@@ -195,7 +195,7 @@ func NewKafkaWriter(conf output.KafkaConfig, mgr bundle.NewManagement) (output.A
 
 	if conf.TLS.Enabled {
 		var err error
-		if k.tlsConf, err = conf.TLS.Get(); err != nil {
+		if k.tlsConf, err = conf.TLS.Get(mgr.FS()); err != nil {
 			return nil, err
 		}
 	}

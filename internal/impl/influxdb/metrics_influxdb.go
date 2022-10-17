@@ -66,6 +66,7 @@ type influxDBMetrics struct {
 	registry        metrics.Registry
 	runtimeRegistry metrics.Registry
 	config          imetrics.InfluxDBConfig
+	mgr             bundle.NewManagement
 	log             log.Modular
 }
 
@@ -74,6 +75,7 @@ func newInfluxDB(config imetrics.Config, nm bundle.NewManagement) (imetrics.Type
 		config:          config.InfluxDB,
 		registry:        metrics.NewRegistry(),
 		runtimeRegistry: metrics.NewRegistry(),
+		mgr:             nm,
 		log:             nm.Logger(),
 	}
 
@@ -136,7 +138,7 @@ func (i *influxDBMetrics) makeClient() error {
 	if u.Scheme == "https" {
 		tlsConfig := &tls.Config{}
 		if i.config.TLS.Enabled {
-			tlsConfig, err = i.config.TLS.Get()
+			tlsConfig, err = i.config.TLS.Get(i.mgr.FS())
 			if err != nil {
 				return err
 			}

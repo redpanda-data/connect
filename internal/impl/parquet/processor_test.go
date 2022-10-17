@@ -129,7 +129,7 @@ schema_file: %v
 			pConf, err := confSpec.ParseYAML(test.config, env)
 			require.NoError(t, err)
 
-			proc, err := newParquetProcessorFromConfig(pConf, nil)
+			proc, err := newParquetProcessorFromConfig(pConf, service.MockResources())
 			if test.errContains == "" {
 				require.NoError(t, err)
 				assert.Equal(t, test.schema, *proc.schema)

@@ -166,7 +166,7 @@ func (s *sftpReader) Connect(ctx context.Context) error {
 	}
 
 	if s.client == nil {
-		if s.client, err = s.conf.Credentials.GetClient(s.conf.Address); err != nil {
+		if s.client, err = s.conf.Credentials.GetClient(s.mgr.FS(), s.conf.Address); err != nil {
 			return err
 		}
 		s.log.Debugln("Finding more paths")

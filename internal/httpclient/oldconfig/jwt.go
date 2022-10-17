@@ -4,10 +4,11 @@ import (
 	"crypto/rsa"
 	"fmt"
 	"net/http"
-	"os"
 	"sync"
 
 	"github.com/golang-jwt/jwt"
+
+	"github.com/benthosdev/benthos/v4/internal/filepath/ifs"
 )
 
 // JWTConfig holds the configuration parameters for an JWT exchange.
@@ -40,12 +41,12 @@ func NewJWTConfig() JWTConfig {
 //------------------------------------------------------------------------------
 
 // Sign method to sign an HTTP request for an JWT exchange.
-func (j JWTConfig) Sign(req *http.Request) error {
+func (j JWTConfig) Sign(f ifs.FS, req *http.Request) error {
 	if !j.Enabled {
 		return nil
 	}
 
-	if err := j.parsePrivateKey(); err != nil {
+	if err := j.parsePrivateKey(f); err != nil {
 		return err
 	}
 
@@ -76,7 +77,7 @@ func (j JWTConfig) Sign(req *http.Request) error {
 
 // parsePrivateKey parses once the RSA private key.
 // Needs mutex locking as Sign might be called by parallel threads.
-func (j JWTConfig) parsePrivateKey() error {
+func (j JWTConfig) parsePrivateKey(fs ifs.FS) error {
 	j.rsaKeyMx.Lock()
 	defer j.rsaKeyMx.Unlock()
 
@@ -84,7 +85,7 @@ func (j JWTConfig) parsePrivateKey() error {
 		return nil
 	}
 
-	privateKey, err := os.ReadFile(j.PrivateKeyFile)
+	privateKey, err := ifs.ReadFile(fs, j.PrivateKeyFile)
 	if err != nil {
 		return fmt.Errorf("failed to read private key: %v", err)
 	}

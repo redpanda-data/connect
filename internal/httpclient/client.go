@@ -85,7 +85,7 @@ func NewClientFromOldConfig(conf oldconfig.OldConfig, mgr bundle.NewManagement, 
 	}
 
 	if conf.TLS.Enabled {
-		tlsConf, err := conf.TLS.Get()
+		tlsConf, err := conf.TLS.Get(mgr.FS())
 		if err != nil {
 			return nil, err
 		}

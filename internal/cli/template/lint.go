@@ -9,6 +9,7 @@ import (
 
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	ifilepath "github.com/benthosdev/benthos/v4/internal/filepath"
+	"github.com/benthosdev/benthos/v4/internal/filepath/ifs"
 	"github.com/benthosdev/benthos/v4/internal/template"
 )
 
@@ -72,7 +73,7 @@ Exits with a status code 1 if any linting errors are detected:
 If a path ends with '...' then Benthos will walk the target and lint any
 files with the .yaml or .yml extension.`[1:],
 		Action: func(c *cli.Context) error {
-			targets, err := ifilepath.GlobsAndSuperPaths(c.Args().Slice(), "yaml", "yml")
+			targets, err := ifilepath.GlobsAndSuperPaths(ifs.OS(), c.Args().Slice(), "yaml", "yml")
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Lint paths error: %v\n", err)
 				os.Exit(1)

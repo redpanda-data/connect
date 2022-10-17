@@ -161,7 +161,7 @@ func newCassandraWriter(conf output.CassandraConfig, mgr bundle.NewManagement) (
 
 	var err error
 	if conf.TLS.Enabled {
-		if c.tlsConf, err = conf.TLS.Get(); err != nil {
+		if c.tlsConf, err = conf.TLS.Get(mgr.FS()); err != nil {
 			return nil, err
 		}
 	}

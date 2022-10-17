@@ -21,6 +21,7 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/component/ratelimit"
 	"github.com/benthosdev/benthos/v4/internal/docs"
+	"github.com/benthosdev/benthos/v4/internal/filepath/ifs"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
@@ -67,6 +68,7 @@ type Type struct {
 	label string
 
 	apiReg APIReg
+	fs     ifs.FS
 
 	inputs       map[string]*inputWrapper
 	caches       map[string]cache.V1
@@ -177,6 +179,8 @@ func New(conf ResourceConfig, opts ...OptFunc) (*Type, error) {
 		logger: log.Noop(),
 		stats:  metrics.Noop(),
 		tracer: trace.NewNoopTracerProvider(),
+
+		fs: ifs.OS(),
 
 		pipes:    map[string]<-chan message.Transaction{},
 		pipeLock: &sync.RWMutex{},
@@ -348,6 +352,13 @@ func (t *Type) RegisterEndpoint(apiPath, desc string, h http.HandlerFunc) {
 	if t.apiReg != nil {
 		t.apiReg.RegisterEndpoint(apiPath, desc, h)
 	}
+}
+
+// FS returns an ifs.FS implementation that provides access to a filesystem. By
+// default this simply access the os package, with relative paths resolved from
+// the directory that the process is running from.
+func (t *Type) FS() ifs.FS {
+	return t.fs
 }
 
 // SetPipe registers a new transaction chan to a named pipe.

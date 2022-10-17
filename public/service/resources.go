@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"io/fs"
 	"time"
 
 	"go.opentelemetry.io/otel/trace"
@@ -11,6 +12,7 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/component/input"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/component/ratelimit"
+	"github.com/benthosdev/benthos/v4/internal/filepath/ifs"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 )
 
@@ -80,6 +82,53 @@ func (r *Resources) Metrics() *Metrics {
 // change outside of major version releases.
 func (r *Resources) OtelTracer() trace.TracerProvider {
 	return r.mgr.Tracer()
+}
+
+// FS implements a superset of fs.FS and includes goodies that benthos
+// components specifically need.
+type FS struct {
+	i ifs.FS
+}
+
+// Open opens the named file for reading.
+func (f *FS) Open(name string) (fs.File, error) {
+	return f.i.Open(name)
+}
+
+// OpenFile is the generalized open call.
+func (f *FS) OpenFile(name string, flag int, perm fs.FileMode) (fs.File, error) {
+	return f.i.OpenFile(name, flag, perm)
+}
+
+// Stat returns a FileInfo describing the named file.
+func (f *FS) Stat(name string) (fs.FileInfo, error) {
+	return f.i.Stat(name)
+}
+
+// Remove removes the named file or (empty) directory.
+func (f *FS) Remove(name string) error {
+	return f.i.Remove(name)
+}
+
+// MkdirAll creates a directory named path, along with any necessary parents,
+// and returns nil, or else returns an error.
+func (f *FS) MkdirAll(path string, perm fs.FileMode) error {
+	return f.i.MkdirAll(path, perm)
+}
+
+// FS returns an fs.FS implementation that provides isolation or customised
+// behaviour for components that access the filesystem. For example, this might
+// be used to tally files being accessed by components for observability
+// purposes, or to customise where relative paths are resolved from.
+//
+// Components should use this instead of accessing the os directly. However, the
+// default behaviour of an environment FS is to access the OS from the directory
+// the process is running from, which matches calling the os package directly.
+func (r *Resources) FS() *FS {
+	if r == nil || r.mgr == nil {
+		return &FS{i: ifs.OS()}
+	}
+	return &FS{i: r.mgr.FS()}
 }
 
 // AccessCache attempts to access a cache resource by name. This action can

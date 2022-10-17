@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"net/http"
 	"os"
 	"os/signal"
@@ -23,6 +24,7 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/internal/config"
 	"github.com/benthosdev/benthos/v4/internal/docs"
+	"github.com/benthosdev/benthos/v4/internal/filepath/ifs"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/manager"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
@@ -46,7 +48,7 @@ func readConfig(path string, streamsMode bool, resourcesPaths, streamsPaths, ove
 			"/etc/benthos/config.yaml",
 			"/etc/benthos.yaml",
 		} {
-			if _, err := os.Stat(dpath); err == nil {
+			if _, err := ifs.OS().Stat(dpath); err == nil {
 				inferred = true
 				path = dpath
 				break
@@ -68,11 +70,10 @@ func readConfig(path string, streamsMode bool, resourcesPaths, streamsPaths, ove
 func initStreamsMode(
 	strict, watching, enableAPI bool,
 	confReader *config.Reader,
-	manager *manager.Type,
-	logger log.Modular,
-	stats *metrics.Namespaced,
+	mgr *manager.Type,
 ) stoppable {
-	streamMgr := strmmgr.New(manager, strmmgr.OptAPIEnabled(enableAPI))
+	logger := mgr.Logger()
+	streamMgr := strmmgr.New(mgr, strmmgr.OptAPIEnabled(enableAPI))
 
 	streamConfs := map[string]stream.Config{}
 	lints, err := confReader.ReadStreams(streamConfs)
@@ -120,7 +121,7 @@ func initStreamsMode(
 	}
 
 	if watching {
-		if err := confReader.BeginFileWatching(manager, strict); err != nil {
+		if err := confReader.BeginFileWatching(mgr, strict); err != nil {
 			logger.Errorf("Failed to create stream config watcher: %v", err)
 			os.Exit(1)
 		}
@@ -175,21 +176,17 @@ func initNormalMode(
 	conf config.Type,
 	strict, watching bool,
 	confReader *config.Reader,
-	manager *manager.Type,
-	logger log.Modular,
-	stats *metrics.Namespaced,
+	mgr *manager.Type,
 ) (newStream stoppable, stoppedChan chan struct{}) {
-	stoppedChan = make(chan struct{})
+	logger := mgr.Logger()
 
+	stoppedChan = make(chan struct{})
 	streamInit := func() (stoppable, error) {
-		return stream.New(
-			conf.Config, manager,
-			stream.OptOnClose(func() {
-				if !watching {
-					close(stoppedChan)
-				}
-			}),
-		)
+		return stream.New(conf.Config, mgr, stream.OptOnClose(func() {
+			if !watching {
+				close(stoppedChan)
+			}
+		}))
 	}
 
 	var stoppableStream swappableStopper
@@ -218,7 +215,7 @@ func initNormalMode(
 	}
 
 	if watching {
-		if err := confReader.BeginFileWatching(manager, strict); err != nil {
+		if err := confReader.BeginFileWatching(mgr, strict); err != nil {
 			logger.Errorf("Failed to create config file watcher: %v", err)
 			os.Exit(1)
 		}
@@ -264,7 +261,13 @@ func cmdService(
 				Compress:   true,
 			}
 		} else {
-			writer, err = os.OpenFile(conf.Logger.File.Path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o666)
+			var fw fs.File
+			if fw, err = ifs.OS().OpenFile(conf.Logger.File.Path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o666); err == nil {
+				var isw bool
+				if writer, isw = fw.(io.Writer); !isw {
+					err = errors.New("failed to open a writable file")
+				}
+			}
 		}
 		if err == nil {
 			logger, err = log.NewV2(writer, conf.Logger)
@@ -374,9 +377,9 @@ func cmdService(
 
 	// Create data streams.
 	if streamsMode {
-		stoppableStream = initStreamsMode(strict, watching, enableStreamsAPI, confReader, manager, logger, stats)
+		stoppableStream = initStreamsMode(strict, watching, enableStreamsAPI, confReader, manager)
 	} else {
-		stoppableStream, dataStreamClosedChan = initNormalMode(conf, strict, watching, confReader, manager, logger, stats)
+		stoppableStream, dataStreamClosedChan = initNormalMode(conf, strict, watching, confReader, manager)
 	}
 
 	// Start HTTP server.

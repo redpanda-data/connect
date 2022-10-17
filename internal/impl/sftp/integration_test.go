@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/benthosdev/benthos/v4/internal/filepath/ifs"
 	"github.com/benthosdev/benthos/v4/internal/impl/sftp/shared"
 	"github.com/benthosdev/benthos/v4/internal/integration"
 
@@ -48,7 +49,7 @@ func TestIntegrationSFTP(t *testing.T) {
 	}
 
 	require.NoError(t, pool.Retry(func() error {
-		_, err = creds.GetClient("localhost:" + resource.GetPort("22/tcp"))
+		_, err = creds.GetClient(ifs.OS(), "localhost:"+resource.GetPort("22/tcp"))
 		return err
 	}))
 

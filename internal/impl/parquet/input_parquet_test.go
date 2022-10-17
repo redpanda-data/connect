@@ -12,6 +12,8 @@ import (
 	"github.com/segmentio/parquet-go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
 type simpleData struct {
@@ -59,7 +61,7 @@ batch_count: 2
 `, tmpDir), nil)
 	require.NoError(t, err)
 
-	in, err := newParquetInputFromConfig(conf, nil)
+	in, err := newParquetInputFromConfig(conf, service.MockResources())
 	require.NoError(t, err)
 
 	tCtx, done := context.WithTimeout(context.Background(), time.Minute)

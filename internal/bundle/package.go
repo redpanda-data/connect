@@ -24,6 +24,7 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/component/ratelimit"
+	"github.com/benthosdev/benthos/v4/internal/filepath/ifs"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
 )
@@ -46,6 +47,7 @@ type NewManagement interface {
 	Metrics() metrics.Type
 	Logger() log.Modular
 	Tracer() trace.TracerProvider
+	FS() ifs.FS
 	BloblEnvironment() *bloblang.Environment
 
 	RegisterEndpoint(path, desc string, h http.HandlerFunc)

@@ -26,7 +26,7 @@ import (
 
 func init() {
 	err := bundle.AllInputs.Add(processors.WrapConstructor(func(c input.Config, nm bundle.NewManagement) (input.Streamed, error) {
-		a, err := newAMQP1Reader(c.AMQP1, nm.Logger())
+		a, err := newAMQP1Reader(c.AMQP1, nm)
 		if err != nil {
 			return nil, err
 		}
@@ -120,14 +120,14 @@ type amqp1Reader struct {
 	conn *amqp1Conn
 }
 
-func newAMQP1Reader(conf input.AMQP1Config, log log.Modular) (*amqp1Reader, error) {
+func newAMQP1Reader(conf input.AMQP1Config, mgr bundle.NewManagement) (*amqp1Reader, error) {
 	a := amqp1Reader{
 		conf: conf,
-		log:  log,
+		log:  mgr.Logger(),
 	}
 	if conf.TLS.Enabled {
 		var err error
-		if a.tlsConf, err = conf.TLS.Get(); err != nil {
+		if a.tlsConf, err = conf.TLS.Get(mgr.FS()); err != nil {
 			return nil, err
 		}
 	}

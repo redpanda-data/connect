@@ -25,7 +25,7 @@ import (
 
 func init() {
 	err := bundle.AllOutputs.Add(processors.WrapConstructor(func(conf output.Config, nm bundle.NewManagement) (output.Streamed, error) {
-		w, err := newMQTTWriter(conf.MQTT, nm, nm.Logger())
+		w, err := newMQTTWriter(conf.MQTT, nm)
 		if err != nil {
 			return nil, err
 		}
@@ -72,6 +72,7 @@ messages these interpolations are performed per message part.`),
 
 type mqttWriter struct {
 	log log.Modular
+	mgr bundle.NewManagement
 
 	connectTimeout time.Duration
 	writeTimeout   time.Duration
@@ -85,13 +86,10 @@ type mqttWriter struct {
 	connMut sync.RWMutex
 }
 
-func newMQTTWriter(
-	conf output.MQTTConfig,
-	mgr bundle.NewManagement,
-	log log.Modular,
-) (*mqttWriter, error) {
+func newMQTTWriter(conf output.MQTTConfig, mgr bundle.NewManagement) (*mqttWriter, error) {
 	m := &mqttWriter{
-		log:  log,
+		log:  mgr.Logger(),
+		mgr:  mgr,
 		conf: conf,
 	}
 
@@ -168,7 +166,7 @@ func (m *mqttWriter) Connect(ctx context.Context) error {
 	}
 
 	if m.conf.TLS.Enabled {
-		tlsConf, err := m.conf.TLS.Get()
+		tlsConf, err := m.conf.TLS.Get(m.mgr.FS())
 		if err != nil {
 			return err
 		}

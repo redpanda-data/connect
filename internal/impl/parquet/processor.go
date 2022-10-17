@@ -3,13 +3,13 @@ package parquet
 import (
 	"context"
 	"fmt"
-	"os"
 
 	"github.com/xitongsys/parquet-go-source/buffer"
 	"github.com/xitongsys/parquet-go/parquet"
 	"github.com/xitongsys/parquet-go/reader"
 	"github.com/xitongsys/parquet-go/writer"
 
+	"github.com/benthosdev/benthos/v4/internal/filepath/ifs"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
@@ -90,7 +90,7 @@ func init() {
 	err := service.RegisterBatchProcessor(
 		"parquet", parquetProcessorConfig(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchProcessor, error) {
-			return newParquetProcessorFromConfig(conf, mgr.Logger())
+			return newParquetProcessorFromConfig(conf, mgr)
 		})
 	if err != nil {
 		panic(err)
@@ -115,7 +115,7 @@ func getCompressionType(str string) (parquet.CompressionCodec, error) {
 	return parquet.CompressionCodec_UNCOMPRESSED, fmt.Errorf("unknown compression type: %v", str)
 }
 
-func newParquetProcessorFromConfig(conf *service.ParsedConfig, logger *service.Logger) (*parquetProcessor, error) {
+func newParquetProcessorFromConfig(conf *service.ParsedConfig, mgr *service.Resources) (*parquetProcessor, error) {
 	operator, err := conf.FieldString("operator")
 	if err != nil {
 		return nil, err
@@ -132,7 +132,7 @@ func newParquetProcessorFromConfig(conf *service.ParsedConfig, logger *service.L
 			return nil, err
 		}
 		if schemaFile != "" {
-			rawSchemaBytes, err := os.ReadFile(schemaFile)
+			rawSchemaBytes, err := ifs.ReadFile(mgr.FS(), schemaFile)
 			if err != nil {
 				return nil, fmt.Errorf("failed to read schema file: %w", err)
 			}
@@ -144,7 +144,7 @@ func newParquetProcessorFromConfig(conf *service.ParsedConfig, logger *service.L
 	if err != nil {
 		return nil, err
 	}
-	return newParquetProcessor(operator, cCodec, rawSchema, logger)
+	return newParquetProcessor(operator, cCodec, rawSchema, mgr.Logger())
 }
 
 type parquetProcessor struct {

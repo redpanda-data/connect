@@ -17,6 +17,7 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/config"
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/filepath"
+	"github.com/benthosdev/benthos/v4/internal/filepath/ifs"
 	"github.com/benthosdev/benthos/v4/internal/template"
 )
 
@@ -181,9 +182,14 @@ Either run Benthos as a stream processor or choose a command:
 		Flags: flags,
 		Before: func(c *cli.Context) error {
 			if dotEnvFile := c.String("env-file"); dotEnvFile != "" {
-				vars, err := parser.ParseDotEnvFile(dotEnvFile)
+				dotEnvBytes, err := ifs.ReadFile(ifs.OS(), dotEnvFile)
 				if err != nil {
 					fmt.Printf("Failed to read dotenv file: %v\n", err)
+					os.Exit(1)
+				}
+				vars, err := parser.ParseDotEnvFile(dotEnvBytes)
+				if err != nil {
+					fmt.Printf("Failed to parse dotenv file: %v\n", err)
 					os.Exit(1)
 				}
 				for k, v := range vars {
@@ -194,7 +200,7 @@ Either run Benthos as a stream processor or choose a command:
 				}
 			}
 
-			templatesPaths, err := filepath.Globs(c.StringSlice("templates"))
+			templatesPaths, err := filepath.Globs(ifs.OS(), c.StringSlice("templates"))
 			if err != nil {
 				fmt.Printf("Failed to resolve template glob pattern: %v\n", err)
 				os.Exit(1)

@@ -45,7 +45,7 @@ func init() {
 func newNSQInput(conf input.Config, mgr bundle.NewManagement) (input.Streamed, error) {
 	var n input.Async
 	var err error
-	if n, err = newNSQReader(conf.NSQ, mgr.Logger()); err != nil {
+	if n, err = newNSQReader(conf.NSQ, mgr); err != nil {
 		return nil, err
 	}
 	return input.NewAsyncReader("nsq", true, n, mgr)
@@ -68,10 +68,10 @@ type nsqReader struct {
 	interruptOnce    sync.Once
 }
 
-func newNSQReader(conf input.NSQConfig, log log.Modular) (*nsqReader, error) {
+func newNSQReader(conf input.NSQConfig, mgr bundle.NewManagement) (*nsqReader, error) {
 	n := nsqReader{
 		conf:             conf,
-		log:              log,
+		log:              mgr.Logger(),
 		internalMessages: make(chan *nsq.Message),
 		interruptChan:    make(chan struct{}),
 	}
@@ -91,7 +91,7 @@ func newNSQReader(conf input.NSQConfig, log log.Modular) (*nsqReader, error) {
 	}
 	if conf.TLS.Enabled {
 		var err error
-		if n.tlsConf, err = conf.TLS.Get(); err != nil {
+		if n.tlsConf, err = conf.TLS.Get(mgr.FS()); err != nil {
 			return nil, err
 		}
 	}

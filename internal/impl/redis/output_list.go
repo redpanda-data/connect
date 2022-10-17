@@ -61,6 +61,7 @@ func newRedisListOutput(conf output.Config, mgr bundle.NewManagement) (output.St
 }
 
 type redisListWriter struct {
+	mgr bundle.NewManagement
 	log log.Modular
 
 	conf output.RedisListConfig
@@ -73,6 +74,7 @@ type redisListWriter struct {
 
 func newRedisListWriter(conf output.RedisListConfig, mgr bundle.NewManagement) (*redisListWriter, error) {
 	r := &redisListWriter{
+		mgr:  mgr,
 		log:  mgr.Logger(),
 		conf: conf,
 	}
@@ -81,7 +83,7 @@ func newRedisListWriter(conf output.RedisListConfig, mgr bundle.NewManagement) (
 	if r.keyStr, err = mgr.BloblEnvironment().NewField(conf.Key); err != nil {
 		return nil, fmt.Errorf("failed to parse key expression: %v", err)
 	}
-	if _, err := clientFromConfig(conf.Config); err != nil {
+	if _, err := clientFromConfig(mgr.FS(), conf.Config); err != nil {
 		return nil, err
 	}
 
@@ -92,7 +94,7 @@ func (r *redisListWriter) Connect(ctx context.Context) error {
 	r.connMut.Lock()
 	defer r.connMut.Unlock()
 
-	client, err := clientFromConfig(r.conf.Config)
+	client, err := clientFromConfig(r.mgr.FS(), r.conf.Config)
 	if err != nil {
 		return err
 	}

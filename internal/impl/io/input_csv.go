@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
 	"sync"
 
 	"github.com/benthosdev/benthos/v4/internal/bundle"
@@ -27,7 +26,7 @@ func init() {
 
 		comma := delimRunes[0]
 
-		pathsRemaining, err := filepath.Globs(conf.CSVFile.Paths)
+		pathsRemaining, err := filepath.Globs(nm.FS(), conf.CSVFile.Paths)
 		if err != nil {
 			return nil, fmt.Errorf("failed to resolve path glob: %w", err)
 		}
@@ -46,7 +45,7 @@ func init() {
 				}
 
 				path := pathsRemaining[0]
-				handle, err := os.Open(path)
+				handle, err := nm.FS().Open(path)
 				if err != nil {
 					return nil, err
 				}

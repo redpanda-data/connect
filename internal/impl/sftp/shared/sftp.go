@@ -6,12 +6,12 @@ package shared
 import (
 	"fmt"
 	"net"
-	"os"
 
 	"github.com/pkg/sftp"
 	"golang.org/x/crypto/ssh"
 
 	"github.com/benthosdev/benthos/v4/internal/docs"
+	"github.com/benthosdev/benthos/v4/internal/filepath/ifs"
 )
 
 // CredentialsDocs returns a documentation field spec for SFTP credentials
@@ -35,7 +35,7 @@ type Credentials struct {
 
 // GetClient establishes a fresh sftp client from a set of credentials and an
 // address.
-func (c Credentials) GetClient(address string) (*sftp.Client, error) {
+func (c Credentials) GetClient(fs ifs.FS, address string) (*sftp.Client, error) {
 	host, port, err := net.SplitHostPort(address)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse address: %v", err)
@@ -69,7 +69,7 @@ func (c Credentials) GetClient(address string) (*sftp.Client, error) {
 	if c.PrivateKeyFile != "" {
 		// read private key file
 		var privateKey []byte
-		privateKey, err = os.ReadFile(c.PrivateKeyFile)
+		privateKey, err = ifs.ReadFile(fs, c.PrivateKeyFile)
 		if err != nil {
 			return nil, fmt.Errorf("failed to read private key: %v", err)
 		}

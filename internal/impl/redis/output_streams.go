@@ -67,6 +67,7 @@ func newRedisStreamsOutput(conf output.Config, mgr bundle.NewManagement) (output
 }
 
 type redisStreamsWriter struct {
+	mgr bundle.NewManagement
 	log log.Modular
 
 	conf       output.RedisStreamsConfig
@@ -79,6 +80,7 @@ type redisStreamsWriter struct {
 
 func newRedisStreamsWriter(conf output.RedisStreamsConfig, mgr bundle.NewManagement) (*redisStreamsWriter, error) {
 	r := &redisStreamsWriter{
+		mgr:  mgr,
 		log:  mgr.Logger(),
 		conf: conf,
 	}
@@ -91,7 +93,7 @@ func newRedisStreamsWriter(conf output.RedisStreamsConfig, mgr bundle.NewManagem
 		return nil, fmt.Errorf("failed to construct metadata filter: %w", err)
 	}
 
-	if _, err = clientFromConfig(conf.Config); err != nil {
+	if _, err = clientFromConfig(mgr.FS(), conf.Config); err != nil {
 		return nil, err
 	}
 	return r, nil
@@ -101,7 +103,7 @@ func (r *redisStreamsWriter) Connect(ctx context.Context) error {
 	r.connMut.Lock()
 	defer r.connMut.Unlock()
 
-	client, err := clientFromConfig(r.conf.Config)
+	client, err := clientFromConfig(r.mgr.FS(), r.conf.Config)
 	if err != nil {
 		return err
 	}

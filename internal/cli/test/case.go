@@ -3,12 +3,12 @@ package test
 import (
 	"context"
 	"fmt"
-	"os"
 	"path/filepath"
 
 	yaml "gopkg.in/yaml.v3"
 
 	iprocessor "github.com/benthosdev/benthos/v4/internal/component/processor"
+	"github.com/benthosdev/benthos/v4/internal/filepath/ifs"
 	"github.com/benthosdev/benthos/v4/internal/message"
 )
 
@@ -24,7 +24,7 @@ func (i *InputPart) getContent(dir string) (string, error) {
 		return i.Content, nil
 	}
 	relPath := filepath.Join(dir, i.filePath)
-	rawBytes, err := os.ReadFile(relPath)
+	rawBytes, err := ifs.ReadFile(ifs.OS(), relPath)
 	if err != nil {
 		return "", err
 	}

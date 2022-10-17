@@ -17,7 +17,7 @@ import (
 
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/input"
-	"github.com/benthosdev/benthos/v4/internal/log"
+	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 )
 
 func TestIntegrationAzureServiceBus(t *testing.T) {
@@ -51,7 +51,7 @@ func testAMQP1Connected(url, sourceAddress string, t *testing.T) {
 	conf.SourceAddress = sourceAddress
 	conf.AzureRenewLock = true
 
-	m, err := newAMQP1Reader(conf, log.Noop())
+	m, err := newAMQP1Reader(conf, mock.NewManager())
 	require.NoError(t, err)
 
 	err = m.Connect(ctx)
@@ -135,7 +135,7 @@ func testAMQP1Disconnected(url, sourceAddress string, t *testing.T) {
 	conf.SourceAddress = sourceAddress
 	conf.AzureRenewLock = true
 
-	m, err := newAMQP1Reader(conf, log.Noop())
+	m, err := newAMQP1Reader(conf, mock.NewManager())
 	require.NoError(t, err)
 
 	err = m.Connect(ctx)

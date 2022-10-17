@@ -16,6 +16,7 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/config"
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	ifilepath "github.com/benthosdev/benthos/v4/internal/filepath"
+	"github.com/benthosdev/benthos/v4/internal/filepath/ifs"
 )
 
 var (
@@ -56,7 +57,7 @@ func lintFile(path string, opts config.LintOptions) (pathLints []pathLint) {
 }
 
 func lintMDSnippets(path string, opts config.LintOptions) (pathLints []pathLint) {
-	rawBytes, err := os.ReadFile(path)
+	rawBytes, err := ifs.ReadFile(ifs.OS(), path)
 	if err != nil {
 		pathLints = append(pathLints, pathLint{
 			source: path,
@@ -151,7 +152,7 @@ files with the .yaml or .yml extension.`[1:],
 			},
 		},
 		Action: func(c *cli.Context) error {
-			targets, err := ifilepath.GlobsAndSuperPaths(c.Args().Slice(), "yaml", "yml")
+			targets, err := ifilepath.GlobsAndSuperPaths(ifs.OS(), c.Args().Slice(), "yaml", "yml")
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Lint paths error: %v\n", err)
 				os.Exit(1)

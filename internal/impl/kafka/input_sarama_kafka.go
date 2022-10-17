@@ -217,7 +217,7 @@ func newKafkaReader(conf input.KafkaConfig, mgr bundle.NewManagement, log log.Mo
 	}
 	if conf.TLS.Enabled {
 		var err error
-		if k.tlsConf, err = conf.TLS.Get(); err != nil {
+		if k.tlsConf, err = conf.TLS.Get(mgr.FS()); err != nil {
 			return nil, err
 		}
 	}

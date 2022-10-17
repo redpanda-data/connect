@@ -23,7 +23,7 @@ func TestIntegrationCassandra(t *testing.T) {
 	pool, err := dockertest.NewPool("")
 	require.NoError(t, err)
 
-	pool.MaxWait = time.Second * 60
+	pool.MaxWait = time.Minute * 3
 	resource, err := pool.Run("cassandra", "latest", nil)
 	require.NoError(t, err)
 	t.Cleanup(func() {

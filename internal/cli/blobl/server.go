@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"html/template"
+	"io/fs"
 	"log"
 	"net/http"
 	"net/url"
@@ -21,6 +22,7 @@ import (
 
 	"github.com/benthosdev/benthos/v4/internal/bloblang"
 	"github.com/benthosdev/benthos/v4/internal/bloblang/parser"
+	"github.com/benthosdev/benthos/v4/internal/filepath/ifs"
 
 	_ "embed"
 )
@@ -61,9 +63,9 @@ func newFileSync(inputFile, mappingFile string, writeBack bool) *fileSync {
 	}
 
 	if inputFile != "" {
-		inputBytes, err := os.ReadFile(inputFile)
+		inputBytes, err := ifs.ReadFile(ifs.OS(), inputFile)
 		if err != nil {
-			if !writeBack || !errors.Is(err, os.ErrNotExist) {
+			if !writeBack || !errors.Is(err, fs.ErrNotExist) {
 				log.Fatal(err)
 			}
 		} else {
@@ -72,9 +74,9 @@ func newFileSync(inputFile, mappingFile string, writeBack bool) *fileSync {
 	}
 
 	if mappingFile != "" {
-		mappingBytes, err := os.ReadFile(mappingFile)
+		mappingBytes, err := ifs.ReadFile(ifs.OS(), mappingFile)
 		if err != nil {
-			if !writeBack || !errors.Is(err, os.ErrNotExist) {
+			if !writeBack || !errors.Is(err, fs.ErrNotExist) {
 				log.Fatal(err)
 			}
 		} else {
@@ -114,12 +116,12 @@ func (f *fileSync) write() {
 	}
 
 	if f.inputFile != "" {
-		if err := os.WriteFile(f.inputFile, []byte(f.inputString), 0o644); err != nil {
+		if err := ifs.WriteFile(ifs.OS(), f.inputFile, []byte(f.inputString), 0o644); err != nil {
 			log.Printf("Failed to write input file: %v\n", err)
 		}
 	}
 	if f.mappingFile != "" {
-		if err := os.WriteFile(f.mappingFile, []byte(f.mappingString), 0o644); err != nil {
+		if err := ifs.WriteFile(ifs.OS(), f.mappingFile, []byte(f.mappingString), 0o644); err != nil {
 			log.Printf("Failed to write mapping file: %v\n", err)
 		}
 	}

@@ -47,7 +47,7 @@ verbatim.`,
 }
 
 func newRedisPubSubInput(conf input.Config, mgr bundle.NewManagement) (input.Streamed, error) {
-	r, err := newRedisPubSubReader(conf.RedisPubSub, mgr.Logger())
+	r, err := newRedisPubSubReader(conf.RedisPubSub, mgr)
 	if err != nil {
 		return nil, err
 	}
@@ -61,16 +61,18 @@ type redisPubSubReader struct {
 
 	conf input.RedisPubSubConfig
 
+	mgr bundle.NewManagement
 	log log.Modular
 }
 
-func newRedisPubSubReader(conf input.RedisPubSubConfig, log log.Modular) (*redisPubSubReader, error) {
+func newRedisPubSubReader(conf input.RedisPubSubConfig, mgr bundle.NewManagement) (*redisPubSubReader, error) {
 	r := &redisPubSubReader{
 		conf: conf,
-		log:  log,
+		mgr:  mgr,
+		log:  mgr.Logger(),
 	}
 
-	_, err := clientFromConfig(r.conf.Config)
+	_, err := clientFromConfig(mgr.FS(), r.conf.Config)
 	if err != nil {
 		return nil, err
 	}
@@ -86,7 +88,7 @@ func (r *redisPubSubReader) Connect(ctx context.Context) error {
 		return nil
 	}
 
-	client, err := clientFromConfig(r.conf.Config)
+	client, err := clientFromConfig(r.mgr.FS(), r.conf.Config)
 	if err != nil {
 		return err
 	}

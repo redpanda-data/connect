@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -16,6 +15,7 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/bloblang"
 	"github.com/benthosdev/benthos/v4/internal/bloblang/mapping"
 	"github.com/benthosdev/benthos/v4/internal/bloblang/query"
+	"github.com/benthosdev/benthos/v4/internal/filepath/ifs"
 	"github.com/benthosdev/benthos/v4/internal/message"
 )
 
@@ -234,7 +234,7 @@ func (c FileEqualsCondition) Check(p *message.Part) error {
 func (c FileEqualsCondition) checkFrom(dir string, p *message.Part) error {
 	relPath := filepath.Join(dir, string(c))
 
-	fileContent, err := os.ReadFile(relPath)
+	fileContent, err := ifs.ReadFile(ifs.OS(), relPath)
 	if err != nil {
 		return fmt.Errorf("failed to read comparison file: %w", err)
 	}
@@ -260,7 +260,7 @@ func (c FileJSONEqualsCondition) Check(p *message.Part) error {
 func (c FileJSONEqualsCondition) checkFrom(dir string, p *message.Part) error {
 	relPath := filepath.Join(dir, string(c))
 
-	fileContent, err := os.ReadFile(relPath)
+	fileContent, err := ifs.ReadFile(ifs.OS(), relPath)
 	if err != nil {
 		return fmt.Errorf("failed to read comparison JSON file: %w", err)
 	}
@@ -284,7 +284,7 @@ func (c FileJSONContainsCondition) Check(p *message.Part) error {
 func (c FileJSONContainsCondition) checkFrom(dir string, p *message.Part) error {
 	relPath := filepath.Join(dir, string(c))
 
-	fileContent, err := os.ReadFile(relPath)
+	fileContent, err := ifs.ReadFile(ifs.OS(), relPath)
 	if err != nil {
 		return fmt.Errorf("failed to read comparison JSON file: %w", err)
 	}

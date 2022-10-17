@@ -62,7 +62,7 @@ func init() {
 	err := service.RegisterProcessor(
 		"schema_registry_decode", schemaRegistryDecoderConfig(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {
-			return newSchemaRegistryDecoderFromConfig(conf, mgr.Logger())
+			return newSchemaRegistryDecoderFromConfig(conf, mgr)
 		})
 	if err != nil {
 		panic(err)
@@ -83,10 +83,11 @@ type schemaRegistryDecoder struct {
 	requestMut sync.Mutex
 	shutSig    *shutdown.Signaller
 
+	mgr    *service.Resources
 	logger *service.Logger
 }
 
-func newSchemaRegistryDecoderFromConfig(conf *service.ParsedConfig, logger *service.Logger) (*schemaRegistryDecoder, error) {
+func newSchemaRegistryDecoderFromConfig(conf *service.ParsedConfig, mgr *service.Resources) (*schemaRegistryDecoder, error) {
 	urlStr, err := conf.FieldString("url")
 	if err != nil {
 		return nil, err
@@ -103,7 +104,7 @@ func newSchemaRegistryDecoderFromConfig(conf *service.ParsedConfig, logger *serv
 	if err != nil {
 		return nil, err
 	}
-	return newSchemaRegistryDecoder(urlStr, authSigner, tlsConf, avroRawJSON, logger)
+	return newSchemaRegistryDecoder(urlStr, authSigner, tlsConf, avroRawJSON, mgr)
 }
 
 func newSchemaRegistryDecoder(
@@ -111,7 +112,7 @@ func newSchemaRegistryDecoder(
 	reqSigner httpclient.RequestSigner,
 	tlsConf *tls.Config,
 	avroRawJSON bool,
-	logger *service.Logger,
+	mgr *service.Resources,
 ) (*schemaRegistryDecoder, error) {
 	u, err := url.Parse(urlStr)
 	if err != nil {
@@ -124,7 +125,8 @@ func newSchemaRegistryDecoder(
 		requestSigner:         reqSigner,
 		schemas:               map[int]*cachedSchemaDecoder{},
 		shutSig:               shutdown.NewSignaller(),
-		logger:                logger,
+		logger:                mgr.Logger(),
+		mgr:                   mgr,
 	}
 
 	s.client = http.DefaultClient
@@ -276,7 +278,7 @@ func (s *schemaRegistryDecoder) getDecoder(id int) (schemaDecoder, error) {
 		return nil, err
 	}
 	req.Header.Add("Accept", "application/vnd.schemaregistry.v1+json")
-	if err := s.requestSigner(req); err != nil {
+	if err := s.requestSigner(s.mgr.FS(), req); err != nil {
 		return nil, err
 	}
 

@@ -53,7 +53,7 @@ as metadata fields.`,
 func newRedisStreamsInput(conf input.Config, mgr bundle.NewManagement) (input.Streamed, error) {
 	var c input.Async
 	var err error
-	if c, err = newRedisStreamsReader(conf.RedisStreams, mgr.Logger()); err != nil {
+	if c, err = newRedisStreamsReader(conf.RedisStreams, mgr); err != nil {
 		return nil, err
 	}
 	c = input.NewAsyncPreserver(c)
@@ -82,6 +82,7 @@ type redisStreamsReader struct {
 	aMut    sync.Mutex
 	ackSend map[string][]string // Acks that can be sent
 
+	mgr bundle.NewManagement
 	log log.Modular
 
 	closeChan  chan struct{}
@@ -89,10 +90,11 @@ type redisStreamsReader struct {
 	closeOnce  sync.Once
 }
 
-func newRedisStreamsReader(conf input.RedisStreamsConfig, log log.Modular) (*redisStreamsReader, error) {
+func newRedisStreamsReader(conf input.RedisStreamsConfig, mgr bundle.NewManagement) (*redisStreamsReader, error) {
 	r := &redisStreamsReader{
 		conf:       conf,
-		log:        log,
+		log:        mgr.Logger(),
+		mgr:        mgr,
 		backlogs:   make(map[string]string, len(conf.Streams)),
 		ackSend:    make(map[string][]string, len(conf.Streams)),
 		closeChan:  make(chan struct{}),
@@ -103,7 +105,7 @@ func newRedisStreamsReader(conf input.RedisStreamsConfig, log log.Modular) (*red
 		r.backlogs[str] = "0"
 	}
 
-	if _, err := clientFromConfig(r.conf.Config); err != nil {
+	if _, err := clientFromConfig(mgr.FS(), r.conf.Config); err != nil {
 		return nil, err
 	}
 
@@ -199,7 +201,7 @@ func (r *redisStreamsReader) Connect(ctx context.Context) error {
 		return nil
 	}
 
-	client, err := clientFromConfig(r.conf.Config)
+	client, err := clientFromConfig(r.mgr.FS(), r.conf.Config)
 	if err != nil {
 		return err
 	}

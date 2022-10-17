@@ -3,7 +3,7 @@ package config
 import (
 	"bytes"
 	"fmt"
-	"os"
+	"io/fs"
 	"path/filepath"
 	"strings"
 	"time"
@@ -14,6 +14,7 @@ import (
 	tdocs "github.com/benthosdev/benthos/v4/internal/cli/test/docs"
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	ifilepath "github.com/benthosdev/benthos/v4/internal/filepath"
+	"github.com/benthosdev/benthos/v4/internal/filepath/ifs"
 	"github.com/benthosdev/benthos/v4/internal/stream"
 )
 
@@ -103,7 +104,7 @@ func (r *Reader) readStreamFile(dir, path string, confs map[string]stream.Config
 }
 
 func (r *Reader) streamPathsExpanded() ([][2]string, error) {
-	streamsPaths, err := ifilepath.Globs(r.streamsPaths)
+	streamsPaths, err := ifilepath.Globs(ifs.OS(), r.streamsPaths)
 	if err != nil {
 		return nil, fmt.Errorf("failed to resolve stream glob pattern: %w", err)
 	}
@@ -112,14 +113,14 @@ func (r *Reader) streamPathsExpanded() ([][2]string, error) {
 	for _, target := range streamsPaths {
 		target = filepath.Clean(target)
 
-		if info, err := os.Stat(target); err != nil {
+		if info, err := ifs.OS().Stat(target); err != nil {
 			return nil, err
 		} else if !info.IsDir() {
 			paths = append(paths, [2]string{"", target})
 			continue
 		}
 
-		if err := filepath.Walk(target, func(path string, info os.FileInfo, werr error) error {
+		if err := fs.WalkDir(ifs.OS(), target, func(path string, info fs.DirEntry, werr error) error {
 			if werr != nil {
 				return werr
 			}

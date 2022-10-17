@@ -163,7 +163,7 @@ func newAMQP09Writer(mgr bundle.NewManagement, conf output.AMQPConfig, log log.M
 	}
 
 	if conf.TLS.Enabled {
-		if a.tlsConf, err = conf.TLS.Get(); err != nil {
+		if a.tlsConf, err = conf.TLS.Get(mgr.FS()); err != nil {
 			return nil, err
 		}
 	}

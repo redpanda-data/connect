@@ -1,11 +1,12 @@
 package parquet
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"io"
-	"os"
+	"io/fs"
 	"sync"
 
 	"github.com/segmentio/parquet-go"
@@ -41,7 +42,7 @@ func init() {
 	err := service.RegisterBatchInput(
 		"parquet", parquetInputConfig(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchInput, error) {
-			in, err := newParquetInputFromConfig(conf, mgr.Logger())
+			in, err := newParquetInputFromConfig(conf, mgr)
 			if err != nil {
 				return nil, err
 			}
@@ -54,19 +55,19 @@ func init() {
 
 //------------------------------------------------------------------------------
 
-func newParquetInputFromConfig(conf *service.ParsedConfig, logger *service.Logger) (service.BatchInput, error) {
+func newParquetInputFromConfig(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchInput, error) {
 	pathsList, err := conf.FieldStringList("paths")
 	if err != nil {
 		return nil, err
 	}
-	pathsRemaining, err := filepath.Globs(pathsList)
+	pathsRemaining, err := filepath.Globs(mgr.FS(), pathsList)
 	if err != nil {
 		return nil, err
 	}
 	if len(pathsRemaining) == 0 {
 		// Important to note that this could be intentional, e.g. running
 		// Benthos as a cron job on a directory.
-		logger.Warnf("Paths %v did not match any files", pathsList)
+		mgr.Logger().Warnf("Paths %v did not match any files", pathsList)
 	}
 
 	batchSize, err := conf.FieldInt("batch_count")
@@ -80,14 +81,15 @@ func newParquetInputFromConfig(conf *service.ParsedConfig, logger *service.Logge
 	rdr := &parquetReader{
 		batchSize:      batchSize,
 		pathsRemaining: pathsRemaining,
-		log:            logger,
+		log:            mgr.Logger(),
+		mgr:            mgr,
 	}
 	return rdr, nil
 }
 
 type openParquetFile struct {
 	schema *parquet.Schema
-	handle *os.File
+	handle fs.File
 	rdr    *parquet.GenericReader[any]
 }
 
@@ -97,6 +99,7 @@ func (p *openParquetFile) Close() error {
 }
 
 type parquetReader struct {
+	mgr *service.Resources
 	log *service.Logger
 
 	batchSize      int
@@ -122,9 +125,19 @@ func (r *parquetReader) getOpenFile() (*openParquetFile, error) {
 	path := r.pathsRemaining[0]
 	r.pathsRemaining = r.pathsRemaining[1:]
 
-	fileHandle, err := os.Open(path)
+	fileHandle, err := r.mgr.FS().Open(path)
 	if err != nil {
 		return nil, err
+	}
+
+	readAtFileHandle, ok := fileHandle.(io.ReaderAt)
+	if !ok {
+		r.log.Warnf("Target filesystem does not support ReadAt, falling back to fully in-memory consumption, this may cause excessive memory usage.")
+		allBytes, err := io.ReadAll(fileHandle)
+		if err != nil {
+			return nil, err
+		}
+		readAtFileHandle = bytes.NewReader(allBytes)
 	}
 
 	fileStats, err := fileHandle.Stat()
@@ -133,7 +146,7 @@ func (r *parquetReader) getOpenFile() (*openParquetFile, error) {
 		return nil, err
 	}
 
-	inFile, err := parquet.OpenFile(fileHandle, fileStats.Size())
+	inFile, err := parquet.OpenFile(readAtFileHandle, fileStats.Size())
 	if err != nil {
 		return nil, err
 	}

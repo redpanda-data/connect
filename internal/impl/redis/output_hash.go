@@ -89,6 +89,7 @@ func newRedisHashOutput(conf output.Config, mgr bundle.NewManagement) (output.St
 }
 
 type redisHashWriter struct {
+	mgr bundle.NewManagement
 	log log.Modular
 
 	conf output.RedisHashConfig
@@ -102,6 +103,7 @@ type redisHashWriter struct {
 
 func newRedisHashWriter(conf output.RedisHashConfig, mgr bundle.NewManagement) (*redisHashWriter, error) {
 	r := &redisHashWriter{
+		mgr:    mgr,
 		log:    mgr.Logger(),
 		conf:   conf,
 		fields: map[string]*field.Expression{},
@@ -122,7 +124,7 @@ func newRedisHashWriter(conf output.RedisHashConfig, mgr bundle.NewManagement) (
 		return nil, errors.New("at least one mechanism for setting fields must be enabled")
 	}
 
-	if _, err := clientFromConfig(conf.Config); err != nil {
+	if _, err := clientFromConfig(mgr.FS(), conf.Config); err != nil {
 		return nil, err
 	}
 
@@ -133,7 +135,7 @@ func (r *redisHashWriter) Connect(ctx context.Context) error {
 	r.connMut.Lock()
 	defer r.connMut.Unlock()
 
-	client, err := clientFromConfig(r.conf.Config)
+	client, err := clientFromConfig(r.mgr.FS(), r.conf.Config)
 	if err != nil {
 		return err
 	}

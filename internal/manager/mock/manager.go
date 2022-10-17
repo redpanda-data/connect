@@ -16,6 +16,7 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/component/ratelimit"
+	"github.com/benthosdev/benthos/v4/internal/filepath/ifs"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
 )
@@ -34,9 +35,10 @@ type Manager struct {
 	// by components.
 	OnRegisterEndpoint func(path string, h http.HandlerFunc)
 
-	M metrics.Type
-	L log.Modular
-	T trace.TracerProvider
+	CustomFS ifs.FS
+	M        metrics.Type
+	L        log.Modular
+	T        trace.TracerProvider
 }
 
 // NewManager provides a new mock manager.
@@ -48,6 +50,7 @@ func NewManager() *Manager {
 		Outputs:    map[string]OutputWriter{},
 		Processors: map[string]Processor{},
 		Pipes:      map[string]<-chan message.Transaction{},
+		CustomFS:   ifs.OS(),
 		M:          metrics.Noop(),
 		L:          log.Noop(),
 		T:          trace.NewNoopTracerProvider(),
@@ -138,6 +141,11 @@ func (m *Manager) RegisterEndpoint(path, desc string, h http.HandlerFunc) {
 	if m.OnRegisterEndpoint != nil {
 		m.OnRegisterEndpoint(path, h)
 	}
+}
+
+// FS returns CustomFS, which wraps the os package unless overridden.
+func (m *Manager) FS() ifs.FS {
+	return m.CustomFS
 }
 
 // BloblEnvironment always returns the global environment.

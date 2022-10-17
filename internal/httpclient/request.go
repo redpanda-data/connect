@@ -12,6 +12,7 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/bloblang/field"
 	"github.com/benthosdev/benthos/v4/internal/bloblang/query"
 	"github.com/benthosdev/benthos/v4/internal/bundle"
+	"github.com/benthosdev/benthos/v4/internal/filepath/ifs"
 	"github.com/benthosdev/benthos/v4/internal/httpclient/oldconfig"
 	"github.com/benthosdev/benthos/v4/internal/message"
 	"github.com/benthosdev/benthos/v4/internal/metadata"
@@ -29,7 +30,7 @@ type MultipartExpressions struct {
 
 // RequestSigner is a closure configured to enrich requests with various
 // functions, usually authentication.
-type RequestSigner func(req *http.Request) error
+type RequestSigner func(f ifs.FS, req *http.Request) error
 
 // RequestCreator creates *http.Request types from messages based on various
 // configurable parameters.
@@ -38,6 +39,7 @@ type RequestCreator struct {
 	explicitBody       *field.Expression
 	explicitMultiparts []MultipartExpressions
 
+	fs        ifs.FS
 	reqSigner RequestSigner
 
 	url              *field.Expression
@@ -55,6 +57,7 @@ type RequestOpt func(r *RequestCreator)
 // service style parses, but it'll take a while so we have this for now.
 func RequestCreatorFromOldConfig(conf oldconfig.OldConfig, mgr bundle.NewManagement, opts ...RequestOpt) (*RequestCreator, error) {
 	r := &RequestCreator{
+		fs:        mgr.FS(),
 		reqSigner: conf.AuthConfig.Sign,
 		verb:      conf.Verb,
 		headers:   map[string]*field.Expression{},
@@ -225,6 +228,6 @@ func (r *RequestCreator) Create(refBatch message.Batch) (req *http.Request, err 
 		req.Header.Add("Content-Type", overrideContentType)
 	}
 
-	err = r.reqSigner(req)
+	err = r.reqSigner(r.fs, req)
 	return
 }

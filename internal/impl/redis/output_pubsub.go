@@ -57,6 +57,7 @@ func newRedisPubSubOutput(conf output.Config, mgr bundle.NewManagement) (output.
 }
 
 type redisPubSubWriter struct {
+	mgr bundle.NewManagement
 	log log.Modular
 
 	conf       output.RedisPubSubConfig
@@ -68,6 +69,7 @@ type redisPubSubWriter struct {
 
 func newRedisPubSubWriter(conf output.RedisPubSubConfig, mgr bundle.NewManagement) (*redisPubSubWriter, error) {
 	r := &redisPubSubWriter{
+		mgr:  mgr,
 		log:  mgr.Logger(),
 		conf: conf,
 	}
@@ -75,7 +77,7 @@ func newRedisPubSubWriter(conf output.RedisPubSubConfig, mgr bundle.NewManagemen
 	if r.channelStr, err = mgr.BloblEnvironment().NewField(conf.Channel); err != nil {
 		return nil, fmt.Errorf("failed to parse channel expression: %v", err)
 	}
-	if _, err = clientFromConfig(conf.Config); err != nil {
+	if _, err = clientFromConfig(mgr.FS(), conf.Config); err != nil {
 		return nil, err
 	}
 	return r, nil
@@ -85,7 +87,7 @@ func (r *redisPubSubWriter) Connect(ctx context.Context) error {
 	r.connMut.Lock()
 	defer r.connMut.Unlock()
 
-	client, err := clientFromConfig(r.conf.Config)
+	client, err := clientFromConfig(r.mgr.FS(), r.conf.Config)
 	if err != nil {
 		return err
 	}

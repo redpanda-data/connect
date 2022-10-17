@@ -16,6 +16,7 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/config"
 	"github.com/benthosdev/benthos/v4/internal/docs"
+	"github.com/benthosdev/benthos/v4/internal/filepath/ifs"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/manager"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
@@ -86,7 +87,7 @@ func (p *ProcessorsProvider) ProvideBloblang(pathStr string) ([]processor.V1, er
 		pathStr = filepath.Join(filepath.Dir(p.targetPath), pathStr)
 	}
 
-	mappingBytes, err := os.ReadFile(pathStr)
+	mappingBytes, err := ifs.ReadFile(ifs.OS(), pathStr)
 	if err != nil {
 		return nil, err
 	}

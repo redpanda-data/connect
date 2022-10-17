@@ -1,7 +1,9 @@
 package test
 
 import (
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"sort"
@@ -13,6 +15,7 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/config"
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	ifilepath "github.com/benthosdev/benthos/v4/internal/filepath"
+	"github.com/benthosdev/benthos/v4/internal/filepath/ifs"
 	"github.com/benthosdev/benthos/v4/internal/log"
 )
 
@@ -42,11 +45,11 @@ func GetPathPair(fullPath, testSuffix string) (configPath, definitionPath string
 }
 
 func getDefinition(targetPath, definitionPath string) (*Definition, error) {
-	if _, err := os.Stat(targetPath); err != nil {
+	if _, err := ifs.OS().Stat(targetPath); err != nil {
 		return nil, fmt.Errorf("unable to access target config file '%v': %v", targetPath, err)
 	}
-	if _, err := os.Stat(definitionPath); err != nil {
-		if !os.IsNotExist(err) {
+	if _, err := ifs.OS().Stat(definitionPath); err != nil {
+		if !errors.Is(err, fs.ErrNotExist) {
 			return nil, fmt.Errorf("unable to access test definition file '%v': %v", definitionPath, err)
 		}
 		if !strings.HasSuffix(targetPath, ".yaml") && !strings.HasSuffix(targetPath, ".yml") {
@@ -55,7 +58,7 @@ func getDefinition(targetPath, definitionPath string) (*Definition, error) {
 		definitionPath = targetPath
 	}
 	var definition Definition
-	defBytes, err := os.ReadFile(definitionPath)
+	defBytes, err := ifs.ReadFile(ifs.OS(), definitionPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read test definition from '%v': %v", definitionPath, err)
 	}
@@ -68,7 +71,7 @@ func getDefinition(targetPath, definitionPath string) (*Definition, error) {
 // GetTestTargets searches for test definition targets in a path with a given
 // test suffix.
 func GetTestTargets(targetPaths []string, testSuffix string) (map[string]Definition, error) {
-	targetPaths, err := ifilepath.GlobsAndSuperPaths(targetPaths, "yaml", "yml")
+	targetPaths, err := ifilepath.GlobsAndSuperPaths(ifs.OS(), targetPaths, "yaml", "yml")
 	if err != nil {
 		return nil, err
 	}

@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"io"
-	"os"
 	"sync"
 	"time"
 
@@ -21,7 +20,7 @@ import (
 
 func init() {
 	err := bundle.AllInputs.Add(processors.WrapConstructor(func(conf input.Config, nm bundle.NewManagement) (input.Streamed, error) {
-		rdr, err := newFileConsumer(conf.File, nm.Logger())
+		rdr, err := newFileConsumer(conf.File, nm)
 		if err != nil {
 			return nil, err
 		}
@@ -80,6 +79,7 @@ type scannerInfo struct {
 
 type fileConsumer struct {
 	log log.Modular
+	nm  bundle.NewManagement
 
 	paths       []string
 	scannerCtor codec.ReaderConstructor
@@ -90,8 +90,8 @@ type fileConsumer struct {
 	delete bool
 }
 
-func newFileConsumer(conf input.FileConfig, log log.Modular) (*fileConsumer, error) {
-	expandedPaths, err := filepath.Globs(conf.Paths)
+func newFileConsumer(conf input.FileConfig, nm bundle.NewManagement) (*fileConsumer, error) {
+	expandedPaths, err := filepath.Globs(nm.FS(), conf.Paths)
 	if err != nil {
 		return nil, err
 	}
@@ -104,7 +104,8 @@ func newFileConsumer(conf input.FileConfig, log log.Modular) (*fileConsumer, err
 	}
 
 	return &fileConsumer{
-		log:         log,
+		nm:          nm,
+		log:         nm.Logger(),
 		scannerCtor: ctor,
 		paths:       expandedPaths,
 		delete:      conf.DeleteOnFinish,
@@ -129,14 +130,14 @@ func (f *fileConsumer) getReader(ctx context.Context) (scannerInfo, error) {
 
 	nextPath := f.paths[0]
 
-	file, err := os.Open(nextPath)
+	file, err := f.nm.FS().Open(nextPath)
 	if err != nil {
 		return scannerInfo{}, err
 	}
 
 	scanner, err := f.scannerCtor(nextPath, file, func(ctx context.Context, err error) error {
 		if err == nil && f.delete {
-			return os.Remove(nextPath)
+			return f.nm.FS().Remove(nextPath)
 		}
 		return nil
 	})

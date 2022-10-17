@@ -18,7 +18,7 @@ func TestFileCache(t *testing.T) {
 	defer os.RemoveAll(dir)
 
 	tCtx := context.Background()
-	c := newFileCache(dir)
+	c := newFileCache(dir, service.MockResources())
 
 	_, err = c.Get(tCtx, "foo")
 	assert.Equal(t, service.ErrKeyNotFound, err)

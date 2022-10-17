@@ -2,7 +2,10 @@ package io
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"sync"
@@ -55,6 +58,7 @@ Writes messages to files on disk based on a chosen codec.`,
 
 type fileWriter struct {
 	log log.Modular
+	nm  bundle.NewManagement
 
 	path      *field.Expression
 	codec     codec.WriterConstructor
@@ -79,6 +83,7 @@ func newFileWriter(pathStr, codecStr string, mgr bundle.NewManagement) (*fileWri
 		codecConf: codecConf,
 		path:      path,
 		log:       mgr.Logger(),
+		nm:        mgr,
 	}, nil
 }
 
@@ -112,17 +117,23 @@ func (w *fileWriter) WriteBatch(ctx context.Context, msg message.Batch) error {
 			flag |= os.O_TRUNC
 		}
 
-		if err := os.MkdirAll(filepath.Dir(path), os.FileMode(0o777)); err != nil {
+		if err := w.nm.FS().MkdirAll(filepath.Dir(path), fs.FileMode(0o777)); err != nil {
 			return err
 		}
 
-		file, err := os.OpenFile(path, flag, os.FileMode(0o666))
+		file, err := w.nm.FS().OpenFile(path, flag, fs.FileMode(0o666))
 		if err != nil {
 			return err
 		}
 
+		fileWriter, ok := file.(io.WriteCloser)
+		if !ok {
+			_ = file.Close()
+			return errors.New("failed to open file for writing")
+		}
+
 		w.handlePath = path
-		handle, err := w.codec(file)
+		handle, err := w.codec(fileWriter)
 		if err != nil {
 			return err
 		}
