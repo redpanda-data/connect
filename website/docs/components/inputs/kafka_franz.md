@@ -444,7 +444,7 @@ Default: `""`
 
 ### `multi_header`
 
-Decode headers into an extra set of `meta` keys with the suffix `_multi`, containing strings of JSON arrays so that duplicate header values can be accessed. These can be used from bloblang with code like `meta("key_multi").parse_json().contains("foo")`
+Decode headers into lists to allow handling of multiple values with the same key
 
 
 Type: `bool`  
