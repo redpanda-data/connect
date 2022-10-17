@@ -188,6 +188,8 @@ func (m *Message) GetError() error {
 
 // MetaGet attempts to find a metadata key from the message and returns a string
 // result and a boolean indicating whether it was found.
+//
+// Strong advice: Use MetaGetMut instead.
 func (m *Message) MetaGet(key string) (string, bool) {
 	v, exists := m.part.MetaGetMut(key)
 	if !exists {
@@ -196,14 +198,35 @@ func (m *Message) MetaGet(key string) (string, bool) {
 	return query.IToString(v), true
 }
 
+// MetaGetMut attempts to find a metadata key from the message and returns the
+// value if found, and a boolean indicating whether it was found. The value
+// returned is mutable, and so it is safe to modify even though it may be a
+// reference type such as a slice or map.
+func (m *Message) MetaGetMut(key string) (any, bool) {
+	v, exists := m.part.MetaGetMut(key)
+	if !exists {
+		return "", false
+	}
+	return v, true
+}
+
 // MetaSet sets the value of a metadata key. If the value is an empty string the
 // metadata key is deleted.
+//
+// Strong advice: Use MetaGetMut instead.
 func (m *Message) MetaSet(key, value string) {
 	if value == "" {
 		m.part.MetaDelete(key)
 	} else {
 		m.part.MetaSetMut(key, value)
 	}
+}
+
+// MetaSetMut sets the value of a metadata key to any value. The value provided
+// is stored as mutable, and therefore if it is a reference type such as a slice
+// or map then it could be modified by a downstream component.
+func (m *Message) MetaSetMut(key string, value any) {
+	m.part.MetaSetMut(key, value)
 }
 
 // MetaDelete removes a key from the message metadata.
@@ -214,8 +237,17 @@ func (m *Message) MetaDelete(key string) {
 // MetaWalk iterates each metadata key/value pair and executes a provided
 // closure on each iteration. To stop iterating, return an error from the
 // closure. An error returned by the closure will be returned by this function.
+//
+// Strong advice: Use MetaWalkMut instead.
 func (m *Message) MetaWalk(fn func(string, string) error) error {
 	return m.part.MetaIterStr(fn)
+}
+
+// MetaWalkMut iterates each metadata key/value pair and executes a provided
+// closure on each iteration. To stop iterating, return an error from the
+// closure. An error returned by the closure will be returned by this function.
+func (m *Message) MetaWalkMut(fn func(key string, value any) error) error {
+	return m.part.MetaIterMut(fn)
 }
 
 //------------------------------------------------------------------------------
