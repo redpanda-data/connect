@@ -2204,6 +2204,10 @@ root.values = this.body.parse_form_url_encoded()
 
 Attempts to parse a string as a JSON document and returns the result.
 
+#### Parameters
+
+**`use_number`** &lt;(optional) bool&gt; An optional flag that when set makes parsing numbers as json.Number instead of the default float64.  
+
 #### Examples
 
 
@@ -2212,6 +2216,13 @@ root.doc = this.doc.parse_json()
 
 # In:  {"doc":"{\"foo\":\"bar\"}"}
 # Out: {"doc":{"foo":"bar"}}
+```
+
+```coffee
+root.doc = this.doc.parse_json(use_number: true)
+
+# In:  {"doc":"{\"foo\":\"11380878173205700000000000000000000000000000000\"}"}
+# Out: {"doc":{"foo":"11380878173205700000000000000000000000000000000"}}
 ```
 
 ### `parse_msgpack`

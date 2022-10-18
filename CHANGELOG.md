@@ -17,6 +17,7 @@ All notable changes to this project will be documented in this file.
 - New `with` bloblang method.
 - Field `multi_header` added to the `kafka` and `kafka_franz` inputs.
 - New `cassandra` input.
+- Param `use_number` added to the `parse_json` bloblang method.
 
 ## 4.9.1 - 2022-10-06
 
