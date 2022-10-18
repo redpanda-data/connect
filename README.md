@@ -115,7 +115,7 @@ Benthos provides lots of tools for making configuration discovery, debugging and
 
 ## Build
 
-Build with Go (1.16 or later):
+Build with Go (any [currently supported version](https://go.dev/dl/)):
 
 ```shell
 git clone git@github.com:benthosdev/benthos
