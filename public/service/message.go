@@ -213,7 +213,7 @@ func (m *Message) MetaGetMut(key string) (any, bool) {
 // MetaSet sets the value of a metadata key. If the value is an empty string the
 // metadata key is deleted.
 //
-// Strong advice: Use MetaGetMut instead.
+// Strong advice: Use MetaSetMut instead.
 func (m *Message) MetaSet(key, value string) {
 	if value == "" {
 		m.part.MetaDelete(key)
