@@ -29,7 +29,7 @@ input:
 pipeline:
   threads: 4
   processors:
-    - bloblang: 'root = {"id": this.user.id, "content": this.body.content}'
+    - mapping: 'root = {"id": this.user.id, "content": this.body.content}'
 output:
   http_server: {}
 EOF
@@ -44,7 +44,7 @@ input:
 pipeline:
   threads: 1
   processors:
-    - bloblang: 'root = this.uppercase()'
+    - mapping: 'root = this.uppercase()'
 output:
   elasticsearch:
     urls:
@@ -102,7 +102,7 @@ $ curl http://localhost:4195/streams/foo | jq '.'
     "pipeline": {
       "processors": [
         {
-          "bloblang": "root = {\"id\": this.user.id, \"content\": this.body.content}",
+          "mapping": "root = {\"id\": this.user.id, \"content\": this.body.content}",
         }
       ],
       "threads": 4

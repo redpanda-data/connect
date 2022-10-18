@@ -63,7 +63,7 @@ benthos.#Config & {
   pipeline: {
     processors: [
       {
-        bloblang: """
+        mapping: """
         root = this
         root.id = uuid_v4()
         """
@@ -91,7 +91,7 @@ input:
     mapping: 'root = { "message": "Hello, CUE!" }'
 pipeline:
   processors:
-    - bloblang: |-
+    - mapping: |-
         root = this
         root.id = uuid_v4()
 output:
@@ -122,7 +122,7 @@ benthos.#Config & {
 
   pipeline: processors: [
     {
-      bloblang: """
+      mapping: """
       root = this
       root.id = uuid_v4()
       """

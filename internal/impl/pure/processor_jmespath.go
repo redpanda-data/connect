@@ -31,7 +31,7 @@ Executes a [JMESPath query](http://jmespath.org/) on JSON documents and replaces
 the message with the resulting document.`,
 		Description: `
 :::note Try out Bloblang
-For better performance and improved capabilities try out native Benthos mapping with the [bloblang processor](/docs/components/processors/bloblang).
+For better performance and improved capabilities try out native Benthos mapping with the [` + "`mapping`" + ` processor](/docs/components/processors/mapping).
 :::
 `,
 		Examples: []docs.AnnotatedExample{

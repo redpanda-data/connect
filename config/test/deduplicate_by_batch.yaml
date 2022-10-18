@@ -1,6 +1,6 @@
 pipeline:
   processors:
-    - bloblang: |
+    - mapping: |
         meta batch_tag = if batch_index() == 0 {
           nanoid(10)
         }

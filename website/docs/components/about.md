@@ -24,7 +24,7 @@ buffer:
 
 pipeline:
   processors:
-  - bloblang: |
+  - mapping: |
       message = this
       meta.link_count = links.length()
 
@@ -77,7 +77,7 @@ pipeline:
         operator: add
         key: '${! json("id") }'
         value: "x"
-    - bloblang: root = if errored() { deleted() }
+    - mapping: root = if errored() { deleted() }
 
 rate_limit_resources:
   - label: foo_ratelimit

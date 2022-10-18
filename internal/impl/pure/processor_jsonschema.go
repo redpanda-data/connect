@@ -74,7 +74,7 @@ pipeline:
     - log:
         level: ERROR
         message: "Schema validation failed due to: ${!error()}"
-    - bloblang: 'root = deleted()' # Drop messages that fail
+    - mapping: 'root = deleted()' # Drop messages that fail
 ` + "```" + `
 
 If a payload being processed looked like:

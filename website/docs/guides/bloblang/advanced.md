@@ -78,12 +78,12 @@ Expanding a single message into multiple messages can be done by mapping message
 }
 ```
 
-We can pull `items` out to the root with `root = items` with a [`bloblang` processor][processors.bloblang] and follow it with an [`unarchive` processor][processors.unarchive] to expand each element into its own independent message:
+We can pull `items` out to the root with `root = items` with a [`mapping` processor][processors.mapping] and follow it with an [`unarchive` processor][processors.unarchive] to expand each element into its own independent message:
 
 ```yaml
 pipeline:
   processors:
-    - bloblang: root = this.items
+    - mapping: root = this.items
     - unarchive:
         format: json_array
 ```
@@ -112,7 +112,7 @@ Also note that when we set `doc_root` we remove the field `items` from the targe
 ```yaml
 pipeline:
   processors:
-    - bloblang: |
+    - mapping: |
         let doc_root = this.without("items")
         root = this.items.map_each($doc_root.merge(this))
     - unarchive:
@@ -156,5 +156,5 @@ output:
 
 Perhaps the first expansion of this mapping that would be worthwhile is to add an explicit list of column names, or at least confirm that the number of values in a row matches an expected count.
 
-[processors.bloblang]: /docs/components/processors/bloblang
+[processors.mapping]: /docs/components/processors/mapping
 [processors.unarchive]: /docs/components/processors/unarchive

@@ -77,7 +77,7 @@ input:
 
         # Optional list of input specific processing steps
         processors:
-          - bloblang: |
+          - mapping: |
               root.message = this
               root.meta.link_count = this.links.length()
               root.user.age = this.user.age.number()
