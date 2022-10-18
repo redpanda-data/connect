@@ -15,6 +15,7 @@ All notable changes to this project will be documented in this file.
 - New `sql_raw` input.
 - New `tracing_id` bloblang function.
 - New `with` bloblang method.
+- Field `multi_header` added to the `kafka` and `kafka_franz` inputs.
 
 ## 4.9.1 - 2022-10-06
 
