@@ -20,9 +20,10 @@ jobs:
     steps:
 
     - name: Install Go
-      uses: actions/setup-go@v2
+      uses: actions/setup-go@v3
       with:
         go-version: ${{ matrix.go-version }}
+        check-latest: true
 
     - name: Checkout code
       uses: actions/checkout@v2
@@ -52,9 +53,10 @@ jobs:
     steps:
 
     - name: Install Go
-      uses: actions/setup-go@v2
+      uses: actions/setup-go@v3
       with:
         go-version: 1.19.x
+        check-latest: true
 
     - name: Checkout code
       uses: actions/checkout@v2
@@ -86,6 +88,12 @@ jobs:
       CGO_ENABLED: 0
     steps:
 
+    - name: Install Go
+      uses: actions/setup-go@v3
+      with:
+        go-version: 1.19.x
+        check-latest: true
+
     - name: Checkout code
       uses: actions/checkout@v2
 
@@ -94,3 +102,10 @@ jobs:
       with:
         version: latest
         args: --timeout 30m cmd/... internal/... public/...
+
+    # TODO: Remove this after https://github.com/golangci/golangci-lint/issues/3094 is addressed
+    - name: Get govulncheck
+      run: go install golang.org/x/vuln/cmd/govulncheck@latest
+
+    - name: Run govulncheck
+      run: govulncheck ./...

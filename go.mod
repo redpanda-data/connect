@@ -110,7 +110,7 @@ require (
 	golang.org/x/net v0.0.0-20220927171203-f486391704dc
 	golang.org/x/oauth2 v0.0.0-20220909003341-f21342109be1
 	golang.org/x/sync v0.0.0-20220923202941-7f9b1623fab7
-	golang.org/x/text v0.3.7
+	golang.org/x/text v0.3.8
 	google.golang.org/api v0.97.0
 	google.golang.org/grpc v1.49.0
 	gopkg.in/natefinch/lumberjack.v2 v2.0.0
