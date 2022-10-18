@@ -76,7 +76,7 @@ partMsgLoop:
 			k.log.Tracef("Received message from topic %v partition %v\n", topic, partition)
 
 			latestOffset = data.Offset
-			part := dataToPart(consumer.HighWaterMarkOffset(), data)
+			part := dataToPart(consumer.HighWaterMarkOffset(), data, k.conf.MultiHeader)
 
 			if batchPolicy.Add(part) {
 				nextTimedBatchChan = nil

@@ -72,7 +72,8 @@ This input adds the following metadata fields to each message:
 			Default(true).
 			Advanced()).
 		Field(service.NewTLSToggledField("tls")).
-		Field(saslField())
+		Field(saslField()).
+		Field(service.NewBoolField("multi_header").Description("Decode headers into lists to allow handling of multiple values with the same key").Default(false).Advanced())
 }
 
 func init() {
@@ -106,6 +107,7 @@ type franzKafkaReader struct {
 	startFromOldest bool
 	commitPeriod    time.Duration
 	regexPattern    bool
+	multiHeader     bool
 
 	msgChan atomic.Value
 	log     *service.Logger
@@ -169,6 +171,9 @@ func newFranzKafkaReaderFromConfig(conf *service.ParsedConfig, log *service.Logg
 	}
 	if tlsEnabled {
 		f.tlsConf = tlsConf
+	}
+	if f.multiHeader, err = conf.FieldBool("multi_header"); err != nil {
+		return nil, err
 	}
 	if f.saslConfs, err = saslMechanismsFromConfig(conf); err != nil {
 		return nil, err
@@ -395,7 +400,7 @@ func (f *franzKafkaReader) Connect(ctx context.Context) error {
 			iter := fetches.RecordIter()
 			for !iter.Done() {
 				record := iter.Next()
-				msg := recordToMessage(record)
+				msg := recordToMessage(record, f.multiHeader)
 
 				// The record lives on for checkpointing, but we don't need the
 				// contents going forward so discard these. This looked fine to
@@ -454,15 +459,28 @@ func (f *franzKafkaReader) Connect(ctx context.Context) error {
 	return nil
 }
 
-func recordToMessage(record *kgo.Record) *service.Message {
+func recordToMessage(record *kgo.Record, multiHeader bool) *service.Message {
 	msg := service.NewMessage(record.Value)
 	msg.MetaSet("kafka_key", string(record.Key))
 	msg.MetaSet("kafka_topic", record.Topic)
 	msg.MetaSet("kafka_partition", strconv.Itoa(int(record.Partition)))
 	msg.MetaSet("kafka_offset", strconv.Itoa(int(record.Offset)))
 	msg.MetaSet("kafka_timestamp_unix", strconv.FormatInt(record.Timestamp.Unix(), 10))
-	for _, hdr := range record.Headers {
-		msg.MetaSet(hdr.Key, string(hdr.Value))
+	if multiHeader {
+		// in multi header mode we gather headers so we can encode them as lists
+		var headers = map[string][]string{}
+
+		for _, hdr := range record.Headers {
+			headers[hdr.Key] = append(headers[hdr.Key], string(hdr.Value))
+		}
+
+		for key, values := range headers {
+			msg.MetaSetMut(key, values)
+		}
+	} else {
+		for _, hdr := range record.Headers {
+			msg.MetaSet(hdr.Key, string(hdr.Value))
+		}
 	}
 	return msg
 }

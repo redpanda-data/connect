@@ -40,6 +40,7 @@ type KafkaConfig struct {
 	TargetVersion       string                   `json:"target_version" yaml:"target_version"`
 	TLS                 btls.Config              `json:"tls" yaml:"tls"`
 	SASL                sasl.Config              `json:"sasl" yaml:"sasl"`
+	MultiHeader         bool                     `json:"multi_header" yaml:"multi_header"`
 	Batching            batchconfig.Config       `json:"batching" yaml:"batching"`
 }
 
@@ -60,6 +61,7 @@ func NewKafkaConfig() KafkaConfig {
 		TargetVersion:       "2.0.0",
 		TLS:                 btls.NewConfig(),
 		SASL:                sasl.NewConfig(),
+		MultiHeader:         false,
 		Batching:            batchconfig.NewConfig(),
 	}
 }

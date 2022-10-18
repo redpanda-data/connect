@@ -75,6 +75,7 @@ input:
       heartbeat_interval: 3s
       rebalance_timeout: 60s
     fetch_buffer_cap: 256
+    multi_header: false
     batching:
       count: 0
       byte_size: 0
@@ -504,6 +505,14 @@ The maximum number of unprocessed messages to fetch at a given time.
 
 Type: `int`  
 Default: `256`  
+
+### `multi_header`
+
+Decode headers into lists to allow handling of multiple values with the same key
+
+
+Type: `bool`  
+Default: `false`  
 
 ### `batching`
 
