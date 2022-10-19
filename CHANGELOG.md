@@ -19,6 +19,10 @@ All notable changes to this project will be documented in this file.
 - New `cassandra` input.
 - Param `use_number` added to the `parse_json` bloblang method.
 
+### Fixed
+
+- The `gcp_cloud_storage` output no longer ignores errors when closing a written file, this was masking issues when the target bucket was invalid.
+
 ## 4.9.1 - 2022-10-06
 
 ### Added

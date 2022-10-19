@@ -253,7 +253,7 @@ func (g *gcpCloudStorageOutput) WriteBatch(ctx context.Context, msg message.Batc
 		}
 
 		if cerr := w.Close(); cerr != nil {
-			errs = multierr.Append(errs, err)
+			errs = multierr.Append(errs, cerr)
 		}
 
 		if isMerge {
