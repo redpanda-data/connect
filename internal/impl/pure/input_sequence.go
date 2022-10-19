@@ -79,7 +79,7 @@ With the following config:`,
 input:
   sequence:
     sharded_join:
-      type: full-outter
+      type: full-outer
       id_path: uuid
       merge_strategy: array
     inputs:
@@ -122,7 +122,7 @@ With the following config:`,
 input:
   sequence:
     sharded_join:
-      type: full-outter
+      type: full-outer
       id_path: uuid
       iterations: 10
       merge_strategy: array
@@ -142,13 +142,14 @@ input:
 		Config: docs.FieldComponent().WithChildren(
 			docs.FieldObject(
 				"sharded_join",
-				`EXPERIMENTAL: Provides a way to perform outter joins of arbitrarily structured and unordered data resulting from the input sequence, even when the overall size of the data surpasses the memory available on the machine.
+				`EXPERIMENTAL: Provides a way to perform outer joins of arbitrarily structured and unordered data resulting from the input sequence, even when the overall size of the data surpasses the memory available on the machine.
 
 When configured the sequence of inputs will be consumed one or more times according to the number of iterations, and when more than one iteration is specified each iteration will process an entirely different set of messages by sharding them by the ID field. Increasing the number of iterations reduces the memory consumption at the cost of needing to fully parse the data each time.
 
 Each message must be structured (JSON or otherwise processed into a structured form) and the fields will be aggregated with those of other messages sharing the ID. At the end of each iteration the joined messages are flushed downstream before the next iteration begins, hence keeping memory usage limited.`,
 			).WithChildren(
-				docs.FieldString("type", "The type of join to perform. A `full-outter` ensures that all identifiers seen in any of the input sequences are sent, and is performed by consuming all input sequences before flushing the joined results. An `outter` join consumes all input sequences but only writes data joined from the last input in the sequence, similar to a left or right outter join. With an `outter` join if an identifier appears multiple times within the final sequence input it will be flushed each time it appears.").HasOptions("none", "full-outter", "outter"),
+				// TODO: V5 Remove "full-outter" and "outter"
+				docs.FieldString("type", "The type of join to perform. A `full-outer` ensures that all identifiers seen in any of the input sequences are sent, and is performed by consuming all input sequences before flushing the joined results. An `outer` join consumes all input sequences but only writes data joined from the last input in the sequence, similar to a left or right outer join. With an `outer` join if an identifier appears multiple times within the final sequence input it will be flushed each time it appears. `full-outter` and `outter` have been deprecated in favour of `full-outer` and `outer`.").HasOptions("none", "full-outer", "outer", "full-outter", "outter"),
 				docs.FieldString("id_path", "A [dot path](/docs/configuration/field_paths) that points to a common field within messages of each fragmented data set and can be used to join them. Messages that are not structured or are missing this field will be dropped. This field must be set in order to enable joins."),
 				docs.FieldInt("iterations", "The total number of iterations (shards), increasing this number will increase the overall time taken to process the data, but reduces the memory used in the process. The real memory usage required is significantly higher than the real size of the data and therefore the number of iterations should be at least an order of magnitude higher than the available memory divided by the overall size of the dataset."),
 				docs.FieldString(
@@ -371,9 +372,9 @@ func validateShardedConfig(s input.SequenceShardedJoinConfig) (*messageJoiner, e
 	switch s.Type {
 	case "none":
 		return nil, nil
-	case "full-outter":
+	case "full-outer", "full-outter":
 		flushOnLast = false
-	case "outter":
+	case "outer", "outter":
 		flushOnLast = true
 	default:
 		return nil, fmt.Errorf("join type '%v' was not recognized", s.Type)

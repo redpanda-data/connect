@@ -70,7 +70,7 @@ pipeline:
     - bloblang: |
         root.id = uuid_v4()
         root.foo = this.inner.foo
-        root.body = this.outter
+        root.body = this.outer
 ```
 
 </TabItem>
@@ -92,7 +92,7 @@ pipeline:
     - bloblang: |
         root.id = uuid_v4()
         root.foo = this.inner.foo
-        root.body = this.outter
+        root.body = this.outer
 ```
 
 </TabItem>
