@@ -28,6 +28,7 @@ func ErrInvalidType(typeStr, tried string) error {
 var (
 	ErrTimeout    = errors.New("action timed out")
 	ErrTypeClosed = errors.New("type was closed")
+	ErrEmptyRead  = errors.New("empty read from source")
 
 	ErrNotConnected = errors.New("not connected to target source or sink")
 

@@ -121,6 +121,8 @@ func (a *airGapReader) ReadBatch(ctx context.Context) (message.Batch, input.Asyn
 			err = component.ErrNotConnected
 		} else if errors.Is(err, ErrEndOfInput) {
 			err = component.ErrTypeClosed
+		} else if errors.Is(err, ErrEmptyRead) {
+			err = component.ErrEmptyRead
 		}
 		return nil, nil, err
 	}

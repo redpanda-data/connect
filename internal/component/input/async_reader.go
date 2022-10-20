@@ -141,7 +141,7 @@ func (r *AsyncReader) loop() {
 		}
 
 		if err != nil || msg == nil {
-			if err != nil && err != component.ErrTimeout && err != component.ErrNotConnected {
+			if err != nil && err != component.ErrTimeout && err != component.ErrNotConnected && err != component.ErrEmptyRead {
 				r.mgr.Logger().Errorf("Failed to read message: %v\n", err)
 			}
 			select {

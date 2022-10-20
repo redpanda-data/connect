@@ -28,6 +28,12 @@ var (
 	// pipeline.
 	ErrEndOfInput = errors.New("end of input")
 
+	// ErrEmptyRead is returned by inputs that have attemtped to read from their
+	// underlying source but received no new data. Unlike ErrEndOfInput, this
+	// does not mean that the input exhausted its source of data and instead it's
+	// worth attempting subsequent reads.
+	ErrEmptyRead = errors.New("empty read from input")
+
 	// ErrEndOfBuffer is returned by a buffer Read/ReadBatch method when the
 	// contents of the buffer has been emptied and the source of the data is
 	// ended (as indicated by EndOfInput). This error prompts the upstream
