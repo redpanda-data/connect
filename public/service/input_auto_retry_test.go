@@ -12,8 +12,9 @@ import (
 )
 
 type mockInput struct {
-	msgsToSnd []*Message
-	ackRcvd   []error
+	msgsToSnd  []*Message
+	ackRcvdMut sync.Mutex
+	ackRcvd    []error
 
 	connChan  chan error
 	readChan  chan error
@@ -50,8 +51,10 @@ func (i *mockInput) Read(ctx context.Context) (*Message, AckFunc, error) {
 			return nil, nil, err
 		}
 	}
+	i.ackRcvdMut.Lock()
 	i.ackRcvd = append(i.ackRcvd, errors.New("ack not received"))
 	index := len(i.ackRcvd) - 1
+	i.ackRcvdMut.Unlock()
 
 	nextMsg := NewMessage(nil)
 	if len(i.msgsToSnd) > 0 {
@@ -60,7 +63,9 @@ func (i *mockInput) Read(ctx context.Context) (*Message, AckFunc, error) {
 	}
 
 	return nextMsg.Copy(), func(ctx context.Context, res error) error {
+		i.ackRcvdMut.Lock()
 		i.ackRcvd[index] = res
+		i.ackRcvdMut.Unlock()
 		return <-i.ackChan
 	}, nil
 }

@@ -493,9 +493,8 @@ func (w *Workflow) ProcessBatch(ctx context.Context, msg message.Batch) ([]messa
 		wg := sync.WaitGroup{}
 		wg.Add(len(layer))
 		for i, eid := range layer {
+			branchMsg, branchSpans := tracing.WithChildSpans(w.tracer, eid, propMsg.ShallowCopy())
 			go func(id string, index int) {
-				branchMsg, branchSpans := tracing.WithChildSpans(w.tracer, id, propMsg.ShallowCopy())
-
 				branchParts := make([]*message.Part, branchMsg.Len())
 				_ = branchMsg.Iter(func(partIndex int, part *message.Part) error {
 					// Remove errors so that they aren't propagated into the
@@ -508,7 +507,7 @@ func (w *Workflow) ProcessBatch(ctx context.Context, msg message.Batch) ([]messa
 				})
 
 				var mapErrs []branchMapError
-				results[index], mapErrs, errors[index] = children[id].createResult(ctx, branchParts, propMsg)
+				results[index], mapErrs, errors[index] = children[id].createResult(ctx, branchParts, propMsg.ShallowCopy())
 				for _, s := range branchSpans {
 					s.Finish()
 				}
