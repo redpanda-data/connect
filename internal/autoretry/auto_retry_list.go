@@ -79,9 +79,7 @@ func NewList[T any](reader ReadFunc[T], mutator MutatorFunc[T]) *List[T] {
 // retry list. Returns a new acknowledgment function that should be propagated
 // as it encapsulates the retry logic.
 func (l *List[T]) adopt(t T, aFn AckFunc) AckFunc {
-	l.cond.L.Lock()
 	l.retryInFlight++
-	l.cond.L.Unlock()
 
 	boff := backoff.NewExponentialBackOff()
 	boff.InitialInterval = time.Millisecond
@@ -118,9 +116,7 @@ func (l *List[T]) wrapPendingAck(t *pendingT[T]) AckFunc {
 
 func (l *List[T]) dispatchReader() {
 	var next readT[T]
-	if next.t, next.aFn, next.err = l.reader(l.readCtx); next.err == nil {
-		next.aFn = l.adopt(next.t, next.aFn)
-	}
+	next.t, next.aFn, next.err = l.reader(l.readCtx)
 
 	l.cond.L.Lock()
 	l.pendingRead = &next
@@ -168,6 +164,9 @@ func (l *List[T]) Shift(ctx context.Context, enableRead bool) (t T, fn AckFunc, 
 
 		// If the read attempt succeeded then return it.
 		if pendingRead := l.pendingRead; pendingRead != nil {
+			if pendingRead.err == nil {
+				pendingRead.aFn = l.adopt(pendingRead.t, pendingRead.aFn)
+			}
 			l.pendingRead = nil
 			return pendingRead.t, pendingRead.aFn, pendingRead.err
 		}
@@ -225,5 +224,20 @@ func (l *List[T]) exhausted() bool {
 // Close any pending read attempts that could be dangling from prior shifts.
 func (l *List[T]) Close(ctx context.Context) error {
 	l.readDone()
-	return nil
+
+	l.cond.L.Lock()
+	defer l.cond.L.Unlock()
+	for {
+		if l.readInFlight <= 0 {
+			if l.pendingRead != nil && l.pendingRead.aFn != nil {
+				aFn := l.pendingRead.aFn
+				go func() {
+					_ = aFn(context.Background(), errors.New("message rejected"))
+				}()
+				l.pendingRead = nil
+			}
+			return nil
+		}
+		l.cond.Wait()
+	}
 }

@@ -3,6 +3,7 @@ package autoretry
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -55,6 +56,7 @@ func TestRetryListAllAcks(t *testing.T) {
 		"baz", "bar", "foo",
 	}, acked)
 
+	fmt.Println("last shift")
 	_, _, err = l.Shift(tCtx, false)
 	assert.Equal(t, ErrExhausted, err)
 
