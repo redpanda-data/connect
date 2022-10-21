@@ -3,7 +3,7 @@ package autoretry
 import (
 	"context"
 	"errors"
-	"io"
+	"fmt"
 	"testing"
 	"time"
 
@@ -11,28 +11,42 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+var errCustomEOF = errors.New("custom EOF")
+
 func TestRetryListAllAcks(t *testing.T) {
 	tCtx, done := context.WithTimeout(context.Background(), time.Second)
 	defer done()
 
 	var acked []string
 
-	l := NewList[string](nil)
+	data := []string{"foo", "bar", "baz"}
+	l := NewList(func(ctx context.Context) (t string, aFn AckFunc, err error) {
+		if len(data) == 0 {
+			err = errCustomEOF
+			return
+		}
+		next := data[0]
+		data = data[1:]
+		return next, func(ctx context.Context, err error) error {
+			acked = append(acked, next)
+			return nil
+		}, nil
+	}, nil)
 
-	fooFn := l.Adopt(tCtx, "foo", func(ctx context.Context, err error) error {
-		acked = append(acked, "foo")
-		return nil
-	})
+	res, fooFn, err := l.Shift(tCtx, true)
+	require.NoError(t, err)
+	assert.Equal(t, "foo", res)
 
-	barFn := l.Adopt(tCtx, "bar", func(ctx context.Context, err error) error {
-		acked = append(acked, "bar")
-		return nil
-	})
+	res, barFn, err := l.Shift(tCtx, true)
+	require.NoError(t, err)
+	assert.Equal(t, "bar", res)
 
-	bazFn := l.Adopt(tCtx, "baz", func(ctx context.Context, err error) error {
-		acked = append(acked, "baz")
-		return nil
-	})
+	res, bazFn, err := l.Shift(tCtx, true)
+	require.NoError(t, err)
+	assert.Equal(t, "baz", res)
+
+	_, _, err = l.Shift(tCtx, true)
+	require.Equal(t, errCustomEOF, err)
 
 	assert.NoError(t, bazFn(tCtx, nil))
 	assert.NoError(t, barFn(tCtx, nil))
@@ -42,8 +56,11 @@ func TestRetryListAllAcks(t *testing.T) {
 		"baz", "bar", "foo",
 	}, acked)
 
-	_, _, err := l.Shift(tCtx)
-	assert.Equal(t, io.EOF, err)
+	fmt.Println("last shift")
+	_, _, err = l.Shift(tCtx, false)
+	assert.Equal(t, ErrExhausted, err)
+
+	require.NoError(t, l.Close(tCtx))
 }
 
 func TestRetryListNacks(t *testing.T) {
@@ -52,25 +69,34 @@ func TestRetryListNacks(t *testing.T) {
 
 	var acked []string
 
-	l := NewList[string](nil)
+	data := []string{"foo", "bar", "baz"}
+	l := NewList(func(ctx context.Context) (t string, aFn AckFunc, err error) {
+		if len(data) == 0 {
+			err = errCustomEOF
+			return
+		}
+		next := data[0]
+		data = data[1:]
+		return next, func(ctx context.Context, err error) error {
+			acked = append(acked, next)
+			return nil
+		}, nil
+	}, nil)
 
-	fooFn := l.Adopt(tCtx, "foo", func(ctx context.Context, err error) error {
-		acked = append(acked, "foo")
-		return nil
-	})
+	v, fooFn, err := l.Shift(tCtx, true)
+	require.NoError(t, err)
+	assert.Equal(t, "foo", v)
 
-	barFn := l.Adopt(tCtx, "bar", func(ctx context.Context, err error) error {
-		acked = append(acked, "bar")
-		return nil
-	})
+	v, barFn, err := l.Shift(tCtx, true)
+	require.NoError(t, err)
+	assert.Equal(t, "bar", v)
 
-	bazFn := l.Adopt(tCtx, "baz", func(ctx context.Context, err error) error {
-		acked = append(acked, "baz")
-		return nil
-	})
+	v, bazFn, err := l.Shift(tCtx, true)
+	require.NoError(t, err)
+	assert.Equal(t, "baz", v)
 
-	_, _, ok := l.TryShift(tCtx)
-	assert.False(t, ok)
+	_, _, err = l.Shift(tCtx, true)
+	require.Equal(t, errCustomEOF, err)
 
 	assert.NoError(t, bazFn(tCtx, errors.New("baz nope")))
 	assert.NoError(t, barFn(tCtx, errors.New("bar nope")))
@@ -78,18 +104,17 @@ func TestRetryListNacks(t *testing.T) {
 
 	assert.Equal(t, []string(nil), acked)
 
-	var v string
-	v, bazFn, ok = l.TryShift(tCtx)
-	require.True(t, ok)
+	v, bazFn, err = l.Shift(tCtx, false)
+	require.NoError(t, err)
 	assert.Equal(t, "baz", v)
 
-	v, barFn, ok = l.TryShift(tCtx)
-	require.True(t, ok)
+	v, barFn, err = l.Shift(tCtx, false)
+	require.NoError(t, err)
 	assert.Equal(t, "bar", v)
 	assert.NoError(t, barFn(tCtx, errors.New("bar nope again")))
 
-	v, fooFn, ok = l.TryShift(tCtx)
-	require.True(t, ok)
+	v, fooFn, err = l.Shift(tCtx, false)
+	require.NoError(t, err)
 	assert.Equal(t, "foo", v)
 
 	assert.NoError(t, fooFn(tCtx, nil))
@@ -99,15 +124,14 @@ func TestRetryListNacks(t *testing.T) {
 		"foo", "baz",
 	}, acked)
 
-	var err error
-	v, barFn, err = l.Shift(tCtx)
+	v, barFn, err = l.Shift(tCtx, false)
 	require.NoError(t, err)
 	assert.Equal(t, "bar", v)
 
 	cancelledCtx, done := context.WithTimeout(tCtx, time.Millisecond*50)
 	defer done()
 
-	_, _, err = l.Shift(cancelledCtx)
+	_, _, err = l.Shift(cancelledCtx, false)
 	assert.Equal(t, cancelledCtx.Err(), err)
 
 	assert.NoError(t, barFn(tCtx, nil))
@@ -116,8 +140,10 @@ func TestRetryListNacks(t *testing.T) {
 		"foo", "baz", "bar",
 	}, acked)
 
-	_, _, err = l.Shift(tCtx)
-	assert.Equal(t, io.EOF, err)
+	_, _, err = l.Shift(tCtx, false)
+	assert.Equal(t, ErrExhausted, err)
+
+	require.NoError(t, l.Close(tCtx))
 }
 
 func TestRetryListNackMutator(t *testing.T) {
@@ -126,38 +152,48 @@ func TestRetryListNackMutator(t *testing.T) {
 
 	var acked []string
 
-	l := NewList(func(t string, err error) string {
+	data := []string{"foo"}
+	l := NewList(func(ctx context.Context) (t string, aFn AckFunc, err error) {
+		if len(data) == 0 {
+			err = errCustomEOF
+			return
+		}
+		next := data[0]
+		data = data[1:]
+		return next, func(ctx context.Context, err error) error {
+			acked = append(acked, next)
+			return nil
+		}, nil
+	}, func(t string, err error) string {
 		return t + " and " + err.Error()
 	})
 
-	fooFn := l.Adopt(tCtx, "foo", func(ctx context.Context, err error) error {
-		acked = append(acked, "foo")
-		return nil
-	})
+	v, fooFn, err := l.Shift(tCtx, true)
+	require.NoError(t, err)
+	assert.Equal(t, "foo", v)
 
-	_, _, ok := l.TryShift(tCtx)
-	assert.False(t, ok)
+	_, _, err = l.Shift(tCtx, true)
+	require.Equal(t, errCustomEOF, err)
 
 	assert.NoError(t, fooFn(tCtx, errors.New("first error")))
 	assert.Equal(t, []string(nil), acked)
 
-	var v string
-	v, fooFn, ok = l.TryShift(tCtx)
-	require.True(t, ok)
+	v, fooFn, err = l.Shift(tCtx, false)
+	require.NoError(t, err)
 	assert.Equal(t, "foo and first error", v)
 
 	assert.NoError(t, fooFn(tCtx, errors.New("second error")))
 	assert.Equal(t, []string(nil), acked)
 
-	v, fooFn, ok = l.TryShift(tCtx)
-	require.True(t, ok)
+	v, fooFn, err = l.Shift(tCtx, false)
+	require.NoError(t, err)
 	assert.Equal(t, "foo and first error and second error", v)
 
 	assert.NoError(t, fooFn(tCtx, errors.New("third error")))
 	assert.Equal(t, []string(nil), acked)
 
-	v, fooFn, ok = l.TryShift(tCtx)
-	require.True(t, ok)
+	v, fooFn, err = l.Shift(tCtx, false)
+	require.NoError(t, err)
 	assert.Equal(t, "foo and first error and second error and third error", v)
 
 	assert.NoError(t, fooFn(tCtx, nil))
@@ -166,6 +202,8 @@ func TestRetryListNackMutator(t *testing.T) {
 		"foo",
 	}, acked)
 
-	_, _, err := l.Shift(tCtx)
-	assert.Equal(t, io.EOF, err)
+	_, _, err = l.Shift(tCtx, false)
+	assert.Equal(t, ErrExhausted, err)
+
+	require.NoError(t, l.Close(tCtx))
 }

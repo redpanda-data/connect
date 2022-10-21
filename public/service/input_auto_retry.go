@@ -3,7 +3,6 @@ package service
 import (
 	"context"
 	"errors"
-	"io"
 	"sync/atomic"
 
 	"github.com/benthosdev/benthos/v4/internal/autoretry"
@@ -18,8 +17,11 @@ import (
 // until success or the stream is stopped.
 func AutoRetryNacks(i Input) Input {
 	return &autoRetryInput{
-		retryList: autoretry.NewList[*Message](nil),
-		child:     i,
+		retryList: autoretry.NewList(func(ctx context.Context) (*Message, autoretry.AckFunc, error) {
+			t, aFn, err := i.Read(ctx)
+			return t, autoretry.AckFunc(aFn), err
+		}, nil),
+		child: i,
 	}
 }
 
@@ -36,7 +38,7 @@ func (i *autoRetryInput) Connect(ctx context.Context) error {
 	// If our source has finished but we still have messages in flight then
 	// we act like we're still open. Read will be called and we can either
 	// return the pending messages or wait for them.
-	if errors.Is(err, ErrEndOfInput) && i.retryList.Exhausted() {
+	if errors.Is(err, ErrEndOfInput) && !i.retryList.Exhausted() {
 		atomic.StoreInt32(&i.inputClosed, 1)
 		err = nil
 	}
@@ -44,41 +46,25 @@ func (i *autoRetryInput) Connect(ctx context.Context) error {
 }
 
 func (i *autoRetryInput) Read(ctx context.Context) (*Message, AckFunc, error) {
-	if msg, rAckFn, exists := i.retryList.TryShift(ctx); exists {
-		return msg.Copy(), AckFunc(rAckFn), nil
-	}
-
-	var (
-		msg *Message
-		aFn AckFunc
-		err error
-	)
-
-	if atomic.LoadInt32(&i.inputClosed) > 0 {
-		err = ErrEndOfInput
-	} else {
-		msg, aFn, err = i.child.Read(ctx)
-	}
+	msg, rAckFn, err := i.retryList.Shift(ctx, atomic.LoadInt32(&i.inputClosed) == 0)
 	if err != nil {
-		// If our source has finished but we still have messages in flight then
-		// we block, ideally until the messages are acked.
-		if errors.Is(err, ErrEndOfInput) {
-			msg, rAckFn, err := i.retryList.Shift(ctx)
-			if err != nil {
-				if errors.Is(err, io.EOF) {
-					err = ErrEndOfInput
-				}
-				return nil, nil, err
-			}
-			return msg.Copy(), AckFunc(rAckFn), nil
+		if errors.Is(err, autoretry.ErrExhausted) {
+			return nil, nil, ErrEndOfInput
 		}
+		if errors.Is(err, ErrEndOfInput) {
+			// Mark our input as being closed and trigger an immediate re-read
+			// in order to clear any pending retries.
+			atomic.StoreInt32(&i.inputClosed, 1)
+			return nil, nil, context.Canceled
+		}
+		// Otherwise we have an unknown error from our reader that we should
+		// escalate, this is most likely an ErrNotConnected or ErrTimeout.
 		return nil, nil, err
 	}
-
-	rAckFn := i.retryList.Adopt(ctx, msg, autoretry.AckFunc(aFn))
 	return msg.Copy(), AckFunc(rAckFn), nil
 }
 
 func (i *autoRetryInput) Close(ctx context.Context) error {
+	_ = i.retryList.Close(ctx)
 	return i.child.Close(ctx)
 }

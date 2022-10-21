@@ -1232,6 +1232,33 @@ func TestMethods(t *testing.T) {
 				"foo": "bar",
 			},
 		},
+		"check parse json with use_number set to true": {
+			input: methods(
+				literalFn("{\"foo\":11380878173205700000000000000000000000000000000}"),
+				method("parse_json", true),
+			),
+			output: map[string]any{
+				"foo": json.Number("11380878173205700000000000000000000000000000000"),
+			},
+		},
+		"check parse json with use_number set to false": {
+			input: methods(
+				literalFn("{\"foo\":11380878173205700000000000000000000000000000000}"),
+				method("parse_json", false),
+			),
+			output: map[string]any{
+				"foo": 1.13808781732057e+46,
+			},
+		},
+		"check parse json with use_number not set": {
+			input: methods(
+				literalFn("{\"foo\":11380878173205700000000000000000000000000000000}"),
+				method("parse_json"),
+			),
+			output: map[string]any{
+				"foo": 1.13808781732057e+46,
+			},
+		},
 		"check parse json invalid": {
 			input: methods(
 				literalFn("not valid json"),

@@ -68,6 +68,106 @@ func TestAsyncPreserverClose(t *testing.T) {
 	wg.Wait()
 }
 
+func TestAsyncPreserverRetryPriority(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
+	defer cancel()
+
+	readerImpl := newMockAsyncReaderBlocked()
+	readerImpl.msgsToSnd = []message.Batch{
+		{message.NewPart([]byte("first msg"))},
+		{message.NewPart([]byte("second msg"))},
+	}
+	readerImpl.ackChan = make(chan error, 3)
+	for i := 0; i < 3; i++ {
+		readerImpl.ackChan <- nil
+	}
+	pres := input.NewAsyncPreserver(readerImpl)
+
+	errFoo := errors.New("foo error")
+
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+
+	readyToReadAgain := make(chan struct{})
+	go func() {
+		require.NoError(t, pres.Connect(ctx))
+
+		// First message consumed, then nacked
+		msg, ackFn, err := pres.ReadBatch(ctx)
+		require.NoError(t, err)
+		require.Len(t, msg, 1)
+		assert.Equal(t, "first msg", string(msg[0].AsBytes()))
+
+		// This will block until either a nack or new message, we want to prove
+		// that the nack gets priority when the new message is blocking, so we
+		// nack after N time and return a new message after M time, where M > N.
+		go func() {
+			<-time.After(time.Millisecond * 500)
+			require.NoError(t, ackFn(ctx, errFoo))
+			<-time.After(time.Second)
+			close(readyToReadAgain)
+		}()
+
+		// Next message consumed, which is the nack, not the new message
+		var newAckFn input.AsyncAckFn
+		msg, newAckFn, err = pres.ReadBatch(ctx)
+		require.NoError(t, err)
+		require.Len(t, msg, 1)
+		assert.Equal(t, "first msg", string(msg[0].AsBytes()))
+		require.NoError(t, newAckFn(ctx, nil))
+
+		// Finally, the second message
+		msg, newAckFn, err = pres.ReadBatch(ctx)
+		require.NoError(t, err)
+		require.Len(t, msg, 1)
+		assert.Equal(t, "second msg", string(msg[0].AsBytes()))
+		require.NoError(t, newAckFn(ctx, nil))
+
+		require.NoError(t, pres.Close(ctx))
+		wg.Done()
+	}()
+
+	select {
+	case readerImpl.connChan <- nil:
+	case <-time.After(time.Second):
+		t.Error("Timed out")
+	}
+
+	select {
+	case readerImpl.readChan <- nil:
+	case <-time.After(time.Second):
+		t.Error("Timed out")
+	}
+
+	select {
+	case <-readyToReadAgain:
+	case <-ctx.Done():
+		t.Error("timed out")
+	}
+
+	select {
+	case readerImpl.readChan <- nil:
+	case <-time.After(time.Second):
+		t.Error("Timed out")
+	}
+
+	select {
+	case readerImpl.unblockCloseAsyncChan <- struct{}{}:
+	case <-time.After(time.Second):
+		t.Error("Timed out")
+	}
+
+	select {
+	case readerImpl.waitForCloseChan <- nil:
+	case <-time.After(time.Second):
+		t.Error("Timed out")
+	}
+
+	wg.Wait()
+}
+
 func TestAsyncPreserverNackThenClose(t *testing.T) {
 	t.Parallel()
 
@@ -111,12 +211,6 @@ func TestAsyncPreserverNackThenClose(t *testing.T) {
 		}
 
 		select {
-		case readerImpl.readChan <- component.ErrTypeClosed:
-		case <-ctx.Done():
-			t.Error("Timed out")
-		}
-
-		select {
 		case readerImpl.unblockCloseAsyncChan <- struct{}{}:
 		case <-ctx.Done():
 			t.Error("Timed out")
@@ -134,11 +228,7 @@ func TestAsyncPreserverNackThenClose(t *testing.T) {
 
 	_, ackFn1, err := pres.ReadBatch(ctx)
 	assert.NoError(t, err)
-
-	go func() {
-		time.Sleep(time.Millisecond * 10)
-		assert.NoError(t, ackFn1(ctx, errors.New("rejected")))
-	}()
+	assert.NoError(t, ackFn1(ctx, errors.New("rejected")))
 
 	_, ackFn2, err := pres.ReadBatch(ctx)
 	require.NoError(t, err)
@@ -148,7 +238,6 @@ func TestAsyncPreserverNackThenClose(t *testing.T) {
 	assert.Equal(t, component.ErrTypeClosed, err)
 
 	assert.NoError(t, pres.Close(ctx))
-
 	wg.Wait()
 }
 
@@ -262,12 +351,6 @@ func TestAsyncPreserverCloseThenNackThenAck(t *testing.T) {
 		}
 
 		select {
-		case readerImpl.readChan <- component.ErrTypeClosed:
-		case <-ctx.Done():
-			t.Error("Timed out")
-		}
-
-		select {
 		case readerImpl.ackChan <- nil:
 		case <-ctx.Done():
 			t.Error("Timed out")
@@ -291,19 +374,11 @@ func TestAsyncPreserverCloseThenNackThenAck(t *testing.T) {
 
 	_, ackFn1, err := pres.ReadBatch(ctx)
 	assert.NoError(t, err)
-
-	go func() {
-		time.Sleep(time.Millisecond * 100)
-		assert.NoError(t, ackFn1(ctx, errors.New("huh")))
-	}()
+	assert.NoError(t, ackFn1(ctx, errors.New("huh")))
 
 	_, ackFn2, err := pres.ReadBatch(ctx)
 	require.NoError(t, err)
-
-	go func() {
-		time.Sleep(time.Millisecond * 100)
-		assert.NoError(t, ackFn2(ctx, nil))
-	}()
+	assert.NoError(t, ackFn2(ctx, nil))
 
 	_, _, err = pres.ReadBatch(ctx)
 	assert.Equal(t, component.ErrTypeClosed, err)
@@ -354,12 +429,6 @@ func TestAsyncPreserverMutateThenNack(t *testing.T) {
 		}
 
 		select {
-		case readerImpl.readChan <- component.ErrTypeClosed:
-		case <-ctx.Done():
-			t.Error("Timed out")
-		}
-
-		select {
 		case readerImpl.ackChan <- nil:
 		case <-ctx.Done():
 			t.Error("Timed out")
@@ -393,11 +462,7 @@ func TestAsyncPreserverMutateThenNack(t *testing.T) {
 
 	_, err = gabs.Wrap(mStruct).Set("woof", "meow")
 	require.NoError(t, err)
-
-	go func() {
-		time.Sleep(time.Millisecond * 100)
-		assert.NoError(t, ackFn1(ctx, errors.New("huh")))
-	}()
+	assert.NoError(t, ackFn1(ctx, errors.New("huh")))
 
 	msgTwo, ackFn2, err := pres.ReadBatch(ctx)
 	require.NoError(t, err)
@@ -407,11 +472,7 @@ func TestAsyncPreserverMutateThenNack(t *testing.T) {
 	assert.Equal(t, map[string]any{
 		"hello": "world",
 	}, mStruct)
-
-	go func() {
-		time.Sleep(time.Millisecond * 100)
-		assert.NoError(t, ackFn2(ctx, nil))
-	}()
+	assert.NoError(t, ackFn2(ctx, nil))
 
 	_, _, err = pres.ReadBatch(ctx)
 	assert.Equal(t, component.ErrTypeClosed, err)
@@ -457,13 +518,13 @@ func TestAsyncPreserverCloseViaConnectThenAck(t *testing.T) {
 		}
 
 		select {
-		case readerImpl.connChan <- component.ErrTypeClosed:
+		case readerImpl.ackChan <- nil:
 		case <-ctx.Done():
 			t.Error("Timed out")
 		}
 
 		select {
-		case readerImpl.ackChan <- nil:
+		case readerImpl.connChan <- component.ErrTypeClosed:
 		case <-ctx.Done():
 			t.Error("Timed out")
 		}
@@ -490,13 +551,10 @@ func TestAsyncPreserverCloseViaConnectThenAck(t *testing.T) {
 	_, _, err = pres.ReadBatch(ctx)
 	assert.Equal(t, component.ErrNotConnected, err)
 
+	assert.NoError(t, ackFn1(ctx, nil))
+
 	err = pres.Connect(ctx)
 	assert.Equal(t, component.ErrTypeClosed, err)
-
-	go func() {
-		time.Sleep(time.Millisecond * 100)
-		assert.NoError(t, ackFn1(ctx, nil))
-	}()
 
 	assert.NoError(t, pres.Close(ctx))
 	wg.Wait()
@@ -594,6 +652,7 @@ func TestAsyncPreserverErrorProp(t *testing.T) {
 }
 
 func TestAsyncPreserverErrorBackoff(t *testing.T) {
+	t.Skip("Not liked by the race detector")
 	t.Parallel()
 
 	readerImpl := newMockAsyncReaderBlocked()

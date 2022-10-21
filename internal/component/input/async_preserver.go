@@ -3,7 +3,6 @@ package input
 import (
 	"context"
 	"errors"
-	"io"
 	"sync/atomic"
 
 	"github.com/benthosdev/benthos/v4/internal/autoretry"
@@ -31,22 +30,27 @@ type AsyncPreserver struct {
 // NewAsyncPreserver returns a new AsyncPreserver wrapper around a input.Async.
 func NewAsyncPreserver(r Async) *AsyncPreserver {
 	return &AsyncPreserver{
-		retryList: autoretry.NewList(func(t message.Batch, err error) message.Batch {
-			var bErr *batch.Error
-			if !errors.As(err, &bErr) || bErr.IndexedErrors() == 0 {
-				return t
-			}
-
-			newBatch := make(message.Batch, 0, bErr.IndexedErrors())
-			bErr.WalkParts(func(i int, p *message.Part, err error) bool {
-				if err == nil {
-					return true
+		retryList: autoretry.NewList(
+			func(ctx context.Context) (message.Batch, autoretry.AckFunc, error) {
+				t, aFn, err := r.ReadBatch(ctx)
+				return t, autoretry.AckFunc(aFn), err
+			},
+			func(t message.Batch, err error) message.Batch {
+				var bErr *batch.Error
+				if !errors.As(err, &bErr) || bErr.IndexedErrors() == 0 {
+					return t
 				}
-				newBatch = append(newBatch, p)
-				return true
-			})
-			return newBatch
-		}),
+
+				newBatch := make(message.Batch, 0, bErr.IndexedErrors())
+				bErr.WalkParts(func(i int, p *message.Part, err error) bool {
+					if err == nil {
+						return true
+					}
+					newBatch = append(newBatch, p)
+					return true
+				})
+				return newBatch
+			}),
 		r: r,
 	}
 }
@@ -61,7 +65,7 @@ func (p *AsyncPreserver) Connect(ctx context.Context) error {
 	// If our source has finished but we still have messages in flight then
 	// we act like we're still open. Read will be called and we can either
 	// return the pending messages or wait for them.
-	if errors.Is(err, component.ErrTypeClosed) && p.retryList.Exhausted() {
+	if errors.Is(err, component.ErrTypeClosed) && !p.retryList.Exhausted() {
 		atomic.StoreInt32(&p.inputClosed, 1)
 		err = nil
 	}
@@ -70,43 +74,27 @@ func (p *AsyncPreserver) Connect(ctx context.Context) error {
 
 // ReadBatch attempts to read a new message from the source.
 func (p *AsyncPreserver) ReadBatch(ctx context.Context) (message.Batch, AsyncAckFn, error) {
-	if batch, rAckFn, exists := p.retryList.TryShift(ctx); exists {
-		return batch.ShallowCopy(), AsyncAckFn(rAckFn), nil
-	}
-
-	var (
-		batch message.Batch
-		aFn   AsyncAckFn
-		err   error
-	)
-
-	if atomic.LoadInt32(&p.inputClosed) > 0 {
-		err = component.ErrTypeClosed
-	} else {
-		batch, aFn, err = p.r.ReadBatch(ctx)
-	}
+	batch, rAckFn, err := p.retryList.Shift(ctx, atomic.LoadInt32(&p.inputClosed) == 0)
 	if err != nil {
-		// If our source has finished but we still have messages in flight then
-		// we block, ideally until the messages are acked.
-		if errors.Is(err, component.ErrTypeClosed) {
-			batch, rAckFn, err := p.retryList.Shift(ctx)
-			if err != nil {
-				if errors.Is(err, io.EOF) {
-					err = component.ErrTypeClosed
-				}
-				return nil, nil, err
-			}
-			return batch.ShallowCopy(), AsyncAckFn(rAckFn), nil
+		if errors.Is(err, autoretry.ErrExhausted) {
+			return nil, nil, component.ErrTypeClosed
 		}
+		if errors.Is(err, component.ErrTypeClosed) {
+			// Mark our input as being closed and trigger an immediate re-read
+			// in order to clear any pending retries.
+			atomic.StoreInt32(&p.inputClosed, 1)
+			return p.ReadBatch(ctx)
+		}
+		// Otherwise we have an unknown error from our reader that we should
+		// escalate, this is most likely an ErrNotConnected or ErrTimeout.
 		return nil, nil, err
 	}
-
-	rAckFn := p.retryList.Adopt(ctx, batch, autoretry.AckFunc(aFn))
 	return batch.ShallowCopy(), AsyncAckFn(rAckFn), nil
 }
 
 // Close triggers the shut down of this component and blocks until completion or
 // context cancellation.
 func (p *AsyncPreserver) Close(ctx context.Context) error {
+	_ = p.retryList.Close(ctx)
 	return p.r.Close(ctx)
 }

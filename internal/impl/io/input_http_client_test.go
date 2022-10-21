@@ -589,9 +589,7 @@ func TestHTTPClientStreamGETMultipartLoop(t *testing.T) {
 	}
 
 	h.TriggerStopConsuming()
-	if err := h.WaitForClose(tCtx); err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, h.WaitForClose(tCtx))
 }
 
 func TestHTTPClientStreamGETMultiRecover(t *testing.T) {

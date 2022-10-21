@@ -1001,6 +1001,8 @@ func parseCSVMethod(*ParsedParams) (simpleMethod, error) {
 var _ = registerSimpleMethod(
 	NewMethodSpec(
 		"parse_json", "",
+	).Param(
+		ParamBool("use_number", "An optional flag that when set makes parsing numbers as json.Number instead of the default float64.").Optional(),
 	).InCategory(
 		MethodCategoryParsing,
 		"Attempts to parse a string as a JSON document and returns the result.",
@@ -1009,8 +1011,17 @@ var _ = registerSimpleMethod(
 			`{"doc":"{\"foo\":\"bar\"}"}`,
 			`{"doc":{"foo":"bar"}}`,
 		),
+		NewExampleSpec("",
+			`root.doc = this.doc.parse_json(use_number: true)`,
+			`{"doc":"{\"foo\":\"11380878173205700000000000000000000000000000000\"}"}`,
+			`{"doc":{"foo":"11380878173205700000000000000000000000000000000"}}`,
+		),
 	),
-	func(*ParsedParams) (simpleMethod, error) {
+	func(args *ParsedParams) (simpleMethod, error) {
+		useNumber, err := args.FieldOptionalBool("use_number")
+		if err != nil {
+			return nil, err
+		}
 		return func(v any, ctx FunctionContext) (any, error) {
 			var jsonBytes []byte
 			switch t := v.(type) {
@@ -1022,7 +1033,11 @@ var _ = registerSimpleMethod(
 				return nil, NewTypeError(v, ValueString)
 			}
 			var jObj any
-			if err := json.Unmarshal(jsonBytes, &jObj); err != nil {
+			decoder := json.NewDecoder(bytes.NewReader(jsonBytes))
+			if useNumber != nil && *useNumber {
+				decoder.UseNumber()
+			}
+			if err := decoder.Decode(&jObj); err != nil {
 				return nil, fmt.Errorf("failed to parse value as JSON: %w", err)
 			}
 			return jObj, nil

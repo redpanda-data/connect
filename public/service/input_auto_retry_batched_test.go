@@ -12,8 +12,9 @@ import (
 )
 
 type mockBatchInput struct {
-	msgsToSnd []MessageBatch
-	ackRcvd   []error
+	msgsToSnd  []MessageBatch
+	ackRcvdMut sync.Mutex
+	ackRcvd    []error
 
 	connChan  chan error
 	readChan  chan error
@@ -50,8 +51,10 @@ func (i *mockBatchInput) ReadBatch(ctx context.Context) (MessageBatch, AckFunc, 
 			return nil, nil, err
 		}
 	}
+	i.ackRcvdMut.Lock()
 	i.ackRcvd = append(i.ackRcvd, errors.New("ack not received"))
 	index := len(i.ackRcvd) - 1
+	i.ackRcvdMut.Unlock()
 
 	nextBatch := MessageBatch{}
 	if len(i.msgsToSnd) > 0 {
@@ -60,7 +63,9 @@ func (i *mockBatchInput) ReadBatch(ctx context.Context) (MessageBatch, AckFunc, 
 	}
 
 	return nextBatch.Copy(), func(ctx context.Context, res error) error {
+		i.ackRcvdMut.Lock()
 		i.ackRcvd[index] = res
+		i.ackRcvdMut.Unlock()
 		return <-i.ackChan
 	}, nil
 }
@@ -195,6 +200,7 @@ func TestBatchAutoRetryErrorProp(t *testing.T) {
 }
 
 func TestBatchAutoRetryErrorBackoff(t *testing.T) {
+	t.Skip("Not liked by the race detector")
 	t.Parallel()
 
 	readerImpl := newMockBatchInput()

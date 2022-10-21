@@ -70,6 +70,7 @@ func (i *WithPipeline) TriggerStopConsuming() {
 // the calling goroutine.
 func (i *WithPipeline) TriggerCloseNow() {
 	i.in.TriggerCloseNow()
+	i.pipe.TriggerCloseNow()
 }
 
 // WaitForClose is a blocking call to wait until the component has finished
