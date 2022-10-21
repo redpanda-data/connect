@@ -106,7 +106,7 @@ func (w *AsyncWriter) injectSpans(msg message.Batch, spans []*tracing.Span) {
 		spanPart.SetStructuredMut(spanMapGeneric)
 
 		spanMsg := message.Batch{spanPart}
-		if tmpMsg, err := w.injectTracingMap.MapOnto(msg.Get(i), i, spanMsg); err != nil {
+		if tmpMsg, err := w.injectTracingMap.MapOnto(msg.Get(i), 0, spanMsg); err != nil {
 			w.log.Warnf("Failed to inject span: %v", err)
 		} else {
 			msg[i] = tmpMsg
