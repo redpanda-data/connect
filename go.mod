@@ -87,7 +87,7 @@ require (
 	github.com/snowflakedb/gosnowflake v1.6.6
 	github.com/stretchr/testify v1.8.0
 	github.com/tilinna/z85 v1.0.0
-	github.com/twmb/franz-go v1.8.0
+	github.com/twmb/franz-go v1.9.0
 	github.com/twmb/franz-go/pkg/kmsg v1.2.0
 	github.com/urfave/cli/v2 v2.11.0
 	github.com/vmihailenco/msgpack/v5 v5.3.5

@@ -3,9 +3,8 @@ builds:
     main: cmd/benthos/main.go
     binary: benthos
     goos: [ windows, darwin, linux, freebsd, openbsd ]
-    goarch: [ amd64, arm64 ]
-    # goarch: [ amd64, arm, arm64 ]
-    # goarm: [ 6, 7 ]
+    goarch: [ amd64, arm, arm64 ]
+    goarm: [ 6, 7 ]
     ignore:
       - goos: windows
         goarch: arm

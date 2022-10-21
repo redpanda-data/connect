@@ -23,6 +23,7 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 
 - The `gcp_cloud_storage` output no longer ignores errors when closing a written file, this was masking issues when the target bucket was invalid.
+- Upgraded the `kafka_franz` input and output to use github.com/twmb/franz-go@v1.9.0 since some [bug fixes](https://github.com/twmb/franz-go/blob/master/CHANGELOG.md#v190) were made recently.
 - Fixed an issue where a `read_until` child input with processors affiliated would block graceful termination.
 
 ## 4.9.1 - 2022-10-06
