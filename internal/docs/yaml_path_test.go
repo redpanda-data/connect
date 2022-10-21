@@ -271,7 +271,7 @@ pipeline:
 `,
 		},
 		{
-			name: "set 2D array value outter index",
+			name: "set 2D array value outer index",
 			input: `
 pipeline:
   processors:
@@ -521,7 +521,7 @@ func TestGetPathDocs(t *testing.T) {
 			resKind: "scalar",
 		},
 		{
-			name:    "workflow 2D array outter",
+			name:    "workflow 2D array outer",
 			path:    "/pipeline/processors/0/workflow/order",
 			resName: "order",
 			resType: "string",

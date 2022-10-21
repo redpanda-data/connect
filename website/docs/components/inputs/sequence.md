@@ -115,7 +115,7 @@ With the following config:
 input:
   sequence:
     sharded_join:
-      type: full-outter
+      type: full-outer
       id_path: uuid
       merge_strategy: array
     inputs:
@@ -160,7 +160,7 @@ With the following config:
 input:
   sequence:
     sharded_join:
-      type: full-outter
+      type: full-outer
       id_path: uuid
       iterations: 10
       merge_strategy: array
@@ -183,7 +183,7 @@ input:
 
 ### `sharded_join`
 
-EXPERIMENTAL: Provides a way to perform outter joins of arbitrarily structured and unordered data resulting from the input sequence, even when the overall size of the data surpasses the memory available on the machine.
+EXPERIMENTAL: Provides a way to perform outer joins of arbitrarily structured and unordered data resulting from the input sequence, even when the overall size of the data surpasses the memory available on the machine.
 
 When configured the sequence of inputs will be consumed one or more times according to the number of iterations, and when more than one iteration is specified each iteration will process an entirely different set of messages by sharding them by the ID field. Increasing the number of iterations reduces the memory consumption at the cost of needing to fully parse the data each time.
 
@@ -195,12 +195,12 @@ Requires version 3.40.0 or newer
 
 ### `sharded_join.type`
 
-The type of join to perform. A `full-outter` ensures that all identifiers seen in any of the input sequences are sent, and is performed by consuming all input sequences before flushing the joined results. An `outter` join consumes all input sequences but only writes data joined from the last input in the sequence, similar to a left or right outter join. With an `outter` join if an identifier appears multiple times within the final sequence input it will be flushed each time it appears.
+The type of join to perform. A `full-outer` ensures that all identifiers seen in any of the input sequences are sent, and is performed by consuming all input sequences before flushing the joined results. An `outer` join consumes all input sequences but only writes data joined from the last input in the sequence, similar to a left or right outer join. With an `outer` join if an identifier appears multiple times within the final sequence input it will be flushed each time it appears. `full-outter` and `outter` have been deprecated in favour of `full-outer` and `outer`.
 
 
 Type: `string`  
 Default: `"none"`  
-Options: `none`, `full-outter`, `outter`.
+Options: `none`, `full-outer`, `outer`, `full-outter`, `outter`.
 
 ### `sharded_join.id_path`
 
