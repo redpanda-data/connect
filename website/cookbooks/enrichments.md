@@ -296,7 +296,7 @@ pipeline:
             fields_mapping: 'root.content = content().string()'
             message: "Enrichments failed due to: ${!error()}"
 
-    - bloblang: |
+    - mapping: |
         root = this
         root.tmp = deleted()
 
@@ -306,7 +306,7 @@ output:
     topic: comments_hydrated
 ```
 
-Since the contents of `tmp` won't be required downstream we remove it after our enrichments using a [`bloblang` processor][processor.bloblang].
+Since the contents of `tmp` won't be required downstream we remove it after our enrichments using a [`mapping` processor][processor.mapping].
 
 A [`catch`][processor.catch] processor was added at the end of the pipeline which catches documents that failed enrichment. You can replace the log event with a wide range of recovery actions such as sending to a dead-letter/retry queue, dropping the message entirely, etc. You can read more about error handling [in this article][error-handling].
 
@@ -317,7 +317,7 @@ A [`catch`][processor.catch] processor was added at the end of the pipeline whic
 [processor.catch]: /docs/components/processors/catch
 [processor.archive]: /docs/components/processors/archive
 [processor.unarchive]: /docs/components/processors/unarchive
-[processor.bloblang]: /docs/components/processors/bloblang
+[processor.mapping]: /docs/components/processors/mapping
 [processor.subprocess]: /docs/components/processors/subprocess
 [processor.lambda]: /docs/components/processors/aws_lambda
 [processor.http]: /docs/components/processors/http

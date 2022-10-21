@@ -224,16 +224,31 @@ func (l *List[T]) exhausted() bool {
 // Close any pending read attempts that could be dangling from prior shifts.
 func (l *List[T]) Close(ctx context.Context) error {
 	l.readDone()
+	return nil
+}
 
+// TODO: Ensure docs around auto retry and all implementations are okay with
+// nacks on termination, otherwise we leave them.
+//
+// nolint:unused // Keeping this around for now.
+func (l *List[T]) nackAllPending() error {
 	l.cond.L.Lock()
 	defer l.cond.L.Unlock()
+
+	rejectAck := func(fn AckFunc) {
+		_ = fn(context.Background(), errors.New("message rejected"))
+	}
+
+	// Wait for all pending activity to end.
 	for {
-		if l.readInFlight <= 0 {
+		if l.retryInFlight <= 0 && l.readInFlight <= 0 {
+			for _, r := range l.pendingRetry {
+				go rejectAck(r.aFn)
+				l.pendingRead = nil
+			}
+			l.pendingRetry = nil
 			if l.pendingRead != nil && l.pendingRead.aFn != nil {
-				aFn := l.pendingRead.aFn
-				go func() {
-					_ = aFn(context.Background(), errors.New("message rejected"))
-				}()
+				go rejectAck(l.pendingRead.aFn)
 				l.pendingRead = nil
 			}
 			return nil

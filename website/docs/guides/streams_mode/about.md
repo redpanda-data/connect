@@ -32,7 +32,7 @@ input:
     path: /meow
 pipeline:
   processors:
-    - bloblang: 'root = "meow " + content()'
+    - mapping: 'root = "meow " + content()'
 output:
   sync_response: {}
 ```

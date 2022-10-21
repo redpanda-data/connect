@@ -35,7 +35,7 @@ output:
         retries: 3
         retry_period: 1s
       processors:
-        - bloblang: 'root = "failed to send this message to foo: " + content()'
+        - mapping: 'root = "failed to send this message to foo: " + content()'
     - file:
         path: /usr/local/benthos/everything_failed.jsonl
 ` + "```" + `

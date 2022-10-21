@@ -13,7 +13,7 @@ input:
 pipeline:
   threads: 4
   processors:
-    - bloblang: |
+    - mapping: |
         root = this
         fans = fans.map_each(match {
           this.obsession > 0.5 => this

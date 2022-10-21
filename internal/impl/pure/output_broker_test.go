@@ -347,10 +347,10 @@ broker:
       processors:
         - bloblang: 'root = content().uppercase()'
 processors:
-  - bloblang: 'root = "outter: " + content()'
+  - bloblang: 'root = "outer: " + content()'
 `,
 			output: map[string]struct{}{
-				"OUTTER: HELLO WORLD 1": {},
+				"OUTER: HELLO WORLD 1": {},
 			},
 		},
 		{
@@ -363,7 +363,7 @@ generate:
 `,
 			outputConfig: `
 processors:
-  - bloblang: 'root = "outter: " + content()'
+  - bloblang: 'root = "outer: " + content()'
 
 broker:
   batching:
@@ -378,7 +378,7 @@ broker:
         - bloblang: 'root = "inner: " + content()'
 `,
 			output: map[string]struct{}{
-				"inner: outter: hello world 1\noutter: hello world 1\noutter: hello world 1": {},
+				"inner: outer: hello world 1\nouter: hello world 1\nouter: hello world 1": {},
 			},
 		},
 	} {

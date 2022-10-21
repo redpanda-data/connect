@@ -84,7 +84,7 @@ pipeline:
     - group_by_value:
         value: ${! json("traffic_light") }
 
-    - bloblang: |
+    - mapping: |
         let is_first_message = batch_index() == 0
 
         root.traffic_light = this.traffic_light

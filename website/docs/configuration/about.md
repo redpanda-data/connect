@@ -26,7 +26,7 @@ input:
 
 pipeline:
   processors:
-  - bloblang: |
+  - mapping: |
       root.message = this
       root.meta.link_count = this.links.length()
 
@@ -55,7 +55,7 @@ buffer:
 
 pipeline:
   processors:
-  - bloblang: |
+  - mapping: |
       root.message = this
       root.meta.link_count = this.links.length()
 
@@ -124,7 +124,7 @@ pipeline:
   processors:
     - resource: get_foo
     - catch:
-      - bloblang: |
+      - mapping: |
           root = this
           root.content = this.content.strip_html()
       - resource: get_foo
@@ -230,10 +230,10 @@ output:
 
 In order to make this process easier Benthos is able to generate usable configuration examples for any types, and you can do this from the binary using the `create` subcommand.
 
-If, for example, we wanted to generate a config with a websocket input, a Kafka output and a Bloblang processor in the middle, we could do it with the following command:
+If, for example, we wanted to generate a config with a websocket input, a Kafka output and a [`mapping` processor][processors.mapping] in the middle, we could do it with the following command:
 
 ```text
-benthos create websocket/bloblang/kafka
+benthos create websocket/mapping/kafka
 ```
 
 > If you need a gentle reminder as to which components Benthos offers you can see those as well with `benthos list`.
@@ -296,6 +296,7 @@ The `shutdown_timeout` option sets a hard deadline for Benthos process to gracef
 This option takes effect after the `shutdown_delay` duration has passed if that is enabled.
 
 [processors]: /docs/components/processors/about
+[processors.mapping]: /docs/components/processors/mapping
 [config-interp]: /docs/configuration/interpolation
 [config.testing]: /docs/configuration/unit_testing
 [config.templating]: /docs/configuration/templating

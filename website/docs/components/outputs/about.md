@@ -17,7 +17,7 @@ output:
 
   # Optional list of processing steps
   processors:
-    - bloblang: '{"message":this,"meta":{"link_count":this.links.length()}}'
+    - mapping: '{"message":this,"meta":{"link_count":this.links.length()}}'
 ```
 
 ## Back Pressure
@@ -90,7 +90,7 @@ output:
             url: tcp://localhost:6379
             stream: everything_else
           processors:
-            - bloblang: |
+            - mapping: |
                 root = this
                 root.type = this.type.not_null() | "unknown"
 ```
@@ -110,7 +110,6 @@ import ComponentSelect from '@theme/ComponentSelect';
 <ComponentSelect type="outputs"></ComponentSelect>
 
 [processors]: /docs/components/processors/about
-[processor.bloblang]: /docs/components/processors/bloblang
 [output.broker]: /docs/components/outputs/broker
 [output.switch]: /docs/components/outputs/switch
 [output.retry]: /docs/components/outputs/retry

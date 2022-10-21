@@ -94,7 +94,7 @@ pipeline:
           source: homebrew
         value: ${! json("analytics.install.30d.benthos") }
 
-    - bloblang: root = deleted()
+    - mapping: root = deleted()
 
 metrics:
   mapping: if this != "downloads" { deleted() }
@@ -105,7 +105,7 @@ With the above config we have selected the [`prometheus` metrics type][metrics.p
 
 We have also specified a [`path_mapping`][metrics.prometheus.path_mapping] that deletes any internal metrics usually emitted by Benthos by filtering on our custom metric name.
 
-Finally, there's also a [`bloblang` processor][processors.bloblang] added to the end of our pipeline that deletes all messages since we're not interested in sending the raw data anywhere after this point anyway.
+Finally, there's also a [`mapping` processor][processors.mapping] added to the end of our pipeline that deletes all messages since we're not interested in sending the raw data anywhere after this point anyway.
 
 While running this config you can verify that our custom metric is emitted with `curl`:
 
@@ -133,8 +133,8 @@ Easy! The Dockerhub API is also pretty simple, and adding it to our pipeline is 
 ```diff
            source: homebrew
          value: ${! json("analytics.install.30d.benthos") }
- 
-+    - bloblang: root = ""
+
++    - mapping: root = ""
 +
 +    - http:
 +        url: https://hub.docker.com/v2/repositories/jeffail/benthos/
@@ -147,7 +147,7 @@ Easy! The Dockerhub API is also pretty simple, and adding it to our pipeline is 
 +          source: dockerhub
 +        value: ${! json("pull_count") }
 +
-     - bloblang: root = deleted()
+     - mapping: root = deleted()
 ```
 </TabItem>
 
@@ -175,7 +175,7 @@ pipeline:
           source: homebrew
         value: ${! json("analytics.install.30d.benthos") }
 
-    - bloblang: root = ""
+    - mapping: root = ""
 
     - http:
         url: https://hub.docker.com/v2/repositories/jeffail/benthos/
@@ -188,7 +188,7 @@ pipeline:
           source: dockerhub
         value: ${! json("pull_count") }
 
-    - bloblang: root = deleted()
+    - mapping: root = deleted()
 
 metrics:
   mapping: if this != "downloads" { deleted() }
@@ -217,7 +217,7 @@ So that's the basics covered. Next, we're going to target the Github releases AP
 ]
 ```
 
-It's an array of objects, one for each tagged release, with a field `assets` which is an array of objects representing each release asset, of which we want to emit a separate download gauge. In order to do this we're going to use a [`bloblang` processor][processors.bloblang] to remap the payload from Github into an array of objects of the following form:
+It's an array of objects, one for each tagged release, with a field `assets` which is an array of objects representing each release asset, of which we want to emit a separate download gauge. In order to do this we're going to use a [`mapping` processor][processors.mapping] to remap the payload from Github into an array of objects of the following form:
 
 ```json
 [
@@ -247,7 +247,7 @@ pipeline:
         url: https://api.github.com/repos/benthosdev/benthos/releases
         verb: GET
 
-    - bloblang: |
+    - mapping: |
         root = this.map_each(release -> release.assets.map_each(asset -> {
           "source":         "github",
           "dist":           asset.name.re_replace_all("^benthos-?((lambda_)|_)[0-9\\.]+(-rc[0-9]+)?_([^\\.]+).*", "$2$4"),
@@ -266,7 +266,7 @@ pipeline:
           source: ${! json("source") }
         value: ${! json("download_count") }
 
-    - bloblang: root = deleted()
+    - mapping: root = deleted()
 
 metrics:
   mapping: if this != "downloads" { deleted() }
@@ -305,7 +305,7 @@ processor_resources:
           - http:
               url: https://hub.docker.com/v2/repositories/jeffail/benthos/
               verb: GET
-          - bloblang: |
+          - mapping: |
               root.source = "docker"
               root.dist = "docker"
               root.download_count = this.pull_count
@@ -320,7 +320,7 @@ processor_resources:
           - http:
               url: https://api.github.com/repos/benthosdev/benthos/releases
               verb: GET
-          - bloblang: |
+          - mapping: |
               root = this.map_each(release -> release.assets.map_each(asset -> {
                 "source":         "github",
                 "dist":           asset.name.re_replace_all("^benthos-?((lambda_)|_)[0-9\\.]+(-rc[0-9]+)?_([^\\.]+).*", "$2$4"),
@@ -330,7 +330,7 @@ processor_resources:
           - unarchive:
               format: json_array
           - resource: metric_gauge
-          - bloblang: 'root = if batch_index() != 0 { deleted() }'
+          - mapping: 'root = if batch_index() != 0 { deleted() }'
 
   - label: homebrew
     branch:
@@ -340,7 +340,7 @@ processor_resources:
           - http:
               url: https://formulae.brew.sh/api/formula/benthos.json
               verb: GET
-          - bloblang: |
+          - mapping: |
               root.source = "homebrew"
               root.dist = "homebrew"
               root.download_count = this.analytics.install.30d.benthos
@@ -369,7 +369,7 @@ metrics:
 [processors.workflow]: /docs/components/processors/workflow
 [processors.branch]: /docs/components/processors/branch
 [processors.unarchive]: /docs/components/processors/unarchive
-[processors.bloblang]: /docs/components/processors/bloblang
+[processors.mapping]: /docs/components/processors/mapping
 [processors.http]: /docs/components/processors/http
 [processors.metric]: /docs/components/processors/metric
 [rate_limits]: /docs/components/rate_limits/about

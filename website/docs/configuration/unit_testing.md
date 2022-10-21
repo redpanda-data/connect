@@ -32,7 +32,7 @@ input:
 
 pipeline:
   processors:
-  - bloblang: '"%vend".format(content().uppercase().string())'
+  - mapping: '"%vend".format(content().uppercase().string())'
 
 output:
   aws_s3:
@@ -255,15 +255,15 @@ Sometimes you'll want to write tests for a series of processors, where one or mo
 ```yaml
 pipeline:
   processors:
-    - bloblang: 'root = "simon says: " + content()'
+    - mapping: 'root = "simon says: " + content()'
     - label: get_foobar_api
       http:
         url: http://example.com/foobar
         verb: GET
-    - bloblang: 'root = content().uppercase()'
+    - mapping: 'root = content().uppercase()'
 ```
 
-Rather than create a fake service for the `http` processor to interact with we can define a mock in our test definition that replaces it with a `bloblang` processor. Mocks are configured as a map of labels that identify a processor to replace and the config to replace it with:
+Rather than create a fake service for the `http` processor to interact with we can define a mock in our test definition that replaces it with a [`mapping` processor][processors.mapping]. Mocks are configured as a map of labels that identify a processor to replace and the config to replace it with:
 
 ```yaml
 tests:
@@ -271,14 +271,14 @@ tests:
     target_processors: '/pipeline/processors'
     mocks:
       get_foobar_api:
-        bloblang: 'root = content().string() + " this is some mock content"'
+        mapping: 'root = content().string() + " this is some mock content"'
     input_batch:
       - content: "hello world"
     output_batches:
       - - content_equals: "SIMON SAYS: HELLO WORLD THIS IS SOME MOCK CONTENT"
 ```
 
-With the above test definition the `http` processor will be swapped out for `bloblang: 'root = content().string() + " this is some mock content"'`. For the purposes of mocking it is recommended that you use a `bloblang` processor that simply mutates the message in a way that you would expect the mocked processor to.
+With the above test definition the `http` processor will be swapped out for `mapping: 'root = content().string() + " this is some mock content"'`. For the purposes of mocking it is recommended that you use a [`mapping` processor][processors.mapping] that simply mutates the message in a way that you would expect the mocked processor to.
 
 > Note: It's not currently possible to mock components that are imported as separate resource files (using `--resource`/`-r`). It is recommended that you mock these by maintaining separate definitions for test purposes (`-r "./test/*.yaml"`).
 
@@ -292,7 +292,7 @@ tests:
     target_processors: '/pipeline/processors'
     mocks:
       /pipeline/processors/1:
-        bloblang: 'root = content().string() + " this is some mock content"'
+        mapping: 'root = content().string() + " this is some mock content"'
     input_batch:
       - content: "hello world"
     output_batches:
@@ -356,7 +356,7 @@ Default: `""`
 
 ### `tests[].mocks`
 
-An optional map of processors to mock. Keys should contain either a label or a JSON pointer of a processor that should be mocked. Values should contain a processor definition, which will replace the mocked processor. Most of the time you'll want to use a `bloblang` processor here, and use it to create a result that emulates the target processor.
+An optional map of processors to mock. Keys should contain either a label or a JSON pointer of a processor that should be mocked. Values should contain a processor definition, which will replace the mocked processor. Most of the time you'll want to use a [`mapping` processor][processors.mapping] here, and use it to create a result that emulates the target processor.
 
 
 Type: map of `unknown`  
@@ -366,11 +366,11 @@ Type: map of `unknown`
 
 mocks:
   get_foobar_api:
-    bloblang: root = content().string() + " this is some mock content"
+    mapping: root = content().string() + " this is some mock content"
 
 mocks:
   /pipeline/processors/1:
-    bloblang: root = content().string() + " this is some mock content"
+    mapping: root = content().string() + " this is some mock content"
 ```
 
 ### `tests[].input_batch`
@@ -616,3 +616,4 @@ file_json_contains: ./foo/bar.json
 [json-pointer]: https://tools.ietf.org/html/rfc6901
 [bloblang]: /docs/guides/bloblang/about
 [logger]: /docs/components/logger/about
+[processors.mapping]: /docs/components/processors/mapping

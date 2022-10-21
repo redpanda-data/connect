@@ -28,7 +28,7 @@ This processor allows you to reference the same configured processor resource in
 ```yaml
 pipeline:
   processors:
-    - bloblang: |
+    - mapping: |
         root.message = this
         root.meta.link_count = this.links.length()
         root.user.age = this.user.age.number()
@@ -43,7 +43,7 @@ pipeline:
 
 processor_resources:
   - label: foo_proc
-    bloblang: |
+    mapping: |
       root.message = this
       root.meta.link_count = this.links.length()
       root.user.age = this.user.age.number()

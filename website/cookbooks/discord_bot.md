@@ -65,7 +65,7 @@ Writing messages to a Discord channel is pretty easy. You can feed the [`discord
 ```yaml
 pipeline:
   processors:
-    - bloblang: |
+    - mapping: |
         root = if !this.content.has_prefix("SHOUTS BACK") {
           "SHOUTS BACK BOT SAYS " + this.content.uppercase()
         } else {
@@ -90,10 +90,10 @@ pipeline:
     - switch:
         - check: this.type == 7
           processors:
-            - bloblang: 'root = "Welcome to the server <@%v>!".format(this.author.id)'
+            - mapping: 'root = "Welcome to the server <@%v>!".format(this.author.id)'
 
         - processors:
-            - bloblang: 'root = deleted()'
+            - mapping: 'root = deleted()'
 ```
 
 By changing our mapping out to this switch we can add specialised commands for different message types, and if none of the cases match then we don't respond. Technically, we can do all of this within a single Bloblang mapping by using a match expression, but having a switch processor would also allow us to add cases where we do cool things like hit other APIs, etc.
@@ -108,11 +108,11 @@ pipeline:
     - switch:
         - check: this.type == 7
           processors:
-            - bloblang: 'root = "Welcome to the server <@%v>!".format(this.author.id)'
+            - mapping: 'root = "Welcome to the server <@%v>!".format(this.author.id)'
 
         - check: this.content == "/joke"
           processors:
-            - bloblang: |
+            - mapping: |
                 let jokes = [
                   "What do you call a belt made of watches? A waist of time.",
                   "What does a clock do when it’s hungry? It goes back four seconds.",
@@ -122,7 +122,7 @@ pipeline:
 
         - check: this.content == "/roast"
           processors:
-            - bloblang: |
+            - mapping: |
                 let roasts = [
                   "If <@%v>'s brain was dynamite, there wouldn’t be enough to blow their hat off.",
                   "Someday you’ll go far <@%v>, and I really hope you stay there.",
@@ -131,7 +131,7 @@ pipeline:
                 root = $roasts.index(timestamp_unix_nano() % $roasts.length()).format(this.author.id)
 
         - processors:
-            - bloblang: 'root = deleted()'
+            - mapping: 'root = deleted()'
 ```
 
 Here we have two new commands. If someone posts a message "/joke" then we respond by selecting one of several exceptionally funny jokes from a static list in the mapping.
@@ -151,18 +151,18 @@ pipeline:
         # Other cases omitted for brevity
         - check: this.content == "/release"
           processors:
-            - bloblang: 'root = ""'
+            - mapping: 'root = ""'
             - try:
               - http:
                   url: https://api.github.com/repos/benthosdev/benthos/releases/latest
                   verb: GET
-              - bloblang: 'root = "The latest release of Benthos is %v: %v".format(this.tag_name, this.html_url)'
+              - mapping: 'root = "The latest release of Benthos is %v: %v".format(this.tag_name, this.html_url)'
 
     - catch:
       - log:
           fields_mapping: 'root.error = error()'
           message: "Failed to process message"
-      - bloblang: 'root = "Sorry, my circuits are all bent from twerking and I must have malfunctioned."'
+      - mapping: 'root = "Sorry, my circuits are all bent from twerking and I must have malfunctioned."'
 ```
 
 Here we've added a switch case that clears the contents of the message, hits the Github API to obtain the latest Benthos release as a JSON object, and finally maps the tag name and the URL of the release to a useful message.

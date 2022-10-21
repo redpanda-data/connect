@@ -420,10 +420,10 @@ foo = "static"`,
 }
 root = this.apply("foo")`,
 			input: []part{
-				{Content: `{"outter":{"inner":"hello world"}}`},
+				{Content: `{"outer":{"inner":"hello world"}}`},
 			},
 			output: part{
-				Content: `{"applied":["foo"],"bar":{"outter":{"inner":"hello world"}},"foo":"static foo"}`,
+				Content: `{"applied":["foo"],"bar":{"outer":{"inner":"hello world"}},"foo":"static foo"}`,
 			},
 		},
 		"test nested maps": {
@@ -440,10 +440,10 @@ map bar {
 }
 root = this.apply("foo")`,
 			input: []part{
-				{Content: `{"outter":{"inner":"hello world"}}`},
+				{Content: `{"outer":{"inner":"hello world"}}`},
 			},
 			output: part{
-				Content: `{"applied":["bar","foo"],"foo":{"bar":{"outter":{"inner":"hello world"}},"static":"this is valid"}}`,
+				Content: `{"applied":["bar","foo"],"foo":{"bar":{"outer":{"inner":"hello world"}},"static":"this is valid"}}`,
 			},
 		},
 		"test imported map": {
@@ -451,10 +451,10 @@ root = this.apply("foo")`,
 
 root = this.apply("foo")`, goodMapFile),
 			input: []part{
-				{Content: `{"outter":{"inner":"hello world"}}`},
+				{Content: `{"outer":{"inner":"hello world"}}`},
 			},
 			output: part{
-				Content: `{"foo":"this is valid","nested":{"outter":{"inner":"hello world"}}}`,
+				Content: `{"foo":"this is valid","nested":{"outer":{"inner":"hello world"}}}`,
 			},
 		},
 		"test directly imported map": {

@@ -8,12 +8,12 @@ When an input protocol supports attributes or metadata they will automatically b
 
 ## Editing Metadata
 
-Benthos allows you to add and remove metadata using the [`bloblang` processor][processors.bloblang]. For example, you can do something like this in your pipeline:
+Benthos allows you to add and remove metadata using the [`mapping` processor][processors.mapping]. For example, you can do something like this in your pipeline:
 
 ```yaml
 pipeline:
   processors:
-  - bloblang: |
+  - mapping: |
       # Remove all existing metadata from messages
       meta = deleted()
 
@@ -89,7 +89,7 @@ pipeline:
   processors:
     # Has an explicit list of public metadata keys, and everything else is given
     # an underscore prefix.
-    - bloblang: |
+    - mapping: |
         let allowed_meta = [
           "foo",
           "bar",
@@ -109,5 +109,5 @@ output:
 
 [interpolation]: /docs/configuration/interpolation
 [processors.switch]: /docs/components/processors/switch
-[processors.bloblang]: /docs/components/processors/bloblang
+[processors.mapping]: /docs/components/processors/mapping
 [guides.bloblang]: /docs/guides/bloblang/about

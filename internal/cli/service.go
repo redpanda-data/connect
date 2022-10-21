@@ -152,7 +152,7 @@ func (s *swappableStopper) Replace(fn func() (stoppable, error)) error {
 	defer s.mut.Unlock()
 
 	if s.stopped {
-		// If the outter stream has been stopped then do not create a new one.
+		// If the outer stream has been stopped then do not create a new one.
 		return nil
 	}
 
