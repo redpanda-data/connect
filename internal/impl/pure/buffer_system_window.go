@@ -106,7 +106,7 @@ pipeline:
 
     # Reduce each batch to a single message by deleting indexes > 0, and
     # aggregate the car and passenger counts.
-    - bloblang: |
+    - mapping: |
         root = if batch_index() == 0 {
           {
             "traffic_light": this.traffic_light,

@@ -86,7 +86,7 @@ benthos -c ./config.yaml
 
 Anything you write to stdin will get written unchanged to stdout, cool! Resist the temptation to play with this for hours, there's more stuff to try out.
 
-Next, let's add some processing steps in order to mutate messages. The most powerful one is the [`bloblang` processor][processors.bloblang] which allows us to perform mappings, let's add a mapping to uppercase our messages:
+Next, let's add some processing steps in order to mutate messages. The most powerful one is the [`mapping` processor][processors.mapping] which allows us to perform mappings, let's add a mapping to uppercase our messages:
 
 ```yaml
 input:
@@ -94,7 +94,7 @@ input:
 
 pipeline:
   processors:
-    - bloblang: root = content().uppercase()
+    - mapping: root = content().uppercase()
 
 output:
   stdout: {}
@@ -112,7 +112,7 @@ pipeline:
   processors:
     - sleep:
         duration: 500ms
-    - bloblang: |
+    - mapping: |
         root.doc = this
         root.first_name = this.names.index(0).uppercase()
         root.last_name = this.names.index(-1).hash("sha256").encode("base64")
@@ -148,10 +148,10 @@ How exciting! I don't know about you but I'm going to need to lie down for a whi
 - [Cookbooks][cookbooks]
 - [More about configuration][configuration]
 
-[processors.bloblang]: /docs/components/processors/bloblang
 [proc_proc_field]: /docs/components/processors/process_field
 [proc_text]: /docs/components/processors/text
 [processors]: /docs/components/processors/about
+[processors.mapping]: /docs/components/processors/mapping
 [inputs]: /docs/components/inputs/about
 [outputs]: /docs/components/outputs/about
 [jmespath]: http://jmespath.org/

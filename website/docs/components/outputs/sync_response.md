@@ -48,7 +48,7 @@ output:
           topic: foo_topic
       - sync_response: {}
         processors:
-          - bloblang: 'root = content().uppercase()'
+          - mapping: 'root = content().uppercase()'
 ```
 
 Using the above example and posting the message 'hello world' to the endpoint

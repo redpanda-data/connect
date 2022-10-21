@@ -53,15 +53,15 @@ It is also possible to target processors in a separate file by prefixing the tar
 		).HasDefault(""),
 		docs.FieldAnything(
 			"mocks",
-			"An optional map of processors to mock. Keys should contain either a label or a JSON pointer of a processor that should be mocked. Values should contain a processor definition, which will replace the mocked processor. Most of the time you'll want to use a `bloblang` processor here, and use it to create a result that emulates the target processor.",
+			"An optional map of processors to mock. Keys should contain either a label or a JSON pointer of a processor that should be mocked. Values should contain a processor definition, which will replace the mocked processor. Most of the time you'll want to use a [`mapping` processor][processors.mapping] here, and use it to create a result that emulates the target processor.",
 			map[string]any{
 				"get_foobar_api": map[string]any{
-					"bloblang": "root = content().string() + \" this is some mock content\"",
+					"mapping": "root = content().string() + \" this is some mock content\"",
 				},
 			},
 			map[string]any{
 				"/pipeline/processors/1": map[string]any{
-					"bloblang": "root = content().string() + \" this is some mock content\"",
+					"mapping": "root = content().string() + \" this is some mock content\"",
 				},
 			},
 		).Map().Optional(),

@@ -78,7 +78,7 @@ input:
 pipeline:
   processors:
     # Reduce document into only fields we wish to cache.
-    - bloblang: 'article = article'
+    - mapping: 'article = article'
 
     # Store reduced articles into our cache.
     - cache:
@@ -204,11 +204,11 @@ pipeline:
             {} # Omitted
 
       # If we've reached this point then both processors succeeded.
-      - bloblang: 'meta output_topic = "comments_hydrated"'
+      - mapping: 'meta output_topic = "comments_hydrated"'
 
     - catch:
         # If we reach here then a processing stage failed.
-        - bloblang: |
+        - mapping: |
             meta output_topic = "comments_retry"
             meta last_attempted = timestamp_unix()
 

@@ -67,7 +67,7 @@ input:
 
 pipeline:
   processors:
-    - bloblang: |
+    - mapping: |
         root.id = uuid_v4()
         root.foo = this.inner.foo
         root.body = this.outter
@@ -89,7 +89,7 @@ input:
 
 pipeline:
   processors:
-    - bloblang: |
+    - mapping: |
         root.id = uuid_v4()
         root.foo = this.inner.foo
         root.body = this.outter

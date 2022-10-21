@@ -25,7 +25,7 @@ buffer:
 pipeline:
   threads: 4
   processors:
-    - bloblang: |
+    - mapping: |
         root = {
           "id": this.user.id,
           "content": this.body.content
@@ -67,7 +67,7 @@ input:
 pipeline:
   threads: 1
   processors:
-    - bloblang: 'root = this.uppercase()'
+    - mapping: 'root = this.uppercase()'
 output:
   elasticsearch:
     urls:
@@ -130,7 +130,7 @@ input:
 pipeline:
   threads: 4
   processors:
-  - bloblang: |
+  - mapping: |
       root = {
         "id": this.user.id,
         "content": this.body.content

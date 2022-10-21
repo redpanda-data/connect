@@ -18,7 +18,7 @@ input:
 
   # Optional list of processing steps
   processors:
-   - bloblang: |
+   - mapping: |
        root.document = this.without("links")
        root.link_count = this.links.length()
 ```

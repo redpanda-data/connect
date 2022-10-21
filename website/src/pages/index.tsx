@@ -61,7 +61,7 @@ const snippets = [
 
 pipeline:
   processors:
-    - bloblang: |
+    - mapping: |
         root.message = this
         root.meta.link_count = this.links.length()
         root.user.age = this.user.age.number()
@@ -117,7 +117,7 @@ pipeline:
   processors:
     - group_by_value:
         value: '\${! json("traffic_light_id") }'
-    - bloblang: |
+    - mapping: |
         root = if batch_index() == 0 {
           {
             "traffic_light_id": this.traffic_light_id,

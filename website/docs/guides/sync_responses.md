@@ -36,7 +36,7 @@ input:
     path: /post
 pipeline:
   processors:
-    - bloblang: root = content().uppercase()
+    - mapping: root = content().uppercase()
 output:
   sync_response: {}
 ```
@@ -58,7 +58,7 @@ output:
           topic: foo_topic
       - sync_response: {}
         processors:
-          - bloblang: root = content().uppercase()
+          - mapping: root = content().uppercase()
 ```
 
 Using the above example, sending a request 'foo bar' to the path `/post` passes the message unchanged to the Kafka topic `foo_topic` and also returns the response 'FOO BAR'.
@@ -78,9 +78,9 @@ input:
 
 pipeline:
   processors:
-    - bloblang: root = "%v baz".format(content().string())
+    - mapping: root = "%v baz".format(content().string())
     - sync_response: {}
-    - bloblang: root = content().uppercase()
+    - mapping: root = content().uppercase()
 
 output:
   kafka:

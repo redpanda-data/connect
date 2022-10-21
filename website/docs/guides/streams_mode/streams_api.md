@@ -74,7 +74,7 @@ input:
     paths: [ /tmp/input.ndjson ]
 pipeline:
   processors:
-    - bloblang: root = content().uppercase()
+    - mapping: root = content().uppercase()
 output:
   file:
     path: /tmp/output.ndjson
