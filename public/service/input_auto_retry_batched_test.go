@@ -200,6 +200,7 @@ func TestBatchAutoRetryErrorProp(t *testing.T) {
 }
 
 func TestBatchAutoRetryErrorBackoff(t *testing.T) {
+	t.Skip("Not liked by the race detector")
 	t.Parallel()
 
 	readerImpl := newMockBatchInput()

@@ -193,6 +193,7 @@ func TestAutoRetryErrorProp(t *testing.T) {
 }
 
 func TestAutoRetryErrorBackoff(t *testing.T) {
+	t.Skip("Not liked by the race detector")
 	t.Parallel()
 
 	readerImpl := newMockInput()
