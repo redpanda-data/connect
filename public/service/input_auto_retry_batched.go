@@ -74,7 +74,7 @@ func (i *autoRetryInputBatched) ReadBatch(ctx context.Context) (MessageBatch, Ac
 			// Mark our input as being closed and trigger an immediate re-read
 			// in order to clear any pending retries.
 			atomic.StoreInt32(&i.inputClosed, 1)
-			return nil, nil, context.Canceled
+			return i.ReadBatch(ctx)
 		}
 		// Otherwise we have an unknown error from our reader that we should
 		// escalate, this is most likely an ErrNotConnected or ErrTimeout.

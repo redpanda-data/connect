@@ -55,7 +55,7 @@ func (i *autoRetryInput) Read(ctx context.Context) (*Message, AckFunc, error) {
 			// Mark our input as being closed and trigger an immediate re-read
 			// in order to clear any pending retries.
 			atomic.StoreInt32(&i.inputClosed, 1)
-			return nil, nil, context.Canceled
+			return i.Read(ctx)
 		}
 		// Otherwise we have an unknown error from our reader that we should
 		// escalate, this is most likely an ErrNotConnected or ErrTimeout.
