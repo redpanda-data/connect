@@ -74,7 +74,7 @@ func init() {
 	err := service.RegisterBatchProcessor(
 		"sql_insert", InsertProcessorConfig(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchProcessor, error) {
-			return NewSQLInsertProcessorFromConfig(conf, mgr.Logger())
+			return NewSQLInsertProcessorFromConfig(conf, mgr)
 		})
 	if err != nil {
 		panic(err)
@@ -97,9 +97,9 @@ type sqlInsertProcessor struct {
 
 // NewSQLInsertProcessorFromConfig returns an internal sql_insert processor.
 // nolint:revive // Not bothered as this is internal anyway
-func NewSQLInsertProcessorFromConfig(conf *service.ParsedConfig, logger *service.Logger) (*sqlInsertProcessor, error) {
+func NewSQLInsertProcessorFromConfig(conf *service.ParsedConfig, mgr *service.Resources) (*sqlInsertProcessor, error) {
 	s := &sqlInsertProcessor{
-		logger:  logger,
+		logger:  mgr.Logger(),
 		shutSig: shutdown.NewSignaller(),
 	}
 
@@ -166,16 +166,16 @@ func NewSQLInsertProcessorFromConfig(conf *service.ParsedConfig, logger *service
 		s.builder = s.builder.Suffix(suffixStr)
 	}
 
-	connSettings, err := connSettingsFromParsed(conf)
+	connSettings, err := connSettingsFromParsed(conf, mgr)
 	if err != nil {
 		return nil, err
 	}
 
-	if s.db, err = sqlOpenWithReworks(logger, driverStr, dsnStr); err != nil {
+	if s.db, err = sqlOpenWithReworks(mgr.Logger(), driverStr, dsnStr); err != nil {
 		return nil, err
 	}
 
-	connSettings.apply(s.db)
+	connSettings.apply(context.Background(), s.db, s.logger)
 
 	go func() {
 		<-s.shutSig.CloseNowChan()

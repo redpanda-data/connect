@@ -70,7 +70,7 @@ func init() {
 			if maxInFlight, err = conf.FieldInt("max_in_flight"); err != nil {
 				return
 			}
-			out, err = newSQLRawOutputFromConfig(conf, mgr.Logger())
+			out, err = newSQLRawOutputFromConfig(conf, mgr)
 			return
 		})
 	if err != nil {
@@ -91,13 +91,13 @@ type sqlRawOutput struct {
 
 	argsMapping *bloblang.Executor
 
-	connSettings connSettings
+	connSettings *connSettings
 
 	logger  *service.Logger
 	shutSig *shutdown.Signaller
 }
 
-func newSQLRawOutputFromConfig(conf *service.ParsedConfig, logger *service.Logger) (*sqlRawOutput, error) {
+func newSQLRawOutputFromConfig(conf *service.ParsedConfig, mgr *service.Resources) (*sqlRawOutput, error) {
 	driverStr, err := conf.FieldString("driver")
 	if err != nil {
 		return nil, err
@@ -129,11 +129,11 @@ func newSQLRawOutputFromConfig(conf *service.ParsedConfig, logger *service.Logge
 		}
 	}
 
-	connSettings, err := connSettingsFromParsed(conf)
+	connSettings, err := connSettingsFromParsed(conf, mgr)
 	if err != nil {
 		return nil, err
 	}
-	return newSQLRawOutput(logger, driverStr, dsnStr, queryStatic, queryDyn, argsMapping, connSettings), nil
+	return newSQLRawOutput(mgr.Logger(), driverStr, dsnStr, queryStatic, queryDyn, argsMapping, connSettings), nil
 }
 
 func newSQLRawOutput(
@@ -142,7 +142,7 @@ func newSQLRawOutput(
 	queryStatic string,
 	queryDyn *service.InterpolatedString,
 	argsMapping *bloblang.Executor,
-	connSettings connSettings,
+	connSettings *connSettings,
 ) *sqlRawOutput {
 	return &sqlRawOutput{
 		logger:       logger,
@@ -169,7 +169,7 @@ func (s *sqlRawOutput) Connect(ctx context.Context) error {
 		return err
 	}
 
-	s.connSettings.apply(s.db)
+	s.connSettings.apply(ctx, s.db, s.logger)
 
 	go func() {
 		<-s.shutSig.CloseNowChan()

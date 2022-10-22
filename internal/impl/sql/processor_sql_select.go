@@ -82,7 +82,7 @@ func init() {
 	err := service.RegisterBatchProcessor(
 		"sql_select", SelectProcessorConfig(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchProcessor, error) {
-			return NewSQLSelectProcessorFromConfig(conf, mgr.Logger())
+			return NewSQLSelectProcessorFromConfig(conf, mgr)
 		})
 	if err != nil {
 		panic(err)
@@ -105,9 +105,9 @@ type sqlSelectProcessor struct {
 
 // NewSQLSelectProcessorFromConfig returns an internal sql_select processor.
 // nolint:revive // Not bothered as this is internal anyway
-func NewSQLSelectProcessorFromConfig(conf *service.ParsedConfig, logger *service.Logger) (*sqlSelectProcessor, error) {
+func NewSQLSelectProcessorFromConfig(conf *service.ParsedConfig, mgr *service.Resources) (*sqlSelectProcessor, error) {
 	s := &sqlSelectProcessor{
-		logger:  logger,
+		logger:  mgr.Logger(),
 		shutSig: shutdown.NewSignaller(),
 	}
 
@@ -166,15 +166,15 @@ func NewSQLSelectProcessorFromConfig(conf *service.ParsedConfig, logger *service
 		s.builder = s.builder.Suffix(suffixStr)
 	}
 
-	connSettings, err := connSettingsFromParsed(conf)
+	connSettings, err := connSettingsFromParsed(conf, mgr)
 	if err != nil {
 		return nil, err
 	}
 
-	if s.db, err = sqlOpenWithReworks(logger, driverStr, dsnStr); err != nil {
+	if s.db, err = sqlOpenWithReworks(mgr.Logger(), driverStr, dsnStr); err != nil {
 		return nil, err
 	}
-	connSettings.apply(s.db)
+	connSettings.apply(context.Background(), s.db, s.logger)
 
 	go func() {
 		<-s.shutSig.CloseNowChan()

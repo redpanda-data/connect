@@ -53,11 +53,11 @@ args_mapping: 'root = [ this.id ]'
 			selectConfig, err := isql.SelectProcessorConfig().ParseYAML(queryConf, env)
 			require.NoError(t, err)
 
-			insertProc, err := isql.NewSQLInsertProcessorFromConfig(insertConfig, nil)
+			insertProc, err := isql.NewSQLInsertProcessorFromConfig(insertConfig, service.MockResources())
 			require.NoError(t, err)
 			t.Cleanup(func() { insertProc.Close(context.Background()) })
 
-			selectProc, err := isql.NewSQLSelectProcessorFromConfig(selectConfig, nil)
+			selectProc, err := isql.NewSQLSelectProcessorFromConfig(selectConfig, service.MockResources())
 			require.NoError(t, err)
 			t.Cleanup(func() { selectProc.Close(context.Background()) })
 
@@ -104,11 +104,11 @@ args_mapping: 'root = [ this.id ]'
 			selectConfig, err := isql.RawProcessorConfig().ParseYAML(queryConf, env)
 			require.NoError(t, err)
 
-			insertProc, err := isql.NewSQLRawProcessorFromConfig(insertConfig, nil)
+			insertProc, err := isql.NewSQLRawProcessorFromConfig(insertConfig, service.MockResources())
 			require.NoError(t, err)
 			t.Cleanup(func() { insertProc.Close(context.Background()) })
 
-			selectProc, err := isql.NewSQLRawProcessorFromConfig(selectConfig, nil)
+			selectProc, err := isql.NewSQLRawProcessorFromConfig(selectConfig, service.MockResources())
 			require.NoError(t, err)
 			t.Cleanup(func() { selectProc.Close(context.Background()) })
 
@@ -155,11 +155,11 @@ result_codec: json_array
 			selectConfig, err := isql.DeprecatedProcessorConfig().ParseYAML(queryConf, env)
 			require.NoError(t, err)
 
-			insertProc, err := isql.NewSQLDeprecatedProcessorFromConfig(insertConfig, nil)
+			insertProc, err := isql.NewSQLDeprecatedProcessorFromConfig(insertConfig, service.MockResources())
 			require.NoError(t, err)
 			t.Cleanup(func() { insertProc.Close(context.Background()) })
 
-			selectProc, err := isql.NewSQLDeprecatedProcessorFromConfig(selectConfig, nil)
+			selectProc, err := isql.NewSQLDeprecatedProcessorFromConfig(selectConfig, service.MockResources())
 			require.NoError(t, err)
 			t.Cleanup(func() { selectProc.Close(context.Background()) })
 

@@ -76,7 +76,7 @@ func init() {
 	err := service.RegisterInput(
 		"sql_select", sqlSelectInputConfig(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Input, error) {
-			i, err := newSQLSelectInputFromConfig(conf, mgr.Logger())
+			i, err := newSQLSelectInputFromConfig(conf, mgr)
 			if err != nil {
 				return nil, err
 			}
@@ -100,15 +100,15 @@ type sqlSelectInput struct {
 	where       string
 	argsMapping *bloblang.Executor
 
-	connSettings connSettings
+	connSettings *connSettings
 
 	logger  *service.Logger
 	shutSig *shutdown.Signaller
 }
 
-func newSQLSelectInputFromConfig(conf *service.ParsedConfig, logger *service.Logger) (*sqlSelectInput, error) {
+func newSQLSelectInputFromConfig(conf *service.ParsedConfig, mgr *service.Resources) (*sqlSelectInput, error) {
 	s := &sqlSelectInput{
-		logger:  logger,
+		logger:  mgr.Logger(),
 		shutSig: shutdown.NewSignaller(),
 	}
 
@@ -167,7 +167,7 @@ func newSQLSelectInputFromConfig(conf *service.ParsedConfig, logger *service.Log
 		s.builder = s.builder.Suffix(suffixStr)
 	}
 
-	if s.connSettings, err = connSettingsFromParsed(conf); err != nil {
+	if s.connSettings, err = connSettingsFromParsed(conf, mgr); err != nil {
 		return nil, err
 	}
 	return s, nil
@@ -191,7 +191,7 @@ func (s *sqlSelectInput) Connect(ctx context.Context) (err error) {
 		}
 	}()
 
-	s.connSettings.apply(db)
+	s.connSettings.apply(ctx, db, s.logger)
 
 	var args []any
 	if s.argsMapping != nil {

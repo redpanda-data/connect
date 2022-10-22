@@ -54,7 +54,7 @@ func init() {
 	err := service.RegisterInput(
 		"sql_raw", sqlRawInputConfig(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Input, error) {
-			i, err := newSQLRawInputFromConfig(conf, mgr.Logger())
+			i, err := newSQLRawInputFromConfig(conf, mgr)
 			if err != nil {
 				return nil, err
 			}
@@ -79,15 +79,15 @@ type sqlRawInput struct {
 
 	argsMapping *bloblang.Executor
 
-	connSettings connSettings
+	connSettings *connSettings
 
 	logger  *service.Logger
 	shutSig *shutdown.Signaller
 }
 
-func newSQLRawInputFromConfig(conf *service.ParsedConfig, logger *service.Logger) (*sqlRawInput, error) {
+func newSQLRawInputFromConfig(conf *service.ParsedConfig, mgr *service.Resources) (*sqlRawInput, error) {
 	s := &sqlRawInput{
-		logger:  logger,
+		logger:  mgr.Logger(),
 		shutSig: shutdown.NewSignaller(),
 	}
 
@@ -115,7 +115,7 @@ func newSQLRawInputFromConfig(conf *service.ParsedConfig, logger *service.Logger
 		return nil, err
 	}
 
-	if s.connSettings, err = connSettingsFromParsed(conf); err != nil {
+	if s.connSettings, err = connSettingsFromParsed(conf, mgr); err != nil {
 		return nil, err
 	}
 	return s, nil
@@ -139,7 +139,7 @@ func (s *sqlRawInput) Connect(ctx context.Context) (err error) {
 		}
 	}()
 
-	s.connSettings.apply(db)
+	s.connSettings.apply(ctx, db, s.logger)
 
 	var args []any
 	if s.argsMapping != nil {
@@ -156,7 +156,7 @@ func (s *sqlRawInput) Connect(ctx context.Context) (err error) {
 	}
 
 	var rows *sql.Rows
-	if rows, err = db.QueryContext(ctx, s.queryStatic, args...); err != nil {
+	if rows, err = db.Query(s.queryStatic, args...); err != nil {
 		return
 	}
 

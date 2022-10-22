@@ -41,7 +41,7 @@ func init() {
 	err := service.RegisterBatchProcessor(
 		"sql", DeprecatedProcessorConfig(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchProcessor, error) {
-			return NewSQLDeprecatedProcessorFromConfig(conf, mgr.Logger())
+			return NewSQLDeprecatedProcessorFromConfig(conf, mgr)
 		})
 	if err != nil {
 		panic(err)
@@ -50,7 +50,7 @@ func init() {
 
 // NewSQLDeprecatedProcessorFromConfig returns an internal sql processor.
 // nolint:revive // Not bothered as this is internal anyway
-func NewSQLDeprecatedProcessorFromConfig(conf *service.ParsedConfig, logger *service.Logger) (*sqlRawProcessor, error) {
+func NewSQLDeprecatedProcessorFromConfig(conf *service.ParsedConfig, mgr *service.Resources) (*sqlRawProcessor, error) {
 	driverStr, err := conf.FieldString("driver")
 	if err != nil {
 		return nil, err
@@ -89,9 +89,9 @@ func NewSQLDeprecatedProcessorFromConfig(conf *service.ParsedConfig, logger *ser
 		}
 	}
 
-	connSettings, err := connSettingsFromParsed(conf)
+	connSettings, err := connSettingsFromParsed(conf, mgr)
 	if err != nil {
 		return nil, err
 	}
-	return newSQLRawProcessor(logger, driverStr, dsnStr, queryStatic, queryDyn, onlyExec, argsMapping, connSettings)
+	return newSQLRawProcessor(mgr.Logger(), driverStr, dsnStr, queryStatic, queryDyn, onlyExec, argsMapping, connSettings)
 }

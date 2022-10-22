@@ -1,11 +1,16 @@
 package sql
 
 import (
+	"context"
 	"database/sql"
+	"fmt"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
+	"github.com/benthosdev/benthos/v4/internal/filepath"
+	"github.com/benthosdev/benthos/v4/internal/filepath/ifs"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
@@ -39,6 +44,38 @@ The ` + "`snowflake`" + ` driver supports multiple DSN formats. Please consult [
 
 func connFields() []*service.ConfigField {
 	return []*service.ConfigField{
+		service.NewStringListField("init_files").
+			Description(`
+An optional list of file paths containing SQL statements to execute immediately upon the first connection to the target database. This is a useful way to initialise tables before processing data. Glob patterns are supported, including super globs (double star).
+
+Care should be taken to ensure that the statements are idempotent, and therefore would not cause issues when run multiple times after service restarts. If both ` + "`init_statement` and `init_files` are specified the `init_statement` is executed _after_ the `init_files`." + `
+
+If a statement fails for any reason a warning log will be emitted but the operation of this component will not be stopped.
+`).
+			Example([]any{`./init/*.sql`}).
+			Example([]any{`./foo.sql`, `./bar.sql`}).
+			Optional().
+			Advanced().
+			Version("4.10.0"),
+		service.NewStringField("init_statement").
+			Description(`
+An optional SQL statement to execute immediately upon the first connection to the target database. This is a useful way to initialise tables before processing data. Care should be taken to ensure that the statement is idempotent, and therefore would not cause issues when run multiple times after service restarts.
+
+If both ` + "`init_statement` and `init_files` are specified the `init_statement` is executed _after_ the `init_files`." + `
+
+If the statement fails for any reason a warning log will be emitted but the operation of this component will not be stopped.
+`).
+			Example(`
+CREATE TABLE IF NOT EXISTS some_table (
+  foo varchar(50) not null,
+  bar integer,
+  baz varchar(50),
+  primary key (foo)
+) WITHOUT ROWID;
+`).
+			Optional().
+			Advanced().
+			Version("4.10.0"),
 		service.NewDurationField("conn_max_idle_time").
 			Description(`An optional maximum amount of time a connection may be idle. Expired connections may be closed lazily before reuse. If value <= 0, connections are not closed due to a connection's idle time.`).
 			Optional().
@@ -79,16 +116,42 @@ type connSettings struct {
 	connMaxIdleTime time.Duration
 	maxIdleConns    int
 	maxOpenConns    int
+
+	initOnce           sync.Once
+	initFileStatements [][2]string // (path,statement)
+	initStatement      string
 }
 
-func (c connSettings) apply(db *sql.DB) {
+func (c *connSettings) apply(ctx context.Context, db *sql.DB, log *service.Logger) {
 	db.SetConnMaxIdleTime(c.connMaxIdleTime)
 	db.SetConnMaxLifetime(c.connMaxLifetime)
 	db.SetMaxIdleConns(c.maxIdleConns)
 	db.SetMaxOpenConns(c.maxOpenConns)
+
+	c.initOnce.Do(func() {
+		for _, fileStmt := range c.initFileStatements {
+			if _, err := db.ExecContext(ctx, fileStmt[1]); err != nil {
+				log.Warnf("Failed to execute init_file '%v': %v", fileStmt[0], err)
+			} else {
+				log.Debugf("Successfully ran init_file '%v'", fileStmt[0])
+			}
+		}
+		if c.initStatement != "" {
+			if _, err := db.ExecContext(ctx, c.initStatement); err != nil {
+				log.Warnf("Failed to execute init_statement: %v", err)
+			} else {
+				log.Debug("Successfully ran init_statement")
+			}
+		}
+	})
 }
 
-func connSettingsFromParsed(conf *service.ParsedConfig) (c connSettings, err error) {
+func connSettingsFromParsed(
+	conf *service.ParsedConfig,
+	mgr *service.Resources,
+) (c *connSettings, err error) {
+	c = &connSettings{}
+
 	if conf.Contains("conn_max_life_time") {
 		if c.connMaxLifetime, err = conf.FieldDuration("conn_max_life_time"); err != nil {
 			return
@@ -110,6 +173,32 @@ func connSettingsFromParsed(conf *service.ParsedConfig) (c connSettings, err err
 	if conf.Contains("conn_max_open") {
 		if c.maxOpenConns, err = conf.FieldInt("conn_max_open"); err != nil {
 			return
+		}
+	}
+
+	if conf.Contains("init_statement") {
+		if c.initStatement, err = conf.FieldString("init_statement"); err != nil {
+			return
+		}
+	}
+
+	if conf.Contains("init_files") {
+		var tmpFiles []string
+		if tmpFiles, err = conf.FieldStringList("init_files"); err != nil {
+			return
+		}
+		if tmpFiles, err = filepath.Globs(mgr.FS(), tmpFiles); err != nil {
+			err = fmt.Errorf("failed to expand init_files glob patterns: %w", err)
+			return
+		}
+		for _, p := range tmpFiles {
+			var statementBytes []byte
+			if statementBytes, err = ifs.ReadFile(mgr.FS(), p); err != nil {
+				return
+			}
+			c.initFileStatements = append(c.initFileStatements, [2]string{
+				p, string(statementBytes),
+			})
 		}
 	}
 	return

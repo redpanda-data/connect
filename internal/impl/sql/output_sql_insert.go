@@ -81,7 +81,7 @@ func init() {
 			if maxInFlight, err = conf.FieldInt("max_in_flight"); err != nil {
 				return
 			}
-			out, err = newSQLInsertOutputFromConfig(conf, mgr.Logger())
+			out, err = newSQLInsertOutputFromConfig(conf, mgr)
 			return
 		})
 	if err != nil {
@@ -101,15 +101,15 @@ type sqlInsertOutput struct {
 	useTxStmt   bool
 	argsMapping *bloblang.Executor
 
-	connSettings connSettings
+	connSettings *connSettings
 
 	logger  *service.Logger
 	shutSig *shutdown.Signaller
 }
 
-func newSQLInsertOutputFromConfig(conf *service.ParsedConfig, logger *service.Logger) (*sqlInsertOutput, error) {
+func newSQLInsertOutputFromConfig(conf *service.ParsedConfig, mgr *service.Resources) (*sqlInsertOutput, error) {
 	s := &sqlInsertOutput{
-		logger:  logger,
+		logger:  mgr.Logger(),
 		shutSig: shutdown.NewSignaller(),
 	}
 
@@ -176,7 +176,7 @@ func newSQLInsertOutputFromConfig(conf *service.ParsedConfig, logger *service.Lo
 		s.builder = s.builder.Suffix(suffixStr)
 	}
 
-	if s.connSettings, err = connSettingsFromParsed(conf); err != nil {
+	if s.connSettings, err = connSettingsFromParsed(conf, mgr); err != nil {
 		return nil, err
 	}
 	return s, nil
@@ -195,7 +195,7 @@ func (s *sqlInsertOutput) Connect(ctx context.Context) error {
 		return err
 	}
 
-	s.connSettings.apply(s.db)
+	s.connSettings.apply(ctx, s.db, s.logger)
 
 	go func() {
 		<-s.shutSig.CloseNowChan()

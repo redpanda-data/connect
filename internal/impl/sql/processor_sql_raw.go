@@ -79,7 +79,7 @@ func init() {
 	err := service.RegisterBatchProcessor(
 		"sql_raw", RawProcessorConfig(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchProcessor, error) {
-			return NewSQLRawProcessorFromConfig(conf, mgr.Logger())
+			return NewSQLRawProcessorFromConfig(conf, mgr)
 		})
 	if err != nil {
 		panic(err)
@@ -104,7 +104,7 @@ type sqlRawProcessor struct {
 
 // NewSQLRawProcessorFromConfig returns an internal sql_raw processor.
 // nolint:revive // Not bothered as this is internal anyway
-func NewSQLRawProcessorFromConfig(conf *service.ParsedConfig, logger *service.Logger) (*sqlRawProcessor, error) {
+func NewSQLRawProcessorFromConfig(conf *service.ParsedConfig, mgr *service.Resources) (*sqlRawProcessor, error) {
 	driverStr, err := conf.FieldString("driver")
 	if err != nil {
 		return nil, err
@@ -141,11 +141,11 @@ func NewSQLRawProcessorFromConfig(conf *service.ParsedConfig, logger *service.Lo
 		}
 	}
 
-	connSettings, err := connSettingsFromParsed(conf)
+	connSettings, err := connSettingsFromParsed(conf, mgr)
 	if err != nil {
 		return nil, err
 	}
-	return newSQLRawProcessor(logger, driverStr, dsnStr, queryStatic, queryDyn, onlyExec, argsMapping, connSettings)
+	return newSQLRawProcessor(mgr.Logger(), driverStr, dsnStr, queryStatic, queryDyn, onlyExec, argsMapping, connSettings)
 }
 
 func newSQLRawProcessor(
@@ -155,7 +155,7 @@ func newSQLRawProcessor(
 	queryDyn *service.InterpolatedString,
 	onlyExec bool,
 	argsMapping *bloblang.Executor,
-	connSettings connSettings,
+	connSettings *connSettings,
 ) (*sqlRawProcessor, error) {
 	s := &sqlRawProcessor{
 		logger:      logger,
@@ -170,7 +170,7 @@ func newSQLRawProcessor(
 	if s.db, err = sqlOpenWithReworks(logger, driverStr, dsnStr); err != nil {
 		return nil, err
 	}
-	connSettings.apply(s.db)
+	connSettings.apply(context.Background(), s.db, s.logger)
 
 	go func() {
 		<-s.shutSig.CloseNowChan()

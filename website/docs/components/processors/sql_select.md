@@ -54,6 +54,8 @@ sql_select:
   args_mapping: ""
   prefix: ""
   suffix: ""
+  init_files: []
+  init_statement: ""
   conn_max_idle_time: ""
   conn_max_life_time: ""
   conn_max_idle: 0
@@ -219,6 +221,53 @@ An optional suffix to append to the select query.
 
 
 Type: `string`  
+
+### `init_files`
+
+An optional list of file paths containing SQL statements to execute immediately upon the first connection to the target database. This is a useful way to initialise tables before processing data. Glob patterns are supported, including super globs (double star).
+
+Care should be taken to ensure that the statements are idempotent, and therefore would not cause issues when run multiple times after service restarts. If both `init_statement` and `init_files` are specified the `init_statement` is executed _after_ the `init_files`.
+
+If a statement fails for any reason a warning log will be emitted but the operation of this component will not be stopped.
+
+
+Type: `array`  
+Requires version 4.10.0 or newer  
+
+```yml
+# Examples
+
+init_files:
+  - ./init/*.sql
+
+init_files:
+  - ./foo.sql
+  - ./bar.sql
+```
+
+### `init_statement`
+
+An optional SQL statement to execute immediately upon the first connection to the target database. This is a useful way to initialise tables before processing data. Care should be taken to ensure that the statement is idempotent, and therefore would not cause issues when run multiple times after service restarts.
+
+If both `init_statement` and `init_files` are specified the `init_statement` is executed _after_ the `init_files`.
+
+If the statement fails for any reason a warning log will be emitted but the operation of this component will not be stopped.
+
+
+Type: `string`  
+Requires version 4.10.0 or newer  
+
+```yml
+# Examples
+
+init_statement: |2
+  CREATE TABLE IF NOT EXISTS some_table (
+    foo varchar(50) not null,
+    bar integer,
+    baz varchar(50),
+    primary key (foo)
+  ) WITHOUT ROWID;
+```
 
 ### `conn_max_idle_time`
 
