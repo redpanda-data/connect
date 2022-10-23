@@ -428,6 +428,121 @@ When filtering objects the mapping query argument is provided a context with a f
 
 var _ = registerSimpleMethod(
 	NewMethodSpec(
+		"find",
+		"Returns the index of the first occurrence of a value or query in an array. `-1` is returned if there are no matches. Numerical comparisons are made irrespective of the representation type (float versus integer).",
+	).InCategory(
+		MethodCategoryObjectAndArray, "",
+		NewExampleSpec("",
+			`root.index = this.find("bar")`,
+			`["foo", "bar", "baz"]`,
+			`{"index":1}`,
+		),
+		NewExampleSpec("",
+			`root.index = this.find(v -> v != "bar")`,
+			`["foo", "bar", "baz"]`,
+			`{"index":0}`,
+		),
+		NewExampleSpec("",
+			`root.index = this.find(v -> v != "foo")`,
+			`["foo"]`,
+			`{"index":-1}`,
+		),
+	).Beta().Param(ParamQuery("value", "A value to find. If a query is provided it will only be resolved once during the lifetime of the mapping.", false)),
+	func(args *ParsedParams) (simpleMethod, error) {
+		val, err := args.Field("value")
+		if err != nil {
+			return nil, err
+		}
+
+		return func(v any, ctx FunctionContext) (any, error) {
+			array, ok := v.([]any)
+			if !ok {
+				return nil, NewTypeError(v, ValueArray)
+			}
+
+			for i, elem := range array {
+				if found, err := findMethodICompare(ctx, val, elem); err != nil {
+					return nil, err
+				} else if found {
+					return i, nil
+				}
+			}
+
+			return -1, nil
+		}, nil
+	},
+)
+
+func findMethodICompare(ctx FunctionContext, compareLeft, compareRight any) (bool, error) {
+	switch compareLeftTyped := compareLeft.(type) {
+	case *Literal:
+		return ICompare(compareLeftTyped.Value, compareRight), nil
+	case Function:
+		if value, err := compareLeftTyped.Exec(ctx.WithValue(compareRight)); err != nil {
+			return false, fmt.Errorf("failed to execute query: %w", err)
+		} else if v, ok := value.(bool); ok {
+			return v, nil
+		}
+		return false, errors.New("query did not return a boolean value")
+	}
+
+	return false, fmt.Errorf("wrong argument type, expected literal or query, got %v", ITypeOf(compareLeft))
+}
+
+//------------------------------------------------------------------------------
+
+var _ = registerSimpleMethod(
+	NewMethodSpec(
+		"find_all",
+		"Returns an array containing the indexes of all occurrences of a value or query in an array. An empty array is returned if there are no matches. Numerical comparisons are made irrespective of the representation type (float versus integer).",
+	).InCategory(
+		MethodCategoryObjectAndArray, "",
+		NewExampleSpec("",
+			`root.index = this.find_all("bar")`,
+			`["foo", "bar", "baz", "bar"]`,
+			`{"index":[1,3]}`,
+		),
+		NewExampleSpec("",
+			`root.index = this.find_all(v -> v != "bar")`,
+			`["foo", "bar", "baz"]`,
+			`{"index":[0,2]}`,
+		),
+		NewExampleSpec("",
+			`root.index = this.find_all(v -> v != "foo")`,
+			`["foo"]`,
+			`{"index":[]}`,
+		),
+	).Beta().Param(ParamQuery("value", "A value to find. If a query is provided it will only be resolved once during the lifetime of the mapping.", false)),
+	func(args *ParsedParams) (simpleMethod, error) {
+		val, err := args.Field("value")
+		if err != nil {
+			return nil, err
+		}
+
+		return func(v any, ctx FunctionContext) (any, error) {
+			array, ok := v.([]any)
+			if !ok {
+				return nil, NewTypeError(v, ValueArray)
+			}
+
+			output := []int{}
+			for i, elem := range array {
+				if found, err := findMethodICompare(ctx, val, elem); err != nil {
+					return nil, err
+				} else if found {
+					output = append(output, i)
+				}
+			}
+
+			return output, nil
+		}, nil
+	},
+)
+
+//------------------------------------------------------------------------------
+
+var _ = registerSimpleMethod(
+	NewMethodSpec(
 		"flatten",
 		"Iterates an array and any element that is itself an array is removed and has its elements inserted directly in the resulting array.",
 	).InCategory(

@@ -20,6 +20,7 @@ All notable changes to this project will be documented in this file.
 - New `base64_encode` and `base64_decode` functions for the awk processor.
 - Param `use_number` added to the `parse_json` bloblang method.
 - Fields `init_statement` and `init_files` added to all sql components.
+- New `find` and `find_all` bloblang array methods.
 
 ### Fixed
 
