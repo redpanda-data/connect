@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/textproto"
 	"strings"
@@ -97,7 +96,7 @@ func getVM(message *service.Message, logger *service.Logger) *goja.Runtime {
 
 		defer resp.Body.Close()
 
-		respBody, err := ioutil.ReadAll(resp.Body)
+		respBody, err := io.ReadAll(resp.Body)
 		if err != nil {
 			return nil, err
 		}
