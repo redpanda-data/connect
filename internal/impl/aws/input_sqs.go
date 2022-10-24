@@ -217,6 +217,7 @@ func (a *awsSQSReader) readLoop(wg *sync.WaitGroup) {
 	backoff := backoff.NewExponentialBackOff()
 	backoff.InitialInterval = 100 * time.Millisecond
 	backoff.MaxInterval = 5 * time.Minute
+	backoff.MaxElapsedTime = 0
 
 	getMsgs := func() {
 		ctx, done := a.closeSignal.CloseAtLeisureCtx(context.Background())
