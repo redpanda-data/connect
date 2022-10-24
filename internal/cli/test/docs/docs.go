@@ -136,6 +136,11 @@ It is also possible to target processors in a separate file by prefixing the tar
 				"Checks that both the message and the condition are valid JSON documents, and that the message is a superset of the condition.",
 				map[string]interface{}{"key": "value"},
 			).Optional(),
+			docs.FieldString(
+				`file_json_contains`,
+				"Checks that both the message and the file contents are valid JSON documents, and that the message is a superset of the condition. Will ignore formatting and ordering differences. The path of the file should be relative to the path of the test file.",
+				"./foo/bar.json",
+			).Optional(),
 		),
 	)
 }

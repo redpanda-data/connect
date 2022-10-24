@@ -14,10 +14,11 @@ import (
 )
 
 type bigQuerySelectInputConfig struct {
-	project     string
-	queryParts  *bqQueryParts
-	argsMapping *bloblang.Executor
-	jobLabels   map[string]string
+	project       string
+	queryParts    *bqQueryParts
+	argsMapping   *bloblang.Executor
+	queryPriority bigquery.QueryPriority
+	jobLabels     map[string]string
 }
 
 func bigQuerySelectInputConfigFromParsed(inConf *service.ParsedConfig) (conf bigQuerySelectInputConfig, err error) {
@@ -66,6 +67,10 @@ func bigQuerySelectInputConfigFromParsed(inConf *service.ParsedConfig) (conf big
 		}
 	}
 
+	if conf.queryPriority, err = parseQueryPriority(inConf, "priority"); err != nil {
+		return
+	}
+
 	return
 }
 
@@ -86,6 +91,7 @@ func newBigQuerySelectInputConfig() *service.ConfigSpec {
 			Optional(),
 		).
 		Field(service.NewStringMapField("job_labels").Description("A list of labels to add to the query job.").Default(map[string]string{})).
+		Field(service.NewStringField("priority").Description("The priority with which to schedule the query.").Default("")).
 		Field(service.NewBloblangField("args_mapping").
 			Description("An optional [Bloblang mapping](/docs/guides/bloblang/about) which should evaluate to an array of values matching in size to the number of placeholder arguments in the field `where`.").
 			Example(`root = [ "article", now().ts_format("2006-01-02") ]`).
@@ -174,9 +180,10 @@ func (inp *bigQuerySelectInput) Connect(ctx context.Context) error {
 	}
 
 	iter, err := inp.client.RunQuery(jobctx, &bqQueryBuilderOptions{
-		queryParts: inp.config.queryParts,
-		jobLabels:  inp.config.jobLabels,
-		args:       args,
+		queryParts:    inp.config.queryParts,
+		jobLabels:     inp.config.jobLabels,
+		queryPriority: inp.config.queryPriority,
+		args:          args,
 	})
 	if err != nil {
 		return err

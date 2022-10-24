@@ -84,11 +84,11 @@ Type: `string`
 
 ### `schema[].type`
 
-The type of the column, only applicable for leaf columns with no child fields.
+The type of the column, only applicable for leaf columns with no child fields. Some logical types can be specified here such as UTF8.
 
 
 Type: `string`  
-Options: `BOOLEAN`, `INT32`, `INT64`, `FLOAT`, `DOUBLE`, `BYTE_ARRAY`.
+Options: `BOOLEAN`, `INT32`, `INT64`, `FLOAT`, `DOUBLE`, `BYTE_ARRAY`, `UTF8`.
 
 ### `schema[].repeated`
 

@@ -187,7 +187,7 @@ func TestSchemaRegistryDecodeAvro(t *testing.T) {
 		return nil, nil
 	})
 
-	decoder, err := newSchemaRegistryDecoder(urlStr, nil, true, nil)
+	decoder, err := newSchemaRegistryDecoder(urlStr, nil, false, nil)
 	require.NoError(t, err)
 
 	tests := []struct {
@@ -212,14 +212,112 @@ func TestSchemaRegistryDecodeAvro(t *testing.T) {
 			output: `{"Name":"foo","MaybeHobby":null,"Address": null}`,
 		},
 		{
-			name:   "successful message with logical types avro json",
+			name:   "successful message with logical types",
 			input:  "\x00\x00\x00\x00\x04\x02\x90\xaf\xce!\x02\x80\x80揪\x97\t\x02\x80\x80\xde\xf2\xdf\xff\xdf\xdc\x01\x02\x02!",
 			output: `{"int_time_millis":{"int.time-millis":35245000},"long_time_micros":{"long.time-micros":20192000000000},"long_timestamp_micros":{"long.timestamp-micros":62135596800000000},"pos_0_33333333":{"bytes.decimal":"!"}}`,
 		},
 		{
-			name:   "successful message with logical types raw json",
+			name:        "non-empty magic byte",
+			input:       "\x06\x00\x00\x00\x03\x06foo\x02\x06foo\x06bar",
+			errContains: "version number 6 not supported",
+		},
+		{
+			name:        "non-existing schema",
+			input:       "\x00\x00\x00\x00\x06\x06foo\x02\x06foo\x06bar",
+			errContains: "schema '6' not found by registry",
+		},
+		{
+			name:        "server fails",
+			input:       "\x00\x00\x00\x00\x05\x06foo\x02\x06foo\x06bar",
+			errContains: "request failed for schema '5'",
+		},
+	}
+
+	for _, test := range tests {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			outMsgs, err := decoder.Process(context.Background(), service.NewMessage([]byte(test.input)))
+			if test.errContains != "" {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), test.errContains)
+			} else {
+				require.NoError(t, err)
+				require.Len(t, outMsgs, 1)
+
+				b, err := outMsgs[0].AsBytes()
+				require.NoError(t, err)
+
+				jdopts := jsondiff.DefaultJSONOptions()
+				diff, explanation := jsondiff.Compare(b, []byte(test.output), &jdopts)
+				assert.Equalf(t, jsondiff.FullMatch.String(), diff.String(), "%s: %s", test.name, explanation)
+			}
+		})
+	}
+
+	require.NoError(t, decoder.Close(context.Background()))
+	decoder.cacheMut.Lock()
+	assert.Len(t, decoder.schemas, 0)
+	decoder.cacheMut.Unlock()
+}
+
+func TestSchemaRegistryDecodeAvroRawJson(t *testing.T) {
+	payload3, err := json.Marshal(struct {
+		Schema string `json:"schema"`
+	}{
+		Schema: testSchema,
+	})
+	require.NoError(t, err)
+
+	payload4, err := json.Marshal(struct {
+		Schema string `json:"schema"`
+	}{
+		Schema: testSchemaLogicalTypes,
+	})
+	require.NoError(t, err)
+
+	returnedSchema3 := false
+	urlStr := runSchemaRegistryServer(t, func(path string) ([]byte, error) {
+		switch path {
+		case "/schemas/ids/3":
+			assert.False(t, returnedSchema3)
+			returnedSchema3 = true
+			return payload3, nil
+		case "/schemas/ids/4":
+			return payload4, nil
+		case "/schemas/ids/5":
+			return nil, fmt.Errorf("nope")
+		}
+		return nil, nil
+	})
+
+	decoder, err := newSchemaRegistryDecoder(urlStr, nil, true, nil)
+	require.NoError(t, err)
+
+	tests := []struct {
+		name        string
+		input       string
+		output      string
+		errContains string
+	}{
+		{
+			name:   "successful message",
+			input:  "\x00\x00\x00\x00\x03\x06foo\x02\x02\x06foo\x06bar\x02\x0edancing",
+			output: `{"Address":{"City":"foo","State":"bar"},"Name":"foo","MaybeHobby":"dancing"}`,
+		},
+		{
+			name:   "successful message with null hobby",
+			input:  "\x00\x00\x00\x00\x03\x06foo\x02\x02\x06foo\x06bar\x00",
+			output: `{"Address":{"City":"foo","State":"bar"},"MaybeHobby":null,"Name":"foo"}`,
+		},
+		{
+			name:   "successful message no address and null hobby",
+			input:  "\x00\x00\x00\x00\x03\x06foo\x00\x00",
+			output: `{"Name":"foo","MaybeHobby":null,"Address": null}`,
+		},
+		{
+			name:   "successful message with logical types",
 			input:  "\x00\x00\x00\x00\x04\x02\x90\xaf\xce!\x02\x80\x80揪\x97\t\x02\x80\x80\xde\xf2\xdf\xff\xdf\xdc\x01\x02\x02!",
-			output: `{"int_time_millis":{"int.time-millis":35245000},"long_time_micros":{"long.time-micros":20192000000000},"long_timestamp_micros":{"long.timestamp-micros":62135596800000000},"pos_0_33333333":{"bytes.decimal":"!"}}`,
+			output: `{"int_time_millis":35245000,"long_time_micros":20192000000000,"long_timestamp_micros":62135596800000000,"pos_0_33333333":"!"}`,
 		},
 		{
 			name:        "non-empty magic byte",
@@ -270,7 +368,7 @@ func TestSchemaRegistryDecodeClearExpired(t *testing.T) {
 		return nil, fmt.Errorf("nope")
 	})
 
-	decoder, err := newSchemaRegistryDecoder(urlStr, nil, true, nil)
+	decoder, err := newSchemaRegistryDecoder(urlStr, nil, false, nil)
 	require.NoError(t, err)
 	require.NoError(t, decoder.Close(context.Background()))
 

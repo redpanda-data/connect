@@ -107,6 +107,7 @@ The field `debug_endpoints` when set to `true` prompts Benthos to register a few
 - `/debug/pprof/heap` responds with a pprof-formatted heap profile.
 - `/debug/pprof/mutex` responds with a pprof-formatted mutex profile.
 - `/debug/pprof/profile` responds with a pprof-formatted cpu profile.
+- `/debug/pprof/goroutine` responds with a pprof-formatted goroutine profile.
 - `/debug/pprof/symbol` looks up the program counters listed in the request, responding with a table mapping program counters to function names.
 - `/debug/pprof/trace` responds with the execution trace in binary form. Tracing lasts for duration specified in seconds GET parameter, or for 1 second if not specified.
 - `/debug/stack` returns a snapshot of the current service stack trace.

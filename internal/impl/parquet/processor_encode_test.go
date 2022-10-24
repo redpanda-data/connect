@@ -24,6 +24,7 @@ schema:
   - { name: d, type: BOOLEAN }
   - { name: e, type: INT32, optional: true }
   - { name: f, type: INT64 }
+  - { name: g, type: UTF8 }
   - name: nested_stuff
     optional: true
     fields:
@@ -62,6 +63,7 @@ byte_array_as_string: true
   "d": true,
   "e": 6,
   "f": 7,
+  "g": "logical string represent",
   "nested_stuff": {
     "a_stuff": "a value",
     "b_stuff": "b value"
@@ -76,6 +78,7 @@ byte_array_as_string: true
   "d": true,
   "e": 6,
   "f": 7,
+  "g": "logical string represent",
   "nested_stuff": {
     "a_stuff": "a value",
     "b_stuff": "b value"
@@ -90,6 +93,7 @@ byte_array_as_string: true
   "c": 0.5,
   "d": true,
   "f": 7,
+  "g": "logical string represent",
   "canary":"not in schema"
 }`,
 			output: `{
@@ -100,6 +104,7 @@ byte_array_as_string: true
   "d": true,
   "e": null,
   "f": 7,
+  "g": "logical string represent",
   "nested_stuff": null
 }`,
 		},

@@ -67,7 +67,7 @@ false for connections to succeed.`),
 			docs.FieldBool("healthcheck", "Whether to enable healthchecks.").Advanced(),
 			docs.FieldString("timeout", "The maximum time to wait before abandoning a request (and trying again).").Advanced(),
 			itls.FieldSpec(),
-			docs.FieldInt("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
+			docs.FieldInt("max_in_flight", "The maximum number of parallel message batches to have in flight at any given time."),
 		).WithChildren(retries.FieldSpecs()...).WithChildren(
 			auth.BasicAuthFieldSpec(),
 			policy.FieldSpec(),

@@ -600,6 +600,19 @@ json_contains:
   key: value
 ```
 
+### `tests[].output_batches[][].file_json_contains`
+
+Checks that both the message and the file contents are valid JSON documents, and that the message is a superset of the condition. Will ignore formatting and ordering differences. The path of the file should be relative to the path of the test file.
+
+
+Type: `string`  
+
+```yml
+# Examples
+
+file_json_contains: ./foo/bar.json
+```
+
 [json-pointer]: https://tools.ietf.org/html/rfc6901
 [bloblang]: /docs/guides/bloblang/about
 [logger]: /docs/components/logger/about

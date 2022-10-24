@@ -608,7 +608,7 @@ func (m *Type) HandleStreamReady(w http.ResponseWriter, r *http.Request) {
 
 	m.lock.Lock()
 	for k, v := range m.streams {
-		if !v.IsReady() {
+		if !v.IsReady() && v.IsRunning() {
 			notReady = append(notReady, k)
 		}
 	}

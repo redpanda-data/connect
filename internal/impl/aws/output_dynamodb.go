@@ -112,7 +112,7 @@ allowing you to transfer data across accounts. You can find out more
 			).Map(),
 			docs.FieldString("ttl", "An optional TTL to set for items, calculated from the moment the message is sent.").Advanced(),
 			docs.FieldString("ttl_key", "The column key to place the TTL value within.").Advanced(),
-			docs.FieldInt("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
+			docs.FieldInt("max_in_flight", "The maximum number of parallel message batches to have in flight at any given time."),
 			policy.FieldSpec(),
 		).WithChildren(session.FieldSpecs()...).WithChildren(retries.FieldSpecs()...).ChildDefaultAndTypesFromStruct(output.NewDynamoDBConfig()),
 		Categories: []string{

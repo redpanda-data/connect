@@ -72,9 +72,10 @@ type bqQueryParts struct {
 }
 
 type bqQueryBuilderOptions struct {
-	queryParts *bqQueryParts
-	jobLabels  map[string]string
-	args       []interface{}
+	queryParts    *bqQueryParts
+	jobLabels     map[string]string
+	queryPriority bigquery.QueryPriority
+	args          []interface{}
 }
 
 func buildBQQuery(client *bigquery.Client, options *bqQueryBuilderOptions) (*bigquery.Query, error) {
@@ -99,6 +100,7 @@ func buildBQQuery(client *bigquery.Client, options *bqQueryBuilderOptions) (*big
 
 	query := client.Query(qs)
 	query.Labels = options.jobLabels
+	query.Priority = options.queryPriority
 
 	bqparams := make([]bigquery.QueryParameter, 0, len(args))
 	for _, arg := range args {
@@ -129,4 +131,26 @@ func errorFromStatus(status *bigquery.JobStatus) error {
 	}
 
 	return fmt.Errorf("failed to complete bigquery job successfully: %w", bqErr)
+}
+
+func parseQueryPriority(config *service.ParsedConfig, fieldName string) (bigquery.QueryPriority, error) {
+	if !config.Contains(fieldName) {
+		return "", nil
+	}
+
+	rawPriority, err := config.FieldString(fieldName)
+	if err != nil {
+		return "", err
+	}
+
+	switch rawPriority {
+	case "interactive":
+		return bigquery.InteractivePriority, nil
+	case "batch":
+		return bigquery.BatchPriority, nil
+	case "":
+		return "", nil
+	default:
+		return "", fmt.Errorf("unrecognised query priority: %s", rawPriority)
+	}
 }

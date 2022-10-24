@@ -63,7 +63,7 @@ allowing you to transfer data across accounts. You can find out more
 			docs.FieldString("url", "The URL of the target SQS queue."),
 			docs.FieldString("message_group_id", "An optional group ID to set for messages.").IsInterpolated(),
 			docs.FieldString("message_deduplication_id", "An optional deduplication ID to set for messages.").IsInterpolated(),
-			docs.FieldInt("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
+			docs.FieldInt("max_in_flight", "The maximum number of parallel message batches to have in flight at any given time."),
 			docs.FieldObject("metadata", "Specify criteria for which metadata values are sent as headers.").WithChildren(metadata.ExcludeFilterFields()...),
 			policy.FieldSpec(),
 		).WithChildren(sess.FieldSpecs()...).WithChildren(retries.FieldSpecs()...).ChildDefaultAndTypesFromStruct(output.NewAmazonSQSConfig()),

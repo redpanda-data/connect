@@ -25,6 +25,7 @@ require (
 	github.com/PaesslerAG/gval v1.2.0
 	github.com/PaesslerAG/jsonpath v0.1.1
 	github.com/Shopify/sarama v1.30.1
+	github.com/andybalholm/brotli v1.0.4 // indirect
 	github.com/apache/pulsar-client-go v0.8.1
 	github.com/apache/pulsar-client-go/oauth2 v0.0.0-20220524063205-c41616b2f512 // indirect
 	github.com/apache/thrift v0.15.0 // indirect
@@ -74,10 +75,12 @@ require (
 	github.com/itchyny/timefmt-go v0.1.3
 	github.com/jhump/protoreflect v1.10.1
 	github.com/jmespath/go-jmespath v0.4.0
+	github.com/klauspost/compress v1.15.9 // indirect
 	github.com/lib/pq v1.10.4
-	github.com/linkedin/goavro/v2 v2.11.1
+	github.com/linkedin/goavro/v2 v2.12.0
 	github.com/matoous/go-nanoid/v2 v2.0.0
 	github.com/mattn/go-colorable v0.1.12 // indirect
+	github.com/mattn/go-runewidth v0.0.13 // indirect
 	github.com/microcosm-cc/bluemonday v1.0.19
 	github.com/mitchellh/mapstructure v1.4.3
 	github.com/moby/term v0.0.0-20210619224110-3f7ff695adc6 // indirect
@@ -102,9 +105,10 @@ require (
 	github.com/rabbitmq/amqp091-go v1.4.0
 	github.com/rcrowley/go-metrics v0.0.0-20201227073835-cf1acfcdf475
 	github.com/rickb777/date v1.17.0
+	github.com/rivo/uniseg v0.3.4 // indirect
 	github.com/robfig/cron/v3 v3.0.1
 	github.com/segmentio/ksuid v1.0.4
-	github.com/segmentio/parquet-go v0.0.0-20220630161706-7691e3e37eea
+	github.com/segmentio/parquet-go v0.0.0-20220830163417-b03c0471ebb0
 	github.com/sirupsen/logrus v1.8.1
 	github.com/smira/go-statsd v1.3.2
 	github.com/snowflakedb/gosnowflake v1.6.6

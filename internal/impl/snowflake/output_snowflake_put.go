@@ -203,7 +203,7 @@ and it must be set to the `+"`<cloud>`"+` part of the Account Identifier
 		}).Description("Compression type.").Default(string(CompressionTypeAuto))).
 		Field(service.NewInterpolatedStringField("snowpipe").Description(`An optional Snowpipe name. Use the `+"`<snowpipe>`"+` part from `+"`<database>.<schema>.<snowpipe>`"+`.`).Optional()).
 		Field(service.NewBatchPolicyField("batching")).
-		Field(service.NewIntField("max_in_flight").Description("The maximum number of messages to have in flight at a given time. Increase this to improve throughput.").Default(1)).
+		Field(service.NewIntField("max_in_flight").Description("The maximum number of parallel message batches to have in flight at any given time.").Default(1)).
 		LintRule(`root = match {
   this.exists("password") && this.exists("private_key_file") => [ "both `+"`password`"+` and `+"`private_key_file`"+` can't be set simultaneously" ],
   this.exists("snowpipe") && (!this.exists("private_key_file") || this.private_key_file == "") => [ "`+"`private_key_file`"+` is required when setting `+"`snowpipe`"+`" ],

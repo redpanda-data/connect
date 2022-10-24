@@ -4,8 +4,8 @@ import "github.com/benthosdev/benthos/v4/internal/docs"
 
 var docsAsync = `
 This output benefits from sending multiple messages in flight in parallel for
-improved performance. You can tune the max number of in flight messages with the
-field ` + "`max_in_flight`" + `.`
+improved performance. You can tune the max number of in flight messages (or
+message batches) with the field ` + "`max_in_flight`" + `.`
 
 var docsBatches = `
 This output benefits from sending messages as a batch for improved performance.

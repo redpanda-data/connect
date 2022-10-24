@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -31,6 +32,7 @@ import (
 
 func router(m *manager.Type) *mux.Router {
 	router := mux.NewRouter()
+	router.HandleFunc("/ready", m.HandleStreamReady)
 	router.HandleFunc("/streams", m.HandleStreamsCRUD)
 	router.HandleFunc("/streams/{id}", m.HandleStreamCRUD)
 	router.HandleFunc("/streams/{id}/stats", m.HandleStreamStats)
@@ -42,11 +44,15 @@ func genRequest(verb, url string, payload interface{}) *http.Request {
 	var body io.Reader
 
 	if payload != nil {
-		bodyBytes, err := json.Marshal(payload)
-		if err != nil {
-			panic(err)
+		if s, ok := payload.(string); ok {
+			body = strings.NewReader(s)
+		} else {
+			bodyBytes, err := json.Marshal(payload)
+			if err != nil {
+				panic(err)
+			}
+			body = bytes.NewReader(bodyBytes)
 		}
-		body = bytes.NewReader(bodyBytes)
 	}
 
 	req, err := http.NewRequest(verb, url, body)
@@ -202,6 +208,13 @@ func TestTypeAPIBasicOperations(t *testing.T) {
 	response = httptest.NewRecorder()
 	r.ServeHTTP(response, request)
 	assert.Equal(t, http.StatusBadRequest, response.Code)
+
+	assert.Eventually(t, func() bool {
+		request = genRequest("GET", "/ready", nil)
+		response = httptest.NewRecorder()
+		r.ServeHTTP(response, request)
+		return response.Code == http.StatusOK
+	}, time.Second*10, time.Millisecond*50)
 
 	request = genRequest("GET", "/streams/bar", nil)
 	response = httptest.NewRecorder()
@@ -904,4 +917,56 @@ file:
 	file2Bytes, err := os.ReadFile(filepath.Join(dir2, "second"))
 	require.NoError(t, err)
 	assert.Equal(t, `{"id":"second","content":"hello world 2"}`, string(file2Bytes))
+}
+
+func TestAPIReady(t *testing.T) {
+	res, err := bmanager.New(bmanager.NewResourceConfig())
+	require.NoError(t, err)
+
+	mgr := manager.New(res)
+
+	r := router(mgr)
+
+	request := genRequest("POST", "/streams/foo", `
+input:
+  generate:
+    count: 1
+    mapping: 'root = {}'
+    interval: ""
+
+output:
+  drop: {}
+`)
+	response := httptest.NewRecorder()
+	r.ServeHTTP(response, request)
+	assert.Equal(t, http.StatusOK, response.Code)
+
+	assert.Eventually(t, func() bool {
+		request = genRequest("GET", "/ready", nil)
+		response = httptest.NewRecorder()
+		r.ServeHTTP(response, request)
+		return response.Code == http.StatusOK
+	}, time.Second*10, time.Millisecond*50)
+
+	request = genRequest("POST", "/streams/bar", `
+input:
+  generate:
+    count: 1
+    mapping: 'root = {}'
+    interval: ""
+
+output:
+  websocket:
+    url: not**a**valid**url
+`)
+	response = httptest.NewRecorder()
+	r.ServeHTTP(response, request)
+	assert.Equal(t, http.StatusOK, response.Code)
+
+	assert.Eventually(t, func() bool {
+		request = genRequest("GET", "/ready", nil)
+		response = httptest.NewRecorder()
+		r.ServeHTTP(response, request)
+		return response.Code == http.StatusServiceUnavailable
+	}, time.Second*10, time.Millisecond*50)
 }

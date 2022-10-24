@@ -69,8 +69,8 @@ func init() {
 func parquetSchemaConfig() *service.ConfigField {
 	return service.NewObjectListField("schema",
 		service.NewStringField("name").Description("The name of the column."),
-		service.NewStringEnumField("type", "BOOLEAN", "INT32", "INT64", "FLOAT", "DOUBLE", "BYTE_ARRAY").
-			Description("The type of the column, only applicable for leaf columns with no child fields.").Optional(),
+		service.NewStringEnumField("type", "BOOLEAN", "INT32", "INT64", "FLOAT", "DOUBLE", "BYTE_ARRAY", "UTF8").
+			Description("The type of the column, only applicable for leaf columns with no child fields. Some logical types can be specified here such as UTF8.").Optional(),
 		service.NewBoolField("repeated").Description("Whether the field is repeated.").Default(false),
 		service.NewBoolField("optional").Description("Whether the field is optional.").Default(false),
 		service.NewAnyListField("fields").Description("A list of child fields.").Optional().Example([]interface{}{
@@ -119,6 +119,8 @@ func parquetGroupFromConfig(columnConfs []*service.ParsedConfig) (parquet.Group,
 				n = parquet.Leaf(parquet.DoubleType)
 			case "BYTE_ARRAY":
 				n = parquet.Leaf(parquet.ByteArrayType)
+			case "UTF8":
+				n = parquet.String()
 			default:
 				return nil, fmt.Errorf("field %v type of '%v' not recognised", name, typeStr)
 			}

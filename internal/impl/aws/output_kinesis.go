@@ -63,7 +63,7 @@ allowing you to transfer data across accounts. You can find out more
 			docs.FieldString("stream", "The stream to publish messages to."),
 			docs.FieldString("partition_key", "A required key for partitioning messages.").IsInterpolated(),
 			docs.FieldString("hash_key", "A optional hash key for partitioning messages.").IsInterpolated().Advanced(),
-			docs.FieldInt("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
+			docs.FieldInt("max_in_flight", "The maximum number of parallel message batches to have in flight at any given time."),
 			policy.FieldSpec(),
 		).WithChildren(sess.FieldSpecs()...).WithChildren(retries.FieldSpecs()...).ChildDefaultAndTypesFromStruct(output.NewKinesisConfig()),
 		Categories: []string{

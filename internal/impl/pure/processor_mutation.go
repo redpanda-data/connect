@@ -80,7 +80,7 @@ With the following config:`,
 pipeline:
   processors:
     - mutation: |
-        root.id = this.id
+        root.description = deleted()
         root.fans = this.fans.filter(fan -> fan.obsession > 0.5)
 `).
 			Example("More Mapping", `

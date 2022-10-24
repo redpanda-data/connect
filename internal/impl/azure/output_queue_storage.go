@@ -39,7 +39,7 @@ In order to set the `+"`queue_name`"+` you can use function interpolations descr
 				"ttl", "The TTL of each individual message as a duration string. Defaults to 0, meaning no retention period is set",
 				"60s", "5m", "36h",
 			).IsInterpolated().Advanced(),
-			docs.FieldInt("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput.").AtVersion("3.45.0"),
+			docs.FieldInt("max_in_flight", "The maximum number of parallel message batches to have in flight at any given time.").AtVersion("3.45.0"),
 			policy.FieldSpec(),
 		).ChildDefaultAndTypesFromStruct(output.NewAzureQueueStorageConfig()),
 		Categories: []string{
