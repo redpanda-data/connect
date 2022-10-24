@@ -22,7 +22,10 @@ func javascriptProcessorConfig() *service.ConfigSpec {
 			Default("")).
 		Field(service.NewInterpolatedStringField("file").
 			Description("The javascript file to use.").
-			Default(""))
+			Default("")).
+		Field(service.NewStringListField("registry_global_folders").
+			Description("List of global folders that will be used to load modules from if the requested JS module is not found elsewhere. If not defined, the the working path will be used.").
+			Default([]string{""}))
 }
 
 func init() {
@@ -54,6 +57,10 @@ func newJavascriptProcessorFromConfig(conf *service.ParsedConfig, mgr *service.R
 	if err != nil {
 		return nil, err
 	}
+	registryGlobalFolders, err := conf.FieldStringList("registry_global_folders")
+	if err != nil {
+		return nil, err
+	}
 
 	if code != "" && file != "" {
 		return nil, errors.New("both 'code' and 'file' fields are specified but only one is allowed")
@@ -82,9 +89,8 @@ func newJavascriptProcessorFromConfig(conf *service.ParsedConfig, mgr *service.R
 	logger := mgr.Logger()
 
 	// Initialize global registry. This is where modules (JS files) live. This enables easy code re-use.
-	// TODO: We need to set a registry root folder. Can we make this configurable somehow? Setting it to the working directory for now.
 	// TODO: Implement registry live reloading in dev mode? E. g. if a JS file is modified.
-	requireRegistry := require.NewRegistry(require.WithGlobalFolders(""))
+	requireRegistry := require.NewRegistry(require.WithGlobalFolders(registryGlobalFolders...))
 	requireRegistry.RegisterNativeModule("console", console.RequireWithPrinter(&Logger{logger}))
 
 	return &javascriptProcessor{program: program, requireRegistry: requireRegistry, logger: logger}, nil
