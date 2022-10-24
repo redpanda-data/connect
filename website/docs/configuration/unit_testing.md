@@ -53,7 +53,7 @@ tests:
           example_key: example metadata value
     output_batches:
       -
-        - content_equals: example content
+        - content_equals: EXAMPLE CONTENTend
           metadata_equals:
             example_key: example metadata value
 ```
