@@ -15,22 +15,7 @@ import (
 	"github.com/dop251/goja_nodejs/require"
 )
 
-var (
-	requireRegistry *require.Registry
-)
-
-func init() {
-	createRequireRegistry()
-	// TODO: Implement registry live reloading in dev mode? E. g. if a JS file is modified.
-}
-
-func createRequireRegistry() {
-	// Initialize global registry. This is where modules (JS files) live. This enables easy code re-use.
-	// TODO: We need to set a registry root folder. Can we make this configurable somehow? Setting it to the working directory for now.
-	requireRegistry = require.NewRegistry(require.WithGlobalFolders(""))
-}
-
-func getVM(message *service.Message, logger *service.Logger) *goja.Runtime {
+func getVM(message *service.Message, requireRegistry *require.Registry, logger *service.Logger) *goja.Runtime {
 	vm := goja.New()
 
 	requireRegistry.Enable(vm)

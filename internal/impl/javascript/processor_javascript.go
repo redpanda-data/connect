@@ -9,6 +9,7 @@ import (
 	"github.com/benthosdev/benthos/v4/public/service"
 	"github.com/dop251/goja"
 	"github.com/dop251/goja_nodejs/console"
+	"github.com/dop251/goja_nodejs/require"
 )
 
 func javascriptProcessorConfig() *service.ConfigSpec {
@@ -39,8 +40,9 @@ func init() {
 //------------------------------------------------------------------------------
 
 type javascriptProcessor struct {
-	program *goja.Program
-	logger  *service.Logger
+	program         *goja.Program
+	requireRegistry *require.Registry
+	logger          *service.Logger
 }
 
 func newJavascriptProcessorFromConfig(conf *service.ParsedConfig, mgr *service.Resources) (*javascriptProcessor, error) {
@@ -79,14 +81,18 @@ func newJavascriptProcessorFromConfig(conf *service.ParsedConfig, mgr *service.R
 
 	logger := mgr.Logger()
 
+	// Initialize global registry. This is where modules (JS files) live. This enables easy code re-use.
+	// TODO: We need to set a registry root folder. Can we make this configurable somehow? Setting it to the working directory for now.
+	// TODO: Implement registry live reloading in dev mode? E. g. if a JS file is modified.
+	requireRegistry := require.NewRegistry(require.WithGlobalFolders(""))
 	requireRegistry.RegisterNativeModule("console", console.RequireWithPrinter(&Logger{logger}))
 
-	return &javascriptProcessor{program: program, logger: logger}, nil
+	return &javascriptProcessor{program: program, requireRegistry: requireRegistry, logger: logger}, nil
 }
 
 func (j *javascriptProcessor) Process(ctx context.Context, m *service.Message) (service.MessageBatch, error) {
 	// Create new JS VM
-	vm := getVM(m, j.logger)
+	vm := getVM(m, j.requireRegistry, j.logger)
 
 	// Run JS file
 	_, err := vm.RunProgram(j.program)
