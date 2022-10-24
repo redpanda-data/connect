@@ -209,17 +209,6 @@ var _ = registerSimpleMethod(
 		if err != nil {
 			return nil, err
 		}
-		compareFn := func(compareLeft any) bool {
-			return ICompare(compareRight, compareLeft)
-		}
-		if compareRightNum, err := IGetNumber(compareRight); err == nil {
-			compareFn = func(compareLeft any) bool {
-				if leftAsNum, err := IGetNumber(compareLeft); err == nil {
-					return leftAsNum == compareRightNum
-				}
-				return false
-			}
-		}
 		sub := IToString(compareRight)
 		bsub := IToBytes(compareRight)
 		return func(v any, ctx FunctionContext) (any, error) {
@@ -230,13 +219,13 @@ var _ = registerSimpleMethod(
 				return bytes.Contains(t, bsub), nil
 			case []any:
 				for _, compareLeft := range t {
-					if compareFn(compareLeft) {
+					if ICompare(compareRight, compareLeft) {
 						return true, nil
 					}
 				}
 			case map[string]any:
 				for _, compareLeft := range t {
-					if compareFn(compareLeft) {
+					if ICompare(compareRight, compareLeft) {
 						return true, nil
 					}
 				}
