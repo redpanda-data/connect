@@ -484,7 +484,7 @@ func LintYAML(ctx LintContext, cType Type, node *yaml.Node) []Lint {
 		}
 	}
 
-	if ctx.RequireLabels && canLabel && !hasLabel {
+	if ctx.RequireLabels && canLabel && !hasLabel && name != "resource" {
 		lints = append(lints, NewLintError(node.Line, LintMissingLabel, fmt.Sprintf("label is required for %s", cSpec.Name)))
 	}
 

@@ -588,6 +588,11 @@ func TestYAMLComponentLinting(t *testing.T) {
 
 	for _, t := range docs.Types() {
 		prov.RegisterDocs(docs.ComponentSpec{
+			Name:   "resource",
+			Type:   t,
+			Config: docs.FieldString("", ""),
+		})
+		prov.RegisterDocs(docs.ComponentSpec{
 			Name: fmt.Sprintf("testlintfoo%v", string(t)),
 			Type: t,
 			Config: docs.FieldComponent().WithChildren(
@@ -694,6 +699,13 @@ testlintbarinput:
 			res: []docs.Lint{
 				docs.NewLintError(2, docs.LintMissingLabel, "label is required for testlintbarinput"),
 			},
+		},
+		{
+			name:      "do not require label for resource",
+			inputType: docs.TypeInput,
+			inputConf: `
+resource: something`,
+			requireLabels: true,
 		},
 		{
 			name:      "allows anchors",
