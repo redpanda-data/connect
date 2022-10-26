@@ -1579,6 +1579,76 @@ root.new_dict = this.dict.filter(item -> item.value.contains("foo"))
 # Out: {"new_dict":{"first":"hello foo","third":"this foo is great"}}
 ```
 
+### `find`
+
+:::caution BETA
+This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
+:::
+Returns the index of the first occurrence of a value or query in an array. `-1` is returned if there are no matches. Numerical comparisons are made irrespective of the representation type (float versus integer).
+
+#### Parameters
+
+**`value`** &lt;query expression&gt; A value to find. If a query is provided it will only be resolved once during the lifetime of the mapping.  
+
+#### Examples
+
+
+```coffee
+root.index = this.find("bar")
+
+# In:  ["foo", "bar", "baz"]
+# Out: {"index":1}
+```
+
+```coffee
+root.index = this.find(v -> v != "bar")
+
+# In:  ["foo", "bar", "baz"]
+# Out: {"index":0}
+```
+
+```coffee
+root.index = this.find(v -> v != "foo")
+
+# In:  ["foo"]
+# Out: {"index":-1}
+```
+
+### `find_all`
+
+:::caution BETA
+This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
+:::
+Returns an array containing the indexes of all occurrences of a value or query in an array. An empty array is returned if there are no matches. Numerical comparisons are made irrespective of the representation type (float versus integer).
+
+#### Parameters
+
+**`value`** &lt;query expression&gt; A value to find. If a query is provided it will only be resolved once during the lifetime of the mapping.  
+
+#### Examples
+
+
+```coffee
+root.index = this.find_all("bar")
+
+# In:  ["foo", "bar", "baz", "bar"]
+# Out: {"index":[1,3]}
+```
+
+```coffee
+root.index = this.find_all(v -> v != "bar")
+
+# In:  ["foo", "bar", "baz"]
+# Out: {"index":[0,2]}
+```
+
+```coffee
+root.index = this.find_all(v -> v != "foo")
+
+# In:  ["foo"]
+# Out: {"index":[]}
+```
+
 ### `flatten`
 
 Iterates an array and any element that is itself an array is removed and has its elements inserted directly in the resulting array.
