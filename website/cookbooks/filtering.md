@@ -8,7 +8,7 @@ Events are like eyebrows, sometimes it's best to just get rid of them. Filtering
 
 ## The Basic Filter
 
-Dropping events with [Bloblang][guides.bloblang] is done by mapping the function `deleted()` to the `root` of the mapped document. To remove all events indiscriminantly you can simply do:
+Dropping events with [Bloblang][guides.bloblang] is done by mapping the function `deleted()` to the `root` of the mapped document. To remove all events indiscriminately you can simply do:
 
 ```yaml
 pipeline:
