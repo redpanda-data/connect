@@ -11,8 +11,8 @@ header() {
     cat 1>&2 <<EOF
 Benthos Installer
 
-Website: https://benthos.dev
-Docs: https://benthos.dev/docs
+Website: https://www.benthos.dev
+Docs: https://www.benthos.dev/docs/about
 Repo: https://github.com/benthosdev/benthos
 
 EOF

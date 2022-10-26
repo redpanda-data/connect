@@ -51,8 +51,6 @@ export default async function pluginContentCookbook(
     'cookbooks',
   );
   const dataDir = path.join(pluginDataDirRoot, pluginId);
-  const aliasedSource = (source: string) =>
-    `~cookbooks/${posixPath(path.relative(pluginDataDirRoot, source))}`;
 
   return {
     name: 'cookbooks',

@@ -126,8 +126,7 @@ First, we sleep for 500 milliseconds just to keep the suspense going. Next, we r
 Try running that config with some sample documents:
 
 ```sh
-echo '
-{"id":"1","names":["celine","dion"]}
+echo '{"id":"1","names":["celine","dion"]}
 {"id":"2","names":["chad","robert","kroeger"]}' | benthos -c ./config.yaml
 ```
 

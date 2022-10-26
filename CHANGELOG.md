@@ -5,6 +5,8 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 4.10.0 - 2022-10-26
+
 ### Added
 
 - The `nats_jetstream` input now adds a range of useful metadata information to messages.

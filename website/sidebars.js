@@ -1,4 +1,4 @@
-const {listPaths,listDeprecatedPaths} = require('./src/plugins/components');
+const {listPaths} = require('./src/plugins/components');
 
 let inputs_docs = listPaths("inputs");
 let processors_docs = listPaths("processors");
