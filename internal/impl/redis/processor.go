@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/go-redis/redis/v7"
+	"github.com/go-redis/redis/v8"
 
 	"github.com/benthosdev/benthos/v4/public/bloblang"
 	"github.com/benthosdev/benthos/v4/public/service"
@@ -201,16 +201,16 @@ func newRedisProcFromConfig(conf *service.ParsedConfig, res *service.Resources) 
 	return r, nil
 }
 
-type redisOperator func(r *redisProc, key string, part *service.Message) error
+type redisOperator func(ctx context.Context, r *redisProc, key string, part *service.Message) error
 
 func newRedisKeysOperator() redisOperator {
-	return func(r *redisProc, key string, part *service.Message) error {
-		res, err := r.client.Keys(key).Result()
+	return func(ctx context.Context, r *redisProc, key string, part *service.Message) error {
+		res, err := r.client.Keys(ctx, key).Result()
 
 		for i := 0; i <= r.retries && err != nil; i++ {
 			r.log.Errorf("Keys command failed: %v\n", err)
 			<-time.After(r.retryPeriod)
-			res, err = r.client.Keys(key).Result()
+			res, err = r.client.Keys(ctx, key).Result()
 		}
 		if err != nil {
 			return err
@@ -226,13 +226,13 @@ func newRedisKeysOperator() redisOperator {
 }
 
 func newRedisSCardOperator() redisOperator {
-	return func(r *redisProc, key string, part *service.Message) error {
-		res, err := r.client.SCard(key).Result()
+	return func(ctx context.Context, r *redisProc, key string, part *service.Message) error {
+		res, err := r.client.SCard(ctx, key).Result()
 
 		for i := 0; i <= r.retries && err != nil; i++ {
 			r.log.Errorf("SCard command failed: %v\n", err)
 			<-time.After(r.retryPeriod)
-			res, err = r.client.SCard(key).Result()
+			res, err = r.client.SCard(ctx, key).Result()
 		}
 		if err != nil {
 			return err
@@ -244,18 +244,18 @@ func newRedisSCardOperator() redisOperator {
 }
 
 func newRedisSAddOperator() redisOperator {
-	return func(r *redisProc, key string, part *service.Message) error {
+	return func(ctx context.Context, r *redisProc, key string, part *service.Message) error {
 		mBytes, err := part.AsBytes()
 		if err != nil {
 			return err
 		}
 
-		res, err := r.client.SAdd(key, mBytes).Result()
+		res, err := r.client.SAdd(ctx, key, mBytes).Result()
 
 		for i := 0; i <= r.retries && err != nil; i++ {
 			r.log.Errorf("SAdd command failed: %v\n", err)
 			<-time.After(r.retryPeriod)
-			res, err = r.client.SAdd(key, mBytes).Result()
+			res, err = r.client.SAdd(ctx, key, mBytes).Result()
 		}
 		if err != nil {
 			return err
@@ -267,7 +267,7 @@ func newRedisSAddOperator() redisOperator {
 }
 
 func newRedisIncrByOperator() redisOperator {
-	return func(r *redisProc, key string, part *service.Message) error {
+	return func(ctx context.Context, r *redisProc, key string, part *service.Message) error {
 		mBytes, err := part.AsBytes()
 		if err != nil {
 			return err
@@ -277,12 +277,12 @@ func newRedisIncrByOperator() redisOperator {
 		if err != nil {
 			return err
 		}
-		res, err := r.client.IncrBy(key, int64(valueInt)).Result()
+		res, err := r.client.IncrBy(ctx, key, int64(valueInt)).Result()
 
 		for i := 0; i <= r.retries && err != nil; i++ {
 			r.log.Errorf("incrby command failed: %v\n", err)
 			<-time.After(r.retryPeriod)
-			res, err = r.client.IncrBy(key, int64(valueInt)).Result()
+			res, err = r.client.IncrBy(ctx, key, int64(valueInt)).Result()
 		}
 		if err != nil {
 			return err
@@ -338,11 +338,11 @@ func (r *redisProc) execRaw(ctx context.Context, index int, inBatch service.Mess
 	command := inBatch.InterpolatedString(index, r.command)
 	args = append([]any{command}, args...)
 
-	res, err := r.client.DoContext(ctx, args...).Result()
+	res, err := r.client.Do(ctx, args...).Result()
 	for i := 0; i <= r.retries && err != nil; i++ {
 		r.log.Errorf("%v command failed: %v", command, err)
 		<-time.After(r.retryPeriod)
-		res, err = r.client.DoContext(ctx, args...).Result()
+		res, err = r.client.Do(ctx, args...).Result()
 	}
 	if err != nil {
 		return err
@@ -357,7 +357,7 @@ func (r *redisProc) ProcessBatch(ctx context.Context, inBatch service.MessageBat
 	for index, part := range newMsg {
 		if r.operator != nil {
 			key := inBatch.InterpolatedString(index, r.key)
-			if err := r.operator(r, key, part); err != nil {
+			if err := r.operator(ctx, r, key, part); err != nil {
 				r.log.Debugf("Operator failed for key '%s': %v", key, err)
 				part.SetError(fmt.Errorf("redis operator failed: %w", err))
 			}

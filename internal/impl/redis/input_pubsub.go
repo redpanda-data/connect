@@ -4,7 +4,7 @@ import (
 	"context"
 	"sync"
 
-	"github.com/go-redis/redis/v7"
+	"github.com/go-redis/redis/v8"
 
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component"
@@ -92,7 +92,7 @@ func (r *redisPubSubReader) Connect(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	if _, err := client.Ping().Result(); err != nil {
+	if _, err := client.Ping(ctx).Result(); err != nil {
 		return err
 	}
 
@@ -100,9 +100,9 @@ func (r *redisPubSubReader) Connect(ctx context.Context) error {
 
 	r.client = client
 	if r.conf.UsePatterns {
-		r.pubsub = r.client.PSubscribe(r.conf.Channels...)
+		r.pubsub = r.client.PSubscribe(ctx, r.conf.Channels...)
 	} else {
-		r.pubsub = r.client.Subscribe(r.conf.Channels...)
+		r.pubsub = r.client.Subscribe(ctx, r.conf.Channels...)
 	}
 	return nil
 }

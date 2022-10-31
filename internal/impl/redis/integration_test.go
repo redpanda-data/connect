@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/go-redis/redis/v7"
+	"github.com/go-redis/redis/v8"
 	"github.com/ory/dockertest/v3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -206,7 +206,7 @@ output:
 				Network: "tcp",
 			})
 			key := testID + "-" + id
-			res, err := client.HGet(key, "content").Result()
+			res, err := client.HGet(ctx, key, "content").Result()
 			if err != nil {
 				return "", nil, err
 			}

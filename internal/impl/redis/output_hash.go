@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/go-redis/redis/v7"
+	"github.com/go-redis/redis/v8"
 
 	"github.com/benthosdev/benthos/v4/internal/bloblang/field"
 	"github.com/benthosdev/benthos/v4/internal/bundle"
@@ -139,7 +139,7 @@ func (r *redisHashWriter) Connect(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	if _, err = client.Ping().Result(); err != nil {
+	if _, err = client.Ping(ctx).Result(); err != nil {
 		return err
 	}
 
@@ -196,7 +196,7 @@ func (r *redisHashWriter) WriteBatch(ctx context.Context, msg message.Batch) err
 		for k, v := range r.fields {
 			fields[k] = v.String(i, msg)
 		}
-		if err := client.HMSet(key, fields).Err(); err != nil {
+		if err := client.HMSet(ctx, key, fields).Err(); err != nil {
 			_ = r.disconnect()
 			r.log.Errorf("Error from redis: %v\n", err)
 			return component.ErrNotConnected

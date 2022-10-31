@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/go-redis/redis/v7"
+	"github.com/go-redis/redis/v8"
 	"github.com/ory/dockertest/v3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -42,8 +42,9 @@ func TestIntegrationRedisProcessor(t *testing.T) {
 		Network: uri.Scheme,
 	})
 
+	ctx := context.Background()
 	if err = pool.Retry(func() error {
-		return client.Ping().Err()
+		return client.Ping(ctx).Err()
 	}); err != nil {
 		t.Fatalf("Could not connect to docker resource: %s", err)
 	}
@@ -69,7 +70,7 @@ func TestIntegrationRedisProcessor(t *testing.T) {
 		testRedisIncrby(t, client, urlStr)
 	})
 
-	require.NoError(t, client.FlushAll().Err())
+	require.NoError(t, client.FlushAll(ctx).Err())
 
 	t.Run("testRedisDeprecatedKeys", func(t *testing.T) {
 		testRedisDeprecatedKeys(t, client, urlStr)
@@ -96,10 +97,12 @@ args_mapping: 'root = [ "foo*" ]'
 	r, err := newRedisProcFromConfig(conf, service.MockResources())
 	require.NoError(t, err)
 
+	ctx := context.Background()
+
 	for _, key := range []string{
 		"bar1", "bar2", "fooa", "foob", "baz1", "fooc",
 	} {
-		_, err := client.Set(key, "hello world", 0).Result()
+		_, err := client.Set(ctx, key, "hello world", 0).Result()
 		require.NoError(t, err)
 	}
 
@@ -180,14 +183,15 @@ args_mapping: 'root = [ meta("key"), content().string() ]'
 		assert.Equal(t, e, string(act))
 	}
 
-	res, err := client.SCard("foo1").Result()
+	ctx := context.Background()
+	res, err := client.SCard(ctx, "foo1").Result()
 	if err != nil {
 		t.Fatal(err)
 	}
 	if exp, act := 2, int(res); exp != act {
 		t.Errorf("Wrong cardinality of set 1: %v != %v", act, exp)
 	}
-	res, err = client.SCard("foo2").Result()
+	res, err = client.SCard(ctx, "foo2").Result()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -286,10 +290,12 @@ key: foo*
 	r, err := newRedisProcFromConfig(conf, service.MockResources())
 	require.NoError(t, err)
 
+	ctx := context.Background()
+
 	for _, key := range []string{
 		"bar1", "bar2", "fooa", "foob", "baz1", "fooc",
 	} {
-		_, err := client.Set(key, "hello world", 0).Result()
+		_, err := client.Set(ctx, key, "hello world", 0).Result()
 		require.NoError(t, err)
 	}
 
@@ -368,14 +374,16 @@ key: "${! meta(\"key\") }"
 		assert.Equal(t, e, string(act))
 	}
 
-	res, err := client.SCard("foo1").Result()
+	ctx := context.Background()
+
+	res, err := client.SCard(ctx, "foo1").Result()
 	if err != nil {
 		t.Fatal(err)
 	}
 	if exp, act := 2, int(res); exp != act {
 		t.Errorf("Wrong cardinality of set 1: %v != %v", act, exp)
 	}
-	res, err = client.SCard("foo2").Result()
+	res, err = client.SCard(ctx, "foo2").Result()
 	if err != nil {
 		t.Fatal(err)
 	}

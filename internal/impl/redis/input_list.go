@@ -5,7 +5,7 @@ import (
 	"errors"
 	"time"
 
-	"github.com/go-redis/redis/v7"
+	"github.com/go-redis/redis/v8"
 
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/public/service"
@@ -82,7 +82,7 @@ type redisListReader struct {
 }
 
 func (r *redisListReader) Connect(ctx context.Context) error {
-	_, err := r.client.Ping().Result()
+	_, err := r.client.Ping(ctx).Result()
 	if err != nil {
 		return err
 	}
@@ -92,7 +92,7 @@ func (r *redisListReader) Connect(ctx context.Context) error {
 }
 
 func (r *redisListReader) Read(ctx context.Context) (*service.Message, service.AckFunc, error) {
-	res, err := r.client.BLPop(r.timeout, r.key).Result()
+	res, err := r.client.BLPop(ctx, r.timeout, r.key).Result()
 	if err != nil && !errors.Is(err, redis.Nil) {
 		return nil, nil, err
 	}

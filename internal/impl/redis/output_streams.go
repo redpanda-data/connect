@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/go-redis/redis/v7"
+	"github.com/go-redis/redis/v8"
 
 	ibatch "github.com/benthosdev/benthos/v4/internal/batch"
 	"github.com/benthosdev/benthos/v4/internal/batch/policy"
@@ -107,7 +107,7 @@ func (r *redisStreamsWriter) Connect(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	if _, err = client.Ping().Result(); err != nil {
+	if _, err = client.Ping(ctx).Result(); err != nil {
 		return err
 	}
 
@@ -137,7 +137,7 @@ func (r *redisStreamsWriter) WriteBatch(ctx context.Context, msg message.Batch) 
 	}
 
 	if msg.Len() == 1 {
-		if err := client.XAdd(&redis.XAddArgs{
+		if err := client.XAdd(ctx, &redis.XAddArgs{
 			ID:           "*",
 			Stream:       r.stream.String(0, msg),
 			MaxLenApprox: r.conf.MaxLenApprox,
@@ -152,7 +152,7 @@ func (r *redisStreamsWriter) WriteBatch(ctx context.Context, msg message.Batch) 
 
 	pipe := client.Pipeline()
 	_ = msg.Iter(func(i int, p *message.Part) error {
-		_ = pipe.XAdd(&redis.XAddArgs{
+		_ = pipe.XAdd(ctx, &redis.XAddArgs{
 			ID:           "*",
 			Stream:       r.stream.String(i, msg),
 			MaxLenApprox: r.conf.MaxLenApprox,
@@ -160,7 +160,7 @@ func (r *redisStreamsWriter) WriteBatch(ctx context.Context, msg message.Batch) 
 		})
 		return nil
 	})
-	cmders, err := pipe.Exec()
+	cmders, err := pipe.Exec(ctx)
 	if err != nil {
 		_ = r.disconnect()
 		r.log.Errorf("Error from redis: %v\n", err)
