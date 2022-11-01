@@ -33,6 +33,7 @@ redis:
   url: ""
   command: ""
   args_mapping: ""
+  keys_mapping: ""
 ```
 
 </TabItem>
@@ -54,6 +55,8 @@ redis:
     client_certs: []
   command: ""
   args_mapping: ""
+  keys_mapping: ""
+  script: ""
   retries: 3
   retry_period: 500ms
 ```
@@ -66,6 +69,7 @@ redis:
 <Tabs defaultValue="Querying Cardinality" values={[
 { label: 'Querying Cardinality', value: 'Querying Cardinality', },
 { label: 'Running Total', value: 'Running Total', },
+{ label: 'Running a script', value: 'Running a script', },
 ]}>
 
 <TabItem value="Querying Cardinality">
@@ -117,6 +121,30 @@ pipeline:
               command: incrby
               args_mapping: 'root = [ this.name, this.friends_visited ]'
         result_map: 'root.total = this'
+```
+
+</TabItem>
+<TabItem value="Running a script">
+
+The following example will use a script execution to get next element from a sorted set and set its score with timestamp unix nano value.
+
+```yaml
+pipeline:
+  processors:
+    - redis:
+      url: TODO
+      script: |
+        local value = redis.call("ZRANGE", KEYS[1], '0', '0')
+
+        if next(elements) == nil then
+          return ''
+        end
+
+        redis.call("ZADD", "XX", KEYS[1], ARGV[1], value)
+
+        return value
+      keys_mapping: 'root = [ meta("key") ]'
+      args_mapping: 'root = [ timestamp_unix_nano() ]'
 ```
 
 </TabItem>
@@ -338,6 +366,29 @@ args_mapping: root = [ this.key ]
 
 args_mapping: root = [ meta("kafka_key"), this.count ]
 ```
+
+### `keys_mapping`
+
+A [Bloblang mapping](/docs/guides/bloblang/about) which should evaluate to an array of keys matching in size to the number of arguments required for the specified Redis script. Must evaluate to an array of strs.
+
+
+Type: `string`  
+Requires version 4.11.0 or newer  
+
+```yml
+# Examples
+
+keys_mapping: root = [ this.key ]
+
+keys_mapping: root = [ meta("kafka_key"), "hardcoded_key" ]
+```
+
+### `script`
+
+A script to use for the target operator. It has precedence over the 'command' field.
+
+
+Type: `string`  
 
 ### `retries`
 
