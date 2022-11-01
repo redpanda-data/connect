@@ -39,6 +39,12 @@ performed for each message and the message contents are replaced with the result
 			Optional().
 			Example("root = [ this.key ]").
 			Example(`root = [ meta("kafka_key"), this.count ]`)).
+		Field(service.NewBloblangField("keys_mapping").
+			Description("A [Bloblang mapping](/docs/guides/bloblang/about) which should evaluate to an array of keys matching in size to the number of arguments required for the specified Redis script. Must evaluate to an array of strs.").
+			Version("4.11.0").
+			Optional().
+			Example("root = [ this.key ]").
+			Example(`root = [ meta("kafka_key"), "hardcoded_key" ]`)).
 		Field(service.NewStringAnnotatedEnumField("operator", map[string]string{
 			"keys":   `Returns an array of strings containing all the keys that match the pattern specified by the ` + "`key` field" + `.`,
 			"scard":  `Returns the cardinality of a set, or ` + "`0`" + ` if the key does not exist.`,
@@ -48,6 +54,10 @@ performed for each message and the message contents are replaced with the result
 			Description("The operator to apply.").
 			Deprecated().
 			Optional()).
+		Field(service.NewStringField("script").
+			Description("A script to use for the target operator. It has precedence over the 'command' field.").
+			Optional().
+			Advanced()).
 		Field(service.NewInterpolatedStringField("key").
 			Description("A key to use for the target operator.").
 			Deprecated().
@@ -61,8 +71,10 @@ performed for each message and the message contents are replaced with the result
 			Default("500ms").
 			Advanced()).
 		LintRule(`root = match {
-  this.exists("operator") == this.exists("command") => [ "one of 'operator' (old style) or 'command' (new style) fields must be specified" ]
+  this.exists("operator") == this.exists("command") && !this.exists("script") => [ "one of 'operator' (old style) or 'command' (new style) or 'script' fields must be specified" ]
   this.exists("args_mapping") && this.exists("operator") => [ "field args_mapping is invalid with an operator set" ],
+  this.exists("command") && this.exists("script") || this.exists("operator") && this.exists("script") => [ "when using field script, operator and command should not be set" ],
+  this.exists("script") && (!this.exists("args_mapping") || !this.exists("keys_mapping")) => [ "fields args_mapping and keys_mapping should be defined when using script" ],
 }`).
 		Example("Querying Cardinality",
 			`If given payloads containing a metadata field `+"`set_key`"+` it's possible to query and store the cardinality of the set for each message using a `+"[`branch` processor](/docs/components/processors/branch)"+` in order to augment rather than replace the message contents:`,
@@ -107,6 +119,26 @@ pipeline:
               command: incrby
               args_mapping: 'root = [ this.name, this.friends_visited ]'
         result_map: 'root.total = this'
+`).
+		Example("Running a script",
+			`The following example will use a script execution to get next element from a sorted set and set its score with timestamp unix nano value.`,
+			`
+pipeline:
+  processors:
+    - redis:
+      url: TODO
+      script: |
+        local value = redis.call("ZRANGE", KEYS[1], '0', '0')
+
+        if next(elements) == nil then
+          return ''
+        end
+
+        redis.call("ZADD", "XX", KEYS[1], ARGV[1], value)
+
+        return value
+      keys_mapping: 'root = [ meta("key") ]'
+      args_mapping: 'root = [ timestamp_unix_nano() ]'
 `)
 }
 
@@ -130,7 +162,9 @@ type redisProc struct {
 	operator redisOperator
 
 	command     *service.InterpolatedString
+	script      *redis.Script
 	argsMapping *bloblang.Executor
+	keysMapping *bloblang.Executor
 
 	client      redis.UniversalClient
 	retries     int
@@ -154,12 +188,31 @@ func newRedisProcFromConfig(conf *service.ParsedConfig, res *service.Resources) 
 	}
 
 	var command *service.InterpolatedString
+	var redisScript *redis.Script
 	var argsMapping *bloblang.Executor
+	var keysMapping *bloblang.Executor
 	if conf.Contains("command") {
 		if command, err = conf.FieldInterpolatedString("command"); err != nil {
 			return nil, err
 		}
 		if argsMapping, err = conf.FieldBloblang("args_mapping"); err != nil {
+			return nil, err
+		}
+	}
+
+	if conf.Contains("script") {
+		var script string
+		if script, err = conf.FieldString("script"); err != nil {
+			return nil, err
+		}
+
+		redisScript = redis.NewScript(script)
+
+		if argsMapping, err = conf.FieldBloblang("args_mapping"); err != nil {
+			return nil, err
+		}
+
+		if keysMapping, err = conf.FieldBloblang("keys_mapping"); err != nil {
 			return nil, err
 		}
 	}
@@ -184,8 +237,10 @@ func newRedisProcFromConfig(conf *service.ParsedConfig, res *service.Resources) 
 
 		operator: operator,
 
+		script:      redisScript,
 		command:     command,
 		argsMapping: argsMapping,
+		keysMapping: keysMapping,
 
 		retries:     retries,
 		retryPeriod: retryPeriod,
@@ -308,48 +363,61 @@ func getRedisOperator(opStr string) (redisOperator, error) {
 }
 
 func (r *redisProc) execRaw(ctx context.Context, index int, inBatch service.MessageBatch, msg *service.Message) error {
-	resMsg, err := inBatch.BloblangQuery(index, r.argsMapping)
+	args, err := getGenericMapping(inBatch, index, r.argsMapping)
+
 	if err != nil {
-		return fmt.Errorf("args mapping failed: %v", err)
+		return fmt.Errorf("args_mapping failed: %w", err)
 	}
 
-	iargs, err := resMsg.AsStructured()
-	if err != nil {
-		return err
-	}
+	var res any
+	if r.command != nil {
+		command := inBatch.InterpolatedString(index, r.command)
+		args = append([]any{command}, args...)
 
-	args, ok := iargs.([]any)
-	if !ok {
-		return fmt.Errorf("mapping returned non-array result: %T", iargs)
-	}
-	for i, v := range args {
-		n, isN := v.(json.Number)
-		if !isN {
-			continue
-		}
-		var nerr error
-		if args[i], nerr = n.Int64(); nerr != nil {
-			if args[i], nerr = n.Float64(); nerr != nil {
-				args[i] = n.String()
-			}
+		res, err = r.execCommand(ctx, command, args)
+
+		if err != nil {
+			return err
 		}
 	}
 
-	command := inBatch.InterpolatedString(index, r.command)
-	args = append([]any{command}, args...)
+	if r.script != nil {
+		keys, err := getStrMapping(inBatch, index, r.keysMapping)
 
+		if err != nil {
+			return fmt.Errorf("keys_mapping failed: %w", err)
+		}
+
+		res, err = r.execScript(ctx, keys, args)
+
+		if err != nil {
+			return err
+		}
+	}
+
+	msg.SetStructuredMut(res)
+	return nil
+}
+
+func (r *redisProc) execCommand(ctx context.Context, command string, args []any) (interface{}, error) {
 	res, err := r.client.Do(ctx, args...).Result()
 	for i := 0; i <= r.retries && err != nil; i++ {
 		r.log.Errorf("%v command failed: %v", command, err)
 		<-time.After(r.retryPeriod)
 		res, err = r.client.Do(ctx, args...).Result()
 	}
-	if err != nil {
-		return err
-	}
+	return res, err
+}
 
-	msg.SetStructuredMut(res)
-	return nil
+func (r *redisProc) execScript(ctx context.Context, keys []string, args []any) (interface{}, error) {
+	res, err := r.script.Run(ctx, r.client, keys, args...).Result()
+
+	for i := 0; i <= r.retries && err != nil; i++ {
+		r.log.Errorf("script failed: %v", err)
+		<-time.After(r.retryPeriod)
+		res, err = r.script.Run(ctx, r.client, keys, args...).Result()
+	}
+	return res, err
 }
 
 func (r *redisProc) ProcessBatch(ctx context.Context, inBatch service.MessageBatch) ([]service.MessageBatch, error) {
@@ -373,4 +441,72 @@ func (r *redisProc) ProcessBatch(ctx context.Context, inBatch service.MessageBat
 
 func (r *redisProc) Close(ctx context.Context) error {
 	return r.client.Close()
+}
+
+func getGenericMapping(inBatch service.MessageBatch, index int, mapping *bloblang.Executor) ([]any, error) {
+	args, err := getMappingArgs(inBatch, index, mapping)
+	if err != nil {
+		return nil, err
+	}
+
+	for i, v := range args {
+		n, isN := v.(json.Number)
+		if !isN {
+			continue
+		}
+		var nerr error
+		if args[i], nerr = n.Int64(); nerr != nil {
+			if args[i], nerr = n.Float64(); nerr != nil {
+				args[i] = n.String()
+			}
+		}
+	}
+
+	return args, nil
+}
+
+func getStrMapping(inBatch service.MessageBatch, index int, mapping *bloblang.Executor) ([]string, error) {
+	args, err := getMappingArgs(inBatch, index, mapping)
+	if err != nil {
+		return nil, err
+	}
+
+	strArgs := make([]string, len(args))
+	for i, v := range args {
+		n, isN := v.(json.Number)
+		if !isN {
+			var ok bool
+			var arg string
+			if arg, ok = v.(string); !ok {
+				return nil, fmt.Errorf("keys mapping returned non-string result: %v", v)
+			}
+
+			strArgs[i] = arg
+
+			continue
+		}
+
+		strArgs[i] = n.String()
+	}
+
+	return strArgs, nil
+}
+
+func getMappingArgs(inBatch service.MessageBatch, index int, mapping *bloblang.Executor) ([]any, error) {
+	resMsg, err := inBatch.BloblangQuery(index, mapping)
+	if err != nil {
+		return nil, fmt.Errorf("mapping failed: %v", err)
+	}
+
+	iargs, err := resMsg.AsStructured()
+	if err != nil {
+		return nil, err
+	}
+
+	args, ok := iargs.([]any)
+	if !ok {
+		return nil, fmt.Errorf("mapping returned non-array result: %T", iargs)
+	}
+
+	return args, nil
 }
