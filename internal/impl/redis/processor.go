@@ -126,19 +126,19 @@ pipeline:
 pipeline:
   processors:
     - redis:
-      url: TODO
-      script: |
-        local value = redis.call("ZRANGE", KEYS[1], '0', '0')
+        url: TODO
+        script: |
+          local value = redis.call("ZRANGE", KEYS[1], '0', '0')
 
-        if next(elements) == nil then
-          return ''
-        end
+          if next(elements) == nil then
+            return ''
+          end
 
-        redis.call("ZADD", "XX", KEYS[1], ARGV[1], value)
+          redis.call("ZADD", "XX", KEYS[1], ARGV[1], value)
 
-        return value
-      keys_mapping: 'root = [ meta("key") ]'
-      args_mapping: 'root = [ timestamp_unix_nano() ]'
+          return value
+        keys_mapping: 'root = [ meta("key") ]'
+        args_mapping: 'root = [ timestamp_unix_nano() ]'
 `)
 }
 
