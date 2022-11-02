@@ -44,6 +44,44 @@ byte_array_as_string: true
 	decodeProc, err := newParquetDecodeProcessorFromConfig(decodeConf, nil)
 	require.NoError(t, err)
 
+	testParquetEncodeDecodeRoundTrip(t, encodeProc, decodeProc)
+}
+
+func TestParquetEncodeDecodeRoundTripPlainEncoding(t *testing.T) {
+	encodeConf, err := parquetEncodeProcessorConfig().ParseYAML(`
+default_encoding: PLAIN
+schema:
+  - { name: id, type: INT64 }
+  - { name: as, type: DOUBLE, repeated: true }
+  - { name: b, type: BYTE_ARRAY }
+  - { name: c, type: FLOAT }
+  - { name: d, type: BOOLEAN }
+  - { name: e, type: INT32, optional: true }
+  - { name: f, type: INT64 }
+  - { name: g, type: UTF8 }
+  - name: nested_stuff
+    optional: true
+    fields:
+      - { name: a_stuff, type: BYTE_ARRAY }
+      - { name: b_stuff, type: BYTE_ARRAY }
+`, nil)
+	require.NoError(t, err)
+
+	encodeProc, err := newParquetEncodeProcessorFromConfig(encodeConf, nil)
+	require.NoError(t, err)
+
+	decodeConf, err := parquetDecodeProcessorConfig().ParseYAML(`
+byte_array_as_string: true
+`, nil)
+	require.NoError(t, err)
+
+	decodeProc, err := newParquetDecodeProcessorFromConfig(decodeConf, nil)
+	require.NoError(t, err)
+
+	testParquetEncodeDecodeRoundTrip(t, encodeProc, decodeProc)
+}
+
+func testParquetEncodeDecodeRoundTrip(t *testing.T, encodeProc *parquetEncodeProcessor, decodeProc *parquetDecodeProcessor) {
 	tctx := context.Background()
 
 	for _, test := range []struct {

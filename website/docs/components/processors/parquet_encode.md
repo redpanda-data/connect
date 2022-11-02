@@ -22,13 +22,36 @@ Encodes [Parquet files](https://parquet.apache.org/docs/) from a batch of struct
 
 Introduced in version 4.4.0.
 
+
+<Tabs defaultValue="common" values={[
+  { label: 'Common', value: 'common', },
+  { label: 'Advanced', value: 'advanced', },
+]}>
+
+<TabItem value="common">
+
 ```yml
-# Config fields, showing default values
+# Common config fields, showing default values
 label: ""
 parquet_encode:
   schema: []
   default_compression: uncompressed
 ```
+
+</TabItem>
+<TabItem value="advanced">
+
+```yml
+# All config fields, showing default values
+label: ""
+parquet_encode:
+  schema: []
+  default_compression: uncompressed
+  default_encoding: DELTA_LENGTH_BYTE_ARRAY
+```
+
+</TabItem>
+</Tabs>
 
 This processor uses [https://github.com/segmentio/parquet-go](https://github.com/segmentio/parquet-go), which is itself experimental. Therefore changes could be made into how this processor functions outside of major version releases.
 
@@ -131,5 +154,15 @@ The default compression type to use for fields.
 Type: `string`  
 Default: `"uncompressed"`  
 Options: `uncompressed`, `snappy`, `gzip`, `brotli`, `zstd`, `lz4raw`.
+
+### `default_encoding`
+
+The default encoding type to use for fields. A custom default encoding is only necessary when consuming data with libraries that do not support `DELTA_LENGTH_BYTE_ARRAY` and is therefore best left unset where possible.
+
+
+Type: `string`  
+Default: `"DELTA_LENGTH_BYTE_ARRAY"`  
+Requires version 4.11.0 or newer  
+Options: `DELTA_LENGTH_BYTE_ARRAY`, `PLAIN`.
 
 

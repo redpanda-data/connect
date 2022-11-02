@@ -24,6 +24,13 @@ func parquetEncodeProcessorConfig() *service.ConfigSpec {
 		).
 			Description("The default compression type to use for fields.").
 			Default("uncompressed")).
+		Field(service.NewStringEnumField("default_encoding",
+			"DELTA_LENGTH_BYTE_ARRAY", "PLAIN",
+		).
+			Description("The default encoding type to use for fields. A custom default encoding is only necessary when consuming data with libraries that do not support `DELTA_LENGTH_BYTE_ARRAY` and is therefore best left unset where possible.").
+			Default("DELTA_LENGTH_BYTE_ARRAY").
+			Advanced().
+			Version("4.11.0")).
 		Description(`
 This processor uses [https://github.com/segmentio/parquet-go](https://github.com/segmentio/parquet-go), which is itself experimental. Therefore changes could be made into how this processor functions outside of major version releases.
 `).
@@ -85,7 +92,17 @@ func parquetSchemaConfig() *service.ConfigField {
 	).Description("Parquet schema.")
 }
 
-func parquetGroupFromConfig(columnConfs []*service.ParsedConfig) (parquet.Group, error) {
+type encodingFn func(n parquet.Node) parquet.Node
+
+var defaultEncodingFn encodingFn = func(n parquet.Node) parquet.Node {
+	return n
+}
+
+var plainEncodingFn encodingFn = func(n parquet.Node) parquet.Node {
+	return parquet.Encoded(n, &parquet.Plain)
+}
+
+func parquetGroupFromConfig(columnConfs []*service.ParsedConfig, encodingFn encodingFn) (parquet.Group, error) {
 	groupNode := parquet.Group{}
 
 	for _, colConf := range columnConfs {
@@ -97,7 +114,7 @@ func parquetGroupFromConfig(columnConfs []*service.ParsedConfig) (parquet.Group,
 		}
 
 		if childColumns, _ := colConf.FieldAnyList("fields"); len(childColumns) > 0 {
-			if n, err = parquetGroupFromConfig(childColumns); err != nil {
+			if n, err = parquetGroupFromConfig(childColumns, encodingFn); err != nil {
 				return nil, err
 			}
 		} else {
@@ -123,6 +140,7 @@ func parquetGroupFromConfig(columnConfs []*service.ParsedConfig) (parquet.Group,
 			default:
 				return nil, fmt.Errorf("field %v type of '%v' not recognised", name, typeStr)
 			}
+			n = encodingFn(n)
 		}
 
 		repeated, _ := colConf.FieldBool("repeated")
@@ -152,7 +170,19 @@ func newParquetEncodeProcessorFromConfig(conf *service.ParsedConfig, logger *ser
 		return nil, err
 	}
 
-	node, err := parquetGroupFromConfig(schemaConfs)
+	customEncoding, err := conf.FieldString("default_encoding")
+	if err != nil {
+		return nil, err
+	}
+	var encoding encodingFn
+	switch customEncoding {
+	case "PLAIN":
+		encoding = plainEncodingFn
+	default:
+		encoding = defaultEncodingFn
+	}
+
+	node, err := parquetGroupFromConfig(schemaConfs, encoding)
 	if err != nil {
 		return nil, err
 	}
