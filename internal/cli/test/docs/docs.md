@@ -168,7 +168,7 @@ A map of key/value pairs that sets the metadata values of the message.
 ### `bloblang`
 
 ```yml
-bloblang: 'this.age > 10 && meta("foo").length() > 0'
+bloblang: 'this.age > 10 && @foo.length() > 0'
 ```
 
 Executes a [Bloblang expression][bloblang] on a message, if the result is anything other than a boolean equalling `true` the test fails.

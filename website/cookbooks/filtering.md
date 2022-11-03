@@ -22,7 +22,7 @@ But that's most likely not what you want. We can instead only delete an event un
 pipeline:
   processors:
   - mapping: |
-      root = if meta("topic").or("") == "foo" ||
+      root = if @topic.or("") == "foo" ||
         this.doc.type == "bar" ||
         this.doc.urls.contains("https://www.benthos.dev/").catch(false) {
         deleted()

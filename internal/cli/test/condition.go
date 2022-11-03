@@ -297,7 +297,7 @@ func (c FileJSONContainsCondition) checkFrom(dir string, p *message.Part) error 
 
 // MetadataEqualsCondition checks whether a metadata keys contents matches a
 // value.
-type MetadataEqualsCondition map[string]string
+type MetadataEqualsCondition map[string]any
 
 // Check this condition against a message part.
 func (m MetadataEqualsCondition) Check(p *message.Part) error {

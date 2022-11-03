@@ -31,7 +31,7 @@ meta foo = deleted()
 Or do more interesting things like remove all metadata keys with a certain prefix:
 
 ```coffee
-meta = meta().filter(!this.key.has_prefix("kafka_"))
+meta = @.filter(kv -> !kv.key.has_prefix("kafka_"))
 ```
 
 ## Using Metadata
@@ -51,7 +51,7 @@ Benthos also allows you to conditionally process messages based on their metadat
 pipeline:
   processors:
   - switch:
-    - check: meta("doc_type") == "nested"
+    - check: '@doc_type == "nested"'
       processors:
         - sql_insert:
             driver: mysql
@@ -62,7 +62,7 @@ pipeline:
               root = [
                 this.document.foo,
                 this.document.bar,
-                meta("kafka_topic"),
+                @kafka_topic,
               ]
 ```
 
@@ -95,7 +95,7 @@ pipeline:
           "bar",
           "baz",
         ]
-        meta = meta().map_each_key(key -> if !$allowed_meta.contains(key) {
+        meta = @.map_each_key(key -> if !$allowed_meta.contains(key) {
           "_" + key
         })
 

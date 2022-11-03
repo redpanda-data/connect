@@ -13,6 +13,7 @@ func queryParser(pCtx Context) Func {
 			bracketsExpressionParser(pCtx),
 			literalValueParser(pCtx),
 			functionParser(pCtx),
+			metadataLiteralParser(),
 			variableLiteralParser(),
 			fieldLiteralRootParser(pCtx),
 		),

@@ -101,15 +101,15 @@ It is also possible to target processors in a separate file by prefixing the tar
 			"output_batches", "List of output batches.",
 		).ArrayOfArrays().Optional().WithChildren(
 			docs.FieldString("content", "The raw content of the input message.").HasDefault(""),
-			docs.FieldString("metadata", "A map of metadata key/values to add to the input message.").Map().Optional(),
+			docs.FieldAnything("metadata", "A map of metadata key/values to add to the input message.").Map().Optional(),
 			docs.FieldString(
 				`bloblang`,
 				"Executes a Bloblang mapping on the output message, if the result is anything other than a boolean equalling `true` the test fails.",
-				"this.age > 10 && meta(\"foo\").length() > 0",
+				"this.age > 10 && @foo.length() > 0",
 			).Optional(),
 			docs.FieldString(`content_equals`, "Checks the full raw contents of a message against a value.").Optional(),
 			docs.FieldString(`content_matches`, "Checks whether the full raw contents of a message matches a regular expression (re2).", "^foo [a-z]+ bar$").Optional(),
-			docs.FieldString(
+			docs.FieldAnything(
 				`metadata_equals`,
 				"Checks a map of metadata keys to values against the metadata stored in the message. If there is a value mismatch between a key of the condition versus the message metadata this condition will fail.",
 				map[string]any{

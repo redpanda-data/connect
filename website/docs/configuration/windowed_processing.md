@@ -88,7 +88,7 @@ pipeline:
         let is_first_message = batch_index() == 0
 
         root.traffic_light = this.traffic_light
-        root.created_at = meta("window_end_timestamp")
+        root.created_at = @window_end_timestamp
         root.total_cars = if $is_first_message {
           json("registration_plate").from_all().unique().length()
         }

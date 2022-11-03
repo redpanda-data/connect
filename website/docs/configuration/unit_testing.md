@@ -168,7 +168,7 @@ A map of key/value pairs that sets the metadata values of the message.
 ### `bloblang`
 
 ```yml
-bloblang: 'this.age > 10 && meta("foo").length() > 0'
+bloblang: 'this.age > 10 && @foo.length() > 0'
 ```
 
 Executes a [Bloblang expression][bloblang] on a message, if the result is anything other than a boolean equalling `true` the test fails.
@@ -497,7 +497,7 @@ Default: `""`
 A map of metadata key/values to add to the input message.
 
 
-Type: map of `string`  
+Type: map of `unknown`  
 
 ### `tests[].output_batches[][].bloblang`
 
@@ -509,7 +509,7 @@ Type: `string`
 ```yml
 # Examples
 
-bloblang: this.age > 10 && meta("foo").length() > 0
+bloblang: this.age > 10 && @foo.length() > 0
 ```
 
 ### `tests[].output_batches[][].content_equals`
@@ -537,7 +537,7 @@ content_matches: ^foo [a-z]+ bar$
 Checks a map of metadata keys to values against the metadata stored in the message. If there is a value mismatch between a key of the condition versus the message metadata this condition will fail.
 
 
-Type: map of `string`  
+Type: map of `unknown`  
 
 ```yml
 # Examples

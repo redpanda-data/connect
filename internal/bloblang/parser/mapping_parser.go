@@ -500,5 +500,3 @@ func plainMappingStatementParser(pCtx Context) Func {
 		)
 	}
 }
-
-//------------------------------------------------------------------------------

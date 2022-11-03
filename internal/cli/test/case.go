@@ -14,8 +14,8 @@ import (
 
 // InputPart defines an input part for a test case.
 type InputPart struct {
-	Content  string                 `yaml:"content"`
-	Metadata map[string]interface{} `yaml:"metadata"`
+	Content  string         `yaml:"content"`
+	Metadata map[string]any `yaml:"metadata"`
 	filePath string
 }
 

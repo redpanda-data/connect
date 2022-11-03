@@ -5,8 +5,6 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/bloblang/query"
 )
 
-//------------------------------------------------------------------------------
-
 func intoStaticResolver(p Func) Func {
 	return func(input []rune) Result {
 		res := p(input)
@@ -82,5 +80,3 @@ func ParseField(pCtx Context, expr string) (*field.Expression, *Error) {
 	e := field.NewExpression(resolvers...)
 	return e, nil
 }
-
-//------------------------------------------------------------------------------

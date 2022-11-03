@@ -37,6 +37,47 @@ func TestMappings(t *testing.T) {
 				query.NewTargetPath(query.TargetValue, "bar", "baz"),
 			},
 		},
+		"metadata stuff": {
+			mapping: `
+meta foo = this.foo
+meta bar = @bar
+meta baz = @
+meta buz = @bar.string().length()
+root.keys = @.keys().sort()
+root.meta = @
+`,
+			input: map[string]any{
+				"foo": "bar",
+			},
+			output: map[string]any{
+				"keys": []any{"bar", "baz", "buz", "foo"},
+				"meta": map[string]any{
+					"foo": "bar",
+					"bar": nil,
+					"baz": map[string]any{
+						"foo": "bar",
+						"bar": nil,
+					},
+					"buz": int64(4),
+				},
+			},
+			assignmentTargets: []mapping.TargetPath{
+				mapping.NewTargetPath(mapping.TargetMetadata, "foo"),
+				mapping.NewTargetPath(mapping.TargetMetadata, "bar"),
+				mapping.NewTargetPath(mapping.TargetMetadata, "baz"),
+				mapping.NewTargetPath(mapping.TargetMetadata, "buz"),
+				mapping.NewTargetPath(mapping.TargetValue, "keys"),
+				mapping.NewTargetPath(mapping.TargetValue, "meta"),
+			},
+			queryTargets: []query.TargetPath{
+				query.NewTargetPath(query.TargetValue, "foo"),
+				query.NewTargetPath(query.TargetMetadata, "bar"),
+				query.NewTargetPath(query.TargetMetadata),
+				query.NewTargetPath(query.TargetMetadata, "bar"),
+				query.NewTargetPath(query.TargetMetadata),
+				query.NewTargetPath(query.TargetMetadata),
+			},
+		},
 		"complex query": {
 			mapping: `root = match this.foo {
 				this.bar == "bruh" => this.baz.buz,
@@ -154,12 +195,16 @@ root.meow = this.apply("foo")
 			})
 			assert.Equal(t, test.queryTargets, targets)
 
-			res, err := m.Exec(query.FunctionContext{
-				MsgBatch: message.QuickBatch(nil),
-				Maps:     m.Maps(),
-				Vars:     map[string]any{},
-			}.WithValue(test.input))
+			part := message.NewPart(nil)
+			part.SetStructuredMut(test.input)
+
+			resPart, err := m.MapPart(0, message.Batch{part})
 			require.NoError(t, err)
+
+			res, err := resPart.AsStructured()
+			if err != nil {
+				res = string(resPart.AsBytes())
+			}
 			assert.Equal(t, test.output, res)
 		})
 	}

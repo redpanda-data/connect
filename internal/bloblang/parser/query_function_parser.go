@@ -223,6 +223,40 @@ func variableLiteralParser() Func {
 	}
 }
 
+func metadataLiteralParser() Func {
+	metaPathParser := Expect(
+		Sequence(
+			Char('@'),
+			Optional(OneOf(
+				JoinStringPayloads(
+					UntilFail(
+						OneOf(
+							InRange('a', 'z'),
+							InRange('A', 'Z'),
+							InRange('0', '9'),
+							Char('_'),
+						),
+					),
+				),
+				QuotedString(),
+			)),
+		),
+		"metadata path",
+	)
+
+	return func(input []rune) Result {
+		res := metaPathParser(input)
+		if res.Err != nil {
+			return res
+		}
+
+		path, _ := res.Payload.([]any)[1].(string)
+		fn := query.NewMetaFunction(path)
+
+		return Success(fn, res.Remaining)
+	}
+}
+
 func fieldLiteralRootParser(pCtx Context) Func {
 	fieldPathParser := Expect(
 		JoinStringPayloads(

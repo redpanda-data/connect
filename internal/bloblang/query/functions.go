@@ -470,6 +470,45 @@ func jsonFunction(args *ParsedParams) (Function, error) {
 
 //------------------------------------------------------------------------------
 
+// NewMetaFunction creates a new function for obtaining a metadata value.
+func NewMetaFunction(key string) Function {
+	if len(key) > 0 {
+		return ClosureFunction("meta field "+key, func(ctx FunctionContext) (any, error) {
+			if ctx.NewMeta == nil {
+				return nil, errors.New("metadata cannot be queried in this context")
+			}
+			v, exists := ctx.NewMeta.MetaGetMut(key)
+			if !exists {
+				return nil, nil
+			}
+			return v, nil
+		}, func(ctx TargetsContext) (TargetsContext, []TargetPath) {
+			paths := []TargetPath{
+				NewTargetPath(TargetMetadata, key),
+			}
+			ctx = ctx.WithValues(paths)
+			return ctx, paths
+		})
+	}
+	return ClosureFunction("meta object", func(ctx FunctionContext) (any, error) {
+		if ctx.NewMeta == nil {
+			return nil, errors.New("metadata cannot be queried in this context")
+		}
+		kvs := map[string]any{}
+		_ = ctx.NewMeta.MetaIterMut(func(k string, v any) error {
+			kvs[k] = v
+			return nil
+		})
+		return kvs, nil
+	}, func(ctx TargetsContext) (TargetsContext, []TargetPath) {
+		paths := []TargetPath{
+			NewTargetPath(TargetMetadata),
+		}
+		ctx = ctx.WithValues(paths)
+		return ctx, paths
+	})
+}
+
 var _ = registerFunction(
 	NewFunctionSpec(
 		FunctionCategoryMessage, "meta",
