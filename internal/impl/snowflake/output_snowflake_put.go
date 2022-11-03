@@ -560,6 +560,12 @@ func newSnowflakeWriterFromConfig(conf *service.ParsedConfig, mgr *service.Resou
 		authenticator = gosnowflake.AuthTypeSnowflake
 	}
 
+	params := make(map[string]*string)
+	valueTrue := "true"
+	// This parameter must be set to prevent the auth token from expiring after 4 hours.
+	// Details here: https://github.com/snowflakedb/gosnowflake/issues/556
+	params["client_session_keep_alive"] = &valueTrue
+
 	if s.dsn, err = gosnowflake.DSN(&gosnowflake.Config{
 		Account: s.accountIdentifier,
 		// Region: The driver extracts the region automatically from the account and I think it doesn't have to be set here
@@ -571,6 +577,7 @@ func newSnowflakeWriterFromConfig(conf *service.ParsedConfig, mgr *service.Resou
 		Warehouse:     warehouse,
 		Schema:        s.schema,
 		PrivateKey:    s.privateKey,
+		Params:        params,
 	}); err != nil {
 		return nil, fmt.Errorf("failed to construct DSN: %s", err)
 	}
