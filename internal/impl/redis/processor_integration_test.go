@@ -90,7 +90,7 @@ func TestIntegrationRedisProcessor(t *testing.T) {
 }
 
 func testRedisScript(t *testing.T, client *redis.Client, url string) {
-	conf, err := redisProcConfig().ParseYAML(fmt.Sprintf(`
+	conf, err := redisScriptProcConfig().ParseYAML(fmt.Sprintf(`
 url: %v
 script: "return KEYS[1] .. ': ' .. ARGV[1]"
 args_mapping: 'root = [ "value" ]'
