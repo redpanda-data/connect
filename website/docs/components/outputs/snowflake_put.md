@@ -80,6 +80,7 @@ output:
     upload_parallel_threads: 4
     compression: AUTO
     snowpipe: ""
+    client_session_keep_alive: false
     batching:
       count: 0
       byte_size: 0
@@ -491,6 +492,14 @@ This field supports [interpolation functions](/docs/configuration/interpolation#
 
 
 Type: `string`  
+
+### `client_session_keep_alive`
+
+Enable Snowflake keepalive mechanism to prevent the client session from expiring after 4 hours (error 390114).
+
+
+Type: `bool`  
+Default: `false`  
 
 ### `batching`
 
