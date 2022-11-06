@@ -8,6 +8,7 @@ All notable changes to this project will be documented in this file.
 ### Added
 
 - Field `default_encoding` added to the `parquet_encode` processor.
+- Field `client_session_keep_alive` added to the `snowflake_put` output.
 
 ## 4.10.0 - 2022-10-26
 

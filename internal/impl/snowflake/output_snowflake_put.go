@@ -203,6 +203,7 @@ and it must be set to the `+"`<cloud>`"+` part of the Account Identifier
 			string(CompressionTypeRawDeflate): "Messages must be pre-compressed using the flate algorithm (without header, RFC1951).",
 		}).Description("Compression type.").Default(string(CompressionTypeAuto))).
 		Field(service.NewInterpolatedStringField("snowpipe").Description(`An optional Snowpipe name. Use the `+"`<snowpipe>`"+` part from `+"`<database>.<schema>.<snowpipe>`"+`.`).Optional()).
+		Field(service.NewBoolField("client_session_keep_alive").Description("Enable Snowflake keepalive mechanism to prevent the client session from expiring after 4 hours (error 390114).").Advanced().Default(false)).
 		Field(service.NewBatchPolicyField("batching")).
 		Field(service.NewIntField("max_in_flight").Description("The maximum number of parallel message batches to have in flight at any given time.").Default(1)).
 		LintRule(`root = match {
@@ -560,11 +561,16 @@ func newSnowflakeWriterFromConfig(conf *service.ParsedConfig, mgr *service.Resou
 		authenticator = gosnowflake.AuthTypeSnowflake
 	}
 
-	params := make(map[string]*string)
-	valueTrue := "true"
-	// This parameter must be set to prevent the auth token from expiring after 4 hours.
-	// Details here: https://github.com/snowflakedb/gosnowflake/issues/556
-	params["client_session_keep_alive"] = &valueTrue
+	var params map[string]*string
+	if clientSessionKeepAlive, err := conf.FieldBool("client_session_keep_alive"); err != nil {
+		return nil, fmt.Errorf("failed to parse client_session_keep_alive: %s", err)
+	} else if clientSessionKeepAlive {
+		params = make(map[string]*string)
+		value := "true"
+		// This parameter must be set to prevent the auth token from expiring after 4 hours.
+		// Details here: https://github.com/snowflakedb/gosnowflake/issues/556
+		params["client_session_keep_alive"] = &value
+	}
 
 	if s.dsn, err = gosnowflake.DSN(&gosnowflake.Config{
 		Account: s.accountIdentifier,
