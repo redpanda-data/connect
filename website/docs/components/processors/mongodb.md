@@ -47,6 +47,8 @@ mongodb:
   document_map: ""
   filter_map: ""
   hint_map: ""
+  sort_map: ""
+  comment: ""
   upsert: false
 ```
 
@@ -61,6 +63,15 @@ mongodb:
   database: ""
   username: ""
   password: ""
+  password_set: false
+  auth_source: ""
+  auth_mechanism: ""
+  app_name: ""
+  connect_timeout: 10s
+  socket_timeout: 30s
+  server_selection_timeout: 30s
+  min_pool_size: "0"
+  max_pool_size: "100"
   operation: insert-one
   collection: ""
   write_concern:
@@ -70,6 +81,9 @@ mongodb:
   document_map: ""
   filter_map: ""
   hint_map: ""
+  sort_map: ""
+  comment: ""
+  find_and_update_return_mode: before
   upsert: false
   json_marshal_mode: canonical
   max_retries: 3
@@ -122,6 +136,86 @@ The password to connect to the database.
 Type: `string`  
 Default: `""`  
 
+### `password_set`
+
+For GSSAPI, this must be true if a password is specified, even if the password is the empty string, and false if no password is specified, indicating that the password should be taken from the context of the running process. For other mechanisms, this field is ignored.
+
+
+Type: `string`  
+Default: `false`  
+Requires version 4.11.0 or newer  
+
+### `auth_source`
+
+The name of the database to use for authentication. This can also be set through the "authSource" URI option (e.g. "authSource=otherDb"). For more information, see [MongoDB docs](https://www.mongodb.com/docs/manual/reference/connection-string/#mongodb-urioption-urioption.authSource).
+
+
+Type: `string`  
+Default: `""`  
+Requires version 4.11.0 or newer  
+
+### `auth_mechanism`
+
+The mechanism to use for authentication. This can also be set through the "authMechanism" URI option. (e.g. "authMechanism=PLAIN"). For more information, see [MongoDB docs](https://docs.mongodb.com/manual/core/authentication-mechanisms/).
+
+
+Type: `string`  
+Requires version 4.11.0 or newer  
+
+### `app_name`
+
+The [appName](https://www.mongodb.com/docs/manual/reference/connection-string/#mongodb-urioption-urioption.appName) to use in the client connection.
+
+
+Type: `string`  
+Default: `""`  
+Requires version 4.11.0 or newer  
+
+### `connect_timeout`
+
+Connect timeout while connecting to the database.
+
+
+Type: `string`  
+Default: `"10s"`  
+Requires version 4.11.0 or newer  
+
+### `socket_timeout`
+
+Socket timeout while connecting to the database.
+
+
+Type: `string`  
+Default: `"30s"`  
+Requires version 4.11.0 or newer  
+
+### `server_selection_timeout`
+
+Server selection timeout while connecting to the database.
+
+
+Type: `string`  
+Default: `"30s"`  
+Requires version 4.11.0 or newer  
+
+### `min_pool_size`
+
+The minimum number of connections allowed in the driver's connection pool to each server.
+
+
+Type: `string`  
+Default: `"0"`  
+Requires version 4.11.0 or newer  
+
+### `max_pool_size`
+
+The maximum number of connections allowed in the driver's connection pool to each server.
+
+
+Type: `string`  
+Default: `"100"`  
+Requires version 4.11.0 or newer  
+
 ### `operation`
 
 The mongodb operation to perform.
@@ -129,7 +223,7 @@ The mongodb operation to perform.
 
 Type: `string`  
 Default: `"insert-one"`  
-Options: `insert-one`, `delete-one`, `delete-many`, `replace-one`, `update-one`, `find-one`.
+Options: `insert-one`, `delete-one`, `delete-many`, `replace-one`, `update-one`, `find-one`, `find-and-update`.
 
 ### `collection`
 
@@ -218,6 +312,48 @@ hint_map: |-
   root.a = this.foo
   root.b = this.bar
 ```
+
+### `sort_map`
+
+A bloblang map representing the sort for the mongo db command. This map is optional and is used only with find-one and find-and-modify operations. It is used to sort the documents in the mongodb.
+
+
+Type: `string`  
+Default: `""`  
+Requires version 4.11.0 or newer  
+
+```yml
+# Examples
+
+sort_map: |-
+  root.a = 1
+  root.b = -1
+```
+
+### `comment`
+
+A interpolated string representing a comment to send with the operation. This field is optional and is used only with find-one operation.
+
+
+Type: `string`  
+Default: `""`  
+Requires version 4.11.0 or newer  
+
+```yml
+# Examples
+
+comment: my comment
+```
+
+### `find_and_update_return_mode`
+
+The return mode for the find and modify operation. This field is used only for the find-and-update operation.
+
+
+Type: `string`  
+Default: `"before"`  
+Requires version 4.11.0 or newer  
+Options: `before`, `after`.
 
 ### `upsert`
 

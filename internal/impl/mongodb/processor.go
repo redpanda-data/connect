@@ -70,6 +70,24 @@ func init() {
 						"except insert-one. It is used to improve performance of finding the documents in the mongodb.",
 					mapExamples()...,
 				),
+				docs.FieldBloblang(
+					"sort_map",
+					"A bloblang map representing the sort for the mongo db command. This map is optional and is used only with find-one and find-and-modify operations. It is used to sort the documents in the mongodb.",
+					"root.a = 1\nroot.b = -1",
+				).Optional().AtVersion("4.11.0"),
+				docs.FieldString(
+					"comment",
+					"A interpolated string representing a comment to send with the operation. This field is optional and is used only with find-one operation.",
+					"my comment",
+				).Optional().AtVersion("4.11.0"),
+				docs.FieldString(
+					"find_and_update_return_mode",
+					"The return mode for the find and modify operation. This field is used only for the find-and-update operation.").
+					HasDefault("before").
+					HasOptions("before", "after").
+					AtVersion("4.11.0").
+					Optional().
+					Advanced(),
 				docs.FieldBool(
 					"upsert",
 					"The upsert setting is optional and only applies for update-one and replace-one operations. If the filter specified in filter_map matches,"+
@@ -110,7 +128,12 @@ type Processor struct {
 	filterMap   *mapping.Executor
 	documentMap *mapping.Executor
 	hintMap     *mapping.Executor
+	sortMap     *mapping.Executor
 	operation   client.Operation
+
+	findAndUpdateReturn options.ReturnDocument
+
+	comment *field.Expression
 }
 
 // NewProcessor returns a MongoDB processor.
@@ -173,6 +196,28 @@ func NewProcessor(conf processor.Config, mgr bundle.NewManagement) (processor.V2
 		}
 	} else if conf.MongoDB.HintMap != "" {
 		return nil, fmt.Errorf("mongodb hint_map not allowed for '%s' operation", conf.MongoDB.Operation)
+	}
+
+	if isSortAllowed(m.operation) && conf.MongoDB.SortMap != "" {
+		if m.sortMap, err = bEnv.NewMapping(conf.MongoDB.SortMap); err != nil {
+			return nil, fmt.Errorf("failed to parse sort_map: %v", err)
+		}
+	} else if conf.MongoDB.SortMap != "" {
+		return nil, fmt.Errorf("mongodb sort_map not allowed for '%s' operation", conf.MongoDB.Operation)
+	}
+
+	if isCommentAllowed(m.operation) && conf.MongoDB.Comment != "" {
+		if m.comment, err = bEnv.NewField(conf.MongoDB.Comment); err != nil {
+			return nil, fmt.Errorf("failed to parse comment expression: %v", err)
+		}
+	} else if conf.MongoDB.Comment != "" {
+		return nil, fmt.Errorf("mongodb comment not allowed for '%s' operation", conf.MongoDB.Operation)
+	}
+
+	if conf.MongoDB.FindAndUpdateReturnMode == "" || conf.MongoDB.FindAndUpdateReturnMode == "before" {
+		m.findAndUpdateReturn = options.Before
+	} else {
+		m.findAndUpdateReturn = options.After
 	}
 
 	if !isUpsertAllowed(m.operation) && conf.MongoDB.Upsert {
@@ -257,7 +302,7 @@ func (m *Processor) ProcessBatch(ctx context.Context, spans []*tracing.Span, bat
 			return fmt.Errorf("failed to generate documentVal")
 		}
 
-		var docJSON, filterJSON, hintJSON any
+		var docJSON, filterJSON, hintJSON, sortJSON any
 
 		if filterValWanted {
 			if filterJSON, err = filterVal.AsStructured(); err != nil {
@@ -271,7 +316,20 @@ func (m *Processor) ProcessBatch(ctx context.Context, spans []*tracing.Span, bat
 			}
 		}
 
-		findOptions := &options.FindOneOptions{}
+		var comment string
+		if m.comment != nil {
+			comment = m.comment.String(i, batch)
+		}
+
+		findOptions := &options.FindOneOptions{
+			Comment: &comment,
+		}
+
+		findAndUpdateOptions := &options.FindOneAndUpdateOptions{
+			Upsert:         &upsertVal,
+			ReturnDocument: &m.findAndUpdateReturn,
+		}
+
 		if m.hintMap != nil {
 			hintVal, err := m.hintMap.MapPart(i, batch)
 			if err != nil {
@@ -281,6 +339,19 @@ func (m *Processor) ProcessBatch(ctx context.Context, spans []*tracing.Span, bat
 				return err
 			}
 			findOptions.Hint = hintJSON
+			findAndUpdateOptions.Hint = hintJSON
+		}
+
+		if m.sortMap != nil {
+			sortVal, err := m.sortMap.MapPart(i, batch)
+			if err != nil {
+				return fmt.Errorf("failed to execute sort_map: %v", err)
+			}
+			if sortJSON, err = sortVal.AsStructured(); err != nil {
+				return err
+			}
+			findOptions.Sort = sortJSON
+			findAndUpdateOptions.Sort = sortJSON
 		}
 
 		var writeModel mongo.WriteModel
@@ -315,9 +386,16 @@ func (m *Processor) ProcessBatch(ctx context.Context, spans []*tracing.Span, bat
 				Update: docJSON,
 				Hint:   hintJSON,
 			}
-		case client.OperationFindOne:
+		case client.OperationFindOne, client.OperationFindAndUpdate:
 			var decoded any
-			err := collection.FindOne(context.Background(), filterJSON, findOptions).Decode(&decoded)
+			var err error
+
+			if m.operation == client.OperationFindOne {
+				err = collection.FindOne(context.Background(), filterJSON, findOptions).Decode(&decoded)
+			} else {
+				err = collection.FindOneAndUpdate(context.Background(), filterJSON, docJSON, findAndUpdateOptions).Decode(&decoded)
+			}
+
 			if err != nil {
 				if errors.Is(err, mongo.ErrNoDocuments) {
 					return err

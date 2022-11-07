@@ -92,6 +92,9 @@ func TestProcessorIntegration(t *testing.T) {
 	t.Run("find one", func(t *testing.T) {
 		testMongoDBProcessorFindOne(port, t)
 	})
+	t.Run("find and update", func(t *testing.T) {
+		testMongoDBProcessorFindAndUpdate(port, t)
+	})
 }
 
 func testMongoDBProcessorInsert(port string, t *testing.T) {
@@ -433,6 +436,7 @@ func testMongoDBProcessorFindOne(port string, t *testing.T) {
 	}
 	conf.MongoDB.Operation = "find-one"
 	conf.MongoDB.FilterMap = "root.a = this.a"
+	conf.MongoDB.Comment = "my comment"
 
 	mongoClient, err := c.Client()
 	require.NoError(t, err)
@@ -478,26 +482,114 @@ func testMongoDBProcessorFindOne(port string, t *testing.T) {
 			expected:    `{"a":"foo","b":"bar","c":"baz","answer_to_everything":{"$numberInt":"42"}}`,
 		},
 	} {
-		if tt.collection != "" {
-			conf.MongoDB.MongoDB.Collection = tt.collection
-		}
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.collection != "" {
+				conf.MongoDB.MongoDB.Collection = tt.collection
+			}
 
-		conf.MongoDB.JSONMarshalMode = tt.marshalMode
+			conf.MongoDB.JSONMarshalMode = tt.marshalMode
 
-		m, err := mongodb.NewProcessor(conf, mgr)
-		require.NoError(t, err)
-		resMsgs, response := m.ProcessBatch(context.Background(), make([]*tracing.Span, 1), message.QuickBatch([][]byte{[]byte(tt.message)}))
-		require.Nil(t, response)
-		require.Len(t, resMsgs, 1)
-		if tt.expectedErr != nil {
-			tmpErr := resMsgs[0].Get(0).ErrorGet()
-			require.Error(t, tmpErr)
-			require.Equal(t, mongo.ErrNoDocuments.Error(), tmpErr.Error())
-			continue
-		}
+			m, err := mongodb.NewProcessor(conf, mgr)
+			require.NoError(t, err)
+			resMsgs, response := m.ProcessBatch(context.Background(), make([]*tracing.Span, 1), message.QuickBatch([][]byte{[]byte(tt.message)}))
+			require.Nil(t, response)
+			require.Len(t, resMsgs, 1)
+			if tt.expectedErr != nil {
+				tmpErr := resMsgs[0].Get(0).ErrorGet()
+				require.Error(t, tmpErr)
+				require.Equal(t, mongo.ErrNoDocuments.Error(), tmpErr.Error())
+				return
+			}
 
-		jdopts := jsondiff.DefaultJSONOptions()
-		diff, explanation := jsondiff.Compare(resMsgs[0].Get(0).AsBytes(), []byte(tt.expected), &jdopts)
-		assert.Equalf(t, jsondiff.SupersetMatch.String(), diff.String(), "%s: %s", tt.name, explanation)
+			jdopts := jsondiff.DefaultJSONOptions()
+			diff, explanation := jsondiff.Compare(resMsgs[0].Get(0).AsBytes(), []byte(tt.expected), &jdopts)
+			assert.Equalf(t, jsondiff.SupersetMatch.String(), diff.String(), "%s: %s", tt.name, explanation)
+		})
+	}
+}
+
+func testMongoDBProcessorFindAndUpdate(port string, t *testing.T) {
+	conf := processor.NewConfig()
+	conf.Type = "mongodb"
+
+	c := client.Config{
+		URL:        "mongodb://localhost:" + port,
+		Database:   "TestDB",
+		Collection: "TestCollection",
+		Username:   "mongoadmin",
+		Password:   "secret",
+	}
+
+	conf.MongoDB = processor.NewMongoDBConfig()
+	conf.MongoDB.MongoDB = c
+	conf.MongoDB.WriteConcern = client.WriteConcern{
+		W:        "1",
+		J:        false,
+		WTimeout: "100s",
+	}
+	conf.MongoDB.Operation = "find-and-update"
+	conf.MongoDB.FilterMap = "root.a = this.a"
+	conf.MongoDB.DocumentMap = `root."$inc".inc = 1`
+	conf.MongoDB.SortMap = "root.b = -1"
+	conf.MongoDB.FindAndUpdateReturnMode = "after"
+	conf.MongoDB.JSONMarshalMode = client.JSONMarshalModeRelaxed
+	conf.MongoDB.Upsert = false
+
+	mongoClient, err := c.Client()
+	require.NoError(t, err)
+	err = mongoClient.Connect(context.Background())
+	require.NoError(t, err)
+	collection := mongoClient.Database("TestDB").Collection("TestCollection")
+	_, err = collection.InsertOne(context.Background(), bson.M{"a": "foo", "b": 1, "c": "foo"})
+	assert.NoError(t, err)
+	_, err = collection.InsertOne(context.Background(), bson.M{"a": "foo", "b": 2, "c": "bar"})
+	assert.NoError(t, err)
+
+	mgr, err := manager.New(manager.NewResourceConfig())
+	require.NoError(t, err)
+
+	for _, tt := range []struct {
+		name        string
+		message     string
+		returnMode  string
+		expected    string
+		expectedErr error
+	}{
+		{
+			name:       "return after document",
+			returnMode: "after",
+			message:    `{"a":"foo","x":"ignore_me_via_filter_map"}`,
+			expected:   `{"a":"foo","b":2,"c":"bar","inc":1}`,
+		}, {
+			name:       "return before document",
+			returnMode: "before",
+			message:    `{"a":"foo"}`,
+			expected:   `{"a":"foo","b":2,"c":"bar","inc":1}`,
+		}, {
+			name:        "no document",
+			returnMode:  "before",
+			message:     `{"a":"not found"}`,
+			expectedErr: mongo.ErrNoDocuments,
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			conf.MongoDB.FindAndUpdateReturnMode = tt.returnMode
+
+			m, err := mongodb.NewProcessor(conf, mgr)
+			require.NoError(t, err)
+			resMsgs, response := m.ProcessBatch(context.Background(), make([]*tracing.Span, 1), message.QuickBatch([][]byte{[]byte(tt.message)}))
+			require.Nil(t, response)
+			require.Len(t, resMsgs, 1)
+			if tt.expectedErr != nil {
+				tmpErr := resMsgs[0].Get(0).ErrorGet()
+				require.Error(t, tmpErr)
+				require.Equal(t, mongo.ErrNoDocuments.Error(), tmpErr.Error())
+				return
+			}
+
+			jdopts := jsondiff.DefaultJSONOptions()
+			diff, explanation := jsondiff.Compare(resMsgs[0].Get(0).AsBytes(), []byte(tt.expected), &jdopts)
+			assert.Equalf(t, jsondiff.SupersetMatch.String(), diff.String(), "%s: %s", tt.name, explanation)
+		})
 	}
 }
