@@ -116,8 +116,8 @@ module.exports = {
       copyright: `Copyright © ${new Date().getFullYear()} Ashley Jeffs.`,
     },
     announcementBar: {
-      id: 'introducing_studio',
-      content: '<strong>🎨 Build your configs visually with the new <a target="_blank" rel="noopener noreferrer" href="https://studio.benthos.dev">Benthos Studio</a> (BETA) 🎨</strong>',
+      id: 'star_the_dang_repo',
+      content: `<strong>Hey, 🫵 you, make sure you've <a target="_blank" rel="noopener noreferrer" href="https://github.com/benthosdev/benthos">⭐ starred the repo ⭐</a> otherwise you won't be entered into our daily prize draw for silent admiration.</strong>`,
       backgroundColor: 'var(--ifm-color-primary)',
       textColor: 'var(--ifm-background-color)',
       isCloseable: true,
