@@ -117,33 +117,42 @@ func (m Config) Client() (*mongo.Client, error) {
 		opt.SetConnectTimeout(10 * time.Second)
 
 	} else {
-		if connectionTimeout, err := time.ParseDuration(m.ConnectionTimeout); err != nil {
+		var err error
+		var connectionTimeout time.Duration
+
+		if connectionTimeout, err = time.ParseDuration(m.ConnectionTimeout); err != nil {
 			return nil, fmt.Errorf("unable to parse connection timeout duration string: %w", err)
-		} else {
-			opt.SetConnectTimeout(connectionTimeout)
 		}
+
+		opt.SetConnectTimeout(connectionTimeout)
 	}
 
 	if m.SocketTimeout == "" {
 		opt.SetSocketTimeout(30 * time.Second)
 
 	} else {
-		if socketTimeout, err := time.ParseDuration(m.SocketTimeout); err != nil {
+		var err error
+		var socketTimeout time.Duration
+
+		if socketTimeout, err = time.ParseDuration(m.SocketTimeout); err != nil {
 			return nil, fmt.Errorf("unable to parse socket timeout duration string: %w", err)
-		} else {
-			opt.SetSocketTimeout(socketTimeout)
 		}
+
+		opt.SetSocketTimeout(socketTimeout)
 	}
 
 	if m.ServerSelectionTimeout == "" {
 		opt.SetServerSelectionTimeout(30 * time.Second)
 
 	} else {
-		if serverSelectionTimeout, err := time.ParseDuration(m.ServerSelectionTimeout); err != nil {
+		var err error
+		var serverSelectionTimeout time.Duration
+
+		if serverSelectionTimeout, err = time.ParseDuration(m.ServerSelectionTimeout); err != nil {
 			return nil, fmt.Errorf("unable to parse server selection timeout duration string: %w", err)
-		} else {
-			opt.SetServerSelectionTimeout(serverSelectionTimeout)
 		}
+
+		opt.SetServerSelectionTimeout(serverSelectionTimeout)
 	}
 
 	if m.MinPoolSize != nil {
@@ -188,14 +197,14 @@ func ConfigDocs() docs.FieldSpecs {
 		docs.FieldString("database", "The name of the target MongoDB DB."),
 		docs.FieldString("username", "The username to connect to the database."),
 		docs.FieldString("password", "The password to connect to the database."),
-		docs.FieldString("password_set", "For GSSAPI, this must be true if a password is specified, even if the password is the empty string, and false if no password is specified, indicating that the password should be taken from the context of the running process. For other mechanisms, this field is ignored.").Optional().Advanced().AtVersion("4.11.0"),
+		docs.FieldBool("password_set", "For GSSAPI, this must be true if a password is specified, even if the password is the empty string, and false if no password is specified, indicating that the password should be taken from the context of the running process. For other mechanisms, this field is ignored.").Optional().Advanced().AtVersion("4.11.0"),
 		docs.FieldString("auth_source", `The name of the database to use for authentication. This can also be set through the "authSource" URI option (e.g. "authSource=otherDb"). For more information, see [MongoDB docs](https://www.mongodb.com/docs/manual/reference/connection-string/#mongodb-urioption-urioption.authSource).`).Optional().Advanced().AtVersion("4.11.0"),
 		docs.FieldString("auth_mechanism", `The mechanism to use for authentication. This can also be set through the "authMechanism" URI option. (e.g. "authMechanism=PLAIN"). For more information, see [MongoDB docs](https://docs.mongodb.com/manual/core/authentication-mechanisms/).`).Optional().Advanced().AtVersion("4.11.0"),
 		docs.FieldString("app_name", "The [appName](https://www.mongodb.com/docs/manual/reference/connection-string/#mongodb-urioption-urioption.appName) to use in the client connection.").Optional().Advanced().AtVersion("4.11.0"),
 		docs.FieldString("connect_timeout", "Connect timeout while connecting to the database.").HasDefault("10s").Optional().Advanced().AtVersion("4.11.0"),
 		docs.FieldString("socket_timeout", "Socket timeout while connecting to the database.").HasDefault("30s").Optional().Advanced().AtVersion("4.11.0"),
 		docs.FieldString("server_selection_timeout", "Server selection timeout while connecting to the database.").HasDefault("30s").Optional().Advanced().AtVersion("4.11.0"),
-		docs.FieldString("min_pool_size", "The minimum number of connections allowed in the driver's connection pool to each server.").HasDefault("0").Optional().Advanced().AtVersion("4.11.0"),
-		docs.FieldString("max_pool_size", "The maximum number of connections allowed in the driver's connection pool to each server.").HasDefault("100").Optional().Advanced().AtVersion("4.11.0"),
+		docs.FieldInt("min_pool_size", "The minimum number of connections allowed in the driver's connection pool to each server.").HasDefault(0).Optional().Advanced().AtVersion("4.11.0"),
+		docs.FieldInt("max_pool_size", "The maximum number of connections allowed in the driver's connection pool to each server.").HasDefault(100).Optional().Advanced().AtVersion("4.11.0"),
 	}
 }

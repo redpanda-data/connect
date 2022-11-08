@@ -70,8 +70,8 @@ mongodb:
   connect_timeout: 10s
   socket_timeout: 30s
   server_selection_timeout: 30s
-  min_pool_size: "0"
-  max_pool_size: "100"
+  min_pool_size: 0
+  max_pool_size: 100
   operation: insert-one
   collection: ""
   write_concern:
@@ -141,7 +141,7 @@ Default: `""`
 For GSSAPI, this must be true if a password is specified, even if the password is the empty string, and false if no password is specified, indicating that the password should be taken from the context of the running process. For other mechanisms, this field is ignored.
 
 
-Type: `string`  
+Type: `bool`  
 Default: `false`  
 Requires version 4.11.0 or newer  
 
@@ -203,8 +203,8 @@ Requires version 4.11.0 or newer
 The minimum number of connections allowed in the driver's connection pool to each server.
 
 
-Type: `string`  
-Default: `"0"`  
+Type: `int`  
+Default: `0`  
 Requires version 4.11.0 or newer  
 
 ### `max_pool_size`
@@ -212,8 +212,8 @@ Requires version 4.11.0 or newer
 The maximum number of connections allowed in the driver's connection pool to each server.
 
 
-Type: `string`  
-Default: `"100"`  
+Type: `int`  
+Default: `100`  
 Requires version 4.11.0 or newer  
 
 ### `operation`
