@@ -398,6 +398,9 @@ Type: `string`
 ### `password`
 
 An optional password.
+:::warning Secret
+This field contains sensitive information that usually shouldn't be added to a config directly, read our [secrets page for more info](/docs/configuration/secrets).
+:::
 
 
 Type: `string`  
@@ -412,6 +415,9 @@ Type: `string`
 ### `private_key_pass`
 
 An optional private SSH key passphrase.
+:::warning Secret
+This field contains sensitive information that usually shouldn't be added to a config directly, read our [secrets page for more info](/docs/configuration/secrets).
+:::
 
 
 Type: `string`  

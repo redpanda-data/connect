@@ -26,6 +26,7 @@ module.exports = {
         'configuration/metadata',
         'configuration/error_handling',
         'configuration/interpolation',
+        'configuration/secrets',
         'configuration/field_paths',
         'configuration/processing_pipelines',
         'configuration/unit_testing',

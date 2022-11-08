@@ -59,7 +59,7 @@ You can access these metadata fields using
 			mqttconf.WillFieldSpec(),
 			docs.FieldString("connect_timeout", "The maximum amount of time to wait in order to establish a connection before the attempt is abandoned.", "1s", "500ms").HasDefault("30s").AtVersion("3.58.0"),
 			docs.FieldString("user", "A username to assume for the connection.").Advanced(),
-			docs.FieldString("password", "A password to provide for the connection.").Advanced(),
+			docs.FieldString("password", "A password to provide for the connection.").Advanced().Secret(),
 			docs.FieldInt("keepalive", "Max seconds of inactivity before a keepalive message is sent.").Advanced(),
 			tls.FieldSpec().AtVersion("3.45.0"),
 		).ChildDefaultAndTypesFromStruct(input.NewMQTTConfig()),

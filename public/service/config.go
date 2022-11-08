@@ -211,6 +211,14 @@ func (c *ConfigField) Optional() *ConfigField {
 	return c
 }
 
+// Secret marks this field as being a secret, which means it represents
+// information that is generally considered sensitive such as passwords or
+// access tokens.
+func (c *ConfigField) Secret() *ConfigField {
+	c.field = c.field.Secret()
+	return c
+}
+
 // Example adds an example value to the field which will be shown when printing
 // documentation for the component config spec.
 func (c *ConfigField) Example(e any) *ConfigField {

@@ -116,6 +116,9 @@ Default: `""`
 ### `credentials.password`
 
 The password for the username to connect to the SFTP server.
+:::warning Secret
+This field contains sensitive information that usually shouldn't be added to a config directly, read our [secrets page for more info](/docs/configuration/secrets).
+:::
 
 
 Type: `string`  
@@ -132,6 +135,9 @@ Default: `""`
 ### `credentials.private_key_pass`
 
 Optional passphrase for private key.
+:::warning Secret
+This field contains sensitive information that usually shouldn't be added to a config directly, read our [secrets page for more info](/docs/configuration/secrets).
+:::
 
 
 Type: `string`  

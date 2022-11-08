@@ -47,7 +47,6 @@ module.exports = {
         {to: 'videos', label: 'Videos', position: 'left'},
         {to: 'community', label: 'Community', position: 'right'},
         {to: 'support', label: 'Support', position: 'right'},
-        {to: 'https://v3.benthos.dev', label: 'Version 3 Docs', position: 'right'},
         {
           href: 'https://github.com/benthosdev/benthos/releases/latest',
           position: 'right',

@@ -31,7 +31,7 @@ func init() {
 			docs.FieldString("db", "The name of the database to use.").HasDefault(""),
 			btls.FieldSpec(),
 			docs.FieldString("username", "A username (when applicable).").Advanced().HasDefault(""),
-			docs.FieldString("password", "A password (when applicable).").Advanced().HasDefault(""),
+			docs.FieldString("password", "A password (when applicable).").Advanced().HasDefault("").Secret(),
 			docs.FieldObject("include", "Optional additional metrics to collect, enabling these metrics may have some performance implications as it acquires a global semaphore and does `stoptheworld()`.").WithChildren(
 				docs.FieldString("runtime", "A duration string indicating how often to poll and collect runtime metrics. Leave empty to disable this metric", "1m").HasDefault(""),
 				docs.FieldString("debug_gc", "A duration string indicating how often to poll and collect GC metrics. Leave empty to disable this metric.", "1m").HasDefault(""),

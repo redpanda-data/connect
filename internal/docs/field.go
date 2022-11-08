@@ -95,6 +95,10 @@ type FieldSpec struct {
 	// is missing.
 	IsOptional bool `json:"is_optional,omitempty"`
 
+	// IsSecret indicates whether the field represents information that is
+	// generally considered sensitive such as passwords or access tokens.
+	IsSecret bool `json:"is_secret,omitempty"`
+
 	// Default value of the field.
 	Default *any `json:"default,omitempty"`
 
@@ -150,6 +154,14 @@ func (f FieldSpec) HasType(t FieldType) FieldSpec {
 // config is not considered an error even when a default value is not provided.
 func (f FieldSpec) Optional() FieldSpec {
 	f.IsOptional = true
+	return f
+}
+
+// Secret marks this field as being a secret, which means it represents
+// information that is generally considered sensitive such as passwords or
+// access tokens.
+func (f FieldSpec) Secret() FieldSpec {
+	f.IsSecret = true
 	return f
 }
 

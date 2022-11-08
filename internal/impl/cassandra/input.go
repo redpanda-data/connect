@@ -63,7 +63,7 @@ func fieldAuth() docs.FieldSpec {
 	return docs.FieldObject("password_authenticator", "Optional configuration of Cassandra authentication parameters.").WithChildren(
 		docs.FieldBool("enabled", "Whether to use password authentication").Optional(),
 		docs.FieldString("username", "A username").Optional(),
-		docs.FieldString("password", "A password").Optional(),
+		docs.FieldString("password", "A password").Optional().Secret(),
 	).Advanced()
 }
 

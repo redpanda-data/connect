@@ -49,7 +49,7 @@ If the Push Gateway requires HTTP Basic Authentication it can be configured with
 			docs.FieldString("push_job_name", "An identifier for push jobs.").Advanced().HasDefault("benthos_push"),
 			docs.FieldObject("push_basic_auth", "The Basic Authentication credentials.").WithChildren(
 				docs.FieldString("username", "The Basic Authentication username.").HasDefault(""),
-				docs.FieldString("password", "The Basic Authentication password.").HasDefault(""),
+				docs.FieldString("password", "The Basic Authentication password.").HasDefault("").Secret(),
 			).Advanced(),
 			docs.FieldString("file_output_path", "An optional file path to write all prometheus metrics on service shutdown.").Advanced().HasDefault(""),
 		),

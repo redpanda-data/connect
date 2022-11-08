@@ -42,7 +42,7 @@ func saslField() *service.ConfigField {
 			Default(""),
 		service.NewStringField("password").
 			Description("A password to provide for PLAIN or SCRAM-* authentication.").
-			Default(""),
+			Default("").Secret(),
 		service.NewStringField("token").
 			Description("The token to use for a single session's OAUTHBEARER authentication.").
 			Default(""),

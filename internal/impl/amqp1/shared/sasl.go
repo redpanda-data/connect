@@ -39,6 +39,6 @@ func SASLFieldSpec() docs.FieldSpec {
 			"plain", "Plain text SASL authentication.",
 		).HasDefault("none"),
 		docs.FieldString("user", "A SASL plain text username. It is recommended that you use environment variables to populate this field.", "${USER}").HasDefault(""),
-		docs.FieldString("password", "A SASL plain text password. It is recommended that you use environment variables to populate this field.", "${PASSWORD}").HasDefault(""),
+		docs.FieldString("password", "A SASL plain text password. It is recommended that you use environment variables to populate this field.", "${PASSWORD}").HasDefault("").Secret(),
 	).Advanced()
 }

@@ -57,7 +57,7 @@ func basicAuthField() *service.ConfigField {
 
 		service.NewStringField("password").
 			Description("A password to authenticate with.").
-			Default(""),
+			Default("").Secret(),
 	).Description("Allows you to specify basic authentication.").
 		Advanced()
 }
@@ -74,7 +74,7 @@ func oAuthFieldSpec() *service.ConfigField {
 
 		service.NewStringField("consumer_secret").
 			Description("A secret used to establish ownership of the consumer key.").
-			Default(""),
+			Default("").Secret(),
 
 		service.NewStringField("access_token").
 			Description("A value used to gain access to the protected resources on behalf of the user.").
@@ -82,7 +82,7 @@ func oAuthFieldSpec() *service.ConfigField {
 
 		service.NewStringField("access_token_secret").
 			Description("A secret provided in order to establish ownership of a given access token.").
-			Default(""),
+			Default("").Secret(),
 	).
 		Description("Allows you to specify open authentication via OAuth version 1.").
 		Advanced()
@@ -100,7 +100,7 @@ func oAuth2FieldSpec() *service.ConfigField {
 
 		service.NewStringField("client_secret").
 			Description("A secret used to establish ownership of the client key.").
-			Default(""),
+			Default("").Secret(),
 
 		service.NewStringField("token_url").
 			Description("The URL of the token provider.").
