@@ -46,36 +46,78 @@ func New(version, date string) Full {
 	return s
 }
 
+func ofStatus(status string, components []docs.ComponentSpec) []docs.ComponentSpec {
+	var newComps []docs.ComponentSpec
+	for _, c := range components {
+		if c.Status == docs.Status(status) {
+			newComps = append(newComps, c)
+		}
+	}
+	return newComps
+}
+
+// ReduceToStatus reduces the components in the schema to only those matching
+// the given stability status.
+func (f *Full) ReduceToStatus(status string) {
+	f.Buffers = ofStatus(status, f.Buffers)
+	f.Caches = ofStatus(status, f.Caches)
+	f.Inputs = ofStatus(status, f.Inputs)
+	f.Outputs = ofStatus(status, f.Outputs)
+	f.Processors = ofStatus(status, f.Processors)
+	f.RateLimits = ofStatus(status, f.RateLimits)
+	f.Metrics = ofStatus(status, f.Metrics)
+	f.Tracers = ofStatus(status, f.Tracers)
+
+	var newFuncs []query.FunctionSpec
+	for _, s := range f.BloblangFunctions {
+		if s.Status == query.Status(status) {
+			newFuncs = append(newFuncs, s)
+		}
+	}
+	f.BloblangFunctions = newFuncs
+
+	var newMethods []query.MethodSpec
+	for _, s := range f.BloblangMethods {
+		if s.Status == query.Status(status) {
+			newMethods = append(newMethods, s)
+		}
+	}
+	f.BloblangMethods = newMethods
+}
+
+func justNames(components []docs.ComponentSpec) []string {
+	names := []string{}
+	for _, c := range components {
+		if c.Status != docs.StatusDeprecated {
+			names = append(names, c.Name)
+		}
+	}
+	return names
+}
+
+func justNamesBloblFuncs(fns []query.FunctionSpec) []string {
+	names := []string{}
+	for _, c := range fns {
+		if c.Status != query.StatusDeprecated {
+			names = append(names, c.Name)
+		}
+	}
+	return names
+}
+
+func justNamesBloblMethods(fns []query.MethodSpec) []string {
+	names := []string{}
+	for _, c := range fns {
+		if c.Status != query.StatusDeprecated {
+			names = append(names, c.Name)
+		}
+	}
+	return names
+}
+
 // Flattened returns a flattened representation of all registered plugin types
 // and names.
 func (f *Full) Flattened() map[string][]string {
-	justNames := func(components []docs.ComponentSpec) []string {
-		names := []string{}
-		for _, c := range components {
-			if c.Status != docs.StatusDeprecated {
-				names = append(names, c.Name)
-			}
-		}
-		return names
-	}
-	justNamesBloblFuncs := func(fns []query.FunctionSpec) []string {
-		names := []string{}
-		for _, c := range fns {
-			if c.Status != query.StatusDeprecated {
-				names = append(names, c.Name)
-			}
-		}
-		return names
-	}
-	justNamesBloblMethods := func(fns []query.MethodSpec) []string {
-		names := []string{}
-		for _, c := range fns {
-			if c.Status != query.StatusDeprecated {
-				names = append(names, c.Name)
-			}
-		}
-		return names
-	}
 	return map[string][]string{
 		"buffers":            justNames(f.Buffers),
 		"caches":             justNames(f.Caches),
