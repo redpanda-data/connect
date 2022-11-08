@@ -46,13 +46,8 @@ $(PATHINSTBIN)/%: $(SOURCE_FILES)
 
 $(APPS): %: $(PATHINSTBIN)/%
 
-TOOLS = benthos_docs_gen
-tools: $(TOOLS)
-
 $(PATHINSTTOOLS)/%: $(SOURCE_FILES)
 	@go build $(GO_FLAGS) -tags "$(TAGS)" -ldflags "$(LD_FLAGS) $(VER_FLAGS)" -o $@ ./cmd/tools/$*
-
-$(TOOLS): %: $(PATHINSTTOOLS)/%
 
 SERVERLESS = benthos-lambda
 serverless: $(SERVERLESS)
@@ -110,7 +105,7 @@ clean:
 	rm -rf $(PATHINSTDOCKER)
 
 docs: $(APPS) $(TOOLS)
-	@$(PATHINSTTOOLS)/benthos_docs_gen $(DOCS_FLAGS)
+	@$(PATHINSTBIN)/benthos docs $(DOCS_FLAGS)
 	@$(PATHINSTBIN)/benthos lint --deprecated "./config/examples/*.yaml" \
 		"$(WEBSITE_DIR)/cookbooks/**/*.md" \
 		"$(WEBSITE_DIR)/docs/**/*.md"
