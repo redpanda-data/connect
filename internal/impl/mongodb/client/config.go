@@ -64,6 +64,7 @@ const (
 	JSONMarshalModeRelaxed JSONMarshalMode = "relaxed"
 )
 
+// AuthMechanismProperties is a config struct for the authentication mechanism for MongoDB.
 type AuthMechanismProperties struct {
 	ServiceName          string `json:"service_name" yaml:"service_name"`
 	CanonicalizeHostname bool   `json:"canonicalize_host_name" yaml:"canonicalize_host_name"`
