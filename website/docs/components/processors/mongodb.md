@@ -66,6 +66,12 @@ mongodb:
   password_set: false
   auth_source: ""
   auth_mechanism: ""
+  auth_mechanism_properties:
+    service_name: ""
+    canonicalize_host_name: false
+    service_realm: ""
+    service_host: ""
+    aws_session_token: ""
   app_name: ""
   connect_timeout: 10s
   socket_timeout: 30s
@@ -160,7 +166,56 @@ The mechanism to use for authentication. This can also be set through the "authM
 
 
 Type: `string`  
+Default: `""`  
 Requires version 4.11.0 or newer  
+
+### `auth_mechanism_properties`
+
+Used to specify additional configuration options for certain mechanisms. For more information, see [MongoDB docs](https://docs.mongodb.com/manual/core/authentication-mechanisms/).
+
+
+Type: `object`  
+Requires version 4.11.0 or newer  
+
+### `auth_mechanism_properties.service_name`
+
+The service name to use for GSSAPI authentication.
+
+
+Type: `string`  
+Default: `""`  
+
+### `auth_mechanism_properties.canonicalize_host_name`
+
+Whether to canonicalize the host name for GSSAPI authentication.
+
+
+Type: `bool`  
+Default: `false`  
+
+### `auth_mechanism_properties.service_realm`
+
+The service realm to use for GSSAPI authentication.
+
+
+Type: `string`  
+Default: `""`  
+
+### `auth_mechanism_properties.service_host`
+
+The service host to use for GSSAPI authentication. The service_host and canonicalize_host_name properties must not be used at the same time on Linux and Darwin systems.
+
+
+Type: `string`  
+Default: `""`  
+
+### `auth_mechanism_properties.aws_session_token`
+
+The AWS token for MONGODB-AWS authentication. This is optional and used for authentication with temporary credentials.
+
+
+Type: `string`  
+Default: `""`  
 
 ### `app_name`
 
