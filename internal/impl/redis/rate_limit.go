@@ -112,7 +112,7 @@ func (r *redisRatelimit) Access(ctx context.Context) (time.Duration, error) {
 		return 0, nil
 	}
 
-	return time.Duration(result.Val().(int64)) * time.Millisecond, nil
+	return time.Duration((result.Val().(int64)) * int64(time.Millisecond)), nil
 }
 
 func (r *redisRatelimit) Close(ctx context.Context) error {
