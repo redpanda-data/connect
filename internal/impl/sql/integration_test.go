@@ -3,9 +3,7 @@ package sql_test
 import (
 	"context"
 	"database/sql"
-	"flag"
 	"fmt"
-	"regexp"
 	"strings"
 	"sync"
 	"testing"
@@ -17,6 +15,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	isql "github.com/benthosdev/benthos/v4/internal/impl/sql"
+	"github.com/benthosdev/benthos/v4/internal/integration"
 	"github.com/benthosdev/benthos/v4/public/service"
 
 	_ "github.com/benthosdev/benthos/v4/public/components/pure"
@@ -538,9 +537,7 @@ func testSuite(t *testing.T, driver, dsn string, createTableFn func(string) erro
 }
 
 func TestIntegration(t *testing.T) {
-	if m := flag.Lookup("test.run").Value.String(); m == "" || regexp.MustCompile(strings.Split(m, "/")[0]).FindString(t.Name()) == "" {
-		t.Skip("Skipping as execution was not requested explicitly using go test -run ^TestIntegration$")
-	}
+	integration.CheckSkip(t)
 
 	t.Run("clickhouse", clickhouseIntegration)
 	t.Run("clickhouse_old", clickhouseOldIntegration)

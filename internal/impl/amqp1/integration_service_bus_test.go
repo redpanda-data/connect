@@ -2,11 +2,8 @@ package amqp1
 
 import (
 	"context"
-	"flag"
 	"fmt"
 	"os"
-	"regexp"
-	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -17,13 +14,12 @@ import (
 
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/input"
+	"github.com/benthosdev/benthos/v4/internal/integration"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 )
 
 func TestIntegrationAzureServiceBus(t *testing.T) {
-	if m := flag.Lookup("test.run").Value.String(); m == "" || regexp.MustCompile(strings.Split(m, "/")[0]).FindString(t.Name()) == "" {
-		t.Skip("Skipping as execution was not requested explicitly using go test -run ^TestIntegration$")
-	}
+	integration.CheckSkip(t)
 
 	if testing.Short() {
 		t.Skip("Skipping integration test in short mode")
