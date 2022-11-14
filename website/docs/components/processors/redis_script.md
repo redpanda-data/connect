@@ -1,7 +1,7 @@
 ---
 title: redis_script
 type: processor
-status: stable
+status: beta
 categories: ["Integration"]
 ---
 
@@ -15,8 +15,12 @@ categories: ["Integration"]
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-Performs actions against Redis using [LUA scripts](https://redis.io/docs/manual/programmability/eval-intro/) that aren't possible using the [`redis`](/docs/components/processors/redis) processor. Actions are
-performed for each message and the message contents are replaced with the result. In order to merge the result into the original message compose this processor within a [`branch` processor](/docs/components/processors/branch).
+:::caution BETA
+This component is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with the component is found.
+:::
+Performs actions against Redis using [LUA scripts](https://redis.io/docs/manual/programmability/eval-intro/).
+
+Introduced in version 4.11.0.
 
 
 <Tabs defaultValue="common" values={[
@@ -62,6 +66,10 @@ redis_script:
 
 </TabItem>
 </Tabs>
+
+Actions are performed for each message and the message contents are replaced with the result.
+
+In order to merge the result into the original message compose this processor within a [`branch` processor](/docs/components/processors/branch).
 
 ## Examples
 
@@ -182,6 +190,9 @@ Requires version 3.45.0 or newer
 ### `tls.root_cas`
 
 An optional root certificate authority to use. This is a string, representing a certificate chain from the parent trusted root certificate, to possible intermediate signing certificates, to the host certificate.
+:::warning Secret
+This field contains sensitive information that usually shouldn't be added to a config directly, read our [secrets page for more info](/docs/configuration/secrets).
+:::
 
 
 Type: `string`  
@@ -240,6 +251,9 @@ Default: `""`
 ### `tls.client_certs[].key`
 
 A plain text certificate key to use.
+:::warning Secret
+This field contains sensitive information that usually shouldn't be added to a config directly, read our [secrets page for more info](/docs/configuration/secrets).
+:::
 
 
 Type: `string`  
@@ -264,6 +278,9 @@ Default: `""`
 ### `tls.client_certs[].password`
 
 A plain text password for when the private key is a password encrypted PEM block according to RFC 1423. Warning: Since it does not authenticate the ciphertext, it is vulnerable to padding oracle attacks that can let an attacker recover the plaintext.
+:::warning Secret
+This field contains sensitive information that usually shouldn't be added to a config directly, read our [secrets page for more info](/docs/configuration/secrets).
+:::
 
 
 Type: `string`  
@@ -296,7 +313,6 @@ A [Bloblang mapping](/docs/guides/bloblang/about) which should evaluate to an ar
 
 
 Type: `string`  
-Requires version 4.11.0 or newer  
 
 ```yml
 # Examples
@@ -308,11 +324,10 @@ args_mapping: root = [ meta("kafka_key"), "hardcoded_value" ]
 
 ### `keys_mapping`
 
-A [Bloblang mapping](/docs/guides/bloblang/about) which should evaluate to an array of keys matching in size to the number of arguments required for the specified Redis script. Must evaluate to an array of strs.
+A [Bloblang mapping](/docs/guides/bloblang/about) which should evaluate to an array of keys matching in size to the number of arguments required for the specified Redis script.
 
 
 Type: `string`  
-Requires version 4.11.0 or newer  
 
 ```yml
 # Examples

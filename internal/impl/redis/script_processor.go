@@ -2,21 +2,24 @@ package redis
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"time"
 
 	"github.com/go-redis/redis/v8"
 
+	"github.com/benthosdev/benthos/v4/internal/bloblang/query"
 	"github.com/benthosdev/benthos/v4/public/bloblang"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
 func redisScriptProcConfig() *service.ConfigSpec {
 	spec := service.NewConfigSpec().
-		Stable().
-		Summary(`Performs actions against Redis using [LUA scripts](https://redis.io/docs/manual/programmability/eval-intro/) that aren't possible using the ` + "[`redis`](/docs/components/processors/redis)" + ` processor. Actions are
-performed for each message and the message contents are replaced with the result. In order to merge the result into the original message compose this processor within a ` + "[`branch` processor](/docs/components/processors/branch)" + `.`).
+		Beta().
+		Version("4.11.0").
+		Summary(`Performs actions against Redis using [LUA scripts](https://redis.io/docs/manual/programmability/eval-intro/).`).
+		Description(`Actions are performed for each message and the message contents are replaced with the result.
+
+In order to merge the result into the original message compose this processor within a ` + "[`branch` processor](/docs/components/processors/branch)" + `.`).
 		Categories("Integration")
 
 	for _, f := range clientFields() {
@@ -29,12 +32,10 @@ performed for each message and the message contents are replaced with the result
 			Example("return redis.call('set', KEYS[1], ARGV[1])")).
 		Field(service.NewBloblangField("args_mapping").
 			Description("A [Bloblang mapping](/docs/guides/bloblang/about) which should evaluate to an array of values matching in size to the number of arguments required for the specified Redis script.").
-			Version("4.11.0").
 			Example("root = [ this.key ]").
 			Example(`root = [ meta("kafka_key"), "hardcoded_value" ]`)).
 		Field(service.NewBloblangField("keys_mapping").
-			Description("A [Bloblang mapping](/docs/guides/bloblang/about) which should evaluate to an array of keys matching in size to the number of arguments required for the specified Redis script. Must evaluate to an array of strs.").
-			Version("4.11.0").
+			Description("A [Bloblang mapping](/docs/guides/bloblang/about) which should evaluate to an array of keys matching in size to the number of arguments required for the specified Redis script.").
 			Example("root = [ this.key ]").
 			Example(`root = [ meta("kafka_key"), this.count ]`)).
 		Field(service.NewIntField("retries").
@@ -143,31 +144,30 @@ func newRedisScriptProcFromConfig(conf *service.ParsedConfig, res *service.Resou
 
 func (r *redisScriptProc) exec(ctx context.Context, index int, inBatch service.MessageBatch, msg *service.Message) error {
 	args, err := getArgsMapping(inBatch, index, r.argsMapping)
-
 	if err != nil {
 		return fmt.Errorf("args_mapping failed: %w", err)
 	}
 
 	keys, err := getKeysStrMapping(inBatch, index, r.keysMapping)
-
 	if err != nil {
 		return fmt.Errorf("keys_mapping failed: %w", err)
 	}
 
 	res, err := r.script.Run(ctx, r.client, keys, args...).Result()
-
 	for i := 0; i <= r.retries && err != nil; i++ {
 		r.log.Errorf("script failed: %v", err)
-		<-time.After(r.retryPeriod)
+		select {
+		case <-time.After(r.retryPeriod):
+		case <-ctx.Done():
+			return ctx.Err()
+		}
 		res, err = r.script.Run(ctx, r.client, keys, args...).Result()
 	}
-
 	if err != nil {
 		return err
 	}
 
 	msg.SetStructuredMut(res)
-
 	return nil
 }
 
@@ -203,18 +203,8 @@ func getArgsMapping(inBatch service.MessageBatch, index int, mapping *bloblang.E
 	}
 
 	for i, v := range args {
-		n, isN := v.(json.Number)
-		if !isN {
-			continue
-		}
-		var nerr error
-		if args[i], nerr = n.Int64(); nerr != nil {
-			if args[i], nerr = n.Float64(); nerr != nil {
-				args[i] = n.String()
-			}
-		}
+		args[i] = query.ISanitize(v)
 	}
-
 	return args, nil
 }
 
@@ -236,20 +226,7 @@ func getKeysStrMapping(inBatch service.MessageBatch, index int, mapping *bloblan
 
 	strArgs := make([]string, len(args))
 	for i, v := range args {
-		n, isN := v.(json.Number)
-		if !isN {
-			var arg string
-			if arg, ok = v.(string); !ok {
-				return nil, fmt.Errorf("keys mapping returned non-string result: %v", v)
-			}
-
-			strArgs[i] = arg
-
-			continue
-		}
-
-		strArgs[i] = n.String()
+		strArgs[i] = query.IToString(v)
 	}
-
 	return strArgs, nil
 }

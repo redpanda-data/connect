@@ -98,7 +98,7 @@ keys_mapping: 'root = [ "key" ]'
 `, url), nil)
 	require.NoError(t, err)
 
-	r, err := newRedisProcFromConfig(conf, service.MockResources())
+	r, err := newRedisScriptProcFromConfig(conf, service.MockResources())
 	require.NoError(t, err)
 
 	msg := service.MessageBatch{
