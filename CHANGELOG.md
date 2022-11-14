@@ -10,6 +10,7 @@ All notable changes to this project will be documented in this file.
 - Field `default_encoding` added to the `parquet_encode` processor.
 - Field `client_session_keep_alive` added to the `snowflake_put` output.
 - Bloblang now supports metadata access via `@foo` syntax, which also supports arbitrary values.
+- TLS client certs now support both PKCS#1 and PKCS#8 encrypted keys.
 
 ## 4.10.0 - 2022-10-26
 
