@@ -30,7 +30,7 @@ wasm:
   function: process
 ```
 
-This processor uses [Wazero](github.com/tetratelabs/wazero) to execute a WASM module (with support for WASI), calling a specific function for each message being processed. From within the WASM module it is possible to query and mutate the message being processed via a suite of functions exported to the module.
+This processor uses [Wazero](https://github.com/tetratelabs/wazero) to execute a WASM module (with support for WASI), calling a specific function for each message being processed. From within the WASM module it is possible to query and mutate the message being processed via a suite of functions exported to the module.
 
 This ecosystem is delicate as WASM doesn't have a single clearly defined way to pass strings back and forth between the host and the module. In order to remedy this we're gradually working on introducing libraries and examples for multiple languages which can be found in [the codebase](https://github.com/benthosdev/benthos/tree/main/public/wasm/README.md).
 
