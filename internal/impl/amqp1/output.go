@@ -3,6 +3,7 @@ package amqp1
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"sync"
 
@@ -18,6 +19,7 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/message"
 	"github.com/benthosdev/benthos/v4/internal/metadata"
 	itls "github.com/benthosdev/benthos/v4/internal/tls"
+	"github.com/benthosdev/benthos/v4/public/bloblang"
 )
 
 func init() {
@@ -48,6 +50,7 @@ Message metadata is added to each AMQP message as string annotations. In order t
 			docs.FieldString("target_address", "The target address to write to.", "/foo", "queue:/bar", "topic:/baz").HasDefault(""),
 			docs.FieldInt("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput.").HasDefault(64),
 			itls.FieldSpec(),
+			docs.FieldBloblang("application_properties_map", "Mapping to set the `application-properties` on output messages").Advanced().HasDefault(""),
 			shared.SASLFieldSpec(),
 			docs.FieldObject("metadata", "Specify criteria for which metadata values are attached to messages as headers.").
 				WithChildren(metadata.ExcludeFilterFields()...),
@@ -66,7 +69,8 @@ type amqp1Writer struct {
 	session *amqp.Session
 	sender  *amqp.Sender
 
-	metaFilter *metadata.ExcludeFilter
+	metaFilter               *metadata.ExcludeFilter
+	applicationPropertiesMap *bloblang.Executor
 
 	log log.Modular
 
@@ -77,11 +81,20 @@ type amqp1Writer struct {
 }
 
 func newAMQP1Writer(conf output.AMQP1Config, mgr bundle.NewManagement) (*amqp1Writer, error) {
+
 	a := amqp1Writer{
 		log:  mgr.Logger(),
 		conf: conf,
 	}
+
 	var err error
+
+	if conf.ApplicationPropertiesMapping != "" {
+		if a.applicationPropertiesMap, err = bloblang.XWrapEnvironment(mgr.BloblEnvironment()).Parse(conf.ApplicationPropertiesMapping); err != nil {
+			return nil, fmt.Errorf("failed to construct application_properties_map: %w", err)
+		}
+	}
+
 	if conf.TLS.Enabled {
 		if a.tlsConf, err = conf.TLS.Get(mgr.FS()); err != nil {
 			return nil, err
@@ -184,6 +197,20 @@ func (a *amqp1Writer) WriteBatch(ctx context.Context, msg message.Batch) error {
 
 	return output.IterateBatchedSend(msg, func(i int, p *message.Part) error {
 		m := amqp.NewMessage(p.AsBytes())
+		var err error
+
+		if a.applicationPropertiesMap != nil {
+			value, err := a.applicationPropertiesMap.Query(p)
+			if err != nil {
+				return err
+			}
+			applicationProperties, ok := value.(map[string]interface{})
+			if !ok {
+				return errors.New("")
+			}
+
+			m.ApplicationProperties = applicationProperties
+		}
 		_ = a.metaFilter.Iter(p, func(k string, v any) error {
 			if m.Annotations == nil {
 				m.Annotations = amqp.Annotations{}
@@ -191,7 +218,7 @@ func (a *amqp1Writer) WriteBatch(ctx context.Context, msg message.Batch) error {
 			m.Annotations[k] = v
 			return nil
 		})
-		err := s.Send(ctx, m)
+		err = s.Send(ctx, m)
 		if err != nil {
 			if err == amqp.ErrTimeout || ctx.Err() != nil {
 				err = component.ErrTimeout
