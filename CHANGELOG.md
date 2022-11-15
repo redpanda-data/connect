@@ -11,6 +11,7 @@ All notable changes to this project will be documented in this file.
 - Field `client_session_keep_alive` added to the `snowflake_put` output.
 - Bloblang now supports metadata access via `@foo` syntax, which also supports arbitrary values.
 - New `redis_script` processor.
+- New `wasm` processor.
 
 ## 4.10.0 - 2022-10-26
 
