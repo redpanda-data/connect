@@ -388,7 +388,12 @@ func newAvroOCFReader(conf ReaderConfig, marshaler string, r io.ReadCloser, ackF
 	if err != nil {
 		return nil, err
 	}
-
+	ocfCodec := ocf.Codec()
+	ocfSchema := ocfCodec.Schema()
+	StandardJSONFullCodec, err := goavro.NewCodecForStandardJSONFull(ocfSchema)
+	if err != nil {
+		return nil, err
+	}
 	decoder := func(a *avroOCFReader) (*message.Part, error) {
 		datum, err := a.ocf.Read()
 		if err != nil {
@@ -431,7 +436,7 @@ func newAvroOCFReader(conf ReaderConfig, marshaler string, r io.ReadCloser, ackF
 		r:            r,
 		logicalTypes: logicalTypes,
 		decoder:      decoder,
-		avroCodec:    ocf.Codec(),
+		avroCodec:    StandardJSONFullCodec,
 		sourceAck:    ackOnce(ackFn),
 	}, nil
 }
