@@ -37,9 +37,11 @@ benthos -c ./config.yaml \
 
 Using this method we can inject the secret into the config without "leaking" it into an environment variable.
 
-## Caveats
+## Avoiding Leaked Secrets
 
-Regardless of which method you use to inject secrets into a config it's important to avoid exposing the resulting config. This means avoid enabling [debug HTTP endpoints][http.debug] when the port is exposed and your config contains secrets, and don't use the `benthos echo` subcommand on configs containing secrets unless you're printing to a secure pipe.
+There are a few ways in which configs parsed by Benthos can be exported back out of the service. In all of these cases Benthos will attempt to scrub any field values within the config that are known secrets (any field marked as a secret in the docs).
+
+However, if you're embedding secrets within a config outside of the value of secret fields, maybe as part of a Bloblang mapping, then care should be made to avoid exposing the resulting config. This specifically means you should not enable [debug HTTP endpoints][http.debug] when the port is exposed, and don't use the `benthos echo` subcommand on configs containing secrets unless you're printing to a secure pipe.
 
 [interpolation]: /docs/configuration/interpolation
 [field_paths]: /docs/configuration/field_paths

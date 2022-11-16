@@ -2,6 +2,7 @@ package docs
 
 import (
 	"fmt"
+	"regexp"
 
 	"github.com/benthosdev/benthos/v4/internal/bloblang"
 	"github.com/benthosdev/benthos/v4/internal/bloblang/query"
@@ -364,6 +365,17 @@ func (f FieldSpec) lintOptions() FieldSpec {
 		return []Lint{NewLintError(line, LintInvalidOption, fmt.Sprintf("value %v is not a valid option for this field", str))}
 	}
 	return f
+}
+
+var (
+	envRegex = regexp.MustCompile(`^\${[0-9A-Za-z_.]+(:((\${[^}]+})|[^}])+)?}$`)
+)
+
+func (f FieldSpec) scrubValue(value string) string {
+	if !f.IsSecret || value == "" || envRegex.MatchString(value) {
+		return value
+	}
+	return "!!!SECRET_SCRUBBED!!!"
 }
 
 func (f FieldSpec) getLintFunc() LintFunc {

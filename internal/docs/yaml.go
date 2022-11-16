@@ -331,6 +331,8 @@ func (f FieldSpec) SanitiseYAML(node *yaml.Node, conf SanitiseConfig) error {
 				return err
 			}
 		}
+	} else if f.IsSecret && conf.ScrubSecrets && node.Value != "" {
+		node.Value = f.scrubValue(node.Value)
 	}
 	return nil
 }

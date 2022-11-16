@@ -194,6 +194,7 @@ func getInferenceCandidateFromList(docProvider Provider, t Type, l []string) (st
 type SanitiseConfig struct {
 	RemoveTypeField  bool
 	RemoveDeprecated bool
+	ScrubSecrets     bool
 	ForExample       bool
 	Filter           FieldFilter
 	DocsProvider     Provider

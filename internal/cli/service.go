@@ -346,6 +346,7 @@ func cmdService(
 	if err == nil {
 		sanitConf := docs.NewSanitiseConfig()
 		sanitConf.RemoveTypeField = true
+		sanitConf.ScrubSecrets = true
 		err = config.Spec().SanitiseYAML(&sanitNode, sanitConf)
 	}
 	if err != nil {

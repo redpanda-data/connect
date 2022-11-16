@@ -267,6 +267,7 @@ variables have been resolved:
 					if err == nil {
 						sanitConf := docs.NewSanitiseConfig()
 						sanitConf.RemoveTypeField = true
+						sanitConf.ScrubSecrets = true
 						err = config.Spec().SanitiseYAML(&node, sanitConf)
 					}
 					if err == nil {
