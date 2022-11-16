@@ -2,8 +2,10 @@ package wasm
 
 import (
 	"context"
-	"log"
+	"errors"
+	"fmt"
 	"os"
+	"sync"
 
 	"github.com/tetratelabs/wazero"
 	"github.com/tetratelabs/wazero/api"
@@ -23,6 +25,10 @@ This processor uses [Wazero](https://github.com/tetratelabs/wazero) to execute a
 This ecosystem is delicate as WASM doesn't have a single clearly defined way to pass strings back and forth between the host and the module. In order to remedy this we're gradually working on introducing libraries and examples for multiple languages which can be found in [the codebase](https://github.com/benthosdev/benthos/tree/main/public/wasm/README.md).
 
 These examples, as well as the processor itself, is a work in progress.
+
+### Parallelism
+
+It's not currently possible to execute a single WASM runtime across parallel threads with this processor. Therefore, in order to support parallel processing this processor implements pooling of module runtimes. Ideally your WASM module shouldn't depend on any global state, but if it does then you need to ensure the processor [is only run on a single thread](/docs/configuration/processing_pipelines).
 `).
 		Field(service.NewStringField("module_path").
 			Description("The path of the target WASM module to execute.")).
@@ -47,19 +53,10 @@ func init() {
 //------------------------------------------------------------------------------
 
 type wazeroAllocProcessor struct {
-	log *service.Logger
-
-	runtime wazero.Runtime
-	mod     api.Module
-
-	pendingMsg      *service.Message
-	afterProcessing []func()
-
-	process     api.Function
-	goMalloc    api.Function
-	goFree      api.Function
-	rustAlloc   api.Function
-	rustDealloc api.Function
+	log          *service.Logger
+	functionName string
+	wasmBinary   []byte
+	modulePool   sync.Pool
 }
 
 func newWazeroAllocProcessorFromConfig(conf *service.ParsedConfig, mgr *service.Resources) (*wazeroAllocProcessor, error) {
@@ -81,23 +78,42 @@ func newWazeroAllocProcessorFromConfig(conf *service.ParsedConfig, mgr *service.
 	return newWazeroAllocProcessor(function, fileBytes, mgr)
 }
 
-func newWazeroAllocProcessor(functionName string, wasmBinary []byte, mgr *service.Resources) (proc *wazeroAllocProcessor, err error) {
+func newWazeroAllocProcessor(functionName string, wasmBinary []byte, mgr *service.Resources) (*wazeroAllocProcessor, error) {
+	proc := &wazeroAllocProcessor{
+		log:        mgr.Logger(),
+		modulePool: sync.Pool{},
+
+		functionName: functionName,
+		wasmBinary:   wasmBinary,
+	}
+
+	// Ensure we can create at least one module runner.
+	modRunner, err := proc.newModule()
+	if err != nil {
+		return nil, err
+	}
+
+	proc.modulePool.Put(modRunner)
+	return proc, nil
+}
+
+func (p *wazeroAllocProcessor) newModule() (mod *moduleRunner, err error) {
 	ctx := context.Background()
 
 	r := wazero.NewRuntime(ctx)
-	proc = &wazeroAllocProcessor{
-		log:     mgr.Logger(),
+	mod = &moduleRunner{
+		log:     p.log,
 		runtime: r,
 	}
 	defer func() {
 		if err != nil {
-			proc.runtime.Close(context.Background())
+			mod.runtime.Close(context.Background())
 		}
 	}()
 
 	if _, err = r.NewHostModuleBuilder("benthos_wasm").
-		NewFunctionBuilder().WithFunc(proc.setBytes).Export("v0_msg_set_bytes").
-		NewFunctionBuilder().WithFunc(proc.getBytes).Export("v0_msg_as_bytes").
+		NewFunctionBuilder().WithFunc(mod.setBytes).Export("v0_msg_set_bytes").
+		NewFunctionBuilder().WithFunc(mod.getBytes).Export("v0_msg_as_bytes").
 		Instantiate(ctx, r); err != nil {
 		return
 	}
@@ -106,91 +122,153 @@ func newWazeroAllocProcessor(functionName string, wasmBinary []byte, mgr *servic
 		return
 	}
 
-	if proc.mod, err = r.InstantiateModuleFromBinary(ctx, wasmBinary); err != nil {
+	if mod.mod, err = r.InstantiateModuleFromBinary(ctx, p.wasmBinary); err != nil {
 		return
 	}
 
-	proc.process = proc.mod.ExportedFunction(functionName)
-	proc.goMalloc = proc.mod.ExportedFunction("malloc")
-	proc.goFree = proc.mod.ExportedFunction("free")
-	proc.rustAlloc = proc.mod.ExportedFunction("allocate")
-	proc.rustDealloc = proc.mod.ExportedFunction("deallocate")
-	return
+	mod.process = mod.mod.ExportedFunction(p.functionName)
+	mod.goMalloc = mod.mod.ExportedFunction("malloc")
+	mod.goFree = mod.mod.ExportedFunction("free")
+	mod.rustAlloc = mod.mod.ExportedFunction("allocate")
+	mod.rustDealloc = mod.mod.ExportedFunction("deallocate")
+
+	return mod, nil
 }
 
-func (p *wazeroAllocProcessor) setBytes(ctx context.Context, m api.Module, contentPtr, contentSize uint32) {
-	bytes, ok := p.mod.Memory().Read(ctx, contentPtr, contentSize)
+func (p *wazeroAllocProcessor) Process(ctx context.Context, msg *service.Message) (service.MessageBatch, error) {
+	var modRunner *moduleRunner
+	var err error
+	if modRunnerPtr := p.modulePool.Get(); modRunnerPtr != nil {
+		modRunner = modRunnerPtr.(*moduleRunner)
+	} else {
+		if modRunner, err = p.newModule(); err != nil {
+			return nil, err
+		}
+	}
+	defer func() {
+		p.modulePool.Put(modRunner)
+	}()
+
+	res, err := modRunner.Run(ctx, msg)
+	if err != nil {
+		return nil, err
+	}
+	return service.MessageBatch{res}, nil
+}
+
+func (p *wazeroAllocProcessor) Close(ctx context.Context) error {
+	for {
+		mr := p.modulePool.Get()
+		if mr == nil {
+			return nil
+		}
+		if err := mr.(*moduleRunner).Close(ctx); err != nil {
+			return err
+		}
+	}
+}
+
+//------------------------------------------------------------------------------
+
+type moduleRunner struct {
+	log *service.Logger
+
+	runtime wazero.Runtime
+	mod     api.Module
+
+	pendingMsg      *service.Message
+	afterProcessing []func()
+	procErr         error
+
+	process     api.Function
+	goMalloc    api.Function
+	goFree      api.Function
+	rustAlloc   api.Function
+	rustDealloc api.Function
+}
+
+func (r *moduleRunner) setBytes(ctx context.Context, m api.Module, contentPtr, contentSize uint32) {
+	bytes, ok := r.mod.Memory().Read(ctx, contentPtr, contentSize)
 	if !ok {
-		// TODO: What do we do here?
-		panic("TODO read mem")
+		r.procErr = errors.New("failed to read out-bound memory")
+		r.log.Error(r.procErr.Error())
 	}
 
 	dataCopy := make([]byte, len(bytes))
 	copy(dataCopy, bytes)
-	p.pendingMsg.SetBytes(dataCopy)
+	r.pendingMsg.SetBytes(dataCopy)
 
-	if p.rustDealloc != nil {
-		_, _ = p.rustDealloc.Call(ctx, uint64(contentPtr), uint64(contentSize))
+	if r.rustDealloc != nil {
+		_, _ = r.rustDealloc.Call(ctx, uint64(contentPtr), uint64(contentSize))
 	}
 }
 
-func (p *wazeroAllocProcessor) getBytes(ctx context.Context, m api.Module) (ptrSize uint64) {
-	msgBytes, err := p.pendingMsg.AsBytes()
+func (r *moduleRunner) getBytes(ctx context.Context, m api.Module) (ptrSize uint64) {
+	msgBytes, err := r.pendingMsg.AsBytes()
 	if err != nil {
-		// TODO: What do we do here?
-		log.Panic("TODO as bytes", err)
+		r.procErr = fmt.Errorf("failed to get message as bytes: %v", err)
+		r.log.Error(r.procErr.Error())
 	}
 
 	contentLen := uint64(len(msgBytes))
 
 	var results []uint64
-	if p.goMalloc != nil {
-		results, err = p.goMalloc.Call(ctx, contentLen)
+	if r.goMalloc != nil {
+		results, err = r.goMalloc.Call(ctx, contentLen)
 	}
-	if p.rustAlloc != nil {
-		results, err = p.rustAlloc.Call(ctx, contentLen)
+	if r.rustAlloc != nil {
+		results, err = r.rustAlloc.Call(ctx, contentLen)
 	}
 	if err != nil {
-		// TODO: What do we do here?
-		log.Panic("TODO bad alloc", err)
+		r.procErr = fmt.Errorf("failed to allocate in-bound memory: %v", err)
+		r.log.Error(r.procErr.Error())
 	}
 
 	contentPtr := results[0]
 
 	// Run de-allocation only once the process call is finished.
-	p.afterProcessing = append(p.afterProcessing, func() {
+	r.afterProcessing = append(r.afterProcessing, func() {
 		var err error
-		if p.goFree != nil {
-			_, err = p.goFree.Call(ctx, contentPtr)
+		if r.goFree != nil {
+			_, err = r.goFree.Call(ctx, contentPtr)
 		}
 		if err != nil {
-			log.Panic("TODO bad dealloc", err)
+			r.procErr = fmt.Errorf("failed to free in-bound memory: %v", err)
+			r.log.Error(r.procErr.Error())
 		}
 	})
 
 	// The pointer is a linear memory offset, which is where we write the name.
-	if !p.mod.Memory().Write(ctx, uint32(contentPtr), msgBytes) {
-		// TODO: What do we do here?
-		panic("TODO mem write")
+	if !r.mod.Memory().Write(ctx, uint32(contentPtr), msgBytes) {
+		r.procErr = errors.New("failed to write in-bound memory")
+		r.log.Error(r.procErr.Error())
 	}
 	return (contentPtr << uint64(32)) | contentLen
 }
 
-func (p *wazeroAllocProcessor) Process(ctx context.Context, msg *service.Message) (service.MessageBatch, error) {
-	p.pendingMsg = msg
-	_, err := p.process.Call(ctx)
-	p.pendingMsg = nil
-	for _, fn := range p.afterProcessing {
+func (r *moduleRunner) reset() {
+	r.pendingMsg = nil
+	r.procErr = nil
+	r.afterProcessing = nil
+}
+
+func (r *moduleRunner) Run(ctx context.Context, msg *service.Message) (*service.Message, error) {
+	r.pendingMsg = msg
+	_, err := r.process.Call(ctx)
+	for _, fn := range r.afterProcessing {
 		fn()
 	}
-	p.afterProcessing = nil
+	r.reset()
 	if err != nil {
 		return nil, err
 	}
-	return service.MessageBatch{msg}, nil
+	if r.procErr != nil {
+		return nil, r.procErr
+	}
+	return msg, nil
 }
 
-func (p *wazeroAllocProcessor) Close(ctx context.Context) error {
-	_ = p.mod.Close(ctx)
-	return p.runtime.Close(ctx)
+func (r *moduleRunner) Close(ctx context.Context) error {
+	_ = r.mod.Close(ctx)
+	return r.runtime.Close(ctx)
 }

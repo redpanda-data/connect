@@ -12,6 +12,7 @@ All notable changes to this project will be documented in this file.
 - Bloblang now supports metadata access via `@foo` syntax, which also supports arbitrary values.
 - New `redis_script` processor.
 - New `wasm` processor.
+- Fields marked as secrets will no longer be printed with `benthos echo` or debug HTTP endpoints.
 
 ## 4.10.0 - 2022-10-26
 

@@ -2,8 +2,12 @@ package wasm
 
 import (
 	"context"
+	"fmt"
 	"os"
+	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/benthosdev/benthos/v4/public/service"
 
@@ -35,6 +39,45 @@ func TestWazeroWASIGoProcessor(t *testing.T) {
 
 		assert.Equal(t, "HELLO WORLD", string(resBytes))
 	}
+}
+
+func TestWazeroWASIGoProcessorParallel(t *testing.T) {
+	wasm, err := os.ReadFile("./uppercase.wasm")
+	if os.IsNotExist(err) {
+		t.Skip("skipping as wasm example not compiled, run build.sh to remedy")
+	}
+	require.NoError(t, err)
+
+	proc, err := newWazeroAllocProcessor("process", wasm, service.MockResources())
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		require.NoError(t, proc.Close(context.Background()))
+	})
+
+	tStarted := time.Now()
+	var wg sync.WaitGroup
+	for j := 0; j < 10; j++ {
+		wg.Add(1)
+		go func(id int) {
+			defer wg.Done()
+
+			iters := 0
+			for time.Since(tStarted) < (time.Millisecond * 500) {
+				iters++
+				exp := fmt.Sprintf("hello world %v:%v", id, iters)
+				inMsg := service.NewMessage([]byte(exp))
+				outBatch, err := proc.Process(context.Background(), inMsg)
+				require.NoError(t, err)
+
+				require.Len(t, outBatch, 1)
+				resBytes, err := outBatch[0].AsBytes()
+				require.NoError(t, err)
+
+				assert.Equal(t, strings.ToUpper(exp), string(resBytes))
+			}
+		}(j)
+	}
+	wg.Wait()
 }
 
 func TestWazeroWASIRustProcessor(t *testing.T) {

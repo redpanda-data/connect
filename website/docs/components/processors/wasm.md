@@ -36,6 +36,10 @@ This ecosystem is delicate as WASM doesn't have a single clearly defined way to 
 
 These examples, as well as the processor itself, is a work in progress.
 
+### Parallelism
+
+It's not currently possible to execute a single WASM runtime across parallel threads with this processor. Therefore, in order to support parallel processing this processor implements pooling of module runtimes. Ideally your WASM module shouldn't depend on any global state, but if it does then you need to ensure the processor [is only run on a single thread](/docs/configuration/processing_pipelines).
+
 
 ## Fields
 
