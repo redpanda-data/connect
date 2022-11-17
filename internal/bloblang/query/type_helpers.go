@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/gabs/v2"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 // SliceToDotPath returns a valid dot path from a slice of path segments.
@@ -230,6 +231,8 @@ func IGetTimestamp(v any) (time.Time, error) {
 		return time.Parse(time.RFC3339Nano, string(t))
 	case string:
 		return time.Parse(time.RFC3339Nano, t)
+	case primitive.ObjectID:
+		return t.Timestamp(), nil
 	}
 	return time.Time{}, NewTypeError(v, ValueNumber, ValueString)
 }
@@ -269,7 +272,7 @@ func restrictForComparison(v any) any {
 // []interface{}, map[string]interface{}, Delete, Nothing.
 func ISanitize(i any) any {
 	switch t := i.(type) {
-	case string, []byte, int64, uint64, float64, bool, []any, map[string]any, Delete, Nothing:
+	case string, []byte, int64, uint64, float64, bool, []any, map[string]any, Delete, Nothing, primitive.ObjectID:
 		return i
 	case json.RawMessage:
 		return []byte(t)
@@ -351,6 +354,8 @@ func IToString(i any) string {
 		return "false"
 	case time.Time:
 		return t.Format(time.RFC3339Nano)
+	case primitive.ObjectID:
+		return t.Hex()
 	case nil:
 		return `null`
 	}
