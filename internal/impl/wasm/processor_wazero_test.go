@@ -30,11 +30,12 @@ func TestWazeroWASIGoProcessor(t *testing.T) {
 
 	for i := 0; i < 1000; i++ {
 		inMsg := service.NewMessage([]byte(`hello world`))
-		outBatch, err := proc.Process(context.Background(), inMsg)
+		outBatches, err := proc.ProcessBatch(context.Background(), service.MessageBatch{inMsg})
 		require.NoError(t, err)
 
-		require.Len(t, outBatch, 1)
-		resBytes, err := outBatch[0].AsBytes()
+		require.Len(t, outBatches, 1)
+		require.Len(t, outBatches[0], 1)
+		resBytes, err := outBatches[0][0].AsBytes()
 		require.NoError(t, err)
 
 		assert.Equal(t, "HELLO WORLD", string(resBytes))
@@ -66,11 +67,12 @@ func TestWazeroWASIGoProcessorParallel(t *testing.T) {
 				iters++
 				exp := fmt.Sprintf("hello world %v:%v", id, iters)
 				inMsg := service.NewMessage([]byte(exp))
-				outBatch, err := proc.Process(context.Background(), inMsg)
+				outBatches, err := proc.ProcessBatch(context.Background(), service.MessageBatch{inMsg})
 				require.NoError(t, err)
 
-				require.Len(t, outBatch, 1)
-				resBytes, err := outBatch[0].AsBytes()
+				require.Len(t, outBatches, 1)
+				require.Len(t, outBatches[0], 1)
+				resBytes, err := outBatches[0][0].AsBytes()
 				require.NoError(t, err)
 
 				assert.Equal(t, strings.ToUpper(exp), string(resBytes))
@@ -95,11 +97,12 @@ func TestWazeroWASIRustProcessor(t *testing.T) {
 
 	for i := 0; i < 1000; i++ {
 		inMsg := service.NewMessage([]byte(`hello world`))
-		outBatch, err := proc.Process(context.Background(), inMsg)
+		outBatches, err := proc.ProcessBatch(context.Background(), service.MessageBatch{inMsg})
 		require.NoError(t, err)
 
-		require.Len(t, outBatch, 1)
-		resBytes, err := outBatch[0].AsBytes()
+		require.Len(t, outBatches, 1)
+		require.Len(t, outBatches[0], 1)
+		resBytes, err := outBatches[0][0].AsBytes()
 		require.NoError(t, err)
 
 		assert.Equal(t, "hello world!!!!111!!11!", string(resBytes))
@@ -125,12 +128,13 @@ func BenchmarkWazeroWASIGoCalls(b *testing.B) {
 	inMsg := service.NewMessage([]byte(`hello world`))
 
 	for i := 0; i < b.N; i++ {
-		outBatch, err := proc.Process(context.Background(), inMsg.Copy())
+		outBatches, err := proc.ProcessBatch(context.Background(), service.MessageBatch{inMsg.Copy()})
 		require.NoError(b, err)
 
-		require.Len(b, outBatch, 1)
+		require.Len(b, outBatches, 1)
+		require.Len(b, outBatches[0], 1)
 
-		_, err = outBatch[0].AsBytes()
+		_, err = outBatches[0][0].AsBytes()
 		require.NoError(b, err)
 	}
 }
@@ -154,12 +158,13 @@ func BenchmarkWazeroWASIRustCalls(b *testing.B) {
 	inMsg := service.NewMessage([]byte(`hello world`))
 
 	for i := 0; i < b.N; i++ {
-		outBatch, err := proc.Process(context.Background(), inMsg.Copy())
+		outBatches, err := proc.ProcessBatch(context.Background(), service.MessageBatch{inMsg.Copy()})
 		require.NoError(b, err)
 
-		require.Len(b, outBatch, 1)
+		require.Len(b, outBatches, 1)
+		require.Len(b, outBatches[0], 1)
 
-		_, err = outBatch[0].AsBytes()
+		_, err = outBatches[0][0].AsBytes()
 		require.NoError(b, err)
 	}
 }

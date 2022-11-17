@@ -39,9 +39,9 @@ It's not currently possible to execute a single WASM runtime across parallel thr
 }
 
 func init() {
-	err := service.RegisterProcessor(
+	err := service.RegisterBatchProcessor(
 		"wasm", wazeroAllocProcessorConfig(),
-		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {
+		func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchProcessor, error) {
 			return newWazeroAllocProcessorFromConfig(conf, mgr)
 		})
 
@@ -111,10 +111,11 @@ func (p *wazeroAllocProcessor) newModule() (mod *moduleRunner, err error) {
 		}
 	}()
 
-	if _, err = r.NewHostModuleBuilder("benthos_wasm").
-		NewFunctionBuilder().WithFunc(mod.setBytes).Export("v0_msg_set_bytes").
-		NewFunctionBuilder().WithFunc(mod.getBytes).Export("v0_msg_as_bytes").
-		Instantiate(ctx, r); err != nil {
+	builder := r.NewHostModuleBuilder("benthos_wasm")
+	for name, ctor := range moduleRunnerFunctionCtors {
+		builder = builder.NewFunctionBuilder().WithFunc(ctor(mod)).Export(name)
+	}
+	if _, err = builder.Instantiate(ctx, r); err != nil {
 		return
 	}
 
@@ -135,7 +136,7 @@ func (p *wazeroAllocProcessor) newModule() (mod *moduleRunner, err error) {
 	return mod, nil
 }
 
-func (p *wazeroAllocProcessor) Process(ctx context.Context, msg *service.Message) (service.MessageBatch, error) {
+func (p *wazeroAllocProcessor) ProcessBatch(ctx context.Context, batch service.MessageBatch) ([]service.MessageBatch, error) {
 	var modRunner *moduleRunner
 	var err error
 	if modRunnerPtr := p.modulePool.Get(); modRunnerPtr != nil {
@@ -149,11 +150,11 @@ func (p *wazeroAllocProcessor) Process(ctx context.Context, msg *service.Message
 		p.modulePool.Put(modRunner)
 	}()
 
-	res, err := modRunner.Run(ctx, msg)
+	res, err := modRunner.Run(ctx, batch)
 	if err != nil {
 		return nil, err
 	}
-	return service.MessageBatch{res}, nil
+	return []service.MessageBatch{res}, nil
 }
 
 func (p *wazeroAllocProcessor) Close(ctx context.Context) error {
@@ -176,7 +177,9 @@ type moduleRunner struct {
 	runtime wazero.Runtime
 	mod     api.Module
 
-	pendingMsg      *service.Message
+	runBatch        service.MessageBatch
+	targetMessage   *service.Message
+	targetIndex     int
 	afterProcessing []func()
 	procErr         error
 
@@ -187,30 +190,23 @@ type moduleRunner struct {
 	rustDealloc api.Function
 }
 
-func (r *moduleRunner) setBytes(ctx context.Context, m api.Module, contentPtr, contentSize uint32) {
-	bytes, ok := r.mod.Memory().Read(ctx, contentPtr, contentSize)
-	if !ok {
-		r.procErr = errors.New("failed to read out-bound memory")
-		r.log.Error(r.procErr.Error())
-	}
-
-	dataCopy := make([]byte, len(bytes))
-	copy(dataCopy, bytes)
-	r.pendingMsg.SetBytes(dataCopy)
-
-	if r.rustDealloc != nil {
-		_, _ = r.rustDealloc.Call(ctx, uint64(contentPtr), uint64(contentSize))
-	}
+func (r *moduleRunner) reset() {
+	r.runBatch = nil
+	r.targetMessage = nil
+	r.targetIndex = 0
+	r.procErr = nil
+	r.afterProcessing = nil
 }
 
-func (r *moduleRunner) getBytes(ctx context.Context, m api.Module) (ptrSize uint64) {
-	msgBytes, err := r.pendingMsg.AsBytes()
-	if err != nil {
-		r.procErr = fmt.Errorf("failed to get message as bytes: %v", err)
-		r.log.Error(r.procErr.Error())
-	}
+func (r *moduleRunner) funcErr(err error) {
+	r.procErr = err
+	r.log.Error(err.Error())
+}
 
-	contentLen := uint64(len(msgBytes))
+// Allocate memory that's in bound to the WASM module. This memory will be
+// deallocated at the end of the run.
+func (r *moduleRunner) allocateBytesInbound(ctx context.Context, data []byte) (contentPtr uint64, err error) {
+	contentLen := uint64(len(data))
 
 	var results []uint64
 	if r.goMalloc != nil {
@@ -220,11 +216,10 @@ func (r *moduleRunner) getBytes(ctx context.Context, m api.Module) (ptrSize uint
 		results, err = r.rustAlloc.Call(ctx, contentLen)
 	}
 	if err != nil {
-		r.procErr = fmt.Errorf("failed to allocate in-bound memory: %v", err)
-		r.log.Error(r.procErr.Error())
+		return
 	}
 
-	contentPtr := results[0]
+	contentPtr = results[0]
 
 	// Run de-allocation only once the process call is finished.
 	r.afterProcessing = append(r.afterProcessing, func() {
@@ -233,39 +228,61 @@ func (r *moduleRunner) getBytes(ctx context.Context, m api.Module) (ptrSize uint
 			_, err = r.goFree.Call(ctx, contentPtr)
 		}
 		if err != nil {
-			r.procErr = fmt.Errorf("failed to free in-bound memory: %v", err)
-			r.log.Error(r.procErr.Error())
+			r.funcErr(fmt.Errorf("failed to free in-bound memory: %v", err))
+			return
 		}
 	})
 
 	// The pointer is a linear memory offset, which is where we write the name.
-	if !r.mod.Memory().Write(ctx, uint32(contentPtr), msgBytes) {
-		r.procErr = errors.New("failed to write in-bound memory")
-		r.log.Error(r.procErr.Error())
+	if !r.mod.Memory().Write(ctx, uint32(contentPtr), data) {
+		err = errors.New("failed to write in-bound memory")
+		return
 	}
-	return (contentPtr << uint64(32)) | contentLen
+	return
 }
 
-func (r *moduleRunner) reset() {
-	r.pendingMsg = nil
-	r.procErr = nil
-	r.afterProcessing = nil
+// Deallocate memory that's out bound from the WASM module.
+func (r *moduleRunner) readBytesOutbound(ctx context.Context, contentPtr, contentSize uint32) ([]byte, error) {
+	bytes, ok := r.mod.Memory().Read(ctx, contentPtr, contentSize)
+	if !ok {
+		return nil, errors.New("prevented read")
+	}
+
+	dataCopy := make([]byte, len(bytes))
+	copy(dataCopy, bytes)
+
+	if r.rustDealloc != nil {
+		_, _ = r.rustDealloc.Call(ctx, uint64(contentPtr), uint64(contentSize))
+	}
+	return dataCopy, nil
 }
 
-func (r *moduleRunner) Run(ctx context.Context, msg *service.Message) (*service.Message, error) {
-	r.pendingMsg = msg
-	_, err := r.process.Call(ctx)
-	for _, fn := range r.afterProcessing {
-		fn()
+func (r *moduleRunner) Run(ctx context.Context, batch service.MessageBatch) (service.MessageBatch, error) {
+	defer r.reset()
+
+	var newBatch service.MessageBatch
+	for i := range batch {
+		r.reset()
+		r.runBatch = batch
+		r.targetIndex = i
+		r.targetMessage = batch[i]
+		_, err := r.process.Call(ctx)
+		for _, fn := range r.afterProcessing {
+			fn()
+		}
+		if err != nil {
+			return nil, err
+		}
+		newMsg := r.targetMessage
+		if r.procErr != nil {
+			newMsg = batch[i].Copy()
+			newMsg.SetError(r.procErr)
+		}
+		if newMsg != nil {
+			newBatch = append(newBatch, newMsg)
+		}
 	}
-	r.reset()
-	if err != nil {
-		return nil, err
-	}
-	if r.procErr != nil {
-		return nil, r.procErr
-	}
-	return msg, nil
+	return newBatch, nil
 }
 
 func (r *moduleRunner) Close(ctx context.Context) error {
