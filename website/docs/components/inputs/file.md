@@ -121,7 +121,7 @@ Default: `1000000`
 
 ### `delete_on_finish`
 
-Whether to delete consumed files from the disk once they are fully consumed.
+Whether to delete input files from the disk once they are fully consumed.
 
 
 Type: `bool`  
