@@ -31,7 +31,7 @@ func httpClientInputSpec() docs.FieldSpec {
 	}
 
 	return httpclient.OldFieldSpec(false,
-		docs.FieldString("payload", "An optional payload to deliver for each request."),
+		docs.FieldString("payload", "An optional payload to deliver for each request.").IsInterpolated(),
 		docs.FieldBool("drop_empty_bodies", "Whether empty payloads received from the target server should be dropped.").Advanced(),
 		docs.FieldObject(
 			"stream", "Allows you to set streaming mode, where requests are kept open and messages are processed line-by-line.",

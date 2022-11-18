@@ -695,6 +695,7 @@ Default: `""`
 ### `payload`
 
 An optional payload to deliver for each request.
+This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
 
 
 Type: `string`  
