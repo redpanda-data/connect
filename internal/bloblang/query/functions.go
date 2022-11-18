@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"math/rand"
 	"sync"
 	"time"
@@ -631,20 +632,28 @@ var _ = registerFunction(
 var _ = registerFunction(
 	NewFunctionSpec(
 		FunctionCategoryGeneral, "random_int",
-		"Generates a non-negative pseudo-random 64-bit integer. An optional integer argument can be provided in order to seed the random number generator.",
+		"Generates a non-negative pseudo-random 64-bit integer. An optional integer argument can be provided in order to seed the random number generator. Optional `min` and `max` arguments can be provided to make the generated numbers within a range.",
 		NewExampleSpec("",
 			`root.first = random_int()
-root.second = random_int(1)`,
+root.second = random_int(1)
+root.third = random_int(max:20)
+root.forth = random_int(min:10, max:20)
+root.fifth = random_int(timestamp_unix_nano(), 5, 20)
+root.sixth = random_int(seed:timestamp_unix_nano(), max:20)
+`,
 		),
 		NewExampleSpec("It is possible to specify a dynamic seed argument, in which case the argument will only be resolved once during the lifetime of the mapping.",
 			`root.first = random_int(timestamp_unix_nano())`,
+			`root.second = random_int(timestamp_unix_nano(), 5, 20)`,
 		),
 	).
 		Param(ParamQuery(
 			"seed",
 			"A seed to use, if a query is provided it will only be resolved once during the lifetime of the mapping.",
 			true,
-		).Default(NewLiteralFunction("", 0))),
+		).Default(NewLiteralFunction("", 0))).
+		Param(ParamInt64("min", "The minimum value the random generated number will have. The default value is 0.").Default(0)).
+		Param(ParamInt64("max", fmt.Sprintf("The maximum value the random generated number will have. The default value is %d (math.MaxInt64 - 1).", uint64(math.MaxInt64-1))).Default(int64(math.MaxInt64-1))),
 	randomIntFunction,
 )
 
@@ -653,7 +662,23 @@ func randomIntFunction(args *ParsedParams) (Function, error) {
 	if err != nil {
 		return nil, err
 	}
-
+	min, err := args.FieldInt64("min")
+	if err != nil {
+		return nil, err
+	}
+	max, err := args.FieldInt64("max")
+	if err != nil {
+		return nil, err
+	}
+	if min < 0 {
+		return nil, fmt.Errorf("min (%d) must be a positive number", min)
+	}
+	if max < min {
+		return nil, fmt.Errorf("min (%d) must be smaller or equal than max (%d)", min, max)
+	}
+	if max == math.MaxInt64 {
+		return nil, fmt.Errorf("max must be smaller than the max allowed for an int64 (%d)", uint64(math.MaxInt64))
+	}
 	var randMut sync.Mutex
 	var r *rand.Rand
 
@@ -674,8 +699,8 @@ func randomIntFunction(args *ParsedParams) (Function, error) {
 
 			r = rand.New(rand.NewSource(seed))
 		}
-
-		v := int64(r.Int())
+		// Int63n generates a random number within a half-open interval [0,n)
+		v := r.Int63n(max-min+1) + min
 		return v, nil
 	}, nil), nil
 }
