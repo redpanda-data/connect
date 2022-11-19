@@ -44,7 +44,9 @@ You can access these metadata fields using
 		Config: docs.FieldComponent().WithChildren(
 			docs.FieldString("project", "The project ID of the target subscription."),
 			docs.FieldString("subscription", "The target subscription ID."),
+			docs.FieldString("topic", "The target topic that the subscription is vinculated."),
 			docs.FieldBool("sync", "Enable synchronous pull mode."),
+			docs.FieldBool("create_subscription", "Should create target subscription or not"),
 			docs.FieldInt("max_outstanding_messages", "The maximum number of outstanding pending messages to be consumed at a given time."),
 			docs.FieldInt("max_outstanding_bytes", "The maximum number of outstanding pending messages to be consumed measured in bytes."),
 		).ChildDefaultAndTypesFromStruct(input.NewGCPPubSubConfig()),
@@ -56,11 +58,42 @@ You can access these metadata fields using
 
 func newGCPPubSubInput(conf input.Config, mgr bundle.NewManagement, log log.Modular, stats metrics.Type) (input.Streamed, error) {
 	var c input.Async
+	var client *pubsub.Client
 	var err error
-	if c, err = newGCPPubSubReader(conf.GCPPubSub, log, stats); err != nil {
+	if c, client, err = newGCPPubSubReader(conf.GCPPubSub, log, stats); err != nil {
 		return nil, err
 	}
+
+	if conf.GCPPubSub.CreateSubscription {
+		createSubscription(conf.GCPPubSub, client, log)
+	}
 	return input.NewAsyncReader("gcp_pubsub", true, c, mgr)
+}
+
+func createSubscription(conf input.GCPPubSubConfig, client *pubsub.Client, log log.Modular) {
+	subsExists, err := client.Subscription(conf.SubscriptionID).Exists(context.Background())
+
+	if err != nil {
+		log.Errorf("Error checking if subscription exists", err)
+		return
+	}
+
+	if subsExists {
+		log.Infof("Subscription '%v' already exists", conf.SubscriptionID)
+		return
+	}
+
+	if conf.TopicID == "" {
+		log.Infof("Subscription won't be created because TopicID is not defined")
+		return
+	}
+
+	log.Infof("Creating subscription '%v' on topic '%v'\n", conf.SubscriptionID, conf.TopicID)
+	_, exception := client.CreateSubscription(context.Background(), conf.SubscriptionID, pubsub.SubscriptionConfig{Topic: client.Topic(conf.TopicID)})
+
+	if exception != nil {
+		log.Errorf("Error creating subscription %v", err)
+	}
 }
 
 type gcpPubSubReader struct {
@@ -76,16 +109,16 @@ type gcpPubSubReader struct {
 	log log.Modular
 }
 
-func newGCPPubSubReader(conf input.GCPPubSubConfig, log log.Modular, stats metrics.Type) (*gcpPubSubReader, error) {
+func newGCPPubSubReader(conf input.GCPPubSubConfig, log log.Modular, stats metrics.Type) (*gcpPubSubReader, *pubsub.Client, error) {
 	client, err := pubsub.NewClient(context.Background(), conf.ProjectID)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	return &gcpPubSubReader{
 		conf:   conf,
 		log:    log,
 		client: client,
-	}, nil
+	}, client, nil
 }
 
 func (c *gcpPubSubReader) Connect(ignored context.Context) error {
