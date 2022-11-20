@@ -89,9 +89,9 @@ func createSubscription(conf input.GCPPubSubConfig, client *pubsub.Client, log l
 	}
 
 	log.Infof("Creating subscription '%v' on topic '%v'\n", conf.SubscriptionID, conf.TopicID)
-	_, exception := client.CreateSubscription(context.Background(), conf.SubscriptionID, pubsub.SubscriptionConfig{Topic: client.Topic(conf.TopicID)})
+	_, err = client.CreateSubscription(context.Background(), conf.SubscriptionID, pubsub.SubscriptionConfig{Topic: client.Topic(conf.TopicID)})
 
-	if exception != nil {
+	if err != nil {
 		log.Errorf("Error creating subscription %v", err)
 	}
 }
