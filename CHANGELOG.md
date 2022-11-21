@@ -17,6 +17,7 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 
 - Fixed a regression bug in the `mongodb` processor where message errors were not set any more. This issue was introduced in v4.7.0 (64eb72).
+- The `avro-ocf:marshaler=json` input codec now omits unexpected logical type fields.
 
 ## 4.10.0 - 2022-10-26
 

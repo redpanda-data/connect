@@ -637,7 +637,7 @@ var _ = registerFunction(
 			`root.first = random_int()
 root.second = random_int(1)
 root.third = random_int(max:20)
-root.forth = random_int(min:10, max:20)
+root.fourth = random_int(min:10, max:20)
 root.fifth = random_int(timestamp_unix_nano(), 5, 20)
 root.sixth = random_int(seed:timestamp_unix_nano(), max:20)
 `,
