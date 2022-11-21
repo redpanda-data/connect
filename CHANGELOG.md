@@ -14,6 +14,10 @@ All notable changes to this project will be documented in this file.
 - New `wasm` processor.
 - Fields marked as secrets will no longer be printed with `benthos echo` or debug HTTP endpoints.
 
+### Fixed
+
+- Fixed a regression bug in the `mongodb` processor where message errors were not set any more. This issue was introduced in v4.7.0 (64eb72).
+
 ## 4.10.0 - 2022-10-26
 
 ### Added
