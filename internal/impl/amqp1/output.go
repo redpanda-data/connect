@@ -197,7 +197,6 @@ func (a *amqp1Writer) WriteBatch(ctx context.Context, msg message.Batch) error {
 
 	return output.IterateBatchedSend(msg, func(i int, p *message.Part) error {
 		m := amqp.NewMessage(p.AsBytes())
-		var err error
 
 		if a.applicationPropertiesMap != nil {
 			value, err := a.applicationPropertiesMap.Query(p)
@@ -218,7 +217,7 @@ func (a *amqp1Writer) WriteBatch(ctx context.Context, msg message.Batch) error {
 			m.Annotations[k] = v
 			return nil
 		})
-		err = s.Send(ctx, m)
+		err := s.Send(ctx, m)
 		if err != nil {
 			if err == amqp.ErrTimeout || ctx.Err() != nil {
 				err = component.ErrTimeout
