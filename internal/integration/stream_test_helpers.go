@@ -118,20 +118,6 @@ type streamTestEnvironment struct {
 	sleepAfterOutput time.Duration
 }
 
-func getFreePort() (int, error) {
-	addr, err := net.ResolveTCPAddr("tcp", "localhost:0")
-	if err != nil {
-		return 0, err
-	}
-
-	listener, err := net.ListenTCP("tcp", addr)
-	if err != nil {
-		return 0, err
-	}
-	defer listener.Close()
-	return listener.Addr().(*net.TCPAddr).Port, nil
-}
-
 func newStreamTestEnvironment(t testing.TB, confTemplate string) streamTestEnvironment {
 	t.Helper()
 
@@ -252,6 +238,14 @@ func StreamTestOptVarThree(v string) StreamTestOptFunc {
 	}
 }
 
+// StreamTestOptVarFour sets a fourth arbitrary variable for the test that can
+// be injected into templated configs.
+func StreamTestOptVarFour(v string) StreamTestOptFunc {
+	return func(env *streamTestEnvironment) {
+		env.configVars.Var4 = v
+	}
+}
+
 // StreamTestOptSleepAfterInput adds a sleep to tests after the input has been
 // created.
 func StreamTestOptSleepAfterInput(t time.Duration) StreamTestOptFunc {
@@ -328,7 +322,7 @@ func (i StreamTestList) Run(t *testing.T, configTemplate string, opts ...StreamT
 
 	for j, test := range i {
 		if envs[j].configVars.port == "" {
-			p, err := getFreePort()
+			p, err := GetFreePort()
 			if err != nil {
 				t.Fatal(err)
 			}
