@@ -70,16 +70,16 @@ func newParquetInputFromConfig(conf *service.ParsedConfig, mgr *service.Resource
 		mgr.Logger().Warnf("Paths %v did not match any files", pathsList)
 	}
 
-	batchSize, err := conf.FieldInt("batch_count")
+	batchCount, err := conf.FieldInt("batch_count")
 	if err != nil {
 		return nil, err
 	}
-	if batchSize < 1 {
-		return nil, fmt.Errorf("batch_size must be >0, got %v", batchSize)
+	if batchCount < 1 {
+		return nil, fmt.Errorf("batch_count must be >0, got %d", batchCount)
 	}
 
 	rdr := &parquetReader{
-		batchSize:      batchSize,
+		batchCount:     batchCount,
 		pathsRemaining: pathsRemaining,
 		log:            mgr.Logger(),
 		mgr:            mgr,
@@ -102,7 +102,7 @@ type parquetReader struct {
 	mgr *service.Resources
 	log *service.Logger
 
-	batchSize      int
+	batchCount     int
 	pathsRemaining []string
 	eConf          extractConfig
 
@@ -176,7 +176,7 @@ func (r *parquetReader) ReadBatch(ctx context.Context) (service.MessageBatch, se
 	r.mut.Lock()
 	defer r.mut.Unlock()
 
-	rowBuf := make([]parquet.Row, r.batchSize)
+	rowBuf := make([]parquet.Row, r.batchCount)
 	var f *openParquetFile
 	var n int
 
@@ -212,7 +212,7 @@ func (r *parquetReader) ReadBatch(ctx context.Context) (service.MessageBatch, se
 		}
 	}
 
-	resBatch := make(service.MessageBatch, n)
+	resBatch := make(service.MessageBatch, 0, n)
 	for i := 0; i < n; i++ {
 		row := rowBuf[i]
 
@@ -221,7 +221,7 @@ func (r *parquetReader) ReadBatch(ctx context.Context) (service.MessageBatch, se
 
 		newMsg := service.NewMessage(nil)
 		newMsg.SetStructuredMut(mappedData)
-		resBatch[i] = newMsg
+		resBatch = append(resBatch, newMsg)
 	}
 
 	return resBatch, func(ctx context.Context, err error) error { return nil }, nil
