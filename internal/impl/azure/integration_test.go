@@ -1,20 +1,28 @@
 package azure
 
 import (
+	"context"
+	"crypto/tls"
+	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
+	"net/http/httputil"
+	"net/url"
 	"os"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/data/azcosmos"
 	"github.com/Azure/azure-sdk-for-go/storage"
 	"github.com/ory/dockertest/v3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/benthosdev/benthos/v4/internal/integration"
+	_ "github.com/benthosdev/benthos/v4/public/components/pure"
 )
 
 type AzuriteTransport struct {
@@ -189,6 +197,162 @@ input:
 		).Run(
 			t, template,
 			integration.StreamTestOptVarOne(dummyQueue),
+		)
+	})
+}
+
+func TestIntegrationAzureCosmosDB(t *testing.T) {
+	integration.CheckSkip(t)
+
+	pool, err := dockertest.NewPool("")
+	require.NoError(t, err)
+
+	pool.MaxWait = 30 * time.Second
+	if deadline, ok := t.Deadline(); ok {
+		pool.MaxWait = time.Until(deadline) - 100*time.Millisecond
+	}
+
+	resource, err := pool.RunWithOptions(&dockertest.RunOptions{
+		Repository: "mcr.microsoft.com/cosmosdb/linux/azure-cosmos-emulator",
+		Tag:        "latest",
+		Env: []string{
+			// Controls how many database, container and partition combinations are supported.
+			// The bigger the value, the longer it takes for the container to start up.
+			"AZURE_COSMOS_EMULATOR_PARTITION_COUNT=2",
+			"AZURE_COSMOS_EMULATOR_ENABLE_DATA_PERSISTENCE=false",
+		},
+		ExposedPorts: []string{"8081/tcp"},
+	})
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		assert.NoError(t, pool.Purge(resource))
+	})
+
+	_ = resource.Expire(900)
+
+	// Start a HTTP -> HTTPS proxy server on a background goroutine to work around the self-signed certificate that the
+	// CosmosDB container provides, because unfortunately, it doesn't expose a plain HTTP endpoint.
+	// This listener will be owned and closed automatically by the HTTP server
+	listener, err := net.Listen("tcp", ":0")
+	require.NoError(t, err)
+	srv := &http.Server{Handler: http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
+		url, err := url.Parse("https://localhost:" + resource.GetPort("8081/tcp"))
+		require.NoError(t, err)
+
+		customTransport := http.DefaultTransport.(*http.Transport).Clone()
+		customTransport.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
+		p := httputil.NewSingleHostReverseProxy(url)
+		p.Transport = customTransport
+		// Ignore proxy errors
+		p.ErrorHandler = func(w http.ResponseWriter, r *http.Request, err error) {}
+
+		p.ServeHTTP(res, req)
+	})}
+	go func() {
+		require.ErrorIs(t, srv.Serve(listener), http.ErrServerClosed)
+	}()
+	t.Cleanup(func() {
+		assert.NoError(t, srv.Close())
+	})
+
+	_, servicePort, err := net.SplitHostPort(listener.Addr().String())
+	require.NoError(t, err)
+
+	err = pool.Retry(func() error {
+		customTransport := http.DefaultTransport.(*http.Transport).Clone()
+		customTransport.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
+		client := &http.Client{Transport: customTransport}
+
+		resp, err := client.Get("http://localhost:" + servicePort + "/_explorer/emulator.pem")
+		if err != nil {
+			return err
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			return fmt.Errorf("failed to get emulator.pem, got status: %d", resp.StatusCode)
+		}
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return err
+		}
+		if len(body) == 0 {
+			return errors.New("failed to get emulator.pem")
+		}
+
+		return nil
+	})
+	require.NoError(t, err, "Failed to start CosmosDB emulator")
+
+	emulatorKey := "C2y6yDjf5/R+ob0N8A7Cgv30VRDJIWEHLM+4QDU5DE2nQ9nDuVTqobD4b8mGGyPMbIZnqyMsEcaGQy67XIw/Jw=="
+	dummyDatabase := "Asgard"
+	dummyContainer := "Valhalla"
+	dummyPartitionKey := "PartOne"
+	dummyPartitionKeyPath := "/" + dummyPartitionKey
+	dummyPartitionKeyValue := "Mimir"
+	t.Run("cosmosdb", func(t *testing.T) {
+		template := `
+output:
+  azure_cosmosdb:
+    endpoint: http://localhost:$PORT
+    account_key: $VAR1
+    database_id: $VAR2-$ID
+    container_id: $VAR3
+    partition_key: ${! json("PartOne") }
+  processors:
+    - mapping: |
+        root.id = uuid_v4()
+        # Assign a fixed value to the partition key so we can use the same value in input.azure_cosmosdb.partition_key
+        root.PartOne = "$VAR4"
+        # Stash the actual message in the content field
+        root.content = content().string()
+
+input:
+  azure_cosmosdb:
+    endpoint: http://localhost:$PORT
+    account_key: $VAR1
+    database_id: $VAR2-$ID
+    container_id: $VAR3
+    partition_key: $VAR4
+    query: |
+      SELECT * FROM $VAR3
+  processors:
+    - mapping: |
+        root = this.content
+`
+		integration.StreamTests(
+			integration.StreamTestOpenCloseIsolated(),
+			integration.StreamTestStreamIsolated(10),
+		).Run(
+			t, template,
+			integration.StreamTestOptPort(servicePort),
+			integration.StreamTestOptVarOne(emulatorKey),
+			integration.StreamTestOptVarTwo(dummyDatabase),
+			integration.StreamTestOptVarThree(dummyContainer),
+			integration.StreamTestOptVarFour(dummyPartitionKeyValue),
+			integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, testID string, vars *integration.StreamTestConfigVars) {
+				cred, err := azcosmos.NewKeyCredential(vars.Var1)
+				require.NoError(t, err)
+
+				client, err := azcosmos.NewClientWithKey("http://localhost:"+servicePort, cred, nil)
+				require.NoError(t, err)
+
+				_, err = client.CreateDatabase(ctx, azcosmos.DatabaseProperties{
+					ID: vars.Var2 + "-" + vars.ID,
+				}, nil)
+				require.NoError(t, err)
+
+				db, err := client.NewDatabase(vars.Var2 + "-" + vars.ID)
+				require.NoError(t, err)
+
+				_, err = db.CreateContainer(ctx, azcosmos.ContainerProperties{
+					ID: vars.Var3,
+					PartitionKeyDefinition: azcosmos.PartitionKeyDefinition{
+						Paths: []string{dummyPartitionKeyPath},
+					},
+				}, nil)
+				require.NoError(t, err)
+			}),
 		)
 	})
 }

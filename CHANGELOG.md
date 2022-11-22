@@ -13,6 +13,7 @@ All notable changes to this project will be documented in this file.
 - New `redis_script` processor.
 - New `wasm` processor.
 - Fields marked as secrets will no longer be printed with `benthos echo` or debug HTTP endpoints.
+- New `azure_cosmosdb` input and output.
 
 ## 4.10.0 - 2022-10-26
 
