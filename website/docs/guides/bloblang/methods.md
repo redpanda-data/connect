@@ -2162,7 +2162,8 @@ Serializes a target value into a pretty-printed JSON byte array (with 4 space in
 
 #### Parameters
 
-**`indent`** &lt;(optional) string, default `"    "`&gt; Indentation string. Each element in a JSON object or array will begin on a new, indented line followed by one or more copies of indent according to the indentation nesting.  
+**`indent`** &lt;string, default `"    "`&gt; Indentation string. Each element in a JSON object or array will begin on a new, indented line followed by one or more copies of indent according to the indentation nesting.  
+**`no_indent`** &lt;bool, default `false`&gt; Disable indentation.  
 
 #### Examples
 
@@ -2176,7 +2177,7 @@ root = this.doc.format_json()
 #      }
 ```
 
-Provide an argument string in order to customise the indentation used.
+Pass a string to the `indent` parameter in order to customise the indentation.
 
 ```coffee
 root = this.format_json("  ")
@@ -2196,6 +2197,15 @@ root.doc = this.doc.format_json().string()
 
 # In:  {"doc":{"foo":"bar"}}
 # Out: {"doc":"{\n    \"foo\": \"bar\"\n}"}
+```
+
+Set the `no_indent` parameter to true to disable indentation. The result is equivalent to calling `bytes()`.
+
+```coffee
+root = this.doc.format_json(no_indent: true)
+
+# In:  {"doc":{"foo":"bar"}}
+# Out: {"foo":"bar"}
 ```
 
 ### `format_msgpack`

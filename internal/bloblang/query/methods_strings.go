@@ -1115,7 +1115,7 @@ var _ = registerSimpleMethod(
     "foo": "bar"
 }`,
 		),
-		NewExampleSpec("Provide an argument string in order to customise the indentation used.",
+		NewExampleSpec("Pass a string to the `indent` parameter in order to customise the indentation.",
 			`root = this.format_json("  ")`,
 			`{"doc":{"foo":"bar"}}`,
 			`{
@@ -1129,12 +1129,21 @@ var _ = registerSimpleMethod(
 			`{"doc":{"foo":"bar"}}`,
 			`{"doc":"{\n    \"foo\": \"bar\"\n}"}`,
 		),
+		NewExampleSpec("Set the `no_indent` parameter to true to disable indentation. The result is equivalent to calling `bytes()`.",
+			`root = this.doc.format_json(no_indent: true)`,
+			`{"doc":{"foo":"bar"}}`,
+			`{"foo":"bar"}`,
+		),
 	).
 		Beta().
 		Param(ParamString(
 			"indent",
 			"Indentation string. Each element in a JSON object or array will begin on a new, indented line followed by one or more copies of indent according to the indentation nesting.",
-		).Optional().Default(strings.Repeat(" ", 4))),
+		).Default(strings.Repeat(" ", 4))).
+		Param(ParamBool(
+			"no_indent",
+			"Disable indentation.",
+		).Default(false)),
 	func(args *ParsedParams) (simpleMethod, error) {
 		indentOpt, err := args.FieldOptionalString("indent")
 		if err != nil {
@@ -1144,17 +1153,15 @@ var _ = registerSimpleMethod(
 		if indentOpt != nil {
 			indent = *indentOpt
 		}
+		noIndentOpt, err := args.FieldOptionalBool("no_indent")
+		if err != nil {
+			return nil, err
+		}
 		return func(v any, ctx FunctionContext) (any, error) {
-			b, err := json.Marshal(v)
-			if err != nil {
-				return nil, err
+			if *noIndentOpt {
+				return json.Marshal(v)
 			}
-
-			var out bytes.Buffer
-			if err := json.Indent(&out, b, "", indent); err != nil {
-				return nil, err
-			}
-			return out.Bytes(), nil
+			return json.MarshalIndent(v, "", indent)
 		}, nil
 	},
 )
