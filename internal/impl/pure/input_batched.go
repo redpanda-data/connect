@@ -7,7 +7,7 @@ import (
 
 func batchedInputConfig() *service.ConfigSpec {
 	spec := service.NewConfigSpec().
-		Beta().
+		Stable().
 		Categories("Utility").
 		Summary("Consumes data from a child input and applies a batching policy to the stream.").
 		Description(`Batching at the input level is sometimes useful for processing across micro-batches, and can also sometimes be a useful performance trick. However, most inputs are fine without it so unless you have a specific plan for batching this component is not worth using.`).

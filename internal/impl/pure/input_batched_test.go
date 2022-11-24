@@ -5,9 +5,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/benthosdev/benthos/v4/public/service"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
 func batchEquals(t testing.TB, exp []string, act service.MessageBatch) {
@@ -73,7 +74,7 @@ func TestBatchedInputProcessors(t *testing.T) {
 batched:
   child:
     generate:
-      mapping: 'root.id = count("TEST_BATCHED_INPUT_BASIC")'
+      mapping: 'root.id = count("TEST_BATCHED_INPUT_PROCESSORS")'
       count: 10
       interval: ""
     processors:
