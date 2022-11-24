@@ -10,6 +10,7 @@ All notable changes to this project will be documented in this file.
 - Field `default_encoding` added to the `parquet_encode` processor.
 - Field `client_session_keep_alive` added to the `snowflake_put` output.
 - Bloblang now supports metadata access via `@foo` syntax, which also supports arbitrary values.
+- TLS client certs now support both PKCS#1 and PKCS#8 encrypted keys.
 - New `redis_script` processor.
 - New `wasm` processor.
 - Fields marked as secrets will no longer be printed with `benthos echo` or debug HTTP endpoints.
