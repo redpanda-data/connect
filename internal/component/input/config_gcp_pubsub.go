@@ -10,6 +10,7 @@ type GCPPubSubConfig struct {
 	CreateSubscription     GCPPubSubSubscriptionConfig `json:"create_subscription" yaml:"create_subscription"`
 }
 
+// GCPPubSubSubscriptionConfig contains config values for subscription creation.
 type GCPPubSubSubscriptionConfig struct {
 	Enabled bool   `json:"enabled" yaml:"enabled"`
 	TopicID string `json:"topic" yaml:"topic"`
