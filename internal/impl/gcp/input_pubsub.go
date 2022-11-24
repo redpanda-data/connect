@@ -2,6 +2,7 @@ package gcp
 
 import (
 	"context"
+	"errors"
 	"sync"
 
 	"cloud.google.com/go/pubsub"
@@ -44,11 +45,12 @@ You can access these metadata fields using
 		Config: docs.FieldComponent().WithChildren(
 			docs.FieldString("project", "The project ID of the target subscription."),
 			docs.FieldString("subscription", "The target subscription ID."),
-			docs.FieldString("topic", "The target topic that the subscription is vinculated."),
 			docs.FieldBool("sync", "Enable synchronous pull mode."),
-			docs.FieldBool("create_subscription", "Should create target subscription or not"),
 			docs.FieldInt("max_outstanding_messages", "The maximum number of outstanding pending messages to be consumed at a given time."),
 			docs.FieldInt("max_outstanding_bytes", "The maximum number of outstanding pending messages to be consumed measured in bytes."),
+			docs.FieldObject("create_subscription", "Allows you to configure the input subscription and creates if it doesn't exist").WithChildren(
+				docs.FieldBool("enabled", "Whether to configure subscription or not.").HasDefault(false),
+				docs.FieldString("topic", "Defines the topic that the subscription should be vinculated to.")).Advanced(),
 		).ChildDefaultAndTypesFromStruct(input.NewGCPPubSubConfig()),
 	})
 	if err != nil {
@@ -64,7 +66,11 @@ func newGCPPubSubInput(conf input.Config, mgr bundle.NewManagement, log log.Modu
 		return nil, err
 	}
 
-	if conf.GCPPubSub.CreateSubscription {
+	if conf.GCPPubSub.CreateSubscription.Enabled {
+		if conf.GCPPubSub.CreateSubscription.TopicID == "" {
+			return nil, errors.New("must specify a topic_id when create_subscription is enabled")
+		}
+
 		createSubscription(conf.GCPPubSub, client, log)
 	}
 	return input.NewAsyncReader("gcp_pubsub", true, c, mgr)
@@ -83,13 +89,13 @@ func createSubscription(conf input.GCPPubSubConfig, client *pubsub.Client, log l
 		return
 	}
 
-	if conf.TopicID == "" {
+	if conf.CreateSubscription.TopicID == "" {
 		log.Infof("Subscription won't be created because TopicID is not defined")
 		return
 	}
 
-	log.Infof("Creating subscription '%v' on topic '%v'\n", conf.SubscriptionID, conf.TopicID)
-	_, err = client.CreateSubscription(context.Background(), conf.SubscriptionID, pubsub.SubscriptionConfig{Topic: client.Topic(conf.TopicID)})
+	log.Infof("Creating subscription '%v' on topic '%v'\n", conf.SubscriptionID, conf.CreateSubscription.TopicID)
+	_, err = client.CreateSubscription(context.Background(), conf.SubscriptionID, pubsub.SubscriptionConfig{Topic: client.Topic(conf.CreateSubscription.TopicID)})
 
 	if err != nil {
 		log.Errorf("Error creating subscription %v", err)

@@ -72,8 +72,9 @@ input:
   gcp_pubsub:
     project: benthos-test-project
     subscription: sub-$ID
-    topic: topic-$ID
-    create_subscription: true
+    create_subscription:
+      enabled: true
+      topic: topic-$ID
 `
 	suiteOpts := []integration.StreamTestOptFunc{
 		integration.StreamTestOptSleepAfterInput(100 * time.Millisecond),
