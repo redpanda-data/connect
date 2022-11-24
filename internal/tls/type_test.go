@@ -12,9 +12,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/benthosdev/benthos/v4/internal/filepath/ifs"
 	"github.com/stretchr/testify/require"
 	"github.com/youmark/pkcs8"
+
+	"github.com/benthosdev/benthos/v4/internal/filepath/ifs"
 )
 
 func createCertificates() (certPem, keyPem []byte) {

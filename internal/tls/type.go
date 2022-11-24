@@ -8,8 +8,9 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/benthosdev/benthos/v4/internal/filepath/ifs"
 	"github.com/youmark/pkcs8"
+
+	"github.com/benthosdev/benthos/v4/internal/filepath/ifs"
 )
 
 // ClientCertConfig contains config fields for a client certificate.

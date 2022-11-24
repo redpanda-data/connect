@@ -17,8 +17,16 @@ import TabItem from '@theme/TabItem';
 
 Consumes messages from a GCP Cloud Pub/Sub subscription.
 
+
+<Tabs defaultValue="common" values={[
+  { label: 'Common', value: 'common', },
+  { label: 'Advanced', value: 'advanced', },
+]}>
+
+<TabItem value="common">
+
 ```yml
-# Config fields, showing default values
+# Common config fields, showing default values
 input:
   label: ""
   gcp_pubsub:
@@ -28,6 +36,27 @@ input:
     max_outstanding_messages: 1000
     max_outstanding_bytes: 1000000000
 ```
+
+</TabItem>
+<TabItem value="advanced">
+
+```yml
+# All config fields, showing default values
+input:
+  label: ""
+  gcp_pubsub:
+    project: ""
+    subscription: ""
+    sync: false
+    max_outstanding_messages: 1000
+    max_outstanding_bytes: 1000000000
+    create_subscription:
+      enabled: false
+      topic: ""
+```
+
+</TabItem>
+</Tabs>
 
 For information on how to set up credentials check out
 [this guide](https://cloud.google.com/docs/authentication/production).
@@ -85,5 +114,28 @@ The maximum number of outstanding pending messages to be consumed measured in by
 
 Type: `int`  
 Default: `1000000000`  
+
+### `create_subscription`
+
+Allows you to configure the input subscription and creates if it doesn't exist.
+
+
+Type: `object`  
+
+### `create_subscription.enabled`
+
+Whether to configure subscription or not.
+
+
+Type: `bool`  
+Default: `false`  
+
+### `create_subscription.topic`
+
+Defines the topic that the subscription should be vinculated to.
+
+
+Type: `string`  
+Default: `""`  
 
 

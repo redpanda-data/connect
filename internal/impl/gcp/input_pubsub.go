@@ -48,7 +48,7 @@ You can access these metadata fields using
 			docs.FieldBool("sync", "Enable synchronous pull mode."),
 			docs.FieldInt("max_outstanding_messages", "The maximum number of outstanding pending messages to be consumed at a given time."),
 			docs.FieldInt("max_outstanding_bytes", "The maximum number of outstanding pending messages to be consumed measured in bytes."),
-			docs.FieldObject("create_subscription", "Allows you to configure the input subscription and creates if it doesn't exist").WithChildren(
+			docs.FieldObject("create_subscription", "Allows you to configure the input subscription and creates if it doesn't exist.").WithChildren(
 				docs.FieldBool("enabled", "Whether to configure subscription or not.").HasDefault(false),
 				docs.FieldString("topic", "Defines the topic that the subscription should be vinculated to.")).Advanced(),
 		).ChildDefaultAndTypesFromStruct(input.NewGCPPubSubConfig()),
