@@ -2,10 +2,7 @@ package mongodb
 
 import (
 	"context"
-	"flag"
 	"fmt"
-	"regexp"
-	"strings"
 	"testing"
 
 	"github.com/ory/dockertest/v3"
@@ -17,6 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/benthosdev/benthos/v4/internal/impl/mongodb/client"
+	"github.com/benthosdev/benthos/v4/internal/integration"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
@@ -44,9 +42,7 @@ query: |
 }
 
 func TestInputIntegration(t *testing.T) {
-	if m := flag.Lookup("test.run").Value.String(); m == "" || regexp.MustCompile(strings.Split(m, "/")[0]).FindString(t.Name()) == "" {
-		t.Skip("Skipping as execution was not requested explicitly using go test -run ^TestIntegration$")
-	}
+	integration.CheckSkip(t)
 
 	if testing.Short() {
 		t.Skip("Skipping integration test in short mode")

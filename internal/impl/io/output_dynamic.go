@@ -80,6 +80,7 @@ func newDynamicOutput(conf output.Config, mgr bundle.NewManagement) (output.Stre
 			if err := node.Encode(uConf); err == nil {
 				sanitConf := docs.NewSanitiseConfig()
 				sanitConf.RemoveTypeField = true
+				sanitConf.ScrubSecrets = true
 				if err := docs.FieldOutput("output", "").SanitiseYAML(&node, sanitConf); err == nil {
 					confBytes, _ = yaml.Marshal(node)
 				}

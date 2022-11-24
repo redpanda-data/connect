@@ -3,11 +3,8 @@ package aws
 import (
 	"bytes"
 	"context"
-	"flag"
 	"fmt"
-	"regexp"
 	"strconv"
-	"strings"
 	"testing"
 	"time"
 
@@ -20,14 +17,13 @@ import (
 
 	"github.com/benthosdev/benthos/v4/internal/component/output"
 	sess "github.com/benthosdev/benthos/v4/internal/impl/aws/session"
+	"github.com/benthosdev/benthos/v4/internal/integration"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
 )
 
 func TestKinesisIntegration(t *testing.T) {
-	if m := flag.Lookup("test.run").Value.String(); m == "" || regexp.MustCompile(strings.Split(m, "/")[0]).FindString(t.Name()) == "" {
-		t.Skip("Skipping as execution was not requested explicitly using go test -run ^TestIntegration$")
-	}
+	integration.CheckSkip(t)
 
 	if testing.Short() {
 		t.Skip("Skipping integration test in short mode")

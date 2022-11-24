@@ -73,6 +73,7 @@ func newDynamicInput(conf input.Config, mgr bundle.NewManagement) (input.Streame
 			if err := node.Encode(uConf); err == nil {
 				sanitConf := docs.NewSanitiseConfig()
 				sanitConf.RemoveTypeField = true
+				sanitConf.ScrubSecrets = true
 				if err := docs.FieldInput("input", "").SanitiseYAML(&node, sanitConf); err == nil {
 					confBytes, _ = yaml.Marshal(node)
 				}

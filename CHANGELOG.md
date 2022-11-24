@@ -11,6 +11,14 @@ All notable changes to this project will be documented in this file.
 - Field `client_session_keep_alive` added to the `snowflake_put` output.
 - Bloblang now supports metadata access via `@foo` syntax, which also supports arbitrary values.
 - TLS client certs now support both PKCS#1 and PKCS#8 encrypted keys.
+- New `redis_script` processor.
+- New `wasm` processor.
+- Fields marked as secrets will no longer be printed with `benthos echo` or debug HTTP endpoints.
+
+### Fixed
+
+- Fixed a regression bug in the `mongodb` processor where message errors were not set any more. This issue was introduced in v4.7.0 (64eb72).
+- The `avro-ocf:marshaler=json` input codec now omits unexpected logical type fields.
 
 ## 4.10.0 - 2022-10-26
 

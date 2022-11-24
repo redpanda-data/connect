@@ -6,6 +6,7 @@ import (
 
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/input"
+	"github.com/benthosdev/benthos/v4/internal/component/input/batcher"
 	"github.com/benthosdev/benthos/v4/internal/message"
 )
 
@@ -230,6 +231,14 @@ type OwnedInput struct {
 	i input.Streamed
 }
 
+// BatchedWith returns a copy of the OwnedInput where messages will be batched
+// according to the provided batcher.
+func (o *OwnedInput) BatchedWith(b *Batcher) *OwnedInput {
+	return &OwnedInput{
+		i: batcher.New(b.p, o.i, b.mgr.Logger()),
+	}
+}
+
 // ReadBatch attempts to read a message batch from the input, along with a
 // function to be called once the entire batch can be either acked (successfully
 // sent or intentionally filtered) or nacked (failed to be processed or
@@ -264,4 +273,17 @@ func (o *OwnedInput) ReadBatch(ctx context.Context) (MessageBatch, AckFunc, erro
 func (o *OwnedInput) Close(ctx context.Context) error {
 	o.i.TriggerStopConsuming()
 	return o.i.WaitForClose(ctx)
+}
+
+type inputUnwrapper struct {
+	i input.Streamed
+}
+
+func (w inputUnwrapper) Unwrap() input.Streamed {
+	return w.i
+}
+
+// XUnwrapper is for internal use only, do not use this.
+func (o *OwnedInput) XUnwrapper() any {
+	return inputUnwrapper{i: o.i}
 }

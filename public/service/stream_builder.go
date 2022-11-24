@@ -763,6 +763,7 @@ func (s *StreamBuilder) buildWithEnv(env *bundle.Environment) (*Stream, error) {
 		if err == nil {
 			sanitConf := docs.NewSanitiseConfig()
 			sanitConf.RemoveTypeField = true
+			sanitConf.ScrubSecrets = true
 			sanitConf.DocsProvider = env
 			_ = config.Spec().SanitiseYAML(&sanitNode, sanitConf)
 		}

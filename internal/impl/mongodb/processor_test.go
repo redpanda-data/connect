@@ -2,9 +2,6 @@ package mongodb_test
 
 import (
 	"context"
-	"flag"
-	"regexp"
-	"strings"
 	"testing"
 
 	"github.com/nsf/jsondiff"
@@ -17,15 +14,14 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/impl/mongodb"
 	"github.com/benthosdev/benthos/v4/internal/impl/mongodb/client"
+	"github.com/benthosdev/benthos/v4/internal/integration"
 	"github.com/benthosdev/benthos/v4/internal/manager"
 	"github.com/benthosdev/benthos/v4/internal/message"
 	"github.com/benthosdev/benthos/v4/internal/tracing"
 )
 
 func TestProcessorIntegration(t *testing.T) {
-	if m := flag.Lookup("test.run").Value.String(); m == "" || regexp.MustCompile(strings.Split(m, "/")[0]).FindString(t.Name()) == "" {
-		t.Skip("Skipping as execution was not requested explicitly using go test -run ^TestIntegration$")
-	}
+	integration.CheckSkip(t)
 
 	if testing.Short() {
 		t.Skip("Skipping integration test in short mode")
