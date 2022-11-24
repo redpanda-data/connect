@@ -124,5 +124,5 @@ func newBrokerInput(conf input.Config, mgr bundle.NewManagement) (input.Streamed
 		return nil, fmt.Errorf("failed to construct batch policy: %v", err)
 	}
 
-	return batcher.New(policy, b, mgr.Logger(), mgr.Metrics()), nil
+	return batcher.New(policy, b, mgr.Logger()), nil
 }
