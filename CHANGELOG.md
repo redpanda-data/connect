@@ -14,6 +14,7 @@ All notable changes to this project will be documented in this file.
 - New `wasm` processor.
 - Fields marked as secrets will no longer be printed with `benthos echo` or debug HTTP endpoints.
 - Add `no_indent` parameter to the `format_json` bloblang method.
+- New `format_xml` bloblang method.
 
 ### Fixed
 
