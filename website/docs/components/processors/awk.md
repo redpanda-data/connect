@@ -402,7 +402,7 @@ Signature: `base64_encode(data)`
 
 Encodes the input data to a base64 string.
 
-### `base64_encode`
+### `base64_decode`
 
 Signature: `base64_decode(data)`
 
