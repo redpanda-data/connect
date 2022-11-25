@@ -21,6 +21,7 @@ All notable changes to this project will be documented in this file.
 - New `sqlite` buffer.
 - Bloblang now has `int64`, `int32`, `uint64` and `uint32` methods for casting explicit integer types.
 - Field `application_properties_map` added to the `amqp1` output.
+- Param `parse_header_row`, `delimiter` and `lazy_quotes` added to the `parse_csv` bloblang method.
 
 ### Fixed
 
