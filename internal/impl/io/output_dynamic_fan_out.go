@@ -253,35 +253,30 @@ func (d *dynamicFanOutOutputBroker) loop() {
 			}
 			d.outputsMut.RLock()
 		}
-		d.outputsMut.RUnlock()
 
-		(func() {
-			d.outputsMut.Lock()
-			defer d.outputsMut.Unlock()
+		_ = atomic.AddInt64(&ackPending, 1)
+		pendingResponses := int64(len(d.outputs))
 
-			_ = atomic.AddInt64(&ackPending, 1)
-			pendingResponses := int64(len(d.outputs))
-
-			for _, output := range d.outputs {
-				select {
-				case output.tsChan <- message.NewTransactionFunc(ts.Payload.ShallowCopy(), func(ctx context.Context, err error) error {
-					if atomic.AddInt64(&pendingResponses, -1) == 0 || err != nil {
-						atomic.StoreInt64(&pendingResponses, 0)
-						ackErr := ts.Ack(ctx, err)
-						_ = atomic.AddInt64(&ackPending, -1)
-						select {
-						case ackInterruptChan <- struct{}{}:
-						default:
-						}
-						return ackErr
+		for _, output := range d.outputs {
+			select {
+			case output.tsChan <- message.NewTransactionFunc(ts.Payload.ShallowCopy(), func(ctx context.Context, err error) error {
+				if atomic.AddInt64(&pendingResponses, -1) == 0 || err != nil {
+					atomic.StoreInt64(&pendingResponses, 0)
+					ackErr := ts.Ack(ctx, err)
+					_ = atomic.AddInt64(&ackPending, -1)
+					select {
+					case ackInterruptChan <- struct{}{}:
+					default:
 					}
-					return nil
-				}):
-				case <-d.shutSig.CloseAtLeisureChan():
-					return
+					return ackErr
 				}
+				return nil
+			}):
+			case <-d.shutSig.CloseAtLeisureChan():
+				break // This signal will be caught again in the next loop
 			}
-		})()
+		}
+		d.outputsMut.RUnlock()
 	}
 }
 
