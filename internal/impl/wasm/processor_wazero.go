@@ -65,7 +65,7 @@ func newWazeroAllocProcessorFromConfig(conf *service.ParsedConfig, mgr *service.
 		return nil, err
 	}
 
-	pathStr, err := conf.FieldString("path")
+	pathStr, err := conf.FieldString("module_path")
 	if err != nil {
 		return nil, err
 	}
