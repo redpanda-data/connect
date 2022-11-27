@@ -2162,7 +2162,8 @@ Serializes a target value into a pretty-printed JSON byte array (with 4 space in
 
 #### Parameters
 
-**`indent`** &lt;(optional) string, default `"    "`&gt; Indentation string. Each element in a JSON object or array will begin on a new, indented line followed by one or more copies of indent according to the indentation nesting.  
+**`indent`** &lt;string, default `"    "`&gt; Indentation string. Each element in a JSON object or array will begin on a new, indented line followed by one or more copies of indent according to the indentation nesting.  
+**`no_indent`** &lt;bool, default `false`&gt; Disable indentation.  
 
 #### Examples
 
@@ -2176,7 +2177,7 @@ root = this.doc.format_json()
 #      }
 ```
 
-Provide an argument string in order to customise the indentation used.
+Pass a string to the `indent` parameter in order to customise the indentation.
 
 ```coffee
 root = this.format_json("  ")
@@ -2198,6 +2199,15 @@ root.doc = this.doc.format_json().string()
 # Out: {"doc":"{\n    \"foo\": \"bar\"\n}"}
 ```
 
+Set the `no_indent` parameter to true to disable indentation. The result is equivalent to calling `bytes()`.
+
+```coffee
+root = this.doc.format_json(no_indent: true)
+
+# In:  {"doc":{"foo":"bar"}}
+# Out: {"foo":"bar"}
+```
+
 ### `format_msgpack`
 
 Formats data as a [MessagePack](https://msgpack.org/) message in bytes format.
@@ -2217,6 +2227,64 @@ root.encoded = this.format_msgpack().encode("base64")
 
 # In:  {"foo":"bar"}
 # Out: {"encoded":"gaNmb2+jYmFy"}
+```
+
+### `format_xml`
+
+
+Serializes a target value into an XML byte array.
+
+
+#### Parameters
+
+**`indent`** &lt;string, default `"    "`&gt; Indentation string. Each element in an XML object or array will begin on a new, indented line followed by one or more copies of indent according to the indentation nesting.  
+**`no_indent`** &lt;bool, default `false`&gt; Disable indentation.  
+
+#### Examples
+
+
+Serializes a target value into a pretty-printed XML byte array (with 4 space indentation by default).
+
+```coffee
+root = this.format_xml()
+
+# In:  {"foo":{"bar":{"baz":"foo bar baz"}}}
+# Out: <foo>
+#          <bar>
+#              <baz>foo bar baz</baz>
+#          </bar>
+#      </foo>
+```
+
+Pass a string to the `indent` parameter in order to customise the indentation.
+
+```coffee
+root = this.format_xml("  ")
+
+# In:  {"foo":{"bar":{"baz":"foo bar baz"}}}
+# Out: <foo>
+#        <bar>
+#          <baz>foo bar baz</baz>
+#        </bar>
+#      </foo>
+```
+
+Use the `.string()` method in order to coerce the result into a string.
+
+```coffee
+root.doc = this.format_xml("").string()
+
+# In:  {"foo":{"bar":{"baz":"foo bar baz"}}}
+# Out: {"doc":"<foo>\n<bar>\n<baz>foo bar baz</baz>\n</bar>\n</foo>"}
+```
+
+Set the `no_indent` parameter to true to disable indentation.
+
+```coffee
+root = this.format_xml(no_indent: true)
+
+# In:  {"foo":{"bar":{"baz":"foo bar baz"}}}
+# Out: <foo><bar><baz>foo bar baz</baz></bar></foo>
 ```
 
 ### `format_yaml`
