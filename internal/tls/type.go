@@ -1,10 +1,14 @@
 package tls
 
 import (
+	"crypto/rsa"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/pem"
 	"errors"
+	"fmt"
+
+	"github.com/youmark/pkcs8"
 
 	"github.com/benthosdev/benthos/v4/internal/filepath/ifs"
 )
@@ -118,21 +122,41 @@ func (c *Config) Get(f ifs.FS) (*tls.Config, error) {
 	return tConf, nil
 }
 
+func getKeyPair(cert []byte, keyType string, keyBytes []byte) (tls.Certificate, error) {
+	return tls.X509KeyPair(cert, pem.EncodeToMemory(&pem.Block{Type: keyType, Bytes: keyBytes}))
+}
+
 func loadKeyPair(cert, key []byte, password string) (tls.Certificate, error) {
 	keyPem, _ := pem.Decode(key)
-	//nolint:staticcheck // SA1019 Disable linting for deprecated  x509.IsEncryptedPEMBlock call
-	encrypted := x509.IsEncryptedPEMBlock(keyPem)
-
-	if encrypted {
-		if password == "" {
-			return tls.Certificate{}, errors.New("missing password for encrypted private key")
-		}
-		decryptedKey, err := decryptKey(keyPem, password)
-		if err != nil {
-			return tls.Certificate{}, err
-		}
-		return tls.X509KeyPair(cert, decryptedKey)
+	if keyPem == nil {
+		return tls.Certificate{}, errors.New("failed to decode private key")
 	}
+
+	var err error
+	//nolint:staticcheck // SA1019 Disable linting for deprecated x509.IsEncryptedPEMBlock call
+	if x509.IsEncryptedPEMBlock(keyPem) {
+		if password == "" {
+			return tls.Certificate{}, errors.New("missing password for PKCS#1 encrypted private key")
+		}
+
+		var decryptedKey []byte
+		//nolint:staticcheck // SA1019 Disable linting for deprecated x509.DecryptPEMBlock call
+		if decryptedKey, err = x509.DecryptPEMBlock(keyPem, []byte(password)); err != nil {
+			return tls.Certificate{}, fmt.Errorf("failed to parse encrypted PKCS#1 private key: %s", err)
+		}
+		return getKeyPair(cert, keyPem.Type, decryptedKey)
+	} else if keyPem.Type == "ENCRYPTED PRIVATE KEY" {
+		if password == "" {
+			return tls.Certificate{}, errors.New("missing password for PKCS#8 encrypted private key")
+		}
+
+		var decryptedKey *rsa.PrivateKey
+		if decryptedKey, err = pkcs8.ParsePKCS8PrivateKeyRSA(keyPem.Bytes, []byte(password)); err != nil {
+			return tls.Certificate{}, fmt.Errorf("failed to parse encrypted PKCS#8 private key: %s", err)
+		}
+		return getKeyPair(cert, keyPem.Type, x509.MarshalPKCS1PrivateKey(decryptedKey))
+	}
+
 	return tls.X509KeyPair(cert, key)
 }
 
@@ -168,15 +192,4 @@ func (c *ClientCertConfig) Load(f ifs.FS) (tls.Certificate, error) {
 	}
 
 	return loadKeyPair([]byte(c.Cert), []byte(c.Key), c.Password)
-}
-
-func decryptKey(key *pem.Block, password string) ([]byte, error) {
-	//nolint:staticcheck // SA1019 Disable linting for deprecated  x509.DecryptPEMBlock call
-	decryptedKey, err := x509.DecryptPEMBlock(key, []byte(password))
-	if err != nil {
-		return nil, errors.New("wrong password provided for key")
-	}
-
-	decyptedKey := pem.EncodeToMemory(&pem.Block{Type: key.Type, Bytes: decryptedKey})
-	return decyptedKey, nil
 }

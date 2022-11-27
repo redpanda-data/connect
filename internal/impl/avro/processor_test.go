@@ -9,6 +9,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"gopkg.in/yaml.v3"
 
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
@@ -16,24 +18,6 @@ import (
 )
 
 func TestAvroBasic(t *testing.T) {
-	schema := `{
-	"namespace": "foo.namespace.com",
-	"type":	"record",
-	"name": "identity",
-	"fields": [
-		{ "name": "Name", "type": "string"},
-		{ "name": "Address", "type": ["null",{
-			"namespace": "my.namespace.com",
-			"type":	"record",
-			"name": "address",
-			"fields": [
-				{ "name": "City", "type": "string" },
-				{ "name": "State", "type": "string" }
-			]
-		}],"default":null}
-	]
-}`
-
 	type testCase struct {
 		name     string
 		operator string
@@ -121,10 +105,29 @@ func TestAvroBasic(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(tt *testing.T) {
 			conf := processor.NewConfig()
-			conf.Type = "avro"
-			conf.Avro.Operator = test.operator
-			conf.Avro.Encoding = test.encoding
-			conf.Avro.Schema = schema
+			require.NoError(t, yaml.Unmarshal(fmt.Appendf(nil, `
+avro:
+  operator: %v
+  encoding: %v
+  schema: |
+    {
+      "namespace": "foo.namespace.com",
+      "type": "record",
+      "name": "identity",
+      "fields": [
+        { "name": "Name", "type": "string"},
+        { "name": "Address", "type": [ "null", {
+          "namespace": "my.namespace.com",
+          "type": "record",
+          "name": "address",
+          "fields": [
+            { "name": "City", "type": "string" },
+            { "name": "State", "type": "string" }
+          ]
+        } ], "default": null }
+      ]
+    }
+`, test.operator, test.encoding), &conf))
 
 			proc, err := mock.NewManager().NewProcessor(conf)
 			if err != nil {
@@ -278,10 +281,12 @@ func TestAvroSchemaPath(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(tt *testing.T) {
 			conf := processor.NewConfig()
-			conf.Type = "avro"
-			conf.Avro.Operator = test.operator
-			conf.Avro.Encoding = test.encoding
-			conf.Avro.SchemaPath = fmt.Sprintf("file://%s", tmpSchemaFile.Name())
+			require.NoError(t, yaml.Unmarshal(fmt.Appendf(nil, `
+avro:
+  operator: %v
+  encoding: %v
+  schema_path: %v
+`, test.operator, test.encoding, fmt.Sprintf("file://%s", tmpSchemaFile.Name())), &conf))
 
 			proc, err := mock.NewManager().NewProcessor(conf)
 			if err != nil {
@@ -320,8 +325,10 @@ func TestAvroSchemaPath(t *testing.T) {
 
 func TestAvroSchemaPathNotExist(t *testing.T) {
 	conf := processor.NewConfig()
-	conf.Type = "avro"
-	conf.Avro.SchemaPath = "file://path_does_not_exist"
+	require.NoError(t, yaml.Unmarshal([]byte(`
+avro:
+  schema_path: "file://path_does_not_exist"
+`), &conf))
 
 	_, err := mock.NewManager().NewProcessor(conf)
 	if err == nil {

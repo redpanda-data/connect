@@ -7,7 +7,6 @@ import (
 
 	"github.com/benthosdev/benthos/v4/internal/batch/policy"
 	"github.com/benthosdev/benthos/v4/internal/component/input"
-	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
 	"github.com/benthosdev/benthos/v4/internal/shutdown"
@@ -16,8 +15,7 @@ import (
 
 // Impl wraps an input with a batch policy.
 type Impl struct {
-	stats metrics.Type
-	log   log.Modular
+	log log.Modular
 
 	child   input.Streamed
 	batcher *policy.Batcher
@@ -28,9 +26,8 @@ type Impl struct {
 }
 
 // New creates a new Batcher around an input.
-func New(batcher *policy.Batcher, child input.Streamed, log log.Modular, stats metrics.Type) input.Streamed {
+func New(batcher *policy.Batcher, child input.Streamed, log log.Modular) input.Streamed {
 	b := Impl{
-		stats:       stats,
 		log:         log,
 		child:       child,
 		batcher:     batcher,

@@ -203,6 +203,11 @@ func (e *Environment) RegisterBatchInput(name string, spec *ConfigSpec, ctor Bat
 		if err != nil {
 			return nil, err
 		}
+		if u, ok := i.(interface {
+			Unwrap() input.Streamed
+		}); ok {
+			return u.Unwrap(), nil
+		}
 		rdr := newAirGapBatchReader(i)
 		return input.NewAsyncReader(conf.Type, false, rdr, nm)
 	}), componentSpec)
