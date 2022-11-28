@@ -75,7 +75,7 @@ func init() {
 	}
 }
 
-var maxRequeue = math.MaxInt64
+var maxRequeue = math.MaxInt
 
 // NewSQLiteBufferFromConfig creates a new SQLite buffer from a parsed config.
 func NewSQLiteBufferFromConfig(conf *service.ParsedConfig, res *service.Resources) (*SQLiteBuffer, error) {
