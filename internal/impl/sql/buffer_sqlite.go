@@ -122,6 +122,8 @@ func newSQLiteBuffer(path string, preProcs, postProcs []*service.OwnedProcessor)
 	}
 
 	if _, err = db.Exec(`
+PRAGMA synchronous = 0;
+
 CREATE TABLE IF NOT EXISTS messages (
   id       INTEGER PRIMARY KEY AUTOINCREMENT,
   content  TEXT NOT NULL,

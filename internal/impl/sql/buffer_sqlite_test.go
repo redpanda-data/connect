@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -393,6 +394,58 @@ path: "%v"
 	wg.Wait()
 }
 
+func TestBufferSQLiteCloseAfterNack(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	ctx := context.Background()
+	conf := fmt.Sprintf(`
+path: "%v"
+`, filepath.Join(tmpDir, "foo.db"))
+
+	block := memBufFromConf(t, conf)
+
+	for _, testMsg := range []string{
+		"hello world 1",
+		"hello world 2",
+		"hello world 3",
+	} {
+		require.NoError(t, block.WriteBatch(ctx, service.MessageBatch{
+			service.NewMessage([]byte(testMsg)),
+		}, func(ctx context.Context, err error) error { return nil }))
+	}
+
+	m, ackFuncA, err := block.ReadBatch(ctx)
+	require.NoError(t, err)
+	require.Len(t, m, 1)
+	msgEqualStr(t, "hello world 1", m[0])
+
+	m, ackFuncB, err := block.ReadBatch(ctx)
+	require.NoError(t, err)
+	require.Len(t, m, 1)
+	msgEqualStr(t, "hello world 2", m[0])
+
+	require.NoError(t, ackFuncA(ctx, errors.New("nope")))
+	require.NoError(t, ackFuncB(ctx, nil))
+
+	// Restart
+	require.NoError(t, block.Close(ctx))
+	block = memBufFromConf(t, conf)
+
+	m, ackFunc, err := block.ReadBatch(ctx)
+	require.NoError(t, err)
+	require.Len(t, m, 1)
+	msgEqualStr(t, "hello world 1", m[0])
+	require.NoError(t, ackFunc(ctx, nil))
+
+	m, ackFunc, err = block.ReadBatch(ctx)
+	require.NoError(t, err)
+	require.Len(t, m, 1)
+	msgEqualStr(t, "hello world 3", m[0])
+	require.NoError(t, ackFunc(ctx, nil))
+
+	require.NoError(t, block.Close(ctx))
+}
+
 func BenchmarkBufferSQLiteWrites(b *testing.B) {
 	tmpDir := b.TempDir()
 
@@ -477,6 +530,46 @@ path: "%v"
 		for i := 0; i < b.N; i++ {
 			if err := block.WriteBatch(ctx, service.MessageBatch{
 				service.NewMessage([]byte(fmt.Sprintf("test%v", i))),
+			}, func(ctx context.Context, err error) error { return nil }); err != nil {
+				b.Error(err)
+			}
+		}
+	}()
+
+	wg.Wait()
+}
+
+func BenchmarkBufferSQLiteLockStepLarge(b *testing.B) {
+	tmpDir := b.TempDir()
+
+	ctx := context.Background()
+	block := memBufFromConf(b, fmt.Sprintf(`
+path: "%v"
+`, filepath.Join(tmpDir, "foo.db")))
+	defer block.Close(ctx)
+
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+
+	testMsg := []byte(strings.Repeat("heh nice one, kid ", 10000))
+
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	go func() {
+		defer wg.Done()
+		for i := 0; i < b.N; i++ {
+			m, ackFunc, err := block.ReadBatch(ctx)
+			require.NoError(b, err)
+			require.Len(b, m, 1)
+			require.NoError(b, ackFunc(ctx, nil))
+		}
+	}()
+
+	go func() {
+		for i := 0; i < b.N; i++ {
+			if err := block.WriteBatch(ctx, service.MessageBatch{
+				service.NewMessage(testMsg),
 			}, func(ctx context.Context, err error) error { return nil }); err != nil {
 				b.Error(err)
 			}
