@@ -18,6 +18,7 @@ All notable changes to this project will be documented in this file.
 - New `format_xml` bloblang method.
 - New `batched` higher level input type.
 - The `gcp_pubsub` input now supports optionally creating subscriptions.
+- New `sqlite` buffer.
 
 ### Fixed
 

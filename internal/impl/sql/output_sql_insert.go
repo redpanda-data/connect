@@ -254,6 +254,7 @@ func (s *sqlInsertOutput) WriteBatch(ctx context.Context, batch service.MessageB
 		if tx == nil {
 			insertBuilder = insertBuilder.Values(args...)
 		} else if _, err := stmt.Exec(args...); err != nil {
+			_ = tx.Rollback()
 			return err
 		}
 	}
