@@ -1,7 +1,7 @@
 ---
 title: amqp_1
 type: input
-status: beta
+status: stable
 categories: ["Services"]
 ---
 
@@ -15,9 +15,6 @@ categories: ["Services"]
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-:::caution BETA
-This component is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with the component is found.
-:::
 Reads messages from an AMQP (1.0) server.
 
 

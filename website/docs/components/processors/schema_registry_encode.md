@@ -1,7 +1,7 @@
 ---
 title: schema_registry_encode
 type: processor
-status: experimental
+status: beta
 categories: ["Parsing","Integration"]
 ---
 
@@ -15,8 +15,8 @@ categories: ["Parsing","Integration"]
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-:::caution EXPERIMENTAL
-This component is experimental and therefore subject to change or removal outside of major version releases.
+:::caution BETA
+This component is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with the component is found.
 :::
 Automatically encodes and validates messages with schemas from a Confluent Schema Registry service.
 

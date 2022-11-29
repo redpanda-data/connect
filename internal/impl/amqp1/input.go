@@ -33,7 +33,7 @@ func init() {
 		return input.NewAsyncReader("amqp_1", true, a, nm)
 	}), docs.ComponentSpec{
 		Name:    "amqp_1",
-		Status:  docs.StatusBeta,
+		Status:  docs.StatusStable,
 		Summary: `Reads messages from an AMQP (1.0) server.`,
 		Description: `
 ### Metadata

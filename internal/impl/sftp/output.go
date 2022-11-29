@@ -34,7 +34,7 @@ func init() {
 		return output.OnlySinglePayloads(a), nil
 	}), docs.ComponentSpec{
 		Name:        "sftp",
-		Status:      docs.StatusExperimental,
+		Status:      docs.StatusBeta,
 		Version:     "3.39.0",
 		Summary:     `Writes files to a server over SFTP.`,
 		Description: output.Description(true, false, `In order to have a different path for each object you should use function interpolations described [here](/docs/configuration/interpolation#bloblang-queries).`),

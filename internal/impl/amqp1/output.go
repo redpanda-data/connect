@@ -33,7 +33,7 @@ func init() {
 		return output.OnlySinglePayloads(w), nil
 	}), docs.ComponentSpec{
 		Name:    "amqp_1",
-		Status:  docs.StatusBeta,
+		Status:  docs.StatusStable,
 		Summary: `Sends messages to an AMQP (1.0) server.`,
 		Description: output.Description(true, false, `
 ### Metadata

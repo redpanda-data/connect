@@ -17,7 +17,7 @@ func init() {
 	// ./internal/bloblang/query/parsed_test.go
 
 	slugSpec := bloblang.NewPluginSpec().
-		Experimental().
+		Beta().
 		Category("String Manipulation").
 		Description(`Creates a "slug" from a given string. Wraps the github.com/gosimple/slug package. See its [docs](https://pkg.go.dev/github.com/gosimple/slug) for more information.`).
 		Version("4.2.0").
@@ -50,7 +50,7 @@ func init() {
 	}
 
 	fakerSpec := bloblang.NewPluginSpec().
-		Experimental().
+		Beta().
 		Category(query.FunctionCategoryFakeData).
 		Description("Takes in a string that maps to a [faker](https://github.com/bxcodec/faker) function and returns the result from that faker function. "+
 			"Returns an error if the given string doesn't match a supported faker function. Supported functions: `latitude`, `longitude`, `unix_time`, "+

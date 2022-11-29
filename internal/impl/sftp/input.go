@@ -52,7 +52,7 @@ func init() {
 		return input.NewAsyncReader("sftp", true, input.NewAsyncPreserver(r), nm)
 	}), docs.ComponentSpec{
 		Name:    "sftp",
-		Status:  docs.StatusExperimental,
+		Status:  docs.StatusBeta,
 		Version: "3.39.0",
 		Summary: `Consumes files from a server over SFTP.`,
 		Description: `
