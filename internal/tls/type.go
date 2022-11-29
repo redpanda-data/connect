@@ -144,6 +144,25 @@ func loadKeyPair(cert, key []byte, password string) (tls.Certificate, error) {
 		if decryptedKey, err = x509.DecryptPEMBlock(keyPem, []byte(password)); err != nil {
 			return tls.Certificate{}, fmt.Errorf("failed to parse encrypted PKCS#1 private key: %s", err)
 		}
+
+		// x509.DecryptPEMBlock() can sometimes fail to detect invalid passwords and will return a nil error, so we
+		// should validate the decrypted key. Otherwise, tls.X509KeyPair() will return an error anyway, but it
+		// wouldn't be clear why. Details here: https://github.com/golang/go/issues/10171
+		// and here https://cs.opensource.google/go/go/+/refs/tags/go1.19.3:src/crypto/tls/tls.go;l=339
+		validKey := false
+		if _, err = x509.ParsePKCS1PrivateKey(decryptedKey); err == nil {
+			validKey = true
+		}
+		if _, err = x509.ParsePKCS8PrivateKey(decryptedKey); err == nil {
+			validKey = true
+		}
+		if _, err := x509.ParseECPrivateKey(decryptedKey); err == nil {
+			validKey = true
+		}
+		if !validKey {
+			return tls.Certificate{}, fmt.Errorf("failed to decrypt PKCS#1 key: %s", x509.IncorrectPasswordError)
+		}
+
 		return getKeyPair(cert, keyPem.Type, decryptedKey)
 	} else if keyPem.Type == "ENCRYPTED PRIVATE KEY" {
 		if password == "" {
