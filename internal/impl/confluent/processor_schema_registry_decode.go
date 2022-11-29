@@ -24,7 +24,7 @@ import (
 
 func schemaRegistryDecoderConfig() *service.ConfigSpec {
 	spec := service.NewConfigSpec().
-		Beta(). // TODO
+		Beta().
 		Categories("Parsing", "Integration").
 		Summary("Automatically decodes and validates messages with schemas from a Confluent Schema Registry service.").
 		Description(`

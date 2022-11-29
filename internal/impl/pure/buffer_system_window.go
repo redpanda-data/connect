@@ -15,7 +15,7 @@ import (
 
 func tumblingWindowBufferConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
-		Beta(). // TODO
+		Beta().
 		Version("3.53.0").
 		Categories("Windowing").
 		Summary("Chops a stream of messages into tumbling or sliding windows of fixed temporal size, following the system clock.").

@@ -77,7 +77,7 @@ func bigQuerySelectInputConfigFromParsed(inConf *service.ParsedConfig) (conf big
 
 func newBigQuerySelectInputConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
-		Beta(). // TODO
+		Beta().
 		Version("3.63.0").
 		Categories("Services", "GCP").
 		Summary("Executes a `SELECT` query against BigQuery and creates a message for each row received.").
