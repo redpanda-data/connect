@@ -363,6 +363,14 @@ func (c *ConfigSpec) Description(description string) *ConfigSpec {
 	return c
 }
 
+// Footnotes adds a description to the plugin configuration spec that appears
+// towards the bottom of the documentation page, this is usually best for long
+// winded lists of docs.
+func (c *ConfigSpec) Footnotes(description string) *ConfigSpec {
+	c.component.Footnotes = description
+	return c
+}
+
 // Field sets the specification of a field within the config spec, used for
 // linting and generating documentation for the component.
 //

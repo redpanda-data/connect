@@ -18,7 +18,6 @@ import TabItem from '@theme/TabItem';
 :::caution BETA
 This component is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with the component is found.
 :::
-
 Performs Avro based operations on messages based on a schema.
 
 ```yml
@@ -54,7 +53,6 @@ The [operator](#operators) to execute
 
 
 Type: `string`  
-Default: `""`  
 Options: `to_json`, `from_json`.
 
 ### `encoding`
