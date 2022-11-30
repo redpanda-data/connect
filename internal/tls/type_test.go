@@ -102,12 +102,13 @@ func TestCertificateFileWithEncryptedKey(t *testing.T) {
 		},
 	}
 
+	tmpDir := t.TempDir()
 	for _, test := range tests {
-		fCert, _ := os.CreateTemp("", "cert.pem")
+		fCert, _ := os.CreateTemp(tmpDir, "cert.pem")
 		_, _ = fCert.Write(test.kp.cert)
 		fCert.Close()
 
-		fKey, _ := os.CreateTemp("", "key.pem")
+		fKey, _ := os.CreateTemp(tmpDir, "key.pem")
 		_, _ = fKey.Write(test.kp.key)
 		fKey.Close()
 
@@ -171,12 +172,13 @@ func TestCertificateFileWithEncryptedKeyAndWrongPassword(t *testing.T) {
 		},
 	}
 
+	tmpDir := t.TempDir()
 	for _, test := range tests {
-		fCert, _ := os.CreateTemp("", "cert.pem")
+		fCert, _ := os.CreateTemp(tmpDir, "cert.pem")
 		_, _ = fCert.Write(test.kp.cert)
 		fCert.Close()
 
-		fKey, _ := os.CreateTemp("", "key.pem")
+		fKey, _ := os.CreateTemp(tmpDir, "key.pem")
 		_, _ = fKey.Write(test.kp.key)
 		fKey.Close()
 
@@ -224,11 +226,13 @@ func TestEncryptedKeyWithWrongPassword(t *testing.T) {
 func TestCertificateFileWithNoEncryption(t *testing.T) {
 	cert, key := createCertificates()
 
-	fCert, _ := os.CreateTemp("", "cert.pem")
+	tmpDir := t.TempDir()
+
+	fCert, _ := os.CreateTemp(tmpDir, "cert.pem")
 	_, _ = fCert.Write(cert)
 	defer fCert.Close()
 
-	fKey, _ := os.CreateTemp("", "key.pem")
+	fKey, _ := os.CreateTemp(tmpDir, "key.pem")
 	_, _ = fKey.Write(key)
 	defer fKey.Close()
 
