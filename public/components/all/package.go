@@ -38,5 +38,6 @@ import (
 	_ "github.com/benthosdev/benthos/v4/public/components/snowflake"
 	_ "github.com/benthosdev/benthos/v4/public/components/sql"
 	_ "github.com/benthosdev/benthos/v4/public/components/statsd"
+	_ "github.com/benthosdev/benthos/v4/public/components/temporal"
 	_ "github.com/benthosdev/benthos/v4/public/components/wasm"
 )
