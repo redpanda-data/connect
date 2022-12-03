@@ -20,5 +20,5 @@ func NewConfigSpec() *service.ConfigSpec {
 			string(TranscoderJSON):      "insert a new document.",
 			string(TranscoderLegacy):    "creates a new document if it does not exist, if it does exist then it updates it.",
 		}).Description("Couchbase transcoder to use.").Default(string(TranscoderLegacy)).Advanced()).
-		Field(service.NewDurationField("timeout").Description("Operation timeout.").Advanced().Optional())
+		Field(service.NewDurationField("timeout").Description("Operation timeout.").Advanced().Default("15s"))
 }

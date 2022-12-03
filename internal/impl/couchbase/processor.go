@@ -19,14 +19,14 @@ var (
 	ErrContentRequired = errors.New("content required")
 )
 
-func couchbaseProcessorConfig() *service.ConfigSpec {
+func ProcessorConfig() *service.ConfigSpec {
 	return client.NewConfigSpec().
 		// TODO Stable().
 		Version("4.10.0").
 		Categories("Integration").
 		Summary("Performs operations against Couchbase for each message, allowing you to store or retrieve data within message payloads.").
 		Description("When inserting, replacing or upserting documents, each must have the `content` property set.").
-		Field(service.NewInterpolatedStringField("id").Description("Document id.").Example(`${! meta("id") }`)).
+		Field(service.NewInterpolatedStringField("id").Description("Document id.").Example(`${! json("id") }`)).
 		Field(service.NewBloblangField("content").Description("Document content.").Optional()).
 		Field(service.NewStringAnnotatedEnumField("operation", map[string]string{
 			string(client.OperationGet):     "fetch a document.",
@@ -39,7 +39,7 @@ func couchbaseProcessorConfig() *service.ConfigSpec {
 }
 
 func init() {
-	err := service.RegisterBatchProcessor("couchbase", couchbaseProcessorConfig(),
+	err := service.RegisterBatchProcessor("couchbase", ProcessorConfig(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchProcessor, error) {
 			return NewProcessor(conf, mgr)
 		},
@@ -80,36 +80,32 @@ func NewProcessor(conf *service.ParsedConfig, mgr *service.Resources) (*Processo
 		}
 	}
 
-	if conf.Contains("operation") { // TODO is this really needed with default
-		op, err := conf.FieldString("operation")
-		if err != nil {
-			return nil, err
-		}
-		switch client.Operation(op) {
-		case client.OperationGet:
-			p.op = get
-		case client.OperationRemove:
-			p.op = remove
-		case client.OperationInsert:
-			if p.content == nil {
-				return nil, ErrContentRequired // TODO is this really needed with lint
-			}
-			p.op = insert
-		case client.OperationReplace:
-			if p.content == nil {
-				return nil, ErrContentRequired // TODO is this really needed with lint
-			}
-			p.op = replace
-		case client.OperationUpsert:
-			if p.content == nil {
-				return nil, ErrContentRequired // TODO is this really needed with lint
-			}
-			p.op = upsert
-		default:
-			return nil, fmt.Errorf("%w: %s", ErrInvalidOperation, op) // TODO is this really needed with enum
-		}
-	} else {
+	op, err := conf.FieldString("operation")
+	if err != nil {
+		return nil, err
+	}
+	switch client.Operation(op) {
+	case client.OperationGet:
 		p.op = get
+	case client.OperationRemove:
+		p.op = remove
+	case client.OperationInsert:
+		if p.content == nil {
+			return nil, ErrContentRequired // TODO is this really needed with lint
+		}
+		p.op = insert
+	case client.OperationReplace:
+		if p.content == nil {
+			return nil, ErrContentRequired // TODO is this really needed with lint
+		}
+		p.op = replace
+	case client.OperationUpsert:
+		if p.content == nil {
+			return nil, ErrContentRequired // TODO is this really needed with lint
+		}
+		p.op = upsert
+	default:
+		return nil, fmt.Errorf("%w: %s", ErrInvalidOperation, op) // TODO is this really needed with enum
 	}
 
 	return p, nil

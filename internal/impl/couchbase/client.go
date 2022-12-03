@@ -41,17 +41,15 @@ func getClient(conf *service.ParsedConfig, mgr *service.Resources) (*couchbaseCl
 		// TODO Meter:    mgr.Metrics(),
 	}
 
-	if conf.Contains("timeout") {
-		opts.TimeoutsConfig = gocb.TimeoutsConfig{
-			ConnectTimeout:    timeout,
-			KVTimeout:         timeout,
-			KVDurableTimeout:  timeout,
-			ViewTimeout:       timeout,
-			QueryTimeout:      timeout,
-			AnalyticsTimeout:  timeout,
-			SearchTimeout:     timeout,
-			ManagementTimeout: timeout,
-		}
+	opts.TimeoutsConfig = gocb.TimeoutsConfig{
+		ConnectTimeout:    timeout,
+		KVTimeout:         timeout,
+		KVDurableTimeout:  timeout,
+		ViewTimeout:       timeout,
+		QueryTimeout:      timeout,
+		AnalyticsTimeout:  timeout,
+		SearchTimeout:     timeout,
+		ManagementTimeout: timeout,
 	}
 
 	if conf.Contains("username") {
@@ -69,27 +67,23 @@ func getClient(conf *service.ParsedConfig, mgr *service.Resources) (*couchbaseCl
 		}
 	}
 
-	if conf.Contains("transcoder") { // TODO is this really needed with default
-		tr, err := conf.FieldString("transcoder")
-		if err != nil {
-			return nil, err
-		}
-		switch client.Transcoder(tr) {
-		case client.TranscoderJSON:
-			opts.Transcoder = gocb.NewJSONTranscoder()
-		case client.TranscoderRaw:
-			opts.Transcoder = gocb.NewRawBinaryTranscoder()
-		case client.TranscoderRawJSON:
-			opts.Transcoder = gocb.NewRawJSONTranscoder()
-		case client.TranscoderRawString:
-			opts.Transcoder = gocb.NewRawStringTranscoder()
-		case client.TranscoderLegacy:
-			opts.Transcoder = gocb.NewLegacyTranscoder()
-		default:
-			return nil, fmt.Errorf("%w: %s", ErrInvalidTranscoder, tr) // TODO is this really needed with enum
-		}
-	} else {
+	tr, err := conf.FieldString("transcoder")
+	if err != nil {
+		return nil, err
+	}
+	switch client.Transcoder(tr) {
+	case client.TranscoderJSON:
+		opts.Transcoder = gocb.NewJSONTranscoder()
+	case client.TranscoderRaw:
+		opts.Transcoder = gocb.NewRawBinaryTranscoder()
+	case client.TranscoderRawJSON:
+		opts.Transcoder = gocb.NewRawJSONTranscoder()
+	case client.TranscoderRawString:
+		opts.Transcoder = gocb.NewRawStringTranscoder()
+	case client.TranscoderLegacy:
 		opts.Transcoder = gocb.NewLegacyTranscoder()
+	default:
+		return nil, fmt.Errorf("%w: %s", ErrInvalidTranscoder, tr) // TODO is this really needed with enum
 	}
 
 	cluster, err := gocb.Connect(url, opts)
