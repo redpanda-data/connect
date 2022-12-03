@@ -56,7 +56,7 @@ couchbase:
   bucket: ""
   collection: _default
   transcoder: legacy
-  timeout: ""
+  timeout: 15s
   id: ""
   content: ""
   operation: get
@@ -134,6 +134,7 @@ Operation timeout.
 
 
 Type: `string`  
+Default: `"15s"`  
 
 ### `id`
 
@@ -146,7 +147,7 @@ Type: `string`
 ```yml
 # Examples
 
-id: ${! meta("id") }
+id: ${! json("id") }
 ```
 
 ### `content`
