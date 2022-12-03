@@ -19,6 +19,7 @@ var (
 	ErrContentRequired = errors.New("content required")
 )
 
+// ProcessorConfig export couchbase processor specification.
 func ProcessorConfig() *service.ConfigSpec {
 	return client.NewConfigSpec().
 		// TODO Stable().
@@ -91,21 +92,21 @@ func NewProcessor(conf *service.ParsedConfig, mgr *service.Resources) (*Processo
 		p.op = remove
 	case client.OperationInsert:
 		if p.content == nil {
-			return nil, ErrContentRequired // TODO is this really needed with lint
+			return nil, ErrContentRequired
 		}
 		p.op = insert
 	case client.OperationReplace:
 		if p.content == nil {
-			return nil, ErrContentRequired // TODO is this really needed with lint
+			return nil, ErrContentRequired
 		}
 		p.op = replace
 	case client.OperationUpsert:
 		if p.content == nil {
-			return nil, ErrContentRequired // TODO is this really needed with lint
+			return nil, ErrContentRequired
 		}
 		p.op = upsert
 	default:
-		return nil, fmt.Errorf("%w: %s", ErrInvalidOperation, op) // TODO is this really needed with enum
+		return nil, fmt.Errorf("%w: %s", ErrInvalidOperation, op)
 	}
 
 	return p, nil

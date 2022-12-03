@@ -37,8 +37,8 @@ func getClient(conf *service.ParsedConfig, mgr *service.Resources) (*couchbaseCl
 
 	// setup couchbase
 	opts := gocb.ClusterOptions{
-		// TODO Tracer:   mgr.OtelTracer().Tracer(name).Start(context.Background(), operationName)
-		// TODO Meter:    mgr.Metrics(),
+		// TODO add opentracing Tracer:
+		// TODO add metrics Meter:
 	}
 
 	opts.TimeoutsConfig = gocb.TimeoutsConfig{
@@ -83,7 +83,7 @@ func getClient(conf *service.ParsedConfig, mgr *service.Resources) (*couchbaseCl
 	case client.TranscoderLegacy:
 		opts.Transcoder = gocb.NewLegacyTranscoder()
 	default:
-		return nil, fmt.Errorf("%w: %s", ErrInvalidTranscoder, tr) // TODO is this really needed with enum
+		return nil, fmt.Errorf("%w: %s", ErrInvalidTranscoder, tr)
 	}
 
 	cluster, err := gocb.Connect(url, opts)
