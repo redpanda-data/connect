@@ -19,6 +19,7 @@ All notable changes to this project will be documented in this file.
 - New `batched` higher level input type.
 - The `gcp_pubsub` input now supports optionally creating subscriptions.
 - New `sqlite` buffer.
+- Bloblang now has `int64`, `int32`, `uint64` and `uint32` methods for casting explicit integer types.
 
 ### Fixed
 

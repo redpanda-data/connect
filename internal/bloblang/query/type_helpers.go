@@ -381,8 +381,12 @@ func IToNumber(v any) (float64, error) {
 }
 
 const (
-	maxUint = ^uint64(0)
-	maxInt  = maxUint >> 1
+	maxUint   = ^uint64(0)
+	maxUint32 = ^uint32(0)
+	maxInt    = maxUint >> 1
+	maxInt32  = maxUint32 >> 1
+	minInt    = ^int(maxInt)
+	minInt32  = ^int32(maxInt32)
 )
 
 // IToInt takes a boxed value and attempts to extract a number (int64) from it
@@ -399,6 +403,21 @@ func IToInt(v any) (int64, error) {
 		}
 		return int64(t), nil
 	case float64:
+		if math.IsInf(t, 0) {
+			return 0, errors.New("cannot convert +/-INF to an integer")
+		}
+		if math.IsNaN(t) {
+			return 0, errors.New("cannot convert NAN to an integer")
+		}
+		if t > float64(maxInt) {
+			return 0, errors.New("float value is too large to be cast as a signed integer")
+		}
+		if t < float64(minInt) {
+			return 0, errors.New("float value is too small to be cast as a signed integer")
+		}
+		if t-float64(int64(t)) != 0 {
+			return 0, errors.New("float value contains decimals and therefore cannot be cast as a signed integer, if you intend to round the value then call `.round()` explicitly before this cast")
+		}
 		return int64(t), nil
 	case json.Number:
 		return t.Int64()
@@ -408,6 +427,85 @@ func IToInt(v any) (int64, error) {
 		return strconv.ParseInt(t, 10, 64)
 	}
 	return 0, NewTypeError(v, ValueNumber)
+}
+
+// IToInt32 takes a boxed value and attempts to extract a number (int32) from
+// it or parse one.
+func IToInt32(v any) (int32, error) {
+	i64, err := IToInt(v)
+	if err != nil {
+		return 0, err
+	}
+	if i64 > int64(maxInt32) {
+		return 0, errors.New("value is too large to be cast as a 32-bit signed integer")
+	}
+	if i64 < int64(minInt32) {
+		return 0, errors.New("value is too small to be cast as a 32-bit signed integer")
+	}
+	return int32(i64), nil
+}
+
+// IToUint takes a boxed value and attempts to extract a number (uint64) from it
+// or parse one.
+func IToUint(v any) (uint64, error) {
+	switch t := v.(type) {
+	case uint64:
+		return t, nil
+	case int:
+		if t < 0 {
+			return 0, errors.New("signed integer value is negative and cannot be cast as an unsigned integer")
+		}
+		return uint64(t), nil
+	case int64:
+		if t < 0 {
+			return 0, errors.New("signed integer value is negative and cannot be cast as an unsigned integer")
+		}
+		return uint64(t), nil
+	case float64:
+		if t < 0 {
+			return 0, errors.New("float value is negative and cannot be cast as an unsigned integer")
+		}
+		if math.IsInf(t, 0) {
+			return 0, errors.New("cannot convert +/-INF to an unsigned integer")
+		}
+		if math.IsNaN(t) {
+			return 0, errors.New("cannot convert NAN to an unsigned integer")
+		}
+		if t > float64(maxUint) {
+			return 0, errors.New("float value is too large to be cast as an unsigned integer")
+		}
+		if t-float64(uint64(t)) != 0 {
+			return 0, errors.New("float value contains decimals and therefore cannot be cast as an unsigned integer, if you intend to round the value then call `.round()` explicitly before this cast")
+		}
+		return uint64(t), nil
+	case json.Number:
+		i, err := t.Int64()
+		if err != nil {
+			return 0, err
+		}
+		if i < 0 {
+			return 0, errors.New("signed integer value is negative and cannot be cast as an unsigned integer")
+		}
+		return uint64(i), nil
+	case []byte:
+		return strconv.ParseUint(string(t), 10, 64)
+	case string:
+		return strconv.ParseUint(t, 10, 64)
+	}
+	return 0, NewTypeError(v, ValueNumber)
+}
+
+// IToUint32 takes a boxed value and attempts to extract a number (uint32) from
+// it or parse one.
+func IToUint32(v any) (uint32, error) {
+	u64, err := IToUint(v)
+	if err != nil {
+		return 0, err
+	}
+	if u64 > uint64(maxUint32) {
+		return 0, errors.New("value is too large to be cast as a 32-bit unsigned integer")
+	}
+	return uint32(u64), nil
 }
 
 // IToBool takes a boxed value and attempts to extract a boolean from it or

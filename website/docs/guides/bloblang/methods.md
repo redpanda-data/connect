@@ -780,7 +780,7 @@ root.new_value = this.value.abs()
 
 ### `ceil`
 
-Returns the least integer value greater than or equal to a number.
+Returns the least integer value greater than or equal to a number. If the resulting value fits within a 64-bit integer then that is returned, otherwise a new floating point number is returned.
 
 #### Examples
 
@@ -797,7 +797,7 @@ root.new_value = this.value.ceil()
 
 ### `floor`
 
-Returns the greatest integer value less than or equal to the target number.
+Returns the greatest integer value less than or equal to the target number. If the resulting value fits within a 64-bit integer then that is returned, otherwise a new floating point number is returned.
 
 #### Examples
 
@@ -807,6 +807,48 @@ root.new_value = this.value.floor()
 
 # In:  {"value":5.7}
 # Out: {"new_value":5}
+```
+
+### `int32`
+
+
+Converts a numerical type into a 32-bit signed integer, this is for advanced use cases where a specific data type is needed for a given component (such as the ClickHouse SQL driver).
+
+If the value is a string then an attempt will be made to parse it as a 32-bit integer. If the target value exceeds the capacity of an integer or contains decimal values then this method will throw an error. In order to convert a floating point number containing decimals first use [`.round()`](#round) on the value first.
+
+#### Examples
+
+
+```coffee
+
+root.a = this.a.int32()
+root.b = this.b.round().int32()
+root.c = this.c.int32()
+
+
+# In:  {"a":12,"b":12.34,"c":"12"}
+# Out: {"a":12,"b":12,"c":12}
+```
+
+### `int64`
+
+
+Converts a numerical type into a 64-bit signed integer, this is for advanced use cases where a specific data type is needed for a given component (such as the ClickHouse SQL driver).
+
+If the value is a string then an attempt will be made to parse it as a 64-bit integer. If the target value exceeds the capacity of an integer or contains decimal values then this method will throw an error. In order to convert a floating point number containing decimals first use [`.round()`](#round) on the value first.
+
+#### Examples
+
+
+```coffee
+
+root.a = this.a.int64()
+root.b = this.b.round().int64()
+root.c = this.c.int64()
+
+
+# In:  {"a":12,"b":12.34,"c":"12"}
+# Out: {"a":12,"b":12,"c":12}
 ```
 
 ### `log`
@@ -893,7 +935,7 @@ root.new_value = [10,this.value].min()
 
 ### `round`
 
-Rounds numbers to the nearest integer, rounding half away from zero.
+Rounds numbers to the nearest integer, rounding half away from zero. If the resulting value fits within a 64-bit integer then that is returned, otherwise a new floating point number is returned.
 
 #### Examples
 
@@ -906,6 +948,50 @@ root.new_value = this.value.round()
 
 # In:  {"value":5.9}
 # Out: {"new_value":6}
+```
+
+### `uint32`
+
+
+Converts a numerical type into a 32-bit unsigned integer, this is for advanced use cases where a specific data type is needed for a given component (such as the ClickHouse SQL driver).
+
+If the value is a string then an attempt will be made to parse it as a 32-bit unsigned integer. If the target value exceeds the capacity of an integer or contains decimal values then this method will throw an error. In order to convert a floating point number containing decimals first use [`.round()`](#round) on the value first.
+
+#### Examples
+
+
+```coffee
+
+root.a = this.a.uint32()
+root.b = this.b.round().uint32()
+root.c = this.c.uint32()
+root.d = this.d.uint32().catch(0)
+
+
+# In:  {"a":12,"b":12.34,"c":"12","d":-12}
+# Out: {"a":12,"b":12,"c":12,"d":0}
+```
+
+### `uint64`
+
+
+Converts a numerical type into a 64-bit unsigned integer, this is for advanced use cases where a specific data type is needed for a given component (such as the ClickHouse SQL driver).
+
+If the value is a string then an attempt will be made to parse it as a 64-bit unsigned integer. If the target value exceeds the capacity of an integer or contains decimal values then this method will throw an error. In order to convert a floating point number containing decimals first use [`.round()`](#round) on the value first.
+
+#### Examples
+
+
+```coffee
+
+root.a = this.a.uint64()
+root.b = this.b.round().uint64()
+root.c = this.c.uint64()
+root.d = this.d.uint64().catch(0)
+
+
+# In:  {"a":12,"b":12.34,"c":"12","d":-12}
+# Out: {"a":12,"b":12,"c":12,"d":0}
 ```
 
 ## Timestamp Manipulation
