@@ -385,7 +385,7 @@ const (
 	maxUint32 = ^uint32(0)
 	maxInt    = maxUint >> 1
 	maxInt32  = maxUint32 >> 1
-	minInt    = ^int(maxInt)
+	minInt    = ^int64(maxInt)
 	minInt32  = ^int32(maxInt32)
 )
 
