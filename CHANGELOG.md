@@ -20,6 +20,7 @@ All notable changes to this project will be documented in this file.
 - The `gcp_pubsub` input now supports optionally creating subscriptions.
 - New `sqlite` buffer.
 - Bloblang now has `int64`, `int32`, `uint64` and `uint32` methods for casting explicit integer types.
+- Field `application_properties_map` added to the `amqp1` output.
 
 ### Fixed
 

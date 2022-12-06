@@ -55,6 +55,7 @@ output:
       root_cas: ""
       root_cas_file: ""
       client_certs: []
+    application_properties_map: ""
     sasl:
       mechanism: none
       user: ""
@@ -258,6 +259,14 @@ password: foo
 
 password: ${KEY_PASSWORD}
 ```
+
+### `application_properties_map`
+
+An optional Bloblang mapping that can be defined in order to set the `application-properties` on output messages.
+
+
+Type: `string`  
+Default: `""`  
 
 ### `sasl`
 
