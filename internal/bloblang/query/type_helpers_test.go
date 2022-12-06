@@ -48,7 +48,7 @@ func TestIToInt(t *testing.T) {
 		},
 		{
 			in:  minInt,
-			out: int64(minInt),
+			out: minInt,
 		},
 		{
 			in:          float64(maxInt) + 10000,
