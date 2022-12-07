@@ -100,9 +100,9 @@ func newAirGapBatchProcessor(typeStr string, p BatchProcessor, mgr bundle.NewMan
 }
 
 func (a *airGapBatchProcessor) ProcessBatch(ctx context.Context, spans []*tracing.Span, batch message.Batch) ([]message.Batch, error) {
-	inputBatch := make([]*Message, batch.Len())
+	inputBatch := make([]*Message, 0, batch.Len())
 	_ = batch.Iter(func(i int, p *message.Part) error {
-		inputBatch[i] = newMessageFromPart(p)
+		inputBatch = append(inputBatch, newMessageFromPart(p))
 		return nil
 	})
 
@@ -111,13 +111,13 @@ func (a *airGapBatchProcessor) ProcessBatch(ctx context.Context, spans []*tracin
 		return nil, err
 	}
 
-	newBatches := make([]message.Batch, len(outputBatches))
-	for i, batch := range outputBatches {
-		newBatch := make(message.Batch, len(batch))
-		for i, m := range batch {
-			newBatch[i] = m.part
+	newBatches := make([]message.Batch, 0, len(outputBatches))
+	for _, batch := range outputBatches {
+		newBatch := make(message.Batch, 0, len(batch))
+		for _, m := range batch {
+			newBatch = append(newBatch, m.part)
 		}
-		newBatches[i] = newBatch
+		newBatches = append(newBatches, newBatch)
 	}
 
 	return newBatches, nil
@@ -145,7 +145,11 @@ func (o *OwnedProcessor) Process(ctx context.Context, msg *Message) (MessageBatc
 		return nil, res
 	}
 
-	var b MessageBatch
+	outputBatchLength := 0
+	for _, iMsg := range iMsgs {
+		outputBatchLength += iMsg.Len()
+	}
+	b := make(MessageBatch, 0, outputBatchLength)
 	for _, iMsg := range iMsgs {
 		_ = iMsg.Iter(func(i int, part *message.Part) error {
 			b = append(b, newMessageFromPart(part))
@@ -163,9 +167,9 @@ func (o *OwnedProcessor) Process(ctx context.Context, msg *Message) (MessageBatc
 // error is marked against individual messages with the `SetError` method and a
 // nil error is returned by this method.
 func (o *OwnedProcessor) ProcessBatch(ctx context.Context, batch MessageBatch) ([]MessageBatch, error) {
-	outMsg := make(message.Batch, len(batch))
-	for i, msg := range batch {
-		outMsg[i] = msg.part
+	outMsg := make(message.Batch, 0, len(batch))
+	for _, msg := range batch {
+		outMsg = append(outMsg, msg.part)
 	}
 
 	iMsgs, res := o.p.ProcessBatch(ctx, outMsg)
@@ -173,9 +177,9 @@ func (o *OwnedProcessor) ProcessBatch(ctx context.Context, batch MessageBatch) (
 		return nil, res
 	}
 
-	var batches []MessageBatch
+	batches := make([]MessageBatch, 0, len(iMsgs))
 	for _, iMsg := range iMsgs {
-		var b MessageBatch
+		b := make(MessageBatch, 0, iMsg.Len())
 		_ = iMsg.Iter(func(i int, part *message.Part) error {
 			b = append(b, newMessageFromPart(part))
 			return nil
