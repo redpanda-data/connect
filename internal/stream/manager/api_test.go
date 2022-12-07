@@ -609,8 +609,9 @@ func TestTypeAPIStreamsLinting(t *testing.T) {
 	response := httptest.NewRecorder()
 	r.ServeHTTP(response, request)
 	assert.Equal(t, http.StatusBadRequest, response.Code)
+	assert.Equal(t, "application/json", response.Result().Header.Get("Content-Type"))
 
-	expLints := `{"lint_errors":["stream 'bar': (15,1) field generate is invalid when the component type is inproc (input)","stream 'foo': (10,1) field inproc is invalid when the component type is drop (output)"]}`
+	expLints := `{"lint_errors":["stream 'foo': (10,1) field inproc is invalid when the component type is drop (output)","stream 'bar': (15,1) field generate is invalid when the component type is inproc (input)"]}`
 	assert.Equal(t, expLints, response.Body.String())
 
 	request, err = http.NewRequest("POST", "/streams?chilled=true", bytes.NewReader(body))
@@ -682,6 +683,7 @@ func TestTypeAPILinting(t *testing.T) {
 	response := httptest.NewRecorder()
 	r.ServeHTTP(response, request)
 	assert.Equal(t, http.StatusBadRequest, response.Code)
+	assert.Equal(t, "application/json", response.Result().Header.Get("Content-Type"))
 
 	expLints := `{"lint_errors":["(9,1) field inproc is invalid when the component type is drop (output)","(11,1) field cache_resources not recognised"]}`
 	assert.Equal(t, expLints, response.Body.String())
@@ -773,6 +775,7 @@ func TestResourceAPILinting(t *testing.T) {
 			response := httptest.NewRecorder()
 			r.ServeHTTP(response, request)
 			assert.Equal(t, http.StatusBadRequest, response.Code)
+			assert.Equal(t, "application/json", response.Result().Header.Get("Content-Type"))
 
 			expLints, err := json.Marshal(struct {
 				LintErrors []string `json:"lint_errors"`

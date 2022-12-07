@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"sort"
 	"strings"
 	"sync"
 
@@ -81,6 +80,10 @@ func (c ConfigSet) UnmarshalYAML(value *yaml.Node) error {
 		c[k] = conf
 	}
 	return nil
+}
+
+type lintErrors struct {
+	LintErrs []string `json:"lint_errors"`
 }
 
 func lintStreamConfigNode(node *yaml.Node) (lints []string) {
@@ -161,12 +164,10 @@ func (m *Type) HandleStreamsCRUD(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		if len(lints) > 0 {
-			sort.Strings(lints)
-			errBytes, _ := json.Marshal(struct {
-				LintErrs []string `json:"lint_errors"`
-			}{
+			errBytes, _ := json.Marshal(lintErrors{
 				LintErrs: lints,
 			})
+			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusBadRequest)
 			_, _ = w.Write(errBytes)
 			return
@@ -343,11 +344,10 @@ func (m *Type) HandleStreamCRUD(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if len(lints) > 0 {
-			errBytes, _ := json.Marshal(struct {
-				LintErrs []string `json:"lint_errors"`
-			}{
+			errBytes, _ := json.Marshal(lintErrors{
 				LintErrs: lints,
 			})
+			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusBadRequest)
 			_, _ = w.Write(errBytes)
 			return
@@ -381,11 +381,10 @@ func (m *Type) HandleStreamCRUD(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if len(lints) > 0 {
-			errBytes, _ := json.Marshal(struct {
-				LintErrs []string `json:"lint_errors"`
-			}{
+			errBytes, _ := json.Marshal(lintErrors{
 				LintErrs: lints,
 			})
+			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusBadRequest)
 			_, _ = w.Write(errBytes)
 			return
@@ -522,11 +521,10 @@ func (m *Type) HandleResourceCRUD(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if len(lints) > 0 {
-		errBytes, _ := json.Marshal(struct {
-			LintErrs []string `json:"lint_errors"`
-		}{
+		errBytes, _ := json.Marshal(lintErrors{
 			LintErrs: lints,
 		})
+		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
 		_, _ = w.Write(errBytes)
 		return
