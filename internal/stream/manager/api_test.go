@@ -611,8 +611,15 @@ func TestTypeAPIStreamsLinting(t *testing.T) {
 	assert.Equal(t, http.StatusBadRequest, response.Code)
 	assert.Equal(t, "application/json", response.Result().Header.Get("Content-Type"))
 
-	expLints := `{"lint_errors":["stream 'foo': (10,1) field inproc is invalid when the component type is drop (output)","stream 'bar': (15,1) field generate is invalid when the component type is inproc (input)"]}`
-	assert.Equal(t, expLints, response.Body.String())
+	expLints := []string{
+		"stream 'foo': (10,1) field inproc is invalid when the component type is drop (output)",
+		"stream 'bar': (15,1) field generate is invalid when the component type is inproc (input)",
+	}
+	var actLints struct {
+		LintErrors []string `json:"lint_errors"`
+	}
+	require.NoError(t, json.Unmarshal(response.Body.Bytes(), &actLints))
+	assert.ElementsMatch(t, expLints, actLints.LintErrors)
 
 	request, err = http.NewRequest("POST", "/streams?chilled=true", bytes.NewReader(body))
 	require.NoError(t, err)
