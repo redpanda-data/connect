@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"strconv"
 	"testing"
 	"time"
 
@@ -29,14 +30,20 @@ func TestCSVReaderHappy(t *testing.T) {
 		handle.Write([]byte("\n"))
 	}
 
+	dummyFile := "foo/bar.csv"
+	dummyTimeUTC := time.Now().UTC()
 	ctored := false
 	f, err := newCSVReader(
-		func(ctx context.Context) (io.Reader, error) {
+		func(ctx context.Context) (csvScannerInfo, error) {
 			if ctored {
-				return nil, io.EOF
+				return csvScannerInfo{}, io.EOF
 			}
 			ctored = true
-			return &handle, nil
+			return csvScannerInfo{
+				handle:      &handle,
+				currentPath: dummyFile,
+				modTimeUTC:  dummyTimeUTC,
+			}, nil
 		},
 		func(ctx context.Context) {},
 	)
@@ -60,6 +67,10 @@ func TestCSVReaderHappy(t *testing.T) {
 		require.NoError(t, err)
 
 		assert.Equal(t, exp, string(resMsg.Get(0).AsBytes()))
+
+		assert.Equal(t, dummyFile, resMsg.Get(0).MetaGetStr("path"))
+		assert.Equal(t, dummyTimeUTC.Format(time.RFC3339), resMsg.Get(0).MetaGetStr("mod_time"))
+		assert.Equal(t, strconv.Itoa(int(dummyTimeUTC.Unix())), resMsg.Get(0).MetaGetStr("mod_time_unix"))
 	}
 
 	_, _, err = f.ReadBatch(context.Background())
@@ -88,12 +99,12 @@ func TestCSVReaderGroupCount(t *testing.T) {
 
 	ctored := false
 	f, err := newCSVReader(
-		func(ctx context.Context) (io.Reader, error) {
+		func(ctx context.Context) (csvScannerInfo, error) {
 			if ctored {
-				return nil, io.EOF
+				return csvScannerInfo{}, io.EOF
 			}
 			ctored = true
-			return &handle, nil
+			return csvScannerInfo{handle: &handle}, nil
 		},
 		func(ctx context.Context) {},
 		optCSVSetGroupCount(3),
@@ -166,15 +177,15 @@ func TestCSVReadersTwoFiles(t *testing.T) {
 	consumedFirst, consumedSecond := false, false
 
 	f, err := newCSVReader(
-		func(ctx context.Context) (io.Reader, error) {
+		func(ctx context.Context) (csvScannerInfo, error) {
 			if !consumedFirst {
 				consumedFirst = true
-				return &handleOne, nil
+				return csvScannerInfo{handle: &handleOne}, nil
 			} else if !consumedSecond {
 				consumedSecond = true
-				return &handleTwo, nil
+				return csvScannerInfo{handle: &handleTwo}, nil
 			}
-			return nil, io.EOF
+			return csvScannerInfo{}, io.EOF
 		},
 		func(ctx context.Context) {},
 	)
@@ -230,12 +241,12 @@ func TestCSVReaderCustomComma(t *testing.T) {
 
 	ctored := false
 	f, err := newCSVReader(
-		func(ctx context.Context) (io.Reader, error) {
+		func(ctx context.Context) (csvScannerInfo, error) {
 			if ctored {
-				return nil, io.EOF
+				return csvScannerInfo{}, io.EOF
 			}
 			ctored = true
-			return &handle, nil
+			return csvScannerInfo{handle: &handle}, nil
 		},
 		func(ctx context.Context) {},
 		optCSVSetComma('|'),
@@ -285,12 +296,12 @@ func TestCSVReaderRelaxed(t *testing.T) {
 
 	ctored := false
 	f, err := newCSVReader(
-		func(ctx context.Context) (io.Reader, error) {
+		func(ctx context.Context) (csvScannerInfo, error) {
 			if ctored {
-				return nil, io.EOF
+				return csvScannerInfo{}, io.EOF
 			}
 			ctored = true
-			return &handle, nil
+			return csvScannerInfo{handle: &handle}, nil
 		},
 		func(ctx context.Context) {},
 		optCSVSetStrict(false),
@@ -341,12 +352,12 @@ func TestCSVReaderStrict(t *testing.T) {
 
 	ctored := false
 	f, err := newCSVReader(
-		func(ctx context.Context) (io.Reader, error) {
+		func(ctx context.Context) (csvScannerInfo, error) {
 			if ctored {
-				return nil, io.EOF
+				return csvScannerInfo{}, io.EOF
 			}
 			ctored = true
-			return &handle, nil
+			return csvScannerInfo{handle: &handle}, nil
 		},
 		func(ctx context.Context) {},
 		optCSVSetStrict(true),
@@ -386,7 +397,7 @@ func TestCSVReaderStrict(t *testing.T) {
 	assert.Equal(t, component.ErrTypeClosed, err)
 }
 
-func TestLazyQuotes(t *testing.T) {
+func TestCSVReaderLazyQuotes(t *testing.T) {
 	tests := []struct {
 		name        string
 		lazyQuotes  bool
@@ -437,11 +448,11 @@ func TestLazyQuotes(t *testing.T) {
 		handle.Write([]byte(test.input))
 
 		f, err := newCSVReader(
-			func(ctx context.Context) (io.Reader, error) {
-				return &handle, nil
+			func(ctx context.Context) (csvScannerInfo, error) {
+				return csvScannerInfo{handle: &handle}, nil
 			},
 			func(ctx context.Context) {},
-			optCSVSetExpectHeaders(false),
+			optCSVSetExpectHeader(false),
 			optCSVSetLazyQuotes(test.lazyQuotes),
 		)
 		require.NoError(t, err, test.name)

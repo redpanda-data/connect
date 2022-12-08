@@ -2398,16 +2398,51 @@ root.doc = this.doc.format_yaml().string()
 
 ### `parse_csv`
 
-Attempts to parse a string into an array of objects by following the CSV format described in RFC 4180. The first line is assumed to be a header row, which determines the keys of values in each object.
+Attempts to parse a string into an array of objects by following the CSV format described in RFC 4180.
+
+#### Parameters
+
+**`parse_header_row`** &lt;bool, default `true`&gt; Whether to reference the first row as a header row. If set to true the output structure for messages will be an object where field keys are determined by the header row. Otherwise, the output will be an array of row arrays.  
+**`delimiter`** &lt;string, default `","`&gt; The delimiter to use for splitting values in each record. It must be a single character.  
+**`lazy_quotes`** &lt;bool, default `false`&gt; If set to `true`, a quote may appear in an unquoted field and a non-doubled quote may appear in a quoted field.  
 
 #### Examples
 
+
+Parses CSV data with a header row
 
 ```coffee
 root.orders = this.orders.parse_csv()
 
 # In:  {"orders":"foo,bar\nfoo 1,bar 1\nfoo 2,bar 2"}
 # Out: {"orders":[{"bar":"bar 1","foo":"foo 1"},{"bar":"bar 2","foo":"foo 2"}]}
+```
+
+Parses CSV data without a header row
+
+```coffee
+root.orders = this.orders.parse_csv(false)
+
+# In:  {"orders":"foo 1,bar 1\nfoo 2,bar 2"}
+# Out: {"orders":[["foo 1","bar 1"],["foo 2","bar 2"]]}
+```
+
+Parses CSV data delimited by dots
+
+```coffee
+root.orders = this.orders.parse_csv(delimiter:".")
+
+# In:  {"orders":"foo.bar\nfoo 1.bar 1\nfoo 2.bar 2"}
+# Out: {"orders":[{"bar":"bar 1","foo":"foo 1"},{"bar":"bar 2","foo":"foo 2"}]}
+```
+
+Parses CSV data containing a quote in an unquoted field
+
+```coffee
+root.orders = this.orders.parse_csv(lazy_quotes:true)
+
+# In:  {"orders":"foo,bar\nfoo 1,bar 1\nfoo\" \"2,bar\" \"2"}
+# Out: {"orders":[{"bar":"bar 1","foo":"foo 1"},{"bar":"bar\" \"2","foo":"foo\" \"2"}]}
 ```
 
 ### `parse_form_url_encoded`

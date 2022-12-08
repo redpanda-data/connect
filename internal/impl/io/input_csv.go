@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"sync"
+	"time"
 
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component"
@@ -16,6 +17,13 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/filepath"
 	"github.com/benthosdev/benthos/v4/internal/message"
 )
+
+type csvScannerInfo struct {
+	handle      io.Reader
+	deleteFn    func() error
+	currentPath string
+	modTimeUTC  time.Time
+}
 
 func init() {
 	err := bundle.AllInputs.Add(processors.WrapConstructor(func(conf input.Config, nm bundle.NewManagement) (input.Streamed, error) {
@@ -39,25 +47,41 @@ func init() {
 		}
 
 		rdr, err := newCSVReader(
-			func(context.Context) (io.Reader, error) {
+			func(context.Context) (csvScannerInfo, error) {
 				if len(pathsRemaining) == 0 {
-					return nil, io.EOF
+					return csvScannerInfo{}, io.EOF
 				}
 
 				path := pathsRemaining[0]
 				handle, err := nm.FS().Open(path)
 				if err != nil {
-					return nil, err
+					return csvScannerInfo{}, err
 				}
+
+				var modTimeUTC time.Time
+				if fInfo, err := handle.Stat(); err == nil {
+					modTimeUTC = fInfo.ModTime().UTC()
+				} else {
+					nm.Logger().Errorf("Failed to read metadata from file '%v'", path)
+				}
+
 				pathsRemaining = pathsRemaining[1:]
 
-				return handle, nil
+				return csvScannerInfo{
+					handle: handle,
+					deleteFn: func() error {
+						return nm.FS().Remove(path)
+					},
+					currentPath: path,
+					modTimeUTC:  modTimeUTC,
+				}, nil
 			},
 			func(context.Context) {},
 			optCSVSetComma(comma),
-			optCSVSetExpectHeaders(conf.CSVFile.ParseHeaderRow),
+			optCSVSetExpectHeader(conf.CSVFile.ParseHeaderRow),
 			optCSVSetGroupCount(conf.CSVFile.BatchCount),
 			optCSVSetLazyQuotes(conf.CSVFile.LazyQuotes),
+			optCSVSetDeleteOnFinish(conf.CSVFile.DeleteOnFinish),
 		)
 		if err != nil {
 			return nil, err
@@ -73,10 +97,11 @@ func init() {
 				"paths", "A list of file paths to read from. Each file will be read sequentially until the list is exhausted, at which point the input will close. Glob patterns are supported, including super globs (double star).",
 				[]string{"/tmp/foo.csv", "/tmp/bar/*.csv", "/tmp/data/**/*.csv"},
 			).Array(),
-			docs.FieldBool("parse_header_row", "Whether to reference the first row as a header row. If set to true the output structure for messages will be an object where field keys are determined by the header row."),
-			docs.FieldString("delimiter", `The delimiter to use for splitting values in each record, must be a single character.`),
-			docs.FieldInt("batch_count", `Optionally process records in batches. This can help to speed up the consumption of exceptionally large CSV files. When the end of the file is reached the remaining records are processed as a (potentially smaller) batch.`).Advanced(),
+			docs.FieldBool("parse_header_row", "Whether to reference the first row as a header row. If set to true the output structure for messages will be an object where field keys are determined by the header row. Otherwise, each message will consist of an array of values from the corresponding CSV row."),
+			docs.FieldString("delimiter", `The delimiter to use for splitting values in each record. It must be a single character.`),
 			docs.FieldBool("lazy_quotes", "If set to `true`, a quote may appear in an unquoted field and a non-doubled quote may appear in a quoted field.").AtVersion("4.1.0"),
+			docs.FieldBool("delete_on_finish", "Whether to delete input files from the disk once they are fully consumed.").Advanced(),
+			docs.FieldInt("batch_count", `Optionally process records in batches. This can help to speed up the consumption of exceptionally large CSV files. When the end of the file is reached the remaining records are processed as a (potentially smaller) batch.`).Advanced(),
 		).ChildDefaultAndTypesFromStruct(input.NewCSVFileConfig()),
 		Description: `
 This input offers more control over CSV parsing than the ` + "[`file` input](/docs/components/inputs/file)" + `.
@@ -101,7 +126,56 @@ If, however, the field ` + "`parse_header_row` is set to `false`" + ` then array
 ` + "```json" + `
 ["first foo","first bar","first baz"]
 ["second foo","second bar","second baz"]
-` + "```" + ``,
+` + "```" + `
+
+### Metadata
+
+This input adds the following metadata fields to each message:
+
+` + "```text" + `
+- header
+- path
+- mod_time_unix
+- mod_time (RFC3339)
+` + "```" + `
+
+You can access these metadata fields using [function interpolation](/docs/configuration/interpolation#metadata).
+
+Note: The ` + "`header`" + ` field is only set when ` + "`parse_header_row`" + ` is ` + "`true`" + `.
+
+### Output CSV column order
+
+When [creating CSV](/docs/guides/bloblang/advanced#creating-csv) from Benthos messages, the columns must be sorted lexicographically to make the output deterministic. Alternatively, when using the ` + "`csv`" + ` input, one can leverage the ` + "`header`" + ` metadata field to retrieve the column order:
+
+` + "```yaml" + `
+input:
+  csv:
+    paths:
+      - ./foo.csv
+      - ./bar.csv
+    parse_header_row: true
+
+  processors:
+    - mapping: |
+        map escape_csv {
+          root = if this.re_match("[\"\n,]+") {
+            "\"" + this.replace_all("\"", "\"\"") + "\""
+          } else {
+            this
+          }
+        }
+
+        let header = if count(@path) == 1 {
+          @header.map_each(c -> c.apply("escape_csv")).join(",") + "\n"
+        } else { "" }
+
+        root = $header + @header.map_each(c -> this.get(c).string().apply("escape_csv")).join(",")
+
+output:
+  file:
+    path: ./output/${! @path.filepath_split().index(-1) }
+` + "```" + `
+`,
 		Categories: []string{
 			"Local",
 		},
@@ -119,19 +193,21 @@ input types it's also possible to parse them using the
 //------------------------------------------------------------------------------
 
 type csvReader struct {
-	handleCtor func(ctx context.Context) (io.Reader, error)
+	handleCtor func(ctx context.Context) (csvScannerInfo, error)
 	onClose    func(ctx context.Context)
 
-	mut     sync.Mutex
-	handle  io.Reader
-	scanner *csv.Reader
-	headers []string
+	mut         sync.Mutex
+	handle      io.Reader
+	scanner     *csv.Reader
+	scannerInfo csvScannerInfo
+	header      []any
 
-	expectHeaders bool
-	comma         rune
-	strict        bool
-	groupCount    int
-	lazyQuotes    bool
+	expectHeader bool
+	comma        rune
+	strict       bool
+	groupCount   int
+	lazyQuotes   bool
+	delete       bool
 }
 
 // newCSVReader creates a new reader input type able to create a feed of line
@@ -146,18 +222,19 @@ type csvReader struct {
 // CSV has been instructed to shut down. This function should unblock any
 // blocked Read calls.
 func newCSVReader(
-	handleCtor func(ctx context.Context) (io.Reader, error),
+	handleCtor func(ctx context.Context) (csvScannerInfo, error),
 	onClose func(ctx context.Context),
 	options ...func(r *csvReader),
 ) (*csvReader, error) {
 	r := csvReader{
-		handleCtor:    handleCtor,
-		onClose:       onClose,
-		comma:         ',',
-		expectHeaders: true,
-		strict:        false,
-		groupCount:    1,
-		lazyQuotes:    false,
+		handleCtor:   handleCtor,
+		onClose:      onClose,
+		comma:        ',',
+		expectHeader: true,
+		strict:       false,
+		groupCount:   1,
+		lazyQuotes:   false,
+		delete:       false,
 	}
 
 	for _, opt := range options {
@@ -170,7 +247,7 @@ func newCSVReader(
 //------------------------------------------------------------------------------
 
 // OptCSVSetComma is a option func that sets the comma character (default ',')
-// to be used to divide records.
+// to be used to divide record fields.
 func optCSVSetComma(comma rune) func(r *csvReader) {
 	return func(r *csvReader) {
 		r.comma = comma
@@ -185,15 +262,15 @@ func optCSVSetGroupCount(groupCount int) func(r *csvReader) {
 	}
 }
 
-// OptCSVSetExpectHeaders is a option func that determines whether the first
+// OptCSVSetExpectHeader is an option func that determines whether the first
 // record from the CSV input outlines the names of columns.
-func optCSVSetExpectHeaders(expect bool) func(r *csvReader) {
+func optCSVSetExpectHeader(expect bool) func(r *csvReader) {
 	return func(r *csvReader) {
-		r.expectHeaders = expect
+		r.expectHeader = expect
 	}
 }
 
-// OptCSVSetStrict is a option func that determines whether records with
+// OptCSVSetStrict is an option func that determines whether records with
 // misaligned numbers of fields should be rejected.
 func optCSVSetStrict(strict bool) func(r *csvReader) {
 	return func(r *csvReader) {
@@ -201,11 +278,19 @@ func optCSVSetStrict(strict bool) func(r *csvReader) {
 	}
 }
 
-// optCSVSetLazyQuotes is a option func that determines whether a quote may
+// optCSVSetLazyQuotes is an option func that determines whether a quote may
 // appear in an unquoted field and a non-doubled quote may appear in a quoted field.
 func optCSVSetLazyQuotes(lazyQuotes bool) func(r *csvReader) {
 	return func(r *csvReader) {
 		r.lazyQuotes = lazyQuotes
+	}
+}
+
+// optCSVSetDeleteOnFinish is an option func that determines whether to delete
+// consumed files from the disk once they are fully consumed.
+func optCSVSetDeleteOnFinish(del bool) func(r *csvReader) {
+	return func(r *csvReader) {
+		r.delete = del
 	}
 }
 
@@ -228,7 +313,7 @@ func (r *csvReader) Connect(ctx context.Context) error {
 		return nil
 	}
 
-	handle, err := r.handleCtor(ctx)
+	scannerInfo, err := r.handleCtor(ctx)
 	if err != nil {
 		if errors.Is(err, io.EOF) {
 			return component.ErrTypeClosed
@@ -236,36 +321,45 @@ func (r *csvReader) Connect(ctx context.Context) error {
 		return err
 	}
 
-	scanner := csv.NewReader(handle)
+	scanner := csv.NewReader(scannerInfo.handle)
 	scanner.LazyQuotes = r.lazyQuotes
 	scanner.Comma = r.comma
 	scanner.ReuseRecord = true
 
 	r.scanner = scanner
-	r.handle = handle
+	r.scannerInfo = scannerInfo
 
 	return nil
 }
 
 func (r *csvReader) readNext(reader *csv.Reader) ([]string, error) {
-	records, err := reader.Read()
-	if err != nil && (r.strict || len(records) == 0) {
+	record, err := reader.Read()
+	if err != nil && (r.strict || len(record) == 0) {
 		if errors.Is(err, io.EOF) {
+			var deleteFn func() error
 			r.mut.Lock()
 			r.scanner = nil
-			r.headers = nil
+			r.header = nil
+			deleteFn = r.scannerInfo.deleteFn
 			r.mut.Unlock()
+
+			if r.delete {
+				if err := deleteFn(); err != nil {
+					return nil, err
+				}
+			}
 			return nil, component.ErrNotConnected
 		}
 		return nil, err
 	}
-	return records, nil
+	return record, nil
 }
 
 func (r *csvReader) ReadBatch(ctx context.Context) (message.Batch, input.AsyncAckFn, error) {
 	r.mut.Lock()
 	scanner := r.scanner
-	headers := r.headers
+	scannerInfo := r.scannerInfo
+	header := r.header
 	r.mut.Unlock()
 
 	if scanner == nil {
@@ -275,7 +369,7 @@ func (r *csvReader) ReadBatch(ctx context.Context) (message.Batch, input.AsyncAc
 	msg := message.QuickBatch(nil)
 
 	for i := 0; i < r.groupCount; i++ {
-		records, err := r.readNext(scanner)
+		record, err := r.readNext(scanner)
 		if err != nil {
 			if i == 0 {
 				return nil, nil, err
@@ -283,15 +377,17 @@ func (r *csvReader) ReadBatch(ctx context.Context) (message.Batch, input.AsyncAc
 			break
 		}
 
-		if r.expectHeaders && headers == nil {
-			headers = make([]string, 0, len(records))
-			headers = append(headers, records...)
+		if r.expectHeader && header == nil {
+			header = make([]any, 0, len(record))
+			for _, rec := range record {
+				header = append(header, rec)
+			}
 
 			r.mut.Lock()
-			r.headers = headers
+			r.header = header
 			r.mut.Unlock()
 
-			if records, err = r.readNext(scanner); err != nil {
+			if record, err = r.readNext(scanner); err != nil {
 				return nil, nil, err
 			}
 		}
@@ -299,19 +395,27 @@ func (r *csvReader) ReadBatch(ctx context.Context) (message.Batch, input.AsyncAc
 		part := message.NewPart(nil)
 
 		var structured any
-		if len(headers) == 0 || len(headers) < len(records) {
-			slice := make([]any, 0, len(records))
-			for _, r := range records {
+		if len(header) == 0 || len(header) < len(record) {
+			slice := make([]any, 0, len(record))
+			for _, r := range record {
 				slice = append(slice, r)
 			}
 			structured = slice
 		} else {
-			obj := make(map[string]any, len(records))
-			for i, r := range records {
-				obj[headers[i]] = r
+			obj := make(map[string]any, len(record))
+			for i, r := range record {
+				// The `header` slice contains only strings, but we define it as `[]any` so it resolves to a bloblang
+				// array when we extract it from the metadata.
+				obj[header[i].(string)] = r
 			}
 			structured = obj
+
+			part.MetaSetMut("header", header)
 		}
+
+		part.MetaSetMut("path", scannerInfo.currentPath)
+		part.MetaSetMut("mod_time_unix", scannerInfo.modTimeUTC.Unix())
+		part.MetaSetMut("mod_time", scannerInfo.modTimeUTC.Format(time.RFC3339))
 
 		part.SetStructuredMut(structured)
 		msg = append(msg, part)
