@@ -24,6 +24,7 @@ All notable changes to this project will be documented in this file.
 - Param `parse_header_row`, `delimiter` and `lazy_quotes` added to the `parse_csv` bloblang method.
 - Field `delete_on_finish` added to the `csv` input.
 - Metadata fields `header`, `path`, `mod_time_unix` and `mod_time` added to the `csv` input.
+- New `couchbase` processor.
 
 ### Fixed
 

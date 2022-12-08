@@ -23,7 +23,7 @@ var (
 func ProcessorConfig() *service.ConfigSpec {
 	return client.NewConfigSpec().
 		// TODO Stable().
-		Version("4.10.0").
+		Version("4.11.0").
 		Categories("Integration").
 		Summary("Performs operations against Couchbase for each message, allowing you to store or retrieve data within message payloads.").
 		Description("When inserting, replacing or upserting documents, each must have the `content` property set.").
