@@ -25,20 +25,31 @@ import (
 
 // Build stamps.
 var (
-	Version   string
-	DateBuilt string
+	Version   = "unknown"
+	DateBuilt = "unknown"
 )
 
 func init() {
-	if Version == "" {
-		if info, ok := debug.ReadBuildInfo(); ok {
-			for _, mod := range info.Deps {
-				if mod.Path == "github.com/benthosdev/benthos/v4" {
-					Version = mod.Version
+	if info, ok := debug.ReadBuildInfo(); ok {
+		for _, mod := range info.Deps {
+			if mod.Path == "github.com/benthosdev/benthos/v4" {
+				Version = mod.Version
+				if mod.Replace != nil {
+					v := mod.Replace.Version
+					if v != "" {
+						Version = v
+					}
 				}
 			}
 		}
-		DateBuilt = "unknown"
+		for _, s := range info.Settings {
+			if s.Key == "vcs.revision" && Version == "unknown" {
+				Version = s.Value
+			}
+			if s.Key == "vcs.time" && DateBuilt == "unknown" {
+				DateBuilt = s.Value
+			}
+		}
 	}
 }
 
@@ -84,18 +95,7 @@ func OptUseContext(ctx context.Context) func() {
 //------------------------------------------------------------------------------
 
 func cmdVersion() {
-	version, dateBuilt := Version, DateBuilt
-	if version == "" {
-		info, ok := debug.ReadBuildInfo()
-		if ok {
-			for _, mod := range info.Deps {
-				if mod.Path == "github.com/benthosdev/benthos/v4" {
-					version = mod.Version
-				}
-			}
-		}
-	}
-	fmt.Printf("Version: %v\nDate: %v\n", version, dateBuilt)
+	fmt.Printf("Version: %v\nDate: %v\n", Version, DateBuilt)
 	os.Exit(0)
 }
 
