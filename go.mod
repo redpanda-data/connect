@@ -31,6 +31,7 @@ require (
 	github.com/cenkalti/backoff/v4 v4.1.3
 	github.com/clbanning/mxj/v2 v2.5.5
 	github.com/colinmarc/hdfs v1.1.3
+	github.com/couchbase/gocb/v2 v2.6.0
 	github.com/denisenkom/go-mssqldb v0.11.0
 	github.com/dgraph-io/ristretto v0.1.0
 	github.com/dustin/go-humanize v1.0.0
@@ -162,6 +163,7 @@ require (
 	github.com/cespare/xxhash/v2 v2.1.2 // indirect
 	github.com/cockroachdb/apd/v2 v2.0.1 // indirect
 	github.com/containerd/continuity v0.2.2 // indirect
+	github.com/couchbase/gocbcore/v10 v10.2.0 // indirect
 	github.com/cpuguy83/go-md2man/v2 v2.0.2 // indirect
 	github.com/danieljoos/wincred v1.1.2 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
