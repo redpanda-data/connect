@@ -3,6 +3,9 @@ package pure
 import (
 	"context"
 
+	"github.com/benthosdev/benthos/v4/internal/bloblang/mapping"
+	"github.com/benthosdev/benthos/v4/internal/component/interop"
+	"github.com/benthosdev/benthos/v4/internal/message"
 	"github.com/benthosdev/benthos/v4/public/bloblang"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
@@ -114,7 +117,8 @@ pipeline:
 			if err != nil {
 				return nil, err
 			}
-			return newMapping(mapping, mgr.Logger()), nil
+
+			return interop.NewUnwrapInternalBatchProcessor(newMapping(mapping, mgr.Logger())), nil
 		})
 	if err != nil {
 		panic(err)
@@ -122,24 +126,28 @@ pipeline:
 }
 
 type mappingProc struct {
-	exec *bloblang.Executor
+	exec *mapping.Executor
 	log  *service.Logger
 }
 
-func newMapping(exec *bloblang.Executor, log *service.Logger) service.BatchProcessor {
+func newMapping(exec *bloblang.Executor, log *service.Logger) *mappingProc {
+	uw := exec.XUnwrapper().(interface {
+		Unwrap() *mapping.Executor
+	}).Unwrap()
+
 	return &mappingProc{
-		exec: exec,
+		exec: uw,
 		log:  log,
 	}
 }
 
-func (m *mappingProc) ProcessBatch(ctx context.Context, batch service.MessageBatch) ([]service.MessageBatch, error) {
-	newBatch := make(service.MessageBatch, 0, len(batch))
-	for i, msg := range batch {
-		newPart, err := batch.BloblangQuery(i, m.exec)
+func (m *mappingProc) ProcessBatch(ctx context.Context, b message.Batch) ([]message.Batch, error) {
+	newBatch := make(message.Batch, 0, len(b))
+	for i, msg := range b {
+		newPart, err := m.exec.MapPart(i, b)
 		if err != nil {
 			m.log.Error(err.Error())
-			msg.SetError(err)
+			msg.ErrorSet(err)
 			newBatch = append(newBatch, msg)
 			continue
 		}
@@ -150,7 +158,7 @@ func (m *mappingProc) ProcessBatch(ctx context.Context, batch service.MessageBat
 	if len(newBatch) == 0 {
 		return nil, nil
 	}
-	return []service.MessageBatch{newBatch}, nil
+	return []message.Batch{newBatch}, nil
 }
 
 func (m *mappingProc) Close(context.Context) error {

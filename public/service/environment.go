@@ -350,6 +350,11 @@ func (e *Environment) RegisterBatchProcessor(name string, spec *ConfigSpec, ctor
 		if err != nil {
 			return nil, err
 		}
+		if u, ok := r.(interface {
+			Unwrap() processor.V1
+		}); ok {
+			return u.Unwrap(), nil
+		}
 		return newAirGapBatchProcessor(conf.Type, r, nm), nil
 	}, componentSpec)
 }
