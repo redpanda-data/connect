@@ -36,6 +36,7 @@ input:
     channel: ""
     user_agent: ""
     max_in_flight: 100
+    max_attempts: 5
 ```
 
 </TabItem>
@@ -59,10 +60,25 @@ input:
     channel: ""
     user_agent: ""
     max_in_flight: 100
+    max_attempts: 5
 ```
 
 </TabItem>
 </Tabs>
+
+### Metadata
+
+This input adds the following metadata fields to each message:
+
+``` text
+- nsq_attempts
+- nsq_id
+- nsq_nsqd_address
+- nsq_timestamp
+```
+
+You can access these metadata fields using [function interpolation](/docs/configuration/interpolation#metadata).
+
 
 ## Fields
 
@@ -253,5 +269,13 @@ The maximum number of pending messages to consume at any given time.
 
 Type: `int`  
 Default: `100`  
+
+### `max_attempts`
+
+The maximum number of attempts to successfully consume a messages.
+
+
+Type: `int`  
+Default: `5`  
 
 
