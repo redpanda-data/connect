@@ -124,30 +124,6 @@ func DefaultTypeOf(t Type) string {
 	return defaultTypeByType(DeprecatedProvider, t)
 }
 
-// GetInferenceCandidate checks a generic config structure for a component and
-// returns either the inferred type name or an error if one cannot be inferred.
-func GetInferenceCandidate(docProvider Provider, t Type, raw any) (string, ComponentSpec, error) {
-	m, ok := raw.(map[string]any)
-	if !ok {
-		return "", ComponentSpec{}, fmt.Errorf("invalid config value %T, expected object", raw)
-	}
-
-	if tStr, ok := m["type"].(string); ok {
-		spec, exists := docProvider.GetDocs(tStr, t)
-		if !exists {
-			return "", ComponentSpec{}, fmt.Errorf("%v type '%v' was not recognised", string(t), tStr)
-		}
-		return tStr, spec, nil
-	}
-
-	var keys []string
-	for k := range m {
-		keys = append(keys, k)
-	}
-
-	return getInferenceCandidateFromList(docProvider, t, keys)
-}
-
 func getInferenceCandidateFromList(docProvider Provider, t Type, l []string) (string, ComponentSpec, error) {
 	ignore := ReservedFieldsByType(t)
 

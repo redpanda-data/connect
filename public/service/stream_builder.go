@@ -670,6 +670,56 @@ func (s *StreamBuilder) AsYAML() (string, error) {
 	return string(b), nil
 }
 
+// WalkedComponent is a struct containing information about a component yielded
+// via the WalkComponents method.
+type WalkedComponent struct {
+	ComponentType string
+	Name          string
+	confYAML      string
+}
+
+// ConfigYAML returns the configuration of a walked component in YAML form.
+func (w *WalkedComponent) ConfigYAML() string {
+	return w.confYAML
+}
+
+// WalkComponents walks the Benthos configuration as it is currently built and
+// for each component type (input, processor, output, etc) calls a provided
+// function with a struct containing information about the component.
+//
+// This can be useful for taking an inventory of the contents of a config.
+func (s *StreamBuilder) WalkComponents(fn func(w *WalkedComponent) error) error {
+	conf := s.buildConfig()
+
+	var node yaml.Node
+	if err := node.Encode(conf); err != nil {
+		return err
+	}
+
+	sanitConf := docs.NewSanitiseConfig()
+	sanitConf.RemoveTypeField = true
+	sanitConf.RemoveDeprecated = false
+	sanitConf.DocsProvider = s.env.internal
+
+	spec := config.Spec()
+	if err := spec.SanitiseYAML(&node, sanitConf); err != nil {
+		return err
+	}
+
+	return spec.WalkYAML(&node, s.env.internal,
+		func(cType docs.Type, name string, config *yaml.Node) error {
+			yamlBytes, err := yaml.Marshal(config)
+			if err != nil {
+				return err
+			}
+			return fn(&WalkedComponent{
+				ComponentType: string(cType),
+				Name:          name,
+				confYAML:      string(yamlBytes),
+			})
+		})
+}
+
 //------------------------------------------------------------------------------
 
 func (s *StreamBuilder) runConsumerFunc(mgr *manager.Type) error {

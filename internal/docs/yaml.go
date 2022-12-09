@@ -845,6 +845,131 @@ func (f FieldSpecs) YAMLToMap(node *yaml.Node, conf ToValueConfig) (map[string]a
 
 //------------------------------------------------------------------------------
 
+// ComponentWalkYAMLFunc is called for each component type within a YAML config,
+// where the node representing that component is provided along with the type
+// and implementation name.
+type ComponentWalkYAMLFunc func(cType Type, name string, config *yaml.Node) error
+
+func walkComponentsYAML(cType Type, node *yaml.Node, prov Provider, fn ComponentWalkYAMLFunc) error {
+	node = unwrapDocumentNode(node)
+
+	name, spec, err := GetInferenceCandidateFromYAML(prov, cType, node)
+	if err != nil {
+		return err
+	}
+
+	if err := fn(cType, name, node); err != nil {
+		return err
+	}
+
+	reservedFields := ReservedFieldsByType(cType)
+	for i := 0; i < len(node.Content)-1; i += 2 {
+		if node.Content[i].Value == name {
+			if err := spec.Config.WalkYAML(node.Content[i+1], prov, fn); err != nil {
+				return err
+			}
+			continue
+		}
+		if node.Content[i].Value == "type" || node.Content[i].Value == "label" {
+			continue
+		}
+		if spec, exists := reservedFields[node.Content[i].Value]; exists {
+			if err := spec.WalkYAML(node.Content[i+1], prov, fn); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// WalkYAML walks each node of a YAML tree and for any component types within
+// the config a provided func is called.
+func (f FieldSpec) WalkYAML(node *yaml.Node, prov Provider, fn ComponentWalkYAMLFunc) error {
+	node = unwrapDocumentNode(node)
+
+	if coreType, isCore := f.Type.IsCoreComponent(); isCore {
+		switch f.Kind {
+		case Kind2DArray:
+			for i := 0; i < len(node.Content); i++ {
+				for j := 0; j < len(node.Content[i].Content); j++ {
+					if err := walkComponentsYAML(coreType, node.Content[i].Content[j], prov, fn); err != nil {
+						return err
+					}
+				}
+			}
+		case KindArray:
+			for i := 0; i < len(node.Content); i++ {
+				if err := walkComponentsYAML(coreType, node.Content[i], prov, fn); err != nil {
+					return err
+				}
+			}
+		case KindMap:
+			for i := 0; i < len(node.Content)-1; i += 2 {
+				if err := walkComponentsYAML(coreType, node.Content[i+1], prov, fn); err != nil {
+					return err
+				}
+			}
+		default:
+			if err := walkComponentsYAML(coreType, node, prov, fn); err != nil {
+				return err
+			}
+		}
+	} else if len(f.Children) > 0 {
+		switch f.Kind {
+		case Kind2DArray:
+			for i := 0; i < len(node.Content); i++ {
+				for j := 0; j < len(node.Content[i].Content); j++ {
+					if err := f.Children.WalkYAML(node.Content[i].Content[j], prov, fn); err != nil {
+						return err
+					}
+				}
+			}
+		case KindArray:
+			for i := 0; i < len(node.Content); i++ {
+				if err := f.Children.WalkYAML(node.Content[i], prov, fn); err != nil {
+					return err
+				}
+			}
+		case KindMap:
+			for i := 0; i < len(node.Content)-1; i += 2 {
+				if err := f.Children.WalkYAML(node.Content[i+1], prov, fn); err != nil {
+					return err
+				}
+			}
+		default:
+			if err := f.Children.WalkYAML(node, prov, fn); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// WalkYAML walks each node of a YAML tree and for any component types within
+// the config a provided func is called.
+func (f FieldSpecs) WalkYAML(node *yaml.Node, prov Provider, fn ComponentWalkYAMLFunc) error {
+	node = unwrapDocumentNode(node)
+
+	nodeKeys := map[string]*yaml.Node{}
+	for i := 0; i < len(node.Content)-1; i += 2 {
+		nodeKeys[node.Content[i].Value] = node.Content[i+1]
+	}
+
+	// Following the order of our field specs, walk each field.
+	for _, field := range f {
+		value, exists := nodeKeys[field.Name]
+		if !exists {
+			continue
+		}
+		if err := field.WalkYAML(value, prov, fn); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+//------------------------------------------------------------------------------
+
 func unwrapDocumentNode(node *yaml.Node) *yaml.Node {
 	if node != nil && node.Kind == yaml.DocumentNode && len(node.Content) > 0 {
 		return node.Content[0]
