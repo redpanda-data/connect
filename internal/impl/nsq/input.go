@@ -136,6 +136,7 @@ func (n *nsqReader) Connect(ctx context.Context) (err error) {
 	cfg := nsq.NewConfig()
 	cfg.UserAgent = n.conf.UserAgent
 	cfg.MaxInFlight = n.conf.MaxInFlight
+	cfg.MaxAttempts = n.conf.MaxAttempts
 	if n.tlsConf != nil {
 		cfg.TlsV1 = true
 		cfg.TlsConfig = n.tlsConf
