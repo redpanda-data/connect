@@ -25,6 +25,8 @@ All notable changes to this project will be documented in this file.
 - Field `delete_on_finish` added to the `csv` input.
 - Metadata fields `header`, `path`, `mod_time_unix` and `mod_time` added to the `csv` input.
 - New `couchbase` processor.
+- Field `max_attempts` added to the `nsq` input.
+- Messages consumed by the `nsq` input are now enriched with metadata.
 
 ### Fixed
 
