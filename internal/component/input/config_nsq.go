@@ -13,6 +13,7 @@ type NSQConfig struct {
 	UserAgent       string      `json:"user_agent" yaml:"user_agent"`
 	TLS             btls.Config `json:"tls" yaml:"tls"`
 	MaxInFlight     int         `json:"max_in_flight" yaml:"max_in_flight"`
+	MaxAttempts     uint16      `json:"max_attempts" yaml:"max_attempts"`
 }
 
 // NewNSQConfig creates a new NSQConfig with default values.
@@ -25,5 +26,6 @@ func NewNSQConfig() NSQConfig {
 		UserAgent:       "",
 		TLS:             btls.NewConfig(),
 		MaxInFlight:     100,
+		MaxAttempts:     5,
 	}
 }
