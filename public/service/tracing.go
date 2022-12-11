@@ -44,6 +44,7 @@ func convertTracingEventType(t tracing.EventType) TracingEventType {
 type TracingEvent struct {
 	Type    TracingEventType
 	Content string
+	Meta    map[string]any
 }
 
 // TracingSummary is a high level description of all traced events. When tracing
@@ -87,6 +88,7 @@ func (s *TracingSummary) InputEvents() map[string][]TracingEvent {
 			events[i] = TracingEvent{
 				Type:    convertTracingEventType(e.Type),
 				Content: e.Content,
+				Meta:    e.Meta,
 			}
 		}
 		m[k] = events
@@ -106,6 +108,7 @@ func (s *TracingSummary) ProcessorEvents() map[string][]TracingEvent {
 			events[i] = TracingEvent{
 				Type:    convertTracingEventType(e.Type),
 				Content: e.Content,
+				Meta:    e.Meta,
 			}
 		}
 		m[k] = events
@@ -125,6 +128,7 @@ func (s *TracingSummary) OutputEvents() map[string][]TracingEvent {
 			events[i] = TracingEvent{
 				Type:    convertTracingEventType(e.Type),
 				Content: e.Content,
+				Meta:    e.Meta,
 			}
 		}
 		m[k] = events

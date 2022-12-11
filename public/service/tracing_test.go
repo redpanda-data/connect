@@ -80,6 +80,7 @@ pipeline:
   processors:
     - bloblang: |
         root.count = if this.id % 2 == 0 { throw("nah %v".format(this.id)) } else { this.id }
+        meta foo = this.id
 
 output:
   drop: {}
@@ -100,40 +101,42 @@ logger:
 	assert.Equal(t, 5, int(trace.TotalOutput()))
 	assert.Equal(t, 2, int(trace.TotalProcessorErrors()))
 
+	type tMap = map[string]any
+
 	assert.Equal(t, map[string][]service.TracingEvent{
 		"root.input": {
-			{Type: service.TracingEventProduce, Content: `{"id":1}`},
-			{Type: service.TracingEventProduce, Content: `{"id":2}`},
-			{Type: service.TracingEventProduce, Content: `{"id":3}`},
-			{Type: service.TracingEventProduce, Content: `{"id":4}`},
-			{Type: service.TracingEventProduce, Content: `{"id":5}`},
+			{Type: service.TracingEventProduce, Content: `{"id":1}`, Meta: tMap{}},
+			{Type: service.TracingEventProduce, Content: `{"id":2}`, Meta: tMap{}},
+			{Type: service.TracingEventProduce, Content: `{"id":3}`, Meta: tMap{}},
+			{Type: service.TracingEventProduce, Content: `{"id":4}`, Meta: tMap{}},
+			{Type: service.TracingEventProduce, Content: `{"id":5}`, Meta: tMap{}},
 		},
 	}, trace.InputEvents())
 
 	assert.Equal(t, map[string][]service.TracingEvent{
 		"root.pipeline.processors.0": {
-			{Type: service.TracingEventConsume, Content: `{"id":1}`},
-			{Type: service.TracingEventProduce, Content: `{"count":1}`},
-			{Type: service.TracingEventConsume, Content: `{"id":2}`},
-			{Type: service.TracingEventProduce, Content: `{"id":2}`},
+			{Type: service.TracingEventConsume, Content: `{"id":1}`, Meta: tMap{}},
+			{Type: service.TracingEventProduce, Content: `{"count":1}`, Meta: tMap{"foo": int64(1)}},
+			{Type: service.TracingEventConsume, Content: `{"id":2}`, Meta: tMap{}},
+			{Type: service.TracingEventProduce, Content: `{"id":2}`, Meta: tMap{}},
 			{Type: service.TracingEventError, Content: `failed assignment (line 1): nah 2`},
-			{Type: service.TracingEventConsume, Content: `{"id":3}`},
-			{Type: service.TracingEventProduce, Content: `{"count":3}`},
-			{Type: service.TracingEventConsume, Content: `{"id":4}`},
-			{Type: service.TracingEventProduce, Content: `{"id":4}`},
+			{Type: service.TracingEventConsume, Content: `{"id":3}`, Meta: tMap{}},
+			{Type: service.TracingEventProduce, Content: `{"count":3}`, Meta: tMap{"foo": int64(3)}},
+			{Type: service.TracingEventConsume, Content: `{"id":4}`, Meta: tMap{}},
+			{Type: service.TracingEventProduce, Content: `{"id":4}`, Meta: tMap{}},
 			{Type: service.TracingEventError, Content: `failed assignment (line 1): nah 4`},
-			{Type: service.TracingEventConsume, Content: `{"id":5}`},
-			{Type: service.TracingEventProduce, Content: `{"count":5}`},
+			{Type: service.TracingEventConsume, Content: `{"id":5}`, Meta: tMap{}},
+			{Type: service.TracingEventProduce, Content: `{"count":5}`, Meta: tMap{"foo": int64(5)}},
 		},
 	}, trace.ProcessorEvents())
 
 	assert.Equal(t, map[string][]service.TracingEvent{
 		"root.output": {
-			{Type: service.TracingEventConsume, Content: `{"count":1}`},
-			{Type: service.TracingEventConsume, Content: `{"id":2}`},
-			{Type: service.TracingEventConsume, Content: `{"count":3}`},
-			{Type: service.TracingEventConsume, Content: `{"id":4}`},
-			{Type: service.TracingEventConsume, Content: `{"count":5}`},
+			{Type: service.TracingEventConsume, Content: `{"count":1}`, Meta: tMap{"foo": int64(1)}},
+			{Type: service.TracingEventConsume, Content: `{"id":2}`, Meta: tMap{}},
+			{Type: service.TracingEventConsume, Content: `{"count":3}`, Meta: tMap{"foo": int64(3)}},
+			{Type: service.TracingEventConsume, Content: `{"id":4}`, Meta: tMap{}},
+			{Type: service.TracingEventConsume, Content: `{"count":5}`, Meta: tMap{"foo": int64(5)}},
 		},
 	}, trace.OutputEvents())
 }
