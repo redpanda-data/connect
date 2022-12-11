@@ -43,7 +43,7 @@ This input adds the following metadata fields to each message:
 `+"```"+`
 
 You can access these metadata fields using
-[function interpolation](/docs/configuration/interpolation#metadata).
+[function interpolation](/docs/configuration/interpolation#bloblang-queries).
 `).
 			Field(service.NewURLField("url").
 				Description("A URL to connect to.").
@@ -57,7 +57,7 @@ You can access these metadata fields using
 			Field(service.NewStringEnumField("subscription_type", "shared", "key_shared", "failover", "exclusive").
 				Description("Specify the subscription type for this consumer.\n\n> NOTE: Using a `key_shared` subscription type will __allow out-of-order delivery__ since nack-ing messages sets non-zero nack delivery delay - this can potentially cause consumers to stall. See [Pulsar documentation](https://pulsar.apache.org/docs/en/2.8.1/concepts-messaging/#negative-acknowledgement) and [this Github issue](https://github.com/apache/pulsar/issues/12208) for more details.").
 				Default(defaultSubscriptionType)).
-			Field(service.NewObjectField("tls", service.NewStringField("root_cas_file")).
+			Field(service.NewObjectField("tls", service.NewStringField("root_cas_file").Description("An optional path of a root certificate authority file to use. This is a file, often with a .pem extension, containing a certificate chain from the parent trusted root certificate, to possible intermediate signing certificates, to the host certificate.").Example("./root_cas.pem")).
 				Description("Specify the path to a custom CA certificate to trust broker TLS service.")).
 			Field(authField()),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Input, error) {
