@@ -2,7 +2,6 @@ package docs
 
 import (
 	"fmt"
-	"regexp"
 
 	"github.com/benthosdev/benthos/v4/internal/bloblang"
 	"github.com/benthosdev/benthos/v4/internal/bloblang/query"
@@ -125,9 +124,13 @@ type FieldSpec struct {
 	// Version is an explicit version when this field was introduced.
 	Version string `json:"version,omitempty"`
 
-	// Linter is a bloblang mapping that should be used in order to lint
-	// a field.
+	// Linter is an optional bloblang mapping that should be used in order to
+	// lint a field.
 	Linter string `json:"linter,omitempty"`
+
+	// Scrubber is an optional bloblang mapping that should be used in order to
+	// scrub sensitive information from field values when echoed.
+	Scrubber string `json:"scrubber,omitempty"`
 
 	omitWhenFn   func(field, parent any) (why string, shouldOmit bool)
 	customLintFn LintFunc
@@ -158,11 +161,16 @@ func (f FieldSpec) Optional() FieldSpec {
 	return f
 }
 
+const bloblREEnvVar = "^\\\\${[0-9A-Za-z_.]+(:((\\\\${[^}]+})|[^}])+)?}$"
+
 // Secret marks this field as being a secret, which means it represents
 // information that is generally considered sensitive such as passwords or
 // access tokens.
 func (f FieldSpec) Secret() FieldSpec {
 	f.IsSecret = true
+	f.Scrubber = fmt.Sprintf(`root = if this != "" && !this.trim().re_match("%v") {
+  "!!!SECRET_SCRUBBED!!!"
+}`, bloblREEnvVar)
 	return f
 }
 
@@ -367,15 +375,35 @@ func (f FieldSpec) lintOptions() FieldSpec {
 	return f
 }
 
-var (
-	envRegex = regexp.MustCompile(`^\${[0-9A-Za-z_.]+(:((\${[^}]+})|[^}])+)?}$`)
-)
-
-func (f FieldSpec) scrubValue(value string) string {
-	if !f.IsSecret || value == "" || envRegex.MatchString(value) {
-		return value
+func (f FieldSpec) scrubValue(v any) (any, error) {
+	if f.Scrubber == "" {
+		return v, nil
 	}
-	return "!!!SECRET_SCRUBBED!!!"
+
+	env := bloblang.NewEnvironment().OnlyPure()
+
+	m, err := env.NewMapping(f.Scrubber)
+	if err != nil {
+		return nil, fmt.Errorf("scrubber mapping failed to parse: %w", err)
+	}
+
+	res, err := m.Exec(query.FunctionContext{
+		Vars:     map[string]any{},
+		Maps:     map[string]query.Function{},
+		MsgBatch: message.QuickBatch(nil),
+	}.WithValue(v))
+	if err != nil {
+		return nil, err
+	}
+
+	switch res.(type) {
+	case query.Delete:
+		return nil, nil
+	case query.Nothing:
+		return v, nil
+	default:
+		return res, nil
+	}
 }
 
 func (f FieldSpec) getLintFunc() LintFunc {
@@ -448,6 +476,21 @@ func FieldFloat(name, description string, examples ...any) FieldSpec {
 // FieldBool returns a field spec for a common bool typed field.
 func FieldBool(name, description string, examples ...any) FieldSpec {
 	return newField(name, description, examples...).HasType(FieldTypeBool)
+}
+
+// FieldURL returns a field spec for a string typed field containing a URL, both
+// linting rules and scrubbers are added.
+func FieldURL(name, description string, examples ...any) FieldSpec {
+	f := newField(name, description, examples...).HasType(FieldTypeString).LinterBlobl(`
+root = this.parse_url().(deleted()).catch(err -> err)
+`)
+	f.Scrubber = fmt.Sprintf(`
+let pass = this.parse_url().user.password.or("")
+root = if $pass != "" && !$pass.trim().re_match("%v") {
+  "!!!SECRET_SCRUBBED!!!"
+}
+`, bloblREEnvVar)
+	return f
 }
 
 // FieldInput returns a field spec for an input typed field.

@@ -331,8 +331,47 @@ func (f FieldSpec) SanitiseYAML(node *yaml.Node, conf SanitiseConfig) error {
 				return err
 			}
 		}
-	} else if f.IsSecret && conf.ScrubSecrets && node.Value != "" {
-		node.Value = f.scrubValue(node.Value)
+	} else if f.Scrubber != "" {
+		scrubNode := func(n *yaml.Node) error {
+			var scrubValue any
+			err := n.Decode(&scrubValue)
+			if err != nil {
+				return err
+			}
+			if scrubValue, err = f.scrubValue(scrubValue); err != nil {
+				return err
+			}
+			if err := n.Encode(scrubValue); err != nil {
+				return err
+			}
+			return nil
+		}
+		switch f.Kind {
+		case Kind2DArray:
+			for i := 0; i < len(node.Content); i++ {
+				for j := 0; j < len(node.Content[i].Content); j++ {
+					if err := scrubNode(node.Content[i].Content[j]); err != nil {
+						return err
+					}
+				}
+			}
+		case KindArray:
+			for i := 0; i < len(node.Content); i++ {
+				if err := scrubNode(node.Content[i]); err != nil {
+					return err
+				}
+			}
+		case KindMap:
+			for i := 0; i < len(node.Content)-1; i += 2 {
+				if err := scrubNode(node.Content[i+1]); err != nil {
+					return err
+				}
+			}
+		default:
+			if err := scrubNode(node); err != nil {
+				return err
+			}
+		}
 	}
 	return nil
 }

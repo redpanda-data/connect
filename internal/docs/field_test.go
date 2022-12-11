@@ -67,3 +67,103 @@ func TestBloblLinter(t *testing.T) {
 		})
 	}
 }
+
+func TestFieldLinting(t *testing.T) {
+	tests := []struct {
+		name   string
+		f      FieldSpec
+		input  any
+		output []Lint
+	}{
+		{
+			name:  "normal string no linter",
+			f:     FieldString("foo", "").LinterBlobl(`root = []`),
+			input: "hello world",
+		},
+		{
+			name:  "url valid",
+			f:     FieldURL("foo", ""),
+			input: "tcp://admin@example.com",
+		},
+		{
+			name:  "url invalid",
+			f:     FieldURL("foo", ""),
+			input: "not a %#$ valid URL",
+			output: []Lint{
+				{Column: 1, What: "field `this`: parse \"not a %\": invalid URL escape \"%\""}},
+		},
+	}
+	for _, test := range tests {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			lints := test.f.getLintFunc()(NewLintContext(), 0, 0, test.input)
+			assert.Equal(t, test.output, lints)
+		})
+	}
+}
+
+func TestSecretScrubbing(t *testing.T) {
+	tests := []struct {
+		name   string
+		f      FieldSpec
+		input  any
+		output any
+	}{
+		{
+			name:   "not a secret",
+			f:      FieldString("foo", ""),
+			input:  "hello world",
+			output: "hello world",
+		},
+		{
+			name:   "raw secret",
+			f:      FieldString("foo", "").Secret(),
+			input:  "hello world",
+			output: "!!!SECRET_SCRUBBED!!!",
+		},
+		{
+			name:   "env var secret",
+			f:      FieldString("foo", "").Secret(),
+			input:  "${FOO}",
+			output: "${FOO}",
+		},
+		{
+			name:   "env var secret whitespaced",
+			f:      FieldString("foo", "").Secret(),
+			input:  "  ${FOO} ",
+			output: "  ${FOO} ",
+		},
+		{
+			name:   "url no user",
+			f:      FieldURL("foo", ""),
+			input:  "tcp://example.com",
+			output: "tcp://example.com",
+		},
+		{
+			name:   "url user no secret",
+			f:      FieldURL("foo", ""),
+			input:  "tcp://admin@example.com",
+			output: "tcp://admin@example.com",
+		},
+		{
+			name:   "url user with password secret",
+			f:      FieldURL("foo", ""),
+			input:  "tcp://admin:foo@example.com",
+			output: "!!!SECRET_SCRUBBED!!!",
+		},
+		{
+			name:   "url user with password env var",
+			f:      FieldURL("foo", ""),
+			input:  "tcp://admin:${FOO}@example.com",
+			output: "tcp://admin:${FOO}@example.com",
+		},
+	}
+	for _, test := range tests {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			out, err := test.f.scrubValue(test.input)
+			require.NoError(t, err)
+			assert.Equal(t, test.output, out)
+		})
+	}
+}

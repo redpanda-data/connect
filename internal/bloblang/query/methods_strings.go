@@ -1218,6 +1218,54 @@ var _ = registerSimpleMethod(
 	},
 )
 
+var _ = registerSimpleMethod(
+	NewMethodSpec(
+		"parse_url", "Attempts to parse a URL from a string value, returning a structured result that describes the various facets of the URL. The fields returned within the structured result roughly follow https://pkg.go.dev/net/url#URL, and may be expanded in future in order to present more information.",
+	).InCategory(
+		MethodCategoryParsing, "",
+		NewExampleSpec("",
+			`root.foo_url = this.foo_url.parse_url()`,
+			`{"foo_url":"https://www.benthos.dev/docs/guides/bloblang/about"}`,
+			`{"foo_url":{"fragment":"","host":"www.benthos.dev","opaque":"","path":"/docs/guides/bloblang/about","raw_fragment":"","raw_path":"","raw_query":"","scheme":"https"}}`,
+		),
+		NewExampleSpec("",
+			`root.username = this.url.parse_url().user.name | "unknown"`,
+			`{"url":"amqp://foo:bar@127.0.0.1:5672/"}`,
+			`{"username":"foo"}`,
+			`{"url":"redis://localhost:6379"}`,
+			`{"username":"unknown"}`,
+		),
+	),
+	func(*ParsedParams) (simpleMethod, error) {
+		return stringMethod(func(data string) (any, error) {
+			urlParsed, err := url.Parse(data)
+			if err != nil {
+				return nil, err
+			}
+			values := map[string]any{
+				"scheme":       urlParsed.Scheme,
+				"opaque":       urlParsed.Opaque,
+				"host":         urlParsed.Host,
+				"path":         urlParsed.Path,
+				"raw_path":     urlParsed.RawPath,
+				"raw_query":    urlParsed.RawQuery,
+				"fragment":     urlParsed.Fragment,
+				"raw_fragment": urlParsed.RawFragment,
+			}
+			if urlParsed.User != nil {
+				userObj := map[string]any{
+					"name": urlParsed.User.Username(),
+				}
+				if pass, exists := urlParsed.User.Password(); exists {
+					userObj["password"] = pass
+				}
+				values["user"] = userObj
+			}
+			return values, nil
+		}), nil
+	},
+)
+
 //------------------------------------------------------------------------------
 
 var _ = registerSimpleMethod(

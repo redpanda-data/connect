@@ -27,12 +27,17 @@ All notable changes to this project will be documented in this file.
 - New `couchbase` processor.
 - Field `max_attempts` added to the `nsq` input.
 - Messages consumed by the `nsq` input are now enriched with metadata.
+- New Bloblang method `parse_url`.
 
 ### Fixed
 
 - Fixed a regression bug in the `mongodb` processor where message errors were not set any more. This issue was introduced in v4.7.0 (64eb72).
 - The `avro-ocf:marshaler=json` input codec now omits unexpected logical type fields.
 - Fixed a bug in the `sql_insert` output (see commit c6a71e9) where transaction-based drivers (`clickhouse` and `oracle`) would fail to roll back an in-progress transaction if any of the messages caused an error.
+
+### Changed
+
+- The `catch` method now defines the context of argument mappings to be the string of the caught error. In previous cases the context was undocumented, vague and would often bind to the outer context. It's still possible to reference this outer context by capturing the error (e.g. `.catch(_ -> this)`).
 
 ## 4.10.0 - 2022-10-26
 
