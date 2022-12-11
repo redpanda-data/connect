@@ -45,7 +45,7 @@ This input adds the following metadata fields to each message:
 You can access these metadata fields using
 [function interpolation](/docs/configuration/interpolation#metadata).
 `).
-			Field(service.NewStringField("url").
+			Field(service.NewURLField("url").
 				Description("A URL to connect to.").
 				Example("pulsar://localhost:6650").
 				Example("pulsar://pulsar.us-west.example.com:6650").

@@ -26,7 +26,7 @@ func init() {
 		Name:    "websocket",
 		Summary: `Sends messages to an HTTP server via a websocket connection.`,
 		Config: docs.FieldComponent().WithChildren(
-			docs.FieldString("url", "The URL to connect to."),
+			docs.FieldURL("url", "The URL to connect to."),
 			btls.FieldSpec(),
 		).WithChildren(httpclient.OldAuthFieldSpecs()...).ChildDefaultAndTypesFromStruct(output.NewWebsocketConfig()),
 		Categories: []string{

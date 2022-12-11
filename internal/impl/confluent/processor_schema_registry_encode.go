@@ -54,7 +54,7 @@ However, it is possible to instead consume documents in [standard/raw JSON forma
 
 Important! There is an outstanding issue in the [avro serializing library](https://github.com/linkedin/goavro) that benthos uses which means it [doesn't encode logical types correctly](https://github.com/linkedin/goavro/issues/252). It's still possible to encode logical types that are in-line with the spec if ` + "`avro_raw_json` is set to true" + `, though now of course non-logical types will not be in-line with the spec.
 `).
-		Field(service.NewStringField("url").Description("The base URL of the schema registry service.")).
+		Field(service.NewURLField("url").Description("The base URL of the schema registry service.")).
 		Field(service.NewInterpolatedStringField("subject").Description("The schema subject to derive schemas from.").
 			Example("foo").
 			Example(`${! meta("kafka_topic") }`)).

@@ -18,7 +18,7 @@ func init() {
 			Version("3.43.0").
 			Categories("Services").
 			Summary("Write messages to an Apache Pulsar server.").
-			Field(service.NewStringField("url").
+			Field(service.NewURLField("url").
 				Description("A URL to connect to.").
 				Example("pulsar://localhost:6650").
 				Example("pulsar://pulsar.us-west.example.com:6650").

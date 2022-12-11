@@ -93,7 +93,7 @@ The fallback argument can be a mapping, allowing you to capture the error string
 root.url = this.url.parse_url().catch(err -> {"error":err,"input":this.url})
 
 # In:  {"url":"invalid %&# url"}
-# Out: {"url":{"error":"parse \"invalid %&\": invalid URL escape \"%&\"","input":"invalid %&# url"}}
+# Out: {"url":{"error":"field `this.url`: parse \"invalid %&\": invalid URL escape \"%&\"","input":"invalid %&# url"}}
 ```
 
 When the input document is not structured attempting to reference structured fields with `this` will result in an error. Therefore, a convenient way to delete non-structured data is with a catch.

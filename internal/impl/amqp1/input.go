@@ -53,7 +53,7 @@ You can access these metadata fields using
 			"Services",
 		},
 		Config: docs.FieldComponent().WithChildren(
-			docs.FieldString("url",
+			docs.FieldURL("url",
 				"A URL to connect to.",
 				"amqp://localhost:5672/",
 				"amqps://guest:guest@localhost:5672/",

@@ -54,7 +54,7 @@ settings can be enabled in the `+"`tls`"+` section.
 The fields 'key' and 'type' can be dynamically set using function interpolations described
 [here](/docs/configuration/interpolation#bloblang-queries).`),
 		Config: docs.FieldComponent().WithChildren(
-			docs.FieldString("urls",
+			docs.FieldURL("urls",
 				"A list of URLs to connect to. The first URL to successfully establish a connection will be used until the connection is closed. If an item of the list contains commas it will be expanded into multiple URLs.",
 				[]string{"amqp://guest:guest@127.0.0.1:5672/"},
 				[]string{"amqp://127.0.0.1:5672/,amqp://127.0.0.2:5672/"},

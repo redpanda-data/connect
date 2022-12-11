@@ -90,7 +90,7 @@ You can access these metadata fields using [function interpolation](/docs/config
 			docs.FieldBool("delete_objects", "Whether to delete downloaded objects from the bucket once they are processed.").Advanced(),
 			codec.ReaderDocs,
 			docs.FieldObject("sqs", "Consume SQS messages in order to trigger key downloads.").WithChildren(
-				docs.FieldString("url", "An optional SQS URL to connect to. When specified this queue will control which objects are downloaded."),
+				docs.FieldURL("url", "An optional SQS URL to connect to. When specified this queue will control which objects are downloaded."),
 				docs.FieldString("endpoint", "A custom endpoint to use when connecting to SQS.").Advanced(),
 				docs.FieldString("key_path", "A [dot path](/docs/configuration/field_paths) whereby object keys are found in SQS messages."),
 				docs.FieldString("bucket_path", "A [dot path](/docs/configuration/field_paths) whereby the bucket name can be found in SQS messages."),

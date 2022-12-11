@@ -61,7 +61,7 @@ services. It's also possible to set them explicitly at the component level,
 allowing you to transfer data across accounts. You can find out more
 [in this document](/docs/guides/cloud/aws).`),
 		Config: docs.FieldComponent().WithChildren(
-			docs.FieldString("url", "The URL of the target SQS queue."),
+			docs.FieldURL("url", "The URL of the target SQS queue."),
 			docs.FieldString("message_group_id", "An optional group ID to set for messages.").IsInterpolated(),
 			docs.FieldString("message_deduplication_id", "An optional deduplication ID to set for messages.").IsInterpolated(),
 			docs.FieldInt("max_in_flight", "The maximum number of parallel message batches to have in flight at any given time."),

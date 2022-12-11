@@ -27,7 +27,7 @@ func init() {
 		Summary:     `Send metrics to InfluxDB 1.x using the ` + "`/write`" + ` endpoint.`,
 		Description: `See https://docs.influxdata.com/influxdb/v1.8/tools/api/#write-http-endpoint for further details on the write API.`,
 		Config: docs.FieldComponent().WithChildren(
-			docs.FieldString("url", "A URL of the format `[https|http|udp]://host:port` to the InfluxDB host.").HasDefault(""),
+			docs.FieldURL("url", "A URL of the format `[https|http|udp]://host:port` to the InfluxDB host.").HasDefault(""),
 			docs.FieldString("db", "The name of the database to use.").HasDefault(""),
 			btls.FieldSpec(),
 			docs.FieldString("username", "A username (when applicable).").Advanced().HasDefault(""),

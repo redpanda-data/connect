@@ -43,7 +43,7 @@ The `+"`topic`"+` field can be dynamically set using function interpolations
 described [here](/docs/configuration/interpolation#bloblang-queries). When sending batched
 messages these interpolations are performed per message part.`),
 		Config: docs.FieldComponent().WithChildren(
-			docs.FieldString("urls", "A list of URLs to connect to. If an item of the list contains commas it will be expanded into multiple URLs.", []string{"tcp://localhost:1883"}).Array(),
+			docs.FieldURL("urls", "A list of URLs to connect to. If an item of the list contains commas it will be expanded into multiple URLs.", []string{"tcp://localhost:1883"}).Array(),
 			docs.FieldString("topic", "The topic to publish messages to."),
 			docs.FieldString("client_id", "An identifier for the client connection."),
 			docs.FieldString("dynamic_client_id_suffix", "Append a dynamically generated suffix to the specified `client_id` on each run of the pipeline. This can be useful when clustering Benthos producers.").Optional().Advanced().HasAnnotatedOptions(

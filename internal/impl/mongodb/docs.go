@@ -37,7 +37,7 @@ func mapExamples() []any {
 	return examples
 }
 
-var urlField = service.NewStringField("url").
+var urlField = service.NewURLField("url").
 	Description("The URL of the target MongoDB DB.").
 	Example("mongodb://localhost:27017")
 

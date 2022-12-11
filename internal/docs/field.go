@@ -161,14 +161,14 @@ func (f FieldSpec) Optional() FieldSpec {
 	return f
 }
 
-const bloblREEnvVar = "^\\\\${[0-9A-Za-z_.]+(:((\\\\${[^}]+})|[^}])+)?}$"
+const bloblREEnvVar = "\\${[0-9A-Za-z_.]+(:((\\${[^}]+})|[^}])+)?}"
 
 // Secret marks this field as being a secret, which means it represents
 // information that is generally considered sensitive such as passwords or
 // access tokens.
 func (f FieldSpec) Secret() FieldSpec {
 	f.IsSecret = true
-	f.Scrubber = fmt.Sprintf(`root = if this != "" && !this.trim().re_match("%v") {
+	f.Scrubber = fmt.Sprintf(`root = if this != "" && !this.trim().re_match("""^%v$""") {
   "!!!SECRET_SCRUBBED!!!"
 }`, bloblREEnvVar)
 	return f
@@ -481,12 +481,12 @@ func FieldBool(name, description string, examples ...any) FieldSpec {
 // FieldURL returns a field spec for a string typed field containing a URL, both
 // linting rules and scrubbers are added.
 func FieldURL(name, description string, examples ...any) FieldSpec {
-	f := newField(name, description, examples...).HasType(FieldTypeString).LinterBlobl(`
-root = this.parse_url().(deleted()).catch(err -> err)
-`)
+	f := newField(name, description, examples...).HasType(FieldTypeString) /*.LinterBlobl(`
+	root = this.parse_url().(deleted()).catch(err -> err)
+	`)*/
 	f.Scrubber = fmt.Sprintf(`
 let pass = this.parse_url().user.password.or("")
-root = if $pass != "" && !$pass.trim().re_match("%v") {
+root = if $pass != "" && !$pass.trim().re_match("""^%v$""") {
   "!!!SECRET_SCRUBBED!!!"
 }
 `, bloblREEnvVar)

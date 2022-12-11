@@ -8,9 +8,9 @@ import (
 func NewConfigSpec() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		// TODO Stable().
-		Field(service.NewStringField("url").Description("Couchbase connection string.").Example("couchbase://localhost:11210")).
+		Field(service.NewURLField("url").Description("Couchbase connection string.").Example("couchbase://localhost:11210")).
 		Field(service.NewStringField("username").Description("Username to connect to the cluster.").Optional()).
-		Field(service.NewStringField("password").Description("Password to connect to the cluster.").Optional()).
+		Field(service.NewStringField("password").Description("Password to connect to the cluster.").Secret().Optional()).
 		Field(service.NewStringField("bucket").Description("Couchbase bucket.")).
 		Field(service.NewStringField("collection").Description("Bucket collection.").Default("_default").Advanced().Optional()).
 		Field(service.NewStringAnnotatedEnumField("transcoder", map[string]string{

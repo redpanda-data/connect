@@ -89,14 +89,20 @@ func TestFieldLinting(t *testing.T) {
 			name:  "url invalid",
 			f:     FieldURL("foo", ""),
 			input: "not a %#$ valid URL",
-			output: []Lint{
-				{Column: 1, What: "field `this`: parse \"not a %\": invalid URL escape \"%\""}},
+			// output: []Lint{
+			// 	{Column: 1, What: "field `this`: parse \"not a %\": invalid URL escape \"%\""},
+			// },
+			// TODO: Disabled until our rule takes interpolation functions into account when necessary.
 		},
 	}
 	for _, test := range tests {
 		test := test
 		t.Run(test.name, func(t *testing.T) {
-			lints := test.f.getLintFunc()(NewLintContext(), 0, 0, test.input)
+			var lints []Lint
+			linter := test.f.getLintFunc()
+			if linter != nil {
+				lints = linter(NewLintContext(), 0, 0, test.input)
+			}
 			assert.Equal(t, test.output, lints)
 		})
 	}
