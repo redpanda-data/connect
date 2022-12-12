@@ -43,6 +43,8 @@ input:
     topics: []
     subscription_name: ""
     subscription_type: shared
+    tls:
+      root_cas_file: ""
 ```
 
 </TabItem>
@@ -57,6 +59,8 @@ input:
     topics: []
     subscription_name: ""
     subscription_type: shared
+    tls:
+      root_cas_file: ""
     auth:
       oauth2:
         enabled: false
@@ -88,7 +92,7 @@ This input adds the following metadata fields to each message:
 ```
 
 You can access these metadata fields using
-[function interpolation](/docs/configuration/interpolation#metadata).
+[function interpolation](/docs/configuration/interpolation#bloblang-queries).
 
 
 ## Fields
@@ -134,6 +138,26 @@ Specify the subscription type for this consumer.
 Type: `string`  
 Default: `"shared"`  
 Options: `shared`, `key_shared`, `failover`, `exclusive`.
+
+### `tls`
+
+Specify the path to a custom CA certificate to trust broker TLS service.
+
+
+Type: `object`  
+
+### `tls.root_cas_file`
+
+An optional path of a root certificate authority file to use. This is a file, often with a .pem extension, containing a certificate chain from the parent trusted root certificate, to possible intermediate signing certificates, to the host certificate.
+
+
+Type: `string`  
+
+```yml
+# Examples
+
+root_cas_file: ./root_cas.pem
+```
 
 ### `auth`
 

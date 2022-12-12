@@ -34,7 +34,7 @@ This input adds the following metadata fields to each message:
 - All message headers (when supported by the connection)
 ` + "```" + `
 
-You can access these metadata fields using [function interpolation](/docs/configuration/interpolation#metadata).
+You can access these metadata fields using [function interpolation](/docs/configuration/interpolation#bloblang-queries).
 
 ` + auth.Description(),
 		Config: docs.FieldComponent().WithChildren(

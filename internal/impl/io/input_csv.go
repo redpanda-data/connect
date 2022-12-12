@@ -139,7 +139,7 @@ This input adds the following metadata fields to each message:
 - mod_time (RFC3339)
 ` + "```" + `
 
-You can access these metadata fields using [function interpolation](/docs/configuration/interpolation#metadata).
+You can access these metadata fields using [function interpolation](/docs/configuration/interpolation#bloblang-queries).
 
 Note: The ` + "`header`" + ` field is only set when ` + "`parse_header_row`" + ` is ` + "`true`" + `.
 

@@ -94,7 +94,7 @@ If HTTPS is enabled, the following fields are added as well:
 - http_server_tls_subject
 - http_server_tls_cipher_suite
 ` + "```" + `
-You can access these metadata fields using [function interpolation](/docs/configuration/interpolation#metadata).`,
+You can access these metadata fields using [function interpolation](/docs/configuration/interpolation#bloblang-queries).`,
 		Config: docs.FieldComponent().WithChildren(
 			docs.FieldString("address", "An alternative address to host from. If left empty the service wide address is used."),
 			docs.FieldString("path", "The endpoint path to listen for POST requests."),

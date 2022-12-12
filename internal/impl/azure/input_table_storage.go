@@ -39,7 +39,7 @@ This input adds the following metadata fields to each message:
 - table_storage_name
 - row_num
 ` + "```" + `
-You can access these metadata fields using [function interpolation](/docs/configuration/interpolation#metadata).`,
+You can access these metadata fields using [function interpolation](/docs/configuration/interpolation#bloblang-queries).`,
 		Config: docs.FieldComponent().WithChildren(
 			docs.FieldString(
 				"storage_account",

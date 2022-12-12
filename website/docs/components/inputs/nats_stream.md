@@ -85,7 +85,7 @@ This input adds the following metadata fields to each message:
 - nats_stream_sequence
 ```
 
-You can access these metadata fields using [function interpolation](/docs/configuration/interpolation#metadata).
+You can access these metadata fields using [function interpolation](/docs/configuration/interpolation#bloblang-queries).
 
 ### Authentication
 
