@@ -34,6 +34,7 @@ All notable changes to this project will be documented in this file.
 - Fixed a regression bug in the `mongodb` processor where message errors were not set any more. This issue was introduced in v4.7.0 (64eb72).
 - The `avro-ocf:marshaler=json` input codec now omits unexpected logical type fields.
 - Fixed a bug in the `sql_insert` output (see commit c6a71e9) where transaction-based drivers (`clickhouse` and `oracle`) would fail to roll back an in-progress transaction if any of the messages caused an error.
+- The `resource` input should no longer block the first layer of graceful termination.
 
 ### Changed
 
