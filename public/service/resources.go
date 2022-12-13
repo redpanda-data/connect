@@ -84,7 +84,7 @@ func (r *Resources) OtelTracer() trace.TracerProvider {
 	return r.mgr.Tracer()
 }
 
-// IFS is a superset of fs.FS that includes goodies that benthos components
+// FS is a superset of fs.FS that includes goodies that benthos components
 // specifically need.
 type FS interface {
 	Open(name string) (fs.File, error)
