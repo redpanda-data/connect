@@ -33,7 +33,7 @@ import (
 type Environment struct {
 	internal    *bundle.Environment
 	bloblangEnv *bloblang.Environment
-	fs          ifs.FS
+	fs          FS
 }
 
 var globalEnvironment = &Environment{
@@ -73,7 +73,7 @@ func (e *Environment) UseBloblangEnvironment(bEnv *bloblang.Environment) {
 
 // UseFS configures the service environment to use an implementation of ifs.FS
 // as its filesystem.
-func (e *Environment) UseFS(fs ifs.FS) {
+func (e *Environment) UseFS(fs FS) {
 	e.fs = fs
 }
 
