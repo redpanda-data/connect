@@ -3,12 +3,18 @@ package service_test
 import (
 	"context"
 	"errors"
+	"fmt"
+	"io/fs"
+	"os"
+	"path/filepath"
 	"testing"
+	"testing/fstest"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/benthosdev/benthos/v4/internal/filepath/ifs"
 	"github.com/benthosdev/benthos/v4/public/bloblang"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
@@ -146,4 +152,71 @@ logger:
 
 	require.NoError(t, strm.StopWithin(time.Second))
 	assert.Equal(t, []string{"meow"}, received)
+}
+
+type testFS struct {
+	ifs.FS
+	override fstest.MapFS
+}
+
+func (fs testFS) Open(name string) (fs.File, error) {
+	if f, err := fs.override.Open(name); err == nil {
+		return f, nil
+	}
+
+	return fs.FS.Open(name)
+}
+
+func (fs testFS) OpenFile(name string, flag int, perm fs.FileMode) (fs.File, error) {
+	if f, err := fs.override.Open(name); err == nil {
+		return f, nil
+	}
+
+	return fs.FS.OpenFile(name, flag, perm)
+}
+
+func (fs testFS) Stat(name string) (fs.FileInfo, error) {
+	if f, err := fs.override.Stat(name); err == nil {
+		return f, nil
+	}
+
+	return fs.FS.Stat(name)
+}
+
+func TestEnvironmentUseFS(t *testing.T) {
+	tmpDir := t.TempDir()
+	outFilePath := filepath.Join(tmpDir, "out.txt")
+
+	env := service.NewEnvironment()
+	env.UseFS(testFS{ifs.OS(), fstest.MapFS{
+		"hello.txt": {
+			Data: []byte("hello\nworld"),
+		},
+	}})
+
+	b := env.NewStreamBuilder()
+
+	require.NoError(t, b.SetYAML(fmt.Sprintf(`
+input:
+  file:
+    paths: [hello.txt]
+
+output:
+  label: foo
+  file:
+    codec: lines
+    path: %v
+`, outFilePath)))
+
+	strm, err := b.Build()
+	require.NoError(t, err)
+
+	require.NoError(t, strm.Run(context.Background()))
+
+	outBytes, err := os.ReadFile(outFilePath)
+	require.NoError(t, err)
+
+	assert.Equal(t, `hello
+world
+`, string(outBytes))
 }

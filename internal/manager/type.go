@@ -158,6 +158,14 @@ func OptSetStreamsMode(b bool) OptFunc {
 	}
 }
 
+// OptSetFS determines which ifs.FS implementation to use for its filesystem.
+// This can be used to override the default os based filesystem implementation.
+func OptSetFS(fs ifs.FS) OptFunc {
+	return func(t *Type) {
+		t.fs = fs
+	}
+}
+
 // New returns an instance of manager.Type, which can be shared amongst
 // components and logical threads of a Benthos service.
 func New(conf ResourceConfig, opts ...OptFunc) (*Type, error) {
