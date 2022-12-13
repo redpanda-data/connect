@@ -675,6 +675,7 @@ func (s *StreamBuilder) AsYAML() (string, error) {
 type WalkedComponent struct {
 	ComponentType string
 	Name          string
+	Label         string
 	confYAML      string
 }
 
@@ -707,14 +708,15 @@ func (s *StreamBuilder) WalkComponents(fn func(w *WalkedComponent) error) error 
 	}
 
 	return spec.WalkYAML(&node, s.env.internal,
-		func(cType docs.Type, name string, config *yaml.Node) error {
-			yamlBytes, err := yaml.Marshal(config)
+		func(c docs.WalkedYAMLComponent) error {
+			yamlBytes, err := yaml.Marshal(c.Conf)
 			if err != nil {
 				return err
 			}
 			return fn(&WalkedComponent{
-				ComponentType: string(cType),
-				Name:          name,
+				ComponentType: string(c.ComponentType),
+				Name:          c.Name,
+				Label:         c.Label,
 				confYAML:      string(yamlBytes),
 			})
 		})

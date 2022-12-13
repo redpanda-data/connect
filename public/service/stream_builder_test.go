@@ -716,6 +716,7 @@ func TestStreamBuilderWalk(t *testing.T) {
 	type walkedComponent struct {
 		typeStr string
 		name    string
+		label   string
 		conf    string
 	}
 	tests := []struct {
@@ -733,6 +734,7 @@ input:
 pipeline:
   processors:
     - mutation: 'root = "hm"'
+      label: fooproc
 
 output:
   reject: "lol nah"
@@ -756,7 +758,8 @@ generate:
 				{
 					typeStr: "processor",
 					name:    "mutation",
-					conf: `label: ""
+					label:   "fooproc",
+					conf: `label: fooproc
 mutation: 'root = "hm"'`,
 				},
 				{
@@ -920,6 +923,7 @@ mapping: ""`,
 				results = append(results, walkedComponent{
 					typeStr: w.ComponentType,
 					name:    w.Name,
+					label:   w.Label,
 					conf:    strings.TrimSpace(w.ConfigYAML()),
 				})
 				return nil

@@ -884,11 +884,6 @@ func (f FieldSpecs) YAMLToMap(node *yaml.Node, conf ToValueConfig) (map[string]a
 
 //------------------------------------------------------------------------------
 
-// ComponentWalkYAMLFunc is called for each component type within a YAML config,
-// where the node representing that component is provided along with the type
-// and implementation name.
-type ComponentWalkYAMLFunc func(cType Type, name string, config *yaml.Node) error
-
 func walkComponentsYAML(cType Type, node *yaml.Node, prov Provider, fn ComponentWalkYAMLFunc) error {
 	node = unwrapDocumentNode(node)
 
@@ -897,7 +892,20 @@ func walkComponentsYAML(cType Type, node *yaml.Node, prov Provider, fn Component
 		return err
 	}
 
-	if err := fn(cType, name, node); err != nil {
+	var label string
+	for i := 0; i < len(node.Content)-1; i += 2 {
+		if node.Content[i].Value == "label" {
+			label = node.Content[i+1].Value
+			break
+		}
+	}
+
+	if err := fn(WalkedYAMLComponent{
+		ComponentType: cType,
+		Name:          name,
+		Label:         label,
+		Conf:          node,
+	}); err != nil {
 		return err
 	}
 
@@ -982,6 +990,20 @@ func (f FieldSpec) WalkYAML(node *yaml.Node, prov Provider, fn ComponentWalkYAML
 		}
 	}
 	return nil
+}
+
+// ComponentWalkYAMLFunc is called for each component type within a YAML config,
+// where the node representing that component is provided along with the type
+// and implementation name.
+type ComponentWalkYAMLFunc func(c WalkedYAMLComponent) error
+
+// WalkedYAMLComponent is a struct containing information about a component
+// yielded via the WalkYAML method.
+type WalkedYAMLComponent struct {
+	ComponentType Type
+	Name          string
+	Label         string
+	Conf          *yaml.Node
 }
 
 // WalkYAML walks each node of a YAML tree and for any component types within
