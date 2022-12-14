@@ -210,24 +210,12 @@ root.foo_summed = json("foo").from_all().sum()`,
 func fromAllMethod(target Function, _ *ParsedParams) (Function, error) {
 	return ClosureFunction("method from_all", func(ctx FunctionContext) (any, error) {
 		values := make([]any, ctx.MsgBatch.Len())
-		var err error
 		for i := 0; i < ctx.MsgBatch.Len(); i++ {
 			subCtx := ctx
 			subCtx.Index = i
-			v, tmpErr := target.Exec(subCtx)
-			if tmpErr != nil {
-				if recovered, ok := tmpErr.(*ErrRecoverable); ok {
-					values[i] = recovered.Recovered
-				}
-				err = tmpErr
-			} else {
-				values[i] = v
-			}
-		}
-		if err != nil {
-			return nil, &ErrRecoverable{
-				Recovered: values,
-				Err:       err,
+			var err error
+			if values[i], err = target.Exec(subCtx); err != nil {
+				return nil, err
 			}
 		}
 		return values, nil

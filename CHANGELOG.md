@@ -39,6 +39,7 @@ All notable changes to this project will be documented in this file.
 ### Changed
 
 - The `catch` method now defines the context of argument mappings to be the string of the caught error. In previous cases the context was undocumented, vague and would often bind to the outer context. It's still possible to reference this outer context by capturing the error (e.g. `.catch(_ -> this)`).
+- Field interpolations that fail due to mapping errors will no longer produce placeholder values and will instead provide proper errors that result in nacks or retries similar to other issues.
 
 ## 4.10.0 - 2022-10-26
 

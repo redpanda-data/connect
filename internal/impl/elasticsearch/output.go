@@ -274,15 +274,26 @@ func (e *Elasticsearch) Write(msg message.Batch) error {
 			e.log.Errorf("Failed to marshal message into JSON document: %v\n", ierr)
 			return fmt.Errorf("failed to marshal message into JSON document: %w", ierr)
 		}
-		requests[i] = &pendingBulkIndex{
-			Action:   e.actionStr.String(i, msg),
-			Index:    e.indexStr.String(i, msg),
-			Pipeline: e.pipelineStr.String(i, msg),
-			Routing:  e.routingStr.String(i, msg),
-			Type:     e.typeStr.String(i, msg),
-			Doc:      jObj,
-			ID:       e.idStr.String(i, msg),
+		pbi := &pendingBulkIndex{Doc: jObj}
+		if pbi.Action, ierr = e.actionStr.String(i, msg); ierr != nil {
+			return fmt.Errorf("action interpolation error: %w", ierr)
 		}
+		if pbi.Index, ierr = e.indexStr.String(i, msg); ierr != nil {
+			return fmt.Errorf("index interpolation error: %w", ierr)
+		}
+		if pbi.Pipeline, ierr = e.pipelineStr.String(i, msg); ierr != nil {
+			return fmt.Errorf("pipeline interpolation error: %w", ierr)
+		}
+		if pbi.Routing, ierr = e.routingStr.String(i, msg); ierr != nil {
+			return fmt.Errorf("routing interpolation error: %w", ierr)
+		}
+		if pbi.Type, ierr = e.typeStr.String(i, msg); ierr != nil {
+			return fmt.Errorf("type interpolation error: %w", ierr)
+		}
+		if pbi.ID, ierr = e.idStr.String(i, msg); ierr != nil {
+			return fmt.Errorf("id interpolation error: %w", ierr)
+		}
+		requests[i] = pbi
 		return nil
 	}); err != nil {
 		return err

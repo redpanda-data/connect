@@ -122,9 +122,13 @@ func (a *kinesisWriter) toRecords(msg message.Batch) ([]*kinesis.PutRecordsReque
 	entries := make([]*kinesis.PutRecordsRequestEntry, msg.Len())
 
 	err := msg.Iter(func(i int, p *message.Part) error {
+		partKey, err := a.partitionKey.String(i, msg)
+		if err != nil {
+			return fmt.Errorf("partition key interpolation error: %w", err)
+		}
 		entry := kinesis.PutRecordsRequestEntry{
 			Data:         p.AsBytes(),
-			PartitionKey: aws.String(a.partitionKey.String(i, msg)),
+			PartitionKey: aws.String(partKey),
 		}
 
 		if len(entry.Data) > mebibyte {
@@ -132,7 +136,11 @@ func (a *kinesisWriter) toRecords(msg message.Batch) ([]*kinesis.PutRecordsReque
 			return component.ErrMessageTooLarge
 		}
 
-		if hashKey := a.hashKey.String(i, msg); hashKey != "" {
+		hashKey, err := a.hashKey.String(i, msg)
+		if err != nil {
+			return fmt.Errorf("hash key interpolation error: %w", err)
+		}
+		if hashKey != "" {
 			entry.ExplicitHashKey = aws.String(hashKey)
 		}
 

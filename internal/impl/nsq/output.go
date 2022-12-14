@@ -115,7 +115,11 @@ func (n *nsqWriter) WriteBatch(ctx context.Context, msg message.Batch) error {
 	}
 
 	return output.IterateBatchedSend(msg, func(i int, p *message.Part) error {
-		return prod.Publish(n.topicStr.String(i, msg), p.AsBytes())
+		topicStr, err := n.topicStr.String(i, msg)
+		if err != nil {
+			return fmt.Errorf("topic interpolation error: %w", err)
+		}
+		return prod.Publish(topicStr, p.AsBytes())
 	})
 }
 

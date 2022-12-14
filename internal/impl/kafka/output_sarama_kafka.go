@@ -356,10 +356,17 @@ func (k *kafkaWriter) WriteBatch(ctx context.Context, msg message.Batch) error {
 	userDefinedHeaders := k.buildUserDefinedHeaders(k.staticHeaders)
 	msgs := []*sarama.ProducerMessage{}
 
-	err := msg.Iter(func(i int, p *message.Part) error {
-		key := k.key.Bytes(i, msg)
+	if err := msg.Iter(func(i int, p *message.Part) error {
+		key, err := k.key.Bytes(i, msg)
+		if err != nil {
+			return fmt.Errorf("key interpolation error: %w", err)
+		}
+		topic, err := k.topic.String(i, msg)
+		if err != nil {
+			return fmt.Errorf("topic interpolation error: %w", err)
+		}
 		nextMsg := &sarama.ProducerMessage{
-			Topic:    k.topic.String(i, msg),
+			Topic:    topic,
 			Value:    sarama.ByteEncoder(p.AsBytes()),
 			Headers:  append(k.buildSystemHeaders(p), userDefinedHeaders...),
 			Metadata: i, // Store the original index for later reference.
@@ -373,7 +380,10 @@ func (k *kafkaWriter) WriteBatch(ctx context.Context, msg message.Batch) error {
 		// field when not using a manual partitioner, we should only set it when
 		// we explicitly want that.
 		if k.conf.Partitioner == "manual" {
-			partitionString := k.partition.String(i, msg)
+			partitionString, err := k.partition.String(i, msg)
+			if err != nil {
+				return fmt.Errorf("partition interpolation error: %w", err)
+			}
 			if partitionString == "" {
 				return fmt.Errorf("partition expression failed to produce a value")
 			}
@@ -390,12 +400,11 @@ func (k *kafkaWriter) WriteBatch(ctx context.Context, msg message.Batch) error {
 		}
 		msgs = append(msgs, nextMsg)
 		return nil
-	})
-	if err != nil {
+	}); err != nil {
 		return err
 	}
 
-	err = producer.SendMessages(msgs)
+	err := producer.SendMessages(msgs)
 	for err != nil {
 		if pErrs, ok := err.(sarama.ProducerErrors); !k.conf.RetryAsBatch && ok {
 			if len(pErrs) == 0 {

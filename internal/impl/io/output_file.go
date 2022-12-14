@@ -95,7 +95,11 @@ func (w *fileWriter) Connect(ctx context.Context) error {
 
 func (w *fileWriter) WriteBatch(ctx context.Context, msg message.Batch) error {
 	err := output.IterateBatchedSend(msg, func(i int, p *message.Part) error {
-		path := filepath.Clean(w.path.String(i, msg))
+		path, err := w.path.String(i, msg)
+		if err != nil {
+			return fmt.Errorf("path interpolation error: %w", err)
+		}
+		path = filepath.Clean(path)
 
 		w.handleMut.Lock()
 		defer w.handleMut.Unlock()

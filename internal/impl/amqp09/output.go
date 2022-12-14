@@ -255,13 +255,34 @@ func (a *amqp09Writer) WriteBatch(wctx context.Context, msg message.Batch) error
 	}
 
 	return output.IterateBatchedSend(msg, func(i int, p *message.Part) error {
-		bindingKey := strings.ReplaceAll(a.key.String(i, msg), "/", ".")
-		msgType := strings.ReplaceAll(a.msgType.String(i, msg), "/", ".")
-		contentType := a.contentType.String(i, msg)
-		contentEncoding := a.contentEncoding.String(i, msg)
+		bindingKey, err := a.key.String(i, msg)
+		if err != nil {
+			return fmt.Errorf("binding key interpolation error: %w", err)
+		}
+		bindingKey = strings.ReplaceAll(bindingKey, "/", ".")
+
+		msgType, err := a.msgType.String(i, msg)
+		if err != nil {
+			return fmt.Errorf("msg type interpolation error: %w", err)
+		}
+		msgType = strings.ReplaceAll(msgType, "/", ".")
+
+		contentType, err := a.contentType.String(i, msg)
+		if err != nil {
+			return fmt.Errorf("content type interpolation error: %w", err)
+		}
+		contentEncoding, err := a.contentEncoding.String(i, msg)
+		if err != nil {
+			return fmt.Errorf("content encoding interpolation error: %w", err)
+		}
+
+		priorityString, err := a.priority.String(i, msg)
+		if err != nil {
+			return fmt.Errorf("priority interpolation error: %w", err)
+		}
 
 		var priority uint8
-		if priorityString := a.priority.String(i, msg); priorityString != "" {
+		if priorityString != "" {
 			priorityInt, err := strconv.Atoi(priorityString)
 			if err != nil {
 				return fmt.Errorf("failed to parse valid integer from priority expression: %w", err)

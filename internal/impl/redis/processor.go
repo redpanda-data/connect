@@ -335,7 +335,10 @@ func (r *redisProc) execRaw(ctx context.Context, index int, inBatch service.Mess
 		}
 	}
 
-	command := inBatch.InterpolatedString(index, r.command)
+	command, err := inBatch.TryInterpolatedString(index, r.command)
+	if err != nil {
+		return fmt.Errorf("command interpolation error: %w", err)
+	}
 	args = append([]any{command}, args...)
 
 	res, err := r.client.Do(ctx, args...).Result()
@@ -356,7 +359,12 @@ func (r *redisProc) ProcessBatch(ctx context.Context, inBatch service.MessageBat
 	newMsg := inBatch.Copy()
 	for index, part := range newMsg {
 		if r.operator != nil {
-			key := inBatch.InterpolatedString(index, r.key)
+			key, err := inBatch.TryInterpolatedString(index, r.key)
+			if err != nil {
+				r.log.Errorf("Key interpolation error: %v", err)
+				part.SetError(fmt.Errorf("key interpolation error: %w", err))
+				continue
+			}
 			if err := r.operator(ctx, r, key, part); err != nil {
 				r.log.Debugf("Operator failed for key '%s': %v", key, err)
 				part.SetError(fmt.Errorf("redis operator failed: %w", err))

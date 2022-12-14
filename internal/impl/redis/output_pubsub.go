@@ -111,7 +111,10 @@ func (r *redisPubSubWriter) WriteBatch(ctx context.Context, msg message.Batch) e
 	}
 
 	if msg.Len() == 1 {
-		channel := r.channelStr.String(0, msg)
+		channel, err := r.channelStr.String(0, msg)
+		if err != nil {
+			return fmt.Errorf("channel interpolation error: %w", err)
+		}
 		if err := client.Publish(ctx, channel, msg.Get(0).AsBytes()).Err(); err != nil {
 			_ = r.disconnect()
 			r.log.Errorf("Error from redis: %v\n", err)
@@ -121,10 +124,16 @@ func (r *redisPubSubWriter) WriteBatch(ctx context.Context, msg message.Batch) e
 	}
 
 	pipe := client.Pipeline()
-	_ = msg.Iter(func(i int, p *message.Part) error {
-		_ = pipe.Publish(ctx, r.channelStr.String(i, msg), p.AsBytes())
+	if err := msg.Iter(func(i int, p *message.Part) error {
+		channel, err := r.channelStr.String(i, msg)
+		if err != nil {
+			return fmt.Errorf("channel interpolation error: %w", err)
+		}
+		_ = pipe.Publish(ctx, channel, p.AsBytes())
 		return nil
-	})
+	}); err != nil {
+		return err
+	}
 	cmders, err := pipe.Exec(ctx)
 	if err != nil {
 		_ = r.disconnect()

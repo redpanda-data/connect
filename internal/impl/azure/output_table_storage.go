@@ -180,14 +180,27 @@ func (a *azureTableStorageWriter) Connect(ctx context.Context) error {
 
 func (a *azureTableStorageWriter) WriteBatch(wctx context.Context, msg message.Batch) error {
 	writeReqs := make(map[string]map[string]map[string][]*aztables.EDMEntity)
-	if err := output.IterateBatchedSend(msg, func(i int, p *message.Part) error {
+	if err := msg.Iter(func(i int, p *message.Part) error {
 		entity := &aztables.EDMEntity{}
-		transactionType := a.transactionType.String(i, msg)
-		tableName := a.tableName.String(i, msg)
-		partitionKey := a.partitionKey.String(i, msg)
-		entity.PartitionKey = a.partitionKey.String(i, msg)
-		entity.RowKey = a.rowKey.String(i, msg)
-		entity.Properties = a.getProperties(i, p, msg)
+		transactionType, err := a.transactionType.String(i, msg)
+		if err != nil {
+			return fmt.Errorf("transaction type interpolation error: %w", err)
+		}
+		tableName, err := a.tableName.String(i, msg)
+		if err != nil {
+			return fmt.Errorf("table name interpolation error: %w", err)
+		}
+		partitionKey, err := a.partitionKey.String(i, msg)
+		if err != nil {
+			return fmt.Errorf("partition key interpolation error: %w", err)
+		}
+		entity.PartitionKey = partitionKey
+		if entity.RowKey, err = a.rowKey.String(i, msg); err != nil {
+			return fmt.Errorf("row key interpolation error: %w", err)
+		}
+		if entity.Properties, err = a.getProperties(i, p, msg); err != nil {
+			return err
+		}
 		if writeReqs[tableName] == nil {
 			writeReqs[tableName] = make(map[string]map[string][]*aztables.EDMEntity)
 		}
@@ -202,7 +215,7 @@ func (a *azureTableStorageWriter) WriteBatch(wctx context.Context, msg message.B
 	return a.execBatch(wctx, writeReqs)
 }
 
-func (a *azureTableStorageWriter) getProperties(i int, p *message.Part, msg message.Batch) map[string]any {
+func (a *azureTableStorageWriter) getProperties(i int, p *message.Part, msg message.Batch) (map[string]any, error) {
 	properties := make(map[string]any)
 	if len(a.properties) == 0 {
 		err := json.Unmarshal(p.AsBytes(), &properties)
@@ -221,10 +234,13 @@ func (a *azureTableStorageWriter) getProperties(i int, p *message.Part, msg mess
 		}
 	} else {
 		for property, value := range a.properties {
-			properties[property] = value.String(i, msg)
+			var err error
+			if properties[property], err = value.String(i, msg); err != nil {
+				return nil, fmt.Errorf("property %v interpolation error: %w", property, err)
+			}
 		}
 	}
-	return properties
+	return properties, nil
 }
 
 func (a *azureTableStorageWriter) execBatch(ctx context.Context, writeReqs map[string]map[string]map[string][]*aztables.EDMEntity) error {

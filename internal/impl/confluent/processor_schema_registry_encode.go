@@ -199,7 +199,14 @@ func newSchemaRegistryEncoder(
 func (s *schemaRegistryEncoder) ProcessBatch(ctx context.Context, batch service.MessageBatch) ([]service.MessageBatch, error) {
 	batch = batch.Copy()
 	for i, msg := range batch {
-		encoder, id, err := s.getEncoder(batch.InterpolatedString(i, s.subject))
+		subject, err := batch.TryInterpolatedString(i, s.subject)
+		if err != nil {
+			s.logger.Errorf("Subject interpolation error: %v", err)
+			msg.SetError(fmt.Errorf("subject interpolation error: %w", err))
+			continue
+		}
+
+		encoder, id, err := s.getEncoder(subject)
 		if err != nil {
 			msg.SetError(err)
 			continue

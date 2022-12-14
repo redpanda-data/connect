@@ -362,18 +362,49 @@ func (b MessageBatch) BloblangMutate(index int, blobl *bloblang.Executor) (*Mess
 	return nil, nil
 }
 
+// TryInterpolatedString resolves an interpolated string expression on a message
+// batch, from the perspective of a particular message index.
+//
+// This method allows interpolation functions to perform windowed aggregations
+// across message batches, and is a more powerful way to interpolate strings
+// than the standard .String method.
+func (b MessageBatch) TryInterpolatedString(index int, i *InterpolatedString) (string, error) {
+	msg := make(message.Batch, len(b))
+	for i, m := range b {
+		msg[i] = m.part
+	}
+	return i.expr.String(index, msg)
+}
+
+// TryInterpolatedBytes resolves an interpolated string expression on a message
+// batch, from the perspective of a particular message index.
+//
+// This method allows interpolation functions to perform windowed aggregations
+// across message batches, and is a more powerful way to interpolate strings
+// than the standard .String method.
+func (b MessageBatch) TryInterpolatedBytes(index int, i *InterpolatedString) ([]byte, error) {
+	msg := make(message.Batch, len(b))
+	for i, m := range b {
+		msg[i] = m.part
+	}
+	return i.expr.Bytes(index, msg)
+}
+
 // InterpolatedString resolves an interpolated string expression on a message
 // batch, from the perspective of a particular message index.
 //
 // This method allows interpolation functions to perform windowed aggregations
 // across message batches, and is a more powerful way to interpolate strings
 // than the standard .String method.
+//
+// Deprecated: Use TryInterpolatedString instead.
 func (b MessageBatch) InterpolatedString(index int, i *InterpolatedString) string {
 	msg := make(message.Batch, len(b))
 	for i, m := range b {
 		msg[i] = m.part
 	}
-	return i.expr.String(index, msg)
+	s, _ := i.expr.String(index, msg)
+	return s
 }
 
 // InterpolatedBytes resolves an interpolated string expression on a message
@@ -382,10 +413,13 @@ func (b MessageBatch) InterpolatedString(index int, i *InterpolatedString) strin
 // This method allows interpolation functions to perform windowed aggregations
 // across message batches, and is a more powerful way to interpolate strings
 // than the standard .String method.
+//
+// Deprecated: Use TryInterpolatedBytes instead.
 func (b MessageBatch) InterpolatedBytes(index int, i *InterpolatedString) []byte {
 	msg := make(message.Batch, len(b))
 	for i, m := range b {
 		msg[i] = m.part
 	}
-	return i.expr.Bytes(index, msg)
+	bRes, _ := i.expr.Bytes(index, msg)
+	return bRes
 }

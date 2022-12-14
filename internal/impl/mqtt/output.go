@@ -205,13 +205,20 @@ func (m *mqttWriter) WriteBatch(ctx context.Context, msg message.Batch) error {
 	return output.IterateBatchedSend(msg, func(i int, p *message.Part) error {
 		retained := m.conf.Retained
 		if m.retained != nil {
-			var parseErr error
-			retained, parseErr = strconv.ParseBool(m.retained.String(i, msg))
+			retainedStr, parseErr := m.retained.String(i, msg)
 			if parseErr != nil {
+				m.log.Errorf("Retained interpolation error: %v", parseErr)
+			} else if retained, parseErr = strconv.ParseBool(retainedStr); parseErr != nil {
 				m.log.Errorf("Error parsing boolean value from retained flag: %v \n", parseErr)
 			}
 		}
-		mtok := client.Publish(m.topic.String(i, msg), m.conf.QoS, retained, p.AsBytes())
+
+		topicStr, err := m.topic.String(i, msg)
+		if err != nil {
+			return fmt.Errorf("topic interpolation error: %w", err)
+		}
+
+		mtok := client.Publish(topicStr, m.conf.QoS, retained, p.AsBytes())
 		mtok.Wait()
 		sendErr := mtok.Error()
 		if sendErr == mqtt.ErrNotConnected {

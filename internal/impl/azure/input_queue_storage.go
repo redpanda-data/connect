@@ -123,7 +123,11 @@ func (a *azureQueueStorage) Connect(ctx context.Context) error {
 }
 
 func (a *azureQueueStorage) ReadBatch(ctx context.Context) (msg message.Batch, ackFn input.AsyncAckFn, err error) {
-	queueName := a.queueName.String(0, msg)
+	var queueName string
+	if queueName, err = a.queueName.String(0, msg); err != nil {
+		err = fmt.Errorf("queue name interpolation error: %w", err)
+		return
+	}
 	queueURL := a.serviceURL.NewQueueURL(queueName)
 	messageURL := queueURL.NewMessagesURL()
 	var approxMsgCount int32

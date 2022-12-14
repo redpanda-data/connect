@@ -266,8 +266,12 @@ func (f fakeInfo) Sys() any {
 func (d *archive) createHeaderFunc(msg service.MessageBatch) func(int, *service.Message) os.FileInfo {
 	return func(index int, body *service.Message) os.FileInfo {
 		bBytes, _ := body.AsBytes()
+		name, err := msg.TryInterpolatedString(index, d.path)
+		if err != nil {
+			d.log.Errorf("Name interpolation error: %w", err)
+		}
 		return fakeInfo{
-			name: msg.InterpolatedString(index, d.path),
+			name: name,
 			size: int64(len(bBytes)),
 			mode: 0o666,
 		}

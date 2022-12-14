@@ -48,11 +48,12 @@ func TestExpressions(t *testing.T) {
 	}
 
 	tests := map[string]struct {
-		expression *Expression
-		output     string
-		numDyn     int
-		messages   []easyMsg
-		index      int
+		expression  *Expression
+		output      string
+		numDyn      int
+		messages    []easyMsg
+		index       int
+		errContains string
 	}{
 		"static string": {
 			expression: NewExpression(
@@ -172,6 +173,20 @@ func TestExpressions(t *testing.T) {
 				{content: `{"foo":"bar"}`},
 			},
 		},
+		"json function gone wrong": {
+			expression: NewExpression(
+				NewQueryResolver(func() query.Function {
+					fn, err := query.InitFunctionHelper("json", "foo")
+					require.NoError(t, err)
+					return fn
+				}()),
+			),
+			numDyn: 1,
+			messages: []easyMsg{
+				{content: `not valid json`},
+			},
+			errContains: "invalid character 'o'",
+		},
 		"json_from function 2": {
 			expression: NewExpression(
 				NewQueryResolver(func() query.Function {
@@ -185,7 +200,7 @@ func TestExpressions(t *testing.T) {
 			numDyn: 1,
 			output: `null`,
 			messages: []easyMsg{
-				{content: `not json`},
+				{content: `{}`},
 				{content: `{"foo":"bar"}`},
 			},
 		},
@@ -342,9 +357,15 @@ func TestExpressions(t *testing.T) {
 				msg = append(msg, part)
 			}
 
-			res := test.expression.String(test.index, msg)
-			assert.Equal(t, test.output, res)
 			assert.Equal(t, test.numDyn, test.expression.NumDynamicExpressions())
+			res, err := test.expression.String(test.index, msg)
+			if test.errContains != "" {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), test.errContains)
+			} else {
+				require.NoError(t, err)
+				assert.Equal(t, test.output, res)
+			}
 		})
 	}
 }

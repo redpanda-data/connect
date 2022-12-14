@@ -8,6 +8,7 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/docs"
+	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
 	"github.com/benthosdev/benthos/v4/internal/tracing"
 )
@@ -52,6 +53,7 @@ find a list of functions [here](/docs/configuration/interpolation#bloblang-queri
 type insertPart struct {
 	index int
 	part  *field.Expression
+	log   log.Modular
 }
 
 func newInsertPart(conf processor.InsertPartConfig, mgr bundle.NewManagement) (processor.V2Batched, error) {
@@ -62,11 +64,16 @@ func newInsertPart(conf processor.InsertPartConfig, mgr bundle.NewManagement) (p
 	return &insertPart{
 		part:  part,
 		index: conf.Index,
+		log:   mgr.Logger(),
 	}, nil
 }
 
 func (p *insertPart) ProcessBatch(ctx context.Context, spans []*tracing.Span, msg message.Batch) ([]message.Batch, error) {
-	newPartBytes := p.part.Bytes(0, msg)
+	newPartBytes, err := p.part.Bytes(0, msg)
+	if err != nil {
+		p.log.Errorf("Content interpolation error: %v", err)
+		return []message.Batch{msg}, nil
+	}
 
 	index := p.index
 	msgLen := msg.Len()
