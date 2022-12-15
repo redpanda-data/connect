@@ -188,11 +188,11 @@ func TestEnvironmentUseFS(t *testing.T) {
 	outFilePath := filepath.Join(tmpDir, "out.txt")
 
 	env := service.NewEnvironment()
-	env.UseFS(testFS{ifs.OS(), fstest.MapFS{
+	env.UseFS(service.NewFS(testFS{ifs.OS(), fstest.MapFS{
 		"hello.txt": {
 			Data: []byte("hello\nworld"),
 		},
-	}})
+	}}))
 
 	b := env.NewStreamBuilder()
 
