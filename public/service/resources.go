@@ -84,10 +84,53 @@ func (r *Resources) OtelTracer() trace.TracerProvider {
 	return r.mgr.Tracer()
 }
 
+// wrapperFS provides extra methods support around a bare fs.FS that does
+// fully implement ifs.FS, this allows us to keep some clean interfaces while
+// also ensuring backward compatibility.
+type wrapperFS struct {
+	fs       fs.FS
+	fallback ifs.FS
+}
+
+// Open opens the named file for reading.
+func (f *wrapperFS) Open(name string) (fs.File, error) {
+	return f.fs.Open(name)
+}
+
+// OpenFile is the generalized open call.
+func (f *wrapperFS) OpenFile(name string, flag int, perm fs.FileMode) (fs.File, error) {
+	return f.fallback.OpenFile(name, flag, perm)
+}
+
+// Stat returns a FileInfo describing the named file.
+func (f *wrapperFS) Stat(name string) (fs.FileInfo, error) {
+	return f.fallback.Stat(name)
+}
+
+// Remove removes the named file or (empty) directory.
+func (f *wrapperFS) Remove(name string) error {
+	return f.fallback.Remove(name)
+}
+
+// MkdirAll creates a directory named path, along with any necessary parents,
+// and returns nil, or else returns an error.
+func (f *wrapperFS) MkdirAll(path string, perm fs.FileMode) error {
+	return f.fallback.MkdirAll(path, perm)
+}
+
 // FS implements a superset of fs.FS and includes goodies that benthos
 // components specifically need.
 type FS struct {
 	i ifs.FS
+}
+
+// NewFS provides a new instance of a filesystem. The fs.FS passed in can
+// optionally implement methods from benthos ifs.FS
+func NewFS(filesystem fs.FS) *FS {
+	if fsimpl, ok := filesystem.(ifs.FS); ok {
+		return &FS{fsimpl}
+	}
+	return &FS{&wrapperFS{filesystem, ifs.OS()}}
 }
 
 // Open opens the named file for reading.
