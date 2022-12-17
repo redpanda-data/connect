@@ -9,6 +9,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -306,6 +307,28 @@ const (
 	retryBackoff
 )
 
+// checkResponse compares a returned status code and body against configured logic
+// determining whether the send succeeded, and if not what the retry strategy
+// should be.
+func (h *Client) checkResponse(res *http.Response) (succeeded bool, retStrat retryStrategy) {
+	if res == nil {
+		return false, retryBackoff
+	}
+	resolved, retryStrat := h.checkStatus(res.StatusCode)
+	if resolved {
+		var bodyString string
+		resolved, retryStrat, bodyString = h.checkBody(res.Body)
+		if resolved {
+			h.log.Debugln(fmt.Sprintf("HTTP response: code %v, body: %v", res.StatusCode, bodyString))
+		} else {
+			h.log.Warnln(fmt.Sprintf("Unexpected HTTP response: code %v, body: %v", res.StatusCode, bodyString))
+		}
+	} else {
+		h.log.Warnln(fmt.Sprintf("Unexpected HTTP response: code %v", res.StatusCode))
+	}
+	return resolved, retryStrat
+}
+
 // checkStatus compares a returned status code against configured logic
 // determining whether the send succeeded, and if not what the retry strategy
 // should be.
@@ -323,6 +346,34 @@ func (h *Client) checkStatus(code int) (succeeded bool, retStrat retryStrategy) 
 		return false, retryLinear
 	}
 	return true, noRetry
+}
+
+// checkBody compares a returned body against configured logic
+// determining whether the send succeeded, and if not what the retry strategy
+// should be.
+func (h *Client) checkBody(body io.ReadCloser) (succeeded bool, retStrat retryStrategy, bodystr string) {
+	bodyBytes, err := io.ReadAll(body)
+	if err != nil {
+		h.log.Warnln(fmt.Sprintf("Unexpected HTTP response: could not read body"))
+		return false, noRetry, ""
+	}
+	bodyString := string(bodyBytes)
+
+	if strings.Contains(bodyString, "Invalid") {
+		return false, noRetry, bodyString
+	}
+	if strings.Contains(bodyString, "Error") || strings.Contains(bodyString, "Failed") {
+		return false, retryBackoff, bodyString
+	}
+	match, err := regexp.MatchString(`"task-id"\s*:\s*"\w+-\w+-\w+-\w+-\w+"`, bodyString)
+	if err != nil {
+		return false, noRetry, bodyString
+	}
+	if !match {
+		return false, retryBackoff, bodyString
+	}
+
+	return true, noRetry, bodyString
 }
 
 // SendToResponse attempts to create an HTTP request from a provided message,
@@ -369,7 +420,7 @@ func (h *Client) SendToResponse(ctx context.Context, sendMsg message.Batch) (res
 	startedAt := time.Now()
 	if res, err = h.client.Do(req.WithContext(ctx)); err == nil {
 		h.incrCode(res.StatusCode)
-		if resolved, retryStrat := h.checkStatus(res.StatusCode); !resolved {
+		if resolved, retryStrat := h.checkResponse(res); !resolved {
 			rateLimited = retryStrat == retryBackoff
 			if retryStrat == noRetry {
 				numRetries = 0
@@ -405,7 +456,7 @@ func (h *Client) SendToResponse(ctx context.Context, sendMsg message.Batch) (res
 		startedAt = time.Now()
 		if res, err = h.client.Do(req.WithContext(ctx)); err == nil {
 			h.incrCode(res.StatusCode)
-			if resolved, retryStrat := h.checkStatus(res.StatusCode); !resolved {
+			if resolved, retryStrat := h.checkResponse(res); !resolved {
 				rateLimited = retryStrat == retryBackoff
 				if retryStrat == noRetry {
 					j = 0

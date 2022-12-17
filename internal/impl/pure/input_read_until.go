@@ -163,8 +163,9 @@ func (r *readUntilInput) loop() {
 
 	// Prevents busy loop when an input never yields messages.
 	restartBackoff := backoff.NewExponentialBackOff()
-	restartBackoff.InitialInterval = time.Millisecond
-	restartBackoff.MaxInterval = time.Millisecond * 100
+	restartBackoff.InitialInterval = 200 * time.Millisecond
+	restartBackoff.Multiplier = 1.1
+	restartBackoff.MaxInterval = 2200 * time.Millisecond
 	restartBackoff.MaxElapsedTime = 0
 
 	var open bool
