@@ -18,12 +18,12 @@ import (
 type RoundTripper struct {
 	Base   http.RoundTripper
 	Logger log.Modular
-	Config oldconfig.DumpRequestLog
+	Config oldconfig.DumpRequestLogConfig
 }
 
 var _ http.RoundTripper = (*RoundTripper)(nil)
 
-func newRequestLog(base http.RoundTripper, logger log.Modular, cfg oldconfig.DumpRequestLog) (http.RoundTripper, error) {
+func newRequestLog(base http.RoundTripper, logger log.Modular, cfg oldconfig.DumpRequestLogConfig) (http.RoundTripper, error) {
 	if base == nil {
 		base = http.DefaultTransport
 	}

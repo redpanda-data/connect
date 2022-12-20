@@ -23,11 +23,11 @@ type OldConfig struct {
 	TLS             tls.Config                   `json:"tls" yaml:"tls"`
 	ProxyURL        string                       `json:"proxy_url" yaml:"proxy_url"`
 	AuthConfig      `json:",inline" yaml:",inline"`
-	OAuth2          OAuth2Config   `json:"oauth2" yaml:"oauth2"`
-	DumpRequestLog  DumpRequestLog `json:"dump_request_log" yaml:"dump_request_log"`
+	OAuth2          OAuth2Config         `json:"oauth2" yaml:"oauth2"`
+	DumpRequestLog  DumpRequestLogConfig `json:"dump_request_log" yaml:"dump_request_log"`
 }
 
-type DumpRequestLog struct {
+type DumpRequestLogConfig struct {
 	// Enable whether to print dump request log or not
 	// Default: false
 	Enable bool `json:"enable" yaml:"enable"`

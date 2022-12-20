@@ -15,19 +15,19 @@ import (
 
 func TestNewRequestLog(t *testing.T) {
 	t.Run("nil base", func(t *testing.T) {
-		httpRoundTrip, err := newRequestLog(nil, log.Noop(), oldconfig.DumpRequestLog{})
+		httpRoundTrip, err := newRequestLog(nil, log.Noop(), oldconfig.DumpRequestLogConfig{})
 		require.NotNil(t, httpRoundTrip)
 		require.NoError(t, err)
 	})
 
 	t.Run("nil log", func(t *testing.T) {
-		httpRoundTrip, err := newRequestLog(http.DefaultTransport, nil, oldconfig.DumpRequestLog{Enable: true})
+		httpRoundTrip, err := newRequestLog(http.DefaultTransport, nil, oldconfig.DumpRequestLogConfig{Enable: true})
 		require.Nil(t, httpRoundTrip)
 		require.Error(t, err)
 	})
 
 	t.Run("enable with log", func(t *testing.T) {
-		httpRoundTrip, err := newRequestLog(http.DefaultTransport, log.Noop(), oldconfig.DumpRequestLog{Enable: true})
+		httpRoundTrip, err := newRequestLog(http.DefaultTransport, log.Noop(), oldconfig.DumpRequestLogConfig{Enable: true})
 		require.NotNil(t, httpRoundTrip)
 		require.NoError(t, err)
 	})
@@ -87,7 +87,7 @@ func TestRoundTripper_RoundTrip(t *testing.T) {
 	t.Run("nil request", func(t *testing.T) {
 		transport := newMockHttpRoundTripper()
 
-		httpRoundTrip, err := newRequestLog(transport, log.Noop(), oldconfig.DumpRequestLog{Enable: true})
+		httpRoundTrip, err := newRequestLog(transport, log.Noop(), oldconfig.DumpRequestLogConfig{Enable: true})
 		require.NotNil(t, httpRoundTrip)
 		require.NoError(t, err)
 
@@ -99,7 +99,7 @@ func TestRoundTripper_RoundTrip(t *testing.T) {
 	t.Run("nil request body", func(t *testing.T) {
 		transport := newMockHttpRoundTripper()
 
-		httpRoundTrip, err := newRequestLog(transport, log.Noop(), oldconfig.DumpRequestLog{Enable: true})
+		httpRoundTrip, err := newRequestLog(transport, log.Noop(), oldconfig.DumpRequestLogConfig{Enable: true})
 		require.NotNil(t, httpRoundTrip)
 		require.NoError(t, err)
 
@@ -113,7 +113,7 @@ func TestRoundTripper_RoundTrip(t *testing.T) {
 	t.Run("non-empty request body", func(t *testing.T) {
 		transport := newMockHttpRoundTripper()
 
-		httpRoundTrip, err := newRequestLog(transport, log.Noop(), oldconfig.DumpRequestLog{Enable: true})
+		httpRoundTrip, err := newRequestLog(transport, log.Noop(), oldconfig.DumpRequestLogConfig{Enable: true})
 		require.NotNil(t, httpRoundTrip)
 		require.NoError(t, err)
 
@@ -129,7 +129,7 @@ func TestRoundTripper_RoundTrip(t *testing.T) {
 	t.Run("non-empty request body but error read", func(t *testing.T) {
 		transport := newMockHttpRoundTripper()
 
-		httpRoundTrip, err := newRequestLog(transport, log.Noop(), oldconfig.DumpRequestLog{Enable: true})
+		httpRoundTrip, err := newRequestLog(transport, log.Noop(), oldconfig.DumpRequestLogConfig{Enable: true})
 		require.NotNil(t, httpRoundTrip)
 		require.NoError(t, err)
 
@@ -145,7 +145,7 @@ func TestRoundTripper_RoundTrip(t *testing.T) {
 	t.Run("non-empty request body no valid json", func(t *testing.T) {
 		transport := newMockHttpRoundTripper()
 
-		httpRoundTrip, err := newRequestLog(transport, log.Noop(), oldconfig.DumpRequestLog{Enable: true})
+		httpRoundTrip, err := newRequestLog(transport, log.Noop(), oldconfig.DumpRequestLogConfig{Enable: true})
 		require.NotNil(t, httpRoundTrip)
 		require.NoError(t, err)
 
@@ -162,7 +162,7 @@ func TestRoundTripper_RoundTrip(t *testing.T) {
 		expectedErr := fmt.Errorf("failed to fetch data")
 		transport := newMockHttpRoundTripperWithErr(expectedErr)
 
-		httpRoundTrip, err := newRequestLog(transport, log.Noop(), oldconfig.DumpRequestLog{Enable: true})
+		httpRoundTrip, err := newRequestLog(transport, log.Noop(), oldconfig.DumpRequestLogConfig{Enable: true})
 		require.NotNil(t, httpRoundTrip)
 		require.NoError(t, err)
 
@@ -182,7 +182,7 @@ func TestRoundTripper_RoundTrip(t *testing.T) {
 			return &http.Response{}, nil
 		}
 
-		httpRoundTrip, err := newRequestLog(transport, log.Noop(), oldconfig.DumpRequestLog{Enable: true})
+		httpRoundTrip, err := newRequestLog(transport, log.Noop(), oldconfig.DumpRequestLogConfig{Enable: true})
 		require.NotNil(t, httpRoundTrip)
 		require.NoError(t, err)
 
@@ -204,7 +204,7 @@ func TestRoundTripper_RoundTrip(t *testing.T) {
 			}, nil
 		}
 
-		httpRoundTrip, err := newRequestLog(transport, log.Noop(), oldconfig.DumpRequestLog{Enable: true})
+		httpRoundTrip, err := newRequestLog(transport, log.Noop(), oldconfig.DumpRequestLogConfig{Enable: true})
 		require.NotNil(t, httpRoundTrip)
 		require.NoError(t, err)
 
@@ -226,7 +226,7 @@ func TestRoundTripper_RoundTrip(t *testing.T) {
 			}, nil
 		}
 
-		httpRoundTrip, err := newRequestLog(transport, log.Noop(), oldconfig.DumpRequestLog{Enable: true})
+		httpRoundTrip, err := newRequestLog(transport, log.Noop(), oldconfig.DumpRequestLogConfig{Enable: true})
 		require.NotNil(t, httpRoundTrip)
 		require.NoError(t, err)
 
@@ -248,7 +248,7 @@ func TestRoundTripper_RoundTrip(t *testing.T) {
 			}, nil
 		}
 
-		httpRoundTrip, err := newRequestLog(transport, log.Noop(), oldconfig.DumpRequestLog{Enable: true})
+		httpRoundTrip, err := newRequestLog(transport, log.Noop(), oldconfig.DumpRequestLogConfig{Enable: true})
 		require.NotNil(t, httpRoundTrip)
 		require.NoError(t, err)
 
@@ -268,7 +268,7 @@ func TestRoundTripper_RoundTrip(t *testing.T) {
 		for _, level := range levels {
 			t.Run(level, func(t *testing.T) {
 				transport := newMockHttpRoundTripper()
-				httpRoundTrip, err := newRequestLog(transport, log.Noop(), oldconfig.DumpRequestLog{
+				httpRoundTrip, err := newRequestLog(transport, log.Noop(), oldconfig.DumpRequestLogConfig{
 					Enable:  true,
 					Level:   level,
 					Message: "my custom message",
