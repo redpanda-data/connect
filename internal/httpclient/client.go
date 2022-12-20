@@ -77,6 +77,11 @@ func NewClientFromOldConfig(conf oldconfig.OldConfig, mgr bundle.NewManagement, 
 	h.clientCtx, h.clientCancel = context.WithCancel(context.Background())
 	h.client = conf.OAuth2.Client(h.clientCtx)
 
+	h.client.Transport, err = newRequestLog(h.client.Transport, h.log, conf.DumpRequestLog)
+	if err != nil {
+		return nil, fmt.Errorf("failed to config logger for request dump: %v", err)
+	}
+
 	if tout := conf.Timeout; len(tout) > 0 {
 		var err error
 		if h.client.Timeout, err = time.ParseDuration(tout); err != nil {

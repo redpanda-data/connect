@@ -23,7 +23,22 @@ type OldConfig struct {
 	TLS             tls.Config                   `json:"tls" yaml:"tls"`
 	ProxyURL        string                       `json:"proxy_url" yaml:"proxy_url"`
 	AuthConfig      `json:",inline" yaml:",inline"`
-	OAuth2          OAuth2Config `json:"oauth2" yaml:"oauth2"`
+	OAuth2          OAuth2Config   `json:"oauth2" yaml:"oauth2"`
+	DumpRequestLog  DumpRequestLog `json:"dump_request_log" yaml:"dump_request_log"`
+}
+
+type DumpRequestLog struct {
+	// Enable whether to print dump request log or not
+	// Default: false
+	Enable bool `json:"enable" yaml:"enable"`
+
+	// Level at what level this request-response log will be printed.
+	// Available level: TRACE, DEBUG, INFO, WARN, ERROR, FATAL
+	// Default: TRACE
+	Level string `json:"level" yaml:"level"`
+
+	// Message printed to the logger.
+	Message string `json:"message" yaml:"message"`
 }
 
 // NewOldConfig creates a new Config with default values.

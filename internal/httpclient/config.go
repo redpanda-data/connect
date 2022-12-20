@@ -19,6 +19,11 @@ func OldFieldSpec(forOutput bool, extraChildren ...docs.FieldSpec) docs.FieldSpe
 		}).IsInterpolated().Map().HasDefault(map[string]any{}),
 		docs.FieldObject("metadata", "Specify optional matching rules to determine which metadata keys should be added to the HTTP request as headers.").Advanced().
 			WithChildren(metadata.IncludeFilterDocs()...),
+		docs.FieldObject("dump_request_log", "Dump the request and response payload in stdout as logger").WithChildren(
+			docs.FieldBool("enable", "Whether to print dump request log or not.", true).HasDefault(false),
+			docs.FieldString("level", "At what level this request-response log will be printed.", "TRACE").HasOptions("TRACE", "DEBUG", "INFO", "WARN", "ERROR", "FATAL").HasDefault("TRACE"),
+			docs.FieldString("message", "Message printed to the logger.", "request log to service xxx").HasDefault("http request log"),
+		).Advanced(),
 	}
 
 	extractHeadersDesc := "Specify which response headers should be added to resulting messages as metadata. Header keys are lowercased before matching, so ensure that your patterns target lowercased versions of the header keys that you expect."
