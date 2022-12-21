@@ -5,6 +5,8 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 4.11.0 - 2022-12-21
+
 ### Added
 
 - Field `default_encoding` added to the `parquet_encode` processor.
