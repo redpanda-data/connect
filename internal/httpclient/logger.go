@@ -66,7 +66,11 @@ func (r *RoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
 		_, reqBodyErr = io.Copy(reqBodyBuf, req.Body)
 		if reqBodyErr != nil {
 			errCum = multierr.Append(errCum, fmt.Errorf("error copy request body: %w", reqBodyErr))
-			reqBodyBuf = bytes.NewBufferString("")
+			reqBodyBuf = &bytes.Buffer{}
+		}
+
+		if _err := req.Body.Close(); _err != nil {
+			errCum = multierr.Append(errCum, fmt.Errorf("error closing request body: %w", _err))
 		}
 
 		req.Body = io.NopCloser(reqBodyBuf)
@@ -93,7 +97,11 @@ func (r *RoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
 		_, respErrBody = io.Copy(respBodyBuf, respOriginal.Body)
 		if respErrBody != nil {
 			errCum = multierr.Append(errCum, fmt.Errorf("error copy response body: %w", respErrBody))
-			respBodyBuf = bytes.NewBufferString("")
+			respBodyBuf = &bytes.Buffer{}
+		}
+
+		if _err := respOriginal.Body.Close(); _err != nil {
+			errCum = multierr.Append(errCum, fmt.Errorf("error closing response body: %w", _err))
 		}
 
 		respOriginal.Body = io.NopCloser(respBodyBuf)

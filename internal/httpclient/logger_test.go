@@ -142,6 +142,25 @@ func TestRoundTripper_RoundTrip(t *testing.T) {
 		require.NoError(t, err)
 	})
 
+	t.Run("non-empty request body but error close", func(t *testing.T) {
+		transport := newMockHttpRoundTripper()
+
+		httpRoundTrip, err := newRequestLog(transport, log.Noop(), oldconfig.DumpRequestLogConfig{Enable: true})
+		require.NotNil(t, httpRoundTrip)
+		require.NoError(t, err)
+
+		req := &http.Request{
+			Body: &Closer{
+				buf: bytes.NewBufferString(`{"foo":"bar"}`),
+				err: fmt.Errorf("mock error buffer"),
+			},
+		}
+
+		resp, err := httpRoundTrip.RoundTrip(req)
+		require.NotNil(t, resp)
+		require.NoError(t, err)
+	})
+
 	t.Run("non-empty request body no valid json", func(t *testing.T) {
 		transport := newMockHttpRoundTripper()
 
@@ -201,6 +220,31 @@ func TestRoundTripper_RoundTrip(t *testing.T) {
 		transport.CallRoundTrip = func(request *http.Request) (*http.Response, error) {
 			return &http.Response{
 				Body: io.NopCloser(bytes.NewBufferString(`{"FOO":"BAR"}`)),
+			}, nil
+		}
+
+		httpRoundTrip, err := newRequestLog(transport, log.Noop(), oldconfig.DumpRequestLogConfig{Enable: true})
+		require.NotNil(t, httpRoundTrip)
+		require.NoError(t, err)
+
+		req := &http.Request{
+			Body: io.NopCloser(bytes.NewBufferString(`{"foo":"bar"}`)),
+		}
+
+		resp, err := httpRoundTrip.RoundTrip(req)
+		require.NotNil(t, resp)
+		require.NoError(t, err)
+	})
+
+	t.Run("not-nil response body fail on close", func(t *testing.T) {
+		transport := newMockHttpRoundTripper()
+
+		transport.CallRoundTrip = func(request *http.Request) (*http.Response, error) {
+			return &http.Response{
+				Body: &Closer{
+					buf: bytes.NewBufferString(`{"FOO":"BAR"}`),
+					err: fmt.Errorf("mock error close resp body"),
+				},
 			}, nil
 		}
 
@@ -294,4 +338,19 @@ func (b *Buf) Read(p []byte) (n int, err error) {
 	}
 
 	return len(p), nil
+}
+
+type Closer struct {
+	buf io.Reader
+	err error
+}
+
+var _ io.ReadCloser = (*Closer)(nil)
+
+func (c *Closer) Read(p []byte) (n int, err error) {
+	return c.buf.Read(p)
+}
+
+func (c *Closer) Close() error {
+	return c.err
 }
