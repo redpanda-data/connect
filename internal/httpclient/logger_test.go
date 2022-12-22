@@ -175,7 +175,7 @@ func TestRoundTripper_RoundTrip(t *testing.T) {
 		require.Error(t, expectedErr)
 	})
 
-	t.Run("not-nil response with empty body", func(t *testing.T) {
+	t.Run("not-nil response with empty resp body", func(t *testing.T) {
 		transport := newMockHttpRoundTripper()
 
 		transport.CallRoundTrip = func(request *http.Request) (*http.Response, error) {
@@ -195,7 +195,7 @@ func TestRoundTripper_RoundTrip(t *testing.T) {
 		require.NoError(t, err)
 	})
 
-	t.Run("not-nil response non-empty body", func(t *testing.T) {
+	t.Run("not-nil response non-empty resp body", func(t *testing.T) {
 		transport := newMockHttpRoundTripper()
 
 		transport.CallRoundTrip = func(request *http.Request) (*http.Response, error) {
@@ -217,7 +217,7 @@ func TestRoundTripper_RoundTrip(t *testing.T) {
 		require.NoError(t, err)
 	})
 
-	t.Run("not-nil response non-empty body with non-valid json", func(t *testing.T) {
+	t.Run("not-nil response non-empty resp body with non-valid json", func(t *testing.T) {
 		transport := newMockHttpRoundTripper()
 
 		transport.CallRoundTrip = func(request *http.Request) (*http.Response, error) {
@@ -239,7 +239,7 @@ func TestRoundTripper_RoundTrip(t *testing.T) {
 		require.NoError(t, err)
 	})
 
-	t.Run("not-nil response non-empty body but failed to read", func(t *testing.T) {
+	t.Run("not-nil response non-empty resp body but failed to read", func(t *testing.T) {
 		transport := newMockHttpRoundTripper()
 
 		transport.CallRoundTrip = func(request *http.Request) (*http.Response, error) {

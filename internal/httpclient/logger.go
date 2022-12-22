@@ -58,22 +58,23 @@ func (r *RoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
 
 	var (
 		reqBodyCaptured interface{}
-		reqBody         []byte
+		reqBodyBuf      = &bytes.Buffer{}
 		reqBodyErr      error
 	)
 
 	if req != nil && req.Body != nil {
-		reqBody, reqBodyErr = io.ReadAll(req.Body)
+		_, reqBodyErr = io.Copy(reqBodyBuf, req.Body)
 		if reqBodyErr != nil {
-			errCum = multierr.Append(errCum, fmt.Errorf("error read request body: %w", reqBodyErr))
-			reqBody = []byte{}
+			errCum = multierr.Append(errCum, fmt.Errorf("error copy request body: %w", reqBodyErr))
+			reqBodyBuf = bytes.NewBufferString("")
 		}
 
-		req.Body = io.NopCloser(bytes.NewReader(reqBody))
+		req.Body = io.NopCloser(reqBodyBuf)
 	}
 
-	if _err := json.Unmarshal(reqBody, &reqBodyCaptured); _err != nil && len(reqBody) > 0 {
-		reqBodyCaptured = string(reqBody)
+	// use json.Unmarshal instead of json.NewDecoder to make sure we can re-read the buffer
+	if _err := json.Unmarshal(reqBodyBuf.Bytes(), &reqBodyCaptured); _err != nil && reqBodyBuf.Len() > 0 {
+		reqBodyCaptured = reqBodyBuf.String()
 	}
 
 	var roundTripErr error
@@ -84,22 +85,23 @@ func (r *RoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
 
 	var (
 		respBodyCaptured interface{}
-		respBody         []byte
+		respBodyBuf      = &bytes.Buffer{}
 		respErrBody      error
 	)
 
 	if respOriginal != nil && respOriginal.Body != nil {
-		respBody, respErrBody = io.ReadAll(respOriginal.Body)
+		_, respErrBody = io.Copy(respBodyBuf, respOriginal.Body)
 		if respErrBody != nil {
-			errCum = multierr.Append(errCum, fmt.Errorf("error read response body: %w", respErrBody))
-			respBody = []byte{}
+			errCum = multierr.Append(errCum, fmt.Errorf("error copy response body: %w", respErrBody))
+			respBodyBuf = bytes.NewBufferString("")
 		}
 
-		respOriginal.Body = io.NopCloser(bytes.NewBuffer(respBody))
+		respOriginal.Body = io.NopCloser(respBodyBuf)
 	}
 
-	if _err := json.Unmarshal(respBody, &respBodyCaptured); _err != nil && len(respBody) > 0 {
-		respBodyCaptured = string(respBody)
+	// use json.Unmarshal instead of json.NewDecoder to make sure we can re-read the buffer
+	if _err := json.Unmarshal(respBodyBuf.Bytes(), &respBodyCaptured); _err != nil && respBodyBuf.Len() > 0 {
+		respBodyCaptured = respBodyBuf.String()
 	}
 
 	// log outgoing request as simple map
