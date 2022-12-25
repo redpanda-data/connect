@@ -2,6 +2,7 @@ package mongodb
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
 	"go.mongodb.org/mongo-driver/bson"
@@ -132,11 +133,20 @@ func (m *mongoInput) Connect(ctx context.Context) error {
 		return fmt.Errorf("ping failed: %v", err)
 	}
 	collection := m.client.Database(m.config.Database).Collection(m.config.Collection)
+	queryBytes, err := json.Marshal(m.query)
+	if err != nil {
+		return fmt.Errorf("json encode failed: %v", err)
+	}
+	var q interface{}
+	if err = bson.UnmarshalExtJSON(queryBytes, m.marshalCanon, &q); err != nil {
+		return fmt.Errorf("unmarshal failed: %v", err)
+	}
+
 	switch m.operation {
 	case "find":
-		m.cursor, err = collection.Find(ctx, m.query)
+		m.cursor, err = collection.Find(ctx, q)
 	case "aggregate":
-		m.cursor, err = collection.Aggregate(ctx, m.query)
+		m.cursor, err = collection.Aggregate(ctx, q)
 	default:
 		return fmt.Errorf("opertaion %s not supported. the supported values are \"find\" and \"aggregate\"", m.operation)
 	}

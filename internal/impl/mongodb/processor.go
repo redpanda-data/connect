@@ -264,14 +264,17 @@ func (m *Processor) ProcessBatch(ctx context.Context, spans []*tracing.Span, bat
 
 		var docJSON, filterJSON, hintJSON any
 
+		isCanonical := m.conf.JSONMarshalMode == client.JSONMarshalModeCanonical
 		if filterValWanted {
-			if filterJSON, err = filterVal.AsStructured(); err != nil {
+			filterBytes := filterVal.AsBytes()
+			if err := bson.UnmarshalExtJSON(filterBytes, isCanonical, &filterJSON); err != nil {
 				return err
 			}
 		}
 
 		if documentValWanted {
-			if docJSON, err = documentVal.AsStructured(); err != nil {
+			docBytes := documentVal.AsBytes()
+			if err := bson.UnmarshalExtJSON(docBytes, isCanonical, &docJSON); err != nil {
 				return err
 			}
 		}
@@ -335,7 +338,7 @@ func (m *Processor) ProcessBatch(ctx context.Context, spans []*tracing.Span, bat
 				m.log.Errorf("Error decoding mongo db result, filter = %v: %s", filterJSON, err)
 				return err
 			}
-			data, err := bson.MarshalExtJSON(decoded, m.conf.JSONMarshalMode == client.JSONMarshalModeCanonical, false)
+			data, err := bson.MarshalExtJSON(decoded, isCanonical, false)
 			if err != nil {
 				return err
 			}
