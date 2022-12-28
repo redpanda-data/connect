@@ -8,6 +8,7 @@ All notable changes to this project will be documented in this file.
 ### Added
 
 - Format `csv:x` added to the `unarchive` processor.
+- Field `max_buffer` added to the `aws_s3` input.
 
 ### Fixed
 

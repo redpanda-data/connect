@@ -64,6 +64,7 @@ input:
     force_path_style_urls: false
     delete_objects: false
     codec: all-bytes
+    max_buffer: 1000000
     sqs:
       url: ""
       endpoint: ""
@@ -260,6 +261,14 @@ codec: delim:foobar
 
 codec: gzip/csv
 ```
+
+### `max_buffer`
+
+The largest token size expected when consuming objects with a tokenised codec such as `lines`.
+
+
+Type: `int`  
+Default: `1000000`  
 
 ### `sqs`
 

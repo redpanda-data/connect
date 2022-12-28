@@ -32,7 +32,7 @@ Consumes data from files on disk, emitting messages according to a chosen codec.
 		Config: docs.FieldComponent().WithChildren(
 			docs.FieldString("paths", "A list of paths to consume sequentially. Glob patterns are supported, including super globs (double star).").Array(),
 			codec.ReaderDocs,
-			docs.FieldInt("max_buffer", "The largest token size expected when consuming delimited files.").Advanced(),
+			docs.FieldInt("max_buffer", "The largest token size expected when consuming files with a tokenised codec such as `lines`.").Advanced(),
 			docs.FieldBool("delete_on_finish", "Whether to delete input files from the disk once they are fully consumed.").Advanced(),
 		).ChildDefaultAndTypesFromStruct(input.NewFileConfig()),
 		Description: `
