@@ -29,7 +29,7 @@ func init() {
 		if err != nil {
 			return nil, err
 		}
-		return input.NewAsyncReader("aws_sqs", false, r, nm)
+		return input.NewAsyncReader("aws_sqs", r, nm)
 	}), docs.ComponentSpec{
 		Name:   "aws_sqs",
 		Status: docs.StatusStable,

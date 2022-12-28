@@ -929,7 +929,7 @@ func BenchmarkTCPSocketWithCutOff(b *testing.B) {
 	sRdr, err := newSocketReader(conf.Socket, log.Noop())
 	require.NoError(b, err)
 
-	rdr, err := input.NewAsyncReader("socket", true, input.NewAsyncCutOff(input.NewAsyncPreserver(sRdr)), mock.NewManager())
+	rdr, err := input.NewAsyncReader("socket", input.NewAsyncCutOff(input.NewAsyncPreserver(sRdr)), mock.NewManager())
 	require.NoError(b, err)
 
 	defer func() {
@@ -999,7 +999,7 @@ func BenchmarkTCPSocketNoCutOff(b *testing.B) {
 	sRdr, err := newSocketReader(conf.Socket, log.Noop())
 	require.NoError(b, err)
 
-	rdr, err := input.NewAsyncReader("socket", true, input.NewAsyncPreserver(sRdr), mock.NewManager())
+	rdr, err := input.NewAsyncReader("socket", input.NewAsyncPreserver(sRdr), mock.NewManager())
 	require.NoError(b, err)
 
 	defer func() {

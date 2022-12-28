@@ -52,7 +52,7 @@ func newNanomsgInput(conf input.Config, mgr bundle.NewManagement) (input.Streame
 	if err != nil {
 		return nil, err
 	}
-	return input.NewAsyncReader("nanomsg", true, input.NewAsyncPreserver(s), mgr)
+	return input.NewAsyncReader("nanomsg", input.NewAsyncPreserver(s), mgr)
 }
 
 type nanomsgReader struct {

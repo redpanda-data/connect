@@ -42,7 +42,7 @@ func init() {
 		if conf.AWSS3.SQS.URL == "" {
 			rdr = input.NewAsyncPreserver(rdr)
 		}
-		return input.NewAsyncReader("aws_s3", false, rdr, nm)
+		return input.NewAsyncReader("aws_s3", rdr, nm)
 	}), docs.ComponentSpec{
 		Name:   "aws_s3",
 		Status: docs.StatusStable,

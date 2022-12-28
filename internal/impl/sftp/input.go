@@ -49,7 +49,7 @@ func init() {
 		if err != nil {
 			return nil, err
 		}
-		return input.NewAsyncReader("sftp", true, input.NewAsyncPreserver(r), nm)
+		return input.NewAsyncReader("sftp", input.NewAsyncPreserver(r), nm)
 	}), docs.ComponentSpec{
 		Name:    "sftp",
 		Status:  docs.StatusBeta,

@@ -24,7 +24,7 @@ func init() {
 		if err != nil {
 			return nil, err
 		}
-		return input.NewAsyncReader("azure_table_storage", true, input.NewAsyncPreserver(r), nm)
+		return input.NewAsyncReader("azure_table_storage", input.NewAsyncPreserver(r), nm)
 	}), docs.ComponentSpec{
 		Name:    "azure_table_storage",
 		Status:  docs.StatusBeta,

@@ -64,7 +64,7 @@ func newNATSInput(conf input.Config, mgr bundle.NewManagement) (input.Streamed, 
 	if err != nil {
 		return nil, err
 	}
-	return input.NewAsyncReader("nats", true, input.NewAsyncPreserver(n), mgr)
+	return input.NewAsyncReader("nats", input.NewAsyncPreserver(n), mgr)
 }
 
 type natsReader struct {

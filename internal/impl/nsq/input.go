@@ -64,7 +64,7 @@ func newNSQInput(conf input.Config, mgr bundle.NewManagement) (input.Streamed, e
 	if n, err = newNSQReader(conf.NSQ, mgr); err != nil {
 		return nil, err
 	}
-	return input.NewAsyncReader("nsq", true, n, mgr)
+	return input.NewAsyncReader("nsq", n, mgr)
 }
 
 type nsqReader struct {

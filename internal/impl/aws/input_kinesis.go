@@ -34,7 +34,7 @@ func init() {
 		if err != nil {
 			return nil, err
 		}
-		return input.NewAsyncReader("aws_kinesis", false, input.NewAsyncPreserver(rdr), nm)
+		return input.NewAsyncReader("aws_kinesis", input.NewAsyncPreserver(rdr), nm)
 	}), docs.ComponentSpec{
 		Name:    "aws_kinesis",
 		Status:  docs.StatusStable,
@@ -52,7 +52,7 @@ By default messages of a shard can be processed in parallel, up to a limit deter
 
 ### Table Schema
 
-It's possible to configure Benthos to create the DynamoDB table required for coordination if it does not already exist. However, if you wish to create this yourself (recommended) then create a table with a string HASH key ` + "`StreamID`" + ` and a string RANGE key ` + "`ShardID`" + `. 
+It's possible to configure Benthos to create the DynamoDB table required for coordination if it does not already exist. However, if you wish to create this yourself (recommended) then create a table with a string HASH key ` + "`StreamID`" + ` and a string RANGE key ` + "`ShardID`" + `.
 
 ### Batching
 

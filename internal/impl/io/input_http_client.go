@@ -45,7 +45,7 @@ func init() {
 		if err != nil {
 			return nil, err
 		}
-		return input.NewAsyncReader("http_client", true, input.NewAsyncPreserver(rdr), mgr)
+		return input.NewAsyncReader("http_client", input.NewAsyncPreserver(rdr), mgr)
 	}), docs.ComponentSpec{
 		Name:    "http_client",
 		Summary: `Connects to a server and continuously performs requests for a single message.`,
