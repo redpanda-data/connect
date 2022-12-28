@@ -33,6 +33,7 @@ type AWSS3Config struct {
 	sess.Config        `json:",inline" yaml:",inline"`
 	Bucket             string         `json:"bucket" yaml:"bucket"`
 	Codec              string         `json:"codec" yaml:"codec"`
+	MaxBuffer          int            `json:"max_buffer" yaml:"max_buffer"`
 	Prefix             string         `json:"prefix" yaml:"prefix"`
 	ForcePathStyleURLs bool           `json:"force_path_style_urls" yaml:"force_path_style_urls"`
 	DeleteObjects      bool           `json:"delete_objects" yaml:"delete_objects"`
@@ -46,6 +47,7 @@ func NewAWSS3Config() AWSS3Config {
 		Bucket:             "",
 		Prefix:             "",
 		Codec:              "all-bytes",
+		MaxBuffer:          1000000,
 		ForcePathStyleURLs: false,
 		DeleteObjects:      false,
 		SQS:                NewAWSS3SQSConfig(),

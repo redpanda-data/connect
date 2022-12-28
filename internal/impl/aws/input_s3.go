@@ -89,6 +89,7 @@ You can access these metadata fields using [function interpolation](/docs/config
 			docs.FieldBool("force_path_style_urls", "Forces the client API to use path style URLs for downloading keys, which is often required when connecting to custom endpoints.").Advanced(),
 			docs.FieldBool("delete_objects", "Whether to delete downloaded objects from the bucket once they are processed.").Advanced(),
 			codec.ReaderDocs,
+			docs.FieldInt("max_buffer", "The largest token size expected when consuming s3 object (given codec like `lines`)").Advanced(),
 			docs.FieldObject("sqs", "Consume SQS messages in order to trigger key downloads.").WithChildren(
 				docs.FieldURL("url", "An optional SQS URL to connect to. When specified this queue will control which objects are downloaded."),
 				docs.FieldString("endpoint", "A custom endpoint to use when connecting to SQS.").Advanced(),
@@ -537,7 +538,10 @@ func newAmazonS3Reader(conf input.AWSS3Config, nm bundle.NewManagement) (*awsS3R
 		log:  nm.Logger(),
 	}
 	var err error
-	if s.objectScannerCtor, err = codec.GetReader(conf.Codec, codec.NewReaderConfig()); err != nil {
+	readerConfig := codec.ReaderConfig{
+		MaxScanTokenSize: conf.MaxBuffer,
+	}
+	if s.objectScannerCtor, err = codec.GetReader(conf.Codec, readerConfig); err != nil {
 		return nil, err
 	}
 	if len(conf.SQS.DelayPeriod) > 0 {
