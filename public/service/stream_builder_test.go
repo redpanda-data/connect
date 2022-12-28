@@ -165,7 +165,7 @@ file:
 
 func TestStreamBuilderEnvVarInterpolation(t *testing.T) {
 	os.Setenv("BENTHOS_TEST_ONE", "foo")
-	os.Setenv("BENTHOS_TEST_TWO", "bar")
+	os.Setenv("BENTHOS_TEST_TWO", "warn")
 
 	b := service.NewStreamBuilder()
 	require.NoError(t, b.AddInputYAML(`
@@ -180,7 +180,7 @@ generate:
 
 	exp := []string{
 		` mapping: root = "foo"`,
-		`level: bar`,
+		`level: warn`,
 	}
 
 	for _, str := range exp {

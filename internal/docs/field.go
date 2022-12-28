@@ -2,6 +2,7 @@ package docs
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/benthosdev/benthos/v4/internal/bloblang"
 	"github.com/benthosdev/benthos/v4/internal/bloblang/query"
@@ -295,6 +296,23 @@ func (f FieldSpec) LinterFunc(fn LintFunc) FieldSpec {
 	return f
 }
 
+func lintsFromAny(line int, v any) (lints []Lint) {
+	switch t := v.(type) {
+	case []any:
+		for _, e := range t {
+			lints = append(lints, lintsFromAny(line, e)...)
+		}
+	case map[string]any:
+		typeInt, _ := query.IGetInt(t["type"])
+		lints = append(lints, NewLintError(line, LintType(typeInt), t["what"].(string)))
+	case string:
+		if len(t) > 0 {
+			lints = append(lints, NewLintError(line, LintCustom, t))
+		}
+	}
+	return
+}
+
 // LinterBlobl adds a linting function to a field. When linting is performed on
 // a config the provided bloblang mapping will be called with a boxed variant of
 // the field value, allowing it to perform linting on that value, where an array
@@ -324,24 +342,13 @@ func (f FieldSpec) LinterBlobl(blobl string) FieldSpec {
 	f.customLintFn = func(ctx LintContext, line, col int, value any) (lints []Lint) {
 		res, err := m.Exec(query.FunctionContext{
 			Vars:     map[string]any{},
-			Maps:     map[string]query.Function{},
+			Maps:     m.Maps(),
 			MsgBatch: message.QuickBatch(nil),
 		}.WithValue(value))
 		if err != nil {
 			return []Lint{NewLintError(line, LintCustom, err.Error())}
 		}
-		switch t := res.(type) {
-		case []any:
-			for _, e := range t {
-				if what, _ := e.(string); len(what) > 0 {
-					lints = append(lints, NewLintError(line, LintCustom, what))
-				}
-			}
-		case string:
-			if len(t) > 0 {
-				lints = append(lints, NewLintError(line, LintCustom, t))
-			}
-		}
+		lints = append(lints, lintsFromAny(line, res)...)
 		return
 	}
 	return f
@@ -352,27 +359,46 @@ func (f FieldSpec) LinterBlobl(blobl string) FieldSpec {
 // because some fields express options that are only a subset due to deprecated
 // functionality.
 func (f FieldSpec) lintOptions() FieldSpec {
-	f.customLintFn = func(ctx LintContext, line, col int, value any) []Lint {
-		str, ok := value.(string)
-		if !ok {
-			return nil
-		}
-		if len(f.Options) > 0 {
-			for _, optStr := range f.Options {
-				if str == optStr {
-					return nil
-				}
-			}
+	var optionsBuilder, patternOptionsBuilder strings.Builder
+
+	_, _ = optionsBuilder.WriteString("{\n")
+	_, _ = patternOptionsBuilder.WriteString("{\n")
+
+	addFn := func(o string) {
+		o = strings.ToLower(o)
+		if colonN := strings.Index(o, ":"); colonN != -1 {
+			_, _ = fmt.Fprintf(&patternOptionsBuilder, "  %q: true,\n", o[:colonN])
 		} else {
-			for _, optStr := range f.AnnotatedOptions {
-				if str == optStr[0] {
-					return nil
-				}
-			}
+			_, _ = fmt.Fprintf(&optionsBuilder, "  %q: true,\n", o)
 		}
-		return []Lint{NewLintError(line, LintInvalidOption, fmt.Sprintf("value %v is not a valid option for this field", str))}
 	}
-	return f
+
+	for _, o := range f.Options {
+		addFn(o)
+	}
+	for _, kv := range f.AnnotatedOptions {
+		addFn(kv[0])
+	}
+
+	_, _ = optionsBuilder.WriteString("}\n")
+	_, _ = patternOptionsBuilder.WriteString("}\n")
+
+	return f.LinterBlobl(fmt.Sprintf(`
+let options = %v
+
+map is_pattern_option {
+  let pattern_options = %v
+  let parts = this.split(":")
+  root = $parts.length() == 2 && $pattern_options.exists($parts.index(0))
+}
+
+# Codec arguments can be chained with a / (i.e. "lines/multipart")
+let value_parts = if this.type() == "string" { this.split("/").map_each(part -> part.lowercase()) } else { [] }
+
+root = $value_parts.map_each(part -> if $options.exists(part) || part.apply("is_pattern_option") { null } else {
+  {"type": 2, "what": "value %%v is not a valid option for this field".format(part)}
+}).filter(ele -> ele != null)
+`, optionsBuilder.String(), patternOptionsBuilder.String()))
 }
 
 func (f FieldSpec) scrubValue(v any) (any, error) {

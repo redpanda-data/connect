@@ -94,6 +94,32 @@ func TestFieldLinting(t *testing.T) {
 			// },
 			// TODO: Disabled until our rule takes interpolation functions into account when necessary.
 		},
+		{
+			name:  "enum valid option",
+			f:     FieldString("foo", "").HasOptions("foo", "bar", "baz:x"),
+			input: "foo",
+		},
+		{
+			name:  "enum invalid option",
+			f:     FieldString("foo", "").HasOptions("foo", "bar", "baz:x"),
+			input: "buz",
+			output: []Lint{
+				{Column: 1, Type: 2, What: "value buz is not a valid option for this field"},
+			},
+		},
+		{
+			name:  "enum valid pattern option",
+			f:     FieldString("foo", "").HasOptions("foo", "bar", "baz:x"),
+			input: "baz:a",
+		},
+		{
+			name:  "enum invalid pattern option",
+			f:     FieldString("foo", "").HasOptions("foo", "bar", "baz:x"),
+			input: "baz",
+			output: []Lint{
+				{Column: 1, Type: 2, What: "value baz is not a valid option for this field"},
+			},
+		},
 	}
 	for _, test := range tests {
 		test := test
