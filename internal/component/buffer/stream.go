@@ -144,6 +144,9 @@ func (m *Stream) inputLoop() {
 func (m *Stream) outputLoop() {
 	var ackGroup sync.WaitGroup
 
+	closeNowCtx, done := m.shutSig.CloseNowCtx(context.Background())
+	defer done()
+
 	defer func() {
 		ackGroup.Wait()
 		_ = m.buffer.Close(context.Background())
@@ -156,9 +159,6 @@ func (m *Stream) outputLoop() {
 		mSentBatch = m.stats.GetCounter("buffer_batch_sent")
 		mLatency   = m.stats.GetTimer("buffer_latency_ns")
 	)
-
-	closeNowCtx, done := m.shutSig.CloseNowCtx(context.Background())
-	defer done()
 
 	for {
 		msg, ackFunc, err := m.buffer.Read(closeNowCtx)
