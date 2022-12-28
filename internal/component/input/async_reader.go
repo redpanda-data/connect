@@ -21,8 +21,6 @@ type AsyncReader struct {
 	connected   int32
 	connBackoff backoff.BackOff
 
-	allowSkipAcks bool
-
 	typeStr string
 	reader  Async
 
@@ -35,7 +33,6 @@ type AsyncReader struct {
 // NewAsyncReader creates a new AsyncReader input type.
 func NewAsyncReader(
 	typeStr string,
-	allowSkipAcks bool,
 	r Async,
 	mgr component.Observability,
 ) (Streamed, error) {
@@ -45,13 +42,12 @@ func NewAsyncReader(
 	boff.MaxElapsedTime = 0
 
 	rdr := &AsyncReader{
-		connBackoff:   boff,
-		allowSkipAcks: allowSkipAcks,
-		typeStr:       typeStr,
-		reader:        r,
-		mgr:           mgr,
-		transactions:  make(chan message.Transaction),
-		shutSig:       shutdown.NewSignaller(),
+		connBackoff:  boff,
+		typeStr:      typeStr,
+		reader:       r,
+		mgr:          mgr,
+		transactions: make(chan message.Transaction),
+		shutSig:      shutdown.NewSignaller(),
 	}
 
 	go rdr.loop()

@@ -27,7 +27,7 @@ func init() {
 		if err != nil {
 			return nil, err
 		}
-		return input.NewAsyncReader("mqtt", true, input.NewAsyncPreserver(m), nm)
+		return input.NewAsyncReader("mqtt", input.NewAsyncPreserver(m), nm)
 	}), docs.ComponentSpec{
 		Name: "mqtt",
 		Summary: `

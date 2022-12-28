@@ -51,7 +51,7 @@ func newSocketInput(conf input.Config, mgr bundle.NewManagement, log log.Modular
 	// we can get the same results by making sure that the async readers forward
 	// CloseAsync all the way through. We would need it to be configurable as it
 	// wouldn't be appropriate for inputs that have real acks.
-	return input.NewAsyncReader("socket", true, input.NewAsyncCutOff(input.NewAsyncPreserver(rdr)), mgr)
+	return input.NewAsyncReader("socket", input.NewAsyncCutOff(input.NewAsyncPreserver(rdr)), mgr)
 }
 
 type socketReader struct {

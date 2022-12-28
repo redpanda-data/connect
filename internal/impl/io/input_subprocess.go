@@ -23,7 +23,7 @@ func init() {
 		if err != nil {
 			return nil, err
 		}
-		return input.NewAsyncReader("subprocess", true, b, nm)
+		return input.NewAsyncReader("subprocess", b, nm)
 	}), docs.ComponentSpec{
 		Name:   "subprocess",
 		Status: docs.StatusBeta,

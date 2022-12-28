@@ -30,7 +30,7 @@ func init() {
 		if err != nil {
 			return nil, err
 		}
-		return input.NewAsyncReader("amqp_1", true, a, nm)
+		return input.NewAsyncReader("amqp_1", a, nm)
 	}), docs.ComponentSpec{
 		Name:    "amqp_1",
 		Status:  docs.StatusStable,

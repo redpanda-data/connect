@@ -79,7 +79,7 @@ func newNATSStreamInput(conf input.Config, mgr bundle.NewManagement) (input.Stre
 	if c, err = newNATSStreamReader(conf.NATSStream, mgr); err != nil {
 		return nil, err
 	}
-	return input.NewAsyncReader("nats_stream", true, c, mgr)
+	return input.NewAsyncReader("nats_stream", c, mgr)
 }
 
 type natsStreamReader struct {

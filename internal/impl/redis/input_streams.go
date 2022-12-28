@@ -57,7 +57,7 @@ func newRedisStreamsInput(conf input.Config, mgr bundle.NewManagement) (input.St
 		return nil, err
 	}
 	c = input.NewAsyncPreserver(c)
-	return input.NewAsyncReader("redis_streams", true, c, mgr)
+	return input.NewAsyncReader("redis_streams", c, mgr)
 }
 
 type pendingRedisStreamMsg struct {
