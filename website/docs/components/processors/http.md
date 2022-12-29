@@ -52,6 +52,10 @@ http:
   metadata:
     include_prefixes: []
     include_patterns: []
+  dump_request_log:
+    enable: false
+    level: TRACE
+    message: http request log
   oauth:
     enabled: false
     consumer_key: ""
@@ -256,6 +260,56 @@ include_patterns:
 
 include_patterns:
   - _timestamp_unix$
+```
+
+### `dump_request_log`
+
+Dump the request and response payload in stdout as logger
+
+
+Type: `object`  
+
+### `dump_request_log.enable`
+
+Whether to print dump request log or not.
+
+
+Type: `bool`  
+Default: `false`  
+
+```yml
+# Examples
+
+enable: true
+```
+
+### `dump_request_log.level`
+
+At what level this request-response log will be printed.
+
+
+Type: `string`  
+Default: `"TRACE"`  
+Options: `TRACE`, `DEBUG`, `INFO`, `WARN`, `ERROR`, `FATAL`.
+
+```yml
+# Examples
+
+level: TRACE
+```
+
+### `dump_request_log.message`
+
+Message printed to the logger.
+
+
+Type: `string`  
+Default: `"http request log"`  
+
+```yml
+# Examples
+
+message: request log to service xxx
 ```
 
 ### `oauth`
