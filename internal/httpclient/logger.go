@@ -15,13 +15,13 @@ import (
 	"go.uber.org/multierr"
 )
 
-type RoundTripper struct {
+type roundTripper struct {
 	Base   http.RoundTripper
 	Logger log.Modular
 	Config oldconfig.DumpRequestLogConfig
 }
 
-var _ http.RoundTripper = (*RoundTripper)(nil)
+var _ http.RoundTripper = (*roundTripper)(nil)
 
 func newRequestLog(base http.RoundTripper, logger log.Modular, cfg oldconfig.DumpRequestLogConfig) (http.RoundTripper, error) {
 	if base == nil {
@@ -41,14 +41,14 @@ func newRequestLog(base http.RoundTripper, logger log.Modular, cfg oldconfig.Dum
 		cfg.Level = "TRACE"
 	}
 
-	return &RoundTripper{
+	return &roundTripper{
 		Base:   base,
 		Logger: logger,
 		Config: cfg,
 	}, nil
 }
 
-func (r *RoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
+func (r *roundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
 	t0 := time.Now()
 
 	var (

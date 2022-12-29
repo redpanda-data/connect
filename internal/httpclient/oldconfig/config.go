@@ -27,6 +27,7 @@ type OldConfig struct {
 	DumpRequestLog  DumpRequestLogConfig `json:"dump_request_log" yaml:"dump_request_log"`
 }
 
+// DumpRequestLogConfig is configuration to enable or disable the HTTP request/response in logger.
 type DumpRequestLogConfig struct {
 	// Enable whether to print dump request log or not
 	// Default: false
