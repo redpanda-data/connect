@@ -14,7 +14,7 @@ import (
 func CacheConfig() *service.ConfigSpec {
 	return client.NewConfigSpec().
 		// TODO Stable().
-		Version("4.11.0").
+		Version("4.12.0").
 		Summary(`Use a Couchbase instance as a cache.`).
 		Field(service.NewDurationField("default_ttl").
 			Description("An optional default TTL to set for items, calculated from the moment the item is cached.").
@@ -66,7 +66,9 @@ func NewCache(conf *service.ParsedConfig, mgr *service.Resources) (*Cache, error
 
 // Get retrieve from cache.
 func (c *Cache) Get(ctx context.Context, key string) (data []byte, err error) {
-	out, err := c.collection.Get(key, &gocb.GetOptions{})
+	out, err := c.collection.Get(key, &gocb.GetOptions{
+		Context: ctx, // this may change in future gocb.
+	})
 	if err != nil {
 		if errors.Is(err, gocb.ErrDocumentNotFound) {
 			return nil, service.ErrKeyNotFound
@@ -83,7 +85,9 @@ func (c *Cache) Set(ctx context.Context, key string, value []byte, ttl *time.Dur
 	if ttl == nil {
 		ttl = c.ttl // load default ttl
 	}
-	opts := &gocb.UpsertOptions{}
+	opts := &gocb.UpsertOptions{
+		Context: ctx, // this may change in future gocb.
+	}
 	if ttl != nil {
 		opts.Expiry = *ttl
 	}
@@ -97,7 +101,9 @@ func (c *Cache) Add(ctx context.Context, key string, value []byte, ttl *time.Dur
 	if ttl == nil {
 		ttl = c.ttl // load default ttl
 	}
-	opts := &gocb.InsertOptions{}
+	opts := &gocb.InsertOptions{
+		Context: ctx, // this may change in future gocb.
+	}
 	if ttl != nil {
 		opts.Expiry = *ttl
 	}
@@ -112,7 +118,9 @@ func (c *Cache) Add(ctx context.Context, key string, value []byte, ttl *time.Dur
 
 // Delete remove from cache.
 func (c *Cache) Delete(ctx context.Context, key string) error {
-	_, err := c.collection.Remove(key, &gocb.RemoveOptions{})
+	_, err := c.collection.Remove(key, &gocb.RemoveOptions{
+		Context: ctx, // this may change in future gocb.
+	})
 
 	return err
 }

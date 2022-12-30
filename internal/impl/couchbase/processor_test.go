@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/bxcodec/faker/v3"
 	"github.com/stretchr/testify/assert"
@@ -101,13 +102,16 @@ couchbase:
 	}
 }
 
-func TestProcessorIntegration(t *testing.T) {
+func TestIntegrationCouchbaseProcessor(t *testing.T) {
 	integration.CheckSkip(t)
 
 	servicePort := requireCouchbase(t)
 
-	bucket := "testing-processor"
+	bucket := fmt.Sprintf("testing-processor-%d", time.Now().Unix())
 	require.NoError(t, createBucket(context.Background(), t, servicePort, bucket))
+	t.Cleanup(func() {
+		require.NoError(t, removeBucket(context.Background(), t, servicePort, bucket))
+	})
 
 	uid := faker.UUIDHyphenated()
 	payload := fmt.Sprintf(`{"id": %q, "data": %q}`, uid, faker.Sentence())
