@@ -19,7 +19,7 @@ This component is experimental and therefore subject to change or removal outsid
 :::
 Use a Couchbase instance as a cache.
 
-Introduced in version 4.10.0.
+Introduced in version 4.12.0.
 
 
 <Tabs defaultValue="common" values={[
@@ -84,6 +84,9 @@ Type: `string`
 ### `password`
 
 Password to connect to the cluster.
+:::warning Secret
+This field contains sensitive information that usually shouldn't be added to a config directly, read our [secrets page for more info](/docs/configuration/secrets).
+:::
 
 
 Type: `string`  
@@ -113,11 +116,11 @@ Default: `"legacy"`
 
 | Option | Summary |
 |---|---|
-| `json` | insert a new document. |
-| `legacy` | creates a new document if it does not exist, if it does exist then it updates it. |
-| `raw` | fetch a document. |
-| `rawjson` | delete a document. |
-| `rawstring` | replace the contents of a document. |
+| `json` | JSONTranscoder implements the default transcoding behavior and applies JSON transcoding to all values. This will apply the following behavior to the value: binary ([]byte) -> error. default -> JSON value, JSON Flags. |
+| `legacy` | LegacyTranscoder implements the behaviour for a backward-compatible transcoder. This transcoder implements behaviour matching that of gocb v1.This will apply the following behavior to the value: binary ([]byte) -> binary bytes, Binary expectedFlags. string -> string bytes, String expectedFlags. default -> JSON value, JSON expectedFlags. |
+| `raw` | RawBinaryTranscoder implements passthrough behavior of raw binary data. This transcoder does not apply any serialization. This will apply the following behavior to the value: binary ([]byte) -> binary bytes, binary expectedFlags. default -> error. |
+| `rawjson` | RawJSONTranscoder implements passthrough behavior of JSON data. This transcoder does not apply any serialization. It will forward data across the network without incurring unnecessary parsing costs. This will apply the following behavior to the value: binary ([]byte) -> JSON bytes, JSON expectedFlags. string -> JSON bytes, JSON expectedFlags. default -> error. |
+| `rawstring` | RawStringTranscoder implements passthrough behavior of raw string data. This transcoder does not apply any serialization. This will apply the following behavior to the value: string -> string bytes, string expectedFlags. default -> error. |
 
 
 ### `timeout`
