@@ -13,6 +13,8 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 
 - The `sqlite` buffer should no longer print `Failed to ack buffer message` logs during graceful termination.
+- The default value of the `conn_max_idle` field has been changed from 0 to 2 for all `sql_*` components in accordance
+to the [`database/sql` docs](https://pkg.go.dev/database/sql#DB.SetMaxIdleConns).
 
 ## 4.11.0 - 2022-12-21
 
