@@ -23,10 +23,6 @@ import (
 func TestProcessorIntegration(t *testing.T) {
 	integration.CheckSkip(t)
 
-	if testing.Short() {
-		t.Skip("Skipping integration test in short mode")
-	}
-
 	pool, err := dockertest.NewPool("")
 	if err != nil {
 		t.Skipf("Could not connect to docker: %s", err)
