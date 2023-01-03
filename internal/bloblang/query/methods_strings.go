@@ -1040,7 +1040,11 @@ func parseCSVMethod(args *ParsedParams) (simpleMethod, error) {
 		} else {
 			records = make([]any, 0, len(strRecords))
 			for _, rec := range strRecords {
-				records = append(records, rec)
+				genericSlice := make([]any, len(rec))
+				for i, v := range rec {
+					genericSlice[i] = v
+				}
+				records = append(records, genericSlice)
 			}
 		}
 
