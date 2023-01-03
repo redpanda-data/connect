@@ -3,6 +3,7 @@ package io
 import (
 	"context"
 	"crypto/tls"
+	"fmt"
 	"net/http"
 	"net/url"
 	"sync"
@@ -28,6 +29,10 @@ func init() {
 		Config: docs.FieldComponent().WithChildren(
 			docs.FieldURL("url", "The URL to connect to.", "ws://localhost:4195/get/ws"),
 			docs.FieldString("open_message", "An optional message to send to the server upon connection.").Advanced(),
+			docs.FieldString("open_message_type", "An optional flag to indicate the data type of open_message.").HasAnnotatedOptions(
+				string(input.OpenMsgTypeBinary), "Binary data open_message.",
+				string(input.OpenMsgTypeText), "Text data open_message. The text message payload is interpreted as UTF-8 encoded text data.",
+			).Advanced().HasDefault(input.OpenMsgTypeText).Optional(),
 			btls.FieldSpec(),
 		).WithChildren(httpclient.OldAuthFieldSpecs()...).ChildDefaultAndTypesFromStruct(input.NewWebsocketConfig()),
 		Categories: []string{
@@ -114,9 +119,19 @@ func (w *websocketReader) Connect(ctx context.Context) error {
 		return err
 	}
 
+	var openMsgType int
+	switch w.conf.OpenMsgType {
+	case input.OpenMsgTypeBinary:
+		openMsgType = websocket.BinaryMessage
+	case input.OpenMsgTypeText:
+		openMsgType = websocket.TextMessage
+	default:
+		return fmt.Errorf("unrecognised open_message_type: %s", w.conf.OpenMsgType)
+	}
+
 	if len(w.conf.OpenMsg) > 0 {
 		if err := client.WriteMessage(
-			websocket.BinaryMessage, []byte(w.conf.OpenMsg),
+			openMsgType, []byte(w.conf.OpenMsg),
 		); err != nil {
 			return err
 		}
