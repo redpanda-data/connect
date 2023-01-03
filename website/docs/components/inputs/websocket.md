@@ -43,7 +43,7 @@ input:
   websocket:
     url: ""
     open_message: ""
-    open_message_type: text
+    open_message_type: binary
     tls:
       enabled: false
       skip_cert_verify: false
@@ -104,7 +104,7 @@ An optional flag to indicate the data type of open_message.
 
 
 Type: `string`  
-Default: `"text"`  
+Default: `"binary"`  
 
 | Option | Summary |
 |---|---|

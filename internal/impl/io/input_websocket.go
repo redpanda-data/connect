@@ -32,7 +32,7 @@ func init() {
 			docs.FieldString("open_message_type", "An optional flag to indicate the data type of open_message.").HasAnnotatedOptions(
 				string(input.OpenMsgTypeBinary), "Binary data open_message.",
 				string(input.OpenMsgTypeText), "Text data open_message. The text message payload is interpreted as UTF-8 encoded text data.",
-			).Advanced().HasDefault(input.OpenMsgTypeText).Optional(),
+			).Advanced().HasDefault(input.OpenMsgTypeBinary).Optional(),
 			btls.FieldSpec(),
 		).WithChildren(httpclient.OldAuthFieldSpecs()...).ChildDefaultAndTypesFromStruct(input.NewWebsocketConfig()),
 		Categories: []string{

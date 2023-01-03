@@ -9,6 +9,7 @@ All notable changes to this project will be documented in this file.
 
 - Format `csv:x` added to the `unarchive` processor.
 - Field `max_buffer` added to the `aws_s3` input.
+- Field `open_message_type` added to the `websocket` input.
 
 ### Fixed
 
