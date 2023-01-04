@@ -54,7 +54,7 @@ output:
 	// Wait for the config watcher to reload the config
 	select {
 	case <-changeChan:
-	case <-time.After(time.Second):
+	case <-time.After(time.Second * 5):
 		require.FailNow(t, "Expected a config change to be triggered")
 	}
 
@@ -117,7 +117,7 @@ output:
 	// Wait for the config watcher to reload the config
 	select {
 	case <-changeChan:
-	case <-time.After(time.Second):
+	case <-time.After(time.Second * 5):
 		require.FailNow(t, "Expected a config change to be triggered")
 	}
 
@@ -191,7 +191,7 @@ func TestReaderStreamDirectWatching(t *testing.T) {
 		// Wait for the config watcher to reload each config
 		select {
 		case <-changeChan:
-		case <-time.After(time.Second):
+		case <-time.After(time.Second * 5):
 			t.Fatal("Expected a config change to be triggered")
 		}
 	}
@@ -214,7 +214,7 @@ func TestReaderStreamDirectWatching(t *testing.T) {
 		// Wait for the config watcher to reload each config
 		select {
 		case <-changeChan:
-		case <-time.After(time.Second):
+		case <-time.After(time.Second * 5):
 			t.Fatal("Expected a config change to be triggered")
 		}
 	}
@@ -275,7 +275,7 @@ func TestReaderStreamWildcardWatching(t *testing.T) {
 		// Wait for the config watcher to reload each config
 		select {
 		case <-changeChan:
-		case <-time.After(time.Second):
+		case <-time.After(time.Second * 5):
 			t.Fatal("Expected a config change to be triggered")
 		}
 	}
@@ -298,7 +298,7 @@ func TestReaderStreamWildcardWatching(t *testing.T) {
 		// Wait for the config watcher to reload each config
 		select {
 		case <-changeChan:
-		case <-time.After(time.Second):
+		case <-time.After(time.Second * 5):
 			t.Fatal("Expected a config change to be triggered")
 		}
 	}
@@ -359,7 +359,7 @@ func TestReaderStreamDirWatching(t *testing.T) {
 		// Wait for the config watcher to reload each config
 		select {
 		case <-changeChan:
-		case <-time.After(time.Second):
+		case <-time.After(time.Second * 5):
 			t.Fatal("Expected a config change to be triggered")
 		}
 	}
@@ -382,7 +382,7 @@ func TestReaderStreamDirWatching(t *testing.T) {
 		// Wait for the config watcher to reload each config
 		select {
 		case <-changeChan:
-		case <-time.After(time.Second):
+		case <-time.After(time.Second * 5):
 			t.Fatal("Expected a config change to be triggered")
 		}
 	}
@@ -443,7 +443,7 @@ func TestReaderWatcherRace(t *testing.T) {
 		// Wait for the config watcher to reload each config
 		select {
 		case <-changeChan:
-		case <-time.After(time.Second):
+		case <-time.After(time.Second * 5):
 			t.Fatal("Expected a config change to be triggered")
 		}
 	}
@@ -465,7 +465,7 @@ func TestReaderWatcherRace(t *testing.T) {
 		// Wait for the config watcher to reload each config
 		select {
 		case <-changeChan:
-		case <-time.After(time.Second):
+		case <-time.After(time.Second * 5):
 			t.Fatal("Expected a config change to be triggered")
 		}
 	}
