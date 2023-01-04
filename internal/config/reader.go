@@ -5,8 +5,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/fs"
+	"path/filepath"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/Jeffail/gabs/v2"
@@ -14,21 +15,17 @@ import (
 
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/docs"
+	"github.com/benthosdev/benthos/v4/internal/filepath/ifs"
 	"github.com/benthosdev/benthos/v4/internal/stream"
 )
 
 const (
-	defaultChangeFlushPeriod = 50 * time.Millisecond
-	defaultChangeDelayPeriod = time.Second
+	defaultChangeFlushPeriod  = 50 * time.Millisecond
+	defaultChangeDelayPeriod  = time.Second
+	defaultFilesRefreshPeriod = time.Second
 )
 
-type configFileInfo struct {
-	updatedAt time.Time
-}
-
 type streamFileInfo struct {
-	configFileInfo
-
 	id string
 }
 
@@ -44,16 +41,21 @@ type Reader struct {
 	// directory walking.
 	testSuffix string
 
+	// The filesystem used for reading config files.
+	fs ifs.FS
+
 	mainPath      string
 	resourcePaths []string
 	streamsPaths  []string
 	overrides     []string
 
+	modTimeLastRead map[string]time.Time
+
 	// Controls whether the main config should include input, output, etc.
 	streamsMode bool
 
 	// Tracks the details of the config file when we last read it.
-	configFileInfo configFileInfo
+	configFileInfo resourceFileInfo
 
 	// Tracks the details of stream config files when we last read them.
 	streamFileInfo map[string]streamFileInfo
@@ -61,27 +63,35 @@ type Reader struct {
 	// Tracks the details of resource config files when we last read them,
 	// including information such as the specific resources that were created
 	// from it.
-	resourceFileInfo    map[string]resourceFileInfo
-	resourceFileInfoMut sync.Mutex
+	resourceFileInfo map[string]resourceFileInfo
+	resourceSources  *resourceSourceInfo
 
 	mainUpdateFn   MainUpdateFunc
 	streamUpdateFn StreamUpdateFunc
 	watcher        fileWatcher
 
-	changeFlushPeriod time.Duration
-	changeDelayPeriod time.Duration
+	changeFlushPeriod  time.Duration
+	changeDelayPeriod  time.Duration
+	filesRefreshPeriod time.Duration
 }
 
 // NewReader creates a new config reader.
 func NewReader(mainPath string, resourcePaths []string, opts ...OptFunc) *Reader {
+	if mainPath != "" {
+		mainPath = filepath.Clean(mainPath)
+	}
 	r := &Reader{
-		testSuffix:        "_benthos_test",
-		mainPath:          mainPath,
-		resourcePaths:     resourcePaths,
-		streamFileInfo:    map[string]streamFileInfo{},
-		resourceFileInfo:  map[string]resourceFileInfo{},
-		changeFlushPeriod: defaultChangeFlushPeriod,
-		changeDelayPeriod: defaultChangeDelayPeriod,
+		testSuffix:         "_benthos_test",
+		fs:                 ifs.OS(),
+		mainPath:           mainPath,
+		resourcePaths:      resourcePaths,
+		modTimeLastRead:    map[string]time.Time{},
+		streamFileInfo:     map[string]streamFileInfo{},
+		resourceFileInfo:   map[string]resourceFileInfo{},
+		resourceSources:    newResourceSourceInfo(),
+		changeFlushPeriod:  defaultChangeFlushPeriod,
+		changeDelayPeriod:  defaultChangeDelayPeriod,
+		filesRefreshPeriod: defaultFilesRefreshPeriod,
 	}
 	for _, opt := range opts {
 		opt(r)
@@ -120,6 +130,15 @@ func OptSetStreamPaths(streamsPaths ...string) OptFunc {
 	}
 }
 
+// OptUseFS sets the ifs.FS implementation for the reader to use. By default the
+// OS filesystem is used, and when overridden it is no longer possible to use
+// BeginFileWatching.
+func OptUseFS(fs ifs.FS) OptFunc {
+	return func(r *Reader) {
+		r.fs = fs
+	}
+}
+
 //------------------------------------------------------------------------------
 
 // Read a Benthos config from the files and options specified.
@@ -127,6 +146,9 @@ func (r *Reader) Read(conf *Type) (lints []string, err error) {
 	if lints, err = r.readMain(conf); err != nil {
 		return
 	}
+	r.configFileInfo = resInfoFromConfig(&conf.ResourceConfig)
+	r.resourceSources.populateFrom(r.mainPath, &r.configFileInfo)
+
 	var rLints []string
 	if rLints, err = r.readResources(&conf.ResourceConfig); err != nil {
 		return
@@ -143,10 +165,9 @@ func (r *Reader) ReadStreams(confs map[string]stream.Config) (lints []string, er
 }
 
 // MainUpdateFunc is a closure function called whenever a main config has been
-// updated. A boolean should be returned indicating whether the stream was
-// successfully updated, if false then the attempt will be made again after a
+// updated. If an error is returned then the attempt will be made again after a
 // grace period.
-type MainUpdateFunc func(conf stream.Config) bool
+type MainUpdateFunc func(conf stream.Config) error
 
 // SubscribeConfigChanges registers a closure function to be called whenever the
 // main configuration file is updated.
@@ -163,10 +184,13 @@ func (r *Reader) SubscribeConfigChanges(fn MainUpdateFunc) error {
 }
 
 // StreamUpdateFunc is a closure function called whenever a stream config has
-// been updated. A boolean should be returned indicating whether the stream was
-// successfully updated, if false then the attempt will be made again after a
-// grace period.
-type StreamUpdateFunc func(id string, conf stream.Config) bool
+// been updated. If an error is returned then the attempt will be made again
+// after a grace period.
+//
+// When the provided config is nil it is a signal that the stream has been
+// deleted, and it is expected that the provided update func should shut that
+// stream down.
+type StreamUpdateFunc func(id string, conf *stream.Config) error
 
 // SubscribeStreamChanges registers a closure to be called whenever the
 // configuration of a stream is updated.
@@ -231,23 +255,18 @@ func (r *Reader) readMain(conf *Type) (lints []string, err error) {
 	var confBytes []byte
 	if r.mainPath != "" {
 		var dLints []docs.Lint
-		if confBytes, dLints, err = ReadFileEnvSwap(r.mainPath); err != nil {
+		var modTime time.Time
+		if confBytes, dLints, modTime, err = ReadFileEnvSwap(r.fs, r.mainPath); err != nil {
 			return
 		}
 		for _, l := range dLints {
 			lints = append(lints, l.Error())
 		}
+		r.modTimeLastRead[r.mainPath] = modTime
 		if err = yaml.Unmarshal(confBytes, &rawNode); err != nil {
 			return
 		}
 	}
-
-	// This is an unlikely race condition as the file could've been updated
-	// exactly when we were reading/linting. However, we'd need to fork
-	// ReadWithJSONPointersLinted in order to pull the file info out, and since
-	// it's going to be removed in V4 I'm just going with the simpler option for
-	// now (ignoring the issue).
-	r.configFileInfo.updatedAt = time.Now()
 
 	confSpec := Spec()
 	if r.streamsMode {
@@ -270,21 +289,23 @@ func (r *Reader) readMain(conf *Type) (lints []string, err error) {
 	return
 }
 
-func (r *Reader) reactMainUpdate(mgr bundle.NewManagement, strict bool) bool {
-	if r.mainUpdateFn == nil {
-		return true
-	}
-
-	mgr.Logger().Infoln("Main config updated, attempting to update pipeline.")
-
+// TriggerMainUpdate attempts to re-read the main configuration file, trigger
+// the provided main update func, and apply changes to resources to the provided
+// manager as appropriate.
+func (r *Reader) TriggerMainUpdate(mgr bundle.NewManagement, strict bool) error {
 	conf := New()
 	lints, err := r.readMain(&conf)
+	if errors.Is(err, fs.ErrNotExist) {
+		// Ignore main file deletes for now
+		return nil
+	}
 	if err != nil {
 		mgr.Logger().Errorf("Failed to read updated config: %v", err)
 
 		// Rejecting due to invalid file means we do not want to try again.
-		return true
+		return noReread(err)
 	}
+	mgr.Logger().Infoln("Main config updated, attempting to update pipeline.")
 
 	lintlog := mgr.Logger()
 	for _, lint := range lints {
@@ -294,13 +315,22 @@ func (r *Reader) reactMainUpdate(mgr bundle.NewManagement, strict bool) bool {
 		mgr.Logger().Errorln("Rejecting updated main config due to linter errors, to allow linting errors run Benthos with --chilled")
 
 		// Rejecting from linters means we do not want to try again.
-		return true
+		return noReread(errors.New("file contained linting errors and is running in strict mode"))
 	}
 
 	// Update any resources within the file.
-	if newInfo := resInfoFromConfig(&conf.ResourceConfig); !newInfo.applyChanges(mgr) {
-		return false
+	newInfo := resInfoFromConfig(&conf.ResourceConfig)
+	if err := r.applyResourceChanges(r.mainPath, mgr, newInfo, r.configFileInfo); err != nil {
+		return err
 	}
+	r.configFileInfo = newInfo
 
-	return r.mainUpdateFn(conf.Config)
+	if r.mainUpdateFn != nil {
+		if err := r.mainUpdateFn(conf.Config); err != nil {
+			mgr.Logger().Errorf("Failed to apply updated config: %v", err)
+			return err
+		}
+		mgr.Logger().Infoln("Updated main config")
+	}
+	return nil
 }

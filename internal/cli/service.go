@@ -102,19 +102,21 @@ func initStreamsMode(
 	}
 	logger.Infoln("Launching benthos in streams mode, use CTRL+C to close")
 
-	if err := confReader.SubscribeStreamChanges(func(id string, newStreamConf stream.Config) bool {
+	if err := confReader.SubscribeStreamChanges(func(id string, newStreamConf *stream.Config) error {
 		ctx, done := context.WithTimeout(context.Background(), time.Second*30)
 		defer done()
 
-		if err = streamMgr.Update(ctx, id, newStreamConf); err != nil && errors.Is(err, strmmgr.ErrStreamDoesNotExist) {
-			err = streamMgr.Create(id, newStreamConf)
+		var updateErr error
+		if newStreamConf != nil {
+			if updateErr = streamMgr.Update(ctx, id, *newStreamConf); updateErr != nil && errors.Is(updateErr, strmmgr.ErrStreamDoesNotExist) {
+				updateErr = streamMgr.Create(id, *newStreamConf)
+			}
+		} else {
+			if updateErr = streamMgr.Delete(ctx, id); updateErr != nil && errors.Is(updateErr, strmmgr.ErrStreamDoesNotExist) {
+				updateErr = nil
+			}
 		}
-		if err != nil {
-			logger.Errorf("Failed to update stream %v: %v", id, err)
-			return false
-		}
-		logger.Infof("Updated stream %v config from file", id)
-		return true
+		return updateErr
 	}); err != nil {
 		logger.Errorf("Failed to create stream config watcher: %v", err)
 		os.Exit(1)
@@ -198,17 +200,11 @@ func initNormalMode(
 	}
 	logger.Infoln("Launching a benthos instance, use CTRL+C to close")
 
-	if err := confReader.SubscribeConfigChanges(func(newStreamConf stream.Config) bool {
-		if err := stoppableStream.Replace(func() (stoppable, error) {
+	if err := confReader.SubscribeConfigChanges(func(newStreamConf stream.Config) error {
+		return stoppableStream.Replace(func() (stoppable, error) {
 			conf.Config = newStreamConf
 			return streamInit()
-		}); err != nil {
-			logger.Errorf("Failed to update stream: %v", err)
-			return false
-		}
-
-		logger.Infoln("Updated main config from file")
-		return true
+		})
 	}); err != nil {
 		logger.Errorf("Failed to create config file watcher: %v", err)
 		os.Exit(1)

@@ -61,27 +61,35 @@ func FileWrite(file fs.File, data []byte) (int, error) {
 // with which relative paths are resolved from the directory the process is
 // executed from.
 func OS() FS {
-	return &osPT{}
+	return osPTI
 }
+
+// IsOS returns true if the provided FS implementation is a wrapper around OS
+// access obtained via OS().
+func IsOS(f FS) bool {
+	return f == osPTI
+}
+
+var osPTI = &osPT{}
 
 type osPT struct{}
 
-func (o osPT) Open(name string) (fs.File, error) {
+func (o *osPT) Open(name string) (fs.File, error) {
 	return os.Open(name)
 }
 
-func (o osPT) OpenFile(name string, flag int, perm fs.FileMode) (fs.File, error) {
+func (o *osPT) OpenFile(name string, flag int, perm fs.FileMode) (fs.File, error) {
 	return os.OpenFile(name, flag, perm)
 }
 
-func (o osPT) Stat(name string) (fs.FileInfo, error) {
+func (o *osPT) Stat(name string) (fs.FileInfo, error) {
 	return os.Stat(name)
 }
 
-func (o osPT) Remove(name string) error {
+func (o *osPT) Remove(name string) error {
 	return os.Remove(name)
 }
 
-func (o osPT) MkdirAll(path string, perm fs.FileMode) error {
+func (o *osPT) MkdirAll(path string, perm fs.FileMode) error {
 	return os.MkdirAll(path, perm)
 }

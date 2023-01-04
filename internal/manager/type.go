@@ -507,6 +507,24 @@ func (t *Type) StoreCache(ctx context.Context, name string, conf cache.Config) e
 	return nil
 }
 
+// RemoveCache attempts to close and remove an existing cache resource.
+func (t *Type) RemoveCache(ctx context.Context, name string) error {
+	t.resourceLock.Lock()
+	defer t.resourceLock.Unlock()
+
+	c, exists := t.caches[name]
+	if !exists {
+		return ErrResourceNotFound(name)
+	}
+
+	if err := c.Close(ctx); err != nil {
+		return err
+	}
+
+	delete(t.caches, name)
+	return nil
+}
+
 //------------------------------------------------------------------------------
 
 // ProbeInput returns true if an input resource exists under the provided name.
@@ -552,7 +570,7 @@ func (t *Type) StoreInput(ctx context.Context, name string, conf input.Config) e
 		// If a previous resource exists with the same name then we do NOT allow
 		// it to be replaced unless it can be successfully closed. This ensures
 		// that we do not leak connections.
-		if err := i.closeExistingInput(ctx); err != nil {
+		if err := i.closeExistingInput(ctx, true); err != nil {
 			return err
 		}
 	}
@@ -571,6 +589,24 @@ func (t *Type) StoreInput(ctx context.Context, name string, conf input.Config) e
 	} else {
 		t.inputs[name] = wrapInput(newInput)
 	}
+	return nil
+}
+
+// RemoveInput attempts to close and remove an existing input resource.
+func (t *Type) RemoveInput(ctx context.Context, name string) error {
+	t.resourceLock.Lock()
+	defer t.resourceLock.Unlock()
+
+	i, exists := t.inputs[name]
+	if !exists {
+		return ErrResourceNotFound(name)
+	}
+
+	if err := i.closeExistingInput(ctx, false); err != nil {
+		return err
+	}
+
+	delete(t.inputs, name)
 	return nil
 }
 
@@ -636,6 +672,24 @@ func (t *Type) StoreProcessor(ctx context.Context, name string, conf processor.C
 	}
 
 	t.processors[name] = newProcessor
+	return nil
+}
+
+// RemoveProcessor attempts to close and remove an existing processor resource.
+func (t *Type) RemoveProcessor(ctx context.Context, name string) error {
+	t.resourceLock.Lock()
+	defer t.resourceLock.Unlock()
+
+	p, exists := t.processors[name]
+	if !exists {
+		return ErrResourceNotFound(name)
+	}
+
+	if err := p.Close(ctx); err != nil {
+		return err
+	}
+
+	delete(t.processors, name)
 	return nil
 }
 
@@ -707,6 +761,25 @@ func (t *Type) StoreOutput(ctx context.Context, name string, conf output.Config)
 	return nil
 }
 
+// RemoveOutput attempts to close and remove an existing output resource.
+func (t *Type) RemoveOutput(ctx context.Context, name string) error {
+	t.resourceLock.Lock()
+	defer t.resourceLock.Unlock()
+
+	o, exists := t.outputs[name]
+	if !exists {
+		return ErrResourceNotFound(name)
+	}
+
+	o.TriggerStopConsuming()
+	if err := o.WaitForClose(ctx); err != nil {
+		return err
+	}
+
+	delete(t.outputs, name)
+	return nil
+}
+
 //------------------------------------------------------------------------------
 
 // ProbeRateLimit returns true if a rate limit resource exists under the
@@ -765,6 +838,24 @@ func (t *Type) StoreRateLimit(ctx context.Context, name string, conf ratelimit.C
 	}
 
 	t.rateLimits[name] = newRateLimit
+	return nil
+}
+
+// RemoveRateLimit attempts to close and remove an existing rate limit resource.
+func (t *Type) RemoveRateLimit(ctx context.Context, name string) error {
+	t.resourceLock.Lock()
+	defer t.resourceLock.Unlock()
+
+	r, exists := t.rateLimits[name]
+	if !exists {
+		return ErrResourceNotFound(name)
+	}
+
+	if err := r.Close(ctx); err != nil {
+		return err
+	}
+
+	delete(t.rateLimits, name)
 	return nil
 }
 

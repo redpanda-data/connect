@@ -3,6 +3,7 @@ package manager_test
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -85,6 +86,81 @@ func TestManagerCache(t *testing.T) {
 	require.True(t, mgr.ProbeCache("foo"))
 	require.True(t, mgr.ProbeCache("bar"))
 	require.False(t, mgr.ProbeCache("baz"))
+}
+
+func TestManagerResourceCRUD(t *testing.T) {
+	conf := manager.NewResourceConfig()
+
+	mgr, err := manager.New(conf)
+	require.NoError(t, err)
+
+	tCtx, done := context.WithTimeout(context.Background(), time.Second*30)
+	defer done()
+
+	inConf := input.NewConfig()
+	inConf.Type = "inproc"
+	inConf.Inproc = "meow"
+
+	outConf := output.NewConfig()
+	outConf.Type = "drop"
+
+	require.False(t, mgr.ProbeCache("foo"))
+	require.False(t, mgr.ProbeInput("foo"))
+	require.False(t, mgr.ProbeOutput("foo"))
+	require.False(t, mgr.ProbeProcessor("foo"))
+	require.False(t, mgr.ProbeRateLimit("foo"))
+
+	require.NoError(t, mgr.StoreCache(tCtx, "foo", cache.NewConfig()))
+	require.NoError(t, mgr.StoreInput(tCtx, "foo", inConf))
+	require.NoError(t, mgr.StoreOutput(tCtx, "foo", outConf))
+	require.NoError(t, mgr.StoreProcessor(tCtx, "foo", processor.NewConfig()))
+	require.NoError(t, mgr.StoreRateLimit(tCtx, "foo", ratelimit.NewConfig()))
+
+	require.True(t, mgr.ProbeCache("foo"))
+	require.True(t, mgr.ProbeInput("foo"))
+	require.True(t, mgr.ProbeOutput("foo"))
+	require.True(t, mgr.ProbeProcessor("foo"))
+	require.True(t, mgr.ProbeRateLimit("foo"))
+
+	require.NoError(t, mgr.RemoveCache(tCtx, "foo"))
+
+	require.False(t, mgr.ProbeCache("foo"))
+	require.True(t, mgr.ProbeInput("foo"))
+	require.True(t, mgr.ProbeOutput("foo"))
+	require.True(t, mgr.ProbeProcessor("foo"))
+	require.True(t, mgr.ProbeRateLimit("foo"))
+
+	require.NoError(t, mgr.RemoveInput(tCtx, "foo"))
+
+	require.False(t, mgr.ProbeCache("foo"))
+	require.False(t, mgr.ProbeInput("foo"))
+	require.True(t, mgr.ProbeOutput("foo"))
+	require.True(t, mgr.ProbeProcessor("foo"))
+	require.True(t, mgr.ProbeRateLimit("foo"))
+
+	require.NoError(t, mgr.RemoveOutput(tCtx, "foo"))
+
+	require.False(t, mgr.ProbeCache("foo"))
+	require.False(t, mgr.ProbeInput("foo"))
+	require.False(t, mgr.ProbeOutput("foo"))
+	require.True(t, mgr.ProbeProcessor("foo"))
+	require.True(t, mgr.ProbeRateLimit("foo"))
+
+	require.NoError(t, mgr.RemoveProcessor(tCtx, "foo"))
+
+	require.False(t, mgr.ProbeCache("foo"))
+	require.False(t, mgr.ProbeInput("foo"))
+	require.False(t, mgr.ProbeOutput("foo"))
+	require.False(t, mgr.ProbeProcessor("foo"))
+	require.True(t, mgr.ProbeRateLimit("foo"))
+
+	require.NoError(t, mgr.RemoveRateLimit(tCtx, "foo"))
+
+	require.False(t, mgr.ProbeCache("foo"))
+	require.False(t, mgr.ProbeInput("foo"))
+	require.False(t, mgr.ProbeOutput("foo"))
+	require.False(t, mgr.ProbeProcessor("foo"))
+	require.False(t, mgr.ProbeRateLimit("foo"))
 }
 
 func TestManagerCacheList(t *testing.T) {

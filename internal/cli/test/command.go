@@ -96,7 +96,7 @@ func GetTestTargets(targetPaths []string, testSuffix string) (map[string]Definit
 func lintTarget(path, testSuffix string) ([]docs.Lint, error) {
 	confPath, _ := GetPathPair(path, testSuffix)
 	dummyConf := config.New()
-	lints, err := config.ReadFileLinted(confPath, config.LintOptions{}, &dummyConf)
+	lints, err := config.ReadFileLinted(ifs.OS(), confPath, config.LintOptions{}, &dummyConf)
 	if err != nil {
 		return nil, err
 	}

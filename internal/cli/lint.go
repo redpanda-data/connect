@@ -31,7 +31,7 @@ type pathLint struct {
 
 func lintFile(path string, opts config.LintOptions) (pathLints []pathLint) {
 	conf := config.New()
-	lints, err := config.ReadFileLinted(path, opts, &conf)
+	lints, err := config.ReadFileLinted(ifs.OS(), path, opts, &conf)
 	if err != nil {
 		var l docs.Lint
 		if errors.As(err, &l) {
