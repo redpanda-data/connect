@@ -363,12 +363,16 @@ func (e *OpenSearch) Close(context.Context) error {
 }
 
 // Build a bulkable request for a given pending bulk index item.
-func (e *OpenSearch) buildBulkableRequest(p *pendingBulkIndex) (*opensearchutil.BulkIndexerItem, error) {
+func (e *OpenSearch) buildBulkableRequest(p *pendingBulkIndex) (r *opensearchutil.BulkIndexerItem, err error) {
 	switch p.Action {
 	case "update":
 		// opensearch util needs the body root element should be "doc"
-		doc, _ := sjson.SetOptions("", "doc", p.Doc, &sjson.Options{ReplaceInPlace: true})
-		r := &opensearchutil.BulkIndexerItem{
+		var doc string
+		doc, err = sjson.SetOptions("", "doc", p.Doc, &sjson.Options{ReplaceInPlace: true})
+		if err != nil {
+			return
+		}
+		r = &opensearchutil.BulkIndexerItem{
 			Index:  p.Index,
 			Action: "update",
 			Body:   strings.NewReader(doc),
@@ -380,9 +384,9 @@ func (e *OpenSearch) buildBulkableRequest(p *pendingBulkIndex) (*opensearchutil.
 			r.Routing = &p.Routing
 		}
 
-		return r, nil
+		return
 	case "delete":
-		r := &opensearchutil.BulkIndexerItem{
+		r = &opensearchutil.BulkIndexerItem{
 			Index:      p.Index,
 			DocumentID: p.ID,
 			Action:     "delete",
@@ -390,10 +394,14 @@ func (e *OpenSearch) buildBulkableRequest(p *pendingBulkIndex) (*opensearchutil.
 		if p.Routing != "" {
 			r.Routing = &p.Routing
 		}
-		return r, nil
+		return
 	case "index":
-		jsonData, _ := json.Marshal(p.Doc)
-		r := &opensearchutil.BulkIndexerItem{
+		var jsonData []byte
+		jsonData, err = json.Marshal(p.Doc)
+		if err != nil {
+			return
+		}
+		r = &opensearchutil.BulkIndexerItem{
 			Index:  p.Index,
 			Action: "index",
 			Body:   bytes.NewReader(jsonData),
@@ -404,10 +412,14 @@ func (e *OpenSearch) buildBulkableRequest(p *pendingBulkIndex) (*opensearchutil.
 		if p.Routing != "" {
 			r.Routing = &p.Routing
 		}
-		return r, nil
+		return
 	case "create":
-		jsonData, _ := json.Marshal(p.Doc)
-		r := &opensearchutil.BulkIndexerItem{
+		var jsonData []byte
+		jsonData, err = json.Marshal(p.Doc)
+		if err != nil {
+			return
+		}
+		r = &opensearchutil.BulkIndexerItem{
 			Index:  p.Index,
 			Action: "create",
 			Body:   bytes.NewReader(jsonData),
@@ -418,7 +430,7 @@ func (e *OpenSearch) buildBulkableRequest(p *pendingBulkIndex) (*opensearchutil.
 		if p.Routing != "" {
 			r.Routing = &p.Routing
 		}
-		return r, nil
+		return
 	default:
 		return nil, fmt.Errorf("opensearch action '%s' is not allowed", p.Action)
 	}
