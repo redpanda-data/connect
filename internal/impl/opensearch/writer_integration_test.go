@@ -158,11 +158,11 @@ func testOpenSearchNoIndex(urls []string, client *os.Client, t *testing.T) {
 		done()
 	}()
 
-	if err = m.Write(message.QuickBatch([][]byte{[]byte(`{"message":"hello world","user":"1"}`)})); err != nil {
+	if err = m.Write(context.Background(), message.QuickBatch([][]byte{[]byte(`{"message":"hello world","user":"1"}`)})); err != nil {
 		t.Error(err)
 	}
 
-	if err = m.Write(message.QuickBatch([][]byte{
+	if err = m.Write(context.Background(), message.QuickBatch([][]byte{
 		[]byte(`{"message":"hello world","user":"2"}`),
 		[]byte(`{"message":"hello world","user":"3"}`),
 	})); err != nil {
@@ -220,7 +220,7 @@ func testOpenSearchParallelWrites(urls []string, client *os.Client, t *testing.T
 		docs[fmt.Sprintf("doc-%v", i)] = str
 		go func(content string) {
 			<-startChan
-			if lerr := m.Write(message.QuickBatch([][]byte{[]byte(content)})); lerr != nil {
+			if lerr := m.Write(context.Background(), message.QuickBatch([][]byte{[]byte(content)})); lerr != nil {
 				t.Error(lerr)
 			}
 			wg.Done()
@@ -272,11 +272,11 @@ func testOpenSearchErrorHandling(urls []string, t *testing.T) {
 		done()
 	}()
 
-	if err = m.Write(message.QuickBatch([][]byte{[]byte(`{"message":invalid json`)})); err == nil {
+	if err = m.Write(context.Background(), message.QuickBatch([][]byte{[]byte(`{"message":invalid json`)})); err == nil {
 		t.Error("Expected error")
 	}
 
-	if err = m.Write(message.QuickBatch([][]byte{[]byte(`{"message":"foo}`), []byte(`{"message":"bar"}`)})); err == nil {
+	if err = m.Write(context.Background(), message.QuickBatch([][]byte{[]byte(`{"message":"foo}`), []byte(`{"message":"bar"}`)})); err == nil {
 		t.Error("Expected error")
 	}
 }
@@ -312,7 +312,7 @@ func testOpenSearchConnect(urls []string, client *os.Client, t *testing.T) {
 		})
 	}
 	for i := 0; i < N; i++ {
-		if err = m.Write(message.QuickBatch(testMsgs[i])); err != nil {
+		if err = m.Write(context.Background(), message.QuickBatch(testMsgs[i])); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -371,8 +371,8 @@ func testOpenSearchIndexInterpolation(urls []string, client *os.Client, t *testi
 	}
 	for i := 0; i < N; i++ {
 		msg := message.QuickBatch(testMsgs[i])
-		msg.Get(0).MetaSet("index", "test_conn_index")
-		if err = m.Write(msg); err != nil {
+		msg.Get(0).MetaSetMut("index", "test_conn_index")
+		if err = m.Write(context.Background(), msg); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -432,9 +432,9 @@ func testOpenSearchBatch(urls []string, client *os.Client, t *testing.T) {
 	}
 	msg := message.QuickBatch(testMsg)
 	for i := 0; i < N; i++ {
-		msg.Get(i).MetaSet("index", "test_conn_index")
+		msg.Get(i).MetaSetMut("index", "test_conn_index")
 	}
-	if err = m.Write(msg); err != nil {
+	if err = m.Write(context.Background(), msg); err != nil {
 		t.Fatal(err)
 	}
 	for i := 0; i < N; i++ {
@@ -494,10 +494,10 @@ func testOpenSearchBatchDelete(urls []string, client *os.Client, t *testing.T) {
 	}
 	msg := message.QuickBatch(testMsg)
 	for i := 0; i < N; i++ {
-		msg.Get(i).MetaSet("index", "test_conn_index")
-		msg.Get(i).MetaSet("opensearch_action", "index")
+		msg.Get(i).MetaSetMut("index", "test_conn_index")
+		msg.Get(i).MetaSetMut("opensearch_action", "index")
 	}
-	if err = m.Write(msg); err != nil {
+	if err = m.Write(context.Background(), msg); err != nil {
 		t.Fatal(err)
 	}
 	for i := 0; i < N; i++ {
@@ -525,10 +525,10 @@ func testOpenSearchBatchDelete(urls []string, client *os.Client, t *testing.T) {
 
 	// Set opensearch_action to deleted for some message parts
 	for i := N / 2; i < N; i++ {
-		msg.Get(i).MetaSet("opensearch_action", "delete")
+		msg.Get(i).MetaSetMut("opensearch_action", "delete")
 	}
 
-	if err = m.Write(msg); err != nil {
+	if err = m.Write(context.Background(), msg); err != nil {
 		t.Fatal(err)
 	}
 
@@ -542,7 +542,7 @@ func testOpenSearchBatchDelete(urls []string, client *os.Client, t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed to get doc '%v': %v", id, err)
 		}
-		partAction := msg.Get(i).MetaGet("opensearch_action")
+		partAction := msg.Get(i).MetaGetStr("opensearch_action")
 		if partAction == "deleted" && get.StatusCode == 200 {
 			t.Errorf("document %v found when it should have been deleted", i)
 		} else if partAction != "deleted" && get.StatusCode != 200 {
@@ -583,15 +583,15 @@ func testOpenSearchBatchIDCollision(urls []string, client *os.Client, t *testing
 	}
 
 	msg := message.QuickBatch(testMsg)
-	msg.Get(0).MetaSet("index", "test_conn_index")
-	msg.Get(1).MetaSet("index", "test_conn_index_2")
+	msg.Get(0).MetaSetMut("index", "test_conn_index")
+	msg.Get(1).MetaSetMut("index", "test_conn_index_2")
 
-	if err = m.Write(msg); err != nil {
+	if err = m.Write(context.Background(), msg); err != nil {
 		t.Fatal(err)
 	}
 	for i := 0; i < N; i++ {
 		get, err := osapi.GetRequest{
-			Index:      msg.Get(i).MetaGet("index"),
+			Index:      msg.Get(i).MetaGetStr("index"),
 			DocumentID: conf.ID,
 		}.Do(context.Background(), client)
 
@@ -636,7 +636,7 @@ func testOpenSearchBatchIDCollision(urls []string, client *os.Client, t *testing
 		[]byte(`{"user": "updated"}`),
 	}
 	msg = message.QuickBatch(testMsg)
-	if err = m.Write(msg); err != nil {
+	if err = m.Write(context.Background(), msg); err != nil {
 		t.Fatal(err)
 	}
 

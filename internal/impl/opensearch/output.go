@@ -13,11 +13,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dustin/go-humanize"
-	"github.com/opensearch-project/opensearch-go/v2/opensearchutil"
-
+	"github.com/benthosdev/benthos/v4/internal/httpclient"
 	"github.com/cenkalti/backoff/v4"
+	"github.com/dustin/go-humanize"
 	os "github.com/opensearch-project/opensearch-go/v2"
+	"github.com/opensearch-project/opensearch-go/v2/opensearchutil"
 
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	v4 "github.com/aws/aws-sdk-go/aws/signer/v4"
@@ -33,7 +33,6 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/component/output/batcher"
 	"github.com/benthosdev/benthos/v4/internal/component/output/processors"
 	"github.com/benthosdev/benthos/v4/internal/docs"
-	"github.com/benthosdev/benthos/v4/internal/http/docs/auth"
 	sess "github.com/benthosdev/benthos/v4/internal/impl/aws/session"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
@@ -92,7 +91,7 @@ false for connections to succeed.`),
 			itls.FieldSpec(),
 			docs.FieldInt("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
 		).WithChildren(retries.FieldSpecs()...).WithChildren(
-			auth.BasicAuthFieldSpec(),
+			httpclient.OldBasicAuthFieldSpec(),
 			policy.FieldSpec(),
 			docs.FieldObject("aws", "Enables and customises connectivity to Amazon OpenSearch Service.").WithChildren(
 				docs.FieldSpecs{
@@ -196,7 +195,7 @@ func NewOpenSearchV2(conf output.OpenSearchConfig, mgr bundle.NewManagement) (*O
 
 	if conf.TLS.Enabled {
 		var err error
-		if e.tlsConf, err = conf.TLS.Get(); err != nil {
+		if e.tlsConf, err = conf.TLS.Get(mgr.FS()); err != nil {
 			return nil, err
 		}
 	}
@@ -291,15 +290,29 @@ func (e *OpenSearch) Write(ctx context.Context, msg message.Batch) error {
 			e.log.Errorf("Failed to marshal message into JSON document: %v\n", ierr)
 			return fmt.Errorf("failed to marshal message into JSON document: %w", ierr)
 		}
-		requests[i] = &pendingBulkIndex{
-			Action:   e.actionStr.String(i, msg),
-			Index:    e.indexStr.String(i, msg),
-			Pipeline: e.pipelineStr.String(i, msg),
-			Routing:  e.routingStr.String(i, msg),
-			Type:     e.typeStr.String(i, msg),
-			Doc:      jObj,
-			ID:       e.idStr.String(i, msg),
+		pbi := &pendingBulkIndex{
+			Doc: jObj,
 		}
+		if pbi.Action, ierr = e.actionStr.String(i, msg); ierr != nil {
+			return fmt.Errorf("action interpolation error: %w", ierr)
+		}
+		if pbi.Index, ierr = e.indexStr.String(i, msg); ierr != nil {
+			return fmt.Errorf("index interpolation error: %w", ierr)
+		}
+		if pbi.Pipeline, ierr = e.pipelineStr.String(i, msg); ierr != nil {
+			return fmt.Errorf("pipeline interpolation error: %w", ierr)
+		}
+		if pbi.Routing, ierr = e.routingStr.String(i, msg); ierr != nil {
+			return fmt.Errorf("routing interpolation error: %w", ierr)
+		}
+		if pbi.Type, ierr = e.typeStr.String(i, msg); ierr != nil {
+			return fmt.Errorf("type interpolation error: %w", ierr)
+		}
+		if pbi.ID, ierr = e.idStr.String(i, msg); ierr != nil {
+			return fmt.Errorf("id interpolation error: %w", ierr)
+		}
+
+		requests[i] = pbi
 		return nil
 	}); err != nil {
 		return err
