@@ -81,10 +81,9 @@ func init() {
 			if maxInFlight, err = conf.FieldInt("max_in_flight"); err != nil {
 				return
 			}
-			out, err = newSQLInsertOutputFromConfig(conf, mgr.Logger())
+			out, err = newSQLInsertOutputFromConfig(conf, mgr)
 			return
 		})
-
 	if err != nil {
 		panic(err)
 	}
@@ -102,15 +101,15 @@ type sqlInsertOutput struct {
 	useTxStmt   bool
 	argsMapping *bloblang.Executor
 
-	connSettings connSettings
+	connSettings *connSettings
 
 	logger  *service.Logger
 	shutSig *shutdown.Signaller
 }
 
-func newSQLInsertOutputFromConfig(conf *service.ParsedConfig, logger *service.Logger) (*sqlInsertOutput, error) {
+func newSQLInsertOutputFromConfig(conf *service.ParsedConfig, mgr *service.Resources) (*sqlInsertOutput, error) {
 	s := &sqlInsertOutput{
-		logger:  logger,
+		logger:  mgr.Logger(),
 		shutSig: shutdown.NewSignaller(),
 	}
 
@@ -121,6 +120,7 @@ func newSQLInsertOutputFromConfig(conf *service.ParsedConfig, logger *service.Lo
 	}
 	if _, in := map[string]struct{}{
 		"clickhouse": {},
+		"oracle":     {},
 	}[s.driver]; in {
 		s.useTxStmt = true
 	}
@@ -148,6 +148,16 @@ func newSQLInsertOutputFromConfig(conf *service.ParsedConfig, logger *service.Lo
 	s.builder = squirrel.Insert(tableStr).Columns(columns...)
 	if s.driver == "postgres" || s.driver == "clickhouse" {
 		s.builder = s.builder.PlaceholderFormat(squirrel.Dollar)
+	} else if s.driver == "oracle" {
+		s.builder = s.builder.PlaceholderFormat(squirrel.Colon)
+	}
+
+	if s.useTxStmt {
+		values := make([]any, 0, len(columns))
+		for _, c := range columns {
+			values = append(values, c)
+		}
+		s.builder = s.builder.Values(values...)
 	}
 
 	if conf.Contains("prefix") {
@@ -166,7 +176,7 @@ func newSQLInsertOutputFromConfig(conf *service.ParsedConfig, logger *service.Lo
 		s.builder = s.builder.Suffix(suffixStr)
 	}
 
-	if s.connSettings, err = connSettingsFromParsed(conf); err != nil {
+	if s.connSettings, err = connSettingsFromParsed(conf, mgr); err != nil {
 		return nil, err
 	}
 	return s, nil
@@ -185,7 +195,7 @@ func (s *sqlInsertOutput) Connect(ctx context.Context) error {
 		return err
 	}
 
-	s.connSettings.apply(s.db)
+	s.connSettings.apply(ctx, s.db, s.logger)
 
 	go func() {
 		<-s.shutSig.CloseNowChan()
@@ -212,7 +222,7 @@ func (s *sqlInsertOutput) WriteBatch(ctx context.Context, batch service.MessageB
 		if tx, err = s.db.Begin(); err != nil {
 			return err
 		}
-		sqlStr, _, err := insertBuilder.Values().ToSql()
+		sqlStr, _, err := insertBuilder.ToSql()
 		if err != nil {
 			return err
 		}
@@ -223,25 +233,28 @@ func (s *sqlInsertOutput) WriteBatch(ctx context.Context, batch service.MessageB
 	}
 
 	for i := range batch {
-		var args []interface{}
-		resMsg, err := batch.BloblangQuery(i, s.argsMapping)
-		if err != nil {
-			return err
-		}
+		var args []any
+		if s.argsMapping != nil {
+			resMsg, err := batch.BloblangQuery(i, s.argsMapping)
+			if err != nil {
+				return err
+			}
 
-		iargs, err := resMsg.AsStructured()
-		if err != nil {
-			return err
-		}
+			iargs, err := resMsg.AsStructured()
+			if err != nil {
+				return err
+			}
 
-		var ok bool
-		if args, ok = iargs.([]interface{}); !ok {
-			return fmt.Errorf("mapping returned non-array result: %T", iargs)
+			var ok bool
+			if args, ok = iargs.([]any); !ok {
+				return fmt.Errorf("mapping returned non-array result: %T", iargs)
+			}
 		}
 
 		if tx == nil {
 			insertBuilder = insertBuilder.Values(args...)
-		} else if _, err = stmt.Exec(args...); err != nil {
+		} else if _, err := stmt.Exec(args...); err != nil {
+			_ = tx.Rollback()
 			return err
 		}
 	}

@@ -42,7 +42,6 @@ func init() {
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Cache, error) {
 			return newMongodbCacheFromConfig(conf)
 		})
-
 	if err != nil {
 		panic(err)
 	}

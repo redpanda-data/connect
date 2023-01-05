@@ -13,10 +13,8 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/docs"
 )
 
-var (
-	// ErrBrokerNoInputs is returned when creating a broker with zero inputs.
-	ErrBrokerNoInputs = errors.New("attempting to create broker input type with no inputs")
-)
+// ErrBrokerNoInputs is returned when creating a broker with zero inputs.
+var ErrBrokerNoInputs = errors.New("attempting to create broker input type with no inputs")
 
 func init() {
 	err := bundle.AllInputs.Add(processors.WrapConstructor(newBrokerInput), docs.ComponentSpec{
@@ -41,7 +39,7 @@ input:
 
         # Optional list of input specific processing steps
         processors:
-          - bloblang: |
+          - mapping: |
               root.message = this
               root.meta.link_count = this.links.length()
               root.user.age = this.user.age.number()
@@ -77,7 +75,7 @@ child nodes processors.`,
 		},
 		Config: docs.FieldComponent().WithChildren(
 			docs.FieldInt("copies", "Whatever is specified within `inputs` will be created this many times.").Advanced().HasDefault(1),
-			docs.FieldInput("inputs", "A list of inputs to create.").Array().HasDefault([]interface{}{}),
+			docs.FieldInput("inputs", "A list of inputs to create.").Array().HasDefault([]any{}),
 			policy.FieldSpec(),
 		),
 	})
@@ -126,5 +124,5 @@ func newBrokerInput(conf input.Config, mgr bundle.NewManagement) (input.Streamed
 		return nil, fmt.Errorf("failed to construct batch policy: %v", err)
 	}
 
-	return batcher.New(policy, b, mgr.Logger(), mgr.Metrics()), nil
+	return batcher.New(policy, b, mgr.Logger()), nil
 }

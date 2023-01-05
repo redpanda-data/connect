@@ -2,11 +2,12 @@ package redis
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"time"
 
 	"github.com/cenkalti/backoff/v4"
-	"github.com/go-redis/redis/v7"
+	"github.com/go-redis/redis/v8"
 
 	"github.com/benthosdev/benthos/v4/public/service"
 )
@@ -45,7 +46,6 @@ func init() {
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Cache, error) {
 			return newRedisCacheFromConfig(conf)
 		})
-
 	if err != nil {
 		panic(err)
 	}
@@ -101,7 +101,7 @@ func newRedisCache(
 		prefix:     prefix,
 		client:     client,
 		boffPool: sync.Pool{
-			New: func() interface{} {
+			New: func() any {
 				bo := *backOff
 				bo.Reset()
 				return &bo
@@ -119,11 +119,11 @@ func (r *redisCache) Get(ctx context.Context, key string) ([]byte, error) {
 
 	key = r.prefix + key
 	for {
-		res, err := r.client.Get(key).Result()
+		res, err := r.client.Get(ctx, key).Result()
 		if err == nil {
 			return []byte(res), nil
 		}
-		if err == redis.Nil {
+		if errors.Is(err, redis.Nil) {
 			return nil, service.ErrKeyNotFound
 		}
 
@@ -156,7 +156,7 @@ func (r *redisCache) Set(ctx context.Context, key string, value []byte, ttl *tim
 	}
 
 	for {
-		err := r.client.Set(key, value, t).Err()
+		err := r.client.Set(ctx, key, value, t).Err()
 		if err == nil {
 			return nil
 		}
@@ -190,7 +190,7 @@ func (r *redisCache) Add(ctx context.Context, key string, value []byte, ttl *tim
 	}
 
 	for {
-		set, err := r.client.SetNX(key, value, t).Result()
+		set, err := r.client.SetNX(ctx, key, value, t).Result()
 		if err == nil {
 			if !set {
 				return service.ErrKeyAlreadyExists
@@ -220,7 +220,7 @@ func (r *redisCache) Delete(ctx context.Context, key string) error {
 	key = r.prefix + key
 
 	for {
-		_, err := r.client.Del(key).Result()
+		_, err := r.client.Del(ctx, key).Result()
 		if err == nil {
 			return nil
 		}

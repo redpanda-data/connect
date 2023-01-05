@@ -3,6 +3,7 @@ package io
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"strings"
 	"sync"
@@ -13,15 +14,14 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/component/input"
 	"github.com/benthosdev/benthos/v4/internal/component/input/processors"
 	"github.com/benthosdev/benthos/v4/internal/docs"
-	"github.com/benthosdev/benthos/v4/internal/http"
-	ihttpdocs "github.com/benthosdev/benthos/v4/internal/http/docs"
+	"github.com/benthosdev/benthos/v4/internal/httpclient"
 	"github.com/benthosdev/benthos/v4/internal/message"
 )
 
 func httpClientInputSpec() docs.FieldSpec {
 	codecDocs := codec.ReaderDocs.AtVersion("3.42.0")
 	codecDocs.Description = "The way in which the bytes of a continuous stream are converted into messages. It's possible to consume lines using a custom delimiter with the `delim:x` codec, where x is the character sequence custom delimiter. It's not necessary to add gzip in the codec when the response headers specify it as it will be decompressed automatically."
-	codecDocs.Examples = []interface{}{"lines", "delim:\t", "delim:foobar", "csv"}
+	codecDocs.Examples = []any{"lines", "delim:\t", "delim:foobar", "csv"}
 
 	streamSpecs := docs.FieldSpecs{
 		docs.FieldBool("enabled", "Enables streaming mode."),
@@ -30,8 +30,8 @@ func httpClientInputSpec() docs.FieldSpec {
 		docs.FieldInt("max_buffer", "Must be larger than the largest line of the stream.").Advanced(),
 	}
 
-	return ihttpdocs.ClientFieldSpec(false,
-		docs.FieldString("payload", "An optional payload to deliver for each request."),
+	return httpclient.OldFieldSpec(false,
+		docs.FieldString("payload", "An optional payload to deliver for each request.").IsInterpolated(),
 		docs.FieldBool("drop_empty_bodies", "Whether empty payloads received from the target server should be dropped.").Advanced(),
 		docs.FieldObject(
 			"stream", "Allows you to set streaming mode, where requests are kept open and messages are processed line-by-line.",
@@ -45,7 +45,7 @@ func init() {
 		if err != nil {
 			return nil, err
 		}
-		return input.NewAsyncReader("http_client", true, input.NewAsyncPreserver(rdr), mgr)
+		return input.NewAsyncReader("http_client", input.NewAsyncPreserver(rdr), mgr)
 	}), docs.ComponentSpec{
 		Name:    "http_client",
 		Summary: `Connects to a server and continuously performs requests for a single message.`,
@@ -101,8 +101,7 @@ rate_limit_resources:
 type httpClientInput struct {
 	conf input.HTTPClientConfig
 
-	client       *http.Client
-	payload      message.Batch
+	client       *httpclient.Client
 	prevResponse message.Batch
 
 	codecCtor codec.ReaderConstructor
@@ -126,24 +125,18 @@ func newHTTPClientInput(conf input.HTTPClientConfig, mgr bundle.NewManagement) (
 		}
 	}
 
-	payload := message.QuickBatch(nil)
-	if len(conf.Payload) > 0 {
-		payload = message.QuickBatch([][]byte{[]byte(conf.Payload)})
+	payloadExpr, err := mgr.BloblEnvironment().NewField(conf.Payload)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse payload expression: %w", err)
 	}
 
-	client, err := http.NewClient(
-		conf.Config,
-		http.OptSetManager(mgr),
-		http.OptSetLogger(mgr.Logger()),
-		http.OptSetStats(mgr.Metrics()),
-	)
+	client, err := httpclient.NewClientFromOldConfig(conf.OldConfig, mgr, httpclient.WithExplicitBody(payloadExpr))
 	if err != nil {
 		return nil, err
 	}
 
 	return &httpClientInput{
 		conf:         conf,
-		payload:      payload,
 		prevResponse: message.QuickBatch(nil),
 		client:       client,
 
@@ -163,7 +156,7 @@ func (h *httpClientInput) Connect(ctx context.Context) (err error) {
 		return nil
 	}
 
-	res, err := h.client.SendToResponse(context.Background(), h.payload, h.prevResponse)
+	res, err := h.client.SendToResponse(context.Background(), h.prevResponse)
 	if err != nil {
 		if strings.Contains(err.Error(), "(Client.Timeout exceeded while awaiting headers)") {
 			err = component.ErrTimeout
@@ -174,7 +167,7 @@ func (h *httpClientInput) Connect(ctx context.Context) (err error) {
 	p := message.NewPart(nil)
 	for k, values := range res.Header {
 		if len(values) > 0 {
-			p.MetaSet(strings.ToLower(k), values[0])
+			p.MetaSetMut(strings.ToLower(k), values[0])
 		}
 	}
 	h.prevResponse = message.Batch{p}
@@ -233,7 +226,7 @@ func (h *httpClientInput) readStreamed(ctx context.Context) (message.Batch, inpu
 	}
 
 	meta := map[string]string{}
-	_ = h.prevResponse.Get(0).MetaIter(func(k, v string) error {
+	_ = h.prevResponse.Get(0).MetaIterStr(func(k, v string) error {
 		meta[k] = v
 		return nil
 	})
@@ -242,7 +235,7 @@ func (h *httpClientInput) readStreamed(ctx context.Context) (message.Batch, inpu
 	_ = msg.Iter(func(i int, p *message.Part) error {
 		part := message.NewPart(p.AsBytes())
 		for k, v := range meta {
-			part.MetaSet(k, v)
+			part.MetaSetMut(k, v)
 		}
 		resParts = append(resParts, part)
 		return nil
@@ -255,7 +248,7 @@ func (h *httpClientInput) readStreamed(ctx context.Context) (message.Batch, inpu
 }
 
 func (h *httpClientInput) readNotStreamed(ctx context.Context) (message.Batch, input.AsyncAckFn, error) {
-	msg, err := h.client.Send(ctx, h.payload, h.prevResponse)
+	msg, err := h.client.Send(ctx, h.prevResponse)
 	if err != nil {
 		if strings.Contains(err.Error(), "(Client.Timeout exceeded while awaiting headers)") {
 			err = component.ErrTimeout

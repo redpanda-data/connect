@@ -2,7 +2,10 @@ package io
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"sync"
@@ -15,7 +18,6 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	"github.com/benthosdev/benthos/v4/internal/shutdown"
 )
 
 func init() {
@@ -56,6 +58,7 @@ Writes messages to files on disk based on a chosen codec.`,
 
 type fileWriter struct {
 	log log.Modular
+	nm  bundle.NewManagement
 
 	path      *field.Expression
 	codec     codec.WriterConstructor
@@ -64,8 +67,6 @@ type fileWriter struct {
 	handleMut  sync.Mutex
 	handlePath string
 	handle     codec.Writer
-
-	shutSig *shutdown.Signaller
 }
 
 func newFileWriter(pathStr, codecStr string, mgr bundle.NewManagement) (*fileWriter, error) {
@@ -82,7 +83,7 @@ func newFileWriter(pathStr, codecStr string, mgr bundle.NewManagement) (*fileWri
 		codecConf: codecConf,
 		path:      path,
 		log:       mgr.Logger(),
-		shutSig:   shutdown.NewSignaller(),
+		nm:        mgr,
 	}, nil
 }
 
@@ -94,7 +95,11 @@ func (w *fileWriter) Connect(ctx context.Context) error {
 
 func (w *fileWriter) WriteBatch(ctx context.Context, msg message.Batch) error {
 	err := output.IterateBatchedSend(msg, func(i int, p *message.Part) error {
-		path := filepath.Clean(w.path.String(i, msg))
+		path, err := w.path.String(i, msg)
+		if err != nil {
+			return fmt.Errorf("path interpolation error: %w", err)
+		}
+		path = filepath.Clean(path)
 
 		w.handleMut.Lock()
 		defer w.handleMut.Unlock()
@@ -116,17 +121,23 @@ func (w *fileWriter) WriteBatch(ctx context.Context, msg message.Batch) error {
 			flag |= os.O_TRUNC
 		}
 
-		if err := os.MkdirAll(filepath.Dir(path), os.FileMode(0o777)); err != nil {
+		if err := w.nm.FS().MkdirAll(filepath.Dir(path), fs.FileMode(0o777)); err != nil {
 			return err
 		}
 
-		file, err := os.OpenFile(path, flag, os.FileMode(0o666))
+		file, err := w.nm.FS().OpenFile(path, flag, fs.FileMode(0o666))
 		if err != nil {
 			return err
 		}
 
+		fileWriter, ok := file.(io.WriteCloser)
+		if !ok {
+			_ = file.Close()
+			return errors.New("failed to open file for writing")
+		}
+
 		w.handlePath = path
-		handle, err := w.codec(file)
+		handle, err := w.codec(fileWriter)
 		if err != nil {
 			return err
 		}

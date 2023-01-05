@@ -3,7 +3,7 @@ title: Processors
 sidebar_label: About
 ---
 
-Benthos processors are functions applied to messages passing through a pipeline. The function signature allows a processor to mutate or drop messages depending on the content of the message. There are many types on offer but the most powerful is the [`bloblang` processor][processor.bloblang].
+Benthos processors are functions applied to messages passing through a pipeline. The function signature allows a processor to mutate or drop messages depending on the content of the message. There are many types on offer but the most powerful are the [`mapping`][processor.mapping] and [`mutation`][processor.mutation] processors.
 
 Processors are set via config, and depending on where in the config they are placed they will be run either immediately after a specific input (set in the input section), on all messages (set in the pipeline section) or before a specific output (set in the output section). Most processors apply to all messages and can be placed in the pipeline section:
 
@@ -12,7 +12,7 @@ pipeline:
   threads: 1
   processors:
     - label: my_cool_mapping
-      bloblang: |
+      mapping: |
         root.message = this
         root.meta.link_count = this.links.length()
 ```
@@ -55,10 +55,10 @@ output:
             url: tcp://localhost:6379
             command: sadd
             args_mapping: 'root = [ this.key, this.value ]'
-        - bloblang: root = deleted()
+        - mapping: root = deleted()
 ```
 
-The way this works is that if your processor with the side effect (`redis` in this case) succeeds then the final `bloblang` processor deletes the message which results in an acknowledgement. If the processor fails then the `try` block exits early without executing the `bloblang` processor and instead the message is routed to the `reject` output, which nacks the message with an error message containing the error obtained from the `redis` processor.
+The way this works is that if your processor with the side effect (`redis` in this case) succeeds then the final `mapping` processor deletes the message which results in an acknowledgement. If the processor fails then the `try` block exits early without executing the `mapping` processor and instead the message is routed to the `reject` output, which nacks the message with an error message containing the error obtained from the `redis` processor.
 
 import ComponentsByCategory from '@theme/ComponentsByCategory';
 
@@ -85,7 +85,9 @@ You can read more about batching [in this document][batching].
 [output.reject]: /docs/components/outputs/reject
 [processor.sql_insert]: /docs/components/processors/sql_insert
 [processor.redis]: /docs/components/processors/redis
-[processor.bloblang]: /docs/components/processors/bloblang
+[processor.mapping]: /docs/components/processors/mapping
+[processor.mutation]: /docs/components/processors/mutation
 [processor.split]: /docs/components/processors/split
 [processor.dedupe]: /docs/components/processors/dedupe
 [processor.for_each]: /docs/components/processors/for_each
+[metrics.about]: /docs/components/metrics/about

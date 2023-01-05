@@ -115,7 +115,7 @@ func (g gcpBQClientURL) NewClient(ctx context.Context, projectID string) (*bigqu
 
 func gcpBigQueryConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
-		// Stable(). TODO
+		Beta().
 		Categories("GCP", "Services").
 		Version("3.55.0").
 		Summary(`Sends messages as new rows to a Google Cloud BigQuery table.`).
@@ -188,7 +188,7 @@ For the CSV format when the field `+"`csv.header`"+` is specified a header row w
 		Field(service.NewObjectField("csv",
 			service.NewStringListField("header").
 				Description("A list of values to use as header for each batch of messages. If not specified the first line of each message will be used as header.").
-				Default([]interface{}{}),
+				Default([]any{}),
 			service.NewStringField("field_delimiter").
 				Description("The separator for fields in a CSV file, used when reading or exporting data.").
 				Default(","),
@@ -229,7 +229,6 @@ func init() {
 			output, err = newGCPBigQueryOutput(gconf, mgr.Logger())
 			return
 		})
-
 	if err != nil {
 		panic(err)
 	}
@@ -293,7 +292,7 @@ func newGCPBigQueryOutput(
 	return g, nil
 }
 
-// convertToIso converts a utf-8 byte encoding to iso-8859-1 byte encoding
+// convertToIso converts a utf-8 byte encoding to iso-8859-1 byte encoding.
 func convertToIso(value []byte) (result []byte, err error) {
 	return charmap.ISO8859_1.NewEncoder().Bytes(value)
 }

@@ -12,10 +12,8 @@ import (
 	"github.com/benthosdev/benthos/v4/public/bloblang"
 )
 
-var (
-	// jsonPathLanguage includes the full gval scripting language and the single quote extension
-	jsonPathLanguage = gval.Full(jsonpath.Language(), gvalstrings.SingleQuoted())
-)
+// jsonPathLanguage includes the full gval scripting language and the single quote extension.
+var jsonPathLanguage = gval.Full(jsonpath.Language(), gvalstrings.SingleQuoted())
 
 func init() {
 	if err := bloblang.RegisterMethodV2("json_path",
@@ -44,7 +42,7 @@ func init() {
 			if err != nil {
 				return nil, fmt.Errorf("failed to evaluate json path expression: %w", err)
 			}
-			return func(v interface{}) (interface{}, error) {
+			return func(v any) (any, error) {
 				return eval(context.Background(), v)
 			}, nil
 		}); err != nil {

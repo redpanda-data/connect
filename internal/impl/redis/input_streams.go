@@ -2,12 +2,13 @@ package redis
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/go-redis/redis/v7"
+	"github.com/go-redis/redis/v8"
 
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component"
@@ -52,11 +53,11 @@ as metadata fields.`,
 func newRedisStreamsInput(conf input.Config, mgr bundle.NewManagement) (input.Streamed, error) {
 	var c input.Async
 	var err error
-	if c, err = newRedisStreamsReader(conf.RedisStreams, mgr.Logger()); err != nil {
+	if c, err = newRedisStreamsReader(conf.RedisStreams, mgr); err != nil {
 		return nil, err
 	}
 	c = input.NewAsyncPreserver(c)
-	return input.NewAsyncReader("redis_streams", true, c, mgr)
+	return input.NewAsyncReader("redis_streams", c, mgr)
 }
 
 type pendingRedisStreamMsg struct {
@@ -81,6 +82,7 @@ type redisStreamsReader struct {
 	aMut    sync.Mutex
 	ackSend map[string][]string // Acks that can be sent
 
+	mgr bundle.NewManagement
 	log log.Modular
 
 	closeChan  chan struct{}
@@ -88,10 +90,11 @@ type redisStreamsReader struct {
 	closeOnce  sync.Once
 }
 
-func newRedisStreamsReader(conf input.RedisStreamsConfig, log log.Modular) (*redisStreamsReader, error) {
+func newRedisStreamsReader(conf input.RedisStreamsConfig, mgr bundle.NewManagement) (*redisStreamsReader, error) {
 	r := &redisStreamsReader{
 		conf:       conf,
-		log:        log,
+		log:        mgr.Logger(),
+		mgr:        mgr,
 		backlogs:   make(map[string]string, len(conf.Streams)),
 		ackSend:    make(map[string][]string, len(conf.Streams)),
 		closeChan:  make(chan struct{}),
@@ -102,7 +105,7 @@ func newRedisStreamsReader(conf input.RedisStreamsConfig, log log.Modular) (*red
 		r.backlogs[str] = "0"
 	}
 
-	if _, err := clientFromConfig(r.conf.Config); err != nil {
+	if _, err := clientFromConfig(mgr.FS(), r.conf.Config); err != nil {
 		return nil, err
 	}
 
@@ -140,6 +143,8 @@ func (r *redisStreamsReader) loop() {
 	}()
 	commitTimer := time.NewTicker(r.commitPeriod)
 
+	ctx := context.Background()
+
 	closed := false
 	for !closed {
 		select {
@@ -147,7 +152,7 @@ func (r *redisStreamsReader) loop() {
 		case <-r.closeChan:
 			closed = true
 		}
-		r.sendAcks()
+		r.sendAcks(ctx)
 	}
 }
 
@@ -162,7 +167,7 @@ func (r *redisStreamsReader) addAsyncAcks(stream string, ids ...string) {
 	r.aMut.Unlock()
 }
 
-func (r *redisStreamsReader) sendAcks() {
+func (r *redisStreamsReader) sendAcks(ctx context.Context) {
 	var client redis.UniversalClient
 	r.cMut.Lock()
 	client = r.client
@@ -181,7 +186,7 @@ func (r *redisStreamsReader) sendAcks() {
 		if len(ids) == 0 {
 			continue
 		}
-		if err := r.client.XAck(str, r.conf.ConsumerGroup, ids...).Err(); err != nil {
+		if err := r.client.XAck(ctx, str, r.conf.ConsumerGroup, ids...).Err(); err != nil {
 			r.log.Errorf("Failed to ack stream %v: %v\n", str, err)
 		}
 	}
@@ -198,11 +203,11 @@ func (r *redisStreamsReader) Connect(ctx context.Context) error {
 		return nil
 	}
 
-	client, err := clientFromConfig(r.conf.Config)
+	client, err := clientFromConfig(r.mgr.FS(), r.conf.Config)
 	if err != nil {
 		return err
 	}
-	if _, err := client.Ping().Result(); err != nil {
+	if _, err := client.Ping(ctx).Result(); err != nil {
 		return err
 	}
 
@@ -213,9 +218,9 @@ func (r *redisStreamsReader) Connect(ctx context.Context) error {
 		}
 		var err error
 		if r.conf.CreateStreams {
-			err = client.XGroupCreateMkStream(s, r.conf.ConsumerGroup, offset).Err()
+			err = client.XGroupCreateMkStream(ctx, s, r.conf.ConsumerGroup, offset).Err()
 		} else {
-			err = client.XGroupCreate(s, r.conf.ConsumerGroup, offset).Err()
+			err = client.XGroupCreate(ctx, s, r.conf.ConsumerGroup, offset).Err()
 		}
 		if err != nil && err.Error() != "BUSYGROUP Consumer Group name already exists" {
 			return fmt.Errorf("failed to create group %v for stream %v: %v", r.conf.ConsumerGroup, s, err)
@@ -228,7 +233,7 @@ func (r *redisStreamsReader) Connect(ctx context.Context) error {
 	return nil
 }
 
-func (r *redisStreamsReader) read() (pendingRedisStreamMsg, error) {
+func (r *redisStreamsReader) read(ctx context.Context) (pendingRedisStreamMsg, error) {
 	var client redis.UniversalClient
 	var msg pendingRedisStreamMsg
 
@@ -258,7 +263,7 @@ func (r *redisStreamsReader) read() (pendingRedisStreamMsg, error) {
 		}
 	}
 
-	res, err := client.XReadGroup(&redis.XReadGroupArgs{
+	res, err := client.XReadGroup(ctx, &redis.XReadGroupArgs{
 		Block:    r.timeout,
 		Consumer: r.conf.ClientID,
 		Group:    r.conf.ConsumerGroup,
@@ -270,7 +275,7 @@ func (r *redisStreamsReader) read() (pendingRedisStreamMsg, error) {
 		if strings.Contains(err.Error(), "i/o timeout") {
 			return msg, component.ErrTimeout
 		}
-		_ = r.disconnect()
+		_ = r.disconnect(ctx)
 		r.log.Errorf("Error from redis: %v\n", err)
 		return msg, component.ErrNotConnected
 	}
@@ -303,9 +308,9 @@ func (r *redisStreamsReader) read() (pendingRedisStreamMsg, error) {
 			}
 
 			part := message.NewPart(bodyBytes)
-			part.MetaSet("redis_stream", xmsg.ID)
+			part.MetaSetMut("redis_stream", xmsg.ID)
 			for k, v := range xmsg.Values {
-				part.MetaSet(k, fmt.Sprintf("%v", v))
+				part.MetaSetMut(k, v)
 			}
 
 			nextMsg := pendingRedisStreamMsg{
@@ -330,14 +335,14 @@ func (r *redisStreamsReader) read() (pendingRedisStreamMsg, error) {
 }
 
 func (r *redisStreamsReader) ReadBatch(ctx context.Context) (message.Batch, input.AsyncAckFn, error) {
-	msg, err := r.read()
+	msg, err := r.read(ctx)
 	if err != nil {
-		if err == component.ErrTimeout {
+		if errors.Is(err, component.ErrTimeout) {
 			// Allow for one more attempt in case we asked for backlog.
 			select {
 			case <-ctx.Done():
 			default:
-				msg, err = r.read()
+				msg, err = r.read(ctx)
 			}
 		}
 		if err != nil {
@@ -356,8 +361,8 @@ func (r *redisStreamsReader) ReadBatch(ctx context.Context) (message.Batch, inpu
 	}, nil
 }
 
-func (r *redisStreamsReader) disconnect() error {
-	r.sendAcks()
+func (r *redisStreamsReader) disconnect(ctx context.Context) error {
+	r.sendAcks(ctx)
 
 	r.cMut.Lock()
 	defer r.cMut.Unlock()

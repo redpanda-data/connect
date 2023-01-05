@@ -22,16 +22,16 @@ func init() {
 	_ = bundle.AllMetrics.Add(newInfluxDB, docs.ComponentSpec{
 		Name:        "influxdb",
 		Type:        docs.TypeMetrics,
-		Status:      docs.StatusExperimental,
+		Status:      docs.StatusBeta,
 		Version:     "3.36.0",
 		Summary:     `Send metrics to InfluxDB 1.x using the ` + "`/write`" + ` endpoint.`,
 		Description: `See https://docs.influxdata.com/influxdb/v1.8/tools/api/#write-http-endpoint for further details on the write API.`,
 		Config: docs.FieldComponent().WithChildren(
-			docs.FieldString("url", "A URL of the format `[https|http|udp]://host:port` to the InfluxDB host.").HasDefault(""),
+			docs.FieldURL("url", "A URL of the format `[https|http|udp]://host:port` to the InfluxDB host.").HasDefault(""),
 			docs.FieldString("db", "The name of the database to use.").HasDefault(""),
 			btls.FieldSpec(),
 			docs.FieldString("username", "A username (when applicable).").Advanced().HasDefault(""),
-			docs.FieldString("password", "A password (when applicable).").Advanced().HasDefault(""),
+			docs.FieldString("password", "A password (when applicable).").Advanced().HasDefault("").Secret(),
 			docs.FieldObject("include", "Optional additional metrics to collect, enabling these metrics may have some performance implications as it acquires a global semaphore and does `stoptheworld()`.").WithChildren(
 				docs.FieldString("runtime", "A duration string indicating how often to poll and collect runtime metrics. Leave empty to disable this metric", "1m").HasDefault(""),
 				docs.FieldString("debug_gc", "A duration string indicating how often to poll and collect GC metrics. Leave empty to disable this metric.", "1m").HasDefault(""),
@@ -45,7 +45,7 @@ func init() {
 					"hostname": "localhost",
 					"zone":     "danger",
 				},
-			).Map().Advanced().HasDefault(map[string]interface{}{}),
+			).Map().Advanced().HasDefault(map[string]any{}),
 			docs.FieldString("retention_policy", "Sets the retention policy for each write.").Advanced().HasDefault(""),
 			docs.FieldString("write_consistency", "[any|one|quorum|all] sets write consistency when available.").Advanced().HasDefault(""),
 		),
@@ -66,6 +66,7 @@ type influxDBMetrics struct {
 	registry        metrics.Registry
 	runtimeRegistry metrics.Registry
 	config          imetrics.InfluxDBConfig
+	mgr             bundle.NewManagement
 	log             log.Modular
 }
 
@@ -74,6 +75,7 @@ func newInfluxDB(config imetrics.Config, nm bundle.NewManagement) (imetrics.Type
 		config:          config.InfluxDB,
 		registry:        metrics.NewRegistry(),
 		runtimeRegistry: metrics.NewRegistry(),
+		mgr:             nm,
 		log:             nm.Logger(),
 	}
 
@@ -136,7 +138,7 @@ func (i *influxDBMetrics) makeClient() error {
 	if u.Scheme == "https" {
 		tlsConfig := &tls.Config{}
 		if i.config.TLS.Enabled {
-			tlsConfig, err = i.config.TLS.Get()
+			tlsConfig, err = i.config.TLS.Get(i.mgr.FS())
 			if err != nil {
 				return err
 			}
@@ -221,20 +223,20 @@ func (i *influxDBMetrics) publishRegistry() error {
 	return i.client.Write(points)
 }
 
-func getMetricValues(i interface{}) map[string]interface{} {
-	var values map[string]interface{}
+func getMetricValues(i any) map[string]any {
+	var values map[string]any
 	switch metric := i.(type) {
 	case metrics.Counter:
-		values = make(map[string]interface{}, 1)
+		values = make(map[string]any, 1)
 		values["count"] = metric.Count()
 	case metrics.Gauge:
-		values = make(map[string]interface{}, 1)
+		values = make(map[string]any, 1)
 		values["value"] = metric.Value()
 	case metrics.GaugeFloat64:
-		values = make(map[string]interface{}, 1)
+		values = make(map[string]any, 1)
 		values["value"] = metric.Value()
 	case metrics.Timer:
-		values = make(map[string]interface{}, 14)
+		values = make(map[string]any, 14)
 		t := metric.Snapshot()
 		ps := t.Percentiles([]float64{0.5, 0.75, 0.95, 0.99, 0.999})
 		values["count"] = t.Count()
@@ -252,7 +254,7 @@ func getMetricValues(i interface{}) map[string]interface{} {
 		values["15m.rate"] = t.Rate15()
 		values["mean.rate"] = t.RateMean()
 	case metrics.Histogram:
-		values = make(map[string]interface{}, 10)
+		values = make(map[string]any, 10)
 		t := metric.Snapshot()
 		ps := t.Percentiles([]float64{0.5, 0.75, 0.95, 0.99, 0.999})
 		values["count"] = t.Count()
@@ -269,13 +271,13 @@ func getMetricValues(i interface{}) map[string]interface{} {
 	return values
 }
 
-func (i *influxDBMetrics) getAllMetrics() map[string]map[string]interface{} {
-	data := make(map[string]map[string]interface{})
-	i.registry.Each(func(name string, metric interface{}) {
+func (i *influxDBMetrics) getAllMetrics() map[string]map[string]any {
+	data := make(map[string]map[string]any)
+	i.registry.Each(func(name string, metric any) {
 		values := getMetricValues(metric)
 		data[name] = values
 	})
-	i.runtimeRegistry.Each(func(name string, metric interface{}) {
+	i.runtimeRegistry.Each(func(name string, metric any) {
 		values := getMetricValues(metric)
 		data[name] = values
 	})
@@ -324,7 +326,7 @@ func (i *influxDBMetrics) GetTimerVec(path string, n ...string) imetrics.StatTim
 
 func (i *influxDBMetrics) GetGauge(path string) imetrics.StatGauge {
 	encodedName := encodeInfluxDBName(path, nil, nil)
-	var result = i.registry.GetOrRegister(encodedName, func() metrics.Gauge {
+	result := i.registry.GetOrRegister(encodedName, func() metrics.Gauge {
 		return influxDBGauge{
 			metrics.NewGauge(),
 		}

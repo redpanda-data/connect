@@ -3,6 +3,9 @@ package pure
 import (
 	"context"
 
+	"github.com/benthosdev/benthos/v4/internal/bloblang/mapping"
+	"github.com/benthosdev/benthos/v4/internal/component/interop"
+	"github.com/benthosdev/benthos/v4/internal/message"
 	"github.com/benthosdev/benthos/v4/public/bloblang"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
@@ -20,6 +23,8 @@ func init() {
 Bloblang is a powerful language that enables a wide range of mapping, transformation and filtering tasks. For more information [check out the docs](/docs/guides/bloblang/about).
 
 If your mapping is large and you'd prefer for it to live in a separate file then you can execute a mapping directly from a file with the expression `+"`from \"<path>\"`"+`, where the path must be absolute, or relative from the location that Benthos is executed from.
+
+Note: This processor is equivalent to the [bloblang](/docs/components/processors/bloblang#component-rename) one. The latter will be deprecated in a future release.
 
 ## Input Document Immutability
 
@@ -112,7 +117,8 @@ pipeline:
 			if err != nil {
 				return nil, err
 			}
-			return newMapping(mapping, mgr.Logger()), nil
+
+			return interop.NewUnwrapInternalBatchProcessor(newMapping(mapping, mgr.Logger())), nil
 		})
 	if err != nil {
 		panic(err)
@@ -120,24 +126,28 @@ pipeline:
 }
 
 type mappingProc struct {
-	exec *bloblang.Executor
+	exec *mapping.Executor
 	log  *service.Logger
 }
 
-func newMapping(exec *bloblang.Executor, log *service.Logger) service.BatchProcessor {
+func newMapping(exec *bloblang.Executor, log *service.Logger) *mappingProc {
+	uw := exec.XUnwrapper().(interface {
+		Unwrap() *mapping.Executor
+	}).Unwrap()
+
 	return &mappingProc{
-		exec: exec,
+		exec: uw,
 		log:  log,
 	}
 }
 
-func (m *mappingProc) ProcessBatch(ctx context.Context, batch service.MessageBatch) ([]service.MessageBatch, error) {
-	newBatch := make(service.MessageBatch, 0, len(batch))
-	for i, msg := range batch {
-		newPart, err := batch.BloblangQuery(i, m.exec)
+func (m *mappingProc) ProcessBatch(ctx context.Context, b message.Batch) ([]message.Batch, error) {
+	newBatch := make(message.Batch, 0, len(b))
+	for i, msg := range b {
+		newPart, err := m.exec.MapPart(i, b)
 		if err != nil {
 			m.log.Error(err.Error())
-			msg.SetError(err)
+			msg.ErrorSet(err)
 			newBatch = append(newBatch, msg)
 			continue
 		}
@@ -148,7 +158,7 @@ func (m *mappingProc) ProcessBatch(ctx context.Context, batch service.MessageBat
 	if len(newBatch) == 0 {
 		return nil, nil
 	}
-	return []service.MessageBatch{newBatch}, nil
+	return []message.Batch{newBatch}, nil
 }
 
 func (m *mappingProc) Close(context.Context) error {

@@ -2,7 +2,6 @@ package parser
 
 import (
 	"fmt"
-	"os"
 )
 
 func dotEnvParser() Func {
@@ -36,7 +35,7 @@ func dotEnvParser() Func {
 		}
 		vars := map[string]string{}
 		for _, line := range res.Payload.(DelimitedResult).Primary {
-			sequence, _ := line.([]interface{})
+			sequence, _ := line.([]any)
 			if len(sequence) == 6 {
 				key := sequence[0].(string)
 				value, _ := sequence[4].(string)
@@ -50,12 +49,8 @@ func dotEnvParser() Func {
 
 // ParseDotEnvFile attempts to parse a .env file containing environment variable
 // assignments, and returns either a map of key/value assignments or an error.
-func ParseDotEnvFile(path string) (map[string]string, error) {
-	dotEnvBytes, err := os.ReadFile(path)
-	if err != nil {
-		return nil, err
-	}
-	input := string(dotEnvBytes)
+func ParseDotEnvFile(envFileBytes []byte) (map[string]string, error) {
+	input := string(envFileBytes)
 	res := dotEnvParser()([]rune(input))
 	if res.Err != nil {
 		line, _ := LineAndColOf([]rune(input), res.Err.Input)

@@ -79,7 +79,7 @@ With the following config:`,
 input:
   sequence:
     sharded_join:
-      type: full-outter
+      type: full-outer
       id_path: uuid
       merge_strategy: array
     inputs:
@@ -102,7 +102,7 @@ BBB,Emma,28
 CCC,Geri,45
 ` + "```" + `
 
-And the second file called "hobbies.ndjson" contains JSON documents, one per line, that associate an identifer with an array of hobbies. However, these data objects are in a nested format:
+And the second file called "hobbies.ndjson" contains JSON documents, one per line, that associate an identifier with an array of hobbies. However, these data objects are in a nested format:
 
 ` + "```json" + `
 {"document":{"uuid":"CCC","hobbies":[{"type":"pokemon go"}]}}
@@ -122,7 +122,7 @@ With the following config:`,
 input:
   sequence:
     sharded_join:
-      type: full-outter
+      type: full-outer
       id_path: uuid
       iterations: 10
       merge_strategy: array
@@ -142,13 +142,14 @@ input:
 		Config: docs.FieldComponent().WithChildren(
 			docs.FieldObject(
 				"sharded_join",
-				`EXPERIMENTAL: Provides a way to perform outter joins of arbitrarily structured and unordered data resulting from the input sequence, even when the overall size of the data surpasses the memory available on the machine.
+				`EXPERIMENTAL: Provides a way to perform outer joins of arbitrarily structured and unordered data resulting from the input sequence, even when the overall size of the data surpasses the memory available on the machine.
 
 When configured the sequence of inputs will be consumed one or more times according to the number of iterations, and when more than one iteration is specified each iteration will process an entirely different set of messages by sharding them by the ID field. Increasing the number of iterations reduces the memory consumption at the cost of needing to fully parse the data each time.
 
 Each message must be structured (JSON or otherwise processed into a structured form) and the fields will be aggregated with those of other messages sharing the ID. At the end of each iteration the joined messages are flushed downstream before the next iteration begins, hence keeping memory usage limited.`,
 			).WithChildren(
-				docs.FieldString("type", "The type of join to perform. A `full-outter` ensures that all identifiers seen in any of the input sequences are sent, and is performed by consuming all input sequences before flushing the joined results. An `outter` join consumes all input sequences but only writes data joined from the last input in the sequence, similar to a left or right outter join. With an `outter` join if an identifier appears multiple times within the final sequence input it will be flushed each time it appears.").HasOptions("none", "full-outter", "outter"),
+				// TODO: V5 Remove "full-outter" and "outter"
+				docs.FieldString("type", "The type of join to perform. A `full-outer` ensures that all identifiers seen in any of the input sequences are sent, and is performed by consuming all input sequences before flushing the joined results. An `outer` join consumes all input sequences but only writes data joined from the last input in the sequence, similar to a left or right outer join. With an `outer` join if an identifier appears multiple times within the final sequence input it will be flushed each time it appears. `full-outter` and `outter` have been deprecated in favour of `full-outer` and `outer`.").HasOptions("none", "full-outer", "outer", "full-outter", "outter"),
 				docs.FieldString("id_path", "A [dot path](/docs/configuration/field_paths) that points to a common field within messages of each fragmented data set and can be used to join them. Messages that are not structured or are missing this field will be dropped. This field must be set in order to enable joins."),
 				docs.FieldInt("iterations", "The total number of iterations (shards), increasing this number will increase the overall time taken to process the data, but reduces the memory used in the process. The real memory usage required is significantly higher than the real size of the data and therefore the number of iterations should be at least an order of magnitude higher than the available memory divided by the overall size of the dataset."),
 				docs.FieldString(
@@ -170,29 +171,28 @@ Each message must be structured (JSON or otherwise processed into a structured f
 //------------------------------------------------------------------------------
 
 type joinedMessage struct {
-	metadata map[string]string
+	metadata map[string]any
 	fields   *gabs.Container
 }
 
 func (j *joinedMessage) ToMsg() message.Batch {
 	part := message.NewPart(nil)
-	jCopy, _ := message.CopyJSON(j.fields)
-	part.SetStructuredMut(jCopy)
+	part.SetStructuredMut(message.CopyJSON(j.fields))
 	for k, v := range j.metadata {
-		part.MetaSet(k, v)
+		part.MetaSetMut(k, v)
 	}
 	msg := message.Batch{part}
 	return msg
 }
 
-type messageJoinerCollisionFn func(dest, source interface{}) interface{}
+type messageJoinerCollisionFn func(dest, source any) any
 
 func getMessageJoinerCollisionFn(name string) (messageJoinerCollisionFn, error) {
 	switch name {
 	case "array":
-		return func(dest, source interface{}) interface{} {
-			destArr, destIsArray := dest.([]interface{})
-			sourceArr, sourceIsArray := source.([]interface{})
+		return func(dest, source any) any {
+			destArr, destIsArray := dest.([]any)
+			sourceArr, sourceIsArray := source.([]any)
 			if destIsArray {
 				if sourceIsArray {
 					return append(destArr, sourceArr...)
@@ -200,16 +200,16 @@ func getMessageJoinerCollisionFn(name string) (messageJoinerCollisionFn, error) 
 				return append(destArr, source)
 			}
 			if sourceIsArray {
-				return append(append([]interface{}{}, dest), sourceArr...)
+				return append(append([]any{}, dest), sourceArr...)
 			}
-			return []interface{}{dest, source}
+			return []any{dest, source}
 		}, nil
 	case "replace":
-		return func(dest, source interface{}) interface{} {
+		return func(dest, source any) any {
 			return source
 		}, nil
 	case "keep":
-		return func(dest, source interface{}) interface{} {
+		return func(dest, source any) any {
 			return dest
 		}, nil
 	}
@@ -231,9 +231,9 @@ func (m *messageJoiner) Add(msg message.Batch, lastInSequence bool, fn func(msg 
 	}
 
 	_ = msg.Iter(func(i int, p *message.Part) error {
-		var incomingObj map[string]interface{}
+		var incomingObj map[string]any
 		if jData, err := p.AsStructuredMut(); err == nil {
-			incomingObj, _ = jData.(map[string]interface{})
+			incomingObj, _ = jData.(map[string]any)
 		}
 		if incomingObj == nil {
 			// Messages that aren't structured objects are dropped.
@@ -253,8 +253,8 @@ func (m *messageJoiner) Add(msg message.Batch, lastInSequence bool, fn func(msg 
 			return nil
 		}
 
-		meta := map[string]string{}
-		_ = p.MetaIter(func(k, v string) error {
+		meta := map[string]any{}
+		_ = p.MetaIterMut(func(k string, v any) error {
 			meta[k] = v
 			return nil
 		})
@@ -276,7 +276,7 @@ func (m *messageJoiner) Add(msg message.Batch, lastInSequence bool, fn func(msg 
 		_ = gIncoming.Delete(m.idPath)
 		_ = jObj.fields.MergeFn(gIncoming, m.collisionFn)
 
-		_ = p.MetaIter(func(k, v string) error {
+		_ = p.MetaIterMut(func(k string, v any) error {
 			jObj.metadata[k] = v
 			return nil
 		})
@@ -372,9 +372,9 @@ func validateShardedConfig(s input.SequenceShardedJoinConfig) (*messageJoiner, e
 	switch s.Type {
 	case "none":
 		return nil, nil
-	case "full-outter":
+	case "full-outer", "full-outter":
 		flushOnLast = false
-	case "outter":
+	case "outer", "outter":
 		flushOnLast = true
 	default:
 		return nil, fmt.Errorf("join type '%v' was not recognized", s.Type)

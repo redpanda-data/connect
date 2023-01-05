@@ -119,11 +119,13 @@ root.id = nanoid(54, "abcde")
 
 ### `random_int`
 
-Generates a non-negative pseudo-random 64-bit integer. An optional integer argument can be provided in order to seed the random number generator.
+Generates a non-negative pseudo-random 64-bit integer. An optional integer argument can be provided in order to seed the random number generator. Optional `min` and `max` arguments can be provided to make the generated numbers within a range.
 
 #### Parameters
 
 **`seed`** &lt;query expression, default `{"Value":0}`&gt; A seed to use, if a query is provided it will only be resolved once during the lifetime of the mapping.  
+**`min`** &lt;integer, default `0`&gt; The minimum value the random generated number will have. The default value is 0.  
+**`max`** &lt;integer, default `9223372036854775806`&gt; The maximum value the random generated number will have. The default value is 9223372036854775806 (math.MaxInt64 - 1).  
 
 #### Examples
 
@@ -131,6 +133,11 @@ Generates a non-negative pseudo-random 64-bit integer. An optional integer argum
 ```coffee
 root.first = random_int()
 root.second = random_int(1)
+root.third = random_int(max:20)
+root.fourth = random_int(min:10, max:20)
+root.fifth = random_int(timestamp_unix_nano(), 5, 20)
+root.sixth = random_int(seed:timestamp_unix_nano(), max:20)
+
 ```
 
 It is possible to specify a dynamic seed argument, in which case the argument will only be resolved once during the lifetime of the mapping.
@@ -351,6 +358,37 @@ The key parameter is optional and if omitted the entire metadata contents are re
 root.all_metadata = root_meta()
 ```
 
+### `tracing_id`
+
+:::caution EXPERIMENTAL
+This function is experimental and therefore breaking changes could be made to it outside of major version releases.
+:::
+Provides the message trace id. The returned value will be zeroed if the message does not contain a span.
+
+#### Examples
+
+
+```coffee
+meta trace_id = tracing_id()
+```
+
+### `tracing_span`
+
+:::caution EXPERIMENTAL
+This function is experimental and therefore breaking changes could be made to it outside of major version releases.
+:::
+Provides the message tracing span [(created via Open Telemetry APIs)](/docs/components/tracers/about) as an object serialised via text map formatting. The returned value will be `null` if the message does not have a span.
+
+#### Examples
+
+
+```coffee
+root.headers.traceparent = tracing_span().traceparent
+
+# In:  {"some_stuff":"just can't be explained by science"}
+# Out: {"headers":{"traceparent":"00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"}}
+```
+
 ## Environment
 
 ### `env`
@@ -438,8 +476,8 @@ root.received_at = timestamp_unix_nano()
 
 ### `fake`
 
-:::caution EXPERIMENTAL
-This function is experimental and therefore breaking changes could be made to it outside of major version releases.
+:::caution BETA
+This function is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
 :::
 Takes in a string that maps to a [faker](https://github.com/bxcodec/faker) function and returns the result from that faker function. Returns an error if the given string doesn't match a supported faker function. Supported functions: `latitude`, `longitude`, `unix_time`, `date`, `time_string`, `month_name`, `year_string`, `day_of_week`, `day_of_month`, `timestamp`, `century`, `timezone`, `time_period`, `email`, `mac_address`, `domain_name`, `url`, `username`, `ipv4`, `ipv6`, `password`, `jwt`, `word`, `sentence`, `paragraph`, `cc_type`, `cc_number`, `currency`, `amount_with_currency`, `title_male`, `title_female`, `first_name`, `first_name_male`, `first_name_female`, `last_name`, `name`, `gender`, `chinese_first_name`, `chinese_last_name`, `chinese_name`, `phone_number`, `toll_free_phone_number`, `e164_phone_number`, `uuid_hyphenated`, `uuid_digit`. Refer to the [faker](https://github.com/bxcodec/faker) docs for details on these functions.
 

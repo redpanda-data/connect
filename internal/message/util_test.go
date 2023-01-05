@@ -21,8 +21,8 @@ func TestGetAllBytes(t *testing.T) {
 }
 
 func TestCloneGeneric(t *testing.T) {
-	var original interface{}
-	var cloned interface{}
+	var original any
+	var cloned any
 
 	err := json.Unmarshal([]byte(`{
 		"root":{
@@ -44,60 +44,52 @@ func TestCloneGeneric(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if cloned, err = cloneGeneric(original); err != nil {
-		t.Fatal(err)
-	}
-
+	cloned = cloneGeneric(original)
 	if exp, act := original, cloned; !reflect.DeepEqual(exp, act) {
 		t.Fatalf("Wrong cloned contents: %v != %v", act, exp)
 	}
 
-	target := cloned.(map[string]interface{})
-	target = target["root"].(map[string]interface{})
-	target = target["first"].(map[string]interface{})
+	target := cloned.(map[string]any)
+	target = target["root"].(map[string]any)
+	target = target["first"].(map[string]any)
 	target["value1"] = 2
 
-	target = original.(map[string]interface{})
-	target = target["root"].(map[string]interface{})
-	target = target["first"].(map[string]interface{})
+	target = original.(map[string]any)
+	target = target["root"].(map[string]any)
+	target = target["first"].(map[string]any)
 	if exp, act := float64(1), target["value1"].(float64); exp != act {
 		t.Errorf("Original value was mutated: %v != %v", act, exp)
 	}
 }
 
 func TestCloneGenericYAML(t *testing.T) {
-	var original interface{} = map[interface{}]interface{}{
-		"root": map[interface{}]interface{}{
-			"first": map[interface{}]interface{}{
+	var original any = map[any]any{
+		"root": map[any]any{
+			"first": map[any]any{
 				"value1": 1,
 				"value2": 1.2,
 				"value3": false,
 				"value4": "hello world",
 			},
-			"second": []interface{}{
+			"second": []any{
 				1, 1.2, false, "hello world",
 			},
 		},
 	}
-	var cloned interface{}
-	var err error
 
-	if cloned, err = cloneGeneric(original); err != nil {
-		t.Fatal(err)
-	}
-
+	cloned := cloneGeneric(original)
 	if exp, act := original, cloned; !reflect.DeepEqual(exp, act) {
 		t.Fatalf("Wrong cloned contents: %v != %v", act, exp)
 	}
 
-	target := cloned.(map[interface{}]interface{})
-	target = target["root"].(map[interface{}]interface{})
-	target = target["first"].(map[interface{}]interface{})
+	target := cloned.(map[any]any)
+	target = target["root"].(map[any]any)
+	target = target["first"].(map[any]any)
 	target["value1"] = 2
 
-	target = original.(map[interface{}]interface{})
-	target = target["root"].(map[interface{}]interface{})
-	target = target["first"].(map[interface{}]interface{})
+	target = original.(map[any]any)
+	target = target["root"].(map[any]any)
+	target = target["first"].(map[any]any)
 	if exp, act := 1, target["value1"].(int); exp != act {
 		t.Errorf("Original value was mutated: %v != %v", act, exp)
 	}
@@ -108,7 +100,7 @@ func TestCloneGenericYAML(t *testing.T) {
 var benchResult float64
 
 func BenchmarkCloneGeneric(b *testing.B) {
-	var generic, cloned interface{}
+	var generic, cloned any
 	err := json.Unmarshal([]byte(`{
 		"root":{
 			"first":{
@@ -132,15 +124,13 @@ func BenchmarkCloneGeneric(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		if cloned, err = cloneGeneric(generic); err != nil {
-			b.Fatal(err)
-		}
+		cloned = cloneGeneric(generic)
 	}
 	b.StopTimer()
 
-	target := cloned.(map[string]interface{})
-	target = target["root"].(map[string]interface{})
-	target = target["first"].(map[string]interface{})
+	target := cloned.(map[string]any)
+	target = target["root"].(map[string]any)
+	target = target["first"].(map[string]any)
 	benchResult = target["value1"].(float64)
 	if exp, act := float64(1), benchResult; exp != act {
 		b.Errorf("Wrong result: %v != %v", act, exp)
@@ -148,7 +138,7 @@ func BenchmarkCloneGeneric(b *testing.B) {
 }
 
 func BenchmarkCloneJSON(b *testing.B) {
-	var generic, cloned interface{}
+	var generic, cloned any
 	err := json.Unmarshal([]byte(`{
 		"root":{
 			"first":{
@@ -182,9 +172,9 @@ func BenchmarkCloneJSON(b *testing.B) {
 	}
 	b.StopTimer()
 
-	target := cloned.(map[string]interface{})
-	target = target["root"].(map[string]interface{})
-	target = target["first"].(map[string]interface{})
+	target := cloned.(map[string]any)
+	target = target["root"].(map[string]any)
+	target = target["first"].(map[string]any)
 	benchResult = target["value1"].(float64)
 	if exp, act := float64(1), benchResult; exp != act {
 		b.Errorf("Wrong result: %v != %v", act, exp)

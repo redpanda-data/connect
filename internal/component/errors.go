@@ -6,6 +6,14 @@ import (
 	"strings"
 )
 
+// ErrNotUnwrapped is returned in cases where a component was meant to be
+// unwrapped either from the public packages or to the public packages but for
+// some reason this did not happen. Unwrapping should only occur in times when
+// it's guaranteed to succeed, so this error indicates that an assumption was
+// incorrect during the migration of certain components which will need to be
+// immediately addressed by maintainers.
+var ErrNotUnwrapped = errors.New("something has gone wrong during the registering of this component, please open an issue https://github.com/benthosdev/benthos/issues/new to let us know")
+
 type errInvalidType struct {
 	typeStr string
 	tried   string
@@ -24,7 +32,7 @@ func ErrInvalidType(typeStr, tried string) error {
 	}
 }
 
-// Errors used throughout the codebase
+// Errors used throughout the codebase.
 var (
 	ErrTimeout    = errors.New("action timed out")
 	ErrTypeClosed = errors.New("type was closed")
@@ -42,7 +50,7 @@ var (
 
 //------------------------------------------------------------------------------
 
-// Manager errors
+// Manager errors.
 var (
 	ErrInputNotFound     = errors.New("input not found")
 	ErrCacheNotFound     = errors.New("cache not found")
@@ -56,7 +64,7 @@ var (
 
 //------------------------------------------------------------------------------
 
-// Buffer errors
+// Buffer errors.
 var (
 	ErrMessageTooLarge = errors.New("message body larger than buffer space")
 )

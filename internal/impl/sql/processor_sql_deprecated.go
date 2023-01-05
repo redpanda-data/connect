@@ -18,7 +18,7 @@ If the query fails to execute then the message will remain unchanged and the err
 
 For basic inserts or select queries use use either the ` + "[`sql_insert`](/docs/components/processors/sql_insert)" + ` or the ` + "[`sql_select`](/docs/components/processors/sql_select)" + ` processor. For more complex queries use the ` + "[`sql_raw`](/docs/components/processors/sql_raw)" + ` processor.`).
 		Field(driverField).
-		Field(service.NewStringField("data_source_name")).
+		Field(service.NewStringField("data_source_name").Description("Data source name.")).
 		Field(rawQueryField().
 			Example("INSERT INTO footable (foo, bar, baz) VALUES (?, ?, ?);")).
 		Field(service.NewBoolField("unsafe_dynamic_query").
@@ -31,6 +31,7 @@ For basic inserts or select queries use use either the ` + "[`sql_insert`](/docs
 			Example(`root = [ meta("user.id") ]`).
 			Optional()).
 		Field(service.NewStringField("result_codec").
+			Description("Result codec.").
 			Default("none")).
 		Version("3.65.0")
 	// TODO: Add example
@@ -40,9 +41,8 @@ func init() {
 	err := service.RegisterBatchProcessor(
 		"sql", DeprecatedProcessorConfig(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchProcessor, error) {
-			return NewSQLDeprecatedProcessorFromConfig(conf, mgr.Logger())
+			return NewSQLDeprecatedProcessorFromConfig(conf, mgr)
 		})
-
 	if err != nil {
 		panic(err)
 	}
@@ -50,7 +50,7 @@ func init() {
 
 // NewSQLDeprecatedProcessorFromConfig returns an internal sql processor.
 // nolint:revive // Not bothered as this is internal anyway
-func NewSQLDeprecatedProcessorFromConfig(conf *service.ParsedConfig, logger *service.Logger) (*sqlRawProcessor, error) {
+func NewSQLDeprecatedProcessorFromConfig(conf *service.ParsedConfig, mgr *service.Resources) (*sqlRawProcessor, error) {
 	driverStr, err := conf.FieldString("driver")
 	if err != nil {
 		return nil, err
@@ -89,9 +89,9 @@ func NewSQLDeprecatedProcessorFromConfig(conf *service.ParsedConfig, logger *ser
 		}
 	}
 
-	connSettings, err := connSettingsFromParsed(conf)
+	connSettings, err := connSettingsFromParsed(conf, mgr)
 	if err != nil {
 		return nil, err
 	}
-	return newSQLRawProcessor(logger, driverStr, dsnStr, queryStatic, queryDyn, onlyExec, argsMapping, connSettings)
+	return newSQLRawProcessor(mgr.Logger(), driverStr, dsnStr, queryStatic, queryDyn, onlyExec, argsMapping, connSettings)
 }

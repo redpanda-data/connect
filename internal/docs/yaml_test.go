@@ -11,6 +11,78 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/docs"
 )
 
+func TestSecretScrubbing(t *testing.T) {
+	fields := docs.FieldSpecs{
+		docs.FieldString("foo", "").Secret(),
+		docs.FieldString("bar", ""),
+		docs.FieldString("bazes", "").Secret().Array(),
+		docs.FieldString("buzes", "").Secret().ArrayOfArrays(),
+		docs.FieldString("bevers", "").Secret().Map(),
+	}
+
+	tests := []struct {
+		name   string
+		input  string
+		output string
+	}{
+		{
+			name: "all env vars",
+			input: `foo: "${foo_value}"
+bar: "${bar_value}"
+bazes: [ "${baz_value_one}", "${baz_value_two}" ]
+buzes: [ [ "${buz_value_one}" ], [ "${buz_value_two}", "${buz_value_three}" ] ]
+bevers:
+  first: "${bev_value_one}"
+  second: "${bev_value_one}"
+`,
+			output: `foo: ${foo_value}
+bar: "${bar_value}"
+bazes: ['${baz_value_one}', '${baz_value_two}']
+buzes: [['${buz_value_one}'], ['${buz_value_two}', '${buz_value_three}']]
+bevers:
+    first: ${bev_value_one}
+    second: ${bev_value_one}
+`,
+		},
+		{
+			name: "all real secrets",
+			input: `foo: dont print me!"
+bar: you can print me
+bazes: [ 'dont print me either', 'nor me' ]
+buzes: [ [ 'and definitely' ], [ 'not any', 'of these' ] ]
+bevers:
+  first: dont even think
+  second: about showing these ones
+`,
+			output: `foo: '!!!SECRET_SCRUBBED!!!'
+bar: you can print me
+bazes: ['!!!SECRET_SCRUBBED!!!', '!!!SECRET_SCRUBBED!!!']
+buzes: [['!!!SECRET_SCRUBBED!!!'], ['!!!SECRET_SCRUBBED!!!', '!!!SECRET_SCRUBBED!!!']]
+bevers:
+    first: '!!!SECRET_SCRUBBED!!!'
+    second: '!!!SECRET_SCRUBBED!!!'
+`,
+		},
+	}
+
+	for _, test := range tests {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			var node yaml.Node
+			require.NoError(t, yaml.Unmarshal([]byte(test.input), &node))
+
+			sanitConf := docs.NewSanitiseConfig()
+			sanitConf.DocsProvider = docs.NewMappedDocsProvider()
+
+			require.NoError(t, fields.SanitiseYAML(&node, sanitConf))
+
+			resBytes, err := yaml.Marshal(node.Content[0])
+			require.NoError(t, err)
+			assert.Equal(t, test.output, string(resBytes))
+		})
+	}
+}
+
 func TestFieldsFromNode(t *testing.T) {
 	tests := []struct {
 		name   string
@@ -116,13 +188,13 @@ c:
 	generic, err := spec.YAMLToMap(&node, docs.ToValueConfig{})
 	require.NoError(t, err)
 
-	assert.Equal(t, map[string]interface{}{
+	assert.Equal(t, map[string]any{
 		"a": "setavalue",
 		"b": 11,
-		"c": map[string]interface{}{
+		"c": map[string]any{
 			"d": true,
 			"e": "evalue",
-			"f": map[string]interface{}{
+			"f": map[string]any{
 				"g": 22,
 				"h": "sethvalue",
 				"i": 23.1,
@@ -136,7 +208,7 @@ func TestFieldsNodeToMapTypeCoercion(t *testing.T) {
 		name   string
 		spec   docs.FieldSpecs
 		yaml   string
-		result interface{}
+		result any
 	}{
 		{
 			name: "string fields",
@@ -162,15 +234,15 @@ f:
  "2": false
  "3": 10
 `,
-			result: map[string]interface{}{
+			result: map[string]any{
 				"a": "no",
 				"b": "false",
 				"c": "10",
 				"d": "30.4",
-				"e": []interface{}{
+				"e": []any{
 					"no", "false", "10",
 				},
-				"f": map[string]interface{}{
+				"f": map[string]any{
 					"1": "no", "2": "false", "3": "10",
 				},
 			},
@@ -197,14 +269,14 @@ e:
  "2": false
  "3": true
 `,
-			result: map[string]interface{}{
+			result: map[string]any{
 				"a": false,
 				"b": false,
 				"c": true,
-				"d": []interface{}{
+				"d": []any{
 					false, false, true,
 				},
-				"e": map[string]interface{}{
+				"e": map[string]any{
 					"1": false, "2": false, "3": true,
 				},
 			},
@@ -231,14 +303,14 @@ e:
  "2": -12
  "3": 13.4
 `,
-			result: map[string]interface{}{
+			result: map[string]any{
 				"a": 11,
 				"b": -12,
 				"c": 13,
-				"d": []interface{}{
+				"d": []any{
 					11, -12, 13,
 				},
-				"e": map[string]interface{}{
+				"e": map[string]any{
 					"1": 11, "2": -12, "3": 13,
 				},
 			},
@@ -265,14 +337,14 @@ e:
  "2": -12
  "3": 13.4
 `,
-			result: map[string]interface{}{
+			result: map[string]any{
 				"a": 11.0,
 				"b": -12.0,
 				"c": 13.4,
-				"d": []interface{}{
+				"d": []any{
 					11.0, -12.0, 13.4,
 				},
-				"e": map[string]interface{}{
+				"e": map[string]any{
 					"1": 11.0, "2": -12.0, "3": 13.4,
 				},
 			},
@@ -281,24 +353,24 @@ e:
 			name: "recurse array of objects",
 			spec: docs.FieldSpecs{
 				docs.FieldObject("foo", "").WithChildren(
-					docs.FieldObject("eles", "").Array().WithChildren(
+					docs.FieldObject("eels", "").Array().WithChildren(
 						docs.FieldString("bar", "").HasDefault("default"),
 					),
 				),
 			},
 			yaml: `
 foo:
-  eles:
+  eels:
     - bar: bar1
     - bar: bar2
 `,
-			result: map[string]interface{}{
-				"foo": map[string]interface{}{
-					"eles": []interface{}{
-						map[string]interface{}{
+			result: map[string]any{
+				"foo": map[string]any{
+					"eels": []any{
+						map[string]any{
 							"bar": "bar1",
 						},
-						map[string]interface{}{
+						map[string]any{
 							"bar": "bar2",
 						},
 					},
@@ -309,26 +381,26 @@ foo:
 			name: "recurse map of objects",
 			spec: docs.FieldSpecs{
 				docs.FieldObject("foo", "").WithChildren(
-					docs.FieldObject("eles", "").Map().WithChildren(
+					docs.FieldObject("eels", "").Map().WithChildren(
 						docs.FieldString("bar", "").HasDefault("default"),
 					),
 				),
 			},
 			yaml: `
 foo:
-  eles:
+  eels:
     first:
       bar: bar1
     second:
       bar: bar2
 `,
-			result: map[string]interface{}{
-				"foo": map[string]interface{}{
-					"eles": map[string]interface{}{
-						"first": map[string]interface{}{
+			result: map[string]any{
+				"foo": map[string]any{
+					"eels": map[string]any{
+						"first": map[string]any{
 							"bar": "bar1",
 						},
-						"second": map[string]interface{}{
+						"second": map[string]any{
 							"bar": "bar2",
 						},
 					},
@@ -347,7 +419,7 @@ b:
   bloblang: 'root = "hello world"'
 c: true
 `,
-			result: map[string]interface{}{
+			result: map[string]any{
 				"a": "adefault",
 				"b": &yaml.Node{
 					Kind:   yaml.MappingNode,
@@ -387,9 +459,9 @@ b:
   - bloblang: 'root = "hello world"'
 c: true
 `,
-			result: map[string]interface{}{
+			result: map[string]any{
 				"a": "adefault",
-				"b": []interface{}{
+				"b": []any{
 					&yaml.Node{
 						Kind:   yaml.MappingNode,
 						Tag:    "!!map",
@@ -430,9 +502,9 @@ b:
     bloblang: 'root = "hello world"'
 c: true
 `,
-			result: map[string]interface{}{
+			result: map[string]any{
 				"a": "adefault",
-				"b": map[string]interface{}{
+				"b": map[string]any{
 					"foo": &yaml.Node{
 						Kind:   yaml.MappingNode,
 						Tag:    "!!map",
@@ -473,10 +545,10 @@ foo:
   -
     - bar3
 `,
-			result: map[string]interface{}{
-				"foo": []interface{}{
-					[]interface{}{"bar1", "bar2"},
-					[]interface{}{"bar3"},
+			result: map[string]any{
+				"foo": []any{
+					[]any{"bar1", "bar2"},
+					[]any{"bar3"},
 				},
 			},
 		},
@@ -492,15 +564,15 @@ foo: [[3,4],[5]]
 bar: [[3.3,4.4],[5.5]]
 baz: [[true,false],[true]]
 `,
-			result: map[string]interface{}{
-				"foo": []interface{}{
-					[]interface{}{3, 4}, []interface{}{5},
+			result: map[string]any{
+				"foo": []any{
+					[]any{3, 4}, []any{5},
 				},
-				"bar": []interface{}{
-					[]interface{}{3.3, 4.4}, []interface{}{5.5},
+				"bar": []any{
+					[]any{3.3, 4.4}, []any{5.5},
 				},
-				"baz": []interface{}{
-					[]interface{}{true, false}, []interface{}{true},
+				"baz": []any{
+					[]any{true, false}, []any{true},
 				},
 			},
 		},
@@ -588,18 +660,23 @@ func TestYAMLComponentLinting(t *testing.T) {
 
 	for _, t := range docs.Types() {
 		prov.RegisterDocs(docs.ComponentSpec{
+			Name:   "resource",
+			Type:   t,
+			Config: docs.FieldString("", ""),
+		})
+		prov.RegisterDocs(docs.ComponentSpec{
 			Name: fmt.Sprintf("testlintfoo%v", string(t)),
 			Type: t,
 			Config: docs.FieldComponent().WithChildren(
-				docs.FieldString("foo1", "").LinterFunc(func(ctx docs.LintContext, line, col int, v interface{}) []docs.Lint {
+				docs.FieldString("foo1", "").LinterFunc(func(ctx docs.LintContext, line, col int, v any) []docs.Lint {
 					if v == "lint me please" {
 						return []docs.Lint{
-							docs.NewLintError(line, "this is a custom lint"),
+							docs.NewLintError(line, docs.LintCustom, "this is a custom lint"),
 						}
 					}
 					return nil
 				}).Optional(),
-				docs.FieldString("foo2", "").Advanced().OmitWhen(func(field, parent interface{}) (string, bool) {
+				docs.FieldString("foo2", "").Advanced().OmitWhen(func(field, parent any) (string, bool) {
 					if field == "drop me" {
 						return "because foo", true
 					}
@@ -669,7 +746,7 @@ testlintbarinput:
   bar1: hello world`,
 			rejectDeprecated: true,
 			res: []docs.Lint{
-				docs.NewLintError(2, "component testlintbarinput is deprecated"),
+				docs.NewLintError(2, docs.LintDeprecated, "component testlintbarinput is deprecated"),
 			},
 		},
 		{
@@ -681,7 +758,7 @@ testlintfooinput:
   foo6: hello world`,
 			rejectDeprecated: true,
 			res: []docs.Lint{
-				docs.NewLintError(4, "field foo6 is deprecated"),
+				docs.NewLintError(4, docs.LintDeprecated, "field foo6 is deprecated"),
 			},
 		},
 		{
@@ -692,8 +769,15 @@ testlintbarinput:
   bar1: hello world`,
 			requireLabels: true,
 			res: []docs.Lint{
-				docs.NewLintError(2, "label is required for testlintbarinput"),
+				docs.NewLintError(2, docs.LintMissingLabel, "label is required for testlintbarinput"),
 			},
+		},
+		{
+			name:      "do not require label for resource",
+			inputType: docs.TypeInput,
+			inputConf: `
+resource: something`,
+			requireLabels: true,
 		},
 		{
 			name:      "allows anchors",
@@ -714,7 +798,7 @@ testlintfooinput: &test-anchor
 processors:
   - testlintfooprocessor: *test-anchor`,
 			res: []docs.Lint{
-				docs.NewLintError(4, "field nope not recognised"),
+				docs.NewLintError(4, docs.LintUnknown, "field nope not recognised"),
 			},
 		},
 		{
@@ -728,9 +812,9 @@ testlintfooinput:
   also_not_recognised: nah
 definitely_not_recognised: huh`,
 			res: []docs.Lint{
-				docs.NewLintError(4, "field not_recognised not recognised"),
-				docs.NewLintError(6, "field also_not_recognised not recognised"),
-				docs.NewLintError(7, "field definitely_not_recognised is invalid when the component type is testlintfooinput (input)"),
+				docs.NewLintError(4, docs.LintUnknown, "field not_recognised not recognised"),
+				docs.NewLintError(6, docs.LintUnknown, "field also_not_recognised not recognised"),
+				docs.NewLintError(7, docs.LintUnknown, "field definitely_not_recognised is invalid when the component type is testlintfooinput (input)"),
 			},
 		},
 		{
@@ -744,8 +828,8 @@ processors:
   - testlintfooprocessor:
       also_not_recognised: nah`,
 			res: []docs.Lint{
-				docs.NewLintError(3, "field not_recognised not recognised"),
-				docs.NewLintError(7, "field also_not_recognised not recognised"),
+				docs.NewLintError(3, docs.LintUnknown, "field not_recognised not recognised"),
+				docs.NewLintError(7, docs.LintUnknown, "field also_not_recognised not recognised"),
 			},
 		},
 		{
@@ -761,7 +845,7 @@ processors:
   - label: foo
     testlintfooprocessor: {}`,
 			res: []docs.Lint{
-				docs.NewLintError(8, "Label 'foo' collides with a previously defined label at line 2"),
+				docs.NewLintError(8, docs.LintDuplicateLabel, "Label 'foo' collides with a previously defined label at line 2"),
 			},
 		},
 		{
@@ -772,7 +856,7 @@ testlintfooinput:
   foo1: hello world
 processors: []`,
 			res: []docs.Lint{
-				docs.NewLintError(4, "field processors is empty and can be removed"),
+				docs.NewLintError(4, docs.LintShouldOmit, "field processors is empty and can be removed"),
 			},
 		},
 		{
@@ -783,7 +867,7 @@ testlintfooinput:
   foo1: hello world
   foo2: drop me`,
 			res: []docs.Lint{
-				docs.NewLintError(4, "because foo"),
+				docs.NewLintError(4, docs.LintShouldOmit, "because foo"),
 			},
 		},
 		{
@@ -797,7 +881,7 @@ testlintfooinput:
         foo1: somevalue
         not_recognised: nah`,
 			res: []docs.Lint{
-				docs.NewLintError(4, "expected array value"),
+				docs.NewLintError(4, docs.LintExpectedArray, "expected array value"),
 			},
 		},
 		{
@@ -810,7 +894,7 @@ testlintfooinput:
       foo1: somevalue
       not_recognised: nah`,
 			res: []docs.Lint{
-				docs.NewLintError(6, "field not_recognised not recognised"),
+				docs.NewLintError(6, docs.LintUnknown, "field not_recognised not recognised"),
 			},
 		},
 		{
@@ -823,7 +907,7 @@ testlintfooinput:
       foo1: [ somevalue ]
 `,
 			res: []docs.Lint{
-				docs.NewLintError(5, "expected string value"),
+				docs.NewLintError(5, docs.LintExpectedScalar, "expected string value"),
 			},
 		},
 		{
@@ -837,7 +921,7 @@ testlintfooinput:
         foo1: somevalue
         not_recognised: nah`,
 			res: []docs.Lint{
-				docs.NewLintError(7, "field not_recognised not recognised"),
+				docs.NewLintError(7, docs.LintUnknown, "field not_recognised not recognised"),
 			},
 		},
 		{
@@ -850,7 +934,7 @@ testlintfooinput:
         foo1: somevalue
         not_recognised: nah`,
 			res: []docs.Lint{
-				docs.NewLintError(4, "expected object value"),
+				docs.NewLintError(4, docs.LintExpectedObject, "expected object value"),
 			},
 		},
 		{
@@ -869,7 +953,7 @@ testlintfooinput:
   foo7:
    - wat: no`,
 			res: []docs.Lint{
-				docs.NewLintError(4, "field wat not recognised"),
+				docs.NewLintError(4, docs.LintUnknown, "field wat not recognised"),
 			},
 		},
 		{
@@ -881,7 +965,7 @@ testlintfooinput:
     key1:
       wat: no`,
 			res: []docs.Lint{
-				docs.NewLintError(4, "expected array value"),
+				docs.NewLintError(4, docs.LintExpectedArray, "expected array value"),
 			},
 		},
 		{
@@ -902,7 +986,7 @@ testlintfooinput:
     key1:
       wat: nope`,
 			res: []docs.Lint{
-				docs.NewLintError(5, "field wat not recognised"),
+				docs.NewLintError(5, docs.LintUnknown, "field wat not recognised"),
 			},
 		},
 		{
@@ -913,7 +997,7 @@ testlintfooinput:
   foo8:
     - wat: nope`,
 			res: []docs.Lint{
-				docs.NewLintError(4, "expected object value"),
+				docs.NewLintError(4, docs.LintExpectedObject, "expected object value"),
 			},
 		},
 		{
@@ -923,7 +1007,7 @@ testlintfooinput:
 testlintfooinput:
   foo1: lint me please`,
 			res: []docs.Lint{
-				docs.NewLintError(3, "this is a custom lint"),
+				docs.NewLintError(3, docs.LintCustom, "this is a custom lint"),
 			},
 		},
 	}
@@ -959,7 +1043,7 @@ func TestYAMLLinting(t *testing.T) {
 			inputSpec: docs.FieldString("foo", ""),
 			inputConf: `["foo","bar"]`,
 			res: []docs.Lint{
-				docs.NewLintError(1, "expected string value"),
+				docs.NewLintError(1, docs.LintExpectedScalar, "expected string value"),
 			},
 		},
 		{
@@ -967,7 +1051,7 @@ func TestYAMLLinting(t *testing.T) {
 			inputSpec: docs.FieldString("foo", "").Array(),
 			inputConf: `"foo"`,
 			res: []docs.Lint{
-				docs.NewLintError(1, "expected array value"),
+				docs.NewLintError(1, docs.LintExpectedArray, "expected array value"),
 			},
 		},
 		{
@@ -977,7 +1061,7 @@ func TestYAMLLinting(t *testing.T) {
 			),
 			inputConf: `"foo"`,
 			res: []docs.Lint{
-				docs.NewLintError(1, "expected object value"),
+				docs.NewLintError(1, docs.LintExpectedObject, "expected object value"),
 			},
 		},
 		{
@@ -987,7 +1071,7 @@ func TestYAMLLinting(t *testing.T) {
 			),
 			inputConf: `bar: {}`,
 			res: []docs.Lint{
-				docs.NewLintError(1, "expected string value"),
+				docs.NewLintError(1, docs.LintExpectedScalar, "expected string value"),
 			},
 		},
 		{
@@ -1000,7 +1084,7 @@ func TestYAMLLinting(t *testing.T) {
 			inputConf: `bar:
   baz: {}`,
 			res: []docs.Lint{
-				docs.NewLintError(2, "expected string value"),
+				docs.NewLintError(2, docs.LintExpectedScalar, "expected string value"),
 			},
 		},
 		{
@@ -1013,7 +1097,7 @@ func TestYAMLLinting(t *testing.T) {
 			),
 			inputConf: `bev: hello world`,
 			res: []docs.Lint{
-				docs.NewLintError(1, "field baz is required"),
+				docs.NewLintError(1, docs.LintMissing, "field baz is required"),
 			},
 		},
 	}

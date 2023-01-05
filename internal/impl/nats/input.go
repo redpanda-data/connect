@@ -34,7 +34,7 @@ This input adds the following metadata fields to each message:
 - All message headers (when supported by the connection)
 ` + "```" + `
 
-You can access these metadata fields using [function interpolation](/docs/configuration/interpolation#metadata).
+You can access these metadata fields using [function interpolation](/docs/configuration/interpolation#bloblang-queries).
 
 ` + auth.Description(),
 		Config: docs.FieldComponent().WithChildren(
@@ -60,11 +60,11 @@ You can access these metadata fields using [function interpolation](/docs/config
 }
 
 func newNATSInput(conf input.Config, mgr bundle.NewManagement) (input.Streamed, error) {
-	n, err := newNATSReader(conf.NATS, mgr.Logger())
+	n, err := newNATSReader(conf.NATS, mgr)
 	if err != nil {
 		return nil, err
 	}
-	return input.NewAsyncReader("nats", true, input.NewAsyncPreserver(n), mgr)
+	return input.NewAsyncReader("nats", input.NewAsyncPreserver(n), mgr)
 }
 
 type natsReader struct {
@@ -82,10 +82,10 @@ type natsReader struct {
 	tlsConf       *tls.Config
 }
 
-func newNATSReader(conf input.NATSConfig, log log.Modular) (*natsReader, error) {
+func newNATSReader(conf input.NATSConfig, mgr bundle.NewManagement) (*natsReader, error) {
 	n := natsReader{
 		conf:          conf,
-		log:           log,
+		log:           mgr.Logger(),
 		interruptChan: make(chan struct{}),
 	}
 	n.urls = strings.Join(conf.URLs, ",")
@@ -94,7 +94,7 @@ func newNATSReader(conf input.NATSConfig, log log.Modular) (*natsReader, error) 
 	}
 	var err error
 	if conf.TLS.Enabled {
-		if n.tlsConf, err = conf.TLS.Get(); err != nil {
+		if n.tlsConf, err = conf.TLS.Get(mgr.FS()); err != nil {
 			return nil, err
 		}
 	}
@@ -180,12 +180,12 @@ func (n *natsReader) ReadBatch(ctx context.Context) (message.Batch, input.AsyncA
 
 	bmsg := message.QuickBatch([][]byte{msg.Data})
 	part := bmsg.Get(0)
-	part.MetaSet("nats_subject", msg.Subject)
+	part.MetaSetMut("nats_subject", msg.Subject)
 	// process message headers if server supports the feature
 	if natsConn.HeadersSupported() {
 		for key := range msg.Header {
 			value := msg.Header.Get(key)
-			part.MetaSet(key, value)
+			part.MetaSetMut(key, value)
 		}
 	}
 

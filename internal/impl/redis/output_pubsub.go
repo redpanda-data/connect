@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/go-redis/redis/v7"
+	"github.com/go-redis/redis/v8"
 
 	ibatch "github.com/benthosdev/benthos/v4/internal/batch"
 	"github.com/benthosdev/benthos/v4/internal/batch/policy"
@@ -57,6 +57,7 @@ func newRedisPubSubOutput(conf output.Config, mgr bundle.NewManagement) (output.
 }
 
 type redisPubSubWriter struct {
+	mgr bundle.NewManagement
 	log log.Modular
 
 	conf       output.RedisPubSubConfig
@@ -68,6 +69,7 @@ type redisPubSubWriter struct {
 
 func newRedisPubSubWriter(conf output.RedisPubSubConfig, mgr bundle.NewManagement) (*redisPubSubWriter, error) {
 	r := &redisPubSubWriter{
+		mgr:  mgr,
 		log:  mgr.Logger(),
 		conf: conf,
 	}
@@ -75,7 +77,7 @@ func newRedisPubSubWriter(conf output.RedisPubSubConfig, mgr bundle.NewManagemen
 	if r.channelStr, err = mgr.BloblEnvironment().NewField(conf.Channel); err != nil {
 		return nil, fmt.Errorf("failed to parse channel expression: %v", err)
 	}
-	if _, err = clientFromConfig(conf.Config); err != nil {
+	if _, err = clientFromConfig(mgr.FS(), conf.Config); err != nil {
 		return nil, err
 	}
 	return r, nil
@@ -85,11 +87,11 @@ func (r *redisPubSubWriter) Connect(ctx context.Context) error {
 	r.connMut.Lock()
 	defer r.connMut.Unlock()
 
-	client, err := clientFromConfig(r.conf.Config)
+	client, err := clientFromConfig(r.mgr.FS(), r.conf.Config)
 	if err != nil {
 		return err
 	}
-	if _, err = client.Ping().Result(); err != nil {
+	if _, err = client.Ping(ctx).Result(); err != nil {
 		return err
 	}
 
@@ -109,8 +111,11 @@ func (r *redisPubSubWriter) WriteBatch(ctx context.Context, msg message.Batch) e
 	}
 
 	if msg.Len() == 1 {
-		channel := r.channelStr.String(0, msg)
-		if err := client.Publish(channel, msg.Get(0).AsBytes()).Err(); err != nil {
+		channel, err := r.channelStr.String(0, msg)
+		if err != nil {
+			return fmt.Errorf("channel interpolation error: %w", err)
+		}
+		if err := client.Publish(ctx, channel, msg.Get(0).AsBytes()).Err(); err != nil {
 			_ = r.disconnect()
 			r.log.Errorf("Error from redis: %v\n", err)
 			return component.ErrNotConnected
@@ -119,11 +124,17 @@ func (r *redisPubSubWriter) WriteBatch(ctx context.Context, msg message.Batch) e
 	}
 
 	pipe := client.Pipeline()
-	_ = msg.Iter(func(i int, p *message.Part) error {
-		_ = pipe.Publish(r.channelStr.String(i, msg), p.AsBytes())
+	if err := msg.Iter(func(i int, p *message.Part) error {
+		channel, err := r.channelStr.String(i, msg)
+		if err != nil {
+			return fmt.Errorf("channel interpolation error: %w", err)
+		}
+		_ = pipe.Publish(ctx, channel, p.AsBytes())
 		return nil
-	})
-	cmders, err := pipe.Exec()
+	}); err != nil {
+		return err
+	}
+	cmders, err := pipe.Exec(ctx)
 	if err != nil {
 		_ = r.disconnect()
 		r.log.Errorf("Error from redis: %v\n", err)

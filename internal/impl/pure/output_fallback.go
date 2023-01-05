@@ -35,7 +35,7 @@ output:
         retries: 3
         retry_period: 1s
       processors:
-        - bloblang: 'root = "failed to send this message to foo: " + content()'
+        - mapping: 'root = "failed to send this message to foo: " + content()'
     - file:
         path: /usr/local/benthos/everything_failed.jsonl
 ` + "```" + `
@@ -186,7 +186,7 @@ func (t *fallbackBroker) loop() {
 			}
 			newPayload := tran.Payload.ShallowCopy()
 			_ = newPayload.Iter(func(i int, p *message.Part) error {
-				p.MetaSet("fallback_error", err.Error())
+				p.MetaSetMut("fallback_error", err.Error())
 				return nil
 			})
 			select {

@@ -23,8 +23,10 @@ func NewFunctionSet() *FunctionSet {
 	}
 }
 
-var nameRegexpRaw = `^[a-z0-9]+(_[a-z0-9]+)*$`
-var nameRegexp = regexp.MustCompile(nameRegexpRaw)
+var (
+	nameRegexpRaw = `^[a-z0-9]+(_[a-z0-9]+)*$`
+	nameRegexp    = regexp.MustCompile(nameRegexpRaw)
+)
 
 // Add a new function to this set by providing a spec (name and documentation),
 // a constructor to be called for each instantiation of the function, and
@@ -151,7 +153,7 @@ func registerFunction(spec FunctionSpec, ctor FunctionCtor) struct{} {
 	return struct{}{}
 }
 
-func registerSimpleFunction(spec FunctionSpec, fn func(ctx FunctionContext) (interface{}, error)) struct{} {
+func registerSimpleFunction(spec FunctionSpec, fn func(ctx FunctionContext) (any, error)) struct{} {
 	if err := AllFunctions.Add(spec, func(*ParsedParams) (Function, error) {
 		return ClosureFunction("function "+spec.Name, fn, nil), nil
 	}); err != nil {
@@ -162,7 +164,7 @@ func registerSimpleFunction(spec FunctionSpec, fn func(ctx FunctionContext) (int
 
 // InitFunctionHelper attempts to initialise a function by its name and a list
 // of arguments, this is convenient for writing tests.
-func InitFunctionHelper(name string, args ...interface{}) (Function, error) {
+func InitFunctionHelper(name string, args ...any) (Function, error) {
 	spec, ok := AllFunctions.specs[name]
 	if !ok {
 		return nil, badFunctionErr(name)
@@ -182,7 +184,7 @@ func FunctionDocs() []FunctionSpec {
 //------------------------------------------------------------------------------
 
 func disabledFunction(name string) Function {
-	return ClosureFunction("function "+name, func(ctx FunctionContext) (interface{}, error) {
+	return ClosureFunction("function "+name, func(ctx FunctionContext) (any, error) {
 		return nil, errors.New("this function has been disabled")
 	}, func(ctx TargetsContext) (TargetsContext, []TargetPath) { return ctx, nil })
 }
@@ -192,7 +194,7 @@ func wrapCtorWithDynamicArgs(name string, args *ParsedParams, fn FunctionCtor) (
 	if len(fns) == 0 {
 		return fn(args)
 	}
-	return ClosureFunction("function "+name, func(ctx FunctionContext) (interface{}, error) {
+	return ClosureFunction("function "+name, func(ctx FunctionContext) (any, error) {
 		newArgs, err := args.ResolveDynamic(ctx)
 		if err != nil {
 			return nil, err

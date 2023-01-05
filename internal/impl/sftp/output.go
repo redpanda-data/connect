@@ -34,7 +34,7 @@ func init() {
 		return output.OnlySinglePayloads(a), nil
 	}), docs.ComponentSpec{
 		Name:        "sftp",
-		Status:      docs.StatusExperimental,
+		Status:      docs.StatusBeta,
 		Version:     "3.39.0",
 		Summary:     `Writes files to a server over SFTP.`,
 		Description: output.Description(true, false, `In order to have a different path for each object you should use function interpolations described [here](/docs/configuration/interpolation#bloblang-queries).`),
@@ -71,6 +71,7 @@ type sftpWriter struct {
 	client *sftp.Client
 
 	log log.Modular
+	mgr bundle.NewManagement
 
 	path      *field.Expression
 	codec     codec.WriterConstructor
@@ -85,6 +86,7 @@ func newSFTPWriter(conf output.SFTPConfig, mgr bundle.NewManagement) (*sftpWrite
 	s := &sftpWriter{
 		conf: conf,
 		log:  mgr.Logger(),
+		mgr:  mgr,
 	}
 
 	var err error
@@ -107,7 +109,7 @@ func (s *sftpWriter) Connect(ctx context.Context) error {
 	}
 
 	var err error
-	s.client, err = s.conf.Credentials.GetClient(s.conf.Address)
+	s.client, err = s.conf.Credentials.GetClient(s.mgr.FS(), s.conf.Address)
 	return err
 }
 
@@ -120,7 +122,10 @@ func (s *sftpWriter) WriteBatch(ctx context.Context, msg message.Batch) error {
 	}
 
 	return output.IterateBatchedSend(msg, func(i int, p *message.Part) error {
-		path := s.path.String(i, msg)
+		path, err := s.path.String(i, msg)
+		if err != nil {
+			return fmt.Errorf("path interpolation error: %w", err)
+		}
 
 		s.handleMut.Lock()
 		defer s.handleMut.Unlock()

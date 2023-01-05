@@ -7,7 +7,7 @@ testCases:
     pipeline:
       processors:
         - label: sample_transform
-          bloblang: root = this.uppercase()
+          mapping: root = this.uppercase()
     output:
       switch:
         cases:

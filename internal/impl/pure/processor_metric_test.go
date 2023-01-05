@@ -62,7 +62,7 @@ func TestMetricCounter(t *testing.T) {
 	}
 
 	expMetrics := map[string]int64{
-		"foo.bar": 5,
+		"foo.bar": 4,
 	}
 
 	for _, i := range inputs {

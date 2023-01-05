@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/go-redis/redis/v7"
+	"github.com/go-redis/redis/v8"
 
 	"github.com/benthosdev/benthos/v4/internal/bloblang/field"
 	"github.com/benthosdev/benthos/v4/internal/bundle"
@@ -89,6 +89,7 @@ func newRedisHashOutput(conf output.Config, mgr bundle.NewManagement) (output.St
 }
 
 type redisHashWriter struct {
+	mgr bundle.NewManagement
 	log log.Modular
 
 	conf output.RedisHashConfig
@@ -102,6 +103,7 @@ type redisHashWriter struct {
 
 func newRedisHashWriter(conf output.RedisHashConfig, mgr bundle.NewManagement) (*redisHashWriter, error) {
 	r := &redisHashWriter{
+		mgr:    mgr,
 		log:    mgr.Logger(),
 		conf:   conf,
 		fields: map[string]*field.Expression{},
@@ -122,7 +124,7 @@ func newRedisHashWriter(conf output.RedisHashConfig, mgr bundle.NewManagement) (
 		return nil, errors.New("at least one mechanism for setting fields must be enabled")
 	}
 
-	if _, err := clientFromConfig(conf.Config); err != nil {
+	if _, err := clientFromConfig(mgr.FS(), conf.Config); err != nil {
 		return nil, err
 	}
 
@@ -133,11 +135,11 @@ func (r *redisHashWriter) Connect(ctx context.Context) error {
 	r.connMut.Lock()
 	defer r.connMut.Unlock()
 
-	client, err := clientFromConfig(r.conf.Config)
+	client, err := clientFromConfig(r.mgr.FS(), r.conf.Config)
 	if err != nil {
 		return err
 	}
-	if _, err = client.Ping().Result(); err != nil {
+	if _, err = client.Ping(ctx).Result(); err != nil {
 		return err
 	}
 
@@ -150,13 +152,13 @@ func (r *redisHashWriter) Connect(ctx context.Context) error {
 //------------------------------------------------------------------------------
 
 func walkForHashFields(
-	msg message.Batch, index int, fields map[string]interface{},
+	msg message.Batch, index int, fields map[string]any,
 ) error {
 	jVal, err := msg.Get(index).AsStructured()
 	if err != nil {
 		return err
 	}
-	jObj, ok := jVal.(map[string]interface{})
+	jObj, ok := jVal.(map[string]any)
 	if !ok {
 		return fmt.Errorf("expected JSON object, found '%T'", jVal)
 	}
@@ -176,10 +178,13 @@ func (r *redisHashWriter) WriteBatch(ctx context.Context, msg message.Batch) err
 	}
 
 	return output.IterateBatchedSend(msg, func(i int, p *message.Part) error {
-		key := r.keyStr.String(i, msg)
-		fields := map[string]interface{}{}
+		key, err := r.keyStr.String(i, msg)
+		if err != nil {
+			return fmt.Errorf("key interpolation error: %w", err)
+		}
+		fields := map[string]any{}
 		if r.conf.WalkMetadata {
-			_ = p.MetaIter(func(k, v string) error {
+			_ = p.MetaIterMut(func(k string, v any) error {
 				fields[k] = v
 				return nil
 			})
@@ -192,9 +197,11 @@ func (r *redisHashWriter) WriteBatch(ctx context.Context, msg message.Batch) err
 			}
 		}
 		for k, v := range r.fields {
-			fields[k] = v.String(i, msg)
+			if fields[k], err = v.String(i, msg); err != nil {
+				return fmt.Errorf("field %v interpolation error: %w", k, err)
+			}
 		}
-		if err := client.HMSet(key, fields).Err(); err != nil {
+		if err := client.HMSet(ctx, key, fields).Err(); err != nil {
 			_ = r.disconnect()
 			r.log.Errorf("Error from redis: %v\n", err)
 			return component.ErrNotConnected

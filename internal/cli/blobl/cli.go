@@ -15,6 +15,7 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/bloblang/mapping"
 	"github.com/benthosdev/benthos/v4/internal/bloblang/parser"
 	"github.com/benthosdev/benthos/v4/internal/bloblang/query"
+	"github.com/benthosdev/benthos/v4/internal/filepath/ifs"
 	"github.com/benthosdev/benthos/v4/internal/message"
 )
 
@@ -112,26 +113,26 @@ Find out more about Bloblang at: https://benthos.dev/docs/guides/bloblang/about`
 
 type execCache struct {
 	msg  message.Batch
-	vars map[string]interface{}
+	vars map[string]any
 }
 
 func newExecCache() *execCache {
 	return &execCache{
 		msg:  message.QuickBatch([][]byte{[]byte(nil)}),
-		vars: map[string]interface{}{},
+		vars: map[string]any{},
 	}
 }
 
 func (e *execCache) executeMapping(exec *mapping.Executor, rawInput, prettyOutput bool, input []byte) (string, error) {
 	e.msg.Get(0).SetBytes(input)
 
-	var valuePtr *interface{}
+	var valuePtr *any
 	var parseErr error
 
-	lazyValue := func() *interface{} {
+	lazyValue := func() *any {
 		if valuePtr == nil && parseErr == nil {
 			if rawInput {
-				var value interface{} = input
+				var value any = input
 				valuePtr = &value
 			} else {
 				if jObj, err := e.msg.Get(0).AsStructured(); err == nil {
@@ -152,7 +153,7 @@ func (e *execCache) executeMapping(exec *mapping.Executor, rawInput, prettyOutpu
 		delete(e.vars, k)
 	}
 
-	var result interface{} = query.Nothing(nil)
+	var result any = query.Nothing(nil)
 	err := exec.ExecOnto(query.FunctionContext{
 		Maps:     exec.Maps(),
 		Vars:     e.vars,
@@ -226,7 +227,7 @@ func run(c *cli.Context) error {
 			fmt.Fprintln(os.Stderr, red("invalid flags, unable to execute both a file mapping and an inline mapping"))
 			os.Exit(1)
 		}
-		mappingBytes, err := os.ReadFile(file)
+		mappingBytes, err := ifs.ReadFile(ifs.OS(), file)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, red("failed to read mapping file: %v\n"), err)
 			os.Exit(1)

@@ -70,7 +70,7 @@ func TestOutOfSync(t *testing.T) {
 
 func TestSequentialLarge(t *testing.T) {
 	c := New()
-	var resolves []func() interface{}
+	var resolves []func() any
 
 	for i := 0; i < 1000; i++ {
 		resolves = append(resolves, c.Track(i, 1))
@@ -86,7 +86,7 @@ func TestSequentialChunks(t *testing.T) {
 	c := New()
 	chunkSize := 100
 	for i := 0; i < 10; i++ {
-		var resolves []func() interface{}
+		var resolves []func() any
 
 		for j := 0; j < chunkSize; j++ {
 			offset := i*chunkSize + j
@@ -104,7 +104,7 @@ func TestSequentialChunks(t *testing.T) {
 
 func TestSequentialReverseLarge(t *testing.T) {
 	c := New()
-	var resolves []func() interface{}
+	var resolves []func() any
 
 	for i := 0; i < 1000; i++ {
 		resolves = append(resolves, c.Track(i, 1))
@@ -123,7 +123,7 @@ func TestSequentialReverseLarge(t *testing.T) {
 
 func TestSequentialRandomLarge(t *testing.T) {
 	c := New()
-	resolves := make([]func() interface{}, 1000)
+	resolves := make([]func() any, 1000)
 	indexes := map[int]struct{}{}
 	for i := 0; i < 1000; i++ {
 		resolves[i] = c.Track(i, 1)
@@ -153,7 +153,7 @@ func BenchmarkChunked100(b *testing.B) {
 	chunkSize := 100
 	N := b.N / chunkSize
 	for i := 0; i < N; i++ {
-		resolves := make([]func() interface{}, chunkSize)
+		resolves := make([]func() any, chunkSize)
 
 		for j := 0; j < chunkSize; j++ {
 			offset := i*chunkSize + j
@@ -176,7 +176,7 @@ func BenchmarkChunkedReverse100(b *testing.B) {
 	chunkSize := 100
 	N := b.N / chunkSize
 	for i := 0; i < N; i++ {
-		resolves := make([]func() interface{}, chunkSize)
+		resolves := make([]func() any, chunkSize)
 
 		for j := 0; j < chunkSize; j++ {
 			offset := i*chunkSize + j
@@ -185,7 +185,7 @@ func BenchmarkChunkedReverse100(b *testing.B) {
 
 		for j := chunkSize - 1; j >= 0; j-- {
 			v := resolves[j]()
-			var exp interface{}
+			var exp any
 			if i > 0 {
 				exp = (i * chunkSize) - 1
 			}
@@ -208,7 +208,7 @@ func BenchmarkChunkedReverse1000(b *testing.B) {
 	chunkSize := 1000
 	N := b.N / chunkSize
 	for i := 0; i < N; i++ {
-		resolves := make([]func() interface{}, chunkSize)
+		resolves := make([]func() any, chunkSize)
 
 		for j := 0; j < chunkSize; j++ {
 			offset := i*chunkSize + j
@@ -217,7 +217,7 @@ func BenchmarkChunkedReverse1000(b *testing.B) {
 
 		for j := chunkSize - 1; j >= 0; j-- {
 			v := resolves[j]()
-			var exp interface{}
+			var exp any
 			if i > 0 {
 				exp = (i * chunkSize) - 1
 			}
@@ -237,7 +237,7 @@ func BenchmarkChunkedReverse1000(b *testing.B) {
 func BenchmarkSequential(b *testing.B) {
 	b.ReportAllocs()
 	c := New()
-	resolves := make([]func() interface{}, b.N)
+	resolves := make([]func() any, b.N)
 	for i := 0; i < b.N; i++ {
 		resolves[i] = c.Track(i, 1)
 	}

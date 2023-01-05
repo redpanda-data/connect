@@ -15,7 +15,7 @@ func authField() *service.ConfigField {
 			service.NewStringField("audience").
 				Description("OAuth2 audience.").
 				Default(""),
-			service.NewStringField("issuer_url").
+			service.NewURLField("issuer_url").
 				Description("OAuth2 issuer URL.").
 				Default(""),
 			service.NewStringField("private_key_file").
@@ -115,7 +115,7 @@ func (c *oAuth2Config) Validate() error {
 	return nil
 }
 
-// ToMap returns OAuth2Config as a map representing OAuth2 client credentails.
+// ToMap returns OAuth2Config as a map representing OAuth2 client credentials.
 func (c *oAuth2Config) ToMap() map[string]string {
 	// Pulsar docs: https://pulsar.apache.org/docs/en/2.8.0/security-oauth2/#go-client
 	return map[string]string{

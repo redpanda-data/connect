@@ -82,9 +82,8 @@ func init() {
 	err := service.RegisterBatchProcessor(
 		"sql_select", SelectProcessorConfig(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchProcessor, error) {
-			return NewSQLSelectProcessorFromConfig(conf, mgr.Logger())
+			return NewSQLSelectProcessorFromConfig(conf, mgr)
 		})
-
 	if err != nil {
 		panic(err)
 	}
@@ -106,9 +105,9 @@ type sqlSelectProcessor struct {
 
 // NewSQLSelectProcessorFromConfig returns an internal sql_select processor.
 // nolint:revive // Not bothered as this is internal anyway
-func NewSQLSelectProcessorFromConfig(conf *service.ParsedConfig, logger *service.Logger) (*sqlSelectProcessor, error) {
+func NewSQLSelectProcessorFromConfig(conf *service.ParsedConfig, mgr *service.Resources) (*sqlSelectProcessor, error) {
 	s := &sqlSelectProcessor{
-		logger:  logger,
+		logger:  mgr.Logger(),
 		shutSig: shutdown.NewSignaller(),
 	}
 
@@ -147,6 +146,8 @@ func NewSQLSelectProcessorFromConfig(conf *service.ParsedConfig, logger *service
 	s.builder = squirrel.Select(columns...).From(tableStr)
 	if driverStr == "postgres" || driverStr == "clickhouse" {
 		s.builder = s.builder.PlaceholderFormat(squirrel.Dollar)
+	} else if driverStr == "oracle" {
+		s.builder = s.builder.PlaceholderFormat(squirrel.Colon)
 	}
 
 	if conf.Contains("prefix") {
@@ -165,15 +166,15 @@ func NewSQLSelectProcessorFromConfig(conf *service.ParsedConfig, logger *service
 		s.builder = s.builder.Suffix(suffixStr)
 	}
 
-	connSettings, err := connSettingsFromParsed(conf)
+	connSettings, err := connSettingsFromParsed(conf, mgr)
 	if err != nil {
 		return nil, err
 	}
 
-	if s.db, err = sqlOpenWithReworks(logger, driverStr, dsnStr); err != nil {
+	if s.db, err = sqlOpenWithReworks(mgr.Logger(), driverStr, dsnStr); err != nil {
 		return nil, err
 	}
-	connSettings.apply(s.db)
+	connSettings.apply(context.Background(), s.db, s.logger)
 
 	go func() {
 		<-s.shutSig.CloseNowChan()
@@ -193,7 +194,7 @@ func (s *sqlSelectProcessor) ProcessBatch(ctx context.Context, batch service.Mes
 
 	batch = batch.Copy()
 	for i, msg := range batch {
-		var args []interface{}
+		var args []any
 		if s.argsMapping != nil {
 			resMsg, err := batch.BloblangQuery(i, s.argsMapping)
 			if err != nil {
@@ -210,7 +211,7 @@ func (s *sqlSelectProcessor) ProcessBatch(ctx context.Context, batch service.Mes
 			}
 
 			var ok bool
-			if args, ok = iargs.([]interface{}); !ok {
+			if args, ok = iargs.([]any); !ok {
 				s.logger.Debugf("Mapping returned non-array result: %T", iargs)
 				msg.SetError(fmt.Errorf("mapping returned non-array result: %T", iargs))
 				continue

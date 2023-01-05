@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/benthosdev/benthos/v4/internal/component/output"
-	"github.com/benthosdev/benthos/v4/internal/log"
+	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
 )
 
@@ -55,7 +55,7 @@ func TestWebsocketOutputBasic(t *testing.T) {
 		conf.URL = wsURL.String()
 	}
 
-	m, err := newWebsocketWriter(conf, log.Noop())
+	m, err := newWebsocketWriter(conf, mock.NewManager())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -98,7 +98,7 @@ func TestWebsocketOutputClose(t *testing.T) {
 		conf.URL = wsURL.String()
 	}
 
-	m, err := newWebsocketWriter(conf, log.Noop())
+	m, err := newWebsocketWriter(conf, mock.NewManager())
 	if err != nil {
 		t.Fatal(err)
 	}

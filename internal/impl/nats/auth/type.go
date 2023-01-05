@@ -6,7 +6,7 @@ type Config struct {
 	UserCredentialsFile string `json:"user_credentials_file" yaml:"user_credentials_file"`
 }
 
-// New creates a new Config instance
+// New creates a new Config instance.
 func New() Config {
 	return Config{
 		NKeyFile:            "",

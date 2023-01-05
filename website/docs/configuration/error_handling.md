@@ -69,7 +69,7 @@ pipeline:
   processors:
     - resource: foo # Processor that might fail
     - catch:
-      - bloblang: |
+      - mapping: |
           root = this
           root.meta.error = error()
 ```
@@ -95,12 +95,12 @@ This loop will block the pipeline and prevent the blocking message from being ac
 
 ## Drop Failed Messages
 
-In order to filter out any failed messages from your pipeline you can use a [`bloblang` processor][processor.bloblang]:
+In order to filter out any failed messages from your pipeline you can use a [`mapping` processor][processor.mapping]:
 
 ```yaml
 pipeline:
   processors:
-    - bloblang: root = if errored() { deleted() }
+    - mapping: root = if errored() { deleted() }
 ```
 
 This will remove any failed messages from a batch. Furthermore, dropping a message will propagate an acknowledgement (also known as "ack") upstream to the pipeline's input.
@@ -142,7 +142,7 @@ output:
 When the source of a rejected message is a sequential input without support for conventional nacks, such as the Kafka or file inputs, a rejected message will be reprocessed from scratch, applying back pressure until it is successfully processed. This can also sometimes be a useful pattern.
 
 [processors]: /docs/components/processors/about
-[processor.bloblang]: /docs/components/processors/bloblang
+[processor.mapping]: /docs/components/processors/mapping
 [processor.switch]: /docs/components/processors/switch
 [processor.while]: /docs/components/processors/while
 [processor.for_each]: /docs/components/processors/for_each

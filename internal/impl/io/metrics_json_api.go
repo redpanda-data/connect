@@ -44,7 +44,7 @@ func newJSONAPI(config metrics.Config, nm bundle.NewManagement) (metrics.Type, e
 
 func (h *jsonAPIMetrics) HandlerFunc() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		values := map[string]interface{}{}
+		values := map[string]any{}
 		for k, v := range h.local.GetCounters() {
 			values[k] = v
 		}

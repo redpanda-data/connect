@@ -1,9 +1,24 @@
 package message
 
 import (
+	"bytes"
 	"encoding/json"
-	"fmt"
+	"errors"
+	"io"
+	"os"
+	"strconv"
+	"time"
 )
+
+var useNumber = true
+
+func init() {
+	if os.Getenv("BENTHOS_USE_NUMBER") == "false" {
+		useNumber = false
+	}
+}
+
+//------------------------------------------------------------------------------
 
 // GetAllBytes returns a 2D byte slice representing the raw byte content of the
 // parts of a message.
@@ -21,66 +36,117 @@ func GetAllBytes(m Batch) [][]byte {
 
 //------------------------------------------------------------------------------
 
-func cloneMap(oldMap map[string]interface{}) (map[string]interface{}, error) {
-	var err error
-	newMap := make(map[string]interface{}, len(oldMap))
-	for k, v := range oldMap {
-		if newMap[k], err = cloneGeneric(v); err != nil {
-			return nil, err
-		}
+func decodeJSON(rawBytes []byte) (structured any, err error) {
+	dec := json.NewDecoder(bytes.NewReader(rawBytes))
+	if useNumber {
+		dec.UseNumber()
 	}
-	return newMap, nil
+
+	if err = dec.Decode(&structured); err != nil {
+		return
+	}
+
+	var dummy json.RawMessage
+	if err = dec.Decode(&dummy); errors.Is(err, io.EOF) {
+		err = nil
+		return
+	}
+
+	structured = nil
+	if err = dec.Decode(&dummy); err == nil || err == io.EOF {
+		err = errors.New("message contains multiple valid documents")
+	}
+	return
 }
 
-func cloneCheekyMap(oldMap map[interface{}]interface{}) (map[interface{}]interface{}, error) {
-	var err error
-	newMap := make(map[interface{}]interface{}, len(oldMap))
-	for k, v := range oldMap {
-		if newMap[k], err = cloneGeneric(v); err != nil {
-			return nil, err
-		}
+func encodeJSON(d any) (rawBytes []byte) {
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf)
+	enc.SetEscapeHTML(false)
+	if err := enc.Encode(d); err != nil {
+		return nil
 	}
-	return newMap, nil
+	if buf.Len() > 1 {
+		rawBytes = buf.Bytes()[:buf.Len()-1]
+	}
+	return
 }
 
-func cloneSlice(oldSlice []interface{}) ([]interface{}, error) {
-	var err error
-	newSlice := make([]interface{}, len(oldSlice))
+// Copy of query.IToString
+func metaToString(i any) string {
+	switch t := i.(type) {
+	case string:
+		return t
+	case []byte:
+		return string(t)
+	case int64:
+		return strconv.FormatInt(t, 10)
+	case uint64:
+		return strconv.FormatUint(t, 10)
+	case float64:
+		return strconv.FormatFloat(t, 'g', -1, 64)
+	case json.Number:
+		return t.String()
+	case bool:
+		if t {
+			return "true"
+		}
+		return "false"
+	case time.Time:
+		return t.Format(time.RFC3339Nano)
+	case nil:
+		return `null`
+	}
+	// Last resort
+	return string(encodeJSON(i))
+}
+
+//------------------------------------------------------------------------------
+
+func cloneMap(oldMap map[string]any) map[string]any {
+	newMap := make(map[string]any, len(oldMap))
+	for k, v := range oldMap {
+		newMap[k] = cloneGeneric(v)
+	}
+	return newMap
+}
+
+func cloneCheekyMap(oldMap map[any]any) map[any]any {
+	newMap := make(map[any]any, len(oldMap))
+	for k, v := range oldMap {
+		newMap[k] = cloneGeneric(v)
+	}
+	return newMap
+}
+
+func cloneSlice(oldSlice []any) []any {
+	newSlice := make([]any, len(oldSlice))
 	for i, v := range oldSlice {
-		if newSlice[i], err = cloneGeneric(v); err != nil {
-			return nil, err
-		}
+		newSlice[i] = cloneGeneric(v)
 	}
-	return newSlice, nil
+	return newSlice
 }
 
 // cloneGeneric is a utility function that recursively copies a generic
 // structure usually resulting from a JSON parse.
-func cloneGeneric(root interface{}) (interface{}, error) {
+func cloneGeneric(root any) any {
 	switch t := root.(type) {
-	case map[string]interface{}:
+	case map[string]any:
 		return cloneMap(t)
-	case map[interface{}]interface{}:
+	case map[any]any:
 		return cloneCheekyMap(t)
-	case []interface{}:
+	case []any:
 		return cloneSlice(t)
-	case string, []byte, json.Number, uint64, int, int64, float64, bool, json.RawMessage:
-		return t, nil
 	default:
-		// Oops, this means we have 'dirty' types within the JSON object. Our
-		// only way to fallback is to marshal/unmarshal the structure, gross!
-		if b, err := json.Marshal(root); err == nil {
-			var rootCopy interface{}
-			if err = json.Unmarshal(b, &rootCopy); err == nil {
-				return rootCopy, nil
-			}
-		}
-		return nil, fmt.Errorf("unrecognised type: %T", t)
+		// Oops, this means we have 'dirty' types within the object, we pass
+		// these through uncloned and hope that the author knows what they're
+		// doing.
+		return root
 	}
 }
 
 // CopyJSON recursively creates a deep copy of a JSON structure extracted from a
 // message part.
-func CopyJSON(root interface{}) (interface{}, error) {
+func CopyJSON(root any) any {
 	return cloneGeneric(root)
 }

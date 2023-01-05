@@ -12,6 +12,7 @@ type AzureTableStorageConfig struct {
 	RowKey                  string             `json:"row_key" yaml:"row_key"`
 	Properties              map[string]string  `json:"properties" yaml:"properties"`
 	InsertType              string             `json:"insert_type" yaml:"insert_type"`
+	TransactionType         string             `json:"transaction_type" yaml:"transaction_type"`
 	Timeout                 string             `json:"timeout" yaml:"timeout"`
 	MaxInFlight             int                `json:"max_in_flight" yaml:"max_in_flight"`
 	Batching                batchconfig.Config `json:"batching" yaml:"batching"`
@@ -27,7 +28,8 @@ func NewAzureTableStorageConfig() AzureTableStorageConfig {
 		PartitionKey:            "",
 		RowKey:                  "",
 		Properties:              map[string]string{},
-		InsertType:              "INSERT",
+		InsertType:              "",
+		TransactionType:         "INSERT",
 		Timeout:                 "5s",
 		MaxInFlight:             64,
 		Batching:                batchconfig.NewConfig(),

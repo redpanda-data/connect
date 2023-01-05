@@ -26,7 +26,7 @@ pipeline:
         operator: add
         key: '${! json("message.id") }'
         value: "storeme"
-    - bloblang: root = if errored() { deleted() }
+    - mapping: root = if errored() { deleted() }
 ```
 
 For the simple case where you wish to store messages in a cache as an output destination for your pipeline check out the [`cache` output][output.cache]. To see examples of more advanced uses of caches such as hydration and deduplication check out the [`cache` processor][processor.cache]. 

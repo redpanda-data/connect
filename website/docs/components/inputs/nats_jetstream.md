@@ -82,10 +82,16 @@ This input adds the following metadata fields to each message:
 
 ```text
 - nats_subject
+- nats_sequence_stream
+- nats_sequence_consumer
+- nats_num_delivered
+- nats_num_pending
+- nats_domain
+- nats_timestamp_unix_nano
 ```
 
 You can access these metadata fields using
-[function interpolation](/docs/configuration/interpolation#metadata).
+[function interpolation](/docs/configuration/interpolation#bloblang-queries).
 
 ### Authentication
 
@@ -253,6 +259,9 @@ Requires version 3.45.0 or newer
 ### `tls.root_cas`
 
 An optional root certificate authority to use. This is a string, representing a certificate chain from the parent trusted root certificate, to possible intermediate signing certificates, to the host certificate.
+:::warning Secret
+This field contains sensitive information that usually shouldn't be added to a config directly, read our [secrets page for more info](/docs/configuration/secrets).
+:::
 
 
 Type: `string`  
@@ -311,6 +320,9 @@ Default: `""`
 ### `tls.client_certs[].key`
 
 A plain text certificate key to use.
+:::warning Secret
+This field contains sensitive information that usually shouldn't be added to a config directly, read our [secrets page for more info](/docs/configuration/secrets).
+:::
 
 
 Type: `string`  
@@ -334,7 +346,10 @@ Default: `""`
 
 ### `tls.client_certs[].password`
 
-A plain text password for when the private key is a password encrypted PEM block according to RFC 1423. Warning: Since it does not authenticate the ciphertext, it is vulnerable to padding oracle attacks that can let an attacker recover the plaintext.
+A plain text password for when the private key is password encrypted in PKCS#1 or PKCS#8 format. The obsolete `pbeWithMD5AndDES-CBC` algorithm is not supported for the PKCS#8 format. Warning: Since it does not authenticate the ciphertext, it is vulnerable to padding oracle attacks that can let an attacker recover the plaintext.
+:::warning Secret
+This field contains sensitive information that usually shouldn't be added to a config directly, read our [secrets page for more info](/docs/configuration/secrets).
+:::
 
 
 Type: `string`  

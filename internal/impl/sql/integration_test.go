@@ -3,10 +3,7 @@ package sql_test
 import (
 	"context"
 	"database/sql"
-	"flag"
 	"fmt"
-	"regexp"
-	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -18,9 +15,11 @@ import (
 	"github.com/stretchr/testify/require"
 
 	isql "github.com/benthosdev/benthos/v4/internal/impl/sql"
+	"github.com/benthosdev/benthos/v4/internal/integration"
 	"github.com/benthosdev/benthos/v4/public/service"
 
 	_ "github.com/benthosdev/benthos/v4/public/components/pure"
+	_ "github.com/benthosdev/benthos/v4/public/components/sql"
 )
 
 type testFn func(t *testing.T, driver, dsn, table string)
@@ -29,19 +28,19 @@ func testProcessors(name string, fn func(t *testing.T, insertProc, selectProc se
 	return func(t *testing.T, driver, dsn, table string) {
 		t.Run(name, func(t *testing.T) {
 			insertConf := fmt.Sprintf(`
-driver: %v
-dsn: %v
-table: %v
-columns: [ foo, bar, baz ]
+driver: %s
+dsn: %s
+table: %s
+columns: [ "\"foo\"", "\"bar\"", "\"baz\"" ]
 args_mapping: 'root = [ this.foo, this.bar.floor(), this.baz ]'
 `, driver, dsn, table)
 
 			queryConf := fmt.Sprintf(`
-driver: %v
-dsn: %v
-table: %v
-columns: [ foo, bar, baz ]
-where: foo = ?
+driver: %s
+dsn: %s
+table: %s
+columns: [ "\"foo\"", "\"bar\"", "\"baz\"" ]
+where: '"foo" = ?'
 args_mapping: 'root = [ this.id ]'
 `, driver, dsn, table)
 
@@ -53,11 +52,11 @@ args_mapping: 'root = [ this.id ]'
 			selectConfig, err := isql.SelectProcessorConfig().ParseYAML(queryConf, env)
 			require.NoError(t, err)
 
-			insertProc, err := isql.NewSQLInsertProcessorFromConfig(insertConfig, nil)
+			insertProc, err := isql.NewSQLInsertProcessorFromConfig(insertConfig, service.MockResources())
 			require.NoError(t, err)
 			t.Cleanup(func() { insertProc.Close(context.Background()) })
 
-			selectProc, err := isql.NewSQLSelectProcessorFromConfig(selectConfig, nil)
+			selectProc, err := isql.NewSQLSelectProcessorFromConfig(selectConfig, service.MockResources())
 			require.NoError(t, err)
 			t.Cleanup(func() { selectProc.Close(context.Background()) })
 
@@ -72,11 +71,13 @@ func testRawProcessors(name string, fn func(t *testing.T, insertProc, selectProc
 			valuesStr := `(?, ?, ?)`
 			if driver == "postgres" || driver == "clickhouse" {
 				valuesStr = `($1, $2, $3)`
+			} else if driver == "oracle" {
+				valuesStr = `(:1, :2, :3)`
 			}
 			insertConf := fmt.Sprintf(`
-driver: %v
-dsn: %v
-query: insert into %v ( foo, bar, baz ) values `+valuesStr+`
+driver: %s
+dsn: %s
+query: insert into %s ( "foo", "bar", "baz" ) values `+valuesStr+`
 args_mapping: 'root = [ this.foo, this.bar.floor(), this.baz ]'
 exec_only: true
 `, driver, dsn, table)
@@ -84,11 +85,13 @@ exec_only: true
 			placeholderStr := "?"
 			if driver == "postgres" || driver == "clickhouse" {
 				placeholderStr = "$1"
+			} else if driver == "oracle" {
+				placeholderStr = ":1"
 			}
 			queryConf := fmt.Sprintf(`
-driver: %v
-dsn: %v
-query: select foo, bar, baz from %v where foo = `+placeholderStr+`
+driver: %s
+dsn: %s
+query: select "foo", "bar", "baz" from %s where "foo" = `+placeholderStr+`
 args_mapping: 'root = [ this.id ]'
 `, driver, dsn, table)
 
@@ -100,11 +103,11 @@ args_mapping: 'root = [ this.id ]'
 			selectConfig, err := isql.RawProcessorConfig().ParseYAML(queryConf, env)
 			require.NoError(t, err)
 
-			insertProc, err := isql.NewSQLRawProcessorFromConfig(insertConfig, nil)
+			insertProc, err := isql.NewSQLRawProcessorFromConfig(insertConfig, service.MockResources())
 			require.NoError(t, err)
 			t.Cleanup(func() { insertProc.Close(context.Background()) })
 
-			selectProc, err := isql.NewSQLRawProcessorFromConfig(selectConfig, nil)
+			selectProc, err := isql.NewSQLRawProcessorFromConfig(selectConfig, service.MockResources())
 			require.NoError(t, err)
 			t.Cleanup(func() { selectProc.Close(context.Background()) })
 
@@ -119,22 +122,26 @@ func testRawDeprecatedProcessors(name string, fn func(t *testing.T, insertProc, 
 			valuesStr := `(?, ?, ?)`
 			if driver == "postgres" || driver == "clickhouse" {
 				valuesStr = `($1, $2, $3)`
+			} else if driver == "oracle" {
+				valuesStr = `(:1, :2, :3)`
 			}
 			insertConf := fmt.Sprintf(`
-driver: %v
-data_source_name: %v
-query: insert into %v ( foo, bar, baz ) values `+valuesStr+`
+driver: %s
+data_source_name: %s
+query: insert into %s ( "foo", "bar", "baz" ) values `+valuesStr+`
 args_mapping: 'root = [ this.foo, this.bar.floor(), this.baz ]'
 `, driver, dsn, table)
 
 			placeholderStr := "?"
 			if driver == "postgres" || driver == "clickhouse" {
 				placeholderStr = "$1"
+			} else if driver == "oracle" {
+				placeholderStr = ":1"
 			}
 			queryConf := fmt.Sprintf(`
-driver: %v
-data_source_name: %v
-query: select foo, bar, baz from %v where foo = `+placeholderStr+`
+driver: %s
+data_source_name: %s
+query: select "foo", "bar", "baz" from %s where "foo" = `+placeholderStr+`
 args_mapping: 'root = [ this.id ]'
 result_codec: json_array
 `, driver, dsn, table)
@@ -147,11 +154,11 @@ result_codec: json_array
 			selectConfig, err := isql.DeprecatedProcessorConfig().ParseYAML(queryConf, env)
 			require.NoError(t, err)
 
-			insertProc, err := isql.NewSQLDeprecatedProcessorFromConfig(insertConfig, nil)
+			insertProc, err := isql.NewSQLDeprecatedProcessorFromConfig(insertConfig, service.MockResources())
 			require.NoError(t, err)
 			t.Cleanup(func() { insertProc.Close(context.Background()) })
 
-			selectProc, err := isql.NewSQLDeprecatedProcessorFromConfig(selectConfig, nil)
+			selectProc, err := isql.NewSQLDeprecatedProcessorFromConfig(selectConfig, service.MockResources())
 			require.NoError(t, err)
 			t.Cleanup(func() { selectProc.Close(context.Background()) })
 
@@ -164,8 +171,8 @@ var testBatchProcessorBasic = testProcessors("basic", func(t *testing.T, insertP
 	var insertBatch service.MessageBatch
 	for i := 0; i < 10; i++ {
 		insertBatch = append(insertBatch, service.NewMessage([]byte(fmt.Sprintf(`{
-  "foo": "doc-%v",
-  "bar": %v,
+  "foo": "doc-%d",
+  "bar": %d,
   "baz": "and this"
 }`, i, i))))
 	}
@@ -180,7 +187,7 @@ var testBatchProcessorBasic = testProcessors("basic", func(t *testing.T, insertP
 
 	var queryBatch service.MessageBatch
 	for i := 0; i < 10; i++ {
-		queryBatch = append(queryBatch, service.NewMessage([]byte(fmt.Sprintf(`{"id":"doc-%v"}`, i))))
+		queryBatch = append(queryBatch, service.NewMessage([]byte(fmt.Sprintf(`{"id":"doc-%d"}`, i))))
 	}
 
 	resBatches, err = selectProc.ProcessBatch(context.Background(), queryBatch)
@@ -190,7 +197,7 @@ var testBatchProcessorBasic = testProcessors("basic", func(t *testing.T, insertP
 	for i, v := range resBatches[0] {
 		require.NoError(t, v.GetError())
 
-		exp := fmt.Sprintf(`[{"bar":%v,"baz":"and this","foo":"doc-%v"}]`, i, i)
+		exp := fmt.Sprintf(`[{"bar":%d,"baz":"and this","foo":"doc-%d"}]`, i, i)
 		actBytes, err := v.AsBytes()
 		require.NoError(t, err)
 
@@ -208,8 +215,8 @@ var testBatchProcessorParallel = testProcessors("parallel", func(t *testing.T, i
 		for j := 0; j < nLoops; j++ {
 			index := i*nLoops + j
 			insertBatch = append(insertBatch, service.NewMessage([]byte(fmt.Sprintf(`{
-  "foo": "doc-%v",
-  "bar": %v,
+  "foo": "doc-%d",
+  "bar": %d,
   "baz": "and this"
 }`, index, index))))
 		}
@@ -235,7 +242,7 @@ var testBatchProcessorParallel = testProcessors("parallel", func(t *testing.T, i
 
 		for j := 0; j < nLoops; j++ {
 			index := i*nLoops + j
-			queryBatch = append(queryBatch, service.NewMessage([]byte(fmt.Sprintf(`{"id":"doc-%v"}`, index))))
+			queryBatch = append(queryBatch, service.NewMessage([]byte(fmt.Sprintf(`{"id":"doc-%d"}`, index))))
 		}
 
 		wg.Add(1)
@@ -260,8 +267,8 @@ var testRawProcessorsBasic = testRawProcessors("raw", func(t *testing.T, insertP
 	var insertBatch service.MessageBatch
 	for i := 0; i < 10; i++ {
 		insertBatch = append(insertBatch, service.NewMessage([]byte(fmt.Sprintf(`{
-  "foo": "doc-%v",
-  "bar": %v,
+  "foo": "doc-%d",
+  "bar": %d,
   "baz": "and this"
 }`, i, i))))
 	}
@@ -276,7 +283,7 @@ var testRawProcessorsBasic = testRawProcessors("raw", func(t *testing.T, insertP
 
 	var queryBatch service.MessageBatch
 	for i := 0; i < 10; i++ {
-		queryBatch = append(queryBatch, service.NewMessage([]byte(fmt.Sprintf(`{"id":"doc-%v"}`, i))))
+		queryBatch = append(queryBatch, service.NewMessage([]byte(fmt.Sprintf(`{"id":"doc-%d"}`, i))))
 	}
 
 	resBatches, err = selectProc.ProcessBatch(context.Background(), queryBatch)
@@ -286,7 +293,7 @@ var testRawProcessorsBasic = testRawProcessors("raw", func(t *testing.T, insertP
 	for i, v := range resBatches[0] {
 		require.NoError(t, v.GetError())
 
-		exp := fmt.Sprintf(`[{"bar":%v,"baz":"and this","foo":"doc-%v"}]`, i, i)
+		exp := fmt.Sprintf(`[{"bar":%d,"baz":"and this","foo":"doc-%d"}]`, i, i)
 		actBytes, err := v.AsBytes()
 		require.NoError(t, err)
 
@@ -298,8 +305,8 @@ var testDeprecatedProcessorsBasic = testRawDeprecatedProcessors("deprecated", fu
 	var insertBatch service.MessageBatch
 	for i := 0; i < 10; i++ {
 		insertBatch = append(insertBatch, service.NewMessage([]byte(fmt.Sprintf(`{
-  "foo": "doc-%v",
-  "bar": %v,
+  "foo": "doc-%d",
+  "bar": %d,
   "baz": "and this"
 }`, i, i))))
 	}
@@ -314,7 +321,7 @@ var testDeprecatedProcessorsBasic = testRawDeprecatedProcessors("deprecated", fu
 
 	var queryBatch service.MessageBatch
 	for i := 0; i < 10; i++ {
-		queryBatch = append(queryBatch, service.NewMessage([]byte(fmt.Sprintf(`{"id":"doc-%v"}`, i))))
+		queryBatch = append(queryBatch, service.NewMessage([]byte(fmt.Sprintf(`{"id":"doc-%d"}`, i))))
 	}
 
 	resBatches, err = selectProc.ProcessBatch(context.Background(), queryBatch)
@@ -324,7 +331,7 @@ var testDeprecatedProcessorsBasic = testRawDeprecatedProcessors("deprecated", fu
 	for i, v := range resBatches[0] {
 		require.NoError(t, v.GetError())
 
-		exp := fmt.Sprintf(`[{"bar":%v,"baz":"and this","foo":"doc-%v"}]`, i, i)
+		exp := fmt.Sprintf(`[{"bar":%d,"baz":"and this","foo":"doc-%d"}]`, i, i)
 		actBytes, err := v.AsBytes()
 		require.NoError(t, err)
 
@@ -345,7 +352,7 @@ sql_insert:
   driver: $driver
   dsn: $dsn
   table: $table
-  columns: [ foo, bar, baz ]
+  columns: [ "\"foo\"", "\"bar\"", "\"baz\"" ]
   args_mapping: 'root = [ this.foo, this.bar.floor(), this.baz ]'
 `)
 
@@ -355,7 +362,7 @@ sql_select:
   dsn: $dsn
   table: $table
   columns: [ "*" ]
-  suffix: ' ORDER BY bar ASC'
+  suffix: ' ORDER BY "bar" ASC'
 processors:
   # For some reason MySQL driver doesn't resolve to integer by default.
   - bloblang: |
@@ -395,13 +402,13 @@ processors:
 		var insertBatch service.MessageBatch
 		for i := 0; i < 10; i++ {
 			insertBatch = append(insertBatch, service.NewMessage([]byte(fmt.Sprintf(`{
-	"foo": "doc-%v",
-	"bar": %v,
+	"foo": "doc-%d",
+	"bar": %d,
 	"baz": "and this"
 }`, i, i))))
 		}
 		require.NoError(t, inFn(context.Background(), insertBatch))
-		require.NoError(t, streamIn.StopWithin(time.Second))
+		require.NoError(t, streamIn.StopWithin(15*time.Second))
 
 		require.NoError(t, streamOut.Run(context.Background()))
 
@@ -431,23 +438,23 @@ func testBatchInputOutputRaw(t *testing.T, driver, dsn, table string) {
 		valuesStr := `(?, ?, ?)`
 		if driver == "postgres" || driver == "clickhouse" {
 			valuesStr = `($1, $2, $3)`
+		} else if driver == "oracle" {
+			valuesStr = `(:1, :2, :3)`
 		}
 
 		outputConf := confReplacer.Replace(`
 sql_raw:
   driver: $driver
   dsn: $dsn
-  query: insert into $table (foo, bar, baz) values ` + valuesStr + `
+  query: insert into $table ("foo", "bar", "baz") values ` + valuesStr + `
   args_mapping: 'root = [ this.foo, this.bar.floor(), this.baz ]'
 `)
 
 		inputConf := confReplacer.Replace(`
-sql_select:
+sql_raw:
   driver: $driver
   dsn: $dsn
-  table: $table
-  columns: [ "*" ]
-  suffix: ' ORDER BY bar ASC'
+  query: 'select * from $table ORDER BY "bar" ASC'
 processors:
   # For some reason MySQL driver doesn't resolve to integer by default.
   - bloblang: |
@@ -487,13 +494,13 @@ processors:
 		var insertBatch service.MessageBatch
 		for i := 0; i < 10; i++ {
 			insertBatch = append(insertBatch, service.NewMessage([]byte(fmt.Sprintf(`{
-	"foo": "doc-%v",
-	"bar": %v,
+	"foo": "doc-%d",
+	"bar": %d,
 	"baz": "and this"
 }`, i, i))))
 		}
 		require.NoError(t, inFn(context.Background(), insertBatch))
-		require.NoError(t, streamIn.StopWithin(time.Second))
+		require.NoError(t, streamIn.StopWithin(15*time.Second))
 
 		require.NoError(t, streamOut.Run(context.Background()))
 
@@ -530,15 +537,15 @@ func testSuite(t *testing.T, driver, dsn string, createTableFn func(string) erro
 }
 
 func TestIntegration(t *testing.T) {
-	if m := flag.Lookup("test.run").Value.String(); m == "" || regexp.MustCompile(strings.Split(m, "/")[0]).FindString(t.Name()) == "" {
-		t.Skip("Skipping as execution was not requested explicitly using go test -run ^TestIntegration$")
-	}
+	integration.CheckSkip(t)
 
 	t.Run("clickhouse", clickhouseIntegration)
 	t.Run("clickhouse_old", clickhouseOldIntegration)
 	t.Run("postgres", postgresIntegration)
 	t.Run("mysql", mySQLIntegration)
 	t.Run("mssql", msSQLIntegration)
+	t.Run("sqlite", sqliteIntegration)
+	t.Run("oracle", oracleIntegration)
 }
 
 func clickhouseIntegration(t *testing.T) {
@@ -548,7 +555,7 @@ func clickhouseIntegration(t *testing.T) {
 	if err != nil {
 		t.Skipf("Could not connect to docker: %s", err)
 	}
-	pool.MaxWait = 30 * time.Second
+	pool.MaxWait = 3 * time.Minute
 
 	resource, err := pool.RunWithOptions(&dockertest.RunOptions{
 		Repository:   "clickhouse/clickhouse-server",
@@ -559,7 +566,7 @@ func clickhouseIntegration(t *testing.T) {
 	var db *sql.DB
 	t.Cleanup(func() {
 		if err = pool.Purge(resource); err != nil {
-			t.Logf("Failed to clean up docker resource: %v", err)
+			t.Logf("Failed to clean up docker resource: %s", err)
 		}
 		if db != nil {
 			db.Close()
@@ -567,15 +574,15 @@ func clickhouseIntegration(t *testing.T) {
 	})
 
 	createTable := func(name string) error {
-		_, err := db.Exec(fmt.Sprintf(`create table %v (
-  foo String,
-  bar Int64,
-  baz String
-) engine=Memory;`, name))
+		_, err := db.Exec(fmt.Sprintf(`create table %s (
+  "foo" String,
+  "bar" Int64,
+  "baz" String
+		) engine=Memory;`, name))
 		return err
 	}
 
-	dsn := fmt.Sprintf("clickhouse://localhost:%v/", resource.GetPort("9000/tcp"))
+	dsn := fmt.Sprintf("clickhouse://localhost:%s/", resource.GetPort("9000/tcp"))
 	require.NoError(t, pool.Retry(func() error {
 		db, err = sql.Open("clickhouse", dsn)
 		if err != nil {
@@ -602,7 +609,7 @@ func clickhouseOldIntegration(t *testing.T) {
 	if err != nil {
 		t.Skipf("Could not connect to docker: %s", err)
 	}
-	pool.MaxWait = 30 * time.Second
+	pool.MaxWait = 3 * time.Minute
 
 	resource, err := pool.RunWithOptions(&dockertest.RunOptions{
 		Repository:   "clickhouse/clickhouse-server",
@@ -613,7 +620,7 @@ func clickhouseOldIntegration(t *testing.T) {
 	var db *sql.DB
 	t.Cleanup(func() {
 		if err = pool.Purge(resource); err != nil {
-			t.Logf("Failed to clean up docker resource: %v", err)
+			t.Logf("Failed to clean up docker resource: %s", err)
 		}
 		if db != nil {
 			db.Close()
@@ -621,15 +628,15 @@ func clickhouseOldIntegration(t *testing.T) {
 	})
 
 	createTable := func(name string) error {
-		_, err := db.Exec(fmt.Sprintf(`create table %v (
-  foo String,
-  bar Int64,
-  baz String
-) engine=Memory;`, name))
+		_, err := db.Exec(fmt.Sprintf(`create table %s (
+  "foo" String,
+  "bar" Int64,
+  "baz" String
+		) engine=Memory;`, name))
 		return err
 	}
 
-	dsn := fmt.Sprintf("tcp://localhost:%v/", resource.GetPort("9000/tcp"))
+	dsn := fmt.Sprintf("tcp://localhost:%s/", resource.GetPort("9000/tcp"))
 	require.NoError(t, pool.Retry(func() error {
 		db, err = sql.Open("clickhouse", dsn)
 		if err != nil {
@@ -656,7 +663,7 @@ func postgresIntegration(t *testing.T) {
 	if err != nil {
 		t.Skipf("Could not connect to docker: %s", err)
 	}
-	pool.MaxWait = 30 * time.Second
+	pool.MaxWait = 3 * time.Minute
 
 	resource, err := pool.RunWithOptions(&dockertest.RunOptions{
 		Repository:   "postgres",
@@ -672,7 +679,7 @@ func postgresIntegration(t *testing.T) {
 	var db *sql.DB
 	t.Cleanup(func() {
 		if err = pool.Purge(resource); err != nil {
-			t.Logf("Failed to clean up docker resource: %v", err)
+			t.Logf("Failed to clean up docker resource: %s", err)
 		}
 		if db != nil {
 			db.Close()
@@ -680,16 +687,16 @@ func postgresIntegration(t *testing.T) {
 	})
 
 	createTable := func(name string) error {
-		_, err := db.Exec(fmt.Sprintf(`create table %v (
-  foo varchar(50) not null,
-  bar integer not null,
-  baz varchar(50) not null,
-  primary key (foo)
-);`, name))
+		_, err := db.Exec(fmt.Sprintf(`create table %s (
+  "foo" varchar(50) not null,
+  "bar" integer not null,
+  "baz" varchar(50) not null,
+  primary key ("foo")
+		)`, name))
 		return err
 	}
 
-	dsn := fmt.Sprintf("postgres://testuser:testpass@localhost:%v/testdb?sslmode=disable", resource.GetPort("5432/tcp"))
+	dsn := fmt.Sprintf("postgres://testuser:testpass@localhost:%s/testdb?sslmode=disable", resource.GetPort("5432/tcp"))
 	require.NoError(t, pool.Retry(func() error {
 		db, err = sql.Open("postgres", dsn)
 		if err != nil {
@@ -710,21 +717,20 @@ func postgresIntegration(t *testing.T) {
 }
 
 func mySQLIntegration(t *testing.T) {
-	if runtime.GOOS == "darwin" {
-		t.Skip("skipping test on macos")
-	}
-
 	t.Parallel()
 
 	pool, err := dockertest.NewPool("")
 	if err != nil {
 		t.Skipf("Could not connect to docker: %s", err)
 	}
-	pool.MaxWait = 30 * time.Second
+	pool.MaxWait = 3 * time.Minute
 
 	resource, err := pool.RunWithOptions(&dockertest.RunOptions{
 		Repository:   "mysql",
 		ExposedPorts: []string{"3306/tcp"},
+		Cmd: []string{
+			"--sql_mode=ANSI_QUOTES",
+		},
 		Env: []string{
 			"MYSQL_USER=testuser",
 			"MYSQL_PASSWORD=testpass",
@@ -737,7 +743,7 @@ func mySQLIntegration(t *testing.T) {
 	var db *sql.DB
 	t.Cleanup(func() {
 		if err = pool.Purge(resource); err != nil {
-			t.Logf("Failed to clean up docker resource: %v", err)
+			t.Logf("Failed to clean up docker resource: %s", err)
 		}
 		if db != nil {
 			db.Close()
@@ -745,16 +751,16 @@ func mySQLIntegration(t *testing.T) {
 	})
 
 	createTable := func(name string) error {
-		_, err := db.Exec(fmt.Sprintf(`create table %v (
-  foo varchar(50) not null,
-  bar integer not null,
-  baz varchar(50) not null,
-  primary key (foo)
-		);`, name))
+		_, err := db.Exec(fmt.Sprintf(`create table %s (
+  "foo" varchar(50) not null,
+  "bar" integer not null,
+  "baz" varchar(50) not null,
+  primary key ("foo")
+		)`, name))
 		return err
 	}
 
-	dsn := fmt.Sprintf("testuser:testpass@tcp(localhost:%v)/testdb", resource.GetPort("3306/tcp"))
+	dsn := fmt.Sprintf("testuser:testpass@tcp(localhost:%s)/testdb", resource.GetPort("3306/tcp"))
 	require.NoError(t, pool.Retry(func() error {
 		if db, err = sql.Open("mysql", dsn); err != nil {
 			return err
@@ -774,17 +780,13 @@ func mySQLIntegration(t *testing.T) {
 }
 
 func msSQLIntegration(t *testing.T) {
-	if runtime.GOOS == "darwin" {
-		t.Skip("skipping test on macos")
-	}
-
 	t.Parallel()
 
 	pool, err := dockertest.NewPool("")
 	if err != nil {
 		t.Skipf("Could not connect to docker: %s", err)
 	}
-	pool.MaxWait = 30 * time.Second
+	pool.MaxWait = 3 * time.Minute
 
 	testPassword := "ins4n3lyStrongP4ssword"
 	resource, err := pool.RunWithOptions(&dockertest.RunOptions{
@@ -800,7 +802,7 @@ func msSQLIntegration(t *testing.T) {
 	var db *sql.DB
 	t.Cleanup(func() {
 		if err = pool.Purge(resource); err != nil {
-			t.Logf("Failed to clean up docker resource: %v", err)
+			t.Logf("Failed to clean up docker resource: %s", err)
 		}
 		if db != nil {
 			db.Close()
@@ -808,16 +810,16 @@ func msSQLIntegration(t *testing.T) {
 	})
 
 	createTable := func(name string) error {
-		_, err := db.Exec(fmt.Sprintf(`create table %v (
-  foo varchar(50) not null,
-  bar integer not null,
-  baz varchar(50) not null,
-  primary key (foo)
-		);`, name))
+		_, err := db.Exec(fmt.Sprintf(`create table %s (
+  "foo" varchar(50) not null,
+  "bar" integer not null,
+  "baz" varchar(50) not null,
+  primary key ("foo")
+		)`, name))
 		return err
 	}
 
-	dsn := fmt.Sprintf("sqlserver://sa:"+testPassword+"@localhost:%v?database=master", resource.GetPort("1433/tcp"))
+	dsn := fmt.Sprintf("sqlserver://sa:"+testPassword+"@localhost:%s?database=master", resource.GetPort("1433/tcp"))
 	require.NoError(t, pool.Retry(func() error {
 		db, err = sql.Open("mssql", dsn)
 		if err != nil {
@@ -835,4 +837,107 @@ func msSQLIntegration(t *testing.T) {
 	}))
 
 	testSuite(t, "mssql", dsn, createTable)
+}
+
+func sqliteIntegration(t *testing.T) {
+	t.Parallel()
+
+	var db *sql.DB
+	var err error
+	t.Cleanup(func() {
+		if db != nil {
+			db.Close()
+		}
+	})
+
+	createTable := func(name string) error {
+		_, err := db.Exec(fmt.Sprintf(`create table %s (
+  "foo" varchar(50) not null,
+  "bar" integer not null,
+  "baz" varchar(50) not null,
+  primary key ("foo")
+		)`, name))
+		return err
+	}
+
+	dsn := "file::memory:?cache=shared"
+
+	require.NoError(t, func() error {
+		db, err = sql.Open("sqlite", dsn)
+		if err != nil {
+			return err
+		}
+		if err = db.Ping(); err != nil {
+			db.Close()
+			db = nil
+			return err
+		}
+		if err := createTable("footable"); err != nil {
+			return err
+		}
+		return nil
+	}())
+
+	testSuite(t, "sqlite", dsn, createTable)
+}
+
+func oracleIntegration(t *testing.T) {
+	t.Parallel()
+
+	pool, err := dockertest.NewPool("")
+	if err != nil {
+		t.Skipf("Could not connect to docker: %s", err)
+	}
+	pool.MaxWait = 3 * time.Minute
+
+	resource, err := pool.RunWithOptions(&dockertest.RunOptions{
+		Repository:   "gvenzl/oracle-xe",
+		Tag:          "slim-faststart",
+		ExposedPorts: []string{"1521/tcp"},
+		Env: []string{
+			"ORACLE_PASSWORD=testpass",
+		},
+	})
+	require.NoError(t, err)
+
+	var db *sql.DB
+	t.Cleanup(func() {
+		if err = pool.Purge(resource); err != nil {
+			t.Logf("Failed to clean up docker resource: %s", err)
+		}
+		if db != nil {
+			db.Close()
+		}
+	})
+
+	createTable := func(name string) error {
+		_, err := db.Exec(fmt.Sprintf(`create table %s (
+  "foo" varchar(50) not null,
+  "bar" integer not null,
+  "baz" varchar(50) not null,
+  primary key ("foo")
+		)`, name))
+		return err
+	}
+
+	dsn := fmt.Sprintf("oracle://system:testpass@localhost:%s/XE", resource.GetPort("1521/tcp"))
+	require.NoError(t, pool.Retry(func() error {
+		db, err = sql.Open("oracle", dsn)
+		if err != nil {
+			return err
+		}
+
+		if err = db.Ping(); err != nil {
+			db.Close()
+			db = nil
+			return err
+		}
+
+		if err := createTable("footable"); err != nil {
+			return err
+		}
+		return nil
+	}))
+
+	testSuite(t, "oracle", dsn, createTable)
 }

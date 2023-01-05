@@ -192,7 +192,8 @@ func expectFromRetry(
 	resReturn error,
 	tChan <-chan message.Transaction,
 	t *testing.T,
-	responsesSlice ...string) {
+	responsesSlice ...string,
+) {
 	t.Helper()
 
 	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
@@ -345,17 +346,17 @@ func TestRetryMutations(t *testing.T) {
 	defer done()
 
 	inMsg := message.NewPart(nil)
-	inMsg.SetStructuredMut(map[string]interface{}{
+	inMsg.SetStructuredMut(map[string]any{
 		"hello": "world",
 	})
 
 	inBatch := message.Batch{inMsg}
 	select {
-	case readChan <- message.NewTransactionFunc(inBatch, func(ctx context.Context, err error) error {
+	case readChan <- message.NewTransactionFunc(inBatch, func(ctx context.Context, _ error) error {
 		inStruct, err := inMsg.AsStructuredMut()
 		require.NoError(t, err)
 
-		assert.Equal(t, map[string]interface{}{
+		assert.Equal(t, map[string]any{
 			"hello": "world",
 		}, inStruct)
 
@@ -378,7 +379,7 @@ func TestRetryMutations(t *testing.T) {
 
 		outStruct, err := ts.Payload.Get(0).AsStructuredMut()
 		require.NoError(t, err)
-		assert.Equal(t, map[string]interface{}{
+		assert.Equal(t, map[string]any{
 			"hello": "world",
 		}, outStruct)
 
@@ -395,7 +396,7 @@ func TestRetryMutations(t *testing.T) {
 
 	inStruct, err := inMsg.AsStructured()
 	require.NoError(t, err)
-	assert.Equal(t, map[string]interface{}{
+	assert.Equal(t, map[string]any{
 		"hello": "world",
 		"moo":   "quack",
 	}, inStruct)

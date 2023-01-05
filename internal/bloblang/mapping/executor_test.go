@@ -15,14 +15,14 @@ import (
 func TestAssignments(t *testing.T) {
 	type part struct {
 		Content string
-		Meta    map[string]string
+		Meta    map[string]any
 	}
 
 	metaKey := func(k string) *string {
 		return &k
 	}
 
-	initFunc := func(name string, args ...interface{}) query.Function {
+	initFunc := func(name string, args ...any) query.Function {
 		t.Helper()
 		fn, err := query.InitFunctionHelper(name, args...)
 		require.NoError(t, err)
@@ -54,7 +54,7 @@ func TestAssignments(t *testing.T) {
 		},
 		"append array at root": {
 			mapping: NewExecutor("", nil, nil,
-				NewStatement(nil, NewJSONAssignment(), query.NewLiteralFunction("", []interface{}{})),
+				NewStatement(nil, NewJSONAssignment(), query.NewLiteralFunction("", []any{})),
 				NewStatement(nil, NewJSONAssignment("-"), query.NewLiteralFunction("", "foo")),
 				NewStatement(nil, NewJSONAssignment("-"), query.NewLiteralFunction("", "bar")),
 				NewStatement(nil, NewJSONAssignment("-"), query.NewLiteralFunction("", "baz")),
@@ -64,7 +64,7 @@ func TestAssignments(t *testing.T) {
 		},
 		"append array at root nested": {
 			mapping: NewExecutor("", nil, nil,
-				NewStatement(nil, NewJSONAssignment(), query.NewLiteralFunction("", []interface{}{})),
+				NewStatement(nil, NewJSONAssignment(), query.NewLiteralFunction("", []any{})),
 				NewStatement(nil, NewJSONAssignment("-", "A"), query.NewLiteralFunction("", "foo")),
 				NewStatement(nil, NewJSONAssignment("-", "B"), query.NewLiteralFunction("", "bar")),
 				NewStatement(nil, NewJSONAssignment("-", "C"), query.NewLiteralFunction("", "baz")),
@@ -115,7 +115,7 @@ func TestAssignments(t *testing.T) {
 			input: []part{{Content: `{}`}},
 			output: &part{
 				Content: `{}`,
-				Meta: map[string]string{
+				Meta: map[string]any{
 					"foo": "exists now",
 				},
 			},
@@ -126,14 +126,14 @@ func TestAssignments(t *testing.T) {
 			),
 			input: []part{{
 				Content: `{}`,
-				Meta: map[string]string{
+				Meta: map[string]any{
 					"ignore": "me",
 					"and":    "delete me",
 				},
 			}},
 			output: &part{
 				Content: `{}`,
-				Meta: map[string]string{
+				Meta: map[string]any{
 					"ignore": "me",
 				},
 			},
@@ -147,21 +147,21 @@ func TestAssignments(t *testing.T) {
 		},
 		"meta set all": {
 			mapping: NewExecutor("", nil, nil,
-				NewStatement(nil, NewMetaAssignment(nil), query.NewLiteralFunction("", map[string]interface{}{
+				NewStatement(nil, NewMetaAssignment(nil), query.NewLiteralFunction("", map[string]any{
 					"new1": "value1",
 					"new2": "value2",
 				})),
 			),
 			input: []part{{
 				Content: `{}`,
-				Meta: map[string]string{
+				Meta: map[string]any{
 					"foo": "first",
 					"bar": "second",
 				},
 			}},
 			output: &part{
 				Content: `{}`,
-				Meta: map[string]string{
+				Meta: map[string]any{
 					"new1": "value1",
 					"new2": "value2",
 				},
@@ -173,7 +173,7 @@ func TestAssignments(t *testing.T) {
 			),
 			input: []part{{
 				Content: `{}`,
-				Meta: map[string]string{
+				Meta: map[string]any{
 					"foo": "first",
 					"bar": "second",
 				},
@@ -187,13 +187,13 @@ func TestAssignments(t *testing.T) {
 			),
 			input: []part{{
 				Content: `{}`,
-				Meta: map[string]string{
+				Meta: map[string]any{
 					"foo": "old value",
 				},
 			}},
 			output: &part{
 				Content: `{}`,
-				Meta: map[string]string{
+				Meta: map[string]any{
 					"foo": "new value",
 					"bar": "old value",
 				},
@@ -207,7 +207,7 @@ func TestAssignments(t *testing.T) {
 			input: []part{{Content: `{}`}},
 			output: &part{
 				Content: `{}`,
-				Meta: map[string]string{
+				Meta: map[string]any{
 					"foo": "exists now",
 					"bar": "exists now",
 				},
@@ -243,7 +243,7 @@ func TestAssignments(t *testing.T) {
 					part = message.NewPart(nil)
 				}
 				for k, v := range p.Meta {
-					part.MetaSet(k, v)
+					part.MetaSetMut(k, v)
 				}
 				msg = append(msg, part)
 			}
@@ -258,14 +258,14 @@ func TestAssignments(t *testing.T) {
 
 			if test.output != nil {
 				if test.output.Meta == nil {
-					test.output.Meta = map[string]string{}
+					test.output.Meta = map[string]any{}
 				}
 
 				newPart := part{
 					Content: string(resPart.AsBytes()),
-					Meta:    map[string]string{},
+					Meta:    map[string]any{},
 				}
-				_ = resPart.MetaIter(func(k, v string) error {
+				_ = resPart.MetaIterMut(func(k string, v any) error {
 					newPart.Meta[k] = v
 					return nil
 				})
@@ -279,7 +279,7 @@ func TestAssignments(t *testing.T) {
 }
 
 func TestTargets(t *testing.T) {
-	function := func(name string, args ...interface{}) query.Function {
+	function := func(name string, args ...any) query.Function {
 		t.Helper()
 		fn, err := query.InitFunctionHelper(name, args...)
 		require.NoError(t, err)
@@ -346,7 +346,7 @@ func TestExec(t *testing.T) {
 		return &k
 	}
 
-	function := func(name string, args ...interface{}) query.Function {
+	function := func(name string, args ...any) query.Function {
 		t.Helper()
 		fn, err := query.InitFunctionHelper(name, args...)
 		require.NoError(t, err)
@@ -355,8 +355,8 @@ func TestExec(t *testing.T) {
 
 	tests := map[string]struct {
 		mapping      *Executor
-		input        interface{}
-		output       interface{}
+		input        any
+		output       any
 		outputString string
 		err          string
 	}{
@@ -384,15 +384,15 @@ func TestExec(t *testing.T) {
 			mapping: NewExecutor("", nil, nil,
 				NewStatement(nil, NewJSONAssignment("foo"), query.NewFieldFunction("bar")),
 			),
-			input:        map[string]interface{}{"bar": "baz"},
-			output:       map[string]interface{}{"foo": "baz"},
+			input:        map[string]any{"bar": "baz"},
+			output:       map[string]any{"foo": "baz"},
 			outputString: `{"foo":"baz"}`,
 		},
 		"failed get": {
 			mapping: NewExecutor("", nil, nil,
 				NewStatement(nil, NewJSONAssignment("foo"), function("json", "bar.baz")),
 			),
-			input:        map[string]interface{}{"nope": "baz"},
+			input:        map[string]any{"nope": "baz"},
 			err:          "failed assignment (line 0): target message part does not exist",
 			outputString: "",
 		},
@@ -401,7 +401,7 @@ func TestExec(t *testing.T) {
 				NewStatement(nil, NewJSONAssignment("foo"), query.NewFieldFunction("does.not.exist")),
 			),
 			input:        `{"message":"hello world"}`,
-			output:       map[string]interface{}{"foo": nil},
+			output:       map[string]any{"foo": nil},
 			outputString: `{"foo":null}`,
 		},
 		"null get and set root": {
@@ -417,7 +417,7 @@ func TestExec(t *testing.T) {
 				NewStatement(nil, NewJSONAssignment(), query.NewLiteralFunction("", "hello world")),
 				NewStatement(nil, NewJSONAssignment("foo"), query.NewFieldFunction("bar")),
 			),
-			input: map[string]interface{}{"bar": "baz"},
+			input: map[string]any{"bar": "baz"},
 			err:   "failed to assign result (line 0): unable to set target path foo as the value of the root was a non-object type (string)",
 		},
 		"colliding set at path": {
@@ -425,7 +425,7 @@ func TestExec(t *testing.T) {
 				NewStatement(nil, NewJSONAssignment("foo"), query.NewLiteralFunction("", "hello world")),
 				NewStatement(nil, NewJSONAssignment("foo", "bar"), query.NewFieldFunction("bar")),
 			),
-			input: map[string]interface{}{"bar": "baz"},
+			input: map[string]any{"bar": "baz"},
 			err:   "failed to assign result (line 0): unable to set target path foo.bar as the value of foo was a non-object type (string)",
 		},
 	}
@@ -441,14 +441,26 @@ func TestExec(t *testing.T) {
 			} else {
 				assert.Equal(t, test.output, res)
 			}
-			resString := test.mapping.ToString(query.FunctionContext{
+
+			resString, err := test.mapping.ToString(query.FunctionContext{
 				MsgBatch: message.QuickBatch(nil),
 			}.WithValue(test.input))
-			assert.Equal(t, test.outputString, resString)
-			resBytes := test.mapping.ToBytes(query.FunctionContext{
+			if len(test.err) > 0 {
+				require.EqualError(t, err, test.err)
+			} else {
+				require.NoError(t, err)
+				assert.Equal(t, test.outputString, resString)
+			}
+
+			resBytes, err := test.mapping.ToBytes(query.FunctionContext{
 				MsgBatch: message.QuickBatch(nil),
 			}.WithValue(test.input))
-			assert.Equal(t, test.outputString, string(resBytes))
+			if len(test.err) > 0 {
+				require.EqualError(t, err, test.err)
+			} else {
+				require.NoError(t, err)
+				assert.Equal(t, test.outputString, string(resBytes))
+			}
 		})
 	}
 }
@@ -456,10 +468,10 @@ func TestExec(t *testing.T) {
 func TestQueries(t *testing.T) {
 	type part struct {
 		Content string
-		Meta    map[string]string
+		Meta    map[string]any
 	}
 
-	initFunc := func(name string, args ...interface{}) query.Function {
+	initFunc := func(name string, args ...any) query.Function {
 		t.Helper()
 		fn, err := query.InitFunctionHelper(name, args...)
 		require.NoError(t, err)
@@ -525,7 +537,7 @@ func TestQueries(t *testing.T) {
 			for _, p := range test.input {
 				part := message.NewPart([]byte(p.Content))
 				for k, v := range p.Meta {
-					part.MetaSet(k, v)
+					part.MetaSetMut(k, v)
 				}
 				msg = append(msg, part)
 			}

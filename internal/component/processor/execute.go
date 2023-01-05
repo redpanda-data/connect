@@ -3,10 +3,7 @@ package processor
 import (
 	"context"
 
-	"go.opentelemetry.io/otel/trace"
-
 	"github.com/benthosdev/benthos/v4/internal/message"
-	"github.com/benthosdev/benthos/v4/internal/tracing"
 )
 
 // ExecuteAll attempts to execute a slice of processors to a message. Returns
@@ -109,38 +106,4 @@ func ExecuteCatchAll(ctx context.Context, procs []V1, msgs ...message.Batch) ([]
 		resultBatches = append(resultBatches, b.batches...)
 	}
 	return resultBatches, nil
-}
-
-// IteratePartsWithSpanV2 iterates the parts of a message according to a slice
-// of indexes (if empty all parts are iterated) and calls a func for each part
-// along with a tracing span for that part. If an error is returned the part is
-// flagged as failed and the span has the error logged.
-func IteratePartsWithSpanV2(
-	tracer trace.TracerProvider,
-	operationName string, parts []int, msg message.Batch,
-	iter func(int, *tracing.Span, *message.Part) error,
-) {
-	exec := func(i int) {
-		part := msg.Get(i)
-		span := tracing.CreateChildSpan(tracer, operationName, part)
-
-		if err := iter(i, span, part); err != nil {
-			part.ErrorSet(err)
-			span.SetTag("error", "true")
-			span.LogKV(
-				"event", "error",
-				"type", err.Error(),
-			)
-		}
-		span.Finish()
-	}
-	if len(parts) == 0 {
-		for i := 0; i < msg.Len(); i++ {
-			exec(i)
-		}
-	} else {
-		for _, i := range parts {
-			exec(i)
-		}
-	}
 }

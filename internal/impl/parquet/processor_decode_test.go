@@ -13,7 +13,7 @@ import (
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
-// Designed to contain all manner of structured data nasties
+// Designed to contain all manner of structured data nasties.
 type testPM struct {
 	ID       int64
 	Foo      testPMFoo
@@ -152,8 +152,9 @@ func TestParquetDecodeProcessor(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			buf := bytes.NewBuffer(nil)
 
-			pWtr := parquet.NewWriter(buf, parquet.SchemaOf(testPM{}))
-			require.NoError(t, pWtr.Write(test.input))
+			pWtr := parquet.NewGenericWriter[testPM](buf)
+			_, err := pWtr.Write([]testPM{test.input})
+			require.NoError(t, err)
 			require.NoError(t, pWtr.Close())
 
 			expectedDataBytes, err := json.Marshal(test.input)
@@ -175,13 +176,14 @@ func TestParquetDecodeProcessor(t *testing.T) {
 	}
 
 	t.Run("all together", func(t *testing.T) {
-		var expected, actual []interface{}
+		var expected, actual []any
 
 		buf := bytes.NewBuffer(nil)
-		pWtr := parquet.NewWriter(buf, parquet.SchemaOf(testPM{}))
+		pWtr := parquet.NewGenericWriter[testPM](buf)
 
 		for _, test := range tests {
-			require.NoError(t, pWtr.Write(test.input))
+			_, err := pWtr.Write([]testPM{test.input})
+			require.NoError(t, err)
 			require.NoError(t, pWtr.Close())
 
 			expected = append(expected, test.input)
@@ -212,24 +214,23 @@ func TestParquetDecodeProcessor(t *testing.T) {
 type decodeCompressionTest struct {
 	Foo string
 	Bar int64
-	Baz string
+	Baz []byte
 }
 
 func TestDecodeCompressionStringParsing(t *testing.T) {
 	input := decodeCompressionTest{
 		Foo: "foo value",
 		Bar: 2,
-		Baz: "baz value",
+		Baz: []byte("baz value"),
 	}
 
 	buf := bytes.NewBuffer(nil)
 
-	pWtr := parquet.NewWriter(buf, parquet.SchemaOf(decodeCompressionTest{}))
-	require.NoError(t, pWtr.Write(input))
-	require.NoError(t, pWtr.Close())
+	pWtr := parquet.NewGenericWriter[decodeCompressionTest](buf)
 
-	expectedDataBytes, err := json.Marshal(input)
+	_, err := pWtr.Write([]decodeCompressionTest{input})
 	require.NoError(t, err)
+	require.NoError(t, pWtr.Close())
 
 	reader, err := newParquetDecodeProcessor(nil, &extractConfig{
 		byteArrayAsStrings: true,
@@ -244,7 +245,7 @@ func TestDecodeCompressionStringParsing(t *testing.T) {
 	actualDataBytes, err := readerResBatch[0].AsBytes()
 	require.NoError(t, err)
 
-	assert.JSONEq(t, string(expectedDataBytes), string(actualDataBytes))
+	assert.JSONEq(t, `{"Foo":"foo value", "Bar":2, "Baz":"baz value"}`, string(actualDataBytes))
 
 	// Without string extraction
 
@@ -261,33 +262,32 @@ func TestDecodeCompressionStringParsing(t *testing.T) {
 	actualDataBytes, err = readerResBatch[0].AsBytes()
 	require.NoError(t, err)
 
-	assert.JSONEq(t, `{"Foo":"Zm9vIHZhbHVl", "Bar":2, "Baz":"YmF6IHZhbHVl"}`, string(actualDataBytes))
+	assert.JSONEq(t, `{"Foo":"foo value", "Bar":2, "Baz":"YmF6IHZhbHVl"}`, string(actualDataBytes))
 }
 
 func TestDecodeCompression(t *testing.T) {
 	input := decodeCompressionTest{
 		Foo: "foo value this is large enough aaaaaaaa bbbbbbbb cccccccccc that compression actually helps",
 		Bar: 2,
-		Baz: "baz value this is large enough aaaaaaaa bbbbbbbb cccccccccc that compression actually helps",
+		Baz: []byte("baz value this is large enough aaaaaaaa bbbbbbbb cccccccccc that compression actually helps"),
 	}
 
 	bufUncompressed := bytes.NewBuffer(nil)
 	bufCompressed := bytes.NewBuffer(nil)
 
-	pWtr := parquet.NewWriter(bufCompressed, parquet.SchemaOf(decodeCompressionTest{}), parquet.Compression(&parquet.Zstd))
-	require.NoError(t, pWtr.Write(input))
+	pWtr := parquet.NewGenericWriter[decodeCompressionTest](bufCompressed, parquet.Compression(&parquet.Zstd))
+	_, err := pWtr.Write([]decodeCompressionTest{input})
+	require.NoError(t, err)
 	require.NoError(t, pWtr.Close())
 
-	pWtr = parquet.NewWriter(bufUncompressed, parquet.SchemaOf(decodeCompressionTest{}))
-	require.NoError(t, pWtr.Write(input))
+	pWtr = parquet.NewGenericWriter[decodeCompressionTest](bufUncompressed)
+	_, err = pWtr.Write([]decodeCompressionTest{input})
+	require.NoError(t, err)
 	require.NoError(t, pWtr.Close())
 
 	// Check that compression actually happened
 	assert.NotEqual(t, bufCompressed.String(), bufUncompressed.String())
 	assert.Less(t, bufCompressed.Len(), bufUncompressed.Len())
-
-	expectedDataBytes, err := json.Marshal(input)
-	require.NoError(t, err)
 
 	reader, err := newParquetDecodeProcessor(nil, &extractConfig{
 		byteArrayAsStrings: true,
@@ -302,5 +302,5 @@ func TestDecodeCompression(t *testing.T) {
 	actualDataBytes, err := readerResBatch[0].AsBytes()
 	require.NoError(t, err)
 
-	assert.JSONEq(t, string(expectedDataBytes), string(actualDataBytes))
+	assert.JSONEq(t, `{"Foo":"foo value this is large enough aaaaaaaa bbbbbbbb cccccccccc that compression actually helps", "Bar":2, "Baz":"baz value this is large enough aaaaaaaa bbbbbbbb cccccccccc that compression actually helps"}`, string(actualDataBytes))
 }

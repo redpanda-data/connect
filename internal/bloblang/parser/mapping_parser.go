@@ -114,7 +114,7 @@ func singleRootImport(pCtx Context) Func {
 			return res
 		}
 
-		fpath := res.Payload.([]interface{})[3].(string)
+		fpath := res.Payload.([]any)[3].(string)
 		contents, err := pCtx.importer.Import(fpath)
 		if err != nil {
 			return Fail(NewFatalError(input, fmt.Errorf("failed to read import: %w", err)), input)
@@ -199,7 +199,7 @@ func importParser(maps map[string]query.Function, pCtx Context) Func {
 			return res
 		}
 
-		fpath := res.Payload.([]interface{})[2].(string)
+		fpath := res.Payload.([]any)[2].(string)
 		contents, err := pCtx.importer.Import(fpath)
 		if err != nil {
 			return Fail(NewFatalError(input, fmt.Errorf("failed to read import: %w", err)), input)
@@ -284,9 +284,9 @@ func mapParser(maps map[string]query.Function, pCtx Context) Func {
 			return res
 		}
 
-		seqSlice := res.Payload.([]interface{})
+		seqSlice := res.Payload.([]any)
 		ident := seqSlice[2].(string)
-		stmtSlice := seqSlice[4].([]interface{})
+		stmtSlice := seqSlice[4].([]any)
 
 		if _, exists := maps[ident]; exists {
 			return Fail(NewFatalError(input, fmt.Errorf("map name collision: %v", ident)), input)
@@ -328,7 +328,7 @@ func letStatementParser(pCtx Context) Func {
 		if res.Err != nil {
 			return res
 		}
-		resSlice := res.Payload.([]interface{})
+		resSlice := res.Payload.([]any)
 		return Success(
 			mapping.NewStatement(
 				input,
@@ -379,7 +379,7 @@ func metaStatementParser(disabled bool, pCtx Context) Func {
 				input,
 			)
 		}
-		resSlice := res.Payload.([]interface{})
+		resSlice := res.Payload.([]any)
 
 		var keyPtr *string
 		if key, set := resSlice[2].(string); set {
@@ -455,11 +455,11 @@ func pathParser() Func {
 			return res
 		}
 
-		sequence := res.Payload.([]interface{})
+		sequence := res.Payload.([]any)
 		path := []string{sequence[0].(string)}
 
 		if sequence[1] != nil {
-			pathParts := sequence[1].([]interface{})[1].(DelimitedResult).Primary
+			pathParts := sequence[1].([]any)[1].(DelimitedResult).Primary
 			for _, p := range pathParts {
 				path = append(path, gabs.DotPathToSlice(p.(string))...)
 			}
@@ -483,7 +483,7 @@ func plainMappingStatementParser(pCtx Context) Func {
 		if res.Err != nil {
 			return res
 		}
-		resSlice := res.Payload.([]interface{})
+		resSlice := res.Payload.([]any)
 		path := resSlice[0].([]string)
 
 		if len(path) > 0 && path[0] == "root" {
@@ -500,5 +500,3 @@ func plainMappingStatementParser(pCtx Context) Func {
 		)
 	}
 }
-
-//------------------------------------------------------------------------------

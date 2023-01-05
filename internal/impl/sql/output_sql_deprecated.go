@@ -15,7 +15,7 @@ func sqlDeprecatedOutputConfig() *service.ConfigSpec {
 
 For basic inserts use the ` + "[`sql_insert`](/docs/components/outputs/sql)" + ` output. For more complex queries use the ` + "[`sql_raw`](/docs/components/outputs/sql_raw)" + ` output.`).
 		Field(driverField).
-		Field(service.NewStringField("data_source_name")).
+		Field(service.NewStringField("data_source_name").Description("Data source name.")).
 		Field(rawQueryField().
 			Example("INSERT INTO footable (foo, bar, baz) VALUES (?, ?, ?);")).
 		Field(service.NewBloblangField("args_mapping").
@@ -40,10 +40,9 @@ func init() {
 			if maxInFlight, err = conf.FieldInt("max_in_flight"); err != nil {
 				return
 			}
-			out, err = newSQLDeprecatedOutputFromConfig(conf, mgr.Logger())
+			out, err = newSQLDeprecatedOutputFromConfig(conf, mgr)
 			return
 		})
-
 	if err != nil {
 		panic(err)
 	}
@@ -51,7 +50,7 @@ func init() {
 
 //------------------------------------------------------------------------------
 
-func newSQLDeprecatedOutputFromConfig(conf *service.ParsedConfig, logger *service.Logger) (*sqlRawOutput, error) {
+func newSQLDeprecatedOutputFromConfig(conf *service.ParsedConfig, mgr *service.Resources) (*sqlRawOutput, error) {
 	driverStr, err := conf.FieldString("driver")
 	if err != nil {
 		return nil, err
@@ -74,9 +73,9 @@ func newSQLDeprecatedOutputFromConfig(conf *service.ParsedConfig, logger *servic
 		}
 	}
 
-	connSettings, err := connSettingsFromParsed(conf)
+	connSettings, err := connSettingsFromParsed(conf, mgr)
 	if err != nil {
 		return nil, err
 	}
-	return newSQLRawOutput(logger, driverStr, dsnStr, queryStatic, argsMapping, connSettings), nil
+	return newSQLRawOutput(mgr.Logger(), driverStr, dsnStr, queryStatic, nil, argsMapping, connSettings), nil
 }

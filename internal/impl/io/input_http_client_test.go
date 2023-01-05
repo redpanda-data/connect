@@ -589,9 +589,7 @@ func TestHTTPClientStreamGETMultipartLoop(t *testing.T) {
 	}
 
 	h.TriggerStopConsuming()
-	if err := h.WaitForClose(tCtx); err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, h.WaitForClose(tCtx))
 }
 
 func TestHTTPClientStreamGETMultiRecover(t *testing.T) {
@@ -753,7 +751,7 @@ func TestHTTPClientStreamGETTokenization(t *testing.T) {
 
 	conf := input.NewConfig()
 	conf.Type = "http_client"
-	conf.HTTPClient.URL = tserve.URL + `/testpost?token=${!json("token")}`
+	conf.HTTPClient.URL = tserve.URL + `/testpost?token=${!json("token").or(null)}`
 	conf.HTTPClient.Retry = "1ms"
 	conf.HTTPClient.Stream.Enabled = true
 

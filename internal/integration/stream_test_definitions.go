@@ -118,7 +118,7 @@ func StreamTestMetadataFilter() StreamTestDefinition {
 			))
 
 			p := receiveMessage(env.ctx, t, input.TransactionChan(), nil)
-			assert.Empty(t, p.MetaGet("foo"))
+			assert.Empty(t, p.MetaGetStr("foo"))
 			messageMatch(t, p, "hello world", "bar", "bar_value")
 		},
 	)

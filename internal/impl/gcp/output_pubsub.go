@@ -39,7 +39,7 @@ If you are blocked by this issue then a work around is to delete either the spec
 `+"```yaml"+`
 pipeline:
   processors:
-    - bloblang: |
+    - mapping: |
         meta kafka_key = deleted()
 `+"```"+`
 
@@ -48,7 +48,7 @@ Or delete all keys with:
 `+"```yaml"+`
 pipeline:
   processors:
-    - bloblang: meta = deleted()
+    - mapping: meta = deleted()
 `+"```"+``),
 		Config: docs.FieldComponent().WithChildren(
 			docs.FieldString("project", "The project ID of the topic to publish to."),
@@ -169,18 +169,21 @@ func (c *gcpPubSubWriter) getTopic(ctx context.Context, t string) (*pubsub.Topic
 func (c *gcpPubSubWriter) WriteBatch(ctx context.Context, msg message.Batch) error {
 	topics := make([]*pubsub.Topic, msg.Len())
 	if err := msg.Iter(func(i int, _ *message.Part) error {
-		var tErr error
-		topics[i], tErr = c.getTopic(ctx, c.topicID.String(i, msg))
+		topicStr, tErr := c.topicID.String(i, msg)
+		if tErr != nil {
+			return fmt.Errorf("topic id interpolation error: %w", tErr)
+		}
+		topics[i], tErr = c.getTopic(ctx, topicStr)
 		return tErr
 	}); err != nil {
 		return err
 	}
 
 	results := make([]*pubsub.PublishResult, msg.Len())
-	_ = msg.Iter(func(i int, part *message.Part) error {
+	if err := msg.Iter(func(i int, part *message.Part) error {
 		topic := topics[i]
 		attr := map[string]string{}
-		_ = c.metaFilter.Iter(part, func(k, v string) error {
+		_ = c.metaFilter.IterStr(part, func(k, v string) error {
 			attr[k] = v
 			return nil
 		})
@@ -188,14 +191,19 @@ func (c *gcpPubSubWriter) WriteBatch(ctx context.Context, msg message.Batch) err
 			Data: part.AsBytes(),
 		}
 		if c.orderingEnabled {
-			gmsg.OrderingKey = c.orderingKey.String(i, msg)
+			var err error
+			if gmsg.OrderingKey, err = c.orderingKey.String(i, msg); err != nil {
+				return fmt.Errorf("ordering key interpolation error: %w", err)
+			}
 		}
 		if len(attr) > 0 {
 			gmsg.Attributes = attr
 		}
 		results[i] = topic.Publish(ctx, gmsg)
 		return nil
-	})
+	}); err != nil {
+		return err
+	}
 
 	var batchErr *batch.Error
 	for i, r := range results {

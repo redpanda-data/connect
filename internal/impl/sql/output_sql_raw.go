@@ -21,6 +21,10 @@ func sqlRawOutputConfig() *service.ConfigSpec {
 		Field(dsnField).
 		Field(rawQueryField().
 			Example("INSERT INTO footable (foo, bar, baz) VALUES (?, ?, ?);")).
+		Field(service.NewBoolField("unsafe_dynamic_query").
+			Description("Whether to enable [interpolation functions](/docs/configuration/interpolation/#bloblang-queries) in the query. Great care should be made to ensure your queries are defended against injection attacks.").
+			Advanced().
+			Default(false)).
 		Field(service.NewBloblangField("args_mapping").
 			Description("An optional [Bloblang mapping](/docs/guides/bloblang/about) which should evaluate to an array of values matching in size to the number of placeholder arguments in the field `query`.").
 			Example("root = [ this.cat.meow, this.doc.woofs[0] ]").
@@ -66,10 +70,9 @@ func init() {
 			if maxInFlight, err = conf.FieldInt("max_in_flight"); err != nil {
 				return
 			}
-			out, err = newSQLRawOutputFromConfig(conf, mgr.Logger())
+			out, err = newSQLRawOutputFromConfig(conf, mgr)
 			return
 		})
-
 	if err != nil {
 		panic(err)
 	}
@@ -84,16 +87,17 @@ type sqlRawOutput struct {
 	dbMut  sync.RWMutex
 
 	queryStatic string
+	queryDyn    *service.InterpolatedString
 
 	argsMapping *bloblang.Executor
 
-	connSettings connSettings
+	connSettings *connSettings
 
 	logger  *service.Logger
 	shutSig *shutdown.Signaller
 }
 
-func newSQLRawOutputFromConfig(conf *service.ParsedConfig, logger *service.Logger) (*sqlRawOutput, error) {
+func newSQLRawOutputFromConfig(conf *service.ParsedConfig, mgr *service.Resources) (*sqlRawOutput, error) {
 	driverStr, err := conf.FieldString("driver")
 	if err != nil {
 		return nil, err
@@ -109,6 +113,15 @@ func newSQLRawOutputFromConfig(conf *service.ParsedConfig, logger *service.Logge
 		return nil, err
 	}
 
+	var queryDyn *service.InterpolatedString
+	if unsafeDyn, err := conf.FieldBool("unsafe_dynamic_query"); err != nil {
+		return nil, err
+	} else if unsafeDyn {
+		if queryDyn, err = conf.FieldInterpolatedString("query"); err != nil {
+			return nil, err
+		}
+	}
+
 	var argsMapping *bloblang.Executor
 	if conf.Contains("args_mapping") {
 		if argsMapping, err = conf.FieldBloblang("args_mapping"); err != nil {
@@ -116,19 +129,20 @@ func newSQLRawOutputFromConfig(conf *service.ParsedConfig, logger *service.Logge
 		}
 	}
 
-	connSettings, err := connSettingsFromParsed(conf)
+	connSettings, err := connSettingsFromParsed(conf, mgr)
 	if err != nil {
 		return nil, err
 	}
-	return newSQLRawOutput(logger, driverStr, dsnStr, queryStatic, argsMapping, connSettings), nil
+	return newSQLRawOutput(mgr.Logger(), driverStr, dsnStr, queryStatic, queryDyn, argsMapping, connSettings), nil
 }
 
 func newSQLRawOutput(
 	logger *service.Logger,
 	driverStr, dsnStr string,
 	queryStatic string,
+	queryDyn *service.InterpolatedString,
 	argsMapping *bloblang.Executor,
-	connSettings connSettings,
+	connSettings *connSettings,
 ) *sqlRawOutput {
 	return &sqlRawOutput{
 		logger:       logger,
@@ -136,6 +150,7 @@ func newSQLRawOutput(
 		driver:       driverStr,
 		dsn:          dsnStr,
 		queryStatic:  queryStatic,
+		queryDyn:     queryDyn,
 		argsMapping:  argsMapping,
 		connSettings: connSettings,
 	}
@@ -154,7 +169,7 @@ func (s *sqlRawOutput) Connect(ctx context.Context) error {
 		return err
 	}
 
-	s.connSettings.apply(s.db)
+	s.connSettings.apply(ctx, s.db, s.logger)
 
 	go func() {
 		<-s.shutSig.CloseNowChan()
@@ -173,23 +188,33 @@ func (s *sqlRawOutput) WriteBatch(ctx context.Context, batch service.MessageBatc
 	defer s.dbMut.RUnlock()
 
 	for i := range batch {
-		var args []interface{}
-		resMsg, err := batch.BloblangQuery(i, s.argsMapping)
-		if err != nil {
-			return err
+		var args []any
+		if s.argsMapping != nil {
+			resMsg, err := batch.BloblangQuery(i, s.argsMapping)
+			if err != nil {
+				return err
+			}
+
+			iargs, err := resMsg.AsStructured()
+			if err != nil {
+				return err
+			}
+
+			var ok bool
+			if args, ok = iargs.([]any); !ok {
+				return fmt.Errorf("mapping returned non-array result: %T", iargs)
+			}
 		}
 
-		iargs, err := resMsg.AsStructured()
-		if err != nil {
-			return err
+		queryStr := s.queryStatic
+		if s.queryDyn != nil {
+			var err error
+			if queryStr, err = batch.TryInterpolatedString(i, s.queryDyn); err != nil {
+				return fmt.Errorf("query interpolation error: %w", err)
+			}
 		}
 
-		var ok bool
-		if args, ok = iargs.([]interface{}); !ok {
-			return fmt.Errorf("mapping returned non-array result: %T", iargs)
-		}
-
-		if _, err = s.db.ExecContext(ctx, s.queryStatic, args...); err != nil {
+		if _, err := s.db.ExecContext(ctx, queryStr, args...); err != nil {
 			return err
 		}
 	}

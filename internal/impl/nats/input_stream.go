@@ -42,7 +42,7 @@ This input adds the following metadata fields to each message:
 - nats_stream_sequence
 ` + "```" + `
 
-You can access these metadata fields using [function interpolation](/docs/configuration/interpolation#metadata).
+You can access these metadata fields using [function interpolation](/docs/configuration/interpolation#bloblang-queries).
 
 ` + auth.Description(),
 		Config: docs.FieldComponent().WithChildren(
@@ -76,10 +76,10 @@ You can access these metadata fields using [function interpolation](/docs/config
 func newNATSStreamInput(conf input.Config, mgr bundle.NewManagement) (input.Streamed, error) {
 	var c input.Async
 	var err error
-	if c, err = newNATSStreamReader(conf.NATSStream, mgr.Logger()); err != nil {
+	if c, err = newNATSStreamReader(conf.NATSStream, mgr); err != nil {
 		return nil, err
 	}
-	return input.NewAsyncReader("nats_stream", true, c, mgr)
+	return input.NewAsyncReader("nats_stream", c, mgr)
 }
 
 type natsStreamReader struct {
@@ -102,7 +102,7 @@ type natsStreamReader struct {
 	tlsConf       *tls.Config
 }
 
-func newNATSStreamReader(conf input.NATSStreamConfig, log log.Modular) (*natsStreamReader, error) {
+func newNATSStreamReader(conf input.NATSStreamConfig, mgr bundle.NewManagement) (*natsStreamReader, error) {
 	if conf.ClientID == "" {
 		u4, err := uuid.NewV4()
 		if err != nil {
@@ -122,7 +122,7 @@ func newNATSStreamReader(conf input.NATSStreamConfig, log log.Modular) (*natsStr
 	n := natsStreamReader{
 		conf:          conf,
 		ackWait:       ackWait,
-		log:           log,
+		log:           mgr.Logger(),
 		msgChan:       make(chan *stan.Msg),
 		interruptChan: make(chan struct{}),
 	}
@@ -131,7 +131,7 @@ func newNATSStreamReader(conf input.NATSStreamConfig, log log.Modular) (*natsStr
 	n.urls = strings.Join(conf.URLs, ",")
 	var err error
 	if conf.TLS.Enabled {
-		if n.tlsConf, err = conf.TLS.Get(); err != nil {
+		if n.tlsConf, err = conf.TLS.Get(mgr.FS()); err != nil {
 			return nil, err
 		}
 	}
@@ -278,8 +278,8 @@ func (n *natsStreamReader) ReadBatch(ctx context.Context) (message.Batch, input.
 
 	bmsg := message.QuickBatch([][]byte{msg.Data})
 	part := bmsg.Get(0)
-	part.MetaSet("nats_stream_subject", msg.Subject)
-	part.MetaSet("nats_stream_sequence", strconv.FormatUint(msg.Sequence, 10))
+	part.MetaSetMut("nats_stream_subject", msg.Subject)
+	part.MetaSetMut("nats_stream_sequence", strconv.FormatUint(msg.Sequence, 10))
 
 	return bmsg, func(rctx context.Context, res error) error {
 		if res == nil {

@@ -3,19 +3,19 @@ package test
 import (
 	"context"
 	"fmt"
-	"os"
 	"path/filepath"
 
 	yaml "gopkg.in/yaml.v3"
 
 	iprocessor "github.com/benthosdev/benthos/v4/internal/component/processor"
+	"github.com/benthosdev/benthos/v4/internal/filepath/ifs"
 	"github.com/benthosdev/benthos/v4/internal/message"
 )
 
 // InputPart defines an input part for a test case.
 type InputPart struct {
-	Content  string            `yaml:"content"`
-	Metadata map[string]string `yaml:"metadata"`
+	Content  string         `yaml:"content"`
+	Metadata map[string]any `yaml:"metadata"`
 	filePath string
 }
 
@@ -24,7 +24,7 @@ func (i *InputPart) getContent(dir string) (string, error) {
 		return i.Content, nil
 	}
 	relPath := filepath.Join(dir, i.filePath)
-	rawBytes, err := os.ReadFile(relPath)
+	rawBytes, err := ifs.ReadFile(ifs.OS(), relPath)
 	if err != nil {
 		return "", err
 	}
@@ -170,7 +170,7 @@ func (c *Case) ExecuteFrom(dir string, provider ProcProvider) (failures []CaseFa
 			}
 			part := message.NewPart([]byte(content))
 			for k, v := range v.Metadata {
-				part.MetaSet(k, v)
+				part.MetaSetMut(k, v)
 			}
 			parts[i] = part
 		}

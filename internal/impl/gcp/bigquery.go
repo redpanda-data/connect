@@ -12,7 +12,7 @@ import (
 )
 
 type bigqueryIterator interface {
-	Next(dst interface{}) error
+	Next(dst any) error
 }
 
 type bqClient interface {
@@ -75,7 +75,7 @@ type bqQueryBuilderOptions struct {
 	queryParts    *bqQueryParts
 	jobLabels     map[string]string
 	queryPriority bigquery.QueryPriority
-	args          []interface{}
+	args          []any
 }
 
 func buildBQQuery(client *bigquery.Client, options *bqQueryBuilderOptions) (*bigquery.Query, error) {

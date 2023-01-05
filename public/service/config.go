@@ -39,6 +39,15 @@ func NewAnyListField(name string) *ConfigField {
 	}
 }
 
+// NewAnyMapField describes a new config field consisting of a map of values
+// that can assume any value type without triggering a config parse or linting
+// error.
+func NewAnyMapField(name string) *ConfigField {
+	return &ConfigField{
+		field: docs.FieldAnything(name, "").Map(),
+	}
+}
+
 // NewStringField describes a new string type config field.
 func NewStringField(name string) *ConfigField {
 	return &ConfigField{
@@ -189,7 +198,7 @@ func (c *ConfigField) Deprecated() *ConfigField {
 // Default specifies a default value that this field will assume if it is
 // omitted from a provided config. Fields that do not have a default value are
 // considered mandatory, and so parsing a config will fail in their absence.
-func (c *ConfigField) Default(v interface{}) *ConfigField {
+func (c *ConfigField) Default(v any) *ConfigField {
 	c.field = c.field.HasDefault(v)
 	return c
 }
@@ -202,9 +211,17 @@ func (c *ConfigField) Optional() *ConfigField {
 	return c
 }
 
+// Secret marks this field as being a secret, which means it represents
+// information that is generally considered sensitive such as passwords or
+// access tokens.
+func (c *ConfigField) Secret() *ConfigField {
+	c.field = c.field.Secret()
+	return c
+}
+
 // Example adds an example value to the field which will be shown when printing
 // documentation for the component config spec.
-func (c *ConfigField) Example(e interface{}) *ConfigField {
+func (c *ConfigField) Example(e any) *ConfigField {
 	c.field.Examples = append(c.field.Examples, e)
 	return c
 }
@@ -226,7 +243,7 @@ func (c *ConfigField) Version(v string) *ConfigField {
 // ensures the value contains only lowercase values we might add the following
 // linting rule:
 //
-// `root = if this.lowercase() != this { [ "field must be lowercase" ] }`
+// `root = if this.lowercase() != this { [ "field must be lowercase" ] }`.
 func (c *ConfigField) LintRule(blobl string) *ConfigField {
 	c.field = c.field.LinterBlobl(blobl)
 	return c
@@ -346,6 +363,14 @@ func (c *ConfigSpec) Description(description string) *ConfigSpec {
 	return c
 }
 
+// Footnotes adds a description to the plugin configuration spec that appears
+// towards the bottom of the documentation page, this is usually best for long
+// winded lists of docs.
+func (c *ConfigSpec) Footnotes(description string) *ConfigSpec {
+	c.component.Footnotes = description
+	return c
+}
+
 // Field sets the specification of a field within the config spec, used for
 // linting and generating documentation for the component.
 //
@@ -409,7 +434,7 @@ func (c *ConfigSpec) EncodeJSON(v []byte) error {
 // root = match {
 // this.exists("meow") && this.exists("woof") => [ "both `+"`meow`"+` and `+"`woof`"+` can't be set simultaneously" ],
 // this.exists("reticulation") && (!this.exists("splines") || this.splines == "") => [ "`+"`splines`"+` is required when setting `+"`reticulation`"+`" ],
-// }
+// }.
 func (c *ConfigSpec) LintRule(blobl string) *ConfigSpec {
 	c.component.Config = c.component.Config.LinterBlobl(blobl)
 	return c
@@ -464,7 +489,7 @@ func (c *ConfigView) RenderDocs() ([]byte, error) {
 		"processor":  {},
 	}[string(c.component.Type)]
 
-	conf := map[string]interface{}{
+	conf := map[string]any{
 		"type": c.component.Name,
 	}
 	for k, v := range docs.ReservedFieldsByType(c.component.Type) {
@@ -487,7 +512,7 @@ func (c *ConfigView) RenderDocs() ([]byte, error) {
 type ParsedConfig struct {
 	hiddenPath []string
 	mgr        bundle.NewManagement
-	generic    interface{}
+	generic    any
 }
 
 // Namespace returns a version of the parsed config at a given field namespace.
@@ -502,8 +527,8 @@ func (p *ParsedConfig) Namespace(path ...string) *ParsedConfig {
 
 // Field accesses a field from the parsed config by its name and returns the
 // value if the field is found and a boolean indicating whether it was found.
-// Nested fields can be accessed by specifing the series of field names.
-func (p *ParsedConfig) field(path ...string) (interface{}, bool) {
+// Nested fields can be accessed by specifying the series of field names.
+func (p *ParsedConfig) field(path ...string) (any, bool) {
 	gObj := gabs.Wrap(p.generic).S(p.hiddenPath...)
 	if exists := gObj.Exists(path...); !exists {
 		return nil, false
@@ -527,7 +552,7 @@ func (p *ParsedConfig) Contains(path ...string) bool {
 
 // FieldAny accesses a field from the parsed config by its name that can assume
 // any value type. If the field is not found an error is returned.
-func (p *ParsedConfig) FieldAny(path ...string) (interface{}, error) {
+func (p *ParsedConfig) FieldAny(path ...string) (any, error) {
 	v, exists := p.field(path...)
 	if !exists {
 		return "", fmt.Errorf("field '%v' was not found in the config", p.fullDotPath(path...))
@@ -544,7 +569,7 @@ func (p *ParsedConfig) FieldAnyList(path ...string) ([]*ParsedConfig, error) {
 	if !exists {
 		return nil, fmt.Errorf("field '%v' was not found in the config", p.fullDotPath(path...))
 	}
-	iList, ok := v.([]interface{})
+	iList, ok := v.([]any)
 	if !ok {
 		return nil, fmt.Errorf("expected field '%v' to be a list, got %T", p.fullDotPath(path...), v)
 	}
@@ -556,6 +581,29 @@ func (p *ParsedConfig) FieldAnyList(path ...string) ([]*ParsedConfig, error) {
 		}
 	}
 	return sList, nil
+}
+
+// FieldAnyMap accesses a field that is an object of arbitrary keys and any
+// values from the parsed config by its name and returns a map of *ParsedConfig
+// types, where each one represents an object or value in the map. Returns an
+// error if the field is not found, or is not an object.
+func (p *ParsedConfig) FieldAnyMap(path ...string) (map[string]*ParsedConfig, error) {
+	v, exists := p.field(path...)
+	if !exists {
+		return nil, fmt.Errorf("field '%v' was not found in the config", p.fullDotPath(path...))
+	}
+	iMap, ok := v.(map[string]any)
+	if !ok {
+		return nil, fmt.Errorf("expected field '%v' to be a string map, got %T", p.fullDotPath(path...), v)
+	}
+	sMap := make(map[string]*ParsedConfig, len(iMap))
+	for k, v := range iMap {
+		sMap[k] = &ParsedConfig{
+			mgr:     p.mgr,
+			generic: v,
+		}
+	}
+	return sMap, nil
 }
 
 // FieldString accesses a string field from the parsed config by its name. If
@@ -599,7 +647,7 @@ func (p *ParsedConfig) FieldStringList(path ...string) ([]string, error) {
 	if !exists {
 		return nil, fmt.Errorf("field '%v' was not found in the config", p.fullDotPath(path...))
 	}
-	iList, ok := v.([]interface{})
+	iList, ok := v.([]any)
 	if !ok {
 		if sList, ok := v.([]string); ok {
 			return sList, nil
@@ -623,7 +671,7 @@ func (p *ParsedConfig) FieldStringMap(path ...string) (map[string]string, error)
 	if !exists {
 		return nil, fmt.Errorf("field '%v' was not found in the config", p.fullDotPath(path...))
 	}
-	iMap, ok := v.(map[string]interface{})
+	iMap, ok := v.(map[string]any)
 	if !ok {
 		if sMap, ok := v.(map[string]string); ok {
 			return sMap, nil
@@ -661,7 +709,7 @@ func (p *ParsedConfig) FieldIntList(path ...string) ([]int, error) {
 	if !exists {
 		return nil, fmt.Errorf("field '%v' was not found in the config", p.fullDotPath(path...))
 	}
-	iList, ok := v.([]interface{})
+	iList, ok := v.([]any)
 	if !ok {
 		if sList, ok := v.([]int); ok {
 			return sList, nil
@@ -687,7 +735,7 @@ func (p *ParsedConfig) FieldIntMap(path ...string) (map[string]int, error) {
 	if !exists {
 		return nil, fmt.Errorf("field '%v' was not found in the config", p.fullDotPath(path...))
 	}
-	iMap, ok := v.(map[string]interface{})
+	iMap, ok := v.(map[string]any)
 	if !ok {
 		if sMap, ok := v.(map[string]int); ok {
 			return sMap, nil
@@ -744,7 +792,7 @@ func (p *ParsedConfig) FieldObjectList(path ...string) ([]*ParsedConfig, error) 
 	if !exists {
 		return nil, fmt.Errorf("field '%v' was not found in the config", p.fullDotPath(path...))
 	}
-	iList, ok := v.([]interface{})
+	iList, ok := v.([]any)
 	if !ok {
 		return nil, fmt.Errorf("expected field '%v' to be a list, got %T", p.fullDotPath(path...), v)
 	}

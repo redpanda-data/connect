@@ -38,13 +38,13 @@ func matchCaseParser(pCtx Context) Func {
 			return res
 		}
 
-		seqSlice := res.Payload.([]interface{})
+		seqSlice := res.Payload.([]any)
 
 		var caseFn query.Function
-		switch t := seqSlice[0].([]interface{})[0].(type) {
+		switch t := seqSlice[0].([]any)[0].(type) {
 		case query.Function:
 			if lit, isLiteral := t.(*query.Literal); isLiteral {
-				caseFn = query.ClosureFunction("case statement", func(ctx query.FunctionContext) (interface{}, error) {
+				caseFn = query.ClosureFunction("case statement", func(ctx query.FunctionContext) (any, error) {
 					v := ctx.Value()
 					if v == nil {
 						return false, nil
@@ -106,11 +106,11 @@ func matchExpressionParser(pCtx Context) Func {
 			return res
 		}
 
-		seqSlice := res.Payload.([]interface{})
+		seqSlice := res.Payload.([]any)
 		contextFn, _ := seqSlice[2].(query.Function)
 
 		cases := []query.MatchCase{}
-		for _, caseVal := range seqSlice[4].([]interface{}) {
+		for _, caseVal := range seqSlice[4].([]any) {
 			cases = append(cases, caseVal.(query.MatchCase))
 		}
 
@@ -169,7 +169,7 @@ func ifExpressionParser(pCtx Context) Func {
 			return res
 		}
 
-		seqSlice := res.Payload.([]interface{})
+		seqSlice := res.Payload.([]any)
 		queryFn := seqSlice[2].(query.Function)
 		ifFn := seqSlice[6].(query.Function)
 
@@ -182,7 +182,7 @@ func ifExpressionParser(pCtx Context) Func {
 			if res.Payload == nil {
 				break
 			}
-			seqSlice = res.Payload.([]interface{})
+			seqSlice = res.Payload.([]any)
 			elseIfs = append(elseIfs, query.ElseIf{
 				QueryFn: seqSlice[3].(query.Function),
 				MapFn:   seqSlice[7].(query.Function),
@@ -196,7 +196,7 @@ func ifExpressionParser(pCtx Context) Func {
 			return res
 		}
 		if res.Payload != nil {
-			elseFn, _ = res.Payload.([]interface{})[5].(query.Function)
+			elseFn, _ = res.Payload.([]any)[5].(query.Function)
 		}
 
 		res.Payload = query.NewIfFunction(queryFn, ifFn, elseIfs, elseFn)
@@ -225,7 +225,7 @@ func bracketsExpressionParser(pCtx Context) Func {
 		if res.Err != nil {
 			return res
 		}
-		res.Payload = res.Payload.([]interface{})[2]
+		res.Payload = res.Payload.([]any)[2]
 		return res
 	}
 }
@@ -259,7 +259,7 @@ func lambdaExpressionParser(pCtx Context) Func {
 			return res
 		}
 
-		seqSlice := res.Payload.([]interface{})
+		seqSlice := res.Payload.([]any)
 		name := seqSlice[0].(string)
 
 		if name != "_" {

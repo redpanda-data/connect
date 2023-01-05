@@ -24,7 +24,7 @@ args_mapping: 'root = [ this.id ]'
 	insertConfig, err := spec.ParseYAML(conf, env)
 	require.NoError(t, err)
 
-	insertOutput, err := newSQLInsertOutputFromConfig(insertConfig, nil)
+	insertOutput, err := newSQLInsertOutputFromConfig(insertConfig, service.MockResources())
 	require.NoError(t, err)
 	require.NoError(t, insertOutput.Close(context.Background()))
 }

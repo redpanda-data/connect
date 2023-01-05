@@ -8,6 +8,7 @@ import (
 
 	"github.com/Azure/go-amqp"
 
+	"github.com/benthosdev/benthos/v4/internal/bloblang/mapping"
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
@@ -22,7 +23,7 @@ import (
 
 func init() {
 	err := bundle.AllOutputs.Add(processors.WrapConstructor(func(c output.Config, nm bundle.NewManagement) (output.Streamed, error) {
-		a, err := newAMQP1Writer(c.AMQP1, nm.Logger())
+		a, err := newAMQP1Writer(c.AMQP1, nm)
 		if err != nil {
 			return nil, err
 		}
@@ -33,14 +34,14 @@ func init() {
 		return output.OnlySinglePayloads(w), nil
 	}), docs.ComponentSpec{
 		Name:    "amqp_1",
-		Status:  docs.StatusBeta,
+		Status:  docs.StatusStable,
 		Summary: `Sends messages to an AMQP (1.0) server.`,
 		Description: output.Description(true, false, `
 ### Metadata
 
 Message metadata is added to each AMQP message as string annotations. In order to control which metadata keys are added use the `+"`metadata`"+` config field.`),
 		Config: docs.FieldComponent().WithChildren(
-			docs.FieldString("url",
+			docs.FieldURL("url",
 				"A URL to connect to.",
 				"amqp://localhost:5672/",
 				"amqps://guest:guest@localhost:5672/",
@@ -48,6 +49,7 @@ Message metadata is added to each AMQP message as string annotations. In order t
 			docs.FieldString("target_address", "The target address to write to.", "/foo", "queue:/bar", "topic:/baz").HasDefault(""),
 			docs.FieldInt("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput.").HasDefault(64),
 			itls.FieldSpec(),
+			docs.FieldBloblang("application_properties_map", "An optional Bloblang mapping that can be defined in order to set the `application-properties` on output messages.").Advanced().HasDefault(""),
 			shared.SASLFieldSpec(),
 			docs.FieldObject("metadata", "Specify criteria for which metadata values are attached to messages as headers.").
 				WithChildren(metadata.ExcludeFilterFields()...),
@@ -66,7 +68,8 @@ type amqp1Writer struct {
 	session *amqp.Session
 	sender  *amqp.Sender
 
-	metaFilter *metadata.ExcludeFilter
+	metaFilter               *metadata.ExcludeFilter
+	applicationPropertiesMap *mapping.Executor
 
 	log log.Modular
 
@@ -76,14 +79,21 @@ type amqp1Writer struct {
 	connLock sync.RWMutex
 }
 
-func newAMQP1Writer(conf output.AMQP1Config, log log.Modular) (*amqp1Writer, error) {
+func newAMQP1Writer(conf output.AMQP1Config, mgr bundle.NewManagement) (*amqp1Writer, error) {
 	a := amqp1Writer{
-		log:  log,
+		log:  mgr.Logger(),
 		conf: conf,
 	}
+
 	var err error
+	if conf.ApplicationPropertiesMapping != "" {
+		if a.applicationPropertiesMap, err = mgr.BloblEnvironment().NewMapping(conf.ApplicationPropertiesMapping); err != nil {
+			return nil, fmt.Errorf("failed to construct application_properties_map: %w", err)
+		}
+	}
+
 	if conf.TLS.Enabled {
-		if a.tlsConf, err = conf.TLS.Get(); err != nil {
+		if a.tlsConf, err = conf.TLS.Get(mgr.FS()); err != nil {
 			return nil, err
 		}
 	}
@@ -184,7 +194,26 @@ func (a *amqp1Writer) WriteBatch(ctx context.Context, msg message.Batch) error {
 
 	return output.IterateBatchedSend(msg, func(i int, p *message.Part) error {
 		m := amqp.NewMessage(p.AsBytes())
-		_ = a.metaFilter.Iter(p, func(k, v string) error {
+
+		if a.applicationPropertiesMap != nil {
+			mapMsg, err := a.applicationPropertiesMap.MapPart(i, msg)
+			if err != nil {
+				return err
+			}
+
+			mapVal, err := mapMsg.AsStructured()
+			if err != nil {
+				return err
+			}
+
+			applicationProperties, ok := mapVal.(map[string]interface{})
+			if !ok {
+				return fmt.Errorf("application_properties_map resulted in a non-object mapping: %T", mapVal)
+			}
+
+			m.ApplicationProperties = applicationProperties
+		}
+		_ = a.metaFilter.Iter(p, func(k string, v any) error {
 			if m.Annotations == nil {
 				m.Annotations = amqp.Annotations{}
 			}

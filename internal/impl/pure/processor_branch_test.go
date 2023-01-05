@@ -220,7 +220,7 @@ func TestBranchBasic(t *testing.T) {
 				part := message.NewPart([]byte(m.content))
 				if m.meta != nil {
 					for k, v := range m.meta {
-						part.MetaSet(k, v)
+						part.MetaSetMut(k, v)
 					}
 				}
 				if m.err != nil {
@@ -241,7 +241,7 @@ func TestBranchBasic(t *testing.T) {
 					meta:    map[string]string{},
 				}
 
-				_ = outMsgs[0].Get(i).MetaIter(func(k, v string) error {
+				_ = outMsgs[0].Get(i).MetaIterStr(func(k, v string) error {
 					comparePart.meta[k] = v
 					return nil
 				})

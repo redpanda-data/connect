@@ -12,7 +12,7 @@ import (
 //
 // In order to avoid type checking the value use one of the typed variants such
 // as StringMethod.
-type Method func(v interface{}) (interface{}, error)
+type Method func(v any) (any, error)
 
 // MethodConstructor defines a constructor for a Bloblang method, where a
 // variadic list of arguments are provided.
@@ -24,7 +24,7 @@ type Method func(v interface{}) (interface{}, error)
 //
 // For a convenient way to perform type checking and coercion on the arguments
 // use an ArgSpec.
-type MethodConstructor func(args ...interface{}) (Method, error)
+type MethodConstructor func(args ...any) (Method, error)
 
 // MethodConstructorV2 defines a constructor for a Bloblang method where
 // parameters are parsed using a ParamsSpec provided when registering the
@@ -40,8 +40,8 @@ type MethodConstructorV2 func(args *ParsedParams) (Method, error)
 
 // StringMethod creates a general method signature from a string method by
 // performing type checking on the method target.
-func StringMethod(methodFn func(string) (interface{}, error)) Method {
-	return func(v interface{}) (interface{}, error) {
+func StringMethod(methodFn func(string) (any, error)) Method {
+	return func(v any) (any, error) {
 		str, err := query.IGetString(v)
 		if err != nil {
 			return nil, err
@@ -52,8 +52,8 @@ func StringMethod(methodFn func(string) (interface{}, error)) Method {
 
 // BytesMethod creates a general method signature from a byte slice method by
 // performing type checking on the method target.
-func BytesMethod(methodFn func([]byte) (interface{}, error)) Method {
-	return func(v interface{}) (interface{}, error) {
+func BytesMethod(methodFn func([]byte) (any, error)) Method {
+	return func(v any) (any, error) {
 		b, err := query.IGetBytes(v)
 		if err != nil {
 			return nil, err
@@ -64,8 +64,8 @@ func BytesMethod(methodFn func([]byte) (interface{}, error)) Method {
 
 // TimestampMethod creates a general method signature from a timestamp method by
 // performing type checking on the method target.
-func TimestampMethod(methodFn func(time.Time) (interface{}, error)) Method {
-	return func(v interface{}) (interface{}, error) {
+func TimestampMethod(methodFn func(time.Time) (any, error)) Method {
+	return func(v any) (any, error) {
 		t, err := query.IGetTimestamp(v)
 		if err != nil {
 			return nil, err
@@ -76,9 +76,9 @@ func TimestampMethod(methodFn func(time.Time) (interface{}, error)) Method {
 
 // ArrayMethod creates a general method signature from an array method by
 // performing type checking on the method target.
-func ArrayMethod(methodFn func([]interface{}) (interface{}, error)) Method {
-	return func(v interface{}) (interface{}, error) {
-		arr, ok := v.([]interface{})
+func ArrayMethod(methodFn func([]any) (any, error)) Method {
+	return func(v any) (any, error) {
+		arr, ok := v.([]any)
 		if !ok {
 			return nil, query.NewTypeError(v, query.ValueArray)
 		}
@@ -88,8 +88,8 @@ func ArrayMethod(methodFn func([]interface{}) (interface{}, error)) Method {
 
 // BoolMethod creates a general method signature from a bool method by
 // performing type checking on the method target.
-func BoolMethod(methodFn func(bool) (interface{}, error)) Method {
-	return func(v interface{}) (interface{}, error) {
+func BoolMethod(methodFn func(bool) (any, error)) Method {
+	return func(v any) (any, error) {
 		b, err := query.IGetBool(v)
 		if err != nil {
 			return nil, err
@@ -100,8 +100,8 @@ func BoolMethod(methodFn func(bool) (interface{}, error)) Method {
 
 // Int64Method creates a general method signature from an int method by
 // performing type checking on the method target.
-func Int64Method(methodFn func(int64) (interface{}, error)) Method {
-	return func(v interface{}) (interface{}, error) {
+func Int64Method(methodFn func(int64) (any, error)) Method {
+	return func(v any) (any, error) {
 		i, err := query.IGetInt(v)
 		if err != nil {
 			return nil, err
@@ -112,8 +112,8 @@ func Int64Method(methodFn func(int64) (interface{}, error)) Method {
 
 // Float64Method creates a general method signature from a float method by
 // performing type checking on the method target.
-func Float64Method(methodFn func(float64) (interface{}, error)) Method {
-	return func(v interface{}) (interface{}, error) {
+func Float64Method(methodFn func(float64) (any, error)) Method {
+	return func(v any) (any, error) {
 		f, err := query.IGetNumber(v)
 		if err != nil {
 			return nil, err
@@ -124,9 +124,9 @@ func Float64Method(methodFn func(float64) (interface{}, error)) Method {
 
 // ObjectMethod creates a general method signature from an object method by
 // performing type checking on the method target.
-func ObjectMethod(methodFn func(obj map[string]interface{}) (interface{}, error)) Method {
-	return func(v interface{}) (interface{}, error) {
-		obj, ok := v.(map[string]interface{})
+func ObjectMethod(methodFn func(obj map[string]any) (any, error)) Method {
+	return func(v any) (any, error) {
+		obj, ok := v.(map[string]any)
 		if !ok {
 			return nil, query.NewTypeError(v, query.ValueObject)
 		}

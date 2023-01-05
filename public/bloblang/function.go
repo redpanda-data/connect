@@ -3,7 +3,7 @@ package bloblang
 // Function defines a Bloblang function, arguments are provided to the
 // constructor, allowing the implementation of this function to resolve them
 // statically when possible.
-type Function func() (interface{}, error)
+type Function func() (any, error)
 
 // FunctionConstructor defines a constructor for a Bloblang function, where a
 // variadic list of arguments are provided.
@@ -16,7 +16,7 @@ type Function func() (interface{}, error)
 //
 // For a convenient way to perform type checking and coercion on the arguments
 // use an ArgSpec.
-type FunctionConstructor func(args ...interface{}) (Function, error)
+type FunctionConstructor func(args ...any) (Function, error)
 
 // FunctionConstructorV2 defines a constructor for a Bloblang function where
 // parameters are parsed using a ParamsSpec provided when registering the

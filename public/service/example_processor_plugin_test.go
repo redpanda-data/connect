@@ -6,8 +6,9 @@ import (
 
 	"github.com/benthosdev/benthos/v4/public/service"
 
-	// Import only pure Benthos components, switch with `components/all` for all
-	// standard components
+	// Import only required Benthos components, switch with `components/all` for
+	// all standard components.
+	_ "github.com/benthosdev/benthos/v4/public/components/io"
 	_ "github.com/benthosdev/benthos/v4/public/components/pure"
 )
 

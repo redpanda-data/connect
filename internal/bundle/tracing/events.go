@@ -14,10 +14,11 @@ var (
 	EventError   EventType = "ERROR"
 )
 
-// NodeEvent represents a single event that occured within the stream.
+// NodeEvent represents a single event that occurred within the stream.
 type NodeEvent struct {
 	Type    EventType
 	Content string
+	Meta    map[string]any
 }
 
 // Summary is a high level description of all traced events.
@@ -41,7 +42,7 @@ func NewSummary() *Summary {
 // execution of a stream pipeline.
 func (s *Summary) InputEvents() map[string][]NodeEvent {
 	m := map[string][]NodeEvent{}
-	s.inputEvents.Range(func(key, value interface{}) bool {
+	s.inputEvents.Range(func(key, value any) bool {
 		m[key.(string)] = value.(*events).Extract()
 		return true
 	})
@@ -52,7 +53,7 @@ func (s *Summary) InputEvents() map[string][]NodeEvent {
 // execution of a stream pipeline.
 func (s *Summary) ProcessorEvents() map[string][]NodeEvent {
 	m := map[string][]NodeEvent{}
-	s.processorEvents.Range(func(key, value interface{}) bool {
+	s.processorEvents.Range(func(key, value any) bool {
 		m[key.(string)] = value.(*events).Extract()
 		return true
 	})
@@ -63,7 +64,7 @@ func (s *Summary) ProcessorEvents() map[string][]NodeEvent {
 // execution of a stream pipeline.
 func (s *Summary) OutputEvents() map[string][]NodeEvent {
 	m := map[string][]NodeEvent{}
-	s.outputEvents.Range(func(key, value interface{}) bool {
+	s.outputEvents.Range(func(key, value any) bool {
 		m[key.(string)] = value.(*events).Extract()
 		return true
 	})
@@ -92,13 +93,14 @@ type events struct {
 	m   []NodeEvent
 }
 
-func (e *events) Add(t EventType, content string) {
+func (e *events) Add(t EventType, content string, metadata map[string]any) {
 	e.mut.Lock()
 	defer e.mut.Unlock()
 
 	e.m = append(e.m, NodeEvent{
 		Type:    t,
 		Content: content,
+		Meta:    metadata,
 	})
 }
 

@@ -17,13 +17,15 @@ import (
 
 	"github.com/linkedin/goavro/v2"
 
+	"github.com/benthosdev/benthos/v4/internal/httpclient"
 	"github.com/benthosdev/benthos/v4/internal/shutdown"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
 func schemaRegistryEncoderConfig() *service.ConfigSpec {
-	return service.NewConfigSpec().
-		// Stable(). TODO
+	spec := service.NewConfigSpec().
+		Beta().
+		Version("3.58.0").
 		Categories("Parsing", "Integration").
 		Summary("Automatically encodes and validates messages with schemas from a Confluent Schema Registry service.").
 		Description(`
@@ -52,7 +54,7 @@ However, it is possible to instead consume documents in [standard/raw JSON forma
 
 Important! There is an outstanding issue in the [avro serializing library](https://github.com/linkedin/goavro) that benthos uses which means it [doesn't encode logical types correctly](https://github.com/linkedin/goavro/issues/252). It's still possible to encode logical types that are in-line with the spec if ` + "`avro_raw_json` is set to true" + `, though now of course non-logical types will not be in-line with the spec.
 `).
-		Field(service.NewStringField("url").Description("The base URL of the schema registry service.")).
+		Field(service.NewURLField("url").Description("The base URL of the schema registry service.")).
 		Field(service.NewInterpolatedStringField("subject").Description("The schema subject to derive schemas from.").
 			Example("foo").
 			Example(`${! meta("kafka_topic") }`)).
@@ -63,18 +65,21 @@ Important! There is an outstanding issue in the [avro serializing library](https
 			Example("1h")).
 		Field(service.NewBoolField("avro_raw_json").
 			Description("Whether messages encoded in Avro format should be parsed as normal JSON (\"json that meets the expectations of regular internet json\") rather than [Avro JSON](https://avro.apache.org/docs/current/specification/_print/#json-encoding). If `true` the schema returned from the subject should be parsed as [standard json](https://pkg.go.dev/github.com/linkedin/goavro/v2#NewCodecForStandardJSONFull) instead of as [avro json](https://pkg.go.dev/github.com/linkedin/goavro/v2#NewCodec). There is a [comment in goavro](https://github.com/linkedin/goavro/blob/5ec5a5ee7ec82e16e6e2b438d610e1cab2588393/union.go#L224-L249), the [underlining library used for avro serialization](https://github.com/linkedin/goavro), that explains in more detail the difference between standard json and avro json.").
-			Advanced().Default(false).Version("3.59.0")).
-		Field(service.NewTLSField("tls")).
-		Version("3.58.0")
+			Advanced().Default(false).Version("3.59.0"))
+
+	for _, f := range httpclient.AuthFields() {
+		spec = spec.Field(f.Version("4.7.0"))
+	}
+
+	return spec.Field(service.NewTLSField("tls"))
 }
 
 func init() {
 	err := service.RegisterBatchProcessor(
 		"schema_registry_encode", schemaRegistryEncoderConfig(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchProcessor, error) {
-			return newSchemaRegistryEncoderFromConfig(conf, mgr.Logger())
+			return newSchemaRegistryEncoderFromConfig(conf, mgr)
 		})
-
 	if err != nil {
 		panic(err)
 	}
@@ -89,6 +94,7 @@ type schemaRegistryEncoder struct {
 	schemaRefreshAfter time.Duration
 
 	schemaRegistryBaseURL *url.URL
+	requestSigner         httpclient.RequestSigner
 
 	schemas    map[string]*cachedSchemaEncoder
 	cacheMut   sync.RWMutex
@@ -96,10 +102,11 @@ type schemaRegistryEncoder struct {
 	shutSig    *shutdown.Signaller
 
 	logger *service.Logger
+	mgr    *service.Resources
 	nowFn  func() time.Time
 }
 
-func newSchemaRegistryEncoderFromConfig(conf *service.ParsedConfig, logger *service.Logger) (*schemaRegistryEncoder, error) {
+func newSchemaRegistryEncoderFromConfig(conf *service.ParsedConfig, mgr *service.Resources) (*schemaRegistryEncoder, error) {
 	urlStr, err := conf.FieldString("url")
 	if err != nil {
 		return nil, err
@@ -124,20 +131,25 @@ func newSchemaRegistryEncoderFromConfig(conf *service.ParsedConfig, logger *serv
 	if refreshTicker < time.Second {
 		refreshTicker = time.Second
 	}
+	authSigner, err := httpclient.AuthSignerFromParsed(conf)
+	if err != nil {
+		return nil, err
+	}
 	tlsConf, err := conf.FieldTLS("tls")
 	if err != nil {
 		return nil, err
 	}
-	return newSchemaRegistryEncoder(urlStr, tlsConf, subject, avroRawJSON, refreshPeriod, refreshTicker, logger)
+	return newSchemaRegistryEncoder(urlStr, authSigner, tlsConf, subject, avroRawJSON, refreshPeriod, refreshTicker, mgr)
 }
 
 func newSchemaRegistryEncoder(
 	urlStr string,
+	reqSigner httpclient.RequestSigner,
 	tlsConf *tls.Config,
 	subject *service.InterpolatedString,
 	avroRawJSON bool,
 	schemaRefreshAfter, schemaRefreshTicker time.Duration,
-	logger *service.Logger,
+	mgr *service.Resources,
 ) (*schemaRegistryEncoder, error) {
 	u, err := url.Parse(urlStr)
 	if err != nil {
@@ -146,12 +158,14 @@ func newSchemaRegistryEncoder(
 
 	s := &schemaRegistryEncoder{
 		schemaRegistryBaseURL: u,
+		requestSigner:         reqSigner,
 		subject:               subject,
 		avroRawJSON:           avroRawJSON,
 		schemaRefreshAfter:    schemaRefreshAfter,
 		schemas:               map[string]*cachedSchemaEncoder{},
 		shutSig:               shutdown.NewSignaller(),
-		logger:                logger,
+		logger:                mgr.Logger(),
+		mgr:                   mgr,
 		nowFn:                 time.Now,
 	}
 
@@ -185,7 +199,14 @@ func newSchemaRegistryEncoder(
 func (s *schemaRegistryEncoder) ProcessBatch(ctx context.Context, batch service.MessageBatch) ([]service.MessageBatch, error) {
 	batch = batch.Copy()
 	for i, msg := range batch {
-		encoder, id, err := s.getEncoder(batch.InterpolatedString(i, s.subject))
+		subject, err := batch.TryInterpolatedString(i, s.subject)
+		if err != nil {
+			s.logger.Errorf("Subject interpolation error: %v", err)
+			msg.SetError(fmt.Errorf("subject interpolation error: %w", err))
+			continue
+		}
+
+		encoder, id, err := s.getEncoder(subject)
 		if err != nil {
 			msg.SetError(err)
 			continue
@@ -302,6 +323,9 @@ func (s *schemaRegistryEncoder) getLatestEncoder(subject string) (schemaEncoder,
 		return nil, 0, err
 	}
 	req.Header.Add("Accept", "application/vnd.schemaregistry.v1+json")
+	if err := s.requestSigner(s.mgr.FS(), req); err != nil {
+		return nil, 0, err
+	}
 
 	var resBytes []byte
 	for i := 0; i < 3; i++ {

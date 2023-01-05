@@ -13,14 +13,14 @@ import (
 func TestExpressionsParser(t *testing.T) {
 	type easyMsg struct {
 		content string
-		meta    map[string]string
+		meta    map[string]any
 	}
 
 	tests := map[string]struct {
 		input    string
 		output   string
 		messages []easyMsg
-		value    *interface{}
+		value    *any
 		index    int
 	}{
 		"match literals": {
@@ -262,23 +262,26 @@ func TestExpressionsParser(t *testing.T) {
 				part := message.NewPart([]byte(m.content))
 				if m.meta != nil {
 					for k, v := range m.meta {
-						part.MetaSet(k, v)
+						part.MetaSetMut(k, v)
 					}
 				}
 				msg = append(msg, part)
 			}
 
-			e, err := tryParseQuery(test.input)
-			require.Nil(t, err)
+			e, pErr := tryParseQuery(test.input)
+			require.Nil(t, pErr)
 
-			res := query.ExecToString(e, query.FunctionContext{
+			res, err := query.ExecToString(e, query.FunctionContext{
 				Index: test.index, MsgBatch: msg,
-			}.WithValueFunc(func() *interface{} { return test.value }))
-
+			}.WithValueFunc(func() *any { return test.value }))
+			require.NoError(t, err)
 			assert.Equal(t, test.output, res)
-			res = string(query.ExecToBytes(e, query.FunctionContext{
+
+			bres, err := query.ExecToBytes(e, query.FunctionContext{
 				Index: test.index, MsgBatch: msg,
-			}.WithValueFunc(func() *interface{} { return test.value })))
+			}.WithValueFunc(func() *any { return test.value }))
+			require.NoError(t, err)
+			res = string(bres)
 			assert.Equal(t, test.output, res)
 		})
 	}

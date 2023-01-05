@@ -2,6 +2,7 @@ package input
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -20,8 +21,6 @@ type AsyncReader struct {
 	connected   int32
 	connBackoff backoff.BackOff
 
-	allowSkipAcks bool
-
 	typeStr string
 	reader  Async
 
@@ -34,7 +33,6 @@ type AsyncReader struct {
 // NewAsyncReader creates a new AsyncReader input type.
 func NewAsyncReader(
 	typeStr string,
-	allowSkipAcks bool,
 	r Async,
 	mgr component.Observability,
 ) (Streamed, error) {
@@ -44,13 +42,12 @@ func NewAsyncReader(
 	boff.MaxElapsedTime = 0
 
 	rdr := &AsyncReader{
-		connBackoff:   boff,
-		allowSkipAcks: allowSkipAcks,
-		typeStr:       typeStr,
-		reader:        r,
-		mgr:           mgr,
-		transactions:  make(chan message.Transaction),
-		shutSig:       shutdown.NewSignaller(),
+		connBackoff:  boff,
+		typeStr:      typeStr,
+		reader:       r,
+		mgr:          mgr,
+		transactions: make(chan message.Transaction),
+		shutSig:      shutdown.NewSignaller(),
 	}
 
 	go rdr.loop()
@@ -96,7 +93,7 @@ func (r *AsyncReader) loop() {
 	initConnection := func() bool {
 		for {
 			if err := r.reader.Connect(closeAtLeisureCtx); err != nil {
-				if r.shutSig.ShouldCloseAtLeisure() || err == component.ErrTypeClosed {
+				if r.shutSig.ShouldCloseAtLeisure() || errors.Is(err, component.ErrTypeClosed) {
 					return false
 				}
 				r.mgr.Logger().Errorf("Failed to connect to %v: %v\n", r.typeStr, err)
@@ -122,7 +119,7 @@ func (r *AsyncReader) loop() {
 		msg, ackFn, err := r.reader.ReadBatch(closeAtLeisureCtx)
 
 		// If our reader says it is not connected.
-		if err == component.ErrNotConnected {
+		if errors.Is(err, component.ErrNotConnected) {
 			mLostConn.Incr(1)
 			atomic.StoreInt32(&r.connected, 0)
 
@@ -135,7 +132,7 @@ func (r *AsyncReader) loop() {
 		}
 
 		// Close immediately if our reader is closed.
-		if r.shutSig.ShouldCloseAtLeisure() || err == component.ErrTypeClosed {
+		if r.shutSig.ShouldCloseAtLeisure() || errors.Is(err, component.ErrTypeClosed) {
 			return
 		}
 

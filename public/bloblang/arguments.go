@@ -11,7 +11,7 @@ import (
 // arguments by registering them with pointer receivers.
 type ArgSpec struct {
 	n          int
-	validators []func(args []interface{}) error
+	validators []func(args []any) error
 }
 
 // NewArgSpec creates an argument parser/validator.
@@ -22,7 +22,7 @@ func NewArgSpec() *ArgSpec {
 // Extract the specified typed arguments from a slice of generic arguments.
 // Returns an error if the number of arguments does not match the spec, and
 // returns an *ArgError if the type of an argument is mismatched.
-func (a *ArgSpec) Extract(args []interface{}) error {
+func (a *ArgSpec) Extract(args []any) error {
 	if len(args) != a.n {
 		return fmt.Errorf("expected %v arguments, received %v", a.n, len(args))
 	}
@@ -39,7 +39,7 @@ func (a *ArgSpec) IntVar(i *int) *ArgSpec {
 	index := a.n
 	a.n++
 
-	a.validators = append(a.validators, func(args []interface{}) error {
+	a.validators = append(a.validators, func(args []any) error {
 		v, err := query.IGetInt(args[index])
 		if err != nil {
 			return newArgError(index, reflect.Int, args[index])
@@ -56,7 +56,7 @@ func (a *ArgSpec) Int64Var(i *int64) *ArgSpec {
 	index := a.n
 	a.n++
 
-	a.validators = append(a.validators, func(args []interface{}) error {
+	a.validators = append(a.validators, func(args []any) error {
 		v, err := query.IGetInt(args[index])
 		if err != nil {
 			return newArgError(index, reflect.Int64, args[index])
@@ -74,7 +74,7 @@ func (a *ArgSpec) Float64Var(f *float64) *ArgSpec {
 	index := a.n
 	a.n++
 
-	a.validators = append(a.validators, func(args []interface{}) error {
+	a.validators = append(a.validators, func(args []any) error {
 		v, err := query.IGetNumber(args[index])
 		if err != nil {
 			return newArgError(index, reflect.Float64, args[index])
@@ -91,7 +91,7 @@ func (a *ArgSpec) BoolVar(b *bool) *ArgSpec {
 	index := a.n
 	a.n++
 
-	a.validators = append(a.validators, func(args []interface{}) error {
+	a.validators = append(a.validators, func(args []any) error {
 		v, err := query.IGetBool(args[index])
 		if err != nil {
 			return newArgError(index, reflect.Bool, args[index])
@@ -109,7 +109,7 @@ func (a *ArgSpec) StringVar(s *string) *ArgSpec {
 	index := a.n
 	a.n++
 
-	a.validators = append(a.validators, func(args []interface{}) error {
+	a.validators = append(a.validators, func(args []any) error {
 		v, err := query.IGetString(args[index])
 		if err != nil {
 			return newArgError(index, reflect.String, args[index])
@@ -123,11 +123,11 @@ func (a *ArgSpec) StringVar(s *string) *ArgSpec {
 
 // AnyVar creates an argument to follow the previously created argument that can
 // have any value.
-func (a *ArgSpec) AnyVar(i *interface{}) *ArgSpec {
+func (a *ArgSpec) AnyVar(i *any) *ArgSpec {
 	index := a.n
 	a.n++
 
-	a.validators = append(a.validators, func(args []interface{}) error {
+	a.validators = append(a.validators, func(args []any) error {
 		*i = args[index]
 		return nil
 	})
@@ -150,14 +150,14 @@ type ArgError struct {
 	ActualKind reflect.Kind
 
 	// The value of the argument
-	Value interface{}
+	Value any
 }
 
 func (a *ArgError) Error() string {
 	return fmt.Sprintf("bad argument %v: expected %v value, got %v (%v)", a.Index, a.ExpectedKind.String(), a.ActualKind.String(), a.Value)
 }
 
-func newArgError(index int, expected reflect.Kind, actual interface{}) error {
+func newArgError(index int, expected reflect.Kind, actual any) error {
 	return &ArgError{
 		Index:        index,
 		ExpectedKind: expected,

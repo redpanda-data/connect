@@ -19,7 +19,7 @@ type V1 interface {
 	Close(ctx context.Context) error
 }
 
-// Pipeline is an interface that implements channel based based consumer and
+// Pipeline is an interface that implements channel based consumer and
 // producer methods for streaming data through a processing pipeline.
 type Pipeline interface {
 	// TransactionChan returns a channel used for consuming transactions from

@@ -100,7 +100,7 @@ func TestSequenceJoins(t *testing.T) {
 	conf.Type = "sequence"
 	conf.Sequence.ShardedJoin.IDPath = "id"
 	conf.Sequence.ShardedJoin.Iterations = 1
-	conf.Sequence.ShardedJoin.Type = "full-outter"
+	conf.Sequence.ShardedJoin.Type = "full-outer"
 
 	csvConf := input.NewConfig()
 	csvConf.Type = "csv"
@@ -224,9 +224,9 @@ func TestSequenceJoinsMergeStrategies(t *testing.T) {
 			conf.Sequence.ShardedJoin.IDPath = "id"
 			conf.Sequence.ShardedJoin.MergeStrategy = test.mergeStrat
 			if test.flushOnFinal {
-				conf.Sequence.ShardedJoin.Type = "outter"
+				conf.Sequence.ShardedJoin.Type = "outer"
 			} else {
-				conf.Sequence.ShardedJoin.Type = "full-outter"
+				conf.Sequence.ShardedJoin.Type = "full-outer"
 			}
 			conf.Sequence.ShardedJoin.Iterations = 1
 
@@ -294,7 +294,7 @@ func TestSequenceJoinsBig(t *testing.T) {
 	conf.Type = "sequence"
 	conf.Sequence.ShardedJoin.IDPath = "id"
 	conf.Sequence.ShardedJoin.Iterations = 5
-	conf.Sequence.ShardedJoin.Type = "full-outter"
+	conf.Sequence.ShardedJoin.Type = "full-outer"
 
 	csvConf := input.NewConfig()
 	csvConf.Type = "csv"

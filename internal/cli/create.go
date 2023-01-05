@@ -133,7 +133,7 @@ If the expression is omitted a default config is created.`[1:],
 			}
 
 			var filter docs.FieldFilter
-			var iconf interface{} = conf
+			var iconf any = conf
 
 			if c.Bool("small") {
 				iconf = minimalCreateConfig{

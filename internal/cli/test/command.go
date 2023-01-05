@@ -1,7 +1,9 @@
 package test
 
 import (
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"sort"
@@ -11,14 +13,18 @@ import (
 	yaml "gopkg.in/yaml.v3"
 
 	"github.com/benthosdev/benthos/v4/internal/config"
+	"github.com/benthosdev/benthos/v4/internal/docs"
 	ifilepath "github.com/benthosdev/benthos/v4/internal/filepath"
+	"github.com/benthosdev/benthos/v4/internal/filepath/ifs"
 	"github.com/benthosdev/benthos/v4/internal/log"
 )
 
-var green = color.New(color.FgGreen).SprintFunc()
-var red = color.New(color.FgRed).SprintFunc()
-var yellow = color.New(color.FgYellow).SprintFunc()
-var blue = color.New(color.FgBlue).SprintFunc()
+var (
+	green  = color.New(color.FgGreen).SprintFunc()
+	red    = color.New(color.FgRed).SprintFunc()
+	yellow = color.New(color.FgYellow).SprintFunc()
+	blue   = color.New(color.FgBlue).SprintFunc()
+)
 
 //------------------------------------------------------------------------------
 
@@ -39,11 +45,11 @@ func GetPathPair(fullPath, testSuffix string) (configPath, definitionPath string
 }
 
 func getDefinition(targetPath, definitionPath string) (*Definition, error) {
-	if _, err := os.Stat(targetPath); err != nil {
+	if _, err := ifs.OS().Stat(targetPath); err != nil {
 		return nil, fmt.Errorf("unable to access target config file '%v': %v", targetPath, err)
 	}
-	if _, err := os.Stat(definitionPath); err != nil {
-		if !os.IsNotExist(err) {
+	if _, err := ifs.OS().Stat(definitionPath); err != nil {
+		if !errors.Is(err, fs.ErrNotExist) {
 			return nil, fmt.Errorf("unable to access test definition file '%v': %v", definitionPath, err)
 		}
 		if !strings.HasSuffix(targetPath, ".yaml") && !strings.HasSuffix(targetPath, ".yml") {
@@ -52,7 +58,7 @@ func getDefinition(targetPath, definitionPath string) (*Definition, error) {
 		definitionPath = targetPath
 	}
 	var definition Definition
-	defBytes, err := os.ReadFile(definitionPath)
+	defBytes, err := ifs.ReadFile(ifs.OS(), definitionPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read test definition from '%v': %v", definitionPath, err)
 	}
@@ -65,7 +71,7 @@ func getDefinition(targetPath, definitionPath string) (*Definition, error) {
 // GetTestTargets searches for test definition targets in a path with a given
 // test suffix.
 func GetTestTargets(targetPaths []string, testSuffix string) (map[string]Definition, error) {
-	targetPaths, err := ifilepath.GlobsAndSuperPaths(targetPaths, "yaml", "yml")
+	targetPaths, err := ifilepath.GlobsAndSuperPaths(ifs.OS(), targetPaths, "yaml", "yml")
 	if err != nil {
 		return nil, err
 	}
@@ -87,10 +93,10 @@ func GetTestTargets(targetPaths []string, testSuffix string) (map[string]Definit
 
 // Lints the config target of a test definition and either returns linting
 // errors (false for failed) or returns an error.
-func lintTarget(path, testSuffix string) ([]string, error) {
+func lintTarget(path, testSuffix string) ([]docs.Lint, error) {
 	confPath, _ := GetPathPair(path, testSuffix)
 	dummyConf := config.New()
-	lints, err := config.ReadFileLinted(confPath, &config.LintOptions{}, &dummyConf)
+	lints, err := config.ReadFileLinted(ifs.OS(), confPath, config.LintOptions{}, &dummyConf)
 	if err != nil {
 		return nil, err
 	}
@@ -115,7 +121,7 @@ func RunAll(paths []string, testSuffix string, lint bool, logger log.Modular, re
 
 	type failedTarget struct {
 		target string
-		lints  []string
+		lints  []docs.Lint
 		cases  []CaseFailure
 	}
 	fails := []failedTarget{}
@@ -127,7 +133,7 @@ func RunAll(paths []string, testSuffix string, lint bool, logger log.Modular, re
 	sort.Strings(targetPaths)
 
 	for _, target := range targetPaths {
-		var lints []string
+		var lints []docs.Lint
 		var failCases []CaseFailure
 		if lint {
 			if lints, err = lintTarget(target, testSuffix); err != nil {

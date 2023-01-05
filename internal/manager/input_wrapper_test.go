@@ -44,7 +44,7 @@ func TestInputWrapperSwap(t *testing.T) {
 		conf.Generate.Mapping = fmt.Sprintf(`root.name = "from generate %v"`, i)
 
 		go func() {
-			assert.NoError(t, iWrapper.closeExistingInput(ctx))
+			assert.NoError(t, iWrapper.closeExistingInput(ctx, true))
 
 			iWrapped, err = bMgr.NewInput(conf)
 			assert.NoError(t, err)

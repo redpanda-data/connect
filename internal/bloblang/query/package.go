@@ -9,25 +9,6 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/message"
 )
 
-// ErrRecoverable represents a function execution error that can optionally be
-// recovered into a zero-value.
-type ErrRecoverable struct {
-	Recovered interface{}
-	Err       error
-}
-
-// Unwrap the error.
-func (e *ErrRecoverable) Unwrap() error {
-	return e.Err
-}
-
-// Error implements the standard error interface.
-func (e *ErrRecoverable) Error() string {
-	return e.Err.Error()
-}
-
-//------------------------------------------------------------------------------
-
 type badFunctionErr string
 
 func (e badFunctionErr) Error() string {
@@ -51,27 +32,29 @@ type MessageBatch interface {
 
 // MetaMsg provides access to the metadata of a message.
 type MetaMsg interface {
-	MetaSet(key, value string)
-	MetaGet(key string) string
+	MetaSetMut(key string, value any)
+	MetaGetStr(key string) string
+	MetaGetMut(key string) (any, bool)
 	MetaDelete(key string)
-	MetaIter(f func(k, v string) error) error
+	MetaIterMut(f func(k string, v any) error) error
+	MetaIterStr(f func(k, v string) error) error
 }
 
 // FunctionContext provides access to a range of query targets for functions to
 // reference.
 type FunctionContext struct {
 	Maps     map[string]Function
-	Vars     map[string]interface{}
+	Vars     map[string]any
 	Index    int
 	MsgBatch MessageBatch
 
 	// Reference new message being mapped
 	NewMeta  MetaMsg
-	NewValue *interface{}
+	NewValue *any
 
-	valueFn    func() *interface{}
-	value      *interface{}
-	nextValue  *interface{}
+	valueFn    func() *any
+	value      *any
+	nextValue  *any
 	namedValue *namedContextValue
 
 	// Used to track how many maps we've entered.
@@ -80,20 +63,19 @@ type FunctionContext struct {
 
 type namedContextValue struct {
 	name  string
-	value interface{}
+	value any
 	next  *namedContextValue
 }
 
 // IncrStackCount increases the count stored in the function context of how many
 // maps we've entered and returns the current count.
-// nolint:gocritic // Ignore unnamedResult false positive
-func (ctx FunctionContext) IncrStackCount() (FunctionContext, int) {
+func (ctx FunctionContext) IncrStackCount() (FunctionContext, int) { //nolint: gocritic // Ignore unnamedResult false positive
 	ctx.stackCount++
 	return ctx, ctx.stackCount
 }
 
 // NamedValue returns the value of a named context if it exists.
-func (ctx FunctionContext) NamedValue(name string) (interface{}, bool) {
+func (ctx FunctionContext) NamedValue(name string) (any, bool) {
 	current := ctx.namedValue
 	for current != nil {
 		if current.name == name {
@@ -105,7 +87,7 @@ func (ctx FunctionContext) NamedValue(name string) (interface{}, bool) {
 }
 
 // WithNamedValue returns a FunctionContext with a named value.
-func (ctx FunctionContext) WithNamedValue(name string, value interface{}) FunctionContext {
+func (ctx FunctionContext) WithNamedValue(name string, value any) FunctionContext {
 	previous := ctx.namedValue
 	ctx.namedValue = &namedContextValue{
 		name:  name,
@@ -117,7 +99,7 @@ func (ctx FunctionContext) WithNamedValue(name string, value interface{}) Functi
 
 // Value returns a lazily evaluated context value. A context value is not always
 // available and can therefore be nil.
-func (ctx FunctionContext) Value() *interface{} {
+func (ctx FunctionContext) Value() *any {
 	if ctx.value != nil {
 		return ctx.value
 	}
@@ -128,13 +110,13 @@ func (ctx FunctionContext) Value() *interface{} {
 }
 
 // WithValueFunc returns a function context with a new value func.
-func (ctx FunctionContext) WithValueFunc(fn func() *interface{}) FunctionContext {
+func (ctx FunctionContext) WithValueFunc(fn func() *any) FunctionContext {
 	ctx.valueFn = fn
 	return ctx
 }
 
 // WithValue returns a function context with a new value.
-func (ctx FunctionContext) WithValue(value interface{}) FunctionContext {
+func (ctx FunctionContext) WithValue(value any) FunctionContext {
 	ctx.nextValue = ctx.value
 	ctx.value = &value
 	return ctx
@@ -145,7 +127,7 @@ func (ctx FunctionContext) WithValue(value interface{}) FunctionContext {
 // absolute root value function then the context returned is unchanged. If there
 // is no current default value then a nil value is returned and the context
 // returned is unchanged.
-func (ctx FunctionContext) PopValue() (*interface{}, FunctionContext) {
+func (ctx FunctionContext) PopValue() (*any, FunctionContext) {
 	retValue := ctx.Value()
 
 	if ctx.nextValue != nil {
@@ -160,26 +142,20 @@ func (ctx FunctionContext) PopValue() (*interface{}, FunctionContext) {
 
 //------------------------------------------------------------------------------
 
-// ExecToString returns a string from a function exection.
-func ExecToString(fn Function, ctx FunctionContext) string {
+// ExecToString returns a string from a function execution.
+func ExecToString(fn Function, ctx FunctionContext) (string, error) {
 	v, err := fn.Exec(ctx)
 	if err != nil {
-		if rec, ok := err.(*ErrRecoverable); ok {
-			return IToString(rec.Recovered)
-		}
-		return ""
+		return "", err
 	}
-	return IToString(v)
+	return IToString(v), nil
 }
 
-// ExecToBytes returns a byte slice from a function exection.
-func ExecToBytes(fn Function, ctx FunctionContext) []byte {
+// ExecToBytes returns a byte slice from a function execution.
+func ExecToBytes(fn Function, ctx FunctionContext) ([]byte, error) {
 	v, err := fn.Exec(ctx)
 	if err != nil {
-		if rec, ok := err.(*ErrRecoverable); ok {
-			return IToBytes(rec.Recovered)
-		}
-		return nil
+		return nil, err
 	}
-	return IToBytes(v)
+	return IToBytes(v), nil
 }

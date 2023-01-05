@@ -181,7 +181,7 @@ func TestMappings(t *testing.T) {
 
 	type part struct {
 		Content string
-		Meta    map[string]string
+		Meta    map[string]any
 	}
 
 	tests := map[string]struct {
@@ -272,14 +272,14 @@ meta "bar baz" = deleted()`,
 			input: []part{
 				{
 					Content: `{"foo":"bar"}`,
-					Meta: map[string]string{
+					Meta: map[string]any{
 						"bar baz": "test1",
 					},
 				},
 			},
 			output: part{
 				Content: `{"bar":{"baz":"test1"}}`,
-				Meta: map[string]string{
+				Meta: map[string]any{
 					"foo": "bar",
 				},
 			},
@@ -292,7 +292,7 @@ meta "bar baz" = "test1"`,
 			},
 			output: part{
 				Content: `{"foo":{"bar":"baz"}}`,
-				Meta: map[string]string{
+				Meta: map[string]any{
 					"bar":     "baz",
 					"bar baz": "test1",
 				},
@@ -305,7 +305,7 @@ meta = deleted()`,
 			input: []part{
 				{
 					Content: `{"foo":"bar"}`,
-					Meta: map[string]string{
+					Meta: map[string]any{
 						"bar baz": "test1",
 					},
 				},
@@ -348,9 +348,9 @@ meta bar = 5 + 2`,
 			},
 			output: part{
 				Content: `this isn't json`,
-				Meta: map[string]string{
+				Meta: map[string]any{
 					"foo": "foo",
-					"bar": "7",
+					"bar": int64(7),
 				},
 			},
 		},
@@ -372,7 +372,7 @@ root."bar baz".test = 5 + 2`,
 			},
 			output: part{
 				Content: `{"bar baz":{"test":7}}`,
-				Meta: map[string]string{
+				Meta: map[string]any{
 					"foo bar": "hello world",
 				},
 			},
@@ -385,8 +385,8 @@ foo = "static"`,
 			},
 			output: part{
 				Content: `{"foo":"static"}`,
-				Meta: map[string]string{
-					"content": `hello world`,
+				Meta: map[string]any{
+					"content": []byte(`hello world`),
 				},
 			},
 		},
@@ -398,8 +398,8 @@ foo = "static"`,
 			},
 			output: part{
 				Content: `{"foo":"static"}`,
-				Meta: map[string]string{
-					"content": `{"foo":{"bar":"baz"}}`,
+				Meta: map[string]any{
+					"content": []byte(`{"foo":{"bar":"baz"}}`),
 				},
 			},
 		},
@@ -420,10 +420,10 @@ foo = "static"`,
 }
 root = this.apply("foo")`,
 			input: []part{
-				{Content: `{"outter":{"inner":"hello world"}}`},
+				{Content: `{"outer":{"inner":"hello world"}}`},
 			},
 			output: part{
-				Content: `{"applied":["foo"],"bar":{"outter":{"inner":"hello world"}},"foo":"static foo"}`,
+				Content: `{"applied":["foo"],"bar":{"outer":{"inner":"hello world"}},"foo":"static foo"}`,
 			},
 		},
 		"test nested maps": {
@@ -440,10 +440,10 @@ map bar {
 }
 root = this.apply("foo")`,
 			input: []part{
-				{Content: `{"outter":{"inner":"hello world"}}`},
+				{Content: `{"outer":{"inner":"hello world"}}`},
 			},
 			output: part{
-				Content: `{"applied":["bar","foo"],"foo":{"bar":{"outter":{"inner":"hello world"}},"static":"this is valid"}}`,
+				Content: `{"applied":["bar","foo"],"foo":{"bar":{"outer":{"inner":"hello world"}},"static":"this is valid"}}`,
 			},
 		},
 		"test imported map": {
@@ -451,10 +451,10 @@ root = this.apply("foo")`,
 
 root = this.apply("foo")`, goodMapFile),
 			input: []part{
-				{Content: `{"outter":{"inner":"hello world"}}`},
+				{Content: `{"outer":{"inner":"hello world"}}`},
 			},
 			output: part{
-				Content: `{"foo":"this is valid","nested":{"outter":{"inner":"hello world"}}}`,
+				Content: `{"foo":"this is valid","nested":{"outer":{"inner":"hello world"}}}`,
 			},
 		},
 		"test directly imported map": {
@@ -475,12 +475,12 @@ root = this.apply("foo")`, goodMapFile),
 			for _, p := range test.input {
 				part := message.NewPart([]byte(p.Content))
 				for k, v := range p.Meta {
-					part.MetaSet(k, v)
+					part.MetaSetMut(k, v)
 				}
 				msg = append(msg, part)
 			}
 			if test.output.Meta == nil {
-				test.output.Meta = map[string]string{}
+				test.output.Meta = map[string]any{}
 			}
 
 			exec, perr := ParseMapping(GlobalContext(), test.mapping)
@@ -491,9 +491,9 @@ root = this.apply("foo")`, goodMapFile),
 
 			newPart := part{
 				Content: string(resPart.AsBytes()),
-				Meta:    map[string]string{},
+				Meta:    map[string]any{},
 			}
-			_ = resPart.MetaIter(func(k, v string) error {
+			_ = resPart.MetaIterMut(func(k string, v any) error {
 				newPart.Meta[k] = v
 				return nil
 			})

@@ -10,14 +10,14 @@ import (
 func TestEnvironment(t *testing.T) {
 	env1, env2 := NewEnvironment(), NewEnvironment()
 
-	require.NoError(t, env1.RegisterMethod("foo", func(_ ...interface{}) (Method, error) {
-		return StringMethod(func(s string) (interface{}, error) {
+	require.NoError(t, env1.RegisterMethod("foo", func(_ ...any) (Method, error) {
+		return StringMethod(func(s string) (any, error) {
 			return "foo:" + s, nil
 		}), nil
 	}))
 
-	require.NoError(t, env2.RegisterFunction("bar", func(_ ...interface{}) (Function, error) {
-		return func() (interface{}, error) {
+	require.NoError(t, env2.RegisterFunction("bar", func(_ ...any) (Function, error) {
+		return func() (any, error) {
 			return "bar", nil
 		}, nil
 	}))
@@ -47,13 +47,13 @@ func TestEnvironmentV2(t *testing.T) {
 	env1, env2 := NewEnvironment(), NewEnvironment()
 
 	require.NoError(t, env1.RegisterMethodV2("foo", NewPluginSpec(), func(_ *ParsedParams) (Method, error) {
-		return StringMethod(func(s string) (interface{}, error) {
+		return StringMethod(func(s string) (any, error) {
 			return "foo:" + s, nil
 		}), nil
 	}))
 
 	require.NoError(t, env2.RegisterFunctionV2("bar", NewPluginSpec(), func(_ *ParsedParams) (Function, error) {
-		return func() (interface{}, error) {
+		return func() (any, error) {
 			return "bar", nil
 		}, nil
 	}))
@@ -82,8 +82,8 @@ func TestEnvironmentV2(t *testing.T) {
 func TestEmptyEnvironment(t *testing.T) {
 	env := NewEmptyEnvironment()
 
-	require.NoError(t, env.RegisterMethod("foo", func(_ ...interface{}) (Method, error) {
-		return StringMethod(func(s string) (interface{}, error) {
+	require.NoError(t, env.RegisterMethod("foo", func(_ ...any) (Method, error) {
+		return StringMethod(func(s string) (any, error) {
 			return "foo:" + s, nil
 		}), nil
 	}))

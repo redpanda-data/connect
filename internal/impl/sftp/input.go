@@ -49,10 +49,10 @@ func init() {
 		if err != nil {
 			return nil, err
 		}
-		return input.NewAsyncReader("sftp", true, input.NewAsyncPreserver(r), nm)
+		return input.NewAsyncReader("sftp", input.NewAsyncPreserver(r), nm)
 	}), docs.ComponentSpec{
 		Name:    "sftp",
-		Status:  docs.StatusExperimental,
+		Status:  docs.StatusBeta,
 		Version: "3.39.0",
 		Summary: `Consumes files from a server over SFTP.`,
 		Description: `
@@ -64,7 +64,7 @@ This input adds the following metadata fields to each message:
 - sftp_path
 ` + "```" + `
 
-You can access these metadata fields using [function interpolation](/docs/configuration/interpolation#metadata).`,
+You can access these metadata fields using [function interpolation](/docs/configuration/interpolation#bloblang-queries).`,
 		Config: docs.FieldComponent().WithChildren(
 			docs.FieldString(
 				"address",
@@ -166,7 +166,7 @@ func (s *sftpReader) Connect(ctx context.Context) error {
 	}
 
 	if s.client == nil {
-		if s.client, err = s.conf.Credentials.GetClient(s.conf.Address); err != nil {
+		if s.client, err = s.conf.Credentials.GetClient(s.mgr.FS(), s.conf.Address); err != nil {
 			return err
 		}
 		s.log.Debugln("Finding more paths")
@@ -252,7 +252,7 @@ func (s *sftpReader) ReadBatch(ctx context.Context) (message.Batch, input.AsyncA
 	}
 
 	for _, part := range parts {
-		part.MetaSet("sftp_path", s.currentPath)
+		part.MetaSetMut("sftp_path", s.currentPath)
 	}
 
 	msg := message.Batch(parts)

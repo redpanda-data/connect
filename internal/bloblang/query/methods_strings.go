@@ -16,6 +16,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"hash"
+	"hash/crc32"
 	"html"
 	"io"
 	"net/url"
@@ -45,7 +47,7 @@ var _ = registerSimpleMethod(
 		),
 	),
 	func(*ParsedParams) (simpleMethod, error) {
-		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
+		return func(v any, ctx FunctionContext) (any, error) {
 			return IToBytes(v), nil
 		}, nil
 	},
@@ -66,7 +68,7 @@ var _ = registerSimpleMethod(
 		),
 	),
 	func(*ParsedParams) (simpleMethod, error) {
-		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
+		return func(v any, ctx FunctionContext) (any, error) {
 			switch t := v.(type) {
 			case string:
 				return cases.Title(language.English).String(t), nil
@@ -160,7 +162,7 @@ var _ = registerSimpleMethod(
 			return nil, fmt.Errorf("unrecognized encoding type: %v", schemeStr)
 		}
 
-		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
+		return func(v any, ctx FunctionContext) (any, error) {
 			var res string
 			var err error
 			switch t := v.(type) {
@@ -241,7 +243,7 @@ var _ = registerSimpleMethod(
 			return nil, fmt.Errorf("unrecognized encoding type: %v", schemeStr)
 		}
 
-		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
+		return func(v any, ctx FunctionContext) (any, error) {
 			var res []byte
 			var err error
 			switch t := v.(type) {
@@ -328,7 +330,7 @@ root.encrypted = this.value.encrypt_aes("ctr", $key, $vector).encode("hex")`,
 		default:
 			return nil, fmt.Errorf("unrecognized encryption type: %v", schemeStr)
 		}
-		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
+		return func(v any, ctx FunctionContext) (any, error) {
 			var res string
 			var err error
 			switch t := v.(type) {
@@ -413,7 +415,7 @@ root.decrypted = this.value.decode("hex").decrypt_aes("ctr", $key, $vector).stri
 		default:
 			return nil, fmt.Errorf("unrecognized decryption type: %v", schemeStr)
 		}
-		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
+		return func(v any, ctx FunctionContext) (any, error) {
 			var res []byte
 			var err error
 			switch t := v.(type) {
@@ -444,7 +446,7 @@ var _ = registerSimpleMethod(
 		),
 	),
 	func(*ParsedParams) (simpleMethod, error) {
-		return stringMethod(func(s string) (interface{}, error) {
+		return stringMethod(func(s string) (any, error) {
 			return html.EscapeString(s), nil
 		}), nil
 	},
@@ -474,7 +476,7 @@ var _ = registerSimpleMethod(
 		if err != nil {
 			return nil, err
 		}
-		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
+		return func(v any, ctx FunctionContext) (any, error) {
 			switch t := v.(type) {
 			case string:
 				return int64(strings.Index(t, substring)), nil
@@ -501,7 +503,7 @@ var _ = registerSimpleMethod(
 		),
 	),
 	func(*ParsedParams) (simpleMethod, error) {
-		return stringMethod(func(s string) (interface{}, error) {
+		return stringMethod(func(s string) (any, error) {
 			return html.UnescapeString(s), nil
 		}), nil
 	},
@@ -522,7 +524,7 @@ var _ = registerSimpleMethod(
 		),
 	),
 	func(*ParsedParams) (simpleMethod, error) {
-		return stringMethod(func(s string) (interface{}, error) {
+		return stringMethod(func(s string) (any, error) {
 			return url.QueryEscape(s), nil
 		}), nil
 	},
@@ -543,7 +545,7 @@ var _ = registerSimpleMethod(
 		),
 	),
 	func(*ParsedParams) (simpleMethod, error) {
-		return stringMethod(func(s string) (interface{}, error) {
+		return stringMethod(func(s string) (any, error) {
 			return url.QueryUnescape(s)
 		}), nil
 	},
@@ -564,8 +566,8 @@ var _ = registerSimpleMethod(
 		),
 	),
 	func(*ParsedParams) (simpleMethod, error) {
-		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
-			arr, ok := v.([]interface{})
+		return func(v any, ctx FunctionContext) (any, error) {
+			arr, ok := v.([]any)
 			if !ok {
 				return nil, NewTypeError(v, ValueArray)
 			}
@@ -597,9 +599,9 @@ var _ = registerSimpleMethod(
 		),
 	),
 	func(*ParsedParams) (simpleMethod, error) {
-		return stringMethod(func(s string) (interface{}, error) {
+		return stringMethod(func(s string) (any, error) {
 			dir, file := filepath.Split(s)
-			return []interface{}{dir, file}, nil
+			return []any{dir, file}, nil
 		}), nil
 	},
 )
@@ -619,7 +621,7 @@ var _ = registerSimpleMethod(
 		),
 	).VariadicParams(),
 	func(args *ParsedParams) (simpleMethod, error) {
-		return stringMethod(func(s string) (interface{}, error) {
+		return stringMethod(func(s string) (any, error) {
 			return fmt.Sprintf(s, args.Raw()...), nil
 		}), nil
 	},
@@ -646,7 +648,7 @@ root.t2 = this.v2.has_prefix("foo")`,
 			return nil, err
 		}
 		prefixB := []byte(prefix)
-		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
+		return func(v any, ctx FunctionContext) (any, error) {
 			switch t := v.(type) {
 			case string:
 				return strings.HasPrefix(t, prefix), nil
@@ -679,7 +681,7 @@ root.t2 = this.v2.has_suffix("foo")`,
 			return nil, err
 		}
 		suffixB := []byte(suffix)
-		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
+		return func(v any, ctx FunctionContext) (any, error) {
 			switch t := v.(type) {
 			case string:
 				return strings.HasSuffix(t, suffix), nil
@@ -701,7 +703,7 @@ var _ = registerSimpleMethod(
 		`
 Hashes a string or byte array according to a chosen algorithm and returns the result as a byte array. When mapping the result to a JSON field the value should be cast to a string using the method `+"[`string`][methods.string], or encoded using the method [`encode`][methods.encode]"+`, otherwise it will be base64 encoded by default.
 
-Available algorithms are: `+"`hmac_sha1`, `hmac_sha256`, `hmac_sha512`, `md5`, `sha1`, `sha256`, `sha512`, `xxhash64`"+`.
+Available algorithms are: `+"`hmac_sha1`, `hmac_sha256`, `hmac_sha512`, `md5`, `sha1`, `sha256`, `sha512`, `xxhash64`, `crc32`"+`.
 
 The following algorithms require a key, which is specified as a second argument: `+"`hmac_sha1`, `hmac_sha256`, `hmac_sha512`"+`.`,
 		NewExampleSpec("",
@@ -710,9 +712,16 @@ root.h2 = this.value.hash("hmac_sha1","static-key").encode("hex")`,
 			`{"value":"hello world"}`,
 			`{"h1":"2aae6c35c94fcfb415dbe95f408b9ce91ee846ed","h2":"d87e5f068fa08fe90bb95bc7c8344cb809179d76"}`,
 		),
+		NewExampleSpec("The `crc32` algorithm supports options for the polynomial.",
+			`root.h1 = this.value.hash(algorithm: "crc32", polynomial: "Castagnoli").encode("hex")
+root.h2 = this.value.hash(algorithm: "crc32", polynomial: "Koopman").encode("hex")`,
+			`{"value":"hello world"}`,
+			`{"h1":"c99465aa","h2":"df373d3c"}`,
+		),
 	).
 		Param(ParamString("algorithm", "The hasing algorithm to use.")).
-		Param(ParamString("key", "An optional key to use.").Optional()),
+		Param(ParamString("key", "An optional key to use.").Optional()).
+		Param(ParamString("polynomial", "An optional polynomial key to use when selecting the `crc32` algorithm, otherwise ignored. Options are `IEEE` (default), `Castagnoli` and `Koopman`").Default("IEEE")),
 	func(args *ParsedParams) (simpleMethod, error) {
 		algorithmStr, err := args.FieldString("algorithm")
 		if err != nil {
@@ -725,6 +734,10 @@ root.h2 = this.value.hash("hmac_sha1","static-key").encode("hex")`,
 		}
 		if keyParam != nil {
 			key = []byte(*keyParam)
+		}
+		poly, err := args.FieldString("polynomial")
+		if err != nil {
+			return nil, err
 		}
 		var hashFn func([]byte) ([]byte, error)
 		switch algorithmStr {
@@ -785,10 +798,26 @@ root.h2 = this.value.hash("hmac_sha1","static-key").encode("hex")`,
 				_, _ = h.Write(b)
 				return []byte(strconv.FormatUint(h.Sum64(), 10)), nil
 			}
+		case "crc32":
+			hashFn = func(b []byte) ([]byte, error) {
+				var hasher hash.Hash
+				switch poly {
+				case "IEEE":
+					hasher = crc32.NewIEEE()
+				case "Castagnoli":
+					hasher = crc32.New(crc32.MakeTable(crc32.Castagnoli))
+				case "Koopman":
+					hasher = crc32.New(crc32.MakeTable(crc32.Koopman))
+				default:
+					return nil, fmt.Errorf("unsupported crc32 hash key %q", poly)
+				}
+				hasher.Write(b)
+				return hasher.Sum(nil), nil
+			}
 		default:
 			return nil, fmt.Errorf("unrecognized hash type: %v", algorithmStr)
 		}
-		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
+		return func(v any, ctx FunctionContext) (any, error) {
 			var res []byte
 			var err error
 			switch t := v.(type) {
@@ -828,8 +857,8 @@ root.joined_numbers = this.numbers.map_each(this.string()).join(",")`,
 		if delimArg != nil {
 			delim = *delimArg
 		}
-		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
-			slice, ok := v.([]interface{})
+		return func(v any, ctx FunctionContext) (any, error) {
+			slice, ok := v.([]any)
 			if !ok {
 				return nil, NewTypeError(v, ValueArray)
 			}
@@ -868,7 +897,7 @@ var _ = registerSimpleMethod(
 		),
 	),
 	func(*ParsedParams) (simpleMethod, error) {
-		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
+		return func(v any, ctx FunctionContext) (any, error) {
 			switch t := v.(type) {
 			case string:
 				return strings.ToUpper(t), nil
@@ -896,7 +925,7 @@ var _ = registerSimpleMethod(
 		),
 	),
 	func(*ParsedParams) (simpleMethod, error) {
-		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
+		return func(v any, ctx FunctionContext) (any, error) {
 			switch t := v.(type) {
 			case string:
 				return strings.ToLower(t), nil
@@ -916,18 +945,60 @@ var _ = registerSimpleMethod(
 		"parse_csv", "",
 	).InCategory(
 		MethodCategoryParsing,
-		"Attempts to parse a string into an array of objects by following the CSV format described in RFC 4180. The first line is assumed to be a header row, which determines the keys of values in each object.",
-		NewExampleSpec("",
+		"Attempts to parse a string into an array of objects by following the CSV format described in RFC 4180.",
+		NewExampleSpec("Parses CSV data with a header row",
 			`root.orders = this.orders.parse_csv()`,
 			`{"orders":"foo,bar\nfoo 1,bar 1\nfoo 2,bar 2"}`,
 			`{"orders":[{"bar":"bar 1","foo":"foo 1"},{"bar":"bar 2","foo":"foo 2"}]}`,
 		),
-	),
+		NewExampleSpec("Parses CSV data without a header row",
+			`root.orders = this.orders.parse_csv(false)`,
+			`{"orders":"foo 1,bar 1\nfoo 2,bar 2"}`,
+			`{"orders":[["foo 1","bar 1"],["foo 2","bar 2"]]}`,
+		),
+		NewExampleSpec("Parses CSV data delimited by dots",
+			`root.orders = this.orders.parse_csv(delimiter:".")`,
+			`{"orders":"foo.bar\nfoo 1.bar 1\nfoo 2.bar 2"}`,
+			`{"orders":[{"bar":"bar 1","foo":"foo 1"},{"bar":"bar 2","foo":"foo 2"}]}`,
+		),
+		NewExampleSpec("Parses CSV data containing a quote in an unquoted field",
+			`root.orders = this.orders.parse_csv(lazy_quotes:true)`,
+			`{"orders":"foo,bar\nfoo 1,bar 1\nfoo\" \"2,bar\" \"2"}`,
+			`{"orders":[{"bar":"bar 1","foo":"foo 1"},{"bar":"bar\" \"2","foo":"foo\" \"2"}]}`,
+		)).
+		Param(ParamBool("parse_header_row", "Whether to reference the first row as a header row. If set to true the output structure for messages will be an object where field keys are determined by the header row. Otherwise, the output will be an array of row arrays.").Default(true)).
+		Param(ParamString("delimiter", "The delimiter to use for splitting values in each record. It must be a single character.").Default(",")).
+		Param(ParamBool("lazy_quotes", "If set to `true`, a quote may appear in an unquoted field and a non-doubled quote may appear in a quoted field.").Default(false)),
 	parseCSVMethod,
 )
 
-func parseCSVMethod(*ParsedParams) (simpleMethod, error) {
-	return func(v interface{}, ctx FunctionContext) (interface{}, error) {
+func parseCSVMethod(args *ParsedParams) (simpleMethod, error) {
+	return func(v any, ctx FunctionContext) (any, error) {
+		var parseHeaderRow bool
+		var optBool *bool
+		var err error
+		if optBool, err = args.FieldOptionalBool("parse_header_row"); err != nil {
+			return nil, err
+		}
+		parseHeaderRow = *optBool
+
+		var delimiter rune
+		var optString *string
+		if optString, err = args.FieldOptionalString("delimiter"); err != nil {
+			return nil, err
+		}
+		delimRunes := []rune(*optString)
+		if len(delimRunes) != 1 {
+			return nil, errors.New("delimiter value must be exactly one character")
+		}
+		delimiter = delimRunes[0]
+
+		var lazyQuotes bool
+		if optBool, err = args.FieldOptionalBool("lazy_quotes"); err != nil {
+			return nil, err
+		}
+		lazyQuotes = *optBool
+
 		var csvBytes []byte
 		switch t := v.(type) {
 		case string:
@@ -939,6 +1010,8 @@ func parseCSVMethod(*ParsedParams) (simpleMethod, error) {
 		}
 
 		r := csv.NewReader(bytes.NewReader(csvBytes))
+		r.Comma = delimiter
+		r.LazyQuotes = lazyQuotes
 		strRecords, err := r.ReadAll()
 		if err != nil {
 			return nil, err
@@ -947,20 +1020,32 @@ func parseCSVMethod(*ParsedParams) (simpleMethod, error) {
 			return nil, errors.New("zero records were parsed")
 		}
 
-		records := make([]interface{}, 0, len(strRecords)-1)
-		headers := strRecords[0]
-		if len(headers) == 0 {
-			return nil, fmt.Errorf("no headers found on first row")
-		}
-		for j, strRecord := range strRecords[1:] {
-			if len(headers) != len(strRecord) {
-				return nil, fmt.Errorf("record on line %v: record mismatch with headers", j)
+		var records []any
+		if parseHeaderRow {
+			records = make([]any, 0, len(strRecords)-1)
+			headers := strRecords[0]
+			if len(headers) == 0 {
+				return nil, fmt.Errorf("no headers found on first row")
 			}
-			obj := make(map[string]interface{}, len(strRecord))
-			for i, r := range strRecord {
-				obj[headers[i]] = r
+			for j, strRecord := range strRecords[1:] {
+				if len(headers) != len(strRecord) {
+					return nil, fmt.Errorf("record on line %v: record mismatch with headers", j)
+				}
+				obj := make(map[string]any, len(strRecord))
+				for i, r := range strRecord {
+					obj[headers[i]] = r
+				}
+				records = append(records, obj)
 			}
-			records = append(records, obj)
+		} else {
+			records = make([]any, 0, len(strRecords))
+			for _, rec := range strRecords {
+				genericSlice := make([]any, len(rec))
+				for i, v := range rec {
+					genericSlice[i] = v
+				}
+				records = append(records, genericSlice)
+			}
 		}
 
 		return records, nil
@@ -972,6 +1057,8 @@ func parseCSVMethod(*ParsedParams) (simpleMethod, error) {
 var _ = registerSimpleMethod(
 	NewMethodSpec(
 		"parse_json", "",
+	).Param(
+		ParamBool("use_number", "An optional flag that when set makes parsing numbers as json.Number instead of the default float64.").Optional(),
 	).InCategory(
 		MethodCategoryParsing,
 		"Attempts to parse a string as a JSON document and returns the result.",
@@ -980,9 +1067,18 @@ var _ = registerSimpleMethod(
 			`{"doc":"{\"foo\":\"bar\"}"}`,
 			`{"doc":{"foo":"bar"}}`,
 		),
+		NewExampleSpec("",
+			`root.doc = this.doc.parse_json(use_number: true)`,
+			`{"doc":"{\"foo\":\"11380878173205700000000000000000000000000000000\"}"}`,
+			`{"doc":{"foo":"11380878173205700000000000000000000000000000000"}}`,
+		),
 	),
-	func(*ParsedParams) (simpleMethod, error) {
-		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
+	func(args *ParsedParams) (simpleMethod, error) {
+		useNumber, err := args.FieldOptionalBool("use_number")
+		if err != nil {
+			return nil, err
+		}
+		return func(v any, ctx FunctionContext) (any, error) {
 			var jsonBytes []byte
 			switch t := v.(type) {
 			case string:
@@ -992,8 +1088,12 @@ var _ = registerSimpleMethod(
 			default:
 				return nil, NewTypeError(v, ValueString)
 			}
-			var jObj interface{}
-			if err := json.Unmarshal(jsonBytes, &jObj); err != nil {
+			var jObj any
+			decoder := json.NewDecoder(bytes.NewReader(jsonBytes))
+			if useNumber != nil && *useNumber {
+				decoder.UseNumber()
+			}
+			if err := decoder.Decode(&jObj); err != nil {
 				return nil, fmt.Errorf("failed to parse value as JSON: %w", err)
 			}
 			return jObj, nil
@@ -1014,7 +1114,7 @@ var _ = registerSimpleMethod(
 		),
 	),
 	func(*ParsedParams) (simpleMethod, error) {
-		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
+		return func(v any, ctx FunctionContext) (any, error) {
 			var yamlBytes []byte
 			switch t := v.(type) {
 			case string:
@@ -1024,7 +1124,7 @@ var _ = registerSimpleMethod(
 			default:
 				return nil, NewTypeError(v, ValueString)
 			}
-			var sObj interface{}
+			var sObj any
 			if err := yaml.Unmarshal(yamlBytes, &sObj); err != nil {
 				return nil, fmt.Errorf("failed to parse value as YAML: %w", err)
 			}
@@ -1052,7 +1152,7 @@ var _ = registerSimpleMethod(
 		),
 	),
 	func(*ParsedParams) (simpleMethod, error) {
-		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
+		return func(v any, ctx FunctionContext) (any, error) {
 			return yaml.Marshal(v)
 		}, nil
 	},
@@ -1071,7 +1171,7 @@ var _ = registerSimpleMethod(
     "foo": "bar"
 }`,
 		),
-		NewExampleSpec("Provide an argument string in order to customise the indentation used.",
+		NewExampleSpec("Pass a string to the `indent` parameter in order to customise the indentation.",
 			`root = this.format_json("  ")`,
 			`{"doc":{"foo":"bar"}}`,
 			`{
@@ -1085,12 +1185,21 @@ var _ = registerSimpleMethod(
 			`{"doc":{"foo":"bar"}}`,
 			`{"doc":"{\n    \"foo\": \"bar\"\n}"}`,
 		),
+		NewExampleSpec("Set the `no_indent` parameter to true to disable indentation. The result is equivalent to calling `bytes()`.",
+			`root = this.doc.format_json(no_indent: true)`,
+			`{"doc":{"foo":"bar"}}`,
+			`{"foo":"bar"}`,
+		),
 	).
 		Beta().
 		Param(ParamString(
 			"indent",
 			"Indentation string. Each element in a JSON object or array will begin on a new, indented line followed by one or more copies of indent according to the indentation nesting.",
-		).Optional().Default(strings.Repeat(" ", 4))),
+		).Default(strings.Repeat(" ", 4))).
+		Param(ParamBool(
+			"no_indent",
+			"Disable indentation.",
+		).Default(false)),
 	func(args *ParsedParams) (simpleMethod, error) {
 		indentOpt, err := args.FieldOptionalString("indent")
 		if err != nil {
@@ -1100,18 +1209,64 @@ var _ = registerSimpleMethod(
 		if indentOpt != nil {
 			indent = *indentOpt
 		}
-		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
-			b, err := json.Marshal(v)
+		noIndentOpt, err := args.FieldOptionalBool("no_indent")
+		if err != nil {
+			return nil, err
+		}
+		return func(v any, ctx FunctionContext) (any, error) {
+			if *noIndentOpt {
+				return json.Marshal(v)
+			}
+			return json.MarshalIndent(v, "", indent)
+		}, nil
+	},
+)
+
+var _ = registerSimpleMethod(
+	NewMethodSpec(
+		"parse_url", "Attempts to parse a URL from a string value, returning a structured result that describes the various facets of the URL. The fields returned within the structured result roughly follow https://pkg.go.dev/net/url#URL, and may be expanded in future in order to present more information.",
+	).InCategory(
+		MethodCategoryParsing, "",
+		NewExampleSpec("",
+			`root.foo_url = this.foo_url.parse_url()`,
+			`{"foo_url":"https://www.benthos.dev/docs/guides/bloblang/about"}`,
+			`{"foo_url":{"fragment":"","host":"www.benthos.dev","opaque":"","path":"/docs/guides/bloblang/about","raw_fragment":"","raw_path":"","raw_query":"","scheme":"https"}}`,
+		),
+		NewExampleSpec("",
+			`root.username = this.url.parse_url().user.name | "unknown"`,
+			`{"url":"amqp://foo:bar@127.0.0.1:5672/"}`,
+			`{"username":"foo"}`,
+			`{"url":"redis://localhost:6379"}`,
+			`{"username":"unknown"}`,
+		),
+	),
+	func(*ParsedParams) (simpleMethod, error) {
+		return stringMethod(func(data string) (any, error) {
+			urlParsed, err := url.Parse(data)
 			if err != nil {
 				return nil, err
 			}
-
-			var out bytes.Buffer
-			if err := json.Indent(&out, b, "", indent); err != nil {
-				return nil, err
+			values := map[string]any{
+				"scheme":       urlParsed.Scheme,
+				"opaque":       urlParsed.Opaque,
+				"host":         urlParsed.Host,
+				"path":         urlParsed.Path,
+				"raw_path":     urlParsed.RawPath,
+				"raw_query":    urlParsed.RawQuery,
+				"fragment":     urlParsed.Fragment,
+				"raw_fragment": urlParsed.RawFragment,
 			}
-			return out.Bytes(), nil
-		}, nil
+			if urlParsed.User != nil {
+				userObj := map[string]any{
+					"name": urlParsed.User.Username(),
+				}
+				if pass, exists := urlParsed.User.Password(); exists {
+					userObj["password"] = pass
+				}
+				values["user"] = userObj
+			}
+			return values, nil
+		}), nil
 	},
 )
 
@@ -1135,7 +1290,7 @@ var _ = registerSimpleMethod(
 		),
 	),
 	func(*ParsedParams) (simpleMethod, error) {
-		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
+		return func(v any, ctx FunctionContext) (any, error) {
 			switch t := v.(type) {
 			case string:
 				runes := []rune(t)
@@ -1171,7 +1326,7 @@ var _ = registerSimpleMethod(
 		),
 	),
 	func(*ParsedParams) (simpleMethod, error) {
-		return stringMethod(func(s string) (interface{}, error) {
+		return stringMethod(func(s string) (any, error) {
 			return strconv.Quote(s), nil
 		}), nil
 	},
@@ -1192,7 +1347,7 @@ var _ = registerSimpleMethod(
 		),
 	),
 	func(*ParsedParams) (simpleMethod, error) {
-		return stringMethod(func(s string) (interface{}, error) {
+		return stringMethod(func(s string) (any, error) {
 			return strconv.Unquote(s)
 		}), nil
 	},
@@ -1234,7 +1389,7 @@ func replaceAllImpl(args *ParsedParams) (simpleMethod, error) {
 		return nil, err
 	}
 	oldB, newB := []byte(oldStr), []byte(newStr)
-	return func(v interface{}, ctx FunctionContext) (interface{}, error) {
+	return func(v any, ctx FunctionContext) (any, error) {
 		switch t := v.(type) {
 		case string:
 			return strings.ReplaceAll(t, oldStr, newStr), nil
@@ -1298,7 +1453,7 @@ func replaceAllManyImpl(args *ParsedParams) (simpleMethod, error) {
 		replacePairsBytes = append(replacePairsBytes, [2][]byte{[]byte(from), []byte(to)})
 	}
 
-	return func(v interface{}, ctx FunctionContext) (interface{}, error) {
+	return func(v any, ctx FunctionContext) (any, error) {
 		switch t := v.(type) {
 		case string:
 			for _, pair := range replacePairs {
@@ -1338,18 +1493,18 @@ var _ = registerSimpleMethod(
 		if err != nil {
 			return nil, err
 		}
-		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
-			var result []interface{}
+		return func(v any, ctx FunctionContext) (any, error) {
+			var result []any
 			switch t := v.(type) {
 			case string:
 				matches := re.FindAllString(t, -1)
-				result = make([]interface{}, 0, len(matches))
+				result = make([]any, 0, len(matches))
 				for _, str := range matches {
 					result = append(result, str)
 				}
 			case []byte:
 				matches := re.FindAll(t, -1)
-				result = make([]interface{}, 0, len(matches))
+				result = make([]any, 0, len(matches))
 				for _, str := range matches {
 					result = append(result, string(str))
 				}
@@ -1384,14 +1539,14 @@ var _ = registerSimpleMethod(
 		if err != nil {
 			return nil, err
 		}
-		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
-			var result []interface{}
+		return func(v any, ctx FunctionContext) (any, error) {
+			var result []any
 			switch t := v.(type) {
 			case string:
 				groupMatches := re.FindAllStringSubmatch(t, -1)
-				result = make([]interface{}, 0, len(groupMatches))
+				result = make([]any, 0, len(groupMatches))
 				for _, matches := range groupMatches {
-					r := make([]interface{}, 0, len(matches))
+					r := make([]any, 0, len(matches))
 					for _, str := range matches {
 						r = append(r, str)
 					}
@@ -1399,9 +1554,9 @@ var _ = registerSimpleMethod(
 				}
 			case []byte:
 				groupMatches := re.FindAllSubmatch(t, -1)
-				result = make([]interface{}, 0, len(groupMatches))
+				result = make([]any, 0, len(groupMatches))
 				for _, matches := range groupMatches {
-					r := make([]interface{}, 0, len(matches))
+					r := make([]any, 0, len(matches))
 					for _, str := range matches {
 						r = append(r, string(str))
 					}
@@ -1449,8 +1604,8 @@ var _ = registerSimpleMethod(
 				groups[i] = fmt.Sprintf("%v", i)
 			}
 		}
-		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
-			result := make(map[string]interface{}, len(groups))
+		return func(v any, ctx FunctionContext) (any, error) {
+			result := make(map[string]any, len(groups))
 			switch t := v.(type) {
 			case string:
 				groupMatches := re.FindStringSubmatch(t)
@@ -1506,14 +1661,14 @@ var _ = registerSimpleMethod(
 				groups[i] = fmt.Sprintf("%v", i)
 			}
 		}
-		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
-			var result []interface{}
+		return func(v any, ctx FunctionContext) (any, error) {
+			var result []any
 			switch t := v.(type) {
 			case string:
 				reMatches := re.FindAllStringSubmatch(t, -1)
-				result = make([]interface{}, 0, len(reMatches))
+				result = make([]any, 0, len(reMatches))
 				for _, matches := range reMatches {
-					obj := make(map[string]interface{}, len(groups))
+					obj := make(map[string]any, len(groups))
 					for i, match := range matches {
 						key := groups[i]
 						obj[key] = match
@@ -1522,9 +1677,9 @@ var _ = registerSimpleMethod(
 				}
 			case []byte:
 				reMatches := re.FindAllSubmatch(t, -1)
-				result = make([]interface{}, 0, len(reMatches))
+				result = make([]any, 0, len(reMatches))
 				for _, matches := range reMatches {
-					obj := make(map[string]interface{}, len(groups))
+					obj := make(map[string]any, len(groups))
 					for i, match := range matches {
 						key := groups[i]
 						obj[key] = match
@@ -1564,7 +1719,7 @@ var _ = registerSimpleMethod(
 		if err != nil {
 			return nil, err
 		}
-		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
+		return func(v any, ctx FunctionContext) (any, error) {
 			var result bool
 			switch t := v.(type) {
 			case string:
@@ -1619,7 +1774,7 @@ func reReplaceAllImpl(args *ParsedParams) (simpleMethod, error) {
 		return nil, err
 	}
 	withBytes := []byte(with)
-	return func(v interface{}, ctx FunctionContext) (interface{}, error) {
+	return func(v any, ctx FunctionContext) (any, error) {
 		var result string
 		switch t := v.(type) {
 		case string:
@@ -1653,18 +1808,18 @@ var _ = registerSimpleMethod(
 			return nil, err
 		}
 		delimB := []byte(delim)
-		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
+		return func(v any, ctx FunctionContext) (any, error) {
 			switch t := v.(type) {
 			case string:
 				bits := strings.Split(t, delim)
-				vals := make([]interface{}, 0, len(bits))
+				vals := make([]any, 0, len(bits))
 				for _, b := range bits {
 					vals = append(vals, b)
 				}
 				return vals, nil
 			case []byte:
 				bits := bytes.Split(t, delimB)
-				vals := make([]interface{}, 0, len(bits))
+				vals := make([]any, 0, len(bits))
 				for _, b := range bits {
 					vals = append(vals, b)
 				}
@@ -1695,7 +1850,7 @@ var _ = registerSimpleMethod(
 		),
 	),
 	func(*ParsedParams) (simpleMethod, error) {
-		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
+		return func(v any, ctx FunctionContext) (any, error) {
 			return IToString(v), nil
 		}, nil
 	},
@@ -1736,7 +1891,7 @@ var _ = registerSimpleMethod(
 			}
 			p = p.AllowElements(tagStrs...)
 		}
-		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
+		return func(v any, ctx FunctionContext) (any, error) {
 			switch t := v.(type) {
 			case string:
 				return p.Sanitize(t), nil
@@ -1768,7 +1923,7 @@ root.description = this.description.trim()`,
 		if err != nil {
 			return nil, err
 		}
-		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
+		return func(v any, ctx FunctionContext) (any, error) {
 			switch t := v.(type) {
 			case string:
 				if cutset == nil {

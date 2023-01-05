@@ -13,7 +13,7 @@ import (
 func TestMethodParser(t *testing.T) {
 	type easyMsg struct {
 		content string
-		meta    map[string]string
+		meta    map[string]any
 	}
 
 	tests := map[string]struct {
@@ -74,16 +74,6 @@ func TestMethodParser(t *testing.T) {
 				{content: `{"foo":"a"}`},
 				{content: `{"foo":"b"}`},
 				{content: `{"foo":"c"}`},
-			},
-		},
-		"json from all 2": {
-			input:  `json("foo").from_all()`,
-			output: `["a",null,"c",null]`,
-			messages: []easyMsg{
-				{content: `{"foo":"a"}`},
-				{content: `{}`},
-				{content: `{"foo":"c"}`},
-				{content: `not even json`},
 			},
 		},
 		"json from all/or": {
@@ -158,9 +148,9 @@ func TestMethodParser(t *testing.T) {
 			input:  `meta("foo").from_all()`,
 			output: `["bar",null,"baz"]`,
 			messages: []easyMsg{
-				{meta: map[string]string{"foo": "bar"}},
+				{meta: map[string]any{"foo": "bar"}},
 				{},
-				{meta: map[string]string{"foo": "baz"}},
+				{meta: map[string]any{"foo": "baz"}},
 			},
 		},
 		"or json null": {
@@ -198,10 +188,10 @@ func TestMethodParser(t *testing.T) {
 			input:  `meta("foo").or( meta("bar") == "yep" ).from_all()`,
 			output: `["from foo",true,false,"from foo 2"]`,
 			messages: []easyMsg{
-				{meta: map[string]string{"foo": "from foo"}},
-				{meta: map[string]string{"bar": "yep"}},
-				{meta: map[string]string{"bar": "nope"}},
-				{meta: map[string]string{"foo": "from foo 2", "bar": "yep"}},
+				{meta: map[string]any{"foo": "from foo"}},
+				{meta: map[string]any{"bar": "yep"}},
+				{meta: map[string]any{"bar": "nope"}},
+				{meta: map[string]any{"foo": "from foo 2", "bar": "yep"}},
 			},
 		},
 		"map each": {
@@ -251,13 +241,6 @@ func TestMethodParser(t *testing.T) {
 				{content: `{"foo":[11,12,7,13]}`},
 			},
 		},
-		"map each not an array": {
-			input:  `json("foo").map_each(this + 10)`,
-			output: ``,
-			messages: []easyMsg{
-				{content: `{"foo":"not an array"}`},
-			},
-		},
 		"map each object": {
 			input:  `json("foo").map_each(value + 10)`,
 			output: `{"a":11,"b":12,"c":12}`,
@@ -291,37 +274,12 @@ func TestMethodParser(t *testing.T) {
 				{content: `{"foo":[1,2,2]}`},
 			},
 		},
-		"test sum standard array 2": {
-			input:  `json("foo").sum()`,
-			output: ``,
-			messages: []easyMsg{
-				{content: `{"foo":[1,2,2,"nah",3]}`},
-			},
-		},
-		"test sum standard array 3": {
-			input:  `json("foo").sum()`,
-			output: ``,
-			messages: []easyMsg{
-				{content: `{"foo":[1,2,2,"4",3]}`},
-			},
-		},
 		"test sum standard array 4": {
 			input:  `json("foo").from_all().sum()`,
 			output: `16`,
 			messages: []easyMsg{
 				{content: `{"foo":1}`},
 				{content: `{"foo":3}`},
-				{content: `{"foo":4}`},
-				{content: `{"foo":8}`},
-			},
-		},
-		"test sum standard array 5": {
-			input:  `json("foo").from_all().sum()`,
-			output: ``,
-			messages: []easyMsg{
-				{content: `{"foo":1}`},
-				{content: `{"foo":"3"}`},
-				{content: `{"foo":"nope"}`},
 				{content: `{"foo":4}`},
 				{content: `{"foo":8}`},
 			},
@@ -362,19 +320,9 @@ func TestMethodParser(t *testing.T) {
 			output:   `FOOBAR`,
 			messages: []easyMsg{{}},
 		},
-		"test uppercase method recovered": {
-			input:    `["foo"].uppercase()`,
-			output:   ``,
-			messages: []easyMsg{{}},
-		},
 		"test lowercase method": {
 			input:    `"FOOBAR".lowercase()`,
 			output:   `foobar`,
-			messages: []easyMsg{{}},
-		},
-		"test lowercase method recovered": {
-			input:    `["FOO"].lowercase()`,
-			output:   ``,
 			messages: []easyMsg{{}},
 		},
 		"test format method": {
@@ -386,7 +334,7 @@ func TestMethodParser(t *testing.T) {
 			input:  `"foo %v bar".format(meta("foo"))`,
 			output: `foo test bar`,
 			messages: []easyMsg{{
-				meta: map[string]string{"foo": "test"},
+				meta: map[string]any{"foo": "test"},
 			}},
 		},
 		"test format method 3": {
@@ -394,7 +342,7 @@ func TestMethodParser(t *testing.T) {
 			output: `foo yup, bar, 3 bar`,
 			messages: []easyMsg{{
 				content: `{"value":"yup"}`,
-				meta:    map[string]string{"foo": "bar"},
+				meta:    map[string]any{"foo": "bar"},
 			}},
 		},
 		"test length string": {
@@ -459,7 +407,7 @@ func TestMethodParser(t *testing.T) {
 				part := message.NewPart([]byte(m.content))
 				if m.meta != nil {
 					for k, v := range m.meta {
-						part.MetaSet(k, v)
+						part.MetaSetMut(k, v)
 					}
 				}
 				msg = append(msg, part)
@@ -467,10 +415,11 @@ func TestMethodParser(t *testing.T) {
 
 			e, perr := tryParseQuery(test.input)
 			require.Nil(t, perr)
-			res := query.ExecToString(e, query.FunctionContext{
+			res, err := query.ExecToString(e, query.FunctionContext{
 				Index:    test.index,
 				MsgBatch: msg,
 			})
+			require.NoError(t, err)
 			assert.Equal(t, test.output, res)
 		})
 	}
@@ -505,7 +454,7 @@ func TestMethodErrors(t *testing.T) {
 				part := message.NewPart([]byte(m.content))
 				if m.meta != nil {
 					for k, v := range m.meta {
-						part.MetaSet(k, v)
+						part.MetaSetMut(k, v)
 					}
 				}
 				msg = append(msg, part)
@@ -526,12 +475,12 @@ func TestMethodErrors(t *testing.T) {
 func TestMethodMaps(t *testing.T) {
 	type easyMsg struct {
 		content string
-		meta    map[string]string
+		meta    map[string]any
 	}
 
 	tests := map[string]struct {
 		input    string
-		output   interface{}
+		output   any
 		err      string
 		maps     map[string]query.Function
 		messages []easyMsg
@@ -575,7 +524,7 @@ func TestMethodMaps(t *testing.T) {
 			},
 			messages: []easyMsg{{
 				content: `{"foo":"this value","bar":"and this value"}`,
-				meta: map[string]string{
+				meta: map[string]any{
 					"dyn_map": "foo",
 				},
 			}},
@@ -589,7 +538,7 @@ func TestMethodMaps(t *testing.T) {
 			},
 			messages: []easyMsg{{
 				content: `{"foo":"this value","bar":"and this value"}`,
-				meta: map[string]string{
+				meta: map[string]any{
 					"dyn_map": "bar",
 				},
 			}},
@@ -606,7 +555,7 @@ func TestMethodMaps(t *testing.T) {
 				part := message.NewPart([]byte(m.content))
 				if m.meta != nil {
 					for k, v := range m.meta {
-						part.MetaSet(k, v)
+						part.MetaSetMut(k, v)
 					}
 				}
 				msg = append(msg, part)

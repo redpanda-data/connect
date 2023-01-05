@@ -21,7 +21,7 @@ type Type struct {
 	Tracer                 tracer.Config  `json:"tracer" yaml:"tracer"`
 	SystemCloseDelay       string         `json:"shutdown_delay" yaml:"shutdown_delay"`
 	SystemCloseTimeout     string         `json:"shutdown_timeout" yaml:"shutdown_timeout"`
-	Tests                  []interface{}  `json:"tests,omitempty" yaml:"tests,omitempty"`
+	Tests                  []any          `json:"tests,omitempty" yaml:"tests,omitempty"`
 }
 
 // New returns a new configuration with default values.

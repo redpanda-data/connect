@@ -38,7 +38,7 @@ func TestSplitToSingleParts(t *testing.T) {
 	for _, tIn := range tests {
 		inMsg := message.QuickBatch(tIn)
 		_ = inMsg.Iter(func(i int, p *message.Part) error {
-			p.MetaSet("foo", "bar")
+			p.MetaSetMut("foo", "bar")
 			return nil
 		})
 		msgs, _ := proc.ProcessBatch(context.Background(), inMsg)
@@ -50,7 +50,7 @@ func TestSplitToSingleParts(t *testing.T) {
 			if act, exp := string(msgs[i].Get(0).AsBytes()), string(expBytes); act != exp {
 				t.Errorf("Wrong contents: %v != %v", act, exp)
 			}
-			if act, exp := msgs[i].Get(0).MetaGet("foo"), "bar"; act != exp {
+			if act, exp := msgs[i].Get(0).MetaGetStr("foo"), "bar"; act != exp {
 				t.Errorf("Wrong metadata: %v != %v", act, exp)
 			}
 		}

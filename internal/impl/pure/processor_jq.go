@@ -32,7 +32,7 @@ func init() {
 Transforms and filters messages using jq queries.`,
 		Description: `
 :::note Try out Bloblang
-For better performance and improved capabilities try out native Benthos mapping with the [bloblang processor](/docs/components/processors/bloblang).
+For better performance and improved capabilities try out native Benthos mapping with the [` + "`mapping`" + ` processor](/docs/components/processors/mapping).
 :::
 
 The provided query is executed on each message, targeting either the contents
@@ -136,16 +136,16 @@ func newJQ(conf processor.JQConfig, mgr bundle.NewManagement) (*jqProc, error) {
 	return j, nil
 }
 
-func (j *jqProc) getPartMetadata(part *message.Part) map[string]interface{} {
-	metadata := map[string]interface{}{}
-	_ = part.MetaIter(func(k, v string) error {
+func (j *jqProc) getPartMetadata(part *message.Part) map[string]any {
+	metadata := map[string]any{}
+	_ = part.MetaIterMut(func(k string, v any) error {
 		metadata[k] = v
 		return nil
 	})
 	return metadata
 }
 
-func (j *jqProc) getPartValue(part *message.Part, raw bool) (obj interface{}, err error) {
+func (j *jqProc) getPartValue(part *message.Part, raw bool) (obj any, err error) {
 	if raw {
 		return string(part.AsBytes()), nil
 	}
@@ -163,7 +163,7 @@ func (j *jqProc) Process(ctx context.Context, msg *message.Part) ([]*message.Par
 	}
 	metadata := j.getPartMetadata(msg)
 
-	var emitted []interface{}
+	var emitted []any
 	iter := j.code.Run(in, metadata)
 	for {
 		out, ok := iter.Next()
@@ -208,7 +208,7 @@ func (*jqProc) Close(ctx context.Context) error {
 	return nil
 }
 
-func (j *jqProc) marshalRaw(values []interface{}) ([]byte, error) {
+func (j *jqProc) marshalRaw(values []any) ([]byte, error) {
 	buf := bytes.NewBufferString("")
 
 	for index, el := range values {

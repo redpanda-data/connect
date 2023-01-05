@@ -271,7 +271,7 @@ pipeline:
 `,
 		},
 		{
-			name: "set 2D array value outter index",
+			name: "set 2D array value outer index",
 			input: `
 pipeline:
   processors:
@@ -436,7 +436,7 @@ pipeline:
 			} else {
 				require.NoError(t, err)
 
-				var iinput, ioutput interface{}
+				var iinput, ioutput any
 				require.NoError(t, input.Decode(&iinput))
 				require.NoError(t, yaml.Unmarshal([]byte(test.output), &ioutput))
 				assert.Equal(t, ioutput, iinput)
@@ -521,7 +521,7 @@ func TestGetPathDocs(t *testing.T) {
 			resKind: "scalar",
 		},
 		{
-			name:    "workflow 2D array outter",
+			name:    "workflow 2D array outer",
 			path:    "/pipeline/processors/0/workflow/order",
 			resName: "order",
 			resType: "string",
@@ -632,7 +632,7 @@ input:
 			} else {
 				require.NoError(t, err)
 
-				var expected, actual interface{}
+				var expected, actual any
 				require.NoError(t, output.Decode(&actual))
 				require.NoError(t, yaml.Unmarshal([]byte(test.output), &expected))
 				assert.Equal(t, expected, actual)

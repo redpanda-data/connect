@@ -56,7 +56,7 @@ This input adds the following metadata fields to each message:
 
 The field ` + "`kafka_lag`" + ` is the calculated difference between the high water mark offset of the partition at the time of ingestion and the current message offset.
 
-You can access these metadata fields using [function interpolation](/docs/configuration/interpolation#metadata).
+You can access these metadata fields using [function interpolation](/docs/configuration/interpolation#bloblang-queries).
 
 ### Ordering
 
@@ -102,6 +102,7 @@ Unfortunately this error message will appear for a wide range of connection prob
 				docs.FieldString("rebalance_timeout", "A period after which rebalancing is abandoned if unresolved.").Advanced(),
 			).Advanced(),
 			docs.FieldInt("fetch_buffer_cap", "The maximum number of unprocessed messages to fetch at a given time.").Advanced(),
+			docs.FieldBool("multi_header", "Decode headers into lists to allow handling of multiple values with the same key").Advanced(),
 			func() docs.FieldSpec {
 				b := policy.FieldSpec()
 				b.IsAdvanced = true
@@ -128,7 +129,7 @@ func newKafkaInput(conf input.Config, mgr bundle.NewManagement, log log.Modular,
 			return nil, err
 		}
 	}
-	return input.NewAsyncReader("kafka", false, input.NewAsyncPreserver(rdr), mgr)
+	return input.NewAsyncReader("kafka", input.NewAsyncPreserver(rdr), mgr)
 }
 
 //------------------------------------------------------------------------------
@@ -217,7 +218,7 @@ func newKafkaReader(conf input.KafkaConfig, mgr bundle.NewManagement, log log.Mo
 	}
 	if conf.TLS.Enabled {
 		var err error
-		if k.tlsConf, err = conf.TLS.Get(); err != nil {
+		if k.tlsConf, err = conf.TLS.Get(mgr.FS()); err != nil {
 			return nil, err
 		}
 	}
@@ -383,11 +384,25 @@ func (k *kafkaReader) syncCheckpointer(topic string, partition int32) func(conte
 	}
 }
 
-func dataToPart(highestOffset int64, data *sarama.ConsumerMessage) *message.Part {
+func dataToPart(highestOffset int64, data *sarama.ConsumerMessage, multiHeader bool) *message.Part {
 	part := message.NewPart(data.Value)
 
-	for _, hdr := range data.Headers {
-		part.MetaSet(string(hdr.Key), string(hdr.Value))
+	if multiHeader {
+		// in multi header mode we gather headers so we can encode them as lists
+		var headers = map[string][]any{}
+
+		for _, hdr := range data.Headers {
+			var key = string(hdr.Key)
+			headers[key] = append(headers[key], string(hdr.Value))
+		}
+
+		for key, values := range headers {
+			part.MetaSetMut(key, values)
+		}
+	} else {
+		for _, hdr := range data.Headers {
+			part.MetaSetMut(string(hdr.Key), string(hdr.Value))
+		}
 	}
 
 	lag := highestOffset - data.Offset - 1
@@ -395,12 +410,12 @@ func dataToPart(highestOffset int64, data *sarama.ConsumerMessage) *message.Part
 		lag = 0
 	}
 
-	part.MetaSet("kafka_key", string(data.Key))
-	part.MetaSet("kafka_partition", strconv.Itoa(int(data.Partition)))
-	part.MetaSet("kafka_topic", data.Topic)
-	part.MetaSet("kafka_offset", strconv.Itoa(int(data.Offset)))
-	part.MetaSet("kafka_lag", strconv.FormatInt(lag, 10))
-	part.MetaSet("kafka_timestamp_unix", strconv.FormatInt(data.Timestamp.Unix(), 10))
+	part.MetaSetMut("kafka_key", string(data.Key))
+	part.MetaSetMut("kafka_partition", int(data.Partition))
+	part.MetaSetMut("kafka_topic", data.Topic)
+	part.MetaSetMut("kafka_offset", int(data.Offset))
+	part.MetaSetMut("kafka_lag", lag)
+	part.MetaSetMut("kafka_timestamp_unix", data.Timestamp.Unix())
 
 	return part
 }

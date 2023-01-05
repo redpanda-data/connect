@@ -27,7 +27,7 @@ jmespath:
 ```
 
 :::note Try out Bloblang
-For better performance and improved capabilities try out native Benthos mapping with the [bloblang processor](/docs/components/processors/bloblang).
+For better performance and improved capabilities try out native Benthos mapping with the [`mapping` processor](/docs/components/processors/mapping).
 :::
 
 

@@ -1,15 +1,20 @@
 package sql
 
 import (
+	"context"
 	"database/sql"
+	"fmt"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
+	"github.com/benthosdev/benthos/v4/internal/filepath"
+	"github.com/benthosdev/benthos/v4/internal/filepath/ifs"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
-var driverField = service.NewStringEnumField("driver", "mysql", "postgres", "clickhouse", "mssql").
+var driverField = service.NewStringEnumField("driver", "mysql", "postgres", "clickhouse", "mssql", "sqlite", "oracle", "snowflake").
 	Description("A database [driver](#drivers) to use.")
 
 var dsnField = service.NewStringField("dsn").
@@ -25,14 +30,52 @@ The following is a list of supported drivers, their placeholder style, and their
 ` + "| `mysql` | `[username[:password]@][protocol[(address)]]/dbname[?param1=value1&...&paramN=valueN]` |" + `
 ` + "| `postgres` | `postgres://[user[:password]@][netloc][:port][/dbname][?param1=value1&...]` |" + `
 ` + "| `mssql` | `sqlserver://[user[:password]@][netloc][:port][?database=dbname&param1=value1&...]` |" + `
+` + "| `sqlite` | `file:/path/to/filename.db[?param&=value1&...]` |" + `
+` + "| `oracle` | `oracle://[username[:password]@][netloc][:port]/service_name?server=server2&server=server3` |" + `
+` + "| `snowflake` | `username[:password]@account_identifier/dbname/schemaname[?param1=value&...&paramN=valueN]` |" + `
 
-Please note that the ` + "`postgres`" + ` driver enforces SSL by default, you can override this with the parameter ` + "`sslmode=disable`" + ` if required.`).
+Please note that the ` + "`postgres`" + ` driver enforces SSL by default, you can override this with the parameter ` + "`sslmode=disable`" + ` if required.
+
+The ` + "`snowflake`" + ` driver supports multiple DSN formats. Please consult [the docs](https://pkg.go.dev/github.com/snowflakedb/gosnowflake#hdr-Connection_String) for more details. For [key pair authentication](https://docs.snowflake.com/en/user-guide/key-pair-auth.html#configuring-key-pair-authentication), the DSN has the following format: ` + "`<snowflake_user>@<snowflake_account>/<db_name>/<schema_name>?warehouse=<warehouse>&role=<role>&authenticator=snowflake_jwt&privateKey=<base64_url_encoded_private_key>`" + `, where the value for the ` + "`privateKey`" + ` parameter can be constructed from an unencrypted RSA private key file ` + "`rsa_key.p8`" + ` using ` + "`openssl enc -d -base64 -in rsa_key.p8 | basenc --base64url -w0`" + ` (you can use ` + "`gbasenc`" + ` insted of ` + "`basenc`" + ` on OSX if you install ` + "`coreutils`" + ` via Homebrew). If you have a password-encrypted private key, you can decrypt it using ` + "`openssl pkcs8 -in rsa_key_encrypted.p8 -out rsa_key.p8`. Also, make sure fields such as the username are URL-encoded.").
 	Example("clickhouse://username:password@host1:9000,host2:9000/database?dial_timeout=200ms&max_execution_time=60").
 	Example("foouser:foopassword@tcp(localhost:3306)/foodb").
-	Example("postgres://foouser:foopass@localhost:5432/foodb?sslmode=disable")
+	Example("postgres://foouser:foopass@localhost:5432/foodb?sslmode=disable").
+	Example("oracle://foouser:foopass@localhost:1521/service_name")
 
 func connFields() []*service.ConfigField {
 	return []*service.ConfigField{
+		service.NewStringListField("init_files").
+			Description(`
+An optional list of file paths containing SQL statements to execute immediately upon the first connection to the target database. This is a useful way to initialise tables before processing data. Glob patterns are supported, including super globs (double star).
+
+Care should be taken to ensure that the statements are idempotent, and therefore would not cause issues when run multiple times after service restarts. If both ` + "`init_statement` and `init_files` are specified the `init_statement` is executed _after_ the `init_files`." + `
+
+If a statement fails for any reason a warning log will be emitted but the operation of this component will not be stopped.
+`).
+			Example([]any{`./init/*.sql`}).
+			Example([]any{`./foo.sql`, `./bar.sql`}).
+			Optional().
+			Advanced().
+			Version("4.10.0"),
+		service.NewStringField("init_statement").
+			Description(`
+An optional SQL statement to execute immediately upon the first connection to the target database. This is a useful way to initialise tables before processing data. Care should be taken to ensure that the statement is idempotent, and therefore would not cause issues when run multiple times after service restarts.
+
+If both ` + "`init_statement` and `init_files` are specified the `init_statement` is executed _after_ the `init_files`." + `
+
+If the statement fails for any reason a warning log will be emitted but the operation of this component will not be stopped.
+`).
+			Example(`
+CREATE TABLE IF NOT EXISTS some_table (
+  foo varchar(50) not null,
+  bar integer,
+  baz varchar(50),
+  primary key (foo)
+) WITHOUT ROWID;
+`).
+			Optional().
+			Advanced().
+			Version("4.10.0"),
 		service.NewDurationField("conn_max_idle_time").
 			Description(`An optional maximum amount of time a connection may be idle. Expired connections may be closed lazily before reuse. If value <= 0, connections are not closed due to a connection's idle time.`).
 			Optional().
@@ -43,6 +86,7 @@ func connFields() []*service.ConfigField {
 			Advanced(),
 		service.NewIntField("conn_max_idle").
 			Description(`An optional maximum number of connections in the idle connection pool. If conn_max_open is greater than 0 but less than the new conn_max_idle, then the new conn_max_idle will be reduced to match the conn_max_open limit. If value <= 0, no idle connections are retained. The default max idle connections is currently 2. This may change in a future release.`).
+			Default(2).
 			Optional().
 			Advanced(),
 		service.NewIntField("conn_max_open").
@@ -62,6 +106,9 @@ func rawQueryField() *service.ConfigField {
 ` + "| `mysql` | Question mark |" + `
 ` + "| `postgres` | Dollar sign |" + `
 ` + "| `mssql` | Question mark |" + `
+` + "| `sqlite` | Question mark |" + `
+` + "| `oracle` | Colon |" + `
+` + "| `snowflake` | Question mark |" + `
 `)
 }
 
@@ -70,16 +117,42 @@ type connSettings struct {
 	connMaxIdleTime time.Duration
 	maxIdleConns    int
 	maxOpenConns    int
+
+	initOnce           sync.Once
+	initFileStatements [][2]string // (path,statement)
+	initStatement      string
 }
 
-func (c connSettings) apply(db *sql.DB) {
+func (c *connSettings) apply(ctx context.Context, db *sql.DB, log *service.Logger) {
 	db.SetConnMaxIdleTime(c.connMaxIdleTime)
 	db.SetConnMaxLifetime(c.connMaxLifetime)
 	db.SetMaxIdleConns(c.maxIdleConns)
 	db.SetMaxOpenConns(c.maxOpenConns)
+
+	c.initOnce.Do(func() {
+		for _, fileStmt := range c.initFileStatements {
+			if _, err := db.ExecContext(ctx, fileStmt[1]); err != nil {
+				log.Warnf("Failed to execute init_file '%v': %v", fileStmt[0], err)
+			} else {
+				log.Debugf("Successfully ran init_file '%v'", fileStmt[0])
+			}
+		}
+		if c.initStatement != "" {
+			if _, err := db.ExecContext(ctx, c.initStatement); err != nil {
+				log.Warnf("Failed to execute init_statement: %v", err)
+			} else {
+				log.Debug("Successfully ran init_statement")
+			}
+		}
+	})
 }
 
-func connSettingsFromParsed(conf *service.ParsedConfig) (c connSettings, err error) {
+func connSettingsFromParsed(
+	conf *service.ParsedConfig,
+	mgr *service.Resources,
+) (c *connSettings, err error) {
+	c = &connSettings{}
+
 	if conf.Contains("conn_max_life_time") {
 		if c.connMaxLifetime, err = conf.FieldDuration("conn_max_life_time"); err != nil {
 			return
@@ -101,6 +174,32 @@ func connSettingsFromParsed(conf *service.ParsedConfig) (c connSettings, err err
 	if conf.Contains("conn_max_open") {
 		if c.maxOpenConns, err = conf.FieldInt("conn_max_open"); err != nil {
 			return
+		}
+	}
+
+	if conf.Contains("init_statement") {
+		if c.initStatement, err = conf.FieldString("init_statement"); err != nil {
+			return
+		}
+	}
+
+	if conf.Contains("init_files") {
+		var tmpFiles []string
+		if tmpFiles, err = conf.FieldStringList("init_files"); err != nil {
+			return
+		}
+		if tmpFiles, err = filepath.Globs(mgr.FS(), tmpFiles); err != nil {
+			err = fmt.Errorf("failed to expand init_files glob patterns: %w", err)
+			return
+		}
+		for _, p := range tmpFiles {
+			var statementBytes []byte
+			if statementBytes, err = ifs.ReadFile(mgr.FS(), p); err != nil {
+				return
+			}
+			c.initFileStatements = append(c.initFileStatements, [2]string{
+				p, string(statementBytes),
+			})
 		}
 	}
 	return

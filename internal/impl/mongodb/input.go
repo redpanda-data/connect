@@ -4,13 +4,14 @@ import (
 	"context"
 	"fmt"
 
+	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 
 	"github.com/benthosdev/benthos/v4/internal/impl/mongodb/client"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
-// mongodb input component allowed operations
+// mongodb input component allowed operations.
 const (
 	FindInputOperation      = "find"
 	AggregateInputOperation = "aggregate"
@@ -32,6 +33,16 @@ func mongoConfigSpec() *service.ConfigSpec {
 			Description("The mongodb operation to perform.").
 			Default(FindInputOperation).Advanced().
 			Version("4.2.0")).
+		Field(service.NewStringAnnotatedEnumField("json_marshal_mode", map[string]string{
+			string(client.JSONMarshalModeCanonical): "A string format that emphasizes type preservation at the expense of readability and interoperability. " +
+				"That is, conversion from canonical to BSON will generally preserve type information except in certain specific cases. ",
+			string(client.JSONMarshalModeRelaxed): "A string format that emphasizes readability and interoperability at the expense of type preservation." +
+				"That is, conversion from relaxed format to BSON can lose type information.",
+		}).
+			Description("The json_marshal_mode setting is optional and controls the format of the output message.").
+			Default(string(client.JSONMarshalModeCanonical)).
+			Advanced().
+			Version("4.7.0")).
 		Field(queryField)
 }
 
@@ -71,6 +82,10 @@ func newMongoInput(conf *service.ParsedConfig) (service.Input, error) {
 	if err != nil {
 		return nil, err
 	}
+	marshalMode, err := conf.FieldString("json_marshal_mode")
+	if err != nil {
+		return nil, err
+	}
 	queryExecutor, err := conf.FieldBloblang("query")
 	if err != nil {
 		return nil, err
@@ -87,18 +102,20 @@ func newMongoInput(conf *service.ParsedConfig) (service.Input, error) {
 		Password:   password,
 	}
 	return service.AutoRetryNacks(&mongoInput{
-		query:     query,
-		config:    config,
-		operation: operation,
+		query:        query,
+		config:       config,
+		operation:    operation,
+		marshalCanon: marshalMode == string(client.JSONMarshalModeCanonical),
 	}), nil
 }
 
 type mongoInput struct {
-	query     interface{}
-	config    client.Config
-	client    *mongo.Client
-	cursor    *mongo.Cursor
-	operation string
+	query        any
+	config       client.Config
+	client       *mongo.Client
+	cursor       *mongo.Cursor
+	operation    string
+	marshalCanon bool
 }
 
 func (m *mongoInput) Connect(ctx context.Context) error {
@@ -134,13 +151,18 @@ func (m *mongoInput) Read(ctx context.Context) (*service.Message, service.AckFun
 	if !m.cursor.Next(ctx) {
 		return nil, nil, service.ErrEndOfInput
 	}
-	var result map[string]interface{}
-	err := m.cursor.Decode(&result)
+	var decoded any
+	if err := m.cursor.Decode(&decoded); err != nil {
+		return nil, nil, err
+	}
+
+	data, err := bson.MarshalExtJSON(decoded, m.marshalCanon, false)
 	if err != nil {
 		return nil, nil, err
 	}
+
 	msg := service.NewMessage(nil)
-	msg.SetStructuredMut(result)
+	msg.SetBytes(data)
 	return msg, func(ctx context.Context, err error) error {
 		return nil
 	}, nil

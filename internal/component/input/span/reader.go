@@ -68,7 +68,7 @@ func (s *Reader) ReadBatch(ctx context.Context) (message.Batch, input.AsyncAckFn
 		return m, afn, nil
 	}
 
-	spanMap, ok := structured.(map[string]interface{})
+	spanMap, ok := structured.(map[string]any)
 	if !ok {
 		s.mgr.Logger().Errorf("Mapping failed for tracing span, expected an object, got: %T", structured)
 		return m, afn, nil

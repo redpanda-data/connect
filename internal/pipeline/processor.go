@@ -79,7 +79,7 @@ func (p *Processor) loop() {
 		} else {
 			select {
 			case p.messagesOut <- message.NewTransactionFunc(resultMsgs[0], tran.Ack):
-			case <-p.shutSig.CloseAtLeisureChan():
+			case <-p.shutSig.CloseNowChan():
 				return
 			}
 		}

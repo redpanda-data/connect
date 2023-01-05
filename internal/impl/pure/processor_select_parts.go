@@ -40,7 +40,7 @@ the last element with be selected, and so on.
 
 This processor is only applicable to [batched messages](/docs/configuration/batching).`,
 		Config: docs.FieldComponent().WithChildren(
-			docs.FieldInt("parts", `An array of message indexes of a batch. Indexes can be negative, and if so the part will be selected from the end counting backwards starting from -1.`).Array().HasDefault([]interface{}{}),
+			docs.FieldInt("parts", `An array of message indexes of a batch. Indexes can be negative, and if so the part will be selected from the end counting backwards starting from -1.`).Array().HasDefault([]any{}),
 		),
 	})
 	if err != nil {

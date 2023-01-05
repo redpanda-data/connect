@@ -29,6 +29,8 @@ Bloblang is a powerful language that enables a wide range of mapping, transforma
 
 If your mapping is large and you'd prefer for it to live in a separate file then you can execute a mapping directly from a file with the expression `from "<path>"`, where the path must be absolute, or relative from the location that Benthos is executed from.
 
+Note: This processor is equivalent to the [bloblang](/docs/components/processors/bloblang#component-rename) one. The latter will be deprecated in a future release.
+
 ## Input Document Immutability
 
 Mapping operates by creating an entirely new object during assignments, this has the advantage of treating the original referenced document as immutable and therefore queryable at any stage of your mapping. For example, with the following mapping:

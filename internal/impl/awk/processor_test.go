@@ -2,19 +2,29 @@ package awk_test
 
 import (
 	"context"
+	"fmt"
 	"reflect"
+	"strconv"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"gopkg.in/yaml.v3"
 
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
+
+	_ "github.com/benthosdev/benthos/v4/internal/impl/awk"
 )
 
 func TestAWKValidation(t *testing.T) {
 	conf := processor.NewConfig()
-	conf.Type = "awk"
-	conf.AWK.Codec = "json"
-	conf.AWK.Program = "{ print foo_bar }"
+	require.NoError(t, yaml.Unmarshal([]byte(`
+awk:
+  codec: json
+  program: "{ print foo_bar }"
+`), &conf))
 
 	a, err := mock.NewManager().NewProcessor(conf)
 	if err != nil {
@@ -36,7 +46,16 @@ func TestAWKValidation(t *testing.T) {
 		t.Error("Expected fail flag on message part")
 	}
 
-	conf.AWK.Codec = "not valid"
+	conf = processor.NewConfig()
+	require.NoError(t, yaml.Unmarshal([]byte(`
+awk:
+  codec: not valid
+  program: |
+    {
+      json_set("foo.bar", json_get("init.val"));
+      json_set("foo.bar", json_get("foo.bar") " extra");
+    }
+`), &conf))
 	if _, err = mock.NewManager().NewProcessor(conf); err == nil {
 		t.Error("Expected error from bad codec")
 	}
@@ -44,9 +63,11 @@ func TestAWKValidation(t *testing.T) {
 
 func TestAWKBadExitStatus(t *testing.T) {
 	conf := processor.NewConfig()
-	conf.Type = "awk"
-	conf.AWK.Codec = "none"
-	conf.AWK.Program = "{ exit 1; print foo }"
+	require.NoError(t, yaml.Unmarshal([]byte(`
+awk:
+  codec: none
+  program: "{ exit 1; print foo }"
+`), &conf))
 
 	a, err := mock.NewManager().NewProcessor(conf)
 	if err != nil {
@@ -71,9 +92,11 @@ func TestAWKBadExitStatus(t *testing.T) {
 
 func TestAWKBadDateString(t *testing.T) {
 	conf := processor.NewConfig()
-	conf.Type = "awk"
-	conf.AWK.Codec = "none"
-	conf.AWK.Program = `{ print timestamp_unix("this isnt a date string") }`
+	require.NoError(t, yaml.Unmarshal([]byte(`
+awk:
+  codec: none
+  program: '{ print timestamp_unix("this isnt a date string") }'
+`), &conf))
 
 	a, err := mock.NewManager().NewProcessor(conf)
 	if err != nil {
@@ -95,12 +118,15 @@ func TestAWKBadDateString(t *testing.T) {
 
 func TestAWKJSONParts(t *testing.T) {
 	conf := processor.NewConfig()
-	conf.Type = "awk"
-	conf.AWK.Codec = "none"
-	conf.AWK.Program = `{
-		json_set("foo.bar", json_get("init.val"));
-		json_set("foo.bar", json_get("foo.bar") " extra");
-	}`
+	require.NoError(t, yaml.Unmarshal([]byte(`
+awk:
+  codec: none
+  program: |
+    {
+      json_set("foo.bar", json_get("init.val"));
+      json_set("foo.bar", json_get("foo.bar") " extra");
+    }
+`), &conf))
 
 	a, err := mock.NewManager().NewProcessor(conf)
 	if err != nil {
@@ -140,6 +166,7 @@ func TestAWK(t *testing.T) {
 		program       string
 		input         string
 		output        string
+		errContains   string
 	}
 
 	tests := []jTest{
@@ -220,11 +247,12 @@ func TestAWK(t *testing.T) {
 			output:  `{"obj":[{"foo":11},{"foo":"nope"}]}`,
 		},
 		{
-			name:    "json get 3",
-			codec:   "none",
-			program: `{ print json_get("obj.bar") }`,
-			input:   `not json content`,
-			output:  `not json content`,
+			name:        "json get 3",
+			codec:       "none",
+			program:     `{ print json_get("obj.bar") }`,
+			input:       `not json content`,
+			output:      `not json content`,
+			errContains: "invalid character 'o' in literal null (expecting 'u')",
 		},
 		{
 			name:    "json get 4",
@@ -241,11 +269,12 @@ func TestAWK(t *testing.T) {
 			output:  `{"obj":{"foo":"hello world"}}`,
 		},
 		{
-			name:    "json set 2",
-			codec:   "none",
-			program: `{ json_set("obj.foo", "hello world") }`,
-			input:   `not json content`,
-			output:  `not json content`,
+			name:        "json set 2",
+			codec:       "none",
+			program:     `{ json_set("obj.foo", "hello world") }`,
+			input:       `not json content`,
+			output:      `not json content`,
+			errContains: "invalid character 'o' in literal null (expecting 'u')",
 		},
 		{
 			name:    "json delete 1",
@@ -255,11 +284,12 @@ func TestAWK(t *testing.T) {
 			output:  `{"obj":{"bar":"baz"}}`,
 		},
 		{
-			name:    "json delete 2",
-			codec:   "none",
-			program: `{ json_delete("obj.foo") }`,
-			input:   `not json content`,
-			output:  `not json content`,
+			name:        "json delete 2",
+			codec:       "none",
+			program:     `{ json_delete("obj.foo") }`,
+			input:       `not json content`,
+			output:      `not json content`,
+			errContains: "invalid character 'o' in literal null (expecting 'u')",
 		},
 		{
 			name:    "json delete 3",
@@ -585,18 +615,36 @@ func TestAWK(t *testing.T) {
 			input:   `{"foo":""}`,
 			output:  `0`,
 		},
+		{
+			name:    "base64_encode",
+			codec:   "none",
+			program: `{ print base64_encode("blobs are cool") }`,
+			output:  "YmxvYnMgYXJlIGNvb2w=",
+		},
+		{
+			name:    "base64_decode succeeds",
+			codec:   "none",
+			program: `{ print base64_decode("YmxvYnMgYXJlIGNvb2w=") }`,
+			output:  "blobs are cool",
+		},
+		{
+			name:        "base64_decode fails on invalid input",
+			codec:       "none",
+			program:     `{ print base64_decode("$$^^**") }`,
+			errContains: "illegal base64 data at input byte 0",
+		},
 	}
 
 	for _, test := range tests {
 		conf := processor.NewConfig()
-		conf.Type = "awk"
-		conf.AWK.Codec = test.codec
-		conf.AWK.Program = test.program
+		require.NoError(t, yaml.Unmarshal(fmt.Appendf(nil, `
+awk:
+  codec: %v
+  program: %v
+`, test.codec, strconv.Quote(test.program)), &conf))
 
 		a, err := mock.NewManager().NewProcessor(conf)
-		if err != nil {
-			t.Fatalf("Error for test '%v': %v", test.name, err)
-		}
+		require.NoError(t, err, "Test '%s' failed", test.name)
 
 		inMsg := message.QuickBatch(
 			[][]byte{
@@ -604,16 +652,17 @@ func TestAWK(t *testing.T) {
 			},
 		)
 		for k, v := range test.metadata {
-			inMsg.Get(0).MetaSet(k, v)
+			inMsg.Get(0).MetaSetMut(k, v)
 		}
-		msgs, _ := a.ProcessBatch(context.Background(), inMsg)
+		msgs, err := a.ProcessBatch(context.Background(), inMsg)
+		require.NoError(t, err, "Test '%s' failed", test.name)
 		if len(msgs) != 1 {
-			t.Fatalf("Test '%v' did not succeed", test.name)
+			t.Fatalf("Test '%s' did not succeed", test.name)
 		}
 
 		if exp := test.metadataAfter; len(exp) > 0 {
 			act := map[string]string{}
-			_ = msgs[0].Get(0).MetaIter(func(k, v string) error {
+			_ = msgs[0].Get(0).MetaIterStr(func(k, v string) error {
 				act[k] = v
 				return nil
 			})
@@ -622,6 +671,13 @@ func TestAWK(t *testing.T) {
 			}
 		}
 
+		if err := msgs[0].Get(0).ErrorGet(); err != nil {
+			if test.errContains != "" {
+				assert.ErrorContains(t, err, test.errContains, "Test '%s' failed", test.name)
+			} else {
+				assert.NoError(t, err, "Test '%s' failed", test.name)
+			}
+		}
 		if exp, act := test.output, string(message.GetAllBytes(msgs[0])[0]); exp != act {
 			t.Errorf("Wrong result '%v': %v != %v", test.name, act, exp)
 		}

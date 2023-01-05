@@ -19,8 +19,8 @@ func TestBloblangCrossfire(t *testing.T) {
 	msg := message.QuickBatch(nil)
 
 	part := message.NewPart([]byte(`{"foo":{"bar":{"baz":"original value","qux":"dont change"}}}`))
-	part.MetaSet("foo", "orig1")
-	part.MetaSet("bar", "orig2")
+	part.MetaSetMut("foo", "orig1")
+	part.MetaSetMut("bar", "orig2")
 	msg = append(msg, part, message.NewPart([]byte(`{}`)))
 	if err := msg.Iter(func(i int, p *message.Part) error {
 		_, err := p.AsStructuredMut()
@@ -54,24 +54,24 @@ func TestBloblangCrossfire(t *testing.T) {
 	resPartTwo := outMsgs[0].Get(1)
 
 	assert.Equal(t, `{"foo":{"bar":{"baz":"original value","qux":"dont change"}}}`, string(inputPartOne.AsBytes()))
-	assert.Equal(t, "orig1", inputPartOne.MetaGet("foo"))
-	assert.Equal(t, "orig2", inputPartOne.MetaGet("bar"))
-	assert.Equal(t, "", inputPartOne.MetaGet("baz"))
+	assert.Equal(t, "orig1", inputPartOne.MetaGetStr("foo"))
+	assert.Equal(t, "orig2", inputPartOne.MetaGetStr("bar"))
+	assert.Equal(t, "", inputPartOne.MetaGetStr("baz"))
 
 	assert.Equal(t, `{}`, string(inputPartTwo.AsBytes()))
-	assert.Equal(t, "", inputPartTwo.MetaGet("foo"))
-	assert.Equal(t, "", inputPartTwo.MetaGet("bar"))
-	assert.Equal(t, "", inputPartTwo.MetaGet("baz"))
+	assert.Equal(t, "", inputPartTwo.MetaGetStr("foo"))
+	assert.Equal(t, "", inputPartTwo.MetaGetStr("bar"))
+	assert.Equal(t, "", inputPartTwo.MetaGetStr("baz"))
 
 	assert.Equal(t, `{"foo":{"bar":{"baz":"and this changed","qux":"dont change"},"bar_new":"this is swapped now"}}`, string(resPartOne.AsBytes()))
-	assert.Equal(t, "orig1", resPartOne.MetaGet("foo"))
-	assert.Equal(t, "orig2", resPartOne.MetaGet("bar"))
-	assert.Equal(t, "new meta", resPartOne.MetaGet("baz"))
+	assert.Equal(t, "orig1", resPartOne.MetaGetStr("foo"))
+	assert.Equal(t, "orig2", resPartOne.MetaGetStr("bar"))
+	assert.Equal(t, "new meta", resPartOne.MetaGetStr("baz"))
 
 	assert.Equal(t, `{"foo":{"bar":{"baz":"and this changed","qux":"dont change"},"bar_new":"this is swapped now"}}`, string(resPartTwo.AsBytes()))
-	assert.Equal(t, "orig1", resPartTwo.MetaGet("foo"))
-	assert.Equal(t, "orig2", resPartTwo.MetaGet("bar"))
-	assert.Equal(t, "new meta", resPartTwo.MetaGet("baz"))
+	assert.Equal(t, "orig1", resPartTwo.MetaGetStr("foo"))
+	assert.Equal(t, "orig2", resPartTwo.MetaGetStr("bar"))
+	assert.Equal(t, "new meta", resPartTwo.MetaGetStr("baz"))
 }
 
 type testKeyType int
@@ -82,8 +82,8 @@ func TestBloblangContext(t *testing.T) {
 	msg := message.QuickBatch(nil)
 
 	part := message.NewPart([]byte(`{"foo":{"bar":{"baz":"original value"}}}`))
-	part.MetaSet("foo", "orig1")
-	part.MetaSet("bar", "orig2")
+	part.MetaSetMut("foo", "orig1")
+	part.MetaSetMut("bar", "orig2")
 
 	key, val := testFooKey, "bar"
 	msg = append(msg, message.WithContext(context.WithValue(context.Background(), key, val), part))
@@ -103,8 +103,8 @@ func TestBloblangContext(t *testing.T) {
 	resPart := outMsgs[0].Get(0)
 
 	assert.Equal(t, `{"result":"ORIGINAL VALUE"}`, string(resPart.AsBytes()))
-	assert.Equal(t, "orig1", resPart.MetaGet("foo"))
-	assert.Equal(t, "orig2", resPart.MetaGet("bar"))
+	assert.Equal(t, "orig1", resPart.MetaGetStr("foo"))
+	assert.Equal(t, "orig2", resPart.MetaGetStr("bar"))
 	assert.Equal(t, val, message.GetContext(resPart).Value(key))
 }
 

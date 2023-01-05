@@ -18,6 +18,7 @@ type testPMBlobl struct {
 	B  int64
 	C  int64
 	D  string
+	E  []byte
 }
 
 func TestParquetParseBloblang(t *testing.T) {
@@ -25,10 +26,10 @@ func TestParquetParseBloblang(t *testing.T) {
 
 	pWtr := parquet.NewWriter(buf, parquet.SchemaOf(testPMBlobl{}))
 	for _, in := range []testPMBlobl{
-		{ID: 1, A: 11, B: 21, C: 31, D: "first"},
-		{ID: 2, A: 12, B: 22, C: 32, D: "second"},
-		{ID: 3, A: 13, B: 23, C: 33, D: "third"},
-		{ID: 4, A: 14, B: 24, C: 34, D: "fourth"},
+		{ID: 1, A: 11, B: 21, C: 31, D: "first", E: []byte("first")},
+		{ID: 2, A: 12, B: 22, C: 32, D: "second", E: []byte("second")},
+		{ID: 3, A: 13, B: 23, C: 33, D: "third", E: []byte("third")},
+		{ID: 4, A: 14, B: 24, C: 34, D: "fourth", E: []byte("fourth")},
 	} {
 		require.NoError(t, pWtr.Write(in))
 	}
@@ -44,10 +45,10 @@ func TestParquetParseBloblang(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.JSONEq(t, `[
-  {"ID": 1, "A": 11, "B": 21, "C": 31, "D": "Zmlyc3Q="},
-  {"ID": 2, "A": 12, "B": 22, "C": 32, "D": "c2Vjb25k"},
-  {"ID": 3, "A": 13, "B": 23, "C": 33, "D": "dGhpcmQ="},
-  {"ID": 4, "A": 14, "B": 24, "C": 34, "D": "Zm91cnRo"}
+  {"ID": 1, "A": 11, "B": 21, "C": 31, "D": "first", "E": "Zmlyc3Q="},
+  {"ID": 2, "A": 12, "B": 22, "C": 32, "D": "second", "E": "c2Vjb25k"},
+  {"ID": 3, "A": 13, "B": 23, "C": 33, "D": "third", "E": "dGhpcmQ="},
+  {"ID": 4, "A": 14, "B": 24, "C": 34, "D": "fourth", "E": "Zm91cnRo"}
 ]`, string(actualDataBytes))
 }
 
@@ -56,10 +57,10 @@ func TestParquetParseBloblangAsStrings(t *testing.T) {
 
 	pWtr := parquet.NewWriter(buf, parquet.SchemaOf(testPMBlobl{}))
 	for _, in := range []testPMBlobl{
-		{ID: 1, A: 11, B: 21, C: 31, D: "first"},
-		{ID: 2, A: 12, B: 22, C: 32, D: "second"},
-		{ID: 3, A: 13, B: 23, C: 33, D: "third"},
-		{ID: 4, A: 14, B: 24, C: 34, D: "fourth"},
+		{ID: 1, A: 11, B: 21, C: 31, D: "first", E: []byte("first")},
+		{ID: 2, A: 12, B: 22, C: 32, D: "second", E: []byte("second")},
+		{ID: 3, A: 13, B: 23, C: 33, D: "third", E: []byte("third")},
+		{ID: 4, A: 14, B: 24, C: 34, D: "fourth", E: []byte("fourth")},
 	} {
 		require.NoError(t, pWtr.Write(in))
 	}
@@ -75,9 +76,9 @@ func TestParquetParseBloblangAsStrings(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.JSONEq(t, `[
-  {"ID": 1, "A": 11, "B": 21, "C": 31, "D": "first"},
-  {"ID": 2, "A": 12, "B": 22, "C": 32, "D": "second"},
-  {"ID": 3, "A": 13, "B": 23, "C": 33, "D": "third"},
-  {"ID": 4, "A": 14, "B": 24, "C": 34, "D": "fourth"}
+  {"ID": 1, "A": 11, "B": 21, "C": 31, "D": "first", "E": "first"},
+  {"ID": 2, "A": 12, "B": 22, "C": 32, "D": "second", "E": "second"},
+  {"ID": 3, "A": 13, "B": 23, "C": 33, "D": "third", "E": "third"},
+  {"ID": 4, "A": 14, "B": 24, "C": 34, "D": "fourth", "E": "fourth"}
 ]`, string(actualDataBytes))
 }

@@ -13,12 +13,12 @@ func (e environmentUnwrapper) Unwrap() *bloblang.Environment {
 }
 
 // XUnwrapper is for internal use only, do not use this.
-func (e *Environment) XUnwrapper() interface{} {
+func (e *Environment) XUnwrapper() any {
 	return environmentUnwrapper{child: e.env}
 }
 
 // XWrapEnvironment is for internal use only, do not use this.
-func XWrapEnvironment(v interface{}) *Environment {
+func XWrapEnvironment(v any) *Environment {
 	if bEnv, ok := v.(*bloblang.Environment); ok {
 		return &Environment{env: bEnv}
 	}

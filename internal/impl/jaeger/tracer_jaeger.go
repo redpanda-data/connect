@@ -19,9 +19,7 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/docs"
 )
 
-var (
-	exporterInitFn = func(epOpt jaeger.EndpointOption) (tracesdk.SpanExporter, error) { return jaeger.New(epOpt) }
-)
+var exporterInitFn = func(epOpt jaeger.EndpointOption) (tracesdk.SpanExporter, error) { return jaeger.New(epOpt) }
 
 func init() {
 	_ = bundle.AllTracers.Add(NewJaeger, docs.ComponentSpec{
@@ -31,7 +29,7 @@ func init() {
 		Summary: `Send tracing events to a [Jaeger](https://www.jaegertracing.io/) agent or collector.`,
 		Config: docs.FieldObject("", "").WithChildren(
 			docs.FieldString("agent_address", "The address of a Jaeger agent to send tracing events to.", "jaeger-agent:6831").HasDefault(""),
-			docs.FieldString("collector_url", "The URL of a Jaeger collector to send tracing events to. If set, this will override `agent_address`.",
+			docs.FieldURL("collector_url", "The URL of a Jaeger collector to send tracing events to. If set, this will override `agent_address`.",
 				"https://jaeger-collector:14268/api/traces").HasDefault("").AtVersion("3.38.0"),
 			docs.FieldString("sampler_type", "The sampler type to use.").HasAnnotatedOptions(
 				"const", "Sample a percentage of traces. 1 or more means all traces are sampled, 0 means no traces are sampled and anything in between means a percentage of traces are sampled. Tuning the sampling rate is recommended for high-volume production workloads.",
@@ -40,7 +38,7 @@ func init() {
 				// "remote", "The sampler consults Jaeger agent for the appropriate sampling strategy to use in the current service.",
 			).HasDefault("const"),
 			docs.FieldFloat("sampler_param", "A parameter to use for sampling. This field is unused for some sampling types.").Advanced().HasDefault(1.0),
-			docs.FieldString("tags", "A map of tags to add to tracing spans.").Map().Advanced().HasDefault(map[string]interface{}{}),
+			docs.FieldString("tags", "A map of tags to add to tracing spans.").Map().Advanced().HasDefault(map[string]any{}),
 			docs.FieldString("flush_interval", "The period of time between each flush of tracing spans.").HasDefault(""),
 		),
 	})

@@ -1,16 +1,16 @@
 package input
 
 import (
-	httpdocs "github.com/benthosdev/benthos/v4/internal/http/docs"
-	imetadata "github.com/benthosdev/benthos/v4/internal/metadata"
+	"github.com/benthosdev/benthos/v4/internal/httpserver"
+	"github.com/benthosdev/benthos/v4/internal/metadata"
 )
 
 // HTTPServerResponseConfig provides config fields for customising the response
 // given from successful requests.
 type HTTPServerResponseConfig struct {
-	Status          string                        `json:"status" yaml:"status"`
-	Headers         map[string]string             `json:"headers" yaml:"headers"`
-	ExtractMetadata imetadata.IncludeFilterConfig `json:"metadata_headers" yaml:"metadata_headers"`
+	Status          string                       `json:"status" yaml:"status"`
+	Headers         map[string]string            `json:"headers" yaml:"headers"`
+	ExtractMetadata metadata.IncludeFilterConfig `json:"metadata_headers" yaml:"metadata_headers"`
 }
 
 // NewHTTPServerResponseConfig creates a new HTTPServerConfig with default values.
@@ -20,7 +20,7 @@ func NewHTTPServerResponseConfig() HTTPServerResponseConfig {
 		Headers: map[string]string{
 			"Content-Type": "application/octet-stream",
 		},
-		ExtractMetadata: imetadata.NewIncludeFilterConfig(),
+		ExtractMetadata: metadata.NewIncludeFilterConfig(),
 	}
 }
 
@@ -36,7 +36,7 @@ type HTTPServerConfig struct {
 	RateLimit          string                   `json:"rate_limit" yaml:"rate_limit"`
 	CertFile           string                   `json:"cert_file" yaml:"cert_file"`
 	KeyFile            string                   `json:"key_file" yaml:"key_file"`
-	CORS               httpdocs.ServerCORS      `json:"cors" yaml:"cors"`
+	CORS               httpserver.CORSConfig    `json:"cors" yaml:"cors"`
 	Response           HTTPServerResponseConfig `json:"sync_response" yaml:"sync_response"`
 }
 
@@ -55,7 +55,7 @@ func NewHTTPServerConfig() HTTPServerConfig {
 		RateLimit: "",
 		CertFile:  "",
 		KeyFile:   "",
-		CORS:      httpdocs.NewServerCORS(),
+		CORS:      httpserver.NewServerCORSConfig(),
 		Response:  NewHTTPServerResponseConfig(),
 	}
 }

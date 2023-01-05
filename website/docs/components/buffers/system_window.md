@@ -1,7 +1,7 @@
 ---
 title: system_window
 type: buffer
-status: experimental
+status: beta
 categories: ["Windowing"]
 ---
 
@@ -15,8 +15,8 @@ categories: ["Windowing"]
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-:::caution EXPERIMENTAL
-This component is experimental and therefore subject to change or removal outside of major version releases.
+:::caution BETA
+This component is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with the component is found.
 :::
 Chops a stream of messages into tumbling or sliding windows of fixed temporal size, following the system clock.
 
@@ -106,7 +106,7 @@ pipeline:
 
     # Reduce each batch to a single message by deleting indexes > 0, and
     # aggregate the car and passenger counts.
-    - bloblang: |
+    - mapping: |
         root = if batch_index() == 0 {
           {
             "traffic_light": this.traffic_light,

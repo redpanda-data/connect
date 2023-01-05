@@ -42,7 +42,7 @@ There is a specific docker tag postfix ` + "`-cgo`" + ` for C builds containing 
 			Description("The socket type to connect as.")).
 		Field(service.NewStringListField("sub_filters").
 			Description("A list of subscription topic filters to use when consuming from a SUB socket. Specifying a single sub_filter of `''` will subscribe to everything.").
-			Default([]interface{}{})).
+			Default([]any{})).
 		Field(service.NewIntField("high_water_mark").
 			Description("The message high water mark to use.").
 			Default(0).

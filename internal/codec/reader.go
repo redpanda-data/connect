@@ -39,7 +39,7 @@ var ReaderDocs = docs.FieldString(
 	"multipart", "Consumes the output of another codec and batches messages together. A batch ends when an empty message is consumed. For example, the codec `lines/multipart` could be used to consume multipart messages where an empty line indicates the end of each batch.",
 	"regex:(?m)^\\d\\d:\\d\\d:\\d\\d", "Consume the file in segments divided by regular expression.",
 	"tar", "Parse the file as a tar archive, and consume each file of the archive as a message.",
-).LinterFunc(nil) // Disable default option linter as it doesn't include foo:bar formats.
+)
 
 //------------------------------------------------------------------------------
 
@@ -373,7 +373,6 @@ type avroOCFReader struct {
 	avroCodec    *goavro.Codec
 	decoder      avroDecoder
 	logicalTypes bool
-	marshaler    string
 	sourceAck    ReaderAckFn
 
 	mut      sync.Mutex
@@ -389,7 +388,12 @@ func newAvroOCFReader(conf ReaderConfig, marshaler string, r io.ReadCloser, ackF
 	if err != nil {
 		return nil, err
 	}
-
+	ocfCodec := ocf.Codec()
+	ocfSchema := ocfCodec.Schema()
+	StandardJSONFullCodec, err := goavro.NewCodecForStandardJSONFull(ocfSchema)
+	if err != nil {
+		return nil, err
+	}
 	decoder := func(a *avroOCFReader) (*message.Part, error) {
 		datum, err := a.ocf.Read()
 		if err != nil {
@@ -397,7 +401,7 @@ func newAvroOCFReader(conf ReaderConfig, marshaler string, r io.ReadCloser, ackF
 		}
 		a.pending++
 		m := service.NewMessage(nil)
-		if a.logicalTypes == false {
+		if !a.logicalTypes {
 			m.SetStructured(datum)
 			mp, err := m.AsBytes()
 			if err != nil {
@@ -432,7 +436,7 @@ func newAvroOCFReader(conf ReaderConfig, marshaler string, r io.ReadCloser, ackF
 		r:            r,
 		logicalTypes: logicalTypes,
 		decoder:      decoder,
-		avroCodec:    ocf.Codec(),
+		avroCodec:    StandardJSONFullCodec,
 		sourceAck:    ackOnce(ackFn),
 	}, nil
 }
@@ -620,7 +624,7 @@ func (a *csvReader) Next(ctx context.Context) ([]*message.Part, ReaderAckFn, err
 	defer a.mut.Unlock()
 
 	if err != nil {
-		if err == io.EOF {
+		if errors.Is(err, io.EOF) {
 			a.finished = true
 		} else {
 			_ = a.sourceAck(ctx, err)
@@ -630,7 +634,7 @@ func (a *csvReader) Next(ctx context.Context) ([]*message.Part, ReaderAckFn, err
 
 	a.pending++
 
-	obj := make(map[string]interface{}, len(records))
+	obj := make(map[string]any, len(records))
 	for i, r := range records {
 		obj[a.headers[i]] = r
 	}
@@ -799,7 +803,7 @@ func (a *chunkerReader) Next(ctx context.Context) ([]*message.Part, ReaderAckFn,
 	defer a.mut.Unlock()
 
 	if err != nil {
-		if err == io.EOF {
+		if errors.Is(err, io.EOF) {
 			a.finished = true
 		} else {
 			_ = a.sourceAck(ctx, err)
@@ -884,7 +888,7 @@ func (a *tarReader) Next(ctx context.Context) ([]*message.Part, ReaderAckFn, err
 		return []*message.Part{message.NewPart(fileBuf.Bytes())}, a.ack, nil
 	}
 
-	if err == io.EOF {
+	if errors.Is(err, io.EOF) {
 		a.finished = true
 	} else {
 		_ = a.sourceAck(ctx, err)
@@ -982,7 +986,6 @@ func newRexExpSplitReader(conf ReaderConfig, r io.ReadCloser, regex string, ackF
 	}
 
 	compiled, err := regexp.Compile(regex)
-
 	if err != nil {
 		return nil, err
 	}

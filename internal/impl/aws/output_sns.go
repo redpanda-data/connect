@@ -13,6 +13,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/sns"
 
 	"github.com/benthosdev/benthos/v4/internal/bloblang/field"
+	"github.com/benthosdev/benthos/v4/internal/bloblang/query"
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
@@ -141,11 +142,11 @@ func isValidSNSAttribute(k, v string) bool {
 	return len(snsAttributeKeyInvalidCharRegexp.FindStringIndex(strings.ToLower(k))) == 0
 }
 
-func (a *snsWriter) getSNSAttributes(msg message.Batch, i int) snsAttributes {
+func (a *snsWriter) getSNSAttributes(msg message.Batch, i int) (snsAttributes, error) {
 	p := msg.Get(i)
 	keys := []string{}
-	_ = a.metaFilter.Iter(p, func(k, v string) error {
-		if isValidSNSAttribute(k, v) {
+	_ = a.metaFilter.Iter(p, func(k string, v any) error {
+		if isValidSNSAttribute(k, query.IToString(v)) {
 			keys = append(keys, k)
 		} else {
 			a.log.Debugf("Rejecting metadata key '%v' due to invalid characters\n", k)
@@ -160,24 +161,32 @@ func (a *snsWriter) getSNSAttributes(msg message.Batch, i int) snsAttributes {
 		for _, k := range keys {
 			values[k] = &sns.MessageAttributeValue{
 				DataType:    aws.String("String"),
-				StringValue: aws.String(p.MetaGet(k)),
+				StringValue: aws.String(p.MetaGetStr(k)),
 			}
 		}
 	}
 
 	var groupID, dedupeID *string
 	if a.groupID != nil {
-		groupID = aws.String(a.groupID.String(i, msg))
+		groupIDStr, err := a.groupID.String(i, msg)
+		if err != nil {
+			return snsAttributes{}, fmt.Errorf("group id interpolation: %w", err)
+		}
+		groupID = aws.String(groupIDStr)
 	}
 	if a.dedupeID != nil {
-		dedupeID = aws.String(a.dedupeID.String(i, msg))
+		dedupeIDStr, err := a.dedupeID.String(i, msg)
+		if err != nil {
+			return snsAttributes{}, fmt.Errorf("dedupe id interpolation: %w", err)
+		}
+		dedupeID = aws.String(dedupeIDStr)
 	}
 
 	return snsAttributes{
 		attrMap:  values,
 		groupID:  groupID,
 		dedupeID: dedupeID,
-	}
+	}, nil
 }
 
 func (a *snsWriter) WriteBatch(wctx context.Context, msg message.Batch) error {
@@ -189,7 +198,10 @@ func (a *snsWriter) WriteBatch(wctx context.Context, msg message.Batch) error {
 	defer cancel()
 
 	return output.IterateBatchedSend(msg, func(i int, p *message.Part) error {
-		attrs := a.getSNSAttributes(msg, i)
+		attrs, err := a.getSNSAttributes(msg, i)
+		if err != nil {
+			return err
+		}
 		message := &sns.PublishInput{
 			TopicArn:               aws.String(a.conf.TopicArn),
 			Message:                aws.String(string(p.AsBytes())),
@@ -197,7 +209,7 @@ func (a *snsWriter) WriteBatch(wctx context.Context, msg message.Batch) error {
 			MessageGroupId:         attrs.groupID,
 			MessageDeduplicationId: attrs.dedupeID,
 		}
-		_, err := a.sns.PublishWithContext(ctx, message)
+		_, err = a.sns.PublishWithContext(ctx, message)
 		return err
 	})
 }

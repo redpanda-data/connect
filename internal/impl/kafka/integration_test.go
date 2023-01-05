@@ -79,7 +79,7 @@ func TestIntegrationKafka(t *testing.T) {
 		},
 	}
 
-	pool.MaxWait = time.Second * 30
+	pool.MaxWait = time.Minute
 	resource, err := pool.RunWithOptions(options)
 	require.NoError(t, err)
 	t.Cleanup(func() {
@@ -200,7 +200,7 @@ func TestIntegrationKafkaSasl(t *testing.T) {
 		},
 	}
 
-	pool.MaxWait = time.Second * 30
+	pool.MaxWait = time.Minute
 	resource, err := pool.RunWithOptions(options)
 	require.NoError(t, err)
 	t.Cleanup(func() {

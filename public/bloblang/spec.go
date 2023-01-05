@@ -67,7 +67,7 @@ func (d ParamDefinition) Optional() ParamDefinition {
 
 // Default adds a default value to a parameter, also making it implicitly
 // optional.
-func (d ParamDefinition) Default(v interface{}) ParamDefinition {
+func (d ParamDefinition) Default(v any) ParamDefinition {
 	d.def = d.def.Default(v)
 	return d
 }
@@ -158,6 +158,17 @@ func (p *PluginSpec) Example(summary, mapping string, inputOutputs ...[2]string)
 	return p
 }
 
+// Variadic marks this plugin as having variadic parameters, which means any
+// number of arguments can be provided and they are unnamed. It is invalid to
+// combine variadic with named parameters.
+//
+// A variadic method is able to extract arguments from a *ParsedParams object
+// via the AsSlice method.
+func (p *PluginSpec) Variadic() *PluginSpec {
+	p.params.Variadic = true
+	return p
+}
+
 // Param adds a parameter to the spec. Instantiations of the plugin with
 // nameless arguments (foo, bar, baz) must follow the order in which fields are
 // added to the spec.
@@ -214,9 +225,14 @@ type ParsedParams struct {
 	par *query.ParsedParams
 }
 
+// AsSlice returns a slice of raw argument values.
+func (p *ParsedParams) AsSlice() []any {
+	return p.par.Raw()
+}
+
 // Get an argument value with a given name and return it boxed within an empty
 // interface.
-func (p *ParsedParams) Get(name string) (interface{}, error) {
+func (p *ParsedParams) Get(name string) (any, error) {
 	return p.par.Field(name)
 }
 

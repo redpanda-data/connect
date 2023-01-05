@@ -34,7 +34,7 @@ This input adds the following metadata fields to each message:
 ` + "```" + `
 
 You can access these metadata fields using
-[function interpolation](/docs/configuration/interpolation#metadata).`,
+[function interpolation](/docs/configuration/interpolation#bloblang-queries).`,
 		Categories: []string{
 			"Services",
 		},
@@ -53,7 +53,7 @@ func newHDFSInput(conf input.Config, mgr bundle.NewManagement, log log.Modular, 
 	if conf.HDFS.Directory == "" {
 		return nil, errors.New("invalid directory (cannot be empty)")
 	}
-	return input.NewAsyncReader("hdfs", true, input.NewAsyncPreserver(newHDFSReader(conf.HDFS, log)), mgr)
+	return input.NewAsyncReader("hdfs", input.NewAsyncPreserver(newHDFSReader(conf.HDFS, log)), mgr)
 }
 
 type hdfsReader struct {
@@ -117,8 +117,8 @@ func (h *hdfsReader) ReadBatch(ctx context.Context) (message.Batch, input.AsyncA
 	}
 
 	msg := message.QuickBatch([][]byte{msgBytes})
-	msg.Get(0).MetaSet("hdfs_name", fileName)
-	msg.Get(0).MetaSet("hdfs_path", filePath)
+	msg.Get(0).MetaSetMut("hdfs_name", fileName)
+	msg.Get(0).MetaSetMut("hdfs_path", filePath)
 	return msg, func(ctx context.Context, err error) error {
 		return nil
 	}, nil

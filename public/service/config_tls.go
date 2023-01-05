@@ -46,7 +46,7 @@ func (p *ParsedConfig) FieldTLS(path ...string) (*tls.Config, error) {
 		return nil, err
 	}
 
-	return conf.GetNonToggled()
+	return conf.GetNonToggled(p.mgr.FS())
 }
 
 // NewTLSToggledField defines a new object type config field that describes TLS
@@ -86,6 +86,6 @@ func (p *ParsedConfig) FieldTLSToggled(path ...string) (tconf *tls.Config, enabl
 		return
 	}
 
-	tconf, err = conf.Get()
+	tconf, err = conf.Get(p.mgr.FS())
 	return
 }

@@ -25,7 +25,7 @@ import (
 
 func init() {
 	err := bundle.AllOutputs.Add(processors.WrapConstructor(func(conf output.Config, nm bundle.NewManagement) (output.Streamed, error) {
-		w, err := newMQTTWriter(conf.MQTT, nm, nm.Logger())
+		w, err := newMQTTWriter(conf.MQTT, nm)
 		if err != nil {
 			return nil, err
 		}
@@ -43,7 +43,7 @@ The `+"`topic`"+` field can be dynamically set using function interpolations
 described [here](/docs/configuration/interpolation#bloblang-queries). When sending batched
 messages these interpolations are performed per message part.`),
 		Config: docs.FieldComponent().WithChildren(
-			docs.FieldString("urls", "A list of URLs to connect to. If an item of the list contains commas it will be expanded into multiple URLs.", []string{"tcp://localhost:1883"}).Array(),
+			docs.FieldURL("urls", "A list of URLs to connect to. If an item of the list contains commas it will be expanded into multiple URLs.", []string{"tcp://localhost:1883"}).Array(),
 			docs.FieldString("topic", "The topic to publish messages to."),
 			docs.FieldString("client_id", "An identifier for the client connection."),
 			docs.FieldString("dynamic_client_id_suffix", "Append a dynamically generated suffix to the specified `client_id` on each run of the pipeline. This can be useful when clustering Benthos producers.").Optional().Advanced().HasAnnotatedOptions(
@@ -56,7 +56,7 @@ messages these interpolations are performed per message part.`),
 			docs.FieldString("retained_interpolated", "Override the value of `retained` with an interpolable value, this allows it to be dynamically set based on message contents. The value must resolve to either `true` or `false`.").IsInterpolated().Advanced().AtVersion("3.59.0"),
 			mqttconf.WillFieldSpec(),
 			docs.FieldString("user", "A username to connect with.").Advanced(),
-			docs.FieldString("password", "A password to connect with.").Advanced(),
+			docs.FieldString("password", "A password to connect with.").Advanced().Secret(),
 			docs.FieldInt("keepalive", "Max seconds of inactivity before a keepalive message is sent.").Advanced(),
 			tls.FieldSpec().AtVersion("3.45.0"),
 			docs.FieldInt("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
@@ -72,6 +72,7 @@ messages these interpolations are performed per message part.`),
 
 type mqttWriter struct {
 	log log.Modular
+	mgr bundle.NewManagement
 
 	connectTimeout time.Duration
 	writeTimeout   time.Duration
@@ -85,13 +86,10 @@ type mqttWriter struct {
 	connMut sync.RWMutex
 }
 
-func newMQTTWriter(
-	conf output.MQTTConfig,
-	mgr bundle.NewManagement,
-	log log.Modular,
-) (*mqttWriter, error) {
+func newMQTTWriter(conf output.MQTTConfig, mgr bundle.NewManagement) (*mqttWriter, error) {
 	m := &mqttWriter{
-		log:  log,
+		log:  mgr.Logger(),
+		mgr:  mgr,
 		conf: conf,
 	}
 
@@ -168,7 +166,7 @@ func (m *mqttWriter) Connect(ctx context.Context) error {
 	}
 
 	if m.conf.TLS.Enabled {
-		tlsConf, err := m.conf.TLS.Get()
+		tlsConf, err := m.conf.TLS.Get(m.mgr.FS())
 		if err != nil {
 			return err
 		}
@@ -207,13 +205,20 @@ func (m *mqttWriter) WriteBatch(ctx context.Context, msg message.Batch) error {
 	return output.IterateBatchedSend(msg, func(i int, p *message.Part) error {
 		retained := m.conf.Retained
 		if m.retained != nil {
-			var parseErr error
-			retained, parseErr = strconv.ParseBool(m.retained.String(i, msg))
+			retainedStr, parseErr := m.retained.String(i, msg)
 			if parseErr != nil {
+				m.log.Errorf("Retained interpolation error: %v", parseErr)
+			} else if retained, parseErr = strconv.ParseBool(retainedStr); parseErr != nil {
 				m.log.Errorf("Error parsing boolean value from retained flag: %v \n", parseErr)
 			}
 		}
-		mtok := client.Publish(m.topic.String(i, msg), m.conf.QoS, retained, p.AsBytes())
+
+		topicStr, err := m.topic.String(i, msg)
+		if err != nil {
+			return fmt.Errorf("topic interpolation error: %w", err)
+		}
+
+		mtok := client.Publish(topicStr, m.conf.QoS, retained, p.AsBytes())
 		mtok.Wait()
 		sendErr := mtok.Error()
 		if sendErr == mqtt.ErrNotConnected {

@@ -108,16 +108,20 @@ func newDedupe(conf processor.DedupeConfig, mgr bundle.NewManagement) (*dedupePr
 func (d *dedupeProc) ProcessBatch(ctx context.Context, spans []*tracing.Span, batch message.Batch) ([]message.Batch, error) {
 	newBatch := message.QuickBatch(nil)
 	_ = batch.Iter(func(i int, p *message.Part) error {
-		key := d.key.String(i, batch)
+		key, err := d.key.String(i, batch)
+		if err != nil {
+			err = fmt.Errorf("key interpolation error: %w", err)
+			processor.MarkErr(p, spans[i], err)
+			return nil
+		}
 
-		var err error
 		if cerr := d.mgr.AccessCache(context.Background(), d.cacheName, func(cache cache.V1) {
 			err = cache.Add(context.Background(), key, []byte{'t'}, nil)
 		}); cerr != nil {
 			err = cerr
 		}
 		if err != nil {
-			if err == component.ErrKeyAlreadyExists {
+			if errors.Is(err, component.ErrKeyAlreadyExists) {
 				spans[i].LogKV(
 					"event", "dropped",
 					"type", "deduplicated",

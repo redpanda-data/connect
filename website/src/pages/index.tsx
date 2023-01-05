@@ -61,7 +61,7 @@ const snippets = [
 
 pipeline:
   processors:
-    - bloblang: |
+    - mapping: |
         root.message = this
         root.meta.link_count = this.links.length()
         root.user.age = this.user.age.number()
@@ -117,11 +117,11 @@ pipeline:
   processors:
     - group_by_value:
         value: '\${! json("traffic_light_id") }'
-    - bloblang: |
+    - mapping: |
         root = if batch_index() == 0 {
           {
             "traffic_light_id": this.traffic_light_id,
-            "created_at": meta("window_end_timestamp"),
+            "created_at": @window_end_timestamp,
             "total_cars": json("registration_plate").from_all().unique().length(),
             "passengers": json("passengers").from_all().sum(),
           }
@@ -365,10 +365,9 @@ function Home() {
                     <a href="https://community.com/" className="col col--6"><img className={styles.communityImg} src="/img/sponsors/community.svg" /></a>
                     <a href="https://www.optum.com/" className="col col--6"><img className={styles.optumImg} src="/img/sponsors/optum_logo.png" /></a>
                     <a href="https://aurora.dev/" className="col col--6"><img className={styles.auroraImg} src="/img/sponsors/aurora.svg" /></a>
-                    <a href="https://rudderstack.com/" className="col col--6"><img className={styles.rudderstackImg} src="/img/sponsors/rudderstack.svg" /></a>
                     <a href="https://wildbit.com" className="col col--6"><img className={styles.wildbitImg} src="/img/sponsors/wildbit.svg" /></a>
                     <a href="https://www.opala.com" className="col col--6"><img className={styles.opalaImg} src="/img/sponsors/opala.svg" /></a>
-                    <a href="https://numary.com" className="col col--6"><img className={styles.numaryImg} src="/img/sponsors/numary.svg" /></a>
+                    <a href="https://formance.com" className="col col--6"><img className={styles.formanceImg} src="/img/sponsors/formance.svg" /></a>
                     <a href="https://synadia.com" className="col col--6"><img className={styles.synadiaImg} src="/img/sponsors/synadia.svg" /></a>
                   </div>
                 </div>

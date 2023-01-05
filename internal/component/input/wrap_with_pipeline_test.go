@@ -195,8 +195,7 @@ func TestBasicWrapMultiPipelines(t *testing.T) {
 
 //------------------------------------------------------------------------------
 
-type mockProc struct {
-}
+type mockProc struct{}
 
 func (m mockProc) ProcessBatch(ctx context.Context, msg message.Batch) ([]message.Batch, error) {
 	msgs := [1]message.Batch{msg}

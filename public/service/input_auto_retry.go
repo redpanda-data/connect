@@ -2,10 +2,10 @@ package service
 
 import (
 	"context"
-	"sync"
-	"time"
+	"errors"
+	"sync/atomic"
 
-	"github.com/cenkalti/backoff/v4"
+	"github.com/benthosdev/benthos/v4/internal/autoretry"
 )
 
 // AutoRetryNacks wraps an input implementation with a component that
@@ -17,96 +17,54 @@ import (
 // until success or the stream is stopped.
 func AutoRetryNacks(i Input) Input {
 	return &autoRetryInput{
-		child:           i,
-		resendInterrupt: func() {},
+		retryList: autoretry.NewList(func(ctx context.Context) (*Message, autoretry.AckFunc, error) {
+			t, aFn, err := i.Read(ctx)
+			return t, autoretry.AckFunc(aFn), err
+		}, nil),
+		child: i,
 	}
 }
 
 //------------------------------------------------------------------------------
 
-type messageRetry struct {
-	boff     backoff.BackOff
-	attempts int
-	msg      *Message
-	ackFn    AckFunc
-}
-
-func newMessageRetry(msg *Message, ackFn AckFunc) messageRetry {
-	boff := backoff.NewExponentialBackOff()
-	boff.InitialInterval = time.Millisecond
-	boff.MaxInterval = time.Second
-	boff.Multiplier = 1.1
-	boff.MaxElapsedTime = 0
-	return messageRetry{boff: boff, attempts: 0, msg: msg, ackFn: ackFn}
-}
-
 type autoRetryInput struct {
-	resendMessages  []messageRetry
-	resendInterrupt func()
-	msgsMut         sync.Mutex
-
-	child Input
+	retryList   *autoretry.List[*Message]
+	child       Input
+	inputClosed int32
 }
 
 func (i *autoRetryInput) Connect(ctx context.Context) error {
-	return i.child.Connect(ctx)
-}
-
-func (i *autoRetryInput) wrapAckFunc(m messageRetry) (*Message, AckFunc) {
-	return m.msg.Copy(), func(ctx context.Context, err error) error {
-		if err != nil {
-			i.msgsMut.Lock()
-			i.resendMessages = append(i.resendMessages, m)
-			i.resendInterrupt()
-			i.msgsMut.Unlock()
-			return nil
-		}
-		return m.ackFn(ctx, nil)
+	err := i.child.Connect(ctx)
+	// If our source has finished but we still have messages in flight then
+	// we act like we're still open. Read will be called and we can either
+	// return the pending messages or wait for them.
+	if errors.Is(err, ErrEndOfInput) && !i.retryList.Exhausted() {
+		atomic.StoreInt32(&i.inputClosed, 1)
+		err = nil
 	}
+	return err
 }
 
 func (i *autoRetryInput) Read(ctx context.Context) (*Message, AckFunc, error) {
-	var cancel func()
-	ctx, cancel = context.WithCancel(ctx)
-	defer cancel()
-
-	// If we have messages queued to be resent we prioritise them over reading
-	// new messages.
-	i.msgsMut.Lock()
-	if lMsgs := len(i.resendMessages); lMsgs > 0 {
-		resend := i.resendMessages[0]
-		if lMsgs > 1 {
-			i.resendMessages = i.resendMessages[1:]
-		} else {
-			i.resendMessages = nil
-		}
-		i.msgsMut.Unlock()
-
-		resend.attempts++
-		if resend.attempts > 2 {
-			// This sleep prevents a busy loop on permanently failed messages.
-			if tout := resend.boff.NextBackOff(); tout > 0 {
-				select {
-				case <-time.After(tout):
-				case <-ctx.Done():
-					return nil, nil, ctx.Err()
-				}
-			}
-		}
-		sendMsg, ackFn := i.wrapAckFunc(resend)
-		return sendMsg, ackFn, nil
-	}
-	i.resendInterrupt = cancel
-	i.msgsMut.Unlock()
-
-	msg, aFn, err := i.child.Read(ctx)
+	msg, rAckFn, err := i.retryList.Shift(ctx, atomic.LoadInt32(&i.inputClosed) == 0)
 	if err != nil {
+		if errors.Is(err, autoretry.ErrExhausted) {
+			return nil, nil, ErrEndOfInput
+		}
+		if errors.Is(err, ErrEndOfInput) {
+			// Mark our input as being closed and trigger an immediate re-read
+			// in order to clear any pending retries.
+			atomic.StoreInt32(&i.inputClosed, 1)
+			return i.Read(ctx)
+		}
+		// Otherwise we have an unknown error from our reader that we should
+		// escalate, this is most likely an ErrNotConnected or ErrTimeout.
 		return nil, nil, err
 	}
-	sendMsg, ackFn := i.wrapAckFunc(newMessageRetry(msg, aFn))
-	return sendMsg, ackFn, nil
+	return msg.Copy(), AckFunc(rAckFn), nil
 }
 
 func (i *autoRetryInput) Close(ctx context.Context) error {
+	_ = i.retryList.Close(ctx)
 	return i.child.Close(ctx)
 }

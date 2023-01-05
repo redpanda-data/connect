@@ -10,8 +10,10 @@ import (
 	_ "github.com/benthosdev/benthos/v4/public/components/avro"
 	_ "github.com/benthosdev/benthos/v4/public/components/aws"
 	_ "github.com/benthosdev/benthos/v4/public/components/azure"
+	_ "github.com/benthosdev/benthos/v4/public/components/beanstalkd"
 	_ "github.com/benthosdev/benthos/v4/public/components/cassandra"
 	_ "github.com/benthosdev/benthos/v4/public/components/confluent"
+	_ "github.com/benthosdev/benthos/v4/public/components/couchbase"
 	_ "github.com/benthosdev/benthos/v4/public/components/dgraph"
 	_ "github.com/benthosdev/benthos/v4/public/components/elasticsearch"
 	_ "github.com/benthosdev/benthos/v4/public/components/gcp"
@@ -37,4 +39,5 @@ import (
 	_ "github.com/benthosdev/benthos/v4/public/components/snowflake"
 	_ "github.com/benthosdev/benthos/v4/public/components/sql"
 	_ "github.com/benthosdev/benthos/v4/public/components/statsd"
+	_ "github.com/benthosdev/benthos/v4/public/components/wasm"
 )

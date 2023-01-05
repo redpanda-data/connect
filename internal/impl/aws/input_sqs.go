@@ -29,7 +29,7 @@ func init() {
 		if err != nil {
 			return nil, err
 		}
-		return input.NewAsyncReader("aws_sqs", false, r, nm)
+		return input.NewAsyncReader("aws_sqs", r, nm)
 	}), docs.ComponentSpec{
 		Name:   "aws_sqs",
 		Status: docs.StatusStable,
@@ -55,9 +55,9 @@ This input adds the following metadata fields to each message:
 ` + "```" + `
 
 You can access these metadata fields using
-[function interpolation](/docs/configuration/interpolation#metadata).`,
+[function interpolation](/docs/configuration/interpolation#bloblang-queries).`,
 		Config: docs.FieldComponent().WithChildren(
-			docs.FieldString("url", "The SQS URL to consume from."),
+			docs.FieldURL("url", "The SQS URL to consume from."),
 			docs.FieldBool("delete_message", "Whether to delete the consumed message once it is acked. Disabling allows you to handle the deletion using a different mechanism.").Advanced(),
 			docs.FieldBool("reset_visibility", "Whether to set the visibility timeout of the consumed message to zero once it is nacked. Disabling honors the preset visibility timeout specified for the queue.").AtVersion("3.58.0").Advanced(),
 			docs.FieldInt("max_number_of_messages", "The maximum number of messages to return on one poll. Valid values: 1 to 10.").Advanced(),
@@ -215,8 +215,9 @@ func (a *awsSQSReader) readLoop(wg *sync.WaitGroup) {
 	}()
 
 	backoff := backoff.NewExponentialBackOff()
-	backoff.InitialInterval = time.Millisecond
-	backoff.MaxInterval = time.Second
+	backoff.InitialInterval = 100 * time.Millisecond
+	backoff.MaxInterval = 5 * time.Minute
+	backoff.MaxElapsedTime = 0
 
 	getMsgs := func() {
 		ctx, done := a.closeSignal.CloseAtLeisureCtx(context.Background())
@@ -329,14 +330,14 @@ func (a *awsSQSReader) resetMessages(ctx context.Context, msgs ...sqsMessageHand
 }
 
 func addSQSMetadata(p *message.Part, sqsMsg *sqs.Message) {
-	p.MetaSet("sqs_message_id", *sqsMsg.MessageId)
-	p.MetaSet("sqs_receipt_handle", *sqsMsg.ReceiptHandle)
+	p.MetaSetMut("sqs_message_id", *sqsMsg.MessageId)
+	p.MetaSetMut("sqs_receipt_handle", *sqsMsg.ReceiptHandle)
 	if rCountStr := sqsMsg.Attributes["ApproximateReceiveCount"]; rCountStr != nil {
-		p.MetaSet("sqs_approximate_receive_count", *rCountStr)
+		p.MetaSetMut("sqs_approximate_receive_count", *rCountStr)
 	}
 	for k, v := range sqsMsg.MessageAttributes {
 		if v.StringValue != nil {
-			p.MetaSet(k, *v.StringValue)
+			p.MetaSetMut(k, *v.StringValue)
 		}
 	}
 }

@@ -173,7 +173,7 @@ func newDynamoDBWriter(conf output.DynamoDBConfig, mgr bundle.NewManagement) (*d
 		return nil, err
 	}
 	db.boffPool = sync.Pool{
-		New: func() interface{} {
+		New: func() any {
 			return db.backoffCtor()
 		},
 	}
@@ -205,9 +205,9 @@ func (d *dynamoDBWriter) Connect(ctx context.Context) error {
 	return nil
 }
 
-func walkJSON(root interface{}) *dynamodb.AttributeValue {
+func walkJSON(root any) *dynamodb.AttributeValue {
 	switch v := root.(type) {
-	case map[string]interface{}:
+	case map[string]any:
 		m := make(map[string]*dynamodb.AttributeValue, len(v))
 		for k, v2 := range v {
 			m[k] = walkJSON(v2)
@@ -215,7 +215,7 @@ func walkJSON(root interface{}) *dynamodb.AttributeValue {
 		return &dynamodb.AttributeValue{
 			M: m,
 		}
-	case []interface{}:
+	case []any:
 		l := make([]*dynamodb.AttributeValue, len(v))
 		for i, v2 := range v {
 			l[i] = walkJSON(v2)
@@ -257,7 +257,7 @@ func walkJSON(root interface{}) *dynamodb.AttributeValue {
 	}
 }
 
-func jsonToMap(path string, root interface{}) (*dynamodb.AttributeValue, error) {
+func jsonToMap(path string, root any) (*dynamodb.AttributeValue, error) {
 	gObj := gabs.Wrap(root)
 	if len(path) > 0 {
 		gObj = gObj.Path(path)
@@ -277,7 +277,7 @@ func (d *dynamoDBWriter) WriteBatch(ctx context.Context, msg message.Batch) erro
 	}()
 
 	writeReqs := []*dynamodb.WriteRequest{}
-	_ = msg.Iter(func(i int, p *message.Part) error {
+	if err := msg.Iter(func(i int, p *message.Part) error {
 		items := map[string]*dynamodb.AttributeValue{}
 		if d.ttl != 0 && d.conf.TTLKey != "" {
 			items[d.conf.TTLKey] = &dynamodb.AttributeValue{
@@ -285,7 +285,10 @@ func (d *dynamoDBWriter) WriteBatch(ctx context.Context, msg message.Batch) erro
 			}
 		}
 		for k, v := range d.strColumns {
-			s := v.String(i, msg)
+			s, err := v.String(i, msg)
+			if err != nil {
+				return fmt.Errorf("string column %v interpolation error: %w", k, err)
+			}
 			items[k] = &dynamodb.AttributeValue{
 				S: &s,
 			}
@@ -294,19 +297,20 @@ func (d *dynamoDBWriter) WriteBatch(ctx context.Context, msg message.Batch) erro
 			jRoot, err := p.AsStructured()
 			if err != nil {
 				d.log.Errorf("Failed to extract JSON maps from document: %v", err)
-			} else {
-				for k, v := range d.jsonMapColumns {
-					if attr, err := jsonToMap(v, jRoot); err == nil {
-						if k == "" {
-							for ak, av := range attr.M {
-								items[ak] = av
-							}
-						} else {
-							items[k] = attr
+				return err
+			}
+			for k, v := range d.jsonMapColumns {
+				if attr, err := jsonToMap(v, jRoot); err == nil {
+					if k == "" {
+						for ak, av := range attr.M {
+							items[ak] = av
 						}
 					} else {
-						d.log.Warnf("Unable to extract JSON map path '%v' from document: %v", v, err)
+						items[k] = attr
 					}
+				} else {
+					d.log.Warnf("Unable to extract JSON map path '%v' from document: %v", v, err)
+					return err
 				}
 			}
 		}
@@ -316,7 +320,9 @@ func (d *dynamoDBWriter) WriteBatch(ctx context.Context, msg message.Batch) erro
 			},
 		})
 		return nil
-	})
+	}); err != nil {
+		return err
+	}
 
 	batchResult, err := d.client.BatchWriteItem(&dynamodb.BatchWriteItemInput{
 		RequestItems: map[string][]*dynamodb.WriteRequest{

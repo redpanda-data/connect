@@ -442,8 +442,10 @@ func (s *subprocWrapper) Send(prolog, payload, epilog []byte) ([]byte, error) {
 
 //------------------------------------------------------------------------------
 
-var newLineBytes = []byte("\n")
-var commaBytes = []byte(",")
+var (
+	newLineBytes = []byte("\n")
+	commaBytes   = []byte(",")
+)
 
 // ProcessMessage logs an event and returns the message unchanged.
 func (e *subprocessProc) Process(ctx context.Context, msg *message.Part) ([]*message.Part, error) {

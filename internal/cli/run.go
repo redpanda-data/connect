@@ -17,6 +17,7 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/config"
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/filepath"
+	"github.com/benthosdev/benthos/v4/internal/filepath/ifs"
 	"github.com/benthosdev/benthos/v4/internal/template"
 )
 
@@ -24,20 +25,31 @@ import (
 
 // Build stamps.
 var (
-	Version   string
-	DateBuilt string
+	Version   = "unknown"
+	DateBuilt = "unknown"
 )
 
 func init() {
-	if Version == "" {
-		if info, ok := debug.ReadBuildInfo(); ok {
-			for _, mod := range info.Deps {
-				if mod.Path == "github.com/benthosdev/benthos/v4" {
-					Version = mod.Version
+	if info, ok := debug.ReadBuildInfo(); ok {
+		for _, mod := range info.Deps {
+			if mod.Path == "github.com/benthosdev/benthos/v4" {
+				Version = mod.Version
+				if mod.Replace != nil {
+					v := mod.Replace.Version
+					if v != "" {
+						Version = v
+					}
 				}
 			}
 		}
-		DateBuilt = "unknown"
+		for _, s := range info.Settings {
+			if s.Key == "vcs.revision" && Version == "unknown" {
+				Version = s.Value
+			}
+			if s.Key == "vcs.time" && DateBuilt == "unknown" {
+				DateBuilt = s.Value
+			}
+		}
 	}
 }
 
@@ -83,18 +95,7 @@ func OptUseContext(ctx context.Context) func() {
 //------------------------------------------------------------------------------
 
 func cmdVersion() {
-	version, dateBuilt := Version, DateBuilt
-	if version == "" {
-		info, ok := debug.ReadBuildInfo()
-		if ok {
-			for _, mod := range info.Deps {
-				if mod.Path == "github.com/benthosdev/benthos/v4" {
-					version = mod.Version
-				}
-			}
-		}
-	}
-	fmt.Printf("Version: %v\nDate: %v\n", version, dateBuilt)
+	fmt.Printf("Version: %v\nDate: %v\n", Version, DateBuilt)
 	os.Exit(0)
 }
 
@@ -181,9 +182,14 @@ Either run Benthos as a stream processor or choose a command:
 		Flags: flags,
 		Before: func(c *cli.Context) error {
 			if dotEnvFile := c.String("env-file"); dotEnvFile != "" {
-				vars, err := parser.ParseDotEnvFile(dotEnvFile)
+				dotEnvBytes, err := ifs.ReadFile(ifs.OS(), dotEnvFile)
 				if err != nil {
 					fmt.Printf("Failed to read dotenv file: %v\n", err)
+					os.Exit(1)
+				}
+				vars, err := parser.ParseDotEnvFile(dotEnvBytes)
+				if err != nil {
+					fmt.Printf("Failed to parse dotenv file: %v\n", err)
 					os.Exit(1)
 				}
 				for k, v := range vars {
@@ -194,7 +200,7 @@ Either run Benthos as a stream processor or choose a command:
 				}
 			}
 
-			templatesPaths, err := filepath.Globs(c.StringSlice("templates"))
+			templatesPaths, err := filepath.Globs(ifs.OS(), c.StringSlice("templates"))
 			if err != nil {
 				fmt.Printf("Failed to resolve template glob pattern: %v\n", err)
 				os.Exit(1)
@@ -261,6 +267,7 @@ variables have been resolved:
 					if err == nil {
 						sanitConf := docs.NewSanitiseConfig()
 						sanitConf.RemoveTypeField = true
+						sanitConf.ScrubSecrets = true
 						err = config.Spec().SanitiseYAML(&node, sanitConf)
 					}
 					if err == nil {

@@ -13,7 +13,7 @@ import (
 func TestArithmeticParser(t *testing.T) {
 	type easyMsg struct {
 		content string
-		meta    map[string]string
+		meta    map[string]any
 	}
 
 	tests := map[string]struct {
@@ -127,7 +127,7 @@ func TestArithmeticParser(t *testing.T) {
 			messages: []easyMsg{
 				{
 					content: `{"foo":5,"bar":12}`,
-					meta: map[string]string{
+					meta: map[string]any{
 						"baz": "this aint a number",
 					},
 				},
@@ -146,7 +146,7 @@ func TestArithmeticParser(t *testing.T) {
 			messages: []easyMsg{
 				{
 					content: `{"foo":5,"bar":12}`,
-					meta: map[string]string{
+					meta: map[string]any{
 						"baz": "3",
 					},
 				},
@@ -172,7 +172,7 @@ func TestArithmeticParser(t *testing.T) {
 			messages: []easyMsg{
 				{
 					content: `{"foo":5,"bar":12}`,
-					meta: map[string]string{
+					meta: map[string]any{
 						"foo": "3",
 						"bar": "8",
 					},
@@ -309,24 +309,28 @@ func TestArithmeticParser(t *testing.T) {
 				part := message.NewPart([]byte(m.content))
 				if m.meta != nil {
 					for k, v := range m.meta {
-						part.MetaSet(k, v)
+						part.MetaSetMut(k, v)
 					}
 				}
 				msg = append(msg, part)
 			}
 
-			e, err := tryParseQuery(test.input)
-			require.Nil(t, err)
+			e, pErr := tryParseQuery(test.input)
+			require.Nil(t, pErr)
 
-			res := query.ExecToString(e, query.FunctionContext{
+			res, err := query.ExecToString(e, query.FunctionContext{
 				Index:    test.index,
 				MsgBatch: msg,
 			})
+			require.NoError(t, err)
 			assert.Equal(t, test.output, res)
-			res = string(query.ExecToBytes(e, query.FunctionContext{
+
+			bRes, err := query.ExecToBytes(e, query.FunctionContext{
 				Index:    test.index,
 				MsgBatch: msg,
-			}))
+			})
+			require.NoError(t, err)
+			res = string(bRes)
 			assert.Equal(t, test.output, res)
 		})
 	}
@@ -372,15 +376,19 @@ func TestArithmeticLiteralsParser(t *testing.T) {
 
 	for k, v := range tests {
 		msg := message.QuickBatch(nil)
-		e, err := tryParseQuery(k)
-		require.Nil(t, err)
+		e, pErr := tryParseQuery(k)
+		require.Nil(t, pErr)
 
-		res := query.ExecToString(e, query.FunctionContext{
+		res, err := query.ExecToString(e, query.FunctionContext{
 			Index:    0,
 			MsgBatch: msg,
 		})
+		require.NoError(t, err)
 		assert.Equal(t, v, res, k)
-		res = string(query.ExecToBytes(e, query.FunctionContext{MsgBatch: msg}))
+
+		bres, err := query.ExecToBytes(e, query.FunctionContext{MsgBatch: msg})
+		require.NoError(t, err)
+		res = string(bres)
 		assert.Equal(t, v, res, k)
 	}
 }

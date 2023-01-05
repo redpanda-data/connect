@@ -6,6 +6,7 @@ import (
 
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/input"
+	"github.com/benthosdev/benthos/v4/internal/component/input/batcher"
 	"github.com/benthosdev/benthos/v4/internal/message"
 )
 
@@ -97,7 +98,7 @@ type BatchInput interface {
 
 //------------------------------------------------------------------------------
 
-// Implements input.AsyncReader
+// Implements input.AsyncReader.
 type airGapReader struct {
 	r Input
 }
@@ -137,7 +138,7 @@ func (a *airGapReader) Close(ctx context.Context) error {
 
 //------------------------------------------------------------------------------
 
-// Implements input.AsyncReader
+// Implements input.AsyncReader.
 type airGapBatchReader struct {
 	r BatchInput
 }
@@ -170,6 +171,7 @@ func (a *airGapBatchReader) ReadBatch(ctx context.Context) (message.Batch, input
 		mBatch[i] = p.part
 	}
 	return mBatch, func(c context.Context, r error) error {
+		r = toPublicBatchError(r)
 		return ackFn(c, r)
 	}, nil
 }
@@ -213,7 +215,10 @@ func (r *ResourceInput) ReadBatch(ctx context.Context) (MessageBatch, AckFunc, e
 		b = append(b, newMessageFromPart(part))
 		return nil
 	})
-	return b, tran.Ack, nil
+	return b, func(c context.Context, r error) error {
+		r = fromPublicBatchError(r)
+		return tran.Ack(c, r)
+	}, nil
 }
 
 //------------------------------------------------------------------------------
@@ -224,6 +229,14 @@ func (r *ResourceInput) ReadBatch(ctx context.Context) (MessageBatch, AckFunc, e
 // calling Close to terminate the input.
 type OwnedInput struct {
 	i input.Streamed
+}
+
+// BatchedWith returns a copy of the OwnedInput where messages will be batched
+// according to the provided batcher.
+func (o *OwnedInput) BatchedWith(b *Batcher) *OwnedInput {
+	return &OwnedInput{
+		i: batcher.New(b.p, o.i, b.mgr.Logger()),
+	}
 }
 
 // ReadBatch attempts to read a message batch from the input, along with a
@@ -250,11 +263,27 @@ func (o *OwnedInput) ReadBatch(ctx context.Context) (MessageBatch, AckFunc, erro
 		b = append(b, newMessageFromPart(part))
 		return nil
 	})
-	return b, tran.Ack, nil
+	return b, func(c context.Context, r error) error {
+		r = fromPublicBatchError(r)
+		return tran.Ack(c, r)
+	}, nil
 }
 
 // Close the input.
 func (o *OwnedInput) Close(ctx context.Context) error {
 	o.i.TriggerStopConsuming()
 	return o.i.WaitForClose(ctx)
+}
+
+type inputUnwrapper struct {
+	i input.Streamed
+}
+
+func (w inputUnwrapper) Unwrap() input.Streamed {
+	return w.i
+}
+
+// XUnwrapper is for internal use only, do not use this.
+func (o *OwnedInput) XUnwrapper() any {
+	return inputUnwrapper{i: o.i}
 }

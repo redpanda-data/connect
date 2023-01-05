@@ -10,9 +10,9 @@ func TestArgumentsLength(t *testing.T) {
 	var a, b, c int
 	set := NewArgSpec().IntVar(&a).IntVar(&b).IntVar(&c)
 
-	assert.EqualError(t, set.Extract([]interface{}{0, 1}), "expected 3 arguments, received 2")
-	assert.EqualError(t, set.Extract([]interface{}{0, 1, 2, 3}), "expected 3 arguments, received 4")
-	assert.NoError(t, set.Extract([]interface{}{0, 1, 2}))
+	assert.EqualError(t, set.Extract([]any{0, 1}), "expected 3 arguments, received 2")
+	assert.EqualError(t, set.Extract([]any{0, 1, 2, 3}), "expected 3 arguments, received 4")
+	assert.NoError(t, set.Extract([]any{0, 1, 2}))
 }
 
 func TestArgumentTypes(t *testing.T) {
@@ -21,7 +21,7 @@ func TestArgumentTypes(t *testing.T) {
 	var c float64
 	var d bool
 	var e string
-	var f interface{}
+	var f any
 	set := NewArgSpec().
 		IntVar(&a).
 		Int64Var(&b).
@@ -32,51 +32,51 @@ func TestArgumentTypes(t *testing.T) {
 
 	testCases := []struct {
 		name string
-		args []interface{}
-		exp  []interface{}
+		args []any
+		exp  []any
 		err  string
 	}{
 		{
 			name: "bad int",
-			args: []interface{}{
+			args: []any{
 				"nope", int64(2), 3.0, true, "hello world", "and this",
 			},
 			err: `bad argument 0: expected int value, got string (nope)`,
 		},
 		{
 			name: "bad int64",
-			args: []interface{}{
+			args: []any{
 				int64(1), "nope", 3.0, true, "hello world", "and this",
 			},
 			err: `bad argument 1: expected int64 value, got string (nope)`,
 		},
 		{
 			name: "bad float64",
-			args: []interface{}{
+			args: []any{
 				int64(1), int64(2), "nope", true, "hello world", "and this",
 			},
 			err: `bad argument 2: expected float64 value, got string (nope)`,
 		},
 		{
 			name: "bad bool",
-			args: []interface{}{
+			args: []any{
 				int64(1), int64(2), 3.0, "nope", "hello world", "and this",
 			},
 			err: `bad argument 3: expected bool value, got string (nope)`,
 		},
 		{
 			name: "bad string",
-			args: []interface{}{
+			args: []any{
 				int64(1), int64(2), 3.0, true, 30, "and this",
 			},
 			err: "bad argument 4: expected string value, got int (30)",
 		},
 		{
 			name: "good values",
-			args: []interface{}{
+			args: []any{
 				int64(1), int64(2), 3.0, true, "hello world", "and this",
 			},
-			exp: []interface{}{
+			exp: []any{
 				1, int64(2), 3.0, true, "hello world", "and this",
 			},
 		},
@@ -90,7 +90,7 @@ func TestArgumentTypes(t *testing.T) {
 				assert.EqualError(t, err, test.err)
 			} else {
 				assert.NoError(t, err)
-				assert.Equal(t, test.exp, []interface{}{
+				assert.Equal(t, test.exp, []any{
 					a, b, c, d, e, f,
 				})
 			}

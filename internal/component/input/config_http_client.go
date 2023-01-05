@@ -1,8 +1,6 @@
 package input
 
-import (
-	ihttpdocs "github.com/benthosdev/benthos/v4/internal/http/docs"
-)
+import "github.com/benthosdev/benthos/v4/internal/httpclient/oldconfig"
 
 // StreamConfig contains fields for specifying consumption behaviour when the
 // body of a request is a constant stream of bytes.
@@ -15,19 +13,19 @@ type StreamConfig struct {
 
 // HTTPClientConfig contains configuration for the HTTPClient output type.
 type HTTPClientConfig struct {
-	ihttpdocs.Config `json:",inline" yaml:",inline"`
-	Payload          string       `json:"payload" yaml:"payload"`
-	DropEmptyBodies  bool         `json:"drop_empty_bodies" yaml:"drop_empty_bodies"`
-	Stream           StreamConfig `json:"stream" yaml:"stream"`
+	oldconfig.OldConfig `json:",inline" yaml:",inline"`
+	Payload             string       `json:"payload" yaml:"payload"`
+	DropEmptyBodies     bool         `json:"drop_empty_bodies" yaml:"drop_empty_bodies"`
+	Stream              StreamConfig `json:"stream" yaml:"stream"`
 }
 
 // NewHTTPClientConfig creates a new HTTPClientConfig with default values.
 func NewHTTPClientConfig() HTTPClientConfig {
-	cConf := ihttpdocs.NewConfig()
+	cConf := oldconfig.NewOldConfig()
 	cConf.Verb = "GET"
 	cConf.URL = ""
 	return HTTPClientConfig{
-		Config:          cConf,
+		OldConfig:       cConf,
 		Payload:         "",
 		DropEmptyBodies: true,
 		Stream: StreamConfig{

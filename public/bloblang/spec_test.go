@@ -16,7 +16,7 @@ func TestParsedParamsNameless(t *testing.T) {
 	parsedInternal, err := params.params.PopulateNameless("foo", 9, true)
 	require.NoError(t, err)
 
-	assert.Equal(t, []interface{}{
+	assert.Equal(t, []any{
 		"foo", int64(9), true,
 	}, parsedInternal.Raw())
 
@@ -44,14 +44,14 @@ func TestParsedParamsNamed(t *testing.T) {
 		Param(NewInt64Param("second").Default(5)).
 		Param(NewBoolParam("third"))
 
-	parsedInternal, err := params.params.PopulateNamed(map[string]interface{}{
+	parsedInternal, err := params.params.PopulateNamed(map[string]any{
 		"first":  "foo",
 		"second": 9,
 		"third":  true,
 	})
 	require.NoError(t, err)
 
-	assert.Equal(t, []interface{}{
+	assert.Equal(t, []any{
 		"foo", int64(9), true,
 	}, parsedInternal.Raw())
 

@@ -184,17 +184,37 @@ func (a *azureBlobStorageWriter) createContainer(c *storage.Container, accessLev
 
 func (a *azureBlobStorageWriter) WriteBatch(_ context.Context, msg message.Batch) error {
 	return output.IterateBatchedSend(msg, func(i int, p *message.Part) error {
-		c := a.client.GetContainerReference(a.container.String(i, msg))
-		b := c.GetBlobReference(a.path.String(i, msg))
-		if err := a.uploadBlob(b, a.blobType.String(i, msg), p.AsBytes()); err != nil {
+		containerStr, err := a.container.String(i, msg)
+		if err != nil {
+			return fmt.Errorf("container interpolation error: %w", err)
+		}
+
+		pathStr, err := a.path.String(i, msg)
+		if err != nil {
+			return fmt.Errorf("path interpolation error: %w", err)
+		}
+
+		blobTypeStr, err := a.blobType.String(i, msg)
+		if err != nil {
+			return fmt.Errorf("blob type interpolation error: %w", err)
+		}
+
+		c := a.client.GetContainerReference(containerStr)
+		b := c.GetBlobReference(pathStr)
+		if err = a.uploadBlob(b, blobTypeStr, p.AsBytes()); err != nil {
 			if containerNotFound(err) {
-				if cerr := a.createContainer(c, a.accessLevel.String(i, msg)); cerr != nil {
+				var accessLevelStr string
+				if accessLevelStr, err = a.accessLevel.String(i, msg); err != nil {
+					return fmt.Errorf("access level interpolation error: %w", err)
+				}
+
+				if cerr := a.createContainer(c, accessLevelStr); cerr != nil {
 					a.log.Debugf("error creating container: %v.", cerr)
 					return cerr
 				}
-				err = a.uploadBlob(b, a.blobType.String(i, msg), p.AsBytes())
-				if err != nil {
-					a.log.Debugf("error retrying to upload  blob: %v.", err)
+
+				if err = a.uploadBlob(b, blobTypeStr, p.AsBytes()); err != nil {
+					a.log.Debugf("error retrying to upload blob: %v.", err)
 				}
 			}
 			return err

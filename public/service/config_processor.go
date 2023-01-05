@@ -64,7 +64,7 @@ func (p *ParsedConfig) FieldProcessorList(path ...string) ([]*OwnedProcessor, er
 		return nil, fmt.Errorf("field '%v' was not found in the config", strings.Join(path, "."))
 	}
 
-	procsArray, ok := proc.([]interface{})
+	procsArray, ok := proc.([]any)
 	if !ok {
 		return nil, fmt.Errorf("unexpected value, expected array, got %T", proc)
 	}

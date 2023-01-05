@@ -34,7 +34,7 @@ func dynamicArrayParser(pCtx Context) Func {
 			return res
 		}
 
-		res.Payload = query.NewArrayLiteral(res.Payload.([]interface{})...)
+		res.Payload = query.NewArrayLiteral(res.Payload.([]any)...)
 		return res
 	}
 }
@@ -79,11 +79,11 @@ func dynamicObjectParser(pCtx Context) Func {
 			return res
 		}
 
-		values := [][2]interface{}{}
+		values := [][2]any{}
 
-		for _, sequenceValue := range res.Payload.([]interface{}) {
-			slice := sequenceValue.([]interface{})
-			values = append(values, [2]interface{}{slice[0], slice[4]})
+		for _, sequenceValue := range res.Payload.([]any) {
+			slice := sequenceValue.([]any)
+			values = append(values, [2]any{slice[0], slice[4]})
 		}
 
 		lit, err := query.NewMapLiteral(values)

@@ -54,7 +54,6 @@ func init() {
 			output, err = newPusherWriterFromConfig(conf, mgr.Logger())
 			return
 		})
-
 	if err != nil {
 		panic(err)
 	}
@@ -123,7 +122,6 @@ func (p *pusherWriter) Connect(ctx context.Context) error {
 }
 
 func (p *pusherWriter) WriteBatch(ctx context.Context, b service.MessageBatch) (err error) {
-
 	events := make([]pusher.Event, 0, len(b))
 
 	// iterate over batch and set pusher events in array

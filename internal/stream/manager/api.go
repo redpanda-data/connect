@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"sort"
 	"strings"
 	"sync"
 
@@ -83,9 +82,13 @@ func (c ConfigSet) UnmarshalYAML(value *yaml.Node) error {
 	return nil
 }
 
+type lintErrors struct {
+	LintErrs []string `json:"lint_errors"`
+}
+
 func lintStreamConfigNode(node *yaml.Node) (lints []string) {
 	for _, dLint := range stream.Spec().LintYAML(docs.NewLintContext(), node) {
-		lints = append(lints, fmt.Sprintf("line %v: %v", dLint.Line, dLint.What))
+		lints = append(lints, dLint.Error())
 	}
 	return
 }
@@ -161,12 +164,10 @@ func (m *Type) HandleStreamsCRUD(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		if len(lints) > 0 {
-			sort.Strings(lints)
-			errBytes, _ := json.Marshal(struct {
-				LintErrs []string `json:"lint_errors"`
-			}{
+			errBytes, _ := json.Marshal(lintErrors{
 				LintErrs: lints,
 			})
+			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusBadRequest)
 			_, _ = w.Write(errBytes)
 			return
@@ -343,11 +344,10 @@ func (m *Type) HandleStreamCRUD(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if len(lints) > 0 {
-			errBytes, _ := json.Marshal(struct {
-				LintErrs []string `json:"lint_errors"`
-			}{
+			errBytes, _ := json.Marshal(lintErrors{
 				LintErrs: lints,
 			})
+			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusBadRequest)
 			_, _ = w.Write(errBytes)
 			return
@@ -360,10 +360,10 @@ func (m *Type) HandleStreamCRUD(w http.ResponseWriter, r *http.Request) {
 
 			var bodyBytes []byte
 			if bodyBytes, serverErr = json.Marshal(struct {
-				Active    bool        `json:"active"`
-				Uptime    float64     `json:"uptime"`
-				UptimeStr string      `json:"uptime_str"`
-				Config    interface{} `json:"config"`
+				Active    bool    `json:"active"`
+				Uptime    float64 `json:"uptime"`
+				UptimeStr string  `json:"uptime_str"`
+				Config    any     `json:"config"`
 			}{
 				Active:    info.IsRunning(),
 				Uptime:    info.Uptime().Seconds(),
@@ -381,11 +381,10 @@ func (m *Type) HandleStreamCRUD(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if len(lints) > 0 {
-			errBytes, _ := json.Marshal(struct {
-				LintErrs []string `json:"lint_errors"`
-			}{
+			errBytes, _ := json.Marshal(lintErrors{
 				LintErrs: lints,
 			})
+			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusBadRequest)
 			_, _ = w.Write(errBytes)
 			return
@@ -516,17 +515,16 @@ func (m *Type) HandleResourceCRUD(w http.ResponseWriter, r *http.Request) {
 
 		if r.URL.Query().Get("chilled") != "true" {
 			for _, l := range docs.LintYAML(docs.NewLintContext(), docType, &node) {
-				lints = append(lints, fmt.Sprintf("line %v: %v", l.Line, l.What))
+				lints = append(lints, l.Error())
 				m.manager.Logger().Infof("Resource '%v' config: %v\n", id, l)
 			}
 		}
 	}
 	if len(lints) > 0 {
-		errBytes, _ := json.Marshal(struct {
-			LintErrs []string `json:"lint_errors"`
-		}{
+		errBytes, _ := json.Marshal(lintErrors{
 			LintErrs: lints,
 		})
+		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
 		_, _ = w.Write(errBytes)
 		return
@@ -564,7 +562,7 @@ func (m *Type) HandleStreamStats(w http.ResponseWriter, r *http.Request) {
 	case "GET":
 		var info *StreamStatus
 		if info, serverErr = m.Read(id); serverErr == nil {
-			values := map[string]interface{}{}
+			values := map[string]any{}
 			for k, v := range info.metrics.GetCounters() {
 				values[k] = v
 			}

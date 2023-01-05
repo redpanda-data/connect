@@ -2,6 +2,7 @@ package output
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -44,7 +45,6 @@ type AsyncWriter struct {
 
 	typeStr     string
 	maxInflight int
-	noCancel    bool
 	writer      AsyncSink
 
 	injectTracingMap *mapping.Executor
@@ -106,7 +106,7 @@ func (w *AsyncWriter) injectSpans(msg message.Batch, spans []*tracing.Span) {
 		spanPart.SetStructuredMut(spanMapGeneric)
 
 		spanMsg := message.Batch{spanPart}
-		if tmpMsg, err := w.injectTracingMap.MapOnto(msg.Get(i), i, spanMsg); err != nil {
+		if tmpMsg, err := w.injectTracingMap.MapOnto(msg.Get(i), 0, spanMsg); err != nil {
 			w.log.Warnf("Failed to inject span: %v", err)
 		} else {
 			msg[i] = tmpMsg
@@ -147,7 +147,7 @@ func (w *AsyncWriter) loop() {
 	initConnection := func() bool {
 		for {
 			if err := w.writer.Connect(closeLeisureCtx); err != nil {
-				if w.shutSig.ShouldCloseAtLeisure() || err == component.ErrTypeClosed {
+				if w.shutSig.ShouldCloseAtLeisure() || errors.Is(err, component.ErrTypeClosed) {
 					return false
 				}
 				w.log.Errorf("Failed to connect to %v: %v\n", w.typeStr, err)
@@ -222,20 +222,20 @@ func (w *AsyncWriter) loop() {
 			}
 
 			w.log.Tracef("Attempting to write %v messages to '%v'.\n", ts.Payload.Len(), w.typeStr)
-			spans := tracing.CreateChildSpans(w.tracer, traceName, ts.Payload)
+			_, spans := tracing.WithChildSpans(w.tracer, traceName, ts.Payload)
 			w.injectSpans(ts.Payload, spans)
 
 			latency, err := w.latencyMeasuringWrite(closeLeisureCtx, ts.Payload)
 
 			// If our writer says it is not connected.
-			if err == component.ErrNotConnected {
+			if errors.Is(err, component.ErrNotConnected) {
 				latency, err = connectLoop(ts.Payload)
 			} else if err != nil {
 				mError.Incr(1)
 			}
 
 			// Close immediately if our writer is closed.
-			if err == component.ErrTypeClosed {
+			if errors.Is(err, component.ErrTypeClosed) {
 				return
 			}
 

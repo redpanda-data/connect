@@ -13,7 +13,7 @@ import (
 func TestExpressions(t *testing.T) {
 	type easyMsg struct {
 		content string
-		meta    map[string]string
+		meta    map[string]any
 	}
 
 	mustFunc := func(fn Function, err error) Function {
@@ -24,8 +24,8 @@ func TestExpressions(t *testing.T) {
 
 	tests := map[string]struct {
 		input    Function
-		value    *interface{}
-		output   interface{}
+		value    *any
+		output   any
 		err      error
 		messages []easyMsg
 		index    int
@@ -136,8 +136,8 @@ func TestExpressions(t *testing.T) {
 				nil,
 				NewMatchCase(NewLiteralFunction("", true), NewFieldFunction("")),
 			),
-			value: func() *interface{} {
-				var v interface{} = "context"
+			value: func() *any {
+				var v any = "context"
 				return &v
 			}(),
 			output: "context",
@@ -178,9 +178,9 @@ func TestExpressions(t *testing.T) {
 					ArithmeticAdd,
 				},
 			)),
-			value: func() *interface{} {
-				var v interface{} = map[string]interface{}{
-					"foo": map[string]interface{}{
+			value: func() *any {
+				var v any = map[string]any{
+					"foo": map[string]any{
 						"bar": 7,
 					},
 					"baz": 23,
@@ -197,16 +197,16 @@ func TestExpressions(t *testing.T) {
 					NewFieldFunction("baz"),
 				).(Function)),
 			)),
-			value: func() *interface{} {
-				var v interface{} = map[string]interface{}{
-					"foo": map[string]interface{}{
+			value: func() *any {
+				var v any = map[string]any{
+					"foo": map[string]any{
 						"bar": 7,
 					},
 					"baz": 23,
 				}
 				return &v
 			}(),
-			output: []interface{}{7, 23},
+			output: []any{7, 23},
 		},
 		"dropped context map to literal": {
 			input: mustFunc(NewMapMethod(
@@ -215,16 +215,16 @@ func TestExpressions(t *testing.T) {
 					NewFieldFunction("baz"),
 				).(Function)),
 			)),
-			value: func() *interface{} {
-				var v interface{} = map[string]interface{}{
-					"foo": map[string]interface{}{
+			value: func() *any {
+				var v any = map[string]any{
+					"foo": map[string]any{
 						"bar": 7,
 					},
 					"baz": 23,
 				}
 				return &v
 			}(),
-			output: []interface{}{23},
+			output: []any{23},
 		},
 	}
 
@@ -238,7 +238,7 @@ func TestExpressions(t *testing.T) {
 				part := message.NewPart([]byte(m.content))
 				if m.meta != nil {
 					for k, v := range m.meta {
-						part.MetaSet(k, v)
+						part.MetaSetMut(k, v)
 					}
 				}
 				msg = append(msg, part)
@@ -249,7 +249,7 @@ func TestExpressions(t *testing.T) {
 					Maps:     map[string]Function{},
 					Index:    test.index,
 					MsgBatch: msg,
-				}.WithValueFunc(func() *interface{} { return test.value }))
+				}.WithValueFunc(func() *any { return test.value }))
 				if test.err != nil {
 					require.EqualError(t, err, test.err.Error())
 				} else {

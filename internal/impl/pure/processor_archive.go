@@ -168,7 +168,7 @@ func concatenateArchive(hFunc headerFunc, msg service.MessageBatch) (*service.Me
 }
 
 func jsonArrayArchive(hFunc headerFunc, msg service.MessageBatch) (*service.Message, error) {
-	var array []interface{}
+	var array []any
 
 	for _, part := range msg {
 		doc, jerr := part.AsStructuredMut()
@@ -242,27 +242,36 @@ type fakeInfo struct {
 func (f fakeInfo) Name() string {
 	return f.name
 }
+
 func (f fakeInfo) Size() int64 {
 	return f.size
 }
+
 func (f fakeInfo) Mode() os.FileMode {
 	return f.mode
 }
+
 func (f fakeInfo) ModTime() time.Time {
 	return time.Now()
 }
+
 func (f fakeInfo) IsDir() bool {
 	return false
 }
-func (f fakeInfo) Sys() interface{} {
+
+func (f fakeInfo) Sys() any {
 	return nil
 }
 
 func (d *archive) createHeaderFunc(msg service.MessageBatch) func(int, *service.Message) os.FileInfo {
 	return func(index int, body *service.Message) os.FileInfo {
 		bBytes, _ := body.AsBytes()
+		name, err := msg.TryInterpolatedString(index, d.path)
+		if err != nil {
+			d.log.Errorf("Name interpolation error: %w", err)
+		}
 		return fakeInfo{
-			name: msg.InterpolatedString(index, d.path),
+			name: name,
 			size: int64(len(bBytes)),
 			mode: 0o666,
 		}

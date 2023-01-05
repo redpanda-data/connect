@@ -10,8 +10,8 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// Copied from ./internal/config/format.go
-func marshalYAML(v interface{}) ([]byte, error) {
+// Copied from ./internal/config/format.go.
+func marshalYAML(v any) ([]byte, error) {
 	var cbytes bytes.Buffer
 	enc := yaml.NewEncoder(&cbytes)
 	enc.SetIndent(2)
@@ -241,7 +241,7 @@ Introduced in version {{.Version}}.
 {{end}}
 `
 
-func createOrderedConfig(t Type, rawExample interface{}, filter FieldFilter) (*yaml.Node, error) {
+func createOrderedConfig(t Type, rawExample any, filter FieldFilter) (*yaml.Node, error) {
 	var newNode yaml.Node
 	if err := newNode.Encode(rawExample); err != nil {
 		return nil, err
@@ -258,8 +258,8 @@ func createOrderedConfig(t Type, rawExample interface{}, filter FieldFilter) (*y
 	return &newNode, nil
 }
 
-func genExampleConfigs(t Type, nest bool, fullConfigExample interface{}) (commonConfigStr, advConfigStr string, err error) {
-	var advConfig, commonConfig interface{}
+func genExampleConfigs(t Type, nest bool, fullConfigExample any) (commonConfigStr, advConfigStr string, err error) {
+	var advConfig, commonConfig any
 	if advConfig, err = createOrderedConfig(t, fullConfigExample, func(f FieldSpec) bool {
 		return !f.IsDeprecated
 	}); err != nil {
@@ -272,8 +272,8 @@ func genExampleConfigs(t Type, nest bool, fullConfigExample interface{}) (common
 	}
 
 	if nest {
-		advConfig = map[string]interface{}{string(t): advConfig}
-		commonConfig = map[string]interface{}{string(t): commonConfig}
+		advConfig = map[string]any{string(t): advConfig}
+		commonConfig = map[string]any{string(t): commonConfig}
 	}
 
 	advancedConfigBytes, err := marshalYAML(advConfig)
@@ -290,7 +290,7 @@ func genExampleConfigs(t Type, nest bool, fullConfigExample interface{}) (common
 
 // AsMarkdown renders the spec of a component, along with a full configuration
 // example, into a markdown document.
-func (c *ComponentSpec) AsMarkdown(nest bool, fullConfigExample interface{}) ([]byte, error) {
+func (c *ComponentSpec) AsMarkdown(nest bool, fullConfigExample any) ([]byte, error) {
 	if strings.Contains(c.Summary, "\n\n") {
 		return nil, fmt.Errorf("%v component '%v' has a summary containing empty lines", c.Type, c.Name)
 	}

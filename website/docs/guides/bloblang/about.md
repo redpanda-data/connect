@@ -106,22 +106,24 @@ root.new_doc.type = $foo
 
 ### Metadata
 
-Benthos messages contain metadata that is separate from the main payload, in Bloblang you can modify the metadata of the resulting message with the `meta` assignment keyword, and you can query the metadata of the input message with the [`meta` function][blobl.functions.meta]:
+Benthos messages contain metadata that is separate from the main payload, in Bloblang you can modify the metadata of the resulting message with the `meta` assignment keyword. Metadata values of the resulting message are referenced within queries with `@`:
 
 ```coffee
-# Delete all existing metadata
+# Reference a metadata value
+root.new_doc.bar = @kafka_topic
+
+# Delete all metadata
 meta = deleted()
 
-# Set a metadata value
+# Set metadata values
 meta bar = "hello world"
+meta baz = {
+  "something": "structured"
+}
 
-# Reference a metadata value from the input message
-root.new_doc.bar = meta("kafka_topic")
+# Get an object of key/values for all metadata
+root.meta_obj = @
 ```
-
-The [`meta` function][blobl.functions.meta] returns the read-only metadata of the input message, so it will not reflect changes you've made within the same mapping. This is why it's possible to begin a mapping by removing all old metadata `meta = deleted()` and still be able to query the original metadata.
-
-If you wish to set a metadata value and then refer back to it later then first set it [as a variable][blobl.variables].
 
 ## Coalesce
 
@@ -409,7 +411,6 @@ Why? That's a good question. Bloblang supports non-JSON formats too, so it can't
 [blobl.proc]: /docs/components/processors/mapping
 [blobl.interp]: /docs/configuration/interpolation#bloblang-queries
 [blobl.functions]: /docs/guides/bloblang/functions
-[blobl.functions.meta]: /docs/guides/bloblang/functions#meta
 [blobl.functions.content]: /docs/guides/bloblang/functions#content
 [blobl.methods]: /docs/guides/bloblang/methods
 [blobl.methods.apply]: /docs/guides/bloblang/methods#apply

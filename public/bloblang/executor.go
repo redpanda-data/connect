@@ -34,10 +34,10 @@ var ErrRootDeleted = errors.New("root was deleted")
 // If the mapping results in the root of the new document being deleted then
 // ErrRootDeleted is returned, which can be used as a signal to filter rather
 // than fail the mapping.
-func (e *Executor) Query(value interface{}) (interface{}, error) {
+func (e *Executor) Query(value any) (any, error) {
 	res, err := e.exec.Exec(query.FunctionContext{
 		Maps:     e.exec.Maps(),
-		Vars:     map[string]interface{}{},
+		Vars:     map[string]any{},
 		Index:    0,
 		MsgBatch: e.emptyQueryMessage,
 	}.WithValue(value))
@@ -60,8 +60,8 @@ func (e *Executor) Query(value interface{}) (interface{}, error) {
 // If the mapping results in the root of the new document being deleted then
 // ErrRootDeleted is returned, which can be used as a signal to filter rather
 // than fail the mapping.
-func (e *Executor) Overlay(value interface{}, onto *interface{}) error {
-	vars := map[string]interface{}{}
+func (e *Executor) Overlay(value any, onto *any) error {
+	vars := map[string]any{}
 
 	if err := e.exec.ExecOnto(query.FunctionContext{
 		Maps:     e.exec.Maps(),

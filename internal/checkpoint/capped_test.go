@@ -262,7 +262,7 @@ func TestCappedSequentialRandomLarge(t *testing.T) {
 func BenchmarkCappedChunked100(b *testing.B) {
 	checkpointLimit := int64(1000)
 	chunkSize := int64(100)
-	resolvers := make([]func() interface{}, chunkSize)
+	resolvers := make([]func() any, chunkSize)
 
 	b.ReportAllocs()
 
@@ -300,7 +300,7 @@ func BenchmarkCappedChunked100(b *testing.B) {
 func BenchmarkCappedChunkedReverse100(b *testing.B) {
 	checkpointLimit := int64(1000)
 	chunkSize := int64(100)
-	resolvers := make([]func() interface{}, chunkSize)
+	resolvers := make([]func() any, chunkSize)
 
 	b.ReportAllocs()
 
@@ -348,7 +348,7 @@ func BenchmarkCappedChunkedReverse100(b *testing.B) {
 func BenchmarkCappedChunkedReverse1000(b *testing.B) {
 	checkpointLimit := int64(1000)
 	chunkSize := int64(1000)
-	resolvers := make([]func() interface{}, chunkSize)
+	resolvers := make([]func() any, chunkSize)
 
 	b.ReportAllocs()
 
@@ -394,7 +394,7 @@ func BenchmarkCappedChunkedReverse1000(b *testing.B) {
 }
 
 func BenchmarkCappedSequential(b *testing.B) {
-	resolvers := make([]func() interface{}, b.N)
+	resolvers := make([]func() any, b.N)
 
 	b.ReportAllocs()
 
@@ -425,18 +425,17 @@ type checkpointTester struct {
 	ctx          context.Context
 	t            *testing.T
 	checkpointer *Capped
-	resolvers    map[int64]func() interface{}
+	resolvers    map[int64]func() any
 }
 
-// nolint:gocritic // Ignore unnamedResult false positive
-func newCheckpointTester(t *testing.T, capacity int64, timeout time.Duration) (*checkpointTester, func()) {
+func newCheckpointTester(t *testing.T, capacity int64, timeout time.Duration) (*checkpointTester, func()) { //nolint: gocritic // Ignore unnamedResult false positive
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 
 	return &checkpointTester{
 		ctx:          ctx,
 		t:            t,
 		checkpointer: NewCapped(capacity),
-		resolvers:    map[int64]func() interface{}{},
+		resolvers:    map[int64]func() any{},
 	}, cancel
 }
 

@@ -42,7 +42,7 @@ func applyMethod(target Function, args *ParsedParams) (Function, error) {
 		return nil, err
 	}
 
-	return ClosureFunction("map "+targetMap, func(ctx FunctionContext) (interface{}, error) {
+	return ClosureFunction("map "+targetMap, func(ctx FunctionContext) (any, error) {
 		res, err := target.Exec(ctx)
 		if err != nil {
 			return nil, err
@@ -58,7 +58,7 @@ func applyMethod(target Function, args *ParsedParams) (Function, error) {
 		}
 
 		// ISOLATED VARIABLES
-		ctx.Vars = map[string]interface{}{}
+		ctx.Vars = map[string]any{}
 		return m.Exec(ctx)
 	}, func(ctx TargetsContext) (TargetsContext, []TargetPath) {
 		mapFn, ok := ctx.Maps[targetMap]
@@ -93,7 +93,7 @@ func boolMethod(target Function, args *ParsedParams) (Function, error) {
 	if err != nil {
 		return nil, err
 	}
-	return ClosureFunction("method bool", func(ctx FunctionContext) (interface{}, error) {
+	return ClosureFunction("method bool", func(ctx FunctionContext) (any, error) {
 		v, err := target.Exec(ctx)
 		if err != nil {
 			if defaultBool != nil {
@@ -121,6 +121,11 @@ var _ = registerMethod(
 		NewExampleSpec("",
 			`root.doc.id = this.thing.id.string().catch(uuid_v4())`,
 		),
+		NewExampleSpec("The fallback argument can be a mapping, allowing you to capture the error string and yield structured data back.",
+			`root.url = this.url.parse_url().catch(err -> {"error":err,"input":this.url})`,
+			`{"url":"invalid %&# url"}`,
+			`{"url":{"error":"field `+"`this.url`"+`: parse \"invalid %&\": invalid URL escape \"%&\"","input":"invalid %&# url"}}`,
+		),
 		NewExampleSpec("When the input document is not structured attempting to reference structured fields with `this` will result in an error. Therefore, a convenient way to delete non-structured data is with a catch.",
 			`root = this.catch(deleted())`,
 			`{"doc":{"foo":"bar"}}`,
@@ -137,10 +142,10 @@ func catchMethod(fn Function, args *ParsedParams) (Function, error) {
 	if err != nil {
 		return nil, err
 	}
-	return ClosureFunction("method catch", func(ctx FunctionContext) (interface{}, error) {
+	return ClosureFunction("method catch", func(ctx FunctionContext) (any, error) {
 		res, err := fn.Exec(ctx)
 		if err != nil {
-			return catchFn.Exec(ctx)
+			return catchFn.Exec(ctx.WithValue(err.Error()))
 		}
 		return res, err
 	}, aggregateTargetPaths(fn, catchFn)), nil
@@ -178,7 +183,7 @@ func (f *fromMethod) Annotation() string {
 	return f.target.Annotation() + " from " + strconv.Itoa(f.index)
 }
 
-func (f *fromMethod) Exec(ctx FunctionContext) (interface{}, error) {
+func (f *fromMethod) Exec(ctx FunctionContext) (any, error) {
 	ctx.Index = f.index
 	return f.target.Exec(ctx)
 }
@@ -203,26 +208,14 @@ root.foo_summed = json("foo").from_all().sum()`,
 )
 
 func fromAllMethod(target Function, _ *ParsedParams) (Function, error) {
-	return ClosureFunction("method from_all", func(ctx FunctionContext) (interface{}, error) {
-		values := make([]interface{}, ctx.MsgBatch.Len())
-		var err error
+	return ClosureFunction("method from_all", func(ctx FunctionContext) (any, error) {
+		values := make([]any, ctx.MsgBatch.Len())
 		for i := 0; i < ctx.MsgBatch.Len(); i++ {
 			subCtx := ctx
 			subCtx.Index = i
-			v, tmpErr := target.Exec(subCtx)
-			if tmpErr != nil {
-				if recovered, ok := tmpErr.(*ErrRecoverable); ok {
-					values[i] = recovered.Recovered
-				}
-				err = tmpErr
-			} else {
-				values[i] = v
-			}
-		}
-		if err != nil {
-			return nil, &ErrRecoverable{
-				Recovered: values,
-				Err:       err,
+			var err error
+			if values[i], err = target.Exec(subCtx); err != nil {
+				return nil, err
 			}
 		}
 		return values, nil
@@ -257,7 +250,7 @@ func (g *getMethod) Annotation() string {
 	return "path `" + SliceToDotPath(g.path...) + "`"
 }
 
-func (g *getMethod) Exec(ctx FunctionContext) (interface{}, error) {
+func (g *getMethod) Exec(ctx FunctionContext) (any, error) {
 	v, err := g.fn.Exec(ctx)
 	if err != nil {
 		return nil, err
@@ -317,7 +310,7 @@ var _ = registerMethod(
 
 // NewMapMethod attempts to create a map method.
 func NewMapMethod(target, mapFn Function) (Function, error) {
-	return ClosureFunction(mapFn.Annotation(), func(ctx FunctionContext) (interface{}, error) {
+	return ClosureFunction(mapFn.Annotation(), func(ctx FunctionContext) (any, error) {
 		res, err := target.Exec(ctx)
 		if err != nil {
 			return nil, err
@@ -359,7 +352,7 @@ func (n *notMethod) Annotation() string {
 	return "not " + n.fn.Annotation()
 }
 
-func (n *notMethod) Exec(ctx FunctionContext) (interface{}, error) {
+func (n *notMethod) Exec(ctx FunctionContext) (any, error) {
 	v, err := n.fn.Exec(ctx)
 	if err != nil {
 		return nil, err
@@ -396,7 +389,7 @@ var _ = registerSimpleMethod(
 		),
 	),
 	func(*ParsedParams) (simpleMethod, error) {
-		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
+		return func(v any, ctx FunctionContext) (any, error) {
 			if v == nil {
 				return nil, errors.New("value is null")
 			}
@@ -426,7 +419,7 @@ func numberCoerceMethod(target Function, args *ParsedParams) (Function, error) {
 	if err != nil {
 		return nil, err
 	}
-	return ClosureFunction("method number", func(ctx FunctionContext) (interface{}, error) {
+	return ClosureFunction("method number", func(ctx FunctionContext) (any, error) {
 		v, err := target.Exec(ctx)
 		if err != nil {
 			if defaultNum != nil {
@@ -460,7 +453,7 @@ func orMethod(fn Function, args *ParsedParams) (Function, error) {
 	if err != nil {
 		return nil, err
 	}
-	return ClosureFunction("method or", func(ctx FunctionContext) (interface{}, error) {
+	return ClosureFunction("method or", func(ctx FunctionContext) (any, error) {
 		res, err := fn.Exec(ctx)
 		if err != nil || IIsNull(res) {
 			return orFn.Exec(ctx)
@@ -510,7 +503,7 @@ root.foo_type = this.foo.type()`,
 		),
 	),
 	func(*ParsedParams) (simpleMethod, error) {
-		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
+		return func(v any, ctx FunctionContext) (any, error) {
 			return string(ITypeOf(v)), nil
 		}, nil
 	},

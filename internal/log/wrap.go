@@ -2,13 +2,13 @@ package log
 
 // PrintFormatter is an interface implemented by standard loggers.
 type PrintFormatter interface {
-	Printf(format string, v ...interface{})
-	Println(v ...interface{})
+	Printf(format string, v ...any)
+	Println(v ...any)
 }
 
 //------------------------------------------------------------------------------
 
-// Logger level constants
+// Logger level constants.
 const (
 	LogOff   int = 0
 	LogFatal int = 1
@@ -52,47 +52,47 @@ func (l *wrapped) WithFields(fields map[string]string) Modular {
 }
 
 // With is a no-op.
-func (l *wrapped) With(keyValues ...interface{}) Modular {
+func (l *wrapped) With(keyValues ...any) Modular {
 	return l
 }
 
 // Fatalf prints a fatal message to the console. Does NOT cause panic.
-func (l *wrapped) Fatalf(format string, v ...interface{}) {
+func (l *wrapped) Fatalf(format string, v ...any) {
 	if LogFatal <= l.level {
 		l.pf.Printf(format, v...)
 	}
 }
 
 // Errorf prints an error message to the console.
-func (l *wrapped) Errorf(format string, v ...interface{}) {
+func (l *wrapped) Errorf(format string, v ...any) {
 	if LogError <= l.level {
 		l.pf.Printf(format, v...)
 	}
 }
 
 // Warnf prints a warning message to the console.
-func (l *wrapped) Warnf(format string, v ...interface{}) {
+func (l *wrapped) Warnf(format string, v ...any) {
 	if LogWarn <= l.level {
 		l.pf.Printf(format, v...)
 	}
 }
 
 // Infof prints an information message to the console.
-func (l *wrapped) Infof(format string, v ...interface{}) {
+func (l *wrapped) Infof(format string, v ...any) {
 	if LogInfo <= l.level {
 		l.pf.Printf(format, v...)
 	}
 }
 
 // Debugf prints a debug message to the console.
-func (l *wrapped) Debugf(format string, v ...interface{}) {
+func (l *wrapped) Debugf(format string, v ...any) {
 	if LogDebug <= l.level {
 		l.pf.Printf(format, v...)
 	}
 }
 
 // Tracef prints a trace message to the console.
-func (l *wrapped) Tracef(format string, v ...interface{}) {
+func (l *wrapped) Tracef(format string, v ...any) {
 	if LogTrace <= l.level {
 		l.pf.Printf(format, v...)
 	}

@@ -14,15 +14,15 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/stream"
 	"github.com/benthosdev/benthos/v4/internal/stream/manager"
 
-	// Import pure components for tests
+	// Import pure components for tests.
 	_ "github.com/benthosdev/benthos/v4/internal/impl/pure"
 )
 
 func TestTypeUnderStress(t *testing.T) {
+	t.Skip("Skipping long running stress test")
+
 	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
 	defer done()
-
-	t.Skip("Skipping long running stress test")
 
 	res, err := bmanager.New(bmanager.NewResourceConfig())
 	require.NoError(t, err)

@@ -9,17 +9,17 @@ func FieldSpec() docs.FieldSpec {
 		Type: docs.FieldTypeObject,
 		Description: `
 Allows you to configure a [batching policy](/docs/configuration/batching).`,
-		Examples: []interface{}{
-			map[string]interface{}{
+		Examples: []any{
+			map[string]any{
 				"count":     0,
 				"byte_size": 5000,
 				"period":    "1s",
 			},
-			map[string]interface{}{
+			map[string]any{
 				"count":  10,
 				"period": "1s",
 			},
-			map[string]interface{}{
+			map[string]any{
 				"count":  0,
 				"period": "1m",
 				"check":  `this.contains("END BATCH")`,
@@ -47,23 +47,23 @@ Allows you to configure a [batching policy](/docs/configuration/batching).`,
 			docs.FieldProcessor(
 				"processors",
 				"A list of [processors](/docs/components/processors/about) to apply to a batch as it is flushed. This allows you to aggregate and archive the batch however you see fit. Please note that all resulting messages are flushed as a single batch, therefore splitting the batch into smaller batches using these processors is a no-op.",
-				[]map[string]interface{}{
+				[]map[string]any{
 					{
-						"archive": map[string]interface{}{
+						"archive": map[string]any{
 							"format": "concatenate",
 						},
 					},
 				},
-				[]map[string]interface{}{
+				[]map[string]any{
 					{
-						"archive": map[string]interface{}{
+						"archive": map[string]any{
 							"format": "lines",
 						},
 					},
 				},
-				[]map[string]interface{}{
+				[]map[string]any{
 					{
-						"archive": map[string]interface{}{
+						"archive": map[string]any{
 							"format": "json_array",
 						},
 					},

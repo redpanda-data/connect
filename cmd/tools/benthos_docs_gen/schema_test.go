@@ -33,9 +33,9 @@ func TestComponentExamples(t *testing.T) {
 		dec.KnownFields(true)
 		assert.NoError(t, dec.Decode(&s), "%v:%v:%v", componentType, typeName, title)
 
-		lintCtx := docs.NewLintContext()
-		lintCtx.RejectDeprecated = !deprecated
-		lints, err := config.LintBytes(lintCtx, []byte(conf))
+		lints, err := config.LintBytes(config.LintOptions{
+			RejectDeprecated: !deprecated,
+		}, []byte(conf))
 		assert.NoError(t, err, "%v:%v:%v", componentType, typeName, title)
 		for _, lint := range lints {
 			t.Errorf("%v %v:%v:%v", lint, componentType, typeName, title)
@@ -111,7 +111,7 @@ func TestConfigTags(t *testing.T) {
 	CheckTagsOfType(v, checkedTypes, t)
 }
 
-func walkSpecWithConfig(t *testing.T, prefix string, spec docs.FieldSpec, conf interface{}) {
+func walkSpecWithConfig(t *testing.T, prefix string, spec docs.FieldSpec, conf any) {
 	t.Helper()
 
 	if _, isCore := spec.Type.IsCoreComponent(); isCore {
@@ -119,7 +119,7 @@ func walkSpecWithConfig(t *testing.T, prefix string, spec docs.FieldSpec, conf i
 	}
 
 	if spec.Kind == docs.Kind2DArray {
-		arr, ok := conf.([]interface{})
+		arr, ok := conf.([]any)
 		if !assert.True(t, ok || spec.IsDeprecated, "%v: documented as array but is %T", prefix, conf) {
 			return
 		}
@@ -129,7 +129,7 @@ func walkSpecWithConfig(t *testing.T, prefix string, spec docs.FieldSpec, conf i
 			walkSpecWithConfig(t, prefix+fmt.Sprintf("[%v]", i), tmpSpec, ele)
 		}
 	} else if spec.Kind == docs.KindArray {
-		arr, ok := conf.([]interface{})
+		arr, ok := conf.([]any)
 		if !assert.True(t, ok || spec.IsDeprecated, "%v: documented as array but is %T", prefix, conf) {
 			return
 		}
@@ -139,7 +139,7 @@ func walkSpecWithConfig(t *testing.T, prefix string, spec docs.FieldSpec, conf i
 			walkSpecWithConfig(t, prefix+fmt.Sprintf("[%v]", i), tmpSpec, ele)
 		}
 	} else if spec.Kind == docs.KindMap {
-		obj, ok := conf.(map[string]interface{})
+		obj, ok := conf.(map[string]any)
 		if !assert.True(t, ok || spec.IsDeprecated, "%v: documented as map but is %T", prefix, conf) {
 			return
 		}
@@ -149,7 +149,7 @@ func walkSpecWithConfig(t *testing.T, prefix string, spec docs.FieldSpec, conf i
 			walkSpecWithConfig(t, prefix+fmt.Sprintf(".<%v>", k), tmpSpec, v)
 		}
 	} else if len(spec.Children) > 0 {
-		obj, ok := conf.(map[string]interface{})
+		obj, ok := conf.(map[string]any)
 		if !assert.True(t, ok, "%v: documented with children but is %T", prefix, conf) {
 			return
 		}
@@ -166,7 +166,7 @@ func walkSpecWithConfig(t *testing.T, prefix string, spec docs.FieldSpec, conf i
 			}
 		}
 	} else if spec.Type == docs.FieldTypeObject {
-		obj, ok := conf.(map[string]interface{})
+		obj, ok := conf.(map[string]any)
 		if !assert.True(t, ok || conf == nil, "%v: documented as object but is %T", prefix, conf) {
 			return
 		}
@@ -315,7 +315,7 @@ func walkTypeWithConfig(t *testing.T, prefix string, spec docs.FieldSpec, v refl
 	}
 }
 
-func getGenericConf(t *testing.T, cType docs.Type, c interface{}) map[string]interface{} {
+func getGenericConf(t *testing.T, cType docs.Type, c any) map[string]any {
 	t.Helper()
 
 	var newNode yaml.Node
@@ -325,7 +325,7 @@ func getGenericConf(t *testing.T, cType docs.Type, c interface{}) map[string]int
 	sanitConf.RemoveTypeField = true
 	require.NoError(t, docs.SanitiseYAML(cType, &newNode, sanitConf))
 
-	var gen map[string]interface{}
+	var gen map[string]any
 	require.NoError(t, newNode.Decode(&gen))
 
 	return gen

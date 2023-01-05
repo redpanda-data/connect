@@ -6,8 +6,9 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/go-redis/redis/v7"
+	"github.com/go-redis/redis/v8"
 
+	"github.com/benthosdev/benthos/v4/internal/filepath/ifs"
 	"github.com/benthosdev/benthos/v4/internal/impl/redis/old"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
@@ -21,7 +22,7 @@ func clientFields() []*service.ConfigField {
 Some cloud hosted instances of Redis (such as Azure Cache) might need some hand holding in order to establish stable connections. Unfortunately, it is often the case that TLS issues will manifest as generic error messages such as "i/o timeout". If you're using TLS and are seeing connectivity problems consider setting ` + "`enable_renegotiation` to `true`" + `, and ensuring that the server supports at least TLS version 1.2.`)
 
 	return []*service.ConfigField{
-		service.NewStringField("url").
+		service.NewURLField("url").
 			Description("The URL of the target Redis server. Database is optional and is supplied as the URL path.").
 			Example(":6397").
 			Example("localhost:6397").
@@ -115,7 +116,7 @@ func getClient(parsedConf *service.ParsedConfig) (redis.UniversalClient, error) 
 	return client, err
 }
 
-func clientFromConfig(r old.Config) (redis.UniversalClient, error) {
+func clientFromConfig(f ifs.FS, r old.Config) (redis.UniversalClient, error) {
 	// We default to Redis DB 0 for backward compatibility
 	var redisDB int
 	var pass string
@@ -145,7 +146,7 @@ func clientFromConfig(r old.Config) (redis.UniversalClient, error) {
 	var tlsConf *tls.Config
 	if r.TLS.Enabled {
 		var err error
-		if tlsConf, err = r.TLS.Get(); err != nil {
+		if tlsConf, err = r.TLS.Get(f); err != nil {
 			return nil, err
 		}
 	}

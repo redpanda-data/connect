@@ -42,7 +42,6 @@ func init() {
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Cache, error) {
 			return newMemcachedFromConfig(conf)
 		})
-
 	if err != nil {
 		panic(err)
 	}
@@ -102,7 +101,7 @@ func newMemcachedCache(
 		prefix:     prefix,
 		defaultTTL: defaultTTL,
 		boffPool: sync.Pool{
-			New: func() interface{} {
+			New: func() any {
 				bo := *backOff
 				bo.Reset()
 				return &bo
@@ -218,7 +217,7 @@ func (m *memcachedCache) Delete(ctx context.Context, key string) error {
 
 	for {
 		err := m.mc.Delete(m.prefix + key)
-		if err == memcache.ErrCacheMiss {
+		if errors.Is(err, memcache.ErrCacheMiss) {
 			return nil
 		}
 

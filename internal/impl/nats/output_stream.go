@@ -3,6 +3,7 @@ package nats
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"math/rand"
 	"strings"
@@ -52,7 +53,7 @@ func init() {
 }
 
 func newNATSStreamOutput(conf output.Config, mgr bundle.NewManagement) (output.Streamed, error) {
-	w, err := newNATSStreamWriter(conf.NATSStream, mgr.Logger())
+	w, err := newNATSStreamWriter(conf.NATSStream, mgr)
 	if err != nil {
 		return nil, err
 	}
@@ -75,7 +76,7 @@ type natsStreamWriter struct {
 	tlsConf *tls.Config
 }
 
-func newNATSStreamWriter(conf output.NATSStreamConfig, log log.Modular) (*natsStreamWriter, error) {
+func newNATSStreamWriter(conf output.NATSStreamConfig, mgr bundle.NewManagement) (*natsStreamWriter, error) {
 	if conf.ClientID == "" {
 		rgen := rand.New(rand.NewSource(time.Now().UnixNano()))
 
@@ -86,13 +87,13 @@ func newNATSStreamWriter(conf output.NATSStreamConfig, log log.Modular) (*natsSt
 	}
 
 	n := natsStreamWriter{
-		log:  log,
+		log:  mgr.Logger(),
 		conf: conf,
 	}
 	n.urls = strings.Join(conf.URLs, ",")
 	var err error
 	if conf.TLS.Enabled {
-		if n.tlsConf, err = conf.TLS.Get(); err != nil {
+		if n.tlsConf, err = conf.TLS.Get(mgr.FS()); err != nil {
 			return nil, err
 		}
 	}
@@ -147,7 +148,7 @@ func (n *natsStreamWriter) WriteBatch(ctx context.Context, msg message.Batch) er
 
 	return output.IterateBatchedSend(msg, func(i int, p *message.Part) error {
 		err := conn.Publish(n.conf.Subject, p.AsBytes())
-		if err == stan.ErrConnectionClosed {
+		if errors.Is(err, stan.ErrConnectionClosed) {
 			conn.Close()
 			n.connMut.Lock()
 			n.stanConn = nil

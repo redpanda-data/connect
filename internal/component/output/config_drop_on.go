@@ -32,7 +32,7 @@ func NewDropOnConfig() DropOnConfig {
 
 type dummyDropOnConfig struct {
 	DropOnConditions `json:",inline" yaml:",inline"`
-	Output           interface{} `json:"output" yaml:"output"`
+	Output           any `json:"output" yaml:"output"`
 }
 
 // MarshalJSON prints an empty object instead of nil.
@@ -48,7 +48,7 @@ func (d DropOnConfig) MarshalJSON() ([]byte, error) {
 }
 
 // MarshalYAML prints an empty object instead of nil.
-func (d DropOnConfig) MarshalYAML() (interface{}, error) {
+func (d DropOnConfig) MarshalYAML() (any, error) {
 	dummy := dummyDropOnConfig{
 		Output:           d.Output,
 		DropOnConditions: d.DropOnConditions,

@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -30,7 +29,7 @@ func init() {
 		if err != nil {
 			return nil, err
 		}
-		return input.NewAsyncReader("gcp_cloud_storage", true, input.NewAsyncPreserver(r), nm)
+		return input.NewAsyncReader("gcp_cloud_storage", input.NewAsyncPreserver(r), nm)
 	}), docs.ComponentSpec{
 		Name:       "gcp_cloud_storage",
 		Type:       docs.TypeInput,
@@ -58,7 +57,7 @@ This input adds the following metadata fields to each message:
 - All user defined metadata
 ` + "```" + `
 
-You can access these metadata fields using [function interpolation](/docs/configuration/interpolation#metadata).
+You can access these metadata fields using [function interpolation](/docs/configuration/interpolation#bloblang-queries).
 
 ### Credentials
 
@@ -146,7 +145,7 @@ func newGCPCloudStorageTargetReader(
 	it := bucket.Objects(ctx, &storage.Query{Prefix: conf.Prefix})
 	for count := 0; count < maxGCPCloudStorageListObjectsResults; count++ {
 		obj, err := it.Next()
-		if err == iterator.Done {
+		if errors.Is(err, iterator.Done) {
 			break
 		} else if err != nil {
 			return nil, fmt.Errorf("failed to list objects: %v", err)
@@ -169,7 +168,7 @@ func (r *gcpCloudStorageTargetReader) Pop(ctx context.Context) (*gcpCloudStorage
 
 		for count := 0; count < maxGCPCloudStorageListObjectsResults; count++ {
 			obj, err := r.startAfter.Next()
-			if err == iterator.Done {
+			if errors.Is(err, iterator.Done) {
 				break
 			} else if err != nil {
 				return nil, fmt.Errorf("failed to list objects: %v", err)
@@ -281,15 +280,15 @@ func (g *gcpCloudStorageInput) getObjectTarget(ctx context.Context) (*gcpCloudSt
 func gcpCloudStorageMsgFromParts(p *gcpCloudStoragePendingObject, parts []*message.Part) message.Batch {
 	msg := message.Batch(parts)
 	_ = msg.Iter(func(_ int, part *message.Part) error {
-		part.MetaSet("gcs_key", p.target.key)
-		part.MetaSet("gcs_bucket", p.obj.Bucket)
-		part.MetaSet("gcs_last_modified", p.obj.Updated.Format(time.RFC3339))
-		part.MetaSet("gcs_last_modified_unix", strconv.FormatInt(p.obj.Updated.Unix(), 10))
-		part.MetaSet("gcs_content_type", p.obj.ContentType)
-		part.MetaSet("gcs_content_encoding", p.obj.ContentEncoding)
+		part.MetaSetMut("gcs_key", p.target.key)
+		part.MetaSetMut("gcs_bucket", p.obj.Bucket)
+		part.MetaSetMut("gcs_last_modified", p.obj.Updated.Format(time.RFC3339))
+		part.MetaSetMut("gcs_last_modified_unix", p.obj.Updated.Unix())
+		part.MetaSetMut("gcs_content_type", p.obj.ContentType)
+		part.MetaSetMut("gcs_content_encoding", p.obj.ContentEncoding)
 
 		for k, v := range p.obj.Metadata {
-			part.MetaSet(k, v)
+			part.MetaSetMut(k, v)
 		}
 		return nil
 	})

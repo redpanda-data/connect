@@ -69,7 +69,7 @@ type FunctionSpec struct {
 	// Examples shows general usage for the function.
 	Examples []ExampleSpec `json:"examples,omitempty"`
 
-	// Impure indicates that a function accesses or interacts with the outter
+	// Impure indicates that a function accesses or interacts with the outer
 	// environment, and is therefore unsafe to execute in shared environments.
 	Impure bool `json:"impure"`
 
@@ -186,7 +186,7 @@ type MethodSpec struct {
 	// Categories that this method fits within.
 	Categories []MethodCatSpec `json:"categories,omitempty"`
 
-	// Impure indicates that a method accesses or interacts with the outter
+	// Impure indicates that a method accesses or interacts with the outer
 	// environment, and is therefore unsafe to execute in shared environments.
 	Impure bool `json:"impure"`
 

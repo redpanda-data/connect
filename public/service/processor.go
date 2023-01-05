@@ -185,7 +185,7 @@ func (o *OwnedProcessor) ProcessBatch(ctx context.Context, batch MessageBatch) (
 	return batches, nil
 }
 
-// Close the processor, allowing it to clean up resources. It is
+// Close the processor, allowing it to clean up resources.
 func (o *OwnedProcessor) Close(ctx context.Context) error {
 	return o.p.Close(ctx)
 }

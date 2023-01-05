@@ -6,7 +6,7 @@ input:
 
 pipeline:
   processors:
-    - bloblang: 'root = "%vend".format(content().uppercase().string())'
+    - mapping: 'root = "%vend".format(content().uppercase().string())'
 
 output:
   aws_s3:

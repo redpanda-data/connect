@@ -5,8 +5,6 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/bloblang/query"
 )
 
-//------------------------------------------------------------------------------
-
 func intoStaticResolver(p Func) Func {
 	return func(input []rune) Result {
 		res := p(input)
@@ -30,7 +28,7 @@ func aFunction(pCtx Context) Func {
 		if res.Err != nil {
 			return res
 		}
-		res.Payload = field.NewQueryResolver(res.Payload.([]interface{})[2].(query.Function))
+		res.Payload = field.NewQueryResolver(res.Payload.([]any)[2].(query.Function))
 		return res
 	}
 }
@@ -44,7 +42,7 @@ func escapedBlock(input []rune) Result {
 	if res.Err != nil {
 		return res
 	}
-	res.Payload = field.StaticResolver("${!" + res.Payload.([]interface{})[1].(string) + "}")
+	res.Payload = field.StaticResolver("${!" + res.Payload.([]any)[1].(string) + "}")
 	return res
 }
 
@@ -82,5 +80,3 @@ func ParseField(pCtx Context, expr string) (*field.Expression, *Error) {
 	e := field.NewExpression(resolvers...)
 	return e, nil
 }
-
-//------------------------------------------------------------------------------

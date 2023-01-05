@@ -145,10 +145,10 @@ func (e *Executor) MapOnto(part *message.Part, index int, msg Message) (*message
 }
 
 func (e *Executor) mapPart(appendTo *message.Part, index int, reference Message) (*message.Part, error) {
-	var valuePtr *interface{}
+	var valuePtr *any
 	var parseErr error
 
-	lazyValue := func() *interface{} {
+	lazyValue := func() *any {
 		if valuePtr == nil && parseErr == nil {
 			if jObj, err := reference.Get(index).AsStructured(); err == nil {
 				valuePtr = &jObj
@@ -164,7 +164,7 @@ func (e *Executor) mapPart(appendTo *message.Part, index int, reference Message)
 	}
 
 	var newPart *message.Part
-	var newValue interface{} = query.Nothing(nil)
+	var newValue any = query.Nothing(nil)
 
 	if appendTo == nil {
 		newPart = reference.Get(index).ShallowCopy()
@@ -175,7 +175,7 @@ func (e *Executor) mapPart(appendTo *message.Part, index int, reference Message)
 		}
 	}
 
-	vars := map[string]interface{}{}
+	vars := map[string]any{}
 
 	for _, stmt := range e.statements {
 		res, err := stmt.query.Exec(query.FunctionContext{
@@ -264,13 +264,13 @@ func (e *Executor) AssignmentTargets() []TargetPath {
 }
 
 // Exec this function with a context struct.
-func (e *Executor) Exec(ctx query.FunctionContext) (interface{}, error) {
+func (e *Executor) Exec(ctx query.FunctionContext) (any, error) {
 	ctx, stackCount := ctx.IncrStackCount()
 	if stackCount > e.maxMapStacks {
 		return nil, &errStacks{annotation: e.annotation, maxStacks: e.maxMapStacks}
 	}
 
-	var newObj interface{} = query.Nothing(nil)
+	var newObj any = query.Nothing(nil)
 	ctx.NewValue = &newObj
 
 	for _, stmt := range e.statements {
@@ -314,28 +314,22 @@ func (e *Executor) ExecOnto(ctx query.FunctionContext, onto AssignmentContext) e
 
 // ToBytes executes this function for a message of a batch and returns the
 // result marshalled into a byte slice.
-func (e *Executor) ToBytes(ctx query.FunctionContext) []byte {
+func (e *Executor) ToBytes(ctx query.FunctionContext) ([]byte, error) {
 	v, err := e.Exec(ctx)
 	if err != nil {
-		if rec, ok := err.(*query.ErrRecoverable); ok {
-			return query.IToBytes(rec.Recovered)
-		}
-		return nil
+		return nil, err
 	}
-	return query.IToBytes(v)
+	return query.IToBytes(v), nil
 }
 
 // ToString executes this function for a message of a batch and returns the
 // result marshalled into a string.
-func (e *Executor) ToString(ctx query.FunctionContext) string {
+func (e *Executor) ToString(ctx query.FunctionContext) (string, error) {
 	v, err := e.Exec(ctx)
 	if err != nil {
-		if rec, ok := err.(*query.ErrRecoverable); ok {
-			return query.IToString(rec.Recovered)
-		}
-		return ""
+		return "", err
 	}
-	return query.IToString(v)
+	return query.IToString(v), nil
 }
 
 //------------------------------------------------------------------------------

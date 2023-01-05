@@ -1,8 +1,6 @@
 package output
 
 import (
-	"fmt"
-
 	"gopkg.in/yaml.v3"
 
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
@@ -11,7 +9,7 @@ import (
 
 // Config is the all encompassing configuration struct for all output types.
 // Deprecated: Do not add new components here. Instead, use the public plugin
-// APIs. Examples can be found in: ./internal/impl
+// APIs. Examples can be found in: ./internal/impl.
 type Config struct {
 	Label              string                  `json:"label" yaml:"label"`
 	Type               string                  `json:"type" yaml:"type"`
@@ -49,7 +47,7 @@ type Config struct {
 	NATS               NATSConfig              `json:"nats" yaml:"nats"`
 	NATSStream         NATSStreamConfig        `json:"nats_stream" yaml:"nats_stream"`
 	NSQ                NSQConfig               `json:"nsq" yaml:"nsq"`
-	Plugin             interface{}             `json:"plugin,omitempty" yaml:"plugin,omitempty"`
+	Plugin             any                     `json:"plugin,omitempty" yaml:"plugin,omitempty"`
 	RedisHash          RedisHashConfig         `json:"redis_hash" yaml:"redis_hash"`
 	RedisList          RedisListConfig         `json:"redis_list" yaml:"redis_list"`
 	RedisPubSub        RedisPubSubConfig       `json:"redis_pubsub" yaml:"redis_pubsub"`
@@ -69,7 +67,7 @@ type Config struct {
 
 // NewConfig returns a configuration struct fully populated with default values.
 // Deprecated: Do not add new components here. Instead, use the public plugin
-// APIs. Examples can be found in: ./internal/impl
+// APIs. Examples can be found in: ./internal/impl.
 func NewConfig() Config {
 	return Config{
 		Label:              "",
@@ -135,18 +133,18 @@ func (conf *Config) UnmarshalYAML(value *yaml.Node) error {
 
 	err := value.Decode(&aliased)
 	if err != nil {
-		return fmt.Errorf("line %v: %v", value.Line, err)
+		return docs.NewLintError(value.Line, docs.LintFailedRead, err.Error())
 	}
 
 	var spec docs.ComponentSpec
 	if aliased.Type, spec, err = docs.GetInferenceCandidateFromYAML(docs.DeprecatedProvider, docs.TypeOutput, value); err != nil {
-		return fmt.Errorf("line %v: %w", value.Line, err)
+		return docs.NewLintError(value.Line, docs.LintComponentMissing, err.Error())
 	}
 
 	if spec.Plugin {
 		pluginNode, err := docs.GetPluginConfigYAML(aliased.Type, value)
 		if err != nil {
-			return fmt.Errorf("line %v: %v", value.Line, err)
+			return docs.NewLintError(value.Line, docs.LintFailedRead, err.Error())
 		}
 		aliased.Plugin = &pluginNode
 	} else {

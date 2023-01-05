@@ -21,15 +21,15 @@ func TestConcurrentMutationsFromNil(t *testing.T) {
 			<-kickOffChan
 
 			local := source.ShallowCopy()
-			local.MetaSet("foo", "bar")
-			local.MetaSet("bar", "baz")
-			_ = local.MetaIter(func(k, v string) error {
+			local.MetaSetMut("foo", "bar")
+			local.MetaSetMut("bar", "baz")
+			_ = local.MetaIterMut(func(k string, v any) error {
 				return nil
 			})
 			local.MetaDelete("foo")
 
 			local.SetBytes([]byte(`new thing`))
-			local.SetStructuredMut(map[string]interface{}{
+			local.SetStructuredMut(map[string]any{
 				"foo": "bar",
 			})
 
@@ -50,9 +50,9 @@ func TestConcurrentMutationsFromNil(t *testing.T) {
 
 func TestConcurrentMutationsFromStructured(t *testing.T) {
 	source := newMessageBytes(nil)
-	source.MetaSet("foo", "foo1")
-	source.MetaSet("bar", "bar1")
-	source.SetStructuredMut(map[string]interface{}{
+	source.MetaSetMut("foo", "foo1")
+	source.MetaSetMut("bar", "bar1")
+	source.SetStructuredMut(map[string]any{
 		"foo": "bar",
 	})
 
@@ -66,22 +66,22 @@ func TestConcurrentMutationsFromStructured(t *testing.T) {
 			<-kickOffChan
 
 			local := source.ShallowCopy()
-			local.MetaSet("foo", "foo2")
+			local.MetaSetMut("foo", "foo2")
 
-			v, exists := local.MetaGet("foo")
+			v, exists := local.MetaGetMut("foo")
 			assert.True(t, exists)
 			assert.Equal(t, "foo2", v)
 
-			v, exists = local.MetaGet("bar")
+			v, exists = local.MetaGetMut("bar")
 			assert.True(t, exists)
 			assert.Equal(t, "bar1", v)
 
-			_ = local.MetaIter(func(k, v string) error {
+			_ = local.MetaIterMut(func(k string, v any) error {
 				return nil
 			})
 			local.MetaDelete("foo")
 
-			_, exists = local.MetaGet("foo")
+			_, exists = local.MetaGetMut("foo")
 			assert.False(t, exists)
 
 			vThing, err := local.AsStructuredMut()

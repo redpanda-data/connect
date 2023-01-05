@@ -15,20 +15,20 @@ import (
 	yaml "gopkg.in/yaml.v3"
 
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
-	httpdocs "github.com/benthosdev/benthos/v4/internal/http/docs"
+	"github.com/benthosdev/benthos/v4/internal/httpserver"
 	"github.com/benthosdev/benthos/v4/internal/log"
 )
 
 // Config contains the configuration fields for the Benthos API.
 type Config struct {
-	Address        string              `json:"address" yaml:"address"`
-	Enabled        bool                `json:"enabled" yaml:"enabled"`
-	RootPath       string              `json:"root_path" yaml:"root_path"`
-	DebugEndpoints bool                `json:"debug_endpoints" yaml:"debug_endpoints"`
-	CertFile       string              `json:"cert_file" yaml:"cert_file"`
-	KeyFile        string              `json:"key_file" yaml:"key_file"`
-	CORS           httpdocs.ServerCORS `json:"cors" yaml:"cors"`
-	BasicAuth      httpdocs.BasicAuth  `json:"basic_auth" yaml:"basic_auth"`
+	Address        string                     `json:"address" yaml:"address"`
+	Enabled        bool                       `json:"enabled" yaml:"enabled"`
+	RootPath       string                     `json:"root_path" yaml:"root_path"`
+	DebugEndpoints bool                       `json:"debug_endpoints" yaml:"debug_endpoints"`
+	CertFile       string                     `json:"cert_file" yaml:"cert_file"`
+	KeyFile        string                     `json:"key_file" yaml:"key_file"`
+	CORS           httpserver.CORSConfig      `json:"cors" yaml:"cors"`
+	BasicAuth      httpserver.BasicAuthConfig `json:"basic_auth" yaml:"basic_auth"`
 }
 
 // NewConfig creates a new API config with default values.
@@ -40,8 +40,8 @@ func NewConfig() Config {
 		DebugEndpoints: false,
 		CertFile:       "",
 		KeyFile:        "",
-		CORS:           httpdocs.NewServerCORS(),
-		BasicAuth:      httpdocs.NewBasicAuth(),
+		CORS:           httpserver.NewServerCORSConfig(),
+		BasicAuth:      httpserver.NewBasicAuthConfig(),
 	}
 }
 
@@ -88,7 +88,7 @@ func New(
 	version string,
 	dateBuilt string,
 	conf Config,
-	wholeConf interface{},
+	wholeConf any,
 	log log.Modular,
 	stats metrics.Type,
 	opts ...OptFunc,
@@ -132,7 +132,7 @@ func New(
 	}
 
 	handlePrintJSONConfig := func(w http.ResponseWriter, r *http.Request) {
-		var g interface{}
+		var g any
 		var err error
 		if node, ok := wholeConf.(yaml.Node); ok {
 			err = node.Decode(&g)

@@ -2,32 +2,14 @@ package input
 
 import (
 	"context"
-	"sync"
+	"errors"
 	"sync/atomic"
-	"time"
 
-	"github.com/cenkalti/backoff/v4"
-
+	"github.com/benthosdev/benthos/v4/internal/autoretry"
 	"github.com/benthosdev/benthos/v4/internal/batch"
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/message"
 )
-
-type asyncPreserverResend struct {
-	boff     backoff.BackOff
-	attempts int
-	msg      message.Batch
-	ackFn    AsyncAckFn
-}
-
-func newResendMsg(msg message.Batch, ackFn AsyncAckFn) asyncPreserverResend {
-	boff := backoff.NewExponentialBackOff()
-	boff.InitialInterval = time.Millisecond
-	boff.MaxInterval = time.Second
-	boff.Multiplier = 1.1
-	boff.MaxElapsedTime = 0
-	return asyncPreserverResend{boff: boff, attempts: 0, msg: msg, ackFn: ackFn}
-}
 
 // AsyncPreserver is a wrapper for input.Async implementations that keeps a
 // buffer of sent messages until they are acknowledged. If an error occurs
@@ -39,10 +21,7 @@ func newResendMsg(msg message.Batch, ackFn AsyncAckFn) asyncPreserverResend {
 // doesn't have a concept of a NoAck (like Kafka), and instead of "rejecting"
 // messages we always intend to simply retry them until success.
 type AsyncPreserver struct {
-	resendMessages  []asyncPreserverResend
-	resendInterrupt func()
-	msgsMut         sync.Mutex
-	pendingMessages int64
+	retryList *autoretry.List[message.Batch]
 
 	inputClosed int32
 	r           Async
@@ -51,8 +30,28 @@ type AsyncPreserver struct {
 // NewAsyncPreserver returns a new AsyncPreserver wrapper around a input.Async.
 func NewAsyncPreserver(r Async) *AsyncPreserver {
 	return &AsyncPreserver{
-		r:               r,
-		resendInterrupt: func() {},
+		retryList: autoretry.NewList(
+			func(ctx context.Context) (message.Batch, autoretry.AckFunc, error) {
+				t, aFn, err := r.ReadBatch(ctx)
+				return t, autoretry.AckFunc(aFn), err
+			},
+			func(t message.Batch, err error) message.Batch {
+				var bErr *batch.Error
+				if !errors.As(err, &bErr) || bErr.IndexedErrors() == 0 {
+					return t
+				}
+
+				newBatch := make(message.Batch, 0, bErr.IndexedErrors())
+				bErr.WalkParts(func(i int, p *message.Part, err error) bool {
+					if err == nil {
+						return true
+					}
+					newBatch = append(newBatch, p)
+					return true
+				})
+				return newBatch
+			}),
+		r: r,
 	}
 }
 
@@ -66,146 +65,36 @@ func (p *AsyncPreserver) Connect(ctx context.Context) error {
 	// If our source has finished but we still have messages in flight then
 	// we act like we're still open. Read will be called and we can either
 	// return the pending messages or wait for them.
-	if err == component.ErrTypeClosed && atomic.LoadInt64(&p.pendingMessages) > 0 {
+	if errors.Is(err, component.ErrTypeClosed) && !p.retryList.Exhausted() {
 		atomic.StoreInt32(&p.inputClosed, 1)
 		err = nil
 	}
 	return err
 }
 
-func (p *AsyncPreserver) wrapAckFn(m asyncPreserverResend) (message.Batch, AsyncAckFn) {
-	if m.msg.Len() == 1 {
-		return p.wrapSingleAckFn(m)
-	}
-	return p.wrapBatchAckFn(m)
-}
-
-func (p *AsyncPreserver) wrapBatchAckFn(m asyncPreserverResend) (message.Batch, AsyncAckFn) {
-	sortGroup, trackedMsg := message.NewSortGroup(m.msg)
-
-	return trackedMsg, func(ctx context.Context, res error) error {
-		if res != nil {
-			resendMsg := m.msg
-			if walkable, ok := res.(batch.WalkableError); ok && walkable.IndexedErrors() < m.msg.Len() {
-				resendMsg = message.QuickBatch(nil)
-				walkable.WalkParts(func(i int, p *message.Part, e error) bool {
-					if e == nil {
-						return true
-					}
-					if tagIndex := sortGroup.GetIndex(p); tagIndex >= 0 {
-						resendMsg = append(resendMsg, m.msg.Get(tagIndex))
-						return true
-					}
-
-					// If we couldn't link the errored part back to an original
-					// message then we need to retry all of them.
-					resendMsg = m.msg
-					return false
-				})
-				if resendMsg.Len() == 0 {
-					resendMsg = m.msg
-				}
-			}
-			m.msg = resendMsg
-
-			p.msgsMut.Lock()
-			p.resendMessages = append(p.resendMessages, m)
-			p.resendInterrupt()
-			p.msgsMut.Unlock()
-			return nil
-		}
-		atomic.AddInt64(&p.pendingMessages, -1)
-		return m.ackFn(ctx, res)
-	}
-}
-
-func (p *AsyncPreserver) wrapSingleAckFn(m asyncPreserverResend) (message.Batch, AsyncAckFn) {
-	return m.msg, func(ctx context.Context, res error) error {
-		if res != nil {
-			p.msgsMut.Lock()
-			p.resendMessages = append(p.resendMessages, m)
-			p.resendInterrupt()
-			p.msgsMut.Unlock()
-			return nil
-		}
-		atomic.AddInt64(&p.pendingMessages, -1)
-		return m.ackFn(ctx, res)
-	}
-}
-
 // ReadBatch attempts to read a new message from the source.
 func (p *AsyncPreserver) ReadBatch(ctx context.Context) (message.Batch, AsyncAckFn, error) {
-	var cancel func()
-	ctx, cancel = context.WithCancel(ctx)
-	defer cancel()
-
-	// If we have messages queued to be resent we prioritise them over reading
-	// new messages.
-	p.msgsMut.Lock()
-	if lMsgs := len(p.resendMessages); lMsgs > 0 {
-		resend := p.resendMessages[0]
-		if lMsgs > 1 {
-			p.resendMessages = p.resendMessages[1:]
-		} else {
-			p.resendMessages = nil
-		}
-		p.msgsMut.Unlock()
-
-		resend.attempts++
-		if resend.attempts > 2 {
-			// This sleep prevents a busy loop on permanently failed messages.
-			if tout := resend.boff.NextBackOff(); tout > 0 {
-				select {
-				case <-time.After(tout):
-				case <-ctx.Done():
-					return nil, nil, ctx.Err()
-				}
-			}
-		}
-		sendMsg, ackFn := p.wrapAckFn(resend)
-		return sendMsg.ShallowCopy(), ackFn, nil
-	}
-	p.resendInterrupt = cancel
-	p.msgsMut.Unlock()
-
-	var (
-		msg message.Batch
-		aFn AsyncAckFn
-		err error
-	)
-	if atomic.LoadInt32(&p.inputClosed) > 0 {
-		err = component.ErrTypeClosed
-	} else {
-		msg, aFn, err = p.r.ReadBatch(ctx)
-	}
+	batch, rAckFn, err := p.retryList.Shift(ctx, atomic.LoadInt32(&p.inputClosed) == 0)
 	if err != nil {
-		// If our source has finished but we still have messages in flight then
-		// we block, ideally until the messages are acked.
-		if err == component.ErrTypeClosed && atomic.LoadInt64(&p.pendingMessages) > 0 {
-			// The context is cancelled either when new pending messages are
-			// ready, or when the upstream component cancels. If the former
-			// occurs then we still return the cancelled error and let Read get
-			// called to gobble up the new pending messages.
-			for {
-				select {
-				case <-ctx.Done():
-					return nil, nil, component.ErrTimeout
-				case <-time.After(time.Millisecond * 10):
-					if atomic.LoadInt64(&p.pendingMessages) <= 0 {
-						return nil, nil, component.ErrTypeClosed
-					}
-				}
-			}
+		if errors.Is(err, autoretry.ErrExhausted) {
+			return nil, nil, component.ErrTypeClosed
 		}
+		if errors.Is(err, component.ErrTypeClosed) {
+			// Mark our input as being closed and trigger an immediate re-read
+			// in order to clear any pending retries.
+			atomic.StoreInt32(&p.inputClosed, 1)
+			return p.ReadBatch(ctx)
+		}
+		// Otherwise we have an unknown error from our reader that we should
+		// escalate, this is most likely an ErrNotConnected or ErrTimeout.
 		return nil, nil, err
 	}
-	atomic.AddInt64(&p.pendingMessages, 1)
-	sendMsg, ackFn := p.wrapAckFn(newResendMsg(msg, aFn))
-	return sendMsg.ShallowCopy(), ackFn, nil
+	return batch.ShallowCopy(), AsyncAckFn(rAckFn), nil
 }
 
 // Close triggers the shut down of this component and blocks until completion or
 // context cancellation.
 func (p *AsyncPreserver) Close(ctx context.Context) error {
+	_ = p.retryList.Close(ctx)
 	return p.r.Close(ctx)
 }

@@ -16,7 +16,7 @@ import (
 type Mapping struct {
 	m          *mapping.Executor
 	logger     log.Modular
-	staticVars map[string]interface{}
+	staticVars map[string]any
 }
 
 // NewMapping parses a Bloblang mapping and returns a metrics mapping.
@@ -31,16 +31,16 @@ func NewMapping(mapping string, logger log.Modular) (*Mapping, error) {
 		}
 		return nil, err
 	}
-	return &Mapping{m: m, logger: logger, staticVars: map[string]interface{}{}}, nil
+	return &Mapping{m: m, logger: logger, staticVars: map[string]any{}}, nil
 }
 
 // WithStaticVars adds a map of key/value pairs to the static variables of the
 // metrics mapping. These are variables that will be made available to each
 // invocation of the metrics mapping.
-func (m *Mapping) WithStaticVars(kvs map[string]interface{}) *Mapping {
+func (m *Mapping) WithStaticVars(kvs map[string]any) *Mapping {
 	newM := *m
 
-	newM.staticVars = map[string]interface{}{}
+	newM.staticVars = map[string]any{}
 	for k, v := range m.staticVars {
 		newM.staticVars[k] = v
 	}
@@ -59,19 +59,19 @@ func (m *Mapping) mapPath(path string, labelNames, labelValues []string) (outPat
 	part := message.NewPart(nil)
 	part.SetStructuredMut(path)
 	for i, v := range labelNames {
-		part.MetaSet(v, labelValues[i])
+		part.MetaSetMut(v, labelValues[i])
 	}
 	msg := message.Batch{part}
 
 	outPart := part.DeepCopy()
 
-	var input interface{} = path
-	vars := map[string]interface{}{}
+	var input any = path
+	vars := map[string]any{}
 	for k, v := range m.staticVars {
 		vars[k] = v
 	}
 
-	var v interface{} = query.Nothing(nil)
+	var v any = query.Nothing(nil)
 	if err := m.m.ExecOnto(query.FunctionContext{
 		Maps:     m.m.Maps(),
 		Vars:     vars,
@@ -87,14 +87,14 @@ func (m *Mapping) mapPath(path string, labelNames, labelValues []string) (outPat
 		return path, nil, nil
 	}
 
-	_ = outPart.MetaIter(func(k, v string) error {
+	_ = outPart.MetaIterStr(func(k, v string) error {
 		outLabelNames = append(outLabelNames, k)
 		return nil
 	})
 	if len(outLabelNames) > 0 {
 		sort.Strings(outLabelNames)
 		for _, k := range outLabelNames {
-			v := outPart.MetaGet(k)
+			v := outPart.MetaGetStr(k)
 			m.logger.Tracef("Metrics label '%v' created with static value '%v'.\n", k, v)
 			outLabelValues = append(outLabelValues, v)
 		}

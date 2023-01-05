@@ -1,4 +1,4 @@
-const {listPaths,listDeprecatedPaths} = require('./src/plugins/components');
+const {listPaths} = require('./src/plugins/components');
 
 let inputs_docs = listPaths("inputs");
 let processors_docs = listPaths("processors");
@@ -26,6 +26,7 @@ module.exports = {
         'configuration/metadata',
         'configuration/error_handling',
         'configuration/interpolation',
+        'configuration/secrets',
         'configuration/field_paths',
         'configuration/processing_pipelines',
         'configuration/unit_testing',

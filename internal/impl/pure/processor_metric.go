@@ -162,13 +162,15 @@ type metricProcessor struct {
 	handler func(string, int, message.Batch) error
 }
 
-type labels []label
-type label struct {
-	name  string
-	value *field.Expression
-}
+type (
+	labels []label
+	label  struct {
+		name  string
+		value *field.Expression
+	}
+)
 
-func (l *label) val(index int, msg message.Batch) string {
+func (l *label) val(index int, msg message.Batch) (string, error) {
 	return l.value.String(index, msg)
 }
 
@@ -180,12 +182,16 @@ func (l labels) names() []string {
 	return names
 }
 
-func (l labels) values(index int, msg message.Batch) []string {
+func (l labels) values(index int, msg message.Batch) ([]string, error) {
 	var values []string
 	for i := range l {
-		values = append(values, l[i].val(index, msg))
+		vStr, err := l[i].val(index, msg)
+		if err != nil {
+			return nil, fmt.Errorf("label interpolation error: %w", err)
+		}
+		values = append(values, vStr)
 	}
-	return values
+	return values, nil
 }
 
 func newMetricProcessor(conf processor.Config, mgr bundle.NewManagement, log log.Modular, stats metrics.Type) (processor.V1, error) {
@@ -261,7 +267,11 @@ func newMetricProcessor(conf processor.Config, mgr bundle.NewManagement, log log
 
 func (m *metricProcessor) handleCounter(val string, index int, msg message.Batch) error {
 	if len(m.labels) > 0 {
-		m.mCounterVec.With(m.labels.values(index, msg)...).Incr(1)
+		labelValues, err := m.labels.values(index, msg)
+		if err != nil {
+			return err
+		}
+		m.mCounterVec.With(labelValues...).Incr(1)
 	} else {
 		m.mCounter.Incr(1)
 	}
@@ -277,7 +287,11 @@ func (m *metricProcessor) handleCounterBy(val string, index int, msg message.Bat
 		return errors.New("value is negative")
 	}
 	if len(m.labels) > 0 {
-		m.mCounterVec.With(m.labels.values(index, msg)...).Incr(i)
+		labelValues, err := m.labels.values(index, msg)
+		if err != nil {
+			return err
+		}
+		m.mCounterVec.With(labelValues...).Incr(i)
 	} else {
 		m.mCounter.Incr(i)
 	}
@@ -293,7 +307,11 @@ func (m *metricProcessor) handleGauge(val string, index int, msg message.Batch) 
 		return errors.New("value is negative")
 	}
 	if len(m.labels) > 0 {
-		m.mGaugeVec.With(m.labels.values(index, msg)...).Set(i)
+		labelValues, err := m.labels.values(index, msg)
+		if err != nil {
+			return err
+		}
+		m.mGaugeVec.With(labelValues...).Set(i)
 	} else {
 		m.mGauge.Set(i)
 	}
@@ -309,7 +327,11 @@ func (m *metricProcessor) handleTimer(val string, index int, msg message.Batch) 
 		return errors.New("value is negative")
 	}
 	if len(m.labels) > 0 {
-		m.mTimerVec.With(m.labels.values(index, msg)...).Timing(i)
+		labelValues, err := m.labels.values(index, msg)
+		if err != nil {
+			return err
+		}
+		m.mTimerVec.With(labelValues...).Timing(i)
 	} else {
 		m.mTimer.Timing(i)
 	}
@@ -318,9 +340,13 @@ func (m *metricProcessor) handleTimer(val string, index int, msg message.Batch) 
 
 func (m *metricProcessor) ProcessBatch(ctx context.Context, msg message.Batch) ([]message.Batch, error) {
 	_ = msg.Iter(func(i int, p *message.Part) error {
-		value := m.value.String(i, msg)
+		value, err := m.value.String(i, msg)
+		if err != nil {
+			m.log.Errorf("Value interpolation error: %v", err)
+			return nil
+		}
 		if err := m.handler(value, i, msg); err != nil {
-			m.log.Errorf("Handler error: %v\n", err)
+			m.log.Errorf("Handler error: %v", err)
 		}
 		return nil
 	})

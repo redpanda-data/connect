@@ -8,12 +8,12 @@ When an input protocol supports attributes or metadata they will automatically b
 
 ## Editing Metadata
 
-Benthos allows you to add and remove metadata using the [`bloblang` processor][processors.bloblang]. For example, you can do something like this in your pipeline:
+Benthos allows you to add and remove metadata using the [`mapping` processor][processors.mapping]. For example, you can do something like this in your pipeline:
 
 ```yaml
 pipeline:
   processors:
-  - bloblang: |
+  - mapping: |
       # Remove all existing metadata from messages
       meta = deleted()
 
@@ -31,7 +31,7 @@ meta foo = deleted()
 Or do more interesting things like remove all metadata keys with a certain prefix:
 
 ```coffee
-meta = meta().filter(!this.key.has_prefix("kafka_"))
+meta = @.filter(kv -> !kv.key.has_prefix("kafka_"))
 ```
 
 ## Using Metadata
@@ -51,7 +51,7 @@ Benthos also allows you to conditionally process messages based on their metadat
 pipeline:
   processors:
   - switch:
-    - check: meta("doc_type") == "nested"
+    - check: '@doc_type == "nested"'
       processors:
         - sql_insert:
             driver: mysql
@@ -62,7 +62,7 @@ pipeline:
               root = [
                 this.document.foo,
                 this.document.bar,
-                meta("kafka_topic"),
+                @kafka_topic,
               ]
 ```
 
@@ -89,13 +89,13 @@ pipeline:
   processors:
     # Has an explicit list of public metadata keys, and everything else is given
     # an underscore prefix.
-    - bloblang: |
+    - mapping: |
         let allowed_meta = [
           "foo",
           "bar",
           "baz",
         ]
-        meta = meta().map_each_key(key -> if !$allowed_meta.contains(key) {
+        meta = @.map_each_key(key -> if !$allowed_meta.contains(key) {
           "_" + key
         })
 
@@ -109,5 +109,5 @@ output:
 
 [interpolation]: /docs/configuration/interpolation
 [processors.switch]: /docs/components/processors/switch
-[processors.bloblang]: /docs/components/processors/bloblang
+[processors.mapping]: /docs/components/processors/mapping
 [guides.bloblang]: /docs/guides/bloblang/about

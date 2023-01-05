@@ -7,6 +7,7 @@ import (
 	"github.com/urfave/cli/v2"
 
 	"github.com/benthosdev/benthos/v4/internal/filepath"
+	"github.com/benthosdev/benthos/v4/internal/filepath/ifs"
 	"github.com/benthosdev/benthos/v4/internal/log"
 )
 
@@ -39,7 +40,7 @@ https://benthos.dev/docs/configuration/unit_testing`[1:],
 			}
 			resourcesPaths := c.StringSlice("resources")
 			var err error
-			if resourcesPaths, err = filepath.Globs(resourcesPaths); err != nil {
+			if resourcesPaths, err = filepath.Globs(ifs.OS(), resourcesPaths); err != nil {
 				fmt.Printf("Failed to resolve resource glob pattern: %v\n", err)
 				os.Exit(1)
 			}

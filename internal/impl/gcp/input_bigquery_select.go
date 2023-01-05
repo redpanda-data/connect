@@ -3,6 +3,7 @@ package gcp
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	"cloud.google.com/go/bigquery"
@@ -76,7 +77,7 @@ func bigQuerySelectInputConfigFromParsed(inConf *service.ParsedConfig) (conf big
 
 func newBigQuerySelectInputConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
-		// Beta().
+		Beta().
 		Version("3.63.0").
 		Categories("Services", "GCP").
 		Summary("Executes a `SELECT` query against BigQuery and creates a message for each row received.").
@@ -162,7 +163,7 @@ func (inp *bigQuerySelectInput) Connect(ctx context.Context) error {
 		inp.client = wrapBQClient(client, inp.logger)
 	}
 
-	var args []interface{}
+	var args []any
 	argsMapping := inp.config.argsMapping
 
 	if argsMapping != nil {
@@ -171,7 +172,7 @@ func (inp *bigQuerySelectInput) Connect(ctx context.Context) error {
 			return err
 		}
 
-		checkedArgs, ok := rawArgs.([]interface{})
+		checkedArgs, ok := rawArgs.([]any)
 		if !ok {
 			return fmt.Errorf("mapping returned non-array result: %T", rawArgs)
 		}
@@ -201,7 +202,7 @@ func (inp *bigQuerySelectInput) Read(ctx context.Context) (*service.Message, ser
 
 	var row map[string]bigquery.Value
 	err := inp.iterator.Next(&row)
-	if err == iterator.Done {
+	if errors.Is(err, iterator.Done) {
 		return nil, nil, service.ErrEndOfInput
 	}
 	if err != nil {
@@ -242,7 +243,6 @@ func init() {
 			}
 			return service.AutoRetryNacks(i), nil
 		})
-
 	if err != nil {
 		panic(err)
 	}

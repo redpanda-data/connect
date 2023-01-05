@@ -2,6 +2,7 @@ package avro
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -9,29 +10,15 @@ import (
 
 	"github.com/linkedin/goavro/v2"
 
-	"github.com/benthosdev/benthos/v4/internal/bundle"
-	"github.com/benthosdev/benthos/v4/internal/component/processor"
-	"github.com/benthosdev/benthos/v4/internal/docs"
-	"github.com/benthosdev/benthos/v4/internal/log"
-	"github.com/benthosdev/benthos/v4/internal/message"
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
-func init() {
-	err := bundle.AllProcessors.Add(func(conf processor.Config, mgr bundle.NewManagement) (processor.V1, error) {
-		p, err := newAvro(conf.Avro, mgr)
-		if err != nil {
-			return nil, err
-		}
-		return processor.NewV2ToV1Processor("avro", p, mgr), nil
-	}, docs.ComponentSpec{
-		Name: "avro",
-		Categories: []string{
-			"Parsing",
-		},
-		Summary: `
-Performs Avro based operations on messages based on a schema.`,
-		Status: docs.StatusBeta,
-		Description: `
+func avroConfigSpec() *service.ConfigSpec {
+	return service.NewConfigSpec().
+		Beta().
+		Categories("Parsing").
+		Summary(`Performs Avro based operations on messages based on a schema.`).
+		Description(`
 WARNING: If you are consuming or generating messages using a schema registry service then it is likely this processor will fail as those services require messages to be prefixed with the identifier of the schema version being used. Instead, try the ` + "[`schema_registry_encode`](/docs/components/processors/schema_registry_encode) and [`schema_registry_decode`](/docs/components/processors/schema_registry_decode)" + ` processors.
 
 ## Operators
@@ -45,18 +32,19 @@ specifies how the source documents are encoded.
 ### ` + "`from_json`" + `
 
 Attempts to convert JSON documents into Avro documents according to the
-specified encoding.`,
-		Config: docs.FieldComponent().WithChildren(
-			docs.FieldString("operator", "The [operator](#operators) to execute").HasOptions("to_json", "from_json"),
-			docs.FieldString("encoding", "An Avro encoding format to use for conversions to and from a schema.").HasOptions("textual", "binary", "single"),
-			docs.FieldString("schema", "A full Avro schema to use."),
-			docs.FieldString(
-				"schema_path", "The path of a schema document to apply. Use either this or the `schema` field.",
-				"file://path/to/spec.avsc",
-				"http://localhost:8081/path/to/spec/versions/1",
-			),
-		).ChildDefaultAndTypesFromStruct(processor.NewAvroConfig()),
-	})
+specified encoding.`).
+		Field(service.NewStringEnumField("operator", "to_json", "from_json").Description("The [operator](#operators) to execute")).
+		Field(service.NewStringEnumField("encoding", "textual", "binary", "single").Description("An Avro encoding format to use for conversions to and from a schema.").Default("textual")).
+		Field(service.NewStringField("schema").Description("A full Avro schema to use.").Default("")).
+		Field(service.NewStringField("schema_path").
+			Description("The path of a schema document to apply. Use either this or the `schema` field.").
+			Default("").
+			Example("file://path/to/spec.avsc").
+			Example("http://localhost:8081/path/to/spec/versions/1"))
+}
+
+func init() {
+	err := service.RegisterProcessor("avro", avroConfigSpec(), newAvroFromConfig)
 	if err != nil {
 		panic(err)
 	}
@@ -64,13 +52,17 @@ specified encoding.`,
 
 //------------------------------------------------------------------------------
 
-type avroOperator func(part *message.Part) error
+type avroOperator func(part *service.Message) error
 
 func newAvroToJSONOperator(encoding string, codec *goavro.Codec) (avroOperator, error) {
 	switch encoding {
 	case "textual":
-		return func(part *message.Part) error {
-			jObj, _, err := codec.NativeFromTextual(part.AsBytes())
+		return func(part *service.Message) error {
+			pBytes, err := part.AsBytes()
+			if err != nil {
+				return err
+			}
+			jObj, _, err := codec.NativeFromTextual(pBytes)
 			if err != nil {
 				return fmt.Errorf("failed to convert Avro document to JSON: %v", err)
 			}
@@ -78,8 +70,12 @@ func newAvroToJSONOperator(encoding string, codec *goavro.Codec) (avroOperator, 
 			return nil
 		}, nil
 	case "binary":
-		return func(part *message.Part) error {
-			jObj, _, err := codec.NativeFromBinary(part.AsBytes())
+		return func(part *service.Message) error {
+			pBytes, err := part.AsBytes()
+			if err != nil {
+				return err
+			}
+			jObj, _, err := codec.NativeFromBinary(pBytes)
 			if err != nil {
 				return fmt.Errorf("failed to convert Avro document to JSON: %v", err)
 			}
@@ -87,8 +83,12 @@ func newAvroToJSONOperator(encoding string, codec *goavro.Codec) (avroOperator, 
 			return nil
 		}, nil
 	case "single":
-		return func(part *message.Part) error {
-			jObj, _, err := codec.NativeFromSingle(part.AsBytes())
+		return func(part *service.Message) error {
+			pBytes, err := part.AsBytes()
+			if err != nil {
+				return err
+			}
+			jObj, _, err := codec.NativeFromSingle(pBytes)
 			if err != nil {
 				return fmt.Errorf("failed to convert Avro document to JSON: %v", err)
 			}
@@ -102,7 +102,7 @@ func newAvroToJSONOperator(encoding string, codec *goavro.Codec) (avroOperator, 
 func newAvroFromJSONOperator(encoding string, codec *goavro.Codec) (avroOperator, error) {
 	switch encoding {
 	case "textual":
-		return func(part *message.Part) error {
+		return func(part *service.Message) error {
 			jObj, err := part.AsStructured()
 			if err != nil {
 				return fmt.Errorf("failed to parse message as JSON: %v", err)
@@ -115,7 +115,7 @@ func newAvroFromJSONOperator(encoding string, codec *goavro.Codec) (avroOperator
 			return nil
 		}, nil
 	case "binary":
-		return func(part *message.Part) error {
+		return func(part *service.Message) error {
 			jObj, err := part.AsStructured()
 			if err != nil {
 				return fmt.Errorf("failed to parse message as JSON: %v", err)
@@ -128,7 +128,7 @@ func newAvroFromJSONOperator(encoding string, codec *goavro.Codec) (avroOperator
 			return nil
 		}, nil
 	case "single":
-		return func(part *message.Part) error {
+		return func(part *service.Message) error {
 			jObj, err := part.AsStructured()
 			if err != nil {
 				return fmt.Errorf("failed to parse message as JSON: %v", err)
@@ -160,7 +160,6 @@ func loadSchema(schemaPath string) (string, error) {
 	c := &http.Client{Transport: t}
 
 	response, err := c.Get(schemaPath)
-
 	if err != nil {
 		return "", err
 	}
@@ -168,7 +167,6 @@ func loadSchema(schemaPath string) (string, error) {
 	defer response.Body.Close()
 
 	body, err := io.ReadAll(response.Body)
-
 	if err != nil {
 		return "", err
 	}
@@ -180,26 +178,37 @@ func loadSchema(schemaPath string) (string, error) {
 
 type avro struct {
 	operator avroOperator
-	log      log.Modular
+	log      *service.Logger
 }
 
-func newAvro(conf processor.AvroConfig, mgr bundle.NewManagement) (processor.V2, error) {
+func newAvroFromConfig(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {
 	a := &avro{log: mgr.Logger()}
 
-	var schema string
+	var operator, encoding, schema, schemaPath string
 	var err error
 
-	if schemaPath := conf.SchemaPath; schemaPath != "" {
+	if operator, err = conf.FieldString("operator"); err != nil {
+		return nil, err
+	}
+	if encoding, err = conf.FieldString("encoding"); err != nil {
+		return nil, err
+	}
+	if schemaPath, err = conf.FieldString("schema_path"); err != nil {
+		return nil, err
+	}
+	if schema, err = conf.FieldString("schema"); err != nil {
+		return nil, err
+	}
+	if schemaPath != "" {
 		if !(strings.HasPrefix(schemaPath, "file://") || strings.HasPrefix(schemaPath, "http://")) {
 			return nil, fmt.Errorf("invalid schema_path provided, must start with file:// or http://")
 		}
-
-		schema, err = loadSchema(schemaPath)
-		if err != nil {
+		if schema, err = loadSchema(schemaPath); err != nil {
 			return nil, fmt.Errorf("failed to load Avro schema definition: %v", err)
 		}
-	} else {
-		schema = conf.Schema
+	}
+	if schema == "" {
+		return nil, errors.New("a schema must be specified with either the `schema` or `schema_path` fields")
 	}
 
 	codec, err := goavro.NewCodec(schema)
@@ -207,7 +216,7 @@ func newAvro(conf processor.AvroConfig, mgr bundle.NewManagement) (processor.V2,
 		return nil, fmt.Errorf("failed to parse schema: %v", err)
 	}
 
-	if a.operator, err = strToAvroOperator(conf.Operator, conf.Encoding, codec); err != nil {
+	if a.operator, err = strToAvroOperator(operator, encoding, codec); err != nil {
 		return nil, err
 	}
 	return a, nil
@@ -215,13 +224,13 @@ func newAvro(conf processor.AvroConfig, mgr bundle.NewManagement) (processor.V2,
 
 //------------------------------------------------------------------------------
 
-func (p *avro) Process(ctx context.Context, msg *message.Part) ([]*message.Part, error) {
+func (p *avro) Process(ctx context.Context, msg *service.Message) (service.MessageBatch, error) {
 	err := p.operator(msg)
 	if err != nil {
 		p.log.Debugf("Operator failed: %v\n", err)
 		return nil, err
 	}
-	return []*message.Part{msg}, nil
+	return service.MessageBatch{msg}, nil
 }
 
 func (p *avro) Close(context.Context) error {

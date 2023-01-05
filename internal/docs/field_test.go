@@ -24,7 +24,7 @@ func TestBloblLinter(t *testing.T) {
 
 	tests := []struct {
 		name     string
-		input    interface{}
+		input    any
 		expected []Lint
 	}{
 		{
@@ -36,22 +36,22 @@ func TestBloblLinter(t *testing.T) {
 			name:  "Single type lint",
 			input: "",
 			expected: []Lint{
-				{What: "expected non-empty string, got empty string"},
+				NewLintError(0, LintCustom, "expected non-empty string, got empty string"),
 			},
 		},
 		{
 			name:  "One lint",
 			input: `hello meow world`,
 			expected: []Lint{
-				{What: "no cats allowed"},
+				NewLintError(0, LintCustom, "no cats allowed"),
 			},
 		},
 		{
 			name:  "Two lints",
 			input: `hello woof world`,
 			expected: []Lint{
-				{What: "no dogs allowed"},
-				{What: "no noise allowed"},
+				NewLintError(0, LintCustom, "no dogs allowed"),
+				NewLintError(0, LintCustom, "no noise allowed"),
 			},
 		},
 	}
@@ -66,5 +66,136 @@ func TestBloblLinter(t *testing.T) {
 			assert.Equal(t, test.expected, lints)
 		})
 	}
+}
 
+func TestFieldLinting(t *testing.T) {
+	tests := []struct {
+		name   string
+		f      FieldSpec
+		input  any
+		output []Lint
+	}{
+		{
+			name:  "normal string no linter",
+			f:     FieldString("foo", "").LinterBlobl(`root = []`),
+			input: "hello world",
+		},
+		{
+			name:  "url valid",
+			f:     FieldURL("foo", ""),
+			input: "tcp://admin@example.com",
+		},
+		{
+			name:  "url invalid",
+			f:     FieldURL("foo", ""),
+			input: "not a %#$ valid URL",
+			// output: []Lint{
+			// 	{Column: 1, What: "field `this`: parse \"not a %\": invalid URL escape \"%\""},
+			// },
+			// TODO: Disabled until our rule takes interpolation functions into account when necessary.
+		},
+		{
+			name:  "enum valid option",
+			f:     FieldString("foo", "").HasOptions("foo", "bar", "baz:x"),
+			input: "foo",
+		},
+		{
+			name:  "enum invalid option",
+			f:     FieldString("foo", "").HasOptions("foo", "bar", "baz:x"),
+			input: "buz",
+			output: []Lint{
+				{Column: 1, Type: 2, What: "value buz is not a valid option for this field"},
+			},
+		},
+		{
+			name:  "enum valid pattern option",
+			f:     FieldString("foo", "").HasOptions("foo", "bar", "baz:x"),
+			input: "baz:a",
+		},
+		{
+			name:  "enum invalid pattern option",
+			f:     FieldString("foo", "").HasOptions("foo", "bar", "baz:x"),
+			input: "baz",
+			output: []Lint{
+				{Column: 1, Type: 2, What: "value baz is not a valid option for this field"},
+			},
+		},
+	}
+	for _, test := range tests {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			var lints []Lint
+			linter := test.f.getLintFunc()
+			if linter != nil {
+				lints = linter(NewLintContext(), 0, 0, test.input)
+			}
+			assert.Equal(t, test.output, lints)
+		})
+	}
+}
+
+func TestSecretScrubbing(t *testing.T) {
+	tests := []struct {
+		name   string
+		f      FieldSpec
+		input  any
+		output any
+	}{
+		{
+			name:   "not a secret",
+			f:      FieldString("foo", ""),
+			input:  "hello world",
+			output: "hello world",
+		},
+		{
+			name:   "raw secret",
+			f:      FieldString("foo", "").Secret(),
+			input:  "hello world",
+			output: "!!!SECRET_SCRUBBED!!!",
+		},
+		{
+			name:   "env var secret",
+			f:      FieldString("foo", "").Secret(),
+			input:  "${FOO}",
+			output: "${FOO}",
+		},
+		{
+			name:   "env var secret whitespaced",
+			f:      FieldString("foo", "").Secret(),
+			input:  "  ${FOO} ",
+			output: "  ${FOO} ",
+		},
+		{
+			name:   "url no user",
+			f:      FieldURL("foo", ""),
+			input:  "tcp://example.com",
+			output: "tcp://example.com",
+		},
+		{
+			name:   "url user no secret",
+			f:      FieldURL("foo", ""),
+			input:  "tcp://admin@example.com",
+			output: "tcp://admin@example.com",
+		},
+		{
+			name:   "url user with password secret",
+			f:      FieldURL("foo", ""),
+			input:  "tcp://admin:foo@example.com",
+			output: "!!!SECRET_SCRUBBED!!!",
+		},
+		{
+			name:   "url user with password env var",
+			f:      FieldURL("foo", ""),
+			input:  "tcp://admin:${FOO}@example.com",
+			output: "tcp://admin:${FOO}@example.com",
+		},
+	}
+	for _, test := range tests {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			out, err := test.f.scrubValue(test.input)
+			require.NoError(t, err)
+			assert.Equal(t, test.output, out)
+		})
+	}
 }

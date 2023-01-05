@@ -4,7 +4,7 @@ package mapping
 // query result to be mapped into a message.
 type TargetType int
 
-// TargetTypes
+// TargetTypes.
 const (
 	TargetMetadata TargetType = iota
 	TargetValue
@@ -12,7 +12,7 @@ const (
 )
 
 // TargetPath represents a target type and segmented path that a query function
-// references. An empty path indicates the root of the type is targetted.
+// references. An empty path indicates the root of the type is targeted.
 type TargetPath struct {
 	Type TargetType
 	Path []string

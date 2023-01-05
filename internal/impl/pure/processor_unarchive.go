@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strings"
 
 	"github.com/benthosdev/benthos/v4/internal/message"
 	"github.com/benthosdev/benthos/v4/public/service"
@@ -34,9 +35,9 @@ For the unarchive formats that contain file information (tar, zip), a metadata f
 			`json_array`:     `Attempt to parse a message as a JSON array, and extract each element into its own message.`,
 			`json_map`:       `Attempt to parse the message as a JSON map and for each element of the map expands its contents into a new message. A metadata field is added to each message called ` + "`archive_key`" + ` with the relevant key from the top-level map.`,
 			`csv`:            `Attempt to parse the message as a csv file (header required) and for each row in the file expands its contents into a json object in a new message.`,
+			`csv:x`:          `Attempt to parse the message as a csv file (header required) and for each row in the file expands its contents into a json object in a new message using a custom delimiter. The custom delimiter must be a single character, e.g. the format "csv:\t" would consume a tab delimited file.`,
 		}).Description("The unarchiving format to apply."))
 }
-
 func init() {
 	err := service.RegisterProcessor(
 		"unarchive", unarchiveProcConfig(),
@@ -64,7 +65,7 @@ func tarUnarchive(part *service.Message) (service.MessageBatch, error) {
 	// Iterate through the files in the archive.
 	for {
 		h, err := tr.Next()
-		if err == io.EOF {
+		if errors.Is(err, io.EOF) {
 			// end of tar archive
 			break
 		}
@@ -165,8 +166,8 @@ func jsonDocumentsUnarchive(part *service.Message) (service.MessageBatch, error)
 	var parts service.MessageBatch
 	dec := json.NewDecoder(bytes.NewReader(pBytes))
 	for {
-		var m interface{}
-		if err := dec.Decode(&m); err == io.EOF {
+		var m any
+		if err := dec.Decode(&m); errors.Is(err, io.EOF) {
 			break
 		} else if err != nil {
 			return nil, err
@@ -184,7 +185,7 @@ func jsonArrayUnarchive(part *service.Message) (service.MessageBatch, error) {
 		return nil, fmt.Errorf("failed to parse message into JSON array: %v", err)
 	}
 
-	jArray, ok := jDoc.([]interface{})
+	jArray, ok := jDoc.([]any)
 	if !ok {
 		return nil, fmt.Errorf("failed to parse message into JSON array: invalid type '%T'", jDoc)
 	}
@@ -204,7 +205,7 @@ func jsonMapUnarchive(part *service.Message) (service.MessageBatch, error) {
 		return nil, fmt.Errorf("failed to parse message into JSON map: %v", err)
 	}
 
-	jMap, ok := jDoc.(map[string]interface{})
+	jMap, ok := jDoc.(map[string]any)
 	if !ok {
 		return nil, fmt.Errorf("failed to parse message into JSON map: invalid type '%T'", jDoc)
 	}
@@ -221,58 +222,63 @@ func jsonMapUnarchive(part *service.Message) (service.MessageBatch, error) {
 	return parts, nil
 }
 
-func csvUnarchive(part *service.Message) (service.MessageBatch, error) {
-	pBytes, err := part.AsBytes()
-	if err != nil {
-		return nil, err
-	}
-
-	buf := bytes.NewReader(pBytes)
-
-	scanner := csv.NewReader(buf)
-	scanner.ReuseRecord = true
-
-	var newParts []*service.Message
-	var headers []string
-
-	for {
-		var records []string
-		records, err = scanner.Read()
+func csvUnarchive(customComma *rune) func(*service.Message) (service.MessageBatch, error) {
+	return func(part *service.Message) (service.MessageBatch, error) {
+		pBytes, err := part.AsBytes()
 		if err != nil {
-			break
+			return nil, err
 		}
 
-		if headers == nil {
-			headers = make([]string, len(records))
-			copy(headers, records)
-			continue
+		buf := bytes.NewReader(pBytes)
+
+		scanner := csv.NewReader(buf)
+		scanner.ReuseRecord = true
+		if customComma != nil {
+			scanner.Comma = *customComma
 		}
 
-		if len(records) < len(headers) {
-			err = errors.New("row has too few values")
-			break
+		var newParts []*service.Message
+		var headers []string
+
+		for {
+			var records []string
+			records, err = scanner.Read()
+			if err != nil {
+				break
+			}
+
+			if headers == nil {
+				headers = make([]string, len(records))
+				copy(headers, records)
+				continue
+			}
+
+			if len(records) < len(headers) {
+				err = errors.New("row has too few values")
+				break
+			}
+
+			if len(records) > len(headers) {
+				err = errors.New("row has too many values")
+				break
+			}
+
+			obj := make(map[string]any, len(records))
+			for i, r := range records {
+				obj[headers[i]] = r
+			}
+
+			newPart := part.Copy()
+			newPart.SetStructuredMut(obj)
+			newParts = append(newParts, newPart)
 		}
 
-		if len(records) > len(headers) {
-			err = errors.New("row has too many values")
-			break
+		if !errors.Is(err, io.EOF) {
+			return nil, fmt.Errorf("failed to parse message as csv: %v", err)
 		}
 
-		obj := make(map[string]interface{}, len(records))
-		for i, r := range records {
-			obj[headers[i]] = r
-		}
-
-		newPart := part.Copy()
-		newPart.SetStructuredMut(obj)
-		newParts = append(newParts, newPart)
+		return newParts, nil
 	}
-
-	if !errors.Is(err, io.EOF) {
-		return nil, fmt.Errorf("failed to parse message as csv: %v", err)
-	}
-
-	return newParts, nil
 }
 
 func strToUnarchiver(str string) (unarchiveFunc, error) {
@@ -292,8 +298,22 @@ func strToUnarchiver(str string) (unarchiveFunc, error) {
 	case "json_map":
 		return jsonMapUnarchive, nil
 	case "csv":
-		return csvUnarchive, nil
+		return csvUnarchive(nil), nil
 	}
+
+	if strings.HasPrefix(str, "csv:") {
+		by := strings.TrimPrefix(str, "csv:")
+		if by == "" {
+			return nil, errors.New("csv format requires a non-empty delimiter")
+		}
+		byRunes := []rune(by)
+		if len(byRunes) != 1 {
+			return nil, errors.New("csv format requires a single character delimiter")
+		}
+		byRune := byRunes[0]
+		return csvUnarchive(&byRune), nil
+	}
+
 	return nil, fmt.Errorf("archive format not recognised: %v", str)
 }
 

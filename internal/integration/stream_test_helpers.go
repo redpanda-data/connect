@@ -19,7 +19,6 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	ioutput "github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/config"
-	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/manager"
 	"github.com/benthosdev/benthos/v4/internal/message"
@@ -34,7 +33,7 @@ import (
 // specifically requested using the -run flag.
 func CheckSkip(t testing.TB) {
 	if m := flag.Lookup("test.run").Value.String(); m == "" || regexp.MustCompile(strings.Split(m, "/")[0]).FindString(t.Name()) == "" {
-		t.Skip("Skipping as execution was not requested explicitly using go test -run ^TestIntegration$")
+		t.Skip("Skipping as execution was not requested explicitly using go test -run ^Test.*Integration.*$")
 	}
 }
 
@@ -447,7 +446,7 @@ func initInput(t testing.TB, env *streamTestEnvironment) iinput.Streamed {
 	dec.KnownFields(true)
 	require.NoError(t, dec.Decode(&s))
 
-	lints, err := config.LintBytes(docs.NewLintContext(), confBytes)
+	lints, err := config.LintBytes(config.LintOptions{}, confBytes)
 	require.NoError(t, err)
 	assert.Empty(t, lints)
 
@@ -476,7 +475,7 @@ func initOutput(t testing.TB, trans <-chan message.Transaction, env *streamTestE
 	dec.KnownFields(true)
 	require.NoError(t, dec.Decode(&s))
 
-	lints, err := config.LintBytes(docs.NewLintContext(), confBytes)
+	lints, err := config.LintBytes(config.LintOptions{}, confBytes)
 	require.NoError(t, err)
 	assert.Empty(t, lints)
 
@@ -519,7 +518,7 @@ func sendMessage(
 
 	p := message.NewPart([]byte(content))
 	for i := 0; i < len(metadata); i += 2 {
-		p.MetaSet(metadata[i], metadata[i+1])
+		p.MetaSetMut(metadata[i], metadata[i+1])
 	}
 	msg := message.Batch{p}
 	resChan := make(chan error)
@@ -598,8 +597,7 @@ func receiveBatch(
 	return b
 }
 
-// nolint:gocritic // Ignore unnamedResult false positive
-func receiveBatchNoRes(ctx context.Context, t testing.TB, tranChan <-chan message.Transaction) (message.Batch, func(context.Context, error) error) {
+func receiveBatchNoRes(ctx context.Context, t testing.TB, tranChan <-chan message.Transaction) (message.Batch, func(context.Context, error) error) { //nolint: gocritic // Ignore unnamedResult false positive
 	t.Helper()
 
 	var tran message.Transaction
@@ -614,8 +612,7 @@ func receiveBatchNoRes(ctx context.Context, t testing.TB, tranChan <-chan messag
 	return tran.Payload, tran.Ack
 }
 
-// nolint:gocritic // Ignore unnamedResult false positive
-func receiveMessageNoRes(ctx context.Context, t testing.TB, tranChan <-chan message.Transaction) (*message.Part, func(context.Context, error) error) {
+func receiveMessageNoRes(ctx context.Context, t testing.TB, tranChan <-chan message.Transaction) (*message.Part, func(context.Context, error) error) { //nolint: gocritic // Ignore unnamedResult false positive
 	t.Helper()
 
 	b, fn := receiveBatchNoRes(ctx, t, tranChan)
@@ -630,13 +627,13 @@ func messageMatch(t testing.TB, p *message.Part, content string, metadata ...str
 	assert.Equal(t, content, string(p.AsBytes()))
 
 	allMetadata := map[string]string{}
-	_ = p.MetaIter(func(k, v string) error {
+	_ = p.MetaIterStr(func(k, v string) error {
 		allMetadata[k] = v
 		return nil
 	})
 
 	for i := 0; i < len(metadata); i += 2 {
-		assert.Equal(t, metadata[i+1], p.MetaGet(metadata[i]), fmt.Sprintf("metadata: %v", allMetadata))
+		assert.Equal(t, metadata[i+1], p.MetaGetStr(metadata[i]), fmt.Sprintf("metadata: %v", allMetadata))
 	}
 }
 
@@ -651,7 +648,7 @@ func messagesInSet(t testing.TB, pop, allowDupes bool, b message.Batch, set map[
 		require.True(t, exists, "in set: %v, set: %v", string(p.AsBytes()), set)
 
 		for i := 0; i < len(metadata); i += 2 {
-			assert.Equal(t, metadata[i+1], p.MetaGet(metadata[i]))
+			assert.Equal(t, metadata[i+1], p.MetaGetStr(metadata[i]))
 		}
 
 		if pop {

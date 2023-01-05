@@ -7,14 +7,12 @@ import (
 	"fmt"
 	"math"
 	"math/rand"
-	"strconv"
 	"sync"
 	"time"
 
 	"github.com/gocql/gocql"
 
 	"github.com/benthosdev/benthos/v4/internal/batch/policy"
-	"github.com/benthosdev/benthos/v4/internal/bloblang/field"
 	"github.com/benthosdev/benthos/v4/internal/bloblang/mapping"
 	"github.com/benthosdev/benthos/v4/internal/bloblang/query"
 	"github.com/benthosdev/benthos/v4/internal/bundle"
@@ -46,13 +44,13 @@ func init() {
 		Summary: `
 Runs a query against a Cassandra database for each message in order to insert data.`,
 		Description: output.Description(true, true, `
-Query arguments can be set using [interpolation functions](/docs/configuration/interpolation#bloblang-queries) in the `+"`args`"+` field or by creating a bloblang array for the fields using the `+"`args_mapping`"+` field.
+Query arguments can be set using a bloblang array for the fields using the `+"`args_mapping`"+` field.
 
 When populating timestamp columns the value must either be a string in ISO 8601 format (2006-01-02T15:04:05Z07:00), or an integer representing unix time in seconds.`),
 		Examples: []docs.AnnotatedExample{
 			{
 				Title:   "Basic Inserts",
-				Summary: "If we were to create a table with some basic columns with `CREATE TABLE foo.bar (id int primary key, content text, created_at timestamp);`, and were processing JSON documents of the form `{\"id\":\"342354354\",\"content\":\"hello world\",\"timestamp\":1605219406}`, we could populate our table with the following config:",
+				Summary: "If we were to create a table with some basic columns with `CREATE TABLE foo.bar (id int primary key, content text, created_at timestamp);`, and were processing JSON documents of the form `{\"id\":\"342354354\",\"content\":\"hello world\",\"timestamp\":1605219406}` using logged batches, we could populate our table with the following config:",
 				Config: `
 output:
   cassandra:
@@ -67,6 +65,7 @@ output:
       ]
     batching:
       count: 500
+      period: 1s
 `,
 			},
 			{
@@ -81,6 +80,7 @@ output:
     args_mapping: 'root = [ this ]'
     batching:
       count: 500
+      period: 1s
 `,
 			},
 		},
@@ -99,7 +99,7 @@ output:
 			).WithChildren(
 				docs.FieldBool("enabled", "Whether to use password authentication."),
 				docs.FieldString("username", "A username."),
-				docs.FieldString("password", "A password."),
+				docs.FieldString("password", "A password.").Secret(),
 			).Advanced(),
 			docs.FieldBool(
 				"disable_initial_host_lookup",
@@ -114,6 +114,10 @@ output:
 				"The consistency level to use.",
 			).HasOptions(
 				"ANY", "ONE", "TWO", "THREE", "QUORUM", "ALL", "LOCAL_QUORUM", "EACH_QUORUM", "LOCAL_ONE",
+			).Advanced(),
+			docs.FieldBool(
+				"logged_batch",
+				"If enabled the driver will perform a logged batch. Disabling this prompts unlogged batches to be used instead, which are less efficient but necessary for alternative storages that do not support logged batches.",
 			).Advanced(),
 			docs.FieldInt("max_retries", "The maximum number of retries before giving up on a request.").Advanced(),
 			docs.FieldObject("backoff", "Control time intervals between retry attempts.").WithChildren(
@@ -144,8 +148,8 @@ type cassandraWriter struct {
 	session  *gocql.Session
 	connLock sync.RWMutex
 
-	args        []*field.Expression
 	argsMapping *mapping.Executor
+	batchType   gocql.BatchType
 }
 
 func newCassandraWriter(conf output.CassandraConfig, mgr bundle.NewManagement) (*cassandraWriter, error) {
@@ -157,7 +161,7 @@ func newCassandraWriter(conf output.CassandraConfig, mgr bundle.NewManagement) (
 
 	var err error
 	if conf.TLS.Enabled {
-		if c.tlsConf, err = conf.TLS.Get(); err != nil {
+		if c.tlsConf, err = conf.TLS.Get(mgr.FS()); err != nil {
 			return nil, err
 		}
 	}
@@ -169,6 +173,10 @@ func newCassandraWriter(conf output.CassandraConfig, mgr bundle.NewManagement) (
 	}
 	if err = c.parseArgs(mgr); err != nil {
 		return nil, fmt.Errorf("parsing args: %w", err)
+	}
+	c.batchType = gocql.UnloggedBatch
+	if c.conf.LoggedBatch {
+		c.batchType = gocql.LoggedBatch
 	}
 
 	return &c, nil
@@ -252,15 +260,11 @@ func (c *cassandraWriter) writeRow(session *gocql.Session, msg message.Batch) er
 	if err != nil {
 		return fmt.Errorf("parsing args: %w", err)
 	}
-
-	if err := session.Query(c.conf.Query, values...).Exec(); err != nil {
-		return err
-	}
-	return nil
+	return session.Query(c.conf.Query, values...).Exec()
 }
 
 func (c *cassandraWriter) writeBatch(session *gocql.Session, msg message.Batch) error {
-	batch := session.NewBatch(gocql.UnloggedBatch)
+	batch := session.NewBatch(c.batchType)
 
 	if err := msg.Iter(func(i int, p *message.Part) error {
 		values, err := c.mapArgs(msg, i)
@@ -273,14 +277,10 @@ func (c *cassandraWriter) writeBatch(session *gocql.Session, msg message.Batch) 
 		return err
 	}
 
-	err := session.ExecuteBatch(batch)
-	if err != nil {
-		return err
-	}
-	return nil
+	return session.ExecuteBatch(batch)
 }
 
-func (c *cassandraWriter) mapArgs(msg message.Batch, index int) ([]interface{}, error) {
+func (c *cassandraWriter) mapArgs(msg message.Batch, index int) ([]any, error) {
 	if c.argsMapping != nil {
 		// We've got an "args_mapping" field, extract values from there.
 		part, err := c.argsMapping.MapPart(index, msg)
@@ -293,7 +293,7 @@ func (c *cassandraWriter) mapArgs(msg message.Batch, index int) ([]interface{}, 
 			return nil, fmt.Errorf("parsing bloblang mapping result as json: %w", err)
 		}
 
-		j, ok := jraw.([]interface{})
+		j, ok := jraw.([]any)
 		if !ok {
 			return nil, fmt.Errorf("expected bloblang mapping result to be []interface{} but was %T", jraw)
 		}
@@ -303,16 +303,6 @@ func (c *cassandraWriter) mapArgs(msg message.Batch, index int) ([]interface{}, 
 		}
 		return j, nil
 	}
-
-	// If we've been given the "args" field, extract values from there.
-	if len(c.args) > 0 {
-		values := make([]interface{}, 0, len(c.args))
-		for _, arg := range c.args {
-			values = append(values, stringValue(arg.String(index, msg)))
-		}
-		return values, nil
-	}
-
 	return nil, nil
 }
 
@@ -359,7 +349,7 @@ func (d *decorator) GetRetryType(err error) gocql.RetryType {
 			return gocql.RetryNextHost
 		}
 		return gocql.Retry
-	// write timeout - uncertain whetever write was succesful or not
+	// write timeout - uncertain whetever write was successful or not
 	case *gocql.RequestErrWriteTimeout:
 		if t.Received > 0 {
 			return gocql.Ignore
@@ -370,69 +360,8 @@ func (d *decorator) GetRetryType(err error) gocql.RetryType {
 	}
 }
 
-func formatCassandraInt64(x int64) []byte {
-	return []byte{byte(x >> 56), byte(x >> 48), byte(x >> 40), byte(x >> 32),
-		byte(x >> 24), byte(x >> 16), byte(x >> 8), byte(x)}
-}
-
-func formatCassandraInt32(x int32) []byte {
-	return []byte{byte(x >> 24), byte(x >> 16), byte(x >> 8), byte(x)}
-}
-
-type stringValue string
-
-// All of our argument values are string types due to interpolation. However,
-// gocql performs type checking and unfortunately does not like timestamp and
-// some other values as strings:
-// https://github.com/gocql/gocql/blob/5913df4d474e0b2492a129d17bbb3c04537a15cd/marshal.go#L1160
-//
-// In order to work around this we manually marshal some types.
-func (s stringValue) MarshalCQL(info gocql.TypeInfo) ([]byte, error) {
-	switch info.Type() {
-	case gocql.TypeTimestamp:
-		t, err := time.Parse(time.RFC3339Nano, string(s))
-		if err == nil {
-			if t.IsZero() {
-				return []byte{}, nil
-			}
-			x := t.UTC().Unix()*1e3 + int64(t.UTC().Nanosecond()/1e6)
-			return formatCassandraInt64(x), nil
-		}
-		x, err := strconv.ParseInt(string(s), 10, 64)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse time value '%v': expected either an ISO 8601 string or unix epoch in seconds", s)
-		}
-		return formatCassandraInt64(x * 1e3), nil
-	case gocql.TypeTime:
-		x, err := strconv.ParseInt(string(s), 10, 64)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse time value '%v': expected milliseconds", s)
-		}
-		return formatCassandraInt64(x), nil
-	case gocql.TypeBoolean:
-		if s == "true" {
-			return []byte{1}, nil
-		} else if s == "false" {
-			return []byte{0}, nil
-		}
-	case gocql.TypeFloat:
-		f, err := strconv.ParseFloat(string(s), 32)
-		if err != nil {
-			return nil, err
-		}
-		return formatCassandraInt32(int32(math.Float32bits(float32(f)))), nil
-	case gocql.TypeDouble:
-		f, err := strconv.ParseFloat(string(s), 64)
-		if err != nil {
-			return nil, err
-		}
-		return formatCassandraInt64(int64(math.Float64bits(f))), nil
-	}
-	return gocql.Marshal(info, string(s))
-}
-
 type genericValue struct {
-	v interface{}
+	v any
 }
 
 // We get typed values out of mappings. However, gocql performs type checking

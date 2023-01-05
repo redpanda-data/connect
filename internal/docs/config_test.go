@@ -30,7 +30,7 @@ func TestInference(t *testing.T) {
 
 	type testCase struct {
 		inputType docs.Type
-		inputConf interface{}
+		inputConf any
 
 		res string
 		err string
@@ -39,21 +39,21 @@ func TestInference(t *testing.T) {
 	tests := []testCase{
 		{
 			inputType: docs.TypeInput,
-			inputConf: map[string]interface{}{
+			inputConf: map[string]any{
 				"processors": "yep",
 			},
 			res: "stdin",
 		},
 		{
 			inputType: docs.TypeOutput,
-			inputConf: map[string]interface{}{
+			inputConf: map[string]any{
 				"processors": "yep",
 			},
 			err: "an explicit output type must be specified",
 		},
 		{
 			inputType: docs.TypeOutput,
-			inputConf: map[string]interface{}{
+			inputConf: map[string]any{
 				"foo":        "yep",
 				"bar":        "yep",
 				"processors": "yep",
@@ -62,7 +62,7 @@ func TestInference(t *testing.T) {
 		},
 		{
 			inputType: docs.TypeInput,
-			inputConf: map[string]interface{}{
+			inputConf: map[string]any{
 				"foo":        "yep",
 				"bar":        "yep",
 				"processors": "yep",
@@ -71,7 +71,7 @@ func TestInference(t *testing.T) {
 		},
 		{
 			inputType: docs.TypeTracer,
-			inputConf: map[string]interface{}{
+			inputConf: map[string]any{
 				"testbartracer": "baz",
 				"testbarbuffer": "baz",
 			},
@@ -79,7 +79,7 @@ func TestInference(t *testing.T) {
 		},
 		{
 			inputType: docs.TypeRateLimit,
-			inputConf: map[string]interface{}{
+			inputConf: map[string]any{
 				"testbarrate_limit": "baz",
 				"testbarbuffer":     "baz",
 			},
@@ -87,7 +87,7 @@ func TestInference(t *testing.T) {
 		},
 		{
 			inputType: docs.TypeProcessor,
-			inputConf: map[string]interface{}{
+			inputConf: map[string]any{
 				"testbarprocessor": "baz",
 				"testbarbuffer":    "baz",
 			},
@@ -95,7 +95,7 @@ func TestInference(t *testing.T) {
 		},
 		{
 			inputType: docs.TypeOutput,
-			inputConf: map[string]interface{}{
+			inputConf: map[string]any{
 				"testbaroutput": "baz",
 				"testbarbuffer": "baz",
 			},
@@ -103,7 +103,7 @@ func TestInference(t *testing.T) {
 		},
 		{
 			inputType: docs.TypeMetrics,
-			inputConf: map[string]interface{}{
+			inputConf: map[string]any{
 				"testfoometrics": "baz",
 				"testbarbuffer":  "baz",
 			},
@@ -111,7 +111,7 @@ func TestInference(t *testing.T) {
 		},
 		{
 			inputType: docs.TypeInput,
-			inputConf: map[string]interface{}{
+			inputConf: map[string]any{
 				"testfooinput":  "baz",
 				"testbarbuffer": "baz",
 			},
@@ -119,7 +119,7 @@ func TestInference(t *testing.T) {
 		},
 		{
 			inputType: docs.TypeCache,
-			inputConf: map[string]interface{}{
+			inputConf: map[string]any{
 				"testfoocache":  "baz",
 				"testbarbuffer": "baz",
 			},
@@ -127,7 +127,7 @@ func TestInference(t *testing.T) {
 		},
 		{
 			inputType: docs.TypeBuffer,
-			inputConf: map[string]interface{}{
+			inputConf: map[string]any{
 				"testfoobuffer": "baz",
 				"testbarbuffer": "baz",
 			},
@@ -135,14 +135,14 @@ func TestInference(t *testing.T) {
 		},
 		{
 			inputType: docs.TypeBuffer,
-			inputConf: map[string]interface{}{
+			inputConf: map[string]any{
 				"testfoobuffer": "baz",
 			},
 			res: "testfoobuffer",
 		},
 		{
 			inputType: docs.TypeBuffer,
-			inputConf: map[string]interface{}{
+			inputConf: map[string]any{
 				"type":   "testfoobuffer",
 				"foobar": "baz",
 			},
@@ -150,7 +150,7 @@ func TestInference(t *testing.T) {
 		},
 		{
 			inputType: docs.TypeBuffer,
-			inputConf: map[string]interface{}{
+			inputConf: map[string]any{
 				"type":   "notreal",
 				"foobar": "baz",
 			},
@@ -163,19 +163,9 @@ func TestInference(t *testing.T) {
 	}
 
 	for i, test := range tests {
-		res, spec, err := docs.GetInferenceCandidate(docsProv, test.inputType, test.inputConf)
-		if len(test.err) > 0 {
-			assert.EqualError(t, err, test.err, "test: %v", i)
-		} else {
-			assert.Equal(t, test.res, spec.Name, "test: %v", i)
-			assert.Equal(t, test.inputType, spec.Type, "test: %v", i)
-			assert.NoError(t, err, "test: %v", i)
-			assert.Equal(t, test.res, res, "test: %v", i)
-		}
-
 		var node yaml.Node
 		require.NoError(t, node.Encode(test.inputConf))
-		res, spec, err = docs.GetInferenceCandidateFromYAML(docsProv, test.inputType, &node)
+		res, spec, err := docs.GetInferenceCandidateFromYAML(docsProv, test.inputType, &node)
 		if len(test.err) > 0 {
 			assert.Error(t, err, "test: %v", i)
 		} else {

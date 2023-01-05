@@ -24,12 +24,15 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/component/ratelimit"
+	"github.com/benthosdev/benthos/v4/internal/filepath/ifs"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
 )
 
-var nameRegexpRaw = `^[a-z0-9]+(_[a-z0-9]+)*$`
-var nameRegexp = regexp.MustCompile(nameRegexpRaw)
+var (
+	nameRegexpRaw = `^[a-z0-9]+(_[a-z0-9]+)*$`
+	nameRegexp    = regexp.MustCompile(nameRegexpRaw)
+)
 
 // NewManagement defines the latest API for a Benthos manager, which will become
 // the only API (internally) in Benthos V4.
@@ -44,6 +47,7 @@ type NewManagement interface {
 	Metrics() metrics.Type
 	Logger() log.Modular
 	Tracer() trace.TracerProvider
+	FS() ifs.FS
 	BloblEnvironment() *bloblang.Environment
 
 	RegisterEndpoint(path, desc string, h http.HandlerFunc)
@@ -58,22 +62,27 @@ type NewManagement interface {
 	ProbeCache(name string) bool
 	AccessCache(ctx context.Context, name string, fn func(cache.V1)) error
 	StoreCache(ctx context.Context, name string, conf cache.Config) error
+	RemoveCache(ctx context.Context, name string) error
 
 	ProbeInput(name string) bool
 	AccessInput(ctx context.Context, name string, fn func(input.Streamed)) error
 	StoreInput(ctx context.Context, name string, conf input.Config) error
+	RemoveInput(ctx context.Context, name string) error
 
 	ProbeProcessor(name string) bool
 	AccessProcessor(ctx context.Context, name string, fn func(processor.V1)) error
 	StoreProcessor(ctx context.Context, name string, conf processor.Config) error
+	RemoveProcessor(ctx context.Context, name string) error
 
 	ProbeOutput(name string) bool
 	AccessOutput(ctx context.Context, name string, fn func(output.Sync)) error
 	StoreOutput(ctx context.Context, name string, conf output.Config) error
+	RemoveOutput(ctx context.Context, name string) error
 
 	ProbeRateLimit(name string) bool
 	AccessRateLimit(ctx context.Context, name string, fn func(ratelimit.V1)) error
 	StoreRateLimit(ctx context.Context, name string, conf ratelimit.Config) error
+	RemoveRateLimit(ctx context.Context, name string) error
 
 	GetPipe(name string) (<-chan message.Transaction, error)
 	SetPipe(name string, t <-chan message.Transaction)

@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/go-redis/redis/v7"
+	"github.com/go-redis/redis/v8"
 
 	ibatch "github.com/benthosdev/benthos/v4/internal/batch"
 	"github.com/benthosdev/benthos/v4/internal/batch/policy"
@@ -67,6 +67,7 @@ func newRedisStreamsOutput(conf output.Config, mgr bundle.NewManagement) (output
 }
 
 type redisStreamsWriter struct {
+	mgr bundle.NewManagement
 	log log.Modular
 
 	conf       output.RedisStreamsConfig
@@ -79,6 +80,7 @@ type redisStreamsWriter struct {
 
 func newRedisStreamsWriter(conf output.RedisStreamsConfig, mgr bundle.NewManagement) (*redisStreamsWriter, error) {
 	r := &redisStreamsWriter{
+		mgr:  mgr,
 		log:  mgr.Logger(),
 		conf: conf,
 	}
@@ -91,7 +93,7 @@ func newRedisStreamsWriter(conf output.RedisStreamsConfig, mgr bundle.NewManagem
 		return nil, fmt.Errorf("failed to construct metadata filter: %w", err)
 	}
 
-	if _, err = clientFromConfig(conf.Config); err != nil {
+	if _, err = clientFromConfig(mgr.FS(), conf.Config); err != nil {
 		return nil, err
 	}
 	return r, nil
@@ -101,11 +103,11 @@ func (r *redisStreamsWriter) Connect(ctx context.Context) error {
 	r.connMut.Lock()
 	defer r.connMut.Unlock()
 
-	client, err := clientFromConfig(r.conf.Config)
+	client, err := clientFromConfig(r.mgr.FS(), r.conf.Config)
 	if err != nil {
 		return err
 	}
-	if _, err = client.Ping().Result(); err != nil {
+	if _, err = client.Ping(ctx).Result(); err != nil {
 		return err
 	}
 
@@ -124,9 +126,9 @@ func (r *redisStreamsWriter) WriteBatch(ctx context.Context, msg message.Batch) 
 		return component.ErrNotConnected
 	}
 
-	partToMap := func(p *message.Part) map[string]interface{} {
-		values := map[string]interface{}{}
-		_ = r.metaFilter.Iter(p, func(k, v string) error {
+	partToMap := func(p *message.Part) map[string]any {
+		values := map[string]any{}
+		_ = r.metaFilter.Iter(p, func(k string, v any) error {
 			values[k] = v
 			return nil
 		})
@@ -135,9 +137,13 @@ func (r *redisStreamsWriter) WriteBatch(ctx context.Context, msg message.Batch) 
 	}
 
 	if msg.Len() == 1 {
-		if err := client.XAdd(&redis.XAddArgs{
+		stream, err := r.stream.String(0, msg)
+		if err != nil {
+			return fmt.Errorf("stream interpolation error: %w", err)
+		}
+		if err := client.XAdd(ctx, &redis.XAddArgs{
 			ID:           "*",
-			Stream:       r.stream.String(0, msg),
+			Stream:       stream,
 			MaxLenApprox: r.conf.MaxLenApprox,
 			Values:       partToMap(msg.Get(0)),
 		}).Err(); err != nil {
@@ -149,16 +155,22 @@ func (r *redisStreamsWriter) WriteBatch(ctx context.Context, msg message.Batch) 
 	}
 
 	pipe := client.Pipeline()
-	_ = msg.Iter(func(i int, p *message.Part) error {
-		_ = pipe.XAdd(&redis.XAddArgs{
+	if err := msg.Iter(func(i int, p *message.Part) error {
+		stream, err := r.stream.String(i, msg)
+		if err != nil {
+			return fmt.Errorf("stream interpolation error: %w", err)
+		}
+		_ = pipe.XAdd(ctx, &redis.XAddArgs{
 			ID:           "*",
-			Stream:       r.stream.String(i, msg),
+			Stream:       stream,
 			MaxLenApprox: r.conf.MaxLenApprox,
 			Values:       partToMap(p),
 		})
 		return nil
-	})
-	cmders, err := pipe.Exec()
+	}); err != nil {
+		return err
+	}
+	cmders, err := pipe.Exec(ctx)
 	if err != nil {
 		_ = r.disconnect()
 		r.log.Errorf("Error from redis: %v\n", err)

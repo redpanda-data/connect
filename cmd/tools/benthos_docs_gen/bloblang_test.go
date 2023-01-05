@@ -8,10 +8,14 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/propagation"
+	"go.opentelemetry.io/otel/trace"
 
 	"github.com/benthosdev/benthos/v4/internal/bloblang"
 	"github.com/benthosdev/benthos/v4/internal/bloblang/query"
 	"github.com/benthosdev/benthos/v4/internal/message"
+	"github.com/benthosdev/benthos/v4/internal/tracing"
 
 	_ "github.com/benthosdev/benthos/v4/public/components/all"
 )
@@ -41,7 +45,13 @@ func TestFunctionExamples(t *testing.T) {
 				require.NoError(t, err)
 
 				for j, io := range e.Results {
-					msg := message.QuickBatch([][]byte{[]byte(io[0])})
+					msg := message.Batch{message.NewPart([]byte(io[0]))}
+					textMap := map[string]any{
+						"traceparent": "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01",
+					}
+					otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}))
+					require.NoError(t, tracing.InitSpansFromParentTextMap(trace.NewNoopTracerProvider(), "test", textMap, msg))
+
 					p, err := m.MapPart(0, msg)
 					exp := io[1]
 					if strings.HasPrefix(exp, "Error(") {

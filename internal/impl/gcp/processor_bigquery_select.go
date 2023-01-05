@@ -3,6 +3,7 @@ package gcp
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	"cloud.google.com/go/bigquery"
@@ -170,7 +171,7 @@ func (proc *bigQuerySelectProcessor) ProcessBatch(ctx context.Context, batch ser
 	for i, msg := range batch {
 		outBatch = append(outBatch, msg)
 
-		var args []interface{}
+		var args []any
 		if argsMapping != nil {
 			resMsg, err := batch.BloblangQuery(i, argsMapping)
 			if err != nil {
@@ -185,7 +186,7 @@ func (proc *bigQuerySelectProcessor) ProcessBatch(ctx context.Context, batch ser
 			}
 
 			var ok bool
-			if args, ok = iargs.([]interface{}); !ok {
+			if args, ok = iargs.([]any); !ok {
 				msg.SetError(fmt.Errorf("mapping returned non-array result: %T", iargs))
 				continue
 			}
@@ -230,7 +231,7 @@ func consumeIterator(iter bigqueryIterator) ([]map[string]bigquery.Value, error)
 	for {
 		var row map[string]bigquery.Value
 		err := iter.Next(&row)
-		if err == iterator.Done {
+		if errors.Is(err, iterator.Done) {
 			break
 		}
 		if err != nil {
@@ -251,7 +252,6 @@ func init() {
 				logger: mgr.Logger(),
 			})
 		})
-
 	if err != nil {
 		panic(err)
 	}

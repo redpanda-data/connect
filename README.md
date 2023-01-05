@@ -19,7 +19,7 @@ input:
 
 pipeline:
   processors:
-    - bloblang: |
+    - mapping: |
         root.message = this
         root.meta.link_count = this.links.length()
         root.user.age = this.user.age.number()
@@ -115,7 +115,7 @@ Benthos provides lots of tools for making configuration discovery, debugging and
 
 ## Build
 
-Build with Go (1.16 or later):
+Build with Go (any [currently supported version](https://go.dev/dl/)):
 
 ```shell
 git clone git@github.com:benthosdev/benthos

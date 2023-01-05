@@ -42,6 +42,7 @@ Type: `string`
 |---|---|
 | `binary` | Extract messages from a [binary blob format](https://github.com/benthosdev/benthos/blob/main/internal/message/message.go#L96). |
 | `csv` | Attempt to parse the message as a csv file (header required) and for each row in the file expands its contents into a json object in a new message. |
+| `csv:x` | Attempt to parse the message as a csv file (header required) and for each row in the file expands its contents into a json object in a new message using a custom delimiter. The custom delimiter must be a single character, e.g. the format "csv:\t" would consume a tab delimited file. |
 | `json_array` | Attempt to parse a message as a JSON array, and extract each element into its own message. |
 | `json_documents` | Attempt to parse a message as a stream of concatenated JSON documents. Each parsed document is expanded into a new message. |
 | `json_map` | Attempt to parse the message as a JSON map and for each element of the map expands its contents into a new message. A metadata field is added to each message called `archive_key` with the relevant key from the top-level map. |

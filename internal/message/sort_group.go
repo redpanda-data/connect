@@ -38,7 +38,7 @@ func NewSortGroupParts(parts []*Part) (*SortGroup, []*Part) {
 	return g, newParts
 }
 
-// NewSortGroup creates a new sort group to be associated with a
+// NewSortGroup creates a new sort group to be associated with a.
 func NewSortGroup(m Batch) (*SortGroup, Batch) {
 	inParts := make([]*Part, len(m))
 	_ = m.Iter(func(i int, part *Part) error {

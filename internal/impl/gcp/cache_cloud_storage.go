@@ -2,6 +2,7 @@ package gcp
 
 import (
 	"context"
+	"errors"
 	"io"
 	"time"
 
@@ -12,6 +13,7 @@ import (
 
 func gcpCloudStorageCacheConfig() *service.ConfigSpec {
 	spec := service.NewConfigSpec().
+		Beta().
 		Summary(`Use a Google Cloud Storage bucket as a cache.`).
 		Description(`It is not possible to atomically upload cloud storage objects exclusively when the target does not already exist, therefore this cache is not suitable for deduplication.`).
 		Field(service.NewStringField("bucket").
@@ -28,7 +30,6 @@ func init() {
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Cache, error) {
 			return newGcpCloudStorageCacheFromConfig(conf)
 		})
-
 	if err != nil {
 		panic(err)
 	}
@@ -70,7 +71,7 @@ func (c *gcpCloudStorageCache) Get(ctx context.Context, key string) ([]byte, err
 	reader, err := c.bucketHandle.Object(key).NewReader(ctx)
 	if err != nil {
 		// Check if the object does not exist and return the proper error
-		if err == storage.ErrObjectNotExist {
+		if errors.Is(err, storage.ErrObjectNotExist) {
 			return nil, service.ErrKeyNotFound
 		}
 		return nil, err

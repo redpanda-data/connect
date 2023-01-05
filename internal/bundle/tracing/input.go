@@ -39,7 +39,12 @@ func (t *tracedInput) loop() {
 		}
 		_ = tran.Payload.Iter(func(i int, part *message.Part) error {
 			_ = atomic.AddUint64(t.ctr, 1)
-			t.e.Add(EventProduce, string(part.AsBytes()))
+			meta := map[string]any{}
+			_ = part.MetaIterMut(func(s string, a any) error {
+				meta[s] = message.CopyJSON(a)
+				return nil
+			})
+			t.e.Add(EventProduce, string(part.AsBytes()), meta)
 			return nil
 		})
 		select {

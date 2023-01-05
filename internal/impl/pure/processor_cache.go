@@ -253,11 +253,32 @@ func cacheOperatorFromString(operator string) (cacheOperator, error) {
 
 func (c *cacheProc) ProcessBatch(ctx context.Context, spans []*tracing.Span, msg message.Batch) ([]message.Batch, error) {
 	_ = msg.Iter(func(index int, part *message.Part) error {
-		key := c.key.String(index, msg)
-		value := c.value.Bytes(index, msg)
+		key, err := c.key.String(index, msg)
+		if err != nil {
+			err = fmt.Errorf("key interpolation error: %w", err)
+			c.mgr.Logger().Debugf(err.Error())
+			processor.MarkErr(part, spans[index], err)
+			return nil
+		}
+
+		value, err := c.value.Bytes(index, msg)
+		if err != nil {
+			err = fmt.Errorf("value interpolation error: %w", err)
+			c.mgr.Logger().Debugf(err.Error())
+			processor.MarkErr(part, spans[index], err)
+			return nil
+		}
 
 		var ttl *time.Duration
-		if ttls := c.ttl.String(index, msg); ttls != "" {
+		ttls, err := c.ttl.String(index, msg)
+		if err != nil {
+			err = fmt.Errorf("ttl interpolation error: %w", err)
+			c.mgr.Logger().Debugf(err.Error())
+			processor.MarkErr(part, spans[index], err)
+			return nil
+		}
+
+		if ttls != "" {
 			td, err := time.ParseDuration(ttls)
 			if err != nil {
 				c.mgr.Logger().Debugf("TTL must be a duration: %v\n", err)
@@ -269,7 +290,6 @@ func (c *cacheProc) ProcessBatch(ctx context.Context, spans []*tracing.Span, msg
 
 		var result []byte
 		var useResult bool
-		var err error
 		if cerr := c.mgr.AccessCache(context.Background(), c.cacheName, func(cache cache.V1) {
 			result, useResult, err = c.operator(context.Background(), cache, key, value, ttl)
 		}); cerr != nil {

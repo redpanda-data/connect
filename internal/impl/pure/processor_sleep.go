@@ -60,9 +60,14 @@ func newSleep(conf processor.SleepConfig, mgr bundle.NewManagement) (*sleepProc,
 
 func (s *sleepProc) ProcessBatch(ctx context.Context, spans []*tracing.Span, msg message.Batch) ([]message.Batch, error) {
 	_ = msg.Iter(func(i int, p *message.Part) error {
-		period, err := time.ParseDuration(s.durationStr.String(i, msg))
+		periodStr, err := s.durationStr.String(i, msg)
 		if err != nil {
-			s.log.Errorf("Failed to parse duration: %v\n", err)
+			s.log.Errorf("Period interpolation error: %v", err)
+			return nil
+		}
+		period, err := time.ParseDuration(periodStr)
+		if err != nil {
+			s.log.Errorf("Failed to parse duration: %v", err)
 			return nil
 		}
 		select {

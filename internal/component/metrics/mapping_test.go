@@ -141,12 +141,12 @@ meta from_c = $c | "nope"
 `, log.Noop())
 	require.NoError(t, err)
 
-	mTwo := mOne.WithStaticVars(map[string]interface{}{
+	mTwo := mOne.WithStaticVars(map[string]any{
 		"a": "a value",
 		"b": "b value",
 	})
 
-	mThree := mTwo.WithStaticVars(map[string]interface{}{
+	mThree := mTwo.WithStaticVars(map[string]any{
 		"c": "c value",
 	})
 

@@ -1,7 +1,7 @@
 ---
 title: schema_registry_encode
 type: processor
-status: experimental
+status: beta
 categories: ["Parsing","Integration"]
 ---
 
@@ -15,8 +15,8 @@ categories: ["Parsing","Integration"]
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-:::caution EXPERIMENTAL
-This component is experimental and therefore subject to change or removal outside of major version releases.
+:::caution BETA
+This component is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with the component is found.
 :::
 Automatically encodes and validates messages with schemas from a Confluent Schema Registry service.
 
@@ -50,6 +50,22 @@ schema_registry_encode:
   subject: ""
   refresh_period: 10m
   avro_raw_json: false
+  oauth:
+    enabled: false
+    consumer_key: ""
+    consumer_secret: ""
+    access_token: ""
+    access_token_secret: ""
+  basic_auth:
+    enabled: false
+    username: ""
+    password: ""
+  jwt:
+    enabled: false
+    private_key_file: ""
+    signing_method: ""
+    claims: {}
+    headers: {}
   tls:
     skip_cert_verify: false
     enable_renegotiation: false
@@ -137,6 +153,141 @@ Type: `bool`
 Default: `false`  
 Requires version 3.59.0 or newer  
 
+### `oauth`
+
+Allows you to specify open authentication via OAuth version 1.
+
+
+Type: `object`  
+Requires version 4.7.0 or newer  
+
+### `oauth.enabled`
+
+Whether to use OAuth version 1 in requests.
+
+
+Type: `bool`  
+Default: `false`  
+
+### `oauth.consumer_key`
+
+A value used to identify the client to the service provider.
+
+
+Type: `string`  
+Default: `""`  
+
+### `oauth.consumer_secret`
+
+A secret used to establish ownership of the consumer key.
+:::warning Secret
+This field contains sensitive information that usually shouldn't be added to a config directly, read our [secrets page for more info](/docs/configuration/secrets).
+:::
+
+
+Type: `string`  
+Default: `""`  
+
+### `oauth.access_token`
+
+A value used to gain access to the protected resources on behalf of the user.
+
+
+Type: `string`  
+Default: `""`  
+
+### `oauth.access_token_secret`
+
+A secret provided in order to establish ownership of a given access token.
+:::warning Secret
+This field contains sensitive information that usually shouldn't be added to a config directly, read our [secrets page for more info](/docs/configuration/secrets).
+:::
+
+
+Type: `string`  
+Default: `""`  
+
+### `basic_auth`
+
+Allows you to specify basic authentication.
+
+
+Type: `object`  
+Requires version 4.7.0 or newer  
+
+### `basic_auth.enabled`
+
+Whether to use basic authentication in requests.
+
+
+Type: `bool`  
+Default: `false`  
+
+### `basic_auth.username`
+
+A username to authenticate as.
+
+
+Type: `string`  
+Default: `""`  
+
+### `basic_auth.password`
+
+A password to authenticate with.
+:::warning Secret
+This field contains sensitive information that usually shouldn't be added to a config directly, read our [secrets page for more info](/docs/configuration/secrets).
+:::
+
+
+Type: `string`  
+Default: `""`  
+
+### `jwt`
+
+BETA: Allows you to specify JWT authentication.
+
+
+Type: `object`  
+Requires version 4.7.0 or newer  
+
+### `jwt.enabled`
+
+Whether to use JWT authentication in requests.
+
+
+Type: `bool`  
+Default: `false`  
+
+### `jwt.private_key_file`
+
+A file with the PEM encoded via PKCS1 or PKCS8 as private key.
+
+
+Type: `string`  
+Default: `""`  
+
+### `jwt.signing_method`
+
+A method used to sign the token such as RS256, RS384 or RS512.
+
+
+Type: `string`  
+Default: `""`  
+
+### `jwt.claims`
+
+A value used to identify the claims that issued the JWT.
+
+
+Type: `object`  
+
+### `jwt.headers`
+
+Add optional key/value headers to the JWT.
+
+
+Type: `object`  
+
 ### `tls`
 
 Custom TLS settings can be used to override system defaults.
@@ -164,6 +315,9 @@ Requires version 3.45.0 or newer
 ### `tls.root_cas`
 
 An optional root certificate authority to use. This is a string, representing a certificate chain from the parent trusted root certificate, to possible intermediate signing certificates, to the host certificate.
+:::warning Secret
+This field contains sensitive information that usually shouldn't be added to a config directly, read our [secrets page for more info](/docs/configuration/secrets).
+:::
 
 
 Type: `string`  
@@ -222,6 +376,9 @@ Default: `""`
 ### `tls.client_certs[].key`
 
 A plain text certificate key to use.
+:::warning Secret
+This field contains sensitive information that usually shouldn't be added to a config directly, read our [secrets page for more info](/docs/configuration/secrets).
+:::
 
 
 Type: `string`  
@@ -245,7 +402,10 @@ Default: `""`
 
 ### `tls.client_certs[].password`
 
-A plain text password for when the private key is a password encrypted PEM block according to RFC 1423. Warning: Since it does not authenticate the ciphertext, it is vulnerable to padding oracle attacks that can let an attacker recover the plaintext.
+A plain text password for when the private key is password encrypted in PKCS#1 or PKCS#8 format. The obsolete `pbeWithMD5AndDES-CBC` algorithm is not supported for the PKCS#8 format. Warning: Since it does not authenticate the ciphertext, it is vulnerable to padding oracle attacks that can let an attacker recover the plaintext.
+:::warning Secret
+This field contains sensitive information that usually shouldn't be added to a config directly, read our [secrets page for more info](/docs/configuration/secrets).
+:::
 
 
 Type: `string`  

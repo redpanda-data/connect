@@ -6,12 +6,12 @@ package shared
 import (
 	"fmt"
 	"net"
-	"os"
 
 	"github.com/pkg/sftp"
 	"golang.org/x/crypto/ssh"
 
 	"github.com/benthosdev/benthos/v4/internal/docs"
+	"github.com/benthosdev/benthos/v4/internal/filepath/ifs"
 )
 
 // CredentialsDocs returns a documentation field spec for SFTP credentials
@@ -19,13 +19,13 @@ import (
 func CredentialsDocs() docs.FieldSpecs {
 	return docs.FieldSpecs{
 		docs.FieldString("username", "The username to connect to the SFTP server."),
-		docs.FieldString("password", "The password for the username to connect to the SFTP server."),
+		docs.FieldString("password", "The password for the username to connect to the SFTP server.").Secret(),
 		docs.FieldString("private_key_file", "The private key for the username to connect to the SFTP server."),
-		docs.FieldString("private_key_pass", "Optional passphrase for private key."),
+		docs.FieldString("private_key_pass", "Optional passphrase for private key.").Secret(),
 	}
 }
 
-// Credentials contains the credentials for connecting to the SFTP server
+// Credentials contains the credentials for connecting to the SFTP server.
 type Credentials struct {
 	Username       string `json:"username" yaml:"username"`
 	Password       string `json:"password" yaml:"password"`
@@ -35,7 +35,7 @@ type Credentials struct {
 
 // GetClient establishes a fresh sftp client from a set of credentials and an
 // address.
-func (c Credentials) GetClient(address string) (*sftp.Client, error) {
+func (c Credentials) GetClient(fs ifs.FS, address string) (*sftp.Client, error) {
 	host, port, err := net.SplitHostPort(address)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse address: %v", err)
@@ -69,7 +69,7 @@ func (c Credentials) GetClient(address string) (*sftp.Client, error) {
 	if c.PrivateKeyFile != "" {
 		// read private key file
 		var privateKey []byte
-		privateKey, err = os.ReadFile(c.PrivateKeyFile)
+		privateKey, err = ifs.ReadFile(fs, c.PrivateKeyFile)
 		if err != nil {
 			return nil, fmt.Errorf("failed to read private key: %v", err)
 		}
@@ -101,7 +101,7 @@ func (c Credentials) GetClient(address string) (*sftp.Client, error) {
 	return client, nil
 }
 
-// Server contains connection data for connecting to an SFTP server
+// Server contains connection data for connecting to an SFTP server.
 type Server struct {
 	Address   string          // host:port
 	Host      string          // IP address
@@ -113,20 +113,20 @@ type Server struct {
 	PublicKey ssh.PublicKey   // server's public key
 }
 
-// HostAuthorityCallback used when setting up the connection to the SFTP server
+// HostAuthorityCallback used when setting up the connection to the SFTP server.
 type HostAuthorityCallback func(ssh.PublicKey, string) bool
 
-// IsRevokedCallback used when setting up the connection to the SFTP server
+// IsRevokedCallback used when setting up the connection to the SFTP server.
 type IsRevokedCallback func(cert *ssh.Certificate) bool
 
-// HostAuthCallback is called when setting up the connection to the SFTP server
+// HostAuthCallback is called when setting up the connection to the SFTP server.
 func HostAuthCallback() HostAuthorityCallback {
 	return func(p ssh.PublicKey, addr string) bool {
 		return true
 	}
 }
 
-// CertCallback is called when setting up the connection to the SFTP server
+// CertCallback is called when setting up the connection to the SFTP server.
 func CertCallback(s *Server) IsRevokedCallback {
 	return func(cert *ssh.Certificate) bool {
 		s.Cert = *cert
@@ -136,7 +136,7 @@ func CertCallback(s *Server) IsRevokedCallback {
 	}
 }
 
-// HostCallback is called when setting up the connection to the SFTP server
+// HostCallback is called when setting up the connection to the SFTP server.
 func HostCallback(s *Server) ssh.HostKeyCallback {
 	return func(hostname string, remote net.Addr, key ssh.PublicKey) error {
 		s.Hostname = hostname

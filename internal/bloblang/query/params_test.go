@@ -71,8 +71,8 @@ func TestParamsNameless(t *testing.T) {
 	tests := []struct {
 		name        string
 		params      Params
-		input       []interface{}
-		output      []interface{}
+		input       []any
+		output      []any
 		errContains string
 	}{
 		{
@@ -85,11 +85,11 @@ func TestParamsNameless(t *testing.T) {
 				Add(ParamQuery("fifth", "", false)).
 				Add(ParamArray("sixth", "")).
 				Add(ParamObject("seventh", "")),
-			input: []interface{}{
-				"foo", 5, false, 6.4, NewFieldFunction("nah"), []interface{}{"one", "two"}, map[string]interface{}{"a": "aaa", "b": "bbb"},
+			input: []any{
+				"foo", 5, false, 6.4, NewFieldFunction("nah"), []any{"one", "two"}, map[string]any{"a": "aaa", "b": "bbb"},
 			},
-			output: []interface{}{
-				"foo", int64(5), false, 6.4, NewFieldFunction("nah"), []interface{}{"one", "two"}, map[string]interface{}{"a": "aaa", "b": "bbb"},
+			output: []any{
+				"foo", int64(5), false, 6.4, NewFieldFunction("nah"), []any{"one", "two"}, map[string]any{"a": "aaa", "b": "bbb"},
 			},
 		},
 		{
@@ -98,8 +98,8 @@ func TestParamsNameless(t *testing.T) {
 				Add(ParamString("first", "")).
 				Add(ParamInt64("second", "").Default(5)).
 				Add(ParamBool("third", "").Default(true)),
-			input: []interface{}{"bar"},
-			output: []interface{}{
+			input: []any{"bar"},
+			output: []any{
 				"bar", int64(5), true,
 			},
 		},
@@ -109,8 +109,8 @@ func TestParamsNameless(t *testing.T) {
 				Add(ParamString("first", "")).
 				Add(ParamInt64("second", "").Optional()).
 				Add(ParamBool("third", "").Optional()),
-			input: []interface{}{"bar"},
-			output: []interface{}{
+			input: []any{"bar"},
+			output: []any{
 				"bar", nil, nil,
 			},
 		},
@@ -120,7 +120,7 @@ func TestParamsNameless(t *testing.T) {
 				Add(ParamString("first", "")).
 				Add(ParamInt64("second", "").Default(5)).
 				Add(ParamBool("third", "").Default(true)),
-			input:       []interface{}{},
+			input:       []any{},
 			errContains: "missing parameter: first",
 		},
 		{
@@ -129,7 +129,7 @@ func TestParamsNameless(t *testing.T) {
 				Add(ParamString("first", "")).
 				Add(ParamInt64("second", "")).
 				Add(ParamBool("third", "")),
-			input:       []interface{}{},
+			input:       []any{},
 			errContains: "missing parameters: first, second, third",
 		},
 		{
@@ -138,7 +138,7 @@ func TestParamsNameless(t *testing.T) {
 				Add(ParamString("first", "")).
 				Add(ParamInt64("second", "").Default(5)).
 				Add(ParamBool("third", "").Default(true)),
-			input:       []interface{}{"foo", 10, false, "bar"},
+			input:       []any{"foo", 10, false, "bar"},
 			errContains: "wrong number of arguments, expected 3, got 4",
 		},
 		{
@@ -147,29 +147,29 @@ func TestParamsNameless(t *testing.T) {
 				Add(ParamString("first", "")).
 				Add(ParamInt64("second", "").Default(5)).
 				Add(ParamBool("third", "").Default(true)),
-			input:       []interface{}{"foo", true, 10},
+			input:       []any{"foo", true, 10},
 			errContains: "field second: expected number",
 		},
 		{
 			name: "bad query type",
 			params: NewParams().
 				Add(ParamQuery("first", "", false)),
-			input:       []interface{}{"foo"},
+			input:       []any{"foo"},
 			errContains: "field first: wrong argument type, expected query expression",
 		},
 		{
 			name: "recast scalar type",
 			params: NewParams().
 				Add(ParamQuery("first", "", true)),
-			input:  []interface{}{"foo"},
-			output: []interface{}{NewLiteralFunction("", "foo")},
+			input:  []any{"foo"},
+			output: []any{NewLiteralFunction("", "foo")},
 		},
 		{
 			name: "dont recast query type",
 			params: NewParams().
 				Add(ParamQuery("first", "", true)),
-			input:  []interface{}{NewFieldFunction("foo")},
-			output: []interface{}{NewFieldFunction("foo")},
+			input:  []any{NewFieldFunction("foo")},
+			output: []any{NewFieldFunction("foo")},
 		},
 		{
 			name: "function args unchanged",
@@ -177,10 +177,10 @@ func TestParamsNameless(t *testing.T) {
 				Add(ParamString("first", "")).
 				Add(ParamInt64("second", "").Default(5)).
 				Add(ParamBool("third", "")),
-			input: []interface{}{
+			input: []any{
 				"foo", NewFieldFunction("doc.value"), false,
 			},
-			output: []interface{}{
+			output: []any{
 				"foo", NewFieldFunction("doc.value"), false,
 			},
 		},
@@ -190,20 +190,20 @@ func TestParamsNameless(t *testing.T) {
 				Add(ParamString("first", "")).
 				Add(ParamInt64("second", "").Default(5)).
 				Add(ParamBool("third", "")),
-			input: []interface{}{
+			input: []any{
 				"foo", NewLiteralFunction("testing", int64(7)), false,
 			},
-			output: []interface{}{
+			output: []any{
 				"foo", int64(7), false,
 			},
 		},
 		{
 			name:   "variadic args expanded",
 			params: VariadicParams(),
-			input: []interface{}{
+			input: []any{
 				"foo", NewLiteralFunction("testing", int64(7)), false,
 			},
-			output: []interface{}{
+			output: []any{
 				"foo", int64(7), false,
 			},
 		},
@@ -227,8 +227,8 @@ func TestParamsNamed(t *testing.T) {
 	tests := []struct {
 		name        string
 		params      Params
-		input       map[string]interface{}
-		output      []interface{}
+		input       map[string]any
+		output      []any
 		errContains string
 	}{
 		{
@@ -241,13 +241,13 @@ func TestParamsNamed(t *testing.T) {
 				Add(ParamQuery("fifth", "", false)).
 				Add(ParamArray("sixth", "")).
 				Add(ParamObject("seventh", "")),
-			input: map[string]interface{}{
+			input: map[string]any{
 				"first": "foo", "second": 5, "third": false, "fourth": 6.4,
-				"fifth": NewFieldFunction("nah"), "sixth": []interface{}{"one", "two"},
-				"seventh": map[string]interface{}{"a": "aaa", "b": "bbb"},
+				"fifth": NewFieldFunction("nah"), "sixth": []any{"one", "two"},
+				"seventh": map[string]any{"a": "aaa", "b": "bbb"},
 			},
-			output: []interface{}{
-				"foo", int64(5), false, 6.4, NewFieldFunction("nah"), []interface{}{"one", "two"}, map[string]interface{}{"a": "aaa", "b": "bbb"},
+			output: []any{
+				"foo", int64(5), false, 6.4, NewFieldFunction("nah"), []any{"one", "two"}, map[string]any{"a": "aaa", "b": "bbb"},
 			},
 		},
 		{
@@ -256,8 +256,8 @@ func TestParamsNamed(t *testing.T) {
 				Add(ParamString("first", "")).
 				Add(ParamInt64("second", "").Default(5)).
 				Add(ParamBool("third", "").Default(true)),
-			input: map[string]interface{}{"first": "bar"},
-			output: []interface{}{
+			input: map[string]any{"first": "bar"},
+			output: []any{
 				"bar", int64(5), true,
 			},
 		},
@@ -267,8 +267,8 @@ func TestParamsNamed(t *testing.T) {
 				Add(ParamString("first", "")).
 				Add(ParamInt64("second", "").Optional()).
 				Add(ParamBool("third", "").Optional()),
-			input: map[string]interface{}{"first": "bar"},
-			output: []interface{}{
+			input: map[string]any{"first": "bar"},
+			output: []any{
 				"bar", nil, nil,
 			},
 		},
@@ -278,7 +278,7 @@ func TestParamsNamed(t *testing.T) {
 				Add(ParamString("first", "")).
 				Add(ParamInt64("second", "").Default(5)).
 				Add(ParamBool("third", "").Default(true)),
-			input:       map[string]interface{}{},
+			input:       map[string]any{},
 			errContains: "missing parameter: first",
 		},
 		{
@@ -287,7 +287,7 @@ func TestParamsNamed(t *testing.T) {
 				Add(ParamString("first", "")).
 				Add(ParamInt64("second", "")).
 				Add(ParamBool("third", "")),
-			input:       map[string]interface{}{},
+			input:       map[string]any{},
 			errContains: "missing parameters: first, second, third",
 		},
 		{
@@ -296,8 +296,9 @@ func TestParamsNamed(t *testing.T) {
 				Add(ParamString("first", "")).
 				Add(ParamInt64("second", "").Default(5)).
 				Add(ParamBool("third", "").Default(true)),
-			input: map[string]interface{}{
-				"first": "foo", "second": 10, "third": false, "fourth": "bar"},
+			input: map[string]any{
+				"first": "foo", "second": 10, "third": false, "fourth": "bar",
+			},
 			errContains: "unknown parameter fourth",
 		},
 		{
@@ -306,8 +307,9 @@ func TestParamsNamed(t *testing.T) {
 				Add(ParamString("first", "")).
 				Add(ParamInt64("second", "")).
 				Add(ParamBool("third", "").Default(true)),
-			input: map[string]interface{}{
-				"first": "foo", "seconde": 10, "third": false},
+			input: map[string]any{
+				"first": "foo", "seconde": 10, "third": false,
+			},
 			errContains: "unknown parameter seconde, did you mean second?",
 		},
 		{
@@ -316,8 +318,9 @@ func TestParamsNamed(t *testing.T) {
 				Add(ParamString("first", "")).
 				Add(ParamInt64("second", "")).
 				Add(ParamBool("third", "")),
-			input: map[string]interface{}{
-				"first": "foo", "seconde": 10, "thirde": false},
+			input: map[string]any{
+				"first": "foo", "seconde": 10, "thirde": false,
+			},
 			errContains: "unknown parameters seconde, thirde, expected second, third",
 		},
 		{
@@ -326,29 +329,29 @@ func TestParamsNamed(t *testing.T) {
 				Add(ParamString("first", "")).
 				Add(ParamInt64("second", "").Default(5)).
 				Add(ParamBool("third", "").Default(true)),
-			input:       map[string]interface{}{"first": "foo", "second": true, "third": 10},
+			input:       map[string]any{"first": "foo", "second": true, "third": 10},
 			errContains: "field second: expected number",
 		},
 		{
 			name: "bad query type",
 			params: NewParams().
 				Add(ParamQuery("first", "", false)),
-			input:       map[string]interface{}{"first": "foo"},
+			input:       map[string]any{"first": "foo"},
 			errContains: "field first: wrong argument type, expected query expression",
 		},
 		{
 			name: "recast scalar type",
 			params: NewParams().
 				Add(ParamQuery("first", "", true)),
-			input:  map[string]interface{}{"first": "foo"},
-			output: []interface{}{NewLiteralFunction("", "foo")},
+			input:  map[string]any{"first": "foo"},
+			output: []any{NewLiteralFunction("", "foo")},
 		},
 		{
 			name: "dont recast query type",
 			params: NewParams().
 				Add(ParamQuery("first", "", true)),
-			input:  map[string]interface{}{"first": NewFieldFunction("foo")},
-			output: []interface{}{NewFieldFunction("foo")},
+			input:  map[string]any{"first": NewFieldFunction("foo")},
+			output: []any{NewFieldFunction("foo")},
 		},
 		{
 			name: "function args unchanged",
@@ -356,10 +359,10 @@ func TestParamsNamed(t *testing.T) {
 				Add(ParamString("first", "")).
 				Add(ParamInt64("second", "").Default(5)).
 				Add(ParamBool("third", "")),
-			input: map[string]interface{}{
+			input: map[string]any{
 				"first": "foo", "second": NewFieldFunction("doc.value"), "third": false,
 			},
-			output: []interface{}{
+			output: []any{
 				"foo", NewFieldFunction("doc.value"), false,
 			},
 		},
@@ -369,10 +372,10 @@ func TestParamsNamed(t *testing.T) {
 				Add(ParamString("first", "")).
 				Add(ParamInt64("second", "").Default(5)).
 				Add(ParamBool("third", "")),
-			input: map[string]interface{}{
+			input: map[string]any{
 				"first": "foo", "second": NewLiteralFunction("testing", 7), "third": false,
 			},
-			output: []interface{}{
+			output: []any{
 				"foo", int64(7), false,
 			},
 		},
@@ -399,14 +402,14 @@ func TestDynamicArgs(t *testing.T) {
 		Add(ParamString("baz", ""))
 
 	exp := []dynamicArgIndex(nil)
-	res := p.gatherDynamicArgs([]interface{}{"first", "second", "third"})
+	res := p.gatherDynamicArgs([]any{"first", "second", "third"})
 	assert.Equal(t, exp, res)
 
 	exp = []dynamicArgIndex{
 		{index: 0, fn: NewFieldFunction("first")},
 		{index: 2, fn: NewFieldFunction("third")},
 	}
-	res = p.gatherDynamicArgs([]interface{}{
+	res = p.gatherDynamicArgs([]any{
 		NewFieldFunction("first"),
 		NewFieldFunction("second"),
 		NewFieldFunction("third"),
@@ -418,10 +421,10 @@ func TestDynamicVariadicArgs(t *testing.T) {
 	p := VariadicParams()
 
 	exp := []dynamicArgIndex(nil)
-	res := p.gatherDynamicArgs([]interface{}{"first", "second", "third"})
+	res := p.gatherDynamicArgs([]any{"first", "second", "third"})
 	assert.Equal(t, exp, res)
 
-	dynArgs := []interface{}{
+	dynArgs := []any{
 		NewFieldFunction("first"),
 		NewFieldFunction("second"),
 		NewFieldFunction("third"),
@@ -438,14 +441,14 @@ func TestDynamicVariadicArgs(t *testing.T) {
 	parsed, err := p.PopulateNameless(dynArgs...)
 	require.NoError(t, err)
 
-	newParsed, err := parsed.ResolveDynamic(FunctionContext{}.WithValue(map[string]interface{}{
+	newParsed, err := parsed.ResolveDynamic(FunctionContext{}.WithValue(map[string]any{
 		"first":  "first value",
 		"second": "second value",
 		"third":  "third value",
 	}))
 	require.NoError(t, err)
 
-	assert.Equal(t, []interface{}{"first value", "second value", "third value"}, newParsed.Raw())
+	assert.Equal(t, []any{"first value", "second value", "third value"}, newParsed.Raw())
 }
 
 func TestParsedParamsNameless(t *testing.T) {
@@ -458,7 +461,7 @@ func TestParsedParamsNameless(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Empty(t, parsed.dynamic())
-	assert.Equal(t, []interface{}{
+	assert.Equal(t, []any{
 		"foo", int64(9), true,
 	}, parsed.Raw())
 
@@ -502,7 +505,7 @@ func TestParsedParamsNamed(t *testing.T) {
 		Add(ParamInt64("second", "").Default(5)).
 		Add(ParamBool("third", ""))
 
-	parsed, err := params.PopulateNamed(map[string]interface{}{
+	parsed, err := params.PopulateNamed(map[string]any{
 		"first":  "foo",
 		"second": 9,
 		"third":  true,
@@ -510,7 +513,7 @@ func TestParsedParamsNamed(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Empty(t, parsed.dynamic())
-	assert.Equal(t, []interface{}{
+	assert.Equal(t, []any{
 		"foo", int64(9), true,
 	}, parsed.Raw())
 
@@ -562,16 +565,16 @@ func TestParsedParamsDynamic(t *testing.T) {
 		NewFieldFunction("doc.bar"),
 	}, parsed.dynamic())
 
-	parsedTwo, err := parsed.ResolveDynamic(FunctionContext{}.WithValue(map[string]interface{}{
-		"doc": map[string]interface{}{
+	parsedTwo, err := parsed.ResolveDynamic(FunctionContext{}.WithValue(map[string]any{
+		"doc": map[string]any{
 			"foo": "foo first value",
 			"bar": true,
 		},
 	}))
 	require.NoError(t, err)
 
-	parsedThree, err := parsed.ResolveDynamic(FunctionContext{}.WithValue(map[string]interface{}{
-		"doc": map[string]interface{}{
+	parsedThree, err := parsed.ResolveDynamic(FunctionContext{}.WithValue(map[string]any{
+		"doc": map[string]any{
 			"foo": "foo second value",
 			"bar": false,
 		},
@@ -579,13 +582,13 @@ func TestParsedParamsDynamic(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Empty(t, parsedTwo.dynamic())
-	assert.Equal(t, []interface{}{
+	assert.Equal(t, []any{
 		"foo first value", int64(9), true,
 	}, parsedTwo.Raw())
 
 	require.NoError(t, err)
 	assert.Empty(t, parsedThree.dynamic())
-	assert.Equal(t, []interface{}{
+	assert.Equal(t, []any{
 		"foo second value", int64(9), false,
 	}, parsedThree.Raw())
 }
@@ -593,7 +596,7 @@ func TestParsedParamsDynamic(t *testing.T) {
 func TestParsedParamsDynamicErrors(t *testing.T) {
 	tests := []struct {
 		name        string
-		input       interface{}
+		input       any
 		errContains string
 	}{
 		{
@@ -602,8 +605,8 @@ func TestParsedParamsDynamicErrors(t *testing.T) {
 		},
 		{
 			name: "function gives wrong type",
-			input: map[string]interface{}{
-				"doc": map[string]interface{}{
+			input: map[string]any{
+				"doc": map[string]any{
 					"foo": 60,
 					"bar": "not a bool",
 				},

@@ -42,7 +42,7 @@ func TestGCPBigQuerySelectProcessor(t *testing.T) {
 	mockClient := &mockBQClient{}
 	proc.client = mockClient
 
-	expected := []map[string]interface{}{
+	expected := []map[string]any{
 		{"total_count": 25568, "word": "the"},
 		{"total_count": 19649, "word": "and"},
 	}

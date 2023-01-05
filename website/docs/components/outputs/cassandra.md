@@ -69,6 +69,7 @@ output:
     query: ""
     args_mapping: ""
     consistency: QUORUM
+    logged_batch: true
     max_retries: 3
     backoff:
       initial_interval: 1s
@@ -86,7 +87,7 @@ output:
 </TabItem>
 </Tabs>
 
-Query arguments can be set using [interpolation functions](/docs/configuration/interpolation#bloblang-queries) in the `args` field or by creating a bloblang array for the fields using the `args_mapping` field.
+Query arguments can be set using a bloblang array for the fields using the `args_mapping` field.
 
 When populating timestamp columns the value must either be a string in ISO 8601 format (2006-01-02T15:04:05Z07:00), or an integer representing unix time in seconds.
 
@@ -109,7 +110,7 @@ Batches can be formed at both the input and output level. You can find out more
 
 <TabItem value="Basic Inserts">
 
-If we were to create a table with some basic columns with `CREATE TABLE foo.bar (id int primary key, content text, created_at timestamp);`, and were processing JSON documents of the form `{"id":"342354354","content":"hello world","timestamp":1605219406}`, we could populate our table with the following config:
+If we were to create a table with some basic columns with `CREATE TABLE foo.bar (id int primary key, content text, created_at timestamp);`, and were processing JSON documents of the form `{"id":"342354354","content":"hello world","timestamp":1605219406}` using logged batches, we could populate our table with the following config:
 
 ```yaml
 output:
@@ -125,6 +126,7 @@ output:
       ]
     batching:
       count: 500
+      period: 1s
 ```
 
 </TabItem>
@@ -141,6 +143,7 @@ output:
     args_mapping: 'root = [ this ]'
     batching:
       count: 500
+      period: 1s
 ```
 
 </TabItem>
@@ -205,6 +208,9 @@ Requires version 3.45.0 or newer
 ### `tls.root_cas`
 
 An optional root certificate authority to use. This is a string, representing a certificate chain from the parent trusted root certificate, to possible intermediate signing certificates, to the host certificate.
+:::warning Secret
+This field contains sensitive information that usually shouldn't be added to a config directly, read our [secrets page for more info](/docs/configuration/secrets).
+:::
 
 
 Type: `string`  
@@ -264,6 +270,9 @@ Default: `""`
 ### `tls.client_certs[].key`
 
 A plain text certificate key to use.
+:::warning Secret
+This field contains sensitive information that usually shouldn't be added to a config directly, read our [secrets page for more info](/docs/configuration/secrets).
+:::
 
 
 Type: `string`  
@@ -287,7 +296,10 @@ Default: `""`
 
 ### `tls.client_certs[].password`
 
-A plain text password for when the private key is a password encrypted PEM block according to RFC 1423. Warning: Since it does not authenticate the ciphertext, it is vulnerable to padding oracle attacks that can let an attacker recover the plaintext.
+A plain text password for when the private key is password encrypted in PKCS#1 or PKCS#8 format. The obsolete `pbeWithMD5AndDES-CBC` algorithm is not supported for the PKCS#8 format. Warning: Since it does not authenticate the ciphertext, it is vulnerable to padding oracle attacks that can let an attacker recover the plaintext.
+:::warning Secret
+This field contains sensitive information that usually shouldn't be added to a config directly, read our [secrets page for more info](/docs/configuration/secrets).
+:::
 
 
 Type: `string`  
@@ -327,6 +339,9 @@ Default: `""`
 ### `password_authenticator.password`
 
 A password.
+:::warning Secret
+This field contains sensitive information that usually shouldn't be added to a config directly, read our [secrets page for more info](/docs/configuration/secrets).
+:::
 
 
 Type: `string`  
@@ -365,6 +380,14 @@ The consistency level to use.
 Type: `string`  
 Default: `"QUORUM"`  
 Options: `ANY`, `ONE`, `TWO`, `THREE`, `QUORUM`, `ALL`, `LOCAL_QUORUM`, `EACH_QUORUM`, `LOCAL_ONE`.
+
+### `logged_batch`
+
+If enabled the driver will perform a logged batch. Disabling this prompts unlogged batches to be used instead, which are less efficient but necessary for alternative storages that do not support logged batches.
+
+
+Type: `bool`  
+Default: `true`  
 
 ### `max_retries`
 

@@ -10,8 +10,7 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/component/output/batcher"
 	"github.com/benthosdev/benthos/v4/internal/component/output/processors"
 	"github.com/benthosdev/benthos/v4/internal/docs"
-	"github.com/benthosdev/benthos/v4/internal/http"
-	ihttpdocs "github.com/benthosdev/benthos/v4/internal/http/docs"
+	"github.com/benthosdev/benthos/v4/internal/httpclient"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
 	"github.com/benthosdev/benthos/v4/internal/transaction"
@@ -31,14 +30,14 @@ The body of the HTTP request is the raw contents of the message payload. If the 
 ### Propagating Responses
 
 It's possible to propagate the response from each HTTP request back to the input source by setting `+"`propagate_response` to `true`"+`. Only inputs that support [synchronous responses](/docs/guides/sync_responses) are able to make use of these propagated responses.`),
-		Config: ihttpdocs.ClientFieldSpec(true,
+		Config: httpclient.OldFieldSpec(true,
 			docs.FieldBool("batch_as_multipart", "Send message batches as a single request using [RFC1341](https://www.w3.org/Protocols/rfc1341/7_2_Multipart.html). If disabled messages in batches will be sent as individual requests.").Advanced(),
 			docs.FieldBool("propagate_response", "Whether responses from the server should be [propagated back](/docs/guides/sync_responses) to the input.").Advanced(),
 			docs.FieldInt("max_in_flight", "The maximum number of parallel message batches to have in flight at any given time."),
 			policy.FieldSpec(),
 			docs.FieldObject(
 				"multipart", "EXPERIMENTAL: Create explicit multipart HTTP requests by specifying an array of parts to add to the request, each part specified consists of content headers and a data field that can be populated dynamically. If this field is populated it will override the default request creation behaviour.",
-			).Array().Advanced().HasDefault([]interface{}{}).WithChildren(
+			).Array().Advanced().HasDefault([]any{}).WithChildren(
 				docs.FieldInterpolatedString("content_type", "The content type of the individual message part.", "application/bin").HasDefault(""),
 				docs.FieldInterpolatedString("content_disposition", "The content disposition of the individual message part.", `form-data; name="bin"; filename='${! meta("AttachmentName") }`).HasDefault(""),
 				docs.FieldInterpolatedString("body", "The body of the individual message part.", `${! json("data.part1") }`).HasDefault(""),
@@ -69,7 +68,7 @@ func newHTTPClientOutput(conf output.Config, mgr bundle.NewManagement) (output.S
 }
 
 type httpClientWriter struct {
-	client *http.Client
+	client *httpclient.Client
 
 	log log.Modular
 
@@ -82,16 +81,11 @@ func newHTTPClientWriter(conf output.HTTPClientConfig, mgr bundle.NewManagement)
 		conf: conf,
 	}
 
-	opts := []func(*http.Client){
-		http.OptSetLogger(h.log),
-		http.OptSetManager(mgr),
-		http.OptSetStats(mgr.Metrics()),
-	}
-
+	opts := []httpclient.RequestOpt{}
 	if len(conf.Multipart) > 0 {
-		parts := make([]http.MultipartExpressions, len(conf.Multipart))
+		parts := make([]httpclient.MultipartExpressions, len(conf.Multipart))
 		for i, p := range conf.Multipart {
-			var exprPart http.MultipartExpressions
+			var exprPart httpclient.MultipartExpressions
 			var err error
 			if exprPart.ContentDisposition, err = mgr.BloblEnvironment().NewField(p.ContentDisposition); err != nil {
 				return nil, fmt.Errorf("failed to parse multipart %v field content_disposition: %v", i, err)
@@ -104,11 +98,11 @@ func newHTTPClientWriter(conf output.HTTPClientConfig, mgr bundle.NewManagement)
 			}
 			parts[i] = exprPart
 		}
-		opts = append(opts, http.OptSetMultiPart(parts))
+		opts = append(opts, httpclient.WithExplicitMultipart(parts))
 	}
 
 	var err error
-	if h.client, err = http.NewClient(conf.Config, opts...); err != nil {
+	if h.client, err = httpclient.NewClientFromOldConfig(conf.OldConfig, mgr, opts...); err != nil {
 		return nil, err
 	}
 	return &h, nil
@@ -120,7 +114,7 @@ func (h *httpClientWriter) Connect(ctx context.Context) error {
 }
 
 func (h *httpClientWriter) WriteBatch(ctx context.Context, msg message.Batch) error {
-	resultMsg, err := h.client.Send(ctx, msg, msg)
+	resultMsg, err := h.client.Send(ctx, msg)
 	if err == nil && h.conf.PropagateResponse {
 		parts := make([]*message.Part, resultMsg.Len())
 		_ = resultMsg.Iter(func(i int, p *message.Part) error {
@@ -131,8 +125,8 @@ func (h *httpClientWriter) WriteBatch(ctx context.Context, msg message.Batch) er
 			}
 			parts[i].SetBytes(p.AsBytes())
 
-			_ = p.MetaIter(func(k, v string) error {
-				parts[i].MetaSet(k, v)
+			_ = p.MetaIterMut(func(k string, v any) error {
+				parts[i].MetaSetMut(k, v)
 				return nil
 			})
 

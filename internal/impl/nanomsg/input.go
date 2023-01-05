@@ -22,7 +22,7 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
 
-	// Import all transport types
+	// Import all transport types.
 	_ "go.nanomsg.org/mangos/v3/transport/all"
 )
 
@@ -32,7 +32,7 @@ func init() {
 		Summary:     `Consumes messages via Nanomsg sockets (scalability protocols).`,
 		Description: `Currently only PULL and SUB sockets are supported.`,
 		Config: docs.FieldComponent().WithChildren(
-			docs.FieldString("urls", "A list of URLs to connect to (or as). If an item of the list contains commas it will be expanded into multiple URLs.").Array(),
+			docs.FieldURL("urls", "A list of URLs to connect to (or as). If an item of the list contains commas it will be expanded into multiple URLs.").Array(),
 			docs.FieldBool("bind", "Whether the URLs provided should be connected to, or bound as."),
 			docs.FieldString("socket_type", "The socket type to use.").HasOptions("PULL", "SUB"),
 			docs.FieldString("sub_filters", "A list of subscription topic filters to use when consuming from a SUB socket. Specifying a single sub_filter of `''` will subscribe to everything.").Array(),
@@ -52,7 +52,7 @@ func newNanomsgInput(conf input.Config, mgr bundle.NewManagement) (input.Streame
 	if err != nil {
 		return nil, err
 	}
-	return input.NewAsyncReader("nanomsg", true, input.NewAsyncPreserver(s), mgr)
+	return input.NewAsyncReader("nanomsg", input.NewAsyncPreserver(s), mgr)
 }
 
 type nanomsgReader struct {
@@ -194,7 +194,7 @@ func (s *nanomsgReader) ReadBatch(ctx context.Context) (message.Batch, input.Asy
 	}
 	data, err := socket.Recv()
 	if err != nil {
-		if err == mangos.ErrRecvTimeout {
+		if errors.Is(err, mangos.ErrRecvTimeout) {
 			return nil, nil, component.ErrTimeout
 		}
 		return nil, nil, err

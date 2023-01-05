@@ -2,6 +2,7 @@
 
 TAGS ?=
 
+GOMAXPROCS         ?= 1
 INSTALL_DIR        ?= $(GOPATH)/bin
 WEBSITE_DIR        ?= ./website
 DEST_DIR           ?= ./target
@@ -30,6 +31,7 @@ APPS = benthos
 all: $(APPS)
 
 install: $(APPS)
+	@install -d $(INSTALL_DIR)
 	@rm -f $(INSTALL_DIR)/benthos
 	@cp $(PATHINSTBIN)/* $(INSTALL_DIR)/
 
@@ -86,7 +88,7 @@ fmt:
 
 lint:
 	@go vet $(GO_FLAGS) ./...
-	@golangci-lint run --timeout 5m cmd/... internal/... public/...
+	@golangci-lint -j $(GOMAXPROCS) run --timeout 5m cmd/... internal/... public/...
 
 test: $(APPS)
 	@go test $(GO_FLAGS) -ldflags "$(LD_FLAGS)" -timeout 3m ./...

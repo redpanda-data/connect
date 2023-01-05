@@ -75,11 +75,11 @@ limit: 100000
 	defer block.Close(ctx)
 
 	inMsg := service.NewMessage(nil)
-	inMsg.SetStructuredMut(map[string]interface{}{
+	inMsg.SetStructuredMut(map[string]any{
 		"hello": "world",
 	})
 
-	require.NoError(t, block.WriteBatch(ctx, service.MessageBatch{inMsg}, func(ctx context.Context, err error) error {
+	require.NoError(t, block.WriteBatch(ctx, service.MessageBatch{inMsg}, func(ctx context.Context, _ error) error {
 		inStruct, err := inMsg.AsStructuredMut()
 		require.NoError(t, err)
 		_, err = gabs.Wrap(inStruct).Set("quack", "moo")
@@ -93,7 +93,7 @@ limit: 100000
 
 	outStruct, err := outBatch[0].AsStructuredMut()
 	require.NoError(t, err)
-	assert.Equal(t, map[string]interface{}{
+	assert.Equal(t, map[string]any{
 		"hello": "world",
 	}, outStruct)
 
@@ -104,7 +104,7 @@ limit: 100000
 
 	inStruct, err := inMsg.AsStructured()
 	require.NoError(t, err)
-	assert.Equal(t, map[string]interface{}{
+	assert.Equal(t, map[string]any{
 		"hello": "world",
 		"moo":   "quack",
 	}, inStruct)

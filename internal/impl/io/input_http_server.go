@@ -28,7 +28,7 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/internal/component/ratelimit"
 	"github.com/benthosdev/benthos/v4/internal/docs"
-	httpdocs "github.com/benthosdev/benthos/v4/internal/http/docs"
+	"github.com/benthosdev/benthos/v4/internal/httpserver"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
 	imetadata "github.com/benthosdev/benthos/v4/internal/metadata"
@@ -39,7 +39,7 @@ import (
 )
 
 func init() {
-	corsSpec := httpdocs.ServerCORSFieldSpec()
+	corsSpec := httpserver.ServerCORSFieldSpec()
 	corsSpec.Description += " Only valid with a custom `address`."
 
 	err := bundle.AllInputs.Add(processors.WrapConstructor(newHTTPServerInput), docs.ComponentSpec{
@@ -94,7 +94,7 @@ If HTTPS is enabled, the following fields are added as well:
 - http_server_tls_subject
 - http_server_tls_cipher_suite
 ` + "```" + `
-You can access these metadata fields using [function interpolation](/docs/configuration/interpolation#metadata).`,
+You can access these metadata fields using [function interpolation](/docs/configuration/interpolation#bloblang-queries).`,
 		Config: docs.FieldComponent().WithChildren(
 			docs.FieldString("address", "An alternative address to host from. If left empty the service wide address is used."),
 			docs.FieldString("path", "The endpoint path to listen for POST requests."),
@@ -269,7 +269,7 @@ func (h *httpServerInput) extractMessageFromRequest(r *http.Request) (message.Ba
 		for {
 			var p *multipart.Part
 			if p, err = mr.NextPart(); err != nil {
-				if err == io.EOF {
+				if errors.Is(err, io.EOF) {
 					break
 				}
 				return nil, err
@@ -289,11 +289,11 @@ func (h *httpServerInput) extractMessageFromRequest(r *http.Request) (message.Ba
 	}
 
 	_ = msg.Iter(func(i int, p *message.Part) error {
-		p.MetaSet("http_server_user_agent", r.UserAgent())
-		p.MetaSet("http_server_request_path", r.URL.Path)
-		p.MetaSet("http_server_verb", r.Method)
+		p.MetaSetMut("http_server_user_agent", r.UserAgent())
+		p.MetaSetMut("http_server_request_path", r.URL.Path)
+		p.MetaSetMut("http_server_verb", r.Method)
 		if host, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
-			p.MetaSet("http_server_remote_ip", host)
+			p.MetaSetMut("http_server_remote_ip", host)
 		}
 
 		if r.TLS != nil {
@@ -308,32 +308,32 @@ func (h *httpServerInput) extractMessageFromRequest(r *http.Request) (message.Ba
 			case tls.VersionTLS13:
 				tlsVersion = "TLSv1.3"
 			}
-			p.MetaSet("http_server_tls_version", tlsVersion)
+			p.MetaSetMut("http_server_tls_version", tlsVersion)
 			if len(r.TLS.VerifiedChains) > 0 && len(r.TLS.VerifiedChains[0]) > 0 {
-				p.MetaSet("http_server_tls_subject", r.TLS.VerifiedChains[0][0].Subject.String())
+				p.MetaSetMut("http_server_tls_subject", r.TLS.VerifiedChains[0][0].Subject.String())
 			}
-			p.MetaSet("http_server_tls_cipher_suite", tls.CipherSuiteName(r.TLS.CipherSuite))
+			p.MetaSetMut("http_server_tls_cipher_suite", tls.CipherSuiteName(r.TLS.CipherSuite))
 		}
 		for k, v := range r.Header {
 			if len(v) > 0 {
-				p.MetaSet(k, v[0])
+				p.MetaSetMut(k, v[0])
 			}
 		}
 		for k, v := range r.URL.Query() {
 			if len(v) > 0 {
-				p.MetaSet(k, v[0])
+				p.MetaSetMut(k, v[0])
 			}
 		}
 		for k, v := range mux.Vars(r) {
-			p.MetaSet(k, v)
+			p.MetaSetMut(k, v)
 		}
 		for _, c := range r.Cookies() {
-			p.MetaSet(c.Name, c.Value)
+			p.MetaSetMut(c.Name, c.Value)
 		}
 		return nil
 	})
 
-	textMapGeneric := map[string]interface{}{}
+	textMapGeneric := map[string]any{}
 	for k, vals := range r.Header {
 		for _, v := range vals {
 			textMapGeneric[k] = v
@@ -436,11 +436,22 @@ func (h *httpServerInput) postHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	if responseMsg.Len() > 0 {
 		for k, v := range h.responseHeaders {
-			w.Header().Set(k, v.String(0, responseMsg))
+			headerStr, err := v.String(0, responseMsg)
+			if err != nil {
+				h.log.Errorf("Interpolation of response header %v error: %v", k, err)
+				continue
+			}
+			w.Header().Set(k, headerStr)
 		}
 
 		statusCode := 200
-		if statusCodeStr := h.responseStatus.String(0, responseMsg); statusCodeStr != "200" {
+		statusCodeStr, err := h.responseStatus.String(0, responseMsg)
+		if err != nil {
+			h.log.Errorf("Interpolation of response status code error: %v", err)
+			w.WriteHeader(http.StatusBadGateway)
+			return
+		}
+		if statusCodeStr != "200" {
 			if statusCode, err = strconv.Atoi(statusCodeStr); err != nil {
 				h.log.Errorf("Failed to parse sync response status code expression: %v\n", err)
 				w.WriteHeader(http.StatusBadGateway)
@@ -450,11 +461,8 @@ func (h *httpServerInput) postHandler(w http.ResponseWriter, r *http.Request) {
 
 		if plen := responseMsg.Len(); plen == 1 {
 			part := responseMsg.Get(0)
-			_ = part.MetaIter(func(k, v string) error {
-				if h.metaFilter.Match(k) {
-					w.Header().Set(k, v)
-					return nil
-				}
+			_ = h.metaFilter.IterStr(part, func(k, v string) error {
+				w.Header().Set(k, v)
 				return nil
 			})
 			payload := part.AsBytes()
@@ -472,18 +480,21 @@ func (h *httpServerInput) postHandler(w http.ResponseWriter, r *http.Request) {
 			var merr error
 			for i := 0; i < plen && merr == nil; i++ {
 				part := responseMsg.Get(i)
-				_ = part.MetaIter(func(k, v string) error {
-					if h.metaFilter.Match(k) {
-						w.Header().Set(k, v)
-						return nil
-					}
+				_ = h.metaFilter.IterStr(part, func(k, v string) error {
+					w.Header().Set(k, v)
 					return nil
 				})
 				payload := part.AsBytes()
 
 				mimeHeader := textproto.MIMEHeader{}
 				if customContentTypeExists {
-					mimeHeader.Set("Content-Type", customContentType.String(i, responseMsg))
+					contentTypeStr, err := customContentType.String(i, responseMsg)
+					if err != nil {
+						h.log.Errorf("Interpolation of content-type header error: %v", err)
+						mimeHeader.Set("Content-Type", http.DetectContentType(payload))
+					} else {
+						mimeHeader.Set("Content-Type", contentTypeStr)
+					}
 				} else {
 					mimeHeader.Set("Content-Type", http.DetectContentType(payload))
 				}
@@ -571,22 +582,22 @@ func (h *httpServerInput) wsHandler(w http.ResponseWriter, r *http.Request) {
 		startedAt := time.Now()
 
 		part := msg.Get(0)
-		part.MetaSet("http_server_user_agent", r.UserAgent())
+		part.MetaSetMut("http_server_user_agent", r.UserAgent())
 		for k, v := range r.Header {
 			if len(v) > 0 {
-				part.MetaSet(k, v[0])
+				part.MetaSetMut(k, v[0])
 			}
 		}
 		for k, v := range r.URL.Query() {
 			if len(v) > 0 {
-				part.MetaSet(k, v[0])
+				part.MetaSetMut(k, v[0])
 			}
 		}
 		for k, v := range mux.Vars(r) {
-			part.MetaSet(k, v)
+			part.MetaSetMut(k, v)
 		}
 		for _, c := range r.Cookies() {
-			part.MetaSet(c.Name, c.Value)
+			part.MetaSetMut(c.Name, c.Value)
 		}
 		tracing.InitSpans(h.mgr.Tracer(), "input_http_server_websocket", msg)
 

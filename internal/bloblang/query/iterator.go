@@ -11,7 +11,7 @@ var errEndOfIter = errors.New("iterator reached the end")
 type Iterator interface {
 	// Next provides the next element of the iterator, or an error. When the
 	// iterator has reached the end ErrEndOfIter is returned.
-	Next() (interface{}, error)
+	Next() (any, error)
 
 	// Len provides a static length of the iterator when possible.
 	Len() (int, bool)
@@ -25,12 +25,12 @@ type Iterable interface {
 	// Some functions will be unable to provide an iterator due to either the
 	// context or function arguments provided, therefore it's possible that a
 	// static value will be returned instead.
-	TryIterate(ctx FunctionContext) (Iterator, interface{}, error)
+	TryIterate(ctx FunctionContext) (Iterator, any, error)
 }
 
 //------------------------------------------------------------------------------
 
-func execTryIter(iFn Iterable, fn Function, ctx FunctionContext) (iter Iterator, v interface{}, err error) {
+func execTryIter(iFn Iterable, fn Function, ctx FunctionContext) (iter Iterator, v any, err error) {
 	if iFn != nil {
 		if iter, v, err = iFn.TryIterate(ctx); err != nil || iter != nil {
 			return
@@ -38,15 +38,15 @@ func execTryIter(iFn Iterable, fn Function, ctx FunctionContext) (iter Iterator,
 	} else if v, err = fn.Exec(ctx); err != nil {
 		return
 	}
-	if arr, ok := v.([]interface{}); ok {
+	if arr, ok := v.([]any); ok {
 		return arrayIterator(arr), nil, nil
 	}
 	return
 }
 
-func arrayIterator(arr []interface{}) Iterator {
+func arrayIterator(arr []any) Iterator {
 	return closureIterator{
-		next: func() (interface{}, error) {
+		next: func() (any, error) {
 			if len(arr) == 0 {
 				return nil, errEndOfIter
 			}
@@ -60,15 +60,15 @@ func arrayIterator(arr []interface{}) Iterator {
 	}
 }
 
-func drainIter(iter Iterator) ([]interface{}, error) {
-	var arr []interface{}
+func drainIter(iter Iterator) ([]any, error) {
+	var arr []any
 	if l, ok := iter.Len(); ok {
-		arr = make([]interface{}, 0, l)
+		arr = make([]any, 0, l)
 	}
 	for {
 		v, err := iter.Next()
 		if err != nil {
-			if err == errEndOfIter {
+			if errors.Is(err, errEndOfIter) {
 				return arr, nil
 			}
 			return nil, err
@@ -78,11 +78,11 @@ func drainIter(iter Iterator) ([]interface{}, error) {
 }
 
 type closureIterator struct {
-	next func() (interface{}, error)
+	next func() (any, error)
 	len  func() (int, bool)
 }
 
-func (c closureIterator) Next() (interface{}, error) {
+func (c closureIterator) Next() (any, error) {
 	return c.next()
 }
 
@@ -101,7 +101,7 @@ type filterMethod struct {
 	mapFn      Function
 }
 
-func newFilterMethod(target Function, args ...interface{}) (Function, error) {
+func newFilterMethod(target Function, args ...any) (Function, error) {
 	mapFn, ok := args[0].(Function)
 	if !ok {
 		return nil, fmt.Errorf("expected query argument, received %T", args[0])
@@ -118,7 +118,7 @@ func (f *filterMethod) Annotation() string {
 	return "method filter"
 }
 
-func (f *filterMethod) TryIterate(ctx FunctionContext) (Iterator, interface{}, error) {
+func (f *filterMethod) TryIterate(ctx FunctionContext) (Iterator, any, error) {
 	iter, res, err := execTryIter(f.iterTarget, f.target, ctx)
 	if err != nil {
 		return nil, nil, err
@@ -128,7 +128,7 @@ func (f *filterMethod) TryIterate(ctx FunctionContext) (Iterator, interface{}, e
 		return nil, res, err
 	}
 	return closureIterator{
-		next: func() (interface{}, error) {
+		next: func() (any, error) {
 			for {
 				v, err := iter.Next()
 				if err != nil {
@@ -151,14 +151,14 @@ func (f *filterMethod) TryIterate(ctx FunctionContext) (Iterator, interface{}, e
 
 // We also support filtering objects, so when we're unable to spawn an iterator
 // we attempt to process a map.
-func (f *filterMethod) execFallback(ctx FunctionContext, res interface{}) (interface{}, error) {
-	m, ok := res.(map[string]interface{})
+func (f *filterMethod) execFallback(ctx FunctionContext, res any) (any, error) {
+	m, ok := res.(map[string]any)
 	if !ok {
 		return nil, ErrFrom(NewTypeError(res, ValueArray, ValueObject), f.target)
 	}
-	newMap := make(map[string]interface{}, len(m))
+	newMap := make(map[string]any, len(m))
 	for k, v := range m {
-		var ctxMap interface{} = map[string]interface{}{
+		var ctxMap any = map[string]any{
 			"key":   k,
 			"value": v,
 		}
@@ -173,7 +173,7 @@ func (f *filterMethod) execFallback(ctx FunctionContext, res interface{}) (inter
 	return newMap, nil
 }
 
-func (f *filterMethod) Exec(ctx FunctionContext) (interface{}, error) {
+func (f *filterMethod) Exec(ctx FunctionContext) (any, error) {
 	iter, res, err := f.TryIterate(ctx)
 	if err != nil || res != nil {
 		return res, err
@@ -193,7 +193,7 @@ type mapEachMethod struct {
 	mapFn      Function
 }
 
-func newMapEachMethod(target Function, args ...interface{}) (Function, error) {
+func newMapEachMethod(target Function, args ...any) (Function, error) {
 	mapFn, ok := args[0].(Function)
 	if !ok {
 		return nil, fmt.Errorf("expected query argument, received %T", args[0])
@@ -210,7 +210,7 @@ func (m *mapEachMethod) Annotation() string {
 	return "method map_each"
 }
 
-func (m *mapEachMethod) TryIterate(ctx FunctionContext) (Iterator, interface{}, error) {
+func (m *mapEachMethod) TryIterate(ctx FunctionContext) (Iterator, any, error) {
 	iter, res, err := execTryIter(m.iterTarget, m.target, ctx)
 	if err != nil {
 		return nil, nil, err
@@ -220,7 +220,7 @@ func (m *mapEachMethod) TryIterate(ctx FunctionContext) (Iterator, interface{}, 
 		return nil, res, err
 	}
 	return closureIterator{
-		next: func() (interface{}, error) {
+		next: func() (any, error) {
 			for {
 				v, err := iter.Next()
 				if err != nil {
@@ -246,14 +246,14 @@ func (m *mapEachMethod) TryIterate(ctx FunctionContext) (Iterator, interface{}, 
 	}, nil, nil
 }
 
-func (m *mapEachMethod) execFallback(ctx FunctionContext, res interface{}) (interface{}, error) {
-	resMap, ok := res.(map[string]interface{})
+func (m *mapEachMethod) execFallback(ctx FunctionContext, res any) (any, error) {
+	resMap, ok := res.(map[string]any)
 	if !ok {
 		return nil, ErrFrom(NewTypeError(res, ValueArray, ValueObject), m.target)
 	}
-	newMap := make(map[string]interface{}, len(resMap))
+	newMap := make(map[string]any, len(resMap))
 	for k, v := range resMap {
-		var ctxMap interface{} = map[string]interface{}{
+		var ctxMap any = map[string]any{
 			"key":   k,
 			"value": v,
 		}
@@ -272,7 +272,7 @@ func (m *mapEachMethod) execFallback(ctx FunctionContext, res interface{}) (inte
 	return newMap, nil
 }
 
-func (m *mapEachMethod) Exec(ctx FunctionContext) (interface{}, error) {
+func (m *mapEachMethod) Exec(ctx FunctionContext) (any, error) {
 	iter, res, err := m.TryIterate(ctx)
 	if err != nil || res != nil {
 		return res, err

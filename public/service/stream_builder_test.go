@@ -165,7 +165,7 @@ file:
 
 func TestStreamBuilderEnvVarInterpolation(t *testing.T) {
 	os.Setenv("BENTHOS_TEST_ONE", "foo")
-	os.Setenv("BENTHOS_TEST_TWO", "bar")
+	os.Setenv("BENTHOS_TEST_TWO", "warn")
 
 	b := service.NewStreamBuilder()
 	require.NoError(t, b.AddInputYAML(`
@@ -180,7 +180,7 @@ generate:
 
 	exp := []string{
 		` mapping: root = "foo"`,
-		`level: bar`,
+		`level: warn`,
 	}
 
 	for _, str := range exp {
@@ -586,14 +586,14 @@ func TestStreamBuilderSetFields(t *testing.T) {
 	tests := []struct {
 		name        string
 		input       string
-		args        []interface{}
+		args        []any
 		output      string
 		errContains string
 	}{
 		{
 			name:  "odd number of args",
 			input: `{}`,
-			args: []interface{}{
+			args: []any{
 				"just a field",
 			},
 			errContains: "odd number of pathValues",
@@ -601,7 +601,7 @@ func TestStreamBuilderSetFields(t *testing.T) {
 		{
 			name:  "a path isnt a string",
 			input: `{}`,
-			args: []interface{}{
+			args: []any{
 				10, "hello world",
 			},
 			errContains: "should be a string",
@@ -613,7 +613,7 @@ input:
   generate:
     mapping: 'root = deleted()'
 `,
-			args: []interface{}{
+			args: []any{
 				"input.generate.unknown_field", "baz",
 			},
 			errContains: "field not recognised",
@@ -625,7 +625,7 @@ input:
   generate:
     mapping: 'root = deleted()'
 `,
-			args: []interface{}{
+			args: []any{
 				"input.label", "foo",
 				"output.label", "foo",
 			},
@@ -638,7 +638,7 @@ input:
   file:
     paths: [ foo, bar ]
 `,
-			args: []interface{}{
+			args: []any{
 				"input.file.paths.1", "baz",
 			},
 			output: `
@@ -654,7 +654,7 @@ input:
   file:
     paths: [ foo, bar ]
 `,
-			args: []interface{}{
+			args: []any{
 				"input.file.paths.-", "baz",
 				"input.file.paths.-", "buz",
 				"input.file.paths.-", "bev",
@@ -672,7 +672,7 @@ input:
   generate:
     mapping: 'root = deleted()'
 `,
-			args: []interface{}{
+			args: []any{
 				"pipeline.processors.-.bloblang", `root = "meow"`,
 			},
 			output: `
@@ -708,6 +708,228 @@ pipeline:
 
 				assert.YAMLEq(t, b2AsYAML, bAsYAML)
 			}
+		})
+	}
+}
+
+func TestStreamBuilderWalk(t *testing.T) {
+	type walkedComponent struct {
+		typeStr string
+		name    string
+		label   string
+		conf    string
+	}
+	tests := []struct {
+		name   string
+		input  string
+		output []walkedComponent
+	}{
+		{
+			name: "basic components",
+			input: `
+input:
+  generate:
+    mapping: 'root = deleted()'
+
+pipeline:
+  processors:
+    - mutation: 'root = "hm"'
+      label: fooproc
+
+output:
+  reject: "lol nah"
+`,
+			output: []walkedComponent{
+				{
+					typeStr: "input",
+					name:    "generate",
+					conf: `label: ""
+generate:
+    mapping: root = deleted()
+    interval: 1s
+    count: 0
+    batch_size: 1`,
+				},
+				{
+					typeStr: "buffer",
+					name:    "none",
+					conf:    `none: {}`,
+				},
+				{
+					typeStr: "processor",
+					name:    "mutation",
+					label:   "fooproc",
+					conf: `label: fooproc
+mutation: 'root = "hm"'`,
+				},
+				{
+					typeStr: "output",
+					name:    "reject",
+					conf: `label: ""
+reject: lol nah`,
+				},
+				{
+					typeStr: "metrics",
+					name:    "none",
+					conf: `none: {}
+mapping: ""`,
+				},
+				{
+					typeStr: "tracer",
+					name:    "none",
+					conf:    `none: {}`,
+				},
+			},
+		},
+		{
+			name: "input and output procs",
+			input: `
+input:
+  generate:
+    mapping: 'root = deleted()'
+  processors:
+    - mutation: 'root = "hm"'
+
+output:
+  reject: "lol nah"
+  processors:
+    - mutation: 'root = "eh"'
+`,
+			output: []walkedComponent{
+				{
+					typeStr: "input",
+					name:    "generate",
+					conf: `label: ""
+generate:
+    mapping: root = deleted()
+    interval: 1s
+    count: 0
+    batch_size: 1
+processors:
+    - label: ""
+      mutation: 'root = "hm"'`,
+				},
+				{
+					typeStr: "processor",
+					name:    "mutation",
+					conf: `label: ""
+mutation: 'root = "hm"'`,
+				},
+				{
+					typeStr: "buffer",
+					name:    "none",
+					conf:    `none: {}`,
+				},
+				{
+					typeStr: "output",
+					name:    "reject",
+					conf: `label: ""
+reject: lol nah
+processors:
+    - label: ""
+      mutation: 'root = "eh"'`,
+				},
+				{
+					typeStr: "processor",
+					name:    "mutation",
+					conf: `label: ""
+mutation: 'root = "eh"'`,
+				},
+				{
+					typeStr: "metrics",
+					name:    "none",
+					conf: `none: {}
+mapping: ""`,
+				},
+				{
+					typeStr: "tracer",
+					name:    "none",
+					conf:    `none: {}`,
+				},
+			},
+		},
+		{
+			name: "nested components",
+			input: `
+input:
+  dynamic:
+    inputs:
+      foo:
+        file:
+          paths: [ aaa.txt ]
+`,
+			output: []walkedComponent{
+				{
+					typeStr: "input",
+					name:    "dynamic",
+					conf: `label: ""
+dynamic:
+    inputs:
+        foo:
+            label: ""
+            file:
+                paths:
+                    - aaa.txt
+                codec: lines
+                max_buffer: 1000000
+                delete_on_finish: false
+    prefix: ""`,
+				},
+				{
+					typeStr: "input",
+					name:    "file",
+					conf: `label: ""
+file:
+    paths:
+        - aaa.txt
+    codec: lines
+    max_buffer: 1000000
+    delete_on_finish: false`,
+				},
+				{
+					typeStr: "buffer",
+					name:    "none",
+					conf:    `none: {}`,
+				},
+				{
+					typeStr: "output",
+					name:    "stdout",
+					conf: `label: ""
+stdout:
+    codec: lines`,
+				},
+				{
+					typeStr: "metrics",
+					name:    "none",
+					conf: `none: {}
+mapping: ""`,
+				},
+				{
+					typeStr: "tracer",
+					name:    "none",
+					conf:    `none: {}`,
+				},
+			},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			b := service.NewStreamBuilder()
+			require.NoError(t, b.SetYAML(test.input))
+
+			var results []walkedComponent
+			require.NoError(t, b.WalkComponents(func(w *service.WalkedComponent) error {
+				results = append(results, walkedComponent{
+					typeStr: w.ComponentType,
+					name:    w.Name,
+					label:   w.Label,
+					conf:    strings.TrimSpace(w.ConfigYAML()),
+				})
+				return nil
+			}))
+
+			assert.Equal(t, test.output, results)
 		})
 	}
 }

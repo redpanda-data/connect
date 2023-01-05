@@ -54,7 +54,7 @@ func (o ArithmeticOperator) String() string {
 	return ""
 }
 
-type arithmeticOpFunc func(lhs Function, rhs Function, l, r interface{}) (interface{}, error)
+type arithmeticOpFunc func(lhs, rhs Function, l, r any) (any, error)
 
 func arithmeticFunc(lhs, rhs Function, op arithmeticOpFunc) (Function, error) {
 	annotation := rhs.Annotation()
@@ -71,9 +71,9 @@ func arithmeticFunc(lhs, rhs Function, op arithmeticOpFunc) (Function, error) {
 		}
 	}
 
-	return ClosureFunction(annotation, func(ctx FunctionContext) (interface{}, error) {
+	return ClosureFunction(annotation, func(ctx FunctionContext) (any, error) {
 		var err error
-		var leftV, rightV interface{}
+		var leftV, rightV any
 		if leftV, err = lhs.Exec(ctx); err == nil {
 			rightV, err = rhs.Exec(ctx)
 		}
@@ -90,14 +90,16 @@ func arithmeticFunc(lhs, rhs Function, op arithmeticOpFunc) (Function, error) {
 // a value by zero.
 var ErrDivideByZero = errors.New("attempted to divide by zero")
 
-type intArithmeticFunc func(left, right int64) (int64, error)
-type floatArithmeticFunc func(left, right float64) (float64, error)
+type (
+	intArithmeticFunc   func(left, right int64) (int64, error)
+	floatArithmeticFunc func(left, right float64) (float64, error)
+)
 
 // Takes two arithmetic funcs, one for integer values and one for float values
 // and returns a generic arithmetic func. If both values can be represented as
 // integers the integer func is called, otherwise the float func is called.
 func numberDegradationFunc(op ArithmeticOperator, iFn intArithmeticFunc, fFn floatArithmeticFunc) arithmeticOpFunc {
-	return func(lhs, rhs Function, left, right interface{}) (interface{}, error) {
+	return func(lhs, rhs Function, left, right any) (any, error) {
 		left = ISanitize(left)
 		right = ISanitize(right)
 
@@ -142,7 +144,7 @@ func prodOp(op ArithmeticOperator) (arithmeticOpFunc, bool) {
 		), true
 	case ArithmeticDiv:
 		// Only executes on float values.
-		return func(lFn, rFn Function, left, right interface{}) (interface{}, error) {
+		return func(lFn, rFn Function, left, right any) (any, error) {
 			lhs, err := IGetNumber(left)
 			if err != nil {
 				return nil, NewTypeMismatch(op.String(), lFn, rFn, left, right)
@@ -158,7 +160,7 @@ func prodOp(op ArithmeticOperator) (arithmeticOpFunc, bool) {
 		}, true
 	case ArithmeticMod:
 		// Only executes on integer values.
-		return func(lFn, rFn Function, left, right interface{}) (interface{}, error) {
+		return func(lFn, rFn Function, left, right any) (any, error) {
 			lhs, err := IGetInt(left)
 			if err != nil {
 				return nil, NewTypeMismatch(op.String(), lFn, rFn, left, right)
@@ -187,7 +189,7 @@ func sumOp(op ArithmeticOperator) (arithmeticOpFunc, bool) {
 				return left + right, nil
 			},
 		)
-		return func(lFn, rFn Function, left, right interface{}) (interface{}, error) {
+		return func(lFn, rFn Function, left, right any) (any, error) {
 			switch left.(type) {
 			case float64, int, int64, uint64, json.Number:
 				return numberAdd(lFn, rFn, left, right)
@@ -293,12 +295,12 @@ func compareBoolFn(op ArithmeticOperator) func(lhs, rhs bool) bool {
 	return nil
 }
 
-func compareGenericFn(op ArithmeticOperator) func(lhs, rhs interface{}) bool {
+func compareGenericFn(op ArithmeticOperator) func(lhs, rhs any) bool {
 	switch op {
 	case ArithmeticEq:
 		return ICompare
 	case ArithmeticNeq:
-		return func(lhs, rhs interface{}) bool {
+		return func(lhs, rhs any) bool {
 			return !ICompare(lhs, rhs)
 		}
 	}
@@ -317,7 +319,7 @@ func compareOp(op ArithmeticOperator) (arithmeticOpFunc, bool) {
 		numOpFn := compareNumFn(op)
 		boolOpFn := compareBoolFn(op)
 		genericOpFn := compareGenericFn(op)
-		return func(lFn, rFn Function, left, right interface{}) (interface{}, error) {
+		return func(lFn, rFn Function, left, right any) (any, error) {
 			switch lhs := restrictForComparison(left).(type) {
 			case string:
 				if strOpFn == nil {
@@ -367,7 +369,7 @@ func compareOp(op ArithmeticOperator) (arithmeticOpFunc, bool) {
 }
 
 func boolOr(lhs, rhs Function) Function {
-	return ClosureFunction(rhs.Annotation(), func(ctx FunctionContext) (interface{}, error) {
+	return ClosureFunction(rhs.Annotation(), func(ctx FunctionContext) (any, error) {
 		lhsV, err := lhs.Exec(ctx)
 		if err != nil {
 			return nil, err
@@ -391,7 +393,7 @@ func boolOr(lhs, rhs Function) Function {
 }
 
 func boolAnd(lhs, rhs Function) Function {
-	return ClosureFunction(rhs.Annotation(), func(ctx FunctionContext) (interface{}, error) {
+	return ClosureFunction(rhs.Annotation(), func(ctx FunctionContext) (any, error) {
 		lhsV, err := lhs.Exec(ctx)
 		if err != nil {
 			return nil, err
@@ -415,7 +417,7 @@ func boolAnd(lhs, rhs Function) Function {
 }
 
 func coalesce(lhs, rhs Function) Function {
-	return ClosureFunction(rhs.Annotation(), func(ctx FunctionContext) (interface{}, error) {
+	return ClosureFunction(rhs.Annotation(), func(ctx FunctionContext) (any, error) {
 		lhsV, err := lhs.Exec(ctx)
 		if err == nil && !IIsNull(lhsV) {
 			return lhsV, nil

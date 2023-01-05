@@ -12,10 +12,6 @@ const paidServicesOptions = [
     description: <>Schedule a consultation call with a Benthos maintainer to discuss your use cases and whether/where Benthos fits in. These calls are often booked for a half or full working day, and it is up to you how to use this time.</>,
   },
   {
-    title: "Book a Talk",
-    description: <>If you're running an event and have decided "well, it couldn't get any worse" then why not book a Benthos maintainer to speak? We often talk about Benthos and how it specifically relates to your organisation, the history of the project and the day to day interactions we experience when running the community, but we're happy to say whatever you want if the price is right.</>,
-  },
-  {
     title: "Issue Bounty",
     description: <><p>If you'd like a specific feature or bug to be addressed within a specified time period then an issue bounty can be set whereby an agreed amount will be paid upon completion of the issue. This is often a nice way of paying for specific features to be built when a longer term contract isn't necessary.</p><p>In order to set a bounty please reach out with a description of the issue (or a link to it on Github) and a desired time frame and we'll provide the value of the bounty, it is then up to you whether you wish to proceed.</p></>,
   },

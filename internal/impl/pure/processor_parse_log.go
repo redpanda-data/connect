@@ -93,7 +93,7 @@ spec. The resulting structured document may contain any of the following fields:
 	}
 }
 
-type parserFormat func(body []byte) (map[string]interface{}, error)
+type parserFormat func(body []byte) (map[string]any, error)
 
 func parserRFC5424(bestEffort bool) parserFormat {
 	var opts []syslog.MachineOption
@@ -102,14 +102,14 @@ func parserRFC5424(bestEffort bool) parserFormat {
 	}
 	p := rfc5424.NewParser(opts...)
 
-	return func(body []byte) (map[string]interface{}, error) {
+	return func(body []byte) (map[string]any, error) {
 		resGen, err := p.Parse(body)
 		if err != nil {
 			return nil, err
 		}
 		res := resGen.(*rfc5424.SyslogMessage)
 
-		resMap := make(map[string]interface{})
+		resMap := make(map[string]any)
 		if res.Message != nil {
 			resMap["message"] = *res.Message
 		}
@@ -178,14 +178,14 @@ func parserRFC3164(bestEffort, wrfc3339 bool, year, tz string) (parserFormat, er
 
 	p := rfc3164.NewParser(opts...)
 
-	return func(body []byte) (map[string]interface{}, error) {
+	return func(body []byte) (map[string]any, error) {
 		resGen, err := p.Parse(body)
 		if err != nil {
 			return nil, err
 		}
 		res := resGen.(*rfc3164.SyslogMessage)
 
-		resMap := make(map[string]interface{})
+		resMap := make(map[string]any)
 		if res.Message != nil {
 			resMap["message"] = *res.Message
 		}

@@ -23,7 +23,6 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
 	"github.com/benthosdev/benthos/v4/internal/old/util/retries"
-	"github.com/benthosdev/benthos/v4/internal/shutdown"
 	"github.com/benthosdev/benthos/v4/internal/tracing"
 )
 
@@ -96,7 +95,7 @@ func init() {
 //------------------------------------------------------------------------------
 
 // Processor stores or retrieves data from a mongo db for each message of a
-// batch
+// batch.
 type Processor struct {
 	conf   processor.MongoDBConfig
 	log    log.Modular
@@ -112,8 +111,6 @@ type Processor struct {
 	documentMap *mapping.Executor
 	hintMap     *mapping.Executor
 	operation   client.Operation
-
-	shutSig *shutdown.Signaller
 }
 
 // NewProcessor returns a MongoDB processor.
@@ -131,8 +128,6 @@ func NewProcessor(conf processor.Config, mgr bundle.NewManagement) (processor.V2
 		tracer: mgr.Tracer(),
 
 		operation: operation,
-
-		shutSig: shutdown.NewSignaller(),
 	}
 
 	if conf.MongoDB.MongoDB.URL == "" {
@@ -233,8 +228,13 @@ func NewProcessor(conf processor.Config, mgr bundle.NewManagement) (processor.V2
 // resulting messages or a response to be sent back to the message source.
 func (m *Processor) ProcessBatch(ctx context.Context, spans []*tracing.Span, batch message.Batch) ([]message.Batch, error) {
 	writeModelsMap := map[*mongo.Collection][]mongo.WriteModel{}
-	processor.IteratePartsWithSpanV2(m.tracer, "mongodb", nil, batch, func(i int, s *tracing.Span, p *message.Part) error {
-		var err error
+	_ = batch.Iter(func(i int, p *message.Part) (err error) {
+		defer func() {
+			if err != nil {
+				p.ErrorSet(err)
+			}
+		}()
+
 		var filterVal, documentVal *message.Part
 		var upsertVal, filterValWanted, documentValWanted bool
 
@@ -262,7 +262,7 @@ func (m *Processor) ProcessBatch(ctx context.Context, spans []*tracing.Span, bat
 			return fmt.Errorf("failed to generate documentVal")
 		}
 
-		var docJSON, filterJSON, hintJSON interface{}
+		var docJSON, filterJSON, hintJSON any
 
 		if filterValWanted {
 			if filterJSON, err = filterVal.AsStructured(); err != nil {
@@ -288,8 +288,13 @@ func (m *Processor) ProcessBatch(ctx context.Context, spans []*tracing.Span, bat
 			findOptions.Hint = hintJSON
 		}
 
+		collectionStr, err := m.collection.String(i, batch)
+		if err != nil {
+			return fmt.Errorf("collection interpolation error: %w", err)
+		}
+
 		var writeModel mongo.WriteModel
-		collection := m.database.Collection(m.collection.String(i, batch), m.writeConcernCollectionOption)
+		collection := m.database.Collection(collectionStr, m.writeConcernCollectionOption)
 
 		switch m.operation {
 		case client.OperationInsertOne:
@@ -321,10 +326,10 @@ func (m *Processor) ProcessBatch(ctx context.Context, spans []*tracing.Span, bat
 				Hint:   hintJSON,
 			}
 		case client.OperationFindOne:
-			var decoded interface{}
+			var decoded any
 			err := collection.FindOne(context.Background(), filterJSON, findOptions).Decode(&decoded)
 			if err != nil {
-				if err == mongo.ErrNoDocuments {
+				if errors.Is(err, mongo.ErrNoDocuments) {
 					return err
 				}
 				m.log.Errorf("Error decoding mongo db result, filter = %v: %s", filterJSON, err)

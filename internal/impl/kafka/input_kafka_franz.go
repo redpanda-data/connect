@@ -58,7 +58,7 @@ This input adds the following metadata fields to each message:
 			Description("Whether listed topics should be interpretted as regular expression patterns for matching multiple topics.").
 			Default(false)).
 		Field(service.NewStringField("consumer_group").
-			Description("A consumer group to consume as. Partitions are automatically distributed across consumers sharing a consumer group, and partition offsets are automatically commited and resumed under this name.")).
+			Description("A consumer group to consume as. Partitions are automatically distributed across consumers sharing a consumer group, and partition offsets are automatically committed and resumed under this name.")).
 		Field(service.NewIntField("checkpoint_limit").
 			Description("Determines how many messages of the same partition can be processed in parallel before applying back pressure. When a message of a given offset is delivered to the output the offset is only allowed to be committed when all messages of prior offsets have also been delivered, this ensures at-least-once delivery guarantees. However, this mechanism also increases the likelihood of duplicates in the event of crashes or server faults, reducing the checkpoint limit will mitigate this.").
 			Default(1024).
@@ -72,7 +72,8 @@ This input adds the following metadata fields to each message:
 			Default(true).
 			Advanced()).
 		Field(service.NewTLSToggledField("tls")).
-		Field(saslField())
+		Field(saslField()).
+		Field(service.NewBoolField("multi_header").Description("Decode headers into lists to allow handling of multiple values with the same key").Default(false).Advanced())
 }
 
 func init() {
@@ -84,7 +85,6 @@ func init() {
 			}
 			return service.AutoRetryNacks(rdr), nil
 		})
-
 	if err != nil {
 		panic(err)
 	}
@@ -107,6 +107,7 @@ type franzKafkaReader struct {
 	startFromOldest bool
 	commitPeriod    time.Duration
 	regexPattern    bool
+	multiHeader     bool
 
 	msgChan atomic.Value
 	log     *service.Logger
@@ -170,6 +171,9 @@ func newFranzKafkaReaderFromConfig(conf *service.ParsedConfig, log *service.Logg
 	}
 	if tlsEnabled {
 		f.tlsConf = tlsConf
+	}
+	if f.multiHeader, err = conf.FieldBool("multi_header"); err != nil {
+		return nil, err
 	}
 	if f.saslConfs, err = saslMechanismsFromConfig(conf); err != nil {
 		return nil, err
@@ -368,17 +372,25 @@ func (f *franzKafkaReader) Connect(ctx context.Context) error {
 			pollDone()
 
 			if errs := fetches.Errors(); len(errs) > 0 {
-				// TODO: The documentation from franz-go is top-tier, it should
-				// be straight forward to use some checks to determine whether
-				// restarting the client is actually necessary.
-				cl.Close()
+				// Any non-temporal error sets this true and we close the client
+				// forcing a reconnect.
+				nonTemporalErr := false
+
 				for _, kerr := range errs {
-					if errors.Is(kerr.Err, context.Canceled) {
+					// TODO: The documentation from franz-go is top-tier, it
+					// should be straight forward to expand this to include more
+					// errors that are safe to disregard.
+					if errors.Is(kerr.Err, context.DeadlineExceeded) {
 						continue
 					}
+					nonTemporalErr = true
 					f.log.Errorf("Kafka poll error on topic %v, partition %v: %v", kerr.Topic, kerr.Partition, kerr.Err)
 				}
-				return
+
+				if nonTemporalErr {
+					cl.Close()
+					return
+				}
 			}
 			if closeCtx.Err() != nil {
 				return
@@ -388,7 +400,7 @@ func (f *franzKafkaReader) Connect(ctx context.Context) error {
 			iter := fetches.RecordIter()
 			for !iter.Done() {
 				record := iter.Next()
-				msg := recordToMessage(record)
+				msg := recordToMessage(record, f.multiHeader)
 
 				// The record lives on for checkpointing, but we don't need the
 				// contents going forward so discard these. This looked fine to
@@ -447,15 +459,28 @@ func (f *franzKafkaReader) Connect(ctx context.Context) error {
 	return nil
 }
 
-func recordToMessage(record *kgo.Record) *service.Message {
+func recordToMessage(record *kgo.Record, multiHeader bool) *service.Message {
 	msg := service.NewMessage(record.Value)
 	msg.MetaSet("kafka_key", string(record.Key))
 	msg.MetaSet("kafka_topic", record.Topic)
 	msg.MetaSet("kafka_partition", strconv.Itoa(int(record.Partition)))
 	msg.MetaSet("kafka_offset", strconv.Itoa(int(record.Offset)))
 	msg.MetaSet("kafka_timestamp_unix", strconv.FormatInt(record.Timestamp.Unix(), 10))
-	for _, hdr := range record.Headers {
-		msg.MetaSet(hdr.Key, string(hdr.Value))
+	if multiHeader {
+		// in multi header mode we gather headers so we can encode them as lists
+		var headers = map[string][]any{}
+
+		for _, hdr := range record.Headers {
+			headers[hdr.Key] = append(headers[hdr.Key], string(hdr.Value))
+		}
+
+		for key, values := range headers {
+			msg.MetaSetMut(key, values)
+		}
+	} else {
+		for _, hdr := range record.Headers {
+			msg.MetaSet(hdr.Key, string(hdr.Value))
+		}
 	}
 	return msg
 }

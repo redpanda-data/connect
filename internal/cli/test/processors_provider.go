@@ -16,6 +16,7 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/config"
 	"github.com/benthosdev/benthos/v4/internal/docs"
+	"github.com/benthosdev/benthos/v4/internal/filepath/ifs"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/manager"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
@@ -86,7 +87,7 @@ func (p *ProcessorsProvider) ProvideBloblang(pathStr string) ([]processor.V1, er
 		pathStr = filepath.Join(filepath.Dir(p.targetPath), pathStr)
 	}
 
-	mappingBytes, err := os.ReadFile(pathStr)
+	mappingBytes, err := ifs.ReadFile(ifs.OS(), pathStr)
 	if err != nil {
 		return nil, err
 	}
@@ -242,7 +243,7 @@ func (p *ProcessorsProvider) getConfs(jsonPtr string, environment map[string]str
 		remainingMocks[k] = v
 	}
 
-	configBytes, _, err := config.ReadFileEnvSwap(targetPath)
+	configBytes, _, _, err := config.ReadFileEnvSwap(ifs.OS(), targetPath)
 	if err != nil {
 		return confs, fmt.Errorf("failed to parse config file '%v': %v", targetPath, err)
 	}
@@ -253,7 +254,7 @@ func (p *ProcessorsProvider) getConfs(jsonPtr string, environment map[string]str
 	}
 
 	for _, path := range p.resourcesPaths {
-		resourceBytes, _, err := config.ReadFileEnvSwap(path)
+		resourceBytes, _, _, err := config.ReadFileEnvSwap(ifs.OS(), path)
 		if err != nil {
 			return confs, fmt.Errorf("failed to parse resources config file '%v': %v", path, err)
 		}

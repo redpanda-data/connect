@@ -16,24 +16,24 @@ func TestMsgPackToJson(t *testing.T) {
 	type testCase struct {
 		name           string
 		base64Input    string
-		expectedOutput interface{}
+		expectedOutput any
 	}
 
 	tests := []testCase{
 		{
 			name:        "basic",
 			base64Input: "iKNrZXmjZm9vp3RydWVLZXnDqGZhbHNlS2V5wqdudWxsS2V5wKZpbnRLZXnQe6hmbG9hdEtlectARszMzMzMzaVhcnJheZGjYmFypm5lc3RlZIGja2V5o2Jheg==",
-			expectedOutput: map[string]interface{}{
+			expectedOutput: map[string]any{
 				"key":      "foo",
 				"trueKey":  true,
 				"falseKey": false,
 				"nullKey":  nil,
 				"intKey":   int8(123),
 				"floatKey": 45.6,
-				"array": []interface{}{
+				"array": []any{
 					"bar",
 				},
-				"nested": map[string]interface{}{
+				"nested": map[string]any{
 					"key": "baz",
 				},
 			},
@@ -66,24 +66,24 @@ func TestMsgPackFromJson(t *testing.T) {
 	type testCase struct {
 		name           string
 		input          string
-		expectedOutput interface{}
+		expectedOutput any
 	}
 
 	tests := []testCase{
 		{
 			name:  "basic",
 			input: `{"key":"foo","trueKey":true,"falseKey":false,"nullKey":null,"intKey":123,"floatKey":45.6,"array":["bar"],"nested":{"key":"baz"}}`,
-			expectedOutput: map[string]interface{}{
+			expectedOutput: map[string]any{
 				"key":      "foo",
 				"trueKey":  true,
 				"falseKey": false,
 				"nullKey":  nil,
 				"intKey":   int8(123),
 				"floatKey": 45.6,
-				"array": []interface{}{
+				"array": []any{
 					"bar",
 				},
-				"nested": map[string]interface{}{
+				"nested": map[string]any{
 					"key": "baz",
 				},
 			},
@@ -91,7 +91,7 @@ func TestMsgPackFromJson(t *testing.T) {
 		{
 			name:  "various ints",
 			input: `{"int8": 13, "uint8": 254, "int16": -257, "uint16" : 65534, "int32" : -70123, "uint32" : 2147483648, "int64" : -9223372036854775808, "uint64": 18446744073709551615}`,
-			expectedOutput: map[string]interface{}{
+			expectedOutput: map[string]any{
 				"int8":   int8(13),
 				"uint8":  uint8(254),
 				"int16":  int16(-257),
@@ -118,7 +118,7 @@ func TestMsgPackFromJson(t *testing.T) {
 			rawBytes, err := msgs[0].AsBytes()
 			require.NoError(t, err)
 
-			var act interface{}
+			var act any
 			require.NoError(t, msgpack.Unmarshal(rawBytes, &act))
 			assert.Equal(t, test.expectedOutput, act)
 		})

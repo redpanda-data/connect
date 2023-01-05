@@ -14,7 +14,7 @@ import (
 // registered this way will NOT support named parameters, for named parameters
 // use the V2 register API.
 func Example_bloblangFunctionPluginV1() {
-	if err := bloblang.RegisterFunction("add_but_always_slightly_wrong", func(args ...interface{}) (bloblang.Function, error) {
+	if err := bloblang.RegisterFunction("add_but_always_slightly_wrong", func(args ...any) (bloblang.Function, error) {
 		var left, right float64
 
 		if err := bloblang.NewArgSpec().
@@ -24,7 +24,7 @@ func Example_bloblangFunctionPluginV1() {
 			return nil, err
 		}
 
-		return func() (interface{}, error) {
+		return func() (any, error) {
 			return left + right + 0.02, nil
 		}, nil
 	}); err != nil {
@@ -40,7 +40,7 @@ root.num = add_but_always_slightly_wrong(this.a, this.b)
 		panic(err)
 	}
 
-	res, err := exe.Query(map[string]interface{}{
+	res, err := exe.Query(map[string]any{
 		"a": 1.2, "b": 2.6,
 	})
 	if err != nil {
@@ -61,7 +61,7 @@ root.num = add_but_always_slightly_wrong(this.a, this.b)
 // way will NOT support named parameters, for named parameters use the V2
 // register API.
 func Example_bloblangMethodPluginV1() {
-	if err := bloblang.RegisterMethod("cuddle", func(args ...interface{}) (bloblang.Method, error) {
+	if err := bloblang.RegisterMethod("cuddle", func(args ...any) (bloblang.Method, error) {
 		var prefix string
 		var suffix string
 
@@ -72,17 +72,17 @@ func Example_bloblangMethodPluginV1() {
 			return nil, err
 		}
 
-		return bloblang.StringMethod(func(s string) (interface{}, error) {
+		return bloblang.StringMethod(func(s string) (any, error) {
 			return prefix + s + suffix, nil
 		}), nil
 	}); err != nil {
 		panic(err)
 	}
 
-	if err := bloblang.RegisterMethod("shuffle", func(_ ...interface{}) (bloblang.Method, error) {
+	if err := bloblang.RegisterMethod("shuffle", func(_ ...any) (bloblang.Method, error) {
 		rand := rand.New(rand.NewSource(0))
-		return bloblang.ArrayMethod(func(in []interface{}) (interface{}, error) {
-			out := make([]interface{}, len(in))
+		return bloblang.ArrayMethod(func(in []any) (any, error) {
+			out := make([]any, len(in))
 			copy(out, in)
 			rand.Shuffle(len(out), func(i, j int) {
 				out[i], out[j] = out[j], out[i]
@@ -103,9 +103,9 @@ root.shuffled = this.names.shuffle()
 		panic(err)
 	}
 
-	res, err := exe.Query(map[string]interface{}{
+	res, err := exe.Query(map[string]any{
 		"summary": "quack",
-		"names":   []interface{}{"denny", "pixie", "olaf", "jen", "spuz"},
+		"names":   []any{"denny", "pixie", "olaf", "jen", "spuz"},
 	})
 	if err != nil {
 		panic(err)
@@ -125,8 +125,8 @@ root.shuffled = this.names.shuffle()
 func Example_bloblangRestrictedEnvironment() {
 	env := bloblang.NewEnvironment().WithoutFunctions("env", "file")
 
-	if err := env.RegisterMethod("custom_thing", func(args ...interface{}) (bloblang.Method, error) {
-		return bloblang.StringMethod(func(s string) (interface{}, error) {
+	if err := env.RegisterMethod("custom_thing", func(args ...any) (bloblang.Method, error) {
+		return bloblang.StringMethod(func(s string) (any, error) {
 			return strings.ToUpper(s), nil
 		}), nil
 	}); err != nil {
@@ -144,11 +144,11 @@ root.buz = this.buz.content.custom_thing()
 		panic(err)
 	}
 
-	res, err := exe.Query(map[string]interface{}{
+	res, err := exe.Query(map[string]any{
 		"foo": 50.0,
 		"bar": "first bit ",
 		"baz": "second bit",
-		"buz": map[string]interface{}{
+		"buz": map[string]any{
 			"id":      "XXXX",
 			"content": "some nested content",
 		},

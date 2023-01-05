@@ -26,7 +26,7 @@ pipeline:
               operator: get
               key: ${! json("key") }
           - catch:
-            - bloblang: 'root = {"err":error()}'
+            - mapping: 'root = {"err":error()}'
         result_map: 'root.result = this'
 
 cache_resources:
@@ -55,7 +55,6 @@ func init() {
 			}
 			return newMultilevelCache(levels, mgr, mgr.Logger())
 		})
-
 	if err != nil {
 		panic(err)
 	}

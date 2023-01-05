@@ -139,10 +139,10 @@ func (l *logProcessor) ProcessBatch(ctx context.Context, spans []*tracing.Span, 
 		if l.fieldsMapping != nil {
 			v, err := l.fieldsMapping.Exec(query.FunctionContext{
 				Maps:     map[string]query.Function{},
-				Vars:     map[string]interface{}{},
+				Vars:     map[string]any{},
 				Index:    i,
 				MsgBatch: msg,
-			}.WithValueFunc(func() *interface{} {
+			}.WithValueFunc(func() *any {
 				jObj, err := msg.Get(i).AsStructured()
 				if err != nil {
 					return nil
@@ -154,7 +154,7 @@ func (l *logProcessor) ProcessBatch(ctx context.Context, spans []*tracing.Span, 
 				return nil
 			}
 
-			vObj, ok := v.(map[string]interface{})
+			vObj, ok := v.(map[string]any)
 			if !ok {
 				l.logger.Errorf("Fields mapping yielded a non-object result: %T", v)
 				return nil
@@ -166,7 +166,7 @@ func (l *logProcessor) ProcessBatch(ctx context.Context, spans []*tracing.Span, 
 			}
 			sort.Strings(keys)
 
-			args := make([]interface{}, 0, len(vObj)*2)
+			args := make([]any, 0, len(vObj)*2)
 			for _, k := range keys {
 				args = append(args, k, vObj[k])
 			}
@@ -176,11 +176,20 @@ func (l *logProcessor) ProcessBatch(ctx context.Context, spans []*tracing.Span, 
 		if len(l.fields) > 0 {
 			interpFields := make(map[string]string, len(l.fields))
 			for k, vi := range l.fields {
-				interpFields[k] = vi.String(i, msg)
+				var err error
+				if interpFields[k], err = vi.String(i, msg); err != nil {
+					l.logger.Errorf("Field %v interpolation error: %v", k, err)
+					return nil
+				}
 			}
 			targetLog = targetLog.WithFields(interpFields)
 		}
-		l.printFn(targetLog, l.message.String(i, msg))
+		logMsg, err := l.message.String(i, msg)
+		if err != nil {
+			l.logger.Errorf("Message interpolation error: %v", err)
+			return nil
+		}
+		l.printFn(targetLog, logMsg)
 		return nil
 	})
 

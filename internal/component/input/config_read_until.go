@@ -21,9 +21,9 @@ func NewReadUntilConfig() ReadUntilConfig {
 }
 
 type dummyReadUntilConfig struct {
-	Input   interface{} `json:"input" yaml:"input"`
-	Restart bool        `json:"restart_input" yaml:"restart_input"`
-	Check   string      `json:"check" yaml:"check"`
+	Input   any    `json:"input" yaml:"input"`
+	Restart bool   `json:"restart_input" yaml:"restart_input"`
+	Check   string `json:"check" yaml:"check"`
 }
 
 // MarshalJSON prints an empty object instead of nil.
@@ -40,7 +40,7 @@ func (r ReadUntilConfig) MarshalJSON() ([]byte, error) {
 }
 
 // MarshalYAML prints an empty object instead of nil.
-func (r ReadUntilConfig) MarshalYAML() (interface{}, error) {
+func (r ReadUntilConfig) MarshalYAML() (any, error) {
 	dummy := dummyReadUntilConfig{
 		Input:   r.Input,
 		Restart: r.Restart,

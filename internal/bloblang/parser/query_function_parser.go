@@ -35,7 +35,7 @@ func functionArgsParser(pCtx Context) Func {
 
 type namedArg struct {
 	name  string
-	value interface{}
+	value any
 }
 
 func namedArgParser(pCtx Context) Func {
@@ -55,7 +55,7 @@ func namedArgParser(pCtx Context) Func {
 			return res
 		}
 
-		resSlice := res.Payload.([]interface{})
+		resSlice := res.Payload.([]any)
 		res.Payload = namedArg{name: resSlice[0].(string), value: resSlice[3]}
 		return res
 	}
@@ -84,7 +84,7 @@ func parseFunctionTail(fn query.Function, pCtx Context) Func {
 			methodParser(fn, pCtx),
 			fieldLiteralMapParser(fn),
 		)(input)
-		if seqSlice, isSlice := res.Payload.([]interface{}); isSlice {
+		if seqSlice, isSlice := res.Payload.([]any); isSlice {
 			method, err := query.NewMapMethod(fn, seqSlice[2].(query.Function))
 			if err != nil {
 				res.Err = NewFatalError(input, err)
@@ -122,7 +122,7 @@ func parseWithTails(fnParser Func, pCtx Context) Func {
 			return res
 		}
 
-		seq := res.Payload.([]interface{})
+		seq := res.Payload.([]any)
 		isNot := seq[0] != nil
 		fn := seq[1].(query.Function)
 		for {
@@ -216,8 +216,42 @@ func variableLiteralParser() Func {
 			return res
 		}
 
-		path := res.Payload.([]interface{})[1].(string)
+		path := res.Payload.([]any)[1].(string)
 		fn := query.NewVarFunction(path)
+
+		return Success(fn, res.Remaining)
+	}
+}
+
+func metadataLiteralParser() Func {
+	metaPathParser := Expect(
+		Sequence(
+			Char('@'),
+			Optional(OneOf(
+				JoinStringPayloads(
+					UntilFail(
+						OneOf(
+							InRange('a', 'z'),
+							InRange('A', 'Z'),
+							InRange('0', '9'),
+							Char('_'),
+						),
+					),
+				),
+				QuotedString(),
+			)),
+		),
+		"metadata path",
+	)
+
+	return func(input []rune) Result {
+		res := metaPathParser(input)
+		if res.Err != nil {
+			return res
+		}
+
+		path, _ := res.Payload.([]any)[1].(string)
+		fn := query.NewMetaFunction(path)
 
 		return Success(fn, res.Remaining)
 	}
@@ -263,15 +297,15 @@ func fieldLiteralRootParser(pCtx Context) Func {
 	}
 }
 
-func extractArgsParserResult(paramsDef query.Params, args []interface{}) (*query.ParsedParams, error) {
-	var namelessArgs []interface{}
-	var namedArgs map[string]interface{}
+func extractArgsParserResult(paramsDef query.Params, args []any) (*query.ParsedParams, error) {
+	var namelessArgs []any
+	var namedArgs map[string]any
 
 	for _, arg := range args {
 		namedArg, isNamed := arg.(namedArg)
 		if isNamed {
 			if namedArgs == nil {
-				namedArgs = map[string]interface{}{}
+				namedArgs = map[string]any{}
 			}
 			if _, exists := namedArgs[namedArg.name]; exists {
 				return nil, fmt.Errorf("duplicate named arg: %v", namedArg.name)
@@ -315,7 +349,7 @@ func methodParser(fn query.Function, pCtx Context) Func {
 			return res
 		}
 
-		seqSlice := res.Payload.([]interface{})
+		seqSlice := res.Payload.([]any)
 
 		targetMethod := seqSlice[0].(string)
 		params, err := pCtx.Methods.Params(targetMethod)
@@ -323,7 +357,7 @@ func methodParser(fn query.Function, pCtx Context) Func {
 			return Fail(NewFatalError(input, err), input)
 		}
 
-		parsedParams, err := extractArgsParserResult(params, seqSlice[1].([]interface{}))
+		parsedParams, err := extractArgsParserResult(params, seqSlice[1].([]any))
 		if err != nil {
 			return Fail(NewFatalError(input, err), input)
 		}
@@ -351,7 +385,7 @@ func functionParser(pCtx Context) Func {
 			return res
 		}
 
-		seqSlice := res.Payload.([]interface{})
+		seqSlice := res.Payload.([]any)
 
 		targetFunc := seqSlice[0].(string)
 		params, err := pCtx.Functions.Params(targetFunc)
@@ -359,7 +393,7 @@ func functionParser(pCtx Context) Func {
 			return Fail(NewFatalError(input, err), input)
 		}
 
-		parsedParams, err := extractArgsParserResult(params, seqSlice[1].([]interface{}))
+		parsedParams, err := extractArgsParserResult(params, seqSlice[1].([]any))
 		if err != nil {
 			return Fail(NewFatalError(input, err), input)
 		}

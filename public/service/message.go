@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/benthosdev/benthos/v4/internal/bloblang/mapping"
+	"github.com/benthosdev/benthos/v4/internal/bloblang/query"
 	"github.com/benthosdev/benthos/v4/internal/message"
 	"github.com/benthosdev/benthos/v4/public/bloblang"
 )
@@ -120,7 +121,7 @@ func (m *Message) AsBytes() ([]byte, error) {
 // It is NOT safe to mutate the contents of the returned value if it is a
 // reference type (slice or map). In order to safely mutate the structured
 // contents of a message use AsStructuredMut.
-func (m *Message) AsStructured() (interface{}, error) {
+func (m *Message) AsStructured() (any, error) {
 	return m.part.AsStructured()
 }
 
@@ -131,7 +132,7 @@ func (m *Message) AsStructured() (interface{}, error) {
 // It is safe to mutate the contents of the returned value even if it is a
 // reference type (slice or map), as the structured contents will be lazily deep
 // cloned if it is still owned by an upstream component.
-func (m *Message) AsStructuredMut() (interface{}, error) {
+func (m *Message) AsStructuredMut() (any, error) {
 	v, err := m.part.AsStructuredMut()
 	if err != nil {
 		return nil, err
@@ -154,7 +155,7 @@ func (m *Message) SetBytes(b []byte) {
 // The provided structure is considered read-only, which means subsequent
 // processors will need to fully clone the structure in order to perform
 // mutations on the data.
-func (m *Message) SetStructured(i interface{}) {
+func (m *Message) SetStructured(i any) {
 	m.part.SetStructured(i)
 }
 
@@ -167,7 +168,7 @@ func (m *Message) SetStructured(i interface{}) {
 //
 // The provided structure is considered mutable, which means subsequent
 // processors might mutate the structure without performing a deep copy.
-func (m *Message) SetStructuredMut(i interface{}) {
+func (m *Message) SetStructuredMut(i any) {
 	m.part.SetStructuredMut(i)
 }
 
@@ -187,19 +188,45 @@ func (m *Message) GetError() error {
 
 // MetaGet attempts to find a metadata key from the message and returns a string
 // result and a boolean indicating whether it was found.
+//
+// Strong advice: Use MetaGetMut instead.
 func (m *Message) MetaGet(key string) (string, bool) {
-	v := m.part.MetaGet(key)
-	return v, len(v) > 0
+	v, exists := m.part.MetaGetMut(key)
+	if !exists {
+		return "", false
+	}
+	return query.IToString(v), true
+}
+
+// MetaGetMut attempts to find a metadata key from the message and returns the
+// value if found, and a boolean indicating whether it was found. The value
+// returned is mutable, and so it is safe to modify even though it may be a
+// reference type such as a slice or map.
+func (m *Message) MetaGetMut(key string) (any, bool) {
+	v, exists := m.part.MetaGetMut(key)
+	if !exists {
+		return "", false
+	}
+	return v, true
 }
 
 // MetaSet sets the value of a metadata key. If the value is an empty string the
 // metadata key is deleted.
+//
+// Strong advice: Use MetaSetMut instead.
 func (m *Message) MetaSet(key, value string) {
 	if value == "" {
 		m.part.MetaDelete(key)
 	} else {
-		m.part.MetaSet(key, value)
+		m.part.MetaSetMut(key, value)
 	}
+}
+
+// MetaSetMut sets the value of a metadata key to any value. The value provided
+// is stored as mutable, and therefore if it is a reference type such as a slice
+// or map then it could be modified by a downstream component.
+func (m *Message) MetaSetMut(key string, value any) {
+	m.part.MetaSetMut(key, value)
 }
 
 // MetaDelete removes a key from the message metadata.
@@ -210,8 +237,17 @@ func (m *Message) MetaDelete(key string) {
 // MetaWalk iterates each metadata key/value pair and executes a provided
 // closure on each iteration. To stop iterating, return an error from the
 // closure. An error returned by the closure will be returned by this function.
+//
+// Strong advice: Use MetaWalkMut instead.
 func (m *Message) MetaWalk(fn func(string, string) error) error {
-	return m.part.MetaIter(fn)
+	return m.part.MetaIterStr(fn)
+}
+
+// MetaWalkMut iterates each metadata key/value pair and executes a provided
+// closure on each iteration. To stop iterating, return an error from the
+// closure. An error returned by the closure will be returned by this function.
+func (m *Message) MetaWalkMut(fn func(key string, value any) error) error {
+	return m.part.MetaIterMut(fn)
 }
 
 //------------------------------------------------------------------------------
@@ -326,18 +362,49 @@ func (b MessageBatch) BloblangMutate(index int, blobl *bloblang.Executor) (*Mess
 	return nil, nil
 }
 
+// TryInterpolatedString resolves an interpolated string expression on a message
+// batch, from the perspective of a particular message index.
+//
+// This method allows interpolation functions to perform windowed aggregations
+// across message batches, and is a more powerful way to interpolate strings
+// than the standard .String method.
+func (b MessageBatch) TryInterpolatedString(index int, i *InterpolatedString) (string, error) {
+	msg := make(message.Batch, len(b))
+	for i, m := range b {
+		msg[i] = m.part
+	}
+	return i.expr.String(index, msg)
+}
+
+// TryInterpolatedBytes resolves an interpolated string expression on a message
+// batch, from the perspective of a particular message index.
+//
+// This method allows interpolation functions to perform windowed aggregations
+// across message batches, and is a more powerful way to interpolate strings
+// than the standard .String method.
+func (b MessageBatch) TryInterpolatedBytes(index int, i *InterpolatedString) ([]byte, error) {
+	msg := make(message.Batch, len(b))
+	for i, m := range b {
+		msg[i] = m.part
+	}
+	return i.expr.Bytes(index, msg)
+}
+
 // InterpolatedString resolves an interpolated string expression on a message
 // batch, from the perspective of a particular message index.
 //
 // This method allows interpolation functions to perform windowed aggregations
 // across message batches, and is a more powerful way to interpolate strings
 // than the standard .String method.
+//
+// Deprecated: Use TryInterpolatedString instead.
 func (b MessageBatch) InterpolatedString(index int, i *InterpolatedString) string {
 	msg := make(message.Batch, len(b))
 	for i, m := range b {
 		msg[i] = m.part
 	}
-	return i.expr.String(index, msg)
+	s, _ := i.expr.String(index, msg)
+	return s
 }
 
 // InterpolatedBytes resolves an interpolated string expression on a message
@@ -346,10 +413,13 @@ func (b MessageBatch) InterpolatedString(index int, i *InterpolatedString) strin
 // This method allows interpolation functions to perform windowed aggregations
 // across message batches, and is a more powerful way to interpolate strings
 // than the standard .String method.
+//
+// Deprecated: Use TryInterpolatedBytes instead.
 func (b MessageBatch) InterpolatedBytes(index int, i *InterpolatedString) []byte {
 	msg := make(message.Batch, len(b))
 	for i, m := range b {
 		msg[i] = m.part
 	}
-	return i.expr.Bytes(index, msg)
+	bRes, _ := i.expr.Bytes(index, msg)
+	return bRes
 }

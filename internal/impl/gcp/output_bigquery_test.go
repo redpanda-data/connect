@@ -210,7 +210,7 @@ csv:
 	defer output.Close(context.Background())
 	require.NoError(t, err)
 
-	var data = []byte("1,2,3")
+	data := []byte("1,2,3")
 	loader := output.createTableLoader(&data)
 
 	assert.Equal(t, "table_meow", loader.Dst.TableID)

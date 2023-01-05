@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
 
 	"github.com/fatih/color"
 	"github.com/nsf/jsondiff"
@@ -14,17 +13,18 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/bloblang/parser"
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/internal/docs"
+	"github.com/benthosdev/benthos/v4/internal/filepath/ifs"
 	"github.com/benthosdev/benthos/v4/internal/log"
 )
 
 // FieldConfig describes a configuration field used in the template.
 type FieldConfig struct {
-	Name        string       `yaml:"name"`
-	Description string       `yaml:"description"`
-	Type        *string      `yaml:"type,omitempty"`
-	Kind        *string      `yaml:"kind,omitempty"`
-	Default     *interface{} `yaml:"default,omitempty"`
-	Advanced    bool         `yaml:"advanced"`
+	Name        string  `yaml:"name"`
+	Description string  `yaml:"description"`
+	Type        *string `yaml:"type,omitempty"`
+	Kind        *string `yaml:"kind,omitempty"`
+	Default     *any    `yaml:"default,omitempty"`
+	Advanced    bool    `yaml:"advanced"`
 }
 
 // TestConfig defines a unit test for the template.
@@ -124,7 +124,7 @@ func (c Config) compile() (*compiled, error) {
 }
 
 func diffYAMLNodesAsJSON(expNode, actNode *yaml.Node) (string, error) {
-	var iexp, iact interface{}
+	var iexp, iact any
 	if err := expNode.Decode(&iexp); err != nil {
 		return "", fmt.Errorf("failed to marshal expected %w", err)
 	}
@@ -164,7 +164,7 @@ func (c Config) Test() ([]string, error) {
 			return nil, fmt.Errorf("test '%v': %w", test.Name, err)
 		}
 		for _, lint := range docs.LintYAML(docs.NewLintContext(), docs.Type(c.Type), outConf) {
-			failures = append(failures, fmt.Sprintf("test '%v': lint error in resulting config: line %v: %v", test.Name, lint.Line, lint.What))
+			failures = append(failures, fmt.Sprintf("test '%v': lint error in resulting config: %v", test.Name, lint.Error()))
 		}
 		if len(test.Expected.Content) > 0 {
 			diff, err := diffYAMLNodesAsJSON(&test.Expected, outConf)
@@ -181,9 +181,9 @@ func (c Config) Test() ([]string, error) {
 }
 
 // ReadConfig attempts to read a template configuration file.
-func ReadConfig(path string) (conf Config, lints []string, err error) {
+func ReadConfig(path string) (conf Config, lints []docs.Lint, err error) {
 	var templateBytes []byte
-	if templateBytes, err = os.ReadFile(path); err != nil {
+	if templateBytes, err = ifs.ReadFile(ifs.OS(), path); err != nil {
 		return
 	}
 
@@ -196,11 +196,7 @@ func ReadConfig(path string) (conf Config, lints []string, err error) {
 		return
 	}
 
-	for _, l := range ConfigSpec().LintYAML(docs.NewLintContext(), &node) {
-		if l.Level == docs.LintError {
-			lints = append(lints, fmt.Sprintf("line %v: %v", l.Line, l.What))
-		}
-	}
+	lints = ConfigSpec().LintYAML(docs.NewLintContext(), &node)
 	return
 }
 
@@ -266,6 +262,6 @@ func ConfigSpec() docs.FieldSpecs {
 			docs.FieldString("name", "A name to identify the test."),
 			docs.FieldObject("config", "A configuration to run this test with, the config resulting from applying the template with this config will be linted."),
 			docs.FieldObject("expected", "An optional configuration describing the expected result of applying the template, when specified the result will be diffed and any mismatching fields will be reported as a test error.").Optional(),
-		).HasDefault([]interface{}{}),
+		).HasDefault([]any{}),
 	}
 }

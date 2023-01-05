@@ -1,8 +1,6 @@
 package tracer
 
 import (
-	"fmt"
-
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/propagation"
 	yaml "gopkg.in/yaml.v3"
@@ -21,7 +19,7 @@ type Config struct {
 	Jaeger     JaegerConfig     `json:"jaeger" yaml:"jaeger"`
 	CloudTrace CloudTraceConfig `json:"gcp_cloudtrace" yaml:"gcp_cloudtrace"`
 	None       struct{}         `json:"none" yaml:"none"`
-	Plugin     interface{}      `json:"plugin,omitempty" yaml:"plugin,omitempty"`
+	Plugin     any              `json:"plugin,omitempty" yaml:"plugin,omitempty"`
 }
 
 // NewConfig returns a configuration struct fully populated with default values.
@@ -45,18 +43,18 @@ func (conf *Config) UnmarshalYAML(value *yaml.Node) error {
 
 	err := value.Decode(&aliased)
 	if err != nil {
-		return fmt.Errorf("line %v: %v", value.Line, err)
+		return docs.NewLintError(value.Line, docs.LintFailedRead, err.Error())
 	}
 
 	var spec docs.ComponentSpec
 	if aliased.Type, spec, err = docs.GetInferenceCandidateFromYAML(docs.DeprecatedProvider, docs.TypeTracer, value); err != nil {
-		return fmt.Errorf("line %v: %w", value.Line, err)
+		return docs.NewLintError(value.Line, docs.LintComponentNotFound, err.Error())
 	}
 
 	if spec.Plugin {
 		pluginNode, err := docs.GetPluginConfigYAML(aliased.Type, value)
 		if err != nil {
-			return fmt.Errorf("line %v: %v", value.Line, err)
+			return docs.NewLintError(value.Line, docs.LintFailedRead, err.Error())
 		}
 		aliased.Plugin = &pluginNode
 	} else {

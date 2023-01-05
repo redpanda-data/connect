@@ -32,12 +32,12 @@ func writeConcernDocs() docs.FieldSpecs {
 	}
 }
 
-func mapExamples() []interface{} {
-	examples := []interface{}{"root.a = this.foo\nroot.b = this.bar"}
+func mapExamples() []any {
+	examples := []any{"root.a = this.foo\nroot.b = this.bar"}
 	return examples
 }
 
-var urlField = service.NewStringField("url").
+var urlField = service.NewURLField("url").
 	Description("The URL of the target MongoDB DB.").
 	Example("mongodb://localhost:27017")
 

@@ -7,17 +7,20 @@ import (
 	"github.com/fatih/color"
 	"github.com/urfave/cli/v2"
 
+	"github.com/benthosdev/benthos/v4/internal/docs"
 	ifilepath "github.com/benthosdev/benthos/v4/internal/filepath"
+	"github.com/benthosdev/benthos/v4/internal/filepath/ifs"
 	"github.com/benthosdev/benthos/v4/internal/template"
 )
 
-var red = color.New(color.FgRed).SprintFunc()
-var yellow = color.New(color.FgYellow).SprintFunc()
+var (
+	red    = color.New(color.FgRed).SprintFunc()
+	yellow = color.New(color.FgYellow).SprintFunc()
+)
 
 type pathLint struct {
 	source string
-	lint   string
-	err    string
+	lint   docs.Lint
 }
 
 func lintFile(path string) (pathLints []pathLint) {
@@ -25,7 +28,7 @@ func lintFile(path string) (pathLints []pathLint) {
 	if err != nil {
 		pathLints = append(pathLints, pathLint{
 			source: path,
-			err:    red(err.Error()),
+			lint:   docs.NewLintError(1, docs.LintFailedRead, err.Error()),
 		})
 		return
 	}
@@ -41,7 +44,7 @@ func lintFile(path string) (pathLints []pathLint) {
 	if err != nil {
 		pathLints = append(pathLints, pathLint{
 			source: path,
-			err:    err.Error(),
+			lint:   docs.NewLintError(1, docs.LintFailedRead, err.Error()),
 		})
 		return
 	}
@@ -49,7 +52,7 @@ func lintFile(path string) (pathLints []pathLint) {
 	for _, tErr := range testErrors {
 		pathLints = append(pathLints, pathLint{
 			source: path,
-			err:    tErr,
+			lint:   docs.NewLintError(1, docs.LintFailedRead, tErr),
 		})
 	}
 	return
@@ -70,7 +73,7 @@ Exits with a status code 1 if any linting errors are detected:
 If a path ends with '...' then Benthos will walk the target and lint any
 files with the .yaml or .yml extension.`[1:],
 		Action: func(c *cli.Context) error {
-			targets, err := ifilepath.GlobsAndSuperPaths(c.Args().Slice(), "yaml", "yml")
+			targets, err := ifilepath.GlobsAndSuperPaths(ifs.OS(), c.Args().Slice(), "yaml", "yml")
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Lint paths error: %v\n", err)
 				os.Exit(1)
@@ -89,11 +92,12 @@ files with the .yaml or .yml extension.`[1:],
 				os.Exit(0)
 			}
 			for _, lint := range pathLints {
-				message := yellow(lint.lint)
-				if len(lint.err) > 0 {
-					message = red(lint.err)
+				lintText := fmt.Sprintf("%v%v\n", lint.source, lint.lint.Error())
+				if lint.lint.Type == docs.LintFailedRead {
+					fmt.Fprint(os.Stderr, red(lintText))
+				} else {
+					fmt.Fprint(os.Stderr, yellow(lintText))
 				}
-				fmt.Fprintf(os.Stderr, "%v: %v\n", lint.source, message)
 			}
 			os.Exit(1)
 			return nil

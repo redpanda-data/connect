@@ -57,6 +57,7 @@ input:
     username: ""
     password: ""
     operation: find
+    json_marshal_mode: canonical
     query: ""
 ```
 
@@ -119,6 +120,21 @@ Type: `string`
 Default: `"find"`  
 Requires version 4.2.0 or newer  
 Options: `find`, `aggregate`.
+
+### `json_marshal_mode`
+
+The json_marshal_mode setting is optional and controls the format of the output message.
+
+
+Type: `string`  
+Default: `"canonical"`  
+Requires version 4.7.0 or newer  
+
+| Option | Summary |
+|---|---|
+| `canonical` | A string format that emphasizes type preservation at the expense of readability and interoperability. That is, conversion from canonical to BSON will generally preserve type information except in certain specific cases.  |
+| `relaxed` | A string format that emphasizes readability and interoperability at the expense of type preservation.That is, conversion from relaxed format to BSON can lose type information. |
+
 
 ### `query`
 

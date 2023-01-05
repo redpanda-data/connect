@@ -87,6 +87,15 @@ If the result of a target query fails (due to incorrect types, failed parsing, e
 root.doc.id = this.thing.id.string().catch(uuid_v4())
 ```
 
+The fallback argument can be a mapping, allowing you to capture the error string and yield structured data back.
+
+```coffee
+root.url = this.url.parse_url().catch(err -> {"error":err,"input":this.url})
+
+# In:  {"url":"invalid %&# url"}
+# Out: {"url":{"error":"field `this.url`: parse \"invalid %&\": invalid URL escape \"%&\"","input":"invalid %&# url"}}
+```
+
 When the input document is not structured attempting to reference structured fields with `this` will result in an error. Therefore, a convenient way to delete non-structured data is with a catch.
 
 ```coffee
@@ -478,8 +487,8 @@ root.the_rest = this.value.slice(0, -4)
 
 ### `slug`
 
-:::caution EXPERIMENTAL
-This method is experimental and therefore breaking changes could be made to it outside of major version releases.
+:::caution BETA
+This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
 :::
 Creates a "slug" from a given string. Wraps the github.com/gosimple/slug package. See its [docs](https://pkg.go.dev/github.com/gosimple/slug) for more information.
 
@@ -780,7 +789,7 @@ root.new_value = this.value.abs()
 
 ### `ceil`
 
-Returns the least integer value greater than or equal to a number.
+Returns the least integer value greater than or equal to a number. If the resulting value fits within a 64-bit integer then that is returned, otherwise a new floating point number is returned.
 
 #### Examples
 
@@ -797,7 +806,7 @@ root.new_value = this.value.ceil()
 
 ### `floor`
 
-Returns the greatest integer value less than or equal to the target number.
+Returns the greatest integer value less than or equal to the target number. If the resulting value fits within a 64-bit integer then that is returned, otherwise a new floating point number is returned.
 
 #### Examples
 
@@ -807,6 +816,48 @@ root.new_value = this.value.floor()
 
 # In:  {"value":5.7}
 # Out: {"new_value":5}
+```
+
+### `int32`
+
+
+Converts a numerical type into a 32-bit signed integer, this is for advanced use cases where a specific data type is needed for a given component (such as the ClickHouse SQL driver).
+
+If the value is a string then an attempt will be made to parse it as a 32-bit integer. If the target value exceeds the capacity of an integer or contains decimal values then this method will throw an error. In order to convert a floating point number containing decimals first use [`.round()`](#round) on the value first.
+
+#### Examples
+
+
+```coffee
+
+root.a = this.a.int32()
+root.b = this.b.round().int32()
+root.c = this.c.int32()
+
+
+# In:  {"a":12,"b":12.34,"c":"12"}
+# Out: {"a":12,"b":12,"c":12}
+```
+
+### `int64`
+
+
+Converts a numerical type into a 64-bit signed integer, this is for advanced use cases where a specific data type is needed for a given component (such as the ClickHouse SQL driver).
+
+If the value is a string then an attempt will be made to parse it as a 64-bit integer. If the target value exceeds the capacity of an integer or contains decimal values then this method will throw an error. In order to convert a floating point number containing decimals first use [`.round()`](#round) on the value first.
+
+#### Examples
+
+
+```coffee
+
+root.a = this.a.int64()
+root.b = this.b.round().int64()
+root.c = this.c.int64()
+
+
+# In:  {"a":12,"b":12.34,"c":"12"}
+# Out: {"a":12,"b":12,"c":12}
 ```
 
 ### `log`
@@ -893,7 +944,7 @@ root.new_value = [10,this.value].min()
 
 ### `round`
 
-Rounds numbers to the nearest integer, rounding half away from zero.
+Rounds numbers to the nearest integer, rounding half away from zero. If the resulting value fits within a 64-bit integer then that is returned, otherwise a new floating point number is returned.
 
 #### Examples
 
@@ -906,6 +957,50 @@ root.new_value = this.value.round()
 
 # In:  {"value":5.9}
 # Out: {"new_value":6}
+```
+
+### `uint32`
+
+
+Converts a numerical type into a 32-bit unsigned integer, this is for advanced use cases where a specific data type is needed for a given component (such as the ClickHouse SQL driver).
+
+If the value is a string then an attempt will be made to parse it as a 32-bit unsigned integer. If the target value exceeds the capacity of an integer or contains decimal values then this method will throw an error. In order to convert a floating point number containing decimals first use [`.round()`](#round) on the value first.
+
+#### Examples
+
+
+```coffee
+
+root.a = this.a.uint32()
+root.b = this.b.round().uint32()
+root.c = this.c.uint32()
+root.d = this.d.uint32().catch(0)
+
+
+# In:  {"a":12,"b":12.34,"c":"12","d":-12}
+# Out: {"a":12,"b":12,"c":12,"d":0}
+```
+
+### `uint64`
+
+
+Converts a numerical type into a 64-bit unsigned integer, this is for advanced use cases where a specific data type is needed for a given component (such as the ClickHouse SQL driver).
+
+If the value is a string then an attempt will be made to parse it as a 64-bit unsigned integer. If the target value exceeds the capacity of an integer or contains decimal values then this method will throw an error. In order to convert a floating point number containing decimals first use [`.round()`](#round) on the value first.
+
+#### Examples
+
+
+```coffee
+
+root.a = this.a.uint64()
+root.b = this.b.round().uint64()
+root.c = this.c.uint64()
+root.d = this.d.uint64().catch(0)
+
+
+# In:  {"a":12,"b":12.34,"c":"12","d":-12}
+# Out: {"a":12,"b":12,"c":12,"d":0}
 ```
 
 ## Timestamp Manipulation
@@ -1579,6 +1674,76 @@ root.new_dict = this.dict.filter(item -> item.value.contains("foo"))
 # Out: {"new_dict":{"first":"hello foo","third":"this foo is great"}}
 ```
 
+### `find`
+
+:::caution BETA
+This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
+:::
+Returns the index of the first occurrence of a value or query in an array. `-1` is returned if there are no matches. Numerical comparisons are made irrespective of the representation type (float versus integer).
+
+#### Parameters
+
+**`value`** &lt;query expression&gt; A value to find. If a query is provided it will only be resolved once during the lifetime of the mapping.  
+
+#### Examples
+
+
+```coffee
+root.index = this.find("bar")
+
+# In:  ["foo", "bar", "baz"]
+# Out: {"index":1}
+```
+
+```coffee
+root.index = this.find(v -> v != "bar")
+
+# In:  ["foo", "bar", "baz"]
+# Out: {"index":0}
+```
+
+```coffee
+root.index = this.find(v -> v != "foo")
+
+# In:  ["foo"]
+# Out: {"index":-1}
+```
+
+### `find_all`
+
+:::caution BETA
+This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
+:::
+Returns an array containing the indexes of all occurrences of a value or query in an array. An empty array is returned if there are no matches. Numerical comparisons are made irrespective of the representation type (float versus integer).
+
+#### Parameters
+
+**`value`** &lt;query expression&gt; A value to find. If a query is provided it will only be resolved once during the lifetime of the mapping.  
+
+#### Examples
+
+
+```coffee
+root.index = this.find_all("bar")
+
+# In:  ["foo", "bar", "baz", "bar"]
+# Out: {"index":[1,3]}
+```
+
+```coffee
+root.index = this.find_all(v -> v != "bar")
+
+# In:  ["foo", "bar", "baz"]
+# Out: {"index":[0,2]}
+```
+
+```coffee
+root.index = this.find_all(v -> v != "foo")
+
+# In:  ["foo"]
+# Out: {"index":[]}
+```
+
 ### `flatten`
 
 Iterates an array and any element that is itself an array is removed and has its elements inserted directly in the resulting array.
@@ -2025,6 +2190,22 @@ root.foo_vals = this.foo.values().sort()
 # Out: {"foo_vals":[1,2]}
 ```
 
+### `with`
+
+Returns an object where all but one or more [field path][field_paths] arguments are removed. Each path specifies a specific field to be retained from the input object, allowing for nested fields.
+
+If a key within a nested path does not exist then it is ignored.
+
+#### Examples
+
+
+```coffee
+root = this.with("inner.a","inner.c","d")
+
+# In:  {"inner":{"a":"first","b":"second","c":"third"},"d":"fourth","e":"fifth"}
+# Out: {"d":"fourth","inner":{"a":"first","c":"third"}}
+```
+
 ### `without`
 
 Returns an object where one or more [field path][field_paths] arguments are removed. Each path specifies a specific field to be deleted from the input object, allowing for nested fields.
@@ -2076,7 +2257,8 @@ Serializes a target value into a pretty-printed JSON byte array (with 4 space in
 
 #### Parameters
 
-**`indent`** &lt;(optional) string, default `"    "`&gt; Indentation string. Each element in a JSON object or array will begin on a new, indented line followed by one or more copies of indent according to the indentation nesting.  
+**`indent`** &lt;string, default `"    "`&gt; Indentation string. Each element in a JSON object or array will begin on a new, indented line followed by one or more copies of indent according to the indentation nesting.  
+**`no_indent`** &lt;bool, default `false`&gt; Disable indentation.  
 
 #### Examples
 
@@ -2090,7 +2272,7 @@ root = this.doc.format_json()
 #      }
 ```
 
-Provide an argument string in order to customise the indentation used.
+Pass a string to the `indent` parameter in order to customise the indentation.
 
 ```coffee
 root = this.format_json("  ")
@@ -2112,6 +2294,15 @@ root.doc = this.doc.format_json().string()
 # Out: {"doc":"{\n    \"foo\": \"bar\"\n}"}
 ```
 
+Set the `no_indent` parameter to true to disable indentation. The result is equivalent to calling `bytes()`.
+
+```coffee
+root = this.doc.format_json(no_indent: true)
+
+# In:  {"doc":{"foo":"bar"}}
+# Out: {"foo":"bar"}
+```
+
 ### `format_msgpack`
 
 Formats data as a [MessagePack](https://msgpack.org/) message in bytes format.
@@ -2131,6 +2322,64 @@ root.encoded = this.format_msgpack().encode("base64")
 
 # In:  {"foo":"bar"}
 # Out: {"encoded":"gaNmb2+jYmFy"}
+```
+
+### `format_xml`
+
+
+Serializes a target value into an XML byte array.
+
+
+#### Parameters
+
+**`indent`** &lt;string, default `"    "`&gt; Indentation string. Each element in an XML object or array will begin on a new, indented line followed by one or more copies of indent according to the indentation nesting.  
+**`no_indent`** &lt;bool, default `false`&gt; Disable indentation.  
+
+#### Examples
+
+
+Serializes a target value into a pretty-printed XML byte array (with 4 space indentation by default).
+
+```coffee
+root = this.format_xml()
+
+# In:  {"foo":{"bar":{"baz":"foo bar baz"}}}
+# Out: <foo>
+#          <bar>
+#              <baz>foo bar baz</baz>
+#          </bar>
+#      </foo>
+```
+
+Pass a string to the `indent` parameter in order to customise the indentation.
+
+```coffee
+root = this.format_xml("  ")
+
+# In:  {"foo":{"bar":{"baz":"foo bar baz"}}}
+# Out: <foo>
+#        <bar>
+#          <baz>foo bar baz</baz>
+#        </bar>
+#      </foo>
+```
+
+Use the `.string()` method in order to coerce the result into a string.
+
+```coffee
+root.doc = this.format_xml("").string()
+
+# In:  {"foo":{"bar":{"baz":"foo bar baz"}}}
+# Out: {"doc":"<foo>\n<bar>\n<baz>foo bar baz</baz>\n</bar>\n</foo>"}
+```
+
+Set the `no_indent` parameter to true to disable indentation.
+
+```coffee
+root = this.format_xml(no_indent: true)
+
+# In:  {"foo":{"bar":{"baz":"foo bar baz"}}}
+# Out: <foo><bar><baz>foo bar baz</baz></bar></foo>
 ```
 
 ### `format_yaml`
@@ -2158,16 +2407,51 @@ root.doc = this.doc.format_yaml().string()
 
 ### `parse_csv`
 
-Attempts to parse a string into an array of objects by following the CSV format described in RFC 4180. The first line is assumed to be a header row, which determines the keys of values in each object.
+Attempts to parse a string into an array of objects by following the CSV format described in RFC 4180.
+
+#### Parameters
+
+**`parse_header_row`** &lt;bool, default `true`&gt; Whether to reference the first row as a header row. If set to true the output structure for messages will be an object where field keys are determined by the header row. Otherwise, the output will be an array of row arrays.  
+**`delimiter`** &lt;string, default `","`&gt; The delimiter to use for splitting values in each record. It must be a single character.  
+**`lazy_quotes`** &lt;bool, default `false`&gt; If set to `true`, a quote may appear in an unquoted field and a non-doubled quote may appear in a quoted field.  
 
 #### Examples
 
+
+Parses CSV data with a header row
 
 ```coffee
 root.orders = this.orders.parse_csv()
 
 # In:  {"orders":"foo,bar\nfoo 1,bar 1\nfoo 2,bar 2"}
 # Out: {"orders":[{"bar":"bar 1","foo":"foo 1"},{"bar":"bar 2","foo":"foo 2"}]}
+```
+
+Parses CSV data without a header row
+
+```coffee
+root.orders = this.orders.parse_csv(false)
+
+# In:  {"orders":"foo 1,bar 1\nfoo 2,bar 2"}
+# Out: {"orders":[["foo 1","bar 1"],["foo 2","bar 2"]]}
+```
+
+Parses CSV data delimited by dots
+
+```coffee
+root.orders = this.orders.parse_csv(delimiter:".")
+
+# In:  {"orders":"foo.bar\nfoo 1.bar 1\nfoo 2.bar 2"}
+# Out: {"orders":[{"bar":"bar 1","foo":"foo 1"},{"bar":"bar 2","foo":"foo 2"}]}
+```
+
+Parses CSV data containing a quote in an unquoted field
+
+```coffee
+root.orders = this.orders.parse_csv(lazy_quotes:true)
+
+# In:  {"orders":"foo,bar\nfoo 1,bar 1\nfoo\" \"2,bar\" \"2"}
+# Out: {"orders":[{"bar":"bar 1","foo":"foo 1"},{"bar":"bar\" \"2","foo":"foo\" \"2"}]}
 ```
 
 ### `parse_form_url_encoded`
@@ -2188,6 +2472,10 @@ root.values = this.body.parse_form_url_encoded()
 
 Attempts to parse a string as a JSON document and returns the result.
 
+#### Parameters
+
+**`use_number`** &lt;(optional) bool&gt; An optional flag that when set makes parsing numbers as json.Number instead of the default float64.  
+
 #### Examples
 
 
@@ -2196,6 +2484,13 @@ root.doc = this.doc.parse_json()
 
 # In:  {"doc":"{\"foo\":\"bar\"}"}
 # Out: {"doc":{"foo":"bar"}}
+```
+
+```coffee
+root.doc = this.doc.parse_json(use_number: true)
+
+# In:  {"doc":"{\"foo\":\"11380878173205700000000000000000000000000000000\"}"}
+# Out: {"doc":{"foo":"11380878173205700000000000000000000000000000000"}}
 ```
 
 ### `parse_msgpack`
@@ -2225,7 +2520,7 @@ Decodes a [Parquet file](https://parquet.apache.org/docs/) into an array of obje
 
 #### Parameters
 
-**`byte_array_as_string`** &lt;bool, default `false`&gt; Whether to extract BYTE_ARRAY and FIXED_LEN_BYTE_ARRAY values as strings rather than byte slices. Enabling this field makes serialising the data as JSON more intuitive as `[]byte` values are serialised as base64 encoded strings by default.  
+**`byte_array_as_string`** &lt;bool, default `false`&gt; Whether to extract BYTE_ARRAY and FIXED_LEN_BYTE_ARRAY values as strings rather than byte slices in all cases. Values with a logical type of UTF8 will automatically be extracted as strings irrespective of this parameter. Enabling this field makes serialising the data as JSON more intuitive as `[]byte` values are serialised as base64 encoded strings by default.  
 
 #### Examples
 
@@ -2236,6 +2531,30 @@ root = content().parse_parquet()
 
 ```coffee
 root = content().parse_parquet(byte_array_as_string: true)
+```
+
+### `parse_url`
+
+Attempts to parse a URL from a string value, returning a structured result that describes the various facets of the URL. The fields returned within the structured result roughly follow https://pkg.go.dev/net/url#URL, and may be expanded in future in order to present more information.
+
+#### Examples
+
+
+```coffee
+root.foo_url = this.foo_url.parse_url()
+
+# In:  {"foo_url":"https://www.benthos.dev/docs/guides/bloblang/about"}
+# Out: {"foo_url":{"fragment":"","host":"www.benthos.dev","opaque":"","path":"/docs/guides/bloblang/about","raw_fragment":"","raw_path":"","raw_query":"","scheme":"https"}}
+```
+
+```coffee
+root.username = this.url.parse_url().user.name | "unknown"
+
+# In:  {"url":"amqp://foo:bar@127.0.0.1:5672/"}
+# Out: {"username":"foo"}
+
+# In:  {"url":"redis://localhost:6379"}
+# Out: {"username":"unknown"}
 ```
 
 ### `parse_xml`
@@ -2394,7 +2713,7 @@ root.encrypted = this.value.encrypt_aes("ctr", $key, $vector).encode("hex")
 
 Hashes a string or byte array according to a chosen algorithm and returns the result as a byte array. When mapping the result to a JSON field the value should be cast to a string using the method [`string`][methods.string], or encoded using the method [`encode`][methods.encode], otherwise it will be base64 encoded by default.
 
-Available algorithms are: `hmac_sha1`, `hmac_sha256`, `hmac_sha512`, `md5`, `sha1`, `sha256`, `sha512`, `xxhash64`.
+Available algorithms are: `hmac_sha1`, `hmac_sha256`, `hmac_sha512`, `md5`, `sha1`, `sha256`, `sha512`, `xxhash64`, `crc32`.
 
 The following algorithms require a key, which is specified as a second argument: `hmac_sha1`, `hmac_sha256`, `hmac_sha512`.
 
@@ -2402,6 +2721,7 @@ The following algorithms require a key, which is specified as a second argument:
 
 **`algorithm`** &lt;string&gt; The hasing algorithm to use.  
 **`key`** &lt;(optional) string&gt; An optional key to use.  
+**`polynomial`** &lt;string, default `"IEEE"`&gt; An optional polynomial key to use when selecting the `crc32` algorithm, otherwise ignored. Options are `IEEE` (default), `Castagnoli` and `Koopman`  
 
 #### Examples
 
@@ -2412,6 +2732,16 @@ root.h2 = this.value.hash("hmac_sha1","static-key").encode("hex")
 
 # In:  {"value":"hello world"}
 # Out: {"h1":"2aae6c35c94fcfb415dbe95f408b9ce91ee846ed","h2":"d87e5f068fa08fe90bb95bc7c8344cb809179d76"}
+```
+
+The `crc32` algorithm supports options for the polynomial.
+
+```coffee
+root.h1 = this.value.hash(algorithm: "crc32", polynomial: "Castagnoli").encode("hex")
+root.h2 = this.value.hash(algorithm: "crc32", polynomial: "Koopman").encode("hex")
+
+# In:  {"value":"hello world"}
+# Out: {"h1":"c99465aa","h2":"df373d3c"}
 ```
 
 ## GeoIP

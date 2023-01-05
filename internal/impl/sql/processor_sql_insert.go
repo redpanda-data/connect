@@ -74,9 +74,8 @@ func init() {
 	err := service.RegisterBatchProcessor(
 		"sql_insert", InsertProcessorConfig(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchProcessor, error) {
-			return NewSQLInsertProcessorFromConfig(conf, mgr.Logger())
+			return NewSQLInsertProcessorFromConfig(conf, mgr)
 		})
-
 	if err != nil {
 		panic(err)
 	}
@@ -98,9 +97,9 @@ type sqlInsertProcessor struct {
 
 // NewSQLInsertProcessorFromConfig returns an internal sql_insert processor.
 // nolint:revive // Not bothered as this is internal anyway
-func NewSQLInsertProcessorFromConfig(conf *service.ParsedConfig, logger *service.Logger) (*sqlInsertProcessor, error) {
+func NewSQLInsertProcessorFromConfig(conf *service.ParsedConfig, mgr *service.Resources) (*sqlInsertProcessor, error) {
 	s := &sqlInsertProcessor{
-		logger:  logger,
+		logger:  mgr.Logger(),
 		shutSig: shutdown.NewSignaller(),
 	}
 
@@ -110,6 +109,7 @@ func NewSQLInsertProcessorFromConfig(conf *service.ParsedConfig, logger *service
 	}
 	if _, in := map[string]struct{}{
 		"clickhouse": {},
+		"oracle":     {},
 	}[driverStr]; in {
 		s.useTxStmt = true
 	}
@@ -138,6 +138,16 @@ func NewSQLInsertProcessorFromConfig(conf *service.ParsedConfig, logger *service
 	s.builder = squirrel.Insert(tableStr).Columns(columns...)
 	if driverStr == "postgres" || driverStr == "clickhouse" {
 		s.builder = s.builder.PlaceholderFormat(squirrel.Dollar)
+	} else if driverStr == "oracle" {
+		s.builder = s.builder.PlaceholderFormat(squirrel.Colon)
+	}
+
+	if s.useTxStmt {
+		values := make([]any, 0, len(columns))
+		for _, c := range columns {
+			values = append(values, c)
+		}
+		s.builder = s.builder.Values(values...)
 	}
 
 	if conf.Contains("prefix") {
@@ -156,16 +166,16 @@ func NewSQLInsertProcessorFromConfig(conf *service.ParsedConfig, logger *service
 		s.builder = s.builder.Suffix(suffixStr)
 	}
 
-	connSettings, err := connSettingsFromParsed(conf)
+	connSettings, err := connSettingsFromParsed(conf, mgr)
 	if err != nil {
 		return nil, err
 	}
 
-	if s.db, err = sqlOpenWithReworks(logger, driverStr, dsnStr); err != nil {
+	if s.db, err = sqlOpenWithReworks(mgr.Logger(), driverStr, dsnStr); err != nil {
 		return nil, err
 	}
 
-	connSettings.apply(s.db)
+	connSettings.apply(context.Background(), s.db, s.logger)
 
 	go func() {
 		<-s.shutSig.CloseNowChan()
@@ -192,7 +202,7 @@ func (s *sqlInsertProcessor) ProcessBatch(ctx context.Context, batch service.Mes
 		if tx, err = s.db.Begin(); err != nil {
 			return nil, err
 		}
-		sqlStr, _, err := insertBuilder.Values().ToSql()
+		sqlStr, _, err := insertBuilder.ToSql()
 		if err != nil {
 			return nil, err
 		}
@@ -203,31 +213,33 @@ func (s *sqlInsertProcessor) ProcessBatch(ctx context.Context, batch service.Mes
 	}
 
 	for i, msg := range batch {
-		var args []interface{}
-		resMsg, err := batch.BloblangQuery(i, s.argsMapping)
-		if err != nil {
-			s.logger.Debugf("Arguments mapping failed: %v", err)
-			msg.SetError(err)
-			continue
-		}
+		var args []any
+		if s.argsMapping != nil {
+			resMsg, err := batch.BloblangQuery(i, s.argsMapping)
+			if err != nil {
+				s.logger.Debugf("Arguments mapping failed: %v", err)
+				msg.SetError(err)
+				continue
+			}
 
-		iargs, err := resMsg.AsStructured()
-		if err != nil {
-			s.logger.Debugf("Mapping returned non-structured result: %v", err)
-			msg.SetError(fmt.Errorf("mapping returned non-structured result: %w", err))
-			continue
-		}
+			iargs, err := resMsg.AsStructured()
+			if err != nil {
+				s.logger.Debugf("Mapping returned non-structured result: %v", err)
+				msg.SetError(fmt.Errorf("mapping returned non-structured result: %w", err))
+				continue
+			}
 
-		var ok bool
-		if args, ok = iargs.([]interface{}); !ok {
-			s.logger.Debugf("Mapping returned non-array result: %T", iargs)
-			msg.SetError(fmt.Errorf("mapping returned non-array result: %T", iargs))
-			continue
+			var ok bool
+			if args, ok = iargs.([]any); !ok {
+				s.logger.Debugf("Mapping returned non-array result: %T", iargs)
+				msg.SetError(fmt.Errorf("mapping returned non-array result: %T", iargs))
+				continue
+			}
 		}
 
 		if tx == nil {
 			insertBuilder = insertBuilder.Values(args...)
-		} else if _, err = stmt.Exec(args...); err != nil {
+		} else if _, err := stmt.Exec(args...); err != nil {
 			return nil, err
 		}
 	}

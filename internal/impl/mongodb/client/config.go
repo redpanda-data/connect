@@ -10,27 +10,27 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/docs"
 )
 
-// Operation represents the operation that will be performed by MongoDB
+// Operation represents the operation that will be performed by MongoDB.
 type Operation string
 
 const (
-	// OperationInsertOne Insert One operation
+	// OperationInsertOne Insert One operation.
 	OperationInsertOne Operation = "insert-one"
-	// OperationDeleteOne Delete One operation
+	// OperationDeleteOne Delete One operation.
 	OperationDeleteOne Operation = "delete-one"
-	// OperationDeleteMany Delete many operation
+	// OperationDeleteMany Delete many operation.
 	OperationDeleteMany Operation = "delete-many"
-	// OperationReplaceOne Replace one operation
+	// OperationReplaceOne Replace one operation.
 	OperationReplaceOne Operation = "replace-one"
-	// OperationUpdateOne Update one operation
+	// OperationUpdateOne Update one operation.
 	OperationUpdateOne Operation = "update-one"
-	// OperationFindOne Find one operation
+	// OperationFindOne Find one operation.
 	OperationFindOne Operation = "find-one"
-	// OperationInvalid Invalid operation
+	// OperationInvalid Invalid operation.
 	OperationInvalid Operation = "invalid"
 )
 
-// NewOperation converts a string operation to a strongly-typed Operation
+// NewOperation converts a string operation to a strongly-typed Operation.
 func NewOperation(op string) Operation {
 	switch op {
 	case "insert-one":
@@ -50,17 +50,17 @@ func NewOperation(op string) Operation {
 	}
 }
 
-// JSONMarshalMode represents the way in which BSON should be marshalled to JSON
+// JSONMarshalMode represents the way in which BSON should be marshalled to JSON.
 type JSONMarshalMode string
 
 const (
-	// JSONMarshalModeCanonical Canonical BSON to JSON marshal mode
+	// JSONMarshalModeCanonical Canonical BSON to JSON marshal mode.
 	JSONMarshalModeCanonical JSONMarshalMode = "canonical"
-	// JSONMarshalModeRelaxed Relaxed BSON to JSON marshal mode
+	// JSONMarshalModeRelaxed Relaxed BSON to JSON marshal mode.
 	JSONMarshalModeRelaxed JSONMarshalMode = "relaxed"
 )
 
-// Config is a config struct for a mongo connection
+// Config is a config struct for a mongo connection.
 type Config struct {
 	URL        string `json:"url" yaml:"url"`
 	Database   string `json:"database" yaml:"database"`
@@ -87,7 +87,7 @@ func NewConfig() Config {
 	}
 }
 
-// Client returns a new mongodb client based on the configuration parameters
+// Client returns a new mongodb client based on the configuration parameters.
 func (m Config) Client() (*mongo.Client, error) {
 	opt := options.Client().
 		SetConnectTimeout(10 * time.Second).
@@ -104,7 +104,6 @@ func (m Config) Client() (*mongo.Client, error) {
 	}
 
 	client, err := mongo.NewClient(opt)
-
 	if err != nil {
 		return nil, fmt.Errorf("failed to create mongodb client: %v", err)
 	}

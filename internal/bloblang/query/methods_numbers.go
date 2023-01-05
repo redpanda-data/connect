@@ -18,7 +18,7 @@ var _ = registerSimpleMethod(
 		),
 	),
 	func(*ParsedParams) (simpleMethod, error) {
-		return numberMethod(func(f *float64, i *int64, ui *uint64) (interface{}, error) {
+		return numberMethod(func(f *float64, i *int64, ui *uint64) (any, error) {
 			var v float64
 			if f != nil {
 				v = *f
@@ -33,7 +33,7 @@ var _ = registerSimpleMethod(
 )
 
 var _ = registerSimpleMethod(
-	NewMethodSpec("ceil", "Returns the least integer value greater than or equal to a number.").InCategory(
+	NewMethodSpec("ceil", "Returns the least integer value greater than or equal to a number. If the resulting value fits within a 64-bit integer then that is returned, otherwise a new floating point number is returned.").InCategory(
 		MethodCategoryNumbers, "",
 		NewExampleSpec("",
 			`root.new_value = this.value.ceil()`,
@@ -44,9 +44,13 @@ var _ = registerSimpleMethod(
 		),
 	),
 	func(*ParsedParams) (simpleMethod, error) {
-		return numberMethod(func(f *float64, i *int64, ui *uint64) (interface{}, error) {
+		return numberMethod(func(f *float64, i *int64, ui *uint64) (any, error) {
 			if f != nil {
-				return int64(math.Ceil(*f)), nil
+				ceiled := math.Ceil(*f)
+				if i, err := IToInt(ceiled); err == nil {
+					return i, nil
+				}
+				return ceiled, nil
 			}
 			if i != nil {
 				return *i, nil
@@ -58,7 +62,7 @@ var _ = registerSimpleMethod(
 
 var _ = registerSimpleMethod(
 	NewMethodSpec(
-		"floor", "Returns the greatest integer value less than or equal to the target number.",
+		"floor", "Returns the greatest integer value less than or equal to the target number. If the resulting value fits within a 64-bit integer then that is returned, otherwise a new floating point number is returned.",
 	).InCategory(
 		MethodCategoryNumbers,
 		"",
@@ -69,9 +73,13 @@ var _ = registerSimpleMethod(
 		),
 	),
 	func(*ParsedParams) (simpleMethod, error) {
-		return numberMethod(func(f *float64, i *int64, ui *uint64) (interface{}, error) {
+		return numberMethod(func(f *float64, i *int64, ui *uint64) (any, error) {
 			if f != nil {
-				return int64(math.Floor(*f)), nil
+				floored := math.Floor(*f)
+				if i, err := IToInt(floored); err == nil {
+					return i, nil
+				}
+				return floored, nil
 			}
 			if i != nil {
 				return *i, nil
@@ -93,7 +101,7 @@ var _ = registerSimpleMethod(
 		),
 	),
 	func(*ParsedParams) (simpleMethod, error) {
-		return numberMethod(func(f *float64, i *int64, ui *uint64) (interface{}, error) {
+		return numberMethod(func(f *float64, i *int64, ui *uint64) (any, error) {
 			var v float64
 			if f != nil {
 				v = *f
@@ -119,7 +127,7 @@ var _ = registerSimpleMethod(
 		),
 	),
 	func(*ParsedParams) (simpleMethod, error) {
-		return numberMethod(func(f *float64, i *int64, ui *uint64) (interface{}, error) {
+		return numberMethod(func(f *float64, i *int64, ui *uint64) (any, error) {
 			var v float64
 			if f != nil {
 				v = *f
@@ -153,8 +161,8 @@ var _ = registerSimpleMethod(
 		),
 	),
 	func(*ParsedParams) (simpleMethod, error) {
-		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
-			arr, ok := v.([]interface{})
+		return func(v any, ctx FunctionContext) (any, error) {
+			arr, ok := v.([]any)
 			if !ok {
 				return nil, NewTypeError(v, ValueArray)
 			}
@@ -196,8 +204,8 @@ var _ = registerSimpleMethod(
 		),
 	),
 	func(*ParsedParams) (simpleMethod, error) {
-		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
-			arr, ok := v.([]interface{})
+		return func(v any, ctx FunctionContext) (any, error) {
+			arr, ok := v.([]any)
 			if !ok {
 				return nil, NewTypeError(v, ValueArray)
 			}
@@ -221,7 +229,7 @@ var _ = registerSimpleMethod(
 
 var _ = registerSimpleMethod(
 	NewMethodSpec(
-		"round", "Rounds numbers to the nearest integer, rounding half away from zero.",
+		"round", "Rounds numbers to the nearest integer, rounding half away from zero. If the resulting value fits within a 64-bit integer then that is returned, otherwise a new floating point number is returned.",
 	).InCategory(
 		MethodCategoryNumbers,
 		"",
@@ -234,9 +242,13 @@ var _ = registerSimpleMethod(
 		),
 	),
 	func(*ParsedParams) (simpleMethod, error) {
-		return numberMethod(func(f *float64, i *int64, ui *uint64) (interface{}, error) {
+		return numberMethod(func(f *float64, i *int64, ui *uint64) (any, error) {
 			if f != nil {
-				return int64(math.Round(*f)), nil
+				rounded := math.Round(*f)
+				if i, err := IToInt(rounded); err == nil {
+					return i, nil
+				}
+				return rounded, nil
 			}
 			if i != nil {
 				return *i, nil

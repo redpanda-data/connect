@@ -40,7 +40,7 @@ func router(m *manager.Type) *mux.Router {
 	return router
 }
 
-func genRequest(verb, url string, payload interface{}) *http.Request {
+func genRequest(verb, url string, payload any) *http.Request {
 	var body io.Reader
 
 	if payload != nil {
@@ -63,7 +63,7 @@ func genRequest(verb, url string, payload interface{}) *http.Request {
 	return req
 }
 
-func genYAMLRequest(verb, url string, payload interface{}) *http.Request {
+func genYAMLRequest(verb, url string, payload any) *http.Request {
 	var body io.Reader
 
 	if payload != nil {
@@ -103,10 +103,10 @@ func parseListBody(data *bytes.Buffer) listBody {
 }
 
 type getBody struct {
-	Active    bool        `json:"active"`
-	Uptime    float64     `json:"uptime"`
-	UptimeStr string      `json:"uptime_str"`
-	Config    interface{} `json:"config"`
+	Active    bool    `json:"active"`
+	Uptime    float64 `json:"uptime"`
+	UptimeStr string  `json:"uptime_str"`
+	Config    any     `json:"config"`
 }
 
 func parseGetBody(t *testing.T, data *bytes.Buffer) getBody {
@@ -167,15 +167,15 @@ func TestTypeAPIBadMethods(t *testing.T) {
 	}
 }
 
-func harmlessConf() interface{} {
-	return map[string]interface{}{
-		"input": map[string]interface{}{
-			"generate": map[string]interface{}{
+func harmlessConf() any {
+	return map[string]any{
+		"input": map[string]any{
+			"generate": map[string]any{
 				"mapping": "root = deleted()",
 			},
 		},
-		"output": map[string]interface{}{
-			"drop": map[string]interface{}{},
+		"output": map[string]any{
+			"drop": map[string]any{},
 		},
 	}
 }
@@ -247,7 +247,7 @@ func TestTypeAPIBasicOperations(t *testing.T) {
 	info = parseGetBody(t, response.Body)
 	assert.True(t, info.Active)
 
-	assert.Equal(t, map[string]interface{}{}, gabs.Wrap(info.Config).S("buffer", "memory").Data())
+	assert.Equal(t, map[string]any{}, gabs.Wrap(info.Config).S("buffer", "memory").Data())
 
 	request = genRequest("DELETE", "/streams/foo", conf)
 	response = httptest.NewRecorder()
@@ -269,13 +269,13 @@ func TestTypeAPIBasicOperations(t *testing.T) {
 	}()
 	_ = os.Setenv(testVar, `root.meow = 5`)
 
-	request = genRequest("POST", "/streams/fooEnv?chilled=true", map[string]interface{}{
-		"input": map[string]interface{}{
-			"generate": map[string]interface{}{
+	request = genRequest("POST", "/streams/fooEnv?chilled=true", map[string]any{
+		"input": map[string]any{
+			"generate": map[string]any{
 				"mapping": "${__TEST_INPUT_MAPPING}",
 			},
 		},
-		"output": map[string]interface{}{
+		"output": map[string]any{
 			"type": "drop",
 		},
 	})
@@ -320,9 +320,9 @@ func TestTypeAPIPatch(t *testing.T) {
 	r.ServeHTTP(response, request)
 	require.Equal(t, http.StatusOK, response.Code, response.Body.String())
 
-	patchConf := map[string]interface{}{
-		"input": map[string]interface{}{
-			"generate": map[string]interface{}{
+	patchConf := map[string]any{
+		"input": map[string]any{
+			"generate": map[string]any{
 				"interval": "2s",
 			},
 		},
@@ -406,7 +406,7 @@ func TestTypeAPIBasicOperationsYAML(t *testing.T) {
 
 	info = parseGetBody(t, response.Body)
 	require.True(t, info.Active)
-	assert.Equal(t, map[string]interface{}{}, gabs.Wrap(info.Config).S("buffer", "memory").Data())
+	assert.Equal(t, map[string]any{}, gabs.Wrap(info.Config).S("buffer", "memory").Data())
 
 	request = genYAMLRequest("DELETE", "/streams/foo", conf)
 	response = httptest.NewRecorder()
@@ -491,7 +491,7 @@ func TestTypeAPISetStreams(t *testing.T) {
 	bazConf := harmlessConf()
 	_, _ = gabs.Wrap(bazConf).Set("root = this.BAZ_ONE", "input", "generate", "mapping")
 
-	streamsBody := map[string]interface{}{}
+	streamsBody := map[string]any{}
 	streamsBody["bar"] = barConf
 	streamsBody["bar2"] = bar2Conf
 	streamsBody["baz"] = bazConf
@@ -609,9 +609,17 @@ func TestTypeAPIStreamsLinting(t *testing.T) {
 	response := httptest.NewRecorder()
 	r.ServeHTTP(response, request)
 	assert.Equal(t, http.StatusBadRequest, response.Code)
+	assert.Equal(t, "application/json", response.Result().Header.Get("Content-Type"))
 
-	expLints := `{"lint_errors":["stream 'bar': line 15: field generate is invalid when the component type is inproc (input)","stream 'foo': line 10: field inproc is invalid when the component type is drop (output)"]}`
-	assert.Equal(t, expLints, response.Body.String())
+	expLints := []string{
+		"stream 'foo': (10,1) field inproc is invalid when the component type is drop (output)",
+		"stream 'bar': (15,1) field generate is invalid when the component type is inproc (input)",
+	}
+	var actLints struct {
+		LintErrors []string `json:"lint_errors"`
+	}
+	require.NoError(t, json.Unmarshal(response.Body.Bytes(), &actLints))
+	assert.ElementsMatch(t, expLints, actLints.LintErrors)
 
 	request, err = http.NewRequest("POST", "/streams?chilled=true", bytes.NewReader(body))
 	require.NoError(t, err)
@@ -682,8 +690,9 @@ func TestTypeAPILinting(t *testing.T) {
 	response := httptest.NewRecorder()
 	r.ServeHTTP(response, request)
 	assert.Equal(t, http.StatusBadRequest, response.Code)
+	assert.Equal(t, "application/json", response.Result().Header.Get("Content-Type"))
 
-	expLints := `{"lint_errors":["line 9: field inproc is invalid when the component type is drop (output)","line 11: field cache_resources not recognised"]}`
+	expLints := `{"lint_errors":["(9,1) field inproc is invalid when the component type is drop (output)","(11,1) field cache_resources not recognised"]}`
 	assert.Equal(t, expLints, response.Body.String())
 
 	request, err = http.NewRequest("POST", "/streams/foo?chilled=true", bytes.NewReader(body))
@@ -709,7 +718,7 @@ func TestResourceAPILinting(t *testing.T) {
   nope: nah
   compaction_interval: 1s`,
 			lints: []string{
-				"line 3: field nope not recognised",
+				"(3,1) field nope not recognised",
 			},
 		},
 		{
@@ -719,7 +728,7 @@ func TestResourceAPILinting(t *testing.T) {
   mapping: root = deleted()
   nope: nah`,
 			lints: []string{
-				"line 3: field nope not recognised",
+				"(3,1) field nope not recognised",
 			},
 		},
 		{
@@ -730,7 +739,7 @@ func TestResourceAPILinting(t *testing.T) {
     drop: {}
   nope: nah`,
 			lints: []string{
-				"line 4: field nope not recognised",
+				"(4,1) field nope not recognised",
 			},
 		},
 		{
@@ -740,7 +749,7 @@ func TestResourceAPILinting(t *testing.T) {
   size: 10
   nope: nah`,
 			lints: []string{
-				"line 3: field nope not recognised",
+				"(3,1) field nope not recognised",
 			},
 		},
 		{
@@ -750,7 +759,7 @@ func TestResourceAPILinting(t *testing.T) {
   count: 10
   nope: nah`,
 			lints: []string{
-				"line 3: field nope not recognised",
+				"(3,1) field nope not recognised",
 			},
 		},
 	}
@@ -773,6 +782,7 @@ func TestResourceAPILinting(t *testing.T) {
 			response := httptest.NewRecorder()
 			r.ServeHTTP(response, request)
 			assert.Equal(t, http.StatusBadRequest, response.Code)
+			assert.Equal(t, "application/json", response.Result().Header.Get("Content-Type"))
 
 			expLints, err := json.Marshal(struct {
 				LintErrors []string `json:"lint_errors"`

@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/go-redis/redis/v7"
+	"github.com/go-redis/redis/v8"
 
 	ibatch "github.com/benthosdev/benthos/v4/internal/batch"
 	"github.com/benthosdev/benthos/v4/internal/batch/policy"
@@ -61,6 +61,7 @@ func newRedisListOutput(conf output.Config, mgr bundle.NewManagement) (output.St
 }
 
 type redisListWriter struct {
+	mgr bundle.NewManagement
 	log log.Modular
 
 	conf output.RedisListConfig
@@ -73,6 +74,7 @@ type redisListWriter struct {
 
 func newRedisListWriter(conf output.RedisListConfig, mgr bundle.NewManagement) (*redisListWriter, error) {
 	r := &redisListWriter{
+		mgr:  mgr,
 		log:  mgr.Logger(),
 		conf: conf,
 	}
@@ -81,7 +83,7 @@ func newRedisListWriter(conf output.RedisListConfig, mgr bundle.NewManagement) (
 	if r.keyStr, err = mgr.BloblEnvironment().NewField(conf.Key); err != nil {
 		return nil, fmt.Errorf("failed to parse key expression: %v", err)
 	}
-	if _, err := clientFromConfig(conf.Config); err != nil {
+	if _, err := clientFromConfig(mgr.FS(), conf.Config); err != nil {
 		return nil, err
 	}
 
@@ -92,11 +94,11 @@ func (r *redisListWriter) Connect(ctx context.Context) error {
 	r.connMut.Lock()
 	defer r.connMut.Unlock()
 
-	client, err := clientFromConfig(r.conf.Config)
+	client, err := clientFromConfig(r.mgr.FS(), r.conf.Config)
 	if err != nil {
 		return err
 	}
-	if _, err = client.Ping().Result(); err != nil {
+	if _, err = client.Ping(ctx).Result(); err != nil {
 		return err
 	}
 
@@ -114,8 +116,11 @@ func (r *redisListWriter) WriteBatch(ctx context.Context, msg message.Batch) err
 	}
 
 	if msg.Len() == 1 {
-		key := r.keyStr.String(0, msg)
-		if err := client.RPush(key, msg.Get(0).AsBytes()).Err(); err != nil {
+		key, err := r.keyStr.String(0, msg)
+		if err != nil {
+			return fmt.Errorf("key interpolation error: %w", err)
+		}
+		if err := client.RPush(ctx, key, msg.Get(0).AsBytes()).Err(); err != nil {
 			_ = r.disconnect()
 			r.log.Errorf("Error from redis: %v\n", err)
 			return component.ErrNotConnected
@@ -124,12 +129,17 @@ func (r *redisListWriter) WriteBatch(ctx context.Context, msg message.Batch) err
 	}
 
 	pipe := client.Pipeline()
-	_ = msg.Iter(func(i int, p *message.Part) error {
-		key := r.keyStr.String(0, msg)
-		_ = pipe.RPush(key, p.AsBytes())
+	if err := msg.Iter(func(i int, p *message.Part) error {
+		key, err := r.keyStr.String(0, msg)
+		if err != nil {
+			return fmt.Errorf("key interpolation error: %w", err)
+		}
+		_ = pipe.RPush(ctx, key, p.AsBytes())
 		return nil
-	})
-	cmders, err := pipe.Exec()
+	}); err != nil {
+		return err
+	}
+	cmders, err := pipe.Exec(ctx)
 	if err != nil {
 		_ = r.disconnect()
 		r.log.Errorf("Error from redis: %v\n", err)

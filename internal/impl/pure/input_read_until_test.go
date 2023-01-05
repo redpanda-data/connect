@@ -54,6 +54,9 @@ baz`)
 	t.Run("ReadUntilBasic", func(te *testing.T) {
 		testReadUntilBasic(inconf, te)
 	})
+	t.Run("ReadUntilRestart", func(te *testing.T) {
+		testReadUntilRestart(inconf, te)
+	})
 	t.Run("ReadUntilRetry", func(te *testing.T) {
 		testReadUntilRetry(inconf, te)
 	})
@@ -94,10 +97,10 @@ func testReadUntilBasic(inConf input.Config, t *testing.T) {
 			t.Errorf("Wrong message contents: %v != %v", act, exp)
 		}
 		if i == len(expMsgs)-1 {
-			if exp, act := "final", tran.Payload.Get(0).MetaGet("benthos_read_until"); exp != act {
+			if exp, act := "final", tran.Payload.Get(0).MetaGetStr("benthos_read_until"); exp != act {
 				t.Errorf("Metadata missing from final message: %v != %v", act, exp)
 			}
-		} else if exp, act := "", tran.Payload.Get(0).MetaGet("benthos_read_until"); exp != act {
+		} else if exp, act := "", tran.Payload.Get(0).MetaGetStr("benthos_read_until"); exp != act {
 			t.Errorf("Metadata final message metadata added to non-final message: %v", act)
 		}
 		require.NoError(t, tran.Ack(ctx, nil))
@@ -116,6 +119,46 @@ func testReadUntilBasic(inConf input.Config, t *testing.T) {
 	if err = in.WaitForClose(ctx); err != nil {
 		t.Fatal(err)
 	}
+}
+
+func testReadUntilRestart(inConf input.Config, t *testing.T) {
+	ctx, done := context.WithTimeout(context.Background(), time.Second*5)
+	defer done()
+
+	rConf := input.NewConfig()
+	rConf.Type = "read_until"
+	rConf.ReadUntil.Input = &inConf
+	rConf.ReadUntil.Check = `false`
+	rConf.ReadUntil.Restart = true
+
+	in, err := bmock.NewManager().NewInput(rConf)
+	require.NoError(t, err)
+
+	expMsgs := []string{
+		"foo",
+		"bar",
+		"baz",
+	}
+
+	for i := 0; i < 3; i++ {
+		for _, expMsg := range expMsgs {
+			var tran message.Transaction
+			var open bool
+			select {
+			case tran, open = <-in.TransactionChan():
+				require.True(t, open)
+			case <-time.After(time.Second):
+				t.Fatal("timed out")
+			}
+
+			require.Len(t, tran.Payload, 1)
+			assert.Equal(t, expMsg, string(tran.Payload[0].AsBytes()))
+			require.NoError(t, tran.Ack(ctx, nil))
+		}
+	}
+
+	in.TriggerStopConsuming()
+	require.NoError(t, in.WaitForClose(ctx))
 }
 
 func testReadUntilRetry(inConf input.Config, t *testing.T) {

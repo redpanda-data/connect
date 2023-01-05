@@ -31,7 +31,7 @@ func ValidateLabel(label string) error {
 
 var labelField = FieldString(
 	"label", "An optional label to use as an identifier for observability data such as metrics and logging.",
-).OmitWhen(func(field, parent interface{}) (string, bool) {
+).OmitWhen(func(field, parent any) (string, bool) {
 	gObj := gabs.Wrap(parent)
 	if typeStr, exists := gObj.S("type").Data().(string); exists && typeStr == "resource" {
 		return "label field should be omitted when pointing to a resource", true
@@ -40,20 +40,20 @@ var labelField = FieldString(
 		return "label field should be omitted when pointing to a resource", true
 	}
 	return "", false
-}).AtVersion("3.44.0").LinterFunc(func(ctx LintContext, line, col int, v interface{}) []Lint {
+}).AtVersion("3.44.0").LinterFunc(func(ctx LintContext, line, col int, v any) []Lint {
 	l, _ := v.(string)
 	if l == "" {
 		return nil
 	}
 	if err := ValidateLabel(l); err != nil {
 		return []Lint{
-			NewLintError(line, fmt.Sprintf("Invalid label '%v': %v", l, err)),
+			NewLintError(line, LintBadLabel, fmt.Sprintf("Invalid label '%v': %v", l, err)),
 		}
 	}
 	prevLine, exists := ctx.LabelsToLine[l]
 	if exists {
 		return []Lint{
-			NewLintError(line, fmt.Sprintf("Label '%v' collides with a previously defined label at line %v", l, prevLine)),
+			NewLintError(line, LintDuplicateLabel, fmt.Sprintf("Label '%v' collides with a previously defined label at line %v", l, prevLine)),
 		}
 	}
 	ctx.LabelsToLine[l] = line
@@ -67,8 +67,8 @@ func ReservedFieldsByType(t Type) map[string]FieldSpec {
 		"plugin": FieldObject("plugin", ""),
 	}
 	if t == TypeInput || t == TypeOutput {
-		m["processors"] = FieldProcessor("processors", "").Array().OmitWhen(func(field, _ interface{}) (string, bool) {
-			if arr, ok := field.([]interface{}); ok && len(arr) == 0 {
+		m["processors"] = FieldProcessor("processors", "").Array().OmitWhen(func(field, _ any) (string, bool) {
+			if arr, ok := field.([]any); ok && len(arr) == 0 {
 				return "field processors is empty and can be removed", true
 			}
 			return "", false
@@ -124,30 +124,6 @@ func DefaultTypeOf(t Type) string {
 	return defaultTypeByType(DeprecatedProvider, t)
 }
 
-// GetInferenceCandidate checks a generic config structure for a component and
-// returns either the inferred type name or an error if one cannot be inferred.
-func GetInferenceCandidate(docProvider Provider, t Type, raw interface{}) (string, ComponentSpec, error) {
-	m, ok := raw.(map[string]interface{})
-	if !ok {
-		return "", ComponentSpec{}, fmt.Errorf("invalid config value %T, expected object", raw)
-	}
-
-	if tStr, ok := m["type"].(string); ok {
-		spec, exists := docProvider.GetDocs(tStr, t)
-		if !exists {
-			return "", ComponentSpec{}, fmt.Errorf("%v type '%v' was not recognised", string(t), tStr)
-		}
-		return tStr, spec, nil
-	}
-
-	var keys []string
-	for k := range m {
-		keys = append(keys, k)
-	}
-
-	return getInferenceCandidateFromList(docProvider, t, keys)
-}
-
 func getInferenceCandidateFromList(docProvider Provider, t Type, l []string) (string, ComponentSpec, error) {
 	ignore := ReservedFieldsByType(t)
 
@@ -194,6 +170,7 @@ func getInferenceCandidateFromList(docProvider Provider, t Type, l []string) (st
 type SanitiseConfig struct {
 	RemoveTypeField  bool
 	RemoveDeprecated bool
+	ScrubSecrets     bool
 	ForExample       bool
 	Filter           FieldFilter
 	DocsProvider     Provider

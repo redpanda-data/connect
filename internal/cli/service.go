@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"net/http"
 	"os"
 	"os/signal"
@@ -23,6 +24,7 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/internal/config"
 	"github.com/benthosdev/benthos/v4/internal/docs"
+	"github.com/benthosdev/benthos/v4/internal/filepath/ifs"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/manager"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
@@ -46,7 +48,7 @@ func readConfig(path string, streamsMode bool, resourcesPaths, streamsPaths, ove
 			"/etc/benthos/config.yaml",
 			"/etc/benthos.yaml",
 		} {
-			if _, err := os.Stat(dpath); err == nil {
+			if _, err := ifs.OS().Stat(dpath); err == nil {
 				inferred = true
 				path = dpath
 				break
@@ -68,11 +70,10 @@ func readConfig(path string, streamsMode bool, resourcesPaths, streamsPaths, ove
 func initStreamsMode(
 	strict, watching, enableAPI bool,
 	confReader *config.Reader,
-	manager *manager.Type,
-	logger log.Modular,
-	stats *metrics.Namespaced,
+	mgr *manager.Type,
 ) stoppable {
-	streamMgr := strmmgr.New(manager, strmmgr.OptAPIEnabled(enableAPI))
+	logger := mgr.Logger()
+	streamMgr := strmmgr.New(mgr, strmmgr.OptAPIEnabled(enableAPI))
 
 	streamConfs := map[string]stream.Config{}
 	lints, err := confReader.ReadStreams(streamConfs)
@@ -101,26 +102,28 @@ func initStreamsMode(
 	}
 	logger.Infoln("Launching benthos in streams mode, use CTRL+C to close")
 
-	if err := confReader.SubscribeStreamChanges(func(id string, newStreamConf stream.Config) bool {
+	if err := confReader.SubscribeStreamChanges(func(id string, newStreamConf *stream.Config) error {
 		ctx, done := context.WithTimeout(context.Background(), time.Second*30)
 		defer done()
 
-		if err = streamMgr.Update(ctx, id, newStreamConf); err != nil && errors.Is(err, strmmgr.ErrStreamDoesNotExist) {
-			err = streamMgr.Create(id, newStreamConf)
+		var updateErr error
+		if newStreamConf != nil {
+			if updateErr = streamMgr.Update(ctx, id, *newStreamConf); updateErr != nil && errors.Is(updateErr, strmmgr.ErrStreamDoesNotExist) {
+				updateErr = streamMgr.Create(id, *newStreamConf)
+			}
+		} else {
+			if updateErr = streamMgr.Delete(ctx, id); updateErr != nil && errors.Is(updateErr, strmmgr.ErrStreamDoesNotExist) {
+				updateErr = nil
+			}
 		}
-		if err != nil {
-			logger.Errorf("Failed to update stream %v: %v", id, err)
-			return false
-		}
-		logger.Infof("Updated stream %v config from file", id)
-		return true
+		return updateErr
 	}); err != nil {
 		logger.Errorf("Failed to create stream config watcher: %v", err)
 		os.Exit(1)
 	}
 
 	if watching {
-		if err := confReader.BeginFileWatching(manager, strict); err != nil {
+		if err := confReader.BeginFileWatching(mgr, strict); err != nil {
 			logger.Errorf("Failed to create stream config watcher: %v", err)
 			os.Exit(1)
 		}
@@ -151,7 +154,7 @@ func (s *swappableStopper) Replace(fn func() (stoppable, error)) error {
 	defer s.mut.Unlock()
 
 	if s.stopped {
-		// If the outter stream has been stopped then do not create a new one.
+		// If the outer stream has been stopped then do not create a new one.
 		return nil
 	}
 
@@ -175,21 +178,17 @@ func initNormalMode(
 	conf config.Type,
 	strict, watching bool,
 	confReader *config.Reader,
-	manager *manager.Type,
-	logger log.Modular,
-	stats *metrics.Namespaced,
+	mgr *manager.Type,
 ) (newStream stoppable, stoppedChan chan struct{}) {
-	stoppedChan = make(chan struct{})
+	logger := mgr.Logger()
 
+	stoppedChan = make(chan struct{})
 	streamInit := func() (stoppable, error) {
-		return stream.New(
-			conf.Config, manager,
-			stream.OptOnClose(func() {
-				if !watching {
-					close(stoppedChan)
-				}
-			}),
-		)
+		return stream.New(conf.Config, mgr, stream.OptOnClose(func() {
+			if !watching {
+				close(stoppedChan)
+			}
+		}))
 	}
 
 	var stoppableStream swappableStopper
@@ -201,24 +200,18 @@ func initNormalMode(
 	}
 	logger.Infoln("Launching a benthos instance, use CTRL+C to close")
 
-	if err := confReader.SubscribeConfigChanges(func(newStreamConf stream.Config) bool {
-		if err := stoppableStream.Replace(func() (stoppable, error) {
+	if err := confReader.SubscribeConfigChanges(func(newStreamConf stream.Config) error {
+		return stoppableStream.Replace(func() (stoppable, error) {
 			conf.Config = newStreamConf
 			return streamInit()
-		}); err != nil {
-			logger.Errorf("Failed to update stream: %v", err)
-			return false
-		}
-
-		logger.Infoln("Updated main config from file")
-		return true
+		})
 	}); err != nil {
 		logger.Errorf("Failed to create config file watcher: %v", err)
 		os.Exit(1)
 	}
 
 	if watching {
-		if err := confReader.BeginFileWatching(manager, strict); err != nil {
+		if err := confReader.BeginFileWatching(mgr, strict); err != nil {
 			logger.Errorf("Failed to create config file watcher: %v", err)
 			os.Exit(1)
 		}
@@ -264,7 +257,13 @@ func cmdService(
 				Compress:   true,
 			}
 		} else {
-			writer, err = os.OpenFile(conf.Logger.File.Path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o666)
+			var fw fs.File
+			if fw, err = ifs.OS().OpenFile(conf.Logger.File.Path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o666); err == nil {
+				var isw bool
+				if writer, isw = fw.(io.Writer); !isw {
+					err = errors.New("failed to open a writable file")
+				}
+			}
 		}
 		if err == nil {
 			logger, err = log.NewV2(writer, conf.Logger)
@@ -343,6 +342,7 @@ func cmdService(
 	if err == nil {
 		sanitConf := docs.NewSanitiseConfig()
 		sanitConf.RemoveTypeField = true
+		sanitConf.ScrubSecrets = true
 		err = config.Spec().SanitiseYAML(&sanitNode, sanitConf)
 	}
 	if err != nil {
@@ -374,9 +374,9 @@ func cmdService(
 
 	// Create data streams.
 	if streamsMode {
-		stoppableStream = initStreamsMode(strict, watching, enableStreamsAPI, confReader, manager, logger, stats)
+		stoppableStream = initStreamsMode(strict, watching, enableStreamsAPI, confReader, manager)
 	} else {
-		stoppableStream, dataStreamClosedChan = initNormalMode(conf, strict, watching, confReader, manager, logger, stats)
+		stoppableStream, dataStreamClosedChan = initNormalMode(conf, strict, watching, confReader, manager)
 	}
 
 	// Start HTTP server.
@@ -462,8 +462,17 @@ func cmdService(
 
 	// Wait for termination signal
 	select {
-	case <-sigChan:
-		logger.Infoln("Received SIGTERM, the service is closing")
+	case sig := <-sigChan:
+		var sigName string
+		switch sig {
+		case os.Interrupt:
+			sigName = "SIGINT"
+		case syscall.SIGTERM:
+			sigName = "SIGTERM"
+		default:
+			sigName = sig.String()
+		}
+		logger.Infof("Received %s, the service is closing", sigName)
 	case <-dataStreamClosedChan:
 		logger.Infoln("Pipeline has terminated. Shutting down the service")
 	case <-httpServerClosedChan:

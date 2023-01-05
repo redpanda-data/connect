@@ -13,11 +13,9 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/docs"
 )
 
-var (
-	// ErrBrokerNoOutputs is returned when creating a Broker type with zero
-	// outputs.
-	ErrBrokerNoOutputs = errors.New("attempting to create broker output type with no outputs")
-)
+// ErrBrokerNoOutputs is returned when creating a Broker type with zero
+// outputs.
+var ErrBrokerNoOutputs = errors.New("attempting to create broker output type with no outputs")
 
 func init() {
 	err := bundle.AllOutputs.Add(processors.WrapConstructor(newBroker), docs.ComponentSpec{
@@ -89,7 +87,7 @@ outputs.`,
 			docs.FieldString("pattern", "The brokering pattern to use.").HasOptions(
 				"fan_out", "fan_out_sequential", "round_robin", "greedy",
 			).HasDefault("fan_out"),
-			docs.FieldOutput("outputs", "A list of child outputs to broker.").Array().HasDefault([]interface{}{}),
+			docs.FieldOutput("outputs", "A list of child outputs to broker.").Array().HasDefault([]any{}),
 			policy.FieldSpec(),
 		),
 		Categories: []string{

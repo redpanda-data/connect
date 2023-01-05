@@ -15,7 +15,7 @@ func init() {
 			Description(`Returns a string matching the hostname of the machine running Benthos.`).
 			Example("", `root.thing.host = hostname()`),
 		func(_ *bloblang.ParsedParams) (bloblang.Function, error) {
-			return func() (interface{}, error) {
+			return func() (any, error) {
 				hn, err := os.Hostname()
 				if err != nil {
 					return nil, err
@@ -41,12 +41,12 @@ func init() {
 				return nil, err
 			}
 
-			var value interface{}
+			var value any
 			if valueStr, exists := os.LookupEnv(name); exists {
 				value = valueStr
 			}
 
-			return func() (interface{}, error) {
+			return func() (any, error) {
 				return value, nil
 			}, nil
 		},
@@ -71,12 +71,13 @@ func init() {
 				return nil, err
 			}
 
+			// TODO: Obtain FS from bloblang environment.
 			pathBytes, err := os.ReadFile(path)
 			if err != nil {
 				return nil, err
 			}
 
-			return func() (interface{}, error) {
+			return func() (any, error) {
 				return pathBytes, nil
 			}, nil
 		},

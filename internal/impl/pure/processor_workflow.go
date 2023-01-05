@@ -248,15 +248,15 @@ processor_resources:
 				"An explicit declaration of branch ordered tiers, which describes the order in which parallel tiers of branches should be executed. Branches should be identified by the name as they are configured in the field `branches`. It's also possible to specify branch processors configured [as a resource](#resources).",
 				[][]string{{"foo", "bar"}, {"baz"}},
 				[][]string{{"foo"}, {"bar"}, {"baz"}},
-			).ArrayOfArrays().HasDefault([]interface{}{}),
+			).ArrayOfArrays().HasDefault([]any{}),
 			docs.FieldString(
 				"branch_resources",
 				"An optional list of [`branch` processor](/docs/components/processors/branch) names that are configured as [resources](#resources). These resources will be included in the workflow with any branches configured inline within the [`branches`](#branches) field. The order and parallelism in which branches are executed is automatically resolved based on the mappings of each branch. When using resources with an explicit order it is not necessary to list resources in this field.",
-			).AtVersion("3.38.0").Advanced().Array().HasDefault([]interface{}{}),
+			).AtVersion("3.38.0").Advanced().Array().HasDefault([]any{}),
 			docs.FieldObject(
 				"branches",
 				"An object of named [`branch` processors](/docs/components/processors/branch) that make up the workflow. The order and parallelism in which branches are executed can either be made explicit with the field `order`, or if omitted an attempt is made to automatically resolve an ordering based on the mappings of each branch.",
-			).Map().WithChildren(branchFields...).HasDefault(map[string]interface{}{}),
+			).Map().WithChildren(branchFields...).HasDefault(map[string]any{}),
 		),
 	})
 	if err != nil {
@@ -363,10 +363,10 @@ func (r *resultTracker) Failed(k, why string) {
 	r.Unlock()
 }
 
-func (r *resultTracker) ToObject() map[string]interface{} {
-	succeeded := make([]interface{}, 0, len(r.succeeded))
-	skipped := make([]interface{}, 0, len(r.skipped))
-	failed := make(map[string]interface{}, len(r.failed))
+func (r *resultTracker) ToObject() map[string]any {
+	succeeded := make([]any, 0, len(r.succeeded))
+	skipped := make([]any, 0, len(r.skipped))
+	failed := make(map[string]any, len(r.failed))
 
 	for k := range r.succeeded {
 		succeeded = append(succeeded, k)
@@ -384,7 +384,7 @@ func (r *resultTracker) ToObject() map[string]interface{} {
 		failed[k] = v
 	}
 
-	m := map[string]interface{}{}
+	m := map[string]any{}
 	if len(succeeded) > 0 {
 		m["succeeded"] = succeeded
 	}
@@ -398,7 +398,7 @@ func (r *resultTracker) ToObject() map[string]interface{} {
 }
 
 // Returns a map of enrichment IDs that should be skipped for this payload.
-func (w *Workflow) skipFromMeta(root interface{}) map[string]struct{} {
+func (w *Workflow) skipFromMeta(root any) map[string]struct{} {
 	skipList := map[string]struct{}{}
 	if len(w.metaPath) == 0 {
 		return skipList
@@ -408,7 +408,7 @@ func (w *Workflow) skipFromMeta(root interface{}) map[string]struct{} {
 
 	// If a whitelist is provided for this flow then skip stages that aren't
 	// within it.
-	if apply, ok := gObj.S(append(w.metaPath, "apply")...).Data().([]interface{}); ok {
+	if apply, ok := gObj.S(append(w.metaPath, "apply")...).Data().([]any); ok {
 		if len(apply) > 0 {
 			for k := range w.allStages {
 				skipList[k] = struct{}{}
@@ -422,7 +422,7 @@ func (w *Workflow) skipFromMeta(root interface{}) map[string]struct{} {
 	}
 
 	// Skip stages that already succeeded in a previous run of this workflow.
-	if succeeded, ok := gObj.S(append(w.metaPath, "succeeded")...).Data().([]interface{}); ok {
+	if succeeded, ok := gObj.S(append(w.metaPath, "succeeded")...).Data().([]any); ok {
 		for _, id := range succeeded {
 			if idStr, isString := id.(string); isString {
 				if _, exists := w.allStages[idStr]; exists {
@@ -433,7 +433,7 @@ func (w *Workflow) skipFromMeta(root interface{}) map[string]struct{} {
 	}
 
 	// Skip stages that were already skipped in a previous run of this workflow.
-	if skipped, ok := gObj.S(append(w.metaPath, "skipped")...).Data().([]interface{}); ok {
+	if skipped, ok := gObj.S(append(w.metaPath, "skipped")...).Data().([]any); ok {
 		for _, id := range skipped {
 			if idStr, isString := id.(string); isString {
 				if _, exists := w.allStages[idStr]; exists {
@@ -493,9 +493,8 @@ func (w *Workflow) ProcessBatch(ctx context.Context, msg message.Batch) ([]messa
 		wg := sync.WaitGroup{}
 		wg.Add(len(layer))
 		for i, eid := range layer {
+			branchMsg, branchSpans := tracing.WithChildSpans(w.tracer, eid, propMsg.ShallowCopy())
 			go func(id string, index int) {
-				branchMsg, branchSpans := tracing.WithChildSpans(w.tracer, id, propMsg.ShallowCopy())
-
 				branchParts := make([]*message.Part, branchMsg.Len())
 				_ = branchMsg.Iter(func(partIndex int, part *message.Part) error {
 					// Remove errors so that they aren't propagated into the
@@ -508,7 +507,7 @@ func (w *Workflow) ProcessBatch(ctx context.Context, msg message.Batch) ([]messa
 				})
 
 				var mapErrs []branchMapError
-				results[index], mapErrs, errors[index] = children[id].createResult(ctx, branchParts, propMsg)
+				results[index], mapErrs, errors[index] = children[id].createResult(ctx, branchParts, propMsg.ShallowCopy())
 				for _, s := range branchSpans {
 					s.Finish()
 				}

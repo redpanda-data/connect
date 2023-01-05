@@ -7,7 +7,6 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -32,7 +31,7 @@ func init() {
 		if err != nil {
 			return nil, err
 		}
-		return input.NewAsyncReader("azure_blob_storage", true, input.NewAsyncPreserver(r), nm)
+		return input.NewAsyncReader("azure_blob_storage", input.NewAsyncPreserver(r), nm)
 	}), docs.ComponentSpec{
 		Name:    "azure_blob_storage",
 		Status:  docs.StatusBeta,
@@ -61,7 +60,7 @@ This input adds the following metadata fields to each message:
 - All user defined metadata
 ` + "```" + `
 
-You can access these metadata fields using [function interpolation](/docs/configuration/interpolation#metadata).`,
+You can access these metadata fields using [function interpolation](/docs/configuration/interpolation#bloblang-queries).`,
 		Config: docs.FieldComponent().WithChildren(
 			docs.FieldString(
 				"storage_account",
@@ -334,17 +333,17 @@ func (a *azureBlobStorage) getObjectTarget(ctx context.Context) (*azurePendingOb
 func blobStorageMsgFromParts(p *azurePendingObject, parts []*message.Part) message.Batch {
 	msg := message.Batch(parts)
 	_ = msg.Iter(func(_ int, part *message.Part) error {
-		part.MetaSet("blob_storage_key", p.target.key)
+		part.MetaSetMut("blob_storage_key", p.target.key)
 		if p.obj.Container != nil {
-			part.MetaSet("blob_storage_container", p.obj.Container.Name)
+			part.MetaSetMut("blob_storage_container", p.obj.Container.Name)
 		}
-		part.MetaSet("blob_storage_last_modified", time.Time(p.obj.Properties.LastModified).Format(time.RFC3339))
-		part.MetaSet("blob_storage_last_modified_unix", strconv.FormatInt(time.Time(p.obj.Properties.LastModified).Unix(), 10))
-		part.MetaSet("blob_storage_content_type", p.obj.Properties.ContentType)
-		part.MetaSet("blob_storage_content_encoding", p.obj.Properties.ContentEncoding)
+		part.MetaSetMut("blob_storage_last_modified", time.Time(p.obj.Properties.LastModified).Format(time.RFC3339))
+		part.MetaSetMut("blob_storage_last_modified_unix", time.Time(p.obj.Properties.LastModified).Unix())
+		part.MetaSetMut("blob_storage_content_type", p.obj.Properties.ContentType)
+		part.MetaSetMut("blob_storage_content_encoding", p.obj.Properties.ContentEncoding)
 
 		for k, v := range p.obj.Metadata {
-			part.MetaSet(k, v)
+			part.MetaSetMut(k, v)
 		}
 		return nil
 	})

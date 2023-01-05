@@ -72,7 +72,7 @@ func newNSQWriter(conf output.NSQConfig, mgr bundle.NewManagement) (*nsqWriter, 
 		return nil, fmt.Errorf("failed to parse topic expression: %v", err)
 	}
 	if conf.TLS.Enabled {
-		if n.tlsConf, err = conf.TLS.Get(); err != nil {
+		if n.tlsConf, err = conf.TLS.Get(mgr.FS()); err != nil {
 			return nil, err
 		}
 	}
@@ -115,7 +115,11 @@ func (n *nsqWriter) WriteBatch(ctx context.Context, msg message.Batch) error {
 	}
 
 	return output.IterateBatchedSend(msg, func(i int, p *message.Part) error {
-		return prod.Publish(n.topicStr.String(i, msg), p.AsBytes())
+		topicStr, err := n.topicStr.String(i, msg)
+		if err != nil {
+			return fmt.Errorf("topic interpolation error: %w", err)
+		}
+		return prod.Publish(topicStr, p.AsBytes())
 	})
 }
 

@@ -37,6 +37,17 @@ url: http://example.com/v1
 `,
 			expectedBaseURL: "http://example.com/v1",
 		},
+		{
+			name: "url with basic auth",
+			config: `
+url: http://example.com/v1
+basic_auth:
+  enabled: true
+  username: user
+  password: pass
+`,
+			expectedBaseURL: "http://example.com/v1",
+		},
 	}
 
 	spec := schemaRegistryDecoderConfig()
@@ -46,8 +57,7 @@ url: http://example.com/v1
 			conf, err := spec.ParseYAML(test.config, env)
 			require.NoError(t, err)
 
-			e, err := newSchemaRegistryDecoderFromConfig(conf, nil)
-
+			e, err := newSchemaRegistryDecoderFromConfig(conf, service.MockResources())
 			if e != nil {
 				assert.Equal(t, test.expectedBaseURL, e.schemaRegistryBaseURL.String())
 			}
@@ -187,7 +197,7 @@ func TestSchemaRegistryDecodeAvro(t *testing.T) {
 		return nil, nil
 	})
 
-	decoder, err := newSchemaRegistryDecoder(urlStr, nil, false, nil)
+	decoder, err := newSchemaRegistryDecoder(urlStr, noopReqSign, nil, false, service.MockResources())
 	require.NoError(t, err)
 
 	tests := []struct {
@@ -290,7 +300,7 @@ func TestSchemaRegistryDecodeAvroRawJson(t *testing.T) {
 		return nil, nil
 	})
 
-	decoder, err := newSchemaRegistryDecoder(urlStr, nil, true, nil)
+	decoder, err := newSchemaRegistryDecoder(urlStr, noopReqSign, nil, true, service.MockResources())
 	require.NoError(t, err)
 
 	tests := []struct {
@@ -368,7 +378,7 @@ func TestSchemaRegistryDecodeClearExpired(t *testing.T) {
 		return nil, fmt.Errorf("nope")
 	})
 
-	decoder, err := newSchemaRegistryDecoder(urlStr, nil, false, nil)
+	decoder, err := newSchemaRegistryDecoder(urlStr, noopReqSign, nil, false, service.MockResources())
 	require.NoError(t, err)
 	require.NoError(t, decoder.Close(context.Background()))
 

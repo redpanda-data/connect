@@ -9,6 +9,7 @@ import (
 
 	"github.com/benthosdev/benthos/v4/internal/batch/policy"
 	"github.com/benthosdev/benthos/v4/internal/batch/policy/batchconfig"
+	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/message"
@@ -48,7 +49,8 @@ func (b BatchPolicy) toInternal() batchconfig.Config {
 // therefore it is important to call Close when this batcher is no longer
 // required, having also called Flush if appropriate.
 type Batcher struct {
-	p *policy.Batcher
+	mgr bundle.NewManagement
+	p   *policy.Batcher
 }
 
 // Add a message to the batch. Returns true if the batching policy has been
@@ -91,11 +93,12 @@ func (b *Batcher) Close(ctx context.Context) error {
 
 // NewBatcher creates a batching mechanism from the policy.
 func (b BatchPolicy) NewBatcher(res *Resources) (*Batcher, error) {
-	p, err := policy.New(b.toInternal(), res.mgr.IntoPath("batching"))
+	mgr := res.mgr.IntoPath("batching")
+	p, err := policy.New(b.toInternal(), mgr)
 	if err != nil {
 		return nil, err
 	}
-	return &Batcher{p}, nil
+	return &Batcher{mgr: mgr, p: p}, nil
 }
 
 //------------------------------------------------------------------------------
@@ -143,7 +146,7 @@ func (p *ParsedConfig) FieldBatchPolicy(path ...string) (conf BatchPolicy, err e
 		return
 	}
 
-	procsArray, ok := procsNode.([]interface{})
+	procsArray, ok := procsNode.([]any)
 	if !ok {
 		err = fmt.Errorf("field 'processors' returned unexpected value, expected array, got %T", procsNode)
 		return

@@ -5,16 +5,16 @@ import (
 )
 
 const (
-	// GCPCloudStorageErrorIfExistsCollisionMode - error-if-exists
+	// GCPCloudStorageErrorIfExistsCollisionMode - error-if-exists.
 	GCPCloudStorageErrorIfExistsCollisionMode = "error-if-exists"
 
-	// GCPCloudStorageAppendCollisionMode - append
+	// GCPCloudStorageAppendCollisionMode - append.
 	GCPCloudStorageAppendCollisionMode = "append"
 
-	// GCPCloudStorageIgnoreCollisionMode - ignore
+	// GCPCloudStorageIgnoreCollisionMode - ignore.
 	GCPCloudStorageIgnoreCollisionMode = "ignore"
 
-	// GCPCloudStorageOverwriteCollisionMode - overwrite
+	// GCPCloudStorageOverwriteCollisionMode - overwrite.
 	GCPCloudStorageOverwriteCollisionMode = "overwrite"
 )
 

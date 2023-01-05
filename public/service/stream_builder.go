@@ -1,7 +1,6 @@
 package service
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -106,8 +105,8 @@ func (s *StreamBuilder) SetThreads(n int) {
 
 // PrintLogger is a simple Print based interface implemented by custom loggers.
 type PrintLogger interface {
-	Printf(format string, v ...interface{})
-	Println(v ...interface{})
+	Printf(format string, v ...any)
+	Println(v ...any)
 }
 
 // SetPrintLogger sets a custom logger supporting a simple Print based interface
@@ -253,7 +252,7 @@ func (s *StreamBuilder) AddInputYAML(conf string) error {
 
 	iconf := input.NewConfig()
 	if err := nconf.Decode(&iconf); err != nil {
-		return err
+		return convertDocsLintErr(err)
 	}
 
 	s.inputs = append(s.inputs, iconf)
@@ -275,7 +274,7 @@ func (s *StreamBuilder) AddProcessorYAML(conf string) error {
 
 	pconf := processor.NewConfig()
 	if err := nconf.Decode(&pconf); err != nil {
-		return err
+		return convertDocsLintErr(err)
 	}
 
 	s.processors = append(s.processors, pconf)
@@ -372,7 +371,7 @@ func (s *StreamBuilder) AddOutputYAML(conf string) error {
 
 	oconf := output.NewConfig()
 	if err := nconf.Decode(&oconf); err != nil {
-		return err
+		return convertDocsLintErr(err)
 	}
 
 	s.outputs = append(s.outputs, oconf)
@@ -393,7 +392,7 @@ func (s *StreamBuilder) AddCacheYAML(conf string) error {
 
 	cconf := cache.NewConfig()
 	if err := nconf.Decode(&cconf); err != nil {
-		return err
+		return convertDocsLintErr(err)
 	}
 	if cconf.Label == "" {
 		return errors.New("a label must be specified for cache resources")
@@ -422,7 +421,7 @@ func (s *StreamBuilder) AddRateLimitYAML(conf string) error {
 
 	rconf := ratelimit.NewConfig()
 	if err := nconf.Decode(&rconf); err != nil {
-		return err
+		return convertDocsLintErr(err)
 	}
 	if rconf.Label == "" {
 		return errors.New("a label must be specified for rate limit resources")
@@ -450,7 +449,7 @@ func (s *StreamBuilder) AddResourcesYAML(conf string) error {
 
 	rconf := manager.NewResourceConfig()
 	if err := node.Decode(&rconf); err != nil {
-		return err
+		return convertDocsLintErr(err)
 	}
 
 	return s.resources.AddFrom(&rconf)
@@ -481,7 +480,7 @@ func (s *StreamBuilder) SetYAML(conf string) error {
 	sconf := config.New()
 	sconf.HTTP.Enabled = false
 	if err := node.Decode(&sconf); err != nil {
-		return err
+		return convertDocsLintErr(err)
 	}
 
 	s.setFromConfig(sconf)
@@ -492,7 +491,7 @@ func (s *StreamBuilder) SetYAML(conf string) error {
 // dot path to a value. The argument must be a variadic list of pairs, where the
 // first element is a string containing the target field dot path, and the
 // second element is a typed value to set the field to.
-func (s *StreamBuilder) SetFields(pathValues ...interface{}) error {
+func (s *StreamBuilder) SetFields(pathValues ...any) error {
 	if s.producerChan != nil {
 		return errors.New("attempted to override config after adding a func producer")
 	}
@@ -538,7 +537,7 @@ func (s *StreamBuilder) SetFields(pathValues ...interface{}) error {
 	sconf := config.New()
 	sconf.HTTP.Enabled = false
 	if err := rootNode.Decode(&sconf); err != nil {
-		return err
+		return convertDocsLintErr(err)
 	}
 
 	s.setFromConfig(sconf)
@@ -573,7 +572,7 @@ func (s *StreamBuilder) SetBufferYAML(conf string) error {
 
 	bconf := buffer.NewConfig()
 	if err := nconf.Decode(&bconf); err != nil {
-		return err
+		return convertDocsLintErr(err)
 	}
 
 	s.buffer = bconf
@@ -594,7 +593,7 @@ func (s *StreamBuilder) SetMetricsYAML(conf string) error {
 
 	mconf := metrics.NewConfig()
 	if err := nconf.Decode(&mconf); err != nil {
-		return err
+		return convertDocsLintErr(err)
 	}
 
 	s.metrics = mconf
@@ -615,7 +614,7 @@ func (s *StreamBuilder) SetTracerYAML(conf string) error {
 
 	tconf := tracer.NewConfig()
 	if err := nconf.Decode(&tconf); err != nil {
-		return err
+		return convertDocsLintErr(err)
 	}
 
 	s.tracer = tconf
@@ -636,7 +635,7 @@ func (s *StreamBuilder) SetLoggerYAML(conf string) error {
 
 	lconf := log.NewConfig()
 	if err := node.Decode(&lconf); err != nil {
-		return err
+		return convertDocsLintErr(err)
 	}
 
 	s.logger = lconf
@@ -669,6 +668,58 @@ func (s *StreamBuilder) AsYAML() (string, error) {
 		return "", err
 	}
 	return string(b), nil
+}
+
+// WalkedComponent is a struct containing information about a component yielded
+// via the WalkComponents method.
+type WalkedComponent struct {
+	ComponentType string
+	Name          string
+	Label         string
+	confYAML      string
+}
+
+// ConfigYAML returns the configuration of a walked component in YAML form.
+func (w *WalkedComponent) ConfigYAML() string {
+	return w.confYAML
+}
+
+// WalkComponents walks the Benthos configuration as it is currently built and
+// for each component type (input, processor, output, etc) calls a provided
+// function with a struct containing information about the component.
+//
+// This can be useful for taking an inventory of the contents of a config.
+func (s *StreamBuilder) WalkComponents(fn func(w *WalkedComponent) error) error {
+	conf := s.buildConfig()
+
+	var node yaml.Node
+	if err := node.Encode(conf); err != nil {
+		return err
+	}
+
+	sanitConf := docs.NewSanitiseConfig()
+	sanitConf.RemoveTypeField = true
+	sanitConf.RemoveDeprecated = false
+	sanitConf.DocsProvider = s.env.internal
+
+	spec := config.Spec()
+	if err := spec.SanitiseYAML(&node, sanitConf); err != nil {
+		return err
+	}
+
+	return spec.WalkYAML(&node, s.env.internal,
+		func(c docs.WalkedYAMLComponent) error {
+			yamlBytes, err := yaml.Marshal(c.Conf)
+			if err != nil {
+				return err
+			}
+			return fn(&WalkedComponent{
+				ComponentType: string(c.ComponentType),
+				Name:          c.Name,
+				Label:         c.Label,
+				confYAML:      string(yamlBytes),
+			})
+		})
 }
 
 //------------------------------------------------------------------------------
@@ -764,6 +815,7 @@ func (s *StreamBuilder) buildWithEnv(env *bundle.Environment) (*Stream, error) {
 		if err == nil {
 			sanitConf := docs.NewSanitiseConfig()
 			sanitConf.RemoveTypeField = true
+			sanitConf.ScrubSecrets = true
 			sanitConf.DocsProvider = env
 			_ = config.Spec().SanitiseYAML(&sanitNode, sanitConf)
 		}
@@ -784,6 +836,7 @@ func (s *StreamBuilder) buildWithEnv(env *bundle.Environment) (*Stream, error) {
 		manager.OptSetTracer(tracer),
 		manager.OptSetEnvironment(env),
 		manager.OptSetBloblangEnvironment(s.env.getBloblangParserEnv()),
+		manager.OptSetFS(s.env.fs),
 	)
 	if err != nil {
 		return nil, err
@@ -858,39 +911,6 @@ func getYAMLNode(b []byte) (*yaml.Node, error) {
 		return nconf.Content[0], nil
 	}
 	return &nconf, nil
-}
-
-// Lint represents a configuration file linting error.
-type Lint struct {
-	Line int
-	What string
-}
-
-// LintError is an error type that represents one or more configuration file
-// linting errors that were encountered.
-type LintError []Lint
-
-// Error returns an error string.
-func (e LintError) Error() string {
-	var lintsCollapsed bytes.Buffer
-	for i, l := range e {
-		if i > 0 {
-			lintsCollapsed.WriteString("\n")
-		}
-		fmt.Fprintf(&lintsCollapsed, "line %v: %v", l.Line, l.What)
-	}
-	return fmt.Sprintf("lint errors: %v", lintsCollapsed.String())
-}
-
-func lintsToErr(lints []docs.Lint) error {
-	if len(lints) == 0 {
-		return nil
-	}
-	var e LintError
-	for _, l := range lints {
-		e = append(e, Lint{Line: l.Line, What: l.What})
-	}
-	return e
 }
 
 func (s *StreamBuilder) lintYAMLSpec(spec docs.FieldSpecs, node *yaml.Node) error {

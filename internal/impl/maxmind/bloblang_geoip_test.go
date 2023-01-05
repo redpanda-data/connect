@@ -13,7 +13,7 @@ func TestGeoIPCity(t *testing.T) {
 	testCases := []struct {
 		name  string
 		input string
-		exp   interface{}
+		exp   any
 	}{
 		{
 			name:  "geoip city",

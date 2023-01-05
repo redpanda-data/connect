@@ -27,7 +27,6 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
 	"github.com/benthosdev/benthos/v4/internal/old/util/retries"
-	"github.com/benthosdev/benthos/v4/internal/shutdown"
 )
 
 func init() {
@@ -119,7 +118,6 @@ func NewWriter(
 		log:       log,
 		stats:     stats,
 		operation: operation,
-		shutSig:   shutdown.NewSignaller(),
 	}
 
 	if conf.MongoConfig.URL == "" {
@@ -202,11 +200,9 @@ type Writer struct {
 	collection                   *field.Expression
 	database                     *mongo.Database
 	writeConcernCollectionOption *options.CollectionOptions
-
-	shutSig *shutdown.Signaller
 }
 
-// Connect attempts to establish a connection to the target mongo DB
+// Connect attempts to establish a connection to the target mongo DB.
 func (m *Writer) Connect(ctx context.Context) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -295,7 +291,7 @@ func (m *Writer) WriteBatch(ctx context.Context, msg message.Batch) error {
 			return fmt.Errorf("failed to generate documentVal")
 		}
 
-		var docJSON, filterJSON, hintJSON interface{}
+		var docJSON, filterJSON, hintJSON any
 
 		if filterValWanted {
 			if filterJSON, err = filterVal.AsStructured(); err != nil {
@@ -319,8 +315,13 @@ func (m *Writer) WriteBatch(ctx context.Context, msg message.Batch) error {
 			}
 		}
 
+		collectionStr, err := collection.String(i, msg)
+		if err != nil {
+			return fmt.Errorf("collection interpolation error: %w", err)
+		}
+
 		var writeModel mongo.WriteModel
-		collection := m.database.Collection(collection.String(i, msg), m.writeConcernCollectionOption)
+		collection := m.database.Collection(collectionStr, m.writeConcernCollectionOption)
 
 		switch m.operation {
 		case client.OperationInsertOne:

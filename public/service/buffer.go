@@ -71,7 +71,7 @@ type BatchBuffer interface {
 
 //------------------------------------------------------------------------------
 
-// Implements buffer.ReaderWriter
+// Implements buffer.ReaderWriter.
 type airGapBatchBuffer struct {
 	b   BatchBuffer
 	sig *shutdown.Signaller

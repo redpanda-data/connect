@@ -12,7 +12,7 @@ import (
 	"github.com/rcrowley/go-metrics"
 )
 
-// not sure if this is necessary yet
+// not sure if this is necessary yet.
 var tagEncodingSeparator = ","
 
 // LocalStat is a representation of a single metric stat. Interactions with this
@@ -75,13 +75,13 @@ func (l *Local) GetCounters() map[string]int64 {
 }
 
 // FlushCounters returns a map of the current state of the metrics paths to
-// counters and then resets the counters to 0
+// counters and then resets the counters to 0.
 func (l *Local) FlushCounters() map[string]int64 {
 	return l.getCounters(true)
 }
 
 // getCounters internal method that returns a copy of the counter maps before
-// optionally reseting the counter as determined by the reset value passed in
+// optionally reseting the counter as determined by the reset value passed in.
 func (l *Local) getCounters(reset bool) map[string]int64 {
 	l.mut.Lock()
 	localFlatCounters := make(map[string]int64, len(l.flatCounters))
@@ -101,13 +101,13 @@ func (l *Local) GetTimings() map[string]metrics.Timer {
 }
 
 // FlushTimings returns a map of the current state of the metrics paths to
-// counters and then resets the counters to 0
+// counters and then resets the counters to 0.
 func (l *Local) FlushTimings() map[string]metrics.Timer {
 	return l.getTimings(true)
 }
 
 // FlushTimings returns a map of the current state of the metrics paths to
-// counters and then resets the counters to 0
+// counters and then resets the counters to 0.
 func (l *Local) getTimings(reset bool) map[string]metrics.Timer {
 	l.mut.Lock()
 	localFlatTimings := make(map[string]metrics.Timer, len(l.flatTimings))

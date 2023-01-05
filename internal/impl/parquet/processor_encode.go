@@ -24,6 +24,13 @@ func parquetEncodeProcessorConfig() *service.ConfigSpec {
 		).
 			Description("The default compression type to use for fields.").
 			Default("uncompressed")).
+		Field(service.NewStringEnumField("default_encoding",
+			"DELTA_LENGTH_BYTE_ARRAY", "PLAIN",
+		).
+			Description("The default encoding type to use for fields. A custom default encoding is only necessary when consuming data with libraries that do not support `DELTA_LENGTH_BYTE_ARRAY` and is therefore best left unset where possible.").
+			Default("DELTA_LENGTH_BYTE_ARRAY").
+			Advanced().
+			Version("4.11.0")).
 		Description(`
 This processor uses [https://github.com/segmentio/parquet-go](https://github.com/segmentio/parquet-go), which is itself experimental. Therefore changes could be made into how this processor functions outside of major version releases.
 `).
@@ -58,7 +65,6 @@ func init() {
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchProcessor, error) {
 			return newParquetEncodeProcessorFromConfig(conf, mgr.Logger())
 		})
-
 	if err != nil {
 		panic(err)
 	}
@@ -73,20 +79,30 @@ func parquetSchemaConfig() *service.ConfigField {
 			Description("The type of the column, only applicable for leaf columns with no child fields. Some logical types can be specified here such as UTF8.").Optional(),
 		service.NewBoolField("repeated").Description("Whether the field is repeated.").Default(false),
 		service.NewBoolField("optional").Description("Whether the field is optional.").Default(false),
-		service.NewAnyListField("fields").Description("A list of child fields.").Optional().Example([]interface{}{
-			map[string]interface{}{
+		service.NewAnyListField("fields").Description("A list of child fields.").Optional().Example([]any{
+			map[string]any{
 				"name": "foo",
 				"type": "INT64",
 			},
-			map[string]interface{}{
+			map[string]any{
 				"name": "bar",
 				"type": "BYTE_ARRAY",
 			},
 		}),
-	)
+	).Description("Parquet schema.")
 }
 
-func parquetGroupFromConfig(columnConfs []*service.ParsedConfig) (parquet.Group, error) {
+type encodingFn func(n parquet.Node) parquet.Node
+
+var defaultEncodingFn encodingFn = func(n parquet.Node) parquet.Node {
+	return n
+}
+
+var plainEncodingFn encodingFn = func(n parquet.Node) parquet.Node {
+	return parquet.Encoded(n, &parquet.Plain)
+}
+
+func parquetGroupFromConfig(columnConfs []*service.ParsedConfig, encodingFn encodingFn) (parquet.Group, error) {
 	groupNode := parquet.Group{}
 
 	for _, colConf := range columnConfs {
@@ -98,7 +114,7 @@ func parquetGroupFromConfig(columnConfs []*service.ParsedConfig) (parquet.Group,
 		}
 
 		if childColumns, _ := colConf.FieldAnyList("fields"); len(childColumns) > 0 {
-			if n, err = parquetGroupFromConfig(childColumns); err != nil {
+			if n, err = parquetGroupFromConfig(childColumns, encodingFn); err != nil {
 				return nil, err
 			}
 		} else {
@@ -124,6 +140,7 @@ func parquetGroupFromConfig(columnConfs []*service.ParsedConfig) (parquet.Group,
 			default:
 				return nil, fmt.Errorf("field %v type of '%v' not recognised", name, typeStr)
 			}
+			n = encodingFn(n)
 		}
 
 		repeated, _ := colConf.FieldBool("repeated")
@@ -153,7 +170,19 @@ func newParquetEncodeProcessorFromConfig(conf *service.ParsedConfig, logger *ser
 		return nil, err
 	}
 
-	node, err := parquetGroupFromConfig(schemaConfs)
+	customEncoding, err := conf.FieldString("default_encoding")
+	if err != nil {
+		return nil, err
+	}
+	var encoding encodingFn
+	switch customEncoding {
+	case "PLAIN":
+		encoding = plainEncodingFn
+	default:
+		encoding = defaultEncodingFn
+	}
+
+	node, err := parquetGroupFromConfig(schemaConfs, encoding)
 	if err != nil {
 		return nil, err
 	}
@@ -201,7 +230,7 @@ func newParquetEncodeProcessor(logger *service.Logger, schema *parquet.Schema, c
 
 func (s *parquetEncodeProcessor) ProcessBatch(ctx context.Context, batch service.MessageBatch) ([]service.MessageBatch, error) {
 	buf := bytes.NewBuffer(nil)
-	pWtr := parquet.NewWriter(buf, s.schema, parquet.Compression(s.compressionType))
+	pWtr := parquet.NewGenericWriter[any](buf, s.schema, parquet.Compression(s.compressionType))
 
 	rows := make([]parquet.Row, len(batch))
 	for i, m := range batch {
@@ -210,7 +239,7 @@ func (s *parquetEncodeProcessor) ProcessBatch(ctx context.Context, batch service
 			return nil, err
 		}
 
-		obj, isObj := ms.(map[string]interface{})
+		obj, isObj := ms.(map[string]any)
 		if !isObj {
 			return nil, fmt.Errorf("unable to encode message type %T as parquet row", ms)
 		}
@@ -244,14 +273,14 @@ type inserterConfig struct {
 	parentMissing bool
 }
 
-func (c *inserterConfig) toPQValue(f parquet.Field, data interface{}, defLevel, repLevel int) (parquet.Row, error) {
+func (c *inserterConfig) toPQValue(f parquet.Field, data any, defLevel, repLevel int) (parquet.Row, error) {
 	if f.Repeated() {
 		repLevel++
 
-		var arr []interface{}
+		var arr []any
 		if data != nil {
 			var isArray bool
-			if arr, isArray = data.([]interface{}); !isArray {
+			if arr, isArray = data.([]any); !isArray {
 				return nil, fmt.Errorf("expected array, got %T", data)
 			}
 		}
@@ -270,12 +299,12 @@ func (c *inserterConfig) toPQValue(f parquet.Field, data interface{}, defLevel, 
 	return c.toPQValueNotRepeated(f, data, defLevel, repLevel)
 }
 
-func (c *inserterConfig) toPQValueNotRepeated(f parquet.Field, data interface{}, defLevel, repLevel int) (parquet.Row, error) {
+func (c *inserterConfig) toPQValueNotRepeated(f parquet.Field, data any, defLevel, repLevel int) (parquet.Row, error) {
 	if len(f.Fields()) > 0 {
-		var obj map[string]interface{}
+		var obj map[string]any
 		if data != nil {
 			var isObj bool
-			if obj, isObj = data.(map[string]interface{}); !isObj {
+			if obj, isObj = data.(map[string]any); !isObj {
 				return nil, fmt.Errorf("expected object, got %T", data)
 			}
 		}
@@ -358,7 +387,7 @@ func (c *inserterConfig) toPQValueNotRepeated(f parquet.Field, data interface{},
 	return parquet.Row{leafValue}, nil
 }
 
-func (c *inserterConfig) toPQValuesRepeated(field parquet.Field, data []interface{}, defLevel, repLevel int) (parquet.Row, error) {
+func (c *inserterConfig) toPQValuesRepeated(field parquet.Field, data []any, defLevel, repLevel int) (parquet.Row, error) {
 	if len(data) == 0 {
 		if c.firstRepOf == nil {
 			c.firstRepOf = &repLevel
@@ -403,7 +432,7 @@ func (c *inserterConfig) toPQValuesRepeated(field parquet.Field, data []interfac
 // https://www.waitingforcode.com/apache-parquet/nested-data-representation-parquet/read
 // https://stackoverflow.com/questions/43568132/dremel-repetition-and-definition-level
 // https://blog.twitter.com/engineering/en_us/a/2013/dremel-made-simple-with-parquet
-func (c *inserterConfig) toPQValuesGroup(fields []parquet.Field, data map[string]interface{}, defLevel, repLevel int) (row parquet.Row, err error) {
+func (c *inserterConfig) toPQValuesGroup(fields []parquet.Field, data map[string]any, defLevel, repLevel int) (row parquet.Row, err error) {
 	for _, f := range fields {
 		v, err := c.toPQValue(f, data[f.Name()], defLevel, repLevel)
 		if err != nil {

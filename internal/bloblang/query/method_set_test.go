@@ -51,7 +51,7 @@ func TestMethodSetDeactivated(t *testing.T) {
 
 	spec := NewMethodSpec("meow", "").Param(ParamString("val1", ""))
 	require.NoError(t, setOne.Add(spec, func(target Function, args *ParsedParams) (Function, error) {
-		return ClosureFunction("", func(ctx FunctionContext) (interface{}, error) {
+		return ClosureFunction("", func(ctx FunctionContext) (any, error) {
 			return nil, customErr
 		}, func(ctx TargetsContext) (TargetsContext, []TargetPath) { return ctx, nil }), nil
 	}))

@@ -1,24 +1,17 @@
 package message
 
-import (
-	"bytes"
-	"encoding/json"
-	"errors"
-	"io"
-)
-
-// Contains underlying allocated data for messages
+// Contains underlying allocated data for messages.
 type messageData struct {
 	rawBytes []byte // Contents are always read-only
 	err      error
 
 	// Mutable when readOnlyStructured = false
 	readOnlyStructured bool
-	structured         interface{} // Sometimes mutable
+	structured         any // Sometimes mutable
 
 	// Mutable when readOnlyMeta = false
 	readOnlyMeta bool
-	metadata     map[string]string
+	metadata     map[string]any
 }
 
 func newMessageBytes(content []byte) *messageData {
@@ -36,20 +29,12 @@ func (m *messageData) SetBytes(d []byte) {
 
 func (m *messageData) AsBytes() []byte {
 	if len(m.rawBytes) == 0 && m.structured != nil {
-		var buf bytes.Buffer
-		enc := json.NewEncoder(&buf)
-		enc.SetEscapeHTML(false)
-		if err := enc.Encode(m.structured); err != nil {
-			return nil
-		}
-		if buf.Len() > 1 {
-			m.rawBytes = buf.Bytes()[:buf.Len()-1]
-		}
+		m.rawBytes = encodeJSON(m.structured)
 	}
 	return m.rawBytes
 }
 
-func (m *messageData) SetStructured(jObj interface{}) {
+func (m *messageData) SetStructured(jObj any) {
 	m.rawBytes = nil
 	if jObj == nil {
 		m.rawBytes = []byte(`null`)
@@ -60,12 +45,12 @@ func (m *messageData) SetStructured(jObj interface{}) {
 	m.readOnlyStructured = true
 }
 
-func (m *messageData) SetStructuredMut(jObj interface{}) {
+func (m *messageData) SetStructuredMut(jObj any) {
 	m.SetStructured(jObj)
 	m.readOnlyStructured = false
 }
 
-func (m *messageData) AsStructured() (interface{}, error) {
+func (m *messageData) AsStructured() (any, error) {
 	if m.structured != nil {
 		return m.structured, nil
 	}
@@ -74,38 +59,19 @@ func (m *messageData) AsStructured() (interface{}, error) {
 		return nil, ErrMessagePartNotExist // TODO: Need this?
 	}
 
-	dec := json.NewDecoder(bytes.NewReader(m.rawBytes))
-	if useNumber {
-		dec.UseNumber()
-	}
-
-	if err := dec.Decode(&m.structured); err != nil {
-		return nil, err
-	}
-
-	var dummy json.RawMessage
-	if err := dec.Decode(&dummy); err == io.EOF {
-		return m.structured, nil
-	}
-
-	m.structured = nil
-	err := dec.Decode(&dummy)
-	if err == nil || err == io.EOF {
-		err = errors.New("message contains multiple valid documents")
-	}
-	return nil, err
+	var err error
+	m.structured, err = decodeJSON(m.rawBytes)
+	return m.structured, err
 }
 
-func (m *messageData) AsStructuredMut() (interface{}, error) {
+func (m *messageData) AsStructuredMut() (any, error) {
 	if m.readOnlyStructured {
 		if m.structured != nil {
-			var err error
-			if m.structured, err = cloneGeneric(m.structured); err != nil {
-				return nil, err
-			}
+			m.structured = cloneGeneric(m.structured)
 		}
 		m.readOnlyStructured = true
 	}
+
 	v, err := m.AsStructured()
 	if err != nil {
 		return nil, err
@@ -139,11 +105,11 @@ func (m *messageData) ShallowCopy() *messageData {
 // This is worth doing on values persisted outside of the lifetime of a
 // transaction unless some other strategy is used for persistence.
 func (m *messageData) DeepCopy() *messageData {
-	var clonedMeta map[string]string
+	var clonedMeta map[string]any
 	if m.metadata != nil {
-		clonedMeta = make(map[string]string, len(m.metadata))
+		clonedMeta = make(map[string]any, len(m.metadata))
 		for k, v := range m.metadata {
-			clonedMeta[k] = v
+			clonedMeta[k] = cloneGeneric(v)
 		}
 	}
 
@@ -153,9 +119,9 @@ func (m *messageData) DeepCopy() *messageData {
 		copy(bytesCopy, m.rawBytes)
 	}
 
-	var structuredCopy interface{}
+	var structuredCopy any
 	if m.structured != nil {
-		structuredCopy, _ = CopyJSON(m.structured)
+		structuredCopy = cloneGeneric(m.structured)
 	}
 
 	return &messageData{
@@ -175,10 +141,11 @@ func (m *messageData) writeableMeta() {
 		return
 	}
 
-	var clonedMeta map[string]string
+	var clonedMeta map[string]any
 	if m.metadata != nil {
-		clonedMeta = make(map[string]string, len(m.metadata))
+		clonedMeta = make(map[string]any, len(m.metadata))
 		for k, v := range m.metadata {
+			// NOTE: All metadata is store as mutable so no need to deep clone.
 			clonedMeta[k] = v
 		}
 	}
@@ -187,18 +154,21 @@ func (m *messageData) writeableMeta() {
 	m.readOnlyMeta = false
 }
 
-func (m *messageData) MetaGet(key string) (string, bool) {
+func (m *messageData) MetaGetMut(key string) (any, bool) {
 	if m.metadata == nil {
-		return "", false
+		return nil, false
 	}
 	s, exists := m.metadata[key]
-	return s, exists
+	if !exists {
+		return nil, false
+	}
+	return s, true
 }
 
-func (m *messageData) MetaSet(key, value string) {
+func (m *messageData) MetaSetMut(key string, value any) {
 	m.writeableMeta()
 	if m.metadata == nil {
-		m.metadata = map[string]string{
+		m.metadata = map[string]any{
 			key: value,
 		}
 		return
@@ -211,7 +181,7 @@ func (m *messageData) MetaDelete(key string) {
 	delete(m.metadata, key)
 }
 
-func (m *messageData) MetaIter(f func(k, v string) error) error {
+func (m *messageData) MetaIterMut(f func(k string, v any) error) error {
 	for ak, av := range m.metadata {
 		if err := f(ak, av); err != nil {
 			return err

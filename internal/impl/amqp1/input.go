@@ -26,14 +26,14 @@ import (
 
 func init() {
 	err := bundle.AllInputs.Add(processors.WrapConstructor(func(c input.Config, nm bundle.NewManagement) (input.Streamed, error) {
-		a, err := newAMQP1Reader(c.AMQP1, nm.Logger())
+		a, err := newAMQP1Reader(c.AMQP1, nm)
 		if err != nil {
 			return nil, err
 		}
-		return input.NewAsyncReader("amqp_1", true, a, nm)
+		return input.NewAsyncReader("amqp_1", a, nm)
 	}), docs.ComponentSpec{
 		Name:    "amqp_1",
-		Status:  docs.StatusBeta,
+		Status:  docs.StatusStable,
 		Summary: `Reads messages from an AMQP (1.0) server.`,
 		Description: `
 ### Metadata
@@ -48,12 +48,12 @@ This input adds the following metadata fields to each message:
 ` + "```" + `
 
 You can access these metadata fields using
-[function interpolation](/docs/configuration/interpolation#metadata).`,
+[function interpolation](/docs/configuration/interpolation#bloblang-queries).`,
 		Categories: []string{
 			"Services",
 		},
 		Config: docs.FieldComponent().WithChildren(
-			docs.FieldString("url",
+			docs.FieldURL("url",
 				"A URL to connect to.",
 				"amqp://localhost:5672/",
 				"amqps://guest:guest@localhost:5672/",
@@ -120,14 +120,14 @@ type amqp1Reader struct {
 	conn *amqp1Conn
 }
 
-func newAMQP1Reader(conf input.AMQP1Config, log log.Modular) (*amqp1Reader, error) {
+func newAMQP1Reader(conf input.AMQP1Config, mgr bundle.NewManagement) (*amqp1Reader, error) {
 	a := amqp1Reader{
 		conf: conf,
-		log:  log,
+		log:  mgr.Logger(),
 	}
 	if conf.TLS.Enabled {
 		var err error
-		if a.tlsConf, err = conf.TLS.Get(); err != nil {
+		if a.tlsConf, err = conf.TLS.Get(mgr.FS()); err != nil {
 			return nil, err
 		}
 	}
@@ -330,7 +330,7 @@ func uuidFromLockTokenBytes(bytes []byte) (*amqp.UUID, error) {
 		return nil, fmt.Errorf("invalid lock token, token was not 16 bytes long")
 	}
 
-	var swapIndex = func(indexOne, indexTwo int, array *[16]byte) {
+	swapIndex := func(indexOne, indexTwo int, array *[16]byte) {
 		array[indexOne], array[indexTwo] = array[indexTwo], array[indexOne]
 	}
 
@@ -367,10 +367,10 @@ func (a *amqp1Reader) renewWithContext(ctx context.Context, msg *amqp.Message) (
 			MessageID: msg.Properties.MessageID,
 			ReplyTo:   &replyTo,
 		},
-		ApplicationProperties: map[string]interface{}{
+		ApplicationProperties: map[string]any{
 			"operation": "com.microsoft:renew-lock",
 		},
-		Value: map[string]interface{}{
+		Value: map[string]any{
 			"lock-tokens": []amqp.UUID{*lockToken},
 		},
 	}
@@ -388,7 +388,7 @@ func (a *amqp1Reader) renewWithContext(ctx context.Context, msg *amqp.Message) (
 		return time.Time{}, fmt.Errorf("unsuccessful status code %d, message %s", statusCode, result.ApplicationProperties["statusDescription"])
 	}
 
-	values, ok := result.Value.(map[string]interface{})
+	values, ok := result.Value.(map[string]any)
 	if !ok {
 		return time.Time{}, errors.New("missing value in response message")
 	}
@@ -401,9 +401,9 @@ func (a *amqp1Reader) renewWithContext(ctx context.Context, msg *amqp.Message) (
 	return expirations[0], nil
 }
 
-func amqpSetMetadata(p *message.Part, k string, v interface{}) {
+func amqpSetMetadata(p *message.Part, k string, v any) {
 	var metaValue string
-	var metaKey = strings.ReplaceAll(k, "-", "_")
+	metaKey := strings.ReplaceAll(k, "-", "_")
 
 	switch v := v.(type) {
 	case bool:
@@ -433,6 +433,6 @@ func amqpSetMetadata(p *message.Part, k string, v interface{}) {
 	}
 
 	if metaValue != "" {
-		p.MetaSet(metaKey, metaValue)
+		p.MetaSetMut(metaKey, metaValue)
 	}
 }

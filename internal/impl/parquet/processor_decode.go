@@ -17,12 +17,14 @@ func parquetDecodeProcessorConfig() *service.ConfigSpec {
 		Categories("Parsing").
 		Summary("Decodes [Parquet files](https://parquet.apache.org/docs/) into a batch of structured messages.").
 		Field(service.NewBoolField("byte_array_as_string").
-			Description("Whether to extract BYTE_ARRAY and FIXED_LEN_BYTE_ARRAY values as strings rather than byte slices. Enabling this field makes serialising the data as JSON more intuitive, otherwise the byte slice fields should be mapped via [Bloblang](/docs/guides/bloblang/about) in order to extract meaningful values.").
+			Description("Whether to extract BYTE_ARRAY and FIXED_LEN_BYTE_ARRAY values as strings rather than byte slices in all cases. Values with a logical type of UTF8 will automatically be extracted as strings irrespective of this field. Enabling this field makes serialising the data as JSON more intuitive as `[]byte` values are serialised as base64 encoded strings by default.").
 			Default(false)).
 		Description(`
 This processor uses [https://github.com/segmentio/parquet-go](https://github.com/segmentio/parquet-go), which is itself experimental. Therefore changes could be made into how this processor functions outside of major version releases.
 
-By default any BYTE_ARRAY or FIXED_LEN_BYTE_ARRAY values will be copied as `+"`[]byte`"+` values as they could contain arbitrary data. This means that when serialising messages as JSON documents these values will by default be base 64 encoded into strings, which is the default for arbitrary data fields. It is possible to convert these binary values to strings (or other data types) using Bloblang transformations such as `+"`root.foo = this.foo.string()` or `root.foo = this.foo.encode(\"hex\")`"+`, etc.
+By default any BYTE_ARRAY or FIXED_LEN_BYTE_ARRAY value will be extracted as a byte slice (`+"`[]byte`"+`) unless the logical type is UTF8, in which case they are extracted as a string (`+"`string`"+`).
+
+When a value extracted as a byte slice exists within a document which is later JSON serialized by default it will be base 64 encoded into strings, which is the default for arbitrary data fields. It is possible to convert these binary values to strings (or other data types) using Bloblang transformations such as `+"`root.foo = this.foo.string()` or `root.foo = this.foo.encode(\"hex\")`"+`, etc.
 
 However, in cases where all BYTE_ARRAY values are strings within your data it may be easier to set the config field `+"`byte_array_as_string` to `true`"+` in order to automatically extract all of these values as strings.`).
 		Version("4.4.0").
@@ -53,7 +55,6 @@ func init() {
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {
 			return newParquetDecodeProcessorFromConfig(conf, mgr.Logger())
 		})
-
 	if err != nil {
 		panic(err)
 	}
@@ -94,11 +95,7 @@ func (s *parquetDecodeProcessor) Process(ctx context.Context, msg *service.Messa
 		return nil, err
 	}
 
-	pRdrConf, err := parquet.NewReaderConfig()
-	if err != nil {
-		return nil, err
-	}
-	pRdr := parquet.NewReader(inFile, pRdrConf)
+	pRdr := parquet.NewGenericReader[any](inFile)
 
 	rowBuf := make([]parquet.Row, 10)
 	var resBatch service.MessageBatch
@@ -116,7 +113,7 @@ func (s *parquetDecodeProcessor) Process(ctx context.Context, msg *service.Messa
 		for i := 0; i < n; i++ {
 			row := rowBuf[i]
 
-			mappedData := map[string]interface{}{}
+			mappedData := map[string]any{}
 			_, _ = s.eConf.extractPQValueGroup(schema.Fields(), row, mappedData, 0, 0)
 
 			newMsg := msg.Copy()
@@ -139,12 +136,12 @@ type extractConfig struct {
 }
 
 func (e *extractConfig) extractPQValueNotRepeated(field parquet.Field, row []parquet.Value, defLevel, repLevel int) (
-	extracted interface{}, // The next value extracted from row
+	extracted any, // The next value extracted from row
 	highestDefLevel int, // The highest definition value seen from the extracted value
 	remaining []parquet.Value, // The remaining rows
 ) {
 	if len(field.Fields()) > 0 {
-		nested := map[string]interface{}{}
+		nested := map[string]any{}
 		highestDefLevel, row = e.extractPQValueGroup(field.Fields(), row, nested, defLevel, repLevel)
 		return nested, highestDefLevel, row
 	}
@@ -156,7 +153,7 @@ func (e *extractConfig) extractPQValueNotRepeated(field parquet.Field, row []par
 		return nil, value.RepetitionLevel(), row
 	}
 
-	var v interface{}
+	var v any
 	switch value.Kind() {
 	case parquet.Boolean:
 		v = value.Boolean()
@@ -173,8 +170,8 @@ func (e *extractConfig) extractPQValueNotRepeated(field parquet.Field, row []par
 	case parquet.Double:
 		v = value.Double()
 	case parquet.ByteArray, parquet.FixedLenByteArray:
-		// TODO: Detect UTF-8 logical type here.
-		if e.byteArrayAsStrings {
+		logType := field.Type().LogicalType()
+		if (logType != nil && logType.UTF8 != nil) || e.byteArrayAsStrings {
 			v = string(value.ByteArray())
 		} else {
 			c := make([]byte, len(value.ByteArray()))
@@ -189,7 +186,7 @@ func (e *extractConfig) extractPQValueNotRepeated(field parquet.Field, row []par
 }
 
 func (e *extractConfig) extractPQValueMaybeRepeated(field parquet.Field, row []parquet.Value, defLevel, repLevel int) (
-	extracted interface{}, // The next value extracted from row
+	extracted any, // The next value extracted from row
 	highestDefLevel int, // The highest definition value seen from the extracted value
 	remaining []parquet.Value, // The remaining rows
 ) {
@@ -198,8 +195,8 @@ func (e *extractConfig) extractPQValueMaybeRepeated(field parquet.Field, row []p
 	}
 
 	repLevel++
-	var elements []interface{}
-	var next interface{}
+	var elements []any
+	var next any
 
 	// The value is repeated zero or more times, but irrespective of that we
 	// always process one value. If the definition level of the returned fields
@@ -232,7 +229,7 @@ func (e *extractConfig) extractPQValueMaybeRepeated(field parquet.Field, row []p
 func (e *extractConfig) extractPQValueGroup(
 	fields []parquet.Field,
 	row []parquet.Value,
-	values map[string]interface{},
+	values map[string]any,
 	defLevel, repLevel int,
 ) (
 	highestDefLevel int, // The highest definition value seen from the extracted value
@@ -251,7 +248,7 @@ func (e *extractConfig) extractPQValueGroup(
 				continue
 			}
 
-			nestedValues := map[string]interface{}{}
+			nestedValues := map[string]any{}
 			if tmpHighestDefLevel, row = e.extractPQValueGroup(
 				field.Fields(), row,
 				nestedValues,

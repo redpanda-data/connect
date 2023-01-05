@@ -28,10 +28,10 @@ func init() {
 	err := bundle.AllInputs.Add(processors.WrapConstructor(func(c input.Config, nm bundle.NewManagement) (input.Streamed, error) {
 		var a input.Async
 		var err error
-		if a, err = newAMQP09Reader(c.AMQP09, nm.Logger()); err != nil {
+		if a, err = newAMQP09Reader(c.AMQP09, nm); err != nil {
 			return nil, err
 		}
-		return input.NewAsyncReader("amqp_0_9", true, a, nm)
+		return input.NewAsyncReader("amqp_0_9", a, nm)
 	}), docs.ComponentSpec{
 		Name: "amqp_0_9",
 		Summary: `
@@ -67,17 +67,17 @@ This input adds the following metadata fields to each message:
 ` + "```" + `
 
 You can access these metadata fields using
-[function interpolation](/docs/configuration/interpolation#metadata).`,
+[function interpolation](/docs/configuration/interpolation#bloblang-queries).`,
 		Categories: []string{
 			"Services",
 		},
 		Config: docs.FieldComponent().WithChildren(
-			docs.FieldString("urls",
+			docs.FieldURL("urls",
 				"A list of URLs to connect to. The first URL to successfully establish a connection will be used until the connection is closed. If an item of the list contains commas it will be expanded into multiple URLs.",
 				[]string{"amqp://guest:guest@127.0.0.1:5672/"},
 				[]string{"amqp://127.0.0.1:5672/,amqp://127.0.0.2:5672/"},
 				[]string{"amqp://127.0.0.1:5672/", "amqp://127.0.0.2:5672/"},
-			).Array().AtVersion("3.58.0").HasDefault([]interface{}{}),
+			).Array().AtVersion("3.58.0").HasDefault([]any{}),
 			docs.FieldString("queue", "An AMQP queue to consume from.").HasDefault(""),
 			docs.FieldObject("queue_declare", `
 Allows you to passively declare the target queue. If the queue already exists
@@ -89,8 +89,8 @@ then the declaration passively verifies that they match the target fields.`,
 			).Advanced(),
 			docs.FieldObject("bindings_declare",
 				"Allows you to passively declare bindings for the target queue.",
-				[]interface{}{
-					map[string]interface{}{
+				[]any{
+					map[string]any{
 						"exchange": "foo",
 						"key":      "bar",
 					},
@@ -98,10 +98,10 @@ then the declaration passively verifies that they match the target fields.`,
 			).Array().WithChildren(
 				docs.FieldString("exchange", "The exchange of the declared binding.").HasDefault(""),
 				docs.FieldString("key", "The key of the declared binding.").HasDefault(""),
-			).Advanced().HasDefault([]interface{}{}),
+			).Advanced().HasDefault([]any{}),
 			docs.FieldString("consumer_tag", "A consumer tag.").HasDefault(""),
 			docs.FieldBool("auto_ack", "Acknowledge messages automatically as they are consumed rather than waiting for acknowledgments from downstream. This can improve throughput and prevent the pipeline from blocking but at the cost of eliminating delivery guarantees.").Advanced().HasDefault(false),
-			docs.FieldString("nack_reject_patterns", "A list of regular expression patterns whereby if a message that has failed to be delivered by Benthos has an error that matches it will be dropped (or delivered to a dead-letter queue if one exists). By default failed messages are nacked with requeue enabled.", []string{"^reject me please:.+$"}).Array().Advanced().AtVersion("3.64.0").HasDefault([]interface{}{}),
+			docs.FieldString("nack_reject_patterns", "A list of regular expression patterns whereby if a message that has failed to be delivered by Benthos has an error that matches it will be dropped (or delivered to a dead-letter queue if one exists). By default failed messages are nacked with requeue enabled.", []string{"^reject me please:.+$"}).Array().Advanced().AtVersion("3.64.0").HasDefault([]any{}),
 			docs.FieldInt("prefetch_count", "The maximum number of pending messages to have consumed at a time.").HasDefault(10),
 			docs.FieldInt("prefetch_size", "The maximum amount of pending messages measured in bytes to have consumed at a time.").Advanced().HasDefault(0),
 			btls.FieldSpec(),
@@ -132,10 +132,10 @@ type amqp09Reader struct {
 	m sync.RWMutex
 }
 
-func newAMQP09Reader(conf input.AMQP09Config, log log.Modular) (*amqp09Reader, error) {
+func newAMQP09Reader(conf input.AMQP09Config, mgr bundle.NewManagement) (*amqp09Reader, error) {
 	a := amqp09Reader{
 		conf: conf,
-		log:  log,
+		log:  mgr.Logger(),
 	}
 
 	if len(conf.URLs) == 0 {
@@ -160,7 +160,7 @@ func newAMQP09Reader(conf input.AMQP09Config, log log.Modular) (*amqp09Reader, e
 
 	if conf.TLS.Enabled {
 		var err error
-		if a.tlsConf, err = conf.TLS.Get(); err != nil {
+		if a.tlsConf, err = conf.TLS.Get(mgr.FS()); err != nil {
 			return nil, err
 		}
 	}
@@ -265,9 +265,9 @@ func (a *amqp09Reader) disconnect() error {
 
 //------------------------------------------------------------------------------
 
-func amqpSetMetadata(p *message.Part, k string, v interface{}) {
+func amqpSetMetadata(p *message.Part, k string, v any) {
 	var metaValue string
-	var metaKey = strings.ReplaceAll(k, "-", "_")
+	metaKey := strings.ReplaceAll(k, "-", "_")
 
 	switch v := v.(type) {
 	case bool:
@@ -306,7 +306,7 @@ func amqpSetMetadata(p *message.Part, k string, v interface{}) {
 	}
 
 	if metaValue != "" {
-		p.MetaSet(metaKey, metaValue)
+		p.MetaSetMut(metaKey, metaValue)
 	}
 }
 
@@ -392,7 +392,7 @@ func (a *amqp09Reader) Close(ctx context.Context) error {
 	return a.disconnect()
 }
 
-// reDial connection to amqp with one or more fallback URLs
+// reDial connection to amqp with one or more fallback URLs.
 func (a *amqp09Reader) reDial(urls []string) (conn *amqp.Connection, err error) {
 	for _, u := range urls {
 		conn, err = a.dial(u)
@@ -407,7 +407,7 @@ func (a *amqp09Reader) reDial(urls []string) (conn *amqp.Connection, err error) 
 	return nil, err
 }
 
-// dial attempts to connect to amqp URL
+// dial attempts to connect to amqp URL.
 func (a *amqp09Reader) dial(amqpURL string) (conn *amqp.Connection, err error) {
 	u, err := url.Parse(amqpURL)
 	if err != nil {

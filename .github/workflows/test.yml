@@ -4,7 +4,7 @@ on:
   push:
   pull_request:
   schedule:
-    - cron: '0,30 * * * *' # Every 30 mins
+    - cron: '0 0/2 * * *' # Every two hours
 
 jobs:
   cross-build:
@@ -20,14 +20,17 @@ jobs:
     steps:
 
     - name: Install Go
-      uses: actions/setup-go@v2
+      uses: actions/setup-go@v3
       with:
         go-version: ${{ matrix.go-version }}
+        check-latest: true
 
     - name: Checkout code
-      uses: actions/checkout@v2
+      uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
 
-    - uses: actions/cache@v2
+    - uses: actions/cache@v3
       with:
         path: |
           ~/go/pkg/mod
@@ -39,7 +42,7 @@ jobs:
           ${{ runner.os }}-go-
 
     - name: GoReleaser
-      uses: goreleaser/goreleaser-action@v2
+      uses: goreleaser/goreleaser-action@v4
       with:
         version: latest
         args: build --snapshot --timeout 60m
@@ -52,14 +55,15 @@ jobs:
     steps:
 
     - name: Install Go
-      uses: actions/setup-go@v2
+      uses: actions/setup-go@v3
       with:
         go-version: 1.19.x
+        check-latest: true
 
     - name: Checkout code
-      uses: actions/checkout@v2
+      uses: actions/checkout@v3
 
-    - uses: actions/cache@v2
+    - uses: actions/cache@v3
       with:
         path: |
           ~/go/pkg/mod
@@ -86,11 +90,24 @@ jobs:
       CGO_ENABLED: 0
     steps:
 
+    - name: Install Go
+      uses: actions/setup-go@v3
+      with:
+        go-version: 1.19.x
+        check-latest: true
+
     - name: Checkout code
-      uses: actions/checkout@v2
+      uses: actions/checkout@v3
 
     - name: Lint
-      uses: golangci/golangci-lint-action@v2
+      uses: golangci/golangci-lint-action@v3
       with:
         version: latest
         args: --timeout 30m cmd/... internal/... public/...
+
+    # TODO: Remove this after https://github.com/golangci/golangci-lint/issues/3094 is addressed
+    # - name: Get govulncheck
+    #   run: go install golang.org/x/vuln/cmd/govulncheck@latest
+
+    # - name: Run govulncheck
+    #   run: govulncheck ./...

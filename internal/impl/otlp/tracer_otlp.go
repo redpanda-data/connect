@@ -22,12 +22,12 @@ func init() {
 	spec := service.NewConfigSpec().
 		Summary("Send tracing events to an [Open Telemetry collector](https://opentelemetry.io/docs/collector/).").
 		Field(service.NewObjectListField("http",
-			service.NewStringField("url").
+			service.NewURLField("url").
 				Description("The URL of a collector to send tracing events to.").
 				Default("localhost:4318"),
 		).Description("A list of http collectors.")).
 		Field(service.NewObjectListField("grpc",
-			service.NewStringField("url").
+			service.NewURLField("url").
 				Description("The URL of a collector to send tracing events to.").
 				Default("localhost:4317"),
 		).Description("A list of grpc collectors.")).
@@ -46,7 +46,6 @@ func init() {
 			}
 			return newOtlp(c)
 		})
-
 	if err != nil {
 		panic(err)
 	}
@@ -74,7 +73,6 @@ func newOtlpConfig(conf *service.ParsedConfig) (*otlp, error) {
 	}
 
 	tags, err := conf.FieldStringMap("tags")
-
 	if err != nil {
 		return nil, err
 	}
@@ -109,7 +107,6 @@ func newOtlp(config *otlp) (trace.TracerProvider, error) {
 	var opts []tracesdk.TracerProviderOption
 
 	opts, err := addGrpcCollectors(ctx, config.grpc, opts)
-
 	if err != nil {
 		return nil, err
 	}

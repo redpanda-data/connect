@@ -65,7 +65,7 @@ func (conf *Config) UnmarshalJSON(bytes []byte) error {
 
 // UnmarshalYAML ensures that when parsing configs that are in a slice the
 // default values are still applied.
-func (conf *Config) UnmarshalYAML(unmarshal func(interface{}) error) error {
+func (conf *Config) UnmarshalYAML(unmarshal func(any) error) error {
 	type confAlias Config
 	aliased := confAlias(NewConfig())
 
@@ -171,7 +171,7 @@ func (l *Logger) WithFields(inboundFields map[string]string) Modular {
 
 // With returns a copy of the logger with new labels added to the logging
 // context.
-func (l *Logger) With(keyValues ...interface{}) Modular {
+func (l *Logger) With(keyValues ...any) Modular {
 	newEntry := l.entry.WithFields(logrus.Fields{})
 	for i := 0; i < (len(keyValues) - 1); i += 2 {
 		key, ok := keyValues[i].(string)
@@ -189,32 +189,32 @@ func (l *Logger) With(keyValues ...interface{}) Modular {
 //------------------------------------------------------------------------------
 
 // Fatalf prints a fatal message to the console. Does NOT cause panic.
-func (l *Logger) Fatalf(format string, v ...interface{}) {
+func (l *Logger) Fatalf(format string, v ...any) {
 	l.entry.Fatalf(strings.TrimSuffix(format, "\n"), v...)
 }
 
 // Errorf prints an error message to the console.
-func (l *Logger) Errorf(format string, v ...interface{}) {
+func (l *Logger) Errorf(format string, v ...any) {
 	l.entry.Errorf(strings.TrimSuffix(format, "\n"), v...)
 }
 
 // Warnf prints a warning message to the console.
-func (l *Logger) Warnf(format string, v ...interface{}) {
+func (l *Logger) Warnf(format string, v ...any) {
 	l.entry.Warnf(strings.TrimSuffix(format, "\n"), v...)
 }
 
 // Infof prints an information message to the console.
-func (l *Logger) Infof(format string, v ...interface{}) {
+func (l *Logger) Infof(format string, v ...any) {
 	l.entry.Infof(strings.TrimSuffix(format, "\n"), v...)
 }
 
 // Debugf prints a debug message to the console.
-func (l *Logger) Debugf(format string, v ...interface{}) {
+func (l *Logger) Debugf(format string, v ...any) {
 	l.entry.Debugf(strings.TrimSuffix(format, "\n"), v...)
 }
 
 // Tracef prints a trace message to the console.
-func (l *Logger) Tracef(format string, v ...interface{}) {
+func (l *Logger) Tracef(format string, v ...any) {
 	l.entry.Tracef(strings.TrimSuffix(format, "\n"), v...)
 }
 

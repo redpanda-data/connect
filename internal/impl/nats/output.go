@@ -3,6 +3,7 @@ package nats
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -95,7 +96,7 @@ func newNATSWriter(conf output.NATSConfig, mgr bundle.NewManagement, log log.Mod
 	n.urls = strings.Join(conf.URLs, ",")
 
 	if conf.TLS.Enabled {
-		if n.tlsConf, err = conf.TLS.Get(); err != nil {
+		if n.tlsConf, err = conf.TLS.Get(mgr.FS()); err != nil {
 			return nil, err
 		}
 	}
@@ -146,7 +147,11 @@ func (n *natsWriter) Write(msg message.Batch) error {
 	}
 
 	return output.IterateBatchedSend(msg, func(i int, p *message.Part) error {
-		subject := n.subjectStr.String(i, msg)
+		subject, err := n.subjectStr.String(i, msg)
+		if err != nil {
+			return fmt.Errorf("subject interpolation error: %w", err)
+		}
+
 		n.log.Debugf("Writing NATS message to topic %s", subject)
 		// fill message data
 		nMsg := nats.NewMsg(subject)
@@ -154,11 +159,15 @@ func (n *natsWriter) Write(msg message.Batch) error {
 		if conn.HeadersSupported() {
 			// fill bloblang headers
 			for k, v := range n.headers {
-				nMsg.Header.Add(k, v.String(i, msg))
+				headerStr, err := v.String(i, msg)
+				if err != nil {
+					return fmt.Errorf("header %v interpolation error: %w", k, err)
+				}
+				nMsg.Header.Add(k, headerStr)
 			}
 		}
-		err := conn.PublishMsg(nMsg)
-		if err == nats.ErrConnectionClosed {
+
+		if err = conn.PublishMsg(nMsg); errors.Is(err, nats.ErrConnectionClosed) {
 			conn.Close()
 			n.connMut.Lock()
 			n.natsConn = nil

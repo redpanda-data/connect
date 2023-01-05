@@ -32,6 +32,7 @@ func newAsyncMockWriter() *mockAsyncWriter {
 func (w *mockAsyncWriter) Connect(ctx context.Context) error {
 	return <-w.connChan
 }
+
 func (w *mockAsyncWriter) WriteBatch(ctx context.Context, msg message.Batch) error {
 	w.msgsRcvd.Store(atomic.AddUint64(&w.msgsTotal, 1), msg)
 	return <-w.writeChan
@@ -43,6 +44,7 @@ type writerCantConnect struct{}
 func (w writerCantConnect) Connect(ctx context.Context) error {
 	return component.ErrNotConnected
 }
+
 func (w writerCantConnect) WriteBatch(ctx context.Context, msg message.Batch) error {
 	return component.ErrNotConnected
 }
@@ -56,6 +58,7 @@ func (w *writerCantSend) Connect(ctx context.Context) error {
 	w.connected++
 	return nil
 }
+
 func (w *writerCantSend) WriteBatch(ctx context.Context, msg message.Batch) error {
 	return component.ErrNotConnected
 }

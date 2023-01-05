@@ -68,7 +68,7 @@ If you are blocked by this issue then a work around is to delete either the spec
 ```yaml
 pipeline:
   processors:
-    - bloblang: |
+    - mapping: |
         meta kafka_key = deleted()
 ```
 
@@ -77,7 +77,7 @@ Or delete all keys with:
 ```yaml
 pipeline:
   processors:
-    - bloblang: meta = deleted()
+    - mapping: meta = deleted()
 ```
 
 ## Performance

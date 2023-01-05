@@ -1,7 +1,7 @@
 ---
 title: gcp_bigquery_select
 type: input
-status: experimental
+status: beta
 categories: ["Services","GCP"]
 ---
 
@@ -15,8 +15,8 @@ categories: ["Services","GCP"]
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-:::caution EXPERIMENTAL
-This component is experimental and therefore subject to change or removal outside of major version releases.
+:::caution BETA
+This component is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with the component is found.
 :::
 Executes a `SELECT` query against BigQuery and creates a message for each row received.
 

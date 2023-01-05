@@ -37,7 +37,7 @@ func (s *SwitchCaseConfig) UnmarshalJSON(bytes []byte) error {
 
 // UnmarshalYAML ensures that when parsing configs that are in a map or slice
 // the default values are still applied.
-func (s *SwitchCaseConfig) UnmarshalYAML(unmarshal func(interface{}) error) error {
+func (s *SwitchCaseConfig) UnmarshalYAML(unmarshal func(any) error) error {
 	type confAlias SwitchCaseConfig
 	aliased := confAlias(NewSwitchCaseConfig())
 

@@ -11,7 +11,7 @@ import (
 
 func processorConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
-		// Stable(). TODO
+		Beta().
 		Categories("Parsing").
 		Summary("Converts messages to or from the [MessagePack](https://msgpack.org/) format.").
 		Field(service.NewStringAnnotatedEnumField("operator", map[string]string{
@@ -27,7 +27,6 @@ func init() {
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {
 			return newProcessorFromConfig(conf)
 		})
-
 	if err != nil {
 		panic(err)
 	}
@@ -44,7 +43,7 @@ func strToMsgPackOperator(opStr string) (msgPackOperator, error) {
 				return nil, err
 			}
 
-			var jObj interface{}
+			var jObj any
 			if err := msgpack.Unmarshal(mBytes, &jObj); err != nil {
 				return nil, fmt.Errorf("failed to convert MsgPack document to JSON: %v", err)
 			}

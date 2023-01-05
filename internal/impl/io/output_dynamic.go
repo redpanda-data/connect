@@ -35,7 +35,7 @@ methods on the ` + "`/outputs/{output_id}`" + ` endpoint. When using POST the
 body of the request should be a YAML configuration for the output, if the output
 already exists it will be changed.`,
 			Config: docs.FieldComponent().WithChildren(
-				docs.FieldOutput("outputs", "A map of outputs to statically create.").Map().HasDefault(map[string]interface{}{}),
+				docs.FieldOutput("outputs", "A map of outputs to statically create.").Map().HasDefault(map[string]any{}),
 				docs.FieldString("prefix", "A path prefix for HTTP endpoints that are registered.").HasDefault(""),
 			),
 			Categories: []string{
@@ -80,6 +80,7 @@ func newDynamicOutput(conf output.Config, mgr bundle.NewManagement) (output.Stre
 			if err := node.Encode(uConf); err == nil {
 				sanitConf := docs.NewSanitiseConfig()
 				sanitConf.RemoveTypeField = true
+				sanitConf.ScrubSecrets = true
 				if err := docs.FieldOutput("output", "").SanitiseYAML(&node, sanitConf); err == nil {
 					confBytes, _ = yaml.Marshal(node)
 				}

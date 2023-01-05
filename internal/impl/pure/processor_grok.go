@@ -5,7 +5,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/Jeffail/gabs/v2"
@@ -15,6 +14,7 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/filepath"
+	"github.com/benthosdev/benthos/v4/internal/filepath/ifs"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
 )
@@ -99,7 +99,7 @@ func newGrok(conf processor.GrokConfig, mgr bundle.NewManagement) (processor.V2,
 	}
 
 	for _, path := range conf.PatternPaths {
-		if err := addGrokPatternsFromPath(path, grokConf.Patterns); err != nil {
+		if err := addGrokPatternsFromPath(mgr.FS(), path, grokConf.Patterns); err != nil {
 			return nil, fmt.Errorf("failed to parse patterns from path '%v': %v", path, err)
 		}
 	}
@@ -125,20 +125,20 @@ func newGrok(conf processor.GrokConfig, mgr bundle.NewManagement) (processor.V2,
 	return g, nil
 }
 
-func addGrokPatternsFromPath(path string, patterns map[string]string) error {
-	if s, err := os.Stat(path); err != nil {
+func addGrokPatternsFromPath(fs ifs.FS, path string, patterns map[string]string) error {
+	if s, err := fs.Stat(path); err != nil {
 		return err
 	} else if s.IsDir() {
 		path += "/*"
 	}
 
-	files, err := filepath.Globs([]string{path})
+	files, err := filepath.Globs(fs, []string{path})
 	if err != nil {
 		return err
 	}
 
 	for _, f := range files {
-		file, err := os.Open(f)
+		file, err := fs.Open(f)
 		if err != nil {
 			return err
 		}
@@ -162,7 +162,7 @@ func addGrokPatternsFromPath(path string, patterns map[string]string) error {
 func (g *grokProc) Process(ctx context.Context, msg *message.Part) ([]*message.Part, error) {
 	body := msg.AsBytes()
 
-	var values map[string]interface{}
+	var values map[string]any
 	for _, compiler := range g.gparsers {
 		var err error
 		if values, err = compiler.ParseTyped(body); err != nil {

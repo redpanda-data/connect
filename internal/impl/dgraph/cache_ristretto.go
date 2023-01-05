@@ -40,7 +40,6 @@ func init() {
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Cache, error) {
 			return newRistrettoCacheFromConfig(conf)
 		})
-
 	if err != nil {
 		panic(err)
 	}
@@ -86,7 +85,7 @@ func newRistrettoCache(defaultTTL time.Duration, retriesEnabled bool, backOff *b
 		cache:          cache,
 		retriesEnabled: retriesEnabled,
 		boffPool: sync.Pool{
-			New: func() interface{} {
+			New: func() any {
 				bo := *backOff
 				bo.Reset()
 				return &bo

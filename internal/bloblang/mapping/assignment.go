@@ -14,24 +14,24 @@ import (
 //------------------------------------------------------------------------------
 
 type metaMsg interface {
-	MetaSet(key, value string)
+	MetaSetMut(key string, value any)
 	MetaDelete(key string)
-	MetaIter(f func(k, v string) error) error
+	MetaIterMut(f func(k string, v any) error) error
 }
 
 // AssignmentContext contains references to all potential assignment
 // destinations of a given mapping.
 type AssignmentContext struct {
-	Vars  map[string]interface{}
+	Vars  map[string]any
 	Meta  metaMsg
-	Value *interface{}
+	Value *any
 }
 
 // Assignment represents a way of assigning a queried value to something within
 // an assignment context. This could be a Benthos message, a variable, a
 // metadata field, etc.
 type Assignment interface {
-	Apply(value interface{}, ctx AssignmentContext) error
+	Apply(value any, ctx AssignmentContext) error
 	Target() TargetPath
 }
 
@@ -50,7 +50,7 @@ func NewVarAssignment(name string) *VarAssignment {
 }
 
 // Apply a value to a variable.
-func (v *VarAssignment) Apply(value interface{}, ctx AssignmentContext) error {
+func (v *VarAssignment) Apply(value any, ctx AssignmentContext) error {
 	if _, deleted := value.(query.Delete); deleted {
 		delete(ctx.Vars, v.name)
 	} else {
@@ -81,25 +81,28 @@ func NewMetaAssignment(key *string) *MetaAssignment {
 }
 
 // Apply a value to a metadata key.
-func (m *MetaAssignment) Apply(value interface{}, ctx AssignmentContext) error {
+func (m *MetaAssignment) Apply(value any, ctx AssignmentContext) error {
 	if ctx.Meta == nil {
 		return errors.New("unable to assign metadata in the current context")
 	}
 	_, deleted := value.(query.Delete)
+	if !deleted {
+		value = query.IClone(value)
+	}
 	if m.key == nil {
 		if deleted {
-			_ = ctx.Meta.MetaIter(func(k, _ string) error {
+			_ = ctx.Meta.MetaIterMut(func(k string, _ any) error {
 				ctx.Meta.MetaDelete(k)
 				return nil
 			})
 		} else {
-			if m, ok := value.(map[string]interface{}); ok {
-				_ = ctx.Meta.MetaIter(func(k, _ string) error {
+			if m, ok := value.(map[string]any); ok {
+				_ = ctx.Meta.MetaIterMut(func(k string, _ any) error {
 					ctx.Meta.MetaDelete(k)
 					return nil
 				})
 				for k, v := range m {
-					ctx.Meta.MetaSet(k, query.IToString(v))
+					ctx.Meta.MetaSetMut(k, v)
 				}
 			} else {
 				return fmt.Errorf("setting root meta object requires object value, received: %T", value)
@@ -110,7 +113,7 @@ func (m *MetaAssignment) Apply(value interface{}, ctx AssignmentContext) error {
 	if deleted {
 		ctx.Meta.MetaDelete(*m.key)
 	} else {
-		ctx.Meta.MetaSet(*m.key, query.IToString(value))
+		ctx.Meta.MetaSetMut(*m.key, value)
 	}
 	return nil
 }
@@ -140,7 +143,7 @@ func NewJSONAssignment(path ...string) *JSONAssignment {
 }
 
 func findTheNonObject(gObj *gabs.Container, allowArray bool, paths ...string) (culprit, typeStr string) {
-	if _, isObj := gObj.Data().(map[string]interface{}); !isObj {
+	if _, isObj := gObj.Data().(map[string]any); !isObj {
 		return "", string(query.ITypeOf(gObj.Data()))
 	}
 
@@ -149,8 +152,8 @@ func findTheNonObject(gObj *gabs.Container, allowArray bool, paths ...string) (c
 		culpritSlice = append(culpritSlice, query.SliceToDotPath(path))
 		gObj = gObj.S(path)
 
-		_, isObj := gObj.Data().(map[string]interface{})
-		_, isArray := gObj.Data().([]interface{})
+		_, isObj := gObj.Data().(map[string]any)
+		_, isArray := gObj.Data().([]any)
 		if !isObj && (!isArray || !allowArray) {
 			return strings.Join(culpritSlice, "."), string(query.ITypeOf(gObj.Data()))
 		}
@@ -160,7 +163,7 @@ func findTheNonObject(gObj *gabs.Container, allowArray bool, paths ...string) (c
 }
 
 // Apply a value to the target JSON path.
-func (j *JSONAssignment) Apply(value interface{}, ctx AssignmentContext) error {
+func (j *JSONAssignment) Apply(value any, ctx AssignmentContext) error {
 	_, deleted := value.(query.Delete)
 	if !deleted {
 		value = query.IClone(value)
@@ -170,7 +173,7 @@ func (j *JSONAssignment) Apply(value interface{}, ctx AssignmentContext) error {
 		return nil
 	}
 	if _, isNothing := (*ctx.Value).(query.Nothing); isNothing || *ctx.Value == nil {
-		*ctx.Value = map[string]interface{}{}
+		*ctx.Value = map[string]any{}
 	}
 
 	gObj := gabs.Wrap(*ctx.Value)
@@ -181,11 +184,11 @@ func (j *JSONAssignment) Apply(value interface{}, ctx AssignmentContext) error {
 	} else {
 		_, err := gObj.Set(value, j.path...)
 		if err != nil && err.Error() == "unable to append new array index at root of path" {
-			if s, ok := (*ctx.Value).([]interface{}); ok {
+			if s, ok := (*ctx.Value).([]any); ok {
 				newPath := make([]string, len(j.path))
 				copy(newPath, j.path)
 				newPath[0] = strconv.Itoa(len(s))
-				gObj = gabs.Wrap(append(s, map[string]interface{}{}))
+				gObj = gabs.Wrap(append(s, map[string]any{}))
 				_, err = gObj.Set(value, newPath...)
 			}
 		}

@@ -63,20 +63,20 @@ behavior is false, which will drop the message.`,
 			docs.FieldObject(
 				"cases",
 				"A list of switch cases, outlining outputs that can be routed to.",
-				[]interface{}{
-					map[string]interface{}{
+				[]any{
+					map[string]any{
 						"check": `this.urls.contains("http://benthos.dev")`,
-						"output": map[string]interface{}{
-							"cache": map[string]interface{}{
+						"output": map[string]any{
+							"cache": map[string]any{
 								"target": "foo",
 								"key":    "${!json(\"id\")}",
 							},
 						},
 						"continue": true,
 					},
-					map[string]interface{}{
-						"output": map[string]interface{}{
-							"s3": map[string]interface{}{
+					map[string]any{
+						"output": map[string]any{
+							"s3": map[string]any{
 								"bucket": "bar",
 								"path":   "${!json(\"id\")}",
 							},
@@ -92,14 +92,14 @@ behavior is false, which will drop the message.`,
 				).HasDefault(""),
 				docs.FieldOutput(
 					"output", "An [output](/docs/components/outputs/about/) for messages that pass the check to be routed to.",
-				).HasDefault(map[string]interface{}{}),
+				).HasDefault(map[string]any{}),
 				docs.FieldBool(
 					"continue",
 					"Indicates whether, if this case passes for a message, the next case should also be tested.",
 				).HasDefault(false).Advanced(),
-			).HasDefault([]interface{}{}),
-		).LinterFunc(func(ctx docs.LintContext, line, col int, value interface{}) []docs.Lint {
-			if _, ok := value.(map[string]interface{}); !ok {
+			).HasDefault([]any{}),
+		).LinterFunc(func(ctx docs.LintContext, line, col int, value any) []docs.Lint {
+			if _, ok := value.(map[string]any); !ok {
 				return nil
 			}
 			gObj := gabs.Wrap(value)
@@ -112,7 +112,7 @@ behavior is false, which will drop the message.`,
 				isReject := cObj.Exists("output", "reject")
 				if typeStr == "reject" || isReject {
 					return []docs.Lint{
-						docs.NewLintError(line, "a `switch` output with a `reject` case output must have the field `switch.retry_until_success` set to `false`, otherwise the `reject` child output will result in infinite retries"),
+						docs.NewLintError(line, docs.LintCustom, "a `switch` output with a `reject` case output must have the field `switch.retry_until_success` set to `false`, otherwise the `reject` child output will result in infinite retries"),
 					}
 				}
 			}

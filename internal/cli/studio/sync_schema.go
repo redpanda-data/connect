@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path"
 
 	"github.com/urfave/cli/v2"
 
@@ -50,7 +51,7 @@ page within the studio application.`[1:],
 				fmt.Fprintf(os.Stderr, "Failed to parse endpoint: %v\n", err)
 				os.Exit(1)
 			}
-			u.Path = fmt.Sprintf("/api/v1/token/%v/session/%v/schema", tokenID, sessionID)
+			u.Path = path.Join(u.Path, fmt.Sprintf("/api/v1/token/%v/session/%v/schema", tokenID, sessionID))
 
 			schema := schema.New(version, dateBuilt)
 			schema.Scrub()

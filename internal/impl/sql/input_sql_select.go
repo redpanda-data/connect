@@ -15,7 +15,7 @@ import (
 
 func sqlSelectInputConfig() *service.ConfigSpec {
 	spec := service.NewConfigSpec().
-		// Stable(). TODO
+		Beta().
 		Categories("Services").
 		Summary("Executes a select query and creates a message for each row received.").
 		Description(`Once the rows from the query are exhausted this input shuts down, allowing the pipeline to gracefully terminate (or the next input in a [sequence](/docs/components/inputs/sequence) to execute).`).
@@ -76,13 +76,12 @@ func init() {
 	err := service.RegisterInput(
 		"sql_select", sqlSelectInputConfig(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Input, error) {
-			i, err := newSQLSelectInputFromConfig(conf, mgr.Logger())
+			i, err := newSQLSelectInputFromConfig(conf, mgr)
 			if err != nil {
 				return nil, err
 			}
 			return service.AutoRetryNacks(i), nil
 		})
-
 	if err != nil {
 		panic(err)
 	}
@@ -101,15 +100,15 @@ type sqlSelectInput struct {
 	where       string
 	argsMapping *bloblang.Executor
 
-	connSettings connSettings
+	connSettings *connSettings
 
 	logger  *service.Logger
 	shutSig *shutdown.Signaller
 }
 
-func newSQLSelectInputFromConfig(conf *service.ParsedConfig, logger *service.Logger) (*sqlSelectInput, error) {
+func newSQLSelectInputFromConfig(conf *service.ParsedConfig, mgr *service.Resources) (*sqlSelectInput, error) {
 	s := &sqlSelectInput{
-		logger:  logger,
+		logger:  mgr.Logger(),
 		shutSig: shutdown.NewSignaller(),
 	}
 
@@ -148,6 +147,8 @@ func newSQLSelectInputFromConfig(conf *service.ParsedConfig, logger *service.Log
 	s.builder = squirrel.Select(columns...).From(tableStr)
 	if s.driver == "postgres" || s.driver == "clickhouse" {
 		s.builder = s.builder.PlaceholderFormat(squirrel.Dollar)
+	} else if s.driver == "oracle" {
+		s.builder = s.builder.PlaceholderFormat(squirrel.Colon)
 	}
 
 	if conf.Contains("prefix") {
@@ -166,7 +167,7 @@ func newSQLSelectInputFromConfig(conf *service.ParsedConfig, logger *service.Log
 		s.builder = s.builder.Suffix(suffixStr)
 	}
 
-	if s.connSettings, err = connSettingsFromParsed(conf); err != nil {
+	if s.connSettings, err = connSettingsFromParsed(conf, mgr); err != nil {
 		return nil, err
 	}
 	return s, nil
@@ -190,17 +191,17 @@ func (s *sqlSelectInput) Connect(ctx context.Context) (err error) {
 		}
 	}()
 
-	s.connSettings.apply(db)
+	s.connSettings.apply(ctx, db, s.logger)
 
-	var args []interface{}
+	var args []any
 	if s.argsMapping != nil {
-		var iargs interface{}
+		var iargs any
 		if iargs, err = s.argsMapping.Query(nil); err != nil {
-			return err
+			return
 		}
 
 		var ok bool
-		if args, ok = iargs.([]interface{}); !ok {
+		if args, ok = iargs.([]any); !ok {
 			err = fmt.Errorf("mapping returned non-array result: %T", iargs)
 			return
 		}

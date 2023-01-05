@@ -12,11 +12,11 @@ import (
 
 func clientFields() []*service.ConfigField {
 	return []*service.ConfigField{
-		service.NewStringField("url").
+		service.NewURLField("url").
 			Description("The URL of the target MongoDB server.").
 			Example("mongodb://localhost:27017"),
 		service.NewStringField("username").Description("The username to connect to the database.").Default(""),
-		service.NewStringField("password").Description("The password to connect to the database.").Default(""),
+		service.NewStringField("password").Description("The password to connect to the database.").Default("").Secret(),
 	}
 }
 

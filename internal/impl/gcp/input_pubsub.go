@@ -2,7 +2,7 @@ package gcp
 
 import (
 	"context"
-	"strconv"
+	"errors"
 	"sync"
 
 	"cloud.google.com/go/pubsub"
@@ -37,7 +37,7 @@ This input adds the following metadata fields to each message:
 ` + "```" + `
 
 You can access these metadata fields using
-[function interpolation](/docs/configuration/interpolation#metadata).`,
+[function interpolation](/docs/configuration/interpolation#bloblang-queries).`,
 		Categories: []string{
 			"Services",
 			"GCP",
@@ -48,6 +48,9 @@ You can access these metadata fields using
 			docs.FieldBool("sync", "Enable synchronous pull mode."),
 			docs.FieldInt("max_outstanding_messages", "The maximum number of outstanding pending messages to be consumed at a given time."),
 			docs.FieldInt("max_outstanding_bytes", "The maximum number of outstanding pending messages to be consumed measured in bytes."),
+			docs.FieldObject("create_subscription", "Allows you to configure the input subscription and creates if it doesn't exist.").WithChildren(
+				docs.FieldBool("enabled", "Whether to configure subscription or not.").HasDefault(false),
+				docs.FieldString("topic", "Defines the topic that the subscription should be vinculated to.")).Advanced(),
 		).ChildDefaultAndTypesFromStruct(input.NewGCPPubSubConfig()),
 	})
 	if err != nil {
@@ -57,11 +60,46 @@ You can access these metadata fields using
 
 func newGCPPubSubInput(conf input.Config, mgr bundle.NewManagement, log log.Modular, stats metrics.Type) (input.Streamed, error) {
 	var c input.Async
+	var client *pubsub.Client
 	var err error
-	if c, err = newGCPPubSubReader(conf.GCPPubSub, log, stats); err != nil {
+	if c, client, err = newGCPPubSubReader(conf.GCPPubSub, log, stats); err != nil {
 		return nil, err
 	}
-	return input.NewAsyncReader("gcp_pubsub", true, c, mgr)
+
+	if conf.GCPPubSub.CreateSubscription.Enabled {
+		if conf.GCPPubSub.CreateSubscription.TopicID == "" {
+			return nil, errors.New("must specify a topic_id when create_subscription is enabled")
+		}
+
+		createSubscription(conf.GCPPubSub, client, log)
+	}
+	return input.NewAsyncReader("gcp_pubsub", c, mgr)
+}
+
+func createSubscription(conf input.GCPPubSubConfig, client *pubsub.Client, log log.Modular) {
+	subsExists, err := client.Subscription(conf.SubscriptionID).Exists(context.Background())
+
+	if err != nil {
+		log.Errorf("Error checking if subscription exists", err)
+		return
+	}
+
+	if subsExists {
+		log.Infof("Subscription '%v' already exists", conf.SubscriptionID)
+		return
+	}
+
+	if conf.CreateSubscription.TopicID == "" {
+		log.Infof("Subscription won't be created because TopicID is not defined")
+		return
+	}
+
+	log.Infof("Creating subscription '%v' on topic '%v'\n", conf.SubscriptionID, conf.CreateSubscription.TopicID)
+	_, err = client.CreateSubscription(context.Background(), conf.SubscriptionID, pubsub.SubscriptionConfig{Topic: client.Topic(conf.CreateSubscription.TopicID)})
+
+	if err != nil {
+		log.Errorf("Error creating subscription %v", err)
+	}
 }
 
 type gcpPubSubReader struct {
@@ -77,16 +115,16 @@ type gcpPubSubReader struct {
 	log log.Modular
 }
 
-func newGCPPubSubReader(conf input.GCPPubSubConfig, log log.Modular, stats metrics.Type) (*gcpPubSubReader, error) {
+func newGCPPubSubReader(conf input.GCPPubSubConfig, log log.Modular, stats metrics.Type) (*gcpPubSubReader, *pubsub.Client, error) {
 	client, err := pubsub.NewClient(context.Background(), conf.ProjectID)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	return &gcpPubSubReader{
 		conf:   conf,
 		log:    log,
 		client: client,
-	}, nil
+	}, client, nil
 }
 
 func (c *gcpPubSubReader) Connect(ignored context.Context) error {
@@ -154,9 +192,9 @@ func (c *gcpPubSubReader) ReadBatch(ctx context.Context) (message.Batch, input.A
 
 	part := message.NewPart(gmsg.Data)
 	for k, v := range gmsg.Attributes {
-		part.MetaSet(k, v)
+		part.MetaSetMut(k, v)
 	}
-	part.MetaSet("gcp_pubsub_publish_time_unix", strconv.FormatInt(gmsg.PublishTime.Unix(), 10))
+	part.MetaSetMut("gcp_pubsub_publish_time_unix", gmsg.PublishTime.Unix())
 
 	msg := message.Batch{part}
 	return msg, func(ctx context.Context, res error) error {

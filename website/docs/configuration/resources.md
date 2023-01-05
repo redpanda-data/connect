@@ -29,7 +29,7 @@ input_resources:
 
 processor_resources:
   - label: bar
-    bloblang: 'root = content.lowercase()'
+    mapping: 'root = content.lowercase()'
 
 cache_resources:
   - label: baz
@@ -53,7 +53,7 @@ pipeline:
   processors:
     - resource: get_foo
     - catch:
-      - bloblang: |
+      - mapping: |
           root = this
           root.content = this.content.strip_html()
       - resource: get_foo

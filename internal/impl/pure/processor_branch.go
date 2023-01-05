@@ -38,7 +38,7 @@ var branchFields = docs.FieldSpecs{
 	docs.FieldProcessor(
 		"processors",
 		"A list of processors to apply to mapped requests. When processing message batches the resulting batch must match the size and ordering of the input batch, therefore filtering, grouping should not be performed within these processors.",
-	).Array().HasDefault([]interface{}{}),
+	).Array().HasDefault([]any{}),
 	docs.FieldBloblang(
 		"result_map",
 		"A [Bloblang mapping](/docs/guides/bloblang/about) that describes how the resulting messages from branched processing should be mapped back into the original payload. If left empty the origin message will remain unchanged (including metadata).",

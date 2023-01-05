@@ -41,15 +41,15 @@ If the Push Gateway requires HTTP Basic Authentication it can be configured with
 ` + "`push_basic_auth`.",
 		Config: docs.FieldComponent().WithChildren(
 			docs.FieldBool("use_histogram_timing", "Whether to export timing metrics as a histogram, if `false` a summary is used instead. When exporting histogram timings the delta values are converted from nanoseconds into seconds in order to better fit within bucket definitions. For more information on histograms and summaries refer to: https://prometheus.io/docs/practices/histograms/.").HasDefault(false).Advanced().AtVersion("3.63.0"),
-			docs.FieldFloat("histogram_buckets", "Timing metrics histogram buckets (in seconds). If left empty defaults to DefBuckets (https://pkg.go.dev/github.com/prometheus/client_golang/prometheus#pkg-variables)").Array().HasDefault([]interface{}{}).Advanced().AtVersion("3.63.0"),
+			docs.FieldFloat("histogram_buckets", "Timing metrics histogram buckets (in seconds). If left empty defaults to DefBuckets (https://pkg.go.dev/github.com/prometheus/client_golang/prometheus#pkg-variables)").Array().HasDefault([]any{}).Advanced().AtVersion("3.63.0"),
 			docs.FieldBool("add_process_metrics", "Whether to export process metrics such as CPU and memory usage in addition to Benthos metrics.").Advanced().HasDefault(false),
 			docs.FieldBool("add_go_metrics", "Whether to export Go runtime metrics such as GC pauses in addition to Benthos metrics.").Advanced().HasDefault(false),
-			docs.FieldString("push_url", "An optional [Push Gateway URL](#push-gateway) to push metrics to.").Advanced().HasDefault(""),
+			docs.FieldURL("push_url", "An optional [Push Gateway URL](#push-gateway) to push metrics to.").Advanced().HasDefault(""),
 			docs.FieldString("push_interval", "The period of time between each push when sending metrics to a Push Gateway.").Advanced().HasDefault(""),
 			docs.FieldString("push_job_name", "An identifier for push jobs.").Advanced().HasDefault("benthos_push"),
 			docs.FieldObject("push_basic_auth", "The Basic Authentication credentials.").WithChildren(
 				docs.FieldString("username", "The Basic Authentication username.").HasDefault(""),
-				docs.FieldString("password", "The Basic Authentication password.").HasDefault(""),
+				docs.FieldString("password", "The Basic Authentication password.").HasDefault("").Secret(),
 			).Advanced(),
 			docs.FieldString("file_output_path", "An optional file path to write all prometheus metrics on service shutdown.").Advanced().HasDefault(""),
 		),

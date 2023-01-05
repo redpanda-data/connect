@@ -1,7 +1,7 @@
 ---
 title: sftp
 type: input
-status: experimental
+status: beta
 categories: ["Network"]
 ---
 
@@ -15,8 +15,8 @@ categories: ["Network"]
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-:::caution EXPERIMENTAL
-This component is experimental and therefore subject to change or removal outside of major version releases.
+:::caution BETA
+This component is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with the component is found.
 :::
 Consumes files from a server over SFTP.
 
@@ -86,7 +86,7 @@ This input adds the following metadata fields to each message:
 - sftp_path
 ```
 
-You can access these metadata fields using [function interpolation](/docs/configuration/interpolation#metadata).
+You can access these metadata fields using [function interpolation](/docs/configuration/interpolation#bloblang-queries).
 
 ## Fields
 
@@ -116,6 +116,9 @@ Default: `""`
 ### `credentials.password`
 
 The password for the username to connect to the SFTP server.
+:::warning Secret
+This field contains sensitive information that usually shouldn't be added to a config directly, read our [secrets page for more info](/docs/configuration/secrets).
+:::
 
 
 Type: `string`  
@@ -132,6 +135,9 @@ Default: `""`
 ### `credentials.private_key_pass`
 
 Optional passphrase for private key.
+:::warning Secret
+This field contains sensitive information that usually shouldn't be added to a config directly, read our [secrets page for more info](/docs/configuration/secrets).
+:::
 
 
 Type: `string`  

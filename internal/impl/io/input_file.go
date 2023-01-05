@@ -4,8 +4,6 @@ import (
 	"context"
 	"errors"
 	"io"
-	"os"
-	"strconv"
 	"sync"
 	"time"
 
@@ -22,11 +20,11 @@ import (
 
 func init() {
 	err := bundle.AllInputs.Add(processors.WrapConstructor(func(conf input.Config, nm bundle.NewManagement) (input.Streamed, error) {
-		rdr, err := newFileConsumer(conf.File, nm.Logger())
+		rdr, err := newFileConsumer(conf.File, nm)
 		if err != nil {
 			return nil, err
 		}
-		return input.NewAsyncReader("file", true, input.NewAsyncPreserver(rdr), nm)
+		return input.NewAsyncReader("file", input.NewAsyncPreserver(rdr), nm)
 	}), docs.ComponentSpec{
 		Name: "file",
 		Summary: `
@@ -34,8 +32,8 @@ Consumes data from files on disk, emitting messages according to a chosen codec.
 		Config: docs.FieldComponent().WithChildren(
 			docs.FieldString("paths", "A list of paths to consume sequentially. Glob patterns are supported, including super globs (double star).").Array(),
 			codec.ReaderDocs,
-			docs.FieldInt("max_buffer", "The largest token size expected when consuming delimited files.").Advanced(),
-			docs.FieldBool("delete_on_finish", "Whether to delete consumed files from the disk once they are fully consumed.").Advanced(),
+			docs.FieldInt("max_buffer", "The largest token size expected when consuming files with a tokenised codec such as `lines`.").Advanced(),
+			docs.FieldBool("delete_on_finish", "Whether to delete input files from the disk once they are fully consumed.").Advanced(),
 		).ChildDefaultAndTypesFromStruct(input.NewFileConfig()),
 		Description: `
 ### Metadata
@@ -49,7 +47,7 @@ This input adds the following metadata fields to each message:
 ` + "```" + `
 
 You can access these metadata fields using
-[function interpolation](/docs/configuration/interpolation#metadata).`,
+[function interpolation](/docs/configuration/interpolation#bloblang-queries).`,
 		Categories: []string{
 			"Local",
 		},
@@ -76,11 +74,12 @@ input:
 type scannerInfo struct {
 	scanner     codec.Reader
 	currentPath string
-	modTime     time.Time
+	modTimeUTC  time.Time
 }
 
 type fileConsumer struct {
 	log log.Modular
+	nm  bundle.NewManagement
 
 	paths       []string
 	scannerCtor codec.ReaderConstructor
@@ -91,8 +90,8 @@ type fileConsumer struct {
 	delete bool
 }
 
-func newFileConsumer(conf input.FileConfig, log log.Modular) (*fileConsumer, error) {
-	expandedPaths, err := filepath.Globs(conf.Paths)
+func newFileConsumer(conf input.FileConfig, nm bundle.NewManagement) (*fileConsumer, error) {
+	expandedPaths, err := filepath.Globs(nm.FS(), conf.Paths)
 	if err != nil {
 		return nil, err
 	}
@@ -105,7 +104,8 @@ func newFileConsumer(conf input.FileConfig, log log.Modular) (*fileConsumer, err
 	}
 
 	return &fileConsumer{
-		log:         log,
+		nm:          nm,
+		log:         nm.Logger(),
 		scannerCtor: ctor,
 		paths:       expandedPaths,
 		delete:      conf.DeleteOnFinish,
@@ -130,14 +130,14 @@ func (f *fileConsumer) getReader(ctx context.Context) (scannerInfo, error) {
 
 	nextPath := f.paths[0]
 
-	file, err := os.Open(nextPath)
+	file, err := f.nm.FS().Open(nextPath)
 	if err != nil {
 		return scannerInfo{}, err
 	}
 
 	scanner, err := f.scannerCtor(nextPath, file, func(ctx context.Context, err error) error {
 		if err == nil && f.delete {
-			return os.Remove(nextPath)
+			return f.nm.FS().Remove(nextPath)
 		}
 		return nil
 	})
@@ -146,9 +146,9 @@ func (f *fileConsumer) getReader(ctx context.Context) (scannerInfo, error) {
 		return scannerInfo{}, err
 	}
 
-	var modTime time.Time
+	var modTimeUTC time.Time
 	if fInfo, err := file.Stat(); err == nil {
-		modTime = fInfo.ModTime()
+		modTimeUTC = fInfo.ModTime().UTC()
 	} else {
 		f.log.Errorf("Failed to read metadata from file '%v'", nextPath)
 	}
@@ -156,7 +156,7 @@ func (f *fileConsumer) getReader(ctx context.Context) (scannerInfo, error) {
 	f.scannerInfo = &scannerInfo{
 		scanner:     scanner,
 		currentPath: nextPath,
-		modTime:     modTime,
+		modTimeUTC:  modTimeUTC,
 	}
 
 	f.paths = f.paths[1:]
@@ -188,17 +188,15 @@ func (f *fileConsumer) ReadBatch(ctx context.Context) (message.Batch, input.Asyn
 			return nil, nil, err
 		}
 
-		modTimeUnix, modTime := f.getModTime(scannerInfo.modTime)
-
 		msg := message.QuickBatch(nil)
 		for _, part := range parts {
 			if len(part.AsBytes()) == 0 {
 				continue
 			}
 
-			part.MetaSet("path", scannerInfo.currentPath)
-			part.MetaSet("mod_time_unix", modTimeUnix)
-			part.MetaSet("mod_time", modTime)
+			part.MetaSetMut("path", scannerInfo.currentPath)
+			part.MetaSetMut("mod_time_unix", scannerInfo.modTimeUTC.Unix())
+			part.MetaSetMut("mod_time", scannerInfo.modTimeUTC.Format(time.RFC3339))
 
 			msg = append(msg, part)
 		}
@@ -223,11 +221,4 @@ func (f *fileConsumer) Close(ctx context.Context) (err error) {
 		f.paths = nil
 	}
 	return
-}
-
-func (f *fileConsumer) getModTime(t time.Time) (modTimeUnix, modTime string) {
-	utcModTime := t.UTC()
-	modTimeUnix = strconv.Itoa(int(utcModTime.Unix()))
-	modTime = utcModTime.Format(time.RFC3339)
-	return modTimeUnix, modTime
 }

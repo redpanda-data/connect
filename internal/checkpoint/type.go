@@ -12,7 +12,7 @@ import (
 // for limiting the number of pending checkpoints.
 type Type struct {
 	positionOffset int64
-	checkpoint     interface{}
+	checkpoint     any
 
 	latest, earliest *node
 }
@@ -28,7 +28,7 @@ func New() *Type {
 //
 // While the returned resolve funcs can be called from any goroutine, it
 // is assumed that Track is called from a single goroutine.
-func (t *Type) Track(payload interface{}, batchSize int64) func() interface{} {
+func (t *Type) Track(payload any, batchSize int64) func() any {
 	newNode := getNode()
 	newNode.payload = payload
 	newNode.position = batchSize
@@ -45,7 +45,7 @@ func (t *Type) Track(payload interface{}, batchSize int64) func() interface{} {
 
 	t.latest = newNode
 
-	return func() interface{} {
+	return func() any {
 		if newNode.prev != nil {
 			newNode.prev.position = newNode.position
 			newNode.prev.payload = newNode.payload
@@ -79,18 +79,18 @@ func (t *Type) Pending() int64 {
 }
 
 // Highest returns the payload of the highest resolved checkpoint.
-func (t *Type) Highest() interface{} {
+func (t *Type) Highest() any {
 	return t.checkpoint
 }
 
 type node struct {
 	position   int64
-	payload    interface{}
+	payload    any
 	prev, next *node
 }
 
 var nodePool = &sync.Pool{
-	New: func() interface{} {
+	New: func() any {
 		return &node{}
 	},
 }

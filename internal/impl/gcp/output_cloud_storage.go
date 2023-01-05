@@ -2,12 +2,14 @@ package gcp
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"path"
 	"sync"
 
 	"cloud.google.com/go/storage"
 	"github.com/gofrs/uuid"
+	"go.uber.org/multierr"
 
 	"github.com/benthosdev/benthos/v4/internal/batch/policy"
 	"github.com/benthosdev/benthos/v4/internal/bloblang/field"
@@ -197,20 +199,22 @@ func (g *gcpCloudStorageOutput) WriteBatch(ctx context.Context, msg message.Batc
 
 	return output.IterateBatchedSend(msg, func(i int, p *message.Part) error {
 		metadata := map[string]string{}
-		_ = p.MetaIter(func(k, v string) error {
+		_ = p.MetaIterStr(func(k, v string) error {
 			metadata[k] = v
 			return nil
 		})
 
-		outputPath := g.path.String(i, msg)
-		var err error
+		outputPath, err := g.path.String(i, msg)
+		if err != nil {
+			return fmt.Errorf("path interpolation error: %w", err)
+		}
 		if g.conf.CollisionMode != output.GCPCloudStorageOverwriteCollisionMode {
 			_, err = client.Bucket(g.conf.Bucket).Object(outputPath).Attrs(ctx)
 		}
 
 		isMerge := false
 		var tempPath string
-		if err == storage.ErrObjectNotExist || g.conf.CollisionMode == output.GCPCloudStorageOverwriteCollisionMode {
+		if errors.Is(err, storage.ErrObjectNotExist) || g.conf.CollisionMode == output.GCPCloudStorageOverwriteCollisionMode {
 			tempPath = outputPath
 		} else {
 			isMerge = true
@@ -232,29 +236,49 @@ func (g *gcpCloudStorageOutput) WriteBatch(ctx context.Context, msg message.Batc
 			dir := path.Dir(outputPath)
 			tempFileName := fmt.Sprintf("%s.tmp", tempUUID.String())
 			tempPath = path.Join(dir, tempFileName)
+
+			g.log.Tracef("creating temporary file for the merge %q", tempPath)
 		}
 
-		w := client.Bucket(g.conf.Bucket).Object(tempPath).NewWriter(ctx)
+		src := client.Bucket(g.conf.Bucket).Object(tempPath)
+
+		w := src.NewWriter(ctx)
 
 		w.ChunkSize = g.conf.ChunkSize
-		w.ContentType = g.contentType.String(i, msg)
-		w.ContentEncoding = g.contentEncoding.String(i, msg)
+		if w.ContentType, err = g.contentType.String(i, msg); err != nil {
+			return fmt.Errorf("content type interpolation error: %w", err)
+		}
+		if w.ContentEncoding, err = g.contentEncoding.String(i, msg); err != nil {
+			return fmt.Errorf("content encoding interpolation error: %w", err)
+		}
 		w.Metadata = metadata
-		if _, err = w.Write(p.AsBytes()); err != nil {
-			return err
+
+		var errs error
+		if _, werr := w.Write(p.AsBytes()); werr != nil {
+			errs = multierr.Append(errs, werr)
 		}
 
-		if err := w.Close(); err != nil {
-			return err
+		if cerr := w.Close(); cerr != nil {
+			errs = multierr.Append(errs, cerr)
 		}
 
 		if isMerge {
-			if err := g.appendToFile(ctx, tempPath, outputPath); err != nil {
-				return err
+			defer g.removeTempFile(ctx, src)
+		}
+
+		if errs != nil {
+			return errs
+		}
+
+		if isMerge {
+			dst := client.Bucket(g.conf.Bucket).Object(outputPath)
+
+			if aerr := g.appendToFile(ctx, src, dst); aerr != nil {
+				return aerr
 			}
 		}
 
-		return err
+		return nil
 	})
 }
 
@@ -271,20 +295,16 @@ func (g *gcpCloudStorageOutput) Close(context.Context) error {
 	return err
 }
 
-func (g *gcpCloudStorageOutput) appendToFile(ctx context.Context, source, dest string) error {
-	client := g.client
-	bucket := client.Bucket(g.conf.Bucket)
-	src := bucket.Object(source)
-	dst := bucket.Object(dest)
+func (g *gcpCloudStorageOutput) appendToFile(ctx context.Context, src, dst *storage.ObjectHandle) error {
+	_, err := dst.ComposerFrom(dst, src).Run(ctx)
 
-	if _, err := dst.ComposerFrom(dst, src).Run(ctx); err != nil {
-		return err
-	}
+	return err
+}
 
+func (g *gcpCloudStorageOutput) removeTempFile(ctx context.Context, src *storage.ObjectHandle) {
 	// Remove the temporary file used for the merge
+	g.log.Tracef("remove the temporary file used for the merge %q", src.ObjectName())
 	if err := src.Delete(ctx); err != nil {
 		g.log.Errorf("Failed to delete temporary file used for merging: %v", err)
 	}
-
-	return nil
 }

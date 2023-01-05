@@ -4,7 +4,7 @@ import (
 	"context"
 	"sync"
 
-	"github.com/go-redis/redis/v7"
+	"github.com/go-redis/redis/v8"
 
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component"
@@ -47,11 +47,11 @@ verbatim.`,
 }
 
 func newRedisPubSubInput(conf input.Config, mgr bundle.NewManagement) (input.Streamed, error) {
-	r, err := newRedisPubSubReader(conf.RedisPubSub, mgr.Logger())
+	r, err := newRedisPubSubReader(conf.RedisPubSub, mgr)
 	if err != nil {
 		return nil, err
 	}
-	return input.NewAsyncReader("redis_pubsub", true, input.NewAsyncPreserver(r), mgr)
+	return input.NewAsyncReader("redis_pubsub", input.NewAsyncPreserver(r), mgr)
 }
 
 type redisPubSubReader struct {
@@ -61,16 +61,18 @@ type redisPubSubReader struct {
 
 	conf input.RedisPubSubConfig
 
+	mgr bundle.NewManagement
 	log log.Modular
 }
 
-func newRedisPubSubReader(conf input.RedisPubSubConfig, log log.Modular) (*redisPubSubReader, error) {
+func newRedisPubSubReader(conf input.RedisPubSubConfig, mgr bundle.NewManagement) (*redisPubSubReader, error) {
 	r := &redisPubSubReader{
 		conf: conf,
-		log:  log,
+		mgr:  mgr,
+		log:  mgr.Logger(),
 	}
 
-	_, err := clientFromConfig(r.conf.Config)
+	_, err := clientFromConfig(mgr.FS(), r.conf.Config)
 	if err != nil {
 		return nil, err
 	}
@@ -86,11 +88,11 @@ func (r *redisPubSubReader) Connect(ctx context.Context) error {
 		return nil
 	}
 
-	client, err := clientFromConfig(r.conf.Config)
+	client, err := clientFromConfig(r.mgr.FS(), r.conf.Config)
 	if err != nil {
 		return err
 	}
-	if _, err := client.Ping().Result(); err != nil {
+	if _, err := client.Ping(ctx).Result(); err != nil {
 		return err
 	}
 
@@ -98,9 +100,9 @@ func (r *redisPubSubReader) Connect(ctx context.Context) error {
 
 	r.client = client
 	if r.conf.UsePatterns {
-		r.pubsub = r.client.PSubscribe(r.conf.Channels...)
+		r.pubsub = r.client.PSubscribe(ctx, r.conf.Channels...)
 	} else {
-		r.pubsub = r.client.Subscribe(r.conf.Channels...)
+		r.pubsub = r.client.Subscribe(ctx, r.conf.Channels...)
 	}
 	return nil
 }

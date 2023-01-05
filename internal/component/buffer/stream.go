@@ -128,7 +128,9 @@ func (m *Stream) inputLoop() {
 		}
 
 		batchLen := tr.Payload.Len()
-		err := m.buffer.Write(closeAtLeisureCtx, tracing.WithSiblingSpans(m.tracer, m.typeStr, tr.Payload), ackFunc)
+
+		writeBatch, _ := tracing.WithSiblingSpans(m.tracer, m.typeStr, tr.Payload)
+		err := m.buffer.Write(closeAtLeisureCtx, writeBatch, ackFunc)
 		if err == nil {
 			mReceivedCount.Incr(int64(batchLen))
 			mReceivedBatchCount.Incr(1)
@@ -142,6 +144,9 @@ func (m *Stream) inputLoop() {
 func (m *Stream) outputLoop() {
 	var ackGroup sync.WaitGroup
 
+	closeNowCtx, done := m.shutSig.CloseNowCtx(context.Background())
+	defer done()
+
 	defer func() {
 		ackGroup.Wait()
 		_ = m.buffer.Close(context.Background())
@@ -154,9 +159,6 @@ func (m *Stream) outputLoop() {
 		mSentBatch = m.stats.GetCounter("buffer_batch_sent")
 		mLatency   = m.stats.GetTimer("buffer_latency_ns")
 	)
-
-	closeNowCtx, done := m.shutSig.CloseNowCtx(context.Background())
-	defer done()
 
 	for {
 		msg, ackFunc, err := m.buffer.Read(closeNowCtx)

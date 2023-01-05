@@ -79,9 +79,8 @@ func init() {
 	err := service.RegisterBatchProcessor(
 		"sql_raw", RawProcessorConfig(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchProcessor, error) {
-			return NewSQLRawProcessorFromConfig(conf, mgr.Logger())
+			return NewSQLRawProcessorFromConfig(conf, mgr)
 		})
-
 	if err != nil {
 		panic(err)
 	}
@@ -105,7 +104,7 @@ type sqlRawProcessor struct {
 
 // NewSQLRawProcessorFromConfig returns an internal sql_raw processor.
 // nolint:revive // Not bothered as this is internal anyway
-func NewSQLRawProcessorFromConfig(conf *service.ParsedConfig, logger *service.Logger) (*sqlRawProcessor, error) {
+func NewSQLRawProcessorFromConfig(conf *service.ParsedConfig, mgr *service.Resources) (*sqlRawProcessor, error) {
 	driverStr, err := conf.FieldString("driver")
 	if err != nil {
 		return nil, err
@@ -142,11 +141,11 @@ func NewSQLRawProcessorFromConfig(conf *service.ParsedConfig, logger *service.Lo
 		}
 	}
 
-	connSettings, err := connSettingsFromParsed(conf)
+	connSettings, err := connSettingsFromParsed(conf, mgr)
 	if err != nil {
 		return nil, err
 	}
-	return newSQLRawProcessor(logger, driverStr, dsnStr, queryStatic, queryDyn, onlyExec, argsMapping, connSettings)
+	return newSQLRawProcessor(mgr.Logger(), driverStr, dsnStr, queryStatic, queryDyn, onlyExec, argsMapping, connSettings)
 }
 
 func newSQLRawProcessor(
@@ -156,7 +155,7 @@ func newSQLRawProcessor(
 	queryDyn *service.InterpolatedString,
 	onlyExec bool,
 	argsMapping *bloblang.Executor,
-	connSettings connSettings,
+	connSettings *connSettings,
 ) (*sqlRawProcessor, error) {
 	s := &sqlRawProcessor{
 		logger:      logger,
@@ -171,7 +170,7 @@ func newSQLRawProcessor(
 	if s.db, err = sqlOpenWithReworks(logger, driverStr, dsnStr); err != nil {
 		return nil, err
 	}
-	connSettings.apply(s.db)
+	connSettings.apply(context.Background(), s.db, s.logger)
 
 	go func() {
 		<-s.shutSig.CloseNowChan()
@@ -191,7 +190,7 @@ func (s *sqlRawProcessor) ProcessBatch(ctx context.Context, batch service.Messag
 
 	batch = batch.Copy()
 	for i, msg := range batch {
-		var args []interface{}
+		var args []any
 		if s.argsMapping != nil {
 			resMsg, err := batch.BloblangQuery(i, s.argsMapping)
 			if err != nil {
@@ -208,7 +207,7 @@ func (s *sqlRawProcessor) ProcessBatch(ctx context.Context, batch service.Messag
 			}
 
 			var ok bool
-			if args, ok = iargs.([]interface{}); !ok {
+			if args, ok = iargs.([]any); !ok {
 				s.logger.Debugf("Mapping returned non-array result: %T", iargs)
 				msg.SetError(fmt.Errorf("mapping returned non-array result: %T", iargs))
 				continue
@@ -217,7 +216,12 @@ func (s *sqlRawProcessor) ProcessBatch(ctx context.Context, batch service.Messag
 
 		queryStr := s.queryStatic
 		if s.queryDyn != nil {
-			queryStr = batch.InterpolatedString(i, s.queryDyn)
+			var err error
+			if queryStr, err = batch.TryInterpolatedString(i, s.queryDyn); err != nil {
+				s.logger.Errorf("Query interoplation error: %v", err)
+				msg.SetError(fmt.Errorf("query interpolation error: %w", err))
+				continue
+			}
 		}
 
 		if s.onlyExec {

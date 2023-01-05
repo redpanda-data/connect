@@ -9,8 +9,9 @@ import (
 
 	"github.com/benthosdev/benthos/v4/public/service"
 
-	// Import only pure Benthos components, switch with `components/all` for all
-	// standard components
+	// Import only required Benthos components, switch with `components/all` for
+	// all standard components.
+	_ "github.com/benthosdev/benthos/v4/public/components/io"
 	_ "github.com/benthosdev/benthos/v4/public/components/pure"
 )
 
@@ -33,9 +34,8 @@ input:
     interval: 1ms
     mapping: 'root = "hello world"'
 
-pipeline:
   processors:
-    - bloblang: 'root = content().uppercase()'
+    - mapping: 'root = content().uppercase()'
 
 output:
   stdout: {}
@@ -79,7 +79,7 @@ generate:
 `)
 	panicOnErr(err)
 
-	err = builder.AddProcessorYAML(`bloblang: 'root = content().uppercase()'`)
+	err = builder.AddProcessorYAML(`mapping: 'root = content().uppercase()'`)
 	panicOnErr(err)
 
 	err = builder.AddOutputYAML(`stdout: {}`)
@@ -113,10 +113,10 @@ func Example_streamBuilderPush() {
 	err := builder.SetLoggerYAML(`level: off`)
 	panicOnErr(err)
 
-	err = builder.AddProcessorYAML(`bloblang: 'root = content().uppercase()'`)
+	err = builder.AddProcessorYAML(`mapping: 'root = content().uppercase()'`)
 	panicOnErr(err)
 
-	err = builder.AddProcessorYAML(`bloblang: 'root = "check this out: " + content()'`)
+	err = builder.AddProcessorYAML(`mapping: 'root = "check this out: " + content()'`)
 	panicOnErr(err)
 
 	// Obtain a closure func that allows us to push data into the stream, this
@@ -192,9 +192,8 @@ input:
     interval: 1ms
     mapping: 'root = "hello world one"'
 
-pipeline:
   processors:
-    - bloblang: 'root = content().uppercase()'
+    - mapping: 'root = content().uppercase()'
 
 output:
   stdout: {}
@@ -216,11 +215,10 @@ input:
     interval: 1ms
     mapping: 'root = "hello world two"'
 
-pipeline:
   processors:
     - sleep:
         duration: 500ms
-    - bloblang: 'root = content().capitalize()'
+    - mapping: 'root = content().capitalize()'
 
 output:
   stdout: {}

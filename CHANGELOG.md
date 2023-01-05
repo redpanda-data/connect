@@ -5,11 +5,139 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- Format `csv:x` added to the `unarchive` processor.
+- Field `max_buffer` added to the `aws_s3` input.
+- Field `open_message_type` added to the `websocket` input.
+- The experimental `--watcher` cli flag now takes into account file deletions and new files that match wildcard patterns.
+
+### Fixed
+
+- The `sqlite` buffer should no longer print `Failed to ack buffer message` logs during graceful termination.
+- The default value of the `conn_max_idle` field has been changed from 0 to 2 for all `sql_*` components in accordance
+to the [`database/sql` docs](https://pkg.go.dev/database/sql#DB.SetMaxIdleConns).
+- The `parse_csv` bloblang method with `parse_header_row` set to `false` no longer produces rows that are of an `unknown` type.
+
+## 4.11.0 - 2022-12-21
+
+### Added
+
+- Field `default_encoding` added to the `parquet_encode` processor.
+- Field `client_session_keep_alive` added to the `snowflake_put` output.
+- Bloblang now supports metadata access via `@foo` syntax, which also supports arbitrary values.
+- TLS client certs now support both PKCS#1 and PKCS#8 encrypted keys.
+- New `redis_script` processor.
+- New `wasm` processor.
+- Fields marked as secrets will no longer be printed with `benthos echo` or debug HTTP endpoints.
+- Add `no_indent` parameter to the `format_json` bloblang method.
+- New `format_xml` bloblang method.
+- New `batched` higher level input type.
+- The `gcp_pubsub` input now supports optionally creating subscriptions.
+- New `sqlite` buffer.
+- Bloblang now has `int64`, `int32`, `uint64` and `uint32` methods for casting explicit integer types.
+- Field `application_properties_map` added to the `amqp1` output.
+- Param `parse_header_row`, `delimiter` and `lazy_quotes` added to the `parse_csv` bloblang method.
+- Field `delete_on_finish` added to the `csv` input.
+- Metadata fields `header`, `path`, `mod_time_unix` and `mod_time` added to the `csv` input.
+- New `couchbase` processor.
+- Field `max_attempts` added to the `nsq` input.
+- Messages consumed by the `nsq` input are now enriched with metadata.
+- New Bloblang method `parse_url`.
+
+### Fixed
+
+- Fixed a regression bug in the `mongodb` processor where message errors were not set any more. This issue was introduced in v4.7.0 (64eb72).
+- The `avro-ocf:marshaler=json` input codec now omits unexpected logical type fields.
+- Fixed a bug in the `sql_insert` output (see commit c6a71e9) where transaction-based drivers (`clickhouse` and `oracle`) would fail to roll back an in-progress transaction if any of the messages caused an error.
+- The `resource` input should no longer block the first layer of graceful termination.
+
+### Changed
+
+- The `catch` method now defines the context of argument mappings to be the string of the caught error. In previous cases the context was undocumented, vague and would often bind to the outer context. It's still possible to reference this outer context by capturing the error (e.g. `.catch(_ -> this)`).
+- Field interpolations that fail due to mapping errors will no longer produce placeholder values and will instead provide proper errors that result in nacks or retries similar to other issues.
+
+## 4.10.0 - 2022-10-26
+
+### Added
+
+- The `nats_jetstream` input now adds a range of useful metadata information to messages.
+- Field `transaction_type` added to the `azure_table_storage` output, which deprecates the previous `insert_type` field and supports interpolation functions.
+- Field `logged_batch` added to the `cassandra` output.
+- All `sql` components now support Snowflake.
+- New `azure_table_storage` input.
+- New `sql_raw` input.
+- New `tracing_id` bloblang function.
+- New `with` bloblang method.
+- Field `multi_header` added to the `kafka` and `kafka_franz` inputs.
+- New `cassandra` input.
+- New `base64_encode` and `base64_decode` functions for the awk processor.
+- Param `use_number` added to the `parse_json` bloblang method.
+- Fields `init_statement` and `init_files` added to all sql components.
+- New `find` and `find_all` bloblang array methods.
+
+### Fixed
+
+- The `gcp_cloud_storage` output no longer ignores errors when closing a written file, this was masking issues when the target bucket was invalid.
+- Upgraded the `kafka_franz` input and output to use github.com/twmb/franz-go@v1.9.0 since some [bug fixes](https://github.com/twmb/franz-go/blob/master/CHANGELOG.md#v190) were made recently.
+- Fixed an issue where a `read_until` child input with processors affiliated would block graceful termination.
+- The `--labels` linting option no longer flags resource components.
+
+## 4.9.1 - 2022-10-06
+
+### Added
+
+- Go API: A new `BatchError` type added for distinguishing errors of a given batch.
+
+### Fixed
+
+- Rolled back `kafka` input and output underlying sarama client library to fix a regression introduced in 4.9.0 😅 where `invalid configuration (Consumer.Group.Rebalance.GroupStrategies and Consumer.Group.Rebalance.Strategy cannot be set at the same time)` errors would prevent consumption under certain configurations. We've decided to roll back rather than upgrade as a breaking API change was introduced that could cause issues for Go API importers (more info here: https://github.com/Shopify/sarama/issues/2358).
+
+## 4.9.0 - 2022-10-03
+
+### Added
+
+- New `parquet` input for reading a batch of Parquet files from disk.
+- Field `max_in_flight` added to the `redis_list` input.
+
+### Fixed
+
+- Upgraded `kafka` input and output underlying sarama client library to fix a regression introduced in 4.7.0 where `The requested offset is outside the range of offsets maintained by the server for the given topic/partition` errors would prevent consumption of partitions.
+- The `cassandra` output now inserts logged batches of data rather than the less efficient (and unnecessary) unlogged form.
+
+## 4.8.0 - 2022-09-30
+
+### Added
+
+- All `sql` components now support Oracle DB.
+
+### Fixed
+
+- All SQL components now accept an empty or unspecified `args_mapping` as an alias for no arguments.
+- Field `unsafe_dynamic_query` added to the `sql_raw` output.
+- Fixed a regression in 4.7.0 where HTTP client components were sending duplicate request headers.
+
+## 4.7.0 - 2022-09-27
+
+### Added
+
+- Field `avro_raw_json` added to the `schema_registry_decode` processor.
+- Field `priority` added to the `gcp_bigquery_select` input.
+- The `hash` bloblang method now supports `crc32`.
+- New `tracing_span` bloblang function.
+- All `sql` components now support SQLite.
+- New `beanstalkd` input and output.
+- Field `json_marshal_mode` added to the `mongodb` input.
+- The `schema_registry_encode` and `schema_registry_decode` processors now support Basic, OAuth and JWT authentication.
+
 ### Fixed
 
 - The streams mode `/ready` endpoint no longer returns status `503` for streams that gracefully finished.
 - The performance of the bloblang `.explode` method now scales linearly with the target size.
 - The `influxdb` and `logger` metrics outputs should no longer mix up tag names.
+- Fix a potential race condition in the `read_until` connect check on terminated input.
+- The `parse_parquet` bloblang method and `parquet_decode` processor now automatically parse `BYTE_ARRAY` values as strings when the logical type is UTF8.
+- The `gcp_cloud_storage` output now correctly cleans up temporary files on error conditions when the collision mode is set to append.
 
 ## 4.6.0 - 2022-08-31
 

@@ -16,7 +16,7 @@ func registerSimpleMethod(spec MethodSpec, ctor simpleMethodConstructor) struct{
 		if err != nil {
 			return nil, err
 		}
-		return ClosureFunction("method "+spec.Name, func(ctx FunctionContext) (interface{}, error) {
+		return ClosureFunction("method "+spec.Name, func(ctx FunctionContext) (any, error) {
 			v, err := target.Exec(ctx)
 			if err != nil {
 				return nil, err
@@ -30,10 +30,10 @@ func registerSimpleMethod(spec MethodSpec, ctor simpleMethodConstructor) struct{
 	})
 }
 
-type simpleMethod func(v interface{}, ctx FunctionContext) (interface{}, error)
+type simpleMethod func(v any, ctx FunctionContext) (any, error)
 
-func stringMethod(fn func(v string) (interface{}, error)) simpleMethod {
-	return func(v interface{}, ctx FunctionContext) (interface{}, error) {
+func stringMethod(fn func(v string) (any, error)) simpleMethod {
+	return func(v any, ctx FunctionContext) (any, error) {
 		s, err := IGetString(v)
 		if err != nil {
 			return nil, err
@@ -42,8 +42,8 @@ func stringMethod(fn func(v string) (interface{}, error)) simpleMethod {
 	}
 }
 
-func numberMethod(fn func(f *float64, i *int64, ui *uint64) (interface{}, error)) simpleMethod {
-	return func(v interface{}, ctx FunctionContext) (interface{}, error) {
+func numberMethod(fn func(f *float64, i *int64, ui *uint64) (any, error)) simpleMethod {
+	return func(v any, ctx FunctionContext) (any, error) {
 		var f *float64
 		var i *int64
 		var ui *uint64

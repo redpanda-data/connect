@@ -99,7 +99,7 @@ func arithmeticParser(fnParser Func) Func {
 
 		delimRes := res.Payload.(DelimitedResult)
 		for _, primaryRes := range delimRes.Primary {
-			fnSeq := primaryRes.([]interface{})
+			fnSeq := primaryRes.([]any)
 			fn := fnSeq[1].(query.Function)
 			if fnSeq[0] != nil {
 				var err error
@@ -118,7 +118,7 @@ func arithmeticParser(fnParser Func) Func {
 			fns = append(fns, fn)
 		}
 		for _, op := range delimRes.Delimiter {
-			ops = append(ops, op.([]interface{})[1].(query.ArithmeticOperator))
+			ops = append(ops, op.([]any)[1].(query.ArithmeticOperator))
 		}
 
 		fn, err := query.NewArithmeticExpression(fns, ops)

@@ -35,13 +35,13 @@ pipeline:
 				InputBatch: []test.InputPart{
 					{
 						Content: "foo bar baz",
-						Metadata: map[string]string{
+						Metadata: map[string]any{
 							"key1": "value1",
 						},
 					},
 					{
 						Content: "one two three",
-						Metadata: map[string]string{
+						Metadata: map[string]any{
 							"key1": "value2",
 						},
 					},
@@ -106,7 +106,7 @@ pipeline:
 				InputBatch: []test.InputPart{
 					{
 						Content: "foo bar baz",
-						Metadata: map[string]string{
+						Metadata: map[string]any{
 							"key1": "value1",
 						},
 					},
@@ -129,7 +129,7 @@ pipeline:
 				InputBatch: []test.InputPart{
 					{
 						Content: "one two three",
-						Metadata: map[string]string{
+						Metadata: map[string]any{
 							"key1": "value2",
 						},
 					},

@@ -11,9 +11,14 @@ import (
 	"os"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
+	"github.com/youmark/pkcs8"
+
+	"github.com/benthosdev/benthos/v4/internal/filepath/ifs"
 )
 
-func CreateCertificates() (certPem, keyPem []byte) {
+func createCertificates() (certPem, keyPem []byte) {
 	key, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
 		panic(err)
@@ -47,109 +52,187 @@ func CreateCertificates() (certPem, keyPem []byte) {
 	return certPem, keyPem
 }
 
-func CreateCertificatesWithEncryptedKey(password string) (certPem, keyPem []byte) {
+type keyPair struct {
+	cert []byte
+	key  []byte
+}
 
-	certPem, keyPem = CreateCertificates()
+func createCertificatesWithEncryptedPKCS1Key(t *testing.T, password string) keyPair {
+	t.Helper()
+
+	certPem, keyPem := createCertificates()
 	decodedKey, _ := pem.Decode(keyPem)
 
 	//nolint:staticcheck // SA1019 Disable linting for deprecated  x509.EncryptPEMBlock call
 	block, err := x509.EncryptPEMBlock(rand.Reader, decodedKey.Type, decodedKey.Bytes, []byte(password), x509.PEMCipher3DES)
-	if err != nil {
-		panic(err)
-	}
+	require.NoError(t, err)
+
 	keyPem = pem.EncodeToMemory(
 		block,
 	)
-	return certPem, keyPem
+	return keyPair{cert: certPem, key: keyPem}
+}
+
+func createCertificatesWithEncryptedPKCS8Key(t *testing.T, password string) keyPair {
+	t.Helper()
+
+	certPem, keyPem := createCertificates()
+	pemBlock, _ := pem.Decode(keyPem)
+	decodedKey, err := x509.ParsePKCS1PrivateKey(pemBlock.Bytes)
+	require.NoError(t, err)
+
+	keyBytes, err := pkcs8.ConvertPrivateKeyToPKCS8(decodedKey, []byte(password))
+	require.NoError(t, err)
+
+	return keyPair{cert: certPem, key: pem.EncodeToMemory(&pem.Block{Type: "ENCRYPTED PRIVATE KEY", Bytes: keyBytes})}
 }
 
 func TestCertificateFileWithEncryptedKey(t *testing.T) {
-	cert, key := CreateCertificatesWithEncryptedKey("benthos")
-
-	fCert, _ := os.CreateTemp("", "cert.pem")
-	_, _ = fCert.Write(cert)
-	defer fCert.Close()
-
-	fKey, _ := os.CreateTemp("", "key.pem")
-	_, _ = fKey.Write(key)
-	defer fKey.Close()
-
-	c := ClientCertConfig{
-		KeyFile:  fKey.Name(),
-		CertFile: fCert.Name(),
-		Password: "benthos",
+	tests := []struct {
+		name string
+		kp   keyPair
+	}{
+		{
+			name: "PKCS#1",
+			kp:   createCertificatesWithEncryptedPKCS1Key(t, "benthos"),
+		},
+		{
+			name: "PKCS#8",
+			kp:   createCertificatesWithEncryptedPKCS8Key(t, "benthos"),
+		},
 	}
 
-	_, err := c.Load()
-	if err != nil {
-		t.Errorf("Failed to load certificate %s", err)
+	tmpDir := t.TempDir()
+	for _, test := range tests {
+		fCert, _ := os.CreateTemp(tmpDir, "cert.pem")
+		_, _ = fCert.Write(test.kp.cert)
+		fCert.Close()
+
+		fKey, _ := os.CreateTemp(tmpDir, "key.pem")
+		_, _ = fKey.Write(test.kp.key)
+		fKey.Close()
+
+		c := ClientCertConfig{
+			KeyFile:  fKey.Name(),
+			CertFile: fCert.Name(),
+			Password: "benthos",
+		}
+
+		_, err := c.Load(ifs.OS())
+		if err != nil {
+			t.Errorf("Failed to load %s certificate: %s", test.name, err)
+		}
 	}
 }
 
 func TestCertificateWithEncryptedKey(t *testing.T) {
-
-	cert, key := CreateCertificatesWithEncryptedKey("benthos")
-
-	c := ClientCertConfig{
-		Key:      string(key),
-		Cert:     string(cert),
-		Password: "benthos",
+	tests := []struct {
+		name string
+		kp   keyPair
+	}{
+		{
+			name: "PKCS#1",
+			kp:   createCertificatesWithEncryptedPKCS1Key(t, "benthos"),
+		},
+		{
+			name: "PKCS#8",
+			kp:   createCertificatesWithEncryptedPKCS8Key(t, "benthos"),
+		},
 	}
 
-	_, err := c.Load()
-	if err != nil {
-		t.Errorf("Failed to load certificate %s", err)
-	}
+	for _, test := range tests {
+		c := ClientCertConfig{
+			Cert:     string(test.kp.cert),
+			Key:      string(test.kp.key),
+			Password: "benthos",
+		}
 
+		_, err := c.Load(ifs.OS())
+		if err != nil {
+			t.Errorf("Failed to load %s certificate: %s", test.name, err)
+		}
+	}
 }
 
 func TestCertificateFileWithEncryptedKeyAndWrongPassword(t *testing.T) {
-	cert, key := CreateCertificatesWithEncryptedKey("benthos")
-
-	fCert, _ := os.CreateTemp("", "cert.pem")
-	_, _ = fCert.Write(cert)
-	defer fCert.Close()
-
-	fKey, _ := os.CreateTemp("", "key.pem")
-	_, _ = fKey.Write(key)
-	defer fKey.Close()
-
-	c := ClientCertConfig{
-		KeyFile:  fKey.Name(),
-		CertFile: fCert.Name(),
-		Password: "not_bentho",
+	tests := []struct {
+		name string
+		kp   keyPair
+		err  string
+	}{
+		{
+			name: "PKCS#1",
+			kp:   createCertificatesWithEncryptedPKCS1Key(t, "benthos"),
+			err:  "x509: decryption password incorrect",
+		},
+		{
+			name: "PKCS#8",
+			kp:   createCertificatesWithEncryptedPKCS8Key(t, "benthos"),
+			err:  "pkcs8: incorrect password",
+		},
 	}
 
-	_, err := c.Load()
-	if err == nil {
-		t.Error("Should have failed with wrong password")
+	tmpDir := t.TempDir()
+	for _, test := range tests {
+		fCert, _ := os.CreateTemp(tmpDir, "cert.pem")
+		_, _ = fCert.Write(test.kp.cert)
+		fCert.Close()
+
+		fKey, _ := os.CreateTemp(tmpDir, "key.pem")
+		_, _ = fKey.Write(test.kp.key)
+		fKey.Close()
+
+		c := ClientCertConfig{
+			KeyFile:  fKey.Name(),
+			CertFile: fCert.Name(),
+			Password: "not_bentho",
+		}
+
+		_, err := c.Load(ifs.OS())
+		require.ErrorContains(t, err, test.err, test.name)
 	}
 }
 
 func TestEncryptedKeyWithWrongPassword(t *testing.T) {
-
-	cert, key := CreateCertificatesWithEncryptedKey("benthos")
-
-	c := ClientCertConfig{
-		Key:      string(key),
-		Cert:     string(cert),
-		Password: "not_bentho",
+	tests := []struct {
+		name string
+		kp   keyPair
+		err  string
+	}{
+		{
+			name: "PKCS#1",
+			kp:   createCertificatesWithEncryptedPKCS1Key(t, "benthos"),
+			err:  "x509: decryption password incorrect",
+		},
+		{
+			name: "PKCS#8",
+			kp:   createCertificatesWithEncryptedPKCS8Key(t, "benthos"),
+			err:  "pkcs8: incorrect password",
+		},
 	}
 
-	_, err := c.Load()
-	if err == nil {
-		t.Error("Should have failed with wrong password")
+	for _, test := range tests {
+		c := ClientCertConfig{
+			Cert:     string(test.kp.cert),
+			Key:      string(test.kp.key),
+			Password: "not_bentho",
+		}
+
+		_, err := c.Load(ifs.OS())
+		require.ErrorContains(t, err, test.err, test.name)
 	}
 }
 
 func TestCertificateFileWithNoEncryption(t *testing.T) {
-	cert, key := CreateCertificates()
+	cert, key := createCertificates()
 
-	fCert, _ := os.CreateTemp("", "cert.pem")
+	tmpDir := t.TempDir()
+
+	fCert, _ := os.CreateTemp(tmpDir, "cert.pem")
 	_, _ = fCert.Write(cert)
 	defer fCert.Close()
 
-	fKey, _ := os.CreateTemp("", "key.pem")
+	fKey, _ := os.CreateTemp(tmpDir, "key.pem")
 	_, _ = fKey.Write(key)
 	defer fKey.Close()
 
@@ -158,21 +241,21 @@ func TestCertificateFileWithNoEncryption(t *testing.T) {
 		CertFile: fCert.Name(),
 	}
 
-	_, err := c.Load()
+	_, err := c.Load(ifs.OS())
 	if err != nil {
 		t.Errorf("Failed to load certificate %s", err)
 	}
 }
-func TestCertificateWithNoEncryption(t *testing.T) {
 
-	cert, key := CreateCertificates()
+func TestCertificateWithNoEncryption(t *testing.T) {
+	cert, key := createCertificates()
 
 	c := ClientCertConfig{
 		Key:  string(key),
 		Cert: string(cert),
 	}
 
-	_, err := c.Load()
+	_, err := c.Load(ifs.OS())
 	if err != nil {
 		t.Errorf("Failed to load certificate %s", err)
 	}

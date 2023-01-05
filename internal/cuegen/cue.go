@@ -33,8 +33,8 @@ func doComponentSpec(cs docs.ComponentSpec) (*ast.Field, error) {
 	}, nil
 }
 
-func doFieldSpecs(s docs.FieldSpecs) ([]interface{}, error) {
-	var fields []interface{}
+func doFieldSpecs(s docs.FieldSpecs) ([]any, error) {
+	var fields []any
 	for _, fieldSpec := range s {
 		field, err := doFieldSpec(fieldSpec)
 		if err != nil {
@@ -102,7 +102,7 @@ func doScalarField(spec docs.FieldSpec) (*ast.Field, error) {
 	case docs.FieldTypeBool:
 		val = ast.NewIdent("bool")
 	case docs.FieldTypeObject:
-		fields := make([]interface{}, 0, len(spec.Children))
+		fields := make([]any, 0, len(spec.Children))
 		for _, child := range spec.Children {
 			field, err := doFieldSpec(child)
 			if err != nil {
