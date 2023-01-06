@@ -30,6 +30,7 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/stream"
 	strmmgr "github.com/benthosdev/benthos/v4/internal/stream/manager"
+	"github.com/benthosdev/benthos/v4/internal/svcdiscover"
 )
 
 var testSuffix = "_benthos_test"
@@ -406,6 +407,15 @@ func cmdService(
 			return 1
 		}
 	}
+
+	// Service discover
+	sdManager := svcdiscover.NewSdManager(conf.Sd, conf.HTTP.Address)
+	go func() {
+		err = sdManager.Register(logger)
+		if err != nil {
+			logger.Errorf("Failed to register service: %v\n", err)
+		}
+	}()
 
 	// Defer clean up.
 	defer func() {
