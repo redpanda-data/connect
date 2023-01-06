@@ -43,6 +43,7 @@ func New() Type {
 }
 
 var httpField = docs.FieldObject("http", "Configures the service-wide HTTP server.").WithChildren(api.Spec()...)
+var svcdiscoverField = docs.FieldObject("sd", "Configures the service-discover.").WithChildren(svcdiscover.Spec()...)
 
 var observabilityFields = docs.FieldSpecs{
 	docs.FieldObject("logger", "Describes how operational logs should be emitted.").WithChildren(log.Spec()...),
@@ -59,6 +60,7 @@ func Spec() docs.FieldSpecs {
 	fields = append(fields, manager.Spec()...)
 	fields = append(fields, observabilityFields...)
 	fields = append(fields, tdocs.ConfigSpec())
+	fields = append(fields, svcdiscoverField)
 	return fields
 }
 
@@ -68,5 +70,6 @@ func SpecWithoutStream() docs.FieldSpecs {
 	fields = append(fields, manager.Spec()...)
 	fields = append(fields, observabilityFields...)
 	fields = append(fields, tdocs.ConfigSpec())
+	fields = append(fields, svcdiscoverField)
 	return fields
 }
