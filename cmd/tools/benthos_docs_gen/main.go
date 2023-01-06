@@ -135,5 +135,5 @@ func doSvcdiscover(dir string) {
 		panic(fmt.Sprintf("Failed to generate docs for svcdiscover: %v", err))
 	}
 
-	create("Service discover docs", filepath.Join(dir, "ServiceDiscover", "about.md"), mdSpec)
+	create("service discover docs", filepath.Join(dir, "service_discover", "about.md"), mdSpec)
 }

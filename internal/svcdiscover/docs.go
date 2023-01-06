@@ -32,7 +32,7 @@ func DocsMarkdown() ([]byte, error) {
 	sdDocsTemplate := docs.FieldsTemplate(false) + sdDocs
 
 	var buf bytes.Buffer
-	err := template.Must(template.New("sd").Parse(sdDocsTemplate)).Execute(&buf, templateContext{
+	err := template.Must(template.New("Serivce Discover").Parse(sdDocsTemplate)).Execute(&buf, templateContext{
 		Fields: docs.FieldObject("", "").WithChildren(Spec()...).FlattenChildrenForDocs(),
 		CommonConfig: `
 sd:
