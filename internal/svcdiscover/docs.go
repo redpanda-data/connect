@@ -27,7 +27,7 @@ type templateContext struct {
 	AdvancedConfig string
 }
 
-// DocsMarkdown returns a markdown document for the http documentation.
+// DocsMarkdown returns a markdown document for the service discover documentation.
 func DocsMarkdown() ([]byte, error) {
 	sdDocsTemplate := docs.FieldsTemplate(false) + sdDocs
 
@@ -49,7 +49,7 @@ sd:
     server_port: 8848
     namespace: public
     service_name: "benthos"
-    registry_ip: "192.16.16.120"
+    registry_ip: ""
 `,
 	})
 
