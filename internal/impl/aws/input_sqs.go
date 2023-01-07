@@ -29,7 +29,7 @@ func init() {
 		if err != nil {
 			return nil, err
 		}
-		return input.NewAsyncReader("aws_sqs", false, r, nm)
+		return input.NewAsyncReader("aws_sqs", r, nm)
 	}), docs.ComponentSpec{
 		Name:   "aws_sqs",
 		Status: docs.StatusStable,
@@ -55,9 +55,9 @@ This input adds the following metadata fields to each message:
 ` + "```" + `
 
 You can access these metadata fields using
-[function interpolation](/docs/configuration/interpolation#metadata).`,
+[function interpolation](/docs/configuration/interpolation#bloblang-queries).`,
 		Config: docs.FieldComponent().WithChildren(
-			docs.FieldString("url", "The SQS URL to consume from."),
+			docs.FieldURL("url", "The SQS URL to consume from."),
 			docs.FieldBool("delete_message", "Whether to delete the consumed message once it is acked. Disabling allows you to handle the deletion using a different mechanism.").Advanced(),
 			docs.FieldBool("reset_visibility", "Whether to set the visibility timeout of the consumed message to zero once it is nacked. Disabling honors the preset visibility timeout specified for the queue.").AtVersion("3.58.0").Advanced(),
 			docs.FieldInt("max_number_of_messages", "The maximum number of messages to return on one poll. Valid values: 1 to 10.").Advanced(),

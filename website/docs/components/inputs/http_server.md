@@ -121,7 +121,7 @@ If HTTPS is enabled, the following fields are added as well:
 - http_server_tls_subject
 - http_server_tls_cipher_suite
 ```
-You can access these metadata fields using [function interpolation](/docs/configuration/interpolation#metadata).
+You can access these metadata fields using [function interpolation](/docs/configuration/interpolation#bloblang-queries).
 
 ## Fields
 

@@ -92,6 +92,9 @@ Type: `string`
 ### `password`
 
 Password to connect to the cluster.
+:::warning Secret
+This field contains sensitive information that usually shouldn't be added to a config directly, read our [secrets page for more info](/docs/configuration/secrets).
+:::
 
 
 Type: `string`  

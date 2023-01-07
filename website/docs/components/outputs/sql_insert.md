@@ -65,7 +65,7 @@ output:
     init_statement: ""
     conn_max_idle_time: ""
     conn_max_life_time: ""
-    conn_max_idle: 0
+    conn_max_idle: 2
     conn_max_open: 0
     batching:
       count: 0
@@ -293,6 +293,7 @@ An optional maximum number of connections in the idle connection pool. If conn_m
 
 
 Type: `int`  
+Default: `2`  
 
 ### `conn_max_open`
 

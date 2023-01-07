@@ -121,7 +121,10 @@ func (p *Processor) ProcessBatch(ctx context.Context, inBatch service.MessageBat
 	// generate query
 	for index := range newMsg {
 		// generate id
-		k := inBatch.InterpolatedString(index, p.id)
+		k, err := inBatch.TryInterpolatedString(index, p.id)
+		if err != nil {
+			return nil, fmt.Errorf("id interpolation error: %w", err)
+		}
 
 		// generate content
 		var content []byte

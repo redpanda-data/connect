@@ -43,6 +43,7 @@ input:
   websocket:
     url: ""
     open_message: ""
+    open_message_type: binary
     tls:
       enabled: false
       skip_cert_verify: false
@@ -96,6 +97,20 @@ An optional message to send to the server upon connection.
 
 Type: `string`  
 Default: `""`  
+
+### `open_message_type`
+
+An optional flag to indicate the data type of open_message.
+
+
+Type: `string`  
+Default: `"binary"`  
+
+| Option | Summary |
+|---|---|
+| `binary` | Binary data open_message. |
+| `text` | Text data open_message. The text message payload is interpreted as UTF-8 encoded text data. |
+
 
 ### `tls`
 

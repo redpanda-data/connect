@@ -41,6 +41,8 @@ output:
   pulsar:
     url: ""
     topic: ""
+    tls:
+      root_cas_file: ""
     key: ""
     ordering_key: ""
     max_in_flight: 64
@@ -56,6 +58,8 @@ output:
   pulsar:
     url: ""
     topic: ""
+    tls:
+      root_cas_file: ""
     key: ""
     ordering_key: ""
     max_in_flight: 64
@@ -98,6 +102,26 @@ The topic to publish to.
 
 
 Type: `string`  
+
+### `tls`
+
+Specify the path to a custom CA certificate to trust broker TLS service.
+
+
+Type: `object`  
+
+### `tls.root_cas_file`
+
+An optional path of a root certificate authority file to use. This is a file, often with a .pem extension, containing a certificate chain from the parent trusted root certificate, to possible intermediate signing certificates, to the host certificate.
+
+
+Type: `string`  
+
+```yml
+# Examples
+
+root_cas_file: ./root_cas.pem
+```
 
 ### `key`
 

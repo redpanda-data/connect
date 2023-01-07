@@ -59,11 +59,8 @@ func (f *fieldFunction) Exec(ctx FunctionContext) (any, error) {
 			if len(f.path) > 0 {
 				fieldName = SliceToDotPath(f.path...)
 			}
-			return nil, &ErrRecoverable{
-				Recovered: nil,
-				Err: ErrNoContext{
-					FieldName: fieldName,
-				},
+			return nil, ErrNoContext{
+				FieldName: fieldName,
 			}
 		}
 		target = *v
@@ -450,10 +447,7 @@ func jsonFunction(args *ParsedParams) (Function, error) {
 	return ClosureFunction("json path `"+SliceToDotPath(argPath...)+"`", func(ctx FunctionContext) (any, error) {
 		jPart, err := ctx.MsgBatch.Get(ctx.Index).AsStructured()
 		if err != nil {
-			return nil, &ErrRecoverable{
-				Recovered: nil,
-				Err:       err,
-			}
+			return nil, err
 		}
 		gPart := gabs.Wrap(jPart)
 		if len(argPath) > 0 {

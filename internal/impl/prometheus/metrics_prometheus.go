@@ -44,7 +44,7 @@ If the Push Gateway requires HTTP Basic Authentication it can be configured with
 			docs.FieldFloat("histogram_buckets", "Timing metrics histogram buckets (in seconds). If left empty defaults to DefBuckets (https://pkg.go.dev/github.com/prometheus/client_golang/prometheus#pkg-variables)").Array().HasDefault([]any{}).Advanced().AtVersion("3.63.0"),
 			docs.FieldBool("add_process_metrics", "Whether to export process metrics such as CPU and memory usage in addition to Benthos metrics.").Advanced().HasDefault(false),
 			docs.FieldBool("add_go_metrics", "Whether to export Go runtime metrics such as GC pauses in addition to Benthos metrics.").Advanced().HasDefault(false),
-			docs.FieldString("push_url", "An optional [Push Gateway URL](#push-gateway) to push metrics to.").Advanced().HasDefault(""),
+			docs.FieldURL("push_url", "An optional [Push Gateway URL](#push-gateway) to push metrics to.").Advanced().HasDefault(""),
 			docs.FieldString("push_interval", "The period of time between each push when sending metrics to a Push Gateway.").Advanced().HasDefault(""),
 			docs.FieldString("push_job_name", "An identifier for push jobs.").Advanced().HasDefault("benthos_push"),
 			docs.FieldObject("push_basic_auth", "The Basic Authentication credentials.").WithChildren(

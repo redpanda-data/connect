@@ -63,7 +63,7 @@ This input adds the following metadata fields to each message:
 ```
 
 You can access these metadata fields using
-[function interpolation](/docs/configuration/interpolation#metadata).
+[function interpolation](/docs/configuration/interpolation#bloblang-queries).
 
 ## Fields
 
@@ -113,7 +113,7 @@ codec: gzip/csv
 
 ### `max_buffer`
 
-The largest token size expected when consuming delimited files.
+The largest token size expected when consuming files with a tokenised codec such as `lines`.
 
 
 Type: `int`  

@@ -3,6 +3,7 @@ package io
 import (
 	"context"
 	"crypto/tls"
+	"fmt"
 	"net/http"
 	"net/url"
 	"sync"
@@ -26,8 +27,12 @@ func init() {
 		Summary:     `Connects to a websocket server and continuously receives messages.`,
 		Description: `It is possible to configure an ` + "`open_message`" + `, which when set to a non-empty string will be sent to the websocket server each time a connection is first established.`,
 		Config: docs.FieldComponent().WithChildren(
-			docs.FieldString("url", "The URL to connect to.", "ws://localhost:4195/get/ws"),
+			docs.FieldURL("url", "The URL to connect to.", "ws://localhost:4195/get/ws"),
 			docs.FieldString("open_message", "An optional message to send to the server upon connection.").Advanced(),
+			docs.FieldString("open_message_type", "An optional flag to indicate the data type of open_message.").HasAnnotatedOptions(
+				string(input.OpenMsgTypeBinary), "Binary data open_message.",
+				string(input.OpenMsgTypeText), "Text data open_message. The text message payload is interpreted as UTF-8 encoded text data.",
+			).Advanced().HasDefault(input.OpenMsgTypeBinary).Optional(),
 			btls.FieldSpec(),
 		).WithChildren(httpclient.OldAuthFieldSpecs()...).ChildDefaultAndTypesFromStruct(input.NewWebsocketConfig()),
 		Categories: []string{
@@ -44,7 +49,7 @@ func newWebsocketInput(conf input.Config, mgr bundle.NewManagement) (input.Strea
 	if err != nil {
 		return nil, err
 	}
-	return input.NewAsyncReader("websocket", true, input.NewAsyncPreserver(ws), mgr)
+	return input.NewAsyncReader("websocket", input.NewAsyncPreserver(ws), mgr)
 }
 
 type websocketReader struct {
@@ -114,9 +119,19 @@ func (w *websocketReader) Connect(ctx context.Context) error {
 		return err
 	}
 
+	var openMsgType int
+	switch w.conf.OpenMsgType {
+	case input.OpenMsgTypeBinary:
+		openMsgType = websocket.BinaryMessage
+	case input.OpenMsgTypeText:
+		openMsgType = websocket.TextMessage
+	default:
+		return fmt.Errorf("unrecognised open_message_type: %s", w.conf.OpenMsgType)
+	}
+
 	if len(w.conf.OpenMsg) > 0 {
 		if err := client.WriteMessage(
-			websocket.BinaryMessage, []byte(w.conf.OpenMsg),
+			openMsgType, []byte(w.conf.OpenMsg),
 		); err != nil {
 			return err
 		}

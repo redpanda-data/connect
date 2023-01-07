@@ -8,7 +8,7 @@
 [[ $- = *i* ]] && echo "Don't source this script!" && return 10
 
 header() {
-    cat 1>&2 <<EOF
+		cat 1>&2 <<EOF
 Benthos Installer
 
 Website: https://www.benthos.dev
@@ -36,7 +36,25 @@ check_tools() {
 install_benthos()
 {
 	trap 'echo -e "Aborted, error $? in command: $BASH_COMMAND"; trap ERR; exit 1' ERR
-	install_path="/usr/local/bin"
+
+	# Process the command line
+	if [[ "$#" -eq 2 ]]; then
+		benthos_tag="v$1"
+		benthos_version="$1"
+		benthos_install_path="$2"
+	elif [[ "$#" -eq 1 ]]; then
+		benthos_tag="v$1"
+		benthos_version=$1
+		benthos_install_path="/usr/local/bin"
+	elif [[ "$#" -eq 0 ]]; then
+		benthos_tag=$(curl -s https://api.github.com/repos/benthosdev/benthos/releases/latest | grep 'tag_name' | cut -d\" -f4)
+		benthos_version=$(echo ${benthos_tag} | cut -c2-)
+		benthos_install_path="/usr/local/bin"
+	else
+		echo "Too many arguments."
+		exit 1
+	fi
+
 	benthos_os="unsupported"
 	benthos_arch="unknown"
 	benthos_arm=""
@@ -45,12 +63,12 @@ install_benthos()
 	check_tools
 
 	if [[ -n "$PREFIX" ]]; then
-		install_path="$PREFIX/bin"
+		benthos_install_path="$PREFIX/bin"
 	fi
 
 	# Fall back to /usr/bin if necessary
-	if [[ ! -d $install_path ]]; then
-		install_path="/usr/bin"
+	if [[ ! -d $benthos_install_path ]]; then
+		benthos_install_path="/usr/bin"
 	fi
 
 	# Not every platform has or needs sudo (https://termux.com/linux.html)
@@ -111,19 +129,6 @@ install_benthos()
 	echo "Downloading Benthos for ${benthos_os}/${benthos_arch}${benthos_arm}..."
 	benthos_file="benthos_${benthos_os}_${benthos_arch}${benthos_arm}${benthos_dl_ext}"
 
-	if [[ "$#" -eq 0 ]]; then
-		# get latest release
-		benthos_tag=$(curl -s https://api.github.com/repos/benthosdev/benthos/releases/latest | grep 'tag_name' | cut -d\" -f4)
-		benthos_version=$(echo ${benthos_tag} | cut -c2-)
-	elif [[ "$#" -gt 1 ]]; then
-		echo "Too many arguments."
-		exit 1
-	elif [ -n $1  ]; then
-		# try to get passed version
-		benthos_tag="v$1"
-		benthos_version=$1
-	fi
-
 	benthos_url="https://github.com/benthosdev/benthos/releases/download/${benthos_tag}/benthos_${benthos_version}_${benthos_os}_${benthos_arch}${benthos_arm}.tar.gz"
 
 	dl="/tmp/$benthos_file"
@@ -137,12 +142,15 @@ install_benthos()
 	esac
 	chmod +x "$PREFIX/tmp/$benthos_bin"
 
-	echo "Putting benthos in $install_path (may require password)"
-	$sudo_cmd mv "$PREFIX/tmp/$benthos_bin" "$install_path/$benthos_bin"
+	echo "Putting benthos in $benthos_install_path (may require password)"
+	$sudo_cmd mv "$PREFIX/tmp/$benthos_bin" "$benthos_install_path/$benthos_bin"
 	$sudo_cmd rm -- "$dl"
 
 	# check installation
-	$benthos_bin -version
+	$benthos_install_path/$benthos_bin -version
+	if ! check_cmd benthos; then
+		echo "Do not forget to add $benthos_install_path to your PATH!"
+	fi
 
 	echo "Successfully installed"
 	trap ERR

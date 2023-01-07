@@ -87,6 +87,15 @@ If the result of a target query fails (due to incorrect types, failed parsing, e
 root.doc.id = this.thing.id.string().catch(uuid_v4())
 ```
 
+The fallback argument can be a mapping, allowing you to capture the error string and yield structured data back.
+
+```coffee
+root.url = this.url.parse_url().catch(err -> {"error":err,"input":this.url})
+
+# In:  {"url":"invalid %&# url"}
+# Out: {"url":{"error":"field `this.url`: parse \"invalid %&\": invalid URL escape \"%&\"","input":"invalid %&# url"}}
+```
+
 When the input document is not structured attempting to reference structured fields with `this` will result in an error. Therefore, a convenient way to delete non-structured data is with a catch.
 
 ```coffee
@@ -2522,6 +2531,30 @@ root = content().parse_parquet()
 
 ```coffee
 root = content().parse_parquet(byte_array_as_string: true)
+```
+
+### `parse_url`
+
+Attempts to parse a URL from a string value, returning a structured result that describes the various facets of the URL. The fields returned within the structured result roughly follow https://pkg.go.dev/net/url#URL, and may be expanded in future in order to present more information.
+
+#### Examples
+
+
+```coffee
+root.foo_url = this.foo_url.parse_url()
+
+# In:  {"foo_url":"https://www.benthos.dev/docs/guides/bloblang/about"}
+# Out: {"foo_url":{"fragment":"","host":"www.benthos.dev","opaque":"","path":"/docs/guides/bloblang/about","raw_fragment":"","raw_path":"","raw_query":"","scheme":"https"}}
+```
+
+```coffee
+root.username = this.url.parse_url().user.name | "unknown"
+
+# In:  {"url":"amqp://foo:bar@127.0.0.1:5672/"}
+# Out: {"username":"foo"}
+
+# In:  {"url":"redis://localhost:6379"}
+# Out: {"username":"unknown"}
 ```
 
 ### `parse_xml`

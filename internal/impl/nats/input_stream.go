@@ -42,7 +42,7 @@ This input adds the following metadata fields to each message:
 - nats_stream_sequence
 ` + "```" + `
 
-You can access these metadata fields using [function interpolation](/docs/configuration/interpolation#metadata).
+You can access these metadata fields using [function interpolation](/docs/configuration/interpolation#bloblang-queries).
 
 ` + auth.Description(),
 		Config: docs.FieldComponent().WithChildren(
@@ -79,7 +79,7 @@ func newNATSStreamInput(conf input.Config, mgr bundle.NewManagement) (input.Stre
 	if c, err = newNATSStreamReader(conf.NATSStream, mgr); err != nil {
 		return nil, err
 	}
-	return input.NewAsyncReader("nats_stream", true, c, mgr)
+	return input.NewAsyncReader("nats_stream", c, mgr)
 }
 
 type natsStreamReader struct {

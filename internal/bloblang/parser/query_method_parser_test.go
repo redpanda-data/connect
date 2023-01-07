@@ -76,16 +76,6 @@ func TestMethodParser(t *testing.T) {
 				{content: `{"foo":"c"}`},
 			},
 		},
-		"json from all 2": {
-			input:  `json("foo").from_all()`,
-			output: `["a",null,"c",null]`,
-			messages: []easyMsg{
-				{content: `{"foo":"a"}`},
-				{content: `{}`},
-				{content: `{"foo":"c"}`},
-				{content: `not even json`},
-			},
-		},
 		"json from all/or": {
 			input:  `json("foo").or("fallback").from_all()`,
 			output: `["a","fallback","c","fallback"]`,
@@ -251,13 +241,6 @@ func TestMethodParser(t *testing.T) {
 				{content: `{"foo":[11,12,7,13]}`},
 			},
 		},
-		"map each not an array": {
-			input:  `json("foo").map_each(this + 10)`,
-			output: ``,
-			messages: []easyMsg{
-				{content: `{"foo":"not an array"}`},
-			},
-		},
 		"map each object": {
 			input:  `json("foo").map_each(value + 10)`,
 			output: `{"a":11,"b":12,"c":12}`,
@@ -291,37 +274,12 @@ func TestMethodParser(t *testing.T) {
 				{content: `{"foo":[1,2,2]}`},
 			},
 		},
-		"test sum standard array 2": {
-			input:  `json("foo").sum()`,
-			output: ``,
-			messages: []easyMsg{
-				{content: `{"foo":[1,2,2,"nah",3]}`},
-			},
-		},
-		"test sum standard array 3": {
-			input:  `json("foo").sum()`,
-			output: ``,
-			messages: []easyMsg{
-				{content: `{"foo":[1,2,2,"4",3]}`},
-			},
-		},
 		"test sum standard array 4": {
 			input:  `json("foo").from_all().sum()`,
 			output: `16`,
 			messages: []easyMsg{
 				{content: `{"foo":1}`},
 				{content: `{"foo":3}`},
-				{content: `{"foo":4}`},
-				{content: `{"foo":8}`},
-			},
-		},
-		"test sum standard array 5": {
-			input:  `json("foo").from_all().sum()`,
-			output: ``,
-			messages: []easyMsg{
-				{content: `{"foo":1}`},
-				{content: `{"foo":"3"}`},
-				{content: `{"foo":"nope"}`},
 				{content: `{"foo":4}`},
 				{content: `{"foo":8}`},
 			},
@@ -362,19 +320,9 @@ func TestMethodParser(t *testing.T) {
 			output:   `FOOBAR`,
 			messages: []easyMsg{{}},
 		},
-		"test uppercase method recovered": {
-			input:    `["foo"].uppercase()`,
-			output:   ``,
-			messages: []easyMsg{{}},
-		},
 		"test lowercase method": {
 			input:    `"FOOBAR".lowercase()`,
 			output:   `foobar`,
-			messages: []easyMsg{{}},
-		},
-		"test lowercase method recovered": {
-			input:    `["FOO"].lowercase()`,
-			output:   ``,
 			messages: []easyMsg{{}},
 		},
 		"test format method": {
@@ -467,10 +415,11 @@ func TestMethodParser(t *testing.T) {
 
 			e, perr := tryParseQuery(test.input)
 			require.Nil(t, perr)
-			res := query.ExecToString(e, query.FunctionContext{
+			res, err := query.ExecToString(e, query.FunctionContext{
 				Index:    test.index,
 				MsgBatch: msg,
 			})
+			require.NoError(t, err)
 			assert.Equal(t, test.output, res)
 		})
 	}

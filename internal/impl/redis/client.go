@@ -22,7 +22,7 @@ func clientFields() []*service.ConfigField {
 Some cloud hosted instances of Redis (such as Azure Cache) might need some hand holding in order to establish stable connections. Unfortunately, it is often the case that TLS issues will manifest as generic error messages such as "i/o timeout". If you're using TLS and are seeing connectivity problems consider setting ` + "`enable_renegotiation` to `true`" + `, and ensuring that the server supports at least TLS version 1.2.`)
 
 	return []*service.ConfigField{
-		service.NewStringField("url").
+		service.NewURLField("url").
 			Description("The URL of the target Redis server. Database is optional and is supplied as the URL path.").
 			Example(":6397").
 			Example("localhost:6397").

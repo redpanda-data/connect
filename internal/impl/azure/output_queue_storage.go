@@ -102,10 +102,21 @@ func (a *azureQueueStorageWriter) Connect(ctx context.Context) error {
 
 func (a *azureQueueStorageWriter) WriteBatch(ctx context.Context, msg message.Batch) error {
 	return output.IterateBatchedSend(msg, func(i int, p *message.Part) error {
-		queueURL := a.serviceURL.NewQueueURL(a.queueName.String(i, msg))
+		queueNameStr, err := a.queueName.String(i, msg)
+		if err != nil {
+			return fmt.Errorf("queue name interpolation error: %w", err)
+		}
+
+		queueURL := a.serviceURL.NewQueueURL(queueNameStr)
 		msgURL := queueURL.NewMessagesURL()
+
+		ttls, err := a.ttl.String(i, msg)
+		if err != nil {
+			return fmt.Errorf("ttl interpolation error: %w", err)
+		}
+
 		var ttl *time.Duration
-		if ttls := a.ttl.String(i, msg); ttls != "" {
+		if ttls != "" {
 			td, err := time.ParseDuration(ttls)
 			if err != nil {
 				a.log.Debugf("TTL must be a duration: %v\n", err)
@@ -120,8 +131,7 @@ func (a *azureQueueStorageWriter) WriteBatch(ctx context.Context, msg message.Ba
 			return 0
 		}()
 		message := string(p.AsBytes())
-		_, err := msgURL.Enqueue(ctx, message, 0, timeToLive)
-		if err != nil {
+		if _, err = msgURL.Enqueue(ctx, message, 0, timeToLive); err != nil {
 			if cerr, ok := err.(azqueue.StorageError); ok {
 				if cerr.ServiceCode() == azqueue.ServiceCodeQueueNotFound {
 					ctx := context.Background()

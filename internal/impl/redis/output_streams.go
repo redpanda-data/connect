@@ -137,9 +137,13 @@ func (r *redisStreamsWriter) WriteBatch(ctx context.Context, msg message.Batch) 
 	}
 
 	if msg.Len() == 1 {
+		stream, err := r.stream.String(0, msg)
+		if err != nil {
+			return fmt.Errorf("stream interpolation error: %w", err)
+		}
 		if err := client.XAdd(ctx, &redis.XAddArgs{
 			ID:           "*",
-			Stream:       r.stream.String(0, msg),
+			Stream:       stream,
 			MaxLenApprox: r.conf.MaxLenApprox,
 			Values:       partToMap(msg.Get(0)),
 		}).Err(); err != nil {
@@ -151,15 +155,21 @@ func (r *redisStreamsWriter) WriteBatch(ctx context.Context, msg message.Batch) 
 	}
 
 	pipe := client.Pipeline()
-	_ = msg.Iter(func(i int, p *message.Part) error {
+	if err := msg.Iter(func(i int, p *message.Part) error {
+		stream, err := r.stream.String(i, msg)
+		if err != nil {
+			return fmt.Errorf("stream interpolation error: %w", err)
+		}
 		_ = pipe.XAdd(ctx, &redis.XAddArgs{
 			ID:           "*",
-			Stream:       r.stream.String(i, msg),
+			Stream:       stream,
 			MaxLenApprox: r.conf.MaxLenApprox,
 			Values:       partToMap(p),
 		})
 		return nil
-	})
+	}); err != nil {
+		return err
+	}
 	cmders, err := pipe.Exec(ctx)
 	if err != nil {
 		_ = r.disconnect()

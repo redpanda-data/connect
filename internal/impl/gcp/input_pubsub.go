@@ -37,7 +37,7 @@ This input adds the following metadata fields to each message:
 ` + "```" + `
 
 You can access these metadata fields using
-[function interpolation](/docs/configuration/interpolation#metadata).`,
+[function interpolation](/docs/configuration/interpolation#bloblang-queries).`,
 		Categories: []string{
 			"Services",
 			"GCP",
@@ -73,7 +73,7 @@ func newGCPPubSubInput(conf input.Config, mgr bundle.NewManagement, log log.Modu
 
 		createSubscription(conf.GCPPubSub, client, log)
 	}
-	return input.NewAsyncReader("gcp_pubsub", true, c, mgr)
+	return input.NewAsyncReader("gcp_pubsub", c, mgr)
 }
 
 func createSubscription(conf input.GCPPubSubConfig, client *pubsub.Client, log log.Modular) {

@@ -24,7 +24,7 @@ func init() {
 		if err != nil {
 			return nil, err
 		}
-		return input.NewAsyncReader("file", true, input.NewAsyncPreserver(rdr), nm)
+		return input.NewAsyncReader("file", input.NewAsyncPreserver(rdr), nm)
 	}), docs.ComponentSpec{
 		Name: "file",
 		Summary: `
@@ -32,7 +32,7 @@ Consumes data from files on disk, emitting messages according to a chosen codec.
 		Config: docs.FieldComponent().WithChildren(
 			docs.FieldString("paths", "A list of paths to consume sequentially. Glob patterns are supported, including super globs (double star).").Array(),
 			codec.ReaderDocs,
-			docs.FieldInt("max_buffer", "The largest token size expected when consuming delimited files.").Advanced(),
+			docs.FieldInt("max_buffer", "The largest token size expected when consuming files with a tokenised codec such as `lines`.").Advanced(),
 			docs.FieldBool("delete_on_finish", "Whether to delete input files from the disk once they are fully consumed.").Advanced(),
 		).ChildDefaultAndTypesFromStruct(input.NewFileConfig()),
 		Description: `
@@ -47,7 +47,7 @@ This input adds the following metadata fields to each message:
 ` + "```" + `
 
 You can access these metadata fields using
-[function interpolation](/docs/configuration/interpolation#metadata).`,
+[function interpolation](/docs/configuration/interpolation#bloblang-queries).`,
 		Categories: []string{
 			"Local",
 		},

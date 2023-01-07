@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"io"
 	llog "log"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -24,6 +25,20 @@ func init() {
 	err := bundle.AllInputs.Add(processors.WrapConstructor(newNSQInput), docs.ComponentSpec{
 		Name:    "nsq",
 		Summary: `Subscribe to an NSQ instance topic and channel.`,
+		Description: `
+### Metadata
+
+This input adds the following metadata fields to each message:
+
+` + "``` text" + `
+- nsq_attempts
+- nsq_id
+- nsq_nsqd_address
+- nsq_timestamp
+` + "```" + `
+
+You can access these metadata fields using [function interpolation](/docs/configuration/interpolation#bloblang-queries).
+`,
 		Config: docs.FieldComponent().WithChildren(
 			docs.FieldString("nsqd_tcp_addresses", "A list of nsqd addresses to connect to.").Array(),
 			docs.FieldString("lookupd_http_addresses", "A list of nsqlookupd addresses to connect to.").Array(),
@@ -32,6 +47,7 @@ func init() {
 			docs.FieldString("channel", "The channel to consume from."),
 			docs.FieldString("user_agent", "A user agent to assume when connecting."),
 			docs.FieldInt("max_in_flight", "The maximum number of pending messages to consume at any given time."),
+			docs.FieldInt("max_attempts", "The maximum number of attempts to successfully consume a messages."),
 		).ChildDefaultAndTypesFromStruct(input.NewNSQConfig()),
 		Categories: []string{
 			"Services",
@@ -48,7 +64,7 @@ func newNSQInput(conf input.Config, mgr bundle.NewManagement) (input.Streamed, e
 	if n, err = newNSQReader(conf.NSQ, mgr); err != nil {
 		return nil, err
 	}
-	return input.NewAsyncReader("nsq", true, n, mgr)
+	return input.NewAsyncReader("nsq", n, mgr)
 }
 
 type nsqReader struct {
@@ -120,6 +136,7 @@ func (n *nsqReader) Connect(ctx context.Context) (err error) {
 	cfg := nsq.NewConfig()
 	cfg.UserAgent = n.conf.UserAgent
 	cfg.MaxInFlight = n.conf.MaxInFlight
+	cfg.MaxAttempts = n.conf.MaxAttempts
 	if n.tlsConf != nil {
 		cfg.TlsV1 = true
 		cfg.TlsConfig = n.tlsConf
@@ -182,7 +199,15 @@ func (n *nsqReader) ReadBatch(ctx context.Context) (message.Batch, input.AsyncAc
 		return nil, nil, err
 	}
 	n.unAckMsgs = append(n.unAckMsgs, msg)
-	return message.QuickBatch([][]byte{msg.Body}), func(rctx context.Context, res error) error {
+
+	bmsg := message.QuickBatch([][]byte{msg.Body})
+	part := bmsg.Get(0)
+	part.MetaSetMut("nsq_attempts", strconv.Itoa(int(msg.Attempts)))
+	part.MetaSetMut("nsq_id", string(msg.ID[:]))
+	part.MetaSetMut("nsq_timestamp", strconv.FormatInt(msg.Timestamp, 10))
+	part.MetaSetMut("nsq_nsqd_address", msg.NSQDAddress)
+
+	return bmsg, func(rctx context.Context, res error) error {
 		if res != nil {
 			msg.Requeue(-1)
 		}

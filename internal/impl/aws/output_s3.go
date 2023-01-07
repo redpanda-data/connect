@@ -282,37 +282,68 @@ func (a *amazonS3Writer) WriteBatch(wctx context.Context, msg message.Batch) err
 		})
 
 		var contentEncoding *string
-		if ce := a.contentEncoding.String(i, msg); len(ce) > 0 {
+		ce, err := a.contentEncoding.String(i, msg)
+		if err != nil {
+			return fmt.Errorf("content encoding interpolation: %w", err)
+		}
+		if len(ce) > 0 {
 			contentEncoding = aws.String(ce)
 		}
 		var cacheControl *string
-		if ce := a.cacheControl.String(i, msg); len(ce) > 0 {
+		if ce, err = a.cacheControl.String(i, msg); err != nil {
+			return fmt.Errorf("cache control interpolation: %w", err)
+		}
+		if len(ce) > 0 {
 			cacheControl = aws.String(ce)
 		}
 		var contentDisposition *string
-		if ce := a.contentDisposition.String(i, msg); len(ce) > 0 {
+		if ce, err = a.contentDisposition.String(i, msg); err != nil {
+			return fmt.Errorf("content disposition interpolation: %w", err)
+		}
+		if len(ce) > 0 {
 			contentDisposition = aws.String(ce)
 		}
 		var contentLanguage *string
-		if ce := a.contentLanguage.String(i, msg); len(ce) > 0 {
+		if ce, err = a.contentLanguage.String(i, msg); err != nil {
+			return fmt.Errorf("content language interpolation: %w", err)
+		}
+		if len(ce) > 0 {
 			contentLanguage = aws.String(ce)
 		}
 		var websiteRedirectLocation *string
-		if ce := a.websiteRedirectLocation.String(i, msg); len(ce) > 0 {
+		if ce, err = a.websiteRedirectLocation.String(i, msg); err != nil {
+			return fmt.Errorf("website redirect location interpolation: %w", err)
+		}
+		if len(ce) > 0 {
 			websiteRedirectLocation = aws.String(ce)
+		}
+
+		key, err := a.path.String(i, msg)
+		if err != nil {
+			return fmt.Errorf("key interpolation: %w", err)
+		}
+
+		contentType, err := a.contentType.String(i, msg)
+		if err != nil {
+			return fmt.Errorf("content type interpolation: %w", err)
+		}
+
+		storageClass, err := a.storageClass.String(i, msg)
+		if err != nil {
+			return fmt.Errorf("storage class interpolation: %w", err)
 		}
 
 		uploadInput := &s3manager.UploadInput{
 			Bucket:                  &a.conf.Bucket,
-			Key:                     aws.String(a.path.String(i, msg)),
+			Key:                     aws.String(key),
 			Body:                    bytes.NewReader(p.AsBytes()),
-			ContentType:             aws.String(a.contentType.String(i, msg)),
+			ContentType:             aws.String(contentType),
 			ContentEncoding:         contentEncoding,
 			CacheControl:            cacheControl,
 			ContentDisposition:      contentDisposition,
 			ContentLanguage:         contentLanguage,
 			WebsiteRedirectLocation: websiteRedirectLocation,
-			StorageClass:            aws.String(a.storageClass.String(i, msg)),
+			StorageClass:            aws.String(storageClass),
 			Metadata:                metadata,
 		}
 
@@ -320,7 +351,11 @@ func (a *amazonS3Writer) WriteBatch(wctx context.Context, msg message.Batch) err
 		if len(a.tags) > 0 {
 			tags := make([]string, len(a.tags))
 			for j, pair := range a.tags {
-				tags[j] = url.QueryEscape(pair.key) + "=" + url.QueryEscape(pair.value.String(i, msg))
+				tagStr, err := pair.value.String(i, msg)
+				if err != nil {
+					return fmt.Errorf("tag %v interpolation: %w", pair.key, err)
+				}
+				tags[j] = url.QueryEscape(pair.key) + "=" + url.QueryEscape(tagStr)
 			}
 			uploadInput.Tagging = aws.String(strings.Join(tags, "&"))
 		}

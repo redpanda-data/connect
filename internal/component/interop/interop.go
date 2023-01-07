@@ -5,6 +5,7 @@ import (
 
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/input"
+	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
@@ -37,17 +38,49 @@ func (u *UnwrapInternalInput) Unwrap() input.Streamed {
 	return u.s
 }
 
-// Connect does nothing, Unwrap the Streamed instead.
+// Connect does nothing, use Unwrap instead.
 func (u *UnwrapInternalInput) Connect(ctx context.Context) error {
 	return component.ErrNotUnwrapped
 }
 
-// ReadBatch does nothing, Unwrap the Streamed instead.
+// ReadBatch does nothing, use Unwrap instead.
 func (u *UnwrapInternalInput) ReadBatch(ctx context.Context) (service.MessageBatch, service.AckFunc, error) {
 	return nil, nil, component.ErrNotUnwrapped
 }
 
-// Close does nothing, Unwrap the Streamed instead.
+// Close does nothing, use Unwrap instead.
 func (u *UnwrapInternalInput) Close(ctx context.Context) error {
+	return component.ErrNotUnwrapped
+}
+
+//------------------------------------------------------------------------------
+
+// UnwrapInternalBatchProcessor is a no-op implementation of an internal
+// component that allows a public/service environment to unwrap it straight into
+// the needed format during construction. This is useful in cases where we're
+// migrating internal components to use the public configuration APIs but aren't
+// quite ready to move the full implementation yet.
+type UnwrapInternalBatchProcessor struct {
+	s processor.V1
+}
+
+// NewUnwrapInternalBatchProcessor returns wraps an internal component
+// implementation.
+func NewUnwrapInternalBatchProcessor(s processor.V1) *UnwrapInternalBatchProcessor {
+	return &UnwrapInternalBatchProcessor{s: s}
+}
+
+// Unwrap in order to obtain the underlying Streamed implementation.
+func (u *UnwrapInternalBatchProcessor) Unwrap() processor.V1 {
+	return u.s
+}
+
+// ProcessBatch does nothing, use Unwrap instead.
+func (u *UnwrapInternalBatchProcessor) ProcessBatch(ctx context.Context, b service.MessageBatch) ([]service.MessageBatch, error) {
+	return nil, component.ErrNotUnwrapped
+}
+
+// Close does nothing, use Unwrap instead.
+func (u *UnwrapInternalBatchProcessor) Close(ctx context.Context) error {
 	return component.ErrNotUnwrapped
 }

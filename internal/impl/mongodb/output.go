@@ -315,8 +315,13 @@ func (m *Writer) WriteBatch(ctx context.Context, msg message.Batch) error {
 			}
 		}
 
+		collectionStr, err := collection.String(i, msg)
+		if err != nil {
+			return fmt.Errorf("collection interpolation error: %w", err)
+		}
+
 		var writeModel mongo.WriteModel
-		collection := m.database.Collection(collection.String(i, msg), m.writeConcernCollectionOption)
+		collection := m.database.Collection(collectionStr, m.writeConcernCollectionOption)
 
 		switch m.operation {
 		case client.OperationInsertOne:

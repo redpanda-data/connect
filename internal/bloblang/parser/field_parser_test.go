@@ -21,12 +21,18 @@ func TestFieldStaticExpressionOptimization(t *testing.T) {
 
 	for k, v := range tests {
 		t.Run(k, func(t *testing.T) {
-			rs, err := parseFieldResolvers(GlobalContext(), k)
-			require.Nil(t, err)
+			rs, pErr := parseFieldResolvers(GlobalContext(), k)
+			require.Nil(t, pErr)
 
 			e := field.NewExpression(rs...)
-			assert.Equal(t, v, e.String(0, message.QuickBatch(nil)))
-			assert.Equal(t, v, string(e.Bytes(0, message.QuickBatch(nil))))
+
+			res, err := e.String(0, message.QuickBatch(nil))
+			require.NoError(t, err)
+			assert.Equal(t, v, res)
+
+			bres, err := e.Bytes(0, message.QuickBatch(nil))
+			require.NoError(t, err)
+			assert.Equal(t, v, string(bres))
 		})
 	}
 }
@@ -173,7 +179,7 @@ func TestFieldExpressions(t *testing.T) {
 			input:  `${!json("foo").from(0)}`,
 			output: `null`,
 			messages: []easyMsg{
-				{content: `not json`},
+				{content: `{}`},
 				{content: `{"foo":"bar"}`},
 			},
 		},
@@ -203,10 +209,11 @@ func TestFieldExpressions(t *testing.T) {
 				msg = append(msg, part)
 			}
 
-			e, err := ParseField(GlobalContext(), test.input)
-			require.Nil(t, err)
+			e, pErr := ParseField(GlobalContext(), test.input)
+			require.Nil(t, pErr)
 
-			res := e.String(test.index, msg)
+			res, err := e.String(test.index, msg)
+			require.NoError(t, err)
 			assert.Equal(t, test.output, res)
 		})
 	}

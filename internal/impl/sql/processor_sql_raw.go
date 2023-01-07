@@ -216,7 +216,12 @@ func (s *sqlRawProcessor) ProcessBatch(ctx context.Context, batch service.Messag
 
 		queryStr := s.queryStatic
 		if s.queryDyn != nil {
-			queryStr = batch.InterpolatedString(i, s.queryDyn)
+			var err error
+			if queryStr, err = batch.TryInterpolatedString(i, s.queryDyn); err != nil {
+				s.logger.Errorf("Query interoplation error: %v", err)
+				msg.SetError(fmt.Errorf("query interpolation error: %w", err))
+				continue
+			}
 		}
 
 		if s.onlyExec {

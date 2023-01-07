@@ -17,9 +17,9 @@ jobs:
         check-latest: true
 
     - name: Check Out Repo
-      uses: actions/checkout@v2
+      uses: actions/checkout@v3
 
-    - uses: actions/cache@v2
+    - uses: actions/cache@v3
       with:
         path: |
           ~/go/pkg/mod
@@ -34,7 +34,7 @@ jobs:
       run: ./resources/scripts/release_notes.sh > ./release_notes.md
 
     - name: GoReleaser
-      uses: goreleaser/goreleaser-action@v2
+      uses: goreleaser/goreleaser-action@v4
       with:
         version: latest
         args: release --release-notes=./release_notes.md --timeout 60m
@@ -52,9 +52,9 @@ jobs:
         check-latest: true
 
     - name: Check Out Repo
-      uses: actions/checkout@v2
+      uses: actions/checkout@v3
 
-    - uses: actions/cache@v2
+    - uses: actions/cache@v3
       with:
         path: |
           ~/go/pkg/mod
@@ -66,7 +66,7 @@ jobs:
           ${{ runner.os }}-go-
 
     - name: Cache Docker layers
-      uses: actions/cache@v2
+      uses: actions/cache@v3
       with:
         path: /tmp/.buildx-cache
         key: ${{ runner.os }}-buildx-${{ github.sha }}

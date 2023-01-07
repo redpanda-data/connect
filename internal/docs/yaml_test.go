@@ -11,6 +11,78 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/docs"
 )
 
+func TestSecretScrubbing(t *testing.T) {
+	fields := docs.FieldSpecs{
+		docs.FieldString("foo", "").Secret(),
+		docs.FieldString("bar", ""),
+		docs.FieldString("bazes", "").Secret().Array(),
+		docs.FieldString("buzes", "").Secret().ArrayOfArrays(),
+		docs.FieldString("bevers", "").Secret().Map(),
+	}
+
+	tests := []struct {
+		name   string
+		input  string
+		output string
+	}{
+		{
+			name: "all env vars",
+			input: `foo: "${foo_value}"
+bar: "${bar_value}"
+bazes: [ "${baz_value_one}", "${baz_value_two}" ]
+buzes: [ [ "${buz_value_one}" ], [ "${buz_value_two}", "${buz_value_three}" ] ]
+bevers:
+  first: "${bev_value_one}"
+  second: "${bev_value_one}"
+`,
+			output: `foo: ${foo_value}
+bar: "${bar_value}"
+bazes: ['${baz_value_one}', '${baz_value_two}']
+buzes: [['${buz_value_one}'], ['${buz_value_two}', '${buz_value_three}']]
+bevers:
+    first: ${bev_value_one}
+    second: ${bev_value_one}
+`,
+		},
+		{
+			name: "all real secrets",
+			input: `foo: dont print me!"
+bar: you can print me
+bazes: [ 'dont print me either', 'nor me' ]
+buzes: [ [ 'and definitely' ], [ 'not any', 'of these' ] ]
+bevers:
+  first: dont even think
+  second: about showing these ones
+`,
+			output: `foo: '!!!SECRET_SCRUBBED!!!'
+bar: you can print me
+bazes: ['!!!SECRET_SCRUBBED!!!', '!!!SECRET_SCRUBBED!!!']
+buzes: [['!!!SECRET_SCRUBBED!!!'], ['!!!SECRET_SCRUBBED!!!', '!!!SECRET_SCRUBBED!!!']]
+bevers:
+    first: '!!!SECRET_SCRUBBED!!!'
+    second: '!!!SECRET_SCRUBBED!!!'
+`,
+		},
+	}
+
+	for _, test := range tests {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			var node yaml.Node
+			require.NoError(t, yaml.Unmarshal([]byte(test.input), &node))
+
+			sanitConf := docs.NewSanitiseConfig()
+			sanitConf.DocsProvider = docs.NewMappedDocsProvider()
+
+			require.NoError(t, fields.SanitiseYAML(&node, sanitConf))
+
+			resBytes, err := yaml.Marshal(node.Content[0])
+			require.NoError(t, err)
+			assert.Equal(t, test.output, string(resBytes))
+		})
+	}
+}
+
 func TestFieldsFromNode(t *testing.T) {
 	tests := []struct {
 		name   string

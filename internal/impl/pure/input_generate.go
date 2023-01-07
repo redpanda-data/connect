@@ -24,7 +24,7 @@ func init() {
 		if err != nil {
 			return nil, err
 		}
-		return input.NewAsyncReader("generate", false, input.NewAsyncPreserver(b), nm)
+		return input.NewAsyncReader("generate", input.NewAsyncPreserver(b), nm)
 	}), docs.ComponentSpec{
 		Name:    "generate",
 		Version: "3.40.0",

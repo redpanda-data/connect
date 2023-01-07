@@ -204,8 +204,10 @@ func (g *gcpCloudStorageOutput) WriteBatch(ctx context.Context, msg message.Batc
 			return nil
 		})
 
-		outputPath := g.path.String(i, msg)
-		var err error
+		outputPath, err := g.path.String(i, msg)
+		if err != nil {
+			return fmt.Errorf("path interpolation error: %w", err)
+		}
 		if g.conf.CollisionMode != output.GCPCloudStorageOverwriteCollisionMode {
 			_, err = client.Bucket(g.conf.Bucket).Object(outputPath).Attrs(ctx)
 		}
@@ -243,8 +245,12 @@ func (g *gcpCloudStorageOutput) WriteBatch(ctx context.Context, msg message.Batc
 		w := src.NewWriter(ctx)
 
 		w.ChunkSize = g.conf.ChunkSize
-		w.ContentType = g.contentType.String(i, msg)
-		w.ContentEncoding = g.contentEncoding.String(i, msg)
+		if w.ContentType, err = g.contentType.String(i, msg); err != nil {
+			return fmt.Errorf("content type interpolation error: %w", err)
+		}
+		if w.ContentEncoding, err = g.contentEncoding.String(i, msg); err != nil {
+			return fmt.Errorf("content encoding interpolation error: %w", err)
+		}
 		w.Metadata = metadata
 
 		var errs error

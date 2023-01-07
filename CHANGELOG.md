@@ -7,6 +7,22 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
+- Format `csv:x` added to the `unarchive` processor.
+- Field `max_buffer` added to the `aws_s3` input.
+- Field `open_message_type` added to the `websocket` input.
+- The experimental `--watcher` cli flag now takes into account file deletions and new files that match wildcard patterns.
+
+### Fixed
+
+- The `sqlite` buffer should no longer print `Failed to ack buffer message` logs during graceful termination.
+- The default value of the `conn_max_idle` field has been changed from 0 to 2 for all `sql_*` components in accordance
+to the [`database/sql` docs](https://pkg.go.dev/database/sql#DB.SetMaxIdleConns).
+- The `parse_csv` bloblang method with `parse_header_row` set to `false` no longer produces rows that are of an `unknown` type.
+
+## 4.11.0 - 2022-12-21
+
+### Added
+
 - Field `default_encoding` added to the `parquet_encode` processor.
 - Field `client_session_keep_alive` added to the `snowflake_put` output.
 - Bloblang now supports metadata access via `@foo` syntax, which also supports arbitrary values.
@@ -25,12 +41,21 @@ All notable changes to this project will be documented in this file.
 - Field `delete_on_finish` added to the `csv` input.
 - Metadata fields `header`, `path`, `mod_time_unix` and `mod_time` added to the `csv` input.
 - New `couchbase` processor.
+- Field `max_attempts` added to the `nsq` input.
+- Messages consumed by the `nsq` input are now enriched with metadata.
+- New Bloblang method `parse_url`.
 
 ### Fixed
 
 - Fixed a regression bug in the `mongodb` processor where message errors were not set any more. This issue was introduced in v4.7.0 (64eb72).
 - The `avro-ocf:marshaler=json` input codec now omits unexpected logical type fields.
 - Fixed a bug in the `sql_insert` output (see commit c6a71e9) where transaction-based drivers (`clickhouse` and `oracle`) would fail to roll back an in-progress transaction if any of the messages caused an error.
+- The `resource` input should no longer block the first layer of graceful termination.
+
+### Changed
+
+- The `catch` method now defines the context of argument mappings to be the string of the caught error. In previous cases the context was undocumented, vague and would often bind to the outer context. It's still possible to reference this outer context by capturing the error (e.g. `.catch(_ -> this)`).
+- Field interpolations that fail due to mapping errors will no longer produce placeholder values and will instead provide proper errors that result in nacks or retries similar to other issues.
 
 ## 4.10.0 - 2022-10-26
 

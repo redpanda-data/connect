@@ -49,7 +49,7 @@ func init() {
 		if err != nil {
 			return nil, err
 		}
-		return input.NewAsyncReader("sftp", true, input.NewAsyncPreserver(r), nm)
+		return input.NewAsyncReader("sftp", input.NewAsyncPreserver(r), nm)
 	}), docs.ComponentSpec{
 		Name:    "sftp",
 		Status:  docs.StatusBeta,
@@ -64,7 +64,7 @@ This input adds the following metadata fields to each message:
 - sftp_path
 ` + "```" + `
 
-You can access these metadata fields using [function interpolation](/docs/configuration/interpolation#metadata).`,
+You can access these metadata fields using [function interpolation](/docs/configuration/interpolation#bloblang-queries).`,
 		Config: docs.FieldComponent().WithChildren(
 			docs.FieldString(
 				"address",

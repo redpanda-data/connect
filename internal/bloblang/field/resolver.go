@@ -10,8 +10,8 @@ import (
 // Resolver is an interface for resolving a string containing Bloblang function
 // interpolations into either a string or bytes.
 type Resolver interface {
-	ResolveString(index int, msg Message, escaped bool) string
-	ResolveBytes(index int, msg Message, escaped bool) []byte
+	ResolveString(index int, msg Message, escaped bool) (string, error)
+	ResolveBytes(index int, msg Message, escaped bool) ([]byte, error)
 }
 
 //------------------------------------------------------------------------------
@@ -21,13 +21,13 @@ type Resolver interface {
 type StaticResolver string
 
 // ResolveString returns a string.
-func (s StaticResolver) ResolveString(index int, msg Message, escaped bool) string {
-	return string(s)
+func (s StaticResolver) ResolveString(index int, msg Message, escaped bool) (string, error) {
+	return string(s), nil
 }
 
 // ResolveBytes returns a byte slice.
-func (s StaticResolver) ResolveBytes(index int, msg Message, escaped bool) []byte {
-	return []byte(s)
+func (s StaticResolver) ResolveBytes(index int, msg Message, escaped bool) ([]byte, error) {
+	return []byte(s), nil
 }
 
 //------------------------------------------------------------------------------
@@ -45,7 +45,7 @@ func NewQueryResolver(fn query.Function) *QueryResolver {
 }
 
 // ResolveString returns a string.
-func (q QueryResolver) ResolveString(index int, msg Message, escaped bool) string {
+func (q QueryResolver) ResolveString(index int, msg Message, escaped bool) (string, error) {
 	if msg == nil {
 		msg = message.QuickBatch(nil)
 	}
@@ -62,11 +62,11 @@ func (q QueryResolver) ResolveString(index int, msg Message, escaped bool) strin
 }
 
 // ResolveBytes returns a byte slice.
-func (q QueryResolver) ResolveBytes(index int, msg Message, escaped bool) []byte {
+func (q QueryResolver) ResolveBytes(index int, msg Message, escaped bool) ([]byte, error) {
 	if msg == nil {
 		msg = message.QuickBatch(nil)
 	}
-	bs := query.ExecToBytes(q.fn, query.FunctionContext{
+	bs, err := query.ExecToBytes(q.fn, query.FunctionContext{
 		Index:    index,
 		MsgBatch: msg,
 		NewMeta:  msg.Get(index),
@@ -76,10 +76,13 @@ func (q QueryResolver) ResolveBytes(index int, msg Message, escaped bool) []byte
 		}
 		return nil
 	}))
+	if err != nil {
+		return nil, err
+	}
 	if escaped {
 		bs = escapeBytes(bs)
 	}
-	return bs
+	return bs, nil
 }
 
 func escapeBytes(in []byte) []byte {

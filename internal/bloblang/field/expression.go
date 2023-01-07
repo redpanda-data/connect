@@ -23,7 +23,7 @@ func NewExpression(resolvers ...Resolver) *Expression {
 	var staticBuf bytes.Buffer
 	for _, r := range resolvers {
 		if s, is := r.(StaticResolver); is {
-			staticBuf.Write(s.ResolveBytes(0, message.QuickBatch(nil), false))
+			staticBuf.Write([]byte(s))
 		} else {
 			e.dynamicExpressions++
 		}
@@ -50,15 +50,19 @@ type Expression struct {
 	dynamicExpressions int
 }
 
-func (e *Expression) resolve(index int, msg Message, escaped bool) []byte {
+func (e *Expression) resolve(index int, msg Message, escaped bool) ([]byte, error) {
 	if len(e.resolvers) == 1 {
 		return e.resolvers[0].ResolveBytes(index, msg, escaped)
 	}
 	var buf bytes.Buffer
 	for _, r := range e.resolvers {
-		buf.Write(r.ResolveBytes(index, msg, escaped))
+		b, err := r.ResolveBytes(index, msg, escaped)
+		if err != nil {
+			return nil, err
+		}
+		buf.Write(b)
 	}
-	return buf.Bytes()
+	return buf.Bytes(), nil
 }
 
 // NumDynamicExpressions returns the number of dynamic interpolation functions
@@ -69,18 +73,22 @@ func (e *Expression) NumDynamicExpressions() int {
 
 // Bytes returns a byte slice representing the expression resolved for a message
 // of a batch.
-func (e *Expression) Bytes(index int, msg Message) []byte {
+func (e *Expression) Bytes(index int, msg Message) ([]byte, error) {
 	if len(e.resolvers) == 0 {
-		return []byte(e.static)
+		return []byte(e.static), nil
 	}
 	return e.resolve(index, msg, false)
 }
 
 // String returns a string representing the expression resolved for a message of
 // a batch.
-func (e *Expression) String(index int, msg Message) string {
+func (e *Expression) String(index int, msg Message) (string, error) {
 	if len(e.resolvers) == 0 {
-		return e.static
+		return e.static, nil
 	}
-	return string(e.Bytes(index, msg))
+	b, err := e.Bytes(index, msg)
+	if err != nil {
+		return "", err
+	}
+	return string(b), nil
 }

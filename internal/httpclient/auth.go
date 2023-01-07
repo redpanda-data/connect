@@ -102,7 +102,7 @@ func oAuth2FieldSpec() *service.ConfigField {
 			Description("A secret used to establish ownership of the client key.").
 			Default("").Secret(),
 
-		service.NewStringField("token_url").
+		service.NewURLField("token_url").
 			Description("The URL of the token provider.").
 			Default(""),
 

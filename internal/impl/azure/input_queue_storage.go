@@ -24,7 +24,7 @@ func init() {
 		if err != nil {
 			return nil, err
 		}
-		return input.NewAsyncReader("azure_queue_storage", false, r, nm)
+		return input.NewAsyncReader("azure_queue_storage", r, nm)
 	}), docs.ComponentSpec{
 		Name:    "azure_queue_storage",
 		Status:  docs.StatusBeta,
@@ -123,7 +123,11 @@ func (a *azureQueueStorage) Connect(ctx context.Context) error {
 }
 
 func (a *azureQueueStorage) ReadBatch(ctx context.Context) (msg message.Batch, ackFn input.AsyncAckFn, err error) {
-	queueName := a.queueName.String(0, msg)
+	var queueName string
+	if queueName, err = a.queueName.String(0, msg); err != nil {
+		err = fmt.Errorf("queue name interpolation error: %w", err)
+		return
+	}
 	queueURL := a.serviceURL.NewQueueURL(queueName)
 	messageURL := queueURL.NewMessagesURL()
 	var approxMsgCount int32

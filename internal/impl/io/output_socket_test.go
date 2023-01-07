@@ -250,7 +250,7 @@ func TestUDPSocketMultipart(t *testing.T) {
 		}
 	}()
 
-	if cerr := wtr.Connect(context.Background()); cerr != nil {
+	if cerr := wtr.Connect(ctx); cerr != nil {
 		t.Fatal(cerr)
 	}
 
@@ -264,10 +264,10 @@ func TestUDPSocketMultipart(t *testing.T) {
 		wg.Done()
 	}()
 
-	if err = wtr.WriteBatch(context.Background(), message.QuickBatch([][]byte{[]byte("foo"), []byte("bar"), []byte("baz")})); err != nil {
+	if err = wtr.WriteBatch(ctx, message.QuickBatch([][]byte{[]byte("foo"), []byte("bar"), []byte("baz")})); err != nil {
 		t.Error(err)
 	}
-	if err = wtr.WriteBatch(context.Background(), message.QuickBatch([][]byte{[]byte("qux")})); err != nil {
+	if err = wtr.WriteBatch(ctx, message.QuickBatch([][]byte{[]byte("qux")})); err != nil {
 		t.Error(err)
 	}
 

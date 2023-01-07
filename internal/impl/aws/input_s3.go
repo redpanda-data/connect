@@ -42,7 +42,7 @@ func init() {
 		if conf.AWSS3.SQS.URL == "" {
 			rdr = input.NewAsyncPreserver(rdr)
 		}
-		return input.NewAsyncReader("aws_s3", false, rdr, nm)
+		return input.NewAsyncReader("aws_s3", rdr, nm)
 	}), docs.ComponentSpec{
 		Name:   "aws_s3",
 		Status: docs.StatusStable,
@@ -81,7 +81,7 @@ This input adds the following metadata fields to each message:
 - All user defined metadata
 ` + "```" + `
 
-You can access these metadata fields using [function interpolation](/docs/configuration/interpolation#metadata). Note that user defined metadata is case insensitive within AWS, and it is likely that the keys will be received in a capitalized form, if you wish to make them consistent you can map all metadata keys to lower or uppercase using a Bloblang mapping such as ` + "`meta = meta().map_each_key(key -> key.lowercase())`" + `.`,
+You can access these metadata fields using [function interpolation](/docs/configuration/interpolation#bloblang-queries). Note that user defined metadata is case insensitive within AWS, and it is likely that the keys will be received in a capitalized form, if you wish to make them consistent you can map all metadata keys to lower or uppercase using a Bloblang mapping such as ` + "`meta = meta().map_each_key(key -> key.lowercase())`" + `.`,
 		Config: docs.FieldComponent().WithChildren(
 			docs.FieldString("bucket", "The bucket to consume from. If the field `sqs.url` is specified this field is optional."),
 			docs.FieldString("prefix", "An optional path prefix, if set only objects with the prefix are consumed when walking a bucket."),
@@ -89,8 +89,9 @@ You can access these metadata fields using [function interpolation](/docs/config
 			docs.FieldBool("force_path_style_urls", "Forces the client API to use path style URLs for downloading keys, which is often required when connecting to custom endpoints.").Advanced(),
 			docs.FieldBool("delete_objects", "Whether to delete downloaded objects from the bucket once they are processed.").Advanced(),
 			codec.ReaderDocs,
+			docs.FieldInt("max_buffer", "The largest token size expected when consuming objects with a tokenised codec such as `lines`.").Advanced(),
 			docs.FieldObject("sqs", "Consume SQS messages in order to trigger key downloads.").WithChildren(
-				docs.FieldString("url", "An optional SQS URL to connect to. When specified this queue will control which objects are downloaded."),
+				docs.FieldURL("url", "An optional SQS URL to connect to. When specified this queue will control which objects are downloaded."),
 				docs.FieldString("endpoint", "A custom endpoint to use when connecting to SQS.").Advanced(),
 				docs.FieldString("key_path", "A [dot path](/docs/configuration/field_paths) whereby object keys are found in SQS messages."),
 				docs.FieldString("bucket_path", "A [dot path](/docs/configuration/field_paths) whereby the bucket name can be found in SQS messages."),
@@ -536,8 +537,12 @@ func newAmazonS3Reader(conf input.AWSS3Config, nm bundle.NewManagement) (*awsS3R
 		conf: conf,
 		log:  nm.Logger(),
 	}
+
+	readerConfig := codec.NewReaderConfig()
+	readerConfig.MaxScanTokenSize = conf.MaxBuffer
+
 	var err error
-	if s.objectScannerCtor, err = codec.GetReader(conf.Codec, codec.NewReaderConfig()); err != nil {
+	if s.objectScannerCtor, err = codec.GetReader(conf.Codec, readerConfig); err != nil {
 		return nil, err
 	}
 	if len(conf.SQS.DelayPeriod) > 0 {

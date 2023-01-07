@@ -18,6 +18,7 @@ var (
 type NodeEvent struct {
 	Type    EventType
 	Content string
+	Meta    map[string]any
 }
 
 // Summary is a high level description of all traced events.
@@ -92,13 +93,14 @@ type events struct {
 	m   []NodeEvent
 }
 
-func (e *events) Add(t EventType, content string) {
+func (e *events) Add(t EventType, content string, metadata map[string]any) {
 	e.mut.Lock()
 	defer e.mut.Unlock()
 
 	e.m = append(e.m, NodeEvent{
 		Type:    t,
 		Content: content,
+		Meta:    metadata,
 	})
 }
 

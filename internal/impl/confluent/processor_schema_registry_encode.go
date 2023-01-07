@@ -54,7 +54,7 @@ However, it is possible to instead consume documents in [standard/raw JSON forma
 
 Important! There is an outstanding issue in the [avro serializing library](https://github.com/linkedin/goavro) that benthos uses which means it [doesn't encode logical types correctly](https://github.com/linkedin/goavro/issues/252). It's still possible to encode logical types that are in-line with the spec if ` + "`avro_raw_json` is set to true" + `, though now of course non-logical types will not be in-line with the spec.
 `).
-		Field(service.NewStringField("url").Description("The base URL of the schema registry service.")).
+		Field(service.NewURLField("url").Description("The base URL of the schema registry service.")).
 		Field(service.NewInterpolatedStringField("subject").Description("The schema subject to derive schemas from.").
 			Example("foo").
 			Example(`${! meta("kafka_topic") }`)).
@@ -199,7 +199,14 @@ func newSchemaRegistryEncoder(
 func (s *schemaRegistryEncoder) ProcessBatch(ctx context.Context, batch service.MessageBatch) ([]service.MessageBatch, error) {
 	batch = batch.Copy()
 	for i, msg := range batch {
-		encoder, id, err := s.getEncoder(batch.InterpolatedString(i, s.subject))
+		subject, err := batch.TryInterpolatedString(i, s.subject)
+		if err != nil {
+			s.logger.Errorf("Subject interpolation error: %v", err)
+			msg.SetError(fmt.Errorf("subject interpolation error: %w", err))
+			continue
+		}
+
+		encoder, id, err := s.getEncoder(subject)
 		if err != nil {
 			msg.SetError(err)
 			continue

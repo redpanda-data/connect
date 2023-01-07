@@ -176,11 +176,20 @@ func (l *logProcessor) ProcessBatch(ctx context.Context, spans []*tracing.Span, 
 		if len(l.fields) > 0 {
 			interpFields := make(map[string]string, len(l.fields))
 			for k, vi := range l.fields {
-				interpFields[k] = vi.String(i, msg)
+				var err error
+				if interpFields[k], err = vi.String(i, msg); err != nil {
+					l.logger.Errorf("Field %v interpolation error: %v", k, err)
+					return nil
+				}
 			}
 			targetLog = targetLog.WithFields(interpFields)
 		}
-		l.printFn(targetLog, l.message.String(i, msg))
+		logMsg, err := l.message.String(i, msg)
+		if err != nil {
+			l.logger.Errorf("Message interpolation error: %v", err)
+			return nil
+		}
+		l.printFn(targetLog, logMsg)
 		return nil
 	})
 

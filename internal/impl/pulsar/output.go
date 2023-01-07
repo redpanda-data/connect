@@ -18,14 +18,14 @@ func init() {
 			Version("3.43.0").
 			Categories("Services").
 			Summary("Write messages to an Apache Pulsar server.").
-			Field(service.NewStringField("url").
+			Field(service.NewURLField("url").
 				Description("A URL to connect to.").
 				Example("pulsar://localhost:6650").
 				Example("pulsar://pulsar.us-west.example.com:6650").
 				Example("pulsar+ssl://pulsar.us-west.example.com:6651")).
 			Field(service.NewStringField("topic").
 				Description("The topic to publish to.")).
-			Field(service.NewObjectField("tls", service.NewStringField("root_cas_file")).
+			Field(service.NewObjectField("tls", service.NewStringField("root_cas_file").Description("An optional path of a root certificate authority file to use. This is a file, often with a .pem extension, containing a certificate chain from the parent trusted root certificate, to possible intermediate signing certificates, to the host certificate.").Example("./root_cas.pem")).
 				Description("Specify the path to a custom CA certificate to trust broker TLS service.")).
 			Field(service.NewInterpolatedStringField("key").
 				Description("The key to publish messages with.").

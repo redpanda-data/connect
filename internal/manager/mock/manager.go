@@ -3,6 +3,7 @@ package mock
 import (
 	"context"
 	"net/http"
+	"sync"
 
 	"go.opentelemetry.io/otel/trace"
 
@@ -30,6 +31,7 @@ type Manager struct {
 	Outputs    map[string]OutputWriter
 	Processors map[string]Processor
 	Pipes      map[string]<-chan message.Transaction
+	lock       sync.Mutex
 
 	// OnRegisterEndpoint can be set in order to intercept endpoints registered
 	// by components.
@@ -155,12 +157,18 @@ func (m *Manager) BloblEnvironment() *bloblang.Environment {
 
 // ProbeCache returns true if a cache resource exists under the provided name.
 func (m *Manager) ProbeCache(name string) bool {
+	m.lock.Lock()
+	defer m.lock.Unlock()
+
 	_, exists := m.Caches[name]
 	return exists
 }
 
 // AccessCache executes a closure on a cache resource.
 func (m *Manager) AccessCache(ctx context.Context, name string, fn func(cache.V1)) error {
+	m.lock.Lock()
+	defer m.lock.Unlock()
+
 	values, ok := m.Caches[name]
 	if !ok {
 		return component.ErrCacheNotFound
@@ -169,15 +177,34 @@ func (m *Manager) AccessCache(ctx context.Context, name string, fn func(cache.V1
 	return nil
 }
 
+// RemoveCache removes a resource.
+func (m *Manager) RemoveCache(ctx context.Context, name string) error {
+	m.lock.Lock()
+	defer m.lock.Unlock()
+
+	_, exists := m.Caches[name]
+	if !exists {
+		return component.ErrCacheNotFound
+	}
+	delete(m.Caches, name)
+	return nil
+}
+
 // ProbeRateLimit returns true if a rate limit resource exists under the
 // provided name.
 func (m *Manager) ProbeRateLimit(name string) bool {
+	m.lock.Lock()
+	defer m.lock.Unlock()
+
 	_, exists := m.RateLimits[name]
 	return exists
 }
 
 // AccessRateLimit executes a closure on a rate limit resource.
 func (m *Manager) AccessRateLimit(ctx context.Context, name string, fn func(ratelimit.V1)) error {
+	m.lock.Lock()
+	defer m.lock.Unlock()
+
 	r, ok := m.RateLimits[name]
 	if !ok {
 		return component.ErrRateLimitNotFound
@@ -186,14 +213,33 @@ func (m *Manager) AccessRateLimit(ctx context.Context, name string, fn func(rate
 	return nil
 }
 
+// RemoveRateLimit removes a resource.
+func (m *Manager) RemoveRateLimit(ctx context.Context, name string) error {
+	m.lock.Lock()
+	defer m.lock.Unlock()
+
+	_, exists := m.RateLimits[name]
+	if !exists {
+		return component.ErrRateLimitNotFound
+	}
+	delete(m.RateLimits, name)
+	return nil
+}
+
 // ProbeInput returns true if an input resource exists under the provided name.
 func (m *Manager) ProbeInput(name string) bool {
+	m.lock.Lock()
+	defer m.lock.Unlock()
+
 	_, exists := m.Inputs[name]
 	return exists
 }
 
 // AccessInput executes a closure on an input resource.
 func (m *Manager) AccessInput(ctx context.Context, name string, fn func(input.Streamed)) error {
+	m.lock.Lock()
+	defer m.lock.Unlock()
+
 	i, exists := m.Inputs[name]
 	if !exists {
 		return component.ErrInputNotFound
@@ -202,15 +248,34 @@ func (m *Manager) AccessInput(ctx context.Context, name string, fn func(input.St
 	return nil
 }
 
+// RemoveInput removes a resource.
+func (m *Manager) RemoveInput(ctx context.Context, name string) error {
+	m.lock.Lock()
+	defer m.lock.Unlock()
+
+	_, exists := m.Inputs[name]
+	if !exists {
+		return component.ErrInputNotFound
+	}
+	delete(m.Inputs, name)
+	return nil
+}
+
 // ProbeProcessor returns true if a processor resource exists under the provided
 // name.
 func (m *Manager) ProbeProcessor(name string) bool {
+	m.lock.Lock()
+	defer m.lock.Unlock()
+
 	_, exists := m.Processors[name]
 	return exists
 }
 
 // AccessProcessor executes a closure on a processor resource.
 func (m *Manager) AccessProcessor(ctx context.Context, name string, fn func(processor.V1)) error {
+	m.lock.Lock()
+	defer m.lock.Unlock()
+
 	p, ok := m.Processors[name]
 	if !ok {
 		return component.ErrProcessorNotFound
@@ -219,20 +284,52 @@ func (m *Manager) AccessProcessor(ctx context.Context, name string, fn func(proc
 	return nil
 }
 
+// RemoveProcessor removes a resource.
+func (m *Manager) RemoveProcessor(ctx context.Context, name string) error {
+	m.lock.Lock()
+	defer m.lock.Unlock()
+
+	_, exists := m.Processors[name]
+	if !exists {
+		return component.ErrProcessorNotFound
+	}
+	delete(m.Processors, name)
+	return nil
+}
+
 // ProbeOutput returns true if an output resource exists under the provided
 // name.
 func (m *Manager) ProbeOutput(name string) bool {
+	m.lock.Lock()
+	defer m.lock.Unlock()
+
 	_, exists := m.Outputs[name]
 	return exists
 }
 
 // AccessOutput executes a closure on an output resource.
 func (m *Manager) AccessOutput(ctx context.Context, name string, fn func(output.Sync)) error {
+	m.lock.Lock()
+	defer m.lock.Unlock()
+
 	o, exists := m.Outputs[name]
 	if !exists {
 		return component.ErrOutputNotFound
 	}
 	fn(o)
+	return nil
+}
+
+// RemoveOutput removes an output resource.
+func (m *Manager) RemoveOutput(ctx context.Context, name string) error {
+	m.lock.Lock()
+	defer m.lock.Unlock()
+
+	_, exists := m.Outputs[name]
+	if !exists {
+		return component.ErrOutputNotFound
+	}
+	delete(m.Outputs, name)
 	return nil
 }
 

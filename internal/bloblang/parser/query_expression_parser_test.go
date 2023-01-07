@@ -268,17 +268,20 @@ func TestExpressionsParser(t *testing.T) {
 				msg = append(msg, part)
 			}
 
-			e, err := tryParseQuery(test.input)
-			require.Nil(t, err)
+			e, pErr := tryParseQuery(test.input)
+			require.Nil(t, pErr)
 
-			res := query.ExecToString(e, query.FunctionContext{
+			res, err := query.ExecToString(e, query.FunctionContext{
 				Index: test.index, MsgBatch: msg,
 			}.WithValueFunc(func() *any { return test.value }))
-
+			require.NoError(t, err)
 			assert.Equal(t, test.output, res)
-			res = string(query.ExecToBytes(e, query.FunctionContext{
+
+			bres, err := query.ExecToBytes(e, query.FunctionContext{
 				Index: test.index, MsgBatch: msg,
-			}.WithValueFunc(func() *any { return test.value })))
+			}.WithValueFunc(func() *any { return test.value }))
+			require.NoError(t, err)
+			res = string(bres)
 			assert.Equal(t, test.output, res)
 		})
 	}

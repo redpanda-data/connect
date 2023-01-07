@@ -21,6 +21,7 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/component/tracer"
 	"github.com/benthosdev/benthos/v4/internal/config"
 	"github.com/benthosdev/benthos/v4/internal/docs"
+	"github.com/benthosdev/benthos/v4/internal/filepath/ifs"
 	"github.com/benthosdev/benthos/v4/public/bloblang"
 )
 
@@ -32,11 +33,13 @@ import (
 type Environment struct {
 	internal    *bundle.Environment
 	bloblangEnv *bloblang.Environment
+	fs          ifs.FS
 }
 
 var globalEnvironment = &Environment{
 	internal:    bundle.GlobalEnvironment,
 	bloblangEnv: bloblang.GlobalEnvironment(),
+	fs:          ifs.OS(),
 }
 
 // GlobalEnvironment returns a reference to the global environment, adding
@@ -58,6 +61,7 @@ func (e *Environment) Clone() *Environment {
 	return &Environment{
 		internal:    e.internal.Clone(),
 		bloblangEnv: e.bloblangEnv.WithoutFunctions().WithoutMethods(),
+		fs:          e.fs,
 	}
 }
 
@@ -65,6 +69,12 @@ func (e *Environment) Clone() *Environment {
 // components constructed with it to a specific Bloblang environment.
 func (e *Environment) UseBloblangEnvironment(bEnv *bloblang.Environment) {
 	e.bloblangEnv = bEnv
+}
+
+// UseFS configures the service environment to use an implementation of ifs.FS
+// as its filesystem.
+func (e *Environment) UseFS(fs *FS) {
+	e.fs = fs
 }
 
 // NewStreamBuilder creates a new StreamBuilder upon the defined environment,
@@ -177,7 +187,7 @@ func (e *Environment) RegisterInput(name string, spec *ConfigSpec, ctor InputCon
 			return nil, err
 		}
 		rdr := newAirGapReader(i)
-		return input.NewAsyncReader(conf.Type, false, rdr, nm)
+		return input.NewAsyncReader(conf.Type, rdr, nm)
 	}), componentSpec)
 }
 
@@ -209,7 +219,7 @@ func (e *Environment) RegisterBatchInput(name string, spec *ConfigSpec, ctor Bat
 			return u.Unwrap(), nil
 		}
 		rdr := newAirGapBatchReader(i)
-		return input.NewAsyncReader(conf.Type, false, rdr, nm)
+		return input.NewAsyncReader(conf.Type, rdr, nm)
 	}), componentSpec)
 }
 
@@ -349,6 +359,11 @@ func (e *Environment) RegisterBatchProcessor(name string, spec *ConfigSpec, ctor
 		r, err := ctor(pluginConf, newResourcesFromManager(nm))
 		if err != nil {
 			return nil, err
+		}
+		if u, ok := r.(interface {
+			Unwrap() processor.V1
+		}); ok {
+			return u.Unwrap(), nil
 		}
 		return newAirGapBatchProcessor(conf.Type, r, nm), nil
 	}, componentSpec)

@@ -11,7 +11,7 @@ import (
 // OldFieldSpec returns a field spec for an http client component.
 func OldFieldSpec(forOutput bool, extraChildren ...docs.FieldSpec) docs.FieldSpec {
 	httpSpecs := docs.FieldSpecs{
-		docs.FieldString("url", "The URL to connect to.").IsInterpolated(),
+		docs.FieldURL("url", "The URL to connect to.").IsInterpolated(),
 		docs.FieldString("verb", "A verb to connect with", "POST", "GET", "DELETE"),
 		docs.FieldString("headers", "A map of headers to add to the request.", map[string]any{
 			"Content-Type": "application/octet-stream",
@@ -37,7 +37,7 @@ func OldFieldSpec(forOutput bool, extraChildren ...docs.FieldSpec) docs.FieldSpe
 		docs.FieldInt("backoff_on", "A list of status codes whereby the request should be considered to have failed and retries should be attempted, but the period between them should be increased gradually.").Array().Advanced(),
 		docs.FieldInt("drop_on", "A list of status codes whereby the request should be considered to have failed but retries should not be attempted. This is useful for preventing wasted retries for requests that will never succeed. Note that with these status codes the _request_ is dropped, but _message_ that caused the request will not be dropped.").Array().Advanced(),
 		docs.FieldInt("successful_on", "A list of status codes whereby the attempt should be considered successful, this is useful for dropping requests that return non-2XX codes indicating that the message has been dealt with, such as a 303 See Other or a 409 Conflict. All 2XX codes are considered successful unless they are present within `backoff_on` or `drop_on`, regardless of this field.").Array().Advanced(),
-		docs.FieldString("proxy_url", "An optional HTTP proxy URL.").Advanced(),
+		docs.FieldURL("proxy_url", "An optional HTTP proxy URL.").Advanced(),
 	)
 	httpSpecs = append(httpSpecs, extraChildren...)
 

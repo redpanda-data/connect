@@ -105,57 +105,72 @@ func (c *CacheWriter) Connect(ctx context.Context) error {
 	return nil
 }
 
-func (c *CacheWriter) writeMulti(ctx context.Context, msg message.Batch) error {
-	var err error
-	if cerr := c.mgr.AccessCache(ctx, c.conf.Target, func(ac cache.V1) {
-		items := map[string]cache.TTLItem{}
-		if err = msg.Iter(func(i int, p *message.Part) error {
-			var ttl *time.Duration
-			if ttls := c.ttl.String(i, msg); ttls != "" {
-				t, terr := time.ParseDuration(ttls)
-				if terr != nil {
-					c.log.Debugf("Invalid duration string for TTL field: %v\n", terr)
-					return fmt.Errorf("ttl field: %w", terr)
-				}
-				ttl = &t
-			}
-			items[c.key.String(i, msg)] = cache.TTLItem{
-				Value: p.AsBytes(),
-				TTL:   ttl,
-			}
-			return nil
-		}); err != nil {
-			return
+func (c *CacheWriter) writeMulti(ctx context.Context, msg message.Batch) (err error) {
+	items := map[string]cache.TTLItem{}
+	if err = msg.Iter(func(i int, p *message.Part) error {
+		ttls, terr := c.ttl.String(i, msg)
+		if terr != nil {
+			return fmt.Errorf("ttl interpolation error: %w", terr)
 		}
+		var ttl *time.Duration
+		if ttls != "" {
+			t, terr := time.ParseDuration(ttls)
+			if terr != nil {
+				c.log.Debugf("Invalid duration string for TTL field: %v\n", terr)
+				return fmt.Errorf("ttl field: %w", terr)
+			}
+			ttl = &t
+		}
+		keyStr, terr := c.key.String(i, msg)
+		if terr != nil {
+			return fmt.Errorf("key interpolation error: %w", terr)
+		}
+		items[keyStr] = cache.TTLItem{
+			Value: p.AsBytes(),
+			TTL:   ttl,
+		}
+		return nil
+	}); err != nil {
+		return
+	}
+	if cerr := c.mgr.AccessCache(ctx, c.conf.Target, func(ac cache.V1) {
 		err = ac.SetMulti(ctx, items)
 	}); cerr != nil {
 		err = cerr
 	}
-	return err
+	return
 }
 
 // WriteBatch attempts to store a message within a cache.
-func (c *CacheWriter) WriteBatch(ctx context.Context, msg message.Batch) error {
+func (c *CacheWriter) WriteBatch(ctx context.Context, msg message.Batch) (err error) {
 	if msg.Len() > 1 {
 		return c.writeMulti(ctx, msg)
 	}
-	var err error
-	if cerr := c.mgr.AccessCache(ctx, c.conf.Target, func(cache cache.V1) {
-		var ttl *time.Duration
-		if ttls := c.ttl.String(0, msg); ttls != "" {
-			t, terr := time.ParseDuration(ttls)
-			if terr != nil {
-				c.log.Debugf("Invalid duration string for TTL field: %v\n", terr)
-				err = fmt.Errorf("ttl field: %w", terr)
-				return
-			}
-			ttl = &t
+	var key, ttls string
+	if key, err = c.key.String(0, msg); err != nil {
+		err = fmt.Errorf("key interpolation error: %v", err)
+		return
+	}
+	if ttls, err = c.ttl.String(0, msg); err != nil {
+		err = fmt.Errorf("ttl interpolation error: %v", err)
+		return
+	}
+	var ttl *time.Duration
+	if ttls != "" {
+		t, err := time.ParseDuration(ttls)
+		if err != nil {
+			c.log.Debugf("Invalid duration string for TTL field: %v", err)
+			return fmt.Errorf("ttl field: %w", err)
 		}
-		err = cache.Set(ctx, c.key.String(0, msg), msg.Get(0).AsBytes(), ttl)
+		ttl = &t
+	}
+
+	if cerr := c.mgr.AccessCache(ctx, c.conf.Target, func(cache cache.V1) {
+		err = cache.Set(ctx, key, msg.Get(0).AsBytes(), ttl)
 	}); cerr != nil {
 		err = cerr
 	}
-	return err
+	return
 }
 
 // Close does nothing.

@@ -127,7 +127,10 @@ func (d *dynamoDBPartiQL) ProcessBatch(ctx context.Context, batch service.Messag
 		req := &dynamodb.BatchStatementRequest{}
 		req.Statement = &d.query
 		if d.dynQuery != nil {
-			query := batch.InterpolatedString(i, d.dynQuery)
+			query, err := batch.TryInterpolatedString(i, d.dynQuery)
+			if err != nil {
+				return nil, fmt.Errorf("query interpolation error: %w", err)
+			}
 			req.Statement = &query
 		}
 

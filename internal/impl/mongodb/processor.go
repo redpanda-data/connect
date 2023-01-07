@@ -288,8 +288,13 @@ func (m *Processor) ProcessBatch(ctx context.Context, spans []*tracing.Span, bat
 			findOptions.Hint = hintJSON
 		}
 
+		collectionStr, err := m.collection.String(i, batch)
+		if err != nil {
+			return fmt.Errorf("collection interpolation error: %w", err)
+		}
+
 		var writeModel mongo.WriteModel
-		collection := m.database.Collection(m.collection.String(i, batch), m.writeConcernCollectionOption)
+		collection := m.database.Collection(collectionStr, m.writeConcernCollectionOption)
 
 		switch m.operation {
 		case client.OperationInsertOne:

@@ -51,7 +51,7 @@ func newRedisPubSubInput(conf input.Config, mgr bundle.NewManagement) (input.Str
 	if err != nil {
 		return nil, err
 	}
-	return input.NewAsyncReader("redis_pubsub", true, input.NewAsyncPreserver(r), mgr)
+	return input.NewAsyncReader("redis_pubsub", input.NewAsyncPreserver(r), mgr)
 }
 
 type redisPubSubReader struct {

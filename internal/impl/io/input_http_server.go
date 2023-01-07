@@ -94,7 +94,7 @@ If HTTPS is enabled, the following fields are added as well:
 - http_server_tls_subject
 - http_server_tls_cipher_suite
 ` + "```" + `
-You can access these metadata fields using [function interpolation](/docs/configuration/interpolation#metadata).`,
+You can access these metadata fields using [function interpolation](/docs/configuration/interpolation#bloblang-queries).`,
 		Config: docs.FieldComponent().WithChildren(
 			docs.FieldString("address", "An alternative address to host from. If left empty the service wide address is used."),
 			docs.FieldString("path", "The endpoint path to listen for POST requests."),
@@ -436,11 +436,22 @@ func (h *httpServerInput) postHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	if responseMsg.Len() > 0 {
 		for k, v := range h.responseHeaders {
-			w.Header().Set(k, v.String(0, responseMsg))
+			headerStr, err := v.String(0, responseMsg)
+			if err != nil {
+				h.log.Errorf("Interpolation of response header %v error: %v", k, err)
+				continue
+			}
+			w.Header().Set(k, headerStr)
 		}
 
 		statusCode := 200
-		if statusCodeStr := h.responseStatus.String(0, responseMsg); statusCodeStr != "200" {
+		statusCodeStr, err := h.responseStatus.String(0, responseMsg)
+		if err != nil {
+			h.log.Errorf("Interpolation of response status code error: %v", err)
+			w.WriteHeader(http.StatusBadGateway)
+			return
+		}
+		if statusCodeStr != "200" {
 			if statusCode, err = strconv.Atoi(statusCodeStr); err != nil {
 				h.log.Errorf("Failed to parse sync response status code expression: %v\n", err)
 				w.WriteHeader(http.StatusBadGateway)
@@ -477,7 +488,13 @@ func (h *httpServerInput) postHandler(w http.ResponseWriter, r *http.Request) {
 
 				mimeHeader := textproto.MIMEHeader{}
 				if customContentTypeExists {
-					mimeHeader.Set("Content-Type", customContentType.String(i, responseMsg))
+					contentTypeStr, err := customContentType.String(i, responseMsg)
+					if err != nil {
+						h.log.Errorf("Interpolation of content-type header error: %v", err)
+						mimeHeader.Set("Content-Type", http.DetectContentType(payload))
+					} else {
+						mimeHeader.Set("Content-Type", contentTypeStr)
+					}
 				} else {
 					mimeHeader.Set("Content-Type", http.DetectContentType(payload))
 				}

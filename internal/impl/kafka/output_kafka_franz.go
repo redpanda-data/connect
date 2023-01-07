@@ -258,12 +258,19 @@ func (f *franzKafkaWriter) WriteBatch(ctx context.Context, b service.MessageBatc
 
 	records := make([]*kgo.Record, 0, len(b))
 	for i, msg := range b {
-		record := &kgo.Record{Topic: b.InterpolatedString(i, f.topic)}
+		var topic string
+		if topic, err = b.TryInterpolatedString(i, f.topic); err != nil {
+			return fmt.Errorf("topic interpolation error: %w", err)
+		}
+
+		record := &kgo.Record{Topic: topic}
 		if record.Value, err = msg.AsBytes(); err != nil {
 			return
 		}
 		if f.key != nil {
-			record.Key = b.InterpolatedBytes(i, f.key)
+			if record.Key, err = b.TryInterpolatedBytes(i, f.key); err != nil {
+				return fmt.Errorf("key interpolation error: %w", err)
+			}
 		}
 		_ = f.metaFilter.Walk(msg, func(key, value string) error {
 			record.Headers = append(record.Headers, kgo.RecordHeader{

@@ -10,6 +10,7 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/component/output/processors"
 	"github.com/benthosdev/benthos/v4/internal/docs"
+	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
 )
 
@@ -62,6 +63,7 @@ output:
 
 type rejectWriter struct {
 	errExpr *field.Expression
+	log     log.Modular
 }
 
 func newRejectWriter(mgr bundle.NewManagement, errorString string) (*rejectWriter, error) {
@@ -72,7 +74,7 @@ func newRejectWriter(mgr bundle.NewManagement, errorString string) (*rejectWrite
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse error expression: %w", err)
 	}
-	return &rejectWriter{errExpr}, nil
+	return &rejectWriter{errExpr: errExpr, log: mgr.Logger()}, nil
 }
 
 func (w *rejectWriter) Connect(ctx context.Context) error {
@@ -80,7 +82,12 @@ func (w *rejectWriter) Connect(ctx context.Context) error {
 }
 
 func (w *rejectWriter) WriteBatch(ctx context.Context, msg message.Batch) error {
-	errStr := w.errExpr.String(0, msg)
+	errStr, err := w.errExpr.String(0, msg)
+	if err != nil {
+		// Wow this would be awkward
+		w.log.Errorf("Reject message interpolation error: %v", err)
+		return fmt.Errorf("reject message interpolation error: %w", err)
+	}
 	return errors.New(errStr)
 }
 

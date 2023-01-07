@@ -88,7 +88,11 @@ func (g *groupByValueProc) ProcessBatch(ctx context.Context, spans []*tracing.Sp
 	groupMap := map[string]message.Batch{}
 
 	_ = batch.Iter(func(i int, p *message.Part) error {
-		v := g.value.String(i, batch)
+		v, err := g.value.String(i, batch)
+		if err != nil {
+			g.log.Errorf("Group value interpolation error: %v", err)
+			p.ErrorSet(fmt.Errorf("group value interpolation error: %w", err))
+		}
 		spans[i].LogKV(
 			"event", "grouped",
 			"type", v,

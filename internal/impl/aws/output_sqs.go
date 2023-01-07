@@ -61,7 +61,7 @@ services. It's also possible to set them explicitly at the component level,
 allowing you to transfer data across accounts. You can find out more
 [in this document](/docs/guides/cloud/aws).`),
 		Config: docs.FieldComponent().WithChildren(
-			docs.FieldString("url", "The URL of the target SQS queue."),
+			docs.FieldURL("url", "The URL of the target SQS queue."),
 			docs.FieldString("message_group_id", "An optional group ID to set for messages.").IsInterpolated(),
 			docs.FieldString("message_deduplication_id", "An optional deduplication ID to set for messages.").IsInterpolated(),
 			docs.FieldInt("max_in_flight", "The maximum number of parallel message batches to have in flight at any given time."),
@@ -162,7 +162,7 @@ func isValidSQSAttribute(k, v string) bool {
 	return len(sqsAttributeKeyInvalidCharRegexp.FindStringIndex(strings.ToLower(k))) == 0
 }
 
-func (a *sqsWriter) getSQSAttributes(msg message.Batch, i int) sqsAttributes {
+func (a *sqsWriter) getSQSAttributes(msg message.Batch, i int) (sqsAttributes, error) {
 	p := msg.Get(i)
 	keys := []string{}
 	_ = a.metaFilter.Iter(p, func(k string, v any) error {
@@ -191,10 +191,18 @@ func (a *sqsWriter) getSQSAttributes(msg message.Batch, i int) sqsAttributes {
 
 	var groupID, dedupeID *string
 	if a.groupID != nil {
-		groupID = aws.String(a.groupID.String(i, msg))
+		groupIDStr, err := a.groupID.String(i, msg)
+		if err != nil {
+			return sqsAttributes{}, fmt.Errorf("group id interpolation: %w", err)
+		}
+		groupID = aws.String(groupIDStr)
 	}
 	if a.dedupeID != nil {
-		dedupeID = aws.String(a.dedupeID.String(i, msg))
+		dedupeIDStr, err := a.dedupeID.String(i, msg)
+		if err != nil {
+			return sqsAttributes{}, fmt.Errorf("dedupe id interpolation: %w", err)
+		}
+		dedupeID = aws.String(dedupeIDStr)
 	}
 
 	return sqsAttributes{
@@ -202,7 +210,7 @@ func (a *sqsWriter) getSQSAttributes(msg message.Batch, i int) sqsAttributes {
 		groupID:  groupID,
 		dedupeID: dedupeID,
 		content:  aws.String(string(p.AsBytes())),
-	}
+	}, nil
 }
 
 func (a *sqsWriter) WriteBatch(ctx context.Context, msg message.Batch) error {
@@ -214,9 +222,13 @@ func (a *sqsWriter) WriteBatch(ctx context.Context, msg message.Batch) error {
 
 	entries := []*sqs.SendMessageBatchRequestEntry{}
 	attrMap := map[string]sqsAttributes{}
-	_ = msg.Iter(func(i int, p *message.Part) error {
+	if err := msg.Iter(func(i int, p *message.Part) error {
 		id := strconv.Itoa(i)
-		attrs := a.getSQSAttributes(msg, i)
+		attrs, err := a.getSQSAttributes(msg, i)
+		if err != nil {
+			return err
+		}
+
 		attrMap[id] = attrs
 
 		entries = append(entries, &sqs.SendMessageBatchRequestEntry{
@@ -227,7 +239,9 @@ func (a *sqsWriter) WriteBatch(ctx context.Context, msg message.Batch) error {
 			MessageDeduplicationId: attrs.dedupeID,
 		})
 		return nil
-	})
+	}); err != nil {
+		return err
+	}
 
 	input := &sqs.SendMessageBatchInput{
 		QueueUrl: aws.String(a.conf.URL),

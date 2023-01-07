@@ -670,6 +670,58 @@ func (s *StreamBuilder) AsYAML() (string, error) {
 	return string(b), nil
 }
 
+// WalkedComponent is a struct containing information about a component yielded
+// via the WalkComponents method.
+type WalkedComponent struct {
+	ComponentType string
+	Name          string
+	Label         string
+	confYAML      string
+}
+
+// ConfigYAML returns the configuration of a walked component in YAML form.
+func (w *WalkedComponent) ConfigYAML() string {
+	return w.confYAML
+}
+
+// WalkComponents walks the Benthos configuration as it is currently built and
+// for each component type (input, processor, output, etc) calls a provided
+// function with a struct containing information about the component.
+//
+// This can be useful for taking an inventory of the contents of a config.
+func (s *StreamBuilder) WalkComponents(fn func(w *WalkedComponent) error) error {
+	conf := s.buildConfig()
+
+	var node yaml.Node
+	if err := node.Encode(conf); err != nil {
+		return err
+	}
+
+	sanitConf := docs.NewSanitiseConfig()
+	sanitConf.RemoveTypeField = true
+	sanitConf.RemoveDeprecated = false
+	sanitConf.DocsProvider = s.env.internal
+
+	spec := config.Spec()
+	if err := spec.SanitiseYAML(&node, sanitConf); err != nil {
+		return err
+	}
+
+	return spec.WalkYAML(&node, s.env.internal,
+		func(c docs.WalkedYAMLComponent) error {
+			yamlBytes, err := yaml.Marshal(c.Conf)
+			if err != nil {
+				return err
+			}
+			return fn(&WalkedComponent{
+				ComponentType: string(c.ComponentType),
+				Name:          c.Name,
+				Label:         c.Label,
+				confYAML:      string(yamlBytes),
+			})
+		})
+}
+
 //------------------------------------------------------------------------------
 
 func (s *StreamBuilder) runConsumerFunc(mgr *manager.Type) error {
@@ -784,6 +836,7 @@ func (s *StreamBuilder) buildWithEnv(env *bundle.Environment) (*Stream, error) {
 		manager.OptSetTracer(tracer),
 		manager.OptSetEnvironment(env),
 		manager.OptSetBloblangEnvironment(s.env.getBloblangParserEnv()),
+		manager.OptSetFS(s.env.fs),
 	)
 	if err != nil {
 		return nil, err

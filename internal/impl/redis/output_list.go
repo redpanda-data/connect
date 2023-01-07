@@ -116,7 +116,10 @@ func (r *redisListWriter) WriteBatch(ctx context.Context, msg message.Batch) err
 	}
 
 	if msg.Len() == 1 {
-		key := r.keyStr.String(0, msg)
+		key, err := r.keyStr.String(0, msg)
+		if err != nil {
+			return fmt.Errorf("key interpolation error: %w", err)
+		}
 		if err := client.RPush(ctx, key, msg.Get(0).AsBytes()).Err(); err != nil {
 			_ = r.disconnect()
 			r.log.Errorf("Error from redis: %v\n", err)
@@ -126,11 +129,16 @@ func (r *redisListWriter) WriteBatch(ctx context.Context, msg message.Batch) err
 	}
 
 	pipe := client.Pipeline()
-	_ = msg.Iter(func(i int, p *message.Part) error {
-		key := r.keyStr.String(0, msg)
+	if err := msg.Iter(func(i int, p *message.Part) error {
+		key, err := r.keyStr.String(0, msg)
+		if err != nil {
+			return fmt.Errorf("key interpolation error: %w", err)
+		}
 		_ = pipe.RPush(ctx, key, p.AsBytes())
 		return nil
-	})
+	}); err != nil {
+		return err
+	}
 	cmders, err := pipe.Exec(ctx)
 	if err != nil {
 		_ = r.disconnect()

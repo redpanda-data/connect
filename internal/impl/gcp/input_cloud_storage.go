@@ -29,7 +29,7 @@ func init() {
 		if err != nil {
 			return nil, err
 		}
-		return input.NewAsyncReader("gcp_cloud_storage", true, input.NewAsyncPreserver(r), nm)
+		return input.NewAsyncReader("gcp_cloud_storage", input.NewAsyncPreserver(r), nm)
 	}), docs.ComponentSpec{
 		Name:       "gcp_cloud_storage",
 		Type:       docs.TypeInput,
@@ -57,7 +57,7 @@ This input adds the following metadata fields to each message:
 - All user defined metadata
 ` + "```" + `
 
-You can access these metadata fields using [function interpolation](/docs/configuration/interpolation#metadata).
+You can access these metadata fields using [function interpolation](/docs/configuration/interpolation#bloblang-queries).
 
 ### Credentials
 

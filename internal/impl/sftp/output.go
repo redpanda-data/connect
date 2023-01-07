@@ -122,7 +122,10 @@ func (s *sftpWriter) WriteBatch(ctx context.Context, msg message.Batch) error {
 	}
 
 	return output.IterateBatchedSend(msg, func(i int, p *message.Part) error {
-		path := s.path.String(i, msg)
+		path, err := s.path.String(i, msg)
+		if err != nil {
+			return fmt.Errorf("path interpolation error: %w", err)
+		}
 
 		s.handleMut.Lock()
 		defer s.handleMut.Unlock()
