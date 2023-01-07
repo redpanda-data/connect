@@ -228,10 +228,6 @@ type pubsubTargetReader struct {
 	log           log.Modular
 	msgsChan      chan *pubsub.Message
 	storageClient *storage.Client
-
-	nextRequest time.Time
-
-	pending []*gcpCloudStorageObjectTarget
 }
 
 func newPubsubTargetReader(
@@ -240,63 +236,28 @@ func newPubsubTargetReader(
 	msgsChan chan *pubsub.Message,
 	storageClient *storage.Client,
 ) *pubsubTargetReader {
-	return &pubsubTargetReader{conf: conf, log: log, msgsChan: msgsChan, storageClient: storageClient, nextRequest: time.Time{}, pending: nil}
+	return &pubsubTargetReader{conf: conf, log: log, msgsChan: msgsChan, storageClient: storageClient}
 }
 
 func (ps *pubsubTargetReader) Pop(ctx context.Context) (*gcpCloudStorageObjectTarget, error) {
-	// we've got some events to pop off the stack, let's do one
-	if len(ps.pending) > 0 {
-		t := ps.pending[0]
-		ps.pending = ps.pending[1:]
-		return t, nil
+	// Receive a Pub/Sub message
+	pubsubMsg := <-ps.msgsChan
+	ps.log.Debugf("received msg on pub/sub msg channel = %v", pubsubMsg)
+
+	object, err := ps.parseObjectTarget(pubsubMsg)
+	if err != nil {
+		ps.log.Errorf("couldn't extract gcs target from pub/sub msg: %v\n", err)
 	}
 
-	// hang out until next pull interval or cancelled
-	if !ps.nextRequest.IsZero() {
-		if until := time.Until(ps.nextRequest); until > 0 {
-			select {
-			case <-time.After(until):
-			case <-ctx.Done():
-				return nil, ctx.Err()
-			}
-		}
-	}
-
-	// go grab some events
-	var err error
-	if ps.pending, err = ps.readPubsubEvents(ctx); err != nil {
-		return nil, err
-	}
-	// if no events waiting, trying again in 500ms
-	// TODO: figure out why this is 500ms
-	// TODO: figure out why this is supposd to return an error
-	// I think the idea here is that if there isn't anything in last poll,
-	// we don't hammer the API?
-	if len(ps.pending) == 0 {
-		ps.nextRequest = time.Now().Add(time.Millisecond * 500)
-		return nil, component.ErrTimeout
-	}
-
-	ps.nextRequest = time.Time{}
-	t := ps.pending[0]
-	ps.pending = ps.pending[1:]
-	return t, nil
+	return object, nil
 }
 
 func (ps *pubsubTargetReader) Close(ctx context.Context) error {
-	// TODO: figure out -- I think this tries to NACK pending items?
-	// ie. when you call ackFn with err != nil, it nacks msgs
-	var err error
-	for _, p := range ps.pending {
-		if aerr := p.ackFn(ctx, errors.New("service shutting down")); aerr != nil {
-			err = aerr
-		}
-	}
-	return err
+	return nil
 }
 
-func (ps *pubsubTargetReader) parseObjectPath(pubsubMsgAttributes map[string]string) (*gcpCloudStorageObjectTarget, error) {
-	eventType, ok := pubsubMsgAttributes["eventType"]
+func (ps *pubsubTargetReader) parseObjectTarget(pubsubMsg *pubsub.Message) (*gcpCloudStorageObjectTarget, error) {
+	eventType, ok := pubsubMsg.Attributes["eventType"]
 	if !ok {
 		return nil, errors.New("pub/sub message missing eventType attribute")
 	}
@@ -306,72 +267,43 @@ func (ps *pubsubTargetReader) parseObjectPath(pubsubMsgAttributes map[string]str
 	// TODO: GCS FUSE likes to touch a file and write to it. This creates two OBJECT_FINALIZE
 	// events, the first one with a 0 byte file. Figure out how to handle this.
 	// I think maybe S3 input handles similar with sqs.delay_period feature?
-	bucket, ok := pubsubMsgAttributes["bucketId"]
+	bucket, ok := pubsubMsg.Attributes["bucketId"]
 	if !ok {
 		return nil, errors.New("pub/sub message missing bucketId attribute")
 	}
-	key, ok := pubsubMsgAttributes["objectId"]
+	key, ok := pubsubMsg.Attributes["objectId"]
 	if !ok {
 		return nil, errors.New("pub/sub message missing objectId attribute")
 	}
 
+	// Create a wrapped acknowledgement
+	ackFn := deleteGCPCloudStorageObjectAckFn(
+		ps.storageClient.Bucket(bucket), key, ps.conf.DeleteObjects,
+		func(ctx context.Context, err error) (aerr error) {
+			if err != nil {
+				ps.log.Debugf("Abandoning Pub/Sub notification due to error: %v\n", err)
+				aerr = ps.nackPubsubMessage(ctx, pubsubMsg)
+			} else {
+				aerr = ps.ackPubsubMessage(ctx, pubsubMsg)
+			}
+			return
+		},
+	)
+
 	return &gcpCloudStorageObjectTarget{
 		bucket: bucket,
 		key:    key,
+		ackFn:  ackFn,
 	}, nil
 }
 
-func (ps *pubsubTargetReader) readPubsubEvents(ctx context.Context) ([]*gcpCloudStorageObjectTarget, error) {
-	var output []*pubsub.Message
-	select {
-	case gmsg := <-ps.msgsChan:
-		output = append(output, gmsg)
-		ps.log.Debugf("received msg on pub/sub channel = %v", gmsg)
-	default:
-	}
-
-	// TODO: Currently just picks up a single message
-	// maybe we should use a larger buffer channel, drop in and check the length of the channel
-	// and drain it? Or maybe we select on the channel until maxmessages accumulated with
-	// a default case of break?
-
-	var pendingObjects []*gcpCloudStorageObjectTarget
-
-	// Discard any Pub/Sub messages not associated with a target file.
-
-	for _, pubsubMsg := range output {
-		object, err := ps.parseObjectPath(pubsubMsg.Attributes)
-		if err != nil {
-			ps.log.Errorf("Pub/Sub extract key error: %v\n", err)
-			continue
-		}
-		pendingObjects = append(pendingObjects, newGCPCloudStorageObjectTarget(
-			object.key, object.bucket, deleteGCPCloudStorageObjectAckFn(
-				ps.storageClient.Bucket(object.bucket), object.key, ps.conf.DeleteObjects,
-				func(ctx context.Context, err error) (aerr error) {
-					if err != nil {
-						ps.log.Debugf("Abandoning Pub/Sub notification due to error: %v\n", err)
-						aerr = ps.nackPubsubMessage(ctx, pubsubMsg)
-					} else {
-						aerr = ps.ackPubsubMessage(ctx, pubsubMsg)
-					}
-					return
-				},
-			)))
-	}
-
-	return pendingObjects, nil
-}
-
 func (ps *pubsubTargetReader) nackPubsubMessage(ctx context.Context, msg *pubsub.Message) error {
-
 	msg.Nack()
 	ps.log.Debugln("nack msg")
 	return nil
 }
 
 func (ps *pubsubTargetReader) ackPubsubMessage(ctx context.Context, msg *pubsub.Message) error {
-
 	msg.Ack()
 	ps.log.Debugln("ack msg")
 	return nil
@@ -470,15 +402,8 @@ func (g *gcpCloudStorageInput) Connect(ctx context.Context) error {
 
 		// TODO: why create new context? should we just use ctx?
 		subCtx, cancel := context.WithCancel(context.Background())
-		// TODO: should the channel buffer size be configurable?
-		// TODO: Does channel size create natural back pressure on Google side? In other
-		// words, the call-back we pass to sub.Receive would block on channel send
-		// until there is buffer available. Maybe it eventually results in disconnects by
-		// Google?
-		// Probably not a good idea? Maybe this should be operated in synchronous mode instead?
-		// sub.ReceiveSettings.Synchronous = true
-		// sub.ReceiveSettings.MaxOutstandingMessages = 10
-		msgsChan := make(chan *pubsub.Message, 1)
+
+		msgsChan := make(chan *pubsub.Message, g.conf.PubSub.MaxOutstandingMessages)
 
 		g.subscription = sub
 		g.msgsChan = msgsChan
