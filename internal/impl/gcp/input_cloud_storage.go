@@ -245,7 +245,19 @@ func newPubsubTargetReader(
 func (ps *pubsubTargetReader) Pop(ctx context.Context) (*gcpCloudStorageObjectTarget, error) {
 	ps.log.Debugln("about to wait for a pubsub message on channel")
 	// Receive a Pub/Sub message
-	pubsubMsg := <-ps.msgsChan
+	var pubsubMsg *pubsub.Message
+	var open bool
+	select {
+	case pubsubMsg, open = <-ps.msgsChan:
+		if !open {
+			ps.log.Debugln("pub/sub channel was closed")
+			return nil, component.ErrNotConnected
+		}
+	case <-ctx.Done():
+		ps.log.Debugln("received shutdown while waiting for pubsub message on channel")
+		return nil, component.ErrTimeout
+	}
+
 	ps.log.Debugf("received msg on pub/sub msg channel = %v", pubsubMsg.Attributes)
 
 	object, err := ps.parseObjectTarget(pubsubMsg)
