@@ -2,9 +2,11 @@ package gcp
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -105,9 +107,10 @@ const (
 )
 
 type gcpCloudStorageObjectTarget struct {
-	key    string
-	bucket string
-	ackFn  func(context.Context, error) error
+	key        string
+	bucket     string
+	generation int64
+	ackFn      func(context.Context, error) error
 }
 
 func newGCPCloudStorageObjectTarget(key, bucket string, ackFn codec.ReaderAckFn) *gcpCloudStorageObjectTarget {
@@ -116,7 +119,7 @@ func newGCPCloudStorageObjectTarget(key, bucket string, ackFn codec.ReaderAckFn)
 			return nil
 		}
 	}
-	return &gcpCloudStorageObjectTarget{key: key, bucket: bucket, ackFn: ackFn}
+	return &gcpCloudStorageObjectTarget{key: key, bucket: bucket, generation: 0, ackFn: ackFn}
 }
 
 type gcpCloudStorageObjectTargetReader interface {
@@ -240,13 +243,15 @@ func newPubsubTargetReader(
 }
 
 func (ps *pubsubTargetReader) Pop(ctx context.Context) (*gcpCloudStorageObjectTarget, error) {
+	ps.log.Debugln("about to wait for a pubsub message on channel")
 	// Receive a Pub/Sub message
 	pubsubMsg := <-ps.msgsChan
-	ps.log.Debugf("received msg on pub/sub msg channel = %v", pubsubMsg)
+	ps.log.Debugf("received msg on pub/sub msg channel = %v", pubsubMsg.Attributes)
 
 	object, err := ps.parseObjectTarget(pubsubMsg)
 	if err != nil {
 		ps.log.Errorf("couldn't extract gcs target from pub/sub msg: %v\n", err)
+		return nil, err
 	}
 
 	return object, nil
@@ -264,9 +269,30 @@ func (ps *pubsubTargetReader) parseObjectTarget(pubsubMsg *pubsub.Message) (*gcp
 	if eventType != "OBJECT_FINALIZE" {
 		return nil, errors.New("not an \"OBJECT_FINALIZE\" eventType")
 	}
-	// TODO: GCS FUSE likes to touch a file and write to it. This creates two OBJECT_FINALIZE
-	// events, the first one with a 0 byte file. Figure out how to handle this.
-	// I think maybe S3 input handles similar with sqs.delay_period feature?
+	// disregard 0 byte object notifications
+	// https://github.com/GoogleCloudPlatform/gcsfuse/blob/master/docs/semantics.md#pubsub-notifications-on-file-creation
+	payloadFormat, ok := pubsubMsg.Attributes["payloadFormat"]
+	if !ok {
+		return nil, errors.New("pub/sub message missing payloadFormat attribute")
+	}
+	if payloadFormat == "JSON_API_V1" {
+		// decode payload and look for size key
+		payloadMap := map[string]string{}
+		err := json.Unmarshal(pubsubMsg.Data, &payloadMap)
+		if err != nil {
+			return nil, err
+		}
+		size, ok := payloadMap["size"]
+		if !ok {
+			return nil, errors.New("couldn't find size in notification payload json")
+		}
+		if size == "0" {
+			return nil, errors.New("ignoring notification for object with size 0")
+		}
+	} else {
+		ps.log.Debugln("notification JSON payload not available, can't check object size")
+	}
+
 	bucket, ok := pubsubMsg.Attributes["bucketId"]
 	if !ok {
 		return nil, errors.New("pub/sub message missing bucketId attribute")
@@ -275,7 +301,14 @@ func (ps *pubsubTargetReader) parseObjectTarget(pubsubMsg *pubsub.Message) (*gcp
 	if !ok {
 		return nil, errors.New("pub/sub message missing objectId attribute")
 	}
-
+	generationStr, ok := pubsubMsg.Attributes["objectGeneration"]
+	if !ok {
+		return nil, errors.New("pub/sub message missing objectGeneration attribute")
+	}
+	generation, err := strconv.Atoi(generationStr)
+	if err != nil {
+		return nil, err
+	}
 	// Create a wrapped acknowledgement
 	ackFn := deleteGCPCloudStorageObjectAckFn(
 		ps.storageClient.Bucket(bucket), key, ps.conf.DeleteObjects,
@@ -291,9 +324,10 @@ func (ps *pubsubTargetReader) parseObjectTarget(pubsubMsg *pubsub.Message) (*gcp
 	)
 
 	return &gcpCloudStorageObjectTarget{
-		bucket: bucket,
-		key:    key,
-		ackFn:  ackFn,
+		bucket:     bucket,
+		key:        key,
+		generation: int64(generation),
+		ackFn:      ackFn,
 	}, nil
 }
 
@@ -461,13 +495,21 @@ func (g *gcpCloudStorageInput) getObjectTarget(ctx context.Context) (*gcpCloudSt
 		return nil, err
 	}
 
-	// TODO: make sure the gcs object lister stores the bucket in the new target bucket attribute rather than
-	// assuming we'd get it from config right here (previous behavior)
 	objReference := g.storageClient.Bucket(target.bucket).Object(target.key)
 
-	// TODO: why are we acknowledging every target that throws an error?
 	objAttributes, err := objReference.Attrs(ctx)
 	if err != nil {
+		_ = target.ackFn(ctx, err)
+		g.log.Debugf("hit error running attrs on object, %v\n", err)
+		return nil, err
+	}
+
+	// if gcs target originated from pub/sub notification, target.generation should be
+	// non-zero value. let's compare it to the objReference generation and
+	// abort if it's not the same.
+
+	if target.generation != 0 && objAttributes.Generation != target.generation {
+		err = errors.New("object generation mismatch")
 		_ = target.ackFn(ctx, err)
 		return nil, err
 	}
