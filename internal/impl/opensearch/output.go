@@ -13,11 +13,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/benthosdev/benthos/v4/internal/httpclient"
 	"github.com/cenkalti/backoff/v4"
 	"github.com/dustin/go-humanize"
 	os "github.com/opensearch-project/opensearch-go/v2"
 	"github.com/opensearch-project/opensearch-go/v2/opensearchutil"
+
+	"github.com/benthosdev/benthos/v4/internal/httpclient"
 
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	v4 "github.com/aws/aws-sdk-go/aws/signer/v4"

@@ -46,7 +46,7 @@ func TestIntegrationOpenSearch(t *testing.T) {
 	require.NoError(t, err)
 
 	pool.MaxWait = time.Second * 30
-	resource, err := pool.Run("opensearchproject/opensearch", "2.2.0", []string{
+	resource, err := pool.Run("opensearchproject/opensearch", "2.4.0", []string{
 		"discovery.type=single-node",
 		"DISABLE_SECURITY_PLUGIN=true",
 	})
@@ -124,7 +124,7 @@ func BenchmarkIntegrationOpenSearch(b *testing.B) {
 	require.NoError(b, err)
 
 	pool.MaxWait = time.Second * 30
-	resource, err := pool.Run("opensearchproject/opensearch", "2.2.0", []string{
+	resource, err := pool.Run("opensearchproject/opensearch", "2.4.0", []string{
 		"discovery.type=single-node",
 		"DISABLE_SECURITY_PLUGIN=true",
 	})

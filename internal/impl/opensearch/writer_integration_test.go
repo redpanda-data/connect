@@ -38,7 +38,7 @@ func TestIntegrationWriter(t *testing.T) {
 	}
 	pool.MaxWait = time.Second * 60
 
-	resource, err := pool.Run("opensearchproject/opensearch", "2.2.0", []string{
+	resource, err := pool.Run("opensearchproject/opensearch", "2.4.0", []string{
 		"discovery.type=single-node",
 		"DISABLE_SECURITY_PLUGIN=true",
 	})
