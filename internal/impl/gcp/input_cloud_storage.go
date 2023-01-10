@@ -56,7 +56,7 @@ A common pattern for consuming GCS objects is to configure a bucket to emit uplo
 
 Benthos is able to follow this pattern when you configure ` + "`pubsub.project` and `pubsub.subscription`" + `, where it consumes events from Pub/Sub and only downloads object keys received within those events.
 
-When using Pub/Sub please make sure you have sensible values for ` + "`pubsub.max_outstanding_messages`" + ` and also the acknowledgement deadline of the subscription itself. When Benthos consumes a GCS object the Pub/Sub message that triggered it is not acknowledged until the GCS object has been sent onwards. This ensures at-least-once crash resiliency, but also means that if the GCS object takes longer to process than the acknowledgement deadline of your subscription then the same objects might be processed multiple times.
+It is recommended to use a lower value for ` + "`pubsub.max_outstanding_messages`" + ` when a ` + "[`codec`](#codec)" + ` would result in many output messages being created from a single input file. Lowering the number of outstanding Pub/Sub messages will help prevent excessive message reprocessing in the event of a crash.
 
 ## Downloading Large Files
 
