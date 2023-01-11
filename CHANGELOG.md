@@ -11,6 +11,7 @@ All notable changes to this project will be documented in this file.
 - Field `max_buffer` added to the `aws_s3` input.
 - Field `open_message_type` added to the `websocket` input.
 - The experimental `--watcher` cli flag now takes into account file deletions and new files that match wildcard patterns.
+- Field `dump_request_log_level` added to HTTP components.
 
 ### Fixed
 

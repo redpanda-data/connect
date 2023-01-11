@@ -56,6 +56,7 @@ input:
     metadata:
       include_prefixes: []
       include_patterns: []
+    dump_request_log_level: ""
     oauth:
       enabled: false
       consumer_key: ""
@@ -246,6 +247,16 @@ include_patterns:
 include_patterns:
   - _timestamp_unix$
 ```
+
+### `dump_request_log_level`
+
+EXPERIMENTAL: Optionally set a level at which the request and response payload of each request made will be logged.
+
+
+Type: `string`  
+Default: `""`  
+Requires version 4.12.0 or newer  
+Options: `TRACE`, `DEBUG`, `INFO`, `WARN`, `ERROR`, `FATAL`.
 
 ### `oauth`
 

@@ -36,6 +36,7 @@ func OldFieldSpec(defaultVerb string, forOutput bool, extraChildren ...docs.Fiel
 		}).IsInterpolated().Map().HasDefault(map[string]any{}),
 		docs.FieldObject("metadata", "Specify optional matching rules to determine which metadata keys should be added to the HTTP request as headers.").Advanced().
 			WithChildren(metadata.IncludeFilterDocs()...),
+		docs.FieldString("dump_request_log_level", "EXPERIMENTAL: Optionally set a level at which the request and response payload of each request made will be logged.").Advanced().HasDefault("").HasOptions("TRACE", "DEBUG", "INFO", "WARN", "ERROR", "FATAL").AtVersion("4.12.0"),
 	}
 
 	extractHeadersDesc := "Specify which response headers should be added to resulting messages as metadata. Header keys are lowercased before matching, so ensure that your patterns target lowercased versions of the header keys that you expect."
@@ -105,23 +106,24 @@ func ConfigFromAny(v any) (conf OldConfig, err error) {
 
 // OldConfig is a configuration struct for an HTTP client.
 type OldConfig struct {
-	URL             string                       `json:"url" yaml:"url"`
-	Verb            string                       `json:"verb" yaml:"verb"`
-	Headers         map[string]string            `json:"headers" yaml:"headers"`
-	Metadata        metadata.IncludeFilterConfig `json:"metadata" yaml:"metadata"`
-	ExtractMetadata metadata.IncludeFilterConfig `json:"extract_headers" yaml:"extract_headers"`
-	RateLimit       string                       `json:"rate_limit" yaml:"rate_limit"`
-	Timeout         string                       `json:"timeout" yaml:"timeout"`
-	Retry           string                       `json:"retry_period" yaml:"retry_period"`
-	MaxBackoff      string                       `json:"max_retry_backoff" yaml:"max_retry_backoff"`
-	NumRetries      int                          `json:"retries" yaml:"retries"`
-	BackoffOn       []int                        `json:"backoff_on" yaml:"backoff_on"`
-	DropOn          []int                        `json:"drop_on" yaml:"drop_on"`
-	SuccessfulOn    []int                        `json:"successful_on" yaml:"successful_on"`
-	TLS             tls.Config                   `json:"tls" yaml:"tls"`
-	ProxyURL        string                       `json:"proxy_url" yaml:"proxy_url"`
-	AuthConfig      `json:",inline" yaml:",inline"`
-	OAuth2          OAuth2Config `json:"oauth2" yaml:"oauth2"`
+	URL                 string                       `json:"url" yaml:"url"`
+	Verb                string                       `json:"verb" yaml:"verb"`
+	Headers             map[string]string            `json:"headers" yaml:"headers"`
+	Metadata            metadata.IncludeFilterConfig `json:"metadata" yaml:"metadata"`
+	ExtractMetadata     metadata.IncludeFilterConfig `json:"extract_headers" yaml:"extract_headers"`
+	RateLimit           string                       `json:"rate_limit" yaml:"rate_limit"`
+	Timeout             string                       `json:"timeout" yaml:"timeout"`
+	Retry               string                       `json:"retry_period" yaml:"retry_period"`
+	MaxBackoff          string                       `json:"max_retry_backoff" yaml:"max_retry_backoff"`
+	NumRetries          int                          `json:"retries" yaml:"retries"`
+	BackoffOn           []int                        `json:"backoff_on" yaml:"backoff_on"`
+	DropOn              []int                        `json:"drop_on" yaml:"drop_on"`
+	SuccessfulOn        []int                        `json:"successful_on" yaml:"successful_on"`
+	DumpRequestLogLevel string                       `json:"dump_request_log_level" yaml:"dump_request_log_level"`
+	TLS                 tls.Config                   `json:"tls" yaml:"tls"`
+	ProxyURL            string                       `json:"proxy_url" yaml:"proxy_url"`
+	AuthConfig          `json:",inline" yaml:",inline"`
+	OAuth2              OAuth2Config `json:"oauth2" yaml:"oauth2"`
 }
 
 // NewOldConfig creates a new Config with default values.
