@@ -33,6 +33,7 @@ type CacheTestConfigVars struct {
 
 	// Generic variables.
 	Var1 string
+	Var2 string
 }
 
 // CachePreTestFn is an optional closure to be called before tests are run, this
@@ -75,6 +76,7 @@ func (e cacheTestEnvironment) RenderConfig() string {
 		"$ID", e.configVars.ID,
 		"$PORT", e.configVars.Port,
 		"$VAR1", e.configVars.Var1,
+		"$VAR2", e.configVars.Var2,
 	).Replace(e.configTemplate)
 }
 
@@ -119,6 +121,14 @@ func CacheTestOptPort(port string) CacheTestOptFunc {
 func CacheTestOptVarOne(v string) CacheTestOptFunc {
 	return func(env *cacheTestEnvironment) {
 		env.configVars.Var1 = v
+	}
+}
+
+// CacheTestOptVarTwo sets an arbitrary variable for the test that can be
+// injected into templated configs.
+func CacheTestOptVarTwo(v string) CacheTestOptFunc {
+	return func(env *cacheTestEnvironment) {
+		env.configVars.Var2 = v
 	}
 }
 
