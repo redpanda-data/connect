@@ -18,6 +18,7 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
 	btls "github.com/benthosdev/benthos/v4/internal/tls"
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
 func init() {
@@ -71,6 +72,7 @@ type natsReader struct {
 	urls string
 	conf input.NATSConfig
 	log  log.Modular
+	fs   *service.FS
 
 	cMut sync.Mutex
 
@@ -86,6 +88,7 @@ func newNATSReader(conf input.NATSConfig, mgr bundle.NewManagement) (*natsReader
 	n := natsReader{
 		conf:          conf,
 		log:           mgr.Logger(),
+		fs:            service.NewFS(mgr.FS()),
 		interruptChan: make(chan struct{}),
 	}
 	n.urls = strings.Join(conf.URLs, ",")
@@ -119,7 +122,7 @@ func (n *natsReader) Connect(ctx context.Context) error {
 		opts = append(opts, nats.Secure(n.tlsConf))
 	}
 
-	opts = append(opts, authConfToOptions(n.conf.Auth)...)
+	opts = append(opts, authConfToOptions(n.conf.Auth, n.fs)...)
 
 	if natsConn, err = nats.Connect(n.urls, opts...); err != nil {
 		return err
