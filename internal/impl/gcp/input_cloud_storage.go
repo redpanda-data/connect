@@ -124,7 +124,6 @@ func newGCPCloudStorageObjectTarget(key, bucket string, ackFn codec.ReaderAckFn)
 
 type gcpCloudStorageObjectTargetReader interface {
 	Pop(ctx context.Context) (*gcpCloudStorageObjectTarget, error)
-	Close(ctx context.Context) error
 }
 
 //------------------------------------------------------------------------------
@@ -220,10 +219,6 @@ func (r *gcpCloudStorageTargetReader) Pop(ctx context.Context) (*gcpCloudStorage
 	return obj, nil
 }
 
-func (r gcpCloudStorageTargetReader) Close(context.Context) error {
-	return nil
-}
-
 //------------------------------------------------------------------------------
 
 type pubsubTargetReader struct {
@@ -267,10 +262,6 @@ func (ps *pubsubTargetReader) Pop(ctx context.Context) (*gcpCloudStorageObjectTa
 	}
 
 	return object, nil
-}
-
-func (ps *pubsubTargetReader) Close(ctx context.Context) error {
-	return nil
 }
 
 func (ps *pubsubTargetReader) parseObjectTarget(pubsubMsg *pubsub.Message) (*gcpCloudStorageObjectTarget, error) {
