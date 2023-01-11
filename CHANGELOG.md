@@ -12,6 +12,7 @@ All notable changes to this project will be documented in this file.
 - Field `open_message_type` added to the `websocket` input.
 - The experimental `--watcher` cli flag now takes into account file deletions and new files that match wildcard patterns.
 - Field `dump_request_log_level` added to HTTP components.
+- New `couchbase` cache implementation.
 
 ### Fixed
 
