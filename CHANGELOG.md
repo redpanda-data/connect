@@ -18,6 +18,7 @@ All notable changes to this project will be documented in this file.
 - The default value of the `conn_max_idle` field has been changed from 0 to 2 for all `sql_*` components in accordance
 to the [`database/sql` docs](https://pkg.go.dev/database/sql#DB.SetMaxIdleConns).
 - The `parse_csv` bloblang method with `parse_header_row` set to `false` no longer produces rows that are of an `unknown` type.
+- Fixed a bug where the `oracle` driver for the `sql_*` components was returning timestamps which were getting marshalled into an empty JSON object instead of a string.
 
 ## 4.11.0 - 2022-12-21
 
