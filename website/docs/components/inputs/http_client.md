@@ -68,16 +68,16 @@ input:
       client_secret: ""
       token_url: ""
       scopes: []
+    basic_auth:
+      enabled: false
+      username: ""
+      password: ""
     jwt:
       enabled: false
       private_key_file: ""
       signing_method: ""
       claims: {}
       headers: {}
-    basic_auth:
-      enabled: false
-      username: ""
-      password: ""
     tls:
       enabled: false
       skip_cert_verify: false
@@ -164,7 +164,6 @@ This field supports [interpolation functions](/docs/configuration/interpolation#
 
 
 Type: `string`  
-Default: `""`  
 
 ### `verb`
 
@@ -349,8 +348,41 @@ A list of optional requested permissions.
 
 
 Type: `array`  
-Default: `[]`  
 Requires version 3.45.0 or newer  
+
+### `basic_auth`
+
+Allows you to specify basic authentication.
+
+
+Type: `object`  
+
+### `basic_auth.enabled`
+
+Whether to use basic authentication in requests.
+
+
+Type: `bool`  
+Default: `false`  
+
+### `basic_auth.username`
+
+A username to authenticate as.
+
+
+Type: `string`  
+Default: `""`  
+
+### `basic_auth.password`
+
+A password to authenticate with.
+:::warning Secret
+This field contains sensitive information that usually shouldn't be added to a config directly, read our [secrets page for more info](/docs/configuration/secrets).
+:::
+
+
+Type: `string`  
+Default: `""`  
 
 ### `jwt`
 
@@ -389,7 +421,6 @@ A value used to identify the claims that issued the JWT.
 
 
 Type: `object`  
-Default: `{}`  
 
 ### `jwt.headers`
 
@@ -397,41 +428,6 @@ Add optional key/value headers to the JWT.
 
 
 Type: `object`  
-Default: `{}`  
-
-### `basic_auth`
-
-Allows you to specify basic authentication.
-
-
-Type: `object`  
-
-### `basic_auth.enabled`
-
-Whether to use basic authentication in requests.
-
-
-Type: `bool`  
-Default: `false`  
-
-### `basic_auth.username`
-
-A username to authenticate as.
-
-
-Type: `string`  
-Default: `""`  
-
-### `basic_auth.password`
-
-A password to authenticate with.
-:::warning Secret
-This field contains sensitive information that usually shouldn't be added to a config directly, read our [secrets page for more info](/docs/configuration/secrets).
-:::
-
-
-Type: `string`  
-Default: `""`  
 
 ### `tls`
 
@@ -505,7 +501,6 @@ A list of client certificates to use. For each certificate either the fields `ce
 
 
 Type: `array`  
-Default: `[]`  
 
 ```yml
 # Examples
@@ -626,7 +621,6 @@ An optional [rate limit](/docs/components/rate_limits/about) to throttle request
 
 
 Type: `string`  
-Default: `""`  
 
 ### `timeout`
 
@@ -699,7 +693,6 @@ This field supports [interpolation functions](/docs/configuration/interpolation#
 
 
 Type: `string`  
-Default: `""`  
 
 ### `drop_empty_bodies`
 

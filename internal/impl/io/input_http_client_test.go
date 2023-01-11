@@ -16,6 +16,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"gopkg.in/yaml.v3"
 
 	"github.com/benthosdev/benthos/v4/internal/component/input"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
@@ -23,6 +24,13 @@ import (
 
 	_ "github.com/benthosdev/benthos/v4/internal/impl/io"
 )
+
+func parseYAMLInputConf(t testing.TB, formatStr string, args ...any) (conf input.Config) {
+	t.Helper()
+	conf = input.NewConfig()
+	require.NoError(t, yaml.Unmarshal(fmt.Appendf(nil, formatStr, args...), &conf))
+	return
+}
 
 func TestHTTPClientGET(t *testing.T) {
 	tCtx, done := context.WithTimeout(context.Background(), time.Second*5)
@@ -49,10 +57,11 @@ func TestHTTPClientGET(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	conf := input.NewConfig()
-	conf.Type = "http_client"
-	conf.HTTPClient.URL = ts.URL + "/testpost"
-	conf.HTTPClient.Retry = "1ms"
+	conf := parseYAMLInputConf(t, `
+http_client:
+  url: %v/testpost
+  retry_period: 1ms
+`, ts.URL)
 
 	h, err := mock.NewManager().NewInput(conf)
 	require.NoError(t, err)
@@ -100,10 +109,11 @@ func TestHTTPClientPagination(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	conf := input.NewConfig()
-	conf.Type = "http_client"
-	conf.HTTPClient.URL = ts.URL + "/${!content()}"
-	conf.HTTPClient.Retry = "1ms"
+	conf := parseYAMLInputConf(t, `
+http_client:
+  url: "%v/${!content()}"
+  retry_period: 1ms
+`, ts.URL)
 
 	h, err := mock.NewManager().NewInput(conf)
 	require.NoError(t, err)
@@ -151,10 +161,11 @@ func TestHTTPClientGETError(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	conf := input.NewConfig()
-	conf.Type = "http_client"
-	conf.HTTPClient.URL = ts.URL + "/testpost"
-	conf.HTTPClient.Retry = "1ms"
+	conf := parseYAMLInputConf(t, `
+http_client:
+  url: "%v/testpost"
+  retry_period: 1ms
+`, ts.URL)
 
 	h, err := mock.NewManager().NewInput(conf)
 	require.NoError(t, err)
@@ -177,10 +188,11 @@ func TestHTTPClientGETError(t *testing.T) {
 func TestHTTPClientGETNotExist(t *testing.T) {
 	t.Parallel()
 
-	conf := input.NewConfig()
-	conf.Type = "http_client"
-	conf.HTTPClient.URL = "jgljksdfhjgkldfjglkf"
-	conf.HTTPClient.Retry = "1ms"
+	conf := parseYAMLInputConf(t, `
+http_client:
+  url: "jgljksdfhjgkldfjglkf"
+  retry_period: 1ms
+`)
 
 	h, err := mock.NewManager().NewInput(conf)
 	require.NoError(t, err)
@@ -197,10 +209,13 @@ func TestHTTPClientGETNotExist(t *testing.T) {
 func TestHTTPClientGETStreamNotExist(t *testing.T) {
 	t.Parallel()
 
-	conf := input.NewConfig()
-	conf.HTTPClient.URL = "jgljksdfhjgkldfjglkf"
-	conf.HTTPClient.Retry = "1ms"
-	conf.HTTPClient.Stream.Enabled = true
+	conf := parseYAMLInputConf(t, `
+http_client:
+  url: jgljksdfhjgkldfjglkf
+  retry_period: 1ms
+  stream:
+    enabled: true
+`)
 
 	h, err := mock.NewManager().NewInput(conf)
 	require.NoError(t, err)
@@ -227,11 +242,13 @@ func TestHTTPClientGETStreamError(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	conf := input.NewConfig()
-	conf.Type = "http_client"
-	conf.HTTPClient.URL = ts.URL + "/testpost"
-	conf.HTTPClient.Retry = "1ms"
-	conf.HTTPClient.Stream.Enabled = true
+	conf := parseYAMLInputConf(t, `
+http_client:
+  url: %v/testpost
+  retry_period: 1ms
+  stream:
+    enabled: true
+`, ts.URL)
 
 	h, err := mock.NewManager().NewInput(conf)
 	require.NoError(t, err)
@@ -284,12 +301,13 @@ func TestHTTPClientPOST(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	conf := input.NewConfig()
-	conf.Type = "http_client"
-	conf.HTTPClient.URL = ts.URL + "/testpost"
-	conf.HTTPClient.Verb = "POST"
-	conf.HTTPClient.Payload = "foobar"
-	conf.HTTPClient.Retry = "1ms"
+	conf := parseYAMLInputConf(t, `
+http_client:
+  url: %v/testpost
+  verb: POST
+  payload: foobar
+  retry_period: 1ms
+`, ts.URL)
 
 	h, err := mock.NewManager().NewInput(conf)
 	require.NoError(t, err)
@@ -359,10 +377,11 @@ func TestHTTPClientGETMultipart(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	conf := input.NewConfig()
-	conf.Type = "http_client"
-	conf.HTTPClient.URL = ts.URL + "/testpost"
-	conf.HTTPClient.Retry = "1ms"
+	conf := parseYAMLInputConf(t, `
+http_client:
+  url: %v/testpost
+  retry_period: 1ms
+`, ts.URL)
 
 	h, err := mock.NewManager().NewInput(conf)
 	require.NoError(t, err)
@@ -460,10 +479,11 @@ func TestHTTPClientGETMultipartLoop(t *testing.T) {
 	}))
 	defer tserve.Close()
 
-	conf := input.NewConfig()
-	conf.Type = "http_client"
-	conf.HTTPClient.URL = tserve.URL + "/testpost"
-	conf.HTTPClient.Retry = "1ms"
+	conf := parseYAMLInputConf(t, `
+http_client:
+  url: %v/testpost
+  retry_period: 1ms
+`, tserve.URL)
 
 	h, err := mock.NewManager().NewInput(conf)
 	require.NoError(t, err)
@@ -555,12 +575,14 @@ func TestHTTPClientStreamGETMultipartLoop(t *testing.T) {
 	}))
 	defer tserve.Close()
 
-	conf := input.NewConfig()
-	conf.Type = "http_client"
-	conf.HTTPClient.URL = tserve.URL + "/testpost"
-	conf.HTTPClient.Retry = "1ms"
-	conf.HTTPClient.Stream.Codec = "lines/multipart"
-	conf.HTTPClient.Stream.Enabled = true
+	conf := parseYAMLInputConf(t, `
+http_client:
+  url: %v/testpost
+  retry_period: 1ms
+  stream:
+    enabled: true
+    codec: "lines/multipart"
+`, tserve.URL)
 
 	h, err := mock.NewManager().NewInput(conf)
 	require.NoError(t, err)
@@ -620,12 +642,14 @@ func TestHTTPClientStreamGETMultiRecover(t *testing.T) {
 	}))
 	defer tserve.Close()
 
-	conf := input.NewConfig()
-	conf.Type = "http_client"
-	conf.HTTPClient.URL = tserve.URL + "/testpost"
-	conf.HTTPClient.Retry = "1ms"
-	conf.HTTPClient.Stream.Enabled = true
-	conf.HTTPClient.Stream.Codec = "lines/multipart"
+	conf := parseYAMLInputConf(t, `
+http_client:
+  url: %v/testpost
+  retry_period: 1ms
+  stream:
+    enabled: true
+    codec: "lines/multipart"
+`, tserve.URL)
 
 	h, err := mock.NewManager().NewInput(conf)
 	require.NoError(t, err)
@@ -682,11 +706,13 @@ func TestHTTPClientStreamGETRecover(t *testing.T) {
 	}))
 	defer tserve.Close()
 
-	conf := input.NewConfig()
-	conf.Type = "http_client"
-	conf.HTTPClient.URL = tserve.URL + "/testpost"
-	conf.HTTPClient.Retry = "1ms"
-	conf.HTTPClient.Stream.Enabled = true
+	conf := parseYAMLInputConf(t, `
+http_client:
+  url: %v/testpost
+  retry_period: 1ms
+  stream:
+    enabled: true
+`, tserve.URL)
 
 	h, err := mock.NewManager().NewInput(conf)
 	require.NoError(t, err)
@@ -749,11 +775,13 @@ func TestHTTPClientStreamGETTokenization(t *testing.T) {
 	}))
 	defer tserve.Close()
 
-	conf := input.NewConfig()
-	conf.Type = "http_client"
-	conf.HTTPClient.URL = tserve.URL + `/testpost?token=${!json("token").or(null)}`
-	conf.HTTPClient.Retry = "1ms"
-	conf.HTTPClient.Stream.Enabled = true
+	conf := parseYAMLInputConf(t, `
+http_client:
+  url: '%v/testpost?token=${!json("token").or(null)}'
+  retry_period: 1ms
+  stream:
+    enabled: true
+`, tserve.URL)
 
 	h, err := mock.NewManager().NewInput(conf)
 	require.NoError(t, err)
@@ -827,10 +855,11 @@ func BenchmarkHTTPClientGETMultipart(b *testing.B) {
 	}))
 	defer tserve.Close()
 
-	conf := input.NewConfig()
-	conf.Type = "http_client"
-	conf.HTTPClient.URL = tserve.URL + "/testpost"
-	conf.HTTPClient.Retry = "1ms"
+	conf := parseYAMLInputConf(b, `
+http_client:
+  url: %v/testpost
+  retry_period: 1ms
+`, tserve.URL)
 
 	h, err := mock.NewManager().NewInput(conf)
 	require.NoError(b, err)

@@ -162,6 +162,7 @@ Provide a list of explicit metadata key prefixes to match against.
 
 
 Type: `array`  
+Default: `[]`  
 
 ```yml
 # Examples
@@ -183,6 +184,7 @@ Provide a list of explicit metadata key regular expression (re2) patterns to mat
 
 
 Type: `array`  
+Default: `[]`  
 
 ```yml
 # Examples

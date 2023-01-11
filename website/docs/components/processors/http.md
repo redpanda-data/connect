@@ -15,9 +15,7 @@ categories: ["Integration"]
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-
-Performs an HTTP request using a message batch as the request body, and replaces
-the original message parts with the body of the response.
+Performs an HTTP request using a message batch as the request body, and replaces the original message parts with the body of the response.
 
 
 <Tabs defaultValue="common" values={[
@@ -64,16 +62,16 @@ http:
     client_secret: ""
     token_url: ""
     scopes: []
+  basic_auth:
+    enabled: false
+    username: ""
+    password: ""
   jwt:
     enabled: false
     private_key_file: ""
     signing_method: ""
     claims: {}
     headers: {}
-  basic_auth:
-    enabled: false
-    username: ""
-    password: ""
   tls:
     enabled: false
     skip_cert_verify: false
@@ -101,43 +99,29 @@ http:
 </TabItem>
 </Tabs>
 
-The `rate_limit` field can be used to specify a rate limit
-[resource](/docs/components/rate_limits/about) to cap the rate of requests
-across all parallel components service wide.
+The `rate_limit` field can be used to specify a rate limit [resource](/docs/components/rate_limits/about) to cap the rate of requests across all parallel components service wide.
 
-The URL and header values of this type can be dynamically set using function
-interpolations described [here](/docs/configuration/interpolation#bloblang-queries).
+The URL and header values of this type can be dynamically set using function interpolations described [here](/docs/configuration/interpolation#bloblang-queries).
 
-In order to map or encode the payload to a specific request body, and map the
-response back into the original payload instead of replacing it entirely, you
-can use the [`branch` processor](/docs/components/processors/branch).
+In order to map or encode the payload to a specific request body, and map the response back into the original payload instead of replacing it entirely, you can use the [`branch` processor](/docs/components/processors/branch).
 
 ## Response Codes
 
-Benthos considers any response code between 200 and 299 inclusive to indicate a
-successful response, you can add more success status codes with the field
-`successful_on`.
+Benthos considers any response code between 200 and 299 inclusive to indicate a successful response, you can add more success status codes with the field `successful_on`.
 
-When a request returns a response code within the `backoff_on` field
-it will be retried after increasing intervals.
+When a request returns a response code within the `backoff_on` field it will be retried after increasing intervals.
 
-When a request returns a response code within the `drop_on` field it
-will not be reattempted and is immediately considered a failed request.
+When a request returns a response code within the `drop_on` field it will not be reattempted and is immediately considered a failed request.
 
 ## Adding Metadata
 
-If the request returns an error response code this processor sets a metadata
-field `http_status_code` on the resulting message.
+If the request returns an error response code this processor sets a metadata field `http_status_code` on the resulting message.
 
-Use the field `extract_headers` to specify rules for which other
-headers should be copied into the resulting message from the response.
+Use the field `extract_headers` to specify rules for which other headers should be copied into the resulting message from the response.
 
 ## Error Handling
 
-When all retry attempts for a message are exhausted the processor cancels the
-attempt. These failed messages will continue through the pipeline unchanged, but
-can be dropped or placed in a dead letter queue according to your config, you
-can read about these patterns [here](/docs/configuration/error_handling).
+When all retry attempts for a message are exhausted the processor cancels the attempt. These failed messages will continue through the pipeline unchanged, but can be dropped or placed in a dead letter queue according to your config, you can read about these patterns [here](/docs/configuration/error_handling).
 
 ## Examples
 
@@ -146,7 +130,6 @@ can read about these patterns [here](/docs/configuration/error_handling).
 ]}>
 
 <TabItem value="Branched Request">
-
 
 This example uses a [`branch` processor](/docs/components/processors/branch/) to strip the request message into an empty body, grab an HTTP payload, and place the result back into the original message at the path `repo.status`:
 
@@ -174,7 +157,6 @@ This field supports [interpolation functions](/docs/configuration/interpolation#
 
 
 Type: `string`  
-Default: `""`  
 
 ### `verb`
 
@@ -359,8 +341,41 @@ A list of optional requested permissions.
 
 
 Type: `array`  
-Default: `[]`  
 Requires version 3.45.0 or newer  
+
+### `basic_auth`
+
+Allows you to specify basic authentication.
+
+
+Type: `object`  
+
+### `basic_auth.enabled`
+
+Whether to use basic authentication in requests.
+
+
+Type: `bool`  
+Default: `false`  
+
+### `basic_auth.username`
+
+A username to authenticate as.
+
+
+Type: `string`  
+Default: `""`  
+
+### `basic_auth.password`
+
+A password to authenticate with.
+:::warning Secret
+This field contains sensitive information that usually shouldn't be added to a config directly, read our [secrets page for more info](/docs/configuration/secrets).
+:::
+
+
+Type: `string`  
+Default: `""`  
 
 ### `jwt`
 
@@ -399,7 +414,6 @@ A value used to identify the claims that issued the JWT.
 
 
 Type: `object`  
-Default: `{}`  
 
 ### `jwt.headers`
 
@@ -407,41 +421,6 @@ Add optional key/value headers to the JWT.
 
 
 Type: `object`  
-Default: `{}`  
-
-### `basic_auth`
-
-Allows you to specify basic authentication.
-
-
-Type: `object`  
-
-### `basic_auth.enabled`
-
-Whether to use basic authentication in requests.
-
-
-Type: `bool`  
-Default: `false`  
-
-### `basic_auth.username`
-
-A username to authenticate as.
-
-
-Type: `string`  
-Default: `""`  
-
-### `basic_auth.password`
-
-A password to authenticate with.
-:::warning Secret
-This field contains sensitive information that usually shouldn't be added to a config directly, read our [secrets page for more info](/docs/configuration/secrets).
-:::
-
-
-Type: `string`  
-Default: `""`  
 
 ### `tls`
 
@@ -515,7 +494,6 @@ A list of client certificates to use. For each certificate either the fields `ce
 
 
 Type: `array`  
-Default: `[]`  
 
 ```yml
 # Examples
@@ -636,7 +614,6 @@ An optional [rate limit](/docs/components/rate_limits/about) to throttle request
 
 
 Type: `string`  
-Default: `""`  
 
 ### `timeout`
 

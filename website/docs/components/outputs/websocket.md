@@ -78,7 +78,6 @@ The URL to connect to.
 
 
 Type: `string`  
-Default: `""`  
 
 ### `tls`
 
@@ -152,7 +151,6 @@ A list of client certificates to use. For each certificate either the fields `ce
 
 
 Type: `array`  
-Default: `[]`  
 
 ```yml
 # Examples
@@ -344,7 +342,6 @@ A value used to identify the claims that issued the JWT.
 
 
 Type: `object`  
-Default: `{}`  
 
 ### `jwt.headers`
 
@@ -352,6 +349,5 @@ Add optional key/value headers to the JWT.
 
 
 Type: `object`  
-Default: `{}`  
 
 

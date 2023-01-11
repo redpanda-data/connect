@@ -13,43 +13,66 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/input"
-	"github.com/benthosdev/benthos/v4/internal/component/input/processors"
-	"github.com/benthosdev/benthos/v4/internal/docs"
+	"github.com/benthosdev/benthos/v4/internal/component/interop"
 	"github.com/benthosdev/benthos/v4/internal/httpclient"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	btls "github.com/benthosdev/benthos/v4/internal/tls"
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
+type wsOpenMsgType string
+
+const (
+	// wsOpenMsgTypeBinary sets the type of open_message to binary.
+	wsOpenMsgTypeBinary wsOpenMsgType = "binary"
+	// wsOpenMsgTypeText sets the type of open_message to text (UTF-8 encoded text data).
+	wsOpenMsgTypeText wsOpenMsgType = "text"
+)
+
+func websocketInputSpec() *service.ConfigSpec {
+	spec := service.NewConfigSpec().
+		Stable().
+		Categories("Network").
+		Summary("Connects to a websocket server and continuously receives messages.").
+		Description(`It is possible to configure an ` + "`open_message`" + `, which when set to a non-empty string will be sent to the websocket server each time a connection is first established.`).
+		Field(service.NewURLField("url").
+			Description("The URL to connect to.").
+			Example("ws://localhost:4195/get/ws")).
+		Field(service.NewStringField("open_message").
+			Description("An optional message to send to the server upon connection.").
+			Advanced().Optional()).
+		Field(service.NewStringAnnotatedEnumField("open_message_type", map[string]string{
+			string(wsOpenMsgTypeBinary): "Binary data open_message.",
+			string(wsOpenMsgTypeText):   "Text data open_message. The text message payload is interpreted as UTF-8 encoded text data.",
+		}).Description("An optional flag to indicate the data type of open_message.").
+			Advanced().Default(string(wsOpenMsgTypeBinary))).
+		Field(service.NewTLSToggledField("tls"))
+
+	for _, f := range httpclient.AuthFieldSpecs() {
+		spec = spec.Field(f)
+	}
+	return spec
+}
+
 func init() {
-	err := bundle.AllInputs.Add(processors.WrapConstructor(newWebsocketInput), docs.ComponentSpec{
-		Name:        "websocket",
-		Summary:     `Connects to a websocket server and continuously receives messages.`,
-		Description: `It is possible to configure an ` + "`open_message`" + `, which when set to a non-empty string will be sent to the websocket server each time a connection is first established.`,
-		Config: docs.FieldComponent().WithChildren(
-			docs.FieldURL("url", "The URL to connect to.", "ws://localhost:4195/get/ws"),
-			docs.FieldString("open_message", "An optional message to send to the server upon connection.").Advanced(),
-			docs.FieldString("open_message_type", "An optional flag to indicate the data type of open_message.").HasAnnotatedOptions(
-				string(input.OpenMsgTypeBinary), "Binary data open_message.",
-				string(input.OpenMsgTypeText), "Text data open_message. The text message payload is interpreted as UTF-8 encoded text data.",
-			).Advanced().HasDefault(input.OpenMsgTypeBinary).Optional(),
-			btls.FieldSpec(),
-		).WithChildren(httpclient.OldAuthFieldSpecs()...).ChildDefaultAndTypesFromStruct(input.NewWebsocketConfig()),
-		Categories: []string{
-			"Network",
-		},
-	})
+	err := service.RegisterBatchInput(
+		"websocket", websocketInputSpec(),
+		func(conf *service.ParsedConfig, mgr *service.Resources) (in service.BatchInput, err error) {
+			oldMgr := interop.UnwrapManagement(mgr)
+			var r *websocketReader
+			if r, err = newWebsocketReaderFromParsed(conf, oldMgr); err != nil {
+				return
+			}
+			var i input.Streamed
+			if i, err = input.NewAsyncReader("websocket", input.NewAsyncPreserver(r), oldMgr); err != nil {
+				return
+			}
+			in = interop.NewUnwrapInternalInput(i)
+			return
+		})
 	if err != nil {
 		panic(err)
 	}
-}
-
-func newWebsocketInput(conf input.Config, mgr bundle.NewManagement) (input.Streamed, error) {
-	ws, err := newWebsocketReader(conf.Websocket, mgr)
-	if err != nil {
-		return nil, err
-	}
-	return input.NewAsyncReader("websocket", input.NewAsyncPreserver(ws), mgr)
 }
 
 type websocketReader struct {
@@ -58,23 +81,43 @@ type websocketReader struct {
 
 	lock *sync.Mutex
 
-	conf    input.WebsocketConfig
-	client  *websocket.Conn
-	tlsConf *tls.Config
+	client     *websocket.Conn
+	urlParsed  *url.URL
+	urlStr     string
+	tlsEnabled bool
+	tlsConf    *tls.Config
+	reqSigner  httpclient.RequestSigner
+
+	openMsgType wsOpenMsgType
+	openMsg     []byte
 }
 
-func newWebsocketReader(conf input.WebsocketConfig, mgr bundle.NewManagement) (*websocketReader, error) {
+func newWebsocketReaderFromParsed(conf *service.ParsedConfig, mgr bundle.NewManagement) (*websocketReader, error) {
 	ws := &websocketReader{
 		log:  mgr.Logger(),
 		mgr:  mgr,
 		lock: &sync.Mutex{},
-		conf: conf,
 	}
-	if conf.TLS.Enabled {
-		var err error
-		if ws.tlsConf, err = conf.TLS.Get(mgr.FS()); err != nil {
-			return nil, err
-		}
+	var err error
+	if ws.urlParsed, err = conf.FieldURL("url"); err != nil {
+		return nil, err
+	}
+	if ws.urlStr, err = conf.FieldString("url"); err != nil {
+		return nil, err
+	}
+	if ws.tlsConf, ws.tlsEnabled, err = conf.FieldTLSToggled("tls"); err != nil {
+		return nil, err
+	}
+	if ws.reqSigner, err = httpclient.AuthSignerFromParsed(conf); err != nil {
+		return nil, err
+	}
+	var openMsgStr, openMsgTypeStr string
+	if openMsgTypeStr, err = conf.FieldString("open_message_type"); err != nil {
+		return nil, err
+	}
+	ws.openMsgType = wsOpenMsgType(openMsgTypeStr)
+	if openMsgStr, _ = conf.FieldString("open_message"); openMsgStr != "" {
+		ws.openMsg = []byte(openMsgStr)
 	}
 	return ws, nil
 }
@@ -96,43 +139,38 @@ func (w *websocketReader) Connect(ctx context.Context) error {
 
 	headers := http.Header{}
 
-	purl, err := url.Parse(w.conf.URL)
+	err := w.reqSigner(w.mgr.FS(), &http.Request{
+		URL:    w.urlParsed,
+		Header: headers,
+	})
 	if err != nil {
 		return err
 	}
 
-	if err := w.conf.Sign(w.mgr.FS(), &http.Request{
-		URL:    purl,
-		Header: headers,
-	}); err != nil {
-		return err
-	}
 	var client *websocket.Conn
-	if w.conf.TLS.Enabled {
+	if w.tlsEnabled {
 		dialer := websocket.Dialer{
 			TLSClientConfig: w.tlsConf,
 		}
-		if client, _, err = dialer.Dial(w.conf.URL, headers); err != nil {
+		if client, _, err = dialer.Dial(w.urlStr, headers); err != nil {
 			return err
 		}
-	} else if client, _, err = websocket.DefaultDialer.Dial(w.conf.URL, headers); err != nil {
+	} else if client, _, err = websocket.DefaultDialer.Dial(w.urlStr, headers); err != nil {
 		return err
 	}
 
 	var openMsgType int
-	switch w.conf.OpenMsgType {
-	case input.OpenMsgTypeBinary:
+	switch w.openMsgType {
+	case wsOpenMsgTypeBinary:
 		openMsgType = websocket.BinaryMessage
-	case input.OpenMsgTypeText:
+	case wsOpenMsgTypeText:
 		openMsgType = websocket.TextMessage
 	default:
-		return fmt.Errorf("unrecognised open_message_type: %s", w.conf.OpenMsgType)
+		return fmt.Errorf("unrecognised open_message_type: %s", w.openMsgType)
 	}
 
-	if len(w.conf.OpenMsg) > 0 {
-		if err := client.WriteMessage(
-			openMsgType, []byte(w.conf.OpenMsg),
-		); err != nil {
+	if len(w.openMsg) > 0 {
+		if err := client.WriteMessage(openMsgType, w.openMsg); err != nil {
 			return err
 		}
 	}

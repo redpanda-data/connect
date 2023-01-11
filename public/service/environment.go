@@ -290,6 +290,11 @@ func (e *Environment) RegisterBatchOutput(name string, spec *ConfigSpec, ctor Ba
 			if err != nil {
 				return nil, err
 			}
+			if u, ok := op.(interface {
+				Unwrap() output.Streamed
+			}); ok {
+				return u.Unwrap(), nil
+			}
 
 			if maxInFlight < 1 {
 				return nil, fmt.Errorf("invalid maxInFlight parameter: %v", maxInFlight)
