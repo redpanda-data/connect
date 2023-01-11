@@ -215,8 +215,8 @@ func (a *awsSQSReader) readLoop(wg *sync.WaitGroup) {
 	}()
 
 	backoff := backoff.NewExponentialBackOff()
-	backoff.InitialInterval = 100 * time.Millisecond
-	backoff.MaxInterval = 5 * time.Minute
+	backoff.InitialInterval = 10 * time.Millisecond
+	backoff.MaxInterval = 30 * time.Second
 	backoff.MaxElapsedTime = 0
 
 	getMsgs := func() {
@@ -237,6 +237,8 @@ func (a *awsSQSReader) readLoop(wg *sync.WaitGroup) {
 		}
 		if len(res.Messages) > 0 {
 			pendingMsgs = append(pendingMsgs, res.Messages...)
+		}
+		if len(res.Messages) > 0 || a.conf.WaitTimeSeconds > 0 {
 			backoff.Reset()
 		}
 	}
