@@ -362,11 +362,9 @@ type gcpCloudStorageInput struct {
 	storageClient *storage.Client
 	pubsubClient  *pubsub.Client
 
-	subscription *pubsub.Subscription
-	msgsChan     chan *pubsub.Message
-	closeFunc    context.CancelFunc
-	// TODO: additional mutex, or use the existing object one?
-	subMut sync.Mutex
+	msgsChan            chan *pubsub.Message
+	subscribeCancelFunc context.CancelFunc
+	wg                  sync.WaitGroup
 
 	log   log.Modular
 	stats metrics.Type
@@ -413,23 +411,17 @@ func (g *gcpCloudStorageInput) getTargetReader(ctx context.Context) (gcpCloudSto
 // Cloud Storage bucket and any relevant Pub/Sub subscription used to
 // traverse the objects.
 func (g *gcpCloudStorageInput) Connect(ctx context.Context) error {
-	var err error
-	// TODO: understand why is this a new context in original code?
-	g.storageClient, err = storage.NewClient(context.Background())
-	if err != nil {
-		return err
-	}
-	if g.conf.PubSub.Subscription != "" {
-		// TODO: Again, should this be a new context or should we use existing?
-		g.pubsubClient, err = pubsub.NewClient(context.Background(), g.conf.PubSub.Project)
-		if err != nil {
+	if g.storageClient == nil {
+		var err error
+		if g.storageClient, err = storage.NewClient(context.Background()); err != nil {
 			return err
 		}
+	}
 
-		g.subMut.Lock()
-		defer g.subMut.Unlock()
-		if g.subscription != nil {
-			return nil
+	if g.conf.PubSub.Subscription != "" && g.conf.PubSub.Project != "" && g.pubsubClient == nil {
+		var err error
+		if g.pubsubClient, err = pubsub.NewClient(context.Background(), g.conf.PubSub.Project); err != nil {
+			return err
 		}
 
 		sub := g.pubsubClient.Subscription(g.conf.PubSub.Subscription)
@@ -437,43 +429,36 @@ func (g *gcpCloudStorageInput) Connect(ctx context.Context) error {
 		sub.ReceiveSettings.MaxOutstandingBytes = g.conf.PubSub.MaxOutstandingBytes
 		sub.ReceiveSettings.Synchronous = g.conf.PubSub.Sync
 
-		// TODO: why create new context? should we just use ctx?
 		subCtx, cancel := context.WithCancel(context.Background())
 
 		msgsChan := make(chan *pubsub.Message, g.conf.PubSub.MaxOutstandingMessages)
 
-		g.subscription = sub
 		g.msgsChan = msgsChan
-		g.closeFunc = cancel
+		g.subscribeCancelFunc = cancel
 
 		// launch goroutine to receive streaming messages from pub/sub
+		g.wg.Add(1)
 		go func() {
-			g.log.Debugln("entering pub/sub receiver goroutine")
+			defer g.wg.Done()
 			rerr := sub.Receive(subCtx, func(ctx context.Context, m *pubsub.Message) {
-				g.log.Debugf("received pub/sub msg inside receiver callback. m = %v\n", m)
 				select {
 				case msgsChan <- m:
-					g.log.Debugf("sending pub/sub msg into message channel inside receiver goroutine. m = %v\n", m)
 				case <-ctx.Done():
-					g.log.Debugf("cancel received, abandoning pub/sub message inside receiver goroutine. m = %v\n", m)
+					g.log.Debugln("caught done inside message handler")
 					if m != nil {
 						m.Nack()
 					}
 				}
-				g.log.Debugln("exiting pub/sub receiver callback")
 			})
 			if rerr != nil && rerr != context.Canceled {
 				g.log.Errorf("Subscription error: %v\n", rerr)
 			}
-			g.subMut.Lock()
-			g.subscription = nil
 			close(g.msgsChan)
-			g.msgsChan = nil
-			g.closeFunc = nil
-			g.subMut.Unlock()
-			g.log.Debugf("exiting pub/sub receiver goroutine")
+			g.log.Debugln("exited subscriber goroutine")
 		}()
 	}
+
+	var err error
 	if g.keyReader, err = g.getTargetReader(ctx); err != nil {
 		g.pubsubClient = nil
 		g.storageClient = nil
@@ -510,7 +495,6 @@ func (g *gcpCloudStorageInput) getObjectTarget(ctx context.Context) (*gcpCloudSt
 	// if gcs target originated from pub/sub notification, target.generation should be
 	// non-zero value. let's compare it to the objReference generation and
 	// abort if it's not the same.
-
 	if target.generation != 0 && objAttributes.Generation != target.generation {
 		err = errors.New("object generation mismatch")
 		_ = target.ackFn(ctx, err)
@@ -538,7 +522,7 @@ func (g *gcpCloudStorageInput) getObjectTarget(ctx context.Context) (*gcpCloudSt
 		_ = target.ackFn(ctx, err)
 		return nil, err
 	}
-	// TODO: Why aren't we using the object mutex around this?
+
 	g.object = object
 	return object, nil
 }
@@ -613,6 +597,7 @@ func (g *gcpCloudStorageInput) ReadBatch(ctx context.Context) (msg message.Batch
 
 // CloseAsync begins cleaning up resources used by this reader asynchronously.
 func (g *gcpCloudStorageInput) Close(ctx context.Context) (err error) {
+	g.log.Debugln("closing")
 	g.objectMut.Lock()
 	defer g.objectMut.Unlock()
 
@@ -622,13 +607,20 @@ func (g *gcpCloudStorageInput) Close(ctx context.Context) (err error) {
 	}
 
 	if err == nil && g.storageClient != nil {
+		g.log.Debugln("closing storeClient")
 		err = g.storageClient.Close()
 		g.storageClient = nil
 	}
 
 	if err == nil && g.pubsubClient != nil {
+		g.log.Debugln("cancel subscription")
+		g.subscribeCancelFunc()
+		g.log.Debugln("waiting until cancel finishes")
+		g.wg.Wait()
+		g.log.Debugln("closing pubsubClient")
 		err = g.pubsubClient.Close()
 		g.pubsubClient = nil
 	}
+	g.log.Debugln("done closing")
 	return
 }
