@@ -13,6 +13,7 @@ All notable changes to this project will be documented in this file.
 - The experimental `--watcher` cli flag now takes into account file deletions and new files that match wildcard patterns.
 - Field `dump_request_log_level` added to HTTP components.
 - New `couchbase` cache implementation.
+- New `compress` and `decompress` Bloblang methods.
 
 ### Fixed
 
