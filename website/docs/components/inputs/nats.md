@@ -30,8 +30,8 @@ input:
   label: ""
   nats:
     urls: []
-    queue: ""
     subject: ""
+    queue: ""
 ```
 
 </TabItem>
@@ -43,8 +43,8 @@ input:
   label: ""
   nats:
     urls: []
-    queue: ""
     subject: ""
+    queue: ""
     prefetch_count: 32
     tls:
       enabled: false
@@ -107,7 +107,6 @@ A list of URLs to connect to. If an item of the list contains commas it will be 
 
 
 Type: `array`  
-Default: `[]`  
 
 ```yml
 # Examples
@@ -119,21 +118,31 @@ urls:
   - nats://username:password@127.0.0.1:4222
 ```
 
-### `queue`
-
-The queue to consume from.
-
-
-Type: `string`  
-Default: `""`  
-
 ### `subject`
 
-A subject to consume from.
+A subject to consume from. Supports wildcards for consuming multiple subjects. Either a subject or stream must be specified.
 
 
 Type: `string`  
-Default: `""`  
+
+```yml
+# Examples
+
+subject: foo.bar.baz
+
+subject: foo.*.baz
+
+subject: foo.bar.*
+
+subject: foo.>
+```
+
+### `queue`
+
+An optional queue group to consume as.
+
+
+Type: `string`  
 
 ### `prefetch_count`
 
@@ -215,7 +224,6 @@ A list of client certificates to use. For each certificate either the fields `ce
 
 
 Type: `array`  
-Default: `[]`  
 
 ```yml
 # Examples
@@ -296,7 +304,6 @@ An optional file containing a NKey seed.
 
 
 Type: `string`  
-Default: `""`  
 
 ```yml
 # Examples
@@ -310,7 +317,6 @@ An optional file containing user credentials which consist of an user JWT and co
 
 
 Type: `string`  
-Default: `""`  
 
 ```yml
 # Examples

@@ -16,9 +16,10 @@ import (
 
 func natsOutputConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
+		Stable().
 		Categories("Services").
 		Summary("Publish to an NATS subject.").
-		Description(`This output will interpolate functions within the subject field, you can find a list of functions [here](/docs/configuration/interpolation#bloblang-queries
+		Description(`This output will interpolate functions within the subject field, you can find a list of functions [here](/docs/configuration/interpolation#bloblang-queries).
 
 ` + auth.Description()).
 		Field(service.NewStringListField("urls").
@@ -37,7 +38,7 @@ func natsOutputConfig() *service.ConfigSpec {
 			})).
 		Field(service.NewIntField("max_in_flight").
 			Description("The maximum number of messages to have in flight at a given time. Increase this to improve throughput.").
-			Default(64)). //TODO: Do we want to bump this up at some point?
+			Default(64)).
 		Field(service.NewTLSToggledField("tls")).
 		Field(service.NewInternalField(auth.FieldSpec()))
 }

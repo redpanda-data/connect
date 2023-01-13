@@ -15,6 +15,7 @@ import (
 
 func natsInputConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
+		Stable().
 		Categories("Services").
 		Summary(`Subscribe to a NATS subject.`).
 		Description(`
@@ -101,6 +102,10 @@ func newNATSReader(conf *service.ParsedConfig, mgr *service.Resources) (*natsRea
 
 	if n.prefetchCount, err = conf.FieldInt("prefetch_count"); err != nil {
 		return nil, err
+	}
+
+	if n.prefetchCount < 0 {
+		return nil, errors.New("prefetch count must be greater than or equal to zero")
 	}
 
 	if conf.Contains("queue") {
