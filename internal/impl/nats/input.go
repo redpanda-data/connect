@@ -80,7 +80,7 @@ type natsReader struct {
 	natsChan      chan *nats.Msg
 	interruptChan chan struct{}
 	interruptOnce sync.Once
-	shutSig  *shutdown.Signaller
+	shutSig       *shutdown.Signaller
 }
 
 func newNATSReader(conf *service.ParsedConfig, mgr *service.Resources) (service.Input, error) {
@@ -88,7 +88,7 @@ func newNATSReader(conf *service.ParsedConfig, mgr *service.Resources) (service.
 		log:           mgr.Logger(),
 		fs:            mgr.FS(),
 		interruptChan: make(chan struct{}),
-		shutSig: shutdown.NewSignaller(),
+		shutSig:       shutdown.NewSignaller(),
 	}
 
 	urlList, err := conf.FieldStringList("urls")
@@ -137,6 +137,7 @@ func (n *natsReader) Connect(ctx context.Context) error {
 	var natsConn *nats.Conn
 	var natsSub *nats.Subscription
 	var err error
+	var opts []nats.Option
 
 	if n.tlsConf != nil {
 		opts = append(opts, nats.Secure(n.tlsConf))
@@ -182,7 +183,6 @@ func (n *natsReader) disconnect() {
 	n.natsChan = nil
 }
 
-func (n *natsReader) ReadBatch(ctx context.Context) (service.MessageBatch, service.AckFunc, error) {
 func (n *natsReader) Read(ctx context.Context) (*service.Message, service.AckFunc, error) {
 	n.cMut.Lock()
 	natsChan := n.natsChan
@@ -202,14 +202,13 @@ func (n *natsReader) Read(ctx context.Context) (*service.Message, service.AckFun
 		return nil, nil, service.ErrNotConnected
 	}
 
-	bmsg := service.MessageBatch{service.NewMessage(msg.Data)}
-	part := bmsg[0]
-	part.MetaSetMut("nats_subject", msg.Subject)
+	bmsg := service.NewMessage(msg.Data)
+	bmsg.MetaSetMut("nats_subject", msg.Subject)
 	// process message headers if server supports the feature
 	if natsConn.HeadersSupported() {
 		for key := range msg.Header {
 			value := msg.Header.Get(key)
-			part.MetaSetMut(key, value)
+			bmsg.MetaSetMut(key, value)
 		}
 	}
 
