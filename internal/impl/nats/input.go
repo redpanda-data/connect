@@ -9,7 +9,6 @@ import (
 
 	"github.com/nats-io/nats.go"
 
-	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/impl/nats/auth"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
@@ -192,12 +191,12 @@ func (n *natsReader) ReadBatch(ctx context.Context) (service.MessageBatch, servi
 	select {
 	case msg, open = <-natsChan:
 	case <-ctx.Done():
-		return nil, nil, component.ErrTimeout
+		return nil, nil, ctx.Err()
 	case _, open = <-n.interruptChan:
 	}
 	if !open {
 		n.disconnect()
-		return nil, nil, component.ErrNotConnected
+		return nil, nil, service.ErrNotConnected
 	}
 
 	bmsg := service.MessageBatch{service.NewMessage(msg.Data)}
