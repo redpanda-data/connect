@@ -53,7 +53,8 @@ func init() {
 	err := service.RegisterInput(
 		"nats", natsInputConfig(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Input, error) {
-			return newNATSReader(conf, mgr)
+			input, err := newNATSReader(conf, mgr)
+			return service.AutoRetryNacks(input), err
 		},
 	)
 	if err != nil {
