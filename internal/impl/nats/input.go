@@ -10,7 +10,6 @@ import (
 	"github.com/nats-io/nats.go"
 
 	"github.com/benthosdev/benthos/v4/internal/impl/nats/auth"
-	"github.com/benthosdev/benthos/v4/internal/shutdown"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
@@ -80,7 +79,6 @@ type natsReader struct {
 	natsChan      chan *nats.Msg
 	interruptChan chan struct{}
 	interruptOnce sync.Once
-	shutSig       *shutdown.Signaller
 }
 
 func newNATSReader(conf *service.ParsedConfig, mgr *service.Resources) (service.Input, error) {
@@ -88,7 +86,6 @@ func newNATSReader(conf *service.ParsedConfig, mgr *service.Resources) (service.
 		log:           mgr.Logger(),
 		fs:            mgr.FS(),
 		interruptChan: make(chan struct{}),
-		shutSig:       shutdown.NewSignaller(),
 	}
 
 	urlList, err := conf.FieldStringList("urls")
