@@ -59,7 +59,7 @@ pipeline:
 			docs.FieldInt("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
 			docs.FieldString("publish_timeout", "The maximum length of time to wait before abandoning a publish attempt for a message.", "10s", "5m", "60m").Advanced(),
 			docs.FieldString("ordering_key", "The ordering key to use for publishing messages.").IsInterpolated().Advanced(),
-			docs.FieldString("endpoint", "The endpoint that overrides the default endpoint to be used for a service. This can be used to connect to region specific pubsub endpoint. [Valid values for Regional endpoints](https://cloud.google.com/pubsub/docs/reference/service_apis_overview#list_of_regional_endpoints).").Optional().HasDefault("pubsub.googleapis.com:443"),
+			docs.FieldString("endpoint", "The endpoint that overrides the default endpoint to be used for a service. This can be used to connect to region specific pubsub endpoint. [Valid values for Regional endpoints](https://cloud.google.com/pubsub/docs/reference/service_apis_overview#list_of_regional_endpoints).", "us-central1-pubsub.googleapis.com:443", "us-west3-pubsub.googleapis.com:443").Optional().HasDefault("pubsub.googleapis.com:443"),
 			docs.FieldObject("metadata", "Specify criteria for which metadata values are sent as attributes.").WithChildren(metadata.ExcludeFilterFields()...),
 		).ChildDefaultAndTypesFromStruct(output.NewGCPPubSubConfig()),
 		Categories: []string{

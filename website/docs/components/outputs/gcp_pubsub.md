@@ -150,6 +150,14 @@ The endpoint that overrides the default endpoint to be used for a service. This 
 Type: `string`  
 Default: `"pubsub.googleapis.com:443"`  
 
+```yml
+# Examples
+
+endpoint: us-central1-pubsub.googleapis.com:443
+
+endpoint: us-west3-pubsub.googleapis.com:443
+```
+
 ### `metadata`
 
 Specify criteria for which metadata values are sent as attributes.
