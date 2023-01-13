@@ -82,7 +82,7 @@ type natsReader struct {
 	interruptOnce sync.Once
 }
 
-func newNATSReader(conf *service.ParsedConfig, mgr *service.Resources) (service.Input, error) {
+func newNATSReader(conf *service.ParsedConfig, mgr *service.Resources) (*natsReader, error) {
 	n := natsReader{
 		log:           mgr.Logger(),
 		fs:            mgr.FS(),
