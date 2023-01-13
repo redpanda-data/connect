@@ -10,6 +10,7 @@ import (
 	"github.com/nats-io/nats.go"
 
 	"github.com/benthosdev/benthos/v4/internal/impl/nats/auth"
+	"github.com/benthosdev/benthos/v4/internal/shutdown"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
@@ -50,9 +51,9 @@ You can access these metadata fields using [function interpolation](/docs/config
 }
 
 func init() {
-	err := service.RegisterBatchInput(
+	err := service.RegisterInput(
 		"nats", natsInputConfig(),
-		func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchInput, error) {
+		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Input, error) {
 			return newNATSReader(conf, mgr)
 		},
 	)
@@ -79,13 +80,15 @@ type natsReader struct {
 	natsChan      chan *nats.Msg
 	interruptChan chan struct{}
 	interruptOnce sync.Once
+	shutSig  *shutdown.Signaller
 }
 
-func newNATSReader(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchInput, error) {
+func newNATSReader(conf *service.ParsedConfig, mgr *service.Resources) (service.Input, error) {
 	n := natsReader{
 		log:           mgr.Logger(),
 		fs:            mgr.FS(),
 		interruptChan: make(chan struct{}),
+		shutSig: shutdown.NewSignaller(),
 	}
 
 	urlList, err := conf.FieldStringList("urls")
@@ -134,7 +137,6 @@ func (n *natsReader) Connect(ctx context.Context) error {
 	var natsConn *nats.Conn
 	var natsSub *nats.Subscription
 	var err error
-	var opts []nats.Option
 
 	if n.tlsConf != nil {
 		opts = append(opts, nats.Secure(n.tlsConf))
@@ -181,6 +183,7 @@ func (n *natsReader) disconnect() {
 }
 
 func (n *natsReader) ReadBatch(ctx context.Context) (service.MessageBatch, service.AckFunc, error) {
+func (n *natsReader) Read(ctx context.Context) (*service.Message, service.AckFunc, error) {
 	n.cMut.Lock()
 	natsChan := n.natsChan
 	natsConn := n.natsConn
