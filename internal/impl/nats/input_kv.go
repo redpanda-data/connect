@@ -15,20 +15,32 @@ import (
 func natsKVInputConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Categories("Services").
-		Version("4.11.0"). // TODO
-		Summary("Watches for updates in a NATS Key Value bucket").
+		Version("4.11.0"). // TODO find out what the current version is
+		Summary("Watches for updates in a NATS Key Value bucket.").
 		Description(`TODO` + auth.Description()).
 		Field(service.NewStringListField("urls").
 			Description("A list of URLs to connect to. If an item of the list contains commas it will be expanded into multiple URLs.").
 			Example([]string{"nats://127.0.0.1:4222"}).
 			Example([]string{"nats://username:password@127.0.0.1:4222"})).
 		Field(service.NewStringField("bucket").
-			Description("TODO: bucket to watch").
+			Description("The name of the KV bucket to watch for updates.").
 			Example("my_kv_bucket")).
 		Field(service.NewStringField("key").
-			Description("TODO: A subject to filter key value watch results, can use wildcards").
+			Description("Key to watch for updates, can include wildcards.").
 			Default(">").
 			Example("foo.bar.baz").Example("foo.*.baz").Example("foo.bar.*").Example("foo.>")).
+		Field(service.NewBoolField("ignore_deletes").
+			Description("Do not send delete markers as messages.").
+			Default(false).
+			Advanced()).
+		Field(service.NewBoolField("include_history").
+			Description("Include all the history per key, not just the last one.").
+			Default(false).
+			Advanced()).
+		Field(service.NewBoolField("meta_only").
+			Description("Retrieve only the metadata of the entry").
+			Default(false).
+			Advanced()).
 		Field(service.NewTLSToggledField("tls")).
 		Field(service.NewInternalField(auth.FieldSpec()))
 }
@@ -44,11 +56,14 @@ func init() {
 }
 
 type kvReader struct {
-	urls     string
-	bucket   string
-	key      string
-	authConf auth.Config
-	tlsConf  *tls.Config
+	urls           string
+	bucket         string
+	key            string
+	ignoreDeletes  bool
+	includeHistory bool
+	metaOnly       bool
+	authConf       auth.Config
+	tlsConf        *tls.Config
 
 	log *service.Logger
 	fs  *service.FS
@@ -75,6 +90,18 @@ func newKVReader(conf *service.ParsedConfig, mgr *service.Resources) (*kvReader,
 	r.urls = strings.Join(urlList, ",")
 
 	if r.bucket, err = conf.FieldString("bucket"); err != nil {
+		return nil, err
+	}
+
+	if r.ignoreDeletes, err = conf.FieldBool("ignore_deletes"); err != nil {
+		return nil, err
+	}
+
+	if r.includeHistory, err = conf.FieldBool("include_history"); err != nil {
+		return nil, err
+	}
+
+	if r.metaOnly, err = conf.FieldBool("meta_only"); err != nil {
 		return nil, err
 	}
 
@@ -139,7 +166,18 @@ func (r *kvReader) Connect(ctx context.Context) error {
 		return err
 	}
 
-	r.watcher, err = kv.Watch(r.key)
+	var watchOpts []nats.WatchOpt
+	if r.ignoreDeletes {
+		watchOpts = append(watchOpts, nats.IgnoreDeletes())
+	}
+	if r.includeHistory {
+		watchOpts = append(watchOpts, nats.IncludeHistory())
+	}
+	if r.metaOnly {
+		watchOpts = append(watchOpts, nats.MetaOnly())
+	}
+
+	r.watcher, err = kv.Watch(r.key, watchOpts...)
 	if err != nil {
 		return err
 	}
