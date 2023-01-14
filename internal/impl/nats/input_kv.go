@@ -46,13 +46,16 @@ func natsKVInputConfig() *service.ConfigSpec {
 }
 
 func init() {
-	service.RegisterInput(
+	err := service.RegisterInput(
 		"nats_kv", natsKVInputConfig(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Input, error) {
 			reader, err := newKVReader(conf, mgr)
 			return service.AutoRetryNacks(reader), err
 		},
 	)
+	if err != nil {
+		panic(err)
+	}
 }
 
 type kvReader struct {
@@ -73,7 +76,6 @@ type kvReader struct {
 	connMut  sync.Mutex
 	natsConn *nats.Conn
 	watcher  nats.KeyWatcher
-	jCtx     nats.JetStreamContext
 }
 
 func newKVReader(conf *service.ParsedConfig, mgr *service.Resources) (*kvReader, error) {
@@ -139,7 +141,7 @@ func (r *kvReader) Connect(ctx context.Context) error {
 	defer func() {
 		if err != nil {
 			if r.watcher != nil {
-				r.watcher.Stop()
+				_ = r.watcher.Stop()
 			}
 			if r.natsConn != nil {
 				r.natsConn.Close()
@@ -192,7 +194,7 @@ func (r *kvReader) disconnect() {
 	defer r.connMut.Unlock()
 
 	if r.watcher != nil {
-		r.watcher.Stop()
+		_ = r.watcher.Stop()
 		r.watcher = nil
 	}
 	if r.natsConn != nil {
