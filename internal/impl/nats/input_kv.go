@@ -15,7 +15,7 @@ import (
 func natsKVInputConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Categories("Services").
-		Version("4.11.0"). // TODO find out what the current version is
+		Version("4.12.0").
 		Summary("Watches for updates in a NATS Key Value bucket.").
 		Description(`TODO` + auth.Description()).
 		Field(service.NewStringListField("urls").
@@ -237,7 +237,7 @@ func (r *kvReader) Read(ctx context.Context) (*service.Message, service.AckFunc,
 		msg.MetaSetMut("nats_kv_created", entry.Created())
 
 		return msg, func(ctx context.Context, res error) error {
-			return nil // TODO: Don't know what to do here
+			return nil
 		}, nil
 	}
 }
