@@ -172,19 +172,17 @@ func (r *kvReader) Read(ctx context.Context) (*service.Message, service.AckFunc,
 		return nil, nil, service.ErrNotConnected
 	}
 
-	updates := watcher.Updates()
-
 	for {
 		var entry nats.KeyValueEntry
 		var open bool
 		select {
-		case entry, open = <-updates:
+		case entry, open = <-watcher.Updates():
 		case <-ctx.Done():
 			return nil, nil, ctx.Err()
 		}
 
 		if !open {
-			//n.disconnect() TODO: disconnect?
+			r.disconnect()
 			return nil, nil, service.ErrNotConnected
 		}
 
