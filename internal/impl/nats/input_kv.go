@@ -184,7 +184,7 @@ func (r *kvReader) Connect(ctx context.Context) error {
 		return err
 	}
 
-	r.log.Infof(`Watching NATS KV bucket "%v" for key(s) "%v"`, r.bucket, r.key)
+	r.log.Infof("Watching NATS KV bucket: %s for key(s): %s", r.bucket, r.key)
 
 	return nil
 }
@@ -229,6 +229,8 @@ func (r *kvReader) Read(ctx context.Context) (*service.Message, service.AckFunc,
 		if entry == nil {
 			continue
 		}
+
+		r.log.Debugf("Reading update for bucket: %s and key: %s", entry.Bucket(), entry.Key())
 
 		msg := service.NewMessage(entry.Value())
 		msg.MetaSetMut("nats_kv_key", entry.Key())
