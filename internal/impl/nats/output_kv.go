@@ -195,7 +195,7 @@ func (kv *kvOutput) Write(ctx context.Context, msg *service.Message) error {
 		return err
 	}
 
-	// TODO: Log here
+	kv.log.Debugf("Updating key: %s in bucket: %s", kv.bucket, key)
 
 	return nil
 }
