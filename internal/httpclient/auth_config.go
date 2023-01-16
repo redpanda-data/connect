@@ -90,6 +90,10 @@ type JWTConfig struct {
 	rsaKey   **rsa.PrivateKey
 }
 
+type jwtSignerWithClaims interface {
+	SignWithClaims(f ifs.FS, req *http.Request, claims jwt.MapClaims) error
+}
+
 // NewJWTConfig returns a new JWTConfig with default values.
 func NewJWTConfig() JWTConfig {
 	var privKey *rsa.PrivateKey
@@ -106,6 +110,11 @@ func NewJWTConfig() JWTConfig {
 
 // Sign method to sign an HTTP request for an JWT exchange.
 func (j JWTConfig) Sign(f ifs.FS, req *http.Request) error {
+	return j.SignWithClaims(f, req, j.Claims)
+}
+
+// SignWithClaims method to sign an HTTP request for an JWT exchange with custom Claims map
+func (j JWTConfig) SignWithClaims(f ifs.FS, req *http.Request, claims jwt.MapClaims) error {
 	if !j.Enabled {
 		return nil
 	}
@@ -117,11 +126,11 @@ func (j JWTConfig) Sign(f ifs.FS, req *http.Request) error {
 	var token *jwt.Token
 	switch j.SigningMethod {
 	case "RS256":
-		token = jwt.NewWithClaims(jwt.SigningMethodRS256, j.Claims)
+		token = jwt.NewWithClaims(jwt.SigningMethodRS256, claims)
 	case "RS384":
-		token = jwt.NewWithClaims(jwt.SigningMethodRS384, j.Claims)
+		token = jwt.NewWithClaims(jwt.SigningMethodRS384, claims)
 	case "RS512":
-		token = jwt.NewWithClaims(jwt.SigningMethodRS512, j.Claims)
+		token = jwt.NewWithClaims(jwt.SigningMethodRS512, claims)
 	default:
 		return fmt.Errorf("jwt signing method %s not acepted. Try with RS256, RS384 or RS512", j.SigningMethod)
 	}
