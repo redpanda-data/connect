@@ -31,6 +31,7 @@ input:
   gcp_pubsub:
     project: ""
     subscription: ""
+    endpoint: ""
     sync: false
     max_outstanding_messages: 1000
     max_outstanding_bytes: 1000000000
@@ -46,6 +47,7 @@ input:
   gcp_pubsub:
     project: ""
     subscription: ""
+    endpoint: ""
     sync: false
     max_outstanding_messages: 1000
     max_outstanding_bytes: 1000000000
@@ -89,6 +91,22 @@ The target subscription ID.
 
 Type: `string`  
 Default: `""`  
+
+### `endpoint`
+
+An optional endpoint to override the default of `pubsub.googleapis.com:443`. This can be used to connect to a region specific pubsub endpoint. For a list of valid values check out [this document.](https://cloud.google.com/pubsub/docs/reference/service_apis_overview#list_of_regional_endpoints)
+
+
+Type: `string`  
+Default: `""`  
+
+```yml
+# Examples
+
+endpoint: us-central1-pubsub.googleapis.com:443
+
+endpoint: us-west3-pubsub.googleapis.com:443
+```
 
 ### `sync`
 

@@ -32,7 +32,7 @@ output:
     project: ""
     topic: ""
     max_in_flight: 64
-    endpoint: pubsub.googleapis.com:443
+    endpoint: ""
     metadata:
       exclude_prefixes: []
 ```
@@ -50,7 +50,7 @@ output:
     max_in_flight: 64
     publish_timeout: 60s
     ordering_key: ""
-    endpoint: pubsub.googleapis.com:443
+    endpoint: ""
     metadata:
       exclude_prefixes: []
 ```
@@ -143,11 +143,11 @@ Default: `""`
 
 ### `endpoint`
 
-The endpoint that overrides the default endpoint to be used for a service. This can be used to connect to region specific pubsub endpoint. [Valid values for Regional endpoints](https://cloud.google.com/pubsub/docs/reference/service_apis_overview#list_of_regional_endpoints).
+An optional endpoint to override the default of `pubsub.googleapis.com:443`. This can be used to connect to a region specific pubsub endpoint. For a list of valid values check out [this document.](https://cloud.google.com/pubsub/docs/reference/service_apis_overview#list_of_regional_endpoints)
 
 
 Type: `string`  
-Default: `"pubsub.googleapis.com:443"`  
+Default: `""`  
 
 ```yml
 # Examples
