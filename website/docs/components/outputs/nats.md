@@ -113,6 +113,7 @@ urls:
 ### `subject`
 
 The subject to publish to.
+This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
 
 
 Type: `string`  
