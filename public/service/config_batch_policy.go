@@ -2,10 +2,7 @@ package service
 
 import (
 	"context"
-	"fmt"
 	"time"
-
-	"gopkg.in/yaml.v3"
 
 	"github.com/benthosdev/benthos/v4/internal/batch/policy"
 	"github.com/benthosdev/benthos/v4/internal/batch/policy/batchconfig"
@@ -129,42 +126,17 @@ func NewBatchPolicyField(name string) *ConfigField {
 // configuration was invalid.
 func (p *ParsedConfig) FieldBatchPolicy(path ...string) (conf BatchPolicy, err error) {
 	if conf.Count, err = p.FieldInt(append(path, "count")...); err != nil {
-		return conf, err
+		return
 	}
 	if conf.ByteSize, err = p.FieldInt(append(path, "byte_size")...); err != nil {
-		return conf, err
+		return
 	}
 	if conf.Check, err = p.FieldString(append(path, "check")...); err != nil {
-		return conf, err
+		return
 	}
 	if conf.Period, err = p.FieldString(append(path, "period")...); err != nil {
-		return conf, err
-	}
-
-	procsNode, exists := p.field(append(path, "processors")...)
-	if !exists {
 		return
 	}
-
-	procsArray, ok := procsNode.([]any)
-	if !ok {
-		err = fmt.Errorf("field 'processors' returned unexpected value, expected array, got %T", procsNode)
-		return
-	}
-
-	for i, iConf := range procsArray {
-		node, ok := iConf.(*yaml.Node)
-		if !ok {
-			err = fmt.Errorf("field 'processors.%v' returned unexpected value, expected object, got %T", i, iConf)
-			return
-		}
-
-		var pconf processor.Config
-		if err = node.Decode(&pconf); err != nil {
-			err = fmt.Errorf("field 'processors.%v': %w", i, err)
-			return
-		}
-		conf.procs = append(conf.procs, pconf)
-	}
+	conf.procs, err = p.fieldProcessorListConfigs(append(path, "processors")...)
 	return
 }

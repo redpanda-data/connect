@@ -1,17 +1,12 @@
 package couchbase_test
 
 import (
-	"bytes"
 	"context"
 	"fmt"
-	"io"
-	"os"
 	"testing"
 	"time"
 
 	"github.com/bxcodec/faker/v3"
-	"github.com/ory/dockertest/v3"
-	"github.com/ory/dockertest/v3/docker"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -107,106 +102,47 @@ couchbase:
 	}
 }
 
-func TestProcessorIntegration(t *testing.T) {
+func TestIntegrationCouchbaseProcessor(t *testing.T) {
 	integration.CheckSkip(t)
 
-	pool, err := dockertest.NewPool("")
-	require.NoError(t, err)
+	servicePort := requireCouchbase(t)
 
-	pool.MaxWait = 30 * time.Second
-	if deadline, ok := t.Deadline(); ok {
-		pool.MaxWait = time.Until(deadline) - 100*time.Millisecond
-	}
-
-	pwd, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("failed to get working directory: %s", err)
-	}
-
-	resource, err := pool.RunWithOptions(&dockertest.RunOptions{
-		Repository: "couchbase",
-		Tag:        "latest",
-		Cmd:        []string{"/opt/couchbase/configure-server.sh"},
-		Env: []string{
-			"CLUSTER_NAME=couchbase",
-			"COUCHBASE_ADMINISTRATOR_USERNAME=benthos",
-			"COUCHBASE_ADMINISTRATOR_PASSWORD=password",
-		},
-		Mounts: []string{
-			fmt.Sprintf("%s/testdata/configure-server.sh:/opt/couchbase/configure-server.sh", pwd),
-		},
-		PortBindings: map[docker.Port][]docker.PortBinding{
-			"8091/tcp": {
-				{
-					HostIP: "0.0.0.0", HostPort: "8091",
-				},
-			},
-			"11210/tcp": {
-				{
-					HostIP: "0.0.0.0", HostPort: "11210",
-				},
-			},
-		},
-	})
-	require.NoError(t, err)
+	bucket := fmt.Sprintf("testing-processor-%d", time.Now().Unix())
+	require.NoError(t, createBucket(context.Background(), t, servicePort, bucket))
 	t.Cleanup(func() {
-		assert.NoError(t, pool.Purge(resource))
+		require.NoError(t, removeBucket(context.Background(), t, servicePort, bucket))
 	})
-
-	_ = resource.Expire(900)
-
-	// Look for readyness
-	var stderr bytes.Buffer
-	time.Sleep(15 * time.Second)
-	for {
-		time.Sleep(time.Second)
-		exitCode, err := resource.Exec([]string{"/usr/bin/cat", "/is-ready"}, dockertest.ExecOptions{
-			StdErr: &stderr, // without stderr exit code is not reported
-		})
-		if exitCode == 0 && err == nil {
-			break
-		}
-		t.Logf("exit code: %d, err: %s", exitCode, err)
-		errB, err := io.ReadAll(&stderr)
-		require.NoError(t, err)
-		t.Logf("stderr: %s", string(errB))
-	}
-
-	t.Logf("couchbase cluster is ready")
-
-	port := resource.GetPort("11210/tcp")
-	require.NotEmpty(t, port)
 
 	uid := faker.UUIDHyphenated()
 	payload := fmt.Sprintf(`{"id": %q, "data": %q}`, uid, faker.Sentence())
 
 	t.Run("Insert", func(t *testing.T) {
-		testCouchbaseProcessorInsert(uid, payload, port, t)
+		testCouchbaseProcessorInsert(uid, payload, bucket, servicePort, t)
 	})
 	t.Run("Get", func(t *testing.T) {
-		testCouchbaseProcessorGet(uid, payload, port, t)
+		testCouchbaseProcessorGet(uid, payload, bucket, servicePort, t)
 	})
 	t.Run("Remove", func(t *testing.T) {
-		testCouchbaseProcessorRemove(uid, port, t)
+		testCouchbaseProcessorRemove(uid, bucket, servicePort, t)
 	})
 	t.Run("GetMissing", func(t *testing.T) {
-		testCouchbaseProcessorGetMissing(uid, port, t)
+		testCouchbaseProcessorGetMissing(uid, bucket, servicePort, t)
 	})
 
 	payload = fmt.Sprintf(`{"id": %q, "data": %q}`, uid, faker.Sentence())
 	t.Run("Upsert", func(t *testing.T) {
-		testCouchbaseProcessorUpsert(uid, payload, port, t)
+		testCouchbaseProcessorUpsert(uid, payload, bucket, servicePort, t)
 	})
 	t.Run("Get", func(t *testing.T) {
-		testCouchbaseProcessorGet(uid, payload, port, t)
+		testCouchbaseProcessorGet(uid, payload, bucket, servicePort, t)
 	})
 
 	payload = fmt.Sprintf(`{"id": %q, "data": %q}`, uid, faker.Sentence())
 	t.Run("Replace", func(t *testing.T) {
-		testCouchbaseProcessorReplace(uid, payload, port, t)
+		testCouchbaseProcessorReplace(uid, payload, bucket, servicePort, t)
 	})
 	t.Run("Get", func(t *testing.T) {
-		testCouchbaseProcessorGet(uid, payload, port, t)
+		testCouchbaseProcessorGet(uid, payload, bucket, servicePort, t)
 	})
 }
 
@@ -225,16 +161,16 @@ func getProc(tb testing.TB, config string) *couchbase.Processor {
 	return proc
 }
 
-func testCouchbaseProcessorInsert(uid, payload, port string, t *testing.T) {
+func testCouchbaseProcessorInsert(uid, payload, bucket, port string, t *testing.T) {
 	config := fmt.Sprintf(`
 url: 'couchbase://localhost:%s'
-bucket: 'testing'
-username: benthos
-password: password
+bucket: %s
+username: %s
+password: %s
 id: '${! json("id") }'
 content: 'root = this'
 operation: 'insert'
-`, port)
+`, port, bucket, username, password)
 
 	msgOut, err := getProc(t, config).ProcessBatch(context.Background(), service.MessageBatch{
 		service.NewMessage([]byte(payload)),
@@ -251,16 +187,16 @@ operation: 'insert'
 	assert.JSONEq(t, payload, string(dataOut))
 }
 
-func testCouchbaseProcessorUpsert(uid, payload, port string, t *testing.T) {
+func testCouchbaseProcessorUpsert(uid, payload, bucket, port string, t *testing.T) {
 	config := fmt.Sprintf(`
 url: 'couchbase://localhost:%s'
-bucket: 'testing'
-username: benthos
-password: password
+bucket: %s
+username: %s
+password: %s
 id: '${! json("id") }'
 content: 'root = this'
 operation: 'upsert'
-`, port)
+`, port, bucket, username, password)
 
 	msgOut, err := getProc(t, config).ProcessBatch(context.Background(), service.MessageBatch{
 		service.NewMessage([]byte(payload)),
@@ -277,16 +213,16 @@ operation: 'upsert'
 	assert.JSONEq(t, payload, string(dataOut))
 }
 
-func testCouchbaseProcessorReplace(uid, payload, port string, t *testing.T) {
+func testCouchbaseProcessorReplace(uid, payload, bucket, port string, t *testing.T) {
 	config := fmt.Sprintf(`
 url: 'couchbase://localhost:%s'
-bucket: 'testing'
-username: benthos
-password: password
+bucket: %s
+username: %s
+password: %s
 id: '${! json("id") }'
 content: 'root = this'
 operation: 'replace'
-`, port)
+`, port, bucket, username, password)
 
 	msgOut, err := getProc(t, config).ProcessBatch(context.Background(), service.MessageBatch{
 		service.NewMessage([]byte(payload)),
@@ -303,15 +239,15 @@ operation: 'replace'
 	assert.JSONEq(t, payload, string(dataOut))
 }
 
-func testCouchbaseProcessorGet(uid, payload, port string, t *testing.T) {
+func testCouchbaseProcessorGet(uid, payload, bucket, port string, t *testing.T) {
 	config := fmt.Sprintf(`
 url: 'couchbase://localhost:%s'
-bucket: 'testing'
-username: benthos
-password: password
+bucket: %s
+username: %s
+password: %s
 id: '${! content() }'
 operation: 'get'
-`, port)
+`, port, bucket, username, password)
 
 	msgOut, err := getProc(t, config).ProcessBatch(context.Background(), service.MessageBatch{
 		service.NewMessage([]byte(uid)),
@@ -328,15 +264,15 @@ operation: 'get'
 	assert.JSONEq(t, payload, string(dataOut))
 }
 
-func testCouchbaseProcessorRemove(uid, port string, t *testing.T) {
+func testCouchbaseProcessorRemove(uid, bucket, port string, t *testing.T) {
 	config := fmt.Sprintf(`
 url: 'couchbase://localhost:%s'
-bucket: 'testing'
-username: benthos
-password: password
+bucket: %s
+username: %s
+password: %s
 id: '${! content() }'
 operation: 'remove'
-`, port)
+`, port, bucket, username, password)
 
 	msgOut, err := getProc(t, config).ProcessBatch(context.Background(), service.MessageBatch{
 		service.NewMessage([]byte(uid)),
@@ -353,15 +289,15 @@ operation: 'remove'
 	assert.Equal(t, uid, string(dataOut))
 }
 
-func testCouchbaseProcessorGetMissing(uid, port string, t *testing.T) {
+func testCouchbaseProcessorGetMissing(uid, bucket, port string, t *testing.T) {
 	config := fmt.Sprintf(`
 url: 'couchbase://localhost:%s'
-bucket: 'testing'
-username: benthos
-password: password
+bucket: %s
+username: %s
+password: %s
 id: '${! content() }'
 operation: 'get'
-`, port)
+`, port, bucket, username, password)
 
 	msgOut, err := getProc(t, config).ProcessBatch(context.Background(), service.MessageBatch{
 		service.NewMessage([]byte(uid)),

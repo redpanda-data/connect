@@ -1,15 +1,7 @@
 package pure
 
 import (
-	"bytes"
-	"compress/flate"
-	"compress/gzip"
-	"compress/zlib"
 	"context"
-	"fmt"
-
-	"github.com/golang/snappy"
-	"github.com/pierrec/lz4/v4"
 
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
@@ -45,101 +37,9 @@ The 'level' field might not apply to all algorithms.`,
 	}
 }
 
-//------------------------------------------------------------------------------
-
-type compressFunc func(level int, bytes []byte) ([]byte, error)
-
-func gzipCompress(level int, b []byte) ([]byte, error) {
-	buf := &bytes.Buffer{}
-	w, err := gzip.NewWriterLevel(buf, level)
-	if err != nil {
-		return nil, err
-	}
-
-	if _, err = w.Write(b); err != nil {
-		w.Close()
-		return nil, err
-	}
-	// Must flush writer before calling buf.Bytes()
-	w.Close()
-	return buf.Bytes(), nil
-}
-
-func zlibCompress(level int, b []byte) ([]byte, error) {
-	buf := &bytes.Buffer{}
-	w, err := zlib.NewWriterLevel(buf, level)
-	if err != nil {
-		return nil, err
-	}
-
-	if _, err = w.Write(b); err != nil {
-		w.Close()
-		return nil, err
-	}
-	// Must flush writer before calling buf.Bytes()
-	w.Close()
-	return buf.Bytes(), nil
-}
-
-func flateCompress(level int, b []byte) ([]byte, error) {
-	buf := &bytes.Buffer{}
-	w, err := flate.NewWriter(buf, level)
-	if err != nil {
-		return nil, err
-	}
-
-	if _, err = w.Write(b); err != nil {
-		w.Close()
-		return nil, err
-	}
-	// Must flush writer before calling buf.Bytes()
-	w.Close()
-	return buf.Bytes(), nil
-}
-
-func snappyCompress(level int, b []byte) ([]byte, error) {
-	return snappy.Encode(nil, b), nil
-}
-
-func lz4Compress(level int, b []byte) ([]byte, error) {
-	buf := &bytes.Buffer{}
-	w := lz4.NewWriter(buf)
-	if level > 0 {
-		// The default compression level is 0 (lz4.Fast)
-		if err := w.Apply(lz4.CompressionLevelOption(lz4.CompressionLevel(1 << (8 + level)))); err != nil {
-			return nil, err
-		}
-	}
-
-	if _, err := w.Write(b); err != nil {
-		w.Close()
-		return nil, err
-	}
-	// Must flush writer before calling buf.Bytes()
-	w.Close()
-
-	return buf.Bytes(), nil
-}
-
-func strToCompressor(str string) (compressFunc, error) {
-	switch str {
-	case "gzip":
-		return gzipCompress, nil
-	case "zlib":
-		return zlibCompress, nil
-	case "flate":
-		return flateCompress, nil
-	case "snappy":
-		return snappyCompress, nil
-	case "lz4":
-		return lz4Compress, nil
-	}
-	return nil, fmt.Errorf("compression type not recognised: %v", str)
-}
-
 type compressProc struct {
 	level int
-	comp  compressFunc
+	comp  CompressFunc
 	log   log.Modular
 }
 

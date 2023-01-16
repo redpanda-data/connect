@@ -292,6 +292,7 @@ func (f FieldSpec) OmitWhen(fn func(field, parent any) (why string, shouldOmit b
 // binary that defines it as the function cannot be serialized into a portable
 // schema.
 func (f FieldSpec) LinterFunc(fn LintFunc) FieldSpec {
+	f.Linter = ""
 	f.customLintFn = fn
 	return f
 }

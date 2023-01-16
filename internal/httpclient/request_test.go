@@ -3,7 +3,6 @@ package httpclient
 import (
 	"testing"
 
-	"github.com/benthosdev/benthos/v4/internal/httpclient/oldconfig"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
 
@@ -12,7 +11,7 @@ import (
 )
 
 func TestSingleMessageHeaders(t *testing.T) {
-	oldConf := oldconfig.NewOldConfig()
+	oldConf := NewOldConfig()
 	oldConf.Headers["Content-Type"] = "foo"
 	oldConf.Metadata.IncludePrefixes = []string{"more_"}
 

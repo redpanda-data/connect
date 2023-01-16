@@ -18,12 +18,12 @@ func IncludeFilterDocs() docs.FieldSpecs {
 			[]string{"foo_", "bar_"},
 			[]string{"kafka_"},
 			[]string{"content-"},
-		).Array(),
+		).Array().HasDefault([]any{}),
 		docs.FieldString(
 			"include_patterns", "Provide a list of explicit metadata key regular expression (re2) patterns to match against.",
 			[]string{".*"},
 			[]string{"_timestamp_unix$"},
-		).Array(),
+		).Array().HasDefault([]any{}),
 	}
 }
 

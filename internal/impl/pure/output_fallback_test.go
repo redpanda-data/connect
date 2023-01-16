@@ -15,41 +15,44 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	yaml "gopkg.in/yaml.v3"
 
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
-	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
 )
 
 var _ output.Streamed = &fallbackBroker{}
 
+func parseYAMLOutputConf(t testing.TB, formatStr string, args ...any) (conf output.Config) {
+	t.Helper()
+	conf = output.NewConfig()
+	require.NoError(t, yaml.Unmarshal(fmt.Appendf(nil, formatStr, args...), &conf))
+	return
+}
+
 func TestFallbackOutputBasic(t *testing.T) {
 	dir := t.TempDir()
 
-	outOne, outTwo, outThree := output.NewConfig(), output.NewConfig(), output.NewConfig()
-	outOne.Type, outTwo.Type, outThree.Type = "http_client", "file", "file"
-	outOne.HTTPClient.URL = "http://localhost:11111111/badurl"
-	outOne.HTTPClient.NumRetries = 1
-	outOne.HTTPClient.Retry = "1ms"
-	outTwo.File.Path = filepath.Join(dir, "two", `bar-${!count("fallbacktofoo")}-${!count("fallbacktobar")}.txt`)
-	outTwo.File.Codec = "all-bytes"
-	outThree.File.Path = "/dev/null"
-
-	procOne, procTwo, procThree := processor.NewConfig(), processor.NewConfig(), processor.NewConfig()
-	procOne.Type, procTwo.Type, procThree.Type = "bloblang", "bloblang", "bloblang"
-	procOne.Bloblang = `root = "this-should-never-appear %v".format(count("fallbacktofoo")) + content()`
-	procTwo.Bloblang = `root = "two-" + content()`
-	procThree.Bloblang = `root = "this-should-never-appear %v".format(count("fallbacktobar")) + content()`
-
-	outOne.Processors = append(outOne.Processors, procOne)
-	outTwo.Processors = append(outTwo.Processors, procTwo)
-	outThree.Processors = append(outThree.Processors, procThree)
-
-	conf := output.NewConfig()
-	conf.Type = "fallback"
-	conf.Fallback = append(conf.Fallback, outOne, outTwo, outThree)
+	conf := parseYAMLOutputConf(t, `
+fallback:
+  - http_client:
+      url: http://localhost:11111111/badurl
+      retries: 1
+      retry_period: "1ms"
+    processors:
+      - mapping: 'root = "this-should-never-appear %%v".format(count("fallbacktofoo")) + content()'
+  - file:
+      path: '%v'
+      codec: all-bytes
+    processors:
+      - mapping: 'root = "two-" + content()'
+  - file:
+      path: /dev/null
+    processors:
+      - mapping: 'root = "this-should-never-appear %%v".format(count("fallbacktobar")) + content()'
+`, filepath.Join(dir, "two", `bar-${!count("fallbacktofoo")}-${!count("fallbacktobar")}.txt`))
 
 	s, err := bundle.AllOutputs.Init(conf, mock.NewManager())
 	require.NoError(t, err)
