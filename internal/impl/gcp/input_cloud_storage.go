@@ -238,22 +238,17 @@ func newPubsubTargetReader(
 }
 
 func (ps *pubsubTargetReader) Pop(ctx context.Context) (*gcpCloudStorageObjectTarget, error) {
-	ps.log.Debugln("about to wait for a pubsub message on channel")
 	// Receive a Pub/Sub message
 	var pubsubMsg *pubsub.Message
 	var open bool
 	select {
 	case pubsubMsg, open = <-ps.msgsChan:
 		if !open {
-			ps.log.Debugln("pub/sub channel was closed")
 			return nil, component.ErrNotConnected
 		}
 	case <-ctx.Done():
-		ps.log.Debugln("received shutdown while waiting for pubsub message on channel")
 		return nil, component.ErrTimeout
 	}
-
-	ps.log.Debugf("received msg on pub/sub msg channel = %v", pubsubMsg.Attributes)
 
 	object, err := ps.parseObjectTarget(pubsubMsg)
 	if err != nil {
@@ -317,7 +312,6 @@ func (ps *pubsubTargetReader) parseObjectTarget(pubsubMsg *pubsub.Message) (*gcp
 		ps.storageClient.Bucket(bucket), key, ps.conf.DeleteObjects,
 		func(ctx context.Context, err error) (aerr error) {
 			if err != nil {
-				ps.log.Debugf("Abandoning Pub/Sub notification due to error: %v\n", err)
 				aerr = ps.nackPubsubMessage(ctx, pubsubMsg)
 			} else {
 				aerr = ps.ackPubsubMessage(ctx, pubsubMsg)
@@ -336,13 +330,13 @@ func (ps *pubsubTargetReader) parseObjectTarget(pubsubMsg *pubsub.Message) (*gcp
 
 func (ps *pubsubTargetReader) nackPubsubMessage(ctx context.Context, msg *pubsub.Message) error {
 	msg.Nack()
-	ps.log.Debugln("nack msg")
+	ps.log.Traceln("pub/sub message nack")
 	return nil
 }
 
 func (ps *pubsubTargetReader) ackPubsubMessage(ctx context.Context, msg *pubsub.Message) error {
 	msg.Ack()
-	ps.log.Debugln("ack msg")
+	ps.log.Traceln("pub/sub message ack")
 	return nil
 }
 
@@ -444,7 +438,6 @@ func (g *gcpCloudStorageInput) Connect(ctx context.Context) error {
 				select {
 				case msgsChan <- m:
 				case <-ctx.Done():
-					g.log.Debugln("caught done inside message handler")
 					if m != nil {
 						m.Nack()
 					}
@@ -454,7 +447,6 @@ func (g *gcpCloudStorageInput) Connect(ctx context.Context) error {
 				g.log.Errorf("Subscription error: %v\n", rerr)
 			}
 			close(g.msgsChan)
-			g.log.Debugln("exited subscriber goroutine")
 		}()
 	}
 
@@ -488,7 +480,6 @@ func (g *gcpCloudStorageInput) getObjectTarget(ctx context.Context) (*gcpCloudSt
 	objAttributes, err := objReference.Attrs(ctx)
 	if err != nil {
 		_ = target.ackFn(ctx, err)
-		g.log.Debugf("hit error running attrs on object, %v\n", err)
 		return nil, err
 	}
 
@@ -512,7 +503,6 @@ func (g *gcpCloudStorageInput) getObjectTarget(ctx context.Context) (*gcpCloudSt
 		obj:    objAttributes,
 	}
 	if object.scanner, err = g.objectScannerCtor(target.key, objReader, target.ackFn); err != nil {
-		// TODO: EOF check copied from input_s3 logic... keep?
 		// Warning: NEVER return io.EOF from a scanner constructor, as this will
 		// falsely indicate that we've reached the end of our list of object
 		// targets when running a Pub/Sub feed.
@@ -597,7 +587,6 @@ func (g *gcpCloudStorageInput) ReadBatch(ctx context.Context) (msg message.Batch
 
 // CloseAsync begins cleaning up resources used by this reader asynchronously.
 func (g *gcpCloudStorageInput) Close(ctx context.Context) (err error) {
-	g.log.Debugln("closing")
 	g.objectMut.Lock()
 	defer g.objectMut.Unlock()
 
@@ -607,20 +596,15 @@ func (g *gcpCloudStorageInput) Close(ctx context.Context) (err error) {
 	}
 
 	if err == nil && g.storageClient != nil {
-		g.log.Debugln("closing storeClient")
 		err = g.storageClient.Close()
 		g.storageClient = nil
 	}
 
 	if err == nil && g.pubsubClient != nil {
-		g.log.Debugln("cancel subscription")
 		g.subscribeCancelFunc()
-		g.log.Debugln("waiting until cancel finishes")
 		g.wg.Wait()
-		g.log.Debugln("closing pubsubClient")
 		err = g.pubsubClient.Close()
 		g.pubsubClient = nil
 	}
-	g.log.Debugln("done closing")
 	return
 }
