@@ -91,12 +91,6 @@ generated with the [nsc tool](https://docs.nats.io/nats-tools/nsc).
 
 More details [here](https://docs.nats.io/developing-with-nats/security/creds).
 
-## Performance
-
-This output benefits from sending multiple messages in flight in parallel for
-improved performance. You can tune the max number of in flight messages (or
-message batches) with the field `max_in_flight`.
-
 ## Fields
 
 ### `urls`
@@ -105,7 +99,6 @@ A list of URLs to connect to. If an item of the list contains commas it will be 
 
 
 Type: `array`  
-Default: `[]`  
 
 ```yml
 # Examples
@@ -120,11 +113,15 @@ urls:
 ### `subject`
 
 The subject to publish to.
-This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
 
 
 Type: `string`  
-Default: `""`  
+
+```yml
+# Examples
+
+subject: foo.bar.baz
+```
 
 ### `headers`
 
@@ -223,7 +220,6 @@ A list of client certificates to use. For each certificate either the fields `ce
 
 
 Type: `array`  
-Default: `[]`  
 
 ```yml
 # Examples
@@ -304,7 +300,6 @@ An optional file containing a NKey seed.
 
 
 Type: `string`  
-Default: `""`  
 
 ```yml
 # Examples
@@ -318,7 +313,6 @@ An optional file containing user credentials which consist of an user JWT and co
 
 
 Type: `string`  
-Default: `""`  
 
 ```yml
 # Examples
