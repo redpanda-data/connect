@@ -47,6 +47,20 @@ docker run --rm jeffail/benthos create nats/protobuf/aws_sqs > ./config.yaml
 # Run
 docker run --rm -v $(pwd)/config.yaml:/benthos.yaml jeffail/benthos`
   },
+  {
+    label: 'Asdf',
+    language: 'bash',
+    children: `# Install
+asdf plugin add benthos
+asdf install benthos latest
+asdf global benthos latest
+
+# Make a config
+benthos create nats/protobuf/aws_sqs > ./config.yaml
+
+# Run
+benthos -c ./config.yaml`
+  },
 ]
 
 const snippets = [
