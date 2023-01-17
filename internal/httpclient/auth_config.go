@@ -2,8 +2,8 @@ package httpclient
 
 import (
 	"context"
+	"crypto"
 	"crypto/hmac"
-	"crypto/rsa"
 	"crypto/sha1"
 	"encoding/base64"
 	"fmt"
@@ -86,21 +86,21 @@ type JWTConfig struct {
 	PrivateKeyFile string         `json:"private_key_file" yaml:"private_key_file"`
 
 	// internal private fields
-	rsaKeyMx *sync.Mutex
-	rsaKey   **rsa.PrivateKey
+	keyMx *sync.Mutex
+	key   *crypto.PrivateKey
 }
 
 // NewJWTConfig returns a new JWTConfig with default values.
 func NewJWTConfig() JWTConfig {
-	var privKey *rsa.PrivateKey
+	var key crypto.PrivateKey
 	return JWTConfig{
 		Enabled:        false,
 		Claims:         map[string]any{},
 		Headers:        map[string]any{},
 		SigningMethod:  "",
 		PrivateKeyFile: "",
-		rsaKeyMx:       &sync.Mutex{},
-		rsaKey:         &privKey,
+		keyMx:          &sync.Mutex{},
+		key:            &key,
 	}
 }
 
@@ -122,15 +122,17 @@ func (j JWTConfig) Sign(f ifs.FS, req *http.Request) error {
 		token = jwt.NewWithClaims(jwt.SigningMethodRS384, j.Claims)
 	case "RS512":
 		token = jwt.NewWithClaims(jwt.SigningMethodRS512, j.Claims)
+	case "EdDSA":
+		token = jwt.NewWithClaims(jwt.SigningMethodEdDSA, j.Claims)
 	default:
-		return fmt.Errorf("jwt signing method %s not acepted. Try with RS256, RS384 or RS512", j.SigningMethod)
+		return fmt.Errorf("jwt signing method %s not acepted. Try with RS256, RS384, RS512 or EdDSA", j.SigningMethod)
 	}
 
 	for name, value := range j.Headers {
 		token.Header[name] = value
 	}
 
-	ss, err := token.SignedString(*j.rsaKey)
+	ss, err := token.SignedString(*j.key)
 	if err != nil {
 		return fmt.Errorf("failed to sign jwt: %v", err)
 	}
@@ -142,10 +144,10 @@ func (j JWTConfig) Sign(f ifs.FS, req *http.Request) error {
 // parsePrivateKey parses once the RSA private key.
 // Needs mutex locking as Sign might be called by parallel threads.
 func (j JWTConfig) parsePrivateKey(fs ifs.FS) error {
-	j.rsaKeyMx.Lock()
-	defer j.rsaKeyMx.Unlock()
+	j.keyMx.Lock()
+	defer j.keyMx.Unlock()
 
-	if *j.rsaKey != nil {
+	if *j.key != nil {
 		return nil
 	}
 
@@ -154,9 +156,14 @@ func (j JWTConfig) parsePrivateKey(fs ifs.FS) error {
 		return fmt.Errorf("failed to read private key: %v", err)
 	}
 
-	*j.rsaKey, err = jwt.ParseRSAPrivateKeyFromPEM(privateKey)
+	switch j.SigningMethod {
+	case "RS256", "RS384", "RS512":
+		*j.key, err = jwt.ParseRSAPrivateKeyFromPEM(privateKey)
+	case "EdDSA":
+		*j.key, err = jwt.ParseEdPrivateKeyFromPEM(privateKey)
+	}
 	if err != nil {
-		return fmt.Errorf("failed to parse private key: %v", err)
+		return fmt.Errorf("failed to parse %s private key: %v", j.SigningMethod, err)
 	}
 
 	return nil
