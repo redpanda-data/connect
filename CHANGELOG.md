@@ -15,6 +15,9 @@ All notable changes to this project will be documented in this file.
 - New `couchbase` cache implementation.
 - New `compress` and `decompress` Bloblang methods.
 - Field `endpoint` added to the `gcp_pubsub` input and output.
+- Fields `file_name`, `file_extension` and `request_id` added to the `snowflake_put` output.
+- Add interpolation support to the `path` field of the `snowflake_put` output.
+- Add ZSTD compression support to the `compression` field of the `snowflake_put` output.
 
 ### Fixed
 
