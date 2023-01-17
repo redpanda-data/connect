@@ -37,7 +37,6 @@ type Config struct {
 	GCPCloudStorage    GCPCloudStorageConfig   `json:"gcp_cloud_storage" yaml:"gcp_cloud_storage"`
 	GCPPubSub          GCPPubSubConfig         `json:"gcp_pubsub" yaml:"gcp_pubsub"`
 	HDFS               HDFSConfig              `json:"hdfs" yaml:"hdfs"`
-	HTTPClient         HTTPClientConfig        `json:"http_client" yaml:"http_client"`
 	HTTPServer         HTTPServerConfig        `json:"http_server" yaml:"http_server"`
 	Inproc             string                  `json:"inproc" yaml:"inproc"`
 	Kafka              KafkaConfig             `json:"kafka" yaml:"kafka"`
@@ -61,7 +60,6 @@ type Config struct {
 	Switch             SwitchConfig            `json:"switch" yaml:"switch"`
 	SyncResponse       struct{}                `json:"sync_response" yaml:"sync_response"`
 	Socket             SocketConfig            `json:"socket" yaml:"socket"`
-	Websocket          WebsocketConfig         `json:"websocket" yaml:"websocket"`
 	Processors         []processor.Config      `json:"processors" yaml:"processors"`
 }
 
@@ -96,7 +94,6 @@ func NewConfig() Config {
 		GCPCloudStorage:    NewGCPCloudStorageConfig(),
 		GCPPubSub:          NewGCPPubSubConfig(),
 		HDFS:               NewHDFSConfig(),
-		HTTPClient:         NewHTTPClientConfig(),
 		HTTPServer:         NewHTTPServerConfig(),
 		Inproc:             "",
 		Kafka:              NewKafkaConfig(),
@@ -120,7 +117,6 @@ func NewConfig() Config {
 		Switch:             NewSwitchConfig(),
 		SyncResponse:       struct{}{},
 		Socket:             NewSocketConfig(),
-		Websocket:          NewWebsocketConfig(),
 		Processors:         []processor.Config{},
 	}
 }

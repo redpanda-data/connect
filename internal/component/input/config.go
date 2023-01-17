@@ -29,7 +29,6 @@ type Config struct {
 	GCPPubSub         GCPPubSubConfig         `json:"gcp_pubsub" yaml:"gcp_pubsub"`
 	Generate          GenerateConfig          `json:"generate" yaml:"generate"`
 	HDFS              HDFSConfig              `json:"hdfs" yaml:"hdfs"`
-	HTTPClient        HTTPClientConfig        `json:"http_client" yaml:"http_client"`
 	HTTPServer        HTTPServerConfig        `json:"http_server" yaml:"http_server"`
 	Inproc            InprocConfig            `json:"inproc" yaml:"inproc"`
 	Kafka             KafkaConfig             `json:"kafka" yaml:"kafka"`
@@ -49,7 +48,6 @@ type Config struct {
 	SocketServer      SocketServerConfig      `json:"socket_server" yaml:"socket_server"`
 	STDIN             STDINConfig             `json:"stdin" yaml:"stdin"`
 	Subprocess        SubprocessConfig        `json:"subprocess" yaml:"subprocess"`
-	Websocket         WebsocketConfig         `json:"websocket" yaml:"websocket"`
 	Processors        []processor.Config      `json:"processors" yaml:"processors"`
 }
 
@@ -75,7 +73,6 @@ func NewConfig() Config {
 		GCPPubSub:         NewGCPPubSubConfig(),
 		Generate:          NewGenerateConfig(),
 		HDFS:              NewHDFSConfig(),
-		HTTPClient:        NewHTTPClientConfig(),
 		HTTPServer:        NewHTTPServerConfig(),
 		Inproc:            NewInprocConfig(),
 		Kafka:             NewKafkaConfig(),
@@ -95,7 +92,6 @@ func NewConfig() Config {
 		SocketServer:      NewSocketServerConfig(),
 		STDIN:             NewSTDINConfig(),
 		Subprocess:        NewSubprocessConfig(),
-		Websocket:         NewWebsocketConfig(),
 		Processors:        []processor.Config{},
 	}
 }

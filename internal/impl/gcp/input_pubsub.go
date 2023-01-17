@@ -3,9 +3,11 @@ package gcp
 import (
 	"context"
 	"errors"
+	"strings"
 	"sync"
 
 	"cloud.google.com/go/pubsub"
+	"google.golang.org/api/option"
 
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component"
@@ -45,6 +47,7 @@ You can access these metadata fields using
 		Config: docs.FieldComponent().WithChildren(
 			docs.FieldString("project", "The project ID of the target subscription."),
 			docs.FieldString("subscription", "The target subscription ID."),
+			docs.FieldString("endpoint", "An optional endpoint to override the default of `pubsub.googleapis.com:443`. This can be used to connect to a region specific pubsub endpoint. For a list of valid values check out [this document.](https://cloud.google.com/pubsub/docs/reference/service_apis_overview#list_of_regional_endpoints)", "us-central1-pubsub.googleapis.com:443", "us-west3-pubsub.googleapis.com:443").HasDefault(""),
 			docs.FieldBool("sync", "Enable synchronous pull mode."),
 			docs.FieldInt("max_outstanding_messages", "The maximum number of outstanding pending messages to be consumed at a given time."),
 			docs.FieldInt("max_outstanding_bytes", "The maximum number of outstanding pending messages to be consumed measured in bytes."),
@@ -116,7 +119,12 @@ type gcpPubSubReader struct {
 }
 
 func newGCPPubSubReader(conf input.GCPPubSubConfig, log log.Modular, stats metrics.Type) (*gcpPubSubReader, *pubsub.Client, error) {
-	client, err := pubsub.NewClient(context.Background(), conf.ProjectID)
+	var opt []option.ClientOption
+	if len(strings.TrimSpace(conf.Endpoint)) > 0 {
+		opt = []option.ClientOption{option.WithEndpoint(conf.Endpoint)}
+	}
+
+	client, err := pubsub.NewClient(context.Background(), conf.ProjectID, opt...)
 	if err != nil {
 		return nil, nil, err
 	}

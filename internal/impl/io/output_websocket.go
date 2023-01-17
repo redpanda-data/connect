@@ -12,42 +12,49 @@ import (
 
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component"
+	"github.com/benthosdev/benthos/v4/internal/component/interop"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
-	"github.com/benthosdev/benthos/v4/internal/component/output/processors"
-	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/httpclient"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	btls "github.com/benthosdev/benthos/v4/internal/tls"
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
+func websocketOutputSpec() *service.ConfigSpec {
+	spec := service.NewConfigSpec().
+		Stable().
+		Categories("Network").
+		Summary("Sends messages to an HTTP server via a websocket connection.").
+		Field(service.NewURLField("url").Description("The URL to connect to.")).
+		Field(service.NewTLSToggledField("tls"))
+
+	for _, f := range httpclient.AuthFieldSpecs() {
+		spec = spec.Field(f)
+	}
+
+	return spec
+}
+
 func init() {
-	err := bundle.AllOutputs.Add(processors.WrapConstructor(newWebsocketOutput), docs.ComponentSpec{
-		Name:    "websocket",
-		Summary: `Sends messages to an HTTP server via a websocket connection.`,
-		Config: docs.FieldComponent().WithChildren(
-			docs.FieldURL("url", "The URL to connect to."),
-			btls.FieldSpec(),
-		).WithChildren(httpclient.OldAuthFieldSpecs()...).ChildDefaultAndTypesFromStruct(output.NewWebsocketConfig()),
-		Categories: []string{
-			"Network",
-		},
-	})
+	err := service.RegisterBatchOutput(
+		"websocket", websocketOutputSpec(),
+		func(conf *service.ParsedConfig, mgr *service.Resources) (out service.BatchOutput, batchPolicy service.BatchPolicy, maxInFlight int, err error) {
+			maxInFlight = 1
+			oldMgr := interop.UnwrapManagement(mgr)
+			var w *websocketWriter
+			if w, err = newWebsocketWriterFromParsed(conf, oldMgr); err != nil {
+				return
+			}
+			var o output.Streamed
+			if o, err = output.NewAsyncWriter("websocket", 1, w, oldMgr); err != nil {
+				return
+			}
+			out = interop.NewUnwrapInternalOutput(o)
+			return
+		})
 	if err != nil {
 		panic(err)
 	}
-}
-
-func newWebsocketOutput(conf output.Config, mgr bundle.NewManagement) (output.Streamed, error) {
-	w, err := newWebsocketWriter(conf.Websocket, mgr)
-	if err != nil {
-		return nil, err
-	}
-	a, err := output.NewAsyncWriter("websocket", 1, w, mgr)
-	if err != nil {
-		return nil, err
-	}
-	return output.OnlySinglePayloads(a), nil
 }
 
 type websocketWriter struct {
@@ -56,23 +63,33 @@ type websocketWriter struct {
 
 	lock *sync.Mutex
 
-	conf    output.WebsocketConfig
-	client  *websocket.Conn
-	tlsConf *tls.Config
+	client     *websocket.Conn
+	urlParsed  *url.URL
+	urlStr     string
+	tlsEnabled bool
+	tlsConf    *tls.Config
+	reqSigner  httpclient.RequestSigner
 }
 
-func newWebsocketWriter(conf output.WebsocketConfig, mgr bundle.NewManagement) (*websocketWriter, error) {
+func newWebsocketWriterFromParsed(conf *service.ParsedConfig, mgr bundle.NewManagement) (*websocketWriter, error) {
 	ws := &websocketWriter{
 		log:  mgr.Logger(),
 		mgr:  mgr,
 		lock: &sync.Mutex{},
-		conf: conf,
 	}
-	if conf.TLS.Enabled {
-		var err error
-		if ws.tlsConf, err = conf.TLS.Get(mgr.FS()); err != nil {
-			return nil, err
-		}
+
+	var err error
+	if ws.urlParsed, err = conf.FieldURL("url"); err != nil {
+		return nil, err
+	}
+	if ws.urlStr, err = conf.FieldString("url"); err != nil {
+		return nil, err
+	}
+	if ws.tlsConf, ws.tlsEnabled, err = conf.FieldTLSToggled("tls"); err != nil {
+		return nil, err
+	}
+	if ws.reqSigner, err = httpclient.AuthSignerFromParsed(conf); err != nil {
+		return nil, err
 	}
 	return ws, nil
 }
@@ -94,27 +111,23 @@ func (w *websocketWriter) Connect(ctx context.Context) error {
 
 	headers := http.Header{}
 
-	purl, err := url.Parse(w.conf.URL)
+	err := w.reqSigner(w.mgr.FS(), &http.Request{
+		URL:    w.urlParsed,
+		Header: headers,
+	})
 	if err != nil {
 		return err
 	}
 
-	if err := w.conf.Sign(w.mgr.FS(), &http.Request{
-		URL:    purl,
-		Header: headers,
-	}); err != nil {
-		return err
-	}
-
 	var client *websocket.Conn
-	if w.conf.TLS.Enabled {
+	if w.tlsEnabled {
 		dialer := websocket.Dialer{
 			TLSClientConfig: w.tlsConf,
 		}
-		if client, _, err = dialer.Dial(w.conf.URL, headers); err != nil {
+		if client, _, err = dialer.Dial(w.urlStr, headers); err != nil {
 			return err
 		}
-	} else if client, _, err = websocket.DefaultDialer.Dial(w.conf.URL, headers); err != nil {
+	} else if client, _, err = websocket.DefaultDialer.Dial(w.urlStr, headers); err != nil {
 		return err
 	}
 

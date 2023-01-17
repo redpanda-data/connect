@@ -13,7 +13,7 @@ import (
 
 func TestAuthConfigParsing(t *testing.T) {
 	spec := service.NewConfigSpec()
-	for _, v := range AuthFields() {
+	for _, v := range AuthFieldSpecs() {
 		spec.Field(v)
 	}
 

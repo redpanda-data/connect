@@ -507,7 +507,7 @@ func NewMetaFunction(key string) Function {
 var _ = registerFunction(
 	NewFunctionSpec(
 		FunctionCategoryMessage, "meta",
-		"Returns the value of a metadata key from the input message, or `null` if the key does not exist. Since values are extracted from the read-only input message they do NOT reflect changes made from within the map. In order to query metadata mutations made within a mapping use the [`root_meta` function](#root_meta). This function supports extracting metadata from other messages of a batch with the `from` method.",
+		"Returns the value of a metadata key from the input message as a string, or `null` if the key does not exist. Since values are extracted from the read-only input message they do NOT reflect changes made from within the map. In order to query metadata mutations made within a mapping use the [`root_meta` function](#root_meta). This function supports extracting metadata from other messages of a batch with the `from` method.",
 		NewExampleSpec("",
 			`root.topic = meta("kafka_topic")`,
 			`root.topic = meta("nope") | meta("also nope") | "default"`,
@@ -559,7 +559,7 @@ var _ = registerFunction(
 var _ = registerFunction(
 	NewFunctionSpec(
 		FunctionCategoryMessage, "root_meta",
-		"Returns the value of a metadata key from the new message being created, or `null` if the key does not exist. Changes made to metadata during a mapping will be reflected by this function.",
+		"Returns the value of a metadata key from the new message being created as a string, or `null` if the key does not exist. Changes made to metadata during a mapping will be reflected by this function.",
 		NewExampleSpec("",
 			`root.topic = root_meta("kafka_topic")`,
 			`root.topic = root_meta("nope") | root_meta("also nope") | "default"`,
