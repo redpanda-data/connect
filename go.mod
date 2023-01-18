@@ -58,6 +58,7 @@ require (
 	github.com/jhump/protoreflect v1.10.1
 	github.com/jmespath/go-jmespath v0.4.0
 	github.com/klauspost/compress v1.15.11
+	github.com/knadh/go-pop3 v0.3.0
 	github.com/lib/pq v1.10.4
 	github.com/linkedin/goavro/v2 v2.12.0
 	github.com/matoous/go-nanoid/v2 v2.0.0
@@ -180,6 +181,8 @@ require (
 	github.com/eapache/go-resiliency v1.3.0 // indirect
 	github.com/eapache/go-xerial-snappy v0.0.0-20180814174437-776d5712da21 // indirect
 	github.com/eapache/queue v1.1.0 // indirect
+	github.com/emersion/go-message v0.15.0 // indirect
+	github.com/emersion/go-textwrapper v0.0.0-20200911093747-65d896831594 // indirect
 	github.com/felixge/httpsnoop v1.0.2 // indirect
 	github.com/form3tech-oss/jwt-go v3.2.5+incompatible // indirect
 	github.com/gabriel-vasile/mimetype v1.4.1 // indirect

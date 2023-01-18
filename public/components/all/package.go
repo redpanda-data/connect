@@ -22,6 +22,7 @@ import (
 	_ "github.com/benthosdev/benthos/v4/public/components/io"
 	_ "github.com/benthosdev/benthos/v4/public/components/jaeger"
 	_ "github.com/benthosdev/benthos/v4/public/components/kafka"
+	_ "github.com/benthosdev/benthos/v4/public/components/mail"
 	_ "github.com/benthosdev/benthos/v4/public/components/maxmind"
 	_ "github.com/benthosdev/benthos/v4/public/components/memcached"
 	_ "github.com/benthosdev/benthos/v4/public/components/mongodb"
