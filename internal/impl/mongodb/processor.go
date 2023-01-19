@@ -401,9 +401,9 @@ func (m *Processor) ProcessBatch(ctx context.Context, spans []*tracing.Span, bat
 			var err error
 
 			if m.operation == client.OperationFindOne {
-				err = collection.FindOne(context.Background(), filterJSON, findOptions).Decode(&decoded)
+				err = collection.FindOne(ctx, filterJSON, findOptions).Decode(&decoded)
 			} else {
-				err = collection.FindOneAndUpdate(context.Background(), filterJSON, docJSON, findAndUpdateOptions).Decode(&decoded)
+				err = collection.FindOneAndUpdate(ctx, filterJSON, docJSON, findAndUpdateOptions).Decode(&decoded)
 			}
 
 			if err != nil {
@@ -432,7 +432,7 @@ func (m *Processor) ProcessBatch(ctx context.Context, spans []*tracing.Span, bat
 	if len(writeModelsMap) > 0 {
 		for collection, writeModels := range writeModelsMap {
 			// We should have at least one write model in the slice
-			if _, err := collection.BulkWrite(context.Background(), writeModels); err != nil {
+			if _, err := collection.BulkWrite(ctx, writeModels); err != nil {
 				m.log.Errorf("Bulk write failed in mongodb processor: %v", err)
 				_ = batch.Iter(func(i int, p *message.Part) error {
 					processor.MarkErr(p, spans[i], err)
