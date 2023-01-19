@@ -339,3 +339,66 @@ func TestAutoRetryBuffer(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, exp3, string(b))
 }
+
+func TestAutoRetryReadAfterClose(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	readerImpl := newMockInput()
+	readerImpl.msgsToSnd = append(readerImpl.msgsToSnd, NewMessage([]byte("foo")))
+
+	pres := AutoRetryNacks(readerImpl)
+
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		select {
+		case readerImpl.connChan <- nil:
+		case <-time.After(time.Second):
+			t.Error("Timed out")
+		}
+		select {
+		case readerImpl.readChan <- nil:
+		case <-time.After(time.Second):
+			t.Error("Timed out")
+		}
+
+		// Force mockInput.Read() to return ErrEndOfInput after the first
+		// message was read
+		close(readerImpl.readChan)
+	}()
+
+	require.NoError(t, pres.Connect(ctx))
+
+	msg, fn, err := pres.Read(ctx)
+	require.NoError(t, err)
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		// Acknowledge the message explicitly so the input doesn't attempt to
+		// redeliver it
+		require.NoError(t, fn(ctx, err))
+	}()
+
+	select {
+	// Push a message on the ackChan to unblock the message acknowledgement
+	case readerImpl.ackChan <- nil:
+	case <-time.After(time.Second):
+		t.Error("Timed out")
+	}
+
+	act, err := msg.AsBytes()
+	require.NoError(t, err)
+
+	assert.Equal(t, "foo", string(act))
+
+	// Wait for the input to close and for the message ack to be sent
+	wg.Wait()
+
+	_, _, err = pres.Read(ctx)
+	assert.Equal(t, ErrEndOfInput, err)
+}

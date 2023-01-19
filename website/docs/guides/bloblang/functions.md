@@ -119,11 +119,13 @@ root.id = nanoid(54, "abcde")
 
 ### `random_int`
 
-Generates a non-negative pseudo-random 64-bit integer. An optional integer argument can be provided in order to seed the random number generator.
+Generates a non-negative pseudo-random 64-bit integer. An optional integer argument can be provided in order to seed the random number generator. Optional `min` and `max` arguments can be provided to make the generated numbers within a range.
 
 #### Parameters
 
 **`seed`** &lt;query expression, default `{"Value":0}`&gt; A seed to use, if a query is provided it will only be resolved once during the lifetime of the mapping.  
+**`min`** &lt;integer, default `0`&gt; The minimum value the random generated number will have. The default value is 0.  
+**`max`** &lt;integer, default `9223372036854775806`&gt; The maximum value the random generated number will have. The default value is 9223372036854775806 (math.MaxInt64 - 1).  
 
 #### Examples
 
@@ -131,6 +133,11 @@ Generates a non-negative pseudo-random 64-bit integer. An optional integer argum
 ```coffee
 root.first = random_int()
 root.second = random_int(1)
+root.third = random_int(max:20)
+root.fourth = random_int(min:10, max:20)
+root.fifth = random_int(timestamp_unix_nano(), 5, 20)
+root.sixth = random_int(seed:timestamp_unix_nano(), max:20)
+
 ```
 
 It is possible to specify a dynamic seed argument, in which case the argument will only be resolved once during the lifetime of the mapping.
@@ -308,7 +315,7 @@ root.doc = json()
 
 ### `meta`
 
-Returns the value of a metadata key from the input message, or `null` if the key does not exist. Since values are extracted from the read-only input message they do NOT reflect changes made from within the map. In order to query metadata mutations made within a mapping use the [`root_meta` function](#root_meta). This function supports extracting metadata from other messages of a batch with the `from` method.
+Returns the value of a metadata key from the input message as a string, or `null` if the key does not exist. Since values are extracted from the read-only input message they do NOT reflect changes made from within the map. In order to query metadata mutations made within a mapping use the [`root_meta` function](#root_meta). This function supports extracting metadata from other messages of a batch with the `from` method.
 
 #### Parameters
 
@@ -332,7 +339,7 @@ root.all_metadata = meta()
 :::caution BETA
 This function is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
 :::
-Returns the value of a metadata key from the new message being created, or `null` if the key does not exist. Changes made to metadata during a mapping will be reflected by this function.
+Returns the value of a metadata key from the new message being created as a string, or `null` if the key does not exist. Changes made to metadata during a mapping will be reflected by this function.
 
 #### Parameters
 
@@ -469,8 +476,8 @@ root.received_at = timestamp_unix_nano()
 
 ### `fake`
 
-:::caution EXPERIMENTAL
-This function is experimental and therefore breaking changes could be made to it outside of major version releases.
+:::caution BETA
+This function is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
 :::
 Takes in a string that maps to a [faker](https://github.com/bxcodec/faker) function and returns the result from that faker function. Returns an error if the given string doesn't match a supported faker function. Supported functions: `latitude`, `longitude`, `unix_time`, `date`, `time_string`, `month_name`, `year_string`, `day_of_week`, `day_of_month`, `timestamp`, `century`, `timezone`, `time_period`, `email`, `mac_address`, `domain_name`, `url`, `username`, `ipv4`, `ipv6`, `password`, `jwt`, `word`, `sentence`, `paragraph`, `cc_type`, `cc_number`, `currency`, `amount_with_currency`, `title_male`, `title_female`, `first_name`, `first_name_male`, `first_name_female`, `last_name`, `name`, `gender`, `chinese_first_name`, `chinese_last_name`, `chinese_name`, `phone_number`, `toll_free_phone_number`, `e164_phone_number`, `uuid_hyphenated`, `uuid_digit`. Refer to the [faker](https://github.com/bxcodec/faker) docs for details on these functions.
 

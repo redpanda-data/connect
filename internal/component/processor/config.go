@@ -12,8 +12,6 @@ import (
 type Config struct {
 	Label        string             `json:"label" yaml:"label"`
 	Type         string             `json:"type" yaml:"type"`
-	Avro         AvroConfig         `json:"avro" yaml:"avro"`
-	AWK          AWKConfig          `json:"awk" yaml:"awk"`
 	Bloblang     string             `json:"bloblang" yaml:"bloblang"`
 	BoundsCheck  BoundsCheckConfig  `json:"bounds_check" yaml:"bounds_check"`
 	Branch       BranchConfig       `json:"branch" yaml:"branch"`
@@ -26,7 +24,6 @@ type Config struct {
 	Grok         GrokConfig         `json:"grok" yaml:"grok"`
 	GroupBy      GroupByConfig      `json:"group_by" yaml:"group_by"`
 	GroupByValue GroupByValueConfig `json:"group_by_value" yaml:"group_by_value"`
-	HTTP         HTTPConfig         `json:"http" yaml:"http"`
 	InsertPart   InsertPartConfig   `json:"insert_part" yaml:"insert_part"`
 	JMESPath     JMESPathConfig     `json:"jmespath" yaml:"jmespath"`
 	JQ           JQConfig           `json:"jq" yaml:"jq"`
@@ -60,8 +57,6 @@ func NewConfig() Config {
 	return Config{
 		Label:        "",
 		Type:         "bounds_check",
-		Avro:         NewAvroConfig(),
-		AWK:          NewAWKConfig(),
 		Bloblang:     "",
 		BoundsCheck:  NewBoundsCheckConfig(),
 		Branch:       NewBranchConfig(),
@@ -74,7 +69,6 @@ func NewConfig() Config {
 		Grok:         NewGrokConfig(),
 		GroupBy:      NewGroupByConfig(),
 		GroupByValue: NewGroupByValueConfig(),
-		HTTP:         NewHTTPConfig(),
 		InsertPart:   NewInsertPartConfig(),
 		JMESPath:     NewJMESPathConfig(),
 		JQ:           NewJQConfig(),

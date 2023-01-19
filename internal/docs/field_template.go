@@ -35,6 +35,11 @@ func FieldsTemplate(lintableExamples bool) string {
 ### ` + "`{{$field.FullName}}`" + `
 
 {{$field.Spec.Description}}
+{{if $field.Spec.IsSecret -}}
+:::warning Secret
+This field contains sensitive information that usually shouldn't be added to a config directly, read our [secrets page for more info](/docs/configuration/secrets).
+:::
+{{end -}}
 {{if $field.Spec.Interpolated -}}
 This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
 {{end}}

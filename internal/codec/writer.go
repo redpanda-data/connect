@@ -20,7 +20,7 @@ var WriterDocs = docs.FieldString(
 	"append", "Append each message to the output stream without any delimiter or special encoding.",
 	"lines", "Append each message to the output stream followed by a line break.",
 	"delim:x", "Append each message to the output stream followed by a custom delimiter.",
-).LinterFunc(nil) // Disable default option linter as it doesn't include foo:bar formats.
+)
 
 //------------------------------------------------------------------------------
 

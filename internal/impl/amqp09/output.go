@@ -54,7 +54,7 @@ settings can be enabled in the `+"`tls`"+` section.
 The fields 'key' and 'type' can be dynamically set using function interpolations described
 [here](/docs/configuration/interpolation#bloblang-queries).`),
 		Config: docs.FieldComponent().WithChildren(
-			docs.FieldString("urls",
+			docs.FieldURL("urls",
 				"A list of URLs to connect to. The first URL to successfully establish a connection will be used until the connection is closed. If an item of the list contains commas it will be expanded into multiple URLs.",
 				[]string{"amqp://guest:guest@127.0.0.1:5672/"},
 				[]string{"amqp://127.0.0.1:5672/,amqp://127.0.0.2:5672/"},
@@ -255,13 +255,34 @@ func (a *amqp09Writer) WriteBatch(wctx context.Context, msg message.Batch) error
 	}
 
 	return output.IterateBatchedSend(msg, func(i int, p *message.Part) error {
-		bindingKey := strings.ReplaceAll(a.key.String(i, msg), "/", ".")
-		msgType := strings.ReplaceAll(a.msgType.String(i, msg), "/", ".")
-		contentType := a.contentType.String(i, msg)
-		contentEncoding := a.contentEncoding.String(i, msg)
+		bindingKey, err := a.key.String(i, msg)
+		if err != nil {
+			return fmt.Errorf("binding key interpolation error: %w", err)
+		}
+		bindingKey = strings.ReplaceAll(bindingKey, "/", ".")
+
+		msgType, err := a.msgType.String(i, msg)
+		if err != nil {
+			return fmt.Errorf("msg type interpolation error: %w", err)
+		}
+		msgType = strings.ReplaceAll(msgType, "/", ".")
+
+		contentType, err := a.contentType.String(i, msg)
+		if err != nil {
+			return fmt.Errorf("content type interpolation error: %w", err)
+		}
+		contentEncoding, err := a.contentEncoding.String(i, msg)
+		if err != nil {
+			return fmt.Errorf("content encoding interpolation error: %w", err)
+		}
+
+		priorityString, err := a.priority.String(i, msg)
+		if err != nil {
+			return fmt.Errorf("priority interpolation error: %w", err)
+		}
 
 		var priority uint8
-		if priorityString := a.priority.String(i, msg); priorityString != "" {
+		if priorityString != "" {
 			priorityInt, err := strconv.Atoi(priorityString)
 			if err != nil {
 				return fmt.Errorf("failed to parse valid integer from priority expression: %w", err)

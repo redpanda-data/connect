@@ -211,6 +211,14 @@ func (c *ConfigField) Optional() *ConfigField {
 	return c
 }
 
+// Secret marks this field as being a secret, which means it represents
+// information that is generally considered sensitive such as passwords or
+// access tokens.
+func (c *ConfigField) Secret() *ConfigField {
+	c.field = c.field.Secret()
+	return c
+}
+
 // Example adds an example value to the field which will be shown when printing
 // documentation for the component config spec.
 func (c *ConfigField) Example(e any) *ConfigField {
@@ -352,6 +360,14 @@ func (c *ConfigSpec) Summary(summary string) *ConfigSpec {
 // used.
 func (c *ConfigSpec) Description(description string) *ConfigSpec {
 	c.component.Description = description
+	return c
+}
+
+// Footnotes adds a description to the plugin configuration spec that appears
+// towards the bottom of the documentation page, this is usually best for long
+// winded lists of docs.
+func (c *ConfigSpec) Footnotes(description string) *ConfigSpec {
+	c.component.Footnotes = description
 	return c
 }
 

@@ -108,12 +108,17 @@ func (h *hdfsWriter) WriteBatch(ctx context.Context, msg message.Batch) error {
 	}
 
 	return output.IterateBatchedSend(msg, func(i int, p *message.Part) error {
-		path := h.path.String(i, msg)
-		directory := h.directory.String(i, msg)
+		path, err := h.path.String(i, msg)
+		if err != nil {
+			return fmt.Errorf("path interpolation error: %w", err)
+		}
+		directory, err := h.directory.String(i, msg)
+		if err != nil {
+			return fmt.Errorf("directory interpolation error: %w", err)
+		}
 		filePath := filepath.Join(directory, path)
 
-		err := h.client.MkdirAll(directory, os.ModeDir|0o644)
-		if err != nil {
+		if err := h.client.MkdirAll(directory, os.ModeDir|0o644); err != nil {
 			return err
 		}
 

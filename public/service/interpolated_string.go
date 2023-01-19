@@ -33,12 +33,28 @@ func (f fauxOldMessage) Len() int {
 	return 1
 }
 
-// String resolves the interpolated field for a given message as a string.
-func (i *InterpolatedString) String(m *Message) string {
+// TryString resolves the interpolated field for a given message as a string,
+// returns an error if any interpolation functions fail.
+func (i *InterpolatedString) TryString(m *Message) (string, error) {
 	return i.expr.String(0, fauxOldMessage{m.part})
 }
 
-// Bytes resolves the interpolated field for a given message as a byte slice.
-func (i *InterpolatedString) Bytes(m *Message) []byte {
+// TryBytes resolves the interpolated field for a given message as a slice of
+// bytes, returns an error if any interpolation functions fail.
+func (i *InterpolatedString) TryBytes(m *Message) ([]byte, error) {
 	return i.expr.Bytes(0, fauxOldMessage{m.part})
+}
+
+// String resolves the interpolated field for a given message as a string.
+// Deprecated: Use TryString instead in order to capture errors.
+func (i *InterpolatedString) String(m *Message) string {
+	s, _ := i.expr.String(0, fauxOldMessage{m.part})
+	return s
+}
+
+// Bytes resolves the interpolated field for a given message as a byte slice.
+// Deprecated: Use TryBytes instead in order to capture errors.
+func (i *InterpolatedString) Bytes(m *Message) []byte {
+	b, _ := i.expr.Bytes(0, fauxOldMessage{m.part})
+	return b
 }

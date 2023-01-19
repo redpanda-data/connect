@@ -72,6 +72,9 @@ input:
   gcp_pubsub:
     project: benthos-test-project
     subscription: sub-$ID
+    create_subscription:
+      enabled: true
+      topic: topic-$ID
 `
 	suiteOpts := []integration.StreamTestOptFunc{
 		integration.StreamTestOptSleepAfterInput(100 * time.Millisecond),
@@ -81,17 +84,7 @@ input:
 			client, err := pubsub.NewClient(ctx, "benthos-test-project")
 			require.NoError(t, err)
 
-			topic, err := client.CreateTopic(ctx, fmt.Sprintf("topic-%v", testID))
-			require.NoError(t, err)
-
-			_, err = client.CreateSubscription(ctx, fmt.Sprintf("sub-%v", testID), pubsub.SubscriptionConfig{
-				AckDeadline: time.Second * 10,
-				RetryPolicy: &pubsub.RetryPolicy{
-					MaximumBackoff: time.Millisecond * 10,
-					MinimumBackoff: time.Millisecond * 10,
-				},
-				Topic: topic,
-			})
+			_, err = client.CreateTopic(ctx, fmt.Sprintf("topic-%v", testID))
 			require.NoError(t, err)
 
 			client.Close()

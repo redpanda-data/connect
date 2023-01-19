@@ -31,6 +31,11 @@ components will be shown.
 				Value: "text",
 				Usage: "Print the component list in a specific format. Options are text, json or cue.",
 			},
+			&cli.StringFlag{
+				Name:  "status",
+				Value: "",
+				Usage: "Filter the component list to only those matching the given status. Options are stable, beta or experimental.",
+			},
 		},
 		Action: func(c *cli.Context) error {
 			listComponents(c)
@@ -47,6 +52,9 @@ func listComponents(c *cli.Context) {
 	}
 
 	schema := schema.New(Version, DateBuilt)
+	if status := c.String("status"); status != "" {
+		schema.ReduceToStatus(status)
+	}
 
 	switch c.String("format") {
 	case "text":

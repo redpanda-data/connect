@@ -24,7 +24,7 @@ import (
 
 func schemaRegistryDecoderConfig() *service.ConfigSpec {
 	spec := service.NewConfigSpec().
-		// Stable(). TODO
+		Beta().
 		Categories("Parsing", "Integration").
 		Summary("Automatically decodes and validates messages with schemas from a Confluent Schema Registry service.").
 		Description(`
@@ -49,9 +49,9 @@ However, it is possible to instead create documents in [standard/raw JSON format
 		Field(service.NewBoolField("avro_raw_json").
 			Description("Whether Avro messages should be decoded into normal JSON (\"json that meets the expectations of regular internet json\") rather than [Avro JSON](https://avro.apache.org/docs/current/specification/_print/#json-encoding). If `true` the schema returned from the subject should be decoded as [standard json](https://pkg.go.dev/github.com/linkedin/goavro/v2#NewCodecForStandardJSONFull) instead of as [avro json](https://pkg.go.dev/github.com/linkedin/goavro/v2#NewCodec). There is a [comment in goavro](https://github.com/linkedin/goavro/blob/5ec5a5ee7ec82e16e6e2b438d610e1cab2588393/union.go#L224-L249), the [underlining library used for avro serialization](https://github.com/linkedin/goavro), that explains in more detail the difference between the standard json and avro json.").
 			Advanced().Default(false)).
-		Field(service.NewStringField("url").Description("The base URL of the schema registry service."))
+		Field(service.NewURLField("url").Description("The base URL of the schema registry service."))
 
-	for _, f := range httpclient.AuthFields() {
+	for _, f := range httpclient.AuthFieldSpecs() {
 		spec = spec.Field(f.Version("4.7.0"))
 	}
 

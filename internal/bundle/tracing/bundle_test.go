@@ -309,6 +309,7 @@ func TestBundleProcessorTracing(t *testing.T) {
 	procConfig.Bloblang = `
 let ctr = content().number()
 root.count = if $ctr % 2 == 0 { throw("nah %v".format($ctr)) } else { $ctr }
+meta bar = "new bar value"
 `
 
 	mgr, err := manager.New(
@@ -321,7 +322,9 @@ root.count = if $ctr % 2 == 0 { throw("nah %v".format($ctr)) } else { $ctr }
 	require.NoError(t, err)
 
 	for i := 0; i < 10; i++ {
-		batch, res := proc.ProcessBatch(tCtx, message.QuickBatch([][]byte{[]byte(strconv.Itoa(i))}))
+		part := message.NewPart([]byte(strconv.Itoa(i)))
+		part.MetaSetMut("foo", fmt.Sprintf("foo value %v", i))
+		batch, res := proc.ProcessBatch(tCtx, message.Batch{part})
 		require.Nil(t, res)
 		require.Len(t, batch, 1)
 		assert.Equal(t, 1, batch[0].Len())
@@ -339,31 +342,33 @@ root.count = if $ctr % 2 == 0 { throw("nah %v".format($ctr)) } else { $ctr }
 	events := procEvents["foo"]
 	require.Len(t, events, 25)
 
+	type tMap = map[string]any
+
 	assert.Equal(t, []tracing.NodeEvent{
-		{Type: "CONSUME", Content: "0"},
-		{Type: "PRODUCE", Content: "0"},
+		{Type: "CONSUME", Content: "0", Meta: tMap{"foo": "foo value 0"}},
+		{Type: "PRODUCE", Content: "0", Meta: tMap{"foo": "foo value 0"}},
 		{Type: "ERROR", Content: "failed assignment (line 3): nah 0"},
-		{Type: "CONSUME", Content: "1"},
-		{Type: "PRODUCE", Content: "{\"count\":1}"},
-		{Type: "CONSUME", Content: "2"},
-		{Type: "PRODUCE", Content: "2"},
+		{Type: "CONSUME", Content: "1", Meta: tMap{"foo": "foo value 1"}},
+		{Type: "PRODUCE", Content: "{\"count\":1}", Meta: tMap{"bar": "new bar value", "foo": "foo value 1"}},
+		{Type: "CONSUME", Content: "2", Meta: tMap{"foo": "foo value 2"}},
+		{Type: "PRODUCE", Content: "2", Meta: tMap{"foo": "foo value 2"}},
 		{Type: "ERROR", Content: "failed assignment (line 3): nah 2"},
-		{Type: "CONSUME", Content: "3"},
-		{Type: "PRODUCE", Content: "{\"count\":3}"},
-		{Type: "CONSUME", Content: "4"},
-		{Type: "PRODUCE", Content: "4"},
+		{Type: "CONSUME", Content: "3", Meta: tMap{"foo": "foo value 3"}},
+		{Type: "PRODUCE", Content: "{\"count\":3}", Meta: tMap{"bar": "new bar value", "foo": "foo value 3"}},
+		{Type: "CONSUME", Content: "4", Meta: tMap{"foo": "foo value 4"}},
+		{Type: "PRODUCE", Content: "4", Meta: tMap{"foo": "foo value 4"}},
 		{Type: "ERROR", Content: "failed assignment (line 3): nah 4"},
-		{Type: "CONSUME", Content: "5"},
-		{Type: "PRODUCE", Content: "{\"count\":5}"},
-		{Type: "CONSUME", Content: "6"},
-		{Type: "PRODUCE", Content: "6"},
+		{Type: "CONSUME", Content: "5", Meta: tMap{"foo": "foo value 5"}},
+		{Type: "PRODUCE", Content: "{\"count\":5}", Meta: tMap{"bar": "new bar value", "foo": "foo value 5"}},
+		{Type: "CONSUME", Content: "6", Meta: tMap{"foo": "foo value 6"}},
+		{Type: "PRODUCE", Content: "6", Meta: tMap{"foo": "foo value 6"}},
 		{Type: "ERROR", Content: "failed assignment (line 3): nah 6"},
-		{Type: "CONSUME", Content: "7"},
-		{Type: "PRODUCE", Content: "{\"count\":7}"},
-		{Type: "CONSUME", Content: "8"},
-		{Type: "PRODUCE", Content: "8"},
+		{Type: "CONSUME", Content: "7", Meta: tMap{"foo": "foo value 7"}},
+		{Type: "PRODUCE", Content: "{\"count\":7}", Meta: tMap{"bar": "new bar value", "foo": "foo value 7"}},
+		{Type: "CONSUME", Content: "8", Meta: tMap{"foo": "foo value 8"}},
+		{Type: "PRODUCE", Content: "8", Meta: tMap{"foo": "foo value 8"}},
 		{Type: "ERROR", Content: "failed assignment (line 3): nah 8"},
-		{Type: "CONSUME", Content: "9"},
-		{Type: "PRODUCE", Content: "{\"count\":9}"},
+		{Type: "CONSUME", Content: "9", Meta: tMap{"foo": "foo value 9"}},
+		{Type: "PRODUCE", Content: "{\"count\":9}", Meta: tMap{"bar": "new bar value", "foo": "foo value 9"}},
 	}, events)
 }

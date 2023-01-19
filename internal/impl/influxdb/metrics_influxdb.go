@@ -22,16 +22,16 @@ func init() {
 	_ = bundle.AllMetrics.Add(newInfluxDB, docs.ComponentSpec{
 		Name:        "influxdb",
 		Type:        docs.TypeMetrics,
-		Status:      docs.StatusExperimental,
+		Status:      docs.StatusBeta,
 		Version:     "3.36.0",
 		Summary:     `Send metrics to InfluxDB 1.x using the ` + "`/write`" + ` endpoint.`,
 		Description: `See https://docs.influxdata.com/influxdb/v1.8/tools/api/#write-http-endpoint for further details on the write API.`,
 		Config: docs.FieldComponent().WithChildren(
-			docs.FieldString("url", "A URL of the format `[https|http|udp]://host:port` to the InfluxDB host.").HasDefault(""),
+			docs.FieldURL("url", "A URL of the format `[https|http|udp]://host:port` to the InfluxDB host.").HasDefault(""),
 			docs.FieldString("db", "The name of the database to use.").HasDefault(""),
 			btls.FieldSpec(),
 			docs.FieldString("username", "A username (when applicable).").Advanced().HasDefault(""),
-			docs.FieldString("password", "A password (when applicable).").Advanced().HasDefault(""),
+			docs.FieldString("password", "A password (when applicable).").Advanced().HasDefault("").Secret(),
 			docs.FieldObject("include", "Optional additional metrics to collect, enabling these metrics may have some performance implications as it acquires a global semaphore and does `stoptheworld()`.").WithChildren(
 				docs.FieldString("runtime", "A duration string indicating how often to poll and collect runtime metrics. Leave empty to disable this metric", "1m").HasDefault(""),
 				docs.FieldString("debug_gc", "A duration string indicating how often to poll and collect GC metrics. Leave empty to disable this metric.", "1m").HasDefault(""),

@@ -18,9 +18,9 @@ jobs:
         check-latest: true
 
     - name: Check Out Repo
-      uses: actions/checkout@v2
+      uses: actions/checkout@v3
 
-    - uses: actions/cache@v2
+    - uses: actions/cache@v3
       with:
         path: |
           ~/go/pkg/mod
@@ -32,7 +32,7 @@ jobs:
           ${{ runner.os }}-go-
 
     - name: Cache Docker layers
-      uses: actions/cache@v2
+      uses: actions/cache@v3
       with:
         path: /tmp/.buildx-cache
         key: ${{ runner.os }}-buildx-${{ github.sha }}

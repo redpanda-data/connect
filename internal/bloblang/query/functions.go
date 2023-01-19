@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"math/rand"
 	"sync"
 	"time"
@@ -58,11 +59,8 @@ func (f *fieldFunction) Exec(ctx FunctionContext) (any, error) {
 			if len(f.path) > 0 {
 				fieldName = SliceToDotPath(f.path...)
 			}
-			return nil, &ErrRecoverable{
-				Recovered: nil,
-				Err: ErrNoContext{
-					FieldName: fieldName,
-				},
+			return nil, ErrNoContext{
+				FieldName: fieldName,
 			}
 		}
 		target = *v
@@ -449,10 +447,7 @@ func jsonFunction(args *ParsedParams) (Function, error) {
 	return ClosureFunction("json path `"+SliceToDotPath(argPath...)+"`", func(ctx FunctionContext) (any, error) {
 		jPart, err := ctx.MsgBatch.Get(ctx.Index).AsStructured()
 		if err != nil {
-			return nil, &ErrRecoverable{
-				Recovered: nil,
-				Err:       err,
-			}
+			return nil, err
 		}
 		gPart := gabs.Wrap(jPart)
 		if len(argPath) > 0 {
@@ -512,7 +507,7 @@ func NewMetaFunction(key string) Function {
 var _ = registerFunction(
 	NewFunctionSpec(
 		FunctionCategoryMessage, "meta",
-		"Returns the value of a metadata key from the input message, or `null` if the key does not exist. Since values are extracted from the read-only input message they do NOT reflect changes made from within the map. In order to query metadata mutations made within a mapping use the [`root_meta` function](#root_meta). This function supports extracting metadata from other messages of a batch with the `from` method.",
+		"Returns the value of a metadata key from the input message as a string, or `null` if the key does not exist. Since values are extracted from the read-only input message they do NOT reflect changes made from within the map. In order to query metadata mutations made within a mapping use the [`root_meta` function](#root_meta). This function supports extracting metadata from other messages of a batch with the `from` method.",
 		NewExampleSpec("",
 			`root.topic = meta("kafka_topic")`,
 			`root.topic = meta("nope") | meta("also nope") | "default"`,
@@ -564,7 +559,7 @@ var _ = registerFunction(
 var _ = registerFunction(
 	NewFunctionSpec(
 		FunctionCategoryMessage, "root_meta",
-		"Returns the value of a metadata key from the new message being created, or `null` if the key does not exist. Changes made to metadata during a mapping will be reflected by this function.",
+		"Returns the value of a metadata key from the new message being created as a string, or `null` if the key does not exist. Changes made to metadata during a mapping will be reflected by this function.",
 		NewExampleSpec("",
 			`root.topic = root_meta("kafka_topic")`,
 			`root.topic = root_meta("nope") | root_meta("also nope") | "default"`,
@@ -631,20 +626,28 @@ var _ = registerFunction(
 var _ = registerFunction(
 	NewFunctionSpec(
 		FunctionCategoryGeneral, "random_int",
-		"Generates a non-negative pseudo-random 64-bit integer. An optional integer argument can be provided in order to seed the random number generator.",
+		"Generates a non-negative pseudo-random 64-bit integer. An optional integer argument can be provided in order to seed the random number generator. Optional `min` and `max` arguments can be provided to make the generated numbers within a range.",
 		NewExampleSpec("",
 			`root.first = random_int()
-root.second = random_int(1)`,
+root.second = random_int(1)
+root.third = random_int(max:20)
+root.fourth = random_int(min:10, max:20)
+root.fifth = random_int(timestamp_unix_nano(), 5, 20)
+root.sixth = random_int(seed:timestamp_unix_nano(), max:20)
+`,
 		),
 		NewExampleSpec("It is possible to specify a dynamic seed argument, in which case the argument will only be resolved once during the lifetime of the mapping.",
 			`root.first = random_int(timestamp_unix_nano())`,
+			`root.second = random_int(timestamp_unix_nano(), 5, 20)`,
 		),
 	).
 		Param(ParamQuery(
 			"seed",
 			"A seed to use, if a query is provided it will only be resolved once during the lifetime of the mapping.",
 			true,
-		).Default(NewLiteralFunction("", 0))),
+		).Default(NewLiteralFunction("", 0))).
+		Param(ParamInt64("min", "The minimum value the random generated number will have. The default value is 0.").Default(0)).
+		Param(ParamInt64("max", fmt.Sprintf("The maximum value the random generated number will have. The default value is %d (math.MaxInt64 - 1).", uint64(math.MaxInt64-1))).Default(int64(math.MaxInt64-1))),
 	randomIntFunction,
 )
 
@@ -653,7 +656,23 @@ func randomIntFunction(args *ParsedParams) (Function, error) {
 	if err != nil {
 		return nil, err
 	}
-
+	min, err := args.FieldInt64("min")
+	if err != nil {
+		return nil, err
+	}
+	max, err := args.FieldInt64("max")
+	if err != nil {
+		return nil, err
+	}
+	if min < 0 {
+		return nil, fmt.Errorf("min (%d) must be a positive number", min)
+	}
+	if max < min {
+		return nil, fmt.Errorf("min (%d) must be smaller or equal than max (%d)", min, max)
+	}
+	if max == math.MaxInt64 {
+		return nil, fmt.Errorf("max must be smaller than the max allowed for an int64 (%d)", uint64(math.MaxInt64))
+	}
 	var randMut sync.Mutex
 	var r *rand.Rand
 
@@ -674,8 +693,8 @@ func randomIntFunction(args *ParsedParams) (Function, error) {
 
 			r = rand.New(rand.NewSource(seed))
 		}
-
-		v := int64(r.Int())
+		// Int63n generates a random number within a half-open interval [0,n)
+		v := r.Int63n(max-min+1) + min
 		return v, nil
 	}, nil), nil
 }

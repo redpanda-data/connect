@@ -314,28 +314,22 @@ func (e *Executor) ExecOnto(ctx query.FunctionContext, onto AssignmentContext) e
 
 // ToBytes executes this function for a message of a batch and returns the
 // result marshalled into a byte slice.
-func (e *Executor) ToBytes(ctx query.FunctionContext) []byte {
+func (e *Executor) ToBytes(ctx query.FunctionContext) ([]byte, error) {
 	v, err := e.Exec(ctx)
 	if err != nil {
-		if rec, ok := err.(*query.ErrRecoverable); ok {
-			return query.IToBytes(rec.Recovered)
-		}
-		return nil
+		return nil, err
 	}
-	return query.IToBytes(v)
+	return query.IToBytes(v), nil
 }
 
 // ToString executes this function for a message of a batch and returns the
 // result marshalled into a string.
-func (e *Executor) ToString(ctx query.FunctionContext) string {
+func (e *Executor) ToString(ctx query.FunctionContext) (string, error) {
 	v, err := e.Exec(ctx)
 	if err != nil {
-		if rec, ok := err.(*query.ErrRecoverable); ok {
-			return query.IToString(rec.Recovered)
-		}
-		return ""
+		return "", err
 	}
-	return query.IToString(v)
+	return query.IToString(v), nil
 }
 
 //------------------------------------------------------------------------------

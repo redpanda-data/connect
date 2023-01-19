@@ -163,19 +163,9 @@ func TestInference(t *testing.T) {
 	}
 
 	for i, test := range tests {
-		res, spec, err := docs.GetInferenceCandidate(docsProv, test.inputType, test.inputConf)
-		if len(test.err) > 0 {
-			assert.EqualError(t, err, test.err, "test: %v", i)
-		} else {
-			assert.Equal(t, test.res, spec.Name, "test: %v", i)
-			assert.Equal(t, test.inputType, spec.Type, "test: %v", i)
-			assert.NoError(t, err, "test: %v", i)
-			assert.Equal(t, test.res, res, "test: %v", i)
-		}
-
 		var node yaml.Node
 		require.NoError(t, node.Encode(test.inputConf))
-		res, spec, err = docs.GetInferenceCandidateFromYAML(docsProv, test.inputType, &node)
+		res, spec, err := docs.GetInferenceCandidateFromYAML(docsProv, test.inputType, &node)
 		if len(test.err) > 0 {
 			assert.Error(t, err, "test: %v", i)
 		} else {

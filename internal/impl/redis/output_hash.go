@@ -178,7 +178,10 @@ func (r *redisHashWriter) WriteBatch(ctx context.Context, msg message.Batch) err
 	}
 
 	return output.IterateBatchedSend(msg, func(i int, p *message.Part) error {
-		key := r.keyStr.String(i, msg)
+		key, err := r.keyStr.String(i, msg)
+		if err != nil {
+			return fmt.Errorf("key interpolation error: %w", err)
+		}
 		fields := map[string]any{}
 		if r.conf.WalkMetadata {
 			_ = p.MetaIterMut(func(k string, v any) error {
@@ -194,7 +197,9 @@ func (r *redisHashWriter) WriteBatch(ctx context.Context, msg message.Batch) err
 			}
 		}
 		for k, v := range r.fields {
-			fields[k] = v.String(i, msg)
+			if fields[k], err = v.String(i, msg); err != nil {
+				return fmt.Errorf("field %v interpolation error: %w", k, err)
+			}
 		}
 		if err := client.HMSet(ctx, key, fields).Err(); err != nil {
 			_ = r.disconnect()

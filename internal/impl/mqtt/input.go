@@ -27,7 +27,7 @@ func init() {
 		if err != nil {
 			return nil, err
 		}
-		return input.NewAsyncReader("mqtt", true, input.NewAsyncPreserver(m), nm)
+		return input.NewAsyncReader("mqtt", input.NewAsyncPreserver(m), nm)
 	}), docs.ComponentSpec{
 		Name: "mqtt",
 		Summary: `
@@ -46,9 +46,9 @@ This input adds the following metadata fields to each message:
 ` + "```" + `
 
 You can access these metadata fields using
-[function interpolation](/docs/configuration/interpolation#metadata).`,
+[function interpolation](/docs/configuration/interpolation#bloblang-queries).`,
 		Config: docs.FieldComponent().WithChildren(
-			docs.FieldString("urls", "A list of URLs to connect to. If an item of the list contains commas it will be expanded into multiple URLs.").Array(),
+			docs.FieldURL("urls", "A list of URLs to connect to. If an item of the list contains commas it will be expanded into multiple URLs.").Array(),
 			docs.FieldString("topics", "A list of topics to consume from.").Array(),
 			docs.FieldString("client_id", "An identifier for the client connection."),
 			docs.FieldString("dynamic_client_id_suffix", "Append a dynamically generated suffix to the specified `client_id` on each run of the pipeline. This can be useful when clustering Benthos producers.").Optional().Advanced().HasAnnotatedOptions(
@@ -59,7 +59,7 @@ You can access these metadata fields using
 			mqttconf.WillFieldSpec(),
 			docs.FieldString("connect_timeout", "The maximum amount of time to wait in order to establish a connection before the attempt is abandoned.", "1s", "500ms").HasDefault("30s").AtVersion("3.58.0"),
 			docs.FieldString("user", "A username to assume for the connection.").Advanced(),
-			docs.FieldString("password", "A password to provide for the connection.").Advanced(),
+			docs.FieldString("password", "A password to provide for the connection.").Advanced().Secret(),
 			docs.FieldInt("keepalive", "Max seconds of inactivity before a keepalive message is sent.").Advanced(),
 			tls.FieldSpec().AtVersion("3.45.0"),
 		).ChildDefaultAndTypesFromStruct(input.NewMQTTConfig()),

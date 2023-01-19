@@ -2,22 +2,29 @@ package awk_test
 
 import (
 	"context"
+	"fmt"
 	"reflect"
+	"strconv"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"gopkg.in/yaml.v3"
 
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
+
+	_ "github.com/benthosdev/benthos/v4/internal/impl/awk"
 )
 
 func TestAWKValidation(t *testing.T) {
 	conf := processor.NewConfig()
-	conf.Type = "awk"
-	conf.AWK.Codec = "json"
-	conf.AWK.Program = "{ print foo_bar }"
+	require.NoError(t, yaml.Unmarshal([]byte(`
+awk:
+  codec: json
+  program: "{ print foo_bar }"
+`), &conf))
 
 	a, err := mock.NewManager().NewProcessor(conf)
 	if err != nil {
@@ -39,7 +46,16 @@ func TestAWKValidation(t *testing.T) {
 		t.Error("Expected fail flag on message part")
 	}
 
-	conf.AWK.Codec = "not valid"
+	conf = processor.NewConfig()
+	require.NoError(t, yaml.Unmarshal([]byte(`
+awk:
+  codec: not valid
+  program: |
+    {
+      json_set("foo.bar", json_get("init.val"));
+      json_set("foo.bar", json_get("foo.bar") " extra");
+    }
+`), &conf))
 	if _, err = mock.NewManager().NewProcessor(conf); err == nil {
 		t.Error("Expected error from bad codec")
 	}
@@ -47,9 +63,11 @@ func TestAWKValidation(t *testing.T) {
 
 func TestAWKBadExitStatus(t *testing.T) {
 	conf := processor.NewConfig()
-	conf.Type = "awk"
-	conf.AWK.Codec = "none"
-	conf.AWK.Program = "{ exit 1; print foo }"
+	require.NoError(t, yaml.Unmarshal([]byte(`
+awk:
+  codec: none
+  program: "{ exit 1; print foo }"
+`), &conf))
 
 	a, err := mock.NewManager().NewProcessor(conf)
 	if err != nil {
@@ -74,9 +92,11 @@ func TestAWKBadExitStatus(t *testing.T) {
 
 func TestAWKBadDateString(t *testing.T) {
 	conf := processor.NewConfig()
-	conf.Type = "awk"
-	conf.AWK.Codec = "none"
-	conf.AWK.Program = `{ print timestamp_unix("this isnt a date string") }`
+	require.NoError(t, yaml.Unmarshal([]byte(`
+awk:
+  codec: none
+  program: '{ print timestamp_unix("this isnt a date string") }'
+`), &conf))
 
 	a, err := mock.NewManager().NewProcessor(conf)
 	if err != nil {
@@ -98,12 +118,15 @@ func TestAWKBadDateString(t *testing.T) {
 
 func TestAWKJSONParts(t *testing.T) {
 	conf := processor.NewConfig()
-	conf.Type = "awk"
-	conf.AWK.Codec = "none"
-	conf.AWK.Program = `{
-		json_set("foo.bar", json_get("init.val"));
-		json_set("foo.bar", json_get("foo.bar") " extra");
-	}`
+	require.NoError(t, yaml.Unmarshal([]byte(`
+awk:
+  codec: none
+  program: |
+    {
+      json_set("foo.bar", json_get("init.val"));
+      json_set("foo.bar", json_get("foo.bar") " extra");
+    }
+`), &conf))
 
 	a, err := mock.NewManager().NewProcessor(conf)
 	if err != nil {
@@ -614,9 +637,11 @@ func TestAWK(t *testing.T) {
 
 	for _, test := range tests {
 		conf := processor.NewConfig()
-		conf.Type = "awk"
-		conf.AWK.Codec = test.codec
-		conf.AWK.Program = test.program
+		require.NoError(t, yaml.Unmarshal(fmt.Appendf(nil, `
+awk:
+  codec: %v
+  program: %v
+`, test.codec, strconv.Quote(test.program)), &conf))
 
 		a, err := mock.NewManager().NewProcessor(conf)
 		require.NoError(t, err, "Test '%s' failed", test.name)

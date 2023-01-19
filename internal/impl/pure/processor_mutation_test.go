@@ -8,14 +8,14 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/benthosdev/benthos/v4/internal/message"
 	"github.com/benthosdev/benthos/v4/public/bloblang"
-	"github.com/benthosdev/benthos/v4/public/service"
 )
 
 func TestMutationCreateCrossfire(t *testing.T) {
 	tCtx := context.Background()
 
-	inMsg := service.NewMessage(nil)
+	inMsg := message.NewPart(nil)
 	inMsg.SetStructuredMut(map[string]any{
 		"foo": map[string]any{
 			"bar": map[string]any{
@@ -24,10 +24,10 @@ func TestMutationCreateCrossfire(t *testing.T) {
 			},
 		},
 	})
-	inMsg.MetaSet("foo", "orig1")
-	inMsg.MetaSet("bar", "orig2")
+	inMsg.MetaSetMut("foo", "orig1")
+	inMsg.MetaSetMut("bar", "orig2")
 
-	inMsg2 := service.NewMessage([]byte(`{}`))
+	inMsg2 := message.NewPart([]byte(`{}`))
 
 	exec, err := bloblang.Parse(`
 a = batch_index()
@@ -42,56 +42,52 @@ meta baz = "new meta"
 
 	proc := newMutation(exec, nil)
 
-	outBatches, err := proc.ProcessBatch(tCtx, service.MessageBatch{inMsg, inMsg2})
+	outBatches, err := proc.ProcessBatch(tCtx, message.Batch{inMsg, inMsg2})
 	require.NoError(t, err)
 	require.Len(t, outBatches, 1)
 	require.Len(t, outBatches[0], 2)
 
-	msgBytes, err := inMsg.AsBytes()
-	require.NoError(t, err)
+	msgBytes := inMsg.AsBytes()
 	assert.Equal(t, `{"a":0,"foo":{"bar":{"baz":"and this changed","qux":"dont change"},"bar_new":"this is swapped now"}}`, string(msgBytes))
-	v, _ := inMsg.MetaGet("foo")
+	v, _ := inMsg.MetaGetMut("foo")
 	assert.Equal(t, "orig1", v)
-	v, _ = inMsg.MetaGet("bar")
+	v, _ = inMsg.MetaGetMut("bar")
 	assert.Equal(t, "orig2", v)
-	v, _ = inMsg.MetaGet("baz")
+	v, _ = inMsg.MetaGetMut("baz")
 	assert.Equal(t, "new meta", v)
 
-	msgBytes, err = inMsg2.AsBytes()
-	require.NoError(t, err)
+	msgBytes = inMsg2.AsBytes()
 	assert.Equal(t, `{"a":1,"foo":{"bar":{"baz":"and this changed","qux":"dont change"},"bar_new":"this is swapped now"}}`, string(msgBytes))
-	v, _ = inMsg2.MetaGet("foo")
+	v, _ = inMsg2.MetaGetMut("foo")
 	assert.Equal(t, "orig1", v)
-	v, _ = inMsg2.MetaGet("bar")
+	v, _ = inMsg2.MetaGetMut("bar")
 	assert.Equal(t, "orig2", v)
-	v, _ = inMsg2.MetaGet("baz")
+	v, _ = inMsg2.MetaGetMut("baz")
 	assert.Equal(t, "new meta", v)
 
-	msgBytes, err = outBatches[0][0].AsBytes()
-	require.NoError(t, err)
+	msgBytes = outBatches[0][0].AsBytes()
 	assert.Equal(t, `{"a":0,"foo":{"bar":{"baz":"and this changed","qux":"dont change"},"bar_new":"this is swapped now"}}`, string(msgBytes))
-	v, _ = outBatches[0][0].MetaGet("foo")
+	v, _ = outBatches[0][0].MetaGetMut("foo")
 	assert.Equal(t, "orig1", v)
-	v, _ = outBatches[0][0].MetaGet("bar")
+	v, _ = outBatches[0][0].MetaGetMut("bar")
 	assert.Equal(t, "orig2", v)
-	v, _ = outBatches[0][0].MetaGet("baz")
+	v, _ = outBatches[0][0].MetaGetMut("baz")
 	assert.Equal(t, "new meta", v)
 
-	msgBytes, err = outBatches[0][1].AsBytes()
-	require.NoError(t, err)
+	msgBytes = outBatches[0][1].AsBytes()
 	assert.Equal(t, `{"a":1,"foo":{"bar":{"baz":"and this changed","qux":"dont change"},"bar_new":"this is swapped now"}}`, string(msgBytes))
-	v, _ = outBatches[0][1].MetaGet("foo")
+	v, _ = outBatches[0][1].MetaGetMut("foo")
 	assert.Equal(t, "orig1", v)
-	v, _ = outBatches[0][1].MetaGet("bar")
+	v, _ = outBatches[0][1].MetaGetMut("bar")
 	assert.Equal(t, "orig2", v)
-	v, _ = outBatches[0][1].MetaGet("baz")
+	v, _ = outBatches[0][1].MetaGetMut("baz")
 	assert.Equal(t, "new meta", v)
 }
 
 func TestMutationCreateCustomObject(t *testing.T) {
 	tCtx := context.Background()
 
-	part := service.NewMessage(nil)
+	part := message.NewPart(nil)
 
 	gObj := gabs.New()
 	_, _ = gObj.ArrayOfSize(3, "foos")
@@ -109,25 +105,23 @@ func TestMutationCreateCustomObject(t *testing.T) {
 
 	proc := newMutation(exec, nil)
 
-	outBatches, err := proc.ProcessBatch(tCtx, service.MessageBatch{part})
+	outBatches, err := proc.ProcessBatch(tCtx, message.Batch{part})
 	require.NoError(t, err)
 	require.Len(t, outBatches, 1)
 	require.Len(t, outBatches[0], 1)
 
-	resPartBytes, err := outBatches[0][0].AsBytes()
-	require.NoError(t, err)
-
+	resPartBytes := outBatches[0][0].AsBytes()
 	assert.Equal(t, `{"foos":[{"foo":"FROM NEW OBJECT"},5,null]}`, string(resPartBytes))
 }
 
 func TestMutationCreateFiltering(t *testing.T) {
 	tCtx := context.Background()
 
-	inBatch := service.MessageBatch{
-		service.NewMessage([]byte(`{"foo":{"delete":true}}`)),
-		service.NewMessage([]byte(`{"foo":{"dont":"delete me"}}`)),
-		service.NewMessage([]byte(`{"bar":{"delete":true}}`)),
-		service.NewMessage([]byte(`{"bar":{"dont":"delete me"}}`)),
+	inBatch := message.Batch{
+		message.NewPart([]byte(`{"foo":{"delete":true}}`)),
+		message.NewPart([]byte(`{"foo":{"dont":"delete me"}}`)),
+		message.NewPart([]byte(`{"bar":{"delete":true}}`)),
+		message.NewPart([]byte(`{"bar":{"dont":"delete me"}}`)),
 	}
 
 	exec, err := bloblang.Parse(`
@@ -144,26 +138,24 @@ root = match {
 	require.Len(t, outBatches, 1)
 	require.Len(t, outBatches[0], 2)
 
-	assert.NoError(t, outBatches[0][0].GetError())
-	assert.NoError(t, outBatches[0][1].GetError())
+	assert.NoError(t, outBatches[0][0].ErrorGet())
+	assert.NoError(t, outBatches[0][1].ErrorGet())
 
-	msgBytes, err := outBatches[0][0].AsBytes()
-	require.NoError(t, err)
+	msgBytes := outBatches[0][0].AsBytes()
 	assert.Equal(t, `{"foo":{"dont":"delete me"}}`, string(msgBytes))
 
-	msgBytes, err = outBatches[0][1].AsBytes()
-	require.NoError(t, err)
+	msgBytes = outBatches[0][1].AsBytes()
 	assert.Equal(t, `{"bar":{"dont":"delete me"}}`, string(msgBytes))
 }
 
 func TestMutationCreateFilterAll(t *testing.T) {
 	tCtx := context.Background()
 
-	inBatch := service.MessageBatch{
-		service.NewMessage([]byte(`{"foo":{"delete":true}}`)),
-		service.NewMessage([]byte(`{"foo":{"dont":"delete me"}}`)),
-		service.NewMessage([]byte(`{"bar":{"delete":true}}`)),
-		service.NewMessage([]byte(`{"bar":{"dont":"delete me"}}`)),
+	inBatch := message.Batch{
+		message.NewPart([]byte(`{"foo":{"delete":true}}`)),
+		message.NewPart([]byte(`{"foo":{"dont":"delete me"}}`)),
+		message.NewPart([]byte(`{"bar":{"delete":true}}`)),
+		message.NewPart([]byte(`{"bar":{"dont":"delete me"}}`)),
 	}
 
 	exec, err := bloblang.Parse(`root = deleted()`)
@@ -179,8 +171,8 @@ func TestMutationCreateFilterAll(t *testing.T) {
 func TestMutationCreateJSONError(t *testing.T) {
 	tCtx := context.Background()
 
-	msg := service.MessageBatch{
-		service.NewMessage([]byte(`this is not valid json`)),
+	msg := message.Batch{
+		message.NewPart([]byte(`this is not valid json`)),
 	}
 
 	exec, err := bloblang.Parse(`foo = json().bar`)
@@ -193,11 +185,10 @@ func TestMutationCreateJSONError(t *testing.T) {
 	require.Len(t, outBatches, 1)
 	require.Len(t, outBatches[0], 1)
 
-	msgBytes, err := outBatches[0][0].AsBytes()
-	require.NoError(t, err)
+	msgBytes := outBatches[0][0].AsBytes()
 	assert.Equal(t, `this is not valid json`, string(msgBytes))
 
-	err = outBatches[0][0].GetError()
+	err = outBatches[0][0].ErrorGet()
 	require.Error(t, err)
 	assert.Equal(t, `failed assignment (line 1): invalid character 'h' in literal true (expecting 'r')`, err.Error())
 }

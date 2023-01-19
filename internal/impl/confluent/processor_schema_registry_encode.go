@@ -24,7 +24,7 @@ import (
 
 func schemaRegistryEncoderConfig() *service.ConfigSpec {
 	spec := service.NewConfigSpec().
-		// Stable(). TODO
+		Beta().
 		Version("3.58.0").
 		Categories("Parsing", "Integration").
 		Summary("Automatically encodes and validates messages with schemas from a Confluent Schema Registry service.").
@@ -54,20 +54,7 @@ However, it is possible to instead consume documents in [standard/raw JSON forma
 
 Important! There is an outstanding issue in the [avro serializing library](https://github.com/linkedin/goavro) that benthos uses which means it [doesn't encode logical types correctly](https://github.com/linkedin/goavro/issues/252). It's still possible to encode logical types that are in-line with the spec if ` + "`avro_raw_json` is set to true" + `, though now of course non-logical types will not be in-line with the spec.
 `).
-		Field(service.NewStringField("url").Description("The base URL of the schema registry service.")).
-		Field(service.NewObjectField("basic_auth",
-			service.NewBoolField("enabled").
-				Description("Whether to use basic authentication in requests.").
-				Default(false),
-			service.NewStringField("username").
-				Description("Username required to authenticate.").
-				Default(""),
-			service.NewStringField("password").
-				Description("Password required to authenticate.").
-				Default("")).
-			Advanced().
-			Description("Allows you to specify basic authentication."),
-		).Description("Enable basic authentication").
+		Field(service.NewURLField("url").Description("The base URL of the schema registry service.")).
 		Field(service.NewInterpolatedStringField("subject").Description("The schema subject to derive schemas from.").
 			Example("foo").
 			Example(`${! meta("kafka_topic") }`)).
@@ -80,7 +67,7 @@ Important! There is an outstanding issue in the [avro serializing library](https
 			Description("Whether messages encoded in Avro format should be parsed as normal JSON (\"json that meets the expectations of regular internet json\") rather than [Avro JSON](https://avro.apache.org/docs/current/specification/_print/#json-encoding). If `true` the schema returned from the subject should be parsed as [standard json](https://pkg.go.dev/github.com/linkedin/goavro/v2#NewCodecForStandardJSONFull) instead of as [avro json](https://pkg.go.dev/github.com/linkedin/goavro/v2#NewCodec). There is a [comment in goavro](https://github.com/linkedin/goavro/blob/5ec5a5ee7ec82e16e6e2b438d610e1cab2588393/union.go#L224-L249), the [underlining library used for avro serialization](https://github.com/linkedin/goavro), that explains in more detail the difference between standard json and avro json.").
 			Advanced().Default(false).Version("3.59.0"))
 
-	for _, f := range httpclient.AuthFields() {
+	for _, f := range httpclient.AuthFieldSpecs() {
 		spec = spec.Field(f.Version("4.7.0"))
 	}
 
@@ -212,7 +199,14 @@ func newSchemaRegistryEncoder(
 func (s *schemaRegistryEncoder) ProcessBatch(ctx context.Context, batch service.MessageBatch) ([]service.MessageBatch, error) {
 	batch = batch.Copy()
 	for i, msg := range batch {
-		encoder, id, err := s.getEncoder(batch.InterpolatedString(i, s.subject))
+		subject, err := batch.TryInterpolatedString(i, s.subject)
+		if err != nil {
+			s.logger.Errorf("Subject interpolation error: %v", err)
+			msg.SetError(fmt.Errorf("subject interpolation error: %w", err))
+			continue
+		}
+
+		encoder, id, err := s.getEncoder(subject)
 		if err != nil {
 			msg.SetError(err)
 			continue

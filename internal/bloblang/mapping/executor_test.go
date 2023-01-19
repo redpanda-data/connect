@@ -441,14 +441,26 @@ func TestExec(t *testing.T) {
 			} else {
 				assert.Equal(t, test.output, res)
 			}
-			resString := test.mapping.ToString(query.FunctionContext{
+
+			resString, err := test.mapping.ToString(query.FunctionContext{
 				MsgBatch: message.QuickBatch(nil),
 			}.WithValue(test.input))
-			assert.Equal(t, test.outputString, resString)
-			resBytes := test.mapping.ToBytes(query.FunctionContext{
+			if len(test.err) > 0 {
+				require.EqualError(t, err, test.err)
+			} else {
+				require.NoError(t, err)
+				assert.Equal(t, test.outputString, resString)
+			}
+
+			resBytes, err := test.mapping.ToBytes(query.FunctionContext{
 				MsgBatch: message.QuickBatch(nil),
 			}.WithValue(test.input))
-			assert.Equal(t, test.outputString, string(resBytes))
+			if len(test.err) > 0 {
+				require.EqualError(t, err, test.err)
+			} else {
+				require.NoError(t, err)
+				assert.Equal(t, test.outputString, string(resBytes))
+			}
 		})
 	}
 }

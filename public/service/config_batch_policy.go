@@ -2,13 +2,11 @@ package service
 
 import (
 	"context"
-	"fmt"
 	"time"
-
-	"gopkg.in/yaml.v3"
 
 	"github.com/benthosdev/benthos/v4/internal/batch/policy"
 	"github.com/benthosdev/benthos/v4/internal/batch/policy/batchconfig"
+	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/message"
@@ -48,7 +46,8 @@ func (b BatchPolicy) toInternal() batchconfig.Config {
 // therefore it is important to call Close when this batcher is no longer
 // required, having also called Flush if appropriate.
 type Batcher struct {
-	p *policy.Batcher
+	mgr bundle.NewManagement
+	p   *policy.Batcher
 }
 
 // Add a message to the batch. Returns true if the batching policy has been
@@ -91,11 +90,12 @@ func (b *Batcher) Close(ctx context.Context) error {
 
 // NewBatcher creates a batching mechanism from the policy.
 func (b BatchPolicy) NewBatcher(res *Resources) (*Batcher, error) {
-	p, err := policy.New(b.toInternal(), res.mgr.IntoPath("batching"))
+	mgr := res.mgr.IntoPath("batching")
+	p, err := policy.New(b.toInternal(), mgr)
 	if err != nil {
 		return nil, err
 	}
-	return &Batcher{p}, nil
+	return &Batcher{mgr: mgr, p: p}, nil
 }
 
 //------------------------------------------------------------------------------
@@ -126,42 +126,17 @@ func NewBatchPolicyField(name string) *ConfigField {
 // configuration was invalid.
 func (p *ParsedConfig) FieldBatchPolicy(path ...string) (conf BatchPolicy, err error) {
 	if conf.Count, err = p.FieldInt(append(path, "count")...); err != nil {
-		return conf, err
+		return
 	}
 	if conf.ByteSize, err = p.FieldInt(append(path, "byte_size")...); err != nil {
-		return conf, err
+		return
 	}
 	if conf.Check, err = p.FieldString(append(path, "check")...); err != nil {
-		return conf, err
+		return
 	}
 	if conf.Period, err = p.FieldString(append(path, "period")...); err != nil {
-		return conf, err
-	}
-
-	procsNode, exists := p.field(append(path, "processors")...)
-	if !exists {
 		return
 	}
-
-	procsArray, ok := procsNode.([]any)
-	if !ok {
-		err = fmt.Errorf("field 'processors' returned unexpected value, expected array, got %T", procsNode)
-		return
-	}
-
-	for i, iConf := range procsArray {
-		node, ok := iConf.(*yaml.Node)
-		if !ok {
-			err = fmt.Errorf("field 'processors.%v' returned unexpected value, expected object, got %T", i, iConf)
-			return
-		}
-
-		var pconf processor.Config
-		if err = node.Decode(&pconf); err != nil {
-			err = fmt.Errorf("field 'processors.%v': %w", i, err)
-			return
-		}
-		conf.procs = append(conf.procs, pconf)
-	}
+	conf.procs, err = p.fieldProcessorListConfigs(append(path, "processors")...)
 	return
 }

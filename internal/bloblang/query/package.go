@@ -9,25 +9,6 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/message"
 )
 
-// ErrRecoverable represents a function execution error that can optionally be
-// recovered into a zero-value.
-type ErrRecoverable struct {
-	Recovered any
-	Err       error
-}
-
-// Unwrap the error.
-func (e *ErrRecoverable) Unwrap() error {
-	return e.Err
-}
-
-// Error implements the standard error interface.
-func (e *ErrRecoverable) Error() string {
-	return e.Err.Error()
-}
-
-//------------------------------------------------------------------------------
-
 type badFunctionErr string
 
 func (e badFunctionErr) Error() string {
@@ -162,25 +143,19 @@ func (ctx FunctionContext) PopValue() (*any, FunctionContext) {
 //------------------------------------------------------------------------------
 
 // ExecToString returns a string from a function execution.
-func ExecToString(fn Function, ctx FunctionContext) string {
+func ExecToString(fn Function, ctx FunctionContext) (string, error) {
 	v, err := fn.Exec(ctx)
 	if err != nil {
-		if rec, ok := err.(*ErrRecoverable); ok {
-			return IToString(rec.Recovered)
-		}
-		return ""
+		return "", err
 	}
-	return IToString(v)
+	return IToString(v), nil
 }
 
 // ExecToBytes returns a byte slice from a function execution.
-func ExecToBytes(fn Function, ctx FunctionContext) []byte {
+func ExecToBytes(fn Function, ctx FunctionContext) ([]byte, error) {
 	v, err := fn.Exec(ctx)
 	if err != nil {
-		if rec, ok := err.(*ErrRecoverable); ok {
-			return IToBytes(rec.Recovered)
-		}
-		return nil
+		return nil, err
 	}
-	return IToBytes(v)
+	return IToBytes(v), nil
 }

@@ -41,10 +41,14 @@ func wrapInput(i input.Streamed) *inputWrapper {
 	return w
 }
 
-func (w *inputWrapper) closeExistingInput(ctx context.Context) error {
+func (w *inputWrapper) closeExistingInput(ctx context.Context, forSwap bool) error {
 	w.inputLock.Lock()
 	tmpInput := w.ctrl.input
-	atomic.StoreInt32(w.ctrl.closedForSwap, 1)
+	if forSwap {
+		atomic.StoreInt32(w.ctrl.closedForSwap, 1)
+	} else {
+		atomic.StoreInt32(w.ctrl.closedForSwap, 0)
+	}
 	w.inputLock.Unlock()
 
 	if tmpInput == nil {

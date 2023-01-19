@@ -15,7 +15,7 @@ func authField() *service.ConfigField {
 			service.NewStringField("audience").
 				Description("OAuth2 audience.").
 				Default(""),
-			service.NewStringField("issuer_url").
+			service.NewURLField("issuer_url").
 				Description("OAuth2 issuer URL.").
 				Default(""),
 			service.NewStringField("private_key_file").

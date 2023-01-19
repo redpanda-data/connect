@@ -86,6 +86,7 @@ CREATE TABLE IF NOT EXISTS some_table (
 			Advanced(),
 		service.NewIntField("conn_max_idle").
 			Description(`An optional maximum number of connections in the idle connection pool. If conn_max_open is greater than 0 but less than the new conn_max_idle, then the new conn_max_idle will be reduced to match the conn_max_open limit. If value <= 0, no idle connections are retained. The default max idle connections is currently 2. This may change in a future release.`).
+			Default(2).
 			Optional().
 			Advanced(),
 		service.NewIntField("conn_max_open").

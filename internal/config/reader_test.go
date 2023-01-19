@@ -1,127 +1,93 @@
 package config
 
 import (
-	"os"
-	"path/filepath"
+	"errors"
+	"io/fs"
 	"testing"
+	"testing/fstest"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"github.com/benthosdev/benthos/v4/internal/manager"
-	"github.com/benthosdev/benthos/v4/internal/stream"
 )
 
-func newDummyReader(confFilePath string) *Reader {
-	rdr := NewReader(confFilePath, nil)
+func newDummyReader(confFilePath string, resourcePaths []string, opts ...OptFunc) *Reader {
+	rdr := NewReader(confFilePath, resourcePaths, opts...)
 	rdr.changeDelayPeriod = 1 * time.Millisecond
 	rdr.changeFlushPeriod = 1 * time.Millisecond
+	rdr.filesRefreshPeriod = 1 * time.Millisecond
 	return rdr
 }
 
-func TestReaderFileWatching(t *testing.T) {
-	dummyConfig := []byte(`
-input:
-  generate: {}
-output:
-  drop: {}
-`)
-
-	confDir := t.TempDir()
-
-	// Create an empty config file in the config folder
-	confFilePath := filepath.Join(confDir, "main.yaml")
-	require.NoError(t, os.WriteFile(confFilePath, []byte{}, 0o644))
-
-	rdr := newDummyReader(confFilePath)
-
-	changeChan := make(chan struct{})
-	var updatedConf stream.Config
-	require.NoError(t, rdr.SubscribeConfigChanges(func(conf stream.Config) bool {
-		updatedConf = conf
-		close(changeChan)
-		return true
-	}))
-
-	// Watch for configuration changes
-	testMgr, err := manager.New(manager.NewResourceConfig())
-	require.NoError(t, err)
-	require.NoError(t, rdr.BeginFileWatching(testMgr, true))
-
-	// Overwrite original config
-	require.NoError(t, os.WriteFile(confFilePath, dummyConfig, 0o644))
-
-	// Wait for the config watcher to reload the config
-	select {
-	case <-changeChan:
-	case <-time.After(100 * time.Millisecond):
-		require.FailNow(t, "Expected a config change to be triggered")
-	}
-
-	assert.Equal(t, "generate", updatedConf.Input.Type)
-	assert.Equal(t, "drop", updatedConf.Output.Type)
+type testFS struct {
+	m fstest.MapFS
 }
 
-func TestReaderFileWatchingSymlinkReplace(t *testing.T) {
-	dummyConfig := []byte(`
+func (fs testFS) Open(name string) (fs.File, error) {
+	return fs.m.Open(name)
+}
+
+func (fs testFS) OpenFile(name string, flag int, perm fs.FileMode) (fs.File, error) {
+	return fs.m.Open(name)
+}
+
+func (fs testFS) Stat(name string) (fs.FileInfo, error) {
+	return fs.m.Stat(name)
+}
+
+func (fs testFS) MkdirAll(name string, perm fs.FileMode) error {
+	return errors.New("not implemented")
+}
+
+func (fs testFS) Remove(name string) error {
+	return errors.New("not implemented")
+}
+
+func TestCustomFileSync(t *testing.T) {
+	testFS := &testFS{m: fstest.MapFS{
+		"foo_main.yaml": &fstest.MapFile{
+			Data: []byte(`
 input:
-  generate: {}
+  label: fooin
+  inproc: foo
+
 output:
-  drop: {}
-`)
+  label: fooout
+  inproc: bar
+`),
+		},
+		"a.yaml": &fstest.MapFile{
+			Data: []byte(`
+processor_resources:
+  - label: a
+    mapping: 'root = content() + " a1"'
+  - label: b
+    mapping: 'root = content() + " b1"'
+`),
+		},
+		"b.yaml": &fstest.MapFile{
+			Data: []byte(`
+processor_resources:
+  - label: c
+    mapping: 'root = content() + " c1"'
+  - label: d
+    mapping: 'root = content() + " d1"'
+`),
+		},
+	}}
+	rdr := newDummyReader("foo_main.yaml", []string{"a.yaml", "b.yaml"}, OptUseFS(testFS))
 
-	rootDir := t.TempDir()
-
-	// Create a config folder
-	confDir := filepath.Join(rootDir, "config")
-	require.NoError(t, os.Mkdir(confDir, 0o755))
-
-	// Create a symlink to the config folder
-	confDirSymlink := filepath.Join(rootDir, "symlink")
-	require.NoError(t, os.Symlink(confDir, confDirSymlink))
-
-	// Create an empty config file in the config folder through the symlink
-	confFilePath := filepath.Join(confDirSymlink, "main.yaml")
-	require.NoError(t, os.WriteFile(confFilePath, []byte{}, 0o644))
-
-	rdr := newDummyReader(confFilePath)
-
-	changeChan := make(chan struct{})
-	var updatedConf stream.Config
-	require.NoError(t, rdr.SubscribeConfigChanges(func(conf stream.Config) bool {
-		updatedConf = conf
-		close(changeChan)
-		return true
-	}))
-
-	// Watch for configuration changes
-	testMgr, err := manager.New(manager.NewResourceConfig())
+	conf := New()
+	lints, err := rdr.Read(&conf)
 	require.NoError(t, err)
-	require.NoError(t, rdr.BeginFileWatching(testMgr, true))
+	require.Empty(t, lints)
 
-	// Create a new config folder and place in it a new copy of the config file
-	newConfDir := filepath.Join(rootDir, "config_new")
-	require.NoError(t, os.Mkdir(newConfDir, 0o755))
-	require.NoError(t, os.WriteFile(filepath.Join(newConfDir, "main.yaml"), dummyConfig, 0o644))
+	assert.Equal(t, "fooin", conf.Input.Label)
+	assert.Equal(t, "fooout", conf.Output.Label)
 
-	// Create a symlink to the new config folder
-	newConfDirSymlink := filepath.Join(rootDir, "symlink_new")
-	require.NoError(t, os.Symlink(newConfDir, newConfDirSymlink))
-
-	// Overwrite the original symlink with the new symlink
-	require.NoError(t, os.Rename(newConfDirSymlink, confDirSymlink))
-
-	// Remove the original config folder to trigger a config refresh
-	require.NoError(t, os.RemoveAll(confDir))
-
-	// Wait for the config watcher to reload the config
-	select {
-	case <-changeChan:
-	case <-time.After(100 * time.Millisecond):
-		require.FailNow(t, "Expected a config change to be triggered")
-	}
-
-	assert.Equal(t, "generate", updatedConf.Input.Type)
-	assert.Equal(t, "drop", updatedConf.Output.Type)
+	assert.Len(t, conf.ResourceProcessors, 4)
+	assert.Equal(t, "a", conf.ResourceProcessors[0].Label)
+	assert.Equal(t, "b", conf.ResourceProcessors[1].Label)
+	assert.Equal(t, "c", conf.ResourceProcessors[2].Label)
+	assert.Equal(t, "d", conf.ResourceProcessors[3].Label)
 }

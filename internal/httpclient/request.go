@@ -13,7 +13,6 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/bloblang/query"
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/filepath/ifs"
-	"github.com/benthosdev/benthos/v4/internal/httpclient/oldconfig"
 	"github.com/benthosdev/benthos/v4/internal/message"
 	"github.com/benthosdev/benthos/v4/internal/metadata"
 )
@@ -55,7 +54,7 @@ type RequestOpt func(r *RequestCreator)
 // RequestCreatorFromOldConfig creates a new request creator from an old struct
 // style config. Eventually I'd like to phase these out for the more dynamic
 // service style parses, but it'll take a while so we have this for now.
-func RequestCreatorFromOldConfig(conf oldconfig.OldConfig, mgr bundle.NewManagement, opts ...RequestOpt) (*RequestCreator, error) {
+func RequestCreatorFromOldConfig(conf OldConfig, mgr bundle.NewManagement, opts ...RequestOpt) (*RequestCreator, error) {
 	r := &RequestCreator{
 		fs:        mgr.FS(),
 		reqSigner: conf.AuthConfig.Sign,
@@ -107,11 +106,15 @@ func WithExplicitMultipart(m []MultipartExpressions) RequestOpt {
 	}
 }
 
-func (r *RequestCreator) bodyFromExplicit(refBatch message.Batch) (body io.Reader, overrideContentType string) {
+func (r *RequestCreator) bodyFromExplicit(refBatch message.Batch) (body io.Reader, overrideContentType string, err error) {
 	if _, exists := r.headers["Content-Type"]; !exists {
 		overrideContentType = "application/octet-stream"
 	}
-	body = bytes.NewBuffer(r.explicitBody.Bytes(0, refBatch))
+	var bBytes []byte
+	if bBytes, err = r.explicitBody.Bytes(0, refBatch); err != nil {
+		return
+	}
+	body = bytes.NewBuffer(bBytes)
 	return
 }
 
@@ -120,14 +123,28 @@ func (r *RequestCreator) bodyFromExplicitMultipart(refBatch message.Batch) (body
 	writer := multipart.NewWriter(buf)
 	for _, v := range r.explicitMultiparts {
 		mh := make(textproto.MIMEHeader)
-		mh.Set("Content-Type", v.ContentType.String(0, refBatch))
-		mh.Set("Content-Disposition", v.ContentDisposition.String(0, refBatch))
+		var cTypeStr, cDispStr string
+		if cTypeStr, err = v.ContentType.String(0, refBatch); err != nil {
+			err = fmt.Errorf("content-type interpolation error: %w", err)
+			return
+		}
+		if cDispStr, err = v.ContentDisposition.String(0, refBatch); err != nil {
+			err = fmt.Errorf("content-disposition interpolation error: %w", err)
+			return
+		}
+		mh.Set("Content-Type", cTypeStr)
+		mh.Set("Content-Disposition", cDispStr)
 
 		var part io.Writer
 		if part, err = writer.CreatePart(mh); err != nil {
 			return
 		}
-		if _, err = io.Copy(part, bytes.NewReader([]byte(v.Body.String(0, refBatch)))); err != nil {
+		var partBytes []byte
+		if partBytes, err = v.Body.Bytes(0, refBatch); err != nil {
+			err = fmt.Errorf("part body interpolation error: %w", err)
+			return
+		}
+		if _, err = io.Copy(part, bytes.NewReader(partBytes)); err != nil {
 			return
 		}
 	}
@@ -139,7 +156,7 @@ func (r *RequestCreator) bodyFromExplicitMultipart(refBatch message.Batch) (body
 
 func (r *RequestCreator) body(refBatch message.Batch) (body io.Reader, overrideContentType string, err error) {
 	if r.explicitBody != nil {
-		body, overrideContentType = r.bodyFromExplicit(refBatch)
+		body, overrideContentType, err = r.bodyFromExplicit(refBatch)
 		return
 	}
 
@@ -168,7 +185,10 @@ func (r *RequestCreator) body(refBatch message.Batch) (body io.Reader, overrideC
 	for i, p := range refBatch {
 		contentType := "application/octet-stream"
 		if v, exists := r.headers["Content-Type"]; exists {
-			contentType = v.String(i, refBatch)
+			if contentType, err = v.String(i, refBatch); err != nil {
+				err = fmt.Errorf("content-type interpolation error: %w", err)
+				return
+			}
 		}
 
 		headers := textproto.MIMEHeader{
@@ -206,12 +226,22 @@ func (r *RequestCreator) Create(refBatch message.Batch) (req *http.Request, err 
 		return
 	}
 
-	if req, err = http.NewRequest(r.verb, r.url.String(0, refBatch), body); err != nil {
+	var urlStr string
+	if urlStr, err = r.url.String(0, refBatch); err != nil {
+		err = fmt.Errorf("url interpolation error: %w", err)
+		return
+	}
+	if req, err = http.NewRequest(r.verb, urlStr, body); err != nil {
 		return
 	}
 
 	for k, v := range r.headers {
-		req.Header.Add(k, v.String(0, refBatch))
+		var hStr string
+		if hStr, err = v.String(0, refBatch); err != nil {
+			err = fmt.Errorf("header '%v' interpolation error: %w", k, err)
+			return
+		}
+		req.Header.Add(k, hStr)
 	}
 	if len(refBatch) > 0 {
 		_ = r.metaInsertFilter.Iter(refBatch[0], func(k string, v any) error {
@@ -221,7 +251,10 @@ func (r *RequestCreator) Create(refBatch message.Batch) (req *http.Request, err 
 	}
 
 	if r.host != nil {
-		req.Host = r.host.String(0, refBatch)
+		if req.Host, err = r.host.String(0, refBatch); err != nil {
+			err = fmt.Errorf("host interpolation error: %w", err)
+			return
+		}
 	}
 	if overrideContentType != "" {
 		req.Header.Del("Content-Type")

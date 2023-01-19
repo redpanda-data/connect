@@ -19,9 +19,9 @@ import (
 func CredentialsDocs() docs.FieldSpecs {
 	return docs.FieldSpecs{
 		docs.FieldString("username", "The username to connect to the SFTP server."),
-		docs.FieldString("password", "The password for the username to connect to the SFTP server."),
+		docs.FieldString("password", "The password for the username to connect to the SFTP server.").Secret(),
 		docs.FieldString("private_key_file", "The private key for the username to connect to the SFTP server."),
-		docs.FieldString("private_key_pass", "Optional passphrase for private key."),
+		docs.FieldString("private_key_pass", "Optional passphrase for private key.").Secret(),
 	}
 }
 

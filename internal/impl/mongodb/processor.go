@@ -273,8 +273,13 @@ func NewProcessor(conf processor.Config, mgr bundle.NewManagement) (processor.V2
 // resulting messages or a response to be sent back to the message source.
 func (m *Processor) ProcessBatch(ctx context.Context, spans []*tracing.Span, batch message.Batch) ([]message.Batch, error) {
 	writeModelsMap := map[*mongo.Collection][]mongo.WriteModel{}
-	_ = batch.Iter(func(i int, p *message.Part) error {
-		var err error
+	_ = batch.Iter(func(i int, p *message.Part) (err error) {
+		defer func() {
+			if err != nil {
+				p.ErrorSet(err)
+			}
+		}()
+
 		var filterVal, documentVal *message.Part
 		var upsertVal, filterValWanted, documentValWanted bool
 
@@ -354,8 +359,13 @@ func (m *Processor) ProcessBatch(ctx context.Context, spans []*tracing.Span, bat
 			findAndUpdateOptions.Sort = sortJSON
 		}
 
+		collectionStr, err := m.collection.String(i, batch)
+		if err != nil {
+			return fmt.Errorf("collection interpolation error: %w", err)
+		}
+
 		var writeModel mongo.WriteModel
-		collection := m.database.Collection(m.collection.String(i, batch), m.writeConcernCollectionOption)
+		collection := m.database.Collection(collectionStr, m.writeConcernCollectionOption)
 
 		switch m.operation {
 		case client.OperationInsertOne:

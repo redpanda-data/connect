@@ -22,6 +22,7 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
 	btls "github.com/benthosdev/benthos/v4/internal/tls"
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
 func init() {
@@ -42,7 +43,7 @@ This input adds the following metadata fields to each message:
 - nats_stream_sequence
 ` + "```" + `
 
-You can access these metadata fields using [function interpolation](/docs/configuration/interpolation#metadata).
+You can access these metadata fields using [function interpolation](/docs/configuration/interpolation#bloblang-queries).
 
 ` + auth.Description(),
 		Config: docs.FieldComponent().WithChildren(
@@ -79,7 +80,7 @@ func newNATSStreamInput(conf input.Config, mgr bundle.NewManagement) (input.Stre
 	if c, err = newNATSStreamReader(conf.NATSStream, mgr); err != nil {
 		return nil, err
 	}
-	return input.NewAsyncReader("nats_stream", true, c, mgr)
+	return input.NewAsyncReader("nats_stream", c, mgr)
 }
 
 type natsStreamReader struct {
@@ -88,6 +89,7 @@ type natsStreamReader struct {
 	ackWait time.Duration
 
 	log log.Modular
+	fs  *service.FS
 
 	unAckMsgs []*stan.Msg
 
@@ -122,6 +124,7 @@ func newNATSStreamReader(conf input.NATSStreamConfig, mgr bundle.NewManagement) 
 	n := natsStreamReader{
 		conf:          conf,
 		ackWait:       ackWait,
+		fs:            service.NewFS(mgr.FS()),
 		log:           mgr.Logger(),
 		msgChan:       make(chan *stan.Msg),
 		interruptChan: make(chan struct{}),
@@ -169,7 +172,7 @@ func (n *natsStreamReader) Connect(ctx context.Context) error {
 		opts = append(opts, nats.Secure(n.tlsConf))
 	}
 
-	opts = append(opts, authConfToOptions(n.conf.Auth)...)
+	opts = append(opts, authConfToOptions(n.conf.Auth, n.fs)...)
 
 	natsConn, err := nats.Connect(n.urls, opts...)
 	if err != nil {

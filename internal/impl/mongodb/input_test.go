@@ -2,10 +2,7 @@ package mongodb
 
 import (
 	"context"
-	"flag"
 	"fmt"
-	"regexp"
-	"strings"
 	"testing"
 
 	"github.com/ory/dockertest/v3"
@@ -17,6 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/benthosdev/benthos/v4/internal/impl/mongodb/client"
+	"github.com/benthosdev/benthos/v4/internal/integration"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
@@ -44,13 +42,7 @@ query: |
 }
 
 func TestInputIntegration(t *testing.T) {
-	if m := flag.Lookup("test.run").Value.String(); m == "" || regexp.MustCompile(strings.Split(m, "/")[0]).FindString(t.Name()) == "" {
-		t.Skip("Skipping as execution was not requested explicitly using go test -run ^TestIntegration$")
-	}
-
-	if testing.Short() {
-		t.Skip("Skipping integration test in short mode")
-	}
+	integration.CheckSkip(t)
 
 	pool, err := dockertest.NewPool("")
 	if err != nil {
@@ -133,6 +125,7 @@ func TestInputIntegration(t *testing.T) {
 	type testCase struct {
 		query           func(coll *mongo.Collection) (*mongo.Cursor, error)
 		placeholderConf string
+		jsonMarshalMode client.JSONMarshalMode
 	}
 	cases := map[string]testCase{
 		"find": {
@@ -149,9 +142,11 @@ username: mongoadmin
 password: secret
 database: "TestDB"
 collection: "TestCollection"
+json_marshal_mode: relaxed
 query: |
   root.age = {"$gte": 18}
 `,
+			jsonMarshalMode: client.JSONMarshalModeRelaxed,
 		},
 		"aggregate": {
 			query: func(coll *mongo.Collection) (*mongo.Cursor, error) {
@@ -175,6 +170,7 @@ password: secret
 database: "TestDB"
 collection: "TestCollection"
 operation: "aggregate"
+json_marshal_mode: canonical
 query: |
   root = [
     {
@@ -189,18 +185,27 @@ query: |
     }
   ]
 `,
+			jsonMarshalMode: client.JSONMarshalModeCanonical,
 		},
 	}
 
 	port := resource.GetPort("27017/tcp")
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			testInput(port, tc.query, tc.placeholderConf, t)
+			testInput(t, port, tc.query, tc.placeholderConf, tc.jsonMarshalMode)
 		})
 	}
 }
 
-func testInput(port string, controlQuery func(collection *mongo.Collection) (cursor *mongo.Cursor, err error), placeholderConf string, t *testing.T) {
+func testInput(
+	t *testing.T,
+	port string,
+	controlQuery func(collection *mongo.Collection) (cursor *mongo.Cursor, err error),
+	placeholderConf string,
+	jsonMarshalMode client.JSONMarshalMode,
+) {
+	t.Helper()
+
 	controlCtx := context.Background()
 	controlConn, err := mongo.Connect(controlCtx, options.Client().ApplyURI("mongodb://mongoadmin:secret@localhost:"+port))
 	require.NoError(t, err)
@@ -210,11 +215,11 @@ func testInput(port string, controlQuery func(collection *mongo.Collection) (cur
 	var wantResults []map[string]any
 	err = controlCur.All(controlCtx, &wantResults)
 	require.NoError(t, err)
-	var wantMsgs []*service.Message
+	var wantMsgs [][]byte
 	for _, res := range wantResults {
-		wantMsg := service.NewMessage(nil)
-		wantMsg.SetStructured(res)
-		wantMsgs = append(wantMsgs, wantMsg)
+		resBytes, err := bson.MarshalExtJSON(res, jsonMarshalMode == client.JSONMarshalModeCanonical, false)
+		require.NoError(t, err)
+		wantMsgs = append(wantMsgs, resBytes)
 	}
 
 	conf := fmt.Sprintf(placeholderConf, port)
@@ -232,12 +237,16 @@ func testInput(port string, controlQuery func(collection *mongo.Collection) (cur
 	err = selectInput.Connect(ctx)
 	require.NoError(t, err)
 	for _, wMsg := range wantMsgs {
-		msg, _, err := selectInput.Read(ctx)
+		msg, ack, err := selectInput.Read(ctx)
 		require.NoError(t, err)
-		assert.Equal(t, wMsg, msg)
+		msgBytes, err := msg.AsBytes()
+		require.NoError(t, err)
+		assert.JSONEq(t, string(wMsg), string(msgBytes))
+		require.NoError(t, ack(ctx, nil))
 	}
-	_, _, err = selectInput.Read(ctx)
+	_, ack, err := selectInput.Read(ctx)
 	assert.Equal(t, service.ErrEndOfInput, err)
+	require.Nil(t, ack)
 
 	require.NoError(t, selectInput.Close(context.Background()))
 }

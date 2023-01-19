@@ -153,14 +153,6 @@ func TestFunctionQueries(t *testing.T) {
 				{content: `{"foo":"bar"}`},
 			},
 		},
-		"json_from function 2": {
-			input:  `json("foo").from(0)`,
-			output: `null`,
-			messages: []easyMsg{
-				{content: `not json`},
-				{content: `{"foo":"bar"}`},
-			},
-		},
 		"json_from function 3": {
 			input:  `json("foo").from(-1)`,
 			output: `bar`,
@@ -456,10 +448,6 @@ bar""")`,
 				{},
 			},
 		},
-		"field no context": {
-			input:  `this`,
-			output: `null`,
-		},
 		"field root": {
 			input:  `this`,
 			output: `test`,
@@ -674,14 +662,17 @@ bar""")`,
 			e, perr := tryParseQuery(test.input)
 			require.Nil(t, perr)
 
-			res := query.ExecToString(e, query.FunctionContext{
+			res, err := query.ExecToString(e, query.FunctionContext{
 				Index: test.index, MsgBatch: msg,
 			}.WithValueFunc(func() *any { return test.value }))
-
+			require.NoError(t, err)
 			assert.Equal(t, test.output, res)
-			res = string(query.ExecToBytes(e, query.FunctionContext{
+
+			bres, err := query.ExecToBytes(e, query.FunctionContext{
 				Index: test.index, MsgBatch: msg,
-			}.WithValueFunc(func() *any { return test.value })))
+			}.WithValueFunc(func() *any { return test.value }))
+			require.NoError(t, err)
+			res = string(bres)
 			assert.Equal(t, test.output, res)
 		})
 	}
@@ -705,9 +696,10 @@ func TestCountersFunction(t *testing.T) {
 		e, perr := tryParseQuery(test[0])
 		require.Nil(t, perr)
 
-		res := query.ExecToString(e, query.FunctionContext{
+		res, err := query.ExecToString(e, query.FunctionContext{
 			MsgBatch: message.QuickBatch(nil),
 		})
+		require.NoError(t, err)
 		assert.Equal(t, test[1], res)
 	}
 }
@@ -719,12 +711,13 @@ func TestUUIDV4Function(t *testing.T) {
 		e, perr := tryParseQuery("uuid_v4()")
 		require.Nil(t, perr)
 
-		res := query.ExecToString(e, query.FunctionContext{
+		res, err := query.ExecToString(e, query.FunctionContext{
 			MsgBatch: message.QuickBatch(nil),
 		})
 		if _, exists := results[res]; exists {
 			t.Errorf("Duplicate UUID generated: %v", res)
 		}
+		require.NoError(t, err)
 		results[res] = struct{}{}
 	}
 }
@@ -735,7 +728,8 @@ func TestTimestamps(t *testing.T) {
 	e, perr := tryParseQuery("timestamp_unix_nano()")
 	require.Nil(t, perr)
 
-	tStamp := query.ExecToString(e, query.FunctionContext{MsgBatch: message.QuickBatch(nil)})
+	tStamp, err := query.ExecToString(e, query.FunctionContext{MsgBatch: message.QuickBatch(nil)})
+	require.NoError(t, err)
 
 	nanoseconds, err := strconv.ParseInt(tStamp, 10, 64)
 	if err != nil {
@@ -753,7 +747,8 @@ func TestTimestamps(t *testing.T) {
 		require.NoError(t, perr.Err)
 	}
 
-	tStamp = query.ExecToString(e, query.FunctionContext{MsgBatch: message.QuickBatch(nil)})
+	tStamp, err = query.ExecToString(e, query.FunctionContext{MsgBatch: message.QuickBatch(nil)})
+	require.NoError(t, err)
 
 	seconds, err := strconv.ParseInt(tStamp, 10, 64)
 	if err != nil {
@@ -771,7 +766,8 @@ func TestTimestamps(t *testing.T) {
 		require.NoError(t, perr.Err)
 	}
 
-	tStamp = query.ExecToString(e, query.FunctionContext{MsgBatch: message.QuickBatch(nil)})
+	tStamp, err = query.ExecToString(e, query.FunctionContext{MsgBatch: message.QuickBatch(nil)})
+	require.NoError(t, err)
 
 	var secondsF float64
 	secondsF, err = strconv.ParseFloat(tStamp, 64)

@@ -21,7 +21,7 @@ func FieldSpec() docs.FieldSpec {
 
 		docs.FieldString(
 			"root_cas", "An optional root certificate authority to use. This is a string, representing a certificate chain from the parent trusted root certificate, to possible intermediate signing certificates, to the host certificate.", "-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----",
-		).HasDefault(""),
+		).HasDefault("").Secret(),
 
 		docs.FieldString(
 			"root_cas_file", "An optional path of a root certificate authority file to use. This is a file, often with a .pem extension, containing a certificate chain from the parent trusted root certificate, to possible intermediate signing certificates, to the host certificate.", "./root_cas.pem",
@@ -43,10 +43,10 @@ func FieldSpec() docs.FieldSpec {
 			},
 		).Array().WithChildren(
 			docs.FieldString("cert", "A plain text certificate to use.").HasDefault(""),
-			docs.FieldString("key", "A plain text certificate key to use.").HasDefault(""),
+			docs.FieldString("key", "A plain text certificate key to use.").HasDefault("").Secret(),
 			docs.FieldString("cert_file", "The path of a certificate to use.").HasDefault(""),
 			docs.FieldString("key_file", "The path of a certificate key to use.").HasDefault(""),
-			docs.FieldString("password", "A plain text password for when the private key is a password encrypted PEM block according to RFC 1423. Warning: Since it does not authenticate the ciphertext, it is vulnerable to padding oracle attacks that can let an attacker recover the plaintext.", "foo", "${KEY_PASSWORD}").HasDefault(""),
+			docs.FieldString("password", "A plain text password for when the private key is password encrypted in PKCS#1 or PKCS#8 format. The obsolete `pbeWithMD5AndDES-CBC` algorithm is not supported for the PKCS#8 format. Warning: Since it does not authenticate the ciphertext, it is vulnerable to padding oracle attacks that can let an attacker recover the plaintext.", "foo", "${KEY_PASSWORD}").HasDefault("").Secret(),
 		),
 	).Advanced()
 }

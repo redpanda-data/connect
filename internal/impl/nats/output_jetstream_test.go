@@ -27,7 +27,7 @@ auth:
 	conf, err := spec.ParseYAML(outputConfig, env)
 	require.NoError(t, err)
 
-	e, err := newJetStreamWriterFromConfig(conf, nil)
+	e, err := newJetStreamWriterFromConfig(conf, nil, nil)
 	require.NoError(t, err)
 
 	msg := service.NewMessage((nil))

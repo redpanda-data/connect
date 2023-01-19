@@ -30,10 +30,10 @@ func init() {
 		if err != nil {
 			return nil, err
 		}
-		return input.NewAsyncReader("amqp_1", true, a, nm)
+		return input.NewAsyncReader("amqp_1", a, nm)
 	}), docs.ComponentSpec{
 		Name:    "amqp_1",
-		Status:  docs.StatusBeta,
+		Status:  docs.StatusStable,
 		Summary: `Reads messages from an AMQP (1.0) server.`,
 		Description: `
 ### Metadata
@@ -48,12 +48,12 @@ This input adds the following metadata fields to each message:
 ` + "```" + `
 
 You can access these metadata fields using
-[function interpolation](/docs/configuration/interpolation#metadata).`,
+[function interpolation](/docs/configuration/interpolation#bloblang-queries).`,
 		Categories: []string{
 			"Services",
 		},
 		Config: docs.FieldComponent().WithChildren(
-			docs.FieldString("url",
+			docs.FieldURL("url",
 				"A URL to connect to.",
 				"amqp://localhost:5672/",
 				"amqps://guest:guest@localhost:5672/",

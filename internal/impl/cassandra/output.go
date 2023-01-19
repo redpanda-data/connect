@@ -99,7 +99,7 @@ output:
 			).WithChildren(
 				docs.FieldBool("enabled", "Whether to use password authentication."),
 				docs.FieldString("username", "A username."),
-				docs.FieldString("password", "A password."),
+				docs.FieldString("password", "A password.").Secret(),
 			).Advanced(),
 			docs.FieldBool(
 				"disable_initial_host_lookup",

@@ -39,7 +39,7 @@ var ReaderDocs = docs.FieldString(
 	"multipart", "Consumes the output of another codec and batches messages together. A batch ends when an empty message is consumed. For example, the codec `lines/multipart` could be used to consume multipart messages where an empty line indicates the end of each batch.",
 	"regex:(?m)^\\d\\d:\\d\\d:\\d\\d", "Consume the file in segments divided by regular expression.",
 	"tar", "Parse the file as a tar archive, and consume each file of the archive as a message.",
-).LinterFunc(nil) // Disable default option linter as it doesn't include foo:bar formats.
+)
 
 //------------------------------------------------------------------------------
 
@@ -388,7 +388,12 @@ func newAvroOCFReader(conf ReaderConfig, marshaler string, r io.ReadCloser, ackF
 	if err != nil {
 		return nil, err
 	}
-
+	ocfCodec := ocf.Codec()
+	ocfSchema := ocfCodec.Schema()
+	StandardJSONFullCodec, err := goavro.NewCodecForStandardJSONFull(ocfSchema)
+	if err != nil {
+		return nil, err
+	}
 	decoder := func(a *avroOCFReader) (*message.Part, error) {
 		datum, err := a.ocf.Read()
 		if err != nil {
@@ -431,7 +436,7 @@ func newAvroOCFReader(conf ReaderConfig, marshaler string, r io.ReadCloser, ackF
 		r:            r,
 		logicalTypes: logicalTypes,
 		decoder:      decoder,
-		avroCodec:    ocf.Codec(),
+		avroCodec:    StandardJSONFullCodec,
 		sourceAck:    ackOnce(ackFn),
 	}, nil
 }

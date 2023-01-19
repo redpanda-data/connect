@@ -9,22 +9,16 @@ import (
 
 	"github.com/nats-io/nats.go"
 
-	"github.com/benthosdev/benthos/v4/internal/bundle"
-	"github.com/benthosdev/benthos/v4/internal/component"
-	"github.com/benthosdev/benthos/v4/internal/component/input"
-	"github.com/benthosdev/benthos/v4/internal/component/input/processors"
-	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/impl/nats/auth"
-	"github.com/benthosdev/benthos/v4/internal/log"
-	"github.com/benthosdev/benthos/v4/internal/message"
-	btls "github.com/benthosdev/benthos/v4/internal/tls"
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
-func init() {
-	err := bundle.AllInputs.Add(processors.WrapConstructor(newNATSInput), docs.ComponentSpec{
-		Name:    "nats",
-		Summary: `Subscribe to a NATS subject.`,
-		Description: `
+func natsInputConfig() *service.ConfigSpec {
+	return service.NewConfigSpec().
+		Stable().
+		Categories("Services").
+		Summary(`Subscribe to a NATS subject.`).
+		Description(`
 ### Metadata
 
 This input adds the following metadata fields to each message:
@@ -34,43 +28,51 @@ This input adds the following metadata fields to each message:
 - All message headers (when supported by the connection)
 ` + "```" + `
 
-You can access these metadata fields using [function interpolation](/docs/configuration/interpolation#metadata).
+You can access these metadata fields using [function interpolation](/docs/configuration/interpolation#bloblang-queries).
 
-` + auth.Description(),
-		Config: docs.FieldComponent().WithChildren(
-			docs.FieldString(
-				"urls",
-				"A list of URLs to connect to. If an item of the list contains commas it will be expanded into multiple URLs.",
-				[]string{"nats://127.0.0.1:4222"},
-				[]string{"nats://username:password@127.0.0.1:4222"},
-			).Array(),
-			docs.FieldString("queue", "The queue to consume from."),
-			docs.FieldString("subject", "A subject to consume from."),
-			docs.FieldInt("prefetch_count", "The maximum number of messages to pull at a time.").Advanced(),
-			btls.FieldSpec(),
-			auth.FieldSpec(),
-		).ChildDefaultAndTypesFromStruct(input.NewNATSConfig()),
-		Categories: []string{
-			"Services",
+` + auth.Description()).
+		Field(service.NewStringListField("urls").
+			Description("A list of URLs to connect to. If an item of the list contains commas it will be expanded into multiple URLs.").
+			Example([]string{"nats://127.0.0.1:4222"}).
+			Example([]string{"nats://username:password@127.0.0.1:4222"})).
+		Field(service.NewStringField("subject").
+			Description("A subject to consume from. Supports wildcards for consuming multiple subjects. Either a subject or stream must be specified.").
+			Example("foo.bar.baz").Example("foo.*.baz").Example("foo.bar.*").Example("foo.>")).
+		Field(service.NewStringField("queue").
+			Description("An optional queue group to consume as.").
+			Optional()).
+		Field(service.NewIntField("prefetch_count").
+			Description("The maximum number of messages to pull at a time.").
+			Advanced().
+			Default(32).
+			LintRule(`root = if this < 0 { ["prefetch count must be greater than or equal to zero"] }`)).
+		Field(service.NewTLSToggledField("tls")).
+		Field(service.NewInternalField(auth.FieldSpec()))
+}
+
+func init() {
+	err := service.RegisterInput(
+		"nats", natsInputConfig(),
+		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Input, error) {
+			input, err := newNATSReader(conf, mgr)
+			return service.AutoRetryNacks(input), err
 		},
-	})
+	)
 	if err != nil {
 		panic(err)
 	}
 }
 
-func newNATSInput(conf input.Config, mgr bundle.NewManagement) (input.Streamed, error) {
-	n, err := newNATSReader(conf.NATS, mgr)
-	if err != nil {
-		return nil, err
-	}
-	return input.NewAsyncReader("nats", true, input.NewAsyncPreserver(n), mgr)
-}
-
 type natsReader struct {
-	urls string
-	conf input.NATSConfig
-	log  log.Modular
+	urls          string
+	subject       string
+	queue         string
+	prefetchCount int
+	authConf      auth.Config
+	tlsConf       *tls.Config
+
+	log *service.Logger
+	fs  *service.FS
 
 	cMut sync.Mutex
 
@@ -79,24 +81,49 @@ type natsReader struct {
 	natsChan      chan *nats.Msg
 	interruptChan chan struct{}
 	interruptOnce sync.Once
-	tlsConf       *tls.Config
 }
 
-func newNATSReader(conf input.NATSConfig, mgr bundle.NewManagement) (*natsReader, error) {
+func newNATSReader(conf *service.ParsedConfig, mgr *service.Resources) (*natsReader, error) {
 	n := natsReader{
-		conf:          conf,
 		log:           mgr.Logger(),
+		fs:            mgr.FS(),
 		interruptChan: make(chan struct{}),
 	}
-	n.urls = strings.Join(conf.URLs, ",")
-	if conf.PrefetchCount < 0 {
+
+	urlList, err := conf.FieldStringList("urls")
+	if err != nil {
+		return nil, err
+	}
+	n.urls = strings.Join(urlList, ",")
+
+	if n.subject, err = conf.FieldString("subject"); err != nil {
+		return nil, err
+	}
+
+	if n.prefetchCount, err = conf.FieldInt("prefetch_count"); err != nil {
+		return nil, err
+	}
+
+	if n.prefetchCount < 0 {
 		return nil, errors.New("prefetch count must be greater than or equal to zero")
 	}
-	var err error
-	if conf.TLS.Enabled {
-		if n.tlsConf, err = conf.TLS.Get(mgr.FS()); err != nil {
+
+	if conf.Contains("queue") {
+		if n.queue, err = conf.FieldString("queue"); err != nil {
 			return nil, err
 		}
+	}
+
+	tlsConf, tlsEnabled, err := conf.FieldTLSToggled("tls")
+	if err != nil {
+		return nil, err
+	}
+	if tlsEnabled {
+		n.tlsConf = tlsConf
+	}
+
+	if n.authConf, err = AuthFromParsedConfig(conf.Namespace("auth")); err != nil {
+		return nil, err
 	}
 
 	return &n, nil
@@ -119,24 +146,24 @@ func (n *natsReader) Connect(ctx context.Context) error {
 		opts = append(opts, nats.Secure(n.tlsConf))
 	}
 
-	opts = append(opts, authConfToOptions(n.conf.Auth)...)
+	opts = append(opts, authConfToOptions(n.authConf, n.fs)...)
 
 	if natsConn, err = nats.Connect(n.urls, opts...); err != nil {
 		return err
 	}
-	natsChan := make(chan *nats.Msg, n.conf.PrefetchCount)
+	natsChan := make(chan *nats.Msg, n.prefetchCount)
 
-	if len(n.conf.QueueID) > 0 {
-		natsSub, err = natsConn.ChanQueueSubscribe(n.conf.Subject, n.conf.QueueID, natsChan)
+	if len(n.queue) > 0 {
+		natsSub, err = natsConn.ChanQueueSubscribe(n.subject, n.queue, natsChan)
 	} else {
-		natsSub, err = natsConn.ChanSubscribe(n.conf.Subject, natsChan)
+		natsSub, err = natsConn.ChanSubscribe(n.subject, natsChan)
 	}
 
 	if err != nil {
 		return err
 	}
 
-	n.log.Infof("Receiving NATS messages from subject: %v\n", n.conf.Subject)
+	n.log.Infof("Receiving NATS messages from subject: %v\n", n.subject)
 
 	n.natsConn = natsConn
 	n.natsSub = natsSub
@@ -159,7 +186,7 @@ func (n *natsReader) disconnect() {
 	n.natsChan = nil
 }
 
-func (n *natsReader) ReadBatch(ctx context.Context) (message.Batch, input.AsyncAckFn, error) {
+func (n *natsReader) Read(ctx context.Context) (*service.Message, service.AckFunc, error) {
 	n.cMut.Lock()
 	natsChan := n.natsChan
 	natsConn := n.natsConn
@@ -170,26 +197,25 @@ func (n *natsReader) ReadBatch(ctx context.Context) (message.Batch, input.AsyncA
 	select {
 	case msg, open = <-natsChan:
 	case <-ctx.Done():
-		return nil, nil, component.ErrTimeout
+		return nil, nil, ctx.Err()
 	case _, open = <-n.interruptChan:
 	}
 	if !open {
 		n.disconnect()
-		return nil, nil, component.ErrNotConnected
+		return nil, nil, service.ErrNotConnected
 	}
 
-	bmsg := message.QuickBatch([][]byte{msg.Data})
-	part := bmsg.Get(0)
-	part.MetaSetMut("nats_subject", msg.Subject)
+	bmsg := service.NewMessage(msg.Data)
+	bmsg.MetaSetMut("nats_subject", msg.Subject)
 	// process message headers if server supports the feature
 	if natsConn.HeadersSupported() {
 		for key := range msg.Header {
 			value := msg.Header.Get(key)
-			part.MetaSetMut(key, value)
+			bmsg.MetaSetMut(key, value)
 		}
 	}
 
-	return bmsg, func(ctx context.Context, res error) error {
+	return bmsg, func(_ context.Context, res error) error {
 		var ackErr error
 		if res != nil {
 			ackErr = msg.Nak()

@@ -10,7 +10,6 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
@@ -33,7 +32,7 @@ import (
 // specifically requested using the -run flag.
 func CheckSkip(t testing.TB) {
 	if m := flag.Lookup("test.run").Value.String(); m == "" || regexp.MustCompile(strings.Split(m, "/")[0]).FindString(t.Name()) == "" {
-		t.Skip("Skipping as execution was not requested explicitly using go test -run ^TestIntegration$")
+		t.Skip("Skipping as execution was not requested explicitly using go test -run ^Test.*Integration.*$")
 	}
 }
 
@@ -299,7 +298,6 @@ func StreamTests(tests ...StreamTestDefinition) StreamTestList {
 func (i StreamTestList) Run(t *testing.T, configTemplate string, opts ...StreamTestOptFunc) {
 	envs := make([]streamTestEnvironment, len(i))
 
-	wg := sync.WaitGroup{}
 	for j := range i {
 		envs[j] = newStreamTestEnvironment(t, configTemplate)
 		for _, opt := range opts {
@@ -314,17 +312,7 @@ func (i StreamTestList) Run(t *testing.T, configTemplate string, opts ...StreamT
 		var done func()
 		envs[j].ctx, done = context.WithTimeout(envs[j].ctx, timeout)
 		t.Cleanup(done)
-
-		if envs[j].preTest != nil {
-			wg.Add(1)
-			env := &envs[j]
-			go func() {
-				defer wg.Done()
-				env.preTest(t, env.ctx, env.configVars.ID, &env.configVars)
-			}()
-		}
 	}
-	wg.Wait()
 
 	for j, test := range i {
 		if envs[j].configVars.port == "" {
@@ -338,39 +326,16 @@ func (i StreamTestList) Run(t *testing.T, configTemplate string, opts ...StreamT
 	}
 }
 
-// RunSequentially executes all the tests against a config template
-// sequentially.
-func (i StreamTestList) RunSequentially(t *testing.T, configTemplate string, opts ...StreamTestOptFunc) {
-	for _, test := range i {
-		env := newStreamTestEnvironment(t, configTemplate)
-		for _, opt := range opts {
-			opt(&env)
-		}
-
-		timeout := env.timeout
-		if deadline, ok := t.Deadline(); ok {
-			timeout = time.Until(deadline) - (time.Second * 5)
-		}
-
-		var done func()
-		env.ctx, done = context.WithTimeout(env.ctx, timeout)
-		t.Cleanup(done)
-
-		if env.preTest != nil {
-			env.preTest(t, env.ctx, env.configVars.ID, &env.configVars)
-		}
-		t.Run("seq", func(t *testing.T) {
-			test.fn(t, &env)
-		})
-	}
-}
-
 //------------------------------------------------------------------------------
 
 func namedStreamTest(name string, test streamTestDefinitionFn) StreamTestDefinition {
 	return StreamTestDefinition{
 		fn: func(t *testing.T, env *streamTestEnvironment) {
 			t.Run(name, func(t *testing.T) {
+				t.Parallel()
+				if env.preTest != nil {
+					env.preTest(t, env.ctx, env.configVars.ID, &env.configVars)
+				}
 				test(t, env)
 			})
 		},

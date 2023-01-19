@@ -208,7 +208,10 @@ func (s *sqlRawOutput) WriteBatch(ctx context.Context, batch service.MessageBatc
 
 		queryStr := s.queryStatic
 		if s.queryDyn != nil {
-			queryStr = batch.InterpolatedString(i, s.queryDyn)
+			var err error
+			if queryStr, err = batch.TryInterpolatedString(i, s.queryDyn); err != nil {
+				return fmt.Errorf("query interpolation error: %w", err)
+			}
 		}
 
 		if _, err := s.db.ExecContext(ctx, queryStr, args...); err != nil {

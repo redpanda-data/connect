@@ -2,6 +2,9 @@ package config
 
 import (
 	"bytes"
+	"io"
+	"io/fs"
+	"time"
 	"unicode/utf8"
 
 	"gopkg.in/yaml.v3"
@@ -18,8 +21,8 @@ type LintOptions struct {
 
 // ReadFileLinted will attempt to read a configuration file path into a
 // structure. Returns an array of lint messages or an error.
-func ReadFileLinted(path string, opts LintOptions, config *Type) ([]docs.Lint, error) {
-	configBytes, lints, err := ReadFileEnvSwap(path)
+func ReadFileLinted(fs ifs.FS, path string, opts LintOptions, config *Type) ([]docs.Lint, error) {
+	configBytes, lints, _, err := ReadFileEnvSwap(fs, path)
 	if err != nil {
 		return nil, err
 	}
@@ -59,10 +62,20 @@ func LintBytes(opts LintOptions, rawBytes []byte) ([]docs.Lint, error) {
 // interpolations before returning the contents. Linting errors are returned if
 // the file has an unexpected higher level format, such as invalid utf-8
 // encoding.
-func ReadFileEnvSwap(path string) (configBytes []byte, lints []docs.Lint, err error) {
-	configBytes, err = ifs.ReadFile(ifs.OS(), path)
-	if err != nil {
-		return nil, nil, err
+//
+// An modTime timestamp is returned if the modtime of the file is available.
+func ReadFileEnvSwap(store ifs.FS, path string) (configBytes []byte, lints []docs.Lint, modTime time.Time, err error) {
+	var configFile fs.File
+	if configFile, err = store.Open(path); err != nil {
+		return
+	}
+
+	if info, ierr := configFile.Stat(); ierr == nil {
+		modTime = info.ModTime()
+	}
+
+	if configBytes, err = io.ReadAll(configFile); err != nil {
+		return
 	}
 
 	if !utf8.Valid(configBytes) {
@@ -73,5 +86,5 @@ func ReadFileEnvSwap(path string) (configBytes []byte, lints []docs.Lint, err er
 	}
 
 	configBytes = ReplaceEnvVariables(configBytes)
-	return configBytes, lints, nil
+	return
 }

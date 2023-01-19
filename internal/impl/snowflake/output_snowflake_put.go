@@ -184,9 +184,9 @@ and it must be set to the `+"`<cloud>`"+` part of the Account Identifier
 (`+"`<account_locator>.<region_id>.<cloud>`"+`).
 `).Example("aws").Example("gcp").Example("azure").Optional()).
 		Field(service.NewStringField("user").Description("Username.")).
-		Field(service.NewStringField("password").Description("An optional password.").Optional()).
+		Field(service.NewStringField("password").Description("An optional password.").Optional().Secret()).
 		Field(service.NewStringField("private_key_file").Description("The path to a file containing the private SSH key.").Optional()).
-		Field(service.NewStringField("private_key_pass").Description("An optional private SSH key passphrase.").Optional()).
+		Field(service.NewStringField("private_key_pass").Description("An optional private SSH key passphrase.").Optional().Secret()).
 		Field(service.NewStringField("role").Description("Role.")).
 		Field(service.NewStringField("database").Description("Database.")).
 		Field(service.NewStringField("warehouse").Description("Warehouse.")).

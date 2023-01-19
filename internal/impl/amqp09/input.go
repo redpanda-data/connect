@@ -31,7 +31,7 @@ func init() {
 		if a, err = newAMQP09Reader(c.AMQP09, nm); err != nil {
 			return nil, err
 		}
-		return input.NewAsyncReader("amqp_0_9", true, a, nm)
+		return input.NewAsyncReader("amqp_0_9", a, nm)
 	}), docs.ComponentSpec{
 		Name: "amqp_0_9",
 		Summary: `
@@ -67,12 +67,12 @@ This input adds the following metadata fields to each message:
 ` + "```" + `
 
 You can access these metadata fields using
-[function interpolation](/docs/configuration/interpolation#metadata).`,
+[function interpolation](/docs/configuration/interpolation#bloblang-queries).`,
 		Categories: []string{
 			"Services",
 		},
 		Config: docs.FieldComponent().WithChildren(
-			docs.FieldString("urls",
+			docs.FieldURL("urls",
 				"A list of URLs to connect to. The first URL to successfully establish a connection will be used until the connection is closed. If an item of the list contains commas it will be expanded into multiple URLs.",
 				[]string{"amqp://guest:guest@127.0.0.1:5672/"},
 				[]string{"amqp://127.0.0.1:5672/,amqp://127.0.0.2:5672/"},

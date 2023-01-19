@@ -367,7 +367,7 @@ function Home() {
                     <a href="https://aurora.dev/" className="col col--6"><img className={styles.auroraImg} src="/img/sponsors/aurora.svg" /></a>
                     <a href="https://wildbit.com" className="col col--6"><img className={styles.wildbitImg} src="/img/sponsors/wildbit.svg" /></a>
                     <a href="https://www.opala.com" className="col col--6"><img className={styles.opalaImg} src="/img/sponsors/opala.svg" /></a>
-                    <a href="https://numary.com" className="col col--6"><img className={styles.numaryImg} src="/img/sponsors/numary.svg" /></a>
+                    <a href="https://formance.com" className="col col--6"><img className={styles.formanceImg} src="/img/sponsors/formance.svg" /></a>
                     <a href="https://synadia.com" className="col col--6"><img className={styles.synadiaImg} src="/img/sponsors/synadia.svg" /></a>
                   </div>
                 </div>

@@ -24,7 +24,7 @@ func SessionFields() []*service.ConfigField {
 				Default("").Advanced(),
 			service.NewStringField("secret").
 				Description("The secret for the credentials being used.").
-				Default("").Advanced(),
+				Default("").Advanced().Secret(),
 			service.NewStringField("token").
 				Description("The token for the credentials being used, required when using short term credentials.").
 				Default("").Advanced(),

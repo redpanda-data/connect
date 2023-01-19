@@ -1,51 +1,33 @@
 package httpclient
 
 import (
-	"github.com/benthosdev/benthos/v4/internal/docs"
-	"github.com/benthosdev/benthos/v4/internal/docs/interop"
-	"github.com/benthosdev/benthos/v4/internal/httpclient/oldconfig"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
-// OldBasicAuthFieldSpec returns a basic authentication field spec.
-func OldBasicAuthFieldSpec() docs.FieldSpec {
-	return interop.Unwrap(basicAuthField())
-}
-
-// OldAuthFieldSpecs returns a map of field specs for an auth type.
-func OldAuthFieldSpecs() docs.FieldSpecs {
-	return docs.FieldSpecs{
-		interop.Unwrap(oAuthFieldSpec()),
-		interop.Unwrap(basicAuthField()),
-		interop.Unwrap(jwtFieldSpec()),
+// AuthFieldSpecs returns a map of field specs for an auth type.
+func AuthFieldSpecs() []*service.ConfigField {
+	return []*service.ConfigField{
+		oAuthFieldSpec(),
+		BasicAuthField(),
+		jwtFieldSpec(),
 	}
 }
 
-// OldAuthFieldSpecsExpanded includes OAuth2 and JWT fields that might not be
+// AuthFieldSpecsExpanded includes OAuth2 and JWT fields that might not be
 // appropriate for all components.
-func OldAuthFieldSpecsExpanded() docs.FieldSpecs {
-	return docs.FieldSpecs{
-		interop.Unwrap(oAuthFieldSpec()),
-		interop.Unwrap(oAuth2FieldSpec()),
-		interop.Unwrap(jwtFieldSpec()),
-		interop.Unwrap(basicAuthField()),
+func AuthFieldSpecsExpanded() []*service.ConfigField {
+	return []*service.ConfigField{
+		oAuthFieldSpec(),
+		oAuth2FieldSpec(),
+		BasicAuthField(),
+		jwtFieldSpec(),
 	}
 }
 
 //------------------------------------------------------------------------------
 
-// AuthFields returns a list of config field specs for all basic, header based,
-// HTTP authentication types. The configuration of these fields is possible to
-// implement by enriching HTTP requests and does not interfere with the client.
-func AuthFields() []*service.ConfigField {
-	return []*service.ConfigField{
-		oAuthFieldSpec(),
-		basicAuthField(),
-		jwtFieldSpec(),
-	}
-}
-
-func basicAuthField() *service.ConfigField {
+// BasicAuthField returns a config field spec for basic authentication.
+func BasicAuthField() *service.ConfigField {
 	return service.NewObjectField("basic_auth",
 		service.NewBoolField("enabled").
 			Description("Whether to use basic authentication in requests.").
@@ -57,7 +39,7 @@ func basicAuthField() *service.ConfigField {
 
 		service.NewStringField("password").
 			Description("A password to authenticate with.").
-			Default(""),
+			Default("").Secret(),
 	).Description("Allows you to specify basic authentication.").
 		Advanced()
 }
@@ -74,7 +56,7 @@ func oAuthFieldSpec() *service.ConfigField {
 
 		service.NewStringField("consumer_secret").
 			Description("A secret used to establish ownership of the consumer key.").
-			Default(""),
+			Default("").Secret(),
 
 		service.NewStringField("access_token").
 			Description("A value used to gain access to the protected resources on behalf of the user.").
@@ -82,7 +64,7 @@ func oAuthFieldSpec() *service.ConfigField {
 
 		service.NewStringField("access_token_secret").
 			Description("A secret provided in order to establish ownership of a given access token.").
-			Default(""),
+			Default("").Secret(),
 	).
 		Description("Allows you to specify open authentication via OAuth version 1.").
 		Advanced()
@@ -100,9 +82,9 @@ func oAuth2FieldSpec() *service.ConfigField {
 
 		service.NewStringField("client_secret").
 			Description("A secret used to establish ownership of the client key.").
-			Default(""),
+			Default("").Secret(),
 
-		service.NewStringField("token_url").
+		service.NewURLField("token_url").
 			Description("The URL of the token provider.").
 			Default(""),
 
@@ -154,8 +136,8 @@ func AuthSignerFromParsed(conf *service.ParsedConfig) (RequestSigner, error) {
 	return oldConf.Sign, nil
 }
 
-func authConfFromParsed(conf *service.ParsedConfig) (oldConf oldconfig.AuthConfig, err error) {
-	oldConf = oldconfig.NewAuthConfig()
+func authConfFromParsed(conf *service.ParsedConfig) (oldConf AuthConfig, err error) {
+	oldConf = NewAuthConfig()
 	if oldConf.OAuth, err = oauthFromParsed(conf); err != nil {
 		return
 	}
@@ -168,8 +150,8 @@ func authConfFromParsed(conf *service.ParsedConfig) (oldConf oldconfig.AuthConfi
 	return
 }
 
-func oauthFromParsed(conf *service.ParsedConfig) (res oldconfig.OAuthConfig, err error) {
-	res = oldconfig.NewOAuthConfig()
+func oauthFromParsed(conf *service.ParsedConfig) (res OAuthConfig, err error) {
+	res = NewOAuthConfig()
 	if !conf.Contains("oauth") {
 		return
 	}
@@ -192,8 +174,8 @@ func oauthFromParsed(conf *service.ParsedConfig) (res oldconfig.OAuthConfig, err
 	return
 }
 
-func basicAuthFromParsed(conf *service.ParsedConfig) (res oldconfig.BasicAuthConfig, err error) {
-	res = oldconfig.NewBasicAuthConfig()
+func basicAuthFromParsed(conf *service.ParsedConfig) (res BasicAuthConfig, err error) {
+	res = NewBasicAuthConfig()
 	if !conf.Contains("basic_auth") {
 		return
 	}
@@ -210,8 +192,8 @@ func basicAuthFromParsed(conf *service.ParsedConfig) (res oldconfig.BasicAuthCon
 	return
 }
 
-func jwtAuthFromParsed(conf *service.ParsedConfig) (res oldconfig.JWTConfig, err error) {
-	res = oldconfig.NewJWTConfig()
+func jwtAuthFromParsed(conf *service.ParsedConfig) (res JWTConfig, err error) {
+	res = NewJWTConfig()
 	if !conf.Contains("jwt") {
 		return
 	}

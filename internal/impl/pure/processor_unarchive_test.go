@@ -329,3 +329,34 @@ format: csv
 		assert.Equal(t, e, string(mBytes))
 	}
 }
+
+func TestUnarchiveCSVCustom(t *testing.T) {
+	conf, err := unarchiveProcConfig().ParseYAML(`
+format: csv:|
+`, nil)
+	require.NoError(t, err)
+
+	exp := []string{
+		`{"color":"blue","id":"1","name":"foo"}`,
+		`{"color":"green","id":"2","name":"bar"}`,
+		`{"color":"red","id":"3","name":"baz"}`,
+	}
+
+	proc, err := newUnarchiveFromParsed(conf, service.MockResources())
+	require.NoError(t, err)
+
+	msgs, res := proc.Process(context.Background(), service.NewMessage([]byte(
+		`id|name|color
+1|foo|blue
+2|bar|green
+3|baz|red`,
+	)))
+	require.NoError(t, res)
+	require.Len(t, msgs, len(exp))
+
+	for i, e := range exp {
+		mBytes, err := msgs[i].AsBytes()
+		require.NoError(t, err)
+		assert.Equal(t, e, string(mBytes))
+	}
+}

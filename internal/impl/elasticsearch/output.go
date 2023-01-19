@@ -21,6 +21,7 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/component/output/batcher"
 	"github.com/benthosdev/benthos/v4/internal/component/output/processors"
 	"github.com/benthosdev/benthos/v4/internal/docs"
+	"github.com/benthosdev/benthos/v4/internal/docs/interop"
 	"github.com/benthosdev/benthos/v4/internal/httpclient"
 	sess "github.com/benthosdev/benthos/v4/internal/impl/aws/session"
 	"github.com/benthosdev/benthos/v4/internal/log"
@@ -56,7 +57,7 @@ It's possible to enable AWS connectivity with this output using the `+"`aws`"+`
 fields. However, you may need to set `+"`sniff` and `healthcheck`"+` to
 false for connections to succeed.`),
 		Config: docs.FieldComponent().WithChildren(
-			docs.FieldString("urls", "A list of URLs to connect to. If an item of the list contains commas it will be expanded into multiple URLs.", []string{"http://localhost:9200"}).Array(),
+			docs.FieldURL("urls", "A list of URLs to connect to. If an item of the list contains commas it will be expanded into multiple URLs.", []string{"http://localhost:9200"}).Array(),
 			docs.FieldString("index", "The index to place messages.").IsInterpolated(),
 			docs.FieldString("action", "The action to take on the document. This field must resolve to one of the following action types: `create`, `index`, `update`, `upsert` or `delete`.").IsInterpolated().Advanced(),
 			docs.FieldString("pipeline", "An optional pipeline id to preprocess incoming documents.").IsInterpolated().Advanced(),
@@ -69,7 +70,7 @@ false for connections to succeed.`),
 			itls.FieldSpec(),
 			docs.FieldInt("max_in_flight", "The maximum number of parallel message batches to have in flight at any given time."),
 		).WithChildren(retries.FieldSpecs()...).WithChildren(
-			httpclient.OldBasicAuthFieldSpec(),
+			interop.Unwrap(httpclient.BasicAuthField()),
 			policy.FieldSpec(),
 			docs.FieldObject("aws", "Enables and customises connectivity to Amazon Elastic Service.").WithChildren(
 				docs.FieldSpecs{
@@ -274,15 +275,26 @@ func (e *Elasticsearch) Write(msg message.Batch) error {
 			e.log.Errorf("Failed to marshal message into JSON document: %v\n", ierr)
 			return fmt.Errorf("failed to marshal message into JSON document: %w", ierr)
 		}
-		requests[i] = &pendingBulkIndex{
-			Action:   e.actionStr.String(i, msg),
-			Index:    e.indexStr.String(i, msg),
-			Pipeline: e.pipelineStr.String(i, msg),
-			Routing:  e.routingStr.String(i, msg),
-			Type:     e.typeStr.String(i, msg),
-			Doc:      jObj,
-			ID:       e.idStr.String(i, msg),
+		pbi := &pendingBulkIndex{Doc: jObj}
+		if pbi.Action, ierr = e.actionStr.String(i, msg); ierr != nil {
+			return fmt.Errorf("action interpolation error: %w", ierr)
 		}
+		if pbi.Index, ierr = e.indexStr.String(i, msg); ierr != nil {
+			return fmt.Errorf("index interpolation error: %w", ierr)
+		}
+		if pbi.Pipeline, ierr = e.pipelineStr.String(i, msg); ierr != nil {
+			return fmt.Errorf("pipeline interpolation error: %w", ierr)
+		}
+		if pbi.Routing, ierr = e.routingStr.String(i, msg); ierr != nil {
+			return fmt.Errorf("routing interpolation error: %w", ierr)
+		}
+		if pbi.Type, ierr = e.typeStr.String(i, msg); ierr != nil {
+			return fmt.Errorf("type interpolation error: %w", ierr)
+		}
+		if pbi.ID, ierr = e.idStr.String(i, msg); ierr != nil {
+			return fmt.Errorf("id interpolation error: %w", ierr)
+		}
+		requests[i] = pbi
 		return nil
 	}); err != nil {
 		return err

@@ -14,7 +14,6 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/batch/policy"
 	"github.com/benthosdev/benthos/v4/internal/batch/policy/batchconfig"
 	"github.com/benthosdev/benthos/v4/internal/component/input/batcher"
-	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
@@ -36,7 +35,7 @@ func TestBatcherStandard(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	batcher := batcher.New(batchPol, mockInput, log.Noop(), metrics.Noop())
+	batcher := batcher.New(batchPol, mockInput, log.Noop())
 
 	testMsgs := []string{}
 	testResChans := []chan error{}
@@ -177,7 +176,7 @@ func TestBatcherErrorTracking(t *testing.T) {
 	batchPol, err := policy.New(batchConf, mock.NewManager())
 	require.NoError(t, err)
 
-	batcher := batcher.New(batchPol, mockInput, log.Noop(), metrics.Noop())
+	batcher := batcher.New(batchPol, mockInput, log.Noop())
 
 	testMsgs := []string{}
 	testResChans := []chan error{}
@@ -247,7 +246,7 @@ func TestBatcherTiming(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	batcher := batcher.New(batchPol, mockInput, log.Noop(), metrics.Noop())
+	batcher := batcher.New(batchPol, mockInput, log.Noop())
 
 	resChan := make(chan error)
 	select {
@@ -331,7 +330,7 @@ func TestBatcherFinalFlush(t *testing.T) {
 	batchPol, err := policy.New(batchConf, mock.NewManager())
 	require.NoError(t, err)
 
-	batcher := batcher.New(batchPol, mockInput, log.Noop(), metrics.Noop())
+	batcher := batcher.New(batchPol, mockInput, log.Noop())
 
 	resChan := make(chan error, 1)
 	select {

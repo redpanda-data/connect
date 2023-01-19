@@ -58,7 +58,7 @@ func Run() {
 		// Iterate default config paths
 		for _, path := range defaultPaths {
 			if _, err := ifs.OS().Stat(path); err == nil {
-				if _, err = config.ReadFileLinted(path, config.LintOptions{}, &conf); err != nil {
+				if _, err = config.ReadFileLinted(ifs.OS(), path, config.LintOptions{}, &conf); err != nil {
 					fmt.Fprintf(os.Stderr, "Configuration file read error: %v\n", err)
 					os.Exit(1)
 				}

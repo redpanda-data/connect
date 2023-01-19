@@ -945,18 +945,60 @@ var _ = registerSimpleMethod(
 		"parse_csv", "",
 	).InCategory(
 		MethodCategoryParsing,
-		"Attempts to parse a string into an array of objects by following the CSV format described in RFC 4180. The first line is assumed to be a header row, which determines the keys of values in each object.",
-		NewExampleSpec("",
+		"Attempts to parse a string into an array of objects by following the CSV format described in RFC 4180.",
+		NewExampleSpec("Parses CSV data with a header row",
 			`root.orders = this.orders.parse_csv()`,
 			`{"orders":"foo,bar\nfoo 1,bar 1\nfoo 2,bar 2"}`,
 			`{"orders":[{"bar":"bar 1","foo":"foo 1"},{"bar":"bar 2","foo":"foo 2"}]}`,
 		),
-	),
+		NewExampleSpec("Parses CSV data without a header row",
+			`root.orders = this.orders.parse_csv(false)`,
+			`{"orders":"foo 1,bar 1\nfoo 2,bar 2"}`,
+			`{"orders":[["foo 1","bar 1"],["foo 2","bar 2"]]}`,
+		),
+		NewExampleSpec("Parses CSV data delimited by dots",
+			`root.orders = this.orders.parse_csv(delimiter:".")`,
+			`{"orders":"foo.bar\nfoo 1.bar 1\nfoo 2.bar 2"}`,
+			`{"orders":[{"bar":"bar 1","foo":"foo 1"},{"bar":"bar 2","foo":"foo 2"}]}`,
+		),
+		NewExampleSpec("Parses CSV data containing a quote in an unquoted field",
+			`root.orders = this.orders.parse_csv(lazy_quotes:true)`,
+			`{"orders":"foo,bar\nfoo 1,bar 1\nfoo\" \"2,bar\" \"2"}`,
+			`{"orders":[{"bar":"bar 1","foo":"foo 1"},{"bar":"bar\" \"2","foo":"foo\" \"2"}]}`,
+		)).
+		Param(ParamBool("parse_header_row", "Whether to reference the first row as a header row. If set to true the output structure for messages will be an object where field keys are determined by the header row. Otherwise, the output will be an array of row arrays.").Default(true)).
+		Param(ParamString("delimiter", "The delimiter to use for splitting values in each record. It must be a single character.").Default(",")).
+		Param(ParamBool("lazy_quotes", "If set to `true`, a quote may appear in an unquoted field and a non-doubled quote may appear in a quoted field.").Default(false)),
 	parseCSVMethod,
 )
 
-func parseCSVMethod(*ParsedParams) (simpleMethod, error) {
+func parseCSVMethod(args *ParsedParams) (simpleMethod, error) {
 	return func(v any, ctx FunctionContext) (any, error) {
+		var parseHeaderRow bool
+		var optBool *bool
+		var err error
+		if optBool, err = args.FieldOptionalBool("parse_header_row"); err != nil {
+			return nil, err
+		}
+		parseHeaderRow = *optBool
+
+		var delimiter rune
+		var optString *string
+		if optString, err = args.FieldOptionalString("delimiter"); err != nil {
+			return nil, err
+		}
+		delimRunes := []rune(*optString)
+		if len(delimRunes) != 1 {
+			return nil, errors.New("delimiter value must be exactly one character")
+		}
+		delimiter = delimRunes[0]
+
+		var lazyQuotes bool
+		if optBool, err = args.FieldOptionalBool("lazy_quotes"); err != nil {
+			return nil, err
+		}
+		lazyQuotes = *optBool
+
 		var csvBytes []byte
 		switch t := v.(type) {
 		case string:
@@ -968,6 +1010,8 @@ func parseCSVMethod(*ParsedParams) (simpleMethod, error) {
 		}
 
 		r := csv.NewReader(bytes.NewReader(csvBytes))
+		r.Comma = delimiter
+		r.LazyQuotes = lazyQuotes
 		strRecords, err := r.ReadAll()
 		if err != nil {
 			return nil, err
@@ -976,20 +1020,32 @@ func parseCSVMethod(*ParsedParams) (simpleMethod, error) {
 			return nil, errors.New("zero records were parsed")
 		}
 
-		records := make([]any, 0, len(strRecords)-1)
-		headers := strRecords[0]
-		if len(headers) == 0 {
-			return nil, fmt.Errorf("no headers found on first row")
-		}
-		for j, strRecord := range strRecords[1:] {
-			if len(headers) != len(strRecord) {
-				return nil, fmt.Errorf("record on line %v: record mismatch with headers", j)
+		var records []any
+		if parseHeaderRow {
+			records = make([]any, 0, len(strRecords)-1)
+			headers := strRecords[0]
+			if len(headers) == 0 {
+				return nil, fmt.Errorf("no headers found on first row")
 			}
-			obj := make(map[string]any, len(strRecord))
-			for i, r := range strRecord {
-				obj[headers[i]] = r
+			for j, strRecord := range strRecords[1:] {
+				if len(headers) != len(strRecord) {
+					return nil, fmt.Errorf("record on line %v: record mismatch with headers", j)
+				}
+				obj := make(map[string]any, len(strRecord))
+				for i, r := range strRecord {
+					obj[headers[i]] = r
+				}
+				records = append(records, obj)
 			}
-			records = append(records, obj)
+		} else {
+			records = make([]any, 0, len(strRecords))
+			for _, rec := range strRecords {
+				genericSlice := make([]any, len(rec))
+				for i, v := range rec {
+					genericSlice[i] = v
+				}
+				records = append(records, genericSlice)
+			}
 		}
 
 		return records, nil
@@ -1115,7 +1171,7 @@ var _ = registerSimpleMethod(
     "foo": "bar"
 }`,
 		),
-		NewExampleSpec("Provide an argument string in order to customise the indentation used.",
+		NewExampleSpec("Pass a string to the `indent` parameter in order to customise the indentation.",
 			`root = this.format_json("  ")`,
 			`{"doc":{"foo":"bar"}}`,
 			`{
@@ -1129,12 +1185,21 @@ var _ = registerSimpleMethod(
 			`{"doc":{"foo":"bar"}}`,
 			`{"doc":"{\n    \"foo\": \"bar\"\n}"}`,
 		),
+		NewExampleSpec("Set the `no_indent` parameter to true to disable indentation. The result is equivalent to calling `bytes()`.",
+			`root = this.doc.format_json(no_indent: true)`,
+			`{"doc":{"foo":"bar"}}`,
+			`{"foo":"bar"}`,
+		),
 	).
 		Beta().
 		Param(ParamString(
 			"indent",
 			"Indentation string. Each element in a JSON object or array will begin on a new, indented line followed by one or more copies of indent according to the indentation nesting.",
-		).Optional().Default(strings.Repeat(" ", 4))),
+		).Default(strings.Repeat(" ", 4))).
+		Param(ParamBool(
+			"no_indent",
+			"Disable indentation.",
+		).Default(false)),
 	func(args *ParsedParams) (simpleMethod, error) {
 		indentOpt, err := args.FieldOptionalString("indent")
 		if err != nil {
@@ -1144,18 +1209,64 @@ var _ = registerSimpleMethod(
 		if indentOpt != nil {
 			indent = *indentOpt
 		}
+		noIndentOpt, err := args.FieldOptionalBool("no_indent")
+		if err != nil {
+			return nil, err
+		}
 		return func(v any, ctx FunctionContext) (any, error) {
-			b, err := json.Marshal(v)
+			if *noIndentOpt {
+				return json.Marshal(v)
+			}
+			return json.MarshalIndent(v, "", indent)
+		}, nil
+	},
+)
+
+var _ = registerSimpleMethod(
+	NewMethodSpec(
+		"parse_url", "Attempts to parse a URL from a string value, returning a structured result that describes the various facets of the URL. The fields returned within the structured result roughly follow https://pkg.go.dev/net/url#URL, and may be expanded in future in order to present more information.",
+	).InCategory(
+		MethodCategoryParsing, "",
+		NewExampleSpec("",
+			`root.foo_url = this.foo_url.parse_url()`,
+			`{"foo_url":"https://www.benthos.dev/docs/guides/bloblang/about"}`,
+			`{"foo_url":{"fragment":"","host":"www.benthos.dev","opaque":"","path":"/docs/guides/bloblang/about","raw_fragment":"","raw_path":"","raw_query":"","scheme":"https"}}`,
+		),
+		NewExampleSpec("",
+			`root.username = this.url.parse_url().user.name | "unknown"`,
+			`{"url":"amqp://foo:bar@127.0.0.1:5672/"}`,
+			`{"username":"foo"}`,
+			`{"url":"redis://localhost:6379"}`,
+			`{"username":"unknown"}`,
+		),
+	),
+	func(*ParsedParams) (simpleMethod, error) {
+		return stringMethod(func(data string) (any, error) {
+			urlParsed, err := url.Parse(data)
 			if err != nil {
 				return nil, err
 			}
-
-			var out bytes.Buffer
-			if err := json.Indent(&out, b, "", indent); err != nil {
-				return nil, err
+			values := map[string]any{
+				"scheme":       urlParsed.Scheme,
+				"opaque":       urlParsed.Opaque,
+				"host":         urlParsed.Host,
+				"path":         urlParsed.Path,
+				"raw_path":     urlParsed.RawPath,
+				"raw_query":    urlParsed.RawQuery,
+				"fragment":     urlParsed.Fragment,
+				"raw_fragment": urlParsed.RawFragment,
 			}
-			return out.Bytes(), nil
-		}, nil
+			if urlParsed.User != nil {
+				userObj := map[string]any{
+					"name": urlParsed.User.Username(),
+				}
+				if pass, exists := urlParsed.User.Password(); exists {
+					userObj["password"] = pass
+				}
+				values["user"] = userObj
+			}
+			return values, nil
+		}), nil
 	},
 )
 

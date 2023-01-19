@@ -121,6 +121,11 @@ var _ = registerMethod(
 		NewExampleSpec("",
 			`root.doc.id = this.thing.id.string().catch(uuid_v4())`,
 		),
+		NewExampleSpec("The fallback argument can be a mapping, allowing you to capture the error string and yield structured data back.",
+			`root.url = this.url.parse_url().catch(err -> {"error":err,"input":this.url})`,
+			`{"url":"invalid %&# url"}`,
+			`{"url":{"error":"field `+"`this.url`"+`: parse \"invalid %&\": invalid URL escape \"%&\"","input":"invalid %&# url"}}`,
+		),
 		NewExampleSpec("When the input document is not structured attempting to reference structured fields with `this` will result in an error. Therefore, a convenient way to delete non-structured data is with a catch.",
 			`root = this.catch(deleted())`,
 			`{"doc":{"foo":"bar"}}`,
@@ -140,7 +145,7 @@ func catchMethod(fn Function, args *ParsedParams) (Function, error) {
 	return ClosureFunction("method catch", func(ctx FunctionContext) (any, error) {
 		res, err := fn.Exec(ctx)
 		if err != nil {
-			return catchFn.Exec(ctx)
+			return catchFn.Exec(ctx.WithValue(err.Error()))
 		}
 		return res, err
 	}, aggregateTargetPaths(fn, catchFn)), nil
@@ -205,24 +210,12 @@ root.foo_summed = json("foo").from_all().sum()`,
 func fromAllMethod(target Function, _ *ParsedParams) (Function, error) {
 	return ClosureFunction("method from_all", func(ctx FunctionContext) (any, error) {
 		values := make([]any, ctx.MsgBatch.Len())
-		var err error
 		for i := 0; i < ctx.MsgBatch.Len(); i++ {
 			subCtx := ctx
 			subCtx.Index = i
-			v, tmpErr := target.Exec(subCtx)
-			if tmpErr != nil {
-				if recovered, ok := tmpErr.(*ErrRecoverable); ok {
-					values[i] = recovered.Recovered
-				}
-				err = tmpErr
-			} else {
-				values[i] = v
-			}
-		}
-		if err != nil {
-			return nil, &ErrRecoverable{
-				Recovered: values,
-				Err:       err,
+			var err error
+			if values[i], err = target.Exec(subCtx); err != nil {
+				return nil, err
 			}
 		}
 		return values, nil

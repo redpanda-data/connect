@@ -24,7 +24,7 @@ func init() {
 		if err != nil {
 			return nil, err
 		}
-		return input.NewAsyncReader("file", true, input.NewAsyncPreserver(rdr), nm)
+		return input.NewAsyncReader("file", input.NewAsyncPreserver(rdr), nm)
 	}), docs.ComponentSpec{
 		Name: "file",
 		Summary: `
@@ -32,8 +32,8 @@ Consumes data from files on disk, emitting messages according to a chosen codec.
 		Config: docs.FieldComponent().WithChildren(
 			docs.FieldString("paths", "A list of paths to consume sequentially. Glob patterns are supported, including super globs (double star).").Array(),
 			codec.ReaderDocs,
-			docs.FieldInt("max_buffer", "The largest token size expected when consuming delimited files.").Advanced(),
-			docs.FieldBool("delete_on_finish", "Whether to delete consumed files from the disk once they are fully consumed.").Advanced(),
+			docs.FieldInt("max_buffer", "The largest token size expected when consuming files with a tokenised codec such as `lines`.").Advanced(),
+			docs.FieldBool("delete_on_finish", "Whether to delete input files from the disk once they are fully consumed.").Advanced(),
 		).ChildDefaultAndTypesFromStruct(input.NewFileConfig()),
 		Description: `
 ### Metadata
@@ -47,7 +47,7 @@ This input adds the following metadata fields to each message:
 ` + "```" + `
 
 You can access these metadata fields using
-[function interpolation](/docs/configuration/interpolation#metadata).`,
+[function interpolation](/docs/configuration/interpolation#bloblang-queries).`,
 		Categories: []string{
 			"Local",
 		},
@@ -74,7 +74,7 @@ input:
 type scannerInfo struct {
 	scanner     codec.Reader
 	currentPath string
-	modTime     time.Time
+	modTimeUTC  time.Time
 }
 
 type fileConsumer struct {
@@ -146,9 +146,9 @@ func (f *fileConsumer) getReader(ctx context.Context) (scannerInfo, error) {
 		return scannerInfo{}, err
 	}
 
-	var modTime time.Time
+	var modTimeUTC time.Time
 	if fInfo, err := file.Stat(); err == nil {
-		modTime = fInfo.ModTime()
+		modTimeUTC = fInfo.ModTime().UTC()
 	} else {
 		f.log.Errorf("Failed to read metadata from file '%v'", nextPath)
 	}
@@ -156,7 +156,7 @@ func (f *fileConsumer) getReader(ctx context.Context) (scannerInfo, error) {
 	f.scannerInfo = &scannerInfo{
 		scanner:     scanner,
 		currentPath: nextPath,
-		modTime:     modTime,
+		modTimeUTC:  modTimeUTC,
 	}
 
 	f.paths = f.paths[1:]
@@ -188,8 +188,6 @@ func (f *fileConsumer) ReadBatch(ctx context.Context) (message.Batch, input.Asyn
 			return nil, nil, err
 		}
 
-		modTimeUnix, modTime := f.getModTime(scannerInfo.modTime)
-
 		msg := message.QuickBatch(nil)
 		for _, part := range parts {
 			if len(part.AsBytes()) == 0 {
@@ -197,8 +195,8 @@ func (f *fileConsumer) ReadBatch(ctx context.Context) (message.Batch, input.Asyn
 			}
 
 			part.MetaSetMut("path", scannerInfo.currentPath)
-			part.MetaSetMut("mod_time_unix", modTimeUnix)
-			part.MetaSetMut("mod_time", modTime)
+			part.MetaSetMut("mod_time_unix", scannerInfo.modTimeUTC.Unix())
+			part.MetaSetMut("mod_time", scannerInfo.modTimeUTC.Format(time.RFC3339))
 
 			msg = append(msg, part)
 		}
@@ -223,11 +221,4 @@ func (f *fileConsumer) Close(ctx context.Context) (err error) {
 		f.paths = nil
 	}
 	return
-}
-
-func (f *fileConsumer) getModTime(t time.Time) (modTimeUnix int, modTime string) {
-	utcModTime := t.UTC()
-	modTimeUnix = int(utcModTime.Unix())
-	modTime = utcModTime.Format(time.RFC3339)
-	return modTimeUnix, modTime
 }

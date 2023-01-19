@@ -2,11 +2,8 @@ package influxdb
 
 import (
 	"encoding/json"
-	"flag"
 	"fmt"
-	"regexp"
 	"runtime"
-	"strings"
 	"testing"
 	"time"
 
@@ -14,6 +11,7 @@ import (
 	"github.com/ory/dockertest/v3"
 
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
+	"github.com/benthosdev/benthos/v4/internal/integration"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 )
 
@@ -22,9 +20,7 @@ func TestInfluxIntegration(t *testing.T) {
 		t.Skip("skipping test on macos")
 	}
 
-	if m := flag.Lookup("test.run").Value.String(); m == "" || regexp.MustCompile(strings.Split(m, "/")[0]).FindString(t.Name()) == "" {
-		t.Skip("Skipping as execution was not requested explicitly using go test -run ^TestIntegration$")
-	}
+	integration.CheckSkip(t)
 
 	if testing.Short() {
 		t.Skip("Skipping integration test in short mode")

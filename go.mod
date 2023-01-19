@@ -31,6 +31,7 @@ require (
 	github.com/cenkalti/backoff/v4 v4.1.3
 	github.com/clbanning/mxj/v2 v2.5.5
 	github.com/colinmarc/hdfs v1.1.3
+	github.com/couchbase/gocb/v2 v2.6.0
 	github.com/denisenkom/go-mssqldb v0.11.0
 	github.com/dgraph-io/ristretto v0.1.0
 	github.com/dustin/go-humanize v1.0.0
@@ -56,12 +57,14 @@ require (
 	github.com/itchyny/timefmt-go v0.1.3
 	github.com/jhump/protoreflect v1.10.1
 	github.com/jmespath/go-jmespath v0.4.0
+	github.com/klauspost/compress v1.15.11
 	github.com/lib/pq v1.10.4
 	github.com/linkedin/goavro/v2 v2.12.0
 	github.com/matoous/go-nanoid/v2 v2.0.0
 	github.com/microcosm-cc/bluemonday v1.0.19
 	github.com/mitchellh/mapstructure v1.4.3
 	github.com/nats-io/nats.go v1.15.0
+	github.com/nats-io/nkeys v0.3.0
 	github.com/nats-io/stan.go v0.10.2
 	github.com/nsf/jsondiff v0.0.0-20210926074059-1e845ec5d249
 	github.com/nsqio/go-nsq v1.1.0
@@ -81,11 +84,12 @@ require (
 	github.com/robfig/cron/v3 v3.0.1
 	github.com/segmentio/ksuid v1.0.4
 	github.com/segmentio/parquet-go v0.0.0-20220830163417-b03c0471ebb0
-	github.com/sijms/go-ora/v2 v2.5.3
+	github.com/sijms/go-ora/v2 v2.5.22
 	github.com/sirupsen/logrus v1.8.1
 	github.com/smira/go-statsd v1.3.2
 	github.com/snowflakedb/gosnowflake v1.6.6
 	github.com/stretchr/testify v1.8.0
+	github.com/tetratelabs/wazero v1.0.0-pre.4
 	github.com/tilinna/z85 v1.0.0
 	github.com/twmb/franz-go v1.9.0
 	github.com/twmb/franz-go/pkg/kmsg v1.2.0
@@ -161,6 +165,7 @@ require (
 	github.com/cespare/xxhash/v2 v2.1.2 // indirect
 	github.com/cockroachdb/apd/v2 v2.0.1 // indirect
 	github.com/containerd/continuity v0.2.2 // indirect
+	github.com/couchbase/gocbcore/v10 v10.2.0 // indirect
 	github.com/cpuguy83/go-md2man/v2 v2.0.2 // indirect
 	github.com/danieljoos/wincred v1.1.2 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
@@ -206,7 +211,6 @@ require (
 	github.com/jcmturner/rpc/v2 v2.0.3 // indirect
 	github.com/josharian/intern v1.0.0 // indirect
 	github.com/kballard/go-shellquote v0.0.0-20180428030007-95032a82bc51 // indirect
-	github.com/klauspost/compress v1.15.11 // indirect
 	github.com/kr/fs v0.1.0 // indirect
 	github.com/lann/builder v0.0.0-20180802200727-47ae307949d0 // indirect
 	github.com/lann/ps v0.0.0-20150810152359-62de8c46ede0 // indirect
@@ -221,7 +225,6 @@ require (
 	github.com/mtibben/percent v0.2.1 // indirect
 	github.com/nats-io/nats-server/v2 v2.8.4 // indirect
 	github.com/nats-io/nats-streaming-server v0.24.6 // indirect
-	github.com/nats-io/nkeys v0.3.0 // indirect
 	github.com/nats-io/nuid v1.0.1 // indirect
 	github.com/olekukonko/tablewriter v0.0.5 // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect
