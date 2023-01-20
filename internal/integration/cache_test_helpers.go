@@ -171,9 +171,6 @@ func (i CacheTestList) Run(t *testing.T, configTemplate string, opts ...CacheTes
 		env.ctx, done = context.WithTimeout(env.ctx, env.timeout)
 		t.Cleanup(done)
 
-		if env.preTest != nil {
-			env.preTest(t, env.ctx, env.configVars.ID, &env.configVars)
-		}
 		test.fn(t, &env)
 	}
 }
@@ -184,6 +181,10 @@ func namedCacheTest(name string, test cacheTestDefinitionFn) CacheTestDefinition
 	return CacheTestDefinition{
 		fn: func(t *testing.T, env *cacheTestEnvironment) {
 			t.Run(name, func(t *testing.T) {
+				t.Parallel()
+				if env.preTest != nil {
+					env.preTest(t, env.ctx, env.configVars.ID, &env.configVars)
+				}
 				test(t, env)
 			})
 		},

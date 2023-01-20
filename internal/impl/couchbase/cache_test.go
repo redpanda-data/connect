@@ -40,17 +40,15 @@ cache_resources:
 		integration.CacheTestOptVarOne(username),
 		integration.CacheTestOptVarTwo(password),
 		integration.CacheTestOptPreTest(func(tb testing.TB, ctx context.Context, testID string, vars *integration.CacheTestConfigVars) {
-			require.NoError(t, createBucket(ctx, tb, servicePort, testID))
-			t.Cleanup(func() {
-				require.NoError(t, removeBucket(ctx, t, servicePort, testID))
+			require.NoError(tb, createBucket(ctx, tb, servicePort, testID))
+			tb.Cleanup(func() {
+				require.NoError(tb, removeBucket(ctx, tb, servicePort, testID))
 			})
 		}),
 	)
 }
 
 func removeBucket(ctx context.Context, tb testing.TB, port, bucket string) error {
-	tb.Helper()
-
 	cluster, err := gocb.Connect(fmt.Sprintf("couchbase://localhost:%v", port), gocb.ClusterOptions{
 		Authenticator: gocb.PasswordAuthenticator{
 			Username: username,
@@ -67,8 +65,6 @@ func removeBucket(ctx context.Context, tb testing.TB, port, bucket string) error
 }
 
 func createBucket(ctx context.Context, tb testing.TB, port, bucket string) error {
-	tb.Helper()
-
 	cluster, err := gocb.Connect(fmt.Sprintf("couchbase://localhost:%v", port), gocb.ClusterOptions{
 		Authenticator: gocb.PasswordAuthenticator{
 			Username: username,
@@ -92,7 +88,7 @@ func createBucket(ctx context.Context, tb testing.TB, port, bucket string) error
 
 	for i := 0; i < 5; i++ { // try five time
 		time.Sleep(time.Second)
-		err = cluster.Bucket(bucket).WaitUntilReady(time.Second, nil)
+		err = cluster.Bucket(bucket).WaitUntilReady(time.Second*10, nil)
 		if err == nil {
 			break
 		}
