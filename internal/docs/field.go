@@ -1,12 +1,11 @@
 package docs
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
-	"github.com/benthosdev/benthos/v4/internal/bloblang"
-	"github.com/benthosdev/benthos/v4/internal/bloblang/query"
-	"github.com/benthosdev/benthos/v4/internal/message"
+	"github.com/benthosdev/benthos/v4/public/bloblang"
 )
 
 // FieldType represents a field type.
@@ -304,7 +303,11 @@ func lintsFromAny(line int, v any) (lints []Lint) {
 			lints = append(lints, lintsFromAny(line, e)...)
 		}
 	case map[string]any:
-		typeInt, _ := query.IGetInt(t["type"])
+		// Note: this is a long winded way to do IGetInt from the internal
+		// package, I'm doing it so that this package no longer depends on other
+		// internal packages (when possible).
+		var typeInt int64
+		_ = bloblang.NewArgSpec().Int64Var(&typeInt).Extract([]any{t["type"]})
 		lints = append(lints, NewLintError(line, LintType(typeInt), t["what"].(string)))
 	case string:
 		if len(t) > 0 {
@@ -331,7 +334,7 @@ func lintsFromAny(line int, v any) (lints []Lint) {
 func (f FieldSpec) LinterBlobl(blobl string) FieldSpec {
 	env := bloblang.NewEnvironment().OnlyPure()
 
-	m, err := env.NewMapping(blobl)
+	m, err := env.Parse(blobl)
 	if err != nil {
 		f.customLintFn = func(ctx LintContext, line, col int, value any) (lints []Lint) {
 			return []Lint{NewLintError(line, LintCustom, fmt.Sprintf("Field lint mapping itself failed to parse: %v", err))}
@@ -341,12 +344,12 @@ func (f FieldSpec) LinterBlobl(blobl string) FieldSpec {
 
 	f.Linter = blobl
 	f.customLintFn = func(ctx LintContext, line, col int, value any) (lints []Lint) {
-		res, err := m.Exec(query.FunctionContext{
-			Vars:     map[string]any{},
-			Maps:     m.Maps(),
-			MsgBatch: message.QuickBatch(nil),
-		}.WithValue(value))
+		var res any
+		err := m.Overlay(value, &res)
 		if err != nil {
+			if errors.Is(err, bloblang.ErrRootDeleted) {
+				return
+			}
 			return []Lint{NewLintError(line, LintCustom, err.Error())}
 		}
 		lints = append(lints, lintsFromAny(line, res)...)
@@ -409,28 +412,19 @@ func (f FieldSpec) scrubValue(v any) (any, error) {
 
 	env := bloblang.NewEnvironment().OnlyPure()
 
-	m, err := env.NewMapping(f.Scrubber)
+	m, err := env.Parse(f.Scrubber)
 	if err != nil {
 		return nil, fmt.Errorf("scrubber mapping failed to parse: %w", err)
 	}
 
-	res, err := m.Exec(query.FunctionContext{
-		Vars:     map[string]any{},
-		Maps:     map[string]query.Function{},
-		MsgBatch: message.QuickBatch(nil),
-	}.WithValue(v))
+	res, err := m.Query(v)
 	if err != nil {
+		if errors.Is(err, bloblang.ErrRootDeleted) {
+			return nil, nil
+		}
 		return nil, err
 	}
-
-	switch res.(type) {
-	case query.Delete:
-		return nil, nil
-	case query.Nothing:
-		return v, nil
-	default:
-		return res, nil
-	}
+	return res, nil
 }
 
 func (f FieldSpec) getLintFunc() LintFunc {
