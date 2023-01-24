@@ -26,6 +26,7 @@ to the [`database/sql` docs](https://pkg.go.dev/database/sql#DB.SetMaxIdleConns)
 - Fixed a bug where the `oracle` driver for the `sql_*` components was returning timestamps which were getting marshalled into an empty JSON object instead of a string.
 - The `aws_sqs` input no longer backs off on subsequent empty requests when long polling is enabled.
 - It's now possible to mock resources within the main test target file in config unit tests.
+- Unit test linting no longer incorrectly expects the `json_contains` predicate to contain a string value only.
 
 ## 4.11.0 - 2022-12-21
 
