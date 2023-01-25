@@ -53,6 +53,10 @@ output:
     endpoint: ""
     metadata:
       exclude_prefixes: []
+    flow_control:
+      max_outstanding_messages: 1000
+      max_outstanding_bytes: -1
+      limit_exceeded_behavior: ignore
 ```
 
 </TabItem>
@@ -171,5 +175,37 @@ Provide a list of explicit metadata key prefixes to be excluded when adding meta
 
 Type: `array`  
 Default: `[]`  
+
+### `flow_control`
+
+For a given topic, configures the PubSub client's internal buffer for messages to be published.
+
+
+Type: `object`  
+
+### `flow_control.max_outstanding_messages`
+
+Maximum number of buffered messages to be published. If less than or equal to zero, this is disabled.
+
+
+Type: `int`  
+Default: `1000`  
+
+### `flow_control.max_outstanding_bytes`
+
+Maximum size of buffered messages to be published. If less than or equal to zero, this is disabled.
+
+
+Type: `int`  
+Default: `-1`  
+
+### `flow_control.limit_exceeded_behavior`
+
+Configures the behavior when trying to publish additional messages while the flow controller is full. The available options are ignore (disable, default), block, and signal_error (publish results will return an error).
+
+
+Type: `string`  
+Default: `"ignore"`  
+Options: `ignore`, `block`, `signal_error`.
 
 
