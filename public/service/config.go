@@ -399,6 +399,23 @@ func (c *ConfigSpec) Field(f *ConfigField) *ConfigSpec {
 	return c
 }
 
+// Fields sets the specification of multiple field within the config spec, used
+// for linting and generating documentation for the component.
+//
+// If the provided any of the fields have an empty name then they are registered
+// as the value at the root of the config spec.
+//
+// When creating a spec with a struct constructor the fields from that struct
+// will already be inferred. However, setting fields explicitly is sometimes
+// useful for enriching their documentation with more information.
+func (c *ConfigSpec) Fields(fs ...*ConfigField) *ConfigSpec {
+	spec := c
+	for _, f := range fs {
+		spec = c.Field(f)
+	}
+	return spec
+}
+
 // Example adds an example to the plugin configuration spec that demonstrates
 // how the component can be used. An example has a title, summary, and a YAML
 // configuration showing a real use case.
