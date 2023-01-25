@@ -1567,6 +1567,20 @@ root.result = this.collapse(include_empty: true)
 # Out: {"result":{"foo.0.bar":"1","foo.1.bar":{},"foo.2.bar":"2","foo.3.bar":[]}}
 ```
 
+### `concat`
+
+Concatenates an array value with one or more argument arrays.
+
+#### Examples
+
+
+```coffee
+root.foo = this.foo.concat(this.bar, this.baz)
+
+# In:  {"foo":["a","b"],"bar":["c"],"baz":["d","e","f"]}
+# Out: {"foo":["a","b","c","d","e","f"]}
+```
+
 ### `contains`
 
 Checks whether an array contains an element matching the argument, or an object contains a value matching the argument, and returns a boolean result. Numerical comparisons are made irrespective of the representation type (float versus integer).

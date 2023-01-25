@@ -1,0 +1,16 @@
+processor_resources:
+  - label: woof_drop
+    mapping: |
+      root = if this.resource."service.name" == "woof" { deleted() }
+
+tests:
+  - name: woof drop test
+    target_processors: 'woof_drop'
+    input_batch:
+      - content: '{"resource":{"cloud.platform":"aws_eks","host.id":"aaa","service.name":"meow"}}'
+      - content: '{"resource":{"cloud.platform":"aws_eks","host.id":"bbb","service.name":"woof"}}'
+      - content: '{"resource":{"cloud.platform":"aws_eks","host.id":"ccc","service.name":"quack"}}'
+    output_batches:
+      -
+        - json_contains: { "resource": { "cloud.platform": "aws_eks", "host.id": "aaa" } }
+        - json_contains: { "resource": { "cloud.platform": "aws_eks", "host.id": "ccc" } }

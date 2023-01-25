@@ -68,6 +68,24 @@ func (e *Environment) Parse(blobl string) (*Executor, error) {
 	return newExecutor(exec), nil
 }
 
+// CheckInterpolatedString attempts to parse a Bloblang interpolated string
+// using the Environment to determine the features (functions and methods)
+// available to it.
+//
+// When a parsing error occurs the error will be the type *ParseError, which
+// gives access to the line and column where the error occurred, as well as a
+// method for creating a well formatted error message.
+func (e *Environment) CheckInterpolatedString(str string) error {
+	_, err := e.env.NewField(str)
+	if err != nil {
+		if pErr, ok := err.(*parser.Error); ok {
+			return internalToPublicParserError([]rune(str), pErr)
+		}
+		return err
+	}
+	return nil
+}
+
 // RegisterMethod adds a new Bloblang method to the environment. All method
 // names must match the regular expression /^[a-z0-9]+(_[a-z0-9]+)*$/ (snake
 // case).
