@@ -1281,6 +1281,23 @@ root.created_at_unix = this.created_at.ts_unix()
 # Out: {"created_at_unix":1257894000}
 ```
 
+### `ts_unix_milli`
+
+:::caution BETA
+This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
+:::
+Attempts to format a timestamp value as a unix timestamp with millisecond precision. Timestamp values can either be a numerical unix time in seconds (with up to nanosecond precision via decimals), or a string in RFC 3339 format. The [`ts_parse`](#ts_parse) method can be used in order to parse different timestamp formats.
+
+#### Examples
+
+
+```coffee
+root.created_at_unix = this.created_at.ts_unix_milli()
+
+# In:  {"created_at":"2009-11-10T23:00:00Z"}
+# Out: {"created_at_unix":1257894000000}
+```
+
 ### `ts_unix_nano`
 
 :::caution BETA
@@ -2915,6 +2932,10 @@ Attempts to format a timestamp value as a string according to a specified strfti
 ### `format_timestamp_unix`
 
 Attempts to format a timestamp value as a unix timestamp. Timestamp values can either be a numerical unix time in seconds (with up to nanosecond precision via decimals), or a string in RFC 3339 format. The [`ts_parse`](#ts_parse) method can be used in order to parse different timestamp formats.
+
+### `format_timestamp_unix_milli`
+
+Attempts to format a timestamp value as a unix timestamp with millisecond precision. Timestamp values can either be a numerical unix time in seconds (with up to nanosecond precision via decimals), or a string in RFC 3339 format. The [`ts_parse`](#ts_parse) method can be used in order to parse different timestamp formats.
 
 ### `format_timestamp_unix_nano`
 
