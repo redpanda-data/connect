@@ -102,8 +102,6 @@ func (l *multilevelCache) setUpToLevelPassive(ctx context.Context, i int, key st
 		}
 		if setErr != nil {
 			l.log.Errorf("Unable to passively set key '%v' for cache '%v': %v", key, name, setErr)
-		} else {
-			fmt.Printf("Adding Key '%s' to '%s'\n", key, name)
 		}
 	}
 }
