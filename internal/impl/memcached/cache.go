@@ -136,7 +136,7 @@ func (m *memcachedCache) Get(ctx context.Context, key string) ([]byte, error) {
 		}
 		if boff == nil {
 			boff = m.boffPool.Get().(backoff.BackOff)
-			defer func() {
+			defer func() { //nolint:gocritic
 				boff.Reset()
 				m.boffPool.Put(boff)
 			}()
@@ -164,7 +164,7 @@ func (m *memcachedCache) Set(ctx context.Context, key string, value []byte, ttl 
 		}
 		if boff == nil {
 			boff = m.boffPool.Get().(backoff.BackOff)
-			defer func() {
+			defer func() { //nolint:gocritic
 				boff.Reset()
 				m.boffPool.Put(boff)
 			}()
@@ -196,7 +196,7 @@ func (m *memcachedCache) Add(ctx context.Context, key string, value []byte, ttl 
 		}
 		if boff == nil {
 			boff = m.boffPool.Get().(backoff.BackOff)
-			defer func() {
+			defer func() { //nolint:gocritic
 				boff.Reset()
 				m.boffPool.Put(boff)
 			}()
@@ -226,7 +226,7 @@ func (m *memcachedCache) Delete(ctx context.Context, key string) error {
 
 		if boff == nil {
 			boff = m.boffPool.Get().(backoff.BackOff)
-			defer func() {
+			defer func() { //nolint:gocritic
 				boff.Reset()
 				m.boffPool.Put(boff)
 			}()

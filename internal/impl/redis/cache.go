@@ -129,7 +129,7 @@ func (r *redisCache) Get(ctx context.Context, key string) ([]byte, error) {
 
 		if boff == nil {
 			boff = r.boffPool.Get().(backoff.BackOff)
-			defer func() {
+			defer func() { //nolint:gocritic
 				boff.Reset()
 				r.boffPool.Put(boff)
 			}()
@@ -169,7 +169,7 @@ func (r *redisCache) Set(ctx context.Context, key string, value []byte, ttl *tim
 
 		if boff == nil {
 			boff = r.boffPool.Get().(backoff.BackOff)
-			defer func() {
+			defer func() { //nolint:gocritic
 				boff.Reset()
 				r.boffPool.Put(boff)
 			}()
@@ -213,7 +213,7 @@ func (r *redisCache) Add(ctx context.Context, key string, value []byte, ttl *tim
 
 		if boff == nil {
 			boff = r.boffPool.Get().(backoff.BackOff)
-			defer func() {
+			defer func() { //nolint:gocritic
 				boff.Reset()
 				r.boffPool.Put(boff)
 			}()
@@ -246,7 +246,7 @@ func (r *redisCache) Delete(ctx context.Context, key string) error {
 
 		if boff == nil {
 			boff = r.boffPool.Get().(backoff.BackOff)
-			defer func() {
+			defer func() { //nolint:gocritic
 				boff.Reset()
 				r.boffPool.Put(boff)
 			}()

@@ -190,7 +190,7 @@ func (d *dynamodbCache) Get(ctx context.Context, key string) ([]byte, error) {
 	for err != nil && err != service.ErrKeyNotFound {
 		if boff == nil {
 			boff = d.boffPool.Get().(backoff.BackOff)
-			defer func() {
+			defer func() { //nolint:gocritic
 				boff.Reset()
 				d.boffPool.Put(boff)
 			}()
@@ -239,7 +239,7 @@ func (d *dynamodbCache) Set(ctx context.Context, key string, value []byte, ttl *
 	for err != nil {
 		if boff == nil {
 			boff = d.boffPool.Get().(backoff.BackOff)
-			defer func() {
+			defer func() { //nolint:gocritic
 				boff.Reset()
 				d.boffPool.Put(boff)
 			}()
@@ -290,7 +290,7 @@ func (d *dynamodbCache) SetMulti(ctx context.Context, items ...service.CacheItem
 		if err != nil {
 			if boff == nil {
 				boff = d.boffPool.Get().(backoff.BackOff)
-				defer func() {
+				defer func() { //nolint:gocritic
 					boff.Reset()
 					d.boffPool.Put(boff)
 				}()
@@ -316,7 +316,7 @@ func (d *dynamodbCache) Add(ctx context.Context, key string, value []byte, ttl *
 	for err != nil && err != service.ErrKeyAlreadyExists {
 		if boff == nil {
 			boff = d.boffPool.Get().(backoff.BackOff)
-			defer func() {
+			defer func() { //nolint:gocritic
 				boff.Reset()
 				d.boffPool.Put(boff)
 			}()
@@ -365,7 +365,7 @@ func (d *dynamodbCache) Delete(ctx context.Context, key string) error {
 	for err != nil {
 		if boff == nil {
 			boff = d.boffPool.Get().(backoff.BackOff)
-			defer func() {
+			defer func() { //nolint:gocritic
 				boff.Reset()
 				d.boffPool.Put(boff)
 			}()

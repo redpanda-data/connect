@@ -108,7 +108,7 @@ func (r *ristrettoCache) Get(ctx context.Context, key string) ([]byte, error) {
 		if r.retriesEnabled {
 			if boff == nil {
 				boff = r.boffPool.Get().(backoff.BackOff)
-				defer func() {
+				defer func() { //nolint:gocritic
 					boff.Reset()
 					r.boffPool.Put(boff)
 				}()

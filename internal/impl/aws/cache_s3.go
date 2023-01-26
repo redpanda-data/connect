@@ -144,7 +144,7 @@ func (s *s3Cache) Get(ctx context.Context, key string) (body []byte, err error) 
 
 		if boff == nil {
 			boff := s.boffPool.Get().(backoff.BackOff)
-			defer func() {
+			defer func() { //nolint:gocritic
 				boff.Reset()
 				s.boffPool.Put(boff)
 			}()
@@ -178,7 +178,7 @@ func (s *s3Cache) Set(ctx context.Context, key string, value []byte, _ *time.Dur
 
 		if boff == nil {
 			boff := s.boffPool.Get().(backoff.BackOff)
-			defer func() {
+			defer func() { //nolint:gocritic
 				boff.Reset()
 				s.boffPool.Put(boff)
 			}()
@@ -218,7 +218,7 @@ func (s *s3Cache) Delete(ctx context.Context, key string) (err error) {
 
 		if boff == nil {
 			boff := s.boffPool.Get().(backoff.BackOff)
-			defer func() {
+			defer func() { //nolint:gocritic
 				boff.Reset()
 				s.boffPool.Put(boff)
 			}()
