@@ -88,10 +88,11 @@ func newMultilevelCache(levels []string, mgr cacheProvider, log *service.Logger)
 
 //------------------------------------------------------------------------------
 
-func (l *multilevelCache) setUpToLevelPassive(ctx context.Context, i int, key string, value []byte) {
-	for j, name := range l.caches {
-		if j == i {
-			break
+func (l *multilevelCache) setUpToLevelPassive(ctx context.Context, i int, key string, value []byte, caches []string) {
+	for _, name := range caches {
+		// key already exists in this cache, skip it
+		if name == l.caches[i] {
+			continue
 		}
 		var setErr error
 		if err := l.mgr.AccessCache(ctx, name, func(c service.Cache) {
@@ -101,11 +102,14 @@ func (l *multilevelCache) setUpToLevelPassive(ctx context.Context, i int, key st
 		}
 		if setErr != nil {
 			l.log.Errorf("Unable to passively set key '%v' for cache '%v': %v", key, name, setErr)
+		} else {
+			fmt.Printf("Adding Key '%s' to '%s'\n", key, name)
 		}
 	}
 }
 
 func (l *multilevelCache) Get(ctx context.Context, key string) ([]byte, error) {
+	var misses []string
 	for i, name := range l.caches {
 		var data []byte
 		var err error
@@ -118,8 +122,10 @@ func (l *multilevelCache) Get(ctx context.Context, key string) ([]byte, error) {
 			if err != service.ErrKeyNotFound {
 				return nil, err
 			}
+			misses = append(misses, name)
 		} else {
-			l.setUpToLevelPassive(ctx, i, key, data)
+			// propogate key/data to caches where there was a miss
+			go l.setUpToLevelPassive(ctx, i, key, data, misses)
 			return data, nil
 		}
 	}
@@ -142,42 +148,40 @@ func (l *multilevelCache) Set(ctx context.Context, key string, value []byte, ttl
 }
 
 func (l *multilevelCache) Add(ctx context.Context, key string, value []byte, ttl *time.Duration) error {
-	for i := 0; i < len(l.caches)-1; i++ {
-		var err error
-		if cerr := l.mgr.AccessCache(ctx, l.caches[i], func(c service.Cache) {
-			_, err = c.Get(ctx, key)
-		}); cerr != nil {
-			return fmt.Errorf("unable to access cache '%v': %v", l.caches[i], cerr)
+	// Check the hot cache for the key
+	var err error
+	if cerr := l.mgr.AccessCache(ctx, l.caches[0], func(c service.Cache) {
+		_, err = c.Get(ctx, key)
+	}); cerr != nil {
+		return fmt.Errorf("unable to access cache '%v': %v", l.caches[0], cerr)
+	}
+	if err != nil {
+		if err != service.ErrKeyNotFound {
+			return err
 		}
-		if err != nil {
-			if err != service.ErrKeyNotFound {
-				return err
-			}
-		} else {
-			return service.ErrKeyAlreadyExists
-		}
+	} else {
+		return service.ErrKeyAlreadyExists
 	}
 
-	var err error
-	if cerr := l.mgr.AccessCache(ctx, l.caches[len(l.caches)-1], func(c service.Cache) {
+	// Add the key to the hot-cache
+	if cerr := l.mgr.AccessCache(ctx, l.caches[0], func(c service.Cache) {
 		err = c.Add(ctx, key, value, ttl)
 	}); cerr != nil {
-		return fmt.Errorf("unable to access cache '%v': %v", l.caches[len(l.caches)-1], cerr)
+		return fmt.Errorf("unable to access cache '%v': %v", l.caches[0], cerr)
 	}
 	if err != nil {
 		return err
 	}
 
-	for i := len(l.caches) - 2; i >= 0; i-- {
-		if cerr := l.mgr.AccessCache(ctx, l.caches[i], func(c service.Cache) {
-			err = c.Add(ctx, key, value, ttl)
-		}); cerr != nil {
-			return fmt.Errorf("unable to access cache '%v': %v", l.caches[i], cerr)
+	// spawn a go routine to add the key to all of the other caches
+	go func(caches []string) {
+		for _, name := range caches {
+			l.mgr.AccessCache(ctx, name, func(c service.Cache) {
+				c.Add(ctx, key, value, ttl)
+			})
 		}
-		if err != nil {
-			return err
-		}
-	}
+	}(l.caches[1:])
+
 	return nil
 }
 
