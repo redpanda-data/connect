@@ -122,13 +122,11 @@ func newS3Cache(bucket, contentType string, backOff *backoff.ExponentialBackOff,
 //------------------------------------------------------------------------------
 
 func (s *s3Cache) Get(ctx context.Context, key string) (body []byte, err error) {
-	boff := s.boffPool.Get().(backoff.BackOff)
-	defer func() {
-		boff.Reset()
-		s.boffPool.Put(boff)
-	}()
+	var (
+		obj  *s3.GetObjectOutput
+		boff backoff.BackOff
+	)
 
-	var obj *s3.GetObjectOutput
 	for {
 		if obj, err = s.s3.GetObjectWithContext(ctx, &s3.GetObjectInput{
 			Bucket: &s.bucket,
@@ -142,6 +140,14 @@ func (s *s3Cache) Get(ctx context.Context, key string) (body []byte, err error) 
 			body, err = io.ReadAll(obj.Body)
 			_ = obj.Body.Close()
 			return
+		}
+
+		if boff == nil {
+			boff := s.boffPool.Get().(backoff.BackOff)
+			defer func() {
+				boff.Reset()
+				s.boffPool.Put(boff)
+			}()
 		}
 
 		wait := boff.NextBackOff()
@@ -158,11 +164,7 @@ func (s *s3Cache) Get(ctx context.Context, key string) (body []byte, err error) 
 
 // Set attempts to set the value of a key.
 func (s *s3Cache) Set(ctx context.Context, key string, value []byte, _ *time.Duration) (err error) {
-	boff := s.boffPool.Get().(backoff.BackOff)
-	defer func() {
-		boff.Reset()
-		s.boffPool.Put(boff)
-	}()
+	var boff backoff.BackOff
 
 	for {
 		if _, err = s.s3.PutObjectWithContext(ctx, &s3.PutObjectInput{
@@ -174,6 +176,13 @@ func (s *s3Cache) Set(ctx context.Context, key string, value []byte, _ *time.Dur
 			return
 		}
 
+		if boff == nil {
+			boff := s.boffPool.Get().(backoff.BackOff)
+			defer func() {
+				boff.Reset()
+				s.boffPool.Put(boff)
+			}()
+		}
 		wait := boff.NextBackOff()
 		if wait == backoff.Stop {
 			return
@@ -197,11 +206,7 @@ func (s *s3Cache) Add(ctx context.Context, key string, value []byte, _ *time.Dur
 }
 
 func (s *s3Cache) Delete(ctx context.Context, key string) (err error) {
-	boff := s.boffPool.Get().(backoff.BackOff)
-	defer func() {
-		boff.Reset()
-		s.boffPool.Put(boff)
-	}()
+	var boff backoff.BackOff
 
 	for {
 		if _, err = s.s3.DeleteObjectWithContext(ctx, &s3.DeleteObjectInput{
@@ -209,6 +214,14 @@ func (s *s3Cache) Delete(ctx context.Context, key string) (err error) {
 			Key:    &key,
 		}); err == nil {
 			return
+		}
+
+		if boff == nil {
+			boff := s.boffPool.Get().(backoff.BackOff)
+			defer func() {
+				boff.Reset()
+				s.boffPool.Put(boff)
+			}()
 		}
 
 		wait := boff.NextBackOff()

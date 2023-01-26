@@ -183,14 +183,19 @@ func (d *dynamodbCache) verify() error {
 //------------------------------------------------------------------------------
 
 func (d *dynamodbCache) Get(ctx context.Context, key string) ([]byte, error) {
-	boff := d.boffPool.Get().(backoff.BackOff)
-	defer func() {
-		boff.Reset()
-		d.boffPool.Put(boff)
-	}()
+	var boff backoff.BackOff
 
 	result, err := d.get(key)
+
 	for err != nil && err != service.ErrKeyNotFound {
+		if boff == nil {
+			boff = d.boffPool.Get().(backoff.BackOff)
+			defer func() {
+				boff.Reset()
+				d.boffPool.Put(boff)
+			}()
+		}
+
 		wait := boff.NextBackOff()
 		if wait == backoff.Stop {
 			break
@@ -228,14 +233,17 @@ func (d *dynamodbCache) get(key string) ([]byte, error) {
 }
 
 func (d *dynamodbCache) Set(ctx context.Context, key string, value []byte, ttl *time.Duration) error {
-	boff := d.boffPool.Get().(backoff.BackOff)
-	defer func() {
-		boff.Reset()
-		d.boffPool.Put(boff)
-	}()
+	var boff backoff.BackOff
 
 	_, err := d.client.PutItem(d.putItemInput(key, value, ttl))
 	for err != nil {
+		if boff == nil {
+			boff = d.boffPool.Get().(backoff.BackOff)
+			defer func() {
+				boff.Reset()
+				d.boffPool.Put(boff)
+			}()
+		}
 		wait := boff.NextBackOff()
 		if wait == backoff.Stop {
 			break
@@ -252,12 +260,7 @@ func (d *dynamodbCache) Set(ctx context.Context, key string, value []byte, ttl *
 }
 
 func (d *dynamodbCache) SetMulti(ctx context.Context, items ...service.CacheItem) error {
-	boff := d.boffPool.Get().(backoff.BackOff)
-	defer func() {
-		boff.Reset()
-		d.boffPool.Put(boff)
-	}()
-
+	var boff backoff.BackOff
 	writeReqs := []*dynamodb.WriteRequest{}
 	for _, kv := range items {
 		writeReqs = append(writeReqs, &dynamodb.WriteRequest{
@@ -285,6 +288,13 @@ func (d *dynamodbCache) SetMulti(ctx context.Context, items ...service.CacheItem
 			}
 		}
 		if err != nil {
+			if boff == nil {
+				boff = d.boffPool.Get().(backoff.BackOff)
+				defer func() {
+					boff.Reset()
+					d.boffPool.Put(boff)
+				}()
+			}
 			if wait == backoff.Stop {
 				break
 			}
@@ -300,14 +310,17 @@ func (d *dynamodbCache) SetMulti(ctx context.Context, items ...service.CacheItem
 }
 
 func (d *dynamodbCache) Add(ctx context.Context, key string, value []byte, ttl *time.Duration) error {
-	boff := d.boffPool.Get().(backoff.BackOff)
-	defer func() {
-		boff.Reset()
-		d.boffPool.Put(boff)
-	}()
+	var boff backoff.BackOff
 
 	err := d.add(key, value, ttl)
 	for err != nil && err != service.ErrKeyAlreadyExists {
+		if boff == nil {
+			boff = d.boffPool.Get().(backoff.BackOff)
+			defer func() {
+				boff.Reset()
+				d.boffPool.Put(boff)
+			}()
+		}
 		wait := boff.NextBackOff()
 		if wait == backoff.Stop {
 			break
@@ -347,14 +360,16 @@ func (d *dynamodbCache) add(key string, value []byte, ttl *time.Duration) error 
 }
 
 func (d *dynamodbCache) Delete(ctx context.Context, key string) error {
-	boff := d.boffPool.Get().(backoff.BackOff)
-	defer func() {
-		boff.Reset()
-		d.boffPool.Put(boff)
-	}()
-
+	var boff backoff.BackOff
 	err := d.delete(key)
 	for err != nil {
+		if boff == nil {
+			boff = d.boffPool.Get().(backoff.BackOff)
+			defer func() {
+				boff.Reset()
+				d.boffPool.Put(boff)
+			}()
+		}
 		wait := boff.NextBackOff()
 		if wait == backoff.Stop {
 			break

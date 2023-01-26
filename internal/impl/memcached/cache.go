@@ -125,12 +125,7 @@ func (m *memcachedCache) getItemFor(key string, value []byte, ttl *time.Duration
 }
 
 func (m *memcachedCache) Get(ctx context.Context, key string) ([]byte, error) {
-	boff := m.boffPool.Get().(backoff.BackOff)
-	defer func() {
-		boff.Reset()
-		m.boffPool.Put(boff)
-	}()
-
+	var boff backoff.BackOff
 	for {
 		item, err := m.mc.Get(m.prefix + key)
 		if err == nil {
@@ -138,6 +133,13 @@ func (m *memcachedCache) Get(ctx context.Context, key string) ([]byte, error) {
 		}
 		if errors.Is(err, memcache.ErrCacheMiss) {
 			return nil, service.ErrKeyNotFound
+		}
+		if boff == nil {
+			boff = m.boffPool.Get().(backoff.BackOff)
+			defer func() {
+				boff.Reset()
+				m.boffPool.Put(boff)
+			}()
 		}
 
 		wait := boff.NextBackOff()
@@ -153,16 +155,19 @@ func (m *memcachedCache) Get(ctx context.Context, key string) ([]byte, error) {
 }
 
 func (m *memcachedCache) Set(ctx context.Context, key string, value []byte, ttl *time.Duration) error {
-	boff := m.boffPool.Get().(backoff.BackOff)
-	defer func() {
-		boff.Reset()
-		m.boffPool.Put(boff)
-	}()
+	var boff backoff.BackOff
 
 	for {
 		err := m.mc.Set(m.getItemFor(key, value, ttl))
 		if err == nil {
 			return nil
+		}
+		if boff == nil {
+			boff = m.boffPool.Get().(backoff.BackOff)
+			defer func() {
+				boff.Reset()
+				m.boffPool.Put(boff)
+			}()
 		}
 
 		wait := boff.NextBackOff()
@@ -180,12 +185,7 @@ func (m *memcachedCache) Set(ctx context.Context, key string, value []byte, ttl 
 // AddWithTTL attempts to set the value of a key only if the key does not already exist
 // and returns an error if the key already exists or if the operation fails.
 func (m *memcachedCache) Add(ctx context.Context, key string, value []byte, ttl *time.Duration) error {
-	boff := m.boffPool.Get().(backoff.BackOff)
-	defer func() {
-		boff.Reset()
-		m.boffPool.Put(boff)
-	}()
-
+	var boff backoff.BackOff
 	for {
 		err := m.mc.Add(m.getItemFor(key, value, ttl))
 		if err == nil {
@@ -193,6 +193,13 @@ func (m *memcachedCache) Add(ctx context.Context, key string, value []byte, ttl 
 		}
 		if errors.Is(err, memcache.ErrNotStored) {
 			return service.ErrKeyAlreadyExists
+		}
+		if boff == nil {
+			boff = m.boffPool.Get().(backoff.BackOff)
+			defer func() {
+				boff.Reset()
+				m.boffPool.Put(boff)
+			}()
 		}
 
 		wait := boff.NextBackOff()
@@ -209,16 +216,20 @@ func (m *memcachedCache) Add(ctx context.Context, key string, value []byte, ttl 
 
 // Delete attempts to remove a key.
 func (m *memcachedCache) Delete(ctx context.Context, key string) error {
-	boff := m.boffPool.Get().(backoff.BackOff)
-	defer func() {
-		boff.Reset()
-		m.boffPool.Put(boff)
-	}()
+	var boff backoff.BackOff
 
 	for {
 		err := m.mc.Delete(m.prefix + key)
 		if errors.Is(err, memcache.ErrCacheMiss) {
 			return nil
+		}
+
+		if boff == nil {
+			boff = m.boffPool.Get().(backoff.BackOff)
+			defer func() {
+				boff.Reset()
+				m.boffPool.Put(boff)
+			}()
 		}
 
 		wait := boff.NextBackOff()

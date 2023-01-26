@@ -111,20 +111,28 @@ func newRedisCache(
 }
 
 func (r *redisCache) Get(ctx context.Context, key string) ([]byte, error) {
-	boff := r.boffPool.Get().(backoff.BackOff)
-	defer func() {
-		boff.Reset()
-		r.boffPool.Put(boff)
-	}()
+	var boff backoff.BackOff
 
-	key = r.prefix + key
+	if len(r.prefix) > 0 {
+		key = r.prefix + key
+	}
+
 	for {
 		res, err := r.client.Get(ctx, key).Result()
 		if err == nil {
 			return []byte(res), nil
 		}
+
 		if errors.Is(err, redis.Nil) {
 			return nil, service.ErrKeyNotFound
+		}
+
+		if boff == nil {
+			boff = r.boffPool.Get().(backoff.BackOff)
+			defer func() {
+				boff.Reset()
+				r.boffPool.Put(boff)
+			}()
 		}
 
 		wait := boff.NextBackOff()
@@ -140,13 +148,11 @@ func (r *redisCache) Get(ctx context.Context, key string) ([]byte, error) {
 }
 
 func (r *redisCache) Set(ctx context.Context, key string, value []byte, ttl *time.Duration) error {
-	boff := r.boffPool.Get().(backoff.BackOff)
-	defer func() {
-		boff.Reset()
-		r.boffPool.Put(boff)
-	}()
+	var boff backoff.BackOff
 
-	key = r.prefix + key
+	if len(r.prefix) > 0 {
+		key = r.prefix + key
+	}
 
 	var t time.Duration
 	if ttl != nil {
@@ -159,6 +165,14 @@ func (r *redisCache) Set(ctx context.Context, key string, value []byte, ttl *tim
 		err := r.client.Set(ctx, key, value, t).Err()
 		if err == nil {
 			return nil
+		}
+
+		if boff == nil {
+			boff = r.boffPool.Get().(backoff.BackOff)
+			defer func() {
+				boff.Reset()
+				r.boffPool.Put(boff)
+			}()
 		}
 
 		wait := boff.NextBackOff()
@@ -174,15 +188,14 @@ func (r *redisCache) Set(ctx context.Context, key string, value []byte, ttl *tim
 }
 
 func (r *redisCache) Add(ctx context.Context, key string, value []byte, ttl *time.Duration) error {
-	boff := r.boffPool.Get().(backoff.BackOff)
-	defer func() {
-		boff.Reset()
-		r.boffPool.Put(boff)
-	}()
+	var boff backoff.BackOff
 
-	key = r.prefix + key
+	if len(r.prefix) > 0 {
+		key = r.prefix + key
+	}
 
 	var t time.Duration
+
 	if ttl != nil {
 		t = *ttl
 	} else {
@@ -198,6 +211,14 @@ func (r *redisCache) Add(ctx context.Context, key string, value []byte, ttl *tim
 			return nil
 		}
 
+		if boff == nil {
+			boff = r.boffPool.Get().(backoff.BackOff)
+			defer func() {
+				boff.Reset()
+				r.boffPool.Put(boff)
+			}()
+		}
+
 		wait := boff.NextBackOff()
 		if wait == backoff.Stop {
 			return err
@@ -211,13 +232,11 @@ func (r *redisCache) Add(ctx context.Context, key string, value []byte, ttl *tim
 }
 
 func (r *redisCache) Delete(ctx context.Context, key string) error {
-	boff := r.boffPool.Get().(backoff.BackOff)
-	defer func() {
-		boff.Reset()
-		r.boffPool.Put(boff)
-	}()
+	var boff backoff.BackOff
 
-	key = r.prefix + key
+	if len(r.prefix) > 0 {
+		key = r.prefix + key
+	}
 
 	for {
 		_, err := r.client.Del(ctx, key).Result()
@@ -225,6 +244,13 @@ func (r *redisCache) Delete(ctx context.Context, key string) error {
 			return nil
 		}
 
+		if boff == nil {
+			boff = r.boffPool.Get().(backoff.BackOff)
+			defer func() {
+				boff.Reset()
+				r.boffPool.Put(boff)
+			}()
+		}
 		wait := boff.NextBackOff()
 		if wait == backoff.Stop {
 			return err
