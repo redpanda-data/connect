@@ -43,22 +43,30 @@ func TestIntegrationNatsKV(t *testing.T) {
 
 	template := `
 output:
+  label: kv_output
   nats_kv:
     urls: [ tcp://localhost:$PORT ]
     bucket: bucket-$ID
-    key: key-$ID
+    # We need to make this key random as the NATS server will only deliver the
+    # latest revision of a key when it's requested by a watcher, this is by
+    # design, but if we want to test benthos semantics like batching we should
+    # use unique keys for ever message passing through the output
+    key: ${! ksuid() }
 
 input:
+  label: kv_input
   nats_kv:
     urls: [ tcp://localhost:$PORT ]
     bucket: bucket-$ID
 `
 	suite := integration.StreamTests(
 		integration.StreamTestOpenClose(),
-		// integration.StreamTestMetadata(), TODO
-		// integration.StreamTestSendBatch(10),
-		integration.StreamTestStreamParallel(500),
-		integration.StreamTestStreamParallelLossy(500),
+		// integration.StreamTestMetadata(), // NATS KV doesn't support metadata
+		integration.StreamTestSendBatch(10),
+		integration.StreamTestStreamParallel(1000),
+		integration.StreamTestStreamSequential(1000),
+		integration.StreamTestStreamParallelLossy(1000),
+		integration.StreamTestStreamParallelLossyThroughReconnect(1000),
 	)
 	suite.Run(
 		t, template,
@@ -73,6 +81,7 @@ input:
 			})
 			require.NoError(t, err)
 		}),
+		integration.StreamTestOptLogging("DEBUG"),
 		integration.StreamTestOptSleepAfterInput(100*time.Millisecond),
 		integration.StreamTestOptSleepAfterOutput(100*time.Millisecond),
 		integration.StreamTestOptPort(resource.GetPort("4222/tcp")),

@@ -190,13 +190,17 @@ func (kv *kvOutput) Write(ctx context.Context, msg *service.Message) error {
 	}
 
 	// TODO: Support other operations
-	_, err = keyValue.Put(key, value)
+	rev, err := keyValue.Put(key, value)
 	if err != nil {
 		return err
 	}
 
-	kv.log.Debugf("Updating key: %s in bucket: %s", kv.bucket, key)
-
+	e := kv.log.With(
+		"nat_kv_bucket", keyValue.Bucket(),
+		"nats_kv_key", key,
+		"nats_kv_revision", rev,
+	)
+	e.Debug("Updated kv bucket entry")
 	return nil
 }
 

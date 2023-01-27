@@ -230,7 +230,13 @@ func (r *kvReader) Read(ctx context.Context) (*service.Message, service.AckFunc,
 			continue
 		}
 
-		r.log.Debugf("Reading update for bucket: %s and key: %s", entry.Bucket(), entry.Key())
+		e := r.log.With(
+			"nat_kv_bucket", entry.Bucket(),
+			"nats_kv_key", entry.Key(),
+			"nats_kv_revision", entry.Revision(),
+			"nats_kv_operation", entry.Operation().String(),
+		)
+		e.Debugf("Recieved kv bucket update")
 
 		msg := service.NewMessage(entry.Value())
 		msg.MetaSetMut("nats_kv_key", entry.Key())
