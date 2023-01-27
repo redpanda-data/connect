@@ -236,7 +236,7 @@ func (r *kvReader) Read(ctx context.Context) (*service.Message, service.AckFunc,
 			"nats_kv_revision", entry.Revision(),
 			"nats_kv_operation", entry.Operation().String(),
 		)
-		e.Debugf("Recieved kv bucket update")
+		e.Debugf("Received kv bucket update")
 
 		msg := service.NewMessage(entry.Value())
 		msg.MetaSetMut("nats_kv_key", entry.Key())
