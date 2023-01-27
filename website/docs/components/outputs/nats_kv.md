@@ -17,7 +17,7 @@ import TabItem from '@theme/TabItem';
 :::caution EXPERIMENTAL
 This component is experimental and therefore subject to change or removal outside of major version releases.
 :::
-Perform operations on a NATS Key Value bucket.
+Put messages in a NATS key-value bucket.
 
 Introduced in version 4.12.0.
 
@@ -67,7 +67,11 @@ output:
 </TabItem>
 </Tabs>
 
-TODO### Authentication
+The field `key` supports
+[interpolation functions](/docs/configuration/interpolation#bloblang-queries), allowing
+you to create a unique key for each message.
+
+### Authentication
 
 There are several components within Benthos which utilise NATS services. You will find that each of these components
 support optional advanced authentication parameters for [NKeys](https://docs.nats.io/nats-server/configuration/securing_nats/auth_intro/nkey_auth)
@@ -128,7 +132,7 @@ bucket: my_kv_bucket
 
 ### `key`
 
-Key to operate on.
+The key for each message, function interpolation can be used to create a unique key per message.
 This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
 
 

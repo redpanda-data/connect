@@ -17,8 +17,13 @@ func natsKVOutputConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Categories("Services").
 		Version("4.12.0").
-		Summary("Perform operations on a NATS Key Value bucket.").
-		Description("TODO" + auth.Description()).
+		Summary("Put messages in a NATS key-value bucket.").
+		Description(`
+The field ` + "`key`" + ` supports
+[interpolation functions](/docs/configuration/interpolation#bloblang-queries), allowing
+you to create a unique key for each message.
+
+` + auth.Description()).
 		Field(service.NewStringListField("urls").
 			Description("A list of URLs to connect to. If an item of the list contains commas it will be expanded into multiple URLs.").
 			Example([]string{"nats://127.0.0.1:4222"}).
@@ -27,7 +32,7 @@ func natsKVOutputConfig() *service.ConfigSpec {
 			Description("The name of the KV bucket to operate on.").
 			Example("my_kv_bucket")).
 		Field(service.NewInterpolatedStringField("key").
-			Description("Key to operate on.").
+			Description("The key for each message, function interpolation can be used to create a unique key per message.").
 			Example("foo").
 			Example("foo.bar.baz").
 			Example(`foo.${! json("meta.type") }`)).
