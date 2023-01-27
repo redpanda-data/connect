@@ -17,7 +17,7 @@ import TabItem from '@theme/TabItem';
 :::caution EXPERIMENTAL
 This component is experimental and therefore subject to change or removal outside of major version releases.
 :::
-Watches for updates in a NATS Key Value bucket.
+Watches for updates in a NATS key-value bucket.
 
 Introduced in version 4.12.0.
 
@@ -68,7 +68,19 @@ input:
 </TabItem>
 </Tabs>
 
-TODO### Authentication
+### Metadata
+
+This input adds the following metadata fields to each message:
+
+``` text
+- nats_kv_key
+- nats_kv_bucket
+- nats_kv_revision
+- nats_kv_delta
+- nats_kv_operation
+- nats_kv_created
+
+### Authentication
 
 There are several components within Benthos which utilise NATS services. You will find that each of these components
 support optional advanced authentication parameters for [NKeys](https://docs.nats.io/nats-server/configuration/securing_nats/auth_intro/nkey_auth)

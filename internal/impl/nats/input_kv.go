@@ -16,8 +16,21 @@ func natsKVInputConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Categories("Services").
 		Version("4.12.0").
-		Summary("Watches for updates in a NATS Key Value bucket.").
-		Description(`TODO` + auth.Description()).
+		Summary("Watches for updates in a NATS key-value bucket.").
+		Description(`
+### Metadata
+
+This input adds the following metadata fields to each message:
+
+` + "``` text" + `
+- nats_kv_key
+- nats_kv_bucket
+- nats_kv_revision
+- nats_kv_delta
+- nats_kv_operation
+- nats_kv_created
+
+` + auth.Description()).
 		Field(service.NewStringListField("urls").
 			Description("A list of URLs to connect to. If an item of the list contains commas it will be expanded into multiple URLs.").
 			Example([]string{"nats://127.0.0.1:4222"}).
