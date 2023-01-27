@@ -35,6 +35,7 @@ func natsKVProcessorConfig() *service.ConfigSpec {
 		Summary("Perform operations on a NATS key-value bucket.").
 		Field(service.NewStringListField("urls").
 			Description("A list of URLs to connect to. If an item of the list contains commas it will be expanded into multiple URLs.").
+			Default([]string{"nats://127.0.0.1:4222"}).
 			Example([]string{"nats://127.0.0.1:4222"}).
 			Example([]string{"nats://username:password@127.0.0.1:4222"})).
 		Field(service.NewStringField("bucket").
@@ -44,10 +45,10 @@ func natsKVProcessorConfig() *service.ConfigSpec {
 			Description("The operation to perform on the KV bucket. TODO add more flavor here")).
 		Field(service.NewInterpolatedStringField("key").
 			Description("The key for each message, function interpolation can be used to create a unique key per message.").
+			Default("").
 			Example("foo").
 			Example("foo.bar.baz").
 			Example(`foo.${! json("meta.type") }`)).
-		// FIXME: should I just make this a bloblang field?
 		Field(service.NewInterpolatedStringField("revision").
 			Description("The revision of the key to operate on. Used for `get_revision` and `update` operations. Function interpolation can be used to dynamically set the revision.").
 			Example("42").
@@ -55,7 +56,14 @@ func natsKVProcessorConfig() *service.ConfigSpec {
 			Optional().
 			Advanced()).
 		Field(service.NewTLSToggledField("tls")).
-		Field(service.NewInternalField(auth.FieldSpec()))
+		Field(service.NewInternalField(auth.FieldSpec())).
+		LintRule(`root = match {
+      ["get_revision", "update"].contains(this.operation) && !this.exists("revision") => [ "'revision' must be set when operation is '" + this.operation + "'" ],
+      !["get_revision", "update"].contains(this.operation) && this.exists("revision") => [ "'revision' cannot be set when operation is '" + this.operation + "'" ],
+      this.key == "" && this.operation != "keys" => [ "'key' must be set when operation is '" + this.operation + "'" ],
+      this.key != "" && this.operation == "keys" => [ "'key' cannot be set when operation is '" + this.operation + "'" ],
+    }`)
+
 }
 
 func init() {
@@ -63,6 +71,11 @@ func init() {
 		"nats_kv", natsKVProcessorConfig(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {
 			processor, err := newKVProcessor(conf, mgr)
+			if err != nil {
+				return nil, err
+			}
+
+			err = processor.Connect(context.Background())
 			return processor, err
 		},
 	)
@@ -121,12 +134,14 @@ func newKVProcessor(conf *service.ParsedConfig, mgr *service.Resources) (*kvProc
 		return nil, err
 	}
 
-	if p.revisionRaw, err = conf.FieldString("revision"); err != nil {
-		return nil, err
-	}
+	if conf.Contains("revision") {
+		if p.revisionRaw, err = conf.FieldString("revision"); err != nil {
+			return nil, err
+		}
 
-	if p.revision, err = conf.FieldInterpolatedString("revision"); err != nil {
-		return nil, err
+		if p.revision, err = conf.FieldInterpolatedString("revision"); err != nil {
+			return nil, err
+		}
 	}
 
 	tlsConf, tlsEnabled, err := conf.FieldTLSToggled("tls")
@@ -340,8 +355,7 @@ func (p *kvProcessor) Connect(ctx context.Context) error {
 		return err
 	}
 
-	p.log.Infof("Connected to NATS KV bucket: for key(s): %s", p.bucket, p.key)
-
+	p.log.Infof("Performing operation `%s` on NATS KV bucket: %s", p.operation, p.bucket)
 	return nil
 }
 
