@@ -46,7 +46,7 @@ output:
   nats_kv:
     urls: [ tcp://localhost:$PORT ]
     bucket: bucket-$ID
-    key: foo
+    key: key-$ID
 
 input:
   nats_kv:
@@ -57,12 +57,11 @@ input:
 		integration.StreamTestOpenClose(),
 		// integration.StreamTestMetadata(), TODO
 		// integration.StreamTestSendBatch(10),
-	// integration.StreamTestStreamParallel(500),
-	// integration.StreamTestStreamParallelLossy(500),
+		integration.StreamTestStreamParallel(500),
+		integration.StreamTestStreamParallelLossy(500),
 	)
 	suite.Run(
 		t, template,
-		integration.StreamTestOptLogging("DEBUG"),
 		integration.StreamTestOptPreTest(func(t testing.TB, _ context.Context, testID string, _ *integration.StreamTestConfigVars) {
 			js, err := natsConn.JetStream()
 			require.NoError(t, err)
