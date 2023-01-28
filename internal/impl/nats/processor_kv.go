@@ -27,8 +27,8 @@ const (
 )
 
 var kvOps = map[string]string{
-	kvGet:         "Returns the latest value for `key`",
-	kvGetRevision: "Returns the value of `key` for the specified `revision`",
+	kvGet:         "Returns the latest value for `key`.",
+	kvGetRevision: "Returns the value of `key` for the specified `revision`.",
 	kvCreate:      "Adds the key/value pair if it does not exist. Returns an error if it already exists.",
 	kvPut:         "Places a new value for the key into the store.",
 	kvUpdate:      "Updates the value for `key` only if the `revision` matches the latest revision.",

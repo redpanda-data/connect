@@ -170,8 +170,8 @@ Type: `string`
 |---|---|
 | `create` | Adds the key/value pair if it does not exist. Returns an error if it already exists. |
 | `delete` | Deletes the key/value pair, but keeps historical values. |
-| `get` | Returns the latest value for `key` |
-| `get_revision` | Returns the value of `key` for the specified `revision` |
+| `get` | Returns the latest value for `key`. |
+| `get_revision` | Returns the value of `key` for the specified `revision`. |
 | `history` | Returns historical values of `key` as a batch. |
 | `keys` | Returns all the keys in the `bucket` as a batch. |
 | `purge` | Deletes the key/value pair and all historical values. |
