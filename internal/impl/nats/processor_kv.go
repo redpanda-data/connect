@@ -26,11 +26,6 @@ const (
 	kvKeys        = "keys"
 )
 
-type kvOpDoc struct {
-	description string
-	metadata    []string
-}
-
 var kvOps = map[string]string{
 	kvGet:         "Returns the latest value for `key`",
 	kvGetRevision: "Returns the value of `key` for the specified `revision`",
