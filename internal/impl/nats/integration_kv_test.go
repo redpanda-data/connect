@@ -7,6 +7,8 @@ import (
 	"time"
 
 	"github.com/benthosdev/benthos/v4/internal/integration"
+	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/gofrs/uuid"
 	"github.com/nats-io/nats.go"
 	"github.com/ory/dockertest/v3"
 	"github.com/stretchr/testify/assert"
@@ -81,9 +83,236 @@ input:
 			})
 			require.NoError(t, err)
 		}),
-		integration.StreamTestOptLogging("DEBUG"),
 		integration.StreamTestOptSleepAfterInput(100*time.Millisecond),
 		integration.StreamTestOptSleepAfterOutput(100*time.Millisecond),
 		integration.StreamTestOptPort(resource.GetPort("4222/tcp")),
 	)
+
+	t.Run("processor", func(t *testing.T) {
+		createBucket := func(t *testing.T) (nats.KeyValue, string) {
+			u4, err := uuid.NewV4()
+			require.NoError(t, err)
+			js, err := natsConn.JetStream()
+			require.NoError(t, err)
+
+			bucketName := "bucket-" + u4.String()
+
+			bucket, err := js.CreateKeyValue(&nats.KeyValueConfig{
+				Bucket:  bucketName,
+				History: 5,
+			})
+			require.NoError(t, err)
+
+			url := fmt.Sprintf("tcp://localhost:%v", resource.GetPort("4222/tcp"))
+
+			return bucket, url
+		}
+
+		process := func(yaml string) (service.MessageBatch, error) {
+			spec := natsKVProcessorConfig()
+			parsed, err := spec.ParseYAML(yaml, nil)
+			require.NoError(t, err)
+
+			p, err := newKVProcessor(parsed, service.MockResources())
+			require.NoError(t, err)
+
+			m := service.NewMessage([]byte("hello"))
+			return p.Process(context.Background(), m)
+		}
+
+		t.Run("get operation", func(t *testing.T) {
+			bucket, url := createBucket(t)
+			_, err := bucket.PutString("blob", "lawblog")
+			require.NoError(t, err)
+
+			yaml := fmt.Sprintf(`
+        bucket: %s
+        operation: get
+        key: blob
+        urls: [%s]`, bucket.Bucket(), url)
+
+			result, err := process(yaml)
+			require.NoError(t, err)
+
+			m := result[0]
+			bytes, err := m.AsBytes()
+			require.NoError(t, err)
+			assert.Equal(t, []byte("lawblog"), bytes)
+		})
+
+		t.Run("get_revision operation", func(t *testing.T) {
+			bucket, url := createBucket(t)
+			revision, err := bucket.PutString("blob", "lawblog")
+			require.NoError(t, err)
+
+			yaml := fmt.Sprintf(`
+        bucket: %s
+        operation: get_revision
+        key: blob
+        revision: %d
+        urls: [%s]`, bucket.Bucket(), revision, url)
+
+			result, err := process(yaml)
+			require.NoError(t, err)
+
+			m := result[0]
+			bytes, err := m.AsBytes()
+			require.NoError(t, err)
+			assert.Equal(t, []byte("lawblog"), bytes)
+		})
+
+		t.Run("create operation (success)", func(t *testing.T) {
+			bucket, url := createBucket(t)
+			yaml := fmt.Sprintf(`
+        bucket: %s
+        operation: create
+        key: blob
+        urls: [%s]`, bucket.Bucket(), url)
+
+			result, err := process(yaml)
+			require.NoError(t, err)
+
+			m := result[0]
+			bytes, err := m.AsBytes()
+			require.NoError(t, err)
+			assert.Equal(t, []byte("hello"), bytes)
+		})
+
+		t.Run("create operation (error)", func(t *testing.T) {
+			bucket, url := createBucket(t)
+			_, err := bucket.PutString("blob", "lawblog")
+			require.NoError(t, err)
+
+			yaml := fmt.Sprintf(`
+        bucket: %s
+        operation: create
+        key: blob
+        urls: [%s]`, bucket.Bucket(), url)
+
+			_, err = process(yaml)
+			require.Error(t, err)
+		})
+
+		t.Run("put operation", func(t *testing.T) {
+			bucket, url := createBucket(t)
+			yaml := fmt.Sprintf(`
+        bucket: %s
+        operation: put
+        key: blob
+        urls: [%s]`, bucket.Bucket(), url)
+
+			result, err := process(yaml)
+			require.NoError(t, err)
+
+			m := result[0]
+			bytes, err := m.AsBytes()
+			require.NoError(t, err)
+			assert.Equal(t, []byte("hello"), bytes)
+		})
+
+		t.Run("update operation", func(t *testing.T) {
+			bucket, url := createBucket(t)
+			revision, err := bucket.PutString("blob", "lawblog")
+			require.NoError(t, err)
+
+			yaml := fmt.Sprintf(`
+        bucket: %s
+        operation: update
+        key: blob
+        revision: %d
+        urls: [%s]`, bucket.Bucket(), revision, url)
+
+			result, err := process(yaml)
+			require.NoError(t, err)
+
+			m := result[0]
+			bytes, err := m.AsBytes()
+			require.NoError(t, err)
+			assert.Equal(t, []byte("hello"), bytes)
+		})
+
+		t.Run("delete operation", func(t *testing.T) {
+			bucket, url := createBucket(t)
+			_, err := bucket.PutString("blob", "lawblog")
+			require.NoError(t, err)
+
+			yaml := fmt.Sprintf(`
+        bucket: %s
+        operation: delete
+        key: blob
+        urls: [%s]`, bucket.Bucket(), url)
+
+			result, err := process(yaml)
+			require.NoError(t, err)
+
+			m := result[0]
+			bytes, err := m.AsBytes()
+			require.NoError(t, err)
+			assert.Equal(t, []byte("hello"), bytes)
+
+			_, err = bucket.Get("blob")
+			require.Error(t, err)
+		})
+
+		t.Run("purge operation", func(t *testing.T) {
+			bucket, url := createBucket(t)
+			_, err := bucket.PutString("blob", "lawblog")
+			require.NoError(t, err)
+
+			yaml := fmt.Sprintf(`
+        bucket: %s
+        operation: purge
+        key: blob
+        urls: [%s]`, bucket.Bucket(), url)
+
+			result, err := process(yaml)
+			require.NoError(t, err)
+
+			m := result[0]
+			bytes, err := m.AsBytes()
+			require.NoError(t, err)
+			assert.Equal(t, []byte("hello"), bytes)
+
+			_, err = bucket.Get("blob")
+			require.Error(t, err)
+		})
+
+		t.Run("history operation", func(t *testing.T) {
+			bucket, url := createBucket(t)
+			_, err := bucket.PutString("blob", "lawblog")
+			require.NoError(t, err)
+			_, err = bucket.PutString("blob", "sawedlog")
+			require.NoError(t, err)
+
+			yaml := fmt.Sprintf(`
+        bucket: %s
+        operation: history
+        key: blob
+        urls: [%s]`, bucket.Bucket(), url)
+
+			result, err := process(yaml)
+			require.NoError(t, err)
+
+			assert.Equal(t, 2, len(result))
+		})
+
+		t.Run("history operation", func(t *testing.T) {
+			bucket, url := createBucket(t)
+			_, err := bucket.PutString("blob", "lawblog")
+			require.NoError(t, err)
+			_, err = bucket.PutString("bobs", "sawedlog")
+			require.NoError(t, err)
+
+			yaml := fmt.Sprintf(`
+        bucket: %s
+        operation: keys
+        key: blob
+        urls: [%s]`, bucket.Bucket(), url)
+
+			result, err := process(yaml)
+			require.NoError(t, err)
+
+			assert.Equal(t, 2, len(result))
+		})
+	})
 }

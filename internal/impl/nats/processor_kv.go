@@ -119,13 +119,7 @@ func init() {
 	err := service.RegisterProcessor(
 		"nats_kv", natsKVProcessorConfig(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {
-			processor, err := newKVProcessor(conf, mgr)
-			if err != nil {
-				return nil, err
-			}
-
-			err = processor.Connect(context.Background())
-			return processor, err
+			return newKVProcessor(conf, mgr)
 		},
 	)
 	if err != nil {
@@ -205,7 +199,9 @@ func newKVProcessor(conf *service.ParsedConfig, mgr *service.Resources) (*kvProc
 		return nil, err
 	}
 
-	return p, nil
+	err = p.Connect(context.Background())
+
+	return p, err
 }
 
 func (p *kvProcessor) disconnect() {
