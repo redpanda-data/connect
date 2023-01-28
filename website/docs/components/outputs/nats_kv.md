@@ -132,7 +132,7 @@ bucket: my_kv_bucket
 
 ### `key`
 
-The key for each message, function interpolation can be used to create a unique key per message.
+The key for each message.
 This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
 
 

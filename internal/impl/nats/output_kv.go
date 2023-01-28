@@ -26,13 +26,14 @@ you to create a unique key for each message.
 ` + auth.Description()).
 		Field(service.NewStringListField("urls").
 			Description("A list of URLs to connect to. If an item of the list contains commas it will be expanded into multiple URLs.").
+			Default([]string{"nats://127.0.0.1:4222"}).
 			Example([]string{"nats://127.0.0.1:4222"}).
 			Example([]string{"nats://username:password@127.0.0.1:4222"})).
 		Field(service.NewStringField("bucket").
 			Description("The name of the KV bucket to operate on.").
 			Example("my_kv_bucket")).
 		Field(service.NewInterpolatedStringField("key").
-			Description("The key for each message, function interpolation can be used to create a unique key per message.").
+			Description("The key for each message.").
 			Example("foo").
 			Example("foo.bar.baz").
 			Example(`foo.${! json("meta.type") }`)).
@@ -194,18 +195,17 @@ func (kv *kvOutput) Write(ctx context.Context, msg *service.Message) error {
 		return err
 	}
 
-	// TODO: Support other operations
 	rev, err := keyValue.Put(key, value)
 	if err != nil {
 		return err
 	}
 
-	e := kv.log.With(
-		"nat_kv_bucket", keyValue.Bucket(),
-		"nats_kv_key", key,
-		"nats_kv_revision", rev,
-	)
-	e.Debug("Updated kv bucket entry")
+	kv.log.With(
+		metaKVBucket, keyValue.Bucket(),
+		metaKVKey, key,
+		metaKVRevision, rev,
+	).Debug("Updated kv bucket entry")
+
 	return nil
 }
 

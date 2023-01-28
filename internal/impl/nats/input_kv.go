@@ -34,6 +34,7 @@ This input adds the following metadata fields to each message:
 ` + auth.Description()).
 		Field(service.NewStringListField("urls").
 			Description("A list of URLs to connect to. If an item of the list contains commas it will be expanded into multiple URLs.").
+			Default([]string{"nats://127.0.0.1:4222"}).
 			Example([]string{"nats://127.0.0.1:4222"}).
 			Example([]string{"nats://username:password@127.0.0.1:4222"})).
 		Field(service.NewStringField("bucket").
@@ -244,23 +245,14 @@ func (r *kvReader) Read(ctx context.Context) (*service.Message, service.AckFunc,
 			continue
 		}
 
-		e := r.log.With(
-			"nat_kv_bucket", entry.Bucket(),
-			"nats_kv_key", entry.Key(),
-			"nats_kv_revision", entry.Revision(),
-			"nats_kv_operation", entry.Operation().String(),
-		)
-		e.Debugf("Received kv bucket update")
+		r.log.With(
+			metaKVBucket, entry.Bucket(),
+			metaKVKey, entry.Key(),
+			metaKVRevision, entry.Revision(),
+			metaKVOperation, entry.Operation().String(),
+		).Debugf("Received kv bucket update")
 
-		msg := service.NewMessage(entry.Value())
-		msg.MetaSetMut("nats_kv_key", entry.Key())
-		msg.MetaSetMut("nats_kv_bucket", entry.Bucket())
-		msg.MetaSetMut("nats_kv_revision", entry.Revision())
-		msg.MetaSetMut("nats_kv_delta", entry.Delta())
-		msg.MetaSetMut("nats_kv_operation", entry.Operation().String())
-		msg.MetaSetMut("nats_kv_created", entry.Created())
-
-		return msg, func(ctx context.Context, res error) error {
+		return newMessageFromKVEntry(entry), func(ctx context.Context, res error) error {
 			return nil
 		}, nil
 	}

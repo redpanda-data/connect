@@ -241,7 +241,7 @@ func (p *kvProcessor) Process(c context.Context, msg *service.Message) (service.
 		if err != nil {
 			return nil, err
 		}
-		return service.MessageBatch{p.newMessageFromEntry(entry)}, nil
+		return service.MessageBatch{newMessageFromKVEntry(entry)}, nil
 
 	case kvGetRevision:
 		revision, err := p.parseRevision(msg)
@@ -252,7 +252,7 @@ func (p *kvProcessor) Process(c context.Context, msg *service.Message) (service.
 		if err != nil {
 			return nil, err
 		}
-		return service.MessageBatch{p.newMessageFromEntry(entry)}, nil
+		return service.MessageBatch{newMessageFromKVEntry(entry)}, nil
 
 	case kvCreate:
 		revision, err := kv.Create(key, bytes)
@@ -316,7 +316,7 @@ func (p *kvProcessor) Process(c context.Context, msg *service.Message) (service.
 		}
 		batch := service.MessageBatch{}
 		for _, entry := range entries {
-			batch = append(batch, p.newMessageFromEntry(entry))
+			batch = append(batch, newMessageFromKVEntry(entry))
 		}
 		return batch, nil
 
@@ -328,7 +328,7 @@ func (p *kvProcessor) Process(c context.Context, msg *service.Message) (service.
 		batch := service.MessageBatch{}
 		for _, key := range keys {
 			m := service.NewMessage([]byte(key))
-			m.MetaSetMut("nats_kv_bucket", p.bucket)
+			m.MetaSetMut(metaKVBucket, p.bucket)
 			batch = append(batch, m)
 		}
 		return batch, nil
@@ -347,24 +347,11 @@ func (p *kvProcessor) parseRevision(msg *service.Message) (uint64, error) {
 	return strconv.ParseUint(revStr, 10, 64)
 }
 
-// TODO: Extract this into a utility function
-func (p *kvProcessor) newMessageFromEntry(entry nats.KeyValueEntry) *service.Message {
-	msg := service.NewMessage(entry.Value())
-	msg.MetaSetMut("nats_kv_key", entry.Key())
-	msg.MetaSetMut("nats_kv_bucket", entry.Bucket())
-	msg.MetaSetMut("nats_kv_revision", entry.Revision())
-	msg.MetaSetMut("nats_kv_delta", entry.Delta())
-	msg.MetaSetMut("nats_kv_operation", entry.Operation().String())
-	msg.MetaSetMut("nats_kv_created", entry.Created())
-
-	return msg
-}
-
 func (p *kvProcessor) addMetadata(msg *service.Message, key string, revision uint64, operation nats.KeyValueOp) {
-	msg.MetaSetMut("nats_kv_key", key)
-	msg.MetaSetMut("nats_kv_bucket", p.bucket)
-	msg.MetaSetMut("nats_kv_revision", revision)
-	msg.MetaSetMut("nats_kv_operation", operation.String())
+	msg.MetaSetMut(metaKVKey, key)
+	msg.MetaSetMut(metaKVBucket, p.bucket)
+	msg.MetaSetMut(metaKVRevision, revision)
+	msg.MetaSetMut(metaKVOperation, operation.String())
 }
 
 func (p *kvProcessor) Connect(ctx context.Context) error {
