@@ -79,6 +79,7 @@ This input adds the following metadata fields to each message:
 - nats_kv_delta
 - nats_kv_operation
 - nats_kv_created
+```
 
 ### Authentication
 

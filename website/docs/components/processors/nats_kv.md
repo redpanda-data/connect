@@ -33,7 +33,8 @@ Introduced in version 4.12.0.
 # Common config fields, showing default values
 label: ""
 nats_kv:
-  urls: []
+  urls:
+    - nats://127.0.0.1:4222
   bucket: ""
   operation: ""
   key: ""
@@ -46,7 +47,8 @@ nats_kv:
 # All config fields, showing default values
 label: ""
 nats_kv:
-  urls: []
+  urls:
+    - nats://127.0.0.1:4222
   bucket: ""
   operation: ""
   key: ""
@@ -66,6 +68,64 @@ nats_kv:
 </TabItem>
 </Tabs>
 
+### KV Operations
+
+The NATS KV processor supports a multitude of KV operations via the [operation](#operation) field. Along with `get`, `put`, and `delete`, this processor supports atomic operations like `update` and `create`, as well as utility operations like `purge`, `history`, and `keys`.
+
+### Metadata
+
+This input adds the following metadata fields to each message, depending on the chosen `operation`:
+
+#### get, get_revision, history
+``` text
+- nats_kv_key
+- nats_kv_bucket
+- nats_kv_revision
+- nats_kv_delta
+- nats_kv_operation
+- nats_kv_created
+```
+
+#### create, update, delete, purge
+``` text
+- nats_kv_key
+- nats_kv_bucket
+- nats_kv_revision
+- nats_kv_operation
+```
+
+#### keys
+``` text
+- nats_kv_bucket
+```
+
+### Authentication
+
+There are several components within Benthos which utilise NATS services. You will find that each of these components
+support optional advanced authentication parameters for [NKeys](https://docs.nats.io/nats-server/configuration/securing_nats/auth_intro/nkey_auth)
+and [User Credentials](https://docs.nats.io/developing-with-nats/security/creds).
+
+An in depth tutorial can be found [here](https://docs.nats.io/developing-with-nats/tutorials/jwt).
+
+#### NKey file
+
+The NATS server can use these NKeys in several ways for authentication. The simplest is for the server to be configured
+with a list of known public keys and for the clients to respond to the challenge by signing it with its private NKey
+configured in the `nkey_file` field.
+
+More details [here](https://docs.nats.io/developing-with-nats/security/nkey).
+
+#### User Credentials file
+
+NATS server supports decentralized authentication based on JSON Web Tokens (JWT). Clients need an [user JWT](https://docs.nats.io/nats-server/configuration/securing_nats/jwt#json-web-tokens)
+and a corresponding [NKey secret](https://docs.nats.io/developing-with-nats/security/nkey) when connecting to a server
+which is configured to use this authentication scheme.
+
+The `user_credentials_file` field should point to a file containing both the private key and the JWT and can be
+generated with the [nsc tool](https://docs.nats.io/nats-tools/nsc).
+
+More details [here](https://docs.nats.io/developing-with-nats/security/creds).
+
 ## Fields
 
 ### `urls`
@@ -74,6 +134,7 @@ A list of URLs to connect to. If an item of the list contains commas it will be 
 
 
 Type: `array`  
+Default: `["nats://127.0.0.1:4222"]`  
 
 ```yml
 # Examples
@@ -100,19 +161,32 @@ bucket: my_kv_bucket
 
 ### `operation`
 
-The operation to perform on the KV bucket. TODO add more flavor here
+The operation to perform on the KV bucket.
 
 
 Type: `string`  
-Options: `get`, `get_revision`, `create`, `put`, `update`, `delete`, `purge`, `history`, `keys`.
+
+| Option | Summary |
+|---|---|
+| `create` | Adds the key/value pair if it does not exist. Returns an error if it already exists. |
+| `delete` | Deletes the key/value pair, but keeps historical values. |
+| `get` | Returns the latest value for `key` |
+| `get_revision` | Returns the value of `key` for the specified `revision` |
+| `history` | Returns historical values of `key` as a batch. |
+| `keys` | Returns all the keys in the `bucket` as a batch. |
+| `purge` | Deletes the key/value pair and all historical values. |
+| `put` | Places a new value for the key into the store. |
+| `update` | Updates the value for `key` only if the `revision` matches the latest revision. |
+
 
 ### `key`
 
-The key for each message, function interpolation can be used to create a unique key per message.
+The key for each message.
 This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
 
 
 Type: `string`  
+Default: `""`  
 
 ```yml
 # Examples
@@ -126,7 +200,7 @@ key: foo.${! json("meta.type") }
 
 ### `revision`
 
-The revision of the key to operate on. Used for `get_revision` and `update` operations. Function interpolation can be used to dynamically set the revision.
+The revision of the key to operate on. Used for `get_revision` and `update` operations.
 This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
 
 

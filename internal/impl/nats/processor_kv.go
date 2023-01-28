@@ -26,13 +26,61 @@ const (
 	kvKeys        = "keys"
 )
 
-var kvOps = []string{kvGet, kvGetRevision, kvCreate, kvPut, kvUpdate, kvDelete, kvPurge, kvHistory, kvKeys}
+type kvOpDoc struct {
+	description string
+	metadata    []string
+}
+
+var kvOps = map[string]string{
+	kvGet:         "Returns the latest value for `key`",
+	kvGetRevision: "Returns the value of `key` for the specified `revision`",
+	kvCreate:      "Adds the key/value pair if it does not exist. Returns an error if it already exists.",
+	kvPut:         "Places a new value for the key into the store.",
+	kvUpdate:      "Updates the value for `key` only if the `revision` matches the latest revision.",
+	kvDelete:      "Deletes the key/value pair, but keeps historical values.",
+	kvPurge:       "Deletes the key/value pair and all historical values.",
+	kvHistory:     "Returns historical values of `key` as a batch.",
+	kvKeys:        "Returns all the keys in the `bucket` as a batch.",
+}
 
 func natsKVProcessorConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Categories("Services").
 		Version("4.12.0").
 		Summary("Perform operations on a NATS key-value bucket.").
+		Description(`
+### KV Operations
+
+The NATS KV processor supports a multitude of KV operations via the [operation](#operation) field. Along with ` + "`get`" + `, ` + "`put`" + `, and ` + "`delete`" + `, this processor supports atomic operations like ` + "`update`" + ` and ` + "`create`" + `, as well as utility operations like ` + "`purge`" + `, ` + "`history`" + `, and ` + "`keys`" + `.
+
+### Metadata
+
+This input adds the following metadata fields to each message, depending on the chosen ` + "`operation`" + `:
+
+#### get, get_revision, history
+` + "``` text" + `
+- nats_kv_key
+- nats_kv_bucket
+- nats_kv_revision
+- nats_kv_delta
+- nats_kv_operation
+- nats_kv_created
+` + "```" + `
+
+#### create, update, delete, purge
+` + "``` text" + `
+- nats_kv_key
+- nats_kv_bucket
+- nats_kv_revision
+- nats_kv_operation
+` + "```" + `
+
+#### keys
+` + "``` text" + `
+- nats_kv_bucket
+` + "```" + `
+
+` + auth.Description()).
 		Field(service.NewStringListField("urls").
 			Description("A list of URLs to connect to. If an item of the list contains commas it will be expanded into multiple URLs.").
 			Default([]string{"nats://127.0.0.1:4222"}).
@@ -41,16 +89,17 @@ func natsKVProcessorConfig() *service.ConfigSpec {
 		Field(service.NewStringField("bucket").
 			Description("The name of the KV bucket to watch for updates.").
 			Example("my_kv_bucket")).
-		Field(service.NewStringEnumField("operation", kvOps...).
-			Description("The operation to perform on the KV bucket. TODO add more flavor here")).
+		Field(service.NewStringAnnotatedEnumField("operation", kvOps).
+			Description(`The operation to perform on the KV bucket.
+`)).
 		Field(service.NewInterpolatedStringField("key").
-			Description("The key for each message, function interpolation can be used to create a unique key per message.").
+			Description("The key for each message.").
 			Default("").
 			Example("foo").
 			Example("foo.bar.baz").
 			Example(`foo.${! json("meta.type") }`)).
 		Field(service.NewInterpolatedStringField("revision").
-			Description("The revision of the key to operate on. Used for `get_revision` and `update` operations. Function interpolation can be used to dynamically set the revision.").
+			Description("The revision of the key to operate on. Used for `get_revision` and `update` operations.").
 			Example("42").
 			Example(`${! @nats_kv_revision }`).
 			Optional().
