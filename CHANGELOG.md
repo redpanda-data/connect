@@ -16,6 +16,7 @@ All notable changes to this project will be documented in this file.
 - New `compress` and `decompress` Bloblang methods.
 - Field `endpoint` added to the `gcp_pubsub` input and output.
 - New Bloblang method `concat`.
+- New `redis` ratelimit.
 
 ### Fixed
 

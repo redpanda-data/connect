@@ -5,14 +5,15 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/benthosdev/benthos/v4/public/service"
 	"github.com/go-redis/redis/v8"
+
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
 func redisRatelimitConfig() *service.ConfigSpec {
 	spec := service.NewConfigSpec().
-		Beta().
-		Summary(`A rate limit implementation using Redis. It works by using a simple token bucket algorithm to limit the number of requests to a given count within a given time period. The rate limit is shared across all instances of Benthos that use the same redis instance.`)
+		Summary(`A rate limit implementation using Redis. It works by using a simple token bucket algorithm to limit the number of requests to a given count within a given time period. The rate limit is shared across all instances of Benthos that use the same Redis instance, which must all have a consistent count and interval.`).
+		Version("4.12.0")
 
 	for _, f := range clientFields() {
 		spec = spec.Field(f)

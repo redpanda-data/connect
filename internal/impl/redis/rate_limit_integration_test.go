@@ -7,11 +7,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/benthosdev/benthos/v4/internal/integration"
 	"github.com/go-redis/redis/v8"
 	"github.com/ory/dockertest/v3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/benthosdev/benthos/v4/internal/integration"
 )
 
 func TestIntegrationRedisRateLimit(t *testing.T) {
