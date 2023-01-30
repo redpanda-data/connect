@@ -13,6 +13,7 @@ import (
 	_ "github.com/benthosdev/benthos/v4/public/components/beanstalkd"
 	_ "github.com/benthosdev/benthos/v4/public/components/cassandra"
 	_ "github.com/benthosdev/benthos/v4/public/components/changelog"
+	_ "github.com/benthosdev/benthos/v4/public/components/cockroachdb"
 	_ "github.com/benthosdev/benthos/v4/public/components/confluent"
 	_ "github.com/benthosdev/benthos/v4/public/components/couchbase"
 	_ "github.com/benthosdev/benthos/v4/public/components/crypto"
