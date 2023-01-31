@@ -122,10 +122,8 @@ func newKVReader(conf *service.ParsedConfig, mgr *service.Resources) (*kvReader,
 		return nil, err
 	}
 
-	if conf.Contains("key") {
-		if r.key, err = conf.FieldString("key"); err != nil {
-			return nil, err
-		}
+	if r.key, err = conf.FieldString("key"); err != nil {
+		return nil, err
 	}
 
 	tlsConf, tlsEnabled, err := conf.FieldTLSToggled("tls")
