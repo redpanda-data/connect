@@ -26,7 +26,7 @@ func crdbChangefeedInputConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Categories("Integration").
 		Summary(fmt.Sprintf("Listens to a CockroachDB Core Changefeed and creates a message for each row received. Each message is a json object looking like: \n```json\n%s\n```", sampleString)).
-		Description("Will continue to listen to the Changefeed until shutdown. If provided, will maintain the previous `timestamp` so that in the event of a restart the chanfeed will resume from where it last processed. This is at-least-once processing, as there is a chance that a timestamp is not successfully stored after being emitted and therefore a row may be sent again on restart.\n\nNote: You must have `SET CLUSTER SETTING kv.rangefeed.enabled = true;` on your CRDB cluster").
+		Description("Will continue to listen to the Changefeed until shutdown. If provided, will maintain the previous `timestamp` so that in the event of a restart the changefeed will resume from where it last processed. This is at-least-once processing, as there is a chance that a timestamp is not successfully stored after being emitted and therefore a row may be sent again on restart.\n\nNote: You must have `SET CLUSTER SETTING kv.rangefeed.enabled = true;` on your CRDB cluster").
 		Field(service.NewStringField("dsn").
 			Description(`A Data Source Name to identify the target database.`).
 			Example("postgresql://dan:xxxx@free-tier.gcp-us-central1.cockroachlabs.cloud:26257/defaultdb?sslmode=require&options=--cluster%3Dportly-impala-2852")).
