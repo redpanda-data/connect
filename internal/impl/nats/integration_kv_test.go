@@ -296,7 +296,7 @@ input:
 			assert.Equal(t, 2, len(result))
 		})
 
-		t.Run("history operation", func(t *testing.T) {
+		t.Run("keys operation", func(t *testing.T) {
 			bucket, url := createBucket(t)
 			_, err := bucket.PutString("blob", "lawblog")
 			require.NoError(t, err)
