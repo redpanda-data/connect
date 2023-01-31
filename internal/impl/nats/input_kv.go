@@ -6,10 +6,11 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/nats-io/nats.go"
+
 	"github.com/benthosdev/benthos/v4/internal/impl/nats/auth"
 	"github.com/benthosdev/benthos/v4/internal/shutdown"
 	"github.com/benthosdev/benthos/v4/public/service"
-	"github.com/nats-io/nats.go"
 )
 
 func natsKVInputConfig() *service.ConfigSpec {
