@@ -63,7 +63,7 @@ require (
 	github.com/lib/pq v1.10.4
 	github.com/linkedin/goavro/v2 v2.12.0
 	github.com/matoous/go-nanoid/v2 v2.0.0
-	github.com/microcosm-cc/bluemonday v1.0.19
+	github.com/microcosm-cc/bluemonday v1.0.22
 	github.com/mitchellh/mapstructure v1.4.3
 	github.com/nats-io/nats.go v1.15.0
 	github.com/nats-io/nkeys v0.3.0
@@ -117,7 +117,7 @@ require (
 	go.opentelemetry.io/otel/trace v1.9.0
 	go.uber.org/multierr v1.8.0
 	golang.org/x/crypto v0.0.0-20220817201139-bc19a97f63c8
-	golang.org/x/net v0.0.0-20220927171203-f486391704dc
+	golang.org/x/net v0.0.0-20221002022538-bcab6841153b
 	golang.org/x/oauth2 v0.0.0-20220909003341-f21342109be1
 	golang.org/x/sync v0.0.0-20220923202941-7f9b1623fab7
 	golang.org/x/text v0.3.8
