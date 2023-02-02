@@ -51,7 +51,7 @@ However, it is possible to instead create documents in [standard/raw JSON format
 			Advanced().Default(false)).
 		Field(service.NewURLField("url").Description("The base URL of the schema registry service."))
 
-	for _, f := range httpclient.AuthFields() {
+	for _, f := range httpclient.AuthFieldSpecs() {
 		spec = spec.Field(f.Version("4.7.0"))
 	}
 

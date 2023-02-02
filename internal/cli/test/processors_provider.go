@@ -212,6 +212,36 @@ func resolveProcessorsPointer(targetFile, jsonPtr string) (filePath, procPath st
 	return
 }
 
+func setMock(confSpec docs.FieldSpecs, root, mock *yaml.Node, pathSlice ...string) error {
+	labelPull := struct {
+		Label *string `yaml:"label"`
+	}{}
+	if err := mock.Decode(&labelPull); err != nil {
+		return fmt.Errorf("decode mock label: %w", err)
+	}
+	if labelPull.Label == nil {
+		if targetNode, _ := docs.GetYAMLPath(root, pathSlice...); targetNode != nil {
+			_ = targetNode.Decode(&labelPull)
+		}
+	} else {
+		labelPull.Label = nil
+	}
+
+	if err := confSpec.SetYAMLPath(docs.DeprecatedProvider, root, mock, pathSlice...); err != nil {
+		return err
+	}
+	if labelPull.Label != nil {
+		var labelNode yaml.Node
+		if err := labelNode.Encode(labelPull.Label); err != nil {
+			return fmt.Errorf("encode mock label: %w", err)
+		}
+		if err := confSpec.SetYAMLPath(docs.DeprecatedProvider, root, &labelNode, append(pathSlice, "label")...); err != nil {
+			return fmt.Errorf("set mock label: %w", err)
+		}
+	}
+	return nil
+}
+
 func (p *ProcessorsProvider) getConfs(jsonPtr string, environment map[string]string, mocks map[string]yaml.Node) (cachedConfig, error) {
 	cacheKey := confTargetID(jsonPtr, environment, mocks)
 
@@ -248,27 +278,6 @@ func (p *ProcessorsProvider) getConfs(jsonPtr string, environment map[string]str
 		return confs, fmt.Errorf("failed to parse config file '%v': %v", targetPath, err)
 	}
 
-	mgrWrapper := manager.NewResourceConfig()
-	if err = yaml.Unmarshal(configBytes, &mgrWrapper); err != nil {
-		return confs, fmt.Errorf("failed to parse config file '%v': %v", targetPath, err)
-	}
-
-	for _, path := range p.resourcesPaths {
-		resourceBytes, _, _, err := config.ReadFileEnvSwap(ifs.OS(), path)
-		if err != nil {
-			return confs, fmt.Errorf("failed to parse resources config file '%v': %v", path, err)
-		}
-		extraMgrWrapper := manager.NewResourceConfig()
-		if err = yaml.Unmarshal(resourceBytes, &extraMgrWrapper); err != nil {
-			return confs, fmt.Errorf("failed to parse resources config file '%v': %v", path, err)
-		}
-		if err = mgrWrapper.AddFrom(&extraMgrWrapper); err != nil {
-			return confs, fmt.Errorf("failed to merge resources from '%v': %v", path, err)
-		}
-	}
-
-	confs.mgr = mgrWrapper
-
 	root := &yaml.Node{}
 	if err = yaml.Unmarshal(configBytes, root); err != nil {
 		return confs, fmt.Errorf("failed to parse config file '%v': %v", targetPath, err)
@@ -285,7 +294,7 @@ func (p *ProcessorsProvider) getConfs(jsonPtr string, environment map[string]str
 		if err != nil {
 			return confs, fmt.Errorf("failed to parse mock path '%v': %w", k, err)
 		}
-		if err = confSpec.SetYAMLPath(docs.DeprecatedProvider, root, &v, mockPathSlice...); err != nil {
+		if err = setMock(confSpec, root, &v, mockPathSlice...); err != nil {
 			return confs, fmt.Errorf("failed to set mock '%v': %w", k, err)
 		}
 		delete(remainingMocks, k)
@@ -299,12 +308,32 @@ func (p *ProcessorsProvider) getConfs(jsonPtr string, environment map[string]str
 			if !exists {
 				return confs, fmt.Errorf("mock for label '%v' could not be applied as the label was not found in the test target file, it is not currently possible to mock resources imported separate to the test file", k)
 			}
-			if err = confSpec.SetYAMLPath(docs.DeprecatedProvider, root, &v, mockPathSlice...); err != nil {
+			if err = setMock(confSpec, root, &v, mockPathSlice...); err != nil {
 				return confs, fmt.Errorf("failed to set mock '%v': %w", k, err)
 			}
 			delete(remainingMocks, k)
 		}
 	}
+
+	mgrWrapper := manager.NewResourceConfig()
+	if err = root.Decode(&mgrWrapper); err != nil {
+		return confs, fmt.Errorf("failed to parse config file '%v': %v", targetPath, err)
+	}
+
+	for _, path := range p.resourcesPaths {
+		resourceBytes, _, _, err := config.ReadFileEnvSwap(ifs.OS(), path)
+		if err != nil {
+			return confs, fmt.Errorf("failed to parse resources config file '%v': %v", path, err)
+		}
+		extraMgrWrapper := manager.NewResourceConfig()
+		if err = yaml.Unmarshal(resourceBytes, &extraMgrWrapper); err != nil {
+			return confs, fmt.Errorf("failed to parse resources config file '%v': %v", path, err)
+		}
+		if err = mgrWrapper.AddFrom(&extraMgrWrapper); err != nil {
+			return confs, fmt.Errorf("failed to merge resources from '%v': %v", path, err)
+		}
+	}
+	confs.mgr = mgrWrapper
 
 	var pathSlice []string
 	if strings.HasPrefix(procPath, "/") {

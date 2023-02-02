@@ -12,6 +12,7 @@ type GCPPubSubConfig struct {
 	PublishTimeout string                       `json:"publish_timeout" yaml:"publish_timeout"`
 	Metadata       metadata.ExcludeFilterConfig `json:"metadata" yaml:"metadata"`
 	OrderingKey    string                       `json:"ordering_key" yaml:"ordering_key"`
+	Endpoint       string                       `json:"endpoint" yaml:"endpoint"`
 }
 
 // NewGCPPubSubConfig creates a new Config with default values.
@@ -23,5 +24,6 @@ func NewGCPPubSubConfig() GCPPubSubConfig {
 		PublishTimeout: "60s",
 		Metadata:       metadata.NewExcludeFilterConfig(),
 		OrderingKey:    "",
+		Endpoint:       "",
 	}
 }

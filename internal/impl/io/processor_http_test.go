@@ -2,6 +2,7 @@ package io_test
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -11,11 +12,19 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"gopkg.in/yaml.v3"
 
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
 )
+
+func parseYAMLProcConf(t testing.TB, formatStr string, args ...any) (conf processor.Config) {
+	t.Helper()
+	conf = processor.NewConfig()
+	require.NoError(t, yaml.Unmarshal(fmt.Appendf(nil, formatStr, args...), &conf))
+	return
+}
 
 func TestHTTPClientRetries(t *testing.T) {
 	var reqCount uint32
@@ -25,11 +34,12 @@ func TestHTTPClientRetries(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	conf := processor.NewConfig()
-	conf.Type = "http"
-	conf.HTTP.OldConfig.URL = ts.URL + "/testpost"
-	conf.HTTP.OldConfig.Retry = "1ms"
-	conf.HTTP.OldConfig.NumRetries = 3
+	conf := parseYAMLProcConf(t, `
+http:
+  url: %v/testpost
+  retry_period: 1ms
+  retries: 3
+`, ts.URL)
 
 	h, err := mock.NewManager().NewProcessor(conf)
 	if err != nil {
@@ -77,9 +87,12 @@ func TestHTTPClientBasic(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	conf := processor.NewConfig()
-	conf.Type = "http"
-	conf.HTTP.OldConfig.URL = ts.URL + "/testpost"
+	conf := parseYAMLProcConf(t, `
+http:
+  url: %v/testpost
+  retry_period: 1ms
+  retries: 3
+`, ts.URL)
 
 	h, err := mock.NewManager().NewProcessor(conf)
 	if err != nil {
@@ -147,9 +160,10 @@ func TestHTTPClientEmptyResponse(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	conf := processor.NewConfig()
-	conf.Type = "http"
-	conf.HTTP.OldConfig.URL = ts.URL + "/testpost"
+	conf := parseYAMLProcConf(t, `
+http:
+  url: %v/testpost
+`, ts.URL)
 
 	h, err := mock.NewManager().NewProcessor(conf)
 	if err != nil {
@@ -199,9 +213,10 @@ func TestHTTPClientEmpty404Response(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	conf := processor.NewConfig()
-	conf.Type = "http"
-	conf.HTTP.OldConfig.URL = ts.URL + "/testpost"
+	conf := parseYAMLProcConf(t, `
+http:
+  url: %v/testpost
+`, ts.URL)
 
 	h, err := mock.NewManager().NewProcessor(conf)
 	if err != nil {
@@ -240,10 +255,12 @@ func TestHTTPClientBasicWithMetadata(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	conf := processor.NewConfig()
-	conf.Type = "http"
-	conf.HTTP.OldConfig.URL = ts.URL + "/testpost"
-	conf.HTTP.ExtractMetadata.IncludePatterns = []string{".*"}
+	conf := parseYAMLProcConf(t, `
+http:
+  url: %v/testpost
+  extract_headers:
+    include_patterns: [ ".*" ]
+`, ts.URL)
 
 	h, err := mock.NewManager().NewProcessor(conf)
 	if err != nil {
@@ -279,9 +296,10 @@ func TestHTTPClientSerial(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	conf := processor.NewConfig()
-	conf.Type = "http"
-	conf.HTTP.OldConfig.URL = ts.URL + "/testpost"
+	conf := parseYAMLProcConf(t, `
+http:
+  url: %v/testpost
+`, ts.URL)
 
 	h, err := mock.NewManager().NewProcessor(conf)
 	require.NoError(t, err)
@@ -319,10 +337,11 @@ func TestHTTPClientParallel(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	conf := processor.NewConfig()
-	conf.Type = "http"
-	conf.HTTP.OldConfig.URL = ts.URL + "/testpost"
-	conf.HTTP.Parallel = true
+	conf := parseYAMLProcConf(t, `
+http:
+  url: %v/testpost
+  parallel: true
+`, ts.URL)
 
 	h, err := mock.NewManager().NewProcessor(conf)
 	if err != nil {
@@ -369,11 +388,12 @@ func TestHTTPClientParallelError(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	conf := processor.NewConfig()
-	conf.Type = "http"
-	conf.HTTP.OldConfig.URL = ts.URL + "/testpost"
-	conf.HTTP.Parallel = true
-	conf.HTTP.OldConfig.NumRetries = 0
+	conf := parseYAMLProcConf(t, `
+http:
+  url: %v/testpost
+  parallel: true
+  retries: 0
+`, ts.URL)
 
 	h, err := mock.NewManager().NewProcessor(conf)
 	if err != nil {

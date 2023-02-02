@@ -215,8 +215,8 @@ func (a *awsSQSReader) readLoop(wg *sync.WaitGroup) {
 	}()
 
 	backoff := backoff.NewExponentialBackOff()
-	backoff.InitialInterval = 100 * time.Millisecond
-	backoff.MaxInterval = 5 * time.Minute
+	backoff.InitialInterval = 10 * time.Millisecond
+	backoff.MaxInterval = time.Minute
 	backoff.MaxElapsedTime = 0
 
 	getMsgs := func() {
@@ -237,6 +237,11 @@ func (a *awsSQSReader) readLoop(wg *sync.WaitGroup) {
 		}
 		if len(res.Messages) > 0 {
 			pendingMsgs = append(pendingMsgs, res.Messages...)
+		}
+		if len(res.Messages) > 0 || a.conf.WaitTimeSeconds > 0 {
+			// When long polling we want to reset our back off even if we didn't
+			// receive messages. However, with long polling disabled we back off
+			// each time we get an empty response.
 			backoff.Reset()
 		}
 	}

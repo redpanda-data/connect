@@ -2,6 +2,7 @@ package io
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -14,7 +15,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/benthosdev/benthos/v4/internal/component"
-	"github.com/benthosdev/benthos/v4/internal/component/input"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
 )
@@ -44,18 +44,18 @@ func TestWebsocketBasic(t *testing.T) {
 		}
 	}))
 
-	conf := input.NewWebsocketConfig()
-	if wsURL, err := url.Parse(server.URL); err != nil {
-		t.Fatal(err)
-	} else {
-		wsURL.Scheme = "ws"
-		conf.URL = wsURL.String()
-	}
+	wsURL, err := url.Parse(server.URL)
+	require.NoError(t, err)
 
-	m, err := newWebsocketReader(conf, mock.NewManager())
-	if err != nil {
-		t.Fatal(err)
-	}
+	wsURL.Scheme = "ws"
+
+	pConf, err := websocketInputSpec().ParseYAML(fmt.Sprintf(`
+url: %v
+`, wsURL.String()), nil)
+	require.NoError(t, err)
+
+	m, err := newWebsocketReaderFromParsed(pConf, mock.NewManager())
+	require.NoError(t, err)
 
 	ctx := context.Background()
 
@@ -113,18 +113,18 @@ func TestWebsocketOpenMsg(t *testing.T) {
 
 	tests := []struct {
 		handler       func(expMsgType int, w http.ResponseWriter, r *http.Request)
-		openMsgType   input.OpenMsgType
+		openMsgType   wsOpenMsgType
 		wsOpenMsgType int
 		errStr        string
 	}{
 		{
 			handler:       testHandler,
-			openMsgType:   input.OpenMsgTypeBinary,
+			openMsgType:   wsOpenMsgTypeBinary,
 			wsOpenMsgType: websocket.BinaryMessage,
 		},
 		{
 			handler:       testHandler,
-			openMsgType:   input.OpenMsgTypeText,
+			openMsgType:   wsOpenMsgTypeText,
 			wsOpenMsgType: websocket.TextMessage,
 		},
 		{
@@ -150,20 +150,20 @@ func TestWebsocketOpenMsg(t *testing.T) {
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { test.handler(test.wsOpenMsgType, w, r) }))
 			t.Cleanup(server.Close)
 
-			conf := input.NewWebsocketConfig()
-			conf.OpenMsg = "hello world"
-			conf.OpenMsgType = test.openMsgType
-			if wsURL, err := url.Parse(server.URL); err != nil {
-				t.Fatal(err)
-			} else {
-				wsURL.Scheme = "ws"
-				conf.URL = wsURL.String()
-			}
+			wsURL, err := url.Parse(server.URL)
+			require.NoError(t, err)
 
-			m, err := newWebsocketReader(conf, mock.NewManager())
-			if err != nil {
-				t.Fatal(err)
-			}
+			wsURL.Scheme = "ws"
+
+			pConf, err := websocketInputSpec().ParseYAML(fmt.Sprintf(`
+url: %v
+open_message: "hello world"
+open_message_type: %v
+`, wsURL.String(), test.openMsgType), nil)
+			require.NoError(t, err)
+
+			m, err := newWebsocketReaderFromParsed(pConf, mock.NewManager())
+			require.NoError(t, err)
 
 			ctx, done := context.WithTimeout(context.Background(), 100*time.Millisecond)
 			t.Cleanup(func() { require.NoError(t, m.Close(ctx)) })
@@ -207,18 +207,18 @@ func TestWebsocketClose(t *testing.T) {
 		<-closeChan
 	}))
 
-	conf := input.NewWebsocketConfig()
-	if wsURL, err := url.Parse(server.URL); err != nil {
-		t.Fatal(err)
-	} else {
-		wsURL.Scheme = "ws"
-		conf.URL = wsURL.String()
-	}
+	wsURL, err := url.Parse(server.URL)
+	require.NoError(t, err)
 
-	m, err := newWebsocketReader(conf, mock.NewManager())
-	if err != nil {
-		t.Fatal(err)
-	}
+	wsURL.Scheme = "ws"
+
+	pConf, err := websocketInputSpec().ParseYAML(fmt.Sprintf(`
+url: %v
+`, wsURL.String()), nil)
+	require.NoError(t, err)
+
+	m, err := newWebsocketReaderFromParsed(pConf, mock.NewManager())
+	require.NoError(t, err)
 
 	ctx := context.Background()
 
