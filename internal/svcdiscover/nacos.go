@@ -17,12 +17,15 @@ func init() {
 
 }
 
+// Nacos nacos struct
 type Nacos struct{}
 
+// NewNacos new nacos
 func NewNacos() ServiceDiscoverReg {
 	return &Nacos{}
 }
 
+// RegisterInstance implements
 func (n *Nacos) RegisterInstance(conf Config, httpAddr string, logger log.Modular) error {
 
 	if conf.Enabled {
@@ -33,17 +36,17 @@ func (n *Nacos) RegisterInstance(conf Config, httpAddr string, logger log.Modula
 			return fmt.Errorf("nacos server_port must be gt 0, and service_name must be not empty")
 		}
 
-		serverIp := conf.Nacos.ServerAddr
+		serverIP := conf.Nacos.ServerAddr
 		serverPort := conf.Nacos.ServerPort
 		serviceName := conf.Nacos.ServiceName
-		namespaceId := conf.Nacos.Namespace
+		namespaceID := conf.Nacos.Namespace
 
 		sc := []constant.ServerConfig{
-			*constant.NewServerConfig(serverIp, uint64(serverPort)),
+			*constant.NewServerConfig(serverIP, uint64(serverPort)),
 		}
 
 		cc := *constant.NewClientConfig(
-			constant.WithNamespaceId(namespaceId),
+			constant.WithNamespaceId(namespaceID),
 			constant.WithTimeoutMs(10000),
 			constant.WithBeatInterval(5000),
 			constant.WithNotLoadCacheAtStart(true),
@@ -63,13 +66,13 @@ func (n *Nacos) RegisterInstance(conf Config, httpAddr string, logger log.Modula
 			return err
 
 		}
-		regIp := conf.Nacos.RegistryIp
-		if regIp == "" {
+		regIP := conf.Nacos.RegistryIP
+		if regIP == "" {
 			ipv4, err := GetLocalIPv4()
 			if err != nil {
 				return err
 			}
-			regIp = ipv4.To4().String()
+			regIP = ipv4.To4().String()
 		}
 
 		svcPort := 4195
@@ -80,7 +83,7 @@ func (n *Nacos) RegisterInstance(conf Config, httpAddr string, logger log.Modula
 			}
 		}
 		success, err := client.RegisterInstance(vo.RegisterInstanceParam{
-			Ip:          regIp,
+			Ip:          regIP,
 			Port:        uint64(svcPort),
 			ServiceName: serviceName,
 			Weight:      10,
@@ -92,11 +95,12 @@ func (n *Nacos) RegisterInstance(conf Config, httpAddr string, logger log.Modula
 		if err != nil {
 			return err
 		}
-		logger.Infof("nacos server resp: %v, register %v@%v on ns %v to %v:%v\n", success, serviceName, regIp, namespaceId, serverIp, serverPort)
+		logger.Infof("nacos server resp: %v, register %v@%v on ns %v to %v:%v\n", success, serviceName, regIP, namespaceID, serverIP, serverPort)
 	}
 	return nil
 }
 
+// NacosSpec nacos sepec
 func NacosSpec() docs.FieldSpec {
 	return docs.FieldObject("nacos", "nacos configuration").WithChildren(
 		docs.FieldString("server_addr", "The address of nacos server.").HasDefault(""),

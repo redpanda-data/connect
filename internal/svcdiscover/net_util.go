@@ -17,6 +17,7 @@ func GetOutboundIP() (net.IP, error) {
 	return localAddr.IP, nil
 }
 
+// GetLocalIPv4 get local ipv4 address
 func GetLocalIPv4() (net.IP, error) {
 	addrs, err := net.InterfaceAddrs()
 	if err != nil {

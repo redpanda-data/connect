@@ -14,12 +14,14 @@ type SdManager struct {
 	Sds      []ServiceDiscoverReg
 }
 
+// NewSdManager new a sd manager
 func NewSdManager(conf Config, httpAddr string) *SdManager {
 	sdManager := &SdManager{conf: conf, httpAddr: httpAddr}
 	sdManager.Sds = append(sdManager.Sds, NewNacos())
 	return sdManager
 }
 
+// Register register self
 func (sm *SdManager) Register(logger log.Modular) error {
 	if len(sm.Sds) == 0 {
 		return nil

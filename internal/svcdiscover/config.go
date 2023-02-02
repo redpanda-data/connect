@@ -1,5 +1,6 @@
 package svcdiscover
 
+// Config svc configuration structure
 type Config struct {
 	Label   string      `json:"label" yaml:"label"`
 	Type    string      `json:"type" yaml:"type"`
@@ -7,6 +8,7 @@ type Config struct {
 	Nacos   NacosConfig `json:"nacos" yaml:"nacos"`
 }
 
+// NewConfig new svc config
 func NewConfig() Config {
 	return Config{
 		Label:   "",
