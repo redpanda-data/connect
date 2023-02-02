@@ -12,6 +12,7 @@ import (
 	tdocs "github.com/benthosdev/benthos/v4/internal/cli/test/docs"
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/log"
+	"github.com/benthosdev/benthos/v4/internal/svcdiscover"
 	"github.com/benthosdev/benthos/v4/internal/template"
 	"github.com/benthosdev/benthos/v4/public/service"
 
@@ -62,6 +63,9 @@ func main() {
 
 	// Template docs
 	doTemplates(docsDir)
+
+	// ServiceDiscover
+	doSvcdiscover(docsDir)
 }
 
 func viewForDir(docsDir string) func(name string, config *service.ConfigView) {
@@ -123,4 +127,13 @@ func doTemplates(dir string) {
 	}
 
 	create("template docs", filepath.Join(dir, "..", "configuration", "templating.md"), mdSpec)
+}
+
+func doSvcdiscover(dir string) {
+	mdSpec, err := svcdiscover.DocsMarkdown()
+	if err != nil {
+		panic(fmt.Sprintf("Failed to generate docs for svcdiscover: %v", err))
+	}
+
+	create("service discover docs", filepath.Join(dir, "service_discover", "about.md"), mdSpec)
 }
