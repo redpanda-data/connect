@@ -44,6 +44,7 @@ This input adds the following metadata fields to each message:
 - kafka_partition
 - kafka_offset
 - kafka_timestamp_unix
+- kafka_tombstone_message
 - All record headers
 ` + "```" + `
 `).
@@ -466,6 +467,7 @@ func recordToMessage(record *kgo.Record, multiHeader bool) *service.Message {
 	msg.MetaSet("kafka_partition", strconv.Itoa(int(record.Partition)))
 	msg.MetaSet("kafka_offset", strconv.Itoa(int(record.Offset)))
 	msg.MetaSet("kafka_timestamp_unix", strconv.FormatInt(record.Timestamp.Unix(), 10))
+	msg.MetaSet("kafka_tombstone_message", strconv.FormatBool(record.Value == nil))
 	if multiHeader {
 		// in multi header mode we gather headers so we can encode them as lists
 		var headers = map[string][]any{}
