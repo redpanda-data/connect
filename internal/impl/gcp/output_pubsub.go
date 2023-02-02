@@ -3,8 +3,11 @@ package gcp
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
+
+	"google.golang.org/api/option"
 
 	"cloud.google.com/go/pubsub"
 
@@ -56,6 +59,7 @@ pipeline:
 			docs.FieldInt("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
 			docs.FieldString("publish_timeout", "The maximum length of time to wait before abandoning a publish attempt for a message.", "10s", "5m", "60m").Advanced(),
 			docs.FieldString("ordering_key", "The ordering key to use for publishing messages.").IsInterpolated().Advanced(),
+			docs.FieldString("endpoint", "An optional endpoint to override the default of `pubsub.googleapis.com:443`. This can be used to connect to a region specific pubsub endpoint. For a list of valid values check out [this document.](https://cloud.google.com/pubsub/docs/reference/service_apis_overview#list_of_regional_endpoints)", "us-central1-pubsub.googleapis.com:443", "us-west3-pubsub.googleapis.com:443").HasDefault(""),
 			docs.FieldObject("metadata", "Specify criteria for which metadata values are sent as attributes.").WithChildren(metadata.ExcludeFilterFields()...),
 		).ChildDefaultAndTypesFromStruct(output.NewGCPPubSubConfig()),
 		Categories: []string{
@@ -98,7 +102,12 @@ type gcpPubSubWriter struct {
 }
 
 func newGCPPubSubWriter(conf output.GCPPubSubConfig, mgr bundle.NewManagement, log log.Modular) (*gcpPubSubWriter, error) {
-	client, err := pubsub.NewClient(context.Background(), conf.ProjectID)
+	var opt []option.ClientOption
+	if len(strings.TrimSpace(conf.Endpoint)) > 0 {
+		opt = []option.ClientOption{option.WithEndpoint(conf.Endpoint)}
+	}
+
+	client, err := pubsub.NewClient(context.Background(), conf.ProjectID, opt...)
 	if err != nil {
 		return nil, err
 	}

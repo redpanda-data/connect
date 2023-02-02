@@ -25,7 +25,11 @@ func init() {
 				Example("pulsar+ssl://pulsar.us-west.example.com:6651")).
 			Field(service.NewStringField("topic").
 				Description("The topic to publish to.")).
-			Field(service.NewObjectField("tls", service.NewStringField("root_cas_file").Description("An optional path of a root certificate authority file to use. This is a file, often with a .pem extension, containing a certificate chain from the parent trusted root certificate, to possible intermediate signing certificates, to the host certificate.").Example("./root_cas.pem")).
+			Field(service.NewObjectField("tls",
+				service.NewStringField("root_cas_file").
+					Description("An optional path of a root certificate authority file to use. This is a file, often with a .pem extension, containing a certificate chain from the parent trusted root certificate, to possible intermediate signing certificates, to the host certificate.").
+					Default("").
+					Example("./root_cas.pem")).
 				Description("Specify the path to a custom CA certificate to trust broker TLS service.")).
 			Field(service.NewInterpolatedStringField("key").
 				Description("The key to publish messages with.").

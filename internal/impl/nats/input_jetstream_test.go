@@ -24,7 +24,7 @@ auth:
 	conf, err := spec.ParseYAML(inputConfig, env)
 	require.NoError(t, err)
 
-	e, err := newJetStreamReaderFromConfig(conf, nil)
+	e, err := newJetStreamReaderFromConfig(conf, nil, nil)
 	require.NoError(t, err)
 
 	assert.Equal(t, "url1,url2", e.urls)

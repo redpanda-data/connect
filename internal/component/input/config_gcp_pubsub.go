@@ -4,6 +4,7 @@ package input
 type GCPPubSubConfig struct {
 	ProjectID              string                      `json:"project" yaml:"project"`
 	SubscriptionID         string                      `json:"subscription" yaml:"subscription"`
+	Endpoint               string                      `json:"endpoint" yaml:"endpoint"`
 	MaxOutstandingMessages int                         `json:"max_outstanding_messages" yaml:"max_outstanding_messages"`
 	MaxOutstandingBytes    int                         `json:"max_outstanding_bytes" yaml:"max_outstanding_bytes"`
 	Sync                   bool                        `json:"sync" yaml:"sync"`

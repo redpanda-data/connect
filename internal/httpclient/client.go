@@ -17,7 +17,6 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/internal/component/ratelimit"
-	"github.com/benthosdev/benthos/v4/internal/httpclient/oldconfig"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
 	"github.com/benthosdev/benthos/v4/internal/metadata"
@@ -57,7 +56,7 @@ type Client struct {
 // NewClientFromOldConfig creates a new request creator from an old struct style
 // config. Eventually I'd like to phase these out for the more dynamic service
 // style parses, but it'll take a while so we have this for now.
-func NewClientFromOldConfig(conf oldconfig.OldConfig, mgr bundle.NewManagement, opts ...RequestOpt) (*Client, error) {
+func NewClientFromOldConfig(conf OldConfig, mgr bundle.NewManagement, opts ...RequestOpt) (*Client, error) {
 	reqCreator, err := RequestCreatorFromOldConfig(conf, mgr, opts...)
 	if err != nil {
 		return nil, err
@@ -118,6 +117,11 @@ func NewClientFromOldConfig(conf oldconfig.OldConfig, mgr bundle.NewManagement, 
 				Proxy: http.ProxyURL(proxyURL),
 			}
 		}
+	}
+
+	h.client.Transport, err = newRequestLog(h.client.Transport, h.log, conf.DumpRequestLogLevel)
+	if err != nil {
+		return nil, fmt.Errorf("failed to config logger for request dump: %v", err)
 	}
 
 	for _, c := range conf.BackoffOn {

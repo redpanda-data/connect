@@ -131,7 +131,7 @@ It is also possible to target processors in a separate file by prefixing the tar
 				"Checks that both the message and the condition are valid JSON documents, and that they are structurally equivalent. Will ignore formatting and ordering differences.",
 				map[string]any{"key": "value"},
 			).Optional(),
-			docs.FieldString(
+			docs.FieldAnything(
 				`json_contains`,
 				"Checks that both the message and the condition are valid JSON documents, and that the message is a superset of the condition.",
 				map[string]any{"key": "value"},

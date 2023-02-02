@@ -11,7 +11,6 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/stretchr/testify/require"
 
-	"github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
 )
@@ -47,37 +46,34 @@ func TestWebsocketOutputBasic(t *testing.T) {
 		}
 	}))
 
-	conf := output.NewWebsocketConfig()
-	if wsURL, err := url.Parse(server.URL); err != nil {
-		t.Fatal(err)
-	} else {
-		wsURL.Scheme = "ws"
-		conf.URL = wsURL.String()
-	}
+	wsURL, err := url.Parse(server.URL)
+	require.NoError(t, err)
 
-	m, err := newWebsocketWriter(conf, mock.NewManager())
-	if err != nil {
-		t.Fatal(err)
-	}
+	wsURL.Scheme = "ws"
 
-	if err = m.Connect(context.Background()); err != nil {
-		t.Fatal(err)
-	}
+	conf := parseYAMLOutputConf(t, `
+websocket:
+  url: %v
+`, wsURL.String())
+
+	m, err := mock.NewManager().NewOutput(conf)
+	require.NoError(t, err)
+
+	tChan := make(chan message.Transaction)
+	require.NoError(t, m.Consume(tChan))
 
 	for _, msg := range expMsgs {
-		if err = m.WriteBatch(context.Background(), message.QuickBatch([][]byte{[]byte(msg)})); err != nil {
-			t.Error(err)
-		}
+		require.NoError(t, writeBatchToChan(ctx, t, message.QuickBatch([][]byte{[]byte(msg)}), tChan))
 	}
 
-	require.NoError(t, m.Close(ctx))
+	m.TriggerCloseNow()
+	require.NoError(t, m.WaitForClose(ctx))
 }
 
 func TestWebsocketOutputClose(t *testing.T) {
 	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
 	defer done()
 
-	closeChan := make(chan struct{})
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		upgrader := websocket.Upgrader{}
 
@@ -90,23 +86,22 @@ func TestWebsocketOutputClose(t *testing.T) {
 		ws.Close()
 	}))
 
-	conf := output.NewWebsocketConfig()
-	if wsURL, err := url.Parse(server.URL); err != nil {
-		t.Fatal(err)
-	} else {
-		wsURL.Scheme = "ws"
-		conf.URL = wsURL.String()
-	}
+	wsURL, err := url.Parse(server.URL)
+	require.NoError(t, err)
 
-	m, err := newWebsocketWriter(conf, mock.NewManager())
-	if err != nil {
-		t.Fatal(err)
-	}
+	wsURL.Scheme = "ws"
 
-	if err = m.Connect(context.Background()); err != nil {
-		t.Fatal(err)
-	}
+	conf := parseYAMLOutputConf(t, `
+websocket:
+  url: %v
+`, wsURL.String())
 
-	require.NoError(t, m.Close(ctx))
-	close(closeChan)
+	m, err := mock.NewManager().NewOutput(conf)
+	require.NoError(t, err)
+
+	tChan := make(chan message.Transaction)
+	require.NoError(t, m.Consume(tChan))
+
+	m.TriggerCloseNow()
+	require.NoError(t, m.WaitForClose(ctx))
 }

@@ -2,6 +2,7 @@ package cuegen
 
 import (
 	"fmt"
+	"strings"
 
 	"cuelang.org/go/cue/ast"
 	"cuelang.org/go/cue/token"
@@ -16,10 +17,14 @@ func doComponentSpec(cs docs.ComponentSpec) (*ast.Field, error) {
 		if err != nil {
 			return nil, err
 		}
-		return &ast.Field{
+		field := &ast.Field{
 			Label: ast.NewIdent(cs.Name),
 			Value: simple.Value,
-		}, nil
+		}
+		if cs.Summary != "" {
+			ast.AddComment(field, doComment(cs.Summary))
+		}
+		return field, nil
 	}
 
 	fields, err := doFieldSpecs(cfg.Children)
@@ -27,10 +32,32 @@ func doComponentSpec(cs docs.ComponentSpec) (*ast.Field, error) {
 		return nil, err
 	}
 
-	return &ast.Field{
+	field := &ast.Field{
 		Label: ast.NewIdent(cs.Name),
 		Value: ast.NewStruct(fields...),
-	}, nil
+	}
+
+	if cs.Summary != "" {
+		ast.AddComment(field, doComment(cs.Summary))
+	}
+
+	return field, nil
+}
+
+func doComment(comment string) *ast.CommentGroup {
+	comments := []*ast.Comment{}
+
+	for _, v := range strings.Split(strings.TrimSpace(comment), "\n") {
+		comments = append(comments, &ast.Comment{
+			Slash: token.NoPos,
+			Text:  "// " + v,
+		})
+	}
+
+	return &ast.CommentGroup{
+		Position: 0,
+		List:     comments,
+	}
 }
 
 func doFieldSpecs(s docs.FieldSpecs) ([]any, error) {
@@ -40,6 +67,11 @@ func doFieldSpecs(s docs.FieldSpecs) ([]any, error) {
 		if err != nil {
 			return nil, err
 		}
+
+		if fieldSpec.Description != "" {
+			ast.AddComment(field.Label, doComment(fieldSpec.Description))
+		}
+
 		if fieldSpec.CheckRequired() {
 			fields = append(fields, field)
 		} else {
@@ -107,6 +139,10 @@ func doScalarField(spec docs.FieldSpec) (*ast.Field, error) {
 			field, err := doFieldSpec(child)
 			if err != nil {
 				return nil, fmt.Errorf("failed to generate type for object field: %w", err)
+			}
+
+			if child.Description != "" {
+				ast.AddComment(field.Label, doComment(child.Description))
 			}
 
 			if child.CheckRequired() {
