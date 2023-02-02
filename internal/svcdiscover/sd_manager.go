@@ -7,6 +7,7 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/log"
 )
 
+// SdManager server discover manager
 type SdManager struct {
 	conf     Config
 	httpAddr string
