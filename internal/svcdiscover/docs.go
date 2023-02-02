@@ -5,6 +5,7 @@ import (
 	"text/template"
 
 	_ "embed"
+
 	"github.com/benthosdev/benthos/v4/internal/docs"
 )
 

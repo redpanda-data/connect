@@ -2,14 +2,15 @@ package svcdiscover
 
 import (
 	"fmt"
+	"strconv"
+	"strings"
+
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/nacos-group/nacos-sdk-go/clients"
 	"github.com/nacos-group/nacos-sdk-go/common/constant"
 	"github.com/nacos-group/nacos-sdk-go/vo"
 	"gopkg.in/natefinch/lumberjack.v2"
-	"strconv"
-	"strings"
 )
 
 func init() {

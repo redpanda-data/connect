@@ -2,8 +2,9 @@ package svcdiscover
 
 import (
 	"fmt"
-	"github.com/benthosdev/benthos/v4/internal/log"
 	"strings"
+
+	"github.com/benthosdev/benthos/v4/internal/log"
 )
 
 type SdManager struct {
