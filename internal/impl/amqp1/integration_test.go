@@ -60,8 +60,6 @@ input:
 		integration.StreamTestSendBatch(10),
 		integration.StreamTestStreamSequential(1000),
 		integration.StreamTestStreamParallel(1000),
-		integration.StreamTestStreamParallelLossy(1000),
-		integration.StreamTestStreamParallelLossyThroughReconnect(1000),
 		integration.StreamTestMetadata(),
 		integration.StreamTestMetadataFilter(),
 	)

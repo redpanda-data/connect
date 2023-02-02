@@ -7,76 +7,48 @@ import (
 
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component"
+	"github.com/benthosdev/benthos/v4/internal/component/interop"
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
-	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/httpclient"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
 	"github.com/benthosdev/benthos/v4/internal/tracing"
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
-func init() {
-	err := bundle.AllProcessors.Add(func(conf processor.Config, mgr bundle.NewManagement) (processor.V1, error) {
-		p, err := newHTTPProc(conf.HTTP, mgr)
-		if err != nil {
-			return nil, err
-		}
-		return processor.NewV2BatchedToV1Processor("http", p, mgr), nil
-	}, docs.ComponentSpec{
-		Name: "http",
-		Categories: []string{
-			"Integration",
-		},
-		Summary: `
-Performs an HTTP request using a message batch as the request body, and replaces
-the original message parts with the body of the response.`,
-		Description: `
-The ` + "`rate_limit`" + ` field can be used to specify a rate limit
-[resource](/docs/components/rate_limits/about) to cap the rate of requests
-across all parallel components service wide.
+func httpProcSpec() *service.ConfigSpec {
+	return service.NewConfigSpec().
+		Stable().
+		Categories("Integration").
+		Summary("Performs an HTTP request using a message batch as the request body, and replaces the original message parts with the body of the response.").
+		Description(`
+The `+"`rate_limit`"+` field can be used to specify a rate limit [resource](/docs/components/rate_limits/about) to cap the rate of requests across all parallel components service wide.
 
-The URL and header values of this type can be dynamically set using function
-interpolations described [here](/docs/configuration/interpolation#bloblang-queries).
+The URL and header values of this type can be dynamically set using function interpolations described [here](/docs/configuration/interpolation#bloblang-queries).
 
-In order to map or encode the payload to a specific request body, and map the
-response back into the original payload instead of replacing it entirely, you
-can use the ` + "[`branch` processor](/docs/components/processors/branch)" + `.
+In order to map or encode the payload to a specific request body, and map the response back into the original payload instead of replacing it entirely, you can use the `+"[`branch` processor](/docs/components/processors/branch)"+`.
 
 ## Response Codes
 
-Benthos considers any response code between 200 and 299 inclusive to indicate a
-successful response, you can add more success status codes with the field
-` + "`successful_on`" + `.
+Benthos considers any response code between 200 and 299 inclusive to indicate a successful response, you can add more success status codes with the field `+"`successful_on`"+`.
 
-When a request returns a response code within the ` + "`backoff_on`" + ` field
-it will be retried after increasing intervals.
+When a request returns a response code within the `+"`backoff_on`"+` field it will be retried after increasing intervals.
 
-When a request returns a response code within the ` + "`drop_on`" + ` field it
-will not be reattempted and is immediately considered a failed request.
+When a request returns a response code within the `+"`drop_on`"+` field it will not be reattempted and is immediately considered a failed request.
 
 ## Adding Metadata
 
-If the request returns an error response code this processor sets a metadata
-field ` + "`http_status_code`" + ` on the resulting message.
+If the request returns an error response code this processor sets a metadata field `+"`http_status_code`"+` on the resulting message.
 
-Use the field ` + "`extract_headers`" + ` to specify rules for which other
-headers should be copied into the resulting message from the response.
+Use the field `+"`extract_headers`"+` to specify rules for which other headers should be copied into the resulting message from the response.
 
 ## Error Handling
 
-When all retry attempts for a message are exhausted the processor cancels the
-attempt. These failed messages will continue through the pipeline unchanged, but
-can be dropped or placed in a dead letter queue according to your config, you
-can read about these patterns [here](/docs/configuration/error_handling).`,
-		Config: httpclient.OldFieldSpec(false,
-			docs.FieldBool("batch_as_multipart", "Send message batches as a single request using [RFC1341](https://www.w3.org/Protocols/rfc1341/7_2_Multipart.html).").Advanced().HasDefault(false),
-			docs.FieldBool("parallel", "When processing batched messages, whether to send messages of the batch in parallel, otherwise they are sent serially.").HasDefault(false)).ChildDefaultAndTypesFromStruct(processor.NewHTTPConfig()),
-		Examples: []docs.AnnotatedExample{
-			{
-				Title: "Branched Request",
-				Summary: `
-This example uses a ` + "[`branch` processor](/docs/components/processors/branch/)" + ` to strip the request message into an empty body, grab an HTTP payload, and place the result back into the original message at the path ` + "`repo.status`" + `:`,
-				Config: `
+When all retry attempts for a message are exhausted the processor cancels the attempt. These failed messages will continue through the pipeline unchanged, but can be dropped or placed in a dead letter queue according to your config, you can read about these patterns [here](/docs/configuration/error_handling).`).
+		Example(
+			"Branched Request",
+			`This example uses a `+"[`branch` processor](/docs/components/processors/branch/)"+` to strip the request message into an empty body, grab an HTTP payload, and place the result back into the original message at the path `+"`repo.status`"+`:`,
+			`
 pipeline:
   processors:
     - branch:
@@ -87,9 +59,24 @@ pipeline:
               verb: GET
         result_map: 'root.repo.status = this'
 `,
-			},
-		},
-	})
+		).
+		Field(httpclient.ConfigField("POST", false,
+			service.NewBoolField("batch_as_multipart").Description("Send message batches as a single request using [RFC1341](https://www.w3.org/Protocols/rfc1341/7_2_Multipart.html).").Advanced().Default(false),
+			service.NewBoolField("parallel").Description("When processing batched messages, whether to send messages of the batch in parallel, otherwise they are sent serially.").Default(false)),
+		)
+}
+
+func init() {
+	err := service.RegisterBatchProcessor(
+		"http", httpProcSpec(),
+		func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchProcessor, error) {
+			oldMgr := interop.UnwrapManagement(mgr)
+			p, err := newHTTPProcFromParsed(conf, oldMgr)
+			if err != nil {
+				return nil, err
+			}
+			return interop.NewUnwrapInternalBatchProcessor(processor.NewV2BatchedToV1Processor("http", p, oldMgr)), nil
+		})
 	if err != nil {
 		panic(err)
 	}
@@ -103,16 +90,34 @@ type httpProc struct {
 	log         log.Modular
 }
 
-func newHTTPProc(conf processor.HTTPConfig, mgr bundle.NewManagement) (processor.V2Batched, error) {
-	g := &httpProc{
-		rawURL:      conf.URL,
-		log:         mgr.Logger(),
-		asMultipart: conf.BatchAsMultipart,
-		parallel:    conf.Parallel,
+func newHTTPProcFromParsed(conf *service.ParsedConfig, mgr bundle.NewManagement) (processor.V2Batched, error) {
+	genericConf, err := conf.FieldAny()
+	if err != nil {
+		return nil, err
 	}
 
-	var err error
-	if g.client, err = httpclient.NewClientFromOldConfig(conf.OldConfig, mgr); err != nil {
+	oldConf, err := httpclient.ConfigFromAny(genericConf)
+	if err != nil {
+		return nil, err
+	}
+
+	asMultipart, err := conf.FieldBool("batch_as_multipart")
+	if err != nil {
+		return nil, err
+	}
+
+	parallel, err := conf.FieldBool("parallel")
+	if err != nil {
+		return nil, err
+	}
+
+	g := &httpProc{
+		rawURL:      oldConf.URL,
+		log:         mgr.Logger(),
+		asMultipart: asMultipart,
+		parallel:    parallel,
+	}
+	if g.client, err = httpclient.NewClientFromOldConfig(oldConf, mgr); err != nil {
 		return nil, err
 	}
 	return g, nil

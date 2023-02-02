@@ -9,6 +9,7 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/manager"
 	"github.com/benthosdev/benthos/v4/internal/stream"
+	"github.com/benthosdev/benthos/v4/internal/svcdiscover"
 )
 
 // Type is the Benthos service configuration struct.
@@ -16,12 +17,13 @@ type Type struct {
 	HTTP                   api.Config `json:"http" yaml:"http"`
 	stream.Config          `json:",inline" yaml:",inline"`
 	manager.ResourceConfig `json:",inline" yaml:",inline"`
-	Logger                 log.Config     `json:"logger" yaml:"logger"`
-	Metrics                metrics.Config `json:"metrics" yaml:"metrics"`
-	Tracer                 tracer.Config  `json:"tracer" yaml:"tracer"`
-	SystemCloseDelay       string         `json:"shutdown_delay" yaml:"shutdown_delay"`
-	SystemCloseTimeout     string         `json:"shutdown_timeout" yaml:"shutdown_timeout"`
-	Tests                  []any          `json:"tests,omitempty" yaml:"tests,omitempty"`
+	Logger                 log.Config         `json:"logger" yaml:"logger"`
+	Metrics                metrics.Config     `json:"metrics" yaml:"metrics"`
+	Tracer                 tracer.Config      `json:"tracer" yaml:"tracer"`
+	SystemCloseDelay       string             `json:"shutdown_delay" yaml:"shutdown_delay"`
+	SystemCloseTimeout     string             `json:"shutdown_timeout" yaml:"shutdown_timeout"`
+	Tests                  []any              `json:"tests,omitempty" yaml:"tests,omitempty"`
+	Sd                     svcdiscover.Config `json:"sd" yaml:"sd"`
 }
 
 // New returns a new configuration with default values.
@@ -36,10 +38,12 @@ func New() Type {
 		SystemCloseDelay:   "",
 		SystemCloseTimeout: "20s",
 		Tests:              nil,
+		Sd:                 svcdiscover.NewConfig(),
 	}
 }
 
 var httpField = docs.FieldObject("http", "Configures the service-wide HTTP server.").WithChildren(api.Spec()...)
+var svcdiscoverField = docs.FieldObject("sd", "Configures the service-discover.").WithChildren(svcdiscover.Spec()...)
 
 var observabilityFields = docs.FieldSpecs{
 	docs.FieldObject("logger", "Describes how operational logs should be emitted.").WithChildren(log.Spec()...),
@@ -56,6 +60,7 @@ func Spec() docs.FieldSpecs {
 	fields = append(fields, manager.Spec()...)
 	fields = append(fields, observabilityFields...)
 	fields = append(fields, tdocs.ConfigSpec())
+	fields = append(fields, svcdiscoverField)
 	return fields
 }
 
@@ -65,5 +70,6 @@ func SpecWithoutStream() docs.FieldSpecs {
 	fields = append(fields, manager.Spec()...)
 	fields = append(fields, observabilityFields...)
 	fields = append(fields, tdocs.ConfigSpec())
+	fields = append(fields, svcdiscoverField)
 	return fields
 }

@@ -3,8 +3,10 @@ package interop
 import (
 	"context"
 
+	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/input"
+	"github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
@@ -83,4 +85,51 @@ func (u *UnwrapInternalBatchProcessor) ProcessBatch(ctx context.Context, b servi
 // Close does nothing, use Unwrap instead.
 func (u *UnwrapInternalBatchProcessor) Close(ctx context.Context) error {
 	return component.ErrNotUnwrapped
+}
+
+//------------------------------------------------------------------------------
+
+// UnwrapInternalOutput is a no-op implementation of an internal component that
+// allows a public/service environment to unwrap it straight into the needed
+// format during construction. This is useful in cases where we're migrating
+// internal components to use the public configuration APIs but aren't quite
+// ready to move the full implementation yet.
+type UnwrapInternalOutput struct {
+	s output.Streamed
+}
+
+// NewUnwrapInternalOutput returns wraps an internal component implementation.
+func NewUnwrapInternalOutput(s output.Streamed) *UnwrapInternalOutput {
+	return &UnwrapInternalOutput{s: s}
+}
+
+// Unwrap in order to obtain the underlying Streamed implementation.
+func (u *UnwrapInternalOutput) Unwrap() output.Streamed {
+	return u.s
+}
+
+// Connect does nothing, use Unwrap instead.
+func (u *UnwrapInternalOutput) Connect(ctx context.Context) error {
+	return component.ErrNotUnwrapped
+}
+
+// WriteBatch does nothing, use Unwrap instead.
+func (u *UnwrapInternalOutput) WriteBatch(ctx context.Context, b service.MessageBatch) error {
+	return component.ErrNotUnwrapped
+}
+
+// Close does nothing, use Unwrap instead.
+func (u *UnwrapInternalOutput) Close(ctx context.Context) error {
+	return component.ErrNotUnwrapped
+}
+
+//------------------------------------------------------------------------------
+
+// UnwrapManagement a public *service.Resources type into an internal
+// bundle.NewManagement type. This solution will eventually be phased out as it
+// is only used for migrating components.
+func UnwrapManagement(r *service.Resources) bundle.NewManagement {
+	return r.XUnwrapper().(interface {
+		Unwrap() bundle.NewManagement
+	}).Unwrap()
 }

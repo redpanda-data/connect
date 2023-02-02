@@ -2,8 +2,16 @@ package io
 
 import (
 	"context"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/tls"
+	"crypto/x509"
+	"encoding/pem"
+	"errors"
 	"fmt"
 	"io"
+	"math/big"
 	"net"
 	"strings"
 	"sync"
@@ -29,12 +37,17 @@ func init() {
 		Description: `
 The field ` + "`max_buffer`" + ` specifies the maximum amount of memory to allocate _per connection_ for buffering lines of data. If a line of data from a connection exceeds this value then the connection will be closed.`,
 		Config: docs.FieldComponent().WithChildren(
-			docs.FieldString("network", "A network type to accept (unix|tcp|udp).").HasOptions(
-				"unix", "tcp", "udp",
+			docs.FieldString("network", "A network type to accept.").HasOptions(
+				"unix", "tcp", "udp", "tls",
 			),
 			docs.FieldString("address", "The address to listen from.", "/tmp/benthos.sock", "0.0.0.0:6000"),
 			codec.ReaderDocs.AtVersion("3.42.0"),
 			docs.FieldInt("max_buffer", "The maximum message buffer size. Must exceed the largest message to be consumed.").Advanced(),
+			docs.FieldObject("tls", "TLS specific configuration, valid when the `network` is set to `tls`.").WithChildren(
+				docs.FieldString("cert_file", "PEM encoded certificate for use with TLS.").HasDefault(""),
+				docs.FieldString("key_file", "PEM encoded private key for use with TLS.").HasDefault(""),
+				docs.FieldBool("self_signed", "Whether to generate self signed certificates.").HasDefault(false),
+			),
 		).ChildDefaultAndTypesFromStruct(input.NewSocketConfig()),
 		Categories: []string{
 			"Network",
@@ -93,6 +106,15 @@ func newSocketServerInput(conf input.Config, mgr bundle.NewManagement, log log.M
 		ln, err = net.Listen(sconf.Network, sconf.Address)
 	case "udp":
 		cn, err = net.ListenPacket(sconf.Network, sconf.Address)
+	case "tls":
+		var cert tls.Certificate
+		if cert, err = loadOrCreateCertificate(sconf.TLS); err != nil {
+			return nil, err
+		}
+		config := &tls.Config{
+			Certificates: []tls.Certificate{cert},
+		}
+		ln, err = tls.Listen("tcp", sconf.Address, config)
 	default:
 		return nil, fmt.Errorf("socket network '%v' is not supported by this input", sconf.Network)
 	}
@@ -347,4 +369,50 @@ func (t *socketServerInput) WaitForClose(ctx context.Context) error {
 		return ctx.Err()
 	}
 	return nil
+}
+
+//------------------------------------------------------------------------------
+
+func createSelfSignedCertificate() (tls.Certificate, error) {
+	priv, _ := ecdsa.GenerateKey(elliptic.P521(), rand.Reader)
+	certOptions := &x509.Certificate{
+		SerialNumber: &big.Int{},
+	}
+
+	certBytes, _ := x509.CreateCertificate(rand.Reader, certOptions, certOptions, &priv.PublicKey, priv)
+	pemcert := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certBytes})
+	key, err := x509.MarshalECPrivateKey(priv)
+	if err != nil {
+		return tls.Certificate{}, err
+	}
+
+	keyBytes := pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: key})
+	cert, err := tls.X509KeyPair(pemcert, keyBytes)
+	if err != nil {
+		return tls.Certificate{}, err
+	}
+
+	return cert, nil
+}
+
+func loadOrCreateCertificate(sconf input.SocketServerTLSConfig) (tls.Certificate, error) {
+	var cert tls.Certificate
+	var err error
+	if sconf.CertFile != "" && sconf.KeyFile != "" {
+		cert, err = tls.LoadX509KeyPair(sconf.CertFile, sconf.KeyFile)
+		if err != nil {
+			return tls.Certificate{}, err
+		}
+		return cert, nil
+	}
+	if !sconf.SelfSigned {
+		return tls.Certificate{}, errors.New("must specify either a certificate file or enable self signed")
+	}
+
+	// Either CertFile or KeyFile was not specified, so make our own certificate
+	cert, err = createSelfSignedCertificate()
+	if err != nil {
+		return tls.Certificate{}, err
+	}
+	return cert, nil
 }

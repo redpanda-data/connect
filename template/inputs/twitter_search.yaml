@@ -113,8 +113,9 @@ mapping: |
         {
           "cache": {
             "resource": this.cache,
-            "operator": "delete",
+            "operator": "set",
             "key": this.cache_key,
+            "value": "",
           },
         },
         { "bloblang": "root = deleted()" },
@@ -210,8 +211,9 @@ tests:
             processors:
               - cache:
                   resource: foocache
-                  operator: delete
+                  operator: set
                   key: last_tweet_id
+                  value: ""
               - bloblang: root = deleted()
 
         - bloblang: root = if (this.data | []).length() > 0 { this.data } else { deleted() }
@@ -279,8 +281,9 @@ tests:
             processors:
               - cache:
                   resource: barcache
-                  operator: delete
+                  operator: set
                   key: last_tweet_id
+                  value: ""
               - bloblang: root = deleted()
 
         - bloblang: root = if (this.data | []).length() > 0 { this.data } else { deleted() }

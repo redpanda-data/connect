@@ -3,53 +3,42 @@ package io
 import (
 	"context"
 	"errors"
-	"fmt"
 	"io"
 	"strings"
 	"sync"
 
+	"github.com/benthosdev/benthos/v4/internal/bloblang/field"
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/codec"
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/input"
-	"github.com/benthosdev/benthos/v4/internal/component/input/processors"
-	"github.com/benthosdev/benthos/v4/internal/docs"
+	"github.com/benthosdev/benthos/v4/internal/component/interop"
 	"github.com/benthosdev/benthos/v4/internal/httpclient"
 	"github.com/benthosdev/benthos/v4/internal/message"
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
-func httpClientInputSpec() docs.FieldSpec {
-	codecDocs := codec.ReaderDocs.AtVersion("3.42.0")
-	codecDocs.Description = "The way in which the bytes of a continuous stream are converted into messages. It's possible to consume lines using a custom delimiter with the `delim:x` codec, where x is the character sequence custom delimiter. It's not necessary to add gzip in the codec when the response headers specify it as it will be decompressed automatically."
-	codecDocs.Examples = []any{"lines", "delim:\t", "delim:foobar", "csv"}
+func httpClientInputSpec() *service.ConfigSpec {
+	oldCodecDocs := codec.ReaderDocs
+	oldCodecDocs.Examples = []any{"lines", "delim:\t", "delim:foobar", "csv"}
 
-	streamSpecs := docs.FieldSpecs{
-		docs.FieldBool("enabled", "Enables streaming mode."),
-		docs.FieldBool("reconnect", "Sets whether to re-establish the connection once it is lost."),
-		codecDocs,
-		docs.FieldInt("max_buffer", "Must be larger than the largest line of the stream.").Advanced(),
-	}
+	codecField := service.NewInternalField(oldCodecDocs).
+		Version("3.42.0").
+		Description("The way in which the bytes of a continuous stream are converted into messages. It's possible to consume lines using a custom delimiter with the `delim:x` codec, where x is the character sequence custom delimiter. It's not necessary to add gzip in the codec when the response headers specify it as it will be decompressed automatically.").
+		Default("lines")
 
-	return httpclient.OldFieldSpec(false,
-		docs.FieldString("payload", "An optional payload to deliver for each request.").IsInterpolated(),
-		docs.FieldBool("drop_empty_bodies", "Whether empty payloads received from the target server should be dropped.").Advanced(),
-		docs.FieldObject(
-			"stream", "Allows you to set streaming mode, where requests are kept open and messages are processed line-by-line.",
-		).WithChildren(streamSpecs...),
-	)
-}
+	streamField := service.NewObjectField("stream",
+		service.NewBoolField("enabled").Description("Enables streaming mode.").Default(false),
+		service.NewBoolField("reconnect").Description("Sets whether to re-establish the connection once it is lost.").Default(true),
+		codecField,
+		service.NewIntField("max_buffer").Description("Must be larger than the largest line of the stream.").Default(1000000).Advanced(),
+	).Description("Allows you to set streaming mode, where requests are kept open and messages are processed line-by-line.").Optional()
 
-func init() {
-	err := bundle.AllInputs.Add(processors.WrapConstructor(func(conf input.Config, mgr bundle.NewManagement) (input.Streamed, error) {
-		rdr, err := newHTTPClientInput(conf.HTTPClient, mgr)
-		if err != nil {
-			return nil, err
-		}
-		return input.NewAsyncReader("http_client", input.NewAsyncPreserver(rdr), mgr)
-	}), docs.ComponentSpec{
-		Name:    "http_client",
-		Summary: `Connects to a server and continuously performs requests for a single message.`,
-		Description: `
+	return service.NewConfigSpec().
+		Stable().
+		Categories("Network").
+		Summary("Connects to a server and continuously performs requests for a single message.").
+		Description(`
 The URL and header values of this type can be dynamically set using function interpolations described [here](/docs/configuration/interpolation#bloblang-queries).
 
 ### Streaming
@@ -58,16 +47,11 @@ If you enable streaming then Benthos will consume the body of the response as a 
 
 ### Pagination
 
-This input supports interpolation functions in the ` + "`url` and `headers`" + ` fields where data from the previous successfully consumed message (if there was one) can be referenced. This can be used in order to support basic levels of pagination. However, in cases where pagination depends on logic it is recommended that you use an ` + "[`http` processor](/docs/components/processors/http) instead, often combined with a [`generate` input](/docs/components/inputs/generate)" + ` in order to schedule the processor.`,
-		Config: httpClientInputSpec().ChildDefaultAndTypesFromStruct(input.NewHTTPClientConfig()),
-		Categories: []string{
-			"Network",
-		},
-		Examples: []docs.AnnotatedExample{
-			{
-				Title:   "Basic Pagination",
-				Summary: "Interpolation functions within the `url` and `headers` fields can be used to reference the previously consumed message, which allows simple pagination.",
-				Config: `
+This input supports interpolation functions in the `+"`url` and `headers`"+` fields where data from the previous successfully consumed message (if there was one) can be referenced. This can be used in order to support basic levels of pagination. However, in cases where pagination depends on logic it is recommended that you use an `+"[`http` processor](/docs/components/processors/http) instead, often combined with a [`generate` input](/docs/components/inputs/generate)"+` in order to schedule the processor.`).
+		Example(
+			"Basic Pagination",
+			"Interpolation functions within the `url` and `headers` fields can be used to reference the previously consumed message, which allows simple pagination.",
+			`
 input:
   http_client:
     url: >-
@@ -88,9 +72,31 @@ rate_limit_resources:
       count: 1
       interval: 30s
 `,
-			},
-		},
-	})
+		).
+		Field(httpclient.ConfigField("GET", false,
+			service.NewInterpolatedStringField("payload").Description("An optional payload to deliver for each request.").Optional(),
+			service.NewBoolField("drop_empty_bodies").Description("Whether empty payloads received from the target server should be dropped.").Default(true).Advanced(),
+			streamField,
+		))
+}
+
+func init() {
+	err := service.RegisterBatchInput(
+		"http_client", httpClientInputSpec(),
+		func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchInput, error) {
+			oldMgr := interop.UnwrapManagement(mgr)
+			rdr, err := newHTTPClientInputFromParsed(conf, oldMgr)
+			if err != nil {
+				return nil, err
+			}
+
+			i, err := input.NewAsyncReader("http_client", input.NewAsyncPreserver(rdr), oldMgr)
+			if err != nil {
+				return nil, err
+			}
+
+			return interop.NewUnwrapInternalInput(i), nil
+		})
 	if err != nil {
 		panic(err)
 	}
@@ -99,53 +105,87 @@ rate_limit_resources:
 //------------------------------------------------------------------------------
 
 type httpClientInput struct {
-	conf input.HTTPClientConfig
-
 	client       *httpclient.Client
 	prevResponse message.Batch
 
-	codecCtor codec.ReaderConstructor
+	codecCtor       codec.ReaderConstructor
+	reconnectStream bool
+	dropEmptyBodies bool
 
 	codecMut sync.Mutex
 	codec    codec.Reader
 }
 
-func newHTTPClientInput(conf input.HTTPClientConfig, mgr bundle.NewManagement) (*httpClientInput, error) {
+func newHTTPClientInputFromParsed(conf *service.ParsedConfig, mgr bundle.NewManagement) (*httpClientInput, error) {
+	genericConf, err := conf.FieldAny()
+	if err != nil {
+		return nil, err
+	}
+
+	oldConf, err := httpclient.ConfigFromAny(genericConf)
+	if err != nil {
+		return nil, err
+	}
+
 	var codecCtor codec.ReaderConstructor
 
-	if conf.Stream.Enabled {
+	streamEnabled, err := conf.FieldBool("stream", "enabled")
+	if err != nil {
+		return nil, err
+	}
+	if streamEnabled {
 		// Timeout should be left at zero if we are streaming.
-		conf.Timeout = ""
-		codecConf := codec.NewReaderConfig()
-		codecConf.MaxScanTokenSize = conf.Stream.MaxBuffer
+		oldConf.Timeout = ""
 
-		var err error
-		if codecCtor, err = codec.GetReader(conf.Stream.Codec, codecConf); err != nil {
+		maxBuffer, err := conf.FieldInt("stream", "max_buffer")
+		if err != nil {
+			return nil, err
+		}
+
+		codecConf := codec.NewReaderConfig()
+		codecConf.MaxScanTokenSize = maxBuffer
+
+		codecStr, err := conf.FieldString("stream", "codec")
+		if err != nil {
+			return nil, err
+		}
+
+		if codecCtor, err = codec.GetReader(codecStr, codecConf); err != nil {
+			return nil, err
+		}
+	}
+	reconnectStream, _ := conf.FieldBool("stream", "reconnect")
+
+	var payloadExpr *field.Expression
+	if payloadStr, _ := conf.FieldString("payload"); payloadStr != "" {
+		if payloadExpr, err = mgr.BloblEnvironment().NewField(payloadStr); err != nil {
 			return nil, err
 		}
 	}
 
-	payloadExpr, err := mgr.BloblEnvironment().NewField(conf.Payload)
+	dropEmpty, err := conf.FieldBool("drop_empty_bodies")
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse payload expression: %w", err)
+		return nil, err
 	}
 
-	client, err := httpclient.NewClientFromOldConfig(conf.OldConfig, mgr, httpclient.WithExplicitBody(payloadExpr))
+	client, err := httpclient.NewClientFromOldConfig(oldConf, mgr, httpclient.WithExplicitBody(payloadExpr))
 	if err != nil {
 		return nil, err
 	}
 
 	return &httpClientInput{
-		conf:         conf,
 		prevResponse: message.QuickBatch(nil),
 		client:       client,
+
+		dropEmptyBodies: dropEmpty,
+		reconnectStream: reconnectStream,
 
 		codecCtor: codecCtor,
 	}, nil
 }
 
 func (h *httpClientInput) Connect(ctx context.Context) (err error) {
-	if !h.conf.Stream.Enabled {
+	if h.codecCtor == nil {
 		return nil
 	}
 
@@ -182,7 +222,7 @@ func (h *httpClientInput) Connect(ctx context.Context) (err error) {
 }
 
 func (h *httpClientInput) ReadBatch(ctx context.Context) (message.Batch, input.AsyncAckFn, error) {
-	if h.conf.Stream.Enabled {
+	if h.codecCtor != nil {
 		return h.readStreamed(ctx)
 	}
 	return h.readNotStreamed(ctx)
@@ -207,7 +247,7 @@ func (h *httpClientInput) readStreamed(ctx context.Context) (message.Batch, inpu
 			h.codec = nil
 		}
 		if errors.Is(err, io.EOF) {
-			if !h.conf.Stream.Reconnect {
+			if !h.reconnectStream {
 				return nil, nil, component.ErrTypeClosed
 			}
 			return nil, nil, component.ErrTimeout
@@ -216,7 +256,7 @@ func (h *httpClientInput) readStreamed(ctx context.Context) (message.Batch, inpu
 	}
 
 	msg := message.Batch(parts)
-	if msg.Len() == 1 && msg.Get(0).IsEmpty() && h.conf.DropEmptyBodies {
+	if msg.Len() == 1 && msg.Get(0).IsEmpty() && h.dropEmptyBodies {
 		_ = codecAckFn(ctx, nil)
 		return nil, nil, component.ErrTimeout
 	}
@@ -259,7 +299,7 @@ func (h *httpClientInput) readNotStreamed(ctx context.Context) (message.Batch, i
 	if msg.Len() == 0 {
 		return nil, nil, component.ErrTimeout
 	}
-	if msg.Len() == 1 && msg.Get(0).IsEmpty() && h.conf.DropEmptyBodies {
+	if msg.Len() == 1 && msg.Get(0).IsEmpty() && h.dropEmptyBodies {
 		return nil, nil, component.ErrTimeout
 	}
 

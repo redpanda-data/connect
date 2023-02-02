@@ -19,7 +19,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/benthosdev/benthos/v4/internal/httpclient/oldconfig"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
 )
@@ -32,7 +31,7 @@ func TestHTTPClientRetries(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	conf := oldconfig.NewOldConfig()
+	conf := NewOldConfig()
 	conf.URL = ts.URL + "/testpost"
 	conf.Retry = "1ms"
 	conf.NumRetries = 3
@@ -48,7 +47,7 @@ func TestHTTPClientRetries(t *testing.T) {
 }
 
 func TestHTTPClientBadRequest(t *testing.T) {
-	conf := oldconfig.NewOldConfig()
+	conf := NewOldConfig()
 	conf.URL = "htp://notvalid:1111"
 	conf.Verb = "notvalid\n"
 	conf.NumRetries = 3
@@ -78,7 +77,7 @@ func TestHTTPClientSendBasic(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	conf := oldconfig.NewOldConfig()
+	conf := NewOldConfig()
 	conf.URL = ts.URL + "/testpost"
 
 	h, err := NewClientFromOldConfig(conf, mock.NewManager())
@@ -111,7 +110,7 @@ func TestHTTPClientBadContentType(t *testing.T) {
 	}))
 	t.Cleanup(ts.Close)
 
-	conf := oldconfig.NewOldConfig()
+	conf := NewOldConfig()
 	conf.URL = ts.URL + "/testpost"
 
 	h, err := NewClientFromOldConfig(conf, mock.NewManager())
@@ -133,7 +132,7 @@ func TestHTTPClientDropOn(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	conf := oldconfig.NewOldConfig()
+	conf := NewOldConfig()
 	conf.URL = ts.URL + "/testpost"
 	conf.DropOn = []int{400}
 
@@ -155,7 +154,7 @@ func TestHTTPClientSuccessfulOn(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	conf := oldconfig.NewOldConfig()
+	conf := NewOldConfig()
 	conf.URL = ts.URL + "/testpost"
 	conf.SuccessfulOn = []int{400}
 
@@ -192,7 +191,7 @@ func TestHTTPClientSendInterpolate(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	conf := oldconfig.NewOldConfig()
+	conf := NewOldConfig()
 	conf.URL = ts.URL + `/${! json("foo.bar") }`
 	conf.Headers["static"] = "foo"
 	conf.Headers["dynamic"] = `hdr-${!json("foo.baz")}`
@@ -254,7 +253,7 @@ func TestHTTPClientSendMultipart(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	conf := oldconfig.NewOldConfig()
+	conf := NewOldConfig()
 	conf.URL = ts.URL + "/testpost"
 
 	h, err := NewClientFromOldConfig(conf, mock.NewManager())
@@ -294,7 +293,7 @@ func TestHTTPClientReceive(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	conf := oldconfig.NewOldConfig()
+	conf := NewOldConfig()
 	conf.URL = ts.URL + "/testpost"
 
 	h, err := NewClientFromOldConfig(conf, mock.NewManager())
@@ -329,7 +328,7 @@ bar_b: %v
 	}))
 	defer ts.Close()
 
-	conf := oldconfig.NewOldConfig()
+	conf := NewOldConfig()
 	conf.URL = ts.URL + "/testpost"
 	conf.Metadata.IncludePrefixes = []string{"foo_"}
 
@@ -363,7 +362,7 @@ func TestHTTPClientReceiveHeadersWithMetadataFiltering(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	conf := oldconfig.NewOldConfig()
+	conf := NewOldConfig()
 	conf.URL = ts.URL
 
 	for _, tt := range []struct {
@@ -446,7 +445,7 @@ func TestHTTPClientReceiveMultipart(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	conf := oldconfig.NewOldConfig()
+	conf := NewOldConfig()
 	conf.URL = ts.URL + "/testpost"
 
 	h, err := NewClientFromOldConfig(conf, mock.NewManager())

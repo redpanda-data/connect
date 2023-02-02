@@ -11,6 +11,13 @@ All notable changes to this project will be documented in this file.
 - Field `max_buffer` added to the `aws_s3` input.
 - Field `open_message_type` added to the `websocket` input.
 - The experimental `--watcher` cli flag now takes into account file deletions and new files that match wildcard patterns.
+- Field `dump_request_log_level` added to HTTP components.
+- New `couchbase` cache implementation.
+- New `compress` and `decompress` Bloblang methods.
+- Field `endpoint` added to the `gcp_pubsub` input and output.
+- New Bloblang method `concat`.
+- New `redis` ratelimit.
+- The `socket_server` input now supports `tls` as a network type.
 
 ### Fixed
 
@@ -18,6 +25,10 @@ All notable changes to this project will be documented in this file.
 - The default value of the `conn_max_idle` field has been changed from 0 to 2 for all `sql_*` components in accordance
 to the [`database/sql` docs](https://pkg.go.dev/database/sql#DB.SetMaxIdleConns).
 - The `parse_csv` bloblang method with `parse_header_row` set to `false` no longer produces rows that are of an `unknown` type.
+- Fixed a bug where the `oracle` driver for the `sql_*` components was returning timestamps which were getting marshalled into an empty JSON object instead of a string.
+- The `aws_sqs` input no longer backs off on subsequent empty requests when long polling is enabled.
+- It's now possible to mock resources within the main test target file in config unit tests.
+- Unit test linting no longer incorrectly expects the `json_contains` predicate to contain a string value only.
 
 ## 4.11.0 - 2022-12-21
 

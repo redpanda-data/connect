@@ -51,7 +51,7 @@ func init() {
 			if err != nil {
 				return nil, 0, err
 			}
-			w, err := newJetStreamWriterFromConfig(conf, mgr.Logger())
+			w, err := newJetStreamWriterFromConfig(conf, mgr.Logger(), mgr.FS())
 			return w, maxInFlight, err
 		})
 	if err != nil {
@@ -70,6 +70,7 @@ type jetStreamOutput struct {
 	tlsConf       *tls.Config
 
 	log *service.Logger
+	fs  *service.FS
 
 	connMut  sync.Mutex
 	natsConn *nats.Conn
@@ -78,9 +79,10 @@ type jetStreamOutput struct {
 	shutSig *shutdown.Signaller
 }
 
-func newJetStreamWriterFromConfig(conf *service.ParsedConfig, log *service.Logger) (*jetStreamOutput, error) {
+func newJetStreamWriterFromConfig(conf *service.ParsedConfig, log *service.Logger, fs *service.FS) (*jetStreamOutput, error) {
 	j := jetStreamOutput{
 		log:     log,
+		fs:      fs,
 		shutSig: shutdown.NewSignaller(),
 	}
 
@@ -140,7 +142,7 @@ func (j *jetStreamOutput) Connect(ctx context.Context) error {
 	if j.tlsConf != nil {
 		opts = append(opts, nats.Secure(j.tlsConf))
 	}
-	opts = append(opts, authConfToOptions(j.authConf)...)
+	opts = append(opts, authConfToOptions(j.authConf, j.fs)...)
 	if natsConn, err = nats.Connect(j.urls, opts...); err != nil {
 		return err
 	}

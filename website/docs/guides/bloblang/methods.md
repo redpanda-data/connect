@@ -1567,6 +1567,20 @@ root.result = this.collapse(include_empty: true)
 # Out: {"result":{"foo.0.bar":"1","foo.1.bar":{},"foo.2.bar":"2","foo.3.bar":[]}}
 ```
 
+### `concat`
+
+Concatenates an array value with one or more argument arrays.
+
+#### Examples
+
+
+```coffee
+root.foo = this.foo.concat(this.bar, this.baz)
+
+# In:  {"foo":["a","b"],"bar":["c"],"baz":["d","e","f"]}
+# Out: {"foo":["a","b","c","d","e","f"]}
+```
+
 ### `contains`
 
 Checks whether an array contains an element matching the argument, or an object contains a value matching the argument, and returns a boolean result. Numerical comparisons are made irrespective of the representation type (float versus integer).
@@ -2613,6 +2627,35 @@ root.doc = this.doc.parse_yaml()
 
 ## Encoding and Encryption
 
+### `compress`
+
+Compresses a string or byte array value according to a specified algorithm.
+
+#### Parameters
+
+**`algorithm`** &lt;string&gt; One of `flate`, `gzip`, `lz4`, `snappy`, `zlib`, `zstd`.  
+**`level`** &lt;integer, default `-1`&gt; The level of compression to use. May not be applicable to all algorithms.  
+
+#### Examples
+
+
+```coffee
+let long_content = range(0, 1000).map_each(content()).join(" ")
+root.a_len = $long_content.length()
+root.b_len = $long_content.compress("gzip").length()
+
+
+# In:  hello world this is some content
+# Out: {"a_len":32999,"b_len":164}
+```
+
+```coffee
+root.compressed = content().compress("lz4").encode("base64")
+
+# In:  hello world I love space
+# Out: {"compressed":"BCJNGGRwuRgAAIBoZWxsbyB3b3JsZCBJIGxvdmUgc3BhY2UAAAAAGoETLg=="}
+```
+
 ### `decode`
 
 Decodes an encoded string target according to a chosen scheme and returns the result as a byte array. When mapping the result to a JSON field the value should be cast to a string using the method [`string`][methods.string], or encoded using the method [`encode`][methods.encode], otherwise it will be base64 encoded by default.
@@ -2638,6 +2681,33 @@ root = this.encoded.decode("ascii85")
 
 # In:  {"encoded":"FD,B0+DGm>FDl80Ci\"A>F`)8BEckl6F`M&(+Cno&@/"}
 # Out: this is totally unstructured data
+```
+
+### `decompress`
+
+Decompresses a string or byte array value according to a specified algorithm. The result of decompression 
+
+#### Parameters
+
+**`algorithm`** &lt;string&gt; One of `gzip`, `zlib`, `bzip2`, `flate`, `snappy`, `lz4`, `zstd`.  
+
+#### Examples
+
+
+```coffee
+root = this.compressed.decode("base64").decompress("lz4")
+
+# In:  {"compressed":"BCJNGGRwuRgAAIBoZWxsbyB3b3JsZCBJIGxvdmUgc3BhY2UAAAAAGoETLg=="}
+# Out: hello world I love space
+```
+
+Use the `.string()` method in order to coerce the result into a string, this makes it possible to place the data within a JSON document without automatic base64 encoding.
+
+```coffee
+root.result = this.compressed.decode("base64").decompress("lz4").string()
+
+# In:  {"compressed":"BCJNGGRwuRgAAIBoZWxsbyB3b3JsZCBJIGxvdmUgc3BhY2UAAAAAGoETLg=="}
+# Out: {"result":"hello world I love space"}
 ```
 
 ### `decrypt_aes`

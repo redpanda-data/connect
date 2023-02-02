@@ -2,7 +2,6 @@ package output
 
 import (
 	"github.com/benthosdev/benthos/v4/internal/batch/policy/batchconfig"
-	"github.com/benthosdev/benthos/v4/internal/httpclient/oldconfig"
 	sess "github.com/benthosdev/benthos/v4/internal/impl/aws/session"
 	"github.com/benthosdev/benthos/v4/internal/old/util/retries"
 	btls "github.com/benthosdev/benthos/v4/internal/tls"
@@ -15,24 +14,31 @@ type OptionalAWSConfig struct {
 	sess.Config `json:",inline" yaml:",inline"`
 }
 
+// ElasticsearchAuthConfig contains basic authentication fields.
+type ElasticsearchAuthConfig struct {
+	Enabled  bool   `json:"enabled" yaml:"enabled"`
+	Username string `json:"username" yaml:"username"`
+	Password string `json:"password" yaml:"password"`
+}
+
 // ElasticsearchConfig contains configuration fields for the Elasticsearch
 // output type.
 type ElasticsearchConfig struct {
-	URLs            []string                  `json:"urls" yaml:"urls"`
-	Sniff           bool                      `json:"sniff" yaml:"sniff"`
-	Healthcheck     bool                      `json:"healthcheck" yaml:"healthcheck"`
-	ID              string                    `json:"id" yaml:"id"`
-	Action          string                    `json:"action" yaml:"action"`
-	Index           string                    `json:"index" yaml:"index"`
-	Pipeline        string                    `json:"pipeline" yaml:"pipeline"`
-	Routing         string                    `json:"routing" yaml:"routing"`
-	Type            string                    `json:"type" yaml:"type"`
-	Timeout         string                    `json:"timeout" yaml:"timeout"`
-	TLS             btls.Config               `json:"tls" yaml:"tls"`
-	Auth            oldconfig.BasicAuthConfig `json:"basic_auth" yaml:"basic_auth"`
-	AWS             OptionalAWSConfig         `json:"aws" yaml:"aws"`
-	GzipCompression bool                      `json:"gzip_compression" yaml:"gzip_compression"`
-	MaxInFlight     int                       `json:"max_in_flight" yaml:"max_in_flight"`
+	URLs            []string                `json:"urls" yaml:"urls"`
+	Sniff           bool                    `json:"sniff" yaml:"sniff"`
+	Healthcheck     bool                    `json:"healthcheck" yaml:"healthcheck"`
+	ID              string                  `json:"id" yaml:"id"`
+	Action          string                  `json:"action" yaml:"action"`
+	Index           string                  `json:"index" yaml:"index"`
+	Pipeline        string                  `json:"pipeline" yaml:"pipeline"`
+	Routing         string                  `json:"routing" yaml:"routing"`
+	Type            string                  `json:"type" yaml:"type"`
+	Timeout         string                  `json:"timeout" yaml:"timeout"`
+	TLS             btls.Config             `json:"tls" yaml:"tls"`
+	Auth            ElasticsearchAuthConfig `json:"basic_auth" yaml:"basic_auth"`
+	AWS             OptionalAWSConfig       `json:"aws" yaml:"aws"`
+	GzipCompression bool                    `json:"gzip_compression" yaml:"gzip_compression"`
+	MaxInFlight     int                     `json:"max_in_flight" yaml:"max_in_flight"`
 	retries.Config  `json:",inline" yaml:",inline"`
 	Batching        batchconfig.Config `json:"batching" yaml:"batching"`
 }
@@ -56,7 +62,6 @@ func NewElasticsearchConfig() ElasticsearchConfig {
 		Routing:     "",
 		Timeout:     "5s",
 		TLS:         btls.NewConfig(),
-		Auth:        oldconfig.NewBasicAuthConfig(),
 		AWS: OptionalAWSConfig{
 			Enabled: false,
 			Config:  sess.NewConfig(),

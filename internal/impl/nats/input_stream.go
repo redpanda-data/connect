@@ -22,6 +22,7 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
 	btls "github.com/benthosdev/benthos/v4/internal/tls"
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
 func init() {
@@ -88,6 +89,7 @@ type natsStreamReader struct {
 	ackWait time.Duration
 
 	log log.Modular
+	fs  *service.FS
 
 	unAckMsgs []*stan.Msg
 
@@ -122,6 +124,7 @@ func newNATSStreamReader(conf input.NATSStreamConfig, mgr bundle.NewManagement) 
 	n := natsStreamReader{
 		conf:          conf,
 		ackWait:       ackWait,
+		fs:            service.NewFS(mgr.FS()),
 		log:           mgr.Logger(),
 		msgChan:       make(chan *stan.Msg),
 		interruptChan: make(chan struct{}),
@@ -169,7 +172,7 @@ func (n *natsStreamReader) Connect(ctx context.Context) error {
 		opts = append(opts, nats.Secure(n.tlsConf))
 	}
 
-	opts = append(opts, authConfToOptions(n.conf.Auth)...)
+	opts = append(opts, authConfToOptions(n.conf.Auth, n.fs)...)
 
 	natsConn, err := nats.Connect(n.urls, opts...)
 	if err != nil {

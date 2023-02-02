@@ -1,17 +1,7 @@
 package pure
 
 import (
-	"bytes"
-	"compress/bzip2"
-	"compress/flate"
-	"compress/gzip"
-	"compress/zlib"
 	"context"
-	"fmt"
-	"io"
-
-	"github.com/golang/snappy"
-	"github.com/pierrec/lz4/v4"
 
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
@@ -44,96 +34,8 @@ decompression types are: gzip, zlib, bzip2, flate, snappy, lz4.`,
 	}
 }
 
-type decompressFunc func(bytes []byte) ([]byte, error)
-
-func gzipDecompress(b []byte) ([]byte, error) {
-	r, err := gzip.NewReader(bytes.NewBuffer(b))
-	if err != nil {
-		return nil, err
-	}
-
-	outBuf := bytes.Buffer{}
-	if _, err = io.Copy(&outBuf, r); err != nil {
-		r.Close()
-		return nil, err
-	}
-	r.Close()
-	return outBuf.Bytes(), nil
-}
-
-func snappyDecompress(b []byte) ([]byte, error) {
-	return snappy.Decode(nil, b)
-}
-
-func zlibDecompress(b []byte) ([]byte, error) {
-	r, err := zlib.NewReader(bytes.NewBuffer(b))
-	if err != nil {
-		return nil, err
-	}
-
-	outBuf := bytes.Buffer{}
-	if _, err = io.Copy(&outBuf, r); err != nil {
-		r.Close()
-		return nil, err
-	}
-	r.Close()
-	return outBuf.Bytes(), nil
-}
-
-func flateDecompress(b []byte) ([]byte, error) {
-	r := flate.NewReader(bytes.NewBuffer(b))
-
-	outBuf := bytes.Buffer{}
-	if _, err := io.Copy(&outBuf, r); err != nil {
-		r.Close()
-		return nil, err
-	}
-	r.Close()
-	return outBuf.Bytes(), nil
-}
-
-func bzip2Decompress(b []byte) ([]byte, error) {
-	r := bzip2.NewReader(bytes.NewBuffer(b))
-
-	outBuf := bytes.Buffer{}
-	if _, err := io.Copy(&outBuf, r); err != nil {
-		return nil, err
-	}
-	return outBuf.Bytes(), nil
-}
-
-func lz4Decompress(b []byte) ([]byte, error) {
-	buf := bytes.NewBuffer(b)
-	r := lz4.NewReader(buf)
-
-	outBuf := bytes.Buffer{}
-	if _, err := outBuf.ReadFrom(r); err != nil && err != io.EOF {
-		return nil, err
-	}
-
-	return outBuf.Bytes(), nil
-}
-
-func strToDecompressor(str string) (decompressFunc, error) {
-	switch str {
-	case "gzip":
-		return gzipDecompress, nil
-	case "zlib":
-		return zlibDecompress, nil
-	case "flate":
-		return flateDecompress, nil
-	case "bzip2":
-		return bzip2Decompress, nil
-	case "snappy":
-		return snappyDecompress, nil
-	case "lz4":
-		return lz4Decompress, nil
-	}
-	return nil, fmt.Errorf("decompression type not recognised: %v", str)
-}
-
 type decompressProc struct {
-	decomp decompressFunc
+	decomp DecompressFunc
 	log    log.Modular
 }
 

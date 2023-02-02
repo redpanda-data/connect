@@ -62,6 +62,41 @@ If a key within a nested path does not exist then it is ignored.`).
 		}); err != nil {
 		panic(err)
 	}
+
+	if err := bloblang.RegisterMethodV2("concat",
+		bloblang.NewPluginSpec().
+			Category(query.MethodCategoryObjectAndArray).
+			Variadic().
+			Description("Concatenates an array value with one or more argument arrays.").
+			Example("", `root.foo = this.foo.concat(this.bar, this.baz)`,
+				[2]string{
+					`{"foo":["a","b"],"bar":["c"],"baz":["d","e","f"]}`,
+					`{"foo":["a","b","c","d","e","f"]}`,
+				},
+			),
+		func(args *bloblang.ParsedParams) (bloblang.Method, error) {
+			argAnys := args.AsSlice()
+			argSlices := make([][]any, len(argAnys))
+			tally := 0
+			for i, a := range argAnys {
+				var ok bool
+				if argSlices[i], ok = a.([]any); !ok {
+					return nil, query.NewTypeError(a, query.ValueArray)
+				}
+				tally += len(argSlices[i])
+			}
+
+			return bloblang.ArrayMethod(func(i []any) (any, error) {
+				resSlice := make([]any, 0, len(i)+tally)
+				resSlice = append(resSlice, i...)
+				for _, s := range argSlices {
+					resSlice = append(resSlice, s...)
+				}
+				return resSlice, nil
+			}), nil
+		}); err != nil {
+		panic(err)
+	}
 }
 
 func mapWith(m map[string]any, paths [][]string) map[string]any {

@@ -13,7 +13,6 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/bloblang/query"
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/filepath/ifs"
-	"github.com/benthosdev/benthos/v4/internal/httpclient/oldconfig"
 	"github.com/benthosdev/benthos/v4/internal/message"
 	"github.com/benthosdev/benthos/v4/internal/metadata"
 )
@@ -55,7 +54,7 @@ type RequestOpt func(r *RequestCreator)
 // RequestCreatorFromOldConfig creates a new request creator from an old struct
 // style config. Eventually I'd like to phase these out for the more dynamic
 // service style parses, but it'll take a while so we have this for now.
-func RequestCreatorFromOldConfig(conf oldconfig.OldConfig, mgr bundle.NewManagement, opts ...RequestOpt) (*RequestCreator, error) {
+func RequestCreatorFromOldConfig(conf OldConfig, mgr bundle.NewManagement, opts ...RequestOpt) (*RequestCreator, error) {
 	r := &RequestCreator{
 		fs:        mgr.FS(),
 		reqSigner: conf.AuthConfig.Sign,
