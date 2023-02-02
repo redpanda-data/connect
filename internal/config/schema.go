@@ -59,8 +59,7 @@ func Spec() docs.FieldSpecs {
 	fields = append(fields, stream.Spec()...)
 	fields = append(fields, manager.Spec()...)
 	fields = append(fields, observabilityFields...)
-	fields = append(fields, tdocs.ConfigSpec())
-	fields = append(fields, svcdiscoverField)
+	fields = append(fields, tdocs.ConfigSpec(), svcdiscoverField)
 	return fields
 }
 
@@ -69,7 +68,6 @@ func SpecWithoutStream() docs.FieldSpecs {
 	fields := docs.FieldSpecs{httpField}
 	fields = append(fields, manager.Spec()...)
 	fields = append(fields, observabilityFields...)
-	fields = append(fields, tdocs.ConfigSpec())
-	fields = append(fields, svcdiscoverField)
+	fields = append(fields, tdocs.ConfigSpec(), svcdiscoverField)
 	return fields
 }
