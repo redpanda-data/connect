@@ -102,6 +102,7 @@ You can access these metadata fields using [function interpolation](/docs/config
 					"10s", "5m",
 				).Advanced(),
 				docs.FieldInt("max_messages", "The maximum number of SQS messages to consume from each request.").Advanced(),
+				docs.FieldBool("drop_eof_error", "Do not requeue SQS message on 'unexpected EOF' error (possibly corrupt S3 object)").Advanced(),
 			),
 		).ChildDefaultAndTypesFromStruct(input.NewAWSS3Config()),
 		Categories: []string{
@@ -432,7 +433,7 @@ func (s *sqsTargetReader) readSQSEvents(ctx context.Context) ([]*s3ObjectTarget,
 				deleteS3ObjectAckFn(
 					s.s3, object.bucket, object.key, s.conf.DeleteObjects,
 					func(ctx context.Context, err error) (aerr error) {
-						if err != nil {
+						if err != nil && (s.conf.SQS.DropEOFError && err.Error() != "unexpected EOF") {
 							nackOnce.Do(func() {
 								// Prevent future acks from triggering a delete.
 								atomic.StoreInt32(&pendingAcks, -1)

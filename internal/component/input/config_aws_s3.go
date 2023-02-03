@@ -13,6 +13,7 @@ type AWSS3SQSConfig struct {
 	BucketPath   string `json:"bucket_path" yaml:"bucket_path"`
 	DelayPeriod  string `json:"delay_period" yaml:"delay_period"`
 	MaxMessages  int64  `json:"max_messages" yaml:"max_messages"`
+	DropEOFError bool   `json:"drop_eof_error" yaml:"drop_eof_error"`
 }
 
 // NewAWSS3SQSConfig creates a new AWSS3SQSConfig with default values.
@@ -25,6 +26,7 @@ func NewAWSS3SQSConfig() AWSS3SQSConfig {
 		BucketPath:   "Records.*.s3.bucket.name",
 		DelayPeriod:  "",
 		MaxMessages:  10,
+		DropEOFError: false,
 	}
 }
 
