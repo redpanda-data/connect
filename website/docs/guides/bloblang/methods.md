@@ -193,6 +193,31 @@ root.title = this.title.capitalize()
 # Out: {"title":"The Foo Bar"}
 ```
 
+### `constant_time_compare`
+
+Checks whether a string matches another string. The time it takes this method is a function of the length of the strings and is independent of the contents. If the lengths of the strings do not match it returns false immediately.
+
+#### Parameters
+
+**`target`** &lt;string&gt; The string to compare to.  
+
+#### Examples
+
+
+```coffee
+root.match = this.secret.constant_time_compare("there-are-many-blobs-in-the-sea")
+
+# In:  {"secret":"there-are-many-blobs-in-the-sea"}
+# Out: {"match":true}
+```
+
+```coffee
+root.match = this.secret.constant_time_compare("will-i-ever-find-love")
+
+# In:  {"secret":"there-are-many-blobs-in-the-sea"}
+# Out: {"match":false}
+```
+
 ### `contains`
 
 Checks whether a string contains a substring and returns a boolean result.
