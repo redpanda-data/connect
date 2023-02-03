@@ -193,6 +193,31 @@ root.title = this.title.capitalize()
 # Out: {"title":"The Foo Bar"}
 ```
 
+### `compare_bcrypt`
+
+Checks whether a string matches a hashed secret using bcrypt.
+
+#### Parameters
+
+**`hashed_secret`** &lt;string&gt; The hashed secret value to compare with the input.  
+
+#### Examples
+
+
+```coffee
+root.match = this.secret.compare_bcrypt("$2y$10$Dtnt5NNzVtMCOZONT705tOcS8It6krJX8bEjnDJnwxiFKsz1C.3Ay")
+
+# In:  {"secret":"there-are-many-blobs-in-the-sea"}
+# Out: {"match":true}
+```
+
+```coffee
+root.match = this.secret.compare_bcrypt("$2y$10$Dtnt5NNzVtMCOZONT705tOcS8It6krJX8bEjnDJnwxiFKsz1C.3Ay")
+
+# In:  {"secret":"will-i-ever-find-love"}
+# Out: {"match":false}
+```
+
 ### `contains`
 
 Checks whether a string contains a substring and returns a boolean result.
