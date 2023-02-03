@@ -72,6 +72,7 @@ input:
       envelope_path: ""
       delay_period: ""
       max_messages: 10
+      drop_eof_error: false
 ```
 
 </TabItem>
@@ -345,5 +346,13 @@ The maximum number of SQS messages to consume from each request.
 
 Type: `int`  
 Default: `10`  
+
+### `sqs.drop_eof_error`
+
+Do not requeue SQS message on 'unexpected EOF' error (possibly corrupt S3 object)
+
+
+Type: `bool`  
+Default: `false`  
 
 
