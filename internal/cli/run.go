@@ -30,6 +30,9 @@ var (
 )
 
 func init() {
+	if Version != "unknown" {
+		return
+	}
 	if info, ok := debug.ReadBuildInfo(); ok {
 		for _, mod := range info.Deps {
 			if mod.Path == "github.com/benthosdev/benthos/v4" {
