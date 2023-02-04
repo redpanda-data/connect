@@ -36,10 +36,12 @@ func init() {
 	if info, ok := debug.ReadBuildInfo(); ok {
 		for _, mod := range info.Deps {
 			if mod.Path == "github.com/benthosdev/benthos/v4" {
-				Version = mod.Version
+				if mod.Version != "(devel)" {
+					Version = mod.Version
+				}
 				if mod.Replace != nil {
 					v := mod.Replace.Version
-					if v != "" {
+					if v != "" && v != "(devel)" {
 						Version = v
 					}
 				}
