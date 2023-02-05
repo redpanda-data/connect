@@ -118,6 +118,7 @@ func (n *natsStreamWriter) Connect(ctx context.Context) error {
 	}
 
 	opts = append(opts, authConfToOptions(n.conf.Auth, n.fs)...)
+	opts = append(opts, errorHandlerOptionFromModularLogger(n.log))
 
 	natsConn, err := nats.Connect(n.urls, opts...)
 	if err != nil {
