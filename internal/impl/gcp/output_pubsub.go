@@ -217,10 +217,12 @@ func (c *gcpPubSubWriter) WriteBatch(ctx context.Context, msg message.Batch) err
 	var batchErr *batch.Error
 	for i, r := range results {
 		if _, err := r.Get(ctx); err != nil {
+			publishErr := fmt.Errorf("failed to publish message: %w", err)
+
 			if batchErr == nil {
-				batchErr = batch.NewError(msg, err)
+				batchErr = batch.NewError(msg, publishErr)
 			}
-			batchErr.Failed(i, err)
+			batchErr.Failed(i, publishErr)
 		}
 	}
 	if batchErr != nil {
