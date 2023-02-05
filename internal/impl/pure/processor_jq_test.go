@@ -153,7 +153,7 @@ func TestJQ(t *testing.T) {
 			input: map[string]any{
 				"ts": time.Unix(1000, 0),
 			},
-			err: "invalid type: time.Time (1970-01-01 01:16:40 +0100 BST)",
+			err: "invalid type: time.Time",
 		},
 	}
 
