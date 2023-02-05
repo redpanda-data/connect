@@ -387,3 +387,40 @@ b:
 	res = iConf["d"].String(NewMessage([]byte("hello world")))
 	assert.Equal(t, "xyzzy hello world baz", res)
 }
+
+func TestConfigFields(t *testing.T) {
+	spec := NewConfigSpec().
+		Fields(
+			NewStringField("a"),
+			NewIntField("b").Default(11),
+			NewObjectField("c",
+				NewBoolField("d").Default(true),
+				NewStringField("e").Default("evalue"),
+			),
+		)
+
+	parsed, err := spec.ParseYAML(`
+      a: sample value
+      c:
+        d: false
+    `, nil)
+	require.NoError(t, err)
+
+	a, err := parsed.FieldString("a")
+	require.NoError(t, err)
+	assert.Equal(t, a, "sample value")
+
+	b, err := parsed.FieldInt("b")
+	require.NoError(t, err)
+	assert.Equal(t, b, 11)
+
+	c := parsed.Namespace("c")
+
+	d, err := c.FieldBool("d")
+	require.NoError(t, err)
+	assert.Equal(t, d, false)
+
+	e, err := c.FieldString("e")
+	require.NoError(t, err)
+	assert.Equal(t, e, "evalue")
+}
