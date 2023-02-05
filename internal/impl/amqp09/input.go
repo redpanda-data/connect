@@ -301,6 +301,11 @@ func amqpSetMetadata(p *message.Part, k string, v any) {
 			amqpSetMetadata(p, metaKey+"_"+key, value)
 		}
 		return
+	case []interface{}:
+		for key, value := range v {
+			amqpSetMetadata(p, fmt.Sprintf("%s_%v", metaKey, key), value)
+		}
+		return
 	default:
 		metaValue = ""
 	}
