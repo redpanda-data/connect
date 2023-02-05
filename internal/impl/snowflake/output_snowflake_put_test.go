@@ -104,41 +104,15 @@ func (c *MockHTTPClient) hasPayload(payload string) bool {
 	return false
 }
 
-func getSnowflakeWriter(t *testing.T, privateKeyPath, privateKeyPassphrase, stage, snowpipe, compression string) (*snowflakeWriter, error) {
-	t.Helper()
-
-	outputConfig := `
-account: benthos
-region: east-us-2
-cloud: azure
-user: foobar
-private_key_file: ` + privateKeyPath + `
-private_key_pass: ` + privateKeyPassphrase + `
-role: test_role
-database: test_db
-warehouse: test_warehouse
-schema: test_schema
-path: foo/bar/baz
-stage: '` + stage + `'
-upload_parallel_threads: 42
-compression: ` + compression + `
-snowpipe: '` + snowpipe + `'
-`
-
-	spec := snowflakePutOutputConfig()
-	env := service.NewEnvironment()
-	conf, err := spec.ParseYAML(outputConfig, env)
-	require.NoError(t, err)
-
-	return newSnowflakeWriterFromConfig(conf, service.MockResources())
-}
-
 func TestSnowflakeOutput(t *testing.T) {
-	tests := []struct {
+	type testCase struct {
 		name                      string
 		privateKeyPath            string
 		privateKeyPassphrase      string
 		stage                     string
+		fileName                  string
+		fileExtension             string
+		requestID                 string
 		snowpipe                  string
 		compression               string
 		snowflakeHTTPResponseCode int
@@ -151,7 +125,40 @@ func TestSnowflakeOutput(t *testing.T) {
 		wantSnowpipeJWT           string
 		errConfigContains         string
 		errContains               string
-	}{
+	}
+	getSnowflakeWriter := func(t *testing.T, tc testCase) (*snowflakeWriter, error) {
+		t.Helper()
+
+		outputConfig := `
+account: benthos
+region: east-us-2
+cloud: azure
+user: foobar
+private_key_file: ` + tc.privateKeyPath + `
+private_key_pass: ` + tc.privateKeyPassphrase + `
+role: test_role
+database: test_db
+warehouse: test_warehouse
+schema: test_schema
+path: foo/bar/baz
+stage: '` + tc.stage + `'
+file_name: '` + tc.fileName + `'
+file_extension: '` + tc.fileExtension + `'
+upload_parallel_threads: 42
+compression: ` + tc.compression + `
+request_id: '` + tc.requestID + `'
+snowpipe: '` + tc.snowpipe + `'
+`
+
+		spec := snowflakePutOutputConfig()
+		env := service.NewEnvironment()
+		conf, err := spec.ParseYAML(outputConfig, env)
+		require.NoError(t, err)
+
+		return newSnowflakeWriterFromConfig(conf, service.MockResources())
+	}
+
+	tests := []testCase{
 		{
 			name:           "executes snowflake query with plaintext SSH key",
 			privateKeyPath: "resources/ssh_keys/snowflake_rsa_key.pem",
@@ -214,7 +221,16 @@ func TestSnowflakeOutput(t *testing.T) {
 			privateKeyPath: "resources/ssh_keys/snowflake_rsa_key.pem",
 			stage:          "@test_stage",
 			compression:    "RAW_DEFLATE",
-			wantPUTQuery:   "PUT file://foo/bar/baz/" + dummyUUID + ".rawdeflate @test_stage/foo/bar/baz AUTO_COMPRESS = FALSE SOURCE_COMPRESSION = RAW_DEFLATE PARALLEL=42",
+			wantPUTQuery:   "PUT file://foo/bar/baz/" + dummyUUID + ".raw_deflate @test_stage/foo/bar/baz AUTO_COMPRESS = FALSE SOURCE_COMPRESSION = RAW_DEFLATE PARALLEL=42",
+		},
+		{
+			name:           "handles file name and file extension interpolation",
+			privateKeyPath: "resources/ssh_keys/snowflake_rsa_key.pem",
+			stage:          "@test_stage",
+			fileName:       `${! "deadbeef" }`,
+			fileExtension:  `${! "parquet" }`,
+			compression:    "NONE",
+			wantPUTQuery:   "PUT file://foo/bar/baz/deadbeef.parquet @test_stage/foo/bar/baz AUTO_COMPRESS = FALSE SOURCE_COMPRESSION = NONE PARALLEL=42",
 		},
 		{
 			name:                      "executes snowflake query and calls Snowpipe",
@@ -273,13 +289,29 @@ func TestSnowflakeOutput(t *testing.T) {
 			wantSnowpipePayload:       `{"files":[{"path":"foo/bar/baz/` + dummyUUID + `.json"}]}`,
 			wantSnowpipeJWT:           "Bearer eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOi02MjEzNTU5Njc0MCwiaWF0IjotNjIxMzU1OTY4MDAsImlzcyI6IkJFTlRIT1MuRk9PQkFSLlNIQTI1Njprc3dSSG9uZmU0QllXQWtReUlBUDVzY2w5OUxRQ0U2S1Irc0J4VEVoenBFPSIsInN1YiI6IkJFTlRIT1MuRk9PQkFSIn0.ABldbfDem53G-EDMoQaY7VVA2RXPryvXFcY0Hqogu_-qjT3qcJEY1aM1B9SqATkeFDNiagOXPl218dUc-Hes4WTbWnoXq8EUlMLjbg3_9qrlp6p-6SzUbX88lpkuYPXD3UiDBhLXsQso5ciufev2IFX5oCt-Oxg9GbI4uIveey_k8dv3S2a942RQbB6ffCj3Stca31oz2F_IPaF2xDmwVsBig_C9NoHToQFVAfVbPIV1hMDIc7zutuLqXQWZPfT6K0PPc15ZMutQQ0tEYCboDanx3tXe9ub_gLfyGaHwuDUXBk3EN3UkZ8rmgasCk_VnFZ_Xk6tnaZfdIrGKRZ5dsA",
 		},
+		{
+			name:                      "handles request_id interpolation and runs a query and makes a single Snowpipe call for the entire batch",
+			privateKeyPath:            "resources/ssh_keys/snowflake_rsa_key.pem",
+			stage:                     `@test_stage`,
+			snowpipe:                  `test_pipe`,
+			requestID:                 `${! "deadbeef" }`,
+			compression:               "NONE",
+			snowflakeHTTPResponseCode: http.StatusOK,
+			snowflakeResponseCode:     "SUCCESS",
+			wantPUTQuery:              "PUT file://foo/bar/baz/deadbeef.json @test_stage/foo/bar/baz AUTO_COMPRESS = FALSE SOURCE_COMPRESSION = NONE PARALLEL=42",
+			wantPUTQueriesCount:       1,
+			wantSnowpipeQuery:         "/v1/data/pipes/test_db.test_schema.test_pipe/insertFiles?requestId=deadbeef",
+			wantSnowpipeQueriesCount:  1,
+			wantSnowpipePayload:       `{"files":[{"path":"foo/bar/baz/deadbeef.json"}]}`,
+			wantSnowpipeJWT:           "Bearer eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOi02MjEzNTU5Njc0MCwiaWF0IjotNjIxMzU1OTY4MDAsImlzcyI6IkJFTlRIT1MuRk9PQkFSLlNIQTI1Njprc3dSSG9uZmU0QllXQWtReUlBUDVzY2w5OUxRQ0U2S1Irc0J4VEVoenBFPSIsInN1YiI6IkJFTlRIT1MuRk9PQkFSIn0.ABldbfDem53G-EDMoQaY7VVA2RXPryvXFcY0Hqogu_-qjT3qcJEY1aM1B9SqATkeFDNiagOXPl218dUc-Hes4WTbWnoXq8EUlMLjbg3_9qrlp6p-6SzUbX88lpkuYPXD3UiDBhLXsQso5ciufev2IFX5oCt-Oxg9GbI4uIveey_k8dv3S2a942RQbB6ffCj3Stca31oz2F_IPaF2xDmwVsBig_C9NoHToQFVAfVbPIV1hMDIc7zutuLqXQWZPfT6K0PPc15ZMutQQ0tEYCboDanx3tXe9ub_gLfyGaHwuDUXBk3EN3UkZ8rmgasCk_VnFZ_Xk6tnaZfdIrGKRZ5dsA",
+		},
 		// TODO:
 		// - Snowflake PUT query payload tests
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			s, err := getSnowflakeWriter(t, test.privateKeyPath, test.privateKeyPassphrase, test.stage, test.snowpipe, test.compression)
+			s, err := getSnowflakeWriter(t, test)
 			if test.errConfigContains == "" {
 				require.NoError(t, err)
 			} else {
