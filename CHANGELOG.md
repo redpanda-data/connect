@@ -21,6 +21,9 @@ All notable changes to this project will be documented in this file.
 - New Bloblang method `concat`.
 - New `redis` ratelimit.
 - The `socket_server` input now supports `tls` as a network type.
+- New bloblang function `timestamp_unix_milli`.
+- New bloblang method `ts_unix_milli`.
+- JWT based HTTP authentication now supports `EdDSA`.
 
 ### Fixed
 
