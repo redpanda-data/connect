@@ -24,6 +24,7 @@ All notable changes to this project will be documented in this file.
 - New bloblang function `timestamp_unix_milli`.
 - New bloblang method `ts_unix_milli`.
 - JWT based HTTP authentication now supports `EdDSA`.
+- New `flow_control` fields added to the `gcp_pubsub` output.
 
 ### Fixed
 
