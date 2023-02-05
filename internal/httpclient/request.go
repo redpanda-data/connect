@@ -9,6 +9,8 @@ import (
 	"net/textproto"
 	"strings"
 
+	"github.com/golang-jwt/jwt"
+
 	"github.com/benthosdev/benthos/v4/internal/bloblang/field"
 	"github.com/benthosdev/benthos/v4/internal/bloblang/query"
 	"github.com/benthosdev/benthos/v4/internal/bundle"
@@ -41,6 +43,11 @@ type RequestCreator struct {
 	fs        ifs.FS
 	reqSigner RequestSigner
 
+	doJwtInterpolation bool
+	jwtConfig          JWTConfig
+	jwtClaims          map[string]*field.Expression
+	jwtSigner          jwtSignerWithClaims
+
 	url              *field.Expression
 	host             *field.Expression
 	verb             string
@@ -58,6 +65,9 @@ func RequestCreatorFromOldConfig(conf OldConfig, mgr bundle.NewManagement, opts 
 	r := &RequestCreator{
 		fs:        mgr.FS(),
 		reqSigner: conf.AuthConfig.Sign,
+		jwtClaims: map[string]*field.Expression{},
+		jwtConfig: conf.AuthConfig.JWT,
+		jwtSigner: conf.AuthConfig.JWT,
 		verb:      conf.Verb,
 		headers:   map[string]*field.Expression{},
 	}
@@ -78,6 +88,27 @@ func RequestCreatorFromOldConfig(conf OldConfig, mgr bundle.NewManagement, opts 
 		} else {
 			if r.headers[k], err = mgr.BloblEnvironment().NewField(v); err != nil {
 				return nil, fmt.Errorf("failed to parse header '%v' expression: %v", k, err)
+			}
+		}
+	}
+
+	if conf.AuthConfig.JWT.Enabled {
+		r.jwtConfig.Claims = jwt.MapClaims{}
+		for k, v := range conf.AuthConfig.JWT.Claims {
+			switch f := v.(type) {
+			case string:
+				var field *field.Expression
+				if field, err = mgr.BloblEnvironment().NewField(f); err != nil {
+					return nil, fmt.Errorf("failed to parse claim '%v' expression: %v", k, err)
+				}
+				if field.NumDynamicExpressions() > 0 {
+					r.jwtClaims[k] = field
+					r.doJwtInterpolation = true
+				} else {
+					r.jwtConfig.Claims[k] = v
+				}
+			default:
+				r.jwtConfig.Claims[k] = v
 			}
 		}
 	}
@@ -261,6 +292,29 @@ func (r *RequestCreator) Create(refBatch message.Batch) (req *http.Request, err 
 		req.Header.Add("Content-Type", overrideContentType)
 	}
 
-	err = r.reqSigner(r.fs, req)
+	if r.doJwtInterpolation {
+		claims := jwt.MapClaims{}
+		for k, v := range r.jwtConfig.Claims {
+			claims[k] = v
+		}
+		for k, v := range r.jwtClaims {
+			var value string
+			var number float64
+			if value, err = v.String(0, refBatch); err != nil {
+				err = fmt.Errorf("claims '%v' interpolation error: %w", k, err)
+				return
+			}
+			if number, err = query.IToNumber(value); err == nil {
+				claims[k] = number
+			} else {
+				claims[k] = value
+			}
+		}
+		err = r.jwtSigner.SignWithClaims(r.fs, req, claims)
+
+	} else {
+		err = r.reqSigner(r.fs, req)
+	}
+
 	return
 }
