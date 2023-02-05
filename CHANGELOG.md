@@ -30,6 +30,7 @@ to the [`database/sql` docs](https://pkg.go.dev/database/sql#DB.SetMaxIdleConns)
 - It's now possible to mock resources within the main test target file in config unit tests.
 - Unit test linting no longer incorrectly expects the `json_contains` predicate to contain a string value only.
 - Config component initialisation errors should no longer show nested path annotations.
+- Prevented panics from the `jq` processor when querying invalid types.
 
 ## 4.11.0 - 2022-12-21
 
