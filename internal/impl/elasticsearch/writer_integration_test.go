@@ -32,6 +32,7 @@ func TestIntegrationWriter(t *testing.T) {
 
 	resource, err := pool.Run("elasticsearch", "7.17.0", []string{
 		"discovery.type=single-node",
+		"ES_JAVA_OPTS=-Xms512m -Xmx512m", // By default ES immediately gobbles half the available RAM, what a psychopath.
 	})
 	if err != nil {
 		t.Fatalf("Could not start resource: %s", err)

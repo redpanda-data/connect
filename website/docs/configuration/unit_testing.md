@@ -591,7 +591,7 @@ json_equals:
 Checks that both the message and the condition are valid JSON documents, and that the message is a superset of the condition.
 
 
-Type: `string`  
+Type: `unknown`  
 
 ```yml
 # Examples

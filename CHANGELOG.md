@@ -18,6 +18,9 @@ All notable changes to this project will be documented in this file.
 - Fields `file_name`, `file_extension` and `request_id` added to the `snowflake_put` output.
 - Add interpolation support to the `path` field of the `snowflake_put` output.
 - Add ZSTD compression support to the `compression` field of the `snowflake_put` output.
+- New Bloblang method `concat`.
+- New `redis` ratelimit.
+- The `socket_server` input now supports `tls` as a network type.
 
 ### Fixed
 
@@ -27,6 +30,10 @@ to the [`database/sql` docs](https://pkg.go.dev/database/sql#DB.SetMaxIdleConns)
 - The `parse_csv` bloblang method with `parse_header_row` set to `false` no longer produces rows that are of an `unknown` type.
 - Fixed a bug where the `oracle` driver for the `sql_*` components was returning timestamps which were getting marshalled into an empty JSON object instead of a string.
 - The `aws_sqs` input no longer backs off on subsequent empty requests when long polling is enabled.
+- It's now possible to mock resources within the main test target file in config unit tests.
+- Unit test linting no longer incorrectly expects the `json_contains` predicate to contain a string value only.
+- Config component initialisation errors should no longer show nested path annotations.
+- Prevented panics from the `jq` processor when querying invalid types.
 
 ## 4.11.0 - 2022-12-21
 

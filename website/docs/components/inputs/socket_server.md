@@ -32,6 +32,10 @@ input:
     network: ""
     address: ""
     codec: lines
+    tls:
+      cert_file: ""
+      key_file: ""
+      self_signed: false
 ```
 
 </TabItem>
@@ -46,6 +50,10 @@ input:
     address: ""
     codec: lines
     max_buffer: 1000000
+    tls:
+      cert_file: ""
+      key_file: ""
+      self_signed: false
 ```
 
 </TabItem>
@@ -57,12 +65,12 @@ The field `max_buffer` specifies the maximum amount of memory to allocate _per c
 
 ### `network`
 
-A network type to accept (unix|tcp|udp).
+A network type to accept.
 
 
 Type: `string`  
 Default: `""`  
-Options: `unix`, `tcp`, `udp`.
+Options: `unix`, `tcp`, `udp`, `tls`.
 
 ### `address`
 
@@ -124,5 +132,36 @@ The maximum message buffer size. Must exceed the largest message to be consumed.
 
 Type: `int`  
 Default: `1000000`  
+
+### `tls`
+
+TLS specific configuration, valid when the `network` is set to `tls`.
+
+
+Type: `object`  
+
+### `tls.cert_file`
+
+PEM encoded certificate for use with TLS.
+
+
+Type: `string`  
+Default: `""`  
+
+### `tls.key_file`
+
+PEM encoded private key for use with TLS.
+
+
+Type: `string`  
+Default: `""`  
+
+### `tls.self_signed`
+
+Whether to generate self signed certificates.
+
+
+Type: `bool`  
+Default: `false`  
 
 
