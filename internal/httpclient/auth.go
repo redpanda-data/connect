@@ -108,7 +108,7 @@ func jwtFieldSpec() *service.ConfigField {
 			Default(""),
 
 		service.NewStringField("signing_method").
-			Description("A method used to sign the token such as RS256, RS384 or RS512.").
+			Description("A method used to sign the token such as RS256, RS384, RS512 or EdDSA.").
 			Default(""),
 
 		service.NewAnyMapField("claims").
