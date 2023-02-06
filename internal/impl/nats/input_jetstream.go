@@ -241,6 +241,7 @@ func (j *jetStreamReader) Connect(ctx context.Context) error {
 		opts = append(opts, nats.Secure(j.tlsConf))
 	}
 	opts = append(opts, authConfToOptions(j.authConf, j.fs)...)
+	opts = append(opts, errorHandlerOption(j.log))
 	if natsConn, err = nats.Connect(j.urls, opts...); err != nil {
 		return err
 	}

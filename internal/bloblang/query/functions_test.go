@@ -375,6 +375,32 @@ func TestRandomIntDynamic(t *testing.T) {
 	assert.Equal(t, tallies, thirdTallies)
 }
 
+func TestRandomIntMilliDynamicParallel(t *testing.T) {
+	tsFn, err := InitFunctionHelper("timestamp_unix_milli")
+	require.NoError(t, err)
+
+	e, err := InitFunctionHelper("random_int", tsFn)
+	require.NoError(t, err)
+
+	startChan := make(chan struct{})
+	wg := sync.WaitGroup{}
+	for i := 0; i < 10; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			<-startChan
+			for j := 0; j < 100; j++ {
+				res, err := e.Exec(FunctionContext{})
+				require.NoError(t, err)
+				require.IsType(t, int64(0), res)
+			}
+		}()
+	}
+
+	close(startChan)
+	wg.Wait()
+}
+
 func TestRandomIntDynamicParallel(t *testing.T) {
 	tsFn, err := InitFunctionHelper("timestamp_unix_nano")
 	require.NoError(t, err)

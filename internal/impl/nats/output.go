@@ -129,6 +129,7 @@ func (n *natsWriter) Connect(ctx context.Context) error {
 	}
 
 	opts = append(opts, authConfToOptions(n.authConf, n.fs)...)
+	opts = append(opts, errorHandlerOption(n.log))
 
 	if n.natsConn, err = nats.Connect(n.urls, opts...); err != nil {
 		return err

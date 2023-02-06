@@ -372,3 +372,21 @@ meta bar = "new bar value"
 		{Type: "PRODUCE", Content: "{\"count\":9}", Meta: tMap{"bar": "new bar value", "foo": "foo value 9"}},
 	}, events)
 }
+
+func TestBundleProcessorTracingError(t *testing.T) {
+	tenv, _ := tracing.TracedBundle(bundle.GlobalEnvironment)
+
+	procConfig := processor.NewConfig()
+	procConfig.Label = "foo"
+	procConfig.Type = "bloblang"
+	procConfig.Bloblang = `let nope`
+
+	mgr, err := manager.New(
+		manager.NewResourceConfig(),
+		manager.OptSetEnvironment(tenv),
+	)
+	require.NoError(t, err)
+
+	_, err = mgr.NewProcessor(procConfig)
+	require.EqualError(t, err, "failed to init processor 'foo': line 1 char 9: expected whitespace")
+}
