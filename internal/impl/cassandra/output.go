@@ -146,6 +146,7 @@ type cassandraWriter struct {
 	backoffMax time.Duration
 
 	session  *gocql.Session
+	conn     *gocql.ClusterConfig
 	connLock sync.RWMutex
 
 	argsMapping *mapping.Executor
@@ -192,6 +193,21 @@ func (c *cassandraWriter) parseArgs(mgr bundle.NewManagement) error {
 	return nil
 }
 
+var (
+	sessLock      sync.Mutex
+	reopenSession bool
+)
+
+type observer struct{}
+
+func (observer) ObserveConnect(info gocql.ObservedConnect) {
+	if info.Err != nil {
+		sessLock.Lock()
+		reopenSession = true
+		sessLock.Unlock()
+	}
+}
+
 func (c *cassandraWriter) Connect(ctx context.Context) error {
 	c.connLock.Lock()
 	defer c.connLock.Unlock()
@@ -214,10 +230,12 @@ func (c *cassandraWriter) Connect(ctx context.Context) error {
 			Password: c.conf.PasswordAuthenticator.Password,
 		}
 	}
+	conn.ConnectObserver = observer{}
 	conn.DisableInitialHostLookup = c.conf.DisableInitialHostLookup
 	if conn.Consistency, err = gocql.ParseConsistencyWrapper(c.conf.Consistency); err != nil {
 		return fmt.Errorf("parsing consistency: %w", err)
 	}
+	c.conn = conn
 
 	conn.RetryPolicy = &decorator{
 		NumRetries: int(c.conf.Config.MaxRetries),
@@ -247,6 +265,22 @@ func (c *cassandraWriter) WriteBatch(ctx context.Context, msg message.Batch) err
 
 	if c.session == nil {
 		return component.ErrNotConnected
+	}
+
+	sessLock.Lock()
+	needReOpen := reopenSession
+	sessLock.Unlock()
+	if needReOpen {
+		c.log.Debugln("reopen the cassandra session")
+		var err error
+		c.session.Close()
+		c.session, err = c.conn.CreateSession()
+		if err != nil {
+			c.log.Debugf("error reopening session: %w", err)
+		}
+		sessLock.Lock()
+		reopenSession = false
+		sessLock.Unlock()
 	}
 
 	if msg.Len() == 1 {
