@@ -17,6 +17,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/sqs"
+	"golang.org/x/exp/slices"
 
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/codec"
@@ -102,7 +103,7 @@ You can access these metadata fields using [function interpolation](/docs/config
 					"10s", "5m",
 				).Advanced(),
 				docs.FieldInt("max_messages", "The maximum number of SQS messages to consume from each request.").Advanced(),
-				docs.FieldBool("drop_eof_error", "Do not requeue SQS message on 'unexpected EOF' error (possibly corrupt S3 object)").Advanced(),
+				docs.FieldString("drop_errors", "A list of errors for which we do not want to requeue SQS messages.").Array().Advanced(),
 			),
 		).ChildDefaultAndTypesFromStruct(input.NewAWSS3Config()),
 		Categories: []string{
@@ -433,20 +434,28 @@ func (s *sqsTargetReader) readSQSEvents(ctx context.Context) ([]*s3ObjectTarget,
 				deleteS3ObjectAckFn(
 					s.s3, object.bucket, object.key, s.conf.DeleteObjects,
 					func(ctx context.Context, err error) (aerr error) {
-						if err != nil && (s.conf.SQS.DropEOFError && err.Error() != "unexpected EOF") {
-							nackOnce.Do(func() {
-								// Prevent future acks from triggering a delete.
-								atomic.StoreInt32(&pendingAcks, -1)
+						if err != nil {
+							if len(s.conf.SQS.DropErrors) > 0 && slices.Contains(s.conf.SQS.DropErrors, err.Error()) {
+								ackOnce.Do(func() {
+									if atomic.AddInt32(&pendingAcks, -1) == 0 {
+										aerr = s.ackSQSMessage(ctx, sqsMsg)
+									}
+								})
+							} else {
+								nackOnce.Do(func() {
+									// Prevent future acks from triggering a delete.
+									atomic.StoreInt32(&pendingAcks, -1)
 
-								s.log.Debugf("Pushing SQS notification back into the queue due to error: %v\n", err)
+									s.log.Debugf("Pushing SQS notification back into the queue due to error: %v\n", err)
 
-								// It's possible that this is called for one message
-								// at the _exact_ same time as another is acked, but
-								// if the acked message triggers a full ack of the
-								// origin message then even though it shouldn't be
-								// possible, it's also harmless.
-								aerr = s.nackSQSMessage(ctx, sqsMsg)
-							})
+									// It's possible that this is called for one message
+									// at the _exact_ same time as another is acked, but
+									// if the acked message triggers a full ack of the
+									// origin message then even though it shouldn't be
+									// possible, it's also harmless.
+									aerr = s.nackSQSMessage(ctx, sqsMsg)
+								})
+							}
 						} else {
 							ackOnce.Do(func() {
 								if atomic.AddInt32(&pendingAcks, -1) == 0 {

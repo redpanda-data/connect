@@ -6,14 +6,14 @@ import (
 
 // AWSS3SQSConfig contains configuration for hooking up the S3 input with an SQS queue.
 type AWSS3SQSConfig struct {
-	URL          string `json:"url" yaml:"url"`
-	Endpoint     string `json:"endpoint" yaml:"endpoint"`
-	EnvelopePath string `json:"envelope_path" yaml:"envelope_path"`
-	KeyPath      string `json:"key_path" yaml:"key_path"`
-	BucketPath   string `json:"bucket_path" yaml:"bucket_path"`
-	DelayPeriod  string `json:"delay_period" yaml:"delay_period"`
-	MaxMessages  int64  `json:"max_messages" yaml:"max_messages"`
-	DropEOFError bool   `json:"drop_eof_error" yaml:"drop_eof_error"`
+	URL          string   `json:"url" yaml:"url"`
+	Endpoint     string   `json:"endpoint" yaml:"endpoint"`
+	EnvelopePath string   `json:"envelope_path" yaml:"envelope_path"`
+	KeyPath      string   `json:"key_path" yaml:"key_path"`
+	BucketPath   string   `json:"bucket_path" yaml:"bucket_path"`
+	DelayPeriod  string   `json:"delay_period" yaml:"delay_period"`
+	MaxMessages  int64    `json:"max_messages" yaml:"max_messages"`
+	DropErrors   []string `json:"drop_errors" yaml:"drop_errors"`
 }
 
 // NewAWSS3SQSConfig creates a new AWSS3SQSConfig with default values.
@@ -26,7 +26,7 @@ func NewAWSS3SQSConfig() AWSS3SQSConfig {
 		BucketPath:   "Records.*.s3.bucket.name",
 		DelayPeriod:  "",
 		MaxMessages:  10,
-		DropEOFError: false,
+		DropErrors:   []string{},
 	}
 }
 
