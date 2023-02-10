@@ -378,6 +378,60 @@ root.foo = this.foo.lowercase()
 # Out: {"foo":"hello world"}
 ```
 
+### `parse_jwt_hs256`
+
+Parses a claims object from a JWT string encoded with HS256. This method does not validate JWT claims.
+
+#### Parameters
+
+**`signing_secret`** &lt;string&gt; The HMAC secret that was used for signing the token.  
+
+#### Examples
+
+
+```coffee
+root.claims = this.signed.parse_jwt_hs256("dont-tell-anyone")
+
+# In:  {"signed":"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyMTIzIn0.hUl-nngPMY_3h9vveWJUPsCcO5PeL6k9hWLnMYeFbFQ"}
+# Out: {"claims":{"sub":"user123"}}
+```
+
+### `parse_jwt_hs384`
+
+Parses a claims object from a JWT string encoded with HS384. This method does not validate JWT claims.
+
+#### Parameters
+
+**`signing_secret`** &lt;string&gt; The HMAC secret that was used for signing the token.  
+
+#### Examples
+
+
+```coffee
+root.claims = this.signed.parse_jwt_hs384("dont-tell-anyone")
+
+# In:  {"signed":"eyJhbGciOiJIUzM4NCIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyMTIzIn0.zGYLr83aToon1efUNq-hw7XgT20lPvZb8sYei8x6S6mpHwb433SJdXJXx0Oio8AZ"}
+# Out: {"claims":{"sub":"user123"}}
+```
+
+### `parse_jwt_hs512`
+
+Parses a claims object from a JWT string encoded with HS512. This method does not validate JWT claims.
+
+#### Parameters
+
+**`signing_secret`** &lt;string&gt; The HMAC secret that was used for signing the token.  
+
+#### Examples
+
+
+```coffee
+root.claims = this.signed.parse_jwt_hs512("dont-tell-anyone")
+
+# In:  {"signed":"eyJhbGciOiJIUzUxMiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyMTIzIn0.zBNR9o_6EDwXXKkpKLNJhG26j8Dc-mV-YahBwmEdCrmiWt5les8I9rgmNlWIowpq6Yxs4kLNAdFhqoRz3NXT3w"}
+# Out: {"claims":{"sub":"user123"}}
+```
+
 ### `quote`
 
 Quotes a target string using escape sequences (`\t`, `\n`, `\xFF`, `\u0100`) for control characters and non-printable characters.
