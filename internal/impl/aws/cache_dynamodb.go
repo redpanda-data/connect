@@ -355,8 +355,6 @@ func (d *dynamodbCache) Delete(ctx context.Context, key string) error {
 
 	err := d.delete(key)
 	for err != nil {
-		if boff == nil {
-		}
 		wait := boff.NextBackOff()
 		if wait == backoff.Stop {
 			break
