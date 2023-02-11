@@ -113,6 +113,16 @@ func TestTimestampMethods(t *testing.T) {
 			output:  int64(1257894000),
 		},
 		{
+			name:    "check ts_unix_milli",
+			mapping: `root = "2009-11-10T23:00:00Z".ts_unix_milli()`,
+			output:  int64(1257894000000),
+		},
+		{
+			name:    "check ts_unix_micro",
+			mapping: `root = "2009-11-10T23:00:00Z".ts_unix_micro()`,
+			output:  int64(1257894000000000),
+		},
+		{
 			name:    "check ts_unix_nano",
 			mapping: `root = "2009-11-10T23:00:00Z".ts_unix_nano()`,
 			output:  int64(1257894000000000000),

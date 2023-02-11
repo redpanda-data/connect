@@ -734,6 +734,32 @@ var _ = registerSimpleFunction(
 
 var _ = registerSimpleFunction(
 	NewFunctionSpec(
+		FunctionCategoryEnvironment, "timestamp_unix_milli",
+		"Returns the current unix timestamp in milliseconds.",
+		NewExampleSpec("",
+			`root.received_at = timestamp_unix_milli()`,
+		),
+	),
+	func(_ FunctionContext) (any, error) {
+		return time.Now().UnixMilli(), nil
+	},
+)
+
+var _ = registerSimpleFunction(
+	NewFunctionSpec(
+		FunctionCategoryEnvironment, "timestamp_unix_micro",
+		"Returns the current unix timestamp in microseconds.",
+		NewExampleSpec("",
+			`root.received_at = timestamp_unix_micro()`,
+		),
+	),
+	func(_ FunctionContext) (any, error) {
+		return time.Now().UnixMicro(), nil
+	},
+)
+
+var _ = registerSimpleFunction(
+	NewFunctionSpec(
 		FunctionCategoryEnvironment, "timestamp_unix_nano",
 		"Returns the current unix timestamp in nanoseconds.",
 		NewExampleSpec("",

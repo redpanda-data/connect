@@ -61,6 +61,14 @@ pipeline:
 			docs.FieldString("ordering_key", "The ordering key to use for publishing messages.").IsInterpolated().Advanced(),
 			docs.FieldString("endpoint", "An optional endpoint to override the default of `pubsub.googleapis.com:443`. This can be used to connect to a region specific pubsub endpoint. For a list of valid values check out [this document.](https://cloud.google.com/pubsub/docs/reference/service_apis_overview#list_of_regional_endpoints)", "us-central1-pubsub.googleapis.com:443", "us-west3-pubsub.googleapis.com:443").HasDefault(""),
 			docs.FieldObject("metadata", "Specify criteria for which metadata values are sent as attributes.").WithChildren(metadata.ExcludeFilterFields()...),
+			docs.FieldObject("flow_control", "For a given topic, configures the PubSub client's internal buffer for messages to be published.").
+				WithChildren(
+					docs.FieldInt("max_outstanding_messages", "Maximum number of buffered messages to be published. If less than or equal to zero, this is disabled.").HasDefault(1000),
+					docs.FieldInt("max_outstanding_bytes", "Maximum size of buffered messages to be published. If less than or equal to zero, this is disabled.").HasDefault(-1),
+					docs.FieldString("limit_exceeded_behavior", "Configures the behavior when trying to publish additional messages while the flow controller is full. The available options are ignore (disable, default), block, and signal_error (publish results will return an error).").
+						HasDefault("ignore").
+						HasOptions("ignore", "block", "signal_error"),
+				).Advanced(),
 		).ChildDefaultAndTypesFromStruct(output.NewGCPPubSubConfig()),
 		Categories: []string{
 			"Services",
@@ -98,6 +106,8 @@ type gcpPubSubWriter struct {
 	topics   map[string]*pubsub.Topic
 	topicMut sync.Mutex
 
+	flowControl pubsub.FlowControlSettings
+
 	log log.Modular
 }
 
@@ -127,6 +137,22 @@ func newGCPPubSubWriter(conf output.GCPPubSubConfig, mgr bundle.NewManagement, l
 	if err != nil {
 		return nil, fmt.Errorf("failed to construct metadata filter: %w", err)
 	}
+
+	flowControl := pubsub.FlowControlSettings{
+		MaxOutstandingMessages: conf.FlowControl.MaxOutstandingMessages,
+		MaxOutstandingBytes:    conf.FlowControl.MaxOutstandingBytes,
+	}
+	switch conf.FlowControl.LimitExceededBehavior {
+	case "ignore":
+		flowControl.LimitExceededBehavior = pubsub.FlowControlIgnore
+	case "block":
+		flowControl.LimitExceededBehavior = pubsub.FlowControlBlock
+	case "signal_error":
+		flowControl.LimitExceededBehavior = pubsub.FlowControlSignalError
+	default:
+		return nil, fmt.Errorf("unrecognized flow control setting: %s", conf.FlowControl.LimitExceededBehavior)
+	}
+
 	return &gcpPubSubWriter{
 		conf:            conf,
 		log:             log,
@@ -136,6 +162,7 @@ func newGCPPubSubWriter(conf output.GCPPubSubConfig, mgr bundle.NewManagement, l
 		topicID:         topic,
 		orderingKey:     orderingKey,
 		orderingEnabled: len(conf.OrderingKey) > 0,
+		flowControl:     flowControl,
 	}, nil
 }
 
@@ -170,6 +197,7 @@ func (c *gcpPubSubWriter) getTopic(ctx context.Context, t string) (*pubsub.Topic
 		return nil, fmt.Errorf("topic '%v' does not exist", t)
 	}
 	topic.PublishSettings.Timeout = c.publishTimeout
+	topic.PublishSettings.FlowControlSettings = c.flowControl
 	topic.EnableMessageOrdering = c.orderingEnabled
 	c.topics[t] = topic
 	return topic, nil
@@ -217,10 +245,12 @@ func (c *gcpPubSubWriter) WriteBatch(ctx context.Context, msg message.Batch) err
 	var batchErr *batch.Error
 	for i, r := range results {
 		if _, err := r.Get(ctx); err != nil {
+			publishErr := fmt.Errorf("failed to publish message: %w", err)
+
 			if batchErr == nil {
-				batchErr = batch.NewError(msg, err)
+				batchErr = batch.NewError(msg, publishErr)
 			}
-			batchErr.Failed(i, err)
+			batchErr.Failed(i, publishErr)
 		}
 	}
 	if batchErr != nil {

@@ -45,7 +45,10 @@ output:
     schema: ""
     stage: ""
     path: ""
+    file_name: ""
+    file_extension: ""
     compression: AUTO
+    request_id: ""
     snowpipe: ""
     batching:
       count: 0
@@ -76,8 +79,11 @@ output:
     schema: ""
     stage: ""
     path: ""
+    file_name: ""
+    file_extension: ""
     upload_parallel_threads: 4
     compression: AUTO
+    request_id: ""
     snowpipe: ""
     client_session_keep_alive: false
     batching:
@@ -185,10 +191,10 @@ for doing so:
 snowsql --private-key-path rsa_key.p8 --generate-jwt -a <account> -u <user>
 ```
 
-- Using the Python `jwt-generator` [utility](https://docs.snowflake.com/en/developer-guide/sql-api/guide.html#using-key-pair-authentication):
+- Using the Python `sql-api-generate-jwt` [utility](https://docs.snowflake.com/en/developer-guide/sql-api/authenticating.html#generating-a-jwt-in-python):
 
 ```shell
-python3 jwt-generator.py --private_key_file_path=rsa_key.p8 --account=<account> --user=<user>
+python3 sql-api-generate-jwt.py --private_key_file_path=rsa_key.p8 --account=<account> --user=<user>
 ```
 
 Once you successfully generate a JWT token and store it into the `JWT_TOKEN` environment variable, then you can,
@@ -198,9 +204,22 @@ for example, query the `insertReport` endpoint using `curl`:
 curl -H "Authorization: Bearer ${JWT_TOKEN}" "https://<account>.snowflakecomputing.com/v1/data/pipes/<database>.<schema>.<snowpipe>/insertReport"
 ```
 
-If you need to pass in a valid `requestId` to any of these Snowpipe REST API endpoints, you can enable debug
-logging as described [here](/docs/components/logger/about) and Benthos will print the RequestIDs that it sends to
-Snowpipe. They match the name of the file that is placed in the stage.
+If you need to pass in a valid `requestId` to any of these Snowpipe REST API endpoints, you can set a
+[uuid_v4()](https://www.benthos.dev/docs/guides/bloblang/functions#uuid_v4) string in a metadata field called
+`request_id`, log it via the [`log`](https://www.benthos.dev/docs/components/processors/log) processor and
+then configure `request_id: ${ @request_id }` ). Alternatively, you can enable debug logging as described
+[here](/docs/components/logger/about) and Benthos will print the Request IDs that it sends to Snowpipe.
+
+### General Troubleshooting
+
+The underlying [`gosnowflake` driver](https://github.com/snowflakedb/gosnowflake) requires write access to
+the default directory to use for temporary files. Please consult the [`os.TempDir`](https://pkg.go.dev/os#TempDir)
+docs for details on how to change this directory via environment variables.
+
+A silent failure can occur due to [this issue](https://github.com/snowflakedb/gosnowflake/issues/701), where the
+underlying [`gosnowflake` driver](https://github.com/snowflakedb/gosnowflake) doesn't return an error and doesn't
+log a failure if it can't figure out the current username. One way to trigger this behaviour is by running Benthos in a
+Docker container with a non-existent user ID (such as `--user 1000:1000`).
 
 
 ## Performance
@@ -215,16 +234,59 @@ Batches can be formed at both the input and output level. You can find out more
 
 ## Examples
 
-<Tabs defaultValue="No compression" values={[
+<Tabs defaultValue="Kafka / realtime brokers" values={[
+{ label: 'Kafka / realtime brokers', value: 'Kafka / realtime brokers', },
 { label: 'No compression', value: 'No compression', },
+{ label: 'Parquet format with snappy compression', value: 'Parquet format with snappy compression', },
 { label: 'Automatic compression', value: 'Automatic compression', },
 { label: 'DEFLATE compression', value: 'DEFLATE compression', },
 { label: 'RAW_DEFLATE compression', value: 'RAW_DEFLATE compression', },
 ]}>
 
+<TabItem value="Kafka / realtime brokers">
+
+Upload message batches from realtime brokers such as Kafka persisting the batch partition and offsets in the stage path and filename similarly to the [Kafka Connector scheme](https://docs.snowflake.com/en/user-guide/kafka-connector-ts.html#step-1-view-the-copy-history-for-the-table) and call Snowpipe to load them into a table. When batching is configured at the input level, it is done per-partition.
+
+```yaml
+input:
+  kafka:
+    addresses:
+      - localhost:9092
+    topics:
+      - foo
+    consumer_group: benthos
+    batching:
+      count: 10
+      period: 3s
+      processors:
+        - mapping: |
+            meta kafka_start_offset = meta("kafka_offset").from(0)
+            meta kafka_end_offset = meta("kafka_offset").from(-1)
+            meta batch_timestamp = if batch_index() == 0 { now() }
+        - mapping: |
+            meta batch_timestamp = if batch_index() != 0 { meta("batch_timestamp").from(0) }
+
+output:
+  snowflake_put:
+    account: benthos
+    user: test@benthos.dev
+    private_key_file: path_to_ssh_key.pem
+    role: ACCOUNTADMIN
+    database: BENTHOS_DB
+    warehouse: COMPUTE_WH
+    schema: PUBLIC
+    stage: "@%BENTHOS_TBL"
+    path: benthos/BENTHOS_TBL/${! @kafka_partition }
+    file_name: ${! @kafka_start_offset }_${! @kafka_end_offset }_${! meta("batch_timestamp") }
+    upload_parallel_threads: 4
+    compression: NONE
+    snowpipe: BENTHOS_PIPE
+```
+
+</TabItem>
 <TabItem value="No compression">
 
-Upload concatenated messages into a .json file to a table stage without calling Snowpipe.
+Upload concatenated messages into a `.json` file to a table stage without calling Snowpipe.
 
 ```yaml
 output:
@@ -236,8 +298,8 @@ output:
     database: BENTHOS_DB
     warehouse: COMPUTE_WH
     schema: PUBLIC
-    path: benthos
     stage: "@%BENTHOS_TBL"
+    path: benthos
     upload_parallel_threads: 4
     compression: NONE
     batching:
@@ -249,9 +311,9 @@ output:
 ```
 
 </TabItem>
-<TabItem value="Automatic compression">
+<TabItem value="Parquet format with snappy compression">
 
-Upload concatenated messages compressed automatically into a .gz archive file to a table stage without calling Snowpipe.
+Upload concatenated messages into a `.parquet` file to a table stage without calling Snowpipe.
 
 ```yaml
 output:
@@ -263,8 +325,41 @@ output:
     database: BENTHOS_DB
     warehouse: COMPUTE_WH
     schema: PUBLIC
-    path: benthos
     stage: "@%BENTHOS_TBL"
+    path: benthos
+    file_extension: parquet
+    upload_parallel_threads: 4
+    compression: NONE
+    batching:
+      count: 10
+      period: 3s
+      processors:
+        - parquet_encode:
+            schema:
+              - name: ID
+                type: INT64
+              - name: CONTENT
+                type: BYTE_ARRAY
+            default_compression: snappy
+```
+
+</TabItem>
+<TabItem value="Automatic compression">
+
+Upload concatenated messages compressed automatically into a `.gz` archive file to a table stage without calling Snowpipe.
+
+```yaml
+output:
+  snowflake_put:
+    account: benthos
+    user: test@benthos.dev
+    private_key_file: path_to_ssh_key.pem
+    role: ACCOUNTADMIN
+    database: BENTHOS_DB
+    warehouse: COMPUTE_WH
+    schema: PUBLIC
+    stage: "@%BENTHOS_TBL"
+    path: benthos
     upload_parallel_threads: 4
     compression: AUTO
     batching:
@@ -278,7 +373,7 @@ output:
 </TabItem>
 <TabItem value="DEFLATE compression">
 
-Upload concatenated messages compressed into a .deflate archive file to a table stage and call Snowpipe to load them into a table.
+Upload concatenated messages compressed into a `.deflate` archive file to a table stage and call Snowpipe to load them into a table.
 
 ```yaml
 output:
@@ -290,8 +385,8 @@ output:
     database: BENTHOS_DB
     warehouse: COMPUTE_WH
     schema: PUBLIC
-    path: benthos
     stage: "@%BENTHOS_TBL"
+    path: benthos
     upload_parallel_threads: 4
     compression: DEFLATE
     snowpipe: BENTHOS_PIPE
@@ -301,14 +396,14 @@ output:
       processors:
         - archive:
             format: concatenate
-        - compress:
-            algorithm: zlib
+        - mapping: |
+            root = content().compress("zlib")
 ```
 
 </TabItem>
 <TabItem value="RAW_DEFLATE compression">
 
-Upload concatenated messages compressed into a .rawdeflate archive file to a table stage and call Snowpipe to load them into a table.
+Upload concatenated messages compressed into a `.raw_deflate` archive file to a table stage and call Snowpipe to load them into a table.
 
 ```yaml
 output:
@@ -320,8 +415,8 @@ output:
     database: BENTHOS_DB
     warehouse: COMPUTE_WH
     schema: PUBLIC
-    path: benthos
     stage: "@%BENTHOS_TBL"
+    path: benthos
     upload_parallel_threads: 4
     compression: RAW_DEFLATE
     snowpipe: BENTHOS_PIPE
@@ -331,8 +426,8 @@ output:
       processors:
         - archive:
             format: concatenate
-        - compress:
-            algorithm: flate
+        - mapping: |
+            root = content().compress("flate")
 ```
 
 </TabItem>
@@ -461,9 +556,39 @@ Type: `string`
 ### `path`
 
 Stage path.
+This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
 
 
 Type: `string`  
+Default: `""`  
+
+### `file_name`
+
+Stage file name. Will be equal to the Request ID if not set or empty.
+This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
+
+
+Type: `string`  
+Default: `""`  
+Requires version v4.12.0 or newer  
+
+### `file_extension`
+
+Stage file extension. Will be derived from the configured `compression` if not set or empty.
+This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
+
+
+Type: `string`  
+Default: `""`  
+Requires version v4.12.0 or newer  
+
+```yml
+# Examples
+
+file_extension: csv
+
+file_extension: parquet
+```
 
 ### `upload_parallel_threads`
 
@@ -483,12 +608,23 @@ Default: `"AUTO"`
 
 | Option | Summary |
 |---|---|
-| `AUTO` | Compression (gzip) is applied automatically by the output and messages must contain plain-text JSON. |
-| `DEFLATE` | Messages must be pre-compressed using the zlib algorithm (with zlib header, RFC1950). |
-| `GZIP` | Messages must be pre-compressed using the gzip algorithm. |
-| `NONE` | No compression is applied and messages must contain plain-text JSON. |
-| `RAW_DEFLATE` | Messages must be pre-compressed using the flate algorithm (without header, RFC1951). |
+| `AUTO` | Compression (gzip) is applied automatically by the output and messages must contain plain-text JSON. Default `file_extension`: `gz`. |
+| `DEFLATE` | Messages must be pre-compressed using the zlib algorithm (with zlib header, RFC1950). Default `file_extension`: `deflate`. |
+| `GZIP` | Messages must be pre-compressed using the gzip algorithm. Default `file_extension`: `gz`. |
+| `NONE` | No compression is applied and messages must contain plain-text JSON. Default `file_extension`: `json`. |
+| `RAW_DEFLATE` | Messages must be pre-compressed using the flate algorithm (without header, RFC1951). Default `file_extension`: `raw_deflate`. |
+| `ZSTD` | Messages must be pre-compressed using the Zstandard algorithm. Default `file_extension`: `zst`. |
 
+
+### `request_id`
+
+Request ID. Will be assigned a random UUID (v4) string if not set or empty.
+This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
+
+
+Type: `string`  
+Default: `""`  
+Requires version v4.12.0 or newer  
 
 ### `snowpipe`
 

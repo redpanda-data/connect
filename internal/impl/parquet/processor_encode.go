@@ -229,6 +229,10 @@ func newParquetEncodeProcessor(logger *service.Logger, schema *parquet.Schema, c
 }
 
 func (s *parquetEncodeProcessor) ProcessBatch(ctx context.Context, batch service.MessageBatch) ([]service.MessageBatch, error) {
+	if len(batch) == 0 {
+		return nil, nil
+	}
+
 	buf := bytes.NewBuffer(nil)
 	pWtr := parquet.NewGenericWriter[any](buf, s.schema, parquet.Compression(s.compressionType))
 

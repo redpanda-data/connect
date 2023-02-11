@@ -90,10 +90,12 @@ func NewJaeger(config tracer.Config, _ bundle.NewManagement) (trace.TracerProvid
 
 	if _, ok := config.Jaeger.Tags[string(semconv.ServiceNameKey)]; !ok {
 		attrs = append(attrs, semconv.ServiceNameKey.String("benthos"))
-	}
 
-	if _, ok := config.Jaeger.Tags[string(semconv.ServiceVersionKey)]; !ok {
-		attrs = append(attrs, semconv.ServiceVersionKey.String(cli.Version))
+		// Only set the default service version tag if the user doesn't provide
+		// a custom service name tag.
+		if _, ok := config.Jaeger.Tags[string(semconv.ServiceVersionKey)]; !ok {
+			attrs = append(attrs, semconv.ServiceVersionKey.String(cli.Version))
+		}
 	}
 
 	var batchOpts []tracesdk.BatchSpanProcessorOption

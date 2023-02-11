@@ -183,6 +183,24 @@ func testParquetEncodeDecodeRoundTrip(t *testing.T, encodeProc *parquetEncodePro
 	}
 }
 
+func TestParquetEncodeEmptyBatch(t *testing.T) {
+	tctx := context.Background()
+
+	encodeConf, err := parquetEncodeProcessorConfig().ParseYAML(`
+default_encoding: PLAIN
+schema:
+  - { name: id, type: INT64 }
+`, nil)
+	require.NoError(t, err)
+
+	encodeProc, err := newParquetEncodeProcessorFromConfig(encodeConf, nil)
+	require.NoError(t, err)
+
+	inBatch := service.MessageBatch{}
+	_, err = encodeProc.ProcessBatch(tctx, inBatch)
+	require.NoError(t, err)
+}
+
 // Designed to contain all manner of structured data nasties, separated from the
 // decode struct so that we can modify them separately.
 type testMP struct {
