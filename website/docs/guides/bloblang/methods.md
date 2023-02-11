@@ -193,6 +193,56 @@ root.title = this.title.capitalize()
 # Out: {"title":"The Foo Bar"}
 ```
 
+### `compare_argon2`
+
+Checks whether a string matches a hashed secret using Argon2.
+
+#### Parameters
+
+**`hashed_secret`** &lt;string&gt; The hashed secret to compare with the input. This must be a fully-qualified string which encodes the Argon2 options used to generate the hash.  
+
+#### Examples
+
+
+```coffee
+root.match = this.secret.compare_argon2("$argon2id$v=19$m=4096,t=3,p=1$c2FsdHktbWNzYWx0ZmFjZQ$RMUMwgtS32/mbszd+ke4o4Ej1jFpYiUqY6MHWa69X7Y")
+
+# In:  {"secret":"there-are-many-blobs-in-the-sea"}
+# Out: {"match":true}
+```
+
+```coffee
+root.match = this.secret.compare_argon2("$argon2id$v=19$m=4096,t=3,p=1$c2FsdHktbWNzYWx0ZmFjZQ$RMUMwgtS32/mbszd+ke4o4Ej1jFpYiUqY6MHWa69X7Y")
+
+# In:  {"secret":"will-i-ever-find-love"}
+# Out: {"match":false}
+```
+
+### `compare_bcrypt`
+
+Checks whether a string matches a hashed secret using bcrypt.
+
+#### Parameters
+
+**`hashed_secret`** &lt;string&gt; The hashed secret value to compare with the input.  
+
+#### Examples
+
+
+```coffee
+root.match = this.secret.compare_bcrypt("$2y$10$Dtnt5NNzVtMCOZONT705tOcS8It6krJX8bEjnDJnwxiFKsz1C.3Ay")
+
+# In:  {"secret":"there-are-many-blobs-in-the-sea"}
+# Out: {"match":true}
+```
+
+```coffee
+root.match = this.secret.compare_bcrypt("$2y$10$Dtnt5NNzVtMCOZONT705tOcS8It6krJX8bEjnDJnwxiFKsz1C.3Ay")
+
+# In:  {"secret":"will-i-ever-find-love"}
+# Out: {"match":false}
+```
+
 ### `contains`
 
 Checks whether a string contains a substring and returns a boolean result.
@@ -275,7 +325,7 @@ root.path_sep = this.path.filepath_split()
 
 ### `format`
 
-Use a value string as a format specifier in order to produce a new string, using any number of provided arguments.
+Use a value string as a format specifier in order to produce a new string, using any number of provided arguments. Please refer to the Go [`fmt` package documentation](https://pkg.go.dev/fmt) for the list of valid format verbs.
 
 #### Examples
 
@@ -376,6 +426,60 @@ root.foo = this.foo.lowercase()
 
 # In:  {"foo":"HELLO WORLD"}
 # Out: {"foo":"hello world"}
+```
+
+### `parse_jwt_hs256`
+
+Parses a claims object from a JWT string encoded with HS256. This method does not validate JWT claims.
+
+#### Parameters
+
+**`signing_secret`** &lt;string&gt; The HMAC secret that was used for signing the token.  
+
+#### Examples
+
+
+```coffee
+root.claims = this.signed.parse_jwt_hs256("dont-tell-anyone")
+
+# In:  {"signed":"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyMTIzIn0.hUl-nngPMY_3h9vveWJUPsCcO5PeL6k9hWLnMYeFbFQ"}
+# Out: {"claims":{"sub":"user123"}}
+```
+
+### `parse_jwt_hs384`
+
+Parses a claims object from a JWT string encoded with HS384. This method does not validate JWT claims.
+
+#### Parameters
+
+**`signing_secret`** &lt;string&gt; The HMAC secret that was used for signing the token.  
+
+#### Examples
+
+
+```coffee
+root.claims = this.signed.parse_jwt_hs384("dont-tell-anyone")
+
+# In:  {"signed":"eyJhbGciOiJIUzM4NCIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyMTIzIn0.zGYLr83aToon1efUNq-hw7XgT20lPvZb8sYei8x6S6mpHwb433SJdXJXx0Oio8AZ"}
+# Out: {"claims":{"sub":"user123"}}
+```
+
+### `parse_jwt_hs512`
+
+Parses a claims object from a JWT string encoded with HS512. This method does not validate JWT claims.
+
+#### Parameters
+
+**`signing_secret`** &lt;string&gt; The HMAC secret that was used for signing the token.  
+
+#### Examples
+
+
+```coffee
+root.claims = this.signed.parse_jwt_hs512("dont-tell-anyone")
+
+# In:  {"signed":"eyJhbGciOiJIUzUxMiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyMTIzIn0.zBNR9o_6EDwXXKkpKLNJhG26j8Dc-mV-YahBwmEdCrmiWt5les8I9rgmNlWIowpq6Yxs4kLNAdFhqoRz3NXT3w"}
+# Out: {"claims":{"sub":"user123"}}
 ```
 
 ### `quote`
@@ -823,7 +927,7 @@ root.new_value = this.value.floor()
 
 Converts a numerical type into a 32-bit signed integer, this is for advanced use cases where a specific data type is needed for a given component (such as the ClickHouse SQL driver).
 
-If the value is a string then an attempt will be made to parse it as a 32-bit integer. If the target value exceeds the capacity of an integer or contains decimal values then this method will throw an error. In order to convert a floating point number containing decimals first use [`.round()`](#round) on the value first.
+If the value is a string then an attempt will be made to parse it as a 32-bit integer. If the target value exceeds the capacity of an integer or contains decimal values then this method will throw an error. In order to convert a floating point number containing decimals first use [`.round()`](#round) on the value first. Please refer to the [`strconv.ParseInt` documentation](https://pkg.go.dev/strconv#ParseInt) for details regarding the supported formats.
 
 #### Examples
 
@@ -839,12 +943,21 @@ root.c = this.c.int32()
 # Out: {"a":12,"b":12,"c":12}
 ```
 
+```coffee
+
+root = this.int32()
+
+
+# In:  "0xB70B"
+# Out: 46859
+```
+
 ### `int64`
 
 
 Converts a numerical type into a 64-bit signed integer, this is for advanced use cases where a specific data type is needed for a given component (such as the ClickHouse SQL driver).
 
-If the value is a string then an attempt will be made to parse it as a 64-bit integer. If the target value exceeds the capacity of an integer or contains decimal values then this method will throw an error. In order to convert a floating point number containing decimals first use [`.round()`](#round) on the value first.
+If the value is a string then an attempt will be made to parse it as a 64-bit integer. If the target value exceeds the capacity of an integer or contains decimal values then this method will throw an error. In order to convert a floating point number containing decimals first use [`.round()`](#round) on the value first. Please refer to the [`strconv.ParseInt` documentation](https://pkg.go.dev/strconv#ParseInt) for details regarding the supported formats.
 
 #### Examples
 
@@ -858,6 +971,15 @@ root.c = this.c.int64()
 
 # In:  {"a":12,"b":12.34,"c":"12"}
 # Out: {"a":12,"b":12,"c":12}
+```
+
+```coffee
+
+root = this.int64()
+
+
+# In:  "0xDEADBEEF"
+# Out: 3735928559
 ```
 
 ### `log`
@@ -964,7 +1086,7 @@ root.new_value = this.value.round()
 
 Converts a numerical type into a 32-bit unsigned integer, this is for advanced use cases where a specific data type is needed for a given component (such as the ClickHouse SQL driver).
 
-If the value is a string then an attempt will be made to parse it as a 32-bit unsigned integer. If the target value exceeds the capacity of an integer or contains decimal values then this method will throw an error. In order to convert a floating point number containing decimals first use [`.round()`](#round) on the value first.
+If the value is a string then an attempt will be made to parse it as a 32-bit unsigned integer. If the target value exceeds the capacity of an integer or contains decimal values then this method will throw an error. In order to convert a floating point number containing decimals first use [`.round()`](#round) on the value first. Please refer to the [`strconv.ParseInt` documentation](https://pkg.go.dev/strconv#ParseInt) for details regarding the supported formats.
 
 #### Examples
 
@@ -981,12 +1103,21 @@ root.d = this.d.uint32().catch(0)
 # Out: {"a":12,"b":12,"c":12,"d":0}
 ```
 
+```coffee
+
+root = this.uint32()
+
+
+# In:  "0xB70B"
+# Out: 46859
+```
+
 ### `uint64`
 
 
 Converts a numerical type into a 64-bit unsigned integer, this is for advanced use cases where a specific data type is needed for a given component (such as the ClickHouse SQL driver).
 
-If the value is a string then an attempt will be made to parse it as a 64-bit unsigned integer. If the target value exceeds the capacity of an integer or contains decimal values then this method will throw an error. In order to convert a floating point number containing decimals first use [`.round()`](#round) on the value first.
+If the value is a string then an attempt will be made to parse it as a 64-bit unsigned integer. If the target value exceeds the capacity of an integer or contains decimal values then this method will throw an error. In order to convert a floating point number containing decimals first use [`.round()`](#round) on the value first. Please refer to the [`strconv.ParseInt` documentation](https://pkg.go.dev/strconv#ParseInt) for details regarding the supported formats.
 
 #### Examples
 
@@ -1001,6 +1132,15 @@ root.d = this.d.uint64().catch(0)
 
 # In:  {"a":12,"b":12.34,"c":"12","d":-12}
 # Out: {"a":12,"b":12,"c":12,"d":0}
+```
+
+```coffee
+
+root = this.uint64()
+
+
+# In:  "0xDEADBEEF"
+# Out: 3735928559
 ```
 
 ## Timestamp Manipulation
@@ -1279,6 +1419,23 @@ root.created_at_unix = this.created_at.ts_unix()
 
 # In:  {"created_at":"2009-11-10T23:00:00Z"}
 # Out: {"created_at_unix":1257894000}
+```
+
+### `ts_unix_micro`
+
+:::caution BETA
+This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
+:::
+Attempts to format a timestamp value as a unix timestamp with microsecond precision. Timestamp values can either be a numerical unix time in seconds (with up to nanosecond precision via decimals), or a string in RFC 3339 format. The [`ts_parse`](#ts_parse) method can be used in order to parse different timestamp formats.
+
+#### Examples
+
+
+```coffee
+root.created_at_unix = this.created_at.ts_unix_micro()
+
+# In:  {"created_at":"2009-11-10T23:00:00Z"}
+# Out: {"created_at_unix":1257894000000000}
 ```
 
 ### `ts_unix_milli`
@@ -1958,7 +2115,7 @@ root = this.json_schema("""{
 In order to load a schema from a file use the `file` function.
 
 ```coffee
-root = this.json_schema(file(var("BENTHOS_TEST_BLOBLANG_SCHEMA_FILE")))
+root = this.json_schema(file(env("BENTHOS_TEST_BLOBLANG_SCHEMA_FILE")))
 ```
 
 ### `key_values`
@@ -2084,6 +2241,60 @@ root = this.foo.merge(this.bar)
 
 # In:  {"foo":{"first_name":"fooer","likes":"bars"},"bar":{"second_name":"barer","likes":"foos"}}
 # Out: {"first_name":"fooer","likes":["bars","foos"],"second_name":"barer"}
+```
+
+### `sign_jwt_hs256`
+
+Hash and sign an object representing JSON Web Token (JWT) claims using HS256.
+
+#### Parameters
+
+**`signing_secret`** &lt;string&gt; The HMAC secret to use for signing the token.  
+
+#### Examples
+
+
+```coffee
+root.signed = this.claims.sign_jwt_hs256("dont-tell-anyone")
+
+# In:  {"claims":{"sub":"user123"}}
+# Out: {"signed":"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyMTIzIn0.hUl-nngPMY_3h9vveWJUPsCcO5PeL6k9hWLnMYeFbFQ"}
+```
+
+### `sign_jwt_hs384`
+
+Hash and sign an object representing JSON Web Token (JWT) claims using HS384.
+
+#### Parameters
+
+**`signing_secret`** &lt;string&gt; The HMAC secret to use for signing the token.  
+
+#### Examples
+
+
+```coffee
+root.signed = this.claims.sign_jwt_hs384("dont-tell-anyone")
+
+# In:  {"claims":{"sub":"user123"}}
+# Out: {"signed":"eyJhbGciOiJIUzM4NCIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyMTIzIn0.zGYLr83aToon1efUNq-hw7XgT20lPvZb8sYei8x6S6mpHwb433SJdXJXx0Oio8AZ"}
+```
+
+### `sign_jwt_hs512`
+
+Hash and sign an object representing JSON Web Token (JWT) claims using HS512.
+
+#### Parameters
+
+**`signing_secret`** &lt;string&gt; The HMAC secret to use for signing the token.  
+
+#### Examples
+
+
+```coffee
+root.signed = this.claims.sign_jwt_hs512("dont-tell-anyone")
+
+# In:  {"claims":{"sub":"user123"}}
+# Out: {"signed":"eyJhbGciOiJIUzUxMiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyMTIzIn0.zBNR9o_6EDwXXKkpKLNJhG26j8Dc-mV-YahBwmEdCrmiWt5les8I9rgmNlWIowpq6Yxs4kLNAdFhqoRz3NXT3w"}
 ```
 
 ### `slice`
@@ -2663,7 +2874,7 @@ root.b_len = $long_content.compress("gzip").length()
 
 
 # In:  hello world this is some content
-# Out: {"a_len":32999,"b_len":164}
+# Out: {"a_len":32999,"b_len":161}
 ```
 
 ```coffee
@@ -2946,6 +3157,10 @@ Attempts to format a timestamp value as a string according to a specified strfti
 ### `format_timestamp_unix`
 
 Attempts to format a timestamp value as a unix timestamp. Timestamp values can either be a numerical unix time in seconds (with up to nanosecond precision via decimals), or a string in RFC 3339 format. The [`ts_parse`](#ts_parse) method can be used in order to parse different timestamp formats.
+
+### `format_timestamp_unix_micro`
+
+Attempts to format a timestamp value as a unix timestamp with microsecond precision. Timestamp values can either be a numerical unix time in seconds (with up to nanosecond precision via decimals), or a string in RFC 3339 format. The [`ts_parse`](#ts_parse) method can be used in order to parse different timestamp formats.
 
 ### `format_timestamp_unix_milli`
 
