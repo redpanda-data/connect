@@ -193,6 +193,53 @@ root.title = this.title.capitalize()
 # Out: {"title":"The Foo Bar"}
 ```
 
+### `compare_argon2`
+
+Checks whether a string matches a hashed secret using Argon2.
+
+#### Parameters
+
+**`hashed_secret`** &lt;string&gt; The hashed secret to compare with the input. This must be a fully-qualified string which encodes the Argon2 options used to generate the hash.  
+
+```coffee
+root.match = this.secret.compare_argon2("$argon2id$v=19$m=4096,t=3,p=1$c2FsdHktbWNzYWx0ZmFjZQ$RMUMwgtS32/mbszd+ke4o4Ej1jFpYiUqY6MHWa69X7Y")
+
+# In:  {"secret":"there-are-many-blobs-in-the-sea"}
+# Out: {"match":true}
+```
+
+```coffee
+root.match = this.secret.compare_argon2("$argon2id$v=19$m=4096,t=3,p=1$c2FsdHktbWNzYWx0ZmFjZQ$RMUMwgtS32/mbszd+ke4o4Ej1jFpYiUqY6MHWa69X7Y")
+
+# In:  {"secret":"will-i-ever-find-love"}
+# Out: {"match":false}
+```
+
+### `compare_bcrypt`
+
+Checks whether a string matches a hashed secret using bcrypt.
+
+#### Parameters
+
+**`hashed_secret`** &lt;string&gt; The hashed secret value to compare with the input.  
+
+#### Examples
+
+
+```coffee
+root.match = this.secret.compare_bcrypt("$2y$10$Dtnt5NNzVtMCOZONT705tOcS8It6krJX8bEjnDJnwxiFKsz1C.3Ay")
+
+# In:  {"secret":"there-are-many-blobs-in-the-sea"}
+# Out: {"match":true}
+```
+
+```coffee
+root.match = this.secret.compare_bcrypt("$2y$10$Dtnt5NNzVtMCOZONT705tOcS8It6krJX8bEjnDJnwxiFKsz1C.3Ay")
+
+# In:  {"secret":"will-i-ever-find-love"}
+# Out: {"match":false}
+```
+
 ### `contains`
 
 Checks whether a string contains a substring and returns a boolean result.
@@ -275,7 +322,7 @@ root.path_sep = this.path.filepath_split()
 
 ### `format`
 
-Use a value string as a format specifier in order to produce a new string, using any number of provided arguments.
+Use a value string as a format specifier in order to produce a new string, using any number of provided arguments. Please refer to the Go [`fmt` package documentation](https://pkg.go.dev/fmt) for the list of valid format verbs.
 
 #### Examples
 
@@ -1281,6 +1328,23 @@ root.created_at_unix = this.created_at.ts_unix()
 # Out: {"created_at_unix":1257894000}
 ```
 
+### `ts_unix_micro`
+
+:::caution BETA
+This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
+:::
+Attempts to format a timestamp value as a unix timestamp with microsecond precision. Timestamp values can either be a numerical unix time in seconds (with up to nanosecond precision via decimals), or a string in RFC 3339 format. The [`ts_parse`](#ts_parse) method can be used in order to parse different timestamp formats.
+
+#### Examples
+
+
+```coffee
+root.created_at_unix = this.created_at.ts_unix_micro()
+
+# In:  {"created_at":"2009-11-10T23:00:00Z"}
+# Out: {"created_at_unix":1257894000000000}
+```
+
 ### `ts_unix_milli`
 
 :::caution BETA
@@ -1958,7 +2022,7 @@ root = this.json_schema("""{
 In order to load a schema from a file use the `file` function.
 
 ```coffee
-root = this.json_schema(file(var("BENTHOS_TEST_BLOBLANG_SCHEMA_FILE")))
+root = this.json_schema(file(env("BENTHOS_TEST_BLOBLANG_SCHEMA_FILE")))
 ```
 
 ### `key_values`
@@ -3000,6 +3064,10 @@ Attempts to format a timestamp value as a string according to a specified strfti
 ### `format_timestamp_unix`
 
 Attempts to format a timestamp value as a unix timestamp. Timestamp values can either be a numerical unix time in seconds (with up to nanosecond precision via decimals), or a string in RFC 3339 format. The [`ts_parse`](#ts_parse) method can be used in order to parse different timestamp formats.
+
+### `format_timestamp_unix_micro`
+
+Attempts to format a timestamp value as a unix timestamp with microsecond precision. Timestamp values can either be a numerical unix time in seconds (with up to nanosecond precision via decimals), or a string in RFC 3339 format. The [`ts_parse`](#ts_parse) method can be used in order to parse different timestamp formats.
 
 ### `format_timestamp_unix_milli`
 
