@@ -111,7 +111,11 @@ func newRedisCache(
 }
 
 func (r *redisCache) Get(ctx context.Context, key string) ([]byte, error) {
-	var boff backoff.BackOff
+	boff := r.boffPool.Get().(backoff.BackOff)
+	defer func() {
+		boff.Reset()
+		r.boffPool.Put(boff)
+	}()
 
 	if len(r.prefix) > 0 {
 		key = r.prefix + key
@@ -125,14 +129,6 @@ func (r *redisCache) Get(ctx context.Context, key string) ([]byte, error) {
 
 		if errors.Is(err, redis.Nil) {
 			return nil, service.ErrKeyNotFound
-		}
-
-		if boff == nil {
-			boff = r.boffPool.Get().(backoff.BackOff)
-			defer func() { //nolint:gocritic
-				boff.Reset()
-				r.boffPool.Put(boff)
-			}()
 		}
 
 		wait := boff.NextBackOff()
@@ -169,7 +165,7 @@ func (r *redisCache) Set(ctx context.Context, key string, value []byte, ttl *tim
 
 		if boff == nil {
 			boff = r.boffPool.Get().(backoff.BackOff)
-			defer func() { //nolint:gocritic
+			defer func() {
 				boff.Reset()
 				r.boffPool.Put(boff)
 			}()
@@ -188,7 +184,11 @@ func (r *redisCache) Set(ctx context.Context, key string, value []byte, ttl *tim
 }
 
 func (r *redisCache) Add(ctx context.Context, key string, value []byte, ttl *time.Duration) error {
-	var boff backoff.BackOff
+	boff := r.boffPool.Get().(backoff.BackOff)
+	defer func() {
+		boff.Reset()
+		r.boffPool.Put(boff)
+	}()
 
 	if len(r.prefix) > 0 {
 		key = r.prefix + key
@@ -211,14 +211,6 @@ func (r *redisCache) Add(ctx context.Context, key string, value []byte, ttl *tim
 			return nil
 		}
 
-		if boff == nil {
-			boff = r.boffPool.Get().(backoff.BackOff)
-			defer func() { //nolint:gocritic
-				boff.Reset()
-				r.boffPool.Put(boff)
-			}()
-		}
-
 		wait := boff.NextBackOff()
 		if wait == backoff.Stop {
 			return err
@@ -232,7 +224,11 @@ func (r *redisCache) Add(ctx context.Context, key string, value []byte, ttl *tim
 }
 
 func (r *redisCache) Delete(ctx context.Context, key string) error {
-	var boff backoff.BackOff
+	boff := r.boffPool.Get().(backoff.BackOff)
+	defer func() {
+		boff.Reset()
+		r.boffPool.Put(boff)
+	}()
 
 	if len(r.prefix) > 0 {
 		key = r.prefix + key
@@ -244,13 +240,6 @@ func (r *redisCache) Delete(ctx context.Context, key string) error {
 			return nil
 		}
 
-		if boff == nil {
-			boff = r.boffPool.Get().(backoff.BackOff)
-			defer func() { //nolint:gocritic
-				boff.Reset()
-				r.boffPool.Put(boff)
-			}()
-		}
 		wait := boff.NextBackOff()
 		if wait == backoff.Stop {
 			return err
