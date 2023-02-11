@@ -31,7 +31,7 @@ root.b_len = $long_content.compress("gzip").length()
 `,
 				[2]string{
 					`hello world this is some content`,
-					`{"a_len":32999,"b_len":164}`,
+					`{"a_len":32999,"b_len":161}`,
 				},
 			).
 			Example("", `root.compressed = content().compress("lz4").encode("base64")`,
