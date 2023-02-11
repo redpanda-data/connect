@@ -193,6 +193,28 @@ root.title = this.title.capitalize()
 # Out: {"title":"The Foo Bar"}
 ```
 
+### `compare_argon2`
+
+Checks whether a string matches a hashed secret using Argon2.
+
+#### Parameters
+
+**`hashed_secret`** &lt;string&gt; The hashed secret to compare with the input. This must be a fully-qualified string which encodes the Argon2 options used to generate the hash.  
+
+```coffee
+root.match = this.secret.compare_argon2("$argon2id$v=19$m=4096,t=3,p=1$c2FsdHktbWNzYWx0ZmFjZQ$RMUMwgtS32/mbszd+ke4o4Ej1jFpYiUqY6MHWa69X7Y")
+
+# In:  {"secret":"there-are-many-blobs-in-the-sea"}
+# Out: {"match":true}
+```
+
+```coffee
+root.match = this.secret.compare_argon2("$argon2id$v=19$m=4096,t=3,p=1$c2FsdHktbWNzYWx0ZmFjZQ$RMUMwgtS32/mbszd+ke4o4Ej1jFpYiUqY6MHWa69X7Y")
+
+# In:  {"secret":"will-i-ever-find-love"}
+# Out: {"match":false}
+```
+
 ### `compare_bcrypt`
 
 Checks whether a string matches a hashed secret using bcrypt.
