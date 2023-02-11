@@ -306,6 +306,7 @@ func (d *dynamodbCache) Add(ctx context.Context, key string, value []byte, ttl *
 		boff.Reset()
 		d.boffPool.Put(boff)
 	}()
+
 	err := d.add(key, value, ttl)
 	for err != nil && err != service.ErrKeyAlreadyExists {
 		wait := boff.NextBackOff()

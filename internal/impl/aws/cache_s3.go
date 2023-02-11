@@ -129,7 +129,6 @@ func (s *s3Cache) Get(ctx context.Context, key string) (body []byte, err error) 
 	}()
 
 	var obj *s3.GetObjectOutput
-
 	for {
 		if obj, err = s.s3.GetObjectWithContext(ctx, &s3.GetObjectInput{
 			Bucket: &s.bucket,
