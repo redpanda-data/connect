@@ -55,6 +55,7 @@ require (
 	github.com/influxdata/influxdb1-client v0.0.0-20220302092344-a9ab5670611c
 	github.com/itchyny/gojq v0.12.11
 	github.com/itchyny/timefmt-go v0.1.5
+	github.com/jeromer/syslogparser v1.1.0
 	github.com/jhump/protoreflect v1.10.1
 	github.com/jmespath/go-jmespath v0.4.0
 	github.com/klauspost/compress v1.15.11
