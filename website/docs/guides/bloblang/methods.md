@@ -2150,6 +2150,60 @@ root = this.foo.merge(this.bar)
 # Out: {"first_name":"fooer","likes":["bars","foos"],"second_name":"barer"}
 ```
 
+### `sign_jwt_hs256`
+
+Hash and sign an object representing JSON Web Token (JWT) claims using HS256.
+
+#### Parameters
+
+**`signing_secret`** &lt;string&gt; The HMAC secret to use for signing the token.  
+
+#### Examples
+
+
+```coffee
+root.signed = this.claims.sign_jwt_hs256("dont-tell-anyone")
+
+# In:  {"claims":{"sub":"user123"}}
+# Out: {"signed":"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyMTIzIn0.hUl-nngPMY_3h9vveWJUPsCcO5PeL6k9hWLnMYeFbFQ"}
+```
+
+### `sign_jwt_hs384`
+
+Hash and sign an object representing JSON Web Token (JWT) claims using HS384.
+
+#### Parameters
+
+**`signing_secret`** &lt;string&gt; The HMAC secret to use for signing the token.  
+
+#### Examples
+
+
+```coffee
+root.signed = this.claims.sign_jwt_hs384("dont-tell-anyone")
+
+# In:  {"claims":{"sub":"user123"}}
+# Out: {"signed":"eyJhbGciOiJIUzM4NCIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyMTIzIn0.zGYLr83aToon1efUNq-hw7XgT20lPvZb8sYei8x6S6mpHwb433SJdXJXx0Oio8AZ"}
+```
+
+### `sign_jwt_hs512`
+
+Hash and sign an object representing JSON Web Token (JWT) claims using HS512.
+
+#### Parameters
+
+**`signing_secret`** &lt;string&gt; The HMAC secret to use for signing the token.  
+
+#### Examples
+
+
+```coffee
+root.signed = this.claims.sign_jwt_hs512("dont-tell-anyone")
+
+# In:  {"claims":{"sub":"user123"}}
+# Out: {"signed":"eyJhbGciOiJIUzUxMiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyMTIzIn0.zBNR9o_6EDwXXKkpKLNJhG26j8Dc-mV-YahBwmEdCrmiWt5les8I9rgmNlWIowpq6Yxs4kLNAdFhqoRz3NXT3w"}
+```
+
 ### `slice`
 
 Extract a slice from an array by specifying two indices, a low and high bound, which selects a half-open range that includes the first element, but excludes the last one. If the second index is omitted then it defaults to the length of the input sequence.
