@@ -3,14 +3,15 @@ package pure
 import (
 	"bytes"
 	"compress/bzip2"
-	"compress/flate"
-	"compress/gzip"
-	"compress/zlib"
 	"fmt"
 	"io"
 	"sync"
 
-	"github.com/golang/snappy"
+	"github.com/klauspost/compress/flate"
+	"github.com/klauspost/compress/gzip"
+	"github.com/klauspost/compress/snappy"
+	"github.com/klauspost/compress/zlib"
+
 	"github.com/pierrec/lz4/v4"
 
 	"github.com/benthosdev/benthos/v4/internal/bloblang/query"
