@@ -144,7 +144,11 @@ func (r *redisCache) Get(ctx context.Context, key string) ([]byte, error) {
 }
 
 func (r *redisCache) Set(ctx context.Context, key string, value []byte, ttl *time.Duration) error {
-	var boff backoff.BackOff
+	boff := r.boffPool.Get().(backoff.BackOff)
+	defer func() {
+		boff.Reset()
+		r.boffPool.Put(boff)
+	}()
 
 	if len(r.prefix) > 0 {
 		key = r.prefix + key
@@ -161,14 +165,6 @@ func (r *redisCache) Set(ctx context.Context, key string, value []byte, ttl *tim
 		err := r.client.Set(ctx, key, value, t).Err()
 		if err == nil {
 			return nil
-		}
-
-		if boff == nil {
-			boff = r.boffPool.Get().(backoff.BackOff)
-			defer func() {
-				boff.Reset()
-				r.boffPool.Put(boff)
-			}()
 		}
 
 		wait := boff.NextBackOff()

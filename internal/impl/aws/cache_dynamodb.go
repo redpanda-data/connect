@@ -192,9 +192,6 @@ func (d *dynamodbCache) Get(ctx context.Context, key string) ([]byte, error) {
 	result, err := d.get(key)
 
 	for err != nil && err != service.ErrKeyNotFound {
-		if boff == nil {
-		}
-
 		wait := boff.NextBackOff()
 		if wait == backoff.Stop {
 			break
@@ -350,15 +347,15 @@ func (d *dynamodbCache) add(key string, value []byte, ttl *time.Duration) error 
 }
 
 func (d *dynamodbCache) Delete(ctx context.Context, key string) error {
-	var boff backoff.BackOff
+	boff := d.boffPool.Get().(backoff.BackOff)
+	defer func() {
+		boff.Reset()
+		d.boffPool.Put(boff)
+	}()
+
 	err := d.delete(key)
 	for err != nil {
 		if boff == nil {
-			boff = d.boffPool.Get().(backoff.BackOff)
-			defer func() {
-				boff.Reset()
-				d.boffPool.Put(boff)
-			}()
 		}
 		wait := boff.NextBackOff()
 		if wait == backoff.Stop {
