@@ -2663,7 +2663,7 @@ root.b_len = $long_content.compress("gzip").length()
 
 
 # In:  hello world this is some content
-# Out: {"a_len":32999,"b_len":164}
+# Out: {"a_len":32999,"b_len":161}
 ```
 
 ```coffee
