@@ -461,6 +461,17 @@ Returns the current unix timestamp in seconds.
 root.received_at = timestamp_unix()
 ```
 
+### `timestamp_unix_micro`
+
+Returns the current unix timestamp in microseconds.
+
+#### Examples
+
+
+```coffee
+root.received_at = timestamp_unix_micro()
+```
+
 ### `timestamp_unix_milli`
 
 Returns the current unix timestamp in milliseconds.

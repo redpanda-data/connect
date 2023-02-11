@@ -25,7 +25,7 @@ input:
 
 By using a rate limit in this way we can guarantee that our input will only poll our HTTP source at the rate of 500 requests per second.
 
-Some components don't have a `rate_limit` field but we might still wish to throttle them by a rate limit, in which case we can use the [`rate_limit` processor][processor.rate_limit] that applies back pressure to a processing pipeline when the limit is reached. For example, if we wished to limit the consumption of lines of a [`csv` file input][inputs.csv] to a specified rate limit we can do that with the following:
+Some components don't have a `rate_limit` field but we might still wish to throttle them by a rate limit, in which case we can use the [`rate_limit` processor][processor.rate_limit] that applies back pressure to a processing pipeline when the limit is reached. For example, if we wished to limit the consumption of lines of a [`csv` file input][input.csv] to a specified rate limit we can do that with the following:
 
 ```yaml
 input:
