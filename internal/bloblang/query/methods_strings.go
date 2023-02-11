@@ -613,7 +613,7 @@ var _ = registerSimpleMethod(
 		"format", "",
 	).InCategory(
 		MethodCategoryStrings,
-		"Use a value string as a format specifier in order to produce a new string, using any number of provided arguments.",
+		"Use a value string as a format specifier in order to produce a new string, using any number of provided arguments. Please refer to the Go [`fmt` package documentation](https://pkg.go.dev/fmt) for the list of valid format verbs.",
 		NewExampleSpec("",
 			`root.foo = "%s(%v): %v".format(this.name, this.age, this.fingers)`,
 			`{"name":"lance","age":37,"fingers":13}`,

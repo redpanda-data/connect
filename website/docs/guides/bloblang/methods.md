@@ -322,7 +322,7 @@ root.path_sep = this.path.filepath_split()
 
 ### `format`
 
-Use a value string as a format specifier in order to produce a new string, using any number of provided arguments.
+Use a value string as a format specifier in order to produce a new string, using any number of provided arguments. Please refer to the Go [`fmt` package documentation](https://pkg.go.dev/fmt) for the list of valid format verbs.
 
 #### Examples
 
