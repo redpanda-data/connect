@@ -15,6 +15,7 @@ import (
 	tracesdk "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/trace"
 
+	"github.com/benthosdev/benthos/v4/internal/cli"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
@@ -120,6 +121,16 @@ func newOtlp(config *otlp) (trace.TracerProvider, error) {
 
 	for k, v := range config.tags {
 		attrs = append(attrs, attribute.String(k, v))
+	}
+
+	if _, ok := config.tags[string(semconv.ServiceNameKey)]; !ok {
+		attrs = append(attrs, semconv.ServiceNameKey.String("benthos"))
+
+		// Only set the default service version tag if the user doesn't provide
+		// a custom service name tag.
+		if _, ok := config.tags[string(semconv.ServiceVersionKey)]; !ok {
+			attrs = append(attrs, semconv.ServiceVersionKey.String(cli.Version))
+		}
 	}
 
 	opts = append(opts, tracesdk.WithResource(resource.NewWithAttributes(semconv.SchemaURL, attrs...)))

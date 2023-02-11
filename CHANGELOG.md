@@ -15,9 +15,17 @@ All notable changes to this project will be documented in this file.
 - New `couchbase` cache implementation.
 - New `compress` and `decompress` Bloblang methods.
 - Field `endpoint` added to the `gcp_pubsub` input and output.
+- Fields `file_name`, `file_extension` and `request_id` added to the `snowflake_put` output.
+- Add interpolation support to the `path` field of the `snowflake_put` output.
+- Add ZSTD compression support to the `compression` field of the `snowflake_put` output.
 - New Bloblang method `concat`.
 - New `redis` ratelimit.
 - The `socket_server` input now supports `tls` as a network type.
+- New bloblang function `timestamp_unix_milli`.
+- New bloblang method `ts_unix_milli`.
+- JWT based HTTP authentication now supports `EdDSA`.
+- New `flow_control` fields added to the `gcp_pubsub` output.
+- The `open_telemetry_collector` tracer now automatically sets the `service.name` and `service.version` tags if they are not configured by the user.
 
 ### Fixed
 
@@ -30,6 +38,8 @@ to the [`database/sql` docs](https://pkg.go.dev/database/sql#DB.SetMaxIdleConns)
 - It's now possible to mock resources within the main test target file in config unit tests.
 - Unit test linting no longer incorrectly expects the `json_contains` predicate to contain a string value only.
 - Config component initialisation errors should no longer show nested path annotations.
+- Prevented panics from the `jq` processor when querying invalid types.
+- The `jaeger` tracer no longer emits the `service.version` tag automatically if the user sets the `service.name` tag explicitly.
 
 ## 4.11.0 - 2022-12-21
 

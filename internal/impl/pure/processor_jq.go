@@ -156,6 +156,28 @@ func (j *jqProc) getPartValue(part *message.Part, raw bool) (obj any, err error)
 	return obj, nil
 }
 
+func safeQuery(input any, meta map[string]any, c *gojq.Code) (emitted []any, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = fmt.Errorf("jq panic: %v", r)
+		}
+	}()
+
+	iter := c.Run(input, meta)
+	for {
+		out, ok := iter.Next()
+		if !ok {
+			break
+		}
+		if err, ok = out.(error); ok {
+			_ = err.Error() // This can panic :(
+			return
+		}
+		emitted = append(emitted, out)
+	}
+	return
+}
+
 func (j *jqProc) Process(ctx context.Context, msg *message.Part) ([]*message.Part, error) {
 	in, err := j.getPartValue(msg, j.inRaw)
 	if err != nil {
@@ -163,18 +185,10 @@ func (j *jqProc) Process(ctx context.Context, msg *message.Part) ([]*message.Par
 	}
 	metadata := j.getPartMetadata(msg)
 
-	var emitted []any
-	iter := j.code.Run(in, metadata)
-	for {
-		out, ok := iter.Next()
-		if !ok {
-			break
-		}
-		if err, ok := out.(error); ok {
-			j.log.Debugf(err.Error())
-			return nil, err
-		}
-		emitted = append(emitted, out)
+	emitted, err := safeQuery(in, metadata, j.code)
+	if err != nil {
+		j.log.Debugf(err.Error())
+		return nil, err
 	}
 
 	if j.outRaw {
