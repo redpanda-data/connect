@@ -3,9 +3,10 @@ package crypto
 import (
 	"fmt"
 
+	"github.com/golang-jwt/jwt/v4"
+
 	"github.com/benthosdev/benthos/v4/internal/bloblang/query"
 	"github.com/benthosdev/benthos/v4/public/bloblang"
-	"github.com/golang-jwt/jwt/v4"
 )
 
 func jwtHSSigner(alg *jwt.SigningMethodHMAC) bloblang.MethodConstructorV2 {

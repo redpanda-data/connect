@@ -7,10 +7,11 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/benthosdev/benthos/v4/internal/bloblang/query"
-	"github.com/benthosdev/benthos/v4/public/bloblang"
 	"go.uber.org/multierr"
 	"golang.org/x/crypto/argon2"
+
+	"github.com/benthosdev/benthos/v4/internal/bloblang/query"
+	"github.com/benthosdev/benthos/v4/public/bloblang"
 )
 
 var (

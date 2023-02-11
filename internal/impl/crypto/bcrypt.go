@@ -3,9 +3,10 @@ package crypto
 import (
 	"errors"
 
+	"golang.org/x/crypto/bcrypt"
+
 	"github.com/benthosdev/benthos/v4/internal/bloblang/query"
 	"github.com/benthosdev/benthos/v4/public/bloblang"
-	"golang.org/x/crypto/bcrypt"
 )
 
 func registerCompareBCryptMethod() error {

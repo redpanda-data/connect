@@ -3,8 +3,9 @@ package crypto
 import (
 	"testing"
 
-	"github.com/benthosdev/benthos/v4/public/bloblang"
 	"github.com/stretchr/testify/require"
+
+	"github.com/benthosdev/benthos/v4/public/bloblang"
 )
 
 func TestBloblangCompareArgon2(t *testing.T) {

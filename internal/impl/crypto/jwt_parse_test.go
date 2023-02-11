@@ -4,9 +4,10 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/benthosdev/benthos/v4/public/bloblang"
 	"github.com/golang-jwt/jwt/v4"
 	"github.com/stretchr/testify/require"
+
+	"github.com/benthosdev/benthos/v4/public/bloblang"
 )
 
 func TestBloblangParseJwtHS(t *testing.T) {
