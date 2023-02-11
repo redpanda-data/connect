@@ -75,6 +75,7 @@ func TestMethodExamples(t *testing.T) {
 	})
 
 	_, err = tmpJSONFile.WriteString(`
+{
   "type":"object",
   "properties":{
     "foo":{
