@@ -25,6 +25,7 @@ All notable changes to this project will be documented in this file.
 - New bloblang method `ts_unix_milli`.
 - JWT based HTTP authentication now supports `EdDSA`.
 - New `flow_control` fields added to the `gcp_pubsub` output.
+- The `open_telemetry_collector` tracer now automatically sets the `service.name` and `service.version` tags if they are not configured by the user.
 
 ### Fixed
 
@@ -38,6 +39,7 @@ to the [`database/sql` docs](https://pkg.go.dev/database/sql#DB.SetMaxIdleConns)
 - Unit test linting no longer incorrectly expects the `json_contains` predicate to contain a string value only.
 - Config component initialisation errors should no longer show nested path annotations.
 - Prevented panics from the `jq` processor when querying invalid types.
+- The `jaeger` tracer no longer emits the `service.version` tag automatically if the user sets the `service.name` tag explicitly.
 
 ## 4.11.0 - 2022-12-21
 
