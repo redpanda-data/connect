@@ -190,7 +190,6 @@ func (d *dynamodbCache) Get(ctx context.Context, key string) ([]byte, error) {
 	}()
 
 	result, err := d.get(key)
-
 	for err != nil && err != service.ErrKeyNotFound {
 		wait := boff.NextBackOff()
 		if wait == backoff.Stop {
