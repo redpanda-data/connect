@@ -42,6 +42,7 @@ to the [`database/sql` docs](https://pkg.go.dev/database/sql#DB.SetMaxIdleConns)
 - Config component initialisation errors should no longer show nested path annotations.
 - Prevented panics from the `jq` processor when querying invalid types.
 - The `jaeger` tracer no longer emits the `service.version` tag automatically if the user sets the `service.name` tag explicitly.
+- The `int64()`, `int32()`, `uint64()` and `uint32()` bloblang methods can now infer the number base as documented [here](https://pkg.go.dev/strconv#ParseInt).
 
 ## 4.11.0 - 2022-12-21
 
