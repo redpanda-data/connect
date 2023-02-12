@@ -101,7 +101,9 @@ func newSyslogUnixDomainSocket(conf *service.ParsedConfig, log *service.Logger) 
 
 func (p *syslogUnixReader) createStreamingSocket() (net.Listener, error) {
 	if _, err := os.Stat(p.address); err == nil {
-		os.Remove(p.address)
+		if err := os.Remove(p.address); err != nil {
+			p.log.Errorf("Couldn't create socket: %v", err)
+		}
 	}
 	conn, err := net.Listen(p.socketType, p.address)
 	if err != nil {
