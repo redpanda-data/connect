@@ -21,17 +21,23 @@ var (
 // respective environment variable will be read and will replace the pattern. If
 // the environment variable is empty or does not exist then either the default
 // value is used or the field will be left empty.
-func ReplaceEnvVariables(inBytes []byte) []byte {
+func ReplaceEnvVariables(inBytes []byte, preventEmptyEnvVars bool) []byte {
 	replaced := envRegex.ReplaceAllFunc(inBytes, func(content []byte) []byte {
 		var value string
+		var ok bool
 		if len(content) > 3 {
 			if colonIndex := bytes.IndexByte(content, ':'); colonIndex == -1 {
-				value = os.Getenv(string(content[2 : len(content)-1]))
+				value, ok = os.LookupEnv(string(content[2 : len(content)-1]))
+				if !ok && preventEmptyEnvVars {
+					panic("Env var was unset but --strict-env is set")
+				}
 			} else {
 				targetVar := content[2:colonIndex]
 				defaultVal := content[colonIndex+1 : len(content)-1]
 
-				value = os.Getenv(string(targetVar))
+				// TODO: Consider reading from `ok` instead of relying on empty string
+				// equality signifying a variable being unset.
+				value, _ = os.LookupEnv(string(targetVar))
 				if value == "" {
 					value = string(defaultVal)
 				}
