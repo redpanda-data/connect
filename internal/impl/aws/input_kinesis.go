@@ -6,8 +6,10 @@ import (
 	"fmt"
 	"math/rand"
 	"strings"
+	"strconv"
 	"sync"
 	"time"
+
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
@@ -60,6 +62,7 @@ Use the ` + "`batching`" + ` fields to configure an optional [batching policy](/
 `,
 		Config: docs.FieldComponent().WithChildren(
 			docs.FieldString("streams", "One or more Kinesis data streams to consume from. Shards of a stream are automatically balanced across consumers by coordinating through the provided DynamoDB table. Multiple comma separated streams can be listed in a single element. Shards are automatically distributed across consumers of a stream by coordinating through the provided DynamoDB table. Alternatively, it's possible to specify an explicit shard to consume from with a colon after the stream name, e.g. `foo:0` would consume the shard `0` of the stream `foo`.").Array(),
+			docs.FieldString("streams_max_shard", "One or more Kinesis Data streams to consume from and also explictly specifying the maximum shards that each client can consume from. This is set by the colon - e.g. kds:3 means that the maximum number of shards that this client can consume is 3.").Array(),
 			docs.FieldObject(
 				"dynamodb", "Determines the table used for storing and accessing the latest consumed sequence for shards, and for coordinating balanced consumers of streams.",
 			).WithChildren(
@@ -113,6 +116,7 @@ type kinesisReader struct {
 
 	streamShards    map[string][]string
 	balancedStreams []string
+	streamMaxShards map[string]int
 
 	commitPeriod    time.Duration
 	leasePeriod     time.Duration
@@ -162,6 +166,7 @@ func newKinesisReader(conf input.AWSKinesisConfig, mgr bundle.NewManagement) (*k
 		},
 	}
 
+
 	for _, t := range conf.Streams {
 		for _, splitStreams := range strings.Split(t, ",") {
 			if trimmed := strings.TrimSpace(splitStreams); len(trimmed) > 0 {
@@ -184,6 +189,26 @@ func newKinesisReader(conf input.AWSKinesisConfig, mgr bundle.NewManagement) (*k
 			}
 		}
 	}
+	 if len(k.balancedStreams) > 0 && len(conf.StreamsMaxShard) > 0 {
+		for _, streamPerShard := range conf.StreamsMaxShard {
+			if trimmed := strings.TrimSpace(streamPerShard); len(trimmed) > 0 {
+				if eachShard := strings.Split(trimmed, ":"); len(eachShard) > 1 {
+					stream := strings.TrimSpace(eachShard[0])
+					maxShardsPerClient, err := strconv.Atoi(strings.TrimSpace(eachShard[1]))
+					if err != nil {
+						return nil, fmt.Errorf("failed to parse streams max shard value: %v", err)
+					}
+					if maxShardsPerClient == 0 {
+						return nil, fmt.Errorf("max shards per client cannot be 0")
+					}
+					k.streamMaxShards[stream] = maxShardsPerClient
+				}
+			}
+		}		
+	}
+
+
+
 	if k.commitPeriod, err = time.ParseDuration(k.conf.CommitPeriod); err != nil {
 		return nil, fmt.Errorf("failed to parse commit period string: %v", err)
 	}
@@ -548,8 +573,12 @@ func (k *kinesisReader) runBalancedShards() {
 				}
 			}
 
+			currentShardClaimed := len(clientClaims[k.clientID])
+			maxShardNumber, maxShardExists := k.streamMaxShards[streamID]
+
+
 			// Have a go at grabbing any unclaimed shards
-			if len(unclaimedShards) > 0 {
+			if len(unclaimedShards) > 0 && (!maxShardExists || currentShardClaimed < maxShardNumber){
 				for shardID, clientID := range unclaimedShards {
 					sequence, err := k.checkpointer.Claim(k.ctx, streamID, shardID, clientID)
 					if err != nil {
