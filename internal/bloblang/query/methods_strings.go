@@ -1773,18 +1773,15 @@ func reReplaceAllImpl(args *ParsedParams) (simpleMethod, error) {
 	if err != nil {
 		return nil, err
 	}
-	withBytes := []byte(with)
 	return func(v any, ctx FunctionContext) (any, error) {
-		var result string
 		switch t := v.(type) {
 		case string:
-			result = re.ReplaceAllString(t, with)
+			return re.ReplaceAllString(t, with), nil
 		case []byte:
-			result = string(re.ReplaceAll(t, withBytes))
+			return string(re.ReplaceAll(t, []byte(with))), nil
 		default:
 			return nil, NewTypeError(v, ValueString)
 		}
-		return result, nil
 	}, nil
 }
 
