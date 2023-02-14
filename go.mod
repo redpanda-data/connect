@@ -13,7 +13,7 @@ require (
 	github.com/Azure/go-autorest/autorest v0.11.23
 	github.com/ClickHouse/clickhouse-go/v2 v2.2.0
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/trace v1.4.0
-	github.com/Jeffail/gabs/v2 v2.6.1
+	github.com/Jeffail/gabs/v2 v2.7.0
 	github.com/Jeffail/grok v1.1.0
 	github.com/Masterminds/squirrel v1.5.2
 	github.com/OneOfOne/xxhash v1.2.8
