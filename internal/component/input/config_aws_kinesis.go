@@ -46,6 +46,7 @@ func NewAWSKinesisConfig() AWSKinesisConfig {
 	return AWSKinesisConfig{
 		Config:          session.NewConfig(),
 		Streams:         []string{},
+		StreamsMaxShard:  []string{},
 		DynamoDB:        NewDynamoDBCheckpointConfig(),
 		CheckpointLimit: 1024,
 		CommitPeriod:    "5s",

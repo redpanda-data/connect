@@ -5,11 +5,10 @@ import (
 	"errors"
 	"fmt"
 	"math/rand"
-	"strings"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
-
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
@@ -140,11 +139,12 @@ func newKinesisReader(conf input.AWSKinesisConfig, mgr bundle.NewManagement) (*k
 	}
 
 	k := kinesisReader{
-		conf:         conf,
-		log:          mgr.Logger(),
-		mgr:          mgr,
-		closedChan:   make(chan struct{}),
-		streamShards: map[string][]string{},
+		conf:            conf,
+		log:             mgr.Logger(),
+		mgr:             mgr,
+		closedChan:      make(chan struct{}),
+		streamShards:    map[string][]string{},
+		streamMaxShards: map[string]int{},
 	}
 	k.ctx, k.done = context.WithCancel(context.Background())
 
@@ -165,7 +165,6 @@ func newKinesisReader(conf input.AWSKinesisConfig, mgr bundle.NewManagement) (*k
 			return k.backoffCtor()
 		},
 	}
-
 
 	for _, t := range conf.Streams {
 		for _, splitStreams := range strings.Split(t, ",") {
@@ -189,33 +188,34 @@ func newKinesisReader(conf input.AWSKinesisConfig, mgr bundle.NewManagement) (*k
 			}
 		}
 	}
-	 if len(k.balancedStreams) > 0 && len(conf.StreamsMaxShard) > 0 {
-		for _, streamPerShard := range conf.StreamsMaxShard {
-			if trimmed := strings.TrimSpace(streamPerShard); len(trimmed) > 0 {
-				if eachShard := strings.Split(trimmed, ":"); len(eachShard) > 1 {
-					stream := strings.TrimSpace(eachShard[0])
-					maxShardsPerClient, err := strconv.Atoi(strings.TrimSpace(eachShard[1]))
-					if err != nil {
-						return nil, fmt.Errorf("failed to parse streams max shard value: %v", err)
+	if len(k.balancedStreams) > 0 && len(conf.StreamsMaxShard) > 0 {
+		for _, s := range conf.StreamsMaxShard {
+			for _, streamPerShard := range strings.Split(s, ",") {
+				if trimmed := strings.TrimSpace(streamPerShard); len(trimmed) > 0 {
+					if eachShard := strings.Split(trimmed, ":"); len(eachShard) > 1 {
+						stream := strings.TrimSpace(eachShard[0])
+						maxShardsPerClient, err := strconv.Atoi(strings.TrimSpace(eachShard[1]))
+						if err != nil {
+							return nil, fmt.Errorf("failed to parse streams max shard value: %v", err)
+						}
+						if maxShardsPerClient == 0 {
+							return nil, fmt.Errorf("max shards per client cannot be 0")
+						}
+						k.streamMaxShards[stream] = maxShardsPerClient
 					}
-					if maxShardsPerClient == 0 {
-						return nil, fmt.Errorf("max shards per client cannot be 0")
-					}
-					k.streamMaxShards[stream] = maxShardsPerClient
 				}
 			}
-		}
-		for _, stream := range k.balancedStreams {
-			numShards, exists := k.streamMaxShards[stream]
-			if exists {
-				k.log.Infof("this client will only read %v shards for stream:%v\n", numShards, stream)
-			}else{
-				k.log.Infof("No max number of shard defined for the stream:%v, goes back to default behaviour\n", stream)
+			for _, stream := range k.balancedStreams {
+				numShards, exists := k.streamMaxShards[stream]
+				if exists {
+					k.log.Infof("this client will only read %v shards for stream:%v\n", numShards, stream)
+				} else {
+					k.log.Infof("No max number of shard defined for the stream:%v, goes back to default behaviour\n", stream)
+				}
+
 			}
-		}		
+		}
 	}
-
-
 
 	if k.commitPeriod, err = time.ParseDuration(k.conf.CommitPeriod); err != nil {
 		return nil, fmt.Errorf("failed to parse commit period string: %v", err)
@@ -581,34 +581,10 @@ func (k *kinesisReader) runBalancedShards() {
 				}
 			}
 
-			currentShardClaimed := len(clientClaims[k.clientID])
-			maxShardNumber, maxShardExists := k.streamMaxShards[streamID]
-
 			// Have a go at grabbing any unclaimed shards
-			if len(unclaimedShards) > 0 && (!maxShardExists || currentShardClaimed < maxShardNumber){
-				// Remaining number of shards that can be claimed
-				shardRemainder := maxShardNumber - currentShardClaimed
-				for shardID, clientID := range unclaimedShards {
-					if  maxShardExists && shardRemainder <= 0 {
-						break
-					}
-					sequence, err := k.checkpointer.Claim(k.ctx, streamID, shardID, clientID)
-					if err != nil {
-						if k.ctx.Err() != nil {
-							return
-						}
-						if !errors.Is(err, ErrLeaseNotAcquired) {
-							k.log.Errorf("Failed to claim unclaimed shard '%v': %v\n", shardID, err)
-						}
-						continue
-					}
-					wg.Add(1)
-					shardRemainder--
-					if err = k.runConsumer(&wg, streamID, shardID, sequence); err != nil {
-						k.log.Errorf("Failed to start consumer: %v\n", err)
-					}
-				}
-
+			if len(unclaimedShards) > 0 {
+				numberShardClaimed := len(clientClaims[k.clientID])
+				k.maxShardRunBalancedConsumer(&wg, streamID, unclaimedShards, numberShardClaimed)
 				// If there are unclaimed shards then let's not resort to
 				// thievery just yet.
 				continue
@@ -709,6 +685,34 @@ func (k *kinesisReader) runExplicitShards() {
 			break
 		} else {
 			<-time.After(time.Second)
+		}
+	}
+}
+
+func (k *kinesisReader) maxShardRunBalancedConsumer(wg *sync.WaitGroup, streamID string, unclaimedShards map[string]string, numberShardClaimed int) {
+	maxShardNumber, maxShardExists := k.streamMaxShards[streamID]
+	if !maxShardExists || numberShardClaimed < maxShardNumber {
+		// Remaining number of shards that can be claimed
+		shardRemainder := maxShardNumber - numberShardClaimed
+		for shardID, clientID := range unclaimedShards {
+			if maxShardExists && shardRemainder <= 0 {
+				break
+			}
+			sequence, err := k.checkpointer.Claim(k.ctx, streamID, shardID, clientID)
+			if err != nil {
+				if k.ctx.Err() != nil {
+					return
+				}
+				if !errors.Is(err, ErrLeaseNotAcquired) {
+					k.log.Errorf("Failed to claim unclaimed shard '%v': %v\n", shardID, err)
+				}
+				continue
+			}
+			wg.Add(1)
+			shardRemainder--
+			if err = k.runConsumer(wg, streamID, shardID, sequence); err != nil {
+				k.log.Errorf("Failed to start consumer: %v\n", err)
+			}
 		}
 	}
 }
