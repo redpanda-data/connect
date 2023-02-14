@@ -45,7 +45,17 @@ var (
 
 	// Specialised and not generally known over ValueNumber.
 	ValueInt   ValueType = "integer"
-	ValueFloat ValueType = "float"
+	ValueInt8    ValueType = "int8"
+	ValueUInt8   ValueType = "uint8"
+	ValueInt16   ValueType = "int16"
+	ValueUInt16  ValueType = "uint16"
+	ValueInt32   ValueType = "int32"
+	ValueUInt32  ValueType = "uint32"
+	ValueInt64   ValueType = "int64"
+	ValueUInt64  ValueType = "uint64"
+	ValueFloat   ValueType = "float"
+	ValueFloat32 ValueType = "float32"
+	ValueFloat64 ValueType = "float64"
 )
 
 // ITypeOf returns the type of a boxed value as a discrete ValueType. If the
@@ -68,6 +78,56 @@ func ITypeOf(i any) ValueType {
 		return ValueObject
 	case Delete:
 		return ValueDelete
+	case Nothing:
+		return ValueNothing
+	case nil:
+		return ValueNull
+	}
+	if _, isDyn := i.(Function); isDyn {
+		return ValueQuery
+	}
+	return ValueUnknown
+}
+
+// NTypeOf returns the type of a boxed value as a discrete ValueType. If the
+// type of the value is unknown then ValueUnknown is returned.
+func NTypeOf(i any) ValueType {
+	switch i.(type) {
+	case int:
+		switch bits.UintSize {
+		case 32:
+			return ValueInt32
+		case 64:
+			return ValueInt64
+		}
+	case int8:
+		return ValueInt8
+	case uint8:
+		return ValueUInt8
+	case int16:
+		return ValueInt16
+	case uint16:
+		return ValueUInt16
+	case int32:
+		return ValueInt32
+	case uint32:
+		return ValueUInt32
+	case int64:
+		return ValueInt64
+	case uint64:
+		return ValueUInt64
+	case float32:
+		return ValueFloat32
+	case float64:
+		return ValueFloat64
+	case json.Number:
+		return ValueFloat64
+	case string:
+		n, err := IToNumber(i)
+		if err != nil {
+			return ValueUnknown
+		}
+		return NTypeOf(n)
 	case Nothing:
 		return ValueNothing
 	case nil:
