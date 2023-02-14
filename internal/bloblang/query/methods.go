@@ -508,3 +508,37 @@ root.foo_type = this.foo.type()`,
 		}, nil
 	},
 )
+
+var _ = registerSimpleMethod(
+	NewMethodSpec(
+		"number_type", "",
+	).InCategory(
+		MethodCategoryCoercion,
+		"Returns the type of a value as a string, providing one of the following values: `int`, `uint`, `int8`, `uint8`, `int16`, `uint16`, `uint32`, `uint64`, `float32`, `float64` or `null`.",
+		NewExampleSpec("",
+			`root.bar_type = this.bar.number_type()
+root.foo_type = this.foo.number_type()`,
+			`{"bar":10,"foo": 123.45}`,
+			`{"bar_type":"int64","foo_type":"float64"}`,
+		),
+		NewExampleSpec("",
+			`root.type = this.number_type()`,
+			`666`,
+			`{"type":"int64"}`,
+			`-169999999999999993883079578865998174333346074304075874502773119193537729178160565864330091787584707988572262467983188919169916105593357174268369962062473635296474636515660464935663040684957844303524367815028553272712298986386310828644513212353921123253311675499856875650512437415429217994623324794855339589632.000000`,
+			`{"type":"float64"}`,
+			`null`,
+			`{"type":"null"}`,
+		),
+		NewExampleSpec("",
+			`root.type = this.uint32().number_type()`,
+			`666`,
+			`{"type":"uint32"}`,
+		),
+	),
+	func(*ParsedParams) (simpleMethod, error) {
+		return func(v any, ctx FunctionContext) (any, error) {
+			return string(NTypeOf(v)), nil
+		}, nil
+	},
+)
