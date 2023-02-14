@@ -1566,6 +1566,34 @@ root.foo = this.thing.number() + 10
 root.bar = this.thing.number(5) * 10
 ```
 
+### `number_type`
+
+"Returns the type of a value as a string, providing one of the following values: `int`, `uint`, `int8`, `uint8`, `int16`, `uint16`, `uint32`, `uint64`, `float32`, `float64` or `null`.
+
+#### Examples
+
+
+```coffee
+root.bar_type = this.bar.number_type()
+root.foo_type = this.foo.number_type()
+
+# In:  {"bar":10,"foo":123.45}
+# Out: {"bar_type":"number","foo_type":"float64"}
+```
+
+```coffee
+root.type = this.number_type()
+
+# In:  666
+# Out: {"type":"int64"}
+
+# In: -169999999999999993883079578865998174333346074304075874502773119193537729178160565864330091787584707988572262467983188919169916105593357174268369962062473635296474636515660464935663040684957844303524367815028553272712298986386310828644513212353921123253311675499856875650512437415429217994623324794855339589632.000000`
+# Out: {"type":"float64"}
+
+# In:  null
+# Out: {"type":"null"}
+```
+
 ### `string`
 
 Marshal a value into a string. If the value is already a string it is unchanged.
