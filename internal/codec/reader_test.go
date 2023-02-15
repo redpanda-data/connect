@@ -3,13 +3,14 @@ package codec
 import (
 	"archive/tar"
 	"bytes"
-	"compress/gzip"
 	"context"
 	"errors"
 	"fmt"
 	"io"
 	"sync"
 	"testing"
+
+	"github.com/klauspost/compress/gzip"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

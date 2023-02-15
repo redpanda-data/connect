@@ -706,7 +706,7 @@ var _ = registerSimpleMethod(
 		),
 		NewExampleSpec(
 			"In order to load a schema from a file use the `file` function.",
-			`root = this.json_schema(file(var("BENTHOS_TEST_BLOBLANG_SCHEMA_FILE")))`,
+			`root = this.json_schema(file(env("BENTHOS_TEST_BLOBLANG_SCHEMA_FILE")))`,
 		),
 	).Beta().Param(ParamString("schema", "The schema to check values against.")),
 	func(args *ParsedParams) (simpleMethod, error) {
