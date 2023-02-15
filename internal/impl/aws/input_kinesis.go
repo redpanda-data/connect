@@ -583,8 +583,11 @@ func (k *kinesisReader) runBalancedShards() {
 
 			// Have a go at grabbing any unclaimed shards
 			if len(unclaimedShards) > 0 {
-				numberShardClaimed := len(clientClaims[k.clientID])
-				k.maxShardRunBalancedConsumer(&wg, streamID, unclaimedShards, numberShardClaimed)
+				numberShardAlreadyClaimed := len(clientClaims[k.clientID])
+				_, err = k.maxShardRunBalancedConsumer(&wg, streamID, unclaimedShards, numberShardAlreadyClaimed)
+				if err!= nil {
+					return
+				}
 				// If there are unclaimed shards then let's not resort to
 				// thievery just yet.
 				continue
@@ -689,19 +692,19 @@ func (k *kinesisReader) runExplicitShards() {
 	}
 }
 
-func (k *kinesisReader) maxShardRunBalancedConsumer(wg *sync.WaitGroup, streamID string, unclaimedShards map[string]string, numberShardClaimed int) {
+func (k *kinesisReader) maxShardRunBalancedConsumer(wg *sync.WaitGroup, streamID string, unclaimedShards map[string]string, numShardAlreadyClaimed int) (int, error) {
+	numShardClaimed := 0
 	maxShardNumber, maxShardExists := k.streamMaxShards[streamID]
-	if !maxShardExists || numberShardClaimed < maxShardNumber {
+	if !maxShardExists || numShardAlreadyClaimed < maxShardNumber {
 		// Remaining number of shards that can be claimed
-		shardRemainder := maxShardNumber - numberShardClaimed
 		for shardID, clientID := range unclaimedShards {
-			if maxShardExists && shardRemainder <= 0 {
+			if maxShardExists && numShardAlreadyClaimed + numShardClaimed >= maxShardNumber {
 				break
 			}
 			sequence, err := k.checkpointer.Claim(k.ctx, streamID, shardID, clientID)
 			if err != nil {
 				if k.ctx.Err() != nil {
-					return
+					return 0, err
 				}
 				if !errors.Is(err, ErrLeaseNotAcquired) {
 					k.log.Errorf("Failed to claim unclaimed shard '%v': %v\n", shardID, err)
@@ -709,12 +712,13 @@ func (k *kinesisReader) maxShardRunBalancedConsumer(wg *sync.WaitGroup, streamID
 				continue
 			}
 			wg.Add(1)
-			shardRemainder--
+			numShardClaimed++
 			if err = k.runConsumer(wg, streamID, shardID, sequence); err != nil {
 				k.log.Errorf("Failed to start consumer: %v\n", err)
 			}
 		}
 	}
+	return numShardClaimed, nil
 }
 
 //------------------------------------------------------------------------------
