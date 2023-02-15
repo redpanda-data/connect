@@ -2,6 +2,7 @@ package pure_test
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -11,6 +12,8 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	yaml "gopkg.in/yaml.v3"
 
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
@@ -18,6 +21,13 @@ import (
 
 	_ "github.com/benthosdev/benthos/v4/internal/impl/pure"
 )
+
+func parseYAMLConf(t testing.TB, formatStr string, args ...any) (conf processor.Config) {
+	t.Helper()
+	conf = processor.NewConfig()
+	require.NoError(t, yaml.Unmarshal(fmt.Appendf(nil, formatStr, args...), &conf))
+	return
+}
 
 func TestParallelBasic(t *testing.T) {
 	wg := sync.WaitGroup{}
@@ -29,12 +39,12 @@ func TestParallelBasic(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	httpConf := processor.NewConfig()
-	httpConf.Type = "http"
-	httpConf.HTTP.URL = ts.URL + "/testpost"
-	conf := processor.NewConfig()
-	conf.Type = "parallel"
-	conf.Parallel.Processors = []processor.Config{httpConf}
+	conf := parseYAMLConf(t, `
+parallel:
+  processors:
+    - http:
+        url: %v/testpost
+`, ts.URL)
 
 	h, err := mock.NewManager().NewProcessor(conf)
 	if err != nil {
@@ -75,14 +85,13 @@ func TestParallelError(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	httpConf := processor.NewConfig()
-	httpConf.Type = "http"
-	httpConf.HTTP.URL = ts.URL + "/testpost"
-	httpConf.HTTP.NumRetries = 0
-
-	conf := processor.NewConfig()
-	conf.Type = "parallel"
-	conf.Parallel.Processors = []processor.Config{httpConf}
+	conf := parseYAMLConf(t, `
+parallel:
+  processors:
+    - http:
+        url: %v/testpost
+        retries: 0
+`, ts.URL)
 
 	h, err := mock.NewManager().NewProcessor(conf)
 	if err != nil {
@@ -126,14 +135,13 @@ func TestParallelCapped(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	httpConf := processor.NewConfig()
-	httpConf.Type = "http"
-	httpConf.HTTP.URL = ts.URL + "/testpost"
-
-	conf := processor.NewConfig()
-	conf.Type = "parallel"
-	conf.Parallel.Processors = []processor.Config{httpConf}
-	conf.Parallel.Cap = 5
+	conf := parseYAMLConf(t, `
+parallel:
+  cap: 5
+  processors:
+    - http:
+        url: %v/testpost
+`, ts.URL)
 
 	h, err := mock.NewManager().NewProcessor(conf)
 	if err != nil {

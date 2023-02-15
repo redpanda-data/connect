@@ -2,6 +2,7 @@ package io_test
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"net"
 	"path/filepath"
@@ -1232,4 +1233,76 @@ func TestTCPSocketServerMultipartShutdown(t *testing.T) {
 	assert.Equal(t, exp, message.GetAllBytes(msg))
 
 	wg.Wait()
+}
+
+func TestTLSSocketServerBasic(t *testing.T) {
+	tCtx, done := context.WithTimeout(context.Background(), time.Second*20)
+	defer done()
+
+	conf := input.NewConfig()
+	conf.Type = "socket_server"
+	conf.SocketServer.Network = "tls"
+	conf.SocketServer.Address = "127.0.0.1:0"
+	conf.SocketServer.TLS.SelfSigned = true
+
+	rdr, err := mock.NewManager().NewInput(conf)
+	require.NoError(t, err)
+
+	addr := rdr.(interface{ Addr() net.Addr }).Addr()
+
+	defer func() {
+		rdr.TriggerStopConsuming()
+		assert.NoError(t, rdr.WaitForClose(tCtx))
+	}()
+
+	conn, err := tls.Dial("tcp", addr.String(), &tls.Config{
+		InsecureSkipVerify: true,
+	})
+	require.NoError(t, err)
+
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+	go func() {
+		_ = conn.SetWriteDeadline(time.Now().Add(time.Second * 5))
+
+		_, cerr := conn.Write([]byte("foo\n"))
+		require.NoError(t, cerr)
+
+		_, cerr = conn.Write([]byte("bar\n"))
+		require.NoError(t, cerr)
+
+		_, cerr = conn.Write([]byte("baz\n"))
+		require.NoError(t, cerr)
+
+		wg.Done()
+	}()
+
+	readNextMsg := func() (message.Batch, error) {
+		var tran message.Transaction
+		select {
+		case tran = <-rdr.TransactionChan():
+			require.NoError(t, tran.Ack(tCtx, nil))
+		case <-time.After(time.Second):
+			return nil, errors.New("timed out")
+		}
+		return tran.Payload, nil
+	}
+
+	exp := [][]byte{[]byte("foo")}
+	msg, err := readNextMsg()
+	require.NoError(t, err)
+	assert.Equal(t, exp, message.GetAllBytes(msg))
+
+	exp = [][]byte{[]byte("bar")}
+	msg, err = readNextMsg()
+	require.NoError(t, err)
+	assert.Equal(t, exp, message.GetAllBytes(msg))
+
+	exp = [][]byte{[]byte("baz")}
+	msg, err = readNextMsg()
+	require.NoError(t, err)
+	assert.Equal(t, exp, message.GetAllBytes(msg))
+
+	wg.Wait()
+	conn.Close()
 }

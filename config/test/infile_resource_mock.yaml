@@ -1,0 +1,23 @@
+pipeline:
+  processors:
+    - resource: http_submit
+
+processor_resources:
+  - label: http_submit
+    http:
+      url: http://nonexistant.foo/
+      verb: POST
+
+tests:
+  - name: test_case
+    target_processors: /pipeline/processors
+    mocks:
+      http_submit:
+        mapping: 'root = {"abc": 123}'
+    input_batch:
+      - json_content:
+          foo: bar
+    output_batches:
+      - - json_equals:
+            abc: 123
+          bloblang: '!errored()'

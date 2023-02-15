@@ -315,7 +315,7 @@ root.doc = json()
 
 ### `meta`
 
-Returns the value of a metadata key from the input message, or `null` if the key does not exist. Since values are extracted from the read-only input message they do NOT reflect changes made from within the map. In order to query metadata mutations made within a mapping use the [`root_meta` function](#root_meta). This function supports extracting metadata from other messages of a batch with the `from` method.
+Returns the value of a metadata key from the input message as a string, or `null` if the key does not exist. Since values are extracted from the read-only input message they do NOT reflect changes made from within the map. In order to query metadata mutations made within a mapping use the [`root_meta` function](#root_meta). This function supports extracting metadata from other messages of a batch with the `from` method.
 
 #### Parameters
 
@@ -339,7 +339,7 @@ root.all_metadata = meta()
 :::caution BETA
 This function is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
 :::
-Returns the value of a metadata key from the new message being created, or `null` if the key does not exist. Changes made to metadata during a mapping will be reflected by this function.
+Returns the value of a metadata key from the new message being created as a string, or `null` if the key does not exist. Changes made to metadata during a mapping will be reflected by this function.
 
 #### Parameters
 
@@ -459,6 +459,28 @@ Returns the current unix timestamp in seconds.
 
 ```coffee
 root.received_at = timestamp_unix()
+```
+
+### `timestamp_unix_micro`
+
+Returns the current unix timestamp in microseconds.
+
+#### Examples
+
+
+```coffee
+root.received_at = timestamp_unix_micro()
+```
+
+### `timestamp_unix_milli`
+
+Returns the current unix timestamp in milliseconds.
+
+#### Examples
+
+
+```coffee
+root.received_at = timestamp_unix_milli()
 ```
 
 ### `timestamp_unix_nano`

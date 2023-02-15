@@ -451,6 +451,68 @@ The output format is defined by showing how the reference time, defined to be Mo
 		panic(err)
 	}
 
+	formatTSUnixMilliSpec := bloblang.NewPluginSpec().
+		Category(query.MethodCategoryTime).
+		Beta().
+		Static().
+		Description("Attempts to format a timestamp value as a unix timestamp with millisecond precision. Timestamp values can either be a numerical unix time in seconds (with up to nanosecond precision via decimals), or a string in RFC 3339 format. The [`ts_parse`](#ts_parse) method can be used in order to parse different timestamp formats.")
+
+	formatTSUnixMilliSpecDep := asDeprecated(formatTSUnixMilliSpec)
+
+	formatTSUnixMilliSpec = formatTSUnixMilliSpec.
+		Example("",
+			`root.created_at_unix = this.created_at.ts_unix_milli()`,
+			[2]string{
+				`{"created_at":"2009-11-10T23:00:00Z"}`,
+				`{"created_at_unix":1257894000000}`,
+			},
+		)
+
+	formatTSUnixMilliCtor := func(args *bloblang.ParsedParams) (bloblang.Method, error) {
+		return bloblang.TimestampMethod(func(target time.Time) (any, error) {
+			return target.UnixMilli(), nil
+		}), nil
+	}
+
+	if err := bloblang.RegisterMethodV2("ts_unix_milli", formatTSUnixMilliSpec, formatTSUnixMilliCtor); err != nil {
+		panic(err)
+	}
+
+	if err := bloblang.RegisterMethodV2("format_timestamp_unix_milli", formatTSUnixMilliSpecDep, formatTSUnixMilliCtor); err != nil {
+		panic(err)
+	}
+
+	formatTSUnixMicroSpec := bloblang.NewPluginSpec().
+		Category(query.MethodCategoryTime).
+		Beta().
+		Static().
+		Description("Attempts to format a timestamp value as a unix timestamp with microsecond precision. Timestamp values can either be a numerical unix time in seconds (with up to nanosecond precision via decimals), or a string in RFC 3339 format. The [`ts_parse`](#ts_parse) method can be used in order to parse different timestamp formats.")
+
+	formatTSUnixMicroSpecDep := asDeprecated(formatTSUnixMicroSpec)
+
+	formatTSUnixMicroSpec = formatTSUnixMicroSpec.
+		Example("",
+			`root.created_at_unix = this.created_at.ts_unix_micro()`,
+			[2]string{
+				`{"created_at":"2009-11-10T23:00:00Z"}`,
+				`{"created_at_unix":1257894000000000}`,
+			},
+		)
+
+	formatTSUnixMicroCtor := func(args *bloblang.ParsedParams) (bloblang.Method, error) {
+		return bloblang.TimestampMethod(func(target time.Time) (any, error) {
+			return target.UnixMicro(), nil
+		}), nil
+	}
+
+	if err := bloblang.RegisterMethodV2("ts_unix_micro", formatTSUnixMicroSpec, formatTSUnixMicroCtor); err != nil {
+		panic(err)
+	}
+
+	if err := bloblang.RegisterMethodV2("format_timestamp_unix_micro", formatTSUnixMicroSpecDep, formatTSUnixMicroCtor); err != nil {
+		panic(err)
+	}
+
 	formatTSUnixNanoSpec := bloblang.NewPluginSpec().
 		Category(query.MethodCategoryTime).
 		Beta().

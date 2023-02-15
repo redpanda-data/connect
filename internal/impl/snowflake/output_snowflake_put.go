@@ -48,6 +48,8 @@ const (
 	CompressionTypeDeflate CompressionType = "DEFLATE"
 	// CompressionTypeRawDeflate Deflate compression using flate algorithm (without header, RFC1951).
 	CompressionTypeRawDeflate CompressionType = "RAW_DEFLATE"
+	// CompressionTypeZstandard compression using Zstandard algorithm.
+	CompressionTypeZstandard CompressionType = "ZSTD"
 )
 
 func snowflakePutOutputConfig() *service.ConfigSpec {
@@ -150,10 +152,10 @@ for doing so:
 snowsql --private-key-path rsa_key.p8 --generate-jwt -a <account> -u <user>
 `+"```"+`
 
-- Using the Python `+"`jwt-generator`"+` [utility](https://docs.snowflake.com/en/developer-guide/sql-api/guide.html#using-key-pair-authentication):
+- Using the Python `+"`sql-api-generate-jwt`"+` [utility](https://docs.snowflake.com/en/developer-guide/sql-api/authenticating.html#generating-a-jwt-in-python):
 
 `+"```shell"+`
-python3 jwt-generator.py --private_key_file_path=rsa_key.p8 --account=<account> --user=<user>
+python3 sql-api-generate-jwt.py --private_key_file_path=rsa_key.p8 --account=<account> --user=<user>
 `+"```"+`
 
 Once you successfully generate a JWT token and store it into the `+"`JWT_TOKEN`"+` environment variable, then you can,
@@ -163,9 +165,22 @@ for example, query the `+"`insertReport`"+` endpoint using `+"`curl`"+`:
 curl -H "Authorization: Bearer ${JWT_TOKEN}" "https://<account>.snowflakecomputing.com/v1/data/pipes/<database>.<schema>.<snowpipe>/insertReport"
 `+"```"+`
 
-If you need to pass in a valid `+"`requestId`"+` to any of these Snowpipe REST API endpoints, you can enable debug
-logging as described [here](/docs/components/logger/about) and Benthos will print the RequestIDs that it sends to
-Snowpipe. They match the name of the file that is placed in the stage.
+If you need to pass in a valid `+"`requestId`"+` to any of these Snowpipe REST API endpoints, you can set a
+[uuid_v4()](https://www.benthos.dev/docs/guides/bloblang/functions#uuid_v4) string in a metadata field called
+`+"`request_id`"+`, log it via the [`+"`log`"+`](https://www.benthos.dev/docs/components/processors/log) processor and
+then configure `+"`request_id: ${ @request_id }`"+` ). Alternatively, you can enable debug logging as described
+[here](/docs/components/logger/about) and Benthos will print the Request IDs that it sends to Snowpipe.
+
+### General Troubleshooting
+
+The underlying [`+"`gosnowflake`"+` driver](https://github.com/snowflakedb/gosnowflake) requires write access to
+the default directory to use for temporary files. Please consult the [`+"`os.TempDir`"+`](https://pkg.go.dev/os#TempDir)
+docs for details on how to change this directory via environment variables.
+
+A silent failure can occur due to [this issue](https://github.com/snowflakedb/gosnowflake/issues/701), where the
+underlying [`+"`gosnowflake`"+` driver](https://github.com/snowflakedb/gosnowflake) doesn't return an error and doesn't
+log a failure if it can't figure out the current username. One way to trigger this behaviour is by running Benthos in a
+Docker container with a non-existent user ID (such as `+"`--user 1000:1000`"+`).
 `)).
 		Field(service.NewStringField("account").Description(`Account name, which is the same as the Account Identifier
 as described [here](https://docs.snowflake.com/en/user-guide/admin-account-identifier.html#where-are-account-identifiers-used).
@@ -193,15 +208,19 @@ and it must be set to the `+"`<cloud>`"+` part of the Account Identifier
 		Field(service.NewStringField("schema").Description("Schema.")).
 		Field(service.NewInterpolatedStringField("stage").Description(`Stage name. Use either one of the
 [supported](https://docs.snowflake.com/en/user-guide/data-load-local-file-system-create-stage.html) stage types.`)).
-		Field(service.NewStringField("path").Description("Stage path.")).
+		Field(service.NewInterpolatedStringField("path").Description("Stage path.").Default("")).
+		Field(service.NewInterpolatedStringField("file_name").Description("Stage file name. Will be equal to the Request ID if not set or empty.").Optional().Default("").Version("v4.12.0")).
+		Field(service.NewInterpolatedStringField("file_extension").Description("Stage file extension. Will be derived from the configured `compression` if not set or empty.").Optional().Default("").Example("csv").Example("parquet").Version("v4.12.0")).
 		Field(service.NewIntField("upload_parallel_threads").Description("Specifies the number of threads to use for uploading files.").Advanced().Default(4).LintRule(`root = if this < 1 || this > 99 { [ "upload_parallel_threads must be between 1 and 99" ] }`)).
 		Field(service.NewStringAnnotatedEnumField("compression", map[string]string{
-			string(CompressionTypeNone):       "No compression is applied and messages must contain plain-text JSON.",
-			string(CompressionTypeAuto):       "Compression (gzip) is applied automatically by the output and messages must contain plain-text JSON.",
-			string(CompressionTypeGzip):       "Messages must be pre-compressed using the gzip algorithm.",
-			string(CompressionTypeDeflate):    "Messages must be pre-compressed using the zlib algorithm (with zlib header, RFC1950).",
-			string(CompressionTypeRawDeflate): "Messages must be pre-compressed using the flate algorithm (without header, RFC1951).",
+			string(CompressionTypeNone):       "No compression is applied and messages must contain plain-text JSON. Default `file_extension`: `json`.",
+			string(CompressionTypeAuto):       "Compression (gzip) is applied automatically by the output and messages must contain plain-text JSON. Default `file_extension`: `gz`.",
+			string(CompressionTypeGzip):       "Messages must be pre-compressed using the gzip algorithm. Default `file_extension`: `gz`.",
+			string(CompressionTypeDeflate):    "Messages must be pre-compressed using the zlib algorithm (with zlib header, RFC1950). Default `file_extension`: `deflate`.",
+			string(CompressionTypeRawDeflate): "Messages must be pre-compressed using the flate algorithm (without header, RFC1951). Default `file_extension`: `raw_deflate`.",
+			string(CompressionTypeZstandard):  "Messages must be pre-compressed using the Zstandard algorithm. Default `file_extension`: `zst`.",
 		}).Description("Compression type.").Default(string(CompressionTypeAuto))).
+		Field(service.NewInterpolatedStringField("request_id").Description("Request ID. Will be assigned a random UUID (v4) string if not set or empty.").Optional().Default("").Version("v4.12.0")).
 		Field(service.NewInterpolatedStringField("snowpipe").Description(`An optional Snowpipe name. Use the `+"`<snowpipe>`"+` part from `+"`<database>.<schema>.<snowpipe>`"+`.`).Optional()).
 		Field(service.NewBoolField("client_session_keep_alive").Description("Enable Snowflake keepalive mechanism to prevent the client session from expiring after 4 hours (error 390114).").Advanced().Default(false)).
 		Field(service.NewBatchPolicyField("batching")).
@@ -210,7 +229,25 @@ and it must be set to the `+"`<cloud>`"+` part of the Account Identifier
   this.exists("password") && this.exists("private_key_file") => [ "both `+"`password`"+` and `+"`private_key_file`"+` can't be set simultaneously" ],
   this.exists("snowpipe") && (!this.exists("private_key_file") || this.private_key_file == "") => [ "`+"`private_key_file`"+` is required when setting `+"`snowpipe`"+`" ],
 }`).
-		Example("No compression", "Upload concatenated messages into a .json file to a table stage without calling Snowpipe.", `
+		Example("Kafka / realtime brokers", "Upload message batches from realtime brokers such as Kafka persisting the batch partition and offsets in the stage path and filename similarly to the [Kafka Connector scheme](https://docs.snowflake.com/en/user-guide/kafka-connector-ts.html#step-1-view-the-copy-history-for-the-table) and call Snowpipe to load them into a table. When batching is configured at the input level, it is done per-partition.", `
+input:
+  kafka:
+    addresses:
+      - localhost:9092
+    topics:
+      - foo
+    consumer_group: benthos
+    batching:
+      count: 10
+      period: 3s
+      processors:
+        - mapping: |
+            meta kafka_start_offset = meta("kafka_offset").from(0)
+            meta kafka_end_offset = meta("kafka_offset").from(-1)
+            meta batch_timestamp = if batch_index() == 0 { now() }
+        - mapping: |
+            meta batch_timestamp = if batch_index() != 0 { meta("batch_timestamp").from(0) }
+
 output:
   snowflake_put:
     account: benthos
@@ -220,8 +257,25 @@ output:
     database: BENTHOS_DB
     warehouse: COMPUTE_WH
     schema: PUBLIC
-    path: benthos
     stage: "@%BENTHOS_TBL"
+    path: benthos/BENTHOS_TBL/${! @kafka_partition }
+    file_name: ${! @kafka_start_offset }_${! @kafka_end_offset }_${! meta("batch_timestamp") }
+    upload_parallel_threads: 4
+    compression: NONE
+    snowpipe: BENTHOS_PIPE
+`).
+		Example("No compression", "Upload concatenated messages into a `.json` file to a table stage without calling Snowpipe.", `
+output:
+  snowflake_put:
+    account: benthos
+    user: test@benthos.dev
+    private_key_file: path_to_ssh_key.pem
+    role: ACCOUNTADMIN
+    database: BENTHOS_DB
+    warehouse: COMPUTE_WH
+    schema: PUBLIC
+    stage: "@%BENTHOS_TBL"
+    path: benthos
     upload_parallel_threads: 4
     compression: NONE
     batching:
@@ -231,7 +285,7 @@ output:
         - archive:
             format: concatenate
 `).
-		Example("Automatic compression", "Upload concatenated messages compressed automatically into a .gz archive file to a table stage without calling Snowpipe.", `
+		Example("Parquet format with snappy compression", "Upload concatenated messages into a `.parquet` file to a table stage without calling Snowpipe.", `
 output:
   snowflake_put:
     account: benthos
@@ -241,8 +295,35 @@ output:
     database: BENTHOS_DB
     warehouse: COMPUTE_WH
     schema: PUBLIC
-    path: benthos
     stage: "@%BENTHOS_TBL"
+    path: benthos
+    file_extension: parquet
+    upload_parallel_threads: 4
+    compression: NONE
+    batching:
+      count: 10
+      period: 3s
+      processors:
+        - parquet_encode:
+            schema:
+              - name: ID
+                type: INT64
+              - name: CONTENT
+                type: BYTE_ARRAY
+            default_compression: snappy
+`).
+		Example("Automatic compression", "Upload concatenated messages compressed automatically into a `.gz` archive file to a table stage without calling Snowpipe.", `
+output:
+  snowflake_put:
+    account: benthos
+    user: test@benthos.dev
+    private_key_file: path_to_ssh_key.pem
+    role: ACCOUNTADMIN
+    database: BENTHOS_DB
+    warehouse: COMPUTE_WH
+    schema: PUBLIC
+    stage: "@%BENTHOS_TBL"
+    path: benthos
     upload_parallel_threads: 4
     compression: AUTO
     batching:
@@ -252,7 +333,7 @@ output:
         - archive:
             format: concatenate
 `).
-		Example("DEFLATE compression", "Upload concatenated messages compressed into a .deflate archive file to a table stage and call Snowpipe to load them into a table.", `
+		Example("DEFLATE compression", "Upload concatenated messages compressed into a `.deflate` archive file to a table stage and call Snowpipe to load them into a table.", `
 output:
   snowflake_put:
     account: benthos
@@ -262,8 +343,8 @@ output:
     database: BENTHOS_DB
     warehouse: COMPUTE_WH
     schema: PUBLIC
-    path: benthos
     stage: "@%BENTHOS_TBL"
+    path: benthos
     upload_parallel_threads: 4
     compression: DEFLATE
     snowpipe: BENTHOS_PIPE
@@ -273,10 +354,10 @@ output:
       processors:
         - archive:
             format: concatenate
-        - compress:
-            algorithm: zlib
+        - mapping: |
+            root = content().compress("zlib")
 `).
-		Example("RAW_DEFLATE compression", "Upload concatenated messages compressed into a .rawdeflate archive file to a table stage and call Snowpipe to load them into a table.", `
+		Example("RAW_DEFLATE compression", "Upload concatenated messages compressed into a `.raw_deflate` archive file to a table stage and call Snowpipe to load them into a table.", `
 output:
   snowflake_put:
     account: benthos
@@ -286,8 +367,8 @@ output:
     database: BENTHOS_DB
     warehouse: COMPUTE_WH
     schema: PUBLIC
-    path: benthos
     stage: "@%BENTHOS_TBL"
+    path: benthos
     upload_parallel_threads: 4
     compression: RAW_DEFLATE
     snowpipe: BENTHOS_PIPE
@@ -297,8 +378,8 @@ output:
       processors:
         - archive:
             format: concatenate
-        - compress:
-            algorithm: flate
+        - mapping: |
+            root = content().compress("flate")
 `)
 }
 
@@ -399,20 +480,23 @@ type httpClientI interface {
 type snowflakeWriter struct {
 	logger *service.Logger
 
-	account  string
-	user     string
-	database string
-	schema   string
-	stage    *service.InterpolatedString
-	path     string
-	snowpipe *service.InterpolatedString
+	account       string
+	user          string
+	database      string
+	schema        string
+	stage         *service.InterpolatedString
+	path          *service.InterpolatedString
+	fileName      *service.InterpolatedString
+	fileExtension *service.InterpolatedString
+	requestID     *service.InterpolatedString
+	snowpipe      *service.InterpolatedString
 
-	accountIdentifier    string
-	putQueryFormat       string
-	outputFileExtension  string
-	privateKey           *rsa.PrivateKey
-	publicKeyFingerprint string
-	dsn                  string
+	accountIdentifier         string
+	putQueryFormat            string
+	defaultStageFileExtension string
+	privateKey                *rsa.PrivateKey
+	publicKeyFingerprint      string
+	dsn                       string
 
 	connMut       sync.Mutex
 	uuidGenerator uuidGenI
@@ -486,8 +570,16 @@ func newSnowflakeWriterFromConfig(conf *service.ParsedConfig, mgr *service.Resou
 		return nil, fmt.Errorf("failed to parse stage: %s", err)
 	}
 
-	if s.path, err = conf.FieldString("path"); err != nil {
+	if s.path, err = conf.FieldInterpolatedString("path"); err != nil {
 		return nil, fmt.Errorf("failed to parse path: %s", err)
+	}
+
+	if s.fileName, err = conf.FieldInterpolatedString("file_name"); err != nil {
+		return nil, fmt.Errorf("failed to parse file_name: %s", err)
+	}
+
+	if s.fileExtension, err = conf.FieldInterpolatedString("file_extension"); err != nil {
+		return nil, fmt.Errorf("failed to parse file_extension: %s", err)
 	}
 
 	var uploadParallelThreads int
@@ -502,25 +594,30 @@ func newSnowflakeWriterFromConfig(conf *service.ParsedConfig, mgr *service.Resou
 
 	compression := CompressionType(compressionStr)
 	var autoCompress, sourceCompression string
+	// Should match file extensions in https://github.com/snowflakedb/gosnowflake/blob/2648a83699492c0613a888e66298157fc1e45bf5/file_compression_type.go
 	switch compression {
 	case CompressionTypeNone:
-		s.outputFileExtension = ".json"
+		s.defaultStageFileExtension = "json"
 		autoCompress = "FALSE"
 		sourceCompression = "NONE"
 	case CompressionTypeAuto:
-		s.outputFileExtension = ".gz"
+		s.defaultStageFileExtension = "gz"
 		autoCompress = "TRUE"
 		sourceCompression = "AUTO_DETECT"
 	case CompressionTypeGzip:
-		s.outputFileExtension = ".gz"
+		s.defaultStageFileExtension = "gz"
 		autoCompress = "FALSE"
 		sourceCompression = "GZIP"
 	case CompressionTypeDeflate:
-		s.outputFileExtension = ".deflate"
+		s.defaultStageFileExtension = "deflate"
 		autoCompress = "FALSE"
 		sourceCompression = string(compression)
 	case CompressionTypeRawDeflate:
-		s.outputFileExtension = ".rawdeflate"
+		s.defaultStageFileExtension = "raw_deflate"
+		autoCompress = "FALSE"
+		sourceCompression = string(compression)
+	case CompressionTypeZstandard:
+		s.defaultStageFileExtension = "zst"
 		autoCompress = "FALSE"
 		sourceCompression = string(compression)
 	default:
@@ -530,10 +627,12 @@ func newSnowflakeWriterFromConfig(conf *service.ParsedConfig, mgr *service.Resou
 	// File path and stage are populated dynamically via interpolation
 	s.putQueryFormat = fmt.Sprintf("PUT file://%%s %%s AUTO_COMPRESS = %s SOURCE_COMPRESSION = %s PARALLEL=%d", autoCompress, sourceCompression, uploadParallelThreads)
 
-	if conf.Contains("snowpipe") {
-		if s.snowpipe, err = conf.FieldInterpolatedString("snowpipe"); err != nil {
-			return nil, fmt.Errorf("failed to parse snowpipe: %s", err)
-		}
+	if s.requestID, err = conf.FieldInterpolatedString("request_id"); err != nil {
+		return nil, fmt.Errorf("failed to parse request_id: %s", err)
+	}
+
+	if s.snowpipe, err = conf.FieldInterpolatedString("snowpipe"); err != nil {
+		return nil, fmt.Errorf("failed to parse snowpipe: %s", err)
 	}
 
 	authenticator := gosnowflake.AuthTypeJwt
@@ -630,7 +729,7 @@ func (s *snowflakeWriter) getSnowpipeInsertURL(snowpipe, requestID string) strin
 	return u.String()
 }
 
-func (s *snowflakeWriter) callSnowpipe(ctx context.Context, snowpipe, requestID, filename string) error {
+func (s *snowflakeWriter) callSnowpipe(ctx context.Context, snowpipe, requestID, filePath string) error {
 	jwtToken, err := s.createJWT()
 	if err != nil {
 		return fmt.Errorf("failed to create Snowpipe JWT token: %s", err)
@@ -644,7 +743,7 @@ func (s *snowflakeWriter) callSnowpipe(ctx context.Context, snowpipe, requestID,
 	}{
 		Files: []File{
 			{
-				Path: filename,
+				Path: filePath,
 			},
 		},
 	}
@@ -691,49 +790,88 @@ func (s *snowflakeWriter) WriteBatch(ctx context.Context, batch service.MessageB
 		return service.ErrNotConnected
 	}
 
-	type File struct {
-		Stage    string
-		Snowpipe string
+	type file struct {
+		stage         string
+		stagePath     string
+		fileName      string
+		fileExtension string
+		requestID     string
+		snowpipe      string
 	}
 
-	// Create one file for each stage-snowpipe combination
-	files := map[File][]byte{}
+	// Concatenate messages into sub-batches based on matching interpolated fields.
+	// TODO: Maybe add a check to ensure that the interpolated snowpipe is consistent across each sub-batch.
+	files := map[file][]byte{}
 	for _, msg := range batch {
-		b, err := msg.AsBytes()
+		var (
+			f   file
+			err error
+		)
+
+		if f.stage, err = s.stage.TryString(msg); err != nil {
+			return fmt.Errorf("failed to get stage: %s", err)
+		} else if f.stage == "" {
+			return fmt.Errorf("stage cannot be empty: %s", err)
+		}
+
+		if f.stagePath, err = s.path.TryString(msg); err != nil {
+			return fmt.Errorf("failed to get stage path: %s", err)
+		}
+
+		if f.requestID, err = s.requestID.TryString(msg); err != nil {
+			return fmt.Errorf("failed to get request ID: %s", err)
+		}
+
+		if f.fileName, err = s.fileName.TryString(msg); err != nil {
+			return fmt.Errorf("failed to get file: %s", err)
+		}
+
+		if f.fileExtension, err = s.fileExtension.TryString(msg); err != nil {
+			return fmt.Errorf("failed to get file extension: %s", err)
+		} else if f.fileExtension == "" {
+			f.fileExtension = s.defaultStageFileExtension
+		}
+
+		if f.snowpipe, err = s.snowpipe.TryString(msg); err != nil {
+			return fmt.Errorf("failed to get snowpipe: %s", err)
+		}
+
+		msgBytes, err := msg.AsBytes()
 		if err != nil {
 			return fmt.Errorf("failed to get message bytes: %s", err)
 		}
 
-		snowpipe := ""
-		if s.snowpipe != nil {
-			snowpipe = s.snowpipe.String(msg)
-		}
-		ss := File{
-			Stage:    s.stage.String(msg),
-			Snowpipe: snowpipe,
-		}
-
-		files[ss] = append(files[ss], b...)
+		files[f] = append(files[f], msgBytes...)
 	}
 
-	for file, batch := range files {
-		uuid, err := s.uuidGenerator.NewV4()
-		if err != nil {
-			return fmt.Errorf("failed to generate requestID: %s", err)
+	// Stage each file in Snowflake and, optionally, call Snowpipe
+	for f, fBytes := range files {
+		requestID := f.requestID
+		if requestID == "" {
+			uuid, err := s.uuidGenerator.NewV4()
+			if err != nil {
+				return fmt.Errorf("failed to generate requestID: %s", err)
+			}
+
+			requestID = uuid.String()
 		}
 
-		requestID := uuid.String()
-		filepath := path.Join(s.path, requestID+s.outputFileExtension)
+		fileName := f.fileName
+		if fileName == "" {
+			fileName = requestID
+		}
 
-		_, err = s.db.ExecContext(gosnowflake.WithFileStream(ctx, bytes.NewReader(batch)), fmt.Sprintf(s.putQueryFormat, filepath, path.Join(file.Stage, s.path)))
+		filePath := path.Join(f.stagePath, fileName+"."+f.fileExtension)
+
+		_, err := s.db.ExecContext(gosnowflake.WithFileStream(ctx, bytes.NewReader(fBytes)), fmt.Sprintf(s.putQueryFormat, filePath, path.Join(f.stage, f.stagePath)))
 		if err != nil {
 			return fmt.Errorf("failed to run query: %s", err)
 		}
 
-		if file.Snowpipe != "" {
+		if f.snowpipe != "" {
 			s.logger.Debugf("Calling Snowpipe with requestId=%s", requestID)
 
-			if err := s.callSnowpipe(ctx, file.Snowpipe, requestID, filepath); err != nil {
+			if err := s.callSnowpipe(ctx, f.snowpipe, requestID, filePath); err != nil {
 				return fmt.Errorf("failed to call Snowpipe: %s", err)
 			}
 		}

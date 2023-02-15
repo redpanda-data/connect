@@ -86,6 +86,8 @@ install_benthos()
 	unamem="$(uname -m)"
 	if [[ $unamem == *aarch64* ]]; then
 		benthos_arch="arm64"
+	elif [[ $unamem == *arm64* ]]; then
+		benthos_arch="arm64"
 	elif [[ $unamem == *64* ]]; then
 		benthos_arch="amd64"
 	elif [[ $unamem == *armv5* ]]; then

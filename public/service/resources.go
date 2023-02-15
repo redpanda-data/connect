@@ -232,3 +232,18 @@ func (r *Resources) AccessRateLimit(ctx context.Context, name string, fn func(r 
 func (r *Resources) HasRateLimit(name string) bool {
 	return r.mgr.ProbeRateLimit(name)
 }
+
+//------------------------------------------------------------------------------
+
+type resourcesUnwrapper struct {
+	mgr bundle.NewManagement
+}
+
+func (r resourcesUnwrapper) Unwrap() bundle.NewManagement {
+	return r.mgr
+}
+
+// XUnwrapper is for internal use only, do not use this.
+func (r *Resources) XUnwrapper() any {
+	return resourcesUnwrapper{mgr: r.mgr}
+}

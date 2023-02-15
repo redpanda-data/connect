@@ -22,8 +22,6 @@ func StreamTestOpenClose() StreamTestDefinition {
 	return namedStreamTest(
 		"can open and close",
 		func(t *testing.T, env *streamTestEnvironment) {
-			t.Parallel()
-
 			tranChan := make(chan message.Transaction)
 			input, output := initConnectors(t, tranChan, env)
 			t.Cleanup(func() {
@@ -44,8 +42,6 @@ func StreamTestOpenCloseIsolated() StreamTestDefinition {
 	return namedStreamTest(
 		"can open and close isolated",
 		func(t *testing.T, env *streamTestEnvironment) {
-			t.Parallel()
-
 			tranChan := make(chan message.Transaction)
 			output := initOutput(t, tranChan, env)
 			t.Cleanup(func() {
@@ -68,8 +64,6 @@ func StreamTestMetadata() StreamTestDefinition {
 	return namedStreamTest(
 		"can send and receive metadata",
 		func(t *testing.T, env *streamTestEnvironment) {
-			t.Parallel()
-
 			tranChan := make(chan message.Transaction)
 			input, output := initConnectors(t, tranChan, env)
 			t.Cleanup(func() {
@@ -100,8 +94,6 @@ func StreamTestMetadataFilter() StreamTestDefinition {
 	return namedStreamTest(
 		"can send and receive metadata filtered",
 		func(t *testing.T, env *streamTestEnvironment) {
-			t.Parallel()
-
 			env.configVars.OutputMetaExcludePrefix = "f"
 
 			tranChan := make(chan message.Transaction)
@@ -129,8 +121,6 @@ func StreamTestSendBatch(n int) StreamTestDefinition {
 	return namedStreamTest(
 		"can send a message batch",
 		func(t *testing.T, env *streamTestEnvironment) {
-			t.Parallel()
-
 			tranChan := make(chan message.Transaction)
 			input, output := initConnectors(t, tranChan, env)
 			t.Cleanup(func() {
@@ -159,8 +149,6 @@ func StreamTestSendBatches(batchSize, batches, parallelism int) StreamTestDefini
 	return namedStreamTest(
 		"can send many message batches",
 		func(t *testing.T, env *streamTestEnvironment) {
-			t.Parallel()
-
 			require.Greater(t, parallelism, 0)
 
 			tranChan := make(chan message.Transaction)
@@ -223,8 +211,6 @@ func StreamTestSendBatchCount(n int) StreamTestDefinition {
 	return namedStreamTest(
 		"can send messages with an output batch count",
 		func(t *testing.T, env *streamTestEnvironment) {
-			t.Parallel()
-
 			env.configVars.OutputBatchCount = n
 
 			tranChan := make(chan message.Transaction)
@@ -273,8 +259,6 @@ func StreamTestSendBatchCountIsolated(n int) StreamTestDefinition {
 	return namedStreamTest(
 		"can send messages with an output batch count isolated",
 		func(t *testing.T, env *streamTestEnvironment) {
-			t.Parallel()
-
 			env.configVars.OutputBatchCount = n
 
 			tranChan := make(chan message.Transaction)
@@ -328,8 +312,6 @@ func StreamTestReceiveBatchCount(n int) StreamTestDefinition {
 	return namedStreamTest(
 		"can send messages with an input batch count",
 		func(t *testing.T, env *streamTestEnvironment) {
-			t.Parallel()
-
 			env.configVars.InputBatchCount = n
 
 			tranChan := make(chan message.Transaction)
@@ -367,8 +349,6 @@ func StreamTestStreamSequential(n int) StreamTestDefinition {
 	return namedStreamTest(
 		"can send and receive data sequentially",
 		func(t *testing.T, env *streamTestEnvironment) {
-			t.Parallel()
-
 			tranChan := make(chan message.Transaction)
 			input, output := initConnectors(t, tranChan, env)
 			t.Cleanup(func() {
@@ -396,8 +376,6 @@ func StreamTestStreamIsolated(n int) StreamTestDefinition {
 	return namedStreamTest(
 		"can send and receive data isolated",
 		func(t *testing.T, env *streamTestEnvironment) {
-			t.Parallel()
-
 			tranChan := make(chan message.Transaction)
 			output := initOutput(t, tranChan, env)
 			t.Cleanup(func() {
@@ -430,8 +408,6 @@ func StreamTestCheckpointCapture() StreamTestDefinition {
 	return namedStreamTest(
 		"respects checkpointed offsets",
 		func(t *testing.T, env *streamTestEnvironment) {
-			t.Parallel()
-
 			tranChan := make(chan message.Transaction)
 			input, output := initConnectors(t, tranChan, env)
 			t.Cleanup(func() {
@@ -500,8 +476,6 @@ func StreamTestStreamParallel(n int) StreamTestDefinition {
 	return namedStreamTest(
 		"can send and receive data in parallel",
 		func(t *testing.T, env *streamTestEnvironment) {
-			t.Parallel()
-
 			tranChan := make(chan message.Transaction, n)
 			input, output := initConnectors(t, tranChan, env)
 			t.Cleanup(func() {
@@ -547,8 +521,6 @@ func StreamTestStreamSaturatedUnacked(n int) StreamTestDefinition {
 	return namedStreamTest(
 		"can consume data without acking and resume",
 		func(t *testing.T, env *streamTestEnvironment) {
-			t.Parallel()
-
 			tranChan := make(chan message.Transaction, n)
 			input, output := initConnectors(t, tranChan, env)
 			t.Cleanup(func() {
@@ -588,8 +560,6 @@ func StreamTestAtLeastOnceDelivery() StreamTestDefinition {
 	return namedStreamTest(
 		"at least once delivery",
 		func(t *testing.T, env *streamTestEnvironment) {
-			t.Parallel()
-
 			tranChan := make(chan message.Transaction)
 			input, output := initConnectors(t, tranChan, env)
 			t.Cleanup(func() {
@@ -663,8 +633,6 @@ func StreamTestStreamParallelLossy(n int) StreamTestDefinition {
 	return namedStreamTest(
 		"can send and receive data in parallel lossy",
 		func(t *testing.T, env *streamTestEnvironment) {
-			t.Parallel()
-
 			tranChan := make(chan message.Transaction)
 			input, output := initConnectors(t, tranChan, env)
 			t.Cleanup(func() {
@@ -721,8 +689,6 @@ func StreamTestStreamParallelLossyThroughReconnect(n int) StreamTestDefinition {
 	return namedStreamTest(
 		"can send and receive data in parallel lossy through reconnect",
 		func(t *testing.T, env *streamTestEnvironment) {
-			t.Parallel()
-
 			tranChan := make(chan message.Transaction)
 			input, output := initConnectors(t, tranChan, env)
 			t.Cleanup(func() {
@@ -790,8 +756,6 @@ func StreamTestOutputOnlySendSequential(n int, getFn GetMessageFunc) StreamTestD
 	return namedStreamTest(
 		"can send to output",
 		func(t *testing.T, env *streamTestEnvironment) {
-			t.Parallel()
-
 			tranChan := make(chan message.Transaction)
 			output := initOutput(t, tranChan, env)
 			t.Cleanup(func() {
@@ -820,8 +784,6 @@ func StreamTestOutputOnlySendBatch(n int, getFn GetMessageFunc) StreamTestDefini
 	return namedStreamTest(
 		"can send to output as batch",
 		func(t *testing.T, env *streamTestEnvironment) {
-			t.Parallel()
-
 			tranChan := make(chan message.Transaction)
 			output := initOutput(t, tranChan, env)
 			t.Cleanup(func() {
@@ -853,8 +815,6 @@ func StreamTestOutputOnlyOverride(getFn GetMessageFunc) StreamTestDefinition {
 	return namedStreamTest(
 		"can send to output and override value",
 		func(t *testing.T, env *streamTestEnvironment) {
-			t.Parallel()
-
 			tranChan := make(chan message.Transaction)
 			output := initOutput(t, tranChan, env)
 			t.Cleanup(func() {

@@ -20,25 +20,29 @@ func NewProcessorField(name string) *ConfigField {
 	}
 }
 
+func procConfigFromAny(v any) (conf processor.Config, err error) {
+	pNode, ok := v.(*yaml.Node)
+	if !ok {
+		err = fmt.Errorf("unexpected value, expected object, got %T", v)
+		return
+	}
+
+	err = pNode.Decode(&conf)
+	return
+}
+
 // FieldProcessor accesses a field from a parsed config that was defined with
 // NewProcessorField and returns an OwnedProcessor, or an error if the
 // configuration was invalid.
 func (p *ParsedConfig) FieldProcessor(path ...string) (*OwnedProcessor, error) {
-	proc, exists := p.field(path...)
+	v, exists := p.field(path...)
 	if !exists {
 		return nil, fmt.Errorf("field '%v' was not found in the config", strings.Join(path, "."))
 	}
-
-	pNode, ok := proc.(*yaml.Node)
-	if !ok {
-		return nil, fmt.Errorf("unexpected value, expected object, got %T", proc)
-	}
-
-	var procConf processor.Config
-	if err := pNode.Decode(&procConf); err != nil {
+	procConf, err := procConfigFromAny(v)
+	if err != nil {
 		return nil, err
 	}
-
 	iproc, err := p.mgr.IntoPath(path...).NewProcessor(procConf)
 	if err != nil {
 		return nil, err
@@ -55,10 +59,7 @@ func NewProcessorListField(name string) *ConfigField {
 	}
 }
 
-// FieldProcessorList accesses a field from a parsed config that was defined
-// with NewProcessorListField and returns a slice of OwnedProcessor, or an error
-// if the configuration was invalid.
-func (p *ParsedConfig) FieldProcessorList(path ...string) ([]*OwnedProcessor, error) {
+func (p *ParsedConfig) fieldProcessorListConfigs(path ...string) ([]processor.Config, error) {
 	proc, exists := p.field(path...)
 	if !exists {
 		return nil, fmt.Errorf("field '%v' was not found in the config", strings.Join(path, "."))
@@ -71,16 +72,22 @@ func (p *ParsedConfig) FieldProcessorList(path ...string) ([]*OwnedProcessor, er
 
 	var procConfigs []processor.Config
 	for i, iConf := range procsArray {
-		node, ok := iConf.(*yaml.Node)
-		if !ok {
-			return nil, fmt.Errorf("value %v returned unexpected value, expected object, got %T", i, iConf)
-		}
-
-		var pconf processor.Config
-		if err := node.Decode(&pconf); err != nil {
+		pconf, err := procConfigFromAny(iConf)
+		if err != nil {
 			return nil, fmt.Errorf("value %v: %w", i, err)
 		}
 		procConfigs = append(procConfigs, pconf)
+	}
+	return procConfigs, nil
+}
+
+// FieldProcessorList accesses a field from a parsed config that was defined
+// with NewProcessorListField and returns a slice of OwnedProcessor, or an error
+// if the configuration was invalid.
+func (p *ParsedConfig) FieldProcessorList(path ...string) ([]*OwnedProcessor, error) {
+	procConfigs, err := p.fieldProcessorListConfigs(path...)
+	if err != nil {
+		return nil, err
 	}
 
 	tmpMgr := p.mgr.IntoPath(path...)

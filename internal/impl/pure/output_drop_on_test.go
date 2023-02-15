@@ -13,6 +13,7 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	yaml "gopkg.in/yaml.v3"
 
 	"github.com/benthosdev/benthos/v4/internal/component/output"
 	bmock "github.com/benthosdev/benthos/v4/internal/manager/mock"
@@ -20,6 +21,13 @@ import (
 
 	_ "github.com/benthosdev/benthos/v4/public/components/pure"
 )
+
+func parseYAMLOutputConf(t testing.TB, formatStr string, args ...any) (conf output.Config) {
+	t.Helper()
+	conf = output.NewConfig()
+	require.NoError(t, yaml.Unmarshal(fmt.Appendf(nil, formatStr, args...), &conf))
+	return
+}
 
 func TestDropOnNothing(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -29,10 +37,11 @@ func TestDropOnNothing(t *testing.T) {
 		ts.Close()
 	})
 
-	childConf := output.NewConfig()
-	childConf.Type = "http_client"
-	childConf.HTTPClient.URL = ts.URL
-	childConf.HTTPClient.DropOn = []int{http.StatusForbidden}
+	childConf := parseYAMLOutputConf(t, `
+http_client:
+  url: %v
+  drop_on: [ %v ]
+`, ts.URL, http.StatusForbidden)
 
 	dropConf := output.NewConfig()
 	dropConf.Type = "drop_on"
@@ -77,10 +86,11 @@ func TestDropOnError(t *testing.T) {
 		ts.Close()
 	})
 
-	childConf := output.NewConfig()
-	childConf.Type = "http_client"
-	childConf.HTTPClient.URL = ts.URL
-	childConf.HTTPClient.DropOn = []int{http.StatusForbidden}
+	childConf := parseYAMLOutputConf(t, `
+http_client:
+  url: %v
+  drop_on: [ %v ]
+`, ts.URL, http.StatusForbidden)
 
 	dropConf := output.NewConfig()
 	dropConf.Type = "drop_on"
@@ -155,14 +165,13 @@ func TestDropOnBackpressureWithErrors(t *testing.T) {
 		ts.Close()
 	})
 
-	childConf := output.NewConfig()
-	childConf.Type = "websocket"
-	childConf.Websocket.URL = "ws://" + strings.TrimPrefix(ts.URL, "http://")
-
-	dropConf := output.NewConfig()
-	dropConf.Type = "drop_on"
-	dropConf.DropOn.BackPressure = "100ms"
-	dropConf.DropOn.Output = &childConf
+	dropConf := parseYAMLOutputConf(t, `
+drop_on:
+  back_pressure: 100ms
+  output:
+    websocket:
+      url: %v
+`, "ws://"+strings.TrimPrefix(ts.URL, "http://"))
 
 	d, err := bmock.NewManager().NewOutput(dropConf)
 	require.NoError(t, err)
@@ -244,15 +253,14 @@ func TestDropOnDisconnectBackpressureNoErrors(t *testing.T) {
 		ts.Close()
 	})
 
-	childConf := output.NewConfig()
-	childConf.Type = "websocket"
-	childConf.Websocket.URL = "ws://" + strings.TrimPrefix(ts.URL, "http://")
-
-	dropConf := output.NewConfig()
-	dropConf.Type = "drop_on"
-	dropConf.DropOn.Error = true
-	dropConf.DropOn.BackPressure = "100ms"
-	dropConf.DropOn.Output = &childConf
+	dropConf := parseYAMLOutputConf(t, `
+drop_on:
+  back_pressure: 100ms
+  error: true
+  output:
+    websocket:
+      url: %v
+`, "ws://"+strings.TrimPrefix(ts.URL, "http://"))
 
 	d, err := bmock.NewManager().NewOutput(dropConf)
 	require.NoError(t, err)

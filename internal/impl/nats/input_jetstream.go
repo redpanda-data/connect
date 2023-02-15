@@ -86,7 +86,7 @@ func init() {
 	err := service.RegisterInput(
 		"nats_jetstream", natsJetStreamInputConfig(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Input, error) {
-			return newJetStreamReaderFromConfig(conf, mgr.Logger())
+			return newJetStreamReaderFromConfig(conf, mgr.Logger(), mgr.FS())
 		})
 	if err != nil {
 		panic(err)
@@ -110,6 +110,7 @@ type jetStreamReader struct {
 	tlsConf       *tls.Config
 
 	log *service.Logger
+	fs  *service.FS
 
 	connMut  sync.Mutex
 	natsConn *nats.Conn
@@ -118,9 +119,10 @@ type jetStreamReader struct {
 	shutSig *shutdown.Signaller
 }
 
-func newJetStreamReaderFromConfig(conf *service.ParsedConfig, log *service.Logger) (*jetStreamReader, error) {
+func newJetStreamReaderFromConfig(conf *service.ParsedConfig, log *service.Logger, fs *service.FS) (*jetStreamReader, error) {
 	j := jetStreamReader{
 		log:     log,
+		fs:      fs,
 		shutSig: shutdown.NewSignaller(),
 	}
 
@@ -238,7 +240,8 @@ func (j *jetStreamReader) Connect(ctx context.Context) error {
 	if j.tlsConf != nil {
 		opts = append(opts, nats.Secure(j.tlsConf))
 	}
-	opts = append(opts, authConfToOptions(j.authConf)...)
+	opts = append(opts, authConfToOptions(j.authConf, j.fs)...)
+	opts = append(opts, errorHandlerOption(j.log))
 	if natsConn, err = nats.Connect(j.urls, opts...); err != nil {
 		return err
 	}

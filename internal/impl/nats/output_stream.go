@@ -22,6 +22,7 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
 	btls "github.com/benthosdev/benthos/v4/internal/tls"
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
 func init() {
@@ -66,6 +67,7 @@ func newNATSStreamOutput(conf output.Config, mgr bundle.NewManagement) (output.S
 
 type natsStreamWriter struct {
 	log log.Modular
+	fs  *service.FS
 
 	stanConn stan.Conn
 	natsConn *nats.Conn
@@ -88,6 +90,7 @@ func newNATSStreamWriter(conf output.NATSStreamConfig, mgr bundle.NewManagement)
 
 	n := natsStreamWriter{
 		log:  mgr.Logger(),
+		fs:   service.NewFS(mgr.FS()),
 		conf: conf,
 	}
 	n.urls = strings.Join(conf.URLs, ",")
@@ -114,7 +117,8 @@ func (n *natsStreamWriter) Connect(ctx context.Context) error {
 		opts = append(opts, nats.Secure(n.tlsConf))
 	}
 
-	opts = append(opts, authConfToOptions(n.conf.Auth)...)
+	opts = append(opts, authConfToOptions(n.conf.Auth, n.fs)...)
+	opts = append(opts, errorHandlerOptionFromModularLogger(n.log))
 
 	natsConn, err := nats.Connect(n.urls, opts...)
 	if err != nil {

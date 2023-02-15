@@ -2,7 +2,6 @@ package io
 
 import (
 	"bytes"
-	"compress/gzip"
 	"context"
 	"crypto/tls"
 	"errors"
@@ -17,6 +16,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/klauspost/compress/gzip"
 
 	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"

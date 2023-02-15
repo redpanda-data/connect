@@ -8,6 +8,8 @@ import (
 	"github.com/benthosdev/benthos/v4/public/bloblang"
 )
 
+// var compressAlgorithms = map[string]
+
 func init() {
 	if err := bloblang.RegisterMethodV2("parse_form_url_encoded",
 		bloblang.NewPluginSpec().

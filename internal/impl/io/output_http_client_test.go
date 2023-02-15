@@ -16,12 +16,20 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"gopkg.in/yaml.v3"
 
 	"github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
 	"github.com/benthosdev/benthos/v4/internal/transaction"
 )
+
+func parseYAMLOutputConf(t testing.TB, formatStr string, args ...any) (conf output.Config) {
+	t.Helper()
+	conf = output.NewConfig()
+	require.NoError(t, yaml.Unmarshal(fmt.Appendf(nil, formatStr, args...), &conf))
+	return
+}
 
 func TestHTTPClientMultipartEnabled(t *testing.T) {
 	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
@@ -49,12 +57,13 @@ func TestHTTPClientMultipartEnabled(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	conf := output.NewConfig()
-	conf.Type = "http_client"
-	conf.HTTPClient.BatchAsMultipart = true
-	conf.HTTPClient.URL = ts.URL + "/testpost"
+	conf := parseYAMLOutputConf(t, `
+http_client:
+  url: %v/testpost
+  batch_as_multipart: true
+`, ts.URL)
 
-	h, err := newHTTPClientOutput(conf, mock.NewManager())
+	h, err := mock.NewManager().NewOutput(conf)
 	require.NoError(t, err)
 
 	tChan := make(chan message.Transaction)
@@ -107,13 +116,13 @@ func TestHTTPClientMultipartDisabled(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	conf := output.NewConfig()
-	conf.Type = "http_client"
-	conf.HTTPClient.URL = ts.URL + "/testpost"
-	conf.HTTPClient.BatchAsMultipart = false
-	conf.HTTPClient.MaxInFlight = 1
+	conf := parseYAMLOutputConf(t, `
+http_client:
+  url: %v/testpost
+  max_in_flight: 1
+`, ts.URL)
 
-	h, err := newHTTPClientOutput(conf, mock.NewManager())
+	h, err := mock.NewManager().NewOutput(conf)
 	require.NoError(t, err)
 
 	tChan := make(chan message.Transaction)
@@ -154,6 +163,33 @@ func TestHTTPClientMultipartDisabled(t *testing.T) {
 	require.NoError(t, h.WaitForClose(ctx))
 }
 
+func writeBatchToStreamed(ctx context.Context, t *testing.T, batch message.Batch, out output.Streamed) (err error) {
+	t.Helper()
+
+	tChan := make(chan message.Transaction)
+	require.NoError(t, out.Consume(tChan))
+
+	return writeBatchToChan(ctx, t, batch, tChan)
+}
+
+func writeBatchToChan(ctx context.Context, t *testing.T, batch message.Batch, tChan chan message.Transaction) (err error) {
+	t.Helper()
+
+	resChan := make(chan error)
+	select {
+	case tChan <- message.NewTransaction(batch, resChan):
+	case <-ctx.Done():
+		t.Fatal(ctx.Err())
+	}
+
+	select {
+	case err = <-resChan:
+	case <-ctx.Done():
+		t.Fatal(ctx.Err())
+	}
+	return
+}
+
 func TestHTTPClientRetries(t *testing.T) {
 	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
 	defer done()
@@ -165,25 +201,23 @@ func TestHTTPClientRetries(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	conf := output.NewHTTPClientConfig()
-	conf.URL = ts.URL + "/testpost"
-	conf.Retry = "1ms"
-	conf.NumRetries = 3
+	conf := parseYAMLOutputConf(t, `
+http_client:
+  url: %v/testpost
+  retry_period: 1ms
+  retries: 3
+`, ts.URL)
 
-	h, err := newHTTPClientWriter(conf, mock.NewManager())
-	if err != nil {
-		t.Fatal(err)
-	}
+	h, err := mock.NewManager().NewOutput(conf)
+	require.NoError(t, err)
 
-	if err = h.WriteBatch(context.Background(), message.QuickBatch([][]byte{[]byte("test")})); err == nil {
-		t.Error("Expected error from end of retries")
-	}
-
+	require.Error(t, writeBatchToStreamed(ctx, t, message.QuickBatch([][]byte{[]byte("test")}), h))
 	if exp, act := uint32(4), atomic.LoadUint32(&reqCount); exp != act {
 		t.Errorf("Wrong count of HTTP attempts: %v != %v", exp, act)
 	}
 
-	require.NoError(t, h.Close(ctx))
+	h.TriggerCloseNow()
+	require.NoError(t, h.WaitForClose(ctx))
 }
 
 func TestHTTPClientBasic(t *testing.T) {
@@ -208,19 +242,24 @@ func TestHTTPClientBasic(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	conf := output.NewHTTPClientConfig()
-	conf.URL = ts.URL + "/testpost"
+	conf := parseYAMLOutputConf(t, `
+http_client:
+  url: %v/testpost
+`, ts.URL)
 
-	h, err := newHTTPClientWriter(conf, mock.NewManager())
+	h, err := mock.NewManager().NewOutput(conf)
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	tChan := make(chan message.Transaction)
+	require.NoError(t, h.Consume(tChan))
 
 	for i := 0; i < nTestLoops; i++ {
 		testStr := fmt.Sprintf("test%v", i)
 		testMsg := message.QuickBatch([][]byte{[]byte(testStr)})
 
-		if err = h.WriteBatch(context.Background(), testMsg); err != nil {
+		if err = writeBatchToChan(ctx, t, testMsg, tChan); err != nil {
 			t.Error(err)
 		}
 
@@ -240,7 +279,8 @@ func TestHTTPClientBasic(t *testing.T) {
 		}
 	}
 
-	require.NoError(t, h.Close(ctx))
+	h.TriggerCloseNow()
+	require.NoError(t, h.WaitForClose(ctx))
 }
 
 func TestHTTPClientSyncResponse(t *testing.T) {
@@ -261,14 +301,19 @@ func TestHTTPClientSyncResponse(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	conf := output.NewHTTPClientConfig()
-	conf.URL = ts.URL + "/testpost"
-	conf.PropagateResponse = true
+	conf := parseYAMLOutputConf(t, `
+http_client:
+  url: %v/testpost
+  propagate_response: true
+`, ts.URL)
 
-	h, err := newHTTPClientWriter(conf, mock.NewManager())
+	h, err := mock.NewManager().NewOutput(conf)
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	tChan := make(chan message.Transaction)
+	require.NoError(t, h.Consume(tChan))
 
 	for i := 0; i < nTestLoops; i++ {
 		testStr := fmt.Sprintf("test%v", i)
@@ -277,7 +322,7 @@ func TestHTTPClientSyncResponse(t *testing.T) {
 		testMsg := message.QuickBatch([][]byte{[]byte(testStr)})
 		transaction.AddResultStore(testMsg, resultStore)
 
-		require.NoError(t, h.WriteBatch(context.Background(), testMsg))
+		require.NoError(t, writeBatchToChan(ctx, t, testMsg, tChan))
 		resMsgs := resultStore.Get()
 		require.Len(t, resMsgs, 1)
 
@@ -287,7 +332,8 @@ func TestHTTPClientSyncResponse(t *testing.T) {
 		assert.Equal(t, "", resMsg.Get(0).MetaGetStr("fooheader"))
 	}
 
-	require.NoError(t, h.Close(ctx))
+	h.TriggerCloseNow()
+	require.NoError(t, h.WaitForClose(ctx))
 }
 
 func TestHTTPClientSyncResponseCopyHeaders(t *testing.T) {
@@ -308,15 +354,21 @@ func TestHTTPClientSyncResponseCopyHeaders(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	conf := output.NewHTTPClientConfig()
-	conf.URL = ts.URL + "/testpost"
-	conf.PropagateResponse = true
-	conf.ExtractMetadata.IncludePatterns = []string{".*"}
+	conf := parseYAMLOutputConf(t, `
+http_client:
+  url: %v/testpost
+  propagate_response: true
+  extract_headers:
+    include_patterns: [ ".*" ]
+`, ts.URL)
 
-	h, err := newHTTPClientWriter(conf, mock.NewManager())
+	h, err := mock.NewManager().NewOutput(conf)
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	tChan := make(chan message.Transaction)
+	require.NoError(t, h.Consume(tChan))
 
 	for i := 0; i < nTestLoops; i++ {
 		testStr := fmt.Sprintf("test%v", i)
@@ -325,7 +377,7 @@ func TestHTTPClientSyncResponseCopyHeaders(t *testing.T) {
 		testMsg := message.QuickBatch([][]byte{[]byte(testStr)})
 		transaction.AddResultStore(testMsg, resultStore)
 
-		require.NoError(t, h.WriteBatch(context.Background(), testMsg))
+		require.NoError(t, writeBatchToChan(ctx, t, testMsg, tChan))
 		resMsgs := resultStore.Get()
 		require.Len(t, resMsgs, 1)
 
@@ -335,7 +387,8 @@ func TestHTTPClientSyncResponseCopyHeaders(t *testing.T) {
 		assert.Equal(t, "foovalue", resMsg.Get(0).MetaGetStr("fooheader"))
 	}
 
-	require.NoError(t, h.Close(ctx))
+	h.TriggerCloseNow()
+	require.NoError(t, h.WaitForClose(ctx))
 }
 
 func TestHTTPClientMultipart(t *testing.T) {
@@ -386,13 +439,19 @@ func TestHTTPClientMultipart(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	conf := output.NewHTTPClientConfig()
-	conf.URL = ts.URL + "/testpost"
+	conf := parseYAMLOutputConf(t, `
+http_client:
+  url: %v/testpost
+  batch_as_multipart: true
+`, ts.URL)
 
-	h, err := newHTTPClientWriter(conf, mock.NewManager())
+	h, err := mock.NewManager().NewOutput(conf)
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	tChan := make(chan message.Transaction)
+	require.NoError(t, h.Consume(tChan))
 
 	for i := 0; i < nTestLoops; i++ {
 		testStr := fmt.Sprintf("test%v", i)
@@ -401,9 +460,7 @@ func TestHTTPClientMultipart(t *testing.T) {
 			[]byte(testStr + "PART-B"),
 		})
 
-		if err = h.WriteBatch(context.Background(), testMsg); err != nil {
-			t.Error(err)
-		}
+		require.NoError(t, writeBatchToChan(ctx, t, testMsg, tChan))
 
 		select {
 		case resMsg := <-resultChan:
@@ -425,7 +482,8 @@ func TestHTTPClientMultipart(t *testing.T) {
 		}
 	}
 
-	require.NoError(t, h.Close(ctx))
+	h.TriggerCloseNow()
+	require.NoError(t, h.WaitForClose(ctx))
 }
 
 func TestHTTPOutputClientMultipartBody(t *testing.T) {
@@ -469,31 +527,32 @@ func TestHTTPOutputClientMultipartBody(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	conf := output.NewHTTPClientConfig()
-	conf.URL = ts.URL + "/testpost"
-	conf.Multipart = []output.HTTPClientMultipartExpression{
-		{
-			ContentDisposition: `form-data; name="text"`,
-			ContentType:        "text/plain",
-			Body:               "PART-A",
-		},
-		{
-			ContentDisposition: `form-data; name="file1"; filename="a.txt"`,
-			ContentType:        "text/plain",
-			Body:               "PART-B",
-		},
-	}
-	h, err := newHTTPClientWriter(conf, mock.NewManager())
+	conf := parseYAMLOutputConf(t, `
+http_client:
+  url: %v/testpost
+  multipart:
+    - content_disposition: 'form-data; name="text"'
+      content_type: 'text/plain'
+      body: PART-A
+    - content_disposition: 'form-data; name="file1"; filename="a.txt"'
+      content_type: 'text/plain'
+      body: PART-B
+`, ts.URL)
+
+	h, err := mock.NewManager().NewOutput(conf)
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	tChan := make(chan message.Transaction)
+	require.NoError(t, h.Consume(tChan))
+
 	for i := 0; i < nTestLoops; i++ {
-		if err = h.WriteBatch(context.Background(), message.QuickBatch([][]byte{[]byte("test")})); err != nil {
-			t.Error(err)
-		}
+		require.NoError(t, writeBatchToChan(ctx, t, message.QuickBatch([][]byte{[]byte("test")}), tChan))
+
 		select {
 		case resMsg := <-resultChan:
-			if resMsg.Len() != len(conf.Multipart) {
+			if resMsg.Len() != 2 {
 				t.Errorf("Wrong # parts: %v != %v", resMsg.Len(), 2)
 				return
 			}
@@ -511,7 +570,8 @@ func TestHTTPOutputClientMultipartBody(t *testing.T) {
 		}
 	}
 
-	require.NoError(t, h.Close(ctx))
+	h.TriggerCloseNow()
+	require.NoError(t, h.WaitForClose(ctx))
 }
 
 func TestHTTPOutputClientMultipartHeaders(t *testing.T) {
@@ -554,32 +614,35 @@ func TestHTTPOutputClientMultipartHeaders(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	conf := output.NewHTTPClientConfig()
-	conf.URL = ts.URL + "/testpost"
-	conf.Multipart = []output.HTTPClientMultipartExpression{
-		{
-			ContentDisposition: `form-data; name="text"`,
-			ContentType:        "text/plain",
-			Body:               "PART-A",
-		},
-		{
-			ContentDisposition: `form-data; name="file1"; filename="a.txt"`,
-			ContentType:        "text/plain",
-			Body:               "PART-B",
-		},
-	}
-	h, err := newHTTPClientWriter(conf, mock.NewManager())
+	conf := parseYAMLOutputConf(t, `
+http_client:
+  url: %v/testpost
+  multipart:
+    - content_disposition: 'form-data; name="text"'
+      content_type: 'text/plain'
+      body: PART-A
+    - content_disposition: 'form-data; name="file1"; filename="a.txt"'
+      content_type: 'text/plain'
+      body: PART-B
+`, ts.URL)
+
+	h, err := mock.NewManager().NewOutput(conf)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err = h.WriteBatch(context.Background(), message.QuickBatch([][]byte{[]byte("test")})); err != nil {
-		t.Error(err)
+
+	require.NoError(t, writeBatchToStreamed(ctx, t, message.QuickBatch([][]byte{[]byte("test")}), h))
+
+	expHeaders := [][2]string{
+		{`form-data; name="text"`, "text/plain"},
+		{`form-data; name="file1"; filename="a.txt"`, "text/plain"},
 	}
+
 	select {
 	case resMsg := <-resultChan:
-		for i := range conf.Multipart {
-			if resMsg.Len() != len(conf.Multipart) {
-				t.Errorf("Wrong # parts: %v != %v", resMsg.Len(), 2)
+		for i, exp := range expHeaders {
+			if resMsg.Len() != 2 {
+				t.Errorf("Wrong # parts: %v != %v", resMsg.Len(), 2)
 				return
 			}
 			mp := make(map[string][]string)
@@ -587,19 +650,14 @@ func TestHTTPOutputClientMultipartHeaders(t *testing.T) {
 			if err != nil {
 				t.Error(err)
 			}
-			if exp, actual := conf.Multipart[i].ContentDisposition, mp["Content-Disposition"]; exp != actual[0] {
-				t.Errorf("Wrong result, %v != %v", exp, actual)
-				return
-			}
-			if exp, actual := conf.Multipart[i].ContentType, mp["Content-Type"]; exp != actual[0] {
-				t.Errorf("Wrong result, %v != %v", exp, actual)
-				return
-			}
+			assert.Equal(t, []string{exp[0]}, mp["Content-Disposition"])
+			assert.Equal(t, []string{exp[1]}, mp["Content-Type"])
 		}
 	case <-time.After(time.Second):
 		t.Errorf("Action timed out")
 		return
 	}
 
-	require.NoError(t, h.Close(ctx))
+	h.TriggerCloseNow()
+	require.NoError(t, h.WaitForClose(ctx))
 }

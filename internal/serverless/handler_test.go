@@ -2,6 +2,7 @@ package serverless
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -10,6 +11,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+	yaml "gopkg.in/yaml.v3"
+
 	"github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/config"
@@ -17,6 +21,13 @@ import (
 	_ "github.com/benthosdev/benthos/v4/public/components/io"
 	_ "github.com/benthosdev/benthos/v4/public/components/pure"
 )
+
+func parseYAMLOutputConf(t testing.TB, formatStr string, args ...any) (conf output.Config) {
+	t.Helper()
+	conf = output.NewConfig()
+	require.NoError(t, yaml.Unmarshal(fmt.Appendf(nil, formatStr, args...), &conf))
+	return
+}
 
 func TestHandlerAsync(t *testing.T) {
 	var results [][]byte
@@ -36,8 +47,10 @@ func TestHandlerAsync(t *testing.T) {
 	defer ts.Close()
 
 	conf := config.New()
-	conf.Output.Type = "http_client"
-	conf.Output.HTTPClient.URL = ts.URL
+	conf.Output = parseYAMLOutputConf(t, `
+http_client:
+  url: %v
+`, ts.URL)
 
 	h, err := NewHandler(conf)
 	if err != nil {
@@ -176,9 +189,10 @@ func TestHandlerCombined(t *testing.T) {
 
 	conf.Output.Broker.Outputs = append(conf.Output.Broker.Outputs, cConf)
 
-	cConf = output.NewConfig()
-	cConf.Type = "http_client"
-	cConf.HTTPClient.URL = ts.URL
+	cConf = parseYAMLOutputConf(t, `
+http_client:
+  url: %v
+`, ts.URL)
 
 	conf.Output.Broker.Outputs = append(conf.Output.Broker.Outputs, cConf)
 

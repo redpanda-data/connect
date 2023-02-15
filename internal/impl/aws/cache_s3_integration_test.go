@@ -26,6 +26,7 @@ func createBucket(ctx context.Context, s3Port, bucket string) error {
 		Endpoint:         aws.String(endpoint),
 		Region:           aws.String("eu-west-1"),
 	})))
+
 	_, err := client.CreateBucket(&s3.CreateBucketInput{
 		Bucket: &bucket,
 	})
