@@ -42,7 +42,7 @@ meta baz = "new meta"
 
 	proc := newMutation(exec, nil)
 
-	outBatches, err := proc.ProcessBatch(tCtx, message.Batch{inMsg, inMsg2})
+	outBatches, err := proc.ProcessBatch(tCtx, nil, message.Batch{inMsg, inMsg2})
 	require.NoError(t, err)
 	require.Len(t, outBatches, 1)
 	require.Len(t, outBatches[0], 2)
@@ -105,7 +105,7 @@ func TestMutationCreateCustomObject(t *testing.T) {
 
 	proc := newMutation(exec, nil)
 
-	outBatches, err := proc.ProcessBatch(tCtx, message.Batch{part})
+	outBatches, err := proc.ProcessBatch(tCtx, nil, message.Batch{part})
 	require.NoError(t, err)
 	require.Len(t, outBatches, 1)
 	require.Len(t, outBatches[0], 1)
@@ -133,7 +133,7 @@ root = match {
 
 	proc := newMutation(exec, nil)
 
-	outBatches, err := proc.ProcessBatch(tCtx, inBatch)
+	outBatches, err := proc.ProcessBatch(tCtx, nil, inBatch)
 	require.NoError(t, err)
 	require.Len(t, outBatches, 1)
 	require.Len(t, outBatches[0], 2)
@@ -163,7 +163,7 @@ func TestMutationCreateFilterAll(t *testing.T) {
 
 	proc := newMutation(exec, nil)
 
-	outBatches, err := proc.ProcessBatch(tCtx, inBatch)
+	outBatches, err := proc.ProcessBatch(tCtx, nil, inBatch)
 	assert.NoError(t, err)
 	assert.Empty(t, outBatches)
 }
@@ -180,7 +180,7 @@ func TestMutationCreateJSONError(t *testing.T) {
 
 	proc := newMutation(exec, nil)
 
-	outBatches, err := proc.ProcessBatch(tCtx, msg)
+	outBatches, err := proc.ProcessBatch(tCtx, nil, msg)
 	require.NoError(t, err)
 	require.Len(t, outBatches, 1)
 	require.Len(t, outBatches[0], 1)
