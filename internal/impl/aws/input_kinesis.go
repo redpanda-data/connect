@@ -198,8 +198,8 @@ func newKinesisReader(conf input.AWSKinesisConfig, mgr bundle.NewManagement) (*k
 						if err != nil {
 							return nil, fmt.Errorf("failed to parse streams max shard value: %v", err)
 						}
-						if maxShardsPerClient == 0 {
-							return nil, fmt.Errorf("max shards per client cannot be 0")
+						if maxShardsPerClient <= 0 {
+							return nil, fmt.Errorf("max shards per client cannot be zero or a negative number")
 						}
 						k.streamMaxShards[stream] = maxShardsPerClient
 					}
@@ -585,7 +585,7 @@ func (k *kinesisReader) runBalancedShards() {
 			if len(unclaimedShards) > 0 {
 				numberShardAlreadyClaimed := len(clientClaims[k.clientID])
 				_, err = k.maxShardRunBalancedConsumer(&wg, streamID, unclaimedShards, numberShardAlreadyClaimed)
-				if err!= nil {
+				if err != nil {
 					return
 				}
 				// If there are unclaimed shards then let's not resort to
@@ -698,7 +698,7 @@ func (k *kinesisReader) maxShardRunBalancedConsumer(wg *sync.WaitGroup, streamID
 	if !maxShardExists || numShardAlreadyClaimed < maxShardNumber {
 		// Remaining number of shards that can be claimed
 		for shardID, clientID := range unclaimedShards {
-			if maxShardExists && numShardAlreadyClaimed + numShardClaimed >= maxShardNumber {
+			if maxShardExists && numShardAlreadyClaimed+numShardClaimed >= maxShardNumber {
 				break
 			}
 			sequence, err := k.checkpointer.Claim(k.ctx, streamID, shardID, clientID)
@@ -714,6 +714,7 @@ func (k *kinesisReader) maxShardRunBalancedConsumer(wg *sync.WaitGroup, streamID
 			wg.Add(1)
 			numShardClaimed++
 			if err = k.runConsumer(wg, streamID, shardID, sequence); err != nil {
+				numShardClaimed--
 				k.log.Errorf("Failed to start consumer: %v\n", err)
 			}
 		}
