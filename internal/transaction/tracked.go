@@ -37,24 +37,27 @@ func (t *Tracked) Message() message.Batch {
 }
 
 func (t *Tracked) getResFromGroup(walkable *batch.Error) error {
+	// We're faced with a batch error. However, there's a chance that the
+	// messages failed in the batch were not sourced from this transaction due
+	// to batching, archiving, etc.
+	//
+	// Therefore, we can be cheeky, poke around, and if we both can verify that
+	// all of our messages are represented in this batch error and also that
+	// they are all nil within it then we can safely say that the parts making
+	// up this transaction are safe to acknowledge.
 	remainingIndexes := make(map[int]struct{}, t.msg.Len())
 	for i := 0; i < t.msg.Len(); i++ {
 		remainingIndexes[i] = struct{}{}
 	}
 
 	var res error
-	walkable.WalkParts(func(_ int, p *message.Part, err error) bool {
-		if index := t.group.GetIndex(p); index >= 0 {
-			if err != nil {
-				res = err
-				return false
-			}
-			delete(remainingIndexes, index)
-			if len(remainingIndexes) == 0 {
-				return false
-			}
+	walkable.WalkParts(t.group, t.msg, func(index int, p *message.Part, err error) bool {
+		if err != nil {
+			res = err
+			return false
 		}
-		return true
+		delete(remainingIndexes, index)
+		return len(remainingIndexes) != 0
 	})
 	if res != nil {
 		return res

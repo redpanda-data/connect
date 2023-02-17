@@ -33,22 +33,39 @@ func NewAsyncPreserver(r Async) *AsyncPreserver {
 		retryList: autoretry.NewList(
 			func(ctx context.Context) (message.Batch, autoretry.AckFunc, error) {
 				t, aFn, err := r.ReadBatch(ctx)
+
+				// Make sure we're able to track the position of messages in
+				// order to reassociate them after a batch-wide error
+				// downstream.
+				_, t = message.NewSortGroup(t)
+
 				return t, autoretry.AckFunc(aFn), err
 			},
 			func(t message.Batch, err error) message.Batch {
 				var bErr *batch.Error
-				if !errors.As(err, &bErr) || bErr.IndexedErrors() == 0 {
+				if len(t) == 0 || !errors.As(err, &bErr) || bErr.IndexedErrors() == 0 {
+					return t
+				}
+
+				sortGroup := message.TopLevelSortGroup(t[0])
+				if sortGroup == nil {
+					// We can't associate our source batch with the one that's associated
+					// with the batch error, therefore we fall back towards treating every
+					// message as if it was errored the same.
 					return t
 				}
 
 				newBatch := make(message.Batch, 0, bErr.IndexedErrors())
-				bErr.WalkParts(func(i int, p *message.Part, err error) bool {
+				bErr.WalkParts(sortGroup, t, func(i int, p *message.Part, err error) bool {
 					if err == nil {
 						return true
 					}
 					newBatch = append(newBatch, p)
 					return true
 				})
+				if len(newBatch) == 0 {
+					return t
+				}
 				return newBatch
 			}),
 		r: r,
