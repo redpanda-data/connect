@@ -42,6 +42,7 @@ to the [`database/sql` docs](https://pkg.go.dev/database/sql#DB.SetMaxIdleConns)
 - Config component initialisation errors should no longer show nested path annotations.
 - Prevented panics from the `jq` processor when querying invalid types.
 - The `jaeger` tracer no longer emits the `service.version` tag automatically if the user sets the `service.name` tag explicitly.
+- The `mapping` and `mutation` processors should provide metrics and tracing events again.
 
 ## 4.11.0 - 2022-12-21
 

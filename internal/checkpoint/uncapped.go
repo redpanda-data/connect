@@ -1,25 +1,31 @@
 package checkpoint
 
-import (
-	"sync"
-)
+import "sync"
 
-// Type keeps track of a sequence of pending checkpoint payloads, and as pending
-// checkpoints are resolved it retains the latest fully resolved payload in the
-// sequence where all prior sequence checkpoints are also resolved.
+// Uncapped keeps track of a sequence of pending checkpoint payloads, and as
+// pending checkpoints are resolved it retains the latest fully resolved payload
+// in the sequence where all prior sequence checkpoints are also resolved.
 //
 // Also keeps track of the logical size of the unresolved sequence, which allows
 // for limiting the number of pending checkpoints.
-type Type struct {
+type Uncapped[T any] struct {
 	positionOffset int64
-	checkpoint     any
+	checkpoint     *T
 
-	latest, earliest *node
+	poolOfT sync.Pool
+
+	latest, earliest *node[T]
 }
 
-// New returns a new checkpointer.
-func New() *Type {
-	return &Type{}
+// NewUncapped returns a new check pointer implemented via a linked list.
+func NewUncapped[T any]() *Uncapped[T] {
+	return &Uncapped[T]{
+		poolOfT: sync.Pool{
+			New: func() any {
+				return &node[T]{}
+			},
+		},
+	}
 }
 
 // Track a new unresolved payload. This payload will be cached until it is
@@ -28,8 +34,8 @@ func New() *Type {
 //
 // While the returned resolve funcs can be called from any goroutine, it
 // is assumed that Track is called from a single goroutine.
-func (t *Type) Track(payload any, batchSize int64) func() any {
-	newNode := getNode()
+func (t *Uncapped[T]) Track(payload T, batchSize int64) func() *T {
+	newNode := t.poolOfT.Get().(*node[T])
 	newNode.payload = payload
 	newNode.position = batchSize
 
@@ -45,13 +51,14 @@ func (t *Type) Track(payload any, batchSize int64) func() any {
 
 	t.latest = newNode
 
-	return func() any {
+	return func() *T {
 		if newNode.prev != nil {
 			newNode.prev.position = newNode.position
 			newNode.prev.payload = newNode.payload
 			newNode.prev.next = newNode.next
 		} else {
-			t.checkpoint = newNode.payload
+			tmp := newNode.payload
+			t.checkpoint = &tmp
 			t.positionOffset = newNode.position
 			t.earliest = newNode.next
 		}
@@ -65,13 +72,14 @@ func (t *Type) Track(payload any, batchSize int64) func() any {
 			}
 		}
 
-		putNode(newNode)
+		newNode.reset()
+		t.poolOfT.Put(newNode)
 		return t.checkpoint
 	}
 }
 
-// Pending returns the gap between the earliest and latests unresolved messages.
-func (t *Type) Pending() int64 {
+// Pending returns the gap between the earliest and latest unresolved messages.
+func (t *Uncapped[T]) Pending() int64 {
 	if t.latest == nil {
 		return 0
 	}
@@ -79,30 +87,20 @@ func (t *Type) Pending() int64 {
 }
 
 // Highest returns the payload of the highest resolved checkpoint.
-func (t *Type) Highest() any {
+func (t *Uncapped[T]) Highest() *T {
 	return t.checkpoint
 }
 
-type node struct {
+type node[T any] struct {
 	position   int64
-	payload    any
-	prev, next *node
+	payload    T
+	prev, next *node[T]
 }
 
-var nodePool = &sync.Pool{
-	New: func() any {
-		return &node{}
-	},
-}
-
-func getNode() *node {
-	return nodePool.Get().(*node)
-}
-
-func putNode(node *node) {
-	node.position = 0
-	node.payload = nil
-	node.prev = nil
-	node.next = nil
-	nodePool.Put(node)
+func (n *node[T]) reset() {
+	n.position = 0
+	var def T
+	n.payload = def
+	n.prev = nil
+	n.next = nil
 }
