@@ -31,6 +31,7 @@ func NewDynamoDBCheckpointConfig() DynamoDBCheckpointConfig {
 type AWSKinesisConfig struct {
 	session.Config  `json:",inline" yaml:",inline"`
 	Streams         []string                 `json:"streams" yaml:"streams"`
+	StreamsMaxShard []string                 `json:"streams_max_shard" yaml:"streams_max_shard"`
 	DynamoDB        DynamoDBCheckpointConfig `json:"dynamodb" yaml:"dynamodb"`
 	CheckpointLimit int                      `json:"checkpoint_limit" yaml:"checkpoint_limit"`
 	CommitPeriod    string                   `json:"commit_period" yaml:"commit_period"`
@@ -45,6 +46,7 @@ func NewAWSKinesisConfig() AWSKinesisConfig {
 	return AWSKinesisConfig{
 		Config:          session.NewConfig(),
 		Streams:         []string{},
+		StreamsMaxShard: []string{},
 		DynamoDB:        NewDynamoDBCheckpointConfig(),
 		CheckpointLimit: 1024,
 		CommitPeriod:    "5s",
