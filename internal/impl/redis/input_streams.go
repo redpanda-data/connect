@@ -186,7 +186,7 @@ func (r *redisStreamsReader) sendAcks(ctx context.Context) {
 		if len(ids) == 0 {
 			continue
 		}
-		if err := r.client.XAck(ctx, str, r.conf.ConsumerGroup, ids...).Err(); err != nil {
+		if err := client.XAck(ctx, str, r.conf.ConsumerGroup, ids...).Err(); err != nil {
 			r.log.Errorf("Failed to ack stream %v: %v\n", str, err)
 		}
 	}
