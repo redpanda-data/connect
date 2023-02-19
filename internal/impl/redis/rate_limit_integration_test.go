@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/url"
+	"sync"
 	"testing"
 	"time"
 
@@ -78,11 +79,14 @@ url: `+url, nil)
 	ctx := context.Background()
 
 	for i := 0; i < 10; i++ {
-		period, _ := rl.Access(ctx)
+		period, err := rl.Access(ctx)
+		require.NoError(t, err)
 		assert.LessOrEqual(t, period, time.Duration(0))
 	}
 
-	if period, _ := rl.Access(ctx); period == 0 {
+	period, err := rl.Access(ctx)
+	require.NoError(t, err)
+	if period == 0 {
 		t.Error("Expected limit on final request")
 	} else if period > time.Second {
 		t.Errorf("Period beyond interval: %v", period)
@@ -93,7 +97,7 @@ func testRedisRateLimitRefresh(t *testing.T, url string) {
 	conf, err := redisRatelimitConfig().ParseYAML(`
 key: rate_limit_refresh
 count: 10
-interval: 10ms
+interval: 100ms
 url: `+url, nil)
 	require.NoError(t, err)
 
@@ -102,29 +106,47 @@ url: `+url, nil)
 
 	ctx := context.Background()
 
+	wg := sync.WaitGroup{}
+	wg.Add(10)
 	for i := 0; i < 10; i++ {
-		period, _ := rl.Access(ctx)
-		if period > 0 {
-			t.Errorf("Period above zero: %v", period)
-		}
+		go func() {
+			defer wg.Done()
+			period, err := rl.Access(ctx)
+			require.NoError(t, err)
+			if period > 0 {
+				t.Errorf("Period above zero: %v", period)
+			}
+		}()
 	}
+	wg.Wait()
 
-	if period, _ := rl.Access(ctx); period == 0 {
+	period, err := rl.Access(ctx)
+	require.NoError(t, err)
+	if period == 0 {
 		t.Error("Expected limit on final request")
 	} else if period > time.Second {
 		t.Errorf("Period beyond interval: %v", period)
 	}
 
-	<-time.After(time.Millisecond * 15)
+	<-time.After(150 * time.Millisecond)
 
+	wg.Add(10)
 	for i := 0; i < 10; i++ {
-		period, _ := rl.Access(ctx)
-		if period != 0 {
-			t.Errorf("Rate limited on get %v", i)
-		}
+		i := i
+		go func() {
+			defer wg.Done()
+			period, err := rl.Access(ctx)
+			require.NoError(t, err)
+			if period != 0 {
+				t.Errorf("Rate limited on get %v", i)
+			}
+		}()
 	}
+	wg.Wait()
 
-	if period, _ := rl.Access(ctx); period == 0 {
+	period, err = rl.Access(ctx)
+	require.NoError(t, err)
+	if period == 0 {
 		t.Error("Expected limit on final request")
 	} else if period > time.Second {
 		t.Errorf("Period beyond interval: %v", period)
