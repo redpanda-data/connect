@@ -61,14 +61,14 @@ require (
 	github.com/linkedin/goavro/v2 v2.12.0
 	github.com/matoous/go-nanoid/v2 v2.0.0
 	github.com/microcosm-cc/bluemonday v1.0.22
-	github.com/mitchellh/mapstructure v1.4.3
+	github.com/mitchellh/mapstructure v1.5.0
 	github.com/nats-io/nats.go v1.15.0
 	github.com/nats-io/nkeys v0.3.0
 	github.com/nats-io/stan.go v0.10.2
 	github.com/nsf/jsondiff v0.0.0-20210926074059-1e845ec5d249
 	github.com/nsqio/go-nsq v1.1.0
 	github.com/olivere/elastic/v7 v7.0.31
-	github.com/ory/dockertest/v3 v3.8.1
+	github.com/ory/dockertest/v3 v3.9.1
 	github.com/oschwald/geoip2-golang v1.5.0
 	github.com/pebbe/zmq4 v1.2.7
 	github.com/pierrec/lz4/v4 v4.1.17
@@ -91,6 +91,7 @@ require (
 	github.com/stretchr/testify v1.8.1
 	github.com/tetratelabs/wazero v1.0.0-pre.9
 	github.com/tilinna/z85 v1.0.0
+	github.com/trinodb/trino-go-client v0.309.0
 	github.com/twmb/franz-go v1.12.1
 	github.com/twmb/franz-go/pkg/kmsg v1.4.0
 	github.com/urfave/cli/v2 v2.11.0
@@ -210,7 +211,7 @@ require (
 	github.com/hashicorp/go-immutable-radix v1.3.0 // indirect
 	github.com/hashicorp/go-uuid v1.0.3 // indirect
 	github.com/hashicorp/golang-lru v0.5.4 // indirect
-	github.com/imdario/mergo v0.3.12 // indirect
+	github.com/imdario/mergo v0.3.13 // indirect
 	github.com/jcmturner/aescts/v2 v2.0.0 // indirect
 	github.com/jcmturner/dnsutils/v2 v2.0.0 // indirect
 	github.com/jcmturner/gofork v1.7.6 // indirect
@@ -281,6 +282,10 @@ require (
 	google.golang.org/genproto v0.0.0-20230110181048-76db0878b65f // indirect
 	google.golang.org/protobuf v1.28.1 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
+	gopkg.in/jcmturner/aescts.v1 v1.0.1 // indirect
+	gopkg.in/jcmturner/dnsutils.v1 v1.0.1 // indirect
+	gopkg.in/jcmturner/gokrb5.v6 v6.1.1 // indirect
+	gopkg.in/jcmturner/rpc.v1 v1.1.0 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	lukechampine.com/uint128 v1.2.0 // indirect
 	modernc.org/cc/v3 v3.40.0 // indirect
