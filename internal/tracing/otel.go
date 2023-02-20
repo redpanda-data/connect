@@ -1,7 +1,6 @@
 package tracing
 
 import (
-	"context"
 	"strings"
 
 	"go.opentelemetry.io/otel"
@@ -48,7 +47,7 @@ func GetTraceID(p *message.Part) string {
 func WithChildSpan(prov trace.TracerProvider, operationName string, part *message.Part) (*message.Part, *Span) {
 	span := GetActiveSpan(part)
 	if span == nil {
-		ctx, t := prov.Tracer(name).Start(context.Background(), operationName)
+		ctx, t := prov.Tracer(name).Start(part.GetContext(), operationName)
 		span = otelSpan(ctx, t)
 		part = part.WithContext(ctx)
 	} else {
@@ -88,11 +87,11 @@ func WithSiblingSpans(prov trace.TracerProvider, operationName string, batch mes
 		}
 		otSpan := GetActiveSpan(part)
 		if otSpan == nil {
-			ctx, t := prov.Tracer(name).Start(context.Background(), operationName)
+			ctx, t := prov.Tracer(name).Start(part.GetContext(), operationName)
 			otSpan = otelSpan(ctx, t)
 		} else {
 			ctx, t := prov.Tracer(name).Start(
-				context.Background(), operationName,
+				part.GetContext(), operationName,
 				trace.WithLinks(trace.LinkFromContext(otSpan.ctx)),
 			)
 			otSpan = otelSpan(ctx, t)
@@ -119,7 +118,7 @@ func InitSpan(prov trace.TracerProvider, operationName string, part *message.Par
 	if GetActiveSpan(part) != nil {
 		return part
 	}
-	ctx, _ := prov.Tracer(name).Start(context.Background(), operationName)
+	ctx, _ := prov.Tracer(name).Start(part.GetContext(), operationName)
 	return message.WithContext(ctx, part)
 }
 
@@ -133,8 +132,9 @@ func InitSpansFromParentTextMap(prov trace.TracerProvider, operationName string,
 		}
 	}
 
-	ctx := otel.GetTextMapPropagator().Extract(context.Background(), c)
+	textProp := otel.GetTextMapPropagator()
 	for i, p := range batch {
+		ctx := textProp.Extract(p.GetContext(), c)
 		pCtx, _ := prov.Tracer(name).Start(ctx, operationName)
 		batch[i] = message.WithContext(pCtx, p)
 	}

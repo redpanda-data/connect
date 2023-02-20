@@ -26,20 +26,24 @@ type testFn func(t *testing.T, driver, dsn, table string)
 
 func testProcessors(name string, fn func(t *testing.T, insertProc, selectProc service.BatchProcessor)) testFn {
 	return func(t *testing.T, driver, dsn, table string) {
+		colList := `[ "foo", "bar", "baz" ]`
+		if driver == "oracle" {
+			colList = `[ "\"foo\"", "\"bar\"", "\"baz\"" ]`
+		}
 		t.Run(name, func(t *testing.T) {
 			insertConf := fmt.Sprintf(`
 driver: %s
 dsn: %s
 table: %s
-columns: [ "\"foo\"", "\"bar\"", "\"baz\"" ]
+columns: %s
 args_mapping: 'root = [ this.foo, this.bar.floor(), this.baz ]'
-`, driver, dsn, table)
+`, driver, dsn, table, colList)
 
 			queryConf := fmt.Sprintf(`
 driver: %s
 dsn: %s
 table: %s
-columns: [ "\"foo\"", "\"bar\"", "\"baz\"" ]
+columns: [ "*" ]
 where: '"foo" = ?'
 args_mapping: 'root = [ this.id ]'
 `, driver, dsn, table)
@@ -340,11 +344,16 @@ var testDeprecatedProcessorsBasic = testRawDeprecatedProcessors("deprecated", fu
 })
 
 func testBatchInputOutputBatch(t *testing.T, driver, dsn, table string) {
+	colList := `[ "foo", "bar", "baz" ]`
+	if driver == "oracle" {
+		colList = `[ "\"foo\"", "\"bar\"", "\"baz\"" ]`
+	}
 	t.Run("batch_input_output", func(t *testing.T) {
 		confReplacer := strings.NewReplacer(
 			"$driver", driver,
 			"$dsn", dsn,
 			"$table", table,
+			"$columnlist", colList,
 		)
 
 		outputConf := confReplacer.Replace(`
@@ -352,7 +361,7 @@ sql_insert:
   driver: $driver
   dsn: $dsn
   table: $table
-  columns: [ "\"foo\"", "\"bar\"", "\"baz\"" ]
+  columns: $columnlist
   args_mapping: 'root = [ this.foo, this.bar.floor(), this.baz ]'
 `)
 
