@@ -302,7 +302,7 @@ func newKafkaReader(conf input.KafkaConfig, mgr bundle.NewManagement, log log.Mo
 //------------------------------------------------------------------------------
 
 func (k *kafkaReader) asyncCheckpointer(topic string, partition int32) func(context.Context, chan<- asyncMessage, message.Batch, int64) bool {
-	cp := checkpoint.NewCapped(int64(k.conf.CheckpointLimit))
+	cp := checkpoint.NewCapped[int64](int64(k.conf.CheckpointLimit))
 	return func(ctx context.Context, c chan<- asyncMessage, msg message.Batch, offset int64) bool {
 		if msg == nil {
 			return true
@@ -325,7 +325,7 @@ func (k *kafkaReader) asyncCheckpointer(topic string, partition int32) func(cont
 				k.cMut.Lock()
 				if k.session != nil {
 					k.log.Debugf("Marking offset for topic '%v' partition '%v'.\n", topic, partition)
-					k.session.MarkOffset(topic, partition, maxOffset.(int64), "")
+					k.session.MarkOffset(topic, partition, *maxOffset, "")
 				} else {
 					k.log.Debugf("Unable to mark offset for topic '%v' partition '%v'.\n", topic, partition)
 				}

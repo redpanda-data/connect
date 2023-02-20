@@ -5,7 +5,9 @@ import (
 
 	"github.com/benthosdev/benthos/v4/internal/bloblang/mapping"
 	"github.com/benthosdev/benthos/v4/internal/component/interop"
+	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/message"
+	"github.com/benthosdev/benthos/v4/internal/tracing"
 	"github.com/benthosdev/benthos/v4/public/bloblang"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
@@ -118,7 +120,8 @@ pipeline:
 				return nil, err
 			}
 
-			return interop.NewUnwrapInternalBatchProcessor(newMapping(mapping, mgr.Logger())), nil
+			v1Proc := processor.NewV2BatchedToV1Processor("mapping", newMapping(mapping, mgr.Logger()), interop.UnwrapManagement(mgr))
+			return interop.NewUnwrapInternalBatchProcessor(v1Proc), nil
 		})
 	if err != nil {
 		panic(err)
@@ -141,7 +144,7 @@ func newMapping(exec *bloblang.Executor, log *service.Logger) *mappingProc {
 	}
 }
 
-func (m *mappingProc) ProcessBatch(ctx context.Context, b message.Batch) ([]message.Batch, error) {
+func (m *mappingProc) ProcessBatch(ctx context.Context, _ []*tracing.Span, b message.Batch) ([]message.Batch, error) {
 	newBatch := make(message.Batch, 0, len(b))
 	for i, msg := range b {
 		newPart, err := m.exec.MapPart(i, b)
