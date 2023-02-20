@@ -123,7 +123,7 @@ func (p *wazeroAllocProcessor) newModule() (mod *moduleRunner, err error) {
 		return
 	}
 
-	if mod.mod, err = r.InstantiateModuleFromBinary(ctx, p.wasmBinary); err != nil {
+	if mod.mod, err = r.Instantiate(ctx, p.wasmBinary); err != nil {
 		return
 	}
 
