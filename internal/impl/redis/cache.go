@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/cenkalti/backoff/v4"
-	"github.com/go-redis/redis/v8"
+	"github.com/redis/go-redis/v9"
 
 	"github.com/benthosdev/benthos/v4/public/service"
 )
@@ -117,12 +117,16 @@ func (r *redisCache) Get(ctx context.Context, key string) ([]byte, error) {
 		r.boffPool.Put(boff)
 	}()
 
-	key = r.prefix + key
+	if len(r.prefix) > 0 {
+		key = r.prefix + key
+	}
+
 	for {
 		res, err := r.client.Get(ctx, key).Result()
 		if err == nil {
 			return []byte(res), nil
 		}
+
 		if errors.Is(err, redis.Nil) {
 			return nil, service.ErrKeyNotFound
 		}
@@ -146,7 +150,9 @@ func (r *redisCache) Set(ctx context.Context, key string, value []byte, ttl *tim
 		r.boffPool.Put(boff)
 	}()
 
-	key = r.prefix + key
+	if len(r.prefix) > 0 {
+		key = r.prefix + key
+	}
 
 	var t time.Duration
 	if ttl != nil {
@@ -180,9 +186,12 @@ func (r *redisCache) Add(ctx context.Context, key string, value []byte, ttl *tim
 		r.boffPool.Put(boff)
 	}()
 
-	key = r.prefix + key
+	if len(r.prefix) > 0 {
+		key = r.prefix + key
+	}
 
 	var t time.Duration
+
 	if ttl != nil {
 		t = *ttl
 	} else {
@@ -217,7 +226,9 @@ func (r *redisCache) Delete(ctx context.Context, key string) error {
 		r.boffPool.Put(boff)
 	}()
 
-	key = r.prefix + key
+	if len(r.prefix) > 0 {
+		key = r.prefix + key
+	}
 
 	for {
 		_, err := r.client.Del(ctx, key).Result()

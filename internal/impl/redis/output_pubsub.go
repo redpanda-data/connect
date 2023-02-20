@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/go-redis/redis/v8"
+	"github.com/redis/go-redis/v9"
 
 	ibatch "github.com/benthosdev/benthos/v4/internal/batch"
 	"github.com/benthosdev/benthos/v4/internal/batch/policy"
