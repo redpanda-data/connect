@@ -22,6 +22,8 @@ func TestNestedSortGroups(t *testing.T) {
 
 	msg1Reordered := Batch{msg1[1], msg1[0]}
 
+	assert.Equal(t, group1, TopLevelSortGroup(msg1[1]))
+
 	group2, msg2 := NewSortGroup(msg1Reordered)
 
 	assert.Equal(t, -1, group1.GetIndex(msg.Get(0)))
@@ -41,4 +43,7 @@ func TestNestedSortGroups(t *testing.T) {
 
 	assert.Equal(t, 1, group1.GetIndex(msg2.Get(0)))
 	assert.Equal(t, 0, group1.GetIndex(msg2.Get(1)))
+
+	assert.Equal(t, group1, TopLevelSortGroup(msg1[1]))
+	assert.Equal(t, group2, TopLevelSortGroup(msg2[1]))
 }

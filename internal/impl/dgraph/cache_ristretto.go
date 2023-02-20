@@ -98,13 +98,6 @@ func newRistrettoCache(defaultTTL time.Duration, retriesEnabled bool, backOff *b
 
 func (r *ristrettoCache) Get(ctx context.Context, key string) ([]byte, error) {
 	var boff backoff.BackOff
-	if r.retriesEnabled {
-		boff = r.boffPool.Get().(backoff.BackOff)
-		defer func() {
-			boff.Reset()
-			r.boffPool.Put(boff)
-		}()
-	}
 
 	for {
 		res, ok := r.cache.Get(key)
@@ -112,7 +105,15 @@ func (r *ristrettoCache) Get(ctx context.Context, key string) ([]byte, error) {
 			return res.([]byte), nil
 		}
 
-		if boff == nil {
+		if r.retriesEnabled {
+			if boff == nil {
+				boff = r.boffPool.Get().(backoff.BackOff)
+				defer func() { //nolint:gocritic
+					boff.Reset()
+					r.boffPool.Put(boff)
+				}()
+			}
+		} else {
 			return nil, service.ErrKeyNotFound
 		}
 
