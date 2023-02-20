@@ -28,6 +28,7 @@ All notable changes to this project will be documented in this file.
 - Added bloblang methods `sign_jwt_hs256`, `sign_jwt_hs384` and `sign_jwt_hs512`
 - New bloblang methods `parse_jwt_hs256`, `parse_jwt_hs384`, `parse_jwt_hs512`.
 - The `open_telemetry_collector` tracer now automatically sets the `service.name` and `service.version` tags if they are not configured by the user.
+- New bloblang string methods `trim_prefix` and `trim_suffix`.
 
 ### Fixed
 
