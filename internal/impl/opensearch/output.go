@@ -332,10 +332,16 @@ func (e *OpenSearch) Write(ctx context.Context, msg message.Batch) error {
 		if err != nil {
 			return err
 		}
-		_ = b.Add(ctx, *bulkReq)
+		err = b.Add(ctx, *bulkReq)
+		if err != nil {
+			return err
+		}
 	}
 
-	_ = b.Close(ctx)
+	err := b.Close(ctx)
+	if err != nil {
+		return err
+	}
 
 	biStats := b.Stats()
 	dur := time.Since(start)
@@ -350,7 +356,7 @@ func (e *OpenSearch) Write(ctx context.Context, msg message.Batch) error {
 		)
 	} else {
 		e.log.Debugf(
-			"Sucessfuly indexed [%s] documents in %s (%s docs/sec)",
+			"Successfully indexed [%s] documents in %s (%s docs/sec)",
 			humanize.Comma(int64(biStats.NumFlushed)),
 			dur.Truncate(time.Millisecond),
 			humanize.Comma(int64(1000.0/float64(dur/time.Millisecond)*float64(biStats.NumFlushed))),
