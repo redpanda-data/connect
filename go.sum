@@ -118,9 +118,6 @@ github.com/BurntSushi/toml v0.3.1/go.mod h1:xHWCNGjB5oqiDr8zfno3MHue2Ht5sIBksp03
 github.com/BurntSushi/xgb v0.0.0-20160522181843-27f122750802/go.mod h1:IVnqGOEym/WlBOVXweHU+Q+/VP0lqqI8lqeDx9IjBqo=
 github.com/ClickHouse/ch-go v0.52.0 h1:4yn/mIgAuVGFGnufLo2ruFNXnErdv1iOHyH4an0khxo=
 github.com/ClickHouse/ch-go v0.52.0/go.mod h1:jd4AyrwTFLQMOG/AKxWc+JwHgVug5xxHt+LQC4Ddoqc=
-github.com/ClickHouse/clickhouse-go v1.5.4 h1:cKjXeYLNWVJIx2J1K6H2CqyRmfwVJVY1OV1coaaFcI0=
-github.com/ClickHouse/clickhouse-go/v2 v2.6.0 h1:NmnPY2Cg4hCqS2ZGBep9EWHfQPAco2Vkpwb02VXtWew=
-github.com/ClickHouse/clickhouse-go/v2 v2.6.0/go.mod h1:SvXuWqDsiHJE3VAn2+3+nz9W9exOSigyskcs4DAcxJQ=
 github.com/ClickHouse/clickhouse-go/v2 v2.6.1 h1:82UzCrD8cYEb/Bs/LOO3dlBZZyL+SlvvH/xwZF25BIU=
 github.com/ClickHouse/clickhouse-go/v2 v2.6.1/go.mod h1:SvXuWqDsiHJE3VAn2+3+nz9W9exOSigyskcs4DAcxJQ=
 github.com/DataDog/datadog-go v2.2.0+incompatible/go.mod h1:LButxg5PwREeZtORoXG3tL4fMGNddJ+vMq1mwgfaqoQ=
