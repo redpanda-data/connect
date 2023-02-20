@@ -45,6 +45,8 @@ to the [`database/sql` docs](https://pkg.go.dev/database/sql#DB.SetMaxIdleConns)
 - The `jaeger` tracer no longer emits the `service.version` tag automatically if the user sets the `service.name` tag explicitly.
 - The `int64()`, `int32()`, `uint64()` and `uint32()` bloblang methods can now infer the number base as documented [here](https://pkg.go.dev/strconv#ParseInt).
 - The `mapping` and `mutation` processors should provide metrics and tracing events again.
+- Fixed a data race in the `redis_streams` input.
+- Upgraded the Redis components to `github.com/redis/go-redis/v9`.
 
 ## 4.11.0 - 2022-12-21
 

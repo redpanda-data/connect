@@ -39,7 +39,6 @@ require (
 	github.com/fatih/color v1.14.1
 	github.com/fsnotify/fsnotify v1.6.0
 	github.com/generikvault/gvalstrings v0.0.0-20180926130504-471f38f0112a
-	github.com/go-redis/redis/v8 v8.11.5
 	github.com/go-sql-driver/mysql v1.6.0
 	github.com/gocql/gocql v1.3.1
 	github.com/gofrs/uuid v4.4.0+incompatible
@@ -80,6 +79,7 @@ require (
 	github.com/quipo/dependencysolver v0.0.0-20170801134659-2b009cb4ddcc
 	github.com/rabbitmq/amqp091-go v1.4.0
 	github.com/rcrowley/go-metrics v0.0.0-20201227073835-cf1acfcdf475
+	github.com/redis/go-redis/v9 v9.0.2
 	github.com/rickb777/date v1.17.0
 	github.com/robfig/cron/v3 v3.0.1
 	github.com/segmentio/ksuid v1.0.4
@@ -235,6 +235,8 @@ require (
 	github.com/nats-io/nats-streaming-server v0.24.6 // indirect
 	github.com/nats-io/nuid v1.0.1 // indirect
 	github.com/olekukonko/tablewriter v0.0.5 // indirect
+	github.com/onsi/ginkgo v1.16.5 // indirect
+	github.com/onsi/gomega v1.18.1 // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect
 	github.com/opencontainers/image-spec v1.0.3-0.20211202183452-c5a74bcca799 // indirect
 	github.com/opencontainers/runc v1.1.4 // indirect
