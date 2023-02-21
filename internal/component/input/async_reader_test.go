@@ -75,7 +75,7 @@ func (r *mockAsyncReader) ReadBatch(ctx context.Context) (message.Batch, input.A
 	i := len(r.ackRcvd) - 1
 	r.ackMut.Unlock()
 
-	nextMsg := message.QuickBatch(nil)
+	nextMsg := message.Batch{message.NewPart(nil)}
 	if len(r.msgsToSnd) > 0 {
 		nextMsg = r.msgsToSnd[0]
 		r.msgsToSnd = r.msgsToSnd[1:]
