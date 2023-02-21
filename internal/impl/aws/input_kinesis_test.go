@@ -1,8 +1,11 @@
 package aws
 
 import (
+	"strconv"
 	"sync"
 	"testing"
+	"time"
+
 	"github.com/benthosdev/benthos/v4/internal/batch/policy/batchconfig"
 	"github.com/benthosdev/benthos/v4/internal/impl/aws/session"
 
@@ -18,9 +21,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-
-//These mocks are used to mock the underlying AWS Api that is called by runConsumer()
-// The following tests only runs through the happy path of it
+// These mocks are used to mock the underlying AWS Api that is called by runConsumer()
+// The following tests only runs through the happy path of the runConsumer() code
 type mockDynamoDbForKinesis struct {
 	dynamodbiface.DynamoDBAPI
 }
@@ -35,8 +37,8 @@ func (m *mockDynamoDbForKinesis) GetItemWithContext(aws.Context, *dynamodb.GetIt
 func (m *mockDynamoDbForKinesis) PutItem(*dynamodb.PutItemInput) (*dynamodb.PutItemOutput, error) {
 	return &dynamodb.PutItemOutput{}, nil
 }
-func (m *mockDynamoDbForKinesis)  DeleteItemWithContext(aws.Context, *dynamodb.DeleteItemInput, ...request.Option) (*dynamodb.DeleteItemOutput, error){
-	return &dynamodb.DeleteItemOutput{},nil
+func (m *mockDynamoDbForKinesis) DeleteItemWithContext(aws.Context, *dynamodb.DeleteItemInput, ...request.Option) (*dynamodb.DeleteItemOutput, error) {
+	return &dynamodb.DeleteItemOutput{}, nil
 
 }
 
@@ -49,21 +51,17 @@ func (m *mockKinesisReader) GetShardIteratorWithContext(aws.Context, *kinesis.Ge
 	return &kinesis.GetShardIteratorOutput{ShardIterator: &shardId}, nil
 }
 
-func (m *mockKinesisReader)  GetRecordsWithContext(aws.Context, *kinesis.GetRecordsInput, ...request.Option) (*kinesis.GetRecordsOutput, error) {
+func (m *mockKinesisReader) GetRecordsWithContext(aws.Context, *kinesis.GetRecordsInput, ...request.Option) (*kinesis.GetRecordsOutput, error) {
 	milisecondsBehind := int64(0)
 	return &kinesis.GetRecordsOutput{
-		ChildShards: []*kinesis.ChildShard{},
+		ChildShards:        []*kinesis.ChildShard{},
 		MillisBehindLatest: &milisecondsBehind,
-		NextShardIterator: nil,
-		Records: []*kinesis.Record{},
+		NextShardIterator:  nil,
+		Records:            []*kinesis.Record{},
 	}, nil
 }
 
-
-
-
-
-func NewAwsTestConfig(streams[]string, streamsMaxShard []string) input.AWSKinesisConfig {
+func NewAwsTestConfig(streams []string, streamsMaxShard []string) input.AWSKinesisConfig {
 	return input.AWSKinesisConfig{
 		Config:          session.NewConfig(),
 		Streams:         streams,
@@ -87,7 +85,7 @@ func TestNewKinesisBalancedReaderConfig(t *testing.T) {
 }
 
 func TestNewKinesisBalancedReaderMaxShardConfig(t *testing.T) {
-	config := NewAwsTestConfig( []string{"test-kds-1", "test-kds-2"}, []string{"test-kds-1:5", "test-kds-2:10"})
+	config := NewAwsTestConfig([]string{"test-kds-1", "test-kds-2"}, []string{"test-kds-1:5", "test-kds-2:10"})
 	kinesisReader, err := newKinesisReader(config, mock.NewManager())
 	require.NoError(t, err)
 	assert.Equal(t, 2, len(kinesisReader.balancedStreams))
@@ -109,6 +107,7 @@ func TestRunMaxShardConfigBalancedShards(t *testing.T) {
 		expectedNumShardClaimed int
 	}{
 		{
+			//Client has capacity to claim 4 more shards
 			testName:        "TestMaxConfigShard",
 			streams:         []string{"test-kds-1", "test-kds-2"},
 			streamsMaxShard: []string{"test-kds-1:5", "test-kds-2:10"},
@@ -125,6 +124,7 @@ func TestRunMaxShardConfigBalancedShards(t *testing.T) {
 			expectedNumShardClaimed: 4,
 		},
 		{
+			// Client has capacity to claim all 7 shards since it has max 10 shards
 			testName:        "TestMaxConfigShardLessUnclaimedShards",
 			streams:         []string{"test-kds-1", "test-kds-2"},
 			streamsMaxShard: []string{"test-kds-1:5", "test-kds-2:10"},
@@ -143,6 +143,7 @@ func TestRunMaxShardConfigBalancedShards(t *testing.T) {
 			expectedNumShardClaimed: 7,
 		},
 		{
+			//Client has no max shard set so it can claim all
 			testName:        "TestNoMaxShardSet",
 			streams:         []string{"test-kds-1", "test-kds-2"},
 			streamsMaxShard: []string{""},
@@ -169,7 +170,7 @@ func TestRunMaxShardConfigBalancedShards(t *testing.T) {
 
 	for _, testCase := range testCases {
 		t.Run(testCase.testName, func(t *testing.T) {
-			config := NewAwsTestConfig(testCase.streams,testCase.streamsMaxShard )
+			config := NewAwsTestConfig(testCase.streams, testCase.streamsMaxShard)
 			kinesisReader, _ := newKinesisReader(config, mockManager)
 			kinesisReader.svc = &mockKinesis
 			kinesisReader.checkpointer = &awsKinesisCheckpointer{input.NewDynamoDBCheckpointConfig(), "", 1, 1, &mockDynamo}
@@ -182,51 +183,104 @@ func TestRunMaxShardConfigBalancedShards(t *testing.T) {
 
 }
 
-// func TestStealShards(t *testing.T) {
-// 	testCases := []struct {
-// 		testName                string
-// 		streams                 []string
-// 		streamsMaxShard         []string
-// 		unclaimedShards         map[string]string
-// 		streamNameToClaim       string
-// 		shardsAlreadyClaimed    int
-// 		expectedIsError         bool
-// 		expectedNumShardClaimed int
-// 	}{
-// 		{
-// 			testName:        "TestMaxConfigShard",
-// 			streams:         []string{"test-kds-1", "test-kds-2"},
-// 			streamsMaxShard: []string{"test-kds-1:5", "test-kds-2:10"},
-// 			unclaimedShards: map[string]string{
-// 				"shard-id-1": "client-id-1",
-// 				"shard-id-2": "client-id-2",
-// 				"shard-id-3": "client-id-3",
-// 				"shard-id-4": "client-id-4",
-// 				"shard-id-5": "client-id-5",
-// 			},
-// 			streamNameToClaim:       "test-kds-1",
-// 			expectedIsError:         false,
-// 		},
-// 	}
+func createKinesisClientClaim(numShards int) []awsKinesisClientClaim {
+	var clientClaims []awsKinesisClientClaim
+	for i := 0; i < numShards; i++ {
+		clientClaims = append(clientClaims, awsKinesisClientClaim{ShardID: strconv.Itoa(i), LeaseTimeout: time.Now()})
+	}
+	return clientClaims
+}
 
-// 		// Setup for mocks to be used.
-// 		mockDynamo := mockDynamoDbForKinesis{}
-// 		mockKinesis := mockKinesisReader{}
-// 		mockManager := mock.NewManager()
+func TestStealShards(t *testing.T) {
 
-// 	for _, testCase := range testCases {
-// 		t.Run(testCase.testName, func(t *testing.T) {
-// 			config := input.NewAWSKinesisConfig()
-// 			config.Streams = testCase.streams
-// 			config.StreamsMaxShard = testCase.streamsMaxShard
-// 			kinesisReader, _ := newKinesisReader(config, mockManager)
-// 			kinesisReader.svc = &mockKinesis
-// 			kinesisReader.checkpointer = &awsKinesisCheckpointer{input.NewDynamoDBCheckpointConfig(), "", 1, 1, &mockDynamo}
-// 			numShardClaimed, err := kinesisReader.stealShards(&sync.WaitGroup{}, testCase.streamNameToClaim, testCase.unclaimedShards)
-// 			// assert.Equal(t, testCase.expectedIsError, err != nil)
-// 			// assert.Equal(t, testCase.expectedNumShardClaimed, numShardClaimed)
+	testCases := []struct {
+		testName          string
+		streams           []string
+		streamsMaxShard   []string
+		clientClaims      map[string][]awsKinesisClientClaim
+		streamNameToClaim string
+		clientId          string
+		expectedIsError   bool
+		expectedIsSuccess bool
+	}{
+		{
+			//ClientId has capacity to steal 1 shard so it steals
+			testName:          "SucessfullyStealShard",
+			streams:           []string{"test-kds-1", "test-kds-2"},
+			streamsMaxShard:   []string{"test-kds-1:5", "test-kds-2:10"},
+			streamNameToClaim: "test-kds-1",
+			clientClaims: map[string][]awsKinesisClientClaim{
+				"clientId":    createKinesisClientClaim(4),
+				"otherClient": createKinesisClientClaim(6),
+			},
+			clientId:          "clientId",
+			expectedIsError:   false,
+			expectedIsSuccess: true,
+		},
+		{
+			//Other client doesnt have enough shards so it will not steal from it
+			testName:          "OtherClientNotEnoughShards",
+			streams:           []string{"test-kds-1", "test-kds-2"},
+			streamsMaxShard:   []string{"test-kds-1:5", "test-kds-2:10"},
+			streamNameToClaim: "test-kds-1",
+			clientClaims: map[string][]awsKinesisClientClaim{
+				"clientId":    createKinesisClientClaim(4),
+				"otherClient": createKinesisClientClaim(5),
+			},
+			clientId:          "clientId",
+			expectedIsError:   false,
+			expectedIsSuccess: false,
+		},
+		{
+			//ClientId already has max shard of 5, so should not steal shards
+			testName:          "MaxShardCapacityNoSteal",
+			streams:           []string{"test-kds-1", "test-kds-2"},
+			streamsMaxShard:   []string{"test-kds-1:5", "test-kds-2:10"},
+			streamNameToClaim: "test-kds-1",
+			clientClaims: map[string][]awsKinesisClientClaim{
+				"clientId":    createKinesisClientClaim(5),
+				"otherClient": createKinesisClientClaim(7),
+			},
+			clientId:          "clientId",
+			expectedIsError:   false,
+			expectedIsSuccess: false,
+		},
 
-// 		})
-// 	}
+		{
+			//Since there is no maxShardConfig, it should steal the other client shards
+			testName:          "NoStreamsMaxShard",
+			streams:           []string{"test-kds-1", "test-kds-2"},
+			streamsMaxShard:   []string{""},
+			streamNameToClaim: "test-kds-1",
+			clientClaims: map[string][]awsKinesisClientClaim{
+				"clientId":    createKinesisClientClaim(5),
+				"otherClient": createKinesisClientClaim(8),
+			},
+			clientId:          "clientId",
+			expectedIsError:   false,
+			expectedIsSuccess: true,
+		},
+	}
 
-// }
+	// Setup for mocks to be used.
+	mockDynamo := mockDynamoDbForKinesis{}
+	mockKinesis := mockKinesisReader{}
+	mockManager := mock.NewManager()
+
+	for _, testCase := range testCases {
+		t.Run(testCase.testName, func(t *testing.T) {
+			config := input.NewAWSKinesisConfig()
+			config.Streams = testCase.streams
+			config.StreamsMaxShard = testCase.streamsMaxShard
+			kinesisReader, _ := newKinesisReader(config, mockManager)
+			kinesisReader.svc = &mockKinesis
+			kinesisReader.clientID = testCase.clientId
+			kinesisReader.checkpointer = &awsKinesisCheckpointer{input.NewDynamoDBCheckpointConfig(), "", 1, 1, &mockDynamo}
+			isSuccess, err := kinesisReader.stealShards(&sync.WaitGroup{}, testCase.streamNameToClaim, testCase.clientClaims)
+			assert.Equal(t, testCase.expectedIsError, err != nil)
+			assert.Equal(t, testCase.expectedIsSuccess, isSuccess)
+
+		})
+	}
+
+}
