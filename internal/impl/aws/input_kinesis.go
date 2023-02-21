@@ -593,53 +593,9 @@ func (k *kinesisReader) runBalancedShards() {
 				continue
 			}
 
-			// There were no unclaimed shards, let's look for a shard to steal.
-			selfClaims := len(clientClaims[k.clientID])
-			for clientID, claims := range clientClaims {
-				if clientID == k.clientID {
-					// Don't steal from ourself, we're not at that point yet.
-					continue
-				}
-
-				// This is an extremely naive "algorithm", we simply randomly
-				// iterate all other clients with shards and if any have two
-				// more shards than we do then it's fair game. Using two here
-				// so that we don't play hot potatoes with an odd shard.
-				if len(claims) > (selfClaims + 1) {
-					randomShard := claims[(rand.Int() % len(claims))].ShardID
-					k.log.Debugf(
-						"Attempting to steal stream '%v' shard '%v' from client '%v' as client '%v'\n",
-						streamID, randomShard, clientID, k.clientID,
-					)
-
-					sequence, err := k.checkpointer.Claim(k.ctx, streamID, randomShard, clientID)
-					if err != nil {
-						if k.ctx.Err() != nil {
-							return
-						}
-						if !errors.Is(err, ErrLeaseNotAcquired) {
-							k.log.Errorf("Failed to steal shard '%v': %v\n", randomShard, err)
-						}
-						k.log.Debugf(
-							"Aborting theft of stream '%v' shard '%v' from client '%v' as client '%v'\n",
-							streamID, randomShard, clientID, k.clientID,
-						)
-						continue
-					}
-
-					k.log.Debugf(
-						"Successfully stole stream '%v' shard '%v' from client '%v' as client '%v'\n",
-						streamID, randomShard, clientID, k.clientID,
-					)
-					wg.Add(1)
-					if err = k.runConsumer(&wg, streamID, randomShard, sequence); err != nil {
-						k.log.Errorf("Failed to start consumer: %v\n", err)
-					} else {
-						// If we successfully stole the shard then that's enough
-						// for now.
-						break
-					}
-				}
+			// Note: Stealing only happens if all shards have already been claimed
+			if err = k.stealShards(&wg, streamID, clientClaims); err!=nil {
+				return
 			}
 		}
 
@@ -692,6 +648,8 @@ func (k *kinesisReader) runExplicitShards() {
 	}
 }
 
+// This function attempts to try and claim shards only if the number of shards already claimed is less than the max number of shards
+// It returns the number of shards it has successfully claimed and any errors it encountered
 func (k *kinesisReader) maxShardRunBalancedConsumer(wg *sync.WaitGroup, streamID string, unclaimedShards map[string]string, numShardAlreadyClaimed int) (int, error) {
 	numShardClaimed := 0
 	maxShardNumber, maxShardExists := k.streamMaxShards[streamID]
@@ -720,6 +678,67 @@ func (k *kinesisReader) maxShardRunBalancedConsumer(wg *sync.WaitGroup, streamID
 		}
 	}
 	return numShardClaimed, nil
+}
+
+// Function that attempts to steal shards if it meets the following condition:
+// * It is not its own clientId
+// * It has not reached the max shard number this client can claim
+// * The client it is stealing from has 2 or more shards more than this client currently has
+// It returns True if successful in stealing a shard and any errors if it encountered any
+func (k *kinesisReader) stealShards(wg *sync.WaitGroup, streamID string, clientClaims map[string][]awsKinesisClientClaim) (bool, error){
+	// There were no unclaimed shards, let's look for a shard to steal.
+	selfClaims := len(clientClaims[k.clientID])
+	maxShardNumber, maxShardExists := k.streamMaxShards[streamID]
+	isSuccess:= false
+	for clientID, claims := range clientClaims {
+		if clientID == k.clientID {
+			// Don't steal from ourself, we're not at that point yet.
+			continue
+		}
+
+		// This is an extremely naive "algorithm", we simply randomly
+		// iterate all other clients with shards and if any have two
+		// more shards than we do then it's fair game. Using two here
+		// so that we don't play hot potatoes with an odd shard.
+		if len(claims) > (selfClaims+1) && (!maxShardExists || selfClaims < maxShardNumber) {
+			randomShard := claims[(rand.Int() % len(claims))].ShardID
+			k.log.Debugf(
+				"Attempting to steal stream '%v' shard '%v' from client '%v' as client '%v'\n",
+				streamID, randomShard, clientID, k.clientID,
+			)
+
+			sequence, err := k.checkpointer.Claim(k.ctx, streamID, randomShard, clientID)
+			if err != nil {
+				if k.ctx.Err() != nil {
+					return isSuccess, k.ctx.Err()
+				}
+				if !errors.Is(err, ErrLeaseNotAcquired) {
+					k.log.Errorf("Failed to steal shard '%v': %v\n", randomShard, err)
+				}
+				k.log.Debugf(
+					"Aborting theft of stream '%v' shard '%v' from client '%v' as client '%v'\n",
+					streamID, randomShard, clientID, k.clientID,
+				)
+				continue
+			}
+
+			k.log.Debugf(
+				"Successfully stole stream '%v' shard '%v' from client '%v' as client '%v'\n",
+				streamID, randomShard, clientID, k.clientID,
+			)
+			wg.Add(1)
+			if err = k.runConsumer(wg, streamID, randomShard, sequence); err != nil {
+				k.log.Errorf("Failed to start consumer: %v\n", err)
+			} else {
+				// If we successfully stole the shard then that's enough
+				// for now.
+				isSuccess = true
+				break
+				
+			}
+		}
+	}
+	return isSuccess, nil
 }
 
 //------------------------------------------------------------------------------
