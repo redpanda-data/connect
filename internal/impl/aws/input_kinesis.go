@@ -594,7 +594,7 @@ func (k *kinesisReader) runBalancedShards() {
 			}
 
 			// Note: Stealing only happens if all shards have already been claimed
-			if err = k.stealShards(&wg, streamID, clientClaims); err!=nil {
+			if _, err = k.stealShards(&wg, streamID, clientClaims); err!=nil {
 				return
 			}
 		}
