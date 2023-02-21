@@ -208,9 +208,9 @@ func newKinesisReader(conf input.AWSKinesisConfig, mgr bundle.NewManagement) (*k
 			for _, stream := range k.balancedStreams {
 				numShards, exists := k.streamMaxShards[stream]
 				if exists {
-					k.log.Infof("this client will only read %v shards for stream:%v\n", numShards, stream)
+					k.log.Infof("For stream:%v\n, this client will read %v shards", stream, numShards)
 				} else {
-					k.log.Infof("No max number of shard defined for the stream:%v, goes back to default behaviour\n", stream)
+					k.log.Infof("No max number of shard defined for the stream:%v, falling back to default behaviour\n", stream)
 				}
 
 			}

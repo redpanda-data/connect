@@ -269,9 +269,7 @@ func TestStealShards(t *testing.T) {
 
 	for _, testCase := range testCases {
 		t.Run(testCase.testName, func(t *testing.T) {
-			config := input.NewAWSKinesisConfig()
-			config.Streams = testCase.streams
-			config.StreamsMaxShard = testCase.streamsMaxShard
+			config := NewAwsTestConfig(testCase.streams, testCase.streamsMaxShard)
 			kinesisReader, _ := newKinesisReader(config, mockManager)
 			kinesisReader.svc = &mockKinesis
 			kinesisReader.clientID = testCase.clientId
