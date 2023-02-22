@@ -61,59 +61,26 @@
   height: 200px;
 }
 
-.meltwaterImg {
-  height: 60px;
-  padding: 10px;
+.sponsorsBox {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 20px;
 }
 
-.humanImg {
-  height: 60px;
-  padding: 5px 10px;
+.sponsorsBox > a {
+  flex-basis: calc(50% - 10px);
+  flex-grow: 0;
 }
 
-.infosumImg {
-  height: 70px;
-  padding: 10px;
-}
-
-.communityImg {
-  height: 70px;
-  padding: 10px;
-}
-
-.optumImg {
-  height: 80px;
-  padding: 10px;
-}
-
-.auroraImg {
-  height: 75px;
-}
-
-.rudderstackImg {
-  height: 30px;
-  padding: 0 10px;
-  margin: 10px 0;
-}
-
-.wildbitImg {
-  height: 45px;
-  margin: 10px 0;
-}
-
-.opalaImg {
-  height: 45px;
-  margin: 10px;
-}
-
-.formanceImg {
-  height: 60px;
-  margin: 0;
+.sponsorsBox > a > img {
+  width: 100%;
 }
 
 .synadiaImg {
-  height: 30px;
-  margin: 10px;
+  height: 90px;
+  margin: 10px 0 50px 0;
 }
 
 .furtherButton {
