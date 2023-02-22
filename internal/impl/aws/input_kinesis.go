@@ -132,6 +132,7 @@ type kinesisReader struct {
 }
 
 var errCannotMixBalancedShards = errors.New("it is not currently possible to include balanced and explicit shard streams in the same kinesis input")
+var errShardNotStolen = errors.New("no shard was succesfully stolen")
 
 func newKinesisReader(conf input.AWSKinesisConfig, mgr bundle.NewManagement) (*kinesisReader, error) {
 	if conf.Batching.IsNoop() {
@@ -594,7 +595,8 @@ func (k *kinesisReader) runBalancedShards() {
 			}
 
 			// Note: Stealing only happens if all shards have already been claimed
-			if _, err = k.stealShard(&wg, streamID, clientClaims); err != nil {
+			err = k.stealShard(&wg, streamID, clientClaims)
+			if !(err == nil || err == errShardNotStolen) {
 				return
 			}
 		}
@@ -684,12 +686,11 @@ func (k *kinesisReader) maxShardRunBalancedConsumer(wg *sync.WaitGroup, streamID
 // * It is not its own clientId
 // * It has not reached the max shard number this client can claim
 // * The client it is stealing from has 2 or more shards more than this client currently has
-// It returns True if successful in stealing a shard and any errors if it encountered any
-func (k *kinesisReader) stealShard(wg *sync.WaitGroup, streamID string, clientClaims map[string][]awsKinesisClientClaim) (bool, error) {
+// It returns nil if it succesfully steals a shard, otherwise returns error errShardNotStolen if shards are not stolen or any errors if it encountered any
+func (k *kinesisReader) stealShard(wg *sync.WaitGroup, streamID string, clientClaims map[string][]awsKinesisClientClaim) ( error) {
 	// There were no unclaimed shards, let's look for a shard to steal.
 	selfClaims := len(clientClaims[k.clientID])
 	maxShardNumber, maxShardExists := k.streamMaxShards[streamID]
-	isSuccess := false
 	for clientID, claims := range clientClaims {
 		if clientID == k.clientID {
 			// Don't steal from ourself, we're not at that point yet.
@@ -710,7 +711,7 @@ func (k *kinesisReader) stealShard(wg *sync.WaitGroup, streamID string, clientCl
 			sequence, err := k.checkpointer.Claim(k.ctx, streamID, randomShard, clientID)
 			if err != nil {
 				if k.ctx.Err() != nil {
-					return isSuccess, k.ctx.Err()
+					return k.ctx.Err()
 				}
 				if !errors.Is(err, ErrLeaseNotAcquired) {
 					k.log.Errorf("Failed to steal shard '%v': %v\n", randomShard, err)
@@ -732,13 +733,12 @@ func (k *kinesisReader) stealShard(wg *sync.WaitGroup, streamID string, clientCl
 			} else {
 				// If we successfully stole the shard then that's enough
 				// for now.
-				isSuccess = true
-				break
+				return nil
 
 			}
 		}
 	}
-	return isSuccess, nil
+	return errShardNotStolen
 }
 
 //------------------------------------------------------------------------------

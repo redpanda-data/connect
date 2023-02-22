@@ -201,7 +201,7 @@ func TestStealShard(t *testing.T) {
 		streamNameToClaim string
 		clientId          string
 		expectedIsError   bool
-		expectedIsSuccess bool
+		errShardNotStolen bool
 	}{
 		{
 			//ClientId has capacity to steal 1 shard so it steals
@@ -215,7 +215,7 @@ func TestStealShard(t *testing.T) {
 			},
 			clientId:          "clientId",
 			expectedIsError:   false,
-			expectedIsSuccess: true,
+			errShardNotStolen: false,
 		},
 		{
 			//Other client doesnt have enough shards so it will not steal from it
@@ -228,8 +228,8 @@ func TestStealShard(t *testing.T) {
 				"otherClient": createKinesisClientClaim(5),
 			},
 			clientId:          "clientId",
-			expectedIsError:   false,
-			expectedIsSuccess: false,
+			expectedIsError:   true,
+			errShardNotStolen: true,
 		},
 		{
 			//ClientId already has max shard of 5, so should not steal shards
@@ -242,8 +242,8 @@ func TestStealShard(t *testing.T) {
 				"otherClient": createKinesisClientClaim(7),
 			},
 			clientId:          "clientId",
-			expectedIsError:   false,
-			expectedIsSuccess: false,
+			expectedIsError:   true,
+			errShardNotStolen: true,
 		},
 
 		{
@@ -258,7 +258,7 @@ func TestStealShard(t *testing.T) {
 			},
 			clientId:          "clientId",
 			expectedIsError:   false,
-			expectedIsSuccess: true,
+			errShardNotStolen: false,
 		},
 	}
 
@@ -274,9 +274,9 @@ func TestStealShard(t *testing.T) {
 			kinesisReader.svc = &mockKinesis
 			kinesisReader.clientID = testCase.clientId
 			kinesisReader.checkpointer = &awsKinesisCheckpointer{input.NewDynamoDBCheckpointConfig(), "", 1, 1, &mockDynamo}
-			isSuccess, err := kinesisReader.stealShard(&sync.WaitGroup{}, testCase.streamNameToClaim, testCase.clientClaims)
+			err := kinesisReader.stealShard(&sync.WaitGroup{}, testCase.streamNameToClaim, testCase.clientClaims)
 			assert.Equal(t, testCase.expectedIsError, err != nil)
-			assert.Equal(t, testCase.expectedIsSuccess, isSuccess)
+			assert.Equal(t, testCase.errShardNotStolen, err == errShardNotStolen)
 
 		})
 	}
