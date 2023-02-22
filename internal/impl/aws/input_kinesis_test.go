@@ -21,7 +21,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// These mocks are used to mock the underlying AWS Api that is called by runConsumer()
+// mockDynamoDbForKinesis and mockKinesisReader is used to mock the underlying AWS API that is called by runConsumer()
 // The following tests only runs through the happy path of the runConsumer() code
 type mockDynamoDbForKinesis struct {
 	dynamodbiface.DynamoDBAPI
@@ -191,7 +191,7 @@ func createKinesisClientClaim(numShards int) []awsKinesisClientClaim {
 	return clientClaims
 }
 
-func TestStealShards(t *testing.T) {
+func TestStealShard(t *testing.T) {
 
 	testCases := []struct {
 		testName          string
@@ -274,7 +274,7 @@ func TestStealShards(t *testing.T) {
 			kinesisReader.svc = &mockKinesis
 			kinesisReader.clientID = testCase.clientId
 			kinesisReader.checkpointer = &awsKinesisCheckpointer{input.NewDynamoDBCheckpointConfig(), "", 1, 1, &mockDynamo}
-			isSuccess, err := kinesisReader.stealShards(&sync.WaitGroup{}, testCase.streamNameToClaim, testCase.clientClaims)
+			isSuccess, err := kinesisReader.stealShard(&sync.WaitGroup{}, testCase.streamNameToClaim, testCase.clientClaims)
 			assert.Equal(t, testCase.expectedIsError, err != nil)
 			assert.Equal(t, testCase.expectedIsSuccess, isSuccess)
 

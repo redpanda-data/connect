@@ -594,7 +594,7 @@ func (k *kinesisReader) runBalancedShards() {
 			}
 
 			// Note: Stealing only happens if all shards have already been claimed
-			if _, err = k.stealShards(&wg, streamID, clientClaims); err!=nil {
+			if _, err = k.stealShard(&wg, streamID, clientClaims); err!=nil {
 				return
 			}
 		}
@@ -648,7 +648,7 @@ func (k *kinesisReader) runExplicitShards() {
 	}
 }
 
-// This function attempts to try and claim shards only if the number of shards already claimed is less than the max number of shards
+// maxShardRunBalancedConsumer() attempts to try and claim shards only if the number of shards already claimed is less than the max number of shards
 // It returns the number of shards it has successfully claimed and any errors it encountered
 func (k *kinesisReader) maxShardRunBalancedConsumer(wg *sync.WaitGroup, streamID string, unclaimedShards map[string]string, numShardAlreadyClaimed int) (int, error) {
 	numShardClaimed := 0
@@ -662,7 +662,7 @@ func (k *kinesisReader) maxShardRunBalancedConsumer(wg *sync.WaitGroup, streamID
 			sequence, err := k.checkpointer.Claim(k.ctx, streamID, shardID, clientID)
 			if err != nil {
 				if k.ctx.Err() != nil {
-					return 0, err
+					return numShardClaimed, err
 				}
 				if !errors.Is(err, ErrLeaseNotAcquired) {
 					k.log.Errorf("Failed to claim unclaimed shard '%v': %v\n", shardID, err)
@@ -685,7 +685,7 @@ func (k *kinesisReader) maxShardRunBalancedConsumer(wg *sync.WaitGroup, streamID
 // * It has not reached the max shard number this client can claim
 // * The client it is stealing from has 2 or more shards more than this client currently has
 // It returns True if successful in stealing a shard and any errors if it encountered any
-func (k *kinesisReader) stealShards(wg *sync.WaitGroup, streamID string, clientClaims map[string][]awsKinesisClientClaim) (bool, error){
+func (k *kinesisReader) stealShard(wg *sync.WaitGroup, streamID string, clientClaims map[string][]awsKinesisClientClaim) (bool, error){
 	// There were no unclaimed shards, let's look for a shard to steal.
 	selfClaims := len(clientClaims[k.clientID])
 	maxShardNumber, maxShardExists := k.streamMaxShards[streamID]
