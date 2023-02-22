@@ -594,7 +594,7 @@ func (k *kinesisReader) runBalancedShards() {
 			}
 
 			// Note: Stealing only happens if all shards have already been claimed
-			if _, err = k.stealShard(&wg, streamID, clientClaims); err!=nil {
+			if _, err = k.stealShard(&wg, streamID, clientClaims); err != nil {
 				return
 			}
 		}
@@ -680,16 +680,16 @@ func (k *kinesisReader) maxShardRunBalancedConsumer(wg *sync.WaitGroup, streamID
 	return numShardClaimed, nil
 }
 
-// Function that attempts to steal shards if it meets the following condition:
+// stealShard() attempts to steal shards if it meets the following condition:
 // * It is not its own clientId
 // * It has not reached the max shard number this client can claim
 // * The client it is stealing from has 2 or more shards more than this client currently has
 // It returns True if successful in stealing a shard and any errors if it encountered any
-func (k *kinesisReader) stealShard(wg *sync.WaitGroup, streamID string, clientClaims map[string][]awsKinesisClientClaim) (bool, error){
+func (k *kinesisReader) stealShard(wg *sync.WaitGroup, streamID string, clientClaims map[string][]awsKinesisClientClaim) (bool, error) {
 	// There were no unclaimed shards, let's look for a shard to steal.
 	selfClaims := len(clientClaims[k.clientID])
 	maxShardNumber, maxShardExists := k.streamMaxShards[streamID]
-	isSuccess:= false
+	isSuccess := false
 	for clientID, claims := range clientClaims {
 		if clientID == k.clientID {
 			// Don't steal from ourself, we're not at that point yet.
@@ -734,7 +734,7 @@ func (k *kinesisReader) stealShard(wg *sync.WaitGroup, streamID string, clientCl
 				// for now.
 				isSuccess = true
 				break
-				
+
 			}
 		}
 	}
