@@ -3,9 +3,7 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
-## Unreleased
-
-### Added
+## 4.12.1 - 2023-02-23
 
 ### Fixed
 
