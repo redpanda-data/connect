@@ -31,6 +31,7 @@ All notable changes to this project will be documented in this file.
 - New bloblang methods `parse_jwt_hs256`, `parse_jwt_hs384`, `parse_jwt_hs512`.
 - The `open_telemetry_collector` tracer now automatically sets the `service.name` and `service.version` tags if they are not configured by the user.
 - New bloblang string methods `trim_prefix` and `trim_suffix`.
+- The [`asdf`](https://asdf-vm.com/) tool version manager can now be used to install Benthos. Details [here](https://github.com/benthosdev/benthos-asdf) and in the usage section of the [documentation page](https://www.benthos.dev/).
 
 ### Fixed
 
