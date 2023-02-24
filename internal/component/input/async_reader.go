@@ -136,7 +136,7 @@ func (r *AsyncReader) loop() {
 			return
 		}
 
-		if err != nil || msg == nil {
+		if err != nil || len(msg) == 0 {
 			if err != nil && err != component.ErrTimeout && err != component.ErrNotConnected {
 				r.mgr.Logger().Errorf("Failed to read message: %v\n", err)
 			}

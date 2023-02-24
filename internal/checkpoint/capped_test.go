@@ -245,15 +245,16 @@ func TestCappedSequentialRandomLarge(t *testing.T) {
 
 		highestI := c.checkpointer.Highest()
 		if highestI == nil {
-			highestI = int64(-1)
+			var tmp int64 = -1
+			highestI = &tmp
 		}
 
 		if resolved == len(indexes) {
-			assert.Equal(t, int64(999), highestI.(int64))
+			assert.Equal(t, int64(999), *highestI)
 		} else {
 			// Assert that the remaining offsets are all higher
 			for _, k := range indexes[index+1:] {
-				assert.True(t, k > highestI.(int64))
+				assert.True(t, k > *highestI)
 			}
 		}
 	}
@@ -262,11 +263,11 @@ func TestCappedSequentialRandomLarge(t *testing.T) {
 func BenchmarkCappedChunked100(b *testing.B) {
 	checkpointLimit := int64(1000)
 	chunkSize := int64(100)
-	resolvers := make([]func() any, chunkSize)
+	resolvers := make([]func() *int64, chunkSize)
 
 	b.ReportAllocs()
 
-	c := NewCapped(checkpointLimit)
+	c := NewCapped[int64](checkpointLimit)
 	ctx := context.Background()
 
 	N := int64(b.N) / chunkSize
@@ -284,13 +285,10 @@ func BenchmarkCappedChunked100(b *testing.B) {
 		for j := int64(0); j < chunkSize; j++ {
 			resolver := resolvers[j]
 			resolvers[j] = nil
-			v, ok := resolver().(int64)
-			if !ok {
-				b.Fatal("should always resolve with a maximum")
-			}
+			v := resolver()
 
 			offset := i*chunkSize + j
-			if offset != v {
+			if offset != *v {
 				b.Errorf("Wrong value: %v != %v", offset, v)
 			}
 		}
@@ -300,11 +298,11 @@ func BenchmarkCappedChunked100(b *testing.B) {
 func BenchmarkCappedChunkedReverse100(b *testing.B) {
 	checkpointLimit := int64(1000)
 	chunkSize := int64(100)
-	resolvers := make([]func() any, chunkSize)
+	resolvers := make([]func() *int64, chunkSize)
 
 	b.ReportAllocs()
 
-	c := NewCapped(checkpointLimit)
+	c := NewCapped[int64](checkpointLimit)
 	ctx := context.Background()
 
 	N := int64(b.N) / chunkSize
@@ -322,7 +320,7 @@ func BenchmarkCappedChunkedReverse100(b *testing.B) {
 		for j := chunkSize - 1; j >= 0; j-- {
 			resolver := resolvers[j]
 			resolvers[j] = nil
-			v, ok := resolver().(int64)
+			v := resolver()
 
 			exp := int64(-1)
 
@@ -335,9 +333,7 @@ func BenchmarkCappedChunkedReverse100(b *testing.B) {
 			}
 
 			if exp >= 0 {
-				if !ok {
-					b.Fatal("should resolve with a maximum")
-				} else if exp != v {
+				if exp != *v {
 					b.Errorf("Wrong value: %v != %v", exp, v)
 				}
 			}
@@ -348,11 +344,11 @@ func BenchmarkCappedChunkedReverse100(b *testing.B) {
 func BenchmarkCappedChunkedReverse1000(b *testing.B) {
 	checkpointLimit := int64(1000)
 	chunkSize := int64(1000)
-	resolvers := make([]func() any, chunkSize)
+	resolvers := make([]func() *int64, chunkSize)
 
 	b.ReportAllocs()
 
-	c := NewCapped(checkpointLimit)
+	c := NewCapped[int64](checkpointLimit)
 	ctx := context.Background()
 
 	N := int64(b.N) / chunkSize
@@ -370,7 +366,7 @@ func BenchmarkCappedChunkedReverse1000(b *testing.B) {
 		for j := chunkSize - 1; j >= 0; j-- {
 			resolver := resolvers[j]
 			resolvers[j] = nil
-			v, ok := resolver().(int64)
+			v := resolver()
 
 			exp := int64(-1)
 
@@ -383,9 +379,7 @@ func BenchmarkCappedChunkedReverse1000(b *testing.B) {
 			}
 
 			if exp >= 0 {
-				if !ok {
-					b.Fatal("should resolve with a maximum")
-				} else if exp != v {
+				if exp != *v {
 					b.Errorf("Wrong value: %v != %v", exp, v)
 				}
 			}
@@ -394,11 +388,11 @@ func BenchmarkCappedChunkedReverse1000(b *testing.B) {
 }
 
 func BenchmarkCappedSequential(b *testing.B) {
-	resolvers := make([]func() any, b.N)
+	resolvers := make([]func() *int64, b.N)
 
 	b.ReportAllocs()
 
-	c := NewCapped(int64(b.N))
+	c := NewCapped[int64](int64(b.N))
 	ctx := context.Background()
 
 	var err error
@@ -410,11 +404,8 @@ func BenchmarkCappedSequential(b *testing.B) {
 	}
 
 	for i := 0; i < b.N; i++ {
-		v, ok := resolvers[i]().(int64)
-		if !ok {
-			b.Fatal("should resolve with a maximum")
-		}
-		if int64(i) != v {
+		v := resolvers[i]()
+		if int64(i) != *v {
 			b.Errorf("Wrong value: %v != %v", i, v)
 		}
 	}
@@ -424,8 +415,8 @@ type checkpointTester struct {
 	mu           sync.Mutex
 	ctx          context.Context
 	t            *testing.T
-	checkpointer *Capped
-	resolvers    map[int64]func() any
+	checkpointer *Capped[int64]
+	resolvers    map[int64]func() *int64
 }
 
 func newCheckpointTester(t *testing.T, capacity int64, timeout time.Duration) (*checkpointTester, func()) { //nolint: gocritic // Ignore unnamedResult false positive
@@ -434,8 +425,8 @@ func newCheckpointTester(t *testing.T, capacity int64, timeout time.Duration) (*
 	return &checkpointTester{
 		ctx:          ctx,
 		t:            t,
-		checkpointer: NewCapped(capacity),
-		resolvers:    map[int64]func() any{},
+		checkpointer: NewCapped[int64](capacity),
+		resolvers:    map[int64]func() *int64{},
 	}, cancel
 }
 
@@ -449,7 +440,7 @@ func (c *checkpointTester) AssertHighest(expected int64) {
 	c.t.Helper()
 	actual := c.checkpointer.Highest()
 	require.NotNil(c.t, actual, "should have a highest offset")
-	assert.Equal(c.t, expected, actual, "highest offset should match expected")
+	assert.Equal(c.t, expected, *actual, "highest offset should match expected")
 }
 
 func (c *checkpointTester) AssertPending(offset int64) {
@@ -507,7 +498,7 @@ func (c *checkpointTester) Resolve(offset, expectedHighest int64) {
 		assert.Nil(c.t, actualHighest, "should not yet have a highest")
 	} else if expectedHighest >= 0 {
 		require.NotNil(c.t, actualHighest, "should have a highest at this point")
-		assert.Equal(c.t, expectedHighest, actualHighest)
+		assert.Equal(c.t, expectedHighest, *actualHighest)
 	}
 }
 

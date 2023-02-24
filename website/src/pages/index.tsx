@@ -372,17 +372,17 @@ function Home() {
               <div className={classnames('col col--6')}>
                 <h3 id="sponsored-by">Sponsored by the following heroes</h3>
                 <div className="container">
-                  <div className={classnames("row")}>
-                    <a href="https://www.meltwater.com/" className="col col--6"><img className={styles.meltwaterImg} src="/img/sponsors/mw_logo.png" /></a>
-                    <a href="https://www.humansecurity.com" className="col col--6"><img className={styles.humanImg} src="/img/sponsors/HUMAN_logo.png" /></a>
-                    <a href="https://www.infosum.com/" className="col col--6"><img className={styles.infosumImg} src="/img/sponsors/infosum_logo.png" /></a>
-                    <a href="https://community.com/" className="col col--6"><img className={styles.communityImg} src="/img/sponsors/community.svg" /></a>
-                    <a href="https://www.optum.com/" className="col col--6"><img className={styles.optumImg} src="/img/sponsors/optum_logo.png" /></a>
-                    <a href="https://aurora.dev/" className="col col--6"><img className={styles.auroraImg} src="/img/sponsors/aurora.svg" /></a>
-                    <a href="https://wildbit.com" className="col col--6"><img className={styles.wildbitImg} src="/img/sponsors/wildbit.svg" /></a>
-                    <a href="https://www.opala.com" className="col col--6"><img className={styles.opalaImg} src="/img/sponsors/opala.svg" /></a>
-                    <a href="https://formance.com" className="col col--6"><img className={styles.formanceImg} src="/img/sponsors/formance.svg" /></a>
-                    <a href="https://synadia.com" className="col col--6"><img className={styles.synadiaImg} src="/img/sponsors/synadia.svg" /></a>
+                  <div>
+                    <a href="https://synadia.com"><img className={styles.synadiaImg} src="/img/sponsors/synadia.svg" /></a>
+                  </div>
+                  <div className={classnames(styles.sponsorsBox)}>
+                    <a href="https://www.meltwater.com/"><img className={styles.meltwaterImg} src="/img/sponsors/mw_logo.png" /></a>
+                    <a href="https://www.humansecurity.com"><img className={styles.humanImg} src="/img/sponsors/HUMAN_logo.png" /></a>
+                    <a href="https://community.com/"><img className={styles.communityImg} src="/img/sponsors/community.svg" /></a>
+                    <a href="https://www.optum.com/"><img className={styles.optumImg} src="/img/sponsors/optum_logo.png" /></a>
+                    <a href="https://aurora.dev/"><img className={styles.auroraImg} src="/img/sponsors/aurora.svg" /></a>
+                    <a href="https://www.opala.com"><img className={styles.opalaImg} src="/img/sponsors/opala.svg" /></a>
+                    <a href="https://formance.com"><img className={styles.formanceImg} src="/img/sponsors/formance.svg" /></a>
                   </div>
                 </div>
               </div>

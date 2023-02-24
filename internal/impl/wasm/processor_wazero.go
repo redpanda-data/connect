@@ -115,7 +115,7 @@ func (p *wazeroAllocProcessor) newModule() (mod *moduleRunner, err error) {
 	for name, ctor := range moduleRunnerFunctionCtors {
 		builder = builder.NewFunctionBuilder().WithFunc(ctor(mod)).Export(name)
 	}
-	if _, err = builder.Instantiate(ctx, r); err != nil {
+	if _, err = builder.Instantiate(ctx); err != nil {
 		return
 	}
 
@@ -123,7 +123,7 @@ func (p *wazeroAllocProcessor) newModule() (mod *moduleRunner, err error) {
 		return
 	}
 
-	if mod.mod, err = r.InstantiateModuleFromBinary(ctx, p.wasmBinary); err != nil {
+	if mod.mod, err = r.Instantiate(ctx, p.wasmBinary); err != nil {
 		return
 	}
 
@@ -234,7 +234,7 @@ func (r *moduleRunner) allocateBytesInbound(ctx context.Context, data []byte) (c
 	})
 
 	// The pointer is a linear memory offset, which is where we write the name.
-	if !r.mod.Memory().Write(ctx, uint32(contentPtr), data) {
+	if !r.mod.Memory().Write(uint32(contentPtr), data) {
 		err = errors.New("failed to write in-bound memory")
 		return
 	}
@@ -243,7 +243,7 @@ func (r *moduleRunner) allocateBytesInbound(ctx context.Context, data []byte) (c
 
 // Deallocate memory that's out bound from the WASM module.
 func (r *moduleRunner) readBytesOutbound(ctx context.Context, contentPtr, contentSize uint32) ([]byte, error) {
-	bytes, ok := r.mod.Memory().Read(ctx, contentPtr, contentSize)
+	bytes, ok := r.mod.Memory().Read(contentPtr, contentSize)
 	if !ok {
 		return nil, errors.New("prevented read")
 	}

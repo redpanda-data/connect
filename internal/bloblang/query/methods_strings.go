@@ -613,7 +613,7 @@ var _ = registerSimpleMethod(
 		"format", "",
 	).InCategory(
 		MethodCategoryStrings,
-		"Use a value string as a format specifier in order to produce a new string, using any number of provided arguments.",
+		"Use a value string as a format specifier in order to produce a new string, using any number of provided arguments. Please refer to the Go [`fmt` package documentation](https://pkg.go.dev/fmt) for the list of valid format verbs.",
 		NewExampleSpec("",
 			`root.foo = "%s(%v): %v".format(this.name, this.age, this.fingers)`,
 			`{"name":"lance","age":37,"fingers":13}`,
@@ -1935,6 +1935,68 @@ root.description = this.description.trim()`,
 					return bytes.TrimSpace(t), nil
 				}
 				return bytes.Trim(t, *cutset), nil
+			}
+			return nil, NewTypeError(v, ValueString)
+		}, nil
+	},
+)
+
+var _ = registerSimpleMethod(
+	NewMethodSpec(
+		"trim_prefix", "",
+	).InCategory(
+		MethodCategoryStrings,
+		"Remove the provided leading prefix substring from a string. If the string does not have the prefix substring, it is returned unchanged.",
+		NewExampleSpec("",
+			`root.name = this.name.trim_prefix("foobar_")
+root.description = this.description.trim_prefix("foobar_")`,
+			`{"description":"unchanged","name":"foobar_blobton"}`,
+			`{"description":"unchanged","name":"blobton"}`,
+		),
+	).Param(ParamString("prefix", "The leading prefix substring to trim from the string.")),
+	func(args *ParsedParams) (simpleMethod, error) {
+		prefix, err := args.FieldString("prefix")
+		if err != nil {
+			return nil, err
+		}
+		bytesPrefix := []byte(prefix)
+		return func(v any, ctx FunctionContext) (any, error) {
+			switch t := v.(type) {
+			case string:
+				return strings.TrimPrefix(t, prefix), nil
+			case []byte:
+				return bytes.TrimPrefix(t, bytesPrefix), nil
+			}
+			return nil, NewTypeError(v, ValueString)
+		}, nil
+	},
+)
+
+var _ = registerSimpleMethod(
+	NewMethodSpec(
+		"trim_suffix", "",
+	).InCategory(
+		MethodCategoryStrings,
+		"Remove the provided trailing suffix substring from a string. If the string does not have the suffix substring, it is returned unchanged.",
+		NewExampleSpec("",
+			`root.name = this.name.trim_suffix("_foobar")
+root.description = this.description.trim_suffix("_foobar")`,
+			`{"description":"unchanged","name":"blobton_foobar"}`,
+			`{"description":"unchanged","name":"blobton"}`,
+		),
+	).Param(ParamString("suffix", "The trailing suffix substring to trim from the string.")),
+	func(args *ParsedParams) (simpleMethod, error) {
+		suffix, err := args.FieldString("suffix")
+		if err != nil {
+			return nil, err
+		}
+		bytesSuffix := []byte(suffix)
+		return func(v any, ctx FunctionContext) (any, error) {
+			switch t := v.(type) {
+			case string:
+				return strings.TrimSuffix(t, suffix), nil
+			case []byte:
+				return bytes.TrimSuffix(t, bytesSuffix), nil
 			}
 			return nil, NewTypeError(v, ValueString)
 		}, nil
