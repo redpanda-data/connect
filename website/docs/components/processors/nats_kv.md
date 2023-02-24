@@ -33,8 +33,7 @@ Introduced in version 4.12.0.
 # Common config fields, showing default values
 label: ""
 nats_kv:
-  urls:
-    - nats://127.0.0.1:4222
+  urls: []
   bucket: ""
   operation: ""
   key: ""
@@ -47,8 +46,7 @@ nats_kv:
 # All config fields, showing default values
 label: ""
 nats_kv:
-  urls:
-    - nats://127.0.0.1:4222
+  urls: []
   bucket: ""
   operation: ""
   key: ""
@@ -74,7 +72,7 @@ The NATS KV processor supports a multitude of KV operations via the [operation](
 
 ### Metadata
 
-This input adds the following metadata fields to each message, depending on the chosen `operation`:
+This processor adds the following metadata fields to each message, depending on the chosen `operation`:
 
 #### get, get_revision, history
 ``` text
@@ -134,7 +132,6 @@ A list of URLs to connect to. If an item of the list contains commas it will be 
 
 
 Type: `array`  
-Default: `["nats://127.0.0.1:4222"]`  
 
 ```yml
 # Examples

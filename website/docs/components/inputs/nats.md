@@ -29,8 +29,7 @@ Subscribe to a NATS subject.
 input:
   label: ""
   nats:
-    urls:
-      - nats://127.0.0.1:4222
+    urls: []
     subject: ""
     queue: ""
 ```
@@ -43,8 +42,7 @@ input:
 input:
   label: ""
   nats:
-    urls:
-      - nats://127.0.0.1:4222
+    urls: []
     subject: ""
     queue: ""
     prefetch_count: 32
@@ -109,7 +107,6 @@ A list of URLs to connect to. If an item of the list contains commas it will be 
 
 
 Type: `array`  
-Default: `["nats://127.0.0.1:4222"]`  
 
 ```yml
 # Examples

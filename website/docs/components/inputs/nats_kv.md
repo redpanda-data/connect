@@ -34,8 +34,7 @@ Introduced in version 4.12.0.
 input:
   label: ""
   nats_kv:
-    urls:
-      - nats://127.0.0.1:4222
+    urls: []
     bucket: ""
     key: '>'
 ```
@@ -48,8 +47,7 @@ input:
 input:
   label: ""
   nats_kv:
-    urls:
-      - nats://127.0.0.1:4222
+    urls: []
     bucket: ""
     key: '>'
     ignore_deletes: false
@@ -118,7 +116,6 @@ A list of URLs to connect to. If an item of the list contains commas it will be 
 
 
 Type: `array`  
-Default: `["nats://127.0.0.1:4222"]`  
 
 ```yml
 # Examples

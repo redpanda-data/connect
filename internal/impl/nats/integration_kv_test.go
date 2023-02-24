@@ -53,7 +53,7 @@ output:
     # We need to make this key random as the NATS server will only deliver the
     # latest revision of a key when it's requested by a watcher, this is by
     # design, but if we want to test benthos semantics like batching we should
-    # use unique keys for ever message passing through the output
+    # use unique keys for every message passing through the output
     key: ${! ksuid() }
 
 input:

@@ -44,7 +44,6 @@ You can access these metadata fields using
 ` + auth.Description()).
 		Field(service.NewStringListField("urls").
 			Description("A list of URLs to connect to. If an item of the list contains commas it will be expanded into multiple URLs.").
-			Default([]string{"nats://127.0.0.1:4222"}).
 			Example([]string{"nats://127.0.0.1:4222"}).
 			Example([]string{"nats://username:password@127.0.0.1:4222"})).
 		Field(service.NewStringField("queue").

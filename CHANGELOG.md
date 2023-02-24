@@ -3,6 +3,12 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+## Unreleased
+
+### Added
+
+- New `nats_kv` processor, input and output.
+
 ## 4.12.1 - 2023-02-23
 
 ### Fixed

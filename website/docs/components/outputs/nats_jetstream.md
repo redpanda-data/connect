@@ -34,8 +34,7 @@ Introduced in version 3.46.0.
 output:
   label: ""
   nats_jetstream:
-    urls:
-      - nats://127.0.0.1:4222
+    urls: []
     subject: ""
     headers: {}
     max_in_flight: 1024
@@ -49,8 +48,7 @@ output:
 output:
   label: ""
   nats_jetstream:
-    urls:
-      - nats://127.0.0.1:4222
+    urls: []
     subject: ""
     headers: {}
     max_in_flight: 1024
@@ -104,7 +102,6 @@ A list of URLs to connect to. If an item of the list contains commas it will be 
 
 
 Type: `array`  
-Default: `["nats://127.0.0.1:4222"]`  
 
 ```yml
 # Examples
