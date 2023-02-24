@@ -1,7 +1,7 @@
 ---
-title: nats
+title: nats_kv
 type: input
-status: stable
+status: experimental
 categories: ["Services"]
 ---
 
@@ -14,7 +14,12 @@ categories: ["Services"]
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-Subscribe to a NATS subject.
+:::caution EXPERIMENTAL
+This component is experimental and therefore subject to change or removal outside of major version releases.
+:::
+Watches for updates in a NATS key-value bucket.
+
+Introduced in version 4.12.0.
 
 
 <Tabs defaultValue="common" values={[
@@ -28,11 +33,11 @@ Subscribe to a NATS subject.
 # Common config fields, showing default values
 input:
   label: ""
-  nats:
+  nats_kv:
     urls:
       - nats://127.0.0.1:4222
-    subject: ""
-    queue: ""
+    bucket: ""
+    key: '>'
 ```
 
 </TabItem>
@@ -42,12 +47,14 @@ input:
 # All config fields, showing default values
 input:
   label: ""
-  nats:
+  nats_kv:
     urls:
       - nats://127.0.0.1:4222
-    subject: ""
-    queue: ""
-    prefetch_count: 32
+    bucket: ""
+    key: '>'
+    ignore_deletes: false
+    include_history: false
+    meta_only: false
     tls:
       enabled: false
       skip_cert_verify: false
@@ -68,11 +75,13 @@ input:
 This input adds the following metadata fields to each message:
 
 ``` text
-- nats_subject
-- All message headers (when supported by the connection)
+- nats_kv_key
+- nats_kv_bucket
+- nats_kv_revision
+- nats_kv_delta
+- nats_kv_operation
+- nats_kv_created
 ```
-
-You can access these metadata fields using [function interpolation](/docs/configuration/interpolation#bloblang-queries).
 
 ### Authentication
 
@@ -121,9 +130,9 @@ urls:
   - nats://username:password@127.0.0.1:4222
 ```
 
-### `subject`
+### `bucket`
 
-A subject to consume from. Supports wildcards for consuming multiple subjects. Either a subject or stream must be specified.
+The name of the KV bucket to watch for updates.
 
 
 Type: `string`  
@@ -131,29 +140,52 @@ Type: `string`
 ```yml
 # Examples
 
-subject: foo.bar.baz
-
-subject: foo.*.baz
-
-subject: foo.bar.*
-
-subject: foo.>
+bucket: my_kv_bucket
 ```
 
-### `queue`
+### `key`
 
-An optional queue group to consume as.
+Key to watch for updates, can include wildcards.
 
 
 Type: `string`  
+Default: `"\u003e"`  
 
-### `prefetch_count`
+```yml
+# Examples
 
-The maximum number of messages to pull at a time.
+key: foo.bar.baz
+
+key: foo.*.baz
+
+key: foo.bar.*
+
+key: foo.>
+```
+
+### `ignore_deletes`
+
+Do not send delete markers as messages.
 
 
-Type: `int`  
-Default: `32`  
+Type: `bool`  
+Default: `false`  
+
+### `include_history`
+
+Include all the history per key, not just the last one.
+
+
+Type: `bool`  
+Default: `false`  
+
+### `meta_only`
+
+Retrieve only the metadata of the entry
+
+
+Type: `bool`  
+Default: `false`  
 
 ### `tls`
 

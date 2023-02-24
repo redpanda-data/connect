@@ -1,7 +1,7 @@
 ---
-title: nats
-type: input
-status: stable
+title: nats_kv
+type: processor
+status: experimental
 categories: ["Services"]
 ---
 
@@ -14,7 +14,12 @@ categories: ["Services"]
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-Subscribe to a NATS subject.
+:::caution EXPERIMENTAL
+This component is experimental and therefore subject to change or removal outside of major version releases.
+:::
+Perform operations on a NATS key-value bucket.
+
+Introduced in version 4.12.0.
 
 
 <Tabs defaultValue="common" values={[
@@ -26,13 +31,13 @@ Subscribe to a NATS subject.
 
 ```yml
 # Common config fields, showing default values
-input:
-  label: ""
-  nats:
-    urls:
-      - nats://127.0.0.1:4222
-    subject: ""
-    queue: ""
+label: ""
+nats_kv:
+  urls:
+    - nats://127.0.0.1:4222
+  bucket: ""
+  operation: ""
+  key: ""
 ```
 
 </TabItem>
@@ -40,39 +45,59 @@ input:
 
 ```yml
 # All config fields, showing default values
-input:
-  label: ""
-  nats:
-    urls:
-      - nats://127.0.0.1:4222
-    subject: ""
-    queue: ""
-    prefetch_count: 32
-    tls:
-      enabled: false
-      skip_cert_verify: false
-      enable_renegotiation: false
-      root_cas: ""
-      root_cas_file: ""
-      client_certs: []
-    auth:
-      nkey_file: ""
-      user_credentials_file: ""
+label: ""
+nats_kv:
+  urls:
+    - nats://127.0.0.1:4222
+  bucket: ""
+  operation: ""
+  key: ""
+  revision: ""
+  tls:
+    enabled: false
+    skip_cert_verify: false
+    enable_renegotiation: false
+    root_cas: ""
+    root_cas_file: ""
+    client_certs: []
+  auth:
+    nkey_file: ""
+    user_credentials_file: ""
 ```
 
 </TabItem>
 </Tabs>
 
+### KV Operations
+
+The NATS KV processor supports a multitude of KV operations via the [operation](#operation) field. Along with `get`, `put`, and `delete`, this processor supports atomic operations like `update` and `create`, as well as utility operations like `purge`, `history`, and `keys`.
+
 ### Metadata
 
-This input adds the following metadata fields to each message:
+This input adds the following metadata fields to each message, depending on the chosen `operation`:
 
+#### get, get_revision, history
 ``` text
-- nats_subject
-- All message headers (when supported by the connection)
+- nats_kv_key
+- nats_kv_bucket
+- nats_kv_revision
+- nats_kv_delta
+- nats_kv_operation
+- nats_kv_created
 ```
 
-You can access these metadata fields using [function interpolation](/docs/configuration/interpolation#bloblang-queries).
+#### create, update, delete, purge
+``` text
+- nats_kv_key
+- nats_kv_bucket
+- nats_kv_revision
+- nats_kv_operation
+```
+
+#### keys
+``` text
+- nats_kv_bucket
+```
 
 ### Authentication
 
@@ -121,9 +146,9 @@ urls:
   - nats://username:password@127.0.0.1:4222
 ```
 
-### `subject`
+### `bucket`
 
-A subject to consume from. Supports wildcards for consuming multiple subjects. Either a subject or stream must be specified.
+The name of the KV bucket to watch for updates.
 
 
 Type: `string`  
@@ -131,29 +156,63 @@ Type: `string`
 ```yml
 # Examples
 
-subject: foo.bar.baz
-
-subject: foo.*.baz
-
-subject: foo.bar.*
-
-subject: foo.>
+bucket: my_kv_bucket
 ```
 
-### `queue`
+### `operation`
 
-An optional queue group to consume as.
+The operation to perform on the KV bucket.
 
 
 Type: `string`  
 
-### `prefetch_count`
+| Option | Summary |
+|---|---|
+| `create` | Adds the key/value pair if it does not exist. Returns an error if it already exists. |
+| `delete` | Deletes the key/value pair, but keeps historical values. |
+| `get` | Returns the latest value for `key`. |
+| `get_revision` | Returns the value of `key` for the specified `revision`. |
+| `history` | Returns historical values of `key` as a batch. |
+| `keys` | Returns all the keys in the `bucket` as a batch. |
+| `purge` | Deletes the key/value pair and all historical values. |
+| `put` | Places a new value for the key into the store. |
+| `update` | Updates the value for `key` only if the `revision` matches the latest revision. |
 
-The maximum number of messages to pull at a time.
+
+### `key`
+
+The key for each message.
+This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
 
 
-Type: `int`  
-Default: `32`  
+Type: `string`  
+Default: `""`  
+
+```yml
+# Examples
+
+key: foo
+
+key: foo.bar.baz
+
+key: foo.${! json("meta.type") }
+```
+
+### `revision`
+
+The revision of the key to operate on. Used for `get_revision` and `update` operations.
+This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
+
+
+Type: `string`  
+
+```yml
+# Examples
+
+revision: "42"
+
+revision: ${! @nats_kv_revision }
+```
 
 ### `tls`
 

@@ -1,7 +1,7 @@
 ---
-title: nats
-type: input
-status: stable
+title: nats_kv
+type: output
+status: experimental
 categories: ["Services"]
 ---
 
@@ -14,7 +14,12 @@ categories: ["Services"]
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-Subscribe to a NATS subject.
+:::caution EXPERIMENTAL
+This component is experimental and therefore subject to change or removal outside of major version releases.
+:::
+Put messages in a NATS key-value bucket.
+
+Introduced in version 4.12.0.
 
 
 <Tabs defaultValue="common" values={[
@@ -26,13 +31,14 @@ Subscribe to a NATS subject.
 
 ```yml
 # Common config fields, showing default values
-input:
+output:
   label: ""
-  nats:
+  nats_kv:
     urls:
       - nats://127.0.0.1:4222
-    subject: ""
-    queue: ""
+    bucket: ""
+    key: ""
+    max_in_flight: 1024
 ```
 
 </TabItem>
@@ -40,14 +46,14 @@ input:
 
 ```yml
 # All config fields, showing default values
-input:
+output:
   label: ""
-  nats:
+  nats_kv:
     urls:
       - nats://127.0.0.1:4222
-    subject: ""
-    queue: ""
-    prefetch_count: 32
+    bucket: ""
+    key: ""
+    max_in_flight: 1024
     tls:
       enabled: false
       skip_cert_verify: false
@@ -63,16 +69,9 @@ input:
 </TabItem>
 </Tabs>
 
-### Metadata
-
-This input adds the following metadata fields to each message:
-
-``` text
-- nats_subject
-- All message headers (when supported by the connection)
-```
-
-You can access these metadata fields using [function interpolation](/docs/configuration/interpolation#bloblang-queries).
+The field `key` supports
+[interpolation functions](/docs/configuration/interpolation#bloblang-queries), allowing
+you to create a unique key for each message.
 
 ### Authentication
 
@@ -121,9 +120,9 @@ urls:
   - nats://username:password@127.0.0.1:4222
 ```
 
-### `subject`
+### `bucket`
 
-A subject to consume from. Supports wildcards for consuming multiple subjects. Either a subject or stream must be specified.
+The name of the KV bucket to operate on.
 
 
 Type: `string`  
@@ -131,29 +130,34 @@ Type: `string`
 ```yml
 # Examples
 
-subject: foo.bar.baz
-
-subject: foo.*.baz
-
-subject: foo.bar.*
-
-subject: foo.>
+bucket: my_kv_bucket
 ```
 
-### `queue`
+### `key`
 
-An optional queue group to consume as.
+The key for each message.
+This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
 
 
 Type: `string`  
 
-### `prefetch_count`
+```yml
+# Examples
 
-The maximum number of messages to pull at a time.
+key: foo
+
+key: foo.bar.baz
+
+key: foo.${! json("meta.type") }
+```
+
+### `max_in_flight`
+
+The maximum number of messages to have in flight at a given time. Increase this to improve throughput.
 
 
 Type: `int`  
-Default: `32`  
+Default: `1024`  
 
 ### `tls`
 
