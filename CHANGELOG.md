@@ -3,6 +3,12 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+## Unreleased
+
+### Added
+
+- New bloblang timestamp methods `ts_add_iso8601` and `ts_sub_iso8601`.
+
 ## 4.12.1 - 2023-02-23
 
 ### Fixed
