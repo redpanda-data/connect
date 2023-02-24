@@ -51,7 +51,7 @@ The NATS KV processor supports a multitude of KV operations via the [operation](
 
 ### Metadata
 
-This input adds the following metadata fields to each message, depending on the chosen ` + "`operation`" + `:
+This processor adds the following metadata fields to each message, depending on the chosen ` + "`operation`" + `:
 
 #### get, get_revision, history
 ` + "``` text" + `
