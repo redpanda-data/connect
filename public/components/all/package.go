@@ -30,6 +30,7 @@ import (
 	_ "github.com/benthosdev/benthos/v4/public/components/nanomsg"
 	_ "github.com/benthosdev/benthos/v4/public/components/nats"
 	_ "github.com/benthosdev/benthos/v4/public/components/nsq"
+	_ "github.com/benthosdev/benthos/v4/public/components/opensearch"
 	_ "github.com/benthosdev/benthos/v4/public/components/otlp"
 	_ "github.com/benthosdev/benthos/v4/public/components/prometheus"
 	_ "github.com/benthosdev/benthos/v4/public/components/pure"
