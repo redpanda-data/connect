@@ -64,7 +64,7 @@ require (
 	github.com/matoous/go-nanoid/v2 v2.0.0
 	github.com/microcosm-cc/bluemonday v1.0.22
 	github.com/mitchellh/mapstructure v1.4.3
-	github.com/nats-io/nats.go v1.15.0
+	github.com/nats-io/nats.go v1.23.0
 	github.com/nats-io/nkeys v0.3.0
 	github.com/nats-io/stan.go v0.10.2
 	github.com/nsf/jsondiff v0.0.0-20210926074059-1e845ec5d249

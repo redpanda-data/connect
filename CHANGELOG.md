@@ -3,6 +3,18 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+## Unreleased
+
+### Added
+
+- New `nats_kv` processor, input and output.
+
+## 4.12.1 - 2023-02-23
+
+### Fixed
+
+- Fixed a regression bug in the `nats` components where panics occur during a flood of messages. This issue was introduced in v4.12.0 (45f785a).
+
 ## 4.12.0 - 2023-02-20
 
 ### Added
