@@ -177,7 +177,7 @@ type joinedMessage struct {
 
 func (j *joinedMessage) ToMsg() message.Batch {
 	part := message.NewPart(nil)
-	part.SetStructuredMut(message.CopyJSON(j.fields))
+	part.SetStructuredMut(message.CopyJSON(j.fields.Data()))
 	for k, v := range j.metadata {
 		part.MetaSetMut(k, v)
 	}
