@@ -50,14 +50,13 @@ type resultStoreImpl struct {
 }
 
 func (r *resultStoreImpl) Add(msg message.Batch) {
-	r.Lock()
-	defer r.Unlock()
-
 	newBatch := make(message.Batch, len(msg))
 	for i, p := range msg {
 		newBatch[i] = message.WithContext(context.Background(), p.DeepCopy())
 	}
+	r.Lock()
 	r.payloads = append(r.payloads, newBatch)
+	r.Unlock()
 }
 
 func (r *resultStoreImpl) Get() []message.Batch {
