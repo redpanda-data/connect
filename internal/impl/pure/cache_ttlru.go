@@ -6,8 +6,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/benthosdev/benthos/v4/public/service"
 	"zvelo.io/ttlru"
+
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
 const (
@@ -87,7 +88,7 @@ func init() {
 }
 
 func ttlruMemCacheFromConfig(conf *service.ParsedConfig) (*ttlruCacheAdapter, error) {
-	cap, err := conf.FieldInt(ttlruCacheFieldCapLabel)
+	capacity, err := conf.FieldInt(ttlruCacheFieldCapLabel)
 	if err != nil {
 		return nil, err
 	}
@@ -112,7 +113,7 @@ func ttlruMemCacheFromConfig(conf *service.ParsedConfig) (*ttlruCacheAdapter, er
 		return nil, err
 	}
 
-	return ttlruMemCache(cap, ttl, initValues, withoutReset, optimistic)
+	return ttlruMemCache(capacity, ttl, initValues, withoutReset, optimistic)
 }
 
 //------------------------------------------------------------------------------
@@ -131,12 +132,12 @@ var (
 	errInvalidTTLRUCachetTTLValue     = fmt.Errorf("invalid ttlru cache parameter ttl: must be bigger than 0s")
 )
 
-func ttlruMemCache(cap int,
+func ttlruMemCache(capacity int,
 	ttl time.Duration,
 	initValues map[string]string,
 	withoutReset, optimistic bool,
 ) (*ttlruCacheAdapter, error) {
-	if cap <= 0 {
+	if capacity <= 0 {
 		return nil, errInvalidTTLRUCacheCapacityValue
 	}
 
@@ -152,7 +153,7 @@ func ttlruMemCache(cap int,
 		opts = append(opts, ttlru.WithoutReset())
 	}
 
-	c := ttlru.New(cap, opts...)
+	c := ttlru.New(capacity, opts...)
 	if c == nil {
 		return nil, errInvalidTTLRUCacheParameters
 	}

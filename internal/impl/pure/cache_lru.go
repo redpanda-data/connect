@@ -6,8 +6,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/benthosdev/benthos/v4/public/service"
 	lruv2 "github.com/hashicorp/golang-lru/v2"
+
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
 const (
@@ -106,7 +107,7 @@ func init() {
 }
 
 func lruMemCacheFromConfig(conf *service.ParsedConfig) (*lruCacheAdapter, error) {
-	cap, err := conf.FieldInt(lruCacheFieldCapLabel)
+	capacity, err := conf.FieldInt(lruCacheFieldCapLabel)
 	if err != nil {
 		return nil, err
 	}
@@ -143,7 +144,7 @@ func lruMemCacheFromConfig(conf *service.ParsedConfig) (*lruCacheAdapter, error)
 		return nil, err
 	}
 
-	return lruMemCache(cap, algorithm, initValues, recentRatioPtr, ghostRatioPtr, optimistic)
+	return lruMemCache(capacity, algorithm, initValues, recentRatioPtr, ghostRatioPtr, optimistic)
 }
 
 //------------------------------------------------------------------------------
@@ -152,12 +153,12 @@ var (
 	errInvalidLRUCacheCapacityValue = fmt.Errorf("invalid lru cache parameter capacity: must be bigger than 0")
 )
 
-func lruMemCache(cap int,
+func lruMemCache(capacity int,
 	algorithm string,
 	initValues map[string]string,
 	recentRatio, ghostRatio *float64,
 	optimistic bool) (ca *lruCacheAdapter, err error) {
-	if cap <= 0 {
+	if capacity <= 0 {
 		return nil, errInvalidLRUCacheCapacityValue
 	}
 
@@ -166,7 +167,7 @@ func lruMemCache(cap int,
 	switch algorithm {
 	case lruCacheFieldAlgorithmValueStandard:
 		var c *lruv2.Cache[string, []byte]
-		c, err = lruv2.New[string, []byte](cap)
+		c, err = lruv2.New[string, []byte](capacity)
 		if err != nil {
 			return
 		}
@@ -176,16 +177,16 @@ func lruMemCache(cap int,
 		}
 
 	case lruCacheFieldAlgorithmValueARC:
-		inner, err = lruv2.NewARC[string, []byte](cap)
+		inner, err = lruv2.NewARC[string, []byte](capacity)
 		if err != nil {
 			return
 		}
 
 	case lruCacheFieldAlgorithmValue2Q:
 		if recentRatio != nil && ghostRatio != nil {
-			inner, err = lruv2.New2QParams[string, []byte](cap, *recentRatio, *ghostRatio)
+			inner, err = lruv2.New2QParams[string, []byte](capacity, *recentRatio, *ghostRatio)
 		} else {
-			inner, err = lruv2.New2Q[string, []byte](cap)
+			inner, err = lruv2.New2Q[string, []byte](capacity)
 		}
 
 		if err != nil {
@@ -227,12 +228,12 @@ type lruv2SimpleCacheAdaptor struct {
 	*lruv2.Cache[string, []byte]
 }
 
-func (a *lruv2SimpleCacheAdaptor) Add(key string, value []byte) {
-	_ = a.Cache.Add(key, value)
+func (ad *lruv2SimpleCacheAdaptor) Add(key string, value []byte) {
+	_ = ad.Cache.Add(key, value)
 }
 
-func (a *lruv2SimpleCacheAdaptor) Remove(key string) {
-	_ = a.Cache.Remove(key)
+func (ad *lruv2SimpleCacheAdaptor) Remove(key string) {
+	_ = ad.Cache.Remove(key)
 }
 
 //------------------------------------------------------------------------------
@@ -318,6 +319,6 @@ func (ca *lruCacheAdapter) Delete(_ context.Context, key string) error {
 	return nil
 }
 
-func (c *lruCacheAdapter) Close(_ context.Context) error {
+func (ca *lruCacheAdapter) Close(_ context.Context) error {
 	return nil
 }
