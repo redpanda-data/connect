@@ -249,29 +249,25 @@ func (t *Type) Stop(ctx context.Context) error {
 	if err == nil {
 		return nil
 	}
-	if errors.Is(err, context.Canceled) {
-		t.manager.Logger().Infoln("Unable to fully drain buffered messages within target time.")
-	} else {
-		t.manager.Logger().Errorf("Encountered error whilst shutting down: %v\n", err)
+	if !(errors.Is(err, context.Canceled) && errors.Is(err, context.DeadlineExceeded)) {
+		t.manager.Logger().Errorf("Encountered error whilst attempting to shut down gracefully: %v\n", err)
 	}
 
 	// If graceful termination failed then call unordered termination, if the
 	// overall ctx is already cancelled this will still trigger asynchronous
 	// clean up of resources, which is a best attempt.
-	err = t.StopUnordered(ctx)
-	if err == nil {
+	if err = t.StopUnordered(ctx); err == nil {
 		return nil
 	}
-	if errors.Is(err, context.Canceled) {
-		t.manager.Logger().Errorln("Failed to stop stream gracefully within target time.")
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		t.manager.Logger().Infoln("Some components prevented forced termination as they were either blocked from delivering data or from acknowledging delivered data within the shutdown timeout. This could potentially cause duplicate messages to be delivered on the next run.")
 
 		dumpBuf := bytes.NewBuffer(nil)
 		_ = pprof.Lookup("goroutine").WriteTo(dumpBuf, 1)
 
 		t.manager.Logger().Debugln(dumpBuf.String())
 	} else {
-		t.manager.Logger().Errorf("Encountered error whilst shutting down: %v\n", err)
+		t.manager.Logger().Errorf("Encountered error whilst forcefully shutting down: %v\n", err)
 	}
-
 	return err
 }
