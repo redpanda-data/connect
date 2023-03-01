@@ -2,8 +2,7 @@ name: Release
 
 on:
   push:
-    tags:
-      - 'v*'
+    branches: [ soda-release ]
 
 jobs:
   goreleaser:
@@ -43,6 +42,10 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   docker:
+    permissions:
+      contents: read
+      id-token: write
+
     runs-on: ubuntu-latest
     steps:
 
@@ -74,6 +77,10 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-buildx-
 
+    - name: current short sha
+      id: sha_short
+      run: echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+
     - name: Build
       run: make deps
 
@@ -97,13 +104,13 @@ jobs:
     - name: auth to gcr 
       run: gcloud auth configure-docker us-docker.pkg.dev -q
 
-    - name: docker meta data
-      id: docker_meta_data
+    - name: docker meta
+      id: docker_meta
       uses: docker/metadata-action@v4
       with:
-        images: sodahealth/benthos
+        images: us-docker.pkg.dev/artifacts-321215/co2-artifacts-docker/benthos
         tags: |
-          type=raw,value=${{ github.ref_name }}
+          type=raw,value=v4.12.1-soda-${{ steps.sha_short.outputs.sha_short }}
 
     - name: Build and push
       uses: docker/build-push-action@v2
