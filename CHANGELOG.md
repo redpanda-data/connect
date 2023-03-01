@@ -12,6 +12,7 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 
 - The `broker` output with the pattern `fan_out_sequential` will no longer abandon in-flight requests that are error blocked until the full shutdown timeout has occurred.
+- Fixed a regression bug in the `sequence` input where the returned messages have type `unknown`. This issue was introduced in v4.10.0 (cefa288).
 
 ## 4.12.1 - 2023-02-23
 
