@@ -389,10 +389,10 @@ func dataToPart(highestOffset int64, data *sarama.ConsumerMessage, multiHeader b
 
 	if multiHeader {
 		// in multi header mode we gather headers so we can encode them as lists
-		var headers = map[string][]any{}
+		headers := map[string][]any{}
 
 		for _, hdr := range data.Headers {
-			var key = string(hdr.Key)
+			key := string(hdr.Key)
 			headers[key] = append(headers[key], string(hdr.Value))
 		}
 
