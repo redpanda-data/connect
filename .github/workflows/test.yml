@@ -8,7 +8,7 @@ on:
 
 jobs:
   cross-build:
-    if: ${{ github.repository == 'benthosdev/benthos' || github.event_name != 'schedule' }}
+    if: ${{ github.repository == 'benthosdev/benthos' }}
     strategy:
       fail-fast: false
       matrix:

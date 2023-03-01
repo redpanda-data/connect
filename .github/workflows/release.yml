@@ -86,11 +86,27 @@ jobs:
       id: buildx
       uses: docker/setup-buildx-action@v1
 
+    # Authenticates against google cloud using OIDC connector
+    - id: 'auth'
+      name: 'Authenticate to Google Cloud'
+      uses: 'google-github-actions/auth@v1'
+      with:
+        workload_identity_provider: 'projects/1035679941503/locations/global/workloadIdentityPools/github-actions-ci/providers/github-actions'
+        service_account: 'github-actions-benthos@artifacts-321215.iam.gserviceaccount.com'
+
+    - name: 'Set up Cloud SDK'
+      uses: 'google-github-actions/setup-gcloud@v1'
+      with:
+        version: 408.0.0
+
+    - name: auth to gcr 
+      run: gcloud auth configure-docker us-docker.pkg.dev -q
+
     - name: Docker meta CGO
       id: docker_meta_cgo
       uses: crazy-max/ghaction-docker-meta@v2
       with:
-        images: jeffail/benthos
+        images: sodahealth/benthos
         flavor: |
           latest=auto
           suffix=-cgo
@@ -113,7 +129,7 @@ jobs:
       id: docker_meta
       uses: crazy-max/ghaction-docker-meta@v2
       with:
-        images: jeffail/benthos
+        images: sodahealth/benthos
         tags: |
           type=semver,pattern={{version}}
           type=semver,pattern={{major}}.{{minor}}
