@@ -13,6 +13,7 @@ All notable changes to this project will be documented in this file.
 
 - The `broker` output with the pattern `fan_out_sequential` will no longer abandon in-flight requests that are error blocked until the full shutdown timeout has occurred.
 - The `broker` input no longer reports itself as unavailable when a child input has intentionally closed.
+- The `find_all` bloblang method no longer produces results that are of an `unknown` type.
 
 ## 4.12.1 - 2023-02-23
 
