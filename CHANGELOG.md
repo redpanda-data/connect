@@ -7,6 +7,7 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
+- Fix vulnerability [GO-2023-1571](https://pkg.go.dev/vuln/GO-2023-1571)
 - New `nats_kv` processor, input and output.
 
 ### Fixed
