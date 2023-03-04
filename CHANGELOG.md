@@ -7,6 +7,7 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
+- New `lru` and `ttlru` in-memory caches.
 - New `nats_kv` processor, input and output.
 
 ### Fixed
