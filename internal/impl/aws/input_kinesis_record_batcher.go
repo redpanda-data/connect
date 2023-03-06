@@ -20,7 +20,7 @@ type awsKinesisRecordBatcher struct {
 	shardID  string
 
 	batchPolicy  *policy.Batcher
-	checkpointer *checkpoint.Capped
+	checkpointer *checkpoint.Capped[string]
 
 	flushedMessage message.Batch
 
@@ -41,7 +41,7 @@ func (k *kinesisReader) newAWSKinesisRecordBatcher(streamID, shardID, sequence s
 		streamID:      streamID,
 		shardID:       shardID,
 		batchPolicy:   batchPolicy,
-		checkpointer:  checkpoint.NewCapped(int64(k.conf.CheckpointLimit)),
+		checkpointer:  checkpoint.NewCapped[string](int64(k.conf.CheckpointLimit)),
 		ackedSequence: sequence,
 	}, nil
 }
@@ -92,7 +92,7 @@ func (a *awsKinesisRecordBatcher) FlushMessage(ctx context.Context) (asyncMessag
 			topSequence := resolveFn()
 			if topSequence != nil {
 				a.ackedMut.Lock()
-				a.ackedSequence = topSequence.(string)
+				a.ackedSequence = *topSequence
 				a.ackedMut.Unlock()
 			}
 			a.ackedWG.Done()

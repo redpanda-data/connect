@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/go-redis/redis/v8"
+	"github.com/redis/go-redis/v9"
 
 	ibatch "github.com/benthosdev/benthos/v4/internal/batch"
 	"github.com/benthosdev/benthos/v4/internal/batch/policy"
@@ -142,10 +142,11 @@ func (r *redisStreamsWriter) WriteBatch(ctx context.Context, msg message.Batch) 
 			return fmt.Errorf("stream interpolation error: %w", err)
 		}
 		if err := client.XAdd(ctx, &redis.XAddArgs{
-			ID:           "*",
-			Stream:       stream,
-			MaxLenApprox: r.conf.MaxLenApprox,
-			Values:       partToMap(msg.Get(0)),
+			ID:     "*",
+			Stream: stream,
+			MaxLen: r.conf.MaxLenApprox,
+			Approx: true,
+			Values: partToMap(msg.Get(0)),
 		}).Err(); err != nil {
 			_ = r.disconnect()
 			r.log.Errorf("Error from redis: %v\n", err)
@@ -161,10 +162,11 @@ func (r *redisStreamsWriter) WriteBatch(ctx context.Context, msg message.Batch) 
 			return fmt.Errorf("stream interpolation error: %w", err)
 		}
 		_ = pipe.XAdd(ctx, &redis.XAddArgs{
-			ID:           "*",
-			Stream:       stream,
-			MaxLenApprox: r.conf.MaxLenApprox,
-			Values:       partToMap(p),
+			ID:     "*",
+			Stream: stream,
+			MaxLen: r.conf.MaxLenApprox,
+			Approx: true,
+			Values: partToMap(p),
 		})
 		return nil
 	}); err != nil {

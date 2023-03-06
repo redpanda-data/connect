@@ -186,12 +186,12 @@ func newFranzKafkaReaderFromConfig(conf *service.ParsedConfig, log *service.Logg
 
 type checkpointTracker struct {
 	mut    sync.Mutex
-	topics map[string]map[int32]*checkpoint.Type
+	topics map[string]map[int32]*checkpoint.Uncapped[*kgo.Record]
 }
 
 func newCheckpointTracker() *checkpointTracker {
 	return &checkpointTracker{
-		topics: map[string]map[int32]*checkpoint.Type{},
+		topics: map[string]map[int32]*checkpoint.Uncapped[*kgo.Record]{},
 	}
 }
 
@@ -201,13 +201,13 @@ func (c *checkpointTracker) addRecord(r *kgo.Record) (removeFn func() *kgo.Recor
 
 	topicCheckpoints := c.topics[r.Topic]
 	if topicCheckpoints == nil {
-		topicCheckpoints = map[int32]*checkpoint.Type{}
+		topicCheckpoints = map[int32]*checkpoint.Uncapped[*kgo.Record]{}
 		c.topics[r.Topic] = topicCheckpoints
 	}
 
 	partCheckpoint := topicCheckpoints[r.Partition]
 	if partCheckpoint == nil {
-		partCheckpoint = checkpoint.New()
+		partCheckpoint = checkpoint.NewUncapped[*kgo.Record]()
 		topicCheckpoints[r.Partition] = partCheckpoint
 	}
 
@@ -216,8 +216,11 @@ func (c *checkpointTracker) addRecord(r *kgo.Record) (removeFn func() *kgo.Recor
 		c.mut.Lock()
 		defer c.mut.Unlock()
 
-		highestRec, _ := releaseFn().(*kgo.Record)
-		return highestRec
+		r := releaseFn()
+		if r == nil {
+			return nil
+		}
+		return *r
 	}, int(partCheckpoint.Pending())
 }
 
@@ -234,8 +237,11 @@ func (c *checkpointTracker) getHighest(topic string, partition int32) *kgo.Recor
 		return nil
 	}
 
-	highestRec, _ := partCheckpoint.Highest().(*kgo.Record)
-	return highestRec
+	highestRec := partCheckpoint.Highest()
+	if highestRec == nil {
+		return nil
+	}
+	return *highestRec
 }
 
 func (c *checkpointTracker) getPending(topic string, partition int32) int {

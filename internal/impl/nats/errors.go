@@ -14,7 +14,7 @@ func errorHandlerOption(logger *service.Logger) nats.Option {
 		}
 		if sub != nil {
 			logger = logger.With("subject", sub.Subject)
-			if c, ok := sub.ConsumerInfo(); ok != nil {
+			if c, err := sub.ConsumerInfo(); err == nil {
 				logger = logger.With("consumer", c.Name)
 			}
 		}
@@ -29,7 +29,7 @@ func errorHandlerOptionFromModularLogger(logger log.Modular) nats.Option {
 		}
 		if sub != nil {
 			logger = logger.With("subject", sub.Subject)
-			if c, ok := sub.ConsumerInfo(); ok != nil {
+			if c, err := sub.ConsumerInfo(); err == nil {
 				logger = logger.With("consumer", c.Name)
 			}
 		}

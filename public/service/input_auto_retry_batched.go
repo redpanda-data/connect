@@ -22,22 +22,52 @@ func AutoRetryNacksBatched(i BatchInput) BatchInput {
 		retryList: autoretry.NewList(
 			func(ctx context.Context) (MessageBatch, autoretry.AckFunc, error) {
 				t, aFn, err := i.ReadBatch(ctx)
+
+				// Make sure we're able to track the position of messages in
+				// order to reassociate them after a batch-wide error
+				// downstream.
+				iParts := make([]*message.Part, len(t))
+				for i, p := range t {
+					iParts[i] = p.part
+				}
+
+				_, iParts = message.NewSortGroupParts(iParts)
+				for i, p := range iParts {
+					t[i] = newMessageFromPart(p)
+				}
+
 				return t, autoretry.AckFunc(aFn), err
 			},
 			func(t MessageBatch, err error) MessageBatch {
 				var bErr *batch.Error
-				if !errors.As(err, &bErr) || bErr.IndexedErrors() == 0 {
+				if len(t) == 0 || !errors.As(err, &bErr) || bErr.IndexedErrors() == 0 {
 					return t
 				}
 
+				sortGroup := message.TopLevelSortGroup(t[0].part)
+				if sortGroup == nil {
+					// We can't associate our source batch with the one that's associated
+					// with the batch error, therefore we fall back towards treating every
+					// message as if it was errored the same.
+					return t
+				}
+
+				sortBatch := make(message.Batch, len(t))
+				for i, p := range t {
+					sortBatch[i] = p.part
+				}
+
 				newBatch := make(MessageBatch, 0, bErr.IndexedErrors())
-				bErr.WalkParts(func(i int, p *message.Part, err error) bool {
+				bErr.WalkParts(sortGroup, sortBatch, func(i int, p *message.Part, err error) bool {
 					if err == nil {
 						return true
 					}
 					newBatch = append(newBatch, &Message{part: p})
 					return true
 				})
+				if len(newBatch) == 0 {
+					return t
+				}
 				return newBatch
 			}),
 		child: i,

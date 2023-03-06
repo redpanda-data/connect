@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/benthosdev/benthos/v4/internal/component/input"
@@ -77,6 +78,28 @@ func TestBasicFanIn(t *testing.T) {
 	if err := fanIn.WaitForClose(ctx); err != nil {
 		t.Error(err)
 	}
+}
+
+func TestFanInConnected(t *testing.T) {
+	tInOne, tInTwo := make(chan message.Transaction), make(chan message.Transaction)
+	Inputs := []input.Streamed{
+		&mock.Input{TChan: tInOne},
+		&mock.Input{TChan: tInTwo},
+	}
+
+	fanIn, err := newFanInInputBroker(Inputs)
+	require.NoError(t, err)
+
+	assert.True(t, fanIn.Connected())
+
+	close(tInOne)
+	time.Sleep(time.Millisecond * 100)
+	assert.True(t, fanIn.Connected())
+
+	close(tInTwo)
+	assert.Eventually(t, func() bool {
+		return !fanIn.Connected()
+	}, time.Second, time.Millisecond*10)
 }
 
 func TestFanInShutdown(t *testing.T) {

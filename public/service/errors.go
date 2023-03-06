@@ -47,7 +47,8 @@ func (err *BatchError) Failed(i int, merr error) *BatchError {
 // itself was processed successfully. The closure should return a bool which
 // indicates whether the iteration should be continued.
 func (err *BatchError) WalkMessages(fn func(int, *Message, error) bool) {
-	err.wrapped.WalkParts(func(i int, p *message.Part, err error) bool {
+	sortGroup, iBatch := message.NewSortGroup(err.wrapped.XErroredBatch())
+	err.wrapped.WalkParts(sortGroup, iBatch, func(i int, p *message.Part, err error) bool {
 		return fn(i, &Message{part: p}, err)
 	})
 }
