@@ -75,11 +75,16 @@ func testAMQP1Connected(url, sourceAddress string, t *testing.T) {
 	wg := sync.WaitGroup{}
 
 	testMsgs := map[string]bool{}
+	testValues := map[string]bool{}
 	for i := 0; i < N; i++ {
 		wg.Add(1)
 
 		str := fmt.Sprintf("hello world: %v", i)
 		testMsgs[str] = true
+
+		value := fmt.Sprintf("value %v", i)
+		testValues[value] = true
+
 		go func(testStr string) {
 			defer wg.Done()
 
@@ -92,7 +97,8 @@ func testAMQP1Connected(url, sourceAddress string, t *testing.T) {
 					ContentEncoding: &contentEncoding,
 					CreationTime:    &createdAt,
 				},
-				Data: [][]byte{[]byte(str)},
+				Data:  [][]byte{[]byte(str)},
+				Value: value,
 			})
 			require.NoError(t, err)
 		}(str)
@@ -109,6 +115,7 @@ func testAMQP1Connected(url, sourceAddress string, t *testing.T) {
 			assert.True(t, testMsgs[string(actM.Get(0).AsBytes())], "Unexpected message")
 			assert.Equal(t, "plain/text", actM.Get(0).MetaGetStr("amqp_content_type"))
 			assert.Equal(t, "utf-8", actM.Get(0).MetaGetStr("amqp_content_encoding"))
+			assert.True(t, testValues[actM.Get(0).MetaGetStr("amqp_value")], "Unexpected value")
 
 			time.Sleep(6 * time.Second) // Simulate long processing before ack so message lock expires and lock renewal is requires
 

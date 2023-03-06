@@ -239,6 +239,7 @@ func (a *amqp1Reader) ReadBatch(ctx context.Context) (message.Batch, input.Async
 	}
 
 	part := message.NewPart(amqpMsg.GetData())
+	amqpSetMetadata(part, "amqp_value", amqpMsg.Value)
 	if amqpMsg.Properties != nil {
 		amqpSetMetadata(part, "amqp_content_type", amqpMsg.Properties.ContentType)
 		amqpSetMetadata(part, "amqp_content_encoding", amqpMsg.Properties.ContentEncoding)
