@@ -66,6 +66,14 @@ The URL of a collector to send tracing events to.
 Type: `string`  
 Default: `"localhost:4318"`  
 
+### `http[].insecure`
+
+Use HTTP instead of HTTPS.
+
+
+Type: `bool`  
+Default: `false`  
+
 ### `grpc`
 
 A list of grpc collectors.
@@ -80,6 +88,14 @@ The URL of a collector to send tracing events to.
 
 Type: `string`  
 Default: `"localhost:4317"`  
+
+### `grpc[].insecure`
+
+Disables client transport security for gRPC.
+
+
+Type: `bool`  
+Default: `false`  
 
 ### `tags`
 
