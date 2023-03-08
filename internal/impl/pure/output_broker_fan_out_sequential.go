@@ -2,6 +2,7 @@ package pure
 
 import (
 	"context"
+	"errors"
 	"sync/atomic"
 	"time"
 
@@ -62,14 +63,11 @@ func (o *fanOutSequentialOutputBroker) loop() {
 
 	defer func() {
 		// Wait for pending acks to be resolved, or forceful termination
-	ackWaitLoop:
 		for atomic.LoadInt64(&ackPending) > 0 {
 			select {
 			case <-ackInterruptChan:
 			case <-time.After(time.Millisecond * 100):
 				// Just incase an interrupt doesn't arrive.
-			case <-o.shutSig.CloseNowChan():
-				break ackWaitLoop
 			}
 		}
 		for _, c := range o.outputTSChans {
@@ -109,6 +107,8 @@ func (o *fanOutSequentialOutputBroker) loop() {
 			}
 			select {
 			case o.outputTSChans[i] <- message.NewTransactionFunc(ts.Payload, ackFn):
+			case <-o.shutSig.CloseNowChan():
+				return errors.New("component is shutting down")
 			case <-ctx.Done():
 				return ctx.Err()
 			}
