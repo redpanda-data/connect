@@ -20,9 +20,7 @@ root.b = this.b.apply("formatting")
 # Out: {"a":"(foo)","b":"(bar)"}
 ```
 
-However, in cases where we wish to provide multiple named parameters to a mapping we can execute them on object literals for the same effect:
-
-However, we can still use object literals for this purpose. Imagine if we wanted a map that is the exact same as above except the pattern is `[%v]` instead, with the potential for even more patterns in the future. To do that we can pass an object with a field `value` with our target to map and a field `pattern` which allows us to specify the pattern to apply:
+However, we can use object literals in order to provide multiple map parameters. Imagine if we wanted a map that is the exact same as above except the pattern is `[%v]` instead, with the potential for even more patterns in the future. To do that we can pass an object with a field `value` with our target to map and a field `pattern` which allows us to specify the pattern to apply:
 
 ```coffee
 map formatting {
