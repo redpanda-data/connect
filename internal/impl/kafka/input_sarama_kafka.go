@@ -309,7 +309,7 @@ func (k *kafkaReader) asyncCheckpointer(topic string, partition int32) func(cont
 		}
 		resolveFn, err := cp.Track(ctx, offset, int64(msg.Len()))
 		if err != nil {
-			if err != component.ErrTimeout {
+			if ctx.Err() == nil && err != component.ErrTimeout {
 				k.log.Errorf("Failed to checkpoint offset: %v\n", err)
 			}
 			return false
