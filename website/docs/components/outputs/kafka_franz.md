@@ -37,6 +37,7 @@ output:
     seed_brokers: []
     topic: ""
     key: ""
+    partition: ""
     metadata:
       include_prefixes: []
       include_patterns: []
@@ -60,6 +61,7 @@ output:
     topic: ""
     key: ""
     partitioner: ""
+    partition: ""
     metadata:
       include_prefixes: []
       include_patterns: []
@@ -144,9 +146,24 @@ Type: `string`
 | Option | Summary |
 |---|---|
 | `least_backup` | Chooses the least backed up partition (the partition with the fewest amount of buffered records). Partitions are selected per batch. |
+| `manual` | Manually select a partition for each message, requires the field `partition` to be specified. |
 | `murmur2_hash` | Kafka's default hash algorithm that uses a 32-bit murmur2 hash of the key to compute which partition the record will be on. |
 | `round_robin` | Round-robin's messages through all available partitions. This algorithm has lower throughput and causes higher CPU load on brokers, but can be useful if you want to ensure an even distribution of records to partitions. |
 
+
+### `partition`
+
+An optional explicit partition to set for each message. This field is only relevant when the `partitioner` is set to `manual`. The provided interpolation string must be a valid integer.
+This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
+
+
+Type: `string`  
+
+```yml
+# Examples
+
+partition: ${! meta("partition") }
+```
 
 ### `metadata`
 

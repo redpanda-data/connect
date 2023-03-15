@@ -126,6 +126,39 @@ input:
 		}),
 		integration.StreamTestOptPort(kafkaPortStr),
 	)
+
+	manualPartitionTemplate := `
+output:
+  kafka_franz:
+    seed_brokers: [ localhost:$PORT ]
+    topic: topic-$ID
+    max_in_flight: $MAX_IN_FLIGHT
+    timeout: "5s"
+    partitioner: manual
+    partition: "0"
+    metadata:
+      include_patterns: [ .* ]
+    batching:
+      count: $OUTPUT_BATCH_COUNT
+
+input:
+  kafka_franz:
+    seed_brokers: [ localhost:$PORT ]
+    topics: [ topic-$ID$VAR1 ]
+    consumer_group: "$VAR4"
+    checkpoint_limit: 100
+    commit_period: "1s"
+`
+	t.Run("manual_partitioner", func(t *testing.T) {
+		suite.Run(
+			t, manualPartitionTemplate,
+			integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, testID string, vars *integration.StreamTestConfigVars) {
+				vars.Var4 = "group" + testID
+				require.NoError(t, createKafkaTopic(context.Background(), "localhost:"+kafkaPortStr, testID, 1))
+			}),
+			integration.StreamTestOptPort(kafkaPortStr),
+		)
+	})
 }
 
 func createKafkaTopicSasl(address, id string, partitions int32) error {

@@ -8,6 +8,7 @@ All notable changes to this project will be documented in this file.
 ### Added
 
 - New `nats_kv` processor, input and output.
+- Field `partition` added to the `kafka_franz` output, allowing for manual partitioning.
 
 ### Fixed
 
