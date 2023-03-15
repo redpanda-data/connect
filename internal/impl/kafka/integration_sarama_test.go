@@ -23,7 +23,7 @@ import (
 )
 
 func TestIntegrationSaramaCheckpointOneLockUp(t *testing.T) {
-	integration.CheckSkip(t)
+	integration.CheckSkipExact(t)
 	t.Parallel()
 
 	pool, err := dockertest.NewPool("")
