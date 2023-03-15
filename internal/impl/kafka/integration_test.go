@@ -21,7 +21,7 @@ import (
 	"github.com/twmb/franz-go/pkg/sasl/scram"
 )
 
-func createKafkaTopic(address, id string, partitions int32) error {
+func createKafkaTopic(ctx context.Context, address, id string, partitions int32) error {
 	topicName := fmt.Sprintf("topic-%v", id)
 
 	cl, err := kgo.NewClient(kgo.SeedBrokers(address))
@@ -37,19 +37,14 @@ func createKafkaTopic(address, id string, partitions int32) error {
 	topicReq.ReplicationFactor = 1
 	createTopicsReq.Topics = append(createTopicsReq.Topics, topicReq)
 
-	res, err := createTopicsReq.RequestWith(context.Background(), cl)
+	res, err := createTopicsReq.RequestWith(ctx, cl)
 	if err != nil {
 		return err
 	}
 	if len(res.Topics) != 1 {
 		return fmt.Errorf("expected one topic in response, saw %d", len(res.Topics))
 	}
-	t := res.Topics[0]
-
-	if err := kerr.ErrorForCode(t.ErrorCode); err != nil {
-		return fmt.Errorf("topic creation failure: %w", err)
-	}
-	return nil
+	return kerr.ErrorForCode(res.Topics[0].ErrorCode)
 }
 
 func TestIntegrationKafka(t *testing.T) {
@@ -88,7 +83,7 @@ func TestIntegrationKafka(t *testing.T) {
 
 	_ = resource.Expire(900)
 	require.NoError(t, pool.Retry(func() error {
-		return createKafkaTopic("localhost:"+kafkaPortStr, "testingconnection", 1)
+		return createKafkaTopic(context.Background(), "localhost:"+kafkaPortStr, "testingconnection", 1)
 	}))
 
 	template := `
@@ -127,7 +122,7 @@ input:
 		t, template,
 		integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, testID string, vars *integration.StreamTestConfigVars) {
 			vars.Var4 = "group" + testID
-			require.NoError(t, createKafkaTopic("localhost:"+kafkaPortStr, testID, 4))
+			require.NoError(t, createKafkaTopic(context.Background(), "localhost:"+kafkaPortStr, testID, 4))
 		}),
 		integration.StreamTestOptPort(kafkaPortStr),
 	)
