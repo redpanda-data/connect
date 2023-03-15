@@ -3,7 +3,7 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
-## Unreleased
+## 4.13.0 - 2023-03-15
 
 ### Added
 
