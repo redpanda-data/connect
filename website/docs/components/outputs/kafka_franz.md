@@ -90,13 +90,6 @@ output:
 
 Writes a batch of messages to Kafka brokers and waits for acknowledgement before propagating it back to the input.
 
-This output is new and experimental, and the existing `kafka` input is not going anywhere, but here's some reasons why it might be worth trying this one out:
-
-- You like shiny new stuff
-- You are experiencing issues with the existing `kafka` output
-- Someone told you to
-
-
 ## Fields
 
 ### `seed_brokers`
