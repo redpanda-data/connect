@@ -36,6 +36,13 @@ func CheckSkip(t testing.TB) {
 	}
 }
 
+// CheckSkipExact skips a test unless the -run flag specifically targets it.
+func CheckSkipExact(t testing.TB) {
+	if m := flag.Lookup("test.run").Value.String(); m == "" || m != t.Name() {
+		t.Skipf("Skipping as execution was not requested explicitly using go test -run %v", t.Name())
+	}
+}
+
 // GetFreePort attempts to get a free port. This involves creating a bind and
 // then immediately dropping it and so it's ever so slightly flakey.
 func GetFreePort() (int, error) {

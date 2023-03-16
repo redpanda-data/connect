@@ -79,7 +79,8 @@ func (a *awsKinesisRecordBatcher) FlushMessage(ctx context.Context) (asyncMessag
 
 	resolveFn, err := a.checkpointer.Track(ctx, a.batchedSequence, int64(a.flushedMessage.Len()))
 	if err != nil {
-		if errors.Is(err, component.ErrTimeout) {
+		if ctx.Err() != nil || errors.Is(err, component.ErrTimeout) {
+			// No need to log this error, just continue with no message.
 			err = nil
 		}
 		return asyncMessage{}, err
