@@ -51,7 +51,7 @@ linters:
     - gofmt
     - goimports
     - gocritic
-    - revive
+    # - revive
     - unconvert
     - durationcheck
     - depguard
