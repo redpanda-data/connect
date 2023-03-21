@@ -468,7 +468,7 @@ func recordToMessage(record *kgo.Record, multiHeader bool) *service.Message {
 	msg.MetaSet("kafka_timestamp_unix", strconv.FormatInt(record.Timestamp.Unix(), 10))
 	if multiHeader {
 		// in multi header mode we gather headers so we can encode them as lists
-		var headers = map[string][]any{}
+		headers := map[string][]any{}
 
 		for _, hdr := range record.Headers {
 			headers[hdr.Key] = append(headers[hdr.Key], string(hdr.Value))

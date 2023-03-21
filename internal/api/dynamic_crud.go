@@ -32,7 +32,7 @@ func newDynamicConfMgr() *dynamicConfMgr {
 // this hash is different to the previous config.
 func (d *dynamicConfMgr) Set(id string, conf []byte) bool {
 	hasher := sha256.New()
-	hasher.Write(conf)
+	_, _ = hasher.Write(conf)
 	newHash := hex.EncodeToString(hasher.Sum(nil))
 
 	if hash, exists := d.configHashes[id]; exists {
@@ -51,7 +51,7 @@ func (d *dynamicConfMgr) Set(id string, conf []byte) bool {
 func (d *dynamicConfMgr) Matches(id string, conf []byte) bool {
 	if hash, exists := d.configHashes[id]; exists {
 		hasher := sha256.New()
-		hasher.Write(conf)
+		_, _ = hasher.Write(conf)
 		newHash := hex.EncodeToString(hasher.Sum(nil))
 
 		if hash == newHash {

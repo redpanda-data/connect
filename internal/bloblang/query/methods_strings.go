@@ -747,7 +747,7 @@ root.h2 = this.value.hash(algorithm: "crc32", polynomial: "Koopman").encode("hex
 			}
 			hashFn = func(b []byte) ([]byte, error) {
 				hasher := hmac.New(sha1.New, key)
-				hasher.Write(b)
+				_, _ = hasher.Write(b)
 				return hasher.Sum(nil), nil
 			}
 		case "hmac_sha256", "hmac-sha256":
@@ -756,7 +756,7 @@ root.h2 = this.value.hash(algorithm: "crc32", polynomial: "Koopman").encode("hex
 			}
 			hashFn = func(b []byte) ([]byte, error) {
 				hasher := hmac.New(sha256.New, key)
-				hasher.Write(b)
+				_, _ = hasher.Write(b)
 				return hasher.Sum(nil), nil
 			}
 		case "hmac_sha512", "hmac-sha512":
@@ -765,31 +765,31 @@ root.h2 = this.value.hash(algorithm: "crc32", polynomial: "Koopman").encode("hex
 			}
 			hashFn = func(b []byte) ([]byte, error) {
 				hasher := hmac.New(sha512.New, key)
-				hasher.Write(b)
+				_, _ = hasher.Write(b)
 				return hasher.Sum(nil), nil
 			}
 		case "md5":
 			hashFn = func(b []byte) ([]byte, error) {
 				hasher := md5.New()
-				hasher.Write(b)
+				_, _ = hasher.Write(b)
 				return hasher.Sum(nil), nil
 			}
 		case "sha1":
 			hashFn = func(b []byte) ([]byte, error) {
 				hasher := sha1.New()
-				hasher.Write(b)
+				_, _ = hasher.Write(b)
 				return hasher.Sum(nil), nil
 			}
 		case "sha256":
 			hashFn = func(b []byte) ([]byte, error) {
 				hasher := sha256.New()
-				hasher.Write(b)
+				_, _ = hasher.Write(b)
 				return hasher.Sum(nil), nil
 			}
 		case "sha512":
 			hashFn = func(b []byte) ([]byte, error) {
 				hasher := sha512.New()
-				hasher.Write(b)
+				_, _ = hasher.Write(b)
 				return hasher.Sum(nil), nil
 			}
 		case "xxhash64":
@@ -811,7 +811,7 @@ root.h2 = this.value.hash(algorithm: "crc32", polynomial: "Koopman").encode("hex
 				default:
 					return nil, fmt.Errorf("unsupported crc32 hash key %q", poly)
 				}
-				hasher.Write(b)
+				_, _ = hasher.Write(b)
 				return hasher.Sum(nil), nil
 			}
 		default:
@@ -866,13 +866,13 @@ root.joined_numbers = this.numbers.map_each(this.string()).join(",")`,
 			var buf bytes.Buffer
 			for i, sv := range slice {
 				if i > 0 {
-					buf.WriteString(delim)
+					_, _ = buf.WriteString(delim)
 				}
 				switch t := sv.(type) {
 				case string:
-					buf.WriteString(t)
+					_, _ = buf.WriteString(t)
 				case []byte:
-					buf.Write(t)
+					_, _ = buf.Write(t)
 				default:
 					return nil, fmt.Errorf("failed to join element %v: %w", i, NewTypeError(sv, ValueString))
 				}

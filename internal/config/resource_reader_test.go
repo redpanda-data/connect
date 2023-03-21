@@ -66,7 +66,7 @@ processor_resources:
 	tCtx, done := context.WithTimeout(context.Background(), time.Second*30)
 	defer done()
 
-	testProc := func(name string, input, output string) {
+	testProc := func(name, input, output string) {
 		require.NoError(t, testMgr.AccessProcessor(tCtx, name, func(p processor.V1) {
 			res, err := p.ProcessBatch(tCtx, message.Batch{
 				message.NewPart([]byte(input)),
@@ -168,7 +168,7 @@ processor_resources:
 	tCtx, done := context.WithTimeout(context.Background(), time.Second*30)
 	defer done()
 
-	testProc := func(name string, input, output string) {
+	testProc := func(name, input, output string) {
 		require.NoError(t, testMgr.AccessProcessor(tCtx, name, func(p processor.V1) {
 			res, err := p.ProcessBatch(tCtx, message.Batch{
 				message.NewPart([]byte(input)),
