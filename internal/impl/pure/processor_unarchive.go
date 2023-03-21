@@ -38,6 +38,7 @@ For the unarchive formats that contain file information (tar, zip), a metadata f
 			`csv:x`:          `Attempt to parse the message as a csv file (header required) and for each row in the file expands its contents into a json object in a new message using a custom delimiter. The custom delimiter must be a single character, e.g. the format "csv:\t" would consume a tab delimited file.`,
 		}).Description("The unarchiving format to apply."))
 }
+
 func init() {
 	err := service.RegisterProcessor(
 		"unarchive", unarchiveProcConfig(),

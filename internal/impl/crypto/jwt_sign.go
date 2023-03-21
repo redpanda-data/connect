@@ -40,7 +40,6 @@ func registerSignJwtHSMethod(name string, signingMethod *jwt.SigningMethodHMAC, 
 		)
 
 	return bloblang.RegisterMethodV2(name, spec, jwtHSSigner(signingMethod))
-
 }
 
 func registerSignJwtHSMethods() error {

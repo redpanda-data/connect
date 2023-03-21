@@ -20,7 +20,6 @@ type couchbaseClient struct {
 }
 
 func getClient(conf *service.ParsedConfig, mgr *service.Resources) (*couchbaseClient, error) {
-
 	// retrieve params
 	url, err := conf.FieldString("url")
 	if err != nil {

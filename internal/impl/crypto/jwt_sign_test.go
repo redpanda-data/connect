@@ -75,5 +75,4 @@ func TestBloblangSignJwtHS(t *testing.T) {
 			require.Equal(t, inClaims, outClaims)
 		})
 	}
-
 }

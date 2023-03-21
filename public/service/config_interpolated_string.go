@@ -8,9 +8,7 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/docs"
 )
 
-var (
-	errInvalidInterpolation = errors.New("failed to parse interpolated field")
-)
+var errInvalidInterpolation = errors.New("failed to parse interpolated field")
 
 // NewInterpolatedStringField defines a new config field that describes a
 // dynamic string that supports Bloblang interpolation functions. It is then

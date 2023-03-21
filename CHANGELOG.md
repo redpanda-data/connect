@@ -3,17 +3,30 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+## Unreleased
+
+- New `lru` and `ttlru` in-memory caches.
+- Fix vulnerability [GO-2023-1571](https://pkg.go.dev/vuln/GO-2023-1571)
+
+### Added
+
+- The `-e/--env-file` cli flag can now be specified multiple times.
+
+### Fixed
+
+- The `find_all` bloblang method no longer produces results that are of an `unknown` type.
+
 ## 4.13.0 - 2023-03-15
 
 ### Added
 
-- New `lru` and `ttlru` in-memory caches.
 - New `nats_kv` processor, input and output.
 - Field `partition` added to the `kafka_franz` output, allowing for manual partitioning.
 
 ### Fixed
 
 - The `broker` output with the pattern `fan_out_sequential` will no longer abandon in-flight requests that are error blocked until the full shutdown timeout has occurred.
+- Fixed a regression bug in the `sequence` input where the returned messages have type `unknown`. This issue was introduced in v4.10.0 (cefa288).
 - The `broker` input no longer reports itself as unavailable when a child input has intentionally closed.
 - Config unit tests that check for structured data should no longer fail in all cases.
 - The `http_server` input with a custom address now supports path variables.
