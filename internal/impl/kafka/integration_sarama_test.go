@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"runtime"
 	"strconv"
+	"sync"
 	"testing"
 	"time"
 
@@ -18,7 +19,166 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/integration"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
+	"github.com/benthosdev/benthos/v4/public/service"
 )
+
+func TestIntegrationSaramaCheckpointOneLockUp(t *testing.T) {
+	integration.CheckSkipExact(t)
+	t.Parallel()
+
+	pool, err := dockertest.NewPool("")
+	require.NoError(t, err)
+
+	pool.MaxWait = time.Minute
+
+	kafkaPort, err := integration.GetFreePort()
+	require.NoError(t, err)
+
+	kafkaPortStr := strconv.Itoa(kafkaPort)
+
+	options := &dockertest.RunOptions{
+		Repository:   "docker.vectorized.io/vectorized/redpanda",
+		Tag:          "latest",
+		Hostname:     "redpanda",
+		ExposedPorts: []string{"9092"},
+		PortBindings: map[docker.Port][]docker.PortBinding{
+			"9092/tcp": {{HostIP: "", HostPort: kafkaPortStr}},
+		},
+		Cmd: []string{
+			"redpanda", "start", "--smp 1", "--overprovisioned", "",
+			"--kafka-addr 0.0.0.0:9092",
+			fmt.Sprintf("--advertise-kafka-addr localhost:%v", kafkaPort),
+		},
+	}
+	resource, err := pool.RunWithOptions(options)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		assert.NoError(t, pool.Purge(resource))
+	})
+
+	_ = resource.Expire(900)
+	require.NoError(t, pool.Retry(func() error {
+		return createKafkaTopic(context.Background(), "localhost:"+kafkaPortStr, "wcotesttopic", 20)
+	}))
+
+	dl, exists := t.Deadline()
+	if exists {
+		dl = dl.Add(-time.Second)
+	} else {
+		dl = time.Now().Add(time.Minute)
+	}
+	testCtx, done := context.WithTimeout(context.Background(), time.Until(dl))
+	defer done()
+
+	writeCtx, writeDone := context.WithCancel(testCtx)
+	defer writeDone()
+
+	// Create data generator stream
+	inBuilder := service.NewStreamBuilder()
+	require.NoError(t, inBuilder.AddOutputYAML(fmt.Sprintf(`
+kafka:
+  addresses: [ "localhost:%v" ]
+  topic: topic-wcotesttopic
+  max_in_flight: 1
+`, kafkaPortStr)))
+
+	inFunc, err := inBuilder.AddProducerFunc()
+	require.NoError(t, err)
+
+	inStrm, err := inBuilder.Build()
+	require.NoError(t, err)
+	go func() {
+		assert.NoError(t, inStrm.Run(testCtx))
+	}()
+
+	// Create two parallel data consumer streams
+	var messageCountMut sync.Mutex
+	var inMessages, outMessagesOne, outMessagesTwo int
+
+	outBuilderConf := fmt.Sprintf(`
+kafka:
+  addresses: [ "localhost:%v" ]
+  topics: [ topic-wcotesttopic ]
+  consumer_group: wcotestgroup
+  checkpoint_limit: 1
+  start_from_oldest: true
+`, kafkaPortStr)
+
+	outBuilder := service.NewStreamBuilder()
+	require.NoError(t, outBuilder.AddInputYAML(outBuilderConf))
+	require.NoError(t, outBuilder.AddProcessorYAML(`mapping: 'root = content().uppercase()'`))
+	require.NoError(t, outBuilder.AddConsumerFunc(func(ctx context.Context, m *service.Message) error {
+		messageCountMut.Lock()
+		outMessagesOne++
+		messageCountMut.Unlock()
+		return nil
+	}))
+	outStrmOne, err := outBuilder.Build()
+	require.NoError(t, err)
+	go func() {
+		assert.NoError(t, outStrmOne.Run(testCtx))
+	}()
+
+	outBuilder = service.NewStreamBuilder()
+	require.NoError(t, outBuilder.AddInputYAML(outBuilderConf))
+	require.NoError(t, outBuilder.AddConsumerFunc(func(ctx context.Context, m *service.Message) error {
+		messageCountMut.Lock()
+		outMessagesTwo++
+		messageCountMut.Unlock()
+		return nil
+	}))
+	outStrmTwo, err := outBuilder.Build()
+	require.NoError(t, err)
+	go func() {
+		assert.NoError(t, outStrmTwo.Run(testCtx))
+	}()
+
+	n := 1000
+	go func() {
+		for {
+			for i := 0; i < n; i++ {
+				err := inFunc(writeCtx, service.NewMessage(fmt.Appendf(nil, "hello world %v", i)))
+				if writeCtx.Err() != nil {
+					return
+				}
+				assert.NoError(t, err)
+				messageCountMut.Lock()
+				inMessages++
+				messageCountMut.Unlock()
+				time.Sleep(time.Millisecond * 10)
+			}
+		}
+	}()
+
+	assert.Eventually(t, func() bool {
+		messageCountMut.Lock()
+		countOne, countTwo := outMessagesOne, outMessagesTwo
+		messageCountMut.Unlock()
+
+		t.Logf("count one: %v, count two: %v", countOne, countTwo)
+		return countOne > 0 && countTwo > 0
+	}, time.Until(dl), time.Millisecond*500)
+
+	var prevOne, prevTwo int
+	assert.Never(t, func() bool {
+		messageCountMut.Lock()
+		countOne, countTwo := outMessagesOne, outMessagesTwo
+		messageCountMut.Unlock()
+
+		hasIncreased := countOne > prevOne && countTwo > prevTwo
+		prevOne, prevTwo = countOne, countTwo
+
+		t.Logf("count one: %v, count two: %v", countOne, countTwo)
+		return !hasIncreased
+	}, time.Until(dl)-time.Second, time.Millisecond*500)
+
+	writeDone()
+	require.NoError(t, inStrm.Stop(testCtx))
+
+	require.NoError(t, outStrmOne.Stop(testCtx))
+	require.NoError(t, outStrmTwo.Stop(testCtx))
+	done()
+}
 
 func TestIntegrationSaramaRedpanda(t *testing.T) {
 	integration.CheckSkip(t)
@@ -57,7 +217,7 @@ func TestIntegrationSaramaRedpanda(t *testing.T) {
 	_ = resource.Expire(900)
 
 	require.NoError(t, pool.Retry(func() error {
-		return createKafkaTopic("localhost:"+kafkaPortStr, "pls_ignore_just_testing_connection", 1)
+		return createKafkaTopic(context.Background(), "localhost:"+kafkaPortStr, "pls_ignore_just_testing_connection", 1)
 	}))
 
 	template := `
@@ -109,7 +269,7 @@ input:
 			t, template,
 			integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, testID string, vars *integration.StreamTestConfigVars) {
 				vars.Var4 = "group" + testID
-				require.NoError(t, createKafkaTopic("localhost:"+kafkaPortStr, testID, 4))
+				require.NoError(t, createKafkaTopic(ctx, "localhost:"+kafkaPortStr, testID, 4))
 			}),
 			integration.StreamTestOptPort(kafkaPortStr),
 			integration.StreamTestOptVarTwo("1"),
@@ -122,7 +282,7 @@ input:
 				t, template,
 				integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, testID string, vars *integration.StreamTestConfigVars) {
 					vars.Var4 = "group" + testID
-					require.NoError(t, createKafkaTopic("localhost:"+kafkaPortStr, testID, 1))
+					require.NoError(t, createKafkaTopic(ctx, "localhost:"+kafkaPortStr, testID, 1))
 				}),
 				integration.StreamTestOptPort(kafkaPortStr),
 				integration.StreamTestOptVarTwo("1"),
@@ -136,7 +296,7 @@ input:
 				t, template,
 				integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, testID string, vars *integration.StreamTestConfigVars) {
 					vars.Var4 = "group" + testID
-					require.NoError(t, createKafkaTopic("localhost:"+kafkaPortStr, testID, 4))
+					require.NoError(t, createKafkaTopic(ctx, "localhost:"+kafkaPortStr, testID, 4))
 				}),
 				integration.StreamTestOptPort(kafkaPortStr),
 				integration.StreamTestOptVarTwo("1000"),
@@ -150,7 +310,7 @@ input:
 				t, template,
 				integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, testID string, vars *integration.StreamTestConfigVars) {
 					vars.Var4 = "group" + testID
-					require.NoError(t, createKafkaTopic("localhost:"+kafkaPortStr, testID, 4))
+					require.NoError(t, createKafkaTopic(ctx, "localhost:"+kafkaPortStr, testID, 4))
 				}),
 				integration.StreamTestOptPort(kafkaPortStr),
 				integration.StreamTestOptVarTwo("1"),
@@ -167,7 +327,7 @@ input:
 				vars.Var4 = "group" + testID
 				topicName := "topic-" + testID
 				vars.Var1 = fmt.Sprintf(":0,%v:1,%v:2,%v:3", topicName, topicName, topicName)
-				require.NoError(t, createKafkaTopic("localhost:"+kafkaPortStr, testID, 4))
+				require.NoError(t, createKafkaTopic(ctx, "localhost:"+kafkaPortStr, testID, 4))
 			}),
 			integration.StreamTestOptPort(kafkaPortStr),
 			integration.StreamTestOptSleepAfterInput(time.Second*3),
@@ -181,7 +341,7 @@ input:
 				t, template,
 				integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, testID string, vars *integration.StreamTestConfigVars) {
 					vars.Var4 = "group" + testID
-					require.NoError(t, createKafkaTopic("localhost:"+kafkaPortStr, testID, 4))
+					require.NoError(t, createKafkaTopic(ctx, "localhost:"+kafkaPortStr, testID, 4))
 				}),
 				integration.StreamTestOptPort(kafkaPortStr),
 				integration.StreamTestOptSleepAfterInput(time.Second*3),
@@ -197,7 +357,7 @@ input:
 				t, template,
 				integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, testID string, vars *integration.StreamTestConfigVars) {
 					vars.Var4 = "group" + testID
-					require.NoError(t, createKafkaTopic("localhost:"+kafkaPortStr, testID, 1))
+					require.NoError(t, createKafkaTopic(ctx, "localhost:"+kafkaPortStr, testID, 1))
 				}),
 				integration.StreamTestOptPort(kafkaPortStr),
 				integration.StreamTestOptSleepAfterInput(time.Second*3),
@@ -213,7 +373,7 @@ input:
 		suite.Run(
 			t, template,
 			integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, testID string, vars *integration.StreamTestConfigVars) {
-				require.NoError(t, createKafkaTopic("localhost:"+kafkaPortStr, testID, 4))
+				require.NoError(t, createKafkaTopic(ctx, "localhost:"+kafkaPortStr, testID, 4))
 			}),
 			integration.StreamTestOptPort(kafkaPortStr),
 			integration.StreamTestOptSleepAfterInput(time.Second*3),
@@ -254,7 +414,7 @@ input:
 			t, templateManualPartitioner,
 			integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, testID string, vars *integration.StreamTestConfigVars) {
 				vars.Var4 = "group" + testID
-				require.NoError(t, createKafkaTopic("localhost:"+kafkaPortStr, testID, 4))
+				require.NoError(t, createKafkaTopic(ctx, "localhost:"+kafkaPortStr, testID, 4))
 			}),
 			integration.StreamTestOptPort(kafkaPortStr),
 			integration.StreamTestOptVarTwo("1"),
@@ -417,7 +577,7 @@ input:
 			suite.Run(
 				t, template,
 				integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, testID string, vars *integration.StreamTestConfigVars) {
-					require.NoError(t, createKafkaTopic(address, testID, 4))
+					require.NoError(t, createKafkaTopic(ctx, address, testID, 4))
 				}),
 				integration.StreamTestOptVarOne(""),
 				integration.StreamTestOptVarTwo("1"),
@@ -429,7 +589,7 @@ input:
 				suite.Run(
 					t, template,
 					integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, testID string, vars *integration.StreamTestConfigVars) {
-						require.NoError(t, createKafkaTopic(address, testID, 4))
+						require.NoError(t, createKafkaTopic(ctx, address, testID, 4))
 					}),
 					integration.StreamTestOptVarOne(""),
 					integration.StreamTestOptVarTwo("1000"),
@@ -453,7 +613,7 @@ input:
 			suiteSingleCheckpointedStream.Run(
 				t, template,
 				integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, testID string, vars *integration.StreamTestConfigVars) {
-					require.NoError(t, createKafkaTopic("localhost:"+kafkaPortStr, testID, 1))
+					require.NoError(t, createKafkaTopic(ctx, "localhost:"+kafkaPortStr, testID, 1))
 				}),
 				integration.StreamTestOptVarOne(":0"),
 				integration.StreamTestOptVarTwo("1000"),
@@ -468,7 +628,7 @@ input:
 				integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, testID string, vars *integration.StreamTestConfigVars) {
 					topicName := "topic-" + testID
 					vars.Var1 = fmt.Sprintf(":0,%v:1,%v:2,%v:3", topicName, topicName, topicName)
-					require.NoError(t, createKafkaTopic(address, testID, 4))
+					require.NoError(t, createKafkaTopic(ctx, address, testID, 4))
 				}),
 				integration.StreamTestOptSleepAfterInput(time.Second*3),
 				integration.StreamTestOptVarTwo("1"),
@@ -482,7 +642,7 @@ input:
 					integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, testID string, vars *integration.StreamTestConfigVars) {
 						topicName := "topic-" + testID
 						vars.Var1 = fmt.Sprintf(":0,%v:1,%v:2,%v:3", topicName, topicName, topicName)
-						require.NoError(t, createKafkaTopic(address, testID, 4))
+						require.NoError(t, createKafkaTopic(ctx, address, testID, 4))
 					}),
 					integration.StreamTestOptSleepAfterInput(time.Second*3),
 					integration.StreamTestOptVarTwo("1000"),

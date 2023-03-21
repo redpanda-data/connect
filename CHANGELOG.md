@@ -5,15 +5,24 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Fixed
+
+- The `find_all` bloblang method no longer produces results that are of an `unknown` type.
+
+## 4.13.0 - 2023-03-15
+
 ### Added
 
+- Fix vulnerability [GO-2023-1571](https://pkg.go.dev/vuln/GO-2023-1571)
 - New `nats_kv` processor, input and output.
+- Field `partition` added to the `kafka_franz` output, allowing for manual partitioning.
 
 ### Fixed
 
 - The `broker` output with the pattern `fan_out_sequential` will no longer abandon in-flight requests that are error blocked until the full shutdown timeout has occurred.
 - The `broker` input no longer reports itself as unavailable when a child input has intentionally closed.
-- The `find_all` bloblang method no longer produces results that are of an `unknown` type.
+- Config unit tests that check for structured data should no longer fail in all cases.
+- The `http_server` input with a custom address now supports path variables.
 
 ## 4.12.1 - 2023-02-23
 

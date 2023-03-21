@@ -21,18 +21,12 @@ import (
 
 func franzKafkaInputConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
-		// Stable(). TODO
+		Beta().
 		Categories("Services").
 		Version("3.61.0").
 		Summary("An alternative Kafka input using the [Franz Kafka client library](https://github.com/twmb/franz-go).").
 		Description(`
 Consumes one or more topics by balancing the partitions across any other connected clients with the same consumer group.
-
-This input is new and experimental, and the existing ` + "`kafka`" + ` input is not going anywhere, but here's some reasons why it might be worth trying this one out:
-
-- You like shiny new stuff
-- You are experiencing issues with the existing ` + "`kafka`" + ` input
-- Someone told you to
 
 ### Metadata
 
