@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- The `-e/--env-file` cli flag can now be specified multiple times.
+
 ### Fixed
 
 - The `find_all` bloblang method no longer produces results that are of an `unknown` type.
