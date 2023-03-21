@@ -309,7 +309,7 @@ func (k *kafkaReader) asyncCheckpointer(topic string, partition int32) func(cont
 		}
 		resolveFn, err := cp.Track(ctx, offset, int64(msg.Len()))
 		if err != nil {
-			if err != component.ErrTimeout {
+			if ctx.Err() == nil && err != component.ErrTimeout {
 				k.log.Errorf("Failed to checkpoint offset: %v\n", err)
 			}
 			return false
@@ -324,7 +324,7 @@ func (k *kafkaReader) asyncCheckpointer(topic string, partition int32) func(cont
 				}
 				k.cMut.Lock()
 				if k.session != nil {
-					k.log.Debugf("Marking offset for topic '%v' partition '%v'.\n", topic, partition)
+					k.log.Tracef("Marking offset for topic '%v' partition '%v'.\n", topic, partition)
 					k.session.MarkOffset(topic, partition, *maxOffset, "")
 				} else {
 					k.log.Debugf("Unable to mark offset for topic '%v' partition '%v'.\n", topic, partition)

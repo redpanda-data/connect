@@ -1,0 +1,22 @@
+input:
+  stdin:
+    codec: lines
+pipeline:
+  processors:
+    - mapping: |
+        meta foo = { "a": "hello" }
+        meta bar = { "b": { "c": "hello" } }
+        meta baz = [ { "a": "hello" }, { "b": { "c": "hello" } } ]
+output:
+  stdout:
+    codec: lines
+
+tests:
+  - name: Should not fail
+    input_batch:
+      - content: hello
+    output_batches:
+      - - metadata_equals:
+            foo: { "a": "hello" }
+            bar: { "b": { "c": "hello" } }
+            baz: [ { "a": "hello" }, { "b": { "c": "hello" } } ]
