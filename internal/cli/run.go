@@ -126,10 +126,10 @@ func Run() {
 			Value:   false,
 			Usage:   "display version info, then exit",
 		},
-		&cli.StringFlag{
+		&cli.StringSliceFlag{
 			Name:    "env-file",
 			Aliases: []string{"e"},
-			Value:   "",
+			Value:   cli.NewStringSlice(),
 			Usage:   "import environment variables from a dotenv file",
 		},
 		&cli.StringFlag{
@@ -186,7 +186,7 @@ Either run Benthos as a stream processor or choose a command:
   benthos -r "./production/*.yaml" -c ./config.yaml`[1:],
 		Flags: flags,
 		Before: func(c *cli.Context) error {
-			if dotEnvFile := c.String("env-file"); dotEnvFile != "" {
+			for _, dotEnvFile := range c.StringSlice("env-file") {
 				dotEnvBytes, err := ifs.ReadFile(ifs.OS(), dotEnvFile)
 				if err != nil {
 					fmt.Printf("Failed to read dotenv file: %v\n", err)

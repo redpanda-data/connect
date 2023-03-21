@@ -28,6 +28,7 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/manager"
+	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
 	"github.com/benthosdev/benthos/v4/internal/transaction"
 
@@ -414,6 +415,68 @@ func TestHTTPtServerPathParameters(t *testing.T) {
 
 	assert.Equal(t, dummyPath, part.MetaGetStr("http_server_request_path"))
 	assert.Equal(t, "PUT", part.MetaGetStr("http_server_verb"))
+	assert.Equal(t, "foo1", part.MetaGetStr("foo"))
+	assert.Equal(t, "bar1", part.MetaGetStr("bar"))
+	assert.Equal(t, "will go on", part.MetaGetStr("mylove"))
+}
+
+func TestHTTPtServerPathParametersCustomServer(t *testing.T) {
+	tCtx, done := context.WithTimeout(context.Background(), time.Minute)
+	defer done()
+
+	freePort, err := getFreePort()
+	require.NoError(t, err)
+
+	conf := input.NewConfig()
+	conf.Type = "http_server"
+	conf.HTTPServer.Address = fmt.Sprintf("0.0.0.0:%v", freePort)
+	conf.HTTPServer.Path = "/test/{foo}/{bar}"
+
+	server, err := mock.NewManager().NewInput(conf)
+	require.NoError(t, err)
+
+	defer func() {
+		server.TriggerStopConsuming()
+		assert.NoError(t, server.WaitForClose(tCtx))
+	}()
+
+	dummyPath := "/test/foo1/bar1"
+	dummyQuery := url.Values{"mylove": []string{"will go on"}}
+	serverURL, err := url.Parse(fmt.Sprintf("http://localhost:%v", freePort))
+	require.NoError(t, err)
+
+	serverURL.Path = dummyPath
+	serverURL.RawQuery = dummyQuery.Encode()
+
+	dummyData := []byte("a bunch of jolly leprechauns await")
+	go func() {
+		req, cerr := http.NewRequest("POST", serverURL.String(), bytes.NewReader(dummyData))
+		require.NoError(t, cerr)
+		req.Header.Set("Content-Type", "text/plain")
+		resp, cerr := http.DefaultClient.Do(req)
+		require.NoError(t, cerr)
+		defer resp.Body.Close()
+	}()
+
+	readNextMsg := func() (message.Batch, error) {
+		var tran message.Transaction
+		select {
+		case tran = <-server.TransactionChan():
+			require.NoError(t, tran.Ack(tCtx, nil))
+		case <-time.After(time.Second):
+			return nil, errors.New("timed out")
+		}
+		return tran.Payload, nil
+	}
+
+	msg, err := readNextMsg()
+	require.NoError(t, err)
+	assert.Equal(t, dummyData, message.GetAllBytes(msg)[0])
+
+	part := msg.Get(0)
+
+	assert.Equal(t, dummyPath, part.MetaGetStr("http_server_request_path"))
+	assert.Equal(t, "POST", part.MetaGetStr("http_server_verb"))
 	assert.Equal(t, "foo1", part.MetaGetStr("foo"))
 	assert.Equal(t, "bar1", part.MetaGetStr("bar"))
 	assert.Equal(t, "will go on", part.MetaGetStr("mylove"))

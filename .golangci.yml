@@ -35,23 +35,22 @@ linters-settings:
 linters:
   disable-all: true
   enable:
-    # Default linters reported by `golangci-lint help linters` in v1.41.1
-    # Disabled for Go 1.18
-    - gosimple
-    - staticcheck
-    - unused
+    # Default linters reported by `golangci-lint help linters` in v1.52.0
     - errcheck
+    - gosimple
     - govet
     - ineffassign
+    - staticcheck
     - typecheck
+    - unused
     # Extra linters:
-    # Disabled for Go 1.18
-    # - wastedassign
+    - wastedassign
     - stylecheck
     - gofmt
     - goimports
-    - gocritic
-    - revive
+    # gocritic is very slow (golangci-lint v1.52.0)
+    # - gocritic
+    # - revive
     - unconvert
     - durationcheck
     - depguard
