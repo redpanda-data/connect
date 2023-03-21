@@ -53,7 +53,7 @@ func (a *awsKinesisRecordBatcher) AddRecord(r *kinesis.Record) bool {
 	if r.PartitionKey != nil {
 		p.MetaSetMut("kinesis_partition_key", *r.PartitionKey)
 	}
-	if r.ApproximateArrivalTimestamp !=nil {
+	if r.ApproximateArrivalTimestamp != nil {
 		iteratorAge := time.Now().UnixNano() - r.ApproximateArrivalTimestamp.UnixNano()
 		p.MetaSetMut("kinesis_iterator_age", iteratorAge)
 	}
