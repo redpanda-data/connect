@@ -525,7 +525,7 @@ var _ = registerSimpleMethod(
 				return nil, NewTypeError(v, ValueArray)
 			}
 
-			output := []int{}
+			output := []any{}
 			for i, elem := range array {
 				if found, err := findMethodICompare(ctx, val, elem); err != nil {
 					return nil, err
@@ -706,7 +706,7 @@ var _ = registerSimpleMethod(
 		),
 		NewExampleSpec(
 			"In order to load a schema from a file use the `file` function.",
-			`root = this.json_schema(file(var("BENTHOS_TEST_BLOBLANG_SCHEMA_FILE")))`,
+			`root = this.json_schema(file(env("BENTHOS_TEST_BLOBLANG_SCHEMA_FILE")))`,
 		),
 	).Beta().Param(ParamString("schema", "The schema to check values against.")),
 	func(args *ParsedParams) (simpleMethod, error) {

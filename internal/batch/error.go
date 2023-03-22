@@ -11,9 +11,9 @@ import (
 // Error is an error type that also allows storing granular errors for each
 // message of a batch.
 type Error struct {
-	err        error
-	source     message.Batch
-	partErrors map[int]error
+	err          error
+	erroredBatch message.Batch
+	partErrors   map[int]error
 }
 
 // NewError creates a new batch-wide error, where it's possible to add granular
@@ -23,8 +23,8 @@ func NewError(msg message.Batch, err error) *Error {
 		err = berr.Unwrap()
 	}
 	return &Error{
-		err:    err,
-		source: msg,
+		err:          err,
+		erroredBatch: msg,
 	}
 }
 
@@ -35,7 +35,7 @@ func NewError(msg message.Batch, err error) *Error {
 // is called at least once then all message indexes that aren't explicitly
 // failed are assumed to have been processed successfully.
 func (e *Error) Failed(i int, err error) *Error {
-	if len(e.source) <= i {
+	if len(e.erroredBatch) <= i {
 		return e
 	}
 	if e.partErrors == nil {
@@ -51,20 +51,33 @@ func (e *Error) IndexedErrors() int {
 	return len(e.partErrors)
 }
 
+// XErroredBatch returns the underlying batch associated with the error.
+func (e *Error) XErroredBatch() message.Batch {
+	return e.erroredBatch
+}
+
 // WalkParts applies a closure to each message that was part of the request that
 // caused this error. The closure is provided the message part index, a pointer
 // to the part, and its individual error, which may be nil if the message itself
 // was processed successfully. The closure returns a bool which indicates
 // whether the iteration should be continued.
-func (e *Error) WalkParts(fn func(int, *message.Part, error) bool) {
-	_ = e.source.Iter(func(i int, p *message.Part) error {
+//
+// Important! The order to parts walked is not guaranteed to match that of the
+// source batch.
+func (e *Error) WalkParts(sourceSortGroup *message.SortGroup, sourceBatch message.Batch, fn func(int, *message.Part, error) bool) {
+	_ = e.erroredBatch.Iter(func(i int, p *message.Part) error {
+		index := sourceSortGroup.GetIndex(p)
+		if index < 0 || index >= len(sourceBatch) {
+			return nil
+		}
+
 		var err error
 		if e.partErrors == nil {
 			err = e.err
 		} else {
 			err = e.partErrors[i]
 		}
-		if !fn(i, p, err) {
+		if !fn(index, sourceBatch[index], err) {
 			return errors.New("stop")
 		}
 		return nil

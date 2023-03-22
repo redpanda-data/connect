@@ -26,20 +26,24 @@ type testFn func(t *testing.T, driver, dsn, table string)
 
 func testProcessors(name string, fn func(t *testing.T, insertProc, selectProc service.BatchProcessor)) testFn {
 	return func(t *testing.T, driver, dsn, table string) {
+		colList := `[ "foo", "bar", "baz" ]`
+		if driver == "oracle" {
+			colList = `[ "\"foo\"", "\"bar\"", "\"baz\"" ]`
+		}
 		t.Run(name, func(t *testing.T) {
 			insertConf := fmt.Sprintf(`
 driver: %s
 dsn: %s
 table: %s
-columns: [ "\"foo\"", "\"bar\"", "\"baz\"" ]
+columns: %s
 args_mapping: 'root = [ this.foo, this.bar.floor(), this.baz ]'
-`, driver, dsn, table)
+`, driver, dsn, table, colList)
 
 			queryConf := fmt.Sprintf(`
 driver: %s
 dsn: %s
 table: %s
-columns: [ "\"foo\"", "\"bar\"", "\"baz\"" ]
+columns: [ "*" ]
 where: '"foo" = ?'
 args_mapping: 'root = [ this.id ]'
 `, driver, dsn, table)
@@ -340,11 +344,16 @@ var testDeprecatedProcessorsBasic = testRawDeprecatedProcessors("deprecated", fu
 })
 
 func testBatchInputOutputBatch(t *testing.T, driver, dsn, table string) {
+	colList := `[ "foo", "bar", "baz" ]`
+	if driver == "oracle" {
+		colList = `[ "\"foo\"", "\"bar\"", "\"baz\"" ]`
+	}
 	t.Run("batch_input_output", func(t *testing.T) {
 		confReplacer := strings.NewReplacer(
 			"$driver", driver,
 			"$dsn", dsn,
 			"$table", table,
+			"$columnlist", colList,
 		)
 
 		outputConf := confReplacer.Replace(`
@@ -352,7 +361,7 @@ sql_insert:
   driver: $driver
   dsn: $dsn
   table: $table
-  columns: [ "\"foo\"", "\"bar\"", "\"baz\"" ]
+  columns: $columnlist
   args_mapping: 'root = [ this.foo, this.bar.floor(), this.baz ]'
 `)
 
@@ -536,19 +545,8 @@ func testSuite(t *testing.T, driver, dsn string, createTableFn func(string) erro
 	}
 }
 
-func TestIntegration(t *testing.T) {
+func TestIntegrationClickhouse(t *testing.T) {
 	integration.CheckSkip(t)
-
-	t.Run("clickhouse", clickhouseIntegration)
-	t.Run("clickhouse_old", clickhouseOldIntegration)
-	t.Run("postgres", postgresIntegration)
-	t.Run("mysql", mySQLIntegration)
-	t.Run("mssql", msSQLIntegration)
-	t.Run("sqlite", sqliteIntegration)
-	t.Run("oracle", oracleIntegration)
-}
-
-func clickhouseIntegration(t *testing.T) {
 	t.Parallel()
 
 	pool, err := dockertest.NewPool("")
@@ -602,7 +600,8 @@ func clickhouseIntegration(t *testing.T) {
 	testSuite(t, "clickhouse", dsn, createTable)
 }
 
-func clickhouseOldIntegration(t *testing.T) {
+func TestIntegrationOldClickhouse(t *testing.T) {
+	integration.CheckSkip(t)
 	t.Parallel()
 
 	pool, err := dockertest.NewPool("")
@@ -656,7 +655,8 @@ func clickhouseOldIntegration(t *testing.T) {
 	testSuite(t, "clickhouse", dsn, createTable)
 }
 
-func postgresIntegration(t *testing.T) {
+func TestIntegrationPostgres(t *testing.T) {
+	integration.CheckSkip(t)
 	t.Parallel()
 
 	pool, err := dockertest.NewPool("")
@@ -716,7 +716,8 @@ func postgresIntegration(t *testing.T) {
 	testSuite(t, "postgres", dsn, createTable)
 }
 
-func mySQLIntegration(t *testing.T) {
+func TestIntegrationMySQL(t *testing.T) {
+	integration.CheckSkip(t)
 	t.Parallel()
 
 	pool, err := dockertest.NewPool("")
@@ -779,7 +780,8 @@ func mySQLIntegration(t *testing.T) {
 	testSuite(t, "mysql", dsn, createTable)
 }
 
-func msSQLIntegration(t *testing.T) {
+func TestIntegrationMSSQL(t *testing.T) {
+	integration.CheckSkip(t)
 	t.Parallel()
 
 	pool, err := dockertest.NewPool("")
@@ -839,7 +841,8 @@ func msSQLIntegration(t *testing.T) {
 	testSuite(t, "mssql", dsn, createTable)
 }
 
-func sqliteIntegration(t *testing.T) {
+func TestIntegrationSQLite(t *testing.T) {
+	integration.CheckSkip(t)
 	t.Parallel()
 
 	var db *sql.DB
@@ -881,7 +884,8 @@ func sqliteIntegration(t *testing.T) {
 	testSuite(t, "sqlite", dsn, createTable)
 }
 
-func oracleIntegration(t *testing.T) {
+func TestIntegrationOracle(t *testing.T) {
+	integration.CheckSkip(t)
 	t.Parallel()
 
 	pool, err := dockertest.NewPool("")

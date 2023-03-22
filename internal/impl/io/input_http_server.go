@@ -2,7 +2,6 @@ package io
 
 import (
 	"bytes"
-	"compress/gzip"
 	"context"
 	"crypto/tls"
 	"errors"
@@ -17,6 +16,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/klauspost/compress/gzip"
 
 	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
@@ -137,7 +138,7 @@ type httpServerInput struct {
 	log  log.Modular
 	mgr  bundle.NewManagement
 
-	mux     *http.ServeMux
+	mux     *mux.Router
 	server  *http.Server
 	timeout time.Duration
 
@@ -158,14 +159,14 @@ type httpServerInput struct {
 }
 
 func newHTTPServerInput(conf input.Config, mgr bundle.NewManagement) (input.Streamed, error) {
-	var mux *http.ServeMux
+	var gMux *mux.Router
 	var server *http.Server
 
 	var err error
 	if len(conf.HTTPServer.Address) > 0 {
-		mux = http.NewServeMux()
+		gMux = mux.NewRouter()
 		server = &http.Server{Addr: conf.HTTPServer.Address}
-		if server.Handler, err = conf.HTTPServer.CORS.WrapHandler(mux); err != nil {
+		if server.Handler, err = conf.HTTPServer.CORS.WrapHandler(gMux); err != nil {
 			return nil, fmt.Errorf("bad CORS configuration: %w", err)
 		}
 	}
@@ -191,7 +192,7 @@ func newHTTPServerInput(conf input.Config, mgr bundle.NewManagement) (input.Stre
 		conf:            conf.HTTPServer,
 		log:             mgr.Logger(),
 		mgr:             mgr,
-		mux:             mux,
+		mux:             gMux,
 		server:          server,
 		timeout:         timeout,
 		responseHeaders: map[string]*field.Expression{},
@@ -219,12 +220,12 @@ func newHTTPServerInput(conf input.Config, mgr bundle.NewManagement) (input.Stre
 
 	postHdlr := gzipHandler(h.postHandler)
 	wsHdlr := gzipHandler(h.wsHandler)
-	if mux != nil {
+	if gMux != nil {
 		if len(h.conf.Path) > 0 {
-			mux.HandleFunc(h.conf.Path, postHdlr)
+			gMux.HandleFunc(h.conf.Path, postHdlr)
 		}
 		if len(h.conf.WSPath) > 0 {
-			mux.HandleFunc(h.conf.WSPath, wsHdlr)
+			gMux.HandleFunc(h.conf.WSPath, wsHdlr)
 		}
 	} else {
 		if len(h.conf.Path) > 0 {

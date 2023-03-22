@@ -28,7 +28,7 @@ func TestIntegrationWriter(t *testing.T) {
 	if err != nil {
 		t.Skipf("Could not connect to docker: %s", err)
 	}
-	pool.MaxWait = time.Second * 60
+	pool.MaxWait = time.Minute * 3
 
 	resource, err := pool.Run("elasticsearch", "7.17.0", []string{
 		"discovery.type=single-node",

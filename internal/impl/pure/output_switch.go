@@ -333,24 +333,23 @@ func (o *switchOutput) dispatchToTargets(
 			continue
 		}
 
-		msgCopy, i := make(message.Batch, len(parts)), target
-		copy(msgCopy, parts)
+		i := target
+		parts := parts
 
 		select {
-		case o.outputTSChans[i] <- message.NewTransactionFunc(msgCopy, func(ctx context.Context, err error) error {
+		case o.outputTSChans[i] <- message.NewTransactionFunc(parts, func(ctx context.Context, err error) error {
 			if err != nil {
 				if bErr, ok := err.(*batch.Error); ok {
-					bErr.WalkParts(func(i int, p *message.Part, e error) bool {
+					bErr.WalkParts(group, sourceMessage, func(i int, p *message.Part, e error) bool {
 						if e != nil {
 							setErrForPart(p, e)
 						}
 						return true
 					})
 				} else {
-					_ = msgCopy.Iter(func(i int, p *message.Part) error {
+					for _, p := range parts {
 						setErrForPart(p, err)
-						return nil
-					})
+					}
 				}
 			}
 			if atomic.AddInt64(&pendingResponses, -1) <= 0 {

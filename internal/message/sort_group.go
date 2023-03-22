@@ -53,14 +53,21 @@ func NewSortGroup(m Batch) (*SortGroup, Batch) {
 // GetIndex attempts to determine the original index of a message part relative
 // to a sort group.
 func (g *SortGroup) GetIndex(p *Part) int {
-	ctx := GetContext(p)
-
-	v, ok := ctx.Value(tagKey).(tagChecker)
+	v, ok := p.GetContext().Value(tagKey).(tagChecker)
 	if !ok {
 		return -1
 	}
-
 	return v.IndexForGroup(g)
+}
+
+// TopLevelSortGroup returns the newest sort group to be associated with the
+// given message part, or nil if there is none.
+func TopLevelSortGroup(p *Part) *SortGroup {
+	v, ok := p.GetContext().Value(tagKey).(tagChecker)
+	if !ok {
+		return nil
+	}
+	return v.TopLevelGroup()
 }
 
 //------------------------------------------------------------------------------
@@ -79,6 +86,7 @@ type tagKeyType int
 const tagKey tagKeyType = iota
 
 type tagChecker interface {
+	TopLevelGroup() groupType
 	IndexForGroup(g groupType) int
 	HasTag(t tagType) bool
 }
@@ -86,6 +94,10 @@ type tagChecker interface {
 type tagValue struct {
 	tag      tagType
 	previous tagChecker
+}
+
+func (t tagValue) TopLevelGroup() groupType {
+	return t.tag.Group
 }
 
 func (t tagValue) IndexForGroup(g groupType) int {

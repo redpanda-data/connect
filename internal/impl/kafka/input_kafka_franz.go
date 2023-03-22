@@ -21,18 +21,12 @@ import (
 
 func franzKafkaInputConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
-		// Stable(). TODO
+		Beta().
 		Categories("Services").
 		Version("3.61.0").
 		Summary("An alternative Kafka input using the [Franz Kafka client library](https://github.com/twmb/franz-go).").
 		Description(`
 Consumes one or more topics by balancing the partitions across any other connected clients with the same consumer group.
-
-This input is new and experimental, and the existing ` + "`kafka`" + ` input is not going anywhere, but here's some reasons why it might be worth trying this one out:
-
-- You like shiny new stuff
-- You are experiencing issues with the existing ` + "`kafka`" + ` input
-- Someone told you to
 
 ### Metadata
 
@@ -186,12 +180,12 @@ func newFranzKafkaReaderFromConfig(conf *service.ParsedConfig, log *service.Logg
 
 type checkpointTracker struct {
 	mut    sync.Mutex
-	topics map[string]map[int32]*checkpoint.Type
+	topics map[string]map[int32]*checkpoint.Uncapped[*kgo.Record]
 }
 
 func newCheckpointTracker() *checkpointTracker {
 	return &checkpointTracker{
-		topics: map[string]map[int32]*checkpoint.Type{},
+		topics: map[string]map[int32]*checkpoint.Uncapped[*kgo.Record]{},
 	}
 }
 
@@ -201,13 +195,13 @@ func (c *checkpointTracker) addRecord(r *kgo.Record) (removeFn func() *kgo.Recor
 
 	topicCheckpoints := c.topics[r.Topic]
 	if topicCheckpoints == nil {
-		topicCheckpoints = map[int32]*checkpoint.Type{}
+		topicCheckpoints = map[int32]*checkpoint.Uncapped[*kgo.Record]{}
 		c.topics[r.Topic] = topicCheckpoints
 	}
 
 	partCheckpoint := topicCheckpoints[r.Partition]
 	if partCheckpoint == nil {
-		partCheckpoint = checkpoint.New()
+		partCheckpoint = checkpoint.NewUncapped[*kgo.Record]()
 		topicCheckpoints[r.Partition] = partCheckpoint
 	}
 
@@ -216,8 +210,11 @@ func (c *checkpointTracker) addRecord(r *kgo.Record) (removeFn func() *kgo.Recor
 		c.mut.Lock()
 		defer c.mut.Unlock()
 
-		highestRec, _ := releaseFn().(*kgo.Record)
-		return highestRec
+		r := releaseFn()
+		if r == nil {
+			return nil
+		}
+		return *r
 	}, int(partCheckpoint.Pending())
 }
 
@@ -234,8 +231,11 @@ func (c *checkpointTracker) getHighest(topic string, partition int32) *kgo.Recor
 		return nil
 	}
 
-	highestRec, _ := partCheckpoint.Highest().(*kgo.Record)
-	return highestRec
+	highestRec := partCheckpoint.Highest()
+	if highestRec == nil {
+		return nil
+	}
+	return *highestRec
 }
 
 func (c *checkpointTracker) getPending(topic string, partition int32) int {
@@ -468,7 +468,7 @@ func recordToMessage(record *kgo.Record, multiHeader bool) *service.Message {
 	msg.MetaSet("kafka_timestamp_unix", strconv.FormatInt(record.Timestamp.Unix(), 10))
 	if multiHeader {
 		// in multi header mode we gather headers so we can encode them as lists
-		var headers = map[string][]any{}
+		headers := map[string][]any{}
 
 		for _, hdr := range record.Headers {
 			headers[hdr.Key] = append(headers[hdr.Key], string(hdr.Value))

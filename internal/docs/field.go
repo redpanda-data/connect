@@ -434,8 +434,9 @@ func (f FieldSpec) getLintFunc() LintFunc {
 	}
 	if f.Interpolated {
 		if fn != nil {
+			innerFn := fn
 			fn = func(ctx LintContext, line, col int, value any) []Lint {
-				lints := f.customLintFn(ctx, line, col, value)
+				lints := innerFn(ctx, line, col, value)
 				moreLints := LintBloblangField(ctx, line, col, value)
 				return append(lints, moreLints...)
 			}
@@ -445,8 +446,9 @@ func (f FieldSpec) getLintFunc() LintFunc {
 	}
 	if f.Bloblang {
 		if fn != nil {
+			innerFn := fn
 			fn = func(ctx LintContext, line, col int, value any) []Lint {
-				lints := f.customLintFn(ctx, line, col, value)
+				lints := innerFn(ctx, line, col, value)
 				moreLints := LintBloblangMapping(ctx, line, col, value)
 				return append(lints, moreLints...)
 			}
