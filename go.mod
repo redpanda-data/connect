@@ -27,7 +27,6 @@ require (
 	github.com/benhoyt/goawk v1.21.0
 	github.com/bradfitz/gomemcache v0.0.0-20230124162541-5f7a7d875746
 	github.com/bwmarrin/snowflake v0.3.0
-	github.com/bxcodec/faker/v3 v3.8.1
 	github.com/cenkalti/backoff/v4 v4.2.0
 	github.com/clbanning/mxj/v2 v2.5.7
 	github.com/colinmarc/hdfs v1.1.3
@@ -39,6 +38,7 @@ require (
 	github.com/fatih/color v1.14.1
 	github.com/fsnotify/fsnotify v1.6.0
 	github.com/generikvault/gvalstrings v0.0.0-20180926130504-471f38f0112a
+	github.com/go-faker/faker/v4 v4.1.0
 	github.com/go-sql-driver/mysql v1.6.0
 	github.com/gocql/gocql v1.3.1
 	github.com/gofrs/uuid v4.4.0+incompatible
