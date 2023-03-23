@@ -222,10 +222,10 @@ func newHTTPServerInput(conf input.Config, mgr bundle.NewManagement) (input.Stre
 	wsHdlr := gzipHandler(h.wsHandler)
 	if gMux != nil {
 		if len(h.conf.Path) > 0 {
-			gMux.HandleFunc(h.conf.Path, postHdlr)
+			gMux.PathPrefix(h.conf.Path).Handler(postHdlr)
 		}
 		if len(h.conf.WSPath) > 0 {
-			gMux.HandleFunc(h.conf.WSPath, wsHdlr)
+			gMux.PathPrefix(h.conf.WSPath).Handler(wsHdlr)
 		}
 	} else {
 		if len(h.conf.Path) > 0 {
