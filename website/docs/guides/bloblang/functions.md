@@ -215,6 +215,39 @@ root.doc.contents = (this.body.content | this.thing.body)
 # Out: Error("failed assignment (line 1): unknown type")
 ```
 
+### `ulid`
+
+:::caution EXPERIMENTAL
+This function is experimental and therefore breaking changes could be made to it outside of major version releases.
+:::
+Generate a random ULID.
+
+#### Parameters
+
+**`encoding`** &lt;string, default `"crockford"`&gt; The format to encode a ULID into. Valid options are: crockford, hex  
+**`random_source`** &lt;string, default `"secure_random"`&gt; The source of randomness to use for generating ULIDs. "secure_random" is recommended for most use cases. "fast_random" can be used if security is not a concern.  
+
+#### Examples
+
+
+Using the defaults of Crockford Base32 encoding and secure random source
+
+```coffee
+root.id = ulid()
+```
+
+ULIDs can be hex-encoded too.
+
+```coffee
+root.id = ulid("hex")
+```
+
+They can be generated using a fast, but unsafe, random source for use cases that are not security-sensitive.
+
+```coffee
+root.id = ulid("crockford", "fast_random")
+```
+
 ### `uuid_v4`
 
 Generates a new RFC-4122 UUID each time it is invoked and prints a string representation.

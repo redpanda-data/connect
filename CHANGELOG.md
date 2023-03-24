@@ -8,6 +8,7 @@ All notable changes to this project will be documented in this file.
 ### Added
 
 - The `-e/--env-file` cli flag can now be specified multiple times.
+- bloblang: added `ulid(encoding, random_source)` function to generate Universally Unique Lexicographically Sortable Identifiers (ULIDs).
 
 ### Fixed
 
