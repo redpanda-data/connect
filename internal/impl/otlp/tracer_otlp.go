@@ -145,7 +145,6 @@ func addGrpcCollectors(ctx context.Context, collectors []collector, opts []trace
 		exp, err := otlptrace.New(ctx, otlptracegrpc.NewClient(
 			otlptracegrpc.WithInsecure(),
 			otlptracegrpc.WithEndpoint(c.url),
-			otlptracegrpc.WithDialOption(),
 		))
 		if err != nil {
 			return nil, err
