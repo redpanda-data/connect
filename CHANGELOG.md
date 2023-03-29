@@ -14,6 +14,7 @@ All notable changes to this project will be documented in this file.
 
 - The `find_all` bloblang method no longer produces results that are of an `unknown` type.
 - Endpoints specified by HTTP server components using both the general `http` server block or their own custom server addresses should now be treated as path prefixes. This corrects a behavioural change that was introduced when both respective server options were updated to support path parameters.
+- Prevented a panic caused when using the `encrypt_aes` and `decrypt_aes` Bloblang methods with a mismatched key/iv lengths.
 
 ## 4.13.0 - 2023-03-15
 

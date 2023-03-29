@@ -287,17 +287,18 @@ root.encrypted = this.value.encrypt_aes("ctr", $key, $vector).encode("hex")`,
 		if err != nil {
 			return nil, err
 		}
-		ivStr, err := args.FieldString("iv")
+		block, err := aes.NewCipher([]byte(keyStr))
 		if err != nil {
 			return nil, err
 		}
 
-		key := []byte(keyStr)
-		iv := []byte(ivStr)
-
-		block, err := aes.NewCipher(key)
+		ivStr, err := args.FieldString("iv")
 		if err != nil {
 			return nil, err
+		}
+		iv := []byte(ivStr)
+		if len(iv) != block.BlockSize() {
+			return nil, errors.New("the key must match the initialisation vector size")
 		}
 
 		var schemeFn func([]byte) (string, error)
@@ -370,21 +371,23 @@ root.decrypted = this.value.decode("hex").decrypt_aes("ctr", $key, $vector).stri
 		if err != nil {
 			return nil, err
 		}
+
 		keyStr, err := args.FieldString("key")
 		if err != nil {
 			return nil, err
 		}
-		ivStr, err := args.FieldString("iv")
+		block, err := aes.NewCipher([]byte(keyStr))
 		if err != nil {
 			return nil, err
 		}
 
-		key := []byte(keyStr)
-		iv := []byte(ivStr)
-
-		block, err := aes.NewCipher(key)
+		ivStr, err := args.FieldString("iv")
 		if err != nil {
 			return nil, err
+		}
+		iv := []byte(ivStr)
+		if len(iv) != block.BlockSize() {
+			return nil, errors.New("the key must match the initialisation vector size")
 		}
 
 		var schemeFn func([]byte) ([]byte, error)
