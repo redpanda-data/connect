@@ -68,6 +68,21 @@ output:
     database: ""
     username: ""
     password: ""
+    password_set: false
+    auth_source: ""
+    auth_mechanism: ""
+    auth_mechanism_properties:
+      service_name: ""
+      canonicalize_host_name: false
+      service_realm: ""
+      service_host: ""
+      aws_session_token: ""
+    app_name: ""
+    connect_timeout: 10s
+    socket_timeout: 30s
+    server_selection_timeout: 30s
+    min_pool_size: 0
+    max_pool_size: 100
     operation: update-one
     collection: ""
     write_concern:
@@ -145,6 +160,135 @@ The password to connect to the database.
 
 Type: `string`  
 Default: `""`  
+
+### `password_set`
+
+For GSSAPI, this must be true if a password is specified, even if the password is the empty string, and false if no password is specified, indicating that the password should be taken from the context of the running process. For other mechanisms, this field is ignored.
+
+
+Type: `bool`  
+Default: `false`  
+Requires version 4.11.0 or newer  
+
+### `auth_source`
+
+The name of the database to use for authentication. This can also be set through the "authSource" URI option (e.g. "authSource=otherDb"). For more information, see [MongoDB docs](https://www.mongodb.com/docs/manual/reference/connection-string/#mongodb-urioption-urioption.authSource).
+
+
+Type: `string`  
+Default: `""`  
+Requires version 4.11.0 or newer  
+
+### `auth_mechanism`
+
+The mechanism to use for authentication. This can also be set through the "authMechanism" URI option. (e.g. "authMechanism=PLAIN"). For more information, see [MongoDB docs](https://docs.mongodb.com/manual/core/authentication-mechanisms/).
+
+
+Type: `string`  
+Default: `""`  
+Requires version 4.11.0 or newer  
+
+### `auth_mechanism_properties`
+
+Used to specify additional configuration options for certain mechanisms. For more information, see [MongoDB docs](https://docs.mongodb.com/manual/core/authentication-mechanisms/).
+
+
+Type: `object`  
+Requires version 4.11.0 or newer  
+
+### `auth_mechanism_properties.service_name`
+
+The service name to use for GSSAPI authentication.
+
+
+Type: `string`  
+Default: `""`  
+
+### `auth_mechanism_properties.canonicalize_host_name`
+
+Whether to canonicalize the host name for GSSAPI authentication.
+
+
+Type: `bool`  
+Default: `false`  
+
+### `auth_mechanism_properties.service_realm`
+
+The service realm to use for GSSAPI authentication.
+
+
+Type: `string`  
+Default: `""`  
+
+### `auth_mechanism_properties.service_host`
+
+The service host to use for GSSAPI authentication. The service_host and canonicalize_host_name properties must not be used at the same time on Linux and Darwin systems.
+
+
+Type: `string`  
+Default: `""`  
+
+### `auth_mechanism_properties.aws_session_token`
+
+The AWS token for MONGODB-AWS authentication. This is optional and used for authentication with temporary credentials.
+
+
+Type: `string`  
+Default: `""`  
+
+### `app_name`
+
+The [appName](https://www.mongodb.com/docs/manual/reference/connection-string/#mongodb-urioption-urioption.appName) to use in the client connection.
+
+
+Type: `string`  
+Default: `""`  
+Requires version 4.11.0 or newer  
+
+### `connect_timeout`
+
+Connect timeout while connecting to the database.
+
+
+Type: `string`  
+Default: `"10s"`  
+Requires version 4.11.0 or newer  
+
+### `socket_timeout`
+
+Socket timeout while connecting to the database.
+
+
+Type: `string`  
+Default: `"30s"`  
+Requires version 4.11.0 or newer  
+
+### `server_selection_timeout`
+
+Server selection timeout while connecting to the database.
+
+
+Type: `string`  
+Default: `"30s"`  
+Requires version 4.11.0 or newer  
+
+### `min_pool_size`
+
+The minimum number of connections allowed in the driver's connection pool to each server.
+
+
+Type: `int`  
+Default: `0`  
+Requires version 4.11.0 or newer  
+
+### `max_pool_size`
+
+The maximum number of connections allowed in the driver's connection pool to each server.
+
+
+Type: `int`  
+Default: `100`  
+Requires version 4.11.0 or newer  
 
 ### `operation`
 

@@ -8,7 +8,7 @@ import (
 
 func processorOperationDocs(defaultOperation client.Operation) docs.FieldSpec {
 	fs := outputOperationDocs(defaultOperation)
-	return fs.HasOptions(append(fs.Options, string(client.OperationFindOne))...)
+	return fs.HasOptions(append(fs.Options, string(client.OperationFindOne), string(client.OperationFindAndUpdate))...)
 }
 
 func outputOperationDocs(defaultOperation client.Operation) docs.FieldSpec {
