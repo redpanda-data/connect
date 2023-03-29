@@ -8,6 +8,7 @@ All notable changes to this project will be documented in this file.
 ### Added
 
 - The `-e/--env-file` cli flag can now be specified multiple times.
+- New `studio pull` cli subcommand for running Studio config deployments.
 
 ### Fixed
 

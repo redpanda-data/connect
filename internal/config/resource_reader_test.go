@@ -13,7 +13,6 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/manager"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	"github.com/benthosdev/benthos/v4/internal/stream"
 )
 
 func TestReaderResourceFileReading(t *testing.T) {
@@ -49,12 +48,11 @@ processor_resources:
 	rdr.changeDelayPeriod = 1 * time.Millisecond
 	rdr.changeFlushPeriod = 1 * time.Millisecond
 
-	conf := New()
-	lints, err := rdr.Read(&conf)
+	conf, lints, err := rdr.Read()
 	require.NoError(t, err)
 	require.Empty(t, lints)
 
-	require.NoError(t, rdr.SubscribeConfigChanges(func(conf stream.Config) error {
+	require.NoError(t, rdr.SubscribeConfigChanges(func(conf *Type) error {
 		return nil
 	}))
 
@@ -151,12 +149,11 @@ processor_resources:
 	rdr.changeDelayPeriod = 1 * time.Millisecond
 	rdr.changeFlushPeriod = 1 * time.Millisecond
 
-	conf := New()
-	lints, err := rdr.Read(&conf)
+	conf, lints, err := rdr.Read()
 	require.NoError(t, err)
 	require.Empty(t, lints)
 
-	require.NoError(t, rdr.SubscribeConfigChanges(func(conf stream.Config) error {
+	require.NoError(t, rdr.SubscribeConfigChanges(func(conf *Type) error {
 		return nil
 	}))
 
