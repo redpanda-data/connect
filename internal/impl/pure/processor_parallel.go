@@ -9,7 +9,6 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	"github.com/benthosdev/benthos/v4/internal/tracing"
 )
 
 func init() {
@@ -18,7 +17,7 @@ func init() {
 		if err != nil {
 			return nil, err
 		}
-		return processor.NewV2BatchedToV1Processor("parallel", p, mgr), nil
+		return processor.NewAutoObservedBatchedProcessor("parallel", p, mgr), nil
 	}, docs.ComponentSpec{
 		Name: "parallel",
 		Categories: []string{
@@ -45,7 +44,7 @@ type parallelProc struct {
 	cap      int
 }
 
-func newParallel(conf processor.ParallelConfig, mgr bundle.NewManagement) (processor.V2Batched, error) {
+func newParallel(conf processor.ParallelConfig, mgr bundle.NewManagement) (processor.AutoObservedBatched, error) {
 	var children []processor.V1
 	for i, pconf := range conf.Processors {
 		pMgr := mgr.IntoPath("parallel", strconv.Itoa(i))
@@ -61,7 +60,7 @@ func newParallel(conf processor.ParallelConfig, mgr bundle.NewManagement) (proce
 	}, nil
 }
 
-func (p *parallelProc) ProcessBatch(ctx context.Context, spans []*tracing.Span, msg message.Batch) ([]message.Batch, error) {
+func (p *parallelProc) ProcessBatch(ctx *processor.BatchProcContext, msg message.Batch) ([]message.Batch, error) {
 	resultMsgs := make([]message.Batch, msg.Len())
 	_ = msg.Iter(func(i int, p *message.Part) error {
 		resultMsgs[i] = message.Batch{p}
@@ -81,7 +80,7 @@ func (p *parallelProc) ProcessBatch(ctx context.Context, spans []*tracing.Span, 
 		go func() {
 			// TODO: V4 Handle processor errors when we migrate to service APIs
 			for index := range reqChan {
-				resMsgs, _ := processor.ExecuteAll(ctx, p.children, resultMsgs[index])
+				resMsgs, _ := processor.ExecuteAll(ctx.Context(), p.children, resultMsgs[index])
 				resultParts := []*message.Part{}
 				for _, m := range resMsgs {
 					_ = m.Iter(func(i int, p *message.Part) error {

@@ -151,7 +151,6 @@ input:
 						vars.Var1 += fmt.Sprintf(",%v:%v", streamName, shard)
 					}
 				}
-
 			}),
 			integration.StreamTestOptPort(resource.GetPort("4566/tcp")),
 			integration.StreamTestOptAllowDupes(),

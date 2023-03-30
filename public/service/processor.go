@@ -6,7 +6,6 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	"github.com/benthosdev/benthos/v4/internal/tracing"
 )
 
 // Processor is a Benthos processor implementation that works against single
@@ -69,7 +68,7 @@ type airGapProcessor struct {
 }
 
 func newAirGapProcessor(typeStr string, p Processor, mgr bundle.NewManagement) processor.V1 {
-	return processor.NewV2ToV1Processor(typeStr, &airGapProcessor{p}, mgr)
+	return processor.NewAutoObservedProcessor(typeStr, &airGapProcessor{p}, mgr)
 }
 
 func (a *airGapProcessor) Process(ctx context.Context, msg *message.Part) ([]*message.Part, error) {
@@ -96,17 +95,21 @@ type airGapBatchProcessor struct {
 }
 
 func newAirGapBatchProcessor(typeStr string, p BatchProcessor, mgr bundle.NewManagement) processor.V1 {
-	return processor.NewV2BatchedToV1Processor(typeStr, &airGapBatchProcessor{p}, mgr)
+	return processor.NewAutoObservedBatchedProcessor(typeStr, &airGapBatchProcessor{p}, mgr)
 }
 
-func (a *airGapBatchProcessor) ProcessBatch(ctx context.Context, spans []*tracing.Span, batch message.Batch) ([]message.Batch, error) {
+func (a *airGapBatchProcessor) ProcessBatch(ctx *processor.BatchProcContext, batch message.Batch) ([]message.Batch, error) {
 	inputBatch := make([]*Message, batch.Len())
 	_ = batch.Iter(func(i int, p *message.Part) error {
-		inputBatch[i] = newMessageFromPart(p)
+		newP := newMessageFromPart(p)
+		newP.onErr = func(err error) {
+			ctx.OnError(err, i, p)
+		}
+		inputBatch[i] = newP
 		return nil
 	})
 
-	outputBatches, err := a.p.ProcessBatch(ctx, inputBatch)
+	outputBatches, err := a.p.ProcessBatch(ctx.Context(), inputBatch)
 	if err != nil {
 		return nil, err
 	}

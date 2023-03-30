@@ -81,7 +81,6 @@ func newGCPPubSubInput(conf input.Config, mgr bundle.NewManagement, log log.Modu
 
 func createSubscription(conf input.GCPPubSubConfig, client *pubsub.Client, log log.Modular) {
 	subsExists, err := client.Subscription(conf.SubscriptionID).Exists(context.Background())
-
 	if err != nil {
 		log.Errorf("Error checking if subscription exists", err)
 		return

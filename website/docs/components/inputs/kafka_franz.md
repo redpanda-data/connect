@@ -1,7 +1,7 @@
 ---
 title: kafka_franz
 type: input
-status: experimental
+status: beta
 categories: ["Services"]
 ---
 
@@ -14,8 +14,8 @@ categories: ["Services"]
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-:::caution EXPERIMENTAL
-This component is experimental and therefore subject to change or removal outside of major version releases.
+:::caution BETA
+This component is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with the component is found.
 :::
 An alternative Kafka input using the [Franz Kafka client library](https://github.com/twmb/franz-go).
 
@@ -70,12 +70,6 @@ input:
 </Tabs>
 
 Consumes one or more topics by balancing the partitions across any other connected clients with the same consumer group.
-
-This input is new and experimental, and the existing `kafka` input is not going anywhere, but here's some reasons why it might be worth trying this one out:
-
-- You like shiny new stuff
-- You are experiencing issues with the existing `kafka` input
-- Someone told you to
 
 ### Metadata
 

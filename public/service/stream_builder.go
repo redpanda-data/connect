@@ -777,7 +777,7 @@ func (s *StreamBuilder) buildWithEnv(env *bundle.Environment) (*Stream, error) {
 	logger := s.customLogger
 	if logger == nil {
 		var err error
-		if logger, err = log.NewV2(os.Stdout, s.logger); err != nil {
+		if logger, err = log.New(os.Stdout, s.logger); err != nil {
 			return nil, err
 		}
 	}

@@ -23,7 +23,8 @@ type MessageBatchHandlerFunc func(context.Context, MessageBatch) error
 // pipeline. It is safe to mutate the message via Set methods, but the
 // underlying byte data should not be edited directly.
 type Message struct {
-	part *message.Part
+	part  *message.Part
+	onErr func(err error)
 }
 
 // MessageBatch describes a collection of one or more messages.
@@ -65,7 +66,7 @@ func NewMessage(content []byte) *Message {
 }
 
 func newMessageFromPart(part *message.Part) *Message {
-	return &Message{part}
+	return &Message{part: part}
 }
 
 // Copy creates a shallow copy of a message that is safe to mutate with Set
@@ -176,6 +177,9 @@ func (m *Message) SetStructuredMut(i any) {
 // error to it as context. Messages marked with errors can be handled using a
 // range of methods outlined in https://www.benthos.dev/docs/configuration/error_handling.
 func (m *Message) SetError(err error) {
+	if m.onErr != nil {
+		m.onErr(err)
+	}
 	m.part.ErrorSet(err)
 }
 

@@ -20,7 +20,7 @@ func init() {
 		if err != nil {
 			return nil, err
 		}
-		return processor.NewV2ToV1Processor("jmespath", p, mgr), nil
+		return processor.NewAutoObservedProcessor("jmespath", p, mgr), nil
 	}, docs.ComponentSpec{
 		Name: "jmespath",
 		Categories: []string{
@@ -80,7 +80,7 @@ type jmespathProc struct {
 	log   log.Modular
 }
 
-func newJMESPath(conf processor.JMESPathConfig, mgr bundle.NewManagement) (processor.V2, error) {
+func newJMESPath(conf processor.JMESPathConfig, mgr bundle.NewManagement) (processor.AutoObserved, error) {
 	query, err := jmespath.Compile(conf.Query)
 	if err != nil {
 		return nil, fmt.Errorf("failed to compile JMESPath query: %v", err)

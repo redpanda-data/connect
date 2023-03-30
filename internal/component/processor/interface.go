@@ -6,11 +6,16 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/message"
 )
 
-// V1 is a common interface implemented by processors.
+// V1 is a common interface implemented by processors. The implementation of a
+// V1 processor is responsible for all expected observability and error handling
+// behaviour described within Benthos documentation.
 type V1 interface {
 	// Process a batch of messages into one or more resulting batches, or return
-	// an error if the entire batch could not be processed. If zero messages are
-	// returned and the error is nil then all messages are filtered.
+	// an error if the entire batch could not be processed, currently the only
+	// valid reason for returning an error is if the context was cancelled.
+	//
+	// If zero messages are returned and the error is nil then all messages are
+	// filtered.
 	ProcessBatch(ctx context.Context, b message.Batch) ([]message.Batch, error)
 
 	// Close the component, blocks until either the underlying resources are

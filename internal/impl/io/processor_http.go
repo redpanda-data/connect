@@ -12,7 +12,6 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/httpclient"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	"github.com/benthosdev/benthos/v4/internal/tracing"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
@@ -75,7 +74,7 @@ func init() {
 			if err != nil {
 				return nil, err
 			}
-			return interop.NewUnwrapInternalBatchProcessor(processor.NewV2BatchedToV1Processor("http", p, oldMgr)), nil
+			return interop.NewUnwrapInternalBatchProcessor(processor.NewAutoObservedBatchedProcessor("http", p, oldMgr)), nil
 		})
 	if err != nil {
 		panic(err)
@@ -90,7 +89,7 @@ type httpProc struct {
 	log         log.Modular
 }
 
-func newHTTPProcFromParsed(conf *service.ParsedConfig, mgr bundle.NewManagement) (processor.V2Batched, error) {
+func newHTTPProcFromParsed(conf *service.ParsedConfig, mgr bundle.NewManagement) (processor.AutoObservedBatched, error) {
 	genericConf, err := conf.FieldAny()
 	if err != nil {
 		return nil, err
@@ -123,7 +122,7 @@ func newHTTPProcFromParsed(conf *service.ParsedConfig, mgr bundle.NewManagement)
 	return g, nil
 }
 
-func (h *httpProc) ProcessBatch(ctx context.Context, spans []*tracing.Span, msg message.Batch) ([]message.Batch, error) {
+func (h *httpProc) ProcessBatch(ctx *processor.BatchProcContext, msg message.Batch) ([]message.Batch, error) {
 	var responseMsg message.Batch
 
 	if h.asMultipart || msg.Len() == 1 {

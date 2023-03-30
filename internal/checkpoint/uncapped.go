@@ -1,7 +1,5 @@
 package checkpoint
 
-import "sync"
-
 // Uncapped keeps track of a sequence of pending checkpoint payloads, and as
 // pending checkpoints are resolved it retains the latest fully resolved payload
 // in the sequence where all prior sequence checkpoints are also resolved.
@@ -9,47 +7,39 @@ import "sync"
 // Also keeps track of the logical size of the unresolved sequence, which allows
 // for limiting the number of pending checkpoints.
 type Uncapped[T any] struct {
-	positionOffset int64
-	checkpoint     *T
+	checkpointPosition int64
+	checkpoint         *T
 
-	poolOfT sync.Pool
-
-	latest, earliest *node[T]
+	start, end *node[T]
 }
 
 // NewUncapped returns a new check pointer implemented via a linked list.
 func NewUncapped[T any]() *Uncapped[T] {
-	return &Uncapped[T]{
-		poolOfT: sync.Pool{
-			New: func() any {
-				return &node[T]{}
-			},
-		},
-	}
+	return &Uncapped[T]{}
 }
 
 // Track a new unresolved payload. This payload will be cached until it is
 // marked as resolved. While it is cached no more recent payload will ever be
 // committed.
-//
-// While the returned resolve funcs can be called from any goroutine, it
-// is assumed that Track is called from a single goroutine.
 func (t *Uncapped[T]) Track(payload T, batchSize int64) func() *T {
-	newNode := t.poolOfT.Get().(*node[T])
-	newNode.payload = payload
-	newNode.position = batchSize
-
-	if t.earliest == nil {
-		t.earliest = newNode
+	newNode := &node[T]{
+		payload:  payload,
+		position: batchSize,
 	}
 
-	if t.latest != nil {
-		newNode.prev = t.latest
-		newNode.position += t.latest.position
-		t.latest.next = newNode
+	if t.start == nil {
+		t.start = newNode
 	}
 
-	t.latest = newNode
+	if t.end != nil {
+		newNode.prev = t.end
+		newNode.position += t.end.position
+		t.end.next = newNode
+	} else {
+		newNode.position += t.checkpointPosition
+	}
+
+	t.end = newNode
 
 	return func() *T {
 		if newNode.prev != nil {
@@ -59,31 +49,25 @@ func (t *Uncapped[T]) Track(payload T, batchSize int64) func() *T {
 		} else {
 			tmp := newNode.payload
 			t.checkpoint = &tmp
-			t.positionOffset = newNode.position
-			t.earliest = newNode.next
+			t.checkpointPosition = newNode.position
+			t.start = newNode.next
 		}
 
 		if newNode.next != nil {
 			newNode.next.prev = newNode.prev
 		} else {
-			t.latest = newNode.prev
-			if t.latest == nil {
-				t.positionOffset = 0
-			}
+			t.end = newNode.prev
 		}
-
-		newNode.reset()
-		t.poolOfT.Put(newNode)
 		return t.checkpoint
 	}
 }
 
-// Pending returns the gap between the earliest and latest unresolved messages.
+// Pending returns the gap between the baseline and the end of our checkpoints.
 func (t *Uncapped[T]) Pending() int64 {
-	if t.latest == nil {
+	if t.end == nil {
 		return 0
 	}
-	return t.latest.position - t.positionOffset
+	return t.end.position - t.checkpointPosition
 }
 
 // Highest returns the payload of the highest resolved checkpoint.
@@ -95,12 +79,4 @@ type node[T any] struct {
 	position   int64
 	payload    T
 	prev, next *node[T]
-}
-
-func (n *node[T]) reset() {
-	n.position = 0
-	var def T
-	n.payload = def
-	n.prev = nil
-	n.next = nil
 }
