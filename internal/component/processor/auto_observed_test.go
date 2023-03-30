@@ -12,7 +12,6 @@ import (
 
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	"github.com/benthosdev/benthos/v4/internal/tracing"
 )
 
 type fnProcessor struct {
@@ -35,7 +34,7 @@ func (p *fnProcessor) Close(ctx context.Context) error {
 
 func TestProcessorAirGapShutdown(t *testing.T) {
 	rp := &fnProcessor{}
-	agrp := NewV2ToV1Processor("foo", rp, component.NoopObservability())
+	agrp := NewAutoObservedProcessor("foo", rp, component.NoopObservability())
 
 	ctx, done := context.WithTimeout(context.Background(), time.Microsecond*5)
 	defer done()
@@ -50,7 +49,7 @@ func TestProcessorAirGapShutdown(t *testing.T) {
 func TestProcessorAirGapOneToOne(t *testing.T) {
 	tCtx := context.Background()
 
-	agrp := NewV2ToV1Processor("foo", &fnProcessor{
+	agrp := NewAutoObservedProcessor("foo", &fnProcessor{
 		fn: func(c context.Context, m *message.Part) ([]*message.Part, error) {
 			if b := m.AsBytes(); string(b) != "unchanged" {
 				return nil, errors.New("nope")
@@ -73,7 +72,7 @@ func TestProcessorAirGapOneToOne(t *testing.T) {
 func TestProcessorAirGapOneToError(t *testing.T) {
 	tCtx := context.Background()
 
-	agrp := NewV2ToV1Processor("foo", &fnProcessor{
+	agrp := NewAutoObservedProcessor("foo", &fnProcessor{
 		fn: func(c context.Context, m *message.Part) ([]*message.Part, error) {
 			_, err := m.AsStructuredMut()
 			return nil, err
@@ -93,7 +92,7 @@ func TestProcessorAirGapOneToError(t *testing.T) {
 func TestProcessorAirGapOneToMany(t *testing.T) {
 	tCtx := context.Background()
 
-	agrp := NewV2ToV1Processor("foo", &fnProcessor{
+	agrp := NewAutoObservedProcessor("foo", &fnProcessor{
 		fn: func(c context.Context, m *message.Part) ([]*message.Part, error) {
 			if b := m.AsBytes(); string(b) != "unchanged" {
 				return nil, errors.New("nope")
@@ -122,11 +121,11 @@ func TestProcessorAirGapOneToMany(t *testing.T) {
 //------------------------------------------------------------------------------
 
 type fnBatchProcessor struct {
-	fn     func(context.Context, message.Batch) ([]message.Batch, error)
+	fn     func(*BatchProcContext, message.Batch) ([]message.Batch, error)
 	closed bool
 }
 
-func (p *fnBatchProcessor) ProcessBatch(ctx context.Context, _ []*tracing.Span, batch message.Batch) ([]message.Batch, error) {
+func (p *fnBatchProcessor) ProcessBatch(ctx *BatchProcContext, batch message.Batch) ([]message.Batch, error) {
 	return p.fn(ctx, batch)
 }
 
@@ -140,7 +139,7 @@ func TestBatchProcessorAirGapShutdown(t *testing.T) {
 	defer done()
 
 	rp := &fnBatchProcessor{}
-	agrp := NewV2BatchedToV1Processor("foo", rp, component.NoopObservability())
+	agrp := NewAutoObservedBatchedProcessor("foo", rp, component.NoopObservability())
 
 	err := agrp.Close(tCtx)
 	assert.NoError(t, err)
@@ -150,8 +149,8 @@ func TestBatchProcessorAirGapShutdown(t *testing.T) {
 func TestBatchProcessorAirGapOneToOne(t *testing.T) {
 	tCtx := context.Background()
 
-	agrp := NewV2BatchedToV1Processor("foo", &fnBatchProcessor{
-		fn: func(c context.Context, msgs message.Batch) ([]message.Batch, error) {
+	agrp := NewAutoObservedBatchedProcessor("foo", &fnBatchProcessor{
+		fn: func(c *BatchProcContext, msgs message.Batch) ([]message.Batch, error) {
 			if b := msgs.Get(0).AsBytes(); string(b) != "unchanged" {
 				return nil, errors.New("nope")
 			}
@@ -173,8 +172,8 @@ func TestBatchProcessorAirGapOneToOne(t *testing.T) {
 func TestBatchProcessorAirGapOneToError(t *testing.T) {
 	tCtx := context.Background()
 
-	agrp := NewV2BatchedToV1Processor("foo", &fnBatchProcessor{
-		fn: func(c context.Context, msgs message.Batch) ([]message.Batch, error) {
+	agrp := NewAutoObservedBatchedProcessor("foo", &fnBatchProcessor{
+		fn: func(c *BatchProcContext, msgs message.Batch) ([]message.Batch, error) {
 			_, err := msgs.Get(0).AsStructuredMut()
 			return nil, err
 		},
@@ -193,8 +192,8 @@ func TestBatchProcessorAirGapOneToError(t *testing.T) {
 func TestBatchProcessorAirGapOneToMany(t *testing.T) {
 	tCtx := context.Background()
 
-	agrp := NewV2BatchedToV1Processor("foo", &fnBatchProcessor{
-		fn: func(c context.Context, msgs message.Batch) ([]message.Batch, error) {
+	agrp := NewAutoObservedBatchedProcessor("foo", &fnBatchProcessor{
+		fn: func(c *BatchProcContext, msgs message.Batch) ([]message.Batch, error) {
 			if b := msgs.Get(0).AsBytes(); string(b) != "unchanged" {
 				return nil, errors.New("nope")
 			}
@@ -223,4 +222,38 @@ func TestBatchProcessorAirGapOneToMany(t *testing.T) {
 
 	assert.Equal(t, 1, msgs[1].Len())
 	assert.Equal(t, "changed 3", string(msgs[1].Get(0).AsBytes()))
+}
+
+func TestBatchProcessorAirGapIndividualErrors(t *testing.T) {
+	tCtx := context.Background()
+
+	agrp := NewAutoObservedBatchedProcessor("foo", &fnBatchProcessor{
+		fn: func(c *BatchProcContext, msgs message.Batch) ([]message.Batch, error) {
+			for i, m := range msgs {
+				if _, err := m.AsStructuredMut(); err != nil {
+					c.OnError(err, i, nil)
+				}
+			}
+			return []message.Batch{msgs}, nil
+		},
+	}, component.NoopObservability())
+
+	msg := message.QuickBatch([][]byte{
+		[]byte("not a structured doc"),
+		[]byte(`{"foo":"bar"}`),
+		[]byte("abcdefg"),
+	})
+
+	msgs, err := agrp.ProcessBatch(tCtx, msg)
+	require.NoError(t, err)
+	require.Len(t, msgs, 1)
+	require.Len(t, msgs[0], 3)
+
+	assert.Equal(t, "not a structured doc", string(msgs[0][0].AsBytes()))
+	assert.Equal(t, `{"foo":"bar"}`, string(msgs[0][1].AsBytes()))
+	assert.Equal(t, "abcdefg", string(msgs[0][2].AsBytes()))
+
+	assert.EqualError(t, msgs[0][0].ErrorGet(), "invalid character 'o' in literal null (expecting 'u')")
+	assert.NoError(t, msgs[0][1].ErrorGet())
+	assert.EqualError(t, msgs[0][2].ErrorGet(), "invalid character 'a' looking for beginning of value")
 }

@@ -9,7 +9,6 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	"github.com/benthosdev/benthos/v4/internal/tracing"
 )
 
 func init() {
@@ -18,7 +17,7 @@ func init() {
 		if err != nil {
 			return nil, err
 		}
-		return processor.NewV2BatchedToV1Processor("bounds_check", p, mgr), nil
+		return processor.NewAutoObservedBatchedProcessor("bounds_check", p, mgr), nil
 	}, docs.ComponentSpec{
 		Name: "bounds_check",
 		Categories: []string{
@@ -44,14 +43,14 @@ type boundsCheck struct {
 }
 
 // newBoundsCheck returns a BoundsCheck processor.
-func newBoundsCheck(conf processor.BoundsCheckConfig, mgr bundle.NewManagement) (processor.V2Batched, error) {
+func newBoundsCheck(conf processor.BoundsCheckConfig, mgr bundle.NewManagement) (processor.AutoObservedBatched, error) {
 	return &boundsCheck{
 		conf: conf,
 		log:  mgr.Logger(),
 	}, nil
 }
 
-func (m *boundsCheck) ProcessBatch(ctx context.Context, spans []*tracing.Span, msg message.Batch) ([]message.Batch, error) {
+func (m *boundsCheck) ProcessBatch(ctx *processor.BatchProcContext, msg message.Batch) ([]message.Batch, error) {
 	lParts := msg.Len()
 	if lParts < m.conf.MinParts {
 		m.log.Debugf(
