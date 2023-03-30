@@ -10,6 +10,7 @@ import (
 
 	"golang.org/x/sync/errgroup"
 
+	"github.com/benthosdev/benthos/v4/public/bloblang"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
@@ -20,6 +21,10 @@ func newCachedProcessorConfigSpec() *service.ConfigSpec {
 		Summary("Cache the result of applying one or more processors to messages identified by a key. If the key already exists within the cache the contents of the message will be replaced with the cached result instead of applying the processors. This component is therefore useful in situations where an expensive set of processors need only be executed periodically.").
 		Description("The format of the data when stored within the cache is a custom and versioned schema chosen to balance performance and storage space. It is therefore not possible to point this processor to a cache that is pre-populated with data that this processor has not created itself.").
 		Field(service.NewStringField("cache").Description("The cache resource to read and write processor results from.")).
+		Field(service.NewBloblangField("skip_on").
+			Description("A condition that can be used to skip caching the results from the processors.").
+			Example("errored()").
+			Optional()).
 		Field(service.NewInterpolatedStringField("key").
 			Description("A key to be resolved for each message, if the key already exists in the cache then the cached result is used, otherwise the processors are applied and the result is cached under this key. The key could be static and therefore apply generally to all messages or it could be an interpolated expression that is potentially unique for each message.").
 			Example("my_foo_result").
@@ -97,6 +102,7 @@ type cachedProcessor struct {
 	key        *service.InterpolatedString
 	ttl        *time.Duration
 	processors []*service.OwnedProcessor
+	skipOn     *bloblang.Executor
 }
 
 func newCachedProcessorFromParsedConf(manager *service.Resources, conf *service.ParsedConfig) (proc *cachedProcessor, err error) {
@@ -125,6 +131,15 @@ func newCachedProcessorFromParsedConf(manager *service.Resources, conf *service.
 	}
 
 	proc.processors, err = conf.FieldProcessorList("processors")
+
+	if conf.Contains("skip_on") {
+		var skipOn *bloblang.Executor
+		if skipOn, err = conf.FieldBloblang("skip_on"); err != nil {
+			return nil, err
+		}
+		proc.skipOn = skipOn
+	}
+
 	return
 }
 
@@ -159,29 +174,39 @@ func (proc *cachedProcessor) Process(ctx context.Context, msg *service.Message) 
 		return nil, err
 	}
 
+	shouldCache := true
 	var collapsedBatch service.MessageBatch
 	for _, b := range resultBatch {
+		skip, err := shouldSkip(b, proc.skipOn)
+		if err != nil {
+			return nil, err
+		}
+
+		shouldCache = shouldCache && !skip
+
 		collapsedBatch = append(collapsedBatch, b...)
 	}
 
-	// Any errors in creating a serialised batch or caching are non-fatal and
-	// should be logged but otherwise regarded as insignificant to the flowing
-	// messages.
-	result, err := cachedProcSerialiseBatch(collapsedBatch)
-	if err != nil {
-		proc.manager.Logger().Errorf("failed to serialise resulting batch for caching: %w", err)
-		return collapsedBatch, nil
-	}
+	if shouldCache {
+		// Any errors in creating a serialised batch or caching are non-fatal and
+		// should be logged but otherwise regarded as insignificant to the flowing
+		// messages.
+		result, err := cachedProcSerialiseBatch(collapsedBatch)
+		if err != nil {
+			proc.manager.Logger().Errorf("failed to serialise resulting batch for caching: %w", err)
+			return collapsedBatch, nil
+		}
 
-	var setErr error
-	cerr := proc.manager.AccessCache(ctx, proc.cacheName, func(cache service.Cache) {
-		setErr = cache.Set(ctx, cacheKey, result, proc.ttl)
-	})
-	if cerr != nil {
-		proc.manager.Logger().Errorf("failed to access cache for result: %w", err)
-	}
-	if setErr != nil {
-		proc.manager.Logger().Errorf("failed to write result to cache: %w", err)
+		var setErr error
+		cerr := proc.manager.AccessCache(ctx, proc.cacheName, func(cache service.Cache) {
+			setErr = cache.Set(ctx, cacheKey, result, proc.ttl)
+		})
+		if cerr != nil {
+			proc.manager.Logger().Errorf("failed to access cache for result: %w", err)
+		}
+		if setErr != nil {
+			proc.manager.Logger().Errorf("failed to write result to cache: %w", err)
+		}
 	}
 
 	return collapsedBatch, nil
@@ -197,6 +222,29 @@ func (proc *cachedProcessor) Close(ctx context.Context) error {
 	}
 
 	return group.Wait()
+}
+
+func shouldSkip(batch service.MessageBatch, predicate *bloblang.Executor) (bool, error) {
+	if predicate == nil {
+		return false, nil
+	}
+
+	predResult, err := batch.BloblangQuery(0, predicate)
+	if err != nil {
+		return false, fmt.Errorf("failed to execute skip_on mapping: %w", err)
+	}
+
+	raw, err := predResult.AsStructured()
+	if err != nil {
+		return false, fmt.Errorf("skip_on mapping did not return structured result: %w", err)
+	}
+
+	skip, ok := raw.(bool)
+	if !ok {
+		return false, fmt.Errorf("skip_on did return boolean result: %v", raw)
+	}
+
+	return skip, nil
 }
 
 //------------------------------------------------------------------------------
