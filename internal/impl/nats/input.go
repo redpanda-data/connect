@@ -6,6 +6,7 @@ import (
 	"errors"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/nats-io/nats.go"
 
@@ -41,6 +42,11 @@ You can access these metadata fields using [function interpolation](/docs/config
 		Field(service.NewStringField("queue").
 			Description("An optional queue group to consume as.").
 			Optional()).
+		Field(service.NewDurationField("nak_delay").
+			Description("An optional delay duration on redelivering a message when negatively acknowledged.").
+			Example("1m").
+			Advanced().
+			Optional()).
 		Field(service.NewIntField("prefetch_count").
 			Description("The maximum number of messages to pull at a time.").
 			Advanced().
@@ -68,6 +74,7 @@ type natsReader struct {
 	subject       string
 	queue         string
 	prefetchCount int
+	nakDelay      time.Duration
 	authConf      auth.Config
 	tlsConf       *tls.Config
 
@@ -106,6 +113,12 @@ func newNATSReader(conf *service.ParsedConfig, mgr *service.Resources) (*natsRea
 
 	if n.prefetchCount < 0 {
 		return nil, errors.New("prefetch count must be greater than or equal to zero")
+	}
+
+	if conf.Contains("nak_delay") {
+		if n.nakDelay, err = conf.FieldDuration("nak_delay"); err != nil {
+			return nil, err
+		}
 	}
 
 	if conf.Contains("queue") {
@@ -219,7 +232,11 @@ func (n *natsReader) Read(ctx context.Context) (*service.Message, service.AckFun
 	return bmsg, func(_ context.Context, res error) error {
 		var ackErr error
 		if res != nil {
-			ackErr = msg.Nak()
+			if n.nakDelay > 0 {
+				ackErr = msg.NakWithDelay(n.nakDelay)
+			} else {
+				ackErr = msg.Nak()
+			}
 		} else {
 			ackErr = msg.Ack()
 		}
