@@ -9,6 +9,7 @@ All notable changes to this project will be documented in this file.
 
 - The `-e/--env-file` cli flag can now be specified multiple times.
 - New `studio pull` cli subcommand for running Studio config deployments.
+- Metadata field `kafka_tombstone_message` added to the `kafka` and `kafka_franz` inputs.
 
 ### Fixed
 
