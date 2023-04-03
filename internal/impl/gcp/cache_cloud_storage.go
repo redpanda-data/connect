@@ -2,11 +2,14 @@ package gcp
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"io"
+	"strings"
 	"time"
 
 	"cloud.google.com/go/storage"
+	"google.golang.org/api/option"
 
 	"github.com/benthosdev/benthos/v4/public/service"
 )
@@ -19,7 +22,9 @@ func gcpCloudStorageCacheConfig() *service.ConfigSpec {
 		Field(service.NewStringField("bucket").
 			Description("The Google Cloud Storage bucket to store items in.")).
 		Field(service.NewStringField("content_type").
-			Description("Optional field to explicitly set the Content-Type.").Optional())
+			Description("Optional field to explicitly set the Content-Type.").Optional()).
+		Field(service.NewStringField("credentials_json").
+			Description("An optional field to set Google Service Account Credentials json as base64 encoded string.").Optional().Secret())
 
 	return spec
 }
@@ -49,7 +54,12 @@ func newGcpCloudStorageCacheFromConfig(parsedConf *service.ParsedConfig) (*gcpCl
 		}
 	}
 
-	client, err := storage.NewClient(context.Background())
+	opt, err := getClientOptionsForCloudStorageCache(parsedConf)
+	if err != nil {
+		return nil, err
+	}
+
+	client, err := storage.NewClient(context.Background(), opt...)
 	if err != nil {
 		return nil, err
 	}
@@ -58,6 +68,25 @@ func newGcpCloudStorageCacheFromConfig(parsedConf *service.ParsedConfig) (*gcpCl
 		bucketHandle: client.Bucket(bucket),
 		contentType:  contentType,
 	}, nil
+}
+
+func getClientOptionsForCloudStorageCache(parsedConf *service.ParsedConfig) ([]option.ClientOption, error) {
+	var opt []option.ClientOption
+	if parsedConf.Contains("credentials_json") {
+		credsJSON, err := parsedConf.FieldString("credentials_json")
+		if err != nil {
+			return nil, err
+		}
+		cred := strings.TrimSpace(credsJSON)
+		if len(cred) > 0 {
+			decodedCred, err := base64.StdEncoding.DecodeString(cred)
+			if err != nil {
+				return nil, err
+			}
+			opt = []option.ClientOption{option.WithCredentialsJSON(decodedCred)}
+		}
+	}
+	return opt, nil
 }
 
 //------------------------------------------------------------------------------

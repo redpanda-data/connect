@@ -2,9 +2,13 @@ package gcp
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
+
+	"google.golang.org/api/option"
 
 	"cloud.google.com/go/bigquery"
 	"google.golang.org/api/iterator"
@@ -15,11 +19,12 @@ import (
 )
 
 type bigQuerySelectInputConfig struct {
-	project       string
-	queryParts    *bqQueryParts
-	argsMapping   *bloblang.Executor
-	queryPriority bigquery.QueryPriority
-	jobLabels     map[string]string
+	project         string
+	queryParts      *bqQueryParts
+	argsMapping     *bloblang.Executor
+	queryPriority   bigquery.QueryPriority
+	jobLabels       map[string]string
+	credentialsJSON string
 }
 
 func bigQuerySelectInputConfigFromParsed(inConf *service.ParsedConfig) (conf bigQuerySelectInputConfig, err error) {
@@ -72,6 +77,13 @@ func bigQuerySelectInputConfigFromParsed(inConf *service.ParsedConfig) (conf big
 		return
 	}
 
+	if inConf.Contains("credentials_json") {
+		conf.credentialsJSON, err = inConf.FieldString("credentials_json")
+		if err != nil {
+			return
+		}
+	}
+
 	return
 }
 
@@ -83,6 +95,10 @@ func newBigQuerySelectInputConfig() *service.ConfigSpec {
 		Summary("Executes a `SELECT` query against BigQuery and creates a message for each row received.").
 		Description(`Once the rows from the query are exhausted, this input shuts down, allowing the pipeline to gracefully terminate (or the next input in a [sequence](/docs/components/inputs/sequence) to execute).`).
 		Field(service.NewStringField("project").Description("GCP project where the query job will execute.")).
+		Field(service.NewStringField("credentials_json").
+			Description("An optional field to set Google Service Account Credentials json as base64 encoded string.").
+			Optional().
+			Secret()).
 		Field(service.NewStringField("table").Description("Fully-qualified BigQuery table name to query.").Example("bigquery-public-data.samples.shakespeare")).
 		Field(service.NewStringListField("columns").Description("A list of columns to query.")).
 		Field(service.NewStringField("where").
@@ -156,7 +172,12 @@ func (inp *bigQuerySelectInput) Connect(ctx context.Context) error {
 	jobctx, _ := inp.shutdownSig.CloseAtLeisureCtx(context.Background())
 
 	if inp.client == nil {
-		client, err := bigquery.NewClient(jobctx, inp.config.project)
+		opt, err := getClientOptionsBQSelect(inp)
+		if err != nil {
+			return fmt.Errorf("failed to create bigquery client: %w", err)
+		}
+
+		client, err := bigquery.NewClient(jobctx, inp.config.project, opt...)
 		if err != nil {
 			return fmt.Errorf("failed to create bigquery client: %w", err)
 		}
@@ -193,6 +214,19 @@ func (inp *bigQuerySelectInput) Connect(ctx context.Context) error {
 	inp.iterator = iter
 
 	return nil
+}
+
+func getClientOptionsBQSelect(inp *bigQuerySelectInput) ([]option.ClientOption, error) {
+	var opt []option.ClientOption
+	cred := strings.TrimSpace(inp.config.credentialsJSON)
+	if len(cred) > 0 {
+		decodedCred, err := base64.StdEncoding.DecodeString(cred)
+		if err != nil {
+			return nil, err
+		}
+		opt = []option.ClientOption{option.WithCredentialsJSON(decodedCred)}
+	}
+	return opt, nil
 }
 
 func (inp *bigQuerySelectInput) Read(ctx context.Context) (*service.Message, service.AckFunc, error) {

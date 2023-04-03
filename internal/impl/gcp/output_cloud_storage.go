@@ -2,14 +2,17 @@ package gcp
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"path"
+	"strings"
 	"sync"
 
 	"cloud.google.com/go/storage"
 	"github.com/gofrs/uuid"
 	"go.uber.org/multierr"
+	"google.golang.org/api/option"
 
 	"github.com/benthosdev/benthos/v4/internal/batch/policy"
 	"github.com/benthosdev/benthos/v4/internal/bloblang/field"
@@ -119,6 +122,7 @@ output:
 			docs.FieldString("content_encoding", "An optional content encoding to set for each object.").IsInterpolated().Advanced(),
 			docs.FieldInt("chunk_size", "An optional chunk size which controls the maximum number of bytes of the object that the Writer will attempt to send to the server in a single request. If ChunkSize is set to zero, chunking will be disabled.").Advanced(),
 			docs.FieldInt("max_in_flight", "The maximum number of message batches to have in flight at a given time. Increase this to improve throughput."),
+			docs.FieldString("credentials_json", "An optional field to set Google Service Account Credentials json as base64 encoded string.").Optional().Secret(),
 			policy.FieldSpec(),
 		).ChildDefaultAndTypesFromStruct(output.NewGCPCloudStorageConfig()),
 	})
@@ -177,13 +181,31 @@ func (g *gcpCloudStorageOutput) Connect(ctx context.Context) error {
 	defer g.connMut.Unlock()
 
 	var err error
-	g.client, err = storage.NewClient(context.Background())
+	opt, err := getClientOptionsForOutputCloudStorage(g)
+	if err != nil {
+		return err
+	}
+
+	g.client, err = storage.NewClient(context.Background(), opt...)
 	if err != nil {
 		return err
 	}
 
 	g.log.Infof("Uploading message parts as objects to GCP Cloud Storage bucket: %v\n", g.conf.Bucket)
 	return nil
+}
+
+func getClientOptionsForOutputCloudStorage(g *gcpCloudStorageOutput) ([]option.ClientOption, error) {
+	var opt []option.ClientOption
+	cred := strings.TrimSpace(g.conf.CredentialsJSON)
+	if len(cred) > 0 {
+		decodedCred, err := base64.StdEncoding.DecodeString(cred)
+		if err != nil {
+			return nil, err
+		}
+		opt = []option.ClientOption{option.WithCredentialsJSON(decodedCred)}
+	}
+	return opt, nil
 }
 
 // WriteBatch attempts to write message contents to a target GCP Cloud

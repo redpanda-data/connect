@@ -2,6 +2,7 @@ package gcp
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"strings"
 	"sync"
@@ -46,6 +47,7 @@ You can access these metadata fields using
 		},
 		Config: docs.FieldComponent().WithChildren(
 			docs.FieldString("project", "The project ID of the target subscription."),
+			docs.FieldString("credentials_json", "An optional field to set Google Service Account Credentials json as base64 encoded string.").Optional().Secret(),
 			docs.FieldString("subscription", "The target subscription ID."),
 			docs.FieldString("endpoint", "An optional endpoint to override the default of `pubsub.googleapis.com:443`. This can be used to connect to a region specific pubsub endpoint. For a list of valid values check out [this document.](https://cloud.google.com/pubsub/docs/reference/service_apis_overview#list_of_regional_endpoints)", "us-central1-pubsub.googleapis.com:443", "us-west3-pubsub.googleapis.com:443").HasDefault(""),
 			docs.FieldBool("sync", "Enable synchronous pull mode."),
@@ -118,9 +120,10 @@ type gcpPubSubReader struct {
 }
 
 func newGCPPubSubReader(conf input.GCPPubSubConfig, log log.Modular, stats metrics.Type) (*gcpPubSubReader, *pubsub.Client, error) {
-	var opt []option.ClientOption
-	if len(strings.TrimSpace(conf.Endpoint)) > 0 {
-		opt = []option.ClientOption{option.WithEndpoint(conf.Endpoint)}
+
+	opt, err := getClientOptionsForPubsubClient(conf)
+	if err != nil {
+		return nil, nil, err
 	}
 
 	client, err := pubsub.NewClient(context.Background(), conf.ProjectID, opt...)
@@ -132,6 +135,23 @@ func newGCPPubSubReader(conf input.GCPPubSubConfig, log log.Modular, stats metri
 		log:    log,
 		client: client,
 	}, client, nil
+}
+
+func getClientOptionsForPubsubClient(conf input.GCPPubSubConfig) ([]option.ClientOption, error) {
+	var opt []option.ClientOption
+	if len(strings.TrimSpace(conf.Endpoint)) > 0 {
+		opt = []option.ClientOption{option.WithEndpoint(conf.Endpoint)}
+	}
+
+	cred := strings.TrimSpace(conf.CredentialsJSON)
+	if len(cred) > 0 {
+		decodedCred, err := base64.StdEncoding.DecodeString(cred)
+		if err != nil {
+			return nil, err
+		}
+		opt = append(opt, option.WithCredentialsJSON(decodedCred))
+	}
+	return opt, nil
 }
 
 func (c *gcpPubSubReader) Connect(ignored context.Context) error {

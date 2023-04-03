@@ -2,14 +2,14 @@ package gcp
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 	"strings"
 	"sync"
 	"time"
 
-	"google.golang.org/api/option"
-
 	"cloud.google.com/go/pubsub"
+	"google.golang.org/api/option"
 
 	"github.com/benthosdev/benthos/v4/internal/batch"
 	"github.com/benthosdev/benthos/v4/internal/bloblang/field"
@@ -55,6 +55,7 @@ pipeline:
 `+"```"+``),
 		Config: docs.FieldComponent().WithChildren(
 			docs.FieldString("project", "The project ID of the topic to publish to."),
+			docs.FieldString("credentials_json", "An optional field to set Google Service Account Credentials json as base64 encoded string.").Optional().Secret(),
 			docs.FieldString("topic", "The topic to publish to.").IsInterpolated(),
 			docs.FieldInt("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
 			docs.FieldString("publish_timeout", "The maximum length of time to wait before abandoning a publish attempt for a message.", "10s", "5m", "60m").Advanced(),
@@ -112,11 +113,11 @@ type gcpPubSubWriter struct {
 }
 
 func newGCPPubSubWriter(conf output.GCPPubSubConfig, mgr bundle.NewManagement, log log.Modular) (*gcpPubSubWriter, error) {
-	var opt []option.ClientOption
-	if len(strings.TrimSpace(conf.Endpoint)) > 0 {
-		opt = []option.ClientOption{option.WithEndpoint(conf.Endpoint)}
-	}
 
+	opt, err := getClientOptionsForOutputPubsub(conf)
+	if err != nil {
+		return nil, err
+	}
 	client, err := pubsub.NewClient(context.Background(), conf.ProjectID, opt...)
 	if err != nil {
 		return nil, err
@@ -164,6 +165,23 @@ func newGCPPubSubWriter(conf output.GCPPubSubConfig, mgr bundle.NewManagement, l
 		orderingEnabled: len(conf.OrderingKey) > 0,
 		flowControl:     flowControl,
 	}, nil
+}
+
+func getClientOptionsForOutputPubsub(conf output.GCPPubSubConfig) ([]option.ClientOption, error) {
+	var opt []option.ClientOption
+	if len(strings.TrimSpace(conf.Endpoint)) > 0 {
+		opt = []option.ClientOption{option.WithEndpoint(conf.Endpoint)}
+	}
+
+	cred := strings.TrimSpace(conf.CredentialsJSON)
+	if len(cred) > 0 {
+		decodedCred, err := base64.StdEncoding.DecodeString(cred)
+		if err != nil {
+			return nil, err
+		}
+		opt = append(opt, option.WithCredentialsJSON(decodedCred))
+	}
+	return opt, nil
 }
 
 func (c *gcpPubSubWriter) Connect(ctx context.Context) error {

@@ -26,6 +26,7 @@ Introduced in version 3.64.0.
 label: ""
 gcp_bigquery_select:
   project: ""
+  credentials_json: ""
   table: ""
   columns: []
   where: ""
@@ -59,7 +60,7 @@ pipeline:
                 - sum(word_count) as total_count
               where: word = ?
               suffix: |
-                GROUP BY word
+                GROUP BY word	
                 ORDER BY total_count DESC
                 LIMIT 10
               args_mapping: root = [ this.term ]
@@ -75,6 +76,16 @@ pipeline:
 ### `project`
 
 GCP project where the query job will execute.
+
+
+Type: `string`  
+
+### `credentials_json`
+
+An optional field to set Google Service Account Credentials json as base64 encoded string.
+:::warning Secret
+This field contains sensitive information that usually shouldn't be added to a config directly, read our [secrets page for more info](/docs/configuration/secrets).
+:::
 
 
 Type: `string`  

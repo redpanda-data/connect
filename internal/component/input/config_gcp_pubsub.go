@@ -9,6 +9,7 @@ type GCPPubSubConfig struct {
 	MaxOutstandingBytes    int                         `json:"max_outstanding_bytes" yaml:"max_outstanding_bytes"`
 	Sync                   bool                        `json:"sync" yaml:"sync"`
 	CreateSubscription     GCPPubSubSubscriptionConfig `json:"create_subscription" yaml:"create_subscription"`
+	CredentialsJSON        string                      `json:"credentials_json" yaml:"credentials_json"`
 }
 
 // GCPPubSubSubscriptionConfig contains config values for subscription creation.
@@ -29,5 +30,6 @@ func NewGCPPubSubConfig() GCPPubSubConfig {
 			Enabled: false,
 			TopicID: "",
 		},
+		CredentialsJSON: "",
 	}
 }

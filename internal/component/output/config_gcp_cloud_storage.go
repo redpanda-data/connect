@@ -29,6 +29,7 @@ type GCPCloudStorageConfig struct {
 	MaxInFlight     int                `json:"max_in_flight" yaml:"max_in_flight"`
 	Batching        batchconfig.Config `json:"batching" yaml:"batching"`
 	CollisionMode   string             `json:"collision_mode" yaml:"collision_mode"`
+	CredentialsJSON string             `json:"credentials_json" yaml:"credentials_json"`
 }
 
 // NewGCPCloudStorageConfig creates a new Config with default values.
@@ -42,5 +43,6 @@ func NewGCPCloudStorageConfig() GCPCloudStorageConfig {
 		MaxInFlight:     64,
 		Batching:        batchconfig.NewConfig(),
 		CollisionMode:   GCPCloudStorageOverwriteCollisionMode,
+		CredentialsJSON: "",
 	}
 }

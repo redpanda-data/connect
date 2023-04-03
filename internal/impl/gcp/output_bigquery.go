@@ -3,6 +3,7 @@ package gcp
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"fmt"
 	"net/http"
 	"strings"
@@ -59,6 +60,7 @@ type gcpBigQueryOutputConfig struct {
 	IgnoreUnknownValues bool
 	MaxBadRecords       int
 	JobLabels           map[string]string
+	CredentialsJSON     string
 
 	// CSV options
 	CSVOptions gcpBigQueryCSVConfig
@@ -98,6 +100,9 @@ func gcpBigQueryOutputConfigFromParsed(conf *service.ParsedConfig) (gconf gcpBig
 	if gconf.JobLabels, err = conf.FieldStringMap("job_labels"); err != nil {
 		return
 	}
+	if gconf.CredentialsJSON, err = conf.FieldString("credentials_json"); err != nil {
+		return
+	}
 	if gconf.CSVOptions, err = gcpBigQueryCSVConfigFromParsed(conf.Namespace("csv")); err != nil {
 		return
 	}
@@ -106,11 +111,30 @@ func gcpBigQueryOutputConfigFromParsed(conf *service.ParsedConfig) (gconf gcpBig
 
 type gcpBQClientURL string
 
-func (g gcpBQClientURL) NewClient(ctx context.Context, projectID string) (*bigquery.Client, error) {
-	if g == "" {
-		return bigquery.NewClient(ctx, projectID)
+func (g gcpBQClientURL) NewClient(ctx context.Context, projectID string, credentialsJSON string) (*bigquery.Client, error) {
+
+	opt, err := g.getClientOptionsForOutputBQ(credentialsJSON)
+	if err != nil {
+		return nil, err
 	}
-	return bigquery.NewClient(ctx, projectID, option.WithoutAuthentication(), option.WithEndpoint(string(g)))
+	return bigquery.NewClient(ctx, projectID, opt...)
+}
+
+func (g gcpBQClientURL) getClientOptionsForOutputBQ(credentialsJSON string) ([]option.ClientOption, error) {
+	var opt []option.ClientOption
+	if g != "" {
+		opt = []option.ClientOption{option.WithoutAuthentication(), option.WithEndpoint(string(g))}
+	}
+
+	cred := strings.TrimSpace(credentialsJSON)
+	if len(cred) > 0 {
+		decodedCred, err := base64.StdEncoding.DecodeString(cred)
+		if err != nil {
+			return nil, err
+		}
+		opt = append(opt, option.WithCredentialsJSON(decodedCred))
+	}
+	return opt, nil
 }
 
 func gcpBigQueryConfig() *service.ConfigSpec {
@@ -185,6 +209,7 @@ For the CSV format when the field `+"`csv.header`"+` is specified a header row w
 			Advanced().
 			Default(false)).
 		Field(service.NewStringMapField("job_labels").Description("A list of labels to add to the load job.").Default(map[string]string{})).
+		Field(service.NewStringField("credentials_json").Description("An optional field to set Google Service Account Credentials json as base64 encoded string.").Optional().Secret()).
 		Field(service.NewObjectField("csv",
 			service.NewStringListField("header").
 				Description("A list of values to use as header for each batch of messages. If not specified the first line of each message will be used as header.").
@@ -302,7 +327,7 @@ func (g *gcpBigQueryOutput) Connect(ctx context.Context) (err error) {
 	defer g.connMut.Unlock()
 
 	var client *bigquery.Client
-	if client, err = g.clientURL.NewClient(context.Background(), g.conf.ProjectID); err != nil {
+	if client, err = g.clientURL.NewClient(context.Background(), g.conf.ProjectID, g.conf.CredentialsJSON); err != nil {
 		err = fmt.Errorf("error creating big query client: %w", err)
 		return
 	}

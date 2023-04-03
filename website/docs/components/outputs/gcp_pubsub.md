@@ -30,6 +30,7 @@ output:
   label: ""
   gcp_pubsub:
     project: ""
+    credentials_json: ""
     topic: ""
     max_in_flight: 64
     endpoint: ""
@@ -46,6 +47,7 @@ output:
   label: ""
   gcp_pubsub:
     project: ""
+    credentials_json: ""
     topic: ""
     max_in_flight: 64
     publish_timeout: 60s
@@ -96,6 +98,17 @@ message batches) with the field `max_in_flight`.
 ### `project`
 
 The project ID of the topic to publish to.
+
+
+Type: `string`  
+Default: `""`  
+
+### `credentials_json`
+
+An optional field to set Google Service Account Credentials json as base64 encoded string.
+:::warning Secret
+This field contains sensitive information that usually shouldn't be added to a config directly, read our [secrets page for more info](/docs/configuration/secrets).
+:::
 
 
 Type: `string`  

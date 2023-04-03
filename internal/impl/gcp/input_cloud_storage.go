@@ -2,12 +2,15 @@ package gcp
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"io"
 	"strings"
 	"sync"
 	"time"
+
+	"google.golang.org/api/option"
 
 	"cloud.google.com/go/storage"
 	"google.golang.org/api/iterator"
@@ -66,6 +69,7 @@ services. You can find out more [in this document](/docs/guides/cloud/gcp).`,
 		Config: docs.FieldComponent().WithChildren(
 			docs.FieldString("bucket", "The name of the bucket from which to download objects."),
 			docs.FieldString("prefix", "An optional path prefix, if set only objects with the prefix are consumed."),
+			docs.FieldString("credentials_json", "An optional field to set Google Service Account Credentials json as base64 encoded string.").Optional().Secret(),
 			codec.ReaderDocs,
 			docs.FieldBool("delete_objects", "Whether to delete downloaded objects from the bucket once they are processed.").Advanced(),
 		).ChildDefaultAndTypesFromStruct(input.NewGCPCloudStorageConfig()),
@@ -231,13 +235,32 @@ func newGCPCloudStorageInput(conf input.GCPCloudStorageConfig, log log.Modular, 
 // Cloud Storage bucket.
 func (g *gcpCloudStorageInput) Connect(ctx context.Context) error {
 	var err error
-	g.client, err = storage.NewClient(context.Background())
+
+	opt, err := getClientOptionsForInputCloudStorage(g)
+	if err != nil {
+		return err
+	}
+
+	g.client, err = storage.NewClient(context.Background(), opt...)
 	if err != nil {
 		return err
 	}
 
 	g.keyReader, err = newGCPCloudStorageTargetReader(ctx, g.conf, g.log, g.client.Bucket(g.conf.Bucket))
 	return err
+}
+
+func getClientOptionsForInputCloudStorage(g *gcpCloudStorageInput) ([]option.ClientOption, error) {
+	var opt []option.ClientOption
+	cred := strings.TrimSpace(g.conf.CredentialsJSON)
+	if len(cred) > 0 {
+		decodedCred, err := base64.StdEncoding.DecodeString(cred)
+		if err != nil {
+			return nil, err
+		}
+		opt = []option.ClientOption{option.WithCredentialsJSON(decodedCred)}
+	}
+	return opt, nil
 }
 
 func (g *gcpCloudStorageInput) getObjectTarget(ctx context.Context) (*gcpCloudStoragePendingObject, error) {

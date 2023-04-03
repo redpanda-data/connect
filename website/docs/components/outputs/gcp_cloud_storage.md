@@ -41,6 +41,7 @@ output:
     content_type: application/octet-stream
     collision_mode: overwrite
     max_in_flight: 64
+    credentials_json: ""
     batching:
       count: 0
       byte_size: 0
@@ -63,6 +64,7 @@ output:
     content_encoding: ""
     chunk_size: 16777216
     max_in_flight: 64
+    credentials_json: ""
     batching:
       count: 0
       byte_size: 0
@@ -217,6 +219,17 @@ The maximum number of message batches to have in flight at a given time. Increas
 
 Type: `int`  
 Default: `64`  
+
+### `credentials_json`
+
+An optional field to set Google Service Account Credentials json as base64 encoded string.
+:::warning Secret
+This field contains sensitive information that usually shouldn't be added to a config directly, read our [secrets page for more info](/docs/configuration/secrets).
+:::
+
+
+Type: `string`  
+Default: `""`  
 
 ### `batching`
 

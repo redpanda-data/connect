@@ -3,10 +3,11 @@ package input
 // GCPCloudStorageConfig contains configuration fields for the Google Cloud
 // Storage input type.
 type GCPCloudStorageConfig struct {
-	Bucket        string `json:"bucket" yaml:"bucket"`
-	Prefix        string `json:"prefix" yaml:"prefix"`
-	Codec         string `json:"codec" yaml:"codec"`
-	DeleteObjects bool   `json:"delete_objects" yaml:"delete_objects"`
+	Bucket          string `json:"bucket" yaml:"bucket"`
+	Prefix          string `json:"prefix" yaml:"prefix"`
+	Codec           string `json:"codec" yaml:"codec"`
+	DeleteObjects   bool   `json:"delete_objects" yaml:"delete_objects"`
+	CredentialsJSON string `json:"credentials_json" yaml:"credentials_json"`
 }
 
 // NewGCPCloudStorageConfig creates a new GCPCloudStorageConfig with default

@@ -30,6 +30,7 @@ input:
   label: ""
   gcp_pubsub:
     project: ""
+    credentials_json: ""
     subscription: ""
     endpoint: ""
     sync: false
@@ -46,6 +47,7 @@ input:
   label: ""
   gcp_pubsub:
     project: ""
+    credentials_json: ""
     subscription: ""
     endpoint: ""
     sync: false
@@ -79,6 +81,17 @@ You can access these metadata fields using
 ### `project`
 
 The project ID of the target subscription.
+
+
+Type: `string`  
+Default: `""`  
+
+### `credentials_json`
+
+An optional field to set Google Service Account Credentials json as base64 encoded string.
+:::warning Secret
+This field contains sensitive information that usually shouldn't be added to a config directly, read our [secrets page for more info](/docs/configuration/secrets).
+:::
 
 
 Type: `string`  
