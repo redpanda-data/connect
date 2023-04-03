@@ -89,6 +89,7 @@ This field contains sensitive information that usually shouldn't be added to a c
 
 
 Type: `string`  
+Default: `""`  
 
 ### `table`
 

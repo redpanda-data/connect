@@ -98,7 +98,8 @@ func newBigQuerySelectInputConfig() *service.ConfigSpec {
 		Field(service.NewStringField("credentials_json").
 			Description("An optional field to set Google Service Account Credentials json as base64 encoded string.").
 			Optional().
-			Secret()).
+			Secret().
+			Default("")).
 		Field(service.NewStringField("table").Description("Fully-qualified BigQuery table name to query.").Example("bigquery-public-data.samples.shakespeare")).
 		Field(service.NewStringListField("columns").Description("A list of columns to query.")).
 		Field(service.NewStringField("where").
