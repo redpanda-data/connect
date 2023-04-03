@@ -220,8 +220,6 @@ func run(c *cli.Context) error {
 	file := c.String("file")
 	m := c.Args().First()
 
-	execCache := newExecCache()
-
 	if len(file) > 0 {
 		if len(m) > 0 {
 			fmt.Fprintln(os.Stderr, red("invalid flags, unable to execute both a file mapping and an inline mapping"))
@@ -275,6 +273,7 @@ func run(c *cli.Context) error {
 		go func() {
 			defer wg.Done()
 
+			execCache := newExecCache()
 			for {
 				input, open := <-inputsChan
 				if !open {
