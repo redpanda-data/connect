@@ -10,6 +10,7 @@ All notable changes to this project will be documented in this file.
 - The `-e/--env-file` cli flag can now be specified multiple times.
 - New `studio pull` cli subcommand for running Studio config deployments.
 - Metadata field `kafka_tombstone_message` added to the `kafka` and `kafka_franz` inputs.
+- Method `SetEnvVarLookupFunc` added to the stream builder API.
 
 ### Fixed
 
@@ -19,6 +20,10 @@ All notable changes to this project will be documented in this file.
 - Batch-aware processors such as `mapping` and `mutation` should now report correct error metrics.
 - Running `benthos blobl server` should no longer panic when a mapping with variable read/writes is executed in parallel.
 - Speculative fix for the `cloudwatch` metrics exporter rejecting metrics due to `minimum field size of 1, PutMetricDataInput.MetricData[0].Dimensions[0].Value`.
+
+### Changed
+
+- When a config contains environment variable interpolations without a default value (i.e. `${FOO}`), if that environment variable is not defined a linting error will be emitted.
 
 ## 4.13.0 - 2023-03-15
 

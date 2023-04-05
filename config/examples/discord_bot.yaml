@@ -1,8 +1,8 @@
 input:
   discord:
     poll_period: 3s
-    channel_id: ${DISCORD_CHANNEL}
-    bot_token: ${DISCORD_BOT_TOKEN}
+    channel_id: ${DISCORD_CHANNEL:xxx}
+    bot_token: ${DISCORD_BOT_TOKEN:xxx}
     cache: request_tracking
     cache_key: last_message_received
     limit: 10
@@ -67,8 +67,8 @@ pipeline:
 
 output:
   discord:
-    channel_id: ${DISCORD_CHANNEL}
-    bot_token: ${DISCORD_BOT_TOKEN}
+    channel_id: ${DISCORD_CHANNEL:xxx}
+    bot_token: ${DISCORD_BOT_TOKEN:xxx}
 
 cache_resources:
   - label: request_tracking

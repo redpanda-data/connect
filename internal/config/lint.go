@@ -2,8 +2,10 @@ package config
 
 import (
 	"bytes"
+	"errors"
 	"io"
 	"io/fs"
+	"os"
 	"time"
 	"unicode/utf8"
 
@@ -85,6 +87,15 @@ func ReadFileEnvSwap(store ifs.FS, path string) (configBytes []byte, lints []doc
 		))
 	}
 
-	configBytes = ReplaceEnvVariables(configBytes)
+	if configBytes, err = ReplaceEnvVariables(configBytes, os.LookupEnv); err != nil {
+		var errEnvMissing *ErrMissingEnvVars
+		if errors.As(err, &errEnvMissing) {
+			configBytes = errEnvMissing.BestAttempt
+			lints = append(lints, docs.NewLintError(1, docs.LintFailedRead, err.Error()))
+			err = nil
+		} else {
+			return
+		}
+	}
 	return
 }
