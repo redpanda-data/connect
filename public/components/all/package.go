@@ -16,6 +16,7 @@ import (
 	_ "github.com/benthosdev/benthos/v4/public/components/couchbase"
 	_ "github.com/benthosdev/benthos/v4/public/components/crypto"
 	_ "github.com/benthosdev/benthos/v4/public/components/dgraph"
+	_ "github.com/benthosdev/benthos/v4/public/components/discord"
 	_ "github.com/benthosdev/benthos/v4/public/components/elasticsearch"
 	_ "github.com/benthosdev/benthos/v4/public/components/gcp"
 	_ "github.com/benthosdev/benthos/v4/public/components/hdfs"
@@ -40,5 +41,6 @@ import (
 	_ "github.com/benthosdev/benthos/v4/public/components/snowflake"
 	_ "github.com/benthosdev/benthos/v4/public/components/sql"
 	_ "github.com/benthosdev/benthos/v4/public/components/statsd"
+	_ "github.com/benthosdev/benthos/v4/public/components/twitter"
 	_ "github.com/benthosdev/benthos/v4/public/components/wasm"
 )
