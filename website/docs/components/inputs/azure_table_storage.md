@@ -113,6 +113,7 @@ table_name: Foo
 ### `filter`
 
 OData filter expression. Is not set all rows are returned. Valid operators are `eq, ne, gt, lt, ge and le`
+This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
 
 
 Type: `string`  
@@ -122,6 +123,8 @@ Default: `""`
 # Examples
 
 filter: PartitionKey eq 'foo' and RowKey gt '1000'
+
+filter: PartitionKey eq '${PARTITION_KEY}'
 ```
 
 ### `select`
