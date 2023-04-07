@@ -22,7 +22,7 @@ func TestMockWalkableError(t *testing.T) {
 		Failed(2, errors.New("c error"))
 
 	require.Equal(t, err.IndexedErrors(), len(batch), "indexed errors did not match size of batch")
-	require.Equal(t, err.Error(), batchError.Error(), "headline error is not propagated")
+	require.ErrorIs(t, err, batchError, "headline error is not propagated")
 	err.WalkMessages(func(i int, m *Message, err error) bool {
 		bs, berr := m.AsBytes()
 		require.NoErrorf(t, berr, "could not get bytes from message at %d", i)

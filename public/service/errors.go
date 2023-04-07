@@ -64,6 +64,10 @@ func (err *BatchError) Error() string {
 	return err.wrapped.Error()
 }
 
+func (err *BatchError) Unwrap() error {
+	return err.wrapped
+}
+
 // If the provided error is not nil and can be cast to an internal batch error
 // we return a public batch error.
 func toPublicBatchError(err error) error {
