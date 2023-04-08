@@ -9,6 +9,7 @@ import (
 
 	"github.com/bwmarrin/discordgo"
 
+	"github.com/benthosdev/benthos/v4/internal/checkpoint"
 	"github.com/benthosdev/benthos/v4/internal/shutdown"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
@@ -64,6 +65,8 @@ type reader struct {
 	shutSig *shutdown.Signaller
 	mgr     *service.Resources
 
+	checkpointer *checkpoint.Capped[string]
+
 	// Config
 	channelID string
 	botToken  string
@@ -76,9 +79,10 @@ type reader struct {
 
 func newReader(conf *service.ParsedConfig, mgr *service.Resources) (*reader, error) {
 	r := &reader{
-		log:     mgr.Logger(),
-		shutSig: shutdown.NewSignaller(),
-		mgr:     mgr,
+		log:          mgr.Logger(),
+		shutSig:      shutdown.NewSignaller(),
+		mgr:          mgr,
+		checkpointer: checkpoint.NewCapped[string](1024),
 	}
 	var err error
 	if r.channelID, err = conf.FieldString("channel_id"); err != nil {
@@ -217,11 +221,20 @@ func (r *reader) Read(ctx context.Context) (*service.Message, service.AckFunc, e
 		return nil, nil, err
 	}
 
+	release, err := r.checkpointer.Track(ctx, msgEvent.ID, 1)
+	if err != nil {
+		return nil, nil, err
+	}
+
 	msg := service.NewMessage(jBytes)
 	return msg, func(ctx context.Context, err error) error {
+		highestID := release()
+		if highestID == nil {
+			return nil
+		}
 		var setErr error
 		if err := r.mgr.AccessCache(ctx, r.cache, func(c service.Cache) {
-			setErr = c.Set(ctx, r.cacheKey, []byte(msgEvent.ID), nil)
+			setErr = c.Set(ctx, r.cacheKey, []byte(*highestID), nil)
 		}); err != nil {
 			return err
 		}
