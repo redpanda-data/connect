@@ -7,14 +7,41 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
-- New `nats_kv` processor, input and output.
+- The `-e/--env-file` cli flag can now be specified multiple times.
+- New `studio pull` cli subcommand for running Studio config deployments.
+- Metadata field `kafka_tombstone_message` added to the `kafka` and `kafka_franz` inputs.
+- Method `SetEnvVarLookupFunc` added to the stream builder API.
+- The `discord` input and output now use the official chat client API and no longer rely on poll-based HTTP requests, this should result in more efficient and less erroneous behaviour.
 - New bloblang timestamp methods `ts_add_iso8601` and `ts_sub_iso8601`.
 
 ### Fixed
 
+- The `find_all` bloblang method no longer produces results that are of an `unknown` type.
+- Endpoints specified by HTTP server components using both the general `http` server block or their own custom server addresses should now be treated as path prefixes. This corrects a behavioural change that was introduced when both respective server options were updated to support path parameters.
+- Prevented a panic caused when using the `encrypt_aes` and `decrypt_aes` Bloblang methods with a mismatched key/iv lengths.
+- Batch-aware processors such as `mapping` and `mutation` should now report correct error metrics.
+- Running `benthos blobl server` should no longer panic when a mapping with variable read/writes is executed in parallel.
+- Speculative fix for the `cloudwatch` metrics exporter rejecting metrics due to `minimum field size of 1, PutMetricDataInput.MetricData[0].Dimensions[0].Value`.
+
+### Changed
+
+- When a config contains environment variable interpolations without a default value (i.e. `${FOO}`), if that environment variable is not defined a linting error will be emitted.
+
+## 4.13.0 - 2023-03-15
+
+### Added
+
+- Fix vulnerability [GO-2023-1571](https://pkg.go.dev/vuln/GO-2023-1571)
+- New `nats_kv` processor, input and output.
+- Field `partition` added to the `kafka_franz` output, allowing for manual partitioning.
+
+### Fixed
+
 - The `broker` output with the pattern `fan_out_sequential` will no longer abandon in-flight requests that are error blocked until the full shutdown timeout has occurred.
+- Fixed a regression bug in the `sequence` input where the returned messages have type `unknown`. This issue was introduced in v4.10.0 (cefa288).
 - The `broker` input no longer reports itself as unavailable when a child input has intentionally closed.
 - Config unit tests that check for structured data should no longer fail in all cases.
+- The `http_server` input with a custom address now supports path variables.
 
 ## 4.12.1 - 2023-02-23
 

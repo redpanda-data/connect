@@ -16,7 +16,7 @@ func TestReverseAirGapLogger(t *testing.T) {
 	lConf.Format = "json"
 
 	var buf bytes.Buffer
-	logger, err := log.NewV2(&buf, lConf)
+	logger, err := log.New(&buf, lConf)
 	require.NoError(t, err)
 
 	agLogger := newReverseAirGapLogger(logger)
@@ -49,7 +49,7 @@ func TestReverseAirGapLoggerDodgyFields(t *testing.T) {
 	lConf.Format = "json"
 
 	var buf bytes.Buffer
-	logger, err := log.NewV2(&buf, lConf)
+	logger, err := log.New(&buf, lConf)
 	require.NoError(t, err)
 
 	agLogger := newReverseAirGapLogger(logger)

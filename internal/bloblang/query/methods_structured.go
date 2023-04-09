@@ -525,7 +525,7 @@ var _ = registerSimpleMethod(
 				return nil, NewTypeError(v, ValueArray)
 			}
 
-			output := []int{}
+			output := []any{}
 			for i, elem := range array {
 				if found, err := findMethodICompare(ctx, val, elem); err != nil {
 					return nil, err

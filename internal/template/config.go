@@ -180,13 +180,9 @@ func (c Config) Test() ([]string, error) {
 	return failures, nil
 }
 
-// ReadConfig attempts to read a template configuration file.
-func ReadConfig(path string) (conf Config, lints []docs.Lint, err error) {
-	var templateBytes []byte
-	if templateBytes, err = ifs.ReadFile(ifs.OS(), path); err != nil {
-		return
-	}
-
+// ReadConfigYAML attempts to read a YAML byte slice as a template configuration
+// file.
+func ReadConfigYAML(templateBytes []byte) (conf Config, lints []docs.Lint, err error) {
 	if err = yaml.Unmarshal(templateBytes, &conf); err != nil {
 		return
 	}
@@ -198,6 +194,15 @@ func ReadConfig(path string) (conf Config, lints []docs.Lint, err error) {
 
 	lints = ConfigSpec().LintYAML(docs.NewLintContext(), &node)
 	return
+}
+
+// ReadConfigFile attempts to read a template configuration file.
+func ReadConfigFile(path string) (conf Config, lints []docs.Lint, err error) {
+	var templateBytes []byte
+	if templateBytes, err = ifs.ReadFile(ifs.OS(), path); err != nil {
+		return
+	}
+	return ReadConfigYAML(templateBytes)
 }
 
 //------------------------------------------------------------------------------

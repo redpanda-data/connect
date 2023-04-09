@@ -37,8 +37,8 @@ output:
 
 	changeChan := make(chan struct{})
 	var updatedConf stream.Config
-	require.NoError(t, rdr.SubscribeConfigChanges(func(conf stream.Config) error {
-		updatedConf = conf
+	require.NoError(t, rdr.SubscribeConfigChanges(func(conf *Type) error {
+		updatedConf = conf.Config
 		close(changeChan)
 		return nil
 	}))
@@ -88,8 +88,8 @@ output:
 
 	changeChan := make(chan struct{})
 	var updatedConf stream.Config
-	require.NoError(t, rdr.SubscribeConfigChanges(func(conf stream.Config) error {
-		updatedConf = conf
+	require.NoError(t, rdr.SubscribeConfigChanges(func(conf *Type) error {
+		updatedConf = conf.Config
 		close(changeChan)
 		return nil
 	}))
@@ -504,8 +504,7 @@ processor_resources:
 
 	rdr := newDummyReader("", []string{confDir + "/*.yaml"})
 
-	conf := New()
-	lints, err := rdr.Read(&conf)
+	conf, lints, err := rdr.Read()
 	require.NoError(t, err)
 	require.Empty(t, lints)
 
@@ -514,7 +513,7 @@ processor_resources:
 	require.Equal(t, conf.ResourceProcessors[1].Label, "c")
 
 	// Ignore
-	require.NoError(t, rdr.SubscribeConfigChanges(func(conf stream.Config) error {
+	require.NoError(t, rdr.SubscribeConfigChanges(func(conf *Type) error {
 		return nil
 	}))
 

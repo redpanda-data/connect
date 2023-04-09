@@ -376,13 +376,14 @@ function Home() {
                     <a href="https://synadia.com"><img className={styles.synadiaImg} src="/img/sponsors/synadia.svg" /></a>
                   </div>
                   <div className={classnames(styles.sponsorsBox)}>
-                    <a href="https://www.meltwater.com/"><img className={styles.meltwaterImg} src="/img/sponsors/mw_logo.png" /></a>
-                    <a href="https://www.humansecurity.com"><img className={styles.humanImg} src="/img/sponsors/HUMAN_logo.png" /></a>
-                    <a href="https://community.com/"><img className={styles.communityImg} src="/img/sponsors/community.svg" /></a>
-                    <a href="https://www.optum.com/"><img className={styles.optumImg} src="/img/sponsors/optum_logo.png" /></a>
-                    <a href="https://aurora.dev/"><img className={styles.auroraImg} src="/img/sponsors/aurora.svg" /></a>
-                    <a href="https://www.opala.com"><img className={styles.opalaImg} src="/img/sponsors/opala.svg" /></a>
-                    <a href="https://formance.com"><img className={styles.formanceImg} src="/img/sponsors/formance.svg" /></a>
+                    <a href="https://www.meltwater.com/"><img src="/img/sponsors/mw_logo.png" /></a>
+                    <a href="https://www.humansecurity.com"><img src="/img/sponsors/HUMAN_logo.png" /></a>
+                    <a href="https://community.com/"><img src="/img/sponsors/community.svg" /></a>
+                    <a href="https://www.optum.com/"><img src="/img/sponsors/optum_logo.png" /></a>
+                    <a href="https://aurora.dev/"><img src="/img/sponsors/aurora.svg" /></a>
+                    <a href="https://www.opala.com"><img src="/img/sponsors/opala.svg" /></a>
+                    <a href="https://formance.com"><img src="/img/sponsors/formance.svg" /></a>
+                    <a href="https://www.umh.app/"><img src="/img/sponsors/umh_logo.svg" /></a>
                   </div>
                 </div>
               </div>

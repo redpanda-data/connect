@@ -12,7 +12,6 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	"github.com/benthosdev/benthos/v4/internal/tracing"
 )
 
 func init() {
@@ -21,7 +20,7 @@ func init() {
 		if err != nil {
 			return nil, err
 		}
-		return processor.NewV2BatchedToV1Processor("group_by", p, mgr), nil
+		return processor.NewAutoObservedBatchedProcessor("group_by", p, mgr), nil
 	}, docs.ComponentSpec{
 		Name: "group_by",
 		Categories: []string{
@@ -93,7 +92,7 @@ type groupByProc struct {
 	groups []group
 }
 
-func newGroupBy(conf processor.GroupByConfig, mgr bundle.NewManagement) (processor.V2Batched, error) {
+func newGroupBy(conf processor.GroupByConfig, mgr bundle.NewManagement) (processor.AutoObservedBatched, error) {
 	var err error
 	groups := make([]group, len(conf))
 
@@ -122,7 +121,7 @@ func newGroupBy(conf processor.GroupByConfig, mgr bundle.NewManagement) (process
 	}, nil
 }
 
-func (g *groupByProc) ProcessBatch(ctx context.Context, spans []*tracing.Span, msg message.Batch) ([]message.Batch, error) {
+func (g *groupByProc) ProcessBatch(ctx *processor.BatchProcContext, msg message.Batch) ([]message.Batch, error) {
 	if msg.Len() == 0 {
 		return nil, nil
 	}
@@ -142,21 +141,15 @@ func (g *groupByProc) ProcessBatch(ctx context.Context, spans []*tracing.Span, m
 			}
 			if res {
 				groupStr := strconv.Itoa(j)
-				spans[i].LogKV(
-					"event", "grouped",
-					"type", groupStr,
-				)
-				spans[i].SetTag("group", groupStr)
+				ctx.Span(i).LogKV("event", "grouped", "type", groupStr)
+				ctx.Span(i).SetTag("group", groupStr)
 				groups[j] = append(groups[j], p)
 				return nil
 			}
 		}
 
-		spans[i].LogKV(
-			"event", "grouped",
-			"type", "default",
-		)
-		spans[i].SetTag("group", "default")
+		ctx.Span(i).LogKV("event", "grouped", "type", "default")
+		ctx.Span(i).SetTag("group", "default")
 		groupless = append(groupless, p)
 		return nil
 	})
@@ -167,7 +160,7 @@ func (g *groupByProc) ProcessBatch(ctx context.Context, spans []*tracing.Span, m
 			continue
 		}
 
-		resultMsgs, res := processor.ExecuteAll(ctx, g.groups[i].Processors, gmsg)
+		resultMsgs, res := processor.ExecuteAll(ctx.Context(), g.groups[i].Processors, gmsg)
 		if len(resultMsgs) > 0 {
 			msgs = append(msgs, resultMsgs...)
 		}

@@ -44,7 +44,6 @@ func init() {
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchProcessor, error) {
 			return newWazeroAllocProcessorFromConfig(conf, mgr)
 		})
-
 	if err != nil {
 		panic(err)
 	}

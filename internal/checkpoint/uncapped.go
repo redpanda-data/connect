@@ -7,8 +7,8 @@ package checkpoint
 // Also keeps track of the logical size of the unresolved sequence, which allows
 // for limiting the number of pending checkpoints.
 type Uncapped[T any] struct {
-	positionOffset int64
-	checkpoint     *T
+	checkpointPosition int64
+	checkpoint         *T
 
 	start, end *node[T]
 }
@@ -35,6 +35,8 @@ func (t *Uncapped[T]) Track(payload T, batchSize int64) func() *T {
 		newNode.prev = t.end
 		newNode.position += t.end.position
 		t.end.next = newNode
+	} else {
+		newNode.position += t.checkpointPosition
 	}
 
 	t.end = newNode
@@ -47,7 +49,7 @@ func (t *Uncapped[T]) Track(payload T, batchSize int64) func() *T {
 		} else {
 			tmp := newNode.payload
 			t.checkpoint = &tmp
-			t.positionOffset = newNode.position
+			t.checkpointPosition = newNode.position
 			t.start = newNode.next
 		}
 
@@ -55,9 +57,6 @@ func (t *Uncapped[T]) Track(payload T, batchSize int64) func() *T {
 			newNode.next.prev = newNode.prev
 		} else {
 			t.end = newNode.prev
-			if t.end == nil {
-				t.positionOffset = 0
-			}
 		}
 		return t.checkpoint
 	}
@@ -68,7 +67,7 @@ func (t *Uncapped[T]) Pending() int64 {
 	if t.end == nil {
 		return 0
 	}
-	return t.end.position - t.positionOffset
+	return t.end.position - t.checkpointPosition
 }
 
 // Highest returns the payload of the highest resolved checkpoint.
