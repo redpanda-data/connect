@@ -5,6 +5,7 @@ import (
 
 	"github.com/benthosdev/benthos/v4/internal/bloblang/mapping"
 	"github.com/benthosdev/benthos/v4/internal/component/interop"
+	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/message"
 	"github.com/benthosdev/benthos/v4/public/bloblang"
 	"github.com/benthosdev/benthos/v4/public/service"
@@ -122,7 +123,8 @@ pipeline:
 				return nil, err
 			}
 
-			return interop.NewUnwrapInternalBatchProcessor(newMutation(mapping, mgr.Logger())), nil
+			v1Proc := processor.NewAutoObservedBatchedProcessor("mutation", newMutation(mapping, mgr.Logger()), interop.UnwrapManagement(mgr))
+			return interop.NewUnwrapInternalBatchProcessor(v1Proc), nil
 		})
 	if err != nil {
 		panic(err)
@@ -145,13 +147,13 @@ func newMutation(exec *bloblang.Executor, log *service.Logger) *mutationProc {
 	}
 }
 
-func (m *mutationProc) ProcessBatch(ctx context.Context, b message.Batch) ([]message.Batch, error) {
+func (m *mutationProc) ProcessBatch(ctx *processor.BatchProcContext, b message.Batch) ([]message.Batch, error) {
 	newBatch := make(message.Batch, 0, len(b))
 	for i, msg := range b {
 		newPart, err := m.exec.MapOnto(msg, i, b)
 		if err != nil {
-			m.log.Error(err.Error())
-			msg.ErrorSet(err)
+			ctx.OnError(err, i, msg)
+			m.log.Errorf("%v", err)
 			newBatch = append(newBatch, msg)
 			continue
 		}

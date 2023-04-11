@@ -20,7 +20,7 @@ func init() {
 		if err != nil {
 			return nil, err
 		}
-		return processor.NewV2ToV1Processor("rate_limit", p, mgr), nil
+		return processor.NewAutoObservedProcessor("rate_limit", p, mgr), nil
 	}, docs.ComponentSpec{
 		Name: "rate_limit",
 		Categories: []string{

@@ -40,8 +40,7 @@ cache_resources:
 
 	rdr := config.NewReader("", nil, config.OptSetStreamPaths(streamOnePath, streamTwoPath))
 
-	conf := config.New()
-	lints, err := rdr.Read(&conf)
+	_, lints, err := rdr.Read()
 	require.NoError(t, err)
 	require.Len(t, lints, 0)
 
@@ -87,8 +86,7 @@ pipeline:
 
 	rdr := config.NewReader("", nil, config.OptSetStreamPaths(streamOnePath, filepath.Join(dir, "nested")))
 
-	conf := config.New()
-	lints, err := rdr.Read(&conf)
+	_, lints, err := rdr.Read()
 	require.NoError(t, err)
 	require.Len(t, lints, 0)
 

@@ -21,7 +21,7 @@ func init() {
 		if err != nil {
 			return nil, err
 		}
-		return processor.NewV2ToV1Processor("json_schema", p, mgr), nil
+		return processor.NewAutoObservedProcessor("json_schema", p, mgr), nil
 	}, docs.ComponentSpec{
 		Name: "json_schema",
 		Categories: []string{
@@ -100,7 +100,7 @@ type jsonSchemaProc struct {
 	schema *jsonschema.Schema
 }
 
-func newJSONSchema(conf processor.JSONSchemaConfig, mgr bundle.NewManagement) (processor.V2, error) {
+func newJSONSchema(conf processor.JSONSchemaConfig, mgr bundle.NewManagement) (processor.AutoObserved, error) {
 	var schema *jsonschema.Schema
 	var err error
 

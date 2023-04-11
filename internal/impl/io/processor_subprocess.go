@@ -29,7 +29,7 @@ func init() {
 		if err != nil {
 			return nil, err
 		}
-		return processor.NewV2ToV1Processor("subprocess", p, mgr), nil
+		return processor.NewAutoObservedProcessor("subprocess", p, mgr), nil
 	}, docs.ComponentSpec{
 		Name: "subprocess",
 		Categories: []string{
@@ -418,12 +418,12 @@ func (s *subprocWrapper) Send(prolog, payload, epilog []byte) ([]byte, error) {
 	case errBytes, open = <-errChan:
 		tout := time.After(time.Second)
 		var errBuf bytes.Buffer
-		errBuf.Write(errBytes)
+		_, _ = errBuf.Write(errBytes)
 	flushErrLoop:
 		for open {
 			select {
 			case errBytes, open = <-errChan:
-				errBuf.Write(errBytes)
+				_, _ = errBuf.Write(errBytes)
 			case <-tout:
 				break flushErrLoop
 			}

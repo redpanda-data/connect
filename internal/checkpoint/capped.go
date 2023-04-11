@@ -3,8 +3,6 @@ package checkpoint
 import (
 	"context"
 	"sync"
-
-	"github.com/benthosdev/benthos/v4/internal/component"
 )
 
 // Capped receives an ordered feed of integer based offsets being tracked, and
@@ -16,23 +14,23 @@ import (
 // to track a value will be blocked until the next value is resolved.
 //
 // This component is safe to use concurrently across goroutines.
-type Capped struct {
-	t    *Type
+type Capped[T any] struct {
+	t    *Uncapped[T]
 	cap  int64
 	cond *sync.Cond
 }
 
 // NewCapped returns a new capped checkpointer.
-func NewCapped(capacity int64) *Capped {
-	return &Capped{
-		t:    New(),
+func NewCapped[T any](capacity int64) *Capped[T] {
+	return &Capped[T]{
+		t:    NewUncapped[T](),
 		cap:  capacity,
 		cond: sync.NewCond(&sync.Mutex{}),
 	}
 }
 
 // Highest returns the current highest checkpoint.
-func (c *Capped) Highest() any {
+func (c *Capped[T]) Highest() *T {
 	c.cond.L.Lock()
 	defer c.cond.L.Unlock()
 	return c.t.Highest()
@@ -42,7 +40,7 @@ func (c *Capped) Highest() any {
 // marked as resolved. While it is cached no higher valued offset will ever be
 // committed. If the provided value is lower than an already provided value an
 // error is returned.
-func (c *Capped) Track(ctx context.Context, payload any, batchSize int64) (func() any, error) {
+func (c *Capped[T]) Track(ctx context.Context, payload T, batchSize int64) (func() *T, error) {
 	c.cond.L.Lock()
 	defer c.cond.L.Unlock()
 
@@ -51,25 +49,21 @@ func (c *Capped) Track(ctx context.Context, payload any, batchSize int64) (func(
 	defer cancel()
 	go func() {
 		<-ctx.Done()
-		c.cond.L.Lock()
 		c.cond.Broadcast()
-		c.cond.L.Unlock()
 	}()
 
 	pending := c.t.Pending()
 	for pending > 0 && pending+batchSize > c.cap {
 		c.cond.Wait()
-		select {
-		case <-ctx.Done():
-			return nil, component.ErrTimeout
-		default:
+		if err := ctx.Err(); err != nil {
+			return nil, err
 		}
 		pending = c.t.Pending()
 	}
 
 	resolveFn := c.t.Track(payload, batchSize)
 
-	return func() any {
+	return func() *T {
 		c.cond.L.Lock()
 		defer c.cond.L.Unlock()
 

@@ -51,6 +51,7 @@ This input adds the following metadata fields to each message:
 - kafka_offset
 - kafka_lag
 - kafka_timestamp_unix
+- kafka_tombstone_message
 - All existing message headers (version 0.11+)
 ` + "```" + `
 
@@ -302,14 +303,14 @@ func newKafkaReader(conf input.KafkaConfig, mgr bundle.NewManagement, log log.Mo
 //------------------------------------------------------------------------------
 
 func (k *kafkaReader) asyncCheckpointer(topic string, partition int32) func(context.Context, chan<- asyncMessage, message.Batch, int64) bool {
-	cp := checkpoint.NewCapped(int64(k.conf.CheckpointLimit))
+	cp := checkpoint.NewCapped[int64](int64(k.conf.CheckpointLimit))
 	return func(ctx context.Context, c chan<- asyncMessage, msg message.Batch, offset int64) bool {
 		if msg == nil {
 			return true
 		}
 		resolveFn, err := cp.Track(ctx, offset, int64(msg.Len()))
 		if err != nil {
-			if err != component.ErrTimeout {
+			if ctx.Err() == nil && err != component.ErrTimeout {
 				k.log.Errorf("Failed to checkpoint offset: %v\n", err)
 			}
 			return false
@@ -324,8 +325,8 @@ func (k *kafkaReader) asyncCheckpointer(topic string, partition int32) func(cont
 				}
 				k.cMut.Lock()
 				if k.session != nil {
-					k.log.Debugf("Marking offset for topic '%v' partition '%v'.\n", topic, partition)
-					k.session.MarkOffset(topic, partition, maxOffset.(int64), "")
+					k.log.Tracef("Marking offset for topic '%v' partition '%v'.\n", topic, partition)
+					k.session.MarkOffset(topic, partition, *maxOffset, "")
 				} else {
 					k.log.Debugf("Unable to mark offset for topic '%v' partition '%v'.\n", topic, partition)
 				}
@@ -389,10 +390,10 @@ func dataToPart(highestOffset int64, data *sarama.ConsumerMessage, multiHeader b
 
 	if multiHeader {
 		// in multi header mode we gather headers so we can encode them as lists
-		var headers = map[string][]any{}
+		headers := map[string][]any{}
 
 		for _, hdr := range data.Headers {
-			var key = string(hdr.Key)
+			key := string(hdr.Key)
 			headers[key] = append(headers[key], string(hdr.Value))
 		}
 
@@ -416,6 +417,7 @@ func dataToPart(highestOffset int64, data *sarama.ConsumerMessage, multiHeader b
 	part.MetaSetMut("kafka_offset", int(data.Offset))
 	part.MetaSetMut("kafka_lag", lag)
 	part.MetaSetMut("kafka_timestamp_unix", data.Timestamp.Unix())
+	part.MetaSetMut("kafka_tombstone_message", data.Value == nil)
 
 	return part
 }

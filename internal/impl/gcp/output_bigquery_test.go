@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"cloud.google.com/go/bigquery"
 	"github.com/stretchr/testify/assert"
@@ -282,10 +283,14 @@ table: table_meow
 
 	output.clientURL = gcpBQClientURL(server.URL)
 
-	err = output.Connect(context.Background())
+	ctx, done := context.WithTimeout(context.Background(), time.Millisecond*200)
+	defer done()
+
+	err = output.Connect(ctx)
 	defer output.Close(context.Background())
 
-	require.EqualError(t, err, "error checking dataset existence: googleapi: got HTTP response code 500 with body: {}")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "googleapi: got HTTP response code 500 with body: {}")
 }
 
 func TestGCPBigQueryOutputTableDoNotExists(t *testing.T) {
@@ -315,10 +320,14 @@ create_disposition: CREATE_NEVER
 
 	output.clientURL = gcpBQClientURL(server.URL)
 
-	err = output.Connect(context.Background())
+	ctx, done := context.WithTimeout(context.Background(), time.Millisecond*200)
+	defer done()
+
+	err = output.Connect(ctx)
 	defer output.Close(context.Background())
 
-	require.EqualError(t, err, "table does not exist: table_meow")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "table does not exist: table_meow")
 }
 
 func TestGCPBigQueryOutputTableDoNotExistsUnknownError(t *testing.T) {
@@ -348,10 +357,14 @@ create_disposition: CREATE_NEVER
 
 	output.clientURL = gcpBQClientURL(server.URL)
 
-	err = output.Connect(context.Background())
+	ctx, done := context.WithTimeout(context.Background(), time.Millisecond*200)
+	defer done()
+
+	err = output.Connect(ctx)
 	defer output.Close(context.Background())
 
-	require.EqualError(t, err, "error checking table existence: googleapi: got HTTP response code 500 with body: {}")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "googleapi: got HTTP response code 500 with body: {}")
 }
 
 func TestGCPBigQueryOutputConnectOk(t *testing.T) {

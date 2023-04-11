@@ -255,7 +255,11 @@ func TestSequenceJoinsMergeStrategies(t *testing.T) {
 						break consumeLoop
 					}
 					assert.Equal(t, 1, tran.Payload.Len())
-					act = append(act, string(tran.Payload.Get(0).AsBytes()))
+					m := tran.Payload.Get(0)
+					payload, err := m.AsStructured()
+					require.NoError(t, err)
+					require.IsType(t, map[string]interface{}{}, payload)
+					act = append(act, string(m.AsBytes()))
 					require.NoError(t, tran.Ack(ctx, nil))
 				case <-time.After(time.Minute):
 					t.Fatalf("Failed to consume message after: %v", act)

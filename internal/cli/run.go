@@ -11,6 +11,7 @@ import (
 
 	"github.com/benthosdev/benthos/v4/internal/bloblang/parser"
 	"github.com/benthosdev/benthos/v4/internal/cli/blobl"
+	"github.com/benthosdev/benthos/v4/internal/cli/common"
 	"github.com/benthosdev/benthos/v4/internal/cli/studio"
 	clitemplate "github.com/benthosdev/benthos/v4/internal/cli/template"
 	"github.com/benthosdev/benthos/v4/internal/cli/test"
@@ -20,8 +21,6 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/filepath/ifs"
 	"github.com/benthosdev/benthos/v4/internal/template"
 )
-
-//------------------------------------------------------------------------------
 
 // Build stamps.
 var (
@@ -58,67 +57,11 @@ func init() {
 	}
 }
 
-// OptSetVersionStamp creates an opt func for setting the version and date built
-// stamps that Benthos returns via --version and the /version endpoint.
-func OptSetVersionStamp(version, dateBuilt string) func() {
-	return func() {
-		Version = version
-		DateBuilt = dateBuilt
-	}
-}
-
 //------------------------------------------------------------------------------
 
-var customFlags []cli.Flag
-
-// OptAddStringFlag registers a custom CLI flag for the standard Benthos run
-// command.
-func OptAddStringFlag(name, usage string, aliases []string, value string, destination *string) func() {
-	return func() {
-		customFlags = append(customFlags, &cli.StringFlag{
-			Name:        name,
-			Aliases:     aliases,
-			Value:       value,
-			Usage:       usage,
-			Destination: destination,
-		})
-	}
-}
-
-//------------------------------------------------------------------------------
-
-var optContext = context.Background()
-
-// OptUseContext sets a context to be used for cancellation during the run
-// command. This adds one extra mechanism for graceful termination.
-func OptUseContext(ctx context.Context) func() {
-	return func() {
-		optContext = ctx
-	}
-}
-
-//------------------------------------------------------------------------------
-
-func cmdVersion() {
-	fmt.Printf("Version: %v\nDate: %v\n", Version, DateBuilt)
-	os.Exit(0)
-}
-
-//------------------------------------------------------------------------------
-
-// RunWithOpts runs the Benthos service after first applying opt funcs, which
-// are used for specify service customisations.
-func RunWithOpts(opts ...func()) {
-	for _, opt := range opts {
-		opt()
-	}
-	Run()
-}
-
-// Run the Benthos service, if the pipeline is started successfully then this
-// call blocks until either the pipeline shuts down or a termination signal is
-// received.
-func Run() {
+// App returns the full CLI app definition, this is useful for writing unit
+// tests around the CLI.
+func App() *cli.App {
 	flags := []cli.Flag{
 		&cli.BoolFlag{
 			Name:    "version",
@@ -126,10 +69,10 @@ func Run() {
 			Value:   false,
 			Usage:   "display version info, then exit",
 		},
-		&cli.StringFlag{
+		&cli.StringSliceFlag{
 			Name:    "env-file",
 			Aliases: []string{"e"},
-			Value:   "",
+			Value:   cli.NewStringSlice(),
 			Usage:   "import environment variables from a dotenv file",
 		},
 		&cli.StringFlag{
@@ -170,9 +113,6 @@ func Run() {
 			Usage:   "EXPERIMENTAL: watch config files for changes and automatically apply them",
 		},
 	}
-	if len(customFlags) > 0 {
-		flags = append(flags, customFlags...)
-	}
 
 	app := &cli.App{
 		Name:  "benthos",
@@ -186,7 +126,7 @@ Either run Benthos as a stream processor or choose a command:
   benthos -r "./production/*.yaml" -c ./config.yaml`[1:],
 		Flags: flags,
 		Before: func(c *cli.Context) error {
-			if dotEnvFile := c.String("env-file"); dotEnvFile != "" {
+			for _, dotEnvFile := range c.StringSlice("env-file") {
 				dotEnvBytes, err := ifs.ReadFile(ifs.OS(), dotEnvFile)
 				if err != nil {
 					fmt.Printf("Failed to read dotenv file: %v\n", err)
@@ -226,7 +166,8 @@ Either run Benthos as a stream processor or choose a command:
 		},
 		Action: func(c *cli.Context) error {
 			if c.Bool("version") {
-				cmdVersion()
+				fmt.Printf("Version: %v\nDate: %v\n", Version, DateBuilt)
+				os.Exit(0)
 			}
 			if c.Args().Len() > 0 {
 				fmt.Fprintf(os.Stderr, "Unrecognised command: %v\n", c.Args().First())
@@ -234,18 +175,7 @@ Either run Benthos as a stream processor or choose a command:
 				os.Exit(1)
 			}
 
-			if code := cmdService(
-				c.String("config"),
-				c.StringSlice("resources"),
-				c.StringSlice("set"),
-				c.String("log.level"),
-				!c.Bool("chilled"),
-				c.Bool("watcher"),
-				false,
-				false,
-				false,
-				nil,
-			); code != 0 {
+			if code := common.RunService(c, Version, DateBuilt, false); code != 0 {
 				os.Exit(code)
 			}
 			return nil
@@ -261,15 +191,14 @@ variables have been resolved:
 
   benthos -c ./config.yaml echo | less`[1:],
 				Action: func(c *cli.Context) error {
-					_, _, confReader := readConfig(c.String("config"), false, c.StringSlice("resources"), nil, c.StringSlice("set"))
-					conf := config.New()
-					if _, err := confReader.Read(&conf); err != nil {
+					_, _, confReader := common.ReadConfig(c, false)
+					conf, _, err := confReader.Read()
+					if err != nil {
 						fmt.Fprintf(os.Stderr, "Configuration file read error: %v\n", err)
 						os.Exit(1)
 					}
 					var node yaml.Node
-					err := node.Encode(conf)
-					if err == nil {
+					if err = node.Encode(conf); err == nil {
 						sanitConf := docs.NewSanitiseConfig()
 						sanitConf.RemoveTypeField = true
 						sanitConf.ScrubSecrets = true
@@ -321,24 +250,13 @@ https://benthos.dev/docs/guides/streams_mode/about`[1:],
 					},
 				},
 				Action: func(c *cli.Context) error {
-					os.Exit(cmdService(
-						c.String("config"),
-						c.StringSlice("resources"),
-						c.StringSlice("set"),
-						c.String("log.level"),
-						!c.Bool("chilled"),
-						c.Bool("watcher"),
-						!c.Bool("no-api"),
-						c.Bool("prefix-stream-endpoints"),
-						true,
-						c.Args().Slice(),
-					))
+					os.Exit(common.RunService(c, Version, DateBuilt, true))
 					return nil
 				},
 			},
 			listCliCommand(),
 			createCliCommand(),
-			test.CliCommand(testSuffix),
+			test.CliCommand(),
 			clitemplate.CliCommand(),
 			blobl.CliCommand(),
 			studio.CliCommand(Version, DateBuilt),
@@ -350,8 +268,12 @@ https://benthos.dev/docs/guides/streams_mode/about`[1:],
 		_ = cli.ShowAppHelp(context)
 		return err
 	}
-
-	_ = app.Run(os.Args)
+	return app
 }
 
-//------------------------------------------------------------------------------
+// Run the Benthos service, if the pipeline is started successfully then this
+// call blocks until either the pipeline shuts down or a termination signal is
+// received.
+func Run(ctx context.Context) {
+	_ = App().RunContext(ctx, os.Args)
+}

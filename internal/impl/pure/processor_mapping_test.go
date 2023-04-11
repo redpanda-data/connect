@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/message"
 	"github.com/benthosdev/benthos/v4/public/bloblang"
 )
@@ -41,7 +42,8 @@ meta baz = "new meta"
 
 	proc := newMapping(exec, nil)
 
-	outBatches, err := proc.ProcessBatch(tCtx, message.Batch{inMsg, inMsg2})
+	inBatch := message.Batch{inMsg, inMsg2}
+	outBatches, err := proc.ProcessBatch(processor.TestBatchProcContext(tCtx, nil, inBatch), inBatch)
 	require.NoError(t, err)
 	require.Len(t, outBatches, 1)
 	require.Len(t, outBatches[0], 2)
@@ -104,7 +106,7 @@ func TestMappingCreateCustomObject(t *testing.T) {
 
 	proc := newMapping(exec, nil)
 
-	outBatches, err := proc.ProcessBatch(tCtx, message.Batch{part})
+	outBatches, err := proc.ProcessBatch(processor.TestBatchProcContext(tCtx, nil, []*message.Part{part}), message.Batch{part})
 	require.NoError(t, err)
 	require.Len(t, outBatches, 1)
 	require.Len(t, outBatches[0], 1)
@@ -132,7 +134,7 @@ root = match {
 
 	proc := newMapping(exec, nil)
 
-	outBatches, err := proc.ProcessBatch(tCtx, inBatch)
+	outBatches, err := proc.ProcessBatch(processor.TestBatchProcContext(tCtx, nil, inBatch), inBatch)
 	require.NoError(t, err)
 	require.Len(t, outBatches, 1)
 	require.Len(t, outBatches[0], 2)
@@ -162,7 +164,7 @@ func TestMappingCreateFilterAll(t *testing.T) {
 
 	proc := newMapping(exec, nil)
 
-	outBatches, err := proc.ProcessBatch(tCtx, inBatch)
+	outBatches, err := proc.ProcessBatch(processor.TestBatchProcContext(tCtx, nil, inBatch), inBatch)
 	assert.NoError(t, err)
 	assert.Empty(t, outBatches)
 }
@@ -179,7 +181,7 @@ func TestMappingCreateJSONError(t *testing.T) {
 
 	proc := newMapping(exec, nil)
 
-	outBatches, err := proc.ProcessBatch(tCtx, msg)
+	outBatches, err := proc.ProcessBatch(processor.TestBatchProcContext(tCtx, nil, msg), msg)
 	require.NoError(t, err)
 	require.Len(t, outBatches, 1)
 	require.Len(t, outBatches[0], 1)

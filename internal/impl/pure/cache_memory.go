@@ -177,9 +177,8 @@ func (m *memoryCache) getShard(key string) *shard {
 	if len(m.shards) == 1 {
 		return m.shards[0]
 	}
-	h := xxhash.New64()
-	_, _ = h.WriteString(key)
-	return m.shards[h.Sum64()%uint64(len(m.shards))]
+
+	return m.shards[xxhash.ChecksumString64(key)%uint64(len(m.shards))]
 }
 
 func (m *memoryCache) Get(_ context.Context, key string) ([]byte, error) {

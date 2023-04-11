@@ -861,6 +861,26 @@ func (t *Type) RemoveRateLimit(ctx context.Context, name string) error {
 
 //------------------------------------------------------------------------------
 
+// CloseObservability attempts to clean up observability (metrics, tracing, etc)
+// components owned by the manager. This should only be called when the manager
+// itself has finished shutting down and when it is the sole owner of the
+// observability components.
+func (t *Type) CloseObservability(ctx context.Context) error {
+	if t.tracer != nil {
+		if shutter, ok := t.tracer.(interface {
+			Shutdown(context.Context) error
+		}); ok {
+			_ = shutter.Shutdown(ctx)
+		}
+	}
+	if t.stats != nil {
+		if err := t.stats.Close(); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // TriggerStopConsuming instructs the manager to stop resource inputs and
 // outputs from consuming data. This call does not block.
 func (t *Type) TriggerStopConsuming() {

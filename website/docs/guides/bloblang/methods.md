@@ -688,6 +688,44 @@ root.description = this.description.trim()
 # Out: {"description":"something happened and its amazing!","title":"watch out"}
 ```
 
+### `trim_prefix`
+
+Remove the provided leading prefix substring from a string. If the string does not have the prefix substring, it is returned unchanged.
+
+#### Parameters
+
+**`prefix`** &lt;string&gt; The leading prefix substring to trim from the string.  
+
+#### Examples
+
+
+```coffee
+root.name = this.name.trim_prefix("foobar_")
+root.description = this.description.trim_prefix("foobar_")
+
+# In:  {"description":"unchanged","name":"foobar_blobton"}
+# Out: {"description":"unchanged","name":"blobton"}
+```
+
+### `trim_suffix`
+
+Remove the provided trailing suffix substring from a string. If the string does not have the suffix substring, it is returned unchanged.
+
+#### Parameters
+
+**`suffix`** &lt;string&gt; The trailing suffix substring to trim from the string.  
+
+#### Examples
+
+
+```coffee
+root.name = this.name.trim_suffix("_foobar")
+root.description = this.description.trim_suffix("_foobar")
+
+# In:  {"description":"unchanged","name":"blobton_foobar"}
+# Out: {"description":"unchanged","name":"blobton"}
+```
+
 ### `unescape_html`
 
 Unescapes a string so that entities like `&lt;` become `<`. It unescapes a larger range of entities than `escape_html` escapes. For example, `&aacute;` unescapes to `á`, as does `&#225;` and `&xE1;`.

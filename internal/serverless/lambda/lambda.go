@@ -1,6 +1,7 @@
 package lambda
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"time"
@@ -49,7 +50,18 @@ func Run() {
 	conf.Output.Switch.Cases = append(conf.Output.Switch.Cases, errorCase, responseCase)
 
 	if confStr := os.Getenv("BENTHOS_CONFIG"); len(confStr) > 0 {
-		confBytes := config.ReplaceEnvVariables([]byte(confStr))
+		confBytes, err := config.ReplaceEnvVariables([]byte(confStr), os.LookupEnv)
+		if err != nil {
+			// TODO: Make this configurable somehow maybe, along with linting
+			// errors.
+			var errEnvMissing *config.ErrMissingEnvVars
+			if errors.As(err, &errEnvMissing) {
+				confBytes = errEnvMissing.BestAttempt
+			} else {
+				fmt.Fprintf(os.Stderr, "Configuration file read error: %v\n", err)
+				os.Exit(1)
+			}
+		}
 		if err := yaml.Unmarshal(confBytes, &conf); err != nil {
 			fmt.Fprintf(os.Stderr, "Configuration file read error: %v\n", err)
 			os.Exit(1)

@@ -63,6 +63,7 @@ type StreamBuilder struct {
 
 	env             *Environment
 	lintingDisabled bool
+	envVarLookupFn  func(string) (string, bool)
 }
 
 // NewStreamBuilder creates a new StreamBuilder.
@@ -70,13 +71,14 @@ func NewStreamBuilder() *StreamBuilder {
 	httpConf := api.NewConfig()
 	httpConf.Enabled = false
 	return &StreamBuilder{
-		http:      httpConf,
-		buffer:    buffer.NewConfig(),
-		resources: manager.NewResourceConfig(),
-		metrics:   metrics.NewConfig(),
-		tracer:    tracer.NewConfig(),
-		logger:    log.NewConfig(),
-		env:       globalEnvironment,
+		http:           httpConf,
+		buffer:         buffer.NewConfig(),
+		resources:      manager.NewResourceConfig(),
+		metrics:        metrics.NewConfig(),
+		tracer:         tracer.NewConfig(),
+		logger:         log.NewConfig(),
+		env:            globalEnvironment,
+		envVarLookupFn: os.LookupEnv,
 	}
 }
 
@@ -94,6 +96,13 @@ func (s *StreamBuilder) getLintContext() docs.LintContext {
 // linting rules.
 func (s *StreamBuilder) DisableLinting() {
 	s.lintingDisabled = true
+}
+
+// SetEnvVarLookupFunc changes the behaviour of the stream builder so that the
+// value of environment variable interpolations (of the form `${FOO}`) are
+// obtained via a provided function rather than the default of os.LookupEnv.
+func (s *StreamBuilder) SetEnvVarLookupFunc(fn func(string) (string, bool)) {
+	s.envVarLookupFn = fn
 }
 
 // SetThreads configures the number of pipeline processor threads should be
@@ -241,7 +250,7 @@ func (s *StreamBuilder) AddBatchProducerFunc() (MessageBatchHandlerFunc, error) 
 // If more than one input configuration is added they will automatically be
 // composed within a broker when the pipeline is built.
 func (s *StreamBuilder) AddInputYAML(conf string) error {
-	nconf, err := getYAMLNode([]byte(conf))
+	nconf, err := s.getYAMLNode([]byte(conf))
 	if err != nil {
 		return err
 	}
@@ -263,7 +272,7 @@ func (s *StreamBuilder) AddInputYAML(conf string) error {
 // builder to be executed within the pipeline.processors section, after all
 // prior added processor configs.
 func (s *StreamBuilder) AddProcessorYAML(conf string) error {
-	nconf, err := getYAMLNode([]byte(conf))
+	nconf, err := s.getYAMLNode([]byte(conf))
 	if err != nil {
 		return err
 	}
@@ -360,7 +369,7 @@ func (s *StreamBuilder) AddBatchConsumerFunc(fn MessageBatchHandlerFunc) error {
 // If more than one output configuration is added they will automatically be
 // composed within a fan out broker when the pipeline is built.
 func (s *StreamBuilder) AddOutputYAML(conf string) error {
-	nconf, err := getYAMLNode([]byte(conf))
+	nconf, err := s.getYAMLNode([]byte(conf))
 	if err != nil {
 		return err
 	}
@@ -381,7 +390,7 @@ func (s *StreamBuilder) AddOutputYAML(conf string) error {
 // AddCacheYAML parses a cache YAML configuration and adds it to the builder as
 // a resource.
 func (s *StreamBuilder) AddCacheYAML(conf string) error {
-	nconf, err := getYAMLNode([]byte(conf))
+	nconf, err := s.getYAMLNode([]byte(conf))
 	if err != nil {
 		return err
 	}
@@ -410,7 +419,7 @@ func (s *StreamBuilder) AddCacheYAML(conf string) error {
 // AddRateLimitYAML parses a rate limit YAML configuration and adds it to the
 // builder as a resource.
 func (s *StreamBuilder) AddRateLimitYAML(conf string) error {
-	nconf, err := getYAMLNode([]byte(conf))
+	nconf, err := s.getYAMLNode([]byte(conf))
 	if err != nil {
 		return err
 	}
@@ -438,7 +447,7 @@ func (s *StreamBuilder) AddRateLimitYAML(conf string) error {
 
 // AddResourcesYAML parses resource configurations and adds them to the config.
 func (s *StreamBuilder) AddResourcesYAML(conf string) error {
-	node, err := getYAMLNode([]byte(conf))
+	node, err := s.getYAMLNode([]byte(conf))
 	if err != nil {
 		return err
 	}
@@ -468,7 +477,7 @@ func (s *StreamBuilder) SetYAML(conf string) error {
 		return errors.New("attempted to override outputs config after adding a func consumer")
 	}
 
-	node, err := getYAMLNode([]byte(conf))
+	node, err := s.getYAMLNode([]byte(conf))
 	if err != nil {
 		return err
 	}
@@ -561,7 +570,7 @@ func (s *StreamBuilder) setFromConfig(sconf config.Type) {
 // to be placed between the input and the pipeline (processors) sections. This
 // config will replace any prior configured buffer.
 func (s *StreamBuilder) SetBufferYAML(conf string) error {
-	nconf, err := getYAMLNode([]byte(conf))
+	nconf, err := s.getYAMLNode([]byte(conf))
 	if err != nil {
 		return err
 	}
@@ -582,7 +591,7 @@ func (s *StreamBuilder) SetBufferYAML(conf string) error {
 // SetMetricsYAML parses a metrics YAML configuration and adds it to the builder
 // such that all stream components emit metrics through it.
 func (s *StreamBuilder) SetMetricsYAML(conf string) error {
-	nconf, err := getYAMLNode([]byte(conf))
+	nconf, err := s.getYAMLNode([]byte(conf))
 	if err != nil {
 		return err
 	}
@@ -603,7 +612,7 @@ func (s *StreamBuilder) SetMetricsYAML(conf string) error {
 // SetTracerYAML parses a tracer YAML configuration and adds it to the builder
 // such that all stream components emit tracing spans through it.
 func (s *StreamBuilder) SetTracerYAML(conf string) error {
-	nconf, err := getYAMLNode([]byte(conf))
+	nconf, err := s.getYAMLNode([]byte(conf))
 	if err != nil {
 		return err
 	}
@@ -624,7 +633,7 @@ func (s *StreamBuilder) SetTracerYAML(conf string) error {
 // SetLoggerYAML parses a logger YAML configuration and adds it to the builder
 // such that all stream components emit logs through it.
 func (s *StreamBuilder) SetLoggerYAML(conf string) error {
-	node, err := getYAMLNode([]byte(conf))
+	node, err := s.getYAMLNode([]byte(conf))
 	if err != nil {
 		return err
 	}
@@ -777,7 +786,7 @@ func (s *StreamBuilder) buildWithEnv(env *bundle.Environment) (*Stream, error) {
 	logger := s.customLogger
 	if logger == nil {
 		var err error
-		if logger, err = log.NewV2(os.Stdout, s.logger); err != nil {
+		if logger, err = log.New(os.Stdout, s.logger); err != nil {
 			return nil, err
 		}
 	}
@@ -901,8 +910,18 @@ func (s *StreamBuilder) buildConfig() builderConfig {
 
 //------------------------------------------------------------------------------
 
-func getYAMLNode(b []byte) (*yaml.Node, error) {
-	b = config.ReplaceEnvVariables(b)
+func (s *StreamBuilder) getYAMLNode(b []byte) (*yaml.Node, error) {
+	var err error
+	if b, err = config.ReplaceEnvVariables(b, s.envVarLookupFn); err != nil {
+		// TODO: Allow users to specify whether they care about env variables
+		// missing, in which case we error or not based on that.
+		var errEnvMissing *config.ErrMissingEnvVars
+		if errors.As(err, &errEnvMissing) {
+			b = errEnvMissing.BestAttempt
+		} else {
+			return nil, err
+		}
+	}
 	var nconf yaml.Node
 	if err := yaml.Unmarshal(b, &nconf); err != nil {
 		return nil, err
