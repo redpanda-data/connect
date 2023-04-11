@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/benthosdev/benthos/v4/internal/cli/studio/metrics"
+	"github.com/benthosdev/benthos/v4/internal/cli/studio/tracing"
 	"github.com/benthosdev/benthos/v4/internal/log"
 )
 
@@ -339,6 +340,7 @@ type pullSessionSyncRequest struct {
 	Name string `json:"name"`
 	pullConfigSummary
 	Metrics  *metrics.Observed `json:"metrics,omitempty"`
+	Tracing  *tracing.Observed `json:"tracing,omitempty"`
 	RunError string            `json:"run_error,omitempty"`
 }
 
@@ -353,6 +355,8 @@ type pullSessionSyncResponse struct {
 
 	// Diff information
 	DeploymentConfigDiff
+
+	RequestedTraces int64 `json:"requested_traces"`
 }
 
 // Sync sends a summary of this nodes execution up to this point along with the
@@ -360,9 +364,13 @@ type pullSessionSyncResponse struct {
 // assigned deployment. The returned data contains the potential for deployment
 // reassignment and/or a summary of files that are different and should be
 // dropped, added or updated in our config reader.
-func (s *sessionTracker) Sync(ctx context.Context, metrics *metrics.Observed) (*DeploymentConfigDiff, error) {
-	if err := s.waitForRateLimit(ctx); err != nil {
-		return nil, err
+func (s *sessionTracker) Sync(
+	ctx context.Context,
+	metrics *metrics.Observed,
+	tracing *tracing.Observed,
+) (diff *DeploymentConfigDiff, requestsTraces int64, err error) {
+	if err = s.waitForRateLimit(ctx); err != nil {
+		return
 	}
 
 	s.mut.Lock()
@@ -371,39 +379,40 @@ func (s *sessionTracker) Sync(ctx context.Context, metrics *metrics.Observed) (*
 		Name:              s.nodeName,
 		pullConfigSummary: s.currentFiles,
 		Metrics:           metrics,
+		Tracing:           tracing,
 	}
 	if s.runErr != nil {
 		syncReq.RunError = s.runErr.Error()
 	}
 	s.mut.Unlock()
 
-	syncURL, err := url.Parse(s.baseURL)
-	if err != nil {
-		return nil, err
+	var syncURL *url.URL
+	if syncURL, err = url.Parse(s.baseURL); err != nil {
+		return
 	}
 	syncURL.Path = path.Join(syncURL.Path, fmt.Sprintf("/deployment/%v/sync", depID))
 
-	requestBytes, err := json.Marshal(syncReq)
-	if err != nil {
-		return nil, err
+	var requestBytes []byte
+	if requestBytes, err = json.Marshal(syncReq); err != nil {
+		return
 	}
 
-	res, err := s.doRateLimitedReq(ctx, func() (*http.Request, error) {
+	var res *http.Response
+	if res, err = s.doRateLimitedReq(ctx, func() (*http.Request, error) {
 		req, err := http.NewRequest("POST", syncURL.String(), bytes.NewReader(requestBytes))
 		if err != nil {
 			return nil, err
 		}
 		addAuthHeaders(s.token, s.secret, req)
 		return req, err
-	})
-	if err != nil {
-		return nil, err
+	}); err != nil {
+		return
 	}
 
 	var response pullSessionSyncResponse
 	responseDec := json.NewDecoder(res.Body)
-	if err := responseDec.Decode(&response); err != nil {
-		return nil, err
+	if err = responseDec.Decode(&response); err != nil {
+		return
 	}
 
 	if response.Reassignment != nil {
@@ -422,12 +431,13 @@ func (s *sessionTracker) Sync(ctx context.Context, metrics *metrics.Observed) (*
 		// and the context we should be fine.
 		//
 		// Note: We also don't bother flushing the metrics again.
-		return s.Sync(ctx, nil)
+		return s.Sync(ctx, nil, nil)
 	}
 
 	s.logger.WithFields(map[string]string{
 		"deployment_id": depID,
 	}).Infoln("Synced with session")
+	requestsTraces = response.RequestedTraces
 
 	// Reflect the diff returned in our new summary of files.
 	summaryChanged := false
@@ -457,11 +467,13 @@ func (s *sessionTracker) Sync(ctx context.Context, metrics *metrics.Observed) (*
 		newFilesSummary.ResourceConfigs = append(newFilesSummary.ResourceConfigs, response.AddResources...)
 	}
 	if !summaryChanged {
-		return nil, nil
+		return
 	}
 
 	s.mut.Lock()
 	s.currentFiles = newFilesSummary
 	s.mut.Unlock()
-	return &response.DeploymentConfigDiff, nil
+
+	diff = &response.DeploymentConfigDiff
+	return
 }
