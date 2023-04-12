@@ -24,6 +24,8 @@ as a JSON file. Then you have 2 options to set this json
     - [cache_cloudstorage](/docs/components/caches/gcp_cloud_storage)
     - [input_pubsub](/docs/components/inputs/gcp_pubsub)
     - [output_pubsub](/docs/components/outputs/gcp_pubsub)
-
+- the value of component's `credentials_json` takes precendence, if set, over `GOOGLE_APPLICATION_CREDENTIALS`. 
+  - if `credentials_json` is set but is invalid value, returns error.
+  - if `credentials_json` is set but is empty value, `GOOGLE_APPLICATION_CREDENTIALS` will be considered if set.
 
 Please refer to [this document](https://cloud.google.com/docs/authentication/production) for details.

@@ -201,7 +201,7 @@ func getClientOptionsForOutputCloudStorage(g *gcpCloudStorageOutput) ([]option.C
 	if len(cred) > 0 {
 		decodedCred, err := base64.StdEncoding.DecodeString(cred)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("error decoding GCP Credentials JSON: %w", err)
 		}
 		opt = []option.ClientOption{option.WithCredentialsJSON(decodedCred)}
 	}

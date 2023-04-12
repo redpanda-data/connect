@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"errors"
+	"fmt"
 	"strings"
 	"sync"
 
@@ -147,7 +148,7 @@ func getClientOptionsForPubsubClient(conf input.GCPPubSubConfig) ([]option.Clien
 	if len(cred) > 0 {
 		decodedCred, err := base64.StdEncoding.DecodeString(cred)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("error decoding GCP Credentials JSON: %w", err)
 		}
 		opt = append(opt, option.WithCredentialsJSON(decodedCred))
 	}

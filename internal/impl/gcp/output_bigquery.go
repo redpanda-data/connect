@@ -115,7 +115,7 @@ func (g gcpBQClientURL) NewClient(ctx context.Context, projectID string, credent
 
 	opt, err := g.getClientOptionsForOutputBQ(credentialsJSON)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error decoding GCP Credentials JSON: %w", err)
 	}
 	return bigquery.NewClient(ctx, projectID, opt...)
 }
@@ -130,7 +130,7 @@ func (g gcpBQClientURL) getClientOptionsForOutputBQ(credentialsJSON string) ([]o
 	if len(cred) > 0 {
 		decodedCred, err := base64.StdEncoding.DecodeString(cred)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("error decoding GCP Credentials JSON: %w", err)
 		}
 		opt = append(opt, option.WithCredentialsJSON(decodedCred))
 	}

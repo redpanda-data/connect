@@ -177,7 +177,7 @@ func getClientOptionsForOutputPubsub(conf output.GCPPubSubConfig) ([]option.Clie
 	if len(cred) > 0 {
 		decodedCred, err := base64.StdEncoding.DecodeString(cred)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("error decoding GCP Credentials JSON: %w", err)
 		}
 		opt = append(opt, option.WithCredentialsJSON(decodedCred))
 	}
