@@ -50,3 +50,16 @@ type Pipeline interface {
 // stream pipeline thread in order to construct a custom pipeline
 // implementation.
 type PipelineConstructorFunc func() (Pipeline, error)
+
+// Unwrap attempts to access a wrapped processor from the provided
+// implementation where applicable, otherwise the provided processor is
+// returned. This is necessary when access raw implementations that could have
+// been wrapped in a tracing mechanism (or other).
+func Unwrap(p V1) V1 {
+	if w, ok := p.(interface {
+		UnwrapProc() V1
+	}); ok {
+		return Unwrap(w.UnwrapProc())
+	}
+	return p
+}

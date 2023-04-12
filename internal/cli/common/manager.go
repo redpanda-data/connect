@@ -25,7 +25,14 @@ import (
 )
 
 // CreateManager from a CLI context and a stream config.
-func CreateManager(c *cli.Context, logger log.Modular, streamsMode bool, version, dateBuilt string, conf config.Type) (stoppableMgr *StoppableManager, err error) {
+func CreateManager(
+	c *cli.Context,
+	logger log.Modular,
+	streamsMode bool,
+	version, dateBuilt string,
+	conf config.Type,
+	mgrOpts ...manager.OptFunc,
+) (stoppableMgr *StoppableManager, err error) {
 	var stats *metrics.Namespaced
 	var trac trace.TracerProvider
 	defer func() {
@@ -82,17 +89,18 @@ func CreateManager(c *cli.Context, logger log.Modular, streamsMode bool, version
 		return
 	}
 
-	// Create resource manager.
-	var mgr *manager.Type
-	if mgr, err = manager.New(
-		conf.ResourceConfig,
+	mgrOpts = append([]manager.OptFunc{
 		manager.OptSetAPIReg(httpServer),
 		manager.OptSetStreamHTTPNamespacing(c.Bool("prefix-stream-endpoints")),
 		manager.OptSetLogger(logger),
 		manager.OptSetMetrics(stats),
 		manager.OptSetTracer(trac),
 		manager.OptSetStreamsMode(streamsMode),
-	); err != nil {
+	}, mgrOpts...)
+
+	// Create resource manager.
+	var mgr *manager.Type
+	if mgr, err = manager.New(conf.ResourceConfig, mgrOpts...); err != nil {
 		err = fmt.Errorf("failed to initialise resources: %w", err)
 		return
 	}

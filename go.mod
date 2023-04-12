@@ -1,5 +1,7 @@
 module github.com/benthosdev/benthos/v4
 
+replace github.com/99designs/keyring => github.com/Jeffail/keyring v1.2.3
+
 require (
 	cloud.google.com/go/bigquery v1.44.0
 	cloud.google.com/go/pubsub v1.27.1
@@ -26,6 +28,7 @@ require (
 	github.com/beanstalkd/go-beanstalk v0.2.0
 	github.com/benhoyt/goawk v1.21.0
 	github.com/bradfitz/gomemcache v0.0.0-20230124162541-5f7a7d875746
+	github.com/bwmarrin/discordgo v0.27.1
 	github.com/bwmarrin/snowflake v0.3.0
 	github.com/bxcodec/faker/v3 v3.8.1
 	github.com/cenkalti/backoff/v4 v4.2.0
@@ -190,7 +193,6 @@ require (
 	github.com/go-logr/logr v1.2.3 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/go-stack/stack v1.8.1 // indirect
-	github.com/godbus/dbus v0.0.0-20190726142602-4481cbc300e2 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang-sql/civil v0.0.0-20220223132316-b832511892a9 // indirect
 	github.com/golang-sql/sqlexp v0.1.0 // indirect
@@ -205,7 +207,6 @@ require (
 	github.com/gorilla/css v1.0.0 // indirect
 	github.com/gosimple/unidecode v1.0.1 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.13.0 // indirect
-	github.com/gsterjov/go-libsecret v0.0.0-20161001094733-a6f4afe4910c // indirect
 	github.com/hailocab/go-hostpool v0.0.0-20160125115350-e80d13ce29ed // indirect
 	github.com/hashicorp/go-immutable-radix v1.3.0 // indirect
 	github.com/hashicorp/go-uuid v1.0.3 // indirect

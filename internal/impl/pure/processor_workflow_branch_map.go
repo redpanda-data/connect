@@ -175,7 +175,7 @@ func (r *resourcedBranch) lock() (branch *Branch, unlockFn func()) {
 
 	go func() {
 		_ = r.mgr.AccessProcessor(context.Background(), r.name, func(p processor.V1) {
-			branch, _ = p.(*Branch)
+			branch, _ = processor.Unwrap(p).(*Branch)
 			openOnce.Do(func() {
 				close(open)
 			})
