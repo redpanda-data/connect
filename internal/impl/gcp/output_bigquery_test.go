@@ -531,6 +531,7 @@ table: table_meow
 	require.Error(t, err)
 }
 
+// credentials_json value is base64 encoded valid json with dummy data
 func TestGCPBigQueryConnectWithCredsJson(t *testing.T) {
 	server := httptest.NewServer(
 		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -563,6 +564,7 @@ credentials_json: ewogICJ0eXBlIjogInNlcnZpY2VfYWNjb3VudCIsCiAgInByb2plY3RfaWQiOi
 	require.EqualValues(t, option.WithCredentialsJSON(expectedValue), actualCredsJSON, "GCP Credentials Json not set as expected.")
 }
 
+// credentials_json value is base64 encoded valid json with dummy data
 func TestGCPBigQueryConnectNoServerUrlAndWithEncCredsJSON(t *testing.T) {
 	config := gcpBigQueryConfFromYAML(t, `
 project: project_meow
@@ -585,6 +587,7 @@ credentials_json: ewogICJ0eXBlIjogInNlcnZpY2VfYWNjb3VudCIsCiAgInByb2plY3RfaWQiOi
 	require.EqualValues(t, option.WithCredentialsJSON(expectedValue), actualCredsJSON, "GCP Credentials Json not set as expected.")
 }
 
+// credentials_json value is base64 encoded valid json with dummy data
 func TestGCPBigQueryConnectNoServerUrlAndWithEncCredsJSONAsMultiLine(t *testing.T) {
 	config := gcpBigQueryConfFromYAML(t, `
 project: project_meow
@@ -637,6 +640,7 @@ credentials_json: |
 	require.EqualValues(t, option.WithCredentialsJSON(expectedValue), actualCredsJSON, "GCP Credentials Json not set as expected.")
 }
 
+// credentials_json value is invalid base64 encoded dummy data
 func TestGCPBigQueryConnectWithCredsJSONError(t *testing.T) {
 	server := httptest.NewServer(
 		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
