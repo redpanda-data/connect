@@ -71,7 +71,8 @@ func (t *Tracked) getResFromGroup(walkable *batch.Error) error {
 
 func (t *Tracked) resFromError(err error) error {
 	if err != nil {
-		if walkable, ok := err.(*batch.Error); ok {
+		var walkable *batch.Error
+		if errors.As(err, &walkable) {
 			err = t.getResFromGroup(walkable)
 		}
 	}
