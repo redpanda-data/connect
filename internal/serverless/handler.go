@@ -103,7 +103,7 @@ func (h *Handler) Handle(ctx context.Context, obj any) (any, error) {
 // NewHandler returns a Handler by creating a Benthos pipeline.
 func NewHandler(conf config.Type) (*Handler, error) {
 	// Logging and stats aggregation.
-	logger, err := log.NewV2(os.Stdout, conf.Logger)
+	logger, err := log.New(os.Stdout, conf.Logger)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create logger: %v", err)
 	}

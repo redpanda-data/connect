@@ -34,8 +34,6 @@ input:
   discord:
     channel_id: ""
     bot_token: ""
-    poll_period: 1m
-    limit: 100
     cache: ""
 ```
 
@@ -49,17 +47,14 @@ input:
   discord:
     channel_id: ""
     bot_token: ""
-    poll_period: 1m
-    limit: 100
     cache: ""
     cache_key: last_message_id
-    rate_limit: ""
 ```
 
 </TabItem>
 </Tabs>
 
-This input works by polling the `/channels/{channel_id}/messages` Discord API endpoint authenticated as a bot using token based authentication. The ID of the newest message consumed is stored in a cache in order to paginate results, ideally this cache should be persisted across restarts in order for the service to resume where it left off.
+This input works by authenticating as a bot using token based authentication. The ID of the newest message consumed and acked is stored in a cache in order to perform a backfill of unread messages each time the input is initialised. Ideally this cache should be persisted across restarts.
 
 ## Fields
 
@@ -77,25 +72,9 @@ A bot token used for authentication.
 
 Type: `string`  
 
-### `poll_period`
-
-The length of time (as a duration string) to wait between each poll for new messages. This field can be set empty, in which case requests are made at the limit set by the rate limit. This field also supports cron expressions.
-
-
-Type: `string`  
-Default: `"1m"`  
-
-### `limit`
-
-The maximum number of messages to receive in a single request.
-
-
-Type: `int`  
-Default: `100`  
-
 ### `cache`
 
-A cache resource to use for request pagination, the ID of the last message received will be stored in this cache and used for subsequent requests.
+A cache resource to use for performing unread message backfills, the ID of the last message received will be stored in this cache and used for subsequent requests.
 
 
 Type: `string`  
@@ -107,13 +86,5 @@ The key identifier used when storing the ID of the last message received.
 
 Type: `string`  
 Default: `"last_message_id"`  
-
-### `rate_limit`
-
-An optional rate limit resource to restrict API requests with.
-
-
-Type: `string`  
-Default: `""`  
 
 

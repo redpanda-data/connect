@@ -173,7 +173,7 @@ func (r *Reader) BeginFileWatching(mgr bundle.NewManagement, strict bool) error 
 					}
 					var succeeded bool
 					if nameClean == r.mainPath {
-						succeeded = !ShouldReread(r.TriggerMainUpdate(mgr, strict))
+						succeeded = !ShouldReread(r.TriggerMainUpdate(mgr, strict, r.mainPath))
 					} else if _, exists := r.streamFileInfo[nameClean]; exists {
 						succeeded = !ShouldReread(r.TriggerStreamUpdate(mgr, strict, nameClean))
 					} else {

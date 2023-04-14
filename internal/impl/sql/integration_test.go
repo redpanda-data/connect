@@ -545,19 +545,8 @@ func testSuite(t *testing.T, driver, dsn string, createTableFn func(string) erro
 	}
 }
 
-func TestIntegration(t *testing.T) {
+func TestIntegrationClickhouse(t *testing.T) {
 	integration.CheckSkip(t)
-
-	t.Run("clickhouse", clickhouseIntegration)
-	t.Run("clickhouse_old", clickhouseOldIntegration)
-	t.Run("postgres", postgresIntegration)
-	t.Run("mysql", mySQLIntegration)
-	t.Run("mssql", msSQLIntegration)
-	t.Run("sqlite", sqliteIntegration)
-	t.Run("oracle", oracleIntegration)
-}
-
-func clickhouseIntegration(t *testing.T) {
 	t.Parallel()
 
 	pool, err := dockertest.NewPool("")
@@ -611,7 +600,8 @@ func clickhouseIntegration(t *testing.T) {
 	testSuite(t, "clickhouse", dsn, createTable)
 }
 
-func clickhouseOldIntegration(t *testing.T) {
+func TestIntegrationOldClickhouse(t *testing.T) {
+	integration.CheckSkip(t)
 	t.Parallel()
 
 	pool, err := dockertest.NewPool("")
@@ -665,7 +655,8 @@ func clickhouseOldIntegration(t *testing.T) {
 	testSuite(t, "clickhouse", dsn, createTable)
 }
 
-func postgresIntegration(t *testing.T) {
+func TestIntegrationPostgres(t *testing.T) {
+	integration.CheckSkip(t)
 	t.Parallel()
 
 	pool, err := dockertest.NewPool("")
@@ -725,7 +716,8 @@ func postgresIntegration(t *testing.T) {
 	testSuite(t, "postgres", dsn, createTable)
 }
 
-func mySQLIntegration(t *testing.T) {
+func TestIntegrationMySQL(t *testing.T) {
+	integration.CheckSkip(t)
 	t.Parallel()
 
 	pool, err := dockertest.NewPool("")
@@ -788,7 +780,8 @@ func mySQLIntegration(t *testing.T) {
 	testSuite(t, "mysql", dsn, createTable)
 }
 
-func msSQLIntegration(t *testing.T) {
+func TestIntegrationMSSQL(t *testing.T) {
+	integration.CheckSkip(t)
 	t.Parallel()
 
 	pool, err := dockertest.NewPool("")
@@ -848,7 +841,8 @@ func msSQLIntegration(t *testing.T) {
 	testSuite(t, "mssql", dsn, createTable)
 }
 
-func sqliteIntegration(t *testing.T) {
+func TestIntegrationSQLite(t *testing.T) {
+	integration.CheckSkip(t)
 	t.Parallel()
 
 	var db *sql.DB
@@ -890,7 +884,8 @@ func sqliteIntegration(t *testing.T) {
 	testSuite(t, "sqlite", dsn, createTable)
 }
 
-func oracleIntegration(t *testing.T) {
+func TestIntegrationOracle(t *testing.T) {
+	integration.CheckSkip(t)
 	t.Parallel()
 
 	pool, err := dockertest.NewPool("")

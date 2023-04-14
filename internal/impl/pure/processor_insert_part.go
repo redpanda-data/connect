@@ -10,7 +10,6 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	"github.com/benthosdev/benthos/v4/internal/tracing"
 )
 
 func init() {
@@ -19,7 +18,7 @@ func init() {
 		if err != nil {
 			return nil, err
 		}
-		return processor.NewV2BatchedToV1Processor("insert_part", p, mgr), nil
+		return processor.NewAutoObservedBatchedProcessor("insert_part", p, mgr), nil
 	}, docs.ComponentSpec{
 		Name: "insert_part",
 		Categories: []string{
@@ -56,7 +55,7 @@ type insertPart struct {
 	log   log.Modular
 }
 
-func newInsertPart(conf processor.InsertPartConfig, mgr bundle.NewManagement) (processor.V2Batched, error) {
+func newInsertPart(conf processor.InsertPartConfig, mgr bundle.NewManagement) (processor.AutoObservedBatched, error) {
 	part, err := mgr.BloblEnvironment().NewField(conf.Content)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse content expression: %v", err)
@@ -68,7 +67,7 @@ func newInsertPart(conf processor.InsertPartConfig, mgr bundle.NewManagement) (p
 	}, nil
 }
 
-func (p *insertPart) ProcessBatch(ctx context.Context, spans []*tracing.Span, msg message.Batch) ([]message.Batch, error) {
+func (p *insertPart) ProcessBatch(ctx *processor.BatchProcContext, msg message.Batch) ([]message.Batch, error) {
 	newPartBytes, err := p.part.Bytes(0, msg)
 	if err != nil {
 		p.log.Errorf("Content interpolation error: %v", err)

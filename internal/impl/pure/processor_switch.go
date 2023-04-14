@@ -12,7 +12,6 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	"github.com/benthosdev/benthos/v4/internal/tracing"
 )
 
 func init() {
@@ -21,7 +20,7 @@ func init() {
 		if err != nil {
 			return nil, err
 		}
-		return processor.NewV2BatchedToV1Processor("switch", p, mgr), nil
+		return processor.NewAutoObservedBatchedProcessor("switch", p, mgr), nil
 	}, docs.ComponentSpec{
 		Name: "switch",
 		Categories: []string{
@@ -157,7 +156,7 @@ func SwitchReorderFromGroup(group *message.SortGroup, parts []*message.Part) {
 	})
 }
 
-func (s *switchProc) ProcessBatch(ctx context.Context, _ []*tracing.Span, msg message.Batch) ([]message.Batch, error) {
+func (s *switchProc) ProcessBatch(ctx *processor.BatchProcContext, msg message.Batch) ([]message.Batch, error) {
 	var result []*message.Part
 	var remaining []*message.Part
 	var carryOver []*message.Part
@@ -183,6 +182,7 @@ func (s *switchProc) ProcessBatch(ctx context.Context, _ []*tracing.Span, msg me
 				var err error
 				if test, err = switchCase.check.QueryPart(j, testMsg); err != nil {
 					s.log.Errorf("Failed to test case %v: %v\n", i, err)
+					ctx.OnError(fmt.Errorf("failed to test case %v: %w", i, err), -1, p)
 					processor.MarkErr(p, nil, err)
 					result = append(result, p)
 					continue
@@ -201,7 +201,7 @@ func (s *switchProc) ProcessBatch(ctx context.Context, _ []*tracing.Span, msg me
 		if len(passed) > 0 {
 			execMsg := message.Batch(passed)
 
-			msgs, res := processor.ExecuteAll(ctx, switchCase.processors, execMsg)
+			msgs, res := processor.ExecuteAll(ctx.Context(), switchCase.processors, execMsg)
 			if res != nil {
 				return nil, res
 			}

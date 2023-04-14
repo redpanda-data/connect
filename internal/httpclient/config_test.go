@@ -121,5 +121,4 @@ oauth2:
 			assert.Equal(t, test.outputConf, conf)
 		})
 	}
-
 }
