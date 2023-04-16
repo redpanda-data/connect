@@ -290,7 +290,7 @@ output:
 			jsonRequestSupersetMatch(t, r, obj{
 				"name":        "foobarnode",
 				"main_config": obj{"name": "maina.yaml", "modified": 1001.0},
-				"run_error":   "maina.yaml: (5,1) unable to infer input type from candidates: [blahbluh]",
+				"run_error":   "failed bootstrap config read: maina.yaml: (5,1) unable to infer input type from candidates: [blahbluh]",
 			})
 			jsonResponse(t, w, obj{
 				"main_config": obj{"name": "maina.yaml", "modified": 1002},

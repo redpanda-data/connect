@@ -190,7 +190,7 @@ func (r *PullRunner) bootstrapConfigReader(ctx context.Context) (bootstrapErr er
 
 	conf, lints, err := confReaderTmp.Read()
 	if err != nil {
-		return fmt.Errorf("failed offline config read: %w", err)
+		return fmt.Errorf("failed bootstrap config read: %w", err)
 	}
 	r.logLints(lints)
 	if r.strictMode && len(lints) > 0 {
@@ -205,7 +205,7 @@ func (r *PullRunner) bootstrapConfigReader(ctx context.Context) (bootstrapErr er
 		manager.OptSetEnvironment(tmpEnv),
 	)
 	if err != nil {
-		return fmt.Errorf("failed to create manager from offline config: %w", err)
+		return fmt.Errorf("failed to create manager from bootstrap config: %w", err)
 	}
 	defer func() {
 		if bootstrapErr != nil {
