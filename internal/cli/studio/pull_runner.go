@@ -190,7 +190,7 @@ func (r *PullRunner) bootstrapConfigReader(ctx context.Context) (bootstrapErr er
 
 	conf, lints, err := confReaderTmp.Read()
 	if err != nil {
-		return err
+		return fmt.Errorf("failed offline config read: %w", err)
 	}
 	r.logLints(lints)
 	if r.strictMode && len(lints) > 0 {
@@ -205,7 +205,7 @@ func (r *PullRunner) bootstrapConfigReader(ctx context.Context) (bootstrapErr er
 		manager.OptSetEnvironment(tmpEnv),
 	)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to create manager from offline config: %w", err)
 	}
 	defer func() {
 		if bootstrapErr != nil {
@@ -215,7 +215,7 @@ func (r *PullRunner) bootstrapConfigReader(ctx context.Context) (bootstrapErr er
 
 	mgrTmp := stopMgrTmp.Manager().WithAddedMetrics(r.metrics)
 	if err := r.triggerStreamReset(ctx, &conf, mgrTmp); err != nil {
-		return err
+		return fmt.Errorf("failed initial stream reset: %w", err)
 	}
 
 	// Extract shutdown timeout values
