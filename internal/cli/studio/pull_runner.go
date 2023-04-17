@@ -43,6 +43,10 @@ type PullRunner struct {
 	confReader     *config.Reader
 	sessionTracker *sessionTracker
 
+	// Controls disabled deployment rotations
+	isDisabled     bool
+	latestMainConf *stream.Config
+
 	metricsFlushPeriod time.Duration
 	metrics            *metrics.Tracker
 	mgr                bundle.NewManagement
@@ -143,10 +147,11 @@ func NewPullRunner(c *cli.Context, version, dateBuilt, token, secret string, opt
 	}
 	r.metricsFlushPeriod = r.sessionTracker.MetricsGuideFlushPeriod()
 
-	if err := r.bootstrapConfigReader(c.Context); err != nil {
+	err = r.bootstrapConfigReader(c.Context)
+	if err != nil {
 		r.logger.Errorf("Failed to run initial sync config: %v", err)
-		r.sessionTracker.SetRunError(err)
 	}
+	r.sessionTracker.SetRunError(err)
 	return r, nil
 }
 
@@ -160,7 +165,32 @@ func (r *PullRunner) logLints(lints []string) {
 	}
 }
 
+func (r *PullRunner) setStreamDisabled(ctx context.Context, toDisabled bool) error {
+	if r.isDisabled == toDisabled {
+		return nil // Already set
+	}
+	if toDisabled {
+		if err := r.stoppableStream.Replace(ctx, func() (common.Stoppable, error) {
+			return &noopStopper{}, nil
+		}); err != nil {
+			return err
+		}
+	} else if r.latestMainConf != nil && r.mgr != nil {
+		if err := r.stoppableStream.Replace(ctx, func() (common.Stoppable, error) {
+			return stream.New(*r.latestMainConf, r.mgr)
+		}); err != nil {
+			return err
+		}
+	}
+	r.isDisabled = toDisabled
+	return nil
+}
+
 func (r *PullRunner) triggerStreamReset(ctx context.Context, conf *config.Type, mgr bundle.NewManagement) error {
+	r.latestMainConf = &conf.Config
+	if r.isDisabled {
+		return nil
+	}
 	return r.stoppableStream.Replace(ctx, func() (common.Stoppable, error) {
 		return stream.New(conf.Config, mgr)
 	})
@@ -269,7 +299,7 @@ func (r *PullRunner) Sync(ctx context.Context) {
 		}
 	}
 
-	diff, requestedTraces, err := r.sessionTracker.Sync(ctx, metricsOut, tracingOut)
+	isDisabled, diff, requestedTraces, err := r.sessionTracker.Sync(ctx, metricsOut, tracingOut)
 	if err != nil {
 		r.logger.Errorf("Failed session sync: %v", err)
 		return
@@ -278,11 +308,24 @@ func (r *PullRunner) Sync(ctx context.Context) {
 	if r.confReader == nil {
 		// We haven't bootstrapped yet, likely due to a bad config on
 		// our first attempt. The latest sync may have fixed the issue
-		// so we try again.
-		if err := r.bootstrapConfigReader(ctx); err != nil {
-			r.logger.Errorf("Failed to bootstrap initial config: %v", err)
-			r.sessionTracker.SetRunError(err)
+		// so we can potentially try again.
+
+		if isDisabled {
+			// Except the deployment is disabled now, so don't.
+			r.logger.Infoln("Deployment is disabled, so skipping bootstrap of initial config")
+			return
 		}
+
+		err := r.bootstrapConfigReader(ctx)
+		if err != nil {
+			r.logger.Errorf("Failed to bootstrap initial config: %v", err)
+		}
+		r.sessionTracker.SetRunError(err)
+		return
+	}
+
+	if err = r.setStreamDisabled(ctx, isDisabled); err != nil {
+		r.logger.Errorf("Failed to toggle deployment enablement: %v", err)
 		return
 	}
 
