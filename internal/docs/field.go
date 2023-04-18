@@ -161,7 +161,7 @@ func (f FieldSpec) Optional() FieldSpec {
 	return f
 }
 
-const bloblREEnvVar = "\\${[0-9A-Za-z_.]+(:((\\${[^}]+})|[^}])+)?}"
+const bloblREEnvVar = "\\${[0-9A-Za-z_.]+(:((\\${[^}]+})|[^}])*)?}"
 
 // Secret marks this field as being a secret, which means it represents
 // information that is generally considered sensitive such as passwords or
