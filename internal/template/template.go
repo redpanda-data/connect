@@ -2,8 +2,6 @@ package template
 
 import (
 	"fmt"
-	"io/fs"
-	"sync"
 
 	"gopkg.in/yaml.v3"
 
@@ -18,53 +16,14 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/manager"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	"github.com/benthosdev/benthos/v4/template"
 )
-
-var initNativeOnce sync.Once
-
-// InitNativeTemplates initialises any templates that were compiled into the
-// binary, these can be found in ./template/embed.go.
-func InitNativeTemplates() (err error) {
-	initNativeOnce.Do(func() {
-		err = fs.WalkDir(template.NativeTemplates, ".", func(path string, d fs.DirEntry, err error) error {
-			if err != nil {
-				return err
-			}
-			if d.IsDir() {
-				return nil
-			}
-			tBytes, err := fs.ReadFile(template.NativeTemplates, path)
-			if err != nil {
-				return err
-			}
-
-			var conf Config
-			if err = yaml.Unmarshal(tBytes, &conf); err != nil {
-				return fmt.Errorf("failed to parse template '%v': %w", path, err)
-			}
-
-			tmpl, err := conf.compile()
-			if err != nil {
-				return fmt.Errorf("failed to compile template %v: %w", path, err)
-			}
-
-			if err := registerTemplate(tmpl); err != nil {
-				return fmt.Errorf("failed to register template %v: %w", path, err)
-			}
-
-			return nil
-		})
-	})
-	return
-}
 
 // InitTemplates parses and registers native templates, as well as templates
 // at paths provided, and returns any linting errors that occur.
 func InitTemplates(templatesPaths ...string) ([]string, error) {
 	var lints []string
 	for _, tPath := range templatesPaths {
-		tmplConf, tLints, err := ReadConfig(tPath)
+		tmplConf, tLints, err := ReadConfigFile(tPath)
 		if err != nil {
 			return nil, fmt.Errorf("template %v: %w", tPath, err)
 		}
@@ -77,7 +36,7 @@ func InitTemplates(templatesPaths ...string) ([]string, error) {
 			return nil, fmt.Errorf("template %v: %w", tPath, err)
 		}
 
-		if err := registerTemplate(tmpl); err != nil {
+		if err := registerTemplate(bundle.GlobalEnvironment, tmpl); err != nil {
 			return nil, fmt.Errorf("template %v: %w", tPath, err)
 		}
 	}
@@ -125,20 +84,36 @@ func (c *compiled) ExpandToNode(node *yaml.Node) (*yaml.Node, error) {
 
 //------------------------------------------------------------------------------
 
+// RegisterTemplateYAML attempts to register a new template component to the
+// specified environment.
+func RegisterTemplateYAML(env *bundle.Environment, template []byte) error {
+	tmplConf, _, err := ReadConfigYAML(template)
+	if err != nil {
+		return err
+	}
+
+	tmpl, err := tmplConf.compile()
+	if err != nil {
+		return err
+	}
+
+	return registerTemplate(env, tmpl)
+}
+
 // RegisterTemplate attempts to add a template component to the global list of
 // component types.
-func registerTemplate(tmpl *compiled) error {
+func registerTemplate(env *bundle.Environment, tmpl *compiled) error {
 	switch tmpl.spec.Type {
 	case docs.TypeCache:
-		return registerCacheTemplate(tmpl, bundle.AllCaches)
+		return registerCacheTemplate(tmpl, env)
 	case docs.TypeInput:
-		return registerInputTemplate(tmpl, bundle.AllInputs)
+		return registerInputTemplate(tmpl, env)
 	case docs.TypeOutput:
-		return registerOutputTemplate(tmpl, bundle.AllOutputs)
+		return registerOutputTemplate(tmpl, env)
 	case docs.TypeProcessor:
-		return registerProcessorTemplate(tmpl, bundle.AllProcessors)
+		return registerProcessorTemplate(tmpl, env)
 	case docs.TypeRateLimit:
-		return registerRateLimitTemplate(tmpl, bundle.AllRateLimits)
+		return registerRateLimitTemplate(tmpl, env)
 	}
 	return fmt.Errorf("unable to register template for component type %v", tmpl.spec.Type)
 }
@@ -152,8 +127,8 @@ func WithMetricsMapping(nm bundle.NewManagement, m *metrics.Mapping) bundle.NewM
 	return nm
 }
 
-func registerCacheTemplate(tmpl *compiled, set *bundle.CacheSet) error {
-	return set.Add(func(c cache.Config, nm bundle.NewManagement) (cache.V1, error) {
+func registerCacheTemplate(tmpl *compiled, env *bundle.Environment) error {
+	return env.CacheAdd(func(c cache.Config, nm bundle.NewManagement) (cache.V1, error) {
 		newNode, err := tmpl.ExpandToNode(c.Plugin.(*yaml.Node))
 		if err != nil {
 			return nil, err
@@ -173,8 +148,8 @@ func registerCacheTemplate(tmpl *compiled, set *bundle.CacheSet) error {
 	}, tmpl.spec)
 }
 
-func registerInputTemplate(tmpl *compiled, set *bundle.InputSet) error {
-	return set.Add(func(c input.Config, nm bundle.NewManagement) (input.Streamed, error) {
+func registerInputTemplate(tmpl *compiled, env *bundle.Environment) error {
+	return env.InputAdd(func(c input.Config, nm bundle.NewManagement) (input.Streamed, error) {
 		newNode, err := tmpl.ExpandToNode(c.Plugin.(*yaml.Node))
 		if err != nil {
 			return nil, err
@@ -197,8 +172,8 @@ func registerInputTemplate(tmpl *compiled, set *bundle.InputSet) error {
 	}, tmpl.spec)
 }
 
-func registerOutputTemplate(tmpl *compiled, set *bundle.OutputSet) error {
-	return set.Add(func(c output.Config, nm bundle.NewManagement, pcf ...processor.PipelineConstructorFunc) (output.Streamed, error) {
+func registerOutputTemplate(tmpl *compiled, env *bundle.Environment) error {
+	return env.OutputAdd(func(c output.Config, nm bundle.NewManagement, pcf ...processor.PipelineConstructorFunc) (output.Streamed, error) {
 		newNode, err := tmpl.ExpandToNode(c.Plugin.(*yaml.Node))
 		if err != nil {
 			return nil, err
@@ -209,7 +184,7 @@ func registerOutputTemplate(tmpl *compiled, set *bundle.OutputSet) error {
 			return nil, err
 		}
 
-		// Tempate processors inserted _after_ configured processors.
+		// Template processors inserted _after_ configured processors.
 		conf.Processors = append(c.Processors, conf.Processors...)
 
 		if tmpl.metricsMapping != nil {
@@ -221,8 +196,8 @@ func registerOutputTemplate(tmpl *compiled, set *bundle.OutputSet) error {
 	}, tmpl.spec)
 }
 
-func registerProcessorTemplate(tmpl *compiled, set *bundle.ProcessorSet) error {
-	return set.Add(func(c processor.Config, nm bundle.NewManagement) (processor.V1, error) {
+func registerProcessorTemplate(tmpl *compiled, env *bundle.Environment) error {
+	return env.ProcessorAdd(func(c processor.Config, nm bundle.NewManagement) (processor.V1, error) {
 		newNode, err := tmpl.ExpandToNode(c.Plugin.(*yaml.Node))
 		if err != nil {
 			return nil, err
@@ -242,8 +217,8 @@ func registerProcessorTemplate(tmpl *compiled, set *bundle.ProcessorSet) error {
 	}, tmpl.spec)
 }
 
-func registerRateLimitTemplate(tmpl *compiled, set *bundle.RateLimitSet) error {
-	return set.Add(func(c ratelimit.Config, nm bundle.NewManagement) (ratelimit.V1, error) {
+func registerRateLimitTemplate(tmpl *compiled, env *bundle.Environment) error {
+	return env.RateLimitAdd(func(c ratelimit.Config, nm bundle.NewManagement) (ratelimit.V1, error) {
 		newNode, err := tmpl.ExpandToNode(c.Plugin.(*yaml.Node))
 		if err != nil {
 			return nil, err

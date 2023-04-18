@@ -20,5 +20,5 @@ import (
 // program, as it interacts with singleton state. In order to manage multiple
 // Benthos stream lifecycles in a program use the StreamBuilder API instead.
 func RunCLI(ctx context.Context) {
-	cli.RunWithOpts(cli.OptUseContext(ctx))
+	cli.Run(ctx)
 }

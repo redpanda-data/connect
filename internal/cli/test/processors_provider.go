@@ -21,7 +21,6 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/manager"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	"github.com/benthosdev/benthos/v4/internal/tracing"
 )
 
 type cachedConfig struct {
@@ -99,7 +98,7 @@ func (p *ProcessorsProvider) ProvideBloblang(pathStr string) ([]processor.V1, er
 	}
 
 	return []processor.V1{
-		processor.NewV2BatchedToV1Processor("bloblang", newBloblang(exec, p.logger), mock.NewManager()),
+		processor.NewAutoObservedBatchedProcessor("bloblang", newBloblang(exec, p.logger), mock.NewManager()),
 	}, nil
 }
 
@@ -108,21 +107,21 @@ type bloblangProc struct {
 	log  log.Modular
 }
 
-func newBloblang(exec *mapping.Executor, log log.Modular) processor.V2Batched {
+func newBloblang(exec *mapping.Executor, log log.Modular) processor.AutoObservedBatched {
 	return &bloblangProc{
 		exec: exec,
 		log:  log,
 	}
 }
 
-func (b *bloblangProc) ProcessBatch(ctx context.Context, spans []*tracing.Span, msg message.Batch) ([]message.Batch, error) {
+func (b *bloblangProc) ProcessBatch(ctx *processor.BatchProcContext, msg message.Batch) ([]message.Batch, error) {
 	newParts := make([]*message.Part, 0, msg.Len())
 	_ = msg.Iter(func(i int, part *message.Part) error {
 		p, err := b.exec.MapPart(i, msg)
 		if err != nil {
 			p = part.ShallowCopy()
+			ctx.OnError(err, i, p)
 			b.log.Errorf("%v\n", err)
-			processor.MarkErr(p, spans[i], err)
 		}
 		if p != nil {
 			newParts = append(newParts, p)

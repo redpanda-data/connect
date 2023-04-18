@@ -14,7 +14,6 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
 	"github.com/benthosdev/benthos/v4/internal/shutdown"
-	"github.com/benthosdev/benthos/v4/internal/tracing"
 )
 
 func init() {
@@ -23,7 +22,7 @@ func init() {
 		if err != nil {
 			return nil, err
 		}
-		return processor.NewV2BatchedToV1Processor("while", p, mgr), nil
+		return processor.NewAutoObservedBatchedProcessor("while", p, mgr), nil
 	}, docs.ComponentSpec{
 		Name: "while",
 		Categories: []string{
@@ -107,13 +106,13 @@ func (w *whileProc) checkMsg(msg message.Batch) bool {
 	return c
 }
 
-func (w *whileProc) ProcessBatch(ctx context.Context, spans []*tracing.Span, msg message.Batch) (msgs []message.Batch, res error) {
+func (w *whileProc) ProcessBatch(ctx *processor.BatchProcContext, msg message.Batch) (msgs []message.Batch, res error) {
 	msgs = []message.Batch{msg}
 
 	loops := 0
 	condResult := w.atLeastOnce || w.checkMsg(msg)
 	for condResult {
-		if w.shutSig.ShouldCloseAtLeisure() || ctx.Err() != nil {
+		if w.shutSig.ShouldCloseAtLeisure() || ctx.Context().Err() != nil {
 			return nil, component.ErrTypeClosed
 		}
 		if w.maxLoops > 0 && loops >= w.maxLoops {
@@ -122,11 +121,11 @@ func (w *whileProc) ProcessBatch(ctx context.Context, spans []*tracing.Span, msg
 		}
 
 		w.log.Traceln("Looped")
-		for _, s := range spans {
-			s.LogKV("event", "loop")
+		for i := range msg {
+			ctx.Span(i).LogKV("event", "loop")
 		}
 
-		msgs, res = processor.ExecuteAll(ctx, w.children, msgs...)
+		msgs, res = processor.ExecuteAll(ctx.Context(), w.children, msgs...)
 		if len(msgs) == 0 {
 			return
 		}
@@ -134,8 +133,8 @@ func (w *whileProc) ProcessBatch(ctx context.Context, spans []*tracing.Span, msg
 		loops++
 	}
 
-	for _, s := range spans {
-		s.SetTag("result", strconv.FormatBool(condResult))
+	for i := range msg {
+		ctx.Span(i).SetTag("result", strconv.FormatBool(condResult))
 	}
 
 	totalParts := 0

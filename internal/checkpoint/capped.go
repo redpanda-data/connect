@@ -3,8 +3,6 @@ package checkpoint
 import (
 	"context"
 	"sync"
-
-	"github.com/benthosdev/benthos/v4/internal/component"
 )
 
 // Capped receives an ordered feed of integer based offsets being tracked, and
@@ -51,18 +49,14 @@ func (c *Capped[T]) Track(ctx context.Context, payload T, batchSize int64) (func
 	defer cancel()
 	go func() {
 		<-ctx.Done()
-		c.cond.L.Lock()
 		c.cond.Broadcast()
-		c.cond.L.Unlock()
 	}()
 
 	pending := c.t.Pending()
 	for pending > 0 && pending+batchSize > c.cap {
 		c.cond.Wait()
-		select {
-		case <-ctx.Done():
-			return nil, component.ErrTimeout
-		default:
+		if err := ctx.Err(); err != nil {
+			return nil, err
 		}
 		pending = c.t.Pending()
 	}

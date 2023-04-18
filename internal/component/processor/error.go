@@ -12,8 +12,10 @@ func MarkErr(part *message.Part, span *tracing.Span, err error) {
 	if err == nil {
 		return
 	}
-	part.ErrorSet(err)
-	if span == nil {
+	if part != nil {
+		part.ErrorSet(err)
+	}
+	if span == nil && part != nil {
 		span = tracing.GetActiveSpan(part)
 	}
 	if span != nil {

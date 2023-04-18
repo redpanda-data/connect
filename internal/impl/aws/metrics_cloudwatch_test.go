@@ -356,6 +356,7 @@ func TestCloudWatchTags(t *testing.T) {
 
 	ctr.With("one").Incr(1)
 	ctr.With("two").Incr(2)
+	ctr.With("").Incr(3) // Test that empty ones are skipped
 	gge.With("third").Set(3)
 
 	cw.flush()
@@ -376,6 +377,10 @@ func TestCloudWatchTags(t *testing.T) {
 				"foo": "two",
 			},
 			value: 2,
+		},
+		"counter.bar": {
+			unit:  "Count",
+			value: 3,
 		},
 		"gauge.bar:map[bar:third]": {
 			unit: "None",

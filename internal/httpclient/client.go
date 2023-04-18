@@ -225,8 +225,8 @@ func (h *Client) waitForAccess(ctx context.Context) bool {
 }
 
 // ResponseToBatch attempts to parse an HTTP response into a 2D slice of bytes.
-func (h *Client) ResponseToBatch(res *http.Response) (resMsg message.Batch, err error) {
-	resMsg = message.QuickBatch(nil)
+func (h *Client) ResponseToBatch(res *http.Response) (message.Batch, error) {
+	resMsg := message.QuickBatch(nil)
 
 	annotatePart := func(p *message.Part) {
 		p.MetaSetMut("http_status_code", res.StatusCode)
@@ -244,17 +244,17 @@ func (h *Client) ResponseToBatch(res *http.Response) (resMsg message.Batch, err 
 		nextPart := message.NewPart(nil)
 		annotatePart(nextPart)
 		resMsg = append(resMsg, nextPart)
-		return
+		return resMsg, nil
 	}
 	defer res.Body.Close()
 
 	var mediaType string
 	var params map[string]string
+	var err error
 	if contentType := res.Header.Get("Content-Type"); len(contentType) > 0 {
 		if mediaType, params, err = mime.ParseMediaType(contentType); err != nil {
 			h.log.Warnf("Failed to parse media type from Content-Type header: %v\n", err)
 		}
-		err = nil
 	}
 
 	var buffer bytes.Buffer
@@ -262,7 +262,7 @@ func (h *Client) ResponseToBatch(res *http.Response) (resMsg message.Batch, err 
 		var bytesRead int64
 		if bytesRead, err = buffer.ReadFrom(res.Body); err != nil {
 			h.log.Errorf("Failed to read response: %v\n", err)
-			return
+			return resMsg, err
 		}
 
 		nextPart := message.NewPart(nil)
@@ -272,7 +272,7 @@ func (h *Client) ResponseToBatch(res *http.Response) (resMsg message.Batch, err 
 
 		annotatePart(nextPart)
 		resMsg = append(resMsg, nextPart)
-		return
+		return resMsg, nil
 	}
 
 	mr := multipart.NewReader(res.Body, params["boundary"])
@@ -281,16 +281,15 @@ func (h *Client) ResponseToBatch(res *http.Response) (resMsg message.Batch, err 
 		var p *multipart.Part
 		if p, err = mr.NextPart(); err != nil {
 			if err == io.EOF {
-				err = nil
 				break
 			}
-			return
+			return resMsg, err
 		}
 
 		var bytesRead int64
 		if bytesRead, err = buffer.ReadFrom(p); err != nil {
 			h.log.Errorf("Failed to read response: %v\n", err)
-			return
+			return resMsg, err
 		}
 
 		nextPart := message.NewPart(buffer.Bytes()[bufferIndex : bufferIndex+bytesRead])
@@ -299,7 +298,8 @@ func (h *Client) ResponseToBatch(res *http.Response) (resMsg message.Batch, err 
 		annotatePart(nextPart)
 		resMsg = append(resMsg, nextPart)
 	}
-	return
+
+	return resMsg, nil
 }
 
 type retryStrategy int

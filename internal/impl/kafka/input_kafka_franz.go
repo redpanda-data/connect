@@ -21,18 +21,12 @@ import (
 
 func franzKafkaInputConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
-		// Stable(). TODO
+		Beta().
 		Categories("Services").
 		Version("3.61.0").
 		Summary("An alternative Kafka input using the [Franz Kafka client library](https://github.com/twmb/franz-go).").
 		Description(`
 Consumes one or more topics by balancing the partitions across any other connected clients with the same consumer group.
-
-This input is new and experimental, and the existing ` + "`kafka`" + ` input is not going anywhere, but here's some reasons why it might be worth trying this one out:
-
-- You like shiny new stuff
-- You are experiencing issues with the existing ` + "`kafka`" + ` input
-- Someone told you to
 
 ### Metadata
 
@@ -44,6 +38,7 @@ This input adds the following metadata fields to each message:
 - kafka_partition
 - kafka_offset
 - kafka_timestamp_unix
+- kafka_tombstone_message
 - All record headers
 ` + "```" + `
 `).
@@ -472,9 +467,10 @@ func recordToMessage(record *kgo.Record, multiHeader bool) *service.Message {
 	msg.MetaSet("kafka_partition", strconv.Itoa(int(record.Partition)))
 	msg.MetaSet("kafka_offset", strconv.Itoa(int(record.Offset)))
 	msg.MetaSet("kafka_timestamp_unix", strconv.FormatInt(record.Timestamp.Unix(), 10))
+	msg.MetaSet("kafka_tombstone_message", strconv.FormatBool(record.Value == nil))
 	if multiHeader {
 		// in multi header mode we gather headers so we can encode them as lists
-		var headers = map[string][]any{}
+		headers := map[string][]any{}
 
 		for _, hdr := range record.Headers {
 			headers[hdr.Key] = append(headers[hdr.Key], string(hdr.Value))
