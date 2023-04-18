@@ -82,7 +82,7 @@ A database [driver](#drivers) to use.
 
 
 Type: `string`  
-Options: `mysql`, `postgres`, `clickhouse`, `mssql`, `sqlite`, `oracle`, `snowflake`.
+Options: `mysql`, `postgres`, `clickhouse`, `mssql`, `sqlite`, `oracle`, `snowflake`, `trino`.
 
 ### `data_source_name`
 
@@ -104,6 +104,7 @@ The query to execute. The style of placeholder to use depends on the driver, som
 | `sqlite` | Question mark |
 | `oracle` | Colon |
 | `snowflake` | Question mark |
+| `trino` | Question mark |
 
 
 Type: `string`  

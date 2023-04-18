@@ -353,6 +353,10 @@ type pullSessionSyncResponse struct {
 	// Reassignment information
 	Reassignment *reassignedDeploymentSummary `json:"reassignment,omitempty"`
 
+	// True if your deployment is disabled/deleted but there's nothing to
+	// reassign to.
+	IsDisabled bool `json:"is_disabled"`
+
 	// Diff information
 	DeploymentConfigDiff
 
@@ -368,7 +372,7 @@ func (s *sessionTracker) Sync(
 	ctx context.Context,
 	metrics *metrics.Observed,
 	tracing *tracing.Observed,
-) (diff *DeploymentConfigDiff, requestsTraces int64, err error) {
+) (disabled bool, diff *DeploymentConfigDiff, requestsTraces int64, err error) {
 	if err = s.waitForRateLimit(ctx); err != nil {
 		return
 	}
@@ -433,6 +437,8 @@ func (s *sessionTracker) Sync(
 		// Note: We also don't bother flushing the metrics again.
 		return s.Sync(ctx, nil, nil)
 	}
+
+	disabled = response.IsDisabled
 
 	s.logger.WithFields(map[string]string{
 		"deployment_id": depID,

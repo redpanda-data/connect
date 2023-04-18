@@ -5,7 +5,6 @@ import (
 	"errors"
 	"io/fs"
 	"net/http"
-	"time"
 )
 
 // Implements ifs.FS around the Benthos Studio node APIs.
@@ -14,9 +13,7 @@ type sessionFS struct {
 }
 
 func (s *sessionFS) Open(name string) (fs.File, error) {
-	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
-	defer done()
-	return s.tracker.ReadFile(ctx, name)
+	return s.tracker.ReadFile(context.Background(), name)
 }
 
 func (s *sessionFS) OpenFile(name string, flag int, perm fs.FileMode) (fs.File, error) {

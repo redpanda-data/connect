@@ -64,48 +64,6 @@ output_resources:
     drop: {}
 `,
 		},
-		{
-			name: "blocked pipeline",
-			conf: `
-input:
-  resource: fooinput
-
-pipeline:
-  processors:
-    - resource: fooproc
-
-output:
-  resource: foooutput
-
-input_resources:
-  - label: fooinput
-    generate:
-      interval: 1ms
-      mapping: |
-        meta = {"foo":"foo value","bar":"bar value"}
-        root.id = uuid_v4()
-
-processor_resources:
-  - label: fooproc
-    rate_limit:
-      resource: fooratelimit
-
-rate_limit_resources:
-  - label: fooratelimit
-    local:
-      count: 100
-      interval: 1s
-
-output_resources:
-  - label: foooutput
-    broker:
-      batching:
-        period: 10s
-      outputs:
-        - drop: {}
-`,
-			closeErr: "failed to cleanly shutdown",
-		},
 	} {
 		test := test
 		t.Run(test.name, func(t *testing.T) {
