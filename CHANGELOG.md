@@ -14,6 +14,7 @@ All notable changes to this project will be documented in this file.
 - The `discord` input and output now use the official chat client API and no longer rely on poll-based HTTP requests, this should result in more efficient and less erroneous behaviour.
 - New bloblang timestamp methods `ts_add_iso8601` and `ts_sub_iso8601`.
 - All SQL components now support the `trino` driver.
+- New input codec `csv-safe`.
 
 ### Fixed
 
