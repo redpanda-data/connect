@@ -12,6 +12,7 @@ All notable changes to this project will be documented in this file.
 - Metadata field `kafka_tombstone_message` added to the `kafka` and `kafka_franz` inputs.
 - Method `SetEnvVarLookupFunc` added to the stream builder API.
 - The `discord` input and output now use the official chat client API and no longer rely on poll-based HTTP requests, this should result in more efficient and less erroneous behaviour.
+- All SQL components now support the `trino` driver.
 
 ### Fixed
 
