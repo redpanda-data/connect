@@ -34,6 +34,7 @@ var ReaderDocs = docs.FieldString(
 	"chunker:x", "Consume the file in chunks of a given number of bytes.",
 	"csv", "Consume structured rows as comma separated values, the first row must be a header row.",
 	"csv:x", "Consume structured rows as values separated by a custom delimiter, the first row must be a header row. The custom delimiter must be a single character, e.g. the codec `\"csv:\\t\"` would consume a tab delimited file.",
+	"csv-safe", "Consume structured rows like `csv`, but sends messages with empty maps on failure to parse. Includes row number and parsing errors (if any) in the message's metadata.",
 	"delim:x", "Consume the file in segments divided by a custom delimiter.",
 	"gzip", "Decompress a gzip file, this codec should precede another codec, e.g. `gzip/all-bytes`, `gzip/tar`, `gzip/csv`, etc.",
 	"lines", "Consume the file in segments divided by linebreaks.",
@@ -224,6 +225,10 @@ func partReader(codec string, conf ReaderConfig) (ReaderConstructor, bool, error
 	case "csv":
 		return func(path string, r io.ReadCloser, fn ReaderAckFn) (Reader, error) {
 			return newCSVReader(r, fn, nil)
+		}, true, nil
+	case "csv-safe":
+		return func(path string, r io.ReadCloser, fn ReaderAckFn) (Reader, error) {
+			return newCSVSafeReader(r, fn, nil)
 		}, true, nil
 	case "tar":
 		return newTarReader, true, nil
@@ -657,6 +662,60 @@ func (a *csvReader) Close(ctx context.Context) error {
 		_ = a.sourceAck(ctx, nil)
 	}
 	return a.r.Close()
+}
+
+//------------------------------------------------------------------------------
+
+type csvSafeReader struct {
+	*csvReader
+
+	rowCounter int32
+}
+
+func newCSVSafeReader(r io.ReadCloser, ackFn ReaderAckFn, customComma *rune) (Reader, error) {
+	baseCsvReader, err := newCSVReader(r, ackFn, customComma)
+	if err != nil {
+		return nil, err
+	}
+
+	typedReader, _ := baseCsvReader.(*csvReader)
+
+	return &csvSafeReader{
+		csvReader:  typedReader,
+		rowCounter: 1, // 1-indexed rows
+	}, nil
+}
+
+func (a *csvSafeReader) Next(ctx context.Context) ([]*message.Part, ReaderAckFn, error) {
+	records, err := a.scanner.Read()
+
+	a.mut.Lock()
+	defer a.mut.Unlock()
+
+	if errors.Is(err, io.EOF) {
+		a.finished = true
+		return nil, nil, err
+	}
+
+	a.pending++
+	a.rowCounter++
+
+	part := message.NewPart(nil)
+	part.MetaSetMut("row_number", a.rowCounter)
+	isEmpty := len(records) == 0 || strings.TrimSpace(records[0]) == ""
+	part.MetaSetMut("row_empty", isEmpty)
+	if err != nil {
+		part.SetStructuredMut(map[string]any{})
+		part.MetaSetMut("row_parse_error", err.Error())
+	} else {
+		obj := make(map[string]any, len(records))
+		for i, r := range records {
+			obj[a.headers[i]] = r
+		}
+		part.SetStructuredMut(obj)
+	}
+
+	return []*message.Part{part}, a.ack, nil
 }
 
 //------------------------------------------------------------------------------
