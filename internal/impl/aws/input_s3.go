@@ -615,7 +615,7 @@ func s3MsgFromParts(p *s3PendingObject, parts []*message.Part) message.Batch {
 		if p.obj.ContentEncoding != nil {
 			part.MetaSetMut("s3_content_encoding", *p.obj.ContentEncoding)
 		}
-		if p.obj.VersionId != nil {
+		if p.obj.VersionId != "null" {
 			part.MetaSetMut("s3_version_id", p.obj.VersionId)
 		}
 		for k, v := range p.obj.Metadata {
