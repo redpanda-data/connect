@@ -78,6 +78,7 @@ This input adds the following metadata fields to each message:
 - s3_last_modified (RFC3339)
 - s3_content_type
 - s3_content_encoding
+- s3_version_id
 - All user defined metadata
 ` + "```" + `
 
