@@ -945,3 +945,58 @@ func TestIntegrationOracle(t *testing.T) {
 
 	testSuite(t, "oracle", dsn, createTable)
 }
+
+func TestIntegrationTrino(t *testing.T) {
+	integration.CheckSkip(t)
+	t.Parallel()
+
+	pool, err := dockertest.NewPool("")
+	if err != nil {
+		t.Skipf("Could not connect to docker: %s", err)
+	}
+	pool.MaxWait = 3 * time.Minute
+
+	testPassword := ""
+	resource, err := pool.RunWithOptions(&dockertest.RunOptions{
+		Repository:   "trinodb/trino",
+		ExposedPorts: []string{"8080/tcp"},
+		Env: []string{
+			"PASSWORD=" + testPassword,
+		},
+	})
+	require.NoError(t, err)
+
+	var db *sql.DB
+	t.Cleanup(func() {
+		if err = pool.Purge(resource); err != nil {
+			t.Logf("Failed to clean up docker resource: %s", err)
+		}
+		if db != nil {
+			db.Close()
+		}
+	})
+
+	selectTable := func(name string) error {
+		_, err := db.Exec(fmt.Sprintf(`SELECT * FROM %s;`, name))
+		return err
+	}
+
+	dsn := fmt.Sprintf("https://trinouser:"+testPassword+"@localhost:%s", resource.GetPort("8080/tcp"))
+	require.NoError(t, pool.Retry(func() error {
+		db, err = sql.Open("trino", dsn)
+		if err != nil {
+			return err
+		}
+		if err = db.Ping(); err != nil {
+			db.Close()
+			db = nil
+			return err
+		}
+		if err := selectTable("tpcds.tiny.customer"); err != nil {
+			return err
+		}
+		return nil
+	}))
+
+	testSuite(t, "trino", dsn, selectTable)
+}
