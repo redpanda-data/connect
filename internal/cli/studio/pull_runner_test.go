@@ -290,7 +290,7 @@ output:
 			jsonRequestSupersetMatch(t, r, obj{
 				"name":        "foobarnode",
 				"main_config": obj{"name": "maina.yaml", "modified": 1001.0},
-				"run_error":   "maina.yaml: (5,1) unable to infer input type from candidates: [blahbluh]",
+				"run_error":   "failed bootstrap config read: maina.yaml: (5,1) unable to infer input type from candidates: [blahbluh]",
 			})
 			jsonResponse(t, w, obj{
 				"main_config": obj{"name": "maina.yaml", "modified": 1002},
@@ -812,6 +812,256 @@ output:
 		data, _ := os.ReadFile(filepath.Join(tmpDir, "outa.jsonl"))
 		return strings.Contains(string(data), `{"id":"first"}`)
 	}, time.Second*30, time.Millisecond*10)
+
+	require.NoError(t, pr.Stop(ctx))
+	waitFn(ctx)
+}
+
+func TestPullRunnerTracesDisabled(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	ctx, done := context.WithTimeout(context.Background(), 30*time.Second)
+	defer done()
+
+	pr, waitFn := testServerForPullRunner(t, nil,
+		[]string{"benthos", "--log.level", "none", "studio", "pull", "--name", "foobarnode", "--session", "foosession"},
+		expectedRequest("/api/v1/node/session/foosession/init", func(t *testing.T, w http.ResponseWriter, r *http.Request) {
+			require.Equal(t, "POST", r.Method)
+			jsonRequestEqual(t, r, obj{
+				"name": "foobarnode",
+			})
+			jsonResponse(t, w, obj{
+				"deployment_id":   "depaid",
+				"deployment_name": "Deployment A",
+				"main_config":     obj{"name": "maina.yaml", "modified": 1001},
+			})
+		}),
+		expectedRequest("/api/v1/node/session/foosession/download/maina.yaml", func(t *testing.T, w http.ResponseWriter, r *http.Request) {
+			require.Equal(t, "GET", r.Method)
+			stringResponse(t, w, replacePaths(tmpDir, `
+http:
+  enabled: false
+input:
+  label: ainput
+  generate:
+    count: 1
+    interval: ""
+    mapping: 'root.id = "first"'
+output:
+  label: aoutput
+  file:
+    codec: lines
+    path: $DIR/outa.jsonl
+`))
+		}),
+		expectedRequest("/api/v1/node/session/foosession/deployment/depaid/sync", func(t *testing.T, w http.ResponseWriter, r *http.Request) {
+			require.Equal(t, "POST", r.Method)
+			jsonRequestEqual(t, r, obj{
+				"name":        "foobarnode",
+				"main_config": obj{"name": "maina.yaml", "modified": 1001.0},
+				"metrics": obj{
+					"input":     obj{"ainput": obj{"received": 1.0}},
+					"output":    obj{"aoutput": obj{"error": 0.0, "sent": 1.0}},
+					"processor": obj{},
+				},
+			}) // No traces yet
+			jsonResponse(t, w, obj{
+				"main_config":      obj{"name": "maina.yaml", "modified": 1002.0},
+				"requested_traces": 100,
+			})
+		}),
+		expectedRequest("/api/v1/node/session/foosession/download/maina.yaml", func(t *testing.T, w http.ResponseWriter, r *http.Request) {
+			require.Equal(t, "GET", r.Method)
+			stringResponse(t, w, replacePaths(tmpDir, `
+http:
+  enabled: false
+input:
+  label: ainput
+  generate:
+    count: 10
+    interval: ""
+    mapping: 'root.id = "second"'
+output:
+  label: aoutput
+  file:
+    codec: lines
+    path: $DIR/outb.jsonl
+`))
+		}),
+		expectedRequest("/api/v1/node/session/foosession/deployment/depaid/sync", func(t *testing.T, w http.ResponseWriter, r *http.Request) {
+			require.Equal(t, "POST", r.Method)
+			jsonRequestEqual(t, r, obj{
+				"name":        "foobarnode",
+				"main_config": obj{"name": "maina.yaml", "modified": 1002.0},
+				"metrics": obj{
+					"input":     obj{"ainput": obj{"received": 10.0}},
+					"output":    obj{"aoutput": obj{"error": 0.0, "sent": 10.0}},
+					"processor": obj{},
+				},
+			}) // Metrics sent on flush, still no traces as it's not enabled
+			jsonResponse(t, w, obj{})
+		}),
+		expectedRequest("/api/v1/node/session/foosession/leave", func(t *testing.T, w http.ResponseWriter, r *http.Request) {
+			require.Equal(t, "POST", r.Method)
+		}),
+	)
+
+	exp := strings.Repeat(`{"id":"first"}`+"\n", 1)
+	assert.Eventually(t, func() bool {
+		data, _ := os.ReadFile(filepath.Join(tmpDir, "outa.jsonl"))
+		return string(data) == exp
+	}, time.Second*30, time.Millisecond*10)
+
+	pr.Sync(ctx) // Includes new config and requests traces
+
+	exp = strings.Repeat(`{"id":"second"}`+"\n", 10)
+	assert.Eventually(t, func() bool {
+		data, _ := os.ReadFile(filepath.Join(tmpDir, "outb.jsonl"))
+		return string(data) == exp
+	}, time.Second*30, time.Millisecond*10)
+
+	pr.Sync(ctx) // Provides were requested above
+
+	require.NoError(t, pr.Stop(ctx))
+	waitFn(ctx)
+}
+
+func TestPullRunnerTracesEnabled(t *testing.T) {
+	t.Skip("Traces are non-deterministic so we need to rework the sync response check")
+
+	tmpDir := t.TempDir()
+
+	ctx, done := context.WithTimeout(context.Background(), 30*time.Second)
+	defer done()
+
+	pr, waitFn := testServerForPullRunner(t, nil,
+		[]string{"benthos", "--log.level", "none", "studio", "pull", "--name", "foobarnode", "--session", "foosession", "--send-traces"},
+		expectedRequest("/api/v1/node/session/foosession/init", func(t *testing.T, w http.ResponseWriter, r *http.Request) {
+			require.Equal(t, "POST", r.Method)
+			jsonRequestEqual(t, r, obj{
+				"name": "foobarnode",
+			})
+			jsonResponse(t, w, obj{
+				"deployment_id":   "depaid",
+				"deployment_name": "Deployment A",
+				"main_config":     obj{"name": "maina.yaml", "modified": 1001},
+			})
+		}),
+		expectedRequest("/api/v1/node/session/foosession/download/maina.yaml", func(t *testing.T, w http.ResponseWriter, r *http.Request) {
+			require.Equal(t, "GET", r.Method)
+			stringResponse(t, w, replacePaths(tmpDir, `
+http:
+  enabled: false
+input:
+  label: ainput
+  generate:
+    count: 1
+    interval: ""
+    mapping: 'root.id = "first"'
+output:
+  label: aoutput
+  file:
+    codec: lines
+    path: $DIR/outa.jsonl
+`))
+		}),
+		expectedRequest("/api/v1/node/session/foosession/deployment/depaid/sync", func(t *testing.T, w http.ResponseWriter, r *http.Request) {
+			require.Equal(t, "POST", r.Method)
+			jsonRequestEqual(t, r, obj{
+				"name":        "foobarnode",
+				"main_config": obj{"name": "maina.yaml", "modified": 1001.0},
+				"metrics": obj{
+					"input":     obj{"ainput": obj{"received": 1.0}},
+					"output":    obj{"aoutput": obj{"error": 0.0, "sent": 1.0}},
+					"processor": obj{},
+				},
+			}) // No traces yet
+			jsonResponse(t, w, obj{
+				"main_config":      obj{"name": "maina.yaml", "modified": 1002.0},
+				"requested_traces": 100,
+			})
+		}),
+		expectedRequest("/api/v1/node/session/foosession/download/maina.yaml", func(t *testing.T, w http.ResponseWriter, r *http.Request) {
+			require.Equal(t, "GET", r.Method)
+			stringResponse(t, w, replacePaths(tmpDir, `
+http:
+  enabled: false
+input:
+  label: ainput
+  generate:
+    count: 10
+    interval: ""
+    mapping: 'root.id = "second"'
+output:
+  label: aoutput
+  file:
+    codec: lines
+    path: $DIR/outb.jsonl
+`))
+		}),
+		expectedRequest("/api/v1/node/session/foosession/deployment/depaid/sync", func(t *testing.T, w http.ResponseWriter, r *http.Request) {
+			require.Equal(t, "POST", r.Method)
+			jsonRequestEqual(t, r, obj{
+				"name":        "foobarnode",
+				"main_config": obj{"name": "maina.yaml", "modified": 1002.0},
+				"metrics": obj{
+					"input":     obj{"ainput": obj{"received": 10.0}},
+					"output":    obj{"aoutput": obj{"error": 0.0, "sent": 10.0}},
+					"processor": obj{},
+				},
+				"tracing": obj{
+					"input_events": obj{
+						"ainput": arr{
+							obj{"content": "{\"id\":\"second\"}", "metadata": obj{}, "type": "PRODUCE"},
+							obj{"content": "{\"id\":\"second\"}", "metadata": obj{}, "type": "PRODUCE"},
+							obj{"content": "{\"id\":\"second\"}", "metadata": obj{}, "type": "PRODUCE"},
+							obj{"content": "{\"id\":\"second\"}", "metadata": obj{}, "type": "PRODUCE"},
+							obj{"content": "{\"id\":\"second\"}", "metadata": obj{}, "type": "PRODUCE"},
+							obj{"content": "{\"id\":\"second\"}", "metadata": obj{}, "type": "PRODUCE"},
+							obj{"content": "{\"id\":\"second\"}", "metadata": obj{}, "type": "PRODUCE"},
+							obj{"content": "{\"id\":\"second\"}", "metadata": obj{}, "type": "PRODUCE"},
+							obj{"content": "{\"id\":\"second\"}", "metadata": obj{}, "type": "PRODUCE"},
+							obj{"content": "{\"id\":\"second\"}", "metadata": obj{}, "type": "PRODUCE"},
+						},
+					},
+					"output_events": obj{
+						"aoutput": arr{
+							obj{"content": "{\"id\":\"second\"}", "metadata": obj{}, "type": "CONSUME"},
+							obj{"content": "{\"id\":\"second\"}", "metadata": obj{}, "type": "CONSUME"},
+							obj{"content": "{\"id\":\"second\"}", "metadata": obj{}, "type": "CONSUME"},
+							obj{"content": "{\"id\":\"second\"}", "metadata": obj{}, "type": "CONSUME"},
+							obj{"content": "{\"id\":\"second\"}", "metadata": obj{}, "type": "CONSUME"},
+							obj{"content": "{\"id\":\"second\"}", "metadata": obj{}, "type": "CONSUME"},
+							obj{"content": "{\"id\":\"second\"}", "metadata": obj{}, "type": "CONSUME"},
+							obj{"content": "{\"id\":\"second\"}", "metadata": obj{}, "type": "CONSUME"},
+							obj{"content": "{\"id\":\"second\"}", "metadata": obj{}, "type": "CONSUME"},
+							obj{"content": "{\"id\":\"second\"}", "metadata": obj{}, "type": "CONSUME"},
+						},
+					},
+				},
+			}) // Metrics sent on flush
+			jsonResponse(t, w, obj{})
+		}),
+		expectedRequest("/api/v1/node/session/foosession/leave", func(t *testing.T, w http.ResponseWriter, r *http.Request) {
+			require.Equal(t, "POST", r.Method)
+		}),
+	)
+
+	exp := strings.Repeat(`{"id":"first"}`+"\n", 1)
+	assert.Eventually(t, func() bool {
+		data, _ := os.ReadFile(filepath.Join(tmpDir, "outa.jsonl"))
+		return string(data) == exp
+	}, time.Second*30, time.Millisecond*10)
+
+	pr.Sync(ctx) // Includes new config and requests traces
+
+	exp = strings.Repeat(`{"id":"second"}`+"\n", 10)
+	assert.Eventually(t, func() bool {
+		data, _ := os.ReadFile(filepath.Join(tmpDir, "outb.jsonl"))
+		return string(data) == exp
+	}, time.Second*30, time.Millisecond*10)
+
+	pr.Sync(ctx) // Provides traces from above writes
 
 	require.NoError(t, pr.Stop(ctx))
 	waitFn(ctx)

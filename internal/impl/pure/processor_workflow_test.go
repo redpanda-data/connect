@@ -18,6 +18,7 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/manager"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
 func TestWorkflowDeps(t *testing.T) {
@@ -926,4 +927,61 @@ func TestWorkflowsWithOrderResources(t *testing.T) {
 			assert.NoError(t, p.Close(ctx))
 		})
 	}
+}
+
+func TestWorkflowUnwrapResourceBranches(t *testing.T) {
+	strmBuilder := service.NewStreamBuilder()
+
+	require.NoError(t, strmBuilder.AddResourcesYAML(`
+processor_resources:
+  - label: fooproc
+    branch:
+      request_map: 'root = this.id'
+      processors:
+        - label: innerproc
+          mapping: 'root.id = content().uppercase().string()'
+      result_map: 'root.id = this.id'
+`))
+
+	require.NoError(t, strmBuilder.AddProcessorYAML(`
+label: barproc
+workflow:
+  branch_resources: [ fooproc ]
+`))
+
+	inFunc, err := strmBuilder.AddProducerFunc()
+	require.NoError(t, err)
+
+	var outValue string
+	require.NoError(t, strmBuilder.AddConsumerFunc(func(ctx context.Context, m *service.Message) error {
+		outBytes, err := m.AsBytes()
+		require.NoError(t, err)
+		outValue = string(outBytes)
+		return nil
+	}))
+
+	strm, tracer, err := strmBuilder.BuildTraced()
+	require.NoError(t, err)
+
+	tCtx, done := context.WithTimeout(context.Background(), time.Second*30)
+	defer done()
+
+	go func() {
+		require.NoError(t, strm.Run(tCtx))
+	}()
+	require.NoError(t, inFunc(tCtx, service.NewMessage([]byte(`{"id":"hello world","content":"waddup"}`))))
+	require.NoError(t, strm.Stop(tCtx))
+
+	assert.Equal(t, `{"content":"waddup","id":"HELLO WORLD","meta":{"workflow":{"succeeded":["fooproc"]}}}`, outValue)
+	assert.Equal(t, map[string][]service.TracingEvent{
+		"barproc": {
+			{Type: "CONSUME", Content: "{\"id\":\"hello world\",\"content\":\"waddup\"}", Meta: map[string]interface{}{}},
+			{Type: "PRODUCE", Content: "{\"content\":\"waddup\",\"id\":\"HELLO WORLD\",\"meta\":{\"workflow\":{\"succeeded\":[\"fooproc\"]}}}", Meta: map[string]interface{}{}},
+		},
+		"fooproc": {},
+		"innerproc": {
+			{Type: "CONSUME", Content: "hello world", Meta: map[string]interface{}{}},
+			{Type: "PRODUCE", Content: "{\"id\":\"HELLO WORLD\"}", Meta: map[string]interface{}{}},
+		},
+	}, tracer.ProcessorEvents())
 }

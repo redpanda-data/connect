@@ -14,10 +14,13 @@ import (
 	"github.com/urfave/cli/v2"
 
 	"github.com/benthosdev/benthos/v4/internal/bundle"
+	"github.com/benthosdev/benthos/v4/internal/bundle/tracing"
 	"github.com/benthosdev/benthos/v4/internal/cli/common"
 	"github.com/benthosdev/benthos/v4/internal/cli/studio/metrics"
+	stracing "github.com/benthosdev/benthos/v4/internal/cli/studio/tracing"
 	"github.com/benthosdev/benthos/v4/internal/config"
 	"github.com/benthosdev/benthos/v4/internal/log"
+	"github.com/benthosdev/benthos/v4/internal/manager"
 	"github.com/benthosdev/benthos/v4/internal/stream"
 )
 
@@ -40,9 +43,14 @@ type PullRunner struct {
 	confReader     *config.Reader
 	sessionTracker *sessionTracker
 
+	// Controls disabled deployment rotations
+	isDisabled     bool
+	latestMainConf *stream.Config
+
 	metricsFlushPeriod time.Duration
 	metrics            *metrics.Tracker
 	mgr                bundle.NewManagement
+	tracingSummary     *tracing.Summary
 	stoppableMgr       *common.StoppableManager
 	stoppableStream    *common.SwappableStopper
 	logger             log.Modular
@@ -50,11 +58,12 @@ type PullRunner struct {
 	exitDelay   time.Duration
 	exitTimeout time.Duration
 
-	cliContext *cli.Context
-	setList    []string
-	strictMode bool
-	version    string
-	dateBuilt  string
+	cliContext  *cli.Context
+	setList     []string
+	strictMode  bool
+	version     string
+	dateBuilt   string
+	allowTraces bool
 
 	nowFn func() time.Time
 }
@@ -89,6 +98,7 @@ func NewPullRunner(c *cli.Context, version, dateBuilt, token, secret string, opt
 		version:            version,
 		dateBuilt:          dateBuilt,
 		nowFn:              time.Now,
+		allowTraces:        c.Bool("send-traces"),
 	}
 	for _, opt := range opts {
 		opt(r)
@@ -137,10 +147,11 @@ func NewPullRunner(c *cli.Context, version, dateBuilt, token, secret string, opt
 	}
 	r.metricsFlushPeriod = r.sessionTracker.MetricsGuideFlushPeriod()
 
-	if err := r.bootstrapConfigReader(c.Context); err != nil {
+	err = r.bootstrapConfigReader(c.Context)
+	if err != nil {
 		r.logger.Errorf("Failed to run initial sync config: %v", err)
-		r.sessionTracker.SetRunError(err)
 	}
+	r.sessionTracker.SetRunError(err)
 	return r, nil
 }
 
@@ -154,7 +165,32 @@ func (r *PullRunner) logLints(lints []string) {
 	}
 }
 
+func (r *PullRunner) setStreamDisabled(ctx context.Context, toDisabled bool) error {
+	if r.isDisabled == toDisabled {
+		return nil // Already set
+	}
+	if toDisabled {
+		if err := r.stoppableStream.Replace(ctx, func() (common.Stoppable, error) {
+			return &noopStopper{}, nil
+		}); err != nil {
+			return err
+		}
+	} else if r.latestMainConf != nil && r.mgr != nil {
+		if err := r.stoppableStream.Replace(ctx, func() (common.Stoppable, error) {
+			return stream.New(*r.latestMainConf, r.mgr)
+		}); err != nil {
+			return err
+		}
+	}
+	r.isDisabled = toDisabled
+	return nil
+}
+
 func (r *PullRunner) triggerStreamReset(ctx context.Context, conf *config.Type, mgr bundle.NewManagement) error {
+	r.latestMainConf = &conf.Config
+	if r.isDisabled {
+		return nil
+	}
 	return r.stoppableStream.Replace(ctx, func() (common.Stoppable, error) {
 		return stream.New(conf.Config, mgr)
 	})
@@ -184,16 +220,22 @@ func (r *PullRunner) bootstrapConfigReader(ctx context.Context) (bootstrapErr er
 
 	conf, lints, err := confReaderTmp.Read()
 	if err != nil {
-		return err
+		return fmt.Errorf("failed bootstrap config read: %w", err)
 	}
 	r.logLints(lints)
 	if r.strictMode && len(lints) > 0 {
 		return errors.New("found linting errors in config")
 	}
 
-	stopMgrTmp, err := common.CreateManager(r.cliContext, r.logger, false, r.version, r.dateBuilt, conf)
+	tmpEnv, tmpTracingSummary := tracing.TracedBundle(bundle.GlobalEnvironment)
+	tmpTracingSummary.SetEnabled(false)
+
+	stopMgrTmp, err := common.CreateManager(
+		r.cliContext, r.logger, false, r.version, r.dateBuilt, conf,
+		manager.OptSetEnvironment(tmpEnv),
+	)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to create manager from bootstrap config: %w", err)
 	}
 	defer func() {
 		if bootstrapErr != nil {
@@ -203,7 +245,7 @@ func (r *PullRunner) bootstrapConfigReader(ctx context.Context) (bootstrapErr er
 
 	mgrTmp := stopMgrTmp.Manager().WithAddedMetrics(r.metrics)
 	if err := r.triggerStreamReset(ctx, &conf, mgrTmp); err != nil {
-		return err
+		return fmt.Errorf("failed initial stream reset: %w", err)
 	}
 
 	// Extract shutdown timeout values
@@ -225,6 +267,7 @@ func (r *PullRunner) bootstrapConfigReader(ctx context.Context) (bootstrapErr er
 
 	r.stoppableMgr = stopMgrTmp
 	r.mgr = mgrTmp
+	r.tracingSummary = tmpTracingSummary
 	r.confReader = confReaderTmp
 	r.exitDelay = exitDelay
 	r.exitTimeout = exitTimeout
@@ -245,7 +288,18 @@ func (r *PullRunner) Sync(ctx context.Context) {
 		metricsOut = r.metrics.Flush()
 	}
 
-	diff, err := r.sessionTracker.Sync(ctx, metricsOut)
+	// Pause traces (if previously enabled), and flush all events collected
+	// since the last sync.
+	var tracingOut *stracing.Observed
+	if r.tracingSummary != nil {
+		r.tracingSummary.SetEventLimit(0)
+		r.tracingSummary.SetEnabled(false)
+		if r.allowTraces {
+			tracingOut = stracing.FromInternal(r.tracingSummary)
+		}
+	}
+
+	isDisabled, diff, requestedTraces, err := r.sessionTracker.Sync(ctx, metricsOut, tracingOut)
 	if err != nil {
 		r.logger.Errorf("Failed session sync: %v", err)
 		return
@@ -254,14 +308,29 @@ func (r *PullRunner) Sync(ctx context.Context) {
 	if r.confReader == nil {
 		// We haven't bootstrapped yet, likely due to a bad config on
 		// our first attempt. The latest sync may have fixed the issue
-		// so we try again.
-		if err := r.bootstrapConfigReader(ctx); err != nil {
-			r.logger.Errorf("Failed to bootstrap initial config: %v", err)
-			r.sessionTracker.SetRunError(err)
-		}
-	} else if diff != nil {
-		var runErr error // TODO: Use new multi error
+		// so we can potentially try again.
 
+		if isDisabled {
+			// Except the deployment is disabled now, so don't.
+			r.logger.Infoln("Deployment is disabled, so skipping bootstrap of initial config")
+			return
+		}
+
+		err := r.bootstrapConfigReader(ctx)
+		if err != nil {
+			r.logger.Errorf("Failed to bootstrap initial config: %v", err)
+		}
+		r.sessionTracker.SetRunError(err)
+		return
+	}
+
+	if err = r.setStreamDisabled(ctx, isDisabled); err != nil {
+		r.logger.Errorf("Failed to toggle deployment enablement: %v", err)
+		return
+	}
+
+	var runErr error // TODO: Use new multi error
+	if diff != nil {
 		// We've already bootstrapped, and so we need to update our
 		// config reader of all changes.
 		for _, resName := range diff.RemoveResources {
@@ -283,6 +352,17 @@ func (r *PullRunner) Sync(ctx context.Context) {
 			}
 		}
 		r.sessionTracker.SetRunError(runErr)
+	}
+	if runErr != nil {
+		return
+	}
+
+	// Set a new trace limit and re-enable if appropriate, we want to do this if
+	// either the files we already have match the deployment, or after we've
+	// successfully followed the diff.
+	if r.allowTraces {
+		r.tracingSummary.SetEventLimit(requestedTraces)
+		r.tracingSummary.SetEnabled(requestedTraces > 0)
 	}
 }
 

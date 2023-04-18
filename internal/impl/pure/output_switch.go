@@ -339,7 +339,8 @@ func (o *switchOutput) dispatchToTargets(
 		select {
 		case o.outputTSChans[i] <- message.NewTransactionFunc(parts, func(ctx context.Context, err error) error {
 			if err != nil {
-				if bErr, ok := err.(*batch.Error); ok {
+				var bErr *batch.Error
+				if errors.As(err, &bErr) {
 					bErr.WalkParts(group, sourceMessage, func(i int, p *message.Part, e error) bool {
 						if e != nil {
 							setErrForPart(p, e)
