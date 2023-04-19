@@ -1241,6 +1241,17 @@ root.delay_for_s = this.delay_for.parse_duration_iso8601() / 1000000000
 # Out: {"delay_for_s":2.5}
 ```
 
+### `ts_add_iso8601`
+
+:::caution BETA
+This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
+:::
+Parse parameter string as ISO 8601 period and add it to value with high precision for units larger than an hour.
+
+#### Parameters
+
+**`duration`** &lt;string&gt; Duration in ISO 8601 format  
+
 ### `ts_format`
 
 :::caution BETA
@@ -1417,6 +1428,17 @@ root.doc.timestamp = this.doc.timestamp.ts_strptime("%Y-%b-%d %H:%M:%S.%f")
 # In:  {"doc":{"timestamp":"2020-Aug-14 11:50:26.371000"}}
 # Out: {"doc":{"timestamp":"2020-08-14T11:50:26.371Z"}}
 ```
+
+### `ts_sub_iso8601`
+
+:::caution BETA
+This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
+:::
+Parse parameter string as ISO 8601 period and subtract it from value with high precision for units larger than an hour.
+
+#### Parameters
+
+**`duration`** &lt;string&gt; Duration in ISO 8601 format  
 
 ### `ts_tz`
 

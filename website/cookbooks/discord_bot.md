@@ -28,11 +28,9 @@ As soon as your bot is added to your server and you have a token you can immedia
 ```yaml
 input:
   discord:
-    poll_period: 3s
     channel_id: ${DISCORD_CHANNEL}
     bot_token: ${DISCORD_BOT_TOKEN}
     cache: request_tracking
-    limit: 10
 
 cache_resources:
   - label: request_tracking

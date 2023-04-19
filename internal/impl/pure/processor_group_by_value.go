@@ -10,7 +10,6 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	"github.com/benthosdev/benthos/v4/internal/tracing"
 )
 
 func init() {
@@ -19,7 +18,7 @@ func init() {
 		if err != nil {
 			return nil, err
 		}
-		return processor.NewV2BatchedToV1Processor("group_by_value", p, mgr), nil
+		return processor.NewAutoObservedBatchedProcessor("group_by_value", p, mgr), nil
 	}, docs.ComponentSpec{
 		Name: "group_by_value",
 		Categories: []string{
@@ -68,7 +67,7 @@ type groupByValueProc struct {
 	value *field.Expression
 }
 
-func newGroupByValue(conf processor.GroupByValueConfig, mgr bundle.NewManagement) (processor.V2Batched, error) {
+func newGroupByValue(conf processor.GroupByValueConfig, mgr bundle.NewManagement) (processor.AutoObservedBatched, error) {
 	value, err := mgr.BloblEnvironment().NewField(conf.Value)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse value expression: %v", err)
@@ -79,7 +78,7 @@ func newGroupByValue(conf processor.GroupByValueConfig, mgr bundle.NewManagement
 	}, nil
 }
 
-func (g *groupByValueProc) ProcessBatch(ctx context.Context, spans []*tracing.Span, batch message.Batch) ([]message.Batch, error) {
+func (g *groupByValueProc) ProcessBatch(ctx *processor.BatchProcContext, batch message.Batch) ([]message.Batch, error) {
 	if batch.Len() == 0 {
 		return nil, nil
 	}
@@ -91,13 +90,12 @@ func (g *groupByValueProc) ProcessBatch(ctx context.Context, spans []*tracing.Sp
 		v, err := g.value.String(i, batch)
 		if err != nil {
 			g.log.Errorf("Group value interpolation error: %v", err)
-			p.ErrorSet(fmt.Errorf("group value interpolation error: %w", err))
+			err = fmt.Errorf("group value interpolation error: %w", err)
+			ctx.OnError(err, i, p)
 		}
-		spans[i].LogKV(
-			"event", "grouped",
-			"type", v,
-		)
-		spans[i].SetTag("group", v)
+
+		ctx.Span(i).LogKV("event", "grouped", "type", v)
+		ctx.Span(i).SetTag("group", v)
 		if group, exists := groupMap[v]; exists {
 			groupMap[v] = append(group, p)
 		} else {

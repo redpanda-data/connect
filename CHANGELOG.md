@@ -9,6 +9,12 @@ All notable changes to this project will be documented in this file.
 
 - The `-e/--env-file` cli flag can now be specified multiple times.
 - New `studio pull` cli subcommand for running Studio config deployments.
+- Metadata field `kafka_tombstone_message` added to the `kafka` and `kafka_franz` inputs.
+- Method `SetEnvVarLookupFunc` added to the stream builder API.
+- The `discord` input and output now use the official chat client API and no longer rely on poll-based HTTP requests, this should result in more efficient and less erroneous behaviour.
+- New bloblang timestamp methods `ts_add_iso8601` and `ts_sub_iso8601`.
+- All SQL components now support the `trino` driver.
+- New input codec `csv-safe`.
 
 ### Fixed
 
@@ -16,6 +22,15 @@ All notable changes to this project will be documented in this file.
 - Endpoints specified by HTTP server components using both the general `http` server block or their own custom server addresses should now be treated as path prefixes. This corrects a behavioural change that was introduced when both respective server options were updated to support path parameters.
 - Prevented a panic caused when using the `encrypt_aes` and `decrypt_aes` Bloblang methods with a mismatched key/iv lengths.
 - The `snowpipe` field of the `snowflake_put` output can now be omitted from the config without raising an error.
+- Batch-aware processors such as `mapping` and `mutation` should now report correct error metrics.
+- Running `benthos blobl server` should no longer panic when a mapping with variable read/writes is executed in parallel.
+- Speculative fix for the `cloudwatch` metrics exporter rejecting metrics due to `minimum field size of 1, PutMetricDataInput.MetricData[0].Dimensions[0].Value`.
+- Reduced the amount of pre-compilation of Bloblang based linting rules for documentation fields, this should dramatically improve the start up time of Benthos (~1s down to ~200ms).
+- Environment variable interpolations with an empty fallback (`${FOO:}`) are now valid.
+
+### Changed
+
+- When a config contains environment variable interpolations without a default value (i.e. `${FOO}`), if that environment variable is not defined a linting error will be emitted. Shutting down due to linting errors can be disabled with the `--chilled` cli flag, and variables can be specified with an empty default value (`${FOO:}`) in order to make the previous behaviour explicit and prevent the new linting error.
 
 ## 4.13.0 - 2023-03-15
 

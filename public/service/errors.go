@@ -11,6 +11,7 @@ import (
 // collection (usually a batch) of messages and provides methods to iterate
 // over these errors.
 type BatchError struct {
+	group   *message.SortGroup
 	wrapped *batch.Error
 }
 
@@ -21,13 +22,15 @@ type BatchError struct {
 // A headline error must be supplied which will be exposed when upstream
 // components do not support granular batch errors.
 func NewBatchError(b MessageBatch, headline error) *BatchError {
-	ibatch := make(message.Batch, len(b))
+	ib := make(message.Batch, len(b))
 	for i, m := range b {
-		ibatch[i] = m.part
+		ib[i] = m.part
 	}
 
+	group, ibatch := message.NewSortGroup(ib)
 	batchErr := batch.NewError(ibatch, headline)
-	return &BatchError{wrapped: batchErr}
+
+	return &BatchError{group: group, wrapped: batchErr}
 }
 
 // Failed stores an error state for a particular message of a batch. Returns a
@@ -47,8 +50,8 @@ func (err *BatchError) Failed(i int, merr error) *BatchError {
 // itself was processed successfully. The closure should return a bool which
 // indicates whether the iteration should be continued.
 func (err *BatchError) WalkMessages(fn func(int, *Message, error) bool) {
-	sortGroup, iBatch := message.NewSortGroup(err.wrapped.XErroredBatch())
-	err.wrapped.WalkParts(sortGroup, iBatch, func(i int, p *message.Part, err error) bool {
+	b := err.wrapped.XErroredBatch()
+	err.wrapped.WalkParts(err.group, b, func(i int, p *message.Part, err error) bool {
 		return fn(i, &Message{part: p}, err)
 	})
 }
@@ -62,6 +65,10 @@ func (err *BatchError) IndexedErrors() int {
 // Error returns the underlying error message
 func (err *BatchError) Error() string {
 	return err.wrapped.Error()
+}
+
+func (err *BatchError) Unwrap() error {
+	return err.wrapped
 }
 
 // If the provided error is not nil and can be cast to an internal batch error

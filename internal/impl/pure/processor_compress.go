@@ -16,7 +16,7 @@ func init() {
 		if err != nil {
 			return nil, err
 		}
-		return processor.NewV2ToV1Processor("compress", p, mgr), nil
+		return processor.NewAutoObservedProcessor("compress", p, mgr), nil
 	}, docs.ComponentSpec{
 		Name: "compress",
 		Categories: []string{

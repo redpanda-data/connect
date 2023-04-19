@@ -534,5 +534,3 @@ func TestManagerPipeGetSet(t *testing.T) {
 		t.Error("Wrong transaction chan returned")
 	}
 }
-
-//------------------------------------------------------------------------------
