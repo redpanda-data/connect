@@ -867,7 +867,9 @@ func (s *snowflakeWriter) WriteBatch(ctx context.Context, batch service.MessageB
 
 		filePath := path.Join(f.stagePath, fileName+"."+f.fileExtension)
 
-		_, err := s.db.ExecContext(gosnowflake.WithFileStream(ctx, bytes.NewReader(fBytes)), fmt.Sprintf(s.putQueryFormat, filePath, path.Join(f.stage, f.stagePath)))
+		_, err := s.db.ExecContext(gosnowflake.WithFileStream(
+			gosnowflake.WithFileTransferOptions(ctx, &gosnowflake.SnowflakeFileTransferOptions{RaisePutGetError: true}),
+			bytes.NewReader(fBytes)), fmt.Sprintf(s.putQueryFormat, filePath, path.Join(f.stage, f.stagePath)))
 		if err != nil {
 			return fmt.Errorf("failed to run query: %s", err)
 		}
