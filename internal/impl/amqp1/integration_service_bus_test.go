@@ -2,7 +2,6 @@ package amqp1
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"sync"
 	"testing"
@@ -71,21 +70,25 @@ func testAMQP1Connected(url, sourceAddress string, t *testing.T) {
 	require.NoError(t, err)
 	defer sender.Close(ctx)
 
-	N := 10
 	wg := sync.WaitGroup{}
 
-	testMsgs := map[string]bool{}
-	testValues := map[string]bool{}
-	for i := 0; i < N; i++ {
+	tests := []struct {
+		data             string
+		value            interface{}
+		expected_content string
+	}{
+		{"hello world: 0", nil, "hello world: 0"},
+		{"hello world: 1", nil, "hello world: 1"},
+		{"hello world: 2", nil, "hello world: 2"},
+		{"", "hello world: 3", "hello world: 3"},
+		{"", "hello world: 4", "hello world: 4"},
+		{"", "hello world: 5", "hello world: 5"},
+	}
+
+	for _, test := range tests {
 		wg.Add(1)
 
-		str := fmt.Sprintf("hello world: %v", i)
-		testMsgs[str] = true
-
-		value := fmt.Sprintf("value %v", i)
-		testValues[value] = true
-
-		go func(testStr string) {
+		go func(data string, value interface{}) {
 			defer wg.Done()
 
 			contentType := "plain/text"
@@ -97,14 +100,19 @@ func testAMQP1Connected(url, sourceAddress string, t *testing.T) {
 					ContentEncoding: &contentEncoding,
 					CreationTime:    &createdAt,
 				},
-				Data:  [][]byte{[]byte(str)},
+				Data:  [][]byte{[]byte(data)},
 				Value: value,
 			})
 			require.NoError(t, err)
-		}(str)
+		}(test.data, test.value)
 	}
 
-	for i := 0; i < N; i++ {
+	want := map[string]bool{}
+	for _, test := range tests {
+		want[test.expected_content] = true
+	}
+
+	for range tests {
 		actM, ackFn, err := m.ReadBatch(ctx)
 		assert.NoError(t, err)
 		wg.Add(1)
@@ -112,10 +120,9 @@ func testAMQP1Connected(url, sourceAddress string, t *testing.T) {
 		go func() {
 			defer wg.Done()
 
-			assert.True(t, testMsgs[string(actM.Get(0).AsBytes())], "Unexpected message")
+			assert.True(t, want[string(actM.Get(0).AsBytes())], "Unexpected message")
 			assert.Equal(t, "plain/text", actM.Get(0).MetaGetStr("amqp_content_type"))
 			assert.Equal(t, "utf-8", actM.Get(0).MetaGetStr("amqp_content_encoding"))
-			assert.True(t, testValues[actM.Get(0).MetaGetStr("amqp_value")], "Unexpected value")
 
 			time.Sleep(6 * time.Second) // Simulate long processing before ack so message lock expires and lock renewal is requires
 
