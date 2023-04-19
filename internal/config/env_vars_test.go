@@ -8,10 +8,26 @@ import (
 )
 
 func TestEnvSwapping(t *testing.T) {
+	envFn := func(s string) (string, bool) {
+		switch s {
+		case "BENTHOS_TEST_FOO":
+			return "", true
+		case "BENTHOS.TEST.FOO":
+			return "testfoo", true
+		case "BENTHOS.TEST.BAR":
+			return "test\nbar", true
+		}
+		return "", false
+	}
+
 	tests := map[string]struct {
 		result      string
 		errContains string
 	}{
+		"foo ${DOES_NOT_EXIST:} baz":                         {result: "foo  baz"},
+		"${DOES_NOT_EXIST:}":                                 {result: ""},
+		"${BENTHOS_TEST_FOO:}":                               {result: ""},
+		"${BENTHOS.TEST.FOO:}":                               {result: "testfoo"},
 		"foo ${BENTHOS_TEST_FOO:bar} baz":                    {result: "foo bar baz"},
 		"foo ${BENTHOS.TEST.FOO:bar} baz":                    {result: "foo testfoo baz"},
 		"foo ${BENTHOS.TEST.FOO} baz":                        {result: "foo testfoo baz"},
@@ -33,20 +49,11 @@ func TestEnvSwapping(t *testing.T) {
 		"foo ${BENTHOS.TEST.BAR} baz":                                              {result: "foo test\\nbar baz"},
 		"foo ${BENTHOS_TEST_THIS_DOESNT_EXIST_LOL} baz":                            {errContains: "required environment variables were not set: [BENTHOS_TEST_THIS_DOESNT_EXIST_LOL]"},
 		"foo ${BENTHOS_TEST_NOPE_A} baz ${BENTHOS_TEST_NOPE_B} buz":                {errContains: "required environment variables were not set: [BENTHOS_TEST_NOPE_A BENTHOS_TEST_NOPE_B]"},
+		"foo ${DOES_NOT_EXIST::} baz":                                              {result: "foo : baz"},
 	}
 
 	for in, exp := range tests {
-		out, err := ReplaceEnvVariables([]byte(in), func(s string) (string, bool) {
-			switch s {
-			case "BENTHOS_TEST_FOO":
-				return "", true
-			case "BENTHOS.TEST.FOO":
-				return "testfoo", true
-			case "BENTHOS.TEST.BAR":
-				return "test\nbar", true
-			}
-			return "", false
-		})
+		out, err := ReplaceEnvVariables([]byte(in), envFn)
 		if exp.errContains != "" {
 			require.Error(t, err)
 			assert.Contains(t, err.Error(), exp.errContains)

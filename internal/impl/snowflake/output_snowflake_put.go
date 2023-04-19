@@ -631,8 +631,10 @@ func newSnowflakeWriterFromConfig(conf *service.ParsedConfig, mgr *service.Resou
 		return nil, fmt.Errorf("failed to parse request_id: %s", err)
 	}
 
-	if s.snowpipe, err = conf.FieldInterpolatedString("snowpipe"); err != nil {
-		return nil, fmt.Errorf("failed to parse snowpipe: %s", err)
+	if conf.Contains("snowpipe") {
+		if s.snowpipe, err = conf.FieldInterpolatedString("snowpipe"); err != nil {
+			return nil, fmt.Errorf("failed to parse snowpipe: %s", err)
+		}
 	}
 
 	authenticator := gosnowflake.AuthTypeJwt
@@ -832,8 +834,10 @@ func (s *snowflakeWriter) WriteBatch(ctx context.Context, batch service.MessageB
 			f.fileExtension = s.defaultStageFileExtension
 		}
 
-		if f.snowpipe, err = s.snowpipe.TryString(msg); err != nil {
-			return fmt.Errorf("failed to get snowpipe: %s", err)
+		if s.snowpipe != nil {
+			if f.snowpipe, err = s.snowpipe.TryString(msg); err != nil {
+				return fmt.Errorf("failed to get snowpipe: %s", err)
+			}
 		}
 
 		msgBytes, err := msg.AsBytes()

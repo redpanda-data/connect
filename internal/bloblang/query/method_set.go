@@ -170,7 +170,7 @@ func wrapMethodCtorWithDynamicArgs(name string, target Function, args *ParsedPar
 	return ClosureFunction("method "+name, func(ctx FunctionContext) (any, error) {
 		newArgs, err := args.ResolveDynamic(ctx)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("method '%s': %w", name, err)
 		}
 		dynFunc, err := fn(target, newArgs)
 		if err != nil {
