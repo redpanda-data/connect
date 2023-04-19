@@ -92,7 +92,7 @@ require (
 	github.com/smira/go-statsd v1.3.2
 	github.com/snowflakedb/gosnowflake v1.6.16
 	github.com/stretchr/testify v1.8.1
-	github.com/tetratelabs/wazero v1.0.0-rc.1
+	github.com/tetratelabs/wazero v1.0.1
 	github.com/tilinna/z85 v1.0.0
 	github.com/trinodb/trino-go-client v0.309.0
 	github.com/twmb/franz-go v1.13.0
