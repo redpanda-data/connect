@@ -692,6 +692,9 @@ root.description = this.description.trim()
 
 Remove the provided leading prefix substring from a string. If the string does not have the prefix substring, it is returned unchanged.
 
+Introduced in version 4.12.0.
+
+
 #### Parameters
 
 **`prefix`** &lt;string&gt; The leading prefix substring to trim from the string.  
@@ -710,6 +713,9 @@ root.description = this.description.trim_prefix("foobar_")
 ### `trim_suffix`
 
 Remove the provided trailing suffix substring from a string. If the string does not have the suffix substring, it is returned unchanged.
+
+Introduced in version 4.12.0.
+
 
 #### Parameters
 
