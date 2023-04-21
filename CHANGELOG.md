@@ -15,6 +15,7 @@ All notable changes to this project will be documented in this file.
 - New bloblang timestamp methods `ts_add_iso8601` and `ts_sub_iso8601`.
 - All SQL components now support the `trino` driver.
 - New input codec `csv-safe`.
+- Added `base64rawurl` scheme to both the `encode` and `decode` Bloblang methods.
 
 ### Fixed
 
