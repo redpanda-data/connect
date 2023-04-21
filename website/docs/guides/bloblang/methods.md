@@ -1933,11 +1933,11 @@ root.new_dict = this.dict.filter(item -> item.value.contains("foo"))
 :::caution BETA
 This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
 :::
-Returns the index of the first occurrence of a value or query in an array. `-1` is returned if there are no matches. Numerical comparisons are made irrespective of the representation type (float versus integer).
+Returns the index of the first occurrence of a value an array. `-1` is returned if there are no matches. Numerical comparisons are made irrespective of the representation type (float versus integer).
 
 #### Parameters
 
-**`value`** &lt;query expression&gt; A value to find. If a query is provided it will only be resolved once during the lifetime of the mapping.  
+**`value`** &lt;unknown&gt; A value to find.  
 
 #### Examples
 
@@ -1950,17 +1950,10 @@ root.index = this.find("bar")
 ```
 
 ```coffee
-root.index = this.find(v -> v != "bar")
+root.index = this.things.find(this.goal)
 
-# In:  ["foo", "bar", "baz"]
-# Out: {"index":0}
-```
-
-```coffee
-root.index = this.find(v -> v != "foo")
-
-# In:  ["foo"]
-# Out: {"index":-1}
+# In:  {"goal":"bar","things":["foo", "bar", "baz"]}
+# Out: {"index":1}
 ```
 
 ### `find_all`
@@ -1968,11 +1961,11 @@ root.index = this.find(v -> v != "foo")
 :::caution BETA
 This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
 :::
-Returns an array containing the indexes of all occurrences of a value or query in an array. An empty array is returned if there are no matches. Numerical comparisons are made irrespective of the representation type (float versus integer).
+Returns an array containing the indexes of all occurrences of a value in an array. An empty array is returned if there are no matches. Numerical comparisons are made irrespective of the representation type (float versus integer).
 
 #### Parameters
 
-**`value`** &lt;query expression&gt; A value to find. If a query is provided it will only be resolved once during the lifetime of the mapping.  
+**`value`** &lt;unknown&gt; A value to find.  
 
 #### Examples
 
@@ -1985,17 +1978,52 @@ root.index = this.find_all("bar")
 ```
 
 ```coffee
-root.index = this.find_all(v -> v != "bar")
+root.indexes = this.things.find_all(this.goal)
+
+# In:  {"goal":"bar","things":["foo", "bar", "baz", "bar", "buz"]}
+# Out: {"indexes":[1,3]}
+```
+
+### `find_all_by`
+
+:::caution BETA
+This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
+:::
+Returns an array containing the indexes of all occurrences of an array where the provided query resolves to a boolean `true`. An empty array is returned if there are no matches. Numerical comparisons are made irrespective of the representation type (float versus integer).
+
+#### Parameters
+
+**`query`** &lt;query expression&gt; A query to execute for each element.  
+
+#### Examples
+
+
+```coffee
+root.index = this.find_all_by(v -> v != "bar")
 
 # In:  ["foo", "bar", "baz"]
 # Out: {"index":[0,2]}
 ```
 
-```coffee
-root.index = this.find_all(v -> v != "foo")
+### `find_by`
 
-# In:  ["foo"]
-# Out: {"index":[]}
+:::caution BETA
+This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
+:::
+Returns the index of the first occurrence of an array where the provided query resolves to a boolean `true`. `-1` is returned if there are no matches.
+
+#### Parameters
+
+**`query`** &lt;query expression&gt; A query to execute for each element.  
+
+#### Examples
+
+
+```coffee
+root.index = this.find_by(v -> v != "bar")
+
+# In:  ["foo", "bar", "baz"]
+# Out: {"index":0}
 ```
 
 ### `flatten`

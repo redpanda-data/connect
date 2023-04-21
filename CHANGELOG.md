@@ -16,10 +16,12 @@ All notable changes to this project will be documented in this file.
 - All SQL components now support the `trino` driver.
 - New input codec `csv-safe`.
 - Added `base64rawurl` scheme to both the `encode` and `decode` Bloblang methods.
+- New `find_by` and `find_all_by` Bloblang methods.
 
 ### Fixed
 
 - The `find_all` bloblang method no longer produces results that are of an `unknown` type.
+- The `find_all` and `find` Bloblang methods no longer fail when the value argument is a field reference.
 - Endpoints specified by HTTP server components using both the general `http` server block or their own custom server addresses should now be treated as path prefixes. This corrects a behavioural change that was introduced when both respective server options were updated to support path parameters.
 - Prevented a panic caused when using the `encrypt_aes` and `decrypt_aes` Bloblang methods with a mismatched key/iv lengths.
 - The `snowpipe` field of the `snowflake_put` output can now be omitted from the config without raising an error.
@@ -33,6 +35,8 @@ All notable changes to this project will be documented in this file.
 ### Changed
 
 - When a config contains environment variable interpolations without a default value (i.e. `${FOO}`), if that environment variable is not defined a linting error will be emitted. Shutting down due to linting errors can be disabled with the `--chilled` cli flag, and variables can be specified with an empty default value (`${FOO:}`) in order to make the previous behaviour explicit and prevent the new linting error.
+- The `find` and `find_all` Bloblang methods no longer support query arguments as they were incompatible with supporting value arguments. For query based arguments use the new `find_by` and `find_all_by` methods.
+
 
 ## 4.13.0 - 2023-03-15
 
