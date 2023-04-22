@@ -758,6 +758,7 @@ Requires version 3.42.0 or newer
 | `lines` | Consume the file in segments divided by linebreaks. |
 | `multipart` | Consumes the output of another codec and batches messages together. A batch ends when an empty message is consumed. For example, the codec `lines/multipart` could be used to consume multipart messages where an empty line indicates the end of each batch. |
 | `regex:(?m)^\d\d:\d\d:\d\d` | Consume the file in segments divided by regular expression. |
+| `skipbom` | Skip one or more byte order marks for each opened reader, this codec should precede another codec, e.g. `skipbom/csv`, etc. |
 | `tar` | Parse the file as a tar archive, and consume each file of the archive as a message. |
 
 

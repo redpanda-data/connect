@@ -17,6 +17,7 @@ All notable changes to this project will be documented in this file.
 - New input codec `csv-safe`.
 - Added `base64rawurl` scheme to both the `encode` and `decode` Bloblang methods.
 - New `find_by` and `find_all_by` Bloblang methods.
+- New `skipbom` input codec.
 
 ### Fixed
 

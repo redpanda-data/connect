@@ -474,6 +474,21 @@ func TestCSVGzipReaderOld(t *testing.T) {
 	)
 }
 
+func TestCSVSkipBOMReader(t *testing.T) {
+	// https://en.wikipedia.org/wiki/Byte_order_mark
+	bom := []byte{0xef, 0xbb, 0xbf}
+	data := append(bom, []byte("col1,col2,col3\nfoo1,bar1,baz1\nfoo2,bar2,baz2\nfoo3,bar3,baz3")...)
+	testReaderSuite(
+		t, "skipbom/csv", "", data,
+		`{"col1":"foo1","col2":"bar1","col3":"baz1"}`,
+		`{"col1":"foo2","col2":"bar2","col3":"baz2"}`,
+		`{"col1":"foo3","col2":"bar3","col3":"baz3"}`,
+	)
+
+	data = []byte("col1,col2,col3")
+	testReaderSuite(t, "csv", "", data)
+}
+
 func TestAllBytesReader(t *testing.T) {
 	data := []byte("foo\nbar\nbaz")
 	testReaderSuite(t, "all-bytes", "", data, "foo\nbar\nbaz")
