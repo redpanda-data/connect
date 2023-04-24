@@ -39,7 +39,7 @@ func mongoConfigSpec() *service.ConfigSpec {
 			Description("The mongodb operation to perform.").
 			Default(FindInputOperation).Advanced().
 			Version("4.2.0")).
-		Field(service.NewStringField("resume_token_file").Description("State directory to restore/save resume token").Optional()).
+		Field(service.NewStringField("resume_token_file").Description("Resume token file to read or save resume token").Optional()).
 		Field(service.NewStringAnnotatedEnumField("json_marshal_mode", map[string]string{
 			string(client.JSONMarshalModeCanonical): "A string format that emphasizes type preservation at the expense of readability and interoperability. " +
 				"That is, conversion from canonical to BSON will generally preserve type information except in certain specific cases. ",
