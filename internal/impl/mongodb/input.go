@@ -1,11 +1,16 @@
 package mongodb
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"io/fs"
+	"io/ioutil"
+	"os"
 
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 
 	"github.com/benthosdev/benthos/v4/internal/impl/mongodb/client"
 	"github.com/benthosdev/benthos/v4/public/service"
@@ -13,8 +18,9 @@ import (
 
 // mongodb input component allowed operations.
 const (
-	FindInputOperation      = "find"
-	AggregateInputOperation = "aggregate"
+	FindInputOperation         = "find"
+	AggregateInputOperation    = "aggregate"
+	ChangeStreamInputOperation = "changestream"
 )
 
 func mongoConfigSpec() *service.ConfigSpec {
@@ -29,10 +35,11 @@ func mongoConfigSpec() *service.ConfigSpec {
 		Field(service.NewStringField("collection").Description("The collection to select from.")).
 		Field(service.NewStringField("username").Description("The username to connect to the database.").Default("")).
 		Field(service.NewStringField("password").Description("The password to connect to the database.").Default("")).
-		Field(service.NewStringEnumField("operation", FindInputOperation, AggregateInputOperation).
+		Field(service.NewStringEnumField("operation", FindInputOperation, AggregateInputOperation, ChangeStreamInputOperation).
 			Description("The mongodb operation to perform.").
 			Default(FindInputOperation).Advanced().
 			Version("4.2.0")).
+		Field(service.NewStringField("resume_token_file").Description("State directory to restore/save resume token").Optional()).
 		Field(service.NewStringAnnotatedEnumField("json_marshal_mode", map[string]string{
 			string(client.JSONMarshalModeCanonical): "A string format that emphasizes type preservation at the expense of readability and interoperability. " +
 				"That is, conversion from canonical to BSON will generally preserve type information except in certain specific cases. ",
@@ -86,13 +93,10 @@ func newMongoInput(conf *service.ParsedConfig) (service.Input, error) {
 	if err != nil {
 		return nil, err
 	}
-	queryExecutor, err := conf.FieldBloblang("query")
-	if err != nil {
-		return nil, err
-	}
-	query, err := queryExecutor.Query(struct{}{})
-	if err != nil {
-		return nil, err
+	var resumeTokenPath *string = nil
+	tokenFile, err := conf.FieldString("resume_token_file")
+	if nil == err {
+		resumeTokenPath = &tokenFile
 	}
 	config := client.Config{
 		URL:        url,
@@ -101,21 +105,45 @@ func newMongoInput(conf *service.ParsedConfig) (service.Input, error) {
 		Username:   username,
 		Password:   password,
 	}
-	return service.AutoRetryNacks(&mongoInput{
-		query:        query,
-		config:       config,
-		operation:    operation,
-		marshalCanon: marshalMode == string(client.JSONMarshalModeCanonical),
-	}), nil
+	var query any
+	if operation != ChangeStreamInputOperation {
+		queryExecutor, err := conf.FieldBloblang("query")
+		if err != nil {
+			return nil, err
+		}
+		query, err = queryExecutor.Query(struct{}{})
+		if err != nil {
+			return nil, err
+		}
+		return service.AutoRetryNacks(&mongoInput{
+			query:        query,
+			config:       config,
+			operation:    operation,
+			marshalCanon: marshalMode == string(client.JSONMarshalModeCanonical),
+		}), nil
+	} else {
+		var pipeline mongo.Pipeline
+		return &mongoInput{
+			query:           pipeline,
+			config:          config,
+			label:           conf.Label(),
+			operation:       operation,
+			resumeTokenPath: resumeTokenPath,
+			marshalCanon:    marshalMode == string(client.JSONMarshalModeCanonical),
+		}, nil
+	}
 }
 
 type mongoInput struct {
-	query        any
-	config       client.Config
-	client       *mongo.Client
-	cursor       *mongo.Cursor
-	operation    string
-	marshalCanon bool
+	query           any
+	config          client.Config
+	client          *mongo.Client
+	cursor          *mongo.Cursor
+	changeStream    *mongo.ChangeStream
+	resumeTokenPath *string
+	label           string
+	operation       string
+	marshalCanon    bool
 }
 
 func (m *mongoInput) Connect(ctx context.Context) error {
@@ -133,10 +161,31 @@ func (m *mongoInput) Connect(ctx context.Context) error {
 	}
 	collection := m.client.Database(m.config.Database).Collection(m.config.Collection)
 	switch m.operation {
-	case "find":
+	case FindInputOperation:
 		m.cursor, err = collection.Find(ctx, m.query)
-	case "aggregate":
+	case AggregateInputOperation:
 		m.cursor, err = collection.Aggregate(ctx, m.query)
+	case ChangeStreamInputOperation:
+		var resumeAfter bson.Raw = nil
+		if nil != m.resumeTokenPath {
+			if _, err := os.Stat(*m.resumeTokenPath); err == nil {
+				c, err := ioutil.ReadFile(*m.resumeTokenPath)
+				if nil == err {
+					reader := bytes.NewReader(c)
+					resumeAfter, err = bson.NewFromIOReader(reader)
+					if nil != err {
+						resumeAfter = nil
+					}
+				}
+			}
+		}
+		if nil != resumeAfter {
+			m.changeStream, err = collection.Watch(ctx, m.query, &options.ChangeStreamOptions{
+				ResumeAfter: resumeAfter,
+			})
+		} else {
+			m.changeStream, err = collection.Watch(ctx, m.query)
+		}
 	default:
 		return fmt.Errorf("opertaion %s not supported. the supported values are \"find\" and \"aggregate\"", m.operation)
 	}
@@ -148,12 +197,24 @@ func (m *mongoInput) Connect(ctx context.Context) error {
 }
 
 func (m *mongoInput) Read(ctx context.Context) (*service.Message, service.AckFunc, error) {
-	if !m.cursor.Next(ctx) {
-		return nil, nil, service.ErrEndOfInput
-	}
 	var decoded any
-	if err := m.cursor.Decode(&decoded); err != nil {
-		return nil, nil, err
+	if nil != m.changeStream {
+		if m.changeStream.Next(ctx) {
+			if err := m.changeStream.Decode(&decoded); err != nil {
+				return nil, nil, err
+			}
+			if nil != m.resumeTokenPath {
+				resumeToken := m.changeStream.ResumeToken()
+				ioutil.WriteFile(*m.resumeTokenPath, resumeToken, fs.ModePerm)
+			}
+		}
+	} else {
+		if !m.cursor.Next(ctx) {
+			return nil, nil, service.ErrEndOfInput
+		}
+		if err := m.cursor.Decode(&decoded); err != nil {
+			return nil, nil, err
+		}
 	}
 
 	data, err := bson.MarshalExtJSON(decoded, m.marshalCanon, false)

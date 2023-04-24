@@ -72,7 +72,7 @@ Once the rows from the query are exhausted this input shuts down, allowing the p
 The URL of the target MongoDB DB.
 
 
-Type: `string`  
+Type: `string`
 
 ```yml
 # Examples
@@ -85,49 +85,58 @@ url: mongodb://localhost:27017
 The name of the target MongoDB database.
 
 
-Type: `string`  
+Type: `string`
 
 ### `collection`
 
 The collection to select from.
 
 
-Type: `string`  
+Type: `string`
 
 ### `username`
 
 The username to connect to the database.
 
 
-Type: `string`  
-Default: `""`  
+Type: `string`
+Default: `""`
 
 ### `password`
 
 The password to connect to the database.
 
 
-Type: `string`  
-Default: `""`  
+Type: `string`
+Default: `""`
 
 ### `operation`
 
 The mongodb operation to perform.
 
 
-Type: `string`  
-Default: `"find"`  
-Requires version 4.2.0 or newer  
-Options: `find`, `aggregate`.
+Type: `string`
+Default: `"find"`
+Requires version 4.2.0 or newer
+Options: `find`, `aggregate`, `changestream`.
+
+### `resume_token_file`
+
+The optional directory to read or save mongodb change stream resume token, only works when `operation` is `changestream`.
+
+
+Type: `string`
+Requires version 4.14.0 or newer
+
 
 ### `json_marshal_mode`
 
 The json_marshal_mode setting is optional and controls the format of the output message.
 
 
-Type: `string`  
-Default: `"canonical"`  
-Requires version 4.7.0 or newer  
+Type: `string`
+Default: `"canonical"`
+Requires version 4.7.0 or newer
 
 | Option | Summary |
 |---|---|
@@ -140,7 +149,7 @@ Requires version 4.7.0 or newer
 Bloblang expression describing MongoDB query.
 
 
-Type: `string`  
+Type: `string`
 
 ```yml
 # Examples
