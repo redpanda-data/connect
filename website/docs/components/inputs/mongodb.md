@@ -122,7 +122,9 @@ Options: `find`, `aggregate`, `changestream`.
 
 ### `resume_token_file`
 
-The optional directory to read or save mongodb change stream resume token, only works when `operation` is `changestream`.
+The optional file to read or save mongodb change stream resume token, only works when `operation` is
+`changestream`. A resume token will be written into `resume_token_file` as soon as the changed document has been `Decoded`
+successfully(not processed successfully).
 
 
 Type: `string`
