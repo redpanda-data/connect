@@ -126,7 +126,6 @@ func newMongoInput(conf *service.ParsedConfig) (service.Input, error) {
 		return &mongoInput{
 			query:           pipeline,
 			config:          config,
-			label:           conf.Label(),
 			operation:       operation,
 			resumeTokenPath: resumeTokenPath,
 			marshalCanon:    marshalMode == string(client.JSONMarshalModeCanonical),
@@ -141,7 +140,6 @@ type mongoInput struct {
 	cursor          *mongo.Cursor
 	changeStream    *mongo.ChangeStream
 	resumeTokenPath *string
-	label           string
 	operation       string
 	marshalCanon    bool
 }

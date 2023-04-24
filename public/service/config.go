@@ -822,8 +822,3 @@ func (p *ParsedConfig) FieldObjectList(path ...string) ([]*ParsedConfig, error) 
 	}
 	return sList, nil
 }
-
-// Label return label name for current input.
-func (p *ParsedConfig) Label() string {
-	return p.mgr.Label()
-}
