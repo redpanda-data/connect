@@ -196,6 +196,7 @@ Throws an error similar to a regular mapping error. This is useful for abandonin
 #### Parameters
 
 **`why`** &lt;string&gt; A string explanation for why an error was thrown, this will be added to the resulting error message.  
+**`context`** &lt;(optional) object&gt; Additional data that can be associated with the error and later retrieved.  
 
 #### Examples
 
@@ -273,6 +274,17 @@ If an error has occurred during the processing of a message this function return
 
 ```coffee
 root.doc.error = error()
+```
+
+### `error_with_context`
+
+If an error has occurred during the processing of a message this function returns the reported cause of the error as a string, otherwise `null`. For more information about error handling patterns read [here][error_handling].
+
+#### Examples
+
+
+```coffee
+root.doc.error = error_with_context()
 ```
 
 ### `errored`

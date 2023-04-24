@@ -522,6 +522,35 @@ func (p *ParsedParams) FieldOptionalArray(n string) (*[]any, error) {
 	return &a, nil
 }
 
+// FieldObject returns an object value with a given name.
+func (p *ParsedParams) FieldObject(n string) (map[string]any, error) {
+	v, err := p.Field(n)
+	if err != nil {
+		return nil, err
+	}
+	a, ok := v.(map[string]any)
+	if !ok {
+		return nil, NewTypeError(v, ValueObject)
+	}
+	return a, nil
+}
+
+// FieldOptionalObject returns an optional object value with a given name.
+func (p *ParsedParams) FieldOptionalObject(n string) (*map[string]any, error) {
+	v, err := p.Field(n)
+	if err != nil {
+		return nil, err
+	}
+	if v == nil {
+		return nil, nil
+	}
+	a, ok := v.(map[string]any)
+	if !ok {
+		return nil, NewTypeError(v, ValueObject)
+	}
+	return &a, nil
+}
+
 // FieldString returns a string argument value with a given name.
 func (p *ParsedParams) FieldString(n string) (string, error) {
 	v, err := p.Field(n)
