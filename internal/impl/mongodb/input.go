@@ -93,10 +93,10 @@ func newMongoInput(conf *service.ParsedConfig) (service.Input, error) {
 	if err != nil {
 		return nil, err
 	}
-	var resumeTokenPath *string = nil
+	var resumeTokenFile *string = nil
 	tokenFile, err := conf.FieldString("resume_token_file")
 	if nil == err {
-		resumeTokenPath = &tokenFile
+		resumeTokenFile = &tokenFile
 	}
 	config := client.Config{
 		URL:        url,
@@ -127,7 +127,7 @@ func newMongoInput(conf *service.ParsedConfig) (service.Input, error) {
 			query:           pipeline,
 			config:          config,
 			operation:       operation,
-			resumeTokenPath: resumeTokenPath,
+			resumeTokenFile: resumeTokenFile,
 			marshalCanon:    marshalMode == string(client.JSONMarshalModeCanonical),
 		}, nil
 	}
@@ -139,7 +139,7 @@ type mongoInput struct {
 	client          *mongo.Client
 	cursor          *mongo.Cursor
 	changeStream    *mongo.ChangeStream
-	resumeTokenPath *string
+	resumeTokenFile *string
 	operation       string
 	marshalCanon    bool
 }
@@ -165,9 +165,9 @@ func (m *mongoInput) Connect(ctx context.Context) error {
 		m.cursor, err = collection.Aggregate(ctx, m.query)
 	case ChangeStreamInputOperation:
 		var resumeAfter bson.Raw = nil
-		if nil != m.resumeTokenPath {
-			if _, err := os.Stat(*m.resumeTokenPath); err == nil {
-				c, err := ioutil.ReadFile(*m.resumeTokenPath)
+		if nil != m.resumeTokenFile {
+			if _, err := os.Stat(*m.resumeTokenFile); err == nil {
+				c, err := ioutil.ReadFile(*m.resumeTokenFile)
 				if nil == err {
 					reader := bytes.NewReader(c)
 					resumeAfter, err = bson.NewFromIOReader(reader)
@@ -201,9 +201,9 @@ func (m *mongoInput) Read(ctx context.Context) (*service.Message, service.AckFun
 			if err := m.changeStream.Decode(&decoded); err != nil {
 				return nil, nil, err
 			}
-			if nil != m.resumeTokenPath {
+			if nil != m.resumeTokenFile {
 				resumeToken := m.changeStream.ResumeToken()
-				ioutil.WriteFile(*m.resumeTokenPath, resumeToken, fs.ModePerm)
+				ioutil.WriteFile(*m.resumeTokenFile, resumeToken, fs.ModePerm)
 			}
 		}
 	} else {
