@@ -10,7 +10,7 @@ All notable changes to this project will be documented in this file.
 ### Added
 
 - The `-e/--env-file` cli flag can now be specified multiple times.
-- New `studio pull` cli subcommand for running Studio config deployments.
+- New `studio pull` cli subcommand for running [Benthos Studio](https://studio.benthos.dev) session deployments.
 - Metadata field `kafka_tombstone_message` added to the `kafka` and `kafka_franz` inputs.
 - Method `SetEnvVarLookupFunc` added to the stream builder API.
 - The `discord` input and output now use the official chat client API and no longer rely on poll-based HTTP requests, this should result in more efficient and less erroneous behaviour.
