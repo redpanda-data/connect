@@ -5,6 +5,8 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 4.14.0 - 2023-04-25
+
 ### Added
 
 - The `-e/--env-file` cli flag can now be specified multiple times.
@@ -34,6 +36,7 @@ All notable changes to this project will be documented in this file.
 - Reduced the amount of pre-compilation of Bloblang based linting rules for documentation fields, this should dramatically improve the start up time of Benthos (~1s down to ~200ms).
 - Environment variable interpolations with an empty fallback (`${FOO:}`) are now valid.
 - Fixed an issue where the `mongodb` output wasn't using bulk send requests according to batching policies.
+- The `amqp_1` input now falls back to accessing `Message.Value` when the data is empty.
 
 ### Changed
 

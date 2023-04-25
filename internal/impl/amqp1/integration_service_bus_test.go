@@ -73,9 +73,9 @@ func testAMQP1Connected(url, sourceAddress string, t *testing.T) {
 	wg := sync.WaitGroup{}
 
 	tests := []struct {
-		data             string
-		value            interface{}
-		expected_content string
+		data            string
+		value           interface{}
+		expectedContent string
 	}{
 		{"hello world: 0", nil, "hello world: 0"},
 		{"hello world: 1", nil, "hello world: 1"},
@@ -109,7 +109,7 @@ func testAMQP1Connected(url, sourceAddress string, t *testing.T) {
 
 	want := map[string]bool{}
 	for _, test := range tests {
-		want[test.expected_content] = true
+		want[test.expectedContent] = true
 	}
 
 	for range tests {
