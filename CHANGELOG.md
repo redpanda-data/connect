@@ -33,12 +33,12 @@ All notable changes to this project will be documented in this file.
 - The `snowflake_put` output now prevents silent failures under certain conditions. Details [here](https://github.com/snowflakedb/gosnowflake/issues/701).
 - Reduced the amount of pre-compilation of Bloblang based linting rules for documentation fields, this should dramatically improve the start up time of Benthos (~1s down to ~200ms).
 - Environment variable interpolations with an empty fallback (`${FOO:}`) are now valid.
+- Fixed an issue where the `mongodb` output wasn't using bulk send requests according to batching policies.
 
 ### Changed
 
 - When a config contains environment variable interpolations without a default value (i.e. `${FOO}`), if that environment variable is not defined a linting error will be emitted. Shutting down due to linting errors can be disabled with the `--chilled` cli flag, and variables can be specified with an empty default value (`${FOO:}`) in order to make the previous behaviour explicit and prevent the new linting error.
 - The `find` and `find_all` Bloblang methods no longer support query arguments as they were incompatible with supporting value arguments. For query based arguments use the new `find_by` and `find_all_by` methods.
-
 
 ## 4.13.0 - 2023-03-15
 
