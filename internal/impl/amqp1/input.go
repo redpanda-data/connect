@@ -238,7 +238,17 @@ func (a *amqp1Reader) ReadBatch(ctx context.Context) (message.Batch, input.Async
 		return nil, nil, err
 	}
 
-	part := message.NewPart(amqpMsg.GetData())
+	var part *message.Part
+
+	if data := amqpMsg.GetData(); data != nil {
+		part = message.NewPart(data)
+	} else if value, ok := amqpMsg.Value.(string); ok {
+		part = message.NewPart([]byte(value))
+	} else {
+		part = message.NewPart(nil)
+	}
+
+	amqpSetMetadata(part, "amqp_value", amqpMsg.Value)
 	if amqpMsg.Properties != nil {
 		amqpSetMetadata(part, "amqp_content_type", amqpMsg.Properties.ContentType)
 		amqpSetMetadata(part, "amqp_content_encoding", amqpMsg.Properties.ContentEncoding)
