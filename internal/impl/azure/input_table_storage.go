@@ -132,24 +132,26 @@ func int32OrNil(val int32) *int32 {
 // ReadBatch attempts to read a new page from the target Azure Storage Table.
 func (a *azureTableStorage) ReadBatch(ctx context.Context) (msg message.Batch, ackFn input.AsyncAckFn, err error) {
 	if a.pager.More() {
-		resp, nerr := a.pager.NextPage(ctx)
-		if nerr != nil {
-			a.log.Warnf("error fetching next page", nerr)
+		resp, err := a.pager.NextPage(ctx)
+		if err != nil {
+			a.log.Warnf("error fetching next page", err)
 			return nil, nil, component.ErrTypeClosed
 		}
-		for _, entity := range resp.Entities {
-			p := message.NewPart(entity)
-			msg = append(msg, p)
+		if len(resp.Entities) > 0 {
+			for _, entity := range resp.Entities {
+				p := message.NewPart(entity)
+				msg = append(msg, p)
+			}
+			_ = msg.Iter(func(_ int, part *message.Part) error {
+				a.row++
+				part.MetaSetMut("table_storage_name", a.conf.TableName)
+				part.MetaSetMut("row_num", a.row)
+				return nil
+			})
+			return msg, func(rctx context.Context, res error) error {
+				return nil
+			}, err
 		}
-		_ = msg.Iter(func(_ int, part *message.Part) error {
-			a.row++
-			part.MetaSetMut("table_storage_name", a.conf.TableName)
-			part.MetaSetMut("row_num", a.row)
-			return nil
-		})
-		return msg, func(rctx context.Context, res error) error {
-			return nil
-		}, err
 	}
 	return nil, nil, component.ErrTypeClosed
 }
