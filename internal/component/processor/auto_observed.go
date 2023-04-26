@@ -6,15 +6,21 @@ import (
 
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
+	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
 	"github.com/benthosdev/benthos/v4/internal/tracing"
 )
 
-// V2 is a simpler interface to implement than V1.
-type V2 interface {
+// AutoObserved is a simpler processor interface to implement than V1 as it is
+// not required to emit observability information within the implementation
+// itself.
+type AutoObserved interface {
 	// Process a message into one or more resulting messages, or return an error
-	// if the message could not be processed. If zero messages are returned and
-	// the error is nil then the message is filtered.
+	// if one occurred during processing, in which case the message will
+	// continue unchanged except for having that error now affiliated with it.
+	//
+	// If zero messages are returned and the error is nil then the message is
+	// filtered.
 	Process(ctx context.Context, p *message.Part) ([]*message.Part, error)
 
 	// Close the component, blocks until either the underlying resources are
@@ -23,13 +29,23 @@ type V2 interface {
 	Close(ctx context.Context) error
 }
 
-// V2Batched is a simpler interface to implement than V1 and allows batch-wide
-// processing.
-type V2Batched interface {
+// AutoObservedBatched is a simpler processor interface to implement than V1 as
+// it is not required to emit observability information within the
+// implementation itself.
+type AutoObservedBatched interface {
 	// Process a batch of messages into one or more resulting batches, or return
-	// an error if the entire batch could not be processed. If zero messages are
-	// returned and the error is nil then all messages are filtered.
-	ProcessBatch(ctx context.Context, spans []*tracing.Span, b message.Batch) ([]message.Batch, error)
+	// an error if one occurred during processing, in which case all messages
+	// will continue unchanged except for having that error now affiliated with
+	// them.
+	//
+	// In order to associate individual messages with an error please use
+	// ctx.OnError instead of msg.ErrorSet. They are similar, but using
+	// ctx.OnError ensures observability data is updated as well as the message
+	// being affiliated with the error.
+	//
+	// If zero message batches are returned and the error is nil then all
+	// messages are filtered.
+	ProcessBatch(ctx *BatchProcContext, b message.Batch) ([]message.Batch, error)
 
 	// Close the component, blocks until either the underlying resources are
 	// cleaned up or the context is cancelled. Returns an error if the context
@@ -42,7 +58,7 @@ type V2Batched interface {
 // Implements V1.
 type v2ToV1Processor struct {
 	typeStr string
-	p       V2
+	p       AutoObserved
 	mgr     component.Observability
 
 	mReceived      metrics.StatCounter
@@ -53,8 +69,9 @@ type v2ToV1Processor struct {
 	mLatency       metrics.StatTimer
 }
 
-// NewV2ToV1Processor wraps a processor.V2 with a struct that implements V1.
-func NewV2ToV1Processor(typeStr string, p V2, mgr component.Observability) V1 {
+// NewAutoObservedProcessor wraps an AutoObserved processor with an
+// implementation of V1 which handles observability information.
+func NewAutoObservedProcessor(typeStr string, p AutoObserved, mgr component.Observability) V1 {
 	return &v2ToV1Processor{
 		typeStr: typeStr, p: p, mgr: mgr,
 
@@ -108,10 +125,69 @@ func (a *v2ToV1Processor) Close(ctx context.Context) error {
 
 //------------------------------------------------------------------------------
 
+// TestBatchProcContext creates a context for batch processors. It's safe to
+// provide nil spans and parts functions for testing purposes.
+func TestBatchProcContext(ctx context.Context, spans []*tracing.Span, parts []*message.Part) *BatchProcContext {
+	return &BatchProcContext{
+		ctx:   ctx,
+		spans: spans,
+		parts: parts,
+	}
+}
+
+// BatchProcContext provides methods for triggering observability updates and
+// accessing processor specific spans.
+type BatchProcContext struct {
+	ctx   context.Context
+	spans []*tracing.Span
+	parts []*message.Part
+
+	mError metrics.StatCounter
+	logger log.Modular
+}
+
+// Context returns the underlying processor context.Context.
+func (b *BatchProcContext) Context() context.Context {
+	return b.ctx
+}
+
+// Span returns a span created specifically for the invocation of the processor.
+// This can be used in order to add context to what the processor did.
+func (b *BatchProcContext) Span(index int) *tracing.Span {
+	if len(b.spans) <= index {
+		return nil
+	}
+	return b.spans[index]
+}
+
+// OnError should be called when an individual message has encountered an error,
+// this should be used instead of .ErrorSet() as it includes observability
+// updates.
+//
+// This method can be called with index -1 in order to set generalised
+// observability information without marking specific message errors.
+func (b *BatchProcContext) OnError(err error, index int, p *message.Part) {
+	if b.mError != nil {
+		b.mError.Incr(1)
+	}
+	if b.logger != nil {
+		b.logger.Debugf("Processor failed: %v", err)
+	}
+
+	var span *tracing.Span
+	if len(b.spans) > index && index >= 0 {
+		span = b.spans[index]
+	}
+	if p == nil && len(b.parts) > index && index >= 0 {
+		p = b.parts[index]
+	}
+	MarkErr(p, span, err)
+}
+
 // Implements types.Processor.
 type v2BatchedToV1Processor struct {
 	typeStr string
-	p       V2Batched
+	p       AutoObservedBatched
 	mgr     component.Observability
 
 	mReceived      metrics.StatCounter
@@ -122,9 +198,9 @@ type v2BatchedToV1Processor struct {
 	mLatency       metrics.StatTimer
 }
 
-// NewV2BatchedToV1Processor wraps a processor.V2Batched with a struct that
-// implements types.Processor.
-func NewV2BatchedToV1Processor(typeStr string, p V2Batched, mgr component.Observability) V1 {
+// NewAutoObservedBatchProcessor wraps an AutoObservedBatched processor with an
+// implementation of V1 which handles observability information.
+func NewAutoObservedBatchedProcessor(typeStr string, p AutoObservedBatched, mgr component.Observability) V1 {
 	return &v2BatchedToV1Processor{
 		typeStr: typeStr, p: p, mgr: mgr,
 
@@ -144,9 +220,15 @@ func (a *v2BatchedToV1Processor) ProcessBatch(ctx context.Context, msg message.B
 	tStarted := time.Now()
 	_, spans := tracing.WithChildSpans(a.mgr.Tracer(), a.typeStr, msg)
 
-	outputBatches, err := a.p.ProcessBatch(ctx, spans, msg)
+	outputBatches, err := a.p.ProcessBatch(&BatchProcContext{
+		ctx:    ctx,
+		spans:  spans,
+		parts:  msg,
+		mError: a.mError,
+		logger: a.mgr.Logger(),
+	}, msg)
 	if err != nil {
-		a.mError.Incr(1)
+		a.mError.Incr(int64(msg.Len()))
 		a.mgr.Logger().Debugf("Processor failed: %v", err)
 		_ = msg.Iter(func(i int, p *message.Part) error {
 			MarkErr(p, spans[i], err)

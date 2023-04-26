@@ -87,7 +87,7 @@ var _ = registerSimpleMethod(
 		"encode", "",
 	).InCategory(
 		MethodCategoryEncoding,
-		"Encodes a string or byte array target according to a chosen scheme and returns a string result. Available schemes are: `base64`, `base64url`, `hex`, `ascii85`.",
+		"Encodes a string or byte array target according to a chosen scheme and returns a string result. Available schemes are: `base64`, `base64url` [(RFC 4648 with padding characters)](https://rfc-editor.org/rfc/rfc4648.html), `base64rawurl` [(RFC 4648 without padding characters)](https://rfc-editor.org/rfc/rfc4648.html), `hex`, `ascii85`.",
 		// NOTE: z85 has been removed from the list until we can support
 		// misaligned data automatically. It'll still be supported for backwards
 		// compatibility, but given it behaves differently to `ascii85` I think
@@ -123,6 +123,14 @@ var _ = registerSimpleMethod(
 			schemeFn = func(b []byte) (string, error) {
 				var buf bytes.Buffer
 				e := base64.NewEncoder(base64.URLEncoding, &buf)
+				_, _ = e.Write(b)
+				e.Close()
+				return buf.String(), nil
+			}
+		case "base64rawurl":
+			schemeFn = func(b []byte) (string, error) {
+				var buf bytes.Buffer
+				e := base64.NewEncoder(base64.RawURLEncoding, &buf)
 				_, _ = e.Write(b)
 				e.Close()
 				return buf.String(), nil
@@ -185,7 +193,7 @@ var _ = registerSimpleMethod(
 		"decode", "",
 	).InCategory(
 		MethodCategoryEncoding,
-		"Decodes an encoded string target according to a chosen scheme and returns the result as a byte array. When mapping the result to a JSON field the value should be cast to a string using the method [`string`][methods.string], or encoded using the method [`encode`][methods.encode], otherwise it will be base64 encoded by default.\n\nAvailable schemes are: `base64`, `base64url`, `hex`, `ascii85`.",
+		"Decodes an encoded string target according to a chosen scheme and returns the result as a byte array. When mapping the result to a JSON field the value should be cast to a string using the method [`string`][methods.string], or encoded using the method [`encode`][methods.encode], otherwise it will be base64 encoded by default.\n\nAvailable schemes are: `base64`, `base64url` [(RFC 4648 with padding characters)](https://rfc-editor.org/rfc/rfc4648.html), `base64rawurl` [(RFC 4648 without padding characters)](https://rfc-editor.org/rfc/rfc4648.html), `hex`, `ascii85`.",
 		// NOTE: z85 has been removed from the list until we can support
 		// misaligned data automatically. It'll still be supported for backwards
 		// compatibility, but given it behaves differently to `ascii85` I think
@@ -217,6 +225,11 @@ var _ = registerSimpleMethod(
 		case "base64url":
 			schemeFn = func(b []byte) ([]byte, error) {
 				e := base64.NewDecoder(base64.URLEncoding, bytes.NewReader(b))
+				return io.ReadAll(e)
+			}
+		case "base64rawurl":
+			schemeFn = func(b []byte) ([]byte, error) {
+				e := base64.NewDecoder(base64.RawURLEncoding, bytes.NewReader(b))
 				return io.ReadAll(e)
 			}
 		case "hex":
@@ -287,17 +300,18 @@ root.encrypted = this.value.encrypt_aes("ctr", $key, $vector).encode("hex")`,
 		if err != nil {
 			return nil, err
 		}
-		ivStr, err := args.FieldString("iv")
+		block, err := aes.NewCipher([]byte(keyStr))
 		if err != nil {
 			return nil, err
 		}
 
-		key := []byte(keyStr)
-		iv := []byte(ivStr)
-
-		block, err := aes.NewCipher(key)
+		ivStr, err := args.FieldString("iv")
 		if err != nil {
 			return nil, err
+		}
+		iv := []byte(ivStr)
+		if len(iv) != block.BlockSize() {
+			return nil, errors.New("the key must match the initialisation vector size")
 		}
 
 		var schemeFn func([]byte) (string, error)
@@ -370,21 +384,23 @@ root.decrypted = this.value.decode("hex").decrypt_aes("ctr", $key, $vector).stri
 		if err != nil {
 			return nil, err
 		}
+
 		keyStr, err := args.FieldString("key")
 		if err != nil {
 			return nil, err
 		}
-		ivStr, err := args.FieldString("iv")
+		block, err := aes.NewCipher([]byte(keyStr))
 		if err != nil {
 			return nil, err
 		}
 
-		key := []byte(keyStr)
-		iv := []byte(ivStr)
-
-		block, err := aes.NewCipher(key)
+		ivStr, err := args.FieldString("iv")
 		if err != nil {
 			return nil, err
+		}
+		iv := []byte(ivStr)
+		if len(iv) != block.BlockSize() {
+			return nil, errors.New("the key must match the initialisation vector size")
 		}
 
 		var schemeFn func([]byte) ([]byte, error)
@@ -1953,7 +1969,8 @@ root.description = this.description.trim_prefix("foobar_")`,
 			`{"description":"unchanged","name":"foobar_blobton"}`,
 			`{"description":"unchanged","name":"blobton"}`,
 		),
-	).Param(ParamString("prefix", "The leading prefix substring to trim from the string.")),
+	).Param(ParamString("prefix", "The leading prefix substring to trim from the string.")).
+		AtVersion("4.12.0"),
 	func(args *ParsedParams) (simpleMethod, error) {
 		prefix, err := args.FieldString("prefix")
 		if err != nil {
@@ -1984,7 +2001,8 @@ root.description = this.description.trim_suffix("_foobar")`,
 			`{"description":"unchanged","name":"blobton_foobar"}`,
 			`{"description":"unchanged","name":"blobton"}`,
 		),
-	).Param(ParamString("suffix", "The trailing suffix substring to trim from the string.")),
+	).Param(ParamString("suffix", "The trailing suffix substring to trim from the string.")).
+		AtVersion("4.12.0"),
 	func(args *ParsedParams) (simpleMethod, error) {
 		suffix, err := args.FieldString("suffix")
 		if err != nil {

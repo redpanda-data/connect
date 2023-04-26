@@ -11,7 +11,6 @@ import {
   normalizeUrl,
   docuHash,
   aliasedSitePath,
-  posixPath,
   addTrailingPathSeparator,
   getContentPathList,
   DEFAULT_PLUGIN_ID,
@@ -194,6 +193,7 @@ export default async function pluginContentCookbook(
                         `${docuHash(aliasedPath)}.json`,
                       );
                     },
+                    markdownConfig: siteConfig.markdown,
                   },
                 },
                 {

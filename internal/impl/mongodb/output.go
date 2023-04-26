@@ -261,7 +261,7 @@ func (m *Writer) WriteBatch(ctx context.Context, msg message.Batch) error {
 		return component.ErrNotConnected
 	}
 
-	writeModelsMap := map[*mongo.Collection][]mongo.WriteModel{}
+	writeModelsMap := map[string][]mongo.WriteModel{}
 	err := output.IterateBatchedSend(msg, func(i int, _ *message.Part) error {
 		var err error
 		var filterVal, documentVal *message.Part
@@ -321,7 +321,6 @@ func (m *Writer) WriteBatch(ctx context.Context, msg message.Batch) error {
 		}
 
 		var writeModel mongo.WriteModel
-		collection := m.database.Collection(collectionStr, m.writeConcernCollectionOption)
 
 		switch m.operation {
 		case client.OperationInsertOne:
@@ -355,7 +354,7 @@ func (m *Writer) WriteBatch(ctx context.Context, msg message.Batch) error {
 		}
 
 		if writeModel != nil {
-			writeModelsMap[collection] = append(writeModelsMap[collection], writeModel)
+			writeModelsMap[collectionStr] = append(writeModelsMap[collectionStr], writeModel)
 		}
 		return nil
 	})
@@ -370,8 +369,9 @@ func (m *Writer) WriteBatch(ctx context.Context, msg message.Batch) error {
 
 	// Dispatch any documents which IterateBatchedSend managed to process successfully
 	if len(writeModelsMap) > 0 {
-		for collection, writeModels := range writeModelsMap {
+		for collectionStr, writeModels := range writeModelsMap {
 			// We should have at least one write model in the slice
+			collection := m.database.Collection(collectionStr, m.writeConcernCollectionOption)
 			if _, err := collection.BulkWrite(context.Background(), writeModels); err != nil {
 				return err
 			}

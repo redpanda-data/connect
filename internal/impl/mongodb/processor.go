@@ -23,7 +23,6 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
 	"github.com/benthosdev/benthos/v4/internal/old/util/retries"
-	"github.com/benthosdev/benthos/v4/internal/tracing"
 )
 
 //------------------------------------------------------------------------------
@@ -34,7 +33,7 @@ func init() {
 		if err != nil {
 			return nil, err
 		}
-		return processor.NewV2BatchedToV1Processor("", v2Proc, nm), nil
+		return processor.NewAutoObservedBatchedProcessor("", v2Proc, nm), nil
 	}, docs.ComponentSpec{
 		Name:       "mongodb",
 		Type:       docs.TypeProcessor,
@@ -114,7 +113,7 @@ type Processor struct {
 }
 
 // NewProcessor returns a MongoDB processor.
-func NewProcessor(conf processor.Config, mgr bundle.NewManagement) (processor.V2Batched, error) {
+func NewProcessor(conf processor.Config, mgr bundle.NewManagement) (processor.AutoObservedBatched, error) {
 	// TODO: V4 Remove this after V4 lands and #972 is fixed
 	operation := client.NewOperation(conf.MongoDB.Operation)
 	if operation == client.OperationInvalid {
@@ -226,12 +225,12 @@ func NewProcessor(conf processor.Config, mgr bundle.NewManagement) (processor.V2
 
 // ProcessBatch applies the processor to a message batch, either creating >0
 // resulting messages or a response to be sent back to the message source.
-func (m *Processor) ProcessBatch(ctx context.Context, spans []*tracing.Span, batch message.Batch) ([]message.Batch, error) {
+func (m *Processor) ProcessBatch(ctx *processor.BatchProcContext, batch message.Batch) ([]message.Batch, error) {
 	writeModelsMap := map[*mongo.Collection][]mongo.WriteModel{}
 	_ = batch.Iter(func(i int, p *message.Part) (err error) {
 		defer func() {
 			if err != nil {
-				p.ErrorSet(err)
+				ctx.OnError(err, i, p)
 			}
 		}()
 
@@ -357,7 +356,7 @@ func (m *Processor) ProcessBatch(ctx context.Context, spans []*tracing.Span, bat
 			if _, err := collection.BulkWrite(context.Background(), writeModels); err != nil {
 				m.log.Errorf("Bulk write failed in mongodb processor: %v", err)
 				_ = batch.Iter(func(i int, p *message.Part) error {
-					processor.MarkErr(p, spans[i], err)
+					ctx.OnError(err, -1, p)
 					return nil
 				})
 			}

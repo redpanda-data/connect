@@ -11,7 +11,6 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	"github.com/benthosdev/benthos/v4/internal/tracing"
 )
 
 func init() {
@@ -20,7 +19,7 @@ func init() {
 		if err != nil {
 			return nil, err
 		}
-		return processor.NewV2BatchedToV1Processor("bloblang", p, mgr), nil
+		return processor.NewAutoObservedBatchedProcessor("bloblang", p, mgr), nil
 	}, docs.ComponentSpec{
 		Name: "bloblang",
 		Categories: []string{
@@ -134,7 +133,7 @@ type bloblangProc struct {
 	log  log.Modular
 }
 
-func newBloblang(conf string, mgr bundle.NewManagement) (processor.V2Batched, error) {
+func newBloblang(conf string, mgr bundle.NewManagement) (processor.AutoObservedBatched, error) {
 	exec, err := mgr.BloblEnvironment().NewMapping(conf)
 	if err != nil {
 		if perr, ok := err.(*parser.Error); ok {
@@ -148,14 +147,14 @@ func newBloblang(conf string, mgr bundle.NewManagement) (processor.V2Batched, er
 	}, nil
 }
 
-func (b *bloblangProc) ProcessBatch(ctx context.Context, spans []*tracing.Span, msg message.Batch) ([]message.Batch, error) {
+func (b *bloblangProc) ProcessBatch(ctx *processor.BatchProcContext, msg message.Batch) ([]message.Batch, error) {
 	newParts := make([]*message.Part, 0, msg.Len())
 	_ = msg.Iter(func(i int, part *message.Part) error {
 		p, err := b.exec.MapPart(i, msg)
 		if err != nil {
+			ctx.OnError(err, i, part)
+			b.log.Errorf("%v", err)
 			p = part
-			b.log.Errorf("%v\n", err)
-			processor.MarkErr(p, spans[i], err)
 		}
 		if p != nil {
 			newParts = append(newParts, p)

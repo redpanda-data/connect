@@ -10,7 +10,9 @@ description: Learn how Benthos templates work.
      internal/template/docs.md
 -->
 
-EXPERIMENTAL: Templates are an experimental feature and therefore subject to change outside of major version releases.
+:::warning EXPERIMENTAL
+Templates are an experimental feature and therefore subject to change outside of major version releases.
+:::
 
 Templates are a way to define new Benthos components (similar to plugins) that are implemented by generating a Benthos config snippet from pre-defined parameter fields. This is useful when a common pattern of Benthos configuration is used but with varying parameters each time.
 
@@ -99,7 +101,7 @@ pipeline:
 
 </Tabs>
 
-You can see more examples of templates, including some that are included as part of the standard Benthos distribution, at [https://github.com/benthosdev/benthos/tree/main/template](https://github.com/benthosdev/benthos/tree/main/template).
+You can see more examples of templates at [https://github.com/benthosdev/benthos/tree/main/config/template_examples](https://github.com/benthosdev/benthos/tree/main/config/template_examples).
 
 ## Fields
 

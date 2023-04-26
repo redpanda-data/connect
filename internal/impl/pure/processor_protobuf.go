@@ -30,7 +30,7 @@ func init() {
 		if err != nil {
 			return nil, err
 		}
-		return processor.NewV2ToV1Processor("protobuf", p, mgr), nil
+		return processor.NewAutoObservedProcessor("protobuf", p, mgr), nil
 	}, docs.ComponentSpec{
 		Name: "protobuf",
 		Categories: []string{

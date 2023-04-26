@@ -25,7 +25,7 @@ func init() {
 		if err != nil {
 			return nil, err
 		}
-		return processor.NewV2ToV1Processor("grok", p, mgr), nil
+		return processor.NewAutoObservedProcessor("grok", p, mgr), nil
 	}, docs.ComponentSpec{
 		Name: "grok",
 		Categories: []string{
@@ -90,7 +90,7 @@ type grokProc struct {
 	log      log.Modular
 }
 
-func newGrok(conf processor.GrokConfig, mgr bundle.NewManagement) (processor.V2, error) {
+func newGrok(conf processor.GrokConfig, mgr bundle.NewManagement) (processor.AutoObserved, error) {
 	grokConf := grok.Config{
 		RemoveEmptyValues:   conf.RemoveEmpty,
 		NamedCapturesOnly:   conf.NamedOnly,

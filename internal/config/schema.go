@@ -1,6 +1,8 @@
 package config
 
 import (
+	"github.com/mitchellh/mapstructure"
+
 	"github.com/benthosdev/benthos/v4/internal/api"
 	tdocs "github.com/benthosdev/benthos/v4/internal/cli/test/docs"
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
@@ -37,6 +39,15 @@ func New() Type {
 		SystemCloseTimeout: "20s",
 		Tests:              nil,
 	}
+}
+
+// Clone a config, creating a new copy that can be mutated in isolation.
+func (t *Type) Clone() (Type, error) {
+	var outConf Type
+	if err := mapstructure.Decode(t, &outConf); err != nil {
+		return Type{}, err
+	}
+	return outConf, nil
 }
 
 var httpField = docs.FieldObject("http", "Configures the service-wide HTTP server.").WithChildren(api.Spec()...)
