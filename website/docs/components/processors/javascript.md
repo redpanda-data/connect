@@ -34,6 +34,79 @@ The [execution engine](https://github.com/dop251/goja) behind this processor pro
 
 Imports via `require` should work similarly to NodeJS, and access to the console is supported which will print via the Benthos logger. More caveats can be [found here](https://github.com/dop251/goja#known-incompatibilities-and-caveats).
 
+This processor is implemented using the [github.com/dop251/goja](https://github.com/dop251/goja) library.
+
+## Fields
+
+### `code`
+
+An inline JavaScript program to run. One of `code` or `file` must be defined.
+This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
+
+
+Type: `string`  
+
+### `file`
+
+A file containing a JavaScript program to run. One of `code` or `file` must be defined.
+This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
+
+
+Type: `string`  
+
+### `global_folders`
+
+List of folders that will be used to load modules from if the requested JS module is not found elsewhere.
+
+
+Type: `array`  
+Default: `[]`  
+
+## Examples
+
+<Tabs defaultValue="Simple mutation" values={[
+{ label: 'Simple mutation', value: 'Simple mutation', },
+{ label: 'Structured mutation', value: 'Structured mutation', },
+]}>
+
+<TabItem value="Simple mutation">
+
+In this example we define a simple function that performs a basic mutation against messages, treating their contents as raw strings.
+
+```yaml
+pipeline:
+  processors:
+    - javascript:
+        code: 'benthos.v0_msg_set_string(benthos.v0_msg_as_string() + "hello world");'
+```
+
+</TabItem>
+<TabItem value="Structured mutation">
+
+In this example we define a function that performs basic mutations against a structured message. Note that we encapsulate the logic within an anonymous function that is called for each invocation, this is required in order to avoid duplicate variable declarations in the global state.
+
+```yaml
+pipeline:
+  processors:
+    - javascript:
+        code: |
+          (() => {
+            let thing = benthos.v0_msg_as_structured();
+            thing.num_keys = Object.keys(thing).length;
+            delete thing["b"];
+            benthos.v0_msg_set_structured(thing);
+          })();
+```
+
+</TabItem>
+</Tabs>
+
+## Runtime
+
+In order to optimise code execution JS runtimes are created on demand (in order to support parallel execution) and are reused across invocations. Therefore, it is important to understand that global state created by your programs will outlive individual invocations. In order for your programs to avoid failing after the first invocation ensure that you do not define variables at the global scope.
+
+Although technically possible, it is recommended that you do not rely on the global state for maintaining state across invocations as the pooling nature of the runtimes will prevent deterministic behaviour. We aim to support deterministic strategies for mutating global state in the future.
+
 ## Functions
 
 ### `benthos.v0_fetch`
@@ -135,34 +208,5 @@ benthos.v0_msg_set_structured({
 });
 ```
 
-
-This processor is implemented using the [github.com/dop251/goja](https://github.com/dop251/goja) library.
-
-
-## Fields
-
-### `code`
-
-An inline JavaScript program to run. One of `code` or `file` must be defined.
-This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
-
-
-Type: `string`  
-
-### `file`
-
-A file containing a JavaScript program to run. One of `code` or `file` must be defined.
-This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
-
-
-Type: `string`  
-
-### `global_folders`
-
-List of folders that will be used to load modules from if the requested JS module is not found elsewhere.
-
-
-Type: `array`  
-Default: `[]`  
 
 
