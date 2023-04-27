@@ -53,6 +53,16 @@ On macOS, Benthos can be installed via Homebrew:
 brew install benthos
 ```
 
+### Asdf
+
+If you use the [asdf](https://asdf-vm.com/) tool version manager you can install Benthos with:
+
+```sh
+asdf plugin add benthos
+asdf install benthos latest
+asdf global benthos latest
+```
+
 ### Serverless
 
 For information about serverless deployments of Benthos check out the serverless section [here][serverless].
