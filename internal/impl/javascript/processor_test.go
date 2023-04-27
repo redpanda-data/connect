@@ -53,6 +53,37 @@ code: |
 	require.NoError(t, proc.Close(bCtx))
 }
 
+func TestProcessorNoEncapsulation(t *testing.T) {
+	conf, err := javascriptProcessorConfig().ParseYAML(`
+code: 'benthos.v0_msg_set_string(benthos.v0_msg_as_string() + "hello world");'
+`, nil)
+	require.NoError(t, err)
+
+	proc, err := newJavascriptProcessorFromConfig(conf, service.MockResources())
+	require.NoError(t, err)
+
+	bCtx, done := context.WithTimeout(context.Background(), time.Second*30)
+	defer done()
+
+	resBatches, err := proc.ProcessBatch(bCtx, service.MessageBatch{
+		service.NewMessage([]byte("first ")),
+		service.NewMessage([]byte("second ")),
+	})
+	require.NoError(t, err)
+	require.Len(t, resBatches, 1)
+	require.Len(t, resBatches[0], 2)
+
+	resBytes, err := resBatches[0][0].AsBytes()
+	require.NoError(t, err)
+	assert.Equal(t, "first hello world", string(resBytes))
+
+	resBytes, err = resBatches[0][1].AsBytes()
+	require.NoError(t, err)
+	assert.Equal(t, "second hello world", string(resBytes))
+
+	require.NoError(t, proc.Close(bCtx))
+}
+
 func TestProcessorMetadata(t *testing.T) {
 	conf, err := javascriptProcessorConfig().ParseYAML(`
 code: |

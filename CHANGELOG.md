@@ -8,6 +8,14 @@ All notable changes to this project will be documented in this file.
 - New `lru` and `ttlru` in-memory caches.
 - Fix vulnerability [GO-2023-1571](https://pkg.go.dev/vuln/GO-2023-1571)
 
+### Added
+
+- Flag `--skip-env-var-check` added to the `lint` subcommand, this disables the new linting behaviour where environment variable interpolations without defaults throw linting errors when the variable is not defined.
+
+### Fixed
+
+- Provide msgpack plugins through github.com/benthosdev/benthos/v4/public/components/msgpack
+
 ## 4.14.0 - 2023-04-25
 
 
