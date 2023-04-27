@@ -689,6 +689,10 @@ const (
 	// LintFailedRead means a configuration could not be read.
 	LintFailedRead LintType = iota
 
+	// LintMissingEnvVar means a configuration contained an environment variable
+	// interpolation without a default and the variable was undefined.
+	LintMissingEnvVar LintType = iota
+
 	// LintInvalidOption means the field value was not one of the explicit list
 	// of options.
 	LintInvalidOption LintType = iota

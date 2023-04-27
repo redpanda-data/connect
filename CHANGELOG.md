@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- Flag `--skip-env-var-check` added to the `lint` subcommand, this disables the new linting behaviour where environment variable interpolations without defaults throw linting errors when the variable is not defined.
+
 ## 4.14.0 - 2023-04-25
 
 ### Added
