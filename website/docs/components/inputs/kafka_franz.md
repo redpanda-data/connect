@@ -180,7 +180,7 @@ Default: `"5s"`
 
 ### `start_from_oldest`
 
-If an offset is not found for a topic partition, determines whether to consume from the oldest available offset, otherwise messages are consumed from the latest offset.
+Determines whether to consume from the oldest available offset, otherwise messages are consumed from the latest offset. The setting is applied when creating a new consumer group or the saved offset no longer exists.
 
 
 Type: `bool`  
