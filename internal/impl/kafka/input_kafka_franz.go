@@ -24,9 +24,11 @@ func franzKafkaInputConfig() *service.ConfigSpec {
 		Beta().
 		Categories("Services").
 		Version("3.61.0").
-		Summary("An alternative Kafka input using the [Franz Kafka client library](https://github.com/twmb/franz-go).").
+		Summary(`A Kafka input using the [Franz Kafka client library](https://github.com/twmb/franz-go).`).
 		Description(`
-Consumes one or more topics by balancing the partitions across any other connected clients with the same consumer group.
+When a consumer group is specified this input consumes one or more topics where partitions will automatically balance across any other connected clients with the same consumer group. When a consumer group is not specified topics can either be consumed in their entirety or with explicit partitions.
+
+This input often out-performs the traditional ` + "`kafka`" + ` input as well as providing more useful logs and error messages.
 
 ### Metadata
 
@@ -48,12 +50,24 @@ This input adds the following metadata fields to each message:
 			Example([]string{"foo:9092", "bar:9092"}).
 			Example([]string{"foo:9092,bar:9092"})).
 		Field(service.NewStringListField("topics").
-			Description("A list of topics to consume from, partitions are automatically shared across consumers sharing the consumer group.")).
+			Description(`
+A list of topics to consume from. Multiple comma separated topics can be listed in a single element. When a ` + "`consumer_group`" + ` is specified partitions are automatically distributed across consumers of a topic, otherwise all partitions are consumed.
+
+Alternatively, it's possible to specify explicit partitions to consume from with a colon after the topic name, e.g. ` + "`foo:0`" + ` would consume the partition 0 of the topic foo. This syntax supports ranges, e.g. ` + "`foo:0-10`" + ` would consume partitions 0 through to 10 inclusive.
+
+Finally, it's also possible to specify an explicit offset to consume from by adding another colon after the partition, e.g. ` + "`foo:0:10`" + ` would consume the partition 0 of the topic foo starting from the offset 10. If the offset is not present (or remains unspecified) then the field ` + "`start_from_oldest`" + ` determines which offset to start from.`).
+			Example([]string{"foo", "bar"}).
+			Example([]string{"things.*"}).
+			Example([]string{"foo,bar"}).
+			Example([]string{"foo:0", "bar:1", "bar:3"}).
+			Example([]string{"foo:0,bar:1,bar:3"}).
+			Example([]string{"foo:0-5"})).
 		Field(service.NewBoolField("regexp_topics").
-			Description("Whether listed topics should be interpretted as regular expression patterns for matching multiple topics.").
+			Description("Whether listed topics should be interpreted as regular expression patterns for matching multiple topics. When topics are specified with explicit partitions this field must remain set to `false`.").
 			Default(false)).
 		Field(service.NewStringField("consumer_group").
-			Description("A consumer group to consume as. Partitions are automatically distributed across consumers sharing a consumer group, and partition offsets are automatically committed and resumed under this name.")).
+			Description("An optional consumer group to consume as. When specified the partitions of specified topics are automatically distributed across consumers sharing a consumer group, and partition offsets are automatically committed and resumed under this name. Consumer groups are not supported when specifying explicit partitions to consume from in the `topics` field.").
+			Optional()).
 		Field(service.NewIntField("checkpoint_limit").
 			Description("Determines how many messages of the same partition can be processed in parallel before applying back pressure. When a message of a given offset is delivered to the output the offset is only allowed to be committed when all messages of prior offsets have also been delivered, this ensures at-least-once delivery guarantees. However, this mechanism also increases the likelihood of duplicates in the event of crashes or server faults, reducing the checkpoint limit will mitigate this.").
 			Default(1024).
@@ -68,7 +82,17 @@ This input adds the following metadata fields to each message:
 			Advanced()).
 		Field(service.NewTLSToggledField("tls")).
 		Field(saslField()).
-		Field(service.NewBoolField("multi_header").Description("Decode headers into lists to allow handling of multiple values with the same key").Default(false).Advanced())
+		Field(service.NewBoolField("multi_header").Description("Decode headers into lists to allow handling of multiple values with the same key").Default(false).Advanced()).
+		LintRule(`
+let has_topic_partitions = this.topics.any(t -> t.contains(":"))
+root = if $has_topic_partitions {
+  if this.consumer_group.or("") != "" {
+    "this input does not support both a consumer group and explicit topic partitions"
+  } else if this.regexp_topics {
+    "this input does not support both regular expression topics and explicit topic partitions"
+  }
+}
+`)
 }
 
 func init() {
@@ -95,6 +119,7 @@ type msgWithAckFn struct {
 type franzKafkaReader struct {
 	seedBrokers     []string
 	topics          []string
+	topicPartitions map[string]map[int32]kgo.Offset
 	consumerGroup   string
 	tlsConf         *tls.Config
 	saslConfs       []sasl.Mechanism
@@ -132,12 +157,33 @@ func newFranzKafkaReaderFromConfig(conf *service.ParsedConfig, log *service.Logg
 		f.seedBrokers = append(f.seedBrokers, strings.Split(b, ",")...)
 	}
 
+	if f.startFromOldest, err = conf.FieldBool("start_from_oldest"); err != nil {
+		return nil, err
+	}
+
 	topicList, err := conf.FieldStringList("topics")
 	if err != nil {
 		return nil, err
 	}
-	for _, t := range topicList {
-		f.topics = append(f.topics, strings.Split(t, ",")...)
+
+	var defaultOffset int64 = -1
+	if f.startFromOldest {
+		defaultOffset = -2
+	}
+
+	var topicPartitions map[string]map[int32]int64
+	if f.topics, topicPartitions, err = parseTopics(topicList, defaultOffset, true); err != nil {
+		return nil, err
+	}
+	if len(topicPartitions) > 0 {
+		f.topicPartitions = map[string]map[int32]kgo.Offset{}
+		for topic, partitions := range topicPartitions {
+			partMap := map[int32]kgo.Offset{}
+			for part, offset := range partitions {
+				partMap[part] = kgo.NewOffset().At(offset)
+			}
+			f.topicPartitions[topic] = partMap
+		}
 	}
 
 	if f.regexPattern, err = conf.FieldBool("regexp_topics"); err != nil {
@@ -149,10 +195,6 @@ func newFranzKafkaReaderFromConfig(conf *service.ParsedConfig, log *service.Logg
 	}
 
 	if f.checkpointLimit, err = conf.FieldInt("checkpoint_limit"); err != nil {
-		return nil, err
-	}
-
-	if f.startFromOldest, err = conf.FieldBool("start_from_oldest"); err != nil {
 		return nil, err
 	}
 
@@ -295,43 +337,49 @@ func (f *franzKafkaReader) Connect(ctx context.Context) error {
 
 	clientOpts := []kgo.Opt{
 		kgo.SeedBrokers(f.seedBrokers...),
-		kgo.ConsumerGroup(f.consumerGroup),
 		kgo.ConsumeTopics(f.topics...),
+		kgo.ConsumePartitions(f.topicPartitions),
 		kgo.ConsumeResetOffset(initialOffset),
 		kgo.SASL(f.saslConfs...),
-		kgo.OnPartitionsRevoked(func(rctx context.Context, c *kgo.Client, m map[string][]int32) {
-			// Note: this is a best attempt, there's a chance of duplicates if
-			// the checkpoint limit is borked with slow moving pending messages,
-			// but we can't block here, so work with that we have.
-			finalOffsets := map[string]map[int32]kgo.EpochOffset{}
-			for topic, parts := range m {
-				offsets := map[int32]kgo.EpochOffset{}
-				for _, part := range parts {
-					if rec := checkpoints.getHighest(topic, part); rec != nil {
-						offsets[part] = kgo.EpochOffset{
-							Epoch:  rec.LeaderEpoch,
-							Offset: rec.Offset,
+		kgo.ConsumerGroup(f.consumerGroup),
+	}
+
+	if f.consumerGroup != "" {
+		clientOpts = append(clientOpts,
+			kgo.OnPartitionsRevoked(func(rctx context.Context, c *kgo.Client, m map[string][]int32) {
+				// Note: this is a best attempt, there's a chance of duplicates if
+				// the checkpoint limit is borked with slow moving pending messages,
+				// but we can't block here, so work with that we have.
+				finalOffsets := map[string]map[int32]kgo.EpochOffset{}
+				for topic, parts := range m {
+					offsets := map[int32]kgo.EpochOffset{}
+					for _, part := range parts {
+						if rec := checkpoints.getHighest(topic, part); rec != nil {
+							offsets[part] = kgo.EpochOffset{
+								Epoch:  rec.LeaderEpoch,
+								Offset: rec.Offset,
+							}
 						}
 					}
+					finalOffsets[topic] = offsets
 				}
-				finalOffsets[topic] = offsets
-			}
 
-			c.CommitOffsetsSync(rctx, finalOffsets, func(_ *kgo.Client, _ *kmsg.OffsetCommitRequest, _ *kmsg.OffsetCommitResponse, commitErr error) {
-				if commitErr == nil {
-					return
-				}
-				f.log.Errorf("Commit error on partition revoke: %v", commitErr)
-			})
-			checkpoints.removeTopicPartitions(m)
-		}),
-		kgo.OnPartitionsLost(func(_ context.Context, _ *kgo.Client, m map[string][]int32) {
-			// No point trying to commit our offsets, just clean up our topic map
-			checkpoints.removeTopicPartitions(m)
-		}),
-		kgo.AutoCommitMarks(),
-		kgo.AutoCommitInterval(f.commitPeriod),
-		kgo.WithLogger(&kgoLogger{f.log}),
+				c.CommitOffsetsSync(rctx, finalOffsets, func(_ *kgo.Client, _ *kmsg.OffsetCommitRequest, _ *kmsg.OffsetCommitResponse, commitErr error) {
+					if commitErr == nil {
+						return
+					}
+					f.log.Errorf("Commit error on partition revoke: %v", commitErr)
+				})
+				checkpoints.removeTopicPartitions(m)
+			}),
+			kgo.OnPartitionsLost(func(_ context.Context, _ *kgo.Client, m map[string][]int32) {
+				// No point trying to commit our offsets, just clean up our topic map
+				checkpoints.removeTopicPartitions(m)
+			}),
+			kgo.AutoCommitMarks(),
+			kgo.AutoCommitInterval(f.commitPeriod),
+			kgo.WithLogger(&kgoLogger{f.log}),
+		)
 	}
 
 	if f.tlsConf != nil {

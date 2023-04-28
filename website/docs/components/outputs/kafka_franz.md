@@ -17,7 +17,7 @@ import TabItem from '@theme/TabItem';
 :::caution BETA
 This component is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with the component is found.
 :::
-An alternative Kafka output using the [Franz Kafka client library](https://github.com/twmb/franz-go).
+A Kafka output using the [Franz Kafka client library](https://github.com/twmb/franz-go).
 
 Introduced in version 3.61.0.
 
@@ -89,6 +89,9 @@ output:
 </Tabs>
 
 Writes a batch of messages to Kafka brokers and waits for acknowledgement before propagating it back to the input.
+
+This output often out-performs the traditional `kafka` output as well as providing more useful logs and error messages.
+
 
 ## Fields
 

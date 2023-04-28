@@ -5,7 +5,6 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -175,36 +174,6 @@ type kafkaReader struct {
 
 var errCannotMixBalanced = errors.New("it is not currently possible to include balanced and explicit partition topics in the same kafka input")
 
-func parsePartitions(expr string) ([]int32, error) {
-	rangeExpr := strings.Split(expr, "-")
-	if len(rangeExpr) > 2 {
-		return nil, fmt.Errorf("partition '%v' is invalid, only one range can be specified", expr)
-	}
-
-	if len(rangeExpr) == 1 {
-		partition, err := strconv.ParseInt(expr, 10, 32)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse partition number: %w", err)
-		}
-		return []int32{int32(partition)}, nil
-	}
-
-	start, err := strconv.ParseInt(rangeExpr[0], 10, 32)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse start of range: %w", err)
-	}
-	end, err := strconv.ParseInt(rangeExpr[1], 10, 32)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse end of range: %w", err)
-	}
-
-	var parts []int32
-	for i := start; i <= end; i++ {
-		parts = append(parts, int32(i))
-	}
-	return parts, nil
-}
-
 func newKafkaReader(conf input.KafkaConfig, mgr bundle.NewManagement, log log.Modular) (*kafkaReader, error) {
 	if conf.Batching.IsNoop() {
 		conf.Batching.Count = 1
@@ -233,32 +202,28 @@ func newKafkaReader(conf input.KafkaConfig, mgr bundle.NewManagement, log log.Mo
 	if len(conf.Topics) == 0 {
 		return nil, errors.New("must specify at least one topic in the topics field")
 	}
-	for _, t := range conf.Topics {
-		for _, splitTopics := range strings.Split(t, ",") {
-			if trimmed := strings.TrimSpace(splitTopics); len(trimmed) > 0 {
-				if withParts := strings.Split(trimmed, ":"); len(withParts) > 1 {
-					if len(k.balancedTopics) > 0 {
-						return nil, errCannotMixBalanced
-					}
-					if len(withParts) > 2 {
-						return nil, fmt.Errorf("topic '%v' is invalid, only one partition should be specified and the same topic can be listed multiple times, e.g. use `foo:0,foo:1` not `foo:0:1`", trimmed)
-					}
 
-					topic := strings.TrimSpace(withParts[0])
-					parts, err := parsePartitions(withParts[1])
-					if err != nil {
-						return nil, err
-					}
-					k.topicPartitions[topic] = append(k.topicPartitions[topic], parts...)
-				} else {
-					if len(k.topicPartitions) > 0 {
-						return nil, errCannotMixBalanced
-					}
-					k.balancedTopics = append(k.balancedTopics, trimmed)
-				}
+	balancedTopics, topicPartitions, err := parseTopics(conf.Topics, -1, false)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(balancedTopics) > 0 && len(topicPartitions) > 0 {
+		return nil, errCannotMixBalanced
+	}
+	if len(balancedTopics) > 0 {
+		k.balancedTopics = balancedTopics
+	} else {
+		k.topicPartitions = map[string][]int32{}
+		for topic, v := range topicPartitions {
+			partSlice := make([]int32, 0, len(v))
+			for p := range v {
+				partSlice = append(partSlice, p)
 			}
+			k.topicPartitions[topic] = partSlice
 		}
 	}
+
 	if tout := conf.CommitPeriod; len(tout) > 0 {
 		var err error
 		if k.commitPeriod, err = time.ParseDuration(tout); err != nil {
@@ -293,7 +258,6 @@ func newKafkaReader(conf input.KafkaConfig, mgr bundle.NewManagement, log log.Mo
 		return nil, errors.New("a consumer group must be specified when consuming balanced topics")
 	}
 
-	var err error
 	if k.version, err = sarama.ParseKafkaVersion(conf.TargetVersion); err != nil {
 		return nil, err
 	}

@@ -8,6 +8,7 @@ All notable changes to this project will be documented in this file.
 ### Added
 
 - Flag `--skip-env-var-check` added to the `lint` subcommand, this disables the new linting behaviour where environment variable interpolations without defaults throw linting errors when the variable is not defined.
+- The `kafka_franz` input now supports explicit partitions in the field `topics`.
 
 ### Fixed
 

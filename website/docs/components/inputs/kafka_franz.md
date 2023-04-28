@@ -17,7 +17,7 @@ import TabItem from '@theme/TabItem';
 :::caution BETA
 This component is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with the component is found.
 :::
-An alternative Kafka input using the [Franz Kafka client library](https://github.com/twmb/franz-go).
+A Kafka input using the [Franz Kafka client library](https://github.com/twmb/franz-go).
 
 Introduced in version 3.61.0.
 
@@ -69,7 +69,9 @@ input:
 </TabItem>
 </Tabs>
 
-Consumes one or more topics by balancing the partitions across any other connected clients with the same consumer group.
+When a consumer group is specified this input consumes one or more topics where partitions will automatically balance across any other connected clients with the same consumer group. When a consumer group is not specified topics can either be consumed in their entirety or with explicit partitions.
+
+This input often out-performs the traditional `kafka` input as well as providing more useful logs and error messages.
 
 ### Metadata
 
@@ -111,14 +113,43 @@ seed_brokers:
 
 ### `topics`
 
-A list of topics to consume from, partitions are automatically shared across consumers sharing the consumer group.
+A list of topics to consume from. Multiple comma separated topics can be listed in a single element. When a `consumer_group` is specified partitions are automatically distributed across consumers of a topic, otherwise all partitions are consumed.
+
+Alternatively, it's possible to specify explicit partitions to consume from with a colon after the topic name, e.g. `foo:0` would consume the partition 0 of the topic foo. This syntax supports ranges, e.g. `foo:0-10` would consume partitions 0 through to 10 inclusive.
+
+Finally, it's also possible to specify an explicit offset to consume from by adding another colon after the partition, e.g. `foo:0:10` would consume the partition 0 of the topic foo starting from the offset 10. If the offset is not present (or remains unspecified) then the field `start_from_oldest` determines which offset to start from.
 
 
 Type: `array`  
 
+```yml
+# Examples
+
+topics:
+  - foo
+  - bar
+
+topics:
+  - things.*
+
+topics:
+  - foo,bar
+
+topics:
+  - foo:0
+  - bar:1
+  - bar:3
+
+topics:
+  - foo:0,bar:1,bar:3
+
+topics:
+  - foo:0-5
+```
+
 ### `regexp_topics`
 
-Whether listed topics should be interpretted as regular expression patterns for matching multiple topics.
+Whether listed topics should be interpreted as regular expression patterns for matching multiple topics. When topics are specified with explicit partitions this field must remain set to `false`.
 
 
 Type: `bool`  
@@ -126,7 +157,7 @@ Default: `false`
 
 ### `consumer_group`
 
-A consumer group to consume as. Partitions are automatically distributed across consumers sharing a consumer group, and partition offsets are automatically committed and resumed under this name.
+An optional consumer group to consume as. When specified the partitions of specified topics are automatically distributed across consumers sharing a consumer group, and partition offsets are automatically committed and resumed under this name. Consumer groups are not supported when specifying explicit partitions to consume from in the `topics` field.
 
 
 Type: `string`  
