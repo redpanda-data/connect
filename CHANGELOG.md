@@ -9,10 +9,12 @@ All notable changes to this project will be documented in this file.
 
 - Flag `--skip-env-var-check` added to the `lint` subcommand, this disables the new linting behaviour where environment variable interpolations without defaults throw linting errors when the variable is not defined.
 - The `kafka_franz` input now supports explicit partitions in the field `topics`.
+- The `kafka_franz` input now supports batching.
 
 ### Fixed
 
-- Provide msgpack plugins through github.com/benthosdev/benthos/v4/public/components/msgpack
+- Provide msgpack plugins through `public/components/msgpack`.
+- The `kafka_franz` input should no longer commit offsets one behind the next during partition yielding.
 
 ## 4.14.0 - 2023-04-25
 
