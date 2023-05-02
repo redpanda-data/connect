@@ -250,9 +250,9 @@ func newAzureBlobStorage(conf input.AzureBlobStorageConfig, log log.Modular, sta
 	if len(conf.StorageConnectionString) > 0 {
 		client, err = azblob.NewClientFromConnectionString(conf.StorageConnectionString, nil)
 	} else if len(conf.StorageAccessKey) > 0 {
-		cred, err := azblob.NewSharedKeyCredential(conf.StorageAccount, conf.StorageAccessKey)
-		if err != nil {
-			return nil, fmt.Errorf("error creating shared key credential: %w", err)
+		cred, credErr := azblob.NewSharedKeyCredential(conf.StorageAccount, conf.StorageAccessKey)
+		if credErr != nil {
+			return nil, fmt.Errorf("error creating shared key credential: %w", credErr)
 		}
 		serviceURL := fmt.Sprintf("https://%s.blob.core.windows.net", conf.StorageAccount)
 		client, err = azblob.NewClientWithSharedKeyCredential(serviceURL, cred, nil)
@@ -260,9 +260,9 @@ func newAzureBlobStorage(conf input.AzureBlobStorageConfig, log log.Modular, sta
 		serviceURL := fmt.Sprintf("https://%s.blob.core.windows.net/%s", conf.StorageAccount, conf.StorageSASToken)
 		client, err = azblob.NewClientWithNoCredential(serviceURL, nil)
 	} else {
-		cred, err := azidentity.NewDefaultAzureCredential(nil)
-		if err != nil {
-			return nil, fmt.Errorf("error getting default azure credentials: %v", err)
+		cred, credErr := azidentity.NewDefaultAzureCredential(nil)
+		if credErr != nil {
+			return nil, fmt.Errorf("error getting default azure credentials: %v", credErr)
 		}
 		serviceURL := fmt.Sprintf("https://%s.blob.core.windows.net", conf.StorageAccount)
 		client, err = azblob.NewClient(serviceURL, cred, nil)
@@ -327,8 +327,8 @@ func blobStorageMsgFromParts(p *azurePendingObject, containerName string, parts 
 	_ = msg.Iter(func(_ int, part *message.Part) error {
 		part.MetaSetMut("blob_storage_key", p.target.key)
 		part.MetaSetMut("blob_storage_container", containerName)
-		part.MetaSetMut("blob_storage_last_modified", time.Time(*p.obj.LastModified).Format(time.RFC3339))
-		part.MetaSetMut("blob_storage_last_modified_unix", time.Time(*p.obj.LastModified).Unix())
+		part.MetaSetMut("blob_storage_last_modified", p.obj.LastModified.Format(time.RFC3339))
+		part.MetaSetMut("blob_storage_last_modified_unix", p.obj.LastModified.Unix())
 		part.MetaSetMut("blob_storage_content_type", p.obj.ContentType)
 		part.MetaSetMut("blob_storage_content_encoding", p.obj.ContentEncoding)
 
