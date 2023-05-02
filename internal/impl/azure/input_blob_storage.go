@@ -6,13 +6,13 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/Azure/azure-sdk-for-go/storage"
-	"github.com/Azure/go-autorest/autorest/azure"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
+	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
+	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
 
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/codec"
@@ -114,7 +114,9 @@ func newAzureObjectTarget(key string, ackFn codec.ReaderAckFn) *azureObjectTarge
 //------------------------------------------------------------------------------
 
 func deleteAzureObjectAckFn(
-	container *storage.Container,
+	ctx context.Context,
+	client *azblob.Client,
+	containerName string,
 	key string,
 	del bool,
 	prev codec.ReaderAckFn,
@@ -128,9 +130,8 @@ func deleteAzureObjectAckFn(
 		if !del || err != nil {
 			return nil
 		}
-		blobReference := container.GetBlobReference(key)
-		_, aerr := blobReference.DeleteIfExists(nil)
-		return aerr
+		_, err = client.DeleteBlob(ctx, containerName, key, nil)
+		return err
 	}
 }
 
@@ -138,14 +139,14 @@ func deleteAzureObjectAckFn(
 
 type azurePendingObject struct {
 	target    *azureObjectTarget
-	obj       *storage.Blob
+	obj       azblob.DownloadStreamResponse
 	extracted int
 	scanner   codec.Reader
 }
 
 type azureTargetReader struct {
 	pending    []*azureObjectTarget
-	container  *storage.Container
+	client     *azblob.Client
 	conf       input.AzureBlobStorageConfig
 	startAfter string
 }
@@ -154,54 +155,57 @@ func newAzureTargetReader(
 	ctx context.Context,
 	conf input.AzureBlobStorageConfig,
 	log log.Modular,
-	container *storage.Container,
+	client *azblob.Client,
 ) (*azureTargetReader, error) {
-	params := storage.ListBlobsParameters{
-		MaxResults: 100,
+	var maxResults int32 = 100
+	params := &azblob.ListBlobsFlatOptions{
+		MaxResults: &maxResults,
 	}
 	if len(conf.Prefix) > 0 {
-		params.Prefix = conf.Prefix
+		params.Prefix = &conf.Prefix
 	}
-	output, err := container.ListBlobs(params)
-	if err != nil {
-		return nil, fmt.Errorf("failed to list blobs: %w", err)
-	}
+	output := client.NewListBlobsFlatPager(conf.Container, params)
 	staticKeys := azureTargetReader{
-		container: container,
-		conf:      conf,
+		client: client,
+		conf:   conf,
 	}
-	for _, blob := range output.Blobs {
-		ackFn := deleteAzureObjectAckFn(container, blob.Name, conf.DeleteObjects, nil)
-		staticKeys.pending = append(staticKeys.pending, newAzureObjectTarget(blob.Name, ackFn))
+	for output.More() {
+		page, err := output.NextPage(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("error getting page of blobs: %w", err)
+		}
+		for _, blob := range page.Segment.BlobItems {
+			ackFn := deleteAzureObjectAckFn(ctx, client, conf.Container, *blob.Name, conf.DeleteObjects, nil)
+			staticKeys.pending = append(staticKeys.pending, newAzureObjectTarget(*blob.Name, ackFn))
+		}
+		staticKeys.startAfter = *page.NextMarker
 	}
 
-	if len(output.Blobs) > 0 {
-		staticKeys.startAfter = output.NextMarker
-	}
 	return &staticKeys, nil
 }
 
 func (s *azureTargetReader) Pop(ctx context.Context) (*azureObjectTarget, error) {
 	if len(s.pending) == 0 && s.startAfter != "" {
 		s.pending = nil
-		params := storage.ListBlobsParameters{
-			Marker:     s.startAfter,
-			MaxResults: 100,
+		var maxResults int32 = 100
+		params := &azblob.ListBlobsFlatOptions{
+			MaxResults: &maxResults,
+			Marker:     &s.startAfter,
 		}
 		if len(s.conf.Prefix) > 0 {
-			params.Prefix = s.conf.Prefix
+			params.Prefix = &s.conf.Prefix
 		}
-		output, err := s.container.ListBlobs(params)
-		if err != nil {
-			return nil, fmt.Errorf("failed to list blobs: %w", err)
-		}
-		for _, blob := range output.Blobs {
-			ackFn := deleteAzureObjectAckFn(s.container, blob.Name, s.conf.DeleteObjects, nil)
-			s.pending = append(s.pending, newAzureObjectTarget(blob.Name, ackFn))
-		}
-
-		if len(output.Blobs) > 0 {
-			s.startAfter = output.NextMarker
+		output := s.client.NewListBlobsFlatPager(s.conf.Container, params)
+		for output.More() {
+			page, err := output.NextPage(ctx)
+			if err != nil {
+				return nil, fmt.Errorf("error getting page of blobs: %w", err)
+			}
+			for _, blob := range page.Segment.BlobItems {
+				ackFn := deleteAzureObjectAckFn(ctx, s.client, s.conf.Container, *blob.Name, s.conf.DeleteObjects, nil)
+				s.pending = append(s.pending, newAzureObjectTarget(*blob.Name, ackFn))
+			}
+			s.startAfter = *page.NextMarker
 		}
 	}
 	if len(s.pending) == 0 {
@@ -229,7 +233,7 @@ type azureBlobStorage struct {
 	objectMut sync.Mutex
 	object    *azurePendingObject
 
-	container *storage.Container
+	client *azblob.Client
 
 	log   log.Modular
 	stats metrics.Type
@@ -241,24 +245,27 @@ func newAzureBlobStorage(conf input.AzureBlobStorageConfig, log log.Modular, sta
 		return nil, errors.New("invalid azure storage account credentials")
 	}
 
-	var client storage.Client
+	var client *azblob.Client
 	var err error
 	if len(conf.StorageConnectionString) > 0 {
-		if strings.Contains(conf.StorageConnectionString, "UseDevelopmentStorage=true;") {
-			client, err = storage.NewEmulatorClient()
-		} else {
-			client, err = storage.NewClientFromConnectionString(conf.StorageConnectionString)
-		}
+		client, err = azblob.NewClientFromConnectionString(conf.StorageConnectionString, nil)
 	} else if len(conf.StorageAccessKey) > 0 {
-		client, err = storage.NewBasicClient(conf.StorageAccount, conf.StorageAccessKey)
-	} else {
-		// The SAS token in the Azure UI is provided as an URL query string with
-		// the '?' prepended to it which confuses url.ParseQuery
-		token, err := url.ParseQuery(strings.TrimPrefix(conf.StorageSASToken, "?"))
-		if err != nil {
-			return nil, fmt.Errorf("invalid azure storage SAS token: %w", err)
+		cred, credErr := azblob.NewSharedKeyCredential(conf.StorageAccount, conf.StorageAccessKey)
+		if credErr != nil {
+			return nil, fmt.Errorf("error creating shared key credential: %w", credErr)
 		}
-		client = storage.NewAccountSASClient(conf.StorageAccount, token, azure.PublicCloud)
+		serviceURL := fmt.Sprintf("https://%s.blob.core.windows.net", conf.StorageAccount)
+		client, err = azblob.NewClientWithSharedKeyCredential(serviceURL, cred, nil)
+	} else if len(conf.StorageSASToken) > 0 {
+		serviceURL := fmt.Sprintf("https://%s.blob.core.windows.net/%s", conf.StorageAccount, conf.StorageSASToken)
+		client, err = azblob.NewClientWithNoCredential(serviceURL, nil)
+	} else {
+		cred, credErr := azidentity.NewDefaultAzureCredential(nil)
+		if credErr != nil {
+			return nil, fmt.Errorf("error getting default azure credentials: %v", credErr)
+		}
+		serviceURL := fmt.Sprintf("https://%s.blob.core.windows.net", conf.StorageAccount)
+		client, err = azblob.NewClient(serviceURL, cred, nil)
 	}
 	if err != nil {
 		return nil, fmt.Errorf("invalid azure storage account credentials: %w", err)
@@ -268,14 +275,12 @@ func newAzureBlobStorage(conf input.AzureBlobStorageConfig, log log.Modular, sta
 	if objectScannerCtor, err = codec.GetReader(conf.Codec, codec.NewReaderConfig()); err != nil {
 		return nil, fmt.Errorf("invalid azure storage codec: %w", err)
 	}
-
-	blobService := client.GetBlobService()
 	a := &azureBlobStorage{
 		conf:              conf,
 		objectScannerCtor: objectScannerCtor,
 		log:               log,
 		stats:             stats,
-		container:         blobService.GetContainerReference(conf.Container),
+		client:            client,
 	}
 
 	return a, nil
@@ -285,7 +290,7 @@ func newAzureBlobStorage(conf input.AzureBlobStorageConfig, log log.Modular, sta
 // Blob Storage container.
 func (a *azureBlobStorage) Connect(ctx context.Context) error {
 	var err error
-	a.keyReader, err = newAzureTargetReader(ctx, a.conf, a.log, a.container)
+	a.keyReader, err = newAzureTargetReader(ctx, a.conf, a.log, a.client)
 	return err
 }
 
@@ -298,20 +303,7 @@ func (a *azureBlobStorage) getObjectTarget(ctx context.Context) (*azurePendingOb
 	if err != nil {
 		return nil, err
 	}
-
-	blobReference := a.container.GetBlobReference(target.key)
-	exists, err := blobReference.Exists()
-	if err != nil {
-		_ = target.ackFn(ctx, err)
-		return nil, fmt.Errorf("failed to get blob reference: %w", err)
-	}
-
-	if !exists {
-		_ = target.ackFn(ctx, err)
-		return nil, errors.New("blob does not exist")
-	}
-
-	obj, err := blobReference.Get(nil)
+	obj, err := a.client.DownloadStream(ctx, a.conf.Container, target.key, nil)
 	if err != nil {
 		_ = target.ackFn(ctx, err)
 		return nil, err
@@ -319,9 +311,9 @@ func (a *azureBlobStorage) getObjectTarget(ctx context.Context) (*azurePendingOb
 
 	object := &azurePendingObject{
 		target: target,
-		obj:    blobReference,
+		obj:    obj,
 	}
-	if object.scanner, err = a.objectScannerCtor(target.key, obj, target.ackFn); err != nil {
+	if object.scanner, err = a.objectScannerCtor(target.key, obj.NewRetryReader(ctx, nil), target.ackFn); err != nil {
 		_ = target.ackFn(ctx, err)
 		return nil, err
 	}
@@ -330,17 +322,15 @@ func (a *azureBlobStorage) getObjectTarget(ctx context.Context) (*azurePendingOb
 	return object, nil
 }
 
-func blobStorageMsgFromParts(p *azurePendingObject, parts []*message.Part) message.Batch {
+func blobStorageMsgFromParts(p *azurePendingObject, containerName string, parts []*message.Part) message.Batch {
 	msg := message.Batch(parts)
 	_ = msg.Iter(func(_ int, part *message.Part) error {
 		part.MetaSetMut("blob_storage_key", p.target.key)
-		if p.obj.Container != nil {
-			part.MetaSetMut("blob_storage_container", p.obj.Container.Name)
-		}
-		part.MetaSetMut("blob_storage_last_modified", time.Time(p.obj.Properties.LastModified).Format(time.RFC3339))
-		part.MetaSetMut("blob_storage_last_modified_unix", time.Time(p.obj.Properties.LastModified).Unix())
-		part.MetaSetMut("blob_storage_content_type", p.obj.Properties.ContentType)
-		part.MetaSetMut("blob_storage_content_encoding", p.obj.Properties.ContentEncoding)
+		part.MetaSetMut("blob_storage_container", containerName)
+		part.MetaSetMut("blob_storage_last_modified", p.obj.LastModified.Format(time.RFC3339))
+		part.MetaSetMut("blob_storage_last_modified_unix", p.obj.LastModified.Unix())
+		part.MetaSetMut("blob_storage_content_type", p.obj.ContentType)
+		part.MetaSetMut("blob_storage_content_encoding", p.obj.ContentEncoding)
 
 		for k, v := range p.obj.Metadata {
 			part.MetaSetMut(k, v)
@@ -359,7 +349,7 @@ func (a *azureBlobStorage) ReadBatch(ctx context.Context) (msg message.Batch, ac
 	defer func() {
 		if errors.Is(err, io.EOF) {
 			err = component.ErrTypeClosed
-		} else if serr, ok := err.(storage.AzureStorageServiceError); ok && serr.StatusCode == http.StatusForbidden {
+		} else if serr, ok := err.(*azcore.ResponseError); ok && serr.StatusCode == http.StatusForbidden {
 			a.log.Warnf("error downloading blob: %v", err)
 			err = component.ErrTypeClosed
 		} else if errors.Is(err, context.Canceled) ||
@@ -397,7 +387,7 @@ func (a *azureBlobStorage) ReadBatch(ctx context.Context) (msg message.Batch, ac
 		}
 	}
 
-	return blobStorageMsgFromParts(object, parts), func(rctx context.Context, res error) error {
+	return blobStorageMsgFromParts(object, a.conf.Container, parts), func(rctx context.Context, res error) error {
 		return scnAckFn(rctx, res)
 	}, nil
 }
