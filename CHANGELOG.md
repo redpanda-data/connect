@@ -11,6 +11,8 @@ All notable changes to this project will be documented in this file.
 - The `kafka_franz` input now supports explicit partitions in the field `topics`.
 - The `kafka_franz` input now supports batching.
 - New `metadata` Bloblang function for batch-aware structured metadata queries.
+- Go API: Running the Benthos CLI with a context set with a deadline now triggers graceful termination before the deadline is reached.
+- Go API: New `public/service/servicetest` package added for functions useful for testing custom Benthos builds.
 
 ### Fixed
 
