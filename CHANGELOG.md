@@ -5,6 +5,8 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 4.15.0 - 2023-05-05
+
 ### Added
 
 - Flag `--skip-env-var-check` added to the `lint` subcommand, this disables the new linting behaviour where environment variable interpolations without defaults throw linting errors when the variable is not defined.
@@ -19,6 +21,7 @@ All notable changes to this project will be documented in this file.
 
 - Provide msgpack plugins through `public/components/msgpack`.
 - The `kafka_franz` input should no longer commit offsets one behind the next during partition yielding.
+- The streams mode HTTP API should no longer route requests to `/streams/<stream-ID>` to the `/streams` handler. This issue was introduced in v4.14.0.
 
 ## 4.14.0 - 2023-04-25
 
