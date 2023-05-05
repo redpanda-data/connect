@@ -9,6 +9,7 @@ import (
 
 	"github.com/Jeffail/gabs/v2"
 	"github.com/gofrs/uuid"
+	"golang.org/x/exp/slog"
 	"gopkg.in/yaml.v3"
 
 	"github.com/benthosdev/benthos/v4/internal/api"
@@ -123,6 +124,12 @@ type PrintLogger interface {
 // fields set via config.
 func (s *StreamBuilder) SetPrintLogger(l PrintLogger) {
 	s.customLogger = log.Wrap(l)
+}
+
+// SetLogger sets a customer logger via Go's standard logging interface,
+// allowing you to replace the default Benthos logger with your own.
+func (s *StreamBuilder) SetLogger(l *slog.Logger) {
+	s.customLogger = log.NewBenthosLogAdapter(l)
 }
 
 // HTTPMultiplexer is an interface supported by most HTTP multiplexers.
