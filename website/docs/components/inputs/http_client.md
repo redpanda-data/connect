@@ -255,7 +255,7 @@ EXPERIMENTAL: Optionally set a level at which the request and response payload o
 Type: `string`  
 Default: `""`  
 Requires version 4.12.0 or newer  
-Options: `TRACE`, `DEBUG`, `INFO`, `WARN`, `ERROR`, `FATAL`.
+Options: `TRACE`, `DEBUG`, `INFO`, `WARN`, `ERROR`, `FATAL`, ``.
 
 ### `oauth`
 
@@ -358,6 +358,7 @@ A list of optional requested permissions.
 
 
 Type: `array`  
+Default: `[]`  
 Requires version 3.45.0 or newer  
 
 ### `basic_auth`
@@ -431,6 +432,7 @@ A value used to identify the claims that issued the JWT.
 
 
 Type: `object`  
+Default: `{}`  
 
 ### `jwt.headers`
 
@@ -438,6 +440,7 @@ Add optional key/value headers to the JWT.
 
 
 Type: `object`  
+Default: `{}`  
 
 ### `tls`
 
