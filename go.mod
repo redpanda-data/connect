@@ -45,7 +45,7 @@ require (
 	github.com/fsnotify/fsnotify v1.6.0
 	github.com/generikvault/gvalstrings v0.0.0-20180926130504-471f38f0112a
 	github.com/go-sql-driver/mysql v1.6.0
-	github.com/gocql/gocql v1.3.1
+	github.com/gocql/gocql v1.4.0
 	github.com/gofrs/uuid v4.4.0+incompatible
 	github.com/golang-jwt/jwt v3.2.2+incompatible
 	github.com/golang-jwt/jwt/v4 v4.4.3
