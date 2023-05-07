@@ -248,7 +248,14 @@ func newAzureBlobStorage(conf input.AzureBlobStorageConfig, log log.Modular, sta
 	var client *azblob.Client
 	var err error
 	if len(conf.StorageConnectionString) > 0 {
-		client, err = azblob.NewClientFromConnectionString(conf.StorageConnectionString, nil)
+		connStr := conf.StorageConnectionString
+		if strings.Contains(conf.StorageConnectionString, "UseDevelopmentStorage=true;") {
+			// This conn string is necessary to work with azurite
+			// The new SDK no longer provides has NewEmulatorClient() so the connStr was copied from
+			// https://learn.microsoft.com/en-us/azure/storage/common/storage-use-azurite?tabs=visual-studio#http-connection-strings
+			connStr = "DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://127.0.0.1:10000/devstoreaccount1;"
+		}
+		client, err = azblob.NewClientFromConnectionString(connStr, nil)
 	} else if len(conf.StorageAccessKey) > 0 {
 		cred, credErr := azblob.NewSharedKeyCredential(conf.StorageAccount, conf.StorageAccessKey)
 		if credErr != nil {
