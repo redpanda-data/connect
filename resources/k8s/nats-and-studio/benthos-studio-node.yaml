@@ -1,0 +1,26 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: benthos-studio-node
+spec:
+  replicas: 10
+  strategy: {}
+  selector:
+    matchLabels:
+      app: benthos-studio-node
+  template:
+    metadata:
+      labels:
+        app: benthos-studio-node
+    spec:
+      containers:
+        - name: benthos
+          image: jeffail/benthos:latest
+          args: [ "studio", "pull", "-s", "<SESSION_ID>" ]
+          env:
+            - name: BSTDIO_NODE_TOKEN
+              valueFrom:
+                secretKeyRef: { name: benthos-studio, key: token }
+            - name: BSTDIO_NODE_SECRET
+              valueFrom:
+                secretKeyRef: { name: benthos-studio, key: secret }
