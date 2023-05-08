@@ -63,6 +63,7 @@ require (
 	github.com/jhump/protoreflect v1.14.1
 	github.com/jmespath/go-jmespath v0.4.0
 	github.com/klauspost/compress v1.16.3
+	github.com/klauspost/pgzip v1.2.6
 	github.com/lib/pq v1.10.4
 	github.com/linkedin/goavro/v2 v2.12.0
 	github.com/matoous/go-nanoid/v2 v2.0.0
