@@ -476,9 +476,9 @@ func pathParser() Func {
 				var (
 					dotPathSlice []string
 					ok           bool
-					pathString   string = p.(string)
 				)
 
+				pathString := p.(string)
 				dotPathSlice, ok = dotPathCache.Get(pathString)
 
 				if !ok {
