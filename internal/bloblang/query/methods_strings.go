@@ -29,6 +29,7 @@ import (
 	"github.com/OneOfOne/xxhash"
 	"github.com/microcosm-cc/bluemonday"
 	"github.com/tilinna/z85"
+	"go4.org/bytereplacer"
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
 	"gopkg.in/yaml.v3"
@@ -1404,13 +1405,17 @@ func replaceAllImpl(args *ParsedParams) (simpleMethod, error) {
 	if err != nil {
 		return nil, err
 	}
-	oldB, newB := []byte(oldStr), []byte(newStr)
+
+	strReplacer := strings.NewReplacer(oldStr, newStr)
+	byteReplacer := bytereplacer.New(oldStr, newStr)
+
 	return func(v any, ctx FunctionContext) (any, error) {
+
 		switch t := v.(type) {
 		case string:
-			return strings.ReplaceAll(t, oldStr, newStr), nil
+			return strReplacer.Replace(t), nil
 		case []byte:
-			return bytes.ReplaceAll(t, oldB, newB), nil
+			return byteReplacer.Replace(t), nil
 		}
 		return nil, NewTypeError(v, ValueString)
 	}, nil
@@ -1453,8 +1458,7 @@ func replaceAllManyImpl(args *ParsedParams) (simpleMethod, error) {
 		return nil, fmt.Errorf("invalid arg, replacements should be in pairs and must therefore be even: %v", items)
 	}
 
-	var replacePairs [][2]string
-	var replacePairsBytes [][2][]byte
+	replacePairs := make([]string, len(items))
 
 	for i := 0; i < len(items); i += 2 {
 		from, err := IGetString(items[i])
@@ -1465,22 +1469,19 @@ func replaceAllManyImpl(args *ParsedParams) (simpleMethod, error) {
 		if err != nil {
 			return nil, fmt.Errorf("invalid replacement value at index %v: %w", i+1, err)
 		}
-		replacePairs = append(replacePairs, [2]string{from, to})
-		replacePairsBytes = append(replacePairsBytes, [2][]byte{[]byte(from), []byte(to)})
+		replacePairs[i] = from
+		replacePairs[i+1] = to
 	}
+
+	strReplacer := strings.NewReplacer(replacePairs...)
+	byteReplacer := bytereplacer.New(replacePairs...)
 
 	return func(v any, ctx FunctionContext) (any, error) {
 		switch t := v.(type) {
 		case string:
-			for _, pair := range replacePairs {
-				t = strings.ReplaceAll(t, pair[0], pair[1])
-			}
-			return t, nil
+			return strReplacer.Replace(t), nil
 		case []byte:
-			for _, pair := range replacePairsBytes {
-				t = bytes.ReplaceAll(t, pair[0], pair[1])
-			}
-			return t, nil
+			return byteReplacer.Replace(t), nil
 		}
 		return nil, NewTypeError(v, ValueString)
 	}, nil
