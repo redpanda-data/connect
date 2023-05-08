@@ -6,10 +6,20 @@ import (
 	"strings"
 
 	"github.com/Jeffail/gabs/v2"
+	lru "github.com/hashicorp/golang-lru/v2"
 
 	"github.com/benthosdev/benthos/v4/internal/bloblang/mapping"
 	"github.com/benthosdev/benthos/v4/internal/bloblang/query"
 )
+
+var dotPathCache *lru.Cache[string, []string]
+
+func init() {
+	var err error
+	if dotPathCache, err = lru.New[string, []string](1024); err != nil {
+		panic(err)
+	}
+}
 
 // ParseMapping parses a bloblang mapping and returns an executor to run it, or
 // an error if the parsing fails.
@@ -461,7 +471,16 @@ func pathParser() Func {
 		if sequence[1] != nil {
 			pathParts := sequence[1].([]any)[1].(DelimitedResult).Primary
 			for _, p := range pathParts {
-				path = append(path, gabs.DotPathToSlice(p.(string))...)
+				dotPathSlice, ok := dotPathCache.Get(p.(string))
+
+				if ok {
+					path = append(path, dotPathSlice...)
+				} else {
+					dotPathSlice := gabs.DotPathToSlice(p.(string))
+					dotPathCache.Add(p.(string), dotPathSlice)
+					path = append(path, dotPathSlice...)
+				}
+
 			}
 		}
 

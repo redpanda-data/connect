@@ -11,11 +11,21 @@ import (
 
 	"github.com/Jeffail/gabs/v2"
 	"github.com/gofrs/uuid"
+	lru "github.com/hashicorp/golang-lru/v2"
 	gonanoid "github.com/matoous/go-nanoid/v2"
 	"github.com/segmentio/ksuid"
 
 	"github.com/benthosdev/benthos/v4/internal/tracing"
 )
+
+var dotPathCache *lru.Cache[string, []string]
+
+func init() {
+	var err error
+	if dotPathCache, err = lru.New[string, []string](1024); err != nil {
+		panic(err)
+	}
+}
 
 type fieldFunction struct {
 	namedContext string
@@ -104,8 +114,14 @@ func (f *fieldFunction) Close(ctx context.Context) error {
 // return a field from a named context.
 func NewNamedContextFieldFunction(namedContext, pathStr string) Function {
 	var path []string
+	var ok bool
 	if len(pathStr) > 0 {
-		path = gabs.DotPathToSlice(pathStr)
+		path, ok = dotPathCache.Get(pathStr)
+
+		if !ok {
+			path = gabs.DotPathToSlice(pathStr)
+			dotPathCache.Add(pathStr, path)
+		}
 	}
 	return &fieldFunction{namedContext: namedContext, fromRoot: false, path: path}
 }
@@ -114,8 +130,14 @@ func NewNamedContextFieldFunction(namedContext, pathStr string) Function {
 // current context.
 func NewFieldFunction(pathStr string) Function {
 	var path []string
+	var ok bool
 	if len(pathStr) > 0 {
-		path = gabs.DotPathToSlice(pathStr)
+		path, ok = dotPathCache.Get(pathStr)
+
+		if !ok {
+			path = gabs.DotPathToSlice(pathStr)
+			dotPathCache.Add(pathStr, path)
+		}
 	}
 	return &fieldFunction{
 		path: path,
@@ -125,9 +147,17 @@ func NewFieldFunction(pathStr string) Function {
 // NewRootFieldFunction creates a query function that returns a field from the
 // root context.
 func NewRootFieldFunction(pathStr string) Function {
-	var path []string
+	var (
+		path []string
+		ok   bool
+	)
 	if len(pathStr) > 0 {
-		path = gabs.DotPathToSlice(pathStr)
+		path, ok = dotPathCache.Get(pathStr)
+
+		if !ok {
+			path = gabs.DotPathToSlice(pathStr)
+			dotPathCache.Add(pathStr, path)
+		}
 	}
 	return &fieldFunction{
 		fromRoot: true,
@@ -440,9 +470,18 @@ func jsonFunction(args *ParsedParams) (Function, error) {
 	if err != nil {
 		return nil, err
 	}
-	var argPath []string
+	var (
+		argPath []string
+		ok      bool
+	)
+
 	if len(path) > 0 {
-		argPath = gabs.DotPathToSlice(path)
+		argPath, ok = dotPathCache.Get(path)
+
+		if !ok {
+			argPath = gabs.DotPathToSlice(path)
+			dotPathCache.Add(path, argPath)
+		}
 	}
 	return ClosureFunction("json path `"+SliceToDotPath(argPath...)+"`", func(ctx FunctionContext) (any, error) {
 		jPart, err := ctx.MsgBatch.Get(ctx.Index).AsStructured()

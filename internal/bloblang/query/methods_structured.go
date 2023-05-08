@@ -290,7 +290,19 @@ var _ = registerSimpleMethod(
 		if err != nil {
 			return nil, err
 		}
-		path := gabs.DotPathToSlice(pathStr)
+
+		var (
+			path []string
+			ok   bool
+		)
+
+		path, ok = dotPathCache.Get(pathStr)
+
+		if !ok {
+			path = gabs.DotPathToSlice(pathStr)
+			dotPathCache.Add(pathStr, path)
+		}
+
 		return func(v any, ctx FunctionContext) (any, error) {
 			return gabs.Wrap(v).Exists(path...), nil
 		}, nil
@@ -325,7 +337,18 @@ Exploding objects results in an object where the keys match the target object, a
 		if err != nil {
 			return nil, err
 		}
-		path := gabs.DotPathToSlice(pathRaw)
+		var (
+			path []string
+			ok   bool
+		)
+
+		path, ok = dotPathCache.Get(pathRaw)
+
+		if !ok {
+			path = gabs.DotPathToSlice(pathRaw)
+			dotPathCache.Add(pathRaw, path)
+		}
+
 		return func(v any, ctx FunctionContext) (any, error) {
 			rootMap, ok := v.(map[string]any)
 			if !ok {
@@ -1690,7 +1713,19 @@ If a key within a nested path does not exist or is not an object then it is not 
 			if err != nil {
 				return nil, fmt.Errorf("argument %v: %w", i, err)
 			}
-			excludeList = append(excludeList, gabs.DotPathToSlice(argStr))
+			var (
+				path []string
+				ok   bool
+			)
+
+			path, ok = dotPathCache.Get(argStr)
+
+			if !ok {
+				path = gabs.DotPathToSlice(argStr)
+				dotPathCache.Add(argStr, path)
+			}
+
+			excludeList = append(excludeList, path)
 		}
 		return func(v any, ctx FunctionContext) (any, error) {
 			m, ok := v.(map[string]any)

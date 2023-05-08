@@ -274,7 +274,18 @@ func (g *getMethod) QueryTargets(ctx TargetsContext) (TargetsContext, []TargetPa
 
 // NewGetMethod creates a new get method.
 func NewGetMethod(target Function, pathStr string) (Function, error) {
-	path := gabs.DotPathToSlice(pathStr)
+	var (
+		path []string
+		ok   bool
+	)
+
+	path, ok = dotPathCache.Get(pathStr)
+
+	if !ok {
+		path = gabs.DotPathToSlice(pathStr)
+		dotPathCache.Add(pathStr, path)
+	}
+
 	switch t := target.(type) {
 	case *getMethod:
 		newPath := append([]string{}, t.path...)
