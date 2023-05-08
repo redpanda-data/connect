@@ -12,7 +12,9 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/bloblang/query"
 )
 
-var dotPathCache *lru.Cache[string, []string]
+var (
+	dotPathCache *lru.Cache[string, []string]
+)
 
 func init() {
 	var err error
@@ -471,15 +473,20 @@ func pathParser() Func {
 		if sequence[1] != nil {
 			pathParts := sequence[1].([]any)[1].(DelimitedResult).Primary
 			for _, p := range pathParts {
-				dotPathSlice, ok := dotPathCache.Get(p.(string))
+				var (
+					dotPathSlice []string
+					ok           bool
+					pathString   string = p.(string)
+				)
 
-				if ok {
-					path = append(path, dotPathSlice...)
-				} else {
-					dotPathSlice := gabs.DotPathToSlice(p.(string))
-					dotPathCache.Add(p.(string), dotPathSlice)
-					path = append(path, dotPathSlice...)
+				dotPathSlice, ok = dotPathCache.Get(pathString)
+
+				if !ok {
+					dotPathSlice = gabs.DotPathToSlice(pathString)
+					dotPathCache.Add(pathString, dotPathSlice)
 				}
+
+				path = append(path, dotPathSlice...)
 
 			}
 		}
