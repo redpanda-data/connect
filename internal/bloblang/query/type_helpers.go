@@ -10,17 +10,47 @@ import (
 	"time"
 
 	"github.com/Jeffail/gabs/v2"
+	lru "github.com/hashicorp/golang-lru/v2"
 )
+
+var (
+	sliceToDotCache *lru.Cache[string, string]
+	dotPathReplacer *strings.Replacer
+)
+
+func init() {
+	var err error
+
+	if sliceToDotCache, err = lru.New[string, string](1024); err != nil {
+		panic(err)
+	}
+
+	dotPathReplacer = strings.NewReplacer(
+		"~", "~0",
+		".", "~")
+}
 
 // SliceToDotPath returns a valid dot path from a slice of path segments.
 func SliceToDotPath(path ...string) string {
-	escapes := make([]string, len(path))
-	for i, s := range path {
-		s = strings.ReplaceAll(s, "~", "~0")
-		s = strings.ReplaceAll(s, ".", "~1")
-		escapes[i] = s
+	var (
+		dotPath string
+		ok      bool
+	)
+
+	key := strings.Join(path, "")
+
+	dotPath, ok = sliceToDotCache.Get(key)
+
+	if !ok {
+		escapes := make([]string, len(path))
+		for i, s := range path {
+			escapes[i] = dotPathReplacer.Replace(s)
+		}
+		dotPath = strings.Join(escapes, ".")
+		sliceToDotCache.Add(key, dotPath)
 	}
-	return strings.Join(escapes, ".")
+
+	return dotPath
 }
 
 //------------------------------------------------------------------------------
