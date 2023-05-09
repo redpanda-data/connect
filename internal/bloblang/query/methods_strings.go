@@ -1416,7 +1416,8 @@ func replaceAllImpl(args *ParsedParams) (simpleMethod, error) {
 			return strReplacer.Replace(t), nil
 		case []byte:
 			// clone t because bytesreplace modifies t in-place
-			return byteReplacer.Replace(bytes.Clone(t)), nil
+			b := append([]byte(nil), t...)
+			return byteReplacer.Replace(b), nil
 		}
 		return nil, NewTypeError(v, ValueString)
 	}, nil
