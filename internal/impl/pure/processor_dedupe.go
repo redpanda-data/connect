@@ -13,7 +13,6 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	"github.com/benthosdev/benthos/v4/internal/tracing"
 )
 
 func init() {
@@ -22,7 +21,7 @@ func init() {
 		if err != nil {
 			return nil, err
 		}
-		return processor.NewV2BatchedToV1Processor("dedupe", p, mgr), nil
+		return processor.NewAutoObservedBatchedProcessor("dedupe", p, mgr), nil
 	}, docs.ComponentSpec{
 		Name: "dedupe",
 		Categories: []string{
@@ -105,13 +104,13 @@ func newDedupe(conf processor.DedupeConfig, mgr bundle.NewManagement) (*dedupePr
 
 //------------------------------------------------------------------------------
 
-func (d *dedupeProc) ProcessBatch(ctx context.Context, spans []*tracing.Span, batch message.Batch) ([]message.Batch, error) {
+func (d *dedupeProc) ProcessBatch(ctx *processor.BatchProcContext, batch message.Batch) ([]message.Batch, error) {
 	newBatch := message.QuickBatch(nil)
 	_ = batch.Iter(func(i int, p *message.Part) error {
 		key, err := d.key.String(i, batch)
 		if err != nil {
 			err = fmt.Errorf("key interpolation error: %w", err)
-			processor.MarkErr(p, spans[i], err)
+			ctx.OnError(err, i, nil)
 			return nil
 		}
 
@@ -122,22 +121,17 @@ func (d *dedupeProc) ProcessBatch(ctx context.Context, spans []*tracing.Span, ba
 		}
 		if err != nil {
 			if errors.Is(err, component.ErrKeyAlreadyExists) {
-				spans[i].LogKV(
-					"event", "dropped",
-					"type", "deduplicated",
-				)
+				ctx.Span(i).LogKV("event", "dropped", "type", "deduplicated")
 				return nil
 			}
 
 			d.log.Errorf("Cache error: %v\n", err)
 			if d.dropOnErr {
-				spans[i].LogKV(
-					"event", "dropped",
-					"type", "deduplicated",
-				)
+				ctx.Span(i).LogKV("event", "dropped", "type", "deduplicated")
 				return nil
 			}
-			processor.MarkErr(p, spans[i], err)
+
+			ctx.OnError(err, i, p)
 		}
 
 		newBatch = append(newBatch, p)

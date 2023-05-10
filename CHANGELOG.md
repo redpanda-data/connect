@@ -5,13 +5,61 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 4.15.0 - 2023-05-05
+
+### Added
+
+- Flag `--skip-env-var-check` added to the `lint` subcommand, this disables the new linting behaviour where environment variable interpolations without defaults throw linting errors when the variable is not defined.
+- The `kafka_franz` input now supports explicit partitions in the field `topics`.
+- The `kafka_franz` input now supports batching.
+- New `metadata` Bloblang function for batch-aware structured metadata queries.
+- Go API: Running the Benthos CLI with a context set with a deadline now triggers graceful termination before the deadline is reached.
+- Go API: New `public/service/servicetest` package added for functions useful for testing custom Benthos builds.
+- New `lru` and `ttlru` in-memory caches.
+
+### Fixed
+
+- Provide msgpack plugins through `public/components/msgpack`.
+- The `kafka_franz` input should no longer commit offsets one behind the next during partition yielding.
+- The streams mode HTTP API should no longer route requests to `/streams/<stream-ID>` to the `/streams` handler. This issue was introduced in v4.14.0.
+
+## 4.14.0 - 2023-04-25
+
 ### Added
 
 - The `-e/--env-file` cli flag can now be specified multiple times.
+- New `studio pull` cli subcommand for running [Benthos Studio](https://studio.benthos.dev) session deployments.
+- Metadata field `kafka_tombstone_message` added to the `kafka` and `kafka_franz` inputs.
+- Method `SetEnvVarLookupFunc` added to the stream builder API.
+- The `discord` input and output now use the official chat client API and no longer rely on poll-based HTTP requests, this should result in more efficient and less erroneous behaviour.
+- New bloblang timestamp methods `ts_add_iso8601` and `ts_sub_iso8601`.
+- All SQL components now support the `trino` driver.
+- New input codec `csv-safe`.
+- Added `base64rawurl` scheme to both the `encode` and `decode` Bloblang methods.
+- New `find_by` and `find_all_by` Bloblang methods.
+- New `skipbom` input codec.
+- New `javascript` processor.
 
 ### Fixed
 
 - The `find_all` bloblang method no longer produces results that are of an `unknown` type.
+- The `find_all` and `find` Bloblang methods no longer fail when the value argument is a field reference.
+- Endpoints specified by HTTP server components using both the general `http` server block or their own custom server addresses should now be treated as path prefixes. This corrects a behavioural change that was introduced when both respective server options were updated to support path parameters.
+- Prevented a panic caused when using the `encrypt_aes` and `decrypt_aes` Bloblang methods with a mismatched key/iv lengths.
+- The `snowpipe` field of the `snowflake_put` output can now be omitted from the config without raising an error.
+- Batch-aware processors such as `mapping` and `mutation` should now report correct error metrics.
+- Running `benthos blobl server` should no longer panic when a mapping with variable read/writes is executed in parallel.
+- Speculative fix for the `cloudwatch` metrics exporter rejecting metrics due to `minimum field size of 1, PutMetricDataInput.MetricData[0].Dimensions[0].Value`.
+- The `snowflake_put` output now prevents silent failures under certain conditions. Details [here](https://github.com/snowflakedb/gosnowflake/issues/701).
+- Reduced the amount of pre-compilation of Bloblang based linting rules for documentation fields, this should dramatically improve the start up time of Benthos (~1s down to ~200ms).
+- Environment variable interpolations with an empty fallback (`${FOO:}`) are now valid.
+- Fixed an issue where the `mongodb` output wasn't using bulk send requests according to batching policies.
+- The `amqp_1` input now falls back to accessing `Message.Value` when the data is empty.
+
+### Changed
+
+- When a config contains environment variable interpolations without a default value (i.e. `${FOO}`), if that environment variable is not defined a linting error will be emitted. Shutting down due to linting errors can be disabled with the `--chilled` cli flag, and variables can be specified with an empty default value (`${FOO:}`) in order to make the previous behaviour explicit and prevent the new linting error.
+- The `find` and `find_all` Bloblang methods no longer support query arguments as they were incompatible with supporting value arguments. For query based arguments use the new `find_by` and `find_all_by` methods.
 
 ## 4.13.0 - 2023-03-15
 

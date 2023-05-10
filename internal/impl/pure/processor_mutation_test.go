@@ -3,11 +3,13 @@ package pure
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/Jeffail/gabs/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/message"
 	"github.com/benthosdev/benthos/v4/public/bloblang"
 )
@@ -42,7 +44,8 @@ meta baz = "new meta"
 
 	proc := newMutation(exec, nil)
 
-	outBatches, err := proc.ProcessBatch(tCtx, nil, message.Batch{inMsg, inMsg2})
+	inBatch := message.Batch{inMsg, inMsg2}
+	outBatches, err := proc.ProcessBatch(processor.TestBatchProcContext(tCtx, nil, inBatch), inBatch)
 	require.NoError(t, err)
 	require.Len(t, outBatches, 1)
 	require.Len(t, outBatches[0], 2)
@@ -105,7 +108,8 @@ func TestMutationCreateCustomObject(t *testing.T) {
 
 	proc := newMutation(exec, nil)
 
-	outBatches, err := proc.ProcessBatch(tCtx, nil, message.Batch{part})
+	inBatch := message.Batch{part}
+	outBatches, err := proc.ProcessBatch(processor.TestBatchProcContext(tCtx, nil, inBatch), inBatch)
 	require.NoError(t, err)
 	require.Len(t, outBatches, 1)
 	require.Len(t, outBatches[0], 1)
@@ -133,7 +137,7 @@ root = match {
 
 	proc := newMutation(exec, nil)
 
-	outBatches, err := proc.ProcessBatch(tCtx, nil, inBatch)
+	outBatches, err := proc.ProcessBatch(processor.TestBatchProcContext(tCtx, nil, inBatch), inBatch)
 	require.NoError(t, err)
 	require.Len(t, outBatches, 1)
 	require.Len(t, outBatches[0], 2)
@@ -163,7 +167,7 @@ func TestMutationCreateFilterAll(t *testing.T) {
 
 	proc := newMutation(exec, nil)
 
-	outBatches, err := proc.ProcessBatch(tCtx, nil, inBatch)
+	outBatches, err := proc.ProcessBatch(processor.TestBatchProcContext(tCtx, nil, inBatch), inBatch)
 	assert.NoError(t, err)
 	assert.Empty(t, outBatches)
 }
@@ -180,7 +184,7 @@ func TestMutationCreateJSONError(t *testing.T) {
 
 	proc := newMutation(exec, nil)
 
-	outBatches, err := proc.ProcessBatch(tCtx, nil, msg)
+	outBatches, err := proc.ProcessBatch(processor.TestBatchProcContext(tCtx, nil, msg), msg)
 	require.NoError(t, err)
 	require.Len(t, outBatches, 1)
 	require.Len(t, outBatches[0], 1)
@@ -191,4 +195,39 @@ func TestMutationCreateJSONError(t *testing.T) {
 	err = outBatches[0][0].ErrorGet()
 	require.Error(t, err)
 	assert.Equal(t, `failed assignment (line 1): invalid character 'h' in literal true (expecting 'r')`, err.Error())
+}
+
+func BenchmarkMutationBasic(b *testing.B) {
+	blobl, err := bloblang.Parse(`
+root = this
+root.sum = this.a + this.b
+`)
+	require.NoError(b, err)
+
+	proc := newMutation(blobl, nil)
+
+	tCtx, done := context.WithTimeout(context.Background(), time.Second*30)
+	defer done()
+
+	tmpMsg := message.NewPart(nil)
+	tmpMsg.SetStructured(map[string]any{
+		"a": 5,
+		"b": 7,
+	})
+
+	b.ResetTimer()
+	b.ReportAllocs()
+
+	for i := 0; i < b.N; i++ {
+		resBatches, err := proc.ProcessBatch(processor.TestBatchProcContext(tCtx, nil, nil), message.Batch{tmpMsg.ShallowCopy()})
+		require.NoError(b, err)
+		require.Len(b, resBatches, 1)
+		require.Len(b, resBatches[0], 1)
+
+		v, err := resBatches[0][0].AsStructured()
+		require.NoError(b, err)
+		assert.Equal(b, int64(12), v.(map[string]any)["sum"])
+	}
+
+	require.NoError(b, proc.Close(tCtx))
 }

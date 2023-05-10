@@ -12,7 +12,7 @@ import (
 )
 
 // CliCommand is a cli.Command definition for unit testing.
-func CliCommand(testSuffix string) *cli.Command {
+func CliCommand() *cli.Command {
 	return &cli.Command{
 		Name:  "test",
 		Usage: "Execute Benthos unit tests",
@@ -47,15 +47,15 @@ https://benthos.dev/docs/configuration/unit_testing`[1:],
 			if logLevel := c.String("log"); len(logLevel) > 0 {
 				logConf := log.NewConfig()
 				logConf.LogLevel = logLevel
-				logger, err := log.NewV2(os.Stdout, logConf)
+				logger, err := log.New(os.Stdout, logConf)
 				if err != nil {
 					fmt.Printf("Failed to init logger: %v\n", err)
 					os.Exit(1)
 				}
-				if RunAll(c.Args().Slice(), testSuffix, true, logger, resourcesPaths) {
+				if RunAll(c.Args().Slice(), "_benthos_test", true, logger, resourcesPaths) {
 					os.Exit(0)
 				}
-			} else if RunAll(c.Args().Slice(), testSuffix, true, log.Noop(), resourcesPaths) {
+			} else if RunAll(c.Args().Slice(), "_benthos_test", true, log.Noop(), resourcesPaths) {
 				os.Exit(0)
 			}
 			os.Exit(1)

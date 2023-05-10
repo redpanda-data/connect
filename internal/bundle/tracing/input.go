@@ -29,6 +29,10 @@ func traceInput(e *events, counter *uint64, i input.Streamed) input.Streamed {
 	return t
 }
 
+func (t *tracedInput) UnwrapInput() input.Streamed {
+	return t.wrapped
+}
+
 func (t *tracedInput) loop() {
 	defer close(t.tChan)
 	readChan := t.wrapped.TransactionChan()
@@ -37,16 +41,13 @@ func (t *tracedInput) loop() {
 		if !open {
 			return
 		}
-		_ = tran.Payload.Iter(func(i int, part *message.Part) error {
-			_ = atomic.AddUint64(t.ctr, 1)
-			meta := map[string]any{}
-			_ = part.MetaIterMut(func(s string, a any) error {
-				meta[s] = message.CopyJSON(a)
+		if t.e.IsEnabled() {
+			_ = tran.Payload.Iter(func(i int, part *message.Part) error {
+				_ = atomic.AddUint64(t.ctr, 1)
+				t.e.Add(EventProduceOf(part))
 				return nil
 			})
-			t.e.Add(EventProduce, string(part.AsBytes()), meta)
-			return nil
-		})
+		}
 		select {
 		case t.tChan <- tran:
 		case <-t.shutSig.CloseNowChan():

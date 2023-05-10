@@ -313,33 +313,9 @@ root.doc = json()
 # Out: {"doc":{"foo":{"bar":"hello world"}}}
 ```
 
-### `meta`
+### `metadata`
 
-Returns the value of a metadata key from the input message as a string, or `null` if the key does not exist. Since values are extracted from the read-only input message they do NOT reflect changes made from within the map. In order to query metadata mutations made within a mapping use the [`root_meta` function](#root_meta). This function supports extracting metadata from other messages of a batch with the `from` method.
-
-#### Parameters
-
-**`key`** &lt;string, default `""`&gt; An optional key of a metadata value to obtain.  
-
-#### Examples
-
-
-```coffee
-root.topic = meta("kafka_topic")
-```
-
-The key parameter is optional and if omitted the entire metadata contents are returned as an object.
-
-```coffee
-root.all_metadata = meta()
-```
-
-### `root_meta`
-
-:::caution BETA
-This function is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
-:::
-Returns the value of a metadata key from the new message being created as a string, or `null` if the key does not exist. Changes made to metadata during a mapping will be reflected by this function.
+Returns the value of a metadata key from the input message, or `null` if the key does not exist. Since values are extracted from the read-only input message they do NOT reflect changes made from within the map, in order to query metadata mutations made within a mapping use the `@.foo` syntax. This function supports extracting metadata from other messages of a batch with the `from` method.
 
 #### Parameters
 
@@ -349,13 +325,13 @@ Returns the value of a metadata key from the new message being created as a stri
 
 
 ```coffee
-root.topic = root_meta("kafka_topic")
+root.topic = metadata("kafka_topic")
 ```
 
 The key parameter is optional and if omitted the entire metadata contents are returned as an object.
 
 ```coffee
-root.all_metadata = root_meta()
+root.all_metadata = metadata()
 ```
 
 ### `tracing_id`
@@ -406,6 +382,13 @@ Returns the value of an environment variable, or `null` if the environment varia
 root.thing.key = env("key").or("default value")
 ```
 
+When the argument is static this function will only resolve once and yield the same result for each invocation as an optimisation, this means that updates to env vars during runtime will not be reflected. You can work around this optimisation by using variables as the argument as this will force a new evaluation for each execution of the mapping.
+
+```coffee
+let env_key = "key"
+root.thing.key = env($env_key).or("default_value")
+```
+
 ### `file`
 
 Reads a file and returns its contents. Relative paths are resolved from the directory of the process executing the mapping.
@@ -419,6 +402,16 @@ Reads a file and returns its contents. Relative paths are resolved from the dire
 
 ```coffee
 root.doc = file(env("BENTHOS_TEST_BLOBLANG_FILE")).parse_json()
+
+# In:  {}
+# Out: {"doc":{"foo":"bar"}}
+```
+
+When the argument is static this function will only resolve once and yield the same result for each invocation as an optimisation, this means that updates to files during runtime will not be reflected. You can work around this optimisation by using variables as the argument as this will force a new file read for each execution of the mapping.
+
+```coffee
+let env_key = "BENTHOS_TEST_BLOBLANG_FILE"
+root.doc = file(env($env_key)).parse_json()
 
 # In:  {}
 # Out: {"doc":{"foo":"bar"}}
@@ -532,6 +525,50 @@ Use `uuid_hyphenated` to generate a hypenated UUID:
 
 ```coffee
 root.uuid = fake("uuid_hyphenated")
+```
+
+## Deprecated
+
+### `meta`
+
+Returns the value of a metadata key from the input message as a string, or `null` if the key does not exist. Since values are extracted from the read-only input message they do NOT reflect changes made from within the map. In order to query metadata mutations made within a mapping use the [`root_meta` function](#root_meta). This function supports extracting metadata from other messages of a batch with the `from` method.
+
+#### Parameters
+
+**`key`** &lt;string, default `""`&gt; An optional key of a metadata value to obtain.  
+
+#### Examples
+
+
+```coffee
+root.topic = meta("kafka_topic")
+```
+
+The key parameter is optional and if omitted the entire metadata contents are returned as an object.
+
+```coffee
+root.all_metadata = meta()
+```
+
+### `root_meta`
+
+Returns the value of a metadata key from the new message being created as a string, or `null` if the key does not exist. Changes made to metadata during a mapping will be reflected by this function.
+
+#### Parameters
+
+**`key`** &lt;string, default `""`&gt; An optional key of a metadata value to obtain.  
+
+#### Examples
+
+
+```coffee
+root.topic = root_meta("kafka_topic")
+```
+
+The key parameter is optional and if omitted the entire metadata contents are returned as an object.
+
+```coffee
+root.all_metadata = root_meta()
 ```
 
 [error_handling]: /docs/configuration/error_handling

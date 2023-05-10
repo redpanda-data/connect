@@ -17,7 +17,7 @@ func init() {
 		if err != nil {
 			return nil, err
 		}
-		return processor.NewV2ToV1Processor("xml", p, mgr), nil
+		return processor.NewAutoObservedProcessor("xml", p, mgr), nil
 	}, docs.ComponentSpec{
 		Name:   "xml",
 		Status: docs.StatusBeta,

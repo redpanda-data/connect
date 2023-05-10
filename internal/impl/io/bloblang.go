@@ -34,7 +34,10 @@ func init() {
 			Category(query.FunctionCategoryEnvironment).
 			Description("Returns the value of an environment variable, or `null` if the environment variable does not exist.").
 			Param(bloblang.NewStringParam("name").Description("The name of an environment variable.")).
-			Example("", `root.thing.key = env("key").or("default value")`),
+			Example("", `root.thing.key = env("key").or("default value")`).
+			Example(
+				"When the argument is static this function will only resolve once and yield the same result for each invocation as an optimisation, this means that updates to env vars during runtime will not be reflected. You can work around this optimisation by using variables as the argument as this will force a new evaluation for each execution of the mapping.", `let env_key = "key"
+root.thing.key = env($env_key).or("default_value")`),
 		func(args *bloblang.ParsedParams) (bloblang.Function, error) {
 			name, err := args.GetString("name")
 			if err != nil {
@@ -64,7 +67,12 @@ func init() {
 			Example("", `root.doc = file(env("BENTHOS_TEST_BLOBLANG_FILE")).parse_json()`, [2]string{
 				`{}`,
 				`{"doc":{"foo":"bar"}}`,
-			}),
+			}).
+			Example(
+				"When the argument is static this function will only resolve once and yield the same result for each invocation as an optimisation, this means that updates to files during runtime will not be reflected. You can work around this optimisation by using variables as the argument as this will force a new file read for each execution of the mapping.", `let env_key = "BENTHOS_TEST_BLOBLANG_FILE"
+root.doc = file(env($env_key)).parse_json()`,
+				[2]string{`{}`, `{"doc":{"foo":"bar"}}`},
+			),
 		func(args *bloblang.ParsedParams) (bloblang.Function, error) {
 			path, err := args.GetString("path")
 			if err != nil {

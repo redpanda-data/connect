@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"strings"
 	"sync"
 
@@ -36,11 +37,14 @@ func (m *Type) registerEndpoints(enableCrud bool) {
 		return
 	}
 	m.manager.RegisterEndpoint(
-		"/streams",
-		"GET: List all streams along with their status and uptimes."+
-			" POST: Post an object of stream ids to stream configs, all"+
-			" streams will be replaced by this new set.",
-		m.HandleStreamsCRUD,
+		"/resources/{type}/{id}",
+		"POST: Create or replace a given resource configuration of a specified type. Types supported are `cache`, `input`, `output`, `processor` and `rate_limit`.",
+		m.HandleResourceCRUD,
+	)
+	m.manager.RegisterEndpoint(
+		"/streams/{id}/stats",
+		"GET a structured JSON object containing metrics for the stream.",
+		m.HandleStreamStats,
 	)
 	m.manager.RegisterEndpoint(
 		"/streams/{id}",
@@ -50,14 +54,11 @@ func (m *Type) registerEndpoints(enableCrud bool) {
 		m.HandleStreamCRUD,
 	)
 	m.manager.RegisterEndpoint(
-		"/streams/{id}/stats",
-		"GET a structured JSON object containing metrics for the stream.",
-		m.HandleStreamStats,
-	)
-	m.manager.RegisterEndpoint(
-		"/resources/{type}/{id}",
-		"POST: Create or replace a given resource configuration of a specified type. Types supported are `cache`, `input`, `output`, `processor` and `rate_limit`.",
-		m.HandleResourceCRUD,
+		"/streams",
+		"GET: List all streams along with their status and uptimes."+
+			" POST: Post an object of stream ids to stream configs, all"+
+			" streams will be replaced by this new set.",
+		m.HandleStreamsCRUD,
 	)
 }
 
@@ -285,9 +286,19 @@ func (m *Type) HandleStreamCRUD(w http.ResponseWriter, r *http.Request) {
 		if confBytes, err = io.ReadAll(r.Body); err != nil {
 			return
 		}
-		confBytes = config.ReplaceEnvVariables(confBytes)
 
-		if r.URL.Query().Get("chilled") != "true" {
+		ignoreLints := r.URL.Query().Get("chilled") == "true"
+
+		if confBytes, err = config.ReplaceEnvVariables(confBytes, os.LookupEnv); err != nil {
+			var errEnvMissing *config.ErrMissingEnvVars
+			if ignoreLints && errors.As(err, &errEnvMissing) {
+				confBytes = errEnvMissing.BestAttempt
+			} else {
+				return
+			}
+		}
+
+		if !ignoreLints {
 			var node yaml.Node
 			if err = yaml.Unmarshal(confBytes, &node); err != nil {
 				return
@@ -505,7 +516,18 @@ func (m *Type) HandleResourceCRUD(w http.ResponseWriter, r *http.Request) {
 		if confBytes, requestErr = io.ReadAll(r.Body); requestErr != nil {
 			return
 		}
-		confBytes = config.ReplaceEnvVariables(confBytes)
+
+		ignoreLints := r.URL.Query().Get("chilled") == "true"
+
+		if confBytes, requestErr = config.ReplaceEnvVariables(confBytes, os.LookupEnv); requestErr != nil {
+			var errEnvMissing *config.ErrMissingEnvVars
+			if ignoreLints && errors.As(requestErr, &errEnvMissing) {
+				confBytes = errEnvMissing.BestAttempt
+				requestErr = nil
+			} else {
+				return
+			}
+		}
 
 		var node yaml.Node
 		if requestErr = yaml.Unmarshal(confBytes, &node); requestErr != nil {
@@ -513,7 +535,7 @@ func (m *Type) HandleResourceCRUD(w http.ResponseWriter, r *http.Request) {
 		}
 		confNode = &node
 
-		if r.URL.Query().Get("chilled") != "true" {
+		if !ignoreLints {
 			for _, l := range docs.LintYAML(docs.NewLintContext(), docType, &node) {
 				lints = append(lints, l.Error())
 				m.manager.Logger().Infof("Resource '%v' config: %v\n", id, l)

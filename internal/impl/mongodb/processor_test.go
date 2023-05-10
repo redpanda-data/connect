@@ -17,7 +17,6 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/integration"
 	"github.com/benthosdev/benthos/v4/internal/manager"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	"github.com/benthosdev/benthos/v4/internal/tracing"
 )
 
 func TestProcessorIntegration(t *testing.T) {
@@ -122,7 +121,8 @@ func testMongoDBProcessorInsert(port string, t *testing.T) {
 		[]byte(`{"foo":"foo2","bar":"bar2"}`),
 	}
 
-	resMsgs, response := m.ProcessBatch(context.Background(), make([]*tracing.Span, len(parts)), message.QuickBatch(parts))
+	inBatch := message.QuickBatch(parts)
+	resMsgs, response := m.ProcessBatch(processor.TestBatchProcContext(context.Background(), nil, inBatch), inBatch)
 	require.Nil(t, response)
 	require.Len(t, resMsgs, 1)
 
@@ -199,7 +199,8 @@ func testMongoDBProcessorDeleteOne(port string, t *testing.T) {
 		[]byte(`{"foo":"foo_delete","bar":"bar_delete"}`),
 	}
 
-	resMsgs, response := m.ProcessBatch(context.Background(), make([]*tracing.Span, len(parts)), message.QuickBatch(parts))
+	inBatch := message.QuickBatch(parts)
+	resMsgs, response := m.ProcessBatch(processor.TestBatchProcContext(context.Background(), nil, inBatch), inBatch)
 	require.Nil(t, response)
 	require.Len(t, resMsgs, 1)
 
@@ -260,7 +261,8 @@ func testMongoDBProcessorDeleteMany(port string, t *testing.T) {
 		[]byte(`{"foo":"foo_delete_many","bar":"bar_delete_many"}`),
 	}
 
-	resMsgs, response := m.ProcessBatch(context.Background(), make([]*tracing.Span, len(parts)), message.QuickBatch(parts))
+	inBatch := message.QuickBatch(parts)
+	resMsgs, response := m.ProcessBatch(processor.TestBatchProcContext(context.Background(), nil, inBatch), inBatch)
 	require.Nil(t, response)
 	require.Len(t, resMsgs, 1)
 
@@ -319,7 +321,8 @@ func testMongoDBProcessorReplaceOne(port string, t *testing.T) {
 		[]byte(`{"foo":"foo_replace","bar":"bar_new"}`),
 	}
 
-	resMsgs, response := m.ProcessBatch(context.Background(), make([]*tracing.Span, len(parts)), message.QuickBatch(parts))
+	inBatch := message.QuickBatch(parts)
+	resMsgs, response := m.ProcessBatch(processor.TestBatchProcContext(context.Background(), nil, inBatch), inBatch)
 	require.Nil(t, response)
 	require.Len(t, resMsgs, 1)
 
@@ -383,7 +386,8 @@ func testMongoDBProcessorUpdateOne(port string, t *testing.T) {
 		[]byte(`{"foo":"foo_update","bar":"bar_update_new"}`),
 	}
 
-	resMsgs, response := m.ProcessBatch(context.Background(), make([]*tracing.Span, len(parts)), message.QuickBatch(parts))
+	inBatch := message.QuickBatch(parts)
+	resMsgs, response := m.ProcessBatch(processor.TestBatchProcContext(context.Background(), nil, inBatch), inBatch)
 	require.Nil(t, response)
 	require.Len(t, resMsgs, 1)
 
@@ -478,7 +482,9 @@ func testMongoDBProcessorFindOne(port string, t *testing.T) {
 
 		m, err := mongodb.NewProcessor(conf, mgr)
 		require.NoError(t, err)
-		resMsgs, response := m.ProcessBatch(context.Background(), make([]*tracing.Span, 1), message.QuickBatch([][]byte{[]byte(tt.message)}))
+
+		inBatch := message.QuickBatch([][]byte{[]byte(tt.message)})
+		resMsgs, response := m.ProcessBatch(processor.TestBatchProcContext(context.Background(), nil, inBatch), inBatch)
 		require.Nil(t, response)
 		require.Len(t, resMsgs, 1)
 		if tt.expectedErr != nil {

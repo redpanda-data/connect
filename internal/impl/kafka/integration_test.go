@@ -105,6 +105,8 @@ input:
     consumer_group: "$VAR4"
     checkpoint_limit: 100
     commit_period: "1s"
+    batching:
+      count: $INPUT_BATCH_COUNT
 `
 
 	suite := integration.StreamTests(
@@ -118,14 +120,58 @@ input:
 		integration.StreamTestStreamSaturatedUnacked(200),
 	)
 
+	// In some modes include testing input level batching
+	var suiteExt integration.StreamTestList
+	suiteExt = append(suiteExt, suite...)
+	suiteExt = append(suiteExt, integration.StreamTestReceiveBatchCount(10))
+
 	suite.Run(
 		t, template,
 		integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, testID string, vars *integration.StreamTestConfigVars) {
 			vars.Var4 = "group" + testID
-			require.NoError(t, createKafkaTopic(context.Background(), "localhost:"+kafkaPortStr, testID, 4))
+			require.NoError(t, createKafkaTopic(ctx, "localhost:"+kafkaPortStr, testID, 4))
 		}),
 		integration.StreamTestOptPort(kafkaPortStr),
 	)
+
+	t.Run("only one partition", func(t *testing.T) {
+		t.Parallel()
+		suiteExt.Run(
+			t, template,
+			integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, testID string, vars *integration.StreamTestConfigVars) {
+				vars.Var4 = "group" + testID
+				require.NoError(t, createKafkaTopic(ctx, "localhost:"+kafkaPortStr, testID, 1))
+			}),
+			integration.StreamTestOptPort(kafkaPortStr),
+		)
+	})
+
+	t.Run("explicit partitions", func(t *testing.T) {
+		t.Parallel()
+		suite.Run(
+			t, template,
+			integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, testID string, vars *integration.StreamTestConfigVars) {
+				topicName := "topic-" + testID
+				vars.Var1 = fmt.Sprintf(":0,%v:1,%v:2,%v:3", topicName, topicName, topicName)
+				require.NoError(t, createKafkaTopic(ctx, "localhost:"+kafkaPortStr, testID, 4))
+			}),
+			integration.StreamTestOptPort(kafkaPortStr),
+			integration.StreamTestOptSleepAfterInput(time.Second*3),
+		)
+
+		t.Run("range of partitions", func(t *testing.T) {
+			t.Parallel()
+			suite.Run(
+				t, template,
+				integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, testID string, vars *integration.StreamTestConfigVars) {
+					require.NoError(t, createKafkaTopic(ctx, "localhost:"+kafkaPortStr, testID, 4))
+				}),
+				integration.StreamTestOptPort(kafkaPortStr),
+				integration.StreamTestOptSleepAfterInput(time.Second*3),
+				integration.StreamTestOptVarOne(":0-3"),
+			)
+		})
+	})
 
 	manualPartitionTemplate := `
 output:

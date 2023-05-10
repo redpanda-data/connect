@@ -19,38 +19,14 @@ This component is experimental and therefore subject to change or removal outsid
 :::
 Writes messages to a Discord channel.
 
-
-<Tabs defaultValue="common" values={[
-  { label: 'Common', value: 'common', },
-  { label: 'Advanced', value: 'advanced', },
-]}>
-
-<TabItem value="common">
-
 ```yml
-# Common config fields, showing default values
+# Config fields, showing default values
 output:
   label: ""
   discord:
     channel_id: ""
     bot_token: ""
 ```
-
-</TabItem>
-<TabItem value="advanced">
-
-```yml
-# All config fields, showing default values
-output:
-  label: ""
-  discord:
-    channel_id: ""
-    bot_token: ""
-    rate_limit: ""
-```
-
-</TabItem>
-</Tabs>
 
 This output POSTs messages to the `/channels/{channel_id}/messages` Discord API endpoint authenticated as a bot using token based authentication.
 
@@ -72,13 +48,5 @@ A bot token used for authentication.
 
 
 Type: `string`  
-
-### `rate_limit`
-
-An optional rate limit resource to restrict API requests with.
-
-
-Type: `string`  
-Default: `""`  
 
 

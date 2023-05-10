@@ -238,18 +238,7 @@ func (r *Reader) TriggerResourceUpdate(mgr bundle.NewManagement, strict bool, pa
 	newResConf := manager.NewResourceConfig()
 	lints, err := r.readResource(path, &newResConf)
 	if errors.Is(err, fs.ErrNotExist) {
-		prevInfo, exists := r.resourceFileInfo[path]
-		if !exists {
-			return nil
-		}
-		mgr.Logger().Infof("Resource file %v deleted, attempting to remove resources.", path)
-
-		newInfo := resInfoEmpty()
-		if err := r.applyResourceChanges(path, mgr, newInfo, prevInfo); err != nil {
-			return err
-		}
-		r.resourceFileInfo[path] = newInfo
-		return nil
+		return r.TriggerResourceDelete(mgr, path)
 	}
 	if err != nil {
 		mgr.Logger().Errorf("Failed to read updated resources config: %v", err)
@@ -279,6 +268,23 @@ func (r *Reader) TriggerResourceUpdate(mgr bundle.NewManagement, strict bool, pa
 	}
 
 	r.resourceFileInfo[path] = newInfo
+	return nil
+}
+
+// TriggerResourceDelete attempts to remove all resources that originated from a
+// given file.
+func (r *Reader) TriggerResourceDelete(mgr bundle.NewManagement, path string) error {
+	prevInfo, exists := r.resourceFileInfo[path]
+	if !exists {
+		return nil
+	}
+	mgr.Logger().Infof("Resource file %v deleted, attempting to remove resources.", path)
+
+	newInfo := resInfoEmpty()
+	if err := r.applyResourceChanges(path, mgr, newInfo, prevInfo); err != nil {
+		return err
+	}
+	delete(r.resourceFileInfo, path)
 	return nil
 }
 

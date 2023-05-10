@@ -14,7 +14,7 @@ import (
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
-var driverField = service.NewStringEnumField("driver", "mysql", "postgres", "clickhouse", "mssql", "sqlite", "oracle", "snowflake").
+var driverField = service.NewStringEnumField("driver", "mysql", "postgres", "clickhouse", "mssql", "sqlite", "oracle", "snowflake", "trino").
 	Description("A database [driver](#drivers) to use.")
 
 var dsnField = service.NewStringField("dsn").
@@ -33,6 +33,7 @@ The following is a list of supported drivers, their placeholder style, and their
 ` + "| `sqlite` | `file:/path/to/filename.db[?param&=value1&...]` |" + `
 ` + "| `oracle` | `oracle://[username[:password]@][netloc][:port]/service_name?server=server2&server=server3` |" + `
 ` + "| `snowflake` | `username[:password]@account_identifier/dbname/schemaname[?param1=value&...&paramN=valueN]` |" + `
+` + "| `trino` | [`http[s]://user[:pass]@host[:port][?parameters]`](https://github.com/trinodb/trino-go-client#dsn-data-source-name)" + `
 
 Please note that the ` + "`postgres`" + ` driver enforces SSL by default, you can override this with the parameter ` + "`sslmode=disable`" + ` if required.
 
@@ -109,6 +110,7 @@ func rawQueryField() *service.ConfigField {
 ` + "| `sqlite` | Question mark |" + `
 ` + "| `oracle` | Colon |" + `
 ` + "| `snowflake` | Question mark |" + `
+` + "| `trino` | Question mark |" + `
 `)
 }
 
