@@ -23,7 +23,7 @@ func init() {
 		if err != nil {
 			return nil, err
 		}
-		return processor.NewV2ToV1Processor("parse_log", p, mgr), nil
+		return processor.NewAutoObservedProcessor("parse_log", p, mgr), nil
 	}, docs.ComponentSpec{
 		Name: "parse_log",
 		Categories: []string{
@@ -236,7 +236,7 @@ type parseLogProc struct {
 	log       log.Modular
 }
 
-func newParseLog(conf processor.ParseLogConfig, mgr bundle.NewManagement) (processor.V2, error) {
+func newParseLog(conf processor.ParseLogConfig, mgr bundle.NewManagement) (processor.AutoObserved, error) {
 	s := &parseLogProc{
 		formatStr: conf.Format,
 		log:       mgr.Logger(),

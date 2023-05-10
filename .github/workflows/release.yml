@@ -13,7 +13,7 @@ jobs:
     - name: Install Go
       uses: actions/setup-go@v3
       with:
-        go-version: 1.19.x
+        go-version: 1.20.x
         check-latest: true
 
     - name: Check Out Repo
@@ -52,7 +52,7 @@ jobs:
     - name: Install Go
       uses: actions/setup-go@v3
       with:
-        go-version: 1.19.x
+        go-version: 1.20.x
         check-latest: true
 
     - name: Check Out Repo
@@ -110,7 +110,7 @@ jobs:
       with:
         images: us-docker.pkg.dev/artifacts-321215/co2-artifacts-docker/benthos
         tags: |
-          type=raw,value=v4.12.1-soda-${{ steps.sha_short.outputs.sha_short }}
+          type=raw,value=v4.15.0-soda-${{ steps.sha_short.outputs.sha_short }}
 
     - name: Build and push
       uses: docker/build-push-action@v2

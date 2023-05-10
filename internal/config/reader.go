@@ -44,6 +44,8 @@ type Reader struct {
 	// The filesystem used for reading config files.
 	fs ifs.FS
 
+	bootstrapConf *Type
+
 	mainPath      string
 	resourcePaths []string
 	streamsPaths  []string
@@ -80,9 +82,11 @@ func NewReader(mainPath string, resourcePaths []string, opts ...OptFunc) *Reader
 	if mainPath != "" {
 		mainPath = filepath.Clean(mainPath)
 	}
+	defaultBootstrapConf := New()
 	r := &Reader{
 		testSuffix:         "_benthos_test",
 		fs:                 ifs.OS(),
+		bootstrapConf:      &defaultBootstrapConf,
 		mainPath:           mainPath,
 		resourcePaths:      resourcePaths,
 		modTimeLastRead:    map[string]time.Time{},
@@ -121,6 +125,14 @@ func OptAddOverrides(overrides ...string) OptFunc {
 	}
 }
 
+// OptSetBootstrapConfig sets a config to be used as the default for each parse.
+// This can be used to change the default behaviours of benthos configs.
+func OptSetBootstrapConfig(conf *Type) OptFunc {
+	return func(r *Reader) {
+		r.bootstrapConf = conf
+	}
+}
+
 // OptSetStreamPaths marks this config reader as operating in streams mode, and
 // adds a list of paths to obtain individual stream configs from.
 func OptSetStreamPaths(streamsPaths ...string) OptFunc {
@@ -142,8 +154,11 @@ func OptUseFS(fs ifs.FS) OptFunc {
 //------------------------------------------------------------------------------
 
 // Read a Benthos config from the files and options specified.
-func (r *Reader) Read(conf *Type) (lints []string, err error) {
-	if lints, err = r.readMain(conf); err != nil {
+func (r *Reader) Read() (conf Type, lints []string, err error) {
+	if conf, err = r.bootstrapConf.Clone(); err != nil {
+		return
+	}
+	if lints, err = r.readMain(r.mainPath, &conf); err != nil {
 		return
 	}
 	r.configFileInfo = resInfoFromConfig(&conf.ResourceConfig)
@@ -167,7 +182,7 @@ func (r *Reader) ReadStreams(confs map[string]stream.Config) (lints []string, er
 // MainUpdateFunc is a closure function called whenever a main config has been
 // updated. If an error is returned then the attempt will be made again after a
 // grace period.
-type MainUpdateFunc func(conf stream.Config) error
+type MainUpdateFunc func(conf *Type) error
 
 // SubscribeConfigChanges registers a closure function to be called whenever the
 // main configuration file is updated.
@@ -240,29 +255,29 @@ func applyOverrides(specs docs.FieldSpecs, root *yaml.Node, overrides ...string)
 	return nil
 }
 
-func (r *Reader) readMain(conf *Type) (lints []string, err error) {
+func (r *Reader) readMain(mainPath string, conf *Type) (lints []string, err error) {
 	defer func() {
-		if err != nil && r.mainPath != "" {
-			err = fmt.Errorf("%v: %w", r.mainPath, err)
+		if err != nil && mainPath != "" {
+			err = fmt.Errorf("%v: %w", mainPath, err)
 		}
 	}()
 
-	if r.mainPath == "" && len(r.overrides) == 0 {
+	if mainPath == "" && len(r.overrides) == 0 {
 		return
 	}
 
 	var rawNode yaml.Node
 	var confBytes []byte
-	if r.mainPath != "" {
+	if mainPath != "" {
 		var dLints []docs.Lint
 		var modTime time.Time
-		if confBytes, dLints, modTime, err = ReadFileEnvSwap(r.fs, r.mainPath); err != nil {
+		if confBytes, dLints, modTime, err = ReadFileEnvSwap(r.fs, mainPath); err != nil {
 			return
 		}
 		for _, l := range dLints {
 			lints = append(lints, l.Error())
 		}
-		r.modTimeLastRead[r.mainPath] = modTime
+		r.modTimeLastRead[mainPath] = modTime
 		if err = yaml.Unmarshal(confBytes, &rawNode); err != nil {
 			return
 		}
@@ -279,7 +294,7 @@ func (r *Reader) readMain(conf *Type) (lints []string, err error) {
 	}
 
 	if !bytes.HasPrefix(confBytes, []byte("# BENTHOS LINT DISABLE")) {
-		lintFilePrefix := r.mainPath
+		lintFilePrefix := mainPath
 		for _, lint := range confSpec.LintYAML(docs.NewLintContext(), &rawNode) {
 			lints = append(lints, fmt.Sprintf("%v%v", lintFilePrefix, lint.Error()))
 		}
@@ -292,20 +307,35 @@ func (r *Reader) readMain(conf *Type) (lints []string, err error) {
 // TriggerMainUpdate attempts to re-read the main configuration file, trigger
 // the provided main update func, and apply changes to resources to the provided
 // manager as appropriate.
-func (r *Reader) TriggerMainUpdate(mgr bundle.NewManagement, strict bool) error {
-	conf := New()
-	lints, err := r.readMain(&conf)
+func (r *Reader) TriggerMainUpdate(mgr bundle.NewManagement, strict bool, newPath string) error {
+	conf, err := r.bootstrapConf.Clone()
+	if err != nil {
+		return err
+	}
+	lints, err := r.readMain(newPath, &conf)
 	if errors.Is(err, fs.ErrNotExist) {
+		if r.mainPath != newPath {
+			mgr.Logger().Errorf("Failed to read changed main config: %v", err)
+			return noReread(err)
+		}
 		// Ignore main file deletes for now
 		return nil
 	}
 	if err != nil {
-		mgr.Logger().Errorf("Failed to read updated config: %v", err)
+		if r.mainPath != newPath {
+			mgr.Logger().Errorf("Failed to read new main config %v: %v", newPath, err)
+		} else {
+			mgr.Logger().Errorf("Failed to read updated config: %v", err)
+		}
 
 		// Rejecting due to invalid file means we do not want to try again.
 		return noReread(err)
 	}
-	mgr.Logger().Infoln("Main config updated, attempting to update pipeline.")
+	if r.mainPath != newPath {
+		mgr.Logger().Infof("Main config changed to %v, attempting to update pipeline.", newPath)
+	} else {
+		mgr.Logger().Infoln("Main config updated, attempting to update pipeline.")
+	}
 
 	lintlog := mgr.Logger()
 	for _, lint := range lints {
@@ -318,6 +348,16 @@ func (r *Reader) TriggerMainUpdate(mgr bundle.NewManagement, strict bool) error 
 		return noReread(errors.New("file contained linting errors and is running in strict mode"))
 	}
 
+	// If the main config file has been changed then we remove all resources
+	// under the old name first.
+	if r.mainPath != newPath {
+		if err := r.applyResourceChanges(r.mainPath, mgr, resInfoEmpty(), r.configFileInfo); err != nil {
+			return err
+		}
+		r.mainPath = newPath
+		r.configFileInfo = resInfoEmpty()
+	}
+
 	// Update any resources within the file.
 	newInfo := resInfoFromConfig(&conf.ResourceConfig)
 	if err := r.applyResourceChanges(r.mainPath, mgr, newInfo, r.configFileInfo); err != nil {
@@ -326,7 +366,7 @@ func (r *Reader) TriggerMainUpdate(mgr bundle.NewManagement, strict bool) error 
 	r.configFileInfo = newInfo
 
 	if r.mainUpdateFn != nil {
-		if err := r.mainUpdateFn(conf.Config); err != nil {
+		if err := r.mainUpdateFn(&conf); err != nil {
 			mgr.Logger().Errorf("Failed to apply updated config: %v", err)
 			return err
 		}

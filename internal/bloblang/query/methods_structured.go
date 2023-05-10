@@ -429,7 +429,7 @@ When filtering objects the mapping query argument is provided a context with a f
 var _ = registerSimpleMethod(
 	NewMethodSpec(
 		"find",
-		"Returns the index of the first occurrence of a value or query in an array. `-1` is returned if there are no matches. Numerical comparisons are made irrespective of the representation type (float versus integer).",
+		"Returns the index of the first occurrence of a value an array. `-1` is returned if there are no matches. Numerical comparisons are made irrespective of the representation type (float versus integer).",
 	).InCategory(
 		MethodCategoryObjectAndArray, "",
 		NewExampleSpec("",
@@ -438,16 +438,11 @@ var _ = registerSimpleMethod(
 			`{"index":1}`,
 		),
 		NewExampleSpec("",
-			`root.index = this.find(v -> v != "bar")`,
-			`["foo", "bar", "baz"]`,
-			`{"index":0}`,
+			`root.index = this.things.find(this.goal)`,
+			`{"goal":"bar","things":["foo", "bar", "baz"]}`,
+			`{"index":1}`,
 		),
-		NewExampleSpec("",
-			`root.index = this.find(v -> v != "foo")`,
-			`["foo"]`,
-			`{"index":-1}`,
-		),
-	).Beta().Param(ParamQuery("value", "A value to find. If a query is provided it will only be resolved once during the lifetime of the mapping.", false)),
+	).Beta().Param(ParamAny("value", "A value to find.")),
 	func(args *ParsedParams) (simpleMethod, error) {
 		val, err := args.Field("value")
 		if err != nil {
@@ -461,40 +456,21 @@ var _ = registerSimpleMethod(
 			}
 
 			for i, elem := range array {
-				if found, err := findMethodICompare(ctx, val, elem); err != nil {
-					return nil, err
-				} else if found {
+				if ICompare(val, elem) {
 					return i, nil
 				}
 			}
-
 			return -1, nil
 		}, nil
 	},
 )
-
-func findMethodICompare(ctx FunctionContext, compareLeft, compareRight any) (bool, error) {
-	switch compareLeftTyped := compareLeft.(type) {
-	case *Literal:
-		return ICompare(compareLeftTyped.Value, compareRight), nil
-	case Function:
-		if value, err := compareLeftTyped.Exec(ctx.WithValue(compareRight)); err != nil {
-			return false, fmt.Errorf("failed to execute query: %w", err)
-		} else if v, ok := value.(bool); ok {
-			return v, nil
-		}
-		return false, errors.New("query did not return a boolean value")
-	}
-
-	return false, fmt.Errorf("wrong argument type, expected literal or query, got %v", ITypeOf(compareLeft))
-}
 
 //------------------------------------------------------------------------------
 
 var _ = registerSimpleMethod(
 	NewMethodSpec(
 		"find_all",
-		"Returns an array containing the indexes of all occurrences of a value or query in an array. An empty array is returned if there are no matches. Numerical comparisons are made irrespective of the representation type (float versus integer).",
+		"Returns an array containing the indexes of all occurrences of a value in an array. An empty array is returned if there are no matches. Numerical comparisons are made irrespective of the representation type (float versus integer).",
 	).InCategory(
 		MethodCategoryObjectAndArray, "",
 		NewExampleSpec("",
@@ -503,16 +479,11 @@ var _ = registerSimpleMethod(
 			`{"index":[1,3]}`,
 		),
 		NewExampleSpec("",
-			`root.index = this.find_all(v -> v != "bar")`,
-			`["foo", "bar", "baz"]`,
-			`{"index":[0,2]}`,
+			`root.indexes = this.things.find_all(this.goal)`,
+			`{"goal":"bar","things":["foo", "bar", "baz", "bar", "buz"]}`,
+			`{"indexes":[1,3]}`,
 		),
-		NewExampleSpec("",
-			`root.index = this.find_all(v -> v != "foo")`,
-			`["foo"]`,
-			`{"index":[]}`,
-		),
-	).Beta().Param(ParamQuery("value", "A value to find. If a query is provided it will only be resolved once during the lifetime of the mapping.", false)),
+	).Beta().Param(ParamAny("value", "A value to find.")),
 	func(args *ParsedParams) (simpleMethod, error) {
 		val, err := args.Field("value")
 		if err != nil {
@@ -525,11 +496,99 @@ var _ = registerSimpleMethod(
 				return nil, NewTypeError(v, ValueArray)
 			}
 
-			output := []int{}
+			output := []any{}
 			for i, elem := range array {
-				if found, err := findMethodICompare(ctx, val, elem); err != nil {
-					return nil, err
-				} else if found {
+				if ICompare(val, elem) {
+					output = append(output, i)
+				}
+			}
+
+			return output, nil
+		}, nil
+	},
+)
+
+//------------------------------------------------------------------------------
+
+var _ = registerSimpleMethod(
+	NewMethodSpec(
+		"find_by",
+		"Returns the index of the first occurrence of an array where the provided query resolves to a boolean `true`. `-1` is returned if there are no matches.",
+	).InCategory(
+		MethodCategoryObjectAndArray, "",
+		NewExampleSpec("",
+			`root.index = this.find_by(v -> v != "bar")`,
+			`["foo", "bar", "baz"]`,
+			`{"index":0}`,
+		),
+	).Beta().Param(ParamQuery("query", "A query to execute for each element.", false)),
+	func(args *ParsedParams) (simpleMethod, error) {
+		queryFn, err := args.FieldQuery("query")
+		if err != nil {
+			return nil, err
+		}
+
+		return func(v any, ctx FunctionContext) (any, error) {
+			array, ok := v.([]any)
+			if !ok {
+				return nil, NewTypeError(v, ValueArray)
+			}
+
+			for i, elem := range array {
+				iIsMatch, err := queryFn.Exec(ctx.WithValue(elem))
+				if err != nil {
+					return nil, fmt.Errorf("query returned an error for index %v: %w", i, err)
+				}
+				isMatch, ok := iIsMatch.(bool)
+				if !ok {
+					return nil, fmt.Errorf("query returned a non-boolean value for index %v: %w", i, NewTypeError(iIsMatch, ValueBool))
+				}
+				if isMatch {
+					return i, nil
+				}
+			}
+			return -1, nil
+		}, nil
+	},
+)
+
+//------------------------------------------------------------------------------
+
+var _ = registerSimpleMethod(
+	NewMethodSpec(
+		"find_all_by",
+		"Returns an array containing the indexes of all occurrences of an array where the provided query resolves to a boolean `true`. An empty array is returned if there are no matches. Numerical comparisons are made irrespective of the representation type (float versus integer).",
+	).InCategory(
+		MethodCategoryObjectAndArray, "",
+		NewExampleSpec("",
+			`root.index = this.find_all_by(v -> v != "bar")`,
+			`["foo", "bar", "baz"]`,
+			`{"index":[0,2]}`,
+		),
+	).Beta().Param(ParamQuery("query", "A query to execute for each element.", false)),
+	func(args *ParsedParams) (simpleMethod, error) {
+		queryFn, err := args.FieldQuery("query")
+		if err != nil {
+			return nil, err
+		}
+
+		return func(v any, ctx FunctionContext) (any, error) {
+			array, ok := v.([]any)
+			if !ok {
+				return nil, NewTypeError(v, ValueArray)
+			}
+
+			output := []any{}
+			for i, elem := range array {
+				iIsMatch, err := queryFn.Exec(ctx.WithValue(elem))
+				if err != nil {
+					return nil, fmt.Errorf("query returned an error for index %v: %w", i, err)
+				}
+				isMatch, ok := iIsMatch.(bool)
+				if !ok {
+					return nil, fmt.Errorf("query returned a non-boolean value for index %v: %w", i, NewTypeError(iIsMatch, ValueBool))
+				}
+				if isMatch {
 					output = append(output, i)
 				}
 			}

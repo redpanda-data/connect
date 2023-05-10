@@ -2,6 +2,8 @@ package pure
 
 import (
 	"context"
+	"errors"
+	"sync"
 
 	"github.com/benthosdev/benthos/v4/internal/component/input"
 	"github.com/benthosdev/benthos/v4/internal/message"
@@ -12,17 +14,22 @@ type fanInInputBroker struct {
 
 	closables       []input.Streamed
 	inputClosedChan chan int
-	inputMap        map[int]struct{}
+	remainingMap    map[int]struct{}
+	remainingMapMut sync.Mutex
 
 	closedChan chan struct{}
 }
 
 func newFanInInputBroker(inputs []input.Streamed) (*fanInInputBroker, error) {
+	if len(inputs) == 0 {
+		return nil, errors.New("fan in broker requires at least one input")
+	}
+
 	i := &fanInInputBroker{
 		transactions: make(chan message.Transaction),
 
 		inputClosedChan: make(chan int),
-		inputMap:        make(map[int]struct{}),
+		remainingMap:    make(map[int]struct{}),
 
 		closables:  []input.Streamed{},
 		closedChan: make(chan struct{}),
@@ -32,7 +39,7 @@ func newFanInInputBroker(inputs []input.Streamed) (*fanInInputBroker, error) {
 		i.closables = append(i.closables, input)
 
 		// Keep track of # open inputs
-		i.inputMap[n] = struct{}{}
+		i.remainingMap[n] = struct{}{}
 
 		// Launch goroutine that async writes input into single channel
 		go func(index int) {
@@ -59,8 +66,15 @@ func (i *fanInInputBroker) TransactionChan() <-chan message.Transaction {
 }
 
 func (i *fanInInputBroker) Connected() bool {
-	for _, in := range i.closables {
-		if !in.Connected() {
+	i.remainingMapMut.Lock()
+	defer i.remainingMapMut.Unlock()
+
+	if len(i.remainingMap) == 0 {
+		return false
+	}
+
+	for index := range i.remainingMap {
+		if !i.closables[index].Connected() {
 			return false
 		}
 	}
@@ -74,9 +88,17 @@ func (i *fanInInputBroker) loop() {
 		close(i.closedChan)
 	}()
 
-	for len(i.inputMap) > 0 {
+	for {
 		index := <-i.inputClosedChan
-		delete(i.inputMap, index)
+
+		i.remainingMapMut.Lock()
+		delete(i.remainingMap, index)
+		remaining := len(i.remainingMap)
+		i.remainingMapMut.Unlock()
+
+		if remaining == 0 {
+			return
+		}
 	}
 }
 

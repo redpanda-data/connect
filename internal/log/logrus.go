@@ -91,9 +91,9 @@ type Logger struct {
 	entry *logrus.Entry
 }
 
-// NewV2 returns a new logger from a config, or returns an error if the config
+// New returns a new logger from a config, or returns an error if the config
 // is invalid.
-func NewV2(stream io.Writer, config Config) (Modular, error) {
+func New(stream io.Writer, config Config) (Modular, error) {
 	logger := logrus.New()
 	logger.Out = stream
 

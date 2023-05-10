@@ -2,8 +2,10 @@ package config
 
 import (
 	"bytes"
+	"errors"
 	"io"
 	"io/fs"
+	"os"
 	"time"
 	"unicode/utf8"
 
@@ -17,6 +19,7 @@ import (
 type LintOptions struct {
 	RejectDeprecated bool
 	RequireLabels    bool
+	SkipEnvVarCheck  bool
 }
 
 // ReadFileLinted will attempt to read a configuration file path into a
@@ -25,6 +28,16 @@ func ReadFileLinted(fs ifs.FS, path string, opts LintOptions, config *Type) ([]d
 	configBytes, lints, _, err := ReadFileEnvSwap(fs, path)
 	if err != nil {
 		return nil, err
+	}
+
+	if opts.SkipEnvVarCheck {
+		var newLints []docs.Lint
+		for _, l := range lints {
+			if l.Type != docs.LintMissingEnvVar {
+				newLints = append(newLints, l)
+			}
+		}
+		lints = newLints
 	}
 
 	if err := yaml.Unmarshal(configBytes, config); err != nil {
@@ -85,6 +98,15 @@ func ReadFileEnvSwap(store ifs.FS, path string) (configBytes []byte, lints []doc
 		))
 	}
 
-	configBytes = ReplaceEnvVariables(configBytes)
+	if configBytes, err = ReplaceEnvVariables(configBytes, os.LookupEnv); err != nil {
+		var errEnvMissing *ErrMissingEnvVars
+		if errors.As(err, &errEnvMissing) {
+			configBytes = errEnvMissing.BestAttempt
+			lints = append(lints, docs.NewLintError(1, docs.LintMissingEnvVar, err.Error()))
+			err = nil
+		} else {
+			return
+		}
+	}
 	return
 }

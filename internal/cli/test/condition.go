@@ -88,11 +88,11 @@ func (c *ConditionsMap) UnmarshalYAML(value *yaml.Node) error {
 			}
 			cond = val
 		case "metadata_equals":
-			val := MetadataEqualsCondition{}
-			if err := v.Decode(&val); err != nil {
+			root := map[string]any{}
+			if err := v.Decode(&root); err != nil {
 				return fmt.Errorf("line %v: %v", v.Line, err)
 			}
-			cond = val
+			cond = MetadataEqualsCondition(root)
 		default:
 			return fmt.Errorf("line %v: message part condition type not recognised: %v", v.Line, k)
 		}

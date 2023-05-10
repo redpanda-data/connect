@@ -13,7 +13,6 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/manager"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	"github.com/benthosdev/benthos/v4/internal/stream"
 )
 
 func TestReaderResourceFileReading(t *testing.T) {
@@ -49,12 +48,11 @@ processor_resources:
 	rdr.changeDelayPeriod = 1 * time.Millisecond
 	rdr.changeFlushPeriod = 1 * time.Millisecond
 
-	conf := New()
-	lints, err := rdr.Read(&conf)
+	conf, lints, err := rdr.Read()
 	require.NoError(t, err)
 	require.Empty(t, lints)
 
-	require.NoError(t, rdr.SubscribeConfigChanges(func(conf stream.Config) error {
+	require.NoError(t, rdr.SubscribeConfigChanges(func(conf *Type) error {
 		return nil
 	}))
 
@@ -66,7 +64,7 @@ processor_resources:
 	tCtx, done := context.WithTimeout(context.Background(), time.Second*30)
 	defer done()
 
-	testProc := func(name string, input, output string) {
+	assertProc := func(name, input, output string) {
 		require.NoError(t, testMgr.AccessProcessor(tCtx, name, func(p processor.V1) {
 			res, err := p.ProcessBatch(tCtx, message.Batch{
 				message.NewPart([]byte(input)),
@@ -78,9 +76,9 @@ processor_resources:
 		}))
 	}
 
-	testProc("fooproc", "hello world", "HELLO WORLD")
-	testProc("barproc", "hello world", "hello world and bar")
-	testProc("bazproc", "hello world", "hello world and baz")
+	assertProc("fooproc", "hello world", "HELLO WORLD")
+	assertProc("barproc", "hello world", "hello world and bar")
+	assertProc("bazproc", "hello world", "hello world and baz")
 
 	// Update foo, remove bar.
 	require.NoError(t, os.WriteFile(filepath.Join(confDir, "a_res.yaml"), []byte(`
@@ -90,13 +88,27 @@ processor_resources:
       root = content().uppercase() + "!!!"
 `), 0o644))
 
+	checkProc := func(name, input string) (output string) {
+		_ = testMgr.AccessProcessor(tCtx, name, func(p processor.V1) {
+			res, err := p.ProcessBatch(tCtx, message.Batch{
+				message.NewPart([]byte(input)),
+			})
+			if err != nil || len(res) != 1 || len(res[0]) != 1 {
+				return
+			}
+			output = string(res[0][0].AsBytes())
+		})
+		return
+	}
+
 	require.Eventually(t, func() bool {
-		return testMgr.AccessProcessor(tCtx, "barproc", func(v processor.V1) {}) != nil
+		return checkProc("fooproc", "hello world") == "HELLO WORLD!!!" &&
+			testMgr.AccessProcessor(tCtx, "barproc", func(v processor.V1) {}) != nil
 	}, time.Second, time.Millisecond*10)
 
-	testProc("fooproc", "hello world", "HELLO WORLD!!!")
+	assertProc("fooproc", "hello world", "HELLO WORLD!!!")
 	require.EqualError(t, testMgr.AccessProcessor(tCtx, "barproc", func(v processor.V1) {}), "unable to locate resource: barproc")
-	testProc("bazproc", "hello world", "hello world and baz")
+	assertProc("bazproc", "hello world", "hello world and baz")
 
 	// Update baz, add new bar.
 	require.NoError(t, os.WriteFile(filepath.Join(confDir, "b_res.yaml"), []byte(`
@@ -110,12 +122,13 @@ processor_resources:
 `), 0o644))
 
 	require.Eventually(t, func() bool {
-		return testMgr.AccessProcessor(tCtx, "barproc", func(v processor.V1) {}) == nil
+		return checkProc("barproc", "hello world") == "hello world and a replaced bar" &&
+			checkProc("bazproc", "hello world") == "hello world and a new baz"
 	}, time.Second, time.Millisecond*10)
 
-	testProc("fooproc", "hello world", "HELLO WORLD!!!")
-	testProc("barproc", "hello world", "hello world and a replaced bar")
-	testProc("bazproc", "hello world", "hello world and a new baz")
+	assertProc("fooproc", "hello world", "HELLO WORLD!!!")
+	assertProc("barproc", "hello world", "hello world and a replaced bar")
+	assertProc("bazproc", "hello world", "hello world and a new baz")
 }
 
 func TestReaderResourceMovedToNewFile(t *testing.T) {
@@ -151,12 +164,11 @@ processor_resources:
 	rdr.changeDelayPeriod = 1 * time.Millisecond
 	rdr.changeFlushPeriod = 1 * time.Millisecond
 
-	conf := New()
-	lints, err := rdr.Read(&conf)
+	conf, lints, err := rdr.Read()
 	require.NoError(t, err)
 	require.Empty(t, lints)
 
-	require.NoError(t, rdr.SubscribeConfigChanges(func(conf stream.Config) error {
+	require.NoError(t, rdr.SubscribeConfigChanges(func(conf *Type) error {
 		return nil
 	}))
 
@@ -168,7 +180,7 @@ processor_resources:
 	tCtx, done := context.WithTimeout(context.Background(), time.Second*30)
 	defer done()
 
-	testProc := func(name string, input, output string) {
+	assertProc := func(name, input, output string) {
 		require.NoError(t, testMgr.AccessProcessor(tCtx, name, func(p processor.V1) {
 			res, err := p.ProcessBatch(tCtx, message.Batch{
 				message.NewPart([]byte(input)),
@@ -180,9 +192,9 @@ processor_resources:
 		}))
 	}
 
-	testProc("fooproc", "hello world", "HELLO WORLD")
-	testProc("barproc", "hello world", "hello world and bar")
-	testProc("bazproc", "hello world", "hello world and baz")
+	assertProc("fooproc", "hello world", "HELLO WORLD")
+	assertProc("barproc", "hello world", "hello world and bar")
+	assertProc("bazproc", "hello world", "hello world and baz")
 
 	// Update baz, add new bar.
 	require.NoError(t, os.WriteFile(filepath.Join(confDir, "b_res.yaml"), []byte(`
@@ -195,22 +207,27 @@ processor_resources:
       root = content() + " and a replaced bar"
 `), 0o644))
 
-	require.Eventually(t, func() (success bool) {
-		_ = testMgr.AccessProcessor(tCtx, "barproc", func(p processor.V1) {
-			res, _ := p.ProcessBatch(tCtx, message.Batch{
-				message.NewPart([]byte("hello world")),
+	checkProc := func(name, input string) (output string) {
+		require.NoError(t, testMgr.AccessProcessor(tCtx, name, func(p processor.V1) {
+			res, err := p.ProcessBatch(tCtx, message.Batch{
+				message.NewPart([]byte(input)),
 			})
-			if len(res) != 1 || len(res[0]) != 1 {
+			if err != nil || len(res) != 1 || len(res[0]) != 1 {
 				return
 			}
-			success = string(res[0][0].AsBytes()) == "hello world and a replaced bar"
-		})
+			output = string(res[0][0].AsBytes())
+		}))
 		return
+	}
+
+	require.Eventually(t, func() bool {
+		return checkProc("barproc", "hello world") == "hello world and a replaced bar" &&
+			checkProc("bazproc", "hello world") == "hello world and a new baz"
 	}, time.Second, time.Millisecond*10)
 
-	testProc("fooproc", "hello world", "HELLO WORLD")
-	testProc("barproc", "hello world", "hello world and a replaced bar")
-	testProc("bazproc", "hello world", "hello world and a new baz")
+	assertProc("fooproc", "hello world", "HELLO WORLD")
+	assertProc("barproc", "hello world", "hello world and a replaced bar")
+	assertProc("bazproc", "hello world", "hello world and a new baz")
 
 	// Update foo, remove bar
 	require.NoError(t, os.WriteFile(filepath.Join(confDir, "a_res.yaml"), []byte(`
@@ -220,21 +237,12 @@ processor_resources:
       root = content().uppercase() + "!!!"
 `), 0o644))
 
-	require.Eventually(t, func() (success bool) {
-		_ = testMgr.AccessProcessor(tCtx, "fooproc", func(p processor.V1) {
-			res, _ := p.ProcessBatch(tCtx, message.Batch{
-				message.NewPart([]byte("hello world")),
-			})
-			if len(res) != 1 || len(res[0]) != 1 {
-				return
-			}
-			success = string(res[0][0].AsBytes()) == "HELLO WORLD!!!"
-		})
-		return
+	require.Eventually(t, func() bool {
+		return checkProc("fooproc", "hello world") == "HELLO WORLD!!!"
 	}, time.Second, time.Millisecond*10)
 
 	// Bar should still exist because it was moved to a new file.
-	testProc("fooproc", "hello world", "HELLO WORLD!!!")
-	testProc("barproc", "hello world", "hello world and a replaced bar")
-	testProc("bazproc", "hello world", "hello world and a new baz")
+	assertProc("fooproc", "hello world", "HELLO WORLD!!!")
+	assertProc("barproc", "hello world", "hello world and a replaced bar")
+	assertProc("bazproc", "hello world", "hello world and a new baz")
 }

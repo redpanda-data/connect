@@ -5,7 +5,6 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -51,6 +50,7 @@ This input adds the following metadata fields to each message:
 - kafka_offset
 - kafka_lag
 - kafka_timestamp_unix
+- kafka_tombstone_message
 - All existing message headers (version 0.11+)
 ` + "```" + `
 
@@ -174,36 +174,6 @@ type kafkaReader struct {
 
 var errCannotMixBalanced = errors.New("it is not currently possible to include balanced and explicit partition topics in the same kafka input")
 
-func parsePartitions(expr string) ([]int32, error) {
-	rangeExpr := strings.Split(expr, "-")
-	if len(rangeExpr) > 2 {
-		return nil, fmt.Errorf("partition '%v' is invalid, only one range can be specified", expr)
-	}
-
-	if len(rangeExpr) == 1 {
-		partition, err := strconv.ParseInt(expr, 10, 32)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse partition number: %w", err)
-		}
-		return []int32{int32(partition)}, nil
-	}
-
-	start, err := strconv.ParseInt(rangeExpr[0], 10, 32)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse start of range: %w", err)
-	}
-	end, err := strconv.ParseInt(rangeExpr[1], 10, 32)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse end of range: %w", err)
-	}
-
-	var parts []int32
-	for i := start; i <= end; i++ {
-		parts = append(parts, int32(i))
-	}
-	return parts, nil
-}
-
 func newKafkaReader(conf input.KafkaConfig, mgr bundle.NewManagement, log log.Modular) (*kafkaReader, error) {
 	if conf.Batching.IsNoop() {
 		conf.Batching.Count = 1
@@ -232,32 +202,28 @@ func newKafkaReader(conf input.KafkaConfig, mgr bundle.NewManagement, log log.Mo
 	if len(conf.Topics) == 0 {
 		return nil, errors.New("must specify at least one topic in the topics field")
 	}
-	for _, t := range conf.Topics {
-		for _, splitTopics := range strings.Split(t, ",") {
-			if trimmed := strings.TrimSpace(splitTopics); len(trimmed) > 0 {
-				if withParts := strings.Split(trimmed, ":"); len(withParts) > 1 {
-					if len(k.balancedTopics) > 0 {
-						return nil, errCannotMixBalanced
-					}
-					if len(withParts) > 2 {
-						return nil, fmt.Errorf("topic '%v' is invalid, only one partition should be specified and the same topic can be listed multiple times, e.g. use `foo:0,foo:1` not `foo:0:1`", trimmed)
-					}
 
-					topic := strings.TrimSpace(withParts[0])
-					parts, err := parsePartitions(withParts[1])
-					if err != nil {
-						return nil, err
-					}
-					k.topicPartitions[topic] = append(k.topicPartitions[topic], parts...)
-				} else {
-					if len(k.topicPartitions) > 0 {
-						return nil, errCannotMixBalanced
-					}
-					k.balancedTopics = append(k.balancedTopics, trimmed)
-				}
+	balancedTopics, topicPartitions, err := parseTopics(conf.Topics, -1, false)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(balancedTopics) > 0 && len(topicPartitions) > 0 {
+		return nil, errCannotMixBalanced
+	}
+	if len(balancedTopics) > 0 {
+		k.balancedTopics = balancedTopics
+	} else {
+		k.topicPartitions = map[string][]int32{}
+		for topic, v := range topicPartitions {
+			partSlice := make([]int32, 0, len(v))
+			for p := range v {
+				partSlice = append(partSlice, p)
 			}
+			k.topicPartitions[topic] = partSlice
 		}
 	}
+
 	if tout := conf.CommitPeriod; len(tout) > 0 {
 		var err error
 		if k.commitPeriod, err = time.ParseDuration(tout); err != nil {
@@ -292,7 +258,6 @@ func newKafkaReader(conf input.KafkaConfig, mgr bundle.NewManagement, log log.Mo
 		return nil, errors.New("a consumer group must be specified when consuming balanced topics")
 	}
 
-	var err error
 	if k.version, err = sarama.ParseKafkaVersion(conf.TargetVersion); err != nil {
 		return nil, err
 	}
@@ -309,7 +274,7 @@ func (k *kafkaReader) asyncCheckpointer(topic string, partition int32) func(cont
 		}
 		resolveFn, err := cp.Track(ctx, offset, int64(msg.Len()))
 		if err != nil {
-			if err != component.ErrTimeout {
+			if ctx.Err() == nil && err != component.ErrTimeout {
 				k.log.Errorf("Failed to checkpoint offset: %v\n", err)
 			}
 			return false
@@ -324,7 +289,7 @@ func (k *kafkaReader) asyncCheckpointer(topic string, partition int32) func(cont
 				}
 				k.cMut.Lock()
 				if k.session != nil {
-					k.log.Debugf("Marking offset for topic '%v' partition '%v'.\n", topic, partition)
+					k.log.Tracef("Marking offset for topic '%v' partition '%v'.\n", topic, partition)
 					k.session.MarkOffset(topic, partition, *maxOffset, "")
 				} else {
 					k.log.Debugf("Unable to mark offset for topic '%v' partition '%v'.\n", topic, partition)
@@ -389,10 +354,10 @@ func dataToPart(highestOffset int64, data *sarama.ConsumerMessage, multiHeader b
 
 	if multiHeader {
 		// in multi header mode we gather headers so we can encode them as lists
-		var headers = map[string][]any{}
+		headers := map[string][]any{}
 
 		for _, hdr := range data.Headers {
-			var key = string(hdr.Key)
+			key := string(hdr.Key)
 			headers[key] = append(headers[key], string(hdr.Value))
 		}
 
@@ -416,6 +381,7 @@ func dataToPart(highestOffset int64, data *sarama.ConsumerMessage, multiHeader b
 	part.MetaSetMut("kafka_offset", int(data.Offset))
 	part.MetaSetMut("kafka_lag", lag)
 	part.MetaSetMut("kafka_timestamp_unix", data.Timestamp.Unix())
+	part.MetaSetMut("kafka_tombstone_message", data.Value == nil)
 
 	return part
 }

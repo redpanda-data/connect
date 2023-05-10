@@ -14,14 +14,13 @@ import (
 )
 
 func TestSetOverridesOnNothing(t *testing.T) {
-	conf := config.New()
 	rdr := config.NewReader("", nil, config.OptAddOverrides(
 		"input.type=generate",
 		"input.generate.mapping=this.foo",
 		"output.type=drop",
 	))
 
-	lints, err := rdr.Read(&conf)
+	conf, lints, err := rdr.Read()
 	require.NoError(t, err)
 	assert.Empty(t, lints)
 
@@ -59,10 +58,9 @@ func TestSetOverrideErrors(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		conf := config.New()
 		rdr := config.NewReader("", nil, config.OptAddOverrides(test.input))
 
-		_, err := rdr.Read(&conf)
+		_, _, err := rdr.Read()
 		assert.Contains(t, err.Error(), test.err)
 	}
 }
@@ -78,14 +76,13 @@ input:
     mapping: 'root = "meow"'
 `), 0o644))
 
-	conf := config.New()
 	rdr := config.NewReader(fullPath, nil, config.OptAddOverrides(
 		"input.generate.count=5",
 		"input.generate.interval=10s",
 		"output.type=drop",
 	))
 
-	lints, err := rdr.Read(&conf)
+	conf, lints, err := rdr.Read()
 	require.NoError(t, err)
 	assert.Empty(t, lints)
 
@@ -133,10 +130,9 @@ tests:
   - name: whut
 `), 0o644))
 
-	conf := config.New()
 	rdr := config.NewReader(fullPath, []string{resourceOnePath, resourceTwoPath, resourceThreePath})
 
-	lints, err := rdr.Read(&conf)
+	conf, lints, err := rdr.Read()
 	require.NoError(t, err)
 	assert.Empty(t, lints)
 
@@ -182,10 +178,9 @@ cache_resources:
       default_ttl: 13s
 `), 0o644))
 
-	conf := config.New()
 	rdr := config.NewReader(fullPath, []string{resourceOnePath, resourceTwoPath})
 
-	lints, err := rdr.Read(&conf)
+	conf, lints, err := rdr.Read()
 	require.NoError(t, err)
 	require.Len(t, lints, 3)
 	assert.Contains(t, lints[0], "/main.yaml(3,1) field meow1 ")

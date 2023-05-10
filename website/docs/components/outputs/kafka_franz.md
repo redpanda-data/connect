@@ -1,7 +1,7 @@
 ---
 title: kafka_franz
 type: output
-status: experimental
+status: beta
 categories: ["Services"]
 ---
 
@@ -14,10 +14,10 @@ categories: ["Services"]
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-:::caution EXPERIMENTAL
-This component is experimental and therefore subject to change or removal outside of major version releases.
+:::caution BETA
+This component is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with the component is found.
 :::
-An alternative Kafka output using the [Franz Kafka client library](https://github.com/twmb/franz-go).
+A Kafka output using the [Franz Kafka client library](https://github.com/twmb/franz-go).
 
 Introduced in version 3.61.0.
 
@@ -37,6 +37,7 @@ output:
     seed_brokers: []
     topic: ""
     key: ""
+    partition: ""
     metadata:
       include_prefixes: []
       include_patterns: []
@@ -60,6 +61,7 @@ output:
     topic: ""
     key: ""
     partitioner: ""
+    partition: ""
     metadata:
       include_prefixes: []
       include_patterns: []
@@ -88,11 +90,7 @@ output:
 
 Writes a batch of messages to Kafka brokers and waits for acknowledgement before propagating it back to the input.
 
-This output is new and experimental, and the existing `kafka` input is not going anywhere, but here's some reasons why it might be worth trying this one out:
-
-- You like shiny new stuff
-- You are experiencing issues with the existing `kafka` output
-- Someone told you to
+This output often out-performs the traditional `kafka` output as well as providing more useful logs and error messages.
 
 
 ## Fields
@@ -144,9 +142,24 @@ Type: `string`
 | Option | Summary |
 |---|---|
 | `least_backup` | Chooses the least backed up partition (the partition with the fewest amount of buffered records). Partitions are selected per batch. |
+| `manual` | Manually select a partition for each message, requires the field `partition` to be specified. |
 | `murmur2_hash` | Kafka's default hash algorithm that uses a 32-bit murmur2 hash of the key to compute which partition the record will be on. |
 | `round_robin` | Round-robin's messages through all available partitions. This algorithm has lower throughput and causes higher CPU load on brokers, but can be useful if you want to ensure an even distribution of records to partitions. |
 
+
+### `partition`
+
+An optional explicit partition to set for each message. This field is only relevant when the `partitioner` is set to `manual`. The provided interpolation string must be a valid integer.
+This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
+
+
+Type: `string`  
+
+```yml
+# Examples
+
+partition: ${! meta("partition") }
+```
 
 ### `metadata`
 

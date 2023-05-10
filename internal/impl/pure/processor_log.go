@@ -14,7 +14,6 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	"github.com/benthosdev/benthos/v4/internal/tracing"
 )
 
 func init() {
@@ -23,7 +22,7 @@ func init() {
 		if err != nil {
 			return nil, err
 		}
-		return processor.NewV2BatchedToV1Processor("log", p, mgr), nil
+		return processor.NewAutoObservedBatchedProcessor("log", p, mgr), nil
 	}, docs.ComponentSpec{
 		Name: "log",
 		Categories: []string{
@@ -77,7 +76,7 @@ type logProcessor struct {
 	fieldsMapping *mapping.Executor
 }
 
-func newLogProcessor(conf processor.Config, mgr bundle.NewManagement, logger log.Modular) (processor.V2Batched, error) {
+func newLogProcessor(conf processor.Config, mgr bundle.NewManagement, logger log.Modular) (processor.AutoObservedBatched, error) {
 	message, err := mgr.BloblEnvironment().NewField(conf.Log.Message)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse message expression: %v", err)
@@ -133,7 +132,7 @@ func (l *logProcessor) levelToLogFn(level string) (func(logger log.Modular, msg 
 	return nil, fmt.Errorf("log level not recognised: %v", level)
 }
 
-func (l *logProcessor) ProcessBatch(ctx context.Context, spans []*tracing.Span, msg message.Batch) ([]message.Batch, error) {
+func (l *logProcessor) ProcessBatch(ctx *processor.BatchProcContext, msg message.Batch) ([]message.Batch, error) {
 	_ = msg.Iter(func(i int, _ *message.Part) error {
 		targetLog := l.logger
 		if l.fieldsMapping != nil {

@@ -24,7 +24,7 @@ type pathLint struct {
 }
 
 func lintFile(path string) (pathLints []pathLint) {
-	conf, lints, err := template.ReadConfig(path)
+	conf, lints, err := template.ReadConfigFile(path)
 	if err != nil {
 		pathLints = append(pathLints, pathLint{
 			source: path,

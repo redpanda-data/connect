@@ -13,7 +13,6 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	"github.com/benthosdev/benthos/v4/internal/tracing"
 )
 
 func init() {
@@ -22,7 +21,7 @@ func init() {
 		if err != nil {
 			return nil, err
 		}
-		return processor.NewV2BatchedToV1Processor("sleep", p, mgr), nil
+		return processor.NewAutoObservedBatchedProcessor("sleep", p, mgr), nil
 	}, docs.ComponentSpec{
 		Name: "sleep",
 		Categories: []string{
@@ -58,7 +57,7 @@ func newSleep(conf processor.SleepConfig, mgr bundle.NewManagement) (*sleepProc,
 	return t, nil
 }
 
-func (s *sleepProc) ProcessBatch(ctx context.Context, spans []*tracing.Span, msg message.Batch) ([]message.Batch, error) {
+func (s *sleepProc) ProcessBatch(ctx *processor.BatchProcContext, msg message.Batch) ([]message.Batch, error) {
 	_ = msg.Iter(func(i int, p *message.Part) error {
 		periodStr, err := s.durationStr.String(i, msg)
 		if err != nil {
@@ -72,7 +71,7 @@ func (s *sleepProc) ProcessBatch(ctx context.Context, spans []*tracing.Span, msg
 		}
 		select {
 		case <-time.After(period):
-		case <-ctx.Done():
+		case <-ctx.Context().Done():
 			return errors.New("stop")
 		case <-s.closeChan:
 			return errors.New("stop")

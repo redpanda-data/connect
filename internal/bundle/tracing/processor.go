@@ -23,15 +23,18 @@ func traceProcessor(e *events, errCtr *uint64, p iprocessor.V1) iprocessor.V1 {
 	return t
 }
 
+func (t *tracedProcessor) UnwrapProc() iprocessor.V1 {
+	return t.wrapped
+}
+
 func (t *tracedProcessor) ProcessBatch(ctx context.Context, m message.Batch) ([]message.Batch, error) {
+	if !t.e.IsEnabled() {
+		return t.wrapped.ProcessBatch(ctx, m)
+	}
+
 	prevErrs := make([]error, m.Len())
 	_ = m.Iter(func(i int, part *message.Part) error {
-		meta := map[string]any{}
-		_ = part.MetaIterMut(func(s string, a any) error {
-			meta[s] = message.CopyJSON(a)
-			return nil
-		})
-		t.e.Add(EventConsume, string(part.AsBytes()), meta)
+		t.e.Add(EventConsumeOf(part))
 		prevErrs[i] = part.ErrorGet()
 		return nil
 	})
@@ -39,12 +42,7 @@ func (t *tracedProcessor) ProcessBatch(ctx context.Context, m message.Batch) ([]
 	outMsgs, res := t.wrapped.ProcessBatch(ctx, m)
 	for _, outMsg := range outMsgs {
 		_ = outMsg.Iter(func(i int, part *message.Part) error {
-			meta := map[string]any{}
-			_ = part.MetaIterMut(func(s string, a any) error {
-				meta[s] = message.CopyJSON(a)
-				return nil
-			})
-			t.e.Add(EventProduce, string(part.AsBytes()), meta)
+			t.e.Add(EventProduceOf(part))
 			fail := part.ErrorGet()
 			if fail == nil {
 				return nil
@@ -54,12 +52,13 @@ func (t *tracedProcessor) ProcessBatch(ctx context.Context, m message.Batch) ([]
 				return nil
 			}
 			_ = atomic.AddUint64(t.errCtr, 1)
-			t.e.Add(EventError, fail.Error(), nil)
+			t.e.Add(EventErrorOf(fail))
 			return nil
 		})
 	}
 	if len(outMsgs) == 0 {
-		t.e.Add(EventDelete, "", nil)
+		// TODO: Find a better way of locating deletes (using batch index tracking).
+		t.e.Add(EventDeleteOf())
 	}
 
 	return outMsgs, res

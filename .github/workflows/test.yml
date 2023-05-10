@@ -8,11 +8,11 @@ on:
 
 jobs:
   cross-build:
-    if: ${{ github.repository == 'benthosdev/benthos' }}
+    if: ${{ github.repository == 'benthosdev/benthos' && github.event_name != 'schedule' }}
     strategy:
       fail-fast: false
       matrix:
-        go-version: [1.18.x, 1.19.x]
+        go-version: [1.19.x, 1.20.x]
         os: [ubuntu-latest, macos-latest]
     runs-on: ${{ matrix.os }}
     env:
@@ -57,7 +57,7 @@ jobs:
     - name: Install Go
       uses: actions/setup-go@v3
       with:
-        go-version: 1.19.x
+        go-version: 1.20.x
         check-latest: true
 
     - name: Checkout code
@@ -93,7 +93,7 @@ jobs:
     - name: Install Go
       uses: actions/setup-go@v3
       with:
-        go-version: 1.19.x
+        go-version: 1.20.x
         check-latest: true
 
     - name: Checkout code

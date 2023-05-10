@@ -8,7 +8,6 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	"github.com/benthosdev/benthos/v4/internal/tracing"
 )
 
 func init() {
@@ -17,7 +16,7 @@ func init() {
 		if err != nil {
 			return nil, err
 		}
-		return processor.NewV2BatchedToV1Processor("catch", p, mgr), nil
+		return processor.NewAutoObservedBatchedProcessor("catch", p, mgr), nil
 	}, docs.ComponentSpec{
 		Name: "catch",
 		Categories: []string{
@@ -103,7 +102,7 @@ func newCatch(conf []processor.Config, mgr bundle.NewManagement) (*catchProc, er
 	}, nil
 }
 
-func (p *catchProc) ProcessBatch(ctx context.Context, spans []*tracing.Span, msg message.Batch) ([]message.Batch, error) {
+func (p *catchProc) ProcessBatch(ctx *processor.BatchProcContext, msg message.Batch) ([]message.Batch, error) {
 	resultMsgs := make([]message.Batch, msg.Len())
 	_ = msg.Iter(func(i int, p *message.Part) error {
 		resultMsgs[i] = message.Batch{p}
@@ -111,7 +110,7 @@ func (p *catchProc) ProcessBatch(ctx context.Context, spans []*tracing.Span, msg
 	})
 
 	var res error
-	if resultMsgs, res = processor.ExecuteCatchAll(ctx, p.children, resultMsgs...); res != nil || len(resultMsgs) == 0 {
+	if resultMsgs, res = processor.ExecuteCatchAll(ctx.Context(), p.children, resultMsgs...); res != nil || len(resultMsgs) == 0 {
 		return nil, res
 	}
 

@@ -611,7 +611,7 @@ func TestParsedParamsDynamicErrors(t *testing.T) {
 					"bar": "not a bool",
 				},
 			},
-			errContains: "first: wrong argument type",
+			errContains: "'first': wrong argument type",
 		},
 	}
 
