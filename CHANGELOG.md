@@ -14,6 +14,7 @@ All notable changes to this project will be documented in this file.
 - New `splunk_hec` output.
 - Plugin API: New `NewMetadataExcludeFilterField` function and accompanying `FieldMetadataExcludeFilter` method added.
 - The `pulsar` input and output are now included in the main distribution of Benthos again.
+- The `gcp_pubsub` input now adds the metadata field `gcp_pubsub_delivery_attempt` to messages when dead lettering is enabled.
 
 ### Fixed
 
