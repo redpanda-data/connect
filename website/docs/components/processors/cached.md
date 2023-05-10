@@ -26,55 +26,13 @@ Introduced in version 4.3.0.
 label: ""
 cached:
   cache: ""
+  skip_on: ""
   key: ""
   ttl: ""
   processors: []
 ```
 
 The format of the data when stored within the cache is a custom and versioned schema chosen to balance performance and storage space. It is therefore not possible to point this processor to a cache that is pre-populated with data that this processor has not created itself.
-
-## Fields
-
-### `cache`
-
-The cache resource to read and write processor results from.
-
-
-Type: `string`  
-
-### `key`
-
-A key to be resolved for each message, if the key already exists in the cache then the cached result is used, otherwise the processors are applied and the result is cached under this key. The key could be static and therefore apply generally to all messages or it could be an interpolated expression that is potentially unique for each message.
-This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
-
-
-Type: `string`  
-
-```yml
-# Examples
-
-key: my_foo_result
-
-key: ${! this.document.id }
-
-key: ${! meta("kafka_key") }
-
-key: ${! meta("kafka_topic") }
-```
-
-### `ttl`
-
-An optional expiry period to set for each cache entry. Some caches only have a general TTL and will therefore ignore this setting.
-
-
-Type: `string`  
-
-### `processors`
-
-The list of processors whose result will be cached.
-
-
-Type: `array`  
 
 ## Examples
 
@@ -139,5 +97,61 @@ cache_resources:
 
 </TabItem>
 </Tabs>
+
+## Fields
+
+### `cache`
+
+The cache resource to read and write processor results from.
+
+
+Type: `string`  
+
+### `skip_on`
+
+A condition that can be used to skip caching the results from the processors.
+
+
+Type: `string`  
+
+```yml
+# Examples
+
+skip_on: errored()
+```
+
+### `key`
+
+A key to be resolved for each message, if the key already exists in the cache then the cached result is used, otherwise the processors are applied and the result is cached under this key. The key could be static and therefore apply generally to all messages or it could be an interpolated expression that is potentially unique for each message.
+This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
+
+
+Type: `string`  
+
+```yml
+# Examples
+
+key: my_foo_result
+
+key: ${! this.document.id }
+
+key: ${! meta("kafka_key") }
+
+key: ${! meta("kafka_topic") }
+```
+
+### `ttl`
+
+An optional expiry period to set for each cache entry. Some caches only have a general TTL and will therefore ignore this setting.
+
+
+Type: `string`  
+
+### `processors`
+
+The list of processors whose result will be cached.
+
+
+Type: `array`  
 
 
