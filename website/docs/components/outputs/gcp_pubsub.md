@@ -37,8 +37,7 @@ output:
     delay_threshold: 10ms
     byte_threshold: 1000000
     metadata:
-      include_prefixes: []
-      include_patterns: []
+      exclude_prefixes: []
     batching:
       count: 0
       byte_size: 0
@@ -64,8 +63,7 @@ output:
     byte_threshold: 1000000
     publish_timeout: 1m0s
     metadata:
-      include_prefixes: []
-      include_patterns: []
+      exclude_prefixes: []
     flow_control:
       max_outstanding_bytes: -1
       max_outstanding_messages: 1000
@@ -197,50 +195,18 @@ publish_timeout: 60m
 
 ### `metadata`
 
-Specify criteria for which metadata values are sent as attributes.
+Specify criteria for which metadata values are sent as attributes, all are sent by default.
 
 
 Type: `object`  
 
-### `metadata.include_prefixes`
+### `metadata.exclude_prefixes`
 
-Provide a list of explicit metadata key prefixes to match against.
-
-
-Type: `array`  
-Default: `[]`  
-
-```yml
-# Examples
-
-include_prefixes:
-  - foo_
-  - bar_
-
-include_prefixes:
-  - kafka_
-
-include_prefixes:
-  - content-
-```
-
-### `metadata.include_patterns`
-
-Provide a list of explicit metadata key regular expression (re2) patterns to match against.
+Provide a list of explicit metadata key prefixes to be excluded when adding metadata to sent messages.
 
 
 Type: `array`  
 Default: `[]`  
-
-```yml
-# Examples
-
-include_patterns:
-  - .*
-
-include_patterns:
-  - _timestamp_unix$
-```
 
 ### `flow_control`
 

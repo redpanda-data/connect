@@ -6,9 +6,10 @@ import (
 	"testing"
 
 	"cloud.google.com/go/pubsub"
-	"github.com/benthosdev/benthos/v4/public/service"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
+
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
 func TestPubSubOutput(t *testing.T) {
@@ -80,8 +81,8 @@ func TestPubSubOutput_MessageAttr(t *testing.T) {
     topic: test
     ordering_key: '${! content().string() }_${! count(content().string()) }'
     metadata:
-      include_prefixes:
-        - keep_
+      exclude_prefixes:
+        - drop_
     `,
 		nil,
 	)

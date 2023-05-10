@@ -17,6 +17,7 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 
 - The `open_telemetry_collector` tracer option no longer blocks service start up when the endpoints cannot be reached, and instead manages connections in the background.
+- The `gcp_pubsub` output should see significant performance improvements due to a client library upgrade.
 
 ## 4.15.0 - 2023-05-05
 

@@ -6,9 +6,10 @@ import (
 	"sync"
 
 	"cloud.google.com/go/pubsub"
-	"github.com/benthosdev/benthos/v4/public/service"
 	"github.com/sourcegraph/conc/pool"
 	"google.golang.org/api/option"
+
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
 func newPubSubOutputConfig() *service.ConfigSpec {
@@ -70,9 +71,9 @@ pipeline:
 				Example("60m").
 				Description("The maximum length of time to wait before abandoning a publish attempt for a message.").
 				Advanced(),
-			service.NewMetadataFilterField("metadata").
+			service.NewMetadataExcludeFilterField("metadata").
 				Optional().
-				Description("Specify criteria for which metadata values are sent as attributes."),
+				Description("Specify criteria for which metadata values are sent as attributes, all are sent by default."),
 			service.NewObjectField(
 				"flow_control",
 				service.NewIntField("max_outstanding_bytes").
@@ -102,7 +103,7 @@ type pubsubOutput struct {
 	clientCancel    context.CancelFunc
 	publishSettings *pubsub.PublishSettings
 	topicQ          *service.InterpolatedString
-	metaFilter      *service.MetadataFilter
+	metaFilter      *service.MetadataExcludeFilter
 	orderingKeyQ    *service.InterpolatedString
 }
 
@@ -119,7 +120,7 @@ func newPubSubOutput(conf *service.ParsedConfig) (*pubsubOutput, error) {
 		return nil, err
 	}
 
-	metaFilter, err := conf.FieldMetadataFilter("metadata")
+	metaFilter, err := conf.FieldMetadataExcludeFilter("metadata")
 	if err != nil {
 		return nil, err
 	}
