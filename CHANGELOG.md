@@ -13,6 +13,7 @@ All notable changes to this project will be documented in this file.
 - Field `nak_delay` added to the `nats` input.
 - New `splunk_hec` output.
 - Plugin API: New `NewMetadataExcludeFilterField` function and accompanying `FieldMetadataExcludeFilter` method added.
+- The `pulsar` input and output are now included in the main distribution of Benthos again.
 
 ### Fixed
 
