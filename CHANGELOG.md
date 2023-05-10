@@ -12,6 +12,7 @@ All notable changes to this project will be documented in this file.
 - Field `skip_on` added to the `cached` processor.
 - Field `nak_delay` added to the `nats` input.
 - New `splunk_hec` output.
+- Plugin API: New `NewMetadataExcludeFilterField` function and accompanying `FieldMetadataExcludeFilter` method added.
 
 ### Fixed
 
