@@ -285,7 +285,7 @@ func (p *pulsarReader) Read(ctx context.Context) (*service.Message, service.AckF
 			if res != nil {
 				r.Nack(pulMsg)
 			} else {
-				r.Ack(pulMsg)
+				return r.Ack(pulMsg)
 			}
 		}
 		return nil
