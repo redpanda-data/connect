@@ -453,10 +453,10 @@ func (p *ParsedParams) ResolveDynamic(ctx FunctionContext) (*ParsedParams, error
 		}
 		tmpValue, err := dyn.fn.Exec(ctx)
 		if err != nil {
-			return nil, fmt.Errorf("failed to extract input arg %v: %w", sourceDef.Name, err)
+			return nil, fmt.Errorf("failed to extract input arg '%v': %w", sourceDef.Name, err)
 		}
 		if newValues[dyn.index], err = sourceDef.parseArgValue(tmpValue); err != nil {
-			return nil, fmt.Errorf("failed to extract input arg %v: %w", sourceDef.Name, err)
+			return nil, fmt.Errorf("failed to extract input arg '%v': %w", sourceDef.Name, err)
 		}
 	}
 	return &ParsedParams{

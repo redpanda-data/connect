@@ -18,6 +18,10 @@ BROKERS="foo:9092,bar:9092" benthos -c ./config.yaml
 
 If a literal string is required that matches this pattern (`${foo}`) you can escape it with double brackets. For example, the string `${{foo}}` is read as the literal `${foo}`.
 
+### Undefined Variables
+
+When an environment variable interpolation is found within a config, does not have a default value specified, and the environment variable is not defined a linting error will be reported. In order to avoid this it is possible to specify environment variable interpolations with an explicit empty default value by adding the colon without a following value, i.e. `${FOO:}` would be equivalent to `${FOO}` and would not trigger a linting error should `FOO` not be defined.
+
 ## Bloblang Queries
 
 Some Benthos fields also support [Bloblang][bloblang] function interpolations, which are much more powerful expressions that allow you to query the contents of messages and perform arithmetic. The syntax of a function interpolation is `${!<bloblang expression>}`, where the contents are a bloblang query (the right-hand-side of a bloblang map) including a range of [functions][bloblang_functions]. For example, with the following config:

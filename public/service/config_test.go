@@ -88,7 +88,7 @@ c:
 		t.Run(test.name, func(t *testing.T) {
 			confBytes := []byte(test.config)
 
-			node, err := getYAMLNode(confBytes)
+			node, err := NewStreamBuilder().getYAMLNode(confBytes)
 			require.NoError(t, err)
 
 			assert.Equal(t, test.lints, spec.component.Config.Children.LintYAML(docs.NewLintContext(), node))

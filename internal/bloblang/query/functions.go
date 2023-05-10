@@ -506,7 +506,54 @@ func NewMetaFunction(key string) Function {
 
 var _ = registerFunction(
 	NewFunctionSpec(
-		FunctionCategoryMessage, "meta",
+		FunctionCategoryMessage, "metadata",
+		"Returns the value of a metadata key from the input message, or `null` if the key does not exist. Since values are extracted from the read-only input message they do NOT reflect changes made from within the map, in order to query metadata mutations made within a mapping use the `@.foo` syntax. This function supports extracting metadata from other messages of a batch with the `from` method.",
+		NewExampleSpec("", `root.topic = metadata("kafka_topic")`),
+		NewExampleSpec(
+			"The key parameter is optional and if omitted the entire metadata contents are returned as an object.",
+			`root.all_metadata = metadata()`,
+		),
+	).Param(ParamString("key", "An optional key of a metadata value to obtain.").Default("")),
+	func(args *ParsedParams) (Function, error) {
+		key, err := args.FieldString("key")
+		if err != nil {
+			return nil, err
+		}
+		if len(key) > 0 {
+			return ClosureFunction("metadata field "+key, func(ctx FunctionContext) (any, error) {
+				v, exists := ctx.MsgBatch.Get(ctx.Index).MetaGetMut(key)
+				if !exists {
+					return nil, nil
+				}
+				return v, nil
+			}, func(ctx TargetsContext) (TargetsContext, []TargetPath) {
+				paths := []TargetPath{
+					NewTargetPath(TargetMetadata, key),
+				}
+				ctx = ctx.WithValues(paths)
+				return ctx, paths
+			}), nil
+		}
+		return ClosureFunction("metadata object", func(ctx FunctionContext) (any, error) {
+			kvs := map[string]any{}
+			_ = ctx.MsgBatch.Get(ctx.Index).MetaIterMut(func(k string, v any) error {
+				kvs[k] = v
+				return nil
+			})
+			return kvs, nil
+		}, func(ctx TargetsContext) (TargetsContext, []TargetPath) {
+			paths := []TargetPath{
+				NewTargetPath(TargetMetadata),
+			}
+			ctx = ctx.WithValues(paths)
+			return ctx, paths
+		}), nil
+	},
+)
+
+var _ = registerFunction(
+	NewDeprecatedFunctionSpec(
+		"meta",
 		"Returns the value of a metadata key from the input message as a string, or `null` if the key does not exist. Since values are extracted from the read-only input message they do NOT reflect changes made from within the map. In order to query metadata mutations made within a mapping use the [`root_meta` function](#root_meta). This function supports extracting metadata from other messages of a batch with the `from` method.",
 		NewExampleSpec("",
 			`root.topic = meta("kafka_topic")`,
@@ -557,8 +604,8 @@ var _ = registerFunction(
 //------------------------------------------------------------------------------
 
 var _ = registerFunction(
-	NewFunctionSpec(
-		FunctionCategoryMessage, "root_meta",
+	NewDeprecatedFunctionSpec(
+		"root_meta",
 		"Returns the value of a metadata key from the new message being created as a string, or `null` if the key does not exist. Changes made to metadata during a mapping will be reflected by this function.",
 		NewExampleSpec("",
 			`root.topic = root_meta("kafka_topic")`,
@@ -568,7 +615,7 @@ var _ = registerFunction(
 			"The key parameter is optional and if omitted the entire metadata contents are returned as an object.",
 			`root.all_metadata = root_meta()`,
 		),
-	).Beta().Param(ParamString("key", "An optional key of a metadata value to obtain.").Default("")),
+	).Param(ParamString("key", "An optional key of a metadata value to obtain.").Default("")),
 	func(args *ParsedParams) (Function, error) {
 		key, err := args.FieldString("key")
 		if err != nil {

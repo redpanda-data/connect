@@ -29,7 +29,7 @@ func init() {
 		if err != nil {
 			return nil, err
 		}
-		return processor.NewV2ToV1Processor("subprocess", p, mgr), nil
+		return processor.NewAutoObservedProcessor("subprocess", p, mgr), nil
 	}, docs.ComponentSpec{
 		Name: "subprocess",
 		Categories: []string{

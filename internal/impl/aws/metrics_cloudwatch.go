@@ -181,15 +181,18 @@ func (c *cloudWatchStatVec) with(labelValues ...string) *cloudWatchStat {
 	if lDim >= maxCloudWatchDimensions {
 		lDim = maxCloudWatchDimensions
 	}
-	dimensions := make([]*cloudwatch.Dimension, lDim)
+	dimensions := make([]*cloudwatch.Dimension, 0, lDim)
 	for i, k := range c.labelNames {
 		if len(labelValues) <= i || i >= maxCloudWatchDimensions {
 			break
 		}
-		dimensions[i] = &cloudwatch.Dimension{
+		if len(labelValues[i]) == 0 {
+			continue
+		}
+		dimensions = append(dimensions, &cloudwatch.Dimension{
 			Name:  aws.String(k),
 			Value: aws.String(labelValues[i]),
-		}
+		})
 	}
 	return &cloudWatchStat{
 		root:       c.root,

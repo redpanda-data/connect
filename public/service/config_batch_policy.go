@@ -35,6 +35,12 @@ func (b BatchPolicy) toInternal() batchconfig.Config {
 	return batchConf
 }
 
+// IsNoop returns true if the batching policy does not have any batching
+// mechanisms configured.
+func (b BatchPolicy) IsNoop() bool {
+	return b.toInternal().IsNoop()
+}
+
 // Batcher provides a batching mechanism where messages can be added one-by-one
 // with a boolean return indicating whether the batching policy has been
 // triggered.

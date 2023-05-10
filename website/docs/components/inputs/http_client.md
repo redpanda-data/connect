@@ -255,7 +255,7 @@ EXPERIMENTAL: Optionally set a level at which the request and response payload o
 Type: `string`  
 Default: `""`  
 Requires version 4.12.0 or newer  
-Options: `TRACE`, `DEBUG`, `INFO`, `WARN`, `ERROR`, `FATAL`.
+Options: `TRACE`, `DEBUG`, `INFO`, `WARN`, `ERROR`, `FATAL`, ``.
 
 ### `oauth`
 
@@ -358,6 +358,7 @@ A list of optional requested permissions.
 
 
 Type: `array`  
+Default: `[]`  
 Requires version 3.45.0 or newer  
 
 ### `basic_auth`
@@ -431,6 +432,7 @@ A value used to identify the claims that issued the JWT.
 
 
 Type: `object`  
+Default: `{}`  
 
 ### `jwt.headers`
 
@@ -438,6 +440,7 @@ Add optional key/value headers to the JWT.
 
 
 Type: `object`  
+Default: `{}`  
 
 ### `tls`
 
@@ -752,11 +755,13 @@ Requires version 3.42.0 or newer
 | `chunker:x` | Consume the file in chunks of a given number of bytes. |
 | `csv` | Consume structured rows as comma separated values, the first row must be a header row. |
 | `csv:x` | Consume structured rows as values separated by a custom delimiter, the first row must be a header row. The custom delimiter must be a single character, e.g. the codec `"csv:\t"` would consume a tab delimited file. |
+| `csv-safe` | Consume structured rows like `csv`, but sends messages with empty maps on failure to parse. Includes row number and parsing errors (if any) in the message's metadata. |
 | `delim:x` | Consume the file in segments divided by a custom delimiter. |
 | `gzip` | Decompress a gzip file, this codec should precede another codec, e.g. `gzip/all-bytes`, `gzip/tar`, `gzip/csv`, etc. |
 | `lines` | Consume the file in segments divided by linebreaks. |
 | `multipart` | Consumes the output of another codec and batches messages together. A batch ends when an empty message is consumed. For example, the codec `lines/multipart` could be used to consume multipart messages where an empty line indicates the end of each batch. |
 | `regex:(?m)^\d\d:\d\d:\d\d` | Consume the file in segments divided by regular expression. |
+| `skipbom` | Skip one or more byte order marks for each opened reader, this codec should precede another codec, e.g. `skipbom/csv`, etc. |
 | `tar` | Parse the file as a tar archive, and consume each file of the archive as a message. |
 
 

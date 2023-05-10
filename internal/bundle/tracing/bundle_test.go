@@ -58,7 +58,7 @@ func TestBundleInputTracing(t *testing.T) {
 	assert.Equal(t, uint64(0), summary.ProcessorErrors)
 	assert.Equal(t, uint64(0), summary.Output)
 
-	inEvents := summary.InputEvents()
+	inEvents := summary.InputEvents(false)
 	require.Contains(t, inEvents, "foo")
 
 	events := inEvents["foo"]
@@ -68,6 +68,139 @@ func TestBundleInputTracing(t *testing.T) {
 		assert.Equal(t, tracing.EventProduce, e.Type)
 		assert.Equal(t, fmt.Sprintf(`{"count":%v}`, i+1), e.Content)
 	}
+}
+
+func TestBundleInputTracingFlush(t *testing.T) {
+	tenv, summary := tracing.TracedBundle(bundle.GlobalEnvironment)
+
+	inConfig := input.NewConfig()
+	inConfig.Label = "foo"
+	inConfig.Type = "generate"
+	inConfig.Generate.Count = 10
+	inConfig.Generate.Interval = "1us"
+	inConfig.Generate.Mapping = `root.count = count("counting the number of input tracing messages with flushing")`
+
+	mgr, err := manager.New(
+		manager.NewResourceConfig(),
+		manager.OptSetEnvironment(tenv),
+	)
+	require.NoError(t, err)
+
+	in, err := mgr.NewInput(inConfig)
+	require.NoError(t, err)
+
+	ctx, done := context.WithTimeout(context.Background(), time.Second)
+	defer done()
+	for i := 0; i < 10; i++ {
+		select {
+		case tran := <-in.TransactionChan():
+			require.NoError(t, tran.Ack(ctx, nil))
+		case <-time.After(time.Second):
+			t.Fatal("timed out")
+		}
+	}
+
+	in.TriggerStopConsuming()
+	require.NoError(t, in.WaitForClose(ctx))
+
+	assert.Equal(t, uint64(10), summary.Input)
+	assert.Equal(t, uint64(0), summary.ProcessorErrors)
+	assert.Equal(t, uint64(0), summary.Output)
+
+	inEvents := summary.InputEvents(false)
+	require.Contains(t, inEvents, "foo")
+
+	events := inEvents["foo"]
+	require.Len(t, events, 10)
+
+	for i, e := range events {
+		assert.Equal(t, tracing.EventProduce, e.Type)
+		assert.Equal(t, fmt.Sprintf(`{"count":%v}`, i+1), e.Content)
+	}
+
+	// Not flushed
+	inEvents = summary.InputEvents(true)
+	require.Contains(t, inEvents, "foo")
+	require.Len(t, inEvents["foo"], 10)
+
+	// Now it's flushed
+	inEvents = summary.InputEvents(true)
+	require.Contains(t, inEvents, "foo")
+	require.Len(t, inEvents["foo"], 0)
+
+	// Run more stuff
+	inConfig.Generate.Count = 5
+
+	in, err = mgr.NewInput(inConfig)
+	require.NoError(t, err)
+
+	for i := 0; i < 5; i++ {
+		select {
+		case tran := <-in.TransactionChan():
+			require.NoError(t, tran.Ack(ctx, nil))
+		case <-time.After(time.Second):
+			t.Fatal("timed out")
+		}
+	}
+
+	in.TriggerStopConsuming()
+	require.NoError(t, in.WaitForClose(ctx))
+
+	inEvents = summary.InputEvents(false)
+	require.Contains(t, inEvents, "foo")
+
+	events = inEvents["foo"]
+	require.Len(t, events, 5)
+
+	for i, e := range events {
+		assert.Equal(t, tracing.EventProduce, e.Type)
+		assert.Equal(t, fmt.Sprintf(`{"count":%v}`, i+11), e.Content)
+	}
+}
+
+func TestBundleInputTracingDisabled(t *testing.T) {
+	tenv, summary := tracing.TracedBundle(bundle.GlobalEnvironment)
+	summary.SetEnabled(false)
+
+	inConfig := input.NewConfig()
+	inConfig.Label = "foo"
+	inConfig.Type = "generate"
+	inConfig.Generate.Count = 10
+	inConfig.Generate.Interval = "1us"
+	inConfig.Generate.Mapping = `root.count = count("counting the number of input tracing messages")`
+
+	mgr, err := manager.New(
+		manager.NewResourceConfig(),
+		manager.OptSetEnvironment(tenv),
+	)
+	require.NoError(t, err)
+
+	in, err := mgr.NewInput(inConfig)
+	require.NoError(t, err)
+
+	ctx, done := context.WithTimeout(context.Background(), time.Second)
+	defer done()
+	for i := 0; i < 10; i++ {
+		select {
+		case tran := <-in.TransactionChan():
+			require.NoError(t, tran.Ack(ctx, nil))
+		case <-time.After(time.Second):
+			t.Fatal("timed out")
+		}
+	}
+
+	in.TriggerStopConsuming()
+	require.NoError(t, in.WaitForClose(ctx))
+
+	assert.Equal(t, uint64(0), summary.Input)
+	assert.Equal(t, uint64(0), summary.ProcessorErrors)
+	assert.Equal(t, uint64(0), summary.Output)
+
+	inEvents := summary.InputEvents(false)
+	require.Contains(t, inEvents, "foo")
+
+	events := inEvents["foo"]
+	require.Len(t, events, 0)
 }
 
 func TestBundleOutputTracing(t *testing.T) {
@@ -114,7 +247,7 @@ func TestBundleOutputTracing(t *testing.T) {
 	assert.Equal(t, uint64(0), summary.ProcessorErrors)
 	assert.Equal(t, uint64(10), summary.Output)
 
-	outEvents := summary.OutputEvents()
+	outEvents := summary.OutputEvents(false)
 	require.Contains(t, outEvents, "foo")
 
 	events := outEvents["foo"]
@@ -124,6 +257,58 @@ func TestBundleOutputTracing(t *testing.T) {
 		assert.Equal(t, tracing.EventConsume, e.Type)
 		assert.Equal(t, strconv.Itoa(i), e.Content)
 	}
+}
+
+func TestBundleOutputTracingDisabled(t *testing.T) {
+	tenv, summary := tracing.TracedBundle(bundle.GlobalEnvironment)
+	summary.SetEnabled(false)
+
+	outConfig := output.NewConfig()
+	outConfig.Label = "foo"
+	outConfig.Type = "drop"
+
+	mgr, err := manager.New(
+		manager.NewResourceConfig(),
+		manager.OptSetEnvironment(tenv),
+	)
+	require.NoError(t, err)
+
+	out, err := mgr.NewOutput(outConfig)
+	require.NoError(t, err)
+
+	tranChan := make(chan message.Transaction)
+	require.NoError(t, out.Consume(tranChan))
+
+	for i := 0; i < 10; i++ {
+		resChan := make(chan error)
+		tran := message.NewTransaction(message.QuickBatch([][]byte{[]byte(strconv.Itoa(i))}), resChan)
+		select {
+		case tranChan <- tran:
+			select {
+			case <-resChan:
+			case <-time.After(time.Second):
+				t.Fatal("timed out")
+			}
+		case <-time.After(time.Second):
+			t.Fatal("timed out")
+		}
+	}
+
+	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+	defer done()
+
+	out.TriggerCloseNow()
+	require.NoError(t, out.WaitForClose(ctx))
+
+	assert.Equal(t, uint64(0), summary.Input)
+	assert.Equal(t, uint64(0), summary.ProcessorErrors)
+	assert.Equal(t, uint64(0), summary.Output)
+
+	outEvents := summary.OutputEvents(false)
+	require.Contains(t, outEvents, "foo")
+
+	events := outEvents["foo"]
+	require.Len(t, events, 0)
 }
 
 func TestBundleOutputWithProcessorsTracing(t *testing.T) {
@@ -176,7 +361,7 @@ func TestBundleOutputWithProcessorsTracing(t *testing.T) {
 	assert.Equal(t, uint64(0), summary.ProcessorErrors)
 	assert.Equal(t, uint64(10), summary.Output)
 
-	outEvents := summary.OutputEvents()
+	outEvents := summary.OutputEvents(false)
 	require.Contains(t, outEvents, "foo")
 
 	outputEvents := outEvents["foo"]
@@ -187,7 +372,7 @@ func TestBundleOutputWithProcessorsTracing(t *testing.T) {
 		assert.Equal(t, "HELLO WORLD "+strconv.Itoa(i), e.Content)
 	}
 
-	procEvents := summary.ProcessorEvents()
+	procEvents := summary.ProcessorEvents(false)
 	require.Contains(t, procEvents, "root.processors.0")
 
 	processorEvents := procEvents["root.processors.0"]
@@ -262,7 +447,7 @@ func TestBundleOutputWithBatchProcessorsTracing(t *testing.T) {
 	assert.Equal(t, 0, int(summary.ProcessorErrors))
 	assert.Equal(t, 20, int(summary.Output))
 
-	outEvents := summary.OutputEvents()
+	outEvents := summary.OutputEvents(false)
 	require.Contains(t, outEvents, "foo")
 
 	outputEvents := outEvents["foo"]
@@ -273,7 +458,7 @@ func TestBundleOutputWithBatchProcessorsTracing(t *testing.T) {
 		assert.Equal(t, "HELLO WORLD "+strconv.Itoa(i), e.Content)
 	}
 
-	procEvents := summary.ProcessorEvents()
+	procEvents := summary.ProcessorEvents(false)
 	require.Contains(t, procEvents, "root.batching.processors.0")
 
 	processorEvents := procEvents["root.batching.processors.0"]
@@ -336,7 +521,7 @@ meta bar = "new bar value"
 	assert.Equal(t, uint64(5), summary.ProcessorErrors)
 	assert.Equal(t, uint64(0), summary.Output)
 
-	procEvents := summary.ProcessorEvents()
+	procEvents := summary.ProcessorEvents(false)
 	require.Contains(t, procEvents, "foo")
 
 	events := procEvents["foo"]
@@ -389,4 +574,51 @@ func TestBundleProcessorTracingError(t *testing.T) {
 
 	_, err = mgr.NewProcessor(procConfig)
 	require.EqualError(t, err, "failed to init processor 'foo': line 1 char 9: expected whitespace")
+}
+
+func TestBundleProcessorTracingDisabled(t *testing.T) {
+	tCtx, done := context.WithTimeout(context.Background(), time.Second*30)
+	defer done()
+
+	tenv, summary := tracing.TracedBundle(bundle.GlobalEnvironment)
+	summary.SetEnabled(false)
+
+	procConfig := processor.NewConfig()
+	procConfig.Label = "foo"
+	procConfig.Type = "bloblang"
+	procConfig.Bloblang = `
+let ctr = content().number()
+root.count = if $ctr % 2 == 0 { throw("nah %v".format($ctr)) } else { $ctr }
+meta bar = "new bar value"
+`
+
+	mgr, err := manager.New(
+		manager.NewResourceConfig(),
+		manager.OptSetEnvironment(tenv),
+	)
+	require.NoError(t, err)
+
+	proc, err := mgr.NewProcessor(procConfig)
+	require.NoError(t, err)
+
+	for i := 0; i < 10; i++ {
+		part := message.NewPart([]byte(strconv.Itoa(i)))
+		part.MetaSetMut("foo", fmt.Sprintf("foo value %v", i))
+		batch, res := proc.ProcessBatch(tCtx, message.Batch{part})
+		require.Nil(t, res)
+		require.Len(t, batch, 1)
+		assert.Equal(t, 1, batch[0].Len())
+	}
+
+	require.NoError(t, proc.Close(tCtx))
+
+	assert.Equal(t, uint64(0), summary.Input)
+	assert.Equal(t, uint64(0), summary.ProcessorErrors)
+	assert.Equal(t, uint64(0), summary.Output)
+
+	procEvents := summary.ProcessorEvents(false)
+	require.Contains(t, procEvents, "foo")
+
+	events := procEvents["foo"]
+	require.Len(t, events, 0)
 }

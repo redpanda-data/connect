@@ -69,6 +69,7 @@ type ristrettoCache struct {
 
 	retriesEnabled bool
 	boffPool       sync.Pool
+	closeOnce      sync.Once
 }
 
 func newRistrettoCache(defaultTTL time.Duration, retriesEnabled bool, backOff *backoff.ExponentialBackOff) (*ristrettoCache, error) {
@@ -152,6 +153,8 @@ func (r *ristrettoCache) Delete(ctx context.Context, key string) error {
 }
 
 func (r *ristrettoCache) Close(ctx context.Context) error {
-	r.cache.Close()
+	r.closeOnce.Do(func() {
+		r.cache.Close()
+	})
 	return nil
 }

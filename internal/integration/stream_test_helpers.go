@@ -213,7 +213,7 @@ func StreamTestOptLogging(level string) StreamTestOptFunc {
 		logConf := log.NewConfig()
 		logConf.LogLevel = level
 		var err error
-		env.log, err = log.NewV2(os.Stdout, logConf)
+		env.log, err = log.New(os.Stdout, logConf)
 		if err != nil {
 			panic(err)
 		}

@@ -1,0 +1,47 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: benthos-generator-config
+data:
+  config.yaml: |
+    input:
+      generate:
+        interval: 1s
+        mapping: |
+          root.id = uuid_v4()
+    output:
+      nats:
+        urls:
+          - nats://nats:4222
+        subject: demo-a
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: benthos-generator
+spec:
+  replicas: 1
+  strategy: {}
+  selector:
+    matchLabels:
+      app: benthos-generator
+  template:
+    metadata:
+      labels:
+        app: benthos-generator
+    spec:
+      volumes:
+        - name: config-volume
+          configMap:
+            name: benthos-generator-config
+      containers:
+        - name: benthos
+          image: jeffail/benthos:latest
+          args:
+            - "-c"
+            - "/etc/benthos/config.yaml"
+          volumeMounts:
+            - name: config-volume
+              mountPath: "/etc/benthos"
+              readOnly: true

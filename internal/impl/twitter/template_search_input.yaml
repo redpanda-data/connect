@@ -58,6 +58,7 @@ fields:
     type: string
 
 mapping: |
+  #!blobl
   let _ = if this.poll_period == "" && this.rate_limit == "" {
     throw("either a poll_period, a rate_limit, or both must be specified")
   }
@@ -148,6 +149,7 @@ mapping: |
   root.processors."-".split = {}
 
 metrics_mapping: |
+  #!blobl
   meta label = $label | ""
   let mpath = meta("path").or("")
 

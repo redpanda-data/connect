@@ -35,10 +35,6 @@ func main() {
 	flag.StringVar(&docsDir, "dir", docsDir, "The directory to write docs to")
 	flag.Parse()
 
-	if err := template.InitNativeTemplates(); err != nil {
-		panic(err)
-	}
-
 	service.GlobalEnvironment().WalkInputs(viewForDir(path.Join(docsDir, "./inputs")))
 	service.GlobalEnvironment().WalkBuffers(viewForDir(path.Join(docsDir, "./buffers")))
 	service.GlobalEnvironment().WalkCaches(viewForDir(path.Join(docsDir, "./caches")))

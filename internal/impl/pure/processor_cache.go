@@ -13,7 +13,6 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	"github.com/benthosdev/benthos/v4/internal/tracing"
 )
 
 func init() {
@@ -22,7 +21,7 @@ func init() {
 		if err != nil {
 			return nil, err
 		}
-		return processor.NewV2BatchedToV1Processor("cache", p, mgr), nil
+		return processor.NewAutoObservedBatchedProcessor("cache", p, mgr), nil
 	}, docs.ComponentSpec{
 		Name: "cache",
 		Categories: []string{
@@ -251,21 +250,19 @@ func cacheOperatorFromString(operator string) (cacheOperator, error) {
 
 //------------------------------------------------------------------------------
 
-func (c *cacheProc) ProcessBatch(ctx context.Context, spans []*tracing.Span, msg message.Batch) ([]message.Batch, error) {
+func (c *cacheProc) ProcessBatch(ctx *processor.BatchProcContext, msg message.Batch) ([]message.Batch, error) {
 	_ = msg.Iter(func(index int, part *message.Part) error {
 		key, err := c.key.String(index, msg)
 		if err != nil {
 			err = fmt.Errorf("key interpolation error: %w", err)
-			c.mgr.Logger().Debugf(err.Error())
-			processor.MarkErr(part, spans[index], err)
+			ctx.OnError(err, index, nil)
 			return nil
 		}
 
 		value, err := c.value.Bytes(index, msg)
 		if err != nil {
 			err = fmt.Errorf("value interpolation error: %w", err)
-			c.mgr.Logger().Debugf(err.Error())
-			processor.MarkErr(part, spans[index], err)
+			ctx.OnError(err, index, nil)
 			return nil
 		}
 
@@ -273,16 +270,15 @@ func (c *cacheProc) ProcessBatch(ctx context.Context, spans []*tracing.Span, msg
 		ttls, err := c.ttl.String(index, msg)
 		if err != nil {
 			err = fmt.Errorf("ttl interpolation error: %w", err)
-			c.mgr.Logger().Debugf(err.Error())
-			processor.MarkErr(part, spans[index], err)
+			ctx.OnError(err, index, nil)
 			return nil
 		}
 
 		if ttls != "" {
 			td, err := time.ParseDuration(ttls)
 			if err != nil {
-				c.mgr.Logger().Debugf("TTL must be a duration: %v\n", err)
-				processor.MarkErr(part, spans[index], err)
+				err = fmt.Errorf("ttl must be a duration: %w", err)
+				ctx.OnError(err, index, nil)
 				return nil
 			}
 			ttl = &td
@@ -297,11 +293,11 @@ func (c *cacheProc) ProcessBatch(ctx context.Context, spans []*tracing.Span, msg
 		}
 		if err != nil {
 			if err != component.ErrKeyAlreadyExists {
-				c.mgr.Logger().Debugf("Operator failed for key '%s': %v\n", key, err)
+				err = fmt.Errorf("operator failed for key '%s': %v", key, err)
 			} else {
-				c.mgr.Logger().Debugf("Key already exists: %v\n", key)
+				err = fmt.Errorf("key already exists: %v", key)
 			}
-			processor.MarkErr(part, spans[index], err)
+			ctx.OnError(err, index, nil)
 			return nil
 		}
 

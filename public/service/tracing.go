@@ -82,7 +82,7 @@ func (s *TracingSummary) TotalOutput() uint64 {
 // Experimental: This method may change outside of major version releases.
 func (s *TracingSummary) InputEvents() map[string][]TracingEvent {
 	m := map[string][]TracingEvent{}
-	for k, v := range s.summary.InputEvents() {
+	for k, v := range s.summary.InputEvents(false) {
 		events := make([]TracingEvent, len(v))
 		for i, e := range v {
 			events[i] = TracingEvent{
@@ -102,7 +102,7 @@ func (s *TracingSummary) InputEvents() map[string][]TracingEvent {
 // Experimental: This method may change outside of major version releases.
 func (s *TracingSummary) ProcessorEvents() map[string][]TracingEvent {
 	m := map[string][]TracingEvent{}
-	for k, v := range s.summary.ProcessorEvents() {
+	for k, v := range s.summary.ProcessorEvents(false) {
 		events := make([]TracingEvent, len(v))
 		for i, e := range v {
 			events[i] = TracingEvent{
@@ -122,7 +122,7 @@ func (s *TracingSummary) ProcessorEvents() map[string][]TracingEvent {
 // Experimental: This method may change outside of major version releases.
 func (s *TracingSummary) OutputEvents() map[string][]TracingEvent {
 	m := map[string][]TracingEvent{}
-	for k, v := range s.summary.OutputEvents() {
+	for k, v := range s.summary.OutputEvents(false) {
 		events := make([]TracingEvent, len(v))
 		for i, e := range v {
 			events[i] = TracingEvent{
