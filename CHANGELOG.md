@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- Fields `auth.user_jwt` and `auth.user_nkey_seed` added to all NATS components.
+
 ## 4.15.0 - 2023-05-05
 
 ### Added
