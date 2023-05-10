@@ -8,6 +8,7 @@ All notable changes to this project will be documented in this file.
 ### Added
 
 - Fields `auth.user_jwt` and `auth.user_nkey_seed` added to all NATS components.
+- bloblang: added `ulid(encoding, random_source)` function to generate Universally Unique Lexicographically Sortable Identifiers (ULIDs).
 
 ## 4.15.0 - 2023-05-05
 

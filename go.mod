@@ -73,6 +73,7 @@ require (
 	github.com/nats-io/stan.go v0.10.2
 	github.com/nsf/jsondiff v0.0.0-20210926074059-1e845ec5d249
 	github.com/nsqio/go-nsq v1.1.0
+	github.com/oklog/ulid v1.3.1
 	github.com/olivere/elastic/v7 v7.0.31
 	github.com/ory/dockertest/v3 v3.9.1
 	github.com/oschwald/geoip2-golang v1.5.0
@@ -118,6 +119,7 @@ require (
 	go.opentelemetry.io/otel/trace v1.13.0
 	go.uber.org/multierr v1.9.0
 	golang.org/x/crypto v0.7.0
+	golang.org/x/exp v0.0.0-20220827204233-334a2380cb91
 	golang.org/x/net v0.8.0
 	golang.org/x/oauth2 v0.5.0
 	golang.org/x/sync v0.1.0
@@ -277,7 +279,6 @@ require (
 	go.opentelemetry.io/otel/exporters/otlp/internal/retry v1.13.0 // indirect
 	go.opentelemetry.io/proto/otlp v0.19.0 // indirect
 	go.uber.org/atomic v1.10.0 // indirect
-	golang.org/x/exp v0.0.0-20220827204233-334a2380cb91 // indirect
 	golang.org/x/mod v0.8.0 // indirect
 	golang.org/x/sys v0.6.0 // indirect
 	golang.org/x/term v0.6.0 // indirect
