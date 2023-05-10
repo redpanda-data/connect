@@ -9,6 +9,11 @@ All notable changes to this project will be documented in this file.
 
 - Fields `auth.user_jwt` and `auth.user_nkey_seed` added to all NATS components.
 - bloblang: added `ulid(encoding, random_source)` function to generate Universally Unique Lexicographically Sortable Identifiers (ULIDs).
+- Field `skip_on` added to the `cached` processor.
+
+### Fixed
+
+- The `open_telemetry_collector` tracer option no longer blocks service start up when the endpoints cannot be reached, and instead manages connections in the background.
 
 ## 4.15.0 - 2023-05-05
 
