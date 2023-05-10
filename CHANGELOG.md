@@ -10,6 +10,7 @@ All notable changes to this project will be documented in this file.
 - Fields `auth.user_jwt` and `auth.user_nkey_seed` added to all NATS components.
 - bloblang: added `ulid(encoding, random_source)` function to generate Universally Unique Lexicographically Sortable Identifiers (ULIDs).
 - Field `skip_on` added to the `cached` processor.
+- Field `nak_delay` added to the `nats` input.
 
 ### Fixed
 
