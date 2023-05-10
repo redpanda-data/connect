@@ -1,0 +1,178 @@
+name: splunk_hec
+type: output
+status: experimental
+categories: [ Services ]
+summary: Writes messages to a Splunk HTTP Endpoint Collector.
+description: |
+  This output POSTs messages to a Splunk HTTP Endpoint Collector (HEC) using token based authentication. The format of the message must be a [valid event JSON](https://docs.splunk.com/Documentation/SplunkCloud/latest/Data/FormateventsforHTTPEventCollector). Raw is not supported.
+fields:
+  - name: url
+    description: Full HTTP Endpoint Collector (HEC) URL, ie. https://foobar.splunkcloud.com/services/collector/event
+    type: string
+
+  - name: token
+    description: A bot token used for authentication.
+    type: string
+
+  - name: gzip
+    description: Enable gzip compression
+    type: bool
+    default: false
+
+  - name: event_host
+    description: Set the host value to assign to the event data. Overrides existing host field if present.
+    type: string
+    default: ""
+
+  - name: event_source
+    description: Set the source value to assign to the event data. Overrides existing source field if present.
+    type: string
+    default: ""
+
+  - name: event_sourcetype
+    description: Set the sourcetype value to assign to the event data. Overrides existing sourcetype field if present.
+    type: string
+    default: ""
+
+  - name: event_index
+    description: Set the index value to assign to the event data. Overrides existing index field if present.
+    type: string
+    default: ""
+
+  - name: batching_count
+    description: A number of messages at which the batch should be flushed. If 0 disables count based batching.
+    type: int
+    default: 100
+
+  - name: batching_period
+    description: A period in which an incomplete batch should be flushed regardless of its size.
+    type: string
+    default: "30s"
+
+  - name: batching_byte_size
+    description: An amount of bytes at which the batch should be flushed. If 0 disables size based batching. Splunk Cloud recommends limiting content length of HEC payload to 1 MB.
+    type: int
+    default: 1000000
+
+  - name: rate_limit
+    description: An optional rate limit resource to restrict API requests with.
+    type: string
+    default: ""
+    advanced: true
+
+  - name: max_in_flight
+    description: The maximum number of parallel message batches to have in flight at any given time.
+    type: int
+    default: 64
+    advanced: true
+
+  - name: skip_cert_verify
+    description: Whether to skip server side certificate verification.
+    type: bool
+    default: false
+    advanced: true
+
+mapping: |
+  root.http_client.url = this.url
+  root.http_client.rate_limit = this.rate_limit
+  root.http_client.verb = "POST"
+  root.http_client.headers."Content-Type" = "application/json"
+  root.http_client.headers.Authorization = "Splunk " + this.token
+  root.http_client.headers."Content-Encoding" = if this.gzip { "gzip"}
+  root.http_client.max_in_flight = this.max_in_flight
+  root.http_client.batch_as_multipart = false
+  root.http_client.batching.count = this.batching_count
+  root.http_client.batching.period = this.batching_period
+  root.http_client.batching.byte_size = this.batching_byte_size
+  root.http_client.batching.processors = []
+  root.http_client.batching.processors."-".archive = { "format": "lines" }
+  root.http_client.batching.processors."-".compress = if this.gzip {{ "algorithm": "gzip" }}
+  root.http_client.tls.enabled = true
+  root.http_client.tls.skip_cert_verify = this.skip_cert_verify
+
+  root.processors = []
+  root.processors."-".bloblang = """
+    let config_host = "%v"
+    let config_source = "%v"
+    let config_sourcetype = "%v"
+    let config_index = "%v"
+    root = if (this | {}).exists("event") { this } else {
+      { "event": content().string() }
+    }
+    root.host = if $config_host != "" { $config_host }
+    root.source = if $config_source != "" { $config_source}
+    root.sourcetype = if $config_sourcetype != "" { $config_sourcetype }
+    root.index = if $config_index != "" { $config_index }
+  """.format(this.event_host, this.event_source, this.event_sourcetype, this.event_index)
+
+tests:
+  - name: Basic fields
+    config:
+      url: https://foobar.splunkcloud.com/services/collector/event
+      token: footoken
+      rate_limit: foolimit
+      max_in_flight: 64
+      gzip: false
+
+    expected:
+      http_client:
+        url: https://foobar.splunkcloud.com/services/collector/event
+        verb: POST
+        headers:
+          Content-Type: application/json
+          Authorization: Splunk footoken
+        rate_limit: foolimit
+        batch_as_multipart: false
+        max_in_flight: 64
+        batching:
+          count: 100
+          period: 30s
+          byte_size: 1000000
+          processors:
+            - archive:
+                format: lines
+        tls:
+          enabled: true
+          skip_cert_verify: false
+      processors: [
+          {
+              "bloblang": "let config_host = \"\"\nlet config_source = \"\"\nlet config_sourcetype = \"\"\nlet config_index = \"\"\nroot = if (this | {}).exists(\"event\") { this } else {\n  { \"event\": content().string() }\n}\nroot.host = if $config_host != \"\" { $config_host }\nroot.source = if $config_source != \"\" { $config_source}\nroot.sourcetype = if $config_sourcetype != \"\" { $config_sourcetype }\nroot.index = if $config_index != \"\" { $config_index }\n"
+          }
+      ]
+
+  - name: gzip
+    config:
+      url: https://foobar.splunkcloud.com/services/collector/event
+      token: footoken
+      rate_limit: foolimit
+      max_in_flight: 64
+      gzip: true
+
+    expected:
+      http_client:
+        url: https://foobar.splunkcloud.com/services/collector/event
+        verb: POST
+        headers:
+          Content-Type: application/json
+          Authorization: Splunk footoken
+          Content-Encoding: gzip
+        rate_limit: foolimit
+        batch_as_multipart: false
+        max_in_flight: 64
+        batching:
+          count: 100
+          period: 30s
+          byte_size: 1000000
+          processors:
+            - archive:
+                format: lines
+            - compress:
+                algorithm: gzip
+        tls:
+          enabled: true
+          skip_cert_verify: false
+      processors: [
+          {
+              "bloblang": "let config_host = \"\"\nlet config_source = \"\"\nlet config_sourcetype = \"\"\nlet config_index = \"\"\nroot = if (this | {}).exists(\"event\") { this } else {\n  { \"event\": content().string() }\n}\nroot.host = if $config_host != \"\" { $config_host }\nroot.source = if $config_source != \"\" { $config_source}\nroot.sourcetype = if $config_sourcetype != \"\" { $config_sourcetype }\nroot.index = if $config_index != \"\" { $config_index }\n"
+          }
+      ]
