@@ -45,6 +45,7 @@ input:
     urls: []
     subject: ""
     queue: ""
+    nak_delay: ""
     prefetch_count: 32
     tls:
       enabled: false
@@ -148,6 +149,19 @@ An optional queue group to consume as.
 
 
 Type: `string`  
+
+### `nak_delay`
+
+An optional delay duration on redelivering a message when negatively acknowledged.
+
+
+Type: `string`  
+
+```yml
+# Examples
+
+nak_delay: 1m
+```
 
 ### `prefetch_count`
 
