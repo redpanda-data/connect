@@ -59,6 +59,8 @@ output:
     auth:
       nkey_file: ""
       user_credentials_file: ""
+      user_jwt: ""
+      user_nkey_seed: ""
 ```
 
 </TabItem>
@@ -80,7 +82,7 @@ configured in the `nkey_file` field.
 
 More details [here](https://docs.nats.io/developing-with-nats/security/nkey).
 
-#### User Credentials file
+#### User Credentials
 
 NATS server supports decentralized authentication based on JSON Web Tokens (JWT). Clients need an [user JWT](https://docs.nats.io/nats-server/configuration/securing_nats/jwt#json-web-tokens)
 and a corresponding [NKey secret](https://docs.nats.io/developing-with-nats/security/nkey) when connecting to a server
@@ -88,6 +90,9 @@ which is configured to use this authentication scheme.
 
 The `user_credentials_file` field should point to a file containing both the private key and the JWT and can be
 generated with the [nsc tool](https://docs.nats.io/nats-tools/nsc).
+
+Alternatively, the `user_jwt` field can contain a plain text JWT and the `user_nkey_seed`can contain
+the plain text NKey Seed.
 
 More details [here](https://docs.nats.io/developing-with-nats/security/creds).
 
@@ -323,5 +328,27 @@ Default: `""`
 
 user_credentials_file: ./user.creds
 ```
+
+### `auth.user_jwt`
+
+An optional plain text user JWT (given along with the corresponding user NKey Seed).
+:::warning Secret
+This field contains sensitive information that usually shouldn't be added to a config directly, read our [secrets page for more info](/docs/configuration/secrets).
+:::
+
+
+Type: `string`  
+Default: `""`  
+
+### `auth.user_nkey_seed`
+
+An optional plain text user NKey Seed (given along with the corresponding user JWT).
+:::warning Secret
+This field contains sensitive information that usually shouldn't be added to a config directly, read our [secrets page for more info](/docs/configuration/secrets).
+:::
+
+
+Type: `string`  
+Default: `""`  
 
 
