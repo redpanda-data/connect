@@ -10,11 +10,19 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"path"
 	"sync"
 	"sync/atomic"
 	"time"
 
+	// nolint:staticcheck // Ignore SA1019 deprecation warning until we can switch to "google.golang.org/protobuf/types/dynamicpb"
+	"github.com/golang/protobuf/jsonpb"
+	// nolint:staticcheck // Ignore SA1019 deprecation warning until we can switch to "google.golang.org/protobuf/types/dynamicpb"
+	"github.com/golang/protobuf/proto"
+
+	"github.com/jhump/protoreflect/desc/protoparse"
+	"github.com/jhump/protoreflect/dynamic"
 	"github.com/linkedin/goavro/v2"
 
 	"github.com/benthosdev/benthos/v4/internal/httpclient"
@@ -323,6 +331,7 @@ func (s *schemaRegistryDecoder) getDecoder(id int) (schemaDecoder, error) {
 	}
 
 	resPayload := struct {
+		Type   string `json:"schemaType"`
 		Schema string `json:"schema"`
 	}{}
 	if err = json.Unmarshal(resBytes, &resPayload); err != nil {
@@ -330,37 +339,92 @@ func (s *schemaRegistryDecoder) getDecoder(id int) (schemaDecoder, error) {
 		return nil, err
 	}
 
-	var codec *goavro.Codec
-	if s.avroRawJSON {
-		if codec, err = goavro.NewCodecForStandardJSONFull(resPayload.Schema); err != nil {
-			s.logger.Errorf("failed to parse response for schema subject '%v': %v", id, err)
+	var decoder func(m *service.Message) error
+
+	if resPayload.Type == "PROTOBUF" {
+		var parser protoparse.Parser
+
+		// Not sure if we can just load the descriptor from resPayload.Schema directly
+		if err := os.WriteFile("def.proto", []byte(resPayload.Schema), 0644); err != nil {
 			return nil, err
+		}
+
+		parser.ImportPaths = []string{"."}
+		fds, err := parser.ParseFiles("./def.proto")
+
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse .proto file: %v", err)
+		}
+		if len(fds) == 0 {
+			return nil, fmt.Errorf("no .proto files were found in the paths '%v'", ".")
+		}
+
+		marshaller := &jsonpb.Marshaler{
+			AnyResolver: dynamic.AnyResolver(dynamic.NewMessageFactoryWithDefaults(), fds...),
+		}
+
+		// Will schema registry returns multiple proto?
+		msgTypes := fds[0].GetMessageTypes()
+
+		decoder = func(m *service.Message) error {
+			b, err := m.AsBytes()
+
+			// Pure guess here: the first byte of the message represents the index of the message descriptor.
+			// Need to find the doc regarding how confluent encode its message.
+			msgIndex := uint8(b[0])
+			msg := dynamic.NewMessage(msgTypes[msgIndex])
+
+			remaining := b[1:]
+			if err != nil {
+				return err
+			}
+
+			if err := proto.Unmarshal(remaining, msg); err != nil {
+				return fmt.Errorf("failed to unmarshal message: %w", err)
+			}
+
+			data, err := msg.MarshalJSONPB(marshaller)
+			if err != nil {
+				return fmt.Errorf("failed to marshal protobuf message: %w", err)
+			}
+
+			m.SetBytes(data)
+
+			return nil
 		}
 	} else {
-		if codec, err = goavro.NewCodec(resPayload.Schema); err != nil {
-			s.logger.Errorf("failed to parse response for schema subject '%v': %v", id, err)
-			return nil, err
-		}
-	}
-
-	decoder := func(m *service.Message) error {
-		b, err := m.AsBytes()
-		if err != nil {
-			return err
-		}
-
-		native, _, err := codec.NativeFromBinary(b)
-		if err != nil {
-			return err
+		var codec *goavro.Codec
+		if s.avroRawJSON {
+			if codec, err = goavro.NewCodecForStandardJSONFull(resPayload.Schema); err != nil {
+				s.logger.Errorf("failed to parse response for schema subject '%v': %v", id, err)
+				return nil, err
+			}
+		} else {
+			if codec, err = goavro.NewCodec(resPayload.Schema); err != nil {
+				s.logger.Errorf("failed to parse response for schema subject '%v': %v", id, err)
+				return nil, err
+			}
 		}
 
-		jb, err := codec.TextualFromNative(nil, native)
-		if err != nil {
-			return err
-		}
-		m.SetBytes(jb)
+		decoder = func(m *service.Message) error {
+			b, err := m.AsBytes()
+			if err != nil {
+				return err
+			}
 
-		return nil
+			native, _, err := codec.NativeFromBinary(b)
+			if err != nil {
+				return err
+			}
+
+			jb, err := codec.TextualFromNative(nil, native)
+			if err != nil {
+				return err
+			}
+			m.SetBytes(jb)
+
+			return nil
+		}
 	}
 
 	s.cacheMut.Lock()
