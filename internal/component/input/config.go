@@ -13,7 +13,6 @@ import (
 type Config struct {
 	Label             string                  `json:"label" yaml:"label"`
 	Type              string                  `json:"type" yaml:"type"`
-	AMQP09            AMQP09Config            `json:"amqp_0_9" yaml:"amqp_0_9"`
 	AWSKinesis        AWSKinesisConfig        `json:"aws_kinesis" yaml:"aws_kinesis"`
 	AWSS3             AWSS3Config             `json:"aws_s3" yaml:"aws_s3"`
 	AWSSQS            AWSSQSConfig            `json:"aws_sqs" yaml:"aws_sqs"`
@@ -56,7 +55,6 @@ func NewConfig() Config {
 	return Config{
 		Label:             "",
 		Type:              "stdin",
-		AMQP09:            NewAMQP09Config(),
 		AWSKinesis:        NewAWSKinesisConfig(),
 		AWSS3:             NewAWSS3Config(),
 		AWSSQS:            NewAWSSQSConfig(),

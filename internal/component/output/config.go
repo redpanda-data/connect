@@ -13,7 +13,6 @@ import (
 type Config struct {
 	Label              string                  `json:"label" yaml:"label"`
 	Type               string                  `json:"type" yaml:"type"`
-	AMQP09             AMQPConfig              `json:"amqp_0_9" yaml:"amqp_0_9"`
 	AWSDynamoDB        DynamoDBConfig          `json:"aws_dynamodb" yaml:"aws_dynamodb"`
 	AWSKinesis         KinesisConfig           `json:"aws_kinesis" yaml:"aws_kinesis"`
 	AWSKinesisFirehose KinesisFirehoseConfig   `json:"aws_kinesis_firehose" yaml:"aws_kinesis_firehose"`
@@ -67,7 +66,6 @@ func NewConfig() Config {
 	return Config{
 		Label:              "",
 		Type:               "stdout",
-		AMQP09:             NewAMQPConfig(),
 		AWSDynamoDB:        NewDynamoDBConfig(),
 		AWSKinesis:         NewKinesisConfig(),
 		AWSKinesisFirehose: NewKinesisFirehoseConfig(),
