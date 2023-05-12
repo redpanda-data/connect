@@ -59,14 +59,16 @@ func New(conf batchconfig.Config, mgr bundle.NewManagement) (*Batcher, error) {
 			return nil, fmt.Errorf("failed to parse duration string: %v", err)
 		}
 	}
-	var procs []iprocessor.V1
+
+	procs := make([]iprocessor.V1, len(conf.Processors))
+
 	for i, pconf := range conf.Processors {
 		pMgr := mgr.IntoPath("processors", strconv.Itoa(i))
 		proc, err := pMgr.NewProcessor(pconf)
 		if err != nil {
 			return nil, err
 		}
-		procs = append(procs, proc)
+		procs[i] = proc
 	}
 
 	batchOn := mgr.Metrics().GetCounterVec("batch_created", "mechanism")
