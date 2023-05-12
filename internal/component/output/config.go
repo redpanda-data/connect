@@ -14,7 +14,6 @@ type Config struct {
 	Label              string                  `json:"label" yaml:"label"`
 	Type               string                  `json:"type" yaml:"type"`
 	AMQP09             AMQPConfig              `json:"amqp_0_9" yaml:"amqp_0_9"`
-	AMQP1              AMQP1Config             `json:"amqp_1" yaml:"amqp_1"`
 	AWSDynamoDB        DynamoDBConfig          `json:"aws_dynamodb" yaml:"aws_dynamodb"`
 	AWSKinesis         KinesisConfig           `json:"aws_kinesis" yaml:"aws_kinesis"`
 	AWSKinesisFirehose KinesisFirehoseConfig   `json:"aws_kinesis_firehose" yaml:"aws_kinesis_firehose"`
@@ -42,7 +41,6 @@ type Config struct {
 	MongoDB            MongoDBConfig           `json:"mongodb" yaml:"mongodb"`
 	MQTT               MQTTConfig              `json:"mqtt" yaml:"mqtt"`
 	Nanomsg            NanomsgConfig           `json:"nanomsg" yaml:"nanomsg"`
-	NATS               NATSConfig              `json:"nats" yaml:"nats"`
 	NATSStream         NATSStreamConfig        `json:"nats_stream" yaml:"nats_stream"`
 	NSQ                NSQConfig               `json:"nsq" yaml:"nsq"`
 	Plugin             any                     `json:"plugin,omitempty" yaml:"plugin,omitempty"`
@@ -70,7 +68,6 @@ func NewConfig() Config {
 		Label:              "",
 		Type:               "stdout",
 		AMQP09:             NewAMQPConfig(),
-		AMQP1:              NewAMQP1Config(),
 		AWSDynamoDB:        NewDynamoDBConfig(),
 		AWSKinesis:         NewKinesisConfig(),
 		AWSKinesisFirehose: NewKinesisFirehoseConfig(),
@@ -98,7 +95,6 @@ func NewConfig() Config {
 		MQTT:               NewMQTTConfig(),
 		MongoDB:            NewMongoDBConfig(),
 		Nanomsg:            NewNanomsgConfig(),
-		NATS:               NewNATSConfig(),
 		NATSStream:         NewNATSStreamConfig(),
 		NSQ:                NewNSQConfig(),
 		Plugin:             nil,

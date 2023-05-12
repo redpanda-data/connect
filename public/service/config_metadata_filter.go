@@ -40,6 +40,22 @@ func (m *MetadataFilter) Walk(msg *Message, fn func(key, value string) error) er
 	})
 }
 
+// WalkMut iterates the filtered metadata key/value pairs as mutable structured
+// values from a message and executes a provided closure function for each pair.
+// An error returned by the closure will be returned by this function and
+// prevent subsequent pairs from being accessed.
+func (m *MetadataFilter) WalkMut(msg *Message, fn func(key string, value any) error) error {
+	if m == nil {
+		return nil
+	}
+	return msg.MetaWalkMut(func(key string, value any) error {
+		if !m.f.Match(key) {
+			return nil
+		}
+		return fn(key, value)
+	})
+}
+
 // FieldMetadataFilter accesses a field from a parsed config that was defined
 // with NewMetdataFilterField and returns a MetadataFilter, or an error if the
 // configuration was invalid.
@@ -97,6 +113,22 @@ func (m *MetadataExcludeFilter) Walk(msg *Message, fn func(key, value string) er
 		return nil
 	}
 	return msg.MetaWalk(func(key, value string) error {
+		if !m.f.Match(key) {
+			return nil
+		}
+		return fn(key, value)
+	})
+}
+
+// WalkMut iterates the filtered metadata key/value pairs as mutable structured
+// values from a message and executes a provided closure function for each pair.
+// An error returned by the closure will be returned by this function and
+// prevent subsequent pairs from being accessed.
+func (m *MetadataExcludeFilter) WalkMut(msg *Message, fn func(key string, value any) error) error {
+	if m == nil {
+		return nil
+	}
+	return msg.MetaWalkMut(func(key string, value any) error {
 		if !m.f.Match(key) {
 			return nil
 		}

@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 
 	"github.com/benthosdev/benthos/v4/internal/bloblang/mapping"
 	"github.com/benthosdev/benthos/v4/internal/bloblang/query"
@@ -54,6 +55,41 @@ func (b MessageBatch) DeepCopy() MessageBatch {
 		bCopy[i] = m.DeepCopy()
 	}
 	return bCopy
+}
+
+// WalkWithBatchedErrors walks a batch and executes a closure function for each
+// message. If the provided closure returns an error then iteration of the batch
+// is not stopped and instead a *BatchError is created and populated.
+//
+// The one exception to this behaviour is when an error is returned that is
+// considered fatal such as ErrNotConnected, in which case iteration is
+// terminated early and that error is returned immediately.
+//
+// This is a useful pattern for batched outputs that deliver messages
+// individually.
+func (b MessageBatch) WalkWithBatchedErrors(fn func(int, *Message) error) error {
+	if len(b) == 1 {
+		return fn(0, b[0])
+	}
+
+	var batchErr *BatchError
+	for i, m := range b {
+		tmpErr := fn(i, m)
+		if tmpErr != nil {
+			if errors.Is(tmpErr, ErrNotConnected) {
+				return tmpErr
+			}
+			if batchErr == nil {
+				batchErr = NewBatchError(b, tmpErr)
+			}
+			_ = batchErr.Failed(i, tmpErr)
+		}
+	}
+
+	if batchErr != nil {
+		return batchErr
+	}
+	return nil
 }
 
 // NewMessage creates a new message with an initial raw bytes content. The
