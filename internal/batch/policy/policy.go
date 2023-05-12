@@ -105,7 +105,7 @@ func (p *Batcher) Add(part *message.Part) bool {
 		if p.sizeTally >= p.byteSize {
 			p.mSizeBatch.Incr(1)
 			p.log.Traceln("Batching based on byte_size")
-			p.trigger = true
+			p.triggered = true
 			return true
 		}
 	}
@@ -113,7 +113,7 @@ func (p *Batcher) Add(part *message.Part) bool {
 	if p.count > 0 && len(p.parts) >= p.count {
 		p.mCountBatch.Incr(1)
 		p.log.Traceln("Batching based on count")
-		p.trigger = true
+		p.triggered = true
 		return true
 	}
 
@@ -127,13 +127,13 @@ func (p *Batcher) Add(part *message.Part) bool {
 		if test {
 			p.mCheckBatch.Incr(1)
 			p.log.Traceln("Batching based on check query")
-			p.trigger = true
+			p.triggered = true
 			return true
 		}
 	}
 
 	if p.period > 0 && time.Since(p.lastBatch) > p.period {
-		p.trigger = true
+		p.triggered = true
 		return true
 	}
 
@@ -147,13 +147,12 @@ func (p *Batcher) Flush(ctx context.Context) message.Batch {
 
 	resultMsgs := p.flushAny(ctx)
 	if len(resultMsgs) == 1 {
-		newMsg = resultMsgs[0]
+		return resultMsgs[0]
 	} else if len(resultMsgs) > 1 {
+
+		newMsg = make(message.Batch, 0, len(resultMsgs))
 		for _, m := range resultMsgs {
-			_ = m.Iter(func(_ int, p *message.Part) error {
-				newMsg = append(newMsg, p)
-				return nil
-			})
+			newMsg = append(newMsg, m...)
 		}
 	}
 	return newMsg
