@@ -103,6 +103,7 @@ func (p *Batcher) Add(part *message.Part) bool {
 		if p.sizeTally >= p.byteSize {
 			p.mSizeBatch.Incr(1)
 			p.log.Traceln("Batching based on byte_size")
+			p.trigger = true
 			return true
 		}
 	}
@@ -110,6 +111,7 @@ func (p *Batcher) Add(part *message.Part) bool {
 	if p.count > 0 && len(p.parts) >= p.count {
 		p.mCountBatch.Incr(1)
 		p.log.Traceln("Batching based on count")
+		p.trigger = true
 		return true
 	}
 
@@ -123,11 +125,17 @@ func (p *Batcher) Add(part *message.Part) bool {
 		if test {
 			p.mCheckBatch.Incr(1)
 			p.log.Traceln("Batching based on check query")
+			p.trigger = true
 			return true
 		}
 	}
 
-	return false || (p.period > 0 && time.Since(p.lastBatch) > p.period)
+	if p.period > 0 && time.Since(p.lastBatch) > p.period {
+		p.trigger = true
+		return true
+	}
+
+	return false
 }
 
 // Flush clears all messages stored by this batch policy. Returns nil if the
