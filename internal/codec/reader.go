@@ -22,7 +22,6 @@ import (
 
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	"github.com/benthosdev/benthos/v4/public/service"
 )
 
 // ReaderDocs is a static field documentation for input codecs.
@@ -441,27 +440,16 @@ func newAvroOCFReader(conf ReaderConfig, marshaler string, r io.ReadCloser, ackF
 			return nil, err
 		}
 		a.pending++
-		m := service.NewMessage(nil)
 		if !a.logicalTypes {
-			m.SetStructured(datum)
-			mp, err := m.AsBytes()
-			if err != nil {
-				return nil, err
-			}
-			part := message.NewPart(mp)
-			return part, nil
+			msg := message.NewPart(nil)
+			msg.SetStructuredMut(datum)
+			return msg, nil
 		}
 		jb, err := a.avroCodec.TextualFromNative(nil, datum)
 		if err != nil {
 			return nil, err
 		}
-		m.SetBytes(jb)
-		mp, err := m.AsBytes()
-		if err != nil {
-			return nil, err
-		}
-		part := message.NewPart(mp)
-		return part, nil
+		return message.NewPart(jb), nil
 	}
 
 	var logicalTypes bool
