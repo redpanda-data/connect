@@ -12,7 +12,7 @@ import (
 
 func TestCompressionDecompression(t *testing.T) {
 	seen := map[string]struct{}{}
-	for _, alg := range []string{`flate`, `gzip`, `lz4`, `snappy`, `zlib`} {
+	for _, alg := range []string{`flate`, `gzip`, `pgzip`, `lz4`, `snappy`, `zlib`} {
 		exec, err := bloblang.Parse(fmt.Sprintf(`root = this.compress(algorithm: "%v")`, alg))
 		require.NoError(t, err)
 
