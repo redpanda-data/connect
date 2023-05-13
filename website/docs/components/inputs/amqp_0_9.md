@@ -14,9 +14,7 @@ categories: ["Services"]
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-
-Connects to an AMQP (0.91) queue. AMQP is a messaging protocol used by various
-message brokers, including RabbitMQ.
+Connects to an AMQP (0.91) queue. AMQP is a messaging protocol used by various message brokers, including RabbitMQ.
 
 
 <Tabs defaultValue="common" values={[
@@ -69,8 +67,7 @@ input:
 </TabItem>
 </Tabs>
 
-TLS is automatic when connecting to an `amqps` URL, but custom
-settings can be enabled in the `tls` section.
+TLS is automatic when connecting to an `amqps` URL, but custom settings can be enabled in the `tls` section.
 
 ### Metadata
 
@@ -97,8 +94,7 @@ This input adds the following metadata fields to each message:
 - All existing message headers, including nested headers prefixed with the key of their respective parent.
 ```
 
-You can access these metadata fields using
-[function interpolation](/docs/configuration/interpolation#bloblang-queries).
+You can access these metadata fields using [function interpolation](/docs/configuration/interpolation#bloblang-queries).
 
 ## Fields
 
@@ -108,7 +104,6 @@ A list of URLs to connect to. The first URL to successfully establish a connecti
 
 
 Type: `array`  
-Default: `[]`  
 Requires version 3.58.0 or newer  
 
 ```yml
@@ -131,12 +126,10 @@ An AMQP queue to consume from.
 
 
 Type: `string`  
-Default: `""`  
 
 ### `queue_declare`
 
-Allows you to passively declare the target queue. If the queue already exists
-then the declaration passively verifies that they match the target fields.
+Allows you to passively declare the target queue. If the queue already exists then the declaration passively verifies that they match the target fields.
 
 
 Type: `object`  
@@ -171,7 +164,6 @@ Allows you to passively declare bindings for the target queue.
 
 
 Type: `array`  
-Default: `[]`  
 
 ```yml
 # Examples

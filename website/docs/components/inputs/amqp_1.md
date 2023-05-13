@@ -71,8 +71,7 @@ This input adds the following metadata fields to each message:
 - All string typed message annotations
 ```
 
-You can access these metadata fields using
-[function interpolation](/docs/configuration/interpolation#bloblang-queries).
+You can access these metadata fields using [function interpolation](/docs/configuration/interpolation#bloblang-queries).
 
 ## Fields
 
@@ -82,7 +81,6 @@ A URL to connect to.
 
 
 Type: `string`  
-Default: `""`  
 
 ```yml
 # Examples
@@ -98,7 +96,6 @@ The source address to consume from.
 
 
 Type: `string`  
-Default: `""`  
 
 ```yml
 # Examples

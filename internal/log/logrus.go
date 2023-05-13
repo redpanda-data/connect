@@ -2,11 +2,16 @@ package log
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"os"
 	"strings"
 
 	"github.com/sirupsen/logrus"
+	"gopkg.in/natefinch/lumberjack.v2"
+
+	"github.com/benthosdev/benthos/v4/internal/filepath/ifs"
 )
 
 // Config holds configuration options for a logger object.
@@ -93,7 +98,30 @@ type Logger struct {
 
 // New returns a new logger from a config, or returns an error if the config
 // is invalid.
-func New(stream io.Writer, config Config) (Modular, error) {
+func New(stream io.Writer, fs ifs.FS, config Config) (Modular, error) {
+	if config.File.Path != "" {
+		if config.File.Rotate {
+			stream = &lumberjack.Logger{
+				Filename:   config.File.Path,
+				MaxSize:    10,
+				MaxAge:     config.File.RotateMaxAge,
+				MaxBackups: 1,
+				Compress:   true,
+			}
+		} else {
+			fw, err := ifs.OS().OpenFile(config.File.Path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o666)
+			if err == nil {
+				var isw bool
+				if stream, isw = fw.(io.Writer); !isw {
+					err = errors.New("failed to open a writeable file")
+				}
+			}
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
+
 	logger := logrus.New()
 	logger.Out = stream
 

@@ -393,11 +393,11 @@ func (f FieldSpecs) SanitiseYAML(node *yaml.Node, conf SanitiseConfig) error {
 		if field.IsDeprecated && conf.RemoveDeprecated {
 			continue
 		}
-		if conf.Filter.shouldDrop(field) {
-			continue
-		}
 		value, exists := nodeKeys[field.Name]
 		if !exists {
+			continue
+		}
+		if conf.Filter.shouldDrop(field, value) {
 			continue
 		}
 		if _, omit := field.shouldOmitYAML(f, value, node); omit {

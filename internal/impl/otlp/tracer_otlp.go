@@ -9,7 +9,6 @@ import (
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
 	semconv "go.opentelemetry.io/otel/semconv/v1.7.0"
-	"google.golang.org/grpc"
 
 	"go.opentelemetry.io/otel/sdk/resource"
 	tracesdk "go.opentelemetry.io/otel/sdk/trace"
@@ -146,7 +145,6 @@ func addGrpcCollectors(ctx context.Context, collectors []collector, opts []trace
 		exp, err := otlptrace.New(ctx, otlptracegrpc.NewClient(
 			otlptracegrpc.WithInsecure(),
 			otlptracegrpc.WithEndpoint(c.url),
-			otlptracegrpc.WithDialOption(grpc.WithBlock()),
 		))
 		if err != nil {
 			return nil, err

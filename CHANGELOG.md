@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- Fields `auth.user_jwt` and `auth.user_nkey_seed` added to all NATS components.
+- bloblang: added `ulid(encoding, random_source)` function to generate Universally Unique Lexicographically Sortable Identifiers (ULIDs).
+- Field `skip_on` added to the `cached` processor.
+- Field `nak_delay` added to the `nats` input.
+- New `splunk_hec` output.
+- Plugin API: New `NewMetadataExcludeFilterField` function and accompanying `FieldMetadataExcludeFilter` method added.
+- The `pulsar` input and output are now included in the main distribution of Benthos again.
+- The `gcp_pubsub` input now adds the metadata field `gcp_pubsub_delivery_attempt` to messages when dead lettering is enabled.
+- The `aws_s3` input now adds `s3_version_id` metadata to versioned messages.
+- All compress/decompress components (codecs, bloblang methods, processors) now support `pgzip`.
+
+### Fixed
+
+- The `open_telemetry_collector` tracer option no longer blocks service start up when the endpoints cannot be reached, and instead manages connections in the background.
+- The `gcp_pubsub` output should see significant performance improvements due to a client library upgrade.
+- The stream builder APIs should now follow `logger.file` config fields.
+- The experimental `cue` format in the cli `list` subcommand no longer introduces infinite recursion for `#Processors`.
+
 ## 4.15.0 - 2023-05-05
 
 ### Added

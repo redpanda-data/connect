@@ -1154,7 +1154,7 @@ func TestYAMLSanitation(t *testing.T) {
 		name        string
 		inputType   docs.Type
 		inputConf   string
-		inputFilter func(f docs.FieldSpec) bool
+		inputFilter func(f docs.FieldSpec, v any) bool
 
 		res string
 		err string
