@@ -221,6 +221,18 @@ You can access these metadata fields using [function interpolation](/docs/config
 func init() {
 	err := service.RegisterBatchInput("aws_s3", s3InputSpec(),
 		func(pConf *service.ParsedConfig, res *service.Resources) (service.BatchInput, error) {
+			// NOTE: We're using interop to punch an internal implementation up
+			// to the public plugin API. The only blocker from using the full
+			// public suite is the codec field.
+			//
+			// Since codecs are likely to get refactored soon I figured it
+			// wasn't worth investing in a public wrapper since the old style
+			// will likely get deprecated.
+			//
+			// This does mean that for now all codec based components will need
+			// to keep internal implementations. However, the config specs are
+			// the biggest time sink when converting to the new APIs so it's not
+			// a big deal to leave these tasks pending.
 			conf, err := s3iConfigFromParsed(pConf)
 			if err != nil {
 				return nil, err
