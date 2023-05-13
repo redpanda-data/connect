@@ -28,25 +28,6 @@ func doComponents(specs []docs.ComponentSpec, opts *componentOptions) ([]ast.Dec
 		fields = append(fields, field)
 	}
 
-	var addons []any
-	if opts.canLabel {
-		addons = append(
-			addons,
-			ast.NewIdent("label"),
-			token.OPTION,
-			ast.NewIdent("string"),
-		)
-	}
-
-	if opts.canPreProcess {
-		addons = append(
-			addons,
-			ast.NewIdent("processors"),
-			token.OPTION,
-			ast.NewList(&ast.Ellipsis{Type: ast.NewIdent("#Processor")}),
-		)
-	}
-
 	decls := []ast.Decl{
 		&ast.Field{
 			Label: opts.collectionIdent,
@@ -70,21 +51,24 @@ func doComponents(specs []docs.ComponentSpec, opts *componentOptions) ([]ast.Dec
 		},
 	}
 
-	if len(addons) > 0 {
+	if opts.canLabel {
 		decls = append(decls, &ast.Field{
 			Label: opts.disjunctionIdent,
-			Value: ast.NewBinExpr(
-				token.AND,
-				opts.disjunctionIdent,
-				ast.NewStruct(
-					ast.NewIdent("processors"),
-					token.OPTION,
-					ast.NewList(&ast.Ellipsis{Type: ast.NewIdent("#Processor")}),
+			Value: ast.NewStruct(
+				ast.NewIdent("label"),
+				token.OPTION,
+				ast.NewIdent("string"),
+			),
+		})
+	}
 
-					ast.NewIdent("label"),
-					token.OPTION,
-					ast.NewIdent("string"),
-				),
+	if opts.canPreProcess {
+		decls = append(decls, &ast.Field{
+			Label: opts.disjunctionIdent,
+			Value: ast.NewStruct(
+				ast.NewIdent("processors"),
+				token.OPTION,
+				ast.NewList(&ast.Ellipsis{Type: ast.NewIdent("#Processor")}),
 			),
 		})
 	}
