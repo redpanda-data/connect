@@ -162,53 +162,53 @@ This input adds the following metadata fields to each message:
 
 You can access these metadata fields using [function interpolation](/docs/configuration/interpolation#bloblang-queries). Note that user defined metadata is case insensitive within AWS, and it is likely that the keys will be received in a capitalized form, if you wish to make them consistent you can map all metadata keys to lower or uppercase using a Bloblang mapping such as `+"`meta = meta().map_each_key(key -> key.lowercase())`"+`.`).
 		Fields(
-			service.NewStringField("bucket").
+			service.NewStringField(s3iFieldBucket).
 				Description("The bucket to consume from. If the field `sqs.url` is specified this field is optional.").
 				Default(""),
-			service.NewStringField("prefix").
+			service.NewStringField(s3iFieldPrefix).
 				Description("An optional path prefix, if set only objects with the prefix are consumed when walking a bucket.").
 				Default(""),
 		).
 		Fields(config.SessionFields()...).
 		Fields(
-			service.NewBoolField("force_path_style_urls").
+			service.NewBoolField(s3iFieldForcePathStyleURLs).
 				Description("Forces the client API to use path style URLs for downloading keys, which is often required when connecting to custom endpoints.").
 				Default(false).
 				Advanced(),
-			service.NewBoolField("delete_objects").
+			service.NewBoolField(s3iFieldDeleteObjects).
 				Description("Whether to delete downloaded objects from the bucket once they are processed.").
 				Default(false).
 				Advanced(),
 			service.NewInternalField(codec.ReaderDocs).Default("all-bytes"),
-			service.NewIntField("max_buffer").
+			service.NewIntField(s3iFieldMaxBuffer).
 				Description("The largest token size expected when consuming objects with a tokenised codec such as `lines`.").
 				Default(1_000_000).
 				Advanced(),
 			service.NewObjectField(s3iFieldSQS,
-				service.NewStringField("url").
+				service.NewStringField(s3iSQSFieldURL).
 					Description("An optional SQS URL to connect to. When specified this queue will control which objects are downloaded.").
 					Default(""),
-				service.NewStringField("endpoint").
+				service.NewStringField(s3iSQSFieldEndpoint).
 					Description("A custom endpoint to use when connecting to SQS.").
 					Default("").
 					Advanced(),
-				service.NewStringField("key_path").
+				service.NewStringField(s3iSQSFieldKeyPath).
 					Description("A [dot path](/docs/configuration/field_paths) whereby object keys are found in SQS messages.").
 					Default("Records.*.s3.object.key"),
-				service.NewStringField("bucket_path").
+				service.NewStringField(s3iSQSFieldBucketPath).
 					Description("A [dot path](/docs/configuration/field_paths) whereby the bucket name can be found in SQS messages.").
 					Default("Records.*.s3.bucket.name"),
-				service.NewStringField("envelope_path").
+				service.NewStringField(s3iSQSFieldEnvelopePath).
 					Description("A [dot path](/docs/configuration/field_paths) of a field to extract an enveloped JSON payload for further extracting the key and bucket from SQS messages. This is specifically useful when subscribing an SQS queue to an SNS topic that receives bucket events.").
 					Default("").
 					Example("Message"),
-				service.NewStringField("delay_period").
+				service.NewStringField(s3iSQSFieldDelayPeriod).
 					Description("An optional period of time to wait from when a notification was originally sent to when the target key download is attempted.").
 					Example("10s").
 					Example("5m").
 					Default("").
 					Advanced(),
-				service.NewIntField("max_messages").
+				service.NewIntField(s3iSQSFieldMaxMessages).
 					Description("The maximum number of SQS messages to consume from each request.").
 					Default(10).
 					Advanced(),

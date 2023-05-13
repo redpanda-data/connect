@@ -12,30 +12,54 @@ import (
 	"github.com/aws/aws-sdk-go/service/sqs"
 	"github.com/cenkalti/backoff/v4"
 
-	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component"
-	"github.com/benthosdev/benthos/v4/internal/component/input"
-	"github.com/benthosdev/benthos/v4/internal/component/input/processors"
-	"github.com/benthosdev/benthos/v4/internal/docs"
-	sess "github.com/benthosdev/benthos/v4/internal/impl/aws/session"
-	"github.com/benthosdev/benthos/v4/internal/log"
-	"github.com/benthosdev/benthos/v4/internal/message"
+	"github.com/benthosdev/benthos/v4/internal/impl/aws/config"
 	"github.com/benthosdev/benthos/v4/internal/shutdown"
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
-func init() {
-	err := bundle.AllInputs.Add(processors.WrapConstructor(func(conf input.Config, nm bundle.NewManagement) (input.Streamed, error) {
-		r, err := newAWSSQSReader(conf.AWSSQS, nm.Logger())
-		if err != nil {
-			return nil, err
-		}
-		return input.NewAsyncReader("aws_sqs", r, nm)
-	}), docs.ComponentSpec{
-		Name:   "aws_sqs",
-		Status: docs.StatusStable,
-		Summary: `
-Consume messages from an AWS SQS URL.`,
-		Description: `
+const (
+	// SQS Input Fields
+	sqsiFieldURL                 = "url"
+	sqsiFieldWaitTimeSeconds     = "wait_time_seconds"
+	sqsiFieldDeleteMessage       = "delete_message"
+	sqsiFieldResetVisibility     = "reset_visibility"
+	sqsiFieldMaxNumberOfMessages = "max_number_of_messages"
+)
+
+type sqsiConfig struct {
+	URL                 string
+	WaitTimeSeconds     int
+	DeleteMessage       bool
+	ResetVisibility     bool
+	MaxNumberOfMessages int
+}
+
+func sqsiConfigFromParsed(pConf *service.ParsedConfig) (conf sqsiConfig, err error) {
+	if conf.URL, err = pConf.FieldString(sqsiFieldURL); err != nil {
+		return
+	}
+	if conf.WaitTimeSeconds, err = pConf.FieldInt(sqsiFieldWaitTimeSeconds); err != nil {
+		return
+	}
+	if conf.DeleteMessage, err = pConf.FieldBool(sqsiFieldDeleteMessage); err != nil {
+		return
+	}
+	if conf.ResetVisibility, err = pConf.FieldBool(sqsiFieldResetVisibility); err != nil {
+		return
+	}
+	if conf.MaxNumberOfMessages, err = pConf.FieldInt(sqsiFieldMaxNumberOfMessages); err != nil {
+		return
+	}
+	return
+}
+
+func sqsInputSpec() *service.ConfigSpec {
+	return service.NewConfigSpec().
+		Stable().
+		Categories("Services", "AWS").
+		Summary(`Consume messages from an AWS SQS URL.`).
+		Description(`
 ### Credentials
 
 By default Benthos will use a shared credentials file when connecting to AWS
@@ -47,27 +71,54 @@ allowing you to transfer data across accounts. You can find out more
 
 This input adds the following metadata fields to each message:
 
-` + "```text" + `
+`+"```text"+`
 - sqs_message_id
 - sqs_receipt_handle
 - sqs_approximate_receive_count
 - All message attributes
-` + "```" + `
+`+"```"+`
 
 You can access these metadata fields using
-[function interpolation](/docs/configuration/interpolation#bloblang-queries).`,
-		Config: docs.FieldComponent().WithChildren(
-			docs.FieldURL("url", "The SQS URL to consume from."),
-			docs.FieldBool("delete_message", "Whether to delete the consumed message once it is acked. Disabling allows you to handle the deletion using a different mechanism.").Advanced(),
-			docs.FieldBool("reset_visibility", "Whether to set the visibility timeout of the consumed message to zero once it is nacked. Disabling honors the preset visibility timeout specified for the queue.").AtVersion("3.58.0").Advanced(),
-			docs.FieldInt("max_number_of_messages", "The maximum number of messages to return on one poll. Valid values: 1 to 10.").Advanced(),
-			docs.FieldInt("wait_time_seconds", "Whether to set the wait time. Enabling this activates long-polling. Valid values: 0 to 20.").Advanced(),
-		).WithChildren(sess.FieldSpecs()...).ChildDefaultAndTypesFromStruct(input.NewAWSSQSConfig()),
-		Categories: []string{
-			"Services",
-			"AWS",
-		},
-	})
+[function interpolation](/docs/configuration/interpolation#bloblang-queries).`).
+		Fields(
+			service.NewURLField(sqsiFieldURL).
+				Description("The SQS URL to consume from."),
+			service.NewBoolField(sqsiFieldDeleteMessage).
+				Description("Whether to delete the consumed message once it is acked. Disabling allows you to handle the deletion using a different mechanism.").
+				Default(true).
+				Advanced(),
+			service.NewBoolField(sqsiFieldResetVisibility).
+				Description("Whether to set the visibility timeout of the consumed message to zero once it is nacked. Disabling honors the preset visibility timeout specified for the queue.").
+				Version("3.58.0").
+				Default(true).
+				Advanced(),
+			service.NewIntField(sqsiFieldMaxNumberOfMessages).
+				Description("The maximum number of messages to return on one poll. Valid values: 1 to 10.").
+				Default(10).
+				Advanced(),
+			service.NewIntField("wait_time_seconds").
+				Description("Whether to set the wait time. Enabling this activates long-polling. Valid values: 0 to 20.").
+				Default(0).
+				Advanced(),
+		).
+		Fields(config.SessionFields()...)
+}
+
+func init() {
+	err := service.RegisterInput("aws_sqs", sqsInputSpec(),
+		func(pConf *service.ParsedConfig, mgr *service.Resources) (service.Input, error) {
+			sess, err := GetSession(pConf)
+			if err != nil {
+				return nil, err
+			}
+
+			conf, err := sqsiConfigFromParsed(pConf)
+			if err != nil {
+				return nil, err
+			}
+
+			return newAWSSQSReader(conf, sess, mgr.Logger())
+		})
 	if err != nil {
 		panic(err)
 	}
@@ -76,7 +127,7 @@ You can access these metadata fields using
 //------------------------------------------------------------------------------
 
 type awsSQSReader struct {
-	conf input.AWSSQSConfig
+	conf sqsiConfig
 
 	session *session.Session
 	sqs     *sqs.SQS
@@ -86,12 +137,13 @@ type awsSQSReader struct {
 	nackMessagesChan chan sqsMessageHandle
 	closeSignal      *shutdown.Signaller
 
-	log log.Modular
+	log *service.Logger
 }
 
-func newAWSSQSReader(conf input.AWSSQSConfig, log log.Modular) (*awsSQSReader, error) {
+func newAWSSQSReader(conf sqsiConfig, sess *session.Session, log *service.Logger) (*awsSQSReader, error) {
 	return &awsSQSReader{
 		conf:             conf,
+		session:          sess,
 		log:              log,
 		messagesChan:     make(chan *sqs.Message),
 		ackMessagesChan:  make(chan sqsMessageHandle),
@@ -103,17 +155,11 @@ func newAWSSQSReader(conf input.AWSSQSConfig, log log.Modular) (*awsSQSReader, e
 // Connect attempts to establish a connection to the target SQS
 // queue.
 func (a *awsSQSReader) Connect(ctx context.Context) error {
-	if a.session != nil {
+	if a.sqs != nil {
 		return nil
 	}
 
-	sess, err := GetSessionFromConf(a.conf.Config)
-	if err != nil {
-		return err
-	}
-
-	a.sqs = sqs.New(sess)
-	a.session = sess
+	a.sqs = sqs.New(a.session)
 
 	var wg sync.WaitGroup
 	wg.Add(2)
@@ -334,7 +380,7 @@ func (a *awsSQSReader) resetMessages(ctx context.Context, msgs ...sqsMessageHand
 	return nil
 }
 
-func addSQSMetadata(p *message.Part, sqsMsg *sqs.Message) {
+func addSQSMetadata(p *service.Message, sqsMsg *sqs.Message) {
 	p.MetaSetMut("sqs_message_id", *sqsMsg.MessageId)
 	p.MetaSetMut("sqs_receipt_handle", *sqsMsg.ReceiptHandle)
 	if rCountStr := sqsMsg.Attributes["ApproximateReceiveCount"]; rCountStr != nil {
@@ -348,9 +394,9 @@ func addSQSMetadata(p *message.Part, sqsMsg *sqs.Message) {
 }
 
 // ReadBatch attempts to read a new message from the target SQS.
-func (a *awsSQSReader) ReadBatch(ctx context.Context) (message.Batch, input.AsyncAckFn, error) {
+func (a *awsSQSReader) Read(ctx context.Context) (*service.Message, service.AckFunc, error) {
 	if a.session == nil {
-		return nil, nil, component.ErrNotConnected
+		return nil, nil, service.ErrNotConnected
 	}
 
 	var next *sqs.Message
@@ -366,15 +412,12 @@ func (a *awsSQSReader) ReadBatch(ctx context.Context) (message.Batch, input.Asyn
 		return nil, nil, ctx.Err()
 	}
 
-	msg := message.QuickBatch(nil)
-	if next.Body != nil {
-		part := message.NewPart([]byte(*next.Body))
-		addSQSMetadata(part, next)
-		msg = append(msg, part)
-	}
-	if msg.Len() == 0 {
+	if next.Body == nil {
 		return nil, nil, component.ErrTimeout
 	}
+
+	msg := service.NewMessage([]byte(*next.Body))
+	addSQSMetadata(msg, next)
 
 	mHandle := sqsMessageHandle{
 		id: *next.MessageId,
