@@ -78,6 +78,7 @@ This input adds the following metadata fields to each message:
 - s3_last_modified (RFC3339)
 - s3_content_type
 - s3_content_encoding
+- s3_version_id
 - All user defined metadata
 ` + "```" + `
 
@@ -613,6 +614,9 @@ func s3MsgFromParts(p *s3PendingObject, parts []*message.Part) message.Batch {
 		}
 		if p.obj.ContentEncoding != nil {
 			part.MetaSetMut("s3_content_encoding", *p.obj.ContentEncoding)
+		}
+		if *p.obj.VersionId != "null" {
+			part.MetaSetMut("s3_version_id", *p.obj.VersionId)
 		}
 		for k, v := range p.obj.Metadata {
 			if v != nil {
