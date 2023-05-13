@@ -149,7 +149,6 @@ func (p *Batcher) Flush(ctx context.Context) message.Batch {
 	if len(resultMsgs) == 1 {
 		return resultMsgs[0]
 	} else if len(resultMsgs) > 1 {
-
 		newMsg = make(message.Batch, 0, len(resultMsgs))
 		for _, m := range resultMsgs {
 			newMsg = append(newMsg, m...)
