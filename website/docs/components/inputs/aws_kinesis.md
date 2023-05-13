@@ -14,7 +14,6 @@ categories: ["Services","AWS"]
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-
 Receive messages from one or more Kinesis streams.
 
 Introduced in version 3.36.0.
@@ -112,7 +111,6 @@ One or more Kinesis data streams to consume from. Shards of a stream are automat
 
 
 Type: `array`  
-Default: `[]`  
 
 ### `dynamodb`
 
@@ -244,6 +242,9 @@ Default: `""`
 ### `credentials.secret`
 
 The secret for the credentials being used.
+:::warning Secret
+This field contains sensitive information that usually shouldn't be added to a config directly, read our [secrets page for more info](/docs/configuration/secrets).
+:::
 
 
 Type: `string`  
@@ -361,7 +362,6 @@ A list of [processors](/docs/components/processors/about) to apply to a batch as
 
 
 Type: `array`  
-Default: `[]`  
 
 ```yml
 # Examples

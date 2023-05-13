@@ -11,79 +11,152 @@ import (
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
+	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/kinesis"
 	"github.com/aws/aws-sdk-go/service/kinesis/kinesisiface"
 	"github.com/cenkalti/backoff/v4"
 	"github.com/gofrs/uuid"
 
-	"github.com/benthosdev/benthos/v4/internal/batch/policy"
-	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component"
-	"github.com/benthosdev/benthos/v4/internal/component/input"
-	"github.com/benthosdev/benthos/v4/internal/component/input/processors"
-	"github.com/benthosdev/benthos/v4/internal/docs"
-	"github.com/benthosdev/benthos/v4/internal/impl/aws/session"
-	"github.com/benthosdev/benthos/v4/internal/log"
-	"github.com/benthosdev/benthos/v4/internal/message"
+	"github.com/benthosdev/benthos/v4/internal/impl/aws/config"
 	"github.com/benthosdev/benthos/v4/internal/old/util/retries"
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
-func init() {
-	err := bundle.AllInputs.Add(processors.WrapConstructor(func(c input.Config, nm bundle.NewManagement) (input.Streamed, error) {
-		rdr, err := newKinesisReader(c.AWSKinesis, nm)
-		if err != nil {
-			return nil, err
+const (
+	// Kinesis Input DynDB Fields
+	kiddbFieldTable              = "table"
+	kiddbFieldCreate             = "create"
+	kiddbFieldReadCapacityUnits  = "read_capacity_units"
+	kiddbFieldWriteCapacityUnits = "write_capacity_units"
+	kiddbFieldBillingMode        = "billing_mode"
+
+	// Kinesis Input Fields
+	kiFieldDynamoDB        = "dynamodb"
+	kiFieldStreams         = "streams"
+	kiFieldCheckpointLimit = "checkpoint_limit"
+	kiFieldCommitPeriod    = "commit_period"
+	kiFieldLeasePeriod     = "lease_period"
+	kiFieldRebalancePeriod = "rebalance_period"
+	kiFieldStartFromOldest = "start_from_oldest"
+	kiFieldBatching        = "batching"
+)
+
+type kiConfig struct {
+	Streams         []string
+	DynamoDB        kiddbConfig
+	CheckpointLimit int
+	CommitPeriod    string
+	LeasePeriod     string
+	RebalancePeriod string
+	StartFromOldest bool
+}
+
+func kinesisInputConfigFromParsed(pConf *service.ParsedConfig) (conf kiConfig, err error) {
+	if conf.Streams, err = pConf.FieldStringList(kiFieldStreams); err != nil {
+		return
+	}
+	if pConf.Contains(kiFieldDynamoDB) {
+		if conf.DynamoDB, err = kinesisInputDynamoDBConfigFromParsed(pConf.Namespace(kiFieldDynamoDB)); err != nil {
+			return
 		}
-		return input.NewAsyncReader("aws_kinesis", input.NewAsyncPreserver(rdr), nm)
-	}), docs.ComponentSpec{
-		Name:    "aws_kinesis",
-		Status:  docs.StatusStable,
-		Version: "3.36.0",
-		Summary: `
-Receive messages from one or more Kinesis streams.`,
-		Description: `
+	}
+	if conf.CheckpointLimit, err = pConf.FieldInt(kiFieldCheckpointLimit); err != nil {
+		return
+	}
+	if conf.CommitPeriod, err = pConf.FieldString(kiFieldCommitPeriod); err != nil {
+		return
+	}
+	if conf.LeasePeriod, err = pConf.FieldString(kiFieldLeasePeriod); err != nil {
+		return
+	}
+	if conf.RebalancePeriod, err = pConf.FieldString(kiFieldRebalancePeriod); err != nil {
+		return
+	}
+	if conf.StartFromOldest, err = pConf.FieldBool(kiFieldStartFromOldest); err != nil {
+		return
+	}
+	return
+}
+
+func kinesisInputSpec() *service.ConfigSpec {
+	spec := service.NewConfigSpec().
+		Stable().
+		Version("3.36.0").
+		Categories("Services", "AWS").
+		Summary("Receive messages from one or more Kinesis streams.").
+		Description(`
 Consumes messages from one or more Kinesis streams either by automatically balancing shards across other instances of this input, or by consuming shards listed explicitly. The latest message sequence consumed by this input is stored within a [DynamoDB table](#table-schema), which allows it to resume at the correct sequence of the shard during restarts. This table is also used for coordination across distributed inputs when shard balancing.
 
 Benthos will not store a consumed sequence unless it is acknowledged at the output level, which ensures at-least-once delivery guarantees.
 
 ### Ordering
 
-By default messages of a shard can be processed in parallel, up to a limit determined by the field ` + "`checkpoint_limit`" + `. However, if strict ordered processing is required then this value must be set to 1 in order to process shard messages in lock-step. When doing so it is recommended that you perform batching at this component for performance as it will not be possible to batch lock-stepped messages at the output level.
+By default messages of a shard can be processed in parallel, up to a limit determined by the field `+"`checkpoint_limit`"+`. However, if strict ordered processing is required then this value must be set to 1 in order to process shard messages in lock-step. When doing so it is recommended that you perform batching at this component for performance as it will not be possible to batch lock-stepped messages at the output level.
 
 ### Table Schema
 
-It's possible to configure Benthos to create the DynamoDB table required for coordination if it does not already exist. However, if you wish to create this yourself (recommended) then create a table with a string HASH key ` + "`StreamID`" + ` and a string RANGE key ` + "`ShardID`" + `.
+It's possible to configure Benthos to create the DynamoDB table required for coordination if it does not already exist. However, if you wish to create this yourself (recommended) then create a table with a string HASH key `+"`StreamID`"+` and a string RANGE key `+"`ShardID`"+`.
 
 ### Batching
 
-Use the ` + "`batching`" + ` fields to configure an optional [batching policy](/docs/configuration/batching#batch-policy). Each stream shard will be batched separately in order to ensure that acknowledgements aren't contaminated.
-`,
-		Config: docs.FieldComponent().WithChildren(
-			docs.FieldString("streams", "One or more Kinesis data streams to consume from. Shards of a stream are automatically balanced across consumers by coordinating through the provided DynamoDB table. Multiple comma separated streams can be listed in a single element. Shards are automatically distributed across consumers of a stream by coordinating through the provided DynamoDB table. Alternatively, it's possible to specify an explicit shard to consume from with a colon after the stream name, e.g. `foo:0` would consume the shard `0` of the stream `foo`.").Array(),
-			docs.FieldObject(
-				"dynamodb", "Determines the table used for storing and accessing the latest consumed sequence for shards, and for coordinating balanced consumers of streams.",
-			).WithChildren(
-				docs.FieldString("table", "The name of the table to access."),
-				docs.FieldBool("create", "Whether, if the table does not exist, it should be created."),
-				docs.FieldString("billing_mode", "When creating the table determines the billing mode.").HasOptions("PROVISIONED", "PAY_PER_REQUEST").Advanced(),
-				docs.FieldInt("read_capacity_units", "Set the provisioned read capacity when creating the table with a `billing_mode` of `PROVISIONED`.").Advanced(),
-				docs.FieldInt("write_capacity_units", "Set the provisioned write capacity when creating the table with a `billing_mode` of `PROVISIONED`.").Advanced(),
-			),
-			docs.FieldInt(
-				"checkpoint_limit", "The maximum gap between the in flight sequence versus the latest acknowledged sequence at a given time. Increasing this limit enables parallel processing and batching at the output level to work on individual shards. Any given sequence will not be committed unless all messages under that offset are delivered in order to preserve at least once delivery guarantees.",
-			),
-			docs.FieldString("commit_period", "The period of time between each update to the checkpoint table."),
-			docs.FieldString("rebalance_period", "The period of time between each attempt to rebalance shards across clients.").Advanced(),
-			docs.FieldString("lease_period", "The period of time after which a client that has failed to update a shard checkpoint is assumed to be inactive.").Advanced(),
-			docs.FieldBool("start_from_oldest", "Whether to consume from the oldest message when a sequence does not yet exist for the stream."),
-		).WithChildren(session.FieldSpecs()...).
-			WithChildren(policy.FieldSpec()).
-			ChildDefaultAndTypesFromStruct(input.NewAWSKinesisConfig()),
-		Categories: []string{
-			"Services",
-			"AWS",
-		},
-	})
+Use the `+"`batching`"+` fields to configure an optional [batching policy](/docs/configuration/batching#batch-policy). Each stream shard will be batched separately in order to ensure that acknowledgements aren't contaminated.
+`).Fields(
+		service.NewStringListField(kiFieldStreams).
+			Description("One or more Kinesis data streams to consume from. Shards of a stream are automatically balanced across consumers by coordinating through the provided DynamoDB table. Multiple comma separated streams can be listed in a single element. Shards are automatically distributed across consumers of a stream by coordinating through the provided DynamoDB table. Alternatively, it's possible to specify an explicit shard to consume from with a colon after the stream name, e.g. `foo:0` would consume the shard `0` of the stream `foo`."),
+		service.NewObjectField(kiFieldDynamoDB,
+			service.NewStringField(kiddbFieldTable).
+				Description("The name of the table to access.").
+				Default(""),
+			service.NewBoolField(kiddbFieldCreate).
+				Description("Whether, if the table does not exist, it should be created.").
+				Default(false),
+			service.NewStringEnumField(kiddbFieldBillingMode, "PROVISIONED", "PAY_PER_REQUEST").
+				Description("When creating the table determines the billing mode.").
+				Default("PAY_PER_REQUEST").
+				Advanced(),
+			service.NewIntField(kiddbFieldReadCapacityUnits).
+				Description("Set the provisioned read capacity when creating the table with a `billing_mode` of `PROVISIONED`.").
+				Default(0).
+				Advanced(),
+			service.NewIntField(kiddbFieldWriteCapacityUnits).
+				Description("Set the provisioned write capacity when creating the table with a `billing_mode` of `PROVISIONED`.").
+				Default(0).
+				Advanced(),
+		).
+			Description("Determines the table used for storing and accessing the latest consumed sequence for shards, and for coordinating balanced consumers of streams."),
+		service.NewIntField(kiFieldCheckpointLimit).
+			Description("The maximum gap between the in flight sequence versus the latest acknowledged sequence at a given time. Increasing this limit enables parallel processing and batching at the output level to work on individual shards. Any given sequence will not be committed unless all messages under that offset are delivered in order to preserve at least once delivery guarantees.").
+			Default(1024),
+		service.NewDurationField(kiFieldCommitPeriod).
+			Description("The period of time between each update to the checkpoint table.").
+			Default("5s"),
+		service.NewDurationField(kiFieldRebalancePeriod).
+			Description("The period of time between each attempt to rebalance shards across clients.").
+			Default("30s").
+			Advanced(),
+		service.NewDurationField(kiFieldLeasePeriod).
+			Description("The period of time after which a client that has failed to update a shard checkpoint is assumed to be inactive.").
+			Default("30s").
+			Advanced(),
+		service.NewBoolField(kiFieldStartFromOldest).
+			Description("Whether to consume from the oldest message when a sequence does not yet exist for the stream.").
+			Default(true),
+	).
+		Fields(config.SessionFields()...).
+		Field(service.NewBatchPolicyField(kiFieldBatching))
+	return spec
+}
+
+func init() {
+	err := service.RegisterBatchInput("aws_kinesis", kinesisInputSpec(),
+		func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchInput, error) {
+			r, err := newKinesisReaderFromParsed(conf, mgr)
+			if err != nil {
+				return nil, err
+			}
+			return service.AutoRetryNacksBatched(r), nil
+		})
 	if err != nil {
 		panic(err)
 	}
@@ -94,16 +167,18 @@ Use the ` + "`batching`" + ` fields to configure an optional [batching policy](/
 var awsKinesisDefaultLimit = int64(10e3)
 
 type asyncMessage struct {
-	msg   message.Batch
-	ackFn input.AsyncAckFn
+	msg   service.MessageBatch
+	ackFn service.AckFunc
 }
 
 type kinesisReader struct {
-	conf     input.AWSKinesisConfig
+	conf     kiConfig
 	clientID string
 
-	log log.Modular
-	mgr bundle.NewManagement
+	sess    *session.Session
+	batcher service.BatchPolicy
+	log     *service.Logger
+	mgr     *service.Resources
 
 	backoffCtor func() backoff.BackOff
 	boffPool    sync.Pool
@@ -130,13 +205,31 @@ type kinesisReader struct {
 
 var errCannotMixBalancedShards = errors.New("it is not currently possible to include balanced and explicit shard streams in the same kinesis input")
 
-func newKinesisReader(conf input.AWSKinesisConfig, mgr bundle.NewManagement) (*kinesisReader, error) {
-	if conf.Batching.IsNoop() {
-		conf.Batching.Count = 1
+func newKinesisReaderFromParsed(pConf *service.ParsedConfig, mgr *service.Resources) (*kinesisReader, error) {
+	conf, err := kinesisInputConfigFromParsed(pConf)
+	if err != nil {
+		return nil, err
+	}
+	sess, err := GetSession(pConf)
+	if err != nil {
+		return nil, err
+	}
+	batcher, err := pConf.FieldBatchPolicy(kiFieldBatching)
+	if err != nil {
+		return nil, err
+	}
+	return newKinesisReaderFromConfig(conf, batcher, sess, mgr)
+}
+
+func newKinesisReaderFromConfig(conf kiConfig, batcher service.BatchPolicy, sess *session.Session, mgr *service.Resources) (*kinesisReader, error) {
+	if batcher.IsNoop() {
+		batcher.Count = 1
 	}
 
 	k := kinesisReader{
 		conf:         conf,
+		sess:         sess,
+		batcher:      batcher,
 		log:          mgr.Logger(),
 		mgr:          mgr,
 		closedChan:   make(chan struct{}),
@@ -387,7 +480,7 @@ func (k *kinesisReader) runConsumer(wg *sync.WaitGroup, streamID, shardID, start
 						nextPullChan = time.After(boff.NextBackOff())
 
 						if aerr, ok := err.(awserr.Error); ok && aerr.Code() == kinesis.ErrCodeExpiredIteratorException {
-							k.log.Warnln("Shard iterator expired, attempting to refresh")
+							k.log.Warn("Shard iterator expired, attempting to refresh")
 							newIter, err := k.getIter(streamID, shardID, recordBatcher.GetSequence())
 							if err != nil {
 								k.log.Errorf("Failed to refresh shard iterator: %v", err)
@@ -452,7 +545,7 @@ func (k *kinesisReader) runConsumer(wg *sync.WaitGroup, streamID, shardID, start
 			}
 
 			if nextTimedBatchChan == nil {
-				if tNext := recordBatcher.UntilNext(); tNext >= 0 {
+				if tNext, exists := recordBatcher.UntilNext(); exists {
 					nextTimedBatchChan = time.After(tNext)
 				}
 			}
@@ -681,13 +774,8 @@ func (k *kinesisReader) Connect(ctx context.Context) error {
 		return nil
 	}
 
-	sess, err := GetSessionFromConf(k.conf.Config)
-	if err != nil {
-		return err
-	}
-
-	svc := kinesis.New(sess)
-	checkpointer, err := newAWSKinesisCheckpointer(sess, k.clientID, k.conf.DynamoDB, k.leasePeriod, k.commitPeriod)
+	svc := kinesis.New(k.sess)
+	checkpointer, err := newAWSKinesisCheckpointer(k.sess, k.clientID, k.conf.DynamoDB, k.leasePeriod, k.commitPeriod)
 	if err != nil {
 		return err
 	}
@@ -705,19 +793,19 @@ func (k *kinesisReader) Connect(ctx context.Context) error {
 }
 
 // ReadBatch attempts to read a message from Kinesis.
-func (k *kinesisReader) ReadBatch(ctx context.Context) (message.Batch, input.AsyncAckFn, error) {
+func (k *kinesisReader) ReadBatch(ctx context.Context) (service.MessageBatch, service.AckFunc, error) {
 	k.cMut.Lock()
 	msgChan := k.msgChan
 	k.cMut.Unlock()
 
 	if msgChan == nil {
-		return nil, nil, component.ErrNotConnected
+		return nil, nil, service.ErrNotConnected
 	}
 
 	select {
 	case m, open := <-msgChan:
 		if !open {
-			return nil, nil, component.ErrNotConnected
+			return nil, nil, service.ErrNotConnected
 		}
 		return m.msg, m.ackFn, nil
 	case <-ctx.Done():
