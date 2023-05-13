@@ -23,6 +23,7 @@ All notable changes to this project will be documented in this file.
 - The `open_telemetry_collector` tracer option no longer blocks service start up when the endpoints cannot be reached, and instead manages connections in the background.
 - The `gcp_pubsub` output should see significant performance improvements due to a client library upgrade.
 - The stream builder APIs should now follow `logger.file` config fields.
+- The experimental `cue` format in the cli `list` subcommand no longer introduces infinite recursion for `#Processors`.
 
 ## 4.15.0 - 2023-05-05
 
