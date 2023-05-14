@@ -11,6 +11,14 @@ import (
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
+func int64Field(conf *service.ParsedConfig, path ...string) (int64, error) {
+	i, err := conf.FieldInt(path...)
+	if err != nil {
+		return 0, err
+	}
+	return int64(i), nil
+}
+
 // GetSession attempts to create an AWS session based on the parsedConfig.
 func GetSession(parsedConf *service.ParsedConfig, opts ...func(*aws.Config)) (*session.Session, error) {
 	awsConf := aws.NewConfig()

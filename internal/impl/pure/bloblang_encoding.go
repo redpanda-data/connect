@@ -11,6 +11,7 @@ import (
 	"github.com/klauspost/compress/gzip"
 	"github.com/klauspost/compress/snappy"
 	"github.com/klauspost/compress/zlib"
+	"github.com/klauspost/pgzip"
 
 	"github.com/pierrec/lz4/v4"
 
@@ -23,7 +24,7 @@ func init() {
 		bloblang.NewPluginSpec().
 			Category(query.MethodCategoryEncoding).
 			Description(`Compresses a string or byte array value according to a specified algorithm.`).
-			Param(bloblang.NewStringParam("algorithm").Description("One of `flate`, `gzip`, `lz4`, `snappy`, `zlib`, `zstd`.")).
+			Param(bloblang.NewStringParam("algorithm").Description("One of `flate`, `gzip`, `pgzip`, `lz4`, `snappy`, `zlib`, `zstd`.")).
 			Param(bloblang.NewInt64Param("level").Description("The level of compression to use. May not be applicable to all algorithms.").Default(-1)).
 			Example("", `let long_content = range(0, 1000).map_each(content()).join(" ")
 root.a_len = $long_content.length()
@@ -64,7 +65,7 @@ root.b_len = $long_content.compress("gzip").length()
 		bloblang.NewPluginSpec().
 			Category(query.MethodCategoryEncoding).
 			Description(`Decompresses a string or byte array value according to a specified algorithm. The result of decompression `).
-			Param(bloblang.NewStringParam("algorithm").Description("One of `gzip`, `zlib`, `bzip2`, `flate`, `snappy`, `lz4`, `zstd`.")).
+			Param(bloblang.NewStringParam("algorithm").Description("One of `gzip`, `pgzip`, `zlib`, `bzip2`, `flate`, `snappy`, `lz4`, `zstd`.")).
 			Example("", `root = this.compressed.decode("base64").decompress("lz4")`,
 				[2]string{
 					`{"compressed":"BCJNGGRwuRgAAIBoZWxsbyB3b3JsZCBJIGxvdmUgc3BhY2UAAAAAGoETLg=="}`,
@@ -126,6 +127,22 @@ func strToCompressor(str string) (CompressFunc, error) {
 var _ = AddCompressFunc("gzip", func(level int, b []byte) ([]byte, error) {
 	buf := &bytes.Buffer{}
 	w, err := gzip.NewWriterLevel(buf, level)
+	if err != nil {
+		return nil, err
+	}
+
+	if _, err = w.Write(b); err != nil {
+		w.Close()
+		return nil, err
+	}
+	// Must flush writer before calling buf.Bytes()
+	w.Close()
+	return buf.Bytes(), nil
+})
+
+var _ = AddCompressFunc("pgzip", func(level int, b []byte) ([]byte, error) {
+	buf := &bytes.Buffer{}
+	w, err := pgzip.NewWriterLevel(buf, level)
 	if err != nil {
 		return nil, err
 	}
@@ -224,6 +241,21 @@ func strToDecompressor(str string) (DecompressFunc, error) {
 
 var _ = AddDecompressFunc("gzip", func(b []byte) ([]byte, error) {
 	r, err := gzip.NewReader(bytes.NewBuffer(b))
+	if err != nil {
+		return nil, err
+	}
+
+	outBuf := bytes.Buffer{}
+	if _, err = io.Copy(&outBuf, r); err != nil {
+		r.Close()
+		return nil, err
+	}
+	r.Close()
+	return outBuf.Bytes(), nil
+})
+
+var _ = AddDecompressFunc("pgzip", func(b []byte) ([]byte, error) {
+	r, err := pgzip.NewReader(bytes.NewBuffer(b))
 	if err != nil {
 		return nil, err
 	}

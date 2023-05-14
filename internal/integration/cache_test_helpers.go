@@ -16,6 +16,7 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/component/cache"
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/internal/config"
+	"github.com/benthosdev/benthos/v4/internal/filepath/ifs"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/manager"
 )
@@ -102,7 +103,7 @@ func CacheTestOptLogging(level string) CacheTestOptFunc {
 		logConf := log.NewConfig()
 		logConf.LogLevel = level
 		var err error
-		env.log, err = log.New(os.Stdout, logConf)
+		env.log, err = log.New(os.Stdout, ifs.OS(), logConf)
 		if err != nil {
 			panic(err)
 		}

@@ -2955,7 +2955,7 @@ Compresses a string or byte array value according to a specified algorithm.
 
 #### Parameters
 
-**`algorithm`** &lt;string&gt; One of `flate`, `gzip`, `lz4`, `snappy`, `zlib`, `zstd`.  
+**`algorithm`** &lt;string&gt; One of `flate`, `gzip`, `pgzip`, `lz4`, `snappy`, `zlib`, `zstd`.  
 **`level`** &lt;integer, default `-1`&gt; The level of compression to use. May not be applicable to all algorithms.  
 
 #### Examples
@@ -3011,7 +3011,7 @@ Decompresses a string or byte array value according to a specified algorithm. Th
 
 #### Parameters
 
-**`algorithm`** &lt;string&gt; One of `gzip`, `zlib`, `bzip2`, `flate`, `snappy`, `lz4`, `zstd`.  
+**`algorithm`** &lt;string&gt; One of `gzip`, `pgzip`, `zlib`, `bzip2`, `flate`, `snappy`, `lz4`, `zstd`.  
 
 #### Examples
 

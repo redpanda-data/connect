@@ -18,6 +18,7 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	ioutput "github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/config"
+	"github.com/benthosdev/benthos/v4/internal/filepath/ifs"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/manager"
 	"github.com/benthosdev/benthos/v4/internal/message"
@@ -213,7 +214,7 @@ func StreamTestOptLogging(level string) StreamTestOptFunc {
 		logConf := log.NewConfig()
 		logConf.LogLevel = level
 		var err error
-		env.log, err = log.New(os.Stdout, logConf)
+		env.log, err = log.New(os.Stdout, ifs.OS(), logConf)
 		if err != nil {
 			panic(err)
 		}

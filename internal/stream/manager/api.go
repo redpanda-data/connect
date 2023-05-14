@@ -37,11 +37,14 @@ func (m *Type) registerEndpoints(enableCrud bool) {
 		return
 	}
 	m.manager.RegisterEndpoint(
-		"/streams",
-		"GET: List all streams along with their status and uptimes."+
-			" POST: Post an object of stream ids to stream configs, all"+
-			" streams will be replaced by this new set.",
-		m.HandleStreamsCRUD,
+		"/resources/{type}/{id}",
+		"POST: Create or replace a given resource configuration of a specified type. Types supported are `cache`, `input`, `output`, `processor` and `rate_limit`.",
+		m.HandleResourceCRUD,
+	)
+	m.manager.RegisterEndpoint(
+		"/streams/{id}/stats",
+		"GET a structured JSON object containing metrics for the stream.",
+		m.HandleStreamStats,
 	)
 	m.manager.RegisterEndpoint(
 		"/streams/{id}",
@@ -51,14 +54,11 @@ func (m *Type) registerEndpoints(enableCrud bool) {
 		m.HandleStreamCRUD,
 	)
 	m.manager.RegisterEndpoint(
-		"/streams/{id}/stats",
-		"GET a structured JSON object containing metrics for the stream.",
-		m.HandleStreamStats,
-	)
-	m.manager.RegisterEndpoint(
-		"/resources/{type}/{id}",
-		"POST: Create or replace a given resource configuration of a specified type. Types supported are `cache`, `input`, `output`, `processor` and `rate_limit`.",
-		m.HandleResourceCRUD,
+		"/streams",
+		"GET: List all streams along with their status and uptimes."+
+			" POST: Post an object of stream ids to stream configs, all"+
+			" streams will be replaced by this new set.",
+		m.HandleStreamsCRUD,
 	)
 }
 

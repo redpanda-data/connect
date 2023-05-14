@@ -13,11 +13,6 @@ import (
 type Config struct {
 	Label             string                  `json:"label" yaml:"label"`
 	Type              string                  `json:"type" yaml:"type"`
-	AMQP09            AMQP09Config            `json:"amqp_0_9" yaml:"amqp_0_9"`
-	AMQP1             AMQP1Config             `json:"amqp_1" yaml:"amqp_1"`
-	AWSKinesis        AWSKinesisConfig        `json:"aws_kinesis" yaml:"aws_kinesis"`
-	AWSS3             AWSS3Config             `json:"aws_s3" yaml:"aws_s3"`
-	AWSSQS            AWSSQSConfig            `json:"aws_sqs" yaml:"aws_sqs"`
 	AzureBlobStorage  AzureBlobStorageConfig  `json:"azure_blob_storage" yaml:"azure_blob_storage"`
 	AzureQueueStorage AzureQueueStorageConfig `json:"azure_queue_storage" yaml:"azure_queue_storage"`
 	AzureTableStorage AzureTableStorageConfig `json:"azure_table_storage" yaml:"azure_table_storage"`
@@ -34,7 +29,6 @@ type Config struct {
 	Kafka             KafkaConfig             `json:"kafka" yaml:"kafka"`
 	MQTT              MQTTConfig              `json:"mqtt" yaml:"mqtt"`
 	Nanomsg           NanomsgConfig           `json:"nanomsg" yaml:"nanomsg"`
-	NATS              NATSConfig              `json:"nats" yaml:"nats"`
 	NATSStream        NATSStreamConfig        `json:"nats_stream" yaml:"nats_stream"`
 	NSQ               NSQConfig               `json:"nsq" yaml:"nsq"`
 	Plugin            any                     `json:"plugin,omitempty" yaml:"plugin,omitempty"`
@@ -58,11 +52,6 @@ func NewConfig() Config {
 	return Config{
 		Label:             "",
 		Type:              "stdin",
-		AMQP09:            NewAMQP09Config(),
-		AMQP1:             NewAMQP1Config(),
-		AWSKinesis:        NewAWSKinesisConfig(),
-		AWSS3:             NewAWSS3Config(),
-		AWSSQS:            NewAWSSQSConfig(),
 		AzureBlobStorage:  NewAzureBlobStorageConfig(),
 		AzureQueueStorage: NewAzureQueueStorageConfig(),
 		Broker:            NewBrokerConfig(),
@@ -78,7 +67,6 @@ func NewConfig() Config {
 		Kafka:             NewKafkaConfig(),
 		MQTT:              NewMQTTConfig(),
 		Nanomsg:           NewNanomsgConfig(),
-		NATS:              NewNATSConfig(),
 		NATSStream:        NewNATSStreamConfig(),
 		NSQ:               NewNSQConfig(),
 		Plugin:            nil,

@@ -31,10 +31,18 @@ output:
   gcp_pubsub:
     project: ""
     topic: ""
-    max_in_flight: 64
     endpoint: ""
+    max_in_flight: 64
+    count_threshold: 100
+    delay_threshold: 10ms
+    byte_threshold: 1000000
     metadata:
       exclude_prefixes: []
+    batching:
+      count: 0
+      byte_size: 0
+      period: ""
+      check: ""
 ```
 
 </TabItem>
@@ -47,16 +55,25 @@ output:
   gcp_pubsub:
     project: ""
     topic: ""
-    max_in_flight: 64
-    publish_timeout: 60s
-    ordering_key: ""
     endpoint: ""
+    ordering_key: ""
+    max_in_flight: 64
+    count_threshold: 100
+    delay_threshold: 10ms
+    byte_threshold: 1000000
+    publish_timeout: 1m0s
     metadata:
       exclude_prefixes: []
     flow_control:
-      max_outstanding_messages: 1000
       max_outstanding_bytes: -1
-      limit_exceeded_behavior: ignore
+      max_outstanding_messages: 1000
+      limit_exceeded_behavior: block
+    batching:
+      count: 0
+      byte_size: 0
+      period: ""
+      check: ""
+      processors: []
 ```
 
 </TabItem>
@@ -85,12 +102,6 @@ pipeline:
     - mapping: meta = deleted()
 ```
 
-## Performance
-
-This output benefits from sending multiple messages in flight in parallel for
-improved performance. You can tune the max number of in flight messages (or
-message batches) with the field `max_in_flight`.
-
 ## Fields
 
 ### `project`
@@ -99,7 +110,6 @@ The project ID of the topic to publish to.
 
 
 Type: `string`  
-Default: `""`  
 
 ### `topic`
 
@@ -108,42 +118,6 @@ This field supports [interpolation functions](/docs/configuration/interpolation#
 
 
 Type: `string`  
-Default: `""`  
-
-### `max_in_flight`
-
-The maximum number of messages to have in flight at a given time. Increase this to improve throughput.
-
-
-Type: `int`  
-Default: `64`  
-
-### `publish_timeout`
-
-The maximum length of time to wait before abandoning a publish attempt for a message.
-
-
-Type: `string`  
-Default: `"60s"`  
-
-```yml
-# Examples
-
-publish_timeout: 10s
-
-publish_timeout: 5m
-
-publish_timeout: 60m
-```
-
-### `ordering_key`
-
-The ordering key to use for publishing messages.
-This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
-
-
-Type: `string`  
-Default: `""`  
 
 ### `endpoint`
 
@@ -161,9 +135,67 @@ endpoint: us-central1-pubsub.googleapis.com:443
 endpoint: us-west3-pubsub.googleapis.com:443
 ```
 
+### `ordering_key`
+
+The ordering key to use for publishing messages.
+This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
+
+
+Type: `string`  
+
+### `max_in_flight`
+
+The maximum number of messages to have in flight at a given time. Increasing this may improve throughput.
+
+
+Type: `int`  
+Default: `64`  
+
+### `count_threshold`
+
+Publish a pubsub buffer when it has this many messages
+
+
+Type: `int`  
+Default: `100`  
+
+### `delay_threshold`
+
+Publish a non-empty pubsub buffer after this delay has passed.
+
+
+Type: `string`  
+Default: `"10ms"`  
+
+### `byte_threshold`
+
+Publish a batch when its size in bytes reaches this value.
+
+
+Type: `int`  
+Default: `1000000`  
+
+### `publish_timeout`
+
+The maximum length of time to wait before abandoning a publish attempt for a message.
+
+
+Type: `string`  
+Default: `"1m0s"`  
+
+```yml
+# Examples
+
+publish_timeout: 10s
+
+publish_timeout: 5m
+
+publish_timeout: 60m
+```
+
 ### `metadata`
 
-Specify criteria for which metadata values are sent as attributes.
+Specify criteria for which metadata values are sent as attributes, all are sent by default.
 
 
 Type: `object`  
@@ -183,14 +215,6 @@ For a given topic, configures the PubSub client's internal buffer for messages t
 
 Type: `object`  
 
-### `flow_control.max_outstanding_messages`
-
-Maximum number of buffered messages to be published. If less than or equal to zero, this is disabled.
-
-
-Type: `int`  
-Default: `1000`  
-
 ### `flow_control.max_outstanding_bytes`
 
 Maximum size of buffered messages to be published. If less than or equal to zero, this is disabled.
@@ -199,13 +223,117 @@ Maximum size of buffered messages to be published. If less than or equal to zero
 Type: `int`  
 Default: `-1`  
 
+### `flow_control.max_outstanding_messages`
+
+Maximum number of buffered messages to be published. If less than or equal to zero, this is disabled.
+
+
+Type: `int`  
+Default: `1000`  
+
 ### `flow_control.limit_exceeded_behavior`
 
-Configures the behavior when trying to publish additional messages while the flow controller is full. The available options are ignore (disable, default), block, and signal_error (publish results will return an error).
+Configures the behavior when trying to publish additional messages while the flow controller is full. The available options are block (default), ignore (disable), and signal_error (publish results will return an error).
 
 
 Type: `string`  
-Default: `"ignore"`  
+Default: `"block"`  
 Options: `ignore`, `block`, `signal_error`.
+
+### `batching`
+
+Configures a batching policy on this output. While the PubSub client maintains its own internal buffering mechanism, preparing larger batches of messages can futher trade-off some latency for throughput.
+
+
+Type: `object`  
+
+```yml
+# Examples
+
+batching:
+  byte_size: 5000
+  count: 0
+  period: 1s
+
+batching:
+  count: 10
+  period: 1s
+
+batching:
+  check: this.contains("END BATCH")
+  count: 0
+  period: 1m
+```
+
+### `batching.count`
+
+A number of messages at which the batch should be flushed. If `0` disables count based batching.
+
+
+Type: `int`  
+Default: `0`  
+
+### `batching.byte_size`
+
+An amount of bytes at which the batch should be flushed. If `0` disables size based batching.
+
+
+Type: `int`  
+Default: `0`  
+
+### `batching.period`
+
+A period in which an incomplete batch should be flushed regardless of its size.
+
+
+Type: `string`  
+Default: `""`  
+
+```yml
+# Examples
+
+period: 1s
+
+period: 1m
+
+period: 500ms
+```
+
+### `batching.check`
+
+A [Bloblang query](/docs/guides/bloblang/about/) that should return a boolean value indicating whether a message should end a batch.
+
+
+Type: `string`  
+Default: `""`  
+
+```yml
+# Examples
+
+check: this.type == "end_of_transaction"
+```
+
+### `batching.processors`
+
+A list of [processors](/docs/components/processors/about) to apply to a batch as it is flushed. This allows you to aggregate and archive the batch however you see fit. Please note that all resulting messages are flushed as a single batch, therefore splitting the batch into smaller batches using these processors is a no-op.
+
+
+Type: `array`  
+
+```yml
+# Examples
+
+processors:
+  - archive:
+      format: concatenate
+
+processors:
+  - archive:
+      format: lines
+
+processors:
+  - archive:
+      format: json_array
+```
 
 

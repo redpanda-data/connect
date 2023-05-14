@@ -144,7 +144,7 @@ If the expression is omitted a default config is created.`[1:],
 					ResourceRateLimits: conf.ResourceRateLimits,
 				}
 
-				filter = func(spec docs.FieldSpec) bool {
+				filter = func(spec docs.FieldSpec, _ any) bool {
 					return !spec.IsAdvanced
 				}
 			}

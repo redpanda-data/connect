@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/benthosdev/benthos/v4/internal/filepath/ifs"
 	"github.com/benthosdev/benthos/v4/internal/log"
 )
 
@@ -16,7 +17,7 @@ func TestReverseAirGapLogger(t *testing.T) {
 	lConf.Format = "json"
 
 	var buf bytes.Buffer
-	logger, err := log.New(&buf, lConf)
+	logger, err := log.New(&buf, ifs.OS(), lConf)
 	require.NoError(t, err)
 
 	agLogger := newReverseAirGapLogger(logger)
@@ -49,7 +50,7 @@ func TestReverseAirGapLoggerDodgyFields(t *testing.T) {
 	lConf.Format = "json"
 
 	var buf bytes.Buffer
-	logger, err := log.New(&buf, lConf)
+	logger, err := log.New(&buf, ifs.OS(), lConf)
 	require.NoError(t, err)
 
 	agLogger := newReverseAirGapLogger(logger)

@@ -1,12 +1,17 @@
 package lang
 
 import (
+	"crypto/rand"
 	"fmt"
+	"io"
 	"strings"
+	"time"
 
 	"github.com/bwmarrin/snowflake"
-	"github.com/bxcodec/faker/v3"
+	"github.com/go-faker/faker/v4"
 	"github.com/gosimple/slug"
+	"github.com/oklog/ulid"
+	frand "golang.org/x/exp/rand"
 
 	"github.com/benthosdev/benthos/v4/internal/bloblang/query"
 	"github.com/benthosdev/benthos/v4/public/bloblang"
@@ -52,13 +57,13 @@ func init() {
 	fakerSpec := bloblang.NewPluginSpec().
 		Beta().
 		Category(query.FunctionCategoryFakeData).
-		Description("Takes in a string that maps to a [faker](https://github.com/bxcodec/faker) function and returns the result from that faker function. "+
+		Description("Takes in a string that maps to a [faker](https://github.com/go-faker/faker) function and returns the result from that faker function. "+
 			"Returns an error if the given string doesn't match a supported faker function. Supported functions: `latitude`, `longitude`, `unix_time`, "+
 			"`date`, `time_string`, `month_name`, `year_string`, `day_of_week`, `day_of_month`, `timestamp`, `century`, `timezone`, `time_period`, "+
 			"`email`, `mac_address`, `domain_name`, `url`, `username`, `ipv4`, `ipv6`, `password`, `jwt`, `word`, `sentence`, `paragraph`, "+
 			"`cc_type`, `cc_number`, `currency`, `amount_with_currency`, `title_male`, `title_female`, `first_name`, `first_name_male`, "+
 			"`first_name_female`, `last_name`, `name`, `gender`, `chinese_first_name`, `chinese_last_name`, `chinese_name`, `phone_number`, "+
-			"`toll_free_phone_number`, `e164_phone_number`, `uuid_hyphenated`, `uuid_digit`. Refer to the [faker](https://github.com/bxcodec/faker) docs "+
+			"`toll_free_phone_number`, `e164_phone_number`, `uuid_hyphenated`, `uuid_digit`. Refer to the [faker](https://github.com/go-faker/faker) docs "+
 			"for details on these functions.").
 		Param(bloblang.NewStringParam("function").Description("The name of the function to use to generate the value.").Default("")).
 		Example("Use `time_string` to generate a time in the format `00:00:00`:",
@@ -109,6 +114,10 @@ func init() {
 			}, nil
 		},
 	); err != nil {
+		panic(err)
+	}
+
+	if err := registerULID(); err != nil {
 		panic(err)
 	}
 }
@@ -229,4 +238,103 @@ func GetFakeValue(function string) (any, error) {
 	}
 
 	return "", fmt.Errorf("invalid faker function: %s", function)
+}
+
+func registerULID() error {
+	encodings := []string{"crockford", "hex"}
+	randSources := []string{"secure_random", "fast_random"}
+	spec := bloblang.NewPluginSpec().
+		Experimental().
+		Category(query.FunctionCategoryGeneral).
+		Description("Generate a random ULID.").
+		Param(
+			bloblang.NewStringParam("encoding").
+				Default("crockford").
+				Description(fmt.Sprintf("The format to encode a ULID into. Valid options are: %s", strings.Join(encodings, ", "))),
+		).
+		Param(
+			bloblang.NewStringParam("random_source").
+				Default("secure_random").
+				Description(`The source of randomness to use for generating ULIDs. "secure_random" is recommended for most use cases. "fast_random" can be used if security is not a concern.`),
+		).
+		Example(
+			"Using the defaults of Crockford Base32 encoding and secure random source",
+			`root.id = ulid()`,
+		).
+		Example(
+			"ULIDs can be hex-encoded too.",
+			`root.id = ulid("hex")`,
+		).
+		Example(
+			"They can be generated using a fast, but unsafe, random source for use cases that are not security-sensitive.",
+			`root.id = ulid("crockford", "fast_random")`,
+		)
+
+	secureRandom := rand.Reader
+	fastRandom := frand.New(new(frand.LockedSource))
+	// The cast to uint64 is done on the assumption that we will not get a
+	// negative value for time.
+	fastRandom.Seed(uint64(time.Now().UnixNano()))
+
+	return bloblang.RegisterFunctionV2("ulid", spec, func(args *bloblang.ParsedParams) (bloblang.Function, error) {
+		encoding, err := args.GetString("encoding")
+		if err != nil {
+			return nil, err
+		}
+
+		if !hasMember(encodings, encoding) {
+			return nil, fmt.Errorf("invalid ulid encoding: %s", encoding)
+		}
+
+		source, err := args.GetString("random_source")
+		if err != nil {
+			return nil, err
+		}
+
+		if !hasMember(randSources, source) {
+			return nil, fmt.Errorf("invalid randomness source: %s", source)
+		}
+
+		var rdr io.Reader
+		if source == "fast_random" {
+			rdr = fastRandom
+		} else {
+			rdr = secureRandom
+		}
+
+		return func() (any, error) {
+			ms := ulid.Timestamp(time.Now())
+
+			id, err := ulid.New(ms, rdr)
+			if err != nil {
+				return nil, err
+			}
+
+			switch encoding {
+			case "crockford":
+				bs, err := id.MarshalText()
+				if err != nil {
+					return nil, err
+				}
+				return string(bs), nil
+			case "hex":
+				bs, err := id.MarshalBinary()
+				if err != nil {
+					return nil, err
+				}
+				return fmt.Sprintf("%x", bs), nil
+			default:
+				return nil, fmt.Errorf("could not encode ULID with %s", encoding)
+			}
+		}, nil
+	})
+}
+
+func hasMember(arr []string, member string) bool {
+	for _, v := range arr {
+		if v == member {
+			return true
+		}
+	}
+	return false
 }

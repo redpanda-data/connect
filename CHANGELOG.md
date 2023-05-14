@@ -7,12 +7,41 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
-- Flag `--skip-env-var-check` added to the `lint` subcommand, this disables the new linting behaviour where environment variable interpolations without defaults throw linting errors when the variable is not defined.
-- The `kafka_franz` input now supports explicit partitions in the field `topics`.
+- Fields `auth.user_jwt` and `auth.user_nkey_seed` added to all NATS components.
+- bloblang: added `ulid(encoding, random_source)` function to generate Universally Unique Lexicographically Sortable Identifiers (ULIDs).
+- Field `skip_on` added to the `cached` processor.
+- Field `nak_delay` added to the `nats` input.
+- New `splunk_hec` output.
+- Plugin API: New `NewMetadataExcludeFilterField` function and accompanying `FieldMetadataExcludeFilter` method added.
+- The `pulsar` input and output are now included in the main distribution of Benthos again.
+- The `gcp_pubsub` input now adds the metadata field `gcp_pubsub_delivery_attempt` to messages when dead lettering is enabled.
+- The `aws_s3` input now adds `s3_version_id` metadata to versioned messages.
+- All compress/decompress components (codecs, bloblang methods, processors) now support `pgzip`.
 
 ### Fixed
 
-- Provide msgpack plugins through github.com/benthosdev/benthos/v4/public/components/msgpack
+- The `open_telemetry_collector` tracer option no longer blocks service start up when the endpoints cannot be reached, and instead manages connections in the background.
+- The `gcp_pubsub` output should see significant performance improvements due to a client library upgrade.
+- The stream builder APIs should now follow `logger.file` config fields.
+- The experimental `cue` format in the cli `list` subcommand no longer introduces infinite recursion for `#Processors`.
+
+## 4.15.0 - 2023-05-05
+
+### Added
+
+- Flag `--skip-env-var-check` added to the `lint` subcommand, this disables the new linting behaviour where environment variable interpolations without defaults throw linting errors when the variable is not defined.
+- The `kafka_franz` input now supports explicit partitions in the field `topics`.
+- The `kafka_franz` input now supports batching.
+- New `metadata` Bloblang function for batch-aware structured metadata queries.
+- Go API: Running the Benthos CLI with a context set with a deadline now triggers graceful termination before the deadline is reached.
+- Go API: New `public/service/servicetest` package added for functions useful for testing custom Benthos builds.
+- New `lru` and `ttlru` in-memory caches.
+
+### Fixed
+
+- Provide msgpack plugins through `public/components/msgpack`.
+- The `kafka_franz` input should no longer commit offsets one behind the next during partition yielding.
+- The streams mode HTTP API should no longer route requests to `/streams/<stream-ID>` to the `/streams` handler. This issue was introduced in v4.14.0.
 
 ## 4.14.0 - 2023-04-25
 

@@ -72,9 +72,7 @@ Message metadata is added to each AMQP message as string annotations. In order t
 
 ## Performance
 
-This output benefits from sending multiple messages in flight in parallel for
-improved performance. You can tune the max number of in flight messages (or
-message batches) with the field `max_in_flight`.
+This output benefits from sending multiple messages in flight in parallel for improved performance. You can tune the max number of in flight messages (or message batches) with the field `max_in_flight`.
 
 ## Fields
 
@@ -84,7 +82,6 @@ A URL to connect to.
 
 
 Type: `string`  
-Default: `""`  
 
 ```yml
 # Examples
@@ -100,7 +97,6 @@ The target address to write to.
 
 
 Type: `string`  
-Default: `""`  
 
 ```yml
 # Examples
@@ -265,7 +261,6 @@ An optional Bloblang mapping that can be defined in order to set the `applicatio
 
 
 Type: `string`  
-Default: `""`  
 
 ### `sasl`
 

@@ -24,11 +24,11 @@ func init() {
 		},
 		Summary: `
 Compresses messages according to the selected algorithm. Supported compression
-algorithms are: gzip, zlib, flate, snappy, lz4.`,
+algorithms are: gzip, pgzip, zlib, flate, snappy, lz4.`,
 		Description: `
 The 'level' field might not apply to all algorithms.`,
 		Config: docs.FieldComponent().WithChildren(
-			docs.FieldString("algorithm", "The compression algorithm to use.").HasOptions("gzip", "zlib", "flate", "snappy", "lz4"),
+			docs.FieldString("algorithm", "The compression algorithm to use.").HasOptions("gzip", "pgzip", "zlib", "flate", "snappy", "lz4"),
 			docs.FieldInt("level", "The level of compression to use. May not be applicable to all algorithms."),
 		).ChildDefaultAndTypesFromStruct(processor.NewCompressConfig()),
 	})
