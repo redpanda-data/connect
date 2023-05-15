@@ -10,8 +10,8 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"os"
 	"path"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -341,40 +341,48 @@ func (s *schemaRegistryDecoder) getDecoder(id int) (schemaDecoder, error) {
 
 	var decoder func(m *service.Message) error
 
+	// https://docs.confluent.io/platform/current/schema-registry/fundamentals/serdes-develop/serdes-protobuf.html#schema-references-in-protobuf
+	// "For backward compatibility reasons, both "schemaType" and "references" are optional. If "schemaType" is omitted, it is assumed to be AVRO."
+	// JSON schema is not supported yet.
 	if resPayload.Type == "PROTOBUF" {
-		var parser protoparse.Parser
-
-		// Not sure if we can just load the descriptor from resPayload.Schema directly
-		if err := os.WriteFile("def.proto", []byte(resPayload.Schema), 0644); err != nil {
-			return nil, err
+		parser := protoparse.Parser{
+			Accessor: func(_ string) (io.ReadCloser, error) {
+				return io.NopCloser(strings.NewReader(resPayload.Schema)), nil
+			},
 		}
 
-		parser.ImportPaths = []string{"."}
-		fds, err := parser.ParseFiles("./def.proto")
-
+		fds, err := parser.ParseFiles("")
 		if err != nil {
-			return nil, fmt.Errorf("failed to parse .proto file: %v", err)
+			return nil, fmt.Errorf("failed to parse proto schema: %v", err)
 		}
-		if len(fds) == 0 {
-			return nil, fmt.Errorf("no .proto files were found in the paths '%v'", ".")
+		if len(fds) == 0 || len(fds) > 1 {
+			return nil, fmt.Errorf("invalid number of file descriptor found in the def, expected 1 got %d", len(fds))
 		}
+		msgTypes := fds[0].GetMessageTypes()
 
 		marshaller := &jsonpb.Marshaler{
 			AnyResolver: dynamic.AnyResolver(dynamic.NewMessageFactoryWithDefaults(), fds...),
 		}
 
-		// Will schema registry returns multiple proto?
-		msgTypes := fds[0].GetMessageTypes()
-
 		decoder = func(m *service.Message) error {
 			b, err := m.AsBytes()
+			if err != nil {
+				return err
+			}
 
-			// Pure guess here: the first byte of the message represents the index of the message descriptor.
-			// Need to find the doc regarding how confluent encode its message.
-			msgIndex := uint8(b[0])
-			msg := dynamic.NewMessage(msgTypes[msgIndex])
+			// The next section is the list of message indexes. Here we only support protobuf definitation with only one message type.
+			// https://docs.confluent.io/platform/current/schema-registry/fundamentals/serdes-develop/index.html#wire-format
+			bytesRead, msgIndexes, err := readMessageIndexes(b)
+			if err != nil {
+				return err
+			}
 
-			remaining := b[1:]
+			if bytesRead > 1 || len(msgIndexes) > 1 {
+				return fmt.Errorf("not supported")
+			}
+
+			msg := dynamic.NewMessage(msgTypes[msgIndexes[0]])
+			remaining := b[bytesRead:]
 			if err != nil {
 				return err
 			}
@@ -393,6 +401,7 @@ func (s *schemaRegistryDecoder) getDecoder(id int) (schemaDecoder, error) {
 			return nil
 		}
 	} else {
+		// https://github.com/confluentinc/schema-registry/blob/master/avro-serializer/src/main/java/io/confluent/kafka/serializers/AbstractKafkaAvroSerializer.java#L93
 		var codec *goavro.Codec
 		if s.avroRawJSON {
 			if codec, err = goavro.NewCodecForStandardJSONFull(resPayload.Schema); err != nil {
@@ -435,4 +444,26 @@ func (s *schemaRegistryDecoder) getDecoder(id int) (schemaDecoder, error) {
 	s.cacheMut.Unlock()
 
 	return decoder, nil
+}
+
+// This is copied from https://github.com/confluentinc/confluent-kafka-go/blob/master/schemaregistry/serde/protobuf/protobuf.go#LL398C22-L398C22
+func readMessageIndexes(payload []byte) (int, []int, error) {
+	arrayLen, bytesRead := binary.Varint(payload)
+	if bytesRead <= 0 {
+		return bytesRead, nil, fmt.Errorf("unable to read message indexes")
+	}
+	if arrayLen == 0 {
+		// Handle the optimization for the first message in the schema
+		return bytesRead, []int{0}, nil
+	}
+	msgIndexes := make([]int, arrayLen)
+	for i := 0; i < int(arrayLen); i++ {
+		idx, read := binary.Varint(payload[bytesRead:])
+		if read <= 0 {
+			return bytesRead, nil, fmt.Errorf("unable to read message indexes")
+		}
+		bytesRead += read
+		msgIndexes[i] = int(idx)
+	}
+	return bytesRead, msgIndexes, nil
 }
