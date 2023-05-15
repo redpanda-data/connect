@@ -1,6 +1,7 @@
 package aws
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"testing"
@@ -11,9 +12,9 @@ import (
 	"github.com/aws/aws-sdk-go/service/firehose"
 	"github.com/aws/aws-sdk-go/service/firehose/firehoseiface"
 	"github.com/cenkalti/backoff/v4"
+	"github.com/stretchr/testify/require"
 
-	"github.com/benthosdev/benthos/v4/internal/log"
-	"github.com/benthosdev/benthos/v4/internal/message"
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
 type mockKinesisFirehose struct {
@@ -25,29 +26,38 @@ func (m *mockKinesisFirehose) PutRecordBatch(input *firehose.PutRecordBatchInput
 	return m.fn(input)
 }
 
-func TestKinesisFirehoseWriteSinglePartMessage(t *testing.T) {
-	k := kinesisFirehoseWriter{
-		backoffCtor: func() backoff.BackOff {
-			return backoff.NewExponentialBackOff()
-		},
-		session: session.Must(session.NewSession(&aws.Config{
-			Credentials: credentials.NewStaticCredentials("xxxxx", "xxxxx", "xxxxx"),
-		})),
-		firehose: &mockKinesisFirehose{
-			fn: func(input *firehose.PutRecordBatchInput) (*firehose.PutRecordBatchOutput, error) {
-				if exp, act := 1, len(input.Records); exp != act {
-					return nil, fmt.Errorf("expected input to have records with length %d, got %d", exp, act)
-				}
-				return &firehose.PutRecordBatchOutput{}, nil
+func testKFO(t *testing.T, m *mockKinesisFirehose) *kinesisFirehoseWriter {
+	t.Helper()
+
+	return &kinesisFirehoseWriter{
+		conf: kfoConfig{
+			Stream: "foo",
+			backoffCtor: func() backoff.BackOff {
+				return backoff.NewExponentialBackOff()
 			},
+			session: session.Must(session.NewSession(&aws.Config{
+				Credentials: credentials.NewStaticCredentials("xxxxx", "xxxxx", "xxxxx"),
+			})),
 		},
-		log: log.Noop(),
+		firehose: m,
 	}
 
-	msg := message.Batch{message.NewPart([]byte(`{"foo":"bar","id":123}`))}
-	if err := k.Write(msg); err != nil {
-		t.Error(err)
+}
+
+func TestKinesisFirehoseWriteSinglePartMessage(t *testing.T) {
+	k := testKFO(t, &mockKinesisFirehose{
+		fn: func(input *firehose.PutRecordBatchInput) (*firehose.PutRecordBatchOutput, error) {
+			if exp, act := 1, len(input.Records); exp != act {
+				return nil, fmt.Errorf("expected input to have records with length %d, got %d", exp, act)
+			}
+			return &firehose.PutRecordBatchOutput{}, nil
+		},
+	})
+
+	msg := service.MessageBatch{
+		service.NewMessage([]byte(`{"foo":"bar","id":123}`)),
 	}
+	require.NoError(t, k.WriteBatch(context.Background(), msg))
 }
 
 func TestKinesisFirehoseWriteMultiPartMessage(t *testing.T) {
@@ -58,61 +68,43 @@ func TestKinesisFirehoseWriteMultiPartMessage(t *testing.T) {
 		{[]byte(`{"foo":"bar","id":123}`), "123"},
 		{[]byte(`{"foo":"baz","id":456}`), "456"},
 	}
-	k := kinesisFirehoseWriter{
-		backoffCtor: func() backoff.BackOff {
-			return backoff.NewExponentialBackOff()
-		},
-		session: session.Must(session.NewSession(&aws.Config{
-			Credentials: credentials.NewStaticCredentials("xxxxx", "xxxxx", "xxxxx"),
-		})),
-		firehose: &mockKinesisFirehose{
-			fn: func(input *firehose.PutRecordBatchInput) (*firehose.PutRecordBatchOutput, error) {
-				if exp, act := len(parts), len(input.Records); exp != act {
-					return nil, fmt.Errorf("expected input to have records with length %d, got %d", exp, act)
-				}
-				return &firehose.PutRecordBatchOutput{}, nil
-			},
-		},
-		log: log.Noop(),
-	}
 
-	msg := message.QuickBatch(nil)
+	k := testKFO(t, &mockKinesisFirehose{
+		fn: func(input *firehose.PutRecordBatchInput) (*firehose.PutRecordBatchOutput, error) {
+			if exp, act := len(parts), len(input.Records); exp != act {
+				return nil, fmt.Errorf("expected input to have records with length %d, got %d", exp, act)
+			}
+			return &firehose.PutRecordBatchOutput{}, nil
+		},
+	})
+
+	var msg service.MessageBatch
 	for _, p := range parts {
-		part := message.NewPart(p.data)
-		msg = append(msg, part)
+		msg = append(msg, service.NewMessage(p.data))
 	}
-
-	if err := k.Write(msg); err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, k.WriteBatch(context.Background(), msg))
 }
 
 func TestKinesisFirehoseWriteChunk(t *testing.T) {
 	batchLengths := []int{}
 	n := 1200
-	k := kinesisFirehoseWriter{
-		backoffCtor: func() backoff.BackOff {
-			return backoff.NewExponentialBackOff()
-		},
-		session: session.Must(session.NewSession(&aws.Config{
-			Credentials: credentials.NewStaticCredentials("xxxxx", "xxxxx", "xxxxx"),
-		})),
-		firehose: &mockKinesisFirehose{
+
+	k := testKFO(t,
+		&mockKinesisFirehose{
 			fn: func(input *firehose.PutRecordBatchInput) (*firehose.PutRecordBatchOutput, error) {
 				batchLengths = append(batchLengths, len(input.Records))
 				return &firehose.PutRecordBatchOutput{}, nil
 			},
 		},
-		log: log.Noop(),
-	}
+	)
 
-	msg := message.QuickBatch(nil)
+	msg := service.MessageBatch{}
 	for i := 0; i < n; i++ {
-		part := message.NewPart([]byte(`{"foo":"bar","id":123}`))
+		part := service.NewMessage([]byte(`{"foo":"bar","id":123}`))
 		msg = append(msg, part)
 	}
 
-	if err := k.Write(msg); err != nil {
+	if err := k.WriteBatch(context.Background(), msg); err != nil {
 		t.Error(err)
 	}
 	if exp, act := n/kinesisMaxRecordsCount+1, len(batchLengths); act != exp {
@@ -134,14 +126,9 @@ func TestKinesisFirehoseWriteChunkWithThrottling(t *testing.T) {
 	t.Parallel()
 	batchLengths := []int{}
 	n := 1200
-	k := kinesisFirehoseWriter{
-		backoffCtor: func() backoff.BackOff {
-			return backoff.NewExponentialBackOff()
-		},
-		session: session.Must(session.NewSession(&aws.Config{
-			Credentials: credentials.NewStaticCredentials("xxxxx", "xxxxx", "xxxxx"),
-		})),
-		firehose: &mockKinesisFirehose{
+
+	k := testKFO(t,
+		&mockKinesisFirehose{
 			fn: func(input *firehose.PutRecordBatchInput) (*firehose.PutRecordBatchOutput, error) {
 				count := len(input.Records)
 				batchLengths = append(batchLengths, count)
@@ -162,12 +149,11 @@ func TestKinesisFirehoseWriteChunkWithThrottling(t *testing.T) {
 				return &output, nil
 			},
 		},
-		log: log.Noop(),
-	}
+	)
 
-	msg := message.QuickBatch(nil)
+	msg := service.MessageBatch{}
 	for i := 0; i < n; i++ {
-		part := message.NewPart([]byte(`{"foo":"bar","id":123}`))
+		part := service.NewMessage([]byte(`{"foo":"bar","id":123}`))
 		msg = append(msg, part)
 	}
 
@@ -175,7 +161,7 @@ func TestKinesisFirehoseWriteChunkWithThrottling(t *testing.T) {
 		500, 500, 500, 300,
 	}
 
-	if err := k.Write(msg); err != nil {
+	if err := k.WriteBatch(context.Background(), msg); err != nil {
 		t.Error(err)
 	}
 	if exp, act := len(expectedLengths), len(batchLengths); act != exp {
@@ -191,27 +177,24 @@ func TestKinesisFirehoseWriteChunkWithThrottling(t *testing.T) {
 func TestKinesisFirehoseWriteError(t *testing.T) {
 	t.Parallel()
 	var calls int
-	k := kinesisFirehoseWriter{
-		backoffCtor: func() backoff.BackOff {
-			return backoff.WithMaxRetries(backoff.NewExponentialBackOff(), 2)
-		},
-		session: session.Must(session.NewSession(&aws.Config{
-			Credentials: credentials.NewStaticCredentials("xxxxx", "xxxxx", "xxxxx"),
-		})),
-		firehose: &mockKinesisFirehose{
+
+	k := testKFO(t,
+		&mockKinesisFirehose{
 			fn: func(input *firehose.PutRecordBatchInput) (*firehose.PutRecordBatchOutput, error) {
 				calls++
 				return nil, errors.New("blah")
 			},
 		},
-		log: log.Noop(),
+	)
+	k.conf.backoffCtor = func() backoff.BackOff {
+		return backoff.WithMaxRetries(backoff.NewExponentialBackOff(), 2)
 	}
 
-	msg := message.Batch{
-		message.NewPart([]byte(`{"foo":"bar"}`)),
+	msg := service.MessageBatch{
+		service.NewMessage([]byte(`{"foo":"bar"}`)),
 	}
 
-	if exp, err := "blah", k.Write(msg); err.Error() != exp {
+	if exp, err := "blah", k.WriteBatch(context.Background(), msg); err.Error() != exp {
 		t.Errorf("Expected err to equal %s, got %v", exp, err)
 	}
 	if exp, act := 3, calls; act != exp {
@@ -222,14 +205,9 @@ func TestKinesisFirehoseWriteError(t *testing.T) {
 func TestKinesisFirehoseWriteMessageThrottling(t *testing.T) {
 	t.Parallel()
 	var calls [][]*firehose.Record
-	k := kinesisFirehoseWriter{
-		backoffCtor: func() backoff.BackOff {
-			return backoff.NewExponentialBackOff()
-		},
-		session: session.Must(session.NewSession(&aws.Config{
-			Credentials: credentials.NewStaticCredentials("xxxxx", "xxxxx", "xxxxx"),
-		})),
-		firehose: &mockKinesisFirehose{
+
+	k := testKFO(t,
+		&mockKinesisFirehose{
 			fn: func(input *firehose.PutRecordBatchInput) (*firehose.PutRecordBatchOutput, error) {
 				records := make([]*firehose.Record, len(input.Records))
 				copy(records, input.Records)
@@ -248,23 +226,22 @@ func TestKinesisFirehoseWriteMessageThrottling(t *testing.T) {
 				return &output, nil
 			},
 		},
-		log: log.Noop(),
+	)
+
+	msg := service.MessageBatch{
+		service.NewMessage([]byte(`{"foo":"bar","id":123}`)),
+		service.NewMessage([]byte(`{"foo":"baz","id":456}`)),
+		service.NewMessage([]byte(`{"foo":"qux","id":789}`)),
 	}
 
-	msg := message.Batch{
-		message.NewPart([]byte(`{"foo":"bar","id":123}`)),
-		message.NewPart([]byte(`{"foo":"baz","id":456}`)),
-		message.NewPart([]byte(`{"foo":"qux","id":789}`)),
-	}
-
-	if err := k.Write(msg); err != nil {
+	if err := k.WriteBatch(context.Background(), msg); err != nil {
 		t.Error(err)
 	}
-	if exp, act := msg.Len(), len(calls); act != exp {
+	if exp, act := len(msg), len(calls); act != exp {
 		t.Errorf("Expected kinesis firehose PutRecordBatch to have call count %d, got %d", exp, act)
 	}
 	for i, c := range calls {
-		if exp, act := msg.Len()-i, len(c); act != exp {
+		if exp, act := len(msg)-i, len(c); act != exp {
 			t.Errorf("Expected kinesis firehose PutRecordBatch call %d input to have Records with length %d, got %d", i, exp, act)
 		}
 	}
@@ -273,14 +250,9 @@ func TestKinesisFirehoseWriteMessageThrottling(t *testing.T) {
 func TestKinesisFirehoseWriteBackoffMaxRetriesExceeded(t *testing.T) {
 	t.Parallel()
 	var calls int
-	k := kinesisFirehoseWriter{
-		backoffCtor: func() backoff.BackOff {
-			return backoff.WithMaxRetries(backoff.NewExponentialBackOff(), 2)
-		},
-		session: session.Must(session.NewSession(&aws.Config{
-			Credentials: credentials.NewStaticCredentials("xxxxx", "xxxxx", "xxxxx"),
-		})),
-		firehose: &mockKinesisFirehose{
+
+	k := testKFO(t,
+		&mockKinesisFirehose{
 			fn: func(input *firehose.PutRecordBatchInput) (*firehose.PutRecordBatchOutput, error) {
 				calls++
 				var output firehose.PutRecordBatchOutput
@@ -291,14 +263,16 @@ func TestKinesisFirehoseWriteBackoffMaxRetriesExceeded(t *testing.T) {
 				return &output, nil
 			},
 		},
-		log: log.Noop(),
+	)
+	k.conf.backoffCtor = func() backoff.BackOff {
+		return backoff.WithMaxRetries(backoff.NewExponentialBackOff(), 2)
 	}
 
-	msg := message.Batch{
-		message.NewPart([]byte(`{"foo":"bar","id":123}`)),
+	msg := service.MessageBatch{
+		service.NewMessage([]byte(`{"foo":"bar","id":123}`)),
 	}
 
-	if err := k.Write(msg); err == nil {
+	if err := k.WriteBatch(context.Background(), msg); err == nil {
 		t.Error(errors.New("expected kinesis.Write to error"))
 	}
 	if exp := 3; calls != exp {

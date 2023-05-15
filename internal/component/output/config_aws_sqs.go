@@ -7,6 +7,11 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/old/util/retries"
 )
 
+// SessionConfig hides a general AWS session config struct.
+type SessionConfig struct {
+	sess.Config `json:",inline" yaml:",inline"`
+}
+
 // AmazonSQSConfig contains configuration fields for the output AmazonSQS type.
 type AmazonSQSConfig struct {
 	SessionConfig          `json:",inline" yaml:",inline"`

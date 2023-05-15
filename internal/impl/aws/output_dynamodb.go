@@ -30,7 +30,6 @@ const (
 	ddboFieldJSONMapColumns = "json_map_columns"
 	ddboFieldTTL            = "ttl"
 	ddboFieldTTLKey         = "ttl_key"
-	ddboFieldMaxInFlight    = "max_in_flight"
 	ddboFieldBatching       = "batching"
 )
 
