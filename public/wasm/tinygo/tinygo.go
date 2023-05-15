@@ -14,7 +14,7 @@ import (
 //
 //go:wasm-module benthos_wasm
 //export v0_msg_set_bytes
-func _v0_msg_set_bytes(ptr uint32, size uint32)
+func _v0_msg_set_bytes(ptr, size uint32)
 
 // SetMsgBytes sets the contents of the message currently being processed to the
 // value provided.
@@ -47,7 +47,7 @@ func GetMsgAsBytes() ([]byte, error) {
 
 // ptrToBytes returns a byte slice from WebAssembly compatible numeric types
 // representing its pointer and length.
-func ptrToBytes(ptr uint32, size uint32) []byte {
+func ptrToBytes(ptr, size uint32) []byte {
 	// Get a slice view of the underlying bytes in the stream. We use SliceHeader, not StringHeader
 	// as it allows us to fix the capacity to what was allocated.
 	return *(*[]byte)(unsafe.Pointer(&reflect.SliceHeader{

@@ -78,6 +78,28 @@ func TestFunctionSetDeactivated(t *testing.T) {
 	assert.EqualError(t, err, "this function has been disabled")
 }
 
+func TestFunctionResolveParamError(t *testing.T) {
+	setOne := AllFunctions.Without()
+
+	spec := NewFunctionSpec(FunctionCategoryGeneral, "meow", "").Param(ParamString("val1", ""))
+	require.NoError(t, setOne.Add(spec, func(args *ParsedParams) (Function, error) {
+		return ClosureFunction("", func(ctx FunctionContext) (any, error) {
+			return "ok", nil
+		}, func(ctx TargetsContext) (TargetsContext, []TargetPath) { return ctx, nil }), nil
+	}))
+
+	assert.Contains(t, listFunctions(setOne), "meow")
+
+	badArgs, err := spec.Params.PopulateNameless(NewFieldFunction("doc.foo"))
+	require.NoError(t, err)
+
+	fnOne, err := setOne.Init("meow", badArgs)
+	require.NoError(t, err)
+
+	_, err = fnOne.Exec(FunctionContext{})
+	assert.EqualError(t, err, "function 'meow': failed to extract input arg 'val1': context was undefined, unable to reference `doc.foo`")
+}
+
 func TestFunctionBadName(t *testing.T) {
 	testCases := map[string]string{
 		"!no":         "function name '!no' does not match the required regular expression /^[a-z0-9]+(_[a-z0-9]+)*$/",

@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"math"
+	"strconv"
 	"strings"
 	"time"
 
@@ -17,18 +18,14 @@ import (
 
 func franzKafkaOutputConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
-		// Stable(). TODO
+		Beta().
 		Categories("Services").
 		Version("3.61.0").
-		Summary("An alternative Kafka output using the [Franz Kafka client library](https://github.com/twmb/franz-go).").
+		Summary("A Kafka output using the [Franz Kafka client library](https://github.com/twmb/franz-go).").
 		Description(`
 Writes a batch of messages to Kafka brokers and waits for acknowledgement before propagating it back to the input.
 
-This output is new and experimental, and the existing ` + "`kafka`" + ` input is not going anywhere, but here's some reasons why it might be worth trying this one out:
-
-- You like shiny new stuff
-- You are experiencing issues with the existing ` + "`kafka`" + ` output
-- Someone told you to
+This output often out-performs the traditional ` + "`kafka`" + ` output as well as providing more useful logs and error messages.
 `).
 		Field(service.NewStringListField("seed_brokers").
 			Description("A list of broker addresses to connect to in order to establish connections. If an item of the list contains commas it will be expanded into multiple addresses.").
@@ -43,9 +40,14 @@ This output is new and experimental, and the existing ` + "`kafka`" + ` input is
 			"murmur2_hash": "Kafka's default hash algorithm that uses a 32-bit murmur2 hash of the key to compute which partition the record will be on.",
 			"round_robin":  "Round-robin's messages through all available partitions. This algorithm has lower throughput and causes higher CPU load on brokers, but can be useful if you want to ensure an even distribution of records to partitions.",
 			"least_backup": "Chooses the least backed up partition (the partition with the fewest amount of buffered records). Partitions are selected per batch.",
+			"manual":       "Manually select a partition for each message, requires the field `partition` to be specified.",
 		}).
 			Description("Override the default murmur2 hashing partitioner.").
 			Advanced().Optional()).
+		Field(service.NewInterpolatedStringField("partition").
+			Description("An optional explicit partition to set for each message. This field is only relevant when the `partitioner` is set to `manual`. The provided interpolation string must be a valid integer.").
+			Example(`${! meta("partition") }`).
+			Optional()).
 		Field(service.NewMetadataFilterField("metadata").
 			Description("Determine which (if any) metadata values should be added to messages as headers.").
 			Optional()).
@@ -68,7 +70,15 @@ This output is new and experimental, and the existing ` + "`kafka`" + ` input is
 			Optional().
 			Advanced()).
 		Field(service.NewTLSToggledField("tls")).
-		Field(saslField())
+		Field(saslField()).
+		LintRule(`
+root = if this.partitioner == "manual" {
+  if this.partition.or("") == "" {
+    "a partition must be specified when the partitioner is set to manual"
+  }
+} else if this.partition.or("") != "" {
+  "a partition cannot be specified unless the partitioner is set to manual"
+}`)
 }
 
 func init() {
@@ -100,6 +110,7 @@ type franzKafkaWriter struct {
 	topicStr         string
 	topic            *service.InterpolatedString
 	key              *service.InterpolatedString
+	partition        *service.InterpolatedString
 	tlsConf          *tls.Config
 	saslConfs        []sasl.Mechanism
 	metaFilter       *service.MetadataFilter
@@ -134,6 +145,14 @@ func newFranzKafkaWriterFromConfig(conf *service.ParsedConfig, log *service.Logg
 	if conf.Contains("key") {
 		if f.key, err = conf.FieldInterpolatedString("key"); err != nil {
 			return nil, err
+		}
+	}
+
+	if conf.Contains("partition") {
+		if rawStr, _ := conf.FieldString("partition"); rawStr != "" {
+			if f.partition, err = conf.FieldInterpolatedString("partition"); err != nil {
+				return nil, err
+			}
 		}
 	}
 
@@ -191,6 +210,8 @@ func newFranzKafkaWriterFromConfig(conf *service.ParsedConfig, log *service.Logg
 			f.partitioner = kgo.RoundRobinPartitioner()
 		case "least_backup":
 			f.partitioner = kgo.LeastBackupPartitioner()
+		case "manual":
+			f.partitioner = kgo.ManualPartitioner()
 		default:
 			return nil, fmt.Errorf("unknown partitioner: %v", partStr)
 		}
@@ -271,6 +292,17 @@ func (f *franzKafkaWriter) WriteBatch(ctx context.Context, b service.MessageBatc
 			if record.Key, err = b.TryInterpolatedBytes(i, f.key); err != nil {
 				return fmt.Errorf("key interpolation error: %w", err)
 			}
+		}
+		if f.partition != nil {
+			partStr, err := b.TryInterpolatedString(i, f.partition)
+			if err != nil {
+				return fmt.Errorf("partition interpolation error: %w", err)
+			}
+			partInt, err := strconv.Atoi(partStr)
+			if err != nil {
+				return fmt.Errorf("partition parse error: %w", err)
+			}
+			record.Partition = int32(partInt)
 		}
 		_ = f.metaFilter.Walk(msg, func(key, value string) error {
 			record.Headers = append(record.Headers, kgo.RecordHeader{

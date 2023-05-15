@@ -161,7 +161,7 @@ func (f FieldSpec) Optional() FieldSpec {
 	return f
 }
 
-const bloblREEnvVar = "\\${[0-9A-Za-z_.]+(:((\\${[^}]+})|[^}])+)?}"
+const bloblREEnvVar = "\\${[0-9A-Za-z_.]+(:((\\${[^}]+})|[^}])*)?}"
 
 // Secret marks this field as being a secret, which means it represents
 // information that is generally considered sensitive such as passwords or
@@ -387,22 +387,20 @@ func (f FieldSpec) lintOptions() FieldSpec {
 	_, _ = optionsBuilder.WriteString("}\n")
 	_, _ = patternOptionsBuilder.WriteString("}\n")
 
-	return f.LinterBlobl(fmt.Sprintf(`
+	f.Linter = fmt.Sprintf(`
 let options = %v
-
 map is_pattern_option {
   let pattern_options = %v
   let parts = this.split(":")
   root = $parts.length() == 2 && $pattern_options.exists($parts.index(0))
 }
-
 # Codec arguments can be chained with a / (i.e. "lines/multipart")
 let value_parts = if this.type() == "string" { this.split("/").map_each(part -> part.lowercase()) } else { [] }
-
 root = $value_parts.map_each(part -> if $options.exists(part) || part.apply("is_pattern_option") { null } else {
   {"type": 2, "what": "value %%v is not a valid option for this field".format(part)}
 }).filter(ele -> ele != null)
-`, optionsBuilder.String(), patternOptionsBuilder.String()))
+`, optionsBuilder.String(), patternOptionsBuilder.String())
+	return f
 }
 
 func (f FieldSpec) scrubValue(v any) (any, error) {
@@ -434,8 +432,9 @@ func (f FieldSpec) getLintFunc() LintFunc {
 	}
 	if f.Interpolated {
 		if fn != nil {
+			innerFn := fn
 			fn = func(ctx LintContext, line, col int, value any) []Lint {
-				lints := f.customLintFn(ctx, line, col, value)
+				lints := innerFn(ctx, line, col, value)
 				moreLints := LintBloblangField(ctx, line, col, value)
 				return append(lints, moreLints...)
 			}
@@ -445,8 +444,9 @@ func (f FieldSpec) getLintFunc() LintFunc {
 	}
 	if f.Bloblang {
 		if fn != nil {
+			innerFn := fn
 			fn = func(ctx LintContext, line, col int, value any) []Lint {
-				lints := f.customLintFn(ctx, line, col, value)
+				lints := innerFn(ctx, line, col, value)
 				moreLints := LintBloblangMapping(ctx, line, col, value)
 				return append(lints, moreLints...)
 			}
@@ -688,6 +688,10 @@ const (
 
 	// LintFailedRead means a configuration could not be read.
 	LintFailedRead LintType = iota
+
+	// LintMissingEnvVar means a configuration contained an environment variable
+	// interpolation without a default and the variable was undefined.
+	LintMissingEnvVar LintType = iota
 
 	// LintInvalidOption means the field value was not one of the explicit list
 	// of options.

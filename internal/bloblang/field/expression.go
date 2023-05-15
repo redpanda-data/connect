@@ -23,7 +23,7 @@ func NewExpression(resolvers ...Resolver) *Expression {
 	var staticBuf bytes.Buffer
 	for _, r := range resolvers {
 		if s, is := r.(StaticResolver); is {
-			staticBuf.Write([]byte(s))
+			_, _ = staticBuf.Write([]byte(s))
 		} else {
 			e.dynamicExpressions++
 		}
@@ -60,7 +60,7 @@ func (e *Expression) resolve(index int, msg Message, escaped bool) ([]byte, erro
 		if err != nil {
 			return nil, err
 		}
-		buf.Write(b)
+		_, _ = buf.Write(b)
 	}
 	return buf.Bytes(), nil
 }

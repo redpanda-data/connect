@@ -107,7 +107,6 @@ This processor adds the following metadata fields to each message, depending on 
       this.key == "" && this.operation != "keys" => [ "'key' must be set when operation is '" + this.operation + "'" ],
       this.key != "" && this.operation == "keys" => [ "'key' cannot be set when operation is '" + this.operation + "'" ],
     }`)
-
 }
 
 func init() {

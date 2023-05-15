@@ -10,6 +10,8 @@ import (
 	"os"
 	"strings"
 
+	"github.com/Azure/azure-sdk-for-go/storage"
+
 	"github.com/Azure/azure-sdk-for-go/sdk/data/aztables"
 
 	"github.com/Azure/azure-storage-queue-go/azqueue"
@@ -20,8 +22,6 @@ const (
 	devQueueEndpointExp = "http://localhost:10001/%s"
 	azAccountName       = "accountname"
 	azAccountKey        = "accountkey"
-	devAccountName      = "devstoreaccount1"
-	devAccountKey       = "Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw=="
 )
 
 // GetQueueServiceURL creates an Azure Queue URL from storage fields.
@@ -33,8 +33,8 @@ func GetQueueServiceURL(storageAccount, storageAccessKey, storageConnectionStrin
 	var err error
 	if storageConnectionString != "" {
 		if strings.Contains(storageConnectionString, "UseDevelopmentStorage=true;") {
-			storageAccount = devAccountName
-			storageAccessKey = devAccountKey
+			storageAccount = storage.StorageEmulatorAccountName
+			storageAccessKey = storage.StorageEmulatorAccountKey
 			endpointExp = devQueueEndpointExp
 			if ap := os.Getenv("AZURITE_QUEUE_ENDPOINT_PORT"); ap != "" {
 				endpointExp = strings.ReplaceAll(devQueueEndpointExp, "10001", ap)
@@ -44,7 +44,7 @@ func GetQueueServiceURL(storageAccount, storageAccessKey, storageConnectionStrin
 			if err != nil {
 				return nil, err
 			}
-			if strings.Contains(storageConnectionString, devAccountName) {
+			if strings.Contains(storageConnectionString, storage.StorageEmulatorAccountName) {
 				endpointExp = devQueueEndpointExp
 			}
 		}
@@ -79,9 +79,11 @@ func GetServiceClient(account, accessKey, connectionString string) (*aztables.Se
 			// `UseDevelopmentStorage=true` is not available in the current SDK, neither `storage.NewEmulatorClient()` (which was used in the previous SDK).
 			// Instead, we use the http connection string to connect to the emulator endpoints with the default table storage port.
 			// https://docs.microsoft.com/en-us/azure/storage/common/storage-use-azurite?tabs=visual-studio#http-connection-strings
-			client, err = aztables.NewServiceClientFromConnectionString("DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;TableEndpoint=http://127.0.0.1:10002/devstoreaccount1;", nil)
+			client, err = aztables.NewServiceClientFromConnectionString(
+				fmt.Sprintf("DefaultEndpointsProtocol=http;AccountName=%s;AccountKey=%s;TableEndpoint=http://127.0.0.1:10002/%s;",
+					storage.StorageEmulatorAccountName, storage.StorageEmulatorAccountKey, storage.StorageEmulatorAccountName), &aztables.ClientOptions{})
 		} else {
-			client, err = aztables.NewServiceClientFromConnectionString(connectionString, nil)
+			client, err = aztables.NewServiceClientFromConnectionString(connectionString, &aztables.ClientOptions{})
 		}
 	} else {
 		cred, credErr := aztables.NewSharedKeyCredential(account, accessKey)

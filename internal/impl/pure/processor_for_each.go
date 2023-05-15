@@ -9,7 +9,6 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	"github.com/benthosdev/benthos/v4/internal/tracing"
 )
 
 func init() {
@@ -18,7 +17,7 @@ func init() {
 		if err != nil {
 			return nil, err
 		}
-		return processor.NewV2BatchedToV1Processor("for_each", p, mgr), nil
+		return processor.NewAutoObservedBatchedProcessor("for_each", p, mgr), nil
 	}, docs.ComponentSpec{
 		Name: "for_each",
 		Categories: []string{
@@ -59,7 +58,7 @@ func newForEach(conf []processor.Config, mgr bundle.NewManagement) (*forEachProc
 	return &forEachProc{children: children}, nil
 }
 
-func (p *forEachProc) ProcessBatch(ctx context.Context, spans []*tracing.Span, msg message.Batch) ([]message.Batch, error) {
+func (p *forEachProc) ProcessBatch(ctx *processor.BatchProcContext, msg message.Batch) ([]message.Batch, error) {
 	individualMsgs := make([]message.Batch, msg.Len())
 	_ = msg.Iter(func(i int, p *message.Part) error {
 		individualMsgs[i] = message.Batch{p}
@@ -68,7 +67,7 @@ func (p *forEachProc) ProcessBatch(ctx context.Context, spans []*tracing.Span, m
 
 	resMsg := message.QuickBatch(nil)
 	for _, tmpMsg := range individualMsgs {
-		resultMsgs, err := processor.ExecuteAll(ctx, p.children, tmpMsg)
+		resultMsgs, err := processor.ExecuteAll(ctx.Context(), p.children, tmpMsg)
 		if err != nil {
 			return nil, err
 		}

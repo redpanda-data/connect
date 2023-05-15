@@ -22,6 +22,7 @@ change outside of major version releases.`[1:],
 		},
 		Subcommands: []*cli.Command{
 			syncSchemaCommand(version, dateBuilt),
+			pullCommand(version, dateBuilt),
 		},
 	}
 }
