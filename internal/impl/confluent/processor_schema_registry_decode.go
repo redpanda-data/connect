@@ -355,7 +355,6 @@ func (s *schemaRegistryDecoder) getDecoder(id int) (schemaDecoder, error) {
 	if resPayload.Type == "PROTOBUF" {
 		decoder, err = s.getProtobufDecoder(resPayload)
 	} else {
-		// https://github.com/confluentinc/schema-registry/blob/master/avro-serializer/src/main/java/io/confluent/kafka/serializers/AbstractKafkaAvroSerializer.java#L93
 		decoder, err = s.getAvroDecoder(resPayload)
 	}
 
@@ -400,15 +399,13 @@ func (s *schemaRegistryDecoder) getProtobufDecoder(info schemaInfo) (schemaDecod
 			return err
 		}
 
-		// The next section is the list of message indexes. Here we only support protobuf definitation with only one message type.
-		// https://docs.confluent.io/platform/current/schema-registry/fundamentals/serdes-develop/index.html#wire-format
 		bytesRead, msgIndexes, err := readMessageIndexes(b)
 		if err != nil {
 			return err
 		}
 
-		if bytesRead > 1 || len(msgIndexes) > 1 {
-			return fmt.Errorf("not supported")
+		if len(msgIndexes) > 1 {
+			return fmt.Errorf("invalid number of message type in in protobuf definition, expected 1 got %d", len(msgIndexes))
 		}
 
 		msg := dynamic.NewMessage(msgTypes[msgIndexes[0]])
