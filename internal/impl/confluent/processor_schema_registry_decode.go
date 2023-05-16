@@ -18,12 +18,13 @@ import (
 
 	// nolint:staticcheck // Ignore SA1019 deprecation warning until we can switch to "google.golang.org/protobuf/types/dynamicpb"
 	"github.com/golang/protobuf/jsonpb"
+	"github.com/linkedin/goavro/v2"
+
 	// nolint:staticcheck // Ignore SA1019 deprecation warning until we can switch to "google.golang.org/protobuf/types/dynamicpb"
 	"github.com/golang/protobuf/proto"
 
 	"github.com/jhump/protoreflect/desc/protoparse"
 	"github.com/jhump/protoreflect/dynamic"
-	"github.com/linkedin/goavro/v2"
 
 	"github.com/benthosdev/benthos/v4/internal/httpclient"
 	"github.com/benthosdev/benthos/v4/internal/shutdown"
@@ -203,6 +204,11 @@ func (s *schemaRegistryDecoder) Close(ctx context.Context) error {
 
 //------------------------------------------------------------------------------
 
+type schemaInfo struct {
+	Type   string `json:"schemaType"`
+	Schema string `json:"schema"`
+}
+
 type schemaDecoder func(m *service.Message) error
 
 type cachedSchemaDecoder struct {
@@ -339,101 +345,23 @@ func (s *schemaRegistryDecoder) getDecoder(id int) (schemaDecoder, error) {
 		return nil, err
 	}
 
-	var decoder func(m *service.Message) error
+	var (
+		decoder schemaDecoder
+	)
 
 	// https://docs.confluent.io/platform/current/schema-registry/fundamentals/serdes-develop/serdes-protobuf.html#schema-references-in-protobuf
 	// "For backward compatibility reasons, both "schemaType" and "references" are optional. If "schemaType" is omitted, it is assumed to be AVRO."
 	// JSON schema is not supported yet.
 	if resPayload.Type == "PROTOBUF" {
-		parser := protoparse.Parser{
-			Accessor: func(_ string) (io.ReadCloser, error) {
-				return io.NopCloser(strings.NewReader(resPayload.Schema)), nil
-			},
-		}
-
-		fds, err := parser.ParseFiles("")
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse proto schema: %v", err)
-		}
-		if len(fds) == 0 || len(fds) > 1 {
-			return nil, fmt.Errorf("invalid number of file descriptor found in the def, expected 1 got %d", len(fds))
-		}
-		msgTypes := fds[0].GetMessageTypes()
-
-		marshaller := &jsonpb.Marshaler{
-			AnyResolver: dynamic.AnyResolver(dynamic.NewMessageFactoryWithDefaults(), fds...),
-		}
-
-		decoder = func(m *service.Message) error {
-			b, err := m.AsBytes()
-			if err != nil {
-				return err
-			}
-
-			// The next section is the list of message indexes. Here we only support protobuf definitation with only one message type.
-			// https://docs.confluent.io/platform/current/schema-registry/fundamentals/serdes-develop/index.html#wire-format
-			bytesRead, msgIndexes, err := readMessageIndexes(b)
-			if err != nil {
-				return err
-			}
-
-			if bytesRead > 1 || len(msgIndexes) > 1 {
-				return fmt.Errorf("not supported")
-			}
-
-			msg := dynamic.NewMessage(msgTypes[msgIndexes[0]])
-			remaining := b[bytesRead:]
-			if err != nil {
-				return err
-			}
-
-			if err := proto.Unmarshal(remaining, msg); err != nil {
-				return fmt.Errorf("failed to unmarshal message: %w", err)
-			}
-
-			data, err := msg.MarshalJSONPB(marshaller)
-			if err != nil {
-				return fmt.Errorf("failed to marshal protobuf message: %w", err)
-			}
-
-			m.SetBytes(data)
-
-			return nil
-		}
+		decoder, err = s.getProtobufDecoder(resPayload)
 	} else {
 		// https://github.com/confluentinc/schema-registry/blob/master/avro-serializer/src/main/java/io/confluent/kafka/serializers/AbstractKafkaAvroSerializer.java#L93
-		var codec *goavro.Codec
-		if s.avroRawJSON {
-			if codec, err = goavro.NewCodecForStandardJSONFull(resPayload.Schema); err != nil {
-				s.logger.Errorf("failed to parse response for schema subject '%v': %v", id, err)
-				return nil, err
-			}
-		} else {
-			if codec, err = goavro.NewCodec(resPayload.Schema); err != nil {
-				s.logger.Errorf("failed to parse response for schema subject '%v': %v", id, err)
-				return nil, err
-			}
-		}
+		decoder, err = s.getAvroDecoder(resPayload)
+	}
 
-		decoder = func(m *service.Message) error {
-			b, err := m.AsBytes()
-			if err != nil {
-				return err
-			}
-
-			native, _, err := codec.NativeFromBinary(b)
-			if err != nil {
-				return err
-			}
-
-			jb, err := codec.TextualFromNative(nil, native)
-			if err != nil {
-				return err
-			}
-			m.SetBytes(jb)
-
-			return nil
-		}
+	if err != nil {
+		s.logger.Errorf("failed to parse response for schema subject '%v': %v", id, err)
+		return nil, err
 	}
 
 	s.cacheMut.Lock()
@@ -442,6 +370,104 @@ func (s *schemaRegistryDecoder) getDecoder(id int) (schemaDecoder, error) {
 		decoder:             decoder,
 	}
 	s.cacheMut.Unlock()
+
+	return decoder, nil
+}
+
+func (s *schemaRegistryDecoder) getProtobufDecoder(info schemaInfo) (schemaDecoder, error) {
+	parser := protoparse.Parser{
+		Accessor: func(_ string) (io.ReadCloser, error) {
+			return io.NopCloser(strings.NewReader(info.Schema)), nil
+		},
+	}
+
+	fds, err := parser.ParseFiles("")
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse proto schema: %v", err)
+	}
+	if len(fds) == 0 || len(fds) > 1 {
+		return nil, fmt.Errorf("invalid number of file descriptor found in the def, expected 1 got %d", len(fds))
+	}
+	msgTypes := fds[0].GetMessageTypes()
+
+	marshaller := &jsonpb.Marshaler{
+		AnyResolver: dynamic.AnyResolver(dynamic.NewMessageFactoryWithDefaults(), fds...),
+	}
+
+	decoder := func(m *service.Message) error {
+		b, err := m.AsBytes()
+		if err != nil {
+			return err
+		}
+
+		// The next section is the list of message indexes. Here we only support protobuf definitation with only one message type.
+		// https://docs.confluent.io/platform/current/schema-registry/fundamentals/serdes-develop/index.html#wire-format
+		bytesRead, msgIndexes, err := readMessageIndexes(b)
+		if err != nil {
+			return err
+		}
+
+		if bytesRead > 1 || len(msgIndexes) > 1 {
+			return fmt.Errorf("not supported")
+		}
+
+		msg := dynamic.NewMessage(msgTypes[msgIndexes[0]])
+		remaining := b[bytesRead:]
+		if err != nil {
+			return err
+		}
+
+		if err := proto.Unmarshal(remaining, msg); err != nil {
+			return fmt.Errorf("failed to unmarshal message: %w", err)
+		}
+
+		data, err := msg.MarshalJSONPB(marshaller)
+		if err != nil {
+			return fmt.Errorf("failed to marshal protobuf message: %w", err)
+		}
+
+		m.SetBytes(data)
+
+		return nil
+	}
+
+	return decoder, err
+}
+
+func (s *schemaRegistryDecoder) getAvroDecoder(info schemaInfo) (schemaDecoder, error) {
+	var (
+		codec *goavro.Codec
+		err   error
+	)
+
+	if s.avroRawJSON {
+		codec, err = goavro.NewCodecForStandardJSONFull(info.Schema)
+	} else {
+		codec, err = goavro.NewCodec(info.Schema)
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	decoder := func(m *service.Message) error {
+		b, err := m.AsBytes()
+		if err != nil {
+			return err
+		}
+
+		native, _, err := codec.NativeFromBinary(b)
+		if err != nil {
+			return err
+		}
+
+		jb, err := codec.TextualFromNative(nil, native)
+		if err != nil {
+			return err
+		}
+		m.SetBytes(jb)
+
+		return nil
+	}
 
 	return decoder, nil
 }
