@@ -167,6 +167,8 @@ func (a *kinesisWriter) Connect(ctx context.Context) error {
 	if err := a.kinesis.WaitUntilStreamExists(&kinesis.DescribeStreamInput{
 		StreamName: a.streamName,
 	}); err != nil {
+		a.session = nil
+		a.kinesis = nil
 		return err
 	}
 

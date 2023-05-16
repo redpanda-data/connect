@@ -13,6 +13,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/kinesis"
 	"github.com/ory/dockertest/v3"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/benthosdev/benthos/v4/internal/component/output"
@@ -61,7 +62,7 @@ func TestKinesisIntegration(t *testing.T) {
 		Stream:       "foo",
 		PartitionKey: "${!json(\"id\")}",
 	}
-	config.Region = "us-east-1"
+	config.Region = "eu-west-1"
 	config.Endpoint = endpoint
 	config.Credentials = sess.CredentialsConfig{
 		ID:     "xxxxxx",
@@ -87,6 +88,11 @@ func TestKinesisIntegration(t *testing.T) {
 
 	t.Run("testKinesisConnect", func(t *testing.T) {
 		testKinesisConnect(t, config, client)
+	})
+
+	t.Run("testKinesisConnectWithInvalidStream", func(t *testing.T) {
+		config.Stream = "invalid-foo"
+		testKinesisConnectWithInvalidStream(t, config, client)
 	})
 }
 
@@ -141,5 +147,18 @@ func testKinesisConnect(t *testing.T, c output.KinesisConfig, client *kinesis.Ki
 		if !bytes.Equal(out.Records[i].Data, record) {
 			t.Errorf("Expected record %d to equal %v, got %v", i, record, out.Records[i])
 		}
+	}
+}
+
+func testKinesisConnectWithInvalidStream(t *testing.T, c output.KinesisConfig, client *kinesis.Kinesis) {
+	r, err := newKinesisWriter(c, mock.NewManager())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	retries := 3
+	for i := 0; i < retries; i++ {
+		err := r.Connect(context.Background())
+		assert.Error(t, err)
 	}
 }
