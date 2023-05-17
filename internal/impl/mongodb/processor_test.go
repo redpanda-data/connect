@@ -467,6 +467,11 @@ func testMongoDBProcessorFindOne(port string, t *testing.T) {
 			expectedErr: mongo.ErrNoDocuments,
 		},
 		{
+			name:        "no documents found",
+			message:     `{"a":{"$oid":"63a884ef4e11f389b8717cd6"}}`,
+			expectedErr: mongo.ErrNoDocuments,
+		},
+		{
 			name:        "collection interpolation",
 			marshalMode: client.JSONMarshalModeCanonical,
 			collection:  `${!json("col")}`,

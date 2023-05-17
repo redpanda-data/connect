@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"go.mongodb.org/mongo-driver/mongo/writeconcern"
@@ -294,13 +295,15 @@ func (m *Writer) WriteBatch(ctx context.Context, msg message.Batch) error {
 		var docJSON, filterJSON, hintJSON any
 
 		if filterValWanted {
-			if filterJSON, err = filterVal.AsStructured(); err != nil {
+			filterBytes := filterVal.AsBytes()
+			if err := bson.UnmarshalExtJSON(filterBytes, true, &filterJSON); err != nil {
 				return err
 			}
 		}
 
 		if documentValWanted {
-			if docJSON, err = documentVal.AsStructured(); err != nil {
+			docBytes := documentVal.AsBytes()
+			if err := bson.UnmarshalExtJSON(docBytes, true, &docJSON); err != nil {
 				return err
 			}
 		}
