@@ -168,8 +168,8 @@ nak_delay: 1m
 The maximum number of messages to pull at a time.
 
 
-Type: `int`  
-Default: `32`  
+Type: `int`
+Default: [nats.DefaultSubPendingMsgsLimit](https://github.com/search?q=repo%3Anats-io%2Fnats.go%20DefaultSubPendingMsgsLimit&type=code)
 
 ### `tls`
 
