@@ -22,46 +22,124 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/codec"
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/input"
-	"github.com/benthosdev/benthos/v4/internal/component/input/processors"
-	"github.com/benthosdev/benthos/v4/internal/docs"
-	sess "github.com/benthosdev/benthos/v4/internal/impl/aws/session"
+	"github.com/benthosdev/benthos/v4/internal/component/interop"
+	"github.com/benthosdev/benthos/v4/internal/impl/aws/config"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
-func init() {
-	err := bundle.AllInputs.Add(processors.WrapConstructor(func(conf input.Config, nm bundle.NewManagement) (input.Streamed, error) {
-		var rdr input.Async
-		var err error
-		if rdr, err = newAmazonS3Reader(conf.AWSS3, nm); err != nil {
-			return nil, err
+const (
+	// S3 Input SQS Fields
+	s3iSQSFieldURL          = "url"
+	s3iSQSFieldEndpoint     = "endpoint"
+	s3iSQSFieldEnvelopePath = "envelope_path"
+	s3iSQSFieldKeyPath      = "key_path"
+	s3iSQSFieldBucketPath   = "bucket_path"
+	s3iSQSFieldDelayPeriod  = "delay_period"
+	s3iSQSFieldMaxMessages  = "max_messages"
+
+	// S3 Input Fields
+	s3iFieldBucket             = "bucket"
+	s3iFieldCodec              = "codec"
+	s3iFieldMaxBuffer          = "max_buffer"
+	s3iFieldPrefix             = "prefix"
+	s3iFieldForcePathStyleURLs = "force_path_style_urls"
+	s3iFieldDeleteObjects      = "delete_objects"
+	s3iFieldSQS                = "sqs"
+)
+
+type s3iSQSConfig struct {
+	URL          string
+	Endpoint     string
+	EnvelopePath string
+	KeyPath      string
+	BucketPath   string
+	DelayPeriod  string
+	MaxMessages  int64
+}
+
+func s3iSQSConfigFromParsed(pConf *service.ParsedConfig) (conf s3iSQSConfig, err error) {
+	if conf.URL, err = pConf.FieldString(s3iSQSFieldURL); err != nil {
+		return
+	}
+	if conf.Endpoint, err = pConf.FieldString(s3iSQSFieldEndpoint); err != nil {
+		return
+	}
+	if conf.EnvelopePath, err = pConf.FieldString(s3iSQSFieldEnvelopePath); err != nil {
+		return
+	}
+	if conf.KeyPath, err = pConf.FieldString(s3iSQSFieldKeyPath); err != nil {
+		return
+	}
+	if conf.BucketPath, err = pConf.FieldString(s3iSQSFieldBucketPath); err != nil {
+		return
+	}
+	if conf.DelayPeriod, err = pConf.FieldString(s3iSQSFieldDelayPeriod); err != nil {
+		return
+	}
+	if conf.MaxMessages, err = int64Field(pConf, s3iSQSFieldMaxMessages); err != nil {
+		return
+	}
+	return
+}
+
+type s3iConfig struct {
+	Bucket             string
+	Codec              string
+	MaxBuffer          int
+	Prefix             string
+	ForcePathStyleURLs bool
+	DeleteObjects      bool
+	SQS                s3iSQSConfig
+}
+
+func s3iConfigFromParsed(pConf *service.ParsedConfig) (conf s3iConfig, err error) {
+	if conf.Bucket, err = pConf.FieldString(s3iFieldBucket); err != nil {
+		return
+	}
+	if conf.Prefix, err = pConf.FieldString(s3iFieldPrefix); err != nil {
+		return
+	}
+	if conf.Codec, err = pConf.FieldString(s3iFieldCodec); err != nil {
+		return
+	}
+	if conf.MaxBuffer, err = pConf.FieldInt(s3iFieldMaxBuffer); err != nil {
+		return
+	}
+	if conf.ForcePathStyleURLs, err = pConf.FieldBool(s3iFieldForcePathStyleURLs); err != nil {
+		return
+	}
+	if conf.DeleteObjects, err = pConf.FieldBool(s3iFieldDeleteObjects); err != nil {
+		return
+	}
+	if pConf.Contains(s3iFieldSQS) {
+		if conf.SQS, err = s3iSQSConfigFromParsed(pConf.Namespace(s3iFieldSQS)); err != nil {
+			return
 		}
-		// If we're not pulling events directly from an SQS queue then
-		// there's no concept of propagating nacks upstream, therefore wrap
-		// our reader within a preserver in order to retry indefinitely.
-		if conf.AWSS3.SQS.URL == "" {
-			rdr = input.NewAsyncPreserver(rdr)
-		}
-		return input.NewAsyncReader("aws_s3", rdr, nm)
-	}), docs.ComponentSpec{
-		Name:   "aws_s3",
-		Status: docs.StatusStable,
-		Summary: `
-Downloads objects within an Amazon S3 bucket, optionally filtered by a prefix, either by walking the items in the bucket or by streaming upload notifications in realtime.`,
-		Description: `
+	}
+	return
+}
+
+func s3InputSpec() *service.ConfigSpec {
+	return service.NewConfigSpec().
+		Stable().
+		Categories("Services", "AWS").
+		Summary(`Downloads objects within an Amazon S3 bucket, optionally filtered by a prefix, either by walking the items in the bucket or by streaming upload notifications in realtime.`).
+		Description(`
 ## Streaming Objects on Upload with SQS
 
 A common pattern for consuming S3 objects is to emit upload notification events from the bucket either directly to an SQS queue, or to an SNS topic that is consumed by an SQS queue, and then have your consumer listen for events which prompt it to download the newly uploaded objects. More information about this pattern and how to set it up can be found at: https://docs.aws.amazon.com/AmazonS3/latest/dev/ways-to-add-notification-config-to-bucket.html.
 
-Benthos is able to follow this pattern when you configure an ` + "`sqs.url`" + `, where it consumes events from SQS and only downloads object keys received within those events. In order for this to work Benthos needs to know where within the event the key and bucket names can be found, specified as [dot paths](/docs/configuration/field_paths) with the fields ` + "`sqs.key_path` and `sqs.bucket_path`" + `. The default values for these fields should already be correct when following the guide above.
+Benthos is able to follow this pattern when you configure an `+"`sqs.url`"+`, where it consumes events from SQS and only downloads object keys received within those events. In order for this to work Benthos needs to know where within the event the key and bucket names can be found, specified as [dot paths](/docs/configuration/field_paths) with the fields `+"`sqs.key_path` and `sqs.bucket_path`"+`. The default values for these fields should already be correct when following the guide above.
 
-If your notification events are being routed to SQS via an SNS topic then the events will be enveloped by SNS, in which case you also need to specify the field ` + "`sqs.envelope_path`" + `, which in the case of SNS to SQS will usually be ` + "`Message`" + `.
+If your notification events are being routed to SQS via an SNS topic then the events will be enveloped by SNS, in which case you also need to specify the field `+"`sqs.envelope_path`"+`, which in the case of SNS to SQS will usually be `+"`Message`"+`.
 
-When using SQS please make sure you have sensible values for ` + "`sqs.max_messages`" + ` and also the visibility timeout of the queue itself. When Benthos consumes an S3 object the SQS message that triggered it is not deleted until the S3 object has been sent onwards. This ensures at-least-once crash resiliency, but also means that if the S3 object takes longer to process than the visibility timeout of your queue then the same objects might be processed multiple times.
+When using SQS please make sure you have sensible values for `+"`sqs.max_messages`"+` and also the visibility timeout of the queue itself. When Benthos consumes an S3 object the SQS message that triggered it is not deleted until the S3 object has been sent onwards. This ensures at-least-once crash resiliency, but also means that if the S3 object takes longer to process than the visibility timeout of your queue then the same objects might be processed multiple times.
 
 ## Downloading Large Files
 
-When downloading large files it's often necessary to process it in streamed parts in order to avoid loading the entire file in memory at a given time. In order to do this a ` + "[`codec`](#codec)" + ` can be specified that determines how to break the input into smaller individual messages.
+When downloading large files it's often necessary to process it in streamed parts in order to avoid loading the entire file in memory at a given time. In order to do this a `+"[`codec`](#codec)"+` can be specified that determines how to break the input into smaller individual messages.
 
 ## Credentials
 
@@ -71,7 +149,7 @@ By default Benthos will use a shared credentials file when connecting to AWS ser
 
 This input adds the following metadata fields to each message:
 
-` + "```" + `
+`+"```"+`
 - s3_key
 - s3_bucket
 - s3_last_modified_unix
@@ -80,42 +158,116 @@ This input adds the following metadata fields to each message:
 - s3_content_encoding
 - s3_version_id
 - All user defined metadata
-` + "```" + `
+`+"```"+`
 
-You can access these metadata fields using [function interpolation](/docs/configuration/interpolation#bloblang-queries). Note that user defined metadata is case insensitive within AWS, and it is likely that the keys will be received in a capitalized form, if you wish to make them consistent you can map all metadata keys to lower or uppercase using a Bloblang mapping such as ` + "`meta = meta().map_each_key(key -> key.lowercase())`" + `.`,
-		Config: docs.FieldComponent().WithChildren(
-			docs.FieldString("bucket", "The bucket to consume from. If the field `sqs.url` is specified this field is optional."),
-			docs.FieldString("prefix", "An optional path prefix, if set only objects with the prefix are consumed when walking a bucket."),
-		).WithChildren(sess.FieldSpecs()...).WithChildren(
-			docs.FieldBool("force_path_style_urls", "Forces the client API to use path style URLs for downloading keys, which is often required when connecting to custom endpoints.").Advanced(),
-			docs.FieldBool("delete_objects", "Whether to delete downloaded objects from the bucket once they are processed.").Advanced(),
-			codec.ReaderDocs,
-			docs.FieldInt("max_buffer", "The largest token size expected when consuming objects with a tokenised codec such as `lines`.").Advanced(),
-			docs.FieldObject("sqs", "Consume SQS messages in order to trigger key downloads.").WithChildren(
-				docs.FieldURL("url", "An optional SQS URL to connect to. When specified this queue will control which objects are downloaded."),
-				docs.FieldString("endpoint", "A custom endpoint to use when connecting to SQS.").Advanced(),
-				docs.FieldString("key_path", "A [dot path](/docs/configuration/field_paths) whereby object keys are found in SQS messages."),
-				docs.FieldString("bucket_path", "A [dot path](/docs/configuration/field_paths) whereby the bucket name can be found in SQS messages."),
-				docs.FieldString("envelope_path", "A [dot path](/docs/configuration/field_paths) of a field to extract an enveloped JSON payload for further extracting the key and bucket from SQS messages. This is specifically useful when subscribing an SQS queue to an SNS topic that receives bucket events.", "Message"),
-				docs.FieldString(
-					"delay_period",
-					"An optional period of time to wait from when a notification was originally sent to when the target key download is attempted.",
-					"10s", "5m",
-				).Advanced(),
-				docs.FieldInt("max_messages", "The maximum number of SQS messages to consume from each request.").Advanced(),
-			),
-		).ChildDefaultAndTypesFromStruct(input.NewAWSS3Config()),
-		Categories: []string{
-			"Services",
-			"AWS",
-		},
-	})
+You can access these metadata fields using [function interpolation](/docs/configuration/interpolation#bloblang-queries). Note that user defined metadata is case insensitive within AWS, and it is likely that the keys will be received in a capitalized form, if you wish to make them consistent you can map all metadata keys to lower or uppercase using a Bloblang mapping such as `+"`meta = meta().map_each_key(key -> key.lowercase())`"+`.`).
+		Fields(
+			service.NewStringField(s3iFieldBucket).
+				Description("The bucket to consume from. If the field `sqs.url` is specified this field is optional.").
+				Default(""),
+			service.NewStringField(s3iFieldPrefix).
+				Description("An optional path prefix, if set only objects with the prefix are consumed when walking a bucket.").
+				Default(""),
+		).
+		Fields(config.SessionFields()...).
+		Fields(
+			service.NewBoolField(s3iFieldForcePathStyleURLs).
+				Description("Forces the client API to use path style URLs for downloading keys, which is often required when connecting to custom endpoints.").
+				Default(false).
+				Advanced(),
+			service.NewBoolField(s3iFieldDeleteObjects).
+				Description("Whether to delete downloaded objects from the bucket once they are processed.").
+				Default(false).
+				Advanced(),
+			service.NewInternalField(codec.ReaderDocs).Default("all-bytes"),
+			service.NewIntField(s3iFieldMaxBuffer).
+				Description("The largest token size expected when consuming objects with a tokenised codec such as `lines`.").
+				Default(1_000_000).
+				Advanced(),
+			service.NewObjectField(s3iFieldSQS,
+				service.NewStringField(s3iSQSFieldURL).
+					Description("An optional SQS URL to connect to. When specified this queue will control which objects are downloaded.").
+					Default(""),
+				service.NewStringField(s3iSQSFieldEndpoint).
+					Description("A custom endpoint to use when connecting to SQS.").
+					Default("").
+					Advanced(),
+				service.NewStringField(s3iSQSFieldKeyPath).
+					Description("A [dot path](/docs/configuration/field_paths) whereby object keys are found in SQS messages.").
+					Default("Records.*.s3.object.key"),
+				service.NewStringField(s3iSQSFieldBucketPath).
+					Description("A [dot path](/docs/configuration/field_paths) whereby the bucket name can be found in SQS messages.").
+					Default("Records.*.s3.bucket.name"),
+				service.NewStringField(s3iSQSFieldEnvelopePath).
+					Description("A [dot path](/docs/configuration/field_paths) of a field to extract an enveloped JSON payload for further extracting the key and bucket from SQS messages. This is specifically useful when subscribing an SQS queue to an SNS topic that receives bucket events.").
+					Default("").
+					Example("Message"),
+				service.NewStringField(s3iSQSFieldDelayPeriod).
+					Description("An optional period of time to wait from when a notification was originally sent to when the target key download is attempted.").
+					Example("10s").
+					Example("5m").
+					Default("").
+					Advanced(),
+				service.NewIntField(s3iSQSFieldMaxMessages).
+					Description("The maximum number of SQS messages to consume from each request.").
+					Default(10).
+					Advanced(),
+			).
+				Description("Consume SQS messages in order to trigger key downloads.").
+				Optional(),
+		)
+}
+
+func init() {
+	err := service.RegisterBatchInput("aws_s3", s3InputSpec(),
+		func(pConf *service.ParsedConfig, res *service.Resources) (service.BatchInput, error) {
+			// NOTE: We're using interop to punch an internal implementation up
+			// to the public plugin API. The only blocker from using the full
+			// public suite is the codec field.
+			//
+			// Since codecs are likely to get refactored soon I figured it
+			// wasn't worth investing in a public wrapper since the old style
+			// will likely get deprecated.
+			//
+			// This does mean that for now all codec based components will need
+			// to keep internal implementations. However, the config specs are
+			// the biggest time sink when converting to the new APIs so it's not
+			// a big deal to leave these tasks pending.
+			conf, err := s3iConfigFromParsed(pConf)
+			if err != nil {
+				return nil, err
+			}
+
+			sess, err := GetSession(pConf, func(c *aws.Config) {
+				c.S3ForcePathStyle = aws.Bool(conf.ForcePathStyleURLs)
+			})
+			if err != nil {
+				return nil, err
+			}
+
+			mgr := interop.UnwrapManagement(res)
+			var rdr input.Async
+			if rdr, err = newAmazonS3Reader(conf, sess, mgr); err != nil {
+				return nil, err
+			}
+
+			// If we're not pulling events directly from an SQS queue then
+			// there's no concept of propagating nacks upstream, therefore wrap
+			// our reader within a preserver in order to retry indefinitely.
+			if conf.SQS.URL == "" {
+				rdr = input.NewAsyncPreserver(rdr)
+			}
+			i, err := input.NewAsyncReader("aws_s3", rdr, mgr)
+			if err != nil {
+				return nil, err
+			}
+
+			return interop.NewUnwrapInternalInput(i), nil
+		})
 	if err != nil {
 		panic(err)
 	}
 }
-
-//------------------------------------------------------------------------------
 
 //------------------------------------------------------------------------------
 
@@ -171,13 +323,13 @@ func deleteS3ObjectAckFn(
 type staticTargetReader struct {
 	pending    []*s3ObjectTarget
 	s3         *s3.S3
-	conf       input.AWSS3Config
+	conf       s3iConfig
 	startAfter *string
 }
 
 func newStaticTargetReader(
 	ctx context.Context,
-	conf input.AWSS3Config,
+	conf s3iConfig,
 	log log.Modular,
 	s3Client *s3.S3,
 ) (*staticTargetReader, error) {
@@ -244,7 +396,7 @@ func (s staticTargetReader) Close(context.Context) error {
 //------------------------------------------------------------------------------
 
 type sqsTargetReader struct {
-	conf input.AWSS3Config
+	conf s3iConfig
 	log  log.Modular
 	sqs  *sqs.SQS
 	s3   *s3.S3
@@ -255,7 +407,7 @@ type sqsTargetReader struct {
 }
 
 func newSQSTargetReader(
-	conf input.AWSS3Config,
+	conf s3iConfig,
 	log log.Modular,
 	s3 *s3.S3,
 	sqs *sqs.SQS,
@@ -502,7 +654,7 @@ func (s *sqsTargetReader) ackSQSMessage(ctx context.Context, msg *sqs.Message) e
 // AmazonS3 is a benthos reader.Type implementation that reads messages from an
 // Amazon S3 bucket.
 type awsS3Reader struct {
-	conf input.AWSS3Config
+	conf s3iConfig
 
 	objectScannerCtor codec.ReaderConstructor
 	keyReader         s3ObjectTargetReader
@@ -527,7 +679,7 @@ type s3PendingObject struct {
 }
 
 // NewAmazonS3 creates a new Amazon S3 bucket reader.Type.
-func newAmazonS3Reader(conf input.AWSS3Config, nm bundle.NewManagement) (*awsS3Reader, error) {
+func newAmazonS3Reader(conf s3iConfig, sess *session.Session, nm bundle.NewManagement) (*awsS3Reader, error) {
 	if conf.Bucket == "" && conf.SQS.URL == "" {
 		return nil, errors.New("either a bucket or an sqs.url must be specified")
 	}
@@ -535,8 +687,9 @@ func newAmazonS3Reader(conf input.AWSS3Config, nm bundle.NewManagement) (*awsS3R
 		return nil, errors.New("cannot specify both a prefix and sqs.url")
 	}
 	s := &awsS3Reader{
-		conf: conf,
-		log:  nm.Logger(),
+		conf:    conf,
+		session: sess,
+		log:     nm.Logger(),
 	}
 
 	readerConfig := codec.NewReaderConfig()
@@ -564,29 +717,21 @@ func (a *awsS3Reader) getTargetReader(ctx context.Context) (s3ObjectTargetReader
 // Connect attempts to establish a connection to the target S3 bucket
 // and any relevant queues used to traverse the objects (SQS, etc).
 func (a *awsS3Reader) Connect(ctx context.Context) error {
-	if a.session != nil {
+	if a.s3 != nil {
 		return nil
 	}
 
-	sess, err := GetSessionFromConf(a.conf.Config, func(c *aws.Config) {
-		c.S3ForcePathStyle = aws.Bool(a.conf.ForcePathStyleURLs)
-	})
-	if err != nil {
-		return err
-	}
-
-	a.session = sess
-	a.s3 = s3.New(sess)
+	a.s3 = s3.New(a.session)
 	if a.conf.SQS.URL != "" {
-		sqsSess := sess.Copy()
+		sqsSess := a.session.Copy()
 		if len(a.conf.SQS.Endpoint) > 0 {
 			sqsSess.Config.Endpoint = &a.conf.SQS.Endpoint
 		}
 		a.sqs = sqs.New(sqsSess)
 	}
 
+	var err error
 	if a.keyReader, err = a.getTargetReader(ctx); err != nil {
-		a.session = nil
 		a.s3 = nil
 		a.sqs = nil
 		return err
