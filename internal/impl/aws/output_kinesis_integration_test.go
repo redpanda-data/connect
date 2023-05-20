@@ -62,7 +62,7 @@ func TestKinesisIntegration(t *testing.T) {
 		Stream:       "foo",
 		PartitionKey: "${!json(\"id\")}",
 	}
-	config.Region = "eu-west-1"
+	config.Region = "us-east-1"
 	config.Endpoint = endpoint
 	config.Credentials = sess.CredentialsConfig{
 		ID:     "xxxxxx",
