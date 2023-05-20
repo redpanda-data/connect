@@ -161,18 +161,23 @@ func (a *kinesisWriter) Connect(ctx context.Context) error {
 		return err
 	}
 
-	a.session = sess
-	a.kinesis = kinesis.New(sess)
-
-	if err := a.kinesis.WaitUntilStreamExists(&kinesis.DescribeStreamInput{
+	k := kinesis.New(sess)
+	if _, err := k.DescribeStream(&kinesis.DescribeStreamInput{
 		StreamName: a.streamName,
 	}); err != nil {
-		a.session = nil
-		a.kinesis = nil
 		return err
 	}
 
+	if err := k.WaitUntilStreamExists(&kinesis.DescribeStreamInput{
+		StreamName: a.streamName,
+	}); err != nil {
+		return err
+	}
+
+	a.session = sess
+	a.kinesis = k
 	a.log.Infof("Sending messages to Kinesis stream: %v\n", a.conf.Stream)
+
 	return nil
 }
 

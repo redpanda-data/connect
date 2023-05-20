@@ -777,6 +777,14 @@ func (k *kinesisReader) waitUntilStreamsExists() error {
 	for _, stream := range k.conf.Streams {
 		go func(stream string) {
 			defer wg.Done()
+
+			if _, err := k.svc.DescribeStream(&kinesis.DescribeStreamInput{
+				StreamName: &stream,
+			}); err != nil {
+				results <- err
+				return
+			}
+
 			err := k.svc.WaitUntilStreamExists(&kinesis.DescribeStreamInput{
 				StreamName: &stream,
 			})
