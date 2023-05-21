@@ -17,6 +17,7 @@ All notable changes to this project will be documented in this file.
 - The `gcp_pubsub` input now adds the metadata field `gcp_pubsub_delivery_attempt` to messages when dead lettering is enabled.
 - The `aws_s3` input now adds `s3_version_id` metadata to versioned messages.
 - All compress/decompress components (codecs, bloblang methods, processors) now support `pgzip`.
+- Field `connection.max_retries` added to the `websocket` input.
 
 ### Fixed
 
