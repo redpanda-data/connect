@@ -2,7 +2,6 @@ package pipeline
 
 import (
 	"context"
-	"sync"
 
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
@@ -93,31 +92,21 @@ func (p *Processor) dispatchMessages(ctx context.Context, msgs []message.Batch, 
 
 	pending := msgs
 	for len(pending) > 0 {
-		wg := sync.WaitGroup{}
-		wg.Add(len(pending))
-
-		var newPending []message.Batch
-		var newPendingMut sync.Mutex
+		newPending := make([]message.Batch, 0, len(pending))
 
 		for _, b := range pending {
-			b := b
-			transac := message.NewTransactionFunc(b.ShallowCopy(), func(ctx context.Context, err error) error {
-				if err != nil {
-					newPendingMut.Lock()
-					newPending = append(newPending, b)
-					newPendingMut.Unlock()
-				}
-				wg.Done()
-				return nil
-			})
-
+			bb := b
 			select {
-			case p.messagesOut <- transac:
+			case p.messagesOut <- message.NewTransactionFunc(bb.ShallowCopy(), func(ctx context.Context, err error) error {
+				if err != nil {
+					newPending = append(newPending, bb)
+				}
+				return nil
+			}):
 			case <-ctx.Done():
 				return
 			}
 		}
-		wg.Wait()
 
 		if pending = newPending; len(pending) > 0 && !throt.Retry() {
 			return
