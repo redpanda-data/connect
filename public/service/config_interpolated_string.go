@@ -19,6 +19,17 @@ func NewInterpolatedStringField(name string) *ConfigField {
 	return &ConfigField{field: tf}
 }
 
+// NewInterpolatedStringEnumField defines a new config field that describes a
+// dynamic string that supports Bloblang interpolation functions, but also has a
+// discrete list of acceptable values. It is then possible to extract an
+// *InterpolatedString from the resulting parsed config with the method
+// FieldInterpolatedString. Verifying that the interpolated result matches one
+// of the specified options must be done at runtime.
+func NewInterpolatedStringEnumField(name string, options ...string) *ConfigField {
+	tf := docs.FieldString(name, "").IsInterpolated().HasOptions(options...)
+	return &ConfigField{field: tf}
+}
+
 // NewInterpolatedStringMapField describes a new config field consisting of an
 // object of arbitrary keys with interpolated string values. It is then
 // possible to extract an *InterpolatedString from the resulting parsed config
