@@ -13,7 +13,6 @@ import (
 type Config struct {
 	Label             string                  `json:"label" yaml:"label"`
 	Type              string                  `json:"type" yaml:"type"`
-	AWSKinesis        KinesisConfig           `json:"aws_kinesis" yaml:"aws_kinesis"`
 	AWSS3             AmazonS3Config          `json:"aws_s3" yaml:"aws_s3"`
 	AWSSNS            SNSConfig               `json:"aws_sns" yaml:"aws_sns"`
 	AWSSQS            AmazonSQSConfig         `json:"aws_sqs" yaml:"aws_sqs"`
@@ -64,7 +63,6 @@ func NewConfig() Config {
 	return Config{
 		Label:             "",
 		Type:              "stdout",
-		AWSKinesis:        NewKinesisConfig(),
 		AWSS3:             NewAmazonS3Config(),
 		AWSSNS:            NewSNSConfig(),
 		AWSSQS:            NewAmazonSQSConfig(),

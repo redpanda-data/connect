@@ -15,11 +15,8 @@ import (
 	"github.com/ory/dockertest/v3"
 	"github.com/stretchr/testify/require"
 
-	"github.com/benthosdev/benthos/v4/internal/component/output"
-	sess "github.com/benthosdev/benthos/v4/internal/impl/aws/session"
 	"github.com/benthosdev/benthos/v4/internal/integration"
-	"github.com/benthosdev/benthos/v4/internal/manager/mock"
-	"github.com/benthosdev/benthos/v4/internal/message"
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
 func TestKinesisIntegration(t *testing.T) {
@@ -57,17 +54,21 @@ func TestKinesisIntegration(t *testing.T) {
 	}
 
 	endpoint := fmt.Sprintf("http://localhost:%d", port)
-	config := output.KinesisConfig{
-		Stream:       "foo",
-		PartitionKey: "${!json(\"id\")}",
-	}
-	config.Region = "us-east-1"
-	config.Endpoint = endpoint
-	config.Credentials = sess.CredentialsConfig{
-		ID:     "xxxxxx",
-		Secret: "xxxxxx",
-		Token:  "xxxxxx",
-	}
+
+	pConf, err := koOutputSpec().ParseYAML(fmt.Sprintf(`
+stream: foo
+partition_key: ${! json("id") }
+region: us-east-1
+endpoint: "%v"
+credentials:
+  id: xxxxxx
+  secret: xxxxxx
+  token: xxxxxx
+`, endpoint), nil)
+	require.NoError(t, err)
+
+	config, err := koConfigFromParsed(pConf)
+	require.NoError(t, err)
 
 	// bootstrap kinesis
 	client := kinesis.New(session.Must(session.NewSession(&aws.Config{
@@ -78,7 +79,7 @@ func TestKinesisIntegration(t *testing.T) {
 	if err := pool.Retry(func() error {
 		_, err := client.CreateStream(&kinesis.CreateStreamInput{
 			ShardCount: aws.Int64(1),
-			StreamName: aws.String(config.Stream),
+			StreamName: aws.String("foo"),
 		})
 		return err
 	}); err != nil {
@@ -90,8 +91,8 @@ func TestKinesisIntegration(t *testing.T) {
 	})
 }
 
-func testKinesisConnect(t *testing.T, c output.KinesisConfig, client *kinesis.Kinesis) {
-	r, err := newKinesisWriter(c, mock.NewManager())
+func testKinesisConnect(t *testing.T, c koConfig, client *kinesis.Kinesis) {
+	r, err := newKinesisWriter(c, service.MockResources())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -109,9 +110,9 @@ func testKinesisConnect(t *testing.T, c output.KinesisConfig, client *kinesis.Ki
 		[]byte(`{"foo":"qux","id":789}`),
 	}
 
-	msg := message.QuickBatch(nil)
+	var msg service.MessageBatch
 	for _, record := range records {
-		msg = append(msg, message.NewPart(record))
+		msg = append(msg, service.NewMessage(record))
 	}
 
 	if err := r.WriteBatch(context.Background(), msg); err != nil {
