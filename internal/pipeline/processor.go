@@ -96,13 +96,14 @@ func (p *Processor) dispatchMessages(ctx context.Context, msgs []message.Batch, 
 
 		for _, b := range pending {
 			bb := b
-			select {
-			case p.messagesOut <- message.NewTransactionFunc(bb.ShallowCopy(), func(ctx context.Context, err error) error {
+			trans := message.NewTransactionFunc(bb.ShallowCopy(), func(ctx context.Context, err error) error {
 				if err != nil {
 					newPending = append(newPending, bb)
 				}
 				return nil
-			}):
+			})
+			select {
+			case p.messagesOut <- trans:
 			case <-ctx.Done():
 				return
 			}
