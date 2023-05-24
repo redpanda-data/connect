@@ -4,8 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"path/filepath"
+	"strings"
 
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
@@ -163,12 +165,12 @@ pipeline:
 
 type protobufOperator func(part *message.Part) error
 
-func newProtobufToJSONOperator(f ifs.FS, msg string, importPaths []string) (protobufOperator, error) {
+func newProtobufToJSONOperator(f ifs.FS, msg string, importPaths []string, schema string) (protobufOperator, error) {
 	if msg == "" {
 		return nil, errors.New("message field must not be empty")
 	}
 
-	descriptors, err := loadDescriptors(f, importPaths)
+	descriptors, err := loadDescriptors(f, importPaths, schema)
 	if err != nil {
 		return nil, err
 	}
@@ -198,12 +200,12 @@ func newProtobufToJSONOperator(f ifs.FS, msg string, importPaths []string) (prot
 	}, nil
 }
 
-func newProtobufFromJSONOperator(f ifs.FS, msg string, importPaths []string) (protobufOperator, error) {
+func newProtobufFromJSONOperator(f ifs.FS, msg string, importPaths []string, schema string) (protobufOperator, error) {
 	if msg == "" {
 		return nil, errors.New("message field must not be empty")
 	}
 
-	descriptors, err := loadDescriptors(f, importPaths)
+	descriptors, err := loadDescriptors(f, importPaths, schema)
 	if err != nil {
 		return nil, err
 	}
@@ -233,17 +235,36 @@ func newProtobufFromJSONOperator(f ifs.FS, msg string, importPaths []string) (pr
 	}, nil
 }
 
-func strToProtobufOperator(f ifs.FS, opStr, message string, importPaths []string) (protobufOperator, error) {
+func strToProtobufOperator(f ifs.FS, opStr, message string, importPaths []string, schema string) (protobufOperator, error) {
 	switch opStr {
 	case "to_json":
-		return newProtobufToJSONOperator(f, message, importPaths)
+		return newProtobufToJSONOperator(f, message, importPaths, schema)
 	case "from_json":
-		return newProtobufFromJSONOperator(f, message, importPaths)
+		return newProtobufFromJSONOperator(f, message, importPaths, schema)
 	}
 	return nil, fmt.Errorf("operator not recognised: %v", opStr)
 }
 
-func loadDescriptors(f ifs.FS, importPaths []string) ([]*desc.FileDescriptor, error) {
+func loadDescriptors(f ifs.FS, importPaths []string, schema string) ([]*desc.FileDescriptor, error) {
+	if len(schema) > 0 {
+		parser := protoparse.Parser{
+			Accessor: func(_ string) (io.ReadCloser, error) {
+				return io.NopCloser(strings.NewReader(schema)), nil
+			},
+		}
+
+		fds, err := parser.ParseFiles("")
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse proto schema: %v", err)
+		}
+
+		if len(fds) == 0 {
+			return nil, errors.New("no descriptor found in schema")
+		}
+
+		return fds, err
+	}
+
 	var parser protoparse.Parser
 	if len(importPaths) == 0 {
 		importPaths = []string{"."}
@@ -304,7 +325,7 @@ func newProtobuf(conf processor.ProtobufConfig, mgr bundle.NewManagement) (*prot
 		log: mgr.Logger(),
 	}
 	var err error
-	if p.operator, err = strToProtobufOperator(mgr.FS(), conf.Operator, conf.Message, conf.ImportPaths); err != nil {
+	if p.operator, err = strToProtobufOperator(mgr.FS(), conf.Operator, conf.Message, conf.ImportPaths, conf.Schema); err != nil {
 		return nil, err
 	}
 	return p, nil

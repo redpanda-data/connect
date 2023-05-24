@@ -199,3 +199,110 @@ func TestProtobufErrors(t *testing.T) {
 		})
 	}
 }
+
+func TestProtobufSchema(t *testing.T) {
+	type testCase struct {
+		name       string
+		operator   string
+		message    string
+		importPath string
+		schema     string
+		input      [][]byte
+		output     [][]byte
+	}
+
+	tests := []testCase{
+		{
+			name:       "json to protobuf",
+			operator:   "from_json",
+			message:    "testing.Person",
+			importPath: "",
+			schema: `syntax = "proto3";
+		package testing;
+
+		message Person {
+		  string first_name = 1;
+		  string last_name = 2;
+		  string full_name = 3;
+		  int32 age = 4;
+		  int32 id = 5;  // Unique ID number for this person.
+		  string email = 6;
+		}`,
+			input: [][]byte{
+				[]byte(`{"firstName":"john","lastName":"oates","age":10}`),
+				[]byte(`{"firstName":"daryl","lastName":"hall"}`),
+				[]byte(`{"firstName":"caleb","lastName":"quaye","email":"caleb@myspace.com"}`),
+			},
+			output: [][]byte{
+				{0x0a, 0x04, 0x6a, 0x6f, 0x68, 0x6e, 0x12, 0x05, 0x6f, 0x61, 0x74, 0x65, 0x73, 0x20, 0x0a},
+				{0x0a, 0x05, 0x64, 0x61, 0x72, 0x79, 0x6c, 0x12, 0x04, 0x68, 0x61, 0x6c, 0x6c},
+				{
+					0x0a, 0x05, 0x63, 0x61, 0x6c, 0x65, 0x62, 0x12, 0x05, 0x71, 0x75, 0x61, 0x79, 0x65, 0x32, 0x11,
+					0x63, 0x61, 0x6c, 0x65, 0x62, 0x40, 0x6d, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x2e, 0x63, 0x6f,
+					0x6d,
+				},
+			},
+		},
+		{
+			name:       "protobuf to json",
+			operator:   "to_json",
+			message:    "testing.Person",
+			importPath: "",
+			schema: `
+		syntax = "proto3";
+		package testing;
+
+		message Person {
+		  string first_name = 1;
+		  string last_name = 2;
+		  string full_name = 3;
+		  int32 age = 4;
+		  int32 id = 5;  // Unique ID number for this person.
+		  string email = 6;
+		}`,
+			input: [][]byte{
+				{0x0a, 0x04, 0x6a, 0x6f, 0x68, 0x6e, 0x12, 0x05, 0x6f, 0x61, 0x74, 0x65, 0x73, 0x20, 0x0a},
+				{0x0a, 0x05, 0x64, 0x61, 0x72, 0x79, 0x6c, 0x12, 0x04, 0x68, 0x61, 0x6c, 0x6c},
+				{
+					0x0a, 0x05, 0x63, 0x61, 0x6c, 0x65, 0x62, 0x12, 0x05, 0x71, 0x75, 0x61, 0x79, 0x65, 0x32, 0x11,
+					0x63, 0x61, 0x6c, 0x65, 0x62, 0x40, 0x6d, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x2e, 0x63, 0x6f,
+					0x6d,
+				},
+			},
+			output: [][]byte{
+				[]byte(`{"firstName":"john","lastName":"oates","age":10}`),
+				[]byte(`{"firstName":"daryl","lastName":"hall"}`),
+				[]byte(`{"firstName":"caleb","lastName":"quaye","email":"caleb@myspace.com"}`),
+			},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(tt *testing.T) {
+			conf := processor.NewConfig()
+			conf.Type = "protobuf"
+			conf.Protobuf.Operator = test.operator
+			conf.Protobuf.Message = test.message
+			conf.Protobuf.ImportPaths = []string{}
+			conf.Protobuf.Schema = test.schema
+
+			proc, err := mock.NewManager().NewProcessor(conf)
+			require.NoError(t, err)
+
+			input := message.QuickBatch(nil)
+			for _, p := range test.input {
+				input = append(input, message.NewPart(p))
+			}
+
+			msgs, res := proc.ProcessBatch(context.Background(), input)
+			require.Nil(t, res)
+			require.Len(t, msgs, 1)
+
+			assert.Equal(t, message.GetAllBytes(msgs[0]), test.output)
+			_ = msgs[0].Iter(func(i int, part *message.Part) error {
+				require.NoError(t, part.ErrorGet())
+				return nil
+			})
+		})
+	}
+}
