@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -249,12 +250,16 @@ func strToProtobufOperator(f ifs.FS, opStr, message string, importPaths []string
 func loadDescriptors(f ifs.FS, importPaths []string, schema string) ([]*desc.FileDescriptor, error) {
 	if len(schema) > 0 {
 		parser := protoparse.Parser{
-			Accessor: func(_ string) (io.ReadCloser, error) {
-				return io.NopCloser(strings.NewReader(schema)), nil
+			Accessor: func(filename string) (io.ReadCloser, error) {
+				if filename == "." {
+					return io.NopCloser(strings.NewReader(schema)), nil
+				} else {
+					return os.Open(filename)
+				}
 			},
 		}
 
-		fds, err := parser.ParseFiles("")
+		fds, err := parser.ParseFiles(".")
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse proto schema: %v", err)
 		}

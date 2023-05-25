@@ -220,6 +220,8 @@ func TestProtobufSchema(t *testing.T) {
 			schema: `syntax = "proto3";
 		package testing;
 
+		import "google/protobuf/timestamp.proto";
+
 		message Person {
 		  string first_name = 1;
 		  string last_name = 2;
@@ -227,6 +229,8 @@ func TestProtobufSchema(t *testing.T) {
 		  int32 age = 4;
 		  int32 id = 5;  // Unique ID number for this person.
 		  string email = 6;
+
+		  google.protobuf.Timestamp last_updated = 7;
 		}`,
 			input: [][]byte{
 				[]byte(`{"firstName":"john","lastName":"oates","age":10}`),
