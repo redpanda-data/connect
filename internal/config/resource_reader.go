@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"os"
 	"path/filepath"
 	"time"
 
@@ -207,7 +208,7 @@ func (r *Reader) readResource(path string, conf *manager.ResourceConfig) (lints 
 	var confBytes []byte
 	var dLints []docs.Lint
 	var modTime time.Time
-	if confBytes, dLints, modTime, err = ReadFileEnvSwap(r.fs, path); err != nil {
+	if confBytes, dLints, modTime, err = ReadFileEnvSwap(r.fs, path, os.LookupEnv); err != nil {
 		return
 	}
 	for _, l := range dLints {

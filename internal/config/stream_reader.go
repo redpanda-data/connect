@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -48,7 +49,7 @@ func (r *Reader) readStreamFileConfig(path string) (conf stream.Config, lints []
 	var confBytes []byte
 	var dLints []docs.Lint
 	var modTime time.Time
-	if confBytes, dLints, modTime, err = ReadFileEnvSwap(r.fs, path); err != nil {
+	if confBytes, dLints, modTime, err = ReadFileEnvSwap(r.fs, path, os.LookupEnv); err != nil {
 		return
 	}
 	for _, l := range dLints {

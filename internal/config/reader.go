@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -271,7 +272,7 @@ func (r *Reader) readMain(mainPath string, conf *Type) (lints []string, err erro
 	if mainPath != "" {
 		var dLints []docs.Lint
 		var modTime time.Time
-		if confBytes, dLints, modTime, err = ReadFileEnvSwap(r.fs, mainPath); err != nil {
+		if confBytes, dLints, modTime, err = ReadFileEnvSwap(r.fs, mainPath, os.LookupEnv); err != nil {
 			return
 		}
 		for _, l := range dLints {
