@@ -25,6 +25,7 @@ All notable changes to this project will be documented in this file.
 - The `gcp_pubsub` output should see significant performance improvements due to a client library upgrade.
 - The stream builder APIs should now follow `logger.file` config fields.
 - The experimental `cue` format in the cli `list` subcommand no longer introduces infinite recursion for `#Processors`.
+- Config unit tests no longer execute linting rules for missing env var interpolations.
 
 ## 4.15.0 - 2023-05-05
 
