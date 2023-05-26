@@ -12,7 +12,9 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/storage"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	"github.com/Azure/azure-sdk-for-go/sdk/data/aztables"
+	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
 
 	"github.com/Azure/azure-storage-queue-go/azqueue"
 )
@@ -120,4 +122,49 @@ func parseConnectionString(input string) (storageAccount, storageAccessKey strin
 		return "", "", errors.New("invalid connection string")
 	}
 	return accountName, accountKey, nil
+}
+
+// GetStorageClient creates the storage client for the provided credentials
+// TODO: Use a proper config struct for the parameters to avoid mixing them up
+func GetStorageClient(storageConnectionString, storageAccount, storageAccessKey, storageSASToken string) (*azblob.Client, error) {
+	var client *azblob.Client
+	var err error
+	if len(storageConnectionString) > 0 {
+		storageConnectionString := storageConnectionString
+		if strings.Contains(storageConnectionString, "UseDevelopmentStorage=true;") {
+			storageConnectionString = GetEmulatorConnectionString("10000", "10001", "10002")
+		}
+		// The UI doesn't add the AccountName parameter to the connection string for some reason...
+		if !strings.Contains(storageConnectionString, "AccountName=") {
+			storageConnectionString = storageConnectionString + ";" + "AccountName=" + storageAccount
+		}
+		client, err = azblob.NewClientFromConnectionString(storageConnectionString, nil)
+	} else if len(storageAccessKey) > 0 {
+		cred, credErr := azblob.NewSharedKeyCredential(storageAccount, storageAccessKey)
+		if credErr != nil {
+			return nil, fmt.Errorf("error creating shared key credential: %w", credErr)
+		}
+		serviceURL := fmt.Sprintf("https://%s.blob.core.windows.net", storageAccount)
+		client, err = azblob.NewClientWithSharedKeyCredential(serviceURL, cred, nil)
+	} else if len(storageSASToken) > 0 {
+		serviceURL := fmt.Sprintf("https://%s.blob.core.windows.net/%s", storageAccount, storageSASToken)
+		client, err = azblob.NewClientWithNoCredential(serviceURL, nil)
+	} else {
+		cred, credErr := azidentity.NewDefaultAzureCredential(nil)
+		if credErr != nil {
+			return nil, fmt.Errorf("error getting default azure credentials: %v", credErr)
+		}
+		serviceURL := fmt.Sprintf("https://%s.blob.core.windows.net", storageAccount)
+		client, err = azblob.NewClient(serviceURL, cred, nil)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("invalid azure storage account credentials: %v", err)
+	}
+
+	return client, err
+}
+
+// GetEmulatorConnectionString returns the Azurite connection string for the provided service ports
+func GetEmulatorConnectionString(blobServicePort, queueServicePort, tableServicePort string) string {
+	return fmt.Sprintf("DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://127.0.0.1:%s/devstoreaccount1;QueueEndpoint=http://127.0.0.1:%s/devstoreaccount1;TableEndpoint=http://127.0.0.1:%s/devstoreaccount1;", blobServicePort, queueServicePort, tableServicePort)
 }
