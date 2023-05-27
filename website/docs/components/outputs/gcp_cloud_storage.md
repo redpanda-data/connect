@@ -41,6 +41,7 @@ output:
     content_type: application/octet-stream
     collision_mode: overwrite
     max_in_flight: 64
+    timeout: 3s
     batching:
       count: 0
       byte_size: 0
@@ -63,6 +64,7 @@ output:
     content_encoding: ""
     chunk_size: 16777216
     max_in_flight: 64
+    timeout: 3s
     batching:
       count: 0
       byte_size: 0
@@ -217,6 +219,22 @@ The maximum number of message batches to have in flight at a given time. Increas
 
 Type: `int`  
 Default: `64`  
+
+### `timeout`
+
+The maximum period to wait on an upload before abandoning it and reattempting.
+
+
+Type: `string`  
+Default: `"3s"`  
+
+```yml
+# Examples
+
+timeout: 1s
+
+timeout: 500ms
+```
 
 ### `batching`
 
