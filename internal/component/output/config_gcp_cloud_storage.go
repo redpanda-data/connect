@@ -1,6 +1,8 @@
 package output
 
 import (
+	"time"
+
 	"github.com/benthosdev/benthos/v4/internal/batch/policy/batchconfig"
 )
 
@@ -29,6 +31,7 @@ type GCPCloudStorageConfig struct {
 	MaxInFlight     int                `json:"max_in_flight" yaml:"max_in_flight"`
 	Batching        batchconfig.Config `json:"batching" yaml:"batching"`
 	CollisionMode   string             `json:"collision_mode" yaml:"collision_mode"`
+	Timeout         time.Duration      `json:"timeout" yaml:"timeout"`
 }
 
 // NewGCPCloudStorageConfig creates a new Config with default values.

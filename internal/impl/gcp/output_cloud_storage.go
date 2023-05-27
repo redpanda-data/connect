@@ -119,6 +119,7 @@ output:
 			docs.FieldString("content_encoding", "An optional content encoding to set for each object.").IsInterpolated().Advanced(),
 			docs.FieldInt("chunk_size", "An optional chunk size which controls the maximum number of bytes of the object that the Writer will attempt to send to the server in a single request. If ChunkSize is set to zero, chunking will be disabled.").Advanced(),
 			docs.FieldInt("max_in_flight", "The maximum number of message batches to have in flight at a given time. Increase this to improve throughput."),
+			docs.FieldString("timeout", "The maximum period to wait on an upload before abandoning it and reattempting.", "1s", "500ms").HasDefault("3s"),
 			policy.FieldSpec(),
 		).ChildDefaultAndTypesFromStruct(output.NewGCPCloudStorageConfig()),
 	})
@@ -188,7 +189,7 @@ func (g *gcpCloudStorageOutput) Connect(ctx context.Context) error {
 
 // WriteBatch attempts to write message contents to a target GCP Cloud
 // Storage bucket as files.
-func (g *gcpCloudStorageOutput) WriteBatch(ctx context.Context, msg message.Batch) error {
+func (g *gcpCloudStorageOutput) WriteBatch(wctx context.Context, msg message.Batch) error {
 	g.connMut.RLock()
 	client := g.client
 	g.connMut.RUnlock()
@@ -196,6 +197,9 @@ func (g *gcpCloudStorageOutput) WriteBatch(ctx context.Context, msg message.Batc
 	if client == nil {
 		return component.ErrNotConnected
 	}
+
+	ctx, cancel := context.WithTimeout(wctx, g.conf.Timeout)
+	defer cancel()
 
 	return output.IterateBatchedSend(msg, func(i int, p *message.Part) error {
 		metadata := map[string]string{}
