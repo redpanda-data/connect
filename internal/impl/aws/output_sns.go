@@ -77,11 +77,11 @@ By default Benthos will use a shared credentials file when connecting to AWS ser
 		Fields(
 			service.NewStringField(snsoFieldTopicARN).
 				Description("The topic to publish to."),
-			service.NewInterpolatedStringField("message_group_id").
+			service.NewInterpolatedStringField(snsoFieldMessageGroupID).
 				Description("An optional group ID to set for messages.").
 				Version("3.60.0").
 				Optional(),
-			service.NewInterpolatedStringField("message_deduplication_id").
+			service.NewInterpolatedStringField(snsoFieldMessageDedupeID).
 				Description("An optional deduplication ID to set for messages.").
 				Version("3.60.0").
 				Optional(),

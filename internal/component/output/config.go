@@ -13,7 +13,6 @@ import (
 type Config struct {
 	Label             string                  `json:"label" yaml:"label"`
 	Type              string                  `json:"type" yaml:"type"`
-	AWSSQS            AmazonSQSConfig         `json:"aws_sqs" yaml:"aws_sqs"`
 	AzureBlobStorage  AzureBlobStorageConfig  `json:"azure_blob_storage" yaml:"azure_blob_storage"`
 	AzureQueueStorage AzureQueueStorageConfig `json:"azure_queue_storage" yaml:"azure_queue_storage"`
 	AzureTableStorage AzureTableStorageConfig `json:"azure_table_storage" yaml:"azure_table_storage"`
@@ -61,7 +60,6 @@ func NewConfig() Config {
 	return Config{
 		Label:             "",
 		Type:              "stdout",
-		AWSSQS:            NewAmazonSQSConfig(),
 		AzureBlobStorage:  NewAzureBlobStorageConfig(),
 		AzureQueueStorage: NewAzureQueueStorageConfig(),
 		AzureTableStorage: NewAzureTableStorageConfig(),
