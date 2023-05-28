@@ -45,6 +45,7 @@ require (
 	github.com/fatih/color v1.14.1
 	github.com/fsnotify/fsnotify v1.6.0
 	github.com/generikvault/gvalstrings v0.0.0-20180926130504-471f38f0112a
+	github.com/getsentry/sentry-go v0.21.0
 	github.com/go-faker/faker/v4 v4.1.0
 	github.com/go-sql-driver/mysql v1.6.0
 	github.com/gocql/gocql v1.4.0
@@ -69,7 +70,7 @@ require (
 	github.com/lib/pq v1.10.4
 	github.com/linkedin/goavro/v2 v2.12.0
 	github.com/matoous/go-nanoid/v2 v2.0.0
-	github.com/microcosm-cc/bluemonday v1.0.22
+	github.com/microcosm-cc/bluemonday v1.0.23
 	github.com/mitchellh/mapstructure v1.5.0
 	github.com/nats-io/nats.go v1.23.0
 	github.com/nats-io/nkeys v0.3.0
@@ -99,7 +100,7 @@ require (
 	github.com/smira/go-statsd v1.3.2
 	github.com/snowflakedb/gosnowflake v1.6.16
 	github.com/sourcegraph/conc v0.3.0
-	github.com/stretchr/testify v1.8.1
+	github.com/stretchr/testify v1.8.2
 	github.com/tetratelabs/wazero v1.0.1
 	github.com/tilinna/z85 v1.0.0
 	github.com/trinodb/trino-go-client v0.309.0
@@ -159,7 +160,7 @@ require (
 	github.com/DataDog/zstd v1.5.2 // indirect
 	github.com/Microsoft/go-winio v0.5.2 // indirect
 	github.com/Nvveen/Gotty v0.0.0-20120604004816-cd527374f1e5 // indirect
-	github.com/andybalholm/brotli v1.0.4 // indirect
+	github.com/andybalholm/brotli v1.0.5 // indirect
 	github.com/apache/arrow/go/arrow v0.0.0-20211112161151-bc219186db40 // indirect
 	github.com/apache/thrift v0.17.0 // indirect
 	github.com/ardielle/ardielle-go v1.5.2 // indirect
@@ -290,7 +291,7 @@ require (
 	google.golang.org/appengine v1.6.7 // indirect
 	google.golang.org/genproto v0.0.0-20230110181048-76db0878b65f // indirect
 	google.golang.org/grpc v1.53.0 // indirect
-	google.golang.org/protobuf v1.28.1 // indirect
+	google.golang.org/protobuf v1.29.1 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/jcmturner/aescts.v1 v1.0.1 // indirect
 	gopkg.in/jcmturner/dnsutils.v1 v1.0.1 // indirect
