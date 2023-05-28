@@ -5,10 +5,11 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/getsentry/sentry-go"
+
 	"github.com/benthosdev/benthos/v4/internal/cli"
 	"github.com/benthosdev/benthos/v4/public/bloblang"
 	"github.com/benthosdev/benthos/v4/public/service"
-	"github.com/getsentry/sentry-go"
 )
 
 const (

@@ -17,7 +17,6 @@ type Config struct {
 	AzureQueueStorage AzureQueueStorageConfig `json:"azure_queue_storage" yaml:"azure_queue_storage"`
 	AzureTableStorage AzureTableStorageConfig `json:"azure_table_storage" yaml:"azure_table_storage"`
 	Broker            BrokerConfig            `json:"broker" yaml:"broker"`
-	CSVFile           CSVFileConfig           `json:"csv" yaml:"csv"`
 	Dynamic           DynamicConfig           `json:"dynamic" yaml:"dynamic"`
 	File              FileConfig              `json:"file" yaml:"file"`
 	GCPCloudStorage   GCPCloudStorageConfig   `json:"gcp_cloud_storage" yaml:"gcp_cloud_storage"`
@@ -55,7 +54,6 @@ func NewConfig() Config {
 		AzureBlobStorage:  NewAzureBlobStorageConfig(),
 		AzureQueueStorage: NewAzureQueueStorageConfig(),
 		Broker:            NewBrokerConfig(),
-		CSVFile:           NewCSVFileConfig(),
 		Dynamic:           NewDynamicConfig(),
 		File:              NewFileConfig(),
 		GCPCloudStorage:   NewGCPCloudStorageConfig(),
