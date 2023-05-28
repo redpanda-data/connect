@@ -16,8 +16,9 @@ import TabItem from '@theme/TabItem';
 :::caution EXPERIMENTAL
 This component is experimental and therefore subject to change or removal outside of major version releases.
 :::
+Captures log events from messages and submits them to [Sentry](https://sentry.io/).
 
-Introduced in version 4.14.0.
+Introduced in version 4.16.0.
 
 ```yml
 # Config fields, showing default values
@@ -34,8 +35,6 @@ sentry_capture:
   flush_timeout: 5s
   sampling_rate: 1
 ```
-
-Captures log events from messages and submits them to [Sentry](https://sentry.io/).
 
 ## Fields
 
