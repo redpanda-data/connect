@@ -207,7 +207,7 @@ func (a *azureBlobStorageWriter) createContainer(ctx context.Context, containerN
 	return err
 }
 
-func (a *azureBlobStorageWriter) WriteBatch(_ context.Context, msg message.Batch) error {
+func (a *azureBlobStorageWriter) WriteBatch(ctx context.Context, msg message.Batch) error {
 	return output.IterateBatchedSend(msg, func(i int, p *message.Part) error {
 		containerStr, err := a.container.String(i, msg)
 		if err != nil {
@@ -223,7 +223,6 @@ func (a *azureBlobStorageWriter) WriteBatch(_ context.Context, msg message.Batch
 		if err != nil {
 			return fmt.Errorf("blob type interpolation error: %w", err)
 		}
-		ctx := p.GetContext()
 		c := a.client.ServiceClient().NewContainerClient(containerStr)
 		if err = a.uploadBlob(ctx, c, pathStr, blobTypeStr, p.AsBytes()); err != nil {
 			if containerNotFound(err) {
