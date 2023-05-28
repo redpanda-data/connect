@@ -135,7 +135,6 @@ A list of file paths to read from. Each file will be read sequentially until the
 
 
 Type: `array`  
-Default: `[]`  
 
 ```yml
 # Examples
@@ -187,8 +186,5 @@ Optionally process records in batches. This can help to speed up the consumption
 Type: `int`  
 Default: `1`  
 
-This input is particularly useful when consuming CSV from files too large to
-parse entirely within memory. However, in cases where CSV is consumed from other
-input types it's also possible to parse them using the
-[Bloblang `parse_csv` method](/docs/guides/bloblang/methods#parse_csv).
+This input is particularly useful when consuming CSV from files too large to parse entirely within memory. However, in cases where CSV is consumed from other input types it's also possible to parse them using the [Bloblang `parse_csv` method](/docs/guides/bloblang/methods#parse_csv).
 

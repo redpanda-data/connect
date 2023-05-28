@@ -105,9 +105,11 @@ output:
 		Fields(
 			service.NewStringListField(csviFieldPaths).
 				Description("A list of file paths to read from. Each file will be read sequentially until the list is exhausted, at which point the input will close. Glob patterns are supported, including super globs (double star).").
-				Example("/tmp/foo.csv").
-				Example("/tmp/bar/*.csv").
-				Example("/tmp/data/**/*.csv"),
+				Example([]string{
+					"/tmp/foo.csv",
+					"/tmp/bar/*.csv",
+					"/tmp/data/**/*.csv",
+				}),
 			service.NewBoolField(csviFieldParseHeaderRow).
 				Description("Whether to reference the first row as a header row. If set to true the output structure for messages will be an object where field keys are determined by the header row. Otherwise, each message will consist of an array of values from the corresponding CSV row.").
 				Default(true),
