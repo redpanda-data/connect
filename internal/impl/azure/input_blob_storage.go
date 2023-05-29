@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
-	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
 
 	"github.com/benthosdev/benthos/v4/internal/bundle"
@@ -21,6 +20,7 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/component/input/processors"
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/internal/docs"
+	"github.com/benthosdev/benthos/v4/internal/impl/azure/shared"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
 )
@@ -40,7 +40,16 @@ func init() {
 Downloads objects within an Azure Blob Storage container, optionally filtered by
 a prefix.`,
 		Description: `
-Downloads objects within an Azure Blob Storage container, optionally filtered by a prefix.
+Supports multiple authentication methods but only one of the following is required:
+- ` + "`storage_connection_string`" + `
+- ` + "`storage_account` and `storage_access_key`" + `
+- ` + "`storage_account` and `storage_sas_token`" + `
+- ` + "`storage_account` to access via [DefaultAzureCredential](https://pkg.go.dev/github.com/Azure/azure-sdk-for-go/sdk/azidentity#DefaultAzureCredential)" + `
+
+If multiple are set then the ` + "`storage_connection_string`" + ` is given priority.
+
+If the ` + "`storage_connection_string`" + ` does not contain the ` + "`AccountName`" + ` parameter, please specify it in the
+` + "`storage_account`" + ` field.
 
 ## Downloading Large Files
 
@@ -84,7 +93,9 @@ You can access these metadata fields using [function interpolation](/docs/config
 			docs.FieldString("prefix", "An optional path prefix, if set only objects with the prefix are consumed."),
 			codec.ReaderDocs,
 			docs.FieldBool("delete_objects", "Whether to delete downloaded objects from the blob once they are processed.").Advanced(),
-		).ChildDefaultAndTypesFromStruct(input.NewAzureBlobStorageConfig()),
+		).LinterBlobl(
+			`root = if this.storage_connection_string != "" && !this.storage_connection_string.contains("AccountName=") && this.storage_account == "" { [ "storage_account must be set if storage_connection_string does not contain the \"AccountName\" parameter" ] }`).
+			ChildDefaultAndTypesFromStruct(input.NewAzureBlobStorageConfig()),
 		Categories: []string{
 			"Services",
 			"Azure",
@@ -245,37 +256,9 @@ func newAzureBlobStorage(conf input.AzureBlobStorageConfig, log log.Modular, sta
 		return nil, errors.New("invalid azure storage account credentials")
 	}
 
-	var client *azblob.Client
-	var err error
-	if len(conf.StorageConnectionString) > 0 {
-		connStr := conf.StorageConnectionString
-		if strings.Contains(conf.StorageConnectionString, "UseDevelopmentStorage=true;") {
-			// This conn string is necessary to work with azurite
-			// The new SDK no longer provides has NewEmulatorClient() so the connStr was copied from
-			// https://learn.microsoft.com/en-us/azure/storage/common/storage-use-azurite?tabs=visual-studio#http-connection-strings
-			connStr = "DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://127.0.0.1:10000/devstoreaccount1;"
-		}
-		client, err = azblob.NewClientFromConnectionString(connStr, nil)
-	} else if len(conf.StorageAccessKey) > 0 {
-		cred, credErr := azblob.NewSharedKeyCredential(conf.StorageAccount, conf.StorageAccessKey)
-		if credErr != nil {
-			return nil, fmt.Errorf("error creating shared key credential: %w", credErr)
-		}
-		serviceURL := fmt.Sprintf("https://%s.blob.core.windows.net", conf.StorageAccount)
-		client, err = azblob.NewClientWithSharedKeyCredential(serviceURL, cred, nil)
-	} else if len(conf.StorageSASToken) > 0 {
-		serviceURL := fmt.Sprintf("https://%s.blob.core.windows.net/%s", conf.StorageAccount, conf.StorageSASToken)
-		client, err = azblob.NewClientWithNoCredential(serviceURL, nil)
-	} else {
-		cred, credErr := azidentity.NewDefaultAzureCredential(nil)
-		if credErr != nil {
-			return nil, fmt.Errorf("error getting default azure credentials: %v", credErr)
-		}
-		serviceURL := fmt.Sprintf("https://%s.blob.core.windows.net", conf.StorageAccount)
-		client, err = azblob.NewClient(serviceURL, cred, nil)
-	}
+	client, err := shared.GetBlobStorageClient(conf.StorageConnectionString, conf.StorageAccount, conf.StorageAccessKey, conf.StorageSASToken)
 	if err != nil {
-		return nil, fmt.Errorf("invalid azure storage account credentials: %w", err)
+		return nil, fmt.Errorf("failed to get storage client: %v", err)
 	}
 
 	var objectScannerCtor codec.ReaderConstructor

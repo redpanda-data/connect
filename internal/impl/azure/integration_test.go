@@ -2,18 +2,18 @@ package azure
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"testing"
 	"time"
 
-	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
 	"github.com/ory/dockertest/v3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/benthosdev/benthos/v4/internal/impl/azure/shared"
 	"github.com/benthosdev/benthos/v4/internal/integration"
+	_ "github.com/benthosdev/benthos/v4/public/components/pure"
 )
 
 func TestIntegrationAzure(t *testing.T) {
@@ -30,10 +30,8 @@ func TestIntegrationAzure(t *testing.T) {
 
 	resource, err := pool.RunWithOptions(&dockertest.RunOptions{
 		Repository: "mcr.microsoft.com/azure-storage/azurite",
-		Tag:        "3.23.0",
-		// Expose Azurite ports in the random port range, so we don't clash with
-		// other apps.
-		ExposedPorts: []string{"10000/tcp", "10001/tcp"},
+		// Expose blob, queue and table service ports
+		ExposedPorts: []string{"10000/tcp", "10001/tcp", "10002/tcp"},
 	})
 	require.NoError(t, err)
 	t.Cleanup(func() {
@@ -42,27 +40,29 @@ func TestIntegrationAzure(t *testing.T) {
 
 	_ = resource.Expire(900)
 
-	blobServicePort := resource.GetPort("10000/tcp")
-	connStr := fmt.Sprintf("DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://127.0.0.1:%s/devstoreaccount1;", blobServicePort)
-	dummyContainer := "jotunheim"
-	dummyPrefix := "kvenn"
-	// Wait for Azurite to properly start up
-	// Copied from https://github.com/mfamador/data-webhooks/blob/2dca9b0fa36bcbadf38884fb1a2e8a3614e6135e/lib/docker_containers.go#L225-L236
+	connString := shared.GetEmulatorConnectionString(resource.GetPort("10000/tcp"), resource.GetPort("10001/tcp"), resource.GetPort("10002/tcp"))
+
+	// Wait for Azurite to start up
 	err = pool.Retry(func() error {
-		client, eerr := azblob.NewClientFromConnectionString(connStr, nil)
-		if eerr != nil {
-			return eerr
+		client, err := azblob.NewClientFromConnectionString(connString, nil)
+		if err != nil {
+			return err
+
 		}
-		if _, err := client.CreateContainer(context.Background(), dummyContainer, nil); err != nil {
-			if containerAlreadyExists(err) {
-				return nil
-			}
+
+		ctx, done := context.WithTimeout(context.Background(), 1*time.Second)
+		defer done()
+
+		if _, err = client.NewListContainersPager(nil).NextPage(ctx); err != nil {
 			return err
 		}
 		return nil
+
 	})
 	require.NoError(t, err, "Failed to start Azurite")
 
+	dummyContainer := "jotunheim"
+	dummyPrefix := "kvenn"
 	t.Run("blob_storage", func(t *testing.T) {
 		template := `
 output:
@@ -72,13 +72,13 @@ output:
     max_in_flight: 1
     path: $VAR2/${!count("$ID")}.txt
     public_access_level: PRIVATE
-    storage_connection_string: "DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://127.0.0.1:$PORT/devstoreaccount1;"
+    storage_connection_string: $VAR3
 
 input:
   azure_blob_storage:
     container: $VAR1-$ID
     prefix: $VAR2
-    storage_connection_string: "DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://127.0.0.1:$PORT/devstoreaccount1;"
+    storage_connection_string: $VAR3
 `
 		integration.StreamTests(
 			integration.StreamTestOpenCloseIsolated(),
@@ -87,26 +87,39 @@ input:
 			t, template,
 			integration.StreamTestOptVarOne(dummyContainer),
 			integration.StreamTestOptVarTwo(dummyPrefix),
-			integration.StreamTestOptPort(blobServicePort),
+			integration.StreamTestOptVarThree(connString),
 		)
 	})
 
 	t.Run("blob_storage_append", func(t *testing.T) {
 		template := `
 output:
-  azure_blob_storage:
-    blob_type: APPEND
-    container: $VAR1
-    max_in_flight: 1
-    path: $VAR2/data.txt
-    public_access_level: PRIVATE
-    storage_connection_string: "DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://127.0.0.1:$PORT/devstoreaccount1;"
+  broker:
+    pattern: fan_out_sequential
+    outputs:
+      - azure_blob_storage:
+          blob_type: APPEND
+          container: $VAR1-$ID
+          max_in_flight: 1
+          path: $VAR2/data.txt
+          public_access_level: PRIVATE
+          storage_connection_string: $VAR3
+      - azure_blob_storage:
+          blob_type: APPEND
+          container: $VAR1-$ID
+          max_in_flight: 1
+          path: $VAR2/data.txt
+          public_access_level: PRIVATE
+          storage_connection_string: $VAR3
 
 input:
   azure_blob_storage:
-    container: $VAR1
+    container: $VAR1-$ID
     prefix: $VAR2/data.txt
-    storage_connection_string: "DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://127.0.0.1:$PORT/devstoreaccount1;"
+    storage_connection_string: $VAR3
+  processors:
+    - mapping: |
+        root = if content() == "hello worldhello world" { "hello world" } else { "" }
 `
 		integration.StreamTests(
 			integration.StreamTestOpenCloseIsolated(),
@@ -114,7 +127,7 @@ input:
 			t, template,
 			integration.StreamTestOptVarOne(dummyContainer),
 			integration.StreamTestOptVarTwo(dummyPrefix),
-			integration.StreamTestOptPort(blobServicePort),
+			integration.StreamTestOptVarThree(connString),
 		)
 	})
 
@@ -125,12 +138,12 @@ input:
 output:
   azure_queue_storage:
     queue_name: $VAR1$ID
-    storage_connection_string: "UseDevelopmentStorage=true;"
+    storage_connection_string: $VAR2
 
 input:
   azure_queue_storage:
     queue_name: $VAR1$ID
-    storage_connection_string: "UseDevelopmentStorage=true;"
+    storage_connection_string: $VAR2
 `
 		integration.StreamTests(
 			integration.StreamTestOpenCloseIsolated(),
@@ -138,13 +151,7 @@ input:
 		).Run(
 			t, template,
 			integration.StreamTestOptVarOne(dummyQueue),
+			integration.StreamTestOptVarTwo("UseDevelopmentStorage=true;"),
 		)
 	})
-}
-
-func containerAlreadyExists(err error) bool {
-	if serr, ok := err.(*azcore.ResponseError); ok {
-		return serr.ErrorCode == "ContainerAlreadyExists"
-	}
-	return false
 }
