@@ -25,9 +25,9 @@ Introduced in version 4.16.0.
 label: ""
 sentry_capture:
   dsn: ""
-  message: ""
-  context: ""
-  tags: {}
+  message: webhook event received # No default (required)
+  context: 'root = {"order": {"product_id": "P93174", "quantity": 5}}' # No default (optional)
+  tags: {} # No default (optional)
   environment: ""
   release: ""
   level: INFO

@@ -31,7 +31,7 @@ Introduced in version 3.36.0.
 output:
   label: ""
   aws_s3:
-    bucket: ""
+    bucket: "" # No default (required)
     path: ${!count("files")}-${!timestamp_unix_nano()}.txt
     tags: {}
     content_type: application/octet-stream
@@ -53,7 +53,7 @@ output:
 output:
   label: ""
   aws_s3:
-    bucket: ""
+    bucket: "" # No default (required)
     path: ${!count("files")}-${!timestamp_unix_nano()}.txt
     tags: {}
     content_type: application/octet-stream
@@ -75,7 +75,7 @@ output:
       byte_size: 0
       period: ""
       check: ""
-      processors: []
+      processors: [] # No default (optional)
     region: ""
     endpoint: ""
     credentials:

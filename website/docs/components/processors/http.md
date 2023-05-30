@@ -28,10 +28,10 @@ Performs an HTTP request using a message batch as the request body, and replaces
 # Common config fields, showing default values
 label: ""
 http:
-  url: ""
+  url: "" # No default (required)
   verb: POST
   headers: {}
-  rate_limit: ""
+  rate_limit: "" # No default (optional)
   timeout: 5s
   parallel: false
 ```
@@ -43,7 +43,7 @@ http:
 # All config fields, showing default values
 label: ""
 http:
-  url: ""
+  url: "" # No default (required)
   verb: POST
   headers: {}
   metadata:
@@ -78,11 +78,11 @@ http:
     enable_renegotiation: false
     root_cas: ""
     root_cas_file: ""
-    client_certs: []
+    client_certs: [] # No default (required)
   extract_headers:
     include_prefixes: []
     include_patterns: []
-  rate_limit: ""
+  rate_limit: "" # No default (optional)
   timeout: 5s
   retry_period: 1s
   max_retry_backoff: 300s

@@ -29,9 +29,9 @@ Subscribe to a NATS subject.
 input:
   label: ""
   nats:
-    urls: []
-    subject: ""
-    queue: ""
+    urls: [] # No default (required)
+    subject: foo.bar.baz # No default (required)
+    queue: "" # No default (optional)
 ```
 
 </TabItem>
@@ -42,10 +42,10 @@ input:
 input:
   label: ""
   nats:
-    urls: []
-    subject: ""
-    queue: ""
-    nak_delay: ""
+    urls: [] # No default (required)
+    subject: foo.bar.baz # No default (required)
+    queue: "" # No default (optional)
+    nak_delay: 1m # No default (optional)
     prefetch_count: 32
     tls:
       enabled: false
@@ -53,12 +53,12 @@ input:
       enable_renegotiation: false
       root_cas: ""
       root_cas_file: ""
-      client_certs: []
+      client_certs: [] # No default (required)
     auth:
-      nkey_file: ""
-      user_credentials_file: ""
-      user_jwt: ""
-      user_nkey_seed: ""
+      nkey_file: ./seed.nk # No default (optional)
+      user_credentials_file: ./user.creds # No default (optional)
+      user_jwt: "" # No default (optional)
+      user_nkey_seed: "" # No default (optional)
 ```
 
 </TabItem>

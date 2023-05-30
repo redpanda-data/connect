@@ -25,11 +25,11 @@ Introduced in version 4.3.0.
 # Config fields, showing default values
 label: ""
 cached:
-  cache: ""
-  skip_on: ""
-  key: ""
-  ttl: ""
-  processors: []
+  cache: "" # No default (required)
+  skip_on: errored() # No default (optional)
+  key: my_foo_result # No default (required)
+  ttl: "" # No default (optional)
+  processors: [] # No default (required)
 ```
 
 The format of the data when stored within the cache is a custom and versioned schema chosen to balance performance and storage space. It is therefore not possible to point this processor to a cache that is pre-populated with data that this processor has not created itself.

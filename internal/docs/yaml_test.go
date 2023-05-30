@@ -602,7 +602,7 @@ func TestFieldToNode(t *testing.T) {
 		{
 			name: "no recurse single node null",
 			spec: docs.FieldObject("foo", ""),
-			expected: `null
+			expected: `null # No default (required)
 `,
 		},
 		{
@@ -611,13 +611,13 @@ func TestFieldToNode(t *testing.T) {
 				docs.FieldString("bar", ""),
 				docs.FieldString("baz", ""),
 			),
-			expected: `{}
+			expected: `{} # No default (required)
 `,
 		},
 		{
 			name: "no recurse map",
 			spec: docs.FieldString("foo", "").Map(),
-			expected: `{}
+			expected: `{} # No default (required)
 `,
 		},
 		{
@@ -631,12 +631,12 @@ func TestFieldToNode(t *testing.T) {
 				docs.FieldString("bud", "").Array(),
 			),
 			recurse: true,
-			expected: `bar: ""
+			expected: `bar: "" # No default (required)
 baz: baz default
-buz: 0
-bev: 0
-bun: false
-bud: []
+buz: 0 # No default (required)
+bev: 0 # No default (required)
+bun: false # No default (required)
+bud: [] # No default (required)
 `,
 		},
 	}

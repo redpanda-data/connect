@@ -29,12 +29,12 @@ Connects to a server and continuously performs requests for a single message.
 input:
   label: ""
   http_client:
-    url: ""
+    url: "" # No default (required)
     verb: GET
     headers: {}
-    rate_limit: ""
+    rate_limit: "" # No default (optional)
     timeout: 5s
-    payload: ""
+    payload: "" # No default (optional)
     stream:
       enabled: false
       reconnect: true
@@ -49,7 +49,7 @@ input:
 input:
   label: ""
   http_client:
-    url: ""
+    url: "" # No default (required)
     verb: GET
     headers: {}
     metadata:
@@ -84,11 +84,11 @@ input:
       enable_renegotiation: false
       root_cas: ""
       root_cas_file: ""
-      client_certs: []
+      client_certs: [] # No default (required)
     extract_headers:
       include_prefixes: []
       include_patterns: []
-    rate_limit: ""
+    rate_limit: "" # No default (optional)
     timeout: 5s
     retry_period: 1s
     max_retry_backoff: 300s
@@ -98,7 +98,7 @@ input:
     drop_on: []
     successful_on: []
     proxy_url: ""
-    payload: ""
+    payload: "" # No default (optional)
     drop_empty_bodies: true
     stream:
       enabled: false

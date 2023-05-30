@@ -29,7 +29,7 @@ Consume messages from an AWS SQS URL.
 input:
   label: ""
   aws_sqs:
-    url: ""
+    url: "" # No default (required)
 ```
 
 </TabItem>
@@ -40,7 +40,7 @@ input:
 input:
   label: ""
   aws_sqs:
-    url: ""
+    url: "" # No default (required)
     delete_message: true
     reset_visibility: true
     max_number_of_messages: 10

@@ -30,8 +30,8 @@ Send tracing events to an [Open Telemetry collector](https://opentelemetry.io/do
 # Common config fields, showing default values
 tracer:
   open_telemetry_collector:
-    http: []
-    grpc: []
+    http: [] # No default (required)
+    grpc: [] # No default (required)
 ```
 
 </TabItem>
@@ -41,8 +41,8 @@ tracer:
 # All config fields, showing default values
 tracer:
   open_telemetry_collector:
-    http: []
-    grpc: []
+    http: [] # No default (required)
+    grpc: [] # No default (required)
     tags: {}
 ```
 

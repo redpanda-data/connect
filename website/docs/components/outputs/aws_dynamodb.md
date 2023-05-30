@@ -31,7 +31,7 @@ Introduced in version 3.36.0.
 output:
   label: ""
   aws_dynamodb:
-    table: ""
+    table: "" # No default (required)
     string_columns: {}
     json_map_columns: {}
     max_in_flight: 64
@@ -50,7 +50,7 @@ output:
 output:
   label: ""
   aws_dynamodb:
-    table: ""
+    table: "" # No default (required)
     string_columns: {}
     json_map_columns: {}
     ttl: ""
@@ -61,7 +61,7 @@ output:
       byte_size: 0
       period: ""
       check: ""
-      processors: []
+      processors: [] # No default (optional)
     region: ""
     endpoint: ""
     credentials:

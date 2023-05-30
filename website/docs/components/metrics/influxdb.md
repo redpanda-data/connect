@@ -52,7 +52,7 @@ metrics:
       enable_renegotiation: false
       root_cas: ""
       root_cas_file: ""
-      client_certs: []
+      client_certs: [] # No default (required)
     username: ""
     password: ""
     include:

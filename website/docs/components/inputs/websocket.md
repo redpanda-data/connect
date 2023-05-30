@@ -29,7 +29,7 @@ Connects to a websocket server and continuously receives messages.
 input:
   label: ""
   websocket:
-    url: ""
+    url: ws://localhost:4195/get/ws # No default (required)
 ```
 
 </TabItem>
@@ -40,8 +40,8 @@ input:
 input:
   label: ""
   websocket:
-    url: ""
-    open_message: ""
+    url: ws://localhost:4195/get/ws # No default (required)
+    open_message: "" # No default (optional)
     open_message_type: binary
     tls:
       enabled: false
@@ -49,9 +49,9 @@ input:
       enable_renegotiation: false
       root_cas: ""
       root_cas_file: ""
-      client_certs: []
+      client_certs: [] # No default (required)
     connection:
-      max_retries: 0
+      max_retries: -1 # No default (optional)
     oauth:
       enabled: false
       consumer_key: ""
@@ -263,6 +263,14 @@ An optional limit to the number of consecutive retry attempts that will be made 
 
 
 Type: `int`  
+
+```yml
+# Examples
+
+max_retries: -1
+
+max_retries: 10
+```
 
 ### `oauth`
 

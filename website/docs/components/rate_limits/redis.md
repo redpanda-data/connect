@@ -32,10 +32,10 @@ Introduced in version 4.12.0.
 # Common config fields, showing default values
 label: ""
 redis:
-  url: ""
+  url: :6397 # No default (required)
   count: 1000
   interval: 1s
-  key: ""
+  key: "" # No default (required)
 ```
 
 </TabItem>
@@ -45,7 +45,7 @@ redis:
 # All config fields, showing default values
 label: ""
 redis:
-  url: ""
+  url: :6397 # No default (required)
   kind: simple
   master: ""
   tls:
@@ -54,10 +54,10 @@ redis:
     enable_renegotiation: false
     root_cas: ""
     root_cas_file: ""
-    client_certs: []
+    client_certs: [] # No default (required)
   count: 1000
   interval: 1s
-  key: ""
+  key: "" # No default (required)
 ```
 
 </TabItem>

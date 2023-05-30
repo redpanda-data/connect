@@ -31,9 +31,9 @@ Introduced in version 3.36.0.
 output:
   label: ""
   aws_sqs:
-    url: ""
-    message_group_id: ""
-    message_deduplication_id: ""
+    url: "" # No default (required)
+    message_group_id: "" # No default (optional)
+    message_deduplication_id: "" # No default (optional)
     max_in_flight: 64
     metadata:
       exclude_prefixes: []
@@ -52,9 +52,9 @@ output:
 output:
   label: ""
   aws_sqs:
-    url: ""
-    message_group_id: ""
-    message_deduplication_id: ""
+    url: "" # No default (required)
+    message_group_id: "" # No default (optional)
+    message_deduplication_id: "" # No default (optional)
     max_in_flight: 64
     metadata:
       exclude_prefixes: []
@@ -63,7 +63,7 @@ output:
       byte_size: 0
       period: ""
       check: ""
-      processors: []
+      processors: [] # No default (optional)
     region: ""
     endpoint: ""
     credentials:

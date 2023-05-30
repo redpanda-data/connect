@@ -34,10 +34,10 @@ Introduced in version 3.61.0.
 output:
   label: ""
   kafka_franz:
-    seed_brokers: []
-    topic: ""
-    key: ""
-    partition: ""
+    seed_brokers: [] # No default (required)
+    topic: "" # No default (required)
+    key: "" # No default (optional)
+    partition: ${! meta("partition") } # No default (optional)
     metadata:
       include_prefixes: []
       include_patterns: []
@@ -57,11 +57,11 @@ output:
 output:
   label: ""
   kafka_franz:
-    seed_brokers: []
-    topic: ""
-    key: ""
-    partitioner: ""
-    partition: ""
+    seed_brokers: [] # No default (required)
+    topic: "" # No default (required)
+    key: "" # No default (optional)
+    partitioner: "" # No default (optional)
+    partition: ${! meta("partition") } # No default (optional)
     metadata:
       include_prefixes: []
       include_patterns: []
@@ -72,17 +72,17 @@ output:
       byte_size: 0
       period: ""
       check: ""
-      processors: []
+      processors: [] # No default (optional)
     max_message_bytes: 1MB
-    compression: ""
+    compression: "" # No default (optional)
     tls:
       enabled: false
       skip_cert_verify: false
       enable_renegotiation: false
       root_cas: ""
       root_cas_file: ""
-      client_certs: []
-    sasl: []
+      client_certs: [] # No default (required)
+    sasl: [] # No default (optional)
 ```
 
 </TabItem>

@@ -31,7 +31,7 @@ Automatically decodes and validates messages with schemas from a Confluent Schem
 # Common config fields, showing default values
 label: ""
 schema_registry_decode:
-  url: ""
+  url: "" # No default (required)
 ```
 
 </TabItem>
@@ -42,7 +42,7 @@ schema_registry_decode:
 label: ""
 schema_registry_decode:
   avro_raw_json: false
-  url: ""
+  url: "" # No default (required)
   oauth:
     enabled: false
     consumer_key: ""
@@ -64,7 +64,7 @@ schema_registry_decode:
     enable_renegotiation: false
     root_cas: ""
     root_cas_file: ""
-    client_certs: []
+    client_certs: [] # No default (required)
 ```
 
 </TabItem>

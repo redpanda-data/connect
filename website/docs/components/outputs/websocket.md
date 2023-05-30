@@ -29,7 +29,7 @@ Sends messages to an HTTP server via a websocket connection.
 output:
   label: ""
   websocket:
-    url: ""
+    url: "" # No default (required)
 ```
 
 </TabItem>
@@ -40,14 +40,14 @@ output:
 output:
   label: ""
   websocket:
-    url: ""
+    url: "" # No default (required)
     tls:
       enabled: false
       skip_cert_verify: false
       enable_renegotiation: false
       root_cas: ""
       root_cas_file: ""
-      client_certs: []
+      client_certs: [] # No default (required)
     oauth:
       enabled: false
       consumer_key: ""

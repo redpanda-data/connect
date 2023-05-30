@@ -34,9 +34,9 @@ Introduced in version 3.43.0.
 input:
   label: ""
   pulsar:
-    url: ""
-    topics: []
-    subscription_name: ""
+    url: pulsar://localhost:6650 # No default (required)
+    topics: [] # No default (required)
+    subscription_name: "" # No default (required)
     subscription_type: shared
     tls:
       root_cas_file: ""
@@ -50,9 +50,9 @@ input:
 input:
   label: ""
   pulsar:
-    url: ""
-    topics: []
-    subscription_name: ""
+    url: pulsar://localhost:6650 # No default (required)
+    topics: [] # No default (required)
+    subscription_name: "" # No default (required)
     subscription_type: shared
     tls:
       root_cas_file: ""

@@ -341,9 +341,11 @@ func (f FieldSpec) SanitiseYAML(node *yaml.Node, conf SanitiseConfig) error {
 			if scrubValue, err = f.scrubValue(scrubValue); err != nil {
 				return err
 			}
+			comment := n.LineComment
 			if err := n.Encode(scrubValue); err != nil {
 				return err
 			}
+			n.LineComment = comment
 			return nil
 		}
 		switch f.Kind {
@@ -677,28 +679,39 @@ func (f FieldSpec) ToYAML(recurse bool) (*yaml.Node, error) {
 			return nil, err
 		}
 	} else {
-		switch f.Type {
-		case FieldTypeString:
-			if err := node.Encode(""); err != nil {
+		if len(f.Examples) > 0 {
+			if err := node.Encode(f.Examples[0]); err != nil {
 				return nil, err
 			}
-		case FieldTypeInt:
-			if err := node.Encode(0); err != nil {
-				return nil, err
-			}
-		case FieldTypeFloat:
-			if err := node.Encode(0.0); err != nil {
-				return nil, err
-			}
-		case FieldTypeBool:
-			if err := node.Encode(false); err != nil {
-				return nil, err
-			}
-		default:
-			if err := node.Encode(nil); err != nil {
-				return nil, err
+		} else {
+			switch f.Type {
+			case FieldTypeString:
+				if err := node.Encode(""); err != nil {
+					return nil, err
+				}
+			case FieldTypeInt:
+				if err := node.Encode(0); err != nil {
+					return nil, err
+				}
+			case FieldTypeFloat:
+				if err := node.Encode(0.0); err != nil {
+					return nil, err
+				}
+			case FieldTypeBool:
+				if err := node.Encode(false); err != nil {
+					return nil, err
+				}
+			default:
+				if err := node.Encode(nil); err != nil {
+					return nil, err
+				}
 			}
 		}
+	}
+	if f.IsOptional {
+		node.LineComment = "No default (optional)"
+	} else {
+		node.LineComment = "No default (required)"
 	}
 	return &node, nil
 }

@@ -31,8 +31,8 @@ Introduced in version 3.36.0.
 output:
   label: ""
   aws_kinesis:
-    stream: ""
-    partition_key: ""
+    stream: "" # No default (required)
+    partition_key: "" # No default (required)
     max_in_flight: 64
     batching:
       count: 0
@@ -49,16 +49,16 @@ output:
 output:
   label: ""
   aws_kinesis:
-    stream: ""
-    partition_key: ""
-    hash_key: ""
+    stream: "" # No default (required)
+    partition_key: "" # No default (required)
+    hash_key: "" # No default (optional)
     max_in_flight: 64
     batching:
       count: 0
       byte_size: 0
       period: ""
       check: ""
-      processors: []
+      processors: [] # No default (optional)
     region: ""
     endpoint: ""
     credentials:

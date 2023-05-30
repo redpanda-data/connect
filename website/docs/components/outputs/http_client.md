@@ -29,10 +29,10 @@ Sends messages to an HTTP server.
 output:
   label: ""
   http_client:
-    url: ""
+    url: "" # No default (required)
     verb: POST
     headers: {}
-    rate_limit: ""
+    rate_limit: "" # No default (optional)
     timeout: 5s
     max_in_flight: 64
     batching:
@@ -50,7 +50,7 @@ output:
 output:
   label: ""
   http_client:
-    url: ""
+    url: "" # No default (required)
     verb: POST
     headers: {}
     metadata:
@@ -85,11 +85,11 @@ output:
       enable_renegotiation: false
       root_cas: ""
       root_cas_file: ""
-      client_certs: []
+      client_certs: [] # No default (required)
     extract_headers:
       include_prefixes: []
       include_patterns: []
-    rate_limit: ""
+    rate_limit: "" # No default (optional)
     timeout: 5s
     retry_period: 1s
     max_retry_backoff: 300s
@@ -107,7 +107,7 @@ output:
       byte_size: 0
       period: ""
       check: ""
-      processors: []
+      processors: [] # No default (optional)
     multipart: []
 ```
 

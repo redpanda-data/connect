@@ -34,8 +34,8 @@ Introduced in version 4.12.0.
 input:
   label: ""
   nats_kv:
-    urls: []
-    bucket: ""
+    urls: [] # No default (required)
+    bucket: my_kv_bucket # No default (required)
     key: '>'
 ```
 
@@ -47,8 +47,8 @@ input:
 input:
   label: ""
   nats_kv:
-    urls: []
-    bucket: ""
+    urls: [] # No default (required)
+    bucket: my_kv_bucket # No default (required)
     key: '>'
     ignore_deletes: false
     include_history: false
@@ -59,12 +59,12 @@ input:
       enable_renegotiation: false
       root_cas: ""
       root_cas_file: ""
-      client_certs: []
+      client_certs: [] # No default (required)
     auth:
-      nkey_file: ""
-      user_credentials_file: ""
-      user_jwt: ""
-      user_nkey_seed: ""
+      nkey_file: ./seed.nk # No default (optional)
+      user_credentials_file: ./user.creds # No default (optional)
+      user_jwt: "" # No default (optional)
+      user_nkey_seed: "" # No default (optional)
 ```
 
 </TabItem>

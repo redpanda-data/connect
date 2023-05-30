@@ -31,9 +31,9 @@ Introduced in version 3.36.0.
 output:
   label: ""
   aws_sns:
-    topic_arn: ""
-    message_group_id: ""
-    message_deduplication_id: ""
+    topic_arn: "" # No default (required)
+    message_group_id: "" # No default (optional)
+    message_deduplication_id: "" # No default (optional)
     max_in_flight: 64
     metadata:
       exclude_prefixes: []
@@ -47,9 +47,9 @@ output:
 output:
   label: ""
   aws_sns:
-    topic_arn: ""
-    message_group_id: ""
-    message_deduplication_id: ""
+    topic_arn: "" # No default (required)
+    message_group_id: "" # No default (optional)
+    message_deduplication_id: "" # No default (optional)
     max_in_flight: 64
     metadata:
       exclude_prefixes: []

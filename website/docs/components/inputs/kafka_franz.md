@@ -34,10 +34,10 @@ Introduced in version 3.61.0.
 input:
   label: ""
   kafka_franz:
-    seed_brokers: []
-    topics: []
+    seed_brokers: [] # No default (required)
+    topics: [] # No default (required)
     regexp_topics: false
-    consumer_group: ""
+    consumer_group: "" # No default (optional)
 ```
 
 </TabItem>
@@ -48,10 +48,10 @@ input:
 input:
   label: ""
   kafka_franz:
-    seed_brokers: []
-    topics: []
+    seed_brokers: [] # No default (required)
+    topics: [] # No default (required)
     regexp_topics: false
-    consumer_group: ""
+    consumer_group: "" # No default (optional)
     checkpoint_limit: 1024
     commit_period: 5s
     start_from_oldest: true
@@ -61,15 +61,15 @@ input:
       enable_renegotiation: false
       root_cas: ""
       root_cas_file: ""
-      client_certs: []
-    sasl: []
+      client_certs: [] # No default (required)
+    sasl: [] # No default (optional)
     multi_header: false
     batching:
       count: 0
       byte_size: 0
       period: ""
       check: ""
-      processors: []
+      processors: [] # No default (optional)
 ```
 
 </TabItem>

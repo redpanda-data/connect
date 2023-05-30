@@ -26,7 +26,7 @@ Introduced in version 3.53.0.
 buffer:
   system_window:
     timestamp_mapping: root = now()
-    size: ""
+    size: 30s # No default (required)
     slide: ""
     offset: ""
     allowed_lateness: ""

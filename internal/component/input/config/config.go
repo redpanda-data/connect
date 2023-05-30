@@ -23,6 +23,8 @@ func connectionField() *service.ConfigField {
 		service.NewIntField(fieldConnMaxRetries).
 			Description("An optional limit to the number of consecutive retry attempts that will be made before abandoning the connection altogether and gracefully terminating the input. When all inputs terminate in this way the service (or stream) will shut down. If set to zero connections will never be reattempted upon a failure. If set below zero this field is ignored (effectively unset).").
 			Advanced().
+			Example(-1).
+			Example(10).
 			Optional(),
 	).
 		Description("Customise how websocket connection attempts are made.").
