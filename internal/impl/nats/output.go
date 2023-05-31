@@ -61,6 +61,7 @@ func init() {
 }
 
 type natsWriter struct {
+	label         string
 	urls          string
 	headers       map[string]*service.InterpolatedString
 	subjectStr    *service.InterpolatedString
@@ -77,6 +78,7 @@ type natsWriter struct {
 
 func newNATSWriter(conf *service.ParsedConfig, mgr *service.Resources) (*natsWriter, error) {
 	n := natsWriter{
+		label:   mgr.Label(),
 		log:     mgr.Logger(),
 		fs:      mgr.FS(),
 		headers: make(map[string]*service.InterpolatedString),
@@ -128,6 +130,7 @@ func (n *natsWriter) Connect(ctx context.Context) error {
 		opts = append(opts, nats.Secure(n.tlsConf))
 	}
 
+	opts = append(opts, nats.Name(n.label))
 	opts = append(opts, authConfToOptions(n.authConf, n.fs)...)
 	opts = append(opts, errorHandlerOption(n.log))
 
