@@ -27,6 +27,5 @@ connection_name: my_connection
 
 		assert.Equal(t, "url1", output.urls)
 		assert.Equal(t, "foobar", output.subjectStrRaw)
-		assert.Equal(t, "my_connection", output.connection_name)
 	})
 }

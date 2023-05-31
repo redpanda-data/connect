@@ -39,10 +39,6 @@ func natsOutputConfig() *service.ConfigSpec {
 		Field(service.NewIntField("max_in_flight").
 			Description("The maximum number of messages to have in flight at a given time. Increase this to improve throughput.").
 			Default(64)).
-		Field(service.NewStringField("connection_name").
-			Description("An optional name to give the connection.").
-			Advanced().
-			Optional()).
 		Field(service.NewTLSToggledField("tls")).
 		Field(service.NewInternalField(auth.FieldSpec()))
 }
@@ -65,13 +61,12 @@ func init() {
 }
 
 type natsWriter struct {
-	urls            string
-	headers         map[string]*service.InterpolatedString
-	subjectStr      *service.InterpolatedString
-	connection_name string
-	subjectStrRaw   string
-	authConf        auth.Config
-	tlsConf         *tls.Config
+	urls          string
+	headers       map[string]*service.InterpolatedString
+	subjectStr    *service.InterpolatedString
+	subjectStrRaw string
+	authConf      auth.Config
+	tlsConf       *tls.Config
 
 	log *service.Logger
 	fs  *service.FS
@@ -93,10 +88,6 @@ func newNATSWriter(conf *service.ParsedConfig, mgr *service.Resources) (*natsWri
 	n.urls = strings.Join(urlList, ",")
 
 	if n.subjectStrRaw, err = conf.FieldString("subject"); err != nil {
-		return nil, err
-	}
-
-	if n.connection_name, err = conf.FieldString("connection_name"); err != nil {
 		return nil, err
 	}
 
@@ -135,10 +126,6 @@ func (n *natsWriter) Connect(ctx context.Context) error {
 
 	if n.tlsConf != nil {
 		opts = append(opts, nats.Secure(n.tlsConf))
-	}
-
-	if n.connection_name != "" {
-		opts = append(opts, nats.Name(n.connection_name))
 	}
 
 	opts = append(opts, authConfToOptions(n.authConf, n.fs)...)
