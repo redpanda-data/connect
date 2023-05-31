@@ -62,6 +62,7 @@ func init() {
 //------------------------------------------------------------------------------
 
 type kvOutput struct {
+	label  string
 	urls   string
 	bucket string
 	key    *service.InterpolatedString
@@ -82,6 +83,7 @@ type kvOutput struct {
 
 func newKVOutput(conf *service.ParsedConfig, mgr *service.Resources) (*kvOutput, error) {
 	kv := kvOutput{
+		label:   mgr.Label(),
 		log:     mgr.Logger(),
 		fs:      mgr.FS(),
 		shutSig: shutdown.NewSignaller(),
@@ -142,6 +144,7 @@ func (kv *kvOutput) Connect(ctx context.Context) error {
 	if kv.tlsConf != nil {
 		opts = append(opts, nats.Secure(kv.tlsConf))
 	}
+	opts = append(opts, nats.Name(kv.label))
 	opts = append(opts, authConfToOptions(kv.authConf, kv.fs)...)
 	if natsConn, err = nats.Connect(kv.urls, opts...); err != nil {
 		return err

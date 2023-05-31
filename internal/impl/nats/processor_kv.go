@@ -122,6 +122,7 @@ func init() {
 }
 
 type kvProcessor struct {
+	label       string
 	urls        string
 	bucket      string
 	operation   string
@@ -144,6 +145,7 @@ type kvProcessor struct {
 
 func newKVProcessor(conf *service.ParsedConfig, mgr *service.Resources) (*kvProcessor, error) {
 	p := &kvProcessor{
+		label:   mgr.Label(),
 		log:     mgr.Logger(),
 		fs:      mgr.FS(),
 		shutSig: shutdown.NewSignaller(),
@@ -366,6 +368,7 @@ func (p *kvProcessor) Connect(ctx context.Context) error {
 	if p.tlsConf != nil {
 		opts = append(opts, nats.Secure(p.tlsConf))
 	}
+	opts = append(opts, nats.Name(p.label))
 	opts = append(opts, authConfToOptions(p.authConf, p.fs)...)
 	if p.natsConn, err = nats.Connect(p.urls, opts...); err != nil {
 		return err
