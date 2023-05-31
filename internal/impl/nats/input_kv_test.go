@@ -9,7 +9,7 @@ import (
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
-func TestTestInputKVParse(t *testing.T) {
+func TestInputKVParse(t *testing.T) {
 	spec := natsKVInputConfig()
 	env := service.NewEnvironment()
 

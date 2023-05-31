@@ -52,6 +52,10 @@ You can access these metadata fields using [function interpolation](/docs/config
 			Advanced().
 			Default(32).
 			LintRule(`root = if this < 0 { ["prefetch count must be greater than or equal to zero"] }`)).
+		// Field(service.NewStringField("connection_name").
+		// 	Description("An optional name to give the connection.").
+		// 	Advanced().
+		// 	Optional()).
 		Field(service.NewTLSToggledField("tls")).
 		Field(service.NewInternalField(auth.FieldSpec()))
 }
@@ -70,13 +74,14 @@ func init() {
 }
 
 type natsReader struct {
-	urls          string
-	subject       string
-	queue         string
-	prefetchCount int
-	nakDelay      time.Duration
-	authConf      auth.Config
-	tlsConf       *tls.Config
+	urls            string
+	subject         string
+	connection_name string
+	queue           string
+	prefetchCount   int
+	nakDelay        time.Duration
+	authConf        auth.Config
+	tlsConf         *tls.Config
 
 	log *service.Logger
 	fs  *service.FS
@@ -127,6 +132,12 @@ func newNATSReader(conf *service.ParsedConfig, mgr *service.Resources) (*natsRea
 		}
 	}
 
+	if conf.Contains("connection_name") {
+		if n.connection_name, err = conf.FieldString("connection_name"); err != nil {
+			return nil, err
+		}
+	}
+
 	tlsConf, tlsEnabled, err := conf.FieldTLSToggled("tls")
 	if err != nil {
 		return nil, err
@@ -157,6 +168,10 @@ func (n *natsReader) Connect(ctx context.Context) error {
 
 	if n.tlsConf != nil {
 		opts = append(opts, nats.Secure(n.tlsConf))
+	}
+
+	if n.connection_name != "" {
+		opts = append(opts, nats.Name(n.connection_name))
 	}
 
 	opts = append(opts, authConfToOptions(n.authConf, n.fs)...)
