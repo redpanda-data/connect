@@ -169,6 +169,7 @@ func (proc *bigQuerySelectProcessor) ProcessBatch(ctx context.Context, batch ser
 	outBatch := make(service.MessageBatch, 0, len(batch))
 
 	for i, msg := range batch {
+		msg = msg.Copy()
 		outBatch = append(outBatch, msg)
 
 		var args []any
