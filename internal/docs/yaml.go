@@ -473,19 +473,19 @@ func LintYAML(ctx LintContext, cType Type, node *yaml.Node) []Lint {
 			return nil
 		}
 		var err error
-		if name, _, err = getInferenceCandidateFromList(ctx.DocsProvider, cType, keys); err != nil {
+		if name, _, err = getInferenceCandidateFromList(ctx.conf.DocsProvider, cType, keys); err != nil {
 			lints = append(lints, NewLintWarning(node.Line, LintComponentMissing, "unable to infer component type"))
 			return lints
 		}
 	}
 
-	cSpec, exists := ctx.DocsProvider.GetDocs(name, cType)
+	cSpec, exists := ctx.conf.DocsProvider.GetDocs(name, cType)
 	if !exists {
 		lints = append(lints, NewLintWarning(node.Line, LintComponentNotFound, fmt.Sprintf("failed to obtain docs for %v type %v", cType, name)))
 		return lints
 	}
 
-	if ctx.RejectDeprecated && cSpec.Status == StatusDeprecated {
+	if ctx.conf.RejectDeprecated && cSpec.Status == StatusDeprecated {
 		lints = append(lints, NewLintError(node.Line, LintDeprecated, fmt.Sprintf("component %v is deprecated", cSpec.Name)))
 	}
 
@@ -527,7 +527,7 @@ func LintYAML(ctx LintContext, cType Type, node *yaml.Node) []Lint {
 		}
 	}
 
-	if ctx.RequireLabels && canLabel && !hasLabel && name != "resource" {
+	if ctx.conf.RequireLabels && canLabel && !hasLabel && name != "resource" {
 		lints = append(lints, NewLintError(node.Line, LintMissingLabel, fmt.Sprintf("label is required for %s", cSpec.Name)))
 	}
 
@@ -541,7 +541,7 @@ func (f FieldSpec) LintYAML(ctx LintContext, node *yaml.Node) []Lint {
 
 	var lints []Lint
 
-	if ctx.RejectDeprecated && f.IsDeprecated {
+	if ctx.conf.RejectDeprecated && f.IsDeprecated {
 		lints = append(lints, NewLintError(node.Line, LintDeprecated, fmt.Sprintf("field %v is deprecated", f.Name)))
 	}
 

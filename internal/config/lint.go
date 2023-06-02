@@ -15,22 +15,15 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/filepath/ifs"
 )
 
-// LintOptions specifies the linters that will be enabled.
-type LintOptions struct {
-	RejectDeprecated bool
-	RequireLabels    bool
-	SkipEnvVarCheck  bool
-}
-
 // ReadFileLinted will attempt to read a configuration file path into a
 // structure. Returns an array of lint messages or an error.
-func ReadFileLinted(fs ifs.FS, path string, opts LintOptions, config *Type) ([]docs.Lint, error) {
+func ReadFileLinted(fs ifs.FS, path string, skipEnvVarCheck bool, lConf docs.LintConfig, config *Type) ([]docs.Lint, error) {
 	configBytes, lints, _, err := ReadFileEnvSwap(fs, path, os.LookupEnv)
 	if err != nil {
 		return nil, err
 	}
 
-	if opts.SkipEnvVarCheck {
+	if skipEnvVarCheck {
 		var newLints []docs.Lint
 		for _, l := range lints {
 			if l.Type != docs.LintMissingEnvVar {
@@ -44,7 +37,7 @@ func ReadFileLinted(fs ifs.FS, path string, opts LintOptions, config *Type) ([]d
 		return nil, err
 	}
 
-	newLints, err := LintBytes(opts, configBytes)
+	newLints, err := LintBytes(lConf, configBytes)
 	if err != nil {
 		return nil, err
 	}
@@ -54,7 +47,7 @@ func ReadFileLinted(fs ifs.FS, path string, opts LintOptions, config *Type) ([]d
 
 // LintBytes attempts to report errors within a user config. Returns a slice of
 // lint results.
-func LintBytes(opts LintOptions, rawBytes []byte) ([]docs.Lint, error) {
+func LintBytes(lintConf docs.LintConfig, rawBytes []byte) ([]docs.Lint, error) {
 	if bytes.HasPrefix(rawBytes, []byte("# BENTHOS LINT DISABLE")) {
 		return nil, nil
 	}
@@ -64,11 +57,7 @@ func LintBytes(opts LintOptions, rawBytes []byte) ([]docs.Lint, error) {
 		return nil, err
 	}
 
-	lintCtx := docs.NewLintContext()
-	lintCtx.RejectDeprecated = opts.RejectDeprecated
-	lintCtx.RequireLabels = opts.RequireLabels
-
-	return Spec().LintYAML(lintCtx, &rawNode), nil
+	return Spec().LintYAML(docs.NewLintContext(lintConf), &rawNode), nil
 }
 
 // ReadFileEnvSwap reads a file and replaces any environment variable

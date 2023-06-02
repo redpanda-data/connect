@@ -1015,14 +1015,14 @@ testlintfooinput:
 	for _, test := range tests {
 		test := test
 		t.Run(test.name, func(t *testing.T) {
-			lintCtx := docs.NewLintContext()
-			lintCtx.RejectDeprecated = test.rejectDeprecated
-			lintCtx.RequireLabels = test.requireLabels
-			lintCtx.DocsProvider = prov
+			lConf := docs.NewLintConfig()
+			lConf.RejectDeprecated = test.rejectDeprecated
+			lConf.RequireLabels = test.requireLabels
+			lConf.DocsProvider = prov
 
 			var node yaml.Node
 			require.NoError(t, yaml.Unmarshal([]byte(test.inputConf), &node))
-			lints := docs.LintYAML(lintCtx, test.inputType, &node)
+			lints := docs.LintYAML(docs.NewLintContext(lConf), test.inputType, &node)
 			assert.Equal(t, test.res, lints)
 		})
 	}
@@ -1108,7 +1108,7 @@ func TestYAMLLinting(t *testing.T) {
 			var node yaml.Node
 			require.NoError(t, yaml.Unmarshal([]byte(test.inputConf), &node))
 
-			lints := test.inputSpec.LintYAML(docs.NewLintContext(), &node)
+			lints := test.inputSpec.LintYAML(docs.NewLintContext(docs.NewLintConfig()), &node)
 			assert.Equal(t, test.res, lints)
 		})
 	}

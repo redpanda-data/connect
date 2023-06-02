@@ -66,7 +66,7 @@ func (r *Reader) readStreamFileConfig(path string) (conf stream.Config, lints []
 	confSpec = append(confSpec, tdocs.ConfigSpec())
 
 	if !bytes.HasPrefix(confBytes, []byte("# BENTHOS LINT DISABLE")) {
-		for _, lint := range confSpec.LintYAML(docs.NewLintContext(), &rawNode) {
+		for _, lint := range confSpec.LintYAML(r.lintCtx(), &rawNode) {
 			lints = append(lints, fmt.Sprintf("%v%v", path, lint.Error()))
 		}
 	}

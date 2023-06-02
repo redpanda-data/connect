@@ -635,19 +635,14 @@ func ShouldDropDeprecated(b bool) FieldFilter {
 
 //------------------------------------------------------------------------------
 
-// LintContext is provided to linting functions, and provides context about the
-// wider configuration.
-type LintContext struct {
-	// A map of label names to the line they were defined at.
-	LabelsToLine map[string]int
-
+// LintConfig describes which rules apply when linting benthos configs, and also
+// determines which component and bloblang environments are used.
+type LintConfig struct {
 	// Provides documentation for component implementations.
 	DocsProvider Provider
 
 	// Provides an isolated context for Bloblang parsing.
 	BloblangEnv *bloblang.Environment
-
-	// Config fields
 
 	// Reject any deprecated components or fields as linting errors.
 	RejectDeprecated bool
@@ -656,14 +651,28 @@ type LintContext struct {
 	RequireLabels bool
 }
 
+// NewLintConfig creates a default linting config.
+func NewLintConfig() LintConfig {
+	return LintConfig{
+		DocsProvider: DeprecatedProvider,
+		BloblangEnv:  bloblang.GlobalEnvironment().Deactivated(),
+	}
+}
+
+// LintContext is provided to linting functions, and provides context about the
+// wider configuration.
+type LintContext struct {
+	// A map of label names to the line they were defined at.
+	labelsToLine map[string]int
+
+	conf LintConfig
+}
+
 // NewLintContext creates a new linting context.
-func NewLintContext() LintContext {
+func NewLintContext(conf LintConfig) LintContext {
 	return LintContext{
-		LabelsToLine:     map[string]int{},
-		DocsProvider:     DeprecatedProvider,
-		BloblangEnv:      bloblang.GlobalEnvironment().Deactivated(),
-		RejectDeprecated: false,
-		RequireLabels:    false,
+		labelsToLine: map[string]int{},
+		conf:         conf,
 	}
 }
 

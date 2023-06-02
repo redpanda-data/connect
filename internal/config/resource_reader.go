@@ -224,7 +224,7 @@ func (r *Reader) readResource(path string, conf *manager.ResourceConfig) (lints 
 		allowTest := append(docs.FieldSpecs{
 			tdocs.ConfigSpec(),
 		}, manager.Spec()...)
-		for _, lint := range allowTest.LintYAML(docs.NewLintContext(), &rawNode) {
+		for _, lint := range allowTest.LintYAML(r.lintCtx(), &rawNode) {
 			lints = append(lints, fmt.Sprintf("%v%v", path, lint.Error()))
 		}
 	}

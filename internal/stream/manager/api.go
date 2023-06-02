@@ -23,6 +23,7 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/pipeline"
 	"github.com/benthosdev/benthos/v4/internal/stream"
+	"github.com/benthosdev/benthos/v4/public/bloblang"
 )
 
 //------------------------------------------------------------------------------
@@ -87,8 +88,14 @@ type lintErrors struct {
 	LintErrs []string `json:"lint_errors"`
 }
 
-func lintStreamConfigNode(node *yaml.Node) (lints []string) {
-	for _, dLint := range stream.Spec().LintYAML(docs.NewLintContext(), node) {
+func (m *Type) lintCtx() docs.LintContext {
+	lConf := docs.NewLintConfig()
+	lConf.BloblangEnv = bloblang.XWrapEnvironment(m.manager.BloblEnvironment()).Deactivated()
+	return docs.NewLintContext(lConf)
+}
+
+func (m *Type) lintStreamConfigNode(node *yaml.Node) (lints []string) {
+	for _, dLint := range stream.Spec().LintYAML(m.lintCtx(), node) {
 		lints = append(lints, dLint.Error())
 	}
 	return
@@ -158,7 +165,7 @@ func (m *Type) HandleStreamsCRUD(w http.ResponseWriter, r *http.Request) {
 		}
 		var lints []string
 		for k, n := range nodeSet {
-			for _, l := range lintStreamConfigNode(&n) {
+			for _, l := range m.lintStreamConfigNode(&n) {
 				keyLint := fmt.Sprintf("stream '%v': %v", k, l)
 				lints = append(lints, keyLint)
 				m.manager.Logger().Debugf("Streams request linting error: %v\n", keyLint)
@@ -303,7 +310,7 @@ func (m *Type) HandleStreamCRUD(w http.ResponseWriter, r *http.Request) {
 			if err = yaml.Unmarshal(confBytes, &node); err != nil {
 				return
 			}
-			lints = lintStreamConfigNode(&node)
+			lints = m.lintStreamConfigNode(&node)
 			for _, l := range lints {
 				m.manager.Logger().Infof("Stream '%v' config: %v\n", id, l)
 			}
@@ -536,7 +543,7 @@ func (m *Type) HandleResourceCRUD(w http.ResponseWriter, r *http.Request) {
 		confNode = &node
 
 		if !ignoreLints {
-			for _, l := range docs.LintYAML(docs.NewLintContext(), docType, &node) {
+			for _, l := range docs.LintYAML(m.lintCtx(), docType, &node) {
 				lints = append(lints, l.Error())
 				m.manager.Logger().Infof("Resource '%v' config: %v\n", id, l)
 			}
