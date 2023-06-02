@@ -62,7 +62,8 @@ jobs:
     - name: Lint
       uses: golangci/golangci-lint-action@v3
       with:
-        version: latest
+        # version: latest # Waiting for https://github.com/golangci/golangci-lint/issues/3862
+        version: v1.52.2
         args: --timeout 30m cmd/... internal/... public/...
 
     # TODO: Remove this after https://github.com/golangci/golangci-lint/issues/3094 is addressed
