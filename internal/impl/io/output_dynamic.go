@@ -19,21 +19,31 @@ func init() {
 	err := bundle.AllOutputs.Add(
 		processors.WrapConstructor(newDynamicOutput),
 		docs.ComponentSpec{
-			Name: "dynamic",
-			Summary: `
-A special broker type where the outputs are identified by unique labels and can
-be created, changed and removed during runtime via a REST API.`,
-			Description: `
-The broker pattern used is always ` + "`fan_out`" + `, meaning each message will
-be delivered to each dynamic output.
+			Name:        "dynamic",
+			Summary:     `A special broker type where the outputs are identified by unique labels and can be created, changed and removed during runtime via a REST API.`,
+			Description: `The broker pattern used is always ` + "`fan_out`" + `, meaning each message will be delivered to each dynamic output.`,
+			Footnotes: `
+## Endpoints
 
-To GET a JSON map of output identifiers with their current uptimes use the
-'/outputs' endpoint.
+### GET ` + "`/outputs`" + `
 
-To perform CRUD actions on the outputs themselves use POST, DELETE, and GET
-methods on the ` + "`/outputs/{output_id}`" + ` endpoint. When using POST the
-body of the request should be a YAML configuration for the output, if the output
-already exists it will be changed.`,
+Returns a JSON object detailing all dynamic outputs, providing information such as their current uptime and configuration.
+
+### GET ` + "`/outputs/{id}`" + `
+
+Returns the configuration of an output.
+
+### POST ` + "`/outputs/{id}`" + `
+
+Creates or updates an output with a configuration provided in the request body (in YAML or JSON format).
+
+### DELETE ` + "`/outputs/{id}`" + `
+
+Stops and removes an output.
+
+### GET ` + "`/outputs/{id}/uptime`" + `
+
+Returns the uptime of an output as a duration string (of the form "72h3m0.5s").`,
 			Config: docs.FieldComponent().WithChildren(
 				docs.FieldOutput("outputs", "A map of outputs to statically create.").Map().HasDefault(map[string]any{}),
 				docs.FieldString("prefix", "A path prefix for HTTP endpoints that are registered.").HasDefault(""),
@@ -129,6 +139,11 @@ func newDynamicOutput(conf output.Config, mgr bundle.NewManagement) (output.Stre
 		return err
 	})
 
+	mgr.RegisterEndpoint(
+		path.Join(conf.Dynamic.Prefix, "/outputs/{id}/uptime"),
+		`Returns the uptime of a specific output as a duration string.`,
+		dynAPI.HandleUptime,
+	)
 	mgr.RegisterEndpoint(
 		path.Join(conf.Dynamic.Prefix, "/outputs/{id}"),
 		"Perform CRUD operations on the configuration of dynamic outputs. For"+
