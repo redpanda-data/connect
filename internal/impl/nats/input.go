@@ -50,7 +50,7 @@ You can access these metadata fields using [function interpolation](/docs/config
 		Field(service.NewIntField("prefetch_count").
 			Description("The maximum number of messages to pull at a time.").
 			Advanced().
-			Default(32).
+			Default(nats.DefaultSubPendingMsgsLimit).
 			LintRule(`root = if this < 0 { ["prefetch count must be greater than or equal to zero"] }`)).
 		Field(service.NewTLSToggledField("tls")).
 		Field(service.NewInternalField(auth.FieldSpec()))
