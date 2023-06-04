@@ -46,7 +46,7 @@ input:
     subject: foo.bar.baz # No default (required)
     queue: "" # No default (optional)
     nak_delay: 1m # No default (optional)
-    prefetch_count: 32
+    prefetch_count: 524288
     tls:
       enabled: false
       skip_cert_verify: false
@@ -168,8 +168,8 @@ nak_delay: 1m
 The maximum number of messages to pull at a time.
 
 
-Type: `int`
-Default: [nats.DefaultSubPendingMsgsLimit](https://github.com/search?q=repo%3Anats-io%2Fnats.go%20DefaultSubPendingMsgsLimit&type=code)
+Type: `int`  
+Default: `524288`  
 
 ### `tls`
 
