@@ -71,6 +71,7 @@ input:
       envelope_path: ""
       delay_period: ""
       max_messages: 10
+      wait_time_seconds: 0
 ```
 
 </TabItem>
@@ -351,5 +352,13 @@ The maximum number of SQS messages to consume from each request.
 
 Type: `int`  
 Default: `10`  
+
+### `sqs.wait_time_seconds`
+
+Whether to set the wait time. Enabling this activates long-polling. Valid values: 0 to 20.
+
+
+Type: `int`  
+Default: `0`  
 
 
