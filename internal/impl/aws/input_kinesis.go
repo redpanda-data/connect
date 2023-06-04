@@ -764,40 +764,26 @@ func (k *kinesisReader) runExplicitShards() {
 	}
 }
 
-func (k *kinesisReader) waitUntilStreamsExists() error {
-	var wg sync.WaitGroup
-	results := make(chan error)
-
-	wg.Add(len(k.conf.Streams))
-	go func() {
-		wg.Wait()
-		close(results)
-	}()
-
-	for _, stream := range k.conf.Streams {
-		go func(stream string) {
-			defer wg.Done()
-
-			if _, err := k.svc.DescribeStream(&kinesis.DescribeStreamInput{
-				StreamName: &stream,
-			}); err != nil {
-				results <- err
-				return
-			}
-
-			err := k.svc.WaitUntilStreamExists(&kinesis.DescribeStreamInput{
-				StreamName: &stream,
-			})
-			results <- err
-		}(stream)
+func (k *kinesisReader) waitUntilStreamsExists(ctx context.Context) error {
+	streams := append([]string{}, k.balancedStreams...)
+	for k := range k.streamShards {
+		streams = append(streams, k)
 	}
 
-	for err := range results {
-		if err != nil {
+	results := make(chan error, len(streams))
+	for _, s := range streams {
+		go func(stream string) {
+			results <- k.svc.WaitUntilStreamExistsWithContext(ctx, &kinesis.DescribeStreamInput{
+				StreamName: &stream,
+			})
+		}(s)
+	}
+
+	for i := 0; i < len(streams); i++ {
+		if err := <-results; err != nil {
 			return err
 		}
 	}
-
 	return nil
 }
 
@@ -821,7 +807,7 @@ func (k *kinesisReader) Connect(ctx context.Context) error {
 	k.checkpointer = checkpointer
 	k.msgChan = make(chan asyncMessage)
 
-	if err = k.waitUntilStreamsExists(); err != nil {
+	if err = k.waitUntilStreamsExists(ctx); err != nil {
 		return err
 	}
 

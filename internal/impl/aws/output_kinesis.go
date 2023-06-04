@@ -175,13 +175,13 @@ func (a *kinesisWriter) Connect(ctx context.Context) error {
 	}
 
 	k := kinesis.New(a.conf.session)
-	if _, err := k.DescribeStream(&kinesis.DescribeStreamInput{
+	if _, err := k.DescribeStreamWithContext(ctx, &kinesis.DescribeStreamInput{
 		StreamName: &a.conf.Stream,
 	}); err != nil {
 		return err
 	}
 
-	if err := k.WaitUntilStreamExists(&kinesis.DescribeStreamInput{
+	if err := k.WaitUntilStreamExistsWithContext(ctx, &kinesis.DescribeStreamInput{
 		StreamName: &a.conf.Stream,
 	}); err != nil {
 		return err

@@ -151,8 +151,8 @@ func testKinesisConnect(t *testing.T, c koConfig, client *kinesis.Kinesis) {
 	}
 }
 
-func testKinesisConnectWithInvalidStream(t *testing.T, c output.KinesisConfig, client *kinesis.Kinesis) {
-	r, err := newKinesisWriter(c, mock.NewManager())
+func testKinesisConnectWithInvalidStream(t *testing.T, c koConfig, client *kinesis.Kinesis) {
+	r, err := newKinesisWriter(c, service.MockResources())
 	if err != nil {
 		t.Fatal(err)
 	}
