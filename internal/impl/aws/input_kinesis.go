@@ -764,9 +764,32 @@ func (k *kinesisReader) runExplicitShards() {
 	}
 }
 
+func (k *kinesisReader) waitUntilStreamsExists(ctx context.Context) error {
+	streams := append([]string{}, k.balancedStreams...)
+	for k := range k.streamShards {
+		streams = append(streams, k)
+	}
+
+	results := make(chan error, len(streams))
+	for _, s := range streams {
+		go func(stream string) {
+			results <- k.svc.WaitUntilStreamExistsWithContext(ctx, &kinesis.DescribeStreamInput{
+				StreamName: &stream,
+			})
+		}(s)
+	}
+
+	for i := 0; i < len(streams); i++ {
+		if err := <-results; err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 //------------------------------------------------------------------------------
 
-// Connect establishes a kafkaReader connection.
+// Connect establishes a kinesisReader connection.
 func (k *kinesisReader) Connect(ctx context.Context) error {
 	k.cMut.Lock()
 	defer k.cMut.Unlock()
@@ -784,11 +807,16 @@ func (k *kinesisReader) Connect(ctx context.Context) error {
 	k.checkpointer = checkpointer
 	k.msgChan = make(chan asyncMessage)
 
+	if err = k.waitUntilStreamsExists(ctx); err != nil {
+		return err
+	}
+
 	if len(k.streamShards) > 0 {
 		go k.runExplicitShards()
 	} else {
 		go k.runBalancedShards()
 	}
+
 	return nil
 }
 

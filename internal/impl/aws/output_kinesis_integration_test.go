@@ -13,6 +13,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/kinesis"
 	"github.com/ory/dockertest/v3"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/benthosdev/benthos/v4/internal/integration"
@@ -89,6 +90,11 @@ credentials:
 	t.Run("testKinesisConnect", func(t *testing.T) {
 		testKinesisConnect(t, config, client)
 	})
+
+	t.Run("testKinesisConnectWithInvalidStream", func(t *testing.T) {
+		config.Stream = "invalid-foo"
+		testKinesisConnectWithInvalidStream(t, config, client)
+	})
 }
 
 func testKinesisConnect(t *testing.T, c koConfig, client *kinesis.Kinesis) {
@@ -142,5 +148,18 @@ func testKinesisConnect(t *testing.T, c koConfig, client *kinesis.Kinesis) {
 		if !bytes.Equal(out.Records[i].Data, record) {
 			t.Errorf("Expected record %d to equal %v, got %v", i, record, out.Records[i])
 		}
+	}
+}
+
+func testKinesisConnectWithInvalidStream(t *testing.T, c koConfig, client *kinesis.Kinesis) {
+	r, err := newKinesisWriter(c, service.MockResources())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	retries := 3
+	for i := 0; i < retries; i++ {
+		err := r.Connect(context.Background())
+		assert.Error(t, err)
 	}
 }
