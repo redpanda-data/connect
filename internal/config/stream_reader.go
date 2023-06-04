@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -48,7 +49,7 @@ func (r *Reader) readStreamFileConfig(path string) (conf stream.Config, lints []
 	var confBytes []byte
 	var dLints []docs.Lint
 	var modTime time.Time
-	if confBytes, dLints, modTime, err = ReadFileEnvSwap(r.fs, path); err != nil {
+	if confBytes, dLints, modTime, err = ReadFileEnvSwap(r.fs, path, os.LookupEnv); err != nil {
 		return
 	}
 	for _, l := range dLints {
@@ -65,7 +66,7 @@ func (r *Reader) readStreamFileConfig(path string) (conf stream.Config, lints []
 	confSpec = append(confSpec, tdocs.ConfigSpec())
 
 	if !bytes.HasPrefix(confBytes, []byte("# BENTHOS LINT DISABLE")) {
-		for _, lint := range confSpec.LintYAML(docs.NewLintContext(), &rawNode) {
+		for _, lint := range confSpec.LintYAML(r.lintCtx(), &rawNode) {
 			lints = append(lints, fmt.Sprintf("%v%v", path, lint.Error()))
 		}
 	}

@@ -31,7 +31,7 @@ Introduced in version 3.36.0.
 input:
   label: ""
   aws_kinesis:
-    streams: []
+    streams: [] # No default (required)
     dynamodb:
       table: ""
       create: false
@@ -53,7 +53,7 @@ input:
 input:
   label: ""
   aws_kinesis:
-    streams: []
+    streams: [] # No default (required)
     dynamodb:
       table: ""
       create: false
@@ -80,7 +80,7 @@ input:
       byte_size: 0
       period: ""
       check: ""
-      processors: []
+      processors: [] # No default (optional)
 ```
 
 </TabItem>

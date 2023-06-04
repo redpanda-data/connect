@@ -25,8 +25,8 @@ Introduced in version 4.14.0.
 # Config fields, showing default values
 label: ""
 javascript:
-  code: ""
-  file: ""
+  code: "" # No default (optional)
+  file: "" # No default (optional)
   global_folders: []
 ```
 

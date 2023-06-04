@@ -83,10 +83,10 @@ func NewStreamBuilder() *StreamBuilder {
 }
 
 func (s *StreamBuilder) getLintContext() docs.LintContext {
-	ctx := docs.NewLintContext()
-	ctx.DocsProvider = s.env.internal
-	ctx.BloblangEnv = s.env.bloblangEnv.Deactivated()
-	return ctx
+	conf := docs.NewLintConfig()
+	conf.DocsProvider = s.env.internal
+	conf.BloblangEnv = s.env.bloblangEnv.Deactivated()
+	return docs.NewLintContext(conf)
 }
 
 //------------------------------------------------------------------------------

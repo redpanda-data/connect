@@ -1,6 +1,7 @@
 name: Cross Build
 
 on:
+  workflow_dispatch: {}
   schedule:
     - cron: '0 0 * * *' # Once per day
 

@@ -29,8 +29,8 @@ Sends messages to a GCP Cloud Pub/Sub topic. [Metadata](/docs/configuration/meta
 output:
   label: ""
   gcp_pubsub:
-    project: ""
-    topic: ""
+    project: "" # No default (required)
+    topic: "" # No default (required)
     endpoint: ""
     max_in_flight: 64
     count_threshold: 100
@@ -53,10 +53,10 @@ output:
 output:
   label: ""
   gcp_pubsub:
-    project: ""
-    topic: ""
+    project: "" # No default (required)
+    topic: "" # No default (required)
     endpoint: ""
-    ordering_key: ""
+    ordering_key: "" # No default (optional)
     max_in_flight: 64
     count_threshold: 100
     delay_threshold: 10ms
@@ -73,7 +73,7 @@ output:
       byte_size: 0
       period: ""
       check: ""
-      processors: []
+      processors: [] # No default (optional)
 ```
 
 </TabItem>

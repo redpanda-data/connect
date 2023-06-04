@@ -13,10 +13,6 @@ import (
 type Config struct {
 	Label             string                  `json:"label" yaml:"label"`
 	Type              string                  `json:"type" yaml:"type"`
-	AWSKinesis        KinesisConfig           `json:"aws_kinesis" yaml:"aws_kinesis"`
-	AWSS3             AmazonS3Config          `json:"aws_s3" yaml:"aws_s3"`
-	AWSSNS            SNSConfig               `json:"aws_sns" yaml:"aws_sns"`
-	AWSSQS            AmazonSQSConfig         `json:"aws_sqs" yaml:"aws_sqs"`
 	AzureBlobStorage  AzureBlobStorageConfig  `json:"azure_blob_storage" yaml:"azure_blob_storage"`
 	AzureQueueStorage AzureQueueStorageConfig `json:"azure_queue_storage" yaml:"azure_queue_storage"`
 	AzureTableStorage AzureTableStorageConfig `json:"azure_table_storage" yaml:"azure_table_storage"`
@@ -64,10 +60,6 @@ func NewConfig() Config {
 	return Config{
 		Label:             "",
 		Type:              "stdout",
-		AWSKinesis:        NewKinesisConfig(),
-		AWSS3:             NewAmazonS3Config(),
-		AWSSNS:            NewSNSConfig(),
-		AWSSQS:            NewAmazonSQSConfig(),
 		AzureBlobStorage:  NewAzureBlobStorageConfig(),
 		AzureQueueStorage: NewAzureQueueStorageConfig(),
 		AzureTableStorage: NewAzureTableStorageConfig(),

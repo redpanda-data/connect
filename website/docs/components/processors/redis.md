@@ -29,9 +29,9 @@ performed for each message and the message contents are replaced with the result
 # Common config fields, showing default values
 label: ""
 redis:
-  url: ""
-  command: ""
-  args_mapping: ""
+  url: :6397 # No default (required)
+  command: scard # No default (optional)
+  args_mapping: root = [ this.key ] # No default (optional)
 ```
 
 </TabItem>
@@ -41,7 +41,7 @@ redis:
 # All config fields, showing default values
 label: ""
 redis:
-  url: ""
+  url: :6397 # No default (required)
   kind: simple
   master: ""
   tls:
@@ -50,9 +50,9 @@ redis:
     enable_renegotiation: false
     root_cas: ""
     root_cas_file: ""
-    client_certs: []
-  command: ""
-  args_mapping: ""
+    client_certs: [] # No default (required)
+  command: scard # No default (optional)
+  args_mapping: root = [ this.key ] # No default (optional)
   retries: 3
   retry_period: 500ms
 ```

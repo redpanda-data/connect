@@ -29,8 +29,8 @@ Reads messages from an AMQP (1.0) server.
 input:
   label: ""
   amqp_1:
-    url: ""
-    source_address: ""
+    url: amqp://localhost:5672/ # No default (required)
+    source_address: /foo # No default (required)
 ```
 
 </TabItem>
@@ -41,8 +41,8 @@ input:
 input:
   label: ""
   amqp_1:
-    url: ""
-    source_address: ""
+    url: amqp://localhost:5672/ # No default (required)
+    source_address: /foo # No default (required)
     azure_renew_lock: false
     tls:
       enabled: false
@@ -50,7 +50,7 @@ input:
       enable_renegotiation: false
       root_cas: ""
       root_cas_file: ""
-      client_certs: []
+      client_certs: [] # No default (required)
     sasl:
       mechanism: none
       user: ""

@@ -29,8 +29,8 @@ Sends messages to an AMQP (0.91) exchange. AMQP is a messaging protocol used by 
 output:
   label: ""
   amqp_0_9:
-    urls: []
-    exchange: ""
+    urls: [] # No default (required)
+    exchange: "" # No default (required)
     key: ""
     type: ""
     metadata:
@@ -46,8 +46,8 @@ output:
 output:
   label: ""
   amqp_0_9:
-    urls: []
-    exchange: ""
+    urls: [] # No default (required)
+    exchange: "" # No default (required)
     exchange_declare:
       enabled: false
       type: direct
@@ -70,7 +70,7 @@ output:
       enable_renegotiation: false
       root_cas: ""
       root_cas_file: ""
-      client_certs: []
+      client_certs: [] # No default (required)
 ```
 
 </TabItem>

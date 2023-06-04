@@ -13,15 +13,19 @@ import (
 	gonanoid "github.com/matoous/go-nanoid/v2"
 	"github.com/urfave/cli/v2"
 
+	ibloblang "github.com/benthosdev/benthos/v4/internal/bloblang"
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/bundle/tracing"
 	"github.com/benthosdev/benthos/v4/internal/cli/common"
 	"github.com/benthosdev/benthos/v4/internal/cli/studio/metrics"
 	stracing "github.com/benthosdev/benthos/v4/internal/cli/studio/tracing"
 	"github.com/benthosdev/benthos/v4/internal/config"
+	"github.com/benthosdev/benthos/v4/internal/docs"
+	"github.com/benthosdev/benthos/v4/internal/filepath/ifs"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/manager"
 	"github.com/benthosdev/benthos/v4/internal/stream"
+	"github.com/benthosdev/benthos/v4/public/bloblang"
 )
 
 type noopStopper struct{}
@@ -207,11 +211,25 @@ func (r *PullRunner) bootstrapConfigReader(ctx context.Context) (bootstrapErr er
 		initResources = append(initResources, f.Name)
 	}
 
+	sessFS := &sessionFS{
+		tracker: r.sessionTracker,
+		backup:  ifs.OS(),
+	}
+
+	bloblEnv := ibloblang.GlobalEnvironment().WithCustomImporter(func(name string) ([]byte, error) {
+		return ifs.ReadFile(sessFS, name)
+	})
+
+	lintConf := docs.NewLintConfig()
+	lintConf.BloblangEnv = bloblang.XWrapEnvironment(bloblEnv).Deactivated()
+
 	confReaderTmp := config.NewReader(initMainFile, initResources,
 		config.OptSetBootstrapConfig(&r.localConf),
 		config.OptAddOverrides(r.setList...),
 		config.OptTestSuffix("_benthos_test"),
-		config.OptUseFS(&sessionFS{tracker: r.sessionTracker}))
+		config.OptUseFS(sessFS),
+		config.OptSetLintConfig(lintConf),
+	)
 	defer func() {
 		if bootstrapErr != nil {
 			_ = confReaderTmp.Close(context.Background())
@@ -233,7 +251,8 @@ func (r *PullRunner) bootstrapConfigReader(ctx context.Context) (bootstrapErr er
 	stopMgrTmp, err := common.CreateManager(
 		r.cliContext, r.logger, false, r.version, r.dateBuilt, conf,
 		manager.OptSetEnvironment(tmpEnv),
-	)
+		manager.OptSetBloblangEnvironment(bloblEnv),
+		manager.OptSetFS(sessFS))
 	if err != nil {
 		return fmt.Errorf("failed to create manager from bootstrap config: %w", err)
 	}

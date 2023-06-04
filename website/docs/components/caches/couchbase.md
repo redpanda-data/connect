@@ -32,10 +32,10 @@ Introduced in version 4.12.0.
 # Common config fields, showing default values
 label: ""
 couchbase:
-  url: ""
-  username: ""
-  password: ""
-  bucket: ""
+  url: couchbase://localhost:11210 # No default (required)
+  username: "" # No default (optional)
+  password: "" # No default (optional)
+  bucket: "" # No default (required)
 ```
 
 </TabItem>
@@ -45,14 +45,14 @@ couchbase:
 # All config fields, showing default values
 label: ""
 couchbase:
-  url: ""
-  username: ""
-  password: ""
-  bucket: ""
+  url: couchbase://localhost:11210 # No default (required)
+  username: "" # No default (optional)
+  password: "" # No default (optional)
+  bucket: "" # No default (required)
   collection: _default
   transcoder: legacy
   timeout: 15s
-  default_ttl: ""
+  default_ttl: "" # No default (optional)
 ```
 
 </TabItem>

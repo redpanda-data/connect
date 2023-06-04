@@ -66,7 +66,16 @@ input:
 </TabItem>
 </Tabs>
 
-Downloads objects within an Azure Blob Storage container, optionally filtered by a prefix.
+Supports multiple authentication methods but only one of the following is required:
+- `storage_connection_string`
+- `storage_account` and `storage_access_key`
+- `storage_account` and `storage_sas_token`
+- `storage_account` to access via [DefaultAzureCredential](https://pkg.go.dev/github.com/Azure/azure-sdk-for-go/sdk/azidentity#DefaultAzureCredential)
+
+If multiple are set then the `storage_connection_string` is given priority.
+
+If the `storage_connection_string` does not contain the `AccountName` parameter, please specify it in the
+`storage_account` field.
 
 ## Downloading Large Files
 

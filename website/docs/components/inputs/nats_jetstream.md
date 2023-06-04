@@ -34,12 +34,12 @@ Introduced in version 3.46.0.
 input:
   label: ""
   nats_jetstream:
-    urls: []
-    queue: ""
-    subject: ""
-    durable: ""
-    stream: ""
-    bind: false
+    urls: [] # No default (required)
+    queue: "" # No default (optional)
+    subject: foo.bar.baz # No default (optional)
+    durable: "" # No default (optional)
+    stream: "" # No default (optional)
+    bind: false # No default (optional)
     deliver: all
 ```
 
@@ -51,12 +51,12 @@ input:
 input:
   label: ""
   nats_jetstream:
-    urls: []
-    queue: ""
-    subject: ""
-    durable: ""
-    stream: ""
-    bind: false
+    urls: [] # No default (required)
+    queue: "" # No default (optional)
+    subject: foo.bar.baz # No default (optional)
+    durable: "" # No default (optional)
+    stream: "" # No default (optional)
+    bind: false # No default (optional)
     deliver: all
     ack_wait: 30s
     max_ack_pending: 1024
@@ -66,12 +66,12 @@ input:
       enable_renegotiation: false
       root_cas: ""
       root_cas_file: ""
-      client_certs: []
+      client_certs: [] # No default (required)
     auth:
-      nkey_file: ""
-      user_credentials_file: ""
-      user_jwt: ""
-      user_nkey_seed: ""
+      nkey_file: ./seed.nk # No default (optional)
+      user_credentials_file: ./user.creds # No default (optional)
+      user_jwt: "" # No default (optional)
+      user_nkey_seed: "" # No default (optional)
 ```
 
 </TabItem>

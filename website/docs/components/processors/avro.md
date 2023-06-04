@@ -23,7 +23,7 @@ Performs Avro based operations on messages based on a schema.
 # Config fields, showing default values
 label: ""
 avro:
-  operator: ""
+  operator: "" # No default (required)
   encoding: textual
   schema: ""
   schema_path: ""

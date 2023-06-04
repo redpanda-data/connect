@@ -33,9 +33,9 @@ Introduced in version 4.12.0.
 # Common config fields, showing default values
 label: ""
 nats_kv:
-  urls: []
-  bucket: ""
-  operation: ""
+  urls: [] # No default (required)
+  bucket: my_kv_bucket # No default (required)
+  operation: "" # No default (required)
   key: ""
 ```
 
@@ -46,23 +46,23 @@ nats_kv:
 # All config fields, showing default values
 label: ""
 nats_kv:
-  urls: []
-  bucket: ""
-  operation: ""
+  urls: [] # No default (required)
+  bucket: my_kv_bucket # No default (required)
+  operation: "" # No default (required)
   key: ""
-  revision: ""
+  revision: "42" # No default (optional)
   tls:
     enabled: false
     skip_cert_verify: false
     enable_renegotiation: false
     root_cas: ""
     root_cas_file: ""
-    client_certs: []
+    client_certs: [] # No default (required)
   auth:
-    nkey_file: ""
-    user_credentials_file: ""
-    user_jwt: ""
-    user_nkey_seed: ""
+    nkey_file: ./seed.nk # No default (optional)
+    user_credentials_file: ./user.creds # No default (optional)
+    user_jwt: "" # No default (optional)
+    user_nkey_seed: "" # No default (optional)
 ```
 
 </TabItem>

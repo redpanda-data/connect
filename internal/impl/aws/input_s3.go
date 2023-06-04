@@ -31,13 +31,14 @@ import (
 
 const (
 	// S3 Input SQS Fields
-	s3iSQSFieldURL          = "url"
-	s3iSQSFieldEndpoint     = "endpoint"
-	s3iSQSFieldEnvelopePath = "envelope_path"
-	s3iSQSFieldKeyPath      = "key_path"
-	s3iSQSFieldBucketPath   = "bucket_path"
-	s3iSQSFieldDelayPeriod  = "delay_period"
-	s3iSQSFieldMaxMessages  = "max_messages"
+	s3iSQSFieldURL             = "url"
+	s3iSQSFieldEndpoint        = "endpoint"
+	s3iSQSFieldEnvelopePath    = "envelope_path"
+	s3iSQSFieldKeyPath         = "key_path"
+	s3iSQSFieldBucketPath      = "bucket_path"
+	s3iSQSFieldDelayPeriod     = "delay_period"
+	s3iSQSFieldMaxMessages     = "max_messages"
+	s3iSQSFieldWaitTimeSeconds = "wait_time_seconds"
 
 	// S3 Input Fields
 	s3iFieldBucket             = "bucket"
@@ -50,13 +51,14 @@ const (
 )
 
 type s3iSQSConfig struct {
-	URL          string
-	Endpoint     string
-	EnvelopePath string
-	KeyPath      string
-	BucketPath   string
-	DelayPeriod  string
-	MaxMessages  int64
+	URL             string
+	Endpoint        string
+	EnvelopePath    string
+	KeyPath         string
+	BucketPath      string
+	DelayPeriod     string
+	MaxMessages     int64
+	WaitTimeSeconds int64
 }
 
 func s3iSQSConfigFromParsed(pConf *service.ParsedConfig) (conf s3iSQSConfig, err error) {
@@ -79,6 +81,9 @@ func s3iSQSConfigFromParsed(pConf *service.ParsedConfig) (conf s3iSQSConfig, err
 		return
 	}
 	if conf.MaxMessages, err = int64Field(pConf, s3iSQSFieldMaxMessages); err != nil {
+		return
+	}
+	if conf.WaitTimeSeconds, err = int64Field(pConf, s3iSQSFieldWaitTimeSeconds); err != nil {
 		return
 	}
 	return
@@ -211,6 +216,10 @@ You can access these metadata fields using [function interpolation](/docs/config
 				service.NewIntField(s3iSQSFieldMaxMessages).
 					Description("The maximum number of SQS messages to consume from each request.").
 					Default(10).
+					Advanced(),
+				service.NewIntField(s3iSQSFieldWaitTimeSeconds).
+					Description("Whether to set the wait time. Enabling this activates long-polling. Valid values: 0 to 20.").
+					Default(0).
 					Advanced(),
 			).
 				Description("Consume SQS messages in order to trigger key downloads.").
@@ -538,6 +547,7 @@ func (s *sqsTargetReader) readSQSEvents(ctx context.Context) ([]*s3ObjectTarget,
 	output, err := s.sqs.ReceiveMessageWithContext(ctx, &sqs.ReceiveMessageInput{
 		QueueUrl:            aws.String(s.conf.SQS.URL),
 		MaxNumberOfMessages: aws.Int64(s.conf.SQS.MaxMessages),
+		WaitTimeSeconds:     aws.Int64(s.conf.SQS.WaitTimeSeconds),
 		AttributeNames: []*string{
 			aws.String("SentTimestamp"),
 		},

@@ -163,7 +163,7 @@ func (c Config) Test() ([]string, error) {
 		if err != nil {
 			return nil, fmt.Errorf("test '%v': %w", test.Name, err)
 		}
-		for _, lint := range docs.LintYAML(docs.NewLintContext(), docs.Type(c.Type), outConf) {
+		for _, lint := range docs.LintYAML(docs.NewLintContext(docs.NewLintConfig()), docs.Type(c.Type), outConf) {
 			failures = append(failures, fmt.Sprintf("test '%v': lint error in resulting config: %v", test.Name, lint.Error()))
 		}
 		if len(test.Expected.Content) > 0 {
@@ -192,7 +192,7 @@ func ReadConfigYAML(templateBytes []byte) (conf Config, lints []docs.Lint, err e
 		return
 	}
 
-	lints = ConfigSpec().LintYAML(docs.NewLintContext(), &node)
+	lints = ConfigSpec().LintYAML(docs.NewLintContext(docs.NewLintConfig()), &node)
 	return
 }
 

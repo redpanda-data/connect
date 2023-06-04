@@ -16,6 +16,7 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/component/cache"
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/internal/config"
+	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/filepath/ifs"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/manager"
@@ -204,7 +205,7 @@ func initCache(t *testing.T, env *cacheTestEnvironment) cache.V1 {
 	dec.KnownFields(true)
 	require.NoError(t, dec.Decode(&s))
 
-	lints, err := config.LintBytes(config.LintOptions{}, confBytes)
+	lints, err := config.LintBytes(docs.NewLintConfig(), confBytes)
 	require.NoError(t, err)
 	assert.Empty(t, lints)
 

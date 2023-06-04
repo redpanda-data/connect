@@ -16,18 +16,30 @@ import (
 
 func init() {
 	err := bundle.AllInputs.Add(processors.WrapConstructor(newDynamicInput), docs.ComponentSpec{
-		Name: "dynamic",
-		Summary: `
-A special broker type where the inputs are identified by unique labels and can
-be created, changed and removed during runtime via a REST HTTP interface.`,
-		Description: `
-To GET a JSON map of input identifiers with their current uptimes use the
-` + "`/inputs`" + ` endpoint.
+		Name:    "dynamic",
+		Summary: `A special broker type where the inputs are identified by unique labels and can be created, changed and removed during runtime via a REST HTTP interface.`,
+		Footnotes: `
+## Endpoints
 
-To perform CRUD actions on the inputs themselves use POST, DELETE, and GET
-methods on the ` + "`/inputs/{input_id}`" + ` endpoint. When using POST the body
-of the request should be a YAML configuration for the input, if the input
-already exists it will be changed.`,
+### GET ` + "`/inputs`" + `
+
+Returns a JSON object detailing all dynamic inputs, providing information such as their current uptime and configuration.
+
+### GET ` + "`/inputs/{id}`" + `
+
+Returns the configuration of an input.
+
+### POST ` + "`/inputs/{id}`" + `
+
+Creates or updates an input with a configuration provided in the request body (in YAML or JSON format).
+
+### DELETE ` + "`/inputs/{id}`" + `
+
+Stops and removes an input.
+
+### GET ` + "`/inputs/{id}/uptime`" + `
+
+Returns the uptime of an input as a duration string (of the form "72h3m0.5s"), or "stopped" in the case where the input has gracefully terminated.`,
 		Categories: []string{
 			"Utility",
 		},
@@ -119,6 +131,11 @@ func newDynamicInput(conf input.Config, mgr bundle.NewManagement) (input.Streame
 		return err
 	})
 
+	mgr.RegisterEndpoint(
+		path.Join(conf.Dynamic.Prefix, "/inputs/{id}/uptime"),
+		`Returns the uptime of a specific input as a duration string, or "stopped" for inputs that are no longer running and have gracefully terminated.`,
+		dynAPI.HandleUptime,
+	)
 	mgr.RegisterEndpoint(
 		path.Join(conf.Dynamic.Prefix, "/inputs/{id}"),
 		"Perform CRUD operations on the configuration of dynamic inputs. For"+

@@ -456,7 +456,6 @@ func TestHTTPServerPathIsPrefix(t *testing.T) {
 
 	dummyData := []byte("a bunch of jolly leprechauns await")
 	go func() {
-		fmt.Println(serverURL.String())
 		req, cerr := http.NewRequest("PUT", serverURL.String(), bytes.NewReader(dummyData))
 		require.NoError(t, cerr)
 		req.Header.Set("Content-Type", "text/plain")

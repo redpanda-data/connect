@@ -29,8 +29,8 @@ Pops messages from the beginning of a Redis list using the BLPop command.
 input:
   label: ""
   redis_list:
-    url: ""
-    key: ""
+    url: :6397 # No default (required)
+    key: "" # No default (required)
 ```
 
 </TabItem>
@@ -41,7 +41,7 @@ input:
 input:
   label: ""
   redis_list:
-    url: ""
+    url: :6397 # No default (required)
     kind: simple
     master: ""
     tls:
@@ -50,8 +50,8 @@ input:
       enable_renegotiation: false
       root_cas: ""
       root_cas_file: ""
-      client_certs: []
-    key: ""
+      client_certs: [] # No default (required)
+    key: "" # No default (required)
     max_in_flight: 0
     timeout: 5s
 ```

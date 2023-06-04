@@ -34,12 +34,14 @@ Introduced in version 3.64.0.
 input:
   label: ""
   mongodb:
-    url: ""
-    database: ""
-    collection: ""
+    url: mongodb://localhost:27017 # No default (required)
+    database: "" # No default (required)
+    collection: "" # No default (required)
     username: ""
     password: ""
-    query: ""
+    query: |2 # No default (required)
+            root.from = {"$lte": timestamp_unix()}
+            root.to = {"$gte": timestamp_unix()}
 ```
 
 </TabItem>
@@ -50,14 +52,16 @@ input:
 input:
   label: ""
   mongodb:
-    url: ""
-    database: ""
-    collection: ""
+    url: mongodb://localhost:27017 # No default (required)
+    database: "" # No default (required)
+    collection: "" # No default (required)
     username: ""
     password: ""
     operation: find
     json_marshal_mode: canonical
-    query: ""
+    query: |2 # No default (required)
+            root.from = {"$lte": timestamp_unix()}
+            root.to = {"$gte": timestamp_unix()}
 ```
 
 </TabItem>

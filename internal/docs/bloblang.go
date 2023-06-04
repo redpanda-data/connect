@@ -14,7 +14,7 @@ func LintBloblangMapping(ctx LintContext, line, col int, v any) []Lint {
 	if str == "" {
 		return nil
 	}
-	_, err := ctx.BloblangEnv.Parse(str)
+	_, err := ctx.conf.BloblangEnv.Parse(str)
 	if err == nil {
 		return nil
 	}
@@ -36,7 +36,7 @@ func LintBloblangField(ctx LintContext, line, col int, v any) []Lint {
 	if str == "" {
 		return nil
 	}
-	err := ctx.BloblangEnv.CheckInterpolatedString(str)
+	err := ctx.conf.BloblangEnv.CheckInterpolatedString(str)
 	if err == nil {
 		return nil
 	}

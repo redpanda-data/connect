@@ -7,6 +7,17 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
+- The `dynamic` input and output have a new endpoint `/input/{id}/uptime` and `/output/{id}/uptime` respectively for obtaining the uptime of a given input/output.
+- Field `wait_time_seconds` added to the `aws_sqs` input.
+
+### Changed
+
+- The `nats` input default value of `prefetch_count` has been increased from `32` to a more appropriate `524288`.
+
+## 4.16.0 - 2023-05-28
+
+### Added
+
 - Fields `auth.user_jwt` and `auth.user_nkey_seed` added to all NATS components.
 - bloblang: added `ulid(encoding, random_source)` function to generate Universally Unique Lexicographically Sortable Identifiers (ULIDs).
 - Field `skip_on` added to the `cached` processor.
@@ -17,6 +28,8 @@ All notable changes to this project will be documented in this file.
 - The `gcp_pubsub` input now adds the metadata field `gcp_pubsub_delivery_attempt` to messages when dead lettering is enabled.
 - The `aws_s3` input now adds `s3_version_id` metadata to versioned messages.
 - All compress/decompress components (codecs, bloblang methods, processors) now support `pgzip`.
+- Field `connection.max_retries` added to the `websocket` input.
+- New `sentry_capture` processor.
 
 ### Fixed
 
@@ -24,6 +37,7 @@ All notable changes to this project will be documented in this file.
 - The `gcp_pubsub` output should see significant performance improvements due to a client library upgrade.
 - The stream builder APIs should now follow `logger.file` config fields.
 - The experimental `cue` format in the cli `list` subcommand no longer introduces infinite recursion for `#Processors`.
+- Config unit tests no longer execute linting rules for missing env var interpolations.
 
 ## 4.15.0 - 2023-05-05
 

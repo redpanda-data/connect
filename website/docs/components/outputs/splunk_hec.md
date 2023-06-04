@@ -32,8 +32,8 @@ Writes messages to a Splunk HTTP Endpoint Collector.
 output:
   label: ""
   splunk_hec:
-    url: ""
-    token: ""
+    url: "" # No default (required)
+    token: "" # No default (required)
     gzip: false
     event_host: ""
     event_source: ""
@@ -52,8 +52,8 @@ output:
 output:
   label: ""
   splunk_hec:
-    url: ""
-    token: ""
+    url: "" # No default (required)
+    token: "" # No default (required)
     gzip: false
     event_host: ""
     event_source: ""

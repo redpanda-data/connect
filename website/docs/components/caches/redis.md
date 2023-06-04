@@ -27,8 +27,8 @@ Use a Redis instance as a cache. The expiration can be set to zero or an empty s
 # Common config fields, showing default values
 label: ""
 redis:
-  url: ""
-  prefix: ""
+  url: :6397 # No default (required)
+  prefix: "" # No default (optional)
 ```
 
 </TabItem>
@@ -38,7 +38,7 @@ redis:
 # All config fields, showing default values
 label: ""
 redis:
-  url: ""
+  url: :6397 # No default (required)
   kind: simple
   master: ""
   tls:
@@ -47,9 +47,9 @@ redis:
     enable_renegotiation: false
     root_cas: ""
     root_cas_file: ""
-    client_certs: []
-  prefix: ""
-  default_ttl: ""
+    client_certs: [] # No default (required)
+  prefix: "" # No default (optional)
+  default_ttl: "" # No default (optional)
   retries:
     initial_interval: 500ms
     max_interval: 1s
