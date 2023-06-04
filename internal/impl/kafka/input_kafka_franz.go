@@ -76,7 +76,7 @@ Finally, it's also possible to specify an explicit offset to consume from by add
 			Default("5s").
 			Advanced()).
 		Field(service.NewBoolField("start_from_oldest").
-			Description("If an offset is not found for a topic partition, determines whether to consume from the oldest available offset, otherwise messages are consumed from the latest offset.").
+			Description("Determines whether to consume from the oldest available offset, otherwise messages are consumed from the latest offset. The setting is applied when creating a new consumer group or the saved offset no longer exists.").
 			Default(true).
 			Advanced()).
 		Field(service.NewTLSToggledField("tls")).
