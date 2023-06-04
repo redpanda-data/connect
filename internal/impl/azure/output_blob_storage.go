@@ -5,11 +5,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net/url"
-	"strings"
 
-	"github.com/Azure/azure-sdk-for-go/storage"
-	"github.com/Azure/go-autorest/autorest/azure"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/streaming"
+	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
+	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/bloberror"
 
 	"github.com/benthosdev/benthos/v4/internal/bloblang/field"
 	"github.com/benthosdev/benthos/v4/internal/bundle"
@@ -17,6 +17,7 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/component/output/processors"
 	"github.com/benthosdev/benthos/v4/internal/docs"
+	"github.com/benthosdev/benthos/v4/internal/impl/azure/shared"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
 )
@@ -33,11 +34,20 @@ Sends message parts as objects to an Azure Blob Storage Account container. Each
 object is uploaded with the filename specified with the ` + "`container`" + `
 field.`,
 		Description: output.Description(true, false, `
-Only one authentication method is required, `+"`storage_connection_string`"+` or `+"`storage_account` and `storage_access_key`"+`. If both are set then the `+"`storage_connection_string`"+` is given priority.
-
 In order to have a different path for each object you should use function
 interpolations described [here](/docs/configuration/interpolation#bloblang-queries), which are
-calculated per message of a batch.`),
+calculated per message of a batch.
+
+Supports multiple authentication methods but only one of the following is required:
+- `+"`storage_connection_string`"+`
+- `+"`storage_account` and `storage_access_key`"+`
+- `+"`storage_account` and `storage_sas_token`"+`
+- `+"`storage_account` to access via [DefaultAzureCredential](https://pkg.go.dev/github.com/Azure/azure-sdk-for-go/sdk/azidentity#DefaultAzureCredential)"+`
+
+If multiple are set then the `+"`storage_connection_string`"+` is given priority.
+
+If the `+"`storage_connection_string`"+` does not contain the `+"`AccountName`"+` parameter, please specify it in the
+`+"`storage_account`"+` field.`),
 		Config: docs.FieldComponent().WithChildren(
 			docs.FieldString(
 				"storage_account",
@@ -72,7 +82,9 @@ calculated per message of a batch.`),
 				"BLOCK", "APPEND",
 			).IsInterpolated().Advanced(),
 			docs.FieldInt("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
-		).ChildDefaultAndTypesFromStruct(output.NewAzureBlobStorageConfig()),
+		).LinterBlobl(
+			`root = if this.storage_connection_string != "" && !this.storage_connection_string.contains("AccountName=") && this.storage_account == "" { [ "storage_account must be set if storage_connection_string does not contain the \"AccountName\" parameter" ] }`).
+			ChildDefaultAndTypesFromStruct(output.NewAzureBlobStorageConfig()),
 		Categories: []string{
 			"Services",
 			"Azure",
@@ -101,7 +113,7 @@ type azureBlobStorageWriter struct {
 	path        *field.Expression
 	blobType    *field.Expression
 	accessLevel *field.Expression
-	client      storage.BlobStorageClient
+	client      *azblob.Client
 	log         log.Modular
 }
 
@@ -109,32 +121,16 @@ func newAzureBlobStorageWriter(mgr bundle.NewManagement, conf output.AzureBlobSt
 	if conf.StorageAccount == "" && conf.StorageConnectionString == "" {
 		return nil, errors.New("invalid azure storage account credentials")
 	}
-	var client storage.Client
-	var err error
-	if len(conf.StorageConnectionString) > 0 {
-		if strings.Contains(conf.StorageConnectionString, "UseDevelopmentStorage=true;") {
-			client, err = storage.NewEmulatorClient()
-		} else {
-			client, err = storage.NewClientFromConnectionString(conf.StorageConnectionString)
-		}
-	} else if len(conf.StorageAccessKey) > 0 {
-		client, err = storage.NewBasicClient(conf.StorageAccount, conf.StorageAccessKey)
-	} else {
-		// The SAS token in the Azure UI is provided as an URL query string with
-		// the '?' prepended to it which confuses url.ParseQuery
-		token, err := url.ParseQuery(strings.TrimPrefix(conf.StorageSASToken, "?"))
-		if err != nil {
-			return nil, fmt.Errorf("invalid azure storage SAS token: %v", err)
-		}
-		client = storage.NewAccountSASClient(conf.StorageAccount, token, azure.PublicCloud)
-	}
+
+	client, err := shared.GetBlobStorageClient(conf.StorageConnectionString, conf.StorageAccount, conf.StorageAccessKey, conf.StorageSASToken)
 	if err != nil {
-		return nil, fmt.Errorf("invalid azure storage account credentials: %v", err)
+		return nil, fmt.Errorf("failed to get storage client: %v", err)
 	}
+
 	a := &azureBlobStorageWriter{
 		conf:   conf,
 		log:    log,
-		client: client.GetBlobService(),
+		client: client,
 	}
 	if a.container, err = mgr.BloblEnvironment().NewField(conf.Container); err != nil {
 		return nil, fmt.Errorf("failed to parse container expression: %v", err)
@@ -155,81 +151,101 @@ func (a *azureBlobStorageWriter) Connect(ctx context.Context) error {
 	return nil
 }
 
-func (a *azureBlobStorageWriter) uploadBlob(b *storage.Blob, blobType string, message []byte) error {
+func (a *azureBlobStorageWriter) uploadBlob(ctx context.Context, containerName, blobName, blobType string, message []byte) error {
+	containerClient := a.client.ServiceClient().NewContainerClient(containerName)
+	var err error
 	if blobType == "APPEND" {
-		exists, err := b.Exists()
+		appendBlobClient := containerClient.NewAppendBlobClient(blobName)
+		_, err = appendBlobClient.AppendBlock(ctx, streaming.NopCloser(bytes.NewReader(message)), nil)
 		if err != nil {
-			return err
-		}
-		if !exists {
-			if err := b.PutAppendBlob(nil); err != nil {
-				return err
+			if isErrorCode(err, bloberror.BlobNotFound) {
+				_, err := appendBlobClient.Create(ctx, nil)
+				if err != nil && !isErrorCode(err, bloberror.BlobAlreadyExists) {
+					return fmt.Errorf("failed to create append blob: %w", err)
+				}
+
+				// Try to upload the message again now that we created the blob
+				_, err = appendBlobClient.AppendBlock(ctx, streaming.NopCloser(bytes.NewReader(message)), nil)
+				if err != nil {
+					return fmt.Errorf("failed retrying to append block to blob: %w", err)
+				}
+			} else {
+				return fmt.Errorf("failed to append block to blob: %w", err)
 			}
 		}
-		return b.AppendBlock(message, nil)
+	} else {
+		_, err = containerClient.NewBlockBlobClient(blobName).UploadStream(ctx, bytes.NewReader(message), nil)
+		if err != nil {
+			return fmt.Errorf("failed to push block to blob: %w", err)
+		}
 	}
-	return b.CreateBlockBlobFromReader(bytes.NewReader(message), nil)
+	return nil
 }
 
-func (a *azureBlobStorageWriter) createContainer(c *storage.Container, accessLevel string) error {
-	opts := storage.CreateContainerOptions{}
+func (a *azureBlobStorageWriter) createContainer(ctx context.Context, containerName, accessLevel string) error {
+	var opts azblob.CreateContainerOptions
 	switch accessLevel {
 	case "BLOB":
-		opts.Access = storage.ContainerAccessTypeBlob
+		accessType := azblob.PublicAccessTypeBlob
+		opts.Access = &accessType
 	case "CONTAINER":
-		opts.Access = storage.ContainerAccessTypeContainer
+		accessType := azblob.PublicAccessTypeContainer
+		opts.Access = &accessType
 	}
-	return c.Create(&opts)
+	_, err := a.client.CreateContainer(ctx, containerName, &opts)
+	return err
 }
 
-func (a *azureBlobStorageWriter) WriteBatch(_ context.Context, msg message.Batch) error {
+func (a *azureBlobStorageWriter) WriteBatch(ctx context.Context, msg message.Batch) error {
 	return output.IterateBatchedSend(msg, func(i int, p *message.Part) error {
-		containerStr, err := a.container.String(i, msg)
+		containerName, err := a.container.String(i, msg)
 		if err != nil {
-			return fmt.Errorf("container interpolation error: %w", err)
+			return fmt.Errorf("container interpolation error: %s", err)
 		}
 
-		pathStr, err := a.path.String(i, msg)
+		blobName, err := a.path.String(i, msg)
 		if err != nil {
-			return fmt.Errorf("path interpolation error: %w", err)
+			return fmt.Errorf("path interpolation error: %s", err)
 		}
 
-		blobTypeStr, err := a.blobType.String(i, msg)
+		blobType, err := a.blobType.String(i, msg)
 		if err != nil {
-			return fmt.Errorf("blob type interpolation error: %w", err)
+			return fmt.Errorf("blob type interpolation error: %s", err)
 		}
 
-		c := a.client.GetContainerReference(containerStr)
-		b := c.GetBlobReference(pathStr)
-		if err = a.uploadBlob(b, blobTypeStr, p.AsBytes()); err != nil {
-			if containerNotFound(err) {
-				var accessLevelStr string
-				if accessLevelStr, err = a.accessLevel.String(i, msg); err != nil {
-					return fmt.Errorf("access level interpolation error: %w", err)
+		if err := a.uploadBlob(ctx, containerName, blobName, blobType, p.AsBytes()); err != nil {
+			if isErrorCode(err, bloberror.ContainerNotFound) {
+				var accessLevel string
+				if accessLevel, err = a.accessLevel.String(i, msg); err != nil {
+					return fmt.Errorf("access level interpolation error: %s", err)
 				}
 
-				if cerr := a.createContainer(c, accessLevelStr); cerr != nil {
-					a.log.Debugf("error creating container: %v.", cerr)
-					return cerr
+				if err := a.createContainer(ctx, containerName, accessLevel); err != nil {
+					if !isErrorCode(err, bloberror.ContainerAlreadyExists) {
+						return fmt.Errorf("failed to create container: %s", err)
+					}
 				}
 
-				if err = a.uploadBlob(b, blobTypeStr, p.AsBytes()); err != nil {
-					a.log.Debugf("error retrying to upload blob: %v.", err)
+				if err := a.uploadBlob(ctx, containerName, blobName, blobType, p.AsBytes()); err != nil {
+					return fmt.Errorf("error retrying to upload blob: %s", err)
 				}
+			} else {
+				return fmt.Errorf("failed to upload blob: %s", err)
 			}
-			return err
 		}
 		return nil
 	})
 }
 
-func containerNotFound(err error) bool {
-	if serr, ok := err.(storage.AzureStorageServiceError); ok {
-		return serr.Code == "ContainerNotFound"
-	}
-	return false
-}
-
 func (a *azureBlobStorageWriter) Close(context.Context) error {
 	return nil
+}
+
+func isErrorCode(err error, code bloberror.Code) bool {
+	var rerr *azcore.ResponseError
+	if ok := errors.As(err, &rerr); ok {
+		return rerr.ErrorCode == string(code)
+	}
+
+	return false
 }
