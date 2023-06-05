@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"path"
 	"sync"
+	"time"
 
 	"cloud.google.com/go/storage"
 	"github.com/gofrs/uuid"
@@ -25,6 +26,7 @@ const (
 	csoFieldMaxInFlight     = "max_in_flight"
 	csoFieldBatching        = "batching"
 	csoFieldCollisionMode   = "collision_mode"
+	csoFieldTimeout         = "timeout"
 
 	// GCPCloudStorageErrorIfExistsCollisionMode - error-if-exists.
 	GCPCloudStorageErrorIfExistsCollisionMode = "error-if-exists"
@@ -46,6 +48,7 @@ type csoConfig struct {
 	ContentEncoding *service.InterpolatedString
 	ChunkSize       int
 	CollisionMode   string
+	Timeout         time.Duration
 }
 
 func csoConfigFromParsed(pConf *service.ParsedConfig) (conf csoConfig, err error) {
@@ -65,6 +68,9 @@ func csoConfigFromParsed(pConf *service.ParsedConfig) (conf csoConfig, err error
 		return
 	}
 	if conf.CollisionMode, err = pConf.FieldString(csoFieldCollisionMode); err != nil {
+		return
+	}
+	if conf.Timeout, err = pConf.FieldDuration(csoFieldTimeout); err != nil {
 		return
 	}
 	return
@@ -150,6 +156,11 @@ output:
 				Description("An optional chunk size which controls the maximum number of bytes of the object that the Writer will attempt to send to the server in a single request. If ChunkSize is set to zero, chunking will be disabled.").
 				Advanced().
 				Default(16*1024*1024), // googleapi.DefaultUploadChunkSize
+			service.NewDurationField(csoFieldTimeout).
+				Description("The maximum period to wait on an upload before abandoning it and reattempting.").
+				Example("1s").
+				Example("500ms").
+				Default("3s"),
 			service.NewOutputMaxInFlightField().
 				Description("The maximum number of message batches to have in flight at a given time. Increase this to improve throughput."),
 			service.NewBatchPolicyField(csoFieldBatching),
@@ -223,6 +234,9 @@ func (g *gcpCloudStorageOutput) WriteBatch(ctx context.Context, batch service.Me
 	if client == nil {
 		return service.ErrNotConnected
 	}
+
+	ctx, cancel := context.WithTimeout(ctx, g.conf.Timeout)
+	defer cancel()
 
 	return batch.WalkWithBatchedErrors(func(i int, msg *service.Message) error {
 		metadata := map[string]string{}

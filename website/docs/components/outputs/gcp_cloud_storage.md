@@ -38,6 +38,7 @@ output:
     path: ${!count("files")}-${!timestamp_unix_nano()}.txt
     content_type: application/octet-stream
     collision_mode: overwrite
+    timeout: 3s
     max_in_flight: 64
     batching:
       count: 0
@@ -60,6 +61,7 @@ output:
     content_encoding: ""
     collision_mode: overwrite
     chunk_size: 16777216
+    timeout: 3s
     max_in_flight: 64
     batching:
       count: 0
@@ -197,6 +199,22 @@ An optional chunk size which controls the maximum number of bytes of the object 
 
 Type: `int`  
 Default: `16777216`  
+
+### `timeout`
+
+The maximum period to wait on an upload before abandoning it and reattempting.
+
+
+Type: `string`  
+Default: `"3s"`  
+
+```yml
+# Examples
+
+timeout: 1s
+
+timeout: 500ms
+```
 
 ### `max_in_flight`
 
