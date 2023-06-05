@@ -18,7 +18,7 @@ import TabItem from '@theme/TabItem';
 This component is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with the component is found.
 :::
 
-Downloads objects within a Google Cloud Storage bucket, optionally filtered by a prefix.
+Downloads objects within a Google Cloud Storage bucket, optionally filtered by a prefix, either by walking the items in the bucket or by streaming upload notifications in realtime.
 
 Introduced in version 3.43.0.
 
@@ -35,6 +35,12 @@ Introduced in version 3.43.0.
 input:
   label: ""
   gcp_cloud_storage:
+    pubsub:
+      project: ""
+      subscription: ""
+      sync: false
+      max_outstanding_messages: 1000
+      max_outstanding_bytes: 1000000000
     bucket: ""
     prefix: ""
     codec: all-bytes
@@ -48,14 +54,29 @@ input:
 input:
   label: ""
   gcp_cloud_storage:
+    pubsub:
+      project: ""
+      subscription: ""
+      sync: false
+      max_outstanding_messages: 1000
+      max_outstanding_bytes: 1000000000
     bucket: ""
     prefix: ""
     codec: all-bytes
     delete_objects: false
+    max_buffer: 1000000
 ```
 
 </TabItem>
 </Tabs>
+
+## Streaming Objects on Upload with Pub/Sub
+
+A common pattern for consuming GCS objects is to configure a bucket to emit upload notification events to a Pub/Sub topic with an associated subscription. A consumer then subscribes to this subscription and newly uploaded objects are then downloaded as notification events are published to the subscription. More information about this pattern and how to set it up can be found at: https://cloud.google.com/storage/docs/pubsub-notifications.
+
+Benthos is able to follow this pattern when you configure `pubsub.project` and `pubsub.subscription`, where it consumes events from Pub/Sub and only downloads object keys received within those events.
+
+It is recommended to use a lower value for `pubsub.max_outstanding_messages` when a [`codec`](#codec) would result in many output messages being created from a single input file. Lowering the number of outstanding Pub/Sub messages will help prevent excessive message reprocessing in the event of a crash.
 
 ## Downloading Large Files
 
@@ -83,6 +104,53 @@ By default Benthos will use a shared credentials file when connecting to GCP
 services. You can find out more [in this document](/docs/guides/cloud/gcp).
 
 ## Fields
+
+### `pubsub`
+
+Consume Pub/Sub messages in order to trigger key downloads.
+
+
+Type: `object`  
+
+### `pubsub.project`
+
+The project ID of the target subscription.
+
+
+Type: `string`  
+Default: `""`  
+
+### `pubsub.subscription`
+
+The target subscription ID.
+
+
+Type: `string`  
+Default: `""`  
+
+### `pubsub.sync`
+
+Enable synchronous pull mode.
+
+
+Type: `bool`  
+Default: `false`  
+
+### `pubsub.max_outstanding_messages`
+
+The maximum number of outstanding pending messages to be consumed at a given time.
+
+
+Type: `int`  
+Default: `1000`  
+
+### `pubsub.max_outstanding_bytes`
+
+The maximum number of outstanding pending messages to be consumed measured in bytes.
+
+
+Type: `int`  
+Default: `1000000000`  
 
 ### `bucket`
 
@@ -146,5 +214,13 @@ Whether to delete downloaded objects from the bucket once they are processed.
 
 Type: `bool`  
 Default: `false`  
+
+### `max_buffer`
+
+The largest token size expected when consuming objects with a tokenised codec such as `lines`.
+
+
+Type: `int`  
+Default: `1000000`  
 
 
