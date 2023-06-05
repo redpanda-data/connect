@@ -17,7 +17,6 @@ import TabItem from '@theme/TabItem';
 :::caution BETA
 This component is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with the component is found.
 :::
-
 Downloads objects within a Google Cloud Storage bucket, optionally filtered by a prefix.
 
 Introduced in version 3.43.0.
@@ -35,7 +34,7 @@ Introduced in version 3.43.0.
 input:
   label: ""
   gcp_cloud_storage:
-    bucket: ""
+    bucket: "" # No default (required)
     prefix: ""
     codec: all-bytes
 ```
@@ -48,7 +47,7 @@ input:
 input:
   label: ""
   gcp_cloud_storage:
-    bucket: ""
+    bucket: "" # No default (required)
     prefix: ""
     codec: all-bytes
     delete_objects: false
@@ -79,8 +78,7 @@ You can access these metadata fields using [function interpolation](/docs/config
 
 ### Credentials
 
-By default Benthos will use a shared credentials file when connecting to GCP
-services. You can find out more [in this document](/docs/guides/cloud/gcp).
+By default Benthos will use a shared credentials file when connecting to GCP services. You can find out more [in this document](/docs/guides/cloud/gcp).
 
 ## Fields
 
@@ -90,7 +88,6 @@ The name of the bucket from which to download objects.
 
 
 Type: `string`  
-Default: `""`  
 
 ### `prefix`
 

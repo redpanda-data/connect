@@ -19,8 +19,6 @@ type Config struct {
 	Broker            BrokerConfig            `json:"broker" yaml:"broker"`
 	Dynamic           DynamicConfig           `json:"dynamic" yaml:"dynamic"`
 	File              FileConfig              `json:"file" yaml:"file"`
-	GCPCloudStorage   GCPCloudStorageConfig   `json:"gcp_cloud_storage" yaml:"gcp_cloud_storage"`
-	GCPPubSub         GCPPubSubConfig         `json:"gcp_pubsub" yaml:"gcp_pubsub"`
 	Generate          GenerateConfig          `json:"generate" yaml:"generate"`
 	HDFS              HDFSConfig              `json:"hdfs" yaml:"hdfs"`
 	HTTPServer        HTTPServerConfig        `json:"http_server" yaml:"http_server"`
@@ -56,8 +54,6 @@ func NewConfig() Config {
 		Broker:            NewBrokerConfig(),
 		Dynamic:           NewDynamicConfig(),
 		File:              NewFileConfig(),
-		GCPCloudStorage:   NewGCPCloudStorageConfig(),
-		GCPPubSub:         NewGCPPubSubConfig(),
 		Generate:          NewGenerateConfig(),
 		HDFS:              NewHDFSConfig(),
 		HTTPServer:        NewHTTPServerConfig(),

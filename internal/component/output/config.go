@@ -25,8 +25,6 @@ type Config struct {
 	Elasticsearch     ElasticsearchConfig     `json:"elasticsearch" yaml:"elasticsearch"`
 	Fallback          TryConfig               `json:"fallback" yaml:"fallback"`
 	File              FileConfig              `json:"file" yaml:"file"`
-	GCPCloudStorage   GCPCloudStorageConfig   `json:"gcp_cloud_storage" yaml:"gcp_cloud_storage"`
-	GCPPubSub         GCPPubSubConfig         `json:"gcp_pubsub" yaml:"gcp_pubsub"`
 	HDFS              HDFSConfig              `json:"hdfs" yaml:"hdfs"`
 	HTTPServer        HTTPServerConfig        `json:"http_server" yaml:"http_server"`
 	Inproc            string                  `json:"inproc" yaml:"inproc"`
@@ -72,8 +70,6 @@ func NewConfig() Config {
 		Elasticsearch:     NewElasticsearchConfig(),
 		Fallback:          NewTryConfig(),
 		File:              NewFileConfig(),
-		GCPCloudStorage:   NewGCPCloudStorageConfig(),
-		GCPPubSub:         NewGCPPubSubConfig(),
 		HDFS:              NewHDFSConfig(),
 		HTTPServer:        NewHTTPServerConfig(),
 		Inproc:            "",
