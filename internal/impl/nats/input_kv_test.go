@@ -61,7 +61,7 @@ auth:
 		conf, err := spec.ParseYAML(inputConfig, env)
 		require.NoError(t, err)
 
-		_, err = newJetStreamReaderFromConfig(conf, nil, nil)
+		_, err = newJetStreamReaderFromConfig(conf, service.MockResources())
 		require.Error(t, err)
 	})
 
@@ -80,7 +80,7 @@ auth:
 		conf, err := spec.ParseYAML(inputConfig, env)
 		require.NoError(t, err)
 
-		_, err = newJetStreamReaderFromConfig(conf, nil, nil)
+		_, err = newJetStreamReaderFromConfig(conf, service.MockResources())
 		require.Error(t, err)
 	})
 }
