@@ -11,6 +11,10 @@ All notable changes to this project will be documented in this file.
 - Field `wait_time_seconds` added to the `aws_sqs` input.
 - Field `timeout` added to the `gcp_cloud_storage` output.
 
+### Fixed
+
+- Restore message ordering support to `gcp_pubsub` output. This issue was introduced in 4.16.0 as a result of [#1836](https://github.com/benthosdev/benthos/pull/1836).
+
 ### Changed
 
 - The `nats` input default value of `prefetch_count` has been increased from `32` to a more appropriate `524288`.

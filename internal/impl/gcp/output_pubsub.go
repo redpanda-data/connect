@@ -332,6 +332,10 @@ func (out *pubsubOutput) getTopic(ctx context.Context, name string) (pubsubTopic
 		return nil, fmt.Errorf("topic '%v' does not exist", name)
 	}
 
+	if out.orderingKeyQ != nil {
+		t.EnableOrdering()
+	}
+
 	out.topics[name] = t
 	return t, nil
 }
