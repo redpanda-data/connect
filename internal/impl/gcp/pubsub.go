@@ -13,6 +13,7 @@ type pubsubClient interface {
 type pubsubTopic interface {
 	Exists(ctx context.Context) (bool, error)
 	Publish(ctx context.Context, msg *pubsub.Message) publishResult
+	EnableOrdering()
 	Stop()
 }
 
@@ -38,9 +39,15 @@ type airGappedTopic struct {
 func (at *airGappedTopic) Exists(ctx context.Context) (bool, error) {
 	return at.t.Exists(ctx)
 }
+
 func (at *airGappedTopic) Publish(ctx context.Context, msg *pubsub.Message) publishResult {
 	return at.t.Publish(ctx, msg)
 }
+
+func (at *airGappedTopic) EnableOrdering() {
+	at.t.EnableMessageOrdering = true
+}
+
 func (at *airGappedTopic) Stop() {
 	at.t.Stop()
 }

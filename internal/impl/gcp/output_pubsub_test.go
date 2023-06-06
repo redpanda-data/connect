@@ -92,6 +92,7 @@ func TestPubSubOutput_MessageAttr(t *testing.T) {
 
 	fooTopic := &mockTopic{}
 	fooTopic.On("Exists").Return(true, nil).Once()
+	fooTopic.On("EnableOrdering").Return().Once()
 	fooTopic.On("Stop").Return().Once()
 
 	fooMsgA := &mockPublishResult{}
@@ -125,10 +126,10 @@ func TestPubSubOutput_MessageAttr(t *testing.T) {
 	err = out.WriteBatch(ctx, service.MessageBatch{msg})
 	require.NoError(t, err, "publish failed")
 
-	require.Len(t, fooTopic.Calls, 2)
-	require.Equal(t, fooTopic.Calls[1].Method, "Publish")
-	require.Len(t, fooTopic.Calls[1].Arguments, 2)
-	psmsg := fooTopic.Calls[1].Arguments[1].(*pubsub.Message)
+	require.Len(t, fooTopic.Calls, 3)
+	require.Equal(t, fooTopic.Calls[2].Method, "Publish")
+	require.Len(t, fooTopic.Calls[2].Arguments, 2)
+	psmsg := fooTopic.Calls[2].Arguments[1].(*pubsub.Message)
 	require.Equal(t, map[string]string{"keep_a": "good stuff"}, psmsg.Attributes)
 	require.Equal(t, "foo_1", psmsg.OrderingKey)
 }
