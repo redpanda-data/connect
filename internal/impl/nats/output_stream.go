@@ -65,7 +65,12 @@ func soSpec() *service.ConfigSpec {
 		Stable().
 		Categories("Services").
 		Summary(`Publish to a NATS Stream subject.`).
-		Description(output.Description(true, false, auth.Description())).
+		Description(`
+:::caution Deprecation Notice
+The NATS Streaming Server is being deprecated. Critical bug fixes and security fixes will be applied until June of 2023. NATS-enabled applications requiring persistence should use [JetStream](https://docs.nats.io/nats-concepts/jetstream).
+:::
+
+`+output.Description(true, false, auth.Description())).
 		Fields(
 			service.NewStringListField(soFieldURLs).
 				Description("A list of URLs to connect to. If an item of the list contains commas it will be expanded into multiple URLs.").

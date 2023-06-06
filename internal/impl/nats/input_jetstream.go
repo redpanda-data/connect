@@ -19,7 +19,7 @@ import (
 
 func natsJetStreamInputConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
-		// Stable(). TODO
+		Stable().
 		Categories("Services").
 		Version("3.46.0").
 		Summary("Reads messages from NATS JetStream subjects.").

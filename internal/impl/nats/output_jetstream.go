@@ -15,7 +15,7 @@ import (
 
 func natsJetStreamOutputConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
-		// Stable(). TODO
+		Stable().
 		Categories("Services").
 		Version("3.46.0").
 		Summary("Write messages to a NATS JetStream subject.").
