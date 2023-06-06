@@ -31,7 +31,7 @@ This input adds the following metadata fields to each message:
 
 You can access these metadata fields using [function interpolation](/docs/configuration/interpolation#bloblang-queries).
 
-` + auth.Description()).
+` + ConnectionNameDescription() + auth.Description()).
 		Field(service.NewStringListField("urls").
 			Description("A list of URLs to connect to. If an item of the list contains commas it will be expanded into multiple URLs.").
 			Example([]string{"nats://127.0.0.1:4222"}).
@@ -70,6 +70,7 @@ func init() {
 }
 
 type natsReader struct {
+	label         string
 	urls          string
 	subject       string
 	queue         string
@@ -92,6 +93,7 @@ type natsReader struct {
 
 func newNATSReader(conf *service.ParsedConfig, mgr *service.Resources) (*natsReader, error) {
 	n := natsReader{
+		label:         mgr.Label(),
 		log:           mgr.Logger(),
 		fs:            mgr.FS(),
 		interruptChan: make(chan struct{}),
@@ -159,6 +161,7 @@ func (n *natsReader) Connect(ctx context.Context) error {
 		opts = append(opts, nats.Secure(n.tlsConf))
 	}
 
+	opts = append(opts, nats.Name(n.label))
 	opts = append(opts, authConfToOptions(n.authConf, n.fs)...)
 	opts = append(opts, errorHandlerOption(n.log))
 

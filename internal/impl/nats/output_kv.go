@@ -24,7 +24,7 @@ The field ` + "`key`" + ` supports
 [interpolation functions](/docs/configuration/interpolation#bloblang-queries), allowing
 you to create a unique key for each message.
 
-` + auth.Description()).
+` + ConnectionNameDescription() + auth.Description()).
 		Field(service.NewStringListField("urls").
 			Description("A list of URLs to connect to. If an item of the list contains commas it will be expanded into multiple URLs.").
 			Example([]string{"nats://127.0.0.1:4222"}).
@@ -63,6 +63,7 @@ func init() {
 //------------------------------------------------------------------------------
 
 type kvOutput struct {
+	label  string
 	urls   string
 	bucket string
 	key    *service.InterpolatedString
@@ -83,6 +84,7 @@ type kvOutput struct {
 
 func newKVOutput(conf *service.ParsedConfig, mgr *service.Resources) (*kvOutput, error) {
 	kv := kvOutput{
+		label:   mgr.Label(),
 		log:     mgr.Logger(),
 		fs:      mgr.FS(),
 		shutSig: shutdown.NewSignaller(),
@@ -143,6 +145,7 @@ func (kv *kvOutput) Connect(ctx context.Context) error {
 	if kv.tlsConf != nil {
 		opts = append(opts, nats.Secure(kv.tlsConf))
 	}
+	opts = append(opts, nats.Name(kv.label))
 	opts = append(opts, authConfToOptions(kv.authConf, kv.fs)...)
 	if natsConn, err = nats.Connect(kv.urls, opts...); err != nil {
 		return err

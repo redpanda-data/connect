@@ -33,7 +33,7 @@ This input adds the following metadata fields to each message:
 - nats_kv_created
 ` + "```" + `
 
-` + auth.Description()).
+` + ConnectionNameDescription() + auth.Description()).
 		Field(service.NewStringListField("urls").
 			Description("A list of URLs to connect to. If an item of the list contains commas it will be expanded into multiple URLs.").
 			Example([]string{"nats://127.0.0.1:4222"}).
@@ -75,6 +75,7 @@ func init() {
 }
 
 type kvReader struct {
+	label          string
 	urls           string
 	bucket         string
 	key            string
@@ -96,6 +97,7 @@ type kvReader struct {
 
 func newKVReader(conf *service.ParsedConfig, mgr *service.Resources) (*kvReader, error) {
 	r := &kvReader{
+		label:   mgr.Label(),
 		log:     mgr.Logger(),
 		fs:      mgr.FS(),
 		shutSig: shutdown.NewSignaller(),
@@ -167,6 +169,7 @@ func (r *kvReader) Connect(ctx context.Context) error {
 	if r.tlsConf != nil {
 		opts = append(opts, nats.Secure(r.tlsConf))
 	}
+	opts = append(opts, nats.Name(r.label))
 	opts = append(opts, authConfToOptions(r.authConf, r.fs)...)
 	if r.natsConn, err = nats.Connect(r.urls, opts...); err != nil {
 		return err

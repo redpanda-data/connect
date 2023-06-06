@@ -9,7 +9,7 @@ import (
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
-func TestTestInputKVParse(t *testing.T) {
+func TestInputKVParse(t *testing.T) {
 	spec := natsKVInputConfig()
 	env := service.NewEnvironment()
 
@@ -61,7 +61,7 @@ auth:
 		conf, err := spec.ParseYAML(inputConfig, env)
 		require.NoError(t, err)
 
-		_, err = newJetStreamReaderFromConfig(conf, nil, nil)
+		_, err = newJetStreamReaderFromConfig(conf, service.MockResources())
 		require.Error(t, err)
 	})
 
@@ -80,7 +80,7 @@ auth:
 		conf, err := spec.ParseYAML(inputConfig, env)
 		require.NoError(t, err)
 
-		_, err = newJetStreamReaderFromConfig(conf, nil, nil)
+		_, err = newJetStreamReaderFromConfig(conf, service.MockResources())
 		require.Error(t, err)
 	})
 }

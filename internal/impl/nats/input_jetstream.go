@@ -41,7 +41,7 @@ This input adds the following metadata fields to each message:
 You can access these metadata fields using
 [function interpolation](/docs/configuration/interpolation#bloblang-queries).
 
-` + auth.Description()).
+` + ConnectionNameDescription() + auth.Description()).
 		Field(service.NewStringListField("urls").
 			Description("A list of URLs to connect to. If an item of the list contains commas it will be expanded into multiple URLs.").
 			Example([]string{"nats://127.0.0.1:4222"}).
@@ -86,7 +86,7 @@ func init() {
 	err := service.RegisterInput(
 		"nats_jetstream", natsJetStreamInputConfig(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Input, error) {
-			return newJetStreamReaderFromConfig(conf, mgr.Logger(), mgr.FS())
+			return newJetStreamReaderFromConfig(conf, mgr)
 		})
 	if err != nil {
 		panic(err)
@@ -96,6 +96,7 @@ func init() {
 //------------------------------------------------------------------------------
 
 type jetStreamReader struct {
+	label         string
 	urls          string
 	deliverOpt    nats.SubOpt
 	subject       string
@@ -119,10 +120,11 @@ type jetStreamReader struct {
 	shutSig *shutdown.Signaller
 }
 
-func newJetStreamReaderFromConfig(conf *service.ParsedConfig, log *service.Logger, fs *service.FS) (*jetStreamReader, error) {
+func newJetStreamReaderFromConfig(conf *service.ParsedConfig, mgr *service.Resources) (*jetStreamReader, error) {
 	j := jetStreamReader{
-		log:     log,
-		fs:      fs,
+		label:   mgr.Label(),
+		log:     mgr.Logger(),
+		fs:      mgr.FS(),
 		shutSig: shutdown.NewSignaller(),
 	}
 
@@ -240,6 +242,7 @@ func (j *jetStreamReader) Connect(ctx context.Context) error {
 	if j.tlsConf != nil {
 		opts = append(opts, nats.Secure(j.tlsConf))
 	}
+	opts = append(opts, nats.Name(j.label))
 	opts = append(opts, authConfToOptions(j.authConf, j.fs)...)
 	opts = append(opts, errorHandlerOption(j.log))
 	if natsConn, err = nats.Connect(j.urls, opts...); err != nil {

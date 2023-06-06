@@ -27,7 +27,7 @@ auth:
 		conf, err := spec.ParseYAML(inputConfig, env)
 		require.NoError(t, err)
 
-		e, err := newJetStreamReaderFromConfig(conf, nil, nil)
+		e, err := newJetStreamReaderFromConfig(conf, service.MockResources())
 		require.NoError(t, err)
 
 		assert.Equal(t, "url1,url2", e.urls)
@@ -49,7 +49,7 @@ auth:
 		conf, err := spec.ParseYAML(inputConfig, env)
 		require.NoError(t, err)
 
-		_, err = newJetStreamReaderFromConfig(conf, nil, nil)
+		_, err = newJetStreamReaderFromConfig(conf, service.MockResources())
 		require.Error(t, err)
 	})
 
@@ -64,7 +64,7 @@ auth:
 		conf, err := spec.ParseYAML(inputConfig, env)
 		require.NoError(t, err)
 
-		_, err = newJetStreamReaderFromConfig(conf, nil, nil)
+		_, err = newJetStreamReaderFromConfig(conf, service.MockResources())
 		require.Error(t, err)
 	})
 }

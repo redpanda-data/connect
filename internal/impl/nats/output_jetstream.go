@@ -19,7 +19,7 @@ func natsJetStreamOutputConfig() *service.ConfigSpec {
 		Categories("Services").
 		Version("3.46.0").
 		Summary("Write messages to a NATS JetStream subject.").
-		Description(auth.Description()).
+		Description(ConnectionNameDescription() + auth.Description()).
 		Field(service.NewStringListField("urls").
 			Description("A list of URLs to connect to. If an item of the list contains commas it will be expanded into multiple URLs.").
 			Example([]string{"nats://127.0.0.1:4222"}).
@@ -51,7 +51,7 @@ func init() {
 			if err != nil {
 				return nil, 0, err
 			}
-			w, err := newJetStreamWriterFromConfig(conf, mgr.Logger(), mgr.FS())
+			w, err := newJetStreamWriterFromConfig(conf, mgr)
 			return w, maxInFlight, err
 		})
 	if err != nil {
@@ -62,6 +62,7 @@ func init() {
 //------------------------------------------------------------------------------
 
 type jetStreamOutput struct {
+	label         string
 	urls          string
 	subjectStrRaw string
 	subjectStr    *service.InterpolatedString
@@ -79,10 +80,11 @@ type jetStreamOutput struct {
 	shutSig *shutdown.Signaller
 }
 
-func newJetStreamWriterFromConfig(conf *service.ParsedConfig, log *service.Logger, fs *service.FS) (*jetStreamOutput, error) {
+func newJetStreamWriterFromConfig(conf *service.ParsedConfig, mgr *service.Resources) (*jetStreamOutput, error) {
 	j := jetStreamOutput{
-		log:     log,
-		fs:      fs,
+		label:   mgr.Label(),
+		log:     mgr.Logger(),
+		fs:      mgr.FS(),
 		shutSig: shutdown.NewSignaller(),
 	}
 
@@ -142,6 +144,7 @@ func (j *jetStreamOutput) Connect(ctx context.Context) error {
 	if j.tlsConf != nil {
 		opts = append(opts, nats.Secure(j.tlsConf))
 	}
+	opts = append(opts, nats.Name(j.label))
 	opts = append(opts, authConfToOptions(j.authConf, j.fs)...)
 	opts = append(opts, errorHandlerOption(j.log))
 	if natsConn, err = nats.Connect(j.urls, opts...); err != nil {
