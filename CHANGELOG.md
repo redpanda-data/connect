@@ -10,6 +10,7 @@ All notable changes to this project will be documented in this file.
 - The `dynamic` input and output have a new endpoint `/input/{id}/uptime` and `/output/{id}/uptime` respectively for obtaining the uptime of a given input/output.
 - Field `wait_time_seconds` added to the `aws_sqs` input.
 - Field `timeout` added to the `gcp_cloud_storage` output.
+- All NATS components now set the name of each connection to the component label when specified.
 
 ### Fixed
 
