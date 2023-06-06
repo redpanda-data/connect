@@ -81,7 +81,7 @@ output:
       enable_renegotiation: false
       root_cas: ""
       root_cas_file: ""
-      client_certs: [] # No default (required)
+      client_certs: []
     sasl: [] # No default (optional)
 ```
 
@@ -416,6 +416,7 @@ A list of client certificates to use. For each certificate either the fields `ce
 
 
 Type: `array`  
+Default: `[]`  
 
 ```yml
 # Examples

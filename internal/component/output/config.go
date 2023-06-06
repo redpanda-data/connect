@@ -32,7 +32,6 @@ type Config struct {
 	MongoDB           MongoDBConfig           `json:"mongodb" yaml:"mongodb"`
 	MQTT              MQTTConfig              `json:"mqtt" yaml:"mqtt"`
 	Nanomsg           NanomsgConfig           `json:"nanomsg" yaml:"nanomsg"`
-	NATSStream        NATSStreamConfig        `json:"nats_stream" yaml:"nats_stream"`
 	NSQ               NSQConfig               `json:"nsq" yaml:"nsq"`
 	Plugin            any                     `json:"plugin,omitempty" yaml:"plugin,omitempty"`
 	RedisHash         RedisHashConfig         `json:"redis_hash" yaml:"redis_hash"`
@@ -77,7 +76,6 @@ func NewConfig() Config {
 		MQTT:              NewMQTTConfig(),
 		MongoDB:           NewMongoDBConfig(),
 		Nanomsg:           NewNanomsgConfig(),
-		NATSStream:        NewNATSStreamConfig(),
 		NSQ:               NewNSQConfig(),
 		Plugin:            nil,
 		RedisHash:         NewRedisHashConfig(),

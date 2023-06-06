@@ -50,7 +50,7 @@ redis:
     enable_renegotiation: false
     root_cas: ""
     root_cas_file: ""
-    client_certs: [] # No default (required)
+    client_certs: []
   command: scard # No default (optional)
   args_mapping: root = [ this.key ] # No default (optional)
   retries: 3
@@ -245,6 +245,7 @@ A list of client certificates to use. For each certificate either the fields `ce
 
 
 Type: `array`  
+Default: `[]`  
 
 ```yml
 # Examples

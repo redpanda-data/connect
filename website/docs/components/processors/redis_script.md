@@ -55,7 +55,7 @@ redis_script:
     enable_renegotiation: false
     root_cas: ""
     root_cas_file: ""
-    client_certs: [] # No default (required)
+    client_certs: []
   script: return redis.call('set', KEYS[1], ARGV[1]) # No default (required)
   args_mapping: root = [ this.key ] # No default (required)
   keys_mapping: root = [ this.key ] # No default (required)
@@ -226,6 +226,7 @@ A list of client certificates to use. For each certificate either the fields `ce
 
 
 Type: `array`  
+Default: `[]`  
 
 ```yml
 # Examples

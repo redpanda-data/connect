@@ -29,8 +29,8 @@ Subscribe to a NATS Stream subject. Joining a queue is optional and allows multi
 input:
   label: ""
   nats_stream:
-    urls: []
-    cluster_id: ""
+    urls: [] # No default (required)
+    cluster_id: "" # No default (required)
     client_id: ""
     queue: ""
     subject: ""
@@ -46,8 +46,8 @@ input:
 input:
   label: ""
   nats_stream:
-    urls: []
-    cluster_id: ""
+    urls: [] # No default (required)
+    cluster_id: "" # No default (required)
     client_id: ""
     queue: ""
     subject: ""
@@ -64,10 +64,10 @@ input:
       root_cas_file: ""
       client_certs: []
     auth:
-      nkey_file: ""
-      user_credentials_file: ""
-      user_jwt: ""
-      user_nkey_seed: ""
+      nkey_file: ./seed.nk # No default (optional)
+      user_credentials_file: ./user.creds # No default (optional)
+      user_jwt: "" # No default (optional)
+      user_nkey_seed: "" # No default (optional)
 ```
 
 </TabItem>
@@ -126,7 +126,6 @@ A list of URLs to connect to. If an item of the list contains commas it will be 
 
 
 Type: `array`  
-Default: `[]`  
 
 ```yml
 # Examples
@@ -144,7 +143,6 @@ The ID of the cluster to consume from.
 
 
 Type: `string`  
-Default: `""`  
 
 ### `client_id`
 
@@ -363,7 +361,6 @@ An optional file containing a NKey seed.
 
 
 Type: `string`  
-Default: `""`  
 
 ```yml
 # Examples
@@ -377,7 +374,6 @@ An optional file containing user credentials which consist of an user JWT and co
 
 
 Type: `string`  
-Default: `""`  
 
 ```yml
 # Examples
@@ -394,7 +390,6 @@ This field contains sensitive information that usually shouldn't be added to a c
 
 
 Type: `string`  
-Default: `""`  
 
 ### `auth.user_nkey_seed`
 
@@ -405,6 +400,5 @@ This field contains sensitive information that usually shouldn't be added to a c
 
 
 Type: `string`  
-Default: `""`  
 
 

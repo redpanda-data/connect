@@ -47,7 +47,7 @@ redis:
     enable_renegotiation: false
     root_cas: ""
     root_cas_file: ""
-    client_certs: [] # No default (required)
+    client_certs: []
   prefix: "" # No default (optional)
   default_ttl: "" # No default (optional)
   retries:
@@ -183,6 +183,7 @@ A list of client certificates to use. For each certificate either the fields `ce
 
 
 Type: `array`  
+Default: `[]`  
 
 ```yml
 # Examples
