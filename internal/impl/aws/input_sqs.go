@@ -168,7 +168,9 @@ func (a *awsSQSReader) Connect(ctx context.Context) error {
 
 	a.sqs = sqs.New(a.session)
 
-	attributes, err := a.sqs.GetQueueAttributes(&sqs.GetQueueAttributesInput{})
+	attributes, err := a.sqs.GetQueueAttributes(&sqs.GetQueueAttributesInput{
+		QueueUrl: aws.String(a.conf.URL),
+	})
 	if err != nil {
 		return err
 	}
