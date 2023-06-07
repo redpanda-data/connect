@@ -150,6 +150,8 @@ func newAWSSQSReader(conf sqsiConfig, sess *session.Session, log *service.Logger
 		messagesChan:     make(chan *sqs.Message),
 		ackMessagesChan:  make(chan sqsMessageHandle),
 		nackMessagesChan: make(chan sqsMessageHandle),
+		addInflightChan:  make(chan sqsMessageHandle),
+		delInflightChan:  make(chan sqsMessageHandle),
 		closeSignal:      shutdown.NewSignaller(),
 	}, nil
 }
