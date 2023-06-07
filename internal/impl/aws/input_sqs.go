@@ -2,6 +2,7 @@ package aws
 
 import (
 	"context"
+	"strconv"
 	"sync"
 	"time"
 
@@ -132,6 +133,8 @@ type awsSQSReader struct {
 	session *session.Session
 	sqs     *sqs.SQS
 
+	queueVisibilityTimeoutSeconds int
+
 	messagesChan     chan *sqs.Message
 	ackMessagesChan  chan sqsMessageHandle
 	nackMessagesChan chan sqsMessageHandle
@@ -164,6 +167,16 @@ func (a *awsSQSReader) Connect(ctx context.Context) error {
 	}
 
 	a.sqs = sqs.New(a.session)
+
+	attributes, err := a.sqs.GetQueueAttributes(&sqs.GetQueueAttributesInput{})
+	if err != nil {
+		return err
+	}
+
+	a.queueVisibilityTimeoutSeconds, err = strconv.Atoi(*attributes.Attributes["VisibilityTimeout"])
+	if err != nil {
+		return err
+	}
 
 	var wg sync.WaitGroup
 	wg.Add(3)
@@ -334,7 +347,7 @@ func (a *awsSQSReader) updateVisibilityLoop(wg *sync.WaitGroup) {
 	updateMsgs := func() {
 		ctx, done := a.closeSignal.CloseNowCtx(context.Background())
 		defer done()
-		if err := a.updateVisibilityMessages(ctx, 30, inflightMsgs...); err != nil {
+		if err := a.updateVisibilityMessages(ctx, a.queueVisibilityTimeoutSeconds, inflightMsgs...); err != nil {
 			a.log.Errorf("Failed to update messages visibility timeout: %v", err)
 		}
 	}
