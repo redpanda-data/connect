@@ -17,10 +17,7 @@ import TabItem from '@theme/TabItem';
 :::caution BETA
 This component is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with the component is found.
 :::
-
-Sends message parts as objects to an Azure Blob Storage Account container. Each
-object is uploaded with the filename specified with the `container`
-field.
+Sends message parts as objects to an Azure Blob Storage Account container. Each object is uploaded with the filename specified with the `container` field.
 
 Introduced in version 3.36.0.
 
@@ -41,7 +38,7 @@ output:
     storage_access_key: ""
     storage_sas_token: ""
     storage_connection_string: ""
-    container: ""
+    container: messages-${!timestamp("2006")} # No default (required)
     path: ${!count("files")}-${!timestamp_unix_nano()}.txt
     max_in_flight: 64
 ```
@@ -58,10 +55,10 @@ output:
     storage_access_key: ""
     storage_sas_token: ""
     storage_connection_string: ""
-    public_access_level: PRIVATE
-    container: ""
+    container: messages-${!timestamp("2006")} # No default (required)
     path: ${!count("files")}-${!timestamp_unix_nano()}.txt
     blob_type: BLOCK
+    public_access_level: PRIVATE
     max_in_flight: 64
 ```
 
@@ -93,7 +90,7 @@ message batches) with the field `max_in_flight`.
 
 ### `storage_account`
 
-The storage account to upload messages to. This field is ignored if `storage_connection_string` is set.
+The storage account to access. This field is ignored if `storage_connection_string` is set.
 
 
 Type: `string`  
@@ -109,29 +106,19 @@ Default: `""`
 
 ### `storage_sas_token`
 
-The storage account SAS token. This field is ignored if `storage_connection_string` or `storage_access_key` / `storage_sas_token` are set.
+The storage account SAS token. This field is ignored if `storage_connection_string` or `storage_access_key` are set.
 
 
 Type: `string`  
 Default: `""`  
-Requires version 3.38.0 or newer  
 
 ### `storage_connection_string`
 
-A storage account connection string. This field is required if `storage_account` and `storage_access_key` are not set.
+A storage account connection string. This field is required if `storage_account` and `storage_access_key` / `storage_sas_token` are not set.
 
 
 Type: `string`  
 Default: `""`  
-
-### `public_access_level`
-
-The container's public access level. The default value is `PRIVATE`.
-
-
-Type: `string`  
-Default: `"PRIVATE"`  
-Options: `PRIVATE`, `BLOB`, `CONTAINER`.
 
 ### `container`
 
@@ -140,7 +127,6 @@ This field supports [interpolation functions](/docs/configuration/interpolation#
 
 
 Type: `string`  
-Default: `""`  
 
 ```yml
 # Examples
@@ -176,6 +162,16 @@ This field supports [interpolation functions](/docs/configuration/interpolation#
 Type: `string`  
 Default: `"BLOCK"`  
 Options: `BLOCK`, `APPEND`.
+
+### `public_access_level`
+
+The container's public access level. The default value is `PRIVATE`.
+This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
+
+
+Type: `string`  
+Default: `"PRIVATE"`  
+Options: `PRIVATE`, `BLOB`, `CONTAINER`.
 
 ### `max_in_flight`
 

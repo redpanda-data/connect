@@ -11,7 +11,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/benthosdev/benthos/v4/internal/impl/azure/shared"
 	"github.com/benthosdev/benthos/v4/internal/integration"
 	_ "github.com/benthosdev/benthos/v4/public/components/pure"
 )
@@ -40,7 +39,7 @@ func TestIntegrationAzure(t *testing.T) {
 
 	_ = resource.Expire(900)
 
-	connString := shared.GetEmulatorConnectionString(resource.GetPort("10000/tcp"), resource.GetPort("10001/tcp"), resource.GetPort("10002/tcp"))
+	connString := getEmulatorConnectionString(resource.GetPort("10000/tcp"), resource.GetPort("10001/tcp"), resource.GetPort("10002/tcp"))
 
 	// Wait for Azurite to start up
 	err = pool.Retry(func() error {

@@ -11,35 +11,31 @@ import (
 // Deprecated: Do not add new components here. Instead, use the public plugin
 // APIs. Examples can be found in: ./internal/impl.
 type Config struct {
-	Label             string                  `json:"label" yaml:"label"`
-	Type              string                  `json:"type" yaml:"type"`
-	AzureBlobStorage  AzureBlobStorageConfig  `json:"azure_blob_storage" yaml:"azure_blob_storage"`
-	AzureQueueStorage AzureQueueStorageConfig `json:"azure_queue_storage" yaml:"azure_queue_storage"`
-	AzureTableStorage AzureTableStorageConfig `json:"azure_table_storage" yaml:"azure_table_storage"`
-	Broker            BrokerConfig            `json:"broker" yaml:"broker"`
-	Dynamic           DynamicConfig           `json:"dynamic" yaml:"dynamic"`
-	File              FileConfig              `json:"file" yaml:"file"`
-	Generate          GenerateConfig          `json:"generate" yaml:"generate"`
-	HDFS              HDFSConfig              `json:"hdfs" yaml:"hdfs"`
-	HTTPServer        HTTPServerConfig        `json:"http_server" yaml:"http_server"`
-	Inproc            InprocConfig            `json:"inproc" yaml:"inproc"`
-	Kafka             KafkaConfig             `json:"kafka" yaml:"kafka"`
-	MQTT              MQTTConfig              `json:"mqtt" yaml:"mqtt"`
-	Nanomsg           NanomsgConfig           `json:"nanomsg" yaml:"nanomsg"`
-	NATSStream        NATSStreamConfig        `json:"nats_stream" yaml:"nats_stream"`
-	NSQ               NSQConfig               `json:"nsq" yaml:"nsq"`
-	Plugin            any                     `json:"plugin,omitempty" yaml:"plugin,omitempty"`
-	ReadUntil         ReadUntilConfig         `json:"read_until" yaml:"read_until"`
-	RedisPubSub       RedisPubSubConfig       `json:"redis_pubsub" yaml:"redis_pubsub"`
-	RedisStreams      RedisStreamsConfig      `json:"redis_streams" yaml:"redis_streams"`
-	Resource          string                  `json:"resource" yaml:"resource"`
-	Sequence          SequenceConfig          `json:"sequence" yaml:"sequence"`
-	SFTP              SFTPConfig              `json:"sftp" yaml:"sftp"`
-	Socket            SocketConfig            `json:"socket" yaml:"socket"`
-	SocketServer      SocketServerConfig      `json:"socket_server" yaml:"socket_server"`
-	STDIN             STDINConfig             `json:"stdin" yaml:"stdin"`
-	Subprocess        SubprocessConfig        `json:"subprocess" yaml:"subprocess"`
-	Processors        []processor.Config      `json:"processors" yaml:"processors"`
+	Label        string             `json:"label" yaml:"label"`
+	Type         string             `json:"type" yaml:"type"`
+	Broker       BrokerConfig       `json:"broker" yaml:"broker"`
+	Dynamic      DynamicConfig      `json:"dynamic" yaml:"dynamic"`
+	File         FileConfig         `json:"file" yaml:"file"`
+	Generate     GenerateConfig     `json:"generate" yaml:"generate"`
+	HDFS         HDFSConfig         `json:"hdfs" yaml:"hdfs"`
+	HTTPServer   HTTPServerConfig   `json:"http_server" yaml:"http_server"`
+	Inproc       InprocConfig       `json:"inproc" yaml:"inproc"`
+	Kafka        KafkaConfig        `json:"kafka" yaml:"kafka"`
+	MQTT         MQTTConfig         `json:"mqtt" yaml:"mqtt"`
+	Nanomsg      NanomsgConfig      `json:"nanomsg" yaml:"nanomsg"`
+	NSQ          NSQConfig          `json:"nsq" yaml:"nsq"`
+	Plugin       any                `json:"plugin,omitempty" yaml:"plugin,omitempty"`
+	ReadUntil    ReadUntilConfig    `json:"read_until" yaml:"read_until"`
+	RedisPubSub  RedisPubSubConfig  `json:"redis_pubsub" yaml:"redis_pubsub"`
+	RedisStreams RedisStreamsConfig `json:"redis_streams" yaml:"redis_streams"`
+	Resource     string             `json:"resource" yaml:"resource"`
+	Sequence     SequenceConfig     `json:"sequence" yaml:"sequence"`
+	SFTP         SFTPConfig         `json:"sftp" yaml:"sftp"`
+	Socket       SocketConfig       `json:"socket" yaml:"socket"`
+	SocketServer SocketServerConfig `json:"socket_server" yaml:"socket_server"`
+	STDIN        STDINConfig        `json:"stdin" yaml:"stdin"`
+	Subprocess   SubprocessConfig   `json:"subprocess" yaml:"subprocess"`
+	Processors   []processor.Config `json:"processors" yaml:"processors"`
 }
 
 // NewConfig returns a configuration struct fully populated with default values.
@@ -47,34 +43,31 @@ type Config struct {
 // APIs. Examples can be found in: ./internal/impl.
 func NewConfig() Config {
 	return Config{
-		Label:             "",
-		Type:              "stdin",
-		AzureBlobStorage:  NewAzureBlobStorageConfig(),
-		AzureQueueStorage: NewAzureQueueStorageConfig(),
-		Broker:            NewBrokerConfig(),
-		Dynamic:           NewDynamicConfig(),
-		File:              NewFileConfig(),
-		Generate:          NewGenerateConfig(),
-		HDFS:              NewHDFSConfig(),
-		HTTPServer:        NewHTTPServerConfig(),
-		Inproc:            NewInprocConfig(),
-		Kafka:             NewKafkaConfig(),
-		MQTT:              NewMQTTConfig(),
-		Nanomsg:           NewNanomsgConfig(),
-		NATSStream:        NewNATSStreamConfig(),
-		NSQ:               NewNSQConfig(),
-		Plugin:            nil,
-		ReadUntil:         NewReadUntilConfig(),
-		RedisPubSub:       NewRedisPubSubConfig(),
-		RedisStreams:      NewRedisStreamsConfig(),
-		Resource:          "",
-		Sequence:          NewSequenceConfig(),
-		SFTP:              NewSFTPConfig(),
-		Socket:            NewSocketConfig(),
-		SocketServer:      NewSocketServerConfig(),
-		STDIN:             NewSTDINConfig(),
-		Subprocess:        NewSubprocessConfig(),
-		Processors:        []processor.Config{},
+		Label:        "",
+		Type:         "stdin",
+		Broker:       NewBrokerConfig(),
+		Dynamic:      NewDynamicConfig(),
+		File:         NewFileConfig(),
+		Generate:     NewGenerateConfig(),
+		HDFS:         NewHDFSConfig(),
+		HTTPServer:   NewHTTPServerConfig(),
+		Inproc:       NewInprocConfig(),
+		Kafka:        NewKafkaConfig(),
+		MQTT:         NewMQTTConfig(),
+		Nanomsg:      NewNanomsgConfig(),
+		NSQ:          NewNSQConfig(),
+		Plugin:       nil,
+		ReadUntil:    NewReadUntilConfig(),
+		RedisPubSub:  NewRedisPubSubConfig(),
+		RedisStreams: NewRedisStreamsConfig(),
+		Resource:     "",
+		Sequence:     NewSequenceConfig(),
+		SFTP:         NewSFTPConfig(),
+		Socket:       NewSocketConfig(),
+		SocketServer: NewSocketServerConfig(),
+		STDIN:        NewSTDINConfig(),
+		Subprocess:   NewSubprocessConfig(),
+		Processors:   []processor.Config{},
 	}
 }
 

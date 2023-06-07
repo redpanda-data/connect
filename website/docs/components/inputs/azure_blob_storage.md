@@ -17,9 +17,7 @@ import TabItem from '@theme/TabItem';
 :::caution BETA
 This component is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with the component is found.
 :::
-
-Downloads objects within an Azure Blob Storage container, optionally filtered by
-a prefix.
+Downloads objects within an Azure Blob Storage container, optionally filtered by a prefix.
 
 Introduced in version 3.36.0.
 
@@ -40,7 +38,7 @@ input:
     storage_access_key: ""
     storage_sas_token: ""
     storage_connection_string: ""
-    container: ""
+    container: "" # No default (required)
     prefix: ""
     codec: all-bytes
 ```
@@ -57,7 +55,7 @@ input:
     storage_access_key: ""
     storage_sas_token: ""
     storage_connection_string: ""
-    container: ""
+    container: "" # No default (required)
     prefix: ""
     codec: all-bytes
     delete_objects: false
@@ -101,7 +99,7 @@ You can access these metadata fields using [function interpolation](/docs/config
 
 ### `storage_account`
 
-The storage account to download blobs from. This field is ignored if `storage_connection_string` is set.
+The storage account to access. This field is ignored if `storage_connection_string` is set.
 
 
 Type: `string`  
@@ -122,7 +120,6 @@ The storage account SAS token. This field is ignored if `storage_connection_stri
 
 Type: `string`  
 Default: `""`  
-Requires version 3.38.0 or newer  
 
 ### `storage_connection_string`
 
@@ -138,7 +135,6 @@ The name of the container from which to download blobs.
 
 
 Type: `string`  
-Default: `""`  
 
 ### `prefix`
 
