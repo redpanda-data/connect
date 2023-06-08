@@ -169,7 +169,8 @@ func (a *awsSQSReader) Connect(ctx context.Context) error {
 	a.sqs = sqs.New(a.session)
 
 	attributes, err := a.sqs.GetQueueAttributes(&sqs.GetQueueAttributesInput{
-		QueueUrl: aws.String(a.conf.URL),
+		QueueUrl:       aws.String(a.conf.URL),
+		AttributeNames: []*string{aws.String("All")},
 	})
 	if err != nil {
 		return err
@@ -369,7 +370,9 @@ func (a *awsSQSReader) updateVisibilityLoop(wg *sync.WaitGroup) {
 				}
 			}
 		case <-updateTimer.C:
-			updateMsgs()
+			if len(inflightMsgs) > 0 {
+				updateMsgs()
+			}
 		case <-a.closeSignal.CloseAtLeisureChan():
 			return
 		}
