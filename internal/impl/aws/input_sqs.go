@@ -348,6 +348,9 @@ func (a *awsSQSReader) updateVisibilityLoop(wg *sync.WaitGroup) {
 	var inflightMsgs []sqsMessageHandle
 
 	updateMsgs := func() {
+		if len(inflightMsgs) == 0 {
+			return
+		}
 		ctx, done := a.closeSignal.CloseNowCtx(context.Background())
 		defer done()
 		if err := a.updateVisibilityMessages(ctx, a.queueVisibilityTimeoutSeconds, inflightMsgs...); err != nil {
@@ -370,9 +373,7 @@ func (a *awsSQSReader) updateVisibilityLoop(wg *sync.WaitGroup) {
 				}
 			}
 		case <-updateTimer.C:
-			if len(inflightMsgs) > 0 {
-				updateMsgs()
-			}
+			updateMsgs()
 		case <-a.closeSignal.CloseAtLeisureChan():
 			return
 		}
