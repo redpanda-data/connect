@@ -30,7 +30,6 @@ type Config struct {
 	JSONSchema   JSONSchemaConfig   `json:"json_schema" yaml:"json_schema"`
 	Log          LogConfig          `json:"log" yaml:"log"`
 	Metric       MetricConfig       `json:"metric" yaml:"metric"`
-	MongoDB      MongoDBConfig      `json:"mongodb" yaml:"mongodb"`
 	Noop         struct{}           `json:"noop" yaml:"noop"`
 	Plugin       any                `json:"plugin,omitempty" yaml:"plugin,omitempty"`
 	Parallel     ParallelConfig     `json:"parallel" yaml:"parallel"`
@@ -75,7 +74,6 @@ func NewConfig() Config {
 		JSONSchema:   NewJSONSchemaConfig(),
 		Log:          NewLogConfig(),
 		Metric:       NewMetricConfig(),
-		MongoDB:      NewMongoDBConfig(),
 		Noop:         struct{}{},
 		Plugin:       nil,
 		Parallel:     NewParallelConfig(),

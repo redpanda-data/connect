@@ -26,7 +26,6 @@ type Config struct {
 	HTTPServer    HTTPServerConfig    `json:"http_server" yaml:"http_server"`
 	Inproc        string              `json:"inproc" yaml:"inproc"`
 	Kafka         KafkaConfig         `json:"kafka" yaml:"kafka"`
-	MongoDB       MongoDBConfig       `json:"mongodb" yaml:"mongodb"`
 	MQTT          MQTTConfig          `json:"mqtt" yaml:"mqtt"`
 	Nanomsg       NanomsgConfig       `json:"nanomsg" yaml:"nanomsg"`
 	NSQ           NSQConfig           `json:"nsq" yaml:"nsq"`
@@ -68,7 +67,6 @@ func NewConfig() Config {
 		Inproc:        "",
 		Kafka:         NewKafkaConfig(),
 		MQTT:          NewMQTTConfig(),
-		MongoDB:       NewMongoDBConfig(),
 		Nanomsg:       NewNanomsgConfig(),
 		NSQ:           NewNSQConfig(),
 		Plugin:        nil,

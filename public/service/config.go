@@ -226,6 +226,13 @@ func (c *ConfigField) Example(e any) *ConfigField {
 	return c
 }
 
+// Examples adds a variadic list of example values to the field which will be
+// shown when printing documentation for the component config spec.
+func (c *ConfigField) Examples(e ...any) *ConfigField {
+	c.field.Examples = append(c.field.Examples, e...)
+	return c
+}
+
 // Version specifies the specific version at which this field was added to the
 // component.
 func (c *ConfigField) Version(v string) *ConfigField {

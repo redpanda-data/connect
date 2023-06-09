@@ -36,12 +36,12 @@ input:
   mongodb:
     url: mongodb://localhost:27017 # No default (required)
     database: "" # No default (required)
-    collection: "" # No default (required)
     username: ""
     password: ""
+    collection: "" # No default (required)
     query: |2 # No default (required)
-            root.from = {"$lte": timestamp_unix()}
-            root.to = {"$gte": timestamp_unix()}
+        root.from = {"$lte": timestamp_unix()}
+        root.to = {"$gte": timestamp_unix()}
 ```
 
 </TabItem>
@@ -54,14 +54,14 @@ input:
   mongodb:
     url: mongodb://localhost:27017 # No default (required)
     database: "" # No default (required)
-    collection: "" # No default (required)
     username: ""
     password: ""
+    collection: "" # No default (required)
     operation: find
     json_marshal_mode: canonical
     query: |2 # No default (required)
-            root.from = {"$lte": timestamp_unix()}
-            root.to = {"$gte": timestamp_unix()}
+        root.from = {"$lte": timestamp_unix()}
+        root.to = {"$gte": timestamp_unix()}
 ```
 
 </TabItem>
@@ -73,7 +73,7 @@ Once the rows from the query are exhausted this input shuts down, allowing the p
 
 ### `url`
 
-The URL of the target MongoDB DB.
+The URL of the target MongoDB server.
 
 
 Type: `string`  
@@ -91,13 +91,6 @@ The name of the target MongoDB database.
 
 Type: `string`  
 
-### `collection`
-
-The collection to select from.
-
-
-Type: `string`  
-
 ### `username`
 
 The username to connect to the database.
@@ -109,10 +102,20 @@ Default: `""`
 ### `password`
 
 The password to connect to the database.
+:::warning Secret
+This field contains sensitive information that usually shouldn't be added to a config directly, read our [secrets page for more info](/docs/configuration/secrets).
+:::
 
 
 Type: `string`  
 Default: `""`  
+
+### `collection`
+
+The collection to select from.
+
+
+Type: `string`  
 
 ### `operation`
 
@@ -150,8 +153,8 @@ Type: `string`
 # Examples
 
 query: |2
-        root.from = {"$lte": timestamp_unix()}
-        root.to = {"$gte": timestamp_unix()}
+    root.from = {"$lte": timestamp_unix()}
+    root.to = {"$gte": timestamp_unix()}
 ```
 
 

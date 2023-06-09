@@ -25,9 +25,9 @@ Introduced in version 3.43.0.
 label: ""
 mongodb:
   url: mongodb://localhost:27017 # No default (required)
+  database: "" # No default (required)
   username: ""
   password: ""
-  database: "" # No default (required)
   collection: "" # No default (required)
   key_field: "" # No default (required)
   value_field: "" # No default (required)
@@ -48,6 +48,13 @@ Type: `string`
 url: mongodb://localhost:27017
 ```
 
+### `database`
+
+The name of the target MongoDB database.
+
+
+Type: `string`  
+
 ### `username`
 
 The username to connect to the database.
@@ -66,13 +73,6 @@ This field contains sensitive information that usually shouldn't be added to a c
 
 Type: `string`  
 Default: `""`  
-
-### `database`
-
-The name of the target MongoDB database.
-
-
-Type: `string`  
 
 ### `collection`
 
