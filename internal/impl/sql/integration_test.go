@@ -897,7 +897,7 @@ func TestIntegrationOracle(t *testing.T) {
 	pool.MaxWait = 3 * time.Minute
 
 	resource, err := pool.RunWithOptions(&dockertest.RunOptions{
-		Repository:   "gvenzl/oracle-xe",
+		Repository:   "gvenzl/oracle-free",
 		Tag:          "slim-faststart",
 		ExposedPorts: []string{"1521/tcp"},
 		Env: []string{
@@ -926,7 +926,7 @@ func TestIntegrationOracle(t *testing.T) {
 		return name, err
 	}
 
-	dsn := fmt.Sprintf("oracle://system:testpass@localhost:%s/XE", resource.GetPort("1521/tcp"))
+	dsn := fmt.Sprintf("oracle://system:testpass@localhost:%s/FREEPDB1", resource.GetPort("1521/tcp"))
 	require.NoError(t, pool.Retry(func() error {
 		db, err = sql.Open("oracle", dsn)
 		if err != nil {
