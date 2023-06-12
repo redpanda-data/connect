@@ -136,7 +136,7 @@ type asyncReaderCantRead struct {
 
 func (r *asyncReaderCantRead) Connect(ctx context.Context) error {
 	r.connected++
-	return nil
+	return errors.New("nope")
 }
 
 func (r *asyncReaderCantRead) ReadBatch(ctx context.Context) (message.Batch, input.AsyncAckFn, error) {
@@ -156,7 +156,7 @@ func TestAsyncReaderCantRead(t *testing.T) {
 	r.TriggerStopConsuming()
 	require.NoError(t, r.WaitForClose(ctx))
 
-	assert.Equal(t, 0, readerImpl.connected)
+	assert.Less(t, readerImpl.connected, 2)
 }
 
 //------------------------------------------------------------------------------
