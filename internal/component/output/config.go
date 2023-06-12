@@ -30,10 +30,6 @@ type Config struct {
 	Nanomsg       NanomsgConfig       `json:"nanomsg" yaml:"nanomsg"`
 	NSQ           NSQConfig           `json:"nsq" yaml:"nsq"`
 	Plugin        any                 `json:"plugin,omitempty" yaml:"plugin,omitempty"`
-	RedisHash     RedisHashConfig     `json:"redis_hash" yaml:"redis_hash"`
-	RedisList     RedisListConfig     `json:"redis_list" yaml:"redis_list"`
-	RedisPubSub   RedisPubSubConfig   `json:"redis_pubsub" yaml:"redis_pubsub"`
-	RedisStreams  RedisStreamsConfig  `json:"redis_streams" yaml:"redis_streams"`
 	Reject        string              `json:"reject" yaml:"reject"`
 	Resource      string              `json:"resource" yaml:"resource"`
 	Retry         RetryConfig         `json:"retry" yaml:"retry"`
@@ -70,10 +66,6 @@ func NewConfig() Config {
 		Nanomsg:       NewNanomsgConfig(),
 		NSQ:           NewNSQConfig(),
 		Plugin:        nil,
-		RedisHash:     NewRedisHashConfig(),
-		RedisList:     NewRedisListConfig(),
-		RedisPubSub:   NewRedisPubSubConfig(),
-		RedisStreams:  NewRedisStreamsConfig(),
 		Reject:        "",
 		Resource:      "",
 		Retry:         NewRetryConfig(),
