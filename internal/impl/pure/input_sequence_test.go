@@ -387,14 +387,19 @@ func TestSequenceSad(t *testing.T) {
 	writeFiles(t, tmpDir, files)
 
 	conf := input.NewConfig()
-	conf.Type = "sequence"
-
-	for _, k := range []string{"f1", "f2", "f3"} {
-		inConf := input.NewConfig()
-		inConf.Type = "file"
-		inConf.File.Paths = []string{filepath.Join(tmpDir, k)}
-		conf.Sequence.Inputs = append(conf.Sequence.Inputs, inConf)
-	}
+	require.NoError(t, yaml.Unmarshal(fmt.Appendf(nil, `
+sequence:
+  inputs:
+    - file:
+        paths:
+          - "%v/f1"
+    - file:
+        paths:
+          - "%v/f2"
+    - file:
+        paths:
+          - "%v/f3"
+`, tmpDir, tmpDir, tmpDir), &conf))
 
 	rdr, err := mock.NewManager().NewInput(conf)
 	require.NoError(t, err)
@@ -460,12 +465,13 @@ func TestSequenceEarlyTermination(t *testing.T) {
 	})
 
 	conf := input.NewConfig()
-	conf.Type = "sequence"
-
-	inConf := input.NewConfig()
-	inConf.Type = "file"
-	inConf.File.Paths = []string{filepath.Join(tmpDir, "f1")}
-	conf.Sequence.Inputs = append(conf.Sequence.Inputs, inConf)
+	require.NoError(t, yaml.Unmarshal(fmt.Appendf(nil, `
+sequence:
+  inputs:
+    - file:
+        paths:
+          - "%v/f1"
+`, tmpDir), &conf))
 
 	rdr, err := mock.NewManager().NewInput(conf)
 	require.NoError(t, err)

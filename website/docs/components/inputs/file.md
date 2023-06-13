@@ -14,7 +14,6 @@ categories: ["Local"]
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-
 Consumes data from files on disk, emitting messages according to a chosen codec.
 
 
@@ -30,7 +29,7 @@ Consumes data from files on disk, emitting messages according to a chosen codec.
 input:
   label: ""
   file:
-    paths: []
+    paths: [] # No default (required)
     codec: lines
 ```
 
@@ -42,7 +41,7 @@ input:
 input:
   label: ""
   file:
-    paths: []
+    paths: [] # No default (required)
     codec: lines
     max_buffer: 1000000
     delete_on_finish: false
@@ -72,7 +71,6 @@ A list of paths to consume sequentially. Glob patterns are supported, including 
 
 
 Type: `array`  
-Default: `[]`  
 
 ### `codec`
 

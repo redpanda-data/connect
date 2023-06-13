@@ -15,7 +15,6 @@ type Config struct {
 	Type         string             `json:"type" yaml:"type"`
 	Broker       BrokerConfig       `json:"broker" yaml:"broker"`
 	Dynamic      DynamicConfig      `json:"dynamic" yaml:"dynamic"`
-	File         FileConfig         `json:"file" yaml:"file"`
 	Generate     GenerateConfig     `json:"generate" yaml:"generate"`
 	HDFS         HDFSConfig         `json:"hdfs" yaml:"hdfs"`
 	HTTPServer   HTTPServerConfig   `json:"http_server" yaml:"http_server"`
@@ -45,7 +44,6 @@ func NewConfig() Config {
 		Type:         "stdin",
 		Broker:       NewBrokerConfig(),
 		Dynamic:      NewDynamicConfig(),
-		File:         NewFileConfig(),
 		Generate:     NewGenerateConfig(),
 		HDFS:         NewHDFSConfig(),
 		HTTPServer:   NewHTTPServerConfig(),

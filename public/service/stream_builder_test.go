@@ -868,11 +868,7 @@ dynamic:
         foo:
             label: ""
             file:
-                paths:
-                    - aaa.txt
-                codec: lines
-                max_buffer: 1000000
-                delete_on_finish: false
+                paths: [aaa.txt]
     prefix: ""`,
 				},
 				{
@@ -880,11 +876,7 @@ dynamic:
 					name:    "file",
 					conf: `label: ""
 file:
-    paths:
-        - aaa.txt
-    codec: lines
-    max_buffer: 1000000
-    delete_on_finish: false`,
+    paths: [aaa.txt]`,
 				},
 				{
 					typeStr: "buffer",
