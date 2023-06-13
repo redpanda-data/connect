@@ -423,7 +423,7 @@ file_content: ./foo/bar.txt
 A map of metadata key/values to add to the input message.
 
 
-Type: map of `string`  
+Type: map of `unknown`  
 
 ### `tests[].input_batches`
 
