@@ -21,7 +21,6 @@ type Config struct {
 	Dynamic       DynamicConfig       `json:"dynamic" yaml:"dynamic"`
 	Elasticsearch ElasticsearchConfig `json:"elasticsearch" yaml:"elasticsearch"`
 	Fallback      TryConfig           `json:"fallback" yaml:"fallback"`
-	HDFS          HDFSConfig          `json:"hdfs" yaml:"hdfs"`
 	HTTPServer    HTTPServerConfig    `json:"http_server" yaml:"http_server"`
 	Inproc        string              `json:"inproc" yaml:"inproc"`
 	Kafka         KafkaConfig         `json:"kafka" yaml:"kafka"`
@@ -56,7 +55,6 @@ func NewConfig() Config {
 		Dynamic:       NewDynamicConfig(),
 		Elasticsearch: NewElasticsearchConfig(),
 		Fallback:      NewTryConfig(),
-		HDFS:          NewHDFSConfig(),
 		HTTPServer:    NewHTTPServerConfig(),
 		Inproc:        "",
 		Kafka:         NewKafkaConfig(),

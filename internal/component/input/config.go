@@ -16,7 +16,6 @@ type Config struct {
 	Broker       BrokerConfig       `json:"broker" yaml:"broker"`
 	Dynamic      DynamicConfig      `json:"dynamic" yaml:"dynamic"`
 	Generate     GenerateConfig     `json:"generate" yaml:"generate"`
-	HDFS         HDFSConfig         `json:"hdfs" yaml:"hdfs"`
 	HTTPServer   HTTPServerConfig   `json:"http_server" yaml:"http_server"`
 	Inproc       InprocConfig       `json:"inproc" yaml:"inproc"`
 	Kafka        KafkaConfig        `json:"kafka" yaml:"kafka"`
@@ -45,7 +44,6 @@ func NewConfig() Config {
 		Broker:       NewBrokerConfig(),
 		Dynamic:      NewDynamicConfig(),
 		Generate:     NewGenerateConfig(),
-		HDFS:         NewHDFSConfig(),
 		HTTPServer:   NewHTTPServerConfig(),
 		Inproc:       NewInprocConfig(),
 		Kafka:        NewKafkaConfig(),

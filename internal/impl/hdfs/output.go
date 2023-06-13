@@ -8,79 +8,83 @@ import (
 
 	"github.com/colinmarc/hdfs"
 
-	"github.com/benthosdev/benthos/v4/internal/batch/policy"
-	"github.com/benthosdev/benthos/v4/internal/bloblang/field"
-	"github.com/benthosdev/benthos/v4/internal/bundle"
-	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
-	"github.com/benthosdev/benthos/v4/internal/component/output/batcher"
-	"github.com/benthosdev/benthos/v4/internal/component/output/processors"
-	"github.com/benthosdev/benthos/v4/internal/docs"
-	"github.com/benthosdev/benthos/v4/internal/log"
-	"github.com/benthosdev/benthos/v4/internal/message"
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
+const (
+	oFieldHosts     = "hosts"
+	oFieldUser      = "user"
+	oFieldDirectory = "directory"
+	oFieldPath      = "path"
+	oFieldBatching  = "batching"
+)
+
+func outputSpec() *service.ConfigSpec {
+	return service.NewConfigSpec().
+		Stable().
+		Categories("Services").
+		Summary(`Sends message parts as files to a HDFS directory.`).
+		Description(output.Description(true, false, `Each file is written with the path specified with the 'path' field, in order to have a different path for each object you should use function interpolations described [here](/docs/configuration/interpolation#bloblang-queries).`)).
+		Fields(
+			service.NewStringListField(oFieldHosts).
+				Description("A list of target host addresses to connect to.").
+				Example("localhost:9000"),
+			service.NewStringField(oFieldUser).
+				Description("A user ID to connect as.").
+				Default(""),
+			service.NewInterpolatedStringField(oFieldDirectory).
+				Description("A directory to store message files within. If the directory does not exist it will be created."),
+			service.NewInterpolatedStringField(oFieldPath).
+				Description("The path to upload messages as, interpolation functions should be used in order to generate unique file paths.").
+				Default(`${!count("files")}-${!timestamp_unix_nano()}.txt`),
+			service.NewOutputMaxInFlightField(),
+			service.NewBatchPolicyField(oFieldBatching),
+		)
+
+}
+
 func init() {
-	err := bundle.AllOutputs.Add(processors.WrapConstructor(newHDFSOutput), docs.ComponentSpec{
-		Name:        "hdfs",
-		Summary:     `Sends message parts as files to a HDFS directory.`,
-		Description: output.Description(true, false, `Each file is written with the path specified with the 'path' field, in order to have a different path for each object you should use function interpolations described [here](/docs/configuration/interpolation#bloblang-queries).`),
-		Config: docs.FieldComponent().WithChildren(
-			docs.FieldString("hosts", "A list of hosts to connect to.", "localhost:9000").Array(),
-			docs.FieldString("user", "A user identifier."),
-			docs.FieldString("directory", "A directory to store message files within. If the directory does not exist it will be created."),
-			docs.FieldString(
-				"path", "The path to upload messages as, interpolation functions should be used in order to generate unique file paths.",
-				`${!count("files")}-${!timestamp_unix_nano()}.txt`,
-			).IsInterpolated(),
-			docs.FieldInt("max_in_flight", "The maximum number of parallel message batches to have in flight at any given time."),
-			policy.FieldSpec(),
-		).ChildDefaultAndTypesFromStruct(output.NewHDFSConfig()),
-		Categories: []string{
-			"Services",
-		},
-	})
+	err := service.RegisterBatchOutput(
+		"hdfs", outputSpec(),
+		func(conf *service.ParsedConfig, mgr *service.Resources) (out service.BatchOutput, pol service.BatchPolicy, mif int, err error) {
+			w := &hdfsWriter{
+				log: mgr.Logger(),
+			}
+			out = w
+			if w.hosts, err = conf.FieldStringList(oFieldHosts); err != nil {
+				return
+			}
+			if w.user, err = conf.FieldString(oFieldUser); err != nil {
+				return
+			}
+			if w.directory, err = conf.FieldInterpolatedString(oFieldDirectory); err != nil {
+				return
+			}
+			if w.path, err = conf.FieldInterpolatedString(oFieldPath); err != nil {
+				return
+			}
+			if pol, err = conf.FieldBatchPolicy(oFieldBatching); err != nil {
+				return
+			}
+			if mif, err = conf.FieldMaxInFlight(); err != nil {
+				return
+			}
+			return
+		})
 	if err != nil {
 		panic(err)
 	}
 }
 
-func newHDFSOutput(conf output.Config, mgr bundle.NewManagement) (output.Streamed, error) {
-	h, err := newHDFSWriter(conf.HDFS, mgr)
-	if err != nil {
-		return nil, err
-	}
-	w, err := output.NewAsyncWriter("hdfs", conf.HDFS.MaxInFlight, h, mgr)
-	if err != nil {
-		return nil, err
-	}
-	return batcher.NewFromConfig(conf.HDFS.Batching, output.OnlySinglePayloads(w), mgr)
-}
-
 type hdfsWriter struct {
-	conf      output.HDFSConfig
-	directory *field.Expression
-	path      *field.Expression
+	hosts     []string
+	user      string
+	directory *service.InterpolatedString
+	path      *service.InterpolatedString
 
 	client *hdfs.Client
-	log    log.Modular
-}
-
-func newHDFSWriter(conf output.HDFSConfig, mgr bundle.NewManagement) (*hdfsWriter, error) {
-	path, err := mgr.BloblEnvironment().NewField(conf.Path)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse path expression: %v", err)
-	}
-	directory, err := mgr.BloblEnvironment().NewField(conf.Directory)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse directory expression: %v", err)
-	}
-	return &hdfsWriter{
-		conf:      conf,
-		directory: directory,
-		path:      path,
-		log:       mgr.Logger(),
-	}, nil
+	log    *service.Logger
 }
 
 func (h *hdfsWriter) Connect(ctx context.Context) error {
@@ -89,8 +93,8 @@ func (h *hdfsWriter) Connect(ctx context.Context) error {
 	}
 
 	client, err := hdfs.NewClient(hdfs.ClientOptions{
-		Addresses: h.conf.Hosts,
-		User:      h.conf.User,
+		Addresses: h.hosts,
+		User:      h.user,
 	})
 	if err != nil {
 		return err
@@ -98,21 +102,21 @@ func (h *hdfsWriter) Connect(ctx context.Context) error {
 
 	h.client = client
 
-	h.log.Infof("Writing message parts as files to HDFS directory: %v\n", h.conf.Directory)
+	h.log.Infof("Writing message parts as files to HDFS directory: %v\n", h.directory)
 	return nil
 }
 
-func (h *hdfsWriter) WriteBatch(ctx context.Context, msg message.Batch) error {
+func (h *hdfsWriter) WriteBatch(ctx context.Context, batch service.MessageBatch) error {
 	if h.client == nil {
-		return component.ErrNotConnected
+		return service.ErrNotConnected
 	}
 
-	return output.IterateBatchedSend(msg, func(i int, p *message.Part) error {
-		path, err := h.path.String(i, msg)
+	return batch.WalkWithBatchedErrors(func(i int, m *service.Message) error {
+		path, err := batch.TryInterpolatedString(i, h.path)
 		if err != nil {
 			return fmt.Errorf("path interpolation error: %w", err)
 		}
-		directory, err := h.directory.String(i, msg)
+		directory, err := batch.TryInterpolatedString(i, h.directory)
 		if err != nil {
 			return fmt.Errorf("directory interpolation error: %w", err)
 		}
@@ -127,7 +131,12 @@ func (h *hdfsWriter) WriteBatch(ctx context.Context, msg message.Batch) error {
 			return err
 		}
 
-		if _, err := fw.Write(p.AsBytes()); err != nil {
+		mBytes, err := m.AsBytes()
+		if err != nil {
+			return err
+		}
+
+		if _, err := fw.Write(mBytes); err != nil {
 			return err
 		}
 		fw.Close()
