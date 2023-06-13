@@ -11,12 +11,12 @@ import (
 	"github.com/aws/aws-sdk-go/aws/request"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/sqs"
-	"github.com/cenkalti/backoff/v4"
-
+	"github.com/aws/aws-sdk-go/service/sqs/sqsiface"
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/impl/aws/config"
 	"github.com/benthosdev/benthos/v4/internal/shutdown"
 	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/cenkalti/backoff/v4"
 )
 
 const (
@@ -133,7 +133,7 @@ type awsSQSReader struct {
 	conf sqsiConfig
 
 	session *session.Session
-	sqs     *sqs.SQS
+	sqs     sqsiface.SQSAPI
 
 	messagesChan     chan *sqs.Message
 	ackMessagesChan  chan sqsMessageHandle
@@ -162,11 +162,9 @@ func newAWSSQSReader(conf sqsiConfig, sess *session.Session, log *service.Logger
 // Connect attempts to establish a connection to the target SQS
 // queue.
 func (a *awsSQSReader) Connect(ctx context.Context) error {
-	if a.sqs != nil {
-		return nil
+	if a.sqs == nil {
+		a.sqs = sqs.New(a.session)
 	}
-
-	a.sqs = sqs.New(a.session)
 
 	var wg sync.WaitGroup
 	wg.Add(3)
