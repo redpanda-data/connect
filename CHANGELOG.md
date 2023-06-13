@@ -5,6 +5,8 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 4.17.0 - 2023-06-13
+
 ### Added
 
 - The `dynamic` input and output have a new endpoint `/input/{id}/uptime` and `/output/{id}/uptime` respectively for obtaining the uptime of a given input/output.
@@ -15,6 +17,7 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 
 - Restore message ordering support to `gcp_pubsub` output. This issue was introduced in 4.16.0 as a result of [#1836](https://github.com/benthosdev/benthos/pull/1836).
+- Specifying structured metadata values (non-strings) in unit test definitions should no longer cause linting errors.
 
 ### Changed
 
