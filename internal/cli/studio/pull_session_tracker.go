@@ -305,7 +305,7 @@ func (s *sessionTracker) ReadFile(ctx context.Context, name string, headOnly boo
 	if err != nil {
 		return nil, err
 	}
-	fileURL.Path = path.Join(fileURL.Path, fmt.Sprintf("/download/%v", url.PathEscape(path.Clean(name))))
+	fileURL.Path = path.Join(fileURL.Path, fmt.Sprintf("/download/%v", path.Clean(name)))
 
 	method := "GET"
 	if headOnly {
