@@ -41,7 +41,7 @@ func azureComponentSpec(forBlobStorage bool) *service.ConfigSpec {
 		spec = spec.Field(service.NewStringField(bscFieldStorageSASToken).
 			Description("The storage account SAS token. This field is ignored if `" + bscFieldStorageConnectionString + "` or `" + bscFieldStorageAccessKey + "` are set.").
 			Default("")).
-			LintRule(`root = if this.storage_connection_string != "" && !this.storage_connection_string.contains("AccountName=") && this.storage_account == "" { [ "storage_account must be set if storage_connection_string does not contain the \"AccountName\" parameter" ] }`)
+			LintRule(`root = if this.storage_connection_string != "" && !this.storage_connection_string.contains("AccountName=")  && !this.storage_connection_string.contains("UseDevelopmentStorage=true;") && this.storage_account == "" { [ "storage_account must be set if storage_connection_string does not contain the \"AccountName\" parameter" ] }`)
 	}
 	spec = spec.Fields(
 		service.NewStringField(bscFieldStorageConnectionString).
