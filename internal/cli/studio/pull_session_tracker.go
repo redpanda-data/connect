@@ -301,11 +301,15 @@ func (s *sessionTracker) ReadFile(ctx context.Context, name string, headOnly boo
 		return nil, err
 	}
 
-	fileURL, err := url.Parse(s.baseURL)
-	if err != nil {
-		return nil, err
+	var fileURLStr string
+	{
+		fileURL, err := url.Parse(s.baseURL)
+		if err != nil {
+			return nil, err
+		}
+		fileURL.Path = path.Join(fileURL.Path, "/download")
+		fileURLStr = fileURL.String() + "/" + url.PathEscape(path.Clean(name))
 	}
-	fileURL.Path = path.Join(fileURL.Path, fmt.Sprintf("/download/%v", path.Clean(name)))
 
 	method := "GET"
 	if headOnly {
@@ -313,7 +317,7 @@ func (s *sessionTracker) ReadFile(ctx context.Context, name string, headOnly boo
 	}
 
 	res, err := s.doRateLimitedReq(ctx, func() (*http.Request, error) {
-		req, err := http.NewRequest(method, fileURL.String(), http.NoBody)
+		req, err := http.NewRequest(method, fileURLStr, http.NoBody)
 		if err != nil {
 			return nil, err
 		}

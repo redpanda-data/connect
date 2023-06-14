@@ -72,7 +72,7 @@ func testServerForPullRunner(
 
 		t.Logf("request: %v", expReq.path)
 
-		require.Equal(t, expReq.path, r.URL.Path)
+		require.Equal(t, expReq.path, r.URL.EscapedPath())
 
 		// Verify that our authorization tokens are punching through
 		assert.Equal(t, "aaa", r.Header.Get("X-Bstdio-Node-Id"))
@@ -176,14 +176,14 @@ func TestPullRunnerHappyPath(t *testing.T) {
 			jsonResponse(t, w, obj{
 				"deployment_id":   "depaid",
 				"deployment_name": "Deployment A",
-				"main_config":     obj{"name": "maina.yaml", "modified": 1001},
+				"main_config":     obj{"name": "main a.yaml", "modified": 1001},
 				"resource_configs": arr{
 					obj{"name": "resa.yaml", "modified": 1002},
 				},
 				"metrics_guide_period_seconds": 300,
 			})
 		}),
-		expectedRequest("/api/v1/node/session/foosession/download/maina.yaml", func(t *testing.T, w http.ResponseWriter, r *http.Request) {
+		expectedRequest("/api/v1/node/session/foosession/download/main%20a.yaml", func(t *testing.T, w http.ResponseWriter, r *http.Request) {
 			require.Equal(t, "GET", r.Method)
 			stringResponse(t, w, `
 http:
@@ -216,7 +216,7 @@ output_resources:
 			require.Equal(t, "POST", r.Method)
 			jsonRequestSupersetMatch(t, r, obj{
 				"name":        "foobarnode",
-				"main_config": obj{"name": "maina.yaml", "modified": 1001.0},
+				"main_config": obj{"name": "main a.yaml", "modified": 1001.0},
 				"resource_configs": arr{
 					obj{"name": "resa.yaml", "modified": 1002.0},
 				},
