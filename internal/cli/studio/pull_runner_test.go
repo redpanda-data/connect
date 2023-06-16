@@ -335,6 +335,87 @@ output:
 	waitFn(ctx)
 }
 
+func TestPullRunnerBlockedShutdown(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	ctx, done := context.WithTimeout(context.Background(), 30*time.Second)
+	defer done()
+
+	pr, waitFn := testServerForPullRunner(t, nil,
+		[]string{"benthos", "--log.level", "none", "studio", "pull", "--name", "foobarnode", "--session", "foosession"},
+		expectedRequest("/api/v1/node/session/foosession/init", func(t *testing.T, w http.ResponseWriter, r *http.Request) {
+			require.Equal(t, "POST", r.Method)
+			jsonRequestEqual(t, r, obj{
+				"name": "foobarnode",
+			})
+			jsonResponse(t, w, obj{
+				"deployment_id":                "depaid",
+				"deployment_name":              "Deployment A",
+				"main_config":                  obj{"name": "maina.yaml", "modified": 1001},
+				"metrics_guide_period_seconds": 300,
+			})
+		}),
+		expectedRequest("/api/v1/node/session/foosession/download/maina.yaml", func(t *testing.T, w http.ResponseWriter, r *http.Request) {
+			require.Equal(t, "GET", r.Method)
+			stringResponse(t, w, replacePaths(tmpDir, `
+http:
+  enabled: false
+input:
+  generate:
+    count: 1
+    interval: ""
+    mapping: 'root.id = "first"'
+output:
+  retry:
+    output:
+      http_client:
+        url: http://example.com:1234 ]
+shutdown_timeout: 2s
+`))
+		}),
+		expectedRequest("/api/v1/node/session/foosession/deployment/depaid/sync", func(t *testing.T, w http.ResponseWriter, r *http.Request) {
+			require.Equal(t, "POST", r.Method)
+			jsonRequestEqual(t, r, obj{
+				"name":        "foobarnode",
+				"main_config": obj{"name": "maina.yaml", "modified": 1001.0},
+			})
+			jsonResponse(t, w, obj{
+				"main_config": obj{"name": "maina.yaml", "modified": 1002},
+			})
+		}),
+		expectedRequest("/api/v1/node/session/foosession/download/maina.yaml", func(t *testing.T, w http.ResponseWriter, r *http.Request) {
+			require.Equal(t, "GET", r.Method)
+			stringResponse(t, w, replacePaths(tmpDir, `
+http:
+  enabled: false
+input:
+  generate:
+    count: 1
+    interval: ""
+    mapping: 'root.id = "first"'
+output:
+  file:
+    codec: lines
+    path: $DIR/outa.jsonl
+`))
+		}),
+		expectedRequest("/api/v1/node/session/foosession/leave", func(t *testing.T, w http.ResponseWriter, r *http.Request) {
+			require.Equal(t, "POST", r.Method)
+		}),
+	)
+
+	time.Sleep(time.Millisecond * 100)
+	pr.Sync(ctx)
+
+	assert.Eventually(t, func() bool {
+		data, _ := os.ReadFile(filepath.Join(tmpDir, "outa.jsonl"))
+		return strings.Contains(string(data), `{"id":"first"}`)
+	}, time.Second*10, time.Millisecond*10)
+
+	require.NoError(t, pr.Stop(ctx))
+	waitFn(ctx)
+}
+
 func TestPullRunnerSetOverride(t *testing.T) {
 	tmpDir := t.TempDir()
 

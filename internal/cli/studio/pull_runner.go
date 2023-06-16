@@ -34,6 +34,12 @@ func (n noopStopper) Stop(_ context.Context) error {
 	return nil
 }
 
+// When a stream component (manager with resources or stream running a config)
+// is instructed to shutdown this deadline determines the maximum amount of time
+// we're willing to wait for it to be done gracefully when otherwise not
+// configured.
+const defaultCloseDeadline = time.Second * 30
+
 // PullRunner encapsulates a component that runs a Benthos stream continuously
 // by obtaining a deployment allocation from a Studio session, pulling the
 // configs from that deployment, and then executing the configs in the
@@ -132,7 +138,9 @@ func NewPullRunner(c *cli.Context, version, dateBuilt, token, secret string, opt
 		if r.localConf, localLints, err = localReader.Read(); err != nil {
 			return nil, fmt.Errorf("configuration file read error: %w", err)
 		}
-		_ = localReader.Close(c.Context)
+		_ = r.withExitContext(c.Context, func(ctx context.Context) error {
+			return localReader.Close(ctx)
+		})
 	}
 
 	// Logger is suuuuper primitive so we only instantiate it from the local
@@ -173,21 +181,24 @@ func (r *PullRunner) setStreamDisabled(ctx context.Context, toDisabled bool) err
 	if r.isDisabled == toDisabled {
 		return nil // Already set
 	}
-	if toDisabled {
-		if err := r.stoppableStream.Replace(ctx, func() (common.Stoppable, error) {
-			return &noopStopper{}, nil
-		}); err != nil {
-			return err
+
+	return r.withExitContext(ctx, func(ctx context.Context) error {
+		if toDisabled {
+			if err := r.stoppableStream.Replace(ctx, func() (common.Stoppable, error) {
+				return &noopStopper{}, nil
+			}); err != nil {
+				return err
+			}
+		} else if r.latestMainConf != nil && r.mgr != nil {
+			if err := r.stoppableStream.Replace(ctx, func() (common.Stoppable, error) {
+				return stream.New(*r.latestMainConf, r.mgr)
+			}); err != nil {
+				return err
+			}
 		}
-	} else if r.latestMainConf != nil && r.mgr != nil {
-		if err := r.stoppableStream.Replace(ctx, func() (common.Stoppable, error) {
-			return stream.New(*r.latestMainConf, r.mgr)
-		}); err != nil {
-			return err
-		}
-	}
-	r.isDisabled = toDisabled
-	return nil
+		r.isDisabled = toDisabled
+		return nil
+	})
 }
 
 func (r *PullRunner) triggerStreamReset(ctx context.Context, conf *config.Type, mgr bundle.NewManagement) error {
@@ -195,8 +206,10 @@ func (r *PullRunner) triggerStreamReset(ctx context.Context, conf *config.Type, 
 	if r.isDisabled {
 		return nil
 	}
-	return r.stoppableStream.Replace(ctx, func() (common.Stoppable, error) {
-		return stream.New(conf.Config, mgr)
+	return r.withExitContext(ctx, func(ctx context.Context) error {
+		return r.stoppableStream.Replace(ctx, func() (common.Stoppable, error) {
+			return stream.New(conf.Config, mgr)
+		})
 	})
 }
 
@@ -230,9 +243,12 @@ func (r *PullRunner) bootstrapConfigReader(ctx context.Context) (bootstrapErr er
 		config.OptUseFS(sessFS),
 		config.OptSetLintConfig(lintConf),
 	)
+
 	defer func() {
 		if bootstrapErr != nil {
-			_ = confReaderTmp.Close(context.Background())
+			_ = r.withExitContext(ctx, func(ctx context.Context) error {
+				return confReaderTmp.Close(ctx)
+			})
 		}
 	}()
 
@@ -258,7 +274,9 @@ func (r *PullRunner) bootstrapConfigReader(ctx context.Context) (bootstrapErr er
 	}
 	defer func() {
 		if bootstrapErr != nil {
-			_ = stopMgrTmp.Stop(context.Background())
+			_ = r.withExitContext(ctx, func(ctx context.Context) error {
+				return stopMgrTmp.Stop(ctx)
+			})
 		}
 	}()
 
@@ -292,7 +310,7 @@ func (r *PullRunner) bootstrapConfigReader(ctx context.Context) (bootstrapErr er
 	r.exitTimeout = exitTimeout
 
 	if err := confReaderTmp.SubscribeConfigChanges(func(conf *config.Type) error {
-		return r.triggerStreamReset(context.Background(), conf, mgrTmp) // TODO: Context on shutdown?
+		return r.triggerStreamReset(context.Background(), conf, mgrTmp)
 	}); err != nil {
 		return fmt.Errorf("failed to subscribe to config changes: %w", err)
 	}
@@ -385,6 +403,16 @@ func (r *PullRunner) Sync(ctx context.Context) {
 	}
 }
 
+func (r *PullRunner) withExitContext(ctx context.Context, fn func(context.Context) error) error {
+	tout := r.exitTimeout
+	if tout <= 0 {
+		tout = defaultCloseDeadline
+	}
+	ctx, done := context.WithTimeout(ctx, tout)
+	defer done()
+	return fn(ctx)
+}
+
 // Stop any underlying stream and managers that may exist.
 func (r *PullRunner) Stop(ctx context.Context) error {
 	{
@@ -407,30 +435,26 @@ func (r *PullRunner) Stop(ctx context.Context) error {
 		}
 	}
 
-	if r.exitTimeout <= 0 {
-		r.exitTimeout = time.Second * 5
-	}
-	ctx, done := context.WithTimeout(ctx, r.exitTimeout)
-	defer done()
-
-	if err := r.stoppableStream.Stop(ctx); err != nil {
-		r.logger.Warnf(
-			"Service failed to close the running stream cleanly within allocated time: %v."+
-				" Exiting forcefully and dumping stack trace to stderr\n", err,
-		)
-		_ = pprof.Lookup("goroutine").WriteTo(os.Stderr, 1)
-		return err
-	}
-	if r.stoppableMgr == nil {
+	return r.withExitContext(ctx, func(ctx context.Context) error {
+		if err := r.stoppableStream.Stop(ctx); err != nil {
+			r.logger.Warnf(
+				"Service failed to close the running stream cleanly within allocated time: %v."+
+					" Exiting forcefully and dumping stack trace to stderr\n", err,
+			)
+			_ = pprof.Lookup("goroutine").WriteTo(os.Stderr, 1)
+			return err
+		}
+		if r.stoppableMgr == nil {
+			return nil
+		}
+		if err := r.stoppableMgr.Stop(ctx); err != nil {
+			r.logger.Warnf(
+				"Service failed to close resources cleanly within allocated time: %v."+
+					" Exiting forcefully and dumping stack trace to stderr\n", err,
+			)
+			_ = pprof.Lookup("goroutine").WriteTo(os.Stderr, 1)
+			return err
+		}
 		return nil
-	}
-	if err := r.stoppableMgr.Stop(ctx); err != nil {
-		r.logger.Warnf(
-			"Service failed to close resources cleanly within allocated time: %v."+
-				" Exiting forcefully and dumping stack trace to stderr\n", err,
-		)
-		_ = pprof.Lookup("goroutine").WriteTo(os.Stderr, 1)
-		return err
-	}
-	return nil
+	})
 }
