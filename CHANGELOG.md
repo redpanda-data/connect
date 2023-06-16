@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Fixed
+
+- HTTP components no longer ignore `proxy_url` settings when OAuth2 is set.
+
 ## 4.17.0 - 2023-06-13
 
 ### Added
