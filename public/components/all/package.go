@@ -42,7 +42,6 @@ import (
 	_ "github.com/benthosdev/benthos/v4/public/components/redis"
 	_ "github.com/benthosdev/benthos/v4/public/components/sentry"
 	_ "github.com/benthosdev/benthos/v4/public/components/sftp"
-	_ "github.com/benthosdev/benthos/v4/public/components/snowflake"
 	_ "github.com/benthosdev/benthos/v4/public/components/splunk"
 	_ "github.com/benthosdev/benthos/v4/public/components/sql"
 	_ "github.com/benthosdev/benthos/v4/public/components/statsd"
