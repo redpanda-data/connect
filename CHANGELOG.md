@@ -8,6 +8,7 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 
 - HTTP components no longer ignore `proxy_url` settings when OAuth2 is set.
+- The `PATCH` verb for the streams mode REST API no longer fails to patch over newer components implemented with the latest plugin APIs.
 
 ### Changed
 

@@ -10,10 +10,10 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/Jeffail/gabs/v2"
 	"github.com/gorilla/mux"
 	"gopkg.in/yaml.v3"
 
-	"github.com/benthosdev/benthos/v4/internal/component/buffer"
 	"github.com/benthosdev/benthos/v4/internal/component/cache"
 	"github.com/benthosdev/benthos/v4/internal/component/input"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
@@ -21,7 +21,6 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/component/ratelimit"
 	"github.com/benthosdev/benthos/v4/internal/config"
 	"github.com/benthosdev/benthos/v4/internal/docs"
-	"github.com/benthosdev/benthos/v4/internal/pipeline"
 	"github.com/benthosdev/benthos/v4/internal/stream"
 	"github.com/benthosdev/benthos/v4/public/bloblang"
 )
@@ -326,30 +325,32 @@ func (m *Type) HandleStreamCRUD(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		type aliasedIn input.Config
-		type aliasedBuf buffer.Config
-		type aliasedPipe pipeline.Config
-		type aliasedOut output.Config
-
-		aliasedConf := struct {
-			Input    aliasedIn   `json:"input"`
-			Buffer   aliasedBuf  `json:"buffer"`
-			Pipeline aliasedPipe `json:"pipeline"`
-			Output   aliasedOut  `json:"output"`
-		}{
-			Input:    aliasedIn(confIn.Input),
-			Buffer:   aliasedBuf(confIn.Buffer),
-			Pipeline: aliasedPipe(confIn.Pipeline),
-			Output:   aliasedOut(confIn.Output),
-		}
-		if err = yaml.Unmarshal(patchBytes, &aliasedConf); err != nil {
+		var cRoot any
+		if cRoot, err = confIn.Sanitised(); err != nil {
 			return
 		}
-		confOut = stream.Config{
-			Input:    input.Config(aliasedConf.Input),
-			Buffer:   buffer.Config(aliasedConf.Buffer),
-			Pipeline: pipeline.Config(aliasedConf.Pipeline),
-			Output:   output.Config(aliasedConf.Output),
+
+		var pRoot any
+		if err = yaml.Unmarshal(patchBytes, &pRoot); err != nil {
+			return
+		}
+
+		gObj := gabs.Wrap(cRoot)
+		if err = gObj.MergeFn(gabs.Wrap(pRoot), func(destination, source any) any {
+			return source
+		}); err != nil {
+			return
+		}
+
+		confOut = stream.NewConfig()
+		{
+			var confNode yaml.Node
+			if err = confNode.Encode(gObj.Data()); err != nil {
+				return
+			}
+			if err = confNode.Decode(&confOut); err != nil {
+				return
+			}
 		}
 		return
 	}
