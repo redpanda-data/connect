@@ -9,6 +9,10 @@ All notable changes to this project will be documented in this file.
 
 - HTTP components no longer ignore `proxy_url` settings when OAuth2 is set.
 
+### Changed
+
+- The old `parquet` processor (now superseded by `parquet_encode` and `parquet_decode`) has been removed from 32-bit ARM builds due to build incompatibilities.
+
 ## 4.17.0 - 2023-06-13
 
 ### Added
