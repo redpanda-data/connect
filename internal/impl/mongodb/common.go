@@ -111,6 +111,8 @@ const (
 	OperationUpdateOne Operation = "update-one"
 	// OperationFindOne Find one operation.
 	OperationFindOne Operation = "find-one"
+	// OperationFindAll Find one operation.
+	OperationFindAll Operation = "find-all"
 	// OperationInvalid Invalid operation.
 	OperationInvalid Operation = "invalid"
 )
@@ -132,7 +134,8 @@ func (op Operation) isFilterAllowed() bool {
 		OperationDeleteMany,
 		OperationReplaceOne,
 		OperationUpdateOne,
-		OperationFindOne:
+		OperationFindOne,
+		OperationFindAll:
 		return true
 	default:
 		return false
@@ -177,6 +180,8 @@ func NewOperation(op string) Operation {
 		return OperationUpdateOne
 	case "find-one":
 		return OperationFindOne
+	case "find-all":
+		return OperationFindAll
 	default:
 		return OperationInvalid
 	}
@@ -189,7 +194,7 @@ const (
 
 func processorOperationDocs(defaultOperation Operation) docs.FieldSpec {
 	fs := outputOperationDocs(defaultOperation)
-	return fs.HasOptions(append(fs.Options, string(OperationFindOne))...)
+	return fs.HasOptions(append(fs.Options, string(OperationFindOne), string(OperationFindAll))...)
 }
 
 func outputOperationDocs(defaultOperation Operation) docs.FieldSpec {
