@@ -122,6 +122,11 @@ func (r *AsyncReader) loop() {
 				r.mgr.Logger().Errorf("Failed to connect to %v: %v\n", r.typeStr, err)
 				mFailedConn.Incr(1)
 
+				var e component.ErrBackOff
+				if errors.As(err, &e) {
+					time.Sleep(e.Wait)
+				}
+
 				nextBoff := r.connBackoff.NextBackOff()
 				if nextBoff == backoff.Stop {
 					r.mgr.Logger().Errorf("Maximum number of connection attempt retries has been met, gracefully terminating input %v", r.typeStr)

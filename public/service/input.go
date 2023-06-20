@@ -152,17 +152,35 @@ func (a *airGapBatchReader) Connect(ctx context.Context) error {
 	if err != nil && errors.Is(err, ErrEndOfInput) {
 		err = component.ErrTypeClosed
 	}
+
+	var e ErrBackOff
+	if errors.As(err, &e) {
+		err = component.ErrBackOff{Err: err, Wait: e.Wait}
+	}
+
 	return err
 }
 
 func (a *airGapBatchReader) ReadBatch(ctx context.Context) (message.Batch, input.AsyncAckFn, error) {
 	batch, ackFn, err := a.r.ReadBatch(ctx)
 	if err != nil {
+		var e ErrBackOff
+		if errors.As(err, &e) {
+			if errors.Is(e.Err, ErrNotConnected) {
+				err = component.ErrNotConnected
+			} else if errors.Is(e.Err, ErrEndOfInput) {
+				err = component.ErrTypeClosed
+			}
+
+			return nil, nil, component.ErrBackOff{Err: err, Wait: e.Wait}
+		}
+
 		if errors.Is(err, ErrNotConnected) {
 			err = component.ErrNotConnected
 		} else if errors.Is(err, ErrEndOfInput) {
 			err = component.ErrTypeClosed
 		}
+
 		return nil, nil, err
 	}
 
