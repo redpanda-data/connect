@@ -174,7 +174,7 @@ func newJetStreamReaderFromConfig(conf *service.ParsedConfig, mgr *service.Resou
 		}
 	}
 	if j.bind {
-		if j.stream == "" || j.durable == "" {
+		if j.stream == "" && j.durable == "" {
 			return nil, fmt.Errorf("stream or durable is required, when bind is true")
 		}
 	} else {
