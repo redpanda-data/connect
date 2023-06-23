@@ -261,6 +261,8 @@ func (a *azureTableStorageWriter) execBatch(ctx context.Context, writeReqs map[s
 				var batch []aztables.TransactionAction
 				ne := len(entities)
 				for i, entity := range entities {
+					entity.PartitionKey = escapeODataString(entity.PartitionKey)
+					entity.RowKey = escapeODataString(entity.RowKey)
 					batch, err = a.addToBatch(batch, tt, entity)
 					if err != nil {
 						return err
@@ -297,6 +299,10 @@ func isLastEntity(i, ne int) bool {
 func reachedBatchLimit(i int) bool {
 	const batchSizeLimit = 100
 	return (i+1)%batchSizeLimit == 0
+}
+
+func escapeODataString(s string) string {
+	return strings.ReplaceAll(s, "'", "''")
 }
 
 func (a *azureTableStorageWriter) addToBatch(batch []aztables.TransactionAction, transactionType string, entity *aztables.EDMEntity) ([]aztables.TransactionAction, error) {
