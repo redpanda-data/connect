@@ -128,7 +128,7 @@ func TestLoggerWithOtherNames(t *testing.T) {
 	expected := `{"@service":"benthos_service","@system":"foo","foo":"bar","message":"Warning message foo fields","severity":"warning"}
 `
 
-	assert.Equal(t, expected, buf.String())
+	require.JSONEq(t, expected, buf.String())
 }
 
 type logCounter struct {
