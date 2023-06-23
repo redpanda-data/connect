@@ -36,7 +36,7 @@ The fields 'key' and 'type' can be dynamically set using function interpolations
 				Example([]string{"amqp://127.0.0.1:5672/,amqp://127.0.0.2:5672/"}).
 				Example([]string{"amqp://127.0.0.1:5672/", "amqp://127.0.0.2:5672/"}).
 				Version("3.58.0"),
-			service.NewStringField(exchangeField).
+			service.NewInterpolatedStringField(exchangeField).
 				Description("An AMQP exchange to publish to."),
 			service.NewObjectField(exchangeDeclareField,
 				service.NewBoolField(exchangeDeclareEnabledField).
@@ -115,11 +115,11 @@ type amqp09Writer struct {
 	msgType         *service.InterpolatedString
 	contentType     *service.InterpolatedString
 	contentEncoding *service.InterpolatedString
+	exchange        *service.InterpolatedString
 	priority        *service.InterpolatedString
 	metaFilter      *service.MetadataExcludeFilter
 
 	urls         []string
-	exchange     string
 	tlsEnabled   bool
 	tlsConf      *tls.Config
 	timeout      time.Duration
@@ -160,7 +160,7 @@ func amqp09WriterFromParsed(conf *service.ParsedConfig, mgr *service.Resources) 
 		}
 	}
 
-	if a.exchange, err = conf.FieldString(exchangeField); err != nil {
+	if a.exchange, err = conf.FieldInterpolatedString(exchangeField); err != nil {
 		return nil, err
 	}
 	if a.tlsConf, a.tlsEnabled, err = conf.FieldTLSToggled(tlsField); err != nil {
@@ -233,21 +233,6 @@ func (a *amqp09Writer) Connect(ctx context.Context) error {
 		return fmt.Errorf("amqp failed to create channel: %v", err)
 	}
 
-	if a.exchangeDeclare {
-		if err = amqpChan.ExchangeDeclare(
-			a.exchange,               // name of the exchange
-			a.exchangeDeclareType,    // type
-			a.exchangeDeclareDurable, // durable
-			false,                    // delete when complete
-			false,                    // internal
-			false,                    // noWait
-			nil,                      // arguments
-		); err != nil {
-			conn.Close()
-			return fmt.Errorf("amqp failed to declare exchange: %v", err)
-		}
-	}
-
 	if err = amqpChan.Confirm(false); err != nil {
 		conn.Close()
 		return fmt.Errorf("amqp channel could not be put into confirm mode: %v", err)
@@ -302,6 +287,11 @@ func (a *amqp09Writer) Write(ctx context.Context, msg *service.Message) error {
 		return err
 	}
 
+	exchange, err := a.exchange.TryString(msg)
+	if err != nil {
+		return fmt.Errorf("exchange name interpolation error: #{err}")
+	}
+
 	bindingKey, err := a.key.TryString(msg)
 	if err != nil {
 		return fmt.Errorf("binding key interpolation error: %w", err)
@@ -346,9 +336,23 @@ func (a *amqp09Writer) Write(ctx context.Context, msg *service.Message) error {
 		return nil
 	})
 
+	if a.exchangeDeclare {
+		if err = amqpChan.ExchangeDeclare(
+			exchange,                 // name of the exchange
+			a.exchangeDeclareType,    // type
+			a.exchangeDeclareDurable, // durable
+			false,                    // delete when complete
+			false,                    // internal
+			false,                    // noWait
+			nil,                      // arguments
+		); err != nil {
+			conn.Close()
+			return fmt.Errorf("amqp failed to declare exchange: %v", err)
+		}
+	}
 	conf, err := amqpChan.PublishWithDeferredConfirmWithContext(
 		ctx,
-		a.exchange,  // publish to an exchange
+		exchange,    // publish to an exchange
 		bindingKey,  // routing to 0 or more queues
 		a.mandatory, // mandatory
 		a.immediate, // immediate
