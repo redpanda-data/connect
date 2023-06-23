@@ -104,7 +104,7 @@ func TestLoggerWithNonStringKeys(t *testing.T) {
 func TestLoggerWithOtherNames(t *testing.T) {
 	loggerConfig := NewConfig()
 	loggerConfig.AddTimeStamp = false
-	loggerConfig.Format = "logfmt"
+	loggerConfig.Format = "json"
 	loggerConfig.LogLevel = "WARN"
 	loggerConfig.StaticFields = map[string]string{
 		"@service": "benthos_service",
@@ -125,7 +125,7 @@ func TestLoggerWithOtherNames(t *testing.T) {
 
 	logger.Warnln("Warning message foo fields")
 
-	expected := `severity=warning message="Warning message foo fields" @service=benthos_service @system=foo foo=bar
+	expected := `{"@service":"benthos_service","@system":"foo","foo":"bar","message":"Warning message foo fields","severity":"warning"}
 `
 
 	assert.Equal(t, expected, buf.String())
