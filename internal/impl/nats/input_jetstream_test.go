@@ -67,4 +67,47 @@ auth:
 		_, err = newJetStreamReaderFromConfig(conf, service.MockResources())
 		require.Error(t, err)
 	})
+
+	t.Run("Missing stream and durable for bind", func(t *testing.T) {
+		inputConfig := `
+urls: [ url1 ]
+subject: testsubject
+bind: true
+`
+
+		conf, err := spec.ParseYAML(inputConfig, env)
+		require.NoError(t, err)
+
+		_, err = newJetStreamReaderFromConfig(conf, service.MockResources())
+		require.Error(t, err)
+	})
+
+	t.Run("Bind set with durable", func(t *testing.T) {
+		inputConfig := `
+urls: [ url1 ]
+subject: testsubject
+durable: foodurable
+bind: true
+`
+
+		conf, err := spec.ParseYAML(inputConfig, env)
+		require.NoError(t, err)
+
+		_, err = newJetStreamReaderFromConfig(conf, service.MockResources())
+		require.NoError(t, err)
+	})
+
+	t.Run("Bind set with stream", func(t *testing.T) {
+		inputConfig := `
+urls: [ url1 ]
+stream: foostream
+bind: true
+`
+
+		conf, err := spec.ParseYAML(inputConfig, env)
+		require.NoError(t, err)
+
+		_, err = newJetStreamReaderFromConfig(conf, service.MockResources())
+		require.NoError(t, err)
+	})
 }
