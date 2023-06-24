@@ -15,7 +15,7 @@ import (
 func TestMessageCopyAirGap(t *testing.T) {
 	p := message.NewPart([]byte("hello world"))
 	p.MetaSetMut("foo", "bar")
-	g1 := newMessageFromPart(p.ShallowCopy())
+	g1 := NewInternalMessage(p.ShallowCopy())
 	g2 := g1.Copy()
 
 	b := p.AsBytes()
@@ -80,7 +80,7 @@ func TestMessageQuery(t *testing.T) {
 	p := message.NewPart([]byte(`{"foo":"bar"}`))
 	p.MetaSetMut("foo", "bar")
 	p.MetaSetMut("bar", "baz")
-	g1 := newMessageFromPart(p)
+	g1 := NewInternalMessage(p)
 
 	b, err := g1.AsBytes()
 	assert.NoError(t, err)
@@ -118,7 +118,7 @@ func TestMessageMutate(t *testing.T) {
 	p := message.NewPart([]byte(`not a json doc`))
 	p.MetaSetMut("foo", "bar")
 	p.MetaSetMut("bar", "baz")
-	g1 := newMessageFromPart(p.ShallowCopy())
+	g1 := NewInternalMessage(p.ShallowCopy())
 
 	_, err := g1.AsStructured()
 	assert.Error(t, err)

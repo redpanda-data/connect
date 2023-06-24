@@ -33,7 +33,7 @@ func AutoRetryNacksBatched(i BatchInput) BatchInput {
 
 				_, iParts = message.NewSortGroupParts(iParts)
 				for i, p := range iParts {
-					t[i] = newMessageFromPart(p)
+					t[i] = NewInternalMessage(p)
 				}
 
 				return t, autoretry.AckFunc(aFn), err

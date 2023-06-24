@@ -114,12 +114,14 @@ This input adds the following metadata fields to each message:
 - All path parameters
 - All cookies
 ```
+
 If HTTPS is enabled, the following fields are added as well:
 ``` text
 - http_server_tls_version
 - http_server_tls_subject
 - http_server_tls_cipher_suite
 ```
+
 You can access these metadata fields using [function interpolation](/docs/configuration/interpolation#bloblang-queries).
 
 ## Fields
@@ -247,8 +249,6 @@ Default: `"200"`
 
 ```yml
 # Examples
-
-status: "200"
 
 status: ${! json("status") }
 
