@@ -101,8 +101,11 @@ func NewMessage(content []byte) *Message {
 	}
 }
 
-func newMessageFromPart(part *message.Part) *Message {
-	return &Message{part: part}
+// NewInternalMessage returns a message wrapped around an instantiation of the
+// internal message package. This function is for internal use only and intended
+// as a scaffold for internal components migrating to the new APIs.
+func NewInternalMessage(imsg *message.Part) *Message {
+	return &Message{part: imsg}
 }
 
 // Copy creates a shallow copy of a message that is safe to mutate with Set
@@ -308,7 +311,7 @@ func (m *Message) BloblangQuery(blobl *bloblang.Executor) (*Message, error) {
 		return nil, err
 	}
 	if res != nil {
-		return newMessageFromPart(res), nil
+		return NewInternalMessage(res), nil
 	}
 	return nil, nil
 }
@@ -336,7 +339,7 @@ func (m *Message) BloblangMutate(blobl *bloblang.Executor) (*Message, error) {
 		return nil, err
 	}
 	if res != nil {
-		return newMessageFromPart(res), nil
+		return NewInternalMessage(res), nil
 	}
 	return nil, nil
 }
@@ -363,7 +366,7 @@ func (b MessageBatch) BloblangQuery(index int, blobl *bloblang.Executor) (*Messa
 		return nil, err
 	}
 	if res != nil {
-		return newMessageFromPart(res), nil
+		return NewInternalMessage(res), nil
 	}
 	return nil, nil
 }
@@ -397,7 +400,7 @@ func (b MessageBatch) BloblangMutate(index int, blobl *bloblang.Executor) (*Mess
 		return nil, err
 	}
 	if res != nil {
-		return newMessageFromPart(res), nil
+		return NewInternalMessage(res), nil
 	}
 	return nil, nil
 }

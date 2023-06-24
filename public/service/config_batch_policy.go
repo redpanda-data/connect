@@ -82,7 +82,7 @@ func (b *Batcher) Flush(ctx context.Context) (batch MessageBatch, err error) {
 		return
 	}
 	_ = m.Iter(func(i int, part *message.Part) error {
-		batch = append(batch, newMessageFromPart(part))
+		batch = append(batch, NewInternalMessage(part))
 		return nil
 	})
 	return

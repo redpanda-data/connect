@@ -749,7 +749,7 @@ func (s *StreamBuilder) runConsumerFunc(mgr *manager.Type) error {
 			}
 			batch := make(MessageBatch, tran.Payload.Len())
 			_ = tran.Payload.Iter(func(i int, part *message.Part) error {
-				batch[i] = newMessageFromPart(part)
+				batch[i] = NewInternalMessage(part)
 				return nil
 			})
 			err := s.consumerFunc(context.Background(), batch)
