@@ -33,12 +33,12 @@ func (m *mockSqsInput) TimeoutLoop(ctx context.Context) {
 		case <-t.C:
 			<-m.mtx
 
-			for mesId, timeout := range m.mesTimeouts {
+			for mesID, timeout := range m.mesTimeouts {
 				timeout = timeout - 1
 				if timeout > 0 {
-					m.mesTimeouts[mesId] = timeout
+					m.mesTimeouts[mesID] = timeout
 				} else {
-					m.mesTimeouts[mesId] = 0
+					m.mesTimeouts[mesID] = 0
 				}
 			}
 
