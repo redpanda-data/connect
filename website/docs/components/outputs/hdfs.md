@@ -29,9 +29,9 @@ Sends message parts as files to a HDFS directory.
 output:
   label: ""
   hdfs:
-    hosts: []
+    hosts: [] # No default (required)
     user: ""
-    directory: ""
+    directory: "" # No default (required)
     path: ${!count("files")}-${!timestamp_unix_nano()}.txt
     max_in_flight: 64
     batching:
@@ -49,9 +49,9 @@ output:
 output:
   label: ""
   hdfs:
-    hosts: []
+    hosts: [] # No default (required)
     user: ""
-    directory: ""
+    directory: "" # No default (required)
     path: ${!count("files")}-${!timestamp_unix_nano()}.txt
     max_in_flight: 64
     batching:
@@ -59,7 +59,7 @@ output:
       byte_size: 0
       period: ""
       check: ""
-      processors: []
+      processors: [] # No default (optional)
 ```
 
 </TabItem>
@@ -77,11 +77,10 @@ message batches) with the field `max_in_flight`.
 
 ### `hosts`
 
-A list of hosts to connect to.
+A list of target host addresses to connect to.
 
 
 Type: `array`  
-Default: `[]`  
 
 ```yml
 # Examples
@@ -91,7 +90,7 @@ hosts: localhost:9000
 
 ### `user`
 
-A user identifier.
+A user ID to connect as.
 
 
 Type: `string`  
@@ -100,10 +99,10 @@ Default: `""`
 ### `directory`
 
 A directory to store message files within. If the directory does not exist it will be created.
+This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
 
 
 Type: `string`  
-Default: `""`  
 
 ### `path`
 
@@ -114,15 +113,9 @@ This field supports [interpolation functions](/docs/configuration/interpolation#
 Type: `string`  
 Default: `"${!count(\"files\")}-${!timestamp_unix_nano()}.txt"`  
 
-```yml
-# Examples
-
-path: ${!count("files")}-${!timestamp_unix_nano()}.txt
-```
-
 ### `max_in_flight`
 
-The maximum number of parallel message batches to have in flight at any given time.
+The maximum number of messages to have in flight at a given time. Increase this to improve throughput.
 
 
 Type: `int`  
@@ -207,7 +200,6 @@ A list of [processors](/docs/components/processors/about) to apply to a batch as
 
 
 Type: `array`  
-Default: `[]`  
 
 ```yml
 # Examples

@@ -3,34 +3,23 @@ package gcp
 import (
 	"context"
 	"fmt"
-	"strings"
 	"sync"
-	"time"
-
-	"google.golang.org/api/option"
 
 	"cloud.google.com/go/pubsub"
+	"github.com/sourcegraph/conc/pool"
+	"google.golang.org/api/option"
 
-	"github.com/benthosdev/benthos/v4/internal/batch"
-	"github.com/benthosdev/benthos/v4/internal/bloblang/field"
-	"github.com/benthosdev/benthos/v4/internal/bundle"
-	"github.com/benthosdev/benthos/v4/internal/component"
-	"github.com/benthosdev/benthos/v4/internal/component/metrics"
-	"github.com/benthosdev/benthos/v4/internal/component/output"
-	"github.com/benthosdev/benthos/v4/internal/component/output/processors"
-	"github.com/benthosdev/benthos/v4/internal/docs"
-	"github.com/benthosdev/benthos/v4/internal/log"
-	"github.com/benthosdev/benthos/v4/internal/message"
-	"github.com/benthosdev/benthos/v4/internal/metadata"
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
-func init() {
-	err := bundle.AllOutputs.Add(processors.WrapConstructor(func(c output.Config, nm bundle.NewManagement) (output.Streamed, error) {
-		return newGCPPubSubOutput(c, nm, nm.Logger(), nm.Metrics())
-	}), docs.ComponentSpec{
-		Name:    "gcp_pubsub",
-		Summary: `Sends messages to a GCP Cloud Pub/Sub topic. [Metadata](/docs/configuration/metadata) from messages are sent as attributes.`,
-		Description: output.Description(true, false, `
+func newPubSubOutputConfig() *service.ConfigSpec {
+	defaults := pubsub.DefaultPublishSettings
+
+	return service.NewConfigSpec().
+		Stable().
+		Categories("Services", "GCP").
+		Summary("Sends messages to a GCP Cloud Pub/Sub topic. [Metadata](/docs/configuration/metadata) from messages are sent as attributes.").
+		Description(`
 For information on how to set up credentials check out [this guide](https://cloud.google.com/docs/authentication/production).
 
 ### Troubleshooting
@@ -52,97 +41,125 @@ Or delete all keys with:
 pipeline:
   processors:
     - mapping: meta = deleted()
-`+"```"+``),
-		Config: docs.FieldComponent().WithChildren(
-			docs.FieldString("project", "The project ID of the topic to publish to."),
-			docs.FieldString("topic", "The topic to publish to.").IsInterpolated(),
-			docs.FieldInt("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
-			docs.FieldString("publish_timeout", "The maximum length of time to wait before abandoning a publish attempt for a message.", "10s", "5m", "60m").Advanced(),
-			docs.FieldString("ordering_key", "The ordering key to use for publishing messages.").IsInterpolated().Advanced(),
-			docs.FieldString("endpoint", "An optional endpoint to override the default of `pubsub.googleapis.com:443`. This can be used to connect to a region specific pubsub endpoint. For a list of valid values check out [this document.](https://cloud.google.com/pubsub/docs/reference/service_apis_overview#list_of_regional_endpoints)", "us-central1-pubsub.googleapis.com:443", "us-west3-pubsub.googleapis.com:443").HasDefault(""),
-			docs.FieldObject("metadata", "Specify criteria for which metadata values are sent as attributes.").WithChildren(metadata.ExcludeFilterFields()...),
-			docs.FieldObject("flow_control", "For a given topic, configures the PubSub client's internal buffer for messages to be published.").
-				WithChildren(
-					docs.FieldInt("max_outstanding_messages", "Maximum number of buffered messages to be published. If less than or equal to zero, this is disabled.").HasDefault(1000),
-					docs.FieldInt("max_outstanding_bytes", "Maximum size of buffered messages to be published. If less than or equal to zero, this is disabled.").HasDefault(-1),
-					docs.FieldString("limit_exceeded_behavior", "Configures the behavior when trying to publish additional messages while the flow controller is full. The available options are ignore (disable, default), block, and signal_error (publish results will return an error).").
-						HasDefault("ignore").
-						HasOptions("ignore", "block", "signal_error"),
-				).Advanced(),
-		).ChildDefaultAndTypesFromStruct(output.NewGCPPubSubConfig()),
-		Categories: []string{
-			"Services",
-			"GCP",
-		},
-	})
-	if err != nil {
-		panic(err)
-	}
+`+"```"+``).
+		Fields(
+			service.NewStringField("project").Description("The project ID of the topic to publish to."),
+			service.NewInterpolatedStringField("topic").Description("The topic to publish to."),
+			service.NewStringField("endpoint").
+				Default("").
+				Example("us-central1-pubsub.googleapis.com:443").
+				Example("us-west3-pubsub.googleapis.com:443").
+				Description("An optional endpoint to override the default of `pubsub.googleapis.com:443`. This can be used to connect to a region specific pubsub endpoint. For a list of valid values check out [this document.](https://cloud.google.com/pubsub/docs/reference/service_apis_overview#list_of_regional_endpoints)"),
+			service.NewInterpolatedStringField("ordering_key").
+				Optional().
+				Description("The ordering key to use for publishing messages.").
+				Advanced(),
+			service.NewIntField("max_in_flight").Default(64).Description("The maximum number of messages to have in flight at a given time. Increasing this may improve throughput."),
+			service.NewIntField("count_threshold").
+				Default(defaults.CountThreshold).
+				Description("Publish a pubsub buffer when it has this many messages"),
+			service.NewDurationField("delay_threshold").
+				Default(defaults.DelayThreshold.String()).
+				Description("Publish a non-empty pubsub buffer after this delay has passed."),
+			service.NewIntField("byte_threshold").
+				Default(defaults.ByteThreshold).
+				Description("Publish a batch when its size in bytes reaches this value."),
+			service.NewDurationField("publish_timeout").
+				Default(defaults.Timeout.String()).
+				Example("10s").
+				Example("5m").
+				Example("60m").
+				Description("The maximum length of time to wait before abandoning a publish attempt for a message.").
+				Advanced(),
+			service.NewMetadataExcludeFilterField("metadata").
+				Optional().
+				Description("Specify criteria for which metadata values are sent as attributes, all are sent by default."),
+			service.NewObjectField(
+				"flow_control",
+				service.NewIntField("max_outstanding_bytes").
+					Default(defaults.FlowControlSettings.MaxOutstandingBytes).
+					Description("Maximum size of buffered messages to be published. If less than or equal to zero, this is disabled."),
+				service.NewIntField("max_outstanding_messages").
+					Default(defaults.FlowControlSettings.MaxOutstandingMessages).
+					Description("Maximum number of buffered messages to be published. If less than or equal to zero, this is disabled."),
+				service.NewStringEnumField("limit_exceeded_behavior", "ignore", "block", "signal_error").
+					Default("block").
+					Description("Configures the behavior when trying to publish additional messages while the flow controller is full. The available options are block (default), ignore (disable), and signal_error (publish results will return an error)."),
+			).
+				Description("For a given topic, configures the PubSub client's internal buffer for messages to be published.").
+				Advanced(),
+			service.NewBatchPolicyField("batching").
+				Description("Configures a batching policy on this output. While the PubSub client maintains its own internal buffering mechanism, preparing larger batches of messages can futher trade-off some latency for throughput."),
+		)
 }
 
-func newGCPPubSubOutput(conf output.Config, mgr bundle.NewManagement, log log.Modular, stats metrics.Type) (output.Streamed, error) {
-	a, err := newGCPPubSubWriter(conf.GCPPubSub, mgr, log)
-	if err != nil {
-		return nil, err
-	}
-	w, err := output.NewAsyncWriter("gcp_pubsub", conf.GCPPubSub.MaxInFlight, a, mgr)
-	if err != nil {
-		return nil, err
-	}
-	return output.OnlySinglePayloads(w), nil
-}
-
-type gcpPubSubWriter struct {
-	conf output.GCPPubSubConfig
-
-	client         *pubsub.Client
-	publishTimeout time.Duration
-	metaFilter     *metadata.ExcludeFilter
-
-	orderingEnabled bool
-	orderingKey     *field.Expression
-
-	topicID  *field.Expression
-	topics   map[string]*pubsub.Topic
+type pubsubOutput struct {
 	topicMut sync.Mutex
+	topics   map[string]pubsubTopic
 
-	flowControl pubsub.FlowControlSettings
-
-	log log.Modular
+	project         string
+	clientOpts      []option.ClientOption
+	client          pubsubClient
+	clientCancel    context.CancelFunc
+	publishSettings *pubsub.PublishSettings
+	topicQ          *service.InterpolatedString
+	metaFilter      *service.MetadataExcludeFilter
+	orderingKeyQ    *service.InterpolatedString
 }
 
-func newGCPPubSubWriter(conf output.GCPPubSubConfig, mgr bundle.NewManagement, log log.Modular) (*gcpPubSubWriter, error) {
-	var opt []option.ClientOption
-	if len(strings.TrimSpace(conf.Endpoint)) > 0 {
-		opt = []option.ClientOption{option.WithEndpoint(conf.Endpoint)}
-	}
+func newPubSubOutput(conf *service.ParsedConfig) (*pubsubOutput, error) {
+	var settings pubsub.PublishSettings
 
-	client, err := pubsub.NewClient(context.Background(), conf.ProjectID, opt...)
+	project, err := conf.FieldString("project")
 	if err != nil {
 		return nil, err
 	}
-	topic, err := mgr.BloblEnvironment().NewField(conf.TopicID)
+
+	topicQ, err := conf.FieldInterpolatedString("topic")
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse topic expression: %v", err)
-	}
-	orderingKey, err := mgr.BloblEnvironment().NewField(conf.OrderingKey)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse ordering key: %v", err)
-	}
-	pubTimeout, err := time.ParseDuration(conf.PublishTimeout)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse publish timeout duration: %w", err)
-	}
-	metaFilter, err := conf.Metadata.Filter()
-	if err != nil {
-		return nil, fmt.Errorf("failed to construct metadata filter: %w", err)
+		return nil, err
 	}
 
-	flowControl := pubsub.FlowControlSettings{
-		MaxOutstandingMessages: conf.FlowControl.MaxOutstandingMessages,
-		MaxOutstandingBytes:    conf.FlowControl.MaxOutstandingBytes,
+	metaFilter, err := conf.FieldMetadataExcludeFilter("metadata")
+	if err != nil {
+		return nil, err
 	}
-	switch conf.FlowControl.LimitExceededBehavior {
+
+	var orderingKeyQ *service.InterpolatedString
+	if conf.Contains("ordering_key") {
+		if orderingKeyQ, err = conf.FieldInterpolatedString("ordering_key"); err != nil {
+			return nil, err
+		}
+	}
+
+	if settings.DelayThreshold, err = conf.FieldDuration("delay_threshold"); err != nil {
+		return nil, err
+	}
+	if settings.CountThreshold, err = conf.FieldInt("count_threshold"); err != nil {
+		return nil, err
+	}
+	if settings.ByteThreshold, err = conf.FieldInt("byte_threshold"); err != nil {
+		return nil, err
+	}
+	if settings.Timeout, err = conf.FieldDuration("publish_timeout"); err != nil {
+		return nil, err
+	}
+
+	flowConf := conf.Namespace("flow_control")
+	var flowControl pubsub.FlowControlSettings
+	if flowControl.MaxOutstandingBytes, err = flowConf.FieldInt("max_outstanding_bytes"); err != nil {
+		return nil, err
+	}
+	if flowControl.MaxOutstandingMessages, err = flowConf.FieldInt("max_outstanding_messages"); err != nil {
+		return nil, err
+	}
+
+	var limitBehavior string
+	if limitBehavior, err = flowConf.FieldString("limit_exceeded_behavior"); err != nil {
+		return nil, err
+	}
+
+	switch limitBehavior {
 	case "ignore":
 		flowControl.LimitExceededBehavior = pubsub.FlowControlIgnore
 	case "block":
@@ -150,123 +167,200 @@ func newGCPPubSubWriter(conf output.GCPPubSubConfig, mgr bundle.NewManagement, l
 	case "signal_error":
 		flowControl.LimitExceededBehavior = pubsub.FlowControlSignalError
 	default:
-		return nil, fmt.Errorf("unrecognized flow control setting: %s", conf.FlowControl.LimitExceededBehavior)
+		return nil, fmt.Errorf("unrecognized flow control setting: %s", limitBehavior)
 	}
 
-	return &gcpPubSubWriter{
-		conf:            conf,
-		log:             log,
+	settings.FlowControlSettings = flowControl
+
+	var endpoint string
+	if endpoint, err = conf.FieldString("endpoint"); err != nil {
+		return nil, err
+	}
+
+	var opt []option.ClientOption
+	if len(endpoint) > 0 {
+		opt = []option.ClientOption{option.WithEndpoint(endpoint)}
+	}
+
+	return &pubsubOutput{
+		topics:          make(map[string]pubsubTopic),
+		project:         project,
+		clientOpts:      opt,
+		publishSettings: &settings,
+		topicQ:          topicQ,
 		metaFilter:      metaFilter,
-		client:          client,
-		publishTimeout:  pubTimeout,
-		topicID:         topic,
-		orderingKey:     orderingKey,
-		orderingEnabled: len(conf.OrderingKey) > 0,
-		flowControl:     flowControl,
+		orderingKeyQ:    orderingKeyQ,
 	}, nil
 }
 
-func (c *gcpPubSubWriter) Connect(ctx context.Context) error {
-	c.topicMut.Lock()
-	defer c.topicMut.Unlock()
-	if c.topics != nil {
+func (out *pubsubOutput) Connect(_ context.Context) error {
+	if out.client != nil {
 		return nil
 	}
 
-	c.topics = map[string]*pubsub.Topic{}
-	c.log.Infof("Sending GCP Cloud Pub/Sub messages to project '%v' and topic '%v'\n", c.conf.ProjectID, c.conf.TopicID)
+	clientCtx, clientCancel := context.WithCancel(context.Background())
+	client, err := pubsub.NewClient(clientCtx, out.project, out.clientOpts...)
+	if err != nil {
+		clientCancel()
+		return fmt.Errorf("failed to create pubsub client: %w", err)
+	}
+
+	out.client = &airGappedPubsubClient{client}
+	out.clientCancel = clientCancel
+
 	return nil
 }
 
-func (c *gcpPubSubWriter) getTopic(ctx context.Context, t string) (*pubsub.Topic, error) {
-	c.topicMut.Lock()
-	defer c.topicMut.Unlock()
-	if c.topics == nil {
-		return nil, component.ErrNotConnected
+func (out *pubsubOutput) WriteBatch(ctx context.Context, batch service.MessageBatch) error {
+	topics := make(map[string]pubsubTopic)
+	p := pool.NewWithResults[*serverResult]().WithContext(ctx)
+	batchErr := service.NewBatchError(batch, fmt.Errorf("failed to publish batch"))
+
+	for i, msg := range batch {
+		i := i
+		res, err := out.writeMessage(ctx, topics, msg)
+		if err != nil {
+			batchErr.Failed(i, err)
+			continue
+		}
+
+		p.Go(func(ctx context.Context) (*serverResult, error) {
+			_, err := res.Get(ctx)
+			if err != nil {
+				return &serverResult{batchIndex: i, err: err}, nil
+			}
+
+			return nil, nil
+		})
 	}
-	if t, exists := c.topics[t]; exists {
+
+	getResults, err := p.Wait()
+	if err != nil {
+		return fmt.Errorf("failed to get publish results: %w", err)
+	}
+
+	for _, res := range getResults {
+		if res == nil {
+			continue
+		}
+
+		batchErr.Failed(res.batchIndex, res.err)
+	}
+
+	if batchErr.IndexedErrors() > 0 {
+		return batchErr
+	}
+
+	return nil
+}
+
+func (out *pubsubOutput) Close(_ context.Context) error {
+	out.topicMut.Lock()
+	defer out.topicMut.Unlock()
+
+	for _, t := range out.topics {
+		t.Stop()
+	}
+	out.topics = nil
+
+	if out.clientCancel != nil {
+		out.clientCancel()
+	}
+
+	return nil
+}
+
+func (out *pubsubOutput) writeMessage(ctx context.Context, cachedTopics map[string]pubsubTopic, msg *service.Message) (publishResult, error) {
+	topicName, err := out.topicQ.TryString(msg)
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve topic name: %w", err)
+	}
+
+	topic, found := cachedTopics[topicName]
+
+	if !found {
+		t, err := out.getTopic(ctx, topicName)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get topic: %s: %w", topicName, err)
+		}
+
+		cachedTopics[topicName] = t
+		topic = t
+	}
+
+	attr := make(map[string]string)
+	if err := out.metaFilter.Walk(msg, func(key, value string) error {
+		attr[key] = value
+		return nil
+	}); err != nil {
+		return nil, fmt.Errorf("failed to build message attributes: %w", err)
+	}
+
+	var orderingKey string
+	if out.orderingKeyQ != nil {
+		if orderingKey, err = out.orderingKeyQ.TryString(msg); err != nil {
+			return nil, fmt.Errorf("failed to build ordering key: %w", err)
+		}
+	}
+
+	data, err := msg.AsBytes()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get bytes from message: %w", err)
+	}
+
+	return topic.Publish(ctx, &pubsub.Message{
+		Data:        data,
+		Attributes:  attr,
+		OrderingKey: orderingKey,
+	}), nil
+}
+
+func (out *pubsubOutput) getTopic(ctx context.Context, name string) (pubsubTopic, error) {
+	out.topicMut.Lock()
+	defer out.topicMut.Unlock()
+
+	if t, exists := out.topics[name]; exists {
 		return t, nil
 	}
 
-	topic := c.client.Topic(t)
-	exists, err := topic.Exists(ctx)
+	t := out.client.Topic(name, out.publishSettings)
+	exists, err := t.Exists(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to validate topic '%v': %v", t, err)
+		return nil, fmt.Errorf("failed to validate topic '%v': %v", name, err)
 	}
 	if !exists {
-		return nil, fmt.Errorf("topic '%v' does not exist", t)
+		return nil, fmt.Errorf("topic '%v' does not exist", name)
 	}
-	topic.PublishSettings.Timeout = c.publishTimeout
-	topic.PublishSettings.FlowControlSettings = c.flowControl
-	topic.EnableMessageOrdering = c.orderingEnabled
-	c.topics[t] = topic
-	return topic, nil
+
+	if out.orderingKeyQ != nil {
+		t.EnableOrdering()
+	}
+
+	out.topics[name] = t
+	return t, nil
 }
 
-func (c *gcpPubSubWriter) WriteBatch(ctx context.Context, msg message.Batch) error {
-	topics := make([]*pubsub.Topic, msg.Len())
-	if err := msg.Iter(func(i int, _ *message.Part) error {
-		topicStr, tErr := c.topicID.String(i, msg)
-		if tErr != nil {
-			return fmt.Errorf("topic id interpolation error: %w", tErr)
-		}
-		topics[i], tErr = c.getTopic(ctx, topicStr)
-		return tErr
-	}); err != nil {
-		return err
-	}
-
-	results := make([]*pubsub.PublishResult, msg.Len())
-	if err := msg.Iter(func(i int, part *message.Part) error {
-		topic := topics[i]
-		attr := map[string]string{}
-		_ = c.metaFilter.IterStr(part, func(k, v string) error {
-			attr[k] = v
-			return nil
-		})
-		gmsg := &pubsub.Message{
-			Data: part.AsBytes(),
-		}
-		if c.orderingEnabled {
-			var err error
-			if gmsg.OrderingKey, err = c.orderingKey.String(i, msg); err != nil {
-				return fmt.Errorf("ordering key interpolation error: %w", err)
-			}
-		}
-		if len(attr) > 0 {
-			gmsg.Attributes = attr
-		}
-		results[i] = topic.Publish(ctx, gmsg)
-		return nil
-	}); err != nil {
-		return err
-	}
-
-	var batchErr *batch.Error
-	for i, r := range results {
-		if _, err := r.Get(ctx); err != nil {
-			publishErr := fmt.Errorf("failed to publish message: %w", err)
-
-			if batchErr == nil {
-				batchErr = batch.NewError(msg, publishErr)
-			}
-			batchErr.Failed(i, publishErr)
-		}
-	}
-	if batchErr != nil {
-		return batchErr
-	}
-	return nil
+type serverResult struct {
+	batchIndex int
+	err        error
 }
 
-func (c *gcpPubSubWriter) Close(context.Context) error {
-	c.topicMut.Lock()
-	defer c.topicMut.Unlock()
-	if c.topics != nil {
-		for _, t := range c.topics {
-			t.Stop()
+func init() {
+	if err := service.RegisterBatchOutput("gcp_pubsub", newPubSubOutputConfig(), func(conf *service.ParsedConfig, mgr *service.Resources) (out service.BatchOutput, batchPolicy service.BatchPolicy, maxInFlight int, err error) {
+		maxInFlight, err = conf.FieldInt("max_in_flight")
+		if err != nil {
+			return
 		}
-		c.topics = nil
+
+		batchPolicy, err = conf.FieldBatchPolicy("batching")
+		if err != nil {
+			return
+		}
+
+		out, err = newPubSubOutput(conf)
+
+		return
+	}); err != nil {
+		panic(err)
 	}
-	return nil
 }

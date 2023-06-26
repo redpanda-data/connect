@@ -7,114 +7,105 @@ import (
 
 	"github.com/Azure/azure-storage-queue-go/azqueue"
 
-	"github.com/benthosdev/benthos/v4/internal/bloblang/field"
-	"github.com/benthosdev/benthos/v4/internal/bundle"
-	"github.com/benthosdev/benthos/v4/internal/component/input"
-	"github.com/benthosdev/benthos/v4/internal/component/input/processors"
-	"github.com/benthosdev/benthos/v4/internal/component/metrics"
-	"github.com/benthosdev/benthos/v4/internal/docs"
-	"github.com/benthosdev/benthos/v4/internal/impl/azure/shared"
-	"github.com/benthosdev/benthos/v4/internal/log"
-	"github.com/benthosdev/benthos/v4/internal/message"
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
-func init() {
-	err := bundle.AllInputs.Add(processors.WrapConstructor(func(conf input.Config, nm bundle.NewManagement) (input.Streamed, error) {
-		r, err := newAzureQueueStorage(conf.AzureQueueStorage, nm, nm.Logger(), nm.Metrics())
-		if err != nil {
-			return nil, err
-		}
-		return input.NewAsyncReader("azure_queue_storage", r, nm)
-	}), docs.ComponentSpec{
-		Name:    "azure_queue_storage",
-		Status:  docs.StatusBeta,
-		Version: "3.42.0",
-		Summary: `
-Dequeue objects from an Azure Storage Queue.`,
-		Description: `
-Dequeue objects from an Azure Storage Queue.
+const (
+	// Queue Storage Input Fields
+	qsiFieldQueueName                = "queue_name"
+	qsiFieldDequeueVisibilityTimeout = "dequeue_visibility_timeout"
+	qsiFieldTrackProperties          = "track_properties"
+)
 
+type qsiConfig struct {
+	svcURL                   *azqueue.ServiceURL
+	QueueName                *service.InterpolatedString
+	DequeueVisibilityTimeout time.Duration
+	MaxInFlight              int
+	TrackProperties          bool
+}
+
+func qsiConfigFromParsed(pConf *service.ParsedConfig) (conf qsiConfig, err error) {
+	if conf.svcURL, err = queueServiceURLFromParsed(pConf); err != nil {
+		return
+	}
+	if conf.QueueName, err = pConf.FieldInterpolatedString(qsiFieldQueueName); err != nil {
+		return
+	}
+	if conf.DequeueVisibilityTimeout, err = pConf.FieldDuration(qsiFieldDequeueVisibilityTimeout); err != nil {
+		return
+	}
+	if conf.MaxInFlight, err = pConf.FieldMaxInFlight(); err != nil {
+		return
+	}
+	if conf.TrackProperties, err = pConf.FieldBool(qsiFieldTrackProperties); err != nil {
+		return
+	}
+	return
+}
+
+func qsiSpec() *service.ConfigSpec {
+	return azureComponentSpec(false).
+		Beta().
+		Version("3.42.0").
+		Summary(`Dequeue objects from an Azure Storage Queue.`).
+		Description(`
 This input adds the following metadata fields to each message:
 
-` + "```" + `
+`+"```"+`
 - queue_storage_insertion_time
 - queue_storage_queue_name
 - queue_storage_message_lag (if 'track_properties' set to true)
 - All user defined queue metadata
-` + "```" + `
+`+"```"+`
 
-Only one authentication method is required, ` + "`storage_connection_string`" + ` or ` + "`storage_account` and `storage_access_key`" + `. If both are set then the ` + "`storage_connection_string`" + ` is given priority.`,
-		Config: docs.FieldComponent().WithChildren(
-			docs.FieldString(
-				"storage_account",
-				"The storage account to dequeue messages from. This field is ignored if `storage_connection_string` is set.",
-			),
-			docs.FieldString(
-				"storage_access_key",
-				"The storage account access key. This field is ignored if `storage_connection_string` is set.",
-			),
-			docs.FieldString(
-				"storage_sas_token",
-				"The storage account SAS token. This field is ignored if `storage_connection_string` or `storage_access_key` are set.",
-			),
-			docs.FieldString(
-				"storage_connection_string",
-				"A storage account connection string. This field is required if `storage_account` and `storage_access_key` / `storage_sas_token` are not set.",
-			),
-			docs.FieldString(
-				"queue_name", "The name of the source storage queue.", "foo_queue", `${! env("MESSAGE_TYPE").lowercase() }`,
-			).IsInterpolated(),
-			docs.FieldString(
-				"dequeue_visibility_timeout", "The timeout duration until a dequeued message gets visible again, 30s by default",
-			).AtVersion("3.45.0").Advanced(),
-			docs.FieldInt("max_in_flight", "The maximum number of unprocessed messages to fetch at a given time.").Advanced(),
-			docs.FieldBool("track_properties", "If set to `true` the queue is polled on each read request for information such as the queue message lag. These properties are added to consumed messages as metadata, but will also have a negative performance impact.").Advanced(),
-		).ChildDefaultAndTypesFromStruct(input.NewAzureQueueStorageConfig()),
-		Categories: []string{
-			"Services",
-			"Azure",
-		},
-	})
+Only one authentication method is required, `+"`storage_connection_string`"+` or `+"`storage_account` and `storage_access_key`"+`. If both are set then the `+"`storage_connection_string`"+` is given priority.`).
+		Fields(
+			service.NewInterpolatedStringField(qsiFieldQueueName).
+				Description("The name of the source storage queue.").
+				Example("foo_queue").
+				Example(`${! env("MESSAGE_TYPE").lowercase() }`),
+			service.NewDurationField(qsiFieldDequeueVisibilityTimeout).
+				Description("The timeout duration until a dequeued message gets visible again, 30s by default").
+				Version("3.45.0").
+				Advanced().
+				Default("30s"),
+			service.NewInputMaxInFlightField().
+				Description("The maximum number of unprocessed messages to fetch at a given time.").
+				Default(10).
+				Advanced(),
+			service.NewBoolField(qsiFieldTrackProperties).
+				Description("If set to `true` the queue is polled on each read request for information such as the queue message lag. These properties are added to consumed messages as metadata, but will also have a negative performance impact.").
+				Default(false).
+				Advanced(),
+			service.NewStringField(bscFieldStorageSASToken).Deprecated().Default(""), // This field was never implemented
+		)
+}
+
+func init() {
+	err := service.RegisterBatchInput("azure_queue_storage", qsiSpec(),
+		func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchInput, error) {
+			pConf, err := qsiConfigFromParsed(conf)
+			if err != nil {
+				return nil, err
+			}
+			return newAzureQueueStorage(pConf, mgr)
+		})
 	if err != nil {
 		panic(err)
 	}
 }
 
 type azureQueueStorage struct {
-	conf input.AzureQueueStorageConfig
-
-	queueName                *field.Expression
-	serviceURL               *azqueue.ServiceURL
-	dequeueVisibilityTimeout time.Duration
-
-	log   log.Modular
-	stats metrics.Type
+	conf qsiConfig
+	log  *service.Logger
 }
 
-func newAzureQueueStorage(conf input.AzureQueueStorageConfig, mgr bundle.NewManagement, log log.Modular, stats metrics.Type) (*azureQueueStorage, error) {
-	serviceURL, err := shared.GetQueueServiceURL(conf.StorageAccount, conf.StorageAccessKey, conf.StorageConnectionString)
-	if err != nil {
-		return nil, err
-	}
-
+func newAzureQueueStorage(conf qsiConfig, mgr *service.Resources) (*azureQueueStorage, error) {
 	a := &azureQueueStorage{
-		conf:       conf,
-		log:        log,
-		stats:      stats,
-		serviceURL: serviceURL,
+		conf: conf,
+		log:  mgr.Logger(),
 	}
-
-	if a.queueName, err = mgr.BloblEnvironment().NewField(conf.QueueName); err != nil {
-		return nil, fmt.Errorf("failed to parse queue name expression: %v", err)
-	}
-
-	if len(conf.DequeueVisibilityTimeout) > 0 {
-		var err error
-		if a.dequeueVisibilityTimeout, err = time.ParseDuration(conf.DequeueVisibilityTimeout); err != nil {
-			return nil, fmt.Errorf("unable to parse dequeue visibility timeout duration string: %w", err)
-		}
-	}
-
 	return a, nil
 }
 
@@ -122,13 +113,13 @@ func (a *azureQueueStorage) Connect(ctx context.Context) error {
 	return nil
 }
 
-func (a *azureQueueStorage) ReadBatch(ctx context.Context) (msg message.Batch, ackFn input.AsyncAckFn, err error) {
+func (a *azureQueueStorage) ReadBatch(ctx context.Context) (batch service.MessageBatch, ackFn service.AckFunc, err error) {
 	var queueName string
-	if queueName, err = a.queueName.String(0, msg); err != nil {
+	if queueName, err = a.conf.QueueName.TryString(service.NewMessage(nil)); err != nil {
 		err = fmt.Errorf("queue name interpolation error: %w", err)
 		return
 	}
-	queueURL := a.serviceURL.NewQueueURL(queueName)
+	queueURL := a.conf.svcURL.NewQueueURL(queueName)
 	messageURL := queueURL.NewMessagesURL()
 	var approxMsgCount int32
 	if a.conf.TrackProperties {
@@ -136,7 +127,7 @@ func (a *azureQueueStorage) ReadBatch(ctx context.Context) (msg message.Batch, a
 			approxMsgCount = props.ApproximateMessagesCount()
 		}
 	}
-	dequeue, err := messageURL.Dequeue(ctx, a.conf.MaxInFlight, a.dequeueVisibilityTimeout)
+	dequeue, err := messageURL.Dequeue(ctx, int32(a.conf.MaxInFlight), a.conf.DequeueVisibilityTimeout)
 	if err != nil {
 		if cerr, ok := err.(azqueue.StorageError); ok {
 			if cerr.ServiceCode() == azqueue.ServiceCodeQueueNotFound {
@@ -151,11 +142,10 @@ func (a *azureQueueStorage) ReadBatch(ctx context.Context) (msg message.Batch, a
 	if n := dequeue.NumMessages(); n > 0 {
 		props, _ := queueURL.GetProperties(ctx)
 		metadata := props.NewMetadata()
-		msg := message.QuickBatch(nil)
 		dqm := make([]*azqueue.DequeuedMessage, n)
 		for i := int32(0); i < n; i++ {
 			queueMsg := dequeue.Message(i)
-			part := message.NewPart([]byte(queueMsg.Text))
+			part := service.NewMessage([]byte(queueMsg.Text))
 			part.MetaSetMut("queue_storage_insertion_time", queueMsg.InsertionTime.Format(time.RFC3339))
 			part.MetaSetMut("queue_storage_queue_name", queueName)
 			if a.conf.TrackProperties {
@@ -168,10 +158,10 @@ func (a *azureQueueStorage) ReadBatch(ctx context.Context) (msg message.Batch, a
 			for k, v := range metadata {
 				part.MetaSetMut(k, v)
 			}
-			msg = append(msg, part)
+			batch = append(batch, part)
 			dqm[i] = queueMsg
 		}
-		return msg, func(ctx context.Context, res error) error {
+		return batch, func(ctx context.Context, res error) error {
 			for i := int32(0); i < n; i++ {
 				msgIDURL := messageURL.NewMessageIDURL(dqm[i].ID)
 				_, err = msgIDURL.Delete(ctx, dqm[i].PopReceipt)

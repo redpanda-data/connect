@@ -30,11 +30,11 @@ Introduced in version 3.59.0.
 # Common config fields, showing default values
 label: ""
 sql_insert:
-  driver: ""
-  dsn: ""
-  table: ""
-  columns: []
-  args_mapping: ""
+  driver: "" # No default (required)
+  dsn: clickhouse://username:password@host1:9000,host2:9000/database?dial_timeout=200ms&max_execution_time=60 # No default (required)
+  table: foo # No default (required)
+  columns: [] # No default (required)
+  args_mapping: root = [ this.cat.meow, this.doc.woofs[0] ] # No default (required)
 ```
 
 </TabItem>
@@ -44,19 +44,25 @@ sql_insert:
 # All config fields, showing default values
 label: ""
 sql_insert:
-  driver: ""
-  dsn: ""
-  table: ""
-  columns: []
-  args_mapping: ""
-  prefix: ""
-  suffix: ""
-  init_files: []
-  init_statement: ""
-  conn_max_idle_time: ""
-  conn_max_life_time: ""
+  driver: "" # No default (required)
+  dsn: clickhouse://username:password@host1:9000,host2:9000/database?dial_timeout=200ms&max_execution_time=60 # No default (required)
+  table: foo # No default (required)
+  columns: [] # No default (required)
+  args_mapping: root = [ this.cat.meow, this.doc.woofs[0] ] # No default (required)
+  prefix: "" # No default (optional)
+  suffix: ON CONFLICT (name) DO NOTHING # No default (optional)
+  init_files: [] # No default (optional)
+  init_statement: | # No default (optional)
+    CREATE TABLE IF NOT EXISTS some_table (
+      foo varchar(50) not null,
+      bar integer,
+      baz varchar(50),
+      primary key (foo)
+    ) WITHOUT ROWID;
+  conn_max_idle_time: "" # No default (optional)
+  conn_max_life_time: "" # No default (optional)
   conn_max_idle: 2
-  conn_max_open: 0
+  conn_max_open: 0 # No default (optional)
 ```
 
 </TabItem>
@@ -102,7 +108,7 @@ A database [driver](#drivers) to use.
 
 
 Type: `string`  
-Options: `mysql`, `postgres`, `clickhouse`, `mssql`, `sqlite`, `oracle`, `snowflake`.
+Options: `mysql`, `postgres`, `clickhouse`, `mssql`, `sqlite`, `oracle`, `snowflake`, `trino`.
 
 ### `dsn`
 
@@ -121,6 +127,7 @@ The following is a list of supported drivers, their placeholder style, and their
 | `sqlite` | `file:/path/to/filename.db[?param&=value1&...]` |
 | `oracle` | `oracle://[username[:password]@][netloc][:port]/service_name?server=server2&server=server3` |
 | `snowflake` | `username[:password]@account_identifier/dbname/schemaname[?param1=value&...&paramN=valueN]` |
+| `trino` | [`http[s]://user[:pass]@host[:port][?parameters]`](https://github.com/trinodb/trino-go-client#dsn-data-source-name)
 
 Please note that the `postgres` driver enforces SSL by default, you can override this with the parameter `sslmode=disable` if required.
 

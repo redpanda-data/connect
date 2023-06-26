@@ -20,8 +20,6 @@ func TestBloblLinter(t *testing.T) {
 }
 `)
 
-	lintCtx := NewLintContext()
-
 	tests := []struct {
 		name     string
 		input    any
@@ -62,7 +60,7 @@ func TestBloblLinter(t *testing.T) {
 			var node yaml.Node
 			require.NoError(t, node.Encode(test.input))
 
-			lints := f.LintYAML(lintCtx, &node)
+			lints := f.LintYAML(NewLintContext(NewLintConfig()), &node)
 			assert.Equal(t, test.expected, lints)
 		})
 	}
@@ -127,7 +125,7 @@ func TestFieldLinting(t *testing.T) {
 			var lints []Lint
 			linter := test.f.getLintFunc()
 			if linter != nil {
-				lints = linter(NewLintContext(), 0, 0, test.input)
+				lints = linter(NewLintContext(NewLintConfig()), 0, 0, test.input)
 			}
 			assert.Equal(t, test.output, lints)
 		})

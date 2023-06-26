@@ -13,15 +13,19 @@ import (
 	gonanoid "github.com/matoous/go-nanoid/v2"
 	"github.com/urfave/cli/v2"
 
+	ibloblang "github.com/benthosdev/benthos/v4/internal/bloblang"
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/bundle/tracing"
 	"github.com/benthosdev/benthos/v4/internal/cli/common"
 	"github.com/benthosdev/benthos/v4/internal/cli/studio/metrics"
 	stracing "github.com/benthosdev/benthos/v4/internal/cli/studio/tracing"
 	"github.com/benthosdev/benthos/v4/internal/config"
+	"github.com/benthosdev/benthos/v4/internal/docs"
+	"github.com/benthosdev/benthos/v4/internal/filepath/ifs"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/manager"
 	"github.com/benthosdev/benthos/v4/internal/stream"
+	"github.com/benthosdev/benthos/v4/public/bloblang"
 )
 
 type noopStopper struct{}
@@ -29,6 +33,12 @@ type noopStopper struct{}
 func (n noopStopper) Stop(_ context.Context) error {
 	return nil
 }
+
+// When a stream component (manager with resources or stream running a config)
+// is instructed to shutdown this deadline determines the maximum amount of time
+// we're willing to wait for it to be done gracefully when otherwise not
+// configured.
+const defaultCloseDeadline = time.Second * 30
 
 // PullRunner encapsulates a component that runs a Benthos stream continuously
 // by obtaining a deployment allocation from a Studio session, pulling the
@@ -42,6 +52,10 @@ type PullRunner struct {
 	localConf      config.Type
 	confReader     *config.Reader
 	sessionTracker *sessionTracker
+
+	// Controls disabled deployment rotations
+	isDisabled     bool
+	latestMainConf *stream.Config
 
 	metricsFlushPeriod time.Duration
 	metrics            *metrics.Tracker
@@ -124,7 +138,9 @@ func NewPullRunner(c *cli.Context, version, dateBuilt, token, secret string, opt
 		if r.localConf, localLints, err = localReader.Read(); err != nil {
 			return nil, fmt.Errorf("configuration file read error: %w", err)
 		}
-		_ = localReader.Close(c.Context)
+		_ = r.withExitContext(c.Context, func(ctx context.Context) error {
+			return localReader.Close(ctx)
+		})
 	}
 
 	// Logger is suuuuper primitive so we only instantiate it from the local
@@ -143,10 +159,11 @@ func NewPullRunner(c *cli.Context, version, dateBuilt, token, secret string, opt
 	}
 	r.metricsFlushPeriod = r.sessionTracker.MetricsGuideFlushPeriod()
 
-	if err := r.bootstrapConfigReader(c.Context); err != nil {
+	err = r.bootstrapConfigReader(c.Context)
+	if err != nil {
 		r.logger.Errorf("Failed to run initial sync config: %v", err)
-		r.sessionTracker.SetRunError(err)
 	}
+	r.sessionTracker.SetRunError(err)
 	return r, nil
 }
 
@@ -160,9 +177,39 @@ func (r *PullRunner) logLints(lints []string) {
 	}
 }
 
+func (r *PullRunner) setStreamDisabled(ctx context.Context, toDisabled bool) error {
+	if r.isDisabled == toDisabled {
+		return nil // Already set
+	}
+
+	return r.withExitContext(ctx, func(ctx context.Context) error {
+		if toDisabled {
+			if err := r.stoppableStream.Replace(ctx, func() (common.Stoppable, error) {
+				return &noopStopper{}, nil
+			}); err != nil {
+				return err
+			}
+		} else if r.latestMainConf != nil && r.mgr != nil {
+			if err := r.stoppableStream.Replace(ctx, func() (common.Stoppable, error) {
+				return stream.New(*r.latestMainConf, r.mgr)
+			}); err != nil {
+				return err
+			}
+		}
+		r.isDisabled = toDisabled
+		return nil
+	})
+}
+
 func (r *PullRunner) triggerStreamReset(ctx context.Context, conf *config.Type, mgr bundle.NewManagement) error {
-	return r.stoppableStream.Replace(ctx, func() (common.Stoppable, error) {
-		return stream.New(conf.Config, mgr)
+	r.latestMainConf = &conf.Config
+	if r.isDisabled {
+		return nil
+	}
+	return r.withExitContext(ctx, func(ctx context.Context) error {
+		return r.stoppableStream.Replace(ctx, func() (common.Stoppable, error) {
+			return stream.New(conf.Config, mgr)
+		})
 	})
 }
 
@@ -177,20 +224,37 @@ func (r *PullRunner) bootstrapConfigReader(ctx context.Context) (bootstrapErr er
 		initResources = append(initResources, f.Name)
 	}
 
+	sessFS := &sessionFS{
+		tracker: r.sessionTracker,
+		backup:  ifs.OS(),
+	}
+
+	bloblEnv := ibloblang.GlobalEnvironment().WithCustomImporter(func(name string) ([]byte, error) {
+		return ifs.ReadFile(sessFS, name)
+	})
+
+	lintConf := docs.NewLintConfig()
+	lintConf.BloblangEnv = bloblang.XWrapEnvironment(bloblEnv).Deactivated()
+
 	confReaderTmp := config.NewReader(initMainFile, initResources,
 		config.OptSetBootstrapConfig(&r.localConf),
 		config.OptAddOverrides(r.setList...),
 		config.OptTestSuffix("_benthos_test"),
-		config.OptUseFS(&sessionFS{tracker: r.sessionTracker}))
+		config.OptUseFS(sessFS),
+		config.OptSetLintConfig(lintConf),
+	)
+
 	defer func() {
 		if bootstrapErr != nil {
-			_ = confReaderTmp.Close(context.Background())
+			_ = r.withExitContext(ctx, func(ctx context.Context) error {
+				return confReaderTmp.Close(ctx)
+			})
 		}
 	}()
 
 	conf, lints, err := confReaderTmp.Read()
 	if err != nil {
-		return err
+		return fmt.Errorf("failed bootstrap config read: %w", err)
 	}
 	r.logLints(lints)
 	if r.strictMode && len(lints) > 0 {
@@ -203,19 +267,22 @@ func (r *PullRunner) bootstrapConfigReader(ctx context.Context) (bootstrapErr er
 	stopMgrTmp, err := common.CreateManager(
 		r.cliContext, r.logger, false, r.version, r.dateBuilt, conf,
 		manager.OptSetEnvironment(tmpEnv),
-	)
+		manager.OptSetBloblangEnvironment(bloblEnv),
+		manager.OptSetFS(sessFS))
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to create manager from bootstrap config: %w", err)
 	}
 	defer func() {
 		if bootstrapErr != nil {
-			_ = stopMgrTmp.Stop(context.Background())
+			_ = r.withExitContext(ctx, func(ctx context.Context) error {
+				return stopMgrTmp.Stop(ctx)
+			})
 		}
 	}()
 
 	mgrTmp := stopMgrTmp.Manager().WithAddedMetrics(r.metrics)
 	if err := r.triggerStreamReset(ctx, &conf, mgrTmp); err != nil {
-		return err
+		return fmt.Errorf("failed initial stream reset: %w", err)
 	}
 
 	// Extract shutdown timeout values
@@ -243,7 +310,7 @@ func (r *PullRunner) bootstrapConfigReader(ctx context.Context) (bootstrapErr er
 	r.exitTimeout = exitTimeout
 
 	if err := confReaderTmp.SubscribeConfigChanges(func(conf *config.Type) error {
-		return r.triggerStreamReset(context.Background(), conf, mgrTmp) // TODO: Context on shutdown?
+		return r.triggerStreamReset(context.Background(), conf, mgrTmp)
 	}); err != nil {
 		return fmt.Errorf("failed to subscribe to config changes: %w", err)
 	}
@@ -269,7 +336,7 @@ func (r *PullRunner) Sync(ctx context.Context) {
 		}
 	}
 
-	diff, requestedTraces, err := r.sessionTracker.Sync(ctx, metricsOut, tracingOut)
+	isDisabled, diff, requestedTraces, err := r.sessionTracker.Sync(ctx, metricsOut, tracingOut)
 	if err != nil {
 		r.logger.Errorf("Failed session sync: %v", err)
 		return
@@ -278,11 +345,24 @@ func (r *PullRunner) Sync(ctx context.Context) {
 	if r.confReader == nil {
 		// We haven't bootstrapped yet, likely due to a bad config on
 		// our first attempt. The latest sync may have fixed the issue
-		// so we try again.
-		if err := r.bootstrapConfigReader(ctx); err != nil {
-			r.logger.Errorf("Failed to bootstrap initial config: %v", err)
-			r.sessionTracker.SetRunError(err)
+		// so we can potentially try again.
+
+		if isDisabled {
+			// Except the deployment is disabled now, so don't.
+			r.logger.Infoln("Deployment is disabled, so skipping bootstrap of initial config")
+			return
 		}
+
+		err := r.bootstrapConfigReader(ctx)
+		if err != nil {
+			r.logger.Errorf("Failed to bootstrap initial config: %v", err)
+		}
+		r.sessionTracker.SetRunError(err)
+		return
+	}
+
+	if err = r.setStreamDisabled(ctx, isDisabled); err != nil {
+		r.logger.Errorf("Failed to toggle deployment enablement: %v", err)
 		return
 	}
 
@@ -323,6 +403,16 @@ func (r *PullRunner) Sync(ctx context.Context) {
 	}
 }
 
+func (r *PullRunner) withExitContext(ctx context.Context, fn func(context.Context) error) error {
+	tout := r.exitTimeout
+	if tout <= 0 {
+		tout = defaultCloseDeadline
+	}
+	ctx, done := context.WithTimeout(ctx, tout)
+	defer done()
+	return fn(ctx)
+}
+
 // Stop any underlying stream and managers that may exist.
 func (r *PullRunner) Stop(ctx context.Context) error {
 	{
@@ -345,30 +435,26 @@ func (r *PullRunner) Stop(ctx context.Context) error {
 		}
 	}
 
-	if r.exitTimeout <= 0 {
-		r.exitTimeout = time.Second * 5
-	}
-	ctx, done := context.WithTimeout(ctx, r.exitTimeout)
-	defer done()
-
-	if err := r.stoppableStream.Stop(ctx); err != nil {
-		r.logger.Warnf(
-			"Service failed to close the running stream cleanly within allocated time: %v."+
-				" Exiting forcefully and dumping stack trace to stderr\n", err,
-		)
-		_ = pprof.Lookup("goroutine").WriteTo(os.Stderr, 1)
-		return err
-	}
-	if r.stoppableMgr == nil {
+	return r.withExitContext(ctx, func(ctx context.Context) error {
+		if err := r.stoppableStream.Stop(ctx); err != nil {
+			r.logger.Warnf(
+				"Service failed to close the running stream cleanly within allocated time: %v."+
+					" Exiting forcefully and dumping stack trace to stderr\n", err,
+			)
+			_ = pprof.Lookup("goroutine").WriteTo(os.Stderr, 1)
+			return err
+		}
+		if r.stoppableMgr == nil {
+			return nil
+		}
+		if err := r.stoppableMgr.Stop(ctx); err != nil {
+			r.logger.Warnf(
+				"Service failed to close resources cleanly within allocated time: %v."+
+					" Exiting forcefully and dumping stack trace to stderr\n", err,
+			)
+			_ = pprof.Lookup("goroutine").WriteTo(os.Stderr, 1)
+			return err
+		}
 		return nil
-	}
-	if err := r.stoppableMgr.Stop(ctx); err != nil {
-		r.logger.Warnf(
-			"Service failed to close resources cleanly within allocated time: %v."+
-				" Exiting forcefully and dumping stack trace to stderr\n", err,
-		)
-		_ = pprof.Lookup("goroutine").WriteTo(os.Stderr, 1)
-		return err
-	}
-	return nil
+	})
 }

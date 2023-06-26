@@ -692,6 +692,9 @@ root.description = this.description.trim()
 
 Remove the provided leading prefix substring from a string. If the string does not have the prefix substring, it is returned unchanged.
 
+Introduced in version 4.12.0.
+
+
 #### Parameters
 
 **`prefix`** &lt;string&gt; The leading prefix substring to trim from the string.  
@@ -710,6 +713,9 @@ root.description = this.description.trim_prefix("foobar_")
 ### `trim_suffix`
 
 Remove the provided trailing suffix substring from a string. If the string does not have the suffix substring, it is returned unchanged.
+
+Introduced in version 4.12.0.
+
 
 #### Parameters
 
@@ -1241,6 +1247,17 @@ root.delay_for_s = this.delay_for.parse_duration_iso8601() / 1000000000
 # Out: {"delay_for_s":2.5}
 ```
 
+### `ts_add_iso8601`
+
+:::caution BETA
+This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
+:::
+Parse parameter string as ISO 8601 period and add it to value with high precision for units larger than an hour.
+
+#### Parameters
+
+**`duration`** &lt;string&gt; Duration in ISO 8601 format  
+
 ### `ts_format`
 
 :::caution BETA
@@ -1417,6 +1434,17 @@ root.doc.timestamp = this.doc.timestamp.ts_strptime("%Y-%b-%d %H:%M:%S.%f")
 # In:  {"doc":{"timestamp":"2020-Aug-14 11:50:26.371000"}}
 # Out: {"doc":{"timestamp":"2020-08-14T11:50:26.371Z"}}
 ```
+
+### `ts_sub_iso8601`
+
+:::caution BETA
+This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
+:::
+Parse parameter string as ISO 8601 period and subtract it from value with high precision for units larger than an hour.
+
+#### Parameters
+
+**`duration`** &lt;string&gt; Duration in ISO 8601 format  
 
 ### `ts_tz`
 
@@ -1905,11 +1933,11 @@ root.new_dict = this.dict.filter(item -> item.value.contains("foo"))
 :::caution BETA
 This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
 :::
-Returns the index of the first occurrence of a value or query in an array. `-1` is returned if there are no matches. Numerical comparisons are made irrespective of the representation type (float versus integer).
+Returns the index of the first occurrence of a value an array. `-1` is returned if there are no matches. Numerical comparisons are made irrespective of the representation type (float versus integer).
 
 #### Parameters
 
-**`value`** &lt;query expression&gt; A value to find. If a query is provided it will only be resolved once during the lifetime of the mapping.  
+**`value`** &lt;unknown&gt; A value to find.  
 
 #### Examples
 
@@ -1922,17 +1950,10 @@ root.index = this.find("bar")
 ```
 
 ```coffee
-root.index = this.find(v -> v != "bar")
+root.index = this.things.find(this.goal)
 
-# In:  ["foo", "bar", "baz"]
-# Out: {"index":0}
-```
-
-```coffee
-root.index = this.find(v -> v != "foo")
-
-# In:  ["foo"]
-# Out: {"index":-1}
+# In:  {"goal":"bar","things":["foo", "bar", "baz"]}
+# Out: {"index":1}
 ```
 
 ### `find_all`
@@ -1940,11 +1961,11 @@ root.index = this.find(v -> v != "foo")
 :::caution BETA
 This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
 :::
-Returns an array containing the indexes of all occurrences of a value or query in an array. An empty array is returned if there are no matches. Numerical comparisons are made irrespective of the representation type (float versus integer).
+Returns an array containing the indexes of all occurrences of a value in an array. An empty array is returned if there are no matches. Numerical comparisons are made irrespective of the representation type (float versus integer).
 
 #### Parameters
 
-**`value`** &lt;query expression&gt; A value to find. If a query is provided it will only be resolved once during the lifetime of the mapping.  
+**`value`** &lt;unknown&gt; A value to find.  
 
 #### Examples
 
@@ -1957,17 +1978,52 @@ root.index = this.find_all("bar")
 ```
 
 ```coffee
-root.index = this.find_all(v -> v != "bar")
+root.indexes = this.things.find_all(this.goal)
+
+# In:  {"goal":"bar","things":["foo", "bar", "baz", "bar", "buz"]}
+# Out: {"indexes":[1,3]}
+```
+
+### `find_all_by`
+
+:::caution BETA
+This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
+:::
+Returns an array containing the indexes of all occurrences of an array where the provided query resolves to a boolean `true`. An empty array is returned if there are no matches. Numerical comparisons are made irrespective of the representation type (float versus integer).
+
+#### Parameters
+
+**`query`** &lt;query expression&gt; A query to execute for each element.  
+
+#### Examples
+
+
+```coffee
+root.index = this.find_all_by(v -> v != "bar")
 
 # In:  ["foo", "bar", "baz"]
 # Out: {"index":[0,2]}
 ```
 
-```coffee
-root.index = this.find_all(v -> v != "foo")
+### `find_by`
 
-# In:  ["foo"]
-# Out: {"index":[]}
+:::caution BETA
+This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
+:::
+Returns the index of the first occurrence of an array where the provided query resolves to a boolean `true`. `-1` is returned if there are no matches.
+
+#### Parameters
+
+**`query`** &lt;query expression&gt; A query to execute for each element.  
+
+#### Examples
+
+
+```coffee
+root.index = this.find_by(v -> v != "bar")
+
+# In:  ["foo", "bar", "baz"]
+# Out: {"index":0}
 ```
 
 ### `flatten`
@@ -2899,7 +2955,7 @@ Compresses a string or byte array value according to a specified algorithm.
 
 #### Parameters
 
-**`algorithm`** &lt;string&gt; One of `flate`, `gzip`, `lz4`, `snappy`, `zlib`, `zstd`.  
+**`algorithm`** &lt;string&gt; One of `flate`, `gzip`, `pgzip`, `lz4`, `snappy`, `zlib`, `zstd`.  
 **`level`** &lt;integer, default `-1`&gt; The level of compression to use. May not be applicable to all algorithms.  
 
 #### Examples
@@ -2926,7 +2982,7 @@ root.compressed = content().compress("lz4").encode("base64")
 
 Decodes an encoded string target according to a chosen scheme and returns the result as a byte array. When mapping the result to a JSON field the value should be cast to a string using the method [`string`][methods.string], or encoded using the method [`encode`][methods.encode], otherwise it will be base64 encoded by default.
 
-Available schemes are: `base64`, `base64url`, `hex`, `ascii85`.
+Available schemes are: `base64`, `base64url` [(RFC 4648 with padding characters)](https://rfc-editor.org/rfc/rfc4648.html), `base64rawurl` [(RFC 4648 without padding characters)](https://rfc-editor.org/rfc/rfc4648.html), `hex`, `ascii85`.
 
 #### Parameters
 
@@ -2955,7 +3011,7 @@ Decompresses a string or byte array value according to a specified algorithm. Th
 
 #### Parameters
 
-**`algorithm`** &lt;string&gt; One of `gzip`, `zlib`, `bzip2`, `flate`, `snappy`, `lz4`, `zstd`.  
+**`algorithm`** &lt;string&gt; One of `gzip`, `pgzip`, `zlib`, `bzip2`, `flate`, `snappy`, `lz4`, `zstd`.  
 
 #### Examples
 
@@ -3000,7 +3056,7 @@ root.decrypted = this.value.decode("hex").decrypt_aes("ctr", $key, $vector).stri
 
 ### `encode`
 
-Encodes a string or byte array target according to a chosen scheme and returns a string result. Available schemes are: `base64`, `base64url`, `hex`, `ascii85`.
+Encodes a string or byte array target according to a chosen scheme and returns a string result. Available schemes are: `base64`, `base64url` [(RFC 4648 with padding characters)](https://rfc-editor.org/rfc/rfc4648.html), `base64rawurl` [(RFC 4648 without padding characters)](https://rfc-editor.org/rfc/rfc4648.html), `hex`, `ascii85`.
 
 #### Parameters
 

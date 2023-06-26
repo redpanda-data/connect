@@ -14,6 +14,7 @@ import (
 	ioutput "github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/config"
+	"github.com/benthosdev/benthos/v4/internal/filepath/ifs"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/manager"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
@@ -103,7 +104,7 @@ func (h *Handler) Handle(ctx context.Context, obj any) (any, error) {
 // NewHandler returns a Handler by creating a Benthos pipeline.
 func NewHandler(conf config.Type) (*Handler, error) {
 	// Logging and stats aggregation.
-	logger, err := log.New(os.Stdout, conf.Logger)
+	logger, err := log.New(os.Stdout, ifs.OS(), conf.Logger)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create logger: %v", err)
 	}

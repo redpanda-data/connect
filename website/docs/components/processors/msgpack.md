@@ -25,7 +25,7 @@ Introduced in version 3.59.0.
 # Config fields, showing default values
 label: ""
 msgpack:
-  operator: ""
+  operator: "" # No default (required)
 ```
 
 ## Fields

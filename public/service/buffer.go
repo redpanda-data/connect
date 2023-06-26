@@ -84,7 +84,7 @@ func newAirGapBatchBuffer(b BatchBuffer) buffer.ReaderWriter {
 func (a *airGapBatchBuffer) Write(ctx context.Context, msg message.Batch, aFn buffer.AckFunc) error {
 	parts := make([]*Message, msg.Len())
 	_ = msg.Iter(func(i int, part *message.Part) error {
-		parts[i] = newMessageFromPart(part)
+		parts[i] = NewInternalMessage(part)
 		return nil
 	})
 	return a.b.WriteBatch(ctx, parts, AckFunc(aFn))

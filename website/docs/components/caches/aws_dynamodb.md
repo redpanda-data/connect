@@ -30,9 +30,9 @@ Introduced in version 3.36.0.
 # Common config fields, showing default values
 label: ""
 aws_dynamodb:
-  table: ""
-  hash_key: ""
-  data_key: ""
+  table: "" # No default (required)
+  hash_key: "" # No default (required)
+  data_key: "" # No default (required)
 ```
 
 </TabItem>
@@ -42,12 +42,12 @@ aws_dynamodb:
 # All config fields, showing default values
 label: ""
 aws_dynamodb:
-  table: ""
-  hash_key: ""
-  data_key: ""
+  table: "" # No default (required)
+  hash_key: "" # No default (required)
+  data_key: "" # No default (required)
   consistent_read: false
-  default_ttl: ""
-  ttl_key: ""
+  default_ttl: "" # No default (optional)
+  ttl_key: "" # No default (optional)
   retries:
     initial_interval: 1s
     max_interval: 5s

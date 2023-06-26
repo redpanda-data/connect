@@ -1,0 +1,63 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: benthos-server-config
+data:
+  config.yaml: |
+    input:
+      http_server:
+        path: /test
+    pipeline:
+      processors:
+        - switch:
+            - check: '@.http_server_request_path.or("").has_prefix("/test/a")'
+              processors:
+                - mapping: 'root = content().uppercase()'
+            - check: '@.http_server_request_path.or("").has_prefix("/test/b")'
+              processors:
+                - mapping: 'root = content() + " AND THIS"'
+    output:
+      sync_response: {}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: benthos-server
+spec:
+  replicas: 1
+  strategy: {}
+  selector:
+    matchLabels:
+      app: benthos-server
+  template:
+    metadata:
+      labels:
+        app: benthos-server
+    spec:
+      volumes:
+        - name: config-volume
+          configMap:
+            name: benthos-server-config
+      containers:
+        - name: benthos
+          image: jeffail/benthos:latest
+          args:
+            - "-c"
+            - "/etc/benthos/config.yaml"
+          ports:
+            - containerPort: 4195
+          volumeMounts:
+            - name: config-volume
+              mountPath: "/etc/benthos"
+              readOnly: true
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: benthos-server
+spec:
+  selector:
+    app: benthos-server
+  ports:
+    - port: 4195

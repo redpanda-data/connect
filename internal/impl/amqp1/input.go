@@ -2,7 +2,6 @@ package amqp1
 
 import (
 	"context"
-	"crypto/tls"
 	"errors"
 	"fmt"
 	"math/rand"
@@ -13,61 +12,248 @@ import (
 
 	"github.com/Azure/go-amqp"
 
-	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component"
-	"github.com/benthosdev/benthos/v4/internal/component/input"
-	"github.com/benthosdev/benthos/v4/internal/component/input/processors"
-	"github.com/benthosdev/benthos/v4/internal/docs"
-	"github.com/benthosdev/benthos/v4/internal/impl/amqp1/shared"
-	"github.com/benthosdev/benthos/v4/internal/log"
-	"github.com/benthosdev/benthos/v4/internal/message"
-	itls "github.com/benthosdev/benthos/v4/internal/tls"
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
-func init() {
-	err := bundle.AllInputs.Add(processors.WrapConstructor(func(c input.Config, nm bundle.NewManagement) (input.Streamed, error) {
-		a, err := newAMQP1Reader(c.AMQP1, nm)
-		if err != nil {
-			return nil, err
-		}
-		return input.NewAsyncReader("amqp_1", a, nm)
-	}), docs.ComponentSpec{
-		Name:    "amqp_1",
-		Status:  docs.StatusStable,
-		Summary: `Reads messages from an AMQP (1.0) server.`,
-		Description: `
+func amqp1InputSpec() *service.ConfigSpec {
+	return service.NewConfigSpec().
+		Stable().
+		Categories("Services").
+		Summary("Reads messages from an AMQP (1.0) server.").
+		Description(`
 ### Metadata
 
 This input adds the following metadata fields to each message:
 
-` + "``` text" + `
+`+"``` text"+`
 - amqp_content_type
 - amqp_content_encoding
 - amqp_creation_time
 - All string typed message annotations
-` + "```" + `
+`+"```"+`
 
-You can access these metadata fields using
-[function interpolation](/docs/configuration/interpolation#bloblang-queries).`,
-		Categories: []string{
-			"Services",
-		},
-		Config: docs.FieldComponent().WithChildren(
-			docs.FieldURL("url",
-				"A URL to connect to.",
-				"amqp://localhost:5672/",
-				"amqps://guest:guest@localhost:5672/",
-			).HasDefault(""),
-			docs.FieldString("source_address", "The source address to consume from.", "/foo", "queue:/bar", "topic:/baz").HasDefault(""),
-			docs.FieldBool("azure_renew_lock", "Experimental: Azure service bus specific option to renew lock if processing takes more then configured lock time").AtVersion("3.45.0").HasDefault(false).Advanced(),
-			itls.FieldSpec(),
-			shared.SASLFieldSpec(),
-		),
-	})
+You can access these metadata fields using [function interpolation](/docs/configuration/interpolation#bloblang-queries).`).
+		Fields(
+			service.NewURLField(urlField).
+				Description("A URL to connect to.").
+				Example("amqp://localhost:5672/").
+				Example("amqps://guest:guest@localhost:5672/"),
+			service.NewStringField(sourceAddrField).
+				Description("The source address to consume from.").
+				Example("/foo").
+				Example("queue:/bar").
+				Example("topic:/baz"),
+			service.NewBoolField(azureRenewLockField).
+				Description("Experimental: Azure service bus specific option to renew lock if processing takes more then configured lock time").
+				Version("3.45.0").
+				Default(false).
+				Advanced(),
+			service.NewTLSToggledField(tlsField),
+			saslFieldSpec(),
+		)
+}
+
+func init() {
+	err := service.RegisterBatchInput("amqp_1", amqp1InputSpec(),
+		func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchInput, error) {
+			return amqp1ReaderFromParsed(conf, mgr)
+		})
 	if err != nil {
 		panic(err)
 	}
 }
+
+//------------------------------------------------------------------------------
+
+type amqp1Reader struct {
+	url        string
+	sourceAddr string
+	renewLock  bool
+	connOpts   []amqp.ConnOption
+	log        *service.Logger
+
+	m    sync.RWMutex
+	conn *amqp1Conn
+}
+
+func amqp1ReaderFromParsed(conf *service.ParsedConfig, mgr *service.Resources) (*amqp1Reader, error) {
+	a := amqp1Reader{
+		log: mgr.Logger(),
+	}
+
+	var err error
+	if a.url, err = conf.FieldString(urlField); err != nil {
+		return nil, err
+	}
+
+	if a.sourceAddr, err = conf.FieldString(sourceAddrField); err != nil {
+		return nil, err
+	}
+
+	if a.renewLock, err = conf.FieldBool(azureRenewLockField); err != nil {
+		return nil, err
+	}
+
+	if a.connOpts, err = saslOptFnsFromParsed(conf); err != nil {
+		return nil, err
+	}
+
+	tlsConf, enabled, err := conf.FieldTLSToggled(tlsField)
+	if err != nil {
+		return nil, err
+	}
+	if enabled {
+		a.connOpts = append(a.connOpts, amqp.ConnTLS(true), amqp.ConnTLSConfig(tlsConf))
+	}
+
+	return &a, nil
+}
+
+func (a *amqp1Reader) Connect(ctx context.Context) (err error) {
+	a.m.Lock()
+	defer a.m.Unlock()
+
+	if a.conn != nil {
+		return
+	}
+
+	conn := &amqp1Conn{
+		log:                    a.log,
+		lockRenewAddressPrefix: randomString(15),
+	}
+
+	// Create client
+	if conn.client, err = amqp.Dial(a.url, a.connOpts...); err != nil {
+		return
+	}
+
+	// Open a session
+	if conn.session, err = conn.client.NewSession(); err != nil {
+		_ = conn.Close(ctx)
+		return
+	}
+
+	// Create a receiver
+	if conn.receiver, err = conn.session.NewReceiver(
+		amqp.LinkSourceAddress(a.sourceAddr),
+		amqp.LinkCredit(10),
+	); err != nil {
+		_ = conn.Close(ctx)
+		return
+	}
+
+	if a.renewLock {
+		managementAddress := a.sourceAddr + "/$management"
+
+		if conn.renewLockSender, err = conn.session.NewSender(
+			amqp.LinkSourceAddress(conn.lockRenewAddressPrefix+lockRenewRequestSuffix),
+			amqp.LinkTargetAddress(managementAddress),
+		); err != nil {
+			_ = conn.Close(ctx)
+			return
+		}
+		if conn.renewLockReceiver, err = conn.session.NewReceiver(
+			amqp.LinkSourceAddress(managementAddress),
+			amqp.LinkTargetAddress(conn.lockRenewAddressPrefix+lockRenewResponseSuffix),
+		); err != nil {
+			_ = conn.Close(ctx)
+			return
+		}
+	}
+
+	a.conn = conn
+	a.log.Infof("Receiving AMQP 1.0 messages from source: %v\n", a.sourceAddr)
+	return nil
+}
+
+func (a *amqp1Reader) disconnect(ctx context.Context) error {
+	a.m.Lock()
+	defer a.m.Unlock()
+
+	if a.conn != nil {
+		a.conn.Close(ctx)
+	}
+	a.conn = nil
+	return nil
+}
+
+func (a *amqp1Reader) ReadBatch(ctx context.Context) (service.MessageBatch, service.AckFunc, error) {
+	a.m.RLock()
+	conn := a.conn
+	a.m.RUnlock()
+
+	if conn == nil {
+		return nil, nil, service.ErrNotConnected
+	}
+
+	// Receive next message
+	amqpMsg, err := conn.receiver.Receive(ctx)
+	if err != nil {
+		if err == amqp.ErrTimeout || ctx.Err() != nil {
+			err = component.ErrTimeout
+		} else {
+			if dErr, isDetachError := err.(*amqp.DetachError); isDetachError && dErr.RemoteError != nil {
+				a.log.Errorf("Lost connection due to: %v", dErr.RemoteError)
+			} else {
+				a.log.Errorf("Lost connection due to: %v", err)
+			}
+			_ = a.disconnect(ctx)
+			err = service.ErrNotConnected
+		}
+		return nil, nil, err
+	}
+
+	var part *service.Message
+
+	if data := amqpMsg.GetData(); data != nil {
+		part = service.NewMessage(data)
+	} else if value, ok := amqpMsg.Value.(string); ok {
+		part = service.NewMessage([]byte(value))
+	} else {
+		part = service.NewMessage(nil)
+	}
+
+	if amqpMsg.Properties != nil {
+		amqpSetMetadata(part, "amqp_content_type", amqpMsg.Properties.ContentType)
+		amqpSetMetadata(part, "amqp_content_encoding", amqpMsg.Properties.ContentEncoding)
+		amqpSetMetadata(part, "amqp_creation_time", amqpMsg.Properties.CreationTime)
+	}
+	if amqpMsg.Annotations != nil {
+		for k, v := range amqpMsg.Annotations {
+			keyStr, keyIsStr := k.(string)
+			valStr, valIsStr := v.(string)
+			if keyIsStr && valIsStr {
+				amqpSetMetadata(part, keyStr, valStr)
+			}
+		}
+	}
+
+	var done chan struct{}
+	if a.renewLock {
+		done = a.startRenewJob(amqpMsg)
+	}
+
+	return service.MessageBatch{part}, func(ctx context.Context, res error) error {
+		if done != nil {
+			close(done)
+			done = nil
+		}
+
+		// TODO: These methods were moved in v0.16.0, but nacking seems broken
+		// (integration tests fail)
+		if res != nil {
+			return conn.receiver.ModifyMessage(ctx, amqpMsg, true, false, amqpMsg.Annotations)
+		}
+		return conn.receiver.AcceptMessage(ctx, amqpMsg)
+	}, nil
+}
+
+func (a *amqp1Reader) Close(ctx context.Context) error {
+	return a.disconnect(ctx)
+}
+
+//------------------------------------------------------------------------------
 
 type amqp1Conn struct {
 	client            *amqp.Client
@@ -76,11 +262,11 @@ type amqp1Conn struct {
 	renewLockReceiver *amqp.Receiver
 	renewLockSender   *amqp.Sender
 
-	log                    log.Modular
+	log                    *service.Logger
 	lockRenewAddressPrefix string
 }
 
-func (c *amqp1Conn) Close(ctx context.Context) {
+func (c *amqp1Conn) Close(ctx context.Context) error {
 	if c.renewLockSender != nil {
 		if err := c.renewLockSender.Close(ctx); err != nil {
 			c.log.Errorf("Failed to cleanly close renew lock sender: %v\n", err)
@@ -106,176 +292,7 @@ func (c *amqp1Conn) Close(ctx context.Context) {
 			c.log.Errorf("Failed to cleanly close client: %v\n", err)
 		}
 	}
-}
-
-//------------------------------------------------------------------------------
-
-type amqp1Reader struct {
-	tlsConf *tls.Config
-
-	conf input.AMQP1Config
-	log  log.Modular
-
-	m    sync.RWMutex
-	conn *amqp1Conn
-}
-
-func newAMQP1Reader(conf input.AMQP1Config, mgr bundle.NewManagement) (*amqp1Reader, error) {
-	a := amqp1Reader{
-		conf: conf,
-		log:  mgr.Logger(),
-	}
-	if conf.TLS.Enabled {
-		var err error
-		if a.tlsConf, err = conf.TLS.Get(mgr.FS()); err != nil {
-			return nil, err
-		}
-	}
-	return &a, nil
-}
-
-func (a *amqp1Reader) Connect(ctx context.Context) error {
-	a.m.Lock()
-	defer a.m.Unlock()
-
-	if a.conn != nil {
-		return nil
-	}
-
-	conn := &amqp1Conn{
-		log:                    a.log,
-		lockRenewAddressPrefix: randomString(15),
-	}
-
-	opts, err := saslToOptFns(a.conf.SASL)
-	if err != nil {
-		return err
-	}
-	if a.conf.TLS.Enabled {
-		opts = append(opts, amqp.ConnTLS(true), amqp.ConnTLSConfig(a.tlsConf))
-	}
-
-	// Create client
-	if conn.client, err = amqp.Dial(a.conf.URL, opts...); err != nil {
-		return err
-	}
-
-	// Open a session
-	if conn.session, err = conn.client.NewSession(); err != nil {
-		conn.Close(ctx)
-		return err
-	}
-
-	// Create a receiver
-	if conn.receiver, err = conn.session.NewReceiver(
-		amqp.LinkSourceAddress(a.conf.SourceAddress),
-		amqp.LinkCredit(10),
-	); err != nil {
-		conn.Close(ctx)
-		return err
-	}
-
-	if a.conf.AzureRenewLock {
-		managementAddress := a.conf.SourceAddress + "/$management"
-
-		conn.renewLockSender, err = conn.session.NewSender(
-			amqp.LinkSourceAddress(conn.lockRenewAddressPrefix+lockRenewRequestSuffix),
-			amqp.LinkTargetAddress(managementAddress),
-		)
-		if err != nil {
-			conn.Close(ctx)
-			return err
-		}
-		conn.renewLockReceiver, err = conn.session.NewReceiver(
-			amqp.LinkSourceAddress(managementAddress),
-			amqp.LinkTargetAddress(conn.lockRenewAddressPrefix+lockRenewResponseSuffix),
-		)
-		if err != nil {
-			conn.Close(ctx)
-			return err
-		}
-	}
-
-	a.conn = conn
-	a.log.Infof("Receiving AMQP 1.0 messages from source: %v\n", a.conf.SourceAddress)
 	return nil
-}
-
-func (a *amqp1Reader) disconnect(ctx context.Context) error {
-	a.m.Lock()
-	defer a.m.Unlock()
-
-	if a.conn != nil {
-		a.conn.Close(ctx)
-	}
-	a.conn = nil
-	return nil
-}
-
-func (a *amqp1Reader) ReadBatch(ctx context.Context) (message.Batch, input.AsyncAckFn, error) {
-	a.m.RLock()
-	conn := a.conn
-	a.m.RUnlock()
-
-	if conn == nil {
-		return nil, nil, component.ErrNotConnected
-	}
-
-	// Receive next message
-	amqpMsg, err := conn.receiver.Receive(ctx)
-	if err != nil {
-		if err == amqp.ErrTimeout || ctx.Err() != nil {
-			err = component.ErrTimeout
-		} else {
-			if dErr, isDetachError := err.(*amqp.DetachError); isDetachError && dErr.RemoteError != nil {
-				a.log.Errorf("Lost connection due to: %v\n", dErr.RemoteError)
-			} else {
-				a.log.Errorf("Lost connection due to: %v\n", err)
-			}
-			_ = a.disconnect(ctx)
-			err = component.ErrNotConnected
-		}
-		return nil, nil, err
-	}
-
-	part := message.NewPart(amqpMsg.GetData())
-	if amqpMsg.Properties != nil {
-		amqpSetMetadata(part, "amqp_content_type", amqpMsg.Properties.ContentType)
-		amqpSetMetadata(part, "amqp_content_encoding", amqpMsg.Properties.ContentEncoding)
-		amqpSetMetadata(part, "amqp_creation_time", amqpMsg.Properties.CreationTime)
-	}
-	if amqpMsg.Annotations != nil {
-		for k, v := range amqpMsg.Annotations {
-			keyStr, keyIsStr := k.(string)
-			valStr, valIsStr := v.(string)
-			if keyIsStr && valIsStr {
-				amqpSetMetadata(part, keyStr, valStr)
-			}
-		}
-	}
-
-	var done chan struct{}
-	if a.conf.AzureRenewLock {
-		done = a.startRenewJob(amqpMsg)
-	}
-
-	return message.Batch{part}, func(ctx context.Context, res error) error {
-		if done != nil {
-			close(done)
-			done = nil
-		}
-
-		// TODO: These methods were moved in v0.16.0, but nacking seems broken
-		// (integration tests fail)
-		if res != nil {
-			return conn.receiver.ModifyMessage(ctx, amqpMsg, true, false, amqpMsg.Annotations)
-		}
-		return conn.receiver.AcceptMessage(ctx, amqpMsg)
-	}, nil
-}
-
-func (a *amqp1Reader) Close(ctx context.Context) error {
-	return a.disconnect(ctx)
 }
 
 const (
@@ -302,7 +319,7 @@ func (a *amqp1Reader) startRenewJob(amqpMsg *amqp.Message) chan struct{} {
 
 		lockedUntil, ok := amqpMsg.Annotations["x-opt-locked-until"].(time.Time)
 		if !ok {
-			a.log.Errorln("Missing x-opt-locked-until annotation in received message")
+			a.log.Error("Missing x-opt-locked-until annotation in received message")
 			return
 		}
 
@@ -401,7 +418,7 @@ func (a *amqp1Reader) renewWithContext(ctx context.Context, msg *amqp.Message) (
 	return expirations[0], nil
 }
 
-func amqpSetMetadata(p *message.Part, k string, v any) {
+func amqpSetMetadata(p *service.Message, k string, v any) {
 	var metaValue string
 	metaKey := strings.ReplaceAll(k, "-", "_")
 

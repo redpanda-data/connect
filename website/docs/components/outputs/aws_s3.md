@@ -14,9 +14,7 @@ categories: ["Services","AWS"]
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-
-Sends message parts as objects to an Amazon S3 bucket. Each object is uploaded
-with the path specified with the `path` field.
+Sends message parts as objects to an Amazon S3 bucket. Each object is uploaded with the path specified with the `path` field.
 
 Introduced in version 3.36.0.
 
@@ -33,7 +31,7 @@ Introduced in version 3.36.0.
 output:
   label: ""
   aws_s3:
-    bucket: ""
+    bucket: "" # No default (required)
     path: ${!count("files")}-${!timestamp_unix_nano()}.txt
     tags: {}
     content_type: application/octet-stream
@@ -55,7 +53,7 @@ output:
 output:
   label: ""
   aws_s3:
-    bucket: ""
+    bucket: "" # No default (required)
     path: ${!count("files")}-${!timestamp_unix_nano()}.txt
     tags: {}
     content_type: application/octet-stream
@@ -77,7 +75,7 @@ output:
       byte_size: 0
       period: ""
       check: ""
-      processors: []
+      processors: [] # No default (optional)
     region: ""
     endpoint: ""
     credentials:
@@ -93,9 +91,7 @@ output:
 </TabItem>
 </Tabs>
 
-In order to have a different path for each object you should use function
-interpolations described [here](/docs/configuration/interpolation#bloblang-queries), which are
-calculated per message of a batch.
+In order to have a different path for each object you should use function interpolations described [here](/docs/configuration/interpolation#bloblang-queries), which are calculated per message of a batch.
 
 ### Metadata
 
@@ -103,8 +99,7 @@ Metadata fields on messages will be sent as headers, in order to mutate these va
 
 ### Tags
 
-The tags field allows you to specify key/value pairs to attach to objects as tags, where the values support
-[interpolation functions](/docs/configuration/interpolation#bloblang-queries):
+The tags field allows you to specify key/value pairs to attach to objects as tags, where the values support [interpolation functions](/docs/configuration/interpolation#bloblang-queries):
 
 ```yaml
 output:
@@ -118,21 +113,13 @@ output:
 
 ### Credentials
 
-By default Benthos will use a shared credentials file when connecting to AWS
-services. It's also possible to set them explicitly at the component level,
-allowing you to transfer data across accounts. You can find out more
-[in this document](/docs/guides/cloud/aws).
+By default Benthos will use a shared credentials file when connecting to AWS services. It's also possible to set them explicitly at the component level, allowing you to transfer data across accounts. You can find out more [in this document](/docs/guides/cloud/aws).
 
 ### Batching
 
-It's common to want to upload messages to S3 as batched archives, the easiest
-way to do this is to batch your messages at the output level and join the batch
-of messages with an
-[`archive`](/docs/components/processors/archive) and/or
-[`compress`](/docs/components/processors/compress) processor.
+It's common to want to upload messages to S3 as batched archives, the easiest way to do this is to batch your messages at the output level and join the batch of messages with an [`archive`](/docs/components/processors/archive) and/or [`compress`](/docs/components/processors/compress) processor.
 
-For example, if we wished to upload messages as a .tar.gz archive of documents
-we could achieve that with the following config:
+For example, if we wished to upload messages as a .tar.gz archive of documents we could achieve that with the following config:
 
 ```yaml
 output:
@@ -149,8 +136,7 @@ output:
             algorithm: gzip
 ```
 
-Alternatively, if we wished to upload JSON documents as a single large document
-containing an array of objects we can do that with:
+Alternatively, if we wished to upload JSON documents as a single large document containing an array of objects we can do that with:
 
 ```yaml
 output:
@@ -178,7 +164,6 @@ The bucket to upload messages to.
 
 
 Type: `string`  
-Default: `""`  
 
 ### `path`
 
@@ -322,7 +307,7 @@ Default: `false`
 
 ### `max_in_flight`
 
-The maximum number of parallel message batches to have in flight at any given time.
+The maximum number of messages to have in flight at a given time. Increase this to improve throughput.
 
 
 Type: `int`  
@@ -415,7 +400,6 @@ A list of [processors](/docs/components/processors/about) to apply to a batch as
 
 
 Type: `array`  
-Default: `[]`  
 
 ```yml
 # Examples
@@ -475,6 +459,9 @@ Default: `""`
 ### `credentials.secret`
 
 The secret for the credentials being used.
+:::warning Secret
+This field contains sensitive information that usually shouldn't be added to a config directly, read our [secrets page for more info](/docs/configuration/secrets).
+:::
 
 
 Type: `string`  

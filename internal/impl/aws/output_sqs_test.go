@@ -7,14 +7,15 @@ import (
 	"testing"
 
 	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/credentials"
+	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/sqs"
 	"github.com/aws/aws-sdk-go/service/sqs/sqsiface"
+	"github.com/cenkalti/backoff/v4"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/benthosdev/benthos/v4/internal/component/output"
-	"github.com/benthosdev/benthos/v4/internal/manager/mock"
-	"github.com/benthosdev/benthos/v4/internal/message"
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
 func TestSQSHeaderCheck(t *testing.T) {
@@ -127,8 +128,15 @@ type inEntries []inMsg
 func TestSQSRetries(t *testing.T) {
 	tCtx := context.Background()
 
-	conf := output.NewAmazonSQSConfig()
-	w, err := newSQSWriter(conf, mock.NewManager())
+	w, err := newSQSWriter(sqsoConfig{
+		URL: "http://foo.example.com",
+		backoffCtor: func() backoff.BackOff {
+			return backoff.NewExponentialBackOff()
+		},
+		session: session.Must(session.NewSession(&aws.Config{
+			Credentials: credentials.NewStaticCredentials("xxxxx", "xxxxx", "xxxxx"),
+		})),
+	}, service.MockResources())
 	require.NoError(t, err)
 
 	var in []inEntries
@@ -167,12 +175,11 @@ func TestSQSRetries(t *testing.T) {
 		{},
 	}
 
-	inMsg := message.QuickBatch([][]byte{
-		[]byte("hello world 1"),
-		[]byte("hello world 2"),
-		[]byte("hello world 3"),
-	})
-	require.NoError(t, w.WriteBatch(tCtx, inMsg))
+	require.NoError(t, w.WriteBatch(tCtx, service.MessageBatch{
+		service.NewMessage([]byte("hello world 1")),
+		service.NewMessage([]byte("hello world 2")),
+		service.NewMessage([]byte("hello world 3")),
+	}))
 
 	assert.Equal(t, []inEntries{
 		{
@@ -189,8 +196,15 @@ func TestSQSRetries(t *testing.T) {
 func TestSQSSendLimit(t *testing.T) {
 	tCtx := context.Background()
 
-	conf := output.NewAmazonSQSConfig()
-	w, err := newSQSWriter(conf, mock.NewManager())
+	w, err := newSQSWriter(sqsoConfig{
+		URL: "http://foo.example.com",
+		backoffCtor: func() backoff.BackOff {
+			return backoff.NewExponentialBackOff()
+		},
+		session: session.Must(session.NewSession(&aws.Config{
+			Credentials: credentials.NewStaticCredentials("xxxxx", "xxxxx", "xxxxx"),
+		})),
+	}, service.MockResources())
 	require.NoError(t, err)
 
 	var in []inEntries
@@ -219,9 +233,9 @@ func TestSQSSendLimit(t *testing.T) {
 		{}, {},
 	}
 
-	inMsg := message.QuickBatch(nil)
+	inMsg := service.MessageBatch{}
 	for i := 0; i < 15; i++ {
-		inMsg = append(inMsg, message.NewPart([]byte(fmt.Sprintf("hello world %v", i+1))))
+		inMsg = append(inMsg, service.NewMessage([]byte(fmt.Sprintf("hello world %v", i+1))))
 	}
 	require.NoError(t, w.WriteBatch(tCtx, inMsg))
 

@@ -32,13 +32,13 @@ Consumes tweets matching a given search using the Twitter recent search V2 API.
 input:
   label: ""
   twitter_search:
-    query: ""
+    query: "" # No default (required)
     tweet_fields: []
     poll_period: 1m
     backfill_period: 5m
-    cache: ""
-    api_key: ""
-    api_secret: ""
+    cache: "" # No default (required)
+    api_key: "" # No default (required)
+    api_secret: "" # No default (required)
 ```
 
 </TabItem>
@@ -49,15 +49,15 @@ input:
 input:
   label: ""
   twitter_search:
-    query: ""
+    query: "" # No default (required)
     tweet_fields: []
     poll_period: 1m
     backfill_period: 5m
-    cache: ""
+    cache: "" # No default (required)
     cache_key: last_tweet_id
     rate_limit: ""
-    api_key: ""
-    api_secret: ""
+    api_key: "" # No default (required)
+    api_secret: "" # No default (required)
 ```
 
 </TabItem>

@@ -14,7 +14,6 @@ categories: ["Local"]
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-
 Writes messages to files on disk based on a chosen codec.
 
 ```yml
@@ -22,7 +21,7 @@ Writes messages to files on disk based on a chosen codec.
 output:
   label: ""
   file:
-    path: ""
+    path: /tmp/data.txt # No default (required)
     codec: lines
 ```
 
@@ -37,7 +36,6 @@ This field supports [interpolation functions](/docs/configuration/interpolation#
 
 
 Type: `string`  
-Default: `""`  
 Requires version 3.33.0 or newer  
 
 ```yml

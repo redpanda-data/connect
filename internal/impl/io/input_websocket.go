@@ -13,6 +13,7 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/input"
+	"github.com/benthosdev/benthos/v4/internal/component/input/config"
 	"github.com/benthosdev/benthos/v4/internal/component/interop"
 	"github.com/benthosdev/benthos/v4/internal/httpclient"
 	"github.com/benthosdev/benthos/v4/internal/log"
@@ -30,28 +31,27 @@ const (
 )
 
 func websocketInputSpec() *service.ConfigSpec {
-	spec := service.NewConfigSpec().
+	return service.NewConfigSpec().
 		Stable().
 		Categories("Network").
 		Summary("Connects to a websocket server and continuously receives messages.").
-		Description(`It is possible to configure an ` + "`open_message`" + `, which when set to a non-empty string will be sent to the websocket server each time a connection is first established.`).
-		Field(service.NewURLField("url").
-			Description("The URL to connect to.").
-			Example("ws://localhost:4195/get/ws")).
-		Field(service.NewStringField("open_message").
-			Description("An optional message to send to the server upon connection.").
-			Advanced().Optional()).
-		Field(service.NewStringAnnotatedEnumField("open_message_type", map[string]string{
-			string(wsOpenMsgTypeBinary): "Binary data open_message.",
-			string(wsOpenMsgTypeText):   "Text data open_message. The text message payload is interpreted as UTF-8 encoded text data.",
-		}).Description("An optional flag to indicate the data type of open_message.").
-			Advanced().Default(string(wsOpenMsgTypeBinary))).
-		Field(service.NewTLSToggledField("tls"))
-
-	for _, f := range httpclient.AuthFieldSpecs() {
-		spec = spec.Field(f)
-	}
-	return spec
+		Description(`It is possible to configure an `+"`open_message`"+`, which when set to a non-empty string will be sent to the websocket server each time a connection is first established.`).
+		Fields(
+			service.NewURLField("url").
+				Description("The URL to connect to.").
+				Example("ws://localhost:4195/get/ws"),
+			service.NewStringField("open_message").
+				Description("An optional message to send to the server upon connection.").
+				Advanced().Optional(),
+			service.NewStringAnnotatedEnumField("open_message_type", map[string]string{
+				string(wsOpenMsgTypeBinary): "Binary data open_message.",
+				string(wsOpenMsgTypeText):   "Text data open_message. The text message payload is interpreted as UTF-8 encoded text data.",
+			}).Description("An optional flag to indicate the data type of open_message.").
+				Advanced().Default(string(wsOpenMsgTypeBinary)),
+			service.NewTLSToggledField("tls"),
+		).
+		Fields(config.AsyncOptsFields()...).
+		Fields(httpclient.AuthFieldSpecs()...)
 }
 
 func init() {
@@ -63,8 +63,14 @@ func init() {
 			if r, err = newWebsocketReaderFromParsed(conf, oldMgr); err != nil {
 				return
 			}
+
+			var opts []func(*input.AsyncReader)
+			if opts, err = config.AsyncOptsFromParsed(conf); err != nil {
+				return
+			}
+
 			var i input.Streamed
-			if i, err = input.NewAsyncReader("websocket", input.NewAsyncPreserver(r), oldMgr); err != nil {
+			if i, err = input.NewAsyncReader("websocket", input.NewAsyncPreserver(r), oldMgr, opts...); err != nil {
 				return
 			}
 			in = interop.NewUnwrapInternalInput(i)

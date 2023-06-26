@@ -17,7 +17,6 @@ import TabItem from '@theme/TabItem';
 :::caution BETA
 This component is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with the component is found.
 :::
-
 Dequeue objects from an Azure Storage Queue.
 
 Introduced in version 3.42.0.
@@ -37,9 +36,8 @@ input:
   azure_queue_storage:
     storage_account: ""
     storage_access_key: ""
-    storage_sas_token: ""
     storage_connection_string: ""
-    queue_name: ""
+    queue_name: foo_queue # No default (required)
 ```
 
 </TabItem>
@@ -52,9 +50,8 @@ input:
   azure_queue_storage:
     storage_account: ""
     storage_access_key: ""
-    storage_sas_token: ""
     storage_connection_string: ""
-    queue_name: ""
+    queue_name: foo_queue # No default (required)
     dequeue_visibility_timeout: 30s
     max_in_flight: 10
     track_properties: false
@@ -62,8 +59,6 @@ input:
 
 </TabItem>
 </Tabs>
-
-Dequeue objects from an Azure Storage Queue.
 
 This input adds the following metadata fields to each message:
 
@@ -80,7 +75,7 @@ Only one authentication method is required, `storage_connection_string` or `stor
 
 ### `storage_account`
 
-The storage account to dequeue messages from. This field is ignored if `storage_connection_string` is set.
+The storage account to access. This field is ignored if `storage_connection_string` is set.
 
 
 Type: `string`  
@@ -89,14 +84,6 @@ Default: `""`
 ### `storage_access_key`
 
 The storage account access key. This field is ignored if `storage_connection_string` is set.
-
-
-Type: `string`  
-Default: `""`  
-
-### `storage_sas_token`
-
-The storage account SAS token. This field is ignored if `storage_connection_string` or `storage_access_key` are set.
 
 
 Type: `string`  
@@ -117,7 +104,6 @@ This field supports [interpolation functions](/docs/configuration/interpolation#
 
 
 Type: `string`  
-Default: `""`  
 
 ```yml
 # Examples

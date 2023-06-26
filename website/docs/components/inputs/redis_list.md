@@ -29,8 +29,8 @@ Pops messages from the beginning of a Redis list using the BLPop command.
 input:
   label: ""
   redis_list:
-    url: ""
-    key: ""
+    url: :6397 # No default (required)
+    key: "" # No default (required)
 ```
 
 </TabItem>
@@ -41,7 +41,7 @@ input:
 input:
   label: ""
   redis_list:
-    url: ""
+    url: :6397 # No default (required)
     kind: simple
     master: ""
     tls:
@@ -51,7 +51,7 @@ input:
       root_cas: ""
       root_cas_file: ""
       client_certs: []
-    key: ""
+    key: "" # No default (required)
     max_in_flight: 0
     timeout: 5s
 ```
@@ -183,6 +183,7 @@ A list of client certificates to use. For each certificate either the fields `ce
 
 
 Type: `array`  
+Default: `[]`  
 
 ```yml
 # Examples

@@ -25,7 +25,7 @@ Introduced in version 4.11.0.
 # Config fields, showing default values
 label: ""
 wasm:
-  module_path: ""
+  module_path: "" # No default (required)
   function: process
 ```
 

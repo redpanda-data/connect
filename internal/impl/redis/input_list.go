@@ -12,23 +12,20 @@ import (
 )
 
 func redisListInputConfig() *service.ConfigSpec {
-	spec := service.NewConfigSpec().
+	return service.NewConfigSpec().
 		Stable().
 		Summary(`Pops messages from the beginning of a Redis list using the BLPop command.`).
-		Categories("Services")
-
-	for _, f := range clientFields() {
-		spec = spec.Field(f)
-	}
-
-	return spec.
-		Field(service.NewStringField("key").
-			Description("The key of a list to read from.")).
-		Field(service.NewInputMaxInFlightField().Version("4.9.0")).
-		Field(service.NewDurationField("timeout").
-			Description("The length of time to poll for new messages before reattempting.").
-			Default("5s").
-			Advanced())
+		Categories("Services").
+		Fields(clientFields()...).
+		Fields(
+			service.NewStringField("key").
+				Description("The key of a list to read from."),
+			service.NewInputMaxInFlightField().Version("4.9.0"),
+			service.NewDurationField("timeout").
+				Description("The length of time to poll for new messages before reattempting.").
+				Default("5s").
+				Advanced(),
+		)
 }
 
 func init() {

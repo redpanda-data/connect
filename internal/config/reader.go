@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -45,6 +46,9 @@ type Reader struct {
 	fs ifs.FS
 
 	bootstrapConf *Type
+
+	// Used for linting configs
+	lintConf docs.LintConfig
 
 	mainPath      string
 	resourcePaths []string
@@ -87,6 +91,7 @@ func NewReader(mainPath string, resourcePaths []string, opts ...OptFunc) *Reader
 		testSuffix:         "_benthos_test",
 		fs:                 ifs.OS(),
 		bootstrapConf:      &defaultBootstrapConf,
+		lintConf:           docs.NewLintConfig(),
 		mainPath:           mainPath,
 		resourcePaths:      resourcePaths,
 		modTimeLastRead:    map[string]time.Time{},
@@ -133,6 +138,13 @@ func OptSetBootstrapConfig(conf *Type) OptFunc {
 	}
 }
 
+// OptSetLintConfig sets the config used for linting files.
+func OptSetLintConfig(lConf docs.LintConfig) OptFunc {
+	return func(r *Reader) {
+		r.lintConf = lConf
+	}
+}
+
 // OptSetStreamPaths marks this config reader as operating in streams mode, and
 // adds a list of paths to obtain individual stream configs from.
 func OptSetStreamPaths(streamsPaths ...string) OptFunc {
@@ -152,6 +164,10 @@ func OptUseFS(fs ifs.FS) OptFunc {
 }
 
 //------------------------------------------------------------------------------
+
+func (r *Reader) lintCtx() docs.LintContext {
+	return docs.NewLintContext(r.lintConf)
+}
 
 // Read a Benthos config from the files and options specified.
 func (r *Reader) Read() (conf Type, lints []string, err error) {
@@ -271,7 +287,7 @@ func (r *Reader) readMain(mainPath string, conf *Type) (lints []string, err erro
 	if mainPath != "" {
 		var dLints []docs.Lint
 		var modTime time.Time
-		if confBytes, dLints, modTime, err = ReadFileEnvSwap(r.fs, mainPath); err != nil {
+		if confBytes, dLints, modTime, err = ReadFileEnvSwap(r.fs, mainPath, os.LookupEnv); err != nil {
 			return
 		}
 		for _, l := range dLints {
@@ -295,7 +311,7 @@ func (r *Reader) readMain(mainPath string, conf *Type) (lints []string, err erro
 
 	if !bytes.HasPrefix(confBytes, []byte("# BENTHOS LINT DISABLE")) {
 		lintFilePrefix := mainPath
-		for _, lint := range confSpec.LintYAML(docs.NewLintContext(), &rawNode) {
+		for _, lint := range confSpec.LintYAML(r.lintCtx(), &rawNode) {
 			lints = append(lints, fmt.Sprintf("%v%v", lintFilePrefix, lint.Error()))
 		}
 	}

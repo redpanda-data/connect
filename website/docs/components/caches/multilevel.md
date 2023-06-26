@@ -18,7 +18,7 @@ Combines multiple caches as levels, performing read-through and write-through op
 ```yml
 # Config fields, showing default values
 label: ""
-multilevel: []
+multilevel: [] # No default (required)
 ```
 
 ## Examples

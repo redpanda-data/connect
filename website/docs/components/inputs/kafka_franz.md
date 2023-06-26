@@ -17,7 +17,7 @@ import TabItem from '@theme/TabItem';
 :::caution BETA
 This component is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with the component is found.
 :::
-An alternative Kafka input using the [Franz Kafka client library](https://github.com/twmb/franz-go).
+A Kafka input using the [Franz Kafka client library](https://github.com/twmb/franz-go).
 
 Introduced in version 3.61.0.
 
@@ -34,10 +34,10 @@ Introduced in version 3.61.0.
 input:
   label: ""
   kafka_franz:
-    seed_brokers: []
-    topics: []
+    seed_brokers: [] # No default (required)
+    topics: [] # No default (required)
     regexp_topics: false
-    consumer_group: ""
+    consumer_group: "" # No default (optional)
 ```
 
 </TabItem>
@@ -48,10 +48,10 @@ input:
 input:
   label: ""
   kafka_franz:
-    seed_brokers: []
-    topics: []
+    seed_brokers: [] # No default (required)
+    topics: [] # No default (required)
     regexp_topics: false
-    consumer_group: ""
+    consumer_group: "" # No default (optional)
     checkpoint_limit: 1024
     commit_period: 5s
     start_from_oldest: true
@@ -62,14 +62,22 @@ input:
       root_cas: ""
       root_cas_file: ""
       client_certs: []
-    sasl: []
+    sasl: [] # No default (optional)
     multi_header: false
+    batching:
+      count: 0
+      byte_size: 0
+      period: ""
+      check: ""
+      processors: [] # No default (optional)
 ```
 
 </TabItem>
 </Tabs>
 
-Consumes one or more topics by balancing the partitions across any other connected clients with the same consumer group.
+When a consumer group is specified this input consumes one or more topics where partitions will automatically balance across any other connected clients with the same consumer group. When a consumer group is not specified topics can either be consumed in their entirety or with explicit partitions.
+
+This input often out-performs the traditional `kafka` input as well as providing more useful logs and error messages.
 
 ### Metadata
 
@@ -111,14 +119,43 @@ seed_brokers:
 
 ### `topics`
 
-A list of topics to consume from, partitions are automatically shared across consumers sharing the consumer group.
+A list of topics to consume from. Multiple comma separated topics can be listed in a single element. When a `consumer_group` is specified partitions are automatically distributed across consumers of a topic, otherwise all partitions are consumed.
+
+Alternatively, it's possible to specify explicit partitions to consume from with a colon after the topic name, e.g. `foo:0` would consume the partition 0 of the topic foo. This syntax supports ranges, e.g. `foo:0-10` would consume partitions 0 through to 10 inclusive.
+
+Finally, it's also possible to specify an explicit offset to consume from by adding another colon after the partition, e.g. `foo:0:10` would consume the partition 0 of the topic foo starting from the offset 10. If the offset is not present (or remains unspecified) then the field `start_from_oldest` determines which offset to start from.
 
 
 Type: `array`  
 
+```yml
+# Examples
+
+topics:
+  - foo
+  - bar
+
+topics:
+  - things.*
+
+topics:
+  - foo,bar
+
+topics:
+  - foo:0
+  - bar:1
+  - bar:3
+
+topics:
+  - foo:0,bar:1,bar:3
+
+topics:
+  - foo:0-5
+```
+
 ### `regexp_topics`
 
-Whether listed topics should be interpretted as regular expression patterns for matching multiple topics.
+Whether listed topics should be interpreted as regular expression patterns for matching multiple topics. When topics are specified with explicit partitions this field must remain set to `false`.
 
 
 Type: `bool`  
@@ -126,7 +163,7 @@ Default: `false`
 
 ### `consumer_group`
 
-A consumer group to consume as. Partitions are automatically distributed across consumers sharing a consumer group, and partition offsets are automatically committed and resumed under this name.
+An optional consumer group to consume as. When specified the partitions of specified topics are automatically distributed across consumers sharing a consumer group, and partition offsets are automatically committed and resumed under this name. Consumer groups are not supported when specifying explicit partitions to consume from in the `topics` field.
 
 
 Type: `string`  
@@ -149,7 +186,7 @@ Default: `"5s"`
 
 ### `start_from_oldest`
 
-If an offset is not found for a topic partition, determines whether to consume from the oldest available offset, otherwise messages are consumed from the latest offset.
+Determines whether to consume from the oldest available offset, otherwise messages are consumed from the latest offset. The setting is applied when creating a new consumer group or the saved offset no longer exists.
 
 
 Type: `bool`  
@@ -227,6 +264,7 @@ A list of client certificates to use. For each certificate either the fields `ce
 
 
 Type: `array`  
+Default: `[]`  
 
 ```yml
 # Examples
@@ -458,5 +496,101 @@ Decode headers into lists to allow handling of multiple values with the same key
 
 Type: `bool`  
 Default: `false`  
+
+### `batching`
+
+Allows you to configure a [batching policy](/docs/configuration/batching) that applies to individual topic partitions in order to batch messages together before flushing them for processing. Batching can be beneficial for performance as well as useful for windowed processing, and doing so this way preserves the ordering of topic partitions.
+
+
+Type: `object`  
+
+```yml
+# Examples
+
+batching:
+  byte_size: 5000
+  count: 0
+  period: 1s
+
+batching:
+  count: 10
+  period: 1s
+
+batching:
+  check: this.contains("END BATCH")
+  count: 0
+  period: 1m
+```
+
+### `batching.count`
+
+A number of messages at which the batch should be flushed. If `0` disables count based batching.
+
+
+Type: `int`  
+Default: `0`  
+
+### `batching.byte_size`
+
+An amount of bytes at which the batch should be flushed. If `0` disables size based batching.
+
+
+Type: `int`  
+Default: `0`  
+
+### `batching.period`
+
+A period in which an incomplete batch should be flushed regardless of its size.
+
+
+Type: `string`  
+Default: `""`  
+
+```yml
+# Examples
+
+period: 1s
+
+period: 1m
+
+period: 500ms
+```
+
+### `batching.check`
+
+A [Bloblang query](/docs/guides/bloblang/about/) that should return a boolean value indicating whether a message should end a batch.
+
+
+Type: `string`  
+Default: `""`  
+
+```yml
+# Examples
+
+check: this.type == "end_of_transaction"
+```
+
+### `batching.processors`
+
+A list of [processors](/docs/components/processors/about) to apply to a batch as it is flushed. This allows you to aggregate and archive the batch however you see fit. Please note that all resulting messages are flushed as a single batch, therefore splitting the batch into smaller batches using these processors is a no-op.
+
+
+Type: `array`  
+
+```yml
+# Examples
+
+processors:
+  - archive:
+      format: concatenate
+
+processors:
+  - archive:
+      format: lines
+
+processors:
+  - archive:
+      format: json_array
+```
 
 

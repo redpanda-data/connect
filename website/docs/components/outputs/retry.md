@@ -32,7 +32,7 @@ elapsed time fields are non-zero, either is reached.
 output:
   label: ""
   retry:
-    output: null
+    output: null # No default (required)
 ```
 
 </TabItem>
@@ -48,7 +48,7 @@ output:
       initial_interval: 500ms
       max_interval: 3s
       max_elapsed_time: 0s
-    output: null
+    output: null # No default (required)
 ```
 
 </TabItem>

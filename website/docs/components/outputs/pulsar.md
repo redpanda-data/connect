@@ -34,8 +34,8 @@ Introduced in version 3.43.0.
 output:
   label: ""
   pulsar:
-    url: ""
-    topic: ""
+    url: pulsar://localhost:6650 # No default (required)
+    topic: "" # No default (required)
     tls:
       root_cas_file: ""
     key: ""
@@ -51,8 +51,8 @@ output:
 output:
   label: ""
   pulsar:
-    url: ""
-    topic: ""
+    url: pulsar://localhost:6650 # No default (required)
+    topic: "" # No default (required)
     tls:
       root_cas_file: ""
     key: ""

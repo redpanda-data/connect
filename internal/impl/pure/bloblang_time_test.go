@@ -167,6 +167,16 @@ func TestTimestampMethods(t *testing.T) {
 			mapping:            `root = "gibberish".parse_duration_iso8601()`,
 			parseErrorContains: "gibberish: expected 'P' period mark at the start",
 		},
+		{
+			name:    "check ts_add_iso8601",
+			mapping: `root = 1677097265.ts_add_iso8601("P1Y").ts_unix()`,
+			output:  int64(1708633265),
+		},
+		{
+			name:    "check ts_sub_iso8601",
+			mapping: `root = 1677097265.ts_sub_iso8601("P1Y").ts_unix()`,
+			output:  int64(1645561265),
+		},
 	}
 
 	for _, test := range tests {

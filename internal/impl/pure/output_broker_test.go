@@ -4,17 +4,17 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"gopkg.in/yaml.v3"
 
-	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
-	"github.com/benthosdev/benthos/v4/internal/component/processor"
-	bmock "github.com/benthosdev/benthos/v4/internal/manager/mock"
+	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
 
 	_ "github.com/benthosdev/benthos/v4/public/components/io"
@@ -24,30 +24,25 @@ import (
 func TestFanOutBroker(t *testing.T) {
 	dir := t.TempDir()
 
-	outOne, outTwo := output.NewConfig(), output.NewConfig()
-	outOne.Type, outTwo.Type = "file", "file"
-	outOne.File.Path = filepath.Join(dir, "one", `foo-${!count("1s")}.txt`)
-	outOne.File.Codec = "all-bytes"
-	outTwo.File.Path = filepath.Join(dir, "two", `bar-${!count("2s")}.txt`)
-	outTwo.File.Codec = "all-bytes"
-
-	procOne, procTwo := processor.NewConfig(), processor.NewConfig()
-	procOne.Type, procTwo.Type = "bloblang", "bloblang"
-	procOne.Bloblang = `root = "one-" + content()`
-	procTwo.Bloblang = `root = "two-" + content()`
-
-	outOne.Processors = append(outOne.Processors, procOne)
-	outTwo.Processors = append(outTwo.Processors, procTwo)
-
 	conf := output.NewConfig()
-	conf.Type = "broker"
-	conf.Broker.Pattern = "fan_out"
-	conf.Broker.Outputs = append(conf.Broker.Outputs, outOne, outTwo)
+	require.NoError(t, yaml.Unmarshal([]byte(strings.ReplaceAll(`
+broker:
+  pattern: fan_out
+  outputs:
+    - file:
+        path: '$DIR/one/foo-${!count("1s")}.txt'
+        codec: all-bytes
+      processors:
+        - bloblang: 'root  = "one-" + content()'
+    - file:
+        path: '$DIR/two/bar-${!count("2s")}.txt'
+        codec: all-bytes
+      processors:
+        - bloblang: 'root  = "two-" + content()'
+`, "$DIR", dir)), &conf))
 
-	s, err := bundle.AllOutputs.Init(conf, bmock.NewManager())
-	if err != nil {
-		t.Fatal(err)
-	}
+	s, err := mock.NewManager().NewOutput(conf)
+	require.NoError(t, err)
 
 	sendChan := make(chan message.Transaction)
 	resChan := make(chan error)
@@ -109,30 +104,25 @@ func TestFanOutBroker(t *testing.T) {
 func TestRoundRobinBroker(t *testing.T) {
 	dir := t.TempDir()
 
-	outOne, outTwo := output.NewConfig(), output.NewConfig()
-	outOne.Type, outTwo.Type = "file", "file"
-	outOne.File.Path = filepath.Join(dir, "one", `foo-${!count("rrfoo")}.txt`)
-	outOne.File.Codec = "all-bytes"
-	outTwo.File.Path = filepath.Join(dir, "two", `bar-${!count("rrbar")}.txt`)
-	outTwo.File.Codec = "all-bytes"
-
-	procOne, procTwo := processor.NewConfig(), processor.NewConfig()
-	procOne.Type, procTwo.Type = "bloblang", "bloblang"
-	procOne.Bloblang = `root = "one-" + content()`
-	procTwo.Bloblang = `root = "two-" + content()`
-
-	outOne.Processors = append(outOne.Processors, procOne)
-	outTwo.Processors = append(outTwo.Processors, procTwo)
-
 	conf := output.NewConfig()
-	conf.Type = "broker"
-	conf.Broker.Pattern = "round_robin"
-	conf.Broker.Outputs = append(conf.Broker.Outputs, outOne, outTwo)
+	require.NoError(t, yaml.Unmarshal([]byte(strings.ReplaceAll(`
+broker:
+  pattern: round_robin
+  outputs:
+    - file:
+        path: '$DIR/one/foo-${!count("rrfoo")}.txt'
+        codec: all-bytes
+      processors:
+        - bloblang: 'root  = "one-" + content()'
+    - file:
+        path: '$DIR/two/bar-${!count("rrbar")}.txt'
+        codec: all-bytes
+      processors:
+        - bloblang: 'root  = "two-" + content()'
+`, "$DIR", dir)), &conf))
 
-	s, err := bundle.AllOutputs.Init(conf, bmock.NewManager())
-	if err != nil {
-		t.Fatal(err)
-	}
+	s, err := mock.NewManager().NewOutput(conf)
+	require.NoError(t, err)
 
 	sendChan := make(chan message.Transaction)
 	resChan := make(chan error)
@@ -192,38 +182,29 @@ func TestRoundRobinBroker(t *testing.T) {
 func TestGreedyBroker(t *testing.T) {
 	dir := t.TempDir()
 
-	outOne, outTwo := output.NewConfig(), output.NewConfig()
-	outOne.Type, outTwo.Type = "file", "file"
-	outOne.File.Path = filepath.Join(dir, "one", `foo-${!count("gfoo")}.txt`)
-	outOne.File.Codec = "all-bytes"
-	outTwo.File.Path = filepath.Join(dir, "two", `bar-${!count("gbar")}.txt`)
-	outTwo.File.Codec = "all-bytes"
-
-	procOne, procTwo := processor.NewConfig(), processor.NewConfig()
-	procOne.Type, procTwo.Type = "bloblang", "bloblang"
-	procOne.Bloblang = `root = "one-" + content()`
-	procTwo.Bloblang = `root = "two-" + content()`
-
-	outOne.Processors = append(outOne.Processors, procOne)
-	outTwo.Processors = append(outTwo.Processors, procTwo)
-
-	procOne, procTwo = processor.NewConfig(), processor.NewConfig()
-	procOne.Type, procTwo.Type = "sleep", "sleep"
-	procOne.Sleep.Duration = "50ms"
-	procTwo.Sleep.Duration = "50ms"
-
-	outOne.Processors = append(outOne.Processors, procOne)
-	outTwo.Processors = append(outTwo.Processors, procTwo)
-
 	conf := output.NewConfig()
-	conf.Type = "broker"
-	conf.Broker.Pattern = "greedy"
-	conf.Broker.Outputs = append(conf.Broker.Outputs, outOne, outTwo)
+	require.NoError(t, yaml.Unmarshal([]byte(strings.ReplaceAll(`
+broker:
+  pattern: greedy
+  outputs:
+    - file:
+        path: '$DIR/one/foo-${!count("gfoo")}.txt'
+        codec: all-bytes
+      processors:
+        - bloblang: 'root  = "one-" + content()'
+        - sleep:
+            duration: 50ms
+    - file:
+        path: '$DIR/two/bar-${!count("gbar")}.txt'
+        codec: all-bytes
+      processors:
+        - bloblang: 'root  = "two-" + content()'
+        - sleep:
+            duration: 50ms
+`, "$DIR", dir)), &conf))
 
-	s, err := bundle.AllOutputs.Init(conf, bmock.NewManager())
-	if err != nil {
-		t.Fatal(err)
-	}
+	s, err := mock.NewManager().NewOutput(conf)
+	require.NoError(t, err)
 
 	sendChan := make(chan message.Transaction)
 	resChan := make(chan error)

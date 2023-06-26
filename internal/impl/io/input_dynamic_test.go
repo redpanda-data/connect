@@ -76,6 +76,66 @@ generate:
     batch_size: 1
 `, res.Body.String())
 
+	req = httptest.NewRequest("GET", "/inputs/foo/uptime", nil)
+	res = httptest.NewRecorder()
+	gMux.ServeHTTP(res, req)
+
+	assert.Equal(t, 200, res.Code)
+	durStr := res.Body.String()
+	uptime, err := time.ParseDuration(durStr)
+	require.NoError(t, err)
+	assert.Greater(t, uptime, time.Nanosecond)
+
+	i.TriggerStopConsuming()
+	require.NoError(t, i.WaitForClose(ctx))
+}
+
+func TestDynamicInputAPIStopped(t *testing.T) {
+	ctx, done := context.WithTimeout(context.Background(), time.Second*10)
+	defer done()
+
+	gMux := mux.NewRouter()
+
+	mgr := bmock.NewManager()
+	mgr.OnRegisterEndpoint = func(path string, h http.HandlerFunc) {
+		gMux.HandleFunc(path, h)
+	}
+
+	conf := input.NewConfig()
+	conf.Type = "dynamic"
+
+	i, err := mgr.NewInput(conf)
+	require.NoError(t, err)
+
+	fooConf := `
+generate:
+  interval: 1ns
+  count: 1
+  mapping: 'root.source = "foo"'
+`
+	req := httptest.NewRequest("POST", "/inputs/foo", bytes.NewBuffer([]byte(fooConf)))
+	res := httptest.NewRecorder()
+	gMux.ServeHTTP(res, req)
+
+	assert.Equal(t, 200, res.Code)
+
+	select {
+	case ts, open := <-i.TransactionChan():
+		require.True(t, open)
+		assert.Equal(t, `{"source":"foo"}`, string(ts.Payload.Get(0).AsBytes()))
+		require.NoError(t, ts.Ack(ctx, nil))
+	case <-ctx.Done():
+		t.Fatal(ctx.Err())
+	}
+
+	assert.Eventually(t, func() bool {
+		req = httptest.NewRequest("GET", "/inputs/foo/uptime", nil)
+		res = httptest.NewRecorder()
+		gMux.ServeHTTP(res, req)
+
+		return res.Code == 200 && res.Body.String() == "stopped"
+	}, time.Second*5, time.Millisecond*10)
+
 	i.TriggerStopConsuming()
 	require.NoError(t, i.WaitForClose(ctx))
 }

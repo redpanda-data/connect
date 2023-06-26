@@ -14,7 +14,6 @@ categories: ["Local"]
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-
 Consumes data from files on disk, emitting messages according to a chosen codec.
 
 
@@ -30,7 +29,7 @@ Consumes data from files on disk, emitting messages according to a chosen codec.
 input:
   label: ""
   file:
-    paths: []
+    paths: [] # No default (required)
     codec: lines
 ```
 
@@ -42,7 +41,7 @@ input:
 input:
   label: ""
   file:
-    paths: []
+    paths: [] # No default (required)
     codec: lines
     max_buffer: 1000000
     delete_on_finish: false
@@ -72,7 +71,6 @@ A list of paths to consume sequentially. Glob patterns are supported, including 
 
 
 Type: `array`  
-Default: `[]`  
 
 ### `codec`
 
@@ -90,11 +88,14 @@ Default: `"lines"`
 | `chunker:x` | Consume the file in chunks of a given number of bytes. |
 | `csv` | Consume structured rows as comma separated values, the first row must be a header row. |
 | `csv:x` | Consume structured rows as values separated by a custom delimiter, the first row must be a header row. The custom delimiter must be a single character, e.g. the codec `"csv:\t"` would consume a tab delimited file. |
+| `csv-safe` | Consume structured rows like `csv`, but sends messages with empty maps on failure to parse. Includes row number and parsing errors (if any) in the message's metadata. |
 | `delim:x` | Consume the file in segments divided by a custom delimiter. |
 | `gzip` | Decompress a gzip file, this codec should precede another codec, e.g. `gzip/all-bytes`, `gzip/tar`, `gzip/csv`, etc. |
+| `pgzip` | Decompress a gzip file in parallel, this codec should precede another codec, e.g. `pgzip/all-bytes`, `pgzip/tar`, `pgzip/csv`, etc. |
 | `lines` | Consume the file in segments divided by linebreaks. |
 | `multipart` | Consumes the output of another codec and batches messages together. A batch ends when an empty message is consumed. For example, the codec `lines/multipart` could be used to consume multipart messages where an empty line indicates the end of each batch. |
 | `regex:(?m)^\d\d:\d\d:\d\d` | Consume the file in segments divided by regular expression. |
+| `skipbom` | Skip one or more byte order marks for each opened reader, this codec should precede another codec, e.g. `skipbom/csv`, etc. |
 | `tar` | Parse the file as a tar archive, and consume each file of the archive as a message. |
 
 

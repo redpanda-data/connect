@@ -72,7 +72,7 @@ func newAirGapProcessor(typeStr string, p Processor, mgr bundle.NewManagement) p
 }
 
 func (a *airGapProcessor) Process(ctx context.Context, msg *message.Part) ([]*message.Part, error) {
-	msgs, err := a.p.Process(ctx, newMessageFromPart(msg))
+	msgs, err := a.p.Process(ctx, NewInternalMessage(msg))
 	if err != nil {
 		return nil, err
 	}
@@ -101,7 +101,7 @@ func newAirGapBatchProcessor(typeStr string, p BatchProcessor, mgr bundle.NewMan
 func (a *airGapBatchProcessor) ProcessBatch(ctx *processor.BatchProcContext, batch message.Batch) ([]message.Batch, error) {
 	inputBatch := make([]*Message, batch.Len())
 	_ = batch.Iter(func(i int, p *message.Part) error {
-		newP := newMessageFromPart(p)
+		newP := NewInternalMessage(p)
 		newP.onErr = func(err error) {
 			ctx.OnError(err, i, p)
 		}
@@ -151,7 +151,7 @@ func (o *OwnedProcessor) Process(ctx context.Context, msg *Message) (MessageBatc
 	var b MessageBatch
 	for _, iMsg := range iMsgs {
 		_ = iMsg.Iter(func(i int, part *message.Part) error {
-			b = append(b, newMessageFromPart(part))
+			b = append(b, NewInternalMessage(part))
 			return nil
 		})
 	}
@@ -180,7 +180,7 @@ func (o *OwnedProcessor) ProcessBatch(ctx context.Context, batch MessageBatch) (
 	for _, iMsg := range iMsgs {
 		var b MessageBatch
 		_ = iMsg.Iter(func(i int, part *message.Part) error {
-			b = append(b, newMessageFromPart(part))
+			b = append(b, NewInternalMessage(part))
 			return nil
 		})
 		batches = append(batches, b)

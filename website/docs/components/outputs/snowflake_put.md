@@ -32,24 +32,24 @@ Sends messages to Snowflake stages and, optionally, calls Snowpipe to load this 
 output:
   label: ""
   snowflake_put:
-    account: ""
-    region: ""
-    cloud: ""
-    user: ""
-    password: ""
-    private_key_file: ""
-    private_key_pass: ""
-    role: ""
-    database: ""
-    warehouse: ""
-    schema: ""
-    stage: ""
+    account: "" # No default (required)
+    region: us-west-2 # No default (optional)
+    cloud: aws # No default (optional)
+    user: "" # No default (required)
+    password: "" # No default (optional)
+    private_key_file: "" # No default (optional)
+    private_key_pass: "" # No default (optional)
+    role: "" # No default (required)
+    database: "" # No default (required)
+    warehouse: "" # No default (required)
+    schema: "" # No default (required)
+    stage: "" # No default (required)
     path: ""
     file_name: ""
     file_extension: ""
     compression: AUTO
     request_id: ""
-    snowpipe: ""
+    snowpipe: "" # No default (optional)
     batching:
       count: 0
       byte_size: 0
@@ -66,32 +66,32 @@ output:
 output:
   label: ""
   snowflake_put:
-    account: ""
-    region: ""
-    cloud: ""
-    user: ""
-    password: ""
-    private_key_file: ""
-    private_key_pass: ""
-    role: ""
-    database: ""
-    warehouse: ""
-    schema: ""
-    stage: ""
+    account: "" # No default (required)
+    region: us-west-2 # No default (optional)
+    cloud: aws # No default (optional)
+    user: "" # No default (required)
+    password: "" # No default (optional)
+    private_key_file: "" # No default (optional)
+    private_key_pass: "" # No default (optional)
+    role: "" # No default (required)
+    database: "" # No default (required)
+    warehouse: "" # No default (required)
+    schema: "" # No default (required)
+    stage: "" # No default (required)
     path: ""
     file_name: ""
     file_extension: ""
     upload_parallel_threads: 4
     compression: AUTO
     request_id: ""
-    snowpipe: ""
+    snowpipe: "" # No default (optional)
     client_session_keep_alive: false
     batching:
       count: 0
       byte_size: 0
       period: ""
       check: ""
-      processors: []
+      processors: [] # No default (optional)
     max_in_flight: 1
 ```
 

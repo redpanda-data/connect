@@ -18,7 +18,7 @@ import (
 func readMsg(t *testing.T, tranChan <-chan message.Transaction) message.Batch {
 	t.Helper()
 
-	tCtx, done := context.WithTimeout(context.Background(), time.Second)
+	tCtx, done := context.WithTimeout(context.Background(), time.Second*10)
 	defer done()
 
 	select {
