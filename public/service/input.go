@@ -216,7 +216,6 @@ func (r *ResourceInput) ReadBatch(ctx context.Context) (MessageBatch, AckFunc, e
 		return nil
 	})
 	return b, func(c context.Context, r error) error {
-		r = fromPublicBatchError(r)
 		return tran.Ack(c, r)
 	}, nil
 }
@@ -264,7 +263,6 @@ func (o *OwnedInput) ReadBatch(ctx context.Context) (MessageBatch, AckFunc, erro
 		return nil
 	})
 	return b, func(c context.Context, r error) error {
-		r = fromPublicBatchError(r)
 		return tran.Ack(c, r)
 	}, nil
 }

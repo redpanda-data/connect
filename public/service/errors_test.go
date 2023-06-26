@@ -68,3 +68,10 @@ func TestMockWalkableError_OmitSuccessfulMessages(t *testing.T) {
 
 	require.Equal(t, err.IndexedErrors(), 2, "indexed errors did not match size of batch")
 }
+
+func TestToPublicBatchError_PreservePublicError(t *testing.T) {
+	b := MessageBatch{NewMessage([]byte(`test`))}
+	err := NewBatchError(b, errors.New("test error headline"))
+
+	require.Same(t, err, toPublicBatchError(err))
+}

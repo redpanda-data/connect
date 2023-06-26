@@ -117,11 +117,12 @@ func (a *airGapBatchWriter) WriteBatch(ctx context.Context, msg message.Batch) e
 		parts[i] = NewInternalMessage(part)
 		return nil
 	})
+
 	err := a.w.WriteBatch(ctx, parts)
 	if err != nil && errors.Is(err, ErrNotConnected) {
 		err = component.ErrNotConnected
 	}
-	err = fromPublicBatchError(err)
+
 	return err
 }
 

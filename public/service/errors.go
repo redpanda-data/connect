@@ -74,19 +74,16 @@ func (err *BatchError) Unwrap() error {
 // If the provided error is not nil and can be cast to an internal batch error
 // we return a public batch error.
 func toPublicBatchError(err error) error {
+	// Modern Benthos components that use the public service API will return a
+	// *service.BatchError type. We will preserve this if we encounter it.
+	var target *BatchError
+	if ok := errors.As(err, &target); ok {
+		return err
+	}
+
 	var bErr *batch.Error
 	if err != nil && errors.As(err, &bErr) {
 		err = &BatchError{wrapped: bErr}
-	}
-	return err
-}
-
-// If the provided error is not nil and can be cast to a public batch error we
-// return the internal batch error.
-func fromPublicBatchError(err error) error {
-	var bErr *BatchError
-	if err != nil && errors.As(err, &bErr) {
-		err = bErr.wrapped
 	}
 	return err
 }
