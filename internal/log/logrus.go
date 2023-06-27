@@ -19,6 +19,7 @@ type Config struct {
 	LogLevel      string            `json:"level" yaml:"level"`
 	Format        string            `json:"format" yaml:"format"`
 	AddTimeStamp  bool              `json:"add_timestamp" yaml:"add_timestamp"`
+	LevelName     string            `json:"level_name" yaml:"level_name"`
 	MessageName   string            `json:"message_name" yaml:"message_name"`
 	TimestampName string            `json:"timestamp_name" yaml:"timestamp_name"`
 	StaticFields  map[string]string `json:"static_fields" yaml:"static_fields"`
@@ -38,6 +39,7 @@ func NewConfig() Config {
 		LogLevel:      "INFO",
 		Format:        "logfmt",
 		AddTimeStamp:  false,
+		LevelName:     "level",
 		TimestampName: "time",
 		MessageName:   "msg",
 		StaticFields: map[string]string{
@@ -130,8 +132,9 @@ func New(stream io.Writer, fs ifs.FS, config Config) (Modular, error) {
 		logger.SetFormatter(&logrus.JSONFormatter{
 			DisableTimestamp: !config.AddTimeStamp,
 			FieldMap: logrus.FieldMap{
-				logrus.FieldKeyTime: config.TimestampName,
-				logrus.FieldKeyMsg:  config.MessageName,
+				logrus.FieldKeyTime:  config.TimestampName,
+				logrus.FieldKeyMsg:   config.MessageName,
+				logrus.FieldKeyLevel: config.LevelName,
 			},
 		})
 	case "logfmt":
@@ -140,8 +143,9 @@ func New(stream io.Writer, fs ifs.FS, config Config) (Modular, error) {
 			QuoteEmptyFields: true,
 			FullTimestamp:    config.AddTimeStamp,
 			FieldMap: logrus.FieldMap{
-				logrus.FieldKeyTime: config.TimestampName,
-				logrus.FieldKeyMsg:  config.MessageName,
+				logrus.FieldKeyTime:  config.TimestampName,
+				logrus.FieldKeyMsg:   config.MessageName,
+				logrus.FieldKeyLevel: config.LevelName,
 			},
 		})
 	default:
