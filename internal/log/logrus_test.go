@@ -101,6 +101,36 @@ func TestLoggerWithNonStringKeys(t *testing.T) {
 	assert.Equal(t, expected, buf.String())
 }
 
+func TestLoggerWithOtherNames(t *testing.T) {
+	loggerConfig := NewConfig()
+	loggerConfig.AddTimeStamp = false
+	loggerConfig.Format = "json"
+	loggerConfig.LogLevel = "WARN"
+	loggerConfig.StaticFields = map[string]string{
+		"@service": "benthos_service",
+		"@system":  "foo",
+	}
+	loggerConfig.LevelName = "severity"
+	loggerConfig.MessageName = "message"
+
+	var buf bytes.Buffer
+
+	logger, err := New(&buf, ifs.OS(), loggerConfig)
+	require.NoError(t, err)
+
+	logger = logger.WithFields(map[string]string{
+		"foo": "bar",
+	})
+	require.NoError(t, err)
+
+	logger.Warnln("Warning message foo fields")
+
+	expected := `{"@service":"benthos_service","@system":"foo","foo":"bar","message":"Warning message foo fields","severity":"warning"}
+`
+
+	require.JSONEq(t, expected, buf.String())
+}
+
 type logCounter struct {
 	count int
 }
