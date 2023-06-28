@@ -2,6 +2,7 @@ package mongodb
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 
@@ -192,6 +193,35 @@ func (m *Processor) ProcessBatch(ctx context.Context, batch service.MessageBatch
 			}
 
 			msg.SetBytes(data)
+			return nil
+		case OperationFindAll:
+			var decoded []bson.M
+			collection := m.database.Collection(collectionStr, m.writeConcernCollectionOption)
+			cur, err := collection.Find(context.Background(), filterJSON, &options.FindOptions{})
+			if err != nil {
+				if errors.Is(err, mongo.ErrNoDocuments) {
+					return err
+				}
+				m.log.Errorf("Error decoding mongo db result, filter = %v: %s", filterJSON, err)
+				return err
+			}
+			defer cur.Close(context.Background())
+
+			err = cur.All(context.Background(), &decoded)
+			if err != nil {
+				m.log.Errorf("Cannot decode All cursor documents: %v", err)
+				return err
+			}
+
+			// Error: WriteArray can only write a Array while positioned on a Element or Value but is positioned on a TopLevel
+			// data, err := bson.MarshalExtJSON(decoded, m.marshalMode == JSONMarshalModeCanonical, false)
+			data, err := json.Marshal(decoded)
+			if err != nil {
+				return err
+			}
+
+			msg.SetBytes(data)
+
 			return nil
 		}
 
