@@ -31,7 +31,7 @@ func AutoRetryNacksBatched(i BatchInput) BatchInput {
 					iParts[i] = p.part
 				}
 
-				_, iParts = message.NewSortGroupParts(iParts)
+				_, iParts = message.NewSortGroup(iParts)
 				for i, p := range iParts {
 					t[i] = NewInternalMessage(p)
 				}
@@ -57,11 +57,16 @@ func AutoRetryNacksBatched(i BatchInput) BatchInput {
 					sortBatch[i] = p.part
 				}
 
+				seenIndexes := map[int]struct{}{}
 				newBatch := make(MessageBatch, 0, bErr.IndexedErrors())
-				bErr.WalkParts(sortGroup, sortBatch, func(i int, p *message.Part, err error) bool {
+				bErr.WalkPartsBySource(sortGroup, sortBatch, func(i int, p *message.Part, err error) bool {
 					if err == nil {
 						return true
 					}
+					if _, exists := seenIndexes[i]; exists {
+						return true
+					}
+					seenIndexes[i] = struct{}{}
 					newBatch = append(newBatch, &Message{part: p})
 					return true
 				})

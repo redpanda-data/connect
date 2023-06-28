@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- Field `logger.level_name` added for customising the name of log levels in the JSON format.
+
 ### Fixed
 
 - HTTP components no longer ignore `proxy_url` settings when OAuth2 is set.
@@ -15,6 +19,7 @@ All notable changes to this project will be documented in this file.
 
 - The old `parquet` processor (now superseded by `parquet_encode` and `parquet_decode`) has been removed from 32-bit ARM builds due to build incompatibilities.
 - The `snowflake_put` output has been removed from 32-bit ARM builds due to build incompatibilities.
+- Plugin API: The `(*BatchError).WalkMessages` method has been deprecated in favour of `WalkMessagesIndexedBy`.
 
 ## 4.17.0 - 2023-06-13
 

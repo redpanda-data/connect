@@ -11,7 +11,6 @@ import (
 // collection (usually a batch) of messages and provides methods to iterate
 // over these errors.
 type BatchError struct {
-	group   *message.SortGroup
 	wrapped *batch.Error
 }
 
@@ -26,11 +25,8 @@ func NewBatchError(b MessageBatch, headline error) *BatchError {
 	for i, m := range b {
 		ib[i] = m.part
 	}
-
-	group, ibatch := message.NewSortGroup(ib)
-	batchErr := batch.NewError(ibatch, headline)
-
-	return &BatchError{group: group, wrapped: batchErr}
+	batchErr := batch.NewError(ib, headline)
+	return &BatchError{wrapped: batchErr}
 }
 
 // Failed stores an error state for a particular message of a batch. Returns a
@@ -44,14 +40,56 @@ func (err *BatchError) Failed(i int, merr error) *BatchError {
 	return err
 }
 
+// WalkMessagesIndexedBy applies a closure to each message of a batch that is
+// included in this batch error. A batch error represents errors that occurred
+// to only a subset of a batch of messages, in which case it is possible to use
+// this error in order to avoid re-processing or re-delivering messages that
+// didn't fail.
+//
+// However, the shape of the batch of messages at the time the errors occurred
+// may differ significantly from the batch known by the component receiving this
+// error. For example a processor that dispatches a batch to a list of child
+// processors may receive a batch error that occurred after filtering and
+// re-ordering has occurred to the batch. In such cases it is not possible to
+// simply inspect the indexes of errored messages in order to associate them
+// with the original batch as those indexes could have changed.
+//
+// Therefore, in order to solve this particular use case it is possible to
+// create a batch indexer before dispatching the batch to the child components.
+// Then, when a batch error is received WalkMessagesIndexedBy can be used as way
+// to walk the errored messages with the indexes (and message contents) of the
+// original batch.
+//
+// Important! The order of messages walked is not guaranteed to match that of
+// the source batch. It is also possible for any given index to be represented
+// zero, one or more times.
+func (err *BatchError) WalkMessagesIndexedBy(s *Indexer, fn func(int, *Message, error) bool) {
+	parts := make(message.Batch, len(s.sourceBatch))
+	for i, m := range s.sourceBatch {
+		parts[i] = m.part
+	}
+	err.wrapped.WalkPartsBySource(s.wrapped, parts, func(i int, p *message.Part, err error) bool {
+		var m *Message
+		if i >= 0 && i < len(s.sourceBatch) {
+			m = s.sourceBatch[i]
+		} else {
+			m = &Message{part: p}
+		}
+		return fn(i, m, err)
+	})
+}
+
 // WalkMessages applies a closure to each message that was part of the request
 // that caused this error. The closure is provided the message index, a pointer
 // to the message, and its individual error, which may be nil if the message
 // itself was processed successfully. The closure should return a bool which
 // indicates whether the iteration should be continued.
+//
+// Deprecated: This method is harmful and should be avoided as indexes are not
+// guaranteed to match a hypothetical origin batch that they might be compared
+// against. Use WalkMessagesIndexedBy instead.
 func (err *BatchError) WalkMessages(fn func(int, *Message, error) bool) {
-	b := err.wrapped.XErroredBatch()
-	err.wrapped.WalkParts(err.group, b, func(i int, p *message.Part, err error) bool {
+	err.wrapped.WalkPartsNaively(func(i int, p *message.Part, err error) bool {
 		return fn(i, &Message{part: p}, err)
 	})
 }

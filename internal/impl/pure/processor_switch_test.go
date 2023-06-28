@@ -354,7 +354,7 @@ func BenchmarkSortCorrect(b *testing.B) {
 		sortedParts[i] = message.NewPart([]byte(fmt.Sprintf("hello world %040d", i)))
 	}
 
-	group, parts := message.NewSortGroupParts(sortedParts)
+	group, parts := message.NewSortGroup(sortedParts)
 
 	b.ReportAllocs()
 	b.ResetTimer()
@@ -368,7 +368,7 @@ func BenchmarkSortReverse(b *testing.B) {
 		sortedParts[i] = message.NewPart([]byte(fmt.Sprintf("hello world %040d", i)))
 	}
 
-	group, parts := message.NewSortGroupParts(sortedParts)
+	group, parts := message.NewSortGroup(sortedParts)
 	unsortedParts := make([]*message.Part, b.N)
 	for i := range parts {
 		unsortedParts[i] = parts[len(parts)-i-1]

@@ -55,11 +55,16 @@ func NewAsyncPreserver(r Async) *AsyncPreserver {
 					return t
 				}
 
+				seenIndexes := map[int]struct{}{}
 				newBatch := make(message.Batch, 0, bErr.IndexedErrors())
-				bErr.WalkParts(sortGroup, t, func(i int, p *message.Part, err error) bool {
+				bErr.WalkPartsBySource(sortGroup, t, func(i int, p *message.Part, err error) bool {
 					if err == nil {
 						return true
 					}
+					if _, exists := seenIndexes[i]; exists {
+						return true
+					}
+					seenIndexes[i] = struct{}{}
 					newBatch = append(newBatch, p)
 					return true
 				})
