@@ -169,10 +169,13 @@ func TestPubSubOutput_MissingTopic(t *testing.T) {
 	var bErr *service.BatchError
 	errs := []error{}
 
-	err = out.WriteBatch(ctx, service.MessageBatch{service.NewMessage([]byte("foo"))})
+	batch := service.MessageBatch{service.NewMessage([]byte("foo"))}
+	index := batch.Index()
+
+	err = out.WriteBatch(ctx, batch)
 	require.ErrorAsf(t, err, &bErr, "expected a batch error but got: %T: %v", bErr, bErr)
 	require.ErrorContains(t, bErr, "failed to publish batch")
-	bErr.WalkMessages(func(i int, m *service.Message, err error) bool {
+	bErr.WalkMessagesIndexedBy(index, func(i int, m *service.Message, err error) bool {
 		if err != nil {
 			errs = append(errs, err)
 		}
@@ -184,10 +187,13 @@ func TestPubSubOutput_MissingTopic(t *testing.T) {
 	bErr = nil
 	errs = []error{}
 
-	err = out.WriteBatch(ctx, service.MessageBatch{service.NewMessage([]byte("bar"))})
+	batch = service.MessageBatch{service.NewMessage([]byte("bar"))}
+	index = batch.Index()
+
+	err = out.WriteBatch(ctx, batch)
 	require.ErrorAsf(t, err, &bErr, "expected a batch error but got: %T: %v", bErr, bErr)
 	require.ErrorContains(t, bErr, "failed to publish batch")
-	bErr.WalkMessages(func(i int, m *service.Message, err error) bool {
+	bErr.WalkMessagesIndexedBy(index, func(i int, m *service.Message, err error) bool {
 		if err != nil {
 			errs = append(errs, err)
 		}
@@ -254,7 +260,10 @@ func TestPubSubOutput_PublishErrors(t *testing.T) {
 	err = out.Connect(ctx)
 	require.NoError(t, err, "connect failed")
 
-	err = out.WriteBatch(ctx, service.MessageBatch{fooMsgA, fooMsgB, barMsg})
+	batch := service.MessageBatch{fooMsgA, fooMsgB, barMsg}
+	index := batch.Index()
+
+	err = out.WriteBatch(ctx, batch)
 	require.Error(t, err, "did not get expected publish error")
 
 	var batchErr *service.BatchError
@@ -262,7 +271,7 @@ func TestPubSubOutput_PublishErrors(t *testing.T) {
 	require.Equal(t, 2, batchErr.IndexedErrors(), "did not receive expected number of batch errors")
 
 	var errs []string
-	batchErr.WalkMessages(func(i int, m *service.Message, err error) bool {
+	batchErr.WalkMessagesIndexedBy(index, func(i int, m *service.Message, err error) bool {
 		if err != nil {
 			errs = append(errs, err.Error())
 		}
