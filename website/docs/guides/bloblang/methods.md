@@ -1933,7 +1933,7 @@ root.new_dict = this.dict.filter(item -> item.value.contains("foo"))
 :::caution BETA
 This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
 :::
-Returns the index of the first occurrence of a value an array. `-1` is returned if there are no matches. Numerical comparisons are made irrespective of the representation type (float versus integer).
+Returns the index of the first occurrence of a value in an array. `-1` is returned if there are no matches. Numerical comparisons are made irrespective of the representation type (float versus integer).
 
 #### Parameters
 
