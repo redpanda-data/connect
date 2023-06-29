@@ -14,6 +14,7 @@ All notable changes to this project will be documented in this file.
 - HTTP components no longer ignore `proxy_url` settings when OAuth2 is set.
 - The `PATCH` verb for the streams mode REST API no longer fails to patch over newer components implemented with the latest plugin APIs.
 - The `nats_jetstream` input no longer fails for configs that set `bind` to `true` and do not specify both a `stream` and `durable` together.
+- The `mongodb` processor and output no longer ignores the `upsert` field.
 
 ### Changed
 

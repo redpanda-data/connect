@@ -334,10 +334,8 @@ func writeMapsFromParsed(conf *service.ParsedConfig, operation Operation) (maps 
 			return
 		}
 	}
-	if probeStr, _ := conf.FieldString(commonFieldUpsert); probeStr != "" {
-		if maps.upsert, err = conf.FieldBool(commonFieldUpsert); err != nil {
-			return
-		}
+	if maps.upsert, err = conf.FieldBool(commonFieldUpsert); err != nil {
+		return
 	}
 
 	if operation.isFilterAllowed() {

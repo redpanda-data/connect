@@ -83,6 +83,9 @@ func TestProcessorIntegration(t *testing.T) {
 	t.Run("find one", func(t *testing.T) {
 		testMongoDBProcessorFindOne(mongoClient, port, t)
 	})
+	t.Run("upsert", func(t *testing.T) {
+		testMongoDBProcessorUpsert(mongoClient, port, t)
+	})
 }
 
 func testMProc(t testing.TB, port, collection string, configYAML string) *mongodb.Processor {
@@ -310,6 +313,88 @@ filter_map: |
 	assert.Equal(t, `"foo_update"`, aVal.String())
 	assert.Equal(t, `"bar_update_new"`, bVal.String())
 	assert.Equal(t, `"c1"`, cVal.String())
+}
+
+func testMongoDBProcessorUpsert(mongoClient *mongo.Client, port string, t *testing.T) {
+	tCtx := context.Background()
+	m := testMProc(t, port, "", `
+write_concern:
+  w: "1"
+  j: false
+  timeout: ""
+operation: update-one
+document_map: |
+  root = { "$set": { "a": this.foo, "b": this.bar } }
+filter_map: |
+  root.a = this.foo
+upsert: true
+`)
+	collection := mongoClient.Database("TestDB").Collection("TestCollection")
+	_, err := collection.Indexes().CreateOne(tCtx, mongo.IndexModel{
+		Keys: bson.M{
+			"foo": -1,
+		},
+	})
+	require.NoError(t, err)
+
+	resMsgs, err := m.ProcessBatch(tCtx, service.MessageBatch{
+		service.NewMessage([]byte(`{"foo":"foo1","bar":"bar1"}`)),
+		service.NewMessage([]byte(`{"foo":"foo2","bar":"bar2"}`)),
+	})
+	require.NoError(t, err)
+	require.Len(t, resMsgs, 1)
+	require.NoError(t, resMsgs[0][0].GetError())
+	assertMessagesEqual(t, resMsgs[0], []string{
+		`{"foo":"foo1","bar":"bar1"}`,
+		`{"foo":"foo2","bar":"bar2"}`,
+	})
+
+	// Validate the record is in the MongoDB
+	result := collection.FindOne(tCtx, bson.M{"a": "foo1"})
+	b, err := result.DecodeBytes()
+	assert.NoError(t, err)
+	aVal := b.Lookup("a")
+	bVal := b.Lookup("b")
+	assert.Equal(t, `"foo1"`, aVal.String())
+	assert.Equal(t, `"bar1"`, bVal.String())
+
+	result = collection.FindOne(tCtx, bson.M{"a": "foo2"})
+	b, err = result.DecodeBytes()
+	assert.NoError(t, err)
+	aVal = b.Lookup("a")
+	bVal = b.Lookup("b")
+	assert.Equal(t, `"foo2"`, aVal.String())
+	assert.Equal(t, `"bar2"`, bVal.String())
+
+	// Override
+	resMsgs, err = m.ProcessBatch(tCtx, service.MessageBatch{
+		service.NewMessage([]byte(`{"foo":"foo1","bar":"bar3"}`)),
+		service.NewMessage([]byte(`{"foo":"foo2","bar":"bar4"}`)),
+	})
+	require.NoError(t, err)
+	require.Len(t, resMsgs, 1)
+	require.NoError(t, resMsgs[0][0].GetError())
+	assertMessagesEqual(t, resMsgs[0], []string{
+		`{"foo":"foo1","bar":"bar3"}`,
+		`{"foo":"foo2","bar":"bar4"}`,
+	})
+
+	// Validate the record is in the MongoDB
+	result = collection.FindOne(tCtx, bson.M{"a": "foo1"})
+	b, err = result.DecodeBytes()
+	assert.NoError(t, err)
+	aVal = b.Lookup("a")
+	bVal = b.Lookup("b")
+	assert.Equal(t, `"foo1"`, aVal.String())
+	assert.Equal(t, `"bar3"`, bVal.String())
+
+	result = collection.FindOne(tCtx, bson.M{"a": "foo2"})
+	b, err = result.DecodeBytes()
+	assert.NoError(t, err)
+	aVal = b.Lookup("a")
+	bVal = b.Lookup("b")
+	assert.Equal(t, `"foo2"`, aVal.String())
+	assert.Equal(t, `"bar4"`, bVal.String())
 }
 
 func testMongoDBProcessorFindOne(mongoClient *mongo.Client, port string, t *testing.T) {
