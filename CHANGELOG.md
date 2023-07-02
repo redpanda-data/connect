@@ -5,9 +5,12 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 4.18.0 - 2023-07-02
+
 ### Added
 
 - Field `logger.level_name` added for customising the name of log levels in the JSON format.
+- Methods `sign_jwt_rs256`, `sign_jwt_rs384` and `sign_jwt_rs512` added to Bloblang.
 
 ### Fixed
 
