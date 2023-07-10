@@ -35,8 +35,14 @@ func (t *tracedOutput) UnwrapOutput() output.Streamed {
 func (t *tracedOutput) loop(inChan <-chan message.Transaction) {
 	defer close(t.tChan)
 	for {
-		tran, open := <-inChan
-		if !open {
+		var tran message.Transaction
+		var open bool
+		select {
+		case tran, open = <-inChan:
+			if !open {
+				return
+			}
+		case <-t.shutSig.CloseNowChan():
 			return
 		}
 		if t.e.IsEnabled() {
