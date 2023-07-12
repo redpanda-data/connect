@@ -3,7 +3,6 @@ package gcp
 import (
 	"context"
 	"errors"
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/mock"
@@ -237,7 +236,7 @@ func TestGCPBigQuerySelectInputClientOptions(t *testing.T) {
 	require.Lenf(t, opt, 1, "Unexpected number of Client Options")
 
 	actualCredsJSON := opt[0]
-	expectedValue := option.WithCredentialsJSON([]byte(strings.TrimSpace(inp.config.credentialsJSON)))
+	expectedValue := option.WithCredentialsJSON([]byte(cleanCredsJson(inp.config.credentialsJSON)))
 	require.EqualValues(t, expectedValue, actualCredsJSON, "GCP Credentials Json not set as expected.")
 }
 
