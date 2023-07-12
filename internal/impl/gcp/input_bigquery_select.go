@@ -2,12 +2,9 @@ package gcp
 
 import (
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"strings"
-
 	"google.golang.org/api/option"
 
 	"cloud.google.com/go/bigquery"
@@ -219,13 +216,9 @@ func (inp *bigQuerySelectInput) Connect(ctx context.Context) error {
 
 func getClientOptionsBQSelect(inp *bigQuerySelectInput) ([]option.ClientOption, error) {
 	var opt []option.ClientOption
-	cred := strings.TrimSpace(inp.config.credentialsJSON)
+	cred := cleanCredsJson(inp.config.credentialsJSON)
 	if len(cred) > 0 {
-		decodedCred, err := base64.StdEncoding.DecodeString(cred)
-		if err != nil {
-			return nil, fmt.Errorf("error decoding GCP Credentials JSON: %w", err)
-		}
-		opt = []option.ClientOption{option.WithCredentialsJSON(decodedCred)}
+		opt = []option.ClientOption{option.WithCredentialsJSON([]byte(cred))}
 	}
 	return opt, nil
 }

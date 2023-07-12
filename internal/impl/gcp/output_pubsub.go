@@ -2,8 +2,8 @@ package gcp
 
 import (
 	"context"
-	"encoding/base64"
 	"fmt"
+	"github.com/Jeffail/gabs/v2"
 	"strings"
 	"sync"
 	"time"
@@ -55,7 +55,18 @@ pipeline:
 `+"```"+``),
 		Config: docs.FieldComponent().WithChildren(
 			docs.FieldString("project", "The project ID of the topic to publish to."),
-			docs.FieldString("credentials_json", "An optional field to set Google Service Account Credentials json as base64 encoded string.").Optional().Secret(),
+			docs.FieldString("credentials_json", "An optional field to set Google Service Account Credentials json as base64 encoded string.").
+				Optional().Secret().
+				LinterFunc(func(ctx docs.LintContext, line, col int, value any) []docs.Lint {
+					s := value.(string)
+					_, err := gabs.ParseJSON([]byte(cleanCredsJson(s)))
+					if err != nil {
+						return []docs.Lint{
+							docs.NewLintError(line, docs.LintCustom, fmt.Errorf("failed to parse Credentials Json message: %v", err).Error()),
+						}
+					}
+					return nil
+				}),
 			docs.FieldString("topic", "The topic to publish to.").IsInterpolated(),
 			docs.FieldInt("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
 			docs.FieldString("publish_timeout", "The maximum length of time to wait before abandoning a publish attempt for a message.", "10s", "5m", "60m").Advanced(),
@@ -167,19 +178,21 @@ func newGCPPubSubWriter(conf output.GCPPubSubConfig, mgr bundle.NewManagement, l
 	}, nil
 }
 
+func cleanCredsJson(inp string) (out string) {
+	//removing the \n char since setting the value from env variable is adding \n char to multi-line values.
+	//This was causing invalid character '\\' error during app startup
+	return strings.ReplaceAll(strings.TrimSpace(inp), "\\n", "")
+}
+
 func getClientOptionsForOutputPubsub(conf output.GCPPubSubConfig) ([]option.ClientOption, error) {
 	var opt []option.ClientOption
 	if len(strings.TrimSpace(conf.Endpoint)) > 0 {
 		opt = []option.ClientOption{option.WithEndpoint(conf.Endpoint)}
 	}
 
-	cred := strings.TrimSpace(conf.CredentialsJSON)
+	cred := cleanCredsJson(conf.CredentialsJSON)
 	if len(cred) > 0 {
-		decodedCred, err := base64.StdEncoding.DecodeString(cred)
-		if err != nil {
-			return nil, fmt.Errorf("error decoding GCP Credentials JSON: %w", err)
-		}
-		opt = append(opt, option.WithCredentialsJSON(decodedCred))
+		opt = append(opt, option.WithCredentialsJSON([]byte(cred)))
 	}
 	return opt, nil
 }

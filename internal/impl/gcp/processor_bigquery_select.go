@@ -1,14 +1,11 @@
 package gcp
 
 import (
+	"cloud.google.com/go/bigquery"
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"strings"
-
-	"cloud.google.com/go/bigquery"
 	"google.golang.org/api/iterator"
 	"google.golang.org/api/option"
 
@@ -180,13 +177,9 @@ func newBigQuerySelectProcessor(inConf *service.ParsedConfig, options *bigQueryP
 }
 
 func getClientOptionsProcessorBQSelect(conf bigQuerySelectProcessorConfig, options *bigQueryProcessorOptions) error {
-	cred := strings.TrimSpace(conf.credentialsJSON)
+	cred := cleanCredsJson(conf.credentialsJSON)
 	if len(cred) > 0 {
-		decodedCred, err := base64.StdEncoding.DecodeString(cred)
-		if err != nil {
-			return fmt.Errorf("error decoding GCP Credentials JSON: %w", err)
-		}
-		options.clientOptions = append(options.clientOptions, option.WithCredentialsJSON(decodedCred))
+		options.clientOptions = append(options.clientOptions, option.WithCredentialsJSON([]byte(cred)))
 	}
 	return nil
 }

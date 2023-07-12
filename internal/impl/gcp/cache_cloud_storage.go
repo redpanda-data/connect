@@ -2,10 +2,8 @@ package gcp
 
 import (
 	"context"
-	"encoding/base64"
 	"errors"
 	"io"
-	"strings"
 	"time"
 
 	"cloud.google.com/go/storage"
@@ -77,13 +75,9 @@ func getClientOptionsForCloudStorageCache(parsedConf *service.ParsedConfig) ([]o
 		if err != nil {
 			return nil, err
 		}
-		cred := strings.TrimSpace(credsJSON)
+		cred := cleanCredsJson(credsJSON)
 		if len(cred) > 0 {
-			decodedCred, err := base64.StdEncoding.DecodeString(cred)
-			if err != nil {
-				return nil, err
-			}
-			opt = []option.ClientOption{option.WithCredentialsJSON(decodedCred)}
+			opt = []option.ClientOption{option.WithCredentialsJSON([]byte(cred))}
 		}
 	}
 	return opt, nil

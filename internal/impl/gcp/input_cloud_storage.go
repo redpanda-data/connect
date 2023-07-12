@@ -2,7 +2,6 @@ package gcp
 
 import (
 	"context"
-	"encoding/base64"
 	"errors"
 	"fmt"
 	"io"
@@ -252,13 +251,9 @@ func (g *gcpCloudStorageInput) Connect(ctx context.Context) error {
 
 func getClientOptionsForInputCloudStorage(g *gcpCloudStorageInput) ([]option.ClientOption, error) {
 	var opt []option.ClientOption
-	cred := strings.TrimSpace(g.conf.CredentialsJSON)
+	cred := cleanCredsJson(g.conf.CredentialsJSON)
 	if len(cred) > 0 {
-		decodedCred, err := base64.StdEncoding.DecodeString(cred)
-		if err != nil {
-			return nil, fmt.Errorf("error decoding GCP Credentials JSON: %w", err)
-		}
-		opt = []option.ClientOption{option.WithCredentialsJSON(decodedCred)}
+		opt = []option.ClientOption{option.WithCredentialsJSON([]byte(cred))}
 	}
 	return opt, nil
 }

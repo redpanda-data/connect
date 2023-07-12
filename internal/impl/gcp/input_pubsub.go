@@ -2,9 +2,7 @@ package gcp
 
 import (
 	"context"
-	"encoding/base64"
 	"errors"
-	"fmt"
 	"strings"
 	"sync"
 
@@ -144,13 +142,9 @@ func getClientOptionsForPubsubClient(conf input.GCPPubSubConfig) ([]option.Clien
 		opt = []option.ClientOption{option.WithEndpoint(conf.Endpoint)}
 	}
 
-	cred := strings.TrimSpace(conf.CredentialsJSON)
+	cred := cleanCredsJson(conf.CredentialsJSON)
 	if len(cred) > 0 {
-		decodedCred, err := base64.StdEncoding.DecodeString(cred)
-		if err != nil {
-			return nil, fmt.Errorf("error decoding GCP Credentials JSON: %w", err)
-		}
-		opt = append(opt, option.WithCredentialsJSON(decodedCred))
+		opt = append(opt, option.WithCredentialsJSON([]byte(cred)))
 	}
 	return opt, nil
 }

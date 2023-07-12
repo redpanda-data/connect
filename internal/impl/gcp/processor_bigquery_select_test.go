@@ -2,9 +2,9 @@ package gcp
 
 import (
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/mock"
@@ -43,25 +43,37 @@ suffix: |
   LIMIT 10
 args_mapping: |
   root = [ this.term ]
-credentials_json: ewogICJ0eXBlIjogInNlcnZpY2VfYWNjb3VudCIsCiAgInByb2plY3RfaWQiOiAiaWRvbm90ZXhpc3Rwcm9qZWN0IiwKICAicHJpdmF0ZV9rZXlfaWQiOiAibng4MDNpbzJ1dDVneGFoM3B4NnRmeTkwd3ltOWZsYzIybzR0aG50eSIsCiAgInByaXZhdGVfa2V5IjogIi0tLS0tQkVHSU4gUFJJVkFURSBLRVktLS0tLVwhIW5vdGFyZWFscHJpdmF0ZWtleSEhIW56c3Bzd2FzdjZidGE3YW5uZDJhN2loaG00bGthYjViZHVqNWlmYmdmdTh4cnp3YTZtZHA4MHE0MmdhMGZyNWltYzloMHExMm1majA2a2J1MDRjMndpNmd5cXc2bGVnNWE0cmZuaHlpcXZjZzM2aGx1MHpxeHNxZWZpYTZxOXNxMDIyOGRtZzZtdnBsbnpzcDltMnBqdW95N250cXRkcnhoc215d3I4ZXhzN3hydGp1MWV5YTNya2V1dzRva2Q0YjI0aW9pdXZwN3ByaTg4aDJveWhzMzBuaDF6bDBxZ2x5bGEzN2xsYzJ5emx2ODg1MmRlMnV3eWM5M20wcWlpN3Vod2dxdXJ6NHl3djVnenhxaDh6aTV6Z2pwOW52cXU3eDUxcHZjc3lxc3BhNWtkeTY0Z3hndmwwYTN4bDVjZ3IyNDJ2a3VzbXduZHo4b3Rua2poZjI3aTlrdGFiMG5rdnp0eTBwYXNyNmo3Y2FlMWY0bWdicmwwNXJ4a2FjbTYwMHN4eWgzOTl2enBkMTc1cWdzdjBkMXM3cHJ0djc2OHRoa2V1Y3hxdnJvcGViZjYzMGdjZzg2OGFsMTJmazZseHdrOHB0cndkbm95aHJnMXM5ZDlyazRrZW9iY3A4a3pwMzUyZXc2eTF4Z2ttZmliemxlZm0wMWlydG8ydTB1M2xkY2sxd3FveTB1emtxdzA4MGZuZmVqMmUzNzg2d3BjYmVsYTNvZjZlaHp4Y2g4MGl3aGVwNDJjejhpamZzeDR6ZHBwa2p6NHhwN3dmenU0cjNkNWlucjN0MW9xOWJjNnYxdjBqMmhueHFiMzAwOXQ1MHowbGtrdjA5Y3duMzFvdHg0NWMxcG90OTYwdWRkZTQ1M2M2cTA5YWkwcGtzbHVnb2N3OXR4MXR6Z3VoMnZhZjM5cmRtZGo4bndoYjJkMnM1anlwdjc0eWZrdDJoNTU0NnRkYnBydzN5MnF4Mmd1enBzd3IxeWw1ZHRpaHo1amlsdzBvaTd0NDc2cWhranB3dTR1ZnR5NnYyc29mYmZ2M3d4ZmpnODZjaXZjNmdxNGUwYWFvc3BvcXAyd2g4cGRoaXFmZGR0bWZnMmd0Z3RyNDhicGdwbjF0ZzFzeDlmYmFuM3VrZW1nczJjY2wwcnNqOTFqdDkyY2s5MGdxMm1sbnV2c3JyOXhiZHlieXM4azcyZGdranF4d3B3czJtazZ6OTJxMXNjY3N2d2NmbHFxanU0MTJndGg0OWZidjd0b21obTg2ZzR0YWJkdGpiOWYwYWV2dGgwenRkY3ByNWZlbjd1ODhydzYycmRsc25mNTY5Nm0yYzdsdjR2XG4tLS0tLUVORCBQUklWQVRFIEtFWS0tLS0tXG4iLAogICJjbGllbnRfZW1haWwiOiAidGVzdG1lQGlkb25vdGV4aXN0cHJvamVjdC5pYW0uZ3NlcnZpY2VhY2NvdW50LmNvbSIsCiAgImNsaWVudF9pZCI6ICI5NzM1NzE1MzIyNDUwNjY5MzM3OCIsCiAgImF1dGhfdXJpIjogImh0dHBzOi8vYWNjb3VudHMuZ29vZ2xlLmNvbS9vL29hdXRoMi9hdXRoIiwKICAidG9rZW5fdXJpIjogImh0dHBzOi8vb2F1dGgyLmdvb2dsZWFwaXMuY29tL3Rva2VuIiwKICAiYXV0aF9wcm92aWRlcl94NTA5X2NlcnRfdXJsIjogImh0dHBzOi8vd3d3Lmdvb2dsZWFwaXMuY29tL29hdXRoMi92MS9jZXJ0cyIsCiAgImNsaWVudF94NTA5X2NlcnRfdXJsIjogImh0dHBzOi8vd3d3Lmdvb2dsZWFwaXMuY29tL3JvYm90L3YxL21ldGFkYXRhL3g1MDkvdGVzdG1lJTQwaWRvbm90ZXhpc3Rwcm9qZWN0LmlhbS5nc2VydmljZWFjY291bnQuY29tIgp9
+credentials_json: |
+  {
+  "type": "service_account",
+  "project_id": "idonotexistproject",
+  "private_key_id": "nx803io2ut5gxah3px6tfy90wym9flc22o4thnty",
+  "private_key": "-----BEGIN PRIVATE KEY-----\!!notarealprivatekey!!!nzspswasv6bta7annd2a7ihhm4lkab5bduj5ifbgfu8xrzwa6mdp80q42ga0fr5imc9h0q12mfj06kbu04c2wi6gyqw6leg5a4rfnhyiqvcg36hlu0zqxsqefia6q9sq0228dmg6mvplnzsp9m2pjuoy7ntqtdrxhsmywr8exs7xrtju1eya3rkeuw4okd4b24ioiuvp7pri88h2oyhs30nh1zl0qglyla37llc2yzlv8852de2uwyc93m0qii7uhwgqurz4ywv5gzxqh8zi5zgjp9nvqu7x51pvcsyqspa5kdy64gxgvl0a3xl5cgr242vkusmwndz8otnkjhf27i9ktab0nkvzty0pasr6j7cae1f4mgbrl05rxkacm600sxyh399vzpd175qgsv0d1s7prtv768thkeucxqvropebf630gcg868al12fk6lxwk8ptrwdnoyhrg1s9d9rk4keobcp8kzp352ew6y1xgkmfibzlefm01irto2u0u3ldck1wqoy0uzkqw080fnfej2e3786wpcbela3of6ehzxch80iwhep42cz8ijfsx4zdppkjz4xp7wfzu4r3d5inr3t1oq9bc6v1v0j2hnxqb3009t50z0lkkv09cwn31otx45c1pot960udde453c6q09ai0pkslugocw9tx1tzguh2vaf39rdmdj8nwhb2d2s5jypv74yfkt2h5546tdbprw3y2qx2guzpswr1yl5dtihz5jilw0oi7t476qhkjpwu4ufty6v2sofbfv3wxfjg86civc6gq4e0aaospoqp2wh8pdhiqfddtmfg2gtgtr48bpgpn1tg1sx9fban3ukemgs2ccl0rsj91jt92ck90gq2mlnuvsrr9xbdybys8k72dgkjqxwpws2mk6z92q1sccsvwcflqqju412gth49fbv7tomhm86g4tabdtjb9f0aevth0ztdcpr5fen7u88rw62rdlsnf5696m2c7lv4v\n-----END PRIVATE KEY-----\n",
+  "client_email": "testme@idonotexistproject.iam.gserviceaccount.com",
+  "client_id": "97357153224506693378",
+  "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+  "token_uri": "https://oauth2.googleapis.com/token",
+  "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+  "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/testme%40idonotexistproject.iam.gserviceaccount.com"
+  }
 `
 
 // credentials_json value is invalid base64 encoded dummy data
-var testBQProcessorYAMLWithCredsJSONError = `
-project: job-project
-table: bigquery-public-data.samples.shakespeare
-columns:
-  - word
-  - sum(word_count) as total_count
-where: length(word) >= ?
-suffix: |
-  GROUP BY word
-  ORDER BY total_count DESC
-  LIMIT 10
-args_mapping: |
-  root = [ this.term ]
-credentials_json: ewogICJ0eXBlIj
-`
+//var testBQProcessorYAMLWithCredsJSONError = `
+//project: job-project
+//table: bigquery-public-data.samples.shakespeare
+//columns:
+//  - word
+//  - sum(word_count) as total_count
+//where: length(word) >= ?
+//suffix: |
+//  GROUP BY word
+//  ORDER BY total_count DESC
+//  LIMIT 10
+//args_mapping: |
+//  root = [ this.term ]
+//credentials_json: ewogICJ0eXBlIj
+//`
 
 func TestGCPBigQuerySelectProcessor(t *testing.T) {
 	spec := newBigQuerySelectProcessorConfig()
@@ -200,8 +212,8 @@ func TestGCPBigQuerySelectProcessorWithCredsJSON1(t *testing.T) {
 	require.Lenf(t, b.clientOptions, 2, "Unexpected number of Client Options")
 
 	actualCredsJSON := b.clientOptions[1]
-	expectedValue, _ := base64.StdEncoding.DecodeString(conf.credentialsJSON)
-	require.EqualValues(t, option.WithCredentialsJSON(expectedValue), actualCredsJSON, "GCP Credentials Json not set as expected.")
+	expectedValue := option.WithCredentialsJSON([]byte(strings.TrimSpace(conf.credentialsJSON)))
+	require.EqualValues(t, expectedValue, actualCredsJSON, "GCP Credentials Json not set as expected.")
 }
 
 func TestGCPBigQuerySelectProcessorWithOnlyCredsJSONOption(t *testing.T) {
@@ -220,22 +232,22 @@ func TestGCPBigQuerySelectProcessorWithOnlyCredsJSONOption(t *testing.T) {
 	require.Lenf(t, b.clientOptions, 1, "Unexpected number of Client Options")
 
 	actualCredsJSON := b.clientOptions[0]
-	expectedValue, _ := base64.StdEncoding.DecodeString(conf.credentialsJSON)
-	require.EqualValues(t, option.WithCredentialsJSON(expectedValue), actualCredsJSON, "GCP Credentials Json not set as expected.")
+	expectedValue := option.WithCredentialsJSON([]byte(strings.TrimSpace(conf.credentialsJSON)))
+	require.EqualValues(t, expectedValue, actualCredsJSON, "GCP Credentials Json not set as expected.")
 }
 
-func TestGCPBigQuerySelectProcessorWithCredsJSONError(t *testing.T) {
-	spec := newBigQuerySelectProcessorConfig()
-
-	parsed, err := spec.ParseYAML(testBQProcessorYAMLWithCredsJSONError, nil)
-	require.NoError(t, err)
-
-	conf, err := bigQuerySelectProcessorConfigFromParsed(parsed)
-	require.NoError(t, err)
-
-	b := &bigQueryProcessorOptions{}
-	err = getClientOptionsProcessorBQSelect(conf, b)
-
-	require.ErrorContains(t, err, "illegal base64 data")
-	require.Lenf(t, b.clientOptions, 0, "Unexpected number of Client Options")
-}
+//func TestGCPBigQuerySelectProcessorWithCredsJSONError(t *testing.T) {
+//	spec := newBigQuerySelectProcessorConfig()
+//
+//	parsed, err := spec.ParseYAML(testBQProcessorYAMLWithCredsJSONError, nil)
+//	require.NoError(t, err)
+//
+//	conf, err := bigQuerySelectProcessorConfigFromParsed(parsed)
+//	require.NoError(t, err)
+//
+//	b := &bigQueryProcessorOptions{}
+//	err = getClientOptionsProcessorBQSelect(conf, b)
+//
+//	require.ErrorContains(t, err, "illegal base64 data")
+//	require.Lenf(t, b.clientOptions, 0, "Unexpected number of Client Options")
+//}
