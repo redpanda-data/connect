@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+
 	"google.golang.org/api/option"
 
 	"cloud.google.com/go/bigquery"
