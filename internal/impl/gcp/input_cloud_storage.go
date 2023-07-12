@@ -24,21 +24,19 @@ import (
 
 const (
 	// Cloud Storage Input Fields
-	csiFieldBucket        = "bucket"
-	csiFieldPrefix        = "prefix"
-	csiFieldCredentialsJson        = "credentials_json"
-	csiFieldCodec         = "codec"
-	csiFieldDeleteObjects = "delete_objects"
+	csiFieldBucket          = "bucket"
+	csiFieldPrefix          = "prefix"
+	csiFieldCredentialsJson = "credentials_json"
+	csiFieldCodec           = "codec"
+	csiFieldDeleteObjects   = "delete_objects"
 )
 
-
-
 type csiConfig struct {
-	Bucket        string
-	Prefix        string
-	CredentialsJson string
-	Codec         string
-	DeleteObjects bool
+	Bucket          string
+	Prefix          string
+	CredentialsJSON string
+	Codec           string
+	DeleteObjects   bool
 }
 
 func csiConfigFromParsed(pConf *service.ParsedConfig) (conf csiConfig, err error) {

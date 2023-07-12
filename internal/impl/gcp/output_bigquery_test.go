@@ -571,7 +571,7 @@ credentials_json: |
 	require.Lenf(t, opt, 3, "Unexpected number of Client Options")
 
 	actualCredsJSON := opt[2]
-	expectedValue := option.WithCredentialsJSON([]byte(strings.TrimSpace(config.CredentialsJSON)))
+	expectedValue := option.WithCredentialsJSON([]byte(cleanCredsJson(config.CredentialsJSON)))
 	require.EqualValues(t, expectedValue, actualCredsJSON, "GCP Credentials Json not set as expected.")
 }
 
@@ -606,6 +606,6 @@ credentials_json: |
 	require.Lenf(t, opt, 1, "Unexpected number of Client Options")
 
 	actualCredsJSON := opt[0]
-	expectedValue := option.WithCredentialsJSON([]byte(strings.TrimSpace(config.CredentialsJSON)))
+	expectedValue := option.WithCredentialsJSON([]byte(cleanCredsJson(config.CredentialsJSON)))
 	require.EqualValues(t, expectedValue, actualCredsJSON, "GCP Credentials Json not set as expected.")
 }

@@ -28,7 +28,7 @@ const (
 	csoFieldBatching        = "batching"
 	csoFieldCollisionMode   = "collision_mode"
 	csoFieldTimeout         = "timeout"
-	csoFieldCredentialsJson         = "credentials_json"
+	csoFieldCredentialsJson = "credentials_json"
 
 	// GCPCloudStorageErrorIfExistsCollisionMode - error-if-exists.
 	GCPCloudStorageErrorIfExistsCollisionMode = "error-if-exists"
@@ -51,7 +51,7 @@ type csoConfig struct {
 	ChunkSize       int
 	CollisionMode   string
 	Timeout         time.Duration
-	CredentialsJson string
+	CredentialsJSON string
 }
 
 func csoConfigFromParsed(pConf *service.ParsedConfig) (conf csoConfig, err error) {
