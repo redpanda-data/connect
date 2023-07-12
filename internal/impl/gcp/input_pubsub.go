@@ -16,7 +16,7 @@ import (
 const (
 	// Pubsub Input Fields
 	pbiFieldProjectID              = "project"
-	pbiFieldCredentialsJson              = "credentials_json"
+	pbiFieldCredentialsJson        = "credentials_json"
 	pbiFieldSubscriptionID         = "subscription"
 	pbiFieldEndpoint               = "endpoint"
 	pbiFieldMaxOutstandingMessages = "max_outstanding_messages"
@@ -29,7 +29,7 @@ const (
 
 type pbiConfig struct {
 	ProjectID              string
-	CredentialsJson              string
+	CredentialsJSON        string
 	SubscriptionID         string
 	Endpoint               string
 	MaxOutstandingMessages int
@@ -202,7 +202,7 @@ func newGCPPubSubReader(conf pbiConfig, res *service.Resources) (*gcpPubSubReade
 	}, nil
 }
 
-func getClientOptionsForPubsubClient(conf input.GCPPubSubConfig) ([]option.ClientOption, error) {
+func getClientOptionsForPubsubClient(conf pbiConfig) ([]option.ClientOption, error) {
 	var opt []option.ClientOption
 	if len(strings.TrimSpace(conf.Endpoint)) > 0 {
 		opt = []option.ClientOption{option.WithEndpoint(conf.Endpoint)}

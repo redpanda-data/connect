@@ -8,7 +8,6 @@ import (
 
 	"cloud.google.com/go/pubsub"
 	"github.com/sourcegraph/conc/pool"
-	"github.com/Jeffail/gabs/v2"
 	"google.golang.org/api/option"
 
 	"github.com/benthosdev/benthos/v4/public/service"
@@ -104,7 +103,7 @@ type pubsubOutput struct {
 	topics   map[string]pubsubTopic
 
 	project         string
-	credentialsJson         string
+	credentialsJSON string
 	clientOpts      []option.ClientOption
 	client          pubsubClient
 	clientCancel    context.CancelFunc
