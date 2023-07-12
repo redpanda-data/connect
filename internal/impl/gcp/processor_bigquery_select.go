@@ -177,7 +177,7 @@ func newBigQuerySelectProcessor(inConf *service.ParsedConfig, options *bigQueryP
 }
 
 func getClientOptionsProcessorBQSelect(conf bigQuerySelectProcessorConfig, options *bigQueryProcessorOptions) error {
-	cred := cleanCredsJson(conf.credentialsJSON)
+	cred := cleanCredsJSON(conf.credentialsJSON)
 	if len(cred) > 0 {
 		options.clientOptions = append(options.clientOptions, option.WithCredentialsJSON([]byte(cred)))
 	}

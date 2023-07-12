@@ -216,7 +216,7 @@ func (inp *bigQuerySelectInput) Connect(ctx context.Context) error {
 
 func getClientOptionsBQSelect(inp *bigQuerySelectInput) ([]option.ClientOption, error) {
 	var opt []option.ClientOption
-	cred := cleanCredsJson(inp.config.credentialsJSON)
+	cred := cleanCredsJSON(inp.config.credentialsJSON)
 	if len(cred) > 0 {
 		opt = []option.ClientOption{option.WithCredentialsJSON([]byte(cred))}
 	}

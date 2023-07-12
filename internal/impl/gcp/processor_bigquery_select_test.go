@@ -211,7 +211,7 @@ func TestGCPBigQuerySelectProcessorWithCredsJSON1(t *testing.T) {
 	require.Lenf(t, b.clientOptions, 2, "Unexpected number of Client Options")
 
 	actualCredsJSON := b.clientOptions[1]
-	expectedValue := option.WithCredentialsJSON([]byte(cleanCredsJson(conf.credentialsJSON)))
+	expectedValue := option.WithCredentialsJSON([]byte(cleanCredsJSON(conf.credentialsJSON)))
 	require.EqualValues(t, expectedValue, actualCredsJSON, "GCP Credentials Json not set as expected.")
 }
 
@@ -231,7 +231,7 @@ func TestGCPBigQuerySelectProcessorWithOnlyCredsJSONOption(t *testing.T) {
 	require.Lenf(t, b.clientOptions, 1, "Unexpected number of Client Options")
 
 	actualCredsJSON := b.clientOptions[0]
-	expectedValue := option.WithCredentialsJSON([]byte(cleanCredsJson(conf.credentialsJSON)))
+	expectedValue := option.WithCredentialsJSON([]byte(cleanCredsJSON(conf.credentialsJSON)))
 	require.EqualValues(t, expectedValue, actualCredsJSON, "GCP Credentials Json not set as expected.")
 }
 

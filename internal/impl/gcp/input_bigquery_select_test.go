@@ -236,7 +236,7 @@ func TestGCPBigQuerySelectInputClientOptions(t *testing.T) {
 	require.Lenf(t, opt, 1, "Unexpected number of Client Options")
 
 	actualCredsJSON := opt[0]
-	expectedValue := option.WithCredentialsJSON([]byte(cleanCredsJson(inp.config.credentialsJSON)))
+	expectedValue := option.WithCredentialsJSON([]byte(cleanCredsJSON(inp.config.credentialsJSON)))
 	require.EqualValues(t, expectedValue, actualCredsJSON, "GCP Credentials Json not set as expected.")
 }
 

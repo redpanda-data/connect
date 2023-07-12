@@ -59,7 +59,7 @@ pipeline:
 				Optional().Secret().
 				LinterFunc(func(ctx docs.LintContext, line, col int, value any) []docs.Lint {
 					s := value.(string)
-					_, err := gabs.ParseJSON([]byte(cleanCredsJson(s)))
+					_, err := gabs.ParseJSON([]byte(cleanCredsJSON(s)))
 					if err != nil {
 						return []docs.Lint{
 							docs.NewLintError(line, docs.LintCustom, fmt.Errorf("failed to parse Credentials Json message: %v", err).Error()),
@@ -178,7 +178,7 @@ func newGCPPubSubWriter(conf output.GCPPubSubConfig, mgr bundle.NewManagement, l
 	}, nil
 }
 
-func cleanCredsJson(inp string) (out string) {
+func cleanCredsJSON(inp string) (out string) {
 	//removing the \n char since setting the value from env variable is adding \n char to multi-line values.
 	//This was causing invalid character '\\' error during app startup
 	return strings.ReplaceAll(strings.TrimSpace(inp), "\\n", "")
@@ -190,7 +190,7 @@ func getClientOptionsForOutputPubsub(conf output.GCPPubSubConfig) ([]option.Clie
 		opt = []option.ClientOption{option.WithEndpoint(conf.Endpoint)}
 	}
 
-	cred := cleanCredsJson(conf.CredentialsJSON)
+	cred := cleanCredsJSON(conf.CredentialsJSON)
 	if len(cred) > 0 {
 		opt = append(opt, option.WithCredentialsJSON([]byte(cred)))
 	}

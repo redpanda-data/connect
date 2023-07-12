@@ -75,7 +75,7 @@ func getClientOptionsForCloudStorageCache(parsedConf *service.ParsedConfig) ([]o
 		if err != nil {
 			return nil, err
 		}
-		cred := cleanCredsJson(credsJSON)
+		cred := cleanCredsJSON(credsJSON)
 		if len(cred) > 0 {
 			opt = []option.ClientOption{option.WithCredentialsJSON([]byte(cred))}
 		}

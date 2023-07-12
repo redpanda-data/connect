@@ -251,7 +251,7 @@ func (g *gcpCloudStorageInput) Connect(ctx context.Context) error {
 
 func getClientOptionsForInputCloudStorage(g *gcpCloudStorageInput) ([]option.ClientOption, error) {
 	var opt []option.ClientOption
-	cred := cleanCredsJson(g.conf.CredentialsJSON)
+	cred := cleanCredsJSON(g.conf.CredentialsJSON)
 	if len(cred) > 0 {
 		opt = []option.ClientOption{option.WithCredentialsJSON([]byte(cred))}
 	}

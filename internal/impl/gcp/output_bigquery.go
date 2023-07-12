@@ -125,7 +125,7 @@ func (g gcpBQClientURL) getClientOptionsForOutputBQ(credentialsJSON string) ([]o
 		opt = []option.ClientOption{option.WithoutAuthentication(), option.WithEndpoint(string(g))}
 	}
 
-	cred := cleanCredsJson(credentialsJSON)
+	cred := cleanCredsJSON(credentialsJSON)
 	if len(cred) > 0 {
 		opt = append(opt, option.WithCredentialsJSON([]byte(cred)))
 	}

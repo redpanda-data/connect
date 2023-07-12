@@ -142,7 +142,7 @@ func getClientOptionsForPubsubClient(conf input.GCPPubSubConfig) ([]option.Clien
 		opt = []option.ClientOption{option.WithEndpoint(conf.Endpoint)}
 	}
 
-	cred := cleanCredsJson(conf.CredentialsJSON)
+	cred := cleanCredsJSON(conf.CredentialsJSON)
 	if len(cred) > 0 {
 		opt = append(opt, option.WithCredentialsJSON([]byte(cred)))
 	}
