@@ -103,7 +103,6 @@ type pubsubOutput struct {
 	topics   map[string]pubsubTopic
 
 	project         string
-	credentialsJSON string
 	clientOpts      []option.ClientOption
 	client          pubsubClient
 	clientCancel    context.CancelFunc
