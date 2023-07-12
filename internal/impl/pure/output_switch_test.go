@@ -216,7 +216,7 @@ func TestSwitchBatchNoRetries(t *testing.T) {
 	assert.Equal(t, 2, bOut.IndexedErrors())
 
 	errContents := []string{}
-	bOut.WalkParts(sortGroup, msg, func(i int, p *message.Part, e error) bool {
+	bOut.WalkPartsBySource(sortGroup, msg, func(i int, p *message.Part, e error) bool {
 		if e != nil {
 			errContents = append(errContents, string(p.AsBytes()))
 			assert.EqualError(t, e, "meow")
@@ -301,7 +301,7 @@ func TestSwitchBatchNoRetriesBatchErr(t *testing.T) {
 		assert.Equal(t, 2, bOut.IndexedErrors())
 
 		errContents := []string{}
-		bOut.WalkParts(sortGroup, msg, func(i int, p *message.Part, e error) bool {
+		bOut.WalkPartsBySource(sortGroup, msg, func(i int, p *message.Part, e error) bool {
 			if e != nil {
 				errContents = append(errContents, string(p.AsBytes()))
 				assert.EqualError(t, e, fmt.Sprintf("err %v", i))

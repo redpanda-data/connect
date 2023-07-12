@@ -14,9 +14,7 @@ categories: ["Utility"]
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-
-A special broker type where the outputs are identified by unique labels and can
-be created, changed and removed during runtime via a REST API.
+A special broker type where the outputs are identified by unique labels and can be created, changed and removed during runtime via a REST API.
 
 ```yml
 # Config fields, showing default values
@@ -27,16 +25,7 @@ output:
     prefix: ""
 ```
 
-The broker pattern used is always `fan_out`, meaning each message will
-be delivered to each dynamic output.
-
-To GET a JSON map of output identifiers with their current uptimes use the
-'/outputs' endpoint.
-
-To perform CRUD actions on the outputs themselves use POST, DELETE, and GET
-methods on the `/outputs/{output_id}` endpoint. When using POST the
-body of the request should be a YAML configuration for the output, if the output
-already exists it will be changed.
+The broker pattern used is always `fan_out`, meaning each message will be delivered to each dynamic output.
 
 ## Fields
 
@@ -56,4 +45,25 @@ A path prefix for HTTP endpoints that are registered.
 Type: `string`  
 Default: `""`  
 
+## Endpoints
+
+### GET `/outputs`
+
+Returns a JSON object detailing all dynamic outputs, providing information such as their current uptime and configuration.
+
+### GET `/outputs/{id}`
+
+Returns the configuration of an output.
+
+### POST `/outputs/{id}`
+
+Creates or updates an output with a configuration provided in the request body (in YAML or JSON format).
+
+### DELETE `/outputs/{id}`
+
+Stops and removes an output.
+
+### GET `/outputs/{id}/uptime`
+
+Returns the uptime of an output as a duration string (of the form "72h3m0.5s").
 

@@ -29,13 +29,13 @@ Consumes messages from a GCP Cloud Pub/Sub subscription.
 input:
   label: ""
   gcp_pubsub:
-    project: ""
-    credentials_json: ""
-    subscription: ""
+    project: "" # No default (required)
+    credentials_json: "" # No default (required)
+    subscription: "" # No default (required)
     endpoint: ""
     sync: false
     max_outstanding_messages: 1000
-    max_outstanding_bytes: 1000000000
+    max_outstanding_bytes: 1e+09
 ```
 
 </TabItem>
@@ -46,13 +46,13 @@ input:
 input:
   label: ""
   gcp_pubsub:
-    project: ""
-    credentials_json: ""
-    subscription: ""
+    project: "" # No default (required)
+    credentials_json: "" # No default (required)
+    subscription: "" # No default (required)
     endpoint: ""
     sync: false
     max_outstanding_messages: 1000
-    max_outstanding_bytes: 1000000000
+    max_outstanding_bytes: 1e+09
     create_subscription:
       enabled: false
       topic: ""
@@ -61,20 +61,20 @@ input:
 </TabItem>
 </Tabs>
 
-For information on how to set up credentials check out
-[this guide](https://cloud.google.com/docs/authentication/production).
+For information on how to set up credentials check out [this guide](https://cloud.google.com/docs/authentication/production).
 
 ### Metadata
 
 This input adds the following metadata fields to each message:
 
 ``` text
-- gcp_pubsub_publish_time_unix
+- gcp_pubsub_publish_time_unix - The time at which the message was published to the topic.
+- gcp_pubsub_delivery_attempt - When dead lettering is enabled, this is set to the number of times PubSub has attempted to deliver a message.
 - All message attributes
 ```
 
-You can access these metadata fields using
-[function interpolation](/docs/configuration/interpolation#bloblang-queries).
+You can access these metadata fields using [function interpolation](/docs/configuration/interpolation#bloblang-queries).
+
 
 ## Fields
 
@@ -95,7 +95,6 @@ This field contains sensitive information that usually shouldn't be added to a c
 
 
 Type: `string`  
-Default: `""`  
 
 ### `subscription`
 
@@ -103,7 +102,6 @@ The target subscription ID.
 
 
 Type: `string`  
-Default: `""`  
 
 ### `endpoint`
 

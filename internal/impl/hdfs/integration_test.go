@@ -15,13 +15,13 @@ import (
 
 func TestIntegrationHDFS(t *testing.T) {
 	integration.CheckSkip(t)
-	t.Skip() // Skip until we fix the static port bindings
+	// t.Skip() // Skip until we fix the static port bindings
 	t.Parallel()
 
 	pool, err := dockertest.NewPool("")
 	require.NoError(t, err)
 
-	pool.MaxWait = time.Second * 30
+	pool.MaxWait = time.Minute * 5
 
 	options := &dockertest.RunOptions{
 		Repository:   "cybermaggedon/hadoop",

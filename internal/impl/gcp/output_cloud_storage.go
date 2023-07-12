@@ -6,50 +6,87 @@ import (
 	"fmt"
 	"path"
 	"sync"
+	"time"
 
 	"cloud.google.com/go/storage"
 	"github.com/gofrs/uuid"
 	"go.uber.org/multierr"
 	"google.golang.org/api/option"
 
-	"github.com/benthosdev/benthos/v4/internal/batch/policy"
-	"github.com/benthosdev/benthos/v4/internal/bloblang/field"
-	"github.com/benthosdev/benthos/v4/internal/bundle"
-	"github.com/benthosdev/benthos/v4/internal/component"
-	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
-	"github.com/benthosdev/benthos/v4/internal/component/output/batcher"
-	"github.com/benthosdev/benthos/v4/internal/component/output/processors"
-	"github.com/benthosdev/benthos/v4/internal/docs"
-	"github.com/benthosdev/benthos/v4/internal/log"
-	"github.com/benthosdev/benthos/v4/internal/message"
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
-func init() {
-	err := bundle.AllOutputs.Add(processors.WrapConstructor(func(c output.Config, nm bundle.NewManagement) (output.Streamed, error) {
-		g, err := newGCPCloudStorageOutput(nm, c.GCPCloudStorage)
-		if err != nil {
-			return nil, err
-		}
-		w, err := output.NewAsyncWriter("gcp_cloud_storage", c.GCPCloudStorage.MaxInFlight, g, nm)
-		if err != nil {
-			return nil, err
-		}
-		w = output.OnlySinglePayloads(w)
-		return batcher.NewFromConfig(c.GCPCloudStorage.Batching, w, nm)
-	}), docs.ComponentSpec{
-		Name:       "gcp_cloud_storage",
-		Type:       docs.TypeOutput,
-		Status:     docs.StatusBeta,
-		Version:    "3.43.0",
-		Categories: []string{"Services", "GCP"},
-		Summary: `
-Sends message parts as objects to a Google Cloud Storage bucket. Each object is
-uploaded with the path specified with the ` + "`path`" + ` field.`,
-		Description: output.Description(true, true, `
-In order to have a different path for each object you should use function
-interpolations described [here](/docs/configuration/interpolation#bloblang-queries), which are
-calculated per message of a batch.
+const (
+	// Cloud Storage Output Fields
+	csoFieldBucket          = "bucket"
+	csoFieldPath            = "path"
+	csoFieldContentType     = "content_type"
+	csoFieldContentEncoding = "content_encoding"
+	csoFieldChunkSize       = "chunk_size"
+	csoFieldMaxInFlight     = "max_in_flight"
+	csoFieldBatching        = "batching"
+	csoFieldCollisionMode   = "collision_mode"
+	csoFieldTimeout         = "timeout"
+	csoFieldCredentialsJson         = "credentials_json"
+
+	// GCPCloudStorageErrorIfExistsCollisionMode - error-if-exists.
+	GCPCloudStorageErrorIfExistsCollisionMode = "error-if-exists"
+
+	// GCPCloudStorageAppendCollisionMode - append.
+	GCPCloudStorageAppendCollisionMode = "append"
+
+	// GCPCloudStorageIgnoreCollisionMode - ignore.
+	GCPCloudStorageIgnoreCollisionMode = "ignore"
+
+	// GCPCloudStorageOverwriteCollisionMode - overwrite.
+	GCPCloudStorageOverwriteCollisionMode = "overwrite"
+)
+
+type csoConfig struct {
+	Bucket          string
+	Path            *service.InterpolatedString
+	ContentType     *service.InterpolatedString
+	ContentEncoding *service.InterpolatedString
+	ChunkSize       int
+	CollisionMode   string
+	Timeout         time.Duration
+	CredentialsJson string
+}
+
+func csoConfigFromParsed(pConf *service.ParsedConfig) (conf csoConfig, err error) {
+	if conf.Bucket, err = pConf.FieldString(csoFieldBucket); err != nil {
+		return
+	}
+	if conf.Path, err = pConf.FieldInterpolatedString(csoFieldPath); err != nil {
+		return
+	}
+	if conf.ContentType, err = pConf.FieldInterpolatedString(csoFieldContentType); err != nil {
+		return
+	}
+	if conf.ContentEncoding, err = pConf.FieldInterpolatedString(csoFieldContentEncoding); err != nil {
+		return
+	}
+	if conf.ChunkSize, err = pConf.FieldInt(csoFieldChunkSize); err != nil {
+		return
+	}
+	if conf.CollisionMode, err = pConf.FieldString(csoFieldCollisionMode); err != nil {
+		return
+	}
+	if conf.Timeout, err = pConf.FieldDuration(csoFieldTimeout); err != nil {
+		return
+	}
+	return
+}
+
+func csoSpec() *service.ConfigSpec {
+	return service.NewConfigSpec().
+		Beta().
+		Version("3.43.0").
+		Categories("Services", "GCP").
+		Summary(`Sends message parts as objects to a Google Cloud Storage bucket. Each object is uploaded with the path specified with the `+"`path`"+` field.`).
+		Description(output.Description(true, true, `
+In order to have a different path for each object you should use function interpolations described [here](/docs/configuration/interpolation#bloblang-queries), which are calculated per message of a batch.
 
 ### Metadata
 
@@ -57,19 +94,13 @@ Metadata fields on messages will be sent as headers, in order to mutate these va
 
 ### Credentials
 
-By default Benthos will use a shared credentials file when connecting to GCP
-services. You can find out more [in this document](/docs/guides/cloud/gcp).
+By default Benthos will use a shared credentials file when connecting to GCP services. You can find out more [in this document](/docs/guides/cloud/gcp).
 
 ### Batching
 
-It's common to want to upload messages to Google Cloud Storage as batched
-archives, the easiest way to do this is to batch your messages at the output
-level and join the batch of messages with an
-`+"[`archive`](/docs/components/processors/archive)"+` and/or
-`+"[`compress`](/docs/components/processors/compress)"+` processor.
+It's common to want to upload messages to Google Cloud Storage as batched archives, the easiest way to do this is to batch your messages at the output level and join the batch of messages with an `+"[`archive`](/docs/components/processors/archive)"+` and/or `+"[`compress`](/docs/components/processors/compress)"+` processor.
 
-For example, if we wished to upload messages as a .tar.gz archive of documents
-we could achieve that with the following config:
+For example, if we wished to upload messages as a .tar.gz archive of documents we could achieve that with the following config:
 
 `+"```yaml"+`
 output:
@@ -86,8 +117,7 @@ output:
             algorithm: gzip
 `+"```"+`
 
-Alternatively, if we wished to upload JSON documents as a single large document
-containing an array of objects we can do that with:
+Alternatively, if we wished to upload JSON documents as a single large document containing an array of objects we can do that with:
 
 `+"```yaml"+`
 output:
@@ -99,31 +129,70 @@ output:
       processors:
         - archive:
             format: json_array
-`+"```"+``),
-		Config: docs.FieldComponent().WithChildren(
-			docs.FieldString("bucket", "The bucket to upload messages to."),
-			docs.FieldString(
-				"path", "The path of each message to upload.",
-				`${!count("files")}-${!timestamp_unix_nano()}.txt`,
-				`${!meta("kafka_key")}.json`,
-				`${!json("doc.namespace")}/${!json("doc.id")}.json`,
-			).IsInterpolated(),
-			docs.FieldString("content_type", "The content type to set for each object.").IsInterpolated(),
-			docs.FieldString("collision_mode", `Determines how file path collisions should be dealt with.`).
-				HasDefault(`overwrite`).
-				HasAnnotatedOptions(
-					"overwrite", "Replace the existing file with the new one.",
-					"append", "Append the message bytes to the original file.",
-					"error-if-exists", "Return an error, this is the equivalent of a nack.",
-					"ignore", "Do not modify the original file, the new data will be dropped.",
-				).AtVersion("3.53.0"),
-			docs.FieldString("content_encoding", "An optional content encoding to set for each object.").IsInterpolated().Advanced(),
-			docs.FieldInt("chunk_size", "An optional chunk size which controls the maximum number of bytes of the object that the Writer will attempt to send to the server in a single request. If ChunkSize is set to zero, chunking will be disabled.").Advanced(),
-			docs.FieldInt("max_in_flight", "The maximum number of message batches to have in flight at a given time. Increase this to improve throughput."),
-			docs.FieldString("credentials_json", "An optional field to set Google Service Account Credentials json as base64 encoded string.").Optional().Secret(),
-			policy.FieldSpec(),
-		).ChildDefaultAndTypesFromStruct(output.NewGCPCloudStorageConfig()),
-	})
+`+"```"+``)).
+		Fields(
+			service.NewStringField(csoFieldBucket).
+				Description("The bucket to upload messages to."),
+			service.NewInterpolatedStringField(csoFieldPath).
+				Description("The path of each message to upload.").
+				Example(`${!count("files")}-${!timestamp_unix_nano()}.txt`).
+				Example(`${!meta("kafka_key")}.json`).
+				Example(`${!json("doc.namespace")}/${!json("doc.id")}.json`).
+				Default(`${!count("files")}-${!timestamp_unix_nano()}.txt`),
+			service.NewInterpolatedStringField(csoFieldContentType).
+				Description("The content type to set for each object.").
+				Default("application/octet-stream"),
+			service.NewInterpolatedStringField(csoFieldContentEncoding).
+				Description("An optional content encoding to set for each object.").
+				Default("").
+				Advanced(),
+			service.NewStringAnnotatedEnumField(csoFieldCollisionMode, map[string]string{
+				"overwrite":       "Replace the existing file with the new one.",
+				"append":          "Append the message bytes to the original file.",
+				"error-if-exists": "Return an error, this is the equivalent of a nack.",
+				"ignore":          "Do not modify the original file, the new data will be dropped.",
+			}).
+				Description(`Determines how file path collisions should be dealt with.`).
+				Version("3.53.0").
+				Default(GCPCloudStorageOverwriteCollisionMode),
+			service.NewIntField(csoFieldChunkSize).
+				Description("An optional chunk size which controls the maximum number of bytes of the object that the Writer will attempt to send to the server in a single request. If ChunkSize is set to zero, chunking will be disabled.").
+				Advanced().
+				Default(16*1024*1024), // googleapi.DefaultUploadChunkSize
+			service.NewDurationField(csoFieldTimeout).
+				Description("The maximum period to wait on an upload before abandoning it and reattempting.").
+				Example("1s").
+				Example("500ms").
+				Default("3s"),
+			service.NewInterpolatedStringField(csoFieldCredentialsJson).
+				Description("An optional field to set Google Service Account Credentials json as base64 encoded string.").
+				Default("").
+				Optional().
+				Secret(),
+			service.NewOutputMaxInFlightField().
+				Description("The maximum number of message batches to have in flight at a given time. Increase this to improve throughput."),
+			service.NewBatchPolicyField(csoFieldBatching),
+		)
+}
+
+func init() {
+	err := service.RegisterBatchOutput("gcp_cloud_storage", csoSpec(),
+		func(conf *service.ParsedConfig, mgr *service.Resources) (out service.BatchOutput, batchPolicy service.BatchPolicy, maxInFlight int, err error) {
+			if maxInFlight, err = conf.FieldMaxInFlight(); err != nil {
+				return
+			}
+			if batchPolicy, err = conf.FieldBatchPolicy(csoFieldBatching); err != nil {
+				return
+			}
+
+			var pConf csoConfig
+			if pConf, err = csoConfigFromParsed(conf); err != nil {
+				return
+			}
+
+			out, err = newGCPCloudStorageOutput(pConf, mgr)
+			return
+		})
 	if err != nil {
 		panic(err)
 	}
@@ -132,43 +201,20 @@ output:
 // gcpCloudStorageOutput is a benthos writer.Type implementation that writes
 // messages to a GCP Cloud Storage bucket.
 type gcpCloudStorageOutput struct {
-	conf output.GCPCloudStorageConfig
-
-	path            *field.Expression
-	contentType     *field.Expression
-	contentEncoding *field.Expression
+	conf csoConfig
 
 	client  *storage.Client
 	connMut sync.RWMutex
 
-	log   log.Modular
-	stats metrics.Type
+	log *service.Logger
 }
 
 // newGCPCloudStorageOutput creates a new GCP Cloud Storage bucket writer.Type.
-func newGCPCloudStorageOutput(
-	mgr bundle.NewManagement,
-	conf output.GCPCloudStorageConfig,
-) (*gcpCloudStorageOutput, error) {
+func newGCPCloudStorageOutput(conf csoConfig, res *service.Resources) (*gcpCloudStorageOutput, error) {
 	g := &gcpCloudStorageOutput{
-		conf:  conf,
-		log:   mgr.Logger(),
-		stats: mgr.Metrics(),
+		conf: conf,
+		log:  res.Logger(),
 	}
-
-	bEnv := mgr.BloblEnvironment()
-
-	var err error
-	if g.path, err = bEnv.NewField(conf.Path); err != nil {
-		return nil, fmt.Errorf("failed to parse path expression: %v", err)
-	}
-	if g.contentType, err = bEnv.NewField(conf.ContentType); err != nil {
-		return nil, fmt.Errorf("failed to parse content type expression: %v", err)
-	}
-	if g.contentEncoding, err = bEnv.NewField(conf.ContentEncoding); err != nil {
-		return nil, fmt.Errorf("failed to parse content encoding expression: %v", err)
-	}
-
 	return g, nil
 }
 
@@ -202,45 +248,46 @@ func getClientOptionsForOutputCloudStorage(g *gcpCloudStorageOutput) ([]option.C
 	return opt, nil
 }
 
-// WriteBatch attempts to write message contents to a target GCP Cloud
-// Storage bucket as files.
-func (g *gcpCloudStorageOutput) WriteBatch(ctx context.Context, msg message.Batch) error {
+func (g *gcpCloudStorageOutput) WriteBatch(ctx context.Context, batch service.MessageBatch) error {
 	g.connMut.RLock()
 	client := g.client
 	g.connMut.RUnlock()
 
 	if client == nil {
-		return component.ErrNotConnected
+		return service.ErrNotConnected
 	}
 
-	return output.IterateBatchedSend(msg, func(i int, p *message.Part) error {
+	ctx, cancel := context.WithTimeout(ctx, g.conf.Timeout)
+	defer cancel()
+
+	return batch.WalkWithBatchedErrors(func(i int, msg *service.Message) error {
 		metadata := map[string]string{}
-		_ = p.MetaIterStr(func(k, v string) error {
+		_ = msg.MetaWalk(func(k, v string) error {
 			metadata[k] = v
 			return nil
 		})
 
-		outputPath, err := g.path.String(i, msg)
+		outputPath, err := g.conf.Path.TryString(msg)
 		if err != nil {
 			return fmt.Errorf("path interpolation error: %w", err)
 		}
-		if g.conf.CollisionMode != output.GCPCloudStorageOverwriteCollisionMode {
+		if g.conf.CollisionMode != GCPCloudStorageOverwriteCollisionMode {
 			_, err = client.Bucket(g.conf.Bucket).Object(outputPath).Attrs(ctx)
 		}
 
 		isMerge := false
 		var tempPath string
-		if errors.Is(err, storage.ErrObjectNotExist) || g.conf.CollisionMode == output.GCPCloudStorageOverwriteCollisionMode {
+		if errors.Is(err, storage.ErrObjectNotExist) || g.conf.CollisionMode == GCPCloudStorageOverwriteCollisionMode {
 			tempPath = outputPath
 		} else {
 			isMerge = true
 
-			if g.conf.CollisionMode == output.GCPCloudStorageErrorIfExistsCollisionMode {
+			if g.conf.CollisionMode == GCPCloudStorageErrorIfExistsCollisionMode {
 				if err == nil {
 					err = fmt.Errorf("file at path already exists: %s", outputPath)
 				}
 				return err
-			} else if g.conf.CollisionMode == output.GCPCloudStorageIgnoreCollisionMode {
+			} else if g.conf.CollisionMode == GCPCloudStorageIgnoreCollisionMode {
 				return nil
 			}
 
@@ -261,16 +308,21 @@ func (g *gcpCloudStorageOutput) WriteBatch(ctx context.Context, msg message.Batc
 		w := src.NewWriter(ctx)
 
 		w.ChunkSize = g.conf.ChunkSize
-		if w.ContentType, err = g.contentType.String(i, msg); err != nil {
+		if w.ContentType, err = g.conf.ContentType.TryString(msg); err != nil {
 			return fmt.Errorf("content type interpolation error: %w", err)
 		}
-		if w.ContentEncoding, err = g.contentEncoding.String(i, msg); err != nil {
+		if w.ContentEncoding, err = g.conf.ContentEncoding.TryString(msg); err != nil {
 			return fmt.Errorf("content encoding interpolation error: %w", err)
 		}
 		w.Metadata = metadata
 
+		mBytes, err := msg.AsBytes()
+		if err != nil {
+			return err
+		}
+
 		var errs error
-		if _, werr := w.Write(p.AsBytes()); werr != nil {
+		if _, werr := w.Write(mBytes); werr != nil {
 			errs = multierr.Append(errs, werr)
 		}
 
@@ -293,7 +345,6 @@ func (g *gcpCloudStorageOutput) WriteBatch(ctx context.Context, msg message.Batc
 				return aerr
 			}
 		}
-
 		return nil
 	})
 }

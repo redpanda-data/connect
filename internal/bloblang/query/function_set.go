@@ -197,7 +197,7 @@ func wrapCtorWithDynamicArgs(name string, args *ParsedParams, fn FunctionCtor) (
 	return ClosureFunction("function "+name, func(ctx FunctionContext) (any, error) {
 		newArgs, err := args.ResolveDynamic(ctx)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("function '%s': %w", name, err)
 		}
 		dynFunc, err := fn(newArgs)
 		if err != nil {

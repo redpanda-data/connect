@@ -14,9 +14,7 @@ categories: ["Services"]
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-
-Pulls messages from Redis (v5.0+) streams with the XREADGROUP command. The
-`client_id` should be unique for each consumer of a group.
+Pulls messages from Redis (v5.0+) streams with the XREADGROUP command. The `client_id` should be unique for each consumer of a group.
 
 
 <Tabs defaultValue="common" values={[
@@ -31,9 +29,9 @@ Pulls messages from Redis (v5.0+) streams with the XREADGROUP command. The
 input:
   label: ""
   redis_streams:
-    url: ""
+    url: :6397 # No default (required)
     body_key: body
-    streams: []
+    streams: [] # No default (required)
     limit: 10
     client_id: ""
     consumer_group: ""
@@ -47,7 +45,7 @@ input:
 input:
   label: ""
   redis_streams:
-    url: ""
+    url: :6397 # No default (required)
     kind: simple
     master: ""
     tls:
@@ -58,7 +56,7 @@ input:
       root_cas_file: ""
       client_certs: []
     body_key: body
-    streams: []
+    streams: [] # No default (required)
     limit: 10
     client_id: ""
     consumer_group: ""
@@ -71,19 +69,16 @@ input:
 </TabItem>
 </Tabs>
 
-Redis stream entries are key/value pairs, as such it is necessary to specify the
-key that contains the body of the message. All other keys/value pairs are saved
-as metadata fields.
+Redis stream entries are key/value pairs, as such it is necessary to specify the key that contains the body of the message. All other keys/value pairs are saved as metadata fields.
 
 ## Fields
 
 ### `url`
 
-The URL of the target Redis server. Database is optional and is supplied as the URL path. The scheme `tcp` is equivalent to `redis`.
+The URL of the target Redis server. Database is optional and is supplied as the URL path.
 
 
 Type: `string`  
-Default: `""`  
 
 ```yml
 # Examples
@@ -108,16 +103,7 @@ Specifies a simple, cluster-aware, or failover-aware redis client.
 
 Type: `string`  
 Default: `"simple"`  
-
-```yml
-# Examples
-
-kind: simple
-
-kind: cluster
-
-kind: failover
-```
+Options: `simple`, `cluster`, `failover`.
 
 ### `master`
 
@@ -291,7 +277,6 @@ A list of streams to consume from.
 
 
 Type: `array`  
-Default: `[]`  
 
 ### `limit`
 

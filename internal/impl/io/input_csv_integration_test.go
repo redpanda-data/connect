@@ -3,6 +3,7 @@ package io_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -11,12 +12,23 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"gopkg.in/yaml.v3"
 
 	"github.com/benthosdev/benthos/v4/internal/component/input"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 
 	_ "github.com/benthosdev/benthos/v4/internal/impl/io"
 )
+
+func csvInput(t testing.TB, confPattern string, args ...any) input.Streamed {
+	iConf := input.NewConfig()
+	require.NoError(t, yaml.Unmarshal(fmt.Appendf(nil, confPattern, args...), &iConf))
+
+	i, err := mock.NewManager().NewInput(iConf)
+	require.NoError(t, err)
+
+	return i
+}
 
 func TestCSVInputGPaths(t *testing.T) {
 	dir := t.TempDir()
@@ -34,16 +46,11 @@ foo5,bar5,baz5
 foo6,bar6,baz6
 `), 0o777))
 
-	conf := input.NewConfig()
-	conf.Type = "csv"
-	conf.CSVFile.Paths = []string{
-		dummyFileA,
-		dummyFileB,
-	}
-	conf.CSVFile.DeleteOnFinish = false
-
-	f, err := mock.NewManager().NewInput(conf)
-	require.NoError(t, err)
+	f := csvInput(t, `
+csv:
+  paths: [ "%v", "%v" ]
+  delete_on_finish: false
+`, dummyFileA, dummyFileB)
 
 	t.Cleanup(func() {
 		ctx, done := context.WithTimeout(context.Background(), time.Second)
@@ -63,7 +70,7 @@ foo6,bar6,baz6
 		assert.Equal(t, exp, string(m.Get(0).AsBytes()))
 	}
 
-	_, err = os.Stat(dummyFileA)
+	_, err := os.Stat(dummyFileA)
 	require.NoError(t, err)
 
 	_, err = os.Stat(dummyFileB)
@@ -76,15 +83,11 @@ func TestCSVInputDeleteOnFinish(t *testing.T) {
 foo1,bar1,baz1
 `), 0o777))
 
-	conf := input.NewConfig()
-	conf.Type = "csv"
-	conf.CSVFile.Paths = []string{
-		dummyCSVFile,
-	}
-	conf.CSVFile.DeleteOnFinish = true
-
-	f, err := mock.NewManager().NewInput(conf)
-	require.NoError(t, err)
+	f := csvInput(t, `
+csv:
+  paths: [ "%v" ]
+  delete_on_finish: true
+`, dummyCSVFile)
 
 	t.Cleanup(func() {
 		ctx, done := context.WithTimeout(context.Background(), time.Second)
@@ -107,7 +110,7 @@ foo1,bar1,baz1
 		require.FailNow(t, "failed to read after input is closed")
 	}
 
-	_, err = os.Stat(dummyCSVFile)
+	_, err := os.Stat(dummyCSVFile)
 	require.True(t, errors.Is(err, fs.ErrNotExist))
 }
 
@@ -125,12 +128,10 @@ foo5,bar5,baz5
 foo6,bar6,baz6
 `), 0o777))
 
-	conf := input.NewConfig()
-	conf.Type = "csv"
-	conf.CSVFile.Paths = []string{dir + "/*.csv"}
-
-	f, err := mock.NewManager().NewInput(conf)
-	require.NoError(t, err)
+	f := csvInput(t, `
+csv:
+  paths: [ "%v/*.csv" ]
+`, dir)
 
 	t.Cleanup(func() {
 		ctx, done := context.WithTimeout(context.Background(), time.Second)

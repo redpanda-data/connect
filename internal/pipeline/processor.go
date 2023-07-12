@@ -114,6 +114,7 @@ func (p *Processor) dispatchMessages(ctx context.Context, msgs []message.Batch, 
 			select {
 			case p.messagesOut <- transac:
 			case <-ctx.Done():
+				wg.Done()
 				return
 			}
 		}

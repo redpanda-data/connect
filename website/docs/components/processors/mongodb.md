@@ -2,7 +2,7 @@
 title: mongodb
 type: processor
 status: experimental
-categories: ["Integration"]
+categories: ["Services"]
 ---
 
 <!--
@@ -33,12 +33,12 @@ Introduced in version 3.43.0.
 # Common config fields, showing default values
 label: ""
 mongodb:
-  url: ""
-  database: ""
+  url: mongodb://localhost:27017 # No default (required)
+  database: "" # No default (required)
   username: ""
   password: ""
+  collection: "" # No default (required)
   operation: insert-one
-  collection: ""
   write_concern:
     w: ""
     j: false
@@ -56,12 +56,12 @@ mongodb:
 # All config fields, showing default values
 label: ""
 mongodb:
-  url: ""
-  database: ""
+  url: mongodb://localhost:27017 # No default (required)
+  database: "" # No default (required)
   username: ""
   password: ""
+  collection: "" # No default (required)
   operation: insert-one
-  collection: ""
   write_concern:
     w: ""
     j: false
@@ -71,11 +71,6 @@ mongodb:
   hint_map: ""
   upsert: false
   json_marshal_mode: canonical
-  max_retries: 3
-  backoff:
-    initial_interval: 1s
-    max_interval: 5s
-    max_elapsed_time: 30s
 ```
 
 </TabItem>
@@ -85,11 +80,10 @@ mongodb:
 
 ### `url`
 
-The URL of the target MongoDB DB.
+The URL of the target MongoDB server.
 
 
 Type: `string`  
-Default: `""`  
 
 ```yml
 # Examples
@@ -99,11 +93,10 @@ url: mongodb://localhost:27017
 
 ### `database`
 
-The name of the target MongoDB DB.
+The name of the target MongoDB database.
 
 
 Type: `string`  
-Default: `""`  
 
 ### `username`
 
@@ -116,10 +109,20 @@ Default: `""`
 ### `password`
 
 The password to connect to the database.
+:::warning Secret
+This field contains sensitive information that usually shouldn't be added to a config directly, read our [secrets page for more info](/docs/configuration/secrets).
+:::
 
 
 Type: `string`  
 Default: `""`  
+
+### `collection`
+
+The name of the target collection.
+
+
+Type: `string`  
 
 ### `operation`
 
@@ -130,18 +133,9 @@ Type: `string`
 Default: `"insert-one"`  
 Options: `insert-one`, `delete-one`, `delete-many`, `replace-one`, `update-one`, `find-one`.
 
-### `collection`
-
-The name of the target collection in the MongoDB DB.
-This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
-
-
-Type: `string`  
-Default: `""`  
-
 ### `write_concern`
 
-The write_concern settings for the mongo connection.
+The write concern settings for the mongo connection.
 
 
 Type: `object`  
@@ -220,7 +214,7 @@ hint_map: |-
 
 ### `upsert`
 
-The upsert setting is optional and only applies for update-one and replace-one operations. If the filter specified in filter_map matches,the document is updated or replaced accordingly, otherwise it is created.
+The upsert setting is optional and only applies for update-one and replace-one operations. If the filter specified in filter_map matches, the document is updated or replaced accordingly, otherwise it is created.
 
 
 Type: `bool`  
@@ -239,46 +233,7 @@ Requires version 3.60.0 or newer
 | Option | Summary |
 |---|---|
 | `canonical` | A string format that emphasizes type preservation at the expense of readability and interoperability. That is, conversion from canonical to BSON will generally preserve type information except in certain specific cases.  |
-| `relaxed` | A string format that emphasizes readability and interoperability at the expense of type preservation.That is, conversion from relaxed format to BSON can lose type information. |
+| `relaxed` | A string format that emphasizes readability and interoperability at the expense of type preservation. That is, conversion from relaxed format to BSON can lose type information. |
 
-
-### `max_retries`
-
-The maximum number of retries before giving up on the request. If set to zero there is no discrete limit.
-
-
-Type: `int`  
-Default: `3`  
-
-### `backoff`
-
-Control time intervals between retry attempts.
-
-
-Type: `object`  
-
-### `backoff.initial_interval`
-
-The initial period to wait between retry attempts.
-
-
-Type: `string`  
-Default: `"1s"`  
-
-### `backoff.max_interval`
-
-The maximum period to wait between retry attempts.
-
-
-Type: `string`  
-Default: `"5s"`  
-
-### `backoff.max_elapsed_time`
-
-The maximum period to wait before retry attempts are abandoned. If zero then no limit is used.
-
-
-Type: `string`  
-Default: `"30s"`  
 
 

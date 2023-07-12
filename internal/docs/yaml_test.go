@@ -602,7 +602,7 @@ func TestFieldToNode(t *testing.T) {
 		{
 			name: "no recurse single node null",
 			spec: docs.FieldObject("foo", ""),
-			expected: `null
+			expected: `null # No default (required)
 `,
 		},
 		{
@@ -611,13 +611,13 @@ func TestFieldToNode(t *testing.T) {
 				docs.FieldString("bar", ""),
 				docs.FieldString("baz", ""),
 			),
-			expected: `{}
+			expected: `{} # No default (required)
 `,
 		},
 		{
 			name: "no recurse map",
 			spec: docs.FieldString("foo", "").Map(),
-			expected: `{}
+			expected: `{} # No default (required)
 `,
 		},
 		{
@@ -631,12 +631,12 @@ func TestFieldToNode(t *testing.T) {
 				docs.FieldString("bud", "").Array(),
 			),
 			recurse: true,
-			expected: `bar: ""
+			expected: `bar: "" # No default (required)
 baz: baz default
-buz: 0
-bev: 0
-bun: false
-bud: []
+buz: 0 # No default (required)
+bev: 0 # No default (required)
+bun: false # No default (required)
+bud: [] # No default (required)
 `,
 		},
 	}
@@ -1015,14 +1015,14 @@ testlintfooinput:
 	for _, test := range tests {
 		test := test
 		t.Run(test.name, func(t *testing.T) {
-			lintCtx := docs.NewLintContext()
-			lintCtx.RejectDeprecated = test.rejectDeprecated
-			lintCtx.RequireLabels = test.requireLabels
-			lintCtx.DocsProvider = prov
+			lConf := docs.NewLintConfig()
+			lConf.RejectDeprecated = test.rejectDeprecated
+			lConf.RequireLabels = test.requireLabels
+			lConf.DocsProvider = prov
 
 			var node yaml.Node
 			require.NoError(t, yaml.Unmarshal([]byte(test.inputConf), &node))
-			lints := docs.LintYAML(lintCtx, test.inputType, &node)
+			lints := docs.LintYAML(docs.NewLintContext(lConf), test.inputType, &node)
 			assert.Equal(t, test.res, lints)
 		})
 	}
@@ -1108,7 +1108,7 @@ func TestYAMLLinting(t *testing.T) {
 			var node yaml.Node
 			require.NoError(t, yaml.Unmarshal([]byte(test.inputConf), &node))
 
-			lints := test.inputSpec.LintYAML(docs.NewLintContext(), &node)
+			lints := test.inputSpec.LintYAML(docs.NewLintContext(docs.NewLintConfig()), &node)
 			assert.Equal(t, test.res, lints)
 		})
 	}
@@ -1154,7 +1154,7 @@ func TestYAMLSanitation(t *testing.T) {
 		name        string
 		inputType   docs.Type
 		inputConf   string
-		inputFilter func(f docs.FieldSpec) bool
+		inputFilter func(f docs.FieldSpec, v any) bool
 
 		res string
 		err string

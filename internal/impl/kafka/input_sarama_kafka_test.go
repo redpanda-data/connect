@@ -24,7 +24,7 @@ func TestKafkaBadParams(t *testing.T) {
 		{
 			name:   "too many partitions",
 			topics: []string{"foo:1:2:3"},
-			errStr: "topic 'foo:1:2:3' is invalid, only one partition should be specified and the same topic can be listed multiple times, e.g. use `foo:0,foo:1` not `foo:0:1`",
+			errStr: "topic 'foo:1:2:3' is invalid, only one partition and an optional offset should be specified",
 		},
 		{
 			name:   "bad range",

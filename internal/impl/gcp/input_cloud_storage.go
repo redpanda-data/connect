@@ -14,42 +14,65 @@ import (
 	"cloud.google.com/go/storage"
 	"google.golang.org/api/iterator"
 
-	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/codec"
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/input"
-	"github.com/benthosdev/benthos/v4/internal/component/input/processors"
-	"github.com/benthosdev/benthos/v4/internal/component/metrics"
-	"github.com/benthosdev/benthos/v4/internal/docs"
-	"github.com/benthosdev/benthos/v4/internal/log"
+	"github.com/benthosdev/benthos/v4/internal/component/interop"
 	"github.com/benthosdev/benthos/v4/internal/message"
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
-func init() {
-	err := bundle.AllInputs.Add(processors.WrapConstructor(func(c input.Config, nm bundle.NewManagement) (input.Streamed, error) {
-		r, err := newGCPCloudStorageInput(c.GCPCloudStorage, nm.Logger(), nm.Metrics())
-		if err != nil {
-			return nil, err
-		}
-		return input.NewAsyncReader("gcp_cloud_storage", input.NewAsyncPreserver(r), nm)
-	}), docs.ComponentSpec{
-		Name:       "gcp_cloud_storage",
-		Type:       docs.TypeInput,
-		Status:     docs.StatusBeta,
-		Version:    "3.43.0",
-		Categories: []string{"Services", "GCP"},
-		Summary: `
-Downloads objects within a Google Cloud Storage bucket, optionally filtered by a prefix.`,
-		Description: `
+const (
+	// Cloud Storage Input Fields
+	csiFieldBucket        = "bucket"
+	csiFieldPrefix        = "prefix"
+	csiFieldCredentialsJson        = "credentials_json"
+	csiFieldCodec         = "codec"
+	csiFieldDeleteObjects = "delete_objects"
+)
+
+
+
+type csiConfig struct {
+	Bucket        string
+	Prefix        string
+	CredentialsJson string
+	Codec         string
+	DeleteObjects bool
+}
+
+func csiConfigFromParsed(pConf *service.ParsedConfig) (conf csiConfig, err error) {
+	if conf.Bucket, err = pConf.FieldString(csiFieldBucket); err != nil {
+		return
+	}
+	if conf.Prefix, err = pConf.FieldString(csiFieldPrefix); err != nil {
+		return
+	}
+	if conf.Codec, err = pConf.FieldString(csiFieldCodec); err != nil {
+		return
+	}
+	if conf.DeleteObjects, err = pConf.FieldBool(csiFieldDeleteObjects); err != nil {
+		return
+	}
+	return
+}
+
+func csiSpec() *service.ConfigSpec {
+	return service.NewConfigSpec().
+		Beta().
+		Version("3.43.0").
+		Categories("Services", "GCP").
+		Summary(`Downloads objects within a Google Cloud Storage bucket, optionally filtered by a prefix.`).
+		Description(`
 ## Downloading Large Files
 
-When downloading large files it's often necessary to process it in streamed parts in order to avoid loading the entire file in memory at a given time. In order to do this a ` + "[`codec`](#codec)" + ` can be specified that determines how to break the input into smaller individual messages.
+When downloading large files it's often necessary to process it in streamed parts in order to avoid loading the entire file in memory at a given time. In order to do this a `+"[`codec`](#codec)"+` can be specified that determines how to break the input into smaller individual messages.
 
 ## Metadata
 
 This input adds the following metadata fields to each message:
 
-` + "```" + `
+`+"```"+`
 - gcs_key
 - gcs_bucket
 - gcs_last_modified
@@ -57,22 +80,67 @@ This input adds the following metadata fields to each message:
 - gcs_content_type
 - gcs_content_encoding
 - All user defined metadata
-` + "```" + `
+`+"```"+`
 
 You can access these metadata fields using [function interpolation](/docs/configuration/interpolation#bloblang-queries).
 
 ### Credentials
 
-By default Benthos will use a shared credentials file when connecting to GCP
-services. You can find out more [in this document](/docs/guides/cloud/gcp).`,
-		Config: docs.FieldComponent().WithChildren(
-			docs.FieldString("bucket", "The name of the bucket from which to download objects."),
-			docs.FieldString("prefix", "An optional path prefix, if set only objects with the prefix are consumed."),
-			docs.FieldString("credentials_json", "An optional field to set Google Service Account Credentials json as base64 encoded string.").Optional().Secret(),
-			codec.ReaderDocs,
-			docs.FieldBool("delete_objects", "Whether to delete downloaded objects from the bucket once they are processed.").Advanced(),
-		).ChildDefaultAndTypesFromStruct(input.NewGCPCloudStorageConfig()),
-	})
+By default Benthos will use a shared credentials file when connecting to GCP services. You can find out more [in this document](/docs/guides/cloud/gcp).`).
+		Fields(
+			service.NewStringField(csiFieldBucket).
+				Description("The name of the bucket from which to download objects."),
+			service.NewStringField(csiFieldPrefix).
+				Description("An optional path prefix, if set only objects with the prefix are consumed.").
+				Default(""),
+			service.NewStringField(csiFieldCredentialsJson).
+				Description("An optional field to set Google Service Account Credentials json as base64 encoded string.").
+				Default("").
+				Optional().
+				Secret(),
+			service.NewInternalField(codec.ReaderDocs).Default("all-bytes"),
+			service.NewBoolField(csiFieldDeleteObjects).
+				Description("Whether to delete downloaded objects from the bucket once they are processed.").
+				Advanced().
+				Default(false),
+		)
+}
+
+func init() {
+	err := service.RegisterBatchInput("gcp_cloud_storage", csiSpec(),
+		func(pConf *service.ParsedConfig, res *service.Resources) (service.BatchInput, error) {
+			// NOTE: We're using interop to punch an internal implementation up
+			// to the public plugin API. The only blocker from using the full
+			// public suite is the codec field.
+			//
+			// Since codecs are likely to get refactored soon I figured it
+			// wasn't worth investing in a public wrapper since the old style
+			// will likely get deprecated.
+			//
+			// This does mean that for now all codec based components will need
+			// to keep internal implementations. However, the config specs are
+			// the biggest time sink when converting to the new APIs so it's not
+			// a big deal to leave these tasks pending.
+			conf, err := csiConfigFromParsed(pConf)
+			if err != nil {
+				return nil, err
+			}
+
+			var rdr input.Async
+			if rdr, err = newGCPCloudStorageInput(conf, res); err != nil {
+				return nil, err
+			}
+
+			rdr = input.NewAsyncPreserver(rdr)
+
+			mgr := interop.UnwrapManagement(res)
+			i, err := input.NewAsyncReader("gcp_cloud_storage", rdr, mgr)
+			if err != nil {
+				return nil, err
+			}
+
+			return interop.NewUnwrapInternalInput(i), nil
+		})
 	if err != nil {
 		panic(err)
 	}
@@ -130,14 +198,14 @@ type gcpCloudStoragePendingObject struct {
 type gcpCloudStorageTargetReader struct {
 	pending    []*gcpCloudStorageObjectTarget
 	bucket     *storage.BucketHandle
-	conf       input.GCPCloudStorageConfig
+	conf       csiConfig
 	startAfter *storage.ObjectIterator
 }
 
 func newGCPCloudStorageTargetReader(
 	ctx context.Context,
-	conf input.GCPCloudStorageConfig,
-	log log.Modular,
+	conf csiConfig,
+	log *service.Logger,
 	bucket *storage.BucketHandle,
 ) (*gcpCloudStorageTargetReader, error) {
 	staticKeys := gcpCloudStorageTargetReader{
@@ -198,7 +266,7 @@ func (r gcpCloudStorageTargetReader) Close(context.Context) error {
 // gcpCloudStorage is a benthos reader.Type implementation that reads messages
 // from a Google Cloud Storage bucket.
 type gcpCloudStorageInput struct {
-	conf input.GCPCloudStorageConfig
+	conf csiConfig
 
 	objectScannerCtor codec.ReaderConstructor
 	keyReader         *gcpCloudStorageTargetReader
@@ -208,12 +276,11 @@ type gcpCloudStorageInput struct {
 
 	client *storage.Client
 
-	log   log.Modular
-	stats metrics.Type
+	log *service.Logger
 }
 
 // newGCPCloudStorageInput creates a new Google Cloud Storage input type.
-func newGCPCloudStorageInput(conf input.GCPCloudStorageConfig, log log.Modular, stats metrics.Type) (*gcpCloudStorageInput, error) {
+func newGCPCloudStorageInput(conf csiConfig, res *service.Resources) (*gcpCloudStorageInput, error) {
 	var objectScannerCtor codec.ReaderConstructor
 	var err error
 	if objectScannerCtor, err = codec.GetReader(conf.Codec, codec.NewReaderConfig()); err != nil {
@@ -223,8 +290,7 @@ func newGCPCloudStorageInput(conf input.GCPCloudStorageConfig, log log.Modular, 
 	g := &gcpCloudStorageInput{
 		conf:              conf,
 		objectScannerCtor: objectScannerCtor,
-		log:               log,
-		stats:             stats,
+		log:               res.Logger(),
 	}
 
 	return g, nil

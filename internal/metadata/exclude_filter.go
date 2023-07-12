@@ -42,14 +42,23 @@ type ExcludeFilter struct {
 	excludePrefixes []string
 }
 
+// Match returns false if the provided string matches the configured filters and
+// true otherwise. It also returns true if no filters are configured.
+func (f *ExcludeFilter) Match(str string) bool {
+	for _, prefix := range f.excludePrefixes {
+		if strings.HasPrefix(str, prefix) {
+			return false
+		}
+	}
+	return true
+}
+
 // Iter applies a function to each metadata key value pair that passes the
 // filter.
 func (f *ExcludeFilter) Iter(m *message.Part, fn func(k string, v any) error) error {
 	return m.MetaIterMut(func(k string, v any) error {
-		for _, prefix := range f.excludePrefixes {
-			if strings.HasPrefix(k, prefix) {
-				return nil
-			}
+		if !f.Match(k) {
+			return nil
 		}
 		return fn(k, v)
 	})
@@ -59,10 +68,8 @@ func (f *ExcludeFilter) Iter(m *message.Part, fn func(k string, v any) error) er
 // filter with the value serialised as a string.
 func (f *ExcludeFilter) IterStr(m *message.Part, fn func(k, v string) error) error {
 	return m.MetaIterStr(func(k, v string) error {
-		for _, prefix := range f.excludePrefixes {
-			if strings.HasPrefix(k, prefix) {
-				return nil
-			}
+		if !f.Match(k) {
+			return nil
 		}
 		return fn(k, v)
 	})

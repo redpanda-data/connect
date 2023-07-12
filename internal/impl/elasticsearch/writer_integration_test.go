@@ -11,14 +11,25 @@ import (
 
 	"github.com/olivere/elastic/v7"
 	"github.com/ory/dockertest/v3"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/impl/elasticsearch"
 	"github.com/benthosdev/benthos/v4/internal/integration"
-	"github.com/benthosdev/benthos/v4/internal/manager/mock"
-	"github.com/benthosdev/benthos/v4/internal/message"
+	"github.com/benthosdev/benthos/v4/public/service"
 )
+
+func outputFromConf(t testing.TB, confStr string, args ...any) *elasticsearch.Output {
+	t.Helper()
+
+	pConf, err := elasticsearch.OutputSpec().ParseYAML(fmt.Sprintf(confStr, args...), nil)
+	require.NoError(t, err)
+
+	o, err := elasticsearch.OutputFromParsed(pConf, service.MockResources())
+	require.NoError(t, err)
+
+	return o
+}
 
 func TestIntegrationWriter(t *testing.T) {
 	integration.CheckSkip(t)
@@ -131,39 +142,32 @@ func TestIntegrationWriter(t *testing.T) {
 }
 
 func testElasticNoIndex(urls []string, client *elastic.Client, t *testing.T) {
-	conf := output.NewElasticsearchConfig()
-	conf.Index = "does_not_exist"
-	conf.ID = "foo-${!count(\"noIndexTest\")}"
-	conf.URLs = urls
-	conf.MaxRetries = 1
-	conf.Backoff.MaxElapsedTime = "1s"
-	conf.Sniff = false
+	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+	defer done()
 
-	m, err := elasticsearch.NewElasticsearchV2(conf, mock.NewManager())
-	if err != nil {
-		t.Fatal(err)
-	}
+	m := outputFromConf(t, `
+index: does_not_exist
+id: 'foo-${!count("noIndexTest")}'
+urls: %v
+max_retries: 1
+backoff:
+  max_elapsed_time: 1s
+sniff: false
+`, urls)
 
-	if err = m.Connect(context.Background()); err != nil {
-		t.Error(err)
-	}
-
+	require.NoError(t, m.Connect(ctx))
 	defer func() {
-		ctx, done := context.WithTimeout(context.Background(), time.Second*30)
 		require.NoError(t, m.Close(ctx))
-		done()
 	}()
 
-	if err = m.Write(message.QuickBatch([][]byte{[]byte(`{"message":"hello world","user":"1"}`)})); err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, m.WriteBatch(ctx, service.MessageBatch{
+		service.NewMessage([]byte(`{"message":"hello world","user":"1"}`)),
+	}))
 
-	if err = m.Write(message.QuickBatch([][]byte{
-		[]byte(`{"message":"hello world","user":"2"}`),
-		[]byte(`{"message":"hello world","user":"3"}`),
-	})); err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, m.WriteBatch(ctx, service.MessageBatch{
+		service.NewMessage([]byte(`{"message":"hello world","user":"2"}`)),
+		service.NewMessage([]byte(`{"message":"hello world","user":"3"}`)),
+	}))
 
 	for i := 0; i < 3; i++ {
 		id := fmt.Sprintf("foo-%v", i+1)
@@ -171,38 +175,29 @@ func testElasticNoIndex(urls []string, client *elastic.Client, t *testing.T) {
 		get, err := client.Get().
 			Index("does_not_exist").
 			Id(id).
-			Do(context.Background())
-		if err != nil {
-			t.Fatalf("Failed to get doc '%v': %v", id, err)
-		}
-		if !get.Found {
-			t.Errorf("document %v not found", i)
-		}
+			Do(ctx)
+		require.NoError(t, err, id)
+		assert.True(t, get.Found, id)
 	}
 }
 
 func testElasticParallelWrites(urls []string, client *elastic.Client, t *testing.T) {
-	conf := output.NewElasticsearchConfig()
-	conf.Index = "new_index_parallel_writes"
-	conf.ID = "${!json(\"key\")}"
-	conf.URLs = urls
-	conf.MaxRetries = 1
-	conf.Backoff.MaxElapsedTime = "1s"
-	conf.Sniff = false
+	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+	defer done()
 
-	m, err := elasticsearch.NewElasticsearchV2(conf, mock.NewManager())
-	if err != nil {
-		t.Fatal(err)
-	}
+	m := outputFromConf(t, `
+index: new_index_parallel_writes
+id: '${!json("key")}'
+urls: %v
+max_retries: 1
+backoff:
+  max_elapsed_time: 1s
+sniff: false
+`, urls)
 
-	if err = m.Connect(context.Background()); err != nil {
-		t.Error(err)
-	}
-
+	require.NoError(t, m.Connect(ctx))
 	defer func() {
-		ctx, done := context.WithTimeout(context.Background(), time.Second*30)
 		require.NoError(t, m.Close(ctx))
-		done()
 	}()
 
 	N := 10
@@ -218,9 +213,9 @@ func testElasticParallelWrites(urls []string, client *elastic.Client, t *testing
 		docs[fmt.Sprintf("doc-%v", i)] = str
 		go func(content string) {
 			<-startChan
-			if lerr := m.Write(message.QuickBatch([][]byte{[]byte(content)})); lerr != nil {
-				t.Error(lerr)
-			}
+			assert.NoError(t, m.WriteBatch(ctx, service.MessageBatch{
+				service.NewMessage([]byte(content)),
+			}))
 			wg.Done()
 		}(str)
 	}
@@ -234,90 +229,73 @@ func testElasticParallelWrites(urls []string, client *elastic.Client, t *testing
 			Index("new_index_parallel_writes").
 			Type("_doc").
 			Id(id).
-			Do(context.Background())
-		if err != nil {
-			t.Fatalf("Failed to get doc '%v': %v", id, err)
-		}
-		if !get.Found {
-			t.Errorf("document %v not found", id)
-		} else {
-			rawBytes, err := get.Source.MarshalJSON()
-			if err != nil {
-				t.Error(err)
-			} else if act := string(rawBytes); act != exp {
-				t.Errorf("Wrong result: %v != %v", act, exp)
-			}
-		}
+			Do(ctx)
+		require.NoError(t, err, id)
+		require.True(t, get.Found, id)
+
+		rawBytes, err := get.Source.MarshalJSON()
+		require.NoError(t, err)
+
+		assert.Equal(t, exp, string(rawBytes), id)
 	}
 }
 
 func testElasticErrorHandling(urls []string, client *elastic.Client, t *testing.T) {
-	conf := output.NewElasticsearchConfig()
-	conf.Index = "test_conn_index?"
-	conf.ID = "foo-static"
-	conf.URLs = urls
-	conf.Backoff.MaxInterval = "1s"
-	conf.Sniff = false
+	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+	defer done()
 
-	m, err := elasticsearch.NewElasticsearchV2(conf, mock.NewManager())
-	if err != nil {
-		t.Fatal(err)
-	}
+	m := outputFromConf(t, `
+index: test_conn_index?
+id: 'foo-static'
+urls: %v
+backoff:
+  max_elapsed_time: 1s
+sniff: false
+`, urls)
 
-	if err = m.Connect(context.Background()); err != nil {
-		t.Fatal(err)
-	}
-
+	require.NoError(t, m.Connect(ctx))
 	defer func() {
-		ctx, done := context.WithTimeout(context.Background(), time.Second*30)
 		require.NoError(t, m.Close(ctx))
-		done()
 	}()
 
-	if err = m.Write(message.QuickBatch([][]byte{[]byte(`{"message":true}`)})); err == nil {
-		t.Error("Expected error")
-	}
+	require.Error(t, m.WriteBatch(ctx, service.MessageBatch{
+		service.NewMessage([]byte(`{"message":true}`)),
+	}))
 
-	if err = m.Write(message.QuickBatch([][]byte{[]byte(`{"message":"foo"}`), []byte(`{"message":"bar"}`)})); err == nil {
-		t.Error("Expected error")
-	}
+	require.Error(t, m.WriteBatch(ctx, service.MessageBatch{
+		service.NewMessage([]byte(`{"message":"foo"}`)),
+		service.NewMessage([]byte(`{"message":"bar"}`)),
+	}))
 }
 
 func testElasticConnect(urls []string, client *elastic.Client, t *testing.T) {
-	conf := output.NewElasticsearchConfig()
-	conf.Index = "test_conn_index"
-	conf.ID = "foo-${!count(\"foo\")}"
-	conf.URLs = urls
-	conf.Type = "_doc"
-	conf.Sniff = false
+	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+	defer done()
 
-	m, err := elasticsearch.NewElasticsearchV2(conf, mock.NewManager())
-	if err != nil {
-		t.Fatal(err)
-	}
+	m := outputFromConf(t, `
+index: test_conn_index
+id: 'foo-${!count("foo")}'
+urls: %v
+type: _doc
+sniff: false
+`, urls)
 
-	if err = m.Connect(context.Background()); err != nil {
-		t.Fatal(err)
-	}
-
+	require.NoError(t, m.Connect(ctx))
 	defer func() {
-		ctx, done := context.WithTimeout(context.Background(), time.Second*30)
 		require.NoError(t, m.Close(ctx))
-		done()
 	}()
 
 	N := 10
 
-	testMsgs := [][][]byte{}
+	var testMsgs [][]byte
 	for i := 0; i < N; i++ {
-		testMsgs = append(testMsgs, [][]byte{
-			[]byte(fmt.Sprintf(`{"message":"hello world","user":"%v"}`, i)),
-		})
+		testData := []byte(fmt.Sprintf(`{"message":"hello world","user":"%v"}`, i))
+		testMsgs = append(testMsgs, testData)
 	}
 	for i := 0; i < N; i++ {
-		if err = m.Write(message.QuickBatch(testMsgs[i])); err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, m.WriteBatch(ctx, service.MessageBatch{
+			service.NewMessage(testMsgs[i]),
+		}))
 	}
 	for i := 0; i < N; i++ {
 		id := fmt.Sprintf("foo-%v", i+1)
@@ -326,61 +304,44 @@ func testElasticConnect(urls []string, client *elastic.Client, t *testing.T) {
 			Index("test_conn_index").
 			Type("_doc").
 			Id(id).
-			Do(context.Background())
-		if err != nil {
-			t.Fatalf("Failed to get doc '%v': %v", id, err)
-		}
-		if !get.Found {
-			t.Errorf("document %v not found", i)
-		}
+			Do(ctx)
+		require.NoError(t, err)
+		assert.True(t, get.Found)
 
 		var sourceBytes []byte
 		sourceBytes, err = get.Source.MarshalJSON()
-		if err != nil {
-			t.Error(err)
-		} else if exp, act := string(testMsgs[i][0]), string(sourceBytes); exp != act {
-			t.Errorf("wrong user field returned: %v != %v", act, exp)
-		}
+		require.NoError(t, err)
+		assert.Equal(t, string(testMsgs[i]), string(sourceBytes))
 	}
 }
 
 func testElasticIndexInterpolation(urls []string, client *elastic.Client, t *testing.T) {
-	conf := output.NewElasticsearchConfig()
-	conf.Index = "${!meta(\"index\")}"
-	conf.ID = "bar-${!count(\"bar\")}"
-	conf.URLs = urls
-	conf.Type = "_doc"
-	conf.Sniff = false
+	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+	defer done()
 
-	m, err := elasticsearch.NewElasticsearchV2(conf, mock.NewManager())
-	if err != nil {
-		t.Fatal(err)
-	}
+	m := outputFromConf(t, `
+index: ${! @index }
+id: 'bar-${!count("bar")}'
+urls: %v
+type: _doc
+sniff: false
+`, urls)
 
-	if err = m.Connect(context.Background()); err != nil {
-		t.Fatal(err)
-	}
-
+	require.NoError(t, m.Connect(ctx))
 	defer func() {
-		ctx, done := context.WithTimeout(context.Background(), time.Second*30)
 		require.NoError(t, m.Close(ctx))
-		done()
 	}()
 
 	N := 10
 
-	testMsgs := [][][]byte{}
+	testMsgs := [][]byte{}
 	for i := 0; i < N; i++ {
-		testMsgs = append(testMsgs, [][]byte{
-			[]byte(fmt.Sprintf(`{"message":"hello world","user":"%v"}`, i)),
-		})
+		testMsgs = append(testMsgs, []byte(fmt.Sprintf(`{"message":"hello world","user":"%v"}`, i)))
 	}
 	for i := 0; i < N; i++ {
-		msg := message.QuickBatch(testMsgs[i])
-		msg.Get(0).MetaSetMut("index", "test_conn_index")
-		if err = m.Write(msg); err != nil {
-			t.Fatal(err)
-		}
+		msg := service.NewMessage(testMsgs[i])
+		msg.MetaSetMut("index", "test_conn_index")
+		require.NoError(t, m.WriteBatch(ctx, service.MessageBatch{msg}))
 	}
 	for i := 0; i < N; i++ {
 		id := fmt.Sprintf("bar-%v", i+1)
@@ -389,172 +350,131 @@ func testElasticIndexInterpolation(urls []string, client *elastic.Client, t *tes
 			Index("test_conn_index").
 			Type("_doc").
 			Id(id).
-			Do(context.Background())
-		if err != nil {
-			t.Fatalf("Failed to get doc '%v': %v", id, err)
-		}
-		if !get.Found {
-			t.Errorf("document %v not found", i)
-		}
+			Do(ctx)
+		require.NoError(t, err)
+		assert.True(t, get.Found)
 
 		var sourceBytes []byte
 		sourceBytes, err = get.Source.MarshalJSON()
-		if err != nil {
-			t.Error(err)
-		} else if exp, act := string(testMsgs[i][0]), string(sourceBytes); exp != act {
-			t.Errorf("wrong user field returned: %v != %v", act, exp)
-		}
+		require.NoError(t, err)
+		assert.Equal(t, string(testMsgs[i]), string(sourceBytes))
 	}
 }
 
 func testElasticBatch(urls []string, client *elastic.Client, t *testing.T) {
-	conf := output.NewElasticsearchConfig()
-	conf.Index = "${!meta(\"index\")}"
-	conf.ID = "bar-${!count(\"bar\")}"
-	conf.URLs = urls
-	conf.Sniff = false
-	conf.Type = "_doc"
+	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+	defer done()
 
-	m, err := elasticsearch.NewElasticsearchV2(conf, mock.NewManager())
-	if err != nil {
-		t.Fatal(err)
-	}
+	m := outputFromConf(t, `
+index: ${! @index }
+id: 'baz-${!count("baz")}'
+urls: %v
+type: _doc
+sniff: false
+`, urls)
 
-	if err = m.Connect(context.Background()); err != nil {
-		t.Fatal(err)
-	}
-
+	require.NoError(t, m.Connect(ctx))
 	defer func() {
-		ctx, done := context.WithTimeout(context.Background(), time.Second*30)
 		require.NoError(t, m.Close(ctx))
-		done()
 	}()
 
 	N := 10
 
-	testMsg := [][]byte{}
+	var testMsg [][]byte
+	var testBatch service.MessageBatch
 	for i := 0; i < N; i++ {
-		testMsg = append(testMsg,
-			[]byte(fmt.Sprintf(`{"message":"hello world","user":"%v"}`, i)),
-		)
+		testMsg = append(testMsg, []byte(fmt.Sprintf(`{"message":"hello world","user":"%v"}`, i)))
+		testBatch = append(testBatch, service.NewMessage(testMsg[i]))
+		testBatch[i].MetaSetMut("index", "test_conn_index")
 	}
-	msg := message.QuickBatch(testMsg)
+
+	require.NoError(t, m.WriteBatch(ctx, testBatch))
+
 	for i := 0; i < N; i++ {
-		msg.Get(i).MetaSetMut("index", "test_conn_index")
-	}
-	if err = m.Write(msg); err != nil {
-		t.Fatal(err)
-	}
-	for i := 0; i < N; i++ {
-		id := fmt.Sprintf("bar-%v", i+1)
+		id := fmt.Sprintf("baz-%v", i+1)
 		// nolint:staticcheck // Ignore SA1019 Type is deprecated warning for .Index()
 		get, err := client.Get().
 			Index("test_conn_index").
 			Type("_doc").
 			Id(id).
-			Do(context.Background())
-		if err != nil {
-			t.Fatalf("Failed to get doc '%v': %v", id, err)
-		}
-		if !get.Found {
-			t.Errorf("document %v not found", i)
-		}
+			Do(ctx)
+		require.NoError(t, err)
+		assert.True(t, get.Found)
 
 		var sourceBytes []byte
 		sourceBytes, err = get.Source.MarshalJSON()
-		if err != nil {
-			t.Error(err)
-		} else if exp, act := string(testMsg[i]), string(sourceBytes); exp != act {
-			t.Errorf("wrong user field returned: %v != %v", act, exp)
-		}
+		require.NoError(t, err)
+		assert.Equal(t, string(testMsg[i]), string(sourceBytes))
 	}
 }
 
 func testElasticBatchDelete(urls []string, client *elastic.Client, t *testing.T) {
-	conf := output.NewElasticsearchConfig()
-	conf.Index = "${!meta(\"index\")}"
-	conf.ID = "bar-${!count(\"elasticBatchDeleteMessages\")}"
-	conf.Action = "${!meta(\"elastic_action\")}"
-	conf.URLs = urls
-	conf.Sniff = false
-	conf.Type = "_doc"
+	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+	defer done()
 
-	m, err := elasticsearch.NewElasticsearchV2(conf, mock.NewManager())
-	if err != nil {
-		t.Fatal(err)
-	}
+	m := outputFromConf(t, `
+index: ${! @index }
+id: 'buz-${!count("elasticBatchDeleteMessages")}'
+urls: %v
+action: ${! @elastic_action }
+type: _doc
+sniff: false
+`, urls)
 
-	if err = m.Connect(context.Background()); err != nil {
-		t.Fatal(err)
-	}
-
+	require.NoError(t, m.Connect(ctx))
 	defer func() {
-		ctx, done := context.WithTimeout(context.Background(), time.Second*30)
 		require.NoError(t, m.Close(ctx))
-		done()
 	}()
 
 	N := 10
 
-	testMsg := [][]byte{}
+	var testMsg [][]byte
+	var testBatch service.MessageBatch
 	for i := 0; i < N; i++ {
-		testMsg = append(testMsg,
-			[]byte(fmt.Sprintf(`{"message":"hello world","user":"%v"}`, i)),
-		)
+		testMsg = append(testMsg, []byte(fmt.Sprintf(`{"message":"hello world","user":"%v"}`, i)))
+		testBatch = append(testBatch, service.NewMessage(testMsg[i]))
+		testBatch[i].MetaSetMut("index", "test_conn_index")
+		testBatch[i].MetaSetMut("elastic_action", "index")
 	}
-	msg := message.QuickBatch(testMsg)
+
+	require.NoError(t, m.WriteBatch(ctx, testBatch))
+
 	for i := 0; i < N; i++ {
-		msg.Get(i).MetaSetMut("index", "test_conn_index")
-		msg.Get(i).MetaSetMut("elastic_action", "index")
-	}
-	if err = m.Write(msg); err != nil {
-		t.Fatal(err)
-	}
-	for i := 0; i < N; i++ {
-		id := fmt.Sprintf("bar-%v", i+1)
+		id := fmt.Sprintf("buz-%v", i+1)
 		// nolint:staticcheck // Ignore SA1019 Type is deprecated warning for .Index()
 		get, err := client.Get().
 			Index("test_conn_index").
 			Type("_doc").
 			Id(id).
-			Do(context.Background())
-		if err != nil {
-			t.Fatalf("Failed to get doc '%v': %v", id, err)
-		}
-		if !get.Found {
-			t.Errorf("document %v not found", i)
-		}
+			Do(ctx)
+
+		require.NoError(t, err)
+		assert.True(t, get.Found)
 
 		var sourceBytes []byte
 		sourceBytes, err = get.Source.MarshalJSON()
-		if err != nil {
-			t.Error(err)
-		} else if exp, act := string(testMsg[i]), string(sourceBytes); exp != act {
-			t.Errorf("wrong user field returned: %v != %v", act, exp)
-		}
+		require.NoError(t, err)
+		assert.Equal(t, string(testMsg[i]), string(sourceBytes))
 	}
 
 	// Set elastic_action to deleted for some message parts
 	for i := N / 2; i < N; i++ {
-		msg.Get(i).MetaSetMut("elastic_action", "delete")
+		testBatch[i].MetaSetMut("elastic_action", "delete")
 	}
 
-	if err = m.Write(msg); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, m.WriteBatch(ctx, testBatch))
 
 	for i := 0; i < N; i++ {
-		id := fmt.Sprintf("bar-%v", i+1)
+		id := fmt.Sprintf("buz-%v", i+1)
 		// nolint:staticcheck // Ignore SA1019 Type is deprecated warning for .Index()
 		get, err := client.Get().
 			Index("test_conn_index").
 			Type("_doc").
 			Id(id).
-			Do(context.Background())
-		if err != nil {
-			t.Fatalf("Failed to get doc '%v': %v", id, err)
-		}
-		partAction := msg.Get(i).MetaGetStr("elastic_action")
+			Do(ctx)
+		require.NoError(t, err)
+
+		partAction, _ := testBatch[i].MetaGet("elastic_action")
 		if partAction == "deleted" && get.Found {
 			t.Errorf("document %v found when it should have been deleted", i)
 		} else if partAction != "deleted" && !get.Found {
@@ -564,119 +484,89 @@ func testElasticBatchDelete(urls []string, client *elastic.Client, t *testing.T)
 }
 
 func testElasticBatchIDCollision(urls []string, client *elastic.Client, t *testing.T) {
-	conf := output.NewElasticsearchConfig()
-	conf.Index = `${!meta("index")}`
-	conf.ID = "bar-id"
-	conf.URLs = urls
-	conf.Sniff = false
-	conf.Type = "_doc"
+	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+	defer done()
 
-	m, err := elasticsearch.NewElasticsearchV2(conf, mock.NewManager())
-	if err != nil {
-		t.Fatal(err)
-	}
+	m := outputFromConf(t, `
+index: ${! @index }
+id: 'bar-id'
+urls: %v
+type: _doc
+sniff: false
+`, urls)
 
-	if err = m.Connect(context.Background()); err != nil {
-		t.Fatal(err)
-	}
-
+	require.NoError(t, m.Connect(ctx))
 	defer func() {
-		ctx, done := context.WithTimeout(context.Background(), time.Second*30)
 		require.NoError(t, m.Close(ctx))
-		done()
 	}()
 
-	N := 2
-
-	testMsg := [][]byte{}
-	for i := 0; i < N; i++ {
-		testMsg = append(testMsg,
-			[]byte(fmt.Sprintf(`{"message":"hello world","user":"%v"}`, i)),
-		)
+	testMsg := [][]byte{
+		[]byte(`{"message":"hello world","user":"0"}`),
+		[]byte(`{"message":"hello world","user":"1"}`),
+	}
+	testBatch := service.MessageBatch{
+		service.NewMessage(testMsg[0]),
+		service.NewMessage(testMsg[1]),
 	}
 
-	msg := message.QuickBatch(testMsg)
-	msg.Get(0).MetaSetMut("index", "test_conn_index")
-	msg.Get(1).MetaSetMut("index", "test_conn_index_2")
+	testBatch[0].MetaSetMut("index", "test_conn_index")
+	testBatch[1].MetaSetMut("index", "test_conn_index_2")
 
-	if err = m.Write(msg); err != nil {
-		t.Fatal(err)
-	}
-	for i := 0; i < N; i++ {
+	require.NoError(t, m.WriteBatch(ctx, testBatch))
+
+	for i := 0; i < 2; i++ {
+		index, _ := testBatch[i].MetaGet("index")
+
 		// nolint:staticcheck // Ignore SA1019 Type is deprecated warning for .Index()
 		get, err := client.Get().
-			Index(msg.Get(i).MetaGetStr("index")).
+			Index(index).
 			Type("_doc").
-			Id(conf.ID).
-			Do(context.Background())
-		if err != nil {
-			t.Fatalf("Failed to get doc '%v': %v", conf.ID, err)
-		}
-		if !get.Found {
-			t.Errorf("document %v not found", i)
-		}
+			Id("bar-id").
+			Do(ctx)
+		require.NoError(t, err)
+		require.True(t, get.Found)
 
 		var sourceBytes []byte
 		sourceBytes, err = get.Source.MarshalJSON()
-		if err != nil {
-			t.Error(err)
-		} else if exp, act := string(testMsg[i]), string(sourceBytes); exp != act {
-			t.Errorf("wrong user field returned: %v != %v", act, exp)
-		}
+		require.NoError(t, err)
+		assert.Equal(t, string(testMsg[i]), string(sourceBytes))
 	}
 
 	// testing sequential updates to a document created above
-	conf.Action = "update"
-	conf.Index = "test_conn_index"
-	conf.ID = "bar-id"
+	m2 := outputFromConf(t, `
+index: test_conn_index
+id: 'bar-id'
+urls: %v
+action: update
+type: _doc
+sniff: false
+`, urls)
 
-	m, err = elasticsearch.NewElasticsearchV2(conf, mock.NewManager())
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if err = m.Connect(context.Background()); err != nil {
-		t.Fatal(err)
-	}
-
+	require.NoError(t, m2.Connect(ctx))
 	defer func() {
-		ctx, done := context.WithTimeout(context.Background(), time.Second*30)
-		require.NoError(t, m.Close(ctx))
-		done()
+		require.NoError(t, m2.Close(ctx))
 	}()
 
-	testMsg = [][]byte{
-		[]byte(`{"message":"goodbye"}`),
-		[]byte(`{"user": "updated"}`),
+	testBatch = service.MessageBatch{
+		service.NewMessage([]byte(`{"message":"goodbye"}`)),
+		service.NewMessage([]byte(`{"user": "updated"}`)),
 	}
-	msg = message.QuickBatch(testMsg)
-	if err = m.Write(msg); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, m2.WriteBatch(ctx, testBatch))
 
 	// nolint:staticcheck // Ignore SA1019 Type is deprecated warning for .Index()
 	get, err := client.Get().
 		Index("test_conn_index").
 		Type("_doc").
-		Id(conf.ID).
-		Do(context.Background())
-	if err != nil {
-		t.Fatalf("Failed to get doc '%v': %v", conf.ID, err)
-	}
-	if !get.Found {
-		t.Errorf("document not found")
-	}
+		Id("bar-id").
+		Do(ctx)
+	require.NoError(t, err)
+	assert.True(t, get.Found)
 
 	var doc struct {
 		Message string `json:"message"`
 		User    string `json:"user"`
 	}
-	err = json.Unmarshal(get.Source, &doc)
-	if err != nil {
-		t.Error(err)
-	} else if doc.User != "updated" {
-		t.Errorf("wrong user field returned: %v != %v", doc.User, "updated")
-	} else if doc.Message != "goodbye" {
-		t.Errorf("wrong message field returned: %v != %v", doc.Message, "goodbye")
-	}
+	require.NoError(t, json.Unmarshal(get.Source, &doc))
+	assert.Equal(t, "updated", doc.User)
+	assert.Equal(t, "goodbye", doc.Message)
 }

@@ -11,59 +11,118 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/codec"
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/input"
-	"github.com/benthosdev/benthos/v4/internal/component/input/processors"
-	"github.com/benthosdev/benthos/v4/internal/docs"
+	"github.com/benthosdev/benthos/v4/internal/component/interop"
 	"github.com/benthosdev/benthos/v4/internal/filepath"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
-func init() {
-	err := bundle.AllInputs.Add(processors.WrapConstructor(func(conf input.Config, nm bundle.NewManagement) (input.Streamed, error) {
-		rdr, err := newFileConsumer(conf.File, nm)
-		if err != nil {
-			return nil, err
-		}
-		return input.NewAsyncReader("file", input.NewAsyncPreserver(rdr), nm)
-	}), docs.ComponentSpec{
-		Name: "file",
-		Summary: `
-Consumes data from files on disk, emitting messages according to a chosen codec.`,
-		Config: docs.FieldComponent().WithChildren(
-			docs.FieldString("paths", "A list of paths to consume sequentially. Glob patterns are supported, including super globs (double star).").Array(),
-			codec.ReaderDocs,
-			docs.FieldInt("max_buffer", "The largest token size expected when consuming files with a tokenised codec such as `lines`.").Advanced(),
-			docs.FieldBool("delete_on_finish", "Whether to delete input files from the disk once they are fully consumed.").Advanced(),
-		).ChildDefaultAndTypesFromStruct(input.NewFileConfig()),
-		Description: `
+const (
+	fileInputFieldPaths          = "paths"
+	fileInputFieldCodec          = "codec"
+	fileInputFieldMaxBuffer      = "max_buffer"
+	fileInputFieldDeleteOnFinish = "delete_on_finish"
+)
+
+func fileInputSpec() *service.ConfigSpec {
+	return service.NewConfigSpec().
+		Stable().
+		Categories("Local").
+		Summary(`Consumes data from files on disk, emitting messages according to a chosen codec.`).
+		Description(`
 ### Metadata
 
 This input adds the following metadata fields to each message:
 
-` + "```text" + `
+`+"```text"+`
 - path
 - mod_time_unix
 - mod_time (RFC3339)
-` + "```" + `
+`+"```"+`
 
 You can access these metadata fields using
-[function interpolation](/docs/configuration/interpolation#bloblang-queries).`,
-		Categories: []string{
-			"Local",
-		},
-		Examples: []docs.AnnotatedExample{
-			{
-				Title:   "Read a Bunch of CSVs",
-				Summary: "If we wished to consume a directory of CSV files as structured documents we can use a glob pattern and the `csv` codec:",
-				Config: `
+[function interpolation](/docs/configuration/interpolation#bloblang-queries).`).
+		Example(
+			"Read a Bunch of CSVs",
+			"If we wished to consume a directory of CSV files as structured documents we can use a glob pattern and the `csv` codec:",
+			`
 input:
   file:
     paths: [ ./data/*.csv ]
     codec: csv
 `,
-			},
-		},
-	})
+		).
+		Fields(
+			service.NewStringListField(fileInputFieldPaths).
+				Description("A list of paths to consume sequentially. Glob patterns are supported, including super globs (double star)."),
+			service.NewInternalField(codec.ReaderDocs).Default("lines"),
+			service.NewIntField(fileInputFieldMaxBuffer).
+				Description("The largest token size expected when consuming files with a tokenised codec such as `lines`.").
+				Advanced().
+				Default(1000000),
+			service.NewBoolField(fileInputFieldDeleteOnFinish).
+				Description("Whether to delete input files from the disk once they are fully consumed.").
+				Advanced().
+				Default(false),
+		)
+}
+
+type fileInputConfig struct {
+	Paths          []string
+	Codec          string
+	MaxBuffer      int
+	DeleteOnFinish bool
+}
+
+func fileInputConfigFromParsed(pConf *service.ParsedConfig) (conf fileInputConfig, err error) {
+	if conf.Paths, err = pConf.FieldStringList(fileInputFieldPaths); err != nil {
+		return
+	}
+	if conf.Codec, err = pConf.FieldString(fileInputFieldCodec); err != nil {
+		return
+	}
+	if conf.MaxBuffer, err = pConf.FieldInt(fileInputFieldMaxBuffer); err != nil {
+		return
+	}
+	if conf.DeleteOnFinish, err = pConf.FieldBool(fileInputFieldDeleteOnFinish); err != nil {
+		return
+	}
+	return
+}
+
+func init() {
+	err := service.RegisterBatchInput("file", fileInputSpec(),
+		func(pConf *service.ParsedConfig, res *service.Resources) (service.BatchInput, error) {
+			// NOTE: We're using interop to punch an internal implementation up
+			// to the public plugin API. The only blocker from using the full
+			// public suite is the codec field.
+			//
+			// Since codecs are likely to get refactored soon I figured it
+			// wasn't worth investing in a public wrapper since the old style
+			// will likely get deprecated.
+			//
+			// This does mean that for now all codec based components will need
+			// to keep internal implementations. However, the config specs are
+			// the biggest time sink when converting to the new APIs so it's not
+			// a big deal to leave these tasks pending.
+			conf, err := fileInputConfigFromParsed(pConf)
+			if err != nil {
+				return nil, err
+			}
+
+			mgr := interop.UnwrapManagement(res)
+			rdr, err := newFileConsumer(conf, mgr)
+			if err != nil {
+				return nil, err
+			}
+
+			i, err := input.NewAsyncReader("file", input.NewAsyncPreserver(rdr), mgr)
+			if err != nil {
+				return nil, err
+			}
+			return interop.NewUnwrapInternalInput(i), nil
+		})
 	if err != nil {
 		panic(err)
 	}
@@ -90,7 +149,7 @@ type fileConsumer struct {
 	delete bool
 }
 
-func newFileConsumer(conf input.FileConfig, nm bundle.NewManagement) (*fileConsumer, error) {
+func newFileConsumer(conf fileInputConfig, nm bundle.NewManagement) (*fileConsumer, error) {
 	expandedPaths, err := filepath.Globs(nm.FS(), conf.Paths)
 	if err != nil {
 		return nil, err

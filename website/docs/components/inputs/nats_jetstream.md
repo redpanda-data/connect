@@ -1,7 +1,7 @@
 ---
 title: nats_jetstream
 type: input
-status: experimental
+status: stable
 categories: ["Services"]
 ---
 
@@ -14,9 +14,6 @@ categories: ["Services"]
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-:::caution EXPERIMENTAL
-This component is experimental and therefore subject to change or removal outside of major version releases.
-:::
 Reads messages from NATS JetStream subjects.
 
 Introduced in version 3.46.0.
@@ -34,12 +31,12 @@ Introduced in version 3.46.0.
 input:
   label: ""
   nats_jetstream:
-    urls: []
-    queue: ""
-    subject: ""
-    durable: ""
-    stream: ""
-    bind: false
+    urls: [] # No default (required)
+    queue: "" # No default (optional)
+    subject: foo.bar.baz # No default (optional)
+    durable: "" # No default (optional)
+    stream: "" # No default (optional)
+    bind: false # No default (optional)
     deliver: all
 ```
 
@@ -51,12 +48,12 @@ input:
 input:
   label: ""
   nats_jetstream:
-    urls: []
-    queue: ""
-    subject: ""
-    durable: ""
-    stream: ""
-    bind: false
+    urls: [] # No default (required)
+    queue: "" # No default (optional)
+    subject: foo.bar.baz # No default (optional)
+    durable: "" # No default (optional)
+    stream: "" # No default (optional)
+    bind: false # No default (optional)
     deliver: all
     ack_wait: 30s
     max_ack_pending: 1024
@@ -68,8 +65,10 @@ input:
       root_cas_file: ""
       client_certs: []
     auth:
-      nkey_file: ""
-      user_credentials_file: ""
+      nkey_file: ./seed.nk # No default (optional)
+      user_credentials_file: ./user.creds # No default (optional)
+      user_jwt: "" # No default (optional)
+      user_nkey_seed: "" # No default (optional)
 ```
 
 </TabItem>
@@ -92,6 +91,14 @@ This input adds the following metadata fields to each message:
 You can access these metadata fields using
 [function interpolation](/docs/configuration/interpolation#bloblang-queries).
 
+### Connection Name
+
+When monitoring and managing a production NATS system, it is often useful to
+know which connection a message was send/received from. This can be achieved by
+setting the connection name option when creating a NATS connection.
+
+Benthos will automatically set the connection name based off the label of the given
+NATS component, so that monitoring tools between NATS and benthos can stay in sync.
 ### Authentication
 
 There are several components within Benthos which utilise NATS services. You will find that each of these components
@@ -108,7 +115,7 @@ configured in the `nkey_file` field.
 
 More details [here](https://docs.nats.io/developing-with-nats/security/nkey).
 
-#### User Credentials file
+#### User Credentials
 
 NATS server supports decentralized authentication based on JSON Web Tokens (JWT). Clients need an [user JWT](https://docs.nats.io/nats-server/configuration/securing_nats/jwt#json-web-tokens)
 and a corresponding [NKey secret](https://docs.nats.io/developing-with-nats/security/nkey) when connecting to a server
@@ -116,6 +123,9 @@ which is configured to use this authentication scheme.
 
 The `user_credentials_file` field should point to a file containing both the private key and the JWT and can be
 generated with the [nsc tool](https://docs.nats.io/nats-tools/nsc).
+
+Alternatively, the `user_jwt` field can contain a plain text JWT and the `user_nkey_seed`can contain
+the plain text NKey Seed.
 
 More details [here](https://docs.nats.io/developing-with-nats/security/creds).
 
@@ -295,6 +305,7 @@ A list of client certificates to use. For each certificate either the fields `ce
 
 
 Type: `array`  
+Default: `[]`  
 
 ```yml
 # Examples
@@ -394,5 +405,25 @@ Type: `string`
 
 user_credentials_file: ./user.creds
 ```
+
+### `auth.user_jwt`
+
+An optional plain text user JWT (given along with the corresponding user NKey Seed).
+:::warning Secret
+This field contains sensitive information that usually shouldn't be added to a config directly, read our [secrets page for more info](/docs/configuration/secrets).
+:::
+
+
+Type: `string`  
+
+### `auth.user_nkey_seed`
+
+An optional plain text user NKey Seed (given along with the corresponding user JWT).
+:::warning Secret
+This field contains sensitive information that usually shouldn't be added to a config directly, read our [secrets page for more info](/docs/configuration/secrets).
+:::
+
+
+Type: `string`  
 
 

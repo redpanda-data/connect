@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/klauspost/compress/gzip"
+	"github.com/klauspost/pgzip"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -347,6 +348,79 @@ func TestCSVReader(t *testing.T) {
 	testReaderSuite(t, "csv", "", data)
 }
 
+func TestCSVSafeReader(t *testing.T) {
+	data := []byte("col1,col2,col3\nfoo1,bar1,baz1\nfoo2,bar2,baz2\nfoo3,bar3,baz3")
+	testReaderSuite(
+		t, "csv-safe", "", data,
+		`{"col1":"foo1","col2":"bar1","col3":"baz1"}`,
+		`{"col1":"foo2","col2":"bar2","col3":"baz2"}`,
+		`{"col1":"foo3","col2":"bar3","col3":"baz3"}`,
+	)
+
+	data = []byte("col1,col2,col3")
+	testReaderSuite(t, "csv-safe", "", data)
+
+	data = []byte("col1,col2,col3\nfoo1,bar1\nfoo2,bar2,baz2\nfoo3,bar3,baz3")
+	testReaderSuite(
+		t, "csv-safe", "", data,
+		`{}`,
+		`{"col1":"foo2","col2":"bar2","col3":"baz2"}`,
+		`{"col1":"foo3","col2":"bar3","col3":"baz3"}`,
+	)
+}
+
+func assertPartMetadataEqual[T any](t *testing.T, p *message.Part, key string, value T) {
+	rawVal, ok := p.MetaGetMut(key)
+	assert.True(t, ok)
+	typedVal, ok := rawVal.(T)
+	assert.True(t, ok)
+	assert.Equal(t, value, typedVal)
+}
+
+func TestCsvSafeReaderMetadata(t *testing.T) {
+	data := []byte("col1,col2,col3\nfoo1,bar1,baz1\n \nfoo2,bar2\n")
+	expected := []string{
+		`{"col1":"foo1","col2":"bar1","col3":"baz1"}`, // valid line
+		`{}`, // empty line
+		`{}`, // missing a column
+	}
+	buf := noopCloser{bytes.NewReader(data), false}
+
+	ctor, err := GetReader("csv-safe", NewReaderConfig())
+	require.NoError(t, err)
+
+	ack := errors.New("default err")
+
+	r, err := ctor("", buf, func(ctx context.Context, err error) error {
+		ack = err
+		return nil
+	})
+	require.NoError(t, err)
+
+	allReads := map[string][]byte{}
+
+	for i, exp := range expected {
+		p, ackFn, err := r.Next(context.Background())
+		require.NoError(t, err)
+		require.NoError(t, ackFn(context.Background(), nil))
+		require.Len(t, p, 1)
+		assert.Equal(t, exp, string(p[0].AsBytes()))
+		assertPartMetadataEqual(t, p[0], "row_number", int32(i+2)) // header row is row 1, and compensate for index-0 range
+		allReads[string(p[0].AsBytes())] = p[0].AsBytes()
+		if i == 1 { // empty row
+			assertPartMetadataEqual(t, p[0], "row_empty", true)
+		} else if i == 2 { // row with missing column
+			assertPartMetadataEqual(t, p[0], "row_parse_error", "record on line 4: wrong number of fields")
+		}
+	}
+
+	_, _, err = r.Next(context.Background())
+	assert.EqualError(t, err, "EOF")
+
+	assert.NoError(t, r.Close(context.Background()))
+	assert.NoError(t, ack)
+}
+
 func TestPSVReader(t *testing.T) {
 	data := []byte("col1|col2|col3\nfoo1|bar1|baz1\nfoo2|bar2|baz2\nfoo3|bar3|baz3")
 	testReaderSuite(
@@ -387,6 +461,20 @@ func TestCSVGzipReader(t *testing.T) {
 	)
 }
 
+func TestCSVPGzipReader(t *testing.T) {
+	var gzipBuf bytes.Buffer
+	zw := pgzip.NewWriter(&gzipBuf)
+	_, _ = zw.Write([]byte("col1,col2,col3\nfoo1,bar1,baz1\nfoo2,bar2,baz2\nfoo3,bar3,baz3"))
+	zw.Close()
+
+	testReaderSuite(
+		t, "pgzip/csv", "", gzipBuf.Bytes(),
+		`{"col1":"foo1","col2":"bar1","col3":"baz1"}`,
+		`{"col1":"foo2","col2":"bar2","col3":"baz2"}`,
+		`{"col1":"foo3","col2":"bar3","col3":"baz3"}`,
+	)
+}
+
 func TestCSVGzipReaderOld(t *testing.T) {
 	var gzipBuf bytes.Buffer
 	zw := gzip.NewWriter(&gzipBuf)
@@ -399,6 +487,21 @@ func TestCSVGzipReaderOld(t *testing.T) {
 		`{"col1":"foo2","col2":"bar2","col3":"baz2"}`,
 		`{"col1":"foo3","col2":"bar3","col3":"baz3"}`,
 	)
+}
+
+func TestCSVSkipBOMReader(t *testing.T) {
+	// https://en.wikipedia.org/wiki/Byte_order_mark
+	bom := []byte{0xef, 0xbb, 0xbf}
+	data := append(bom, []byte("col1,col2,col3\nfoo1,bar1,baz1\nfoo2,bar2,baz2\nfoo3,bar3,baz3")...)
+	testReaderSuite(
+		t, "skipbom/csv", "", data,
+		`{"col1":"foo1","col2":"bar1","col3":"baz1"}`,
+		`{"col1":"foo2","col2":"bar2","col3":"baz2"}`,
+		`{"col1":"foo3","col2":"bar3","col3":"baz3"}`,
+	)
+
+	data = []byte("col1,col2,col3")
+	testReaderSuite(t, "csv", "", data)
 }
 
 func TestAllBytesReader(t *testing.T) {
@@ -499,6 +602,36 @@ func TestTarGzipReader(t *testing.T) {
 	testReaderSuite(t, "auto", "foo.tar.gz", gzipBuf.Bytes(), input...)
 	testReaderSuite(t, "auto", "foo.tar.gzip", gzipBuf.Bytes(), input...)
 	testReaderSuite(t, "auto", "foo.tgz", gzipBuf.Bytes(), input...)
+}
+
+func TestTarPGzipReader(t *testing.T) {
+	input := []string{
+		"first document",
+		"second document",
+		"third document",
+	}
+
+	var gzipBuf bytes.Buffer
+
+	zw := pgzip.NewWriter(&gzipBuf)
+	tw := tar.NewWriter(zw)
+	for i := range input {
+		hdr := &tar.Header{
+			Name: fmt.Sprintf("testfile%v", i),
+			Mode: 0o600,
+			Size: int64(len(input[i])),
+		}
+
+		err := tw.WriteHeader(hdr)
+		require.NoError(t, err)
+
+		_, err = tw.Write([]byte(input[i]))
+		require.NoError(t, err)
+	}
+	require.NoError(t, tw.Close())
+	require.NoError(t, zw.Close())
+
+	testReaderSuite(t, "pgzip/tar", "", gzipBuf.Bytes(), input...)
 }
 
 func TestTarGzipReaderOld(t *testing.T) {

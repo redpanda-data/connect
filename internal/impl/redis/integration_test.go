@@ -3,6 +3,7 @@ package redis
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"testing"
 	"time"
 
@@ -11,9 +12,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/integration"
-	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	_ "github.com/benthosdev/benthos/v4/public/components/pure"
 )
 
@@ -31,19 +30,20 @@ func TestIntegrationRedis(t *testing.T) {
 		assert.NoError(t, pool.Purge(resource))
 	})
 
+	urlStr := fmt.Sprintf("tcp://localhost:%v", resource.GetPort("6379/tcp"))
+	uri, err := url.Parse(urlStr)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	client := redis.NewClient(&redis.Options{
+		Addr:    uri.Host,
+		Network: uri.Scheme,
+	})
+
 	_ = resource.Expire(900)
 	require.NoError(t, pool.Retry(func() error {
-		conf := output.NewRedisStreamsConfig()
-		conf.URL = fmt.Sprintf("tcp://localhost:%v", resource.GetPort("6379/tcp"))
-
-		r, cErr := newRedisStreamsWriter(conf, mock.NewManager())
-		if cErr != nil {
-			return cErr
-		}
-		cErr = r.Connect(context.Background())
-
-		_ = r.Close(context.Background())
-		return cErr
+		return client.Ping(context.Background()).Err()
 	}))
 
 	// STREAMS
@@ -239,19 +239,20 @@ func BenchmarkIntegrationRedis(b *testing.B) {
 		assert.NoError(b, pool.Purge(resource))
 	})
 
+	urlStr := fmt.Sprintf("tcp://localhost:%v", resource.GetPort("6379/tcp"))
+	uri, err := url.Parse(urlStr)
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	client := redis.NewClient(&redis.Options{
+		Addr:    uri.Host,
+		Network: uri.Scheme,
+	})
+
 	_ = resource.Expire(900)
 	require.NoError(b, pool.Retry(func() error {
-		conf := output.NewRedisStreamsConfig()
-		conf.URL = fmt.Sprintf("tcp://localhost:%v", resource.GetPort("6379/tcp"))
-
-		r, cErr := newRedisStreamsWriter(conf, mock.NewManager())
-		if cErr != nil {
-			return cErr
-		}
-		cErr = r.Connect(context.Background())
-
-		_ = r.Close(context.Background())
-		return cErr
+		return client.Ping(context.Background()).Err()
 	}))
 
 	// STREAMS

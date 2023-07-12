@@ -465,3 +465,166 @@ func TestHTTPClientReceiveMultipart(t *testing.T) {
 		assert.Equal(t, "201", resMsg.Get(1).MetaGetStr("http_status_code"))
 	}
 }
+
+func TestHTTPClientBadTLS(t *testing.T) {
+	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		b, err := io.ReadAll(r.Body)
+		require.NoError(t, err)
+		_, _ = w.Write(bytes.ToUpper(b))
+	}))
+	defer ts.Close()
+
+	conf := NewOldConfig()
+	conf.URL = ts.URL + "/testpost"
+	conf.NumRetries = 0
+
+	h, err := NewClientFromOldConfig(conf, mock.NewManager())
+	require.NoError(t, err)
+
+	_, err = h.Send(context.Background(), message.Batch{
+		message.NewPart([]byte("hello world")),
+	})
+	require.Error(t, err)
+}
+
+func TestHTTPClientProxyConf(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatal("this shouldnt be hit directly")
+	}))
+	defer ts.Close()
+
+	tsProxy := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, r.Host, strings.TrimPrefix(ts.URL, "http://"))
+		b, err := io.ReadAll(r.Body)
+		require.NoError(t, err)
+		_, _ = w.Write(bytes.ToUpper(b))
+	}))
+	defer tsProxy.Close()
+
+	conf := NewOldConfig()
+	conf.URL = ts.URL + "/testpost"
+	conf.ProxyURL = tsProxy.URL
+
+	h, err := NewClientFromOldConfig(conf, mock.NewManager())
+	require.NoError(t, err)
+
+	resBatch, err := h.Send(context.Background(), message.Batch{
+		message.NewPart([]byte("hello world")),
+	})
+	require.NoError(t, err)
+	require.Len(t, resBatch, 1)
+
+	mBytes := resBatch[0].AsBytes()
+	assert.Equal(t, "HELLO WORLD", string(mBytes))
+}
+
+func TestHTTPClientProxyAndTLSConf(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatal("this shouldnt be hit directly")
+	}))
+	defer ts.Close()
+
+	tsProxy := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, r.Host, strings.TrimPrefix(ts.URL, "http://"))
+		b, err := io.ReadAll(r.Body)
+		require.NoError(t, err)
+		_, _ = w.Write(bytes.ToUpper(b))
+	}))
+	defer tsProxy.Close()
+
+	conf := NewOldConfig()
+	conf.URL = ts.URL + "/testpost"
+	conf.TLS.Enabled = true
+	conf.TLS.InsecureSkipVerify = true
+	conf.ProxyURL = tsProxy.URL
+
+	h, err := NewClientFromOldConfig(conf, mock.NewManager())
+	require.NoError(t, err)
+
+	resBatch, err := h.Send(context.Background(), message.Batch{
+		message.NewPart([]byte("hello world")),
+	})
+	require.NoError(t, err)
+	require.Len(t, resBatch, 1)
+
+	mBytes := resBatch[0].AsBytes()
+	assert.Equal(t, "HELLO WORLD", string(mBytes))
+}
+
+func TestHTTPClientOAuth2Conf(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "Bearer footoken", r.Header.Get("Authorization"))
+		b, err := io.ReadAll(r.Body)
+		require.NoError(t, err)
+		_, _ = w.Write(bytes.ToUpper(b))
+	}))
+	defer ts.Close()
+
+	tsOAuth2 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "Basic Zm9va2V5OmZvb3NlY3JldA==", r.Header.Get("Authorization"))
+		b, err := io.ReadAll(r.Body)
+		require.NoError(t, err)
+		assert.Equal(t, "grant_type=client_credentials", string(b))
+		_, _ = w.Write([]byte(`access_token=footoken&token_type=Bearer`))
+	}))
+	defer tsOAuth2.Close()
+
+	conf := NewOldConfig()
+	conf.URL = ts.URL + "/testpost"
+	conf.OAuth2.Enabled = true
+	conf.OAuth2.TokenURL = tsOAuth2.URL
+	conf.OAuth2.ClientKey = "fookey"
+	conf.OAuth2.ClientSecret = "foosecret"
+
+	h, err := NewClientFromOldConfig(conf, mock.NewManager())
+	require.NoError(t, err)
+
+	resBatch, err := h.Send(context.Background(), message.Batch{
+		message.NewPart([]byte("hello world")),
+	})
+	require.NoError(t, err)
+	require.Len(t, resBatch, 1)
+
+	mBytes := resBatch[0].AsBytes()
+	assert.Equal(t, "HELLO WORLD", string(mBytes))
+}
+
+func TestHTTPClientOAuth2AndTLSConf(t *testing.T) {
+	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "Bearer footoken", r.Header.Get("Authorization"))
+		b, err := io.ReadAll(r.Body)
+		require.NoError(t, err)
+		_, _ = w.Write(bytes.ToUpper(b))
+	}))
+	defer ts.Close()
+
+	tsOAuth2 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "Basic Zm9va2V5OmZvb3NlY3JldA==", r.Header.Get("Authorization"))
+		b, err := io.ReadAll(r.Body)
+		require.NoError(t, err)
+		assert.Equal(t, "grant_type=client_credentials", string(b))
+		_, _ = w.Write([]byte(`access_token=footoken&token_type=Bearer`))
+	}))
+	defer tsOAuth2.Close()
+
+	conf := NewOldConfig()
+	conf.URL = ts.URL + "/testpost"
+	conf.TLS.Enabled = true
+	conf.TLS.InsecureSkipVerify = true
+	conf.OAuth2.Enabled = true
+	conf.OAuth2.TokenURL = tsOAuth2.URL
+	conf.OAuth2.ClientKey = "fookey"
+	conf.OAuth2.ClientSecret = "foosecret"
+
+	h, err := NewClientFromOldConfig(conf, mock.NewManager())
+	require.NoError(t, err)
+
+	resBatch, err := h.Send(context.Background(), message.Batch{
+		message.NewPart([]byte("hello world")),
+	})
+	require.NoError(t, err)
+	require.Len(t, resBatch, 1)
+
+	mBytes := resBatch[0].AsBytes()
+	assert.Equal(t, "HELLO WORLD", string(mBytes))
+}

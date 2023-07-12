@@ -27,8 +27,8 @@ Connects to a cluster of memcached services, a prefix can be specified to allow 
 # Common config fields, showing default values
 label: ""
 memcached:
-  addresses: []
-  prefix: ""
+  addresses: [] # No default (required)
+  prefix: "" # No default (optional)
   default_ttl: 300s
 ```
 
@@ -39,8 +39,8 @@ memcached:
 # All config fields, showing default values
 label: ""
 memcached:
-  addresses: []
-  prefix: ""
+  addresses: [] # No default (required)
+  prefix: "" # No default (optional)
   default_ttl: 300s
   retries:
     initial_interval: 1s

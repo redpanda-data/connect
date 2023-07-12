@@ -34,7 +34,7 @@ Introduced in version 4.8.0.
 input:
   label: ""
   parquet:
-    paths: []
+    paths: [] # No default (required)
 ```
 
 </TabItem>
@@ -45,7 +45,7 @@ input:
 input:
   label: ""
   parquet:
-    paths: []
+    paths: [] # No default (required)
     batch_count: 1
 ```
 

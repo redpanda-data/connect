@@ -82,6 +82,7 @@ tracer:
   none: {}
 
 shutdown_timeout: 20s
+shutdown_delay: ""
 ```
 
 </TabItem>

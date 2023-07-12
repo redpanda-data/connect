@@ -25,15 +25,15 @@ Introduced in version 3.64.0.
 # Config fields, showing default values
 label: ""
 gcp_bigquery_select:
-  project: ""
-  credentials_json: ""
-  table: ""
-  columns: []
-  where: ""
+  project: "" # No default (required)
+  credentials_json: "" # No default (required)
+  table: bigquery-public-data.samples.shakespeare # No default (required)
+  columns: [] # No default (required)
+  where: type = ? and created_at > ? # No default (optional)
   job_labels: {}
-  args_mapping: ""
-  prefix: ""
-  suffix: ""
+  args_mapping: root = [ "article", now().ts_format("2006-01-02") ] # No default (optional)
+  prefix: "" # No default (optional)
+  suffix: "" # No default (optional)
 ```
 
 ## Examples
@@ -60,7 +60,7 @@ pipeline:
                 - sum(word_count) as total_count
               where: word = ?
               suffix: |
-                GROUP BY word	
+                GROUP BY word
                 ORDER BY total_count DESC
                 LIMIT 10
               args_mapping: root = [ this.term ]

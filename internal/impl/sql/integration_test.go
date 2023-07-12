@@ -528,7 +528,7 @@ processors:
 	})
 }
 
-func testSuite(t *testing.T, driver, dsn string, createTableFn func(string) error) {
+func testSuite(t *testing.T, driver, dsn string, createTableFn func(string) (string, error)) {
 	for _, fn := range []testFn{
 		testBatchProcessorBasic,
 		testBatchProcessorParallel,
@@ -540,7 +540,9 @@ func testSuite(t *testing.T, driver, dsn string, createTableFn func(string) erro
 		tableName, err := gonanoid.Generate("abcdefghijklmnopqrstuvwxyz", 40)
 		require.NoError(t, err)
 
-		require.NoError(t, createTableFn(tableName), tableName)
+		tableName, err = createTableFn(tableName)
+		require.NoError(t, err)
+
 		fn(t, driver, dsn, tableName)
 	}
 }
@@ -571,13 +573,13 @@ func TestIntegrationClickhouse(t *testing.T) {
 		}
 	})
 
-	createTable := func(name string) error {
+	createTable := func(name string) (string, error) {
 		_, err := db.Exec(fmt.Sprintf(`create table %s (
   "foo" String,
   "bar" Int64,
   "baz" String
 		) engine=Memory;`, name))
-		return err
+		return name, err
 	}
 
 	dsn := fmt.Sprintf("clickhouse://localhost:%s/", resource.GetPort("9000/tcp"))
@@ -591,7 +593,7 @@ func TestIntegrationClickhouse(t *testing.T) {
 			db = nil
 			return err
 		}
-		if err := createTable("footable"); err != nil {
+		if _, err := createTable("footable"); err != nil {
 			return err
 		}
 		return nil
@@ -626,13 +628,13 @@ func TestIntegrationOldClickhouse(t *testing.T) {
 		}
 	})
 
-	createTable := func(name string) error {
+	createTable := func(name string) (string, error) {
 		_, err := db.Exec(fmt.Sprintf(`create table %s (
   "foo" String,
   "bar" Int64,
   "baz" String
 		) engine=Memory;`, name))
-		return err
+		return name, err
 	}
 
 	dsn := fmt.Sprintf("tcp://localhost:%s/", resource.GetPort("9000/tcp"))
@@ -646,7 +648,7 @@ func TestIntegrationOldClickhouse(t *testing.T) {
 			db = nil
 			return err
 		}
-		if err := createTable("footable"); err != nil {
+		if _, err := createTable("footable"); err != nil {
 			return err
 		}
 		return nil
@@ -686,14 +688,14 @@ func TestIntegrationPostgres(t *testing.T) {
 		}
 	})
 
-	createTable := func(name string) error {
+	createTable := func(name string) (string, error) {
 		_, err := db.Exec(fmt.Sprintf(`create table %s (
   "foo" varchar(50) not null,
   "bar" integer not null,
   "baz" varchar(50) not null,
   primary key ("foo")
 		)`, name))
-		return err
+		return name, err
 	}
 
 	dsn := fmt.Sprintf("postgres://testuser:testpass@localhost:%s/testdb?sslmode=disable", resource.GetPort("5432/tcp"))
@@ -707,7 +709,7 @@ func TestIntegrationPostgres(t *testing.T) {
 			db = nil
 			return err
 		}
-		if err := createTable("footable"); err != nil {
+		if _, err := createTable("footable"); err != nil {
 			return err
 		}
 		return nil
@@ -751,14 +753,14 @@ func TestIntegrationMySQL(t *testing.T) {
 		}
 	})
 
-	createTable := func(name string) error {
+	createTable := func(name string) (string, error) {
 		_, err := db.Exec(fmt.Sprintf(`create table %s (
   "foo" varchar(50) not null,
   "bar" integer not null,
   "baz" varchar(50) not null,
   primary key ("foo")
 		)`, name))
-		return err
+		return name, err
 	}
 
 	dsn := fmt.Sprintf("testuser:testpass@tcp(localhost:%s)/testdb", resource.GetPort("3306/tcp"))
@@ -771,7 +773,7 @@ func TestIntegrationMySQL(t *testing.T) {
 			db = nil
 			return err
 		}
-		if err := createTable("footable"); err != nil {
+		if _, err := createTable("footable"); err != nil {
 			return err
 		}
 		return nil
@@ -811,14 +813,14 @@ func TestIntegrationMSSQL(t *testing.T) {
 		}
 	})
 
-	createTable := func(name string) error {
+	createTable := func(name string) (string, error) {
 		_, err := db.Exec(fmt.Sprintf(`create table %s (
   "foo" varchar(50) not null,
   "bar" integer not null,
   "baz" varchar(50) not null,
   primary key ("foo")
 		)`, name))
-		return err
+		return name, err
 	}
 
 	dsn := fmt.Sprintf("sqlserver://sa:"+testPassword+"@localhost:%s?database=master", resource.GetPort("1433/tcp"))
@@ -832,7 +834,7 @@ func TestIntegrationMSSQL(t *testing.T) {
 			db = nil
 			return err
 		}
-		if err := createTable("footable"); err != nil {
+		if _, err := createTable("footable"); err != nil {
 			return err
 		}
 		return nil
@@ -853,14 +855,14 @@ func TestIntegrationSQLite(t *testing.T) {
 		}
 	})
 
-	createTable := func(name string) error {
+	createTable := func(name string) (string, error) {
 		_, err := db.Exec(fmt.Sprintf(`create table %s (
   "foo" varchar(50) not null,
   "bar" integer not null,
   "baz" varchar(50) not null,
   primary key ("foo")
 		)`, name))
-		return err
+		return name, err
 	}
 
 	dsn := "file::memory:?cache=shared"
@@ -875,7 +877,7 @@ func TestIntegrationSQLite(t *testing.T) {
 			db = nil
 			return err
 		}
-		if err := createTable("footable"); err != nil {
+		if _, err := createTable("footable"); err != nil {
 			return err
 		}
 		return nil
@@ -895,7 +897,7 @@ func TestIntegrationOracle(t *testing.T) {
 	pool.MaxWait = 3 * time.Minute
 
 	resource, err := pool.RunWithOptions(&dockertest.RunOptions{
-		Repository:   "gvenzl/oracle-xe",
+		Repository:   "gvenzl/oracle-free",
 		Tag:          "slim-faststart",
 		ExposedPorts: []string{"1521/tcp"},
 		Env: []string{
@@ -914,17 +916,17 @@ func TestIntegrationOracle(t *testing.T) {
 		}
 	})
 
-	createTable := func(name string) error {
+	createTable := func(name string) (string, error) {
 		_, err := db.Exec(fmt.Sprintf(`create table %s (
   "foo" varchar(50) not null,
   "bar" integer not null,
   "baz" varchar(50) not null,
   primary key ("foo")
 		)`, name))
-		return err
+		return name, err
 	}
 
-	dsn := fmt.Sprintf("oracle://system:testpass@localhost:%s/XE", resource.GetPort("1521/tcp"))
+	dsn := fmt.Sprintf("oracle://system:testpass@localhost:%s/FREEPDB1", resource.GetPort("1521/tcp"))
 	require.NoError(t, pool.Retry(func() error {
 		db, err = sql.Open("oracle", dsn)
 		if err != nil {
@@ -937,11 +939,72 @@ func TestIntegrationOracle(t *testing.T) {
 			return err
 		}
 
-		if err := createTable("footable"); err != nil {
+		if _, err := createTable("footable"); err != nil {
 			return err
 		}
 		return nil
 	}))
 
 	testSuite(t, "oracle", dsn, createTable)
+}
+
+func TestIntegrationTrino(t *testing.T) {
+	integration.CheckSkip(t)
+	t.Parallel()
+
+	pool, err := dockertest.NewPool("")
+	if err != nil {
+		t.Skipf("Could not connect to docker: %s", err)
+	}
+	pool.MaxWait = 3 * time.Minute
+
+	testPassword := ""
+	resource, err := pool.RunWithOptions(&dockertest.RunOptions{
+		Repository:   "trinodb/trino",
+		ExposedPorts: []string{"8080/tcp"},
+		Env: []string{
+			"PASSWORD=" + testPassword,
+		},
+	})
+	require.NoError(t, err)
+
+	var db *sql.DB
+	t.Cleanup(func() {
+		if err = pool.Purge(resource); err != nil {
+			t.Logf("Failed to clean up docker resource: %s", err)
+		}
+		if db != nil {
+			db.Close()
+		}
+	})
+
+	createTable := func(name string) (string, error) {
+		name = "memory.default." + name
+		_, err := db.Exec(fmt.Sprintf(`
+create table %s (
+  "foo" varchar,
+  "bar" integer,
+  "baz" varchar
+)`, name))
+		return name, err
+	}
+
+	dsn := fmt.Sprintf("http://trinouser:"+testPassword+"@localhost:%s", resource.GetPort("8080/tcp"))
+	require.NoError(t, pool.Retry(func() error {
+		db, err = sql.Open("trino", dsn)
+		if err != nil {
+			return err
+		}
+		if err = db.Ping(); err != nil {
+			db.Close()
+			db = nil
+			return err
+		}
+		if _, err := createTable("test"); err != nil {
+			return err
+		}
+		return nil
+	}))
+
+	testSuite(t, "trino", dsn, createTable)
 }

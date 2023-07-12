@@ -11,6 +11,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"gopkg.in/yaml.v3"
 
 	"github.com/benthosdev/benthos/v4/internal/component/input"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
@@ -58,12 +59,13 @@ func TestFileDirectory(t *testing.T) {
 	act := map[string]struct{}{}
 
 	conf := input.NewConfig()
-	conf.Type = "file"
-	conf.File.Paths = []string{
-		fmt.Sprintf("%v/*.txt", tmpDir),
-		fmt.Sprintf("%v/**/*.txt", tmpDir),
-	}
-	conf.File.Codec = "all-bytes"
+	require.NoError(t, yaml.Unmarshal(fmt.Appendf(nil, `
+file:
+  paths:
+    - "%v/*.txt"
+    - "%v/**/*.txt"
+  codec: all-bytes
+`, tmpDir, tmpDir), &conf))
 
 	i, err := mock.NewManager().NewInput(conf)
 	require.NoError(t, err)

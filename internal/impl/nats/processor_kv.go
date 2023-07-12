@@ -41,6 +41,7 @@ var kvOps = map[string]string{
 
 func natsKVProcessorConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
+		Beta().
 		Categories("Services").
 		Version("4.12.0").
 		Summary("Perform operations on a NATS key-value bucket.").
@@ -76,7 +77,7 @@ This processor adds the following metadata fields to each message, depending on 
 - nats_kv_bucket
 ` + "```" + `
 
-` + auth.Description()).
+` + ConnectionNameDescription() + auth.Description()).
 		Field(service.NewStringListField("urls").
 			Description("A list of URLs to connect to. If an item of the list contains commas it will be expanded into multiple URLs.").
 			Example([]string{"nats://127.0.0.1:4222"}).
@@ -122,6 +123,7 @@ func init() {
 }
 
 type kvProcessor struct {
+	label       string
 	urls        string
 	bucket      string
 	operation   string
@@ -144,6 +146,7 @@ type kvProcessor struct {
 
 func newKVProcessor(conf *service.ParsedConfig, mgr *service.Resources) (*kvProcessor, error) {
 	p := &kvProcessor{
+		label:   mgr.Label(),
 		log:     mgr.Logger(),
 		fs:      mgr.FS(),
 		shutSig: shutdown.NewSignaller(),
@@ -366,6 +369,7 @@ func (p *kvProcessor) Connect(ctx context.Context) error {
 	if p.tlsConf != nil {
 		opts = append(opts, nats.Secure(p.tlsConf))
 	}
+	opts = append(opts, nats.Name(p.label))
 	opts = append(opts, authConfToOptions(p.authConf, p.fs)...)
 	if p.natsConn, err = nats.Connect(p.urls, opts...); err != nil {
 		return err

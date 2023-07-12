@@ -14,7 +14,6 @@ categories: ["Services","AWS"]
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-
 Consume messages from an AWS SQS URL.
 
 
@@ -30,7 +29,7 @@ Consume messages from an AWS SQS URL.
 input:
   label: ""
   aws_sqs:
-    url: ""
+    url: "" # No default (required)
 ```
 
 </TabItem>
@@ -41,7 +40,7 @@ input:
 input:
   label: ""
   aws_sqs:
-    url: ""
+    url: "" # No default (required)
     delete_message: true
     reset_visibility: true
     max_number_of_messages: 10
@@ -90,7 +89,6 @@ The SQS URL to consume from.
 
 
 Type: `string`  
-Default: `""`  
 
 ### `delete_message`
 
@@ -167,6 +165,9 @@ Default: `""`
 ### `credentials.secret`
 
 The secret for the credentials being used.
+:::warning Secret
+This field contains sensitive information that usually shouldn't be added to a config directly, read our [secrets page for more info](/docs/configuration/secrets).
+:::
 
 
 Type: `string`  

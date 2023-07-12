@@ -24,8 +24,8 @@ Writes messages to a Discord channel.
 output:
   label: ""
   discord:
-    channel_id: ""
-    bot_token: ""
+    channel_id: "" # No default (required)
+    bot_token: "" # No default (required)
 ```
 
 This output POSTs messages to the `/channels/{channel_id}/messages` Discord API endpoint authenticated as a bot using token based authentication.

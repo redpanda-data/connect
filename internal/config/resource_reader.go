@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"os"
 	"path/filepath"
 	"time"
 
@@ -207,7 +208,7 @@ func (r *Reader) readResource(path string, conf *manager.ResourceConfig) (lints 
 	var confBytes []byte
 	var dLints []docs.Lint
 	var modTime time.Time
-	if confBytes, dLints, modTime, err = ReadFileEnvSwap(r.fs, path); err != nil {
+	if confBytes, dLints, modTime, err = ReadFileEnvSwap(r.fs, path, os.LookupEnv); err != nil {
 		return
 	}
 	for _, l := range dLints {
@@ -223,7 +224,7 @@ func (r *Reader) readResource(path string, conf *manager.ResourceConfig) (lints 
 		allowTest := append(docs.FieldSpecs{
 			tdocs.ConfigSpec(),
 		}, manager.Spec()...)
-		for _, lint := range allowTest.LintYAML(docs.NewLintContext(), &rawNode) {
+		for _, lint := range allowTest.LintYAML(r.lintCtx(), &rawNode) {
 			lints = append(lints, fmt.Sprintf("%v%v", path, lint.Error()))
 		}
 	}

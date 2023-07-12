@@ -341,7 +341,7 @@ func (o *switchOutput) dispatchToTargets(
 			if err != nil {
 				var bErr *batch.Error
 				if errors.As(err, &bErr) {
-					bErr.WalkParts(group, sourceMessage, func(i int, p *message.Part, e error) bool {
+					bErr.WalkPartsBySource(group, sourceMessage, func(i int, p *message.Part, e error) bool {
 						if e != nil {
 							setErrForPart(p, e)
 						}

@@ -20,6 +20,7 @@ import (
 type AsyncReader struct {
 	connected   int32
 	connBackoff backoff.BackOff
+	readBackoff backoff.BackOff
 
 	typeStr string
 	reader  Async
@@ -35,23 +36,42 @@ func NewAsyncReader(
 	typeStr string,
 	r Async,
 	mgr component.Observability,
+	opts ...func(a *AsyncReader),
 ) (Streamed, error) {
-	boff := backoff.NewExponentialBackOff()
-	boff.InitialInterval = time.Millisecond * 100
-	boff.MaxInterval = time.Second
-	boff.MaxElapsedTime = 0
+	connBoff := backoff.NewExponentialBackOff()
+	connBoff.InitialInterval = time.Millisecond * 100
+	connBoff.MaxInterval = time.Second
+	connBoff.MaxElapsedTime = 0
+
+	readBoff := backoff.NewExponentialBackOff()
+	readBoff.InitialInterval = time.Millisecond * 100
+	readBoff.MaxInterval = time.Second
+	readBoff.MaxElapsedTime = 0
 
 	rdr := &AsyncReader{
-		connBackoff:  boff,
+		connBackoff:  connBoff,
+		readBackoff:  readBoff,
 		typeStr:      typeStr,
 		reader:       r,
 		mgr:          mgr,
 		transactions: make(chan message.Transaction),
 		shutSig:      shutdown.NewSignaller(),
 	}
+	for _, opt := range opts {
+		opt(rdr)
+	}
 
 	go rdr.loop()
 	return rdr, nil
+}
+
+// AsyncReaderWithConnBackOff set the backoff used for limiting connection
+// attempts. If the maximum number of retry attempts is reached then the input
+// will gracefully stop.
+func AsyncReaderWithConnBackOff(boff backoff.BackOff) func(a *AsyncReader) {
+	return func(a *AsyncReader) {
+		a.connBackoff = boff
+	}
 }
 
 //------------------------------------------------------------------------------
@@ -92,14 +112,24 @@ func (r *AsyncReader) loop() {
 
 	initConnection := func() bool {
 		for {
+			if r.shutSig.ShouldCloseAtLeisure() {
+				return false
+			}
 			if err := r.reader.Connect(closeAtLeisureCtx); err != nil {
 				if r.shutSig.ShouldCloseAtLeisure() || errors.Is(err, component.ErrTypeClosed) {
 					return false
 				}
 				r.mgr.Logger().Errorf("Failed to connect to %v: %v\n", r.typeStr, err)
 				mFailedConn.Incr(1)
+
+				nextBoff := r.connBackoff.NextBackOff()
+				if nextBoff == backoff.Stop {
+					r.mgr.Logger().Errorf("Maximum number of connection attempt retries has been met, gracefully terminating input %v", r.typeStr)
+					return false
+				}
+
 				select {
-				case <-time.After(r.connBackoff.NextBackOff()):
+				case <-time.After(nextBoff):
 				case <-closeAtLeisureCtx.Done():
 					return false
 				}
@@ -129,6 +159,7 @@ func (r *AsyncReader) loop() {
 			}
 			mConn.Incr(1)
 			atomic.StoreInt32(&r.connected, 1)
+			continue
 		}
 
 		// Close immediately if our reader is closed.
@@ -140,14 +171,19 @@ func (r *AsyncReader) loop() {
 			if err != nil && err != component.ErrTimeout && err != component.ErrNotConnected {
 				r.mgr.Logger().Errorf("Failed to read message: %v\n", err)
 			}
+			nextBoff := r.readBackoff.NextBackOff()
+			if nextBoff == backoff.Stop {
+				r.mgr.Logger().Errorf("Maximum number of read attempt retries has been met, gracefully terminating input %v", r.typeStr)
+				return
+			}
 			select {
-			case <-time.After(r.connBackoff.NextBackOff()):
+			case <-time.After(nextBoff):
 			case <-r.shutSig.CloseAtLeisureChan():
 				return
 			}
 			continue
 		} else {
-			r.connBackoff.Reset()
+			r.readBackoff.Reset()
 			mRcvd.Incr(int64(msg.Len()))
 			r.mgr.Logger().Tracef("Consumed %v messages from '%v'.\n", msg.Len(), r.typeStr)
 		}

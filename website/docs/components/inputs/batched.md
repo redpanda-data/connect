@@ -31,7 +31,7 @@ Introduced in version 4.11.0.
 input:
   label: ""
   batched:
-    child: null
+    child: null # No default (required)
     policy:
       count: 0
       byte_size: 0
@@ -47,13 +47,13 @@ input:
 input:
   label: ""
   batched:
-    child: null
+    child: null # No default (required)
     policy:
       count: 0
       byte_size: 0
       period: ""
       check: ""
-      processors: []
+      processors: [] # No default (optional)
 ```
 
 </TabItem>

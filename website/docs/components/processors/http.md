@@ -28,10 +28,10 @@ Performs an HTTP request using a message batch as the request body, and replaces
 # Common config fields, showing default values
 label: ""
 http:
-  url: ""
+  url: "" # No default (required)
   verb: POST
   headers: {}
-  rate_limit: ""
+  rate_limit: "" # No default (optional)
   timeout: 5s
   parallel: false
 ```
@@ -43,7 +43,7 @@ http:
 # All config fields, showing default values
 label: ""
 http:
-  url: ""
+  url: "" # No default (required)
   verb: POST
   headers: {}
   metadata:
@@ -82,7 +82,7 @@ http:
   extract_headers:
     include_prefixes: []
     include_patterns: []
-  rate_limit: ""
+  rate_limit: "" # No default (optional)
   timeout: 5s
   retry_period: 1s
   max_retry_backoff: 300s
@@ -248,7 +248,7 @@ EXPERIMENTAL: Optionally set a level at which the request and response payload o
 Type: `string`  
 Default: `""`  
 Requires version 4.12.0 or newer  
-Options: `TRACE`, `DEBUG`, `INFO`, `WARN`, `ERROR`, `FATAL`.
+Options: `TRACE`, `DEBUG`, `INFO`, `WARN`, `ERROR`, `FATAL`, ``.
 
 ### `oauth`
 
@@ -351,6 +351,7 @@ A list of optional requested permissions.
 
 
 Type: `array`  
+Default: `[]`  
 Requires version 3.45.0 or newer  
 
 ### `basic_auth`
@@ -424,6 +425,7 @@ A value used to identify the claims that issued the JWT.
 
 
 Type: `object`  
+Default: `{}`  
 
 ### `jwt.headers`
 
@@ -431,6 +433,7 @@ Add optional key/value headers to the JWT.
 
 
 Type: `object`  
+Default: `{}`  
 
 ### `tls`
 
@@ -504,6 +507,7 @@ A list of client certificates to use. For each certificate either the fields `ce
 
 
 Type: `array`  
+Default: `[]`  
 
 ```yml
 # Examples

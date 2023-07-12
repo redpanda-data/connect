@@ -9,145 +9,70 @@ import (
 	"sync"
 	"time"
 
-	"github.com/benthosdev/benthos/v4/internal/bundle"
-	"github.com/benthosdev/benthos/v4/internal/component"
-	"github.com/benthosdev/benthos/v4/internal/component/input"
-	"github.com/benthosdev/benthos/v4/internal/component/input/processors"
-	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/filepath"
-	"github.com/benthosdev/benthos/v4/internal/message"
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
-type csvScannerInfo struct {
-	handle      io.Reader
-	deleteFn    func() error
-	currentPath string
-	modTimeUTC  time.Time
-}
+var (
+	// CSV Input Fields
+	csviFieldPaths          = "paths"
+	csviFieldParseHeaderRow = "parse_header_row"
+	csviFieldDelim          = "delimiter"
+	csviFieldLazyQuotes     = "lazy_quotes"
+	csviFieldBatchCount     = "batch_count"
+	csviFieldDeleteOnFinish = "delete_on_finish"
+)
 
-func init() {
-	err := bundle.AllInputs.Add(processors.WrapConstructor(func(conf input.Config, nm bundle.NewManagement) (input.Streamed, error) {
-		delimRunes := []rune(conf.CSVFile.Delim)
-		if len(delimRunes) != 1 {
-			return nil, errors.New("delimiter value must be exactly one character")
-		}
-
-		comma := delimRunes[0]
-
-		pathsRemaining, err := filepath.Globs(nm.FS(), conf.CSVFile.Paths)
-		if err != nil {
-			return nil, fmt.Errorf("failed to resolve path glob: %w", err)
-		}
-		if len(pathsRemaining) == 0 {
-			return nil, errors.New("requires at least one input file path")
-		}
-
-		if conf.CSVFile.BatchCount < 1 {
-			return nil, errors.New("batch_count must be at least 1")
-		}
-
-		rdr, err := newCSVReader(
-			func(context.Context) (csvScannerInfo, error) {
-				if len(pathsRemaining) == 0 {
-					return csvScannerInfo{}, io.EOF
-				}
-
-				path := pathsRemaining[0]
-				handle, err := nm.FS().Open(path)
-				if err != nil {
-					return csvScannerInfo{}, err
-				}
-
-				var modTimeUTC time.Time
-				if fInfo, err := handle.Stat(); err == nil {
-					modTimeUTC = fInfo.ModTime().UTC()
-				} else {
-					nm.Logger().Errorf("Failed to read metadata from file '%v'", path)
-				}
-
-				pathsRemaining = pathsRemaining[1:]
-
-				return csvScannerInfo{
-					handle: handle,
-					deleteFn: func() error {
-						return nm.FS().Remove(path)
-					},
-					currentPath: path,
-					modTimeUTC:  modTimeUTC,
-				}, nil
-			},
-			func(context.Context) {},
-			optCSVSetComma(comma),
-			optCSVSetExpectHeader(conf.CSVFile.ParseHeaderRow),
-			optCSVSetGroupCount(conf.CSVFile.BatchCount),
-			optCSVSetLazyQuotes(conf.CSVFile.LazyQuotes),
-			optCSVSetDeleteOnFinish(conf.CSVFile.DeleteOnFinish),
-		)
-		if err != nil {
-			return nil, err
-		}
-
-		return input.NewAsyncReader("csv", input.NewAsyncPreserver(rdr), nm)
-	}), docs.ComponentSpec{
-		Name:    "csv",
-		Status:  docs.StatusStable,
-		Summary: "Reads one or more CSV files as structured records following the format described in RFC 4180.",
-		Config: docs.FieldComponent().WithChildren(
-			docs.FieldString(
-				"paths", "A list of file paths to read from. Each file will be read sequentially until the list is exhausted, at which point the input will close. Glob patterns are supported, including super globs (double star).",
-				[]string{"/tmp/foo.csv", "/tmp/bar/*.csv", "/tmp/data/**/*.csv"},
-			).Array(),
-			docs.FieldBool("parse_header_row", "Whether to reference the first row as a header row. If set to true the output structure for messages will be an object where field keys are determined by the header row. Otherwise, each message will consist of an array of values from the corresponding CSV row."),
-			docs.FieldString("delimiter", `The delimiter to use for splitting values in each record. It must be a single character.`),
-			docs.FieldBool("lazy_quotes", "If set to `true`, a quote may appear in an unquoted field and a non-doubled quote may appear in a quoted field.").AtVersion("4.1.0"),
-			docs.FieldBool("delete_on_finish", "Whether to delete input files from the disk once they are fully consumed.").Advanced(),
-			docs.FieldInt("batch_count", `Optionally process records in batches. This can help to speed up the consumption of exceptionally large CSV files. When the end of the file is reached the remaining records are processed as a (potentially smaller) batch.`).Advanced(),
-		).ChildDefaultAndTypesFromStruct(input.NewCSVFileConfig()),
-		Description: `
-This input offers more control over CSV parsing than the ` + "[`file` input](/docs/components/inputs/file)" + `.
+func csviFieldSpec() *service.ConfigSpec {
+	return service.NewConfigSpec().
+		Stable().
+		Categories("Local").
+		Summary("Reads one or more CSV files as structured records following the format described in RFC 4180.").
+		Description(`
+This input offers more control over CSV parsing than the `+"[`file` input](/docs/components/inputs/file)"+`.
 
 When parsing with a header row each line of the file will be consumed as a structured object, where the key names are determined from the header now. For example, the following CSV file:
 
-` + "```csv" + `
+`+"```csv"+`
 foo,bar,baz
 first foo,first bar,first baz
 second foo,second bar,second baz
-` + "```" + `
+`+"```"+`
 
 Would produce the following messages:
 
-` + "```json" + `
+`+"```json"+`
 {"foo":"first foo","bar":"first bar","baz":"first baz"}
 {"foo":"second foo","bar":"second bar","baz":"second baz"}
-` + "```" + `
+`+"```"+`
 
-If, however, the field ` + "`parse_header_row` is set to `false`" + ` then arrays are produced instead, like follows:
+If, however, the field `+"`parse_header_row` is set to `false`"+` then arrays are produced instead, like follows:
 
-` + "```json" + `
+`+"```json"+`
 ["first foo","first bar","first baz"]
 ["second foo","second bar","second baz"]
-` + "```" + `
+`+"```"+`
 
 ### Metadata
 
 This input adds the following metadata fields to each message:
 
-` + "```text" + `
+`+"```text"+`
 - header
 - path
 - mod_time_unix
 - mod_time (RFC3339)
-` + "```" + `
+`+"```"+`
 
 You can access these metadata fields using [function interpolation](/docs/configuration/interpolation#bloblang-queries).
 
-Note: The ` + "`header`" + ` field is only set when ` + "`parse_header_row`" + ` is ` + "`true`" + `.
+Note: The `+"`header`"+` field is only set when `+"`parse_header_row`"+` is `+"`true`"+`.
 
 ### Output CSV column order
 
-When [creating CSV](/docs/guides/bloblang/advanced#creating-csv) from Benthos messages, the columns must be sorted lexicographically to make the output deterministic. Alternatively, when using the ` + "`csv`" + ` input, one can leverage the ` + "`header`" + ` metadata field to retrieve the column order:
+When [creating CSV](/docs/guides/bloblang/advanced#creating-csv) from Benthos messages, the columns must be sorted lexicographically to make the output deterministic. Alternatively, when using the `+"`csv`"+` input, one can leverage the `+"`header`"+` metadata field to retrieve the column order:
 
-` + "```yaml" + `
+`+"```yaml"+`
 input:
   csv:
     paths:
@@ -174,17 +99,139 @@ input:
 output:
   file:
     path: ./output/${! @path.filepath_split().index(-1) }
-` + "```" + `
-`,
-		Categories: []string{
-			"Local",
-		},
-		Footnotes: `
-This input is particularly useful when consuming CSV from files too large to
-parse entirely within memory. However, in cases where CSV is consumed from other
-input types it's also possible to parse them using the
-` + "[Bloblang `parse_csv` method](/docs/guides/bloblang/methods#parse_csv)" + `.`,
-	})
+`+"```"+`
+`).
+		Footnotes(`This input is particularly useful when consuming CSV from files too large to parse entirely within memory. However, in cases where CSV is consumed from other input types it's also possible to parse them using the `+"[Bloblang `parse_csv` method](/docs/guides/bloblang/methods#parse_csv)"+`.`).
+		Fields(
+			service.NewStringListField(csviFieldPaths).
+				Description("A list of file paths to read from. Each file will be read sequentially until the list is exhausted, at which point the input will close. Glob patterns are supported, including super globs (double star).").
+				Example([]string{
+					"/tmp/foo.csv",
+					"/tmp/bar/*.csv",
+					"/tmp/data/**/*.csv",
+				}),
+			service.NewBoolField(csviFieldParseHeaderRow).
+				Description("Whether to reference the first row as a header row. If set to true the output structure for messages will be an object where field keys are determined by the header row. Otherwise, each message will consist of an array of values from the corresponding CSV row.").
+				Default(true),
+			service.NewStringField(csviFieldDelim).
+				Description(`The delimiter to use for splitting values in each record. It must be a single character.`).
+				Default(","),
+			service.NewBoolField(csviFieldLazyQuotes).
+				Description("If set to `true`, a quote may appear in an unquoted field and a non-doubled quote may appear in a quoted field.").
+				Version("4.1.0").
+				Default(false),
+			service.NewBoolField(csviFieldDeleteOnFinish).
+				Description("Whether to delete input files from the disk once they are fully consumed.").
+				Advanced().
+				Default(false),
+			service.NewIntField(csviFieldBatchCount).
+				Description(`Optionally process records in batches. This can help to speed up the consumption of exceptionally large CSV files. When the end of the file is reached the remaining records are processed as a (potentially smaller) batch.`).
+				Advanced().
+				Default(1),
+		)
+}
+
+type csvScannerInfo struct {
+	handle      io.Reader
+	deleteFn    func() error
+	currentPath string
+	modTimeUTC  time.Time
+}
+
+func init() {
+	err := service.RegisterBatchInput("csv", csviFieldSpec(),
+		func(conf *service.ParsedConfig, nm *service.Resources) (service.BatchInput, error) {
+			delim, err := conf.FieldString(csviFieldDelim)
+			if err != nil {
+				return nil, err
+			}
+
+			delimRunes := []rune(delim)
+			if len(delimRunes) != 1 {
+				return nil, errors.New("delimiter value must be exactly one character")
+			}
+
+			comma := delimRunes[0]
+
+			csvPaths, err := conf.FieldStringList(csviFieldPaths)
+			if err != nil {
+				return nil, err
+			}
+
+			pathsRemaining, err := filepath.Globs(nm.FS(), csvPaths)
+			if err != nil {
+				return nil, fmt.Errorf("failed to resolve path glob: %w", err)
+			}
+			if len(pathsRemaining) == 0 {
+				return nil, errors.New("requires at least one input file path")
+			}
+
+			batchCount, err := conf.FieldInt(csviFieldBatchCount)
+			if err != nil {
+				return nil, err
+			}
+			if batchCount < 1 {
+				return nil, errors.New("batch_count must be at least 1")
+			}
+
+			parseHeaderRow, err := conf.FieldBool(csviFieldParseHeaderRow)
+			if err != nil {
+				return nil, err
+			}
+
+			lazyQuotes, err := conf.FieldBool(csviFieldLazyQuotes)
+			if err != nil {
+				return nil, err
+			}
+
+			deleteOnFinish, err := conf.FieldBool(csviFieldDeleteOnFinish)
+			if err != nil {
+				return nil, err
+			}
+
+			rdr, err := newCSVReader(
+				func(context.Context) (csvScannerInfo, error) {
+					if len(pathsRemaining) == 0 {
+						return csvScannerInfo{}, io.EOF
+					}
+
+					path := pathsRemaining[0]
+					handle, err := nm.FS().Open(path)
+					if err != nil {
+						return csvScannerInfo{}, err
+					}
+
+					var modTimeUTC time.Time
+					if fInfo, err := handle.Stat(); err == nil {
+						modTimeUTC = fInfo.ModTime().UTC()
+					} else {
+						nm.Logger().Errorf("Failed to read metadata from file '%v'", path)
+					}
+
+					pathsRemaining = pathsRemaining[1:]
+
+					return csvScannerInfo{
+						handle: handle,
+						deleteFn: func() error {
+							return nm.FS().Remove(path)
+						},
+						currentPath: path,
+						modTimeUTC:  modTimeUTC,
+					}, nil
+				},
+				func(context.Context) {},
+				optCSVSetComma(comma),
+				optCSVSetExpectHeader(parseHeaderRow),
+				optCSVSetGroupCount(batchCount),
+				optCSVSetLazyQuotes(lazyQuotes),
+				optCSVSetDeleteOnFinish(deleteOnFinish),
+			)
+			if err != nil {
+				return nil, err
+			}
+
+			return service.AutoRetryNacksBatched(rdr), nil
+		})
 	if err != nil {
 		panic(err)
 	}
@@ -316,7 +363,7 @@ func (r *csvReader) Connect(ctx context.Context) error {
 	scannerInfo, err := r.handleCtor(ctx)
 	if err != nil {
 		if errors.Is(err, io.EOF) {
-			return component.ErrTypeClosed
+			return service.ErrEndOfInput
 		}
 		return err
 	}
@@ -348,14 +395,14 @@ func (r *csvReader) readNext(reader *csv.Reader) ([]string, error) {
 					return nil, err
 				}
 			}
-			return nil, component.ErrNotConnected
+			return nil, service.ErrNotConnected
 		}
 		return nil, err
 	}
 	return record, nil
 }
 
-func (r *csvReader) ReadBatch(ctx context.Context) (message.Batch, input.AsyncAckFn, error) {
+func (r *csvReader) ReadBatch(ctx context.Context) (service.MessageBatch, service.AckFunc, error) {
 	r.mut.Lock()
 	scanner := r.scanner
 	scannerInfo := r.scannerInfo
@@ -363,11 +410,10 @@ func (r *csvReader) ReadBatch(ctx context.Context) (message.Batch, input.AsyncAc
 	r.mut.Unlock()
 
 	if scanner == nil {
-		return nil, nil, component.ErrNotConnected
+		return nil, nil, service.ErrNotConnected
 	}
 
-	msg := message.QuickBatch(nil)
-
+	msg := service.MessageBatch{}
 	for i := 0; i < r.groupCount; i++ {
 		record, err := r.readNext(scanner)
 		if err != nil {
@@ -392,7 +438,7 @@ func (r *csvReader) ReadBatch(ctx context.Context) (message.Batch, input.AsyncAc
 			}
 		}
 
-		part := message.NewPart(nil)
+		part := service.NewMessage(nil)
 
 		var structured any
 		if len(header) == 0 || len(header) < len(record) {

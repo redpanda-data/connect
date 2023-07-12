@@ -7,8 +7,6 @@ import (
 	"github.com/cenkalti/backoff/v4"
 )
 
-//------------------------------------------------------------------------------
-
 // Backoff contains configuration params for the exponential backoff of the
 // retry mechanism.
 type Backoff struct {
@@ -81,5 +79,3 @@ func (c *Config) GetCtor() (func() backoff.BackOff, error) {
 		return boff
 	}, nil
 }
-
-//------------------------------------------------------------------------------

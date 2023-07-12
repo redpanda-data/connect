@@ -74,7 +74,7 @@ Please note, messages are considered delivered as soon as the data is written to
 
 ### `address`
 
-An optional address to listen from. If left empty the service wide HTTP server is used.
+An alternative address to host from. If left empty the service wide address is used.
 
 
 Type: `string`  
@@ -122,7 +122,7 @@ Default: `"5s"`
 
 ### `cert_file`
 
-An optional certificate file to use for TLS connections. Only applicable when an `address` is specified.
+Enable TLS by specifying a certificate and key file. Only valid with a custom `address`.
 
 
 Type: `string`  
@@ -130,7 +130,7 @@ Default: `""`
 
 ### `key_file`
 
-An optional certificate key file to use for TLS connections. Only applicable when an `address` is specified.
+Enable TLS by specifying a certificate and key file. Only valid with a custom `address`.
 
 
 Type: `string`  

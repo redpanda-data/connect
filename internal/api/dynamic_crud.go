@@ -197,6 +197,32 @@ func (d *Dynamic) HandleList(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func (d *Dynamic) HandleUptime(w http.ResponseWriter, r *http.Request) {
+	id := mux.Vars(r)["id"]
+
+	var uptimeStr string
+
+	d.idsMut.Lock()
+	if startedAt, exists := d.ids[id]; exists {
+		uptimeStr = time.Since(startedAt).String()
+	}
+	d.idsMut.Unlock()
+
+	if uptimeStr == "" {
+		d.configsMut.Lock()
+		if _, exists := d.configs[id]; exists {
+			uptimeStr = "stopped"
+		}
+		d.configsMut.Unlock()
+	}
+	if uptimeStr == "" {
+		http.Error(w, fmt.Sprintf("Dynamic component '%v' is unknown", id), http.StatusNotFound)
+		return
+	}
+
+	_, _ = w.Write([]byte(uptimeStr))
+}
+
 func (d *Dynamic) handleGETInput(w http.ResponseWriter, r *http.Request) error {
 	id := mux.Vars(r)["id"]
 
