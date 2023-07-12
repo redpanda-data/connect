@@ -46,7 +46,7 @@ pipeline:
 		Fields(
 			service.NewStringField("project").Description("The project ID of the topic to publish to."),
 			service.NewStringField("credentials_json").
-				Description("An optional field to set Google Service Account Credentials json as base64 encoded string.").
+				Description("An optional field to set Google Service Account Credentials json.").
 				Optional().
 				Secret(),
 			service.NewInterpolatedStringField("topic").Description("The topic to publish to."),
@@ -188,8 +188,8 @@ func newPubSubOutput(conf *service.ParsedConfig) (*pubsubOutput, error) {
 		opt = []option.ClientOption{option.WithEndpoint(endpoint)}
 	}
 
-	credJson, _ := conf.FieldString("credentials_json")
-	cred := cleanCredsJson(credJson)
+	credJSON, _ := conf.FieldString("credentials_json")
+	cred := cleanCredsJSON(credJSON)
 	if len(cred) > 0 {
 		opt = append(opt, option.WithCredentialsJSON([]byte(cred)))
 	}
@@ -381,7 +381,7 @@ func init() {
 	}
 }
 
-func cleanCredsJson(inp string) (out string) {
+func cleanCredsJSON(inp string) (out string) {
 	//removing the \n char since setting the value from env variable is adding \n char to multi-line values.
 	//This was causing invalid character '\\' error during app startup
 	return strings.ReplaceAll(strings.TrimSpace(inp), "\\n", "")

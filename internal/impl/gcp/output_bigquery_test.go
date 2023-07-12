@@ -29,7 +29,7 @@ func gcpBigQueryConfFromYAML(t *testing.T, yamlStr string) gcpBigQueryOutputConf
 	return conf
 }
 
-func TestNewGCPBigQueryOutputJsonNewLineOk(t *testing.T) {
+func TestNewGCPBigQueryOutputJSONNewLineOk(t *testing.T) {
 	output, err := newGCPBigQueryOutput(gcpBigQueryOutputConfig{}, nil)
 
 	require.NoError(t, err)
@@ -531,7 +531,7 @@ table: table_meow
 }
 
 // credentials_json value is base64 encoded valid json with dummy data
-func TestGCPBigQueryConnectWithCredsJson(t *testing.T) {
+func TestGCPBigQueryConnectWithCredsJSON(t *testing.T) {
 	server := httptest.NewServer(
 		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusNotFound)
@@ -571,8 +571,8 @@ credentials_json: |
 	require.Lenf(t, opt, 3, "Unexpected number of Client Options")
 
 	actualCredsJSON := opt[2]
-	expectedValue := option.WithCredentialsJSON([]byte(cleanCredsJson(config.CredentialsJSON)))
-	require.EqualValues(t, expectedValue, actualCredsJSON, "GCP Credentials Json not set as expected.")
+	expectedValue := option.WithCredentialsJSON([]byte(cleanCredsJSON(config.CredentialsJSON)))
+	require.EqualValues(t, expectedValue, actualCredsJSON, "GCP Credentials JSON not set as expected.")
 }
 
 // credentials_json value is base64 encoded valid json with dummy data
@@ -606,6 +606,6 @@ credentials_json: |
 	require.Lenf(t, opt, 1, "Unexpected number of Client Options")
 
 	actualCredsJSON := opt[0]
-	expectedValue := option.WithCredentialsJSON([]byte(cleanCredsJson(config.CredentialsJSON)))
-	require.EqualValues(t, expectedValue, actualCredsJSON, "GCP Credentials Json not set as expected.")
+	expectedValue := option.WithCredentialsJSON([]byte(cleanCredsJSON(config.CredentialsJSON)))
+	require.EqualValues(t, expectedValue, actualCredsJSON, "GCP Credentials JSON not set as expected.")
 }

@@ -28,7 +28,7 @@ const (
 	csoFieldBatching        = "batching"
 	csoFieldCollisionMode   = "collision_mode"
 	csoFieldTimeout         = "timeout"
-	csoFieldCredentialsJson = "credentials_json"
+	csoFieldCredentialsJSON = "credentials_json"
 
 	// GCPCloudStorageErrorIfExistsCollisionMode - error-if-exists.
 	GCPCloudStorageErrorIfExistsCollisionMode = "error-if-exists"
@@ -164,8 +164,8 @@ output:
 				Example("1s").
 				Example("500ms").
 				Default("3s"),
-			service.NewInterpolatedStringField(csoFieldCredentialsJson).
-				Description("An optional field to set Google Service Account Credentials json as base64 encoded string.").
+			service.NewInterpolatedStringField(csoFieldCredentialsJSON).
+				Description("An optional field to set Google Service Account Credentials json.").
 				Default("").
 				Optional().
 				Secret(),
@@ -241,7 +241,7 @@ func (g *gcpCloudStorageOutput) Connect(ctx context.Context) error {
 
 func getClientOptionsForOutputCloudStorage(g *gcpCloudStorageOutput) ([]option.ClientOption, error) {
 	var opt []option.ClientOption
-	cred := cleanCredsJson(g.conf.CredentialsJSON)
+	cred := cleanCredsJSON(g.conf.CredentialsJSON)
 	if len(cred) > 0 {
 		opt = []option.ClientOption{option.WithCredentialsJSON([]byte(cred))}
 	}

@@ -93,7 +93,7 @@ func newBigQuerySelectInputConfig() *service.ConfigSpec {
 		Description(`Once the rows from the query are exhausted, this input shuts down, allowing the pipeline to gracefully terminate (or the next input in a [sequence](/docs/components/inputs/sequence) to execute).`).
 		Field(service.NewStringField("project").Description("GCP project where the query job will execute.")).
 		Field(service.NewStringField("credentials_json").
-			Description("An optional field to set Google Service Account Credentials json as base64 encoded string.").
+			Description("An optional field to set Google Service Account Credentials json.").
 			Optional().
 			Secret().
 			Default("")).
@@ -216,7 +216,7 @@ func (inp *bigQuerySelectInput) Connect(ctx context.Context) error {
 
 func getClientOptionsBQSelect(inp *bigQuerySelectInput) ([]option.ClientOption, error) {
 	var opt []option.ClientOption
-	cred := cleanCredsJson(inp.config.credentialsJSON)
+	cred := cleanCredsJSON(inp.config.credentialsJSON)
 	if len(cred) > 0 {
 		opt = []option.ClientOption{option.WithCredentialsJSON([]byte(cred))}
 	}

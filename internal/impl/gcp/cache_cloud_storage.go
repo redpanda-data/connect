@@ -22,7 +22,7 @@ func gcpCloudStorageCacheConfig() *service.ConfigSpec {
 		Field(service.NewStringField("content_type").
 			Description("Optional field to explicitly set the Content-Type.").Optional()).
 		Field(service.NewStringField("credentials_json").
-			Description("An optional field to set Google Service Account Credentials json as base64 encoded string.").Optional().Secret().Default(""))
+			Description("An optional field to set Google Service Account Credentials json.").Optional().Secret().Default(""))
 
 	return spec
 }
@@ -75,7 +75,7 @@ func getClientOptionsForCloudStorageCache(parsedConf *service.ParsedConfig) ([]o
 		if err != nil {
 			return nil, err
 		}
-		cred := cleanCredsJson(credsJSON)
+		cred := cleanCredsJSON(credsJSON)
 		if len(cred) > 0 {
 			opt = []option.ClientOption{option.WithCredentialsJSON([]byte(cred))}
 		}

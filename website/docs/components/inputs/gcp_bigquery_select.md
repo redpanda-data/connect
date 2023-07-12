@@ -27,7 +27,7 @@ input:
   label: ""
   gcp_bigquery_select:
     project: "" # No default (required)
-    credentials_json: "" # No default (required)
+    credentials_json: ""
     table: bigquery-public-data.samples.shakespeare # No default (required)
     columns: [] # No default (required)
     where: type = ? and created_at > ? # No default (optional)
@@ -82,7 +82,7 @@ Type: `string`
 
 ### `credentials_json`
 
-An optional field to set Google Service Account Credentials json as base64 encoded string.
+An optional field to set Google Service Account Credentials json.
 :::warning Secret
 This field contains sensitive information that usually shouldn't be added to a config directly, read our [secrets page for more info](/docs/configuration/secrets).
 :::

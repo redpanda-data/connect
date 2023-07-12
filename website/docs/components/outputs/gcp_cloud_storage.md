@@ -39,8 +39,8 @@ output:
     content_type: application/octet-stream
     collision_mode: overwrite
     timeout: 3s
-    max_in_flight: 64
     credentials_json: ""
+    max_in_flight: 64
     batching:
       count: 0
       byte_size: 0
@@ -63,8 +63,8 @@ output:
     collision_mode: overwrite
     chunk_size: 16777216
     timeout: 3s
-    max_in_flight: 64
     credentials_json: ""
+    max_in_flight: 64
     batching:
       count: 0
       byte_size: 0
@@ -218,6 +218,18 @@ timeout: 1s
 timeout: 500ms
 ```
 
+### `credentials_json`
+
+An optional field to set Google Service Account Credentials json.
+:::warning Secret
+This field contains sensitive information that usually shouldn't be added to a config directly, read our [secrets page for more info](/docs/configuration/secrets).
+:::
+This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
+
+
+Type: `string`  
+Default: `""`  
+
 ### `max_in_flight`
 
 The maximum number of message batches to have in flight at a given time. Increase this to improve throughput.
@@ -225,17 +237,6 @@ The maximum number of message batches to have in flight at a given time. Increas
 
 Type: `int`  
 Default: `64`  
-
-### `credentials_json`
-
-An optional field to set Google Service Account Credentials json as base64 encoded string.
-:::warning Secret
-This field contains sensitive information that usually shouldn't be added to a config directly, read our [secrets page for more info](/docs/configuration/secrets).
-:::
-
-
-Type: `string`  
-Default: `""`  
 
 ### `batching`
 
