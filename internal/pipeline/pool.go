@@ -149,6 +149,7 @@ func (p *Pool) TriggerCloseNow() {
 	for _, w := range p.workers {
 		w.TriggerCloseNow()
 	}
+	p.shutSig.CloseNow()
 }
 
 // WaitForClose blocks until the component has closed down or the context is

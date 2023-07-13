@@ -7,6 +7,7 @@ import (
 
 	"github.com/benthosdev/benthos/v4/internal/component/input"
 	"github.com/benthosdev/benthos/v4/internal/message"
+	"github.com/benthosdev/benthos/v4/internal/shutdown"
 )
 
 type fanInInputBroker struct {
@@ -17,7 +18,7 @@ type fanInInputBroker struct {
 	remainingMap    map[int]struct{}
 	remainingMapMut sync.Mutex
 
-	closedChan chan struct{}
+	shutSig *shutdown.Signaller
 }
 
 func newFanInInputBroker(inputs []input.Streamed) (*fanInInputBroker, error) {
@@ -31,8 +32,8 @@ func newFanInInputBroker(inputs []input.Streamed) (*fanInInputBroker, error) {
 		inputClosedChan: make(chan int),
 		remainingMap:    make(map[int]struct{}),
 
-		closables:  []input.Streamed{},
-		closedChan: make(chan struct{}),
+		closables: []input.Streamed{},
+		shutSig:   shutdown.NewSignaller(),
 	}
 
 	for n, input := range inputs {
@@ -48,11 +49,21 @@ func newFanInInputBroker(inputs []input.Streamed) (*fanInInputBroker, error) {
 				i.inputClosedChan <- index
 			}()
 			for {
-				in, open := <-inputs[index].TransactionChan()
-				if !open {
+				var in message.Transaction
+				var open bool
+				select {
+				case in, open = <-inputs[index].TransactionChan():
+					if !open {
+						return
+					}
+				case <-i.shutSig.CloseNowChan():
 					return
 				}
-				i.transactions <- in
+				select {
+				case i.transactions <- in:
+				case <-i.shutSig.CloseNowChan():
+					return
+				}
 			}
 		}(n)
 	}
@@ -85,7 +96,7 @@ func (i *fanInInputBroker) loop() {
 	defer func() {
 		close(i.inputClosedChan)
 		close(i.transactions)
-		close(i.closedChan)
+		i.shutSig.ShutdownComplete()
 	}()
 
 	for {
@@ -112,11 +123,12 @@ func (i *fanInInputBroker) TriggerCloseNow() {
 	for _, closable := range i.closables {
 		closable.TriggerCloseNow()
 	}
+	i.shutSig.CloseNow()
 }
 
 func (i *fanInInputBroker) WaitForClose(ctx context.Context) error {
 	select {
-	case <-i.closedChan:
+	case <-i.shutSig.HasClosedChan():
 	case <-ctx.Done():
 		return ctx.Err()
 	}

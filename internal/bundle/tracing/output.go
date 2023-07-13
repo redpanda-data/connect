@@ -72,6 +72,7 @@ func (t *tracedOutput) Connected() bool {
 
 func (t *tracedOutput) TriggerCloseNow() {
 	t.wrapped.TriggerCloseNow()
+	t.shutSig.CloseNow()
 }
 
 func (t *tracedOutput) WaitForClose(ctx context.Context) error {
