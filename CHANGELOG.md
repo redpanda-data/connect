@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Changed
+
+- The `snowflake_put` output is now beta.
+
 ### Fixed
 
 - Errors encountered by the `gcp_pubsub` output should now present more specific logs.
