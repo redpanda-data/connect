@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Fixed
+
+- Errors encountered by the `gcp_pubsub` output should now present more specific logs.
+
 ## 4.18.0 - 2023-07-02
 
 ### Added
