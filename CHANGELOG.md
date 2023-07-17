@@ -9,6 +9,7 @@ All notable changes to this project will be documented in this file.
 
 - Errors encountered by the `gcp_pubsub` output should now present more specific logs.
 - The CUE schema for `switch` processor now correctly reflects that it takes a list of clauses.
+- Fixed the CUE schema for fields that take a 2d-array such as `workflow.order`.
 
 ## 4.18.0 - 2023-07-02
 

@@ -84,7 +84,7 @@ func doFieldSpec(spec docs.FieldSpec) (*ast.Field, error) {
 		if err != nil {
 			return nil, err
 		}
-		f.Value = ast.NewList(ast.NewList(&ast.Ellipsis{Type: f.Value}))
+		f.Value = ast.NewList(&ast.Ellipsis{Type: ast.NewList(&ast.Ellipsis{Type: f.Value})})
 		return f, nil
 	case docs.KindMap:
 		f, err := doScalarField(spec)
