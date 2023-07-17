@@ -8,6 +8,7 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 
 - Errors encountered by the `gcp_pubsub` output should now present more specific logs.
+- Upgraded `kafka` input and output underlying sarama client library to v1.40.0 at new module path github.com/IBM/sarama
 
 ## 4.18.0 - 2023-07-02
 
