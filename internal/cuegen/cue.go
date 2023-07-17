@@ -11,30 +11,14 @@ import (
 )
 
 func doComponentSpec(cs docs.ComponentSpec) (*ast.Field, error) {
-	cfg := cs.Config
-	if len(cfg.Children) == 0 {
-		simple, err := doFieldSpec(cfg)
-		if err != nil {
-			return nil, err
-		}
-		field := &ast.Field{
-			Label: ast.NewIdent(cs.Name),
-			Value: simple.Value,
-		}
-		if cs.Summary != "" {
-			ast.AddComment(field, doComment(cs.Summary))
-		}
-		return field, nil
-	}
-
-	fields, err := doFieldSpecs(cfg.Children)
+	f, err := doFieldSpec(cs.Config)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("%s: failed to generate CUE: %w", cs.Name, err)
 	}
 
 	field := &ast.Field{
 		Label: ast.NewIdent(cs.Name),
-		Value: ast.NewStruct(fields...),
+		Value: f.Value,
 	}
 
 	if cs.Summary != "" {
