@@ -75,8 +75,8 @@ func bigQuerySelectInputConfigFromParsed(inConf *service.ParsedConfig) (conf big
 		return
 	}
 
-	if inConf.Contains("credentials_json") {
-		conf.credentialsJSON, err = inConf.FieldString("credentials_json")
+	if inConf.Contains("credentials_json_encoded") {
+		conf.credentialsJSON, err = inConf.FieldString("credentials_json_encoded")
 		if err != nil {
 			return
 		}
@@ -93,8 +93,8 @@ func newBigQuerySelectInputConfig() *service.ConfigSpec {
 		Summary("Executes a `SELECT` query against BigQuery and creates a message for each row received.").
 		Description(`Once the rows from the query are exhausted, this input shuts down, allowing the pipeline to gracefully terminate (or the next input in a [sequence](/docs/components/inputs/sequence) to execute).`).
 		Field(service.NewStringField("project").Description("GCP project where the query job will execute.")).
-		Field(service.NewStringField("credentials_json").
-			Description("An optional field to set Google Service Account Credentials json.").
+		Field(service.NewStringField("credentials_json_encoded").
+			Description("An optional field to set Google Service Account Credentials json as base64 encoded string.").
 			Optional().
 			Secret().
 			Default("")).
@@ -171,9 +171,10 @@ func (inp *bigQuerySelectInput) Connect(ctx context.Context) error {
 	jobctx, _ := inp.shutdownSig.CloseAtLeisureCtx(context.Background())
 
 	if inp.client == nil {
-		opt, err := getClientOptionsBQSelect(inp)
+		var opt []option.ClientOption
+		opt, err := getClientOptionWithCredential(inp.config.credentialsJSON, opt)
 		if err != nil {
-			return fmt.Errorf("failed to create bigquery client: %w", err)
+			return fmt.Errorf("failed to get Credentials for bigquery client: %w", err)
 		}
 
 		client, err := bigquery.NewClient(jobctx, inp.config.project, opt...)
@@ -213,15 +214,6 @@ func (inp *bigQuerySelectInput) Connect(ctx context.Context) error {
 	inp.iterator = iter
 
 	return nil
-}
-
-func getClientOptionsBQSelect(inp *bigQuerySelectInput) ([]option.ClientOption, error) {
-	var opt []option.ClientOption
-	cred := cleanCredsJSON(inp.config.credentialsJSON)
-	if len(cred) > 0 {
-		opt = []option.ClientOption{option.WithCredentialsJSON([]byte(cred))}
-	}
-	return opt, nil
 }
 
 func (inp *bigQuerySelectInput) Read(ctx context.Context) (*service.Message, service.AckFunc, error) {

@@ -30,8 +30,8 @@ func bigQuerySelectProcessorConfigFromParsed(inConf *service.ParsedConfig) (conf
 	if conf.project, err = inConf.FieldString("project"); err != nil {
 		return
 	}
-	if inConf.Contains("credentials_json") {
-		conf.credentialsJSON, err = inConf.FieldString("credentials_json")
+	if inConf.Contains("credentials_json_encoded") {
+		conf.credentialsJSON, err = inConf.FieldString("credentials_json_encoded")
 		if err != nil {
 			return
 		}
@@ -84,7 +84,7 @@ func newBigQuerySelectProcessorConfig() *service.ConfigSpec {
 		Categories("Integration").
 		Summary("Executes a `SELECT` query against BigQuery and replaces messages with the rows returned.").
 		Field(service.NewStringField("project").Description("GCP project where the query job will execute.")).
-		Field(service.NewStringField("credentials_json").Description("An optional field to set Google Service Account Credentials json.").Optional().Secret().Default("")).
+		Field(service.NewStringField("credentials_json_encoded").Description("An optional field to set Google Service Account Credentials json as base64 encoded string.").Optional().Secret().Default("")).
 		Field(service.NewStringField("table").Description("Fully-qualified BigQuery table name to query.").Example("bigquery-public-data.samples.shakespeare")).
 		Field(service.NewStringListField("columns").Description("A list of columns to query.")).
 		Field(service.NewStringField("where").
@@ -154,7 +154,8 @@ func newBigQuerySelectProcessor(inConf *service.ParsedConfig, options *bigQueryP
 
 	closeCtx, closeF := context.WithCancel(context.Background())
 
-	err = getClientOptionsProcessorBQSelect(conf, options)
+	var opt []option.ClientOption
+	opt, err = getClientOptionWithCredential(conf.credentialsJSON, opt)
 	if err != nil {
 		closeF()
 		return nil, fmt.Errorf("failed to create bigquery client: %w", err)
@@ -175,14 +176,6 @@ func newBigQuerySelectProcessor(inConf *service.ParsedConfig, options *bigQueryP
 		closeCtx: closeCtx,
 		closeF:   closeF,
 	}, nil
-}
-
-func getClientOptionsProcessorBQSelect(conf bigQuerySelectProcessorConfig, options *bigQueryProcessorOptions) error {
-	cred := cleanCredsJSON(conf.credentialsJSON)
-	if len(cred) > 0 {
-		options.clientOptions = append(options.clientOptions, option.WithCredentialsJSON([]byte(cred)))
-	}
-	return nil
 }
 
 func (proc *bigQuerySelectProcessor) ProcessBatch(ctx context.Context, batch service.MessageBatch) ([]service.MessageBatch, error) {

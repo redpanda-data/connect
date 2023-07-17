@@ -99,7 +99,7 @@ func gcpBigQueryOutputConfigFromParsed(conf *service.ParsedConfig) (gconf gcpBig
 	if gconf.JobLabels, err = conf.FieldStringMap("job_labels"); err != nil {
 		return
 	}
-	if gconf.CredentialsJSON, err = conf.FieldString("credentials_json"); err != nil {
+	if gconf.CredentialsJSON, err = conf.FieldString("credentials_json_encoded"); err != nil {
 		return
 	}
 	if gconf.CSVOptions, err = gcpBigQueryCSVConfigFromParsed(conf.Namespace("csv")); err != nil {
@@ -112,25 +112,27 @@ type gcpBQClientURL string
 
 func (g gcpBQClientURL) NewClient(ctx context.Context, projectID string, credentialsJSON string) (*bigquery.Client, error) {
 
-	opt, err := g.getClientOptionsForOutputBQ(credentialsJSON)
+	var opt []option.ClientOption
+	opt, err := getClientOptionWithCredential(credentialsJSON, opt)
 	if err != nil {
-		return nil, fmt.Errorf("error decoding GCP Credentials JSON: %w", err)
+		return nil, fmt.Errorf("error with GCP Credentials JSON: %w", err)
 	}
+
 	return bigquery.NewClient(ctx, projectID, opt...)
 }
 
-func (g gcpBQClientURL) getClientOptionsForOutputBQ(credentialsJSON string) ([]option.ClientOption, error) {
+/*func (g gcpBQClientURL) getClientOptionsForOutputBQ(credentialsJSON string) ([]option.ClientOption, error) {
 	var opt []option.ClientOption
 	if g != "" {
 		opt = []option.ClientOption{option.WithoutAuthentication(), option.WithEndpoint(string(g))}
 	}
 
-	cred := cleanCredsJSON(credentialsJSON)
-	if len(cred) > 0 {
-		opt = append(opt, option.WithCredentialsJSON([]byte(cred)))
+	opt, err := getClientOptionWithCredential(credentialsJSON, opt)
+	if err != nil {
+		return nil, err
 	}
 	return opt, nil
-}
+}*/
 
 func gcpBigQueryConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
@@ -204,7 +206,7 @@ For the CSV format when the field `+"`csv.header`"+` is specified a header row w
 			Advanced().
 			Default(false)).
 		Field(service.NewStringMapField("job_labels").Description("A list of labels to add to the load job.").Default(map[string]string{})).
-		Field(service.NewStringField("credentials_json").Description("An optional field to set Google Service Account Credentials json.").Optional().Secret().Default("")).
+		Field(service.NewStringField("credentials_json_encoded").Description("An optional field to set Google Service Account Credentials json as base64 encoded string.").Optional().Secret().Default("")).
 		Field(service.NewObjectField("csv",
 			service.NewStringListField("header").
 				Description("A list of values to use as header for each batch of messages. If not specified the first line of each message will be used as header.").

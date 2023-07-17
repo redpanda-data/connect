@@ -24,7 +24,7 @@ label: ""
 gcp_cloud_storage:
   bucket: "" # No default (required)
   content_type: "" # No default (optional)
-  credentials_json: ""
+  credentials_json_encoded: ""
 ```
 
 It is not possible to atomically upload cloud storage objects exclusively when the target does not already exist, therefore this cache is not suitable for deduplication.
@@ -45,7 +45,7 @@ Optional field to explicitly set the Content-Type.
 
 Type: `string`  
 
-### `credentials_json`
+### `credentials_json_encoded`
 
 An optional field to set Google Service Account Credentials json.
 :::warning Secret

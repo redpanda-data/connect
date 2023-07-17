@@ -16,7 +16,7 @@ import (
 const (
 	// Pubsub Input Fields
 	pbiFieldProjectID              = "project"
-	pbiFieldCredentialsJSON        = "credentials_json"
+	pbiFieldCredentialsJSON        = "credentials_json_encoded"
 	pbiFieldSubscriptionID         = "subscription"
 	pbiFieldEndpoint               = "endpoint"
 	pbiFieldMaxOutstandingMessages = "max_outstanding_messages"
@@ -94,7 +94,7 @@ You can access these metadata fields using [function interpolation](/docs/config
 			service.NewStringField(pbiFieldProjectID).
 				Description("The project ID of the target subscription."),
 			service.NewStringField(pbiFieldCredentialsJSON).
-				Description("An optional field to set Google Service Account Credentials json.").
+				Description("An optional field to set Google Service Account Credentials json as base64 encoded string.").
 				Optional().
 				Secret(),
 			service.NewStringField(pbiFieldSubscriptionID).
@@ -208,11 +208,7 @@ func getClientOptionsForPubsubClient(conf pbiConfig) ([]option.ClientOption, err
 		opt = []option.ClientOption{option.WithEndpoint(conf.Endpoint)}
 	}
 
-	cred := cleanCredsJSON(conf.CredentialsJSON)
-	if len(cred) > 0 {
-		opt = append(opt, option.WithCredentialsJSON([]byte(cred)))
-	}
-	return opt, nil
+	return getClientOptionWithCredential(conf.CredentialsJSON, opt)
 }
 
 func (c *gcpPubSubReader) Connect(ignored context.Context) error {

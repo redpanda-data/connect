@@ -2,6 +2,7 @@ package gcp
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 	"strings"
 	"sync"
@@ -45,10 +46,9 @@ pipeline:
 `+"```"+``).
 		Fields(
 			service.NewStringField("project").Description("The project ID of the topic to publish to."),
-			service.NewStringField("credentials_json").
-				Description("An optional field to set Google Service Account Credentials json.").
-				Optional().
-				Secret(),
+			service.NewStringField("credentials_json_encoded").
+				Description("An optional field to set Google Service Account Credentials json as base64 encoded string.").
+				Optional(),
 			service.NewInterpolatedStringField("topic").Description("The topic to publish to."),
 			service.NewStringField("endpoint").
 				Default("").
@@ -187,12 +187,13 @@ func newPubSubOutput(conf *service.ParsedConfig) (*pubsubOutput, error) {
 		opt = []option.ClientOption{option.WithEndpoint(endpoint)}
 	}
 
-	credJSON, _ := conf.FieldString("credentials_json")
-	cred := cleanCredsJSON(credJSON)
+	encodeCredJson, _ := conf.FieldString("credentials_json_encoded")
+	/*cred := getClientOptionWithCredential(credJSON)
 	if len(cred) > 0 {
 		opt = append(opt, option.WithCredentialsJSON([]byte(cred)))
-	}
+	}*/
 
+	opt, err = getClientOptionWithCredential(encodeCredJson, opt)
 	if err != nil {
 		return nil, err
 	}
@@ -384,8 +385,14 @@ func init() {
 	}
 }
 
-func cleanCredsJSON(inp string) (out string) {
-	//removing the \n char since setting the value from env variable is adding \n char to multi-line values.
-	//This was causing invalid character '\\' error during app startup
-	return strings.ReplaceAll(strings.TrimSpace(inp), "\\n", "")
+func getClientOptionWithCredential(encodedCred string, opt []option.ClientOption) ([]option.ClientOption, error) {
+	cred := strings.TrimSpace(encodedCred)
+	if len(cred) > 0 {
+		decodedCred, err := base64.StdEncoding.DecodeString(cred)
+		if err != nil {
+			return nil, err
+		}
+		opt = append(opt, option.WithCredentialsJSON(decodedCred))
+	}
+	return opt, nil
 }

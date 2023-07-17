@@ -21,7 +21,7 @@ func gcpCloudStorageCacheConfig() *service.ConfigSpec {
 			Description("The Google Cloud Storage bucket to store items in.")).
 		Field(service.NewStringField("content_type").
 			Description("Optional field to explicitly set the Content-Type.").Optional()).
-		Field(service.NewStringField("credentials_json").
+		Field(service.NewStringField("credentials_json_encoded").
 			Description("An optional field to set Google Service Account Credentials json.").Optional().Secret().Default(""))
 
 	return spec
@@ -52,9 +52,16 @@ func newGcpCloudStorageCacheFromConfig(parsedConf *service.ParsedConfig) (*gcpCl
 		}
 	}
 
-	opt, err := getClientOptionsForCloudStorageCache(parsedConf)
-	if err != nil {
-		return nil, err
+	var opt []option.ClientOption
+	if parsedConf.Contains("credentials_json_encoded") {
+		credJSONEncoded, err := parsedConf.FieldString("credentials_json_encoded")
+		if err != nil {
+			return nil, err
+		}
+		opt, err = getClientOptionWithCredential(credJSONEncoded, opt)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	client, err := storage.NewClient(context.Background(), opt...)
@@ -66,21 +73,6 @@ func newGcpCloudStorageCacheFromConfig(parsedConf *service.ParsedConfig) (*gcpCl
 		bucketHandle: client.Bucket(bucket),
 		contentType:  contentType,
 	}, nil
-}
-
-func getClientOptionsForCloudStorageCache(parsedConf *service.ParsedConfig) ([]option.ClientOption, error) {
-	var opt []option.ClientOption
-	if parsedConf.Contains("credentials_json") {
-		credsJSON, err := parsedConf.FieldString("credentials_json")
-		if err != nil {
-			return nil, err
-		}
-		cred := cleanCredsJSON(credsJSON)
-		if len(cred) > 0 {
-			opt = []option.ClientOption{option.WithCredentialsJSON([]byte(cred))}
-		}
-	}
-	return opt, nil
 }
 
 //------------------------------------------------------------------------------

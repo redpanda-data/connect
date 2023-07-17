@@ -15,7 +15,7 @@ to manually create one. Once you have a service account set up which has the req
 [create](https://console.cloud.google.com/apis/credentials/serviceaccountkey) a new Service Account Key and download it
 as a JSON file. Then you have 2 options to set this json 
 - either, Set the path to this JSON file in the `GOOGLE_APPLICATION_CREDENTIALS` environment variable.
-- or, set the base64 encoded json in the individual GCP component's config (`credentials_json`). Please remember that this field contains sensitive information that usually shouldn't be added to a config directly, read our [secrets page for more info](/docs/configuration/secrets). The corresponding documentation for each component is 
+- or, set the base64 encoded json in the individual GCP component's config (`credentials_json_encoded`). Please remember that this field contains sensitive information that usually shouldn't be added to a config directly, read our [secrets page for more info](/docs/configuration/secrets). The corresponding documentation for each component is 
     - [input_bigquery_select](/docs/components/inputs/gcp_bigquery_select)
     - [output_bigquery](/docs/components/outputs/gcp_bigquery)
     - [processor_bigquery_select](/docs/components/processors/gcp_bigquery_select)
@@ -24,8 +24,8 @@ as a JSON file. Then you have 2 options to set this json
     - [cache_cloudstorage](/docs/components/caches/gcp_cloud_storage)
     - [input_pubsub](/docs/components/inputs/gcp_pubsub)
     - [output_pubsub](/docs/components/outputs/gcp_pubsub)
-- the value of component's `credentials_json` takes precendence, if set, over `GOOGLE_APPLICATION_CREDENTIALS`. 
-  - if `credentials_json` is set but is invalid value, returns error.
-  - if `credentials_json` is set but is empty value, `GOOGLE_APPLICATION_CREDENTIALS` will be considered if set.
+- the value of component's `credentials_json_encoded` takes precendence, if set, over `GOOGLE_APPLICATION_CREDENTIALS`. 
+  - if `credentials_json_encoded` is set but is invalid value, returns error.
+  - if `credentials_json_encoded` is set but is empty value, `GOOGLE_APPLICATION_CREDENTIALS` will be considered if set.
 
 Please refer to [this document](https://cloud.google.com/docs/authentication/production) for details.

@@ -36,7 +36,7 @@ input:
   gcp_cloud_storage:
     bucket: "" # No default (required)
     prefix: ""
-    credentials_json: ""
+    credentials_json_encoded: ""
     codec: all-bytes
 ```
 
@@ -50,7 +50,7 @@ input:
   gcp_cloud_storage:
     bucket: "" # No default (required)
     prefix: ""
-    credentials_json: ""
+    credentials_json_encoded: ""
     codec: all-bytes
     delete_objects: false
 ```
@@ -99,9 +99,9 @@ An optional path prefix, if set only objects with the prefix are consumed.
 Type: `string`  
 Default: `""`  
 
-### `credentials_json`
+### `credentials_json_encoded`
 
-An optional field to set Google Service Account Credentials json.
+An optional field to set Google Service Account Credentials json as base64 encoded string.
 :::warning Secret
 This field contains sensitive information that usually shouldn't be added to a config directly, read our [secrets page for more info](/docs/configuration/secrets).
 :::

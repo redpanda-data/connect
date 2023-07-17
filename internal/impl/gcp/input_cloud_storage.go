@@ -26,7 +26,7 @@ const (
 	// Cloud Storage Input Fields
 	csiFieldBucket          = "bucket"
 	csiFieldPrefix          = "prefix"
-	csiFieldCredentialsJSON = "credentials_json"
+	csiFieldCredentialsJSON = "credentials_json_encoded"
 	csiFieldCodec           = "codec"
 	csiFieldDeleteObjects   = "delete_objects"
 )
@@ -92,7 +92,7 @@ By default Benthos will use a shared credentials file when connecting to GCP ser
 				Description("An optional path prefix, if set only objects with the prefix are consumed.").
 				Default(""),
 			service.NewStringField(csiFieldCredentialsJSON).
-				Description("An optional field to set Google Service Account Credentials json.").
+				Description("An optional field to set Google Service Account Credentials json as base64 encoded string.").
 				Default("").
 				Optional().
 				Secret(),
@@ -315,9 +315,9 @@ func (g *gcpCloudStorageInput) Connect(ctx context.Context) error {
 
 func getClientOptionsForInputCloudStorage(g *gcpCloudStorageInput) ([]option.ClientOption, error) {
 	var opt []option.ClientOption
-	cred := cleanCredsJSON(g.conf.CredentialsJSON)
-	if len(cred) > 0 {
-		opt = []option.ClientOption{option.WithCredentialsJSON([]byte(cred))}
+	opt, err := getClientOptionWithCredential(g.conf.CredentialsJSON, opt)
+	if err != nil {
+		return nil, err
 	}
 	return opt, nil
 }
