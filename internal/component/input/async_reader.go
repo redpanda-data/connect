@@ -124,7 +124,7 @@ func (r *AsyncReader) loop() {
 
 				var e component.ErrBackOff
 				if errors.As(err, &e) {
-					time.Sleep(e.Wait)
+					r.sleepWithCancellation(closeAtLeisureCtx, e.Wait)
 				}
 
 				nextBoff := r.connBackoff.NextBackOff()
@@ -264,4 +264,16 @@ func (r *AsyncReader) WaitForClose(ctx context.Context) error {
 		return ctx.Err()
 	}
 	return nil
+}
+
+func (r *AsyncReader) sleepWithCancellation(ctx context.Context, d time.Duration) error {
+	t := time.NewTimer(d)
+	defer t.Stop()
+
+	select {
+	case <-t.C:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
