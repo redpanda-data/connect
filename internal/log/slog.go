@@ -3,7 +3,7 @@ package log
 import (
 	"os"
 
-	"golang.org/x/exp/slog"
+	"log/slog"
 )
 
 type logHandler struct {

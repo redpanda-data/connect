@@ -2,11 +2,11 @@ package log
 
 import (
 	"bytes"
+	"log/slog"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"golang.org/x/exp/slog"
 )
 
 // Clear slog's time attribute for easier testing
