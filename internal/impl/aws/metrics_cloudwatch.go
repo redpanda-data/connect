@@ -119,6 +119,18 @@ type cloudWatchStat struct {
 	dimensions []*cloudwatch.Dimension
 }
 
+func (c *cloudWatchStat) SetFloat64(value float64) {
+	c.Set(int64(value))
+}
+
+func (c *cloudWatchStat) IncrFloat64(count float64) {
+	c.Incr(int64(count))
+}
+
+func (c *cloudWatchStat) DecrFloat64(count float64) {
+	c.Decr(int64(count))
+}
+
 // Trims a map of datum values to a ceiling. The primary goal here is to be fast
 // and efficient rather than accurately preserving the most common values.
 func trimValuesMap(m map[int64]int64) {

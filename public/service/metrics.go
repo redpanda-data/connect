@@ -169,9 +169,21 @@ func (a *airGapGauge) Incr(by int64) {
 	a.airGapped.Set(value)
 }
 
+func (a *airGapGauge) IncrFloat64(count float64) {
+	a.Incr(int64(count))
+}
+
+func (a *airGapGauge) SetFloat64(value float64) {
+	a.Set(int64(value))
+}
+
 func (a *airGapGauge) Decr(by int64) {
 	value := atomic.AddInt64(&a.v, -by)
 	a.airGapped.Set(value)
+}
+
+func (a *airGapGauge) DecrFloat64(count float64) {
+	a.Decr(int64(count))
 }
 
 func (a *airGapGauge) Set(value int64) {

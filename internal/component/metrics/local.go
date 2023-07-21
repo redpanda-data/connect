@@ -36,6 +36,18 @@ func (l *LocalStat) Set(value int64) {
 	atomic.StoreInt64(l.Value, value)
 }
 
+func (l *LocalStat) IncrFloat64(count float64) {
+	l.Set(int64(count))
+}
+
+func (l *LocalStat) DecrFloat64(count float64) {
+	l.Decr(int64(count))
+}
+
+func (l *LocalStat) SetFloat64(value float64) {
+	l.Set(int64(value))
+}
+
 // LocalTiming is a representation of a single metric timing.
 type LocalTiming struct {
 	t    metrics.Timer
