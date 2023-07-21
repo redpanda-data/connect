@@ -39,6 +39,19 @@ type StatGaugeInter interface {
 	Decr(count int64)
 }
 
+// StatGaugeFloater is a representation of a single gauge metric stat. Interactions
+// with this stat are thread safe.
+type StatGaugeFloater interface {
+	// SetFloat64 sets the value of a gauge metric.
+	SetFloat64(value float64)
+
+	// IncrFloat64 increments a gauge by an amount.
+	IncrFloat64(count float64)
+
+	// DecrFloat64 decrements a gauge by an amount.
+	DecrFloat64(count float64)
+}
+
 //------------------------------------------------------------------------------
 
 // StatCounterVec creates StatCounters with dynamic labels.
