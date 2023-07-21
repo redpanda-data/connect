@@ -22,6 +22,13 @@ type StatTimer interface {
 // StatGauge is a representation of a single gauge metric stat. Interactions
 // with this stat are thread safe.
 type StatGauge interface {
+	StatGaugeInter
+	StatGaugeFloater
+}
+
+// StatGaugeInter is a representation of a single gauge metric stat. Interactions
+// with this stat are thread safe.
+type StatGaugeInter interface {
 	// Set sets the value of a gauge metric.
 	Set(value int64)
 
