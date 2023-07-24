@@ -303,7 +303,7 @@ func (m *metricProcessor) handleGauge(val string, index int, msg message.Batch) 
 	i, err := strconv.ParseInt(val, 10, 64)
 	if err == nil {
 		if i < 0 {
-			return errors.New("value is negative")
+			return fmt.Errorf("value %d is negative", i)
 		}
 		parsedVal = i
 	} else {
@@ -312,7 +312,7 @@ func (m *metricProcessor) handleGauge(val string, index int, msg message.Batch) 
 			return err
 		}
 		if f < 0 {
-			return errors.New("value is negative")
+			return fmt.Errorf("value %f is negative", f)
 		}
 		parsedVal = f
 	}
