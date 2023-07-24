@@ -15,7 +15,7 @@ func (d DudStat) Decr(count int64) {}
 func (d DudStat) Timing(delta int64) {}
 
 // Set does nothing.
-func (d DudStat) Set(value int64) {}
+func (d DudStat) SetInt64(value int64) {}
 
 // SetFloat64 does nothing
 func (d DudStat) SetFloat64(value float64) {}

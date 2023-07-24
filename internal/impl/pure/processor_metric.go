@@ -324,14 +324,14 @@ func (m *metricProcessor) handleGauge(val string, index int, msg message.Batch) 
 		}
 		switch conv := parsedVal.(type) {
 		case int64:
-			m.mGaugeVec.With(labelValues...).Set(conv)
+			m.mGaugeVec.With(labelValues...).SetInt64(conv)
 		case float64:
 			m.mGaugeVec.With(labelValues...).SetFloat64(conv)
 		}
 	} else {
 		switch conv := parsedVal.(type) {
 		case int64:
-			m.mGauge.Set(conv)
+			m.mGauge.SetInt64(conv)
 		case float64:
 			m.mGauge.SetFloat64(conv)
 		}

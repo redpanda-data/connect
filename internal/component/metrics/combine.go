@@ -66,13 +66,13 @@ type combinedGauge struct {
 	c2 StatGauge
 }
 
-func (c *combinedGauge) Set(value int64) {
-	c.c1.Set(value)
-	c.c2.Set(value)
+func (c *combinedGauge) SetInt64(value int64) {
+	c.c1.SetInt64(value)
+	c.c2.SetInt64(value)
 }
 
 func (c *combinedGauge) SetFloat64(value float64) {
-	c.Set(int64(value))
+	c.SetInt64(int64(value))
 }
 
 func (c *combinedGauge) Incr(count int64) {

@@ -29,8 +29,8 @@ type StatGauge interface {
 // StatGaugeInter is a representation of a single integer gauge metric stat. Interactions
 // with this stat are thread safe.
 type StatGaugeInter interface {
-	// Set sets the value of a gauge metric.
-	Set(value int64)
+	// SetInt64 sets the integer value of a gauge metric.
+	SetInt64(value int64)
 
 	// Incr increments a gauge by an amount.
 	Incr(count int64)

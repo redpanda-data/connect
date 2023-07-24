@@ -94,7 +94,7 @@ func (g *MetricGauge) Set(value int64, labelValues ...string) {
 	if g == nil {
 		return
 	}
-	g.gv.With(labelValues...).Set(value)
+	g.gv.With(labelValues...).SetInt64(value)
 }
 
 //------------------------------------------------------------------------------
@@ -187,7 +187,7 @@ func (a *airGapGauge) IncrFloat64(count float64) {
 }
 
 func (a *airGapGauge) SetFloat64(value float64) {
-	a.Set(int64(value))
+	a.SetInt64(int64(value))
 }
 
 func (a *airGapGauge) Decr(by int64) {
@@ -199,7 +199,7 @@ func (a *airGapGauge) DecrFloat64(count float64) {
 	a.Decr(int64(count))
 }
 
-func (a *airGapGauge) Set(value int64) {
+func (a *airGapGauge) SetInt64(value int64) {
 	atomic.StoreInt64(&a.v, value)
 	a.airGapped.SetInt64(value)
 }

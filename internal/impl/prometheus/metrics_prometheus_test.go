@@ -119,7 +119,7 @@ func TestPrometheusMetrics(t *testing.T) {
 	ctr.Incr(11)
 
 	gge := nm.GetGauge("gaugeone")
-	gge.Set(12)
+	gge.SetInt64(12)
 
 	tmr := nm.GetTimer("timerone")
 	tmr.Timing(13)
@@ -129,7 +129,7 @@ func TestPrometheusMetrics(t *testing.T) {
 	ctrTwo.With("value2").Incr(11)
 
 	ggeTwo := nm.GetGaugeVec("gaugetwo", "label2")
-	ggeTwo.With("value3").Set(12)
+	ggeTwo.With("value3").SetInt64(12)
 
 	ggeThree := nm.GetGauge("gaugethree")
 	ggeThree.SetFloat64(10.452)
@@ -202,14 +202,14 @@ func applyTestMetrics(nm metrics.Type) {
 	ctr.Incr(11)
 
 	gge := nm.GetGauge("gaugeone")
-	gge.Set(12)
+	gge.SetInt64(12)
 
 	ctrTwo := nm.GetCounterVec("countertwo", "label1")
 	ctrTwo.With("value1").Incr(10)
 	ctrTwo.With("value2").Incr(11)
 
 	ggeTwo := nm.GetGaugeVec("gaugetwo", "label2")
-	ggeTwo.With("value3").Set(12)
+	ggeTwo.With("value3").SetInt64(12)
 }
 
 func assertContainsTestMetrics(t *testing.T, body string) {

@@ -32,12 +32,12 @@ func (l *LocalStat) Decr(count int64) {
 }
 
 // Set sets a gauge metric.
-func (l *LocalStat) Set(value int64) {
+func (l *LocalStat) SetInt64(value int64) {
 	atomic.StoreInt64(l.Value, value)
 }
 
 func (l *LocalStat) IncrFloat64(count float64) {
-	l.Set(int64(count))
+	l.SetInt64(int64(count))
 }
 
 func (l *LocalStat) DecrFloat64(count float64) {
@@ -45,7 +45,7 @@ func (l *LocalStat) DecrFloat64(count float64) {
 }
 
 func (l *LocalStat) SetFloat64(value float64) {
-	l.Set(int64(value))
+	l.SetInt64(int64(value))
 }
 
 // LocalTiming is a representation of a single metric timing.

@@ -66,7 +66,7 @@ func (s *statsdStat) Incr(count int64) {
 }
 
 func (s *statsdStat) IncrFloat64(count float64) {
-	s.Set(int64(count))
+	s.SetInt64(int64(count))
 }
 
 func (s *statsdStat) Decr(count int64) {
@@ -81,12 +81,12 @@ func (s *statsdStat) Timing(delta int64) {
 	s.s.Timing(s.path, delta, s.tags...)
 }
 
-func (s *statsdStat) Set(value int64) {
+func (s *statsdStat) SetInt64(value int64) {
 	s.s.Gauge(s.path, value, s.tags...)
 }
 
 func (s *statsdStat) SetFloat64(value float64) {
-	s.Set(int64(value))
+	s.SetInt64(int64(value))
 }
 
 //------------------------------------------------------------------------------

@@ -78,7 +78,7 @@ func (p *promGauge) DecrFloat64(count float64) {
 	p.ctr.Add(-count)
 }
 
-func (p *promGauge) Set(value int64) {
+func (p *promGauge) SetInt64(value int64) {
 	p.ctr.Set(float64(value))
 }
 

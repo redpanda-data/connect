@@ -75,7 +75,7 @@ func (c closureStat) Decr(v int64) {
 	c(v)
 }
 
-func (c closureStat) Set(v int64) {
+func (c closureStat) SetInt64(v int64) {
 	c(v)
 }
 

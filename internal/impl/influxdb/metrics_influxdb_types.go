@@ -17,12 +17,12 @@ type influxDBGauge struct {
 }
 
 // Set sets a gauge metric.
-func (g influxDBGauge) Set(value int64) {
+func (g influxDBGauge) SetInt64(value int64) {
 	g.Update(value)
 }
 
 func (g influxDBGauge) SetFloat64(value float64) {
-	g.Set(int64(value))
+	g.SetInt64(int64(value))
 }
 
 // Incr increments a metric by an amount.

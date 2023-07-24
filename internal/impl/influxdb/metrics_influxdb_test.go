@@ -101,12 +101,12 @@ func TestInfluxGauge(t *testing.T) {
 	i := influx.(*influxDBMetrics)
 
 	expectedMetrics := 3
-	i.GetGauge("ga uge").Set(10)
-	i.GetGauge("ga uge").Set(20)
-	i.GetGauge("ga uge").Set(30)
-	i.GetGaugeVec("gauge with labels", "label").With("value").Set(100)
-	i.GetGaugeVec("gauge with labels", "label").With("value").Set(200)
-	i.GetGaugeVec("gauge with labels", "label").With("value2").Set(100)
+	i.GetGauge("ga uge").SetInt64(10)
+	i.GetGauge("ga uge").SetInt64(20)
+	i.GetGauge("ga uge").SetInt64(30)
+	i.GetGaugeVec("gauge with labels", "label").With("value").SetInt64(100)
+	i.GetGaugeVec("gauge with labels", "label").With("value").SetInt64(200)
+	i.GetGaugeVec("gauge with labels", "label").With("value2").SetInt64(100)
 
 	m := i.getAllMetrics()
 	if len(m) != expectedMetrics {

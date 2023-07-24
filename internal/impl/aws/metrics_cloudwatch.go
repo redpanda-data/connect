@@ -120,7 +120,7 @@ type cloudWatchStat struct {
 }
 
 func (c *cloudWatchStat) SetFloat64(value float64) {
-	c.Set(int64(value))
+	c.SetInt64(int64(value))
 }
 
 func (c *cloudWatchStat) IncrFloat64(count float64) {
@@ -214,7 +214,7 @@ func (c *cloudWatchStat) Timing(delta int64) {
 }
 
 // Set sets a gauge metric.
-func (c *cloudWatchStat) Set(value int64) {
+func (c *cloudWatchStat) SetInt64(value int64) {
 	c.appendValue(value)
 }
 
