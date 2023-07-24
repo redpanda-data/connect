@@ -35,8 +35,8 @@ input:
   label: ""
   pulsar:
     url: pulsar://localhost:6650 # No default (required)
-    topics: []
-    topics_pattern: ""
+    topics: [] # No default (optional)
+    topics_pattern: "" # No default (optional)
     subscription_name: "" # No default (required)
     subscription_type: shared
     tls:
@@ -52,8 +52,8 @@ input:
   label: ""
   pulsar:
     url: pulsar://localhost:6650 # No default (required)
-    topics: []
-    topics_pattern: ""
+    topics: [] # No default (optional)
+    topics_pattern: "" # No default (optional)
     subscription_name: "" # No default (required)
     subscription_type: shared
     tls:
@@ -117,7 +117,6 @@ A list of topics to subscribe to. This or topics_pattern must be set.
 
 
 Type: `array`  
-Default: `[]`  
 
 ### `topics_pattern`
 
@@ -125,7 +124,6 @@ A regular expression matching the topics to subscribe to. This or topics must be
 
 
 Type: `string`  
-Default: `""`  
 
 ### `subscription_name`
 

@@ -62,10 +62,10 @@ You can access these metadata fields using
 			Example("pulsar+ssl://pulsar.us-west.example.com:6651")).
 		Field(service.NewStringListField("topics").
 			Description("A list of topics to subscribe to. This or topics_pattern must be set.").
-			Default([]string{})).
+			Optional()).
 		Field(service.NewStringField("topics_pattern").
 			Description("A regular expression matching the topics to subscribe to. This or topics must be set.").
-			Default("")).
+			Optional()).
 		Field(service.NewStringField("subscription_name").
 			Description("Specify the subscription name for this consumer.")).
 		Field(service.NewStringEnumField("subscription_type", "shared", "key_shared", "failover", "exclusive").
@@ -110,10 +110,10 @@ func newPulsarReaderFromParsed(conf *service.ParsedConfig, log *service.Logger) 
 	if p.url, err = conf.FieldString("url"); err != nil {
 		return
 	}
-	if p.topics, err = conf.FieldStringList("topics"); err != nil {
+	if p.topics, _ = conf.FieldStringList("topics"); err != nil {
 		return
 	}
-	if p.topicsPattern, err = conf.FieldString("topics_pattern"); err != nil {
+	if p.topicsPattern, _ = conf.FieldString("topics_pattern"); err != nil {
 		return
 	}
 	if p.subName, err = conf.FieldString("subscription_name"); err != nil {
