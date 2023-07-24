@@ -35,12 +35,12 @@ func (g influxDBGauge) IncrFloat64(count float64) {
 }
 
 // Decr decrements a metric by an amount.
-func (g influxDBGauge) Decr(count int64) {
+func (g influxDBGauge) DecrInt64(count int64) {
 	g.Update(g.Value() - count)
 }
 
 func (g influxDBGauge) DecrFloat64(count float64) {
-	g.Decr(int64(count))
+	g.DecrInt64(int64(count))
 }
 
 type influxDBCounter struct {

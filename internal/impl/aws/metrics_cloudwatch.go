@@ -132,7 +132,7 @@ func (c *cloudWatchStat) IncrFloat64(count float64) {
 }
 
 func (c *cloudWatchStat) DecrFloat64(count float64) {
-	c.Decr(int64(count))
+	c.DecrInt64(int64(count))
 }
 
 // Trims a map of datum values to a ceiling. The primary goal here is to be fast
@@ -206,7 +206,7 @@ func (c *cloudWatchStat) IncrInt64(count int64) {
 }
 
 // Decr decrements a metric by an amount.
-func (c *cloudWatchStat) Decr(count int64) {
+func (c *cloudWatchStat) DecrInt64(count int64) {
 	c.addValue(-count)
 }
 

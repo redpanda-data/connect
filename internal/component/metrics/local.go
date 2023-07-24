@@ -32,7 +32,7 @@ func (l *LocalStat) IncrInt64(count int64) {
 }
 
 // Decr decrements a metric by an amount.
-func (l *LocalStat) Decr(count int64) {
+func (l *LocalStat) DecrInt64(count int64) {
 	atomic.AddInt64(l.Value, -count)
 }
 
@@ -46,7 +46,7 @@ func (l *LocalStat) IncrFloat64(count float64) {
 }
 
 func (l *LocalStat) DecrFloat64(count float64) {
-	l.Decr(int64(count))
+	l.DecrInt64(int64(count))
 }
 
 func (l *LocalStat) SetFloat64(value float64) {

@@ -73,12 +73,12 @@ func (s *statsdStat) IncrFloat64(count float64) {
 	s.SetInt64(int64(count))
 }
 
-func (s *statsdStat) Decr(count int64) {
+func (s *statsdStat) DecrInt64(count int64) {
 	s.s.Decr(s.path, count, s.tags...)
 }
 
 func (s *statsdStat) DecrFloat64(count float64) {
-	s.Decr(int64(count))
+	s.DecrInt64(int64(count))
 }
 
 func (s *statsdStat) Timing(delta int64) {

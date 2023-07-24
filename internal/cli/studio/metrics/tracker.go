@@ -75,7 +75,7 @@ func (c closureStat) IncrInt64(v int64) {
 	c(v)
 }
 
-func (c closureStat) Decr(v int64) {
+func (c closureStat) DecrInt64(v int64) {
 	c(v)
 }
 

@@ -190,13 +190,13 @@ func (a *airGapGauge) SetFloat64(value float64) {
 	a.SetInt64(int64(value))
 }
 
-func (a *airGapGauge) Decr(by int64) {
+func (a *airGapGauge) DecrInt64(by int64) {
 	value := atomic.AddInt64(&a.v, -by)
 	a.airGapped.SetInt64(value)
 }
 
 func (a *airGapGauge) DecrFloat64(count float64) {
-	a.Decr(int64(count))
+	a.DecrInt64(int64(count))
 }
 
 func (a *airGapGauge) SetInt64(value int64) {

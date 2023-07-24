@@ -35,8 +35,8 @@ type StatGaugeInter interface {
 	// IncrInt64 increments with an integer value a gauge by an amount.
 	IncrInt64(count int64)
 
-	// Decr decrements a gauge by an amount.
-	Decr(count int64)
+	// DecrInt64 decrements a gauge by an integer amount.
+	DecrInt64(count int64)
 }
 
 // StatGaugeFloater is a representation of a single decimal gauge metric stat. Interactions
