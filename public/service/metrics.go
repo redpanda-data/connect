@@ -143,9 +143,22 @@ type MetricsExporterTimer interface {
 
 // MetricsExporterGauge represents a gauge metric of a given name and labels.
 type MetricsExporterGauge interface {
-	// Set a gauge metric, the number of label values must match the number and
+	MetricsInt64ExporterGauge
+	MetricsFloat64ExporterGauge
+}
+
+// MetricsInt64ExporterGauge represents a int64 gauge metric of a given name and labels.
+type MetricsInt64ExporterGauge interface {
+	// SetInt64 sets a gauge metric with an int64 value, the number of label values must match the number and
 	// order of labels specified when the gauge was created.
-	Set(value int64)
+	SetInt64(value int64)
+}
+
+// MetricsFloat64ExporterGauge represents a float64 gauge metric of a given name and labels.
+type MetricsFloat64ExporterGauge interface {
+	// SetFloat64 sets a gauge metric with a float64 value, the number of label values must match the number and
+	// order of labels specified when the gauge was created.
+	SetFloat64(value float64)
 }
 
 //------------------------------------------------------------------------------
@@ -166,7 +179,7 @@ type airGapGauge struct {
 
 func (a *airGapGauge) Incr(by int64) {
 	value := atomic.AddInt64(&a.v, by)
-	a.airGapped.Set(value)
+	a.airGapped.SetInt64(value)
 }
 
 func (a *airGapGauge) IncrFloat64(count float64) {
@@ -179,7 +192,7 @@ func (a *airGapGauge) SetFloat64(value float64) {
 
 func (a *airGapGauge) Decr(by int64) {
 	value := atomic.AddInt64(&a.v, -by)
-	a.airGapped.Set(value)
+	a.airGapped.SetInt64(value)
 }
 
 func (a *airGapGauge) DecrFloat64(count float64) {
@@ -188,7 +201,7 @@ func (a *airGapGauge) DecrFloat64(count float64) {
 
 func (a *airGapGauge) Set(value int64) {
 	atomic.StoreInt64(&a.v, value)
-	a.airGapped.Set(value)
+	a.airGapped.SetInt64(value)
 }
 
 type airGapCounter struct {
