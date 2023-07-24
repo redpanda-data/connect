@@ -8,6 +8,12 @@ testCases:
       processors:
         - label: sample_transform
           mapping: root = this.uppercase()
+        - switch:
+            - check: count("total") == 1
+              processors:
+                - mapping: meta first = true
+            - processors:
+                - mapping: meta first = false
     output:
       switch:
         cases:
