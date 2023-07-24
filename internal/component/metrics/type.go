@@ -26,7 +26,7 @@ type StatGauge interface {
 	StatGaugeFloater
 }
 
-// StatGaugeInter is a representation of a single gauge metric stat. Interactions
+// StatGaugeInter is a representation of a single integer gauge metric stat. Interactions
 // with this stat are thread safe.
 type StatGaugeInter interface {
 	// Set sets the value of a gauge metric.
@@ -39,7 +39,7 @@ type StatGaugeInter interface {
 	Decr(count int64)
 }
 
-// StatGaugeFloater is a representation of a single gauge metric stat. Interactions
+// StatGaugeFloater is a representation of a single decimal gauge metric stat. Interactions
 // with this stat are thread safe.
 type StatGaugeFloater interface {
 	// SetFloat64 sets the value of a gauge metric.
