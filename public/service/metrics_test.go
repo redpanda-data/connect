@@ -92,10 +92,14 @@ func (m *mockMetricsExporterType) Timing(delta int64) {
 	m.lock.Unlock()
 }
 
-func (m *mockMetricsExporterType) Set(value int64) {
+func (m *mockMetricsExporterType) SetInt64(value int64) {
 	m.lock.Lock()
 	m.values[m.name] = value
 	m.lock.Unlock()
+}
+
+func (m *mockMetricsExporterType) SetFloat64(value float64) {
+	m.SetInt64(int64(value))
 }
 
 func (m *mockMetricsExporter) NewCounterCtor(name string, labelKeys ...string) MetricsExporterCounterCtor {
