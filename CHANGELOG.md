@@ -11,7 +11,8 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
-- Errors encountered by the `gcp_pubsub` output should now present more specific logs.
+- Errors encountered by the `gcp_pubsub` output should now present more specific logs.=
+- Upgraded `kafka` input and output underlying sarama client library to v1.40.0 at new module path github.com/IBM/sarama
 - The CUE schema for `switch` processor now correctly reflects that it takes a list of clauses.
 - Fixed the CUE schema for fields that take a 2d-array such as `workflow.order`.
 
