@@ -1,7 +1,7 @@
 ---
 title: snowflake_put
 type: output
-status: experimental
+status: beta
 categories: ["Services"]
 ---
 
@@ -14,10 +14,12 @@ categories: ["Services"]
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-:::caution EXPERIMENTAL
-This component is experimental and therefore subject to change or removal outside of major version releases.
+:::caution BETA
+This component is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with the component is found.
 :::
 Sends messages to Snowflake stages and, optionally, calls Snowpipe to load this data into one or more tables.
+
+Introduced in version 4.0.0.
 
 
 <Tabs defaultValue="common" values={[
