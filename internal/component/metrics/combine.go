@@ -75,13 +75,13 @@ func (c *combinedGauge) SetFloat64(value float64) {
 	c.SetInt64(int64(value))
 }
 
-func (c *combinedGauge) Incr(count int64) {
-	c.c1.Incr(count)
-	c.c2.Incr(count)
+func (c *combinedGauge) IncrInt64(count int64) {
+	c.c1.IncrInt64(count)
+	c.c2.IncrInt64(count)
 }
 
 func (c *combinedGauge) IncrFloat64(count float64) {
-	c.Incr(int64(count))
+	c.IncrInt64(int64(count))
 }
 
 func (c *combinedGauge) Decr(count int64) {

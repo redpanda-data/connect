@@ -32,8 +32,8 @@ type StatGaugeInter interface {
 	// SetInt64 sets the integer value of a gauge metric.
 	SetInt64(value int64)
 
-	// Incr increments a gauge by an amount.
-	Incr(count int64)
+	// IncrInt64 increments with an integer value a gauge by an amount.
+	IncrInt64(count int64)
 
 	// Decr decrements a gauge by an amount.
 	Decr(count int64)

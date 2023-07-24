@@ -62,7 +62,7 @@ type promGauge struct {
 	ctr prometheus.Gauge
 }
 
-func (p *promGauge) Incr(count int64) {
+func (p *promGauge) IncrInt64(count int64) {
 	p.ctr.Add(float64(count))
 }
 

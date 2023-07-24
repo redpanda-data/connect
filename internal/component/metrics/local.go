@@ -23,6 +23,11 @@ type LocalStat struct {
 
 // Incr increments a metric by an amount.
 func (l *LocalStat) Incr(count int64) {
+	l.IncrInt64(count)
+}
+
+// IncrInt64 increments a metric by an int64 amount.
+func (l *LocalStat) IncrInt64(count int64) {
 	atomic.AddInt64(l.Value, count)
 }
 

@@ -119,12 +119,16 @@ type cloudWatchStat struct {
 	dimensions []*cloudwatch.Dimension
 }
 
+func (c *cloudWatchStat) Incr(count int64) {
+	c.IncrInt64(count)
+}
+
 func (c *cloudWatchStat) SetFloat64(value float64) {
 	c.SetInt64(int64(value))
 }
 
 func (c *cloudWatchStat) IncrFloat64(count float64) {
-	c.Incr(int64(count))
+	c.IncrInt64(int64(count))
 }
 
 func (c *cloudWatchStat) DecrFloat64(count float64) {
@@ -196,8 +200,8 @@ func (c *cloudWatchStat) addValue(v int64) {
 	c.root.datumLock.Unlock()
 }
 
-// Incr increments a metric by an amount.
-func (c *cloudWatchStat) Incr(count int64) {
+// IncrInt64 increments a metric by an int64 amount.
+func (c *cloudWatchStat) IncrInt64(count int64) {
 	c.addValue(count)
 }
 

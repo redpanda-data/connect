@@ -8,13 +8,16 @@ type DudStat struct{}
 // Incr does nothing.
 func (d DudStat) Incr(count int64) {}
 
+// IncrInt64 does nothing.
+func (d DudStat) IncrInt64(count int64) {}
+
 // Decr does nothing.
 func (d DudStat) Decr(count int64) {}
 
 // Timing does nothing.
 func (d DudStat) Timing(delta int64) {}
 
-// Set does nothing.
+// SetInt64 does nothing.
 func (d DudStat) SetInt64(value int64) {}
 
 // SetFloat64 does nothing

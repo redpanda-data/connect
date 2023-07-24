@@ -177,13 +177,13 @@ type airGapGauge struct {
 	airGapped MetricsExporterGauge
 }
 
-func (a *airGapGauge) Incr(by int64) {
+func (a *airGapGauge) IncrInt64(by int64) {
 	value := atomic.AddInt64(&a.v, by)
 	a.airGapped.SetInt64(value)
 }
 
 func (a *airGapGauge) IncrFloat64(count float64) {
-	a.Incr(int64(count))
+	a.IncrInt64(int64(count))
 }
 
 func (a *airGapGauge) SetFloat64(value float64) {

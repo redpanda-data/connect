@@ -26,12 +26,12 @@ func (g influxDBGauge) SetFloat64(value float64) {
 }
 
 // Incr increments a metric by an amount.
-func (g influxDBGauge) Incr(count int64) {
+func (g influxDBGauge) IncrInt64(count int64) {
 	g.Update(g.Value() + count)
 }
 
 func (g influxDBGauge) IncrFloat64(count float64) {
-	g.Incr(int64(count))
+	g.IncrInt64(int64(count))
 }
 
 // Decr decrements a metric by an amount.

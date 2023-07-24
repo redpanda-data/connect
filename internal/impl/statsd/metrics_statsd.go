@@ -62,6 +62,10 @@ type statsdStat struct {
 }
 
 func (s *statsdStat) Incr(count int64) {
+	s.IncrInt64(count)
+}
+
+func (s *statsdStat) IncrInt64(count int64) {
 	s.s.Incr(s.path, count, s.tags...)
 }
 
