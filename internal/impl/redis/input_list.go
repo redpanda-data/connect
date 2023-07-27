@@ -3,12 +3,20 @@ package redis
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/redis/go-redis/v9"
 
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/public/service"
+)
+
+type redisPopMethod string
+
+const (
+	blpop redisPopMethod = "blpop"
+	brpop redisPopMethod = "brpop"
 )
 
 func redisListInputConfig() *service.ConfigSpec {
@@ -25,6 +33,11 @@ func redisListInputConfig() *service.ConfigSpec {
 				Description("The length of time to poll for new messages before reattempting.").
 				Default("5s").
 				Advanced(),
+			service.NewStringEnumField("method", string(blpop), string(brpop)).
+				Description("Method from which to pop from the Redis list").
+				Default(string(blpop)).
+				Advanced().
+				Version("4.19.0"),
 		)
 }
 
@@ -67,6 +80,19 @@ func newRedisListInputFromConfig(conf *service.ParsedConfig, mgr *service.Resour
 	if r.timeout, err = conf.FieldDuration("timeout"); err != nil {
 		return nil, err
 	}
+
+	if popMethod, err := conf.FieldString("method"); err != nil {
+		switch redisPopMethod(popMethod) {
+		case blpop:
+			r.pop = client.BLPop
+
+		case brpop:
+			r.pop = client.BRPop
+
+		default:
+			return nil, fmt.Errorf("invalid redis method: %s", popMethod)
+		}
+	}
 	return r, nil
 }
 
@@ -74,6 +100,7 @@ type redisListReader struct {
 	client  redis.UniversalClient
 	timeout time.Duration
 	key     string
+	pop     func(ctx context.Context, timeout time.Duration, keys ...string) *redis.StringSliceCmd
 
 	log *service.Logger
 }
@@ -89,7 +116,7 @@ func (r *redisListReader) Connect(ctx context.Context) error {
 }
 
 func (r *redisListReader) Read(ctx context.Context) (*service.Message, service.AckFunc, error) {
-	res, err := r.client.BLPop(ctx, r.timeout, r.key).Result()
+	res, err := r.pop(ctx, r.timeout, r.key).Result()
 	if err != nil && !errors.Is(err, redis.Nil) {
 		return nil, nil, err
 	}

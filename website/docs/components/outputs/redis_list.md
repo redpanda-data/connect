@@ -65,6 +65,7 @@ output:
       period: ""
       check: ""
       processors: [] # No default (optional)
+    method: rpush
 ```
 
 </TabItem>
@@ -397,5 +398,15 @@ processors:
   - archive:
       format: json_array
 ```
+
+### `method`
+
+Method from which to push to the Redis list
+
+
+Type: `string`  
+Default: `"rpush"`  
+Requires version 4.19.0 or newer  
+Options: `rpush`, `lpush`.
 
 
