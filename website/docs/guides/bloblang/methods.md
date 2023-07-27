@@ -482,6 +482,60 @@ root.claims = this.signed.parse_jwt_hs512("dont-tell-anyone")
 # Out: {"claims":{"sub":"user123"}}
 ```
 
+### `parse_jwt_rs256`
+
+Parses a claims object from a JWT string encoded with RS256. This method does not validate JWT claims.
+
+#### Parameters
+
+**`public_key`** &lt;string&gt; The public key that corresponds to the private key used to sign the token.  
+
+#### Examples
+
+
+```coffee
+root.claims = this.signed.parse_jwt_rs256("dont-tell-anyone")
+
+# In:  {"signed":"eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyMTMzOCIsIm5hbWUiOiJOb3QgQmxvYmF0aGFuIn0.KWin9nTB8d4IZjcCbKQe4jJXc2LfsKKwbSCAMnHcAROpie62Gdjq2m48AEr4EY3iDIdcuqwZoaAwwza_MUvzVDNkjwpdc2ISqYLq9iBczhpG-X3I24Zv28OrCWtZruSM2rl6w7llMSVer35hPjNFPXE_qzIQ7H6O8m3_8tWE1wh2737WdwX0ExjMzYq-bhr5SwYGh905TP521It_YaC6OJ-ijaBR2SgmdriBn7Tov1Qn11iktvOUl-4uRj8Gy-w31O-fZDVklldymdf3uvBByuQkwzl4VkWhr5v2Wvjq49mY4Uj8H-u4NFzrwZtHik56n9YTll0K6k0z3ucUjHpDFA"}
+# Out: {"claims":{"sub":"user123"}}
+```
+
+### `parse_jwt_rs384`
+
+Parses a claims object from a JWT string encoded with RS384. This method does not validate JWT claims.
+
+#### Parameters
+
+**`public_key`** &lt;string&gt; The public key that corresponds to the private key used to sign the token.  
+
+#### Examples
+
+
+```coffee
+root.claims = this.signed.parse_jwt_rs384("dont-tell-anyone")
+
+# In:  {"signed":"eyJhbGciOiJSUzM4NCIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyMTMzOCIsIm5hbWUiOiJOb3QgQmxvYmF0aGFuIn0.detziSnNZJ0cX75pof0EASsajqCmes4otwSYAMjVdr31-gADaGdXTKrkpClUeFdH_488UaekpaeP1iRzML8-kp1yGa6ZCfOw1E_r3zT6hkdZwPDi5OKQy2V5JWlvGTzzwfSc9SgaRGyGg-FBo54CakQMwAA3Us_g82sy4bwO1ay2BriW5dX6tJnm2875DgBzOlHnAt97bH0odT7_LbJPkm9c_H7EdVUH810Qar_NVaPdVgwo5CMN4lCXxIjrFoxCJ3kEu8jf-9bZedK5UHsRlo7lYDxtxrmi9izMXvwCbEcn4Hgi6a_SjsOzsHYriRJN5NCQI_vs4kFiUWiLAyFNeA"}
+# Out: {"claims":{"sub":"user123"}}
+```
+
+### `parse_jwt_rs512`
+
+Parses a claims object from a JWT string encoded with RS512. This method does not validate JWT claims.
+
+#### Parameters
+
+**`public_key`** &lt;string&gt; The public key that corresponds to the private key used to sign the token.  
+
+#### Examples
+
+
+```coffee
+root.claims = this.signed.parse_jwt_rs512("dont-tell-anyone")
+
+# In:  {"signed":"eyJhbGciOiJSUzUxMiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyMTMzOCIsIm5hbWUiOiJOb3QgQmxvYmF0aGFuIn0.eePFKSyF7LHAOehfEKi-V1cOUj5rtHPZ6uyj9VLlihOOyL8jPrny_8w9tsF4YC0jFzsKeRQ2Nnb8_IZqqWhbJgtfUOtkdl4G4CaLEJPUZH3kD_AvVQMsQGjsLO4Mu_rNycLByqk0RZjRVxNTkkt_ArZVSiLX9tmkvvT5fvHTfoGSe56qdhjrzyIcICckwdZU3AJTMf8w3loDISQLEG4OufkrmERXvslAkPN1ZxCZdwg7SHnATz8iEFerGiU-4QNN5dOuQi_XIdPMIbKE6dp4cYDyyr5wVnaEOCDd_TEEenpRLeHsqka3hmQY45rDiOXznpIkpZWeFNmf-4yjVHCZVg"}
+# Out: {"claims":{"sub":"user123"}}
+```
+
 ### `quote`
 
 Quotes a target string using escape sequences (`\t`, `\n`, `\xFF`, `\u0100`) for control characters and non-printable characters.
