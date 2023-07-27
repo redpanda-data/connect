@@ -85,7 +85,7 @@ func TestBloblangParseJwtHS_RejectNoneAlgorithm(t *testing.T) {
 	require.NoError(t, err)
 
 	res, err := exe.Query(terribleJWT)
-	require.ErrorIs(t, err, errJWTUnrecognizedMethod)
+	require.ErrorIs(t, err, errJWTIncorrectMethod)
 	require.Nil(t, res)
 }
 
@@ -167,7 +167,7 @@ func TestBloblangParseJwtRS_RejectNoneAlgorithm(t *testing.T) {
 	require.NoError(t, err)
 
 	res, err := exe.Query(terribleJWT)
-	require.ErrorIs(t, err, errJWTUnrecognizedMethod)
+	require.ErrorIs(t, err, errJWTIncorrectMethod)
 	require.Nil(t, res)
 }
 

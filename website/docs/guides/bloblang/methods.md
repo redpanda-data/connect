@@ -432,54 +432,132 @@ root.foo = this.foo.lowercase()
 
 Parses a claims object from a JWT string encoded with HS256. This method does not validate JWT claims.
 
+Introduced in version v4.12.0.
+
+
 #### Parameters
 
-**`signing_secret`** &lt;string&gt; The HMAC secret that was used for signing the token.  
+**`signing_secret`** &lt;string&gt; The HS256 secret that was used for signing the token.  
 
 #### Examples
 
 
 ```coffee
-root.claims = this.signed.parse_jwt_hs256("dont-tell-anyone")
+root.claims = this.signed.parse_jwt_hs256("""dont-tell-anyone""")
 
-# In:  {"signed":"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyMTIzIn0.hUl-nngPMY_3h9vveWJUPsCcO5PeL6k9hWLnMYeFbFQ"}
-# Out: {"claims":{"sub":"user123"}}
+# In:  {"claims":{"sub":"user123"}}
+# Out: {"signed":"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyMTIzIn0.hUl-nngPMY_3h9vveWJUPsCcO5PeL6k9hWLnMYeFbFQ"}
 ```
 
 ### `parse_jwt_hs384`
 
 Parses a claims object from a JWT string encoded with HS384. This method does not validate JWT claims.
 
+Introduced in version v4.12.0.
+
+
 #### Parameters
 
-**`signing_secret`** &lt;string&gt; The HMAC secret that was used for signing the token.  
+**`signing_secret`** &lt;string&gt; The HS384 secret that was used for signing the token.  
 
 #### Examples
 
 
 ```coffee
-root.claims = this.signed.parse_jwt_hs384("dont-tell-anyone")
+root.claims = this.signed.parse_jwt_hs384("""dont-tell-anyone""")
 
-# In:  {"signed":"eyJhbGciOiJIUzM4NCIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyMTIzIn0.zGYLr83aToon1efUNq-hw7XgT20lPvZb8sYei8x6S6mpHwb433SJdXJXx0Oio8AZ"}
-# Out: {"claims":{"sub":"user123"}}
+# In:  {"claims":{"sub":"user123"}}
+# Out: {"signed":"eyJhbGciOiJIUzM4NCIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyMTIzIn0.zGYLr83aToon1efUNq-hw7XgT20lPvZb8sYei8x6S6mpHwb433SJdXJXx0Oio8AZ"}
 ```
 
 ### `parse_jwt_hs512`
 
 Parses a claims object from a JWT string encoded with HS512. This method does not validate JWT claims.
 
+Introduced in version v4.12.0.
+
+
 #### Parameters
 
-**`signing_secret`** &lt;string&gt; The HMAC secret that was used for signing the token.  
+**`signing_secret`** &lt;string&gt; The HS512 secret that was used for signing the token.  
 
 #### Examples
 
 
 ```coffee
-root.claims = this.signed.parse_jwt_hs512("dont-tell-anyone")
+root.claims = this.signed.parse_jwt_hs512("""dont-tell-anyone""")
 
-# In:  {"signed":"eyJhbGciOiJIUzUxMiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyMTIzIn0.zBNR9o_6EDwXXKkpKLNJhG26j8Dc-mV-YahBwmEdCrmiWt5les8I9rgmNlWIowpq6Yxs4kLNAdFhqoRz3NXT3w"}
-# Out: {"claims":{"sub":"user123"}}
+# In:  {"claims":{"sub":"user123"}}
+# Out: {"signed":"eyJhbGciOiJIUzUxMiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyMTIzIn0.zBNR9o_6EDwXXKkpKLNJhG26j8Dc-mV-YahBwmEdCrmiWt5les8I9rgmNlWIowpq6Yxs4kLNAdFhqoRz3NXT3w"}
+```
+
+### `parse_jwt_rs256`
+
+Parses a claims object from a JWT string encoded with RS256. This method does not validate JWT claims.
+
+Introduced in version v4.19.0.
+
+
+#### Parameters
+
+**`signing_secret`** &lt;string&gt; The RS256 secret that was used for signing the token.  
+
+#### Examples
+
+
+```coffee
+root.claims = this.signed.parse_jwt_rs256("""-----BEGIN RSA PUBLIC KEY-----
+... certificate data ...
+-----END RSA PUBLIC KEY-----""")
+
+# In:  {"claims":{"sub":"user123"}}
+# Out: {"signed":"eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyMTMzOCIsIm5hbWUiOiJOb3QgQmxvYmF0aGFuIn0.KWin9nTB8d4IZjcCbKQe4jJXc2LfsKKwbSCAMnHcAROpie62Gdjq2m48AEr4EY3iDIdcuqwZoaAwwza_MUvzVDNkjwpdc2ISqYLq9iBczhpG-X3I24Zv28OrCWtZruSM2rl6w7llMSVer35hPjNFPXE_qzIQ7H6O8m3_8tWE1wh2737WdwX0ExjMzYq-bhr5SwYGh905TP521It_YaC6OJ-ijaBR2SgmdriBn7Tov1Qn11iktvOUl-4uRj8Gy-w31O-fZDVklldymdf3uvBByuQkwzl4VkWhr5v2Wvjq49mY4Uj8H-u4NFzrwZtHik56n9YTll0K6k0z3ucUjHpDFA"}
+```
+
+### `parse_jwt_rs384`
+
+Parses a claims object from a JWT string encoded with RS384. This method does not validate JWT claims.
+
+Introduced in version v4.19.0.
+
+
+#### Parameters
+
+**`signing_secret`** &lt;string&gt; The RS384 secret that was used for signing the token.  
+
+#### Examples
+
+
+```coffee
+root.claims = this.signed.parse_jwt_rs384("""-----BEGIN RSA PUBLIC KEY-----
+... certificate data ...
+-----END RSA PUBLIC KEY-----""")
+
+# In:  {"claims":{"sub":"user123"}}
+# Out: {"signed":"eyJhbGciOiJSUzM4NCIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyMTMzOCIsIm5hbWUiOiJOb3QgQmxvYmF0aGFuIn0.detziSnNZJ0cX75pof0EASsajqCmes4otwSYAMjVdr31-gADaGdXTKrkpClUeFdH_488UaekpaeP1iRzML8-kp1yGa6ZCfOw1E_r3zT6hkdZwPDi5OKQy2V5JWlvGTzzwfSc9SgaRGyGg-FBo54CakQMwAA3Us_g82sy4bwO1ay2BriW5dX6tJnm2875DgBzOlHnAt97bH0odT7_LbJPkm9c_H7EdVUH810Qar_NVaPdVgwo5CMN4lCXxIjrFoxCJ3kEu8jf-9bZedK5UHsRlo7lYDxtxrmi9izMXvwCbEcn4Hgi6a_SjsOzsHYriRJN5NCQI_vs4kFiUWiLAyFNeA"}
+```
+
+### `parse_jwt_rs512`
+
+Parses a claims object from a JWT string encoded with RS512. This method does not validate JWT claims.
+
+Introduced in version v4.19.0.
+
+
+#### Parameters
+
+**`signing_secret`** &lt;string&gt; The RS512 secret that was used for signing the token.  
+
+#### Examples
+
+
+```coffee
+root.claims = this.signed.parse_jwt_rs512("""-----BEGIN RSA PUBLIC KEY-----
+... certificate data ...
+-----END RSA PUBLIC KEY-----""")
+
+# In:  {"claims":{"sub":"user123"}}
+# Out: {"signed":"eyJhbGciOiJSUzUxMiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyMTMzOCIsIm5hbWUiOiJOb3QgQmxvYmF0aGFuIn0.eePFKSyF7LHAOehfEKi-V1cOUj5rtHPZ6uyj9VLlihOOyL8jPrny_8w9tsF4YC0jFzsKeRQ2Nnb8_IZqqWhbJgtfUOtkdl4G4CaLEJPUZH3kD_AvVQMsQGjsLO4Mu_rNycLByqk0RZjRVxNTkkt_ArZVSiLX9tmkvvT5fvHTfoGSe56qdhjrzyIcICckwdZU3AJTMf8w3loDISQLEG4OufkrmERXvslAkPN1ZxCZdwg7SHnATz8iEFerGiU-4QNN5dOuQi_XIdPMIbKE6dp4cYDyyr5wVnaEOCDd_TEEenpRLeHsqka3hmQY45rDiOXznpIkpZWeFNmf-4yjVHCZVg"}
 ```
 
 ### `parse_jwt_rs256`
@@ -2465,6 +2543,18 @@ Introduced in version v4.18.0.
 
 **`signing_secret`** &lt;string&gt; The secret to use for signing the token.  
 
+#### Examples
+
+
+```coffee
+root.signed = this.claims.sign_jwt_rs256("""-----BEGIN RSA PUBLIC KEY-----
+... certificate data ...
+-----END RSA PUBLIC KEY-----""")
+
+# In:  {"claims":{"sub":"user123"}}
+# Out: {"signed":"eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJpYXQiOjE1MTYyMzkwMjIsIm1vb2QiOiJEaXNkYWluZnVsIiwic3ViIjoiMTIzNDU2Nzg5MCJ9.b0lH3jEupZZ4zoaly4Y_GCvu94HH6UKdKY96zfGNsIkPZpQLHIkZ7jMWlLlNOAd8qXlsBGP_i8H2qCKI4zlWJBGyPZgxXDzNRPVrTDfFpn4t4nBcA1WK2-ntXP3ehQxsaHcQU8Z_nsogId7Pme5iJRnoHWEnWtbwz5DLSXL3ZZNnRdrHM9MdI7QSDz9mojKDCaMpGN9sG7Xl-tGdBp1XzXuUOzG8S03mtZ1IgVR1uiBL2N6oohHIAunk8DIAmNWI-zgycTgzUGU7mvPkKH43qO8Ua1-13tCUBKKa8VxcotZ67Mxm1QAvBGoDnTKwWMwghLzs6d6WViXQg6eWlJcpBA"}
+```
+
 ### `sign_jwt_rs384`
 
 Hash and sign an object representing JSON Web Token (JWT) claims using RS384.
@@ -2476,6 +2566,18 @@ Introduced in version v4.18.0.
 
 **`signing_secret`** &lt;string&gt; The secret to use for signing the token.  
 
+#### Examples
+
+
+```coffee
+root.signed = this.claims.sign_jwt_rs384("""-----BEGIN RSA PUBLIC KEY-----
+... certificate data ...
+-----END RSA PUBLIC KEY-----""")
+
+# In:  {"claims":{"sub":"user123"}}
+# Out: {"signed":"eyJhbGciOiJSUzM4NCIsInR5cCI6IkpXVCJ9.eyJpYXQiOjE1MTYyMzkwMjIsIm1vb2QiOiJEaXNkYWluZnVsIiwic3ViIjoiMTIzNDU2Nzg5MCJ9.orcXYBcjVE5DU7mvq4KKWFfNdXR4nEY_xupzWoETRpYmQZIozlZnM_nHxEk2dySvpXlAzVm7kgOPK2RFtGlOVaNRIa3x-pMMr-bhZTno4L8Hl4sYxOks3bWtjK7wql4uqUbqThSJB12psAXw2-S-I_FMngOPGIn4jDT9b802ottJSvTpXcy0-eKTjrV2PSkRRu-EYJh0CJZW55MNhqlt6kCGhAXfbhNazN3ASX-dmpd_JixyBKphrngr_zRA-FCn_Xf3QQDA-5INopb4Yp5QiJ7UxVqQEKI80X_JvJqz9WE1qiAw8pq5-xTen1t7zTP-HT1NbbD3kltcNa3G8acmNg"}
+```
+
 ### `sign_jwt_rs512`
 
 Hash and sign an object representing JSON Web Token (JWT) claims using RS512.
@@ -2486,6 +2588,18 @@ Introduced in version v4.18.0.
 #### Parameters
 
 **`signing_secret`** &lt;string&gt; The secret to use for signing the token.  
+
+#### Examples
+
+
+```coffee
+root.signed = this.claims.sign_jwt_rs512("""-----BEGIN RSA PUBLIC KEY-----
+... certificate data ...
+-----END RSA PUBLIC KEY-----""")
+
+# In:  {"claims":{"sub":"user123"}}
+# Out: {"signed":"eyJhbGciOiJSUzUxMiIsInR5cCI6IkpXVCJ9.eyJpYXQiOjE1MTYyMzkwMjIsIm1vb2QiOiJEaXNkYWluZnVsIiwic3ViIjoiMTIzNDU2Nzg5MCJ9.rsMp_X5HMrUqKnZJIxo27aAoscovRA6SSQYR9rq7pifIj0YHXxMyNyOBDGnvVALHKTi25VUGHpfNUW0VVMmae0A4t_ObNU6hVZHguWvetKZZq4FZpW1lgWHCMqgPGwT5_uOqwYCH6r8tJuZT3pqXeL0CY4putb1AN2w6CVp620nh3l8d3XWb4jaifycd_4CEVCqHuWDmohfug4VhmoVKlIXZkYoAQowgHlozATDssBSWdYtv107Wd2AzEoiXPu6e3pflsuXULlyqQnS4ELEKPYThFLafh1NqvZDPddqozcPZ-iODBW-xf3A4DYDdivnMYLrh73AZOGHexxu8ay6nDA"}
+```
 
 ### `slice`
 

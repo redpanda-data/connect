@@ -75,6 +75,9 @@ func registerSignJwtMethod(m signJwtMethodSpec) error {
 
 func registerSignJwtMethods() error {
 	dummySecretHMAC := "dont-tell-anyone"
+	dummySecretRSA := `-----BEGIN RSA PUBLIC KEY-----
+... certificate data ...
+-----END RSA PUBLIC KEY-----`
 
 	for _, m := range []signJwtMethodSpec{
 		{
@@ -99,19 +102,25 @@ func registerSignJwtMethods() error {
 			sampleSignature: "eyJhbGciOiJIUzUxMiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyMTIzIn0.zBNR9o_6EDwXXKkpKLNJhG26j8Dc-mV-YahBwmEdCrmiWt5les8I9rgmNlWIowpq6Yxs4kLNAdFhqoRz3NXT3w",
 		},
 		{
-			method:        jwt.SigningMethodRS256,
-			secretDecoder: rsaSecretDecoder,
-			version:       "v4.18.0",
+			method:          jwt.SigningMethodRS256,
+			dummySecret:     dummySecretRSA,
+			secretDecoder:   rsaSecretDecoder,
+			version:         "v4.18.0",
+			sampleSignature: "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJpYXQiOjE1MTYyMzkwMjIsIm1vb2QiOiJEaXNkYWluZnVsIiwic3ViIjoiMTIzNDU2Nzg5MCJ9.b0lH3jEupZZ4zoaly4Y_GCvu94HH6UKdKY96zfGNsIkPZpQLHIkZ7jMWlLlNOAd8qXlsBGP_i8H2qCKI4zlWJBGyPZgxXDzNRPVrTDfFpn4t4nBcA1WK2-ntXP3ehQxsaHcQU8Z_nsogId7Pme5iJRnoHWEnWtbwz5DLSXL3ZZNnRdrHM9MdI7QSDz9mojKDCaMpGN9sG7Xl-tGdBp1XzXuUOzG8S03mtZ1IgVR1uiBL2N6oohHIAunk8DIAmNWI-zgycTgzUGU7mvPkKH43qO8Ua1-13tCUBKKa8VxcotZ67Mxm1QAvBGoDnTKwWMwghLzs6d6WViXQg6eWlJcpBA",
 		},
 		{
-			method:        jwt.SigningMethodRS384,
-			secretDecoder: rsaSecretDecoder,
-			version:       "v4.18.0",
+			method:          jwt.SigningMethodRS384,
+			dummySecret:     dummySecretRSA,
+			secretDecoder:   rsaSecretDecoder,
+			version:         "v4.18.0",
+			sampleSignature: "eyJhbGciOiJSUzM4NCIsInR5cCI6IkpXVCJ9.eyJpYXQiOjE1MTYyMzkwMjIsIm1vb2QiOiJEaXNkYWluZnVsIiwic3ViIjoiMTIzNDU2Nzg5MCJ9.orcXYBcjVE5DU7mvq4KKWFfNdXR4nEY_xupzWoETRpYmQZIozlZnM_nHxEk2dySvpXlAzVm7kgOPK2RFtGlOVaNRIa3x-pMMr-bhZTno4L8Hl4sYxOks3bWtjK7wql4uqUbqThSJB12psAXw2-S-I_FMngOPGIn4jDT9b802ottJSvTpXcy0-eKTjrV2PSkRRu-EYJh0CJZW55MNhqlt6kCGhAXfbhNazN3ASX-dmpd_JixyBKphrngr_zRA-FCn_Xf3QQDA-5INopb4Yp5QiJ7UxVqQEKI80X_JvJqz9WE1qiAw8pq5-xTen1t7zTP-HT1NbbD3kltcNa3G8acmNg",
 		},
 		{
-			method:        jwt.SigningMethodRS512,
-			secretDecoder: rsaSecretDecoder,
-			version:       "v4.18.0",
+			method:          jwt.SigningMethodRS512,
+			dummySecret:     dummySecretRSA,
+			secretDecoder:   rsaSecretDecoder,
+			version:         "v4.18.0",
+			sampleSignature: "eyJhbGciOiJSUzUxMiIsInR5cCI6IkpXVCJ9.eyJpYXQiOjE1MTYyMzkwMjIsIm1vb2QiOiJEaXNkYWluZnVsIiwic3ViIjoiMTIzNDU2Nzg5MCJ9.rsMp_X5HMrUqKnZJIxo27aAoscovRA6SSQYR9rq7pifIj0YHXxMyNyOBDGnvVALHKTi25VUGHpfNUW0VVMmae0A4t_ObNU6hVZHguWvetKZZq4FZpW1lgWHCMqgPGwT5_uOqwYCH6r8tJuZT3pqXeL0CY4putb1AN2w6CVp620nh3l8d3XWb4jaifycd_4CEVCqHuWDmohfug4VhmoVKlIXZkYoAQowgHlozATDssBSWdYtv107Wd2AzEoiXPu6e3pflsuXULlyqQnS4ELEKPYThFLafh1NqvZDPddqozcPZ-iODBW-xf3A4DYDdivnMYLrh73AZOGHexxu8ay6nDA",
 		},
 	} {
 		m.name = "sign_jwt_" + strings.ToLower(m.method.Alg())
