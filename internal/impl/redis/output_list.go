@@ -19,8 +19,8 @@ const (
 type redisPushMethod string
 
 const (
-	rpush redisPushMethod = "rpush"
-	lpush redisPushMethod = "lpush"
+	rPush redisPushMethod = "rpush"
+	lPush redisPushMethod = "lpush"
 )
 
 func redisListOutputConfig() *service.ConfigSpec {
@@ -36,9 +36,9 @@ func redisListOutputConfig() *service.ConfigSpec {
 				Examples("some_list", "${! @.kafka_key )}", "${! this.doc.id }", "${! count(\"msgs\") }"),
 			service.NewOutputMaxInFlightField(),
 			service.NewBatchPolicyField(loFieldBatching),
-			service.NewStringEnumField("method", string(rpush), string(lpush)).
+			service.NewStringEnumField("method", string(rPush), string(lPush)).
 				Description("Method from which to push to the Redis list").
-				Default(string(rpush)).
+				Default(string(rPush)).
 				Advanced().
 				Version("4.19.0"),
 		)
@@ -92,7 +92,7 @@ func newRedisListWriter(conf *service.ParsedConfig, mgr *service.Resources) (r *
 
 	if pushMethod, err := conf.FieldString("method"); err != nil {
 		switch redisPushMethod(pushMethod) {
-		case rpush:
+		case rPush:
 			r.clientPush = func(client redis.UniversalClient, ctx context.Context, key string, values ...interface{}) *redis.IntCmd {
 				return client.RPush(ctx, key, values)
 			}
@@ -100,7 +100,7 @@ func newRedisListWriter(conf *service.ParsedConfig, mgr *service.Resources) (r *
 				return pipe.RPush(ctx, key, values)
 			}
 
-		case lpush:
+		case lPush:
 			r.clientPush = func(client redis.UniversalClient, ctx context.Context, key string, values ...interface{}) *redis.IntCmd {
 				return client.LPush(ctx, key, values)
 			}

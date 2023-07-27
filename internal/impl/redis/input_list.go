@@ -15,8 +15,8 @@ import (
 type redisPopMethod string
 
 const (
-	blpop redisPopMethod = "blpop"
-	brpop redisPopMethod = "brpop"
+	bLPop redisPopMethod = "blpop"
+	bRPop redisPopMethod = "brpop"
 )
 
 func redisListInputConfig() *service.ConfigSpec {
@@ -33,9 +33,9 @@ func redisListInputConfig() *service.ConfigSpec {
 				Description("The length of time to poll for new messages before reattempting.").
 				Default("5s").
 				Advanced(),
-			service.NewStringEnumField("method", string(blpop), string(brpop)).
+			service.NewStringEnumField("method", string(bLPop), string(bRPop)).
 				Description("Method from which to pop from the Redis list").
-				Default(string(blpop)).
+				Default(string(bLPop)).
 				Advanced().
 				Version("4.19.0"),
 		)
@@ -83,10 +83,10 @@ func newRedisListInputFromConfig(conf *service.ParsedConfig, mgr *service.Resour
 
 	if popMethod, err := conf.FieldString("method"); err != nil {
 		switch redisPopMethod(popMethod) {
-		case blpop:
+		case bLPop:
 			r.pop = client.BLPop
 
-		case brpop:
+		case bRPop:
 			r.pop = client.BRPop
 
 		default:
