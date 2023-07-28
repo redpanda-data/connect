@@ -50,11 +50,6 @@ vpaxhlfudxnXgTO1IP4RQRgryRxZ19EUzhvWDcG3GQIckoNMY5PelsnCGnIBT2Xh
 UeYyTt05zRRWuD+p5bY=
 -----END PUBLIC KEY-----`
 
-const dummyWrongSecretECDSA = `-----BEGIN PUBLIC KEY-----
-MFkwEwYHKoZIzj0CAQYIKoZIzj1DAQcDQgAEGtLqIBePHmIhQcf0JLgc+F/4W/oI
-dp0Gta53G35VerNDgUUXmp78J2kfh4qLdh0XtmOMI587tCaqjvDAXfs//w==
------END PUBLIC KEY-----`
-
 func TestBloblangParseJwtHS(t *testing.T) {
 	secret := "what-is-love"
 	expected := map[string]any{
