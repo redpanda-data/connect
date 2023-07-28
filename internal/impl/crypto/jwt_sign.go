@@ -20,6 +20,10 @@ func rsaSecretDecoder(secret string) (any, error) {
 	return jwt.ParseRSAPrivateKeyFromPEM([]byte(secret))
 }
 
+func ecdsaSecretDecoder(secret string) (any, error) {
+	return jwt.ParseECPrivateKeyFromPEM([]byte(secret))
+}
+
 func jwtSigner(secretDecoder secretDecoderFunc, method jwt.SigningMethod) bloblang.MethodConstructorV2 {
 	return func(args *bloblang.ParsedParams) (bloblang.Method, error) {
 		signingSecret, err := args.GetString("signing_secret")
@@ -75,9 +79,12 @@ func registerSignJwtMethod(m signJwtMethodSpec) error {
 
 func registerSignJwtMethods() error {
 	dummySecretHMAC := "dont-tell-anyone"
-	dummySecretRSA := `-----BEGIN RSA PUBLIC KEY-----
+	dummySecretRSA := `-----BEGIN RSA PRIVATE KEY-----
 ... certificate data ...
------END RSA PUBLIC KEY-----`
+-----END RSA PRIVATE KEY-----`
+	dummySecretECDSA := `-----BEGIN EC PRIVATE KEY-----
+... certificate data ...
+-----END EC PRIVATE KEY-----`
 
 	for _, m := range []signJwtMethodSpec{
 		{
@@ -101,6 +108,7 @@ func registerSignJwtMethods() error {
 			version:         "v4.12.0",
 			sampleSignature: "eyJhbGciOiJIUzUxMiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyMTIzIn0.zBNR9o_6EDwXXKkpKLNJhG26j8Dc-mV-YahBwmEdCrmiWt5les8I9rgmNlWIowpq6Yxs4kLNAdFhqoRz3NXT3w",
 		},
+
 		{
 			method:          jwt.SigningMethodRS256,
 			dummySecret:     dummySecretRSA,
@@ -121,6 +129,28 @@ func registerSignJwtMethods() error {
 			secretDecoder:   rsaSecretDecoder,
 			version:         "v4.18.0",
 			sampleSignature: "eyJhbGciOiJSUzUxMiIsInR5cCI6IkpXVCJ9.eyJpYXQiOjE1MTYyMzkwMjIsIm1vb2QiOiJEaXNkYWluZnVsIiwic3ViIjoiMTIzNDU2Nzg5MCJ9.rsMp_X5HMrUqKnZJIxo27aAoscovRA6SSQYR9rq7pifIj0YHXxMyNyOBDGnvVALHKTi25VUGHpfNUW0VVMmae0A4t_ObNU6hVZHguWvetKZZq4FZpW1lgWHCMqgPGwT5_uOqwYCH6r8tJuZT3pqXeL0CY4putb1AN2w6CVp620nh3l8d3XWb4jaifycd_4CEVCqHuWDmohfug4VhmoVKlIXZkYoAQowgHlozATDssBSWdYtv107Wd2AzEoiXPu6e3pflsuXULlyqQnS4ELEKPYThFLafh1NqvZDPddqozcPZ-iODBW-xf3A4DYDdivnMYLrh73AZOGHexxu8ay6nDA",
+		},
+
+		{
+			method:          jwt.SigningMethodES256,
+			dummySecret:     dummySecretECDSA,
+			secretDecoder:   ecdsaSecretDecoder,
+			version:         "v4.20.0",
+			sampleSignature: "eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9.eyJpYXQiOjE1MTYyMzkwMjIsIm1vb2QiOiJEaXNkYWluZnVsIiwic3ViIjoiMTIzNDU2Nzg5MCJ9.-8LrOdkEiv_44ADWW08lpbq41ZmHCel58NMORPq1q4Dyw0zFhqDVLrRoSvCvuyyvgXAFb9IHfR-9MlJ_2ShA9A",
+		},
+		{
+			method:          jwt.SigningMethodES384,
+			dummySecret:     dummySecretECDSA,
+			secretDecoder:   ecdsaSecretDecoder,
+			version:         "v4.20.0",
+			sampleSignature: "eyJhbGciOiJFUzM4NCIsInR5cCI6IkpXVCJ9.eyJpYXQiOjE1MTYyMzkwMjIsIm1vb2QiOiJEaXNkYWluZnVsIiwic3ViIjoiMTIzNDU2Nzg5MCJ9.bkrqALC-HuAOXYiH4Xdc6gT5-tgRY9niI5bB0luuIBkyYRKHwNLtFIZ-lw54ld3_20BxXNaC-o6zFJwTEUaqZybRBj2KZtV8X7cX1oKte_V4YceNYESnmqiEP0eA7PHh",
+		},
+		{
+			method:          jwt.SigningMethodES512,
+			dummySecret:     dummySecretECDSA,
+			secretDecoder:   ecdsaSecretDecoder,
+			version:         "v4.20.0",
+			sampleSignature: "eyJhbGciOiJFUzUxMiIsInR5cCI6IkpXVCJ9.eyJpYXQiOjE1MTYyMzkwMjIsIm1vb2QiOiJEaXNkYWluZnVsIiwic3ViIjoiMTIzNDU2Nzg5MCJ9.AET5FhyU_Y0gB2QZ7cMxTY_o6ioMEuBz9MliILqE1En3AjiBdWyVwtuSva-u0WVuTIQmpV3Uaes0_DNhSRoBa3jzAKElAJzNlF0D_reofCTfwfTur4XuRHOCRCU9UFHuATMwIUd_me7aF3K4fQKu1OuaGjZT8F3R2usoiZVMjm9e-bw5",
 		},
 	} {
 		m.name = "sign_jwt_" + strings.ToLower(m.method.Alg())

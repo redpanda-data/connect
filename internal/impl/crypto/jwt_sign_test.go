@@ -59,6 +59,24 @@ Mxm2RVc8oMcbe1r+6yWpELjzMX2cVesvXH91Dc1SQrhT7hjUe0fF+WxY0HWKzTTQ
 tg+1jV0qRszLh20l2jcF5Xr1IUfQINcS2j7v1dGHdBzu9bmupRC7DTYXRiTv+L7L
 EppmxRJGlb1Mh0Egvc+eup2lzglmgdRe/FBX4LH6hhH6tohRt8Yx
 -----END RSA PRIVATE KEY-----`
+	dummySecretECDSA256 := `-----BEGIN EC PRIVATE KEY-----
+MHgCAQEEIQD8OkejBIrg9VDaOr3uOQlbqVeCJmz4ewGxtzQ1q7WDhqAKBggqhkjO
+PQMBB6FEA0IABBrS6iAXjx5iIUHH9CS4HPhf+Fv6CHadBrWudxt+VXqzQ4FFF5qe
+/CdpH4eKi3YdF7ZjjCOfO7Qmqo7wwF37P/8=
+-----END EC PRIVATE KEY-----`
+	dummySecretECDSA384 := `-----BEGIN EC PRIVATE KEY-----
+MIGkAgEBBDBTWmZosMhHGYBLWXLp6OupGWQqUPOeV6N+RNnZuaecYBy6DcK8NiCO
+frNZZLLf/eOgBwYFK4EEACKhZANiAARGjPvj8HpLCYuGzxfsJaGetbJGsHXcC5Tw
+5h6rLSodG70lY3Dw0hq+qlOa7pc9PjFwVqdiOrwVt64zXV6rToLnaY2ZLgsvDMDa
+KaUUSCfzlu8mgLdueS6riZCPC31XF0c=
+-----END EC PRIVATE KEY-----`
+	dummySecretECDSA512 := `-----BEGIN EC PRIVATE KEY-----
+MIHcAgEBBEIA9KQHq4Ta5Spbzgbym9APM+5z+nNeAxVqNy8nOlZo0zVs9hXuSJeQ
+0K68oUBLpZkAZ85c8mNiIg6GiDwY5qcQaM6gBwYFK4EEACOhgYkDgYYABACQct22
+z0/np8WTKGlhDfUz9K3C3fC+lrGGV+53GdeBM7Ug/hFBGCvJHFnX0RTOG9YNwbcZ
+AhySg0xjk96WycIacgFPZeH01CSNYXkrrFLi6kWxsZIDBD4YjLKTkg8nYseA7IxI
+JWHmBFldXcJkvNe6PH+6YL1R5jJO3TnNFFa4P6nltg==
+-----END EC PRIVATE KEY-----`
 
 	inClaims := testClaims{
 		Sub:  "1234567890",
@@ -77,6 +95,9 @@ EppmxRJGlb1Mh0Egvc+eup2lzglmgdRe/FBX4LH6hhH6tohRt8Yx
 		{method: "sign_jwt_rs256", secret: dummySecretRSA, alg: jwt.SigningMethodRS256},
 		{method: "sign_jwt_rs384", secret: dummySecretRSA, alg: jwt.SigningMethodRS384},
 		{method: "sign_jwt_rs512", secret: dummySecretRSA, alg: jwt.SigningMethodRS512},
+		{method: "sign_jwt_es256", secret: dummySecretECDSA256, alg: jwt.SigningMethodES256},
+		{method: "sign_jwt_es384", secret: dummySecretECDSA384, alg: jwt.SigningMethodES384},
+		{method: "sign_jwt_es512", secret: dummySecretECDSA512, alg: jwt.SigningMethodES512},
 	}
 
 	for _, tc := range testCases {
@@ -101,6 +122,10 @@ EppmxRJGlb1Mh0Egvc+eup2lzglmgdRe/FBX4LH6hhH6tohRt8Yx
 					key = []byte(tc.secret)
 				case *jwt.SigningMethodRSA:
 					privateKey, err := jwt.ParseRSAPrivateKeyFromPEM([]byte(tc.secret))
+					require.NoError(t, err)
+					key = privateKey.Public()
+				case *jwt.SigningMethodECDSA:
+					privateKey, err := jwt.ParseECPrivateKeyFromPEM([]byte(tc.secret))
 					require.NoError(t, err)
 					key = privateKey.Public()
 				default:

@@ -19,6 +19,10 @@ func rsaPublicSecretDecoder(secret string) (any, error) {
 	return jwt.ParseRSAPublicKeyFromPEM([]byte(secret))
 }
 
+func ecdsaPublicSecretDecoder(secret string) (any, error) {
+	return jwt.ParseECPublicKeyFromPEM([]byte(secret))
+}
+
 type parseJwtMethodSpec struct {
 	name            string
 	dummySecret     string
@@ -85,6 +89,9 @@ func registerParseJwtMethods() error {
 	dummySecretRSA := `-----BEGIN RSA PUBLIC KEY-----
 ... certificate data ...
 -----END RSA PUBLIC KEY-----`
+	dummySecretECDSA := `-----BEGIN EC PUBLIC KEY-----
+... certificate data ...
+-----END EC PUBLIC KEY-----`
 
 	for _, m := range []parseJwtMethodSpec{
 		{
@@ -108,6 +115,7 @@ func registerParseJwtMethods() error {
 			version:         "v4.12.0",
 			sampleSignature: "eyJhbGciOiJIUzUxMiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyMTIzIn0.zBNR9o_6EDwXXKkpKLNJhG26j8Dc-mV-YahBwmEdCrmiWt5les8I9rgmNlWIowpq6Yxs4kLNAdFhqoRz3NXT3w",
 		},
+
 		{
 			method:          jwt.SigningMethodRS256,
 			dummySecret:     dummySecretRSA,
@@ -127,6 +135,28 @@ func registerParseJwtMethods() error {
 			dummySecret:     dummySecretRSA,
 			secretDecoder:   rsaPublicSecretDecoder,
 			version:         "v4.19.0",
+			sampleSignature: "eyJhbGciOiJSUzUxMiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyMTMzOCIsIm5hbWUiOiJOb3QgQmxvYmF0aGFuIn0.eePFKSyF7LHAOehfEKi-V1cOUj5rtHPZ6uyj9VLlihOOyL8jPrny_8w9tsF4YC0jFzsKeRQ2Nnb8_IZqqWhbJgtfUOtkdl4G4CaLEJPUZH3kD_AvVQMsQGjsLO4Mu_rNycLByqk0RZjRVxNTkkt_ArZVSiLX9tmkvvT5fvHTfoGSe56qdhjrzyIcICckwdZU3AJTMf8w3loDISQLEG4OufkrmERXvslAkPN1ZxCZdwg7SHnATz8iEFerGiU-4QNN5dOuQi_XIdPMIbKE6dp4cYDyyr5wVnaEOCDd_TEEenpRLeHsqka3hmQY45rDiOXznpIkpZWeFNmf-4yjVHCZVg",
+		},
+
+		{
+			method:          jwt.SigningMethodES256,
+			dummySecret:     dummySecretECDSA,
+			secretDecoder:   ecdsaPublicSecretDecoder,
+			version:         "v4.20.0",
+			sampleSignature: "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyMTMzOCIsIm5hbWUiOiJOb3QgQmxvYmF0aGFuIn0.KWin9nTB8d4IZjcCbKQe4jJXc2LfsKKwbSCAMnHcAROpie62Gdjq2m48AEr4EY3iDIdcuqwZoaAwwza_MUvzVDNkjwpdc2ISqYLq9iBczhpG-X3I24Zv28OrCWtZruSM2rl6w7llMSVer35hPjNFPXE_qzIQ7H6O8m3_8tWE1wh2737WdwX0ExjMzYq-bhr5SwYGh905TP521It_YaC6OJ-ijaBR2SgmdriBn7Tov1Qn11iktvOUl-4uRj8Gy-w31O-fZDVklldymdf3uvBByuQkwzl4VkWhr5v2Wvjq49mY4Uj8H-u4NFzrwZtHik56n9YTll0K6k0z3ucUjHpDFA",
+		},
+		{
+			method:          jwt.SigningMethodES384,
+			dummySecret:     dummySecretECDSA,
+			secretDecoder:   ecdsaPublicSecretDecoder,
+			version:         "v4.20.0",
+			sampleSignature: "eyJhbGciOiJSUzM4NCIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyMTMzOCIsIm5hbWUiOiJOb3QgQmxvYmF0aGFuIn0.detziSnNZJ0cX75pof0EASsajqCmes4otwSYAMjVdr31-gADaGdXTKrkpClUeFdH_488UaekpaeP1iRzML8-kp1yGa6ZCfOw1E_r3zT6hkdZwPDi5OKQy2V5JWlvGTzzwfSc9SgaRGyGg-FBo54CakQMwAA3Us_g82sy4bwO1ay2BriW5dX6tJnm2875DgBzOlHnAt97bH0odT7_LbJPkm9c_H7EdVUH810Qar_NVaPdVgwo5CMN4lCXxIjrFoxCJ3kEu8jf-9bZedK5UHsRlo7lYDxtxrmi9izMXvwCbEcn4Hgi6a_SjsOzsHYriRJN5NCQI_vs4kFiUWiLAyFNeA",
+		},
+		{
+			method:          jwt.SigningMethodES512,
+			dummySecret:     dummySecretECDSA,
+			secretDecoder:   ecdsaPublicSecretDecoder,
+			version:         "v4.20.0",
 			sampleSignature: "eyJhbGciOiJSUzUxMiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyMTMzOCIsIm5hbWUiOiJOb3QgQmxvYmF0aGFuIn0.eePFKSyF7LHAOehfEKi-V1cOUj5rtHPZ6uyj9VLlihOOyL8jPrny_8w9tsF4YC0jFzsKeRQ2Nnb8_IZqqWhbJgtfUOtkdl4G4CaLEJPUZH3kD_AvVQMsQGjsLO4Mu_rNycLByqk0RZjRVxNTkkt_ArZVSiLX9tmkvvT5fvHTfoGSe56qdhjrzyIcICckwdZU3AJTMf8w3loDISQLEG4OufkrmERXvslAkPN1ZxCZdwg7SHnATz8iEFerGiU-4QNN5dOuQi_XIdPMIbKE6dp4cYDyyr5wVnaEOCDd_TEEenpRLeHsqka3hmQY45rDiOXznpIkpZWeFNmf-4yjVHCZVg",
 		},
 	} {

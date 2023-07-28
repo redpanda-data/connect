@@ -428,6 +428,75 @@ root.foo = this.foo.lowercase()
 # Out: {"foo":"hello world"}
 ```
 
+### `parse_jwt_es256`
+
+Parses a claims object from a JWT string encoded with ES256. This method does not validate JWT claims.
+
+Introduced in version v4.20.0.
+
+
+#### Parameters
+
+**`signing_secret`** &lt;string&gt; The ES256 secret that was used for signing the token.  
+
+#### Examples
+
+
+```coffee
+root.claims = this.signed.parse_jwt_es256("""-----BEGIN EC PUBLIC KEY-----
+... certificate data ...
+-----END EC PUBLIC KEY-----""")
+
+# In:  {"claims":{"sub":"user123"}}
+# Out: {"signed":"eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyMTMzOCIsIm5hbWUiOiJOb3QgQmxvYmF0aGFuIn0.KWin9nTB8d4IZjcCbKQe4jJXc2LfsKKwbSCAMnHcAROpie62Gdjq2m48AEr4EY3iDIdcuqwZoaAwwza_MUvzVDNkjwpdc2ISqYLq9iBczhpG-X3I24Zv28OrCWtZruSM2rl6w7llMSVer35hPjNFPXE_qzIQ7H6O8m3_8tWE1wh2737WdwX0ExjMzYq-bhr5SwYGh905TP521It_YaC6OJ-ijaBR2SgmdriBn7Tov1Qn11iktvOUl-4uRj8Gy-w31O-fZDVklldymdf3uvBByuQkwzl4VkWhr5v2Wvjq49mY4Uj8H-u4NFzrwZtHik56n9YTll0K6k0z3ucUjHpDFA"}
+```
+
+### `parse_jwt_es384`
+
+Parses a claims object from a JWT string encoded with ES384. This method does not validate JWT claims.
+
+Introduced in version v4.20.0.
+
+
+#### Parameters
+
+**`signing_secret`** &lt;string&gt; The ES384 secret that was used for signing the token.  
+
+#### Examples
+
+
+```coffee
+root.claims = this.signed.parse_jwt_es384("""-----BEGIN EC PUBLIC KEY-----
+... certificate data ...
+-----END EC PUBLIC KEY-----""")
+
+# In:  {"claims":{"sub":"user123"}}
+# Out: {"signed":"eyJhbGciOiJSUzM4NCIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyMTMzOCIsIm5hbWUiOiJOb3QgQmxvYmF0aGFuIn0.detziSnNZJ0cX75pof0EASsajqCmes4otwSYAMjVdr31-gADaGdXTKrkpClUeFdH_488UaekpaeP1iRzML8-kp1yGa6ZCfOw1E_r3zT6hkdZwPDi5OKQy2V5JWlvGTzzwfSc9SgaRGyGg-FBo54CakQMwAA3Us_g82sy4bwO1ay2BriW5dX6tJnm2875DgBzOlHnAt97bH0odT7_LbJPkm9c_H7EdVUH810Qar_NVaPdVgwo5CMN4lCXxIjrFoxCJ3kEu8jf-9bZedK5UHsRlo7lYDxtxrmi9izMXvwCbEcn4Hgi6a_SjsOzsHYriRJN5NCQI_vs4kFiUWiLAyFNeA"}
+```
+
+### `parse_jwt_es512`
+
+Parses a claims object from a JWT string encoded with ES512. This method does not validate JWT claims.
+
+Introduced in version v4.20.0.
+
+
+#### Parameters
+
+**`signing_secret`** &lt;string&gt; The ES512 secret that was used for signing the token.  
+
+#### Examples
+
+
+```coffee
+root.claims = this.signed.parse_jwt_es512("""-----BEGIN EC PUBLIC KEY-----
+... certificate data ...
+-----END EC PUBLIC KEY-----""")
+
+# In:  {"claims":{"sub":"user123"}}
+# Out: {"signed":"eyJhbGciOiJSUzUxMiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyMTMzOCIsIm5hbWUiOiJOb3QgQmxvYmF0aGFuIn0.eePFKSyF7LHAOehfEKi-V1cOUj5rtHPZ6uyj9VLlihOOyL8jPrny_8w9tsF4YC0jFzsKeRQ2Nnb8_IZqqWhbJgtfUOtkdl4G4CaLEJPUZH3kD_AvVQMsQGjsLO4Mu_rNycLByqk0RZjRVxNTkkt_ArZVSiLX9tmkvvT5fvHTfoGSe56qdhjrzyIcICckwdZU3AJTMf8w3loDISQLEG4OufkrmERXvslAkPN1ZxCZdwg7SHnATz8iEFerGiU-4QNN5dOuQi_XIdPMIbKE6dp4cYDyyr5wVnaEOCDd_TEEenpRLeHsqka3hmQY45rDiOXznpIkpZWeFNmf-4yjVHCZVg"}
+```
+
 ### `parse_jwt_hs256`
 
 Parses a claims object from a JWT string encoded with HS256. This method does not validate JWT claims.
@@ -558,60 +627,6 @@ root.claims = this.signed.parse_jwt_rs512("""-----BEGIN RSA PUBLIC KEY-----
 
 # In:  {"claims":{"sub":"user123"}}
 # Out: {"signed":"eyJhbGciOiJSUzUxMiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyMTMzOCIsIm5hbWUiOiJOb3QgQmxvYmF0aGFuIn0.eePFKSyF7LHAOehfEKi-V1cOUj5rtHPZ6uyj9VLlihOOyL8jPrny_8w9tsF4YC0jFzsKeRQ2Nnb8_IZqqWhbJgtfUOtkdl4G4CaLEJPUZH3kD_AvVQMsQGjsLO4Mu_rNycLByqk0RZjRVxNTkkt_ArZVSiLX9tmkvvT5fvHTfoGSe56qdhjrzyIcICckwdZU3AJTMf8w3loDISQLEG4OufkrmERXvslAkPN1ZxCZdwg7SHnATz8iEFerGiU-4QNN5dOuQi_XIdPMIbKE6dp4cYDyyr5wVnaEOCDd_TEEenpRLeHsqka3hmQY45rDiOXznpIkpZWeFNmf-4yjVHCZVg"}
-```
-
-### `parse_jwt_rs256`
-
-Parses a claims object from a JWT string encoded with RS256. This method does not validate JWT claims.
-
-#### Parameters
-
-**`public_key`** &lt;string&gt; The public key that corresponds to the private key used to sign the token.  
-
-#### Examples
-
-
-```coffee
-root.claims = this.signed.parse_jwt_rs256("dont-tell-anyone")
-
-# In:  {"signed":"eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyMTMzOCIsIm5hbWUiOiJOb3QgQmxvYmF0aGFuIn0.KWin9nTB8d4IZjcCbKQe4jJXc2LfsKKwbSCAMnHcAROpie62Gdjq2m48AEr4EY3iDIdcuqwZoaAwwza_MUvzVDNkjwpdc2ISqYLq9iBczhpG-X3I24Zv28OrCWtZruSM2rl6w7llMSVer35hPjNFPXE_qzIQ7H6O8m3_8tWE1wh2737WdwX0ExjMzYq-bhr5SwYGh905TP521It_YaC6OJ-ijaBR2SgmdriBn7Tov1Qn11iktvOUl-4uRj8Gy-w31O-fZDVklldymdf3uvBByuQkwzl4VkWhr5v2Wvjq49mY4Uj8H-u4NFzrwZtHik56n9YTll0K6k0z3ucUjHpDFA"}
-# Out: {"claims":{"sub":"user123"}}
-```
-
-### `parse_jwt_rs384`
-
-Parses a claims object from a JWT string encoded with RS384. This method does not validate JWT claims.
-
-#### Parameters
-
-**`public_key`** &lt;string&gt; The public key that corresponds to the private key used to sign the token.  
-
-#### Examples
-
-
-```coffee
-root.claims = this.signed.parse_jwt_rs384("dont-tell-anyone")
-
-# In:  {"signed":"eyJhbGciOiJSUzM4NCIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyMTMzOCIsIm5hbWUiOiJOb3QgQmxvYmF0aGFuIn0.detziSnNZJ0cX75pof0EASsajqCmes4otwSYAMjVdr31-gADaGdXTKrkpClUeFdH_488UaekpaeP1iRzML8-kp1yGa6ZCfOw1E_r3zT6hkdZwPDi5OKQy2V5JWlvGTzzwfSc9SgaRGyGg-FBo54CakQMwAA3Us_g82sy4bwO1ay2BriW5dX6tJnm2875DgBzOlHnAt97bH0odT7_LbJPkm9c_H7EdVUH810Qar_NVaPdVgwo5CMN4lCXxIjrFoxCJ3kEu8jf-9bZedK5UHsRlo7lYDxtxrmi9izMXvwCbEcn4Hgi6a_SjsOzsHYriRJN5NCQI_vs4kFiUWiLAyFNeA"}
-# Out: {"claims":{"sub":"user123"}}
-```
-
-### `parse_jwt_rs512`
-
-Parses a claims object from a JWT string encoded with RS512. This method does not validate JWT claims.
-
-#### Parameters
-
-**`public_key`** &lt;string&gt; The public key that corresponds to the private key used to sign the token.  
-
-#### Examples
-
-
-```coffee
-root.claims = this.signed.parse_jwt_rs512("dont-tell-anyone")
-
-# In:  {"signed":"eyJhbGciOiJSUzUxMiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyMTMzOCIsIm5hbWUiOiJOb3QgQmxvYmF0aGFuIn0.eePFKSyF7LHAOehfEKi-V1cOUj5rtHPZ6uyj9VLlihOOyL8jPrny_8w9tsF4YC0jFzsKeRQ2Nnb8_IZqqWhbJgtfUOtkdl4G4CaLEJPUZH3kD_AvVQMsQGjsLO4Mu_rNycLByqk0RZjRVxNTkkt_ArZVSiLX9tmkvvT5fvHTfoGSe56qdhjrzyIcICckwdZU3AJTMf8w3loDISQLEG4OufkrmERXvslAkPN1ZxCZdwg7SHnATz8iEFerGiU-4QNN5dOuQi_XIdPMIbKE6dp4cYDyyr5wVnaEOCDd_TEEenpRLeHsqka3hmQY45rDiOXznpIkpZWeFNmf-4yjVHCZVg"}
-# Out: {"claims":{"sub":"user123"}}
 ```
 
 ### `quote`
@@ -2469,6 +2484,75 @@ root = this.foo.merge(this.bar)
 # Out: {"first_name":"fooer","likes":["bars","foos"],"second_name":"barer"}
 ```
 
+### `sign_jwt_es256`
+
+Hash and sign an object representing JSON Web Token (JWT) claims using ES256.
+
+Introduced in version v4.20.0.
+
+
+#### Parameters
+
+**`signing_secret`** &lt;string&gt; The secret to use for signing the token.  
+
+#### Examples
+
+
+```coffee
+root.signed = this.claims.sign_jwt_es256("""-----BEGIN EC PRIVATE KEY-----
+... certificate data ...
+-----END EC PRIVATE KEY-----""")
+
+# In:  {"claims":{"sub":"user123"}}
+# Out: {"signed":"eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9.eyJpYXQiOjE1MTYyMzkwMjIsIm1vb2QiOiJEaXNkYWluZnVsIiwic3ViIjoiMTIzNDU2Nzg5MCJ9.-8LrOdkEiv_44ADWW08lpbq41ZmHCel58NMORPq1q4Dyw0zFhqDVLrRoSvCvuyyvgXAFb9IHfR-9MlJ_2ShA9A"}
+```
+
+### `sign_jwt_es384`
+
+Hash and sign an object representing JSON Web Token (JWT) claims using ES384.
+
+Introduced in version v4.20.0.
+
+
+#### Parameters
+
+**`signing_secret`** &lt;string&gt; The secret to use for signing the token.  
+
+#### Examples
+
+
+```coffee
+root.signed = this.claims.sign_jwt_es384("""-----BEGIN EC PRIVATE KEY-----
+... certificate data ...
+-----END EC PRIVATE KEY-----""")
+
+# In:  {"claims":{"sub":"user123"}}
+# Out: {"signed":"eyJhbGciOiJFUzM4NCIsInR5cCI6IkpXVCJ9.eyJpYXQiOjE1MTYyMzkwMjIsIm1vb2QiOiJEaXNkYWluZnVsIiwic3ViIjoiMTIzNDU2Nzg5MCJ9.bkrqALC-HuAOXYiH4Xdc6gT5-tgRY9niI5bB0luuIBkyYRKHwNLtFIZ-lw54ld3_20BxXNaC-o6zFJwTEUaqZybRBj2KZtV8X7cX1oKte_V4YceNYESnmqiEP0eA7PHh"}
+```
+
+### `sign_jwt_es512`
+
+Hash and sign an object representing JSON Web Token (JWT) claims using ES512.
+
+Introduced in version v4.20.0.
+
+
+#### Parameters
+
+**`signing_secret`** &lt;string&gt; The secret to use for signing the token.  
+
+#### Examples
+
+
+```coffee
+root.signed = this.claims.sign_jwt_es512("""-----BEGIN EC PRIVATE KEY-----
+... certificate data ...
+-----END EC PRIVATE KEY-----""")
+
+# In:  {"claims":{"sub":"user123"}}
+# Out: {"signed":"eyJhbGciOiJFUzUxMiIsInR5cCI6IkpXVCJ9.eyJpYXQiOjE1MTYyMzkwMjIsIm1vb2QiOiJEaXNkYWluZnVsIiwic3ViIjoiMTIzNDU2Nzg5MCJ9.AET5FhyU_Y0gB2QZ7cMxTY_o6ioMEuBz9MliILqE1En3AjiBdWyVwtuSva-u0WVuTIQmpV3Uaes0_DNhSRoBa3jzAKElAJzNlF0D_reofCTfwfTur4XuRHOCRCU9UFHuATMwIUd_me7aF3K4fQKu1OuaGjZT8F3R2usoiZVMjm9e-bw5"}
+```
+
 ### `sign_jwt_hs256`
 
 Hash and sign an object representing JSON Web Token (JWT) claims using HS256.
@@ -2547,9 +2631,9 @@ Introduced in version v4.18.0.
 
 
 ```coffee
-root.signed = this.claims.sign_jwt_rs256("""-----BEGIN RSA PUBLIC KEY-----
+root.signed = this.claims.sign_jwt_rs256("""-----BEGIN RSA PRIVATE KEY-----
 ... certificate data ...
------END RSA PUBLIC KEY-----""")
+-----END RSA PRIVATE KEY-----""")
 
 # In:  {"claims":{"sub":"user123"}}
 # Out: {"signed":"eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJpYXQiOjE1MTYyMzkwMjIsIm1vb2QiOiJEaXNkYWluZnVsIiwic3ViIjoiMTIzNDU2Nzg5MCJ9.b0lH3jEupZZ4zoaly4Y_GCvu94HH6UKdKY96zfGNsIkPZpQLHIkZ7jMWlLlNOAd8qXlsBGP_i8H2qCKI4zlWJBGyPZgxXDzNRPVrTDfFpn4t4nBcA1WK2-ntXP3ehQxsaHcQU8Z_nsogId7Pme5iJRnoHWEnWtbwz5DLSXL3ZZNnRdrHM9MdI7QSDz9mojKDCaMpGN9sG7Xl-tGdBp1XzXuUOzG8S03mtZ1IgVR1uiBL2N6oohHIAunk8DIAmNWI-zgycTgzUGU7mvPkKH43qO8Ua1-13tCUBKKa8VxcotZ67Mxm1QAvBGoDnTKwWMwghLzs6d6WViXQg6eWlJcpBA"}
@@ -2570,9 +2654,9 @@ Introduced in version v4.18.0.
 
 
 ```coffee
-root.signed = this.claims.sign_jwt_rs384("""-----BEGIN RSA PUBLIC KEY-----
+root.signed = this.claims.sign_jwt_rs384("""-----BEGIN RSA PRIVATE KEY-----
 ... certificate data ...
------END RSA PUBLIC KEY-----""")
+-----END RSA PRIVATE KEY-----""")
 
 # In:  {"claims":{"sub":"user123"}}
 # Out: {"signed":"eyJhbGciOiJSUzM4NCIsInR5cCI6IkpXVCJ9.eyJpYXQiOjE1MTYyMzkwMjIsIm1vb2QiOiJEaXNkYWluZnVsIiwic3ViIjoiMTIzNDU2Nzg5MCJ9.orcXYBcjVE5DU7mvq4KKWFfNdXR4nEY_xupzWoETRpYmQZIozlZnM_nHxEk2dySvpXlAzVm7kgOPK2RFtGlOVaNRIa3x-pMMr-bhZTno4L8Hl4sYxOks3bWtjK7wql4uqUbqThSJB12psAXw2-S-I_FMngOPGIn4jDT9b802ottJSvTpXcy0-eKTjrV2PSkRRu-EYJh0CJZW55MNhqlt6kCGhAXfbhNazN3ASX-dmpd_JixyBKphrngr_zRA-FCn_Xf3QQDA-5INopb4Yp5QiJ7UxVqQEKI80X_JvJqz9WE1qiAw8pq5-xTen1t7zTP-HT1NbbD3kltcNa3G8acmNg"}
@@ -2593,9 +2677,9 @@ Introduced in version v4.18.0.
 
 
 ```coffee
-root.signed = this.claims.sign_jwt_rs512("""-----BEGIN RSA PUBLIC KEY-----
+root.signed = this.claims.sign_jwt_rs512("""-----BEGIN RSA PRIVATE KEY-----
 ... certificate data ...
------END RSA PUBLIC KEY-----""")
+-----END RSA PRIVATE KEY-----""")
 
 # In:  {"claims":{"sub":"user123"}}
 # Out: {"signed":"eyJhbGciOiJSUzUxMiIsInR5cCI6IkpXVCJ9.eyJpYXQiOjE1MTYyMzkwMjIsIm1vb2QiOiJEaXNkYWluZnVsIiwic3ViIjoiMTIzNDU2Nzg5MCJ9.rsMp_X5HMrUqKnZJIxo27aAoscovRA6SSQYR9rq7pifIj0YHXxMyNyOBDGnvVALHKTi25VUGHpfNUW0VVMmae0A4t_ObNU6hVZHguWvetKZZq4FZpW1lgWHCMqgPGwT5_uOqwYCH6r8tJuZT3pqXeL0CY4putb1AN2w6CVp620nh3l8d3XWb4jaifycd_4CEVCqHuWDmohfug4VhmoVKlIXZkYoAQowgHlozATDssBSWdYtv107Wd2AzEoiXPu6e3pflsuXULlyqQnS4ELEKPYThFLafh1NqvZDPddqozcPZ-iODBW-xf3A4DYDdivnMYLrh73AZOGHexxu8ay6nDA"}
