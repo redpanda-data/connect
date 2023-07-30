@@ -119,10 +119,6 @@ type cloudWatchStat struct {
 	dimensions []*cloudwatch.Dimension
 }
 
-func (c *cloudWatchStat) Incr(count int64) {
-	c.IncrInt64(count)
-}
-
 func (c *cloudWatchStat) SetFloat64(value float64) {
 	c.SetInt64(int64(value))
 }
