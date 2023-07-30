@@ -67,8 +67,8 @@ func (t *Tracker) withCurrentEpoch(fn func(*Observed)) {
 
 type closureStat func(v int64)
 
-func (c closureStat) Incr(count int64) {
-	c.IncrInt64(count)
+func (c closureStat) IncrFloat64(v float64) {
+	c(int64(v))
 }
 
 func (c closureStat) IncrInt64(v int64) {

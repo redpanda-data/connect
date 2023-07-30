@@ -180,7 +180,7 @@ func (h *Client) incrCode(code int) {
 	h.codesMut.RUnlock()
 
 	if exists {
-		ctr.Incr(1)
+		ctr.IncrInt64(1)
 		return
 	}
 
@@ -189,7 +189,7 @@ func (h *Client) incrCode(code int) {
 		return
 	}
 	ctr = h.mgr.Metrics().GetCounter(fmt.Sprintf("http_request_code_%vxx", tier))
-	ctr.Incr(1)
+	ctr.IncrInt64(1)
 
 	h.codesMut.Lock()
 	h.mCodes[code] = ctr

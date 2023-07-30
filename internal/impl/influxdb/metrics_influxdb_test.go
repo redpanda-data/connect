@@ -60,11 +60,11 @@ func TestInfluxCounters(t *testing.T) {
 	i := influx.(*influxDBMetrics)
 
 	expectedMetrics := 3
-	i.GetCounter("cou nter").Incr(1)
-	i.GetCounter("cou nter").Incr(1)
-	i.GetCounterVec("counter with labels", "label").With("value").Incr(2)
-	i.GetCounterVec("counter with labels", "label").With("value").Incr(2)
-	i.GetCounterVec("counter with labels", "label").With("value2").Incr(2)
+	i.GetCounter("cou nter").IncrInt64(1)
+	i.GetCounter("cou nter").IncrInt64(1)
+	i.GetCounterVec("counter with labels", "label").With("value").IncrInt64(2)
+	i.GetCounterVec("counter with labels", "label").With("value").IncrInt64(2)
+	i.GetCounterVec("counter with labels", "label").With("value2").IncrInt64(2)
 
 	m := i.getAllMetrics()
 	if len(m) != expectedMetrics {

@@ -46,9 +46,14 @@ type combinedCounter struct {
 	c2 StatCounter
 }
 
-func (c *combinedCounter) Incr(count int64) {
-	c.c1.Incr(count)
-	c.c2.Incr(count)
+func (c *combinedCounter) IncrInt64(count int64) {
+	c.c1.IncrInt64(count)
+	c.c2.IncrInt64(count)
+}
+
+func (c *combinedCounter) IncrFloat64(count float64) {
+	c.c1.IncrFloat64(count)
+	c.c2.IncrFloat64(count)
 }
 
 type combinedTimer struct {

@@ -69,12 +69,12 @@ func (a *metricsCache) Get(ctx context.Context, key string) ([]byte, error) {
 	a.mGetLatency.Timing(int64(time.Since(started)))
 	if err != nil {
 		if errors.Is(err, component.ErrKeyNotFound) {
-			a.mGetNotFound.Incr(1)
+			a.mGetNotFound.IncrInt64(1)
 		} else {
-			a.mGetError.Incr(1)
+			a.mGetError.IncrInt64(1)
 		}
 	} else {
-		a.mGetSuccess.Incr(1)
+		a.mGetSuccess.IncrInt64(1)
 	}
 	return b, err
 }
@@ -84,9 +84,9 @@ func (a *metricsCache) Set(ctx context.Context, key string, value []byte, ttl *t
 	err := a.c.Set(ctx, key, value, ttl)
 	a.mSetLatency.Timing(int64(time.Since(started)))
 	if err != nil {
-		a.mSetError.Incr(1)
+		a.mSetError.IncrInt64(1)
 	} else {
-		a.mSetSuccess.Incr(1)
+		a.mSetSuccess.IncrInt64(1)
 	}
 	return err
 }
@@ -96,9 +96,9 @@ func (a *metricsCache) SetMulti(ctx context.Context, items map[string]TTLItem) e
 	err := a.c.SetMulti(ctx, items)
 	a.mSetLatency.Timing(int64(time.Since(started)))
 	if err != nil {
-		a.mSetError.Incr(int64(len(items)))
+		a.mSetError.IncrInt64(int64(len(items)))
 	} else {
-		a.mSetSuccess.Incr(int64(len(items)))
+		a.mSetSuccess.IncrInt64(int64(len(items)))
 	}
 	return err
 }
@@ -109,12 +109,12 @@ func (a *metricsCache) Add(ctx context.Context, key string, value []byte, ttl *t
 	a.mAddLatency.Timing(int64(time.Since(started)))
 	if err != nil {
 		if errors.Is(err, component.ErrKeyAlreadyExists) {
-			a.mAddDupe.Incr(1)
+			a.mAddDupe.IncrInt64(1)
 		} else {
-			a.mAddError.Incr(1)
+			a.mAddError.IncrInt64(1)
 		}
 	} else {
-		a.mAddSuccess.Incr(1)
+		a.mAddSuccess.IncrInt64(1)
 	}
 	return err
 }
@@ -124,9 +124,9 @@ func (a *metricsCache) Delete(ctx context.Context, key string) error {
 	err := a.c.Delete(ctx, key)
 	a.mDelLatency.Timing(int64(time.Since(started)))
 	if err != nil {
-		a.mDelError.Incr(1)
+		a.mDelError.IncrInt64(1)
 	} else {
-		a.mDelSuccess.Incr(1)
+		a.mDelSuccess.IncrInt64(1)
 	}
 	return err
 }

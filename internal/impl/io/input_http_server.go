@@ -510,7 +510,7 @@ func (h *httpServerInput) postHandler(w http.ResponseWriter, r *http.Request) {
 	store := transaction.NewResultStore()
 	transaction.AddResultStore(msg, store)
 
-	h.mPostRcvd.Incr(int64(msg.Len()))
+	h.mPostRcvd.IncrInt64(int64(msg.Len()))
 	h.log.Tracef("Consumed %v messages from POST to '%v'.\n", msg.Len(), h.conf.Path)
 
 	resChan := make(chan error, 1)
@@ -684,7 +684,7 @@ func (h *httpServerInput) wsHandler(w http.ResponseWriter, r *http.Request) {
 			if _, msgBytes, err = ws.ReadMessage(); err != nil {
 				return
 			}
-			h.mWSRcvd.Incr(1)
+			h.mWSRcvd.IncrInt64(1)
 		}
 
 		if h.conf.RateLimit != "" {

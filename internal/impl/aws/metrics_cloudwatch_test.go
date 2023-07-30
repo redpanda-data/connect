@@ -96,13 +96,13 @@ func TestCloudWatchBasic(t *testing.T) {
 	cw.ctx, cw.cancel = context.WithCancel(context.Background())
 
 	ctrFoo := cw.NewCounterCtor("counter.foo")()
-	ctrFoo.Incr(7)
-	ctrFoo.Incr(6)
+	ctrFoo.IncrInt64(7)
+	ctrFoo.IncrInt64(6)
 
 	ctrBar := cw.NewCounterCtor("counter.bar")()
-	ctrBar.Incr(1)
-	ctrBar.Incr(1)
-	ctrBar.Incr(1)
+	ctrBar.IncrInt64(1)
+	ctrBar.IncrInt64(1)
+	ctrBar.IncrInt64(1)
 
 	ggeFoo := cw.NewGaugeCtor("gauge.foo")()
 	ggeFoo.SetInt64(111)
@@ -120,10 +120,10 @@ func TestCloudWatchBasic(t *testing.T) {
 
 	cw.flush()
 
-	ctrFoo.Incr(2)
+	ctrFoo.IncrInt64(2)
 
-	ctrBar.Incr(1)
-	ctrBar.Incr(1)
+	ctrBar.IncrInt64(1)
+	ctrBar.IncrInt64(1)
 
 	ggeFoo.SetInt64(72)
 
@@ -213,7 +213,7 @@ func TestCloudWatchMoreThan20Items(t *testing.T) {
 	for i := 0; i < 30; i++ {
 		name := fmt.Sprintf("counter.%v", i)
 		ctr := cw.NewCounterCtor(name)()
-		ctr.Incr(23)
+		ctr.IncrInt64(23)
 		exp[name] = checkedDatum{
 			unit:  "Count",
 			value: 23,
@@ -319,9 +319,9 @@ func TestCloudWatchTags(t *testing.T) {
 	ctr := cw.NewCounterCtor("counter.bar", "foo")
 	gge := cw.NewGaugeCtor("gauge.bar", "bar")
 
-	ctr("one").Incr(1)
-	ctr("two").Incr(2)
-	ctr("").Incr(3) // Test that empty ones are skipped
+	ctr("one").IncrInt64(1)
+	ctr("two").IncrInt64(2)
+	ctr("").IncrInt64(3) // Test that empty ones are skipped
 	gge("third").SetInt64(3)
 
 	cw.flush()
@@ -378,7 +378,7 @@ func TestCloudWatchTagsMoreThan20(t *testing.T) {
 	}
 
 	ctrFoo := cw.NewCounterCtor("counter.foo", tagNames...)
-	ctrFoo(tagValues...).Incr(3)
+	ctrFoo(tagValues...).IncrInt64(3)
 
 	cw.flush()
 

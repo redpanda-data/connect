@@ -85,8 +85,8 @@ func NewAutoObservedProcessor(typeStr string, p AutoObserved, mgr component.Obse
 }
 
 func (a *v2ToV1Processor) ProcessBatch(ctx context.Context, msg message.Batch) ([]message.Batch, error) {
-	a.mReceived.Incr(int64(msg.Len()))
-	a.mBatchReceived.Incr(1)
+	a.mReceived.IncrInt64(int64(msg.Len()))
+	a.mBatchReceived.IncrInt64(1)
 
 	tStarted := time.Now()
 
@@ -96,7 +96,7 @@ func (a *v2ToV1Processor) ProcessBatch(ctx context.Context, msg message.Batch) (
 
 		nextParts, err := a.p.Process(ctx, part)
 		if err != nil {
-			a.mError.Incr(1)
+			a.mError.IncrInt64(1)
 			a.mgr.Logger().Debugf("Processor failed: %v", err)
 			MarkErr(part, span, err)
 			nextParts = append(nextParts, part)
@@ -114,8 +114,8 @@ func (a *v2ToV1Processor) ProcessBatch(ctx context.Context, msg message.Batch) (
 		return nil, nil
 	}
 
-	a.mSent.Incr(int64(len(newParts)))
-	a.mBatchSent.Incr(1)
+	a.mSent.IncrInt64(int64(len(newParts)))
+	a.mBatchSent.IncrInt64(1)
 	return []message.Batch{newParts}, nil
 }
 
@@ -168,7 +168,7 @@ func (b *BatchProcContext) Span(index int) *tracing.Span {
 // observability information without marking specific message errors.
 func (b *BatchProcContext) OnError(err error, index int, p *message.Part) {
 	if b.mError != nil {
-		b.mError.Incr(1)
+		b.mError.IncrInt64(1)
 	}
 	if b.logger != nil {
 		b.logger.Debugf("Processor failed: %v", err)
@@ -214,8 +214,8 @@ func NewAutoObservedBatchedProcessor(typeStr string, p AutoObservedBatched, mgr 
 }
 
 func (a *v2BatchedToV1Processor) ProcessBatch(ctx context.Context, msg message.Batch) ([]message.Batch, error) {
-	a.mReceived.Incr(int64(msg.Len()))
-	a.mBatchReceived.Incr(1)
+	a.mReceived.IncrInt64(int64(msg.Len()))
+	a.mBatchReceived.IncrInt64(1)
 
 	tStarted := time.Now()
 	_, spans := tracing.WithChildSpans(a.mgr.Tracer(), a.typeStr, msg)
@@ -228,7 +228,7 @@ func (a *v2BatchedToV1Processor) ProcessBatch(ctx context.Context, msg message.B
 		logger: a.mgr.Logger(),
 	}, msg)
 	if err != nil {
-		a.mError.Incr(int64(msg.Len()))
+		a.mError.IncrInt64(int64(msg.Len()))
 		a.mgr.Logger().Debugf("Processor failed: %v", err)
 		_ = msg.Iter(func(i int, p *message.Part) error {
 			MarkErr(p, spans[i], err)
@@ -247,9 +247,9 @@ func (a *v2BatchedToV1Processor) ProcessBatch(ctx context.Context, msg message.B
 	}
 
 	for _, m := range outputBatches {
-		a.mSent.Incr(int64(m.Len()))
+		a.mSent.IncrInt64(int64(m.Len()))
 	}
-	a.mBatchSent.Incr(int64(len(outputBatches)))
+	a.mBatchSent.IncrInt64(int64(len(outputBatches)))
 	return outputBatches, nil
 }
 

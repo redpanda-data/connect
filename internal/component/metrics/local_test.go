@@ -10,8 +10,8 @@ func TestCounter(t *testing.T) {
 	nm := NewLocal()
 
 	ctr := nm.GetCounter("counterone")
-	ctr.Incr(10)
-	ctr.Incr(11)
+	ctr.IncrInt64(10)
+	ctr.IncrInt64(11)
 
 	gge := nm.GetGauge("gaugeone")
 	gge.SetInt64(12)
@@ -20,8 +20,8 @@ func TestCounter(t *testing.T) {
 	tmr.Timing(13)
 
 	ctrTwo := nm.GetCounterVec("countertwo", "label1")
-	ctrTwo.With("value1").Incr(10)
-	ctrTwo.With("value2").Incr(11)
+	ctrTwo.With("value1").IncrInt64(10)
+	ctrTwo.With("value2").IncrInt64(11)
 
 	ggeTwo := nm.GetGaugeVec("gaugetwo", "label2")
 	ggeTwo.With("value3").SetInt64(12)

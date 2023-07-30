@@ -5,13 +5,10 @@ import "net/http"
 // DudStat implements the Stat interface but doesn't actual do anything.
 type DudStat struct{}
 
-// Incr does nothing.
-func (d DudStat) Incr(count int64) {}
-
 // IncrInt64 does nothing.
 func (d DudStat) IncrInt64(count int64) {}
 
-// Decr does nothing.
+// DecrInt64 does nothing.
 func (d DudStat) DecrInt64(count int64) {}
 
 // Timing does nothing.

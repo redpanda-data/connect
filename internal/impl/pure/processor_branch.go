@@ -311,8 +311,8 @@ pathLoop:
 // ProcessBatch applies the processor to a message, either creating >0
 // resulting messages or a response to be sent back to the message source.
 func (b *Branch) ProcessBatch(ctx context.Context, batch message.Batch) ([]message.Batch, error) {
-	b.mReceived.Incr(int64(batch.Len()))
-	b.mBatchReceived.Incr(1)
+	b.mReceived.IncrInt64(int64(batch.Len()))
+	b.mBatchReceived.IncrInt64(1)
 	startedAt := time.Now()
 
 	branchMsg, propSpans := tracing.WithChildSpans(b.tracer, "branch", batch.ShallowCopy())
@@ -401,7 +401,7 @@ func (b *Branch) createResult(ctx context.Context, parts []*message.Part, refere
 			_ = parts[i].SetBytes(nil)
 			newPart, err := b.requestMap.MapOnto(parts[i], i, referenceMsg)
 			if err != nil {
-				b.mError.Incr(1)
+				b.mError.IncrInt64(1)
 				b.log.Debugf("Failed to map request '%v': %v\n", i, err)
 
 				// Skip if message part fails mapping.
@@ -431,7 +431,7 @@ func (b *Branch) createResult(ctx context.Context, parts []*message.Part, refere
 			err = errors.New("child processors resulted in zero messages")
 		}
 		if err != nil {
-			b.mError.Incr(1)
+			b.mError.IncrInt64(1)
 			b.log.Errorf("Child processors failed: %v\n", err)
 			return nil, mapErrs, err
 		}
@@ -440,7 +440,7 @@ func (b *Branch) createResult(ctx context.Context, parts []*message.Part, refere
 	// Re-align processor results with original message indexes
 	var alignedResult []*message.Part
 	if alignedResult, err = alignBranchResult(originalLen, skipped, failed, procResults); err != nil {
-		b.mError.Incr(1)
+		b.mError.IncrInt64(1)
 		b.log.Errorf("Failed to align branch result: %v. Avoid using filters or archive/unarchive processors within your branch, or anything that increases or reduces the number of messages. These processors should instead be applied before or after the branch processor.\n", err)
 		return nil, mapErrs, err
 	}
@@ -462,7 +462,7 @@ func (b *Branch) createResult(ctx context.Context, parts []*message.Part, refere
 // payload as per the map specified in the postmap and postmap_optional fields.
 func (b *Branch) overlayResult(payload message.Batch, results []*message.Part) ([]branchMapError, error) {
 	if exp, act := payload.Len(), len(results); exp != act {
-		b.mError.Incr(1)
+		b.mError.IncrInt64(1)
 		return nil, fmt.Errorf(
 			"message count returned from branch has diverged from the request, started with %v messages, finished with %v",
 			act, exp,
@@ -479,7 +479,7 @@ func (b *Branch) overlayResult(payload message.Batch, results []*message.Part) (
 
 			newPart, err := b.resultMap.MapOnto(payload.Get(i), i, message.Batch(results))
 			if err != nil {
-				b.mError.Incr(1)
+				b.mError.IncrInt64(1)
 				b.log.Debugf("Failed to map result '%v': %v\n", i, err)
 
 				failed = append(failed, newBranchMapError(i, fmt.Errorf("result mapping failed: %w", err)))
@@ -493,8 +493,8 @@ func (b *Branch) overlayResult(payload message.Batch, results []*message.Part) (
 		}
 	}
 
-	b.mBatchSent.Incr(1)
-	b.mSent.Incr(int64(payload.Len()))
+	b.mBatchSent.IncrInt64(1)
+	b.mSent.IncrInt64(int64(payload.Len()))
 	return failed, nil
 }
 

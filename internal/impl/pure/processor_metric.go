@@ -271,9 +271,9 @@ func (m *metricProcessor) handleCounter(val string, index int, msg message.Batch
 		if err != nil {
 			return err
 		}
-		m.mCounterVec.With(labelValues...).Incr(1)
+		m.mCounterVec.With(labelValues...).IncrInt64(1)
 	} else {
-		m.mCounter.Incr(1)
+		m.mCounter.IncrInt64(1)
 	}
 	return nil
 }

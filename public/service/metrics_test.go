@@ -16,7 +16,7 @@ import (
 func TestMetricsNil(t *testing.T) {
 	var m *Metrics
 
-	m.NewCounter("foo").Incr(1)
+	m.NewCounter("foo").IncrInt64(1)
 	m.NewGauge("bar").Set(10)
 	m.NewTimer("baz").Timing(10)
 }
@@ -26,8 +26,8 @@ func TestMetricsNoLabels(t *testing.T) {
 	nm := newReverseAirGapMetrics(stats)
 
 	ctr := nm.NewCounter("counterone")
-	ctr.Incr(10)
-	ctr.Incr(11)
+	ctr.IncrInt64(10)
+	ctr.IncrInt64(11)
 
 	gge := nm.NewGauge("gaugeone")
 	gge.Set(12)
@@ -48,8 +48,8 @@ func TestMetricsWithLabels(t *testing.T) {
 	nm := newReverseAirGapMetrics(stats)
 
 	ctr := nm.NewCounter("countertwo", "label1")
-	ctr.Incr(10, "value1")
-	ctr.Incr(11, "value2")
+	ctr.IncrInt64(10, "value1")
+	ctr.IncrInt64(11, "value2")
 
 	gge := nm.NewGauge("gaugetwo", "label2")
 	gge.Set(12, "value3")
@@ -80,7 +80,13 @@ type mockMetricsExporterType struct {
 	lock   *sync.Mutex
 }
 
-func (m *mockMetricsExporterType) Incr(count int64) {
+func (m *mockMetricsExporterType) IncrFloat64(count float64) {
+	m.lock.Lock()
+	m.values[m.name] += int64(count)
+	m.lock.Unlock()
+}
+
+func (m *mockMetricsExporterType) IncrInt64(count int64) {
 	m.lock.Lock()
 	m.values[m.name] += count
 	m.lock.Unlock()

@@ -284,7 +284,7 @@ acceptLoop:
 					}
 					return
 				}
-				t.mRcvd.Incr(int64(len(parts)))
+				t.mRcvd.IncrInt64(int64(len(parts)))
 
 				// We simply bounce rejected messages in a loop downstream so
 				// there's no benefit to aggregating acks.
@@ -333,7 +333,7 @@ func (t *socketServerInput) udpLoop() {
 			}
 			return
 		}
-		t.mRcvd.Incr(int64(len(parts)))
+		t.mRcvd.IncrInt64(int64(len(parts)))
 
 		// We simply bounce rejected messages in a loop downstream so
 		// there's no benefit to aggregating acks.

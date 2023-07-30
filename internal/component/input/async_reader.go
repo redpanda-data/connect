@@ -120,7 +120,7 @@ func (r *AsyncReader) loop() {
 					return false
 				}
 				r.mgr.Logger().Errorf("Failed to connect to %v: %v\n", r.typeStr, err)
-				mFailedConn.Incr(1)
+				mFailedConn.IncrInt64(1)
 
 				nextBoff := r.connBackoff.NextBackOff()
 				if nextBoff == backoff.Stop {
@@ -142,7 +142,7 @@ func (r *AsyncReader) loop() {
 	if !initConnection() {
 		return
 	}
-	mConn.Incr(1)
+	mConn.IncrInt64(1)
 	atomic.StoreInt32(&r.connected, 1)
 
 	for {
@@ -150,14 +150,14 @@ func (r *AsyncReader) loop() {
 
 		// If our reader says it is not connected.
 		if errors.Is(err, component.ErrNotConnected) {
-			mLostConn.Incr(1)
+			mLostConn.IncrInt64(1)
 			atomic.StoreInt32(&r.connected, 0)
 
 			// Continue to try to reconnect while still active.
 			if !initConnection() {
 				return
 			}
-			mConn.Incr(1)
+			mConn.IncrInt64(1)
 			atomic.StoreInt32(&r.connected, 1)
 			continue
 		}
@@ -184,7 +184,7 @@ func (r *AsyncReader) loop() {
 			continue
 		} else {
 			r.readBackoff.Reset()
-			mRcvd.Incr(int64(msg.Len()))
+			mRcvd.IncrInt64(int64(msg.Len()))
 			r.mgr.Logger().Tracef("Consumed %v messages from '%v'.\n", msg.Len(), r.typeStr)
 		}
 

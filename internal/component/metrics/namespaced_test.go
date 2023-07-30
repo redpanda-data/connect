@@ -50,8 +50,8 @@ func TestNamespacedNothing(t *testing.T) {
 	nm := metrics.NewNamespaced(prom)
 
 	ctr := nm.GetCounter("counterone")
-	ctr.Incr(10)
-	ctr.Incr(11)
+	ctr.IncrInt64(10)
+	ctr.IncrInt64(11)
 
 	gge := nm.GetGauge("gaugeone")
 	gge.SetInt64(12)
@@ -60,8 +60,9 @@ func TestNamespacedNothing(t *testing.T) {
 	tmr.Timing(13)
 
 	ctrTwo := nm.GetCounterVec("countertwo", "label1")
-	ctrTwo.With("value1").Incr(10)
-	ctrTwo.With("value2").Incr(11)
+	ctrTwo.With("value1").IncrInt64(10)
+	ctrTwo.With("value2").IncrInt64(11)
+	ctrTwo.With("value3").IncrFloat64(10.452)
 
 	ggeTwo := nm.GetGaugeVec("gaugetwo", "label2")
 	ggeTwo.With("value3").SetInt64(12)
@@ -76,6 +77,7 @@ func TestNamespacedNothing(t *testing.T) {
 	assert.Contains(t, body, "\ntimerone_sum 1.3e-08")
 	assert.Contains(t, body, "\ncountertwo{label1=\"value1\"} 10")
 	assert.Contains(t, body, "\ncountertwo{label1=\"value2\"} 11")
+	assert.Contains(t, body, "\ncountertwo{label1=\"value3\"} 10.452")
 	assert.Contains(t, body, "\ngaugetwo{label2=\"value3\"} 12")
 	assert.Contains(t, body, "\ntimertwo_sum{label3=\"value4\",label4=\"value5\"} 1.3e-08")
 }
@@ -86,8 +88,8 @@ func TestNamespacedPrefix(t *testing.T) {
 	nm := metrics.NewNamespaced(prom)
 
 	ctr := nm.GetCounter("counterone")
-	ctr.Incr(10)
-	ctr.Incr(11)
+	ctr.IncrInt64(10)
+	ctr.IncrInt64(11)
 
 	gge := nm.GetGauge("gaugeone")
 	gge.SetInt64(12)
@@ -96,8 +98,8 @@ func TestNamespacedPrefix(t *testing.T) {
 	tmr.Timing(13)
 
 	ctrTwo := nm.GetCounterVec("countertwo", "label1")
-	ctrTwo.With("value1").Incr(10)
-	ctrTwo.With("value2").Incr(11)
+	ctrTwo.With("value1").IncrInt64(10)
+	ctrTwo.With("value2").IncrInt64(11)
 
 	ggeTwo := nm.GetGaugeVec("gaugetwo", "label2")
 	ggeTwo.With("value3").SetInt64(12)
@@ -106,7 +108,7 @@ func TestNamespacedPrefix(t *testing.T) {
 	tmrTwo.With("value4", "value5").Timing(13)
 
 	ctrThree := nm.GetCounter("counterthree")
-	ctrThree.Incr(22)
+	ctrThree.IncrInt64(22)
 
 	body := getPage(t, handler)
 
@@ -126,8 +128,8 @@ func TestNamespacedPrefixStaticLabels(t *testing.T) {
 	nm := metrics.NewNamespaced(prom).WithLabels("static1", "svalue1")
 
 	ctr := nm.GetCounter("counterone")
-	ctr.Incr(10)
-	ctr.Incr(11)
+	ctr.IncrInt64(10)
+	ctr.IncrInt64(11)
 
 	gge := nm.GetGauge("gaugeone")
 	gge.SetInt64(12)
@@ -136,8 +138,8 @@ func TestNamespacedPrefixStaticLabels(t *testing.T) {
 	tmr.Timing(13)
 
 	ctrTwo := nm.GetCounterVec("countertwo", "label1")
-	ctrTwo.With("value1").Incr(10)
-	ctrTwo.With("value2").Incr(11)
+	ctrTwo.With("value1").IncrInt64(10)
+	ctrTwo.With("value2").IncrInt64(11)
 
 	ggeTwo := nm.GetGaugeVec("gaugetwo", "label2")
 	ggeTwo.With("value3").SetInt64(12)
@@ -148,7 +150,7 @@ func TestNamespacedPrefixStaticLabels(t *testing.T) {
 	nm2 := nm.WithLabels("static2", "svalue2")
 
 	ctrThree := nm2.GetCounter("counterthree")
-	ctrThree.Incr(22)
+	ctrThree.IncrInt64(22)
 
 	body := getPage(t, handler)
 
@@ -176,8 +178,8 @@ func TestNamespacedPrefixStaticLabelsWithMappings(t *testing.T) {
 	nm = nm.WithMapping(mappingFooToBar)
 
 	ctr := nm.GetCounter("counter")
-	ctr.Incr(10)
-	ctr.Incr(11)
+	ctr.IncrInt64(10)
+	ctr.IncrInt64(11)
 
 	gge := nm.GetGauge("gauge")
 	gge.SetInt64(12)
@@ -186,8 +188,8 @@ func TestNamespacedPrefixStaticLabelsWithMappings(t *testing.T) {
 	tmr.Timing(13)
 
 	ctrTwo := nm.GetCounterVec("countertwo", "label1")
-	ctrTwo.With("value1").Incr(10)
-	ctrTwo.With("value2").Incr(11)
+	ctrTwo.With("value1").IncrInt64(10)
+	ctrTwo.With("value2").IncrInt64(11)
 
 	ggeTwo := nm.GetGaugeVec("gaugetwo", "label2")
 	ggeTwo.With("value3").SetInt64(12)
@@ -224,8 +226,8 @@ root = this.replace_all("bar","baz")`, log.Noop())
 	nm = nm.WithMapping(mappingFooToBar)
 
 	ctr := nm.GetCounter("counter")
-	ctr.Incr(10)
-	ctr.Incr(11)
+	ctr.IncrInt64(10)
+	ctr.IncrInt64(11)
 
 	gge := nm.GetGauge("gauge")
 	gge.SetInt64(12)
@@ -234,8 +236,8 @@ root = this.replace_all("bar","baz")`, log.Noop())
 	tmr.Timing(13)
 
 	ctrTwo := nm.GetCounterVec("countertwo", "label1")
-	ctrTwo.With("value1").Incr(10)
-	ctrTwo.With("value2").Incr(11)
+	ctrTwo.With("value1").IncrInt64(10)
+	ctrTwo.With("value2").IncrInt64(11)
 
 	ggeTwo := nm.GetGaugeVec("gaugetwo", "label2")
 	ggeTwo.With("value3").SetInt64(12)

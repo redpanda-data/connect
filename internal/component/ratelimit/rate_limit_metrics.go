@@ -28,12 +28,12 @@ func MetricsForRateLimit(r V1, stats metrics.Type) V1 {
 }
 
 func (r *metricsRateLimit) Access(ctx context.Context) (time.Duration, error) {
-	r.mChecked.Incr(1)
+	r.mChecked.IncrInt64(1)
 	tout, err := r.r.Access(ctx)
 	if err != nil {
-		r.mErr.Incr(1)
+		r.mErr.IncrInt64(1)
 	} else if tout > 0 {
-		r.mLimited.Incr(1)
+		r.mLimited.IncrInt64(1)
 	}
 	return tout, err
 }

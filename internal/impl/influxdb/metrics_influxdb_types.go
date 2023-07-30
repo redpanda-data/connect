@@ -47,9 +47,14 @@ type influxDBCounter struct {
 	metrics.Counter
 }
 
-// Incr increments a metric by an amount.
-func (i influxDBCounter) Incr(count int64) {
+// IncrInt64 increments a metric by an integer amount.
+func (i influxDBCounter) IncrInt64(count int64) {
 	i.Inc(count)
+}
+
+// IncrFloat64 increments a metric by a decimal amount.
+func (i influxDBCounter) IncrFloat64(count float64) {
+	i.Inc(int64(count))
 }
 
 type influxDBTimer struct {

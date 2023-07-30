@@ -90,8 +90,12 @@ type promCounter struct {
 	ctr prometheus.Counter
 }
 
-func (p *promCounter) Incr(count int64) {
+func (p *promCounter) IncrInt64(count int64) {
 	p.ctr.Add(float64(count))
+}
+
+func (p *promCounter) IncrFloat64(count float64) {
+	p.ctr.Add(count)
 }
 
 type promTiming struct {

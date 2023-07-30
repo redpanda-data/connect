@@ -102,12 +102,12 @@ func (p *Batcher) Add(part *message.Part) bool {
 
 	if !p.triggered && p.count > 0 && len(p.parts) >= p.count {
 		p.triggered = true
-		p.mCountBatch.Incr(1)
+		p.mCountBatch.IncrInt64(1)
 		p.log.Traceln("Batching based on count")
 	}
 	if !p.triggered && p.byteSize > 0 && p.sizeTally >= p.byteSize {
 		p.triggered = true
-		p.mSizeBatch.Incr(1)
+		p.mSizeBatch.IncrInt64(1)
 		p.log.Traceln("Batching based on byte_size")
 	}
 	if p.check != nil && !p.triggered {
@@ -119,7 +119,7 @@ func (p *Batcher) Add(part *message.Part) bool {
 		}
 		if test {
 			p.triggered = true
-			p.mCheckBatch.Incr(1)
+			p.mCheckBatch.IncrInt64(1)
 			p.log.Traceln("Batching based on check query")
 		}
 	}
@@ -149,7 +149,7 @@ func (p *Batcher) flushAny(ctx context.Context) []message.Batch {
 	var newMsg message.Batch
 	if len(p.parts) > 0 {
 		if !p.triggered && p.period > 0 && time.Since(p.lastBatch) > p.period {
-			p.mPeriodBatch.Incr(1)
+			p.mPeriodBatch.IncrInt64(1)
 			p.log.Traceln("Batching based on period")
 		}
 		newMsg = message.Batch(p.parts)
