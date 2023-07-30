@@ -7,8 +7,18 @@ import (
 // StatCounter is a representation of a single counter metric stat. Interactions
 // with this stat are thread safe.
 type StatCounter interface {
-	// Incr increments a counter by an amount.
-	Incr(count int64)
+	StatCounterInter
+	StatCounterFloater
+}
+
+type StatCounterInter interface {
+	// IncrInt64 increments a counter by an integer amount.
+	IncrInt64(count int64)
+}
+
+type StatCounterFloater interface {
+	// IncrFloat64 increments a counter by a decimal amount.
+	IncrFloat64(count float64)
 }
 
 // StatTimer is a representation of a single timer metric stat, timing values
