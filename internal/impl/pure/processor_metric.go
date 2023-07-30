@@ -279,21 +279,42 @@ func (m *metricProcessor) handleCounter(val string, index int, msg message.Batch
 }
 
 func (m *metricProcessor) handleCounterBy(val string, index int, msg message.Batch) error {
+	var parsedVal any
 	i, err := strconv.ParseInt(val, 10, 64)
-	if err != nil {
-		return err
+	if err == nil {
+		if i < 0 {
+			return fmt.Errorf("value %d is negative", i)
+		}
+		parsedVal = i
+	} else {
+		f, err := strconv.ParseFloat(val, 64)
+		if err != nil {
+			return err
+		}
+		if f < 0 {
+			return fmt.Errorf("value %f is negative", f)
+		}
+		parsedVal = f
 	}
-	if i < 0 {
-		return errors.New("value is negative")
-	}
+
 	if len(m.labels) > 0 {
 		labelValues, err := m.labels.values(index, msg)
 		if err != nil {
 			return err
 		}
-		m.mCounterVec.With(labelValues...).Incr(i)
+		switch conv := parsedVal.(type) {
+		case int64:
+			m.mCounterVec.With(labelValues...).IncrInt64(conv)
+		case float64:
+			m.mCounterVec.With(labelValues...).IncrFloat64(conv)
+		}
 	} else {
-		m.mCounter.Incr(i)
+		switch conv := parsedVal.(type) {
+		case int64:
+			m.mCounter.IncrInt64(conv)
+		case float64:
+			m.mCounter.IncrFloat64(conv)
+		}
 	}
 	return nil
 }
