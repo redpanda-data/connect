@@ -201,7 +201,7 @@ func (c *cloudWatchStat) IncrInt64(count int64) {
 	c.addValue(count)
 }
 
-// Decr decrements a metric by an amount.
+// DecrInt64 decrements a metric by an amount.
 func (c *cloudWatchStat) DecrInt64(count int64) {
 	c.addValue(-count)
 }
