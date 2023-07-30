@@ -56,14 +56,24 @@ type MetricCounter struct {
 	cv metrics.StatCounterVec
 }
 
-// Incr increments a counter metric by an amount, the number of label values
+// IncrInt64 increments a counter metric by an integer amount, the number of label values
 // must match the number and order of labels specified when the counter was
 // created.
-func (c *MetricCounter) Incr(count int64, labelValues ...string) {
+func (c *MetricCounter) IncrInt64(count int64, labelValues ...string) {
 	if c == nil {
 		return
 	}
-	c.cv.With(labelValues...).Incr(count)
+	c.cv.With(labelValues...).IncrInt64(count)
+}
+
+// IncrFloat64 increments a counter metric by a decimal amount, the number of label values
+// must match the number and order of labels specified when the counter was
+// created.
+func (c *MetricCounter) IncrFloat64(count float64, labelValues ...string) {
+	if c == nil {
+		return
+	}
+	c.cv.With(labelValues...).IncrFloat64(count)
 }
 
 // MetricTimer represents a timing metric of a given name and labels.
@@ -125,10 +135,22 @@ type MetricsExporterGaugeCtor func(labelValues ...string) MetricsExporterGauge
 // MetricsExporterCounter represents a counter metric of a given name and
 // labels.
 type MetricsExporterCounter interface {
-	// Incr increments a counter metric by an amount, the number of label values
+	MetricsInt64ExporterCounter
+	MetricsFloat64ExporterCounter
+}
+
+type MetricsInt64ExporterCounter interface {
+	// IncrInt64 increments a counter metric by an integer amount, the number of label values
 	// must match the number and order of labels specified when the counter was
 	// created.
-	Incr(count int64)
+	IncrInt64(count int64)
+}
+
+type MetricsFloat64ExporterCounter interface {
+	// IncrFloat64 increments a counter metric by a decimal amount, the number of label values
+	// must match the number and order of labels specified when the counter was
+	// created.
+	IncrFloat64(count float64)
 }
 
 // MetricsExporterTimer represents a timing metric of a given name and labels.
@@ -208,8 +230,12 @@ type airGapCounter struct {
 	airGapped MetricsExporterCounter
 }
 
-func (a *airGapCounter) Incr(count int64) {
-	a.airGapped.Incr(count)
+func (a *airGapCounter) IncrInt64(count int64) {
+	a.airGapped.IncrInt64(count)
+}
+
+func (a *airGapCounter) IncrFloat64(count float64) {
+	a.airGapped.IncrFloat64(count)
 }
 
 type airGapTiming struct {
