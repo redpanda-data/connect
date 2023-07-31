@@ -17,6 +17,7 @@ All notable changes to this project will be documented in this file.
 - Fixed the CUE schema for fields that take a 2d-array such as `workflow.order`.
 - The `http_server` input and output now follow the same multiplexer rules regardless of whether the general `http` server block is used or a custom endpoint.
 - Config linting should now respect fields sourced via a merge key (`<<`).
+- The `lint` subcommand should now lint config files pointed to via `-r`/`--resources` flags.
 
 ### Changed
 
