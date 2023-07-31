@@ -82,7 +82,7 @@ It's possible for this output type to create the target exchange by setting `exc
 
 TLS is automatic when connecting to an `amqps` URL, but custom settings can be enabled in the `tls` section.
 
-The fields 'key' and 'type' can be dynamically set using function interpolations described [here](/docs/configuration/interpolation#bloblang-queries).
+The fields 'exchange',  'key' and 'type' can be dynamically set using function interpolations described [here](/docs/configuration/interpolation#bloblang-queries).
 
 ## Fields
 
@@ -111,6 +111,7 @@ urls:
 ### `exchange`
 
 An AMQP exchange to publish to.
+This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
 
 
 Type: `string`  
