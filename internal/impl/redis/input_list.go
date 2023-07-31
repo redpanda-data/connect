@@ -81,18 +81,22 @@ func newRedisListInputFromConfig(conf *service.ParsedConfig, mgr *service.Resour
 		return nil, err
 	}
 
-	if popMethod, err := conf.FieldString("method"); err != nil {
-		switch redisPopMethod(popMethod) {
-		case bLPop:
-			r.pop = client.BLPop
-
-		case bRPop:
-			r.pop = client.BRPop
-
-		default:
-			return nil, fmt.Errorf("invalid redis method: %s", popMethod)
-		}
+	popMethod, err := conf.FieldString("method")
+	if err != nil {
+		return nil, err
 	}
+
+	switch redisPopMethod(popMethod) {
+	case bLPop:
+		r.pop = client.BLPop
+
+	case bRPop:
+		r.pop = client.BRPop
+
+	default:
+		return nil, fmt.Errorf("invalid redis method: %s", popMethod)
+	}
+
 	return r, nil
 }
 

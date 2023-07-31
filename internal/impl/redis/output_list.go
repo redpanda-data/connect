@@ -90,28 +90,32 @@ func newRedisListWriter(conf *service.ParsedConfig, mgr *service.Resources) (r *
 		return nil, err
 	}
 
-	if pushMethod, err := conf.FieldString("method"); err != nil {
-		switch redisPushMethod(pushMethod) {
-		case rPush:
-			r.clientPush = func(client redis.UniversalClient, ctx context.Context, key string, values ...interface{}) *redis.IntCmd {
-				return client.RPush(ctx, key, values)
-			}
-			r.pipelinePush = func(pipe redis.Pipeliner, ctx context.Context, key string, values ...interface{}) *redis.IntCmd {
-				return pipe.RPush(ctx, key, values)
-			}
-
-		case lPush:
-			r.clientPush = func(client redis.UniversalClient, ctx context.Context, key string, values ...interface{}) *redis.IntCmd {
-				return client.LPush(ctx, key, values)
-			}
-			r.pipelinePush = func(pipe redis.Pipeliner, ctx context.Context, key string, values ...interface{}) *redis.IntCmd {
-				return pipe.LPush(ctx, key, values)
-			}
-
-		default:
-			return nil, fmt.Errorf("invalid redis method: %s", pushMethod)
-		}
+	pushMethod, err := conf.FieldString("method")
+	if err != nil {
+		return nil, err
 	}
+
+	switch redisPushMethod(pushMethod) {
+	case rPush:
+		r.clientPush = func(client redis.UniversalClient, ctx context.Context, key string, values ...interface{}) *redis.IntCmd {
+			return client.RPush(ctx, key, values)
+		}
+		r.pipelinePush = func(pipe redis.Pipeliner, ctx context.Context, key string, values ...interface{}) *redis.IntCmd {
+			return pipe.RPush(ctx, key, values)
+		}
+
+	case lPush:
+		r.clientPush = func(client redis.UniversalClient, ctx context.Context, key string, values ...interface{}) *redis.IntCmd {
+			return client.LPush(ctx, key, values)
+		}
+		r.pipelinePush = func(pipe redis.Pipeliner, ctx context.Context, key string, values ...interface{}) *redis.IntCmd {
+			return pipe.LPush(ctx, key, values)
+		}
+
+	default:
+		return nil, fmt.Errorf("invalid redis method: %s", pushMethod)
+	}
+
 	return r, nil
 }
 
