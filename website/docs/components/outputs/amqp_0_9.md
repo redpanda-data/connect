@@ -56,6 +56,12 @@ output:
     type: ""
     content_type: application/octet-stream
     content_encoding: ""
+    correlation_id: ""
+    reply_to: ""
+    expiration: ""
+    message_id: ""
+    user_id: ""
+    app_id: ""
     metadata:
       exclude_prefixes: []
     priority: ""
@@ -177,6 +183,60 @@ Default: `"application/octet-stream"`
 ### `content_encoding`
 
 The content encoding attribute to set for each message.
+This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
+
+
+Type: `string`  
+Default: `""`  
+
+### `correlation_id`
+
+Set the correlation ID of each message with a dynamic interpolated expression.
+This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
+
+
+Type: `string`  
+Default: `""`  
+
+### `reply_to`
+
+Carries response queue name - set with a dynamic interpolated expression.
+This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
+
+
+Type: `string`  
+Default: `""`  
+
+### `expiration`
+
+Set the per-message TTL
+This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
+
+
+Type: `string`  
+Default: `""`  
+
+### `message_id`
+
+Set the message ID of each message with a dynamic interpolated expression.
+This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
+
+
+Type: `string`  
+Default: `""`  
+
+### `user_id`
+
+Set the user ID to the name of the publisher.  If this property is set by a publisher, its value must be equal to the name of the user used to open the connection.
+This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
+
+
+Type: `string`  
+Default: `""`  
+
+### `app_id`
+
+Set the application ID of each message with a dynamic interpolated expression.
 This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
 
 

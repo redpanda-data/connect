@@ -36,4 +36,10 @@ const (
 	mandatoryField              = "mandatory"
 	immediateField              = "immediate"
 	timeoutField                = "timeout"
+	correlationIDField          = "correlation_id"
+	replyToField                = "reply_to"
+	expirationField             = "expiration"
+	messageIDField              = "message_id"
+	userIDField                 = "user_id"
+	appIDField                  = "app_id"
 )
