@@ -65,7 +65,7 @@ output:
       period: ""
       check: ""
       processors: [] # No default (optional)
-    method: rpush
+    command: rpush
 ```
 
 </TabItem>
@@ -399,9 +399,9 @@ processors:
       format: json_array
 ```
 
-### `method`
+### `command`
 
-Method from which to push to the Redis list
+The command used to push elements to the Redis list
 
 
 Type: `string`  

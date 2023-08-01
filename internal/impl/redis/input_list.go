@@ -12,11 +12,11 @@ import (
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
-type redisPopMethod string
+type redisPopCommand string
 
 const (
-	bLPop redisPopMethod = "blpop"
-	bRPop redisPopMethod = "brpop"
+	bLPop redisPopCommand = "blpop"
+	bRPop redisPopCommand = "brpop"
 )
 
 func redisListInputConfig() *service.ConfigSpec {
@@ -33,8 +33,8 @@ func redisListInputConfig() *service.ConfigSpec {
 				Description("The length of time to poll for new messages before reattempting.").
 				Default("5s").
 				Advanced(),
-			service.NewStringEnumField("method", string(bLPop), string(bRPop)).
-				Description("Method from which to pop from the Redis list").
+			service.NewStringEnumField("command", string(bLPop), string(bRPop)).
+				Description("The command used to pop elements from the Redis list").
 				Default(string(bLPop)).
 				Advanced().
 				Version("4.19.0"),
@@ -81,12 +81,12 @@ func newRedisListInputFromConfig(conf *service.ParsedConfig, mgr *service.Resour
 		return nil, err
 	}
 
-	popMethod, err := conf.FieldString("method")
+	popCommand, err := conf.FieldString("command")
 	if err != nil {
 		return nil, err
 	}
 
-	switch redisPopMethod(popMethod) {
+	switch redisPopCommand(popCommand) {
 	case bLPop:
 		r.pop = client.BLPop
 
@@ -94,7 +94,7 @@ func newRedisListInputFromConfig(conf *service.ParsedConfig, mgr *service.Resour
 		r.pop = client.BRPop
 
 	default:
-		return nil, fmt.Errorf("invalid redis method: %s", popMethod)
+		return nil, fmt.Errorf("invalid redis command: %s", popCommand)
 	}
 
 	return r, nil
