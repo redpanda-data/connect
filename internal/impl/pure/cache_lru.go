@@ -53,7 +53,7 @@ cache_resources:
         foo: bar
 ` + "```" + `
 
-These values can be overridden during execution, at which point the configured TTL is respected as usual.`).
+These values can be overridden during execution.`).
 		Field(service.NewIntField(lruCacheFieldCapLabel).
 			Description("The cache maximum capacity (number of entries)").
 			Default(lruCacheFieldCapDefaultValue)).

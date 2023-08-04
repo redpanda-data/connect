@@ -19,10 +19,6 @@ const (
 	lfuCacheFieldSamplesDefaultValue = 100000
 
 	lfuCacheFieldInitValuesLabel = "init_values"
-
-	// optimistic
-	lfuCacheFieldOptimisticLabel        = "optimistic"
-	lfuCacheFieldOptimisticDefaultValue = false
 )
 
 func lfuCacheConfig() *service.ConfigSpec {
@@ -46,7 +42,7 @@ cache_resources:
         foo: bar
 ` + "```" + `
 
-These values can be overridden during execution, at which point the configured TTL is respected as usual.`).
+These values can be overridden during execution.`).
 		Field(service.NewIntField(lfuCacheFieldSizeLabel).
 			Description("The cache maximum size (number of entries)").
 			Default(lfuCacheFieldSizeDefaultValue)).
@@ -60,11 +56,7 @@ These values can be overridden during execution, at which point the configured T
 				"Nickelback":       "1995",
 				"Spice Girls":      "1994",
 				"The Human League": "1977",
-			})).
-		Field(service.NewBoolField(lfuCacheFieldOptimisticLabel).
-			Description("If true, we do not lock on read/write events. The lfu package is thread-safe, however the ADD operation is not atomic.").
-			Default(lfuCacheFieldOptimisticDefaultValue).
-			Advanced())
+			}))
 
 	return spec
 }
@@ -100,12 +92,7 @@ func lfuMemCacheFromConfig(conf *service.ParsedConfig) (*lfuCacheAdapter, error)
 		return nil, err
 	}
 
-	optimistic, err := conf.FieldBool(lfuCacheFieldOptimisticLabel)
-	if err != nil {
-		return nil, err
-	}
-
-	return lfuMemCache(size, samples, initValues, optimistic)
+	return lfuMemCache(size, samples, initValues)
 }
 
 //------------------------------------------------------------------------------
@@ -117,8 +104,7 @@ var (
 
 func lfuMemCache(size int,
 	samples int,
-	initValues map[string]string,
-	optimistic bool) (ca *lfuCacheAdapter, err error) {
+	initValues map[string]string) (ca *lfuCacheAdapter, err error) {
 	if size <= 0 {
 		return nil, errInvalidLFUCacheSizeValue
 	}
@@ -126,13 +112,7 @@ func lfuMemCache(size int,
 		return nil, errInvalidLFUCacheSamplesValue
 	}
 
-	var inner lfu.LFU
-
-	if optimistic {
-		inner = lfu.New(size, samples)
-	} else {
-		inner = lfu.NewSync(size, samples)
-	}
+	inner := lfu.NewSync(size, samples)
 
 	for k, v := range initValues {
 		inner.Set(&lfu.Item{
