@@ -21,25 +21,12 @@ func TestLFUCacheStandard(t *testing.T) {
 	testServiceCache(t, c)
 }
 
-func TestLFUCacheOptimistic(t *testing.T) {
-	t.Parallel()
-
-	defConf, err := lfuCacheConfig().ParseYAML(`
-optimistic: true
-`, nil)
-	require.NoError(t, err)
-
-	c, err := lfuMemCacheFromConfig(defConf)
-	require.NoError(t, err)
-
-	testServiceCache(t, c)
-}
-
 func TestLFUCacheInitValues(t *testing.T) {
 	t.Parallel()
 
 	defConf, err := lfuCacheConfig().ParseYAML(`
 cap: 1024
+samples: 99999
 init_values:
   foo: bar
   foo2: bar2
