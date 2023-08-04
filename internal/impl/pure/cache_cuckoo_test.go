@@ -38,7 +38,7 @@ func TestCuckooCacheStandard(t *testing.T) {
 	assert.Equal(t, string(value), "t")
 }
 
-func TestCookieCacheDelete(t *testing.T) {
+func TestCuckooCacheDelete(t *testing.T) {
 	t.Parallel()
 
 	defConf, err := cuckooCacheConfig().ParseYAML(``, nil)
