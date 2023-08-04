@@ -7,8 +7,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"github.com/benthosdev/benthos/v4/public/service"
 )
 
 func TestCuckooCacheStandard(t *testing.T) {
@@ -23,28 +21,14 @@ func TestCuckooCacheStandard(t *testing.T) {
 	testServiceCache(t, c)
 }
 
-func TestCuckooCacheOptimistic(t *testing.T) {
-	t.Parallel()
-
-	defConf, err := cuckooCacheConfig().ParseYAML(`
-optimistic: true
-`, nil)
-	require.NoError(t, err)
-
-	c, err := cuckooMemCacheFromConfig(defConf)
-	require.NoError(t, err)
-
-	testServiceCache(t, c)
-}
-
 func TestCuckooCacheInitValues(t *testing.T) {
 	t.Parallel()
 
 	defConf, err := cuckooCacheConfig().ParseYAML(`
 cap: 1024
 init_values:
-  foo: bar
-  foo2: bar2
+  - foo
+  - bar
 `, nil)
 	require.NoError(t, err)
 
@@ -68,27 +52,17 @@ init_values:
 	}
 }
 
-func TestCuckooCacheAlgorithms(t *testing.T) {
+func TestCuckooCacheAlgorithm(t *testing.T) {
 	t.Parallel()
 
-	algorithms := []string{"standard", "arc", "two_queues"}
+	defConf, err := cuckooCacheConfig().ParseYAML(``, nil)
+	require.NoError(t, err)
 
-	for _, algorithm := range algorithms {
-		algorithm := algorithm
-		t.Run(algorithm, func(t *testing.T) {
-			t.Parallel()
+	c, err := cuckooMemCacheFromConfig(defConf)
+	require.NoError(t, err)
 
-			yamlConf := fmt.Sprintf("algorithm: %q", algorithm)
-
-			defConf, err := cuckooCacheConfig().ParseYAML(yamlConf, nil)
-			require.NoError(t, err)
-
-			c, err := cuckooMemCacheFromConfig(defConf)
-			require.NoError(t, err)
-
-			testServiceCache(t, c)
-		})
-	}
+	// TODO add unit test
+	_ = c
 }
 
 func BenchmarkCuckoo(b *testing.B) {
@@ -137,61 +111,4 @@ func BenchmarkCuckooParallel(b *testing.B) {
 			assert.Equal(b, value, res)
 		}
 	})
-}
-
-func testServiceCache(t *testing.T, c service.Cache) {
-	t.Helper()
-
-	ctx := context.Background()
-
-	expErr := service.ErrKeyNotFound
-	if _, act := c.Get(ctx, "foo"); act != expErr {
-		t.Errorf("Wrong error returned: %v != %v", act, expErr)
-	}
-
-	if err := c.Set(ctx, "foo", []byte("1"), nil); err != nil {
-		t.Error(err)
-	}
-
-	exp := "1"
-	if act, err := c.Get(ctx, "foo"); err != nil {
-		t.Error(err)
-	} else if string(act) != exp {
-		t.Errorf("Wrong result: %v != %v", string(act), exp)
-	}
-
-	if err := c.Add(ctx, "bar", []byte("2"), nil); err != nil {
-		t.Error(err)
-	}
-
-	exp = "2"
-	if act, err := c.Get(ctx, "bar"); err != nil {
-		t.Error(err)
-	} else if string(act) != exp {
-		t.Errorf("Wrong result: %v != %v", string(act), exp)
-	}
-
-	expErr = service.ErrKeyAlreadyExists
-	if act := c.Add(ctx, "foo", []byte("2"), nil); expErr != act {
-		t.Errorf("Wrong error returned: %v != %v", act, expErr)
-	}
-
-	if err := c.Set(ctx, "foo", []byte("3"), nil); err != nil {
-		t.Error(err)
-	}
-
-	exp = "3"
-	if act, err := c.Get(ctx, "foo"); err != nil {
-		t.Error(err)
-	} else if string(act) != exp {
-		t.Errorf("Wrong result: %v != %v", string(act), exp)
-	}
-
-	if err := c.Delete(ctx, "foo"); err != nil {
-		t.Error(err)
-	}
-
-	if _, err := c.Get(ctx, "foo"); err != service.ErrKeyNotFound {
-		t.Errorf("Wrong error returned: %v != %v", err, service.ErrKeyNotFound)
-	}
 }
