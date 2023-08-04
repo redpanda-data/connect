@@ -13,7 +13,7 @@ status: stable
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-Stores key/value pairs in a lfu in-memory cache. This cache is therefore reset every time the service restarts.
+Stores key/value pairs in a TinyLFU in-memory cache. This cache is therefore reset every time the service restarts.
 
 
 <Tabs defaultValue="common" values={[
@@ -50,7 +50,9 @@ lfu:
 
 This provides the lfu package which implements a fixed-size thread safe LFU cache.
 
-It uses the package [`lfu`](github.com/vmihailenco/go-tinylfu)
+It uses the package [`go-tinyflu`](github.com/vmihailenco/go-tinylfu)
+
+This cache is described on [`TinyLFU: A Highly Efficient Cache Admission Policy`](https://arxiv.org/abs/1512.00727)
 
 The field init_values can be used to pre-populate the memory cache with any number of key/value pairs:
 

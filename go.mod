@@ -1,6 +1,9 @@
 module github.com/benthosdev/benthos/v4
 
-replace github.com/99designs/keyring => github.com/Jeffail/keyring v1.2.3
+replace (
+	github.com/99designs/keyring => github.com/Jeffail/keyring v1.2.3
+	github.com/vmihailenco/go-tinylfu => github.com/peczenyj/go-tinylfu v0.2.3
+)
 
 require (
 	cloud.google.com/go/bigquery v1.44.0
@@ -97,7 +100,7 @@ require (
 	github.com/smira/go-statsd v1.3.2
 	github.com/snowflakedb/gosnowflake v1.6.23
 	github.com/sourcegraph/conc v0.3.0
-	github.com/stretchr/testify v1.8.2
+	github.com/stretchr/testify v1.8.4
 	github.com/tetratelabs/wazero v1.0.1
 	github.com/tilinna/z85 v1.0.0
 	github.com/trinodb/trino-go-client v0.309.0

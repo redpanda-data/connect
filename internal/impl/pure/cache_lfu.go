@@ -2,6 +2,7 @@ package pure
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -27,10 +28,12 @@ const (
 func lfuCacheConfig() *service.ConfigSpec {
 	spec := service.NewConfigSpec().
 		Stable().
-		Summary(`Stores key/value pairs in a lfu in-memory cache. This cache is therefore reset every time the service restarts.`).
+		Summary(`Stores key/value pairs in a TinyLFU in-memory cache. This cache is therefore reset every time the service restarts.`).
 		Description(`This provides the lfu package which implements a fixed-size thread safe LFU cache.
 
-It uses the package ` + "[`lfu`](github.com/vmihailenco/go-tinylfu)" + `
+It uses the package ` + "[`go-tinyflu`](github.com/vmihailenco/go-tinylfu)" + `
+
+This cache is described on ` + "[`TinyLFU: A Highly Efficient Cache Admission Policy`](https://arxiv.org/abs/1512.00727)" + `
 
 The field ` + lfuCacheFieldInitValuesLabel + ` can be used to pre-populate the memory cache with any number of key/value pairs:
 
@@ -123,7 +126,7 @@ func lfuMemCache(size int,
 		return nil, errInvalidLFUCacheSamplesValue
 	}
 
-	var inner lfuCache
+	var inner lfu.LFU
 
 	if optimistic {
 		inner = lfu.New(size, samples)
@@ -147,24 +150,10 @@ func lfuMemCache(size int,
 
 //------------------------------------------------------------------------------
 
-var (
-	_ lfuCache = (*lfu.T)(nil)
-	_ lfuCache = (*lfu.SyncT)(nil)
-)
-
-type lfuCache interface {
-	Get(key string) (interface{}, bool)
-	// Add(newItem *Item) error
-	Set(newItem *lfu.Item)
-	Del(key string)
-}
-
-//------------------------------------------------------------------------------
-
 var _ service.Cache = (*lfuCacheAdapter)(nil)
 
 type lfuCacheAdapter struct {
-	inner lfuCache
+	inner lfu.LFU
 }
 
 func (ca *lfuCacheAdapter) Get(_ context.Context, key string) ([]byte, error) {
@@ -194,8 +183,25 @@ func (ca *lfuCacheAdapter) Set(_ context.Context, key string, value []byte, ttl 
 }
 
 func (ca *lfuCacheAdapter) Add(ctx context.Context, key string, value []byte, ttl *time.Duration) error {
-	return ca.Set(ctx, key, value, ttl)
-	// return nil
+	item := &lfu.Item{
+		Key:   key,
+		Value: value,
+	}
+
+	if ttl != nil {
+		item.ExpireAt = time.Now().UTC().Add(*ttl)
+	}
+
+	err := ca.inner.Add(item)
+	if err != nil {
+		if errors.Is(err, lfu.ErrKeyAlreadyExists) {
+			return service.ErrKeyAlreadyExists
+		}
+
+		return fmt.Errorf("unexpected error: %w", err)
+	}
+
+	return nil
 }
 
 func (ca *lfuCacheAdapter) Delete(_ context.Context, key string) error {
