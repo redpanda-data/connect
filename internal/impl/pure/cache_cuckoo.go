@@ -42,7 +42,7 @@ These values can be overridden during execution.`).
 		Field(service.NewIntField(cuckooCacheFieldCapLabel).
 			Description("The cache maximum capacity (number of entries)").
 			Default(cuckooCacheFieldCapDefaultValue)).
-		Field(service.NewStringMapField(cuckooCacheFieldInitValuesLabel).
+		Field(service.NewStringListField(cuckooCacheFieldInitValuesLabel).
 			Description("A table of keys that should be present in the cache on initialization. This can be used to create static lookup tables.").
 			Default([]string{}).
 			Example([]string{
@@ -149,7 +149,10 @@ func (ca *cuckooCacheAdapter) Get(_ context.Context, key string) ([]byte, error)
 	return []byte{'t'}, nil
 }
 
-var errUnableToInsertKeyIntoCuckooFilter = errors.New("unable to insert key into cuckoo filter")
+var (
+	errUnableToInsertKeyIntoCuckooFilter = errors.New("unable to insert key into cuckoo filter")
+	errUnableToDeleteKeyIntoCuckooFilter = errors.New("unable to delete key into cuckoo filter")
+)
 
 func (ca *cuckooCacheAdapter) Set(_ context.Context, key string, _ []byte, _ *time.Duration) error {
 	ca.RWMutex.Lock()
@@ -182,9 +185,13 @@ func (ca *cuckooCacheAdapter) Add(ctx context.Context, key string, _ []byte, _ *
 func (ca *cuckooCacheAdapter) Delete(_ context.Context, key string) error {
 	ca.RWMutex.Lock()
 
-	ca.inner.Delete([]byte(key))
+	ok := ca.inner.Delete([]byte(key))
 
 	ca.RWMutex.Unlock()
+
+	if !ok {
+		return errUnableToDeleteKeyIntoCuckooFilter
+	}
 
 	return nil
 }

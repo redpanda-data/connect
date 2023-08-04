@@ -18,7 +18,46 @@ func TestCuckooCacheStandard(t *testing.T) {
 	c, err := cuckooMemCacheFromConfig(defConf)
 	require.NoError(t, err)
 
-	testServiceCache(t, c)
+	ctx := context.Background()
+	key := "foo"
+
+	_, err = c.Get(ctx, key)
+	assert.EqualError(t, err, "key does not exist")
+
+	err = c.Add(ctx, key, nil, nil)
+	assert.NoError(t, err)
+
+	err = c.Add(ctx, key, nil, nil)
+	assert.EqualError(t, err, "key already exists")
+
+	err = c.Set(ctx, key, nil, nil)
+	assert.NoError(t, err)
+
+	value, err := c.Get(ctx, key)
+	assert.NoError(t, err)
+	assert.Equal(t, string(value), "t")
+}
+
+func TestCookieCacheDelete(t *testing.T) {
+	t.Parallel()
+
+	defConf, err := cuckooCacheConfig().ParseYAML(``, nil)
+	require.NoError(t, err)
+
+	c, err := cuckooMemCacheFromConfig(defConf)
+	require.NoError(t, err)
+
+	ctx := context.Background()
+	key := "foo"
+
+	err = c.Set(ctx, key, nil, nil)
+	assert.NoError(t, err)
+
+	err = c.Delete(ctx, key)
+	assert.NoError(t, err)
+
+	_, err = c.Get(ctx, key)
+	assert.EqualError(t, err, "key does not exist")
 }
 
 func TestCuckooCacheInitValues(t *testing.T) {
@@ -37,32 +76,18 @@ init_values:
 
 	ctx := context.Background()
 
-	exp := "bar"
+	exp := "t"
 	if act, err := c.Get(ctx, "foo"); err != nil {
 		t.Error(err)
 	} else if string(act) != exp {
 		t.Errorf("Wrong result: %v != %v", string(act), exp)
 	}
 
-	exp = "bar2"
-	if act, err := c.Get(ctx, "foo2"); err != nil {
+	if act, err := c.Get(ctx, "bar"); err != nil {
 		t.Error(err)
 	} else if string(act) != exp {
 		t.Errorf("Wrong result: %v != %v", string(act), exp)
 	}
-}
-
-func TestCuckooCacheAlgorithm(t *testing.T) {
-	t.Parallel()
-
-	defConf, err := cuckooCacheConfig().ParseYAML(``, nil)
-	require.NoError(t, err)
-
-	c, err := cuckooMemCacheFromConfig(defConf)
-	require.NoError(t, err)
-
-	// TODO add unit test
-	_ = c
 }
 
 func BenchmarkCuckoo(b *testing.B) {

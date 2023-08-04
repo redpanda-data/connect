@@ -56,7 +56,7 @@ Default: `10000`
 A table of keys that should be present in the cache on initialization. This can be used to create static lookup tables.
 
 
-Type: `object`  
+Type: `array`  
 Default: `[]`  
 
 ```yml
