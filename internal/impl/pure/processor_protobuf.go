@@ -14,14 +14,12 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
 
-	// nolint:staticcheck // Ignore SA1019 deprecation warning until we can switch to "google.golang.org/protobuf/types/dynamicpb"
-	"github.com/golang/protobuf/jsonpb"
-	// nolint:staticcheck // Ignore SA1019 deprecation warning until we can switch to "google.golang.org/protobuf/types/dynamicpb"
-	"github.com/golang/protobuf/proto"
-
-	"github.com/jhump/protoreflect/desc"
 	"github.com/jhump/protoreflect/desc/protoparse"
-	"github.com/jhump/protoreflect/dynamic"
+	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/reflect/protoreflect"
+	"google.golang.org/protobuf/reflect/protoregistry"
+	"google.golang.org/protobuf/types/dynamicpb"
 )
 
 func init() {
@@ -168,29 +166,33 @@ func newProtobufToJSONOperator(f ifs.FS, msg string, importPaths []string) (prot
 		return nil, errors.New("message field must not be empty")
 	}
 
-	descriptors, err := loadDescriptors(f, importPaths)
+	descriptors, types, err := loadDescriptors(f, importPaths)
 	if err != nil {
 		return nil, err
 	}
 
-	m := getMessageFromDescriptors(msg, descriptors)
-	if m == nil {
+	d, err := descriptors.FindDescriptorByName(protoreflect.FullName(msg))
+	if err != nil {
 		return nil, fmt.Errorf("unable to find message '%v' definition within '%v'", msg, importPaths)
 	}
 
-	marshaller := &jsonpb.Marshaler{
-		AnyResolver: dynamic.AnyResolver(dynamic.NewMessageFactoryWithDefaults(), descriptors...),
+	md, ok := d.(protoreflect.MessageDescriptor)
+	if !ok {
+		return nil, fmt.Errorf("message descriptor %v was unexpected type %T", msg, d)
 	}
 
 	return func(part *message.Part) error {
-		msg := dynamic.NewMessage(m)
-		if err := proto.Unmarshal(part.AsBytes(), msg); err != nil {
-			return fmt.Errorf("failed to unmarshal message: %w", err)
+		dynMsg := dynamicpb.NewMessage(md)
+		if err := proto.Unmarshal(part.AsBytes(), dynMsg); err != nil {
+			return fmt.Errorf("failed to unmarshal protobuf message '%v': %w", msg, err)
 		}
 
-		data, err := msg.MarshalJSONPB(marshaller)
+		opts := protojson.MarshalOptions{
+			Resolver: types,
+		}
+		data, err := opts.Marshal(dynMsg)
 		if err != nil {
-			return fmt.Errorf("failed to marshal protobuf message: %w", err)
+			return fmt.Errorf("failed to unmarshal JSON protobuf message '%v': %w", msg, err)
 		}
 
 		part.SetBytes(data)
@@ -203,29 +205,34 @@ func newProtobufFromJSONOperator(f ifs.FS, msg string, importPaths []string) (pr
 		return nil, errors.New("message field must not be empty")
 	}
 
-	descriptors, err := loadDescriptors(f, importPaths)
+	descriptors, types, err := loadDescriptors(f, importPaths)
 	if err != nil {
 		return nil, err
 	}
 
-	m := getMessageFromDescriptors(msg, descriptors)
-	if m == nil {
+	d, err := descriptors.FindDescriptorByName(protoreflect.FullName(msg))
+	if err != nil {
 		return nil, fmt.Errorf("unable to find message '%v' definition within '%v'", msg, importPaths)
 	}
 
-	unmarshaler := &jsonpb.Unmarshaler{
-		AnyResolver: dynamic.AnyResolver(dynamic.NewMessageFactoryWithDefaults(), descriptors...),
+	md, ok := d.(protoreflect.MessageDescriptor)
+	if !ok {
+		return nil, fmt.Errorf("message descriptor %v was unexpected type %T", msg, d)
 	}
 
 	return func(part *message.Part) error {
-		msg := dynamic.NewMessage(m)
-		if err := msg.UnmarshalJSONPB(unmarshaler, part.AsBytes()); err != nil {
-			return fmt.Errorf("failed to unmarshal JSON message: %w", err)
+		dynMsg := dynamicpb.NewMessage(md)
+
+		opts := protojson.UnmarshalOptions{
+			Resolver: types,
+		}
+		if err := opts.Unmarshal(part.AsBytes(), dynMsg); err != nil {
+			return fmt.Errorf("failed to unmarshal JSON message '%v': %w", msg, err)
 		}
 
-		data, err := msg.Marshal()
+		data, err := proto.Marshal(dynMsg)
 		if err != nil {
-			return fmt.Errorf("failed to marshal protobuf message: %v", err)
+			return fmt.Errorf("failed to marshal protobuf message '%v': %v", msg, err)
 		}
 
 		part.SetBytes(data)
@@ -243,7 +250,7 @@ func strToProtobufOperator(f ifs.FS, opStr, message string, importPaths []string
 	return nil, fmt.Errorf("operator not recognised: %v", opStr)
 }
 
-func loadDescriptors(f ifs.FS, importPaths []string) ([]*desc.FileDescriptor, error) {
+func loadDescriptors(f ifs.FS, importPaths []string) (*protoregistry.Files, *protoregistry.Types, error) {
 	var parser protoparse.Parser
 	if len(importPaths) == 0 {
 		importPaths = []string{"."}
@@ -251,7 +258,7 @@ func loadDescriptors(f ifs.FS, importPaths []string) ([]*desc.FileDescriptor, er
 		parser.ImportPaths = importPaths
 	}
 
-	var files []string
+	var fileNames []string
 	for _, importPath := range importPaths {
 		if err := fs.WalkDir(f, importPath, func(path string, info fs.DirEntry, ferr error) error {
 			if ferr != nil || info.IsDir() {
@@ -262,34 +269,34 @@ func loadDescriptors(f ifs.FS, importPaths []string) ([]*desc.FileDescriptor, er
 				if ferr != nil {
 					return fmt.Errorf("failed to get relative path: %v", ferr)
 				}
-				files = append(files, rPath)
+				fileNames = append(fileNames, rPath)
 			}
 			return nil
 		}); err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 	}
 
-	fds, err := parser.ParseFiles(files...)
+	fds, err := parser.ParseFiles(fileNames...)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse .proto file: %v", err)
+		return nil, nil, fmt.Errorf("failed to parse .proto file: %v", err)
 	}
 	if len(fds) == 0 {
-		return nil, fmt.Errorf("no .proto files were found in the paths '%v'", importPaths)
+		return nil, nil, fmt.Errorf("no .proto files were found in the paths '%v'", importPaths)
 	}
 
-	return fds, err
-}
-
-func getMessageFromDescriptors(message string, fds []*desc.FileDescriptor) *desc.MessageDescriptor {
-	var msg *desc.MessageDescriptor
-	for _, fd := range fds {
-		msg = fd.FindMessage(message)
-		if msg != nil {
-			break
+	files, types := &protoregistry.Files{}, &protoregistry.Types{}
+	for _, v := range fds {
+		if err := files.RegisterFile(v.UnwrapFile()); err != nil {
+			return nil, nil, fmt.Errorf("failed to register file '%v': %w", v.GetName(), err)
+		}
+		for _, t := range v.GetMessageTypes() {
+			if err := types.RegisterMessage(dynamicpb.NewMessageType(t.UnwrapMessage())); err != nil {
+				return nil, nil, fmt.Errorf("failed to register type '%v': %w", t.GetName(), err)
+			}
 		}
 	}
-	return msg
+	return files, types, nil
 }
 
 //------------------------------------------------------------------------------

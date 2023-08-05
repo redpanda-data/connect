@@ -2,6 +2,7 @@ package pure_test
 
 import (
 	"context"
+	"strconv"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -12,10 +13,82 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/message"
 )
 
-func TestProtobuf(t *testing.T) {
+func TestProtobufFromJSON(t *testing.T) {
+	type testCase struct {
+		name           string
+		message        string
+		importPath     string
+		input          []string
+		outputContains []string
+	}
+
+	tests := []testCase{
+		{
+			name:       "json to protobuf",
+			message:    "testing.Person",
+			importPath: "../../../config/test/protobuf/schema",
+			input: []string{
+				`{"firstName":"john","lastName":"oates","age":10}`,
+				`{"firstName":"daryl","lastName":"hall"}`,
+				`{"firstName":"caleb","lastName":"quaye","email":"caleb@myspace.com"}`,
+			},
+			outputContains: []string{
+				"john",
+				"daryl",
+				"caleb",
+			},
+		},
+		{
+			name:       "any: json to protobuf",
+			message:    "testing.Envelope",
+			importPath: "../../../config/test/protobuf/schema",
+			input: []string{
+				`{"id":747,"content":{"@type":"type.googleapis.com/testing.Person","first_name":"bob"}}`,
+				`{"id":747,"content":{"@type":"type.googleapis.com/testing.House","address":"123"}}`,
+			},
+			outputContains: []string{
+				"type.googleapis.com/testing.Person",
+				"type.googleapis.com/testing.House",
+			},
+		},
+	}
+
+	for i, test := range tests {
+		t.Run(test.name+"/"+strconv.Itoa(i), func(t *testing.T) {
+			conf := processor.NewConfig()
+			conf.Type = "protobuf"
+			conf.Protobuf.Operator = "from_json"
+			conf.Protobuf.Message = test.message
+			conf.Protobuf.ImportPaths = []string{test.importPath}
+
+			proc, err := mock.NewManager().NewProcessor(conf)
+			require.NoError(t, err)
+
+			input := message.QuickBatch(nil)
+			for _, p := range test.input {
+				input = append(input, message.NewPart([]byte(p)))
+			}
+
+			msgs, res := proc.ProcessBatch(context.Background(), input)
+			require.Nil(t, res)
+			require.Len(t, msgs, 1)
+
+			require.Len(t, msgs[0], len(test.outputContains))
+			for i, exp := range test.outputContains {
+				assert.Contains(t, string(msgs[0][i].AsBytes()), exp)
+				assert.NotEqual(t, test.input[i], string(msgs[0][i].AsBytes()))
+			}
+			_ = msgs[0].Iter(func(i int, part *message.Part) error {
+				require.NoError(t, part.ErrorGet())
+				return nil
+			})
+		})
+	}
+}
+
+func TestProtobufToJSON(t *testing.T) {
 	type testCase struct {
 		name       string
-		operator   string
 		message    string
 		importPath string
 		input      [][]byte
@@ -24,28 +97,7 @@ func TestProtobuf(t *testing.T) {
 
 	tests := []testCase{
 		{
-			name:       "json to protobuf",
-			operator:   "from_json",
-			message:    "testing.Person",
-			importPath: "../../../config/test/protobuf/schema",
-			input: [][]byte{
-				[]byte(`{"firstName":"john","lastName":"oates","age":10}`),
-				[]byte(`{"firstName":"daryl","lastName":"hall"}`),
-				[]byte(`{"firstName":"caleb","lastName":"quaye","email":"caleb@myspace.com"}`),
-			},
-			output: [][]byte{
-				{0x0a, 0x04, 0x6a, 0x6f, 0x68, 0x6e, 0x12, 0x05, 0x6f, 0x61, 0x74, 0x65, 0x73, 0x20, 0x0a},
-				{0x0a, 0x05, 0x64, 0x61, 0x72, 0x79, 0x6c, 0x12, 0x04, 0x68, 0x61, 0x6c, 0x6c},
-				{
-					0x0a, 0x05, 0x63, 0x61, 0x6c, 0x65, 0x62, 0x12, 0x05, 0x71, 0x75, 0x61, 0x79, 0x65, 0x32, 0x11,
-					0x63, 0x61, 0x6c, 0x65, 0x62, 0x40, 0x6d, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x2e, 0x63, 0x6f,
-					0x6d,
-				},
-			},
-		},
-		{
 			name:       "protobuf to json",
-			operator:   "to_json",
 			message:    "testing.Person",
 			importPath: "../../../config/test/protobuf/schema",
 			input: [][]byte{
@@ -61,33 +113,10 @@ func TestProtobuf(t *testing.T) {
 				[]byte(`{"firstName":"john","lastName":"oates","age":10}`),
 				[]byte(`{"firstName":"daryl","lastName":"hall"}`),
 				[]byte(`{"firstName":"caleb","lastName":"quaye","email":"caleb@myspace.com"}`),
-			},
-		},
-		{
-			name:       "any: json to protobuf",
-			operator:   "from_json",
-			message:    "testing.Envelope",
-			importPath: "../../../config/test/protobuf/schema",
-			input: [][]byte{
-				[]byte(`{"id":747,"content":{"@type":"type.googleapis.com/testing.Person","first_name":"bob"}}`),
-				[]byte(`{"id":747,"content":{"@type":"type.googleapis.com/testing.House","address":"123"}}`),
-			},
-			output: [][]byte{
-				{
-					0x8, 0xeb, 0x5, 0x12, 0x2b, 0xa, 0x22, 0x74, 0x79, 0x70, 0x65, 0x2e, 0x67, 0x6f, 0x6f, 0x67, 0x6c,
-					0x65, 0x61, 0x70, 0x69, 0x73, 0x2e, 0x63, 0x6f, 0x6d, 0x2f, 0x74, 0x65, 0x73, 0x74, 0x69, 0x6e,
-					0x67, 0x2e, 0x50, 0x65, 0x72, 0x73, 0x6f, 0x6e, 0x12, 0x5, 0xa, 0x3, 0x62, 0x6f, 0x62,
-				},
-				{
-					0x8, 0xeb, 0x5, 0x12, 0x2a, 0xa, 0x21, 0x74, 0x79, 0x70, 0x65, 0x2e, 0x67, 0x6f, 0x6f, 0x67, 0x6c,
-					0x65, 0x61, 0x70, 0x69, 0x73, 0x2e, 0x63, 0x6f, 0x6d, 0x2f, 0x74, 0x65, 0x73, 0x74, 0x69, 0x6e,
-					0x67, 0x2e, 0x48, 0x6f, 0x75, 0x73, 0x65, 0x12, 0x5, 0x12, 0x3, 0x31, 0x32, 0x33,
-				},
 			},
 		},
 		{
 			name:       "any: protobuf to json",
-			operator:   "to_json",
 			message:    "testing.Envelope",
 			importPath: "../../../config/test/protobuf/schema",
 			input: [][]byte{
@@ -109,11 +138,11 @@ func TestProtobuf(t *testing.T) {
 		},
 	}
 
-	for _, test := range tests {
-		t.Run(test.name, func(tt *testing.T) {
+	for i, test := range tests {
+		t.Run(test.name+"/"+strconv.Itoa(i), func(t *testing.T) {
 			conf := processor.NewConfig()
 			conf.Type = "protobuf"
-			conf.Protobuf.Operator = test.operator
+			conf.Protobuf.Operator = "to_json"
 			conf.Protobuf.Message = test.message
 			conf.Protobuf.ImportPaths = []string{test.importPath}
 
@@ -129,7 +158,10 @@ func TestProtobuf(t *testing.T) {
 			require.Nil(t, res)
 			require.Len(t, msgs, 1)
 
-			assert.Equal(t, message.GetAllBytes(msgs[0]), test.output)
+			require.Len(t, msgs[0], len(test.output))
+			for i, exp := range test.output {
+				assert.Equal(t, string(exp), string(msgs[0][i].AsBytes()))
+			}
 			_ = msgs[0].Iter(func(i int, part *message.Part) error {
 				require.NoError(t, part.ErrorGet())
 				return nil
@@ -160,9 +192,9 @@ func TestProtobufErrors(t *testing.T) {
 				[]byte(`{"firstName":5,"lastName":"quaye","email":"caleb@myspace.com"}`),
 			},
 			output: []string{
-				`failed to unmarshal JSON message: message type testing.Person has no known field named ageFoo`,
-				`failed to unmarshal JSON message: invalid character 'o' in literal null (expecting 'u')`,
-				`failed to unmarshal JSON message: bad input: expecting string ; instead got 5`,
+				"failed to unmarshal JSON message 'testing.Person': proto: (line 1:40): unknown field \"ageFoo\"",
+				"failed to unmarshal JSON message 'testing.Person': proto: syntax error (line 1:1): invalid value not",
+				"failed to unmarshal JSON message 'testing.Person': proto: (line 1:14): invalid value for string type: 5",
 			},
 		},
 	}
