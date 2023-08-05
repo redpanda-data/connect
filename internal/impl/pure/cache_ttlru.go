@@ -123,7 +123,7 @@ type ttlruCacheAdapter struct {
 
 	optimistic bool
 
-	sync.RWMutex
+	sync.Mutex
 }
 
 var (
@@ -203,11 +203,11 @@ func (ca *ttlruCacheAdapter) Add(_ context.Context, key string, value []byte, _ 
 		return ca.unsafeAdd(key, value)
 	}
 
-	ca.RWMutex.Lock()
+	ca.Lock()
 
 	err := ca.unsafeAdd(key, value)
 
-	ca.RWMutex.Unlock()
+	ca.Unlock()
 
 	return err
 }

@@ -245,7 +245,7 @@ type lruCacheAdapter struct {
 
 	optimistic bool
 
-	sync.RWMutex
+	sync.Mutex
 }
 
 func (ca *lruCacheAdapter) Get(_ context.Context, key string) ([]byte, error) {
@@ -279,11 +279,11 @@ func (ca *lruCacheAdapter) Add(_ context.Context, key string, value []byte, _ *t
 		return ca.unsafeAdd(key, value)
 	}
 
-	ca.RWMutex.Lock()
+	ca.Lock()
 
 	err := ca.unsafeAdd(key, value)
 
-	ca.RWMutex.Unlock()
+	ca.Unlock()
 
 	return err
 }
