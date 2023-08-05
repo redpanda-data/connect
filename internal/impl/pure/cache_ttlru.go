@@ -171,17 +171,7 @@ func ttlruMemCache(capacity int,
 var _ service.Cache = (*ttlruCacheAdapter)(nil)
 
 func (ca *ttlruCacheAdapter) Get(_ context.Context, key string) ([]byte, error) {
-	unlock := func() {}
-	if !ca.optimistic {
-		ca.RWMutex.RLock()
-
-		unlock = ca.RWMutex.RUnlock
-	}
-
 	value, ok := ca.inner.Get(key)
-
-	unlock()
-
 	if !ok {
 		return nil, service.ErrKeyNotFound
 	}
@@ -192,53 +182,38 @@ func (ca *ttlruCacheAdapter) Get(_ context.Context, key string) ([]byte, error) 
 }
 
 func (ca *ttlruCacheAdapter) Set(_ context.Context, key string, value []byte, _ *time.Duration) error {
-	unlock := func() {}
-	if !ca.optimistic {
-		ca.RWMutex.Lock()
-
-		unlock = ca.RWMutex.Unlock
-	}
-
 	ca.inner.Set(key, value)
-
-	unlock()
 
 	return nil
 }
 
-func (ca *ttlruCacheAdapter) Add(_ context.Context, key string, value []byte, _ *time.Duration) error {
-	unlock := func() {}
-	if !ca.optimistic {
-		ca.RWMutex.Lock()
-
-		unlock = ca.RWMutex.Unlock
-	}
-
+func (ca *ttlruCacheAdapter) unsafeAdd(key string, value []byte) error {
 	_, ok := ca.inner.Get(key)
 	if ok {
-		unlock()
-
 		return service.ErrKeyAlreadyExists
 	}
 
 	_ = ca.inner.Set(key, value)
 
-	unlock()
-
 	return nil
 }
 
-func (ca *ttlruCacheAdapter) Delete(_ context.Context, key string) error {
-	unlock := func() {}
-	if !ca.optimistic {
-		ca.RWMutex.Lock()
-
-		unlock = ca.RWMutex.Unlock
+func (ca *ttlruCacheAdapter) Add(_ context.Context, key string, value []byte, _ *time.Duration) error {
+	if ca.optimistic {
+		return ca.unsafeAdd(key, value)
 	}
 
-	ca.inner.Del(key)
+	ca.RWMutex.Lock()
 
-	unlock()
+	err := ca.unsafeAdd(key, value)
+
+	ca.RWMutex.Unlock()
+
+	return err
+}
+
+func (ca *ttlruCacheAdapter) Delete(_ context.Context, key string) error {
+	ca.inner.Del(key)
 
 	return nil
 }
