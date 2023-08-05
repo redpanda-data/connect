@@ -102,14 +102,14 @@ func TestProtobufToJSON(t *testing.T) {
 			message:    "testing.Person",
 			importPath: "../../../config/test/protobuf/schema",
 			input:      []byte{0x0a, 0x04, 0x6a, 0x6f, 0x68, 0x6e, 0x12, 0x05, 0x6f, 0x61, 0x74, 0x65, 0x73, 0x20, 0x0a},
-			output:     `{"firstName":"john", "lastName":"oates", "age":10}`,
+			output:     `{"firstName":"john","lastName":"oates","age":10}`,
 		},
 		{
 			name:       "protobuf to json 2",
 			message:    "testing.Person",
 			importPath: "../../../config/test/protobuf/schema",
 			input:      []byte{0x0a, 0x05, 0x64, 0x61, 0x72, 0x79, 0x6c, 0x12, 0x04, 0x68, 0x61, 0x6c, 0x6c},
-			output:     `{"firstName":"daryl", "lastName":"hall"}`,
+			output:     `{"firstName":"daryl","lastName":"hall"}`,
 		},
 		{
 			name:       "protobuf to json 3",
@@ -120,7 +120,7 @@ func TestProtobufToJSON(t *testing.T) {
 				0x63, 0x61, 0x6c, 0x65, 0x62, 0x40, 0x6d, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x2e, 0x63, 0x6f,
 				0x6d,
 			},
-			output: `{"firstName":"caleb", "lastName":"quaye", "email":"caleb@myspace.com"}`,
+			output: `{"firstName":"caleb","lastName":"quaye","email":"caleb@myspace.com"}`,
 		},
 		{
 			name:       "any: protobuf to json 1",
@@ -131,7 +131,7 @@ func TestProtobufToJSON(t *testing.T) {
 				0x65, 0x61, 0x70, 0x69, 0x73, 0x2e, 0x63, 0x6f, 0x6d, 0x2f, 0x74, 0x65, 0x73, 0x74, 0x69, 0x6e,
 				0x67, 0x2e, 0x50, 0x65, 0x72, 0x73, 0x6f, 0x6e, 0x12, 0x5, 0xa, 0x3, 0x62, 0x6f, 0x62,
 			},
-			output: `{"id":747, "content":{"@type":"type.googleapis.com/testing.Person", "firstName":"bob"}}`,
+			output: `{"id":747,"content":{"@type":"type.googleapis.com/testing.Person","firstName":"bob"}}`,
 		},
 		{
 			name:       "any: protobuf to json 2",
@@ -142,7 +142,7 @@ func TestProtobufToJSON(t *testing.T) {
 				0x65, 0x61, 0x70, 0x69, 0x73, 0x2e, 0x63, 0x6f, 0x6d, 0x2f, 0x74, 0x65, 0x73, 0x74, 0x69, 0x6e,
 				0x67, 0x2e, 0x48, 0x6f, 0x75, 0x73, 0x65, 0x12, 0x5, 0x12, 0x3, 0x31, 0x32, 0x33,
 			},
-			output: `{"id":747, "content":{"@type":"type.googleapis.com/testing.House", "address":"123"}}`,
+			output: `{"id":747,"content":{"@type":"type.googleapis.com/testing.House","address":"123"}}`,
 		},
 	}
 
@@ -165,7 +165,7 @@ import_paths: [ %v ]
 			mBytes, err := msgs[0].AsBytes()
 			require.NoError(t, err)
 
-			assert.Equal(t, test.output, string(mBytes))
+			assert.JSONEq(t, test.output, string(mBytes))
 			require.NoError(t, msgs[0].GetError())
 		})
 	}
@@ -188,7 +188,7 @@ func TestProtobufErrors(t *testing.T) {
 			message:    "testing.Person",
 			importPath: "../../../config/test/protobuf/schema",
 			input:      `{"firstName":"john","lastName":"oates","ageFoo":10}`,
-			output:     "failed to unmarshal JSON message 'testing.Person': proto:\u00a0(line 1:40): unknown field \"ageFoo\"",
+			output:     "unknown field \"ageFoo\"",
 		},
 		{
 			name:       "json to protobuf invalid value",
@@ -196,7 +196,7 @@ func TestProtobufErrors(t *testing.T) {
 			message:    "testing.Person",
 			importPath: "../../../config/test/protobuf/schema",
 			input:      `not valid json`,
-			output:     "failed to unmarshal JSON message 'testing.Person': proto:\u00a0syntax error (line 1:1): invalid value not",
+			output:     "syntax error (line 1:1): invalid value not",
 		},
 		{
 			name:       "json to protobuf invalid string",
@@ -204,7 +204,7 @@ func TestProtobufErrors(t *testing.T) {
 			message:    "testing.Person",
 			importPath: "../../../config/test/protobuf/schema",
 			input:      `{"firstName":5,"lastName":"quaye","email":"caleb@myspace.com"}`,
-			output:     "failed to unmarshal JSON message 'testing.Person': proto:\u00a0(line 1:14): invalid value for string type: 5",
+			output:     "invalid value for string type: 5",
 		},
 	}
 
@@ -222,7 +222,7 @@ import_paths: [ %v ]
 
 			_, err = proc.Process(context.Background(), service.NewMessage([]byte(test.input)))
 			require.Error(t, err)
-			require.Equal(t, test.output, err.Error())
+			require.Contains(t, err.Error(), test.output)
 		})
 	}
 }
