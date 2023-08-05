@@ -15,6 +15,9 @@ const (
 	lfuCacheFieldSizeLabel        = "size"
 	lfuCacheFieldSizeDefaultValue = 1000
 
+	lfuCacheFieldDefaultTTLLabel        = "default_ttl"
+	lfuCacheFieldDefaultTTLDefaultValue = 1 * time.Hour
+
 	lfuCacheFieldSamplesLabel        = "samples"
 	lfuCacheFieldSamplesDefaultValue = 100000
 
@@ -49,6 +52,9 @@ These values can be overridden during execution.`).
 		Field(service.NewIntField(lfuCacheFieldSamplesLabel).
 			Description("The cache samples").
 			Default(lfuCacheFieldSamplesDefaultValue)).
+		Field(service.NewDurationField(lfuCacheFieldDefaultTTLLabel).
+			Description("The default ttl of each element").
+			Default(lfuCacheFieldDefaultTTLDefaultValue.String())).
 		Field(service.NewStringMapField(lfuCacheFieldInitValuesLabel).
 			Description("A table of key/value pairs that should be present in the cache on initialization. This can be used to create static lookup tables.").
 			Default(map[string]string{}).
@@ -87,12 +93,17 @@ func lfuMemCacheFromConfig(conf *service.ParsedConfig) (*lfuCacheAdapter, error)
 		return nil, err
 	}
 
+	ttl, err := conf.FieldDuration(lfuCacheFieldDefaultTTLLabel)
+	if err != nil {
+		return nil, err
+	}
+
 	initValues, err := conf.FieldStringMap(lfuCacheFieldInitValuesLabel)
 	if err != nil {
 		return nil, err
 	}
 
-	return lfuMemCache(size, samples, initValues)
+	return lfuMemCache(size, samples, ttl, initValues)
 }
 
 //------------------------------------------------------------------------------
@@ -102,8 +113,8 @@ var (
 	errInvalidLFUCacheSamplesValue = fmt.Errorf("invalid lfu cache parameter samples: must be bigger than 0")
 )
 
-func lfuMemCache(size int,
-	samples int,
+func lfuMemCache(size, samples int,
+	ttl time.Duration,
 	initValues map[string]string) (ca *lfuCacheAdapter, err error) {
 	if size <= 0 {
 		return nil, errInvalidLFUCacheSizeValue
@@ -114,15 +125,13 @@ func lfuMemCache(size int,
 
 	inner := lfu.NewSync(size, samples)
 
-	for k, v := range initValues {
-		inner.Set(&lfu.Item{
-			Key:   k,
-			Value: []byte(v),
-		})
+	ca = &lfuCacheAdapter{
+		inner:      inner,
+		defaultTTL: ttl,
 	}
 
-	ca = &lfuCacheAdapter{
-		inner: inner,
+	for k, v := range initValues {
+		_ = ca.Set(context.Background(), k, []byte(v), &ttl)
 	}
 
 	return ca, nil
@@ -133,7 +142,8 @@ func lfuMemCache(size int,
 var _ service.Cache = (*lfuCacheAdapter)(nil)
 
 type lfuCacheAdapter struct {
-	inner lfu.LFU
+	inner      lfu.LFU
+	defaultTTL time.Duration
 }
 
 func (ca *lfuCacheAdapter) Get(_ context.Context, key string) ([]byte, error) {
@@ -147,15 +157,27 @@ func (ca *lfuCacheAdapter) Get(_ context.Context, key string) ([]byte, error) {
 	return data, nil
 }
 
+func (ca *lfuCacheAdapter) addExpireAt(item *lfu.Item, ttl *time.Duration) {
+	var t time.Duration
+
+	if ttl != nil {
+		t = *ttl
+	} else {
+		t = ca.defaultTTL
+	}
+
+	if t > 0 {
+		item.ExpireAt = time.Now().Add(t)
+	}
+}
+
 func (ca *lfuCacheAdapter) Set(_ context.Context, key string, value []byte, ttl *time.Duration) error {
 	item := &lfu.Item{
 		Key:   key,
 		Value: value,
 	}
 
-	if ttl != nil {
-		item.ExpireAt = time.Now().UTC().Add(*ttl)
-	}
+	ca.addExpireAt(item, ttl)
 
 	ca.inner.Set(item)
 
@@ -168,16 +190,12 @@ func (ca *lfuCacheAdapter) Add(ctx context.Context, key string, value []byte, tt
 		Value: value,
 	}
 
-	if ttl != nil {
-		item.ExpireAt = time.Now().UTC().Add(*ttl)
-	}
+	ca.addExpireAt(item, ttl)
 
 	err := ca.inner.Add(item)
-	if err != nil {
-		if errors.Is(err, lfu.ErrKeyAlreadyExists) {
-			return service.ErrKeyAlreadyExists
-		}
-
+	if errors.Is(err, lfu.ErrKeyAlreadyExists) {
+		return service.ErrKeyAlreadyExists
+	} else if err != nil {
 		return fmt.Errorf("unexpected error: %w", err)
 	}
 

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/benthosdev/benthos/v4/public/service"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -15,7 +16,9 @@ func TestLFUCacheStandard(t *testing.T) {
 	defConf, err := lfuCacheConfig().ParseYAML(``, nil)
 	require.NoError(t, err)
 
-	c, err := lfuMemCacheFromConfig(defConf)
+	var c service.Cache
+
+	c, err = lfuMemCacheFromConfig(defConf)
 	require.NoError(t, err)
 
 	testServiceCache(t, c)
@@ -27,13 +30,16 @@ func TestLFUCacheInitValues(t *testing.T) {
 	defConf, err := lfuCacheConfig().ParseYAML(`
 cap: 1024
 samples: 99999
+default_ttl: "60s"
 init_values:
   foo: bar
   foo2: bar2
 `, nil)
 	require.NoError(t, err)
 
-	c, err := lfuMemCacheFromConfig(defConf)
+	var c service.Cache
+
+	c, err = lfuMemCacheFromConfig(defConf)
 	require.NoError(t, err)
 
 	ctx := context.Background()
@@ -57,7 +63,9 @@ func BenchmarkLFU(b *testing.B) {
 	defConf, err := lfuCacheConfig().ParseYAML(``, nil)
 	require.NoError(b, err)
 
-	c, err := lfuMemCacheFromConfig(defConf)
+	var c service.Cache
+
+	c, err = lfuMemCacheFromConfig(defConf)
 	require.NoError(b, err)
 
 	ctx := context.Background()
@@ -80,7 +88,9 @@ func BenchmarkLFUParallel(b *testing.B) {
 	defConf, err := lfuCacheConfig().ParseYAML(``, nil)
 	require.NoError(b, err)
 
-	c, err := lfuMemCacheFromConfig(defConf)
+	var c service.Cache
+
+	c, err = lfuMemCacheFromConfig(defConf)
 	require.NoError(b, err)
 
 	ctx := context.Background()

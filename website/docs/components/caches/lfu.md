@@ -21,6 +21,7 @@ label: ""
 lfu:
   size: 1000
   samples: 100000
+  default_ttl: 1h0m0s
   init_values: {}
 ```
 
@@ -60,6 +61,14 @@ The cache samples
 
 Type: `int`  
 Default: `100000`  
+
+### `default_ttl`
+
+The default ttl of each element
+
+
+Type: `string`  
+Default: `"1h0m0s"`  
 
 ### `init_values`
 
