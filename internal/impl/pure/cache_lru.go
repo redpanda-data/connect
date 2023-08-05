@@ -201,12 +201,10 @@ func lruMemCache(capacity int,
 		inner.Add(k, []byte(v))
 	}
 
-	ca = &lruCacheAdapter{
+	return &lruCacheAdapter{
 		inner:      inner,
 		optimistic: optimistic,
-	}
-
-	return ca, nil
+	}, nil
 }
 
 //------------------------------------------------------------------------------
