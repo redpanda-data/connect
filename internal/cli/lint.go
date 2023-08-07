@@ -177,6 +177,7 @@ func LintAction(c *cli.Context, stderr io.Writer) int {
 	if conf := c.String("config"); len(conf) > 0 {
 		targets = append(targets, conf)
 	}
+	targets = append(targets, c.StringSlice("resources")...)
 
 	lConf := docs.NewLintConfig()
 	lConf.RejectDeprecated = c.Bool("deprecated")
