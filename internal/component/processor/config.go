@@ -34,7 +34,6 @@ type Config struct {
 	Plugin       any                `json:"plugin,omitempty" yaml:"plugin,omitempty"`
 	Parallel     ParallelConfig     `json:"parallel" yaml:"parallel"`
 	ParseLog     ParseLogConfig     `json:"parse_log" yaml:"parse_log"`
-	Protobuf     ProtobufConfig     `json:"protobuf" yaml:"protobuf"`
 	RateLimit    RateLimitConfig    `json:"rate_limit" yaml:"rate_limit"`
 	Resource     string             `json:"resource" yaml:"resource"`
 	SelectParts  SelectPartsConfig  `json:"select_parts" yaml:"select_parts"`
@@ -78,7 +77,6 @@ func NewConfig() Config {
 		Plugin:       nil,
 		Parallel:     NewParallelConfig(),
 		ParseLog:     NewParseLogConfig(),
-		Protobuf:     NewProtobufConfig(),
 		RateLimit:    NewRateLimitConfig(),
 		Resource:     "",
 		SelectParts:  NewSelectPartsConfig(),
