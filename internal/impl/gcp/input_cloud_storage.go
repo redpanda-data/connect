@@ -299,7 +299,8 @@ func newGCPCloudStorageInput(conf csiConfig, res *service.Resources) (*gcpCloudS
 func (g *gcpCloudStorageInput) Connect(ctx context.Context) error {
 	var err error
 
-	opt, err := getClientOptionsForInputCloudStorage(g)
+	var opt []option.ClientOption
+	opt, err = getClientOptionWithCredential(g.conf.CredentialsJSON, opt)
 	if err != nil {
 		return err
 	}
@@ -311,15 +312,6 @@ func (g *gcpCloudStorageInput) Connect(ctx context.Context) error {
 
 	g.keyReader, err = newGCPCloudStorageTargetReader(ctx, g.conf, g.log, g.client.Bucket(g.conf.Bucket))
 	return err
-}
-
-func getClientOptionsForInputCloudStorage(g *gcpCloudStorageInput) ([]option.ClientOption, error) {
-	var opt []option.ClientOption
-	opt, err := getClientOptionWithCredential(g.conf.CredentialsJSON, opt)
-	if err != nil {
-		return nil, err
-	}
-	return opt, nil
 }
 
 func (g *gcpCloudStorageInput) getObjectTarget(ctx context.Context) (*gcpCloudStoragePendingObject, error) {

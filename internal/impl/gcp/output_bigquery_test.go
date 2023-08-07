@@ -553,14 +553,13 @@ credentials_json_encoded: ewogICJ0eXBlIjogInNlcnZpY2VfYWNjb3VudCIsCiAgInByb2plY3
 
 	output.clientURL = gcpBQClientURL(server.URL)
 
-	var opt []option.ClientOption
-	opt, err = getClientOptionWithCredential(config.CredentialsJSON, opt)
+	opt, err := output.clientURL.buildClientOptions(config.CredentialsJSON)
 	defer output.Close(context.Background())
 
 	require.NoError(t, err)
-	require.Lenf(t, opt, 3, "Unexpected number of Client Options")
+	require.Lenf(t, opt, 2, "Unexpected number of Client Options")
 
-	actualCredsJSON := opt[2]
+	actualCredsJSON := opt[0]
 	decodedCred, _ := base64.StdEncoding.DecodeString(config.CredentialsJSON)
 	expectedValue := option.WithCredentialsJSON(decodedCred)
 	require.EqualValues(t, expectedValue, actualCredsJSON, "GCP Credentials JSON not set as expected.")
@@ -579,14 +578,45 @@ credentials_json_encoded: ewogICJ0eXBlIjogInNlcnZpY2VfYWNjb3VudCIsCiAgInByb2plY3
 	require.NoError(t, err)
 
 	var opt []option.ClientOption
-	opt, err = getClientOptionWithCredential(config.CredentialsJSON, opt)
+	opt, err = output.clientURL.buildClientOptions(config.CredentialsJSON)
 	defer output.Close(context.Background())
 
 	require.NoError(t, err)
-	require.Lenf(t, opt, 1, "Unexpected number of Client Options")
+	require.Lenf(t, opt, 2, "Unexpected number of Client Options")
 
 	actualCredsJSON := opt[0]
 	decodedCred, _ := base64.StdEncoding.DecodeString(config.CredentialsJSON)
 	expectedValue := option.WithCredentialsJSON(decodedCred)
 	require.EqualValues(t, expectedValue, actualCredsJSON, "GCP Credentials JSON not set as expected.")
+}
+
+func TestGCPBigQueryConnectNoCredsJSON(t *testing.T) {
+	server := httptest.NewServer(
+		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusNotFound)
+			_, _ = w.Write([]byte("{}"))
+		}),
+	)
+	defer server.Close()
+
+	config := gcpBigQueryConfFromYAML(t, `
+project: project_meow
+dataset: dataset_meow
+table: table_meow
+`)
+
+	output, err := newGCPBigQueryOutput(config, nil)
+	require.NoError(t, err)
+
+	output.clientURL = gcpBQClientURL(server.URL)
+
+	opt, err := output.clientURL.buildClientOptions(config.CredentialsJSON)
+	defer output.Close(context.Background())
+
+	require.NoError(t, err)
+	require.Lenf(t, opt, 2, "Unexpected number of Client Options")
+
+	actualCredsJSON := opt[0]
+	expectedValue := option.WithoutAuthentication()
+	require.EqualValues(t, expectedValue, actualCredsJSON, "Expected withoutAuthentication() as option when Creds Json is not mentioned.")
 }

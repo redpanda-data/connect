@@ -110,29 +110,31 @@ func gcpBigQueryOutputConfigFromParsed(conf *service.ParsedConfig) (gconf gcpBig
 
 type gcpBQClientURL string
 
-func (g gcpBQClientURL) NewClient(ctx context.Context, projectID string, credentialsJSON string) (*bigquery.Client, error) {
+func (g gcpBQClientURL) NewClient(ctx context.Context, conf gcpBigQueryOutputConfig) (*bigquery.Client, error) {
+	opt, err := g.buildClientOptions(conf.CredentialsJSON)
+	if err != nil {
+		return nil, fmt.Errorf("error with GCP Credentials JSON: %w", err)
+	}
 
+	return bigquery.NewClient(ctx, conf.ProjectID, opt...)
+}
+
+func (g gcpBQClientURL) buildClientOptions(credentialsJSON string) ([]option.ClientOption, error) {
 	var opt []option.ClientOption
 	opt, err := getClientOptionWithCredential(credentialsJSON, opt)
 	if err != nil {
 		return nil, fmt.Errorf("error with GCP Credentials JSON: %w", err)
 	}
 
-	return bigquery.NewClient(ctx, projectID, opt...)
-}
-
-/*func (g gcpBQClientURL) getClientOptionsForOutputBQ(credentialsJSON string) ([]option.ClientOption, error) {
-	var opt []option.ClientOption
-	if g != "" {
-		opt = []option.ClientOption{option.WithoutAuthentication(), option.WithEndpoint(string(g))}
+	//if credentials json is not set, fallback to exiting logic of using withoutAuthentication
+	if len(opt) == 0 {
+		opt = append(opt, option.WithoutAuthentication())
 	}
 
-	opt, err := getClientOptionWithCredential(credentialsJSON, opt)
-	if err != nil {
-		return nil, err
-	}
+	opt = append(opt, option.WithEndpoint(string(g)))
+
 	return opt, nil
-}*/
+}
 
 func gcpBigQueryConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
@@ -324,7 +326,7 @@ func (g *gcpBigQueryOutput) Connect(ctx context.Context) (err error) {
 	defer g.connMut.Unlock()
 
 	var client *bigquery.Client
-	if client, err = g.clientURL.NewClient(context.Background(), g.conf.ProjectID, g.conf.CredentialsJSON); err != nil {
+	if client, err = g.clientURL.NewClient(context.Background(), g.conf); err != nil {
 		err = fmt.Errorf("error creating big query client: %w", err)
 		return
 	}

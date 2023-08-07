@@ -211,7 +211,6 @@ func TestGCPBigQuerySelectInputClientOptions(t *testing.T) {
 	require.NoError(t, err)
 
 	var opt []option.ClientOption
-	//opt, err = getClientOptionsBQSelect(inp)
 	opt, err = getClientOptionWithCredential(inp.config.credentialsJSON, opt)
 	require.NoError(t, err)
 	require.Lenf(t, opt, 1, "Unexpected number of Client Options")

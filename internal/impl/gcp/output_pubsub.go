@@ -187,13 +187,8 @@ func newPubSubOutput(conf *service.ParsedConfig) (*pubsubOutput, error) {
 		opt = []option.ClientOption{option.WithEndpoint(endpoint)}
 	}
 
-	encodeCredJson, _ := conf.FieldString("credentials_json_encoded")
-	/*cred := getClientOptionWithCredential(credJSON)
-	if len(cred) > 0 {
-		opt = append(opt, option.WithCredentialsJSON([]byte(cred)))
-	}*/
-
-	opt, err = getClientOptionWithCredential(encodeCredJson, opt)
+	encodeCredJSON, _ := conf.FieldString("credentials_json_encoded")
+	opt, err = getClientOptionWithCredential(encodeCredJSON, opt)
 	if err != nil {
 		return nil, err
 	}

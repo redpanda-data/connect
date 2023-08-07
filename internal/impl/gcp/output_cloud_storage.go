@@ -239,11 +239,6 @@ func (g *gcpCloudStorageOutput) Connect(ctx context.Context) error {
 	return nil
 }
 
-func getClientOptionsForOutputCloudStorage(g *gcpCloudStorageOutput) ([]option.ClientOption, error) {
-	var opt []option.ClientOption
-	return getClientOptionWithCredential(g.conf.CredentialsJSON, opt)
-}
-
 func (g *gcpCloudStorageOutput) WriteBatch(ctx context.Context, batch service.MessageBatch) error {
 	g.connMut.RLock()
 	client := g.client
