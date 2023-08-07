@@ -154,8 +154,7 @@ func newBigQuerySelectProcessor(inConf *service.ParsedConfig, options *bigQueryP
 
 	closeCtx, closeF := context.WithCancel(context.Background())
 
-	var opt []option.ClientOption
-	opt, err = getClientOptionWithCredential(conf.credentialsJSON, opt)
+	options.clientOptions, err = getClientOptionWithCredential(conf.credentialsJSON, options.clientOptions)
 	if err != nil {
 		closeF()
 		return nil, fmt.Errorf("failed to create bigquery client: %w", err)
