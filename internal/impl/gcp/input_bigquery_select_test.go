@@ -4,12 +4,12 @@ import (
 	"context"
 	"encoding/base64"
 	"errors"
-	"google.golang.org/api/option"
 	"testing"
 
 	"github.com/benthosdev/benthos/v4/public/service"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/api/option"
 )
 
 var testBQInputYAML = `

@@ -3,7 +3,6 @@ package gcp
 import (
 	"context"
 	"encoding/base64"
-	"google.golang.org/api/option"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -14,6 +13,7 @@ import (
 	"cloud.google.com/go/bigquery"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/api/option"
 
 	"github.com/benthosdev/benthos/v4/public/service"
 )
