@@ -1,0 +1,37 @@
+pipeline:
+  processors:
+    - dedupe:
+        cache: in_memory_cuckoo
+        key: ${! content() }
+
+cache_resources:
+  - label: in_memory_cuckoo
+    cuckoo:
+      cap: 10000
+
+tests:
+  - name: de-duplicate across batches using cuckoo filter
+    input_batches:
+      -
+        - content: '1'
+        - content: '2'
+        - content: '3'
+        - content: '4'
+        - content: '3'
+        - content: '3'
+        - content: '3'
+      -
+        - content: '4'
+        - content: '1'
+        - content: '1'
+        - content: '3'
+        - content: '4'
+        - content: '4'
+        - content: '2'
+        - content: '1'
+    output_batches:
+      -
+        - content_equals: 1
+        - content_equals: 2
+        - content_equals: 3
+        - content_equals: 4
