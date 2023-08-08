@@ -40,7 +40,7 @@ func TestTTLRUCacheInitValues(t *testing.T) {
 	t.Parallel()
 
 	defConf, err := ttlruCacheConfig().ParseYAML(`
-ttl: '5m'
+default_ttl: '5m'
 cap: 1024
 init_values:
   foo: bar
