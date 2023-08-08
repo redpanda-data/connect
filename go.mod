@@ -101,8 +101,8 @@ require (
 	github.com/tetratelabs/wazero v1.0.1
 	github.com/tilinna/z85 v1.0.0
 	github.com/trinodb/trino-go-client v0.309.0
-	github.com/twmb/franz-go v1.13.0
-	github.com/twmb/franz-go/pkg/kmsg v1.4.0
+	github.com/twmb/franz-go v1.14.3
+	github.com/twmb/franz-go/pkg/kmsg v1.6.1
 	github.com/urfave/cli/v2 v2.11.0
 	github.com/vmihailenco/msgpack/v5 v5.3.5
 	github.com/xdg/scram v1.0.3
