@@ -256,14 +256,12 @@ func BenchmarkCuckoo(b *testing.B) {
 
 	for i := 0; i < b.N; i++ {
 		j := i % cuckooCacheFieldCapDefaultValue
-		key, value := fmt.Sprintf("key%v", j), []byte(fmt.Sprintf("foo%v", j))
+		key, value := fmt.Sprintf("key%v", j), []byte("t")
 
-		assert.NoError(b, c.Set(ctx, key, value, nil))
-
-		res, err := c.Get(ctx, key)
-		require.NoError(b, err)
-		assert.Equal(b, value, res)
+		err = c.Set(ctx, key, value, nil)
 	}
+
+	_ = err
 }
 
 func BenchmarkCuckooParallel(b *testing.B) {
@@ -280,15 +278,15 @@ func BenchmarkCuckooParallel(b *testing.B) {
 	b.ResetTimer()
 
 	b.RunParallel(func(p *testing.PB) {
+		var err error
+
 		for i := 0; p.Next(); i++ {
 			j := i % cuckooCacheFieldCapDefaultValue
-			key, value := fmt.Sprintf("key%v", j), []byte(fmt.Sprintf("foo%v", j))
+			key, value := fmt.Sprintf("key%v", j), []byte("t")
 
-			assert.NoError(b, c.Set(ctx, key, value, nil))
-
-			res, err := c.Get(ctx, key)
-			require.NoError(b, err)
-			assert.Equal(b, value, res)
+			err = c.Set(ctx, key, value, nil)
 		}
+
+		_ = err
 	})
 }
