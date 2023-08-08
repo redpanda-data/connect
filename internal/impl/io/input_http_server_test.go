@@ -40,7 +40,7 @@ type apiRegGorillaMutWrapper struct {
 }
 
 func (a apiRegGorillaMutWrapper) RegisterEndpoint(path, desc string, h http.HandlerFunc) {
-	a.mut.PathPrefix(path).Handler(h)
+	api.GetMuxRoute(a.mut, path).Handler(h)
 }
 
 func TestHTTPBasic(t *testing.T) {
@@ -434,7 +434,7 @@ func TestHTTPServerPathIsPrefix(t *testing.T) {
 
 	conf := parseYAMLInputConf(t, `
 http_server:
-  path: /test/{foo}/{bar}
+  path: /test/{foo}/{bar}/
   allowed_verbs: [ "POST", "PUT" ]
 `)
 	server, err := mgr.NewInput(conf)
@@ -561,7 +561,7 @@ func TestHTTPServerPathParametersCustomServerPathIsPrefix(t *testing.T) {
 	conf := parseYAMLInputConf(t, `
 http_server:
   address: 0.0.0.0:%v
-  path: /test/{foo}/{bar}
+  path: /test/{foo}/{bar}/
 `, freePort)
 
 	server, err := mock.NewManager().NewInput(conf)

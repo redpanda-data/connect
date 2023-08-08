@@ -264,8 +264,8 @@ func (t *Type) RegisterEndpoint(path, desc string, handlerFunc http.HandlerFunc)
 			h(w, r)
 		})
 
-		t.mux.PathPrefix(path).Handler(wrapHandler)
-		t.mux.PathPrefix(t.conf.RootPath + path).Handler(wrapHandler)
+		GetMuxRoute(t.mux, path).Handler(wrapHandler)
+		GetMuxRoute(t.mux, t.conf.RootPath+path).Handler(wrapHandler)
 	}
 	t.handlers[path] = handlerFunc
 }

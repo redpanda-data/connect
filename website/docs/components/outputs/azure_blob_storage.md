@@ -36,8 +36,8 @@ output:
   azure_blob_storage:
     storage_account: ""
     storage_access_key: ""
-    storage_sas_token: ""
     storage_connection_string: ""
+    storage_sas_token: ""
     container: messages-${!timestamp("2006")} # No default (required)
     path: ${!count("files")}-${!timestamp_unix_nano()}.txt
     max_in_flight: 64
@@ -53,8 +53,8 @@ output:
   azure_blob_storage:
     storage_account: ""
     storage_access_key: ""
-    storage_sas_token: ""
     storage_connection_string: ""
+    storage_sas_token: ""
     container: messages-${!timestamp("2006")} # No default (required)
     path: ${!count("files")}-${!timestamp_unix_nano()}.txt
     blob_type: BLOCK
@@ -104,17 +104,17 @@ The storage account access key. This field is ignored if `storage_connection_str
 Type: `string`  
 Default: `""`  
 
-### `storage_sas_token`
+### `storage_connection_string`
 
-The storage account SAS token. This field is ignored if `storage_connection_string` or `storage_access_key` are set.
+A storage account connection string. This field is required if `storage_account` and `storage_access_key` / `storage_sas_token` are not set.
 
 
 Type: `string`  
 Default: `""`  
 
-### `storage_connection_string`
+### `storage_sas_token`
 
-A storage account connection string. This field is required if `storage_account` and `storage_access_key` / `storage_sas_token` are not set.
+The storage account SAS token. This field is ignored if `storage_connection_string` or `storage_access_key` are set.
 
 
 Type: `string`  

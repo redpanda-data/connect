@@ -2600,6 +2600,20 @@ root = this.without("inner.a","inner.c","d")
 # Out: {"e":"fifth","inner":{"b":"second"}}
 ```
 
+### `zip`
+
+zip an array value with one or more argument arrays.
+
+#### Examples
+
+
+```coffee
+root.foo = this.foo.zip(this.bar, this.baz)
+
+# In:  {"foo":["a","b","c"],"bar":[1,2,3],"baz":[4,5,6]}
+# Out: {"foo":[["a",1,4],["b",2,5],["c",3,6]]}
+```
+
 ## Parsing
 
 ### `bloblang`
