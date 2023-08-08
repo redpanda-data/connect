@@ -429,7 +429,7 @@ When filtering objects the mapping query argument is provided a context with a f
 var _ = registerSimpleMethod(
 	NewMethodSpec(
 		"find",
-		"Returns the index of the first occurrence of a value an array. `-1` is returned if there are no matches. Numerical comparisons are made irrespective of the representation type (float versus integer).",
+		"Returns the index of the first occurrence of a value in an array. `-1` is returned if there are no matches. Numerical comparisons are made irrespective of the representation type (float versus integer).",
 	).InCategory(
 		MethodCategoryObjectAndArray, "",
 		NewExampleSpec("",

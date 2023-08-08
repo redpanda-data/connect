@@ -37,8 +37,14 @@ func (t *tracedInput) loop() {
 	defer close(t.tChan)
 	readChan := t.wrapped.TransactionChan()
 	for {
-		tran, open := <-readChan
-		if !open {
+		var tran message.Transaction
+		var open bool
+		select {
+		case tran, open = <-readChan:
+			if !open {
+				return
+			}
+		case <-t.shutSig.CloseNowChan():
 			return
 		}
 		if t.e.IsEnabled() {

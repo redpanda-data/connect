@@ -21,16 +21,26 @@ const (
 func init() {
 	err := service.RegisterInput(
 		"pulsar",
-		service.NewConfigSpec().
-			Version("3.43.0").
-			Categories("Services").
-			Summary("Reads messages from an Apache Pulsar server.").
-			Description(`
+		inputConfigSpec(),
+		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Input, error) {
+			return newPulsarReaderFromParsed(conf, mgr.Logger())
+		})
+	if err != nil {
+		panic(err)
+	}
+}
+
+func inputConfigSpec() *service.ConfigSpec {
+	return service.NewConfigSpec().
+		Version("3.43.0").
+		Categories("Services").
+		Summary("Reads messages from an Apache Pulsar server.").
+		Description(`
 ### Metadata
 
 This input adds the following metadata fields to each message:
 
-`+"```text"+`
+` + "```text" + `
 - pulsar_message_id
 - pulsar_key
 - pulsar_ordering_key
@@ -40,36 +50,34 @@ This input adds the following metadata fields to each message:
 - pulsar_producer_name
 - pulsar_redelivery_count
 - All properties of the message
-`+"```"+`
+` + "```" + `
 
 You can access these metadata fields using
 [function interpolation](/docs/configuration/interpolation#bloblang-queries).
 `).
-			Field(service.NewURLField("url").
-				Description("A URL to connect to.").
-				Example("pulsar://localhost:6650").
-				Example("pulsar://pulsar.us-west.example.com:6650").
-				Example("pulsar+ssl://pulsar.us-west.example.com:6651")).
-			Field(service.NewStringListField("topics").
-				Description("A list of topics to subscribe to.")).
-			Field(service.NewStringField("subscription_name").
-				Description("Specify the subscription name for this consumer.")).
-			Field(service.NewStringEnumField("subscription_type", "shared", "key_shared", "failover", "exclusive").
-				Description("Specify the subscription type for this consumer.\n\n> NOTE: Using a `key_shared` subscription type will __allow out-of-order delivery__ since nack-ing messages sets non-zero nack delivery delay - this can potentially cause consumers to stall. See [Pulsar documentation](https://pulsar.apache.org/docs/en/2.8.1/concepts-messaging/#negative-acknowledgement) and [this Github issue](https://github.com/apache/pulsar/issues/12208) for more details.").
-				Default(defaultSubscriptionType)).
-			Field(service.NewObjectField("tls",
-				service.NewStringField("root_cas_file").
-					Description("An optional path of a root certificate authority file to use. This is a file, often with a .pem extension, containing a certificate chain from the parent trusted root certificate, to possible intermediate signing certificates, to the host certificate.").
-					Default("").
-					Example("./root_cas.pem")).
-				Description("Specify the path to a custom CA certificate to trust broker TLS service.")).
-			Field(authField()),
-		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Input, error) {
-			return newPulsarReaderFromParsed(conf, mgr.Logger())
-		})
-	if err != nil {
-		panic(err)
-	}
+		Field(service.NewURLField("url").
+			Description("A URL to connect to.").
+			Example("pulsar://localhost:6650").
+			Example("pulsar://pulsar.us-west.example.com:6650").
+			Example("pulsar+ssl://pulsar.us-west.example.com:6651")).
+		Field(service.NewStringListField("topics").
+			Description("A list of topics to subscribe to. This or topics_pattern must be set.").
+			Optional()).
+		Field(service.NewStringField("topics_pattern").
+			Description("A regular expression matching the topics to subscribe to. This or topics must be set.").
+			Optional()).
+		Field(service.NewStringField("subscription_name").
+			Description("Specify the subscription name for this consumer.")).
+		Field(service.NewStringEnumField("subscription_type", "shared", "key_shared", "failover", "exclusive").
+			Description("Specify the subscription type for this consumer.\n\n> NOTE: Using a `key_shared` subscription type will __allow out-of-order delivery__ since nack-ing messages sets non-zero nack delivery delay - this can potentially cause consumers to stall. See [Pulsar documentation](https://pulsar.apache.org/docs/en/2.8.1/concepts-messaging/#negative-acknowledgement) and [this Github issue](https://github.com/apache/pulsar/issues/12208) for more details.").
+			Default(defaultSubscriptionType)).
+		Field(service.NewObjectField("tls",
+			service.NewStringField("root_cas_file").
+				Description("An optional path of a root certificate authority file to use. This is a file, often with a .pem extension, containing a certificate chain from the parent trusted root certificate, to possible intermediate signing certificates, to the host certificate.").
+				Default("").
+				Example("./root_cas.pem")).
+			Description("Specify the path to a custom CA certificate to trust broker TLS service.")).
+		Field(authField())
 }
 
 //------------------------------------------------------------------------------
@@ -81,12 +89,13 @@ type pulsarReader struct {
 
 	log *service.Logger
 
-	authConf    authConfig
-	url         string
-	topics      []string
-	subName     string
-	subType     string
-	rootCasFile string
+	authConf      authConfig
+	url           string
+	topics        []string
+	topicsPattern string
+	subName       string
+	subType       string
+	rootCasFile   string
 }
 
 func newPulsarReaderFromParsed(conf *service.ParsedConfig, log *service.Logger) (p *pulsarReader, err error) {
@@ -101,7 +110,10 @@ func newPulsarReaderFromParsed(conf *service.ParsedConfig, log *service.Logger) 
 	if p.url, err = conf.FieldString("url"); err != nil {
 		return
 	}
-	if p.topics, err = conf.FieldStringList("topics"); err != nil {
+	if p.topics, _ = conf.FieldStringList("topics"); err != nil {
+		return
+	}
+	if p.topicsPattern, _ = conf.FieldString("topics_pattern"); err != nil {
 		return
 	}
 	if p.subName, err = conf.FieldString("subscription_name"); err != nil {
@@ -118,8 +130,9 @@ func newPulsarReaderFromParsed(conf *service.ParsedConfig, log *service.Logger) 
 		err = errors.New("field url must not be empty")
 		return
 	}
-	if len(p.topics) == 0 {
-		err = errors.New("field topics must not be empty")
+	if len(p.topics) == 0 && len(p.topicsPattern) == 0 ||
+		len(p.topics) != 0 && len(p.topicsPattern) != 0 {
+		err = errors.New("exactly one of fields topics and topics_pattern must be set")
 		return
 	}
 	if p.subName == "" {
@@ -192,14 +205,16 @@ func (p *pulsarReader) Connect(ctx context.Context) error {
 		return err
 	}
 
-	if consumer, err = client.Subscribe(pulsar.ConsumerOptions{
+	options := pulsar.ConsumerOptions{
 		Topics:           p.topics,
+		TopicsPattern:    p.topicsPattern,
 		SubscriptionName: p.subName,
 		Type:             subType,
 		KeySharedPolicy: &pulsar.KeySharedPolicy{
 			AllowOutOfOrderDelivery: true,
 		},
-	}); err != nil {
+	}
+	if consumer, err = client.Subscribe(options); err != nil {
 		client.Close()
 		return err
 	}

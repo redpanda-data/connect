@@ -1933,7 +1933,7 @@ root.new_dict = this.dict.filter(item -> item.value.contains("foo"))
 :::caution BETA
 This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
 :::
-Returns the index of the first occurrence of a value an array. `-1` is returned if there are no matches. Numerical comparisons are made irrespective of the representation type (float versus integer).
+Returns the index of the first occurrence of a value in an array. `-1` is returned if there are no matches. Numerical comparisons are made irrespective of the representation type (float versus integer).
 
 #### Parameters
 
@@ -2341,15 +2341,18 @@ root = this.foo.merge(this.bar)
 
 Hash and sign an object representing JSON Web Token (JWT) claims using HS256.
 
+Introduced in version v4.12.0.
+
+
 #### Parameters
 
-**`signing_secret`** &lt;string&gt; The HMAC secret to use for signing the token.  
+**`signing_secret`** &lt;string&gt; The secret to use for signing the token.  
 
 #### Examples
 
 
 ```coffee
-root.signed = this.claims.sign_jwt_hs256("dont-tell-anyone")
+root.signed = this.claims.sign_jwt_hs256("""dont-tell-anyone""")
 
 # In:  {"claims":{"sub":"user123"}}
 # Out: {"signed":"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyMTIzIn0.hUl-nngPMY_3h9vveWJUPsCcO5PeL6k9hWLnMYeFbFQ"}
@@ -2359,15 +2362,18 @@ root.signed = this.claims.sign_jwt_hs256("dont-tell-anyone")
 
 Hash and sign an object representing JSON Web Token (JWT) claims using HS384.
 
+Introduced in version v4.12.0.
+
+
 #### Parameters
 
-**`signing_secret`** &lt;string&gt; The HMAC secret to use for signing the token.  
+**`signing_secret`** &lt;string&gt; The secret to use for signing the token.  
 
 #### Examples
 
 
 ```coffee
-root.signed = this.claims.sign_jwt_hs384("dont-tell-anyone")
+root.signed = this.claims.sign_jwt_hs384("""dont-tell-anyone""")
 
 # In:  {"claims":{"sub":"user123"}}
 # Out: {"signed":"eyJhbGciOiJIUzM4NCIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyMTIzIn0.zGYLr83aToon1efUNq-hw7XgT20lPvZb8sYei8x6S6mpHwb433SJdXJXx0Oio8AZ"}
@@ -2377,19 +2383,55 @@ root.signed = this.claims.sign_jwt_hs384("dont-tell-anyone")
 
 Hash and sign an object representing JSON Web Token (JWT) claims using HS512.
 
+Introduced in version v4.12.0.
+
+
 #### Parameters
 
-**`signing_secret`** &lt;string&gt; The HMAC secret to use for signing the token.  
+**`signing_secret`** &lt;string&gt; The secret to use for signing the token.  
 
 #### Examples
 
 
 ```coffee
-root.signed = this.claims.sign_jwt_hs512("dont-tell-anyone")
+root.signed = this.claims.sign_jwt_hs512("""dont-tell-anyone""")
 
 # In:  {"claims":{"sub":"user123"}}
 # Out: {"signed":"eyJhbGciOiJIUzUxMiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyMTIzIn0.zBNR9o_6EDwXXKkpKLNJhG26j8Dc-mV-YahBwmEdCrmiWt5les8I9rgmNlWIowpq6Yxs4kLNAdFhqoRz3NXT3w"}
 ```
+
+### `sign_jwt_rs256`
+
+Hash and sign an object representing JSON Web Token (JWT) claims using RS256.
+
+Introduced in version v4.18.0.
+
+
+#### Parameters
+
+**`signing_secret`** &lt;string&gt; The secret to use for signing the token.  
+
+### `sign_jwt_rs384`
+
+Hash and sign an object representing JSON Web Token (JWT) claims using RS384.
+
+Introduced in version v4.18.0.
+
+
+#### Parameters
+
+**`signing_secret`** &lt;string&gt; The secret to use for signing the token.  
+
+### `sign_jwt_rs512`
+
+Hash and sign an object representing JSON Web Token (JWT) claims using RS512.
+
+Introduced in version v4.18.0.
+
+
+#### Parameters
+
+**`signing_secret`** &lt;string&gt; The secret to use for signing the token.  
 
 ### `slice`
 

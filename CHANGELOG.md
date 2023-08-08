@@ -7,7 +7,31 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
+- Field `topics_pattern` added to the `pulsar` input.
+- Both the `schema_registry_encode` and `schema_registry_decode` processors now support protobuf schemas.
+- Both the `schema_registry_encode` and `schema_registry_decode` processors now support references for AVRO and PROTOBUF schemas.
+
+### Fixed
+
+- Errors encountered by the `gcp_pubsub` output should now present more specific logs.
+- Upgraded `kafka` input and output underlying sarama client library to v1.40.0 at new module path github.com/IBM/sarama
+- The CUE schema for `switch` processor now correctly reflects that it takes a list of clauses.
+- Fixed the CUE schema for fields that take a 2d-array such as `workflow.order`.
+- The `http_server` input and output now follow the same multiplexer rules regardless of whether the general `http` server block is used or a custom endpoint.
+- Config linting should now respect fields sourced via a merge key (`<<`).
+- The `lint` subcommand should now lint config files pointed to via `-r`/`--resources` flags.
+
+### Changed
+
+- The `snowflake_put` output is now beta.
+- Endpoints specified by `http_server` components using both the general `http` server block or their own custom server addresses should no longer be treated as path prefixes unless the path ends with a slash (`/`), in which case all extensions of the path will match. This corrects a behavioural change introduced in v4.14.0.
+
+## 4.18.0 - 2023-07-02
+
+### Added
+
 - Field `logger.level_name` added for customising the name of log levels in the JSON format.
+- Methods `sign_jwt_rs256`, `sign_jwt_rs384` and `sign_jwt_rs512` added to Bloblang.
 
 ### Fixed
 

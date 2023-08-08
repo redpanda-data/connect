@@ -84,7 +84,7 @@ It's possible to return a response for each message received using [synchronous 
 
 ### Endpoints
 
-The following fields specify endpoints that are registered for sending messages, and support path parameters of the form `/{foo}`, which are added to ingested messages as metadata:
+The following fields specify endpoints that are registered for sending messages, and support path parameters of the form `/{foo}`, which are added to ingested messages as metadata. A path ending in `/` will match against all extensions of that path:
 
 #### `path` (defaults to `/post`)
 
@@ -95,6 +95,16 @@ If the request contains a multipart `content-type` header as per [rfc1341](https
 #### `ws_path` (defaults to `/post/ws`)
 
 Creates a websocket connection, where payloads received on the socket are passed through the pipeline as a batch of one message.
+
+:::caution Endpoint Caveats
+Components within a Benthos config will register their respective endpoints in a non-deterministic order. This means that establishing precedence of endpoints that are registered via multiple `http_server` inputs or outputs (either within brokers or from cohabiting streams) is not possible in a predictable way.
+
+This ambiguity makes it difficult to ensure that paths which are both a subset of a path registered by a separate component, and end in a slash (`/`) and will therefore match against all extensions of that path, do not prevent the more specific path from matching against requests.
+
+It is therefore recommended that you ensure paths of separate components do not collide unless they are explicitly non-competing.
+
+For example, if you were to deploy two separate `http_server` inputs, one with a path `/foo/` and the other with a path `/foo/bar`, it would not be possible to ensure that the path `/foo/` does not swallow requests made to `/foo/bar`.
+:::
 
 You may specify an optional `ws_welcome_message`, which is a static payload to be sent to all clients once a websocket connection is first established.
 
