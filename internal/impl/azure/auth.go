@@ -3,19 +3,15 @@ package azure
 import (
 	"errors"
 	"fmt"
-	"net/url"
 	"os"
 	"strings"
-
-	"github.com/Azure/azure-sdk-for-go/storage"
 
 	"github.com/benthosdev/benthos/v4/public/service"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	"github.com/Azure/azure-sdk-for-go/sdk/data/aztables"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
-
-	"github.com/Azure/azure-storage-queue-go/azqueue"
+	"github.com/Azure/azure-sdk-for-go/sdk/storage/azqueue"
 )
 
 const (
@@ -36,18 +32,14 @@ func azureComponentSpec(forBlobStorage bool) *service.ConfigSpec {
 			service.NewStringField(bscFieldStorageAccessKey).
 				Description("The storage account access key. This field is ignored if `"+bscFieldStorageConnectionString+"` is set.").
 				Default(""),
+			service.NewStringField(bscFieldStorageConnectionString).
+				Description("A storage account connection string. This field is required if `"+bscFieldStorageAccount+"` and `"+bscFieldStorageAccessKey+"` / `"+bscFieldStorageSASToken+"` are not set.").
+				Default(""),
 		)
-	if forBlobStorage {
-		spec = spec.Field(service.NewStringField(bscFieldStorageSASToken).
-			Description("The storage account SAS token. This field is ignored if `" + bscFieldStorageConnectionString + "` or `" + bscFieldStorageAccessKey + "` are set.").
-			Default("")).
-			LintRule(`root = if this.storage_connection_string != "" && !this.storage_connection_string.contains("AccountName=")  && !this.storage_connection_string.contains("UseDevelopmentStorage=true;") && this.storage_account == "" { [ "storage_account must be set if storage_connection_string does not contain the \"AccountName\" parameter" ] }`)
-	}
-	spec = spec.Fields(
-		service.NewStringField(bscFieldStorageConnectionString).
-			Description("A storage account connection string. This field is required if `" + bscFieldStorageAccount + "` and `" + bscFieldStorageAccessKey + "` / `" + bscFieldStorageSASToken + "` are not set.").
-			Default(""),
-	)
+	spec = spec.Field(service.NewStringField(bscFieldStorageSASToken).
+		Description("The storage account SAS token. This field is ignored if `" + bscFieldStorageConnectionString + "` or `" + bscFieldStorageAccessKey + "` are set.").
+		Default("")).
+		LintRule(`root = if this.storage_connection_string != "" && !this.storage_connection_string.contains("AccountName=")  && !this.storage_connection_string.contains("UseDevelopmentStorage=true;") && this.storage_account == "" { [ "storage_account must be set if storage_connection_string does not contain the \"AccountName\" parameter" ] }`)
 	return spec
 }
 
@@ -74,38 +66,32 @@ func blobStorageClientFromParsed(pConf *service.ParsedConfig) (*azblob.Client, e
 	return getBlobStorageClient(connectionString, storageAccount, storageAccessKey, storageSASToken)
 }
 
+const (
+	blobEndpointExp = "https://%s.blob.core.windows.net"
+)
+
 func getBlobStorageClient(storageConnectionString, storageAccount, storageAccessKey, storageSASToken string) (*azblob.Client, error) {
 	var client *azblob.Client
 	var err error
 	if len(storageConnectionString) > 0 {
-		storageConnectionString := storageConnectionString
-		if strings.Contains(storageConnectionString, "UseDevelopmentStorage=true;") {
-			storageConnectionString = getEmulatorConnectionString("10000", "10001", "10002")
-		}
-		// The Shared Access Signature UI doesn't add the AccountName parameter to the Connection String for some reason...
-		// However, in the Access Keys UI, the Connection String does have the AccountName parameter embedded in it.
-		// I think it's worth maintaining this hack in here to help users who try to use SAS tokens in Connection String
-		// format.
-		if !strings.Contains(storageConnectionString, "AccountName=") {
-			storageConnectionString = storageConnectionString + ";" + "AccountName=" + storageAccount
-		}
+		storageConnectionString := parseStorageConnectionString(storageConnectionString, storageAccount)
 		client, err = azblob.NewClientFromConnectionString(storageConnectionString, nil)
 	} else if len(storageAccessKey) > 0 {
 		cred, credErr := azblob.NewSharedKeyCredential(storageAccount, storageAccessKey)
 		if credErr != nil {
 			return nil, fmt.Errorf("error creating shared key credential: %w", credErr)
 		}
-		serviceURL := fmt.Sprintf("https://%s.blob.core.windows.net", storageAccount)
+		serviceURL := fmt.Sprintf(blobEndpointExp, storageAccount)
 		client, err = azblob.NewClientWithSharedKeyCredential(serviceURL, cred, nil)
 	} else if len(storageSASToken) > 0 {
-		serviceURL := fmt.Sprintf("https://%s.blob.core.windows.net/%s", storageAccount, storageSASToken)
+		serviceURL := fmt.Sprintf("%s/%s", fmt.Sprintf(blobEndpointExp, storageAccount), storageSASToken)
 		client, err = azblob.NewClientWithNoCredential(serviceURL, nil)
 	} else {
 		cred, credErr := azidentity.NewDefaultAzureCredential(nil)
 		if credErr != nil {
 			return nil, fmt.Errorf("error getting default Azure credentials: %v", credErr)
 		}
-		serviceURL := fmt.Sprintf("https://%s.blob.core.windows.net", storageAccount)
+		serviceURL := fmt.Sprintf(blobEndpointExp, storageAccount)
 		client, err = azblob.NewClient(serviceURL, cred, nil)
 	}
 	if err != nil {
@@ -122,16 +108,48 @@ func getEmulatorConnectionString(blobServicePort, queueServicePort, tableService
 	)
 }
 
+const (
+	azuriteBlobPortEnv  = "AZURITE_BLOB_ENDPOINT_PORT"
+	azuriteQueuePortEnv = "AZURITE_QUEUE_ENDPOINT_PORT"
+	azuriteTablePortEnv = "AZURITE_TABLE_ENDPOINT_PORT"
+)
+
+func parseStorageConnectionString(storageConnectionString, storageAccount string) string {
+	if strings.Contains(storageConnectionString, "UseDevelopmentStorage=true;") {
+		var azuriteDefaultPorts = map[string]string{
+			azuriteBlobPortEnv:  "10000",
+			azuriteQueuePortEnv: "10001",
+			azuriteTablePortEnv: "10002",
+		}
+		for name := range azuriteDefaultPorts {
+			port := os.Getenv(name)
+			if port != "" {
+				azuriteDefaultPorts[name] = port
+			}
+		}
+		storageConnectionString = getEmulatorConnectionString(
+			azuriteDefaultPorts[azuriteBlobPortEnv],
+			azuriteDefaultPorts[azuriteQueuePortEnv],
+			azuriteDefaultPorts[azuriteTablePortEnv],
+		)
+	}
+	// The Shared Access Signature UI doesn't add the AccountName parameter to the Connection String for some reason...
+	// However, in the Access Keys UI, the Connection String does have the AccountName parameter embedded in it.
+	// I think it's worth maintaining this hack in here to help users who try to use SAS tokens in Connection String
+	// format.
+	if !strings.Contains(storageConnectionString, "AccountName=") {
+		storageConnectionString = storageConnectionString + ";" + "AccountName=" + storageAccount
+	}
+	return storageConnectionString
+}
+
 //------------------------------------------------------------------------------
 
 const (
-	azQueueEndpointExp  = "https://%s.queue.core.windows.net"
-	devQueueEndpointExp = "http://localhost:10001/%s"
-	azAccountName       = "accountname"
-	azAccountKey        = "accountkey"
+	azQueueEndpointExp = "https://%s.queue.core.windows.net"
 )
 
-func queueServiceURLFromParsed(pConf *service.ParsedConfig) (*azqueue.ServiceURL, error) {
+func queueServiceClientFromParsed(pConf *service.ParsedConfig) (*azqueue.ServiceClient, error) {
 	connectionString, err := pConf.FieldString(bscFieldStorageConnectionString)
 	if err != nil {
 		return nil, err
@@ -144,83 +162,53 @@ func queueServiceURLFromParsed(pConf *service.ParsedConfig) (*azqueue.ServiceURL
 	if err != nil {
 		return nil, err
 	}
+	storageSASToken, err := pConf.FieldString(bscFieldStorageSASToken)
+	if err != nil {
+		return nil, err
+	}
 	if storageAccount == "" && connectionString == "" {
 		return nil, errors.New("invalid azure storage account credentials")
 	}
-	return getQueueServiceURL(storageAccount, storageAccessKey, connectionString)
+	return getQueueServiceClient(storageAccount, storageAccessKey, connectionString, storageSASToken)
 }
 
-func getQueueServiceURL(storageAccount, storageAccessKey, storageConnectionString string) (*azqueue.ServiceURL, error) {
+func getQueueServiceClient(storageAccount, storageAccessKey, storageConnectionString, storageSASToken string) (*azqueue.ServiceClient, error) {
 	if storageAccount == "" && storageConnectionString == "" {
 		return nil, errors.New("invalid azure storage account credentials")
 	}
-	endpointExp := azQueueEndpointExp
+	var client *azqueue.ServiceClient
 	var err error
 	if storageConnectionString != "" {
-		if strings.Contains(storageConnectionString, "UseDevelopmentStorage=true;") {
-			storageAccount = storage.StorageEmulatorAccountName
-			storageAccessKey = storage.StorageEmulatorAccountKey
-			endpointExp = devQueueEndpointExp
-			if ap := os.Getenv("AZURITE_QUEUE_ENDPOINT_PORT"); ap != "" {
-				endpointExp = strings.ReplaceAll(devQueueEndpointExp, "10001", ap)
-			}
-		} else {
-			storageAccount, storageAccessKey, err = parseConnectionString(storageConnectionString)
-			if err != nil {
-				return nil, err
-			}
-			if strings.Contains(storageConnectionString, storage.StorageEmulatorAccountName) {
-				endpointExp = devQueueEndpointExp
-			}
+		connStr := parseStorageConnectionString(storageConnectionString, storageAccount)
+		client, err = azqueue.NewServiceClientFromConnectionString(connStr, nil)
+	} else if storageAccessKey != "" {
+		cred, credErr := azqueue.NewSharedKeyCredential(storageAccount, storageAccessKey)
+		if credErr != nil {
+			return nil, fmt.Errorf("error creating shared key credential: %w", credErr)
 		}
-	}
-	if storageAccount == "" {
-		return nil, fmt.Errorf("invalid azure storage account credentials: %v", err)
-	}
-	var credential azqueue.Credential
-	if storageAccessKey != "" {
-		credential, _ = azqueue.NewSharedKeyCredential(storageAccount, storageAccessKey)
+		serviceURL := fmt.Sprintf(azQueueEndpointExp, storageAccount)
+		client, err = azqueue.NewServiceClientWithSharedKeyCredential(serviceURL, cred, nil)
+	} else if storageSASToken != "" {
+		serviceURL := fmt.Sprintf("%s/%s", fmt.Sprintf(azQueueEndpointExp, storageAccount), storageSASToken)
+		client, err = azqueue.NewServiceClientWithNoCredential(serviceURL, nil)
 	} else {
-		credential = azqueue.NewAnonymousCredential()
-	}
-
-	p := azqueue.NewPipeline(credential, azqueue.PipelineOptions{})
-	endpoint, _ := url.Parse(fmt.Sprintf(endpointExp, storageAccount))
-	serviceURL := azqueue.NewServiceURL(*endpoint, p)
-
-	return &serviceURL, err
-}
-
-// parseConnectionString extracts the credentials from the connection string.
-func parseConnectionString(input string) (storageAccount, storageAccessKey string, err error) {
-	// build a map of connection string key/value pairs
-	parts := map[string]string{}
-	for _, pair := range strings.Split(input, ";") {
-		if pair == "" {
-			continue
+		cred, credErr := azidentity.NewDefaultAzureCredential(nil)
+		if credErr != nil {
+			return nil, fmt.Errorf("error getting default azure credentials: %v", credErr)
 		}
-		equalDex := strings.IndexByte(pair, '=')
-		if equalDex <= 0 {
-			fmt.Println(fmt.Errorf("invalid connection segment %q", pair))
-		}
-		value := strings.TrimSpace(pair[equalDex+1:])
-		key := strings.TrimSpace(strings.ToLower(pair[:equalDex]))
-		parts[key] = value
+		serviceURL := fmt.Sprintf(azQueueEndpointExp, storageAccount)
+		client, err = azqueue.NewServiceClient(serviceURL, cred, nil)
 	}
-	accountName, ok := parts[azAccountName]
-	if !ok {
-		return "", "", errors.New("invalid connection string")
+	if err != nil {
+		return nil, fmt.Errorf("invalid azure storage account credentials: %w", err)
 	}
-	accountKey, ok := parts[azAccountKey]
-	if !ok {
-		return "", "", errors.New("invalid connection string")
-	}
-	return accountName, accountKey, nil
+
+	return client, err
 }
 
 //------------------------------------------------------------------------------
 
-func serviceClientFromParsed(pConf *service.ParsedConfig) (*aztables.ServiceClient, error) {
+func tablesServiceClientFromParsed(pConf *service.ParsedConfig) (*aztables.ServiceClient, error) {
 	connectionString, err := pConf.FieldString(bscFieldStorageConnectionString)
 	if err != nil {
 		return nil, err
@@ -233,36 +221,45 @@ func serviceClientFromParsed(pConf *service.ParsedConfig) (*aztables.ServiceClie
 	if err != nil {
 		return nil, err
 	}
+	storageSASToken, err := pConf.FieldString(bscFieldStorageSASToken)
+	if err != nil {
+		return nil, err
+	}
 	if storageAccount == "" && connectionString == "" {
 		return nil, errors.New("invalid azure storage account credentials")
 	}
-	return getServiceClient(storageAccount, storageAccessKey, connectionString)
+	return getTablesServiceClient(storageAccount, storageAccessKey, connectionString, storageSASToken)
 }
 
-func getServiceClient(account, accessKey, connectionString string) (*aztables.ServiceClient, error) {
+const (
+	tableEndpointExp = "https://%s.table.core.windows.net"
+)
+
+func getTablesServiceClient(account, accessKey, connectionString, storageSASToken string) (*aztables.ServiceClient, error) {
 	var err error
 	if account == "" && connectionString == "" {
 		return nil, errors.New("invalid azure storage account credentials")
 	}
 	var client *aztables.ServiceClient
 	if connectionString != "" {
-		if strings.Contains(connectionString, "UseDevelopmentStorage=true;") {
-			// Only here to support legacy configs that pass UseDevelopmentStorage=true;
-			// `UseDevelopmentStorage=true` is not available in the current SDK, neither `storage.NewEmulatorClient()` (which was used in the previous SDK).
-			// Instead, we use the http connection string to connect to the emulator endpoints with the default table storage port.
-			// https://docs.microsoft.com/en-us/azure/storage/common/storage-use-azurite?tabs=visual-studio#http-connection-strings
-			client, err = aztables.NewServiceClientFromConnectionString(
-				fmt.Sprintf("DefaultEndpointsProtocol=http;AccountName=%s;AccountKey=%s;TableEndpoint=http://127.0.0.1:10002/%s;",
-					storage.StorageEmulatorAccountName, storage.StorageEmulatorAccountKey, storage.StorageEmulatorAccountName), &aztables.ClientOptions{})
-		} else {
-			client, err = aztables.NewServiceClientFromConnectionString(connectionString, &aztables.ClientOptions{})
-		}
-	} else {
+		storageConnectionString := parseStorageConnectionString(connectionString, account)
+		client, err = aztables.NewServiceClientFromConnectionString(storageConnectionString, &aztables.ClientOptions{})
+	} else if accessKey != "" {
 		cred, credErr := aztables.NewSharedKeyCredential(account, accessKey)
 		if credErr != nil {
 			return nil, fmt.Errorf("invalid azure storage account credentials: %v", err)
 		}
-		client, err = aztables.NewServiceClientWithSharedKey(fmt.Sprintf("https://%s.table.core.windows.net/", account), cred, nil)
+		client, err = aztables.NewServiceClientWithSharedKey(fmt.Sprintf(tableEndpointExp, account), cred, nil)
+	} else if storageSASToken != "" {
+		serviceURL := fmt.Sprintf("%s/%s", fmt.Sprintf(tableEndpointExp, account), storageSASToken)
+		client, err = aztables.NewServiceClientWithNoCredential(serviceURL, nil)
+	} else {
+		cred, credErr := azidentity.NewDefaultAzureCredential(nil)
+		if credErr != nil {
+			return nil, fmt.Errorf("error getting default Azure credentials: %v", credErr)
+		}
+		serviceURL := fmt.Sprintf(tableEndpointExp, account)
+		client, err = aztables.NewServiceClient(serviceURL, cred, nil)
 	}
 	return client, err
 }

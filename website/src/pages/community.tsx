@@ -55,20 +55,6 @@ function Community() {
             <div className="col text--center padding-vert--md">
               <div className="card">
                 <div className="card__header">
-                  <i className={classnames(styles.icon, styles.email)}></i>
-                </div>
-                <div className="card__body">
-                  <p>Say hello via email</p>
-                </div>
-                <div className="card__footer">
-                  <Link to="mailto:hello@benthos.dev" className="button button--outline button--primary button--block">hello&#64;benthos.dev</Link>
-                </div>
-              </div>
-            </div>
-
-            <div className="col text--center padding-vert--md">
-              <div className="card">
-                <div className="card__header">
                   <i className={classnames(styles.icon, styles.slack)}></i>
                 </div>
                 <div className="card__body">
@@ -79,6 +65,20 @@ function Community() {
                 </div>
                 <div className="card__footer">
                   <Link to="https://app.slack.com/client/T029RQSE6/CLWCBK7FY" className="button button--outline button--primary button--block">Open</Link>
+                </div>
+              </div>
+            </div>
+
+            <div className="col text--center padding-vert--md">
+              <div className="card">
+                <div className="card__header">
+                  <i className={classnames(styles.icon, styles.email)}></i>
+                </div>
+                <div className="card__body">
+                  <p>For sensitive or security related queries pop us an email</p>
+                </div>
+                <div className="card__footer">
+                  <Link to="mailto:hello@benthos.dev" className="button button--outline button--primary button--block">hello&#64;benthos.dev</Link>
                 </div>
               </div>
             </div>
