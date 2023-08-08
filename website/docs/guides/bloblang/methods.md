@@ -2602,7 +2602,7 @@ root = this.without("inner.a","inner.c","d")
 
 ### `zip`
 
-zip an array value with one or more argument arrays.
+Zip an array value with one or more argument arrays. Each array must match in length.
 
 #### Examples
 

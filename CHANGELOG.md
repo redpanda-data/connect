@@ -10,6 +10,7 @@ All notable changes to this project will be documented in this file.
 - Field `topics_pattern` added to the `pulsar` input.
 - Both the `schema_registry_encode` and `schema_registry_decode` processors now support protobuf schemas.
 - Both the `schema_registry_encode` and `schema_registry_decode` processors now support references for AVRO and PROTOBUF schemas.
+- New Bloblang method `zip`.
 
 ### Fixed
 

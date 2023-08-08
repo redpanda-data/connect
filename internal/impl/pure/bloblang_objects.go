@@ -102,7 +102,7 @@ If a key within a nested path does not exist then it is ignored.`).
 		bloblang.NewPluginSpec().
 			Category(query.MethodCategoryObjectAndArray).
 			Variadic().
-			Description("zip an array value with one or more argument arrays.").
+			Description("Zip an array value with one or more argument arrays. Each array must match in length.").
 			Example("", `root.foo = this.foo.zip(this.bar, this.baz)`,
 				[2]string{
 					`{"foo":["a","b","c"],"bar":[1,2,3],"baz":[4,5,6]}`,
