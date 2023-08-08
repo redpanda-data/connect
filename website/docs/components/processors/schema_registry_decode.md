@@ -72,7 +72,7 @@ schema_registry_decode:
 
 Decodes messages automatically from a schema stored within a [Confluent Schema Registry service](https://docs.confluent.io/platform/current/schema-registry/index.html) by extracting a schema ID from the message and obtaining the associated schema from the registry. If a message fails to match against the schema then it will remain unchanged and the error can be caught using error handling methods outlined [here](/docs/configuration/error_handling).
 
-Currently only Avro and Protobuf schemas are supported.
+Currently only Avro or Protobuf schemas are supported, both are capable of expanding from schema references as of v4.19.0.
 
 ### Avro JSON Format
 
@@ -91,11 +91,6 @@ However, it is possible to instead create documents in [standard/raw JSON format
 ### Protobuf Format
 
 This processor decodes protobuf messages to JSON documents, you can read more about JSON mapping of protobuf messages here: https://developers.google.com/protocol-buffers/docs/proto3#json
-
-Current limitations:
-* It only supports protobuf definition with only ONE message type.
-* [Schema reference](https://docs.confluent.io/platform/current/schema-registry/fundamentals/serdes-develop/serdes-protobuf.html#schema-references-in-protobuf) is not supported yet.
-
 
 
 ## Fields

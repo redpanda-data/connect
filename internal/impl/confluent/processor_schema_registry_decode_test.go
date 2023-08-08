@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"testing"
 	"time"
 
@@ -59,7 +60,7 @@ basic_auth:
 
 			e, err := newSchemaRegistryDecoderFromConfig(conf, service.MockResources())
 			if e != nil {
-				assert.Equal(t, test.expectedBaseURL, e.schemaRegistryBaseURL.String())
+				assert.Equal(t, test.expectedBaseURL, e.client.schemaRegistryBaseURL.String())
 			}
 
 			if err == nil {
@@ -75,10 +76,14 @@ basic_auth:
 	}
 }
 
-func runSchemaRegistryServer(t *testing.T, fn func(path string) ([]byte, error)) string {
+func runSchemaRegistryServer(t testing.TB, fn func(path string) ([]byte, error)) string {
 	t.Helper()
 
+	var reqMut sync.Mutex
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		reqMut.Lock()
+		defer reqMut.Unlock()
+
 		b, err := fn(r.URL.Path)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
@@ -178,30 +183,27 @@ message users {
   string gender = 4;
 }`
 
+func mustJBytes(t testing.TB, obj any) []byte {
+	t.Helper()
+	b, err := json.Marshal(obj)
+	require.NoError(t, err)
+	return b
+}
+
 func TestSchemaRegistryDecodeAvro(t *testing.T) {
-	payload3, err := json.Marshal(struct {
-		Schema string `json:"schema"`
-	}{
-		Schema: testSchema,
-	})
-	require.NoError(t, err)
-
-	payload4, err := json.Marshal(struct {
-		Schema string `json:"schema"`
-	}{
-		Schema: testSchemaLogicalTypes,
-	})
-	require.NoError(t, err)
-
 	returnedSchema3 := false
 	urlStr := runSchemaRegistryServer(t, func(path string) ([]byte, error) {
 		switch path {
 		case "/schemas/ids/3":
 			assert.False(t, returnedSchema3)
 			returnedSchema3 = true
-			return payload3, nil
+			return mustJBytes(t, map[string]any{
+				"schema": testSchema,
+			}), nil
 		case "/schemas/ids/4":
-			return payload4, nil
+			return mustJBytes(t, map[string]any{
+				"schema": testSchemaLogicalTypes,
+			}), nil
 		case "/schemas/ids/5":
 			return nil, fmt.Errorf("nope")
 		}
@@ -414,6 +416,7 @@ func TestSchemaRegistryDecodeClearExpired(t *testing.T) {
 	}, decoder.schemas)
 	decoder.cacheMut.Unlock()
 }
+
 func TestSchemaRegistryDecodeProtobuf(t *testing.T) {
 	payload1, err := json.Marshal(struct {
 		Type   string `json:"schemaType"`
@@ -452,7 +455,7 @@ func TestSchemaRegistryDecodeProtobuf(t *testing.T) {
 		{
 			name:        "not supported message",
 			input:       "\x00\x00\x00\x00\x01\x04\x00\x02\b\xa2\xb8\xe2\xec\xaf+\x12\x06User_2\x1a\bRegion_9\"\x05OTHER",
-			errContains: `invalid number of message type in in protobuf definition, expected 1 got 2`,
+			errContains: `is greater than available message definitions`,
 		},
 	}
 
@@ -470,7 +473,7 @@ func TestSchemaRegistryDecodeProtobuf(t *testing.T) {
 				b, err := outMsgs[0].AsBytes()
 				require.NoError(t, err)
 
-				assert.Equal(t, test.output, string(b), "%s: %s", test.name)
+				assert.JSONEq(t, test.output, string(b), "%s: %s", test.name)
 			}
 		})
 	}
