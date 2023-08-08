@@ -2,6 +2,7 @@ package pure
 
 import (
 	"context"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"os"
@@ -182,8 +183,8 @@ func bloomMemCache(capacity int,
 		log:     log,
 	}
 
-	if ierr := ca.importDumpFromDisk(); ierr != nil {
-		log.With("import error", err).Warnf("unable to import dump from disk")
+	if ierr := ca.restoreDumpFromDisk(); ierr != nil {
+		log.With("error", err).Warnf("unable to restore dump from disk, skip")
 	}
 
 	for _, key := range initValues {
@@ -215,22 +216,22 @@ func (ca *bloomCacheAdapter) suffix() string {
 	return ".dat"
 }
 
-func (ca *bloomCacheAdapter) importDumpFromDisk() error {
+func (ca *bloomCacheAdapter) restoreDumpFromDisk() error {
 	ca.Lock()
 	defer ca.Unlock()
 
-	err := ca.storage.searchForDumpFile(ca.prefix(), func(dumpFile *os.File) error {
-		n, err := ca.inner.ReadFrom(dumpFile)
+	err := ca.storage.searchForDumpFile(ca.prefix(), ca.suffix(), func(dumpFile *os.File) error {
+		_, err := ca.inner.ReadFrom(dumpFile)
 		if err != nil {
-			return fmt.Errorf("unable to import file %q: %w", dumpFile.Name(), err)
+			return fmt.Errorf("unable to restore dump file %q: %w", dumpFile.Name(), err)
 		}
 
-		ca.log.With("byted_readed", n).Infof("import bloom dump from file %q with success", dumpFile.Name())
+		ca.log.Debugf("restore bloom dump from file %q with success", dumpFile.Name())
 
 		return nil
 	})
 	if err != nil {
-		return fmt.Errorf("unable to search for dump file: %w", err)
+		return fmt.Errorf("error while search for dump file: %w", err)
 	}
 
 	return nil
@@ -290,8 +291,13 @@ func (ca *bloomCacheAdapter) flushOnDisk(now time.Time) error {
 
 	err := ca.storage.writeDumpFile(ca.prefix(), ca.suffix(), now, func(f *os.File) error {
 		_, err := ca.inner.WriteTo(f)
+		if err != nil {
+			return err
+		}
 
-		return err
+		ca.log.Debugf("write dump file with success on %q", f.Name())
+
+		return nil
 	})
 	if err != nil {
 		return err
@@ -336,7 +342,7 @@ func (c *storageDumpConf) isReadOnly() bool {
 	return c.readOnly
 }
 
-func (c *storageDumpConf) searchForDumpFile(prefix string, callback func(*os.File) error) error {
+func (c *storageDumpConf) searchForDumpFile(prefix, suffix string, callback func(*os.File) error) error {
 	if c == nil {
 		return nil
 	}
@@ -349,7 +355,7 @@ func (c *storageDumpConf) searchForDumpFile(prefix string, callback func(*os.Fil
 	}
 
 	if info.IsDir() {
-		return c.scanDir(prefix, callback)
+		return c.scanDir(prefix, suffix, callback)
 	}
 
 	dumpFile, err := os.Open(c.storagePath)
@@ -371,7 +377,7 @@ func (c *storageDumpConf) searchForDumpFile(prefix string, callback func(*os.Fil
 	return nil
 }
 
-func (c *storageDumpConf) scanDir(prefix string, callback func(*os.File) error) error {
+func (c *storageDumpConf) scanDir(prefix, suffix string, callback func(*os.File) error) error {
 	entries, err := os.ReadDir(c.storagePath)
 	if os.IsNotExist(err) {
 		return nil
@@ -393,7 +399,7 @@ func (c *storageDumpConf) scanDir(prefix string, callback func(*os.File) error) 
 			continue
 		}
 
-		if !strings.HasSuffix(entry.Name(), ".dat") {
+		if !strings.HasSuffix(entry.Name(), suffix) {
 			continue
 		}
 
@@ -401,6 +407,13 @@ func (c *storageDumpConf) scanDir(prefix string, callback func(*os.File) error) 
 		if err != nil {
 			c.log.With("err", err, "entry", entry.Name()).
 				Tracef("unable to read filesystem information, skip entry")
+
+			continue
+		}
+
+		if fileSize := info.Size(); fileSize <= int64(2*binary.Size(uint64(0))) {
+			c.log.With("file_size", fileSize, "entry", entry.Name()).
+				Tracef("file size too low, skip entry")
 
 			continue
 		}
@@ -426,7 +439,14 @@ func (c *storageDumpConf) scanDir(prefix string, callback func(*os.File) error) 
 	if dumpFile != nil {
 		defer dumpFile.Close()
 
-		return callback(dumpFile)
+		err = callback(dumpFile)
+		if err != nil {
+			return err
+		}
+
+		c.lastImportedFile = dumpFile.Name()
+
+		return nil
 	}
 
 	return nil
@@ -470,8 +490,9 @@ func (c *storageDumpConf) writeDumpFile(prefix, suffix string, now time.Time, ca
 		return err
 	}
 
+	c.log.Tracef("dump file on %q", filePath)
+
 	c.lastImportedFile = filePath
 
 	return nil
-
 }

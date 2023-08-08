@@ -142,9 +142,7 @@ func cuckooMemCacheFromConfig(conf *service.ParsedConfig, log *service.Logger) (
 
 //------------------------------------------------------------------------------
 
-var (
-	errInvalidCuckooCacheCapacityValue = fmt.Errorf("invalid cuckoo cache parameter capacity: must be bigger than 0")
-)
+var errInvalidCuckooCacheCapacityValue = fmt.Errorf("invalid cuckoo cache parameter capacity: must be bigger than 0")
 
 func cuckooMemCache(capacity int,
 	initValues []string,
@@ -163,8 +161,8 @@ func cuckooMemCache(capacity int,
 		storage: storage,
 	}
 
-	if ierr := ca.importDumpFromDisk(); ierr != nil {
-		log.With("import error", err).Warnf("unable to import dump from disk")
+	if ierr := ca.restoreDumpFromDisk(); ierr != nil {
+		log.With("error", ierr).Warnf("unable to restore dump from disk, skip")
 	}
 
 	for _, key := range initValues {
@@ -209,29 +207,29 @@ func (ca *cuckooCacheAdapter) suffix() string {
 	return ".dat"
 }
 
-func (ca *cuckooCacheAdapter) importDumpFromDisk() error {
+func (ca *cuckooCacheAdapter) restoreDumpFromDisk() error {
 	ca.Lock()
 	defer ca.Unlock()
 
-	err := ca.storage.searchForDumpFile(ca.prefix(), func(dumpFile *os.File) error {
+	err := ca.storage.searchForDumpFile(ca.prefix(), ca.suffix(), func(dumpFile *os.File) error {
 		data, err := io.ReadAll(dumpFile)
 		if err != nil {
-			return err
+			return fmt.Errorf("unable to read dump file %q: %w", dumpFile.Name(), err)
 		}
 
 		filter, err := cuckoo.Decode(data)
 		if err != nil {
-			return err
+			return fmt.Errorf("unable to restore dump file %q: %w", dumpFile.Name(), err)
 		}
 
 		ca.inner = filter
 
-		ca.log.With("byted_readed", len(data)).Infof("import cuckoo dump from file %q with success", dumpFile.Name())
+		ca.log.Debugf("restore cuckoo dump from file %q with success", dumpFile.Name())
 
 		return nil
 	})
 	if err != nil {
-		return fmt.Errorf("unable to search for dump file: %w", err)
+		return fmt.Errorf("error while search for dump file: %w", err)
 	}
 
 	return nil
@@ -310,8 +308,13 @@ func (ca *cuckooCacheAdapter) flushOnDisk(t time.Time) error {
 		data := ca.inner.Encode()
 
 		_, err := f.Write(data)
+		if err != nil {
+			return err
+		}
 
-		return err
+		ca.log.Debugf("write dump file with success on %q", f.Name())
+
+		return nil
 	})
 	if err != nil {
 		return err
