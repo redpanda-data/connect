@@ -3,9 +3,11 @@ package azure
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"time"
 
-	"github.com/Azure/azure-storage-queue-go/azqueue"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
+	"github.com/Azure/azure-sdk-for-go/sdk/storage/azqueue"
 
 	"github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/public/service"
@@ -19,13 +21,13 @@ const (
 )
 
 type qsoConfig struct {
-	svcURL    *azqueue.ServiceURL
+	client    *azqueue.ServiceClient
 	QueueName *service.InterpolatedString
 	TTL       *service.InterpolatedString
 }
 
 func qsoConfigFromParsed(pConf *service.ParsedConfig) (conf qsoConfig, err error) {
-	if conf.svcURL, err = queueServiceURLFromParsed(pConf); err != nil {
+	if conf.client, err = queueServiceClientFromParsed(pConf); err != nil {
 		return
 	}
 	if conf.QueueName, err = pConf.FieldInterpolatedString(qsoFieldQueueName); err != nil {
@@ -106,9 +108,7 @@ func (a *azureQueueStorageWriter) WriteBatch(ctx context.Context, batch service.
 		if err != nil {
 			return fmt.Errorf("queue name interpolation error: %w", err)
 		}
-
-		queueURL := a.conf.svcURL.NewQueueURL(queueNameStr)
-		msgURL := queueURL.NewMessagesURL()
+		queue := a.conf.client.NewQueueClient(queueNameStr)
 
 		ttls, err := batch.TryInterpolatedString(i, a.conf.TTL)
 		if err != nil {
@@ -124,27 +124,28 @@ func (a *azureQueueStorageWriter) WriteBatch(ctx context.Context, batch service.
 			}
 			ttl = &td
 		}
-		timeToLive := func() time.Duration {
+		timeToLive := func() *int32 {
 			if ttl != nil {
-				return *ttl
+				ttlAsSeconds := int32(ttl.Seconds())
+				return &ttlAsSeconds
 			}
-			return 0
+			return nil
 		}()
 
 		mBytes, err := msg.AsBytes()
 		if err != nil {
 			return err
 		}
-
-		if _, err = msgURL.Enqueue(ctx, string(mBytes), 0, timeToLive); err != nil {
-			if cerr, ok := err.(azqueue.StorageError); ok {
-				if cerr.ServiceCode() == azqueue.ServiceCodeQueueNotFound {
-					ctx := context.Background()
-					_, err = queueURL.Create(ctx, azqueue.Metadata{})
+		message := string(mBytes)
+		opts := &azqueue.EnqueueMessageOptions{TimeToLive: timeToLive}
+		if _, err = queue.EnqueueMessage(ctx, message, opts); err != nil {
+			if cerr, ok := err.(*azcore.ResponseError); ok {
+				if cerr.StatusCode == http.StatusNotFound {
+					_, err = queue.Create(ctx, nil)
 					if err != nil {
 						return fmt.Errorf("error creating queue: %v", err)
 					}
-					_, err := msgURL.Enqueue(ctx, string(mBytes), 0, 0)
+					_, err := queue.EnqueueMessage(ctx, message, opts)
 					if err != nil {
 						return fmt.Errorf("error retrying to enqueue message: %v", err)
 					}
