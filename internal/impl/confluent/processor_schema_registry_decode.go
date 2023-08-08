@@ -11,11 +11,20 @@ import (
 	"net/http"
 	"net/url"
 	"path"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
+	// nolint:staticcheck // Ignore SA1019 deprecation warning until we can switch to "google.golang.org/protobuf/types/dynamicpb"
+	"github.com/golang/protobuf/jsonpb"
 	"github.com/linkedin/goavro/v2"
+
+	// nolint:staticcheck // Ignore SA1019 deprecation warning until we can switch to "google.golang.org/protobuf/types/dynamicpb"
+	"github.com/golang/protobuf/proto"
+
+	"github.com/jhump/protoreflect/desc/protoparse"
+	"github.com/jhump/protoreflect/dynamic"
 
 	"github.com/benthosdev/benthos/v4/internal/httpclient"
 	"github.com/benthosdev/benthos/v4/internal/shutdown"
@@ -30,7 +39,7 @@ func schemaRegistryDecoderConfig() *service.ConfigSpec {
 		Description(`
 Decodes messages automatically from a schema stored within a [Confluent Schema Registry service](https://docs.confluent.io/platform/current/schema-registry/index.html) by extracting a schema ID from the message and obtaining the associated schema from the registry. If a message fails to match against the schema then it will remain unchanged and the error can be caught using error handling methods outlined [here](/docs/configuration/error_handling).
 
-Currently only Avro schemas are supported.
+Currently only Avro and Protobuf schemas are supported.
 
 ### Avro JSON Format
 
@@ -45,7 +54,17 @@ For example, the union schema ` + "`[\"null\",\"string\",\"Foo\"]`, where `Foo`"
 - the string ` + "`\"a\"` as `{\"string\": \"a\"}`" + `; and
 - a ` + "`Foo` instance as `{\"Foo\": {...}}`, where `{...}` indicates the JSON encoding of a `Foo`" + ` instance.
 
-However, it is possible to instead create documents in [standard/raw JSON format](https://pkg.go.dev/github.com/linkedin/goavro/v2#NewCodecForStandardJSONFull) by setting the field ` + "[`avro_raw_json`](#avro_raw_json) to `true`" + `.`).
+However, it is possible to instead create documents in [standard/raw JSON format](https://pkg.go.dev/github.com/linkedin/goavro/v2#NewCodecForStandardJSONFull) by setting the field ` + "[`avro_raw_json`](#avro_raw_json) to `true`" + `.` +
+			`
+### Protobuf Format
+
+This processor decodes protobuf messages to JSON documents, you can read more about JSON mapping of protobuf messages here: https://developers.google.com/protocol-buffers/docs/proto3#json
+
+Current limitations:
+* It only supports protobuf definition with only ONE message type.
+* [Schema reference](https://docs.confluent.io/platform/current/schema-registry/fundamentals/serdes-develop/serdes-protobuf.html#schema-references-in-protobuf) is not supported yet.
+
+`).
 		Field(service.NewBoolField("avro_raw_json").
 			Description("Whether Avro messages should be decoded into normal JSON (\"json that meets the expectations of regular internet json\") rather than [Avro JSON](https://avro.apache.org/docs/current/specification/_print/#json-encoding). If `true` the schema returned from the subject should be decoded as [standard json](https://pkg.go.dev/github.com/linkedin/goavro/v2#NewCodecForStandardJSONFull) instead of as [avro json](https://pkg.go.dev/github.com/linkedin/goavro/v2#NewCodec). There is a [comment in goavro](https://github.com/linkedin/goavro/blob/5ec5a5ee7ec82e16e6e2b438d610e1cab2588393/union.go#L224-L249), the [underlining library used for avro serialization](https://github.com/linkedin/goavro), that explains in more detail the difference between the standard json and avro json.").
 			Advanced().Default(false)).
@@ -195,6 +214,11 @@ func (s *schemaRegistryDecoder) Close(ctx context.Context) error {
 
 //------------------------------------------------------------------------------
 
+type schemaInfo struct {
+	Type   string `json:"schemaType"`
+	Schema string `json:"schema"`
+}
+
 type schemaDecoder func(m *service.Message) error
 
 type cachedSchemaDecoder struct {
@@ -323,6 +347,7 @@ func (s *schemaRegistryDecoder) getDecoder(id int) (schemaDecoder, error) {
 	}
 
 	resPayload := struct {
+		Type   string `json:"schemaType"`
 		Schema string `json:"schema"`
 	}{}
 	if err = json.Unmarshal(resBytes, &resPayload); err != nil {
@@ -330,17 +355,105 @@ func (s *schemaRegistryDecoder) getDecoder(id int) (schemaDecoder, error) {
 		return nil, err
 	}
 
-	var codec *goavro.Codec
-	if s.avroRawJSON {
-		if codec, err = goavro.NewCodecForStandardJSONFull(resPayload.Schema); err != nil {
-			s.logger.Errorf("failed to parse response for schema subject '%v': %v", id, err)
-			return nil, err
-		}
+	var (
+		decoder schemaDecoder
+	)
+
+	// https://docs.confluent.io/platform/current/schema-registry/fundamentals/serdes-develop/serdes-protobuf.html#schema-references-in-protobuf
+	// "For backward compatibility reasons, both "schemaType" and "references" are optional. If "schemaType" is omitted, it is assumed to be AVRO."
+	// JSON schema is not supported yet.
+	if resPayload.Type == "PROTOBUF" {
+		decoder, err = s.getProtobufDecoder(resPayload)
 	} else {
-		if codec, err = goavro.NewCodec(resPayload.Schema); err != nil {
-			s.logger.Errorf("failed to parse response for schema subject '%v': %v", id, err)
-			return nil, err
+		decoder, err = s.getAvroDecoder(resPayload)
+	}
+
+	if err != nil {
+		s.logger.Errorf("failed to parse response for schema subject '%v': %v", id, err)
+		return nil, err
+	}
+
+	s.cacheMut.Lock()
+	s.schemas[id] = &cachedSchemaDecoder{
+		lastUsedUnixSeconds: time.Now().Unix(),
+		decoder:             decoder,
+	}
+	s.cacheMut.Unlock()
+
+	return decoder, nil
+}
+
+func (s *schemaRegistryDecoder) getProtobufDecoder(info schemaInfo) (schemaDecoder, error) {
+	parser := protoparse.Parser{
+		Accessor: func(_ string) (io.ReadCloser, error) {
+			return io.NopCloser(strings.NewReader(info.Schema)), nil
+		},
+	}
+
+	fds, err := parser.ParseFiles("")
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse proto schema: %v", err)
+	}
+	if len(fds) == 0 || len(fds) > 1 {
+		return nil, fmt.Errorf("invalid number of file descriptor found in the def, expected 1 got %d", len(fds))
+	}
+	msgTypes := fds[0].GetMessageTypes()
+
+	marshaller := &jsonpb.Marshaler{
+		AnyResolver: dynamic.AnyResolver(dynamic.NewMessageFactoryWithDefaults(), fds...),
+	}
+
+	decoder := func(m *service.Message) error {
+		b, err := m.AsBytes()
+		if err != nil {
+			return err
 		}
+
+		bytesRead, msgIndexes, err := readMessageIndexes(b)
+		if err != nil {
+			return err
+		}
+
+		if len(msgIndexes) > 1 {
+			return fmt.Errorf("invalid number of message type in in protobuf definition, expected 1 got %d", len(msgIndexes))
+		}
+
+		msg := dynamic.NewMessage(msgTypes[msgIndexes[0]])
+		remaining := b[bytesRead:]
+		if err != nil {
+			return err
+		}
+
+		if err := proto.Unmarshal(remaining, msg); err != nil {
+			return fmt.Errorf("failed to unmarshal message: %w", err)
+		}
+
+		data, err := msg.MarshalJSONPB(marshaller)
+		if err != nil {
+			return fmt.Errorf("failed to marshal protobuf message: %w", err)
+		}
+
+		m.SetBytes(data)
+
+		return nil
+	}
+
+	return decoder, err
+}
+
+func (s *schemaRegistryDecoder) getAvroDecoder(info schemaInfo) (schemaDecoder, error) {
+	var (
+		codec *goavro.Codec
+		err   error
+	)
+
+	if s.avroRawJSON {
+		codec, err = goavro.NewCodecForStandardJSONFull(info.Schema)
+	} else {
+		codec, err = goavro.NewCodec(info.Schema)
+	}
+	if err != nil {
+		return nil, err
 	}
 
 	decoder := func(m *service.Message) error {
@@ -363,12 +476,27 @@ func (s *schemaRegistryDecoder) getDecoder(id int) (schemaDecoder, error) {
 		return nil
 	}
 
-	s.cacheMut.Lock()
-	s.schemas[id] = &cachedSchemaDecoder{
-		lastUsedUnixSeconds: time.Now().Unix(),
-		decoder:             decoder,
-	}
-	s.cacheMut.Unlock()
-
 	return decoder, nil
+}
+
+// This is copied from https://github.com/confluentinc/confluent-kafka-go/blob/master/schemaregistry/serde/protobuf/protobuf.go#LL398C22-L398C22
+func readMessageIndexes(payload []byte) (int, []int, error) {
+	arrayLen, bytesRead := binary.Varint(payload)
+	if bytesRead <= 0 {
+		return bytesRead, nil, fmt.Errorf("unable to read message indexes")
+	}
+	if arrayLen == 0 {
+		// Handle the optimization for the first message in the schema
+		return bytesRead, []int{0}, nil
+	}
+	msgIndexes := make([]int, arrayLen)
+	for i := 0; i < int(arrayLen); i++ {
+		idx, read := binary.Varint(payload[bytesRead:])
+		if read <= 0 {
+			return bytesRead, nil, fmt.Errorf("unable to read message indexes")
+		}
+		bytesRead += read
+		msgIndexes[i] = int(idx)
+	}
+	return bytesRead, msgIndexes, nil
 }

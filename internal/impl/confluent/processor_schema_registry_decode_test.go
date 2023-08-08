@@ -167,6 +167,17 @@ const testSchemaLogicalTypes = `{
 	]
 }`
 
+const testProtoSchema = `
+syntax = "proto3";
+package ksql;
+
+message users {
+  int64 registertime = 1;
+  string userid = 2;
+  string regionid = 3;
+  string gender = 4;
+}`
+
 func TestSchemaRegistryDecodeAvro(t *testing.T) {
 	payload3, err := json.Marshal(struct {
 		Schema string `json:"schema"`
@@ -401,5 +412,71 @@ func TestSchemaRegistryDecodeClearExpired(t *testing.T) {
 		10: {lastUsedUnixSeconds: tNotStale},
 		15: {lastUsedUnixSeconds: tNearlyStale},
 	}, decoder.schemas)
+	decoder.cacheMut.Unlock()
+}
+func TestSchemaRegistryDecodeProtobuf(t *testing.T) {
+	payload1, err := json.Marshal(struct {
+		Type   string `json:"schemaType"`
+		Schema string `json:"schema"`
+	}{
+		Type:   "PROTOBUF",
+		Schema: testProtoSchema,
+	})
+	require.NoError(t, err)
+
+	returnedSchema1 := false
+	urlStr := runSchemaRegistryServer(t, func(path string) ([]byte, error) {
+		switch path {
+		case "/schemas/ids/1":
+			assert.False(t, returnedSchema1)
+			returnedSchema1 = true
+			return payload1, nil
+		}
+		return nil, nil
+	})
+
+	decoder, err := newSchemaRegistryDecoder(urlStr, noopReqSign, nil, false, service.MockResources())
+	require.NoError(t, err)
+
+	tests := []struct {
+		name        string
+		input       string
+		output      string
+		errContains string
+	}{
+		{
+			name:   "successful message",
+			input:  "\x00\x00\x00\x00\x01\x00\b\xa2\xb8\xe2\xec\xaf+\x12\x06User_2\x1a\bRegion_9\"\x05OTHER",
+			output: `{"registertime":"1490313321506","userid":"User_2","regionid":"Region_9","gender":"OTHER"}`,
+		},
+		{
+			name:        "not supported message",
+			input:       "\x00\x00\x00\x00\x01\x04\x00\x02\b\xa2\xb8\xe2\xec\xaf+\x12\x06User_2\x1a\bRegion_9\"\x05OTHER",
+			errContains: `invalid number of message type in in protobuf definition, expected 1 got 2`,
+		},
+	}
+
+	for _, test := range tests {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			outMsgs, err := decoder.Process(context.Background(), service.NewMessage([]byte(test.input)))
+			if test.errContains != "" {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), test.errContains)
+			} else {
+				require.NoError(t, err)
+				require.Len(t, outMsgs, 1)
+
+				b, err := outMsgs[0].AsBytes()
+				require.NoError(t, err)
+
+				assert.Equal(t, test.output, string(b), "%s: %s", test.name)
+			}
+		})
+	}
+
+	require.NoError(t, decoder.Close(context.Background()))
+	decoder.cacheMut.Lock()
+	assert.Len(t, decoder.schemas, 0)
 	decoder.cacheMut.Unlock()
 }
