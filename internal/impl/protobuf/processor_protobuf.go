@@ -5,12 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"os"
 	"path/filepath"
 
 	"github.com/benthosdev/benthos/v4/internal/filepath/ifs"
 	"github.com/benthosdev/benthos/v4/public/service"
 
-	"github.com/jhump/protoreflect/desc/protoparse"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
@@ -194,19 +194,18 @@ func newProtobufFromJSONOperator(f ifs.FS, msg string, importPaths []string) (pr
 		return nil, errors.New("message field must not be empty")
 	}
 
-	descriptors, types, err := loadDescriptors(f, importPaths)
+	_, types, err := loadDescriptors(f, importPaths)
 	if err != nil {
 		return nil, err
 	}
 
-	d, err := descriptors.FindDescriptorByName(protoreflect.FullName(msg))
+	types.RangeMessages(func(mt protoreflect.MessageType) bool {
+		return true
+	})
+
+	md, err := types.FindMessageByName(protoreflect.FullName(msg))
 	if err != nil {
 		return nil, fmt.Errorf("unable to find message '%v' definition within '%v'", msg, importPaths)
-	}
-
-	md, ok := d.(protoreflect.MessageDescriptor)
-	if !ok {
-		return nil, fmt.Errorf("message descriptor %v was unexpected type %T", msg, d)
 	}
 
 	return func(part *service.Message) error {
@@ -215,7 +214,7 @@ func newProtobufFromJSONOperator(f ifs.FS, msg string, importPaths []string) (pr
 			return err
 		}
 
-		dynMsg := dynamicpb.NewMessage(md)
+		dynMsg := dynamicpb.NewMessage(md.Descriptor())
 
 		opts := protojson.UnmarshalOptions{
 			Resolver: types,
@@ -245,14 +244,7 @@ func strToProtobufOperator(f ifs.FS, opStr, message string, importPaths []string
 }
 
 func loadDescriptors(f ifs.FS, importPaths []string) (*protoregistry.Files, *protoregistry.Types, error) {
-	var parser protoparse.Parser
-	if len(importPaths) == 0 {
-		importPaths = []string{"."}
-	} else {
-		parser.ImportPaths = importPaths
-	}
-
-	var fileNames []string
+	files := map[string]string{}
 	for _, importPath := range importPaths {
 		if err := fs.WalkDir(f, importPath, func(path string, info fs.DirEntry, ferr error) error {
 			if ferr != nil || info.IsDir() {
@@ -263,34 +255,18 @@ func loadDescriptors(f ifs.FS, importPaths []string) (*protoregistry.Files, *pro
 				if ferr != nil {
 					return fmt.Errorf("failed to get relative path: %v", ferr)
 				}
-				fileNames = append(fileNames, rPath)
+				content, ferr := os.ReadFile(path)
+				if ferr != nil {
+					return fmt.Errorf("failed to read import %v: %v", path, ferr)
+				}
+				files[rPath] = string(content)
 			}
 			return nil
 		}); err != nil {
 			return nil, nil, err
 		}
 	}
-
-	fds, err := parser.ParseFiles(fileNames...)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to parse .proto file: %v", err)
-	}
-	if len(fds) == 0 {
-		return nil, nil, fmt.Errorf("no .proto files were found in the paths '%v'", importPaths)
-	}
-
-	files, types := &protoregistry.Files{}, &protoregistry.Types{}
-	for _, v := range fds {
-		if err := files.RegisterFile(v.UnwrapFile()); err != nil {
-			return nil, nil, fmt.Errorf("failed to register file '%v': %w", v.GetName(), err)
-		}
-		for _, t := range v.GetMessageTypes() {
-			if err := types.RegisterMessage(dynamicpb.NewMessageType(t.UnwrapMessage())); err != nil {
-				return nil, nil, fmt.Errorf("failed to register type '%v': %w", t.GetName(), err)
-			}
-		}
-	}
-	return files, types, nil
+	return RegistriesFromMap(files)
 }
 
 //------------------------------------------------------------------------------

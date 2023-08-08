@@ -38,7 +38,7 @@ type tsoConfig struct {
 }
 
 func tsoConfigFromParsed(pConf *service.ParsedConfig) (conf tsoConfig, err error) {
-	if conf.client, err = serviceClientFromParsed(pConf); err != nil {
+	if conf.client, err = tablesServiceClientFromParsed(pConf); err != nil {
 		return
 	}
 	if conf.TableName, err = pConf.FieldInterpolatedString(tsoFieldTableName); err != nil {

@@ -3,9 +3,11 @@ package azure
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"time"
 
-	"github.com/Azure/azure-storage-queue-go/azqueue"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
+	azq "github.com/Azure/azure-sdk-for-go/sdk/storage/azqueue"
 
 	"github.com/benthosdev/benthos/v4/public/service"
 )
@@ -18,7 +20,7 @@ const (
 )
 
 type qsiConfig struct {
-	svcURL                   *azqueue.ServiceURL
+	client                   *azq.ServiceClient
 	QueueName                *service.InterpolatedString
 	DequeueVisibilityTimeout time.Duration
 	MaxInFlight              int
@@ -26,7 +28,7 @@ type qsiConfig struct {
 }
 
 func qsiConfigFromParsed(pConf *service.ParsedConfig) (conf qsiConfig, err error) {
-	if conf.svcURL, err = queueServiceURLFromParsed(pConf); err != nil {
+	if conf.client, err = queueServiceClientFromParsed(pConf); err != nil {
 		return
 	}
 	if conf.QueueName, err = pConf.FieldInterpolatedString(qsiFieldQueueName); err != nil {
@@ -119,60 +121,60 @@ func (a *azureQueueStorage) ReadBatch(ctx context.Context) (batch service.Messag
 		err = fmt.Errorf("queue name interpolation error: %w", err)
 		return
 	}
-	queueURL := a.conf.svcURL.NewQueueURL(queueName)
-	messageURL := queueURL.NewMessagesURL()
+	queueClient := a.conf.client.NewQueueClient(queueName)
 	var approxMsgCount int32
 	if a.conf.TrackProperties {
-		if props, err := queueURL.GetProperties(ctx); err == nil {
-			approxMsgCount = props.ApproximateMessagesCount()
+		if props, err := queueClient.GetProperties(ctx, nil); err == nil {
+			if amc := props.ApproximateMessagesCount; amc != nil {
+				approxMsgCount = *amc
+			}
 		}
 	}
-	dequeue, err := messageURL.Dequeue(ctx, int32(a.conf.MaxInFlight), a.conf.DequeueVisibilityTimeout)
+	visibilityTimeout := int32(a.conf.DequeueVisibilityTimeout.Seconds())
+	numMessages := int32(a.conf.MaxInFlight)
+	dequeue, err := queueClient.DequeueMessages(ctx, &azq.DequeueMessagesOptions{
+		NumberOfMessages:  &numMessages,
+		VisibilityTimeout: &visibilityTimeout,
+	})
 	if err != nil {
-		if cerr, ok := err.(azqueue.StorageError); ok {
-			if cerr.ServiceCode() == azqueue.ServiceCodeQueueNotFound {
-				ctx := context.Background()
-				_, err = queueURL.Create(ctx, azqueue.Metadata{})
+		if cerr, ok := err.(*azcore.ResponseError); ok {
+			if cerr.StatusCode == http.StatusNotFound {
+				_, err = queueClient.Create(ctx, nil)
 				return nil, nil, err
 			}
 			return nil, nil, fmt.Errorf("storage error message: %v", cerr)
 		}
 		return nil, nil, fmt.Errorf("error dequeing message: %v", err)
 	}
-	if n := dequeue.NumMessages(); n > 0 {
-		props, _ := queueURL.GetProperties(ctx)
-		metadata := props.NewMetadata()
-		dqm := make([]*azqueue.DequeuedMessage, n)
-		for i := int32(0); i < n; i++ {
-			queueMsg := dequeue.Message(i)
-			part := service.NewMessage([]byte(queueMsg.Text))
-			part.MetaSetMut("queue_storage_insertion_time", queueMsg.InsertionTime.Format(time.RFC3339))
-			part.MetaSetMut("queue_storage_queue_name", queueName)
-			if a.conf.TrackProperties {
-				msgLag := 0
-				if approxMsgCount >= n {
-					msgLag = int(approxMsgCount - n)
-				}
-				part.MetaSetMut("queue_storage_message_lag", msgLag)
+	n := int32(len(dequeue.Messages))
+	props, _ := queueClient.GetProperties(ctx, nil)
+	dqm := make([]*azq.DequeuedMessage, n)
+	for i, queueMsg := range dequeue.Messages {
+		part := service.NewMessage([]byte(*queueMsg.MessageText))
+		part.MetaSetMut("queue_storage_insertion_time", queueMsg.InsertionTime.Format(time.RFC3339))
+		part.MetaSetMut("queue_storage_queue_name", queueName)
+		if a.conf.TrackProperties {
+			msgLag := 0
+			if approxMsgCount >= n {
+				msgLag = int(approxMsgCount - n)
 			}
-			for k, v := range metadata {
-				part.MetaSetMut(k, v)
-			}
-			batch = append(batch, part)
-			dqm[i] = queueMsg
+			part.MetaSetMut("queue_storage_message_lag", msgLag)
 		}
-		return batch, func(ctx context.Context, res error) error {
-			for i := int32(0); i < n; i++ {
-				msgIDURL := messageURL.NewMessageIDURL(dqm[i].ID)
-				_, err = msgIDURL.Delete(ctx, dqm[i].PopReceipt)
-				if err != nil {
-					return fmt.Errorf("error deleting message: %v", err)
-				}
-			}
-			return nil
-		}, nil
+		for k, v := range props.Metadata {
+			part.MetaSetMut(k, v)
+		}
+		batch = append(batch, part)
+		dqm[i] = queueMsg
 	}
-	return nil, nil, nil
+	return batch, func(ctx context.Context, res error) error {
+		for _, queueMsg := range dqm {
+			_, err = queueClient.DeleteMessage(ctx, *queueMsg.MessageID, *queueMsg.PopReceipt, nil)
+			if err != nil {
+				return fmt.Errorf("error deleting message: %v", err)
+			}
+		}
+		return nil
+	}, nil
 }
 
 func (a *azureQueueStorage) Close(ctx context.Context) error {
