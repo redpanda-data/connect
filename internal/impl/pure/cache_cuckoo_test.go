@@ -2,8 +2,16 @@ package pure
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io"
+	"os"
+	"path"
 	"testing"
+
+	"github.com/benthosdev/benthos/v4/public/service"
+
+	cuckoo "github.com/seiflotfy/cuckoofilter"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -15,7 +23,9 @@ func TestCuckooCacheStandard(t *testing.T) {
 	defConf, err := cuckooCacheConfig().ParseYAML(``, nil)
 	require.NoError(t, err)
 
-	c, err := cuckooMemCacheFromConfig(defConf)
+	logger := service.MockResources().Logger()
+
+	c, err := cuckooMemCacheFromConfig(defConf, logger)
 	require.NoError(t, err)
 
 	ctx := context.Background()
@@ -44,7 +54,9 @@ func TestCuckooCacheDelete(t *testing.T) {
 	defConf, err := cuckooCacheConfig().ParseYAML(``, nil)
 	require.NoError(t, err)
 
-	c, err := cuckooMemCacheFromConfig(defConf)
+	logger := service.MockResources().Logger()
+
+	c, err := cuckooMemCacheFromConfig(defConf, logger)
 	require.NoError(t, err)
 
 	ctx := context.Background()
@@ -71,7 +83,9 @@ init_values:
 `, nil)
 	require.NoError(t, err)
 
-	c, err := cuckooMemCacheFromConfig(defConf)
+	logger := service.MockResources().Logger()
+
+	c, err := cuckooMemCacheFromConfig(defConf, logger)
 	require.NoError(t, err)
 
 	ctx := context.Background()
@@ -90,11 +104,150 @@ init_values:
 	}
 }
 
+func TestCuckooImportDumpFile(t *testing.T) {
+	t.Parallel()
+
+	path, err := os.MkdirTemp(os.TempDir(), "*")
+	require.NoError(t, err)
+
+	defer os.RemoveAll(path)
+
+	capacity := 1000
+
+	outer := cuckoo.NewFilter(uint(capacity))
+
+	_ = outer.Insert([]byte("foo"))
+	_ = outer.Insert([]byte("bar"))
+
+	f, err := os.CreateTemp(path, "benthos-cuckoo-dump.*.dat")
+	require.NoError(t, err)
+
+	data := outer.Encode()
+
+	_, err = f.Write(data)
+	require.NoError(t, err)
+
+	require.NoError(t, f.Sync())
+	require.NoError(t, f.Close())
+
+	yamlStr := fmt.Sprintf(`
+---
+cap: 1024
+init_values:
+    - foo
+    - bar
+storage:
+    path: %q
+`, path)
+
+	defConf, err := cuckooCacheConfig().ParseYAML(yamlStr, nil)
+	require.NoErrorf(t, err, "unexpected error while parse:\n%s", yamlStr)
+
+	logger := service.MockResources().Logger()
+
+	c, err := cuckooMemCacheFromConfig(defConf, logger)
+	require.NoError(t, err)
+
+	defer c.Close(context.Background())
+
+	_, err = c.Get(context.Background(), "foo")
+	assert.NoError(t, err)
+
+	_, err = c.Get(context.Background(), "bar")
+	assert.NoError(t, err)
+
+	_, err = c.Get(context.Background(), "baz")
+	assert.True(t, errors.Is(err, service.ErrKeyNotFound))
+}
+
+func TestCuckooWriteDumpFile(t *testing.T) {
+	t.Parallel()
+
+	storagePath, err := os.MkdirTemp(os.TempDir(), "*")
+	require.NoError(t, err)
+
+	defer os.RemoveAll(storagePath)
+
+	lastFileImported := path.Join(storagePath, "benthos-cuckoo-dump.1691480368391.dat")
+	yamlStr := fmt.Sprintf(`
+---
+cap: 1024
+init_values:
+    - foo
+    - bar
+storage:
+    path: %q
+`, lastFileImported)
+
+	defConf, err := cuckooCacheConfig().ParseYAML(yamlStr, nil)
+	require.NoErrorf(t, err, "unexpected error while parse:\n%s", yamlStr)
+
+	logger := service.MockResources().Logger()
+
+	c, err := cuckooMemCacheFromConfig(defConf, logger)
+	require.NoError(t, err)
+
+	err = c.Close(context.Background())
+	require.NoError(t, err)
+
+	f, err := os.Open(lastFileImported)
+	require.NoError(t, err)
+
+	defer f.Close()
+
+	data, err := io.ReadAll(f)
+	require.NoError(t, err)
+
+	outer, err := cuckoo.Decode(data)
+	require.NoError(t, err)
+
+	assert.True(t, outer.Lookup([]byte("foo")))
+	assert.True(t, outer.Lookup([]byte("bar")))
+	assert.False(t, outer.Lookup([]byte("baz")))
+}
+
+func TestCuckooWriteDumpFileReadOnly(t *testing.T) {
+	t.Parallel()
+
+	storagePath, err := os.MkdirTemp(os.TempDir(), "*")
+	require.NoError(t, err)
+
+	defer os.RemoveAll(storagePath)
+
+	lastFileImported := path.Join(storagePath, "benthos-cuckoo-dump.1691480368391.dat")
+	yamlStr := fmt.Sprintf(`
+---
+cap: 1024
+init_values:
+    - foo
+    - bar
+storage:
+    path: %q
+    read_only: true
+`, lastFileImported)
+
+	defConf, err := cuckooCacheConfig().ParseYAML(yamlStr, nil)
+	require.NoErrorf(t, err, "unexpected error while parse:\n%s", yamlStr)
+
+	logger := service.MockResources().Logger()
+
+	c, err := cuckooMemCacheFromConfig(defConf, logger)
+	require.NoError(t, err)
+
+	err = c.Close(context.Background())
+	require.NoError(t, err)
+
+	_, err = os.Stat(lastFileImported)
+	assert.True(t, errors.Is(err, os.ErrNotExist), "should not create file")
+}
+
 func BenchmarkCuckoo(b *testing.B) {
 	defConf, err := cuckooCacheConfig().ParseYAML(``, nil)
 	require.NoError(b, err)
 
-	c, err := cuckooMemCacheFromConfig(defConf)
+	logger := service.MockResources().Logger()
+
+	c, err := cuckooMemCacheFromConfig(defConf, logger)
 	require.NoError(b, err)
 
 	ctx := context.Background()
@@ -117,7 +270,9 @@ func BenchmarkCuckooParallel(b *testing.B) {
 	defConf, err := cuckooCacheConfig().ParseYAML(``, nil)
 	require.NoError(b, err)
 
-	c, err := cuckooMemCacheFromConfig(defConf)
+	logger := service.MockResources().Logger()
+
+	c, err := cuckooMemCacheFromConfig(defConf, logger)
 	require.NoError(b, err)
 
 	ctx := context.Background()

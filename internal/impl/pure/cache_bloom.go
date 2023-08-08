@@ -4,6 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
+	"path"
+	"strings"
 	"sync"
 	"time"
 
@@ -20,6 +23,11 @@ const (
 	bloomCacheFieldFalsePositiveRateDefaultValue = 0.01
 
 	bloomCacheFieldInitValuesLabel = "init_values"
+
+	bloomCacheFieldStorageLabel            = "storage"
+	commonFieldStoragePathLabel            = "path"
+	commonFieldStorageReadOnlyLabel        = "read_only"
+	commonFieldStorageReadOnlyDefaultValue = false
 )
 
 func bloomCacheConfig() *service.ConfigSpec {
@@ -61,6 +69,31 @@ These values can be overridden during execution.`).
 				"Spice Girls",
 				"The Human League",
 			})).
+		Field(service.NewObjectField(bloomCacheFieldStorageLabel,
+			service.NewStringField(commonFieldStoragePathLabel).
+				Description(`Path to a dir or file where we can restore or write dumps of bloom filter.
+
+This cache can try to dump the content of the cache in disk during the benthos shutdown.
+
+Also, the cache can try to restore the state from an existing dump file. Errors will be ignored on this phase.
+
+This field accepts two kinds of value:
+
+If the path contains a single file with extension '.dat', it will be used for I/O operations.
+
+If the path constains a directory, we will try to use the most recent dump file (if any).
+
+If necessary, we will create a file with format 'benthos-bloom-dump.<timestamp>.dat'
+`).
+				Examples("/path/to/bloom-dumps-dir", "/path/to/bloom-dumps-dir/dump.dat").
+				Advanced(),
+			service.NewBoolField(commonFieldStorageReadOnlyLabel).
+				Description("If true, will try to read the dump but will not flush it on disk on exit").
+				Default(commonFieldStorageReadOnlyDefaultValue).
+				Advanced()).
+			Description("If present, can be used to write and restore dumps of bloom filters").
+			Advanced().
+			Optional()).
 		Footnotes(`This component implements all cache operations except *delete*, however it does not store any value, only the keys.
 
 The main intent is to be used on deduplication.
@@ -74,7 +107,7 @@ func init() {
 	err := service.RegisterCache(
 		"bloom", bloomCacheConfig(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Cache, error) {
-			f, err := bloomMemCacheFromConfig(conf)
+			f, err := bloomMemCacheFromConfig(conf, mgr.Logger())
 			if err != nil {
 				return nil, err
 			}
@@ -85,7 +118,7 @@ func init() {
 	}
 }
 
-func bloomMemCacheFromConfig(conf *service.ParsedConfig) (*bloomCacheAdapter, error) {
+func bloomMemCacheFromConfig(conf *service.ParsedConfig, log *service.Logger) (*bloomCacheAdapter, error) {
 	capacity, err := conf.FieldInt(bloomCacheFieldCapLabel)
 	if err != nil {
 		return nil, err
@@ -101,7 +134,19 @@ func bloomMemCacheFromConfig(conf *service.ParsedConfig) (*bloomCacheAdapter, er
 		return nil, err
 	}
 
-	return bloomMemCache(capacity, fp, initValues)
+	bloomLogger := log.With("cache", "bloom")
+
+	var storage *storageDumpConf
+
+	if conf.Contains(bloomCacheFieldStorageLabel) {
+		subConf := conf.Namespace(bloomCacheFieldStorageLabel)
+		storage, err = newStorageDumpConf(subConf, bloomLogger)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return bloomMemCache(capacity, fp, initValues, storage, bloomLogger)
 }
 
 //------------------------------------------------------------------------------
@@ -114,6 +159,8 @@ var (
 func bloomMemCache(capacity int,
 	fp float64,
 	initValues []string,
+	storage *storageDumpConf,
+	log *service.Logger,
 ) (ca *bloomCacheAdapter, err error) {
 	if capacity <= 0 {
 		return nil, errInvalidBloomCacheCapacityValue
@@ -130,7 +177,17 @@ func bloomMemCache(capacity int,
 	}
 
 	ca = &bloomCacheAdapter{
-		inner: inner,
+		inner:   inner,
+		storage: storage,
+		log:     log,
+	}
+
+	if ierr := ca.importDumpFromDisk(); ierr != nil {
+		log.With("import error", err).Warnf("unable to import dump from disk")
+	}
+
+	for _, key := range initValues {
+		_ = ca.inner.AddString(key)
 	}
 
 	return ca, nil
@@ -143,7 +200,40 @@ var _ service.Cache = (*bloomCacheAdapter)(nil)
 type bloomCacheAdapter struct {
 	inner *bloom.BloomFilter
 
+	storage *storageDumpConf
+
+	log *service.Logger
+
 	sync.RWMutex
+}
+
+func (ca *bloomCacheAdapter) prefix() string {
+	return "benthos-bloom-dump"
+}
+
+func (ca *bloomCacheAdapter) suffix() string {
+	return ".dat"
+}
+
+func (ca *bloomCacheAdapter) importDumpFromDisk() error {
+	ca.Lock()
+	defer ca.Unlock()
+
+	err := ca.storage.searchForDumpFile(ca.prefix(), func(dumpFile *os.File) error {
+		n, err := ca.inner.ReadFrom(dumpFile)
+		if err != nil {
+			return fmt.Errorf("unable to import file %q: %w", dumpFile.Name(), err)
+		}
+
+		ca.log.With("byted_readed", n).Infof("import bloom dump from file %q with success", dumpFile.Name())
+
+		return nil
+	})
+	if err != nil {
+		return fmt.Errorf("unable to search for dump file: %w", err)
+	}
+
+	return nil
 }
 
 func (ca *bloomCacheAdapter) Get(_ context.Context, key string) ([]byte, error) {
@@ -191,5 +281,197 @@ func (ca *bloomCacheAdapter) Delete(_ context.Context, key string) error {
 }
 
 func (ca *bloomCacheAdapter) Close(_ context.Context) error {
+	return ca.flushOnDisk(time.Now())
+}
+
+func (ca *bloomCacheAdapter) flushOnDisk(now time.Time) error {
+	ca.Lock()
+	defer ca.Unlock()
+
+	err := ca.storage.writeDumpFile(ca.prefix(), ca.suffix(), now, func(f *os.File) error {
+		_, err := ca.inner.WriteTo(f)
+
+		return err
+	})
+	if err != nil {
+		return err
+	}
+
 	return nil
+}
+
+//------------------------------------------------------------------------------
+
+type storageDumpConf struct {
+	storagePath      string
+	lastImportedFile string
+	readOnly         bool
+
+	log *service.Logger
+}
+
+func newStorageDumpConf(subConf *service.ParsedConfig, log *service.Logger) (*storageDumpConf, error) {
+	storagePath, err := subConf.FieldString(commonFieldStoragePathLabel)
+	if err != nil {
+		return nil, err
+	}
+
+	readOnly, err := subConf.FieldBool(commonFieldStorageReadOnlyLabel)
+	if err != nil {
+		return nil, err
+	}
+
+	return &storageDumpConf{
+		storagePath: path.Clean(storagePath),
+		readOnly:    readOnly,
+		log:         log,
+	}, nil
+}
+
+func (c *storageDumpConf) isReadOnly() bool {
+	if c == nil {
+		return true
+	}
+
+	return c.readOnly
+}
+
+func (c *storageDumpConf) searchForDumpFile(prefix string, callback func(*os.File) error) error {
+	if c == nil {
+		return nil
+	}
+
+	info, err := os.Stat(c.storagePath)
+	if os.IsNotExist(err) {
+		return nil
+	} else if err != nil {
+		return fmt.Errorf("unable to extract information from path %q: %w", c.storagePath, err)
+	}
+
+	if info.IsDir() {
+		return c.scanDir(prefix, callback)
+	}
+
+	dumpFile, err := os.Open(c.storagePath)
+	if os.IsNotExist(err) {
+		return nil
+	} else if err != nil {
+		return err
+	}
+
+	defer dumpFile.Close()
+
+	err = callback(dumpFile)
+	if err != nil {
+		return err
+	}
+
+	c.lastImportedFile = dumpFile.Name()
+
+	return nil
+}
+
+func (c *storageDumpConf) scanDir(prefix string, callback func(*os.File) error) error {
+	entries, err := os.ReadDir(c.storagePath)
+	if os.IsNotExist(err) {
+		return nil
+	} else if err != nil {
+		return fmt.Errorf("unable to list entries from dir %q: %w", c.storagePath, err)
+	}
+
+	var (
+		dumpFile *os.File
+		modTime  time.Time
+	)
+
+	for _, entry := range entries {
+		if entry.IsDir() || !entry.Type().IsRegular() {
+			continue
+		}
+
+		if !strings.HasPrefix(entry.Name(), prefix) {
+			continue
+		}
+
+		if !strings.HasSuffix(entry.Name(), ".dat") {
+			continue
+		}
+
+		info, err := entry.Info()
+		if err != nil {
+			c.log.With("err", err, "entry", entry.Name()).
+				Tracef("unable to read filesystem information, skip entry")
+
+			continue
+		}
+
+		if curModTime := info.ModTime(); curModTime.After(modTime) {
+			fileName := path.Join(c.storagePath, info.Name())
+
+			candidate, err := os.Open(fileName)
+			if err != nil {
+				c.log.With("err", err, "file", fileName).Tracef("unable to open file, skip entry")
+
+				continue
+			}
+
+			if dumpFile != nil {
+				dumpFile.Close()
+			}
+
+			dumpFile, modTime = candidate, curModTime
+		}
+	}
+
+	if dumpFile != nil {
+		defer dumpFile.Close()
+
+		return callback(dumpFile)
+	}
+
+	return nil
+}
+
+func (c *storageDumpConf) writeDumpFile(prefix, suffix string, now time.Time, callback func(*os.File) error) error {
+	if c.isReadOnly() {
+		return nil
+	}
+
+	filePath := c.lastImportedFile
+
+	if filePath == "" {
+		filePath = c.storagePath
+
+		info, err := os.Stat(filePath)
+		if err != nil && !errors.Is(err, os.ErrNotExist) {
+			return err
+		}
+
+		if info != nil && info.IsDir() {
+			fileName := fmt.Sprintf("%s.%d%s", prefix, now.UnixNano(), suffix)
+			filePath = path.Join(filePath, fileName)
+		}
+	}
+
+	dumpFile, err := os.Create(filePath)
+	if err != nil {
+		return err
+	}
+
+	defer dumpFile.Close()
+
+	err = callback(dumpFile)
+	if err != nil {
+		return err
+	}
+
+	err = dumpFile.Sync()
+	if err != nil {
+		return err
+	}
+
+	c.lastImportedFile = filePath
+
+	return nil
+
 }

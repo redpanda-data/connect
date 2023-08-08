@@ -15,14 +15,40 @@ import TabItem from '@theme/TabItem';
 
 Stores keys in a bloom in-memory filter, useful for deduplication. This cache is therefore reset every time the service restarts.
 
+
+<Tabs defaultValue="common" values={[
+  { label: 'Common', value: 'common', },
+  { label: 'Advanced', value: 'advanced', },
+]}>
+
+<TabItem value="common">
+
 ```yml
-# Config fields, showing default values
+# Common config fields, showing default values
 label: ""
 bloom:
   cap: 10000
   fp: 0.01
   init_values: []
 ```
+
+</TabItem>
+<TabItem value="advanced">
+
+```yml
+# All config fields, showing default values
+label: ""
+bloom:
+  cap: 10000
+  fp: 0.01
+  init_values: []
+  storage:
+    path: /path/to/bloom-dumps-dir # No default (required)
+    read_only: false
+```
+
+</TabItem>
+</Tabs>
 
 This provides the bloom package which implements a fixed-size thread safe filter.
 
@@ -80,6 +106,48 @@ init_values:
   - Spice Girls
   - The Human League
 ```
+
+### `storage`
+
+If present, can be used to write and restore dumps of bloom filters
+
+
+Type: `object`  
+
+### `storage.path`
+
+Path to a dir or file where we can restore or write dumps of bloom filter.
+
+This cache can try to dump the content of the cache in disk during the benthos shutdown.
+
+Also, the cache can try to restore the state from an existing dump file. Errors will be ignored on this phase.
+
+This field accepts two kinds of value:
+
+If the path contains a single file with extension '.dat', it will be used for I/O operations.
+
+If the path constains a directory, we will try to use the most recent dump file (if any).
+
+If necessary, we will create a file with format 'benthos-bloom-dump.<timestamp>.dat'
+
+
+Type: `string`  
+
+```yml
+# Examples
+
+path: /path/to/bloom-dumps-dir
+
+path: /path/to/bloom-dumps-dir/dump.dat
+```
+
+### `storage.read_only`
+
+If true, will try to read the dump but will not flush it on disk on exit
+
+
+Type: `bool`  
+Default: `false`  
 
 This component implements all cache operations except *delete*, however it does not store any value, only the keys.
 

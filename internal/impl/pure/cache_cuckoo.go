@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
+	"os"
 	"sync"
 	"time"
 
@@ -15,7 +17,10 @@ import (
 const (
 	cuckooCacheFieldCapLabel        = "cap"
 	cuckooCacheFieldCapDefaultValue = cuckoo.DefaultCapacity
+
 	cuckooCacheFieldInitValuesLabel = "init_values"
+
+	cuckooCacheFieldStorageLabel = "storage"
 )
 
 func cuckooCacheConfig() *service.ConfigSpec {
@@ -60,6 +65,31 @@ These values can be overridden during execution.`).
 				"Spice Girls",
 				"The Human League",
 			})).
+		Field(service.NewObjectField(cuckooCacheFieldStorageLabel,
+			service.NewStringField(commonFieldStoragePathLabel).
+				Description(`Path to a dir or file where we can restore or write dumps of cuckoo filter.
+
+This cache can try to dump the content of the cache in disk during the benthos shutdown.
+
+Also, the cache can try to restore the state from an existing dump file. Errors will be ignored on this phase.
+
+This field accepts two kinds of value:
+
+If the path contains a single file with extension '.dat', it will be used for I/O operations.
+
+If the path constains a directory, we will try to use the most recent dump file (if any).
+
+If necessary, we will create a file with format 'benthos-cuckoo-dump.<timestamp>.dat'
+`).
+				Examples("/path/to/cuckoo-dumps-dir", "/path/to/cuckoo-dumps-dir/dump.dat").
+				Advanced(),
+			service.NewBoolField(commonFieldStorageReadOnlyLabel).
+				Description("If true, will try to read the dump but will not flush it on disk on exit").
+				Default(commonFieldStorageReadOnlyDefaultValue).
+				Advanced()).
+			Description("If present, can be used to write and restore dumps of cuckoo filters").
+			Advanced().
+			Optional()).
 		Footnotes(`This component implements all cache operations, however it does not store any value, only the keys.
 
 The main intent is to be used on deduplication.
@@ -73,7 +103,7 @@ func init() {
 	err := service.RegisterCache(
 		"cuckoo", cuckooCacheConfig(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Cache, error) {
-			f, err := cuckooMemCacheFromConfig(conf)
+			f, err := cuckooMemCacheFromConfig(conf, mgr.Logger())
 			if err != nil {
 				return nil, err
 			}
@@ -84,7 +114,7 @@ func init() {
 	}
 }
 
-func cuckooMemCacheFromConfig(conf *service.ParsedConfig) (*cuckooCacheAdapter, error) {
+func cuckooMemCacheFromConfig(conf *service.ParsedConfig, log *service.Logger) (*cuckooCacheAdapter, error) {
 	capacity, err := conf.FieldInt(cuckooCacheFieldCapLabel)
 	if err != nil {
 		return nil, err
@@ -95,7 +125,19 @@ func cuckooMemCacheFromConfig(conf *service.ParsedConfig) (*cuckooCacheAdapter, 
 		return nil, err
 	}
 
-	return cuckooMemCache(capacity, initValues)
+	cuckooLogger := log.With("cache", "cuckoo")
+
+	var storage *storageDumpConf
+
+	if conf.Contains(cuckooCacheFieldStorageLabel) {
+		subConf := conf.Namespace(cuckooCacheFieldStorageLabel)
+		storage, err = newStorageDumpConf(subConf, cuckooLogger)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return cuckooMemCache(capacity, initValues, cuckooLogger, storage)
 }
 
 //------------------------------------------------------------------------------
@@ -106,6 +148,8 @@ var (
 
 func cuckooMemCache(capacity int,
 	initValues []string,
+	log *service.Logger,
+	storage *storageDumpConf,
 ) (ca *cuckooCacheAdapter, err error) {
 	if capacity <= 0 {
 		return nil, errInvalidCuckooCacheCapacityValue
@@ -113,12 +157,18 @@ func cuckooMemCache(capacity int,
 
 	inner := cuckoo.NewFilter(uint(capacity))
 
-	for _, key := range initValues {
-		inner.Insert([]byte(key))
+	ca = &cuckooCacheAdapter{
+		inner:   inner,
+		log:     log,
+		storage: storage,
 	}
 
-	ca = &cuckooCacheAdapter{
-		inner: inner,
+	if ierr := ca.importDumpFromDisk(); ierr != nil {
+		log.With("import error", err).Warnf("unable to import dump from disk")
+	}
+
+	for _, key := range initValues {
+		inner.Insert([]byte(key))
 	}
 
 	return ca, nil
@@ -133,6 +183,8 @@ type cuckooCache interface {
 	Insert([]byte) bool
 	InsertUnique([]byte) bool
 	Delete([]byte) bool
+
+	Encode() []byte
 }
 
 //------------------------------------------------------------------------------
@@ -142,7 +194,47 @@ var _ service.Cache = (*cuckooCacheAdapter)(nil)
 type cuckooCacheAdapter struct {
 	inner cuckooCache
 
+	storage *storageDumpConf
+
+	log *service.Logger
+
 	sync.RWMutex
+}
+
+func (ca *cuckooCacheAdapter) prefix() string {
+	return "benthos-cuckoo-dump"
+}
+
+func (ca *cuckooCacheAdapter) suffix() string {
+	return ".dat"
+}
+
+func (ca *cuckooCacheAdapter) importDumpFromDisk() error {
+	ca.Lock()
+	defer ca.Unlock()
+
+	err := ca.storage.searchForDumpFile(ca.prefix(), func(dumpFile *os.File) error {
+		data, err := io.ReadAll(dumpFile)
+		if err != nil {
+			return err
+		}
+
+		filter, err := cuckoo.Decode(data)
+		if err != nil {
+			return err
+		}
+
+		ca.inner = filter
+
+		ca.log.With("byted_readed", len(data)).Infof("import cuckoo dump from file %q with success", dumpFile.Name())
+
+		return nil
+	})
+	if err != nil {
+		return fmt.Errorf("unable to search for dump file: %w", err)
+	}
+
+	return nil
 }
 
 func (ca *cuckooCacheAdapter) Get(_ context.Context, key string) ([]byte, error) {
@@ -207,5 +299,23 @@ func (ca *cuckooCacheAdapter) Delete(_ context.Context, key string) error {
 }
 
 func (ca *cuckooCacheAdapter) Close(_ context.Context) error {
+	return ca.flushOnDisk(time.Now())
+}
+
+func (ca *cuckooCacheAdapter) flushOnDisk(t time.Time) error {
+	ca.Lock()
+	defer ca.Unlock()
+
+	err := ca.storage.writeDumpFile(ca.prefix(), ca.suffix(), t, func(f *os.File) error {
+		data := ca.inner.Encode()
+
+		_, err := f.Write(data)
+
+		return err
+	})
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
