@@ -90,7 +90,7 @@ subject: foo
 
 			e, err := newSchemaRegistryEncoderFromConfig(conf, service.MockResources())
 			if e != nil {
-				assert.Equal(t, test.expectedBaseURL, e.schemaRegistryBaseURL.String())
+				assert.Equal(t, test.expectedBaseURL, e.client.schemaRegistryBaseURL.String())
 			}
 
 			if err == nil {
