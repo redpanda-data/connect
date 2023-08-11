@@ -77,7 +77,7 @@ This field accepts two kinds of value:
 
 If the path contains a single file with extension '.dat', it will be used for I/O operations.
 
-If the path constains a directory, we will try to use the most recent dump file (if any). The directory must exits.
+If the path contains a directory, we will try to use the most recent dump file (if any). The directory must exits.
 
 If necessary, we will create a file with format 'benthos-cuckoo-dump.<timestamp>.dat'
 `).
