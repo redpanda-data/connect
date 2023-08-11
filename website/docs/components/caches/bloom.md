@@ -43,8 +43,9 @@ bloom:
   fp: 0.01
   init_values: []
   storage:
-    path: /path/to/bloom-dumps-dir # No default (required)
-    read_only: false
+    path: /path/to/bloom-dumps-dir/ # No default (required)
+    skip_restore: false
+    skip_dump: false
 ```
 
 </TabItem>
@@ -126,7 +127,7 @@ This field accepts two kinds of value:
 
 If the path contains a single file with extension '.dat', it will be used for I/O operations.
 
-If the path constains a directory, we will try to use the most recent dump file (if any).
+If the path constains a directory, we will try to use the most recent dump file (if any). The directory must exits.
 
 If necessary, we will create a file with format 'benthos-bloom-dump.<timestamp>.dat'
 
@@ -136,14 +137,24 @@ Type: `string`
 ```yml
 # Examples
 
-path: /path/to/bloom-dumps-dir
+path: /path/to/bloom-dumps-dir/
 
-path: /path/to/bloom-dumps-dir/dump.dat
+path: /path/to/bloom-dumps-dir/benthos-bloom-dump.1691480368391.dat
+
+path: /path/to/bloom-dumps-dir/you-can-choose-any-other-name.dat
 ```
 
-### `storage.read_only`
+### `storage.skip_restore`
 
-If true, will try to read the dump but will not flush it on disk on exit
+If true, will not restore the filter state from disk
+
+
+Type: `bool`  
+Default: `false`  
+
+### `storage.skip_dump`
+
+If true, will not dump the filter state on disk
 
 
 Type: `bool`  

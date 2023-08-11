@@ -197,7 +197,7 @@ storage:
 	assert.False(t, outer.TestString("baz"))
 }
 
-func TestBloomWriteDumpFileReadOnly(t *testing.T) {
+func TestBloomWriteDumpFileSkipDump(t *testing.T) {
 	t.Parallel()
 
 	storagePath, err := os.MkdirTemp(os.TempDir(), "*")
@@ -214,7 +214,7 @@ init_values:
     - bar
 storage:
     path: %q
-    read_only: true
+    skip_dump: true
 `, lastFileImported)
 
 	defConf, err := bloomCacheConfig().ParseYAML(yamlStr, nil)

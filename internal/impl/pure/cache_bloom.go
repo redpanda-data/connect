@@ -25,10 +25,12 @@ const (
 
 	bloomCacheFieldInitValuesLabel = "init_values"
 
-	bloomCacheFieldStorageLabel            = "storage"
-	commonFieldStoragePathLabel            = "path"
-	commonFieldStorageReadOnlyLabel        = "read_only"
-	commonFieldStorageReadOnlyDefaultValue = false
+	bloomCacheFieldStorageLabel               = "storage"
+	commonFieldStoragePathLabel               = "path"
+	commonFieldStorageSkipDumpLabel           = "skip_dump"
+	commonFieldStorageSkipDumpDefaultValue    = false
+	commonFieldStorageSkipRestoreLabel        = "skip_restore"
+	commonFieldStorageSkipRestoreDefaultValue = false
 )
 
 func bloomCacheConfig() *service.ConfigSpec {
@@ -82,15 +84,21 @@ This field accepts two kinds of value:
 
 If the path contains a single file with extension '.dat', it will be used for I/O operations.
 
-If the path constains a directory, we will try to use the most recent dump file (if any).
+If the path constains a directory, we will try to use the most recent dump file (if any). The directory must exits.
 
 If necessary, we will create a file with format 'benthos-bloom-dump.<timestamp>.dat'
 `).
-				Examples("/path/to/bloom-dumps-dir", "/path/to/bloom-dumps-dir/dump.dat").
+				Example("/path/to/bloom-dumps-dir/").
+				Example("/path/to/bloom-dumps-dir/benthos-bloom-dump.1691480368391.dat").
+				Example("/path/to/bloom-dumps-dir/you-can-choose-any-other-name.dat").
 				Advanced(),
-			service.NewBoolField(commonFieldStorageReadOnlyLabel).
-				Description("If true, will try to read the dump but will not flush it on disk on exit").
-				Default(commonFieldStorageReadOnlyDefaultValue).
+			service.NewBoolField(commonFieldStorageSkipRestoreLabel).
+				Description("If true, will not restore the filter state from disk").
+				Default(commonFieldStorageSkipRestoreDefaultValue).
+				Advanced(),
+			service.NewBoolField(commonFieldStorageSkipDumpLabel).
+				Description("If true, will not dump the filter state on disk").
+				Default(commonFieldStorageSkipDumpDefaultValue).
 				Advanced()).
 			Description("If present, can be used to write and restore dumps of bloom filters").
 			Advanced().
@@ -311,7 +319,8 @@ func (ca *bloomCacheAdapter) flushOnDisk(now time.Time) error {
 type storageDumpConf struct {
 	storagePath      string
 	lastImportedFile string
-	readOnly         bool
+	skipDump         bool
+	skipRestore      bool
 
 	log *service.Logger
 }
@@ -322,28 +331,36 @@ func newStorageDumpConf(subConf *service.ParsedConfig, log *service.Logger) (*st
 		return nil, err
 	}
 
-	readOnly, err := subConf.FieldBool(commonFieldStorageReadOnlyLabel)
+	skipDump, err := subConf.FieldBool(commonFieldStorageSkipDumpLabel)
 	if err != nil {
 		return nil, err
 	}
 
 	return &storageDumpConf{
 		storagePath: path.Clean(storagePath),
-		readOnly:    readOnly,
+		skipDump:    skipDump,
 		log:         log,
 	}, nil
 }
 
-func (c *storageDumpConf) isReadOnly() bool {
+func (c *storageDumpConf) shouldSkipRestore() bool {
 	if c == nil {
 		return true
 	}
 
-	return c.readOnly
+	return c.skipRestore
+}
+
+func (c *storageDumpConf) shouldSkipDump() bool {
+	if c == nil {
+		return true
+	}
+
+	return c.skipDump
 }
 
 func (c *storageDumpConf) searchForDumpFile(prefix, suffix string, callback func(*os.File) error) error {
-	if c == nil {
+	if c.shouldSkipRestore() {
 		return nil
 	}
 
@@ -453,7 +470,7 @@ func (c *storageDumpConf) scanDir(prefix, suffix string, callback func(*os.File)
 }
 
 func (c *storageDumpConf) writeDumpFile(prefix, suffix string, now time.Time, callback func(*os.File) error) error {
-	if c.isReadOnly() {
+	if c.shouldSkipDump() {
 		return nil
 	}
 

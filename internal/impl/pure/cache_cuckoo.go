@@ -77,15 +77,17 @@ This field accepts two kinds of value:
 
 If the path contains a single file with extension '.dat', it will be used for I/O operations.
 
-If the path constains a directory, we will try to use the most recent dump file (if any).
+If the path constains a directory, we will try to use the most recent dump file (if any). The directory must exits.
 
 If necessary, we will create a file with format 'benthos-cuckoo-dump.<timestamp>.dat'
 `).
-				Examples("/path/to/cuckoo-dumps-dir", "/path/to/cuckoo-dumps-dir/dump.dat").
+				Example("/path/to/cuckoo-dumps-dir/").
+				Example("/path/to/cuckoo-dumps-dir/benthos-cuckoo-dump.1691480368391.dat").
+				Example("/path/to/cuckoo-dumps-dir/you-can-choose-any-other-name.dat").
 				Advanced(),
-			service.NewBoolField(commonFieldStorageReadOnlyLabel).
+			service.NewBoolField(commonFieldStorageSkipDumpLabel).
 				Description("If true, will try to read the dump but will not flush it on disk on exit").
-				Default(commonFieldStorageReadOnlyDefaultValue).
+				Default(commonFieldStorageSkipDumpDefaultValue).
 				Advanced()).
 			Description("If present, can be used to write and restore dumps of cuckoo filters").
 			Advanced().

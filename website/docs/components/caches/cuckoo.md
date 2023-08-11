@@ -41,8 +41,8 @@ cuckoo:
   cap: 10000
   init_values: []
   storage:
-    path: /path/to/cuckoo-dumps-dir # No default (required)
-    read_only: false
+    path: /path/to/cuckoo-dumps-dir/ # No default (required)
+    skip_dump: false
 ```
 
 </TabItem>
@@ -118,7 +118,7 @@ This field accepts two kinds of value:
 
 If the path contains a single file with extension '.dat', it will be used for I/O operations.
 
-If the path constains a directory, we will try to use the most recent dump file (if any).
+If the path constains a directory, we will try to use the most recent dump file (if any). The directory must exits.
 
 If necessary, we will create a file with format 'benthos-cuckoo-dump.<timestamp>.dat'
 
@@ -128,12 +128,14 @@ Type: `string`
 ```yml
 # Examples
 
-path: /path/to/cuckoo-dumps-dir
+path: /path/to/cuckoo-dumps-dir/
 
-path: /path/to/cuckoo-dumps-dir/dump.dat
+path: /path/to/cuckoo-dumps-dir/benthos-cuckoo-dump.1691480368391.dat
+
+path: /path/to/cuckoo-dumps-dir/you-can-choose-any-other-name.dat
 ```
 
-### `storage.read_only`
+### `storage.skip_dump`
 
 If true, will try to read the dump but will not flush it on disk on exit
 
