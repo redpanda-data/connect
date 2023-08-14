@@ -11,6 +11,7 @@ import (
 	"cloud.google.com/go/storage"
 	"github.com/gofrs/uuid"
 	"go.uber.org/multierr"
+	"google.golang.org/api/option"
 
 	"github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/public/service"
@@ -27,6 +28,7 @@ const (
 	csoFieldBatching        = "batching"
 	csoFieldCollisionMode   = "collision_mode"
 	csoFieldTimeout         = "timeout"
+	csoFieldCredentialsJSON = "credentials_json_encoded"
 
 	// GCPCloudStorageErrorIfExistsCollisionMode - error-if-exists.
 	GCPCloudStorageErrorIfExistsCollisionMode = "error-if-exists"
@@ -49,6 +51,7 @@ type csoConfig struct {
 	ChunkSize       int
 	CollisionMode   string
 	Timeout         time.Duration
+	CredentialsJSON string
 }
 
 func csoConfigFromParsed(pConf *service.ParsedConfig) (conf csoConfig, err error) {
@@ -161,6 +164,11 @@ output:
 				Example("1s").
 				Example("500ms").
 				Default("3s"),
+			service.NewInterpolatedStringField(csoFieldCredentialsJSON).
+				Description("An optional field to set Google Service Account Credentials json as base64 encoded string.").
+				Default("").
+				Optional().
+				Secret(),
 			service.NewOutputMaxInFlightField().
 				Description("The maximum number of message batches to have in flight at a given time. Increase this to improve throughput."),
 			service.NewBatchPolicyField(csoFieldBatching),
@@ -216,8 +224,13 @@ func (g *gcpCloudStorageOutput) Connect(ctx context.Context) error {
 	g.connMut.Lock()
 	defer g.connMut.Unlock()
 
-	var err error
-	g.client, err = storage.NewClient(context.Background())
+	var opt []option.ClientOption
+	opt, err := getClientOptionWithCredential(g.conf.CredentialsJSON, opt)
+	if err != nil {
+		return err
+	}
+
+	g.client, err = storage.NewClient(context.Background(), opt...)
 	if err != nil {
 		return err
 	}

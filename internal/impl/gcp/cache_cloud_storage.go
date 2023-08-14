@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"cloud.google.com/go/storage"
+	"google.golang.org/api/option"
 
 	"github.com/benthosdev/benthos/v4/public/service"
 )
@@ -19,7 +20,9 @@ func gcpCloudStorageCacheConfig() *service.ConfigSpec {
 		Field(service.NewStringField("bucket").
 			Description("The Google Cloud Storage bucket to store items in.")).
 		Field(service.NewStringField("content_type").
-			Description("Optional field to explicitly set the Content-Type.").Optional())
+			Description("Optional field to explicitly set the Content-Type.").Optional()).
+		Field(service.NewStringField("credentials_json_encoded").
+			Description("An optional field to set Google Service Account Credentials json.").Optional().Secret().Default(""))
 
 	return spec
 }
@@ -49,7 +52,19 @@ func newGcpCloudStorageCacheFromConfig(parsedConf *service.ParsedConfig) (*gcpCl
 		}
 	}
 
-	client, err := storage.NewClient(context.Background())
+	var opt []option.ClientOption
+	if parsedConf.Contains("credentials_json_encoded") {
+		credJSONEncoded, err := parsedConf.FieldString("credentials_json_encoded")
+		if err != nil {
+			return nil, err
+		}
+		opt, err = getClientOptionWithCredential(credJSONEncoded, opt)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	client, err := storage.NewClient(context.Background(), opt...)
 	if err != nil {
 		return nil, err
 	}

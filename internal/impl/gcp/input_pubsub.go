@@ -16,6 +16,7 @@ import (
 const (
 	// Pubsub Input Fields
 	pbiFieldProjectID              = "project"
+	pbiFieldCredentialsJSON        = "credentials_json_encoded"
 	pbiFieldSubscriptionID         = "subscription"
 	pbiFieldEndpoint               = "endpoint"
 	pbiFieldMaxOutstandingMessages = "max_outstanding_messages"
@@ -28,6 +29,7 @@ const (
 
 type pbiConfig struct {
 	ProjectID              string
+	CredentialsJSON        string
 	SubscriptionID         string
 	Endpoint               string
 	MaxOutstandingMessages int
@@ -91,6 +93,10 @@ You can access these metadata fields using [function interpolation](/docs/config
 		Fields(
 			service.NewStringField(pbiFieldProjectID).
 				Description("The project ID of the target subscription."),
+			service.NewStringField(pbiFieldCredentialsJSON).
+				Description("An optional field to set Google Service Account Credentials json as base64 encoded string.").
+				Optional().
+				Secret(),
 			service.NewStringField(pbiFieldSubscriptionID).
 				Description("The target subscription ID."),
 			service.NewStringField(pbiFieldEndpoint).
@@ -172,9 +178,9 @@ type gcpPubSubReader struct {
 }
 
 func newGCPPubSubReader(conf pbiConfig, res *service.Resources) (*gcpPubSubReader, error) {
-	var opt []option.ClientOption
-	if len(strings.TrimSpace(conf.Endpoint)) > 0 {
-		opt = []option.ClientOption{option.WithEndpoint(conf.Endpoint)}
+	opt, err := getClientOptionsForPubsubClient(conf)
+	if err != nil {
+		return nil, err
 	}
 
 	client, err := pubsub.NewClient(context.Background(), conf.ProjectID, opt...)
@@ -194,6 +200,15 @@ func newGCPPubSubReader(conf pbiConfig, res *service.Resources) (*gcpPubSubReade
 		log:    res.Logger(),
 		client: client,
 	}, nil
+}
+
+func getClientOptionsForPubsubClient(conf pbiConfig) ([]option.ClientOption, error) {
+	var opt []option.ClientOption
+	if len(strings.TrimSpace(conf.Endpoint)) > 0 {
+		opt = []option.ClientOption{option.WithEndpoint(conf.Endpoint)}
+	}
+
+	return getClientOptionWithCredential(conf.CredentialsJSON, opt)
 }
 
 func (c *gcpPubSubReader) Connect(ignored context.Context) error {

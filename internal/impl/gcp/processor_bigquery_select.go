@@ -15,7 +15,8 @@ import (
 )
 
 type bigQuerySelectProcessorConfig struct {
-	project string
+	project         string
+	credentialsJSON string
 
 	queryParts  *bqQueryParts
 	jobLabels   map[string]string
@@ -28,6 +29,12 @@ func bigQuerySelectProcessorConfigFromParsed(inConf *service.ParsedConfig) (conf
 
 	if conf.project, err = inConf.FieldString("project"); err != nil {
 		return
+	}
+	if inConf.Contains("credentials_json_encoded") {
+		conf.credentialsJSON, err = inConf.FieldString("credentials_json_encoded")
+		if err != nil {
+			return
+		}
 	}
 
 	if inConf.Contains("args_mapping") {
@@ -77,6 +84,7 @@ func newBigQuerySelectProcessorConfig() *service.ConfigSpec {
 		Categories("Integration").
 		Summary("Executes a `SELECT` query against BigQuery and replaces messages with the rows returned.").
 		Field(service.NewStringField("project").Description("GCP project where the query job will execute.")).
+		Field(service.NewStringField("credentials_json_encoded").Description("An optional field to set Google Service Account Credentials json as base64 encoded string.").Optional().Secret().Default("")).
 		Field(service.NewStringField("table").Description("Fully-qualified BigQuery table name to query.").Example("bigquery-public-data.samples.shakespeare")).
 		Field(service.NewStringListField("columns").Description("A list of columns to query.")).
 		Field(service.NewStringField("where").
@@ -112,7 +120,7 @@ pipeline:
                 - sum(word_count) as total_count
               where: word = ?
               suffix: |
-                GROUP BY word
+                GROUP BY word	
                 ORDER BY total_count DESC
                 LIMIT 10
               args_mapping: root = [ this.term ]
@@ -145,6 +153,12 @@ func newBigQuerySelectProcessor(inConf *service.ParsedConfig, options *bigQueryP
 	}
 
 	closeCtx, closeF := context.WithCancel(context.Background())
+
+	options.clientOptions, err = getClientOptionWithCredential(conf.credentialsJSON, options.clientOptions)
+	if err != nil {
+		closeF()
+		return nil, fmt.Errorf("failed to create bigquery client: %w", err)
+	}
 
 	wrapped, err := bigquery.NewClient(closeCtx, conf.project, options.clientOptions...)
 	if err != nil {

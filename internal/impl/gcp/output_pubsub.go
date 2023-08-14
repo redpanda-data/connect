@@ -2,7 +2,9 @@ package gcp
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
+	"strings"
 	"sync"
 
 	"cloud.google.com/go/pubsub"
@@ -44,6 +46,9 @@ pipeline:
 `+"```"+``).
 		Fields(
 			service.NewStringField("project").Description("The project ID of the topic to publish to."),
+			service.NewStringField("credentials_json_encoded").
+				Description("An optional field to set Google Service Account Credentials json as base64 encoded string.").
+				Optional(),
 			service.NewInterpolatedStringField("topic").Description("The topic to publish to."),
 			service.NewStringField("endpoint").
 				Default("").
@@ -180,6 +185,12 @@ func newPubSubOutput(conf *service.ParsedConfig) (*pubsubOutput, error) {
 	var opt []option.ClientOption
 	if len(endpoint) > 0 {
 		opt = []option.ClientOption{option.WithEndpoint(endpoint)}
+	}
+
+	encodeCredJSON, _ := conf.FieldString("credentials_json_encoded")
+	opt, err = getClientOptionWithCredential(encodeCredJSON, opt)
+	if err != nil {
+		return nil, err
 	}
 
 	return &pubsubOutput{
@@ -367,4 +378,16 @@ func init() {
 	}); err != nil {
 		panic(err)
 	}
+}
+
+func getClientOptionWithCredential(encodedCred string, opt []option.ClientOption) ([]option.ClientOption, error) {
+	cred := strings.TrimSpace(encodedCred)
+	if len(cred) > 0 {
+		decodedCred, err := base64.StdEncoding.DecodeString(cred)
+		if err != nil {
+			return nil, err
+		}
+		opt = append(opt, option.WithCredentialsJSON(decodedCred))
+	}
+	return opt, nil
 }

@@ -9,6 +9,8 @@ import (
 	"sync"
 	"time"
 
+	"google.golang.org/api/option"
+
 	"cloud.google.com/go/storage"
 	"google.golang.org/api/iterator"
 
@@ -22,17 +24,19 @@ import (
 
 const (
 	// Cloud Storage Input Fields
-	csiFieldBucket        = "bucket"
-	csiFieldPrefix        = "prefix"
-	csiFieldCodec         = "codec"
-	csiFieldDeleteObjects = "delete_objects"
+	csiFieldBucket          = "bucket"
+	csiFieldPrefix          = "prefix"
+	csiFieldCredentialsJSON = "credentials_json_encoded"
+	csiFieldCodec           = "codec"
+	csiFieldDeleteObjects   = "delete_objects"
 )
 
 type csiConfig struct {
-	Bucket        string
-	Prefix        string
-	Codec         string
-	DeleteObjects bool
+	Bucket          string
+	Prefix          string
+	CredentialsJSON string
+	Codec           string
+	DeleteObjects   bool
 }
 
 func csiConfigFromParsed(pConf *service.ParsedConfig) (conf csiConfig, err error) {
@@ -87,6 +91,11 @@ By default Benthos will use a shared credentials file when connecting to GCP ser
 			service.NewStringField(csiFieldPrefix).
 				Description("An optional path prefix, if set only objects with the prefix are consumed.").
 				Default(""),
+			service.NewStringField(csiFieldCredentialsJSON).
+				Description("An optional field to set Google Service Account Credentials json as base64 encoded string.").
+				Default("").
+				Optional().
+				Secret(),
 			service.NewInternalField(codec.ReaderDocs).Default("all-bytes"),
 			service.NewBoolField(csiFieldDeleteObjects).
 				Description("Whether to delete downloaded objects from the bucket once they are processed.").
@@ -289,7 +298,14 @@ func newGCPCloudStorageInput(conf csiConfig, res *service.Resources) (*gcpCloudS
 // Cloud Storage bucket.
 func (g *gcpCloudStorageInput) Connect(ctx context.Context) error {
 	var err error
-	g.client, err = storage.NewClient(context.Background())
+
+	var opt []option.ClientOption
+	opt, err = getClientOptionWithCredential(g.conf.CredentialsJSON, opt)
+	if err != nil {
+		return err
+	}
+
+	g.client, err = storage.NewClient(context.Background(), opt...)
 	if err != nil {
 		return err
 	}

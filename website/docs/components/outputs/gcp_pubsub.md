@@ -30,6 +30,7 @@ output:
   label: ""
   gcp_pubsub:
     project: "" # No default (required)
+    credentials_json_encoded: "" # No default (optional)
     topic: "" # No default (required)
     endpoint: ""
     max_in_flight: 64
@@ -54,6 +55,7 @@ output:
   label: ""
   gcp_pubsub:
     project: "" # No default (required)
+    credentials_json_encoded: "" # No default (optional)
     topic: "" # No default (required)
     endpoint: ""
     ordering_key: "" # No default (optional)
@@ -107,6 +109,13 @@ pipeline:
 ### `project`
 
 The project ID of the topic to publish to.
+
+
+Type: `string`  
+
+### `credentials_json_encoded`
+
+An optional field to set Google Service Account Credentials json as base64 encoded string.
 
 
 Type: `string`  

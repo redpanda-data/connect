@@ -26,6 +26,7 @@ Introduced in version 3.64.0.
 label: ""
 gcp_bigquery_select:
   project: "" # No default (required)
+  credentials_json_encoded: ""
   table: bigquery-public-data.samples.shakespeare # No default (required)
   columns: [] # No default (required)
   where: type = ? and created_at > ? # No default (optional)
@@ -59,7 +60,7 @@ pipeline:
                 - sum(word_count) as total_count
               where: word = ?
               suffix: |
-                GROUP BY word
+                GROUP BY word	
                 ORDER BY total_count DESC
                 LIMIT 10
               args_mapping: root = [ this.term ]
@@ -78,6 +79,17 @@ GCP project where the query job will execute.
 
 
 Type: `string`  
+
+### `credentials_json_encoded`
+
+An optional field to set Google Service Account Credentials json as base64 encoded string.
+:::warning Secret
+This field contains sensitive information that usually shouldn't be added to a config directly, read our [secrets page for more info](/docs/configuration/secrets).
+:::
+
+
+Type: `string`  
+Default: `""`  
 
 ### `table`
 
