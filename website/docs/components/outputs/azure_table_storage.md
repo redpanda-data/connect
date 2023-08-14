@@ -37,6 +37,7 @@ output:
     storage_account: ""
     storage_access_key: ""
     storage_connection_string: ""
+    storage_sas_token: ""
     table_name: ${! meta("kafka_topic") } # No default (required)
     partition_key: ""
     row_key: ""
@@ -60,6 +61,7 @@ output:
     storage_account: ""
     storage_access_key: ""
     storage_connection_string: ""
+    storage_sas_token: ""
     table_name: ${! meta("kafka_topic") } # No default (required)
     partition_key: ""
     row_key: ""
@@ -146,6 +148,14 @@ Default: `""`
 ### `storage_connection_string`
 
 A storage account connection string. This field is required if `storage_account` and `storage_access_key` / `storage_sas_token` are not set.
+
+
+Type: `string`  
+Default: `""`  
+
+### `storage_sas_token`
+
+The storage account SAS token. This field is ignored if `storage_connection_string` or `storage_access_key` are set.
 
 
 Type: `string`  
