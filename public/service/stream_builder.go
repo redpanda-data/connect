@@ -4,12 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"os"
 
 	"github.com/Jeffail/gabs/v2"
 	"github.com/gofrs/uuid"
-	"golang.org/x/exp/slog"
 	"gopkg.in/yaml.v3"
 
 	"github.com/benthosdev/benthos/v4/internal/api"
