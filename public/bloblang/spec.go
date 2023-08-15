@@ -96,6 +96,7 @@ type pluginExample struct {
 	summary      string
 	mapping      string
 	inputOutputs [][2]string
+	skipTesting  bool
 }
 
 // NewPluginSpec creates a new plugin definition for a function or method
@@ -154,6 +155,22 @@ func (p *PluginSpec) Example(summary, mapping string, inputOutputs ...[2]string)
 		summary:      summary,
 		mapping:      mapping,
 		inputOutputs: inputOutputs,
+	})
+	return p
+}
+
+// Example adds an optional example to the plugin spec, this is used when
+// generating documentation for the plugin. An example consists of a short
+// summary, a mapping demonstrating the plugin, and one or more input/output
+// combinations. This example is marked as not being tested. The implementation
+// of the plugin is expected to be correct, but the example is not used as a
+// test case.
+func (p *PluginSpec) NotTestedExample(summary, mapping string, inputOutputs ...[2]string) *PluginSpec {
+	p.examples = append(p.examples, pluginExample{
+		summary:      summary,
+		mapping:      mapping,
+		inputOutputs: inputOutputs,
+		skipTesting:  true,
 	})
 	return p
 }

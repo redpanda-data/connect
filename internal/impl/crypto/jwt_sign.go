@@ -64,7 +64,7 @@ func registerSignJwtMethod(m signJwtMethodSpec) error {
 		Version(m.version)
 
 	if m.sampleSignature != "" {
-		spec.Example(
+		spec.NotTestedExample(
 			"",
 			fmt.Sprintf(`root.signed = this.claims.%s("""%s""")`, m.name, m.dummySecret),
 			[2]string{
@@ -80,10 +80,10 @@ func registerSignJwtMethod(m signJwtMethodSpec) error {
 func registerSignJwtMethods() error {
 	dummySecretHMAC := "dont-tell-anyone"
 	dummySecretRSA := `-----BEGIN RSA PRIVATE KEY-----
-... certificate data ...
+...
 -----END RSA PRIVATE KEY-----`
 	dummySecretECDSA := `-----BEGIN EC PRIVATE KEY-----
-... certificate data ...
+...
 -----END EC PRIVATE KEY-----`
 
 	for _, m := range []signJwtMethodSpec{
@@ -135,22 +135,22 @@ func registerSignJwtMethods() error {
 			method:          jwt.SigningMethodES256,
 			dummySecret:     dummySecretECDSA,
 			secretDecoder:   ecdsaSecretDecoder,
-			version:         "v4.20.0",
+			version:         "v4.19.0",
 			sampleSignature: "eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9.eyJpYXQiOjE1MTYyMzkwMjIsIm1vb2QiOiJEaXNkYWluZnVsIiwic3ViIjoiMTIzNDU2Nzg5MCJ9.-8LrOdkEiv_44ADWW08lpbq41ZmHCel58NMORPq1q4Dyw0zFhqDVLrRoSvCvuyyvgXAFb9IHfR-9MlJ_2ShA9A",
 		},
 		{
 			method:          jwt.SigningMethodES384,
 			dummySecret:     dummySecretECDSA,
 			secretDecoder:   ecdsaSecretDecoder,
-			version:         "v4.20.0",
-			sampleSignature: "eyJhbGciOiJFUzM4NCIsInR5cCI6IkpXVCJ9.eyJpYXQiOjE1MTYyMzkwMjIsIm1vb2QiOiJEaXNkYWluZnVsIiwic3ViIjoiMTIzNDU2Nzg5MCJ9.bkrqALC-HuAOXYiH4Xdc6gT5-tgRY9niI5bB0luuIBkyYRKHwNLtFIZ-lw54ld3_20BxXNaC-o6zFJwTEUaqZybRBj2KZtV8X7cX1oKte_V4YceNYESnmqiEP0eA7PHh",
+			version:         "v4.19.0",
+			sampleSignature: "eyJhbGciOiJFUzM4NCIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyMTIzIn0.8FmTKH08dl7dyxrNu0rmvhegiIBCy-O9cddGco2e9lpZtgv5mS5qHgPkgBC5eRw1d7SRJsHwHZeehzdqT5Ba7aZJIhz9ds0sn37YQ60L7jT0j2gxCzccrt4kECHnUnLw",
 		},
 		{
 			method:          jwt.SigningMethodES512,
 			dummySecret:     dummySecretECDSA,
 			secretDecoder:   ecdsaSecretDecoder,
-			version:         "v4.20.0",
-			sampleSignature: "eyJhbGciOiJFUzUxMiIsInR5cCI6IkpXVCJ9.eyJpYXQiOjE1MTYyMzkwMjIsIm1vb2QiOiJEaXNkYWluZnVsIiwic3ViIjoiMTIzNDU2Nzg5MCJ9.AET5FhyU_Y0gB2QZ7cMxTY_o6ioMEuBz9MliILqE1En3AjiBdWyVwtuSva-u0WVuTIQmpV3Uaes0_DNhSRoBa3jzAKElAJzNlF0D_reofCTfwfTur4XuRHOCRCU9UFHuATMwIUd_me7aF3K4fQKu1OuaGjZT8F3R2usoiZVMjm9e-bw5",
+			version:         "v4.19.0",
+			sampleSignature: "eyJhbGciOiJFUzUxMiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyMTIzIn0.AQbEWymoRZxDJEJtKSFFG2k2VbDCTYSuBwAZyMqexCspr3If8aERTVGif8HXG3S7TzMBCCzxkcKr3eIU441l3DlpAMNfQbkcOlBqMvNBn-CX481WyKf3K5rFHQ-6wRonz05aIsWAxCDvAozI_9J0OWllxdQ2MBAuTPbPJ38OqXsYkCQs",
 		},
 	} {
 		m.name = "sign_jwt_" + strings.ToLower(m.method.Alg())

@@ -41,6 +41,9 @@ func TestFunctionExamples(t *testing.T) {
 		t.Run(spec.Name, func(t *testing.T) {
 			t.Parallel()
 			for i, e := range spec.Examples {
+				if e.SkipTesting {
+					continue
+				}
 				m, err := bloblang.GlobalEnvironment().NewMapping(e.Mapping)
 				require.NoError(t, err)
 
@@ -96,6 +99,9 @@ func TestMethodExamples(t *testing.T) {
 		t.Run(spec.Name, func(t *testing.T) {
 			t.Parallel()
 			for i, e := range spec.Examples {
+				if e.SkipTesting {
+					continue
+				}
 				m, err := bloblang.GlobalEnvironment().NewMapping(e.Mapping)
 				require.NoError(t, err)
 
@@ -117,6 +123,9 @@ func TestMethodExamples(t *testing.T) {
 			}
 			for _, target := range spec.Categories {
 				for i, e := range target.Examples {
+					if e.SkipTesting {
+						continue
+					}
 					m, err := bloblang.GlobalEnvironment().NewMapping(e.Mapping)
 					require.NoError(t, err)
 

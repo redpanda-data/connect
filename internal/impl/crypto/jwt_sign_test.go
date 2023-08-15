@@ -29,7 +29,7 @@ func (c *testClaims) MarshalMap() map[string]any {
 }
 
 func TestBloblangSignJwt(t *testing.T) {
-	dummySecretHMAC := "get-in-losers"
+	dummySecretHMAC := "dont-tell-anyone"
 
 	// Generated with `openssl genrsa 2048`
 	dummySecretRSA := `-----BEGIN RSA PRIVATE KEY-----
@@ -115,7 +115,7 @@ JWHmBFldXcJkvNe6PH+6YL1R5jJO3TnNFFa4P6nltg==
 			require.True(t, ok, "bloblang result is not a string")
 
 			var outClaims testClaims
-			_, err = jwt.ParseWithClaims(output, &outClaims, func(tok *jwt.Token) (any, error) {
+			result, err := jwt.ParseWithClaims(output, &outClaims, func(tok *jwt.Token) (any, error) {
 				var key any
 				switch tok.Method.(type) {
 				case *jwt.SigningMethodHMAC:
@@ -138,6 +138,7 @@ JWHmBFldXcJkvNe6PH+6YL1R5jJO3TnNFFa4P6nltg==
 
 				return key, nil
 			})
+			fmt.Printf("%s: %s\n", result.Method.Alg(), result.Raw)
 			require.NoError(t, err)
 			require.Equal(t, inClaims, outClaims)
 		})
