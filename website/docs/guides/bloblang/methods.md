@@ -432,7 +432,7 @@ root.foo = this.foo.lowercase()
 
 Parses a claims object from a JWT string encoded with ES256. This method does not validate JWT claims.
 
-Introduced in version v4.20.0.
+Introduced in version v4.19.0.
 
 
 #### Parameters
@@ -456,7 +456,7 @@ dp0Gta53G35VerNDgUUXmp78J2kfh4qLdh0XtmOMI587tCaqjvDAXfs//w==
 
 Parses a claims object from a JWT string encoded with ES384. This method does not validate JWT claims.
 
-Introduced in version v4.20.0.
+Introduced in version v4.19.0.
 
 
 #### Parameters
@@ -481,7 +481,7 @@ MHYwEAYHKoZIzj0CAQYFK4EEACIDYgAERoz74/B6SwmLhs8X7CWhnrWyRrB13AuU
 
 Parses a claims object from a JWT string encoded with ES512. This method does not validate JWT claims.
 
-Introduced in version v4.20.0.
+Introduced in version v4.19.0.
 
 
 #### Parameters
@@ -2512,7 +2512,7 @@ root = this.foo.merge(this.bar)
 
 Hash and sign an object representing JSON Web Token (JWT) claims using ES256.
 
-Introduced in version v4.20.0.
+Introduced in version v4.19.0.
 
 
 #### Parameters
@@ -2524,7 +2524,7 @@ Introduced in version v4.20.0.
 
 ```coffee
 root.signed = this.claims.sign_jwt_es256("""-----BEGIN EC PRIVATE KEY-----
-...
+... signature data ...
 -----END EC PRIVATE KEY-----""")
 
 # In:  {"claims":{"sub":"user123"}}
@@ -2535,7 +2535,7 @@ root.signed = this.claims.sign_jwt_es256("""-----BEGIN EC PRIVATE KEY-----
 
 Hash and sign an object representing JSON Web Token (JWT) claims using ES384.
 
-Introduced in version v4.20.0.
+Introduced in version v4.19.0.
 
 
 #### Parameters
@@ -2547,7 +2547,7 @@ Introduced in version v4.20.0.
 
 ```coffee
 root.signed = this.claims.sign_jwt_es384("""-----BEGIN EC PRIVATE KEY-----
-...
+... signature data ...
 -----END EC PRIVATE KEY-----""")
 
 # In:  {"claims":{"sub":"user123"}}
@@ -2558,7 +2558,7 @@ root.signed = this.claims.sign_jwt_es384("""-----BEGIN EC PRIVATE KEY-----
 
 Hash and sign an object representing JSON Web Token (JWT) claims using ES512.
 
-Introduced in version v4.20.0.
+Introduced in version v4.19.0.
 
 
 #### Parameters
@@ -2570,7 +2570,7 @@ Introduced in version v4.20.0.
 
 ```coffee
 root.signed = this.claims.sign_jwt_es512("""-----BEGIN EC PRIVATE KEY-----
-...
+... signature data ...
 -----END EC PRIVATE KEY-----""")
 
 # In:  {"claims":{"sub":"user123"}}
@@ -2656,7 +2656,7 @@ Introduced in version v4.18.0.
 
 ```coffee
 root.signed = this.claims.sign_jwt_rs256("""-----BEGIN RSA PRIVATE KEY-----
-...
+... signature data ...
 -----END RSA PRIVATE KEY-----""")
 
 # In:  {"claims":{"sub":"user123"}}
@@ -2679,7 +2679,7 @@ Introduced in version v4.18.0.
 
 ```coffee
 root.signed = this.claims.sign_jwt_rs384("""-----BEGIN RSA PRIVATE KEY-----
-...
+... signature data ...
 -----END RSA PRIVATE KEY-----""")
 
 # In:  {"claims":{"sub":"user123"}}
@@ -2702,7 +2702,7 @@ Introduced in version v4.18.0.
 
 ```coffee
 root.signed = this.claims.sign_jwt_rs512("""-----BEGIN RSA PRIVATE KEY-----
-...
+... signature data ...
 -----END RSA PRIVATE KEY-----""")
 
 # In:  {"claims":{"sub":"user123"}}
