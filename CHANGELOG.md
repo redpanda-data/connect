@@ -11,6 +11,7 @@ All notable changes to this project will be documented in this file.
 - Both the `schema_registry_encode` and `schema_registry_decode` processors now support protobuf schemas.
 - Both the `schema_registry_encode` and `schema_registry_decode` processors now support references for AVRO and PROTOBUF schemas.
 - New Bloblang method `zip`.
+- New Bloblang `int8`, `int16`, `uint8`, `uint16`, `float32` and `float64` methods.
 
 ### Fixed
 
