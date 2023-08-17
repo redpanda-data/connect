@@ -88,7 +88,7 @@ jobs:
 
     - name: Docker meta CGO
       id: docker_meta_cgo
-      uses: crazy-max/ghaction-docker-meta@v2
+      uses: docker/metadata-action@v4
       with:
         images: jeffail/benthos
         flavor: |
@@ -111,7 +111,7 @@ jobs:
 
     - name: Docker meta
       id: docker_meta
-      uses: crazy-max/ghaction-docker-meta@v2
+      uses: docker/metadata-action@v4
       with:
         images: jeffail/benthos
         tags: |
