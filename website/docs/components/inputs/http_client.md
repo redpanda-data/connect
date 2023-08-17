@@ -29,12 +29,12 @@ Connects to a server and continuously performs requests for a single message.
 input:
   label: ""
   http_client:
-    url: ""
+    url: "" # No default (required)
     verb: GET
     headers: {}
-    rate_limit: ""
+    rate_limit: "" # No default (optional)
     timeout: 5s
-    payload: ""
+    payload: "" # No default (optional)
     stream:
       enabled: false
       reconnect: true
@@ -49,7 +49,7 @@ input:
 input:
   label: ""
   http_client:
-    url: ""
+    url: "" # No default (required)
     verb: GET
     headers: {}
     metadata:
@@ -88,7 +88,7 @@ input:
     extract_headers:
       include_prefixes: []
       include_patterns: []
-    rate_limit: ""
+    rate_limit: "" # No default (optional)
     timeout: 5s
     retry_period: 1s
     max_retry_backoff: 300s
@@ -98,7 +98,7 @@ input:
     drop_on: []
     successful_on: []
     proxy_url: ""
-    payload: ""
+    payload: "" # No default (optional)
     drop_empty_bodies: true
     stream:
       enabled: false
@@ -255,7 +255,7 @@ EXPERIMENTAL: Optionally set a level at which the request and response payload o
 Type: `string`  
 Default: `""`  
 Requires version 4.12.0 or newer  
-Options: `TRACE`, `DEBUG`, `INFO`, `WARN`, `ERROR`, `FATAL`.
+Options: `TRACE`, `DEBUG`, `INFO`, `WARN`, `ERROR`, `FATAL`, ``.
 
 ### `oauth`
 
@@ -358,6 +358,7 @@ A list of optional requested permissions.
 
 
 Type: `array`  
+Default: `[]`  
 Requires version 3.45.0 or newer  
 
 ### `basic_auth`
@@ -431,6 +432,7 @@ A value used to identify the claims that issued the JWT.
 
 
 Type: `object`  
+Default: `{}`  
 
 ### `jwt.headers`
 
@@ -438,6 +440,7 @@ Add optional key/value headers to the JWT.
 
 
 Type: `object`  
+Default: `{}`  
 
 ### `tls`
 
@@ -511,6 +514,7 @@ A list of client certificates to use. For each certificate either the fields `ce
 
 
 Type: `array`  
+Default: `[]`  
 
 ```yml
 # Examples
@@ -755,6 +759,7 @@ Requires version 3.42.0 or newer
 | `csv-safe` | Consume structured rows like `csv`, but sends messages with empty maps on failure to parse. Includes row number and parsing errors (if any) in the message's metadata. |
 | `delim:x` | Consume the file in segments divided by a custom delimiter. |
 | `gzip` | Decompress a gzip file, this codec should precede another codec, e.g. `gzip/all-bytes`, `gzip/tar`, `gzip/csv`, etc. |
+| `pgzip` | Decompress a gzip file in parallel, this codec should precede another codec, e.g. `pgzip/all-bytes`, `pgzip/tar`, `pgzip/csv`, etc. |
 | `lines` | Consume the file in segments divided by linebreaks. |
 | `multipart` | Consumes the output of another codec and batches messages together. A batch ends when an empty message is consumed. For example, the codec `lines/multipart` could be used to consume multipart messages where an empty line indicates the end of each batch. |
 | `regex:(?m)^\d\d:\d\d:\d\d` | Consume the file in segments divided by regular expression. |

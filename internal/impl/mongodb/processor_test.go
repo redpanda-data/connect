@@ -2,7 +2,9 @@ package mongodb_test
 
 import (
 	"context"
+	"fmt"
 	"testing"
+	"time"
 
 	"github.com/nsf/jsondiff"
 	"github.com/ory/dockertest/v3"
@@ -10,13 +12,11 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 
-	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/impl/mongodb"
-	"github.com/benthosdev/benthos/v4/internal/impl/mongodb/client"
 	"github.com/benthosdev/benthos/v4/internal/integration"
-	"github.com/benthosdev/benthos/v4/internal/manager"
-	"github.com/benthosdev/benthos/v4/internal/message"
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
 func TestProcessorIntegration(t *testing.T) {
@@ -42,105 +42,111 @@ func TestProcessorIntegration(t *testing.T) {
 		assert.NoError(t, pool.Purge(resource))
 	})
 
-	var mongoClient *mongo.Client
+	mongoClient, err := mongo.NewClient(options.Client().
+		SetConnectTimeout(10 * time.Second).
+		SetSocketTimeout(30 * time.Second).
+		SetServerSelectionTimeout(30 * time.Second).
+		SetAuth(options.Credential{
+			Username: "mongoadmin",
+			Password: "secret",
+		}).
+		ApplyURI("mongodb://localhost:" + resource.GetPort("27017/tcp")))
+	require.NoError(t, err)
+
 	require.NoError(t, pool.Retry(func() error {
-		url := "mongodb://localhost:" + resource.GetPort("27017/tcp")
-		conf := client.NewConfig()
-		conf.URL = url
-		conf.Username = "mongoadmin"
-		conf.Password = "secret"
-
-		if mongoClient == nil {
-			mongoClient, err = conf.Client()
-			if err != nil {
-				return err
-			}
-		}
-
 		if err := mongoClient.Connect(context.Background()); err != nil {
 			return err
 		}
-
-		return mongoClient.Database("TestDB").CreateCollection(context.Background(), "TestCollection")
+		if err := mongoClient.Database("TestDB").CreateCollection(context.Background(), "TestCollection"); err != nil {
+			_ = mongoClient.Disconnect(context.Background())
+			return err
+		}
+		return nil
 	}))
 
 	port := resource.GetPort("27017/tcp")
 	t.Run("insert", func(t *testing.T) {
-		testMongoDBProcessorInsert(port, t)
+		testMongoDBProcessorInsert(mongoClient, port, t)
 	})
 	t.Run("delete one", func(t *testing.T) {
-		testMongoDBProcessorDeleteOne(port, t)
+		testMongoDBProcessorDeleteOne(mongoClient, port, t)
 	})
 	t.Run("delete many", func(t *testing.T) {
-		testMongoDBProcessorDeleteMany(port, t)
+		testMongoDBProcessorDeleteMany(mongoClient, port, t)
 	})
 	t.Run("replace one", func(t *testing.T) {
-		testMongoDBProcessorReplaceOne(port, t)
+		testMongoDBProcessorReplaceOne(mongoClient, port, t)
 	})
 	t.Run("update one", func(t *testing.T) {
-		testMongoDBProcessorUpdateOne(port, t)
+		testMongoDBProcessorUpdateOne(mongoClient, port, t)
 	})
 	t.Run("find one", func(t *testing.T) {
-		testMongoDBProcessorFindOne(port, t)
+		testMongoDBProcessorFindOne(mongoClient, port, t)
+	})
+	t.Run("upsert", func(t *testing.T) {
+		testMongoDBProcessorUpsert(mongoClient, port, t)
 	})
 }
 
-func testMongoDBProcessorInsert(port string, t *testing.T) {
-	conf := processor.NewConfig()
-	conf.Type = "mongodb"
+func testMProc(t testing.TB, port, collection string, configYAML string) *mongodb.Processor {
+	t.Helper()
 
-	c := client.Config{
-		URL:        "mongodb://localhost:" + port,
-		Database:   "TestDB",
-		Collection: "TestCollection",
-		Username:   "mongoadmin",
-		Password:   "secret",
+	if collection == "" {
+		collection = "TestCollection"
 	}
 
-	mongoConfig := processor.MongoDBConfig{
-		MongoDB: c,
-		WriteConcern: client.WriteConcern{
-			W:        "1",
-			J:        false,
-			WTimeout: "",
-		},
-		Operation:   "insert-one",
-		DocumentMap: "root.a = this.foo\nroot.b = this.bar",
+	conf, err := mongodb.ProcessorSpec().ParseYAML(fmt.Sprintf(`
+url: mongodb://localhost:%v
+database: TestDB
+collection: %v
+username: mongoadmin
+password: secret
+`, port, collection)+configYAML, nil)
+	require.NoError(t, err)
+
+	proc, err := mongodb.ProcessorFromParsed(conf, service.MockResources())
+	require.NoError(t, err)
+
+	return proc
+}
+
+func assertMessagesEqual(t testing.TB, batch service.MessageBatch, to []string) {
+	t.Helper()
+	require.Len(t, batch, len(to))
+	for i, exp := range to {
+		mBytes, err := batch[i].AsBytes()
+		require.NoError(t, err)
+		assert.Equal(t, exp, string(mBytes))
 	}
+}
 
-	conf.MongoDB = mongoConfig
-
-	mgr, err := manager.New(manager.NewResourceConfig())
-	require.NoError(t, err)
-
-	m, err := mongodb.NewProcessor(conf, mgr)
-	require.NoError(t, err)
-
-	parts := [][]byte{
-		[]byte(`{"foo":"foo1","bar":"bar1"}`),
-		[]byte(`{"foo":"foo2","bar":"bar2"}`),
-	}
-
-	inBatch := message.QuickBatch(parts)
-	resMsgs, response := m.ProcessBatch(processor.TestBatchProcContext(context.Background(), nil, inBatch), inBatch)
-	require.Nil(t, response)
-	require.Len(t, resMsgs, 1)
-
-	expectedResult := [][]byte{
-		[]byte(`{"foo":"foo1","bar":"bar1"}`),
-		[]byte(`{"foo":"foo2","bar":"bar2"}`),
-	}
-
-	assert.Equal(t, expectedResult, message.GetAllBytes(resMsgs[0]))
-
-	// Validate the record is in the MongoDB
-	mongoClient, err := c.Client()
-	require.NoError(t, err)
-	err = mongoClient.Connect(context.Background())
-	require.NoError(t, err)
+func testMongoDBProcessorInsert(mongoClient *mongo.Client, port string, t *testing.T) {
+	tCtx := context.Background()
+	m := testMProc(t, port, "", `
+write_concern:
+  w: "1"
+  j: false
+  timeout: ""
+operation: "insert-one"
+document_map: |
+  root.a = this.foo
+  root.b = this.bar
+`)
 	collection := mongoClient.Database("TestDB").Collection("TestCollection")
 
-	result := collection.FindOne(context.Background(), bson.M{"a": "foo1", "b": "bar1"})
+	resMsgs, err := m.ProcessBatch(tCtx, service.MessageBatch{
+		service.NewMessage([]byte(`{"foo":"foo1","bar":"bar1"}`)),
+		service.NewMessage([]byte(`{"foo":"foo2","bar":"bar2"}`)),
+	})
+	require.NoError(t, err)
+	require.Len(t, resMsgs, 1)
+	assertMessagesEqual(t, resMsgs[0], []string{
+		`{"foo":"foo1","bar":"bar1"}`,
+		`{"foo":"foo2","bar":"bar2"}`,
+	})
+
+	// Validate the record is in the MongoDB
+	result := collection.FindOne(tCtx, bson.M{"a": "foo1", "b": "bar1"})
 	b, err := result.DecodeBytes()
 	assert.NoError(t, err)
 	aVal := b.Lookup("a")
@@ -148,7 +154,7 @@ func testMongoDBProcessorInsert(port string, t *testing.T) {
 	assert.Equal(t, `"foo1"`, aVal.String())
 	assert.Equal(t, `"bar1"`, bVal.String())
 
-	result = collection.FindOne(context.Background(), bson.M{"a": "foo2", "b": "bar2"})
+	result = collection.FindOne(tCtx, bson.M{"a": "foo2", "b": "bar2"})
 	b, err = result.DecodeBytes()
 	assert.NoError(t, err)
 	aVal = b.Lookup("a")
@@ -157,58 +163,31 @@ func testMongoDBProcessorInsert(port string, t *testing.T) {
 	assert.Equal(t, `"bar2"`, bVal.String())
 }
 
-func testMongoDBProcessorDeleteOne(port string, t *testing.T) {
-	conf := processor.NewConfig()
-	conf.Type = "mongodb"
+func testMongoDBProcessorDeleteOne(mongoClient *mongo.Client, port string, t *testing.T) {
+	tCtx := context.Background()
+	m := testMProc(t, port, "", `
+write_concern:
+  w: "1"
+  j: false
+  timeout: 100s
+operation: delete-one
+filter_map: |
+  root.a = this.foo
+  root.b = this.bar
+`)
 
-	c := client.Config{
-		URL:        "mongodb://localhost:" + port,
-		Database:   "TestDB",
-		Collection: "TestCollection",
-		Username:   "mongoadmin",
-		Password:   "secret",
-	}
-
-	mongoConfig := processor.MongoDBConfig{
-		MongoDB: c,
-		WriteConcern: client.WriteConcern{
-			W:        "1",
-			J:        false,
-			WTimeout: "100s",
-		},
-		Operation: "delete-one",
-		FilterMap: "root.a = this.foo\nroot.b = this.bar",
-	}
-
-	mongoClient, err := c.Client()
-	require.NoError(t, err)
-	err = mongoClient.Connect(context.Background())
-	require.NoError(t, err)
 	collection := mongoClient.Database("TestDB").Collection("TestCollection")
-	_, err = collection.InsertOne(context.Background(), bson.M{"a": "foo_delete", "b": "bar_delete"})
+	_, err := collection.InsertOne(tCtx, bson.M{"a": "foo_delete", "b": "bar_delete"})
 	assert.NoError(t, err)
 
-	mgr, err := manager.New(manager.NewResourceConfig())
-	require.NoError(t, err)
-
-	conf.MongoDB = mongoConfig
-	m, err := mongodb.NewProcessor(conf, mgr)
-	require.NoError(t, err)
-
-	parts := [][]byte{
-		[]byte(`{"foo":"foo_delete","bar":"bar_delete"}`),
-	}
-
-	inBatch := message.QuickBatch(parts)
-	resMsgs, response := m.ProcessBatch(processor.TestBatchProcContext(context.Background(), nil, inBatch), inBatch)
+	resMsgs, response := m.ProcessBatch(tCtx, service.MessageBatch{
+		service.NewMessage([]byte(`{"foo":"foo_delete","bar":"bar_delete"}`)),
+	})
 	require.Nil(t, response)
 	require.Len(t, resMsgs, 1)
-
-	expectedResult := [][]byte{
-		[]byte(`{"foo":"foo_delete","bar":"bar_delete"}`),
-	}
-
-	assert.Equal(t, expectedResult, message.GetAllBytes(resMsgs[0]))
+	assertMessagesEqual(t, resMsgs[0], []string{
+		`{"foo":"foo_delete","bar":"bar_delete"}`,
+	})
 
 	// Validate the record has been deleted from the db
 	result := collection.FindOne(context.Background(), bson.M{"a": "foo_delete", "b": "bar_delete"})
@@ -217,59 +196,36 @@ func testMongoDBProcessorDeleteOne(port string, t *testing.T) {
 	assert.Error(t, err, "mongo: no documents in result")
 }
 
-func testMongoDBProcessorDeleteMany(port string, t *testing.T) {
-	conf := processor.NewConfig()
-	conf.Type = "mongodb"
+func testMongoDBProcessorDeleteMany(mongoClient *mongo.Client, port string, t *testing.T) {
+	tCtx := context.Background()
+	m := testMProc(t, port, "", `
+write_concern:
+  w: "1"
+  j: false
+  timeout: 100s
+operation: delete-many
+filter_map: |
+  root.a = this.foo
+  root.b = this.bar
+`)
 
-	c := client.Config{
-		URL:        "mongodb://localhost:" + port,
-		Database:   "TestDB",
-		Collection: "TestCollection",
-		Username:   "mongoadmin",
-		Password:   "secret",
-	}
-
-	mongoConfig := processor.MongoDBConfig{
-		MongoDB: c,
-		WriteConcern: client.WriteConcern{
-			W:        "1",
-			J:        false,
-			WTimeout: "100s",
-		},
-		Operation: "delete-many",
-		FilterMap: "root.a = this.foo\nroot.b = this.bar",
-	}
-
-	mongoClient, err := c.Client()
-	require.NoError(t, err)
-	err = mongoClient.Connect(context.Background())
-	require.NoError(t, err)
 	collection := mongoClient.Database("TestDB").Collection("TestCollection")
-	_, err = collection.InsertOne(context.Background(), bson.M{"a": "foo_delete_many", "b": "bar_delete_many", "c": "c1"})
+
+	_, err := collection.InsertOne(context.Background(), bson.M{"a": "foo_delete_many", "b": "bar_delete_many", "c": "c1"})
 	assert.NoError(t, err)
 	_, err = collection.InsertOne(context.Background(), bson.M{"a": "foo_delete_many", "b": "bar_delete_many", "c": "c2"})
 	assert.NoError(t, err)
 
-	mgr, err := manager.New(manager.NewResourceConfig())
+	resMsgs, err := m.ProcessBatch(tCtx, service.MessageBatch{
+		service.NewMessage([]byte(`{"foo":"foo_delete_many","bar":"bar_delete_many"}`)),
+	})
 	require.NoError(t, err)
-
-	conf.MongoDB = mongoConfig
-	m, err := mongodb.NewProcessor(conf, mgr)
-	require.NoError(t, err)
-
-	parts := [][]byte{
-		[]byte(`{"foo":"foo_delete_many","bar":"bar_delete_many"}`),
-	}
-
-	inBatch := message.QuickBatch(parts)
-	resMsgs, response := m.ProcessBatch(processor.TestBatchProcContext(context.Background(), nil, inBatch), inBatch)
-	require.Nil(t, response)
 	require.Len(t, resMsgs, 1)
 
-	expectedResult := [][]byte{
-		[]byte(`{"foo":"foo_delete_many","bar":"bar_delete_many"}`),
-	}
-	assert.Equal(t, expectedResult, message.GetAllBytes(resMsgs[0]))
+	require.Len(t, resMsgs, 1)
+	assertMessagesEqual(t, resMsgs[0], []string{
+		`{"foo":"foo_delete_many","bar":"bar_delete_many"}`,
+	})
 
 	// Validate the record has been deleted from the db
 	result := collection.FindOne(context.Background(), bson.M{"a": "foo_delete_many", "b": "bar_delete_many"})
@@ -278,58 +234,34 @@ func testMongoDBProcessorDeleteMany(port string, t *testing.T) {
 	assert.Error(t, err, "mongo: no documents in result")
 }
 
-func testMongoDBProcessorReplaceOne(port string, t *testing.T) {
-	conf := processor.NewConfig()
-	conf.Type = "mongodb"
+func testMongoDBProcessorReplaceOne(mongoClient *mongo.Client, port string, t *testing.T) {
+	tCtx := context.Background()
+	m := testMProc(t, port, "", `
+write_concern:
+  w: "1"
+  j: false
+  timeout: ""
+operation: replace-one
+document_map: |
+  root.a = this.foo
+  root.b = this.bar
+filter_map: |
+  root.a = this.foo
+`)
 
-	c := client.Config{
-		URL:        "mongodb://localhost:" + port,
-		Database:   "TestDB",
-		Collection: "TestCollection",
-		Username:   "mongoadmin",
-		Password:   "secret",
-	}
-
-	mongoConfig := processor.MongoDBConfig{
-		MongoDB: c,
-		WriteConcern: client.WriteConcern{
-			W:        "1",
-			J:        false,
-			WTimeout: "",
-		},
-		Operation:   "replace-one",
-		DocumentMap: "root.a = this.foo\nroot.b = this.bar",
-		FilterMap:   "root.a = this.foo",
-	}
-
-	mongoClient, err := c.Client()
-	require.NoError(t, err)
-	err = mongoClient.Connect(context.Background())
-	require.NoError(t, err)
 	collection := mongoClient.Database("TestDB").Collection("TestCollection")
-	_, err = collection.InsertOne(context.Background(), bson.M{"a": "foo_replace", "b": "bar_old", "c": "c1"})
+
+	_, err := collection.InsertOne(context.Background(), bson.M{"a": "foo_replace", "b": "bar_old", "c": "c1"})
 	assert.NoError(t, err)
 
-	mgr, err := manager.New(manager.NewResourceConfig())
+	resMsgs, err := m.ProcessBatch(tCtx, service.MessageBatch{
+		service.NewMessage([]byte(`{"foo":"foo_replace","bar":"bar_new"}`)),
+	})
 	require.NoError(t, err)
-
-	conf.MongoDB = mongoConfig
-	m, err := mongodb.NewProcessor(conf, mgr)
-	require.NoError(t, err)
-
-	parts := [][]byte{
-		[]byte(`{"foo":"foo_replace","bar":"bar_new"}`),
-	}
-
-	inBatch := message.QuickBatch(parts)
-	resMsgs, response := m.ProcessBatch(processor.TestBatchProcContext(context.Background(), nil, inBatch), inBatch)
-	require.Nil(t, response)
 	require.Len(t, resMsgs, 1)
-
-	expectedResult := [][]byte{
-		[]byte(`{"foo":"foo_replace","bar":"bar_new"}`),
-	}
-	assert.Equal(t, expectedResult, message.GetAllBytes(resMsgs[0]))
+	assertMessagesEqual(t, resMsgs[0], []string{
+		`{"foo":"foo_replace","bar":"bar_new"}`,
+	})
 
 	// Validate the record has been updated in the db
 	result := collection.FindOne(context.Background(), bson.M{"a": "foo_replace", "b": "bar_new"})
@@ -343,58 +275,33 @@ func testMongoDBProcessorReplaceOne(port string, t *testing.T) {
 	assert.Equal(t, bson.RawValue{}, cVal)
 }
 
-func testMongoDBProcessorUpdateOne(port string, t *testing.T) {
-	conf := processor.NewConfig()
-	conf.Type = "mongodb"
+func testMongoDBProcessorUpdateOne(mongoClient *mongo.Client, port string, t *testing.T) {
+	tCtx := context.Background()
+	m := testMProc(t, port, "", `
+write_concern:
+  w: "1"
+  j: false
+  timeout: 100s
+operation: update-one
+document_map: |
+  root = { "$set": { "a": this.foo, "b": this.bar } }
+filter_map: |
+  root.a = this.foo
+`)
 
-	c := client.Config{
-		URL:        "mongodb://localhost:" + port,
-		Database:   "TestDB",
-		Collection: "TestCollection",
-		Username:   "mongoadmin",
-		Password:   "secret",
-	}
-
-	mongoConfig := processor.MongoDBConfig{
-		MongoDB: c,
-		WriteConcern: client.WriteConcern{
-			W:        "1",
-			J:        false,
-			WTimeout: "100s",
-		},
-		Operation:   "update-one",
-		DocumentMap: `root = {"$set": {"a": this.foo, "b": this.bar}}`,
-		FilterMap:   "root.a = this.foo",
-	}
-
-	mongoClient, err := c.Client()
-	require.NoError(t, err)
-	err = mongoClient.Connect(context.Background())
-	require.NoError(t, err)
 	collection := mongoClient.Database("TestDB").Collection("TestCollection")
-	_, err = collection.InsertOne(context.Background(), bson.M{"a": "foo_update", "b": "bar_update_old", "c": "c1"})
+
+	_, err := collection.InsertOne(context.Background(), bson.M{"a": "foo_update", "b": "bar_update_old", "c": "c1"})
 	assert.NoError(t, err)
 
-	mgr, err := manager.New(manager.NewResourceConfig())
+	resMsgs, err := m.ProcessBatch(tCtx, service.MessageBatch{
+		service.NewMessage([]byte(`{"foo":"foo_update","bar":"bar_update_new"}`)),
+	})
 	require.NoError(t, err)
-
-	conf.MongoDB = mongoConfig
-	m, err := mongodb.NewProcessor(conf, mgr)
-	require.NoError(t, err)
-
-	parts := [][]byte{
-		[]byte(`{"foo":"foo_update","bar":"bar_update_new"}`),
-	}
-
-	inBatch := message.QuickBatch(parts)
-	resMsgs, response := m.ProcessBatch(processor.TestBatchProcContext(context.Background(), nil, inBatch), inBatch)
-	require.Nil(t, response)
 	require.Len(t, resMsgs, 1)
-
-	expectedResult := [][]byte{
-		[]byte(`{"foo":"foo_update","bar":"bar_update_new"}`),
-	}
-	assert.Equal(t, expectedResult, message.GetAllBytes(resMsgs[0]))
+	assertMessagesEqual(t, resMsgs[0], []string{
+		`{"foo":"foo_update","bar":"bar_update_new"}`,
+	})
 
 	// Validate the record has been updated in the db
 	result := collection.FindOne(context.Background(), bson.M{"a": "foo_update", "b": "bar_update_new"})
@@ -408,56 +315,112 @@ func testMongoDBProcessorUpdateOne(port string, t *testing.T) {
 	assert.Equal(t, `"c1"`, cVal.String())
 }
 
-func testMongoDBProcessorFindOne(port string, t *testing.T) {
-	conf := processor.NewConfig()
-	conf.Type = "mongodb"
-
-	c := client.Config{
-		URL:        "mongodb://localhost:" + port,
-		Database:   "TestDB",
-		Collection: "TestCollection",
-		Username:   "mongoadmin",
-		Password:   "secret",
-	}
-
-	conf.MongoDB = processor.NewMongoDBConfig()
-	conf.MongoDB.MongoDB = c
-	conf.MongoDB.WriteConcern = client.WriteConcern{
-		W:        "1",
-		J:        false,
-		WTimeout: "100s",
-	}
-	conf.MongoDB.Operation = "find-one"
-	conf.MongoDB.FilterMap = "root.a = this.a"
-
-	mongoClient, err := c.Client()
-	require.NoError(t, err)
-	err = mongoClient.Connect(context.Background())
-	require.NoError(t, err)
+func testMongoDBProcessorUpsert(mongoClient *mongo.Client, port string, t *testing.T) {
+	tCtx := context.Background()
+	m := testMProc(t, port, "", `
+write_concern:
+  w: "1"
+  j: false
+  timeout: ""
+operation: update-one
+document_map: |
+  root = { "$set": { "a": this.foo, "b": this.bar } }
+filter_map: |
+  root.a = this.foo
+upsert: true
+`)
 	collection := mongoClient.Database("TestDB").Collection("TestCollection")
-	_, err = collection.InsertOne(context.Background(), bson.M{"a": "foo", "b": "bar", "c": "baz", "answer_to_everything": 42})
-	assert.NoError(t, err)
-
-	mgr, err := manager.New(manager.NewResourceConfig())
+	_, err := collection.Indexes().CreateOne(tCtx, mongo.IndexModel{
+		Keys: bson.M{
+			"foo": -1,
+		},
+	})
 	require.NoError(t, err)
+
+	resMsgs, err := m.ProcessBatch(tCtx, service.MessageBatch{
+		service.NewMessage([]byte(`{"foo":"foo1","bar":"bar1"}`)),
+		service.NewMessage([]byte(`{"foo":"foo2","bar":"bar2"}`)),
+	})
+	require.NoError(t, err)
+	require.Len(t, resMsgs, 1)
+	require.NoError(t, resMsgs[0][0].GetError())
+	assertMessagesEqual(t, resMsgs[0], []string{
+		`{"foo":"foo1","bar":"bar1"}`,
+		`{"foo":"foo2","bar":"bar2"}`,
+	})
+
+	// Validate the record is in the MongoDB
+	result := collection.FindOne(tCtx, bson.M{"a": "foo1"})
+	b, err := result.DecodeBytes()
+	assert.NoError(t, err)
+	aVal := b.Lookup("a")
+	bVal := b.Lookup("b")
+	assert.Equal(t, `"foo1"`, aVal.String())
+	assert.Equal(t, `"bar1"`, bVal.String())
+
+	result = collection.FindOne(tCtx, bson.M{"a": "foo2"})
+	b, err = result.DecodeBytes()
+	assert.NoError(t, err)
+	aVal = b.Lookup("a")
+	bVal = b.Lookup("b")
+	assert.Equal(t, `"foo2"`, aVal.String())
+	assert.Equal(t, `"bar2"`, bVal.String())
+
+	// Override
+	resMsgs, err = m.ProcessBatch(tCtx, service.MessageBatch{
+		service.NewMessage([]byte(`{"foo":"foo1","bar":"bar3"}`)),
+		service.NewMessage([]byte(`{"foo":"foo2","bar":"bar4"}`)),
+	})
+	require.NoError(t, err)
+	require.Len(t, resMsgs, 1)
+	require.NoError(t, resMsgs[0][0].GetError())
+	assertMessagesEqual(t, resMsgs[0], []string{
+		`{"foo":"foo1","bar":"bar3"}`,
+		`{"foo":"foo2","bar":"bar4"}`,
+	})
+
+	// Validate the record is in the MongoDB
+	result = collection.FindOne(tCtx, bson.M{"a": "foo1"})
+	b, err = result.DecodeBytes()
+	assert.NoError(t, err)
+	aVal = b.Lookup("a")
+	bVal = b.Lookup("b")
+	assert.Equal(t, `"foo1"`, aVal.String())
+	assert.Equal(t, `"bar3"`, bVal.String())
+
+	result = collection.FindOne(tCtx, bson.M{"a": "foo2"})
+	b, err = result.DecodeBytes()
+	assert.NoError(t, err)
+	aVal = b.Lookup("a")
+	bVal = b.Lookup("b")
+	assert.Equal(t, `"foo2"`, aVal.String())
+	assert.Equal(t, `"bar4"`, bVal.String())
+}
+
+func testMongoDBProcessorFindOne(mongoClient *mongo.Client, port string, t *testing.T) {
+	tCtx := context.Background()
+	collection := mongoClient.Database("TestDB").Collection("TestCollection")
+
+	_, err := collection.InsertOne(context.Background(), bson.M{"a": "foo", "b": "bar", "c": "baz", "answer_to_everything": 42})
+	assert.NoError(t, err)
 
 	for _, tt := range []struct {
 		name        string
 		message     string
-		marshalMode client.JSONMarshalMode
+		marshalMode mongodb.JSONMarshalMode
 		collection  string
 		expected    string
 		expectedErr error
 	}{
 		{
 			name:        "canonical marshal mode",
-			marshalMode: client.JSONMarshalModeCanonical,
+			marshalMode: mongodb.JSONMarshalModeCanonical,
 			message:     `{"a":"foo","x":"ignore_me_via_filter_map"}`,
 			expected:    `{"a":"foo","b":"bar","c":"baz","answer_to_everything":{"$numberInt":"42"}}`,
 		},
 		{
 			name:        "relaxed marshal mode",
-			marshalMode: client.JSONMarshalModeRelaxed,
+			marshalMode: mongodb.JSONMarshalModeRelaxed,
 			message:     `{"a":"foo","x":"ignore_me_via_filter_map"}`,
 			expected:    `{"a":"foo","b":"bar","c":"baz","answer_to_everything":42}`,
 		},
@@ -468,34 +431,41 @@ func testMongoDBProcessorFindOne(port string, t *testing.T) {
 		},
 		{
 			name:        "collection interpolation",
-			marshalMode: client.JSONMarshalModeCanonical,
+			marshalMode: mongodb.JSONMarshalModeCanonical,
 			collection:  `${!json("col")}`,
 			message:     `{"col":"TestCollection","a":"foo"}`,
 			expected:    `{"a":"foo","b":"bar","c":"baz","answer_to_everything":{"$numberInt":"42"}}`,
 		},
 	} {
-		if tt.collection != "" {
-			conf.MongoDB.MongoDB.Collection = tt.collection
-		}
+		m := testMProc(t, port, tt.collection, fmt.Sprintf(`
+write_concern:
+  w: "1"
+  j: false
+  timeout: 100s
+operation: find-one
+filter_map: |
+  root.a = this.a
+json_marshal_mode: %v
+`, tt.marshalMode))
 
-		conf.MongoDB.JSONMarshalMode = tt.marshalMode
-
-		m, err := mongodb.NewProcessor(conf, mgr)
+		resMsgs, err := m.ProcessBatch(tCtx, service.MessageBatch{
+			service.NewMessage([]byte(tt.message)),
+		})
 		require.NoError(t, err)
-
-		inBatch := message.QuickBatch([][]byte{[]byte(tt.message)})
-		resMsgs, response := m.ProcessBatch(processor.TestBatchProcContext(context.Background(), nil, inBatch), inBatch)
-		require.Nil(t, response)
 		require.Len(t, resMsgs, 1)
+
 		if tt.expectedErr != nil {
-			tmpErr := resMsgs[0].Get(0).ErrorGet()
+			tmpErr := resMsgs[0][0].GetError()
 			require.Error(t, tmpErr)
 			require.Equal(t, mongo.ErrNoDocuments.Error(), tmpErr.Error())
 			continue
 		}
 
+		mBytes, err := resMsgs[0][0].AsBytes()
+		require.NoError(t, err)
+
 		jdopts := jsondiff.DefaultJSONOptions()
-		diff, explanation := jsondiff.Compare(resMsgs[0].Get(0).AsBytes(), []byte(tt.expected), &jdopts)
+		diff, explanation := jsondiff.Compare(mBytes, []byte(tt.expected), &jdopts)
 		assert.Equalf(t, jsondiff.SupersetMatch.String(), diff.String(), "%s: %s", tt.name, explanation)
 	}
 }

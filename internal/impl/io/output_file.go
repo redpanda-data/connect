@@ -13,42 +13,86 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/bloblang/field"
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/codec"
+	"github.com/benthosdev/benthos/v4/internal/component/interop"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
-	"github.com/benthosdev/benthos/v4/internal/component/output/processors"
-	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
+const (
+	fileOutputFieldPath  = "path"
+	fileOutputFieldCodec = "codec"
+)
+
+func fileOutputSpec() *service.ConfigSpec {
+	return service.NewConfigSpec().
+		Stable().
+		Categories("Local").
+		Summary(`Writes messages to files on disk based on a chosen codec.`).
+		Description(`Messages can be written to different files by using [interpolation functions](/docs/configuration/interpolation#bloblang-queries) in the path field. However, only one file is ever open at a given time, and therefore when the path changes the previously open file is closed.`).
+		Fields(
+			service.NewInterpolatedStringField(fileOutputFieldPath).
+				Description("The file to write to, if the file does not yet exist it will be created.").
+				Examples(
+					"/tmp/data.txt",
+					"/tmp/${! timestamp_unix() }.txt",
+					`/tmp/${! json("document.id") }.json`,
+				).
+				Version("3.33.0"),
+			service.NewInternalField(codec.WriterDocs).Version("3.33.0").Default("lines"),
+		)
+}
+
+type fileOutputConfig struct {
+	Path  string
+	Codec string
+}
+
+func fileOutputConfigFromParsed(pConf *service.ParsedConfig) (conf fileOutputConfig, err error) {
+	if conf.Path, err = pConf.FieldString(fileOutputFieldPath); err != nil {
+		return
+	}
+	if conf.Codec, err = pConf.FieldString(fileOutputFieldCodec); err != nil {
+		return
+	}
+	return
+}
+
 func init() {
-	err := bundle.AllOutputs.Add(processors.WrapConstructor(func(conf output.Config, nm bundle.NewManagement) (output.Streamed, error) {
-		f, err := newFileWriter(conf.File.Path, conf.File.Codec, nm)
-		if err != nil {
-			return nil, err
-		}
-		w, err := output.NewAsyncWriter("file", 1, f, nm)
-		if err != nil {
-			return nil, err
-		}
-		return w, nil
-	}), docs.ComponentSpec{
-		Name: "file",
-		Summary: `
-Writes messages to files on disk based on a chosen codec.`,
-		Description: `Messages can be written to different files by using [interpolation functions](/docs/configuration/interpolation#bloblang-queries) in the path field. However, only one file is ever open at a given time, and therefore when the path changes the previously open file is closed.`,
-		Config: docs.FieldComponent().WithChildren(
-			docs.FieldString(
-				"path", "The file to write to, if the file does not yet exist it will be created.",
-				"/tmp/data.txt",
-				"/tmp/${! timestamp_unix() }.txt",
-				`/tmp/${! json("document.id") }.json`,
-			).IsInterpolated().AtVersion("3.33.0"),
-			codec.WriterDocs.AtVersion("3.33.0"),
-		).ChildDefaultAndTypesFromStruct(output.NewFileConfig()),
-		Categories: []string{
-			"Local",
-		},
-	})
+	err := service.RegisterBatchOutput("file", fileOutputSpec(),
+		func(pConf *service.ParsedConfig, res *service.Resources) (out service.BatchOutput, pol service.BatchPolicy, mif int, err error) {
+			// NOTE: We're using interop to punch an internal implementation up
+			// to the public plugin API. The only blocker from using the full
+			// public suite is the codec field.
+			//
+			// Since codecs are likely to get refactored soon I figured it
+			// wasn't worth investing in a public wrapper since the old style
+			// will likely get deprecated.
+			//
+			// This does mean that for now all codec based components will need
+			// to keep internal implementations. However, the config specs are
+			// the biggest time sink when converting to the new APIs so it's not
+			// a big deal to leave these tasks pending.
+			var conf fileOutputConfig
+			if conf, err = fileOutputConfigFromParsed(pConf); err != nil {
+				return
+			}
+
+			mgr := interop.UnwrapManagement(res)
+			var f *fileWriter
+			if f, err = newFileWriter(conf.Path, conf.Codec, mgr); err != nil {
+				return
+			}
+
+			var w output.Streamed
+			if w, err = output.NewAsyncWriter("file", 1, f, mgr); err != nil {
+				return
+			}
+
+			out = interop.NewUnwrapInternalOutput(w)
+			return
+		})
 	if err != nil {
 		panic(err)
 	}

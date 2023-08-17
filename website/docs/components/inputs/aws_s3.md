@@ -14,7 +14,6 @@ categories: ["Services","AWS"]
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-
 Downloads objects within an Amazon S3 bucket, optionally filtered by a prefix, either by walking the items in the bucket or by streaming upload notifications in realtime.
 
 
@@ -72,6 +71,7 @@ input:
       envelope_path: ""
       delay_period: ""
       max_messages: 10
+      wait_time_seconds: 0
 ```
 
 </TabItem>
@@ -106,6 +106,7 @@ This input adds the following metadata fields to each message:
 - s3_last_modified (RFC3339)
 - s3_content_type
 - s3_content_encoding
+- s3_version_id
 - All user defined metadata
 ```
 
@@ -171,6 +172,9 @@ Default: `""`
 ### `credentials.secret`
 
 The secret for the credentials being used.
+:::warning Secret
+This field contains sensitive information that usually shouldn't be added to a config directly, read our [secrets page for more info](/docs/configuration/secrets).
+:::
 
 
 Type: `string`  
@@ -244,6 +248,7 @@ Default: `"all-bytes"`
 | `csv-safe` | Consume structured rows like `csv`, but sends messages with empty maps on failure to parse. Includes row number and parsing errors (if any) in the message's metadata. |
 | `delim:x` | Consume the file in segments divided by a custom delimiter. |
 | `gzip` | Decompress a gzip file, this codec should precede another codec, e.g. `gzip/all-bytes`, `gzip/tar`, `gzip/csv`, etc. |
+| `pgzip` | Decompress a gzip file in parallel, this codec should precede another codec, e.g. `pgzip/all-bytes`, `pgzip/tar`, `pgzip/csv`, etc. |
 | `lines` | Consume the file in segments divided by linebreaks. |
 | `multipart` | Consumes the output of another codec and batches messages together. A batch ends when an empty message is consumed. For example, the codec `lines/multipart` could be used to consume multipart messages where an empty line indicates the end of each batch. |
 | `regex:(?m)^\d\d:\d\d:\d\d` | Consume the file in segments divided by regular expression. |
@@ -347,3 +352,13 @@ The maximum number of SQS messages to consume from each request.
 
 Type: `int`  
 Default: `10`  
+
+### `sqs.wait_time_seconds`
+
+Whether to set the wait time. Enabling this activates long-polling. Valid values: 0 to 20.
+
+
+Type: `int`  
+Default: `0`  
+
+

@@ -7,15 +7,12 @@ import (
 	"testing"
 
 	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/credentials"
-	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/kinesis"
 	"github.com/aws/aws-sdk-go/service/kinesis/kinesisiface"
-	"github.com/cenkalti/backoff/v4"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
-	"github.com/benthosdev/benthos/v4/internal/bloblang"
-	"github.com/benthosdev/benthos/v4/internal/log"
-	"github.com/benthosdev/benthos/v4/internal/message"
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
 type mockKinesis struct {
@@ -27,38 +24,43 @@ func (m *mockKinesis) PutRecords(input *kinesis.PutRecordsInput) (*kinesis.PutRe
 	return m.fn(input)
 }
 
+func testKOWriter(t *testing.T, conf string) *kinesisWriter {
+	t.Helper()
+
+	pConf, err := koOutputSpec().ParseYAML(conf, nil)
+	require.NoError(t, err)
+
+	kConf, err := koConfigFromParsed(pConf)
+	require.NoError(t, err)
+
+	w, err := newKinesisWriter(kConf, service.MockResources())
+	require.NoError(t, err)
+
+	return w
+}
+
 func TestKinesisWriteSinglePartMessage(t *testing.T) {
-	k := kinesisWriter{
-		backoffCtor: func() backoff.BackOff {
-			return backoff.NewExponentialBackOff()
+	k := testKOWriter(t, `
+stream: foo
+partition_key: ${! json("id") }
+`)
+	k.kinesis = &mockKinesis{
+		fn: func(input *kinesis.PutRecordsInput) (*kinesis.PutRecordsOutput, error) {
+			if exp, act := 1, len(input.Records); exp != act {
+				return nil, fmt.Errorf("expected input to have records with length %d, got %d", exp, act)
+			}
+			if exp, act := "123", input.Records[0].PartitionKey; exp != *act {
+				return nil, fmt.Errorf("expected record to have partition key %s, got %s", exp, *act)
+			}
+			return &kinesis.PutRecordsOutput{}, nil
 		},
-		session: session.Must(session.NewSession(&aws.Config{
-			Credentials: credentials.NewStaticCredentials("xxxxx", "xxxxx", "xxxxx"),
-		})),
-		kinesis: &mockKinesis{
-			fn: func(input *kinesis.PutRecordsInput) (*kinesis.PutRecordsOutput, error) {
-				if exp, act := 1, len(input.Records); exp != act {
-					return nil, fmt.Errorf("expected input to have records with length %d, got %d", exp, act)
-				}
-				if exp, act := "123", input.Records[0].PartitionKey; exp != *act {
-					return nil, fmt.Errorf("expected record to have partition key %s, got %s", exp, *act)
-				}
-				return &kinesis.PutRecordsOutput{}, nil
-			},
-		},
-		log: log.Noop(),
 	}
 
-	k.partitionKey, _ = bloblang.GlobalEnvironment().NewField("${!json(\"id\")}")
-	k.hashKey, _ = bloblang.GlobalEnvironment().NewField("")
-
-	msg := message.Batch{
-		message.NewPart([]byte(`{"foo":"bar","id":123}`)),
+	msg := service.MessageBatch{
+		service.NewMessage([]byte(`{"foo":"bar","id":123}`)),
 	}
 
-	if err := k.WriteBatch(context.Background(), msg); err != nil {
-		t.Error(err)
-	}
+	assert.NoError(t, k.WriteBatch(context.Background(), msg))
 }
 
 func TestKinesisWriteMultiPartMessage(t *testing.T) {
@@ -69,35 +71,28 @@ func TestKinesisWriteMultiPartMessage(t *testing.T) {
 		{[]byte(`{"foo":"bar","id":123}`), "123"},
 		{[]byte(`{"foo":"baz","id":456}`), "456"},
 	}
-	k := kinesisWriter{
-		backoffCtor: func() backoff.BackOff {
-			return backoff.NewExponentialBackOff()
-		},
-		session: session.Must(session.NewSession(&aws.Config{
-			Credentials: credentials.NewStaticCredentials("xxxxx", "xxxxx", "xxxxx"),
-		})),
-		kinesis: &mockKinesis{
-			fn: func(input *kinesis.PutRecordsInput) (*kinesis.PutRecordsOutput, error) {
-				if exp, act := len(parts), len(input.Records); exp != act {
-					return nil, fmt.Errorf("expected input to have records with length %d, got %d", exp, act)
+
+	k := testKOWriter(t, `
+stream: foo
+partition_key: ${! json("id") }
+`)
+	k.kinesis = &mockKinesis{
+		fn: func(input *kinesis.PutRecordsInput) (*kinesis.PutRecordsOutput, error) {
+			if exp, act := len(parts), len(input.Records); exp != act {
+				return nil, fmt.Errorf("expected input to have records with length %d, got %d", exp, act)
+			}
+			for i, p := range parts {
+				if exp, act := p.key, input.Records[i].PartitionKey; exp != *act {
+					return nil, fmt.Errorf("expected record %d to have partition key %s, got %s", i, exp, *act)
 				}
-				for i, p := range parts {
-					if exp, act := p.key, input.Records[i].PartitionKey; exp != *act {
-						return nil, fmt.Errorf("expected record %d to have partition key %s, got %s", i, exp, *act)
-					}
-				}
-				return &kinesis.PutRecordsOutput{}, nil
-			},
+			}
+			return &kinesis.PutRecordsOutput{}, nil
 		},
-		log: log.Noop(),
 	}
 
-	k.partitionKey, _ = bloblang.GlobalEnvironment().NewField("${!json(\"id\")}")
-	k.hashKey, _ = bloblang.GlobalEnvironment().NewField("")
-
-	msg := message.QuickBatch(nil)
+	var msg service.MessageBatch
 	for _, p := range parts {
-		part := message.NewPart(p.data)
+		part := service.NewMessage(p.data)
 		msg = append(msg, part)
 	}
 
@@ -109,28 +104,21 @@ func TestKinesisWriteMultiPartMessage(t *testing.T) {
 func TestKinesisWriteChunk(t *testing.T) {
 	batchLengths := []int{}
 	n := 1200
-	k := kinesisWriter{
-		backoffCtor: func() backoff.BackOff {
-			return backoff.NewExponentialBackOff()
+
+	k := testKOWriter(t, `
+stream: foo
+partition_key: ${! json("id") }
+`)
+	k.kinesis = &mockKinesis{
+		fn: func(input *kinesis.PutRecordsInput) (*kinesis.PutRecordsOutput, error) {
+			batchLengths = append(batchLengths, len(input.Records))
+			return &kinesis.PutRecordsOutput{}, nil
 		},
-		session: session.Must(session.NewSession(&aws.Config{
-			Credentials: credentials.NewStaticCredentials("xxxxx", "xxxxx", "xxxxx"),
-		})),
-		kinesis: &mockKinesis{
-			fn: func(input *kinesis.PutRecordsInput) (*kinesis.PutRecordsOutput, error) {
-				batchLengths = append(batchLengths, len(input.Records))
-				return &kinesis.PutRecordsOutput{}, nil
-			},
-		},
-		log: log.Noop(),
 	}
 
-	k.partitionKey, _ = bloblang.GlobalEnvironment().NewField("${!json(\"id\")}")
-	k.hashKey, _ = bloblang.GlobalEnvironment().NewField("")
-
-	msg := message.QuickBatch(nil)
+	var msg service.MessageBatch
 	for i := 0; i < n; i++ {
-		part := message.NewPart([]byte(`{"foo":"bar","id":123}`))
+		part := service.NewMessage([]byte(`{"foo":"bar","id":123}`))
 		msg = append(msg, part)
 	}
 
@@ -156,42 +144,35 @@ func TestKinesisWriteChunkWithThrottling(t *testing.T) {
 	t.Parallel()
 	batchLengths := []int{}
 	n := 1200
-	k := kinesisWriter{
-		backoffCtor: func() backoff.BackOff {
-			return backoff.NewExponentialBackOff()
-		},
-		session: session.Must(session.NewSession(&aws.Config{
-			Credentials: credentials.NewStaticCredentials("xxxxx", "xxxxx", "xxxxx"),
-		})),
-		kinesis: &mockKinesis{
-			fn: func(input *kinesis.PutRecordsInput) (*kinesis.PutRecordsOutput, error) {
-				count := len(input.Records)
-				batchLengths = append(batchLengths, count)
-				var failed int64
-				output := kinesis.PutRecordsOutput{
-					Records: make([]*kinesis.PutRecordsResultEntry, count),
+
+	k := testKOWriter(t, `
+stream: foo
+partition_key: ${! json("id") }
+`)
+	k.kinesis = &mockKinesis{
+		fn: func(input *kinesis.PutRecordsInput) (*kinesis.PutRecordsOutput, error) {
+			count := len(input.Records)
+			batchLengths = append(batchLengths, count)
+			var failed int64
+			output := kinesis.PutRecordsOutput{
+				Records: make([]*kinesis.PutRecordsResultEntry, count),
+			}
+			for i := 0; i < count; i++ {
+				var entry kinesis.PutRecordsResultEntry
+				if i >= 300 {
+					failed++
+					entry.SetErrorCode(kinesis.ErrCodeProvisionedThroughputExceededException)
 				}
-				for i := 0; i < count; i++ {
-					var entry kinesis.PutRecordsResultEntry
-					if i >= 300 {
-						failed++
-						entry.SetErrorCode(kinesis.ErrCodeProvisionedThroughputExceededException)
-					}
-					output.Records[i] = &entry
-				}
-				output.SetFailedRecordCount(failed)
-				return &output, nil
-			},
+				output.Records[i] = &entry
+			}
+			output.SetFailedRecordCount(failed)
+			return &output, nil
 		},
-		log: log.Noop(),
 	}
 
-	k.partitionKey, _ = bloblang.GlobalEnvironment().NewField("${!json(\"id\")}")
-	k.hashKey, _ = bloblang.GlobalEnvironment().NewField("")
-
-	msg := message.QuickBatch(nil)
+	var msg service.MessageBatch
 	for i := 0; i < n; i++ {
-		part := message.NewPart([]byte(`{"foo":"bar","id":123}`))
+		part := service.NewMessage([]byte(`{"foo":"bar","id":123}`))
 		msg = append(msg, part)
 	}
 
@@ -215,27 +196,21 @@ func TestKinesisWriteChunkWithThrottling(t *testing.T) {
 func TestKinesisWriteError(t *testing.T) {
 	t.Parallel()
 	var calls int
-	k := kinesisWriter{
-		backoffCtor: func() backoff.BackOff {
-			return backoff.WithMaxRetries(backoff.NewExponentialBackOff(), 2)
+
+	k := testKOWriter(t, `
+stream: foo
+partition_key: ${! json("id") }
+max_retries: 2
+`)
+	k.kinesis = &mockKinesis{
+		fn: func(input *kinesis.PutRecordsInput) (*kinesis.PutRecordsOutput, error) {
+			calls++
+			return nil, errors.New("blah")
 		},
-		session: session.Must(session.NewSession(&aws.Config{
-			Credentials: credentials.NewStaticCredentials("xxxxx", "xxxxx", "xxxxx"),
-		})),
-		kinesis: &mockKinesis{
-			fn: func(input *kinesis.PutRecordsInput) (*kinesis.PutRecordsOutput, error) {
-				calls++
-				return nil, errors.New("blah")
-			},
-		},
-		log: log.Noop(),
 	}
 
-	k.partitionKey, _ = bloblang.GlobalEnvironment().NewField("${!json(\"id\")}")
-	k.hashKey, _ = bloblang.GlobalEnvironment().NewField("")
-
-	msg := message.Batch{
-		message.NewPart([]byte(`{"foo":"bar"}`)),
+	msg := service.MessageBatch{
+		service.NewMessage([]byte(`{"foo":"bar"}`)),
 	}
 
 	if exp, err := "blah", k.WriteBatch(context.Background(), msg); err.Error() != exp {
@@ -249,52 +224,45 @@ func TestKinesisWriteError(t *testing.T) {
 func TestKinesisWriteMessageThrottling(t *testing.T) {
 	t.Parallel()
 	var calls [][]*kinesis.PutRecordsRequestEntry
-	k := kinesisWriter{
-		backoffCtor: func() backoff.BackOff {
-			return backoff.NewExponentialBackOff()
-		},
-		session: session.Must(session.NewSession(&aws.Config{
-			Credentials: credentials.NewStaticCredentials("xxxxx", "xxxxx", "xxxxx"),
-		})),
-		kinesis: &mockKinesis{
-			fn: func(input *kinesis.PutRecordsInput) (*kinesis.PutRecordsOutput, error) {
-				records := make([]*kinesis.PutRecordsRequestEntry, len(input.Records))
-				copy(records, input.Records)
-				calls = append(calls, records)
-				var failed int64
-				var output kinesis.PutRecordsOutput
-				for i := 0; i < len(input.Records); i++ {
-					entry := kinesis.PutRecordsResultEntry{}
-					if i > 0 {
-						failed++
-						entry.SetErrorCode(kinesis.ErrCodeProvisionedThroughputExceededException)
-					}
-					output.Records = append(output.Records, &entry)
+
+	k := testKOWriter(t, `
+stream: foo
+partition_key: ${! json("id") }
+`)
+	k.kinesis = &mockKinesis{
+		fn: func(input *kinesis.PutRecordsInput) (*kinesis.PutRecordsOutput, error) {
+			records := make([]*kinesis.PutRecordsRequestEntry, len(input.Records))
+			copy(records, input.Records)
+			calls = append(calls, records)
+			var failed int64
+			var output kinesis.PutRecordsOutput
+			for i := 0; i < len(input.Records); i++ {
+				entry := kinesis.PutRecordsResultEntry{}
+				if i > 0 {
+					failed++
+					entry.SetErrorCode(kinesis.ErrCodeProvisionedThroughputExceededException)
 				}
-				output.SetFailedRecordCount(failed)
-				return &output, nil
-			},
+				output.Records = append(output.Records, &entry)
+			}
+			output.SetFailedRecordCount(failed)
+			return &output, nil
 		},
-		log: log.Noop(),
 	}
 
-	k.partitionKey, _ = bloblang.GlobalEnvironment().NewField("${!json(\"id\")}")
-	k.hashKey, _ = bloblang.GlobalEnvironment().NewField("")
-
-	msg := message.Batch{
-		message.NewPart([]byte(`{"foo":"bar","id":123}`)),
-		message.NewPart([]byte(`{"foo":"baz","id":456}`)),
-		message.NewPart([]byte(`{"foo":"qux","id":789}`)),
+	msg := service.MessageBatch{
+		service.NewMessage([]byte(`{"foo":"bar","id":123}`)),
+		service.NewMessage([]byte(`{"foo":"baz","id":456}`)),
+		service.NewMessage([]byte(`{"foo":"qux","id":789}`)),
 	}
 
 	if err := k.WriteBatch(context.Background(), msg); err != nil {
 		t.Error(err)
 	}
-	if exp, act := msg.Len(), len(calls); act != exp {
+	if exp, act := len(msg), len(calls); act != exp {
 		t.Errorf("Expected kinesis.PutRecords to have call count %d, got %d", exp, act)
 	}
 	for i, c := range calls {
-		if exp, act := msg.Len()-i, len(c); act != exp {
+		if exp, act := len(msg)-i, len(c); act != exp {
 			t.Errorf("Expected kinesis.PutRecords call %d input to have Records with length %d, got %d", i, exp, act)
 		}
 	}
@@ -303,32 +271,26 @@ func TestKinesisWriteMessageThrottling(t *testing.T) {
 func TestKinesisWriteBackoffMaxRetriesExceeded(t *testing.T) {
 	t.Parallel()
 	var calls int
-	k := kinesisWriter{
-		backoffCtor: func() backoff.BackOff {
-			return backoff.WithMaxRetries(backoff.NewExponentialBackOff(), 2)
+
+	k := testKOWriter(t, `
+stream: foo
+partition_key: ${! json("id") }
+max_retries: 2
+`)
+	k.kinesis = &mockKinesis{
+		fn: func(input *kinesis.PutRecordsInput) (*kinesis.PutRecordsOutput, error) {
+			calls++
+			var output kinesis.PutRecordsOutput
+			output.FailedRecordCount = aws.Int64(1)
+			output.Records = append(output.Records, &kinesis.PutRecordsResultEntry{
+				ErrorCode: aws.String(kinesis.ErrCodeProvisionedThroughputExceededException),
+			})
+			return &output, nil
 		},
-		session: session.Must(session.NewSession(&aws.Config{
-			Credentials: credentials.NewStaticCredentials("xxxxx", "xxxxx", "xxxxx"),
-		})),
-		kinesis: &mockKinesis{
-			fn: func(input *kinesis.PutRecordsInput) (*kinesis.PutRecordsOutput, error) {
-				calls++
-				var output kinesis.PutRecordsOutput
-				output.FailedRecordCount = aws.Int64(1)
-				output.Records = append(output.Records, &kinesis.PutRecordsResultEntry{
-					ErrorCode: aws.String(kinesis.ErrCodeProvisionedThroughputExceededException),
-				})
-				return &output, nil
-			},
-		},
-		log: log.Noop(),
 	}
 
-	k.partitionKey, _ = bloblang.GlobalEnvironment().NewField("${!json(\"id\")}")
-	k.hashKey, _ = bloblang.GlobalEnvironment().NewField("")
-
-	msg := message.Batch{
-		message.NewPart([]byte(`{"foo":"bar","id":123}`)),
+	msg := service.MessageBatch{
+		service.NewMessage([]byte(`{"foo":"bar","id":123}`)),
 	}
 
 	if err := k.WriteBatch(context.Background(), msg); err == nil {

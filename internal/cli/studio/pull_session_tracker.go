@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"io/fs"
@@ -79,9 +80,18 @@ func initSessionTracker(
 	return tracker, nil
 }
 
-func (s *sessionTracker) checkResponse(res *http.Response) (waitUntil *time.Time, err error) {
+type studioAPIErr struct {
+	StatusCode int
+	BodyBytes  []byte
+}
+
+func (s *studioAPIErr) Error() string {
+	return fmt.Sprintf("request failed with status %v: %s", s.StatusCode, s.BodyBytes)
+}
+
+func (s *sessionTracker) checkResponse(res *http.Response) (waitUntil *time.Time, abortReq bool, err error) {
 	if res.StatusCode == http.StatusOK {
-		return nil, nil
+		return nil, false, nil
 	}
 	if res.StatusCode == http.StatusTooManyRequests {
 		if retAfterInt, err := strconv.ParseInt(res.Header.Get("Retry-After"), 10, 64); err == nil {
@@ -89,8 +99,11 @@ func (s *sessionTracker) checkResponse(res *http.Response) (waitUntil *time.Time
 			waitUntil = &retUntil
 		}
 	}
+	_, abortReq = map[int]struct{}{
+		http.StatusNotFound: {},
+	}[res.StatusCode]
 	bodyBytes, _ := io.ReadAll(res.Body)
-	err = fmt.Errorf("request failed with status %v: %s", res.StatusCode, bodyBytes)
+	err = &studioAPIErr{StatusCode: res.StatusCode, BodyBytes: bodyBytes}
 	return
 }
 
@@ -152,17 +165,18 @@ func (s *sessionTracker) doRateLimitedReq(ctx context.Context, reqFn func() (*ht
 
 		// Wait for one second after an error by default
 		nextWait := s.nowFn().Add(time.Second)
+		var abortReq bool
 		if res, err = http.DefaultClient.Do(req.WithContext(ctx)); err == nil {
 			// No request error, but also check the response status and rate
 			// limit suggestions.
 			var nextWaitTmp *time.Time
-			if nextWaitTmp, err = s.checkResponse(res); nextWaitTmp != nil {
+			if nextWaitTmp, abortReq, err = s.checkResponse(res); nextWaitTmp != nil {
 				// The response has suggested a time to wait for, so we use
 				// that instead of our default.
 				nextWait = *nextWaitTmp
 			}
 		}
-		if err == nil {
+		if err == nil || abortReq {
 			return
 		}
 		if ctxErr := ctx.Err(); ctxErr != nil {
@@ -282,19 +296,28 @@ func (s *sessionTracker) Leave(ctx context.Context) error {
 }
 
 // ReadFile attempts to read a given file from the session we're synced with.
-func (s *sessionTracker) ReadFile(ctx context.Context, name string) (fs.File, error) {
+func (s *sessionTracker) ReadFile(ctx context.Context, name string, headOnly bool) (fs.File, error) {
 	if err := s.waitForRateLimit(ctx); err != nil {
 		return nil, err
 	}
 
-	fileURL, err := url.Parse(s.baseURL)
-	if err != nil {
-		return nil, err
+	var fileURLStr string
+	{
+		fileURL, err := url.Parse(s.baseURL)
+		if err != nil {
+			return nil, err
+		}
+		fileURL.Path = path.Join(fileURL.Path, "/download")
+		fileURLStr = fileURL.String() + "/" + url.PathEscape(path.Clean(name))
 	}
-	fileURL.Path = path.Join(fileURL.Path, fmt.Sprintf("/download/%v", url.PathEscape(path.Clean(name))))
+
+	method := "GET"
+	if headOnly {
+		method = "HEAD"
+	}
 
 	res, err := s.doRateLimitedReq(ctx, func() (*http.Request, error) {
-		req, err := http.NewRequest("GET", fileURL.String(), http.NoBody)
+		req, err := http.NewRequest(method, fileURLStr, http.NoBody)
 		if err != nil {
 			return nil, err
 		}
@@ -302,6 +325,10 @@ func (s *sessionTracker) ReadFile(ctx context.Context, name string) (fs.File, er
 		return req, err
 	})
 	if err != nil {
+		var sErr *studioAPIErr
+		if errors.As(err, &sErr) && sErr.StatusCode == 404 {
+			return nil, fs.ErrNotExist
+		}
 		return nil, err
 	}
 
@@ -331,7 +358,11 @@ func (s *sessionTracker) ReadFile(ctx context.Context, name string) (fs.File, er
 		s.mut.Unlock()
 	}
 
-	return &sessionFile{res: res}, nil
+	return &sessionFile{
+		res:     res,
+		path:    name,
+		modTime: time.UnixMilli(int64(modTimeMillis)),
+	}, nil
 }
 
 //------------------------------------------------------------------------------

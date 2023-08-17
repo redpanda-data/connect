@@ -24,9 +24,9 @@ func init() {
 		},
 		Summary: `
 Decompresses messages according to the selected algorithm. Supported
-decompression types are: gzip, zlib, bzip2, flate, snappy, lz4.`,
+decompression types are: gzip, pgzip, zlib, bzip2, flate, snappy, lz4.`,
 		Config: docs.FieldComponent().WithChildren(
-			docs.FieldString("algorithm", "The decompression algorithm to use.").HasOptions("gzip", "zlib", "bzip2", "flate", "snappy", "lz4"),
+			docs.FieldString("algorithm", "The decompression algorithm to use.").HasOptions("gzip", "pgzip", "zlib", "bzip2", "flate", "snappy", "lz4"),
 		).ChildDefaultAndTypesFromStruct(processor.NewDecompressConfig()),
 	})
 	if err != nil {

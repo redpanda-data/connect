@@ -331,14 +331,14 @@ func TestTypeAPIPatch(t *testing.T) {
 	response = httptest.NewRecorder()
 	r.ServeHTTP(response, request)
 	if exp, act := http.StatusOK, response.Code; exp != act {
-		t.Errorf("Unexpected result: %v != %v", act, exp)
+		t.Errorf("Unexpected result: %v != %v: %v", act, exp, response.Body.String())
 	}
 
 	request = genRequest("GET", "/streams/foo", nil)
 	response = httptest.NewRecorder()
 	r.ServeHTTP(response, request)
 	if exp, act := http.StatusOK, response.Code; exp != act {
-		t.Errorf("Unexpected result: %v != %v", act, exp)
+		t.Errorf("Unexpected result: %v != %v: %v", act, exp, response.Body.String())
 	}
 	info := parseGetBody(t, response.Body)
 	if !info.Active {

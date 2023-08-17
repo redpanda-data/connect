@@ -56,7 +56,7 @@ output:
       byte_size: 0
       period: ""
       check: ""
-      processors: []
+      processors: [] # No default (optional)
 ```
 
 </TabItem>

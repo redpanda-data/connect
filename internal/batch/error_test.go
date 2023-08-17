@@ -23,7 +23,7 @@ func TestErrorBatchAssociation(t *testing.T) {
 	bErr = bErr.Failed(1, errors.New("yas"))
 
 	partsWalked := map[int]string{}
-	bErr.WalkParts(group, batch, func(i int, p *message.Part, err error) bool {
+	bErr.WalkPartsBySource(group, batch, func(i int, p *message.Part, err error) bool {
 		partsWalked[i] = fmt.Sprintf("%s - %v", p.AsBytes(), err)
 		return true
 	})
@@ -48,7 +48,7 @@ func TestErrorBatchAssociationShallowCopy(t *testing.T) {
 	bErr = bErr.Failed(1, errors.New("yas"))
 
 	partsWalked := map[int]string{}
-	bErr.WalkParts(group, batch, func(i int, p *message.Part, err error) bool {
+	bErr.WalkPartsBySource(group, batch, func(i int, p *message.Part, err error) bool {
 		partsWalked[i] = fmt.Sprintf("%s - %v", p.AsBytes(), err)
 		return true
 	})
@@ -73,7 +73,7 @@ func TestErrorBatchAssociationDeepCopy(t *testing.T) {
 	bErr = bErr.Failed(1, errors.New("yas"))
 
 	partsWalked := map[int]string{}
-	bErr.WalkParts(group, batch, func(i int, p *message.Part, err error) bool {
+	bErr.WalkPartsBySource(group, batch, func(i int, p *message.Part, err error) bool {
 		partsWalked[i] = fmt.Sprintf("%s - %v", p.AsBytes(), err)
 		return true
 	})
@@ -100,7 +100,7 @@ func TestErrorBatchAssociationNested(t *testing.T) {
 	bErr = bErr.Failed(1, errors.New("yas"))
 
 	partsWalked := map[int]string{}
-	bErr.WalkParts(group, batch, func(i int, p *message.Part, err error) bool {
+	bErr.WalkPartsBySource(group, batch, func(i int, p *message.Part, err error) bool {
 		partsWalked[i] = fmt.Sprintf("%s - %v", p.AsBytes(), err)
 		return true
 	})
@@ -128,7 +128,7 @@ func TestErrorBatchAssociationDoubleNested(t *testing.T) {
 	bErr = bErr.Failed(1, errors.New("yas"))
 
 	partsWalked := map[int]string{}
-	bErr.WalkParts(group, batch, func(i int, p *message.Part, err error) bool {
+	bErr.WalkPartsBySource(group, batch, func(i int, p *message.Part, err error) bool {
 		partsWalked[i] = fmt.Sprintf("%s - %v", p.AsBytes(), err)
 		return true
 	})

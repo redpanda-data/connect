@@ -29,10 +29,10 @@ Sends messages to an HTTP server.
 output:
   label: ""
   http_client:
-    url: ""
+    url: "" # No default (required)
     verb: POST
     headers: {}
-    rate_limit: ""
+    rate_limit: "" # No default (optional)
     timeout: 5s
     max_in_flight: 64
     batching:
@@ -50,7 +50,7 @@ output:
 output:
   label: ""
   http_client:
-    url: ""
+    url: "" # No default (required)
     verb: POST
     headers: {}
     metadata:
@@ -89,7 +89,7 @@ output:
     extract_headers:
       include_prefixes: []
       include_patterns: []
-    rate_limit: ""
+    rate_limit: "" # No default (optional)
     timeout: 5s
     retry_period: 1s
     max_retry_backoff: 300s
@@ -107,7 +107,7 @@ output:
       byte_size: 0
       period: ""
       check: ""
-      processors: []
+      processors: [] # No default (optional)
     multipart: []
 ```
 
@@ -234,7 +234,7 @@ EXPERIMENTAL: Optionally set a level at which the request and response payload o
 Type: `string`  
 Default: `""`  
 Requires version 4.12.0 or newer  
-Options: `TRACE`, `DEBUG`, `INFO`, `WARN`, `ERROR`, `FATAL`.
+Options: `TRACE`, `DEBUG`, `INFO`, `WARN`, `ERROR`, `FATAL`, ``.
 
 ### `oauth`
 
@@ -337,6 +337,7 @@ A list of optional requested permissions.
 
 
 Type: `array`  
+Default: `[]`  
 Requires version 3.45.0 or newer  
 
 ### `basic_auth`
@@ -410,6 +411,7 @@ A value used to identify the claims that issued the JWT.
 
 
 Type: `object`  
+Default: `{}`  
 
 ### `jwt.headers`
 
@@ -417,6 +419,7 @@ Add optional key/value headers to the JWT.
 
 
 Type: `object`  
+Default: `{}`  
 
 ### `tls`
 
@@ -490,6 +493,7 @@ A list of client certificates to use. For each certificate either the fields `ce
 
 
 Type: `array`  
+Default: `[]`  
 
 ```yml
 # Examples

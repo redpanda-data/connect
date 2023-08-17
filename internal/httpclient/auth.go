@@ -90,6 +90,7 @@ func oAuth2FieldSpec() *service.ConfigField {
 
 		service.NewStringListField("scopes").
 			Description("A list of optional requested permissions.").
+			Default([]string{}).
 			Advanced().
 			Version("3.45.0"),
 	).
@@ -113,10 +114,12 @@ func jwtFieldSpec() *service.ConfigField {
 
 		service.NewAnyMapField("claims").
 			Description("A value used to identify the claims that issued the JWT.").
+			Default(map[string]any{}).
 			Advanced(),
 
 		service.NewAnyMapField("headers").
 			Description("Add optional key/value headers to the JWT.").
+			Default(map[string]any{}).
 			Advanced(),
 	).
 		Description("BETA: Allows you to specify JWT authentication.").

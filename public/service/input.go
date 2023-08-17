@@ -212,7 +212,7 @@ func (r *ResourceInput) ReadBatch(ctx context.Context) (MessageBatch, AckFunc, e
 
 	var b MessageBatch
 	_ = tran.Payload.Iter(func(i int, part *message.Part) error {
-		b = append(b, newMessageFromPart(part))
+		b = append(b, NewInternalMessage(part))
 		return nil
 	})
 	return b, func(c context.Context, r error) error {
@@ -260,7 +260,7 @@ func (o *OwnedInput) ReadBatch(ctx context.Context) (MessageBatch, AckFunc, erro
 
 	var b MessageBatch
 	_ = tran.Payload.Iter(func(i int, part *message.Part) error {
-		b = append(b, newMessageFromPart(part))
+		b = append(b, NewInternalMessage(part))
 		return nil
 	})
 	return b, func(c context.Context, r error) error {

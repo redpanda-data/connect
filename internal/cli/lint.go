@@ -30,9 +30,9 @@ type pathLint struct {
 	lint   docs.Lint
 }
 
-func lintFile(path string, opts config.LintOptions) (pathLints []pathLint) {
+func lintFile(path string, skipEnvVarCheck bool, lConf docs.LintConfig) (pathLints []pathLint) {
 	conf := config.New()
-	lints, err := config.ReadFileLinted(ifs.OS(), path, opts, &conf)
+	lints, err := config.ReadFileLinted(ifs.OS(), path, skipEnvVarCheck, lConf, &conf)
 	if err != nil {
 		var l docs.Lint
 		if errors.As(err, &l) {
@@ -57,7 +57,7 @@ func lintFile(path string, opts config.LintOptions) (pathLints []pathLint) {
 	return
 }
 
-func lintMDSnippets(path string, opts config.LintOptions) (pathLints []pathLint) {
+func lintMDSnippets(path string, lConf docs.LintConfig) (pathLints []pathLint) {
 	rawBytes, err := ifs.ReadFile(ifs.OS(), path)
 	if err != nil {
 		pathLints = append(pathLints, pathLint{
@@ -103,7 +103,7 @@ func lintMDSnippets(path string, opts config.LintOptions) (pathLints []pathLint)
 				})
 			}
 		} else {
-			lints, err := config.LintBytes(opts, configBytes)
+			lints, err := config.LintBytes(lConf, configBytes)
 			if err != nil {
 				pathLints = append(pathLints, pathLint{
 					source: path,
@@ -178,11 +178,10 @@ func LintAction(c *cli.Context, stderr io.Writer) int {
 		targets = append(targets, conf)
 	}
 
-	lintOpts := config.LintOptions{
-		RejectDeprecated: c.Bool("deprecated"),
-		RequireLabels:    c.Bool("labels"),
-		SkipEnvVarCheck:  c.Bool("skip-env-var-check"),
-	}
+	lConf := docs.NewLintConfig()
+	lConf.RejectDeprecated = c.Bool("deprecated")
+	lConf.RequireLabels = c.Bool("labels")
+	skipEnvVarCheck := c.Bool("skip-env-var-check")
 
 	var pathLintMut sync.Mutex
 	var pathLints []pathLint
@@ -201,9 +200,9 @@ func LintAction(c *cli.Context, stderr io.Writer) int {
 				}
 				var lints []pathLint
 				if path.Ext(target) == ".md" {
-					lints = lintMDSnippets(target, lintOpts)
+					lints = lintMDSnippets(target, lConf)
 				} else {
-					lints = lintFile(target, lintOpts)
+					lints = lintFile(target, skipEnvVarCheck, lConf)
 				}
 				if len(lints) > 0 {
 					pathLintMut.Lock()

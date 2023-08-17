@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt"
+	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/clientcredentials"
 
 	"github.com/benthosdev/benthos/v4/internal/filepath/ifs"
@@ -279,10 +280,9 @@ func NewOAuth2Config() OAuth2Config {
 }
 
 // Client returns an http.Client with OAuth2 configured.
-func (oauth OAuth2Config) Client(ctx context.Context) *http.Client {
+func (oauth OAuth2Config) Client(ctx context.Context, base *http.Client) *http.Client {
 	if !oauth.Enabled {
-		var client http.Client
-		return &client
+		return base
 	}
 
 	conf := &clientcredentials.Config{
@@ -292,5 +292,5 @@ func (oauth OAuth2Config) Client(ctx context.Context) *http.Client {
 		Scopes:       oauth.Scopes,
 	}
 
-	return conf.Client(ctx)
+	return conf.Client(context.WithValue(ctx, oauth2.HTTPClient, base))
 }

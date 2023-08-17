@@ -6,6 +6,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/benthosdev/benthos/v4/internal/filepath/ifs"
 )
 
 func TestLoggerWith(t *testing.T) {
@@ -20,7 +22,7 @@ func TestLoggerWith(t *testing.T) {
 
 	var buf bytes.Buffer
 
-	logger, err := New(&buf, loggerConfig)
+	logger, err := New(&buf, ifs.OS(), loggerConfig)
 	require.NoError(t, err)
 
 	logger.Warnf("Warning message root module")
@@ -53,7 +55,7 @@ func TestLoggerWithOddArgs(t *testing.T) {
 
 	var buf bytes.Buffer
 
-	logger, err := New(&buf, loggerConfig)
+	logger, err := New(&buf, ifs.OS(), loggerConfig)
 	require.NoError(t, err)
 
 	logger = logger.WithFields(map[string]string{
@@ -81,7 +83,7 @@ func TestLoggerWithNonStringKeys(t *testing.T) {
 
 	var buf bytes.Buffer
 
-	logger, err := New(&buf, loggerConfig)
+	logger, err := New(&buf, ifs.OS(), loggerConfig)
 	require.NoError(t, err)
 
 	logger = logger.WithFields(map[string]string{
@@ -97,6 +99,36 @@ func TestLoggerWithNonStringKeys(t *testing.T) {
 `
 
 	assert.Equal(t, expected, buf.String())
+}
+
+func TestLoggerWithOtherNames(t *testing.T) {
+	loggerConfig := NewConfig()
+	loggerConfig.AddTimeStamp = false
+	loggerConfig.Format = "json"
+	loggerConfig.LogLevel = "WARN"
+	loggerConfig.StaticFields = map[string]string{
+		"@service": "benthos_service",
+		"@system":  "foo",
+	}
+	loggerConfig.LevelName = "severity"
+	loggerConfig.MessageName = "message"
+
+	var buf bytes.Buffer
+
+	logger, err := New(&buf, ifs.OS(), loggerConfig)
+	require.NoError(t, err)
+
+	logger = logger.WithFields(map[string]string{
+		"foo": "bar",
+	})
+	require.NoError(t, err)
+
+	logger.Warnln("Warning message foo fields")
+
+	expected := `{"@service":"benthos_service","@system":"foo","foo":"bar","message":"Warning message foo fields","severity":"warning"}
+`
+
+	require.JSONEq(t, expected, buf.String())
 }
 
 type logCounter struct {
@@ -122,7 +154,7 @@ func TestLogLevels(t *testing.T) {
 
 		buf := logCounter{}
 
-		logger, err := New(&buf, loggerConfig)
+		logger, err := New(&buf, ifs.OS(), loggerConfig)
 		require.NoError(t, err)
 
 		logger.Errorln("error test")

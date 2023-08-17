@@ -32,9 +32,9 @@ Consumes messages posted in a Discord channel.
 input:
   label: ""
   discord:
-    channel_id: ""
-    bot_token: ""
-    cache: ""
+    channel_id: "" # No default (required)
+    bot_token: "" # No default (required)
+    cache: "" # No default (required)
 ```
 
 </TabItem>
@@ -45,9 +45,9 @@ input:
 input:
   label: ""
   discord:
-    channel_id: ""
-    bot_token: ""
-    cache: ""
+    channel_id: "" # No default (required)
+    bot_token: "" # No default (required)
+    cache: "" # No default (required)
     cache_key: last_message_id
 ```
 

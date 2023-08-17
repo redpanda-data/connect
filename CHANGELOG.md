@@ -5,6 +5,69 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 4.18.0 - 2023-07-02
+
+### Added
+
+- Field `logger.level_name` added for customising the name of log levels in the JSON format.
+- Methods `sign_jwt_rs256`, `sign_jwt_rs384` and `sign_jwt_rs512` added to Bloblang.
+
+### Fixed
+
+- HTTP components no longer ignore `proxy_url` settings when OAuth2 is set.
+- The `PATCH` verb for the streams mode REST API no longer fails to patch over newer components implemented with the latest plugin APIs.
+- The `nats_jetstream` input no longer fails for configs that set `bind` to `true` and do not specify both a `stream` and `durable` together.
+- The `mongodb` processor and output no longer ignores the `upsert` field.
+
+### Changed
+
+- The old `parquet` processor (now superseded by `parquet_encode` and `parquet_decode`) has been removed from 32-bit ARM builds due to build incompatibilities.
+- The `snowflake_put` output has been removed from 32-bit ARM builds due to build incompatibilities.
+- Plugin API: The `(*BatchError).WalkMessages` method has been deprecated in favour of `WalkMessagesIndexedBy`.
+
+## 4.17.0 - 2023-06-13
+
+### Added
+
+- The `dynamic` input and output have a new endpoint `/input/{id}/uptime` and `/output/{id}/uptime` respectively for obtaining the uptime of a given input/output.
+- Field `wait_time_seconds` added to the `aws_sqs` input.
+- Field `timeout` added to the `gcp_cloud_storage` output.
+- All NATS components now set the name of each connection to the component label when specified.
+
+### Fixed
+
+- Restore message ordering support to `gcp_pubsub` output. This issue was introduced in 4.16.0 as a result of [#1836](https://github.com/benthosdev/benthos/pull/1836).
+- Specifying structured metadata values (non-strings) in unit test definitions should no longer cause linting errors.
+
+### Changed
+
+- The `nats` input default value of `prefetch_count` has been increased from `32` to a more appropriate `524288`.
+
+## 4.16.0 - 2023-05-28
+
+### Added
+
+- Fields `auth.user_jwt` and `auth.user_nkey_seed` added to all NATS components.
+- bloblang: added `ulid(encoding, random_source)` function to generate Universally Unique Lexicographically Sortable Identifiers (ULIDs).
+- Field `skip_on` added to the `cached` processor.
+- Field `nak_delay` added to the `nats` input.
+- New `splunk_hec` output.
+- Plugin API: New `NewMetadataExcludeFilterField` function and accompanying `FieldMetadataExcludeFilter` method added.
+- The `pulsar` input and output are now included in the main distribution of Benthos again.
+- The `gcp_pubsub` input now adds the metadata field `gcp_pubsub_delivery_attempt` to messages when dead lettering is enabled.
+- The `aws_s3` input now adds `s3_version_id` metadata to versioned messages.
+- All compress/decompress components (codecs, bloblang methods, processors) now support `pgzip`.
+- Field `connection.max_retries` added to the `websocket` input.
+- New `sentry_capture` processor.
+
+### Fixed
+
+- The `open_telemetry_collector` tracer option no longer blocks service start up when the endpoints cannot be reached, and instead manages connections in the background.
+- The `gcp_pubsub` output should see significant performance improvements due to a client library upgrade.
+- The stream builder APIs should now follow `logger.file` config fields.
+- The experimental `cue` format in the cli `list` subcommand no longer introduces infinite recursion for `#Processors`.
+- Config unit tests no longer execute linting rules for missing env var interpolations.
+
 ## 4.15.0 - 2023-05-05
 
 ### Added

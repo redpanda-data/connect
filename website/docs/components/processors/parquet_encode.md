@@ -33,7 +33,7 @@ Introduced in version 4.4.0.
 # Common config fields, showing default values
 label: ""
 parquet_encode:
-  schema: []
+  schema: [] # No default (required)
   default_compression: uncompressed
 ```
 
@@ -44,7 +44,7 @@ parquet_encode:
 # All config fields, showing default values
 label: ""
 parquet_encode:
-  schema: []
+  schema: [] # No default (required)
   default_compression: uncompressed
   default_encoding: DELTA_LENGTH_BYTE_ARRAY
 ```

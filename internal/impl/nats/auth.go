@@ -38,6 +38,12 @@ func authConfToOptions(auth auth.Config, fs *service.FS) []nats.Option {
 		))
 	}
 
+	if auth.UserJWT != "" && auth.UserNkeySeed != "" {
+		opts = append(opts, nats.UserJWTAndSeed(
+			auth.UserJWT, auth.UserNkeySeed,
+		))
+	}
+
 	return opts
 }
 
@@ -51,6 +57,22 @@ func AuthFromParsedConfig(p *service.ParsedConfig) (c auth.Config, err error) {
 	}
 	if p.Contains("user_credentials_file") {
 		if c.UserCredentialsFile, err = p.FieldString("user_credentials_file"); err != nil {
+			return
+		}
+	}
+	if p.Contains("user_jwt") || p.Contains("user_nkey_seed") {
+		if !p.Contains("user_jwt") {
+			err = errors.New("missing auth.user_jwt config field")
+			return
+		}
+		if !p.Contains("user_nkey_seed") {
+			err = errors.New("missing auth.user_nkey_seed config field")
+			return
+		}
+		if c.UserJWT, err = p.FieldString("user_jwt"); err != nil {
+			return
+		}
+		if c.UserNkeySeed, err = p.FieldString("user_nkey_seed"); err != nil {
 			return
 		}
 	}

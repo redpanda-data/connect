@@ -79,7 +79,7 @@ It is also possible to target processors in a separate file by prefixing the tar
 				"Sets the raw content of the message by reading a file. The path of the file should be relative to the path of the test file.",
 				"./foo/bar.txt",
 			).Optional(),
-			docs.FieldString("metadata", "A map of metadata key/values to add to the input message.").Map().Optional(),
+			docs.FieldAnything("metadata", "A map of metadata key/values to add to the input message.").Map().Optional(),
 		),
 		docs.FieldObject(
 			"input_batches", "Define a series of batches of messages to feed into your test, specify either an `input_batch` or a series of `input_batches`.",

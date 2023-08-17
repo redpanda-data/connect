@@ -16,7 +16,7 @@ import TabItem from '@theme/TabItem';
 
 
 Decompresses messages according to the selected algorithm. Supported
-decompression types are: gzip, zlib, bzip2, flate, snappy, lz4.
+decompression types are: gzip, pgzip, zlib, bzip2, flate, snappy, lz4.
 
 ```yml
 # Config fields, showing default values
@@ -34,6 +34,6 @@ The decompression algorithm to use.
 
 Type: `string`  
 Default: `""`  
-Options: `gzip`, `zlib`, `bzip2`, `flate`, `snappy`, `lz4`.
+Options: `gzip`, `pgzip`, `zlib`, `bzip2`, `flate`, `snappy`, `lz4`.
 
 

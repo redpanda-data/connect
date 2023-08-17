@@ -10,10 +10,10 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/Jeffail/gabs/v2"
 	"github.com/gorilla/mux"
 	"gopkg.in/yaml.v3"
 
-	"github.com/benthosdev/benthos/v4/internal/component/buffer"
 	"github.com/benthosdev/benthos/v4/internal/component/cache"
 	"github.com/benthosdev/benthos/v4/internal/component/input"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
@@ -21,8 +21,8 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/component/ratelimit"
 	"github.com/benthosdev/benthos/v4/internal/config"
 	"github.com/benthosdev/benthos/v4/internal/docs"
-	"github.com/benthosdev/benthos/v4/internal/pipeline"
 	"github.com/benthosdev/benthos/v4/internal/stream"
+	"github.com/benthosdev/benthos/v4/public/bloblang"
 )
 
 //------------------------------------------------------------------------------
@@ -87,8 +87,14 @@ type lintErrors struct {
 	LintErrs []string `json:"lint_errors"`
 }
 
-func lintStreamConfigNode(node *yaml.Node) (lints []string) {
-	for _, dLint := range stream.Spec().LintYAML(docs.NewLintContext(), node) {
+func (m *Type) lintCtx() docs.LintContext {
+	lConf := docs.NewLintConfig()
+	lConf.BloblangEnv = bloblang.XWrapEnvironment(m.manager.BloblEnvironment()).Deactivated()
+	return docs.NewLintContext(lConf)
+}
+
+func (m *Type) lintStreamConfigNode(node *yaml.Node) (lints []string) {
+	for _, dLint := range stream.Spec().LintYAML(m.lintCtx(), node) {
 		lints = append(lints, dLint.Error())
 	}
 	return
@@ -158,7 +164,7 @@ func (m *Type) HandleStreamsCRUD(w http.ResponseWriter, r *http.Request) {
 		}
 		var lints []string
 		for k, n := range nodeSet {
-			for _, l := range lintStreamConfigNode(&n) {
+			for _, l := range m.lintStreamConfigNode(&n) {
 				keyLint := fmt.Sprintf("stream '%v': %v", k, l)
 				lints = append(lints, keyLint)
 				m.manager.Logger().Debugf("Streams request linting error: %v\n", keyLint)
@@ -303,7 +309,7 @@ func (m *Type) HandleStreamCRUD(w http.ResponseWriter, r *http.Request) {
 			if err = yaml.Unmarshal(confBytes, &node); err != nil {
 				return
 			}
-			lints = lintStreamConfigNode(&node)
+			lints = m.lintStreamConfigNode(&node)
 			for _, l := range lints {
 				m.manager.Logger().Infof("Stream '%v' config: %v\n", id, l)
 			}
@@ -319,30 +325,32 @@ func (m *Type) HandleStreamCRUD(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		type aliasedIn input.Config
-		type aliasedBuf buffer.Config
-		type aliasedPipe pipeline.Config
-		type aliasedOut output.Config
-
-		aliasedConf := struct {
-			Input    aliasedIn   `json:"input"`
-			Buffer   aliasedBuf  `json:"buffer"`
-			Pipeline aliasedPipe `json:"pipeline"`
-			Output   aliasedOut  `json:"output"`
-		}{
-			Input:    aliasedIn(confIn.Input),
-			Buffer:   aliasedBuf(confIn.Buffer),
-			Pipeline: aliasedPipe(confIn.Pipeline),
-			Output:   aliasedOut(confIn.Output),
-		}
-		if err = yaml.Unmarshal(patchBytes, &aliasedConf); err != nil {
+		var cRoot any
+		if cRoot, err = confIn.Sanitised(); err != nil {
 			return
 		}
-		confOut = stream.Config{
-			Input:    input.Config(aliasedConf.Input),
-			Buffer:   buffer.Config(aliasedConf.Buffer),
-			Pipeline: pipeline.Config(aliasedConf.Pipeline),
-			Output:   output.Config(aliasedConf.Output),
+
+		var pRoot any
+		if err = yaml.Unmarshal(patchBytes, &pRoot); err != nil {
+			return
+		}
+
+		gObj := gabs.Wrap(cRoot)
+		if err = gObj.MergeFn(gabs.Wrap(pRoot), func(destination, source any) any {
+			return source
+		}); err != nil {
+			return
+		}
+
+		confOut = stream.NewConfig()
+		{
+			var confNode yaml.Node
+			if err = confNode.Encode(gObj.Data()); err != nil {
+				return
+			}
+			if err = confNode.Decode(&confOut); err != nil {
+				return
+			}
 		}
 		return
 	}
@@ -536,7 +544,7 @@ func (m *Type) HandleResourceCRUD(w http.ResponseWriter, r *http.Request) {
 		confNode = &node
 
 		if !ignoreLints {
-			for _, l := range docs.LintYAML(docs.NewLintContext(), docType, &node) {
+			for _, l := range docs.LintYAML(m.lintCtx(), docType, &node) {
 				lints = append(lints, l.Error())
 				m.manager.Logger().Infof("Resource '%v' config: %v\n", id, l)
 			}

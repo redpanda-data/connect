@@ -89,7 +89,7 @@ Unfortunately this error message will appear for a wide range of connection prob
 			docs.FieldString("consumer_group", "An identifier for the consumer group of the connection. This field can be explicitly made empty in order to disable stored offsets for the consumed topic partitions."),
 			docs.FieldString("client_id", "An identifier for the client connection.").Advanced(),
 			docs.FieldString("rack_id", "A rack identifier for this client.").Advanced(),
-			docs.FieldBool("start_from_oldest", "If an offset is not found for a topic partition, determines whether to consume from the oldest available offset, otherwise messages are consumed from the latest offset.").Advanced(),
+			docs.FieldBool("start_from_oldest", "Determines whether to consume from the oldest available offset, otherwise messages are consumed from the latest offset. The setting is applied when creating a new consumer group or the saved offset no longer exists.").Advanced(),
 			docs.FieldInt(
 				"checkpoint_limit", "The maximum number of messages of the same topic and partition that can be processed at a given time. Increasing this limit enables parallel processing and batching at the output level to work on individual partitions. Any given offset will not be committed unless all messages under that offset are delivered in order to preserve at least once delivery guarantees.",
 			).AtVersion("3.33.0"),

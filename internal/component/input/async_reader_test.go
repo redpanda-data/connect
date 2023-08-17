@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/cenkalti/backoff/v4"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -135,7 +136,7 @@ type asyncReaderCantRead struct {
 
 func (r *asyncReaderCantRead) Connect(ctx context.Context) error {
 	r.connected++
-	return nil
+	return errors.New("nope")
 }
 
 func (r *asyncReaderCantRead) ReadBatch(ctx context.Context) (message.Batch, input.AsyncAckFn, error) {
@@ -147,10 +148,7 @@ func TestAsyncReaderCantRead(t *testing.T) {
 	readerImpl := &asyncReaderCantRead{}
 
 	r, err := input.NewAsyncReader("foo", readerImpl, mock.NewManager())
-	if err != nil {
-		t.Error(err)
-		return
-	}
+	require.NoError(t, err)
 
 	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
 	defer done()
@@ -158,9 +156,7 @@ func TestAsyncReaderCantRead(t *testing.T) {
 	r.TriggerStopConsuming()
 	require.NoError(t, r.WaitForClose(ctx))
 
-	if readerImpl.connected < 1 {
-		t.Errorf("Connected wasn't called enough times: %v", readerImpl.connected)
-	}
+	assert.Less(t, readerImpl.connected, 2)
 }
 
 //------------------------------------------------------------------------------
@@ -680,6 +676,37 @@ func TestAsyncReaderParallel(t *testing.T) {
 	if exp, act := expErrs, readerImpl.ackRcvd; !reflect.DeepEqual(exp, act) {
 		t.Errorf("Unexpected errors returned: %v != %v", act, exp)
 	}
+}
+
+type asyncReaderCantReadOrConnect struct {
+	connected int
+}
+
+func (r *asyncReaderCantReadOrConnect) Connect(ctx context.Context) error {
+	r.connected++
+	return errors.New("sorry")
+}
+
+func (r *asyncReaderCantReadOrConnect) ReadBatch(ctx context.Context) (message.Batch, input.AsyncAckFn, error) {
+	return nil, nil, component.ErrNotConnected
+}
+func (r *asyncReaderCantReadOrConnect) Close(ctx context.Context) error { return nil }
+
+func TestAsyncReaderTypeConnMaxExceeded(t *testing.T) {
+	readerImpl := &asyncReaderCantReadOrConnect{}
+
+	boff := backoff.NewExponentialBackOff()
+	boff.InitialInterval = time.Millisecond
+	boff.MaxInterval = time.Millisecond * 10
+
+	r, err := input.NewAsyncReader("foo", readerImpl, mock.NewManager(), input.AsyncReaderWithConnBackOff(backoff.WithMaxRetries(boff, 3)))
+	require.NoError(t, err)
+
+	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+	defer done()
+
+	require.NoError(t, r.WaitForClose(ctx))
+	assert.Equal(t, 4, readerImpl.connected)
 }
 
 //------------------------------------------------------------------------------

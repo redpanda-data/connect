@@ -31,7 +31,7 @@ Automatically decodes and validates messages with schemas from a Confluent Schem
 # Common config fields, showing default values
 label: ""
 schema_registry_decode:
-  url: ""
+  url: "" # No default (required)
 ```
 
 </TabItem>
@@ -42,7 +42,7 @@ schema_registry_decode:
 label: ""
 schema_registry_decode:
   avro_raw_json: false
-  url: ""
+  url: "" # No default (required)
   oauth:
     enabled: false
     consumer_key: ""
@@ -233,6 +233,7 @@ A value used to identify the claims that issued the JWT.
 
 
 Type: `object`  
+Default: `{}`  
 
 ### `jwt.headers`
 
@@ -240,6 +241,7 @@ Add optional key/value headers to the JWT.
 
 
 Type: `object`  
+Default: `{}`  
 
 ### `tls`
 
@@ -305,6 +307,7 @@ A list of client certificates to use. For each certificate either the fields `ce
 
 
 Type: `array`  
+Default: `[]`  
 
 ```yml
 # Examples

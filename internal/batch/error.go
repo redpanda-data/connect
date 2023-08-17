@@ -56,15 +56,16 @@ func (e *Error) XErroredBatch() message.Batch {
 	return e.erroredBatch
 }
 
-// WalkParts applies a closure to each message that was part of the request that
-// caused this error. The closure is provided the message part index, a pointer
-// to the part, and its individual error, which may be nil if the message itself
-// was processed successfully. The closure returns a bool which indicates
-// whether the iteration should be continued.
+// WalkPartsBySource applies a closure to each message that was part of the
+// request that caused this error. The closure is provided the message part
+// index, a pointer to the part, and its individual error, which may be nil if
+// the message itself was processed successfully. The closure returns a bool
+// which indicates whether the iteration should be continued.
 //
 // Important! The order to parts walked is not guaranteed to match that of the
-// source batch.
-func (e *Error) WalkParts(sourceSortGroup *message.SortGroup, sourceBatch message.Batch, fn func(int, *message.Part, error) bool) {
+// source batch. It is also possible for any given index to be represented zero,
+// one or more times.
+func (e *Error) WalkPartsBySource(sourceSortGroup *message.SortGroup, sourceBatch message.Batch, fn func(int, *message.Part, error) bool) {
 	_ = e.erroredBatch.Iter(func(i int, p *message.Part) error {
 		index := sourceSortGroup.GetIndex(p)
 		if index < 0 || index >= len(sourceBatch) {
@@ -78,6 +79,30 @@ func (e *Error) WalkParts(sourceSortGroup *message.SortGroup, sourceBatch messag
 			err = e.partErrors[i]
 		}
 		if !fn(index, sourceBatch[index], err) {
+			return errors.New("stop")
+		}
+		return nil
+	})
+}
+
+// WalkPartsNaively applies a closure to each message that was part of the
+// request that caused this error. The closure is provided the message part
+// index, a pointer to the part, and its individual error, which may be nil if
+// the message itself was processed successfully. The closure returns a bool
+// which indicates whether the iteration should be continued.
+//
+// WARNING: The shape and order of the errored batch is not guaranteed to match
+// that of an origin batch and therefore cannot be used to associate batch
+// errors with the origin. Instead, use WalkPartsBySource.
+func (e *Error) WalkPartsNaively(fn func(int, *message.Part, error) bool) {
+	_ = e.erroredBatch.Iter(func(i int, p *message.Part) error {
+		var err error
+		if e.partErrors == nil {
+			err = e.err
+		} else {
+			err = e.partErrors[i]
+		}
+		if !fn(i, p, err) {
 			return errors.New("stop")
 		}
 		return nil

@@ -34,10 +34,10 @@ Introduced in version 3.61.0.
 input:
   label: ""
   kafka_franz:
-    seed_brokers: []
-    topics: []
+    seed_brokers: [] # No default (required)
+    topics: [] # No default (required)
     regexp_topics: false
-    consumer_group: ""
+    consumer_group: "" # No default (optional)
 ```
 
 </TabItem>
@@ -48,10 +48,10 @@ input:
 input:
   label: ""
   kafka_franz:
-    seed_brokers: []
-    topics: []
+    seed_brokers: [] # No default (required)
+    topics: [] # No default (required)
     regexp_topics: false
-    consumer_group: ""
+    consumer_group: "" # No default (optional)
     checkpoint_limit: 1024
     commit_period: 5s
     start_from_oldest: true
@@ -62,14 +62,14 @@ input:
       root_cas: ""
       root_cas_file: ""
       client_certs: []
-    sasl: []
+    sasl: [] # No default (optional)
     multi_header: false
     batching:
       count: 0
       byte_size: 0
       period: ""
       check: ""
-      processors: []
+      processors: [] # No default (optional)
 ```
 
 </TabItem>
@@ -186,7 +186,7 @@ Default: `"5s"`
 
 ### `start_from_oldest`
 
-If an offset is not found for a topic partition, determines whether to consume from the oldest available offset, otherwise messages are consumed from the latest offset.
+Determines whether to consume from the oldest available offset, otherwise messages are consumed from the latest offset. The setting is applied when creating a new consumer group or the saved offset no longer exists.
 
 
 Type: `bool`  
@@ -264,6 +264,7 @@ A list of client certificates to use. For each certificate either the fields `ce
 
 
 Type: `array`  
+Default: `[]`  
 
 ```yml
 # Examples

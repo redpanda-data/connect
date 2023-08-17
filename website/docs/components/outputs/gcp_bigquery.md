@@ -35,8 +35,8 @@ output:
   label: ""
   gcp_bigquery:
     project: ""
-    dataset: ""
-    table: ""
+    dataset: "" # No default (required)
+    table: "" # No default (required)
     format: NEWLINE_DELIMITED_JSON
     max_in_flight: 64
     job_labels: {}
@@ -59,8 +59,8 @@ output:
   label: ""
   gcp_bigquery:
     project: ""
-    dataset: ""
-    table: ""
+    dataset: "" # No default (required)
+    table: "" # No default (required)
     format: NEWLINE_DELIMITED_JSON
     max_in_flight: 64
     write_disposition: WRITE_APPEND
@@ -81,7 +81,7 @@ output:
       byte_size: 0
       period: ""
       check: ""
-      processors: []
+      processors: [] # No default (optional)
 ```
 
 </TabItem>

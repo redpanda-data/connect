@@ -25,10 +25,17 @@ Introduced in version 3.62.0.
 # Config fields, showing default values
 label: ""
 parquet:
-  operator: ""
+  operator: "" # No default (required)
   compression: snappy
-  schema_file: ""
-  schema: ""
+  schema_file: schemas/foo.json # No default (optional)
+  schema: |- # No default (optional)
+    {
+      "Tag": "name=root, repetitiontype=REQUIRED",
+      "Fields": [
+        {"Tag":"name=name,inname=NameIn,type=BYTE_ARRAY,convertedtype=UTF8, repetitiontype=REQUIRED"},
+        {"Tag":"name=age,inname=Age,type=INT32,repetitiontype=REQUIRED"}
+      ]
+    }
 ```
 
 ### Alternatives

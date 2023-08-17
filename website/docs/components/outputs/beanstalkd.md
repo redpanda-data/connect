@@ -26,7 +26,7 @@ Introduced in version 4.7.0.
 output:
   label: ""
   beanstalkd:
-    address: ""
+    address: 127.0.0.1:11300 # No default (required)
     max_in_flight: 64
 ```
 

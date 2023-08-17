@@ -24,13 +24,13 @@ Introduced in version 3.43.0.
 # Config fields, showing default values
 label: ""
 mongodb:
-  url: ""
+  url: mongodb://localhost:27017 # No default (required)
+  database: "" # No default (required)
   username: ""
   password: ""
-  database: ""
-  collection: ""
-  key_field: ""
-  value_field: ""
+  collection: "" # No default (required)
+  key_field: "" # No default (required)
+  value_field: "" # No default (required)
 ```
 
 ## Fields
@@ -47,6 +47,13 @@ Type: `string`
 
 url: mongodb://localhost:27017
 ```
+
+### `database`
+
+The name of the target MongoDB database.
+
+
+Type: `string`  
 
 ### `username`
 
@@ -66,13 +73,6 @@ This field contains sensitive information that usually shouldn't be added to a c
 
 Type: `string`  
 Default: `""`  
-
-### `database`
-
-The name of the target MongoDB database.
-
-
-Type: `string`  
 
 ### `collection`
 

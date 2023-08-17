@@ -21,7 +21,7 @@ failed.
 ```yml
 # Config fields, showing default values
 label: ""
-catch: []
+catch: [] # No default (required)
 ```
 
 Behaves similarly to the [`for_each`](/docs/components/processors/for_each) processor, where a

@@ -23,7 +23,7 @@ Introduced in version 3.58.0.
 # Config fields, showing default values
 output:
   label: ""
-  fallback: []
+  fallback: [] # No default (required)
 ```
 
 This pattern is useful for triggering events in the case where certain output targets have broken. For example, if you had an output type `http_client` but wished to reroute messages whenever the endpoint becomes unreachable you could use this pattern:

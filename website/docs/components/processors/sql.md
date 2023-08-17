@@ -33,10 +33,10 @@ Introduced in version 3.65.0.
 # Common config fields, showing default values
 label: ""
 sql:
-  driver: ""
-  data_source_name: ""
-  query: ""
-  args_mapping: ""
+  driver: "" # No default (required)
+  data_source_name: "" # No default (required)
+  query: INSERT INTO footable (foo, bar, baz) VALUES (?, ?, ?); # No default (required)
+  args_mapping: root = [ this.cat.meow, this.doc.woofs[0] ] # No default (optional)
   result_codec: none
 ```
 
@@ -47,11 +47,11 @@ sql:
 # All config fields, showing default values
 label: ""
 sql:
-  driver: ""
-  data_source_name: ""
-  query: ""
+  driver: "" # No default (required)
+  data_source_name: "" # No default (required)
+  query: INSERT INTO footable (foo, bar, baz) VALUES (?, ?, ?); # No default (required)
   unsafe_dynamic_query: false
-  args_mapping: ""
+  args_mapping: root = [ this.cat.meow, this.doc.woofs[0] ] # No default (optional)
   result_codec: none
 ```
 

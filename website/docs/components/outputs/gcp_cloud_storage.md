@@ -17,9 +17,7 @@ import TabItem from '@theme/TabItem';
 :::caution BETA
 This component is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with the component is found.
 :::
-
-Sends message parts as objects to a Google Cloud Storage bucket. Each object is
-uploaded with the path specified with the `path` field.
+Sends message parts as objects to a Google Cloud Storage bucket. Each object is uploaded with the path specified with the `path` field.
 
 Introduced in version 3.43.0.
 
@@ -36,10 +34,11 @@ Introduced in version 3.43.0.
 output:
   label: ""
   gcp_cloud_storage:
-    bucket: ""
+    bucket: "" # No default (required)
     path: ${!count("files")}-${!timestamp_unix_nano()}.txt
     content_type: application/octet-stream
     collision_mode: overwrite
+    timeout: 3s
     max_in_flight: 64
     batching:
       count: 0
@@ -56,27 +55,26 @@ output:
 output:
   label: ""
   gcp_cloud_storage:
-    bucket: ""
+    bucket: "" # No default (required)
     path: ${!count("files")}-${!timestamp_unix_nano()}.txt
     content_type: application/octet-stream
-    collision_mode: overwrite
     content_encoding: ""
+    collision_mode: overwrite
     chunk_size: 16777216
+    timeout: 3s
     max_in_flight: 64
     batching:
       count: 0
       byte_size: 0
       period: ""
       check: ""
-      processors: []
+      processors: [] # No default (optional)
 ```
 
 </TabItem>
 </Tabs>
 
-In order to have a different path for each object you should use function
-interpolations described [here](/docs/configuration/interpolation#bloblang-queries), which are
-calculated per message of a batch.
+In order to have a different path for each object you should use function interpolations described [here](/docs/configuration/interpolation#bloblang-queries), which are calculated per message of a batch.
 
 ### Metadata
 
@@ -84,19 +82,13 @@ Metadata fields on messages will be sent as headers, in order to mutate these va
 
 ### Credentials
 
-By default Benthos will use a shared credentials file when connecting to GCP
-services. You can find out more [in this document](/docs/guides/cloud/gcp).
+By default Benthos will use a shared credentials file when connecting to GCP services. You can find out more [in this document](/docs/guides/cloud/gcp).
 
 ### Batching
 
-It's common to want to upload messages to Google Cloud Storage as batched
-archives, the easiest way to do this is to batch your messages at the output
-level and join the batch of messages with an
-[`archive`](/docs/components/processors/archive) and/or
-[`compress`](/docs/components/processors/compress) processor.
+It's common to want to upload messages to Google Cloud Storage as batched archives, the easiest way to do this is to batch your messages at the output level and join the batch of messages with an [`archive`](/docs/components/processors/archive) and/or [`compress`](/docs/components/processors/compress) processor.
 
-For example, if we wished to upload messages as a .tar.gz archive of documents
-we could achieve that with the following config:
+For example, if we wished to upload messages as a .tar.gz archive of documents we could achieve that with the following config:
 
 ```yaml
 output:
@@ -113,8 +105,7 @@ output:
             algorithm: gzip
 ```
 
-Alternatively, if we wished to upload JSON documents as a single large document
-containing an array of objects we can do that with:
+Alternatively, if we wished to upload JSON documents as a single large document containing an array of objects we can do that with:
 
 ```yaml
 output:
@@ -146,7 +137,6 @@ The bucket to upload messages to.
 
 
 Type: `string`  
-Default: `""`  
 
 ### `path`
 
@@ -176,6 +166,15 @@ This field supports [interpolation functions](/docs/configuration/interpolation#
 Type: `string`  
 Default: `"application/octet-stream"`  
 
+### `content_encoding`
+
+An optional content encoding to set for each object.
+This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
+
+
+Type: `string`  
+Default: `""`  
+
 ### `collision_mode`
 
 Determines how file path collisions should be dealt with.
@@ -187,20 +186,11 @@ Requires version 3.53.0 or newer
 
 | Option | Summary |
 |---|---|
-| `overwrite` | Replace the existing file with the new one. |
 | `append` | Append the message bytes to the original file. |
 | `error-if-exists` | Return an error, this is the equivalent of a nack. |
 | `ignore` | Do not modify the original file, the new data will be dropped. |
+| `overwrite` | Replace the existing file with the new one. |
 
-
-### `content_encoding`
-
-An optional content encoding to set for each object.
-This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
-
-
-Type: `string`  
-Default: `""`  
 
 ### `chunk_size`
 
@@ -209,6 +199,22 @@ An optional chunk size which controls the maximum number of bytes of the object 
 
 Type: `int`  
 Default: `16777216`  
+
+### `timeout`
+
+The maximum period to wait on an upload before abandoning it and reattempting.
+
+
+Type: `string`  
+Default: `"3s"`  
+
+```yml
+# Examples
+
+timeout: 1s
+
+timeout: 500ms
+```
 
 ### `max_in_flight`
 
@@ -297,7 +303,6 @@ A list of [processors](/docs/components/processors/about) to apply to a batch as
 
 
 Type: `array`  
-Default: `[]`  
 
 ```yml
 # Examples

@@ -29,7 +29,7 @@ Reads one or more CSV files as structured records following the format described
 input:
   label: ""
   csv:
-    paths: []
+    paths: [] # No default (required)
     parse_header_row: true
     delimiter: ','
     lazy_quotes: false
@@ -43,7 +43,7 @@ input:
 input:
   label: ""
   csv:
-    paths: []
+    paths: [] # No default (required)
     parse_header_row: true
     delimiter: ','
     lazy_quotes: false
@@ -135,7 +135,6 @@ A list of file paths to read from. Each file will be read sequentially until the
 
 
 Type: `array`  
-Default: `[]`  
 
 ```yml
 # Examples
@@ -187,8 +186,5 @@ Optionally process records in batches. This can help to speed up the consumption
 Type: `int`  
 Default: `1`  
 
-This input is particularly useful when consuming CSV from files too large to
-parse entirely within memory. However, in cases where CSV is consumed from other
-input types it's also possible to parse them using the
-[Bloblang `parse_csv` method](/docs/guides/bloblang/methods#parse_csv).
+This input is particularly useful when consuming CSV from files too large to parse entirely within memory. However, in cases where CSV is consumed from other input types it's also possible to parse them using the [Bloblang `parse_csv` method](/docs/guides/bloblang/methods#parse_csv).
 

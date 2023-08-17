@@ -16,12 +16,12 @@ import (
 	"sync"
 
 	"github.com/klauspost/compress/gzip"
+	"github.com/klauspost/pgzip"
 
 	goavro "github.com/linkedin/goavro/v2"
 
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	"github.com/benthosdev/benthos/v4/public/service"
 )
 
 // ReaderDocs is a static field documentation for input codecs.
@@ -37,6 +37,7 @@ var ReaderDocs = docs.FieldString(
 	"csv-safe", "Consume structured rows like `csv`, but sends messages with empty maps on failure to parse. Includes row number and parsing errors (if any) in the message's metadata.",
 	"delim:x", "Consume the file in segments divided by a custom delimiter.",
 	"gzip", "Decompress a gzip file, this codec should precede another codec, e.g. `gzip/all-bytes`, `gzip/tar`, `gzip/csv`, etc.",
+	"pgzip", "Decompress a gzip file in parallel, this codec should precede another codec, e.g. `pgzip/all-bytes`, `pgzip/tar`, `pgzip/csv`, etc.",
 	"lines", "Consume the file in segments divided by linebreaks.",
 	"multipart", "Consumes the output of another codec and batches messages together. A batch ends when an empty message is consumed. For example, the codec `lines/multipart` could be used to consume multipart messages where an empty line indicates the end of each batch.",
 	"regex:(?m)^\\d\\d:\\d\\d:\\d\\d", "Consume the file in segments divided by regular expression.",
@@ -187,7 +188,8 @@ func chainedReader(codec string, conf ReaderConfig) (ReaderConstructor, error) {
 }
 
 func ioReader(codec string, conf ReaderConfig) (ioReaderConstructor, bool) {
-	if codec == "gzip" {
+	switch codec {
+	case "gzip":
 		return func(_ string, r io.ReadCloser) (io.ReadCloser, error) {
 			g, err := gzip.NewReader(r)
 			if err != nil {
@@ -197,8 +199,17 @@ func ioReader(codec string, conf ReaderConfig) (ioReaderConstructor, bool) {
 			unzipped := ioReadCloserWrapper{Reader: g, underlying: r}
 			return &unzipped, nil
 		}, true
-	}
-	if codec == "skipbom" {
+	case "pgzip":
+		return func(_ string, r io.ReadCloser) (io.ReadCloser, error) {
+			g, err := pgzip.NewReader(r)
+			if err != nil {
+				r.Close()
+				return nil, err
+			}
+			unzipped := ioReadCloserWrapper{Reader: g, underlying: r}
+			return &unzipped, nil
+		}, true
+	case "skipbom":
 		return func(_ string, r io.ReadCloser) (io.ReadCloser, error) {
 			skipBom := ioReadCloserWrapper{Reader: skipBOM(r), underlying: r}
 			return &skipBom, nil
@@ -429,27 +440,16 @@ func newAvroOCFReader(conf ReaderConfig, marshaler string, r io.ReadCloser, ackF
 			return nil, err
 		}
 		a.pending++
-		m := service.NewMessage(nil)
 		if !a.logicalTypes {
-			m.SetStructured(datum)
-			mp, err := m.AsBytes()
-			if err != nil {
-				return nil, err
-			}
-			part := message.NewPart(mp)
-			return part, nil
+			msg := message.NewPart(nil)
+			msg.SetStructuredMut(datum)
+			return msg, nil
 		}
 		jb, err := a.avroCodec.TextualFromNative(nil, datum)
 		if err != nil {
 			return nil, err
 		}
-		m.SetBytes(jb)
-		mp, err := m.AsBytes()
-		if err != nil {
-			return nil, err
-		}
-		part := message.NewPart(mp)
-		return part, nil
+		return message.NewPart(jb), nil
 	}
 
 	var logicalTypes bool

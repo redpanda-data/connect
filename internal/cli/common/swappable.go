@@ -75,9 +75,14 @@ func (s *SwappableStopper) Replace(ctx context.Context, fn func() (Stoppable, er
 		return nil
 	}
 
-	if err := s.current.Stop(ctx); err != nil {
-		return fmt.Errorf("failed to stop active stream: %w", err)
-	}
+	// The underlying implementation is expected to continue shutting resources
+	// down in the background. An error here indicates that it hasn't managed to
+	// fully clean up before reaching a context deadline.
+	//
+	// However, aborting the creation of the replacement would not be
+	// appropriate as it would leave the service stateless, we therefore stop
+	// blocking and proceed.
+	_ = s.current.Stop(ctx)
 
 	newStoppable, err := fn()
 	if err != nil {

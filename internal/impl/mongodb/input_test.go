@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/ory/dockertest/v3"
 	"github.com/stretchr/testify/assert"
@@ -13,7 +14,6 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/benthosdev/benthos/v4/internal/impl/mongodb/client"
 	"github.com/benthosdev/benthos/v4/internal/integration"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
@@ -64,29 +64,30 @@ func TestInputIntegration(t *testing.T) {
 		assert.NoError(t, pool.Purge(resource))
 	})
 
-	var mongoClient *mongo.Client
+	mongoClient, err := mongo.NewClient(options.Client().
+		SetConnectTimeout(10 * time.Second).
+		SetSocketTimeout(30 * time.Second).
+		SetServerSelectionTimeout(30 * time.Second).
+		SetAuth(options.Credential{
+			Username: "mongoadmin",
+			Password: "secret",
+		}).
+		ApplyURI("mongodb://localhost:" + resource.GetPort("27017/tcp")))
+	require.NoError(t, err)
 
 	dbName := "TestDB"
 	collName := "TestCollection"
 	require.NoError(t, pool.Retry(func() error {
-		url := "mongodb://localhost:" + resource.GetPort("27017/tcp")
-		conf := client.NewConfig()
-		conf.URL = url
-		conf.Username = "mongoadmin"
-		conf.Password = "secret"
-
-		if mongoClient == nil {
-			mongoClient, err = conf.Client()
-			if err != nil {
-				return err
-			}
-		}
-
 		if err := mongoClient.Connect(context.Background()); err != nil {
 			return err
 		}
-		return mongoClient.Database(dbName).CreateCollection(context.Background(), collName)
+		if err := mongoClient.Database(dbName).CreateCollection(context.Background(), collName); err != nil {
+			_ = mongoClient.Disconnect(context.Background())
+			return err
+		}
+		return nil
 	}))
+
 	coll := mongoClient.Database(dbName).Collection(collName)
 	sampleData := []any{
 		bson.M{
@@ -125,7 +126,7 @@ func TestInputIntegration(t *testing.T) {
 	type testCase struct {
 		query           func(coll *mongo.Collection) (*mongo.Cursor, error)
 		placeholderConf string
-		jsonMarshalMode client.JSONMarshalMode
+		jsonMarshalMode JSONMarshalMode
 	}
 	cases := map[string]testCase{
 		"find": {
@@ -146,7 +147,7 @@ json_marshal_mode: relaxed
 query: |
   root.age = {"$gte": 18}
 `,
-			jsonMarshalMode: client.JSONMarshalModeRelaxed,
+			jsonMarshalMode: JSONMarshalModeRelaxed,
 		},
 		"aggregate": {
 			query: func(coll *mongo.Collection) (*mongo.Cursor, error) {
@@ -185,7 +186,7 @@ query: |
     }
   ]
 `,
-			jsonMarshalMode: client.JSONMarshalModeCanonical,
+			jsonMarshalMode: JSONMarshalModeCanonical,
 		},
 	}
 
@@ -202,7 +203,7 @@ func testInput(
 	port string,
 	controlQuery func(collection *mongo.Collection) (cursor *mongo.Cursor, err error),
 	placeholderConf string,
-	jsonMarshalMode client.JSONMarshalMode,
+	jsonMarshalMode JSONMarshalMode,
 ) {
 	t.Helper()
 
@@ -217,7 +218,7 @@ func testInput(
 	require.NoError(t, err)
 	var wantMsgs [][]byte
 	for _, res := range wantResults {
-		resBytes, err := bson.MarshalExtJSON(res, jsonMarshalMode == client.JSONMarshalModeCanonical, false)
+		resBytes, err := bson.MarshalExtJSON(res, jsonMarshalMode == JSONMarshalModeCanonical, false)
 		require.NoError(t, err)
 		wantMsgs = append(wantMsgs, resBytes)
 	}
