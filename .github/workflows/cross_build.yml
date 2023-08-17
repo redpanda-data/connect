@@ -18,30 +18,19 @@ jobs:
       CGO_ENABLED: 0
     steps:
 
+    - name: Checkout code
+      uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+
     - name: Install Go
       uses: actions/setup-go@v4
       with:
         go-version: ${{ matrix.go-version }}
         check-latest: true
 
-    - name: Checkout code
-      uses: actions/checkout@v3
-      with:
-        fetch-depth: 0
-
-    - uses: actions/cache@v3
-      with:
-        path: |
-          ~/go/pkg/mod
-          ~/.cache/go-build
-          ~/Library/Caches/go-build
-          %LocalAppData%\go-build
-        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-        restore-keys: |
-          ${{ runner.os }}-go-
-
     - name: GoReleaser
       uses: goreleaser/goreleaser-action@v4
       with:
         version: latest
-        args: build --snapshot --timeout 60m
+        args: build --snapshot --timeout 120m
