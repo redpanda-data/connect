@@ -3,7 +3,10 @@ updates:
 - package-ecosystem: "gomod"
   directory: "/"
   schedule:
-    interval: "daily"
+    interval: "weekly"
+  groups:
+    production-dependencies:
+      dependency-type: "production"
   open-pull-requests-limit: 10
 - package-ecosystem: "github-actions"
   directory: "/"
