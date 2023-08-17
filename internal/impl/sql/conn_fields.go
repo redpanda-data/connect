@@ -5,10 +5,13 @@ import (
 	"database/sql"
 	"fmt"
 	"net/url"
+	"os"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/feature/rds/auth"
 	"github.com/benthosdev/benthos/v4/internal/filepath"
 	"github.com/benthosdev/benthos/v4/internal/filepath/ifs"
 	"github.com/benthosdev/benthos/v4/public/service"
@@ -235,6 +238,43 @@ func sqlOpenWithReworks(logger *service.Logger, driver, dsn string) (*sql.DB, er
 
 		logger.Warnf("Detected old-style Clickhouse Data Source Name: '%v', replacing with new style: '%v'", dsn, newDSN)
 		dsn = newDSN
+	} else if driver == "postgres" {
+		dsnString, err := prepareDBConnectingString(dsn)
+
+		if err != nil {
+			return nil, err
+		}
+
+		dsn = dsnString
 	}
+
 	return sql.Open(driver, dsn)
+}
+
+func prepareDBConnectingString(dsn string) (string, error) {
+	var region string = os.Getenv("AWS_REGION")
+
+	psqlUrl, _ := url.Parse(dsn)
+	q := psqlUrl.Query()
+
+	if strings.Contains(psqlUrl.Host, "rds.amazonaws.com") {
+		cfg, err := config.LoadDefaultConfig(context.Background())
+
+		if err != nil {
+			return "", err
+		}
+
+		authToken, err := auth.BuildAuthToken(
+			context.Background(), psqlUrl.Host, region, psqlUrl.User.Username(), cfg.Credentials)
+
+		if err != nil {
+			return "", err
+		}
+
+		psqlUrl.User = url.UserPassword(psqlUrl.User.Username(), authToken)
+	}
+
+	psqlUrl.RawQuery = q.Encode()
+
+	return psqlUrl.String(), nil
 }
