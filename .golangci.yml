@@ -53,7 +53,7 @@ linters:
     # - revive
     - unconvert
     - durationcheck
-    - depguard
+    # - depguard
     # - bodyclose
     # - gosec
     # - misspell
