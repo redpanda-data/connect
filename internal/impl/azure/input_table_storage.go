@@ -28,7 +28,7 @@ type tsiConfig struct {
 
 func tsiConfigFromParsed(pConf *service.ParsedConfig) (conf tsiConfig, err error) {
 	var svcClient *aztables.ServiceClient
-	if svcClient, err = serviceClientFromParsed(pConf); err != nil {
+	if svcClient, err = tablesServiceClientFromParsed(pConf); err != nil {
 		return
 	}
 	if conf.TableName, err = pConf.FieldString(tsiFieldTableName); err != nil {

@@ -21,6 +21,7 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/klauspost/compress/gzip"
 
+	"github.com/benthosdev/benthos/v4/internal/api"
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component/input"
 	"github.com/benthosdev/benthos/v4/internal/component/interop"
@@ -172,7 +173,7 @@ It's possible to return a response for each message received using [synchronous 
 
 ### Endpoints
 
-The following fields specify endpoints that are registered for sending messages, and support path parameters of the form `+"`/{foo}`"+`, which are added to ingested messages as metadata:
+The following fields specify endpoints that are registered for sending messages, and support path parameters of the form `+"`/{foo}`"+`, which are added to ingested messages as metadata. A path ending in `+"`/`"+` will match against all extensions of that path:
 
 #### `+"`path` (defaults to `/post`)"+`
 
@@ -183,6 +184,8 @@ If the request contains a multipart `+"`content-type`"+` header as per [rfc1341]
 #### `+"`ws_path` (defaults to `/post/ws`)"+`
 
 Creates a websocket connection, where payloads received on the socket are passed through the pipeline as a batch of one message.
+
+`+api.EndpointCaveats()+`
 
 You may specify an optional `+"`ws_welcome_message`"+`, which is a static payload to be sent to all clients once a websocket connection is first established.
 
@@ -343,10 +346,10 @@ func newHTTPServerInput(conf hsiConfig, mgr bundle.NewManagement) (input.Streame
 	wsHdlr := gzipHandler(h.wsHandler)
 	if gMux != nil {
 		if len(h.conf.Path) > 0 {
-			gMux.PathPrefix(h.conf.Path).Handler(postHdlr)
+			api.GetMuxRoute(gMux, h.conf.Path).Handler(postHdlr)
 		}
 		if len(h.conf.WSPath) > 0 {
-			gMux.PathPrefix(h.conf.WSPath).Handler(wsHdlr)
+			api.GetMuxRoute(gMux, h.conf.WSPath).Handler(wsHdlr)
 		}
 	} else {
 		if len(h.conf.Path) > 0 {

@@ -12,8 +12,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
 
+	"github.com/benthosdev/benthos/v4/internal/api"
 	"github.com/benthosdev/benthos/v4/internal/batch"
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component"
@@ -109,7 +111,10 @@ Three endpoints will be registered at the paths specified by the fields `+"`path
 
 When messages are batched the `+"`path`"+` endpoint encodes the batch according to [RFC1341](https://www.w3.org/Protocols/rfc1341/7_2_Multipart.html). This behaviour can be overridden by [archiving your batches](/docs/configuration/batching#post-batch-processing).
 
-Please note, messages are considered delivered as soon as the data is written to the client. There is no concept of at least once delivery on this output.`).
+Please note, messages are considered delivered as soon as the data is written to the client. There is no concept of at least once delivery on this output.
+
+`+api.EndpointCaveats()+`
+`).
 		Fields(
 			service.NewStringField(hsoFieldAddress).
 				Description("An alternative address to host from. If left empty the service wide address is used.").
@@ -175,7 +180,7 @@ type httpServerOutput struct {
 	conf hsoConfig
 	log  log.Modular
 
-	mux    *http.ServeMux
+	mux    *mux.Router
 	server *http.Server
 
 	transactions <-chan message.Transaction
@@ -197,14 +202,14 @@ type httpServerOutput struct {
 }
 
 func newHTTPServerOutput(conf hsoConfig, mgr bundle.NewManagement) (output.Streamed, error) {
-	var mux *http.ServeMux
+	var gMux *mux.Router
 	var server *http.Server
 
 	var err error
 	if len(conf.Address) > 0 {
-		mux = http.NewServeMux()
+		gMux = mux.NewRouter()
 		server = &http.Server{Addr: conf.Address}
-		if server.Handler, err = conf.CORS.WrapHandler(mux); err != nil {
+		if server.Handler, err = conf.CORS.WrapHandler(gMux); err != nil {
 			return nil, fmt.Errorf("bad CORS configuration: %w", err)
 		}
 	}
@@ -219,7 +224,7 @@ func newHTTPServerOutput(conf hsoConfig, mgr bundle.NewManagement) (output.Strea
 		shutSig: shutdown.NewSignaller(),
 		conf:    conf,
 		log:     mgr.Logger(),
-		mux:     mux,
+		mux:     gMux,
 		server:  server,
 
 		mGetSent:      mSent,
@@ -235,15 +240,15 @@ func newHTTPServerOutput(conf hsoConfig, mgr bundle.NewManagement) (output.Strea
 		mStreamError:     mError,
 	}
 
-	if mux != nil {
+	if gMux != nil {
 		if len(h.conf.Path) > 0 {
-			h.mux.HandleFunc(h.conf.Path, h.getHandler)
+			api.GetMuxRoute(gMux, h.conf.Path).HandlerFunc(h.getHandler)
 		}
 		if len(h.conf.StreamPath) > 0 {
-			h.mux.HandleFunc(h.conf.StreamPath, h.streamHandler)
+			api.GetMuxRoute(gMux, h.conf.StreamPath).HandlerFunc(h.streamHandler)
 		}
 		if len(h.conf.WSPath) > 0 {
-			h.mux.HandleFunc(h.conf.WSPath, h.wsHandler)
+			api.GetMuxRoute(gMux, h.conf.WSPath).HandlerFunc(h.wsHandler)
 		}
 	} else {
 		if len(h.conf.Path) > 0 {

@@ -799,6 +799,7 @@ processors:
   - testlintfooprocessor: *test-anchor`,
 			res: []docs.Lint{
 				docs.NewLintError(4, docs.LintUnknown, "field nope not recognised"),
+				docs.NewLintError(4, docs.LintUnknown, "field nope not recognised"),
 			},
 		},
 		{
@@ -1026,6 +1027,67 @@ testlintfooinput:
 			assert.Equal(t, test.res, lints)
 		})
 	}
+}
+
+func TestYAMLLintYAMLMerge(t *testing.T) {
+	prov := docs.NewMappedDocsProvider()
+	prov.RegisterDocs(docs.ComponentSpec{
+		Name: "meowthing",
+		Type: docs.TypeInput,
+		Config: docs.FieldComponent().WithChildren(
+			docs.FieldString("foo", ""),
+			docs.FieldString("bar", "").Optional(),
+		),
+	})
+
+	lConf := docs.NewLintConfig()
+	lConf.DocsProvider = prov
+
+	lintConf := func(t *testing.T, name, conf string, expected []docs.Lint) {
+		t.Run(name, func(t *testing.T) {
+			var node yaml.Node
+			require.NoError(t, yaml.Unmarshal([]byte(conf), &node))
+			lints := docs.FieldInput("root", "").Map().LintYAML(docs.NewLintContext(lConf), &node)
+			assert.Equal(t, expected, lints)
+		})
+	}
+
+	lintConf(t, "no lint errors", `
+first:
+  meowthing: &a
+    foo: one
+second:
+  meowthing:
+    <<: *a
+    bar: two
+`, nil)
+
+	lintConf(t, "unknown field from", `
+first:
+  meowthing: &a
+    foo: one
+    baz: three
+second:
+  meowthing:
+    <<: *a
+    bar: two
+`, []docs.Lint{
+		{Line: 5, Column: 1, Level: docs.LintError, Type: docs.LintUnknown, What: "field baz not recognised"},
+		{Line: 5, Column: 1, Level: docs.LintError, Type: docs.LintUnknown, What: "field baz not recognised"},
+	})
+
+	lintConf(t, "unknown field into", `
+first:
+  meowthing: &a
+    foo: one
+    bar: two
+second:
+  meowthing:
+    <<: *a
+    baz: three
+`, []docs.Lint{
+		{Line: 9, Column: 1, Level: docs.LintError, Type: docs.LintUnknown, What: "field baz not recognised"},
+	})
 }
 
 func TestYAMLLinting(t *testing.T) {

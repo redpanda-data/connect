@@ -56,7 +56,7 @@ func ITypeOf(i any) ValueType {
 		return ValueString
 	case []byte:
 		return ValueBytes
-	case int, int64, uint64, float64, json.Number:
+	case int, int8, int16, int32, int64, uint8, uint16, uint32, uint64, float64, json.Number:
 		return ValueNumber
 	case bool:
 		return ValueBool
@@ -95,9 +95,25 @@ func IGetNumber(v any) (float64, error) {
 	switch t := v.(type) {
 	case int:
 		return float64(t), nil
+	case int8:
+		return float64(t), nil
+	case int16:
+		return float64(t), nil
+	case int32:
+		return float64(t), nil
 	case int64:
 		return float64(t), nil
+	case uint:
+		return float64(t), nil
+	case uint8:
+		return float64(t), nil
+	case uint16:
+		return float64(t), nil
+	case uint32:
+		return float64(t), nil
 	case uint64:
+		return float64(t), nil
+	case float32:
 		return float64(t), nil
 	case float64:
 		return t, nil
@@ -113,7 +129,21 @@ func IGetFloat32(v any) (float32, error) {
 	switch t := v.(type) {
 	case int:
 		return float32(t), nil
+	case int8:
+		return float32(t), nil
+	case int16:
+		return float32(t), nil
+	case int32:
+		return float32(t), nil
 	case int64:
+		return float32(t), nil
+	case uint:
+		return float32(t), nil
+	case uint8:
+		return float32(t), nil
+	case uint16:
+		return float32(t), nil
+	case uint32:
 		return float32(t), nil
 	case uint64:
 		return float32(t), nil
@@ -134,8 +164,22 @@ func IGetInt(v any) (int64, error) {
 	switch t := v.(type) {
 	case int:
 		return int64(t), nil
+	case int8:
+		return int64(t), nil
+	case int16:
+		return int64(t), nil
+	case int32:
+		return int64(t), nil
 	case int64:
 		return t, nil
+	case uint:
+		return int64(t), nil
+	case uint8:
+		return int64(t), nil
+	case uint16:
+		return int64(t), nil
+	case uint32:
+		return int64(t), nil
 	case uint64:
 		return int64(t), nil
 	case float64:
@@ -160,9 +204,25 @@ func IGetBool(v any) (bool, error) {
 		return t, nil
 	case int:
 		return t != 0, nil
+	case int8:
+		return t != 0, nil
+	case int16:
+		return t != 0, nil
+	case int32:
+		return t != 0, nil
 	case int64:
 		return t != 0, nil
+	case uint:
+		return t != 0, nil
+	case uint8:
+		return t != 0, nil
+	case uint16:
+		return t != 0, nil
+	case uint32:
+		return t != 0, nil
 	case uint64:
+		return t != 0, nil
+	case float32:
 		return t != 0, nil
 	case float64:
 		return t != 0, nil
@@ -285,11 +345,19 @@ func ISanitize(i any) any {
 		return t.Format(time.RFC3339Nano)
 	case int:
 		return int64(t)
+	case int8:
+		return int64(t)
+	case int16:
+		return int64(t)
 	case int32:
 		return int64(t)
-	case uint32:
-		return uint64(t)
 	case uint:
+		return uint64(t)
+	case uint8:
+		return uint64(t)
+	case uint16:
+		return uint64(t)
+	case uint32:
 		return uint64(t)
 	case float32:
 		return float64(t)
@@ -361,15 +429,37 @@ func IToString(i any) string {
 // IToNumber takes a boxed value and attempts to extract a number (float64)
 // from it or parse one.
 func IToNumber(v any) (float64, error) {
+	return IToFloat64(v)
+}
+
+// IToFloat64 takes a boxed value and attempts to extract a number (float64)
+// from it or parse one.
+func IToFloat64(v any) (float64, error) {
 	switch t := v.(type) {
 	case int:
 		return float64(t), nil
+	case int8:
+		return float64(t), nil
+	case int16:
+		return float64(t), nil
+	case int32:
+		return float64(t), nil
 	case int64:
+		return float64(t), nil
+	case uint:
+		return float64(t), nil
+	case uint8:
+		return float64(t), nil
+	case uint16:
+		return float64(t), nil
+	case uint32:
 		return float64(t), nil
 	case uint64:
 		return float64(t), nil
 	case float64:
 		return t, nil
+	case float32:
+		return float64(t), nil
 	case json.Number:
 		return t.Float64()
 	case []byte:
@@ -380,13 +470,67 @@ func IToNumber(v any) (float64, error) {
 	return 0, NewTypeError(v, ValueNumber)
 }
 
+// IToFloat32 takes a boxed value and attempts to extract a number (float32)
+// from it or parse one.
+func IToFloat32(v any) (float32, error) {
+	switch t := v.(type) {
+	case int:
+		return float32(t), nil
+	case int8:
+		return float32(t), nil
+	case int16:
+		return float32(t), nil
+	case int32:
+		return float32(t), nil
+	case int64:
+		return float32(t), nil
+	case uint:
+		return float32(t), nil
+	case uint8:
+		return float32(t), nil
+	case uint16:
+		return float32(t), nil
+	case uint32:
+		return float32(t), nil
+	case uint64:
+		return float32(t), nil
+	case float64:
+		return float32(t), nil
+	case json.Number:
+		f64, err := strconv.ParseFloat(string(t), 32)
+		if err != nil {
+			return 0, err
+		}
+		return float32(f64), nil
+	case []byte:
+		f64, err := strconv.ParseFloat(string(t), 32)
+		if err != nil {
+			return 0, err
+		}
+		return float32(f64), nil
+	case string:
+		f64, err := strconv.ParseFloat(t, 32)
+		if err != nil {
+			return 0, err
+		}
+		return float32(f64), nil
+	}
+	return 0, NewTypeError(v, ValueNumber)
+}
+
 const (
 	maxUint   = ^uint64(0)
 	maxUint32 = ^uint32(0)
+	maxUint16 = ^uint16(0)
+	maxUint8  = ^uint8(0)
 	maxInt    = maxUint >> 1
 	maxInt32  = maxUint32 >> 1
+	maxInt16  = maxUint16 >> 1
+	maxInt8   = maxUint8 >> 1
 	minInt    = ^int64(maxInt)
 	minInt32  = ^int32(maxInt32)
+	minInt16  = ^int16(maxInt16)
+	minInt8   = ^int8(maxInt8)
 )
 
 // IToInt takes a boxed value and attempts to extract a number (int64) from it
@@ -395,8 +539,22 @@ func IToInt(v any) (int64, error) {
 	switch t := v.(type) {
 	case int:
 		return int64(t), nil
+	case int8:
+		return int64(t), nil
+	case int16:
+		return int64(t), nil
+	case int32:
+		return int64(t), nil
 	case int64:
 		return t, nil
+	case uint:
+		return int64(t), nil
+	case uint8:
+		return int64(t), nil
+	case uint16:
+		return int64(t), nil
+	case uint32:
+		return int64(t), nil
 	case uint64:
 		if t > maxInt {
 			return 0, errors.New("unsigned integer value is too large to be cast as a signed integer")
@@ -432,6 +590,9 @@ func IToInt(v any) (int64, error) {
 // IToInt32 takes a boxed value and attempts to extract a number (int32) from
 // it or parse one.
 func IToInt32(v any) (int32, error) {
+	if v, ok := v.(int32); ok {
+		return v, nil
+	}
 	i64, err := IToInt(v)
 	if err != nil {
 		return 0, err
@@ -445,22 +606,73 @@ func IToInt32(v any) (int32, error) {
 	return int32(i64), nil
 }
 
+// IToInt16 takes a boxed value and attempts to extract a number (int64) from
+// it or parse one.
+func IToInt16(v any) (int16, error) {
+	if v, ok := v.(int16); ok {
+		return v, nil
+	}
+	i64, err := IToInt(v)
+	if err != nil {
+		return 0, err
+	}
+	if i64 > int64(maxInt16) {
+		return 0, errors.New("value is too large to be cast as a 16-bit signed integer")
+	}
+	if i64 < int64(minInt16) {
+		return 0, errors.New("value is too small to be cast as a 16-bit signed integer")
+	}
+	return int16(i64), nil
+}
+
+// IToInt8 takes a boxed value and attempts to extract a number (int8) from
+// it or parse one.
+func IToInt8(v any) (int8, error) {
+	if v, ok := v.(int8); ok {
+		return v, nil
+	}
+	i64, err := IToInt(v)
+	if err != nil {
+		return 0, err
+	}
+	if i64 > int64(maxInt8) {
+		return 0, errors.New("value is too large to be cast as an 8-bit signed integer")
+	}
+	if i64 < int64(minInt8) {
+		return 0, errors.New("value is too small to be cast as an 8-bit signed integer")
+	}
+	return int8(i64), nil
+}
+
 // IToUint takes a boxed value and attempts to extract a number (uint64) from it
 // or parse one.
 func IToUint(v any) (uint64, error) {
 	switch t := v.(type) {
+	case uint:
+		return uint64(t), nil
+	case uint8:
+		return uint64(t), nil
+	case uint16:
+		return uint64(t), nil
+	case uint32:
+		return uint64(t), nil
 	case uint64:
 		return t, nil
 	case int:
-		if t < 0 {
-			return 0, errors.New("signed integer value is negative and cannot be cast as an unsigned integer")
-		}
-		return uint64(t), nil
+		return IToUint(int64(t))
+	case int8:
+		return IToUint(int64(t))
+	case int16:
+		return IToUint(int64(t))
+	case int32:
+		return IToUint(int64(t))
 	case int64:
 		if t < 0 {
 			return 0, errors.New("signed integer value is negative and cannot be cast as an unsigned integer")
 		}
 		return uint64(t), nil
+	case float32:
+		return IToUint(float64(t))
 	case float64:
 		if t < 0 {
 			return 0, errors.New("float value is negative and cannot be cast as an unsigned integer")
@@ -498,6 +710,9 @@ func IToUint(v any) (uint64, error) {
 // IToUint32 takes a boxed value and attempts to extract a number (uint32) from
 // it or parse one.
 func IToUint32(v any) (uint32, error) {
+	if v, ok := v.(uint32); ok {
+		return v, nil
+	}
 	u64, err := IToUint(v)
 	if err != nil {
 		return 0, err
@@ -508,6 +723,38 @@ func IToUint32(v any) (uint32, error) {
 	return uint32(u64), nil
 }
 
+// IToUint16 takes a boxed value and attempts to extract a number (uint16) from
+// it or parse one.
+func IToUint16(v any) (uint16, error) {
+	if v, ok := v.(uint16); ok {
+		return v, nil
+	}
+	u64, err := IToUint(v)
+	if err != nil {
+		return 0, err
+	}
+	if u64 > uint64(maxUint16) {
+		return 0, errors.New("value is too large to be cast as a 16-bit unsigned integer")
+	}
+	return uint16(u64), nil
+}
+
+// IToUint8 takes a boxed value and attempts to extract a number (uint8) from
+// it or parse one.
+func IToUint8(v any) (uint8, error) {
+	if v, ok := v.(uint8); ok {
+		return v, nil
+	}
+	u64, err := IToUint(v)
+	if err != nil {
+		return 0, err
+	}
+	if u64 > uint64(maxUint8) {
+		return 0, errors.New("value is too large to be cast as an 8-bit unsigned integer")
+	}
+	return uint8(u64), nil
+}
+
 // IToBool takes a boxed value and attempts to extract a boolean from it or
 // parse it into a bool.
 func IToBool(v any) (bool, error) {
@@ -516,9 +763,25 @@ func IToBool(v any) (bool, error) {
 		return t, nil
 	case int:
 		return t != 0, nil
+	case int8:
+		return t != 0, nil
+	case int16:
+		return t != 0, nil
+	case int32:
+		return t != 0, nil
 	case int64:
 		return t != 0, nil
+	case uint:
+		return t != 0, nil
+	case uint8:
+		return t != 0, nil
+	case uint16:
+		return t != 0, nil
+	case uint32:
+		return t != 0, nil
 	case uint64:
+		return t != 0, nil
+	case float32:
 		return t != 0, nil
 	case float64:
 		return t != 0, nil

@@ -5,10 +5,13 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
-### Changed
+### Added
 
-- The `snowflake_put` output is now beta.
 - Field `topics_pattern` added to the `pulsar` input.
+- Both the `schema_registry_encode` and `schema_registry_decode` processors now support protobuf schemas.
+- Both the `schema_registry_encode` and `schema_registry_decode` processors now support references for AVRO and PROTOBUF schemas.
+- New Bloblang method `zip`.
+- New Bloblang `int8`, `int16`, `uint8`, `uint16`, `float32` and `float64` methods.
 
 ### Fixed
 
@@ -16,6 +19,16 @@ All notable changes to this project will be documented in this file.
 - Upgraded `kafka` input and output underlying sarama client library to v1.40.0 at new module path github.com/IBM/sarama
 - The CUE schema for `switch` processor now correctly reflects that it takes a list of clauses.
 - Fixed the CUE schema for fields that take a 2d-array such as `workflow.order`.
+- The `snowflake_put` output has been added back to 32-bit ARM builds since the build incompatibilities have been resolved.
+- The `snowflake_put` output and the `sql_*` components no longer trigger a panic when running on a readonly file system with the `snowflake` driver. This driver still requires access to write temporary files somewhere, which can be configured via the Go [`TMPDIR`](https://pkg.go.dev/os#TempDir) environment variable. Details [here](https://github.com/snowflakedb/gosnowflake/issues/700).
+- The `http_server` input and output now follow the same multiplexer rules regardless of whether the general `http` server block is used or a custom endpoint.
+- Config linting should now respect fields sourced via a merge key (`<<`).
+- The `lint` subcommand should now lint config files pointed to via `-r`/`--resources` flags.
+
+### Changed
+
+- The `snowflake_put` output is now beta.
+- Endpoints specified by `http_server` components using both the general `http` server block or their own custom server addresses should no longer be treated as path prefixes unless the path ends with a slash (`/`), in which case all extensions of the path will match. This corrects a behavioural change introduced in v4.14.0.
 
 ## 4.18.0 - 2023-07-02
 
