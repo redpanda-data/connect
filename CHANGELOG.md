@@ -5,6 +5,8 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 4.19.0 - 2023-08-17
+
 ### Added
 
 - Field `topics_pattern` added to the `pulsar` input.
