@@ -1,16 +1,15 @@
 pipeline:
   processors:
     - dedupe:
-        cache: local_ttlru
+        cache: local_lfu
         key: ${! content() }
 
 cache_resources:
-  - label: local_ttlru
-    ttlru:
-      default_ttl: 1m
+  - label: local_lfu
+    lfu: {}
 
 tests:
-  - name: de-duplicate across batches using ttlru cache
+  - name: de-duplicate across batches using lfu cache
     input_batches:
       -
         - content: '1'
