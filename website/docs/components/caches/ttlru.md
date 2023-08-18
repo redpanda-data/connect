@@ -28,7 +28,7 @@ Stores key/value pairs in a ttlru in-memory cache. This cache is therefore reset
 label: ""
 ttlru:
   cap: 1024
-  ttl: 5m0s
+  default_ttl: 5m0s
   init_values: {}
 ```
 
@@ -40,7 +40,8 @@ ttlru:
 label: ""
 ttlru:
   cap: 1024
-  ttl: 5m0s
+  default_ttl: 5m0s
+  ttl: "" # No default (optional)
   init_values: {}
   without_reset: false
   optimistic: false
@@ -61,7 +62,7 @@ The field init_values can be used to pre-populate the memory cache with any numb
 cache_resources:
   - label: foocache
     ttlru:
-      ttl: '5m'
+      default_ttl: '5m'
       cap: 1024
       init_values:
         foo: bar
@@ -79,13 +80,21 @@ The cache maximum capacity (number of entries)
 Type: `int`  
 Default: `1024`  
 
-### `ttl`
+### `default_ttl`
 
 The cache ttl of each element
 
 
 Type: `string`  
 Default: `"5m0s"`  
+Requires version 4.20.0 or newer  
+
+### `ttl`
+
+Deprecated. Please use `default_ttl` field
+
+
+Type: `string`  
 
 ### `init_values`
 

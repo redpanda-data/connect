@@ -12,15 +12,20 @@ import (
 )
 
 const (
-	ttlruCacheFieldCapLabel                 = "cap"
-	ttlruCacheFieldCapDefaultValue          = 1024
-	ttlruCacheFieldTTLLabel                 = "ttl"
-	ttlruCacheFieldTTLDefaultValue          = 5 * time.Minute
-	ttlruCacheFieldInitValuesLabel          = "init_values"
+	ttlruCacheFieldCapLabel        = "cap"
+	ttlruCacheFieldCapDefaultValue = 1024
+
+	ttlruCacheFieldDeprecatedTTLLabel     = "ttl"
+	ttlruCacheFieldDefaultTTLLabel        = "default_ttl"
+	ttlruCacheFieldDefaultTTLDefaultValue = 5 * time.Minute
+
+	ttlruCacheFieldInitValuesLabel = "init_values"
+
 	ttlruCacheFieldWithoutResetLabel        = "without_reset"
 	ttlruCacheFieldWithoutResetDefaultValue = false
-	ttlruCacheFieldOptimisticLabel          = "optimistic"
-	ttlruCacheFieldOptimisticDefaultValue   = false
+
+	ttlruCacheFieldOptimisticLabel        = "optimistic"
+	ttlruCacheFieldOptimisticDefaultValue = false
 )
 
 func ttlruCacheConfig() *service.ConfigSpec {
@@ -39,7 +44,7 @@ The field ` + ttlruCacheFieldInitValuesLabel + ` can be used to pre-populate the
 cache_resources:
   - label: foocache
     ttlru:
-      ttl: '5m'
+      default_ttl: '5m'
       cap: 1024
       init_values:
         foo: bar
@@ -49,9 +54,13 @@ These values can be overridden during execution.`).
 		Field(service.NewIntField(ttlruCacheFieldCapLabel).
 			Description("The cache maximum capacity (number of entries)").
 			Default(ttlruCacheFieldCapDefaultValue)).
-		Field(service.NewDurationField(ttlruCacheFieldTTLLabel).
+		Field(service.NewDurationField(ttlruCacheFieldDefaultTTLLabel).
 			Description("The cache ttl of each element").
-			Default(ttlruCacheFieldTTLDefaultValue.String())).
+			Default(ttlruCacheFieldDefaultTTLDefaultValue.String()).
+			Version("4.20.0")).
+		Field(service.NewDurationField(ttlruCacheFieldDeprecatedTTLLabel).
+			Description("Deprecated. Please use `" + ttlruCacheFieldDefaultTTLLabel + "` field").
+			Optional().Advanced()).
 		Field(service.NewStringMapField(ttlruCacheFieldInitValuesLabel).
 			Description("A table of key/value pairs that should be present in the cache on initialization. This can be used to create static lookup tables.").
 			Default(map[string]string{}).
@@ -93,7 +102,12 @@ func ttlruMemCacheFromConfig(conf *service.ParsedConfig) (*ttlruCacheAdapter, er
 		return nil, err
 	}
 
-	ttl, err := conf.FieldDuration(ttlruCacheFieldTTLLabel)
+	var ttl time.Duration
+	if conf.Contains(ttlruCacheFieldDeprecatedTTLLabel) {
+		ttl, err = conf.FieldDuration(ttlruCacheFieldDeprecatedTTLLabel)
+	} else {
+		ttl, err = conf.FieldDuration(ttlruCacheFieldDefaultTTLLabel)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -123,17 +137,17 @@ type ttlruCacheAdapter struct {
 
 	optimistic bool
 
-	sync.RWMutex
+	sync.Mutex
 }
 
 var (
 	errInvalidTTLRUCacheParameters    = fmt.Errorf("invalid ttlru cache parameters")
 	errInvalidTTLRUCacheCapacityValue = fmt.Errorf("invalid ttlru cache parameter capacity: must be bigger than 0")
-	errInvalidTTLRUCachetTTLValue     = fmt.Errorf("invalid ttlru cache parameter ttl: must be bigger than 0s")
+	errInvalidTTLRUCachetTTLValue     = fmt.Errorf("invalid ttlru cache parameter default_ttl: must be bigger than 0s")
 )
 
 func ttlruMemCache(capacity int,
-	ttl time.Duration,
+	defaultTTL time.Duration,
 	initValues map[string]string,
 	withoutReset, optimistic bool,
 ) (*ttlruCacheAdapter, error) {
@@ -141,13 +155,13 @@ func ttlruMemCache(capacity int,
 		return nil, errInvalidTTLRUCacheCapacityValue
 	}
 
-	if ttl <= 0 {
+	if defaultTTL <= 0 {
 		return nil, errInvalidTTLRUCachetTTLValue
 	}
 
 	opts := make([]ttlru.Option, 1, 2)
 
-	opts[0] = ttlru.WithTTL(ttl)
+	opts[0] = ttlru.WithTTL(defaultTTL)
 
 	if withoutReset {
 		opts = append(opts, ttlru.WithoutReset())
@@ -171,17 +185,7 @@ func ttlruMemCache(capacity int,
 var _ service.Cache = (*ttlruCacheAdapter)(nil)
 
 func (ca *ttlruCacheAdapter) Get(_ context.Context, key string) ([]byte, error) {
-	unlock := func() {}
-	if !ca.optimistic {
-		ca.RWMutex.RLock()
-
-		unlock = ca.RWMutex.RUnlock
-	}
-
 	value, ok := ca.inner.Get(key)
-
-	unlock()
-
 	if !ok {
 		return nil, service.ErrKeyNotFound
 	}
@@ -192,53 +196,38 @@ func (ca *ttlruCacheAdapter) Get(_ context.Context, key string) ([]byte, error) 
 }
 
 func (ca *ttlruCacheAdapter) Set(_ context.Context, key string, value []byte, _ *time.Duration) error {
-	unlock := func() {}
-	if !ca.optimistic {
-		ca.RWMutex.Lock()
-
-		unlock = ca.RWMutex.Unlock
-	}
-
 	ca.inner.Set(key, value)
-
-	unlock()
 
 	return nil
 }
 
-func (ca *ttlruCacheAdapter) Add(_ context.Context, key string, value []byte, _ *time.Duration) error {
-	unlock := func() {}
-	if !ca.optimistic {
-		ca.RWMutex.Lock()
-
-		unlock = ca.RWMutex.Unlock
-	}
-
+func (ca *ttlruCacheAdapter) unsafeAdd(key string, value []byte) error {
 	_, ok := ca.inner.Get(key)
 	if ok {
-		unlock()
-
 		return service.ErrKeyAlreadyExists
 	}
 
 	_ = ca.inner.Set(key, value)
 
-	unlock()
-
 	return nil
 }
 
-func (ca *ttlruCacheAdapter) Delete(_ context.Context, key string) error {
-	unlock := func() {}
-	if !ca.optimistic {
-		ca.RWMutex.Lock()
-
-		unlock = ca.RWMutex.Unlock
+func (ca *ttlruCacheAdapter) Add(_ context.Context, key string, value []byte, _ *time.Duration) error {
+	if ca.optimistic {
+		return ca.unsafeAdd(key, value)
 	}
 
-	ca.inner.Del(key)
+	ca.Lock()
 
-	unlock()
+	err := ca.unsafeAdd(key, value)
+
+	ca.Unlock()
+
+	return err
+}
+
+func (ca *ttlruCacheAdapter) Delete(_ context.Context, key string) error {
+	ca.inner.Del(key)
 
 	return nil
 }
