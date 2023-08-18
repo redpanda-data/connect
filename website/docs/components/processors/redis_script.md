@@ -33,7 +33,7 @@ Introduced in version 4.11.0.
 # Common config fields, showing default values
 label: ""
 redis_script:
-  url: :6397 # No default (required)
+  url: redis://:6397 # No default (required)
   script: return redis.call('set', KEYS[1], ARGV[1]) # No default (required)
   args_mapping: root = [ this.key ] # No default (required)
   keys_mapping: root = [ this.key ] # No default (required)
@@ -46,7 +46,7 @@ redis_script:
 # All config fields, showing default values
 label: ""
 redis_script:
-  url: :6397 # No default (required)
+  url: redis://:6397 # No default (required)
   kind: simple
   master: ""
   tls:
@@ -114,9 +114,7 @@ Type: `string`
 ```yml
 # Examples
 
-url: :6397
-
-url: localhost:6397
+url: redis://:6397
 
 url: redis://localhost:6379
 

@@ -29,7 +29,7 @@ performed for each message and the message contents are replaced with the result
 # Common config fields, showing default values
 label: ""
 redis:
-  url: :6397 # No default (required)
+  url: redis://:6397 # No default (required)
   command: scard # No default (optional)
   args_mapping: root = [ this.key ] # No default (optional)
 ```
@@ -41,7 +41,7 @@ redis:
 # All config fields, showing default values
 label: ""
 redis:
-  url: :6397 # No default (required)
+  url: redis://:6397 # No default (required)
   kind: simple
   master: ""
   tls:
@@ -133,9 +133,7 @@ Type: `string`
 ```yml
 # Examples
 
-url: :6397
-
-url: localhost:6397
+url: redis://:6397
 
 url: redis://localhost:6379
 
