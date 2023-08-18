@@ -773,6 +773,9 @@ func s3MsgFromParts(p *s3PendingObject, parts []*message.Part) message.Batch {
 		if p.obj.VersionId != nil && *p.obj.VersionId != "null" {
 			part.MetaSetMut("s3_version_id", *p.obj.VersionId)
 		}
+		if p.obj.ETag != nil {
+			part.MetaSetMut("s3_etag", strings.ReplaceAll(*p.obj.ETag, `"`, ""))
+		}		
 		for k, v := range p.obj.Metadata {
 			if v != nil {
 				part.MetaSetMut(k, *v)
