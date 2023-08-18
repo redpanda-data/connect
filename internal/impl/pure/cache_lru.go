@@ -53,7 +53,7 @@ cache_resources:
         foo: bar
 ` + "```" + `
 
-These values can be overridden during execution.`).
+These values can be overridden during execution, at which point the configured TTL is respected as usual.`).
 		Field(service.NewIntField(lruCacheFieldCapLabel).
 			Description("The cache maximum capacity (number of entries)").
 			Default(lruCacheFieldCapDefaultValue)).
@@ -201,10 +201,12 @@ func lruMemCache(capacity int,
 		inner.Add(k, []byte(v))
 	}
 
-	return &lruCacheAdapter{
+	ca = &lruCacheAdapter{
 		inner:      inner,
 		optimistic: optimistic,
-	}, nil
+	}
+
+	return ca, nil
 }
 
 //------------------------------------------------------------------------------
@@ -243,11 +245,21 @@ type lruCacheAdapter struct {
 
 	optimistic bool
 
-	sync.Mutex
+	sync.RWMutex
 }
 
 func (ca *lruCacheAdapter) Get(_ context.Context, key string) ([]byte, error) {
+	unlock := func() {}
+	if !ca.optimistic {
+		ca.RWMutex.RLock()
+
+		unlock = ca.RWMutex.RUnlock
+	}
+
 	value, ok := ca.inner.Get(key)
+
+	unlock()
+
 	if !ok {
 		return nil, service.ErrKeyNotFound
 	}
@@ -256,38 +268,53 @@ func (ca *lruCacheAdapter) Get(_ context.Context, key string) ([]byte, error) {
 }
 
 func (ca *lruCacheAdapter) Set(_ context.Context, key string, value []byte, _ *time.Duration) error {
+	unlock := func() {}
+	if !ca.optimistic {
+		ca.RWMutex.Lock()
+
+		unlock = ca.RWMutex.Unlock
+	}
+
 	ca.inner.Add(key, value)
+
+	unlock()
 
 	return nil
 }
 
-func (ca *lruCacheAdapter) unsafeAdd(key string, value []byte) error {
+func (ca *lruCacheAdapter) Add(ctx context.Context, key string, value []byte, ttl *time.Duration) error {
+	unlock := func() {}
+	if !ca.optimistic {
+		ca.RWMutex.Lock()
+
+		unlock = ca.RWMutex.Unlock
+	}
+
 	_, ok := ca.inner.Peek(key)
 	if ok {
+		unlock()
+
 		return service.ErrKeyAlreadyExists
 	}
 
 	ca.inner.Add(key, value)
 
+	unlock()
+
 	return nil
 }
 
-func (ca *lruCacheAdapter) Add(_ context.Context, key string, value []byte, _ *time.Duration) error {
-	if ca.optimistic {
-		return ca.unsafeAdd(key, value)
+func (ca *lruCacheAdapter) Delete(_ context.Context, key string) error {
+	unlock := func() {}
+	if !ca.optimistic {
+		ca.RWMutex.Lock()
+
+		unlock = ca.RWMutex.Unlock
 	}
 
-	ca.Lock()
-
-	err := ca.unsafeAdd(key, value)
-
-	ca.Unlock()
-
-	return err
-}
-
-func (ca *lruCacheAdapter) Delete(_ context.Context, key string) error {
 	ca.inner.Remove(key)
+
+	unlock()
 
 	return nil
 }
