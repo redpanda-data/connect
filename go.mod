@@ -132,7 +132,6 @@ require (
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 	gopkg.in/yaml.v3 v3.0.1
 	modernc.org/sqlite v1.19.1
-	zvelo.io/ttlru v1.0.10
 )
 
 require (

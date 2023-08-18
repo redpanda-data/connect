@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"zvelo.io/ttlru"
+	ttlru "github.com/hashicorp/golang-lru/v2/expirable"
 
 	"github.com/benthosdev/benthos/v4/public/service"
 )
@@ -133,9 +133,10 @@ func ttlruMemCacheFromConfig(conf *service.ParsedConfig) (*ttlruCacheAdapter, er
 //------------------------------------------------------------------------------
 
 type ttlruCacheAdapter struct {
-	inner ttlru.Cache
+	inner *ttlru.LRU[string, []byte]
 
-	optimistic bool
+	withoutReset bool
+	optimistic   bool
 
 	sync.Mutex
 }
@@ -149,7 +150,8 @@ var (
 func ttlruMemCache(capacity int,
 	defaultTTL time.Duration,
 	initValues map[string]string,
-	withoutReset, optimistic bool,
+	withoutReset bool,
+	optimistic bool,
 ) (*ttlruCacheAdapter, error) {
 	if capacity <= 0 {
 		return nil, errInvalidTTLRUCacheCapacityValue
@@ -159,55 +161,56 @@ func ttlruMemCache(capacity int,
 		return nil, errInvalidTTLRUCachetTTLValue
 	}
 
-	opts := make([]ttlru.Option, 1, 2)
-
-	opts[0] = ttlru.WithTTL(defaultTTL)
-
-	if withoutReset {
-		opts = append(opts, ttlru.WithoutReset())
-	}
-
-	c := ttlru.New(capacity, opts...)
+	c := ttlru.NewLRU[string, []byte](capacity, nil, defaultTTL)
 	if c == nil {
 		return nil, errInvalidTTLRUCacheParameters
 	}
 
 	for k, v := range initValues {
-		c.Set(k, []byte(v))
+		_ = c.Add(k, []byte(v))
 	}
 
 	return &ttlruCacheAdapter{
-		inner:      c,
-		optimistic: optimistic,
+		inner:        c,
+		withoutReset: withoutReset,
+		optimistic:   optimistic,
 	}, nil
 }
 
 var _ service.Cache = (*ttlruCacheAdapter)(nil)
 
 func (ca *ttlruCacheAdapter) Get(_ context.Context, key string) ([]byte, error) {
-	value, ok := ca.inner.Get(key)
+	var (
+		value []byte
+		ok    bool
+	)
+
+	if ca.withoutReset {
+		value, ok = ca.inner.Peek(key)
+	} else {
+		value, ok = ca.inner.Get(key)
+	}
+
 	if !ok {
 		return nil, service.ErrKeyNotFound
 	}
 
-	data, _ := value.([]byte)
-
-	return data, nil
+	return value, nil
 }
 
 func (ca *ttlruCacheAdapter) Set(_ context.Context, key string, value []byte, _ *time.Duration) error {
-	ca.inner.Set(key, value)
+	_ = ca.inner.Add(key, value)
 
 	return nil
 }
 
 func (ca *ttlruCacheAdapter) unsafeAdd(key string, value []byte) error {
-	_, ok := ca.inner.Get(key)
+	_, ok := ca.inner.Peek(key)
 	if ok {
 		return service.ErrKeyAlreadyExists
 	}
 
-	_ = ca.inner.Set(key, value)
+	_ = ca.inner.Add(key, value)
 
 	return nil
 }
@@ -227,7 +230,7 @@ func (ca *ttlruCacheAdapter) Add(_ context.Context, key string, value []byte, _ 
 }
 
 func (ca *ttlruCacheAdapter) Delete(_ context.Context, key string) error {
-	ca.inner.Del(key)
+	_ = ca.inner.Remove(key)
 
 	return nil
 }

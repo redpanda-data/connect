@@ -173,7 +173,7 @@ func lruMemCache(capacity int,
 			return
 		}
 
-		inner = &lruv2SimpleCacheAdaptor{
+		inner = &lruv2SimpleCacheAdaptor[string, []byte]{
 			Cache: c,
 		}
 
@@ -211,7 +211,7 @@ func lruMemCache(capacity int,
 //------------------------------------------------------------------------------
 
 var (
-	_ lruCache = (*lruv2SimpleCacheAdaptor)(nil)
+	_ lruCache = (*lruv2SimpleCacheAdaptor[string, []byte])(nil)
 	_ lruCache = (*lruv2.TwoQueueCache[string, []byte])(nil)
 	_ lruCache = (*arcv2.ARCCache[string, []byte])(nil)
 )
@@ -223,15 +223,15 @@ type lruCache interface {
 	Remove(key string)
 }
 
-type lruv2SimpleCacheAdaptor struct {
-	*lruv2.Cache[string, []byte]
+type lruv2SimpleCacheAdaptor[K comparable, V any] struct {
+	*lruv2.Cache[K, V]
 }
 
-func (ad *lruv2SimpleCacheAdaptor) Add(key string, value []byte) {
+func (ad *lruv2SimpleCacheAdaptor[K, V]) Add(key K, value V) {
 	_ = ad.Cache.Add(key, value)
 }
 
-func (ad *lruv2SimpleCacheAdaptor) Remove(key string) {
+func (ad *lruv2SimpleCacheAdaptor[K, V]) Remove(key K) {
 	_ = ad.Cache.Remove(key)
 }
 
