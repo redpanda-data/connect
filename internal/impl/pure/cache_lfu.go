@@ -109,8 +109,8 @@ func lfuMemCacheFromConfig(conf *service.ParsedConfig) (*lfuCacheAdapter, error)
 //------------------------------------------------------------------------------
 
 var (
-	errInvalidLFUCacheSizeValue    = fmt.Errorf("invalid lfu cache parameter size: must be bigger than 0")
-	errInvalidLFUCacheSamplesValue = fmt.Errorf("invalid lfu cache parameter samples: must be bigger than 0")
+	errInvalidLFUCacheSizeValue    = errors.New("invalid lfu cache parameter size: must be bigger than 0")
+	errInvalidLFUCacheSamplesValue = errors.New("invalid lfu cache parameter samples: must be bigger than 0")
 )
 
 func lfuMemCache(size, samples int,
