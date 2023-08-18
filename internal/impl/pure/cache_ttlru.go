@@ -6,9 +6,8 @@ import (
 	"sync"
 	"time"
 
-	ttlru "github.com/hashicorp/golang-lru/v2/expirable"
-
 	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/hashicorp/golang-lru/v2/expirable"
 )
 
 const (
@@ -133,7 +132,7 @@ func ttlruMemCacheFromConfig(conf *service.ParsedConfig) (*ttlruCacheAdapter, er
 //------------------------------------------------------------------------------
 
 type ttlruCacheAdapter struct {
-	inner *ttlru.LRU[string, []byte]
+	inner *expirable.LRU[string, []byte]
 
 	withoutReset bool
 	optimistic   bool
@@ -161,7 +160,7 @@ func ttlruMemCache(capacity int,
 		return nil, errInvalidTTLRUCachetTTLValue
 	}
 
-	c := ttlru.NewLRU[string, []byte](capacity, nil, defaultTTL)
+	c := expirable.NewLRU[string, []byte](capacity, nil, defaultTTL)
 	if c == nil {
 		return nil, errInvalidTTLRUCacheParameters
 	}
