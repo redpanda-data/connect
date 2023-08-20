@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/benthosdev/benthos/v4/public/service"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -15,7 +16,9 @@ func TestTTLRUCacheDefault(t *testing.T) {
 	defConf, err := ttlruCacheConfig().ParseYAML(``, nil)
 	require.NoError(t, err)
 
-	c, err := ttlruMemCacheFromConfig(defConf)
+	logger := service.MockResources().Logger()
+
+	c, err := ttlruMemCacheFromConfig(defConf, logger)
 	require.NoError(t, err)
 
 	testServiceCache(t, c)
@@ -30,7 +33,9 @@ without_reset: true
 `, nil)
 	require.NoError(t, err)
 
-	c, err := ttlruMemCacheFromConfig(defConf)
+	logger := service.MockResources().Logger()
+
+	c, err := ttlruMemCacheFromConfig(defConf, logger)
 	require.NoError(t, err)
 
 	testServiceCache(t, c)
@@ -48,7 +53,9 @@ init_values:
 `, nil)
 	require.NoError(t, err)
 
-	c, err := ttlruMemCacheFromConfig(defConf)
+	logger := service.MockResources().Logger()
+
+	c, err := ttlruMemCacheFromConfig(defConf, logger)
 	require.NoError(t, err)
 
 	ctx := context.Background()
@@ -72,7 +79,9 @@ func BenchmarkTTLRU(b *testing.B) {
 	defConf, err := ttlruCacheConfig().ParseYAML(``, nil)
 	require.NoError(b, err)
 
-	c, err := ttlruMemCacheFromConfig(defConf)
+	logger := service.MockResources().Logger()
+
+	c, err := ttlruMemCacheFromConfig(defConf, logger)
 	require.NoError(b, err)
 
 	ctx := context.Background()
@@ -95,7 +104,9 @@ func BenchmarkTTLRUParallel(b *testing.B) {
 	defConf, err := ttlruCacheConfig().ParseYAML(``, nil)
 	require.NoError(b, err)
 
-	c, err := ttlruMemCacheFromConfig(defConf)
+	logger := service.MockResources().Logger()
+
+	c, err := ttlruMemCacheFromConfig(defConf, logger)
 	require.NoError(b, err)
 
 	ctx := context.Background()

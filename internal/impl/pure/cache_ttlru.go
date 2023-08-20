@@ -84,7 +84,8 @@ func init() {
 	err := service.RegisterCache(
 		"ttlru", ttlruCacheConfig(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Cache, error) {
-			f, err := ttlruMemCacheFromConfig(conf)
+			logger := mgr.Logger().With("component", "ttlru")
+			f, err := ttlruMemCacheFromConfig(conf, logger)
 			if err != nil {
 				return nil, err
 			}
@@ -95,7 +96,7 @@ func init() {
 	}
 }
 
-func ttlruMemCacheFromConfig(conf *service.ParsedConfig) (*ttlruCacheAdapter, error) {
+func ttlruMemCacheFromConfig(conf *service.ParsedConfig, logger *service.Logger) (*ttlruCacheAdapter, error) {
 	capacity, err := conf.FieldInt(ttlruCacheFieldCapLabel)
 	if err != nil {
 		return nil, err
@@ -104,6 +105,9 @@ func ttlruMemCacheFromConfig(conf *service.ParsedConfig) (*ttlruCacheAdapter, er
 	var ttl time.Duration
 	if conf.Contains(ttlruCacheFieldDeprecatedTTLLabel) {
 		ttl, err = conf.FieldDuration(ttlruCacheFieldDeprecatedTTLLabel)
+
+		logger.Warnf("field %q is deprecated, please use %q",
+			ttlruCacheFieldDeprecatedTTLLabel, ttlruCacheFieldDefaultTTLLabel)
 	} else {
 		ttl, err = conf.FieldDuration(ttlruCacheFieldDefaultTTLLabel)
 	}
