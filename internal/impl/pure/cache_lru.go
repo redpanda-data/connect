@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	lruarcv2 "github.com/hashicorp/golang-lru/arc/v2"
 	lruv2 "github.com/hashicorp/golang-lru/v2"
 
 	"github.com/benthosdev/benthos/v4/public/service"
@@ -177,7 +178,7 @@ func lruMemCache(capacity int,
 		}
 
 	case lruCacheFieldAlgorithmValueARC:
-		inner, err = lruv2.NewARC[string, []byte](capacity)
+		inner, err = lruarcv2.NewARC[string, []byte](capacity)
 		if err != nil {
 			return
 		}
@@ -214,7 +215,7 @@ func lruMemCache(capacity int,
 var (
 	_ lruCache = (*lruv2SimpleCacheAdaptor)(nil)
 	_ lruCache = (*lruv2.TwoQueueCache[string, []byte])(nil)
-	_ lruCache = (*lruv2.ARCCache[string, []byte])(nil)
+	_ lruCache = (*lruarcv2.ARCCache[string, []byte])(nil)
 )
 
 type lruCache interface {
