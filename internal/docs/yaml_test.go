@@ -1,6 +1,7 @@
 package docs_test
 
 import (
+	"errors"
 	"fmt"
 	"testing"
 
@@ -671,7 +672,7 @@ func TestYAMLComponentLinting(t *testing.T) {
 				docs.FieldString("foo1", "").LinterFunc(func(ctx docs.LintContext, line, col int, v any) []docs.Lint {
 					if v == "lint me please" {
 						return []docs.Lint{
-							docs.NewLintError(line, docs.LintCustom, "this is a custom lint"),
+							docs.NewLintError(line, docs.LintCustom, errors.New("this is a custom lint")),
 						}
 					}
 					return nil
@@ -746,7 +747,7 @@ testlintbarinput:
   bar1: hello world`,
 			rejectDeprecated: true,
 			res: []docs.Lint{
-				docs.NewLintError(2, docs.LintDeprecated, "component testlintbarinput is deprecated"),
+				docs.NewLintError(2, docs.LintDeprecated, errors.New("component testlintbarinput is deprecated")),
 			},
 		},
 		{
@@ -758,7 +759,7 @@ testlintfooinput:
   foo6: hello world`,
 			rejectDeprecated: true,
 			res: []docs.Lint{
-				docs.NewLintError(4, docs.LintDeprecated, "field foo6 is deprecated"),
+				docs.NewLintError(4, docs.LintDeprecated, errors.New("field foo6 is deprecated")),
 			},
 		},
 		{
@@ -769,7 +770,7 @@ testlintbarinput:
   bar1: hello world`,
 			requireLabels: true,
 			res: []docs.Lint{
-				docs.NewLintError(2, docs.LintMissingLabel, "label is required for testlintbarinput"),
+				docs.NewLintError(2, docs.LintMissingLabel, errors.New("label is required for testlintbarinput")),
 			},
 		},
 		{
@@ -798,8 +799,8 @@ testlintfooinput: &test-anchor
 processors:
   - testlintfooprocessor: *test-anchor`,
 			res: []docs.Lint{
-				docs.NewLintError(4, docs.LintUnknown, "field nope not recognised"),
-				docs.NewLintError(4, docs.LintUnknown, "field nope not recognised"),
+				docs.NewLintError(4, docs.LintUnknown, errors.New("field nope not recognised")),
+				docs.NewLintError(4, docs.LintUnknown, errors.New("field nope not recognised")),
 			},
 		},
 		{
@@ -813,9 +814,9 @@ testlintfooinput:
   also_not_recognised: nah
 definitely_not_recognised: huh`,
 			res: []docs.Lint{
-				docs.NewLintError(4, docs.LintUnknown, "field not_recognised not recognised"),
-				docs.NewLintError(6, docs.LintUnknown, "field also_not_recognised not recognised"),
-				docs.NewLintError(7, docs.LintUnknown, "field definitely_not_recognised is invalid when the component type is testlintfooinput (input)"),
+				docs.NewLintError(4, docs.LintUnknown, errors.New("field not_recognised not recognised")),
+				docs.NewLintError(6, docs.LintUnknown, errors.New("field also_not_recognised not recognised")),
+				docs.NewLintError(7, docs.LintUnknown, errors.New("field definitely_not_recognised is invalid when the component type is testlintfooinput (input)")),
 			},
 		},
 		{
@@ -829,8 +830,8 @@ processors:
   - testlintfooprocessor:
       also_not_recognised: nah`,
 			res: []docs.Lint{
-				docs.NewLintError(3, docs.LintUnknown, "field not_recognised not recognised"),
-				docs.NewLintError(7, docs.LintUnknown, "field also_not_recognised not recognised"),
+				docs.NewLintError(3, docs.LintUnknown, errors.New("field not_recognised not recognised")),
+				docs.NewLintError(7, docs.LintUnknown, errors.New("field also_not_recognised not recognised")),
 			},
 		},
 		{
@@ -846,7 +847,7 @@ processors:
   - label: foo
     testlintfooprocessor: {}`,
 			res: []docs.Lint{
-				docs.NewLintError(8, docs.LintDuplicateLabel, "Label 'foo' collides with a previously defined label at line 2"),
+				docs.NewLintError(8, docs.LintDuplicateLabel, errors.New("label 'foo' collides with a previously defined label at line 2")),
 			},
 		},
 		{
@@ -857,7 +858,7 @@ testlintfooinput:
   foo1: hello world
 processors: []`,
 			res: []docs.Lint{
-				docs.NewLintError(4, docs.LintShouldOmit, "field processors is empty and can be removed"),
+				docs.NewLintError(4, docs.LintShouldOmit, errors.New("field processors is empty and can be removed")),
 			},
 		},
 		{
@@ -868,7 +869,7 @@ testlintfooinput:
   foo1: hello world
   foo2: drop me`,
 			res: []docs.Lint{
-				docs.NewLintError(4, docs.LintShouldOmit, "because foo"),
+				docs.NewLintError(4, docs.LintShouldOmit, errors.New("because foo")),
 			},
 		},
 		{
@@ -882,7 +883,7 @@ testlintfooinput:
         foo1: somevalue
         not_recognised: nah`,
 			res: []docs.Lint{
-				docs.NewLintError(4, docs.LintExpectedArray, "expected array value"),
+				docs.NewLintError(4, docs.LintExpectedArray, errors.New("expected array value")),
 			},
 		},
 		{
@@ -895,7 +896,7 @@ testlintfooinput:
       foo1: somevalue
       not_recognised: nah`,
 			res: []docs.Lint{
-				docs.NewLintError(6, docs.LintUnknown, "field not_recognised not recognised"),
+				docs.NewLintError(6, docs.LintUnknown, errors.New("field not_recognised not recognised")),
 			},
 		},
 		{
@@ -908,7 +909,7 @@ testlintfooinput:
       foo1: [ somevalue ]
 `,
 			res: []docs.Lint{
-				docs.NewLintError(5, docs.LintExpectedScalar, "expected string value"),
+				docs.NewLintError(5, docs.LintExpectedScalar, errors.New("expected string value")),
 			},
 		},
 		{
@@ -922,7 +923,7 @@ testlintfooinput:
         foo1: somevalue
         not_recognised: nah`,
 			res: []docs.Lint{
-				docs.NewLintError(7, docs.LintUnknown, "field not_recognised not recognised"),
+				docs.NewLintError(7, docs.LintUnknown, errors.New("field not_recognised not recognised")),
 			},
 		},
 		{
@@ -935,7 +936,7 @@ testlintfooinput:
         foo1: somevalue
         not_recognised: nah`,
 			res: []docs.Lint{
-				docs.NewLintError(4, docs.LintExpectedObject, "expected object value"),
+				docs.NewLintError(4, docs.LintExpectedObject, errors.New("expected object value")),
 			},
 		},
 		{
@@ -954,7 +955,7 @@ testlintfooinput:
   foo7:
    - wat: no`,
 			res: []docs.Lint{
-				docs.NewLintError(4, docs.LintUnknown, "field wat not recognised"),
+				docs.NewLintError(4, docs.LintUnknown, errors.New("field wat not recognised")),
 			},
 		},
 		{
@@ -966,7 +967,7 @@ testlintfooinput:
     key1:
       wat: no`,
 			res: []docs.Lint{
-				docs.NewLintError(4, docs.LintExpectedArray, "expected array value"),
+				docs.NewLintError(4, docs.LintExpectedArray, errors.New("expected array value")),
 			},
 		},
 		{
@@ -987,7 +988,7 @@ testlintfooinput:
     key1:
       wat: nope`,
 			res: []docs.Lint{
-				docs.NewLintError(5, docs.LintUnknown, "field wat not recognised"),
+				docs.NewLintError(5, docs.LintUnknown, errors.New("field wat not recognised")),
 			},
 		},
 		{
@@ -998,7 +999,7 @@ testlintfooinput:
   foo8:
     - wat: nope`,
 			res: []docs.Lint{
-				docs.NewLintError(4, docs.LintExpectedObject, "expected object value"),
+				docs.NewLintError(4, docs.LintExpectedObject, errors.New("expected object value")),
 			},
 		},
 		{
@@ -1008,7 +1009,7 @@ testlintfooinput:
 testlintfooinput:
   foo1: lint me please`,
 			res: []docs.Lint{
-				docs.NewLintError(3, docs.LintCustom, "this is a custom lint"),
+				docs.NewLintError(3, docs.LintCustom, errors.New("this is a custom lint")),
 			},
 		},
 	}
@@ -1105,7 +1106,7 @@ func TestYAMLLinting(t *testing.T) {
 			inputSpec: docs.FieldString("foo", ""),
 			inputConf: `["foo","bar"]`,
 			res: []docs.Lint{
-				docs.NewLintError(1, docs.LintExpectedScalar, "expected string value"),
+				docs.NewLintError(1, docs.LintExpectedScalar, errors.New("expected string value")),
 			},
 		},
 		{
@@ -1113,7 +1114,7 @@ func TestYAMLLinting(t *testing.T) {
 			inputSpec: docs.FieldString("foo", "").Array(),
 			inputConf: `"foo"`,
 			res: []docs.Lint{
-				docs.NewLintError(1, docs.LintExpectedArray, "expected array value"),
+				docs.NewLintError(1, docs.LintExpectedArray, errors.New("expected array value")),
 			},
 		},
 		{
@@ -1123,7 +1124,7 @@ func TestYAMLLinting(t *testing.T) {
 			),
 			inputConf: `"foo"`,
 			res: []docs.Lint{
-				docs.NewLintError(1, docs.LintExpectedObject, "expected object value"),
+				docs.NewLintError(1, docs.LintExpectedObject, errors.New("expected object value")),
 			},
 		},
 		{
@@ -1133,7 +1134,7 @@ func TestYAMLLinting(t *testing.T) {
 			),
 			inputConf: `bar: {}`,
 			res: []docs.Lint{
-				docs.NewLintError(1, docs.LintExpectedScalar, "expected string value"),
+				docs.NewLintError(1, docs.LintExpectedScalar, errors.New("expected string value")),
 			},
 		},
 		{
@@ -1146,7 +1147,7 @@ func TestYAMLLinting(t *testing.T) {
 			inputConf: `bar:
   baz: {}`,
 			res: []docs.Lint{
-				docs.NewLintError(2, docs.LintExpectedScalar, "expected string value"),
+				docs.NewLintError(2, docs.LintExpectedScalar, errors.New("expected string value")),
 			},
 		},
 		{
@@ -1159,7 +1160,7 @@ func TestYAMLLinting(t *testing.T) {
 			),
 			inputConf: `bev: hello world`,
 			res: []docs.Lint{
-				docs.NewLintError(1, docs.LintMissing, "field baz is required"),
+				docs.NewLintError(1, docs.LintMissing, errors.New("field baz is required")),
 			},
 		},
 	}

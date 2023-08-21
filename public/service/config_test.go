@@ -1,6 +1,7 @@
 package service
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -62,7 +63,7 @@ c:
     e: evalue
 `,
 			lints: []docs.Lint{
-				docs.NewLintError(2, docs.LintUnknown, "field not_real not recognised"),
+				docs.NewLintError(2, docs.LintUnknown, errors.New("field not_real not recognised")),
 			},
 		},
 		{
@@ -79,7 +80,7 @@ c:
     e: evalue
 `,
 			lints: []docs.Lint{
-				docs.NewLintError(4, docs.LintUnknown, "field not_real not recognised"),
+				docs.NewLintError(4, docs.LintUnknown, errors.New("field not_real not recognised")),
 			},
 		},
 	}
