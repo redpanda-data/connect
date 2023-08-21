@@ -6,10 +6,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/benthosdev/benthos/v4/internal/manager/mock"
-	"github.com/benthosdev/benthos/v4/internal/message"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/benthosdev/benthos/v4/internal/manager/mock"
+	"github.com/benthosdev/benthos/v4/internal/message"
 )
 
 func TestOutputWrapperShutdown(t *testing.T) {
@@ -39,11 +40,11 @@ func TestOutputWrapperShutdown(t *testing.T) {
 	}()
 
 	for i := 0; i < 1000; i++ {
-		mWrapped.WriteTransaction(tCtx, message.NewTransactionFunc(message.Batch{
+		require.NoError(t, mWrapped.WriteTransaction(tCtx, message.NewTransactionFunc(message.Batch{
 			message.NewPart([]byte("hello world")),
 		}, func(ctx context.Context, err error) error {
 			return nil
-		}))
+		})))
 	}
 
 	wg.Wait()

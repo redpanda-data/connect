@@ -1,6 +1,7 @@
 package amqp1
 
 import (
+	"context"
 	"fmt"
 	"runtime"
 	"testing"
@@ -32,9 +33,12 @@ func TestIntegrationAMQP1(t *testing.T) {
 		assert.NoError(t, pool.Purge(resource))
 	})
 
+	ctx, done := context.WithTimeout(context.Background(), time.Minute)
+	defer done()
+
 	_ = resource.Expire(900)
 	require.NoError(t, pool.Retry(func() error {
-		client, err := amqp.Dial(fmt.Sprintf("amqp://guest:guest@localhost:%v/", resource.GetPort("5672/tcp")))
+		client, err := amqp.Dial(ctx, fmt.Sprintf("amqp://guest:guest@localhost:%v/", resource.GetPort("5672/tcp")), nil)
 		if err == nil {
 			client.Close()
 		}

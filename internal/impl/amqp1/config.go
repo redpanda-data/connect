@@ -35,34 +35,36 @@ func (e ErrSASLMechanismNotSupported) Error() string {
 	return fmt.Sprintf("SASL mechanism %v was not recognised", string(e))
 }
 
-func saslOptFnsFromParsed(conf *service.ParsedConfig) ([]amqp.ConnOption, error) {
+func saslOptFnsFromParsed(conf *service.ParsedConfig, opts *amqp.ConnOptions) error {
 	if !conf.Contains(saslField) {
-		return nil, nil
+		return nil
 	}
+
 	conf = conf.Namespace(saslField)
 
 	mechanism, err := conf.FieldString(saslMechField)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	user, err := conf.FieldString(saslUserField)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	pass, err := conf.FieldString(saslPassField)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	switch mechanism {
 	case "plain":
-		return []amqp.ConnOption{amqp.ConnSASLPlain(user, pass)}, nil
+		opts.SASLType = amqp.SASLTypePlain(user, pass)
 	case "none":
-		return nil, nil
+	default:
+		return ErrSASLMechanismNotSupported(mechanism)
 	}
-	return nil, ErrSASLMechanismNotSupported(mechanism)
+	return nil
 }
 
 func saslFieldSpec() *service.ConfigField {
