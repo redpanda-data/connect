@@ -620,25 +620,34 @@ func (f FieldSpecs) LintYAML(ctx LintContext, node *yaml.Node) []Lint {
 		return lints
 	}
 
-	specNames := map[string]FieldSpec{}
+	specNamesMissing, specNamesAll := map[string]FieldSpec{}, map[string]FieldSpec{}
 	for _, field := range f {
-		specNames[field.Name] = field
+		specNamesMissing[field.Name] = field
+		specNamesAll[field.Name] = field
 	}
 
-	for i := 0; i < len(node.Content)-1; i += 2 {
-		spec, exists := specNames[node.Content[i].Value]
-		if !exists {
-			if node.Content[i+1].Kind != yaml.AliasNode {
-				lints = append(lints, NewLintError(node.Content[i].Line, LintUnknown, fmt.Sprintf("field %v not recognised", node.Content[i].Value)))
+	var walkNodeContent func(*yaml.Node)
+	walkNodeContent = func(walkNode *yaml.Node) {
+		for i := 0; i < len(walkNode.Content)-1; i += 2 {
+			if walkNode.Content[i].Tag == "!!merge" && walkNode.Content[i+1].Alias != nil {
+				walkNodeContent(walkNode.Content[i+1].Alias)
+				continue
 			}
-			continue
+			spec, exists := specNamesAll[walkNode.Content[i].Value]
+			if !exists {
+				if walkNode.Content[i+1].Kind != yaml.AliasNode {
+					lints = append(lints, NewLintError(walkNode.Content[i].Line, LintUnknown, fmt.Sprintf("field %v not recognised", walkNode.Content[i].Value)))
+				}
+				continue
+			}
+			lints = append(lints, lintYAMLFromOmit(f, spec, walkNode, walkNode.Content[i+1])...)
+			lints = append(lints, spec.LintYAML(ctx, walkNode.Content[i+1])...)
+			delete(specNamesMissing, walkNode.Content[i].Value)
 		}
-		lints = append(lints, lintYAMLFromOmit(f, spec, node, node.Content[i+1])...)
-		lints = append(lints, spec.LintYAML(ctx, node.Content[i+1])...)
-		delete(specNames, node.Content[i].Value)
 	}
+	walkNodeContent(node)
 
-	for name, remaining := range specNames {
+	for name, remaining := range specNamesMissing {
 		_, isCore := remaining.Type.IsCoreComponent()
 		if remaining.needsDefault() &&
 			remaining.Default == nil &&
@@ -1046,7 +1055,10 @@ func (f FieldSpecs) WalkYAML(node *yaml.Node, prov Provider, fn ComponentWalkYAM
 
 func unwrapDocumentNode(node *yaml.Node) *yaml.Node {
 	if node != nil && node.Kind == yaml.DocumentNode && len(node.Content) > 0 {
-		return node.Content[0]
+		node = node.Content[0]
+	}
+	if node != nil && node.Alias != nil {
+		node = node.Alias
 	}
 	return node
 }

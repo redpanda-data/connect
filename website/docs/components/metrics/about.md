@@ -27,9 +27,13 @@ Each major Benthos component type emits one or more metrics with the name prefix
 - `input_received`: A count of the number of messages received by the input.
 - `input_latency_ns`: Measures the roundtrip latency in nanoseconds from the point at which a message is read up to the moment the message has either been acknowledged by an output, has been stored within a buffer, or has been rejected (nacked).
 - `batch_created`: A count of each time an input-level batch has been created using a batching policy. Includes a label `mechanism` describing the particular mechanism that triggered it, one of; `count`, `size`, `period`, `check`.
-- `input_connection_up`: A count of the number of the times the input has successfully established a connection to the target source.
-- `input_connection_failed`: A count of the number of times the input has failed to establish a connection to the target source.
-- `input_connection_lost`: A count of the number of times the input has lost a previously established connection to the target source.
+- `input_connection_up`: For continuous stream based inputs represents a count of the number of the times the input has successfully established a connection to the target source. For poll based inputs that do not retain an active connection this value will increment once.
+- `input_connection_failed`: For continuous stream based inputs represents a count of the number of times the input has failed to establish a connection to the target source.
+- `input_connection_lost`: For continuous stream based inputs represents a count of the number of times the input has lost a previously established connection to the target source.
+
+:::caution
+The behaviour of connection metrics may differ based on input type due to certain libraries and protocols obfuscating the concept of a single connection.
+:::
 
 ### Buffers
 
@@ -56,9 +60,13 @@ Each major Benthos component type emits one or more metrics with the name prefix
 - `output_error`: A count of the number of send attempts that have failed. On failed batched sends this count is incremented once only.
 - `output_latency_ns`: Latency of writes in nanoseconds. This metric may not be populated by outputs that are pull-based such as the `http_server`.
 - `batch_created`: A count of each time an output-level batch has been created using a batching policy. Includes a label `mechanism` describing the particular mechanism that triggered it, one of; `count`, `size`, `period`, `check`.
-- `output_connection_up`: A count of the number of the times the output has successfully established a connection to the target sink.
-- `output_connection_failed`: A count of the number of times the output has failed to establish a connection to the target sink.
-- `output_connection_lost`: A count of the number of times the output has lost a previously established connection to the target sink.
+- `output_connection_up`: For continuous stream based outputs represents a count of the number of the times the output has successfully established a connection to the target sink. For poll based outputs that do not retain an active connection this value will increment once.
+- `output_connection_failed`: For continuous stream based outputs represents a count of the number of times the output has failed to establish a connection to the target sink.
+- `output_connection_lost`: For continuous stream based outputs represents a count of the number of times the output has lost a previously established connection to the target sink.
+
+:::caution
+The behaviour of connection metrics may differ based on output type due to certain libraries and protocols obfuscating the concept of a single connection.
+:::
 
 ### Caches
 

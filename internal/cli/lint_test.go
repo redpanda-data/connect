@@ -79,6 +79,46 @@ output:
 			},
 		},
 		{
+			name: "one file with c flag",
+			args: []string{"benthos", "-c", tFile("foo.yaml"), "lint"},
+			files: map[string]string{
+				"foo.yaml": `
+input:
+  generate:
+    huh: what
+    mapping: 'root.id = uuid_v4()'
+output:
+  nah: nope
+  drop: {}
+`,
+			},
+			expectedCode: 1,
+			expectedLints: []string{
+				"field huh not recognised",
+				"field nah is invalid",
+			},
+		},
+		{
+			name: "one file with r flag",
+			args: []string{"benthos", "-r", tFile("foo.yaml"), "lint"},
+			files: map[string]string{
+				"foo.yaml": `
+input:
+  generate:
+    huh: what
+    mapping: 'root.id = uuid_v4()'
+output:
+  nah: nope
+  drop: {}
+`,
+			},
+			expectedCode: 1,
+			expectedLints: []string{
+				"field huh not recognised",
+				"field nah is invalid",
+			},
+		},
+		{
 			name: "env var missing",
 			args: []string{"benthos", "lint", tFile("foo.yaml")},
 			files: map[string]string{

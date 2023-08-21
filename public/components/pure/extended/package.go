@@ -15,6 +15,7 @@ import (
 	_ "github.com/benthosdev/benthos/v4/internal/impl/lang"
 	_ "github.com/benthosdev/benthos/v4/internal/impl/msgpack"
 	_ "github.com/benthosdev/benthos/v4/internal/impl/parquet"
+	_ "github.com/benthosdev/benthos/v4/internal/impl/protobuf"
 	_ "github.com/benthosdev/benthos/v4/internal/impl/pure/extended"
 	_ "github.com/benthosdev/benthos/v4/internal/impl/xml"
 )

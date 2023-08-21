@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Shopify/sarama"
+	"github.com/IBM/sarama"
 	"github.com/cenkalti/backoff/v4"
 
 	batchInternal "github.com/benthosdev/benthos/v4/internal/batch"
