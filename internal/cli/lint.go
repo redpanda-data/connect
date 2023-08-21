@@ -34,18 +34,10 @@ func lintFile(path string, skipEnvVarCheck bool, lConf docs.LintConfig) (pathLin
 	conf := config.New()
 	lints, err := config.ReadFileLinted(ifs.OS(), path, skipEnvVarCheck, lConf, &conf)
 	if err != nil {
-		var l docs.Lint
-		if errors.As(err, &l) {
-			pathLints = append(pathLints, pathLint{
-				source: path,
-				lint:   l,
-			})
-		} else {
-			pathLints = append(pathLints, pathLint{
-				source: path,
-				lint:   docs.NewLintError(1, docs.LintFailedRead, err.Error()),
-			})
-		}
+		pathLints = append(pathLints, pathLint{
+			source: path,
+			lint:   docs.NewLintError(1, docs.LintFailedRead, err),
+		})
 		return
 	}
 	for _, l := range lints {
@@ -62,7 +54,7 @@ func lintMDSnippets(path string, lConf docs.LintConfig) (pathLints []pathLint) {
 	if err != nil {
 		pathLints = append(pathLints, pathLint{
 			source: path,
-			lint:   docs.NewLintError(1, docs.LintFailedRead, err.Error()),
+			lint:   docs.NewLintError(1, docs.LintFailedRead, err),
 		})
 		return
 	}
@@ -79,7 +71,7 @@ func lintMDSnippets(path string, lConf docs.LintConfig) (pathLints []pathLint) {
 		if endOfSnippet == -1 {
 			pathLints = append(pathLints, pathLint{
 				source: path,
-				lint:   docs.NewLintError(snippetLine, docs.LintFailedRead, "markdown snippet not terminated"),
+				lint:   docs.NewLintError(snippetLine, docs.LintFailedRead, errors.New("markdown snippet not terminated")),
 			})
 			return
 		}
@@ -99,7 +91,7 @@ func lintMDSnippets(path string, lConf docs.LintConfig) (pathLints []pathLint) {
 			} else {
 				pathLints = append(pathLints, pathLint{
 					source: path,
-					lint:   docs.NewLintError(snippetLine, docs.LintFailedRead, err.Error()),
+					lint:   docs.NewLintError(snippetLine, docs.LintFailedRead, err),
 				})
 			}
 		} else {
@@ -107,7 +99,7 @@ func lintMDSnippets(path string, lConf docs.LintConfig) (pathLints []pathLint) {
 			if err != nil {
 				pathLints = append(pathLints, pathLint{
 					source: path,
-					lint:   docs.NewLintError(snippetLine, docs.LintFailedRead, err.Error()),
+					lint:   docs.NewLintError(snippetLine, docs.LintFailedRead, err),
 				})
 			}
 			for _, l := range lints {

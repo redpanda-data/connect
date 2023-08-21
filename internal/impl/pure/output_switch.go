@@ -112,7 +112,7 @@ behavior is false, which will drop the message.`,
 				isReject := cObj.Exists("output", "reject")
 				if typeStr == "reject" || isReject {
 					return []docs.Lint{
-						docs.NewLintError(line, docs.LintCustom, "a `switch` output with a `reject` case output must have the field `switch.retry_until_success` set to `false`, otherwise the `reject` child output will result in infinite retries"),
+						docs.NewLintError(line, docs.LintCustom, errors.New("a `switch` output with a `reject` case output must have the field `switch.retry_until_success` set to `false`, otherwise the `reject` child output will result in infinite retries")),
 					}
 				}
 			}
