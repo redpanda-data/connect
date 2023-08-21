@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Fixed
+
+- Fixed an issue where saturated output resources could panic under intense CRUD activity.
+
 ## 4.19.0 - 2023-08-17
 
 ### Added
