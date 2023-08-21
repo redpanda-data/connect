@@ -43,7 +43,6 @@ ttlru:
   default_ttl: 5m0s
   ttl: "" # No default (optional)
   init_values: {}
-  without_reset: false
   optimistic: false
 ```
 
@@ -112,14 +111,6 @@ init_values:
   Spice Girls: "1994"
   The Human League: "1977"
 ```
-
-### `without_reset`
-
-If true, we stop reset the ttl on read events.
-
-
-Type: `bool`  
-Default: `false`  
 
 ### `optimistic`
 

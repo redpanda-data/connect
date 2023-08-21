@@ -24,12 +24,12 @@ func TestTTLRUCacheDefault(t *testing.T) {
 	testServiceCache(t, c)
 }
 
-func TestTTLRUCacheOptimisticAndWithoutReset(t *testing.T) {
+func TestTTLRUCacheOptimistic(t *testing.T) {
 	t.Parallel()
 
 	defConf, err := ttlruCacheConfig().ParseYAML(`
 optimistic: true
-without_reset: true
+without_reset: true # must be ignored
 `, nil)
 	require.NoError(t, err)
 
