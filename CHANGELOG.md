@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- The `amqp1` input now supports `anonymous` SASL authentication.
+
 ### Fixed
 
 - Fixed an issue where saturated output resources could panic under intense CRUD activity.
