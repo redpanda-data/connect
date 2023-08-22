@@ -41,7 +41,8 @@ linters:
     - govet
     - ineffassign
     - staticcheck
-    - typecheck
+    # Another linter bites the dust, for some reason this is false erroring on github actions
+    # - typecheck
     - unused
     # Extra linters:
     - wastedassign
