@@ -107,8 +107,8 @@ require (
 	github.com/trinodb/trino-go-client v0.312.0
 	github.com/twmb/franz-go v1.14.4
 	github.com/twmb/franz-go/pkg/kmsg v1.6.1
-	github.com/vmihailenco/go-tinylfu v0.2.2
 	github.com/urfave/cli/v2 v2.25.7
+	github.com/vmihailenco/go-tinylfu v0.2.2
 	github.com/vmihailenco/msgpack/v5 v5.3.5
 	github.com/xdg/scram v1.0.5
 	github.com/xeipuuv/gojsonschema v1.2.0
