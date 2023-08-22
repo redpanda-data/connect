@@ -273,6 +273,7 @@ Default: `"none"`
 
 | Option | Summary |
 |---|---|
+| `anonymous` | Anonymous SASL authentication. |
 | `none` | No SASL based authentication. |
 | `plain` | Plain text SASL authentication. |
 
