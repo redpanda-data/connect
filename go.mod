@@ -26,8 +26,8 @@ require (
 	github.com/aws/aws-lambda-go v1.41.0
 	github.com/aws/aws-sdk-go v1.44.327
 	github.com/beanstalkd/go-beanstalk v0.2.0
-	github.com/bits-and-blooms/bloom/v3 v3.5.0
 	github.com/benhoyt/goawk v1.24.0
+	github.com/bits-and-blooms/bloom/v3 v3.5.0
 	github.com/bradfitz/gomemcache v0.0.0-20230124162541-5f7a7d875746
 	github.com/bwmarrin/discordgo v0.27.1
 	github.com/bwmarrin/snowflake v0.3.0
