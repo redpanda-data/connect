@@ -58,17 +58,15 @@ azure_renew_lock: true
 		_ = m.Close(context.Background())
 	}()
 
-	client, err := amqp.Dial(url)
+	client, err := amqp.Dial(ctx, url, nil)
 	require.NoError(t, err)
 	defer client.Close()
 
-	session, err := client.NewSession()
+	session, err := client.NewSession(ctx, nil)
 	require.NoError(t, err)
 	defer session.Close(ctx)
 
-	sender, err := session.NewSender(
-		amqp.LinkTargetAddress("/test"),
-	)
+	sender, err := session.NewSender(ctx, "/test", nil)
 	require.NoError(t, err)
 	defer sender.Close(ctx)
 
@@ -104,7 +102,7 @@ azure_renew_lock: true
 				},
 				Data:  [][]byte{[]byte(data)},
 				Value: value,
-			})
+			}, nil)
 			require.NoError(t, err)
 		}(test.data, test.value)
 	}

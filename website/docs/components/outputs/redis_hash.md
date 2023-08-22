@@ -29,7 +29,7 @@ Sets Redis hash objects using the HMSET command.
 output:
   label: ""
   redis_hash:
-    url: :6397 # No default (required)
+    url: redis://:6397 # No default (required)
     key: ${! @.kafka_key )} # No default (required)
     walk_metadata: false
     walk_json_object: false
@@ -45,7 +45,7 @@ output:
 output:
   label: ""
   redis_hash:
-    url: :6397 # No default (required)
+    url: redis://:6397 # No default (required)
     kind: simple
     master: ""
     tls:
@@ -110,9 +110,7 @@ Type: `string`
 ```yml
 # Examples
 
-url: :6397
-
-url: localhost:6397
+url: redis://:6397
 
 url: redis://localhost:6379
 
