@@ -3,9 +3,10 @@ package query
 // ExampleSpec provides a mapping example and some input/output results to
 // display.
 type ExampleSpec struct {
-	Mapping string      `json:"mapping"`
-	Summary string      `json:"summary"`
-	Results [][2]string `json:"results"`
+	Mapping     string      `json:"mapping"`
+	Summary     string      `json:"summary"`
+	Results     [][2]string `json:"results"`
+	SkipTesting bool        `json:"skip_testing"`
 }
 
 // NewExampleSpec creates a new example spec.
@@ -20,6 +21,22 @@ func NewExampleSpec(summary, mapping string, results ...string) ExampleSpec {
 		Mapping: mapping,
 		Summary: summary,
 		Results: structuredResults,
+	}
+}
+
+// NewNotTestedExampleSpec creates a new not tested example spec.
+func NewNotTestedExampleSpec(summary, mapping string, results ...string) ExampleSpec {
+	structuredResults := make([][2]string, 0, len(results)/2)
+	for i, res := range results {
+		if i%2 == 1 {
+			structuredResults = append(structuredResults, [2]string{results[i-1], res})
+		}
+	}
+	return ExampleSpec{
+		Mapping:     mapping,
+		Summary:     summary,
+		Results:     structuredResults,
+		SkipTesting: true,
 	}
 }
 
@@ -153,6 +170,7 @@ var (
 	MethodCategoryCoercion       = "Type Coercion"
 	MethodCategoryParsing        = "Parsing"
 	MethodCategoryObjectAndArray = "Object & Array Manipulation"
+	MethodCategoryJWT            = "JSON Web Tokens"
 	MethodCategoryGeoIP          = "GeoIP"
 	MethodCategoryDeprecated     = "Deprecated"
 	MethodCategoryPlugin         = "Plugin"
