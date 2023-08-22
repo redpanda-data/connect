@@ -8,6 +8,7 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 
 - Fixed an issue where saturated output resources could panic under intense CRUD activity.
+- The config linter no longer raises issues with codec fields containing colons within their arguments.
 
 ## 4.19.0 - 2023-08-17
 

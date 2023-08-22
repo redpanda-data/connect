@@ -392,7 +392,7 @@ let options = %v
 map is_pattern_option {
   let pattern_options = %v
   let parts = this.split(":")
-  root = $parts.length() == 2 && $pattern_options.exists($parts.index(0))
+  root = $parts.length() >= 2 && $pattern_options.exists($parts.index(0))
 }
 # Codec arguments can be chained with a / (i.e. "lines/multipart")
 let value_parts = if this.type() == "string" { this.split("/").map_each(part -> part.lowercase()) } else { [] }
