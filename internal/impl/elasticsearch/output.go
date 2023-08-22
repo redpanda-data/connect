@@ -73,7 +73,7 @@ func esoConfigFromParsed(pConf *service.ParsedConfig) (conf esoConfig, err error
 	if sniff, err = pConf.FieldBool(esoFieldSniff); err != nil {
 		return
 	}
-	if healthCheck, err = pConf.FieldBool(esoFieldSniff); err != nil {
+	if healthCheck, err = pConf.FieldBool(esoFieldHealthcheck); err != nil {
 		return
 	}
 	conf.clientOpts = []elastic.ClientOptionFunc{
@@ -89,7 +89,7 @@ func esoConfigFromParsed(pConf *service.ParsedConfig) (conf esoConfig, err error
 			if username, err = authConf.FieldString(esoFieldAuthUsername); err != nil {
 				return
 			}
-			if password, err = authConf.FieldString(esoFieldAuthUsername); err != nil {
+			if password, err = authConf.FieldString(esoFieldAuthPassword); err != nil {
 				return
 			}
 			conf.clientOpts = append(conf.clientOpts, elastic.SetBasicAuth(username, password))
@@ -172,9 +172,9 @@ var AWSOptFn = notImportedAWSOptFn
 // AWSField represents the aws block within an elasticsearch field. This is
 // exported in order to make unit testing easier within the aws subpackage.
 func AWSField() *service.ConfigField {
-	return service.NewObjectField("aws",
+	return service.NewObjectField(esoFieldAWS,
 		append([]*service.ConfigField{
-			service.NewBoolField("enabled").
+			service.NewBoolField(ESOFieldAWSEnabled).
 				Description("Whether to connect to Amazon Elastic Service.").
 				Default(false),
 		}, config.SessionFields()...)...).
