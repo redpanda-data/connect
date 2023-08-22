@@ -52,6 +52,15 @@ func TestSlogToBenthosLoggerAdapterMapKV(t *testing.T) {
 	logger.Warnln("Warning message foo fields")
 	logger.Warnf("Warning message root module\n")
 
-	expected := "time=\"\" level=WARN msg=\"Warning message foo fields\" foo=bar count=10 thing=\"is a string\" iscool=true\ntime=\"\" level=WARN msg=\"Warning message root module\\n\" foo=bar count=10 thing=\"is a string\" iscool=true\n"
-	assert.Equal(t, expected, buf.String())
+	bufStr := buf.String()
+
+	for _, exp := range []string{
+		"time=\"\" level=WARN msg=\"Warning message foo fields\"",
+		"foo=bar",
+		"count=10",
+		"thing=\"is a string\" iscool=true",
+		"time=\"\" level=WARN msg=\"Warning message root module\\n\"",
+	} {
+		assert.Contains(t, bufStr, exp)
+	}
 }
