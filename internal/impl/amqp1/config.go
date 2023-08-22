@@ -60,6 +60,8 @@ func saslOptFnsFromParsed(conf *service.ParsedConfig, opts *amqp.ConnOptions) er
 	switch mechanism {
 	case "plain":
 		opts.SASLType = amqp.SASLTypePlain(user, pass)
+	case "anonymous":
+		opts.SASLType = amqp.SASLTypeAnonymous()
 	case "none":
 	default:
 		return ErrSASLMechanismNotSupported(mechanism)
@@ -70,8 +72,9 @@ func saslOptFnsFromParsed(conf *service.ParsedConfig, opts *amqp.ConnOptions) er
 func saslFieldSpec() *service.ConfigField {
 	return service.NewObjectField(saslField,
 		service.NewStringAnnotatedEnumField(saslMechField, map[string]string{
-			"none":  "No SASL based authentication.",
-			"plain": "Plain text SASL authentication.",
+			"none":      "No SASL based authentication.",
+			"plain":     "Plain text SASL authentication.",
+			"anonymous": "Anonymous SASL authentication.",
 		}).Description("The SASL authentication mechanism to use.").
 			Default("none"),
 		service.NewStringField(saslUserField).
