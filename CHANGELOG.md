@@ -5,9 +5,15 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 4.20.0 - 2023-08-22
+
 ### Added
 
 - The `amqp1` input now supports `anonymous` SASL authentication.
+- New JWT Bloblang methods `parse_jwt_es256`, `parse_jwt_es384`, `parse_jwt_es512`, `parse_jwt_rs256`, `parse_jwt_rs384`, `parse_jwt_rs512`, `sign_jwt_es256`, `sign_jwt_es384` and `sign_jwt_es512` added.
+- The `csv-safe` input codec now supports custom delimiters with the syntax `csv-safe:x`.
+- The `open_telemetry_collector` tracer now supports secure connections, enabled via the `secure` field.
+- Function `v0_msg_exists_meta` added to the `javascript` processor.
 
 ### Fixed
 
