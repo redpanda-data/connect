@@ -369,6 +369,27 @@ func TestCSVSafeReader(t *testing.T) {
 	)
 }
 
+func TestCSVSafeCustomDelimiterReader(t *testing.T) {
+	data := []byte("col1|col2|col3\nfoo1|bar1|baz1\nfoo2|bar2|baz2\nfoo3|bar3|baz3")
+	testReaderSuite(
+		t, "csv-safe:|", "", data,
+		`{"col1":"foo1","col2":"bar1","col3":"baz1"}`,
+		`{"col1":"foo2","col2":"bar2","col3":"baz2"}`,
+		`{"col1":"foo3","col2":"bar3","col3":"baz3"}`,
+	)
+
+	data = []byte("col1|col2|col3")
+	testReaderSuite(t, "csv-safe:|", "", data)
+
+	data = []byte("col1|col2|col3\nfoo1|bar1\nfoo2|bar2|baz2\nfoo3|bar3|baz3")
+	testReaderSuite(
+		t, "csv-safe:|", "", data,
+		`{}`,
+		`{"col1":"foo2","col2":"bar2","col3":"baz2"}`,
+		`{"col1":"foo3","col2":"bar3","col3":"baz3"}`,
+	)
+}
+
 func assertPartMetadataEqual[T any](t *testing.T, p *message.Part, key string, value T) {
 	rawVal, ok := p.MetaGetMut(key)
 	assert.True(t, ok)

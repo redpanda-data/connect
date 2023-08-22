@@ -35,6 +35,7 @@ var ReaderDocs = docs.FieldString(
 	"csv", "Consume structured rows as comma separated values, the first row must be a header row.",
 	"csv:x", "Consume structured rows as values separated by a custom delimiter, the first row must be a header row. The custom delimiter must be a single character, e.g. the codec `\"csv:\\t\"` would consume a tab delimited file.",
 	"csv-safe", "Consume structured rows like `csv`, but sends messages with empty maps on failure to parse. Includes row number and parsing errors (if any) in the message's metadata.",
+	"csv-safe:x", "Consume structured rows like `csv:x` as values separated by a custom delimiter, but sends messages with empty maps on failure to parse. The custom delimiter must be a single character, e.g. the codec `\"csv-safe:\\t\"` would consume a tab delimited file. Includes row number and parsing errors (if any) in the message's metadata.",
 	"delim:x", "Consume the file in segments divided by a custom delimiter.",
 	"gzip", "Decompress a gzip file, this codec should precede another codec, e.g. `gzip/all-bytes`, `gzip/tar`, `gzip/csv`, etc.",
 	"pgzip", "Decompress a gzip file in parallel, this codec should precede another codec, e.g. `pgzip/all-bytes`, `pgzip/tar`, `pgzip/csv`, etc.",
@@ -290,6 +291,20 @@ func partReader(codec string, conf ReaderConfig) (ReaderConstructor, bool, error
 		byRune := byRunes[0]
 		return func(path string, r io.ReadCloser, fn ReaderAckFn) (Reader, error) {
 			return newCSVReader(r, fn, &byRune)
+		}, true, nil
+	}
+	if strings.HasPrefix(codec, "csv-safe:") {
+		by := strings.TrimPrefix(codec, "csv-safe:")
+		if by == "" {
+			return nil, false, errors.New("csv-safe codec requires a non-empty delimiter")
+		}
+		byRunes := []rune(by)
+		if len(byRunes) != 1 {
+			return nil, false, errors.New("csv-safe codec requires a single character delimiter")
+		}
+		byRune := byRunes[0]
+		return func(path string, r io.ReadCloser, fn ReaderAckFn) (Reader, error) {
+			return newCSVSafeReader(r, fn, &byRune)
 		}, true, nil
 	}
 	if strings.HasPrefix(codec, "chunker:") {

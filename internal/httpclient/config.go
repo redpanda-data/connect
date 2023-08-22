@@ -73,7 +73,7 @@ func OldFieldSpec(defaultVerb string, forOutput bool, extraChildren ...docs.Fiel
 			metaPatternCount, _ := gObj.ArrayCountP("extract_headers.include_patterns")
 			if copyResponseHeadersSet && copyResponseHeaders && (metaPrefixCount > 0 || metaPatternCount > 0) {
 				return []docs.Lint{
-					docs.NewLintError(line, docs.LintCustom, "Cannot use extract_headers when copy_response_headers is true."),
+					docs.NewLintError(line, docs.LintCustom, errors.New("cannot use extract_headers when copy_response_headers is true")),
 				}
 			}
 			return nil
