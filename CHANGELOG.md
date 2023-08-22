@@ -9,6 +9,7 @@ All notable changes to this project will be documented in this file.
 
 - Fixed an issue where saturated output resources could panic under intense CRUD activity.
 - The config linter no longer raises issues with codec fields containing colons within their arguments.
+- The `elasticsearch` output should no longer fail to send basic authentication passwords, this fixes a regression introduced in v4.19.0.
 
 ## 4.19.0 - 2023-08-17
 
