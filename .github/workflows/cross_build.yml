@@ -23,14 +23,8 @@ jobs:
       with:
         fetch-depth: 0
 
-    - name: Install Go
-      uses: actions/setup-go@v4
-      with:
-        go-version: ${{ matrix.go-version }}
-        check-latest: true
-
     - name: Free up some disk space on ubuntu
-      if: ${{ github.runner == 'ubuntu-latest' }}
+      if: ${{ runner.os == 'Linux' }}
       run: |
         # Workaround to provide additional free space for testing.
         #   https://github.com/actions/virtual-environments/issues/2840
@@ -39,8 +33,14 @@ jobs:
         sudo rm -rf "/usr/local/share/boost"
         sudo rm -rf "$AGENT_TOOLSDIRECTORY"
 
+    - name: Install Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: ${{ matrix.go-version }}
+        check-latest: true
+
     - name: GoReleaser
       uses: goreleaser/goreleaser-action@v4
       with:
         version: latest
-        args: build --snapshot --timeout 120m
+        args: release --snapshot --timeout 120m
