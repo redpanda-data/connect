@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Fixed
+
+- Allow comments in single root and directly imported bloblang mappings
+
 ## 4.20.0 - 2023-08-22
 
 ### Added
