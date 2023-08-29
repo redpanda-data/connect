@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Fixed
+
+- The `azure_blob_storage` input no longer adds `blob_storage_content_type` and `blob_storage_content_encoding` metadata values as string pointer types, and instead adds these values as string types only when they are present.
+
 ## 4.20.0 - 2023-08-22
 
 ### Added
