@@ -67,6 +67,9 @@ Finally, it's also possible to specify an explicit offset to consume from by add
 		Field(service.NewStringField("consumer_group").
 			Description("An optional consumer group to consume as. When specified the partitions of specified topics are automatically distributed across consumers sharing a consumer group, and partition offsets are automatically committed and resumed under this name. Consumer groups are not supported when specifying explicit partitions to consume from in the `topics` field.").
 			Optional()).
+		Field(service.NewStringField("client_id").
+			Description("An identifier for the client connection.").
+			Default("timeplus")).
 		Field(service.NewIntField("checkpoint_limit").
 			Description("Determines how many messages of the same partition can be processed in parallel before applying back pressure. When a message of a given offset is delivered to the output the offset is only allowed to be committed when all messages of prior offsets have also been delivered, this ensures at-least-once delivery guarantees. However, this mechanism also increases the likelihood of duplicates in the event of crashes or server faults, reducing the checkpoint limit will mitigate this.").
 			Default(1024).
@@ -122,6 +125,7 @@ type franzKafkaReader struct {
 	seedBrokers     []string
 	topics          []string
 	topicPartitions map[string]map[int32]kgo.Offset
+	clientID        string
 	consumerGroup   string
 	tlsConf         *tls.Config
 	saslConfs       []sasl.Mechanism
@@ -192,6 +196,10 @@ func newFranzKafkaReaderFromConfig(conf *service.ParsedConfig, res *service.Reso
 	}
 
 	if f.regexPattern, err = conf.FieldBool("regexp_topics"); err != nil {
+		return nil, err
+	}
+
+	if f.clientID, err = conf.FieldString("client_id"); err != nil {
 		return nil, err
 	}
 
@@ -594,6 +602,7 @@ func (f *franzKafkaReader) Connect(ctx context.Context) error {
 		kgo.ConsumeResetOffset(initialOffset),
 		kgo.SASL(f.saslConfs...),
 		kgo.ConsumerGroup(f.consumerGroup),
+		kgo.ClientID(f.clientID),
 	}
 
 	if f.consumerGroup != "" {

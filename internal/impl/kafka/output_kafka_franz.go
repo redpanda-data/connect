@@ -48,6 +48,9 @@ This output often out-performs the traditional ` + "`kafka`" + ` output as well 
 			Description("An optional explicit partition to set for each message. This field is only relevant when the `partitioner` is set to `manual`. The provided interpolation string must be a valid integer.").
 			Example(`${! meta("partition") }`).
 			Optional()).
+		Field(service.NewStringField("client_id").
+			Description("An identifier for the client connection.").
+			Default("timeplus")).
 		Field(service.NewMetadataFilterField("metadata").
 			Description("Determine which (if any) metadata values should be added to messages as headers.").
 			Optional()).
@@ -111,6 +114,7 @@ type franzKafkaWriter struct {
 	topic            *service.InterpolatedString
 	key              *service.InterpolatedString
 	partition        *service.InterpolatedString
+	clientID         string
 	tlsConf          *tls.Config
 	saslConfs        []sasl.Mechanism
 	metaFilter       *service.MetadataFilter
@@ -217,6 +221,10 @@ func newFranzKafkaWriterFromConfig(conf *service.ParsedConfig, log *service.Logg
 		}
 	}
 
+	if f.clientID, err = conf.FieldString("client_id"); err != nil {
+		return nil, err
+	}
+
 	if conf.Contains("metadata") {
 		if f.metaFilter, err = conf.FieldMetadataFilter("metadata"); err != nil {
 			return nil, err
@@ -250,6 +258,7 @@ func (f *franzKafkaWriter) Connect(ctx context.Context) error {
 		kgo.AllowAutoTopicCreation(), // TODO: Configure this
 		kgo.ProducerBatchMaxBytes(f.produceMaxBytes),
 		kgo.ProduceRequestTimeout(f.timeout),
+		kgo.ClientID(f.clientID),
 		kgo.WithLogger(&kgoLogger{f.log}),
 	}
 	if f.tlsConf != nil {
