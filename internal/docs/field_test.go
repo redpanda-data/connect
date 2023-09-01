@@ -1,6 +1,7 @@
 package docs
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -20,8 +21,6 @@ func TestBloblLinter(t *testing.T) {
 }
 `)
 
-	lintCtx := NewLintContext()
-
 	tests := []struct {
 		name     string
 		input    any
@@ -36,22 +35,22 @@ func TestBloblLinter(t *testing.T) {
 			name:  "Single type lint",
 			input: "",
 			expected: []Lint{
-				NewLintError(0, LintCustom, "expected non-empty string, got empty string"),
+				NewLintError(0, LintCustom, errors.New("expected non-empty string, got empty string")),
 			},
 		},
 		{
 			name:  "One lint",
 			input: `hello meow world`,
 			expected: []Lint{
-				NewLintError(0, LintCustom, "no cats allowed"),
+				NewLintError(0, LintCustom, errors.New("no cats allowed")),
 			},
 		},
 		{
 			name:  "Two lints",
 			input: `hello woof world`,
 			expected: []Lint{
-				NewLintError(0, LintCustom, "no dogs allowed"),
-				NewLintError(0, LintCustom, "no noise allowed"),
+				NewLintError(0, LintCustom, errors.New("no dogs allowed")),
+				NewLintError(0, LintCustom, errors.New("no noise allowed")),
 			},
 		},
 	}
@@ -62,7 +61,7 @@ func TestBloblLinter(t *testing.T) {
 			var node yaml.Node
 			require.NoError(t, node.Encode(test.input))
 
-			lints := f.LintYAML(lintCtx, &node)
+			lints := f.LintYAML(NewLintContext(NewLintConfig()), &node)
 			assert.Equal(t, test.expected, lints)
 		})
 	}
@@ -127,7 +126,7 @@ func TestFieldLinting(t *testing.T) {
 			var lints []Lint
 			linter := test.f.getLintFunc()
 			if linter != nil {
-				lints = linter(NewLintContext(), 0, 0, test.input)
+				lints = linter(NewLintContext(NewLintConfig()), 0, 0, test.input)
 			}
 			assert.Equal(t, test.output, lints)
 		})

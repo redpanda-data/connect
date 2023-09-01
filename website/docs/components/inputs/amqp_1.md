@@ -29,8 +29,8 @@ Reads messages from an AMQP (1.0) server.
 input:
   label: ""
   amqp_1:
-    url: ""
-    source_address: ""
+    url: amqp://localhost:5672/ # No default (required)
+    source_address: /foo # No default (required)
 ```
 
 </TabItem>
@@ -41,8 +41,8 @@ input:
 input:
   label: ""
   amqp_1:
-    url: ""
-    source_address: ""
+    url: amqp://localhost:5672/ # No default (required)
+    source_address: /foo # No default (required)
     azure_renew_lock: false
     tls:
       enabled: false
@@ -71,8 +71,7 @@ This input adds the following metadata fields to each message:
 - All string typed message annotations
 ```
 
-You can access these metadata fields using
-[function interpolation](/docs/configuration/interpolation#bloblang-queries).
+You can access these metadata fields using [function interpolation](/docs/configuration/interpolation#bloblang-queries).
 
 ## Fields
 
@@ -82,7 +81,6 @@ A URL to connect to.
 
 
 Type: `string`  
-Default: `""`  
 
 ```yml
 # Examples
@@ -98,7 +96,6 @@ The source address to consume from.
 
 
 Type: `string`  
-Default: `""`  
 
 ```yml
 # Examples
@@ -191,6 +188,7 @@ A list of client certificates to use. For each certificate either the fields `ce
 
 
 Type: `array`  
+Default: `[]`  
 
 ```yml
 # Examples
@@ -275,6 +273,7 @@ Default: `"none"`
 
 | Option | Summary |
 |---|---|
+| `anonymous` | Anonymous SASL authentication. |
 | `none` | No SASL based authentication. |
 | `plain` | Plain text SASL authentication. |
 

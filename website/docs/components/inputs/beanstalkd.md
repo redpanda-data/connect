@@ -26,7 +26,7 @@ Introduced in version 4.7.0.
 input:
   label: ""
   beanstalkd:
-    address: ""
+    address: 127.0.0.1:11300 # No default (required)
 ```
 
 ## Fields

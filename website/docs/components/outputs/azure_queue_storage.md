@@ -17,7 +17,6 @@ import TabItem from '@theme/TabItem';
 :::caution BETA
 This component is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with the component is found.
 :::
-
 Sends messages to an Azure Storage Queue.
 
 Introduced in version 3.36.0.
@@ -38,7 +37,8 @@ output:
     storage_account: ""
     storage_access_key: ""
     storage_connection_string: ""
-    queue_name: ""
+    storage_sas_token: ""
+    queue_name: "" # No default (required)
     max_in_flight: 64
     batching:
       count: 0
@@ -58,7 +58,8 @@ output:
     storage_account: ""
     storage_access_key: ""
     storage_connection_string: ""
-    queue_name: ""
+    storage_sas_token: ""
+    queue_name: "" # No default (required)
     ttl: ""
     max_in_flight: 64
     batching:
@@ -66,7 +67,7 @@ output:
       byte_size: 0
       period: ""
       check: ""
-      processors: []
+      processors: [] # No default (optional)
 ```
 
 </TabItem>
@@ -90,7 +91,7 @@ Batches can be formed at both the input and output level. You can find out more
 
 ### `storage_account`
 
-The storage account to upload messages to. This field is ignored if `storage_connection_string` is set.
+The storage account to access. This field is ignored if `storage_connection_string` is set.
 
 
 Type: `string`  
@@ -106,7 +107,15 @@ Default: `""`
 
 ### `storage_connection_string`
 
-A storage account connection string. This field is required if `storage_account` and `storage_access_key` are not set.
+A storage account connection string. This field is required if `storage_account` and `storage_access_key` / `storage_sas_token` are not set.
+
+
+Type: `string`  
+Default: `""`  
+
+### `storage_sas_token`
+
+The storage account SAS token. This field is ignored if `storage_connection_string` or `storage_access_key` are set.
 
 
 Type: `string`  
@@ -119,7 +128,6 @@ This field supports [interpolation functions](/docs/configuration/interpolation#
 
 
 Type: `string`  
-Default: `""`  
 
 ### `ttl`
 
@@ -147,7 +155,6 @@ The maximum number of parallel message batches to have in flight at any given ti
 
 Type: `int`  
 Default: `64`  
-Requires version 3.45.0 or newer  
 
 ### `batching`
 
@@ -228,7 +235,6 @@ A list of [processors](/docs/components/processors/about) to apply to a batch as
 
 
 Type: `array`  
-Default: `[]`  
 
 ```yml
 # Examples

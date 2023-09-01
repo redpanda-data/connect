@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"os"
 
@@ -83,10 +84,10 @@ func NewStreamBuilder() *StreamBuilder {
 }
 
 func (s *StreamBuilder) getLintContext() docs.LintContext {
-	ctx := docs.NewLintContext()
-	ctx.DocsProvider = s.env.internal
-	ctx.BloblangEnv = s.env.bloblangEnv.Deactivated()
-	return ctx
+	conf := docs.NewLintConfig()
+	conf.DocsProvider = s.env.internal
+	conf.BloblangEnv = s.env.bloblangEnv.Deactivated()
+	return docs.NewLintContext(conf)
 }
 
 //------------------------------------------------------------------------------
@@ -123,6 +124,12 @@ type PrintLogger interface {
 // fields set via config.
 func (s *StreamBuilder) SetPrintLogger(l PrintLogger) {
 	s.customLogger = log.Wrap(l)
+}
+
+// SetLogger sets a customer logger via Go's standard logging interface,
+// allowing you to replace the default Benthos logger with your own.
+func (s *StreamBuilder) SetLogger(l *slog.Logger) {
+	s.customLogger = log.NewBenthosLogAdapter(l)
 }
 
 // HTTPMultiplexer is an interface supported by most HTTP multiplexers.
@@ -749,7 +756,7 @@ func (s *StreamBuilder) runConsumerFunc(mgr *manager.Type) error {
 			}
 			batch := make(MessageBatch, tran.Payload.Len())
 			_ = tran.Payload.Iter(func(i int, part *message.Part) error {
-				batch[i] = newMessageFromPart(part)
+				batch[i] = NewInternalMessage(part)
 				return nil
 			})
 			err := s.consumerFunc(context.Background(), batch)
@@ -786,7 +793,7 @@ func (s *StreamBuilder) buildWithEnv(env *bundle.Environment) (*Stream, error) {
 	logger := s.customLogger
 	if logger == nil {
 		var err error
-		if logger, err = log.New(os.Stdout, s.logger); err != nil {
+		if logger, err = log.New(os.Stdout, s.env.fs, s.logger); err != nil {
 			return nil, err
 		}
 	}

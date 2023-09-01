@@ -12,9 +12,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/benthosdev/benthos/v4/internal/component"
-	"github.com/benthosdev/benthos/v4/internal/component/input"
-	"github.com/benthosdev/benthos/v4/internal/message"
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
 func TestCSVReaderHappy(t *testing.T) {
@@ -62,22 +60,27 @@ func TestCSVReaderHappy(t *testing.T) {
 		`{"header1":"bar1","header2":"bar2","header3":"bar3"}`,
 		`{"header1":"baz1","header2":"baz2","header3":"baz3"}`,
 	} {
-		var resMsg message.Batch
+		var resMsg service.MessageBatch
 		resMsg, _, err = f.ReadBatch(context.Background())
 		require.NoError(t, err)
 
-		assert.Equal(t, exp, string(resMsg.Get(0).AsBytes()))
+		msgBytes, err := resMsg[0].AsBytes()
+		require.NoError(t, err)
+		assert.Equal(t, exp, string(msgBytes))
 
-		assert.Equal(t, dummyFile, resMsg.Get(0).MetaGetStr("path"))
-		assert.Equal(t, dummyTimeUTC.Format(time.RFC3339), resMsg.Get(0).MetaGetStr("mod_time"))
-		assert.Equal(t, strconv.Itoa(int(dummyTimeUTC.Unix())), resMsg.Get(0).MetaGetStr("mod_time_unix"))
+		m, _ := resMsg[0].MetaGet("path")
+		assert.Equal(t, dummyFile, m)
+		m, _ = resMsg[0].MetaGet("mod_time")
+		assert.Equal(t, dummyTimeUTC.Format(time.RFC3339), m)
+		m, _ = resMsg[0].MetaGet("mod_time_unix")
+		assert.Equal(t, strconv.Itoa(int(dummyTimeUTC.Unix())), m)
 	}
 
 	_, _, err = f.ReadBatch(context.Background())
-	assert.Equal(t, component.ErrNotConnected, err)
+	assert.Equal(t, service.ErrNotConnected, err)
 
 	err = f.Connect(context.Background())
-	assert.Equal(t, component.ErrTypeClosed, err)
+	assert.Equal(t, service.ErrEndOfInput, err)
 }
 
 func TestCSVReaderGroupCount(t *testing.T) {
@@ -134,21 +137,23 @@ func TestCSVReaderGroupCount(t *testing.T) {
 			`{"bar":"bar7","baz":"baz7","foo":"foo7"}`,
 		},
 	} {
-		var resMsg message.Batch
+		var resMsg service.MessageBatch
 		resMsg, _, err = f.ReadBatch(context.Background())
 		require.NoError(t, err)
 
-		require.Equal(t, len(exp), resMsg.Len())
+		require.Equal(t, len(exp), len(resMsg))
 		for i := 0; i < len(exp); i++ {
-			assert.Equal(t, exp[i], string(resMsg.Get(i).AsBytes()))
+			mBytes, err := resMsg[i].AsBytes()
+			require.NoError(t, err)
+			assert.Equal(t, exp[i], string(mBytes))
 		}
 	}
 
 	_, _, err = f.ReadBatch(context.Background())
-	assert.Equal(t, component.ErrNotConnected, err)
+	assert.Equal(t, service.ErrNotConnected, err)
 
 	err = f.Connect(context.Background())
-	assert.Equal(t, component.ErrTypeClosed, err)
+	assert.Equal(t, service.ErrEndOfInput, err)
 }
 
 func TestCSVReadersTwoFiles(t *testing.T) {
@@ -207,23 +212,26 @@ func TestCSVReadersTwoFiles(t *testing.T) {
 		`{"header4":"bar1","header5":"bar2","header6":"bar3"}`,
 		`{"header4":"baz1","header5":"baz2","header6":"baz3"}`,
 	} {
-		var resMsg message.Batch
-		var ackFn input.AsyncAckFn
+		var resMsg service.MessageBatch
+		var ackFn service.AckFunc
 		resMsg, ackFn, err = f.ReadBatch(context.Background())
-		if err == component.ErrNotConnected {
+		if err == service.ErrNotConnected {
 			require.NoError(t, f.Connect(context.Background()))
 			resMsg, ackFn, err = f.ReadBatch(context.Background())
 		}
 		require.NoError(t, err, i)
-		assert.Equal(t, exp, string(resMsg.Get(0).AsBytes()), i)
+
+		mBytes, err := resMsg[0].AsBytes()
+		require.NoError(t, err)
+		assert.Equal(t, exp, string(mBytes), i)
 		_ = ackFn(context.Background(), nil)
 	}
 
 	_, _, err = f.ReadBatch(context.Background())
-	assert.Equal(t, component.ErrNotConnected, err)
+	assert.Equal(t, service.ErrNotConnected, err)
 
 	err = f.Connect(context.Background())
-	assert.Equal(t, component.ErrTypeClosed, err)
+	assert.Equal(t, service.ErrEndOfInput, err)
 }
 
 func TestCSVReaderCustomComma(t *testing.T) {
@@ -266,18 +274,21 @@ func TestCSVReaderCustomComma(t *testing.T) {
 		`{"header1":"bar1","header2":"bar2","header3":"bar3"}`,
 		`{"header1":"baz1","header2":"baz2","header3":"baz3"}`,
 	} {
-		var resMsg message.Batch
+		var resMsg service.MessageBatch
 		resMsg, _, err = f.ReadBatch(context.Background())
 		require.NoError(t, err)
 
-		assert.Equal(t, exp, string(resMsg.Get(0).AsBytes()))
+		mBytes, err := resMsg[0].AsBytes()
+		require.NoError(t, err)
+
+		assert.Equal(t, exp, string(mBytes))
 	}
 
 	_, _, err = f.ReadBatch(context.Background())
-	assert.Equal(t, component.ErrNotConnected, err)
+	assert.Equal(t, service.ErrNotConnected, err)
 
 	err = f.Connect(context.Background())
-	assert.Equal(t, component.ErrTypeClosed, err)
+	assert.Equal(t, service.ErrEndOfInput, err)
 }
 
 func TestCSVReaderRelaxed(t *testing.T) {
@@ -322,18 +333,21 @@ func TestCSVReaderRelaxed(t *testing.T) {
 		`{"header1":"baz1","header2":"baz2","header3":"baz3"}`,
 		`{"header1":"buz1","header2":"buz2"}`,
 	} {
-		var resMsg message.Batch
+		var resMsg service.MessageBatch
 		resMsg, _, err = f.ReadBatch(context.Background())
 		require.NoError(t, err)
 
-		assert.Equal(t, exp, string(resMsg.Get(0).AsBytes()))
+		mBytes, err := resMsg[0].AsBytes()
+		require.NoError(t, err)
+
+		assert.Equal(t, exp, string(mBytes))
 	}
 
 	_, _, err = f.ReadBatch(context.Background())
-	assert.Equal(t, component.ErrNotConnected, err)
+	assert.Equal(t, service.ErrNotConnected, err)
 
 	err = f.Connect(context.Background())
-	assert.Equal(t, component.ErrTypeClosed, err)
+	assert.Equal(t, service.ErrEndOfInput, err)
 }
 
 func TestCSVReaderStrict(t *testing.T) {
@@ -378,23 +392,28 @@ func TestCSVReaderStrict(t *testing.T) {
 		`{"header1":"baz1","header2":"baz2","header3":"baz3"}`,
 		errors.New("record on line 5: wrong number of fields"),
 	} {
-		var resMsg message.Batch
+		var resMsg service.MessageBatch
 		resMsg, _, err = f.ReadBatch(context.Background())
 
 		switch expT := exp.(type) {
 		case string:
 			require.NoError(t, err)
-			assert.Equal(t, expT, string(resMsg.Get(0).AsBytes()))
+
+			mBytes, err := resMsg[0].AsBytes()
+			require.NoError(t, err)
+
+			assert.Equal(t, expT, string(mBytes))
+
 		case error:
 			assert.EqualError(t, err, expT.Error())
 		}
 	}
 
 	_, _, err = f.ReadBatch(context.Background())
-	assert.Equal(t, component.ErrNotConnected, err)
+	assert.Equal(t, service.ErrNotConnected, err)
 
 	err = f.Connect(context.Background())
-	assert.Equal(t, component.ErrTypeClosed, err)
+	assert.Equal(t, service.ErrEndOfInput, err)
 }
 
 func TestCSVReaderLazyQuotes(t *testing.T) {
@@ -471,8 +490,9 @@ func TestCSVReaderLazyQuotes(t *testing.T) {
 		}
 		require.NoError(t, err, test.name)
 
-		actual := string(resMsg.Get(0).AsBytes())
+		mBytes, err := resMsg[0].AsBytes()
+		require.NoError(t, err)
 
-		assert.Equal(t, test.expected, actual, test.name)
+		assert.Equal(t, test.expected, string(mBytes), test.name)
 	}
 }

@@ -47,16 +47,16 @@ var labelField = FieldString(
 	}
 	if err := ValidateLabel(l); err != nil {
 		return []Lint{
-			NewLintError(line, LintBadLabel, fmt.Sprintf("Invalid label '%v': %v", l, err)),
+			NewLintError(line, LintBadLabel, fmt.Errorf("invalid label '%v': %w", l, err)),
 		}
 	}
-	prevLine, exists := ctx.LabelsToLine[l]
+	prevLine, exists := ctx.labelsToLine[l]
 	if exists {
 		return []Lint{
-			NewLintError(line, LintDuplicateLabel, fmt.Sprintf("Label '%v' collides with a previously defined label at line %v", l, prevLine)),
+			NewLintError(line, LintDuplicateLabel, fmt.Errorf("label '%v' collides with a previously defined label at line %v", l, prevLine)),
 		}
 	}
-	ctx.LabelsToLine[l] = line
+	ctx.labelsToLine[l] = line
 	return nil
 }).HasDefault("")
 

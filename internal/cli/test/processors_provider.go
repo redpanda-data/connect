@@ -267,12 +267,19 @@ func (p *ProcessorsProvider) getConfs(jsonPtr string, environment map[string]str
 	cleanupEnv := setEnvironment(environment)
 	defer cleanupEnv()
 
+	envVarLookup := func(name string) (string, bool) {
+		if s, ok := environment[name]; ok {
+			return s, true
+		}
+		return os.LookupEnv(name)
+	}
+
 	remainingMocks := map[string]yaml.Node{}
 	for k, v := range mocks {
 		remainingMocks[k] = v
 	}
 
-	configBytes, _, _, err := config.ReadFileEnvSwap(ifs.OS(), targetPath)
+	configBytes, _, _, err := config.ReadFileEnvSwap(ifs.OS(), targetPath, envVarLookup)
 	if err != nil {
 		return confs, fmt.Errorf("failed to parse config file '%v': %v", targetPath, err)
 	}
@@ -320,7 +327,7 @@ func (p *ProcessorsProvider) getConfs(jsonPtr string, environment map[string]str
 	}
 
 	for _, path := range p.resourcesPaths {
-		resourceBytes, _, _, err := config.ReadFileEnvSwap(ifs.OS(), path)
+		resourceBytes, _, _, err := config.ReadFileEnvSwap(ifs.OS(), path, envVarLookup)
 		if err != nil {
 			return confs, fmt.Errorf("failed to parse resources config file '%v': %v", path, err)
 		}

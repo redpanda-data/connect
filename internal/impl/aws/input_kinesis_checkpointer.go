@@ -14,7 +14,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/dynamodb"
 	"github.com/aws/aws-sdk-go/service/dynamodb/dynamodbiface"
 
-	"github.com/benthosdev/benthos/v4/internal/component/input"
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
 // Common errors that might occur throughout checkpointing.
@@ -22,10 +22,37 @@ var (
 	ErrLeaseNotAcquired = errors.New("the shard could not be leased due to a collision")
 )
 
+type kiddbConfig struct {
+	Table              string
+	Create             bool
+	ReadCapacityUnits  int64
+	WriteCapacityUnits int64
+	BillingMode        string
+}
+
+func kinesisInputDynamoDBConfigFromParsed(pConf *service.ParsedConfig) (conf kiddbConfig, err error) {
+	if conf.Table, err = pConf.FieldString(kiddbFieldTable); err != nil {
+		return
+	}
+	if conf.Create, err = pConf.FieldBool(kiddbFieldCreate); err != nil {
+		return
+	}
+	if conf.ReadCapacityUnits, err = int64Field(pConf, kiddbFieldReadCapacityUnits); err != nil {
+		return
+	}
+	if conf.WriteCapacityUnits, err = int64Field(pConf, kiddbFieldWriteCapacityUnits); err != nil {
+		return
+	}
+	if conf.BillingMode, err = pConf.FieldString(kiddbFieldBillingMode); err != nil {
+		return
+	}
+	return
+}
+
 // awsKinesisCheckpointer manages the shard checkpointing for a given client
 // identifier.
 type awsKinesisCheckpointer struct {
-	conf input.DynamoDBCheckpointConfig
+	conf kiddbConfig
 
 	clientID      string
 	leaseDuration time.Duration
@@ -38,7 +65,7 @@ type awsKinesisCheckpointer struct {
 func newAWSKinesisCheckpointer(
 	session *session.Session,
 	clientID string,
-	conf input.DynamoDBCheckpointConfig,
+	conf kiddbConfig,
 	leaseDuration time.Duration,
 	commitPeriod time.Duration,
 ) (*awsKinesisCheckpointer, error) {

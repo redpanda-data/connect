@@ -161,7 +161,7 @@ func (f FieldSpec) Optional() FieldSpec {
 	return f
 }
 
-const bloblREEnvVar = "\\${[0-9A-Za-z_.]+(:((\\${[^}]+})|[^}])+)?}"
+const bloblREEnvVar = "\\${[0-9A-Za-z_.]+(:((\\${[^}]+})|[^}])*)?}"
 
 // Secret marks this field as being a secret, which means it represents
 // information that is generally considered sensitive such as passwords or
@@ -308,10 +308,10 @@ func lintsFromAny(line int, v any) (lints []Lint) {
 		// internal packages (when possible).
 		var typeInt int64
 		_ = bloblang.NewArgSpec().Int64Var(&typeInt).Extract([]any{t["type"]})
-		lints = append(lints, NewLintError(line, LintType(typeInt), t["what"].(string)))
+		lints = append(lints, NewLintError(line, LintType(typeInt), errors.New(t["what"].(string))))
 	case string:
 		if len(t) > 0 {
-			lints = append(lints, NewLintError(line, LintCustom, t))
+			lints = append(lints, NewLintError(line, LintCustom, errors.New(t)))
 		}
 	}
 	return
@@ -337,7 +337,7 @@ func (f FieldSpec) LinterBlobl(blobl string) FieldSpec {
 	m, err := env.Parse(blobl)
 	if err != nil {
 		f.customLintFn = func(ctx LintContext, line, col int, value any) (lints []Lint) {
-			return []Lint{NewLintError(line, LintCustom, fmt.Sprintf("Field lint mapping itself failed to parse: %v", err))}
+			return []Lint{NewLintError(line, LintCustom, fmt.Errorf("field lint mapping itself failed to parse: %w", err))}
 		}
 		return f
 	}
@@ -350,7 +350,7 @@ func (f FieldSpec) LinterBlobl(blobl string) FieldSpec {
 			if errors.Is(err, bloblang.ErrRootDeleted) {
 				return
 			}
-			return []Lint{NewLintError(line, LintCustom, err.Error())}
+			return []Lint{NewLintError(line, LintCustom, err)}
 		}
 		lints = append(lints, lintsFromAny(line, res)...)
 		return
@@ -387,22 +387,20 @@ func (f FieldSpec) lintOptions() FieldSpec {
 	_, _ = optionsBuilder.WriteString("}\n")
 	_, _ = patternOptionsBuilder.WriteString("}\n")
 
-	return f.LinterBlobl(fmt.Sprintf(`
+	f.Linter = fmt.Sprintf(`
 let options = %v
-
 map is_pattern_option {
   let pattern_options = %v
   let parts = this.split(":")
-  root = $parts.length() == 2 && $pattern_options.exists($parts.index(0))
+  root = $parts.length() >= 2 && $pattern_options.exists($parts.index(0))
 }
-
 # Codec arguments can be chained with a / (i.e. "lines/multipart")
 let value_parts = if this.type() == "string" { this.split("/").map_each(part -> part.lowercase()) } else { [] }
-
 root = $value_parts.map_each(part -> if $options.exists(part) || part.apply("is_pattern_option") { null } else {
   {"type": 2, "what": "value %%v is not a valid option for this field".format(part)}
 }).filter(ele -> ele != null)
-`, optionsBuilder.String(), patternOptionsBuilder.String()))
+`, optionsBuilder.String(), patternOptionsBuilder.String())
+	return f
 }
 
 func (f FieldSpec) scrubValue(v any) (any, error) {
@@ -615,13 +613,13 @@ func (f FieldSpecs) Add(specs ...FieldSpec) FieldSpecs {
 
 // FieldFilter defines a filter closure that returns a boolean for a component
 // field indicating whether the field should be kept within a generated config.
-type FieldFilter func(spec FieldSpec) bool
+type FieldFilter func(spec FieldSpec, v any) bool
 
-func (f FieldFilter) shouldDrop(spec FieldSpec) bool {
+func (f FieldFilter) shouldDrop(spec FieldSpec, v any) bool {
 	if f == nil {
 		return false
 	}
-	return !f(spec)
+	return !f(spec, v)
 }
 
 // ShouldDropDeprecated returns a field filter that removes all deprecated
@@ -630,26 +628,21 @@ func ShouldDropDeprecated(b bool) FieldFilter {
 	if !b {
 		return nil
 	}
-	return func(spec FieldSpec) bool {
+	return func(spec FieldSpec, _ any) bool {
 		return !spec.IsDeprecated
 	}
 }
 
 //------------------------------------------------------------------------------
 
-// LintContext is provided to linting functions, and provides context about the
-// wider configuration.
-type LintContext struct {
-	// A map of label names to the line they were defined at.
-	LabelsToLine map[string]int
-
+// LintConfig describes which rules apply when linting benthos configs, and also
+// determines which component and bloblang environments are used.
+type LintConfig struct {
 	// Provides documentation for component implementations.
 	DocsProvider Provider
 
 	// Provides an isolated context for Bloblang parsing.
 	BloblangEnv *bloblang.Environment
-
-	// Config fields
 
 	// Reject any deprecated components or fields as linting errors.
 	RejectDeprecated bool
@@ -658,14 +651,28 @@ type LintContext struct {
 	RequireLabels bool
 }
 
+// NewLintConfig creates a default linting config.
+func NewLintConfig() LintConfig {
+	return LintConfig{
+		DocsProvider: DeprecatedProvider,
+		BloblangEnv:  bloblang.GlobalEnvironment().Deactivated(),
+	}
+}
+
+// LintContext is provided to linting functions, and provides context about the
+// wider configuration.
+type LintContext struct {
+	// A map of label names to the line they were defined at.
+	labelsToLine map[string]int
+
+	conf LintConfig
+}
+
 // NewLintContext creates a new linting context.
-func NewLintContext() LintContext {
+func NewLintContext(conf LintConfig) LintContext {
 	return LintContext{
-		LabelsToLine:     map[string]int{},
-		DocsProvider:     DeprecatedProvider,
-		BloblangEnv:      bloblang.GlobalEnvironment().Deactivated(),
-		RejectDeprecated: false,
-		RequireLabels:    false,
+		labelsToLine: map[string]int{},
+		conf:         conf,
 	}
 }
 
@@ -690,6 +697,10 @@ const (
 
 	// LintFailedRead means a configuration could not be read.
 	LintFailedRead LintType = iota
+
+	// LintMissingEnvVar means a configuration contained an environment variable
+	// interpolation without a default and the variable was undefined.
+	LintMissingEnvVar LintType = iota
 
 	// LintInvalidOption means the field value was not one of the explicit list
 	// of options.
@@ -750,8 +761,12 @@ type Lint struct {
 }
 
 // NewLintError returns an error lint.
-func NewLintError(line int, t LintType, msg string) Lint {
-	return Lint{Line: line, Column: 1, Level: LintError, Type: t, What: msg}
+func NewLintError(line int, t LintType, err error) Lint {
+	var inner Lint
+	if errors.As(err, &inner) {
+		return inner
+	}
+	return Lint{Line: line, Column: 1, Level: LintError, Type: t, What: err.Error()}
 }
 
 // NewLintWarning returns a warning lint.

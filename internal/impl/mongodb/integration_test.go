@@ -13,8 +13,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 
-	"github.com/benthosdev/benthos/v4/internal/impl/mongodb/client"
 	"github.com/benthosdev/benthos/v4/internal/integration"
 )
 
@@ -50,17 +50,16 @@ func TestIntegrationMongoDB(t *testing.T) {
 
 	_ = resource.Expire(900)
 	require.NoError(t, pool.Retry(func() error {
-		url := "mongodb://localhost:" + resource.GetPort("27017/tcp")
-		conf := client.NewConfig()
-		conf.URL = url
-		conf.Username = "mongoadmin"
-		conf.Password = "secret"
-
-		mongoClient, err = conf.Client()
-		if err != nil {
-			return err
-		}
-		return mongoClient.Connect(context.Background())
+		mongoClient, err = mongo.Connect(context.Background(), options.Client().
+			SetConnectTimeout(10*time.Second).
+			SetSocketTimeout(30*time.Second).
+			SetServerSelectionTimeout(30*time.Second).
+			SetAuth(options.Credential{
+				Username: "mongoadmin",
+				Password: "secret",
+			}).
+			ApplyURI("mongodb://localhost:"+resource.GetPort("27017/tcp")))
+		return err
 	}))
 
 	template := `

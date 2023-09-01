@@ -428,60 +428,6 @@ root.foo = this.foo.lowercase()
 # Out: {"foo":"hello world"}
 ```
 
-### `parse_jwt_hs256`
-
-Parses a claims object from a JWT string encoded with HS256. This method does not validate JWT claims.
-
-#### Parameters
-
-**`signing_secret`** &lt;string&gt; The HMAC secret that was used for signing the token.  
-
-#### Examples
-
-
-```coffee
-root.claims = this.signed.parse_jwt_hs256("dont-tell-anyone")
-
-# In:  {"signed":"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyMTIzIn0.hUl-nngPMY_3h9vveWJUPsCcO5PeL6k9hWLnMYeFbFQ"}
-# Out: {"claims":{"sub":"user123"}}
-```
-
-### `parse_jwt_hs384`
-
-Parses a claims object from a JWT string encoded with HS384. This method does not validate JWT claims.
-
-#### Parameters
-
-**`signing_secret`** &lt;string&gt; The HMAC secret that was used for signing the token.  
-
-#### Examples
-
-
-```coffee
-root.claims = this.signed.parse_jwt_hs384("dont-tell-anyone")
-
-# In:  {"signed":"eyJhbGciOiJIUzM4NCIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyMTIzIn0.zGYLr83aToon1efUNq-hw7XgT20lPvZb8sYei8x6S6mpHwb433SJdXJXx0Oio8AZ"}
-# Out: {"claims":{"sub":"user123"}}
-```
-
-### `parse_jwt_hs512`
-
-Parses a claims object from a JWT string encoded with HS512. This method does not validate JWT claims.
-
-#### Parameters
-
-**`signing_secret`** &lt;string&gt; The HMAC secret that was used for signing the token.  
-
-#### Examples
-
-
-```coffee
-root.claims = this.signed.parse_jwt_hs512("dont-tell-anyone")
-
-# In:  {"signed":"eyJhbGciOiJIUzUxMiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyMTIzIn0.zBNR9o_6EDwXXKkpKLNJhG26j8Dc-mV-YahBwmEdCrmiWt5les8I9rgmNlWIowpq6Yxs4kLNAdFhqoRz3NXT3w"}
-# Out: {"claims":{"sub":"user123"}}
-```
-
 ### `quote`
 
 Quotes a target string using escape sequences (`\t`, `\n`, `\xFF`, `\u0100`) for control characters and non-printable characters.
@@ -692,6 +638,9 @@ root.description = this.description.trim()
 
 Remove the provided leading prefix substring from a string. If the string does not have the prefix substring, it is returned unchanged.
 
+Introduced in version 4.12.0.
+
+
 #### Parameters
 
 **`prefix`** &lt;string&gt; The leading prefix substring to trim from the string.  
@@ -710,6 +659,9 @@ root.description = this.description.trim_prefix("foobar_")
 ### `trim_suffix`
 
 Remove the provided trailing suffix substring from a string. If the string does not have the suffix substring, it is returned unchanged.
+
+Introduced in version 4.12.0.
+
 
 #### Parameters
 
@@ -946,6 +898,44 @@ root.new_value = this.value.ceil()
 # Out: {"new_value":-5}
 ```
 
+### `float32`
+
+
+Converts a numerical type into a 32-bit floating point number, this is for advanced use cases where a specific data type is needed for a given component (such as the ClickHouse SQL driver).
+
+If the value is a string then an attempt will be made to parse it as a 32-bit floating point number. Please refer to the [`strconv.ParseFloat` documentation](https://pkg.go.dev/strconv#ParseFloat) for details regarding the supported formats.
+
+#### Examples
+
+
+```coffee
+
+root.out = this.in.float32()
+
+
+# In:  {"in":"6.674282313423543523453425345e-11"}
+# Out: {"out":6.674283e-11}
+```
+
+### `float64`
+
+
+Converts a numerical type into a 64-bit floating point number, this is for advanced use cases where a specific data type is needed for a given component (such as the ClickHouse SQL driver).
+
+If the value is a string then an attempt will be made to parse it as a 64-bit floating point number. Please refer to the [`strconv.ParseFloat` documentation](https://pkg.go.dev/strconv#ParseFloat) for details regarding the supported formats.
+
+#### Examples
+
+
+```coffee
+
+root.out = this.in.float64()
+
+
+# In:  {"in":"6.674282313423543523453425345e-11"}
+# Out: {"out":6.674282313423544e-11}
+```
+
 ### `floor`
 
 Returns the greatest integer value less than or equal to the target number. If the resulting value fits within a 64-bit integer then that is returned, otherwise a new floating point number is returned.
@@ -960,12 +950,43 @@ root.new_value = this.value.floor()
 # Out: {"new_value":5}
 ```
 
+### `int16`
+
+
+Converts a numerical type into a 16-bit signed integer, this is for advanced use cases where a specific data type is needed for a given component (such as the ClickHouse SQL driver).
+
+If the value is a string then an attempt will be made to parse it as a 16-bit signed integer. If the target value exceeds the capacity of an integer or contains decimal values then this method will throw an error. In order to convert a floating point number containing decimals first use [`.round()`](#round) on the value. Please refer to the [`strconv.ParseInt` documentation](https://pkg.go.dev/strconv#ParseInt) for details regarding the supported formats.
+
+#### Examples
+
+
+```coffee
+
+root.a = this.a.int16()
+root.b = this.b.round().int16()
+root.c = this.c.int16()
+root.d = this.d.int16().catch(0)
+
+
+# In:  {"a":12,"b":12.34,"c":"12","d":-12}
+# Out: {"a":12,"b":12,"c":12,"d":-12}
+```
+
+```coffee
+
+root = this.int16()
+
+
+# In:  "0xDE"
+# Out: 222
+```
+
 ### `int32`
 
 
 Converts a numerical type into a 32-bit signed integer, this is for advanced use cases where a specific data type is needed for a given component (such as the ClickHouse SQL driver).
 
-If the value is a string then an attempt will be made to parse it as a 32-bit integer. If the target value exceeds the capacity of an integer or contains decimal values then this method will throw an error. In order to convert a floating point number containing decimals first use [`.round()`](#round) on the value first. Please refer to the [`strconv.ParseInt` documentation](https://pkg.go.dev/strconv#ParseInt) for details regarding the supported formats.
+If the value is a string then an attempt will be made to parse it as a 32-bit signed integer. If the target value exceeds the capacity of an integer or contains decimal values then this method will throw an error. In order to convert a floating point number containing decimals first use [`.round()`](#round) on the value. Please refer to the [`strconv.ParseInt` documentation](https://pkg.go.dev/strconv#ParseInt) for details regarding the supported formats.
 
 #### Examples
 
@@ -975,10 +996,11 @@ If the value is a string then an attempt will be made to parse it as a 32-bit in
 root.a = this.a.int32()
 root.b = this.b.round().int32()
 root.c = this.c.int32()
+root.d = this.d.int32().catch(0)
 
 
-# In:  {"a":12,"b":12.34,"c":"12"}
-# Out: {"a":12,"b":12,"c":12}
+# In:  {"a":12,"b":12.34,"c":"12","d":-12}
+# Out: {"a":12,"b":12,"c":12,"d":-12}
 ```
 
 ```coffee
@@ -986,8 +1008,8 @@ root.c = this.c.int32()
 root = this.int32()
 
 
-# In:  "0xB70B"
-# Out: 46859
+# In:  "0xDEAD"
+# Out: 57005
 ```
 
 ### `int64`
@@ -995,7 +1017,7 @@ root = this.int32()
 
 Converts a numerical type into a 64-bit signed integer, this is for advanced use cases where a specific data type is needed for a given component (such as the ClickHouse SQL driver).
 
-If the value is a string then an attempt will be made to parse it as a 64-bit integer. If the target value exceeds the capacity of an integer or contains decimal values then this method will throw an error. In order to convert a floating point number containing decimals first use [`.round()`](#round) on the value first. Please refer to the [`strconv.ParseInt` documentation](https://pkg.go.dev/strconv#ParseInt) for details regarding the supported formats.
+If the value is a string then an attempt will be made to parse it as a 64-bit signed integer. If the target value exceeds the capacity of an integer or contains decimal values then this method will throw an error. In order to convert a floating point number containing decimals first use [`.round()`](#round) on the value. Please refer to the [`strconv.ParseInt` documentation](https://pkg.go.dev/strconv#ParseInt) for details regarding the supported formats.
 
 #### Examples
 
@@ -1005,10 +1027,11 @@ If the value is a string then an attempt will be made to parse it as a 64-bit in
 root.a = this.a.int64()
 root.b = this.b.round().int64()
 root.c = this.c.int64()
+root.d = this.d.int64().catch(0)
 
 
-# In:  {"a":12,"b":12.34,"c":"12"}
-# Out: {"a":12,"b":12,"c":12}
+# In:  {"a":12,"b":12.34,"c":"12","d":-12}
+# Out: {"a":12,"b":12,"c":12,"d":-12}
 ```
 
 ```coffee
@@ -1018,6 +1041,37 @@ root = this.int64()
 
 # In:  "0xDEADBEEF"
 # Out: 3735928559
+```
+
+### `int8`
+
+
+Converts a numerical type into a 8-bit signed integer, this is for advanced use cases where a specific data type is needed for a given component (such as the ClickHouse SQL driver).
+
+If the value is a string then an attempt will be made to parse it as a 8-bit signed integer. If the target value exceeds the capacity of an integer or contains decimal values then this method will throw an error. In order to convert a floating point number containing decimals first use [`.round()`](#round) on the value. Please refer to the [`strconv.ParseInt` documentation](https://pkg.go.dev/strconv#ParseInt) for details regarding the supported formats.
+
+#### Examples
+
+
+```coffee
+
+root.a = this.a.int8()
+root.b = this.b.round().int8()
+root.c = this.c.int8()
+root.d = this.d.int8().catch(0)
+
+
+# In:  {"a":12,"b":12.34,"c":"12","d":-12}
+# Out: {"a":12,"b":12,"c":12,"d":-12}
+```
+
+```coffee
+
+root = this.int8()
+
+
+# In:  "0xD"
+# Out: 13
 ```
 
 ### `log`
@@ -1119,12 +1173,43 @@ root.new_value = this.value.round()
 # Out: {"new_value":6}
 ```
 
+### `uint16`
+
+
+Converts a numerical type into a 16-bit unsigned integer, this is for advanced use cases where a specific data type is needed for a given component (such as the ClickHouse SQL driver).
+
+If the value is a string then an attempt will be made to parse it as a 16-bit unsigned integer. If the target value exceeds the capacity of an integer or contains decimal values then this method will throw an error. In order to convert a floating point number containing decimals first use [`.round()`](#round) on the value. Please refer to the [`strconv.ParseInt` documentation](https://pkg.go.dev/strconv#ParseInt) for details regarding the supported formats.
+
+#### Examples
+
+
+```coffee
+
+root.a = this.a.uint16()
+root.b = this.b.round().uint16()
+root.c = this.c.uint16()
+root.d = this.d.uint16().catch(0)
+
+
+# In:  {"a":12,"b":12.34,"c":"12","d":-12}
+# Out: {"a":12,"b":12,"c":12,"d":0}
+```
+
+```coffee
+
+root = this.uint16()
+
+
+# In:  "0xDE"
+# Out: 222
+```
+
 ### `uint32`
 
 
 Converts a numerical type into a 32-bit unsigned integer, this is for advanced use cases where a specific data type is needed for a given component (such as the ClickHouse SQL driver).
 
-If the value is a string then an attempt will be made to parse it as a 32-bit unsigned integer. If the target value exceeds the capacity of an integer or contains decimal values then this method will throw an error. In order to convert a floating point number containing decimals first use [`.round()`](#round) on the value first. Please refer to the [`strconv.ParseInt` documentation](https://pkg.go.dev/strconv#ParseInt) for details regarding the supported formats.
+If the value is a string then an attempt will be made to parse it as a 32-bit unsigned integer. If the target value exceeds the capacity of an integer or contains decimal values then this method will throw an error. In order to convert a floating point number containing decimals first use [`.round()`](#round) on the value. Please refer to the [`strconv.ParseInt` documentation](https://pkg.go.dev/strconv#ParseInt) for details regarding the supported formats.
 
 #### Examples
 
@@ -1146,8 +1231,8 @@ root.d = this.d.uint32().catch(0)
 root = this.uint32()
 
 
-# In:  "0xB70B"
-# Out: 46859
+# In:  "0xDEAD"
+# Out: 57005
 ```
 
 ### `uint64`
@@ -1155,7 +1240,7 @@ root = this.uint32()
 
 Converts a numerical type into a 64-bit unsigned integer, this is for advanced use cases where a specific data type is needed for a given component (such as the ClickHouse SQL driver).
 
-If the value is a string then an attempt will be made to parse it as a 64-bit unsigned integer. If the target value exceeds the capacity of an integer or contains decimal values then this method will throw an error. In order to convert a floating point number containing decimals first use [`.round()`](#round) on the value first. Please refer to the [`strconv.ParseInt` documentation](https://pkg.go.dev/strconv#ParseInt) for details regarding the supported formats.
+If the value is a string then an attempt will be made to parse it as a 64-bit unsigned integer. If the target value exceeds the capacity of an integer or contains decimal values then this method will throw an error. In order to convert a floating point number containing decimals first use [`.round()`](#round) on the value. Please refer to the [`strconv.ParseInt` documentation](https://pkg.go.dev/strconv#ParseInt) for details regarding the supported formats.
 
 #### Examples
 
@@ -1179,6 +1264,37 @@ root = this.uint64()
 
 # In:  "0xDEADBEEF"
 # Out: 3735928559
+```
+
+### `uint8`
+
+
+Converts a numerical type into a 8-bit unsigned integer, this is for advanced use cases where a specific data type is needed for a given component (such as the ClickHouse SQL driver).
+
+If the value is a string then an attempt will be made to parse it as a 8-bit unsigned integer. If the target value exceeds the capacity of an integer or contains decimal values then this method will throw an error. In order to convert a floating point number containing decimals first use [`.round()`](#round) on the value. Please refer to the [`strconv.ParseInt` documentation](https://pkg.go.dev/strconv#ParseInt) for details regarding the supported formats.
+
+#### Examples
+
+
+```coffee
+
+root.a = this.a.uint8()
+root.b = this.b.round().uint8()
+root.c = this.c.uint8()
+root.d = this.d.uint8().catch(0)
+
+
+# In:  {"a":12,"b":12.34,"c":"12","d":-12}
+# Out: {"a":12,"b":12,"c":12,"d":0}
+```
+
+```coffee
+
+root = this.uint8()
+
+
+# In:  "0xD"
+# Out: 13
 ```
 
 ## Timestamp Manipulation
@@ -1240,6 +1356,17 @@ root.delay_for_s = this.delay_for.parse_duration_iso8601() / 1000000000
 # In:  {"delay_for":"PT2.5S"}
 # Out: {"delay_for_s":2.5}
 ```
+
+### `ts_add_iso8601`
+
+:::caution BETA
+This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
+:::
+Parse parameter string as ISO 8601 period and add it to value with high precision for units larger than an hour.
+
+#### Parameters
+
+**`duration`** &lt;string&gt; Duration in ISO 8601 format  
 
 ### `ts_format`
 
@@ -1417,6 +1544,17 @@ root.doc.timestamp = this.doc.timestamp.ts_strptime("%Y-%b-%d %H:%M:%S.%f")
 # In:  {"doc":{"timestamp":"2020-Aug-14 11:50:26.371000"}}
 # Out: {"doc":{"timestamp":"2020-08-14T11:50:26.371Z"}}
 ```
+
+### `ts_sub_iso8601`
+
+:::caution BETA
+This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
+:::
+Parse parameter string as ISO 8601 period and subtract it from value with high precision for units larger than an hour.
+
+#### Parameters
+
+**`duration`** &lt;string&gt; Duration in ISO 8601 format  
 
 ### `ts_tz`
 
@@ -1933,11 +2071,11 @@ root.new_dict = this.dict.filter(item -> item.value.contains("foo"))
 :::caution BETA
 This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
 :::
-Returns the index of the first occurrence of a value or query in an array. `-1` is returned if there are no matches. Numerical comparisons are made irrespective of the representation type (float versus integer).
+Returns the index of the first occurrence of a value in an array. `-1` is returned if there are no matches. Numerical comparisons are made irrespective of the representation type (float versus integer).
 
 #### Parameters
 
-**`value`** &lt;query expression&gt; A value to find. If a query is provided it will only be resolved once during the lifetime of the mapping.  
+**`value`** &lt;unknown&gt; A value to find.  
 
 #### Examples
 
@@ -1950,17 +2088,10 @@ root.index = this.find("bar")
 ```
 
 ```coffee
-root.index = this.find(v -> v != "bar")
+root.index = this.things.find(this.goal)
 
-# In:  ["foo", "bar", "baz"]
-# Out: {"index":0}
-```
-
-```coffee
-root.index = this.find(v -> v != "foo")
-
-# In:  ["foo"]
-# Out: {"index":-1}
+# In:  {"goal":"bar","things":["foo", "bar", "baz"]}
+# Out: {"index":1}
 ```
 
 ### `find_all`
@@ -1968,11 +2099,11 @@ root.index = this.find(v -> v != "foo")
 :::caution BETA
 This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
 :::
-Returns an array containing the indexes of all occurrences of a value or query in an array. An empty array is returned if there are no matches. Numerical comparisons are made irrespective of the representation type (float versus integer).
+Returns an array containing the indexes of all occurrences of a value in an array. An empty array is returned if there are no matches. Numerical comparisons are made irrespective of the representation type (float versus integer).
 
 #### Parameters
 
-**`value`** &lt;query expression&gt; A value to find. If a query is provided it will only be resolved once during the lifetime of the mapping.  
+**`value`** &lt;unknown&gt; A value to find.  
 
 #### Examples
 
@@ -1985,17 +2116,52 @@ root.index = this.find_all("bar")
 ```
 
 ```coffee
-root.index = this.find_all(v -> v != "bar")
+root.indexes = this.things.find_all(this.goal)
+
+# In:  {"goal":"bar","things":["foo", "bar", "baz", "bar", "buz"]}
+# Out: {"indexes":[1,3]}
+```
+
+### `find_all_by`
+
+:::caution BETA
+This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
+:::
+Returns an array containing the indexes of all occurrences of an array where the provided query resolves to a boolean `true`. An empty array is returned if there are no matches. Numerical comparisons are made irrespective of the representation type (float versus integer).
+
+#### Parameters
+
+**`query`** &lt;query expression&gt; A query to execute for each element.  
+
+#### Examples
+
+
+```coffee
+root.index = this.find_all_by(v -> v != "bar")
 
 # In:  ["foo", "bar", "baz"]
 # Out: {"index":[0,2]}
 ```
 
-```coffee
-root.index = this.find_all(v -> v != "foo")
+### `find_by`
 
-# In:  ["foo"]
-# Out: {"index":[]}
+:::caution BETA
+This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
+:::
+Returns the index of the first occurrence of an array where the provided query resolves to a boolean `true`. `-1` is returned if there are no matches.
+
+#### Parameters
+
+**`query`** &lt;query expression&gt; A query to execute for each element.  
+
+#### Examples
+
+
+```coffee
+root.index = this.find_by(v -> v != "bar")
+
+# In:  ["foo", "bar", "baz"]
+# Out: {"index":0}
 ```
 
 ### `flatten`
@@ -2309,60 +2475,6 @@ root = this.foo.merge(this.bar)
 # Out: {"first_name":"fooer","likes":["bars","foos"],"second_name":"barer"}
 ```
 
-### `sign_jwt_hs256`
-
-Hash and sign an object representing JSON Web Token (JWT) claims using HS256.
-
-#### Parameters
-
-**`signing_secret`** &lt;string&gt; The HMAC secret to use for signing the token.  
-
-#### Examples
-
-
-```coffee
-root.signed = this.claims.sign_jwt_hs256("dont-tell-anyone")
-
-# In:  {"claims":{"sub":"user123"}}
-# Out: {"signed":"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyMTIzIn0.hUl-nngPMY_3h9vveWJUPsCcO5PeL6k9hWLnMYeFbFQ"}
-```
-
-### `sign_jwt_hs384`
-
-Hash and sign an object representing JSON Web Token (JWT) claims using HS384.
-
-#### Parameters
-
-**`signing_secret`** &lt;string&gt; The HMAC secret to use for signing the token.  
-
-#### Examples
-
-
-```coffee
-root.signed = this.claims.sign_jwt_hs384("dont-tell-anyone")
-
-# In:  {"claims":{"sub":"user123"}}
-# Out: {"signed":"eyJhbGciOiJIUzM4NCIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyMTIzIn0.zGYLr83aToon1efUNq-hw7XgT20lPvZb8sYei8x6S6mpHwb433SJdXJXx0Oio8AZ"}
-```
-
-### `sign_jwt_hs512`
-
-Hash and sign an object representing JSON Web Token (JWT) claims using HS512.
-
-#### Parameters
-
-**`signing_secret`** &lt;string&gt; The HMAC secret to use for signing the token.  
-
-#### Examples
-
-
-```coffee
-root.signed = this.claims.sign_jwt_hs512("dont-tell-anyone")
-
-# In:  {"claims":{"sub":"user123"}}
-# Out: {"signed":"eyJhbGciOiJIUzUxMiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyMTIzIn0.zBNR9o_6EDwXXKkpKLNJhG26j8Dc-mV-YahBwmEdCrmiWt5les8I9rgmNlWIowpq6Yxs4kLNAdFhqoRz3NXT3w"}
-```
-
 ### `slice`
 
 Extract a slice from an array by specifying two indices, a low and high bound, which selects a half-open range that includes the first element, but excludes the last one. If the second index is omitted then it defaults to the length of the input sequence.
@@ -2528,6 +2640,20 @@ root = this.without("inner.a","inner.c","d")
 
 # In:  {"inner":{"a":"first","b":"second","c":"third"},"d":"fourth","e":"fifth"}
 # Out: {"e":"fifth","inner":{"b":"second"}}
+```
+
+### `zip`
+
+Zip an array value with one or more argument arrays. Each array must match in length.
+
+#### Examples
+
+
+```coffee
+root.foo = this.foo.zip(this.bar, this.baz)
+
+# In:  {"foo":["a","b","c"],"bar":[1,2,3],"baz":[4,5,6]}
+# Out: {"foo":[["a",1,4],["b",2,5],["c",3,6]]}
 ```
 
 ## Parsing
@@ -2927,7 +3053,7 @@ Compresses a string or byte array value according to a specified algorithm.
 
 #### Parameters
 
-**`algorithm`** &lt;string&gt; One of `flate`, `gzip`, `lz4`, `snappy`, `zlib`, `zstd`.  
+**`algorithm`** &lt;string&gt; One of `flate`, `gzip`, `pgzip`, `lz4`, `snappy`, `zlib`, `zstd`.  
 **`level`** &lt;integer, default `-1`&gt; The level of compression to use. May not be applicable to all algorithms.  
 
 #### Examples
@@ -2954,7 +3080,7 @@ root.compressed = content().compress("lz4").encode("base64")
 
 Decodes an encoded string target according to a chosen scheme and returns the result as a byte array. When mapping the result to a JSON field the value should be cast to a string using the method [`string`][methods.string], or encoded using the method [`encode`][methods.encode], otherwise it will be base64 encoded by default.
 
-Available schemes are: `base64`, `base64url`, `hex`, `ascii85`.
+Available schemes are: `base64`, `base64url` [(RFC 4648 with padding characters)](https://rfc-editor.org/rfc/rfc4648.html), `base64rawurl` [(RFC 4648 without padding characters)](https://rfc-editor.org/rfc/rfc4648.html), `hex`, `ascii85`.
 
 #### Parameters
 
@@ -2983,7 +3109,7 @@ Decompresses a string or byte array value according to a specified algorithm. Th
 
 #### Parameters
 
-**`algorithm`** &lt;string&gt; One of `gzip`, `zlib`, `bzip2`, `flate`, `snappy`, `lz4`, `zstd`.  
+**`algorithm`** &lt;string&gt; One of `gzip`, `pgzip`, `zlib`, `bzip2`, `flate`, `snappy`, `lz4`, `zstd`.  
 
 #### Examples
 
@@ -3028,7 +3154,7 @@ root.decrypted = this.value.decode("hex").decrypt_aes("ctr", $key, $vector).stri
 
 ### `encode`
 
-Encodes a string or byte array target according to a chosen scheme and returns a string result. Available schemes are: `base64`, `base64url`, `hex`, `ascii85`.
+Encodes a string or byte array target according to a chosen scheme and returns a string result. Available schemes are: `base64`, `base64url` [(RFC 4648 with padding characters)](https://rfc-editor.org/rfc/rfc4648.html), `base64rawurl` [(RFC 4648 without padding characters)](https://rfc-editor.org/rfc/rfc4648.html), `hex`, `ascii85`.
 
 #### Parameters
 
@@ -3106,6 +3232,434 @@ root.h2 = this.value.hash(algorithm: "crc32", polynomial: "Koopman").encode("hex
 
 # In:  {"value":"hello world"}
 # Out: {"h1":"c99465aa","h2":"df373d3c"}
+```
+
+## JSON Web Tokens
+
+### `parse_jwt_es256`
+
+Parses a claims object from a JWT string encoded with ES256. This method does not validate JWT claims.
+
+Introduced in version v4.20.0.
+
+
+#### Parameters
+
+**`signing_secret`** &lt;string&gt; The ES256 secret that was used for signing the token.  
+
+#### Examples
+
+
+```coffee
+root.claims = this.signed.parse_jwt_es256("""-----BEGIN PUBLIC KEY-----
+MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEGtLqIBePHmIhQcf0JLgc+F/4W/oI
+dp0Gta53G35VerNDgUUXmp78J2kfh4qLdh0XtmOMI587tCaqjvDAXfs//w==
+-----END PUBLIC KEY-----""")
+
+# In:  {"signed":"eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9.eyJpYXQiOjE1MTYyMzkwMjIsIm1vb2QiOiJEaXNkYWluZnVsIiwic3ViIjoiMTIzNDU2Nzg5MCJ9.GIRajP9JJbpTlqSCdNEz4qpQkRvzX4Q51YnTwVyxLDM9tKjR_a8ggHWn9CWj7KG0x8J56OWtmUxn112SRTZVhQ"}
+# Out: {"claims":{"iat":1516239022,"mood":"Disdainful","sub":"1234567890"}}
+```
+
+### `parse_jwt_es384`
+
+Parses a claims object from a JWT string encoded with ES384. This method does not validate JWT claims.
+
+Introduced in version v4.20.0.
+
+
+#### Parameters
+
+**`signing_secret`** &lt;string&gt; The ES384 secret that was used for signing the token.  
+
+#### Examples
+
+
+```coffee
+root.claims = this.signed.parse_jwt_es384("""-----BEGIN PUBLIC KEY-----
+MHYwEAYHKoZIzj0CAQYFK4EEACIDYgAERoz74/B6SwmLhs8X7CWhnrWyRrB13AuU
+8OYeqy0qHRu9JWNw8NIavqpTmu6XPT4xcFanYjq8FbeuM11eq06C52mNmS4LLwzA
+2imlFEgn85bvJoC3bnkuq4mQjwt9VxdH
+-----END PUBLIC KEY-----""")
+
+# In:  {"signed":"eyJhbGciOiJFUzM4NCIsInR5cCI6IkpXVCJ9.eyJpYXQiOjE1MTYyMzkwMjIsIm1vb2QiOiJEaXNkYWluZnVsIiwic3ViIjoiMTIzNDU2Nzg5MCJ9.H2HBSlrvQBaov2tdreGonbBexxtQB-xzaPL4-tNQZ6TVh7VH8VBcSwcWHYa1lBAHmdsKOFcB2Wk0SB7QWeGT3ptSgr-_EhDMaZ8bA5spgdpq5DsKfaKHrd7DbbQlmxNq"}
+# Out: {"claims":{"iat":1516239022,"mood":"Disdainful","sub":"1234567890"}}
+```
+
+### `parse_jwt_es512`
+
+Parses a claims object from a JWT string encoded with ES512. This method does not validate JWT claims.
+
+Introduced in version v4.20.0.
+
+
+#### Parameters
+
+**`signing_secret`** &lt;string&gt; The ES512 secret that was used for signing the token.  
+
+#### Examples
+
+
+```coffee
+root.claims = this.signed.parse_jwt_es512("""-----BEGIN PUBLIC KEY-----
+MIGbMBAGByqGSM49AgEGBSuBBAAjA4GGAAQAkHLdts9P56fFkyhpYQ31M/Stwt3w
+vpaxhlfudxnXgTO1IP4RQRgryRxZ19EUzhvWDcG3GQIckoNMY5PelsnCGnIBT2Xh
+9NQkjWF5K6xS4upFsbGSAwQ+GIyyk5IPJ2LHgOyMSCVh5gRZXV3CZLzXujx/umC9
+UeYyTt05zRRWuD+p5bY=
+-----END PUBLIC KEY-----""")
+
+# In:  {"signed":"eyJhbGciOiJFUzUxMiIsInR5cCI6IkpXVCJ9.eyJpYXQiOjE1MTYyMzkwMjIsIm1vb2QiOiJEaXNkYWluZnVsIiwic3ViIjoiMTIzNDU2Nzg5MCJ9.ACrpLuU7TKpAnncDCpN9m85nkL55MJ45NFOBl6-nEXmNT1eIxWjiP4pwWVbFH9et_BgN14119jbL_KqEJInPYc9nAXC6dDLq0aBU-dalvNl4-O5YWpP43-Y-TBGAsWnbMTrchILJ4-AEiICe73Ck5yWPleKg9c3LtkEFWfGs7BoPRguZ"}
+# Out: {"claims":{"iat":1516239022,"mood":"Disdainful","sub":"1234567890"}}
+```
+
+### `parse_jwt_hs256`
+
+Parses a claims object from a JWT string encoded with HS256. This method does not validate JWT claims.
+
+Introduced in version v4.12.0.
+
+
+#### Parameters
+
+**`signing_secret`** &lt;string&gt; The HS256 secret that was used for signing the token.  
+
+#### Examples
+
+
+```coffee
+root.claims = this.signed.parse_jwt_hs256("""dont-tell-anyone""")
+
+# In:  {"signed":"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpYXQiOjE1MTYyMzkwMjIsIm1vb2QiOiJEaXNkYWluZnVsIiwic3ViIjoiMTIzNDU2Nzg5MCJ9.YwXOM8v3gHVWcQRRRQc_zDlhmLnM62fwhFYGpiA0J1A"}
+# Out: {"claims":{"iat":1516239022,"mood":"Disdainful","sub":"1234567890"}}
+```
+
+### `parse_jwt_hs384`
+
+Parses a claims object from a JWT string encoded with HS384. This method does not validate JWT claims.
+
+Introduced in version v4.12.0.
+
+
+#### Parameters
+
+**`signing_secret`** &lt;string&gt; The HS384 secret that was used for signing the token.  
+
+#### Examples
+
+
+```coffee
+root.claims = this.signed.parse_jwt_hs384("""dont-tell-anyone""")
+
+# In:  {"signed":"eyJhbGciOiJIUzM4NCIsInR5cCI6IkpXVCJ9.eyJpYXQiOjE1MTYyMzkwMjIsIm1vb2QiOiJEaXNkYWluZnVsIiwic3ViIjoiMTIzNDU2Nzg5MCJ9.2Y8rf_ijwN4t8hOGGViON_GrirLkCQVbCOuax6EoZ3nluX0tCGezcJxbctlIfsQ2"}
+# Out: {"claims":{"iat":1516239022,"mood":"Disdainful","sub":"1234567890"}}
+```
+
+### `parse_jwt_hs512`
+
+Parses a claims object from a JWT string encoded with HS512. This method does not validate JWT claims.
+
+Introduced in version v4.12.0.
+
+
+#### Parameters
+
+**`signing_secret`** &lt;string&gt; The HS512 secret that was used for signing the token.  
+
+#### Examples
+
+
+```coffee
+root.claims = this.signed.parse_jwt_hs512("""dont-tell-anyone""")
+
+# In:  {"signed":"eyJhbGciOiJIUzUxMiIsInR5cCI6IkpXVCJ9.eyJpYXQiOjE1MTYyMzkwMjIsIm1vb2QiOiJEaXNkYWluZnVsIiwic3ViIjoiMTIzNDU2Nzg5MCJ9.utRb0urG6LGGyranZJVo5Dk0Fns1QNcSUYPN0TObQ-YzsGGB8jrxHwM5NAJccjJZzKectEUqmmKCaETZvuX4Fg"}
+# Out: {"claims":{"iat":1516239022,"mood":"Disdainful","sub":"1234567890"}}
+```
+
+### `parse_jwt_rs256`
+
+Parses a claims object from a JWT string encoded with RS256. This method does not validate JWT claims.
+
+Introduced in version v4.20.0.
+
+
+#### Parameters
+
+**`signing_secret`** &lt;string&gt; The RS256 secret that was used for signing the token.  
+
+#### Examples
+
+
+```coffee
+root.claims = this.signed.parse_jwt_rs256("""-----BEGIN PUBLIC KEY-----
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAs/ibN8r68pLMR6gRzg4S
+8v8l6Q7yi8qURjkEbcNeM1rkokC7xh0I4JVTwxYSVv/JIW8qJdyspl5NIfuAVi32
+WfKvSAs+NIs+DMsNPYw3yuQals4AX8hith1YDvYpr8SD44jxhz/DR9lYKZFGhXGB
++7NqQ7vpTWp3BceLYocazWJgusZt7CgecIq57ycM5hjM93BvlrUJ8nQ1a46wfL/8
+Cy4P0et70hzZrsjjN41KFhKY0iUwlyU41yEiDHvHDDsTMBxAZosWjSREGfJL6Mfp
+XOInTHs/Gg6DZMkbxjQu6L06EdJ+Q/NwglJdAXM7Zo9rNELqRig6DdvG5JesdMsO
++QIDAQAB
+-----END PUBLIC KEY-----""")
+
+# In:  {"signed":"eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJpYXQiOjE1MTYyMzkwMjIsIm1vb2QiOiJEaXNkYWluZnVsIiwic3ViIjoiMTIzNDU2Nzg5MCJ9.b0lH3jEupZZ4zoaly4Y_GCvu94HH6UKdKY96zfGNsIkPZpQLHIkZ7jMWlLlNOAd8qXlsBGP_i8H2qCKI4zlWJBGyPZgxXDzNRPVrTDfFpn4t4nBcA1WK2-ntXP3ehQxsaHcQU8Z_nsogId7Pme5iJRnoHWEnWtbwz5DLSXL3ZZNnRdrHM9MdI7QSDz9mojKDCaMpGN9sG7Xl-tGdBp1XzXuUOzG8S03mtZ1IgVR1uiBL2N6oohHIAunk8DIAmNWI-zgycTgzUGU7mvPkKH43qO8Ua1-13tCUBKKa8VxcotZ67Mxm1QAvBGoDnTKwWMwghLzs6d6WViXQg6eWlJcpBA"}
+# Out: {"claims":{"iat":1516239022,"mood":"Disdainful","sub":"1234567890"}}
+```
+
+### `parse_jwt_rs384`
+
+Parses a claims object from a JWT string encoded with RS384. This method does not validate JWT claims.
+
+Introduced in version v4.20.0.
+
+
+#### Parameters
+
+**`signing_secret`** &lt;string&gt; The RS384 secret that was used for signing the token.  
+
+#### Examples
+
+
+```coffee
+root.claims = this.signed.parse_jwt_rs384("""-----BEGIN PUBLIC KEY-----
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAs/ibN8r68pLMR6gRzg4S
+8v8l6Q7yi8qURjkEbcNeM1rkokC7xh0I4JVTwxYSVv/JIW8qJdyspl5NIfuAVi32
+WfKvSAs+NIs+DMsNPYw3yuQals4AX8hith1YDvYpr8SD44jxhz/DR9lYKZFGhXGB
++7NqQ7vpTWp3BceLYocazWJgusZt7CgecIq57ycM5hjM93BvlrUJ8nQ1a46wfL/8
+Cy4P0et70hzZrsjjN41KFhKY0iUwlyU41yEiDHvHDDsTMBxAZosWjSREGfJL6Mfp
+XOInTHs/Gg6DZMkbxjQu6L06EdJ+Q/NwglJdAXM7Zo9rNELqRig6DdvG5JesdMsO
++QIDAQAB
+-----END PUBLIC KEY-----""")
+
+# In:  {"signed":"eyJhbGciOiJSUzM4NCIsInR5cCI6IkpXVCJ9.eyJpYXQiOjE1MTYyMzkwMjIsIm1vb2QiOiJEaXNkYWluZnVsIiwic3ViIjoiMTIzNDU2Nzg5MCJ9.orcXYBcjVE5DU7mvq4KKWFfNdXR4nEY_xupzWoETRpYmQZIozlZnM_nHxEk2dySvpXlAzVm7kgOPK2RFtGlOVaNRIa3x-pMMr-bhZTno4L8Hl4sYxOks3bWtjK7wql4uqUbqThSJB12psAXw2-S-I_FMngOPGIn4jDT9b802ottJSvTpXcy0-eKTjrV2PSkRRu-EYJh0CJZW55MNhqlt6kCGhAXfbhNazN3ASX-dmpd_JixyBKphrngr_zRA-FCn_Xf3QQDA-5INopb4Yp5QiJ7UxVqQEKI80X_JvJqz9WE1qiAw8pq5-xTen1t7zTP-HT1NbbD3kltcNa3G8acmNg"}
+# Out: {"claims":{"iat":1516239022,"mood":"Disdainful","sub":"1234567890"}}
+```
+
+### `parse_jwt_rs512`
+
+Parses a claims object from a JWT string encoded with RS512. This method does not validate JWT claims.
+
+Introduced in version v4.20.0.
+
+
+#### Parameters
+
+**`signing_secret`** &lt;string&gt; The RS512 secret that was used for signing the token.  
+
+#### Examples
+
+
+```coffee
+root.claims = this.signed.parse_jwt_rs512("""-----BEGIN PUBLIC KEY-----
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAs/ibN8r68pLMR6gRzg4S
+8v8l6Q7yi8qURjkEbcNeM1rkokC7xh0I4JVTwxYSVv/JIW8qJdyspl5NIfuAVi32
+WfKvSAs+NIs+DMsNPYw3yuQals4AX8hith1YDvYpr8SD44jxhz/DR9lYKZFGhXGB
++7NqQ7vpTWp3BceLYocazWJgusZt7CgecIq57ycM5hjM93BvlrUJ8nQ1a46wfL/8
+Cy4P0et70hzZrsjjN41KFhKY0iUwlyU41yEiDHvHDDsTMBxAZosWjSREGfJL6Mfp
+XOInTHs/Gg6DZMkbxjQu6L06EdJ+Q/NwglJdAXM7Zo9rNELqRig6DdvG5JesdMsO
++QIDAQAB
+-----END PUBLIC KEY-----""")
+
+# In:  {"signed":"eyJhbGciOiJSUzUxMiIsInR5cCI6IkpXVCJ9.eyJpYXQiOjE1MTYyMzkwMjIsIm1vb2QiOiJEaXNkYWluZnVsIiwic3ViIjoiMTIzNDU2Nzg5MCJ9.rsMp_X5HMrUqKnZJIxo27aAoscovRA6SSQYR9rq7pifIj0YHXxMyNyOBDGnvVALHKTi25VUGHpfNUW0VVMmae0A4t_ObNU6hVZHguWvetKZZq4FZpW1lgWHCMqgPGwT5_uOqwYCH6r8tJuZT3pqXeL0CY4putb1AN2w6CVp620nh3l8d3XWb4jaifycd_4CEVCqHuWDmohfug4VhmoVKlIXZkYoAQowgHlozATDssBSWdYtv107Wd2AzEoiXPu6e3pflsuXULlyqQnS4ELEKPYThFLafh1NqvZDPddqozcPZ-iODBW-xf3A4DYDdivnMYLrh73AZOGHexxu8ay6nDA"}
+# Out: {"claims":{"iat":1516239022,"mood":"Disdainful","sub":"1234567890"}}
+```
+
+### `sign_jwt_es256`
+
+Hash and sign an object representing JSON Web Token (JWT) claims using ES256.
+
+Introduced in version v4.20.0.
+
+
+#### Parameters
+
+**`signing_secret`** &lt;string&gt; The secret to use for signing the token.  
+
+#### Examples
+
+
+```coffee
+root.signed = this.claims.sign_jwt_es256("""-----BEGIN EC PRIVATE KEY-----
+... signature data ...
+-----END EC PRIVATE KEY-----""")
+
+# In:  {"claims":{"sub":"user123"}}
+# Out: {"signed":"eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9.eyJpYXQiOjE1MTYyMzkwMjIsIm1vb2QiOiJEaXNkYWluZnVsIiwic3ViIjoiMTIzNDU2Nzg5MCJ9.-8LrOdkEiv_44ADWW08lpbq41ZmHCel58NMORPq1q4Dyw0zFhqDVLrRoSvCvuyyvgXAFb9IHfR-9MlJ_2ShA9A"}
+```
+
+### `sign_jwt_es384`
+
+Hash and sign an object representing JSON Web Token (JWT) claims using ES384.
+
+Introduced in version v4.20.0.
+
+
+#### Parameters
+
+**`signing_secret`** &lt;string&gt; The secret to use for signing the token.  
+
+#### Examples
+
+
+```coffee
+root.signed = this.claims.sign_jwt_es384("""-----BEGIN EC PRIVATE KEY-----
+... signature data ...
+-----END EC PRIVATE KEY-----""")
+
+# In:  {"claims":{"sub":"user123"}}
+# Out: {"signed":"eyJhbGciOiJFUzM4NCIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyMTIzIn0.8FmTKH08dl7dyxrNu0rmvhegiIBCy-O9cddGco2e9lpZtgv5mS5qHgPkgBC5eRw1d7SRJsHwHZeehzdqT5Ba7aZJIhz9ds0sn37YQ60L7jT0j2gxCzccrt4kECHnUnLw"}
+```
+
+### `sign_jwt_es512`
+
+Hash and sign an object representing JSON Web Token (JWT) claims using ES512.
+
+Introduced in version v4.20.0.
+
+
+#### Parameters
+
+**`signing_secret`** &lt;string&gt; The secret to use for signing the token.  
+
+#### Examples
+
+
+```coffee
+root.signed = this.claims.sign_jwt_es512("""-----BEGIN EC PRIVATE KEY-----
+... signature data ...
+-----END EC PRIVATE KEY-----""")
+
+# In:  {"claims":{"sub":"user123"}}
+# Out: {"signed":"eyJhbGciOiJFUzUxMiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyMTIzIn0.AQbEWymoRZxDJEJtKSFFG2k2VbDCTYSuBwAZyMqexCspr3If8aERTVGif8HXG3S7TzMBCCzxkcKr3eIU441l3DlpAMNfQbkcOlBqMvNBn-CX481WyKf3K5rFHQ-6wRonz05aIsWAxCDvAozI_9J0OWllxdQ2MBAuTPbPJ38OqXsYkCQs"}
+```
+
+### `sign_jwt_hs256`
+
+Hash and sign an object representing JSON Web Token (JWT) claims using HS256.
+
+Introduced in version v4.12.0.
+
+
+#### Parameters
+
+**`signing_secret`** &lt;string&gt; The secret to use for signing the token.  
+
+#### Examples
+
+
+```coffee
+root.signed = this.claims.sign_jwt_hs256("""dont-tell-anyone""")
+
+# In:  {"claims":{"sub":"user123"}}
+# Out: {"signed":"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyMTIzIn0.hUl-nngPMY_3h9vveWJUPsCcO5PeL6k9hWLnMYeFbFQ"}
+```
+
+### `sign_jwt_hs384`
+
+Hash and sign an object representing JSON Web Token (JWT) claims using HS384.
+
+Introduced in version v4.12.0.
+
+
+#### Parameters
+
+**`signing_secret`** &lt;string&gt; The secret to use for signing the token.  
+
+#### Examples
+
+
+```coffee
+root.signed = this.claims.sign_jwt_hs384("""dont-tell-anyone""")
+
+# In:  {"claims":{"sub":"user123"}}
+# Out: {"signed":"eyJhbGciOiJIUzM4NCIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyMTIzIn0.zGYLr83aToon1efUNq-hw7XgT20lPvZb8sYei8x6S6mpHwb433SJdXJXx0Oio8AZ"}
+```
+
+### `sign_jwt_hs512`
+
+Hash and sign an object representing JSON Web Token (JWT) claims using HS512.
+
+Introduced in version v4.12.0.
+
+
+#### Parameters
+
+**`signing_secret`** &lt;string&gt; The secret to use for signing the token.  
+
+#### Examples
+
+
+```coffee
+root.signed = this.claims.sign_jwt_hs512("""dont-tell-anyone""")
+
+# In:  {"claims":{"sub":"user123"}}
+# Out: {"signed":"eyJhbGciOiJIUzUxMiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyMTIzIn0.zBNR9o_6EDwXXKkpKLNJhG26j8Dc-mV-YahBwmEdCrmiWt5les8I9rgmNlWIowpq6Yxs4kLNAdFhqoRz3NXT3w"}
+```
+
+### `sign_jwt_rs256`
+
+Hash and sign an object representing JSON Web Token (JWT) claims using RS256.
+
+Introduced in version v4.18.0.
+
+
+#### Parameters
+
+**`signing_secret`** &lt;string&gt; The secret to use for signing the token.  
+
+#### Examples
+
+
+```coffee
+root.signed = this.claims.sign_jwt_rs256("""-----BEGIN RSA PRIVATE KEY-----
+... signature data ...
+-----END RSA PRIVATE KEY-----""")
+
+# In:  {"claims":{"sub":"user123"}}
+# Out: {"signed":"eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJpYXQiOjE1MTYyMzkwMjIsIm1vb2QiOiJEaXNkYWluZnVsIiwic3ViIjoiMTIzNDU2Nzg5MCJ9.b0lH3jEupZZ4zoaly4Y_GCvu94HH6UKdKY96zfGNsIkPZpQLHIkZ7jMWlLlNOAd8qXlsBGP_i8H2qCKI4zlWJBGyPZgxXDzNRPVrTDfFpn4t4nBcA1WK2-ntXP3ehQxsaHcQU8Z_nsogId7Pme5iJRnoHWEnWtbwz5DLSXL3ZZNnRdrHM9MdI7QSDz9mojKDCaMpGN9sG7Xl-tGdBp1XzXuUOzG8S03mtZ1IgVR1uiBL2N6oohHIAunk8DIAmNWI-zgycTgzUGU7mvPkKH43qO8Ua1-13tCUBKKa8VxcotZ67Mxm1QAvBGoDnTKwWMwghLzs6d6WViXQg6eWlJcpBA"}
+```
+
+### `sign_jwt_rs384`
+
+Hash and sign an object representing JSON Web Token (JWT) claims using RS384.
+
+Introduced in version v4.18.0.
+
+
+#### Parameters
+
+**`signing_secret`** &lt;string&gt; The secret to use for signing the token.  
+
+#### Examples
+
+
+```coffee
+root.signed = this.claims.sign_jwt_rs384("""-----BEGIN RSA PRIVATE KEY-----
+... signature data ...
+-----END RSA PRIVATE KEY-----""")
+
+# In:  {"claims":{"sub":"user123"}}
+# Out: {"signed":"eyJhbGciOiJSUzM4NCIsInR5cCI6IkpXVCJ9.eyJpYXQiOjE1MTYyMzkwMjIsIm1vb2QiOiJEaXNkYWluZnVsIiwic3ViIjoiMTIzNDU2Nzg5MCJ9.orcXYBcjVE5DU7mvq4KKWFfNdXR4nEY_xupzWoETRpYmQZIozlZnM_nHxEk2dySvpXlAzVm7kgOPK2RFtGlOVaNRIa3x-pMMr-bhZTno4L8Hl4sYxOks3bWtjK7wql4uqUbqThSJB12psAXw2-S-I_FMngOPGIn4jDT9b802ottJSvTpXcy0-eKTjrV2PSkRRu-EYJh0CJZW55MNhqlt6kCGhAXfbhNazN3ASX-dmpd_JixyBKphrngr_zRA-FCn_Xf3QQDA-5INopb4Yp5QiJ7UxVqQEKI80X_JvJqz9WE1qiAw8pq5-xTen1t7zTP-HT1NbbD3kltcNa3G8acmNg"}
+```
+
+### `sign_jwt_rs512`
+
+Hash and sign an object representing JSON Web Token (JWT) claims using RS512.
+
+Introduced in version v4.18.0.
+
+
+#### Parameters
+
+**`signing_secret`** &lt;string&gt; The secret to use for signing the token.  
+
+#### Examples
+
+
+```coffee
+root.signed = this.claims.sign_jwt_rs512("""-----BEGIN RSA PRIVATE KEY-----
+... signature data ...
+-----END RSA PRIVATE KEY-----""")
+
+# In:  {"claims":{"sub":"user123"}}
+# Out: {"signed":"eyJhbGciOiJSUzUxMiIsInR5cCI6IkpXVCJ9.eyJpYXQiOjE1MTYyMzkwMjIsIm1vb2QiOiJEaXNkYWluZnVsIiwic3ViIjoiMTIzNDU2Nzg5MCJ9.rsMp_X5HMrUqKnZJIxo27aAoscovRA6SSQYR9rq7pifIj0YHXxMyNyOBDGnvVALHKTi25VUGHpfNUW0VVMmae0A4t_ObNU6hVZHguWvetKZZq4FZpW1lgWHCMqgPGwT5_uOqwYCH6r8tJuZT3pqXeL0CY4putb1AN2w6CVp620nh3l8d3XWb4jaifycd_4CEVCqHuWDmohfug4VhmoVKlIXZkYoAQowgHlozATDssBSWdYtv107Wd2AzEoiXPu6e3pflsuXULlyqQnS4ELEKPYThFLafh1NqvZDPddqozcPZ-iODBW-xf3A4DYDdivnMYLrh73AZOGHexxu8ay6nDA"}
 ```
 
 ## GeoIP

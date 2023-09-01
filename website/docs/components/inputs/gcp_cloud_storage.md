@@ -17,7 +17,6 @@ import TabItem from '@theme/TabItem';
 :::caution BETA
 This component is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with the component is found.
 :::
-
 Downloads objects within a Google Cloud Storage bucket, optionally filtered by a prefix.
 
 Introduced in version 3.43.0.
@@ -35,7 +34,7 @@ Introduced in version 3.43.0.
 input:
   label: ""
   gcp_cloud_storage:
-    bucket: ""
+    bucket: "" # No default (required)
     prefix: ""
     codec: all-bytes
 ```
@@ -48,7 +47,7 @@ input:
 input:
   label: ""
   gcp_cloud_storage:
-    bucket: ""
+    bucket: "" # No default (required)
     prefix: ""
     codec: all-bytes
     delete_objects: false
@@ -79,8 +78,7 @@ You can access these metadata fields using [function interpolation](/docs/config
 
 ### Credentials
 
-By default Benthos will use a shared credentials file when connecting to GCP
-services. You can find out more [in this document](/docs/guides/cloud/gcp).
+By default Benthos will use a shared credentials file when connecting to GCP services. You can find out more [in this document](/docs/guides/cloud/gcp).
 
 ## Fields
 
@@ -90,7 +88,6 @@ The name of the bucket from which to download objects.
 
 
 Type: `string`  
-Default: `""`  
 
 ### `prefix`
 
@@ -116,11 +113,15 @@ Default: `"all-bytes"`
 | `chunker:x` | Consume the file in chunks of a given number of bytes. |
 | `csv` | Consume structured rows as comma separated values, the first row must be a header row. |
 | `csv:x` | Consume structured rows as values separated by a custom delimiter, the first row must be a header row. The custom delimiter must be a single character, e.g. the codec `"csv:\t"` would consume a tab delimited file. |
+| `csv-safe` | Consume structured rows like `csv`, but sends messages with empty maps on failure to parse. Includes row number and parsing errors (if any) in the message's metadata. |
+| `csv-safe:x` | Consume structured rows like `csv:x` as values separated by a custom delimiter, but sends messages with empty maps on failure to parse. The custom delimiter must be a single character, e.g. the codec `"csv-safe:\t"` would consume a tab delimited file. Includes row number and parsing errors (if any) in the message's metadata. |
 | `delim:x` | Consume the file in segments divided by a custom delimiter. |
 | `gzip` | Decompress a gzip file, this codec should precede another codec, e.g. `gzip/all-bytes`, `gzip/tar`, `gzip/csv`, etc. |
+| `pgzip` | Decompress a gzip file in parallel, this codec should precede another codec, e.g. `pgzip/all-bytes`, `pgzip/tar`, `pgzip/csv`, etc. |
 | `lines` | Consume the file in segments divided by linebreaks. |
 | `multipart` | Consumes the output of another codec and batches messages together. A batch ends when an empty message is consumed. For example, the codec `lines/multipart` could be used to consume multipart messages where an empty line indicates the end of each batch. |
 | `regex:(?m)^\d\d:\d\d:\d\d` | Consume the file in segments divided by regular expression. |
+| `skipbom` | Skip one or more byte order marks for each opened reader, this codec should precede another codec, e.g. `skipbom/csv`, etc. |
 | `tar` | Parse the file as a tar archive, and consume each file of the archive as a message. |
 
 

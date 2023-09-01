@@ -868,11 +868,7 @@ dynamic:
         foo:
             label: ""
             file:
-                paths:
-                    - aaa.txt
-                codec: lines
-                max_buffer: 1000000
-                delete_on_finish: false
+                paths: [aaa.txt]
     prefix: ""`,
 				},
 				{
@@ -880,11 +876,7 @@ dynamic:
 					name:    "file",
 					conf: `label: ""
 file:
-    paths:
-        - aaa.txt
-    codec: lines
-    max_buffer: 1000000
-    delete_on_finish: false`,
+    paths: [aaa.txt]`,
 				},
 				{
 					typeStr: "buffer",
@@ -998,6 +990,92 @@ output:
 	b = service.NewStreamBuilder()
 	b.DisableLinting()
 	require.NoError(t, b.SetYAML(lintingErrorConfig))
+}
+
+type noopProc struct{}
+
+func (n noopProc) Process(ctx context.Context, m *service.Message) (service.MessageBatch, error) {
+	return service.MessageBatch{m}, nil
+}
+
+func (n noopProc) Close(context.Context) error {
+	return nil
+}
+
+func TestStreamBuilderSecretsSetYAML(t *testing.T) {
+	var meowValues []string
+
+	env := service.NewEnvironment()
+	require.NoError(t, env.RegisterProcessor("foo",
+		service.NewConfigSpec().
+			Field(service.NewStringField("meow").Secret()),
+		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {
+			meowValue, _ := conf.FieldString("meow")
+			meowValues = append(meowValues, meowValue)
+			return noopProc{}, nil
+		}))
+
+	b := env.NewStreamBuilder()
+	require.NoError(t, b.SetYAML(`
+input:
+  generate:
+    count: 1
+    interval: 1ms
+    mapping: 'root.id = "foo"'
+  processors:
+    - foo:
+        meow: first
+output:
+  drop: {}
+`))
+
+	strm, err := b.Build()
+	require.NoError(t, err)
+
+	tCtx, done := context.WithTimeout(context.Background(), time.Second)
+	defer done()
+	require.NoError(t, strm.Run(tCtx))
+
+	assert.Equal(t, []string{"first"}, meowValues)
+}
+
+func TestStreamBuilderSecretsSetField(t *testing.T) {
+	var meowValues []string
+
+	env := service.NewEnvironment()
+	require.NoError(t, env.RegisterProcessor("foo",
+		service.NewConfigSpec().
+			Field(service.NewStringField("meow").Secret()),
+		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {
+			meowValue, _ := conf.FieldString("meow")
+			meowValues = append(meowValues, meowValue)
+			return noopProc{}, nil
+		}))
+
+	b := env.NewStreamBuilder()
+	require.NoError(t, b.SetYAML(`
+input:
+  generate:
+    count: 1
+    interval: 1ms
+    mapping: 'root.id = "foo"'
+  processors:
+    - foo:
+        meow: ignorethisvalue
+output:
+  drop: {}
+`))
+
+	require.NoError(t, b.SetFields("input.processors.0.foo.meow", "second"))
+
+	strm, err := b.Build()
+	require.NoError(t, err)
+
+	tCtx, done := context.WithTimeout(context.Background(), time.Second)
+	defer done()
+	require.NoError(t, strm.Run(tCtx))
+
+	assert.Equal(t, []string{"second"}, meowValues)
 }
 
 type disabledMux struct{}

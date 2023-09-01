@@ -21,7 +21,7 @@ Introduced in version 4.5.0.
 ```yml
 # Config fields, showing default values
 label: ""
-mapping: ""
+mapping: "" # No default (required)
 ```
 
 Bloblang is a powerful language that enables a wide range of mapping, transformation and filtering tasks. For more information [check out the docs](/docs/guides/bloblang/about).

@@ -10,6 +10,7 @@ import (
 	"github.com/klauspost/compress/gzip"
 	"github.com/klauspost/compress/snappy"
 	"github.com/klauspost/compress/zlib"
+	"github.com/klauspost/pgzip"
 	"github.com/pierrec/lz4/v4"
 
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
@@ -49,6 +50,53 @@ func TestDecompressGZIP(t *testing.T) {
 		var buf bytes.Buffer
 
 		zw := gzip.NewWriter(&buf)
+		_, _ = zw.Write(input[i])
+		zw.Close()
+
+		input[i] = buf.Bytes()
+	}
+
+	if reflect.DeepEqual(input, exp) {
+		t.Fatal("Input and exp output are the same")
+	}
+
+	proc, err := mock.NewManager().NewProcessor(conf)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	msgs, res := proc.ProcessBatch(context.Background(), message.QuickBatch(input))
+	if len(msgs) != 1 {
+		t.Error("Decompress failed")
+	} else if res != nil {
+		t.Errorf("Expected nil response: %v", res)
+	}
+	if act := message.GetAllBytes(msgs[0]); !reflect.DeepEqual(exp, act) {
+		t.Errorf("Unexpected output: %s != %s", act, exp)
+	}
+}
+
+func TestDecompressPGZIP(t *testing.T) {
+	conf := processor.NewConfig()
+	conf.Type = "decompress"
+	conf.Decompress.Algorithm = "pgzip"
+
+	input := [][]byte{
+		[]byte("hello world first part"),
+		[]byte("hello world second part"),
+		[]byte("third part"),
+		[]byte("fourth"),
+		[]byte("5"),
+	}
+
+	exp := [][]byte{}
+
+	for i := range input {
+		exp = append(exp, input[i])
+
+		var buf bytes.Buffer
+
+		zw := pgzip.NewWriter(&buf)
 		_, _ = zw.Write(input[i])
 		zw.Close()
 

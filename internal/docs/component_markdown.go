@@ -160,12 +160,12 @@ func createOrderedConfig(t Type, rawExample any, filter FieldFilter) (*yaml.Node
 
 func genExampleConfigs(t Type, nest bool, fullConfigExample any) (commonConfigStr, advConfigStr string, err error) {
 	var advConfig, commonConfig any
-	if advConfig, err = createOrderedConfig(t, fullConfigExample, func(f FieldSpec) bool {
+	if advConfig, err = createOrderedConfig(t, fullConfigExample, func(f FieldSpec, _ any) bool {
 		return !f.IsDeprecated
 	}); err != nil {
 		panic(err)
 	}
-	if commonConfig, err = createOrderedConfig(t, fullConfigExample, func(f FieldSpec) bool {
+	if commonConfig, err = createOrderedConfig(t, fullConfigExample, func(f FieldSpec, _ any) bool {
 		return !f.IsAdvanced && !f.IsDeprecated
 	}); err != nil {
 		panic(err)

@@ -54,9 +54,9 @@ const (
 
 func snowflakePutOutputConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
-		// Stable(). TODO
+		Beta().
 		Categories("Services").
-		//  Version("4.0.0").
+		Version("4.0.0").
 		Summary("Sends messages to Snowflake stages and, optionally, calls Snowpipe to load this data into one or more tables.").
 		Description(output.Description(true, true, `
 In order to use a different stage and / or Snowpipe for each message, you can use function interpolations as described
@@ -226,8 +226,8 @@ and it must be set to the `+"`<cloud>`"+` part of the Account Identifier
 		Field(service.NewBatchPolicyField("batching")).
 		Field(service.NewIntField("max_in_flight").Description("The maximum number of parallel message batches to have in flight at any given time.").Default(1)).
 		LintRule(`root = match {
-  this.exists("password") && this.exists("private_key_file") => [ "both `+"`password`"+` and `+"`private_key_file`"+` can't be set simultaneously" ],
-  this.exists("snowpipe") && (!this.exists("private_key_file") || this.private_key_file == "") => [ "`+"`private_key_file`"+` is required when setting `+"`snowpipe`"+`" ],
+  this.exists("password") && this.password != "" && this.exists("private_key_file") && this.private_key_file != "" => [ "both `+"`password`"+` and `+"`private_key_file`"+` can't be set simultaneously" ],
+  this.exists("snowpipe") && this.snowpipe != "" && (!this.exists("private_key_file") || this.private_key_file == "") => [ "`+"`private_key_file`"+` is required when setting `+"`snowpipe`"+`" ],
 }`).
 		Example("Kafka / realtime brokers", "Upload message batches from realtime brokers such as Kafka persisting the batch partition and offsets in the stage path and filename similarly to the [Kafka Connector scheme](https://docs.snowflake.com/en/user-guide/kafka-connector-ts.html#step-1-view-the-copy-history-for-the-table) and call Snowpipe to load them into a table. When batching is configured at the input level, it is done per-partition.", `
 input:
@@ -631,8 +631,10 @@ func newSnowflakeWriterFromConfig(conf *service.ParsedConfig, mgr *service.Resou
 		return nil, fmt.Errorf("failed to parse request_id: %s", err)
 	}
 
-	if s.snowpipe, err = conf.FieldInterpolatedString("snowpipe"); err != nil {
-		return nil, fmt.Errorf("failed to parse snowpipe: %s", err)
+	if conf.Contains("snowpipe") {
+		if s.snowpipe, err = conf.FieldInterpolatedString("snowpipe"); err != nil {
+			return nil, fmt.Errorf("failed to parse snowpipe: %s", err)
+		}
 	}
 
 	authenticator := gosnowflake.AuthTypeJwt
@@ -832,8 +834,10 @@ func (s *snowflakeWriter) WriteBatch(ctx context.Context, batch service.MessageB
 			f.fileExtension = s.defaultStageFileExtension
 		}
 
-		if f.snowpipe, err = s.snowpipe.TryString(msg); err != nil {
-			return fmt.Errorf("failed to get snowpipe: %s", err)
+		if s.snowpipe != nil {
+			if f.snowpipe, err = s.snowpipe.TryString(msg); err != nil {
+				return fmt.Errorf("failed to get snowpipe: %s", err)
+			}
 		}
 
 		msgBytes, err := msg.AsBytes()
@@ -863,7 +867,9 @@ func (s *snowflakeWriter) WriteBatch(ctx context.Context, batch service.MessageB
 
 		filePath := path.Join(f.stagePath, fileName+"."+f.fileExtension)
 
-		_, err := s.db.ExecContext(gosnowflake.WithFileStream(ctx, bytes.NewReader(fBytes)), fmt.Sprintf(s.putQueryFormat, filePath, path.Join(f.stage, f.stagePath)))
+		_, err := s.db.ExecContext(gosnowflake.WithFileStream(
+			gosnowflake.WithFileTransferOptions(ctx, &gosnowflake.SnowflakeFileTransferOptions{RaisePutGetError: true}),
+			bytes.NewReader(fBytes)), fmt.Sprintf(s.putQueryFormat, filePath, path.Join(f.stage, f.stagePath)))
 		if err != nil {
 			return fmt.Errorf("failed to run query: %s", err)
 		}

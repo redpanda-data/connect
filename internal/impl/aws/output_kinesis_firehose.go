@@ -11,81 +11,98 @@ import (
 	"github.com/aws/aws-sdk-go/service/firehose/firehoseiface"
 	"github.com/cenkalti/backoff/v4"
 
-	"github.com/benthosdev/benthos/v4/internal/batch/policy"
-	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component"
-	"github.com/benthosdev/benthos/v4/internal/component/output"
-	"github.com/benthosdev/benthos/v4/internal/component/output/batcher"
-	"github.com/benthosdev/benthos/v4/internal/component/output/processors"
-	"github.com/benthosdev/benthos/v4/internal/docs"
-	sess "github.com/benthosdev/benthos/v4/internal/impl/aws/session"
-	"github.com/benthosdev/benthos/v4/internal/log"
-	"github.com/benthosdev/benthos/v4/internal/message"
-	"github.com/benthosdev/benthos/v4/internal/old/util/retries"
+	"github.com/benthosdev/benthos/v4/internal/impl/aws/config"
+	"github.com/benthosdev/benthos/v4/internal/impl/pure"
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
-func init() {
-	err := bundle.AllOutputs.Add(processors.WrapConstructor(func(c output.Config, nm bundle.NewManagement) (output.Streamed, error) {
-		kin, err := newKinesisFirehoseWriter(c.AWSKinesisFirehose, nm.Logger())
-		if err != nil {
-			return nil, err
-		}
-		w, err := output.NewAsyncWriter("aws_kinesis_firehose", c.AWSKinesisFirehose.MaxInFlight, kin, nm)
-		if err != nil {
-			return w, err
-		}
-		return batcher.NewFromConfig(c.AWSKinesisFirehose.Batching, w, nm)
-	}), docs.ComponentSpec{
-		Name:    "aws_kinesis_firehose",
-		Version: "3.36.0",
-		Summary: `
-Sends messages to a Kinesis Firehose delivery stream.`,
-		Description: output.Description(true, true, `
+const (
+	// Kinesis Firehose Output Fields
+	kfoFieldStream   = "stream"
+	kfoFieldBatching = "batching"
+)
+
+type kfoConfig struct {
+	Stream string
+
+	session     *session.Session
+	backoffCtor func() backoff.BackOff
+}
+
+func kfoConfigFromParsed(pConf *service.ParsedConfig) (conf kfoConfig, err error) {
+	if conf.Stream, err = pConf.FieldString(kfoFieldStream); err != nil {
+		return
+	}
+	if conf.session, err = GetSession(pConf); err != nil {
+		return
+	}
+	if conf.backoffCtor, err = pure.CommonRetryBackOffCtorFromParsed(pConf); err != nil {
+		return
+	}
+	return
+}
+
+func kfoOutputSpec() *service.ConfigSpec {
+	return service.NewConfigSpec().
+		Stable().
+		Version("3.36.0").
+		Categories("Services", "AWS").
+		Summary(`Sends messages to a Kinesis Firehose delivery stream.`).
+		Description(`
 ### Credentials
 
-By default Benthos will use a shared credentials file when connecting to AWS
-services. It's also possible to set them explicitly at the component level,
-allowing you to transfer data across accounts. You can find out more
-[in this document](/docs/guides/cloud/aws).`),
-		Config: docs.FieldComponent().WithChildren(
-			docs.FieldString("stream", "The stream to publish messages to."),
-			docs.FieldInt("max_in_flight", "The maximum number of parallel message batches to have in flight at any given time."),
-			policy.FieldSpec(),
-		).WithChildren(sess.FieldSpecs()...).WithChildren(retries.FieldSpecs()...).ChildDefaultAndTypesFromStruct(output.NewKinesisFirehoseConfig()),
-		Categories: []string{
-			"Services",
-			"AWS",
-		},
-	})
+By default Benthos will use a shared credentials file when connecting to AWS services. It's also possible to set them explicitly at the component level, allowing you to transfer data across accounts. You can find out more [in this document](/docs/guides/cloud/aws).
+
+## Performance
+
+This output benefits from sending multiple messages in flight in parallel for improved performance. You can tune the max number of in flight messages (or message batches) with the field `+"`max_in_flight`"+`.
+
+This output benefits from sending messages as a batch for improved performance. Batches can be formed at both the input and output level. You can find out more [in this doc](/docs/configuration/batching).
+`).
+		Fields(
+			service.NewStringField(kfoFieldStream).
+				Description("The stream to publish messages to."),
+			service.NewOutputMaxInFlightField(),
+			service.NewBatchPolicyField(kfoFieldBatching),
+		).
+		Fields(config.SessionFields()...).
+		Fields(pure.CommonRetryBackOffFields(0, "1s", "5s", "30s")...)
+}
+
+func init() {
+	err := service.RegisterBatchOutput("aws_kinesis_firehose", kfoOutputSpec(),
+		func(conf *service.ParsedConfig, mgr *service.Resources) (out service.BatchOutput, batchPolicy service.BatchPolicy, maxInFlight int, err error) {
+			if maxInFlight, err = conf.FieldMaxInFlight(); err != nil {
+				return
+			}
+			if batchPolicy, err = conf.FieldBatchPolicy(kfoFieldBatching); err != nil {
+				return
+			}
+			var wConf kfoConfig
+			if wConf, err = kfoConfigFromParsed(conf); err != nil {
+				return
+			}
+			out, err = newKinesisFirehoseWriter(wConf, mgr.Logger())
+			return
+		})
 	if err != nil {
 		panic(err)
 	}
 }
 
 type kinesisFirehoseWriter struct {
-	conf output.KinesisFirehoseConfig
-
-	session  *session.Session
 	firehose firehoseiface.FirehoseAPI
 
-	backoffCtor func() backoff.BackOff
-	streamName  *string
-
-	log log.Modular
+	conf kfoConfig
+	log  *service.Logger
 }
 
-func newKinesisFirehoseWriter(conf output.KinesisFirehoseConfig, log log.Modular) (*kinesisFirehoseWriter, error) {
-	k := kinesisFirehoseWriter{
-		conf:       conf,
-		log:        log,
-		streamName: aws.String(conf.Stream),
-	}
-
-	var err error
-	if k.backoffCtor, err = conf.Config.GetCtor(); err != nil {
-		return nil, err
-	}
-	return &k, nil
+func newKinesisFirehoseWriter(conf kfoConfig, log *service.Logger) (*kinesisFirehoseWriter, error) {
+	return &kinesisFirehoseWriter{
+		conf: conf,
+		log:  log,
+	}, nil
 }
 
 // toRecords converts an individual benthos message into a slice of Kinesis Firehose
@@ -93,24 +110,25 @@ func newKinesisFirehoseWriter(conf output.KinesisFirehoseConfig, log log.Modular
 // and passing each new message through the partition and hash key interpolation
 // process, allowing the user to define the partition and hash key per message
 // part.
-func (a *kinesisFirehoseWriter) toRecords(msg message.Batch) ([]*firehose.Record, error) {
-	entries := make([]*firehose.Record, msg.Len())
+func (a *kinesisFirehoseWriter) toRecords(batch service.MessageBatch) ([]*firehose.Record, error) {
+	entries := make([]*firehose.Record, len(batch))
 
-	err := msg.Iter(func(i int, p *message.Part) error {
-		entry := firehose.Record{
-			Data: p.AsBytes(),
+	for i, p := range batch {
+		var entry firehose.Record
+		var err error
+		if entry.Data, err = p.AsBytes(); err != nil {
+			return nil, err
 		}
 
 		if len(entry.Data) > mebibyte {
-			a.log.Errorf("part %d exceeds the maximum Kinesis Firehose payload limit of 1 MiB\n", i)
-			return component.ErrMessageTooLarge
+			a.log.Errorf("batch message %d exceeds the maximum Kinesis Firehose payload limit of 1 MiB", i)
+			return nil, component.ErrMessageTooLarge
 		}
 
 		entries[i] = &entry
-		return nil
-	})
+	}
 
-	return entries, err
+	return entries, nil
 }
 
 //------------------------------------------------------------------------------
@@ -118,20 +136,13 @@ func (a *kinesisFirehoseWriter) toRecords(msg message.Batch) ([]*firehose.Record
 // Connect creates a new Kinesis Firehose client and ensures that the target
 // Kinesis Firehose delivery stream.
 func (a *kinesisFirehoseWriter) Connect(ctx context.Context) error {
-	if a.session != nil {
+	if a.firehose != nil {
 		return nil
 	}
 
-	sess, err := GetSessionFromConf(a.conf.SessionConfig.Config)
-	if err != nil {
-		return err
-	}
-
-	a.session = sess
-	a.firehose = firehose.New(sess)
-
+	a.firehose = firehose.New(a.conf.session)
 	if _, err := a.firehose.DescribeDeliveryStream(&firehose.DescribeDeliveryStreamInput{
-		DeliveryStreamName: a.streamName,
+		DeliveryStreamName: aws.String(a.conf.Stream),
 	}); err != nil {
 		return err
 	}
@@ -140,31 +151,24 @@ func (a *kinesisFirehoseWriter) Connect(ctx context.Context) error {
 	return nil
 }
 
-// Write attempts to write message contents to a target Kinesis Firehose delivery
-// stream in batches of 500. If throttling is detected, failed messages are retried
-// according to the configurable backoff settings.
-func (a *kinesisFirehoseWriter) Write(msg message.Batch) error {
-	return a.WriteBatch(context.Background(), msg)
-}
-
 // WriteBatch attempts to write message contents to a target Kinesis
 // Firehose delivery stream in batches of 500. If throttling is detected, failed
 // messages are retried according to the configurable backoff settings.
-func (a *kinesisFirehoseWriter) WriteBatch(ctx context.Context, msg message.Batch) error {
-	if a.session == nil {
-		return component.ErrNotConnected
+func (a *kinesisFirehoseWriter) WriteBatch(ctx context.Context, batch service.MessageBatch) error {
+	if a.firehose == nil {
+		return service.ErrNotConnected
 	}
 
-	backOff := a.backoffCtor()
+	backOff := a.conf.backoffCtor()
 
-	records, err := a.toRecords(msg)
+	records, err := a.toRecords(batch)
 	if err != nil {
 		return err
 	}
 
 	input := &firehose.PutRecordBatchInput{
 		Records:            records,
-		DeliveryStreamName: a.streamName,
+		DeliveryStreamName: aws.String(a.conf.Stream),
 	}
 
 	// trim input record length to max kinesis firehose batch size

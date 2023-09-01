@@ -17,7 +17,7 @@ import TabItem from '@theme/TabItem';
 :::caution BETA
 This component is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with the component is found.
 :::
-An alternative Kafka output using the [Franz Kafka client library](https://github.com/twmb/franz-go).
+A Kafka output using the [Franz Kafka client library](https://github.com/twmb/franz-go).
 
 Introduced in version 3.61.0.
 
@@ -34,10 +34,10 @@ Introduced in version 3.61.0.
 output:
   label: ""
   kafka_franz:
-    seed_brokers: []
-    topic: ""
-    key: ""
-    partition: ""
+    seed_brokers: [] # No default (required)
+    topic: "" # No default (required)
+    key: "" # No default (optional)
+    partition: ${! meta("partition") } # No default (optional)
     metadata:
       include_prefixes: []
       include_patterns: []
@@ -57,11 +57,13 @@ output:
 output:
   label: ""
   kafka_franz:
-    seed_brokers: []
-    topic: ""
-    key: ""
-    partitioner: ""
-    partition: ""
+    seed_brokers: [] # No default (required)
+    topic: "" # No default (required)
+    key: "" # No default (optional)
+    partitioner: "" # No default (optional)
+    partition: ${! meta("partition") } # No default (optional)
+    client_id: benthos
+    rack_id: ""
     metadata:
       include_prefixes: []
       include_patterns: []
@@ -72,9 +74,9 @@ output:
       byte_size: 0
       period: ""
       check: ""
-      processors: []
+      processors: [] # No default (optional)
     max_message_bytes: 1MB
-    compression: ""
+    compression: "" # No default (optional)
     tls:
       enabled: false
       skip_cert_verify: false
@@ -82,13 +84,16 @@ output:
       root_cas: ""
       root_cas_file: ""
       client_certs: []
-    sasl: []
+    sasl: [] # No default (optional)
 ```
 
 </TabItem>
 </Tabs>
 
 Writes a batch of messages to Kafka brokers and waits for acknowledgement before propagating it back to the input.
+
+This output often out-performs the traditional `kafka` output as well as providing more useful logs and error messages.
+
 
 ## Fields
 
@@ -157,6 +162,22 @@ Type: `string`
 
 partition: ${! meta("partition") }
 ```
+
+### `client_id`
+
+An identifier for the client connection.
+
+
+Type: `string`  
+Default: `"benthos"`  
+
+### `rack_id`
+
+A rack identifier for this client.
+
+
+Type: `string`  
+Default: `""`  
 
 ### `metadata`
 
@@ -413,6 +434,7 @@ A list of client certificates to use. For each certificate either the fields `ce
 
 
 Type: `array`  
+Default: `[]`  
 
 ```yml
 # Examples

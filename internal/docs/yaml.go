@@ -1,6 +1,7 @@
 package docs
 
 import (
+	"errors"
 	"fmt"
 
 	"gopkg.in/yaml.v3"
@@ -341,9 +342,11 @@ func (f FieldSpec) SanitiseYAML(node *yaml.Node, conf SanitiseConfig) error {
 			if scrubValue, err = f.scrubValue(scrubValue); err != nil {
 				return err
 			}
+			comment := n.LineComment
 			if err := n.Encode(scrubValue); err != nil {
 				return err
 			}
+			n.LineComment = comment
 			return nil
 		}
 		switch f.Kind {
@@ -393,11 +396,11 @@ func (f FieldSpecs) SanitiseYAML(node *yaml.Node, conf SanitiseConfig) error {
 		if field.IsDeprecated && conf.RemoveDeprecated {
 			continue
 		}
-		if conf.Filter.shouldDrop(field) {
-			continue
-		}
 		value, exists := nodeKeys[field.Name]
 		if !exists {
+			continue
+		}
+		if conf.Filter.shouldDrop(field, value) {
 			continue
 		}
 		if _, omit := field.shouldOmitYAML(f, value, node); omit {
@@ -421,7 +424,7 @@ func (f FieldSpecs) SanitiseYAML(node *yaml.Node, conf SanitiseConfig) error {
 func lintYAMLFromOmit(parentSpec FieldSpecs, lintTargetSpec FieldSpec, parent, node *yaml.Node) []Lint {
 	why, shouldOmit := lintTargetSpec.shouldOmitYAML(parentSpec, node, parent)
 	if shouldOmit {
-		return []Lint{NewLintError(node.Line, LintShouldOmit, why)}
+		return []Lint{NewLintError(node.Line, LintShouldOmit, errors.New(why))}
 	}
 	return nil
 }
@@ -471,20 +474,20 @@ func LintYAML(ctx LintContext, cType Type, node *yaml.Node) []Lint {
 			return nil
 		}
 		var err error
-		if name, _, err = getInferenceCandidateFromList(ctx.DocsProvider, cType, keys); err != nil {
+		if name, _, err = getInferenceCandidateFromList(ctx.conf.DocsProvider, cType, keys); err != nil {
 			lints = append(lints, NewLintWarning(node.Line, LintComponentMissing, "unable to infer component type"))
 			return lints
 		}
 	}
 
-	cSpec, exists := ctx.DocsProvider.GetDocs(name, cType)
+	cSpec, exists := ctx.conf.DocsProvider.GetDocs(name, cType)
 	if !exists {
 		lints = append(lints, NewLintWarning(node.Line, LintComponentNotFound, fmt.Sprintf("failed to obtain docs for %v type %v", cType, name)))
 		return lints
 	}
 
-	if ctx.RejectDeprecated && cSpec.Status == StatusDeprecated {
-		lints = append(lints, NewLintError(node.Line, LintDeprecated, fmt.Sprintf("component %v is deprecated", cSpec.Name)))
+	if ctx.conf.RejectDeprecated && cSpec.Status == StatusDeprecated {
+		lints = append(lints, NewLintError(node.Line, LintDeprecated, fmt.Errorf("component %v is deprecated", cSpec.Name)))
 	}
 
 	nameFound := false
@@ -506,7 +509,7 @@ func LintYAML(ctx LintContext, cType Type, node *yaml.Node) []Lint {
 		}
 		if key == "plugin" {
 			if nameFound || !cSpec.Plugin {
-				lints = append(lints, NewLintError(node.Content[i].Line, LintShouldOmit, "plugin object is ineffective"))
+				lints = append(lints, NewLintError(node.Content[i].Line, LintShouldOmit, errors.New("plugin object is ineffective")))
 			} else {
 				lints = append(lints, cSpec.Config.LintYAML(ctx, node.Content[i+1])...)
 			}
@@ -520,13 +523,13 @@ func LintYAML(ctx LintContext, cType Type, node *yaml.Node) []Lint {
 			lints = append(lints, NewLintError(
 				node.Content[i].Line,
 				LintUnknown,
-				fmt.Sprintf("field %v is invalid when the component type is %v (%v)", node.Content[i].Value, name, cType),
+				fmt.Errorf("field %v is invalid when the component type is %v (%v)", node.Content[i].Value, name, cType),
 			))
 		}
 	}
 
-	if ctx.RequireLabels && canLabel && !hasLabel && name != "resource" {
-		lints = append(lints, NewLintError(node.Line, LintMissingLabel, fmt.Sprintf("label is required for %s", cSpec.Name)))
+	if ctx.conf.RequireLabels && canLabel && !hasLabel && name != "resource" {
+		lints = append(lints, NewLintError(node.Line, LintMissingLabel, fmt.Errorf("label is required for %s", cSpec.Name)))
 	}
 
 	return lints
@@ -539,8 +542,8 @@ func (f FieldSpec) LintYAML(ctx LintContext, node *yaml.Node) []Lint {
 
 	var lints []Lint
 
-	if ctx.RejectDeprecated && f.IsDeprecated {
-		lints = append(lints, NewLintError(node.Line, LintDeprecated, fmt.Sprintf("field %v is deprecated", f.Name)))
+	if ctx.conf.RejectDeprecated && f.IsDeprecated {
+		lints = append(lints, NewLintError(node.Line, LintDeprecated, fmt.Errorf("field %v is deprecated", f.Name)))
 	}
 
 	// Execute custom linters, if the kind is non-scalar this means we execute
@@ -552,7 +555,7 @@ func (f FieldSpec) LintYAML(ctx LintContext, node *yaml.Node) []Lint {
 	switch f.Kind {
 	case Kind2DArray:
 		if node.Kind != yaml.SequenceNode {
-			lints = append(lints, NewLintError(node.Line, LintExpectedArray, "expected array value"))
+			lints = append(lints, NewLintError(node.Line, LintExpectedArray, errors.New("expected array value")))
 			return lints
 		}
 		for i := 0; i < len(node.Content); i++ {
@@ -561,7 +564,7 @@ func (f FieldSpec) LintYAML(ctx LintContext, node *yaml.Node) []Lint {
 		return lints
 	case KindArray:
 		if node.Kind != yaml.SequenceNode {
-			lints = append(lints, NewLintError(node.Line, LintExpectedArray, "expected array value"))
+			lints = append(lints, NewLintError(node.Line, LintExpectedArray, errors.New("expected array value")))
 			return lints
 		}
 		for i := 0; i < len(node.Content); i++ {
@@ -570,7 +573,7 @@ func (f FieldSpec) LintYAML(ctx LintContext, node *yaml.Node) []Lint {
 		return lints
 	case KindMap:
 		if node.Kind != yaml.MappingNode {
-			lints = append(lints, NewLintError(node.Line, LintExpectedObject, "expected object value"))
+			lints = append(lints, NewLintError(node.Line, LintExpectedObject, errors.New("expected object value")))
 			return lints
 		}
 		for i := 0; i < len(node.Content)-1; i += 2 {
@@ -594,11 +597,11 @@ func (f FieldSpec) LintYAML(ctx LintContext, node *yaml.Node) []Lint {
 	// TODO: Do proper checking for bool and number types.
 	case FieldTypeBool, FieldTypeString, FieldTypeInt, FieldTypeFloat:
 		if node.Kind == yaml.MappingNode || node.Kind == yaml.SequenceNode {
-			lints = append(lints, NewLintError(node.Line, LintExpectedScalar, fmt.Sprintf("expected %v value", f.Type)))
+			lints = append(lints, NewLintError(node.Line, LintExpectedScalar, fmt.Errorf("expected %v value", f.Type)))
 		}
 	case FieldTypeObject:
 		if node.Kind != yaml.MappingNode && node.Kind != yaml.AliasNode {
-			lints = append(lints, NewLintError(node.Line, LintExpectedObject, "expected object value"))
+			lints = append(lints, NewLintError(node.Line, LintExpectedObject, errors.New("expected object value")))
 		}
 	}
 	return lints
@@ -614,36 +617,45 @@ func (f FieldSpecs) LintYAML(ctx LintContext, node *yaml.Node) []Lint {
 			// TODO: Actually lint through aliases
 			return nil
 		}
-		lints = append(lints, NewLintError(node.Line, LintExpectedObject, "expected object value"))
+		lints = append(lints, NewLintError(node.Line, LintExpectedObject, errors.New("expected object value")))
 		return lints
 	}
 
-	specNames := map[string]FieldSpec{}
+	specNamesMissing, specNamesAll := map[string]FieldSpec{}, map[string]FieldSpec{}
 	for _, field := range f {
-		specNames[field.Name] = field
+		specNamesMissing[field.Name] = field
+		specNamesAll[field.Name] = field
 	}
 
-	for i := 0; i < len(node.Content)-1; i += 2 {
-		spec, exists := specNames[node.Content[i].Value]
-		if !exists {
-			if node.Content[i+1].Kind != yaml.AliasNode {
-				lints = append(lints, NewLintError(node.Content[i].Line, LintUnknown, fmt.Sprintf("field %v not recognised", node.Content[i].Value)))
+	var walkNodeContent func(*yaml.Node)
+	walkNodeContent = func(walkNode *yaml.Node) {
+		for i := 0; i < len(walkNode.Content)-1; i += 2 {
+			if walkNode.Content[i].Tag == "!!merge" && walkNode.Content[i+1].Alias != nil {
+				walkNodeContent(walkNode.Content[i+1].Alias)
+				continue
 			}
-			continue
+			spec, exists := specNamesAll[walkNode.Content[i].Value]
+			if !exists {
+				if walkNode.Content[i+1].Kind != yaml.AliasNode {
+					lints = append(lints, NewLintError(walkNode.Content[i].Line, LintUnknown, fmt.Errorf("field %v not recognised", walkNode.Content[i].Value)))
+				}
+				continue
+			}
+			lints = append(lints, lintYAMLFromOmit(f, spec, walkNode, walkNode.Content[i+1])...)
+			lints = append(lints, spec.LintYAML(ctx, walkNode.Content[i+1])...)
+			delete(specNamesMissing, walkNode.Content[i].Value)
 		}
-		lints = append(lints, lintYAMLFromOmit(f, spec, node, node.Content[i+1])...)
-		lints = append(lints, spec.LintYAML(ctx, node.Content[i+1])...)
-		delete(specNames, node.Content[i].Value)
 	}
+	walkNodeContent(node)
 
-	for name, remaining := range specNames {
+	for name, remaining := range specNamesMissing {
 		_, isCore := remaining.Type.IsCoreComponent()
 		if remaining.needsDefault() &&
 			remaining.Default == nil &&
 			!isCore &&
 			remaining.Kind == KindScalar &&
 			len(remaining.Children) == 0 {
-			lints = append(lints, NewLintError(node.Line, LintMissing, fmt.Sprintf("field %v is required", name)))
+			lints = append(lints, NewLintError(node.Line, LintMissing, fmt.Errorf("field %v is required", name)))
 		}
 	}
 	return lints
@@ -677,28 +689,39 @@ func (f FieldSpec) ToYAML(recurse bool) (*yaml.Node, error) {
 			return nil, err
 		}
 	} else {
-		switch f.Type {
-		case FieldTypeString:
-			if err := node.Encode(""); err != nil {
+		if len(f.Examples) > 0 {
+			if err := node.Encode(f.Examples[0]); err != nil {
 				return nil, err
 			}
-		case FieldTypeInt:
-			if err := node.Encode(0); err != nil {
-				return nil, err
-			}
-		case FieldTypeFloat:
-			if err := node.Encode(0.0); err != nil {
-				return nil, err
-			}
-		case FieldTypeBool:
-			if err := node.Encode(false); err != nil {
-				return nil, err
-			}
-		default:
-			if err := node.Encode(nil); err != nil {
-				return nil, err
+		} else {
+			switch f.Type {
+			case FieldTypeString:
+				if err := node.Encode(""); err != nil {
+					return nil, err
+				}
+			case FieldTypeInt:
+				if err := node.Encode(0); err != nil {
+					return nil, err
+				}
+			case FieldTypeFloat:
+				if err := node.Encode(0.0); err != nil {
+					return nil, err
+				}
+			case FieldTypeBool:
+				if err := node.Encode(false); err != nil {
+					return nil, err
+				}
+			default:
+				if err := node.Encode(nil); err != nil {
+					return nil, err
+				}
 			}
 		}
+	}
+	if f.IsOptional {
+		node.LineComment = "No default (optional)"
+	} else {
+		node.LineComment = "No default (required)"
 	}
 	return &node, nil
 }
@@ -1033,7 +1056,10 @@ func (f FieldSpecs) WalkYAML(node *yaml.Node, prov Provider, fn ComponentWalkYAM
 
 func unwrapDocumentNode(node *yaml.Node) *yaml.Node {
 	if node != nil && node.Kind == yaml.DocumentNode && len(node.Content) > 0 {
-		return node.Content[0]
+		node = node.Content[0]
+	}
+	if node != nil && node.Alias != nil {
+		node = node.Alias
 	}
 	return node
 }

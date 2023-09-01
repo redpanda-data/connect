@@ -14,7 +14,6 @@ categories: ["Services","AWS"]
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-
 Sends messages to an SQS queue.
 
 Introduced in version 3.36.0.
@@ -32,9 +31,9 @@ Introduced in version 3.36.0.
 output:
   label: ""
   aws_sqs:
-    url: ""
-    message_group_id: ""
-    message_deduplication_id: ""
+    url: "" # No default (required)
+    message_group_id: "" # No default (optional)
+    message_deduplication_id: "" # No default (optional)
     max_in_flight: 64
     metadata:
       exclude_prefixes: []
@@ -53,9 +52,9 @@ output:
 output:
   label: ""
   aws_sqs:
-    url: ""
-    message_group_id: ""
-    message_deduplication_id: ""
+    url: "" # No default (required)
+    message_group_id: "" # No default (optional)
+    message_deduplication_id: "" # No default (optional)
     max_in_flight: 64
     metadata:
       exclude_prefixes: []
@@ -64,7 +63,7 @@ output:
       byte_size: 0
       period: ""
       check: ""
-      processors: []
+      processors: [] # No default (optional)
     region: ""
     endpoint: ""
     credentials:
@@ -85,22 +84,13 @@ output:
 </TabItem>
 </Tabs>
 
-Metadata values are sent along with the payload as attributes with the data type
-String. If the number of metadata values in a message exceeds the message
-attribute limit (10) then the top ten keys ordered alphabetically will be
-selected.
+Metadata values are sent along with the payload as attributes with the data type String. If the number of metadata values in a message exceeds the message attribute limit (10) then the top ten keys ordered alphabetically will be selected.
 
-The fields `message_group_id` and `message_deduplication_id` can be
-set dynamically using
-[function interpolations](/docs/configuration/interpolation#bloblang-queries), which are
-resolved individually for each message of a batch.
+The fields `message_group_id` and `message_deduplication_id` can be set dynamically using [function interpolations](/docs/configuration/interpolation#bloblang-queries), which are resolved individually for each message of a batch.
 
 ### Credentials
 
-By default Benthos will use a shared credentials file when connecting to AWS
-services. It's also possible to set them explicitly at the component level,
-allowing you to transfer data across accounts. You can find out more
-[in this document](/docs/guides/cloud/aws).
+By default Benthos will use a shared credentials file when connecting to AWS services. It's also possible to set them explicitly at the component level, allowing you to transfer data across accounts. You can find out more [in this document](/docs/guides/cloud/aws).
 
 ## Performance
 
@@ -120,7 +110,6 @@ The URL of the target SQS queue.
 
 
 Type: `string`  
-Default: `""`  
 
 ### `message_group_id`
 
@@ -129,7 +118,6 @@ This field supports [interpolation functions](/docs/configuration/interpolation#
 
 
 Type: `string`  
-Default: `""`  
 
 ### `message_deduplication_id`
 
@@ -138,7 +126,6 @@ This field supports [interpolation functions](/docs/configuration/interpolation#
 
 
 Type: `string`  
-Default: `""`  
 
 ### `max_in_flight`
 
@@ -242,7 +229,6 @@ A list of [processors](/docs/components/processors/about) to apply to a batch as
 
 
 Type: `array`  
-Default: `[]`  
 
 ```yml
 # Examples
@@ -302,6 +288,9 @@ Default: `""`
 ### `credentials.secret`
 
 The secret for the credentials being used.
+:::warning Secret
+This field contains sensitive information that usually shouldn't be added to a config directly, read our [secrets page for more info](/docs/configuration/secrets).
+:::
 
 
 Type: `string`  

@@ -13,9 +13,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/benthosdev/benthos/v4/internal/component"
-	"github.com/benthosdev/benthos/v4/internal/component/input"
 	"github.com/benthosdev/benthos/v4/internal/integration"
-	"github.com/benthosdev/benthos/v4/internal/manager/mock"
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
 func TestIntegrationAzureServiceBus(t *testing.T) {
@@ -42,12 +41,14 @@ func TestIntegrationAzureServiceBus(t *testing.T) {
 func testAMQP1Connected(url, sourceAddress string, t *testing.T) {
 	ctx := context.Background()
 
-	conf := input.NewAMQP1Config()
-	conf.URL = url
-	conf.SourceAddress = sourceAddress
-	conf.AzureRenewLock = true
+	conf, err := amqp1InputSpec().ParseYAML(fmt.Sprintf(`
+url: %v
+source_address: %v
+azure_renew_lock: true
+`, url, sourceAddress), nil)
+	require.NoError(t, err)
 
-	m, err := newAMQP1Reader(conf, mock.NewManager())
+	m, err := amqp1ReaderFromParsed(conf, service.MockResources())
 	require.NoError(t, err)
 
 	err = m.Connect(ctx)
@@ -57,30 +58,37 @@ func testAMQP1Connected(url, sourceAddress string, t *testing.T) {
 		_ = m.Close(context.Background())
 	}()
 
-	client, err := amqp.Dial(url)
+	client, err := amqp.Dial(ctx, url, nil)
 	require.NoError(t, err)
 	defer client.Close()
 
-	session, err := client.NewSession()
+	session, err := client.NewSession(ctx, nil)
 	require.NoError(t, err)
 	defer session.Close(ctx)
 
-	sender, err := session.NewSender(
-		amqp.LinkTargetAddress("/test"),
-	)
+	sender, err := session.NewSender(ctx, "/test", nil)
 	require.NoError(t, err)
 	defer sender.Close(ctx)
 
-	N := 10
 	wg := sync.WaitGroup{}
 
-	testMsgs := map[string]bool{}
-	for i := 0; i < N; i++ {
+	tests := []struct {
+		data            string
+		value           interface{}
+		expectedContent string
+	}{
+		{"hello world: 0", nil, "hello world: 0"},
+		{"hello world: 1", nil, "hello world: 1"},
+		{"hello world: 2", nil, "hello world: 2"},
+		{"", "hello world: 3", "hello world: 3"},
+		{"", "hello world: 4", "hello world: 4"},
+		{"", "hello world: 5", "hello world: 5"},
+	}
+
+	for _, test := range tests {
 		wg.Add(1)
 
-		str := fmt.Sprintf("hello world: %v", i)
-		testMsgs[str] = true
-		go func(testStr string) {
+		go func(data string, value interface{}) {
 			defer wg.Done()
 
 			contentType := "plain/text"
@@ -92,13 +100,19 @@ func testAMQP1Connected(url, sourceAddress string, t *testing.T) {
 					ContentEncoding: &contentEncoding,
 					CreationTime:    &createdAt,
 				},
-				Data: [][]byte{[]byte(str)},
-			})
+				Data:  [][]byte{[]byte(data)},
+				Value: value,
+			}, nil)
 			require.NoError(t, err)
-		}(str)
+		}(test.data, test.value)
 	}
 
-	for i := 0; i < N; i++ {
+	want := map[string]bool{}
+	for _, test := range tests {
+		want[test.expectedContent] = true
+	}
+
+	for range tests {
 		actM, ackFn, err := m.ReadBatch(ctx)
 		assert.NoError(t, err)
 		wg.Add(1)
@@ -106,9 +120,15 @@ func testAMQP1Connected(url, sourceAddress string, t *testing.T) {
 		go func() {
 			defer wg.Done()
 
-			assert.True(t, testMsgs[string(actM.Get(0).AsBytes())], "Unexpected message")
-			assert.Equal(t, "plain/text", actM.Get(0).MetaGetStr("amqp_content_type"))
-			assert.Equal(t, "utf-8", actM.Get(0).MetaGetStr("amqp_content_encoding"))
+			content, err := actM[0].AsBytes()
+			require.NoError(t, err)
+			assert.True(t, want[string(content)], "Unexpected message")
+
+			m, _ := actM[0].MetaGetMut("amqp_content_type")
+			assert.Equal(t, "plain/text", m)
+
+			m, _ = actM[0].MetaGetMut("amqp_content_encoding")
+			assert.Equal(t, "utf-8", m)
 
 			time.Sleep(6 * time.Second) // Simulate long processing before ack so message lock expires and lock renewal is requires
 
@@ -126,12 +146,14 @@ func testAMQP1Connected(url, sourceAddress string, t *testing.T) {
 func testAMQP1Disconnected(url, sourceAddress string, t *testing.T) {
 	ctx := context.Background()
 
-	conf := input.NewAMQP1Config()
-	conf.URL = url
-	conf.SourceAddress = sourceAddress
-	conf.AzureRenewLock = true
+	conf, err := amqp1InputSpec().ParseYAML(fmt.Sprintf(`
+url: %v
+source_address: %v
+azure_renew_lock: true
+`, url, sourceAddress), nil)
+	require.NoError(t, err)
 
-	m, err := newAMQP1Reader(conf, mock.NewManager())
+	m, err := amqp1ReaderFromParsed(conf, service.MockResources())
 	require.NoError(t, err)
 
 	err = m.Connect(ctx)

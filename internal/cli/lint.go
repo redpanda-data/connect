@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path"
 	"runtime"
@@ -29,22 +30,14 @@ type pathLint struct {
 	lint   docs.Lint
 }
 
-func lintFile(path string, opts config.LintOptions) (pathLints []pathLint) {
+func lintFile(path string, skipEnvVarCheck bool, lConf docs.LintConfig) (pathLints []pathLint) {
 	conf := config.New()
-	lints, err := config.ReadFileLinted(ifs.OS(), path, opts, &conf)
+	lints, err := config.ReadFileLinted(ifs.OS(), path, skipEnvVarCheck, lConf, &conf)
 	if err != nil {
-		var l docs.Lint
-		if errors.As(err, &l) {
-			pathLints = append(pathLints, pathLint{
-				source: path,
-				lint:   l,
-			})
-		} else {
-			pathLints = append(pathLints, pathLint{
-				source: path,
-				lint:   docs.NewLintError(1, docs.LintFailedRead, err.Error()),
-			})
-		}
+		pathLints = append(pathLints, pathLint{
+			source: path,
+			lint:   docs.NewLintError(1, docs.LintFailedRead, err),
+		})
 		return
 	}
 	for _, l := range lints {
@@ -56,12 +49,12 @@ func lintFile(path string, opts config.LintOptions) (pathLints []pathLint) {
 	return
 }
 
-func lintMDSnippets(path string, opts config.LintOptions) (pathLints []pathLint) {
+func lintMDSnippets(path string, lConf docs.LintConfig) (pathLints []pathLint) {
 	rawBytes, err := ifs.ReadFile(ifs.OS(), path)
 	if err != nil {
 		pathLints = append(pathLints, pathLint{
 			source: path,
-			lint:   docs.NewLintError(1, docs.LintFailedRead, err.Error()),
+			lint:   docs.NewLintError(1, docs.LintFailedRead, err),
 		})
 		return
 	}
@@ -78,7 +71,7 @@ func lintMDSnippets(path string, opts config.LintOptions) (pathLints []pathLint)
 		if endOfSnippet == -1 {
 			pathLints = append(pathLints, pathLint{
 				source: path,
-				lint:   docs.NewLintError(snippetLine, docs.LintFailedRead, "markdown snippet not terminated"),
+				lint:   docs.NewLintError(snippetLine, docs.LintFailedRead, errors.New("markdown snippet not terminated")),
 			})
 			return
 		}
@@ -98,15 +91,15 @@ func lintMDSnippets(path string, opts config.LintOptions) (pathLints []pathLint)
 			} else {
 				pathLints = append(pathLints, pathLint{
 					source: path,
-					lint:   docs.NewLintError(snippetLine, docs.LintFailedRead, err.Error()),
+					lint:   docs.NewLintError(snippetLine, docs.LintFailedRead, err),
 				})
 			}
 		} else {
-			lints, err := config.LintBytes(opts, configBytes)
+			lints, err := config.LintBytes(lConf, configBytes)
 			if err != nil {
 				pathLints = append(pathLints, pathLint{
 					source: path,
-					lint:   docs.NewLintError(snippetLine, docs.LintFailedRead, err.Error()),
+					lint:   docs.NewLintError(snippetLine, docs.LintFailedRead, err),
 				})
 			}
 			for _, l := range lints {
@@ -150,65 +143,81 @@ files with the .yaml or .yml extension.`[1:],
 				Value: false,
 				Usage: "Print linting errors when components do not have labels.",
 			},
+			&cli.BoolFlag{
+				Name:  "skip-env-var-check",
+				Value: false,
+				Usage: "Do not produce lint errors when environment interpolations exist without defaults within configs but aren't defined.",
+			},
 		},
 		Action: func(c *cli.Context) error {
-			targets, err := ifilepath.GlobsAndSuperPaths(ifs.OS(), c.Args().Slice(), "yaml", "yml")
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Lint paths error: %v\n", err)
-				os.Exit(1)
+			if code := LintAction(c, os.Stderr); code != 0 {
+				os.Exit(code)
 			}
-			if conf := c.String("config"); len(conf) > 0 {
-				targets = append(targets, conf)
-			}
-
-			lintOpts := config.LintOptions{
-				RejectDeprecated: c.Bool("deprecated"),
-				RequireLabels:    c.Bool("labels"),
-			}
-
-			var pathLintMut sync.Mutex
-			var pathLints []pathLint
-			threads := runtime.NumCPU()
-			var wg sync.WaitGroup
-			wg.Add(threads)
-			for i := 0; i < threads; i++ {
-				go func(threadID int) {
-					defer wg.Done()
-					for j, target := range targets {
-						if j%threads != threadID {
-							continue
-						}
-						if target == "" {
-							continue
-						}
-						var lints []pathLint
-						if path.Ext(target) == ".md" {
-							lints = lintMDSnippets(target, lintOpts)
-						} else {
-							lints = lintFile(target, lintOpts)
-						}
-						if len(lints) > 0 {
-							pathLintMut.Lock()
-							pathLints = append(pathLints, lints...)
-							pathLintMut.Unlock()
-						}
-					}
-				}(i)
-			}
-			wg.Wait()
-			if len(pathLints) == 0 {
-				os.Exit(0)
-			}
-			for _, lint := range pathLints {
-				lintText := fmt.Sprintf("%v%v\n", lint.source, lint.lint.Error())
-				if lint.lint.Type == docs.LintFailedRead || lint.lint.Type == docs.LintComponentMissing {
-					fmt.Fprint(os.Stderr, red(lintText))
-				} else {
-					fmt.Fprint(os.Stderr, yellow(lintText))
-				}
-			}
-			os.Exit(1)
 			return nil
 		},
 	}
+}
+
+// LintAction performs the benthos lint subcommand and returns the appropriate
+// exit code. This function is exported for testing purposes only.
+func LintAction(c *cli.Context, stderr io.Writer) int {
+	targets, err := ifilepath.GlobsAndSuperPaths(ifs.OS(), c.Args().Slice(), "yaml", "yml")
+	if err != nil {
+		fmt.Fprintf(stderr, "Lint paths error: %v\n", err)
+		return 1
+	}
+	if conf := c.String("config"); len(conf) > 0 {
+		targets = append(targets, conf)
+	}
+	targets = append(targets, c.StringSlice("resources")...)
+
+	lConf := docs.NewLintConfig()
+	lConf.RejectDeprecated = c.Bool("deprecated")
+	lConf.RequireLabels = c.Bool("labels")
+	skipEnvVarCheck := c.Bool("skip-env-var-check")
+
+	var pathLintMut sync.Mutex
+	var pathLints []pathLint
+	threads := runtime.NumCPU()
+	var wg sync.WaitGroup
+	wg.Add(threads)
+	for i := 0; i < threads; i++ {
+		go func(threadID int) {
+			defer wg.Done()
+			for j, target := range targets {
+				if j%threads != threadID {
+					continue
+				}
+				if target == "" {
+					continue
+				}
+				var lints []pathLint
+				if path.Ext(target) == ".md" {
+					lints = lintMDSnippets(target, lConf)
+				} else {
+					lints = lintFile(target, skipEnvVarCheck, lConf)
+				}
+				if len(lints) > 0 {
+					pathLintMut.Lock()
+					pathLints = append(pathLints, lints...)
+					pathLintMut.Unlock()
+				}
+			}
+		}(i)
+	}
+	wg.Wait()
+
+	if len(pathLints) == 0 {
+		return 0
+	}
+
+	for _, lint := range pathLints {
+		lintText := fmt.Sprintf("%v%v\n", lint.source, lint.lint.Error())
+		if lint.lint.Type == docs.LintFailedRead || lint.lint.Type == docs.LintComponentMissing {
+			fmt.Fprint(stderr, red(lintText))
+		} else {
+			fmt.Fprint(stderr, yellow(lintText))
+		}
+	}
+	return 1
 }

@@ -21,9 +21,9 @@ Reads files from a HDFS directory, where each discrete file will be consumed as 
 input:
   label: ""
   hdfs:
-    hosts: []
+    hosts: [] # No default (required)
     user: ""
-    directory: ""
+    directory: "" # No default (required)
 ```
 
 ### Metadata
@@ -46,7 +46,12 @@ A list of target host addresses to connect to.
 
 
 Type: `array`  
-Default: `[]`  
+
+```yml
+# Examples
+
+hosts: localhost:9000
+```
 
 ### `user`
 
@@ -62,6 +67,5 @@ The directory to consume from.
 
 
 Type: `string`  
-Default: `""`  
 
 

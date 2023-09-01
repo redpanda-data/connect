@@ -30,12 +30,10 @@ type Config struct {
 	JSONSchema   JSONSchemaConfig   `json:"json_schema" yaml:"json_schema"`
 	Log          LogConfig          `json:"log" yaml:"log"`
 	Metric       MetricConfig       `json:"metric" yaml:"metric"`
-	MongoDB      MongoDBConfig      `json:"mongodb" yaml:"mongodb"`
 	Noop         struct{}           `json:"noop" yaml:"noop"`
 	Plugin       any                `json:"plugin,omitempty" yaml:"plugin,omitempty"`
 	Parallel     ParallelConfig     `json:"parallel" yaml:"parallel"`
 	ParseLog     ParseLogConfig     `json:"parse_log" yaml:"parse_log"`
-	Protobuf     ProtobufConfig     `json:"protobuf" yaml:"protobuf"`
 	RateLimit    RateLimitConfig    `json:"rate_limit" yaml:"rate_limit"`
 	Resource     string             `json:"resource" yaml:"resource"`
 	SelectParts  SelectPartsConfig  `json:"select_parts" yaml:"select_parts"`
@@ -75,12 +73,10 @@ func NewConfig() Config {
 		JSONSchema:   NewJSONSchemaConfig(),
 		Log:          NewLogConfig(),
 		Metric:       NewMetricConfig(),
-		MongoDB:      NewMongoDBConfig(),
 		Noop:         struct{}{},
 		Plugin:       nil,
 		Parallel:     NewParallelConfig(),
 		ParseLog:     NewParseLogConfig(),
-		Protobuf:     NewProtobufConfig(),
 		RateLimit:    NewRateLimitConfig(),
 		Resource:     "",
 		SelectParts:  NewSelectPartsConfig(),
@@ -104,18 +100,18 @@ func (conf *Config) UnmarshalYAML(value *yaml.Node) error {
 
 	err := value.Decode(&aliased)
 	if err != nil {
-		return docs.NewLintError(value.Line, docs.LintFailedRead, err.Error())
+		return docs.NewLintError(value.Line, docs.LintFailedRead, err)
 	}
 
 	var spec docs.ComponentSpec
 	if aliased.Type, spec, err = docs.GetInferenceCandidateFromYAML(docs.DeprecatedProvider, docs.TypeProcessor, value); err != nil {
-		return docs.NewLintError(value.Line, docs.LintComponentMissing, err.Error())
+		return docs.NewLintError(value.Line, docs.LintComponentMissing, err)
 	}
 
 	if spec.Plugin {
 		pluginNode, err := docs.GetPluginConfigYAML(aliased.Type, value)
 		if err != nil {
-			return docs.NewLintError(value.Line, docs.LintFailedRead, err.Error())
+			return docs.NewLintError(value.Line, docs.LintFailedRead, err)
 		}
 		aliased.Plugin = &pluginNode
 	} else {

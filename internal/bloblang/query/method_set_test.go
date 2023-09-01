@@ -75,6 +75,28 @@ func TestMethodSetDeactivated(t *testing.T) {
 	assert.EqualError(t, err, "this method has been disabled")
 }
 
+func TestMethodResolveParamError(t *testing.T) {
+	setOne := AllMethods.Without()
+
+	spec := NewMethodSpec("meow", "").Param(ParamString("val1", ""))
+	require.NoError(t, setOne.Add(spec, func(target Function, args *ParsedParams) (Function, error) {
+		return ClosureFunction("", func(ctx FunctionContext) (any, error) {
+			return "ok", nil
+		}, func(ctx TargetsContext) (TargetsContext, []TargetPath) { return ctx, nil }), nil
+	}))
+
+	assert.Contains(t, listMethods(setOne), "meow")
+
+	badArgs, err := spec.Params.PopulateNameless(NewFieldFunction("doc.foo"))
+	require.NoError(t, err)
+
+	fnOne, err := setOne.Init("meow", NewLiteralFunction("", nil), badArgs)
+	require.NoError(t, err)
+
+	_, err = fnOne.Exec(FunctionContext{})
+	assert.EqualError(t, err, "method 'meow': failed to extract input arg 'val1': context was undefined, unable to reference `doc.foo`")
+}
+
 func TestMethodBadName(t *testing.T) {
 	testCases := map[string]string{
 		"!no":         "method name '!no' does not match the required regular expression /^[a-z0-9]+(_[a-z0-9]+)*$/",

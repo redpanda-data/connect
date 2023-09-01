@@ -16,12 +16,12 @@ import (
 	"sync"
 
 	"github.com/klauspost/compress/gzip"
+	"github.com/klauspost/pgzip"
 
 	goavro "github.com/linkedin/goavro/v2"
 
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	"github.com/benthosdev/benthos/v4/public/service"
 )
 
 // ReaderDocs is a static field documentation for input codecs.
@@ -34,11 +34,15 @@ var ReaderDocs = docs.FieldString(
 	"chunker:x", "Consume the file in chunks of a given number of bytes.",
 	"csv", "Consume structured rows as comma separated values, the first row must be a header row.",
 	"csv:x", "Consume structured rows as values separated by a custom delimiter, the first row must be a header row. The custom delimiter must be a single character, e.g. the codec `\"csv:\\t\"` would consume a tab delimited file.",
+	"csv-safe", "Consume structured rows like `csv`, but sends messages with empty maps on failure to parse. Includes row number and parsing errors (if any) in the message's metadata.",
+	"csv-safe:x", "Consume structured rows like `csv:x` as values separated by a custom delimiter, but sends messages with empty maps on failure to parse. The custom delimiter must be a single character, e.g. the codec `\"csv-safe:\\t\"` would consume a tab delimited file. Includes row number and parsing errors (if any) in the message's metadata.",
 	"delim:x", "Consume the file in segments divided by a custom delimiter.",
 	"gzip", "Decompress a gzip file, this codec should precede another codec, e.g. `gzip/all-bytes`, `gzip/tar`, `gzip/csv`, etc.",
+	"pgzip", "Decompress a gzip file in parallel, this codec should precede another codec, e.g. `pgzip/all-bytes`, `pgzip/tar`, `pgzip/csv`, etc.",
 	"lines", "Consume the file in segments divided by linebreaks.",
 	"multipart", "Consumes the output of another codec and batches messages together. A batch ends when an empty message is consumed. For example, the codec `lines/multipart` could be used to consume multipart messages where an empty line indicates the end of each batch.",
 	"regex:(?m)^\\d\\d:\\d\\d:\\d\\d", "Consume the file in segments divided by regular expression.",
+	"skipbom", "Skip one or more byte order marks for each opened reader, this codec should precede another codec, e.g. `skipbom/csv`, etc.",
 	"tar", "Parse the file as a tar archive, and consume each file of the archive as a message.",
 )
 
@@ -185,14 +189,31 @@ func chainedReader(codec string, conf ReaderConfig) (ReaderConstructor, error) {
 }
 
 func ioReader(codec string, conf ReaderConfig) (ioReaderConstructor, bool) {
-	if codec == "gzip" {
+	switch codec {
+	case "gzip":
 		return func(_ string, r io.ReadCloser) (io.ReadCloser, error) {
 			g, err := gzip.NewReader(r)
 			if err != nil {
 				r.Close()
 				return nil, err
 			}
-			return g, nil
+			unzipped := ioReadCloserWrapper{Reader: g, underlying: r}
+			return &unzipped, nil
+		}, true
+	case "pgzip":
+		return func(_ string, r io.ReadCloser) (io.ReadCloser, error) {
+			g, err := pgzip.NewReader(r)
+			if err != nil {
+				r.Close()
+				return nil, err
+			}
+			unzipped := ioReadCloserWrapper{Reader: g, underlying: r}
+			return &unzipped, nil
+		}, true
+	case "skipbom":
+		return func(_ string, r io.ReadCloser) (io.ReadCloser, error) {
+			skipBom := ioReadCloserWrapper{Reader: skipBOM(r), underlying: r}
+			return &skipBom, nil
 		}, true
 	}
 	return nil, false
@@ -224,6 +245,10 @@ func partReader(codec string, conf ReaderConfig) (ReaderConstructor, bool, error
 	case "csv":
 		return func(path string, r io.ReadCloser, fn ReaderAckFn) (Reader, error) {
 			return newCSVReader(r, fn, nil)
+		}, true, nil
+	case "csv-safe":
+		return func(path string, r io.ReadCloser, fn ReaderAckFn) (Reader, error) {
+			return newCSVSafeReader(r, fn, nil)
 		}, true, nil
 	case "tar":
 		return newTarReader, true, nil
@@ -266,6 +291,20 @@ func partReader(codec string, conf ReaderConfig) (ReaderConstructor, bool, error
 		byRune := byRunes[0]
 		return func(path string, r io.ReadCloser, fn ReaderAckFn) (Reader, error) {
 			return newCSVReader(r, fn, &byRune)
+		}, true, nil
+	}
+	if strings.HasPrefix(codec, "csv-safe:") {
+		by := strings.TrimPrefix(codec, "csv-safe:")
+		if by == "" {
+			return nil, false, errors.New("csv-safe codec requires a non-empty delimiter")
+		}
+		byRunes := []rune(by)
+		if len(byRunes) != 1 {
+			return nil, false, errors.New("csv-safe codec requires a single character delimiter")
+		}
+		byRune := byRunes[0]
+		return func(path string, r io.ReadCloser, fn ReaderAckFn) (Reader, error) {
+			return newCSVSafeReader(r, fn, &byRune)
 		}, true, nil
 	}
 	if strings.HasPrefix(codec, "chunker:") {
@@ -337,6 +376,21 @@ func autoCodec(conf ReaderConfig) ReaderConstructor {
 	}
 }
 
+// ioReadCloserWrapper is a helper that closes both the upper and underlying reader
+// when you are creating some sort of wrapped reader where you want to ensure both
+// are closed.
+type ioReadCloserWrapper struct {
+	io.Reader
+	underlying io.ReadCloser
+}
+
+func (w ioReadCloserWrapper) Close() error {
+	if rc, ok := w.Reader.(io.Closer); ok {
+		rc.Close()
+	}
+	return w.underlying.Close()
+}
+
 //------------------------------------------------------------------------------
 
 type allBytesReader struct {
@@ -401,27 +455,16 @@ func newAvroOCFReader(conf ReaderConfig, marshaler string, r io.ReadCloser, ackF
 			return nil, err
 		}
 		a.pending++
-		m := service.NewMessage(nil)
 		if !a.logicalTypes {
-			m.SetStructured(datum)
-			mp, err := m.AsBytes()
-			if err != nil {
-				return nil, err
-			}
-			part := message.NewPart(mp)
-			return part, nil
+			msg := message.NewPart(nil)
+			msg.SetStructuredMut(datum)
+			return msg, nil
 		}
 		jb, err := a.avroCodec.TextualFromNative(nil, datum)
 		if err != nil {
 			return nil, err
 		}
-		m.SetBytes(jb)
-		mp, err := m.AsBytes()
-		if err != nil {
-			return nil, err
-		}
-		part := message.NewPart(mp)
-		return part, nil
+		return message.NewPart(jb), nil
 	}
 
 	var logicalTypes bool
@@ -657,6 +700,60 @@ func (a *csvReader) Close(ctx context.Context) error {
 		_ = a.sourceAck(ctx, nil)
 	}
 	return a.r.Close()
+}
+
+//------------------------------------------------------------------------------
+
+type csvSafeReader struct {
+	*csvReader
+
+	rowCounter int32
+}
+
+func newCSVSafeReader(r io.ReadCloser, ackFn ReaderAckFn, customComma *rune) (Reader, error) {
+	baseCsvReader, err := newCSVReader(r, ackFn, customComma)
+	if err != nil {
+		return nil, err
+	}
+
+	typedReader, _ := baseCsvReader.(*csvReader)
+
+	return &csvSafeReader{
+		csvReader:  typedReader,
+		rowCounter: 1, // 1-indexed rows
+	}, nil
+}
+
+func (a *csvSafeReader) Next(ctx context.Context) ([]*message.Part, ReaderAckFn, error) {
+	records, err := a.scanner.Read()
+
+	a.mut.Lock()
+	defer a.mut.Unlock()
+
+	if errors.Is(err, io.EOF) {
+		a.finished = true
+		return nil, nil, err
+	}
+
+	a.pending++
+	a.rowCounter++
+
+	part := message.NewPart(nil)
+	part.MetaSetMut("row_number", a.rowCounter)
+	isEmpty := len(records) == 0 || strings.TrimSpace(records[0]) == ""
+	part.MetaSetMut("row_empty", isEmpty)
+	if err != nil {
+		part.SetStructuredMut(map[string]any{})
+		part.MetaSetMut("row_parse_error", err.Error())
+	} else {
+		obj := make(map[string]any, len(records))
+		for i, r := range records {
+			obj[a.headers[i]] = r
+		}
+		part.SetStructuredMut(obj)
+	}
+
+	return []*message.Part{part}, a.ack, nil
 }
 
 //------------------------------------------------------------------------------

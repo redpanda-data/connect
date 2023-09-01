@@ -14,6 +14,7 @@ func TestCachedHappy(t *testing.T) {
 	conf, err := newCachedProcessorConfigSpec().ParseYAML(`
 key: ${! content() }
 cache: foo
+skip_on: errored()
 processors:
   - bloblang: 'root = content().string() + " FOO " + uuid_v4()'
   - bloblang: 'root = content().string() + " BAR " + uuid_v4()'
@@ -143,6 +144,55 @@ processors:
 	resBytes, err = resBatchA2[2].AsBytes()
 	require.NoError(t, err)
 	assert.Equal(t, string(resBytes), `"valuec FOO"`)
+
+	assert.NoError(t, proc.Close(tCtx))
+}
+
+func TestCachedSkip(t *testing.T) {
+	conf, err := newCachedProcessorConfigSpec().ParseYAML(`
+key: ${! content() }
+cache: foo
+skip_on: "errored()"
+processors:
+  - bloblang: |
+      let body = content().string()
+      root = "%s FOO %d".format($body, count($body))
+  - bloblang: root = throw("simulated error")
+`, nil)
+	require.NoError(t, err)
+
+	mRes := service.MockResources(
+		service.MockResourcesOptAddCache("foo"),
+		service.MockResourcesOptAddCache("bar"),
+	)
+
+	proc, err := newCachedProcessorFromParsedConf(mRes, conf)
+	require.NoError(t, err)
+
+	tCtx := context.Background()
+
+	resBatchA1, err := proc.Process(tCtx, service.NewMessage([]byte("keya")))
+	require.NoError(t, err)
+	require.Len(t, resBatchA1, 1)
+
+	resBatchA2, err := proc.Process(tCtx, service.NewMessage([]byte("keya")))
+	require.NoError(t, err)
+	require.Len(t, resBatchA2, 1)
+
+	resBytesA1, err := resBatchA1[0].AsBytes()
+	require.NoError(t, err)
+	assert.Equal(t, string(resBytesA1), "keya FOO 1")
+
+	resBytesA2, err := resBatchA2[0].AsBytes()
+	require.NoError(t, err)
+	// Since caching is skipped, the second message runs through processors
+	assert.Equal(t, string(resBytesA2), "keya FOO 2")
+
+	require.NoError(t, mRes.AccessCache(tCtx, "foo", func(c service.Cache) {
+		val, err := c.Get(tCtx, "keya")
+		assert.ErrorIs(t, err, service.ErrKeyNotFound)
+		assert.Empty(t, val)
+	}))
 
 	assert.NoError(t, proc.Close(tCtx))
 }

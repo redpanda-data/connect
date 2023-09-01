@@ -20,7 +20,7 @@ Splits a [batch of messages](/docs/configuration/batching) into N batches, where
 ```yml
 # Config fields, showing default values
 label: ""
-group_by: []
+group_by: [] # No default (required)
 ```
 
 Once the groups are established a list of processors are applied to their respective grouped batch, which can be used to label the batch as per their grouping. Messages that do not pass the check of any specified group are placed in their own group.

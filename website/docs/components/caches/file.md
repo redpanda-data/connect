@@ -19,7 +19,7 @@ Stores each item in a directory as a file, where an item ID is the path relative
 # Config fields, showing default values
 label: ""
 file:
-  directory: ""
+  directory: "" # No default (required)
 ```
 
 This type currently offers no form of item expiry or garbage collection, and is intended to be used for development and debugging purposes only.

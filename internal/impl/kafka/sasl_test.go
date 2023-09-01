@@ -3,7 +3,7 @@ package kafka_test
 import (
 	"testing"
 
-	"github.com/Shopify/sarama"
+	"github.com/IBM/sarama"
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v3"
 

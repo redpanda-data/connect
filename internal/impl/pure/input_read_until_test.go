@@ -3,12 +3,14 @@ package pure_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	yaml "gopkg.in/yaml.v3"
 
 	"github.com/benthosdev/benthos/v4/internal/component/input"
 	bmock "github.com/benthosdev/benthos/v4/internal/manager/mock"
@@ -48,8 +50,10 @@ baz`)
 	}
 
 	inconf := input.NewConfig()
-	inconf.Type = "file"
-	inconf.File.Paths = []string{tmpfile.Name()}
+	require.NoError(t, yaml.Unmarshal(fmt.Appendf(nil, `
+file:
+  paths: [ "%v" ]
+`, tmpfile.Name()), &inconf))
 
 	t.Run("ReadUntilBasic", func(te *testing.T) {
 		testReadUntilBasic(inconf, te)

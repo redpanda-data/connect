@@ -1,6 +1,7 @@
 package docs_test
 
 import (
+	"errors"
 	"fmt"
 	"testing"
 
@@ -602,7 +603,7 @@ func TestFieldToNode(t *testing.T) {
 		{
 			name: "no recurse single node null",
 			spec: docs.FieldObject("foo", ""),
-			expected: `null
+			expected: `null # No default (required)
 `,
 		},
 		{
@@ -611,13 +612,13 @@ func TestFieldToNode(t *testing.T) {
 				docs.FieldString("bar", ""),
 				docs.FieldString("baz", ""),
 			),
-			expected: `{}
+			expected: `{} # No default (required)
 `,
 		},
 		{
 			name: "no recurse map",
 			spec: docs.FieldString("foo", "").Map(),
-			expected: `{}
+			expected: `{} # No default (required)
 `,
 		},
 		{
@@ -631,12 +632,12 @@ func TestFieldToNode(t *testing.T) {
 				docs.FieldString("bud", "").Array(),
 			),
 			recurse: true,
-			expected: `bar: ""
+			expected: `bar: "" # No default (required)
 baz: baz default
-buz: 0
-bev: 0
-bun: false
-bud: []
+buz: 0 # No default (required)
+bev: 0 # No default (required)
+bun: false # No default (required)
+bud: [] # No default (required)
 `,
 		},
 	}
@@ -671,7 +672,7 @@ func TestYAMLComponentLinting(t *testing.T) {
 				docs.FieldString("foo1", "").LinterFunc(func(ctx docs.LintContext, line, col int, v any) []docs.Lint {
 					if v == "lint me please" {
 						return []docs.Lint{
-							docs.NewLintError(line, docs.LintCustom, "this is a custom lint"),
+							docs.NewLintError(line, docs.LintCustom, errors.New("this is a custom lint")),
 						}
 					}
 					return nil
@@ -746,7 +747,7 @@ testlintbarinput:
   bar1: hello world`,
 			rejectDeprecated: true,
 			res: []docs.Lint{
-				docs.NewLintError(2, docs.LintDeprecated, "component testlintbarinput is deprecated"),
+				docs.NewLintError(2, docs.LintDeprecated, errors.New("component testlintbarinput is deprecated")),
 			},
 		},
 		{
@@ -758,7 +759,7 @@ testlintfooinput:
   foo6: hello world`,
 			rejectDeprecated: true,
 			res: []docs.Lint{
-				docs.NewLintError(4, docs.LintDeprecated, "field foo6 is deprecated"),
+				docs.NewLintError(4, docs.LintDeprecated, errors.New("field foo6 is deprecated")),
 			},
 		},
 		{
@@ -769,7 +770,7 @@ testlintbarinput:
   bar1: hello world`,
 			requireLabels: true,
 			res: []docs.Lint{
-				docs.NewLintError(2, docs.LintMissingLabel, "label is required for testlintbarinput"),
+				docs.NewLintError(2, docs.LintMissingLabel, errors.New("label is required for testlintbarinput")),
 			},
 		},
 		{
@@ -798,7 +799,8 @@ testlintfooinput: &test-anchor
 processors:
   - testlintfooprocessor: *test-anchor`,
 			res: []docs.Lint{
-				docs.NewLintError(4, docs.LintUnknown, "field nope not recognised"),
+				docs.NewLintError(4, docs.LintUnknown, errors.New("field nope not recognised")),
+				docs.NewLintError(4, docs.LintUnknown, errors.New("field nope not recognised")),
 			},
 		},
 		{
@@ -812,9 +814,9 @@ testlintfooinput:
   also_not_recognised: nah
 definitely_not_recognised: huh`,
 			res: []docs.Lint{
-				docs.NewLintError(4, docs.LintUnknown, "field not_recognised not recognised"),
-				docs.NewLintError(6, docs.LintUnknown, "field also_not_recognised not recognised"),
-				docs.NewLintError(7, docs.LintUnknown, "field definitely_not_recognised is invalid when the component type is testlintfooinput (input)"),
+				docs.NewLintError(4, docs.LintUnknown, errors.New("field not_recognised not recognised")),
+				docs.NewLintError(6, docs.LintUnknown, errors.New("field also_not_recognised not recognised")),
+				docs.NewLintError(7, docs.LintUnknown, errors.New("field definitely_not_recognised is invalid when the component type is testlintfooinput (input)")),
 			},
 		},
 		{
@@ -828,8 +830,8 @@ processors:
   - testlintfooprocessor:
       also_not_recognised: nah`,
 			res: []docs.Lint{
-				docs.NewLintError(3, docs.LintUnknown, "field not_recognised not recognised"),
-				docs.NewLintError(7, docs.LintUnknown, "field also_not_recognised not recognised"),
+				docs.NewLintError(3, docs.LintUnknown, errors.New("field not_recognised not recognised")),
+				docs.NewLintError(7, docs.LintUnknown, errors.New("field also_not_recognised not recognised")),
 			},
 		},
 		{
@@ -845,7 +847,7 @@ processors:
   - label: foo
     testlintfooprocessor: {}`,
 			res: []docs.Lint{
-				docs.NewLintError(8, docs.LintDuplicateLabel, "Label 'foo' collides with a previously defined label at line 2"),
+				docs.NewLintError(8, docs.LintDuplicateLabel, errors.New("label 'foo' collides with a previously defined label at line 2")),
 			},
 		},
 		{
@@ -856,7 +858,7 @@ testlintfooinput:
   foo1: hello world
 processors: []`,
 			res: []docs.Lint{
-				docs.NewLintError(4, docs.LintShouldOmit, "field processors is empty and can be removed"),
+				docs.NewLintError(4, docs.LintShouldOmit, errors.New("field processors is empty and can be removed")),
 			},
 		},
 		{
@@ -867,7 +869,7 @@ testlintfooinput:
   foo1: hello world
   foo2: drop me`,
 			res: []docs.Lint{
-				docs.NewLintError(4, docs.LintShouldOmit, "because foo"),
+				docs.NewLintError(4, docs.LintShouldOmit, errors.New("because foo")),
 			},
 		},
 		{
@@ -881,7 +883,7 @@ testlintfooinput:
         foo1: somevalue
         not_recognised: nah`,
 			res: []docs.Lint{
-				docs.NewLintError(4, docs.LintExpectedArray, "expected array value"),
+				docs.NewLintError(4, docs.LintExpectedArray, errors.New("expected array value")),
 			},
 		},
 		{
@@ -894,7 +896,7 @@ testlintfooinput:
       foo1: somevalue
       not_recognised: nah`,
 			res: []docs.Lint{
-				docs.NewLintError(6, docs.LintUnknown, "field not_recognised not recognised"),
+				docs.NewLintError(6, docs.LintUnknown, errors.New("field not_recognised not recognised")),
 			},
 		},
 		{
@@ -907,7 +909,7 @@ testlintfooinput:
       foo1: [ somevalue ]
 `,
 			res: []docs.Lint{
-				docs.NewLintError(5, docs.LintExpectedScalar, "expected string value"),
+				docs.NewLintError(5, docs.LintExpectedScalar, errors.New("expected string value")),
 			},
 		},
 		{
@@ -921,7 +923,7 @@ testlintfooinput:
         foo1: somevalue
         not_recognised: nah`,
 			res: []docs.Lint{
-				docs.NewLintError(7, docs.LintUnknown, "field not_recognised not recognised"),
+				docs.NewLintError(7, docs.LintUnknown, errors.New("field not_recognised not recognised")),
 			},
 		},
 		{
@@ -934,7 +936,7 @@ testlintfooinput:
         foo1: somevalue
         not_recognised: nah`,
 			res: []docs.Lint{
-				docs.NewLintError(4, docs.LintExpectedObject, "expected object value"),
+				docs.NewLintError(4, docs.LintExpectedObject, errors.New("expected object value")),
 			},
 		},
 		{
@@ -953,7 +955,7 @@ testlintfooinput:
   foo7:
    - wat: no`,
 			res: []docs.Lint{
-				docs.NewLintError(4, docs.LintUnknown, "field wat not recognised"),
+				docs.NewLintError(4, docs.LintUnknown, errors.New("field wat not recognised")),
 			},
 		},
 		{
@@ -965,7 +967,7 @@ testlintfooinput:
     key1:
       wat: no`,
 			res: []docs.Lint{
-				docs.NewLintError(4, docs.LintExpectedArray, "expected array value"),
+				docs.NewLintError(4, docs.LintExpectedArray, errors.New("expected array value")),
 			},
 		},
 		{
@@ -986,7 +988,7 @@ testlintfooinput:
     key1:
       wat: nope`,
 			res: []docs.Lint{
-				docs.NewLintError(5, docs.LintUnknown, "field wat not recognised"),
+				docs.NewLintError(5, docs.LintUnknown, errors.New("field wat not recognised")),
 			},
 		},
 		{
@@ -997,7 +999,7 @@ testlintfooinput:
   foo8:
     - wat: nope`,
 			res: []docs.Lint{
-				docs.NewLintError(4, docs.LintExpectedObject, "expected object value"),
+				docs.NewLintError(4, docs.LintExpectedObject, errors.New("expected object value")),
 			},
 		},
 		{
@@ -1007,7 +1009,7 @@ testlintfooinput:
 testlintfooinput:
   foo1: lint me please`,
 			res: []docs.Lint{
-				docs.NewLintError(3, docs.LintCustom, "this is a custom lint"),
+				docs.NewLintError(3, docs.LintCustom, errors.New("this is a custom lint")),
 			},
 		},
 	}
@@ -1015,17 +1017,78 @@ testlintfooinput:
 	for _, test := range tests {
 		test := test
 		t.Run(test.name, func(t *testing.T) {
-			lintCtx := docs.NewLintContext()
-			lintCtx.RejectDeprecated = test.rejectDeprecated
-			lintCtx.RequireLabels = test.requireLabels
-			lintCtx.DocsProvider = prov
+			lConf := docs.NewLintConfig()
+			lConf.RejectDeprecated = test.rejectDeprecated
+			lConf.RequireLabels = test.requireLabels
+			lConf.DocsProvider = prov
 
 			var node yaml.Node
 			require.NoError(t, yaml.Unmarshal([]byte(test.inputConf), &node))
-			lints := docs.LintYAML(lintCtx, test.inputType, &node)
+			lints := docs.LintYAML(docs.NewLintContext(lConf), test.inputType, &node)
 			assert.Equal(t, test.res, lints)
 		})
 	}
+}
+
+func TestYAMLLintYAMLMerge(t *testing.T) {
+	prov := docs.NewMappedDocsProvider()
+	prov.RegisterDocs(docs.ComponentSpec{
+		Name: "meowthing",
+		Type: docs.TypeInput,
+		Config: docs.FieldComponent().WithChildren(
+			docs.FieldString("foo", ""),
+			docs.FieldString("bar", "").Optional(),
+		),
+	})
+
+	lConf := docs.NewLintConfig()
+	lConf.DocsProvider = prov
+
+	lintConf := func(t *testing.T, name, conf string, expected []docs.Lint) {
+		t.Run(name, func(t *testing.T) {
+			var node yaml.Node
+			require.NoError(t, yaml.Unmarshal([]byte(conf), &node))
+			lints := docs.FieldInput("root", "").Map().LintYAML(docs.NewLintContext(lConf), &node)
+			assert.Equal(t, expected, lints)
+		})
+	}
+
+	lintConf(t, "no lint errors", `
+first:
+  meowthing: &a
+    foo: one
+second:
+  meowthing:
+    <<: *a
+    bar: two
+`, nil)
+
+	lintConf(t, "unknown field from", `
+first:
+  meowthing: &a
+    foo: one
+    baz: three
+second:
+  meowthing:
+    <<: *a
+    bar: two
+`, []docs.Lint{
+		{Line: 5, Column: 1, Level: docs.LintError, Type: docs.LintUnknown, What: "field baz not recognised"},
+		{Line: 5, Column: 1, Level: docs.LintError, Type: docs.LintUnknown, What: "field baz not recognised"},
+	})
+
+	lintConf(t, "unknown field into", `
+first:
+  meowthing: &a
+    foo: one
+    bar: two
+second:
+  meowthing:
+    <<: *a
+    baz: three
+`, []docs.Lint{
+		{Line: 9, Column: 1, Level: docs.LintError, Type: docs.LintUnknown, What: "field baz not recognised"},
+	})
 }
 
 func TestYAMLLinting(t *testing.T) {
@@ -1043,7 +1106,7 @@ func TestYAMLLinting(t *testing.T) {
 			inputSpec: docs.FieldString("foo", ""),
 			inputConf: `["foo","bar"]`,
 			res: []docs.Lint{
-				docs.NewLintError(1, docs.LintExpectedScalar, "expected string value"),
+				docs.NewLintError(1, docs.LintExpectedScalar, errors.New("expected string value")),
 			},
 		},
 		{
@@ -1051,7 +1114,7 @@ func TestYAMLLinting(t *testing.T) {
 			inputSpec: docs.FieldString("foo", "").Array(),
 			inputConf: `"foo"`,
 			res: []docs.Lint{
-				docs.NewLintError(1, docs.LintExpectedArray, "expected array value"),
+				docs.NewLintError(1, docs.LintExpectedArray, errors.New("expected array value")),
 			},
 		},
 		{
@@ -1061,7 +1124,7 @@ func TestYAMLLinting(t *testing.T) {
 			),
 			inputConf: `"foo"`,
 			res: []docs.Lint{
-				docs.NewLintError(1, docs.LintExpectedObject, "expected object value"),
+				docs.NewLintError(1, docs.LintExpectedObject, errors.New("expected object value")),
 			},
 		},
 		{
@@ -1071,7 +1134,7 @@ func TestYAMLLinting(t *testing.T) {
 			),
 			inputConf: `bar: {}`,
 			res: []docs.Lint{
-				docs.NewLintError(1, docs.LintExpectedScalar, "expected string value"),
+				docs.NewLintError(1, docs.LintExpectedScalar, errors.New("expected string value")),
 			},
 		},
 		{
@@ -1084,7 +1147,7 @@ func TestYAMLLinting(t *testing.T) {
 			inputConf: `bar:
   baz: {}`,
 			res: []docs.Lint{
-				docs.NewLintError(2, docs.LintExpectedScalar, "expected string value"),
+				docs.NewLintError(2, docs.LintExpectedScalar, errors.New("expected string value")),
 			},
 		},
 		{
@@ -1097,7 +1160,7 @@ func TestYAMLLinting(t *testing.T) {
 			),
 			inputConf: `bev: hello world`,
 			res: []docs.Lint{
-				docs.NewLintError(1, docs.LintMissing, "field baz is required"),
+				docs.NewLintError(1, docs.LintMissing, errors.New("field baz is required")),
 			},
 		},
 	}
@@ -1108,7 +1171,7 @@ func TestYAMLLinting(t *testing.T) {
 			var node yaml.Node
 			require.NoError(t, yaml.Unmarshal([]byte(test.inputConf), &node))
 
-			lints := test.inputSpec.LintYAML(docs.NewLintContext(), &node)
+			lints := test.inputSpec.LintYAML(docs.NewLintContext(docs.NewLintConfig()), &node)
 			assert.Equal(t, test.res, lints)
 		})
 	}
@@ -1154,7 +1217,7 @@ func TestYAMLSanitation(t *testing.T) {
 		name        string
 		inputType   docs.Type
 		inputConf   string
-		inputFilter func(f docs.FieldSpec) bool
+		inputFilter func(f docs.FieldSpec, v any) bool
 
 		res string
 		err string

@@ -30,8 +30,8 @@ Send tracing events to an [Open Telemetry collector](https://opentelemetry.io/do
 # Common config fields, showing default values
 tracer:
   open_telemetry_collector:
-    http: []
-    grpc: []
+    http: [] # No default (required)
+    grpc: [] # No default (required)
 ```
 
 </TabItem>
@@ -41,8 +41,8 @@ tracer:
 # All config fields, showing default values
 tracer:
   open_telemetry_collector:
-    http: []
-    grpc: []
+    http: [] # No default (required)
+    grpc: [] # No default (required)
     tags: {}
 ```
 
@@ -66,6 +66,14 @@ The URL of a collector to send tracing events to.
 Type: `string`  
 Default: `"localhost:4318"`  
 
+### `http[].secure`
+
+Connect to the collector over HTTPS
+
+
+Type: `bool`  
+Default: `false`  
+
 ### `grpc`
 
 A list of grpc collectors.
@@ -80,6 +88,14 @@ The URL of a collector to send tracing events to.
 
 Type: `string`  
 Default: `"localhost:4317"`  
+
+### `grpc[].secure`
+
+Connect to the collector with client transport security
+
+
+Type: `bool`  
+Default: `false`  
 
 ### `tags`
 

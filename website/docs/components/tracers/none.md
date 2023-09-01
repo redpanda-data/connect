@@ -18,7 +18,7 @@ Do not send tracing events anywhere.
 ```yml
 # Config fields, showing default values
 tracer:
-  none: null
+  none: null # No default (required)
 ```
 
 

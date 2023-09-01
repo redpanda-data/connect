@@ -2,11 +2,16 @@ package log
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"os"
 	"strings"
 
 	"github.com/sirupsen/logrus"
+	"gopkg.in/natefinch/lumberjack.v2"
+
+	"github.com/benthosdev/benthos/v4/internal/filepath/ifs"
 )
 
 // Config holds configuration options for a logger object.
@@ -14,6 +19,7 @@ type Config struct {
 	LogLevel      string            `json:"level" yaml:"level"`
 	Format        string            `json:"format" yaml:"format"`
 	AddTimeStamp  bool              `json:"add_timestamp" yaml:"add_timestamp"`
+	LevelName     string            `json:"level_name" yaml:"level_name"`
 	MessageName   string            `json:"message_name" yaml:"message_name"`
 	TimestampName string            `json:"timestamp_name" yaml:"timestamp_name"`
 	StaticFields  map[string]string `json:"static_fields" yaml:"static_fields"`
@@ -33,6 +39,7 @@ func NewConfig() Config {
 		LogLevel:      "INFO",
 		Format:        "logfmt",
 		AddTimeStamp:  false,
+		LevelName:     "level",
 		TimestampName: "time",
 		MessageName:   "msg",
 		StaticFields: map[string]string{
@@ -93,7 +100,30 @@ type Logger struct {
 
 // New returns a new logger from a config, or returns an error if the config
 // is invalid.
-func New(stream io.Writer, config Config) (Modular, error) {
+func New(stream io.Writer, fs ifs.FS, config Config) (Modular, error) {
+	if config.File.Path != "" {
+		if config.File.Rotate {
+			stream = &lumberjack.Logger{
+				Filename:   config.File.Path,
+				MaxSize:    10,
+				MaxAge:     config.File.RotateMaxAge,
+				MaxBackups: 1,
+				Compress:   true,
+			}
+		} else {
+			fw, err := ifs.OS().OpenFile(config.File.Path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o666)
+			if err == nil {
+				var isw bool
+				if stream, isw = fw.(io.Writer); !isw {
+					err = errors.New("failed to open a writeable file")
+				}
+			}
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
+
 	logger := logrus.New()
 	logger.Out = stream
 
@@ -102,8 +132,9 @@ func New(stream io.Writer, config Config) (Modular, error) {
 		logger.SetFormatter(&logrus.JSONFormatter{
 			DisableTimestamp: !config.AddTimeStamp,
 			FieldMap: logrus.FieldMap{
-				logrus.FieldKeyTime: config.TimestampName,
-				logrus.FieldKeyMsg:  config.MessageName,
+				logrus.FieldKeyTime:  config.TimestampName,
+				logrus.FieldKeyMsg:   config.MessageName,
+				logrus.FieldKeyLevel: config.LevelName,
 			},
 		})
 	case "logfmt":
@@ -112,8 +143,9 @@ func New(stream io.Writer, config Config) (Modular, error) {
 			QuoteEmptyFields: true,
 			FullTimestamp:    config.AddTimeStamp,
 			FieldMap: logrus.FieldMap{
-				logrus.FieldKeyTime: config.TimestampName,
-				logrus.FieldKeyMsg:  config.MessageName,
+				logrus.FieldKeyTime:  config.TimestampName,
+				logrus.FieldKeyMsg:   config.MessageName,
+				logrus.FieldKeyLevel: config.LevelName,
 			},
 		})
 	default:

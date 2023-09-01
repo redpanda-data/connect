@@ -17,10 +17,7 @@ import TabItem from '@theme/TabItem';
 :::caution BETA
 This component is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with the component is found.
 :::
-
-Sends message parts as objects to an Azure Blob Storage Account container. Each
-object is uploaded with the filename specified with the `container`
-field.
+Sends message parts as objects to an Azure Blob Storage Account container. Each object is uploaded with the filename specified with the `container` field.
 
 Introduced in version 3.36.0.
 
@@ -39,9 +36,9 @@ output:
   azure_blob_storage:
     storage_account: ""
     storage_access_key: ""
-    storage_sas_token: ""
     storage_connection_string: ""
-    container: ""
+    storage_sas_token: ""
+    container: messages-${!timestamp("2006")} # No default (required)
     path: ${!count("files")}-${!timestamp_unix_nano()}.txt
     max_in_flight: 64
 ```
@@ -56,23 +53,32 @@ output:
   azure_blob_storage:
     storage_account: ""
     storage_access_key: ""
-    storage_sas_token: ""
     storage_connection_string: ""
-    public_access_level: PRIVATE
-    container: ""
+    storage_sas_token: ""
+    container: messages-${!timestamp("2006")} # No default (required)
     path: ${!count("files")}-${!timestamp_unix_nano()}.txt
     blob_type: BLOCK
+    public_access_level: PRIVATE
     max_in_flight: 64
 ```
 
 </TabItem>
 </Tabs>
 
-Only one authentication method is required, `storage_connection_string` or `storage_account` and `storage_access_key`. If both are set then the `storage_connection_string` is given priority.
-
 In order to have a different path for each object you should use function
 interpolations described [here](/docs/configuration/interpolation#bloblang-queries), which are
 calculated per message of a batch.
+
+Supports multiple authentication methods but only one of the following is required:
+- `storage_connection_string`
+- `storage_account` and `storage_access_key`
+- `storage_account` and `storage_sas_token`
+- `storage_account` to access via [DefaultAzureCredential](https://pkg.go.dev/github.com/Azure/azure-sdk-for-go/sdk/azidentity#DefaultAzureCredential)
+
+If multiple are set then the `storage_connection_string` is given priority.
+
+If the `storage_connection_string` does not contain the `AccountName` parameter, please specify it in the
+`storage_account` field.
 
 ## Performance
 
@@ -84,7 +90,7 @@ message batches) with the field `max_in_flight`.
 
 ### `storage_account`
 
-The storage account to upload messages to. This field is ignored if `storage_connection_string` is set.
+The storage account to access. This field is ignored if `storage_connection_string` is set.
 
 
 Type: `string`  
@@ -98,31 +104,21 @@ The storage account access key. This field is ignored if `storage_connection_str
 Type: `string`  
 Default: `""`  
 
-### `storage_sas_token`
-
-The storage account SAS token. This field is ignored if `storage_connection_string` or `storage_access_key` / `storage_sas_token` are set.
-
-
-Type: `string`  
-Default: `""`  
-Requires version 3.38.0 or newer  
-
 ### `storage_connection_string`
 
-A storage account connection string. This field is required if `storage_account` and `storage_access_key` are not set.
+A storage account connection string. This field is required if `storage_account` and `storage_access_key` / `storage_sas_token` are not set.
 
 
 Type: `string`  
 Default: `""`  
 
-### `public_access_level`
+### `storage_sas_token`
 
-The container's public access level. The default value is `PRIVATE`.
+The storage account SAS token. This field is ignored if `storage_connection_string` or `storage_access_key` are set.
 
 
 Type: `string`  
-Default: `"PRIVATE"`  
-Options: `PRIVATE`, `BLOB`, `CONTAINER`.
+Default: `""`  
 
 ### `container`
 
@@ -131,7 +127,6 @@ This field supports [interpolation functions](/docs/configuration/interpolation#
 
 
 Type: `string`  
-Default: `""`  
 
 ```yml
 # Examples
@@ -167,6 +162,16 @@ This field supports [interpolation functions](/docs/configuration/interpolation#
 Type: `string`  
 Default: `"BLOCK"`  
 Options: `BLOCK`, `APPEND`.
+
+### `public_access_level`
+
+The container's public access level. The default value is `PRIVATE`.
+This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
+
+
+Type: `string`  
+Default: `"PRIVATE"`  
+Options: `PRIVATE`, `BLOB`, `CONTAINER`.
 
 ### `max_in_flight`
 

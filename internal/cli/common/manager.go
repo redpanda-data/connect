@@ -174,6 +174,23 @@ func RunManagerUntilStopped(
 		done()
 	}()
 
+	var deadLineTrigger <-chan time.Time
+	if dl, exists := c.Context.Deadline(); exists {
+		// If a deadline has been set by the cli context then we need to trigger
+		// graceful termination before it's reached, otherwise it'll never
+		// happen as the context will cancel the cleanup.
+		//
+		// We make a best attempt at doing this by starting termination earlier
+		// than the deadline (by 10%, capped at one second).
+		dlTriggersBy := time.Until(dl)
+
+		earlierBy := dlTriggersBy / 10
+		if earlierBy > time.Second {
+			earlierBy = time.Second
+		}
+		deadLineTrigger = time.After(dlTriggersBy - earlierBy)
+	}
+
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
 
@@ -192,6 +209,8 @@ func RunManagerUntilStopped(
 		stopMgr.Manager().Logger().Infof("Received %s, the service is closing", sigName)
 	case <-dataStreamClosedChan:
 		stopMgr.Manager().Logger().Infoln("Pipeline has terminated. Shutting down the service")
+	case <-deadLineTrigger:
+		stopMgr.Manager().Logger().Infoln("Run context deadline about to be reached. Shutting down the service")
 	case <-c.Context.Done():
 		stopMgr.Manager().Logger().Infoln("Run context was cancelled. Shutting down the service")
 	}

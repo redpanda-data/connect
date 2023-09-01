@@ -112,7 +112,7 @@ behavior is false, which will drop the message.`,
 				isReject := cObj.Exists("output", "reject")
 				if typeStr == "reject" || isReject {
 					return []docs.Lint{
-						docs.NewLintError(line, docs.LintCustom, "a `switch` output with a `reject` case output must have the field `switch.retry_until_success` set to `false`, otherwise the `reject` child output will result in infinite retries"),
+						docs.NewLintError(line, docs.LintCustom, errors.New("a `switch` output with a `reject` case output must have the field `switch.retry_until_success` set to `false`, otherwise the `reject` child output will result in infinite retries")),
 					}
 				}
 			}
@@ -339,8 +339,9 @@ func (o *switchOutput) dispatchToTargets(
 		select {
 		case o.outputTSChans[i] <- message.NewTransactionFunc(parts, func(ctx context.Context, err error) error {
 			if err != nil {
-				if bErr, ok := err.(*batch.Error); ok {
-					bErr.WalkParts(group, sourceMessage, func(i int, p *message.Part, e error) bool {
+				var bErr *batch.Error
+				if errors.As(err, &bErr) {
+					bErr.WalkPartsBySource(group, sourceMessage, func(i int, p *message.Part, e error) bool {
 						if e != nil {
 							setErrForPart(p, e)
 						}

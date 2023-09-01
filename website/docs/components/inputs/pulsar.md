@@ -34,9 +34,10 @@ Introduced in version 3.43.0.
 input:
   label: ""
   pulsar:
-    url: ""
-    topics: []
-    subscription_name: ""
+    url: pulsar://localhost:6650 # No default (required)
+    topics: [] # No default (optional)
+    topics_pattern: "" # No default (optional)
+    subscription_name: "" # No default (required)
     subscription_type: shared
     tls:
       root_cas_file: ""
@@ -50,9 +51,10 @@ input:
 input:
   label: ""
   pulsar:
-    url: ""
-    topics: []
-    subscription_name: ""
+    url: pulsar://localhost:6650 # No default (required)
+    topics: [] # No default (optional)
+    topics_pattern: "" # No default (optional)
+    subscription_name: "" # No default (required)
     subscription_type: shared
     tls:
       root_cas_file: ""
@@ -111,10 +113,17 @@ url: pulsar+ssl://pulsar.us-west.example.com:6651
 
 ### `topics`
 
-A list of topics to subscribe to.
+A list of topics to subscribe to. This or topics_pattern must be set.
 
 
 Type: `array`  
+
+### `topics_pattern`
+
+A regular expression matching the topics to subscribe to. This or topics must be set.
+
+
+Type: `string`  
 
 ### `subscription_name`
 
