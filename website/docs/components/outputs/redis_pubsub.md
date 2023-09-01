@@ -29,7 +29,7 @@ Publishes messages through the Redis PubSub model. It is not possible to guarant
 output:
   label: ""
   redis_pubsub:
-    url: :6397 # No default (required)
+    url: redis://:6397 # No default (required)
     channel: "" # No default (required)
     max_in_flight: 64
     batching:
@@ -47,7 +47,7 @@ output:
 output:
   label: ""
   redis_pubsub:
-    url: :6397 # No default (required)
+    url: redis://:6397 # No default (required)
     kind: simple
     master: ""
     tls:
@@ -94,9 +94,7 @@ Type: `string`
 ```yml
 # Examples
 
-url: :6397
-
-url: localhost:6397
+url: redis://:6397
 
 url: redis://localhost:6379
 

@@ -319,6 +319,7 @@ func BloblangMethodsMarkdown() ([]byte, error) {
 		query.MethodCategoryObjectAndArray,
 		query.MethodCategoryParsing,
 		query.MethodCategoryEncoding,
+		query.MethodCategoryJWT,
 		query.MethodCategoryGeoIP,
 		query.MethodCategoryDeprecated,
 	} {

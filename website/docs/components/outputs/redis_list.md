@@ -29,7 +29,7 @@ Pushes messages onto the end of a Redis list (which is created if it doesn't alr
 output:
   label: ""
   redis_list:
-    url: :6397 # No default (required)
+    url: redis://:6397 # No default (required)
     key: some_list # No default (required)
     max_in_flight: 64
     batching:
@@ -47,7 +47,7 @@ output:
 output:
   label: ""
   redis_list:
-    url: :6397 # No default (required)
+    url: redis://:6397 # No default (required)
     kind: simple
     master: ""
     tls:
@@ -94,9 +94,7 @@ Type: `string`
 ```yml
 # Examples
 
-url: :6397
-
-url: localhost:6397
+url: redis://:6397
 
 url: redis://localhost:6379
 

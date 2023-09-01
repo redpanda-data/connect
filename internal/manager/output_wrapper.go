@@ -7,15 +7,17 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/component"
 	ioutput "github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/message"
+	"github.com/benthosdev/benthos/v4/internal/shutdown"
 )
 
 var _ ioutput.Sync = &outputWrapper{}
 
 type outputWrapper struct {
-	output ioutput.Streamed
+	output  ioutput.Streamed
+	shutSig *shutdown.Signaller
 
-	tranChan  chan message.Transaction
-	closeOnce sync.Once
+	tranChan chan message.Transaction
+	tranMut  sync.RWMutex
 }
 
 func wrapOutput(o ioutput.Streamed) (*outputWrapper, error) {
@@ -25,13 +27,17 @@ func wrapOutput(o ioutput.Streamed) (*outputWrapper, error) {
 	}
 	return &outputWrapper{
 		output:   o,
+		shutSig:  shutdown.NewSignaller(),
 		tranChan: tranChan,
 	}, nil
 }
 
 func (w *outputWrapper) WriteTransaction(ctx context.Context, t message.Transaction) error {
+	w.tranMut.RLock()
+	defer w.tranMut.RUnlock()
 	select {
 	case w.tranChan <- t:
+	case <-w.shutSig.CloseAtLeisureChan():
 	case <-ctx.Done():
 		return component.ErrTimeout
 	}
@@ -45,9 +51,13 @@ func (w *outputWrapper) Connected() bool {
 }
 
 func (w *outputWrapper) TriggerStopConsuming() {
-	w.closeOnce.Do(func() {
+	w.shutSig.CloseAtLeisure()
+	w.tranMut.Lock()
+	if w.tranChan != nil {
 		close(w.tranChan)
-	})
+		w.tranChan = nil
+	}
+	w.tranMut.Unlock()
 }
 
 func (w *outputWrapper) TriggerCloseNow() {

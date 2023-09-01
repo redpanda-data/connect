@@ -29,7 +29,7 @@ Pops messages from the beginning of a Redis list using the BLPop command.
 input:
   label: ""
   redis_list:
-    url: :6397 # No default (required)
+    url: redis://:6397 # No default (required)
     key: "" # No default (required)
 ```
 
@@ -41,7 +41,7 @@ input:
 input:
   label: ""
   redis_list:
-    url: :6397 # No default (required)
+    url: redis://:6397 # No default (required)
     kind: simple
     master: ""
     tls:
@@ -71,9 +71,7 @@ Type: `string`
 ```yml
 # Examples
 
-url: :6397
-
-url: localhost:6397
+url: redis://:6397
 
 url: redis://localhost:6379
 

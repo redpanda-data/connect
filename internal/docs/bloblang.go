@@ -19,11 +19,11 @@ func LintBloblangMapping(ctx LintContext, line, col int, v any) []Lint {
 		return nil
 	}
 	if mErr, ok := err.(*bloblang.ParseError); ok {
-		lint := NewLintError(line+mErr.Line-1, LintBadBloblang, mErr.ErrorMultiline())
+		lint := NewLintError(line+mErr.Line-1, LintBadBloblang, mErr)
 		lint.Column = col + mErr.Column
 		return []Lint{lint}
 	}
-	return []Lint{NewLintError(line, LintBadBloblang, err.Error())}
+	return []Lint{NewLintError(line, LintBadBloblang, err)}
 }
 
 // LintBloblangField is function for linting a config field expected to be an
@@ -41,9 +41,9 @@ func LintBloblangField(ctx LintContext, line, col int, v any) []Lint {
 		return nil
 	}
 	if mErr, ok := err.(*bloblang.ParseError); ok {
-		lint := NewLintError(line+mErr.Line-1, LintBadBloblang, mErr.ErrorMultiline())
+		lint := NewLintError(line+mErr.Line-1, LintBadBloblang, mErr)
 		lint.Column = col + mErr.Column
 		return []Lint{lint}
 	}
-	return []Lint{NewLintError(line, LintBadBloblang, err.Error())}
+	return []Lint{NewLintError(line, LintBadBloblang, err)}
 }

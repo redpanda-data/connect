@@ -27,7 +27,7 @@ Use a Redis instance as a cache. The expiration can be set to zero or an empty s
 # Common config fields, showing default values
 label: ""
 redis:
-  url: :6397 # No default (required)
+  url: redis://:6397 # No default (required)
   prefix: "" # No default (optional)
 ```
 
@@ -38,7 +38,7 @@ redis:
 # All config fields, showing default values
 label: ""
 redis:
-  url: :6397 # No default (required)
+  url: redis://:6397 # No default (required)
   kind: simple
   master: ""
   tls:
@@ -71,9 +71,7 @@ Type: `string`
 ```yml
 # Examples
 
-url: :6397
-
-url: localhost:6397
+url: redis://:6397
 
 url: redis://localhost:6379
 

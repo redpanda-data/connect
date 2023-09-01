@@ -29,7 +29,7 @@ Pushes messages to a Redis (v5.0+) Stream (which is created if it doesn't alread
 output:
   label: ""
   redis_streams:
-    url: :6397 # No default (required)
+    url: redis://:6397 # No default (required)
     stream: "" # No default (required)
     body_key: body
     max_length: 0
@@ -51,7 +51,7 @@ output:
 output:
   label: ""
   redis_streams:
-    url: :6397 # No default (required)
+    url: redis://:6397 # No default (required)
     kind: simple
     master: ""
     tls:
@@ -104,9 +104,7 @@ Type: `string`
 ```yml
 # Examples
 
-url: :6397
-
-url: localhost:6397
+url: redis://:6397
 
 url: redis://localhost:6379
 

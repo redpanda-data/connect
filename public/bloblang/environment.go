@@ -127,7 +127,11 @@ func (e *Environment) RegisterMethodV2(name string, spec *PluginSpec, ctor Metho
 		for _, inputOutput := range e.inputOutputs {
 			res = append(res, inputOutput[0], inputOutput[1])
 		}
-		examples = append(examples, query.NewExampleSpec(e.summary, e.mapping, res...))
+		if e.skipTesting {
+			examples = append(examples, query.NewNotTestedExampleSpec(e.summary, e.mapping, res...))
+		} else {
+			examples = append(examples, query.NewExampleSpec(e.summary, e.mapping, res...))
+		}
 	}
 	iSpec := query.NewMethodSpec(name, spec.description).InCategory(category, "", examples...).AtVersion(spec.version)
 	if spec.status != "" {
@@ -198,7 +202,11 @@ func (e *Environment) RegisterFunctionV2(name string, spec *PluginSpec, ctor Fun
 		for _, inputOutput := range e.inputOutputs {
 			res = append(res, inputOutput[0], inputOutput[1])
 		}
-		examples = append(examples, query.NewExampleSpec(e.summary, e.mapping, res...))
+		if e.skipTesting {
+			examples = append(examples, query.NewNotTestedExampleSpec(e.summary, e.mapping, res...))
+		} else {
+			examples = append(examples, query.NewExampleSpec(e.summary, e.mapping, res...))
+		}
 	}
 	iSpec := query.NewFunctionSpec(category, name, spec.description, examples...).AtVersion(spec.version)
 	if spec.status != "" {
