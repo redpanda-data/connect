@@ -76,6 +76,8 @@ output:
     key: ""
     partitioner: fnv1a_hash
     partition: ""
+    partitions_per_new_topic: 0
+    topic_replication_factor: 1
     compression: none
     static_headers: {}
     metadata:
@@ -436,6 +438,22 @@ This field supports [interpolation functions](/docs/configuration/interpolation#
 
 Type: `string`  
 Default: `""`  
+
+### `partitions_per_new_topic`
+
+If a topic is created and this value is greater than zero then this number of partitions will be used for the topic.
+
+
+Type: `int`  
+Default: `0`  
+
+### `topic_replication_factor`
+
+The replication factor for the newly created topics. If `partitions_per_new_topic` is greater than zero this field is required, otherwise is ignored
+
+
+Type: `int`  
+Default: `1`  
 
 ### `compression`
 
