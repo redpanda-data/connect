@@ -272,7 +272,7 @@ http_server:
 
 	res, err := http.Post(testURL, "text/plain", bytes.NewReader(dummyData))
 	assert.NoError(t, err)
-	assert.Equal(t, 404, res.StatusCode)
+	assert.Equal(t, 503, res.StatusCode)
 
 	serverTwo, err := mgr.NewInput(conf)
 	require.NoError(t, err)
