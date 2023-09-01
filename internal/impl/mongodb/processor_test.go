@@ -42,19 +42,19 @@ func TestProcessorIntegration(t *testing.T) {
 		assert.NoError(t, pool.Purge(resource))
 	})
 
-	mongoClient, err := mongo.NewClient(options.Client().
-		SetConnectTimeout(10 * time.Second).
-		SetSocketTimeout(30 * time.Second).
-		SetServerSelectionTimeout(30 * time.Second).
-		SetAuth(options.Credential{
-			Username: "mongoadmin",
-			Password: "secret",
-		}).
-		ApplyURI("mongodb://localhost:" + resource.GetPort("27017/tcp")))
-	require.NoError(t, err)
+	var mongoClient *mongo.Client
 
 	require.NoError(t, pool.Retry(func() error {
-		if err := mongoClient.Connect(context.Background()); err != nil {
+		mongoClient, err = mongo.Connect(context.Background(), options.Client().
+			SetConnectTimeout(10*time.Second).
+			SetSocketTimeout(30*time.Second).
+			SetServerSelectionTimeout(30*time.Second).
+			SetAuth(options.Credential{
+				Username: "mongoadmin",
+				Password: "secret",
+			}).
+			ApplyURI("mongodb://localhost:"+resource.GetPort("27017/tcp")))
+		if err != nil {
 			return err
 		}
 		if err := mongoClient.Database("TestDB").CreateCollection(context.Background(), "TestCollection"); err != nil {

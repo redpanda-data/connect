@@ -75,9 +75,6 @@ type mongodbCache struct {
 }
 
 func newMongodbCache(collectionName, keyField, valueField string, client *mongo.Client, database *mongo.Database) (*mongodbCache, error) {
-	if err := client.Connect(context.Background()); err != nil {
-		return nil, err
-	}
 	return &mongodbCache{
 		client:     client,
 		collection: database.Collection(collectionName),
