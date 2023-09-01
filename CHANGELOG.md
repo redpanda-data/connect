@@ -8,6 +8,7 @@ All notable changes to this project will be documented in this file.
 ### Added
 
 - Fields `client_id` and `rack_id` added to the `kafka_franz` input and output.
+- New experimental `command` processor.
 
 ### Fixed
 
