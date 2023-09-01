@@ -6,8 +6,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/benthosdev/benthos/v4/public/service"
 	"github.com/hashicorp/golang-lru/v2/expirable"
+
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
 const (

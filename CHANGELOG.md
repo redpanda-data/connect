@@ -5,11 +5,17 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- Fields `client_id` and `rack_id` added to the `kafka_franz` input and output.
+
 ### Fixed
 
-- Allow comments in single root and directly imported bloblang mappings
+- Allow comments in single root and directly imported bloblang mappings.
 - The `azure_blob_storage` input no longer adds `blob_storage_content_type` and `blob_storage_content_encoding` metadata values as string pointer types, and instead adds these values as string types only when they are present.
 - The `http_server` input now returns a more appropriate 503 service unavailable status code during shutdown instead of the previous 404 status.
+- Fixed a potential panic when closing a `pusher` output that was never initialised.
+- The `sftp` output now reconnects upon being disconnected by the Azure idle timeout.
 
 ## 4.20.0 - 2023-08-22
 
