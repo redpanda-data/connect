@@ -12,6 +12,7 @@ import (
 
 	"github.com/IBM/sarama"
 	"github.com/cenkalti/backoff/v4"
+	"golang.org/x/sync/syncmap"
 
 	batchInternal "github.com/benthosdev/benthos/v4/internal/batch"
 	"github.com/benthosdev/benthos/v4/internal/batch/policy"
@@ -68,6 +69,8 @@ Unfortunately this error message will appear for a wide range of connection prob
 			docs.FieldString("key", "The key to publish messages with.").IsInterpolated(),
 			docs.FieldString("partitioner", "The partitioning algorithm to use.").HasOptions("fnv1a_hash", "murmur2_hash", "random", "round_robin", "manual"),
 			docs.FieldString("partition", "The manually-specified partition to publish messages to, relevant only when the field `partitioner` is set to `manual`. Must be able to parse as a 32-bit integer.").IsInterpolated().Advanced(),
+			docs.FieldInt("partitions_per_new_topic", "If a topic is created and this value is greater than zero then this number of partitions will be used for the topic.").Optional().Advanced(),
+			docs.FieldInt("topic_replication_factor", "The replication factor for the newly created topics. If `partitions_per_new_topic` is greater than zero this field is required, otherwise is ignored").Advanced(),
 			docs.FieldString("compression", "The compression algorithm to use.").HasOptions("none", "snappy", "lz4", "gzip", "zstd"),
 			docs.FieldString("static_headers", "An optional map of static headers that should be added to messages in addition to metadata.", map[string]string{"first-static-header": "value-1", "second-static-header": "value-2"}).Map(),
 			docs.FieldObject("metadata", "Specify criteria for which metadata values are sent with messages as headers.").WithChildren(metadata.ExcludeFilterFields()...),
@@ -131,6 +134,7 @@ type kafkaWriter struct {
 	topic     *field.Expression
 	partition *field.Expression
 
+	admin       sarama.ClusterAdmin
 	producer    sarama.SyncProducer
 	compression sarama.CompressionCodec
 	partitioner sarama.PartitionerConstructor
@@ -183,6 +187,10 @@ func NewKafkaWriter(conf output.KafkaConfig, mgr bundle.NewManagement) (output.A
 		return nil, fmt.Errorf("failed to parse parition expression: %v", err)
 	}
 	if k.backoffCtor, err = conf.Config.GetCtor(); err != nil {
+		return nil, err
+	}
+
+	if k.admin, err = sarama.NewClusterAdmin(conf.Addresses, sarama.NewConfig()); err != nil {
 		return nil, err
 	}
 
@@ -296,6 +304,14 @@ func (k *kafkaWriter) buildUserDefinedHeaders(staticHeaders map[string]string) [
 
 //------------------------------------------------------------------------------
 
+// topicCache serves as a cache for topics that have been created during the
+// lifetime of this writer. This is to avoid unnecessary calls to the Kafka
+// cluster to create topics that already exist.
+//
+// The map is keyed by topic name and the value is a boolean indicating whether
+// the topic exists or not.
+var topicCache = syncmap.Map{}
+
 // Connect attempts to establish a connection to a Kafka broker.
 func (k *kafkaWriter) Connect(ctx context.Context) error {
 	k.connMut.Lock()
@@ -364,6 +380,16 @@ func (k *kafkaWriter) WriteBatch(ctx context.Context, msg message.Batch) error {
 		topic, err := k.topic.String(i, msg)
 		if err != nil {
 			return fmt.Errorf("topic interpolation error: %w", err)
+		}
+		if k.conf.PartitionsPerNewTopic > 0 {
+			if k.conf.TopicReplicationFactor%2 == 0 {
+				return fmt.Errorf("topic_replication_factor must be an odd number, got %v", k.conf.TopicReplicationFactor)
+			}
+
+			err = k.createTopic(topic)
+			if err != nil {
+				return fmt.Errorf("failed to create topic '%v': %w", topic, err)
+			}
 		}
 		nextMsg := &sarama.ProducerMessage{
 			Topic:    topic,
@@ -563,4 +589,47 @@ func (mur *murmur2) Sum32() uint32 {
 	cached := uint32(h)
 	mur.cached = &cached
 	return cached
+}
+
+//------------------------------------------------------------------------------
+
+// createTopic creates a topic in the Kafka cluster if it does not already
+// exist.
+//
+// If k.conf.PartitionsPerNewTopic is set to a value greater than 0, then the
+// topic will be created with that number of partitions.
+func (k *kafkaWriter) createTopic(topic string) (err error) {
+	var exists bool
+	if exists, err = k.checkIfTopicExists(topic); err != nil {
+		return err
+	}
+	if exists {
+		return nil
+	}
+
+	topicCache.Store(topic, false)
+
+	topicDetail := sarama.TopicDetail{
+		NumPartitions:     int32(k.conf.PartitionsPerNewTopic),
+		ReplicationFactor: int16(k.conf.TopicReplicationFactor),
+	}
+
+	err = k.admin.CreateTopic(topic, &topicDetail, false)
+	return err
+}
+
+// checkIfTopicExists checks if a topic exists in the Kafka cluster.
+func (k *kafkaWriter) checkIfTopicExists(topic string) (exists bool, err error) {
+	initialized, ok := topicCache.Load(topic)
+	if !ok || !initialized.(bool) {
+		var topics map[string]sarama.TopicDetail
+		if topics, err = k.admin.ListTopics(); err != nil {
+			return false, err
+		}
+		_, exists = topics[topic]
+		topicCache.Store(topic, exists)
+		return exists, nil
+	}
+
+	return initialized.(bool), nil
 }
