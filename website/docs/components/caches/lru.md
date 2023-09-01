@@ -64,7 +64,7 @@ cache_resources:
         foo: bar
 ```
 
-These values can be overridden during execution, at which point the configured TTL is respected as usual.
+These values can be overridden during execution.
 
 ## Fields
 
