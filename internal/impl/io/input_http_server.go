@@ -781,10 +781,14 @@ func (h *httpServerInput) loop() {
 			}
 		} else {
 			if len(h.conf.Path) > 0 {
-				h.mgr.RegisterEndpoint(h.conf.Path, "Does nothing.", http.NotFound)
+				h.mgr.RegisterEndpoint(h.conf.Path, "Endpoint disabled.", func(w http.ResponseWriter, r *http.Request) {
+					http.Error(w, "Service unavailable", http.StatusServiceUnavailable)
+				})
 			}
 			if len(h.conf.WSPath) > 0 {
-				h.mgr.RegisterEndpoint(h.conf.WSPath, "Does nothing.", http.NotFound)
+				h.mgr.RegisterEndpoint(h.conf.WSPath, "Endpoint disabled.", func(w http.ResponseWriter, r *http.Request) {
+					http.Error(w, "Service unavailable", http.StatusServiceUnavailable)
+				})
 			}
 		}
 

@@ -328,10 +328,16 @@ func blobStorageMsgFromParts(p *azurePendingObject, containerName string, parts 
 	_ = msg.Iter(func(_ int, part *message.Part) error {
 		part.MetaSetMut("blob_storage_key", p.target.key)
 		part.MetaSetMut("blob_storage_container", containerName)
-		part.MetaSetMut("blob_storage_last_modified", p.obj.LastModified.Format(time.RFC3339))
-		part.MetaSetMut("blob_storage_last_modified_unix", p.obj.LastModified.Unix())
-		part.MetaSetMut("blob_storage_content_type", p.obj.ContentType)
-		part.MetaSetMut("blob_storage_content_encoding", p.obj.ContentEncoding)
+		if p.obj.LastModified != nil {
+			part.MetaSetMut("blob_storage_last_modified", p.obj.LastModified.Format(time.RFC3339))
+			part.MetaSetMut("blob_storage_last_modified_unix", p.obj.LastModified.Unix())
+		}
+		if p.obj.ContentType != nil {
+			part.MetaSetMut("blob_storage_content_type", *p.obj.ContentType)
+		}
+		if p.obj.ContentEncoding != nil {
+			part.MetaSetMut("blob_storage_content_encoding", *p.obj.ContentEncoding)
+		}
 
 		for k, v := range p.obj.Metadata {
 			part.MetaSetMut(k, v)
