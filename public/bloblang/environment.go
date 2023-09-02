@@ -142,11 +142,14 @@ func (e *Environment) RegisterMethodV2(name string, spec *PluginSpec, ctor Metho
 	}
 	iSpec.Params = spec.params
 	return e.env.RegisterMethod(iSpec, func(target query.Function, args *query.ParsedParams) (query.Function, error) {
-		fn, err := ctor(&ParsedParams{par: args})
+		parsedParams := newParsedParams(args, e)
+
+		fn, err := ctor(parsedParams)
 		if err != nil {
 			return nil, err
 		}
-		if spec.static {
+
+		if spec.isStaticFn(parsedParams) {
 			if sTarget, isLiteral := target.(*query.Literal); isLiteral {
 				v, err := fn(sTarget.Value)
 				if err != nil {
@@ -155,6 +158,7 @@ func (e *Environment) RegisterMethodV2(name string, spec *PluginSpec, ctor Metho
 				return query.NewLiteralFunction("method "+name, v), nil
 			}
 		}
+
 		return query.ClosureFunction("method "+name, func(ctx query.FunctionContext) (any, error) {
 			v, err := target.Exec(ctx)
 			if err != nil {
@@ -217,17 +221,21 @@ func (e *Environment) RegisterFunctionV2(name string, spec *PluginSpec, ctor Fun
 	}
 	iSpec.Params = spec.params
 	return e.env.RegisterFunction(iSpec, func(args *query.ParsedParams) (query.Function, error) {
-		fn, err := ctor(&ParsedParams{par: args})
+		parsedParams := newParsedParams(args, e)
+
+		fn, err := ctor(parsedParams)
 		if err != nil {
 			return nil, err
 		}
-		if spec.static {
+
+		if spec.isStaticFn(parsedParams) {
 			v, err := fn()
 			if err != nil {
 				return nil, err
 			}
 			return query.NewLiteralFunction("function "+name, v), nil
 		}
+
 		return query.ClosureFunction("function "+name, func(ctx query.FunctionContext) (any, error) {
 			return fn()
 		}, nil), nil

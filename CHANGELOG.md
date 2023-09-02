@@ -9,6 +9,8 @@ All notable changes to this project will be documented in this file.
 
 - Fields `client_id` and `rack_id` added to the `kafka_franz` input and output.
 - New experimental `command` processor.
+- Parameter `no_cache` added to the `file` and `env` Bloblang functions.
+- New `file_rel` function added to Bloblang.
 
 ### Fixed
 

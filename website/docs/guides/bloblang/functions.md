@@ -407,6 +407,7 @@ Returns the value of an environment variable, or `null` if the environment varia
 #### Parameters
 
 **`name`** &lt;string&gt; The name of an environment variable.  
+**`no_cache`** &lt;bool, default `false`&gt; Force the variable lookup to occur for each mapping invocation.  
 
 #### Examples
 
@@ -415,20 +416,24 @@ Returns the value of an environment variable, or `null` if the environment varia
 root.thing.key = env("key").or("default value")
 ```
 
-When the argument is static this function will only resolve once and yield the same result for each invocation as an optimisation, this means that updates to env vars during runtime will not be reflected. You can work around this optimisation by using variables as the argument as this will force a new evaluation for each execution of the mapping.
+```coffee
+root.thing.key = env(this.thing.key_name)
+```
+
+When the name parameter is static this function will only resolve once and yield the same result for each invocation as an optimisation, this means that updates to env vars during runtime will not be reflected. You can disable this cache with the optional parameter `no_cache`, which when set to `true` will cause the variable lookup to be performed for each execution of the mapping.
 
 ```coffee
-let env_key = "key"
-root.thing.key = env($env_key).or("default_value")
+root.thing.key = env(name: "key", no_cache: true)
 ```
 
 ### `file`
 
-Reads a file and returns its contents. Relative paths are resolved from the directory of the process executing the mapping.
+Reads a file and returns its contents. Relative paths are resolved from the directory of the process executing the mapping. In order to read files relative to the mapping file use the newer [`file_rel` function](#file_rel)
 
 #### Parameters
 
 **`path`** &lt;string&gt; The path of the target file.  
+**`no_cache`** &lt;bool, default `false`&gt; Force the file to be read for each mapping invocation.  
 
 #### Examples
 
@@ -440,11 +445,38 @@ root.doc = file(env("BENTHOS_TEST_BLOBLANG_FILE")).parse_json()
 # Out: {"doc":{"foo":"bar"}}
 ```
 
-When the argument is static this function will only resolve once and yield the same result for each invocation as an optimisation, this means that updates to files during runtime will not be reflected. You can work around this optimisation by using variables as the argument as this will force a new file read for each execution of the mapping.
+When the path parameter is static this function will only read the specified file once and yield the same result for each invocation as an optimisation, this means that updates to files during runtime will not be reflected. You can disable this cache with the optional parameter `no_cache`, which when set to `true` will cause the file to be read for each execution of the mapping.
 
 ```coffee
-let env_key = "BENTHOS_TEST_BLOBLANG_FILE"
-root.doc = file(env($env_key)).parse_json()
+root.doc = file(path: env("BENTHOS_TEST_BLOBLANG_FILE"), no_cache: true).parse_json()
+
+# In:  {}
+# Out: {"doc":{"foo":"bar"}}
+```
+
+### `file_rel`
+
+Reads a file and returns its contents. Relative paths are resolved from the directory of the mapping.
+
+#### Parameters
+
+**`path`** &lt;string&gt; The path of the target file.  
+**`no_cache`** &lt;bool, default `false`&gt; Force the file to be read for each mapping invocation.  
+
+#### Examples
+
+
+```coffee
+root.doc = file_rel(env("BENTHOS_TEST_BLOBLANG_FILE")).parse_json()
+
+# In:  {}
+# Out: {"doc":{"foo":"bar"}}
+```
+
+When the path parameter is static this function will only read the specified file once and yield the same result for each invocation as an optimisation, this means that updates to files during runtime will not be reflected. You can disable this cache with the optional parameter `no_cache`, which when set to `true` will cause the file to be read for each execution of the mapping.
+
+```coffee
+root.doc = file_rel(path: env("BENTHOS_TEST_BLOBLANG_FILE"), no_cache: true).parse_json()
 
 # In:  {}
 # Out: {"doc":{"foo":"bar"}}
