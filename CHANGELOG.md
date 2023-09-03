@@ -19,6 +19,7 @@ All notable changes to this project will be documented in this file.
 - The `http_server` input now returns a more appropriate 503 service unavailable status code during shutdown instead of the previous 404 status.
 - Fixed a potential panic when closing a `pusher` output that was never initialised.
 - The `sftp` output now reconnects upon being disconnected by the Azure idle timeout.
+- The `switch` output now produces error logs when messages do not pass at least one case with `strict_mode` enabled, previously these rejected messages were potentially re-processed in a loop without any logs depending on the config. An inaccuracy to the documentation has also been fixed in order to clarify behaviour when strict mode is not enabled.
 
 ## 4.20.0 - 2023-08-22
 

@@ -43,7 +43,7 @@ func init() {
 		Summary: `
 The switch output type allows you to route messages to different outputs based on their contents.`,
 		Description: `
-Messages must successfully route to one or more outputs, otherwise this is considered an error and the message is reprocessed. In order to explicitly drop messages that do not match your cases add one final case with a [drop output](/docs/components/outputs/drop).`,
+Messages that do not pass the check of a single output case are effectively dropped. In order to prevent this outcome set the field ` + "[`strict_mode`](#strict_mode) to `true`" + `, in which case messages that do not pass at least one case are considered failed and will be nacked and/or reprocessed depending on your input.`,
 		Config: docs.FieldComponent().WithChildren(
 			docs.FieldBool(
 				"retry_until_success", `
@@ -432,6 +432,7 @@ func (o *switchOutput) loop() {
 				}
 			}
 			if !routedAtLeastOnce && o.strictMode {
+				o.logger.Errorln("Message failed to match against at least one output check with strict mode enabled, it will be nacked and/or re-processed")
 				return ErrSwitchNoConditionMet
 			}
 			return nil
