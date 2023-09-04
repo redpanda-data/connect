@@ -96,9 +96,13 @@ func oAuth2FieldSpec() *service.ConfigField {
 
 		service.NewAnyMapField("endpoint_params").
 			Description("A list of optional endpoint parameters.").
-			Default(map[string]any{}).
+			Default(map[string][]string{}).
 			Advanced().
-			Version("?"),
+			Example(map[string]any{
+				"foo": []string{"meow", "quack"},
+				"bar": []string{"woof"},
+			}).
+			Version("4.21.0"),
 	).
 		Description("Allows you to specify open authentication via OAuth version 2 using the client credentials token flow.").
 		Advanced()

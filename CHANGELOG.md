@@ -11,6 +11,7 @@ All notable changes to this project will be documented in this file.
 - New experimental `command` processor.
 - Parameter `no_cache` added to the `file` and `env` Bloblang functions.
 - New `file_rel` function added to Bloblang.
+- Field `endpoint_params` added to the `oauth2` section of HTTP client components.
 
 ### Fixed
 
