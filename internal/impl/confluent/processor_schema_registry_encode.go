@@ -26,7 +26,7 @@ Encodes messages automatically from schemas obtains from a [Confluent Schema Reg
 
 If a message fails to encode under the schema then it will remain unchanged and the error can be caught using error handling methods outlined [here](/docs/configuration/error_handling).
 
-Currently only Avro or Protobuf schemas are supported, both are capable of expanding from schema references as of v4.19.0.
+Currently only Avro, Protobuf and JSON schemas are supported, all are capable of expanding from schema references as of v4.21.0.
 
 ### Avro JSON Format
 
@@ -67,7 +67,7 @@ We will be considering alternative approaches in future so please [get in touch]
 			Example("60s").
 			Example("1h")).
 		Field(service.NewBoolField("avro_raw_json").
-			Description("Whether messages encoded in Avro format should be parsed as normal JSON (\"json that meets the expectations of regular internet json\") rather than [Avro JSON](https://avro.apache.org/docs/current/specification/_print/#json-encoding). If `true` the schema returned from the subject should be parsed as [standard json](https://pkg.go.dev/github.com/linkedin/goavro/v2#NewCodecForStandardJSONFull) instead of as [avro json](https://pkg.go.dev/github.com/linkedin/goavro/v2#NewCodec). There is a [comment in goavro](https://github.com/linkedin/goavro/blob/5ec5a5ee7ec82e16e6e2b438d610e1cab2588393/union.go#L224-L249), the [underlining library used for avro serialization](https://github.com/linkedin/goavro), that explains in more detail the difference between standard json and avro json.").
+			Description("Whether messages encoded in Avro format should be parsed as normal JSON (\"json that meets the expectations of regular internet json\") rather than [Avro JSON](https://avro.apache.org/docs/current/specification/_print/#json-encoding). If `true` the schema returned from the subject should be parsed as [standard json](https://pkg.go.dev/github.com/linkedin/goavro/v2#NewCodecForStandardJSONFull) instead of as [avro json](https://pkg.go.dev/github.com/linkedin/goavro/v2#NewCodec). There is a [comment in goavro](https://github.com/linkedin/goavro/blob/5ec5a5ee7ec82e16e6e2b438d610e1cab2588393/union.go#L224-L249), the [underlining library used for avro serialization](https://github.com/linkedin/goavro), that explains in more detail the difference between standard json and avro json. This field does not affect messages with a JSON schema, only the ones with an AVRO one.").
 			Advanced().Default(false).Version("3.59.0"))
 
 	for _, f := range httpclient.AuthFieldSpecs() {
@@ -311,6 +311,8 @@ func (s *schemaRegistryEncoder) getLatestEncoder(subject string) (schemaEncoder,
 		encoder, err = s.getProtobufEncoder(ctx, resPayload)
 	case "", "AVRO":
 		encoder, err = s.getAvroEncoder(ctx, resPayload)
+	case "JSON":
+		encoder, err = s.getJsonEncoder(ctx, resPayload)
 	default:
 		err = fmt.Errorf("schema type %v not supported", resPayload.Type)
 	}
