@@ -364,7 +364,7 @@ Requires version 3.45.0 or newer
 
 ### `oauth2.endpoint_params`
 
-A list of optional endpoint parameters.
+A list of optional endpoint parameters, values should be arrays of strings.
 
 
 Type: `object`  
