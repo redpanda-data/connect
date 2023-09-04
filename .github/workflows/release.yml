@@ -11,7 +11,7 @@ jobs:
     steps:
 
     - name: Check Out Repo
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
 
     - name: Free up some disk space on ubuntu
       if: ${{ runner.os == 'Linux' }}
@@ -45,7 +45,7 @@ jobs:
     steps:
 
     - name: Check Out Repo
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
 
     - name: Install Go
       uses: actions/setup-go@v4
