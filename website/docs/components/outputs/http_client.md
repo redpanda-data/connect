@@ -348,7 +348,18 @@ A list of optional endpoint parameters.
 
 Type: `object`  
 Default: `{}`  
-Requires version ? or newer  
+Requires version 4.21.0 or newer  
+
+```yml
+# Examples
+
+endpoint_params:
+  bar:
+    - woof
+  foo:
+    - meow
+    - quack
+```
 
 ### `basic_auth`
 
