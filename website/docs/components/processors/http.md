@@ -62,6 +62,7 @@ http:
     client_secret: ""
     token_url: ""
     scopes: []
+    endpoint_params: {}
   basic_auth:
     enabled: false
     username: ""
@@ -353,6 +354,15 @@ A list of optional requested permissions.
 Type: `array`  
 Default: `[]`  
 Requires version 3.45.0 or newer  
+
+### `oauth2.endpoint_params`
+
+A list of optional endpoint parameters.
+
+
+Type: `object`  
+Default: `{}`  
+Requires version ? or newer  
 
 ### `basic_auth`
 
