@@ -6,21 +6,6 @@ import Link from '@docusaurus/Link';
 import classnames from 'classnames';
 import styles from './support.module.css';
 
-const paidServicesOptions = [
-  {
-    title: "Remote Consultation",
-    description: <>Schedule a consultation call with a Benthos maintainer to discuss your use cases and whether/where Benthos fits in. These calls are often booked for a half or full working day, and it is up to you how to use this time.</>,
-  },
-  {
-    title: "Issue Bounty",
-    description: <><p>If you'd like a specific feature or bug to be addressed within a specified time period then an issue bounty can be set whereby an agreed amount will be paid upon completion of the issue. This is often a nice way of paying for specific features to be built when a longer term contract isn't necessary.</p><p>In order to set a bounty please reach out with a description of the issue (or a link to it on Github) and a desired time frame and we'll provide the value of the bounty, it is then up to you whether you wish to proceed.</p></>,
-  },
-  {
-    title: "Support Retainer",
-    description: <><p>If you feel it's likely that you might require one or more of the above services regularly then you can retain a certain number of days of support each month. This would allow you to get quicker access to services with an agreed upon response time.</p><p>It's worth noting that the support offered at <Link to="https://github.com/sponsors/Jeffail">certain Jeffail Github sponsorship tiers</Link> might suffice for some smaller organisations.</p></>,
-  },
-];
-
 function Support() {
   return (
     <Layout title="Support" description="How to get Benthos support">
@@ -42,7 +27,7 @@ function Support() {
         <section>
           <div className="container container-narrow padding-top--lg">
             <div className="row margin-bottom--lg">
-              <div className="col col--9 col--offset-1">
+              <div className="col col--12">
                 <p>
 Benthos has a helpful and conveniently global community so if you have quick questions, are in the market for ideas, or just want to make some friends, it's worth trying your luck with our <a href="#community-support">community spaces</a>. However, for organisations that want quicker action, guaranteed attention or some one-on-one consulting time there are some <a href="#paid-services">paid services available</a> that are worth considering.
                 </p>
@@ -51,25 +36,19 @@ Benthos has a helpful and conveniently global community so if you have quick que
           </div>
         </section>
         <section>
-          <div className="container container-narrow padding-top--lg padding-bottom--lg">
-            <div className="row padding-bottom--lg">
+          <div className="container container-narrow padding-bottom--lg">
+            <div className="row margin-bottom--lg">
               <div className="col col--12">
                 <h2 id="paid-services">Paid Services
                   <a className="hash-link" href="#paid-services" title="Direct link to heading">​</a></h2>
-                <p>
-Paid services options range from ad hoc appointments to long term contracts. These can be tailored to your particular needs and are subject to availability, so please reach out to <Link to="mailto:business@benthos.dev">business&#64;benthos.dev</Link> to get started. The following is a broad list of services offered, it'd speed things up to have one of these in mind when you contact us:</p>
+                  <p>
+Paid services options range from ad hoc consultations to long term help desk contracts. These can be tailored to your particular needs and are subject to availability. Please reach out to <Link to="mailto:business@benthos.dev">business&#64;benthos.dev</Link> to get started.
+                  </p>
+                  <p>
+It's also worth noting that some subscription offerings of <a href="https://studio.benthos.dev">Benthos Studio</a> include support and may offer enough for your particular use case.
+                  </p>
               </div>
             </div>
-            {paidServicesOptions.map((opt, idx) => (
-              <div key={idx} className="row padding-bottom--lg">
-                <div className="col col--3">
-                  <strong>{opt.title}</strong>
-                </div>
-                <div className="col col--9">
-                  {opt.description}
-                </div>
-              </div>
-            ))}
           </div>
         </section>
         <section>
