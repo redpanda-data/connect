@@ -18,6 +18,9 @@ const (
 	cuckooCacheFieldCapLabel        = "cap"
 	cuckooCacheFieldCapDefaultValue = cuckoo.DefaultCapacity
 
+	cuckooCacheFieldScalableLabel        = "scalable"
+	cuckooCacheFieldScalableDefaultValue = false
+
 	cuckooCacheFieldInitValuesLabel = "init_values"
 
 	cuckooCacheFieldStorageLabel = "storage"
@@ -57,6 +60,9 @@ These values can be overridden during execution.`).
 		Field(service.NewIntField(cuckooCacheFieldCapLabel).
 			Description("The cache maximum capacity (number of entries)").
 			Default(cuckooCacheFieldCapDefaultValue)).
+		Field(service.NewBoolField(cuckooCacheFieldScalableLabel).
+			Description("If true, will use a scalable cuckoo filter, that adapts the inner capacity based on usage").
+			Default(cuckooCacheFieldScalableDefaultValue)).
 		Field(service.NewStringListField(cuckooCacheFieldInitValuesLabel).
 			Description("A table of keys that should be present in the cache on initialization. This can be used to create static lookup tables.").
 			Default([]string{}).
@@ -122,6 +128,11 @@ func cuckooMemCacheFromConfig(conf *service.ParsedConfig, log *service.Logger) (
 		return nil, err
 	}
 
+	scalable, err := conf.FieldBool(cuckooCacheFieldScalableLabel)
+	if err != nil {
+		return nil, err
+	}
+
 	initValues, err := conf.FieldStringList(cuckooCacheFieldInitValuesLabel)
 	if err != nil {
 		return nil, err
@@ -139,7 +150,7 @@ func cuckooMemCacheFromConfig(conf *service.ParsedConfig, log *service.Logger) (
 		}
 	}
 
-	return cuckooMemCache(capacity, initValues, cuckooLogger, storage)
+	return cuckooMemCache(capacity, scalable, initValues, cuckooLogger, storage)
 }
 
 //------------------------------------------------------------------------------
@@ -147,6 +158,7 @@ func cuckooMemCacheFromConfig(conf *service.ParsedConfig, log *service.Logger) (
 var errInvalidCuckooCacheCapacityValue = fmt.Errorf("invalid cuckoo cache parameter capacity: must be bigger than 0")
 
 func cuckooMemCache(capacity int,
+	useScalable bool,
 	initValues []string,
 	log *service.Logger,
 	storage *storageDumpConf,
@@ -155,8 +167,13 @@ func cuckooMemCache(capacity int,
 		return nil, errInvalidCuckooCacheCapacityValue
 	}
 
-	inner := cuckoo.NewFilter(uint(capacity))
+	var inner cuckooCache
 
+	if useScalable {
+		inner = cuckoo.NewScalableCuckooFilter()
+	} else {
+		inner = cuckoo.NewFilter(uint(capacity))
+	}
 	ca = &cuckooCacheAdapter{
 		inner:   inner,
 		log:     log,

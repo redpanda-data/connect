@@ -28,6 +28,7 @@ Stores keys in a cuckoo in-memory filter, useful for deduplication. This cache i
 label: ""
 cuckoo:
   cap: 10000
+  scalable: false
   init_values: []
 ```
 
@@ -39,6 +40,7 @@ cuckoo:
 label: ""
 cuckoo:
   cap: 10000
+  scalable: false
   init_values: []
   storage:
     path: /path/to/cuckoo-dumps-dir/ # No default (required)
@@ -81,6 +83,14 @@ The cache maximum capacity (number of entries)
 
 Type: `int`  
 Default: `10000`  
+
+### `scalable`
+
+If true, will use a scalable cuckoo filter, that adapts the inner capacity based on usage
+
+
+Type: `bool`  
+Default: `false`  
 
 ### `init_values`
 

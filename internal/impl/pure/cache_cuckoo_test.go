@@ -48,6 +48,37 @@ func TestCuckooCacheStandard(t *testing.T) {
 	assert.Equal(t, string(value), "t")
 }
 
+func TestCuckooCacheScalable(t *testing.T) {
+	t.Parallel()
+
+	defConf, err := cuckooCacheConfig().ParseYAML(`scalable: true`, nil)
+	require.NoError(t, err)
+
+	logger := service.MockResources().Logger()
+
+	c, err := cuckooMemCacheFromConfig(defConf, logger)
+	require.NoError(t, err)
+
+	ctx := context.Background()
+	key := "foo"
+
+	_, err = c.Get(ctx, key)
+	assert.EqualError(t, err, "key does not exist")
+
+	err = c.Add(ctx, key, nil, nil)
+	assert.NoError(t, err)
+
+	err = c.Add(ctx, key, nil, nil)
+	assert.EqualError(t, err, "key already exists")
+
+	err = c.Set(ctx, key, nil, nil)
+	assert.NoError(t, err)
+
+	value, err := c.Get(ctx, key)
+	assert.NoError(t, err)
+	assert.Equal(t, string(value), "t")
+}
+
 func TestCuckooCacheDelete(t *testing.T) {
 	t.Parallel()
 
