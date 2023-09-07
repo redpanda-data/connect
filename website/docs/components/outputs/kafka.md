@@ -76,8 +76,10 @@ output:
     key: ""
     partitioner: fnv1a_hash
     partition: ""
-    partitions_per_new_topic: 0
-    topic_replication_factor: 1
+    custom_topic_creation:
+      enabled: false
+      partitions: -1
+      replication_factor: -1
     compression: none
     static_headers: {}
     metadata:
@@ -439,21 +441,36 @@ This field supports [interpolation functions](/docs/configuration/interpolation#
 Type: `string`  
 Default: `""`  
 
-### `partitions_per_new_topic`
+### `custom_topic_creation`
 
-If a topic is created and this value is greater than zero then this number of partitions will be used for the topic.
+If enabled, topics will be created with the specified number of partitions and replication factor if they do not already exist.
+
+
+Type: `object`  
+
+### `custom_topic_creation.enabled`
+
+Whether to enable custom topic creation.
+
+
+Type: `bool`  
+Default: `false`  
+
+### `custom_topic_creation.partitions`
+
+The number of partitions to create for new topics. Must be greater than 1
 
 
 Type: `int`  
-Default: `0`  
+Default: `-1`  
 
-### `topic_replication_factor`
+### `custom_topic_creation.replication_factor`
 
-The replication factor for the newly created topics. If `partitions_per_new_topic` is greater than zero this field is required, otherwise is ignored
+The replication factor to use for new topics. Must be an odd number, and less then or equal to the number of brokers
 
 
 Type: `int`  
-Default: `1`  
+Default: `-1`  
 
 ### `compression`
 
