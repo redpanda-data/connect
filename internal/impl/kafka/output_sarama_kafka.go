@@ -69,8 +69,11 @@ Unfortunately this error message will appear for a wide range of connection prob
 			docs.FieldString("key", "The key to publish messages with.").IsInterpolated(),
 			docs.FieldString("partitioner", "The partitioning algorithm to use.").HasOptions("fnv1a_hash", "murmur2_hash", "random", "round_robin", "manual"),
 			docs.FieldString("partition", "The manually-specified partition to publish messages to, relevant only when the field `partitioner` is set to `manual`. Must be able to parse as a 32-bit integer.").IsInterpolated().Advanced(),
-			docs.FieldInt("partitions_per_new_topic", "If a topic is created and this value is greater than zero then this number of partitions will be used for the topic.").Optional().Advanced(),
-			docs.FieldInt("topic_replication_factor", "The replication factor for the newly created topics. If `partitions_per_new_topic` is greater than zero this field is required, otherwise is ignored").Advanced(),
+			docs.FieldObject("custom_topic_creation", "If enabled, topics will be created with the specified number of partitions and replication factor if they do not already exist.").WithChildren(
+				docs.FieldBool("enabled", "Whether to enable custom topic creation.").HasDefault(false),
+				docs.FieldInt("partitions", "The number of partitions to create for new topics. Must be greater than 1").HasDefault(-1),
+				docs.FieldInt("replication_factor", "The replication factor to use for new topics. Must be an odd number, and less then or equal to the number of brokers").HasDefault(-1),
+			).Advanced(),
 			docs.FieldString("compression", "The compression algorithm to use.").HasOptions("none", "snappy", "lz4", "gzip", "zstd"),
 			docs.FieldString("static_headers", "An optional map of static headers that should be added to messages in addition to metadata.", map[string]string{"first-static-header": "value-1", "second-static-header": "value-2"}).Map(),
 			docs.FieldObject("metadata", "Specify criteria for which metadata values are sent with messages as headers.").WithChildren(metadata.ExcludeFilterFields()...),
@@ -381,13 +384,15 @@ func (k *kafkaWriter) WriteBatch(ctx context.Context, msg message.Batch) error {
 		if err != nil {
 			return fmt.Errorf("topic interpolation error: %w", err)
 		}
-		if k.conf.PartitionsPerNewTopic > 0 {
-			if k.conf.TopicReplicationFactor%2 == 0 {
-				return fmt.Errorf("topic_replication_factor must be an odd number, got %v", k.conf.TopicReplicationFactor)
+		if k.conf.CustomTopicCreation.Enabled {
+			if k.conf.CustomTopicCreation.Partitions < 2 {
+				return fmt.Errorf("topic_partitions must be greater than one, got %v", k.conf.CustomTopicCreation.Partitions)
+			}
+			if k.conf.CustomTopicCreation.ReplicationFactor%2 == 0 {
+				return fmt.Errorf("topic_replication_factor must be an odd number, got %v", k.conf.CustomTopicCreation.ReplicationFactor)
 			}
 
-			err = k.createTopic(topic)
-			if err != nil {
+			if err = k.createTopic(topic); err != nil {
 				return fmt.Errorf("failed to create topic '%v': %w", topic, err)
 			}
 		}
@@ -610,8 +615,8 @@ func (k *kafkaWriter) createTopic(topic string) (err error) {
 	k.topicCache.Store(topic, false)
 
 	topicDetail := sarama.TopicDetail{
-		NumPartitions:     int32(k.conf.PartitionsPerNewTopic),
-		ReplicationFactor: int16(k.conf.TopicReplicationFactor),
+		NumPartitions:     int32(k.conf.CustomTopicCreation.Partitions),
+		ReplicationFactor: int16(k.conf.CustomTopicCreation.ReplicationFactor),
 	}
 
 	err = k.admin.CreateTopic(topic, &topicDetail, false)
