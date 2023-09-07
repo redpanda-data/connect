@@ -142,7 +142,8 @@ type kafkaWriter struct {
 	staticHeaders map[string]string
 	metaFilter    *metadata.ExcludeFilter
 
-	connMut sync.RWMutex
+	connMut    sync.RWMutex
+	topicCache syncmap.Map
 }
 
 // NewKafkaWriter returns a kafka writer.
@@ -310,7 +311,6 @@ func (k *kafkaWriter) buildUserDefinedHeaders(staticHeaders map[string]string) [
 //
 // The map is keyed by topic name and the value is a boolean indicating whether
 // the topic exists or not.
-var topicCache = syncmap.Map{}
 
 // Connect attempts to establish a connection to a Kafka broker.
 func (k *kafkaWriter) Connect(ctx context.Context) error {
@@ -607,7 +607,7 @@ func (k *kafkaWriter) createTopic(topic string) (err error) {
 		return nil
 	}
 
-	topicCache.Store(topic, false)
+	k.topicCache.Store(topic, false)
 
 	topicDetail := sarama.TopicDetail{
 		NumPartitions:     int32(k.conf.PartitionsPerNewTopic),
@@ -620,14 +620,14 @@ func (k *kafkaWriter) createTopic(topic string) (err error) {
 
 // checkIfTopicExists checks if a topic exists in the Kafka cluster.
 func (k *kafkaWriter) checkIfTopicExists(topic string) (exists bool, err error) {
-	initialized, ok := topicCache.Load(topic)
+	initialized, ok := k.topicCache.Load(topic)
 	if !ok || !initialized.(bool) {
 		var topics map[string]sarama.TopicDetail
 		if topics, err = k.admin.ListTopics(); err != nil {
 			return false, err
 		}
 		_, exists = topics[topic]
-		topicCache.Store(topic, exists)
+		k.topicCache.Store(topic, exists)
 		return exists, nil
 	}
 
