@@ -5,6 +5,8 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 4.21.0 - 2023-09-08
+
 ### Added
 
 - Fields `client_id` and `rack_id` added to the `kafka_franz` input and output.
