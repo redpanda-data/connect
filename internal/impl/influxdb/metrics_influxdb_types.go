@@ -47,7 +47,7 @@ type influxDBCounter struct {
 	metrics.Counter
 }
 
-// IncrInt64 increments a metric by an integer amount.
+// Incr increments a metric by an integer amount.
 func (i influxDBCounter) Incr(count int64) {
 	i.Inc(count)
 }

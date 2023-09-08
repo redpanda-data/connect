@@ -29,7 +29,7 @@ func (l *LossyCache) Get(ctx context.Context, key string) ([]byte, error) {
 func (l *LossyCache) Set(ctx context.Context, key string, value []byte, ttl *time.Duration) error {
 	if len(l.items) >= l.capacity {
 		// Dropped, whoopsie!
-		l.mDropped.IncrInt64(1)
+		l.mDropped.Incr(1)
 		return nil
 	}
 	l.items[key] = value
@@ -42,7 +42,7 @@ func (l *LossyCache) Add(ctx context.Context, key string, value []byte, ttl *tim
 	}
 	if len(l.items) >= l.capacity {
 		// Dropped, whoopsie!
-		l.mDropped.IncrInt64(1)
+		l.mDropped.Incr(1)
 		return nil
 	}
 	l.items[key] = value

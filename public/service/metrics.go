@@ -56,10 +56,10 @@ type MetricCounter struct {
 	cv metrics.StatCounterVec
 }
 
-// IncrInt64 increments a counter metric by an integer amount, the number of label values
+// Incr increments a counter metric by an integer amount, the number of label values
 // must match the number and order of labels specified when the counter was
 // created.
-func (c *MetricCounter) IncrInt64(count int64, labelValues ...string) {
+func (c *MetricCounter) Incr(count int64, labelValues ...string) {
 	if c == nil {
 		return
 	}
