@@ -470,6 +470,11 @@ func (h *httpServerInput) extractMessageFromRequest(r *http.Request) (message.Ba
 }
 
 func (h *httpServerInput) postHandler(w http.ResponseWriter, r *http.Request) {
+	if h.shutSig.ShouldCloseAtLeisure() {
+		http.Error(w, "Server closing", http.StatusServiceUnavailable)
+		return
+	}
+
 	h.handlerWG.Add(1)
 	defer h.handlerWG.Done()
 	defer r.Body.Close()
@@ -653,6 +658,11 @@ func (h *httpServerInput) postHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *httpServerInput) wsHandler(w http.ResponseWriter, r *http.Request) {
+	if h.shutSig.ShouldCloseAtLeisure() {
+		http.Error(w, "Server closing", http.StatusServiceUnavailable)
+		return
+	}
+
 	h.handlerWG.Add(1)
 	defer h.handlerWG.Done()
 
