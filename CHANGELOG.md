@@ -23,6 +23,7 @@ All notable changes to this project will be documented in this file.
 - The `switch` output now produces error logs when messages do not pass at least one case with `strict_mode` enabled, previously these rejected messages were potentially re-processed in a loop without any logs depending on the config. An inaccuracy to the documentation has also been fixed in order to clarify behaviour when strict mode is not enabled.
 - The `log` processor `fields_mapping` field should no longer reject metadata queries using `@` syntax.
 - Fixed an issue where heavily utilised streams with nested resource based outputs could lock-up when performing heavy resource mutating traffic on the streams mode REST API.
+- The Bloblang `zip` method no longer produces values that yield an "Unknown data type".
 
 ## 4.20.0 - 2023-08-22
 
