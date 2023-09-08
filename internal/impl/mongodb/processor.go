@@ -102,10 +102,6 @@ func ProcessorFromParsed(conf *service.ParsedConfig, res *service.Resources) (mp
 	}
 	mp.marshalMode = JSONMarshalMode(marshalModeStr)
 
-	if err = mp.client.Connect(context.Background()); err != nil {
-		return nil, fmt.Errorf("failed to connect: %v", err)
-	}
-
 	if err = mp.client.Ping(context.Background(), nil); err != nil {
 		_ = mp.client.Disconnect(context.Background())
 		return nil, fmt.Errorf("ping failed: %v", err)

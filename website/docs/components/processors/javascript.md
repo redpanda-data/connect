@@ -147,6 +147,20 @@ Obtain the root of the processed message as a structured value. If the message i
 let foo = benthos.v0_msg_as_structured().foo;
 ```
 
+### `benthos.v0_msg_exists_meta`
+
+Check that a metadata key exists.
+
+#### Parameters
+
+**`name`** &lt;string&gt; The metadata key to search for.  
+
+#### Examples
+
+```javascript
+if (benthos.v0_msg_exists_meta("kafka_key")) {}
+```
+
 ### `benthos.v0_msg_get_meta`
 
 Get the value of a metadata key from the processed message.

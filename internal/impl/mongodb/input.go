@@ -110,10 +110,6 @@ func (m *mongoInput) Connect(ctx context.Context) error {
 		return nil
 	}
 
-	if err := m.client.Connect(ctx); err != nil {
-		return fmt.Errorf("failed to connect: %w", err)
-	}
-
 	err := m.client.Ping(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("ping failed: %v", err)

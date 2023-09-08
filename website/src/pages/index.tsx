@@ -221,12 +221,12 @@ const features = [
     ),
   },
   {
-    title: 'Create, edit and test configs visually',
+    title: 'Create, Test and Deploy Configs Visually',
     imageUrl: 'img/Blobartist.svg',
     description: (
       <>
         <p>Declarative YAML is great for seamlessly integrating with version control tools, but creating and editing large configs can become a right bother.</p>
-        <p><a target="_blank" rel="noopener noreferrer" href="https://studio.benthos.dev">Benthos Studio</a> is a visual web application that allows you to create/import configs, edit and test them, and share them with others. It's so fun you'll be making configs just for the heck of it! Loser.</p>
+        <p><a target="_blank" rel="noopener noreferrer" href="https://studio.benthos.dev">Benthos Studio</a> is a visual web application that allows you to create/import configs, edit, test, share and deploy them. It's so fun you'll be making configs just for the heck of it! Loser.</p>
       </>
     ),
   },

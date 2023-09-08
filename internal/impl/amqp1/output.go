@@ -68,7 +68,7 @@ func init() {
 }
 
 type amqp1Writer struct {
-	client  *amqp.Client
+	client  *amqp.Conn
 	session *amqp.Session
 	sender  *amqp.Sender
 
@@ -76,7 +76,7 @@ type amqp1Writer struct {
 	targetAddr               string
 	metaFilter               *service.MetadataExcludeFilter
 	applicationPropertiesMap *bloblang.Executor
-	connOpts                 []amqp.ConnOption
+	connOpts                 *amqp.ConnOptions
 
 	log      *service.Logger
 	connLock sync.RWMutex
@@ -84,7 +84,8 @@ type amqp1Writer struct {
 
 func amqp1WriterFromParsed(conf *service.ParsedConfig, mgr *service.Resources) (*amqp1Writer, error) {
 	a := amqp1Writer{
-		log: mgr.Logger(),
+		log:      mgr.Logger(),
+		connOpts: &amqp.ConnOptions{},
 	}
 
 	var err error
@@ -96,7 +97,7 @@ func amqp1WriterFromParsed(conf *service.ParsedConfig, mgr *service.Resources) (
 		return nil, err
 	}
 
-	if a.connOpts, err = saslOptFnsFromParsed(conf); err != nil {
+	if err := saslOptFnsFromParsed(conf, a.connOpts); err != nil {
 		return nil, err
 	}
 
@@ -105,7 +106,7 @@ func amqp1WriterFromParsed(conf *service.ParsedConfig, mgr *service.Resources) (
 		return nil, err
 	}
 	if enabled {
-		a.connOpts = append(a.connOpts, amqp.ConnTLS(true), amqp.ConnTLSConfig(tlsConf))
+		a.connOpts.TLSConfig = tlsConf
 	}
 
 	if conf.Contains(appPropsMapField) {
@@ -129,26 +130,24 @@ func (a *amqp1Writer) Connect(ctx context.Context) (err error) {
 	}
 
 	var (
-		client  *amqp.Client
+		client  *amqp.Conn
 		session *amqp.Session
 		sender  *amqp.Sender
 	)
 
 	// Create client
-	if client, err = amqp.Dial(a.url, a.connOpts...); err != nil {
+	if client, err = amqp.Dial(ctx, a.url, a.connOpts); err != nil {
 		return
 	}
 
 	// Open a session
-	if session, err = client.NewSession(); err != nil {
+	if session, err = client.NewSession(ctx, nil); err != nil {
 		_ = client.Close()
 		return
 	}
 
 	// Create a sender
-	if sender, err = session.NewSender(
-		amqp.LinkTargetAddress(a.targetAddr),
-	); err != nil {
+	if sender, err = session.NewSender(ctx, a.targetAddr, nil); err != nil {
 		_ = session.Close(ctx)
 		_ = client.Close()
 		return
@@ -237,15 +236,11 @@ func (a *amqp1Writer) Write(ctx context.Context, msg *service.Message) error {
 		return nil
 	})
 
-	if err = s.Send(ctx, m); err != nil {
-		if err == amqp.ErrTimeout || ctx.Err() != nil {
+	if err = s.Send(ctx, m, nil); err != nil {
+		if ctx.Err() != nil {
 			err = component.ErrTimeout
 		} else {
-			if dErr, isDetachError := err.(*amqp.DetachError); isDetachError && dErr.RemoteError != nil {
-				a.log.Errorf("Lost connection due to: %v\n", dErr.RemoteError)
-			} else {
-				a.log.Errorf("Lost connection due to: %v\n", err)
-			}
+			a.log.Errorf("Lost connection due to: %v\n", err)
 			_ = a.disconnect(ctx)
 			err = service.ErrNotConnected
 		}

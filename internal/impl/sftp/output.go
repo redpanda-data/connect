@@ -2,6 +2,7 @@ package sftp
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -104,20 +105,13 @@ func (s *sftpWriter) Connect(ctx context.Context) error {
 	s.handleMut.Lock()
 	defer s.handleMut.Unlock()
 
-	if s.client != nil {
-		return nil
-	}
-
 	var err error
 	s.client, err = s.conf.Credentials.GetClient(s.mgr.FS(), s.conf.Address)
 	return err
 }
 
 func (s *sftpWriter) WriteBatch(ctx context.Context, msg message.Batch) error {
-	s.handleMut.Lock()
-	client := s.client
-	s.handleMut.Unlock()
-	if client == nil {
+	if s.client == nil {
 		return component.ErrNotConnected
 	}
 
@@ -149,11 +143,17 @@ func (s *sftpWriter) WriteBatch(ctx context.Context, msg message.Batch) error {
 		}
 
 		if err := s.client.MkdirAll(filepath.Dir(path)); err != nil {
+			if errors.Is(err, sftp.ErrSshFxConnectionLost) {
+				return component.ErrNotConnected
+			}
 			return err
 		}
 
 		file, err := s.client.OpenFile(path, flag)
 		if err != nil {
+			if errors.Is(err, sftp.ErrSshFxConnectionLost) {
+				return component.ErrNotConnected
+			}
 			return err
 		}
 

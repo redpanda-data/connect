@@ -30,18 +30,18 @@ func (conf *Config) UnmarshalYAML(value *yaml.Node) error {
 
 	err := value.Decode(&aliased)
 	if err != nil {
-		return docs.NewLintError(value.Line, docs.LintFailedRead, err.Error())
+		return docs.NewLintError(value.Line, docs.LintFailedRead, err)
 	}
 
 	var spec docs.ComponentSpec
 	if aliased.Type, spec, err = docs.GetInferenceCandidateFromYAML(docs.DeprecatedProvider, docs.TypeBuffer, value); err != nil {
-		return docs.NewLintError(value.Line, docs.LintComponentMissing, err.Error())
+		return docs.NewLintError(value.Line, docs.LintComponentMissing, err)
 	}
 
 	if spec.Plugin {
 		pluginNode, err := docs.GetPluginConfigYAML(aliased.Type, value)
 		if err != nil {
-			return docs.NewLintError(value.Line, docs.LintFailedRead, err.Error())
+			return docs.NewLintError(value.Line, docs.LintFailedRead, err)
 		}
 		aliased.Plugin = &pluginNode
 	} else {

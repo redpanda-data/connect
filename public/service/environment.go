@@ -71,10 +71,21 @@ func (e *Environment) UseBloblangEnvironment(bEnv *bloblang.Environment) {
 	e.bloblangEnv = bEnv
 }
 
-// UseFS configures the service environment to use an implementation of ifs.FS
-// as its filesystem.
+// UseFS configures the service environment to use an instantiation of *FS as
+// its filesystem. This provides extra control over the file access of all
+// Benthos components within the stream. However, this functionality is opt-in
+// and there is no guarantee that plugin implementations will use this method
+// of file access.
+//
+// The underlying bloblang environment will also be configured to import
+// mappings and other files via this file access method. In order to avoid this
+// behaviour add a fresh bloblang environment via UseBloblangEnvironment _after_
+// setting this file access.
 func (e *Environment) UseFS(fs *FS) {
 	e.fs = fs
+	e.bloblangEnv = e.bloblangEnv.WithCustomImporter(func(name string) ([]byte, error) {
+		return ifs.ReadFile(fs, name)
+	})
 }
 
 // NewStreamBuilder creates a new StreamBuilder upon the defined environment,

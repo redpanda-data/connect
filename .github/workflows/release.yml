@@ -11,7 +11,17 @@ jobs:
     steps:
 
     - name: Check Out Repo
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
+
+    - name: Free up some disk space on ubuntu
+      if: ${{ runner.os == 'Linux' }}
+      run: |
+        # Workaround to provide additional free space for testing.
+        #   https://github.com/actions/virtual-environments/issues/2840
+        sudo rm -rf /usr/share/dotnet
+        sudo rm -rf /opt/ghc
+        sudo rm -rf "/usr/local/share/boost"
+        sudo rm -rf "$AGENT_TOOLSDIRECTORY"
 
     - name: Install Go
       uses: actions/setup-go@v4
@@ -35,7 +45,7 @@ jobs:
     steps:
 
     - name: Check Out Repo
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
 
     - name: Install Go
       uses: actions/setup-go@v4
