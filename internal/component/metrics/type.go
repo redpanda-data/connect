@@ -12,8 +12,8 @@ type StatCounter interface {
 }
 
 type StatCounterInter interface {
-	// IncrInt64 increments a counter by an integer amount.
-	IncrInt64(count int64)
+	// Incr increments a counter by an integer amount.
+	Incr(count int64)
 }
 
 type StatCounterFloater interface {
@@ -39,14 +39,14 @@ type StatGauge interface {
 // StatGaugeInter is a representation of a single integer gauge metric stat. Interactions
 // with this stat are thread safe.
 type StatGaugeInter interface {
-	// SetInt64 sets the integer value of a gauge metric.
-	SetInt64(value int64)
+	// Set sets the integer value of a gauge metric.
+	Set(value int64)
 
-	// IncrInt64 increments with an integer value a gauge by an amount.
-	IncrInt64(count int64)
+	// Incr increments with an integer value a gauge by an amount.
+	Incr(count int64)
 
-	// DecrInt64 decrements a gauge by an integer amount.
-	DecrInt64(count int64)
+	// Decr decrements a gauge by an integer amount.
+	Decr(count int64)
 }
 
 // StatGaugeFloater is a representation of a single decimal gauge metric stat. Interactions

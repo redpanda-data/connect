@@ -271,9 +271,9 @@ func (m *metricProcessor) handleCounter(val string, index int, msg message.Batch
 		if err != nil {
 			return err
 		}
-		m.mCounterVec.With(labelValues...).IncrInt64(1)
+		m.mCounterVec.With(labelValues...).Incr(1)
 	} else {
-		m.mCounter.IncrInt64(1)
+		m.mCounter.Incr(1)
 	}
 	return nil
 }
@@ -304,14 +304,14 @@ func (m *metricProcessor) handleCounterBy(val string, index int, msg message.Bat
 		}
 		switch conv := parsedVal.(type) {
 		case int64:
-			m.mCounterVec.With(labelValues...).IncrInt64(conv)
+			m.mCounterVec.With(labelValues...).Incr(conv)
 		case float64:
 			m.mCounterVec.With(labelValues...).IncrFloat64(conv)
 		}
 	} else {
 		switch conv := parsedVal.(type) {
 		case int64:
-			m.mCounter.IncrInt64(conv)
+			m.mCounter.Incr(conv)
 		case float64:
 			m.mCounter.IncrFloat64(conv)
 		}
@@ -345,14 +345,14 @@ func (m *metricProcessor) handleGauge(val string, index int, msg message.Batch) 
 		}
 		switch conv := parsedVal.(type) {
 		case int64:
-			m.mGaugeVec.With(labelValues...).SetInt64(conv)
+			m.mGaugeVec.With(labelValues...).Set(conv)
 		case float64:
 			m.mGaugeVec.With(labelValues...).SetFloat64(conv)
 		}
 	} else {
 		switch conv := parsedVal.(type) {
 		case int64:
-			m.mGauge.SetInt64(conv)
+			m.mGauge.Set(conv)
 		case float64:
 			m.mGauge.SetFloat64(conv)
 		}

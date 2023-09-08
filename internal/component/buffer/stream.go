@@ -132,8 +132,8 @@ func (m *Stream) inputLoop() {
 		writeBatch, _ := tracing.WithSiblingSpans(m.tracer, m.typeStr, tr.Payload)
 		err := m.buffer.Write(closeAtLeisureCtx, writeBatch, ackFunc)
 		if err == nil {
-			mReceivedCount.IncrInt64(int64(batchLen))
-			mReceivedBatchCount.IncrInt64(1)
+			mReceivedCount.Incr(int64(batchLen))
+			mReceivedBatchCount.Incr(1)
 		} else {
 			_ = ackFunc(closeNowCtx, err)
 		}
@@ -190,8 +190,8 @@ func (m *Stream) outputLoop() {
 
 		startedAt := time.Now()
 
-		mSent.IncrInt64(int64(batchLen))
-		mSentBatch.IncrInt64(1)
+		mSent.Incr(int64(batchLen))
+		mSentBatch.Incr(1)
 		ackGroup.Add(1)
 
 		go func() {

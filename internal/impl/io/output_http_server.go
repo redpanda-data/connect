@@ -331,8 +331,8 @@ func (h *httpServerOutput) getHandler(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write(ts.Payload.Get(0).AsBytes())
 	}
 
-	h.mGetBatchSent.IncrInt64(1)
-	h.mGetSent.IncrInt64(int64(batch.MessageCollapsedCount(ts.Payload)))
+	h.mGetBatchSent.Incr(1)
+	h.mGetSent.Incr(int64(batch.MessageCollapsedCount(ts.Payload)))
 
 	_ = ts.Ack(ctx, nil)
 }
@@ -377,14 +377,14 @@ func (h *httpServerOutput) streamHandler(w http.ResponseWriter, r *http.Request)
 		_, err := w.Write(data)
 		_ = ts.Ack(ctx, err)
 		if err != nil {
-			h.mStreamError.IncrInt64(1)
+			h.mStreamError.Incr(1)
 			return
 		}
 
 		_, _ = w.Write([]byte("\n"))
 		flusher.Flush()
-		h.mStreamSent.IncrInt64(int64(batch.MessageCollapsedCount(ts.Payload)))
-		h.mStreamBatchSent.IncrInt64(1)
+		h.mStreamSent.Incr(int64(batch.MessageCollapsedCount(ts.Payload)))
+		h.mStreamBatchSent.Incr(1)
 	}
 }
 
@@ -430,11 +430,11 @@ func (h *httpServerOutput) wsHandler(w http.ResponseWriter, r *http.Request) {
 			if werr = ws.WriteMessage(websocket.BinaryMessage, msg); werr != nil {
 				break
 			}
-			h.mWSBatchSent.IncrInt64(1)
-			h.mWSSent.IncrInt64(int64(batch.MessageCollapsedCount(ts.Payload)))
+			h.mWSBatchSent.Incr(1)
+			h.mWSSent.Incr(int64(batch.MessageCollapsedCount(ts.Payload)))
 		}
 		if werr != nil {
-			h.mWSError.IncrInt64(1)
+			h.mWSError.Incr(1)
 		}
 		_ = ts.Ack(ctx, werr)
 	}

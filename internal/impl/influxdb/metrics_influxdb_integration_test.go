@@ -93,7 +93,7 @@ func TestInfluxIntegration(t *testing.T) {
 }
 
 func testInfluxConnect(t *testing.T, i metrics.Type, c client.Client) {
-	i.GetGauge("testing").SetInt64(31337)
+	i.GetGauge("testing").Set(31337)
 	i.Close()
 
 	resp, err := c.Query(client.Query{Command: `SELECT "hostname"::tag, "value"::field FROM "testing"`, Database: "db0"})

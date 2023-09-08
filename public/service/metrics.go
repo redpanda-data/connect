@@ -63,7 +63,7 @@ func (c *MetricCounter) IncrInt64(count int64, labelValues ...string) {
 	if c == nil {
 		return
 	}
-	c.cv.With(labelValues...).IncrInt64(count)
+	c.cv.With(labelValues...).Incr(count)
 }
 
 // IncrFloat64 increments a counter metric by a decimal amount, the number of label values
@@ -104,7 +104,7 @@ func (g *MetricGauge) Set(value int64, labelValues ...string) {
 	if g == nil {
 		return
 	}
-	g.gv.With(labelValues...).SetInt64(value)
+	g.gv.With(labelValues...).Set(value)
 }
 
 //------------------------------------------------------------------------------
@@ -140,10 +140,10 @@ type MetricsExporterCounter interface {
 }
 
 type MetricsInt64ExporterCounter interface {
-	// IncrInt64 increments a counter metric by an integer amount, the number of label values
+	// Incr increments a counter metric by an integer amount, the number of label values
 	// must match the number and order of labels specified when the counter was
 	// created.
-	IncrInt64(count int64)
+	Incr(count int64)
 }
 
 type MetricsFloat64ExporterCounter interface {
@@ -171,9 +171,9 @@ type MetricsExporterGauge interface {
 
 // MetricsInt64ExporterGauge represents a int64 gauge metric of a given name and labels.
 type MetricsInt64ExporterGauge interface {
-	// SetInt64 sets a gauge metric with an int64 value, the number of label values must match the number and
+	// Set sets a gauge metric with an int64 value, the number of label values must match the number and
 	// order of labels specified when the gauge was created.
-	SetInt64(value int64)
+	Set(value int64)
 }
 
 // MetricsFloat64ExporterGauge represents a float64 gauge metric of a given name and labels.
@@ -199,39 +199,39 @@ type airGapGauge struct {
 	airGapped MetricsExporterGauge
 }
 
-func (a *airGapGauge) IncrInt64(by int64) {
+func (a *airGapGauge) Incr(by int64) {
 	value := atomic.AddInt64(&a.v, by)
-	a.airGapped.SetInt64(value)
+	a.airGapped.Set(value)
 }
 
 func (a *airGapGauge) IncrFloat64(count float64) {
-	a.IncrInt64(int64(count))
+	a.Incr(int64(count))
 }
 
 func (a *airGapGauge) SetFloat64(value float64) {
-	a.SetInt64(int64(value))
+	a.Set(int64(value))
 }
 
-func (a *airGapGauge) DecrInt64(by int64) {
+func (a *airGapGauge) Decr(by int64) {
 	value := atomic.AddInt64(&a.v, -by)
-	a.airGapped.SetInt64(value)
+	a.airGapped.Set(value)
 }
 
 func (a *airGapGauge) DecrFloat64(count float64) {
-	a.DecrInt64(int64(count))
+	a.Decr(int64(count))
 }
 
-func (a *airGapGauge) SetInt64(value int64) {
+func (a *airGapGauge) Set(value int64) {
 	atomic.StoreInt64(&a.v, value)
-	a.airGapped.SetInt64(value)
+	a.airGapped.Set(value)
 }
 
 type airGapCounter struct {
 	airGapped MetricsExporterCounter
 }
 
-func (a *airGapCounter) IncrInt64(count int64) {
-	a.airGapped.IncrInt64(count)
+func (a *airGapCounter) Incr(count int64) {
+	a.airGapped.Incr(count)
 }
 
 func (a *airGapCounter) IncrFloat64(count float64) {

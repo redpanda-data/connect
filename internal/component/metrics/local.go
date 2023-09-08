@@ -22,30 +22,30 @@ type LocalStat struct {
 }
 
 // IncrInt64 increments a metric by an int64 amount.
-func (l *LocalStat) IncrInt64(count int64) {
+func (l *LocalStat) Incr(count int64) {
 	atomic.AddInt64(l.Value, count)
 }
 
 // DecrInt64 decrements a metric by an amount.
-func (l *LocalStat) DecrInt64(count int64) {
+func (l *LocalStat) Decr(count int64) {
 	atomic.AddInt64(l.Value, -count)
 }
 
-// SetInt64 sets a gauge metric.
-func (l *LocalStat) SetInt64(value int64) {
+// Set sets a gauge metric.
+func (l *LocalStat) Set(value int64) {
 	atomic.StoreInt64(l.Value, value)
 }
 
 func (l *LocalStat) IncrFloat64(count float64) {
-	l.SetInt64(int64(count))
+	l.Set(int64(count))
 }
 
 func (l *LocalStat) DecrFloat64(count float64) {
-	l.DecrInt64(int64(count))
+	l.Decr(int64(count))
 }
 
 func (l *LocalStat) SetFloat64(value float64) {
-	l.SetInt64(int64(value))
+	l.Set(int64(value))
 }
 
 // LocalTiming is a representation of a single metric timing.

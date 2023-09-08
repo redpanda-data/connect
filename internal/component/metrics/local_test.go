@@ -10,26 +10,26 @@ func TestCounter(t *testing.T) {
 	nm := NewLocal()
 
 	ctr := nm.GetCounter("counterone")
-	ctr.IncrInt64(10)
-	ctr.IncrInt64(11)
+	ctr.Incr(10)
+	ctr.Incr(11)
 
 	gge := nm.GetGauge("gaugeone")
-	gge.SetInt64(12)
+	gge.Set(12)
 
 	tmr := nm.GetTimer("timerone")
 	tmr.Timing(13)
 
 	ctrTwo := nm.GetCounterVec("countertwo", "label1")
-	ctrTwo.With("value1").IncrInt64(10)
-	ctrTwo.With("value2").IncrInt64(11)
+	ctrTwo.With("value1").Incr(10)
+	ctrTwo.With("value2").Incr(11)
 
 	ggeTwo := nm.GetGaugeVec("gaugetwo", "label2")
-	ggeTwo.With("value3").SetInt64(12)
+	ggeTwo.With("value3").Set(12)
 
 	tmrTwo := nm.GetTimerVec("timertwo", "label3", "label4")
 	tmrTwo.With("value4", "value5").Timing(13)
 
-	ggeTwo.With("value6").SetInt64(24)
+	ggeTwo.With("value6").Set(24)
 
 	expCounters := map[string]int64{
 		"counterone":                    21,

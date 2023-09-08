@@ -151,7 +151,7 @@ func (w *AsyncWriter) loop() {
 					return false
 				}
 				w.log.Errorf("Failed to connect to %v: %v\n", w.typeStr, err)
-				mFailedConn.IncrInt64(1)
+				mFailedConn.Incr(1)
 				select {
 				case <-time.After(connBackoff.NextBackOff()):
 				case <-closeLeisureCtx.Done():
@@ -166,7 +166,7 @@ func (w *AsyncWriter) loop() {
 	if !initConnection() {
 		return
 	}
-	mConn.IncrInt64(1)
+	mConn.Incr(1)
 	atomic.StoreInt32(&w.isConnected, 1)
 
 	wg := sync.WaitGroup{}
@@ -185,10 +185,10 @@ func (w *AsyncWriter) loop() {
 			if latency, err = w.latencyMeasuringWrite(closeLeisureCtx, msg); err != component.ErrNotConnected {
 				return
 			} else if err != nil {
-				mError.IncrInt64(1)
+				mError.Incr(1)
 			}
 		}
-		mLostConn.IncrInt64(1)
+		mLostConn.Incr(1)
 
 		// Continue to try to reconnect while still active.
 		for {
@@ -198,10 +198,10 @@ func (w *AsyncWriter) loop() {
 			}
 			if latency, err = w.latencyMeasuringWrite(closeLeisureCtx, msg); err != component.ErrNotConnected {
 				atomic.StoreInt32(&w.isConnected, 1)
-				mConn.IncrInt64(1)
+				mConn.Incr(1)
 				return
 			} else if err != nil {
-				mError.IncrInt64(1)
+				mError.Incr(1)
 			}
 		}
 	}
@@ -231,7 +231,7 @@ func (w *AsyncWriter) loop() {
 			if errors.Is(err, component.ErrNotConnected) {
 				latency, err = connectLoop(ts.Payload)
 			} else if err != nil {
-				mError.IncrInt64(1)
+				mError.Incr(1)
 			}
 
 			// Close immediately if our writer is closed.
@@ -248,8 +248,8 @@ func (w *AsyncWriter) loop() {
 					w.log.Debugf("Rejecting message: %v\n", err)
 				}
 			} else {
-				mBatchSent.IncrInt64(1)
-				mSent.IncrInt64(int64(batch.MessageCollapsedCount(ts.Payload)))
+				mBatchSent.Incr(1)
+				mSent.Incr(int64(batch.MessageCollapsedCount(ts.Payload)))
 				mLatency.Timing(latency)
 				w.log.Tracef("Successfully wrote %v messages to '%v'.\n", ts.Payload.Len(), w.typeStr)
 			}

@@ -50,22 +50,22 @@ func TestNamespacedNothing(t *testing.T) {
 	nm := metrics.NewNamespaced(prom)
 
 	ctr := nm.GetCounter("counterone")
-	ctr.IncrInt64(10)
-	ctr.IncrInt64(11)
+	ctr.Incr(10)
+	ctr.Incr(11)
 
 	gge := nm.GetGauge("gaugeone")
-	gge.SetInt64(12)
+	gge.Set(12)
 
 	tmr := nm.GetTimer("timerone")
 	tmr.Timing(13)
 
 	ctrTwo := nm.GetCounterVec("countertwo", "label1")
-	ctrTwo.With("value1").IncrInt64(10)
-	ctrTwo.With("value2").IncrInt64(11)
+	ctrTwo.With("value1").Incr(10)
+	ctrTwo.With("value2").Incr(11)
 	ctrTwo.With("value3").IncrFloat64(10.452)
 
 	ggeTwo := nm.GetGaugeVec("gaugetwo", "label2")
-	ggeTwo.With("value3").SetInt64(12)
+	ggeTwo.With("value3").Set(12)
 
 	tmrTwo := nm.GetTimerVec("timertwo", "label3", "label4")
 	tmrTwo.With("value4", "value5").Timing(13)
@@ -88,27 +88,27 @@ func TestNamespacedPrefix(t *testing.T) {
 	nm := metrics.NewNamespaced(prom)
 
 	ctr := nm.GetCounter("counterone")
-	ctr.IncrInt64(10)
-	ctr.IncrInt64(11)
+	ctr.Incr(10)
+	ctr.Incr(11)
 
 	gge := nm.GetGauge("gaugeone")
-	gge.SetInt64(12)
+	gge.Set(12)
 
 	tmr := nm.GetTimer("timerone")
 	tmr.Timing(13)
 
 	ctrTwo := nm.GetCounterVec("countertwo", "label1")
-	ctrTwo.With("value1").IncrInt64(10)
-	ctrTwo.With("value2").IncrInt64(11)
+	ctrTwo.With("value1").Incr(10)
+	ctrTwo.With("value2").Incr(11)
 
 	ggeTwo := nm.GetGaugeVec("gaugetwo", "label2")
-	ggeTwo.With("value3").SetInt64(12)
+	ggeTwo.With("value3").Set(12)
 
 	tmrTwo := nm.GetTimerVec("timertwo", "label3", "label4")
 	tmrTwo.With("value4", "value5").Timing(13)
 
 	ctrThree := nm.GetCounter("counterthree")
-	ctrThree.IncrInt64(22)
+	ctrThree.Incr(22)
 
 	body := getPage(t, handler)
 
@@ -128,21 +128,21 @@ func TestNamespacedPrefixStaticLabels(t *testing.T) {
 	nm := metrics.NewNamespaced(prom).WithLabels("static1", "svalue1")
 
 	ctr := nm.GetCounter("counterone")
-	ctr.IncrInt64(10)
-	ctr.IncrInt64(11)
+	ctr.Incr(10)
+	ctr.Incr(11)
 
 	gge := nm.GetGauge("gaugeone")
-	gge.SetInt64(12)
+	gge.Set(12)
 
 	tmr := nm.GetTimer("timerone")
 	tmr.Timing(13)
 
 	ctrTwo := nm.GetCounterVec("countertwo", "label1")
-	ctrTwo.With("value1").IncrInt64(10)
-	ctrTwo.With("value2").IncrInt64(11)
+	ctrTwo.With("value1").Incr(10)
+	ctrTwo.With("value2").Incr(11)
 
 	ggeTwo := nm.GetGaugeVec("gaugetwo", "label2")
-	ggeTwo.With("value3").SetInt64(12)
+	ggeTwo.With("value3").Set(12)
 
 	tmrTwo := nm.GetTimerVec("timertwo", "label3", "label4")
 	tmrTwo.With("value4", "value5").Timing(13)
@@ -150,7 +150,7 @@ func TestNamespacedPrefixStaticLabels(t *testing.T) {
 	nm2 := nm.WithLabels("static2", "svalue2")
 
 	ctrThree := nm2.GetCounter("counterthree")
-	ctrThree.IncrInt64(22)
+	ctrThree.Incr(22)
 
 	body := getPage(t, handler)
 
@@ -178,21 +178,21 @@ func TestNamespacedPrefixStaticLabelsWithMappings(t *testing.T) {
 	nm = nm.WithMapping(mappingFooToBar)
 
 	ctr := nm.GetCounter("counter")
-	ctr.IncrInt64(10)
-	ctr.IncrInt64(11)
+	ctr.Incr(10)
+	ctr.Incr(11)
 
 	gge := nm.GetGauge("gauge")
-	gge.SetInt64(12)
+	gge.Set(12)
 
 	tmr := nm.GetTimer("timer")
 	tmr.Timing(13)
 
 	ctrTwo := nm.GetCounterVec("countertwo", "label1")
-	ctrTwo.With("value1").IncrInt64(10)
-	ctrTwo.With("value2").IncrInt64(11)
+	ctrTwo.With("value1").Incr(10)
+	ctrTwo.With("value2").Incr(11)
 
 	ggeTwo := nm.GetGaugeVec("gaugetwo", "label2")
-	ggeTwo.With("value3").SetInt64(12)
+	ggeTwo.With("value3").Set(12)
 
 	tmrTwo := nm.GetTimerVec("timertwo", "label3", "label4")
 	tmrTwo.With("value4", "value5").Timing(13)
@@ -226,21 +226,21 @@ root = this.replace_all("bar","baz")`, log.Noop())
 	nm = nm.WithMapping(mappingFooToBar)
 
 	ctr := nm.GetCounter("counter")
-	ctr.IncrInt64(10)
-	ctr.IncrInt64(11)
+	ctr.Incr(10)
+	ctr.Incr(11)
 
 	gge := nm.GetGauge("gauge")
-	gge.SetInt64(12)
+	gge.Set(12)
 
 	tmr := nm.GetTimer("timer")
 	tmr.Timing(13)
 
 	ctrTwo := nm.GetCounterVec("countertwo", "label1")
-	ctrTwo.With("value1").IncrInt64(10)
-	ctrTwo.With("value2").IncrInt64(11)
+	ctrTwo.With("value1").Incr(10)
+	ctrTwo.With("value2").Incr(11)
 
 	ggeTwo := nm.GetGaugeVec("gaugetwo", "label2")
-	ggeTwo.With("value3").SetInt64(12)
+	ggeTwo.With("value3").Set(12)
 
 	tmrTwo := nm.GetTimerVec("timertwo", "label3", "label4")
 	tmrTwo.With("value4", "value5").Timing(13)

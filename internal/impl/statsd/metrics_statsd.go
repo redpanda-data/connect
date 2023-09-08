@@ -61,32 +61,32 @@ type statsdStat struct {
 	tags []statsd.Tag
 }
 
-func (s *statsdStat) IncrInt64(count int64) {
+func (s *statsdStat) Incr(count int64) {
 	s.s.Incr(s.path, count, s.tags...)
 }
 
 func (s *statsdStat) IncrFloat64(count float64) {
-	s.SetInt64(int64(count))
+	s.Set(int64(count))
 }
 
-func (s *statsdStat) DecrInt64(count int64) {
+func (s *statsdStat) Decr(count int64) {
 	s.s.Decr(s.path, count, s.tags...)
 }
 
 func (s *statsdStat) DecrFloat64(count float64) {
-	s.DecrInt64(int64(count))
+	s.Decr(int64(count))
 }
 
 func (s *statsdStat) Timing(delta int64) {
 	s.s.Timing(s.path, delta, s.tags...)
 }
 
-func (s *statsdStat) SetInt64(value int64) {
+func (s *statsdStat) Set(value int64) {
 	s.s.Gauge(s.path, value, s.tags...)
 }
 
 func (s *statsdStat) SetFloat64(value float64) {
-	s.SetInt64(int64(value))
+	s.Set(int64(value))
 }
 
 //------------------------------------------------------------------------------

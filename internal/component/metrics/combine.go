@@ -46,9 +46,9 @@ type combinedCounter struct {
 	c2 StatCounter
 }
 
-func (c *combinedCounter) IncrInt64(count int64) {
-	c.c1.IncrInt64(count)
-	c.c2.IncrInt64(count)
+func (c *combinedCounter) Incr(count int64) {
+	c.c1.Incr(count)
+	c.c2.Incr(count)
 }
 
 func (c *combinedCounter) IncrFloat64(count float64) {
@@ -71,9 +71,9 @@ type combinedGauge struct {
 	c2 StatGauge
 }
 
-func (c *combinedGauge) SetInt64(value int64) {
-	c.c1.SetInt64(value)
-	c.c2.SetInt64(value)
+func (c *combinedGauge) Set(value int64) {
+	c.c1.Set(value)
+	c.c2.Set(value)
 }
 
 func (c *combinedGauge) SetFloat64(value float64) {
@@ -81,9 +81,9 @@ func (c *combinedGauge) SetFloat64(value float64) {
 	c.c2.SetFloat64(value)
 }
 
-func (c *combinedGauge) IncrInt64(count int64) {
-	c.c1.IncrInt64(count)
-	c.c2.IncrInt64(count)
+func (c *combinedGauge) Incr(count int64) {
+	c.c1.Incr(count)
+	c.c2.Incr(count)
 }
 
 func (c *combinedGauge) IncrFloat64(count float64) {
@@ -91,9 +91,9 @@ func (c *combinedGauge) IncrFloat64(count float64) {
 	c.c2.IncrFloat64(count)
 }
 
-func (c *combinedGauge) DecrInt64(count int64) {
-	c.c1.DecrInt64(count)
-	c.c2.DecrInt64(count)
+func (c *combinedGauge) Decr(count int64) {
+	c.c1.Decr(count)
+	c.c2.Decr(count)
 }
 
 func (c *combinedGauge) DecrFloat64(count float64) {

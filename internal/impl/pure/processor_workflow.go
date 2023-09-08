@@ -448,22 +448,22 @@ func (w *Workflow) skipFromMeta(root any) map[string]struct{} {
 
 // ProcessBatch applies workflow stages to each part of a message type.
 func (w *Workflow) ProcessBatch(ctx context.Context, msg message.Batch) ([]message.Batch, error) {
-	w.mReceived.IncrInt64(int64(msg.Len()))
-	w.mBatchReceived.IncrInt64(1)
+	w.mReceived.Incr(int64(msg.Len()))
+	w.mBatchReceived.Incr(1)
 	startedAt := time.Now()
 
 	// Prevent resourced branches from being updated mid-flow.
 	dag, children, unlock, err := w.children.Lock()
 	if err != nil {
-		w.mError.IncrInt64(1)
+		w.mError.Incr(1)
 		w.log.Errorf("Failed to establish workflow: %v\n", err)
 
 		_ = msg.Iter(func(i int, p *message.Part) error {
 			p.ErrorSet(err)
 			return nil
 		})
-		w.mSent.IncrInt64(int64(msg.Len()))
-		w.mBatchSent.IncrInt64(1)
+		w.mSent.Incr(int64(msg.Len()))
+		w.mBatchSent.Incr(1)
 		return []message.Batch{msg}, nil
 	}
 	defer unlock()
@@ -531,7 +531,7 @@ func (w *Workflow) ProcessBatch(ctx context.Context, msg message.Batch) ([]messa
 				failed, err = children[id].overlayResult(msg, results[i])
 			}
 			if err != nil {
-				w.mError.IncrInt64(1)
+				w.mError.Incr(1)
 				w.log.Errorf("Failed to perform enrichment '%v': %v\n", id, err)
 				for j := range records {
 					records[j].Failed(id, err.Error())
@@ -549,7 +549,7 @@ func (w *Workflow) ProcessBatch(ctx context.Context, msg message.Batch) ([]messa
 		_ = msg.Iter(func(i int, p *message.Part) error {
 			pJSON, err := p.AsStructuredMut()
 			if err != nil {
-				w.mError.IncrInt64(1)
+				w.mError.Incr(1)
 				w.log.Errorf("Failed to parse message for meta update: %v\n", err)
 				p.ErrorSet(err)
 				return nil
@@ -582,8 +582,8 @@ func (w *Workflow) ProcessBatch(ctx context.Context, msg message.Batch) ([]messa
 
 	tracing.FinishSpans(propMsg)
 
-	w.mSent.IncrInt64(int64(msg.Len()))
-	w.mBatchSent.IncrInt64(1)
+	w.mSent.Incr(int64(msg.Len()))
+	w.mBatchSent.Incr(1)
 	w.mLatency.Timing(time.Since(startedAt).Nanoseconds())
 	return []message.Batch{msg}, nil
 }

@@ -120,15 +120,15 @@ type cloudWatchStat struct {
 }
 
 func (c *cloudWatchStat) SetFloat64(value float64) {
-	c.SetInt64(int64(value))
+	c.Set(int64(value))
 }
 
 func (c *cloudWatchStat) IncrFloat64(count float64) {
-	c.IncrInt64(int64(count))
+	c.Incr(int64(count))
 }
 
 func (c *cloudWatchStat) DecrFloat64(count float64) {
-	c.DecrInt64(int64(count))
+	c.Decr(int64(count))
 }
 
 // Trims a map of datum values to a ceiling. The primary goal here is to be fast
@@ -196,13 +196,13 @@ func (c *cloudWatchStat) addValue(v int64) {
 	c.root.datumLock.Unlock()
 }
 
-// IncrInt64 increments a metric by an int64 amount.
-func (c *cloudWatchStat) IncrInt64(count int64) {
+// Incr increments a metric by an int64 amount.
+func (c *cloudWatchStat) Incr(count int64) {
 	c.addValue(count)
 }
 
-// DecrInt64 decrements a metric by an amount.
-func (c *cloudWatchStat) DecrInt64(count int64) {
+// Decr decrements a metric by an amount.
+func (c *cloudWatchStat) Decr(count int64) {
 	c.addValue(-count)
 }
 
@@ -214,7 +214,7 @@ func (c *cloudWatchStat) Timing(delta int64) {
 }
 
 // Set sets a gauge metric.
-func (c *cloudWatchStat) SetInt64(value int64) {
+func (c *cloudWatchStat) Set(value int64) {
 	c.appendValue(value)
 }
 

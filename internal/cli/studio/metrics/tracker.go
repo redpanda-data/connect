@@ -71,15 +71,15 @@ func (c closureStat) IncrFloat64(v float64) {
 	c(int64(v))
 }
 
-func (c closureStat) IncrInt64(v int64) {
+func (c closureStat) Incr(v int64) {
 	c(v)
 }
 
-func (c closureStat) DecrInt64(v int64) {
+func (c closureStat) Decr(v int64) {
 	c(v)
 }
 
-func (c closureStat) SetInt64(v int64) {
+func (c closureStat) Set(v int64) {
 	c(v)
 }
 

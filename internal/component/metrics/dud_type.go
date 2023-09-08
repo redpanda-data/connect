@@ -6,16 +6,16 @@ import "net/http"
 type DudStat struct{}
 
 // IncrInt64 does nothing.
-func (d DudStat) IncrInt64(count int64) {}
+func (d DudStat) Incr(count int64) {}
 
 // DecrInt64 does nothing.
-func (d DudStat) DecrInt64(count int64) {}
+func (d DudStat) Decr(count int64) {}
 
 // Timing does nothing.
 func (d DudStat) Timing(delta int64) {}
 
-// SetInt64 does nothing.
-func (d DudStat) SetInt64(value int64) {}
+// Set does nothing.
+func (d DudStat) Set(value int64) {}
 
 // SetFloat64 does nothing
 func (d DudStat) SetFloat64(value float64) {}
