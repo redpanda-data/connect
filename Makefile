@@ -1,4 +1,4 @@
-.PHONY: all serverless deps docker docker-cgo clean docs test test-race test-integration fmt lint install deploy-docs
+.PHONY: all serverless deps docker docker-cgo clean docs test test-race test-integration fix fmt lint install deploy-docs
 
 TAGS ?=
 
@@ -81,8 +81,11 @@ docker-cgo:
 	@docker build -f ./resources/docker/Dockerfile.cgo . -t $(DOCKER_IMAGE):$(VER_CUT)-cgo
 	@docker tag $(DOCKER_IMAGE):$(VER_CUT)-cgo $(DOCKER_IMAGE):latest-cgo
 
+fix:
+	@go list -f {{.Dir}} ./... | xargs -I{} go fix {}
+
 fmt:
-	@go list -f {{.Dir}} ./... | xargs -I{} gofmt -w -s {}
+	@go list -f {{.Dir}} ./... | xargs -I{} gofumpt -w -extra {}
 	@go list -f {{.Dir}} ./... | xargs -I{} goimports -w -local github.com/benthosdev/benthos/v4 {}
 	@go mod tidy
 
