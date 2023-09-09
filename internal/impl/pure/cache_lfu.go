@@ -3,7 +3,7 @@ package pure
 import (
 	"context"
 	"errors"
-	"fmt"
+	"sync"
 	"time"
 
 	lfu "github.com/vmihailenco/go-tinylfu"
@@ -115,7 +115,8 @@ var (
 
 func lfuMemCache(size, samples int,
 	ttl time.Duration,
-	initValues map[string]string) (ca *lfuCacheAdapter, err error) {
+	initValues map[string]string,
+) (ca *lfuCacheAdapter, err error) {
 	if size <= 0 {
 		return nil, errInvalidLFUCacheSizeValue
 	}
@@ -142,8 +143,9 @@ func lfuMemCache(size, samples int,
 var _ service.Cache = (*lfuCacheAdapter)(nil)
 
 type lfuCacheAdapter struct {
-	inner      lfu.LFU
+	inner      *lfu.SyncT
 	defaultTTL time.Duration
+	mutex      sync.RWMutex
 }
 
 func (ca *lfuCacheAdapter) Get(_ context.Context, key string) ([]byte, error) {
@@ -185,21 +187,17 @@ func (ca *lfuCacheAdapter) Set(_ context.Context, key string, value []byte, ttl 
 }
 
 func (ca *lfuCacheAdapter) Add(ctx context.Context, key string, value []byte, ttl *time.Duration) error {
-	item := &lfu.Item{
-		Key:   key,
-		Value: value,
-	}
+	ca.mutex.RLock()
 
-	ca.addExpireAt(item, ttl)
+	_, ok := ca.inner.Get(key)
 
-	err := ca.inner.Add(item)
-	if errors.Is(err, lfu.ErrKeyAlreadyExists) {
+	ca.mutex.RUnlock()
+
+	if ok {
 		return service.ErrKeyAlreadyExists
-	} else if err != nil {
-		return fmt.Errorf("unexpected error: %w", err)
 	}
 
-	return nil
+	return ca.Set(ctx, key, value, ttl)
 }
 
 func (ca *lfuCacheAdapter) Delete(_ context.Context, key string) error {
