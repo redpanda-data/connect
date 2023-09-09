@@ -116,7 +116,7 @@ const (
 
 func parseStorageConnectionString(storageConnectionString, storageAccount string) string {
 	if strings.Contains(storageConnectionString, "UseDevelopmentStorage=true;") {
-		var azuriteDefaultPorts = map[string]string{
+		azuriteDefaultPorts := map[string]string{
 			azuriteBlobPortEnv:  "10000",
 			azuriteQueuePortEnv: "10001",
 			azuriteTablePortEnv: "10002",

@@ -1,9 +1,8 @@
 package log
 
 import (
-	"os"
-
 	"log/slog"
+	"os"
 )
 
 type logHandler struct {
