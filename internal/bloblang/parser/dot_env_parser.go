@@ -10,7 +10,7 @@ func dotEnvParser() Func {
 		Optional(SpacesAndTabs()),
 		Char('='),
 		Optional(SpacesAndTabs()),
-		Optional(OneOf(QuotedString(), NotInSet('#', ' ', '\n'))),
+		Optional(OneOf(TripleQuoteString(), QuotedString(), NotInSet('#', ' ', '\n'))),
 		Optional(SpacesAndTabs()),
 	)
 

@@ -126,7 +126,12 @@ Either run Benthos as a stream processor or choose a command:
   benthos -r "./production/*.yaml" -c ./config.yaml`[1:],
 		Flags: flags,
 		Before: func(c *cli.Context) error {
-			for _, dotEnvFile := range c.StringSlice("env-file") {
+			dotEnvPaths, err := filepath.Globs(ifs.OS(), c.StringSlice("env-file"))
+			if err != nil {
+				fmt.Printf("Failed to resolve env file glob pattern: %v\n", err)
+				os.Exit(1)
+			}
+			for _, dotEnvFile := range dotEnvPaths {
 				dotEnvBytes, err := ifs.ReadFile(ifs.OS(), dotEnvFile)
 				if err != nil {
 					fmt.Printf("Failed to read dotenv file: %v\n", err)

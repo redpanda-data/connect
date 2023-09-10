@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- The `-e/--env-file` cli flag for importing environment variable files now supports glob patterns.
+- Environment variables imported via `-e/--env-file` cli flags now support triple quoted strings.
+
 ## 4.21.0 - 2023-09-08
 
 ### Added
