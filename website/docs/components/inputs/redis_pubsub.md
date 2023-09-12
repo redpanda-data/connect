@@ -29,7 +29,7 @@ Consume from a Redis publish/subscribe channel using either the SUBSCRIBE or PSU
 input:
   label: ""
   redis_pubsub:
-    url: :6397 # No default (required)
+    url: redis://:6397 # No default (required)
     channels: [] # No default (required)
     use_patterns: false
 ```
@@ -42,7 +42,7 @@ input:
 input:
   label: ""
   redis_pubsub:
-    url: :6397 # No default (required)
+    url: redis://:6397 # No default (required)
     kind: simple
     master: ""
     tls:
@@ -79,9 +79,7 @@ Type: `string`
 ```yml
 # Examples
 
-url: :6397
-
-url: localhost:6397
+url: redis://:6397
 
 url: redis://localhost:6379
 

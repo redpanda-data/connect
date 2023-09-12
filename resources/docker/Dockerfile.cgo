@@ -1,4 +1,4 @@
-FROM golang:1.20 AS build
+FROM golang:1.21 AS build
 
 ENV CGO_ENABLED=1
 ENV GOOS=linux
@@ -16,7 +16,7 @@ COPY . /go/src/github.com/benthosdev/benthos/
 RUN make TAGS=x_benthos_extra
 
 # Pack
-FROM debian:bullseye
+FROM debian:latest
 
 LABEL maintainer="Ashley Jeffs <ash@jeffail.uk>"
 

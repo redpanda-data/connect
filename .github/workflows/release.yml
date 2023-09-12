@@ -10,25 +10,24 @@ jobs:
     runs-on: ubuntu-latest
     steps:
 
-    - name: Install Go
-      uses: actions/setup-go@v3
-      with:
-        go-version: 1.20.x
-        check-latest: true
-
     - name: Check Out Repo
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
 
-    - uses: actions/cache@v3
+    - name: Free up some disk space on ubuntu
+      if: ${{ runner.os == 'Linux' }}
+      run: |
+        # Workaround to provide additional free space for testing.
+        #   https://github.com/actions/virtual-environments/issues/2840
+        sudo rm -rf /usr/share/dotnet
+        sudo rm -rf /opt/ghc
+        sudo rm -rf "/usr/local/share/boost"
+        sudo rm -rf "$AGENT_TOOLSDIRECTORY"
+
+    - name: Install Go
+      uses: actions/setup-go@v4
       with:
-        path: |
-          ~/go/pkg/mod
-          ~/.cache/go-build
-          ~/Library/Caches/go-build
-          %LocalAppData%\go-build
-        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-        restore-keys: |
-          ${{ runner.os }}-go-
+        go-version: 1.21.x
+        check-latest: true
 
     - name: Release Notes
       run: ./resources/scripts/release_notes.sh > ./release_notes.md
@@ -37,7 +36,7 @@ jobs:
       uses: goreleaser/goreleaser-action@v4
       with:
         version: latest
-        args: release --release-notes=./release_notes.md --timeout 60m
+        args: release --release-notes=./release_notes.md --timeout 120m
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -45,25 +44,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
 
-    - name: Install Go
-      uses: actions/setup-go@v3
-      with:
-        go-version: 1.20.x
-        check-latest: true
-
     - name: Check Out Repo
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
 
-    - uses: actions/cache@v3
+    - name: Install Go
+      uses: actions/setup-go@v4
       with:
-        path: |
-          ~/go/pkg/mod
-          ~/.cache/go-build
-          ~/Library/Caches/go-build
-          %LocalAppData%\go-build
-        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-        restore-keys: |
-          ${{ runner.os }}-go-
+        go-version: 1.21.x
+        check-latest: true
 
     - name: Cache Docker layers
       uses: actions/cache@v3
@@ -77,18 +65,18 @@ jobs:
       run: make deps
 
     - name: Login to Docker Hub
-      uses: docker/login-action@v1
+      uses: docker/login-action@v2
       with:
         username: ${{ secrets.DOCKER_HUB_USERNAME }}
         password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
 
     - name: Install Buildx
       id: buildx
-      uses: docker/setup-buildx-action@v1
+      uses: docker/setup-buildx-action@v2
 
     - name: Docker meta CGO
       id: docker_meta_cgo
-      uses: crazy-max/ghaction-docker-meta@v2
+      uses: docker/metadata-action@v4
       with:
         images: jeffail/benthos
         flavor: |
@@ -100,7 +88,7 @@ jobs:
           type=semver,suffix=-cgo,pattern={{major}}
 
     - name: Build and push CGO
-      uses: docker/build-push-action@v2
+      uses: docker/build-push-action@v4
       with:
         context: ./
         file: ./resources/docker/Dockerfile.cgo
@@ -111,7 +99,7 @@ jobs:
 
     - name: Docker meta
       id: docker_meta
-      uses: crazy-max/ghaction-docker-meta@v2
+      uses: docker/metadata-action@v4
       with:
         images: jeffail/benthos
         tags: |
@@ -120,7 +108,7 @@ jobs:
           type=semver,pattern={{major}}
 
     - name: Build and push
-      uses: docker/build-push-action@v2
+      uses: docker/build-push-action@v4
       with:
         context: ./
         file: ./resources/docker/Dockerfile

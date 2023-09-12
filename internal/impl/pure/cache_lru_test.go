@@ -2,6 +2,7 @@ package pure
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"testing"
 
@@ -143,55 +144,64 @@ func testServiceCache(t *testing.T, c service.Cache) {
 	t.Helper()
 
 	ctx := context.Background()
+	key := "foo"
 
 	expErr := service.ErrKeyNotFound
-	if _, act := c.Get(ctx, "foo"); act != expErr {
-		t.Errorf("Wrong error returned: %v != %v", act, expErr)
+
+	if _, act := c.Get(ctx, key); !errors.Is(act, expErr) {
+		t.Errorf("wrong error returned on c.Get(ctx, %q): %v != %v", key, act, expErr)
 	}
 
-	if err := c.Set(ctx, "foo", []byte("1"), nil); err != nil {
-		t.Error(err)
+	if err := c.Set(ctx, key, []byte("1"), nil); err != nil {
+		t.Errorf("unexpected error while c.Set(ctx, %q, <data>): %v", key, err)
 	}
 
 	exp := "1"
-	if act, err := c.Get(ctx, "foo"); err != nil {
-		t.Error(err)
+	if act, err := c.Get(ctx, key); err != nil {
+		t.Errorf("unexpected error while c.Get(ctx, %q): %v", key, err)
 	} else if string(act) != exp {
-		t.Errorf("Wrong result: %v != %v", string(act), exp)
+		t.Errorf("Wrong result c.Get(ctx, %q): %v != %v", key, string(act), exp)
 	}
 
-	if err := c.Add(ctx, "bar", []byte("2"), nil); err != nil {
-		t.Error(err)
+	key = "bar"
+
+	if err := c.Add(ctx, key, []byte("2"), nil); err != nil {
+		t.Errorf("unexpected error while c.Add(ctx, %q, <data>): %v", key, err)
 	}
 
 	exp = "2"
-	if act, err := c.Get(ctx, "bar"); err != nil {
-		t.Error(err)
+
+	if act, err := c.Get(ctx, key); err != nil {
+		t.Errorf("unexpected error while c.Get(ctx, %q): %v", key, err)
 	} else if string(act) != exp {
-		t.Errorf("Wrong result: %v != %v", string(act), exp)
+		t.Errorf("wrong result c.Get(ctx, %q): %v != %v", key, string(act), exp)
 	}
 
+	key = "foo"
 	expErr = service.ErrKeyAlreadyExists
-	if act := c.Add(ctx, "foo", []byte("2"), nil); expErr != act {
-		t.Errorf("Wrong error returned: %v != %v", act, expErr)
+
+	if act := c.Add(ctx, key, []byte("2"), nil); !errors.Is(act, expErr) {
+		t.Errorf("unexpected error returned on c.Add(ctx, %q, <data>): %v != %v", key, act, expErr)
 	}
 
-	if err := c.Set(ctx, "foo", []byte("3"), nil); err != nil {
-		t.Error(err)
+	if err := c.Set(ctx, key, []byte("3"), nil); err != nil {
+		t.Errorf("unexpected error while c.Set(ctx, %q, <data>): %v", key, err)
 	}
 
 	exp = "3"
-	if act, err := c.Get(ctx, "foo"); err != nil {
-		t.Error(err)
+	if act, err := c.Get(ctx, key); err != nil {
+		t.Errorf("unexpected error while c.Get(ctx, %q): %v", key, err)
 	} else if string(act) != exp {
-		t.Errorf("Wrong result: %v != %v", string(act), exp)
+		t.Errorf("wrong result c.Get(ctx, %q): %v != %v", key, string(act), exp)
 	}
 
-	if err := c.Delete(ctx, "foo"); err != nil {
-		t.Error(err)
+	if err := c.Delete(ctx, key); err != nil {
+		t.Errorf("unexpected error while c.Delete(ctx, %q, <data>): %v", key, err)
 	}
 
-	if _, err := c.Get(ctx, "foo"); err != service.ErrKeyNotFound {
-		t.Errorf("Wrong error returned: %v != %v", err, service.ErrKeyNotFound)
+	expErr = service.ErrKeyNotFound
+
+	if _, act := c.Get(ctx, key); !errors.Is(act, expErr) {
+		t.Errorf("wrong error returned on c.Get(ctx, %q): %v != %v", key, act, expErr)
 	}
 }

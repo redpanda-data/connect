@@ -308,10 +308,10 @@ func lintsFromAny(line int, v any) (lints []Lint) {
 		// internal packages (when possible).
 		var typeInt int64
 		_ = bloblang.NewArgSpec().Int64Var(&typeInt).Extract([]any{t["type"]})
-		lints = append(lints, NewLintError(line, LintType(typeInt), t["what"].(string)))
+		lints = append(lints, NewLintError(line, LintType(typeInt), errors.New(t["what"].(string))))
 	case string:
 		if len(t) > 0 {
-			lints = append(lints, NewLintError(line, LintCustom, t))
+			lints = append(lints, NewLintError(line, LintCustom, errors.New(t)))
 		}
 	}
 	return
@@ -337,7 +337,7 @@ func (f FieldSpec) LinterBlobl(blobl string) FieldSpec {
 	m, err := env.Parse(blobl)
 	if err != nil {
 		f.customLintFn = func(ctx LintContext, line, col int, value any) (lints []Lint) {
-			return []Lint{NewLintError(line, LintCustom, fmt.Sprintf("Field lint mapping itself failed to parse: %v", err))}
+			return []Lint{NewLintError(line, LintCustom, fmt.Errorf("field lint mapping itself failed to parse: %w", err))}
 		}
 		return f
 	}
@@ -350,7 +350,7 @@ func (f FieldSpec) LinterBlobl(blobl string) FieldSpec {
 			if errors.Is(err, bloblang.ErrRootDeleted) {
 				return
 			}
-			return []Lint{NewLintError(line, LintCustom, err.Error())}
+			return []Lint{NewLintError(line, LintCustom, err)}
 		}
 		lints = append(lints, lintsFromAny(line, res)...)
 		return
@@ -392,7 +392,7 @@ let options = %v
 map is_pattern_option {
   let pattern_options = %v
   let parts = this.split(":")
-  root = $parts.length() == 2 && $pattern_options.exists($parts.index(0))
+  root = $parts.length() >= 2 && $pattern_options.exists($parts.index(0))
 }
 # Codec arguments can be chained with a / (i.e. "lines/multipart")
 let value_parts = if this.type() == "string" { this.split("/").map_each(part -> part.lowercase()) } else { [] }
@@ -761,8 +761,12 @@ type Lint struct {
 }
 
 // NewLintError returns an error lint.
-func NewLintError(line int, t LintType, msg string) Lint {
-	return Lint{Line: line, Column: 1, Level: LintError, Type: t, What: msg}
+func NewLintError(line int, t LintType, err error) Lint {
+	var inner Lint
+	if errors.As(err, &inner) {
+		return inner
+	}
+	return Lint{Line: line, Column: 1, Level: LintError, Type: t, What: err.Error()}
 }
 
 // NewLintWarning returns a warning lint.

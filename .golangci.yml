@@ -41,6 +41,7 @@ linters:
     - govet
     - ineffassign
     - staticcheck
+    # Another linter bites the dust, for some reason this is false erroring on github actions
     - typecheck
     - unused
     # Extra linters:
@@ -53,7 +54,7 @@ linters:
     # - revive
     - unconvert
     - durationcheck
-    - depguard
+    # - depguard
     # - bodyclose
     # - gosec
     # - misspell

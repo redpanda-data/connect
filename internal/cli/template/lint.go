@@ -1,6 +1,7 @@
 package template
 
 import (
+	"errors"
 	"fmt"
 	"os"
 
@@ -28,7 +29,7 @@ func lintFile(path string) (pathLints []pathLint) {
 	if err != nil {
 		pathLints = append(pathLints, pathLint{
 			source: path,
-			lint:   docs.NewLintError(1, docs.LintFailedRead, err.Error()),
+			lint:   docs.NewLintError(1, docs.LintFailedRead, err),
 		})
 		return
 	}
@@ -44,7 +45,7 @@ func lintFile(path string) (pathLints []pathLint) {
 	if err != nil {
 		pathLints = append(pathLints, pathLint{
 			source: path,
-			lint:   docs.NewLintError(1, docs.LintFailedRead, err.Error()),
+			lint:   docs.NewLintError(1, docs.LintFailedRead, err),
 		})
 		return
 	}
@@ -52,7 +53,7 @@ func lintFile(path string) (pathLints []pathLint) {
 	for _, tErr := range testErrors {
 		pathLints = append(pathLints, pathLint{
 			source: path,
-			lint:   docs.NewLintError(1, docs.LintFailedRead, tErr),
+			lint:   docs.NewLintError(1, docs.LintFailedRead, errors.New(tErr)),
 		})
 	}
 	return

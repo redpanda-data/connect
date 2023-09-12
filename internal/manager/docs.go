@@ -1,6 +1,8 @@
 package manager
 
 import (
+	"errors"
+
 	"github.com/Jeffail/gabs/v2"
 
 	"github.com/benthosdev/benthos/v4/internal/docs"
@@ -14,7 +16,7 @@ func lintResource(ctx docs.LintContext, line, col int, v any) []docs.Lint {
 	label, _ := gObj.S("label").Data().(string)
 	if label == "" {
 		return []docs.Lint{
-			docs.NewLintError(line, docs.LintBadLabel, "The label field for resources must be unique and not empty"),
+			docs.NewLintError(line, docs.LintBadLabel, errors.New("the label field for resources must be unique and not empty")),
 		}
 	}
 	return nil

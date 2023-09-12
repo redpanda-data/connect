@@ -36,10 +36,11 @@ output:
 	rdr := newDummyReader(confFilePath, nil)
 
 	changeChan := make(chan struct{})
+	once := sync.Once{}
 	var updatedConf stream.Config
 	require.NoError(t, rdr.SubscribeConfigChanges(func(conf *Type) error {
 		updatedConf = conf.Config
-		close(changeChan)
+		once.Do(func() { close(changeChan) })
 		return nil
 	}))
 

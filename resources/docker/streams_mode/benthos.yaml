@@ -1,0 +1,6 @@
+http:
+  enabled: true
+
+output_resources:
+  - label: to_stdout
+    stdout: {}

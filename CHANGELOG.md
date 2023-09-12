@@ -7,7 +7,56 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
+- The `-e/--env-file` cli flag for importing environment variable files now supports glob patterns.
+- Environment variables imported via `-e/--env-file` cli flags now support triple quoted strings.
+
+## 4.21.0 - 2023-09-08
+
+### Added
+
+- Fields `client_id` and `rack_id` added to the `kafka_franz` input and output.
+- New experimental `command` processor.
+- Parameter `no_cache` added to the `file` and `env` Bloblang functions.
+- New `file_rel` function added to Bloblang.
+- Field `endpoint_params` added to the `oauth2` section of HTTP client components.
+
+### Fixed
+
+- Allow comments in single root and directly imported bloblang mappings.
+- The `azure_blob_storage` input no longer adds `blob_storage_content_type` and `blob_storage_content_encoding` metadata values as string pointer types, and instead adds these values as string types only when they are present.
+- The `http_server` input now returns a more appropriate 503 service unavailable status code during shutdown instead of the previous 404 status.
+- Fixed a potential panic when closing a `pusher` output that was never initialised.
+- The `sftp` output now reconnects upon being disconnected by the Azure idle timeout.
+- The `switch` output now produces error logs when messages do not pass at least one case with `strict_mode` enabled, previously these rejected messages were potentially re-processed in a loop without any logs depending on the config. An inaccuracy to the documentation has also been fixed in order to clarify behaviour when strict mode is not enabled.
+- The `log` processor `fields_mapping` field should no longer reject metadata queries using `@` syntax.
+- Fixed an issue where heavily utilised streams with nested resource based outputs could lock-up when performing heavy resource mutating traffic on the streams mode REST API.
+- The Bloblang `zip` method no longer produces values that yield an "Unknown data type".
+
+## 4.20.0 - 2023-08-22
+
+### Added
+
+- The `amqp1` input now supports `anonymous` SASL authentication.
+- New JWT Bloblang methods `parse_jwt_es256`, `parse_jwt_es384`, `parse_jwt_es512`, `parse_jwt_rs256`, `parse_jwt_rs384`, `parse_jwt_rs512`, `sign_jwt_es256`, `sign_jwt_es384` and `sign_jwt_es512` added.
+- The `csv-safe` input codec now supports custom delimiters with the syntax `csv-safe:x`.
+- The `open_telemetry_collector` tracer now supports secure connections, enabled via the `secure` field.
+- Function `v0_msg_exists_meta` added to the `javascript` processor.
+
+### Fixed
+
+- Fixed an issue where saturated output resources could panic under intense CRUD activity.
+- The config linter no longer raises issues with codec fields containing colons within their arguments.
+- The `elasticsearch` output should no longer fail to send basic authentication passwords, this fixes a regression introduced in v4.19.0.
+
+## 4.19.0 - 2023-08-17
+
+### Added
+
 - Field `topics_pattern` added to the `pulsar` input.
+- Both the `schema_registry_encode` and `schema_registry_decode` processors now support protobuf schemas.
+- Both the `schema_registry_encode` and `schema_registry_decode` processors now support references for AVRO and PROTOBUF schemas.
+- New Bloblang method `zip`.
+- New Bloblang `int8`, `int16`, `uint8`, `uint16`, `float32` and `float64` methods.
 
 ### Fixed
 
@@ -15,6 +64,8 @@ All notable changes to this project will be documented in this file.
 - Upgraded `kafka` input and output underlying sarama client library to v1.40.0 at new module path github.com/IBM/sarama
 - The CUE schema for `switch` processor now correctly reflects that it takes a list of clauses.
 - Fixed the CUE schema for fields that take a 2d-array such as `workflow.order`.
+- The `snowflake_put` output has been added back to 32-bit ARM builds since the build incompatibilities have been resolved.
+- The `snowflake_put` output and the `sql_*` components no longer trigger a panic when running on a readonly file system with the `snowflake` driver. This driver still requires access to write temporary files somewhere, which can be configured via the Go [`TMPDIR`](https://pkg.go.dev/os#TempDir) environment variable. Details [here](https://github.com/snowflakedb/gosnowflake/issues/700).
 - The `http_server` input and output now follow the same multiplexer rules regardless of whether the general `http` server block is used or a custom endpoint.
 - Config linting should now respect fields sourced via a merge key (`<<`).
 - The `lint` subcommand should now lint config files pointed to via `-r`/`--resources` flags.
