@@ -144,10 +144,12 @@ func newCachedProcessorFromParsedConf(manager *service.Resources, conf *service.
 }
 
 func (proc *cachedProcessor) Process(ctx context.Context, msg *service.Message) (service.MessageBatch, error) {
-	cacheKey := proc.key.String(msg)
+	cacheKey, err := proc.key.TryString(msg)
+	if err != nil {
+		return nil, err
+	}
 
 	var cachedBytes []byte
-	var err error
 	if cerr := proc.manager.AccessCache(ctx, proc.cacheName, func(cache service.Cache) {
 		cachedBytes, err = cache.Get(ctx, cacheKey)
 	}); cerr != nil {

@@ -130,7 +130,11 @@ func (p *pusherWriter) WriteBatch(ctx context.Context, b service.MessageBatch) (
 		if err != nil {
 			return err
 		}
-		key := p.channel.String(msg)
+
+		key, err := p.channel.TryString(msg)
+		if err != nil {
+			return err
+		}
 
 		event := pusher.Event{
 			Channel: key,
