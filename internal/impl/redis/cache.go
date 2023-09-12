@@ -2,12 +2,10 @@ package redis
 
 import (
 	"context"
-	"errors"
 	"sync"
 	"time"
 
 	"github.com/cenkalti/backoff/v4"
-	"github.com/redis/go-redis/v9"
 
 	"github.com/benthosdev/benthos/v4/public/service"
 )
@@ -77,15 +75,18 @@ func newRedisCacheFromConfig(conf *service.ParsedConfig) (*redisCache, error) {
 	if err != nil {
 		return nil, err
 	}
-	return newRedisCache(ttl, prefix, client, backOff)
+
+	cacheAdaptor := NewDefaultRedisCacheAdaptor(client)
+
+	return newRedisCache(ttl, prefix, cacheAdaptor, backOff)
 }
 
 //------------------------------------------------------------------------------
 
 type redisCache struct {
-	client     redis.UniversalClient
-	defaultTTL time.Duration
-	prefix     string
+	cacheAdaptor RedisCacheAdaptor
+	defaultTTL   time.Duration
+	prefix       string
 
 	boffPool sync.Pool
 }
@@ -93,13 +94,13 @@ type redisCache struct {
 func newRedisCache(
 	defaultTTL time.Duration,
 	prefix string,
-	client redis.UniversalClient,
+	client RedisCacheAdaptor,
 	backOff *backoff.ExponentialBackOff,
 ) (*redisCache, error) {
 	return &redisCache{
-		defaultTTL: defaultTTL,
-		prefix:     prefix,
-		client:     client,
+		defaultTTL:   defaultTTL,
+		prefix:       prefix,
+		cacheAdaptor: client,
 		boffPool: sync.Pool{
 			New: func() any {
 				bo := *backOff
@@ -122,13 +123,12 @@ func (r *redisCache) Get(ctx context.Context, key string) ([]byte, error) {
 	}
 
 	for {
-		res, err := r.client.Get(ctx, key).Result()
+		res, found, err := r.cacheAdaptor.Get(ctx, key)
 		if err == nil {
-			return []byte(res), nil
-		}
-
-		if errors.Is(err, redis.Nil) {
-			return nil, service.ErrKeyNotFound
+			if !found {
+				return nil, service.ErrKeyNotFound
+			}
+			return res, nil
 		}
 
 		wait := boff.NextBackOff()
@@ -162,7 +162,7 @@ func (r *redisCache) Set(ctx context.Context, key string, value []byte, ttl *tim
 	}
 
 	for {
-		err := r.client.Set(ctx, key, value, t).Err()
+		err := r.cacheAdaptor.Set(ctx, key, value, t)
 		if err == nil {
 			return nil
 		}
@@ -199,7 +199,7 @@ func (r *redisCache) Add(ctx context.Context, key string, value []byte, ttl *tim
 	}
 
 	for {
-		set, err := r.client.SetNX(ctx, key, value, t).Result()
+		set, err := r.cacheAdaptor.Add(ctx, key, value, t)
 		if err == nil {
 			if !set {
 				return service.ErrKeyAlreadyExists
@@ -231,7 +231,7 @@ func (r *redisCache) Delete(ctx context.Context, key string) error {
 	}
 
 	for {
-		_, err := r.client.Del(ctx, key).Result()
+		err := r.cacheAdaptor.Delete(ctx, key)
 		if err == nil {
 			return nil
 		}
@@ -249,5 +249,5 @@ func (r *redisCache) Delete(ctx context.Context, key string) error {
 }
 
 func (r *redisCache) Close(ctx context.Context) error {
-	return r.client.Close()
+	return r.cacheAdaptor.Close()
 }
