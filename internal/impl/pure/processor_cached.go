@@ -144,12 +144,20 @@ func newCachedProcessorFromParsedConf(manager *service.Resources, conf *service.
 }
 
 func (proc *cachedProcessor) Process(ctx context.Context, msg *service.Message) (service.MessageBatch, error) {
-	cacheKey := proc.key.String(msg)
+	cacheKey, err := proc.key.TryString(msg)
+	if err != nil {
+		return nil, fmt.Errorf("failed to interpolate key expression: %w", err)
+	}
 
 	var ttl *time.Duration
 
 	if proc.ttl != nil {
-		tempTTL, err := time.ParseDuration(proc.ttl.String(msg))
+		duration, err := proc.ttl.TryString(msg)
+		if err != nil {
+			return nil, fmt.Errorf("failed to interpolate ttl expression: %w", err)
+		}
+
+		tempTTL, err := time.ParseDuration(duration)
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse ttl expression: %w", err)
 		}
@@ -158,7 +166,6 @@ func (proc *cachedProcessor) Process(ctx context.Context, msg *service.Message) 
 	}
 
 	var cachedBytes []byte
-	var err error
 	if cerr := proc.manager.AccessCache(ctx, proc.cacheName, func(cache service.Cache) {
 		cachedBytes, err = cache.Get(ctx, cacheKey)
 	}); cerr != nil {
