@@ -12,17 +12,17 @@ import (
 )
 
 var (
-	_ RedisCacheAdaptor = (*defaultRedisCacheAdaptor)(nil)
+	_ RedisCacheAdaptor = (*crudRedisCacheAdaptor)(nil)
 	_ RedisCacheAdaptor = (*bloomFilterRedisCacheAdaptor)(nil)
 	_ RedisCacheAdaptor = (*cuckooFilterRedisCacheAdaptor)(nil)
 
-	_ RedisMinimalInterface             = (redis.UniversalClient)(nil)
-	_ RedisBloomFilterMinimalInterface  = (redis.UniversalClient)(nil)
-	_ RedisCuckooFilterMinimalInterface = (redis.UniversalClient)(nil)
+	_ RedisCRUD         = (redis.UniversalClient)(nil)
+	_ RedisBloomFilter  = (redis.UniversalClient)(nil)
+	_ RedisCuckooFilter = (redis.UniversalClient)(nil)
 )
 
-type RedisMinimalInterface interface {
-	// from cmdable interface
+// RedisCRUD few methods from Cmdable interface focus on basic CRUD.
+type RedisCRUD interface {
 	Get(ctx context.Context, key string) *redis.StringCmd
 	Set(ctx context.Context, key string, value interface{}, expiration time.Duration) *redis.StatusCmd
 	SetNX(ctx context.Context, key string, value interface{}, expiration time.Duration) *redis.BoolCmd
@@ -31,15 +31,16 @@ type RedisMinimalInterface interface {
 	io.Closer
 }
 
-type RedisBloomFilterMinimalInterface interface {
-	// from probabilistic interface
+// RedisBloomFilter few methods from probabilistic interface focus on bloom filters.
+type RedisBloomFilter interface {
 	BFAdd(ctx context.Context, key string, element interface{}) *redis.BoolCmd
 	BFExists(ctx context.Context, key string, element interface{}) *redis.BoolCmd
 
 	io.Closer
 }
 
-type RedisCuckooFilterMinimalInterface interface {
+// RedisCuckooFilter few methods from probabilistic interface focus on cuckoo filters.
+type RedisCuckooFilter interface {
 	CFAdd(ctx context.Context, key string, element interface{}) *redis.BoolCmd
 	CFAddNX(ctx context.Context, key string, element interface{}) *redis.BoolCmd
 	CFDel(ctx context.Context, key string, element interface{}) *redis.BoolCmd
@@ -65,9 +66,9 @@ type conf struct {
 	clock     clock.Clock
 }
 
-func (c *conf) SetDefaults(prefix string) {
+func (c *conf) SetDefaults(filterKeyPrefix string) {
 	c.strict = false
-	c.filterKey = prefix + `-benthos-%Y%m%d`
+	c.filterKey = filterKeyPrefix + `-benthos-%Y%m%d`
 	c.location = time.UTC
 }
 
@@ -75,24 +76,30 @@ func (c *conf) SetDefaults(prefix string) {
 type Option func(*conf)
 
 // WithStrict can enable the strict mode. Not supported operations will fail.
+// default is false.
 func WithStrict(strict bool) Option {
 	return func(c *conf) {
 		c.strict = strict
 	}
 }
 
+// WithFilterKey can rewrite the filter key used on bloom and cuckoo filters. Accepts
+// To be parsed with "github.com/itchyny/timefmt-go".Format with current time.
 func WithFilterKey(filterKey string) Option {
 	return func(c *conf) {
 		c.filterKey = filterKey
 	}
 }
 
+// WithLocation can update the time.Location used to format filter keys based on current timestamp.
+// Default is UTC.
 func WithLocation(location *time.Location) Option {
 	return func(c *conf) {
 		c.location = location
 	}
 }
 
+// WithClock inject a custom clock for testing purposes.
 func WithClock(clock clock.Clock) Option {
 	return func(c *conf) {
 		c.clock = clock
@@ -101,20 +108,20 @@ func WithClock(clock clock.Clock) Option {
 
 var errDeleteOperationNotSupported = errors.New("delete operation not supported")
 
-type defaultRedisCacheAdaptor struct {
-	client RedisMinimalInterface
+type crudRedisCacheAdaptor struct {
+	client RedisCRUD
 }
 
-// NewDefaultRedisCacheAdaptor ctor.
-func NewDefaultRedisCacheAdaptor(client RedisMinimalInterface) RedisCacheAdaptor {
-	return &defaultRedisCacheAdaptor{client: client}
+// NewCRUDRedisCacheAdaptor ctor.
+func NewCRUDRedisCacheAdaptor(client RedisCRUD) RedisCacheAdaptor {
+	return &crudRedisCacheAdaptor{client: client}
 }
 
-func (c *defaultRedisCacheAdaptor) Add(ctx context.Context, key string, value []byte, expiration time.Duration) (bool, error) {
+func (c *crudRedisCacheAdaptor) Add(ctx context.Context, key string, value []byte, expiration time.Duration) (bool, error) {
 	return c.client.SetNX(ctx, key, value, expiration).Result()
 }
 
-func (c *defaultRedisCacheAdaptor) Get(ctx context.Context, key string) ([]byte, bool, error) {
+func (c *crudRedisCacheAdaptor) Get(ctx context.Context, key string) ([]byte, bool, error) {
 	result, err := c.client.Get(ctx, key).Result()
 	if err != nil {
 		if errors.Is(err, redis.Nil) {
@@ -127,22 +134,22 @@ func (c *defaultRedisCacheAdaptor) Get(ctx context.Context, key string) ([]byte,
 	return []byte(result), true, nil
 }
 
-func (c *defaultRedisCacheAdaptor) Delete(ctx context.Context, key string) error {
+func (c *crudRedisCacheAdaptor) Delete(ctx context.Context, key string) error {
 	_, err := c.client.Del(ctx, key).Result()
 
 	return err
 }
 
-func (c *defaultRedisCacheAdaptor) Set(ctx context.Context, key string, value []byte, expiration time.Duration) error {
+func (c *crudRedisCacheAdaptor) Set(ctx context.Context, key string, value []byte, expiration time.Duration) error {
 	return c.client.Set(ctx, key, value, expiration).Err()
 }
 
-func (c *defaultRedisCacheAdaptor) Close() error {
+func (c *crudRedisCacheAdaptor) Close() error {
 	return c.client.Close()
 }
 
 type bloomFilterRedisCacheAdaptor struct {
-	client    RedisBloomFilterMinimalInterface
+	client    RedisBloomFilter
 	strict    bool
 	filterKey string
 	location  *time.Location
@@ -150,7 +157,10 @@ type bloomFilterRedisCacheAdaptor struct {
 }
 
 // NewBloomFilterRedisCacheAdaptor ctor.
-func NewBloomFilterRedisCacheAdaptor(client RedisBloomFilterMinimalInterface, opts ...Option) RedisCacheAdaptor {
+// will format the current time.Time as `bf-benthos-%Y%m%d` using "github.com/itchyny/timefmt-go".Format
+// can be changed with WithFilterKey(...) option.
+// Does not supports Delete operation. May return error if using option WithStrict(true)
+func NewBloomFilterRedisCacheAdaptor(client RedisBloomFilter, opts ...Option) RedisCacheAdaptor {
 	var c conf
 
 	c.SetDefaults("bf")
@@ -212,14 +222,17 @@ func (c *bloomFilterRedisCacheAdaptor) Close() error {
 }
 
 type cuckooFilterRedisCacheAdaptor struct {
-	client    RedisCuckooFilterMinimalInterface
+	client    RedisCuckooFilter
 	filterKey string
 	location  *time.Location
 	clock     clock.Clock
 }
 
 // NewCuckooFilterRedisCacheAdaptor ctor.
-func NewCuckooFilterRedisCacheAdaptor(client RedisCuckooFilterMinimalInterface, opts ...Option) RedisCacheAdaptor {
+// will format the current time.Time as `cf-benthos-%Y%m%d` using "github.com/itchyny/timefmt-go".Format
+// can be changed with WithFilterKey(...) option.
+// Cuckoo filters supports Delete operations. WithStrict option will be ignored.
+func NewCuckooFilterRedisCacheAdaptor(client RedisCuckooFilter, opts ...Option) RedisCacheAdaptor {
 	var c conf
 
 	c.SetDefaults("cf")

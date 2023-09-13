@@ -76,7 +76,7 @@ func newRedisCacheFromConfig(conf *service.ParsedConfig) (*redisCache, error) {
 		return nil, err
 	}
 
-	cacheAdaptor := NewDefaultRedisCacheAdaptor(client)
+	cacheAdaptor := NewCRUDRedisCacheAdaptor(client)
 
 	return newRedisCache(ttl, prefix, cacheAdaptor, backOff)
 }

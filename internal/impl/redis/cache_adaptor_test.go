@@ -20,13 +20,13 @@ func TestDefaultRedisAdaptor(t *testing.T) {
 	testcases := []struct {
 		label string
 
-		prepare func(*redismock.RedisMinimalInterface)
+		prepare func(*redismock.RedisCRUD)
 
 		verify func(t *testing.T, adaptor redis.RedisCacheAdaptor)
 	}{
 		{
 			label: "adaptor.Get should call 'Get' from inner client with success",
-			prepare: func(rmi *redismock.RedisMinimalInterface) {
+			prepare: func(rmi *redismock.RedisCRUD) {
 				var cmd redis_client.StringCmd
 
 				cmd.SetVal("bar")
@@ -44,7 +44,7 @@ func TestDefaultRedisAdaptor(t *testing.T) {
 		},
 		{
 			label: "adaptor.Get should call 'Get' from inner client with error 'service.ErrKeyNotFound'",
-			prepare: func(rmi *redismock.RedisMinimalInterface) {
+			prepare: func(rmi *redismock.RedisCRUD) {
 				var cmd redis_client.StringCmd
 
 				cmd.SetErr(redis_client.Nil)
@@ -62,7 +62,7 @@ func TestDefaultRedisAdaptor(t *testing.T) {
 		},
 		{
 			label: "adaptor.Get should call 'Get' from inner client with failure",
-			prepare: func(rmi *redismock.RedisMinimalInterface) {
+			prepare: func(rmi *redismock.RedisCRUD) {
 				var cmd redis_client.StringCmd
 
 				cmd.SetErr(errors.New("ops"))
@@ -80,7 +80,7 @@ func TestDefaultRedisAdaptor(t *testing.T) {
 		},
 		{
 			label: "adaptor.Add should call 'SetNX' from inner client with success",
-			prepare: func(rmi *redismock.RedisMinimalInterface) {
+			prepare: func(rmi *redismock.RedisCRUD) {
 				{
 					var cmd redis_client.BoolCmd
 
@@ -115,7 +115,7 @@ func TestDefaultRedisAdaptor(t *testing.T) {
 		},
 		{
 			label: "adaptor.Set should call 'Set' from inner client with success",
-			prepare: func(rmi *redismock.RedisMinimalInterface) {
+			prepare: func(rmi *redismock.RedisCRUD) {
 				var cmd redis_client.StatusCmd
 
 				rmi.On("Set", context.Background(), "foo", []byte("bar"), 1*time.Minute).Return(&cmd)
@@ -129,7 +129,7 @@ func TestDefaultRedisAdaptor(t *testing.T) {
 		},
 		{
 			label: "adaptor.Set should call 'Set' from inner client with failure",
-			prepare: func(rmi *redismock.RedisMinimalInterface) {
+			prepare: func(rmi *redismock.RedisCRUD) {
 				var cmd redis_client.StatusCmd
 
 				cmd.SetErr(errors.New("ops"))
@@ -145,7 +145,7 @@ func TestDefaultRedisAdaptor(t *testing.T) {
 		},
 		{
 			label: "adaptor.Delete should call 'Del' from inner client with success",
-			prepare: func(rmi *redismock.RedisMinimalInterface) {
+			prepare: func(rmi *redismock.RedisCRUD) {
 				var cmd redis_client.IntCmd
 
 				rmi.On("Del", context.Background(), "foo").Return(&cmd)
@@ -159,7 +159,7 @@ func TestDefaultRedisAdaptor(t *testing.T) {
 		},
 		{
 			label: "adaptor.Delete should call 'Del' from inner client with failure",
-			prepare: func(rmi *redismock.RedisMinimalInterface) {
+			prepare: func(rmi *redismock.RedisCRUD) {
 				var cmd redis_client.IntCmd
 
 				cmd.SetErr(errors.New("ops"))
@@ -175,7 +175,7 @@ func TestDefaultRedisAdaptor(t *testing.T) {
 		},
 		{
 			label: "adaptor.Close should call 'Close' from inner client with success",
-			prepare: func(rmi *redismock.RedisMinimalInterface) {
+			prepare: func(rmi *redismock.RedisCRUD) {
 				rmi.On("Close").Return(nil)
 			},
 			verify: func(t *testing.T, adaptor redis.RedisCacheAdaptor) {
@@ -187,7 +187,7 @@ func TestDefaultRedisAdaptor(t *testing.T) {
 		},
 		{
 			label: "adaptor.Close should call 'Close' from inner client with failure",
-			prepare: func(rmi *redismock.RedisMinimalInterface) {
+			prepare: func(rmi *redismock.RedisCRUD) {
 				rmi.On("Close").Return(errors.New("ops"))
 			},
 			verify: func(t *testing.T, adaptor redis.RedisCacheAdaptor) {
@@ -204,11 +204,11 @@ func TestDefaultRedisAdaptor(t *testing.T) {
 		t.Run(tc.label, func(t *testing.T) {
 			t.Parallel()
 
-			client := redismock.NewRedisMinimalInterface(t)
+			client := redismock.NewRedisCRUD(t)
 
 			tc.prepare(client)
 
-			adaptor := redis.NewDefaultRedisCacheAdaptor(client)
+			adaptor := redis.NewCRUDRedisCacheAdaptor(client)
 
 			tc.verify(t, adaptor)
 		})
@@ -223,7 +223,7 @@ func TestBloomFilterRedisAdaptor(t *testing.T) {
 
 		opts []redis.Option
 
-		prepare func(*redismock.RedisBloomFilterMinimalInterface)
+		prepare func(*redismock.RedisBloomFilter)
 
 		verify func(t *testing.T, adaptor redis.RedisCacheAdaptor)
 	}{
@@ -232,7 +232,7 @@ func TestBloomFilterRedisAdaptor(t *testing.T) {
 			opts: []redis.Option{
 				redis.WithFilterKey("other-bf-benthos-%Y%m%d%H%M%S"),
 			},
-			prepare: func(rbfmi *redismock.RedisBloomFilterMinimalInterface) {
+			prepare: func(rbfmi *redismock.RedisBloomFilter) {
 				{
 					var cmd redis_client.BoolCmd
 
@@ -277,7 +277,7 @@ func TestBloomFilterRedisAdaptor(t *testing.T) {
 		},
 		{
 			label: "adaptor.Get should call 'BFExists' on inner client",
-			prepare: func(rbfmi *redismock.RedisBloomFilterMinimalInterface) {
+			prepare: func(rbfmi *redismock.RedisBloomFilter) {
 				{
 					var cmd redis_client.BoolCmd
 
@@ -325,7 +325,7 @@ func TestBloomFilterRedisAdaptor(t *testing.T) {
 		},
 		{
 			label: "adapter.Set should call 'BFAdd' in inner client",
-			prepare: func(rbfmi *redismock.RedisBloomFilterMinimalInterface) {
+			prepare: func(rbfmi *redismock.RedisBloomFilter) {
 				{
 					var cmd redis_client.BoolCmd
 
@@ -368,7 +368,7 @@ func TestBloomFilterRedisAdaptor(t *testing.T) {
 		{
 			label:   "adaptor.Delete should do nothing on strict mode false",
 			opts:    []redis.Option{redis.WithStrict(false)},
-			prepare: func(rbfmi *redismock.RedisBloomFilterMinimalInterface) {},
+			prepare: func(rbfmi *redismock.RedisBloomFilter) {},
 			verify: func(t *testing.T, adaptor redis.RedisCacheAdaptor) {
 				t.Helper()
 
@@ -379,7 +379,7 @@ func TestBloomFilterRedisAdaptor(t *testing.T) {
 		{
 			label:   "adaptor.Delete should return error on strict mode true",
 			opts:    []redis.Option{redis.WithStrict(true)},
-			prepare: func(rbfmi *redismock.RedisBloomFilterMinimalInterface) {},
+			prepare: func(rbfmi *redismock.RedisBloomFilter) {},
 			verify: func(t *testing.T, adaptor redis.RedisCacheAdaptor) {
 				t.Helper()
 
@@ -389,7 +389,7 @@ func TestBloomFilterRedisAdaptor(t *testing.T) {
 		},
 		{
 			label: "adaptor.Close should call 'Close' from inner client with success",
-			prepare: func(rmi *redismock.RedisBloomFilterMinimalInterface) {
+			prepare: func(rmi *redismock.RedisBloomFilter) {
 				rmi.On("Close").Return(nil)
 			},
 			verify: func(t *testing.T, adaptor redis.RedisCacheAdaptor) {
@@ -401,7 +401,7 @@ func TestBloomFilterRedisAdaptor(t *testing.T) {
 		},
 		{
 			label: "adaptor.Close should call 'Close' from inner client with failure",
-			prepare: func(rmi *redismock.RedisBloomFilterMinimalInterface) {
+			prepare: func(rmi *redismock.RedisBloomFilter) {
 				rmi.On("Close").Return(errors.New("ops"))
 			},
 			verify: func(t *testing.T, adaptor redis.RedisCacheAdaptor) {
@@ -418,7 +418,7 @@ func TestBloomFilterRedisAdaptor(t *testing.T) {
 		t.Run(tc.label, func(t *testing.T) {
 			t.Parallel()
 
-			client := redismock.NewRedisBloomFilterMinimalInterface(t)
+			client := redismock.NewRedisBloomFilter(t)
 			clock := clock.NewMock()
 
 			clock.Add(1*time.Hour + 15*time.Minute + 45*time.Second)
@@ -447,7 +447,7 @@ func TestCuckooFilterRedisAdaptor(t *testing.T) {
 
 		opts []redis.Option
 
-		prepare func(*redismock.RedisCuckooFilterMinimalInterface)
+		prepare func(*redismock.RedisCuckooFilter)
 
 		verify func(t *testing.T, adaptor redis.RedisCacheAdaptor)
 	}{
@@ -456,7 +456,7 @@ func TestCuckooFilterRedisAdaptor(t *testing.T) {
 			opts: []redis.Option{
 				redis.WithFilterKey("other-cf-benthos-%Y%m%d%H%M%S"),
 			},
-			prepare: func(rbfmi *redismock.RedisCuckooFilterMinimalInterface) {
+			prepare: func(rbfmi *redismock.RedisCuckooFilter) {
 				{
 					var cmd redis_client.BoolCmd
 
@@ -501,7 +501,7 @@ func TestCuckooFilterRedisAdaptor(t *testing.T) {
 		},
 		{
 			label: "adaptor.Get should call 'CFExists' on inner client",
-			prepare: func(rbfmi *redismock.RedisCuckooFilterMinimalInterface) {
+			prepare: func(rbfmi *redismock.RedisCuckooFilter) {
 				{
 					var cmd redis_client.BoolCmd
 
@@ -549,7 +549,7 @@ func TestCuckooFilterRedisAdaptor(t *testing.T) {
 		},
 		{
 			label: "adapter.Set should call 'CFAdd' in inner client",
-			prepare: func(rbfmi *redismock.RedisCuckooFilterMinimalInterface) {
+			prepare: func(rbfmi *redismock.RedisCuckooFilter) {
 				{
 					var cmd redis_client.BoolCmd
 
@@ -592,7 +592,7 @@ func TestCuckooFilterRedisAdaptor(t *testing.T) {
 		{
 			label: "adaptor.Delete should call 'CFDel' from inner client",
 			opts:  []redis.Option{redis.WithStrict(false)},
-			prepare: func(rbfmi *redismock.RedisCuckooFilterMinimalInterface) {
+			prepare: func(rbfmi *redismock.RedisCuckooFilter) {
 				{
 					var cmd redis_client.BoolCmd
 
@@ -634,7 +634,7 @@ func TestCuckooFilterRedisAdaptor(t *testing.T) {
 		},
 		{
 			label: "adaptor.Close should call 'Close' from inner client with success",
-			prepare: func(rmi *redismock.RedisCuckooFilterMinimalInterface) {
+			prepare: func(rmi *redismock.RedisCuckooFilter) {
 				rmi.On("Close").Return(nil)
 			},
 			verify: func(t *testing.T, adaptor redis.RedisCacheAdaptor) {
@@ -646,7 +646,7 @@ func TestCuckooFilterRedisAdaptor(t *testing.T) {
 		},
 		{
 			label: "adaptor.Close should call 'Close' from inner client with failure",
-			prepare: func(rmi *redismock.RedisCuckooFilterMinimalInterface) {
+			prepare: func(rmi *redismock.RedisCuckooFilter) {
 				rmi.On("Close").Return(errors.New("ops"))
 			},
 			verify: func(t *testing.T, adaptor redis.RedisCacheAdaptor) {
@@ -663,7 +663,7 @@ func TestCuckooFilterRedisAdaptor(t *testing.T) {
 		t.Run(tc.label, func(t *testing.T) {
 			t.Parallel()
 
-			client := redismock.NewRedisCuckooFilterMinimalInterface(t)
+			client := redismock.NewRedisCuckooFilter(t)
 			clock := clock.NewMock()
 
 			clock.Add(1*time.Hour + 15*time.Minute + 45*time.Second)
