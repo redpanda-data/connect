@@ -402,18 +402,20 @@ func TestDynamicArgs(t *testing.T) {
 		Add(ParamString("baz", ""))
 
 	exp := []dynamicArgIndex(nil)
-	res := p.gatherDynamicArgs([]any{"first", "second", "third"})
+	res, err := p.gatherDynamicArgs([]any{"first", "second", "third"})
+	require.NoError(t, err)
 	assert.Equal(t, exp, res)
 
 	exp = []dynamicArgIndex{
 		{index: 0, fn: NewFieldFunction("first")},
 		{index: 2, fn: NewFieldFunction("third")},
 	}
-	res = p.gatherDynamicArgs([]any{
+	res, err = p.gatherDynamicArgs([]any{
 		NewFieldFunction("first"),
 		NewFieldFunction("second"),
 		NewFieldFunction("third"),
 	})
+	require.NoError(t, err)
 	assert.Equal(t, exp, res)
 }
 
@@ -421,7 +423,8 @@ func TestDynamicVariadicArgs(t *testing.T) {
 	p := VariadicParams()
 
 	exp := []dynamicArgIndex(nil)
-	res := p.gatherDynamicArgs([]any{"first", "second", "third"})
+	res, err := p.gatherDynamicArgs([]any{"first", "second", "third"})
+	require.NoError(t, err)
 	assert.Equal(t, exp, res)
 
 	dynArgs := []any{
@@ -435,7 +438,8 @@ func TestDynamicVariadicArgs(t *testing.T) {
 		{index: 1, fn: NewFieldFunction("second")},
 		{index: 2, fn: NewFieldFunction("third")},
 	}
-	res = p.gatherDynamicArgs(dynArgs)
+	res, err = p.gatherDynamicArgs(dynArgs)
+	require.NoError(t, err)
 	assert.Equal(t, exp, res)
 
 	parsed, err := p.PopulateNameless(dynArgs...)
@@ -496,6 +500,17 @@ func TestParsedParamsNameless(t *testing.T) {
 	require.Error(t, err)
 
 	_, err = parsed.Field("fourth")
+	require.Error(t, err)
+}
+
+func TestParsedNoDynamic(t *testing.T) {
+	params := NewParams().
+		Add(ParamString("first", "").DisableDynamic())
+
+	_, err := params.PopulateNameless("bar")
+	require.NoError(t, err)
+
+	_, err = params.PopulateNameless(NewVarFunction("foo"))
 	require.Error(t, err)
 }
 

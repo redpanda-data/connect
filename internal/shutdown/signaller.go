@@ -3,26 +3,7 @@ package shutdown
 import (
 	"context"
 	"sync"
-	"time"
 )
-
-const longTermWait = time.Hour * 24
-
-// MaximumShutdownWait is a magic number determining the maximum length of time
-// that a component should be willing to wait for a child to finish shutting
-// down before it can give up and exit.
-//
-// This wait time is largely symbolic, if a component blocks for anything more
-// than a few minutes then it has failed in its duty to gracefully terminate.
-//
-// However, it's still necessary for components to provide some measure of time
-// that they're willing to wait for with the current mechanism (WaitForClose),
-// therefore we provide a very large duration, and since this is a magic number
-// I've defined it once and exposed as a function, allowing us to more easily
-// identify these cases and refactor them in the future.
-func MaximumShutdownWait() time.Duration {
-	return longTermWait
-}
 
 // Signaller is a mechanism owned by components that support graceful
 // shut down and is used as a way to signal from outside that any goroutines

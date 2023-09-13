@@ -14,6 +14,7 @@ type ParamDefinition struct {
 	Name        string    `json:"name"`
 	Description string    `json:"description,omitempty"`
 	ValueType   ValueType `json:"type"`
+	NoDynamic   bool      `json:"no_dynamic"`
 
 	castScalarsToLiteral bool
 
@@ -96,6 +97,14 @@ func ParamAny(name, description string) ParamDefinition {
 		Name: name, Description: description,
 		ValueType: ValueUnknown,
 	}
+}
+
+// NoDynamic disables any form of dynamic assignment for this parameter. This is
+// quite limiting (prevents variables from being used, etc) and so should only
+// be used with caution.
+func (d ParamDefinition) DisableDynamic() ParamDefinition {
+	d.NoDynamic = true
+	return d
 }
 
 // Optional marks the parameter as optional.
@@ -203,7 +212,10 @@ func (p Params) PopulateNameless(args ...any) (*ParsedParams, error) {
 		return nil, err
 	}
 
-	dynArgs := p.gatherDynamicArgs(procParams)
+	dynArgs, err := p.gatherDynamicArgs(procParams)
+	if err != nil {
+		return nil, err
+	}
 	return &ParsedParams{
 		source:  p,
 		dynArgs: dynArgs,
@@ -219,7 +231,10 @@ func (p Params) PopulateNamed(args map[string]any) (*ParsedParams, error) {
 		return nil, err
 	}
 
-	dynArgs := p.gatherDynamicArgs(procParams)
+	dynArgs, err := p.gatherDynamicArgs(procParams)
+	if err != nil {
+		return nil, err
+	}
 	return &ParsedParams{
 		source:  p,
 		dynArgs: dynArgs,
@@ -251,7 +266,7 @@ type dynamicArgIndex struct {
 	fn    Function
 }
 
-func (p Params) gatherDynamicArgs(args []any) (dynArgs []dynamicArgIndex) {
+func (p Params) gatherDynamicArgs(args []any) (dynArgs []dynamicArgIndex, err error) {
 	if p.Variadic {
 		for i, arg := range args {
 			if fn, isFn := arg.(Function); isFn {
@@ -265,6 +280,10 @@ func (p Params) gatherDynamicArgs(args []any) (dynArgs []dynamicArgIndex) {
 			continue
 		}
 		if fn, isFn := args[i].(Function); isFn {
+			if param.NoDynamic {
+				err = fmt.Errorf("param %v must not be dynamic", param.Name)
+				return
+			}
 			dynArgs = append(dynArgs, dynamicArgIndex{index: i, fn: fn})
 		}
 	}
