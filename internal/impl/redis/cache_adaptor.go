@@ -117,9 +117,6 @@ type conf struct {
 	filterKey string
 	location  *time.Location
 	clock     clock.Clock
-
-	bfInsertOptions *redis.BFInsertOptions
-	cfInsertOptions *redis.CFInsertOptions
 }
 
 func (c *conf) SetDefaults(filterKeyPrefix string) {
@@ -127,8 +124,6 @@ func (c *conf) SetDefaults(filterKeyPrefix string) {
 	c.filterKey = filterKeyPrefix + `-benthos-%Y%m%d`
 	c.location = time.UTC
 	c.clock = clock.New()
-	c.bfInsertOptions = nil
-	c.cfInsertOptions = nil
 }
 
 // AdaptorOption functional option type
@@ -162,20 +157,6 @@ func WithLocation(location *time.Location) AdaptorOption {
 func WithClock(clock clock.Clock) AdaptorOption {
 	return func(c *conf) {
 		c.clock = clock
-	}
-}
-
-// WithBloomFilterInsertOptions add a bloom filter intert option object.
-func WithBloomFilterInsertOptions(bfInsertOptions *redis.BFInsertOptions) AdaptorOption {
-	return func(c *conf) {
-		c.bfInsertOptions = bfInsertOptions
-	}
-}
-
-// WithCuckooFilterInsertOptions add a cuckoo filter intert option object.
-func WithCuckooFilterInsertOptions(cfInsertOptions *redis.CFInsertOptions) AdaptorOption {
-	return func(c *conf) {
-		c.cfInsertOptions = cfInsertOptions
 	}
 }
 
@@ -222,12 +203,11 @@ func (c *crudRedisCacheAdaptor) Close() error {
 }
 
 type bloomFilterRedisCacheAdaptor struct {
-	client          RedisBloomFilter
-	strict          bool
-	filterKey       string
-	location        *time.Location
-	clock           clock.Clock
-	bfInsertOptions *redis.BFInsertOptions
+	client    RedisBloomFilter
+	strict    bool
+	filterKey string
+	location  *time.Location
+	clock     clock.Clock
 }
 
 // NewBloomFilterRedisCacheAdaptor ctor.
@@ -244,12 +224,11 @@ func NewBloomFilterRedisCacheAdaptor(client RedisBloomFilter, opts ...AdaptorOpt
 	}
 
 	return &bloomFilterRedisCacheAdaptor{
-		client:          client,
-		strict:          c.strict,
-		filterKey:       c.filterKey,
-		location:        c.location,
-		clock:           c.clock,
-		bfInsertOptions: c.bfInsertOptions,
+		client:    client,
+		strict:    c.strict,
+		filterKey: c.filterKey,
+		location:  c.location,
+		clock:     c.clock,
 	}
 }
 
@@ -301,7 +280,7 @@ func (c *bloomFilterRedisCacheAdaptor) SetMulti(ctx context.Context, items ...se
 		elements[i] = item.Key
 	}
 
-	return c.client.BFInsert(ctx, filterKey, c.bfInsertOptions, elements...).Err()
+	return c.client.BFInsert(ctx, filterKey, nil, elements...).Err()
 }
 
 func (c *bloomFilterRedisCacheAdaptor) Close() error {
@@ -309,11 +288,10 @@ func (c *bloomFilterRedisCacheAdaptor) Close() error {
 }
 
 type cuckooFilterRedisCacheAdaptor struct {
-	client          RedisCuckooFilter
-	filterKey       string
-	location        *time.Location
-	clock           clock.Clock
-	cfInsertOptions *redis.CFInsertOptions
+	client    RedisCuckooFilter
+	filterKey string
+	location  *time.Location
+	clock     clock.Clock
 }
 
 // NewCuckooFilterRedisCacheAdaptor ctor.
@@ -330,11 +308,10 @@ func NewCuckooFilterRedisCacheAdaptor(client RedisCuckooFilter, opts ...AdaptorO
 	}
 
 	return &cuckooFilterRedisCacheAdaptor{
-		client:          client,
-		filterKey:       c.filterKey,
-		location:        c.location,
-		clock:           c.clock,
-		cfInsertOptions: c.cfInsertOptions,
+		client:    client,
+		filterKey: c.filterKey,
+		location:  c.location,
+		clock:     c.clock,
 	}
 }
 
@@ -378,7 +355,7 @@ func (c *cuckooFilterRedisCacheAdaptor) SetMulti(ctx context.Context, items ...s
 		elements[i] = item.Key
 	}
 
-	return c.client.CFInsert(ctx, filterKey, c.cfInsertOptions, elements...).Err()
+	return c.client.CFInsert(ctx, filterKey, nil, elements...).Err()
 }
 
 func (c *cuckooFilterRedisCacheAdaptor) Delete(ctx context.Context, key string) error {
