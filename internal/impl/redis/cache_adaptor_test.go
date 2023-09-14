@@ -389,7 +389,7 @@ func TestBloomFilterRedisAdaptor(t *testing.T) {
 			},
 		},
 		{
-			label: "adaptor.SetMulti should call 'BFMAdd' from inner client",
+			label: "adaptor.SetMulti should call 'BFInsert' from inner client",
 			prepare: func(rbf *redismock.RedisBloomFilter) {
 				{
 					{
@@ -397,14 +397,72 @@ func TestBloomFilterRedisAdaptor(t *testing.T) {
 
 						cmd.SetVal([]bool{true, true})
 
-						rbf.On("BFMAdd", context.Background(), "bf-benthos-19700101", "foo", "bar").Return(&cmd)
+						rbf.On("BFInsert", context.Background(),
+							"bf-benthos-19700101", (*redis_client.BFInsertOptions)(nil), "foo", "bar").Return(&cmd)
 					}
 					{
 						var cmd redis_client.BoolSliceCmd
 
 						cmd.SetErr(errors.New("ops"))
 
-						rbf.On("BFMAdd", context.Background(), "bf-benthos-19700101", "baz", "bam").Return(&cmd)
+						rbf.On("BFInsert", context.Background(),
+							"bf-benthos-19700101", (*redis_client.BFInsertOptions)(nil), "baz", "bam").Return(&cmd)
+					}
+				}
+			},
+			verify: func(t *testing.T, adaptor redis.RedisMultiCacheAdaptor) {
+				t.Helper()
+
+				{
+					items := []service.CacheItem{
+						{Key: "foo", Value: []byte("t")},
+						{Key: "bar", Value: []byte("t")},
+					}
+
+					err := adaptor.SetMulti(context.Background(), items...)
+					assert.NoError(t, err)
+				}
+
+				{
+					items := []service.CacheItem{
+						{Key: "baz", Value: []byte("t")},
+						{Key: "bam", Value: []byte("t")},
+					}
+
+					err := adaptor.SetMulti(context.Background(), items...)
+					assert.EqualError(t, err, "ops")
+				}
+			},
+		},
+		{
+			label: "adaptor.SetMulti should call 'BFInsert' from inner client with custom options",
+			opts: []redis.AdaptorOption{
+				redis.WithBloomFilterInsertOptions(&redis_client.BFInsertOptions{
+					Capacity: 1000,
+					NoCreate: true,
+				}),
+			},
+			prepare: func(rbf *redismock.RedisBloomFilter) {
+				{
+					{
+						var cmd redis_client.BoolSliceCmd
+
+						cmd.SetVal([]bool{true, true})
+
+						rbf.On("BFInsert", context.Background(), "bf-benthos-19700101", &redis_client.BFInsertOptions{
+							Capacity: 1000,
+							NoCreate: true,
+						}, "foo", "bar").Return(&cmd)
+					}
+					{
+						var cmd redis_client.BoolSliceCmd
+
+						cmd.SetErr(errors.New("ops"))
+
+						rbf.On("BFInsert", context.Background(), "bf-benthos-19700101", &redis_client.BFInsertOptions{
+							Capacity: 1000,
+							NoCreate: true,
+						}, "baz", "bam").Return(&cmd)
 					}
 				}
 			},
@@ -696,6 +754,64 @@ func TestCuckooFilterRedisAdaptor(t *testing.T) {
 
 						rcf.On("CFInsert", context.Background(),
 							"cf-benthos-19700101", (*redis_client.CFInsertOptions)(nil), "baz", "bam").Return(&cmd)
+					}
+				}
+			},
+			verify: func(t *testing.T, adaptor redis.RedisMultiCacheAdaptor) {
+				t.Helper()
+
+				{
+					items := []service.CacheItem{
+						{Key: "foo", Value: []byte("t")},
+						{Key: "bar", Value: []byte("t")},
+					}
+
+					err := adaptor.SetMulti(context.Background(), items...)
+					assert.NoError(t, err)
+				}
+
+				{
+					items := []service.CacheItem{
+						{Key: "baz", Value: []byte("t")},
+						{Key: "bam", Value: []byte("t")},
+					}
+
+					err := adaptor.SetMulti(context.Background(), items...)
+					assert.EqualError(t, err, "ops")
+				}
+			},
+		},
+		{
+			label: "adaptor.SetMulti should call 'CFInsert' from inner client with custom option",
+			opts: []redis.AdaptorOption{
+				redis.WithCuckooFilterInsertOptions(&redis_client.CFInsertOptions{
+					Capacity: 1000,
+					NoCreate: true,
+				}),
+			},
+			prepare: func(rcf *redismock.RedisCuckooFilter) {
+				{
+					{
+						var cmd redis_client.BoolSliceCmd
+
+						cmd.SetVal([]bool{true, true})
+
+						rcf.On("CFInsert", context.Background(),
+							"cf-benthos-19700101", &redis_client.CFInsertOptions{
+								Capacity: 1000,
+								NoCreate: true,
+							}, "foo", "bar").Return(&cmd)
+					}
+					{
+						var cmd redis_client.BoolSliceCmd
+
+						cmd.SetErr(errors.New("ops"))
+
+						rcf.On("CFInsert", context.Background(),
+							"cf-benthos-19700101", &redis_client.CFInsertOptions{
+								Capacity: 1000,
+								NoCreate: true,
+							}, "baz", "bam").Return(&cmd)
 					}
 				}
 			},

@@ -46,6 +46,8 @@ func redisProbabilisticCacheConfig() *service.ConfigSpec {
 		Field(service.NewBackOffField("retries", false, retriesDefaults).
 			Advanced())
 
+		// TODO add bf insert options and cf insert options
+
 	return spec
 }
 

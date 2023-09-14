@@ -36,9 +36,18 @@ type RedisCRUD interface {
 
 // RedisBloomFilter few methods from probabilistic interface focus on bloom filters.
 type RedisBloomFilter interface {
+	// BFAdd adds an item to a Bloom filter.
+	// For more information - https://redis.io/commands/bf.add/
 	BFAdd(ctx context.Context, key string, element interface{}) *redis.BoolCmd
-	BFMAdd(ctx context.Context, key string, elements ...interface{}) *redis.BoolSliceCmd
 
+	// BFInsert inserts elements into a Bloom filter.
+	// This function also allows for specifying additional options such as:
+	// capacity, error rate, expansion rate, and non-scaling behavior.
+	// For more information - https://redis.io/commands/bf.insert/
+	BFInsert(ctx context.Context, key string, options *redis.BFInsertOptions, elements ...interface{}) *redis.BoolSliceCmd
+
+	// BFExists determines whether a given item was added to a Bloom filter.
+	// For more information - https://redis.io/commands/bf.exists/
 	BFExists(ctx context.Context, key string, element interface{}) *redis.BoolCmd
 
 	io.Closer
@@ -46,10 +55,28 @@ type RedisBloomFilter interface {
 
 // RedisCuckooFilter few methods from probabilistic interface focus on cuckoo filters.
 type RedisCuckooFilter interface {
+	// CFAdd adds an element to a Cuckoo filter.
+	// Returns true if the element was added to the filter or false if it already exists in the filter.
+	// For more information - https://redis.io/commands/cf.add/
 	CFAdd(ctx context.Context, key string, element interface{}) *redis.BoolCmd
+
+	// CFAddNX adds an element to a Cuckoo filter only if it does not already exist in the filter.
+	// Returns true if the element was added to the filter or false if it already exists in the filter.
+	// For more information - https://redis.io/commands/cf.addnx/
 	CFAddNX(ctx context.Context, key string, element interface{}) *redis.BoolCmd
+
+	// CFInsert inserts elements into a Cuckoo filter.
+	// This function also allows for specifying additional options such as capacity, error rate, expansion rate, and non-scaling behavior.
+	// Returns an array of booleans indicating whether each element was added to the filter or not.
+	// For more information - https://redis.io/commands/cf.insert/
 	CFInsert(ctx context.Context, key string, options *redis.CFInsertOptions, elements ...interface{}) *redis.BoolSliceCmd
+
+	// CFDel deletes an item once from the cuckoo filter.
+	// For more information - https://redis.io/commands/cf.del/
 	CFDel(ctx context.Context, key string, element interface{}) *redis.BoolCmd
+
+	// CFExists determines whether an item may exist in the Cuckoo Filter or not.
+	// For more information - https://redis.io/commands/cf.exists/
 	CFExists(ctx context.Context, key string, element interface{}) *redis.BoolCmd
 
 	io.Closer
@@ -57,15 +84,25 @@ type RedisCuckooFilter interface {
 
 // RedisCacheAdaptor is a minimal interface to use redis as cache.
 type RedisCacheAdaptor interface {
-	Add(ctx context.Context, key string, value []byte, expiration time.Duration) (bool, error)
+	// Get a cache item.
 	Get(ctx context.Context, key string) ([]byte, bool, error)
-	Delete(ctx context.Context, key string) error
+
+	// Set a cache item, specifying an optional TTL.
 	Set(ctx context.Context, key string, value []byte, expiration time.Duration) error
+
+	// Add is the same operation as Set except that it returns an error if the
+	// key already exists.
+	Add(ctx context.Context, key string, value []byte, expiration time.Duration) (bool, error)
+
+	// Delete attempts to remove a key.
+	Delete(ctx context.Context, key string) error
 
 	io.Closer
 }
 
 type redisMultiSetter interface {
+	// SetMulti attempts to set multiple cache items in as few requests as
+	// possible.
 	SetMulti(ctx context.Context, items ...service.CacheItem) error
 }
 
@@ -80,6 +117,9 @@ type conf struct {
 	filterKey string
 	location  *time.Location
 	clock     clock.Clock
+
+	bfInsertOptions *redis.BFInsertOptions
+	cfInsertOptions *redis.CFInsertOptions
 }
 
 func (c *conf) SetDefaults(filterKeyPrefix string) {
@@ -87,6 +127,8 @@ func (c *conf) SetDefaults(filterKeyPrefix string) {
 	c.filterKey = filterKeyPrefix + `-benthos-%Y%m%d`
 	c.location = time.UTC
 	c.clock = clock.New()
+	c.bfInsertOptions = nil
+	c.cfInsertOptions = nil
 }
 
 // AdaptorOption functional option type
@@ -120,6 +162,20 @@ func WithLocation(location *time.Location) AdaptorOption {
 func WithClock(clock clock.Clock) AdaptorOption {
 	return func(c *conf) {
 		c.clock = clock
+	}
+}
+
+// WithBloomFilterInsertOptions add a bloom filter intert option object.
+func WithBloomFilterInsertOptions(bfInsertOptions *redis.BFInsertOptions) AdaptorOption {
+	return func(c *conf) {
+		c.bfInsertOptions = bfInsertOptions
+	}
+}
+
+// WithCuckooFilterInsertOptions add a cuckoo filter intert option object.
+func WithCuckooFilterInsertOptions(cfInsertOptions *redis.CFInsertOptions) AdaptorOption {
+	return func(c *conf) {
+		c.cfInsertOptions = cfInsertOptions
 	}
 }
 
@@ -166,11 +222,12 @@ func (c *crudRedisCacheAdaptor) Close() error {
 }
 
 type bloomFilterRedisCacheAdaptor struct {
-	client    RedisBloomFilter
-	strict    bool
-	filterKey string
-	location  *time.Location
-	clock     clock.Clock
+	client          RedisBloomFilter
+	strict          bool
+	filterKey       string
+	location        *time.Location
+	clock           clock.Clock
+	bfInsertOptions *redis.BFInsertOptions
 }
 
 // NewBloomFilterRedisCacheAdaptor ctor.
@@ -187,11 +244,12 @@ func NewBloomFilterRedisCacheAdaptor(client RedisBloomFilter, opts ...AdaptorOpt
 	}
 
 	return &bloomFilterRedisCacheAdaptor{
-		client:    client,
-		strict:    c.strict,
-		filterKey: c.filterKey,
-		location:  c.location,
-		clock:     c.clock,
+		client:          client,
+		strict:          c.strict,
+		filterKey:       c.filterKey,
+		location:        c.location,
+		clock:           c.clock,
+		bfInsertOptions: c.bfInsertOptions,
 	}
 }
 
@@ -243,7 +301,7 @@ func (c *bloomFilterRedisCacheAdaptor) SetMulti(ctx context.Context, items ...se
 		elements[i] = item.Key
 	}
 
-	return c.client.BFMAdd(ctx, filterKey, elements...).Err()
+	return c.client.BFInsert(ctx, filterKey, c.bfInsertOptions, elements...).Err()
 }
 
 func (c *bloomFilterRedisCacheAdaptor) Close() error {
@@ -251,10 +309,11 @@ func (c *bloomFilterRedisCacheAdaptor) Close() error {
 }
 
 type cuckooFilterRedisCacheAdaptor struct {
-	client    RedisCuckooFilter
-	filterKey string
-	location  *time.Location
-	clock     clock.Clock
+	client          RedisCuckooFilter
+	filterKey       string
+	location        *time.Location
+	clock           clock.Clock
+	cfInsertOptions *redis.CFInsertOptions
 }
 
 // NewCuckooFilterRedisCacheAdaptor ctor.
@@ -271,10 +330,11 @@ func NewCuckooFilterRedisCacheAdaptor(client RedisCuckooFilter, opts ...AdaptorO
 	}
 
 	return &cuckooFilterRedisCacheAdaptor{
-		client:    client,
-		filterKey: c.filterKey,
-		location:  c.location,
-		clock:     c.clock,
+		client:          client,
+		filterKey:       c.filterKey,
+		location:        c.location,
+		clock:           c.clock,
+		cfInsertOptions: c.cfInsertOptions,
 	}
 }
 
@@ -318,9 +378,7 @@ func (c *cuckooFilterRedisCacheAdaptor) SetMulti(ctx context.Context, items ...s
 		elements[i] = item.Key
 	}
 
-	var opts *redis.CFInsertOptions
-
-	return c.client.CFInsert(ctx, filterKey, opts, elements...).Err()
+	return c.client.CFInsert(ctx, filterKey, c.cfInsertOptions, elements...).Err()
 }
 
 func (c *cuckooFilterRedisCacheAdaptor) Delete(ctx context.Context, key string) error {
