@@ -170,9 +170,11 @@ func WithClock(clock clock.Clock) AdaptorOption {
 }
 
 // WithInterval update the interval used to change the filter key.
+// Minimal value: 1 second
 func WithInterval(interval time.Duration) AdaptorOption {
+	const minInterval = 1 * time.Second
 	return func(c *conf) {
-		c.interval = interval
+		c.interval = max(interval, minInterval)
 	}
 }
 

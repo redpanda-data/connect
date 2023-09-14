@@ -32,7 +32,8 @@ label: ""
 redis_probabilistic:
   url: redis://:6397 # No default (required)
   backend: "" # No default (required)
-  filter_key: bf-benthos-%Y%m%d # No default (optional)
+  filter_key_template: bf-benthos-%Y%m%d # No default (optional)
+  interval: 600s
 ```
 
 </TabItem>
@@ -53,7 +54,8 @@ redis_probabilistic:
     root_cas_file: ""
     client_certs: []
   backend: "" # No default (required)
-  filter_key: bf-benthos-%Y%m%d # No default (optional)
+  filter_key_template: bf-benthos-%Y%m%d # No default (optional)
+  interval: 600s
   location: UTC
   strict: false
   retries:
@@ -268,9 +270,9 @@ Type: `string`
 | `cuckoo` | uses cuckoo filters, supports delete operation |
 
 
-### `filter_key`
+### `filter_key_template`
 
-change the key used by the probabilistic filter. support strftime notation
+change the template for the key used by the probabilistic filter. support strftime notation
 
 
 Type: `string`  
@@ -278,14 +280,22 @@ Type: `string`
 ```yml
 # Examples
 
-filter_key: bf-benthos-%Y%m%d
+filter_key_template: bf-benthos-%Y%m%d
 
-filter_key: cf-benthos-%Y%m%d
+filter_key_template: cf-benthos-%Y%m%d
 
-filter_key: my-personal-hourly-bloom-filter-key-%Y%m%d%H
+filter_key_template: my-personal-hourly-bloom-filter-key-%Y%m%d%H
 
-filter_key: my-personal-hourly-cuckoo-filter-key-%Y%m%d%H
+filter_key_template: my-personal-hourly-cuckoo-filter-key-%Y%m%d%H
 ```
+
+### `interval`
+
+change the interval where we generate a new filter key from a filter key template
+
+
+Type: `string`  
+Default: `"600s"`  
 
 ### `location`
 

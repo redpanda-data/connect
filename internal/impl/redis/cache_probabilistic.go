@@ -26,8 +26,8 @@ func redisProbabilisticCacheConfig() *service.ConfigSpec {
 			"bloom":  "uses bloom filters, does not support delete operation",
 			"cuckoo": "uses cuckoo filters, supports delete operation",
 		}).Description("choose the backend")).
-		Field(service.NewStringField("filter_key").
-			Description(`change the key used by the probabilistic filter. support strftime notation`).
+		Field(service.NewStringField("filter_key_template").
+			Description(`change the template for the key used by the probabilistic filter. support strftime notation`).
 			Examples(
 				"bf-benthos-%Y%m%d",
 				"cf-benthos-%Y%m%d",
@@ -35,6 +35,9 @@ func redisProbabilisticCacheConfig() *service.ConfigSpec {
 				"my-personal-hourly-cuckoo-filter-key-%Y%m%d%H",
 			).
 			Optional()).
+		Field(service.NewDurationField("interval").
+			Description("change the interval where we generate a new filter key from a filter key template").
+			Default("600s")).
 		Field(service.NewStringField("location").
 			Description("change the `time.Location` used to generate the filter key").
 			Default("UTC").
@@ -75,23 +78,32 @@ func newRedisProbabilisticCacheFromConfig(conf *service.ParsedConfig) (*redisCac
 
 	var opts []AdaptorOption
 
-	if conf.Contains("filter_key") {
-		var filterKey string
-		if filterKey, err = conf.FieldString("filter_key"); err != nil {
+	if conf.Contains("filter_key_template") {
+		filterKey, err := conf.FieldString("filter_key_template")
+		if err != nil {
 			return nil, err
 		}
 
 		opts = append(opts, WithFilterKeyTemplate(filterKey))
 	}
 
-	if conf.Contains("location") {
-		var locationStr string
-		if locationStr, err = conf.FieldString("location"); err != nil {
+	if conf.Contains("interval") {
+		interval, err := conf.FieldDuration("interval")
+		if err != nil {
 			return nil, err
 		}
 
-		var location *time.Location
-		if location, err = time.LoadLocation(locationStr); err != nil {
+		opts = append(opts, WithInterval(interval))
+	}
+
+	if conf.Contains("location") {
+		locationStr, err := conf.FieldString("location")
+		if err != nil {
+			return nil, err
+		}
+
+		location, err := time.LoadLocation(locationStr)
+		if err != nil {
 			return nil, err
 		}
 
@@ -99,8 +111,8 @@ func newRedisProbabilisticCacheFromConfig(conf *service.ParsedConfig) (*redisCac
 	}
 
 	if conf.Contains("strict") {
-		var strict bool
-		if strict, err = conf.FieldBool("strict"); err != nil {
+		strict, err := conf.FieldBool("strict")
+		if err != nil {
 			return nil, err
 		}
 
