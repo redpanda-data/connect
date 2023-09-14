@@ -32,6 +32,7 @@ label: ""
 redis_probabilistic:
   url: redis://:6397 # No default (required)
   backend: "" # No default (required)
+  filter_key: bf-benthos-%Y%m%d # No default (optional)
 ```
 
 </TabItem>

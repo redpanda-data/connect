@@ -7,14 +7,17 @@ import (
 	"time"
 
 	"github.com/benbjohnson/clock"
+	"github.com/benthosdev/benthos/v4/public/service"
 	"github.com/itchyny/timefmt-go"
 	"github.com/redis/go-redis/v9"
 )
 
 var (
 	_ RedisCacheAdaptor = (*crudRedisCacheAdaptor)(nil)
-	_ RedisCacheAdaptor = (*bloomFilterRedisCacheAdaptor)(nil)
-	_ RedisCacheAdaptor = (*cuckooFilterRedisCacheAdaptor)(nil)
+	_ RedisCacheAdaptor = (RedisMultiCacheAdaptor)(nil)
+
+	_ RedisMultiCacheAdaptor = (*bloomFilterRedisCacheAdaptor)(nil)
+	_ RedisMultiCacheAdaptor = (*cuckooFilterRedisCacheAdaptor)(nil)
 
 	_ RedisCRUD         = (redis.UniversalClient)(nil)
 	_ RedisBloomFilter  = (redis.UniversalClient)(nil)
@@ -34,6 +37,8 @@ type RedisCRUD interface {
 // RedisBloomFilter few methods from probabilistic interface focus on bloom filters.
 type RedisBloomFilter interface {
 	BFAdd(ctx context.Context, key string, element interface{}) *redis.BoolCmd
+	BFMAdd(ctx context.Context, key string, elements ...interface{}) *redis.BoolSliceCmd
+
 	BFExists(ctx context.Context, key string, element interface{}) *redis.BoolCmd
 
 	io.Closer
@@ -43,6 +48,7 @@ type RedisBloomFilter interface {
 type RedisCuckooFilter interface {
 	CFAdd(ctx context.Context, key string, element interface{}) *redis.BoolCmd
 	CFAddNX(ctx context.Context, key string, element interface{}) *redis.BoolCmd
+	CFInsert(ctx context.Context, key string, options *redis.CFInsertOptions, elements ...interface{}) *redis.BoolSliceCmd
 	CFDel(ctx context.Context, key string, element interface{}) *redis.BoolCmd
 	CFExists(ctx context.Context, key string, element interface{}) *redis.BoolCmd
 
@@ -57,6 +63,16 @@ type RedisCacheAdaptor interface {
 	Set(ctx context.Context, key string, value []byte, expiration time.Duration) error
 
 	io.Closer
+}
+
+type redisMultiSetter interface {
+	SetMulti(ctx context.Context, items ...service.CacheItem) error
+}
+
+type RedisMultiCacheAdaptor interface {
+	redisMultiSetter
+
+	RedisCacheAdaptor
 }
 
 type conf struct {
@@ -161,7 +177,7 @@ type bloomFilterRedisCacheAdaptor struct {
 // will format the current time.Time as `bf-benthos-%Y%m%d` using "github.com/itchyny/timefmt-go".Format
 // can be changed with WithFilterKey(...) option.
 // Does not supports Delete operation. May return error if using option WithStrict(true)
-func NewBloomFilterRedisCacheAdaptor(client RedisBloomFilter, opts ...AdaptorOption) RedisCacheAdaptor {
+func NewBloomFilterRedisCacheAdaptor(client RedisBloomFilter, opts ...AdaptorOption) RedisMultiCacheAdaptor {
 	var c conf
 
 	c.SetDefaults("bf")
@@ -218,6 +234,18 @@ func (c *bloomFilterRedisCacheAdaptor) Set(ctx context.Context, key string, valu
 	return c.client.BFAdd(ctx, filterKey, key).Err()
 }
 
+func (c *bloomFilterRedisCacheAdaptor) SetMulti(ctx context.Context, items ...service.CacheItem) error {
+	filterKey := c.buildFilterKey()
+
+	elements := make([]interface{}, len(items))
+
+	for i, item := range items {
+		elements[i] = item.Key
+	}
+
+	return c.client.BFMAdd(ctx, filterKey, elements...).Err()
+}
+
 func (c *bloomFilterRedisCacheAdaptor) Close() error {
 	return c.client.Close()
 }
@@ -233,7 +261,7 @@ type cuckooFilterRedisCacheAdaptor struct {
 // will format the current time.Time as `cf-benthos-%Y%m%d` using "github.com/itchyny/timefmt-go".Format
 // can be changed with WithFilterKey(...) option.
 // Cuckoo filters supports Delete operations. WithStrict option will be ignored.
-func NewCuckooFilterRedisCacheAdaptor(client RedisCuckooFilter, opts ...AdaptorOption) RedisCacheAdaptor {
+func NewCuckooFilterRedisCacheAdaptor(client RedisCuckooFilter, opts ...AdaptorOption) RedisMultiCacheAdaptor {
 	var c conf
 
 	c.SetDefaults("cf")
@@ -279,6 +307,20 @@ func (c *cuckooFilterRedisCacheAdaptor) Set(ctx context.Context, key string, val
 	filterKey := c.buildFilterKey()
 
 	return c.client.CFAdd(ctx, filterKey, key).Err()
+}
+
+func (c *cuckooFilterRedisCacheAdaptor) SetMulti(ctx context.Context, items ...service.CacheItem) error {
+	filterKey := c.buildFilterKey()
+
+	elements := make([]interface{}, len(items))
+
+	for i, item := range items {
+		elements[i] = item.Key
+	}
+
+	var opts *redis.CFInsertOptions
+
+	return c.client.CFInsert(ctx, filterKey, opts, elements...).Err()
 }
 
 func (c *cuckooFilterRedisCacheAdaptor) Delete(ctx context.Context, key string) error {

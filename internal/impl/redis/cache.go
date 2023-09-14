@@ -78,15 +78,16 @@ func newRedisCacheFromConfig(conf *service.ParsedConfig) (*redisCache, error) {
 
 	cacheAdaptor := NewCRUDRedisCacheAdaptor(client)
 
-	return newRedisCache(ttl, prefix, cacheAdaptor, backOff)
+	return newRedisCache(ttl, prefix, cacheAdaptor, backOff), nil
 }
 
 //------------------------------------------------------------------------------
 
 type redisCache struct {
-	cacheAdaptor RedisCacheAdaptor
-	defaultTTL   time.Duration
-	prefix       string
+	cacheAdaptor     RedisCacheAdaptor
+	cacheMultiSetter redisMultiSetter
+	defaultTTL       time.Duration
+	prefix           string
 
 	boffPool sync.Pool
 }
@@ -94,13 +95,15 @@ type redisCache struct {
 func newRedisCache(
 	defaultTTL time.Duration,
 	prefix string,
-	client RedisCacheAdaptor,
+	cacheAdaptor RedisCacheAdaptor,
 	backOff *backoff.ExponentialBackOff,
-) (*redisCache, error) {
+) *redisCache {
+	cacheMultiSetter, _ := cacheAdaptor.(redisMultiSetter)
 	return &redisCache{
-		defaultTTL:   defaultTTL,
-		prefix:       prefix,
-		cacheAdaptor: client,
+		defaultTTL:       defaultTTL,
+		prefix:           prefix,
+		cacheAdaptor:     cacheAdaptor,
+		cacheMultiSetter: cacheMultiSetter,
 		boffPool: sync.Pool{
 			New: func() any {
 				bo := *backOff
@@ -108,7 +111,7 @@ func newRedisCache(
 				return &bo
 			},
 		},
-	}, nil
+	}
 }
 
 func (r *redisCache) Get(ctx context.Context, key string) ([]byte, error) {
@@ -177,6 +180,21 @@ func (r *redisCache) Set(ctx context.Context, key string, value []byte, ttl *tim
 			return err
 		}
 	}
+}
+
+func (r *redisCache) SetMulti(ctx context.Context, items ...service.CacheItem) error {
+	if r.cacheMultiSetter != nil {
+		return r.cacheMultiSetter.SetMulti(ctx, items...)
+	}
+
+	for _, item := range items {
+		err := r.Set(ctx, item.Key, item.Value, item.TTL)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func (r *redisCache) Add(ctx context.Context, key string, value []byte, ttl *time.Duration) error {
@@ -248,6 +266,6 @@ func (r *redisCache) Delete(ctx context.Context, key string) error {
 	}
 }
 
-func (r *redisCache) Close(ctx context.Context) error {
+func (r *redisCache) Close(_ context.Context) error {
 	return r.cacheAdaptor.Close()
 }

@@ -124,5 +124,5 @@ func newRedisProbabilisticCacheFromConfig(conf *service.ParsedConfig) (*redisCac
 		cacheAdaptor = NewCuckooFilterRedisCacheAdaptor(client, opts...)
 	}
 
-	return newRedisCache(ttl, prefix, cacheAdaptor, backOff)
+	return newRedisCache(ttl, prefix, cacheAdaptor, backOff), nil
 }
