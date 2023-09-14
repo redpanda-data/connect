@@ -34,8 +34,7 @@ func redisProbabilisticCacheConfig() *service.ConfigSpec {
 				"my-personal-hourly-bloom-filter-key-%Y%m%d%H",
 				"my-personal-hourly-cuckoo-filter-key-%Y%m%d%H",
 			).
-			Optional().
-			Advanced()).
+			Optional()).
 		Field(service.NewStringField("location").
 			Description("change the `time.Location` used to generate the filter key").
 			Default("UTC").
@@ -72,7 +71,7 @@ func newRedisProbabilisticCacheFromConfig(conf *service.ParsedConfig) (*redisCac
 		return nil, err
 	}
 
-	var opts []Option
+	var opts []AdaptorOption
 
 	if conf.Contains("filter_key") {
 		var filterKey string

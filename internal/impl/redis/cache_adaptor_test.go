@@ -221,7 +221,7 @@ func TestBloomFilterRedisAdaptor(t *testing.T) {
 	testcases := []struct {
 		label string
 
-		opts []redis.Option
+		opts []redis.AdaptorOption
 
 		prepare func(*redismock.RedisBloomFilter)
 
@@ -229,7 +229,7 @@ func TestBloomFilterRedisAdaptor(t *testing.T) {
 	}{
 		{
 			label: "adaptor.Add should call 'BFAdd' from inner client",
-			opts: []redis.Option{
+			opts: []redis.AdaptorOption{
 				redis.WithFilterKey("other-bf-benthos-%Y%m%d%H%M%S"),
 			},
 			prepare: func(rbfmi *redismock.RedisBloomFilter) {
@@ -367,7 +367,7 @@ func TestBloomFilterRedisAdaptor(t *testing.T) {
 		},
 		{
 			label:   "adaptor.Delete should do nothing on strict mode false",
-			opts:    []redis.Option{redis.WithStrict(false)},
+			opts:    []redis.AdaptorOption{redis.WithStrict(false)},
 			prepare: func(rbfmi *redismock.RedisBloomFilter) {},
 			verify: func(t *testing.T, adaptor redis.RedisCacheAdaptor) {
 				t.Helper()
@@ -378,7 +378,7 @@ func TestBloomFilterRedisAdaptor(t *testing.T) {
 		},
 		{
 			label:   "adaptor.Delete should return error on strict mode true",
-			opts:    []redis.Option{redis.WithStrict(true)},
+			opts:    []redis.AdaptorOption{redis.WithStrict(true)},
 			prepare: func(rbfmi *redismock.RedisBloomFilter) {},
 			verify: func(t *testing.T, adaptor redis.RedisCacheAdaptor) {
 				t.Helper()
@@ -425,7 +425,7 @@ func TestBloomFilterRedisAdaptor(t *testing.T) {
 
 			tc.prepare(client)
 
-			opts := []redis.Option{
+			opts := []redis.AdaptorOption{
 				redis.WithClock(clock),
 				redis.WithLocation(time.UTC),
 			}
@@ -445,7 +445,7 @@ func TestCuckooFilterRedisAdaptor(t *testing.T) {
 	testcases := []struct {
 		label string
 
-		opts []redis.Option
+		opts []redis.AdaptorOption
 
 		prepare func(*redismock.RedisCuckooFilter)
 
@@ -453,7 +453,7 @@ func TestCuckooFilterRedisAdaptor(t *testing.T) {
 	}{
 		{
 			label: "adaptor.Add should call 'CFAddNX' from inner client",
-			opts: []redis.Option{
+			opts: []redis.AdaptorOption{
 				redis.WithFilterKey("other-cf-benthos-%Y%m%d%H%M%S"),
 			},
 			prepare: func(rbfmi *redismock.RedisCuckooFilter) {
@@ -591,7 +591,7 @@ func TestCuckooFilterRedisAdaptor(t *testing.T) {
 		},
 		{
 			label: "adaptor.Delete should call 'CFDel' from inner client",
-			opts:  []redis.Option{redis.WithStrict(false)},
+			opts:  []redis.AdaptorOption{redis.WithStrict(false)},
 			prepare: func(rbfmi *redismock.RedisCuckooFilter) {
 				{
 					var cmd redis_client.BoolCmd
@@ -670,7 +670,7 @@ func TestCuckooFilterRedisAdaptor(t *testing.T) {
 
 			tc.prepare(client)
 
-			opts := []redis.Option{
+			opts := []redis.AdaptorOption{
 				redis.WithClock(clock),
 				redis.WithLocation(time.UTC),
 			}

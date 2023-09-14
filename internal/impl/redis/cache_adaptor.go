@@ -70,14 +70,15 @@ func (c *conf) SetDefaults(filterKeyPrefix string) {
 	c.strict = false
 	c.filterKey = filterKeyPrefix + `-benthos-%Y%m%d`
 	c.location = time.UTC
+	c.clock = clock.New()
 }
 
-// Option functional option type
-type Option func(*conf)
+// AdaptorOption functional option type
+type AdaptorOption func(*conf)
 
 // WithStrict can enable the strict mode. Not supported operations will fail.
 // default is false.
-func WithStrict(strict bool) Option {
+func WithStrict(strict bool) AdaptorOption {
 	return func(c *conf) {
 		c.strict = strict
 	}
@@ -85,7 +86,7 @@ func WithStrict(strict bool) Option {
 
 // WithFilterKey can rewrite the filter key used on bloom and cuckoo filters. Accepts
 // To be parsed with "github.com/itchyny/timefmt-go".Format with current time.
-func WithFilterKey(filterKey string) Option {
+func WithFilterKey(filterKey string) AdaptorOption {
 	return func(c *conf) {
 		c.filterKey = filterKey
 	}
@@ -93,14 +94,14 @@ func WithFilterKey(filterKey string) Option {
 
 // WithLocation can update the time.Location used to format filter keys based on current timestamp.
 // Default is UTC.
-func WithLocation(location *time.Location) Option {
+func WithLocation(location *time.Location) AdaptorOption {
 	return func(c *conf) {
 		c.location = location
 	}
 }
 
 // WithClock inject a custom clock for testing purposes.
-func WithClock(clock clock.Clock) Option {
+func WithClock(clock clock.Clock) AdaptorOption {
 	return func(c *conf) {
 		c.clock = clock
 	}
@@ -160,7 +161,7 @@ type bloomFilterRedisCacheAdaptor struct {
 // will format the current time.Time as `bf-benthos-%Y%m%d` using "github.com/itchyny/timefmt-go".Format
 // can be changed with WithFilterKey(...) option.
 // Does not supports Delete operation. May return error if using option WithStrict(true)
-func NewBloomFilterRedisCacheAdaptor(client RedisBloomFilter, opts ...Option) RedisCacheAdaptor {
+func NewBloomFilterRedisCacheAdaptor(client RedisBloomFilter, opts ...AdaptorOption) RedisCacheAdaptor {
 	var c conf
 
 	c.SetDefaults("bf")
@@ -232,7 +233,7 @@ type cuckooFilterRedisCacheAdaptor struct {
 // will format the current time.Time as `cf-benthos-%Y%m%d` using "github.com/itchyny/timefmt-go".Format
 // can be changed with WithFilterKey(...) option.
 // Cuckoo filters supports Delete operations. WithStrict option will be ignored.
-func NewCuckooFilterRedisCacheAdaptor(client RedisCuckooFilter, opts ...Option) RedisCacheAdaptor {
+func NewCuckooFilterRedisCacheAdaptor(client RedisCuckooFilter, opts ...AdaptorOption) RedisCacheAdaptor {
 	var c conf
 
 	c.SetDefaults("cf")
