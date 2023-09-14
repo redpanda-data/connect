@@ -81,7 +81,7 @@ func newRedisProbabilisticCacheFromConfig(conf *service.ParsedConfig) (*redisCac
 			return nil, err
 		}
 
-		opts = append(opts, WithFilterKey(filterKey))
+		opts = append(opts, WithFilterKeyTemplate(filterKey))
 	}
 
 	if conf.Contains("location") {

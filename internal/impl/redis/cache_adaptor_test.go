@@ -231,7 +231,7 @@ func TestBloomFilterRedisAdaptor(t *testing.T) {
 		{
 			label: "adaptor.Add should call 'BFAdd' from inner client",
 			opts: []redis.AdaptorOption{
-				redis.WithFilterKey("other-bf-benthos-%Y%m%d%H%M%S"),
+				redis.WithFilterKeyTemplate("other-bf-benthos-%Y%m%d%H%M%S"),
 			},
 			prepare: func(rbf *redismock.RedisBloomFilter) {
 				{
@@ -501,7 +501,7 @@ func TestCuckooFilterRedisAdaptor(t *testing.T) {
 		{
 			label: "adaptor.Add should call 'CFAddNX' from inner client",
 			opts: []redis.AdaptorOption{
-				redis.WithFilterKey("other-cf-benthos-%Y%m%d%H%M%S"),
+				redis.WithFilterKeyTemplate("other-cf-benthos-%Y%m%d%H%M%S"),
 			},
 			prepare: func(rcf *redismock.RedisCuckooFilter) {
 				{
@@ -774,5 +774,67 @@ func TestCuckooFilterRedisAdaptor(t *testing.T) {
 
 			tc.verify(t, adaptor)
 		})
+	}
+}
+
+func TestBloomFilterKeyGeneration(t *testing.T) {
+	t.Parallel()
+
+	client := redismock.NewRedisBloomFilter(t)
+
+	var cmd redis_client.BoolCmd
+
+	client.On("BFExists", context.Background(), "other-bf-benthos-19700101000000", "foo").Return(&cmd)
+	client.On("BFExists", context.Background(), "other-bf-benthos-19700101011530", "bar").Return(&cmd)
+
+	clock := clock.NewMock()
+
+	instance := redis.NewBloomFilterRedisCacheAdaptor(client,
+		redis.WithInterval(10*time.Second),
+		redis.WithClock(clock),
+		redis.WithFilterKeyTemplate(`other-bf-benthos-%Y%m%d%H%M%S`),
+	)
+
+	{
+		_, _, err := instance.Get(context.Background(), "foo")
+		assert.NoError(t, err)
+	}
+
+	clock.Add(1*time.Hour + 15*time.Minute + 31*time.Second)
+
+	{
+		_, _, err := instance.Get(context.Background(), "bar")
+		assert.NoError(t, err)
+	}
+}
+
+func TestCuckooFilterKeyGeneration(t *testing.T) {
+	t.Parallel()
+
+	client := redismock.NewRedisCuckooFilter(t)
+
+	var cmd redis_client.BoolCmd
+
+	client.On("CFExists", context.Background(), "other-cf-benthos-19700101000000", "foo").Return(&cmd)
+	client.On("CFExists", context.Background(), "other-cf-benthos-19700101011530", "bar").Return(&cmd)
+
+	clock := clock.NewMock()
+
+	instance := redis.NewCuckooFilterRedisCacheAdaptor(client,
+		redis.WithInterval(10*time.Second),
+		redis.WithClock(clock),
+		redis.WithFilterKeyTemplate(`other-cf-benthos-%Y%m%d%H%M%S`),
+	)
+
+	{
+		_, _, err := instance.Get(context.Background(), "foo")
+		assert.NoError(t, err)
+	}
+
+	clock.Add(1*time.Hour + 15*time.Minute + 31*time.Second)
+
+	{
+		_, _, err := instance.Get(context.Background(), "bar")
+		assert.NoError(t, err)
 	}
 }
