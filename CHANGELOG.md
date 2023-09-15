@@ -10,6 +10,10 @@ All notable changes to this project will be documented in this file.
 - The `-e/--env-file` cli flag for importing environment variable files now supports glob patterns.
 - Environment variables imported via `-e/--env-file` cli flags now support triple quoted strings.
 
+### Fixed
+
+- Corrected a scheduling error where the `generate` input with a descriptor interval (`@hourly`, etc) had a chance of firing twice.
+
 ### Changed
 
 - The `random_int` Bloblang function now prevents instantiations where either the `max` or `min` arguments are dynamic. This is in order to avoid situations where the random number generator is re-initialised across subsequent mappings in a way that surprises map authors.
