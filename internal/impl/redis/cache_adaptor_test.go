@@ -393,7 +393,7 @@ func TestBloomFilterRedisAdaptor(t *testing.T) {
 			},
 		},
 		{
-			label: "adaptor.SetMulti should call 'BFInsert' from inner client",
+			label: "adaptor.SetMulti should call 'BFInsert' from inner client without insert options",
 			prepare: func(rbf *redismock.RedisBloomFilter) {
 				{
 					{
@@ -411,6 +411,59 @@ func TestBloomFilterRedisAdaptor(t *testing.T) {
 
 						rbf.On("BFInsert", context.Background(),
 							"bf:benthos", (*redis_client.BFInsertOptions)(nil), "baz", "bam").Return(&cmd)
+					}
+				}
+			},
+			verify: func(t *testing.T, adaptor redis.RedisMultiCacheAdaptor) {
+				t.Helper()
+
+				{
+					items := []service.CacheItem{
+						{Key: "foo", Value: []byte("t")},
+						{Key: "bar", Value: []byte("t")},
+					}
+
+					err := adaptor.SetMulti(context.Background(), items...)
+					assert.NoError(t, err)
+				}
+
+				{
+					items := []service.CacheItem{
+						{Key: "baz", Value: []byte("t")},
+						{Key: "bam", Value: []byte("t")},
+					}
+
+					err := adaptor.SetMulti(context.Background(), items...)
+					assert.EqualError(t, err, "ops")
+				}
+			},
+		},
+		{
+			label: "adaptor.SetMulti should call 'BFInsert' from inner client with insert options",
+			insertOpts: &redis_client.BFInsertOptions{
+				Capacity: 1024,
+			},
+			prepare: func(rbf *redismock.RedisBloomFilter) {
+				{
+					{
+						var cmd redis_client.BoolSliceCmd
+
+						cmd.SetVal([]bool{true, true})
+
+						rbf.On("BFInsert", context.Background(),
+							"bf:benthos", &redis_client.BFInsertOptions{
+								Capacity: 1024,
+							}, "foo", "bar").Return(&cmd)
+					}
+					{
+						var cmd redis_client.BoolSliceCmd
+
+						cmd.SetErr(errors.New("ops"))
+
+						rbf.On("BFInsert", context.Background(),
+							"bf:benthos", &redis_client.BFInsertOptions{
+								Capacity: 1024,
+							}, "baz", "bam").Return(&cmd)
 					}
 				}
 			},
@@ -681,25 +734,25 @@ func TestCuckooFilterRedisAdaptor(t *testing.T) {
 			},
 		},
 		{
-			label: "adaptor.SetMulti should call 'CFInsert' from inner client",
+			label: "adaptor.SetMulti should call 'CFInsert' from inner client without insert options",
 			prepare: func(rcf *redismock.RedisCuckooFilter) {
+
 				{
-					{
-						var cmd redis_client.BoolSliceCmd
+					var cmd redis_client.BoolSliceCmd
 
-						cmd.SetVal([]bool{true, true})
+					cmd.SetVal([]bool{true, true})
 
-						rcf.On("CFInsert", context.Background(),
-							"cf:benthos", (*redis_client.CFInsertOptions)(nil), "foo", "bar").Return(&cmd)
-					}
-					{
-						var cmd redis_client.BoolSliceCmd
+					rcf.On("CFInsert", context.Background(),
+						"cf:benthos", (*redis_client.CFInsertOptions)(nil), "foo", "bar").Return(&cmd)
+				}
 
-						cmd.SetErr(errors.New("ops"))
+				{
+					var cmd redis_client.BoolSliceCmd
 
-						rcf.On("CFInsert", context.Background(),
-							"cf:benthos", (*redis_client.CFInsertOptions)(nil), "baz", "bam").Return(&cmd)
-					}
+					cmd.SetErr(errors.New("ops"))
+
+					rcf.On("CFInsert", context.Background(),
+						"cf:benthos", (*redis_client.CFInsertOptions)(nil), "baz", "bam").Return(&cmd)
 				}
 			},
 			verify: func(t *testing.T, adaptor redis.RedisMultiCacheAdaptor) {
@@ -724,6 +777,33 @@ func TestCuckooFilterRedisAdaptor(t *testing.T) {
 					err := adaptor.SetMulti(context.Background(), items...)
 					assert.EqualError(t, err, "ops")
 				}
+			},
+		},
+		{
+			label: "adaptor.SetMulti should call 'CFInsert' from inner client with insert options",
+			insertOpts: &redis_client.CFInsertOptions{
+				Capacity: 1024,
+			},
+			prepare: func(rcf *redismock.RedisCuckooFilter) {
+				var cmd redis_client.BoolSliceCmd
+
+				cmd.SetVal([]bool{true, true})
+
+				rcf.On("CFInsert", context.Background(),
+					"cf:benthos", &redis_client.CFInsertOptions{
+						Capacity: 1024,
+					}, "foo", "bar").Return(&cmd)
+			},
+			verify: func(t *testing.T, adaptor redis.RedisMultiCacheAdaptor) {
+				t.Helper()
+
+				items := []service.CacheItem{
+					{Key: "foo", Value: []byte("t")},
+					{Key: "bar", Value: []byte("t")},
+				}
+
+				err := adaptor.SetMulti(context.Background(), items...)
+				assert.NoError(t, err)
 			},
 		},
 		{

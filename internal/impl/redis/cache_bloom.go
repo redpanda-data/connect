@@ -48,6 +48,51 @@ If the key does not exists, we will create one using the default capacity.`).
 			Description("if `true`, bloom filter will fail on delete operations").
 			Default(false).
 			Advanced()).
+		Field(service.NewObjectField("insert_options",
+			service.NewIntField("capacity").
+				Description(`Specifies the desired capacity for the filter to be created.
+This parameter is ignored if the filter already exists. 
+If the filter is automatically created and this parameter is absent, then the module-level capacity is used. 
+See [BF.RESERVE](https://redis.io/commands/bf.reserve) for more information about the impact of this value.`).
+				Default(0).
+				Advanced().
+				Optional(),
+			service.NewFloatField("error").
+				Description(`Specifies the error ratio of the newly created filter if it does not yet exist. 
+If the filter is automatically created and error is not specified then the module-level error rate is used.
+See [BF.RESERVE](https://redis.io/commands/bf.reserve) for more information about the impact of this value.`).
+				Default(0.0).
+				Advanced().
+				Optional(),
+			service.NewIntField("expansion").
+				Description(`When capacity is reached, an additional sub-filter is created. 
+The size of the new sub-filter is the size of the last sub-filter multiplied by expansion, specified as a positive integer.
+
+If the number of elements to be stored in the filter is unknown, use an expansion of 2 or more to reduce the number of sub-filters. 
+Otherwise, use an expansion of 1 to reduce memory consumption. The default value is 2.`).
+				Default(0).
+				Advanced().
+				Optional(),
+			service.NewBoolField("non_scaling").
+				Description(`Prevents the filter from creating additional sub-filters if initial capacity is reached.
+Non-scaling filters require slightly less memory than their scaling counterparts. 
+The filter returns an error when capacity is reached.`).
+				Default(false).
+				Advanced().
+				Optional(),
+			service.NewBoolField("no_create").
+				Description(`Indicates that the filter should not be created if it does not already exist. 
+If the filter does not yet exist, an error is returned rather than creating it automatically. 
+This may be used where a strict separation between filter creation and filter addition is desired. 
+It is an error to specify NOCREATE together with either CAPACITY or ERROR.`).
+				Default(false).
+				Advanced().
+				Optional()).
+			Description(`If specified, will be used on Add/Set operations
+
+See [BF.INSERT](https://redis.io/commands/bf.insert/)`).
+			Optional().
+			Advanced()).
 		Field(service.NewBackOffField("retries", false, retriesDefaults).
 			Advanced()).
 		Footnotes(`This component implements all cache operations, however it does not store any value, only the keys.
@@ -100,6 +145,21 @@ func newRedisBloomCacheFromConfig(conf *service.ParsedConfig) (*redisCache, erro
 	}
 
 	var insertOpts *redis.BFInsertOptions
+	if conf.Contains("insert_options") {
+		capacity, err := conf.FieldInt("insert_options.capacity")
+		if err != nil {
+			return nil, err
+		}
+		noCreate, err := conf.FieldBool("insert_options.no_create")
+		if err != nil {
+			return nil, err
+		}
+
+		insertOpts = &redis.BFInsertOptions{
+			Capacity: int64(capacity),
+			NoCreate: noCreate,
+		}
+	}
 	cacheAdaptor, err := NewBloomFilterRedisCacheAdaptor(client, filterKey, strict, insertOpts)
 	if err != nil {
 		return nil, err

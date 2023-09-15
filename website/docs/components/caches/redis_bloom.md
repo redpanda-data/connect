@@ -53,6 +53,12 @@ redis_bloom:
     client_certs: []
   filter_key: bf:benthos # No default (required)
   strict: false
+  insert_options:
+    capacity: 0
+    error: 0
+    expansion: 0
+    non_scaling: false
+    no_create: false
   retries:
     initial_interval: 500ms
     max_interval: 1s
@@ -288,6 +294,69 @@ filter_key: anything-descriptive
 ### `strict`
 
 if `true`, bloom filter will fail on delete operations
+
+
+Type: `bool`  
+Default: `false`  
+
+### `insert_options`
+
+If specified, will be used on Add/Set operations
+
+See [BF.INSERT](https://redis.io/commands/bf.insert/)
+
+
+Type: `object`  
+
+### `insert_options.capacity`
+
+Specifies the desired capacity for the filter to be created.
+This parameter is ignored if the filter already exists. 
+If the filter is automatically created and this parameter is absent, then the module-level capacity is used. 
+See [BF.RESERVE](https://redis.io/commands/bf.reserve) for more information about the impact of this value.
+
+
+Type: `int`  
+Default: `0`  
+
+### `insert_options.error`
+
+Specifies the error ratio of the newly created filter if it does not yet exist. 
+If the filter is automatically created and error is not specified then the module-level error rate is used.
+See [BF.RESERVE](https://redis.io/commands/bf.reserve) for more information about the impact of this value.
+
+
+Type: `float`  
+Default: `0`  
+
+### `insert_options.expansion`
+
+When capacity is reached, an additional sub-filter is created. 
+The size of the new sub-filter is the size of the last sub-filter multiplied by expansion, specified as a positive integer.
+
+If the number of elements to be stored in the filter is unknown, use an expansion of 2 or more to reduce the number of sub-filters. 
+Otherwise, use an expansion of 1 to reduce memory consumption. The default value is 2.
+
+
+Type: `int`  
+Default: `0`  
+
+### `insert_options.non_scaling`
+
+Prevents the filter from creating additional sub-filters if initial capacity is reached.
+Non-scaling filters require slightly less memory than their scaling counterparts. 
+The filter returns an error when capacity is reached.
+
+
+Type: `bool`  
+Default: `false`  
+
+### `insert_options.no_create`
+
+Indicates that the filter should not be created if it does not already exist. 
+If the filter does not yet exist, an error is returned rather than creating it automatically. 
+This may be used where a strict separation between filter creation and filter addition is desired. 
+It is an error to specify NOCREATE together with either CAPACITY or ERROR.
 
 
 Type: `bool`  

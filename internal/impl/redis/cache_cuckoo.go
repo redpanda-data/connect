@@ -46,10 +46,28 @@ If the key does not exists, we will create one using the default capacity.`).
 			Advanced()).
 		Field(service.NewObjectField("insert_options",
 			service.NewIntField("capacity").
-				Default(1000),
+				Description(`Specifies the desired capacity of the new filter, if this filter does not exist yet.
+
+If the filter already exists, then this parameter is ignored.
+
+If the filter does not exist yet and this parameter is not specified, then the filter is created with the module-level default capacity which is 1024.
+
+See [CF.RESERVE](https://redis.io/commands/cf.reserve/) for more information on cuckoo filter capacities.`).
+				Default(0).
+				Advanced().
+				Optional(),
 			service.NewBoolField("no_create").
-				Default(false)).
-			Description("...").
+				Description(`If specified, prevents automatic filter creation if the filter does not exist (Instead, an error is returned).
+
+This option is mutually exclusive with CAPACITY.`).
+				Default(false).
+				Advanced().
+				Optional()).
+			Description(`If specified, will be used on Add/Set operations
+
+See [CF.INSERT](https://redis.io/commands/cf.insert/)
+See [CF.INSERTNX](https://redis.io/commands/cf.insertnx/)`).
+			Optional().
 			Advanced()).
 		Footnotes(`This component implements all cache operations, however it does not store any value, only the keys.
 
