@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/cenkalti/backoff/v4"
+	"github.com/redis/go-redis/v9"
 
 	"github.com/benthosdev/benthos/v4/public/service"
 )
@@ -98,7 +99,8 @@ func newRedisBloomCacheFromConfig(conf *service.ParsedConfig) (*redisCache, erro
 		return nil, err
 	}
 
-	cacheAdaptor, err := NewBloomFilterRedisCacheAdaptor(client, filterKey, strict)
+	var insertOpts *redis.BFInsertOptions
+	cacheAdaptor, err := NewBloomFilterRedisCacheAdaptor(client, filterKey, strict, insertOpts)
 	if err != nil {
 		return nil, err
 	}

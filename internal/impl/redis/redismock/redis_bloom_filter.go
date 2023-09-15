@@ -66,25 +66,6 @@ func (_m *RedisBloomFilter) BFInsert(ctx context.Context, key string, options *r
 	return r0
 }
 
-// BFMAdd provides a mock function with given fields: ctx, key, elements
-func (_m *RedisBloomFilter) BFMAdd(ctx context.Context, key string, elements ...interface{}) *redis.BoolSliceCmd {
-	var _ca []interface{}
-	_ca = append(_ca, ctx, key)
-	_ca = append(_ca, elements...)
-	ret := _m.Called(_ca...)
-
-	var r0 *redis.BoolSliceCmd
-	if rf, ok := ret.Get(0).(func(context.Context, string, ...interface{}) *redis.BoolSliceCmd); ok {
-		r0 = rf(ctx, key, elements...)
-	} else {
-		if ret.Get(0) != nil {
-			r0 = ret.Get(0).(*redis.BoolSliceCmd)
-		}
-	}
-
-	return r0
-}
-
 // Close provides a mock function with given fields:
 func (_m *RedisBloomFilter) Close() error {
 	ret := _m.Called()

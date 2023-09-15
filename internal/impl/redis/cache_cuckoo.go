@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/cenkalti/backoff/v4"
+	"github.com/redis/go-redis/v9"
 
 	"github.com/benthosdev/benthos/v4/public/service"
 )
@@ -42,6 +43,13 @@ If the key does not exists, we will create one using the default capacity.`).
 				"anything-descriptive",
 			)).
 		Field(service.NewBackOffField("retries", false, retriesDefaults).
+			Advanced()).
+		Field(service.NewObjectField("insert_options",
+			service.NewIntField("capacity").
+				Default(1000),
+			service.NewBoolField("no_create").
+				Default(false)).
+			Description("...").
 			Advanced()).
 		Footnotes(`This component implements all cache operations, however it does not store any value, only the keys.
 
@@ -84,7 +92,24 @@ func newRedisCuckooCacheFromConfig(conf *service.ParsedConfig) (*redisCache, err
 		return nil, err
 	}
 
-	cacheAdaptor, err := NewCuckooFilterRedisCacheAdaptor(client, filterKey)
+	var insertOpts *redis.CFInsertOptions
+	if conf.Contains("insert_options") {
+		capacity, err := conf.FieldInt("insert_options.capacity")
+		if err != nil {
+			return nil, err
+		}
+		noCreate, err := conf.FieldBool("insert_options.no_create")
+		if err != nil {
+			return nil, err
+		}
+
+		insertOpts = &redis.CFInsertOptions{
+			Capacity: int64(capacity),
+			NoCreate: noCreate,
+		}
+	}
+
+	cacheAdaptor, err := NewCuckooFilterRedisCacheAdaptor(client, filterKey, insertOpts)
 	if err != nil {
 		return nil, err
 	}

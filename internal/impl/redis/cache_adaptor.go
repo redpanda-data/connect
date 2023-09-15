@@ -70,6 +70,13 @@ type RedisCuckooFilter interface {
 	// For more information - https://redis.io/commands/cf.insert/
 	CFInsert(ctx context.Context, key string, options *redis.CFInsertOptions, elements ...interface{}) *redis.BoolSliceCmd
 
+	// CFInsertNX inserts elements into a Cuckoo filter only if they do not already exist in the filter.
+	// This function also allows for specifying additional options such as:
+	// capacity, error rate, expansion rate, and non-scaling behavior.
+	// Returns an array of integers indicating whether each element was added to the filter or not.
+	// For more information - https://redis.io/commands/cf.insertnx/
+	CFInsertNX(ctx context.Context, key string, options *redis.CFInsertOptions, elements ...interface{}) *redis.IntSliceCmd
+
 	// CFDel deletes an item once from the cuckoo filter.
 	// For more information - https://redis.io/commands/cf.del/
 	CFDel(ctx context.Context, key string, element interface{}) *redis.BoolCmd
@@ -157,22 +164,24 @@ func (c *crudRedisCacheAdaptor) Close() error {
 }
 
 type bloomFilterRedisCacheAdaptor struct {
-	client    RedisBloomFilter
-	filterKey string
-	strict    bool
+	client     RedisBloomFilter
+	filterKey  string
+	strict     bool
+	insertOpts *redis.BFInsertOptions
 }
 
 // NewBloomFilterRedisCacheAdaptor ctor.
 func NewBloomFilterRedisCacheAdaptor(client RedisBloomFilter,
-	filterKey string, strict bool) (RedisMultiCacheAdaptor, error) {
+	filterKey string, strict bool, insertOpts *redis.BFInsertOptions) (RedisMultiCacheAdaptor, error) {
 	if filterKey == "" {
 		return nil, errMissingFilterKey
 	}
 
 	return &bloomFilterRedisCacheAdaptor{
-		client:    client,
-		filterKey: filterKey,
-		strict:    strict,
+		client:     client,
+		filterKey:  filterKey,
+		strict:     strict,
+		insertOpts: insertOpts,
 	}, nil
 }
 
@@ -210,7 +219,7 @@ func (c *bloomFilterRedisCacheAdaptor) SetMulti(ctx context.Context, items ...se
 		elements[i] = item.Key
 	}
 
-	return c.client.BFInsert(ctx, c.filterKey, nil, elements...).Err()
+	return c.client.BFInsert(ctx, c.filterKey, c.insertOpts, elements...).Err()
 }
 
 func (c *bloomFilterRedisCacheAdaptor) Close() error {
@@ -218,8 +227,9 @@ func (c *bloomFilterRedisCacheAdaptor) Close() error {
 }
 
 type cuckooFilterRedisCacheAdaptor struct {
-	client    RedisCuckooFilter
-	filterKey string
+	client     RedisCuckooFilter
+	filterKey  string
+	insertOpts *redis.CFInsertOptions
 }
 
 // NewCuckooFilterRedisCacheAdaptor ctor.
@@ -227,18 +237,30 @@ type cuckooFilterRedisCacheAdaptor struct {
 // can be changed with WithFilterKey(...) option.
 // Cuckoo filters supports Delete operations. WithStrict option will be ignored.
 func NewCuckooFilterRedisCacheAdaptor(client RedisCuckooFilter,
-	filterKey string) (RedisMultiCacheAdaptor, error) {
+	filterKey string, insertOpts *redis.CFInsertOptions) (RedisMultiCacheAdaptor, error) {
 	if filterKey == "" {
 		return nil, errMissingFilterKey
 	}
 
 	return &cuckooFilterRedisCacheAdaptor{
-		client:    client,
-		filterKey: filterKey,
+		client:     client,
+		filterKey:  filterKey,
+		insertOpts: insertOpts,
 	}, nil
 }
 
 func (c *cuckooFilterRedisCacheAdaptor) Add(ctx context.Context, key string, _ []byte, _ time.Duration) (bool, error) {
+	if c.insertOpts != nil {
+		r, err := c.client.CFInsertNX(ctx, c.filterKey, c.insertOpts, key).Result()
+		if err != nil {
+			return false, err
+		}
+
+		ok := len(r) > 0 && r[0] == 1
+
+		return ok, nil
+	}
+
 	return c.client.CFAddNX(ctx, c.filterKey, key).Result()
 }
 
@@ -254,6 +276,10 @@ func (c *cuckooFilterRedisCacheAdaptor) Get(ctx context.Context, key string) ([]
 }
 
 func (c *cuckooFilterRedisCacheAdaptor) Set(ctx context.Context, key string, value []byte, expiration time.Duration) error {
+	if c.insertOpts != nil {
+		return c.client.CFInsert(ctx, c.filterKey, c.insertOpts, key).Err()
+	}
+
 	return c.client.CFAdd(ctx, c.filterKey, key).Err()
 }
 
@@ -264,7 +290,7 @@ func (c *cuckooFilterRedisCacheAdaptor) SetMulti(ctx context.Context, items ...s
 		elements[i] = item.Key
 	}
 
-	return c.client.CFInsert(ctx, c.filterKey, nil, elements...).Err()
+	return c.client.CFInsert(ctx, c.filterKey, c.insertOpts, elements...).Err()
 }
 
 func (c *cuckooFilterRedisCacheAdaptor) Delete(ctx context.Context, key string) error {

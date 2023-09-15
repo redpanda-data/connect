@@ -226,8 +226,9 @@ func TestBloomFilterRedisAdaptor(t *testing.T) {
 	testcases := []struct {
 		label string
 
-		filterKey string
-		strict    bool
+		filterKey  string
+		strict     bool
+		insertOpts *redis_client.BFInsertOptions
 
 		prepare func(*redismock.RedisBloomFilter)
 
@@ -477,7 +478,8 @@ func TestBloomFilterRedisAdaptor(t *testing.T) {
 				filterKey = tc.filterKey
 			}
 
-			adaptor, err := redis.NewBloomFilterRedisCacheAdaptor(client, filterKey, tc.strict)
+			adaptor, err := redis.NewBloomFilterRedisCacheAdaptor(client,
+				filterKey, tc.strict, tc.insertOpts)
 			require.NoError(t, err)
 
 			tc.verify(t, adaptor)
@@ -493,7 +495,8 @@ func TestCuckooFilterRedisAdaptor(t *testing.T) {
 	testcases := []struct {
 		label string
 
-		filterKey string
+		filterKey  string
+		insertOpts *redis_client.CFInsertOptions
 
 		prepare func(*redismock.RedisCuckooFilter)
 
@@ -766,7 +769,8 @@ func TestCuckooFilterRedisAdaptor(t *testing.T) {
 				filterKey = tc.filterKey
 			}
 
-			adaptor, err := redis.NewCuckooFilterRedisCacheAdaptor(client, filterKey)
+			adaptor, err := redis.NewCuckooFilterRedisCacheAdaptor(client,
+				filterKey, tc.insertOpts)
 			require.NoError(t, err)
 
 			tc.verify(t, adaptor)
@@ -778,7 +782,7 @@ func TestBloomCtorFailure(t *testing.T) {
 	t.Parallel()
 
 	client := redismock.NewRedisBloomFilter(t)
-	_, err := redis.NewBloomFilterRedisCacheAdaptor(client, "", false)
+	_, err := redis.NewBloomFilterRedisCacheAdaptor(client, "", false, nil)
 	assert.EqualError(t, err, "missing filter key")
 }
 
@@ -786,6 +790,6 @@ func TestCuckooCtorFailure(t *testing.T) {
 	t.Parallel()
 
 	client := redismock.NewRedisCuckooFilter(t)
-	_, err := redis.NewCuckooFilterRedisCacheAdaptor(client, "")
+	_, err := redis.NewCuckooFilterRedisCacheAdaptor(client, "", nil)
 	assert.EqualError(t, err, "missing filter key")
 }

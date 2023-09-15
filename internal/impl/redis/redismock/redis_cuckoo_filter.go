@@ -98,6 +98,25 @@ func (_m *RedisCuckooFilter) CFInsert(ctx context.Context, key string, options *
 	return r0
 }
 
+// CFInsertNX provides a mock function with given fields: ctx, key, options, elements
+func (_m *RedisCuckooFilter) CFInsertNX(ctx context.Context, key string, options *redis.CFInsertOptions, elements ...interface{}) *redis.IntSliceCmd {
+	var _ca []interface{}
+	_ca = append(_ca, ctx, key, options)
+	_ca = append(_ca, elements...)
+	ret := _m.Called(_ca...)
+
+	var r0 *redis.IntSliceCmd
+	if rf, ok := ret.Get(0).(func(context.Context, string, *redis.CFInsertOptions, ...interface{}) *redis.IntSliceCmd); ok {
+		r0 = rf(ctx, key, options, elements...)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*redis.IntSliceCmd)
+		}
+	}
+
+	return r0
+}
+
 // Close provides a mock function with given fields:
 func (_m *RedisCuckooFilter) Close() error {
 	ret := _m.Called()
