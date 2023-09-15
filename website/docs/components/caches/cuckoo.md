@@ -1,7 +1,7 @@
 ---
 title: cuckoo
 type: cache
-status: stable
+status: beta
 ---
 
 <!--
@@ -13,42 +13,19 @@ status: stable
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
+:::caution BETA
+This component is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with the component is found.
+:::
 Stores keys in a cuckoo in-memory filter, useful for deduplication. This cache is therefore reset every time the service restarts.
 
-
-<Tabs defaultValue="common" values={[
-  { label: 'Common', value: 'common', },
-  { label: 'Advanced', value: 'advanced', },
-]}>
-
-<TabItem value="common">
-
 ```yml
-# Common config fields, showing default values
+# Config fields, showing default values
 label: ""
 cuckoo:
   cap: 10000
   scalable: false
   init_values: []
 ```
-
-</TabItem>
-<TabItem value="advanced">
-
-```yml
-# All config fields, showing default values
-label: ""
-cuckoo:
-  cap: 10000
-  scalable: false
-  init_values: []
-  storage:
-    path: /path/to/cuckoo-dumps-dir/ # No default (required)
-    skip_dump: false
-```
-
-</TabItem>
-</Tabs>
 
 This provides the cuckoo package which implements a fixed-size thread safe Cuckoo filter.
 
@@ -108,50 +85,6 @@ init_values:
   - Spice Girls
   - The Human League
 ```
-
-### `storage`
-
-If present, can be used to write and restore dumps of cuckoo filters
-
-
-Type: `object`  
-
-### `storage.path`
-
-Path to a dir or file where we can restore or write dumps of cuckoo filter.
-
-This cache can try to dump the content of the cache in disk during the benthos shutdown.
-
-Also, the cache can try to restore the state from an existing dump file. Errors will be ignored on this phase.
-
-This field accepts two kinds of value:
-
-If the path contains a single file with extension '.dat', it will be used for I/O operations.
-
-If the path contains a directory, we will try to use the most recent dump file (if any). The directory must exits.
-
-If necessary, we will create a file with format 'benthos-cuckoo-dump.<timestamp>.dat'
-
-
-Type: `string`  
-
-```yml
-# Examples
-
-path: /path/to/cuckoo-dumps-dir/
-
-path: /path/to/cuckoo-dumps-dir/benthos-cuckoo-dump.1691480368391.dat
-
-path: /path/to/cuckoo-dumps-dir/you-can-choose-any-other-name.dat
-```
-
-### `storage.skip_dump`
-
-If true, will try to read the dump but will not flush it on disk on exit
-
-
-Type: `bool`  
-Default: `false`  
 
 This component implements all cache operations, however it does not store any value, only the keys.
 

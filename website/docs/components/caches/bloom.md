@@ -15,41 +15,14 @@ import TabItem from '@theme/TabItem';
 
 Stores keys in a bloom in-memory filter, useful for deduplication. This cache is therefore reset every time the service restarts.
 
-
-<Tabs defaultValue="common" values={[
-  { label: 'Common', value: 'common', },
-  { label: 'Advanced', value: 'advanced', },
-]}>
-
-<TabItem value="common">
-
 ```yml
-# Common config fields, showing default values
+# Config fields, showing default values
 label: ""
 bloom:
   cap: 10000
   fp: 0.01
   init_values: []
 ```
-
-</TabItem>
-<TabItem value="advanced">
-
-```yml
-# All config fields, showing default values
-label: ""
-bloom:
-  cap: 10000
-  fp: 0.01
-  init_values: []
-  storage:
-    path: /path/to/bloom-dumps-dir/ # No default (required)
-    skip_restore: false
-    skip_dump: false
-```
-
-</TabItem>
-</Tabs>
 
 This provides the bloom package which implements a fixed-size thread safe filter.
 
@@ -107,58 +80,6 @@ init_values:
   - Spice Girls
   - The Human League
 ```
-
-### `storage`
-
-If present, can be used to write and restore dumps of bloom filters
-
-
-Type: `object`  
-
-### `storage.path`
-
-Path to a dir or file where we can restore or write dumps of bloom filter.
-
-This cache can try to dump the content of the cache in disk during the benthos shutdown.
-
-Also, the cache can try to restore the state from an existing dump file. Errors will be ignored on this phase.
-
-This field accepts two kinds of value:
-
-If the path contains a single file with extension '.dat', it will be used for I/O operations.
-
-If the path contains a directory, we will try to use the most recent dump file (if any). The directory must exits.
-
-If necessary, we will create a file with format 'benthos-bloom-dump.<timestamp>.dat'
-
-
-Type: `string`  
-
-```yml
-# Examples
-
-path: /path/to/bloom-dumps-dir/
-
-path: /path/to/bloom-dumps-dir/benthos-bloom-dump.1691480368391.dat
-
-path: /path/to/bloom-dumps-dir/you-can-choose-any-other-name.dat
-```
-
-### `storage.skip_restore`
-
-If true, will not restore the filter state from disk
-
-
-Type: `bool`  
-Default: `false`  
-
-### `storage.skip_dump`
-
-If true, will not dump the filter state on disk
-
-
-Type: `bool`  
-Default: `false`  
 
 This component implements all cache operations except *delete*, however it does not store any value, only the keys.
 
