@@ -265,8 +265,8 @@ var _ = registerSimpleFunction(
 //------------------------------------------------------------------------------
 
 var _ = registerFunction(
-	NewFunctionSpec(
-		FunctionCategoryGeneral, "count",
+	NewDeprecatedFunctionSpec(
+		"count",
 		"The `count` function is a counter starting at 1 which increments after each time it is called. Count takes an argument which is an identifier for the counter, allowing you to specify multiple unique counters in your configuration.",
 		NewExampleSpec("",
 			`root = this
