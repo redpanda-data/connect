@@ -33,11 +33,11 @@ Cuckoo filter is a Bloom filter replacement for approximated set-membership quer
 
 Cuckoo ﬁlters provide the ﬂexibility to add and remove items dynamically. A cuckoo filter is based on cuckoo hashing (and therefore named as cuckoo filter). It is essentially a cuckoo hash table storing each key's fingerprint. Cuckoo hash tables can be highly compact, thus a cuckoo filter could use less space than conventional Bloom ﬁlters, for applications that require low false positive rates (< 3%).
 
-For details about the algorithm and citations please use this article for now[`Cuckoo Filter: Better Than Bloom`](https://www.cs.cmu.edu/~dga/papers/cuckoo-conext2014.pdf) by Bin Fan, Dave Andersen and Michael Kaminsky
+For details about the algorithm and citations please use this article for now [`Cuckoo Filter: Better Than Bloom`](https://www.cs.cmu.edu/~dga/papers/cuckoo-conext2014.pdf) by Bin Fan, Dave Andersen and Michael Kaminsky
 
 It uses the package [`cuckoofilter`](github.com/seiflotfy/cuckoofilter)
 
-The field init_values can be used to pre-populate the memory cache with any number of keys:
+The field `init_values` can be used to pre-populate the memory cache with any number of keys:
 
 ```yml
 cache_resources:

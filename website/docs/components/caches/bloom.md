@@ -59,7 +59,7 @@ When you construct, you need to know how many elements you have (the desired cap
 
 It uses the package [`bloomfilter`](github.com/bits-and-blooms/bloom/v3)
 
-The field init_values can be used to pre-populate the memory cache with any number of keys:
+The field `init_values` can be used to pre-populate the memory cache with any number of keys:
 
 ```yml
 cache_resources:
