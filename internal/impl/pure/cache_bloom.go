@@ -24,7 +24,7 @@ const (
 
 func bloomCacheConfig() *service.ConfigSpec {
 	spec := service.NewConfigSpec().
-		Stable().
+		Beta().
 		Summary(`Stores keys in a bloom in-memory filter, useful for deduplication. This cache is therefore reset every time the service restarts.`).
 		Description(`This provides the bloom package which implements a fixed-size thread safe filter.
 

@@ -1,7 +1,7 @@
 ---
 title: bloom
 type: cache
-status: stable
+status: beta
 ---
 
 <!--
@@ -13,6 +13,9 @@ status: stable
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
+:::caution BETA
+This component is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with the component is found.
+:::
 Stores keys in a bloom in-memory filter, useful for deduplication. This cache is therefore reset every time the service restarts.
 
 ```yml
