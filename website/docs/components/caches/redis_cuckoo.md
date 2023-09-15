@@ -56,6 +56,9 @@ redis_cuckoo:
     initial_interval: 500ms
     max_interval: 1s
     max_elapsed_time: 5s
+  insert_options:
+    capacity: 1000
+    no_create: false
 ```
 
 </TabItem>
@@ -336,6 +339,29 @@ max_elapsed_time: 1m
 
 max_elapsed_time: 1h
 ```
+
+### `insert_options`
+
+...
+
+
+Type: `object`  
+
+### `insert_options.capacity`
+
+Sorry! This field is missing documentation.
+
+
+Type: `int`  
+Default: `1000`  
+
+### `insert_options.no_create`
+
+Sorry! This field is missing documentation.
+
+
+Type: `bool`  
+Default: `false`  
 
 This component implements all cache operations, however it does not store any value, only the keys.
 
