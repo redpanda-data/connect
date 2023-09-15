@@ -3,8 +3,9 @@ package redis
 import (
 	"time"
 
-	"github.com/benthosdev/benthos/v4/public/service"
 	"github.com/cenkalti/backoff/v4"
+
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
 func redisBloomCacheConfig() *service.ConfigSpec {

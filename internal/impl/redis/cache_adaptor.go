@@ -6,9 +6,10 @@ import (
 	"io"
 	"time"
 
-	"github.com/benthosdev/benthos/v4/public/service"
 	"github.com/itchyny/timefmt-go"
 	"github.com/redis/go-redis/v9"
+
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
 var (

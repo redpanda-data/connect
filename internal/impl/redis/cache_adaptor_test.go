@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/benbjohnson/clock"
+
 	"github.com/benthosdev/benthos/v4/internal/impl/redis"
 	"github.com/benthosdev/benthos/v4/internal/impl/redis/redismock"
 	"github.com/benthosdev/benthos/v4/public/service"
