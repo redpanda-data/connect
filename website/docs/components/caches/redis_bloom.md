@@ -54,9 +54,9 @@ redis_bloom:
   filter_key: bf:benthos # No default (required)
   strict: false
   insert_options:
-    capacity: 0
-    error: 0
-    expansion: 0
+    capacity: 1024
+    error_rate: 0.001
+    expansion: 2
     non_scaling: false
     no_create: false
   retries:
@@ -317,17 +317,20 @@ See [BF.RESERVE](https://redis.io/commands/bf.reserve) for more information abou
 
 
 Type: `int`  
-Default: `0`  
+Default: `1024`  
 
-### `insert_options.error`
+### `insert_options.error_rate`
 
-Specifies the error ratio of the newly created filter if it does not yet exist. 
+Specifies the error ratio of the newly created filter if it does not yet exist.
+				
+The rate is a decimal value between 0 and 1. For example, for a desired false positive rate of 0.1% (1 in 1000), error_rate should be set to 0.001.
+
 If the filter is automatically created and error is not specified then the module-level error rate is used.
 See [BF.RESERVE](https://redis.io/commands/bf.reserve) for more information about the impact of this value.
 
 
 Type: `float`  
-Default: `0`  
+Default: `0.001`  
 
 ### `insert_options.expansion`
 
@@ -339,7 +342,7 @@ Otherwise, use an expansion of 1 to reduce memory consumption. The default value
 
 
 Type: `int`  
-Default: `0`  
+Default: `2`  
 
 ### `insert_options.non_scaling`
 
@@ -419,7 +422,7 @@ max_elapsed_time: 1h
 
 This component implements all cache operations, however it does not store any value, only the keys.
 
-			The main intent is to be used on deduplication.
+The main intent is to be used on deduplication.
 			
-			When fetch a key from this case, if the key exists, we return a fixed string`t`.
+When fetch a key from this case, if the key exists, we return a fixed string`t`.
 

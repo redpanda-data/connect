@@ -57,7 +57,7 @@ redis_cuckoo:
     max_interval: 1s
     max_elapsed_time: 5s
   insert_options:
-    capacity: 0
+    capacity: 1024
     no_create: false
 ```
 
@@ -362,7 +362,7 @@ See [CF.RESERVE](https://redis.io/commands/cf.reserve/) for more information on 
 
 
 Type: `int`  
-Default: `0`  
+Default: `1024`  
 
 ### `insert_options.no_create`
 
@@ -376,7 +376,7 @@ Default: `false`
 
 This component implements all cache operations, however it does not store any value, only the keys.
 
-			The main intent is to be used on deduplication.
+The main intent is to be used on deduplication.
 			
-			When fetch a key from this case, if the key exists, we return a fixed string`t`.
+When fetch a key from this case, if the key exists, we return a fixed string`t`.
 

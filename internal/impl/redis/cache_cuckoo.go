@@ -53,7 +53,7 @@ If the filter already exists, then this parameter is ignored.
 If the filter does not exist yet and this parameter is not specified, then the filter is created with the module-level default capacity which is 1024.
 
 See [CF.RESERVE](https://redis.io/commands/cf.reserve/) for more information on cuckoo filter capacities.`).
-				Default(0).
+				Default(1024).
 				Advanced().
 				Optional(),
 			service.NewBoolField("no_create").
@@ -71,9 +71,9 @@ See [CF.INSERTNX](https://redis.io/commands/cf.insertnx/)`).
 			Advanced()).
 		Footnotes(`This component implements all cache operations, however it does not store any value, only the keys.
 
-			The main intent is to be used on deduplication.
+The main intent is to be used on deduplication.
 			
-			When fetch a key from this case, if the key exists, we return a fixed string` + "`t`" + `.`)
+When fetch a key from this case, if the key exists, we return a fixed string` + "`t`" + `.`)
 
 	return spec
 }

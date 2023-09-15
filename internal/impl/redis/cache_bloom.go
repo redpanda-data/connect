@@ -54,14 +54,17 @@ If the key does not exists, we will create one using the default capacity.`).
 This parameter is ignored if the filter already exists. 
 If the filter is automatically created and this parameter is absent, then the module-level capacity is used. 
 See [BF.RESERVE](https://redis.io/commands/bf.reserve) for more information about the impact of this value.`).
-				Default(0).
+				Default(1024).
 				Advanced().
 				Optional(),
-			service.NewFloatField("error").
-				Description(`Specifies the error ratio of the newly created filter if it does not yet exist. 
+			service.NewFloatField("error_rate").
+				Description(`Specifies the error ratio of the newly created filter if it does not yet exist.
+				
+The rate is a decimal value between 0 and 1. For example, for a desired false positive rate of 0.1% (1 in 1000), error_rate should be set to 0.001.
+
 If the filter is automatically created and error is not specified then the module-level error rate is used.
 See [BF.RESERVE](https://redis.io/commands/bf.reserve) for more information about the impact of this value.`).
-				Default(0.0).
+				Default(0.001).
 				Advanced().
 				Optional(),
 			service.NewIntField("expansion").
@@ -70,7 +73,7 @@ The size of the new sub-filter is the size of the last sub-filter multiplied by 
 
 If the number of elements to be stored in the filter is unknown, use an expansion of 2 or more to reduce the number of sub-filters. 
 Otherwise, use an expansion of 1 to reduce memory consumption. The default value is 2.`).
-				Default(0).
+				Default(2).
 				Advanced().
 				Optional(),
 			service.NewBoolField("non_scaling").
@@ -78,7 +81,7 @@ Otherwise, use an expansion of 1 to reduce memory consumption. The default value
 Non-scaling filters require slightly less memory than their scaling counterparts. 
 The filter returns an error when capacity is reached.`).
 				Default(false).
-				Advanced().
+				Advanced().Default(false).
 				Optional(),
 			service.NewBoolField("no_create").
 				Description(`Indicates that the filter should not be created if it does not already exist. 
@@ -97,9 +100,9 @@ See [BF.INSERT](https://redis.io/commands/bf.insert/)`).
 			Advanced()).
 		Footnotes(`This component implements all cache operations, however it does not store any value, only the keys.
 
-			The main intent is to be used on deduplication.
+The main intent is to be used on deduplication.
 			
-			When fetch a key from this case, if the key exists, we return a fixed string` + "`t`" + `.`)
+When fetch a key from this case, if the key exists, we return a fixed string` + "`t`" + `.`)
 
 	return spec
 }
@@ -150,16 +153,36 @@ func newRedisBloomCacheFromConfig(conf *service.ParsedConfig) (*redisCache, erro
 		if err != nil {
 			return nil, err
 		}
+
+		errorRate, err := conf.FieldFloat("insert_options.error_rate")
+		if err != nil {
+			return nil, err
+		}
+
+		expansion, err := conf.FieldInt("insert_options.expansion")
+		if err != nil {
+			return nil, err
+		}
+
+		nonScalling, err := conf.FieldBool("insert_options.non_scalling")
+		if err != nil {
+			return nil, err
+		}
+
 		noCreate, err := conf.FieldBool("insert_options.no_create")
 		if err != nil {
 			return nil, err
 		}
 
 		insertOpts = &redis.BFInsertOptions{
-			Capacity: int64(capacity),
-			NoCreate: noCreate,
+			Capacity:   int64(capacity),
+			Error:      errorRate,
+			Expansion:  int64(expansion),
+			NonScaling: nonScalling,
+			NoCreate:   noCreate,
 		}
 	}
+
 	cacheAdaptor, err := NewBloomFilterRedisCacheAdaptor(client, filterKey, strict, insertOpts)
 	if err != nil {
 		return nil, err
