@@ -16,7 +16,7 @@ import TabItem from '@theme/TabItem';
 :::caution BETA
 This component is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with the component is found.
 :::
-Use a Redis instance as a probabilistic cache using bloom filters.
+Use a Redis instance as a probabilistic cache using bloom filters
 
 
 <Tabs defaultValue="common" values={[
@@ -31,7 +31,7 @@ Use a Redis instance as a probabilistic cache using bloom filters.
 label: ""
 redis_bloom:
   url: redis://:6397 # No default (required)
-  filter_key: bf:benthos
+  filter_key: bf:benthos # No default (required)
 ```
 
 </TabItem>
@@ -51,7 +51,7 @@ redis_bloom:
     root_cas: ""
     root_cas_file: ""
     client_certs: []
-  filter_key: bf:benthos
+  filter_key: bf:benthos # No default (required)
   strict: false
   retries:
     initial_interval: 500ms
@@ -61,6 +61,16 @@ redis_bloom:
 
 </TabItem>
 </Tabs>
+
+Bloom filters are a probabilistic data structure that checks for presence of an element in a set.
+
+A Bloom filter is a probabilistic data structure in Redis Stack that enables you to check if an element is present in a set using a very small memory space of a fixed size.
+
+Instead of storing all of the elements in the set, Bloom Filters store only the elements' hashed representation, thus sacrificing some precision. The trade-off is that Bloom Filters are very space-efficient and fast.
+
+A Bloom filter can guarantee the absence of an element from a set, but it can only give an estimation about its presence. So when it responds that an element is not present in a set (a negative answer), you can be sure that indeed is the case. But one out of every N positive answers will be wrong. Even though it looks unusual at a first glance, this kind of uncertainty still has its place in computer science. There are many cases out there where a negative answer will prevent more costly operations, for example checking if a username has been taken, if a credit card has been reported as stolen, if a user has already seen an ad and much more.
+
+See more [here](https://redis.io/docs/data-types/probabilistic/bloom-filter/).
 
 ## Fields
 
@@ -254,23 +264,30 @@ password: ${KEY_PASSWORD}
 
 ### `filter_key`
 
-change the key used by the probabilistic filter
+Specify the key used by the probabilistic bloom filter. 
+
+If the key does not exists, we will create one using the default capacity.
 
 
 Type: `string`  
-Default: `"bf:benthos"`  
 
 ```yml
 # Examples
 
 filter_key: bf:benthos
 
-filter_key: bloom-filter:benthos
+filter_key: cache:bf:benthos
+
+filter_key: bloom-filer:benthos:20230919
+
+filter_key: dedupe:bf:benthos:1694774600
+
+filter_key: anything-descriptive
 ```
 
 ### `strict`
 
-if true, bloom filter will fail on delete operations
+if `true`, bloom filter will fail on delete operations
 
 
 Type: `bool`  

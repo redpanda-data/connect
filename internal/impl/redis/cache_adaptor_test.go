@@ -14,6 +14,7 @@ import (
 
 	redis_client "github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestCRUDRedisAdaptor(t *testing.T) {
@@ -220,22 +221,21 @@ func TestCRUDRedisAdaptor(t *testing.T) {
 func TestBloomFilterRedisAdaptor(t *testing.T) {
 	t.Parallel()
 
+	const defaultFilterKey = "bf:benthos"
+
 	testcases := []struct {
 		label string
 
-		opts []redis.AdaptorOption
+		filterKey string
+		strict    bool
 
 		prepare func(*redismock.RedisBloomFilter)
 
 		verify func(t *testing.T, adaptor redis.RedisMultiCacheAdaptor)
 	}{
 		{
-			label: "adaptor.Add should call 'BFAdd' from inner client",
-			opts: []redis.AdaptorOption{
-				redis.WithFilterKey("bloom-filter:benthos"),
-				redis.WithFilterKeyPrefix("other"),
-				redis.WithFilterKeySuffix("20010101"),
-			},
+			label:     "adaptor.Add should call 'BFAdd' from inner client",
+			filterKey: "other:bloom-filter:benthos:20010101",
 			prepare: func(rbf *redismock.RedisBloomFilter) {
 				{
 					var cmd redis_client.BoolCmd
@@ -371,7 +371,7 @@ func TestBloomFilterRedisAdaptor(t *testing.T) {
 		},
 		{
 			label:   "adaptor.Delete should do nothing on strict mode false",
-			opts:    []redis.AdaptorOption{redis.WithStrict(false)},
+			strict:  false,
 			prepare: func(rbf *redismock.RedisBloomFilter) {},
 			verify: func(t *testing.T, adaptor redis.RedisMultiCacheAdaptor) {
 				t.Helper()
@@ -382,7 +382,7 @@ func TestBloomFilterRedisAdaptor(t *testing.T) {
 		},
 		{
 			label:   "adaptor.Delete should return error on strict mode true",
-			opts:    []redis.AdaptorOption{redis.WithStrict(true)},
+			strict:  true,
 			prepare: func(rbf *redismock.RedisBloomFilter) {},
 			verify: func(t *testing.T, adaptor redis.RedisMultiCacheAdaptor) {
 				t.Helper()
@@ -472,7 +472,13 @@ func TestBloomFilterRedisAdaptor(t *testing.T) {
 
 			tc.prepare(client)
 
-			adaptor := redis.NewBloomFilterRedisCacheAdaptor(client, tc.opts...)
+			filterKey := defaultFilterKey
+			if tc.filterKey != "" {
+				filterKey = tc.filterKey
+			}
+
+			adaptor, err := redis.NewBloomFilterRedisCacheAdaptor(client, filterKey, tc.strict)
+			require.NoError(t, err)
 
 			tc.verify(t, adaptor)
 		})
@@ -482,22 +488,20 @@ func TestBloomFilterRedisAdaptor(t *testing.T) {
 func TestCuckooFilterRedisAdaptor(t *testing.T) {
 	t.Parallel()
 
+	const defaultFilterKey = "cf:benthos"
+
 	testcases := []struct {
 		label string
 
-		opts []redis.AdaptorOption
+		filterKey string
 
 		prepare func(*redismock.RedisCuckooFilter)
 
 		verify func(t *testing.T, adaptor redis.RedisMultiCacheAdaptor)
 	}{
 		{
-			label: "adaptor.Add should call 'CFAddNX' from inner client",
-			opts: []redis.AdaptorOption{
-				redis.WithFilterKey("cuckoo-filter:benthos"),
-				redis.WithFilterKeyPrefix("other"),
-				redis.WithFilterKeySuffix("20010101"),
-			},
+			label:     "adaptor.Add should call 'CFAddNX' from inner client",
+			filterKey: "other:cuckoo-filter:benthos:20010101",
 			prepare: func(rcf *redismock.RedisCuckooFilter) {
 				{
 					var cmd redis_client.BoolCmd
@@ -633,7 +637,6 @@ func TestCuckooFilterRedisAdaptor(t *testing.T) {
 		},
 		{
 			label: "adaptor.Delete should call 'CFDel' from inner client",
-			opts:  []redis.AdaptorOption{redis.WithStrict(false)},
 			prepare: func(rcf *redismock.RedisCuckooFilter) {
 				{
 					var cmd redis_client.BoolCmd
@@ -758,9 +761,31 @@ func TestCuckooFilterRedisAdaptor(t *testing.T) {
 
 			tc.prepare(client)
 
-			adaptor := redis.NewCuckooFilterRedisCacheAdaptor(client, tc.opts...)
+			filterKey := defaultFilterKey
+			if tc.filterKey != "" {
+				filterKey = tc.filterKey
+			}
+
+			adaptor, err := redis.NewCuckooFilterRedisCacheAdaptor(client, filterKey)
+			require.NoError(t, err)
 
 			tc.verify(t, adaptor)
 		})
 	}
+}
+
+func TestBloomCtorFailure(t *testing.T) {
+	t.Parallel()
+
+	client := redismock.NewRedisBloomFilter(t)
+	_, err := redis.NewBloomFilterRedisCacheAdaptor(client, "", false)
+	assert.EqualError(t, err, "missing filter key")
+}
+
+func TestCuckooCtorFailure(t *testing.T) {
+	t.Parallel()
+
+	client := redismock.NewRedisCuckooFilter(t)
+	_, err := redis.NewCuckooFilterRedisCacheAdaptor(client, "")
+	assert.EqualError(t, err, "missing filter key")
 }

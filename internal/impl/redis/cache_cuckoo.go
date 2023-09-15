@@ -16,7 +16,14 @@ func redisCuckooCacheConfig() *service.ConfigSpec {
 
 	spec := service.NewConfigSpec().
 		Beta().
-		Summary(`Use a Redis instance as a probabilistic cache using cuckoo filters.`)
+		Summary(`Use a Redis instance as a probabilistic cache using cuckoo filters.`).
+		Description(`Cuckoo filters are a probabilistic data structure that checks for presence of an element in a set.
+
+A Cuckoo filter, just like a Bloom filter, is a probabilistic data structure in Redis Stack that enables you to check if an element is present in a set in a very fast and space efficient way, while also allowing for deletions and showing better performance than Bloom in some scenarios.
+
+While the Bloom filter is a bit array with flipped bits at positions decided by the hash function, a Cuckoo filter is an array of buckets, storing fingerprints of the values in one of the buckets at positions decided by the two hash functions. A membership query for item x searches the possible buckets for the fingerprint of x, and returns true if an identical fingerprint is found. A cuckoo filter's fingerprint size will directly determine the false positive rate.
+
+See more [here](https://redis.io/docs/data-types/probabilistic/cuckoo-filter/).`)
 
 	for _, f := range clientFields() {
 		spec = spec.Field(f)
@@ -24,13 +31,16 @@ func redisCuckooCacheConfig() *service.ConfigSpec {
 
 	spec = spec.
 		Field(service.NewStringField("filter_key").
-			Description(`change the key used by the probabilistic filter`).
+			Description(`Specify the key used by the probabilistic cuckoo filter. 
+
+If the key does not exists, we will create one using the default capacity.`).
 			Examples(
 				"cf:benthos",
-				"cuckoo-filter:benthos",
-			).
-			Default("cf:benthos").
-			Optional()). // add prefix and suffix
+				"cache:cf:benthos",
+				"cuckoo-filter:benthos:20230919",
+				"dedupe:cf:benthos:1694774600",
+				"anything-descriptive",
+			)).
 		Field(service.NewBackOffField("retries", false, retriesDefaults).
 			Advanced()).
 		Footnotes(`This component implements all cache operations, however it does not store any value, only the keys.
@@ -64,15 +74,9 @@ func newRedisCuckooCacheFromConfig(conf *service.ParsedConfig) (*redisCache, err
 		return nil, err
 	}
 
-	var opts []AdaptorOption
-
-	if conf.Contains("filter_key") {
-		filterKey, err := conf.FieldString("filter_key")
-		if err != nil {
-			return nil, err
-		}
-
-		opts = append(opts, WithFilterKey(filterKey))
+	filterKey, err := conf.FieldString("filter_key")
+	if err != nil {
+		return nil, err
 	}
 
 	backOff, err := conf.FieldBackOff("retries")
@@ -80,7 +84,10 @@ func newRedisCuckooCacheFromConfig(conf *service.ParsedConfig) (*redisCache, err
 		return nil, err
 	}
 
-	cacheAdaptor := NewCuckooFilterRedisCacheAdaptor(client, opts...)
+	cacheAdaptor, err := NewCuckooFilterRedisCacheAdaptor(client, filterKey)
+	if err != nil {
+		return nil, err
+	}
 
 	return newRedisCache(ttl, prefix, cacheAdaptor, backOff), nil
 }
