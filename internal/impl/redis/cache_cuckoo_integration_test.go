@@ -32,14 +32,17 @@ func TestIntegrationRedisCuckooCache(t *testing.T) {
 	require.NoError(t, pool.Retry(func() error {
 		url := fmt.Sprintf("tcp://localhost:%v/1", resource.GetPort("6379/tcp"))
 
-		confTemplate := `url: %q`
+		confTemplate := `---
+url: %q
+filter_key: cf:benthos
+`
 
 		pConf, cErr := redisCacheConfig().ParseYAML(fmt.Sprintf(confTemplate, url), nil)
 		if cErr != nil {
 			return cErr
 		}
 
-		r, cErr := newRedisBloomCacheFromConfig(pConf)
+		r, cErr := newRedisCuckooCacheFromConfig(pConf)
 		if cErr != nil {
 			return cErr
 		}
@@ -48,11 +51,12 @@ func TestIntegrationRedisCuckooCache(t *testing.T) {
 		return cErr
 	}))
 
-	template := `
+	template := `---
 cache_resources:
   - label: testcache
     redis_cuckoo:
       url: tcp://localhost:$PORT/1
+      filter_key: cf:benthos
 `
 	opts := []integration.Option{integration.WithValue([]byte("t"))}
 	suite := integration.CacheTests(

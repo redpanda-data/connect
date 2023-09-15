@@ -279,6 +279,28 @@ func TestBloomFilterRedisAdaptor(t *testing.T) {
 			},
 		},
 		{
+			label: "adapter.Add should call 'BFInsert' in inner client if insert options are well defined",
+			insertOpts: &redis_client.BFInsertOptions{
+				Capacity: 1024,
+			},
+			prepare: func(rbf *redismock.RedisBloomFilter) {
+				var cmd redis_client.BoolSliceCmd
+
+				cmd.SetVal([]bool{true})
+
+				rbf.On("BFInsert", context.Background(), "bf:benthos", &redis_client.BFInsertOptions{
+					Capacity: 1024,
+				}, "foo").Return(&cmd)
+			},
+			verify: func(t *testing.T, adaptor redis.RedisMultiCacheAdaptor) {
+				t.Helper()
+
+				ok, err := adaptor.Add(context.Background(), "foo", []byte("t"), 1*time.Minute)
+				assert.NoError(t, err)
+				assert.True(t, ok)
+			},
+		},
+		{
 			label: "adaptor.Get should call 'BFExists' on inner client",
 			prepare: func(rbf *redismock.RedisBloomFilter) {
 				{
@@ -366,6 +388,27 @@ func TestBloomFilterRedisAdaptor(t *testing.T) {
 					err := adaptor.Set(context.Background(), "baz", []byte("t"), 1*time.Minute)
 					assert.EqualError(t, err, "ops")
 				}
+			},
+		},
+		{
+			label: "adapter.Set should call 'BFInsert' in inner client if insert options are well defined",
+			insertOpts: &redis_client.BFInsertOptions{
+				Capacity: 1024,
+			},
+			prepare: func(rbf *redismock.RedisBloomFilter) {
+				var cmd redis_client.BoolSliceCmd
+
+				cmd.SetVal([]bool{true})
+
+				rbf.On("BFInsert", context.Background(), "bf:benthos", &redis_client.BFInsertOptions{
+					Capacity: 1024,
+				}, "foo").Return(&cmd)
+			},
+			verify: func(t *testing.T, adaptor redis.RedisMultiCacheAdaptor) {
+				t.Helper()
+
+				err := adaptor.Set(context.Background(), "foo", []byte("t"), 1*time.Minute)
+				assert.NoError(t, err)
 			},
 		},
 		{
@@ -600,6 +643,28 @@ func TestCuckooFilterRedisAdaptor(t *testing.T) {
 			},
 		},
 		{
+			label: "adaptor.Add should call 'CFInsertNX' on inner client if insert options are not well defined",
+			insertOpts: &redis_client.CFInsertOptions{
+				Capacity: 1024,
+			},
+			prepare: func(rcf *redismock.RedisCuckooFilter) {
+				var cmd redis_client.IntSliceCmd
+
+				cmd.SetVal([]int64{1})
+
+				rcf.On("CFInsertNX", context.Background(), "cf:benthos", &redis_client.CFInsertOptions{
+					Capacity: 1024,
+				}, "foo").Return(&cmd)
+			},
+			verify: func(t *testing.T, adaptor redis.RedisMultiCacheAdaptor) {
+				t.Helper()
+
+				ok, err := adaptor.Add(context.Background(), "foo", []byte("t"), 0*time.Second)
+				assert.NoError(t, err)
+				assert.True(t, ok)
+			},
+		},
+		{
 			label: "adaptor.Get should call 'CFExists' on inner client",
 			prepare: func(rcf *redismock.RedisCuckooFilter) {
 				{
@@ -690,6 +755,27 @@ func TestCuckooFilterRedisAdaptor(t *testing.T) {
 			},
 		},
 		{
+			label: "adaptor.Set should call 'CFInsert' on inner client if insert options are not well defined",
+			insertOpts: &redis_client.CFInsertOptions{
+				Capacity: 1024,
+			},
+			prepare: func(rcf *redismock.RedisCuckooFilter) {
+				var cmd redis_client.BoolSliceCmd
+
+				cmd.SetVal([]bool{true})
+
+				rcf.On("CFInsert", context.Background(), "cf:benthos", &redis_client.CFInsertOptions{
+					Capacity: 1024,
+				}, "foo").Return(&cmd)
+			},
+			verify: func(t *testing.T, adaptor redis.RedisMultiCacheAdaptor) {
+				t.Helper()
+
+				err := adaptor.Set(context.Background(), "foo", []byte("t"), 0*time.Second)
+				assert.NoError(t, err)
+			},
+		},
+		{
 			label: "adaptor.Delete should call 'CFDel' from inner client",
 			prepare: func(rcf *redismock.RedisCuckooFilter) {
 				{
@@ -732,7 +818,7 @@ func TestCuckooFilterRedisAdaptor(t *testing.T) {
 			},
 		},
 		{
-			label: "adaptor.SetMulti should call 'CFInsert' from inner client without insert options",
+			label: "adaptor.SetMulti should call 'CFInsert' from inner client",
 			prepare: func(rcf *redismock.RedisCuckooFilter) {
 
 				{
@@ -778,7 +864,7 @@ func TestCuckooFilterRedisAdaptor(t *testing.T) {
 			},
 		},
 		{
-			label: "adaptor.SetMulti should call 'CFInsert' from inner client with insert options",
+			label: "adaptor.SetMulti should call 'CFInsert' from inner client if insert options are not well defined",
 			insertOpts: &redis_client.CFInsertOptions{
 				Capacity: 1024,
 			},
@@ -858,7 +944,7 @@ func TestBloomCtorFailure(t *testing.T) {
 
 	client := redismock.NewRedisBloomFilter(t)
 	_, err := redis.NewBloomFilterRedisCacheAdaptor(client, "", false, nil)
-	assert.EqualError(t, err, "missing filter key")
+	assert.EqualError(t, err, `field 'filter_key' should not be empty`)
 }
 
 func TestCuckooCtorFailure(t *testing.T) {
@@ -866,5 +952,5 @@ func TestCuckooCtorFailure(t *testing.T) {
 
 	client := redismock.NewRedisCuckooFilter(t)
 	_, err := redis.NewCuckooFilterRedisCacheAdaptor(client, "", nil)
-	assert.EqualError(t, err, "missing filter key")
+	assert.EqualError(t, err, `field 'filter_key' should not be empty`)
 }

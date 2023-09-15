@@ -110,21 +110,9 @@ func newRedisCuckooCacheFromConfig(conf *service.ParsedConfig) (*redisCache, err
 		return nil, err
 	}
 
-	var insertOpts *redis.CFInsertOptions
-	if conf.Contains("insert_options") {
-		capacity, err := conf.FieldInt("insert_options.capacity")
-		if err != nil {
-			return nil, err
-		}
-		noCreate, err := conf.FieldBool("insert_options.no_create")
-		if err != nil {
-			return nil, err
-		}
-
-		insertOpts = &redis.CFInsertOptions{
-			Capacity: int64(capacity),
-			NoCreate: noCreate,
-		}
+	insertOpts, err := parseRedisCFInsertOpts(conf)
+	if err != nil {
+		return nil, err
 	}
 
 	cacheAdaptor, err := NewCuckooFilterRedisCacheAdaptor(client, filterKey, insertOpts)
@@ -133,4 +121,28 @@ func newRedisCuckooCacheFromConfig(conf *service.ParsedConfig) (*redisCache, err
 	}
 
 	return newRedisCache(ttl, prefix, cacheAdaptor, backOff), nil
+}
+
+func parseRedisCFInsertOpts(conf *service.ParsedConfig) (insertOpts *redis.CFInsertOptions, err error) {
+	if conf.Contains("insert_options") {
+		insertOpts = &redis.CFInsertOptions{}
+
+		if conf.Contains("insert_options.capacity") {
+			capacity, err := conf.FieldInt("insert_options.capacity")
+			if err != nil {
+				return nil, err
+			}
+
+			insertOpts.Capacity = int64(capacity)
+		}
+
+		if conf.Contains("insert_options.no_create") {
+			insertOpts.NoCreate, err = conf.FieldBool("insert_options.no_create")
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	return insertOpts, nil
 }

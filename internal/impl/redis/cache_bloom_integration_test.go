@@ -32,7 +32,10 @@ func TestIntegrationRedisBloomCache(t *testing.T) {
 	require.NoError(t, pool.Retry(func() error {
 		url := fmt.Sprintf("tcp://localhost:%v/1", resource.GetPort("6379/tcp"))
 
-		confTemplate := `url: %q`
+		confTemplate := `---
+url: %q
+filter_key: bf:benthos
+`
 
 		pConf, cErr := redisCacheConfig().ParseYAML(fmt.Sprintf(confTemplate, url), nil)
 		if cErr != nil {
@@ -48,11 +51,12 @@ func TestIntegrationRedisBloomCache(t *testing.T) {
 		return cErr
 	}))
 
-	template := `
+	template := `---
 cache_resources:
   - label: testcache
     redis_bloom:
       url: tcp://localhost:$PORT/1
+      filter_key: bf:benthos
 `
 	suite := integration.CacheTests(
 		integration.CacheTestOpenClose(integration.WithValue([]byte("t"))),

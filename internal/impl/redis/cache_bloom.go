@@ -147,40 +147,9 @@ func newRedisBloomCacheFromConfig(conf *service.ParsedConfig) (*redisCache, erro
 		return nil, err
 	}
 
-	var insertOpts *redis.BFInsertOptions
-	if conf.Contains("insert_options") {
-		capacity, err := conf.FieldInt("insert_options.capacity")
-		if err != nil {
-			return nil, err
-		}
-
-		errorRate, err := conf.FieldFloat("insert_options.error_rate")
-		if err != nil {
-			return nil, err
-		}
-
-		expansion, err := conf.FieldInt("insert_options.expansion")
-		if err != nil {
-			return nil, err
-		}
-
-		nonScalling, err := conf.FieldBool("insert_options.non_scalling")
-		if err != nil {
-			return nil, err
-		}
-
-		noCreate, err := conf.FieldBool("insert_options.no_create")
-		if err != nil {
-			return nil, err
-		}
-
-		insertOpts = &redis.BFInsertOptions{
-			Capacity:   int64(capacity),
-			Error:      errorRate,
-			Expansion:  int64(expansion),
-			NonScaling: nonScalling,
-			NoCreate:   noCreate,
-		}
+	insertOpts, err := parseRedisBFInsertOpts(conf)
+	if err != nil {
+		return nil, err
 	}
 
 	cacheAdaptor, err := NewBloomFilterRedisCacheAdaptor(client, filterKey, strict, insertOpts)
@@ -189,4 +158,51 @@ func newRedisBloomCacheFromConfig(conf *service.ParsedConfig) (*redisCache, erro
 	}
 
 	return newRedisCache(ttl, prefix, cacheAdaptor, backOff), nil
+}
+
+func parseRedisBFInsertOpts(conf *service.ParsedConfig) (insertOpts *redis.BFInsertOptions, err error) {
+	if conf.Contains("insert_options") {
+		insertOpts = &redis.BFInsertOptions{}
+
+		if conf.Contains("insert_options.capacity") {
+			capacity, err := conf.FieldInt("insert_options.capacity")
+			if err != nil {
+				return nil, err
+			}
+
+			insertOpts.Capacity = int64(capacity)
+		}
+
+		if conf.Contains("insert_options.error_rate") {
+			insertOpts.Error, err = conf.FieldFloat("insert_options.error_rate")
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		if conf.Contains("insert_options.expansion") {
+			expansion, err := conf.FieldInt("insert_options.expansion")
+			if err != nil {
+				return nil, err
+			}
+
+			insertOpts.Expansion = int64(expansion)
+		}
+
+		if conf.Contains("insert_options.non_scalling") {
+			insertOpts.NonScaling, err = conf.FieldBool("insert_options.non_scalling")
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		if conf.Contains("insert_options.no_create") {
+			insertOpts.NoCreate, err = conf.FieldBool("insert_options.no_create")
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	return insertOpts, nil
 }

@@ -119,8 +119,8 @@ type RedisMultiCacheAdaptor interface {
 }
 
 var (
-	errDeleteOperationNotSupported = errors.New("delete operation not supported")
-	errMissingFilterKey            = errors.New("missing filter key")
+	errDeleteOperationNotSupported = errors.New(`delete operation not supported`)
+	errMissingFilterKey            = errors.New(`field 'filter_key' should not be empty`)
 )
 
 type crudRedisCacheAdaptor struct {
@@ -186,6 +186,17 @@ func NewBloomFilterRedisCacheAdaptor(client RedisBloomFilter,
 }
 
 func (c *bloomFilterRedisCacheAdaptor) Add(ctx context.Context, key string, _ []byte, _ time.Duration) (bool, error) {
+	if c.insertOpts != nil {
+		r, err := c.client.BFInsert(ctx, c.filterKey, c.insertOpts, key).Result()
+		if err != nil {
+			return false, err
+		}
+
+		ok := len(r) > 0 && r[0]
+
+		return ok, nil
+	}
+
 	return c.client.BFAdd(ctx, c.filterKey, key).Result()
 }
 
@@ -209,6 +220,10 @@ func (c *bloomFilterRedisCacheAdaptor) Delete(_ context.Context, key string) err
 }
 
 func (c *bloomFilterRedisCacheAdaptor) Set(ctx context.Context, key string, value []byte, expiration time.Duration) error {
+	if c.insertOpts != nil {
+		return c.client.BFInsert(ctx, c.filterKey, c.insertOpts, key).Err()
+	}
+
 	return c.client.BFAdd(ctx, c.filterKey, key).Err()
 }
 
