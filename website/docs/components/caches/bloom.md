@@ -18,14 +18,38 @@ This component is mostly stable but breaking changes could still be made outside
 :::
 Stores keys in a bloom in-memory filter, useful for deduplication. This cache is therefore reset every time the service restarts.
 
+
+<Tabs defaultValue="common" values={[
+  { label: 'Common', value: 'common', },
+  { label: 'Advanced', value: 'advanced', },
+]}>
+
+<TabItem value="common">
+
 ```yml
-# Config fields, showing default values
+# Common config fields, showing default values
 label: ""
 bloom:
   cap: 10000
   fp: 0.01
   init_values: []
 ```
+
+</TabItem>
+<TabItem value="advanced">
+
+```yml
+# All config fields, showing default values
+label: ""
+bloom:
+  cap: 10000
+  fp: 0.01
+  init_values: []
+  strict: false
+```
+
+</TabItem>
+</Tabs>
 
 This provides the bloom package which implements a fixed-size thread safe filter.
 
@@ -83,6 +107,14 @@ init_values:
   - Spice Girls
   - The Human League
 ```
+
+### `strict`
+
+Bloom filters does not support delete operations. If strict mode is true, such operations will fail.
+
+
+Type: `bool`  
+Default: `false`  
 
 This component implements all cache operations except *delete*, however it does not store any value, only the keys.
 

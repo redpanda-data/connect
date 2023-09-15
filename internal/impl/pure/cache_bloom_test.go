@@ -57,6 +57,24 @@ func TestBloomCacheDelete(t *testing.T) {
 	key := "foo"
 
 	err = c.Delete(ctx, key)
+	assert.NoError(t, err)
+}
+
+func TestBloomCacheDeleteWithStrictMode(t *testing.T) {
+	t.Parallel()
+
+	defConf, err := bloomCacheConfig().ParseYAML(`strict: true`, nil)
+	require.NoError(t, err)
+
+	logger := service.MockResources().Logger()
+
+	c, err := bloomMemCacheFromConfig(defConf, logger)
+	require.NoError(t, err)
+
+	ctx := context.Background()
+	key := "foo"
+
+	err = c.Delete(ctx, key)
 	assert.EqualError(t, err, "unable to delete key into bloom filter: not supported")
 }
 
@@ -89,6 +107,46 @@ init_values:
 		t.Error(err)
 	} else if string(act) != exp {
 		t.Errorf("Wrong result: %v != %v", string(act), exp)
+	}
+}
+
+func TestBloomCacheBatchedSet(t *testing.T) {
+	t.Parallel()
+
+	defConf, err := bloomCacheConfig().ParseYAML(``, nil)
+	require.NoError(t, err)
+
+	logger := service.MockResources().Logger()
+
+	var c service.Cache
+	c, err = bloomMemCacheFromConfig(defConf, logger)
+	require.NoError(t, err)
+
+	batchedSet, ok := c.(batchedCache)
+	require.True(t, ok)
+
+	items := []service.CacheItem{
+		{Key: "foo"},
+		{Key: "bar"},
+	}
+
+	err = batchedSet.SetMulti(context.Background(), items...)
+	require.NoError(t, err)
+
+	{
+		v, err := c.Get(context.Background(), "foo")
+		require.NoError(t, err)
+		assert.EqualValues(t, "t", v)
+	}
+	{
+		v, err := c.Get(context.Background(), "bar")
+		require.NoError(t, err)
+		assert.EqualValues(t, "t", v)
+	}
+	{
+		v, err := c.Get(context.Background(), "baz")
+		assert.EqualError(t, err, "key does not exist")
+		assert.Empty(t, v)
 	}
 }
 

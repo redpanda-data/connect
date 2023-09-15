@@ -20,6 +20,9 @@ const (
 	bloomCacheFieldFalsePositiveRateDefaultValue = 0.01
 
 	bloomCacheFieldInitValuesLabel = "init_values"
+
+	bloomCacheFieldStrictLabel        = "strict"
+	bloomCacheFieldStrictDefaultValue = false
 )
 
 func bloomCacheConfig() *service.ConfigSpec {
@@ -61,6 +64,11 @@ These values can be overridden during execution.`).
 				"Spice Girls",
 				"The Human League",
 			})).
+		Field(service.NewBoolField(bloomCacheFieldStrictLabel).
+			Description("Bloom filters does not support delete operations. If strict mode is true, such operations will fail.").
+			Default(bloomCacheFieldStrictDefaultValue).
+			Advanced().
+			Optional()).
 		Footnotes(`This component implements all cache operations except *delete*, however it does not store any value, only the keys.
 
 The main intent is to be used on deduplication.
@@ -101,9 +109,17 @@ func bloomMemCacheFromConfig(conf *service.ParsedConfig, log *service.Logger) (*
 		return nil, err
 	}
 
+	var strict bool
+	if conf.Contains(bloomCacheFieldStrictLabel) {
+		strict, err = conf.FieldBool(bloomCacheFieldStrictLabel)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	bloomLogger := log.With("cache", "bloom")
 
-	return bloomMemCache(capacity, fp, initValues, bloomLogger)
+	return bloomMemCache(capacity, fp, initValues, bloomLogger, strict)
 }
 
 //------------------------------------------------------------------------------
@@ -117,6 +133,7 @@ func bloomMemCache(capacity int,
 	fp float64,
 	initValues []string,
 	log *service.Logger,
+	strict bool,
 ) (ca *bloomCacheAdapter, err error) {
 	if capacity <= 0 {
 		return nil, errInvalidBloomCacheCapacityValue
@@ -133,8 +150,9 @@ func bloomMemCache(capacity int,
 	}
 
 	ca = &bloomCacheAdapter{
-		inner: inner,
-		log:   log,
+		inner:  inner,
+		log:    log,
+		strict: strict,
 	}
 
 	for _, key := range initValues {
@@ -146,12 +164,17 @@ func bloomMemCache(capacity int,
 
 //------------------------------------------------------------------------------
 
-var _ service.Cache = (*bloomCacheAdapter)(nil)
+var (
+	_ service.Cache = (*bloomCacheAdapter)(nil)
+	_ batchedCache  = (*bloomCacheAdapter)(nil)
+)
 
 type bloomCacheAdapter struct {
 	inner *bloom.BloomFilter
 
 	log *service.Logger
+
+	strict bool
 
 	sync.RWMutex
 }
@@ -173,7 +196,19 @@ func (ca *bloomCacheAdapter) Get(_ context.Context, key string) ([]byte, error) 
 func (ca *bloomCacheAdapter) Set(_ context.Context, key string, _ []byte, _ *time.Duration) error {
 	ca.RWMutex.Lock()
 
-	ca.inner.AddString(key)
+	_ = ca.inner.AddString(key)
+
+	ca.RWMutex.Unlock()
+
+	return nil
+}
+
+func (ca *bloomCacheAdapter) SetMulti(_ context.Context, items ...service.CacheItem) error {
+	ca.RWMutex.Lock()
+
+	for _, item := range items {
+		_ = ca.inner.AddString(item.Key)
+	}
 
 	ca.RWMutex.Unlock()
 
@@ -197,7 +232,11 @@ func (ca *bloomCacheAdapter) Add(ctx context.Context, key string, _ []byte, _ *t
 var errUnableToDeleteKeyIntoBloomFilter = errors.New("unable to delete key into bloom filter: not supported")
 
 func (ca *bloomCacheAdapter) Delete(_ context.Context, key string) error {
-	return errUnableToDeleteKeyIntoBloomFilter
+	if ca.strict {
+		return errUnableToDeleteKeyIntoBloomFilter
+	}
+
+	return nil
 }
 
 func (ca *bloomCacheAdapter) Close(_ context.Context) error {

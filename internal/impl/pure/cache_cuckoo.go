@@ -159,7 +159,10 @@ type cuckooCache interface {
 
 //------------------------------------------------------------------------------
 
-var _ service.Cache = (*cuckooCacheAdapter)(nil)
+var (
+	_ service.Cache = (*cuckooCacheAdapter)(nil)
+	_ batchedCache  = (*cuckooCacheAdapter)(nil)
+)
 
 type cuckooCacheAdapter struct {
 	inner cuckooCache
@@ -198,6 +201,20 @@ func (ca *cuckooCacheAdapter) Set(_ context.Context, key string, _ []byte, _ *ti
 	if !ok {
 		return errUnableToInsertKeyIntoCuckooFilter
 	}
+
+	return nil
+}
+
+func (ca *cuckooCacheAdapter) SetMulti(_ context.Context, items ...service.CacheItem) error {
+	ca.RWMutex.Lock()
+
+	for _, item := range items {
+		if !ca.inner.Insert([]byte(item.Key)) {
+			return errUnableToInsertKeyIntoCuckooFilter
+		}
+	}
+
+	ca.RWMutex.Unlock()
 
 	return nil
 }

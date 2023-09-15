@@ -129,6 +129,46 @@ init_values:
 	}
 }
 
+func TestCuckooCacheBatchedSet(t *testing.T) {
+	t.Parallel()
+
+	defConf, err := cuckooCacheConfig().ParseYAML(``, nil)
+	require.NoError(t, err)
+
+	logger := service.MockResources().Logger()
+
+	var c service.Cache
+	c, err = cuckooMemCacheFromConfig(defConf, logger)
+	require.NoError(t, err)
+
+	batchedSet, ok := c.(batchedCache)
+	require.True(t, ok)
+
+	items := []service.CacheItem{
+		{Key: "foo"},
+		{Key: "bar"},
+	}
+
+	err = batchedSet.SetMulti(context.Background(), items...)
+	require.NoError(t, err)
+
+	{
+		v, err := c.Get(context.Background(), "foo")
+		require.NoError(t, err)
+		assert.EqualValues(t, "t", v)
+	}
+	{
+		v, err := c.Get(context.Background(), "bar")
+		require.NoError(t, err)
+		assert.EqualValues(t, "t", v)
+	}
+	{
+		v, err := c.Get(context.Background(), "baz")
+		assert.EqualError(t, err, "key does not exist")
+		assert.Empty(t, v)
+	}
+}
+
 func BenchmarkCuckoo(b *testing.B) {
 	defConf, err := cuckooCacheConfig().ParseYAML(``, nil)
 	require.NoError(b, err)
