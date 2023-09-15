@@ -322,4 +322,9 @@ max_elapsed_time: 1m
 max_elapsed_time: 1h
 ```
 
+This component implements all cache operations, however it does not store any value, only the keys.
+
+			The main intent is to be used on deduplication.
+			
+			When fetch a key from this case, if the key exists, we return a fixed string`t`.
 
