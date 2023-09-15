@@ -138,6 +138,8 @@ func CacheTestDelete(opts ...Option) CacheTestDefinition {
 				closeCache(t, cache)
 			})
 
+			_ = cache.Delete(env.ctx, key)
+
 			_, err := cache.Get(env.ctx, key)
 			require.EqualError(t, err, "key does not exist", "expecting 'key does not exists' error")
 

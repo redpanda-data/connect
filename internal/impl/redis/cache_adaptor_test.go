@@ -231,7 +231,9 @@ func TestBloomFilterRedisAdaptor(t *testing.T) {
 		{
 			label: "adaptor.Add should call 'BFAdd' from inner client",
 			opts: []redis.AdaptorOption{
-				redis.WithFilterKeyTemplate("other-bf-benthos-%Y%m%d%H%M%S"),
+				redis.WithFilterKey("bloom-filter:benthos"),
+				redis.WithFilterKeyPrefix("other"),
+				redis.WithFilterKeySuffix("20010101"),
 			},
 			prepare: func(rbf *redismock.RedisBloomFilter) {
 				{
@@ -239,21 +241,21 @@ func TestBloomFilterRedisAdaptor(t *testing.T) {
 
 					cmd.SetVal(true)
 
-					rbf.On("BFAdd", context.Background(), "other-bf-benthos-19700101011545", "foo").Return(&cmd)
+					rbf.On("BFAdd", context.Background(), "other:bloom-filter:benthos:20010101", "foo").Return(&cmd)
 				}
 				{
 					var cmd redis_client.BoolCmd
 
 					cmd.SetVal(false)
 
-					rbf.On("BFAdd", context.Background(), "other-bf-benthos-19700101011545", "bar").Return(&cmd)
+					rbf.On("BFAdd", context.Background(), "other:bloom-filter:benthos:20010101", "bar").Return(&cmd)
 				}
 				{
 					var cmd redis_client.BoolCmd
 
 					cmd.SetErr(errors.New("ops"))
 
-					rbf.On("BFAdd", context.Background(), "other-bf-benthos-19700101011545", "baz").Return(&cmd)
+					rbf.On("BFAdd", context.Background(), "other:bloom-filter:benthos:20010101", "baz").Return(&cmd)
 				}
 			},
 			verify: func(t *testing.T, adaptor redis.RedisMultiCacheAdaptor) {
@@ -284,21 +286,21 @@ func TestBloomFilterRedisAdaptor(t *testing.T) {
 
 					cmd.SetVal(true)
 
-					rbf.On("BFExists", context.Background(), "bf-benthos-19700101", "foo").Return(&cmd)
+					rbf.On("BFExists", context.Background(), "bf:benthos", "foo").Return(&cmd)
 				}
 				{
 					var cmd redis_client.BoolCmd
 
 					cmd.SetVal(false)
 
-					rbf.On("BFExists", context.Background(), "bf-benthos-19700101", "bar").Return(&cmd)
+					rbf.On("BFExists", context.Background(), "bf:benthos", "bar").Return(&cmd)
 				}
 				{
 					var cmd redis_client.BoolCmd
 
 					cmd.SetErr(errors.New("ops"))
 
-					rbf.On("BFExists", context.Background(), "bf-benthos-19700101", "baz").Return(&cmd)
+					rbf.On("BFExists", context.Background(), "bf:benthos", "baz").Return(&cmd)
 				}
 			},
 			verify: func(t *testing.T, adaptor redis.RedisMultiCacheAdaptor) {
@@ -332,21 +334,21 @@ func TestBloomFilterRedisAdaptor(t *testing.T) {
 
 					cmd.SetVal(true)
 
-					rbf.On("BFAdd", context.Background(), "bf-benthos-19700101", "foo").Return(&cmd)
+					rbf.On("BFAdd", context.Background(), "bf:benthos", "foo").Return(&cmd)
 				}
 				{
 					var cmd redis_client.BoolCmd
 
 					cmd.SetVal(false)
 
-					rbf.On("BFAdd", context.Background(), "bf-benthos-19700101", "bar").Return(&cmd)
+					rbf.On("BFAdd", context.Background(), "bf:benthos", "bar").Return(&cmd)
 				}
 				{
 					var cmd redis_client.BoolCmd
 
 					cmd.SetErr(errors.New("ops"))
 
-					rbf.On("BFAdd", context.Background(), "bf-benthos-19700101", "baz").Return(&cmd)
+					rbf.On("BFAdd", context.Background(), "bf:benthos", "baz").Return(&cmd)
 				}
 			},
 			verify: func(t *testing.T, adaptor redis.RedisMultiCacheAdaptor) {
@@ -398,7 +400,7 @@ func TestBloomFilterRedisAdaptor(t *testing.T) {
 						cmd.SetVal([]bool{true, true})
 
 						rbf.On("BFInsert", context.Background(),
-							"bf-benthos-19700101", (*redis_client.BFInsertOptions)(nil), "foo", "bar").Return(&cmd)
+							"bf:benthos", (*redis_client.BFInsertOptions)(nil), "foo", "bar").Return(&cmd)
 					}
 					{
 						var cmd redis_client.BoolSliceCmd
@@ -406,7 +408,7 @@ func TestBloomFilterRedisAdaptor(t *testing.T) {
 						cmd.SetErr(errors.New("ops"))
 
 						rbf.On("BFInsert", context.Background(),
-							"bf-benthos-19700101", (*redis_client.BFInsertOptions)(nil), "baz", "bam").Return(&cmd)
+							"bf:benthos", (*redis_client.BFInsertOptions)(nil), "baz", "bam").Return(&cmd)
 					}
 				}
 			},
@@ -466,20 +468,10 @@ func TestBloomFilterRedisAdaptor(t *testing.T) {
 			t.Parallel()
 
 			client := redismock.NewRedisBloomFilter(t)
-			clock := clock.NewMock()
-
-			clock.Add(1*time.Hour + 15*time.Minute + 45*time.Second)
 
 			tc.prepare(client)
 
-			opts := []redis.AdaptorOption{
-				redis.WithClock(clock),
-				redis.WithLocation(time.UTC),
-			}
-
-			opts = append(opts, tc.opts...)
-
-			adaptor := redis.NewBloomFilterRedisCacheAdaptor(client, opts...)
+			adaptor := redis.NewBloomFilterRedisCacheAdaptor(client, tc.opts...)
 
 			tc.verify(t, adaptor)
 		})
@@ -501,7 +493,9 @@ func TestCuckooFilterRedisAdaptor(t *testing.T) {
 		{
 			label: "adaptor.Add should call 'CFAddNX' from inner client",
 			opts: []redis.AdaptorOption{
-				redis.WithFilterKeyTemplate("other-cf-benthos-%Y%m%d%H%M%S"),
+				redis.WithFilterKey("cuckoo-filter:benthos"),
+				redis.WithFilterKeyPrefix("other"),
+				redis.WithFilterKeySuffix("20010101"),
 			},
 			prepare: func(rcf *redismock.RedisCuckooFilter) {
 				{
@@ -509,21 +503,21 @@ func TestCuckooFilterRedisAdaptor(t *testing.T) {
 
 					cmd.SetVal(true)
 
-					rcf.On("CFAddNX", context.Background(), "other-cf-benthos-19700101011545", "foo").Return(&cmd)
+					rcf.On("CFAddNX", context.Background(), "other:cuckoo-filter:benthos:20010101", "foo").Return(&cmd)
 				}
 				{
 					var cmd redis_client.BoolCmd
 
 					cmd.SetVal(false)
 
-					rcf.On("CFAddNX", context.Background(), "other-cf-benthos-19700101011545", "bar").Return(&cmd)
+					rcf.On("CFAddNX", context.Background(), "other:cuckoo-filter:benthos:20010101", "bar").Return(&cmd)
 				}
 				{
 					var cmd redis_client.BoolCmd
 
 					cmd.SetErr(errors.New("ops"))
 
-					rcf.On("CFAddNX", context.Background(), "other-cf-benthos-19700101011545", "baz").Return(&cmd)
+					rcf.On("CFAddNX", context.Background(), "other:cuckoo-filter:benthos:20010101", "baz").Return(&cmd)
 				}
 			},
 			verify: func(t *testing.T, adaptor redis.RedisMultiCacheAdaptor) {
@@ -554,21 +548,21 @@ func TestCuckooFilterRedisAdaptor(t *testing.T) {
 
 					cmd.SetVal(true)
 
-					rcf.On("CFExists", context.Background(), "cf-benthos-19700101", "foo").Return(&cmd)
+					rcf.On("CFExists", context.Background(), "cf:benthos", "foo").Return(&cmd)
 				}
 				{
 					var cmd redis_client.BoolCmd
 
 					cmd.SetVal(false)
 
-					rcf.On("CFExists", context.Background(), "cf-benthos-19700101", "bar").Return(&cmd)
+					rcf.On("CFExists", context.Background(), "cf:benthos", "bar").Return(&cmd)
 				}
 				{
 					var cmd redis_client.BoolCmd
 
 					cmd.SetErr(errors.New("ops"))
 
-					rcf.On("CFExists", context.Background(), "cf-benthos-19700101", "baz").Return(&cmd)
+					rcf.On("CFExists", context.Background(), "cf:benthos", "baz").Return(&cmd)
 				}
 			},
 			verify: func(t *testing.T, adaptor redis.RedisMultiCacheAdaptor) {
@@ -602,21 +596,21 @@ func TestCuckooFilterRedisAdaptor(t *testing.T) {
 
 					cmd.SetVal(true)
 
-					rcf.On("CFAdd", context.Background(), "cf-benthos-19700101", "foo").Return(&cmd)
+					rcf.On("CFAdd", context.Background(), "cf:benthos", "foo").Return(&cmd)
 				}
 				{
 					var cmd redis_client.BoolCmd
 
 					cmd.SetVal(false)
 
-					rcf.On("CFAdd", context.Background(), "cf-benthos-19700101", "bar").Return(&cmd)
+					rcf.On("CFAdd", context.Background(), "cf:benthos", "bar").Return(&cmd)
 				}
 				{
 					var cmd redis_client.BoolCmd
 
 					cmd.SetErr(errors.New("ops"))
 
-					rcf.On("CFAdd", context.Background(), "cf-benthos-19700101", "baz").Return(&cmd)
+					rcf.On("CFAdd", context.Background(), "cf:benthos", "baz").Return(&cmd)
 				}
 			},
 			verify: func(t *testing.T, adaptor redis.RedisMultiCacheAdaptor) {
@@ -645,21 +639,21 @@ func TestCuckooFilterRedisAdaptor(t *testing.T) {
 
 					cmd.SetVal(true)
 
-					rcf.On("CFDel", context.Background(), "cf-benthos-19700101", "foo").Return(&cmd)
+					rcf.On("CFDel", context.Background(), "cf:benthos", "foo").Return(&cmd)
 				}
 				{
 					var cmd redis_client.BoolCmd
 
 					cmd.SetVal(false)
 
-					rcf.On("CFDel", context.Background(), "cf-benthos-19700101", "bar").Return(&cmd)
+					rcf.On("CFDel", context.Background(), "cf:benthos", "bar").Return(&cmd)
 				}
 				{
 					var cmd redis_client.BoolCmd
 
 					cmd.SetErr(errors.New("ops"))
 
-					rcf.On("CFDel", context.Background(), "cf-benthos-19700101", "baz").Return(&cmd)
+					rcf.On("CFDel", context.Background(), "cf:benthos", "baz").Return(&cmd)
 				}
 			},
 			verify: func(t *testing.T, adaptor redis.RedisMultiCacheAdaptor) {
@@ -689,7 +683,7 @@ func TestCuckooFilterRedisAdaptor(t *testing.T) {
 						cmd.SetVal([]bool{true, true})
 
 						rcf.On("CFInsert", context.Background(),
-							"cf-benthos-19700101", (*redis_client.CFInsertOptions)(nil), "foo", "bar").Return(&cmd)
+							"cf:benthos", (*redis_client.CFInsertOptions)(nil), "foo", "bar").Return(&cmd)
 					}
 					{
 						var cmd redis_client.BoolSliceCmd
@@ -697,7 +691,7 @@ func TestCuckooFilterRedisAdaptor(t *testing.T) {
 						cmd.SetErr(errors.New("ops"))
 
 						rcf.On("CFInsert", context.Background(),
-							"cf-benthos-19700101", (*redis_client.CFInsertOptions)(nil), "baz", "bam").Return(&cmd)
+							"cf:benthos", (*redis_client.CFInsertOptions)(nil), "baz", "bam").Return(&cmd)
 					}
 				}
 			},
@@ -763,78 +757,9 @@ func TestCuckooFilterRedisAdaptor(t *testing.T) {
 
 			tc.prepare(client)
 
-			opts := []redis.AdaptorOption{
-				redis.WithClock(clock),
-				redis.WithLocation(time.UTC),
-			}
-
-			opts = append(opts, tc.opts...)
-
-			adaptor := redis.NewCuckooFilterRedisCacheAdaptor(client, opts...)
+			adaptor := redis.NewCuckooFilterRedisCacheAdaptor(client, tc.opts...)
 
 			tc.verify(t, adaptor)
 		})
-	}
-}
-
-func TestBloomFilterKeyGeneration(t *testing.T) {
-	t.Parallel()
-
-	client := redismock.NewRedisBloomFilter(t)
-
-	var cmd redis_client.BoolCmd
-
-	client.On("BFExists", context.Background(), "other-bf-benthos-19700101000000", "foo").Return(&cmd)
-	client.On("BFExists", context.Background(), "other-bf-benthos-19700101011530", "bar").Return(&cmd)
-
-	clock := clock.NewMock()
-
-	instance := redis.NewBloomFilterRedisCacheAdaptor(client,
-		redis.WithInterval(10*time.Second),
-		redis.WithClock(clock),
-		redis.WithFilterKeyTemplate(`other-bf-benthos-%Y%m%d%H%M%S`),
-	)
-
-	{
-		_, _, err := instance.Get(context.Background(), "foo")
-		assert.NoError(t, err)
-	}
-
-	clock.Add(1*time.Hour + 15*time.Minute + 31*time.Second)
-
-	{
-		_, _, err := instance.Get(context.Background(), "bar")
-		assert.NoError(t, err)
-	}
-}
-
-func TestCuckooFilterKeyGeneration(t *testing.T) {
-	t.Parallel()
-
-	client := redismock.NewRedisCuckooFilter(t)
-
-	var cmd redis_client.BoolCmd
-
-	client.On("CFExists", context.Background(), "other-cf-benthos-19700101000000", "foo").Return(&cmd)
-	client.On("CFExists", context.Background(), "other-cf-benthos-19700101011530", "bar").Return(&cmd)
-
-	clock := clock.NewMock()
-
-	instance := redis.NewCuckooFilterRedisCacheAdaptor(client,
-		redis.WithInterval(10*time.Second),
-		redis.WithClock(clock),
-		redis.WithFilterKeyTemplate(`other-cf-benthos-%Y%m%d%H%M%S`),
-	)
-
-	{
-		_, _, err := instance.Get(context.Background(), "foo")
-		assert.NoError(t, err)
-	}
-
-	clock.Add(1*time.Hour + 15*time.Minute + 31*time.Second)
-
-	{
-		_, _, err := instance.Get(context.Background(), "bar")
-		assert.NoError(t, err)
 	}
 }

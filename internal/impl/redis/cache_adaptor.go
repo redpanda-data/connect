@@ -4,10 +4,8 @@ import (
 	"context"
 	"errors"
 	"io"
-	"sync"
 	"time"
 
-	"github.com/benbjohnson/clock"
 	"github.com/benthosdev/benthos/v4/public/service"
 	"github.com/itchyny/timefmt-go"
 	"github.com/redis/go-redis/v9"
@@ -114,25 +112,32 @@ type RedisMultiCacheAdaptor interface {
 }
 
 type conf struct {
-	strict            bool
-	filterKeyTemplate string
-	location          *time.Location
-	clock             clock.Clock
-	interval          time.Duration
+	strict bool
+
+	filterKey       string
+	prefixFilterKey string
+	suffixFilterKey string
 }
 
-func (c *conf) SetDefaults(filterKeyPrefix string) {
+func (c *conf) SetDefaults(filterType string) {
 	c.strict = false
-	c.filterKeyTemplate = filterKeyPrefix + `-benthos-%Y%m%d`
-	c.location = time.UTC
-	c.clock = clock.New()
-	c.interval = 10 * time.Minute
+	c.filterKey = filterType + ":benthos"
+	c.prefixFilterKey = ""
+	c.suffixFilterKey = ""
 }
 
-func (c *conf) getTickerAndStopper() (<-chan time.Time, func()) {
-	ticker := c.clock.Ticker(c.interval)
+func (c *conf) getFilterKey() string {
+	filterKey := c.filterKey
 
-	return ticker.C, ticker.Stop
+	if c.prefixFilterKey != "" {
+		filterKey = c.prefixFilterKey + ":" + filterKey
+	}
+
+	if c.suffixFilterKey != "" {
+		filterKey = filterKey + ":" + c.suffixFilterKey
+	}
+
+	return filterKey
 }
 
 // AdaptorOption functional option type
@@ -146,35 +151,24 @@ func WithStrict(strict bool) AdaptorOption {
 	}
 }
 
-// WithFilterKeyTemplate can rewrite the filter key used on bloom and cuckoo filters. Accepts
-// To be parsed with "github.com/itchyny/timefmt-go".Format with current time.
-func WithFilterKeyTemplate(filterKeyTemplate string) AdaptorOption {
+// WithFilterKey can rewrite the filter key used on bloom and cuckoo filters.
+func WithFilterKey(filterKey string) AdaptorOption {
 	return func(c *conf) {
-		c.filterKeyTemplate = filterKeyTemplate
+		c.filterKey = filterKey
 	}
 }
 
-// WithLocation can update the time.Location used to format filter keys based on current timestamp.
-// Default is UTC.
-func WithLocation(location *time.Location) AdaptorOption {
+// WithFilterKeyPrefix can add a prefix to the filter key used on bloom and cuckoo filters.
+func WithFilterKeyPrefix(prefix string) AdaptorOption {
 	return func(c *conf) {
-		c.location = location
+		c.prefixFilterKey = prefix
 	}
 }
 
-// WithClock inject a custom clock for testing purposes.
-func WithClock(clock clock.Clock) AdaptorOption {
+// WithFilterKeySuffix can add a suffix to the filter key used on bloom and cuckoo filters.
+func WithFilterKeySuffix(suffix string) AdaptorOption {
 	return func(c *conf) {
-		c.clock = clock
-	}
-}
-
-// WithInterval update the interval used to change the filter key.
-// Minimal value: 1 second
-func WithInterval(interval time.Duration) AdaptorOption {
-	const minInterval = 1 * time.Second
-	return func(c *conf) {
-		c.interval = max(interval, minInterval)
+		c.suffixFilterKey = suffix
 	}
 }
 
@@ -221,13 +215,8 @@ func (c *crudRedisCacheAdaptor) Close() error {
 }
 
 type bloomFilterRedisCacheAdaptor struct {
-	client            RedisBloomFilter
-	strict            bool
-	location          *time.Location
-	filterKeyTemplate string
-	onClose           func()
-
-	sync.RWMutex
+	client    RedisBloomFilter
+	strict    bool
 	filterKey string
 }
 
@@ -244,53 +233,25 @@ func NewBloomFilterRedisCacheAdaptor(client RedisBloomFilter, opts ...AdaptorOpt
 		opt(&c)
 	}
 
-	tickerChan, tickerStopper := c.getTickerAndStopper()
-
-	instance := &bloomFilterRedisCacheAdaptor{
-		client:            client,
-		strict:            c.strict,
-		filterKeyTemplate: c.filterKeyTemplate,
-		location:          c.location,
-		onClose:           tickerStopper,
+	return &bloomFilterRedisCacheAdaptor{
+		client:    client,
+		strict:    c.strict,
+		filterKey: c.getFilterKey(),
 	}
-
-	instance.updateFilterKey(c.clock.Now())
-
-	go func() {
-		for t := range tickerChan {
-			instance.updateFilterKey(t)
-		}
-	}()
-
-	return instance
 }
 
 func buildFilterKey(now time.Time, location *time.Location, filterKeyTemplate string) string {
 	return timefmt.Format(now.In(location), filterKeyTemplate)
 }
 
-func (c *bloomFilterRedisCacheAdaptor) updateFilterKey(now time.Time) {
-	c.RWMutex.Lock()
-	c.filterKey = buildFilterKey(now, c.location, c.filterKeyTemplate)
-	c.RWMutex.Unlock()
-}
-
-func (c *bloomFilterRedisCacheAdaptor) getFilterKey() string {
-	c.RWMutex.RLock()
-	filterKey := c.filterKey
-	c.RWMutex.RUnlock()
-
-	return filterKey
-}
-
 func (c *bloomFilterRedisCacheAdaptor) Add(ctx context.Context, key string, _ []byte, _ time.Duration) (bool, error) {
-	filterKey := c.getFilterKey()
+	filterKey := c.filterKey
 
 	return c.client.BFAdd(ctx, filterKey, key).Result()
 }
 
 func (c *bloomFilterRedisCacheAdaptor) Get(ctx context.Context, key string) ([]byte, bool, error) {
-	filterKey := c.getFilterKey()
+	filterKey := c.filterKey
 
 	ok, err := c.client.BFExists(ctx, filterKey, key).Result()
 	if err != nil {
@@ -312,13 +273,13 @@ func (c *bloomFilterRedisCacheAdaptor) Delete(_ context.Context, key string) err
 }
 
 func (c *bloomFilterRedisCacheAdaptor) Set(ctx context.Context, key string, value []byte, expiration time.Duration) error {
-	filterKey := c.getFilterKey()
+	filterKey := c.filterKey
 
 	return c.client.BFAdd(ctx, filterKey, key).Err()
 }
 
 func (c *bloomFilterRedisCacheAdaptor) SetMulti(ctx context.Context, items ...service.CacheItem) error {
-	filterKey := c.getFilterKey()
+	filterKey := c.filterKey
 
 	elements := make([]interface{}, len(items))
 
@@ -330,8 +291,6 @@ func (c *bloomFilterRedisCacheAdaptor) SetMulti(ctx context.Context, items ...se
 }
 
 func (c *bloomFilterRedisCacheAdaptor) Close() error {
-	defer c.onClose()
-
 	return c.client.Close()
 }
 
@@ -339,10 +298,6 @@ type cuckooFilterRedisCacheAdaptor struct {
 	client            RedisCuckooFilter
 	location          *time.Location
 	filterKeyTemplate string
-	onClose           func()
-
-	sync.RWMutex
-	filterKey string
 }
 
 // NewCuckooFilterRedisCacheAdaptor ctor.
@@ -358,48 +313,20 @@ func NewCuckooFilterRedisCacheAdaptor(client RedisCuckooFilter, opts ...AdaptorO
 		opt(&c)
 	}
 
-	tickerChan, tickerStopper := c.getTickerAndStopper()
-
-	instance := &cuckooFilterRedisCacheAdaptor{
+	return &cuckooFilterRedisCacheAdaptor{
 		client:            client,
-		filterKeyTemplate: c.filterKeyTemplate,
-		location:          c.location,
-		onClose:           tickerStopper,
+		filterKeyTemplate: c.getFilterKey(),
 	}
-
-	instance.updateFilterKey(c.clock.Now())
-
-	go func() {
-		for t := range tickerChan {
-			instance.updateFilterKey(t)
-		}
-	}()
-
-	return instance
-}
-
-func (c *cuckooFilterRedisCacheAdaptor) updateFilterKey(now time.Time) {
-	c.RWMutex.Lock()
-	c.filterKey = buildFilterKey(now, c.location, c.filterKeyTemplate)
-	c.RWMutex.Unlock()
-}
-
-func (c *cuckooFilterRedisCacheAdaptor) getFilterKey() string {
-	c.RWMutex.RLock()
-	filterKey := c.filterKey
-	c.RWMutex.RUnlock()
-
-	return filterKey
 }
 
 func (c *cuckooFilterRedisCacheAdaptor) Add(ctx context.Context, key string, _ []byte, _ time.Duration) (bool, error) {
-	filterKey := c.getFilterKey()
+	filterKey := c.filterKeyTemplate
 
 	return c.client.CFAddNX(ctx, filterKey, key).Result()
 }
 
 func (c *cuckooFilterRedisCacheAdaptor) Get(ctx context.Context, key string) ([]byte, bool, error) {
-	filterKey := c.getFilterKey()
+	filterKey := c.filterKeyTemplate
 
 	ok, err := c.client.CFExists(ctx, filterKey, key).Result()
 	if err != nil {
@@ -413,13 +340,13 @@ func (c *cuckooFilterRedisCacheAdaptor) Get(ctx context.Context, key string) ([]
 }
 
 func (c *cuckooFilterRedisCacheAdaptor) Set(ctx context.Context, key string, value []byte, expiration time.Duration) error {
-	filterKey := c.getFilterKey()
+	filterKey := c.filterKeyTemplate
 
 	return c.client.CFAdd(ctx, filterKey, key).Err()
 }
 
 func (c *cuckooFilterRedisCacheAdaptor) SetMulti(ctx context.Context, items ...service.CacheItem) error {
-	filterKey := c.getFilterKey()
+	filterKey := c.filterKeyTemplate
 
 	elements := make([]interface{}, len(items))
 
@@ -431,13 +358,11 @@ func (c *cuckooFilterRedisCacheAdaptor) SetMulti(ctx context.Context, items ...s
 }
 
 func (c *cuckooFilterRedisCacheAdaptor) Delete(ctx context.Context, key string) error {
-	filterKey := c.getFilterKey()
+	filterKey := c.filterKeyTemplate
 
 	return c.client.CFDel(ctx, filterKey, key).Err()
 }
 
 func (c *cuckooFilterRedisCacheAdaptor) Close() error {
-	defer c.onClose()
-
 	return c.client.Close()
 }
