@@ -1,5 +1,5 @@
 ---
-title: redis_probabilistic
+title: redis_cuckoo
 type: cache
 status: beta
 ---
@@ -16,7 +16,7 @@ import TabItem from '@theme/TabItem';
 :::caution BETA
 This component is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with the component is found.
 :::
-Use a Redis instance as a probabilistic cache.
+Use a Redis instance as a probabilistic cache using cuckoo filters.
 
 
 <Tabs defaultValue="common" values={[
@@ -29,11 +29,9 @@ Use a Redis instance as a probabilistic cache.
 ```yml
 # Common config fields, showing default values
 label: ""
-redis_probabilistic:
+redis_cuckoo:
   url: redis://:6397 # No default (required)
-  backend: "" # No default (required)
-  filter_key_template: bf-benthos-%Y%m%d # No default (optional)
-  interval: 600s
+  filter_key: cf:benthos
 ```
 
 </TabItem>
@@ -42,7 +40,7 @@ redis_probabilistic:
 ```yml
 # All config fields, showing default values
 label: ""
-redis_probabilistic:
+redis_cuckoo:
   url: redis://:6397 # No default (required)
   kind: simple
   master: ""
@@ -53,11 +51,7 @@ redis_probabilistic:
     root_cas: ""
     root_cas_file: ""
     client_certs: []
-  backend: "" # No default (required)
-  filter_key_template: bf-benthos-%Y%m%d # No default (optional)
-  interval: 600s
-  location: UTC
-  strict: false
+  filter_key: cf:benthos
   retries:
     initial_interval: 500ms
     max_interval: 1s
@@ -257,61 +251,21 @@ password: foo
 password: ${KEY_PASSWORD}
 ```
 
-### `backend`
+### `filter_key`
 
-choose the backend
-
-
-Type: `string`  
-
-| Option | Summary |
-|---|---|
-| `bloom` | uses bloom filters, does not support delete operation |
-| `cuckoo` | uses cuckoo filters, supports delete operation |
-
-
-### `filter_key_template`
-
-change the template for the key used by the probabilistic filter. support strftime notation
+change the key used by the probabilistic filter
 
 
 Type: `string`  
+Default: `"cf:benthos"`  
 
 ```yml
 # Examples
 
-filter_key_template: bf-benthos-%Y%m%d
+filter_key: cf:benthos
 
-filter_key_template: cf-benthos-%Y%m%d
-
-filter_key_template: my-personal-hourly-bloom-filter-key-%Y%m%d%H
-
-filter_key_template: my-personal-hourly-cuckoo-filter-key-%Y%m%d%H
+filter_key: cuckoo-filter:benthos
 ```
-
-### `interval`
-
-change the interval where we generate a new filter key from a filter key template
-
-
-Type: `string`  
-Default: `"600s"`  
-
-### `location`
-
-change the `time.Location` used to generate the filter key
-
-
-Type: `string`  
-Default: `"UTC"`  
-
-### `strict`
-
-if true, bloom filter will fail on delete operations
-
-
-Type: `bool`  
-Default: `false`  
 
 ### `retries`
 
