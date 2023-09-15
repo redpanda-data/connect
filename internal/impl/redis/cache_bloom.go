@@ -54,7 +54,7 @@ If the key does not exists, we will create one using the default capacity.`).
 This parameter is ignored if the filter already exists. 
 If the filter is automatically created and this parameter is absent, then the module-level capacity is used. 
 See [BF.RESERVE](https://redis.io/commands/bf.reserve) for more information about the impact of this value.`).
-				Default(1024).
+				Default(100).
 				Advanced().
 				Optional(),
 			service.NewFloatField("error_rate").
@@ -64,7 +64,7 @@ The rate is a decimal value between 0 and 1. For example, for a desired false po
 
 If the filter is automatically created and error is not specified then the module-level error rate is used.
 See [BF.RESERVE](https://redis.io/commands/bf.reserve) for more information about the impact of this value.`).
-				Default(0.001).
+				Default(0.01).
 				Advanced().
 				Optional(),
 			service.NewIntField("expansion").

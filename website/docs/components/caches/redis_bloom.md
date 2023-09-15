@@ -54,8 +54,8 @@ redis_bloom:
   filter_key: bf:benthos # No default (required)
   strict: false
   insert_options:
-    capacity: 1024
-    error_rate: 0.001
+    capacity: 100
+    error_rate: 0.01
     expansion: 2
     non_scaling: false
     no_create: false
@@ -317,7 +317,7 @@ See [BF.RESERVE](https://redis.io/commands/bf.reserve) for more information abou
 
 
 Type: `int`  
-Default: `1024`  
+Default: `100`  
 
 ### `insert_options.error_rate`
 
@@ -330,7 +330,7 @@ See [BF.RESERVE](https://redis.io/commands/bf.reserve) for more information abou
 
 
 Type: `float`  
-Default: `0.001`  
+Default: `0.01`  
 
 ### `insert_options.expansion`
 
