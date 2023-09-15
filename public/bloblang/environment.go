@@ -107,12 +107,7 @@ func (e *Environment) RegisterMethod(name string, ctor MethodConstructor) error 
 	})
 }
 
-// RegisterMethodV2 adds a new Bloblang method to the environment using a
-// provided ParamsSpec to define the name of the method and its parameters.
-//
-// Plugin names must match the regular expression /^[a-z0-9]+(_[a-z0-9]+)*$/
-// (snake case).
-func (e *Environment) RegisterMethodV2(name string, spec *PluginSpec, ctor MethodConstructorV2) error {
+func methodSpecFromPublic(name string, spec *PluginSpec) query.MethodSpec {
 	category := spec.category
 	if category == "" {
 		category = query.MethodCategoryPlugin
@@ -141,7 +136,16 @@ func (e *Environment) RegisterMethodV2(name string, spec *PluginSpec, ctor Metho
 		iSpec = iSpec.MarkImpure()
 	}
 	iSpec.Params = spec.params
-	return e.env.RegisterMethod(iSpec, func(target query.Function, args *query.ParsedParams) (query.Function, error) {
+	return iSpec
+}
+
+// RegisterMethodV2 adds a new Bloblang method to the environment using a
+// provided ParamsSpec to define the name of the method and its parameters.
+//
+// Plugin names must match the regular expression /^[a-z0-9]+(_[a-z0-9]+)*$/
+// (snake case).
+func (e *Environment) RegisterMethodV2(name string, spec *PluginSpec, ctor MethodConstructorV2) error {
+	return e.env.RegisterMethod(methodSpecFromPublic(name, spec), func(target query.Function, args *query.ParsedParams) (query.Function, error) {
 		parsedParams := newParsedParams(args, e)
 
 		fn, err := ctor(parsedParams)
@@ -169,6 +173,27 @@ func (e *Environment) RegisterMethodV2(name string, spec *PluginSpec, ctor Metho
 	})
 }
 
+// RegisterAdvancedMethod adds a new Bloblang method to the environment using a
+// provided ParamsSpec to define the name of the method and its parameters.
+// Advanced methods are provided extra context during invocation.
+//
+// Plugin names must match the regular expression /^[a-z0-9]+(_[a-z0-9]+)*$/
+// (snake case).
+func (e *Environment) RegisterAdvancedMethod(name string, spec *PluginSpec, ctor AdvancedMethodConstructor) error {
+	return e.env.RegisterMethod(methodSpecFromPublic(name, spec), func(target query.Function, args *query.ParsedParams) (query.Function, error) {
+		parsedParams := newParsedParams(args, e)
+
+		fn, err := ctor(parsedParams)
+		if err != nil {
+			return nil, err
+		}
+
+		return query.ClosureFunction("method "+name, func(ctx query.FunctionContext) (any, error) {
+			return fn(newExecContext(ctx), newExecFunction(target))
+		}, target.QueryTargets), nil
+	})
+}
+
 // RegisterFunction adds a new Bloblang function to the environment. All
 // function names must match the regular expression /^[a-z0-9]+(_[a-z0-9]+)*$/
 // (snake case).
@@ -186,12 +211,7 @@ func (e *Environment) RegisterFunction(name string, ctor FunctionConstructor) er
 	})
 }
 
-// RegisterFunctionV2 adds a new Bloblang function to the environment using a
-// provided ParamsSpec to define the name of the function and its parameters.
-//
-// Plugin names must match the regular expression /^[a-z0-9]+(_[a-z0-9]+)*$/
-// (snake case).
-func (e *Environment) RegisterFunctionV2(name string, spec *PluginSpec, ctor FunctionConstructorV2) error {
+func functionSpecFromPublic(name string, spec *PluginSpec) query.FunctionSpec {
 	category := spec.category
 	if category == "" {
 		category = query.FunctionCategoryPlugin
@@ -220,7 +240,16 @@ func (e *Environment) RegisterFunctionV2(name string, spec *PluginSpec, ctor Fun
 		iSpec = iSpec.MarkImpure()
 	}
 	iSpec.Params = spec.params
-	return e.env.RegisterFunction(iSpec, func(args *query.ParsedParams) (query.Function, error) {
+	return iSpec
+}
+
+// RegisterFunctionV2 adds a new Bloblang function to the environment using a
+// provided ParamsSpec to define the name of the function and its parameters.
+//
+// Plugin names must match the regular expression /^[a-z0-9]+(_[a-z0-9]+)*$/
+// (snake case).
+func (e *Environment) RegisterFunctionV2(name string, spec *PluginSpec, ctor FunctionConstructorV2) error {
+	return e.env.RegisterFunction(functionSpecFromPublic(name, spec), func(args *query.ParsedParams) (query.Function, error) {
 		parsedParams := newParsedParams(args, e)
 
 		fn, err := ctor(parsedParams)
@@ -238,6 +267,27 @@ func (e *Environment) RegisterFunctionV2(name string, spec *PluginSpec, ctor Fun
 
 		return query.ClosureFunction("function "+name, func(ctx query.FunctionContext) (any, error) {
 			return fn()
+		}, nil), nil
+	})
+}
+
+// RegisterAdvancedFunction adds a new Bloblang function to the environment
+// using a provided ParamsSpec to define the name of the function and its
+// parameters. Advanced functions are provided extra context during invocation.
+//
+// Plugin names must match the regular expression /^[a-z0-9]+(_[a-z0-9]+)*$/
+// (snake case).
+func (e *Environment) RegisterAdvancedFunction(name string, spec *PluginSpec, ctor AdvancedFunctionConstructor) error {
+	return e.env.RegisterFunction(functionSpecFromPublic(name, spec), func(args *query.ParsedParams) (query.Function, error) {
+		parsedParams := newParsedParams(args, e)
+
+		fn, err := ctor(parsedParams)
+		if err != nil {
+			return nil, err
+		}
+
+		return query.ClosureFunction("function "+name, func(ctx query.FunctionContext) (any, error) {
+			return fn(newExecContext(ctx))
 		}, nil), nil
 	})
 }
@@ -341,6 +391,13 @@ func RegisterMethodV2(name string, spec *PluginSpec, ctor MethodConstructorV2) e
 	return GlobalEnvironment().RegisterMethodV2(name, spec, ctor)
 }
 
+// RegisterAdvancedMethod adds a new advanced Bloblang method to the global
+// environment. All method names must match the regular expression
+// /^[a-z0-9]+(_[a-z0-9]+)*$/ (snake case).
+func RegisterAdvancedMethod(name string, spec *PluginSpec, ctor AdvancedMethodConstructor) error {
+	return GlobalEnvironment().RegisterAdvancedMethod(name, spec, ctor)
+}
+
 // RegisterFunction adds a new Bloblang function to the global environment. All
 // function names must match the regular expression /^[a-z0-9]+(_[a-z0-9]+)*$/
 // (snake case).
@@ -353,6 +410,13 @@ func RegisterFunction(name string, ctor FunctionConstructor) error {
 // /^[a-z0-9]+(_[a-z0-9]+)*$/ (snake case).
 func RegisterFunctionV2(name string, spec *PluginSpec, ctor FunctionConstructorV2) error {
 	return GlobalEnvironment().RegisterFunctionV2(name, spec, ctor)
+}
+
+// RegisterAdvancedFunction adds a new advanced Bloblang function to the global
+// environment. All function names must match the regular expression
+// /^[a-z0-9]+(_[a-z0-9]+)*$/ (snake case).
+func RegisterAdvancedFunction(name string, spec *PluginSpec, ctor AdvancedFunctionConstructor) error {
+	return GlobalEnvironment().RegisterAdvancedFunction(name, spec, ctor)
 }
 
 // WalkFunctions executes a provided function argument for every function that
