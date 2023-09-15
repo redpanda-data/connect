@@ -6,8 +6,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/benbjohnson/clock"
-
 	"github.com/benthosdev/benthos/v4/internal/impl/redis"
 	"github.com/benthosdev/benthos/v4/internal/impl/redis/redismock"
 	"github.com/benthosdev/benthos/v4/public/service"
@@ -838,9 +836,6 @@ func TestCuckooFilterRedisAdaptor(t *testing.T) {
 			t.Parallel()
 
 			client := redismock.NewRedisCuckooFilter(t)
-			clock := clock.NewMock()
-
-			clock.Add(1*time.Hour + 15*time.Minute + 45*time.Second)
 
 			tc.prepare(client)
 
