@@ -36,6 +36,7 @@ require (
 	github.com/couchbase/gocb/v2 v2.6.3
 	github.com/denisenkom/go-mssqldb v0.12.3
 	github.com/dgraph-io/ristretto v0.1.1
+	github.com/dimchansky/utfbom v1.1.1
 	github.com/dop251/goja v0.0.0-20220815083517-0c74f9139fd6
 	github.com/dop251/goja_nodejs v0.0.0-20220808115320-bac29516aae9
 	github.com/dustin/go-humanize v1.0.1

@@ -11,6 +11,7 @@ import (
 
 	"github.com/benthosdev/benthos/v4/internal/filepath"
 	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/dimchansky/utfbom"
 )
 
 var (
@@ -368,7 +369,10 @@ func (r *csvReader) Connect(ctx context.Context) error {
 		return err
 	}
 
-	scanner := csv.NewReader(scannerInfo.handle)
+	// Skip BOM if present and return a new Reader
+	sr := utfbom.SkipOnly(scannerInfo.handle)
+
+	scanner := csv.NewReader(sr)
 	scanner.LazyQuotes = r.lazyQuotes
 	scanner.Comma = r.comma
 	scanner.ReuseRecord = true

@@ -15,6 +15,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/dimchansky/utfbom"
 	"github.com/klauspost/compress/gzip"
 	"github.com/klauspost/pgzip"
 
@@ -624,7 +625,10 @@ type csvReader struct {
 }
 
 func newCSVReader(r io.ReadCloser, ackFn ReaderAckFn, customComma *rune) (Reader, error) {
-	scanner := csv.NewReader(r)
+	// Skip BOM if present and return a new Reader
+	sr := utfbom.SkipOnly(r)
+
+	scanner := csv.NewReader(sr)
 	scanner.ReuseRecord = true
 	if customComma != nil {
 		scanner.Comma = *customComma
