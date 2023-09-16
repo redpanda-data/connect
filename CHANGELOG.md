@@ -14,6 +14,7 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 
 - Corrected a scheduling error where the `generate` input with a descriptor interval (`@hourly`, etc) had a chance of firing twice.
+- Fixed an issue where a `redis_streams` input that is rejected from read attempts enters a reconnect loop without backoff.
 
 ### Changed
 
