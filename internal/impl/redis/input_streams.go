@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/cenkalti/backoff/v4"
 	"github.com/redis/go-redis/v9"
 
 	"github.com/benthosdev/benthos/v4/internal/component"
@@ -111,7 +112,8 @@ type redisStreamsReader struct {
 	aMut    sync.Mutex
 	ackSend map[string][]string // Acks that can be sent
 
-	log *service.Logger
+	log         *service.Logger
+	connBackoff backoff.BackOff
 
 	closeChan  chan struct{}
 	closedChan chan struct{}
@@ -119,13 +121,19 @@ type redisStreamsReader struct {
 }
 
 func newRedisStreamsReader(conf *service.ParsedConfig, mgr *service.Resources) (r *redisStreamsReader, err error) {
+	connBoff := backoff.NewExponentialBackOff()
+	connBoff.InitialInterval = time.Millisecond * 100
+	connBoff.MaxInterval = time.Second
+	connBoff.MaxElapsedTime = 0
+
 	r = &redisStreamsReader{
 		clientCtor: func() (redis.UniversalClient, error) {
 			return getClient(conf)
 		},
-		log:        mgr.Logger(),
-		closeChan:  make(chan struct{}),
-		closedChan: make(chan struct{}),
+		log:         mgr.Logger(),
+		connBackoff: connBoff,
+		closeChan:   make(chan struct{}),
+		closedChan:  make(chan struct{}),
 	}
 	if _, err = getClient(conf); err != nil {
 		return
@@ -320,8 +328,14 @@ func (r *redisStreamsReader) read(ctx context.Context) (pendingRedisStreamMsg, e
 		}
 		_ = r.disconnect(ctx)
 		r.log.Errorf("Error from redis: %v\n", err)
+
+		select {
+		case <-time.After(r.connBackoff.NextBackOff()):
+		case <-ctx.Done():
+		}
 		return msg, service.ErrNotConnected
 	}
+	r.connBackoff.Reset()
 
 	pendingMsgs := []pendingRedisStreamMsg{}
 	for _, strRes := range res {
