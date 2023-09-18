@@ -139,8 +139,6 @@ type awsSQSReader struct {
 	messagesChan     chan *sqs.Message
 	ackMessagesChan  chan sqsMessageHandle
 	nackMessagesChan chan sqsMessageHandle
-	addInflightChan  chan sqsMessageHandle
-	delInflightChan  chan sqsMessageHandle
 	closeSignal      *shutdown.Signaller
 
 	log *service.Logger
@@ -154,8 +152,6 @@ func newAWSSQSReader(conf sqsiConfig, sess *session.Session, log *service.Logger
 		messagesChan:     make(chan *sqs.Message),
 		ackMessagesChan:  make(chan sqsMessageHandle),
 		nackMessagesChan: make(chan sqsMessageHandle),
-		addInflightChan:  make(chan sqsMessageHandle),
-		delInflightChan:  make(chan sqsMessageHandle),
 		closeSignal:      shutdown.NewSignaller(),
 	}, nil
 }
@@ -167,11 +163,14 @@ func (a *awsSQSReader) Connect(ctx context.Context) error {
 		a.sqs = sqs.New(a.session)
 	}
 
+	ift := &sqsInFlightTracker{
+		handles: map[string]sqsInFlightHandle{},
+	}
+
 	var wg sync.WaitGroup
-	wg.Add(3)
-	go a.readLoop(&wg)
-	go a.ackLoop(&wg)
-	go a.updateVisibilityLoop(&wg)
+	wg.Add(2)
+	go a.readLoop(&wg, ift)
+	go a.ackLoop(&wg, ift)
 	go func() {
 		wg.Wait()
 		a.closeSignal.ShutdownComplete()
@@ -181,71 +180,145 @@ func (a *awsSQSReader) Connect(ctx context.Context) error {
 	return nil
 }
 
-func (a *awsSQSReader) ackLoop(wg *sync.WaitGroup) {
-	defer wg.Done()
+type sqsInFlightHandle struct {
+	receiptHandle  string
+	timeoutSeconds int
+	addedAt        time.Time
+}
 
-	var pendingAcks []sqsMessageHandle
-	var pendingNacks []sqsMessageHandle
+type sqsInFlightTracker struct {
+	handles map[string]sqsInFlightHandle
+	m       sync.Mutex
+}
 
-	flushAcks := func() {
-		tmpAcks := pendingAcks
-		pendingAcks = nil
-		if len(tmpAcks) == 0 {
-			return
+func (t *sqsInFlightTracker) PullToRefresh() (handles []sqsMessageHandle, timeoutSeconds int) {
+	t.m.Lock()
+	defer t.m.Unlock()
+
+	handles = make([]sqsMessageHandle, 0, len(t.handles))
+	for k, v := range t.handles {
+		if time.Since(v.addedAt) < time.Second {
+			continue
+		}
+		handles = append(handles, sqsMessageHandle{
+			id:            k,
+			receiptHandle: v.receiptHandle,
+		})
+		if v.timeoutSeconds > timeoutSeconds {
+			timeoutSeconds = v.timeoutSeconds
+		}
+	}
+	return
+}
+
+func (t *sqsInFlightTracker) Remove(id string) {
+	t.m.Lock()
+	defer t.m.Unlock()
+	delete(t.handles, id)
+}
+
+func (t *sqsInFlightTracker) AddNew(messages ...*sqs.Message) {
+	t.m.Lock()
+	defer t.m.Unlock()
+
+	for _, m := range messages {
+		if m.MessageId == nil || m.ReceiptHandle == nil {
+			continue
 		}
 
-		ctx, done := a.closeSignal.CloseNowCtx(context.Background())
-		defer done()
-		if err := a.deleteMessages(ctx, tmpAcks...); err != nil {
-			a.log.Errorf("Failed to delete messages: %v", err)
+		handle := sqsInFlightHandle{
+			timeoutSeconds: 30,
+			receiptHandle:  *m.ReceiptHandle,
+			addedAt:        time.Now(),
+		}
+		if timeoutStr, exists := m.Attributes[sqsiAttributeNameVisibilityTimeout]; exists && timeoutStr != nil {
+			// Might as well keep the queue timeout setting refreshed as we
+			// consume new data.
+			if tmpTimeoutSeconds, err := strconv.Atoi(*timeoutStr); err == nil {
+				handle.timeoutSeconds = tmpTimeoutSeconds
+			}
+		}
+		t.handles[*m.MessageId] = handle
+	}
+}
+
+func flushMapToHandles(m map[string]string) (s []sqsMessageHandle) {
+	s = make([]sqsMessageHandle, 0, len(m))
+	for k, v := range m {
+		s = append(s, sqsMessageHandle{id: k, receiptHandle: v})
+		delete(m, k)
+	}
+	return
+}
+
+func (a *awsSQSReader) ackLoop(wg *sync.WaitGroup, inFlightTracker *sqsInFlightTracker) {
+	defer wg.Done()
+
+	closeNowCtx, done := a.closeSignal.CloseNowCtx(context.Background())
+	defer done()
+
+	flushFinishedHandles := func(m map[string]string, delete bool) {
+		handles := flushMapToHandles(m)
+		if len(handles) == 0 {
+			return
+		}
+		if delete {
+			if err := a.deleteMessages(closeNowCtx, handles...); err != nil {
+				a.log.Errorf("Failed to delete messages: %v", err)
+			}
+		} else {
+			if err := a.resetMessages(closeNowCtx, handles...); err != nil {
+				a.log.Errorf("Failed to reset the visibility timeout of messages: %v", err)
+			}
 		}
 	}
 
-	flushNacks := func() {
-		tmpNacks := pendingNacks
-		pendingNacks = nil
-		if len(tmpNacks) == 0 {
+	refreshCurrentHandles := func() {
+		currentHandles, timeoutSeconds := inFlightTracker.PullToRefresh()
+		if len(currentHandles) == 0 {
 			return
 		}
-
-		ctx, done := a.closeSignal.CloseNowCtx(context.Background())
-		defer done()
-		if err := a.resetMessages(ctx, tmpNacks...); err != nil {
-			a.log.Errorf("Failed to reset the visibility timeout of messages: %v", err)
+		if err := a.updateVisibilityMessages(closeNowCtx, timeoutSeconds, currentHandles...); err != nil {
+			a.log.Errorf("Failed to update messages visibility timeout: %v", err)
 		}
 	}
 
 	flushTimer := time.NewTicker(time.Second)
 	defer flushTimer.Stop()
 
+	// Both maps are of the message ID to the receipt handle
+	pendingAcks := map[string]string{}
+	pendingNacks := map[string]string{}
+
 ackLoop:
 	for {
 		select {
 		case h := <-a.ackMessagesChan:
-			a.delInflightChan <- h
-			pendingAcks = append(pendingAcks, h)
+			pendingAcks[h.id] = h.receiptHandle
+			inFlightTracker.Remove(h.id)
 			if len(pendingAcks) >= a.conf.MaxNumberOfMessages {
-				flushAcks()
+				flushFinishedHandles(pendingAcks, true)
 			}
 		case h := <-a.nackMessagesChan:
-			a.delInflightChan <- h
-			pendingNacks = append(pendingNacks, h)
+			pendingNacks[h.id] = h.receiptHandle
+			inFlightTracker.Remove(h.id)
 			if len(pendingNacks) >= a.conf.MaxNumberOfMessages {
-				flushNacks()
+				flushFinishedHandles(pendingNacks, false)
 			}
 		case <-flushTimer.C:
-			flushAcks()
-			flushNacks()
+			flushFinishedHandles(pendingAcks, true)
+			flushFinishedHandles(pendingNacks, false)
+			refreshCurrentHandles()
 		case <-a.closeSignal.CloseAtLeisureChan():
 			break ackLoop
 		}
 	}
 
-	flushAcks()
-	flushNacks()
+	flushFinishedHandles(pendingAcks, true)
+	flushFinishedHandles(pendingNacks, false)
 }
 
-func (a *awsSQSReader) readLoop(wg *sync.WaitGroup) {
+func (a *awsSQSReader) readLoop(wg *sync.WaitGroup, inFlightTracker *sqsInFlightTracker) {
 	defer wg.Done()
 
 	var pendingMsgs []*sqs.Message
@@ -269,15 +342,16 @@ func (a *awsSQSReader) readLoop(wg *sync.WaitGroup) {
 		}
 	}()
 
+	closeAtLeisureCtx, done := a.closeSignal.CloseAtLeisureCtx(context.Background())
+	defer done()
+
 	backoff := backoff.NewExponentialBackOff()
 	backoff.InitialInterval = 10 * time.Millisecond
 	backoff.MaxInterval = time.Minute
 	backoff.MaxElapsedTime = 0
 
 	getMsgs := func() {
-		ctx, done := a.closeSignal.CloseAtLeisureCtx(context.Background())
-		defer done()
-		res, err := a.sqs.ReceiveMessageWithContext(ctx, &sqs.ReceiveMessageInput{
+		res, err := a.sqs.ReceiveMessageWithContext(closeAtLeisureCtx, &sqs.ReceiveMessageInput{
 			QueueUrl:              aws.String(a.conf.URL),
 			MaxNumberOfMessages:   aws.Int64(int64(a.conf.MaxNumberOfMessages)),
 			WaitTimeSeconds:       aws.Int64(int64(a.conf.WaitTimeSeconds)),
@@ -291,13 +365,8 @@ func (a *awsSQSReader) readLoop(wg *sync.WaitGroup) {
 			return
 		}
 		if len(res.Messages) > 0 {
+			inFlightTracker.AddNew(res.Messages...)
 			pendingMsgs = append(pendingMsgs, res.Messages...)
-			for _, msg := range res.Messages {
-				a.addInflightChan <- sqsMessageHandle{
-					id:            *msg.MessageId,
-					receiptHandle: *msg.ReceiptHandle,
-				}
-			}
 		}
 		if len(res.Messages) > 0 || a.conf.WaitTimeSeconds > 0 {
 			// When long polling we want to reset our back off even if we didn't
@@ -322,60 +391,6 @@ func (a *awsSQSReader) readLoop(wg *sync.WaitGroup) {
 		select {
 		case a.messagesChan <- pendingMsgs[0]:
 			pendingMsgs = pendingMsgs[1:]
-		case <-a.closeSignal.CloseAtLeisureChan():
-			return
-		}
-	}
-}
-
-func (a *awsSQSReader) updateVisibilityLoop(wg *sync.WaitGroup) {
-	defer wg.Done()
-
-	var inflightMsgs []sqsMessageHandle
-
-	updateMsgs := func() {
-		if len(inflightMsgs) == 0 {
-			return
-		}
-		ctx, done := a.closeSignal.CloseNowCtx(context.Background())
-		defer done()
-
-		attributes, err := a.sqs.GetQueueAttributes(&sqs.GetQueueAttributesInput{
-			QueueUrl:       aws.String(a.conf.URL),
-			AttributeNames: []*string{aws.String(sqsiAttributeNameVisibilityTimeout)},
-		})
-		if err != nil {
-			a.log.Errorf("Failed to retrieve queue visibility timeout: %v", err)
-			return
-		}
-
-		timeoutSeconds, err := strconv.Atoi(*attributes.Attributes[sqsiAttributeNameVisibilityTimeout])
-		if err != nil {
-			a.log.Errorf("Failed to parse queue visibility timeout: %v", err)
-			return
-		}
-
-		if err := a.updateVisibilityMessages(ctx, timeoutSeconds, inflightMsgs...); err != nil {
-			a.log.Errorf("Failed to update messages visibility timeout: %v", err)
-		}
-	}
-
-	updateTimer := time.NewTicker(time.Second)
-	defer updateTimer.Stop()
-
-	for {
-		select {
-		case h := <-a.addInflightChan:
-			inflightMsgs = append(inflightMsgs, h)
-		case h := <-a.delInflightChan:
-			for i, msg := range inflightMsgs {
-				if h == msg {
-					inflightMsgs = append(inflightMsgs[:i], inflightMsgs[i+1:]...)
-					break
-				}
-			}
-		case <-updateTimer.C:
-			updateMsgs()
 		case <-a.closeSignal.CloseAtLeisureChan():
 			return
 		}
@@ -447,7 +462,7 @@ func (a *awsSQSReader) updateVisibilityMessages(ctx context.Context, timeout int
 			return err
 		}
 		for _, fail := range response.Failed {
-			a.log.Errorf("Failed to delete consumed SQS message '%v', response code: %v\n", *fail.Id, *fail.Code)
+			a.log.Errorf("Failed to update consumed SQS message '%v' visibility, response code: %v\n", *fail.Id, *fail.Code)
 		}
 	}
 	return nil
@@ -468,7 +483,7 @@ func addSQSMetadata(p *service.Message, sqsMsg *sqs.Message) {
 
 // ReadBatch attempts to read a new message from the target SQS.
 func (a *awsSQSReader) Read(ctx context.Context) (*service.Message, service.AckFunc, error) {
-	if a.session == nil {
+	if a.sqs == nil {
 		return nil, nil, service.ErrNotConnected
 	}
 
