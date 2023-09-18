@@ -28,3 +28,14 @@ type FunctionConstructor func(args ...any) (Function, error)
 // constructor will be called on each invocation of the mapping with the derived
 // arguments.
 type FunctionConstructorV2 func(args *ParsedParams) (Function, error)
+
+//------------------------------------------------------------------------------
+
+// AdvancedFunction defines a Bloblang function that accesses the execution
+// context of the mapping during invocation.
+type AdvancedFunction func(ctx *ExecContext) (any, error)
+
+// AdvancedFunctionConstructor defines a constructor for a Bloblang function
+// where parameters are parsed using a ParamsSpec provided when registering the
+// function, and the constructed function is provided an ExecContext.
+type AdvancedFunctionConstructor func(args *ParsedParams) (AdvancedFunction, error)

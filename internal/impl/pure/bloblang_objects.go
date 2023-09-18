@@ -127,7 +127,7 @@ If a key within a nested path does not exist then it is ignored.`).
 				if len(i) != len(argSlices[0]) {
 					return nil, sizeError
 				}
-				resSlice := make([][]any, 0, len(i))
+				resSlice := make([]any, 0, len(i))
 				for offset, value := range i {
 					zipValue := make([]any, 0, len(argSlices)+1)
 					zipValue = append(zipValue, value)

@@ -470,6 +470,11 @@ func (h *httpServerInput) extractMessageFromRequest(r *http.Request) (message.Ba
 }
 
 func (h *httpServerInput) postHandler(w http.ResponseWriter, r *http.Request) {
+	if h.shutSig.ShouldCloseAtLeisure() {
+		http.Error(w, "Server closing", http.StatusServiceUnavailable)
+		return
+	}
+
 	h.handlerWG.Add(1)
 	defer h.handlerWG.Done()
 	defer r.Body.Close()
@@ -653,6 +658,11 @@ func (h *httpServerInput) postHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *httpServerInput) wsHandler(w http.ResponseWriter, r *http.Request) {
+	if h.shutSig.ShouldCloseAtLeisure() {
+		http.Error(w, "Server closing", http.StatusServiceUnavailable)
+		return
+	}
+
 	h.handlerWG.Add(1)
 	defer h.handlerWG.Done()
 
@@ -780,16 +790,29 @@ func (h *httpServerInput) loop() {
 				h.log.Errorf("Failed to gracefully terminate http_server: %v\n", err)
 			}
 		} else {
-			if len(h.conf.Path) > 0 {
-				h.mgr.RegisterEndpoint(h.conf.Path, "Endpoint disabled.", func(w http.ResponseWriter, r *http.Request) {
-					http.Error(w, "Service unavailable", http.StatusServiceUnavailable)
-				})
-			}
-			if len(h.conf.WSPath) > 0 {
-				h.mgr.RegisterEndpoint(h.conf.WSPath, "Endpoint disabled.", func(w http.ResponseWriter, r *http.Request) {
-					http.Error(w, "Service unavailable", http.StatusServiceUnavailable)
-				})
-			}
+			// We are using the service-wide HTTP server. In order to prevent
+			// situations where a slow shutdown results in serving an abundance
+			// of 503 responses we wait until either the current requests are
+			// handled and shutdown can commence, or we've been instructed to
+			// close immediately, which prevents these requests from
+			// indefinitely blocking shutdown.
+			go func() {
+				select {
+				case <-h.shutSig.HasClosedChan():
+				case <-h.shutSig.CloseNowChan():
+				}
+
+				if len(h.conf.Path) > 0 {
+					h.mgr.RegisterEndpoint(h.conf.Path, "Endpoint disabled.", func(w http.ResponseWriter, r *http.Request) {
+						http.Error(w, "Service unavailable", http.StatusServiceUnavailable)
+					})
+				}
+				if len(h.conf.WSPath) > 0 {
+					h.mgr.RegisterEndpoint(h.conf.WSPath, "Endpoint disabled.", func(w http.ResponseWriter, r *http.Request) {
+						http.Error(w, "Service unavailable", http.StatusServiceUnavailable)
+					})
+				}
+			}()
 		}
 
 		h.handlerWG.Wait()

@@ -7,6 +7,23 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
+- The `-e/--env-file` cli flag for importing environment variable files now supports glob patterns.
+- Environment variables imported via `-e/--env-file` cli flags now support triple quoted strings.
+- New experimental `counter` function added to Bloblang. It is recommended that this function, although experimental, should be used instead of the now deprecated `count` function.
+
+### Fixed
+
+- Corrected a scheduling error where the `generate` input with a descriptor interval (`@hourly`, etc) had a chance of firing twice.
+- Fixed an issue where a `redis_streams` input that is rejected from read attempts enters a reconnect loop without backoff.
+
+### Changed
+
+- The `random_int` Bloblang function now prevents instantiations where either the `max` or `min` arguments are dynamic. This is in order to avoid situations where the random number generator is re-initialised across subsequent mappings in a way that surprises map authors.
+
+## 4.21.0 - 2023-09-08
+
+### Added
+
 - Fields `client_id` and `rack_id` added to the `kafka_franz` input and output.
 - New experimental `command` processor.
 - Parameter `no_cache` added to the `file` and `env` Bloblang functions.
@@ -22,6 +39,8 @@ All notable changes to this project will be documented in this file.
 - The `sftp` output now reconnects upon being disconnected by the Azure idle timeout.
 - The `switch` output now produces error logs when messages do not pass at least one case with `strict_mode` enabled, previously these rejected messages were potentially re-processed in a loop without any logs depending on the config. An inaccuracy to the documentation has also been fixed in order to clarify behaviour when strict mode is not enabled.
 - The `log` processor `fields_mapping` field should no longer reject metadata queries using `@` syntax.
+- Fixed an issue where heavily utilised streams with nested resource based outputs could lock-up when performing heavy resource mutating traffic on the streams mode REST API.
+- The Bloblang `zip` method no longer produces values that yield an "Unknown data type".
 
 ## 4.20.0 - 2023-08-22
 

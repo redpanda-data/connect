@@ -32,26 +32,67 @@ root.values_two = range(0, this.max, 2)
 
 ## General
 
-### `count`
+### `counter`
 
-The `count` function is a counter starting at 1 which increments after each time it is called. Count takes an argument which is an identifier for the counter, allowing you to specify multiple unique counters in your configuration.
+:::caution EXPERIMENTAL
+This function is experimental and therefore breaking changes could be made to it outside of major version releases.
+:::
+Returns a non-negative integer that increments each time it is resolved, yielding the minimum (`1` by default) as the first value. Each instantiation of `counter` has its own independent count. Once the maximum integer (or `max` argument) is reached the counter resets back to the minimum.
 
 #### Parameters
 
-**`name`** &lt;string&gt; An identifier for the counter.  
+**`min`** &lt;query expression, default `1`&gt; The minimum value of the counter, this is the first value that will be yielded. If this parameter is dynamic it will be resolved only once during the lifetime of the mapping.  
+**`max`** &lt;query expression, default `9223372036854775807`&gt; The maximum value of the counter, once this value is yielded the counter will reset back to the min. If this parameter is dynamic it will be resolved only once during the lifetime of the mapping.  
+**`set`** &lt;(optional) query expression&gt; An optional mapping that when specified will be executed each time the counter is resolved. When this mapping yields an integer value it will cause the counter to reset to this value and yield it. If this mapping yields `null`, or nothing, then nothing will happen. If this mapping yields a deletion then the counter is reset to the `min` value.  
 
 #### Examples
 
 
 ```coffee
-root = this
-root.id = count("bloblang_function_example")
+root.id = counter()
 
-# In:  {"message":"foo"}
-# Out: {"id":1,"message":"foo"}
+# In:  {}
+# Out: {"id":1}
 
-# In:  {"message":"bar"}
-# Out: {"id":2,"message":"bar"}
+# In:  {}
+# Out: {"id":2}
+```
+
+It's possible to increment a counter multiple times within a single mapping invocation using a map.
+
+```coffee
+
+map foos {
+  root = counter()
+}
+
+root.meow_id = null.apply("foos")
+root.woof_id = null.apply("foos")
+
+
+# In:  {}
+# Out: {"meow_id":1,"woof_id":2}
+
+# In:  {}
+# Out: {"meow_id":3,"woof_id":4}
+```
+
+By specifying an optional `set` parameter it is possible to dynamically reset the counter based on input data.
+
+```coffee
+root.consecutive_doggos = counter(min: 1, set: if !this.sound.lowercase().contains("woof") { 0 })
+
+# In:  {"sound":"woof woof"}
+# Out: {"consecutive_doggos":1}
+
+# In:  {"sound":"woofer wooooo"}
+# Out: {"consecutive_doggos":2}
+
+# In:  {"sound":"meow"}
+# Out: {"consecutive_doggos":0}
+
+# In:  {"sound":"uuuuh uh uh woof uhhhhhh"}
+# Out: {"consecutive_doggos":1}
 ```
 
 ### `deleted`
@@ -119,7 +160,10 @@ root.id = nanoid(54, "abcde")
 
 ### `random_int`
 
-Generates a non-negative pseudo-random 64-bit integer. An optional integer argument can be provided in order to seed the random number generator. Optional `min` and `max` arguments can be provided to make the generated numbers within a range.
+
+Generates a non-negative pseudo-random 64-bit integer. An optional integer argument can be provided in order to seed the random number generator.
+
+Optional `min` and `max` arguments can be provided in order to only generate numbers within a range. Neither of these parameters can be set via a dynamic expression (i.e. from values taken from mapped data). Instead, for dynamic ranges extract a min and max manually using a modulo operator (`random_int() % a + b`).
 
 #### Parameters
 
@@ -593,6 +637,28 @@ root.uuid = fake("uuid_hyphenated")
 ```
 
 ## Deprecated
+
+### `count`
+
+The `count` function is a counter starting at 1 which increments after each time it is called. Count takes an argument which is an identifier for the counter, allowing you to specify multiple unique counters in your configuration.
+
+#### Parameters
+
+**`name`** &lt;string&gt; An identifier for the counter.  
+
+#### Examples
+
+
+```coffee
+root = this
+root.id = count("bloblang_function_example")
+
+# In:  {"message":"foo"}
+# Out: {"id":1,"message":"foo"}
+
+# In:  {"message":"bar"}
+# Out: {"id":2,"message":"bar"}
+```
 
 ### `meta`
 
