@@ -23,7 +23,7 @@ func schemaRegistryDecoderConfig() *service.ConfigSpec {
 		Description(`
 Decodes messages automatically from a schema stored within a [Confluent Schema Registry service](https://docs.confluent.io/platform/current/schema-registry/index.html) by extracting a schema ID from the message and obtaining the associated schema from the registry. If a message fails to match against the schema then it will remain unchanged and the error can be caught using error handling methods outlined [here](/docs/configuration/error_handling).
 
-Currently only Avro or Protobuf schemas are supported, both are capable of expanding from schema references as of v4.19.0.
+Currently only Avro, Protobuf and Json schemas are supported, all are capable of expanding from schema references as of v4.21.0.
 
 ### Avro JSON Format
 
@@ -44,7 +44,7 @@ However, it is possible to instead create documents in [standard/raw JSON format
 This processor decodes protobuf messages to JSON documents, you can read more about JSON mapping of protobuf messages here: https://developers.google.com/protocol-buffers/docs/proto3#json
 `).
 		Field(service.NewBoolField("avro_raw_json").
-			Description("Whether Avro messages should be decoded into normal JSON (\"json that meets the expectations of regular internet json\") rather than [Avro JSON](https://avro.apache.org/docs/current/specification/_print/#json-encoding). If `true` the schema returned from the subject should be decoded as [standard json](https://pkg.go.dev/github.com/linkedin/goavro/v2#NewCodecForStandardJSONFull) instead of as [avro json](https://pkg.go.dev/github.com/linkedin/goavro/v2#NewCodec). There is a [comment in goavro](https://github.com/linkedin/goavro/blob/5ec5a5ee7ec82e16e6e2b438d610e1cab2588393/union.go#L224-L249), the [underlining library used for avro serialization](https://github.com/linkedin/goavro), that explains in more detail the difference between the standard json and avro json.").
+			Description("Whether Avro messages should be decoded into normal JSON (\"json that meets the expectations of regular internet json\") rather than [Avro JSON](https://avro.apache.org/docs/current/specification/_print/#json-encoding). If `true` the schema returned from the subject should be decoded as [standard json](https://pkg.go.dev/github.com/linkedin/goavro/v2#NewCodecForStandardJSONFull) instead of as [avro json](https://pkg.go.dev/github.com/linkedin/goavro/v2#NewCodec). There is a [comment in goavro](https://github.com/linkedin/goavro/blob/5ec5a5ee7ec82e16e6e2b438d610e1cab2588393/union.go#L224-L249), the [underlining library used for avro serialization](https://github.com/linkedin/goavro), that explains in more detail the difference between the standard json and avro json.  This field does not affect messages with a JSON schema, only the ones with an AVRO one.").
 			Advanced().Default(false)).
 		Field(service.NewURLField("url").Description("The base URL of the schema registry service."))
 
@@ -259,6 +259,8 @@ func (s *schemaRegistryDecoder) getDecoder(id int) (schemaDecoder, error) {
 		decoder, err = s.getProtobufDecoder(ctx, resPayload)
 	case "", "AVRO":
 		decoder, err = s.getAvroDecoder(ctx, resPayload)
+	case "JSON":
+		decoder, err = s.getJsonDecoder(ctx, resPayload)
 	default:
 		err = fmt.Errorf("schema type %v not supported", resPayload.Type)
 	}
