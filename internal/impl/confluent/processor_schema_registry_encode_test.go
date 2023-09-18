@@ -573,7 +573,7 @@ func TestSchemaRegistryEncodeJSON(t *testing.T) {
 		SchemaType string `json:"schemaType"`
 		ID         int    `json:"id"`
 	}{
-		Schema:     testJsonSchema,
+		Schema:     testJSONSchema,
 		SchemaType: "JSON",
 		ID:         3,
 	})

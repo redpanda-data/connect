@@ -183,7 +183,7 @@ message users {
   string gender = 4;
 }`
 
-const testJsonSchema = `{
+const testJSONSchema = `{
 	"type": "object",
 	"properties": {
 		"Name": {"type": "string"},
@@ -509,7 +509,7 @@ func TestSchemaRegistryDecodeJson(t *testing.T) {
 			assert.False(t, returnedSchema3)
 			returnedSchema3 = true
 			return mustJBytes(t, map[string]any{
-				"schema":     testJsonSchema,
+				"schema":     testJSONSchema,
 				"schemaType": "JSON",
 			}), nil
 		case "/schemas/ids/5":
