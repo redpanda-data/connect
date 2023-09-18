@@ -75,7 +75,7 @@ func TestBloomCacheDeleteWithStrictMode(t *testing.T) {
 	key := "foo"
 
 	err = c.Delete(ctx, key)
-	assert.EqualError(t, err, "unable to delete key into bloom filter: not supported")
+	assert.EqualError(t, err, "unsupported operation")
 }
 
 func TestBloomCacheInitValues(t *testing.T) {

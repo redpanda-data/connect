@@ -229,11 +229,9 @@ func (ca *bloomCacheAdapter) Add(ctx context.Context, key string, _ []byte, _ *t
 	return nil
 }
 
-var errUnableToDeleteKeyIntoBloomFilter = errors.New("unable to delete key into bloom filter: not supported")
-
 func (ca *bloomCacheAdapter) Delete(_ context.Context, key string) error {
 	if ca.strict {
-		return errUnableToDeleteKeyIntoBloomFilter
+		return errors.ErrUnsupported
 	}
 
 	return nil
