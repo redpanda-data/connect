@@ -33,7 +33,7 @@ jobs:
       run: ./resources/scripts/release_notes.sh > ./release_notes.md
 
     - name: GoReleaser
-      uses: goreleaser/goreleaser-action@v4
+      uses: goreleaser/goreleaser-action@v5
       with:
         version: latest
         args: release --release-notes=./release_notes.md --timeout 120m
