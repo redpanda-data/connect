@@ -356,16 +356,11 @@ func TestShardedCacheCtor(t *testing.T) {
 		errMsg string
 	}{
 		{
-			label:   "ctor should return error if n=0",
-			nShards: 0,
-			errMsg:  "must have at least one shard",
-		},
-		{
 			label:   "should return error from first call to ctor",
 			nShards: 2,
 			ctorBuilder: func(t *testing.T) middleware.CacheCtorCallback {
 				return func(info middleware.ShardInfo) (service.Cache, error) {
-					if info.Index == 0 {
+					if info.I == 0 {
 						return nil, errors.New("ops")
 					}
 
@@ -379,7 +374,7 @@ func TestShardedCacheCtor(t *testing.T) {
 			nShards: 2,
 			ctorBuilder: func(t *testing.T) middleware.CacheCtorCallback {
 				return func(info middleware.ShardInfo) (service.Cache, error) {
-					switch info.Index {
+					switch info.I {
 					case 0:
 						mock := servicemock.NewCache(t)
 						mock.On("Close", context.Background()).Return(nil)
@@ -418,28 +413,56 @@ func TestShardedCacheCtor(t *testing.T) {
 	}
 }
 
-func TestCtorSpecialCaseOneShard(t *testing.T) {
-	mock := servicemock.NewCache(t)
+func TestCtorSpecialCasesShard(t *testing.T) {
+	t.Parallel()
 
-	var (
-		lastIndex atomic.Int64
-		calls     atomic.Int64
-	)
+	testcases := []struct {
+		label string
+		n     int
+	}{
+		{
+			label: "n=1 should return same instance",
+			n:     1,
+		},
+		{
+			label: "n=0 should return same instance (same as 1)",
+			n:     0,
+		},
+		{
+			label: "n=-1 should return same instance (same as 1)",
+			n:     -1,
+		},
+	}
 
-	lastIndex.Store(-1)
+	for _, tc := range testcases {
+		tc := tc
+		t.Run(tc.label, func(t *testing.T) {
+			t.Parallel()
+			mock := servicemock.NewCache(t)
 
-	instance, err := middleware.NewShardedCache(context.Background(),
-		1, func(info middleware.ShardInfo) (service.Cache, error) {
-			lastIndex.Store(int64(info.Index))
+			var (
+				lastPtr atomic.Pointer[middleware.ShardInfo]
+				calls   atomic.Int64
+			)
 
-			calls.Add(1)
+			instance, err := middleware.NewShardedCache(context.Background(),
+				1, func(info middleware.ShardInfo) (service.Cache, error) {
+					lastPtr.Store(&info)
 
-			return mock, nil
+					calls.Add(1)
+
+					return mock, nil
+				})
+
+			require.NoError(t, err)
+			assert.Equal(t, mock, instance, "should return same instance")
+
+			assert.EqualValues(t, 1, calls.Load())
+
+			info := lastPtr.Load()
+
+			assert.Equal(t, 0, info.I, "index")
+			assert.Equal(t, 1, info.N, "number of shards")
 		})
-
-	require.NoError(t, err)
-	assert.Equal(t, mock, instance, "should return same instance")
-
-	assert.EqualValues(t, 0, lastIndex.Load())
-	assert.EqualValues(t, 1, calls.Load())
+	}
 }

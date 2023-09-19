@@ -29,8 +29,6 @@ type shardedCache struct {
 	mShards []batchedCache
 }
 
-var errMustHaveAtLeastOneShard = errors.New("must have at least one shard")
-
 // CacheShardedFields return the fields to be added to a cache configuration to support sharded cache.
 func CacheShardedFields() []*service.ConfigField {
 	return []*service.ConfigField{
@@ -41,9 +39,18 @@ func CacheShardedFields() []*service.ConfigField {
 	}
 }
 
+// ApplyCacheShardedFields apply CacheShardedFields into config spec.
+func ApplyCacheShardedFields(spec *service.ConfigSpec) *service.ConfigSpec {
+	for _, f := range CacheShardedFields() {
+		spec = spec.Field(f)
+	}
+
+	return spec
+}
+
 type ShardInfo struct {
-	Index int
-	Max   int
+	I int
+	N int
 }
 
 type ShardedCacheConstructor func(ShardInfo,
@@ -56,7 +63,7 @@ type CacheCtorCallback func(ShardInfo) (service.Cache, error)
 func WrapCacheConstructorWithShards(ctx context.Context,
 	ctor ShardedCacheConstructor) service.CacheConstructor {
 	return func(conf *service.ParsedConfig, mgr *service.Resources) (instance service.Cache, err error) {
-		var nShards = 1
+		var nShards int
 		if conf.Contains("shards") {
 			nShards, err = conf.FieldInt("shards")
 			if err != nil {
@@ -75,11 +82,11 @@ func WrapCacheConstructorWithShards(ctx context.Context,
 // If the cache implements SetMulti method, we will delegate the calls to the respective shards.
 func NewShardedCache(ctx context.Context, nShards int,
 	ctor CacheCtorCallback) (service.Cache, error) {
-	if nShards <= 0 {
-		return nil, errMustHaveAtLeastOneShard
+	if nShards < 1 {
+		nShards = 1
 	}
 
-	info := ShardInfo{Index: 0, Max: nShards}
+	info := ShardInfo{N: nShards}
 
 	firstShard, err := ctor(info)
 	if err != nil {
@@ -102,7 +109,7 @@ func NewShardedCache(ctx context.Context, nShards int,
 	}
 
 	for i := 1; i < nShards; i++ {
-		info.Index = i
+		info.I = i
 		nextShard, err := ctor(info)
 		if err != nil {
 			cerr := closeShards(ctx, shards[:i])

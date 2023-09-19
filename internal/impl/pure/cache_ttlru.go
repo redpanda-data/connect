@@ -33,9 +33,7 @@ func ttlruCacheConfig() *service.ConfigSpec {
 		Stable().
 		Summary(`Stores key/value pairs in a ttlru in-memory cache. This cache is therefore reset every time the service restarts.`)
 
-	for _, f := range middleware.CacheShardedFields() {
-		spec = spec.Field(f)
-	}
+	spec = middleware.ApplyCacheShardedFields(spec)
 
 	spec.Description(`The cache ttlru provides a simple, goroutine safe, cache with a fixed number of entries. Each entry has a per-cache defined TTL.
 

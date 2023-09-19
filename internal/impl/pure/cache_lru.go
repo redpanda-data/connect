@@ -41,9 +41,7 @@ func lruCacheConfig() *service.ConfigSpec {
 		Stable().
 		Summary(`Stores key/value pairs in a lru in-memory cache. This cache is therefore reset every time the service restarts.`)
 
-	for _, f := range middleware.CacheShardedFields() {
-		spec = spec.Field(f)
-	}
+	spec = middleware.ApplyCacheShardedFields(spec)
 
 	spec.Description(`This provides the lru package which implements a fixed-size thread safe LRU cache.
 

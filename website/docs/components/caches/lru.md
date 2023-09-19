@@ -38,6 +38,7 @@ lru:
 # All config fields, showing default values
 label: ""
 lru:
+  shards: 1
   cap: 1000
   init_values: {}
   algorithm: standard
@@ -67,6 +68,14 @@ cache_resources:
 These values can be overridden during execution.
 
 ## Fields
+
+### `shards`
+
+A number of logical shards to spread keys across, increasing the shards can have a performance benefit when processing a large number of keys.
+
+
+Type: `int`  
+Default: `1`  
 
 ### `cap`
 

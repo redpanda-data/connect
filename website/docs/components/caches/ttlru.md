@@ -39,6 +39,7 @@ ttlru:
 # All config fields, showing default values
 label: ""
 ttlru:
+  shards: 1
   cap: 1024
   default_ttl: 5m0s
   ttl: "" # No default (optional)
@@ -70,6 +71,14 @@ cache_resources:
 These values can be overridden during execution.
 
 ## Fields
+
+### `shards`
+
+A number of logical shards to spread keys across, increasing the shards can have a performance benefit when processing a large number of keys.
+
+
+Type: `int`  
+Default: `1`  
 
 ### `cap`
 
