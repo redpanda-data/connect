@@ -32,6 +32,9 @@ output:
     urls: [] # No default (required)
     subject: foo.bar.baz # No default (required)
     headers: {}
+    metadata:
+      include_prefixes: []
+      include_patterns: []
     max_in_flight: 64
 ```
 
@@ -46,6 +49,9 @@ output:
     urls: [] # No default (required)
     subject: foo.bar.baz # No default (required)
     headers: {}
+    metadata:
+      include_prefixes: []
+      include_patterns: []
     max_in_flight: 64
     tls:
       enabled: false
@@ -152,6 +158,53 @@ Default: `{}`
 headers:
   Content-Type: application/json
   Timestamp: ${!meta("Timestamp")}
+```
+
+### `metadata`
+
+Determine which (if any) metadata values should be added to messages as headers.
+
+
+Type: `object`  
+
+### `metadata.include_prefixes`
+
+Provide a list of explicit metadata key prefixes to match against.
+
+
+Type: `array`  
+Default: `[]`  
+
+```yml
+# Examples
+
+include_prefixes:
+  - foo_
+  - bar_
+
+include_prefixes:
+  - kafka_
+
+include_prefixes:
+  - content-
+```
+
+### `metadata.include_patterns`
+
+Provide a list of explicit metadata key regular expression (re2) patterns to match against.
+
+
+Type: `array`  
+Default: `[]`  
+
+```yml
+# Examples
+
+include_patterns:
+  - .*
+
+include_patterns:
+  - _timestamp_unix$
 ```
 
 ### `max_in_flight`
