@@ -10,8 +10,8 @@ import (
 )
 
 func listFunctions(f *FunctionSet) []string {
-	functionNames := make([]string, 0, len(f.constructors))
-	for k := range f.constructors {
+	functionNames := make([]string, 0, len(f.functions))
+	for k := range f.functions {
 		functionNames = append(functionNames, k)
 	}
 	sort.Strings(functionNames)

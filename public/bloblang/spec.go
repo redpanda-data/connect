@@ -51,6 +51,26 @@ func NewAnyParam(name string) ParamDefinition {
 	}
 }
 
+// NewQueryParam creates a new advanced parameter that can yield any value and
+// is encapsulated as an ExecFunction. This is important for advanced functions
+// and methods that need greater control over how the parameters are resolved.
+// The allowScalars parameter determines whether scalar values are valid for
+// this parameter, when `false` all parameter arguments must be dynamic
+// expressions.
+//
+// However, most plugins will not benefit from query parameters, and they can
+// only be resolved via the ExecContext provided to functions and methods
+// registered with RegisterAdvancedFunction and RegisterAdvancedMethod
+// respectively.
+//
+// Parameter names must match the regular expression /^[a-z0-9]+(_[a-z0-9]+)*$/
+// (snake case).
+func NewQueryParam(name string, allowScalars bool) ParamDefinition {
+	return ParamDefinition{
+		def: query.ParamQuery(name, "", allowScalars),
+	}
+}
+
 // Description adds an optional description to the parameter definition, this is
 // used when generating documentation for the parameter to describe what the
 // parameter is for.
@@ -86,7 +106,7 @@ type PluginSpec struct {
 	category    string
 	description string
 	impure      bool
-	static      bool
+	isStaticFn  func(params *ParsedParams) bool
 	params      query.Params
 	examples    []pluginExample
 	version     string
@@ -104,6 +124,9 @@ type pluginExample struct {
 func NewPluginSpec() *PluginSpec {
 	return &PluginSpec{
 		params: query.NewParams(),
+		isStaticFn: func(params *ParsedParams) bool {
+			return false
+		},
 	}
 }
 
@@ -209,14 +232,29 @@ func (p *PluginSpec) Impure() *PluginSpec {
 }
 
 // Static marks the plugin as a statically evaluated function or method. This is
-// a guarantee that given the name parameters this plugin will always yield the
+// a guarantee that given the same parameters this plugin will always yield the
 // same value.
 //
 // Marking a function or method as static has the advantage that it can
 // sometimes be optimistically evaluated at mapping parse time when given static
 // arguments.
 func (p *PluginSpec) Static() *PluginSpec {
-	p.static = true
+	p.isStaticFn = func(params *ParsedParams) bool {
+		return true
+	}
+	return p
+}
+
+// StaticWithFunc marks the plugin as a potentially statically evaluated
+// function or method, but only given certain parameters as determined by the
+// provided closure function. This is a guarantee that given the same parameters
+// this plugin will always yield the same value.
+//
+// Marking a function or method as static has the advantage that it can
+// sometimes be optimistically evaluated at mapping parse time when given static
+// arguments.
+func (p *PluginSpec) StaticWithFunc(fn func(params *ParsedParams) bool) *PluginSpec {
+	p.isStaticFn = fn
 	return p
 }
 
@@ -245,6 +283,14 @@ func (p *PluginSpec) EncodeJSON(v []byte) error {
 // instantiation.
 type ParsedParams struct {
 	par *query.ParsedParams
+	e   *Environment
+}
+
+func newParsedParams(p *query.ParsedParams, e *Environment) *ParsedParams {
+	return &ParsedParams{
+		par: p,
+		e:   e,
+	}
 }
 
 // AsSlice returns a slice of raw argument values.
@@ -300,4 +346,32 @@ func (p *ParsedParams) GetBool(name string) (bool, error) {
 // defined, otherwise nil.
 func (p *ParsedParams) GetOptionalBool(name string) (*bool, error) {
 	return p.par.FieldOptionalBool(name)
+}
+
+// GetQuery returns an ExecFunction from a parameter defined as a NewQueryParam.
+func (p *ParsedParams) GetQuery(name string) (*ExecFunction, error) {
+	fn, err := p.par.FieldQuery(name)
+	if err != nil {
+		return nil, err
+	}
+	return newExecFunction(fn), nil
+}
+
+// GetOptionalQuery returns an ExecFunction from a parameter defined as a
+// NewQueryParam if it was defined, otherwise nil.
+func (p *ParsedParams) GetOptionalQuery(name string) (*ExecFunction, error) {
+	fn, err := p.par.FieldOptionalQuery(name)
+	if err != nil {
+		return nil, err
+	}
+	if fn == nil {
+		return nil, nil
+	}
+	return newExecFunction(fn), nil
+}
+
+// ImportFile attempts to read a file via the underlying environment importer.
+// Relative paths will be resolved from the path of the file being imported.
+func (p *ParsedParams) ImportFile(name string) ([]byte, error) {
+	return p.e.env.ImportFile(name)
 }

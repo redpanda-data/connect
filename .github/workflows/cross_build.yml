@@ -19,9 +19,19 @@ jobs:
     steps:
 
     - name: Checkout code
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
       with:
         fetch-depth: 0
+
+    - name: Free up some disk space on ubuntu
+      if: ${{ runner.os == 'Linux' }}
+      run: |
+        # Workaround to provide additional free space for testing.
+        #   https://github.com/actions/virtual-environments/issues/2840
+        sudo rm -rf /usr/share/dotnet
+        sudo rm -rf /opt/ghc
+        sudo rm -rf "/usr/local/share/boost"
+        sudo rm -rf "$AGENT_TOOLSDIRECTORY"
 
     - name: Install Go
       uses: actions/setup-go@v4
@@ -30,7 +40,7 @@ jobs:
         check-latest: true
 
     - name: GoReleaser
-      uses: goreleaser/goreleaser-action@v4
+      uses: goreleaser/goreleaser-action@v5
       with:
         version: latest
-        args: build --snapshot --timeout 120m
+        args: release --snapshot --timeout 120m

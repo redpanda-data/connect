@@ -151,7 +151,9 @@ func (a *azureQueueStorage) ReadBatch(ctx context.Context) (batch service.Messag
 	dqm := make([]*azq.DequeuedMessage, n)
 	for i, queueMsg := range dequeue.Messages {
 		part := service.NewMessage([]byte(*queueMsg.MessageText))
-		part.MetaSetMut("queue_storage_insertion_time", queueMsg.InsertionTime.Format(time.RFC3339))
+		if queueMsg.InsertionTime != nil {
+			part.MetaSetMut("queue_storage_insertion_time", queueMsg.InsertionTime.Format(time.RFC3339))
+		}
 		part.MetaSetMut("queue_storage_queue_name", queueName)
 		if a.conf.TrackProperties {
 			msgLag := 0
@@ -161,7 +163,9 @@ func (a *azureQueueStorage) ReadBatch(ctx context.Context) (batch service.Messag
 			part.MetaSetMut("queue_storage_message_lag", msgLag)
 		}
 		for k, v := range props.Metadata {
-			part.MetaSetMut(k, v)
+			if v != nil {
+				part.MetaSetMut(k, *v)
+			}
 		}
 		batch = append(batch, part)
 		dqm[i] = queueMsg

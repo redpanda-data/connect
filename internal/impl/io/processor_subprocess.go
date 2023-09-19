@@ -38,6 +38,10 @@ func init() {
 		Summary: `
 Executes a command as a subprocess and, for each message, will pipe its contents to the stdin stream of the process followed by a newline.`,
 		Description: `
+:::info
+This processor keeps the subprocess alive and requires very specific behaviour from the command executed. If you wish to simply execute a command for each message take a look at the [` + "`command`" + ` processor](/docs/components/processors/command) instead.
+:::
+
 The subprocess must then either return a line over stdout or stderr. If a response is returned over stdout then its contents will replace the message. If a response is instead returned from stderr it will be logged and the message will continue unchanged and will be [marked as failed](/docs/configuration/error_handling).
 
 Rather than separating data by a newline it's possible to specify alternative ` + "[`codec_send`](#codec_send) and [`codec_recv`](#codec_recv)" + ` values, which allow binary messages to be encoded for logical separation.

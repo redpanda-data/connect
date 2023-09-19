@@ -7,19 +7,22 @@ import (
 	"sort"
 )
 
+type functionDetails struct {
+	ctor FunctionCtor
+	spec FunctionSpec
+}
+
 // FunctionSet contains an explicit set of functions to be available in a
 // Bloblang query.
 type FunctionSet struct {
 	disableCtors bool
-	constructors map[string]FunctionCtor
-	specs        map[string]FunctionSpec
+	functions    map[string]functionDetails
 }
 
 // NewFunctionSet creates a function set without any functions in it.
 func NewFunctionSet() *FunctionSet {
 	return &FunctionSet{
-		constructors: map[string]FunctionCtor{},
-		specs:        map[string]FunctionSpec{},
+		functions: map[string]functionDetails{},
 	}
 }
 
@@ -38,16 +41,15 @@ func (f *FunctionSet) Add(spec FunctionSpec, ctor FunctionCtor) error {
 	if err := spec.Params.validate(); err != nil {
 		return err
 	}
-	f.constructors[spec.Name] = ctor
-	f.specs[spec.Name] = spec
+	f.functions[spec.Name] = functionDetails{ctor: ctor, spec: spec}
 	return nil
 }
 
 // Docs returns a slice of function specs, which document each function.
 func (f *FunctionSet) Docs() []FunctionSpec {
-	specSlice := make([]FunctionSpec, 0, len(f.specs))
-	for _, v := range f.specs {
-		specSlice = append(specSlice, v)
+	specSlice := make([]FunctionSpec, 0, len(f.functions))
+	for _, v := range f.functions {
+		specSlice = append(specSlice, v.spec)
 	}
 	sort.Slice(specSlice, func(i, j int) bool {
 		return specSlice[i].Name < specSlice[j].Name
@@ -57,24 +59,24 @@ func (f *FunctionSet) Docs() []FunctionSpec {
 
 // Params attempts to obtain an argument specification for a given function.
 func (f *FunctionSet) Params(name string) (Params, error) {
-	spec, exists := f.specs[name]
+	details, exists := f.functions[name]
 	if !exists {
 		return VariadicParams(), badFunctionErr(name)
 	}
-	return spec.Params, nil
+	return details.spec.Params, nil
 }
 
 // Init attempts to initialize a function of the set by name and zero or more
 // arguments.
 func (f *FunctionSet) Init(name string, args *ParsedParams) (Function, error) {
-	ctor, exists := f.constructors[name]
+	details, exists := f.functions[name]
 	if !exists {
 		return nil, badFunctionErr(name)
 	}
 	if f.disableCtors {
 		return disabledFunction(name), nil
 	}
-	return wrapCtorWithDynamicArgs(name, args, ctor)
+	return wrapCtorWithDynamicArgs(name, args, details.ctor)
 }
 
 // Without creates a clone of the function set that can be mutated in isolation,
@@ -85,29 +87,22 @@ func (f *FunctionSet) Without(functions ...string) *FunctionSet {
 		excludeMap[k] = struct{}{}
 	}
 
-	constructors := make(map[string]FunctionCtor, len(f.constructors))
-	for k, v := range f.constructors {
+	details := make(map[string]functionDetails, len(f.functions))
+	for k, v := range f.functions {
 		if _, exists := excludeMap[k]; !exists {
-			constructors[k] = v
+			details[k] = v
 		}
 	}
-
-	specs := map[string]FunctionSpec{}
-	for _, v := range f.specs {
-		if _, exists := excludeMap[v.Name]; !exists {
-			specs[v.Name] = v
-		}
-	}
-	return &FunctionSet{disableCtors: f.disableCtors, constructors: constructors, specs: specs}
+	return &FunctionSet{disableCtors: f.disableCtors, functions: details}
 }
 
 // OnlyPure creates a clone of the function set that can be mutated in
 // isolation, where all impure functions are removed.
 func (f *FunctionSet) OnlyPure() *FunctionSet {
 	var excludes []string
-	for _, v := range f.specs {
-		if v.Impure {
-			excludes = append(excludes, v.Name)
+	for _, v := range f.functions {
+		if v.spec.Impure {
+			excludes = append(excludes, v.spec.Name)
 		}
 	}
 	return f.Without(excludes...)
@@ -117,9 +112,9 @@ func (f *FunctionSet) OnlyPure() *FunctionSet {
 // isolation, where all message access functions are removed.
 func (f *FunctionSet) NoMessage() *FunctionSet {
 	var excludes []string
-	for _, v := range f.specs {
-		if v.Category == FunctionCategoryMessage {
-			excludes = append(excludes, v.Name)
+	for _, v := range f.functions {
+		if v.spec.Category == FunctionCategoryMessage {
+			excludes = append(excludes, v.spec.Name)
 		}
 	}
 	return f.Without(excludes...)
@@ -165,11 +160,11 @@ func registerSimpleFunction(spec FunctionSpec, fn func(ctx FunctionContext) (any
 // InitFunctionHelper attempts to initialise a function by its name and a list
 // of arguments, this is convenient for writing tests.
 func InitFunctionHelper(name string, args ...any) (Function, error) {
-	spec, ok := AllFunctions.specs[name]
+	details, ok := AllFunctions.functions[name]
 	if !ok {
 		return nil, badFunctionErr(name)
 	}
-	parsedArgs, err := spec.Params.PopulateNameless(args...)
+	parsedArgs, err := details.spec.Params.PopulateNameless(args...)
 	if err != nil {
 		return nil, err
 	}

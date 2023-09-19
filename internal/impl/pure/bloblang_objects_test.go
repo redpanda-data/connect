@@ -97,10 +97,10 @@ func TestZipMethod(t *testing.T) {
 				},
 			},
 			output: map[string]any{
-				"foo": [][]any{
-					{"a", 1, []any{"x"}},
-					{"b", 2, []any{"y"}},
-					{"c", 3, []any{"z"}},
+				"foo": []any{
+					[]any{"a", 1, []any{"x"}},
+					[]any{"b", 2, []any{"y"}},
+					[]any{"c", 3, []any{"z"}},
 				},
 			},
 		},

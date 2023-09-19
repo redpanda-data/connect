@@ -1,0 +1,37 @@
+pipeline:
+  processors:
+    - dedupe:
+        cache: local_ttlru
+        key: ${! content() }
+
+cache_resources:
+  - label: local_ttlru
+    ttlru:
+      default_ttl: 1m
+
+tests:
+  - name: de-duplicate across batches using ttlru cache
+    input_batches:
+      -
+        - content: '1'
+        - content: '2'
+        - content: '3'
+        - content: '4'
+        - content: '3'
+        - content: '3'
+        - content: '3'
+      -
+        - content: '4'
+        - content: '1'
+        - content: '1'
+        - content: '3'
+        - content: '4'
+        - content: '4'
+        - content: '2'
+        - content: '1'
+    output_batches:
+      -
+        - content_equals: 1
+        - content_equals: 2
+        - content_equals: 3
+        - content_equals: 4

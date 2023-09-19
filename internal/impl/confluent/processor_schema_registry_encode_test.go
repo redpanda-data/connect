@@ -566,3 +566,87 @@ func TestSchemaRegistryEncodeRefresh(t *testing.T) {
 	assert.Equal(t, int32(1), atomic.LoadInt32(&fooReqs))
 	assert.Equal(t, int32(1), atomic.LoadInt32(&barReqs))
 }
+
+func TestSchemaRegistryEncodeJSON(t *testing.T) {
+	fooFirst, err := json.Marshal(struct {
+		Schema     string `json:"schema"`
+		SchemaType string `json:"schemaType"`
+		ID         int    `json:"id"`
+	}{
+		Schema:     testJSONSchema,
+		SchemaType: "JSON",
+		ID:         3,
+	})
+	require.NoError(t, err)
+
+	urlStr := runSchemaRegistryServer(t, func(path string) ([]byte, error) {
+		if path == "/subjects/foo/versions/latest" {
+			return fooFirst, nil
+		}
+		return nil, errors.New("nope")
+	})
+
+	subj, err := service.NewInterpolatedString("foo")
+	require.NoError(t, err)
+
+	encoder, err := newSchemaRegistryEncoder(urlStr, noopReqSign, nil, subj, false, time.Minute*10, time.Minute, service.MockResources())
+	require.NoError(t, err)
+
+	tests := []struct {
+		name        string
+		input       string
+		output      string
+		errContains string
+	}{
+		{
+			name:   "successful message",
+			input:  `{"Address":{"City":"foo","State":"bar"},"Name":"foo","MaybeHobby":"dancing"}`,
+			output: "\x00\x00\x00\x00\x03{\"Address\":{\"City\":\"foo\",\"State\":\"bar\"},\"Name\":\"foo\",\"MaybeHobby\":\"dancing\"}",
+		},
+		{
+			name:   "successful message null hobby",
+			input:  `{"Address":{"City": "foo","State":"bar"},"Name":"foo","MaybeHobby":null}`,
+			output: "\x00\x00\x00\x00\x03{\"Address\":{\"City\": \"foo\",\"State\":\"bar\"},\"Name\":\"foo\",\"MaybeHobby\":null}",
+		},
+		{
+			name:   "successful message no address and null hobby",
+			input:  `{"Name":"foo","MaybeHobby":null}`,
+			output: "\x00\x00\x00\x00\x03{\"Name\":\"foo\",\"MaybeHobby\":null}",
+		},
+		{
+			name:        "message doesnt match schema",
+			input:       `{"Address":"not this","Name":"foo"}`,
+			errContains: "json message does not conform to schema",
+		},
+	}
+
+	for _, test := range tests {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			outBatches, err := encoder.ProcessBatch(
+				context.Background(),
+				service.MessageBatch{service.NewMessage([]byte(test.input))},
+			)
+			require.NoError(t, err)
+			require.Len(t, outBatches, 1)
+			require.Len(t, outBatches[0], 1)
+
+			err = outBatches[0][0].GetError()
+			if test.errContains != "" {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), test.errContains)
+			} else {
+				require.NoError(t, err)
+
+				b, err := outBatches[0][0].AsBytes()
+				require.NoError(t, err)
+				assert.Equal(t, test.output, string(b))
+			}
+		})
+	}
+
+	require.NoError(t, encoder.Close(context.Background()))
+	encoder.cacheMut.Lock()
+	assert.Len(t, encoder.schemas, 0)
+	encoder.cacheMut.Unlock()
+}

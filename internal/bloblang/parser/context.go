@@ -119,6 +119,11 @@ func (pCtx Context) DisabledImports() Context {
 	return nextCtx
 }
 
+// ImportFile attempts to read a file for import via the customised Importer.
+func (pCtx Context) ImportFile(name string) ([]byte, error) {
+	return pCtx.importer.Import(name)
+}
+
 //------------------------------------------------------------------------------
 
 // Importer represents a repository of bloblang files that can be imported by

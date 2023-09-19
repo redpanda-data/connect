@@ -1,6 +1,7 @@
 package mongodb
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"strconv"
@@ -80,7 +81,10 @@ func getClient(parsedConf *service.ParsedConfig) (client *mongo.Client, database
 		opt.SetAuth(creds)
 	}
 
-	if client, err = mongo.NewClient(opt); err != nil {
+	ctx, done := context.WithTimeout(context.Background(), time.Minute)
+	defer done()
+
+	if client, err = mongo.Connect(ctx, opt); err != nil {
 		return
 	}
 
@@ -256,20 +260,14 @@ func writeConcernCollectionOptionFromParsed(pConf *service.ParsedConfig) (opt *o
 		}
 	}
 
-	writeConcern := writeconcern.New(
-		writeconcern.J(j),
-		writeconcern.WTimeout(wTimeout),
-	)
-
-	if wInt, err := strconv.Atoi(w); err != nil {
-		writeconcern.WTagSet(w)
-	} else {
-		writeconcern.W(wInt)(writeConcern)
+	writeConcern := &writeconcern.WriteConcern{
+		Journal:  &j,
+		WTimeout: wTimeout,
 	}
-
-	// This does some validation so we don't have to
-	if _, _, err = writeConcern.MarshalBSONValue(); err != nil {
-		return nil, fmt.Errorf("write concern validation error: %w", err)
+	if wInt, err := strconv.Atoi(w); err != nil {
+		writeConcern.W = w
+	} else {
+		writeConcern.W = wInt
 	}
 
 	return options.Collection().SetWriteConcern(writeConcern), nil
