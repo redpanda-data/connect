@@ -6,7 +6,7 @@ import (
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
-// CacheInitValuesFields return the fields to be added to a cache configuration to support sharded cache.
+// CacheInitValuesFields return the fields to be added to a cache configuration to support init values.
 func CacheInitValuesFields() []*service.ConfigField {
 	return []*service.ConfigField{
 		service.NewStringMapField("init_values").
