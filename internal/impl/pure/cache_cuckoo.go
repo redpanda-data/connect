@@ -48,8 +48,8 @@ cache_resources:
     cuckoo:
       cap: 1024
       init_values:
-        - foo
-        - bar
+        foo: t
+        bar: t
 ` + "```" + `
 
 These values can be overridden during execution.`).
@@ -59,13 +59,13 @@ These values can be overridden during execution.`).
 		Field(service.NewBoolField(cuckooCacheFieldScalableLabel).
 			Description("If true, will use a scalable cuckoo filter, that adapts the inner capacity based on usage").
 			Default(cuckooCacheFieldScalableDefaultValue)).
-		Field(service.NewStringListField(cuckooCacheFieldInitValuesLabel).
-			Description("A table of keys that should be present in the cache on initialization. This can be used to create static lookup tables.").
-			Default([]string{}).
-			Example([]string{
-				"Nickelback",
-				"Spice Girls",
-				"The Human League",
+		Field(service.NewStringMapField(ttlruCacheFieldInitValuesLabel).
+			Description("A table of key/value pairs that should be present in the cache on initialization. This can be used to create static lookup tables.").
+			Default(map[string]string{}).
+			Example(map[string]string{
+				"Nickelback":       "1995",
+				"Spice Girls":      "1994",
+				"The Human League": "1977",
 			})).
 		Footnotes(`This component implements all cache operations, however it does not store any value, only the keys.
 
@@ -102,7 +102,7 @@ func cuckooMemCacheFromConfig(conf *service.ParsedConfig, log *service.Logger) (
 		return nil, err
 	}
 
-	initValues, err := conf.FieldStringList(cuckooCacheFieldInitValuesLabel)
+	initValues, err := conf.FieldStringMap(cuckooCacheFieldInitValuesLabel)
 	if err != nil {
 		return nil, err
 	}
@@ -118,7 +118,7 @@ var errInvalidCuckooCacheCapacityValue = fmt.Errorf("invalid cuckoo cache parame
 
 func cuckooMemCache(capacity int,
 	useScalable bool,
-	initValues []string,
+	initValues map[string]string,
 	log *service.Logger,
 ) (ca *cuckooCacheAdapter, err error) {
 	if capacity <= 0 {
@@ -137,7 +137,7 @@ func cuckooMemCache(capacity int,
 		log:   log,
 	}
 
-	for _, key := range initValues {
+	for key := range initValues {
 		_ = inner.Insert([]byte(key))
 	}
 

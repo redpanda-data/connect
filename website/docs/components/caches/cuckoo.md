@@ -24,7 +24,7 @@ label: ""
 cuckoo:
   cap: 10000
   scalable: false
-  init_values: []
+  init_values: {}
 ```
 
 This provides the cuckoo package which implements a fixed-size thread safe Cuckoo filter.
@@ -45,8 +45,8 @@ cache_resources:
     cuckoo:
       cap: 1024
       init_values:
-        - foo
-        - bar
+        foo: t
+        bar: t
 ```
 
 These values can be overridden during execution.
@@ -71,19 +71,19 @@ Default: `false`
 
 ### `init_values`
 
-A table of keys that should be present in the cache on initialization. This can be used to create static lookup tables.
+A table of key/value pairs that should be present in the cache on initialization. This can be used to create static lookup tables.
 
 
-Type: `array`  
-Default: `[]`  
+Type: `object`  
+Default: `{}`  
 
 ```yml
 # Examples
 
 init_values:
-  - Nickelback
-  - Spice Girls
-  - The Human League
+  Nickelback: "1995"
+  Spice Girls: "1994"
+  The Human League: "1977"
 ```
 
 This component implements all cache operations, however it does not store any value, only the keys.

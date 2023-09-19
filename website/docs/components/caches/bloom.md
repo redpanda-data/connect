@@ -32,7 +32,7 @@ label: ""
 bloom:
   cap: 10000
   fp: 0.01
-  init_values: []
+  init_values: {}
 ```
 
 </TabItem>
@@ -44,7 +44,7 @@ label: ""
 bloom:
   cap: 10000
   fp: 0.01
-  init_values: []
+  init_values: {}
   strict: false
 ```
 
@@ -67,8 +67,8 @@ cache_resources:
     bloom:
       cap: 1024
       init_values:
-        - foo
-        - bar
+        foo: t
+        bar: t
 ```
 
 These values can be overridden during execution.
@@ -93,19 +93,19 @@ Default: `0.01`
 
 ### `init_values`
 
-A table of keys that should be present in the cache on initialization. This can be used to create static lookup tables.
+A table of key/value pairs that should be present in the cache on initialization. This can be used to create static lookup tables.
 
 
-Type: `array`  
-Default: `[]`  
+Type: `object`  
+Default: `{}`  
 
 ```yml
 # Examples
 
 init_values:
-  - Nickelback
-  - Spice Girls
-  - The Human League
+  Nickelback: "1995"
+  Spice Girls: "1994"
+  The Human League: "1977"
 ```
 
 ### `strict`

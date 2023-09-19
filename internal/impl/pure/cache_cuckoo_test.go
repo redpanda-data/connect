@@ -103,8 +103,8 @@ func TestCuckooCacheInitValues(t *testing.T) {
 	defConf, err := cuckooCacheConfig().ParseYAML(`
 cap: 1024
 init_values:
-  - foo
-  - bar
+  foo: t
+  bar: t
 `, nil)
 	require.NoError(t, err)
 

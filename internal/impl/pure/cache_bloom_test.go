@@ -84,8 +84,8 @@ func TestBloomCacheInitValues(t *testing.T) {
 	defConf, err := bloomCacheConfig().ParseYAML(`
 cap: 1024
 init_values:
-  - foo
-  - bar
+  foo: t
+  bar: t
 `, nil)
 	require.NoError(t, err)
 

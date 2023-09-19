@@ -45,8 +45,8 @@ cache_resources:
     bloom:
       cap: 1024
       init_values:
-        - foo
-        - bar
+        foo: t
+        bar: t
 ` + "```" + `
 
 These values can be overridden during execution.`).
@@ -56,13 +56,13 @@ These values can be overridden during execution.`).
 		Field(service.NewFloatField(bloomCacheFieldFalsePositiveRateLabel).
 			Description("false positive rate. 1% is 0.01").
 			Default(bloomCacheFieldFalsePositiveRateDefaultValue)).
-		Field(service.NewStringListField(bloomCacheFieldInitValuesLabel).
-			Description("A table of keys that should be present in the cache on initialization. This can be used to create static lookup tables.").
-			Default([]string{}).
-			Example([]string{
-				"Nickelback",
-				"Spice Girls",
-				"The Human League",
+		Field(service.NewStringMapField(ttlruCacheFieldInitValuesLabel).
+			Description("A table of key/value pairs that should be present in the cache on initialization. This can be used to create static lookup tables.").
+			Default(map[string]string{}).
+			Example(map[string]string{
+				"Nickelback":       "1995",
+				"Spice Girls":      "1994",
+				"The Human League": "1977",
 			})).
 		Field(service.NewBoolField(bloomCacheFieldStrictLabel).
 			Description("Bloom filters does not support delete operations. If strict mode is true, such operations will fail.").
@@ -104,7 +104,7 @@ func bloomMemCacheFromConfig(conf *service.ParsedConfig, log *service.Logger) (*
 		return nil, err
 	}
 
-	initValues, err := conf.FieldStringList(bloomCacheFieldInitValuesLabel)
+	initValues, err := conf.FieldStringMap(bloomCacheFieldInitValuesLabel)
 	if err != nil {
 		return nil, err
 	}
@@ -131,7 +131,7 @@ var (
 
 func bloomMemCache(capacity int,
 	fp float64,
-	initValues []string,
+	initValues map[string]string,
 	log *service.Logger,
 	strict bool,
 ) (ca *bloomCacheAdapter, err error) {
@@ -145,7 +145,7 @@ func bloomMemCache(capacity int,
 
 	inner := bloom.NewWithEstimates(uint(capacity), fp)
 
-	for _, key := range initValues {
+	for key := range initValues {
 		inner.AddString(key)
 	}
 
