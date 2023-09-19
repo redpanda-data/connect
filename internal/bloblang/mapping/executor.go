@@ -335,9 +335,10 @@ func (e *Executor) ToString(ctx query.FunctionContext) (string, error) {
 //------------------------------------------------------------------------------
 
 type failedAssignmentErr struct {
-	line   int
-	onExec bool
-	err    error
+	line    int
+	onExec  bool
+	err     error
+	mapname string
 }
 
 func (f *failedAssignmentErr) Unwrap() error {
@@ -346,7 +347,7 @@ func (f *failedAssignmentErr) Unwrap() error {
 
 func (f *failedAssignmentErr) Error() string {
 	if f.onExec {
-		return fmt.Sprintf("failed assignment (line %v): %v", f.line, f.err)
+		return fmt.Sprintf("failed assignment on map(%s) (line %v): %v", f.mapname, f.line, f.err)
 	}
 	return fmt.Sprintf("failed to assign result (line %v): %v", f.line, f.err)
 }
@@ -376,9 +377,30 @@ func formatExecErr(err error, onExec bool, input, stmtInput []rune) error {
 		err = e
 	}
 
+	mapname := getMapName(input)
+
 	return &failedAssignmentErr{
 		line:   line,
 		onExec: onExec,
 		err:    err,
+		mapname: mapname,
 	}
+}
+
+func getMapName(input []rune) string {
+	secondSpaceIndex := -1
+	for i := 4; i < len(input); i++ {
+		if input[i] == ' ' {
+			secondSpaceIndex = i
+			break
+		}
+	}
+
+	if secondSpaceIndex == -1 {
+		return ""
+	}
+
+	mapName := string(input[4:secondSpaceIndex])
+
+	return mapName
 }
