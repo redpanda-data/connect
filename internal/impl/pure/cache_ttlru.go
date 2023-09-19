@@ -9,6 +9,7 @@ import (
 	"github.com/hashicorp/golang-lru/v2/expirable"
 
 	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/benthosdev/benthos/v4/public/service/middleware"
 )
 
 const (
@@ -30,8 +31,13 @@ const (
 func ttlruCacheConfig() *service.ConfigSpec {
 	spec := service.NewConfigSpec().
 		Stable().
-		Summary(`Stores key/value pairs in a ttlru in-memory cache. This cache is therefore reset every time the service restarts.`).
-		Description(`The cache ttlru provides a simple, goroutine safe, cache with a fixed number of entries. Each entry has a per-cache defined TTL.
+		Summary(`Stores key/value pairs in a ttlru in-memory cache. This cache is therefore reset every time the service restarts.`)
+
+	for _, f := range middleware.CacheShardedFields() {
+		spec = spec.Field(f)
+	}
+
+	spec.Description(`The cache ttlru provides a simple, goroutine safe, cache with a fixed number of entries. Each entry has a per-cache defined TTL.
 
 This TTL is reset on both modification and access of the value. As a result, if the cache is full, and no items have expired, when adding a new item, the item with the soonest expiration will be evicted.
 
@@ -77,19 +83,20 @@ These values can be overridden during execution.`).
 }
 
 func init() {
-	err := service.RegisterCache(
-		"ttlru", ttlruCacheConfig(),
-		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Cache, error) {
-			logger := mgr.Logger().With("component", "ttlru")
-			f, err := ttlruMemCacheFromConfig(conf, logger)
-			if err != nil {
-				return nil, err
-			}
-			return f, nil
-		})
+	ctor := middleware.WrapCacheConstructorWithShards(context.Background(), ttlruMemShardCacheConstructor)
+
+	err := service.RegisterCache("ttlru", ttlruCacheConfig(), ctor)
 	if err != nil {
 		panic(err)
 	}
+}
+
+func ttlruMemShardCacheConstructor(_ middleware.ShardInfo,
+	conf *service.ParsedConfig, mgr *service.Resources) (service.Cache, error) {
+
+	logger := mgr.Logger().With("component", "ttlru")
+
+	return ttlruMemCacheFromConfig(conf, logger)
 }
 
 func ttlruMemCacheFromConfig(conf *service.ParsedConfig, logger *service.Logger) (*ttlruCacheAdapter, error) {

@@ -6,7 +6,9 @@ pipeline:
 
 cache_resources:
   - label: local_lru
-    lru: {}
+    lru:
+      cap: 1000
+      shards: 2
 
 tests:
   - name: de-duplicate across batches using lru cache

@@ -10,6 +10,7 @@ import (
 	lruv2 "github.com/hashicorp/golang-lru/v2"
 
 	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/benthosdev/benthos/v4/public/service/middleware"
 )
 
 const (
@@ -38,8 +39,13 @@ const (
 func lruCacheConfig() *service.ConfigSpec {
 	spec := service.NewConfigSpec().
 		Stable().
-		Summary(`Stores key/value pairs in a lru in-memory cache. This cache is therefore reset every time the service restarts.`).
-		Description(`This provides the lru package which implements a fixed-size thread safe LRU cache.
+		Summary(`Stores key/value pairs in a lru in-memory cache. This cache is therefore reset every time the service restarts.`)
+
+	for _, f := range middleware.CacheShardedFields() {
+		spec = spec.Field(f)
+	}
+
+	spec.Description(`This provides the lru package which implements a fixed-size thread safe LRU cache.
 
 It uses the package ` + "[`lru`](https://github.com/hashicorp/golang-lru/v2)" + `
 
@@ -93,18 +99,19 @@ These values can be overridden during execution.`).
 }
 
 func init() {
-	err := service.RegisterCache(
-		"lru", lruCacheConfig(),
-		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Cache, error) {
-			f, err := lruMemCacheFromConfig(conf)
-			if err != nil {
-				return nil, err
-			}
-			return f, nil
-		})
+	ctor := middleware.WrapCacheConstructorWithShards(context.Background(),
+		lruMemShardCacheConstructor)
+
+	err := service.RegisterCache("lru", lruCacheConfig(), ctor)
 	if err != nil {
 		panic(err)
 	}
+}
+
+func lruMemShardCacheConstructor(_ middleware.ShardInfo,
+	conf *service.ParsedConfig, _ *service.Resources) (service.Cache, error) {
+
+	return lruMemCacheFromConfig(conf)
 }
 
 func lruMemCacheFromConfig(conf *service.ParsedConfig) (*lruCacheAdapter, error) {
