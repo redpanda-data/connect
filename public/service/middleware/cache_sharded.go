@@ -53,15 +53,28 @@ type ShardInfo struct {
 	N int
 }
 
-type ShardedCacheConstructor func(ShardInfo,
+type shardInfoContextKeyType string
+
+const shardInfoContextKey shardInfoContextKeyType = "shard-info-context-key"
+
+func ShardInfoFromContext(ctx context.Context) (ShardInfo, bool) {
+	info, ok := ctx.Value(shardInfoContextKey).(ShardInfo)
+
+	return info, ok
+}
+func ContextWithShardInfo(ctx context.Context, info ShardInfo) context.Context {
+	return context.WithValue(ctx, shardInfoContextKey, info)
+}
+
+type CtxCacheConstructor func(context.Context,
 	*service.ParsedConfig, *service.Resources) (service.Cache, error)
 
-type CacheCtorCallback func(ShardInfo) (service.Cache, error)
+type CtxCtorCallback func(context.Context) (service.Cache, error)
 
 // WrapCacheConstructorWithShards will create a sharded cache with n shards if there is a
 // field 'shards' available in the configuration.
 func WrapCacheConstructorWithShards(ctx context.Context,
-	ctor ShardedCacheConstructor) service.CacheConstructor {
+	ctor CtxCacheConstructor) service.CacheConstructor {
 	return func(conf *service.ParsedConfig, mgr *service.Resources) (instance service.Cache, err error) {
 		var nShards int
 		if conf.Contains("shards") {
@@ -71,9 +84,11 @@ func WrapCacheConstructorWithShards(ctx context.Context,
 			}
 		}
 
-		return NewShardedCache(ctx, nShards, func(info ShardInfo) (service.Cache, error) {
-			return ctor(info, conf, mgr)
-		})
+		shardedCtor := func(ctx context.Context) (service.Cache, error) {
+			return ctor(ctx, conf, mgr)
+		}
+
+		return NewShardedCache(ctx, nShards, shardedCtor, mgr.Logger())
 	}
 }
 
@@ -81,14 +96,14 @@ func WrapCacheConstructorWithShards(ctx context.Context,
 // called at least n times. Will return at first error and close the already opened shards.
 // If the cache implements SetMulti method, we will delegate the calls to the respective shards.
 func NewShardedCache(ctx context.Context, nShards int,
-	ctor CacheCtorCallback) (service.Cache, error) {
+	ctor CtxCtorCallback, logger *service.Logger) (service.Cache, error) {
 	if nShards < 1 {
 		nShards = 1
 	}
 
 	info := ShardInfo{N: nShards}
 
-	firstShard, err := ctor(info)
+	firstShard, err := ctor(ContextWithShardInfo(ctx, info))
 	if err != nil {
 		return nil, err
 	}
@@ -110,11 +125,11 @@ func NewShardedCache(ctx context.Context, nShards int,
 
 	for i := 1; i < nShards; i++ {
 		info.I = i
-		nextShard, err := ctor(info)
+		nextShard, err := ctor(ContextWithShardInfo(ctx, info))
 		if err != nil {
 			cerr := closeShards(ctx, shards[:i])
 			if cerr != nil {
-				err = errors.Join(err, cerr)
+				logger.With("error", cerr).Warn("unexpected error while closing caches")
 			}
 
 			return nil, err

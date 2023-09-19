@@ -185,13 +185,13 @@ error while closing shard #1: ops`)
 
 			var mocks []*servicemock.Cache
 			instance, err := middleware.NewShardedCache(context.Background(),
-				tc.nShards, func(_ middleware.ShardInfo) (service.Cache, error) {
+				tc.nShards, func(_ context.Context) (service.Cache, error) {
 					cache := servicemock.NewCache(t)
 
 					mocks = append(mocks, cache)
 
 					return cache, nil
-				})
+				}, service.MockResources().Logger())
 
 			require.NoError(t, err)
 			require.Len(t, mocks, tc.nShards)
@@ -209,13 +209,13 @@ func TestSetMultiWithABatchedCached(t *testing.T) {
 	var mocks []*batchedMockCache
 
 	instance, err := middleware.NewShardedCache(context.Background(),
-		2, func(_ middleware.ShardInfo) (service.Cache, error) {
+		2, func(_ context.Context) (service.Cache, error) {
 			mock := newBatchedMockCache(t)
 
 			mocks = append(mocks, mock)
 
 			return mock, nil
-		})
+		}, service.MockResources().Logger())
 
 	require.NoError(t, err)
 
@@ -280,13 +280,13 @@ func TestSetMultiWithoutANormalCached(t *testing.T) {
 	var mocks []*servicemock.Cache
 
 	instance, err := middleware.NewShardedCache(context.Background(),
-		2, func(_ middleware.ShardInfo) (service.Cache, error) {
+		2, func(_ context.Context) (service.Cache, error) {
 			mock := servicemock.NewCache(t)
 
 			mocks = append(mocks, mock)
 
 			return mock, nil
-		})
+		}, service.MockResources().Logger())
 
 	require.NoError(t, err)
 
@@ -351,15 +351,18 @@ func TestShardedCacheCtor(t *testing.T) {
 
 		nShards int
 
-		ctorBuilder func(t *testing.T) middleware.CacheCtorCallback
+		ctorBuilder func(t *testing.T) middleware.CtxCtorCallback
 
 		errMsg string
 	}{
 		{
 			label:   "should return error from first call to ctor",
 			nShards: 2,
-			ctorBuilder: func(t *testing.T) middleware.CacheCtorCallback {
-				return func(info middleware.ShardInfo) (service.Cache, error) {
+			ctorBuilder: func(t *testing.T) middleware.CtxCtorCallback {
+				return func(ctx context.Context) (service.Cache, error) {
+					info, ok := middleware.ShardInfoFromContext(ctx)
+					require.True(t, ok, "should contain shard info on context")
+
 					if info.I == 0 {
 						return nil, errors.New("ops")
 					}
@@ -372,8 +375,10 @@ func TestShardedCacheCtor(t *testing.T) {
 		{
 			label:   "should return error from second call and close the first cache",
 			nShards: 2,
-			ctorBuilder: func(t *testing.T) middleware.CacheCtorCallback {
-				return func(info middleware.ShardInfo) (service.Cache, error) {
+			ctorBuilder: func(t *testing.T) middleware.CtxCtorCallback {
+				return func(ctx context.Context) (service.Cache, error) {
+					info, ok := middleware.ShardInfoFromContext(ctx)
+					require.True(t, ok, "should contain shard info on context")
 					switch info.I {
 					case 0:
 						mock := servicemock.NewCache(t)
@@ -395,13 +400,14 @@ func TestShardedCacheCtor(t *testing.T) {
 		t.Run(tc.label, func(t *testing.T) {
 			t.Parallel()
 
-			var ctor middleware.CacheCtorCallback
+			var ctor middleware.CtxCtorCallback
 
 			if tc.ctorBuilder != nil {
 				ctor = tc.ctorBuilder(t)
 			}
 
-			_, err := middleware.NewShardedCache(context.Background(), tc.nShards, ctor)
+			_, err := middleware.NewShardedCache(context.Background(),
+				tc.nShards, ctor, service.MockResources().Logger())
 			if tc.errMsg != "" {
 				assert.EqualError(t, err, tc.errMsg)
 
@@ -446,13 +452,16 @@ func TestCtorSpecialCasesShard(t *testing.T) {
 			)
 
 			instance, err := middleware.NewShardedCache(context.Background(),
-				1, func(info middleware.ShardInfo) (service.Cache, error) {
+				1, func(ctx context.Context) (service.Cache, error) {
+					info, ok := middleware.ShardInfoFromContext(ctx)
+					require.True(t, ok, "should contain shard info on context")
+
 					lastPtr.Store(&info)
 
 					calls.Add(1)
 
 					return mock, nil
-				})
+				}, service.MockResources().Logger())
 
 			require.NoError(t, err)
 			assert.Equal(t, mock, instance, "should return same instance")

@@ -27,8 +27,8 @@ Stores key/value pairs in a lru in-memory cache. This cache is therefore reset e
 # Common config fields, showing default values
 label: ""
 lru:
-  cap: 1000
   init_values: {}
+  cap: 1000
 ```
 
 </TabItem>
@@ -39,8 +39,8 @@ lru:
 label: ""
 lru:
   shards: 1
-  cap: 1000
   init_values: {}
+  cap: 1000
   algorithm: standard
   two_queues_recent_ratio: 0.25
   two_queues_ghost_ratio: 0.5
@@ -54,7 +54,7 @@ This provides the lru package which implements a fixed-size thread safe LRU cach
 
 It uses the package [`lru`](https://github.com/hashicorp/golang-lru/v2)
 
-The field init_values can be used to pre-populate the memory cache with any number of key/value pairs:
+The field `init_values` can be used to pre-populate the memory cache with any number of key/value pairs:
 
 ```yaml
 cache_resources:
@@ -77,14 +77,6 @@ A number of logical shards to spread keys across, increasing the shards can have
 Type: `int`  
 Default: `1`  
 
-### `cap`
-
-The cache maximum capacity (number of entries)
-
-
-Type: `int`  
-Default: `1000`  
-
 ### `init_values`
 
 A table of key/value pairs that should be present in the cache on initialization. This can be used to create static lookup tables.
@@ -101,6 +93,14 @@ init_values:
   Spice Girls: "1994"
   The Human League: "1977"
 ```
+
+### `cap`
+
+The cache maximum capacity (number of entries)
+
+
+Type: `int`  
+Default: `1000`  
 
 ### `algorithm`
 

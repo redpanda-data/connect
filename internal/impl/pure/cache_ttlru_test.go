@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/benthosdev/benthos/v4/public/service/middleware"
 )
 
 func TestTTLRUCacheDefault(t *testing.T) {
@@ -17,9 +18,7 @@ func TestTTLRUCacheDefault(t *testing.T) {
 	defConf, err := ttlruCacheConfig().ParseYAML(``, nil)
 	require.NoError(t, err)
 
-	logger := service.MockResources().Logger()
-
-	c, err := ttlruMemCacheFromConfig(defConf, logger)
+	c, err := ttlruMemCacheFromConfig(defConf, service.MockResources())
 	require.NoError(t, err)
 
 	testServiceCache(t, c)
@@ -34,9 +33,7 @@ without_reset: true # must be ignored
 `, nil)
 	require.NoError(t, err)
 
-	logger := service.MockResources().Logger()
-
-	c, err := ttlruMemCacheFromConfig(defConf, logger)
+	c, err := ttlruMemCacheFromConfig(defConf, service.MockResources())
 	require.NoError(t, err)
 
 	testServiceCache(t, c)
@@ -54,9 +51,11 @@ init_values:
 `, nil)
 	require.NoError(t, err)
 
-	logger := service.MockResources().Logger()
+	var ctor service.CacheConstructor = ttlruMemCacheFromConfig
 
-	c, err := ttlruMemCacheFromConfig(defConf, logger)
+	ctor = middleware.WrapCacheInitValues(context.Background(), ctor)
+
+	c, err := ctor(defConf, service.MockResources())
 	require.NoError(t, err)
 
 	ctx := context.Background()
@@ -80,9 +79,7 @@ func BenchmarkTTLRU(b *testing.B) {
 	defConf, err := ttlruCacheConfig().ParseYAML(``, nil)
 	require.NoError(b, err)
 
-	logger := service.MockResources().Logger()
-
-	c, err := ttlruMemCacheFromConfig(defConf, logger)
+	c, err := ttlruMemCacheFromConfig(defConf, service.MockResources())
 	require.NoError(b, err)
 
 	ctx := context.Background()
@@ -105,9 +102,7 @@ func BenchmarkTTLRUParallel(b *testing.B) {
 	defConf, err := ttlruCacheConfig().ParseYAML(``, nil)
 	require.NoError(b, err)
 
-	logger := service.MockResources().Logger()
-
-	c, err := ttlruMemCacheFromConfig(defConf, logger)
+	c, err := ttlruMemCacheFromConfig(defConf, service.MockResources())
 	require.NoError(b, err)
 
 	ctx := context.Background()

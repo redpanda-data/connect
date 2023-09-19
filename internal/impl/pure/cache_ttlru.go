@@ -19,8 +19,6 @@ const (
 	ttlruCacheFieldDefaultTTLLabel        = "default_ttl"
 	ttlruCacheFieldDefaultTTLDefaultValue = 5 * time.Minute
 
-	ttlruCacheFieldInitValuesLabel = "init_values"
-
 	ttlruCacheFieldOptimisticLabel        = "optimistic"
 	ttlruCacheFieldOptimisticDefaultValue = false
 
@@ -34,6 +32,7 @@ func ttlruCacheConfig() *service.ConfigSpec {
 		Summary(`Stores key/value pairs in a ttlru in-memory cache. This cache is therefore reset every time the service restarts.`)
 
 	spec = middleware.ApplyCacheShardedFields(spec)
+	spec = middleware.ApplyCacheInitValuesFields(spec)
 
 	spec.Description(`The cache ttlru provides a simple, goroutine safe, cache with a fixed number of entries. Each entry has a per-cache defined TTL.
 
@@ -41,7 +40,7 @@ This TTL is reset on both modification and access of the value. As a result, if 
 
 It uses the package ` + "[`expirable`](https://github.com/hashicorp/golang-lru/v2/expirable)" + `
 
-The field ` + ttlruCacheFieldInitValuesLabel + ` can be used to pre-populate the memory cache with any number of key/value pairs:
+The field ` + "`init_values`" + ` can be used to pre-populate the memory cache with any number of key/value pairs:
 
 ` + "```yaml" + `
 cache_resources:
@@ -64,14 +63,6 @@ These values can be overridden during execution.`).
 		Field(service.NewDurationField(ttlruCacheFieldDeprecatedTTLLabel).
 			Description("Deprecated. Please use `" + ttlruCacheFieldDefaultTTLLabel + "` field").
 			Optional().Advanced()).
-		Field(service.NewStringMapField(ttlruCacheFieldInitValuesLabel).
-			Description("A table of key/value pairs that should be present in the cache on initialization. This can be used to create static lookup tables.").
-			Default(map[string]string{}).
-			Example(map[string]string{
-				"Nickelback":       "1995",
-				"Spice Girls":      "1994",
-				"The Human League": "1977",
-			})).
 		Field(service.NewBoolField(ttlruCacheFieldOptimisticLabel).
 			Description("If true, we do not lock on read/write events. The ttlru package is thread-safe, however the ADD operation is not atomic.").
 			Default(ttlruCacheFieldOptimisticDefaultValue).
@@ -81,7 +72,11 @@ These values can be overridden during execution.`).
 }
 
 func init() {
-	ctor := middleware.WrapCacheConstructorWithShards(context.Background(), ttlruMemShardCacheConstructor)
+	ctx := context.Background()
+
+	ctor := middleware.WrapCacheConstructorWithShards(ctx, ttlruMemCtxCacheConstructor)
+
+	ctor = middleware.WrapCacheInitValues(ctx, ctor)
 
 	err := service.RegisterCache("ttlru", ttlruCacheConfig(), ctor)
 	if err != nil {
@@ -89,15 +84,14 @@ func init() {
 	}
 }
 
-func ttlruMemShardCacheConstructor(_ middleware.ShardInfo,
+func ttlruMemCtxCacheConstructor(_ context.Context,
 	conf *service.ParsedConfig, mgr *service.Resources) (service.Cache, error) {
-
-	logger := mgr.Logger().With("component", "ttlru")
-
-	return ttlruMemCacheFromConfig(conf, logger)
+	return ttlruMemCacheFromConfig(conf, mgr)
 }
 
-func ttlruMemCacheFromConfig(conf *service.ParsedConfig, logger *service.Logger) (*ttlruCacheAdapter, error) {
+func ttlruMemCacheFromConfig(conf *service.ParsedConfig, mgr *service.Resources) (service.Cache, error) {
+	logger := mgr.Logger().With("component", "ttlru")
+
 	capacity, err := conf.FieldInt(ttlruCacheFieldCapLabel)
 	if err != nil {
 		return nil, err
@@ -120,17 +114,12 @@ func ttlruMemCacheFromConfig(conf *service.ParsedConfig, logger *service.Logger)
 		logger.Warnf("field %q is deprecated, ignoring", ttlruCacheFieldDeprecatedWithoutResetLabel)
 	}
 
-	initValues, err := conf.FieldStringMap(ttlruCacheFieldInitValuesLabel)
-	if err != nil {
-		return nil, err
-	}
-
 	optimistic, err := conf.FieldBool(ttlruCacheFieldOptimisticLabel)
 	if err != nil {
 		return nil, err
 	}
 
-	return ttlruMemCache(capacity, ttl, initValues, optimistic)
+	return ttlruMemCache(capacity, ttl, optimistic)
 }
 
 //------------------------------------------------------------------------------
@@ -150,7 +139,6 @@ var (
 
 func ttlruMemCache(capacity int,
 	defaultTTL time.Duration,
-	initValues map[string]string,
 	optimistic bool,
 ) (*ttlruCacheAdapter, error) {
 	if capacity <= 0 {
@@ -162,10 +150,6 @@ func ttlruMemCache(capacity int,
 	}
 
 	c := expirable.NewLRU[string, []byte](capacity, nil, defaultTTL)
-
-	for k, v := range initValues {
-		_ = c.Add(k, []byte(v))
-	}
 
 	return &ttlruCacheAdapter{
 		inner:      c,

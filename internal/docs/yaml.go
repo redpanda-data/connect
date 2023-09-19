@@ -108,7 +108,7 @@ func GetInferenceCandidateFromYAML(docProv Provider, t Type, node *yaml.Node) (s
 	node = unwrapDocumentNode(node)
 
 	if node.Kind != yaml.MappingNode {
-		return "", ComponentSpec{}, fmt.Errorf("invalid type %v, expected object", node.Kind)
+		return "", ComponentSpec{}, fmt.Errorf("invalid type %v, expected object", k2s(node.Kind))
 	}
 
 	var keys []string
@@ -769,7 +769,7 @@ func (f FieldSpec) YAMLToValue(node *yaml.Node, conf ToValueConfig) (any, error)
 	switch f.Kind {
 	case Kind2DArray:
 		if !conf.Passive && node.Kind != yaml.SequenceNode {
-			return nil, fmt.Errorf("line %v: expected array value, got %v", node.Line, node.Kind)
+			return nil, fmt.Errorf("line %v: expected array value, got %v", node.Line, k2s(node.Kind))
 		}
 		subSpec := f.Array()
 
@@ -784,7 +784,7 @@ func (f FieldSpec) YAMLToValue(node *yaml.Node, conf ToValueConfig) (any, error)
 		return s, nil
 	case KindArray:
 		if !conf.Passive && node.Kind != yaml.SequenceNode {
-			return nil, fmt.Errorf("line %v: expected array value, got %v", node.Line, node.Kind)
+			return nil, fmt.Errorf("line %v: expected array value, got %v", node.Line, k2s(node.Kind))
 		}
 		subSpec := f.Scalar()
 
@@ -799,7 +799,7 @@ func (f FieldSpec) YAMLToValue(node *yaml.Node, conf ToValueConfig) (any, error)
 		return s, nil
 	case KindMap:
 		if !conf.Passive && node.Kind != yaml.MappingNode {
-			return nil, fmt.Errorf("line %v: expected map value, got %v", node.Line, node.Kind)
+			return nil, fmt.Errorf("line %v: expected map value, got %v", node.Line, k2s(node.Kind))
 		}
 		subSpec := f.Scalar()
 
@@ -1062,4 +1062,21 @@ func unwrapDocumentNode(node *yaml.Node) *yaml.Node {
 		node = node.Alias
 	}
 	return node
+}
+
+func k2s(kind yaml.Kind) string {
+	switch kind {
+	case yaml.DocumentNode:
+		return "Document"
+	case yaml.SequenceNode:
+		return "Sequence"
+	case yaml.MappingNode:
+		return "Mapping"
+	case yaml.ScalarNode:
+		return "Scalar"
+	case yaml.AliasNode:
+		return "Alias"
+	default:
+		return "Unknown"
+	}
 }
