@@ -56,7 +56,7 @@ type ErrBackOff struct {
 }
 
 // Error returns the Error string.
-func (e ErrBackOff) Error() string {
+func (e *ErrBackOff) Error() string {
 	return e.Err.Error()
 }
 

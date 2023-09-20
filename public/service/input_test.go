@@ -182,7 +182,7 @@ func TestBatchInputAirGapSadWithBackOff(t *testing.T) {
 	err := agi.Connect(context.Background())
 	assert.EqualError(t, err, "bad connect")
 
-	var e component.ErrBackOff
+	var e *component.ErrBackOff
 	assert.True(t, errors.As(err, &e))
 	assert.Equal(t, e.Wait, time.Second*2)
 	assert.EqualError(t, e.Err, "bad connect")
