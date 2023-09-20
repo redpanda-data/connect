@@ -152,9 +152,17 @@ func (w *AsyncWriter) loop() {
 				}
 				w.log.Errorf("Failed to connect to %v: %v\n", w.typeStr, err)
 				mFailedConn.Incr(1)
-				select {
-				case <-time.After(connBackoff.NextBackOff()):
-				case <-closeLeisureCtx.Done():
+
+				var nextBoff time.Duration
+
+				var ebo *component.ErrBackOff
+				if errors.As(err, &ebo) {
+					nextBoff = ebo.Wait
+				} else {
+					nextBoff = connBackoff.NextBackOff()
+				}
+
+				if sleepWithCancellation(closeLeisureCtx, nextBoff) != nil {
 					return false
 				}
 			} else {
@@ -297,4 +305,16 @@ func (w *AsyncWriter) WaitForClose(ctx context.Context) error {
 		return ctx.Err()
 	}
 	return nil
+}
+
+func sleepWithCancellation(ctx context.Context, d time.Duration) error {
+	t := time.NewTimer(d)
+	defer t.Stop()
+
+	select {
+	case <-t.C:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }

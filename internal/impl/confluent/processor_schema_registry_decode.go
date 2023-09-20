@@ -23,7 +23,7 @@ func schemaRegistryDecoderConfig() *service.ConfigSpec {
 		Description(`
 Decodes messages automatically from a schema stored within a [Confluent Schema Registry service](https://docs.confluent.io/platform/current/schema-registry/index.html) by extracting a schema ID from the message and obtaining the associated schema from the registry. If a message fails to match against the schema then it will remain unchanged and the error can be caught using error handling methods outlined [here](/docs/configuration/error_handling).
 
-Currently only Avro or Protobuf schemas are supported, both are capable of expanding from schema references as of v4.19.0.
+Avro, Protobuf and Json schemas are supported, all are capable of expanding from schema references as of v4.22.0.
 
 ### Avro JSON Format
 
@@ -259,6 +259,8 @@ func (s *schemaRegistryDecoder) getDecoder(id int) (schemaDecoder, error) {
 		decoder, err = s.getProtobufDecoder(ctx, resPayload)
 	case "", "AVRO":
 		decoder, err = s.getAvroDecoder(ctx, resPayload)
+	case "JSON":
+		decoder, err = s.getJSONDecoder(ctx, resPayload)
 	default:
 		err = fmt.Errorf("schema type %v not supported", resPayload.Type)
 	}

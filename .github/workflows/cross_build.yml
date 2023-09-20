@@ -40,7 +40,7 @@ jobs:
         check-latest: true
 
     - name: GoReleaser
-      uses: goreleaser/goreleaser-action@v4
+      uses: goreleaser/goreleaser-action@v5
       with:
         version: latest
         args: release --snapshot --timeout 120m

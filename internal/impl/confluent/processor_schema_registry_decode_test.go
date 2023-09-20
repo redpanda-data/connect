@@ -183,6 +183,23 @@ message users {
   string gender = 4;
 }`
 
+const testJSONSchema = `{
+	"type": "object",
+	"properties": {
+		"Name": {"type": "string"},
+		"Address": {
+			"type": ["object", "null"],
+			"properties": {
+				"City": {"type": "string"},
+				"State": {"type": "string"}
+			},
+			"required": ["State"]
+		},
+		"MaybeHobby": {"type": ["string", "null"]}
+	},
+	"required": ["Name"]
+}`
+
 func mustJBytes(t testing.TB, obj any) []byte {
 	t.Helper()
 	b, err := json.Marshal(obj)
@@ -474,6 +491,76 @@ func TestSchemaRegistryDecodeProtobuf(t *testing.T) {
 				require.NoError(t, err)
 
 				assert.JSONEq(t, test.output, string(b), "%s: %s", test.name)
+			}
+		})
+	}
+
+	require.NoError(t, decoder.Close(context.Background()))
+	decoder.cacheMut.Lock()
+	assert.Len(t, decoder.schemas, 0)
+	decoder.cacheMut.Unlock()
+}
+
+func TestSchemaRegistryDecodeJson(t *testing.T) {
+	returnedSchema3 := false
+	urlStr := runSchemaRegistryServer(t, func(path string) ([]byte, error) {
+		switch path {
+		case "/schemas/ids/3":
+			assert.False(t, returnedSchema3)
+			returnedSchema3 = true
+			return mustJBytes(t, map[string]any{
+				"schema":     testJSONSchema,
+				"schemaType": "JSON",
+			}), nil
+		case "/schemas/ids/5":
+			return nil, fmt.Errorf("nope")
+		}
+		return nil, nil
+	})
+
+	decoder, err := newSchemaRegistryDecoder(urlStr, noopReqSign, nil, false, service.MockResources())
+	require.NoError(t, err)
+
+	tests := []struct {
+		name        string
+		input       string
+		output      string
+		errContains string
+	}{
+		{
+			name:   "successful message",
+			input:  "\x00\x00\x00\x00\x03{\"Address\":{\"City\":\"foo\",\"State\":\"bar\"},\"MaybeHobby\":\"dancing\",\"Name\":\"foo\"}",
+			output: `{"Address":{"City":"foo","State":"bar"},"MaybeHobby":"dancing","Name":"foo"}`,
+		},
+		{
+			name:   "successful message with null hobby",
+			input:  "\x00\x00\x00\x00\x03{\"Address\":{\"City\":\"foo\",\"State\":\"bar\"},\"MaybeHobby\":null,\"Name\":\"foo\"}",
+			output: `{"Address":{"City":"foo","State":"bar"},"MaybeHobby":null,"Name":"foo"}`,
+		},
+		{
+			name:   "successful message no address and null hobby",
+			input:  "\x00\x00\x00\x00\x03{\"Name\":\"foo\",\"MaybeHobby\":null,\"Address\": null}",
+			output: `{"Name":"foo","MaybeHobby":null,"Address": null}`,
+		},
+	}
+
+	for _, test := range tests {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			outMsgs, err := decoder.Process(context.Background(), service.NewMessage([]byte(test.input)))
+			if test.errContains != "" {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), test.errContains)
+			} else {
+				require.NoError(t, err)
+				require.Len(t, outMsgs, 1)
+
+				b, err := outMsgs[0].AsBytes()
+				require.NoError(t, err)
+
+				jdopts := jsondiff.DefaultJSONOptions()
+				diff, explanation := jsondiff.Compare(b, []byte(test.output), &jdopts)
+				assert.Equalf(t, jsondiff.FullMatch.String(), diff.String(), "%s: %s", test.name, explanation)
 			}
 		})
 	}

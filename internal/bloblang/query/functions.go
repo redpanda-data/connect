@@ -265,8 +265,8 @@ var _ = registerSimpleFunction(
 //------------------------------------------------------------------------------
 
 var _ = registerFunction(
-	NewFunctionSpec(
-		FunctionCategoryGeneral, "count",
+	NewDeprecatedFunctionSpec(
+		"count",
 		"The `count` function is a counter starting at 1 which increments after each time it is called. Count takes an argument which is an identifier for the counter, allowing you to specify multiple unique counters in your configuration.",
 		NewExampleSpec("",
 			`root = this
@@ -672,8 +672,10 @@ var _ = registerFunction(
 
 var _ = registerFunction(
 	NewFunctionSpec(
-		FunctionCategoryGeneral, "random_int",
-		"Generates a non-negative pseudo-random 64-bit integer. An optional integer argument can be provided in order to seed the random number generator. Optional `min` and `max` arguments can be provided to make the generated numbers within a range.",
+		FunctionCategoryGeneral, "random_int", `
+Generates a non-negative pseudo-random 64-bit integer. An optional integer argument can be provided in order to seed the random number generator.
+
+Optional `+"`min` and `max`"+` arguments can be provided in order to only generate numbers within a range. Neither of these parameters can be set via a dynamic expression (i.e. from values taken from mapped data). Instead, for dynamic ranges extract a min and max manually using a modulo operator (`+"`random_int() % a + b`"+`).`,
 		NewExampleSpec("",
 			`root.first = random_int()
 root.second = random_int(1)
@@ -693,8 +695,8 @@ root.sixth = random_int(seed:timestamp_unix_nano(), max:20)
 			"A seed to use, if a query is provided it will only be resolved once during the lifetime of the mapping.",
 			true,
 		).Default(NewLiteralFunction("", 0))).
-		Param(ParamInt64("min", "The minimum value the random generated number will have. The default value is 0.").Default(0)).
-		Param(ParamInt64("max", fmt.Sprintf("The maximum value the random generated number will have. The default value is %d (math.MaxInt64 - 1).", uint64(math.MaxInt64-1))).Default(int64(math.MaxInt64-1))),
+		Param(ParamInt64("min", "The minimum value the random generated number will have. The default value is 0.").Default(0).DisableDynamic()).
+		Param(ParamInt64("max", fmt.Sprintf("The maximum value the random generated number will have. The default value is %d (math.MaxInt64 - 1).", uint64(math.MaxInt64-1))).Default(int64(math.MaxInt64-1)).DisableDynamic()),
 	randomIntFunction,
 )
 

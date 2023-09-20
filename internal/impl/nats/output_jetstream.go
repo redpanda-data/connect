@@ -37,6 +37,9 @@ func natsJetStreamOutputConfig() *service.ConfigSpec {
 				"Content-Type": "application/json",
 				"Timestamp":    `${!meta("Timestamp")}`,
 			}).Version("4.1.0")).
+		Field(service.NewMetadataFilterField("metadata").
+			Description("Determine which (if any) metadata values should be added to messages as headers.").
+			Optional()).
 		Field(service.NewIntField("max_in_flight").
 			Description("The maximum number of messages to have in flight at a given time. Increase this to improve throughput.").
 			Default(1024)).
@@ -68,6 +71,7 @@ type jetStreamOutput struct {
 	subjectStrRaw string
 	subjectStr    *service.InterpolatedString
 	headers       map[string]*service.InterpolatedString
+	metaFilter    *service.MetadataFilter
 	authConf      auth.Config
 	tlsConf       *tls.Config
 
@@ -105,6 +109,12 @@ func newJetStreamWriterFromConfig(conf *service.ParsedConfig, mgr *service.Resou
 
 	if j.headers, err = conf.FieldInterpolatedStringMap("headers"); err != nil {
 		return nil, err
+	}
+
+	if conf.Contains("metadata") {
+		if j.metaFilter, err = conf.FieldMetadataFilter("metadata"); err != nil {
+			return nil, err
+		}
 	}
 
 	tlsConf, tlsEnabled, err := conf.FieldTLSToggled("tls")
@@ -204,6 +214,10 @@ func (j *jetStreamOutput) Write(ctx context.Context, msg *service.Message) error
 
 		jsmsg.Header.Add(k, value)
 	}
+	_ = j.metaFilter.Walk(msg, func(key, value string) error {
+		jsmsg.Header.Add(key, value)
+		return nil
+	})
 
 	_, err = jCtx.PublishMsg(jsmsg)
 	return err
