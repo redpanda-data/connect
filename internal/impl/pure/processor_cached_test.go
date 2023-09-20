@@ -13,6 +13,7 @@ import (
 func TestCachedHappy(t *testing.T) {
 	conf, err := newCachedProcessorConfigSpec().ParseYAML(`
 key: ${! content() }
+ttl: 3660s
 cache: foo
 skip_on: errored()
 processors:
@@ -92,6 +93,7 @@ processors:
 func TestCachedHappyBatched(t *testing.T) {
 	conf, err := newCachedProcessorConfigSpec().ParseYAML(`
 key: ${! meta("key") }
+ttl: ${! meta("ttl").or("60s")}
 cache: foo
 processors:
   - bloblang: 'root = this.map_each(ele -> ele + " FOO")'
@@ -109,6 +111,7 @@ processors:
 
 	msg := service.NewMessage([]byte(``))
 	msg.MetaSet("key", "keya")
+	msg.MetaSet("ttl", "3660s")
 
 	resBatchA1, err := proc.Process(tCtx, service.NewMessage([]byte(`["valuea","valueb","valuec"]`)))
 	require.NoError(t, err)
@@ -193,6 +196,36 @@ processors:
 		assert.ErrorIs(t, err, service.ErrKeyNotFound)
 		assert.Empty(t, val)
 	}))
+
+	assert.NoError(t, proc.Close(tCtx))
+}
+
+func TestCachedBadTTL(t *testing.T) {
+	conf, err := newCachedProcessorConfigSpec().ParseYAML(`
+key: ${! content() }
+ttl: ${! 2+2 }
+cache: foo
+skip_on: "errored()"
+processors:
+  - bloblang: |
+      let body = content().string()
+      root = "%s FOO %d".format($body, count($body))
+  - bloblang: root = throw("simulated error")
+`, nil)
+	require.NoError(t, err)
+
+	mRes := service.MockResources(
+		service.MockResourcesOptAddCache("foo"),
+	)
+
+	proc, err := newCachedProcessorFromParsedConf(mRes, conf)
+	require.NoError(t, err)
+
+	tCtx := context.Background()
+
+	resBatchA1, err := proc.Process(tCtx, service.NewMessage([]byte("keya")))
+	assert.EqualError(t, err, `failed to parse ttl expression: time: missing unit in duration "4"`)
+	assert.Empty(t, resBatchA1)
 
 	assert.NoError(t, proc.Close(tCtx))
 }
