@@ -38,6 +38,8 @@ func RunService(c *cli.Context, version, dateBuilt string, streamsMode bool) int
 		return 1
 	}
 
+	logger.Infof("Benthos version: %s", version)
+
 	if mainPath == "" {
 		logger.Infof("Running without a main config file")
 	} else if inferredMainPath {
