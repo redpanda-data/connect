@@ -11,6 +11,7 @@ All notable changes to this project will be documented in this file.
 - Environment variables imported via `-e/--env-file` cli flags now support triple quoted strings.
 - New experimental `counter` function added to Bloblang. It is recommended that this function, although experimental, should be used instead of the now deprecated `count` function.
 - The `schema_registry_encode` and `schema_registry_decode` processors now support JSONSchema.
+- Field `metadata` added to the `nats` and `nats_jetstream` outputs.
 
 ### Fixed
 
