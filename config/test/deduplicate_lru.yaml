@@ -1,0 +1,36 @@
+pipeline:
+  processors:
+    - dedupe:
+        cache: local_lru
+        key: ${! content() }
+
+cache_resources:
+  - label: local_lru
+    lru: {}
+
+tests:
+  - name: de-duplicate across batches using lru cache
+    input_batches:
+      -
+        - content: '1'
+        - content: '2'
+        - content: '3'
+        - content: '4'
+        - content: '3'
+        - content: '3'
+        - content: '3'
+      -
+        - content: '4'
+        - content: '1'
+        - content: '1'
+        - content: '3'
+        - content: '4'
+        - content: '4'
+        - content: '2'
+        - content: '1'
+    output_batches:
+      -
+        - content_equals: 1
+        - content_equals: 2
+        - content_equals: 3
+        - content_equals: 4

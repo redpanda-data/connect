@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/rand"
+	"strings"
 
 	"github.com/benthosdev/benthos/v4/public/bloblang"
 )
@@ -142,4 +143,53 @@ root.reversed = this.names.sometimes_reverse()
 
 	fmt.Println(string(jsonBytes))
 	// Output: {"new_summary":"meowquackwoof","reversed":["spuz","jen","olaf","pixie","denny"]}
+}
+
+// This example demonstrates how to create and use an isolated Bloblang
+// environment with some standard functions removed.
+func Example_bloblangRestrictedEnvironment() {
+	env := bloblang.NewEnvironment().WithoutFunctions("env", "file")
+
+	customThingSpec := bloblang.NewPluginSpec().
+		Description("Uppercases some stuff or something")
+
+	if err := env.RegisterMethodV2("custom_thing", customThingSpec, func(args *bloblang.ParsedParams) (bloblang.Method, error) {
+		return bloblang.StringMethod(func(s string) (any, error) {
+			return strings.ToUpper(s), nil
+		}), nil
+	}); err != nil {
+		panic(err)
+	}
+
+	mapping := `
+root.foo = this.foo.string()
+root.bar = this.bar + this.baz
+root.buz = this.buz.content.custom_thing()
+`
+
+	exe, err := env.Parse(mapping)
+	if err != nil {
+		panic(err)
+	}
+
+	res, err := exe.Query(map[string]any{
+		"foo": 50.0,
+		"bar": "first bit ",
+		"baz": "second bit",
+		"buz": map[string]any{
+			"id":      "XXXX",
+			"content": "some nested content",
+		},
+	})
+	if err != nil {
+		panic(err)
+	}
+
+	jsonBytes, err := json.Marshal(res)
+	if err != nil {
+		panic(err)
+	}
+
+	fmt.Println(string(jsonBytes))
+	// Output: {"bar":"first bit second bit","buz":"SOME NESTED CONTENT","foo":"50"}
 }

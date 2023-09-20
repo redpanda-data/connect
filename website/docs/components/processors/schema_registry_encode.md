@@ -80,7 +80,7 @@ Encodes messages automatically from schemas obtains from a [Confluent Schema Reg
 
 If a message fails to encode under the schema then it will remain unchanged and the error can be caught using error handling methods outlined [here](/docs/configuration/error_handling).
 
-Currently only Avro or Protobuf schemas are supported, both are capable of expanding from schema references as of v4.19.0.
+Avro, Protobuf and Json schemas are supported, all are capable of expanding from schema references as of v4.22.0.
 
 ### Avro JSON Format
 

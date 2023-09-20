@@ -97,8 +97,9 @@ func parseExecutor(pCtx Context) Func {
 }
 
 func singleRootImport(pCtx Context) Func {
+	newline := NewlineAllowComment()
 	whitespace := SpacesAndTabs()
-	allWhitespace := DiscardAll(OneOf(whitespace, Newline()))
+	allWhitespace := DiscardAll(OneOf(whitespace, newline))
 
 	parser := Sequence(
 		allWhitespace,
@@ -127,16 +128,20 @@ func singleRootImport(pCtx Context) Func {
 		if execRes.Err != nil {
 			return Fail(NewFatalError(input, NewImportError(fpath, importContent, execRes.Err)), input)
 		}
+		if len(res.Remaining) > 0 {
+			return Fail(NewFatalError(input, fmt.Errorf("unexpected content after single root import: %s", string(res.Remaining))), input)
+		}
 		return Success(execRes.Payload.(*mapping.Executor), res.Remaining)
 	}
 }
 
 func singleRootMapping(pCtx Context) Func {
+	newline := NewlineAllowComment()
 	whitespace := SpacesAndTabs()
-	allWhitespace := DiscardAll(OneOf(whitespace, Newline()))
+	allWhitespace := DiscardAll(OneOf(whitespace, newline))
 
 	return func(input []rune) Result {
-		res := queryParser(pCtx)(input)
+		res := queryParser(pCtx)(allWhitespace(input).Remaining)
 		if res.Err != nil {
 			return res
 		}

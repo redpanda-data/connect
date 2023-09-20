@@ -38,6 +38,19 @@ type MethodConstructorV2 func(args *ParsedParams) (Method, error)
 
 //------------------------------------------------------------------------------
 
+// AdvancedMethod defines a Bloblang method that accesses the execution context
+// of the mapping during invocation. Advanced methods are responsible for
+// calling Exec upon the ExecFunction they target, and have the capability to
+// mutate or modify the execution context of that target.
+type AdvancedMethod func(ctx *ExecContext, fn *ExecFunction) (any, error)
+
+// AdvancedMethodConstructor defines a constructor for a Bloblang method
+// where parameters are parsed using a ParamsSpec provided when registering the
+// method, and the constructed method is provided an ExecContext.
+type AdvancedMethodConstructor func(args *ParsedParams) (AdvancedMethod, error)
+
+//------------------------------------------------------------------------------
+
 // StringMethod creates a general method signature from a string method by
 // performing type checking on the method target.
 func StringMethod(methodFn func(string) (any, error)) Method {

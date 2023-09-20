@@ -93,6 +93,28 @@ func oAuth2FieldSpec() *service.ConfigField {
 			Default([]string{}).
 			Advanced().
 			Version("3.45.0"),
+
+		service.NewAnyMapField("endpoint_params").
+			Description("A list of optional endpoint parameters, values should be arrays of strings.").
+			Default(map[string][]string{}).
+			Advanced().
+			Example(map[string]any{
+				"foo": []string{"meow", "quack"},
+				"bar": []string{"woof"},
+			}).
+			Version("4.21.0").
+			LintRule(`
+root = if this.type() == "object" {
+  this.values().map_each(ele -> if ele.type() != "array" {
+    "field must be an object containing arrays of strings, got %s (%v)".format(ele.format_json(no_indent: true), ele.type())
+  } else {
+    ele.map_each(str -> if str.type() != "string" {
+      "field values must be strings, got %s (%v)".format(str.format_json(no_indent: true), str.type())
+    } else { deleted() })
+  }).
+    flatten()
+}
+`),
 	).
 		Description("Allows you to specify open authentication via OAuth version 2 using the client credentials token flow.").
 		Advanced()
