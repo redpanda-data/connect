@@ -2,9 +2,7 @@ package service
 
 import (
 	"context"
-	"errors"
 
-	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/input"
 	"github.com/benthosdev/benthos/v4/internal/component/input/batcher"
 	"github.com/benthosdev/benthos/v4/internal/message"
@@ -108,22 +106,13 @@ func newAirGapReader(r Input) input.Async {
 }
 
 func (a *airGapReader) Connect(ctx context.Context) error {
-	err := a.r.Connect(ctx)
-	if err != nil && errors.Is(err, ErrEndOfInput) {
-		err = component.ErrTypeClosed
-	}
-	return err
+	return publicToInternalErr(a.r.Connect(ctx))
 }
 
 func (a *airGapReader) ReadBatch(ctx context.Context) (message.Batch, input.AsyncAckFn, error) {
 	msg, ackFn, err := a.r.Read(ctx)
 	if err != nil {
-		if errors.Is(err, ErrNotConnected) {
-			err = component.ErrNotConnected
-		} else if errors.Is(err, ErrEndOfInput) {
-			err = component.ErrTypeClosed
-		}
-		return nil, nil, err
+		return nil, nil, publicToInternalErr(err)
 	}
 
 	tMsg := message.Batch{msg.part}
@@ -148,40 +137,13 @@ func newAirGapBatchReader(r BatchInput) input.Async {
 }
 
 func (a *airGapBatchReader) Connect(ctx context.Context) error {
-	err := a.r.Connect(ctx)
-	if err != nil && errors.Is(err, ErrEndOfInput) {
-		err = component.ErrTypeClosed
-	}
-
-	var e ErrBackOff
-	if errors.As(err, &e) {
-		err = component.ErrBackOff{Err: err, Wait: e.Wait}
-	}
-
-	return err
+	return publicToInternalErr(a.r.Connect(ctx))
 }
 
 func (a *airGapBatchReader) ReadBatch(ctx context.Context) (message.Batch, input.AsyncAckFn, error) {
 	batch, ackFn, err := a.r.ReadBatch(ctx)
 	if err != nil {
-		var e ErrBackOff
-		if errors.As(err, &e) {
-			if errors.Is(e.Err, ErrNotConnected) {
-				err = component.ErrNotConnected
-			} else if errors.Is(e.Err, ErrEndOfInput) {
-				err = component.ErrTypeClosed
-			}
-
-			return nil, nil, component.ErrBackOff{Err: err, Wait: e.Wait}
-		}
-
-		if errors.Is(err, ErrNotConnected) {
-			err = component.ErrNotConnected
-		} else if errors.Is(err, ErrEndOfInput) {
-			err = component.ErrTypeClosed
-		}
-
-		return nil, nil, err
+		return nil, nil, publicToInternalErr(err)
 	}
 
 	mBatch := make(message.Batch, len(batch))
@@ -234,7 +196,7 @@ func (r *ResourceInput) ReadBatch(ctx context.Context) (MessageBatch, AckFunc, e
 		return nil
 	})
 	return b, func(c context.Context, r error) error {
-		r = fromPublicBatchError(r)
+		r = publicToInternalErr(r)
 		return tran.Ack(c, r)
 	}, nil
 }
@@ -282,7 +244,7 @@ func (o *OwnedInput) ReadBatch(ctx context.Context) (MessageBatch, AckFunc, erro
 		return nil
 	})
 	return b, func(c context.Context, r error) error {
-		r = fromPublicBatchError(r)
+		r = publicToInternalErr(r)
 		return tran.Ack(c, r)
 	}, nil
 }
