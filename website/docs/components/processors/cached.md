@@ -143,6 +143,7 @@ key: ${! meta("kafka_topic") }
 ### `ttl`
 
 An optional expiry period to set for each cache entry. Some caches only have a general TTL and will therefore ignore this setting.
+This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
 
 
 Type: `string`  

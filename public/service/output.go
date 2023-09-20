@@ -2,10 +2,8 @@ package service
 
 import (
 	"context"
-	"errors"
 	"sync"
 
-	"github.com/benthosdev/benthos/v4/internal/component"
 	ioutput "github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/message"
 )
@@ -85,11 +83,7 @@ func (a *airGapWriter) Connect(ctx context.Context) error {
 }
 
 func (a *airGapWriter) WriteBatch(ctx context.Context, msg message.Batch) error {
-	err := a.w.Write(ctx, NewInternalMessage(msg.Get(0)))
-	if err != nil && errors.Is(err, ErrNotConnected) {
-		err = component.ErrNotConnected
-	}
-	return err
+	return publicToInternalErr(a.w.Write(ctx, NewInternalMessage(msg.Get(0))))
 }
 
 func (a *airGapWriter) Close(ctx context.Context) error {
@@ -117,12 +111,7 @@ func (a *airGapBatchWriter) WriteBatch(ctx context.Context, msg message.Batch) e
 		parts[i] = NewInternalMessage(part)
 		return nil
 	})
-	err := a.w.WriteBatch(ctx, parts)
-	if err != nil && errors.Is(err, ErrNotConnected) {
-		err = component.ErrNotConnected
-	}
-	err = fromPublicBatchError(err)
-	return err
+	return publicToInternalErr(a.w.WriteBatch(ctx, parts))
 }
 
 func (a *airGapBatchWriter) Close(ctx context.Context) error {

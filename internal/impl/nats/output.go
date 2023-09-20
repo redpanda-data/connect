@@ -36,6 +36,9 @@ func natsOutputConfig() *service.ConfigSpec {
 				"Content-Type": "application/json",
 				"Timestamp":    `${!meta("Timestamp")}`,
 			})).
+		Field(service.NewMetadataFilterField("metadata").
+			Description("Determine which (if any) metadata values should be added to messages as headers.").
+			Optional()).
 		Field(service.NewIntField("max_in_flight").
 			Description("The maximum number of messages to have in flight at a given time. Increase this to improve throughput.").
 			Default(64)).
@@ -64,6 +67,7 @@ type natsWriter struct {
 	label         string
 	urls          string
 	headers       map[string]*service.InterpolatedString
+	metaFilter    *service.MetadataFilter
 	subjectStr    *service.InterpolatedString
 	subjectStrRaw string
 	authConf      auth.Config
@@ -99,6 +103,12 @@ func newNATSWriter(conf *service.ParsedConfig, mgr *service.Resources) (*natsWri
 
 	if n.headers, err = conf.FieldInterpolatedStringMap("headers"); err != nil {
 		return nil, err
+	}
+
+	if conf.Contains("metadata") {
+		if n.metaFilter, err = conf.FieldMetadataFilter("metadata"); err != nil {
+			return nil, err
+		}
 	}
 
 	tlsConf, tlsEnabled, err := conf.FieldTLSToggled("tls")
@@ -176,6 +186,10 @@ func (n *natsWriter) Write(context context.Context, msg *service.Message) error 
 			}
 			nMsg.Header.Add(k, headerStr)
 		}
+		_ = n.metaFilter.Walk(msg, func(key, value string) error {
+			nMsg.Header.Add(key, value)
+			return nil
+		})
 	}
 
 	if err = conn.PublishMsg(nMsg); errors.Is(err, nats.ErrConnectionClosed) {
