@@ -43,7 +43,7 @@ Returns a non-negative integer that increments each time it is resolved, yieldin
 
 **`min`** &lt;query expression, default `1`&gt; The minimum value of the counter, this is the first value that will be yielded. If this parameter is dynamic it will be resolved only once during the lifetime of the mapping.  
 **`max`** &lt;query expression, default `9223372036854775807`&gt; The maximum value of the counter, once this value is yielded the counter will reset back to the min. If this parameter is dynamic it will be resolved only once during the lifetime of the mapping.  
-**`set`** &lt;(optional) query expression&gt; An optional mapping that when specified will be executed each time the counter is resolved. When this mapping yields an integer value it will cause the counter to reset to this value and yield it. If this mapping yields `null`, or nothing, then nothing will happen. If this mapping yields a deletion then the counter is reset to the `min` value.  
+**`set`** &lt;(optional) query expression&gt; An optional mapping that when specified will be executed each time the counter is resolved. When this mapping resolves to a non-negative integer value it will cause the counter to reset to this value and yield it. If this mapping is omitted or doesn't resolve to anything then the counter will increment and yield the value as normal. If this mapping resolves to `null` then the counter is not incremented and the current value is yielded. If this mapping resolves to a deletion then the counter is reset to the `min` value.  
 
 #### Examples
 
@@ -93,6 +93,24 @@ root.consecutive_doggos = counter(min: 1, set: if !this.sound.lowercase().contai
 
 # In:  {"sound":"uuuuh uh uh woof uhhhhhh"}
 # Out: {"consecutive_doggos":1}
+```
+
+The `set` parameter can also be utilised to peek at the counter without mutating it by returning `null`.
+
+```coffee
+root.things = counter(set: if this.id == null { null })
+
+# In:  {"id":"a"}
+# Out: {"things":1}
+
+# In:  {"id":"b"}
+# Out: {"things":2}
+
+# In:  {"what":"just checking"}
+# Out: {"things":2}
+
+# In:  {"id":"c"}
+# Out: {"things":3}
 ```
 
 ### `deleted`
