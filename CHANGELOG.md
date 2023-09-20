@@ -12,13 +12,14 @@ All notable changes to this project will be documented in this file.
 - New experimental `counter` function added to Bloblang. It is recommended that this function, although experimental, should be used instead of the now deprecated `count` function.
 - The `schema_registry_encode` and `schema_registry_decode` processors now support JSONSchema.
 - Field `metadata` added to the `nats` and `nats_jetstream` outputs.
+- The `cached` processor field `ttl` now supports interpolation functions.
 
 ### Fixed
 
 - Corrected a scheduling error where the `generate` input with a descriptor interval (`@hourly`, etc) had a chance of firing twice.
 - Fixed an issue where a `redis_streams` input that is rejected from read attempts enters a reconnect loop without backoff.
 - The `sqs` input now periodically refreshes the visibility timeout of messages that take a significant amount of time to process.
-- The `ts_add_iso8601()` and `ts_sub_iso8601()` bloblang methods now return the correct error for certain invalid durations.
+- The `ts_add_iso8601` and `ts_sub_iso8601` bloblang methods now return the correct error for certain invalid durations.
 
 ### Changed
 
