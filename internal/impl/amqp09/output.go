@@ -66,6 +66,30 @@ The fields 'key' and 'type' can be dynamically set using function interpolations
 				Description("The content encoding attribute to set for each message.").
 				Advanced().
 				Default(""),
+			service.NewInterpolatedStringField(correlationIDField).
+				Description("Set the correlation ID of each message with a dynamic interpolated expression.").
+				Advanced().
+				Default(""),
+			service.NewInterpolatedStringField(replyToField).
+				Description("Carries response queue name - set with a dynamic interpolated expression.").
+				Advanced().
+				Default(""),
+			service.NewInterpolatedStringField(expirationField).
+				Description("Set the per-message TTL").
+				Advanced().
+				Default(""),
+			service.NewInterpolatedStringField(messageIDField).
+				Description("Set the message ID of each message with a dynamic interpolated expression.").
+				Advanced().
+				Default(""),
+			service.NewInterpolatedStringField(userIDField).
+				Description("Set the user ID to the name of the publisher.  If this property is set by a publisher, its value must be equal to the name of the user used to open the connection.").
+				Advanced().
+				Default(""),
+			service.NewInterpolatedStringField(appIDField).
+				Description("Set the application ID of each message with a dynamic interpolated expression.").
+				Advanced().
+				Default(""),
 			service.NewMetadataExcludeFilterField(metadataFilterField).
 				Description("Specify criteria for which metadata values are attached to messages as headers."),
 			service.NewInterpolatedStringField(priorityField).
@@ -116,6 +140,12 @@ type amqp09Writer struct {
 	contentType     *service.InterpolatedString
 	contentEncoding *service.InterpolatedString
 	priority        *service.InterpolatedString
+	correlationID   *service.InterpolatedString
+	replyTo         *service.InterpolatedString
+	expiration      *service.InterpolatedString
+	messageID       *service.InterpolatedString
+	userID          *service.InterpolatedString
+	appID           *service.InterpolatedString
 	metaFilter      *service.MetadataExcludeFilter
 
 	urls         []string
@@ -209,6 +239,24 @@ func amqp09WriterFromParsed(conf *service.ParsedConfig, mgr *service.Resources) 
 		return nil, err
 	}
 	if a.priority, err = conf.FieldInterpolatedString(priorityField); err != nil {
+		return nil, err
+	}
+	if a.correlationID, err = conf.FieldInterpolatedString(correlationIDField); err != nil {
+		return nil, err
+	}
+	if a.replyTo, err = conf.FieldInterpolatedString(replyToField); err != nil {
+		return nil, err
+	}
+	if a.expiration, err = conf.FieldInterpolatedString(expirationField); err != nil {
+		return nil, err
+	}
+	if a.messageID, err = conf.FieldInterpolatedString(messageIDField); err != nil {
+		return nil, err
+	}
+	if a.userID, err = conf.FieldInterpolatedString(userIDField); err != nil {
+		return nil, err
+	}
+	if a.appID, err = conf.FieldInterpolatedString(appIDField); err != nil {
 		return nil, err
 	}
 
@@ -340,6 +388,35 @@ func (a *amqp09Writer) Write(ctx context.Context, msg *service.Message) error {
 		priority = uint8(priorityInt)
 	}
 
+	correlationID, err := a.correlationID.TryString(msg)
+	if err != nil {
+		return fmt.Errorf("correlation ID interpolation error: %w", err)
+	}
+
+	replyTo, err := a.replyTo.TryString(msg)
+	if err != nil {
+		return fmt.Errorf("reply to interpolation error: %w", err)
+	}
+
+	expiration, err := a.expiration.TryString(msg)
+	if err != nil {
+		return fmt.Errorf("expiration interpolation error: %w", err)
+	}
+
+	messageID, err := a.messageID.TryString(msg)
+	if err != nil {
+		return fmt.Errorf("message ID interpolation error: %w", err)
+	}
+
+	userID, err := a.userID.TryString(msg)
+	if err != nil {
+		return fmt.Errorf("user ID interpolation error: %w", err)
+	}
+
+	appID, err := a.appID.TryString(msg)
+	if err != nil {
+		return fmt.Errorf("app ID interpolation error: %w", err)
+	}
 	headers := amqp.Table{}
 	_ = a.metaFilter.WalkMut(msg, func(k string, v any) error {
 		headers[strings.ReplaceAll(k, "_", "-")] = v
@@ -360,6 +437,12 @@ func (a *amqp09Writer) Write(ctx context.Context, msg *service.Message) error {
 			DeliveryMode:    a.deliveryMode, // 1=non-persistent, 2=persistent
 			Priority:        priority,       // 0-9
 			Type:            msgType,
+			CorrelationId:   correlationID,
+			ReplyTo:         replyTo,
+			Expiration:      expiration,
+			MessageId:       messageID,
+			AppId:           appID,
+			UserId:          userID,
 			// a bunch of application/implementation-specific fields
 		},
 	)

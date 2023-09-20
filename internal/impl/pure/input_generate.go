@@ -155,7 +155,11 @@ func newGenerateReader(mgr bundle.NewManagement, conf input.GenerateConfig) (*ge
 
 func getDurationTillNextSchedule(schedule cron.Schedule, location *time.Location) time.Duration {
 	now := time.Now().In(location)
-	return schedule.Next(now).Sub(now)
+	nowRounded := now.Round(time.Second)
+	if nowRounded.Before(now) {
+		nowRounded = nowRounded.Add(time.Second)
+	}
+	return schedule.Next(nowRounded).Sub(now)
 }
 
 func parseCronExpression(cronExpression string) (*cron.Schedule, *time.Location, error) {

@@ -9,6 +9,22 @@ All notable changes to this project will be documented in this file.
 
 - The `-e/--env-file` cli flag for importing environment variable files now supports glob patterns.
 - Environment variables imported via `-e/--env-file` cli flags now support triple quoted strings.
+- New experimental `counter` function added to Bloblang. It is recommended that this function, although experimental, should be used instead of the now deprecated `count` function.
+- The `schema_registry_encode` and `schema_registry_decode` processors now support JSONSchema.
+- Field `metadata` added to the `nats` and `nats_jetstream` outputs.
+- The `cached` processor field `ttl` now supports interpolation functions.
+- Many new properties fields have been added to the `amqp_0_9` output.
+
+### Fixed
+
+- Corrected a scheduling error where the `generate` input with a descriptor interval (`@hourly`, etc) had a chance of firing twice.
+- Fixed an issue where a `redis_streams` input that is rejected from read attempts enters a reconnect loop without backoff.
+- The `sqs` input now periodically refreshes the visibility timeout of messages that take a significant amount of time to process.
+- The `ts_add_iso8601` and `ts_sub_iso8601` bloblang methods now return the correct error for certain invalid durations.
+
+### Changed
+
+- The `random_int` Bloblang function now prevents instantiations where either the `max` or `min` arguments are dynamic. This is in order to avoid situations where the random number generator is re-initialised across subsequent mappings in a way that surprises map authors.
 
 ## 4.21.0 - 2023-09-08
 

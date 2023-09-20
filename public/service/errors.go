@@ -2,10 +2,64 @@ package service
 
 import (
 	"errors"
+	"time"
 
 	"github.com/benthosdev/benthos/v4/internal/batch"
+	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/message"
 )
+
+var (
+	// ErrNotConnected is returned by inputs and outputs when their Read or
+	// Write methods are called and the connection that they maintain is lost.
+	// This error prompts the upstream component to call Connect until the
+	// connection is re-established.
+	ErrNotConnected = errors.New("not connected")
+
+	// ErrEndOfInput is returned by inputs that have exhausted their source of
+	// data to the point where subsequent Read calls will be ineffective. This
+	// error prompts the upstream component to gracefully terminate the
+	// pipeline.
+	ErrEndOfInput = errors.New("end of input")
+
+	// ErrEndOfBuffer is returned by a buffer Read/ReadBatch method when the
+	// contents of the buffer has been emptied and the source of the data is
+	// ended (as indicated by EndOfInput). This error prompts the upstream
+	// component to gracefully terminate the pipeline.
+	ErrEndOfBuffer = errors.New("end of buffer")
+)
+
+// ErrBackOff is an error that plugins can optionally wrap another error with
+// which instructs upstream components to wait for a specified period of time
+// before retrying the errored call.
+//
+// Not all plugin methods support this error, for a list refer to the
+// documentation of NewErrBackOff.
+type ErrBackOff struct {
+	Err  error
+	Wait time.Duration
+}
+
+// NewErrBackOff wraps an error with a specified time to wait. For specific
+// plugin methods this will instruct upstream components to wait by the
+// specified amount of time before re-attempting the errored call.
+//
+// NOTE: ErrBackOff is opt-in for upstream components and therefore only a
+// subset of plugin calls will respect this error. Currently the following
+// methods are known to support ErrBackOff:
+//
+// - Input.Connect
+// - BatchInput.Connect
+// - Output.Connect
+// - BatchOutput.Connect
+func NewErrBackOff(err error, wait time.Duration) *ErrBackOff {
+	return &ErrBackOff{err, wait}
+}
+
+// Error returns the Error string.
+func (e *ErrBackOff) Error() string {
+	return e.Err.Error()
+}
 
 // BatchError groups the errors that were encountered while processing a
 // collection (usually a batch) of messages and provides methods to iterate
@@ -119,12 +173,29 @@ func toPublicBatchError(err error) error {
 	return err
 }
 
-// If the provided error is not nil and can be cast to a public batch error we
-// return the internal batch error.
-func fromPublicBatchError(err error) error {
+func publicToInternalErr(err error) error {
+	if err == nil {
+		return nil
+	}
+
+	var e *ErrBackOff
+	if errors.As(err, &e) {
+		return &component.ErrBackOff{Err: publicToInternalErr(e.Err), Wait: e.Wait}
+	}
+
 	var bErr *BatchError
-	if err != nil && errors.As(err, &bErr) {
-		err = bErr.wrapped
+	if errors.As(err, &bErr) {
+		return bErr.wrapped
+	}
+
+	if errors.Is(err, ErrEndOfInput) {
+		return component.ErrTypeClosed
+	}
+	if errors.Is(err, ErrEndOfBuffer) {
+		return component.ErrTypeClosed
+	}
+	if errors.Is(err, ErrNotConnected) {
+		return component.ErrNotConnected
 	}
 	return err
 }
