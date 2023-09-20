@@ -5,9 +5,10 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/benthosdev/benthos/v4/public/service"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
 func TestLFUCacheStandard(t *testing.T) {
