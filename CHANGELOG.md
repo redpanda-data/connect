@@ -13,6 +13,7 @@ All notable changes to this project will be documented in this file.
 - The `schema_registry_encode` and `schema_registry_decode` processors now support JSONSchema.
 - Field `metadata` added to the `nats` and `nats_jetstream` outputs.
 - The `cached` processor field `ttl` now supports interpolation functions.
+- Many new properties fields have been added to the `amqp_0_9` output.
 
 ### Fixed
 
