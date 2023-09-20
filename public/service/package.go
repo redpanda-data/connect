@@ -13,6 +13,7 @@ package service
 import (
 	"context"
 	"errors"
+	"time"
 )
 
 var (
@@ -34,6 +35,21 @@ var (
 	// component to gracefully terminate the pipeline.
 	ErrEndOfBuffer = errors.New("end of buffer")
 )
+
+// ErrBackOff is an error returned that allows for a back off duration to be specified
+type ErrBackOff struct {
+	Err  error
+	Wait time.Duration
+}
+
+func NewErrBackOff(err error, wait time.Duration) ErrBackOff {
+	return ErrBackOff{err, wait}
+}
+
+// Error returns the Error string.
+func (e ErrBackOff) Error() string {
+	return e.Err.Error()
+}
 
 // Closer is implemented by components that support stopping and cleaning up
 // their underlying resources.

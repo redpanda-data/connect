@@ -122,6 +122,11 @@ func (r *AsyncReader) loop() {
 				r.mgr.Logger().Errorf("Failed to connect to %v: %v\n", r.typeStr, err)
 				mFailedConn.Incr(1)
 
+				var e component.ErrBackOff
+				if errors.As(err, &e) {
+					_ = r.sleepWithCancellation(closeAtLeisureCtx, e.Wait)
+				}
+
 				nextBoff := r.connBackoff.NextBackOff()
 				if nextBoff == backoff.Stop {
 					r.mgr.Logger().Errorf("Maximum number of connection attempt retries has been met, gracefully terminating input %v", r.typeStr)
@@ -259,4 +264,16 @@ func (r *AsyncReader) WaitForClose(ctx context.Context) error {
 		return ctx.Err()
 	}
 	return nil
+}
+
+func (r *AsyncReader) sleepWithCancellation(ctx context.Context, d time.Duration) error {
+	t := time.NewTimer(d)
+	defer t.Stop()
+
+	select {
+	case <-t.C:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
