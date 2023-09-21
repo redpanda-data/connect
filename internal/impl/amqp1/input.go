@@ -104,12 +104,14 @@ func amqp1ReaderFromParsed(conf *service.ParsedConfig, mgr *service.Resources) (
 		}
 	}
 
-	if singleURL, _ := conf.FieldString(urlField); singleURL != "" {
-		a.urls = append(a.urls, singleURL)
-	}
-
 	if len(a.urls) == 0 {
-		return nil, errors.New("must specify at least one URL")
+		singleURL, err := conf.FieldString(urlField)
+		if err != nil {
+			return nil, err
+		}
+
+		a.urls = append(a.urls, singleURL)
+
 	}
 
 	if a.sourceAddr, err = conf.FieldString(sourceAddrField); err != nil {
