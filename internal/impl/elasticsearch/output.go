@@ -3,6 +3,7 @@ package elasticsearch
 import (
 	"context"
 	"crypto/tls"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -40,6 +41,10 @@ const (
 	ESOFieldAWSEnabled      = "enabled"
 	esoFieldGzipCompression = "gzip_compression"
 	esoFieldBatching        = "batching"
+	esoFieldMultiPart       = "multipart"
+	esoFieldDocument        = "doc"
+	esoFieldScript          = "script"
+	esoFieldUpsert          = "upsert"
 )
 
 type esoConfig struct {
@@ -48,12 +53,16 @@ type esoConfig struct {
 	clientOpts  []elastic.ClientOptionFunc
 	backoffCtor func() backoff.BackOff
 
+	multipart   bool
 	actionStr   *service.InterpolatedString
 	idStr       *service.InterpolatedString
 	indexStr    *service.InterpolatedString
 	pipelineStr *service.InterpolatedString
 	routingStr  *service.InterpolatedString
 	typeStr     *service.InterpolatedString
+	docStr      *service.InterpolatedString
+	scriptStr   *service.InterpolatedString
+	upsertStr   *service.InterpolatedString
 }
 
 func esoConfigFromParsed(pConf *service.ParsedConfig) (conf esoConfig, err error) {
@@ -154,6 +163,20 @@ func esoConfigFromParsed(pConf *service.ParsedConfig) (conf esoConfig, err error
 	if conf.typeStr, err = pConf.FieldInterpolatedString(esoFieldType); err != nil {
 		return
 	}
+	if conf.multipart, err = pConf.FieldBool(esoFieldMultiPart); err != nil {
+		return
+	}
+	if conf.multipart {
+		if conf.docStr, err = pConf.FieldInterpolatedString(esoFieldDocument); err != nil {
+			return
+		}
+		if conf.scriptStr, err = pConf.FieldInterpolatedString(esoFieldScript); err != nil {
+			return
+		}
+		if conf.upsertStr, err = pConf.FieldInterpolatedString(esoFieldUpsert); err != nil {
+			return
+		}
+	}
 	return
 }
 
@@ -234,6 +257,19 @@ It's possible to enable AWS connectivity with this output using the `+"`aws`"+` 
 				Default("5s"),
 			service.NewTLSToggledField(esoFieldTLS),
 			service.NewOutputMaxInFlightField(),
+			service.NewBoolField(esoFieldMultiPart).
+				Description("Whether to enable multipart.").
+				Advanced().
+				Default(false),
+			service.NewInterpolatedStringField(esoFieldDocument).
+				Description("The document to write (use root document if false).").
+				Default(""),
+			service.NewInterpolatedStringField(esoFieldScript).
+				Description("Set script (only if action is `update`).").
+				Default(""),
+			service.NewInterpolatedStringField(esoFieldUpsert).
+				Description("Set upsert (only if action is `update`).").
+				Default(""),
 		).
 		Fields(pure.CommonRetryBackOffFields(0, "1s", "5s", "30s")...).
 		Fields(
@@ -315,7 +351,9 @@ type pendingBulkIndex struct {
 	Pipeline string
 	Routing  string
 	Type     string
-	Doc      any
+	Doc      string
+	Script   string
+	Upsert   any
 	ID       string
 }
 
@@ -329,32 +367,50 @@ func (e *Output) WriteBatch(ctx context.Context, msg service.MessageBatch) error
 	requests := make([]*pendingBulkIndex, len(msg))
 
 	for i := 0; i < len(msg); i++ {
-		jObj, ierr := msg[i].AsStructured()
-		if ierr != nil {
-			e.log.Errorf("Failed to marshal message into JSON document: %v\n", ierr)
-			return fmt.Errorf("failed to marshal message into JSON document: %w", ierr)
+		var (
+			err error
+			pbi pendingBulkIndex
+		)
+		if e.conf.multipart {
+			if pbi.Doc, err = msg.TryInterpolatedString(i, e.conf.docStr); err != nil {
+				return fmt.Errorf("action interpolation error: %w", err)
+			}
+			if pbi.Script, err = msg.TryInterpolatedString(i, e.conf.scriptStr); err != nil {
+				return fmt.Errorf("action interpolation error: %w", err)
+			}
+			if upsert, err := msg.TryInterpolatedString(i, e.conf.upsertStr); err != nil {
+				return fmt.Errorf("action interpolation error: %w", err)
+			} else if upsert != "" {
+				pbi.Upsert = json.RawMessage(upsert)
+			}
+		} else {
+			doc, err := msg[i].AsBytes()
+			if err != nil {
+				e.log.Errorf("Failed to marshal message into JSON document: %v\n", err)
+				return fmt.Errorf("failed to marshal message into JSON document: %w", err)
+			}
+			pbi.Doc = string(doc)
 		}
 
-		pbi := &pendingBulkIndex{Doc: jObj}
-		if pbi.Action, ierr = msg.TryInterpolatedString(i, e.conf.actionStr); ierr != nil {
-			return fmt.Errorf("action interpolation error: %w", ierr)
+		if pbi.Action, err = msg.TryInterpolatedString(i, e.conf.actionStr); err != nil {
+			return fmt.Errorf("action interpolation error: %w", err)
 		}
-		if pbi.Index, ierr = msg.TryInterpolatedString(i, e.conf.indexStr); ierr != nil {
-			return fmt.Errorf("index interpolation error: %w", ierr)
+		if pbi.Index, err = msg.TryInterpolatedString(i, e.conf.indexStr); err != nil {
+			return fmt.Errorf("index interpolation error: %w", err)
 		}
-		if pbi.Pipeline, ierr = msg.TryInterpolatedString(i, e.conf.pipelineStr); ierr != nil {
-			return fmt.Errorf("pipeline interpolation error: %w", ierr)
+		if pbi.Pipeline, err = msg.TryInterpolatedString(i, e.conf.pipelineStr); err != nil {
+			return fmt.Errorf("pipeline interpolation error: %w", err)
 		}
-		if pbi.Routing, ierr = msg.TryInterpolatedString(i, e.conf.routingStr); ierr != nil {
-			return fmt.Errorf("routing interpolation error: %w", ierr)
+		if pbi.Routing, err = msg.TryInterpolatedString(i, e.conf.routingStr); err != nil {
+			return fmt.Errorf("routing interpolation error: %w", err)
 		}
-		if pbi.Type, ierr = msg.TryInterpolatedString(i, e.conf.typeStr); ierr != nil {
-			return fmt.Errorf("type interpolation error: %w", ierr)
+		if pbi.Type, err = msg.TryInterpolatedString(i, e.conf.typeStr); err != nil {
+			return fmt.Errorf("type interpolation error: %w", err)
 		}
-		if pbi.ID, ierr = msg.TryInterpolatedString(i, e.conf.idStr); ierr != nil {
-			return fmt.Errorf("id interpolation error: %w", ierr)
+		if pbi.ID, err = msg.TryInterpolatedString(i, e.conf.idStr); err != nil {
+			return fmt.Errorf("id interpolation error: %w", err)
 		}
-		requests[i] = pbi
+		requests[i] = &pbi
 	}
 
 	b := e.client.Bulk()
@@ -433,8 +489,16 @@ func (e *Output) buildBulkableRequest(p *pendingBulkIndex) (elastic.BulkableRequ
 		r := elastic.NewBulkUpdateRequest().
 			Index(p.Index).
 			Routing(p.Routing).
-			Id(p.ID).
-			Doc(p.Doc)
+			Id(p.ID)
+		if p.Doc != "" {
+			r = r.Doc(p.Doc)
+		}
+		if p.Upsert != nil {
+			r = r.Upsert(p.Upsert)
+		}
+		if p.Script != "" {
+			r = r.Script(elastic.NewScript(p.Script))
+		}
 		if p.Type != "" {
 			r = r.Type(p.Type)
 		}

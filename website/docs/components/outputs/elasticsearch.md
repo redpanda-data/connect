@@ -34,6 +34,9 @@ output:
     id: ${!count("elastic_ids")}-${!timestamp_unix()}
     type: ""
     max_in_flight: 64
+    doc: ""
+    script: ""
+    upsert: ""
     batching:
       count: 0
       byte_size: 0
@@ -67,6 +70,10 @@ output:
       root_cas_file: ""
       client_certs: []
     max_in_flight: 64
+    multipart: false
+    doc: ""
+    script: ""
+    upsert: ""
     max_retries: 0
     backoff:
       initial_interval: 1s
@@ -356,6 +363,41 @@ The maximum number of messages to have in flight at a given time. Increase this 
 
 Type: `int`  
 Default: `64`  
+
+### `multipart`
+
+Whether to enable multipart.
+
+
+Type: `bool`  
+Default: `false`  
+
+### `doc`
+
+The document to write (use root document if false).
+This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
+
+
+Type: `string`  
+Default: `""`  
+
+### `script`
+
+Set script (only if action is `update`).
+This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
+
+
+Type: `string`  
+Default: `""`  
+
+### `upsert`
+
+Set upsert (only if action is `update`).
+This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
+
+
+Type: `string`  
+Default: `""`  
 
 ### `max_retries`
 
