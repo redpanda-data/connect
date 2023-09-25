@@ -24,7 +24,7 @@ require (
 	github.com/PaesslerAG/jsonpath v0.1.1
 	github.com/apache/pulsar-client-go v0.11.0
 	github.com/aws/aws-lambda-go v1.41.0
-	github.com/aws/aws-sdk-go v1.45.12
+	github.com/aws/aws-sdk-go v1.45.15
 	github.com/beanstalkd/go-beanstalk v0.2.0
 	github.com/benhoyt/goawk v1.24.0
 	github.com/bradfitz/gomemcache v0.0.0-20230124162541-5f7a7d875746
@@ -44,7 +44,7 @@ require (
 	github.com/fsnotify/fsnotify v1.6.0
 	github.com/generikvault/gvalstrings v0.0.0-20180926130504-471f38f0112a
 	github.com/getsentry/sentry-go v0.24.1
-	github.com/go-faker/faker/v4 v4.1.1
+	github.com/go-faker/faker/v4 v4.2.0
 	github.com/go-sql-driver/mysql v1.7.1
 	github.com/gocql/gocql v1.6.0
 	github.com/gofrs/uuid v4.4.0+incompatible
@@ -70,7 +70,7 @@ require (
 	github.com/matoous/go-nanoid/v2 v2.0.0
 	github.com/microcosm-cc/bluemonday v1.0.25
 	github.com/mitchellh/mapstructure v1.5.0
-	github.com/nats-io/nats.go v1.29.0
+	github.com/nats-io/nats.go v1.30.0
 	github.com/nats-io/nkeys v0.4.5
 	github.com/nats-io/stan.go v0.10.4
 	github.com/nsf/jsondiff v0.0.0-20210926074059-1e845ec5d249
@@ -88,12 +88,12 @@ require (
 	github.com/quipo/dependencysolver v0.0.0-20170801134659-2b009cb4ddcc
 	github.com/rabbitmq/amqp091-go v1.8.1
 	github.com/rcrowley/go-metrics v0.0.0-20201227073835-cf1acfcdf475
-	github.com/redis/go-redis/v9 v9.1.0
-	github.com/rickb777/date v1.20.4
+	github.com/redis/go-redis/v9 v9.2.0
+	github.com/rickb777/date v1.20.5
 	github.com/robfig/cron/v3 v3.0.1
 	github.com/segmentio/ksuid v1.0.4
 	github.com/segmentio/parquet-go v0.0.0-20220830163417-b03c0471ebb0
-	github.com/sijms/go-ora/v2 v2.7.17
+	github.com/sijms/go-ora/v2 v2.7.18
 	github.com/sirupsen/logrus v1.9.3
 	github.com/smira/go-statsd v1.3.2
 	github.com/snowflakedb/gosnowflake v1.6.24
@@ -102,7 +102,7 @@ require (
 	github.com/tetratelabs/wazero v1.5.0
 	github.com/tilinna/z85 v1.0.0
 	github.com/trinodb/trino-go-client v0.312.0
-	github.com/twmb/franz-go v1.14.4
+	github.com/twmb/franz-go v1.15.0
 	github.com/twmb/franz-go/pkg/kmsg v1.6.1
 	github.com/urfave/cli/v2 v2.25.7
 	github.com/vmihailenco/msgpack/v5 v5.3.5
@@ -127,7 +127,7 @@ require (
 	golang.org/x/oauth2 v0.12.0
 	golang.org/x/sync v0.3.0
 	golang.org/x/text v0.13.0
-	google.golang.org/api v0.141.0
+	google.golang.org/api v0.142.0
 	google.golang.org/protobuf v1.31.0
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 	gopkg.in/yaml.v3 v3.0.1
@@ -294,7 +294,7 @@ require (
 	google.golang.org/appengine v1.6.7 // indirect
 	google.golang.org/genproto v0.0.0-20230803162519-f966b187b2e5 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20230803162519-f966b187b2e5 // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20230911183012-2d3300fd4832 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20230913181813-007df8e322eb // indirect
 	google.golang.org/grpc v1.58.0 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/jcmturner/aescts.v1 v1.0.1 // indirect
