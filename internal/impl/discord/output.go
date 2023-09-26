@@ -2,10 +2,10 @@ package discord
 
 import (
 	"context"
+	"encoding/json"
 	"sync"
 
 	"github.com/bwmarrin/discordgo"
-	"github.com/mitchellh/mapstructure"
 
 	"github.com/benthosdev/benthos/v4/public/service"
 )
@@ -96,17 +96,14 @@ func (w *writer) Write(ctx context.Context, msg *service.Message) error {
 		return service.ErrNotConnected
 	}
 
-	s, err := msg.AsStructured()
-	if err == nil {
-		var cMsg discordgo.MessageSend
-		if err = mapstructure.Decode(s, &cMsg); err == nil {
-			_, err = sess.ChannelMessageSendComplex(w.channelID, &cMsg)
-			return err
-		}
-	}
-
 	rawContent, err := msg.AsBytes()
 	if err != nil {
+		return err
+	}
+
+	var cMsg discordgo.MessageSend
+	if err := json.Unmarshal(rawContent, &cMsg); err == nil {
+		_, err = sess.ChannelMessageSendComplex(w.channelID, &cMsg)
 		return err
 	}
 

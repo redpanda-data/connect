@@ -40,6 +40,13 @@ metrics:
   prometheus:
     use_histogram_timing: false
     histogram_buckets: []
+    summary_quantiles_objectives:
+      - quantile: 0.5
+        error: 0.05
+      - quantile: 0.9
+        error: 0.01
+      - quantile: 0.99
+        error: 0.001
     add_process_metrics: false
     add_go_metrics: false
     push_url: ""
@@ -74,6 +81,43 @@ Timing metrics histogram buckets (in seconds). If left empty defaults to DefBuck
 Type: `array`  
 Default: `[]`  
 Requires version 3.63.0 or newer  
+
+### `summary_quantiles_objectives`
+
+Timing metrics summary buckets (as quantiles) as key with allowed error level as value.
+
+
+Type: `array`  
+Default: `[{"error":0.05,"quantile":0.5},{"error":0.01,"quantile":0.9},{"error":0.001,"quantile":0.99}]`  
+Requires version 4.22.0 or newer  
+
+```yml
+# Examples
+
+summary_quantiles_objectives:
+  - error: 0.05
+    quantile: 0.5
+  - error: 0.01
+    quantile: 0.9
+  - error: 0.001
+    quantile: 0.99
+```
+
+### `summary_quantiles_objectives[].quantile`
+
+Quantile value.
+
+
+Type: `float`  
+Default: `""`  
+
+### `summary_quantiles_objectives[].error`
+
+Permissible margin of error for quantile calculations. Precise calculations in a streaming context (without prior knowledge of the full dataset) can be resource-intensive. To balance accuracy with computational efficiency, an error margin is introduced. For instance, if the 90th quantile (`0.9`) is determined to be `100ms` with a 1% error margin (`0.01`), the true value will fall within the `[99ms, 101ms]` range.)
+
+
+Type: `float`  
+Default: `""`  
 
 ### `add_process_metrics`
 
