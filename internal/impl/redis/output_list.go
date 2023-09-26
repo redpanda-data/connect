@@ -40,7 +40,7 @@ func redisListOutputConfig() *service.ConfigSpec {
 				Description("The command used to push elements to the Redis list").
 				Default(string(rPush)).
 				Advanced().
-				Version("4.19.0"),
+				Version("4.22.0"),
 		)
 }
 

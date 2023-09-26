@@ -37,7 +37,7 @@ func redisListInputConfig() *service.ConfigSpec {
 				Description("The command used to pop elements from the Redis list").
 				Default(string(bLPop)).
 				Advanced().
-				Version("4.19.0"),
+				Version("4.22.0"),
 		)
 }
 

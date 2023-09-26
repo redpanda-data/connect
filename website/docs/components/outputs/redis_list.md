@@ -404,7 +404,7 @@ The command used to push elements to the Redis list
 
 Type: `string`  
 Default: `"rpush"`  
-Requires version 4.19.0 or newer  
+Requires version 4.22.0 or newer  
 Options: `rpush`, `lpush`.
 
 
