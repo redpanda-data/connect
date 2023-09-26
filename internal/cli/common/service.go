@@ -44,7 +44,7 @@ func RunService(c *cli.Context, version, dateBuilt string, streamsMode bool) int
 	} else if inferredMainPath {
 		verLogger.With("path", mainPath).Infof("Running main config from file found in a default path")
 	} else {
-		verLogger.With("path", mainPath).With("path", mainPath).Infof("Running main config from specified file")
+		verLogger.With("path", mainPath).Infof("Running main config from specified file")
 	}
 
 	strict := !c.Bool("chilled")
