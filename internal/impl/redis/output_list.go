@@ -16,6 +16,13 @@ const (
 	loFieldBatching = "batching"
 )
 
+type redisPushCommand string
+
+const (
+	rPush redisPushCommand = "rpush"
+	lPush redisPushCommand = "lpush"
+)
+
 func redisListOutputConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Stable().
@@ -29,6 +36,11 @@ func redisListOutputConfig() *service.ConfigSpec {
 				Examples("some_list", "${! @.kafka_key )}", "${! this.doc.id }", "${! count(\"msgs\") }"),
 			service.NewOutputMaxInFlightField(),
 			service.NewBatchPolicyField(loFieldBatching),
+			service.NewStringEnumField("command", string(rPush), string(lPush)).
+				Description("The command used to push elements to the Redis list").
+				Default(string(rPush)).
+				Advanced().
+				Version("4.19.0"),
 		)
 }
 
@@ -55,9 +67,11 @@ type redisListWriter struct {
 
 	key *service.InterpolatedString
 
-	clientCtor func() (redis.UniversalClient, error)
-	client     redis.UniversalClient
-	connMut    sync.RWMutex
+	clientCtor   func() (redis.UniversalClient, error)
+	client       redis.UniversalClient
+	connMut      sync.RWMutex
+	clientPush   func(client redis.UniversalClient, ctx context.Context, key string, values ...interface{}) *redis.IntCmd
+	pipelinePush func(pipe redis.Pipeliner, ctx context.Context, key string, values ...interface{}) *redis.IntCmd
 }
 
 func newRedisListWriter(conf *service.ParsedConfig, mgr *service.Resources) (r *redisListWriter, err error) {
@@ -75,6 +89,33 @@ func newRedisListWriter(conf *service.ParsedConfig, mgr *service.Resources) (r *
 	if _, err := getClient(conf); err != nil {
 		return nil, err
 	}
+
+	pushCommand, err := conf.FieldString("command")
+	if err != nil {
+		return nil, err
+	}
+
+	switch redisPushCommand(pushCommand) {
+	case rPush:
+		r.clientPush = func(client redis.UniversalClient, ctx context.Context, key string, values ...interface{}) *redis.IntCmd {
+			return client.RPush(ctx, key, values)
+		}
+		r.pipelinePush = func(pipe redis.Pipeliner, ctx context.Context, key string, values ...interface{}) *redis.IntCmd {
+			return pipe.RPush(ctx, key, values)
+		}
+
+	case lPush:
+		r.clientPush = func(client redis.UniversalClient, ctx context.Context, key string, values ...interface{}) *redis.IntCmd {
+			return client.LPush(ctx, key, values)
+		}
+		r.pipelinePush = func(pipe redis.Pipeliner, ctx context.Context, key string, values ...interface{}) *redis.IntCmd {
+			return pipe.LPush(ctx, key, values)
+		}
+
+	default:
+		return nil, fmt.Errorf("invalid redis command: %s", pushCommand)
+	}
+
 	return r, nil
 }
 
@@ -114,7 +155,7 @@ func (r *redisListWriter) WriteBatch(ctx context.Context, batch service.MessageB
 			return err
 		}
 
-		if err := client.RPush(ctx, key, mBytes).Err(); err != nil {
+		if err := r.clientPush(client, ctx, key, mBytes).Err(); err != nil {
 			_ = r.disconnect()
 			r.log.Errorf("Error from redis: %v\n", err)
 			return service.ErrNotConnected
@@ -135,7 +176,7 @@ func (r *redisListWriter) WriteBatch(ctx context.Context, batch service.MessageB
 			return err
 		}
 
-		_ = pipe.RPush(ctx, key, mBytes)
+		_ = r.pipelinePush(pipe, ctx, key, mBytes)
 	}
 
 	cmders, err := pipe.Exec(ctx)
