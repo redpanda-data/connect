@@ -281,7 +281,7 @@ The command used to pop elements from the Redis list
 
 Type: `string`  
 Default: `"blpop"`  
-Requires version 4.19.0 or newer  
+Requires version 4.22.0 or newer  
 Options: `blpop`, `brpop`.
 
 

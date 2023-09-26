@@ -14,6 +14,7 @@ All notable changes to this project will be documented in this file.
 - Field `metadata` added to the `nats` and `nats_jetstream` outputs.
 - The `cached` processor field `ttl` now supports interpolation functions.
 - Many new properties fields have been added to the `amqp_0_9` output.
+- Field `command` added to the `redis_list` input and output.
 
 ### Fixed
 
