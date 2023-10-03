@@ -376,7 +376,7 @@ func (p *partitionTracker) loop() {
 					return
 				}
 
-				if sendBatch, _ := p.batcher.Flush(closeAtLeisureCtx); len(sendBatch) == 0 {
+				if sendBatch, _ = p.batcher.Flush(closeAtLeisureCtx); len(sendBatch) == 0 {
 					return
 				}
 				sendRecord = p.topBatchRecord

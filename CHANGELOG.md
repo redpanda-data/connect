@@ -5,6 +5,8 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 4.22.0 - 2023-10-03
+
 ### Added
 
 - The `-e/--env-file` cli flag for importing environment variable files now supports glob patterns.
@@ -23,6 +25,7 @@ All notable changes to this project will be documented in this file.
 - The `sqs` input now periodically refreshes the visibility timeout of messages that take a significant amount of time to process.
 - The `ts_add_iso8601` and `ts_sub_iso8601` bloblang methods now return the correct error for certain invalid durations.
 - The `discord` output no longer ignores structured message fields containing underscores.
+- Fixed an issue where the `kafka_franz` input was ignoring batching periods and stalling.
 
 ### Changed
 
