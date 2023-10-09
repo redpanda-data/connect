@@ -29,7 +29,6 @@ Reads messages from an AMQP (1.0) server.
 input:
   label: ""
   amqp_1:
-    url: amqp://localhost:5672/ # No default (optional)
     urls: [] # No default (optional)
     source_address: /foo # No default (required)
 ```
@@ -42,7 +41,6 @@ input:
 input:
   label: ""
   amqp_1:
-    url: amqp://localhost:5672/ # No default (optional)
     urls: [] # No default (optional)
     source_address: /foo # No default (required)
     azure_renew_lock: false
@@ -77,28 +75,13 @@ You can access these metadata fields using [function interpolation](/docs/config
 
 ## Fields
 
-### `url`
-
-A URL to connect to.
-
-
-Type: `string`  
-
-```yml
-# Examples
-
-url: amqp://localhost:5672/
-
-url: amqps://guest:guest@localhost:5672/
-```
-
 ### `urls`
 
 A list of URLs to connect to. The first URL to successfully establish a connection will be used until the connection is closed. If an item of the list contains commas it will be expanded into multiple URLs.
 
 
 Type: `array`  
-Requires version T.B.D or newer  
+Requires version 4.23.0 or newer  
 
 ```yml
 # Examples

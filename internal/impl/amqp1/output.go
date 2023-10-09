@@ -31,6 +31,7 @@ This output benefits from sending multiple messages in flight in parallel for im
 				Description("A URL to connect to.").
 				Example("amqp://localhost:5672/").
 				Example("amqps://guest:guest@localhost:5672/").
+				Deprecated().
 				Optional(),
 			service.NewURLListField(urlsField).
 				Description("A list of URLs to connect to. The first URL to successfully establish a connection will be used until the connection is closed. If an item of the list contains commas it will be expanded into multiple URLs.").
@@ -38,7 +39,7 @@ This output benefits from sending multiple messages in flight in parallel for im
 				Example([]string{"amqp://127.0.0.1:5672/,amqp://127.0.0.2:5672/"}).
 				Example([]string{"amqp://127.0.0.1:5672/", "amqp://127.0.0.2:5672/"}).
 				Optional().
-				Version("T.B.D"),
+				Version("4.23.0"),
 			service.NewStringField(targetAddrField).
 				Description("The target address to write to.").
 				Example("/foo").
@@ -53,7 +54,11 @@ This output benefits from sending multiple messages in flight in parallel for im
 			saslFieldSpec(),
 			service.NewMetadataExcludeFilterField(metaFilterField).
 				Description("Specify criteria for which metadata values are attached to messages as headers."),
-		)
+		).LintRule(`
+root = if this.url.or("") == "" && this.urls.or([]).length() == 0 {
+  "field 'urls' must be set"
+}
+`)
 }
 
 func init() {
