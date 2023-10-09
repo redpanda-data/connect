@@ -15,7 +15,11 @@ import (
 
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/puzpuzpuz/xsync/v2"
 )
+
+// create package level xsync map
+var exchangeStatusMap = xsync.NewMap()
 
 func amqp09OutputSpec() *service.ConfigSpec {
 	return service.NewConfigSpec().
@@ -36,7 +40,7 @@ The fields 'key' and 'type' can be dynamically set using function interpolations
 				Example([]string{"amqp://127.0.0.1:5672/,amqp://127.0.0.2:5672/"}).
 				Example([]string{"amqp://127.0.0.1:5672/", "amqp://127.0.0.2:5672/"}).
 				Version("3.58.0"),
-			service.NewStringField(exchangeField).
+			service.NewInterpolatedStringField(exchangeField).
 				Description("An AMQP exchange to publish to."),
 			service.NewObjectField(exchangeDeclareField,
 				service.NewBoolField(exchangeDeclareEnabledField).
@@ -129,6 +133,7 @@ func init() {
 		w, err := amqp09WriterFromParsed(conf, mgr)
 		return w, maxInFlight, err
 	})
+
 	if err != nil {
 		panic(err)
 	}
@@ -139,6 +144,7 @@ type amqp09Writer struct {
 	msgType         *service.InterpolatedString
 	contentType     *service.InterpolatedString
 	contentEncoding *service.InterpolatedString
+	exchange        *service.InterpolatedString
 	priority        *service.InterpolatedString
 	correlationID   *service.InterpolatedString
 	replyTo         *service.InterpolatedString
@@ -149,7 +155,6 @@ type amqp09Writer struct {
 	metaFilter      *service.MetadataExcludeFilter
 
 	urls         []string
-	exchange     string
 	tlsEnabled   bool
 	tlsConf      *tls.Config
 	timeout      time.Duration
@@ -190,7 +195,7 @@ func amqp09WriterFromParsed(conf *service.ParsedConfig, mgr *service.Resources) 
 		}
 	}
 
-	if a.exchange, err = conf.FieldString(exchangeField); err != nil {
+	if a.exchange, err = conf.FieldInterpolatedString(exchangeField); err != nil {
 		return nil, err
 	}
 	if a.tlsConf, a.tlsEnabled, err = conf.FieldTLSToggled(tlsField); err != nil {
@@ -281,21 +286,6 @@ func (a *amqp09Writer) Connect(ctx context.Context) error {
 		return fmt.Errorf("amqp failed to create channel: %v", err)
 	}
 
-	if a.exchangeDeclare {
-		if err = amqpChan.ExchangeDeclare(
-			a.exchange,               // name of the exchange
-			a.exchangeDeclareType,    // type
-			a.exchangeDeclareDurable, // durable
-			false,                    // delete when complete
-			false,                    // internal
-			false,                    // noWait
-			nil,                      // arguments
-		); err != nil {
-			conn.Close()
-			return fmt.Errorf("amqp failed to declare exchange: %v", err)
-		}
-	}
-
 	if err = amqpChan.Confirm(false); err != nil {
 		conn.Close()
 		return fmt.Errorf("amqp channel could not be put into confirm mode: %v", err)
@@ -326,6 +316,40 @@ func (a *amqp09Writer) disconnect() error {
 		a.conn = nil
 	}
 	return nil
+}
+
+// declareExchange declare and memoize the declaration of an AMQP exchange
+func (a *amqp09Writer) declareExchange(msg *service.Message) (string, error) {
+	exchange, err := a.exchange.TryString(msg)
+	if err != nil {
+		return "", fmt.Errorf("exchange name interpolation error: #{err}")
+	}
+
+	if a.exchangeDeclare {
+		// check if the exchange name exists in exchangeDeclarationStatus
+		if _, ok := exchangeStatusMap.Load(exchange); ok {
+			a.log.Debugf("Exchange %s exists in cache, not re-declaring", exchange)
+			return exchange, nil
+		} else {
+			if err := a.amqpChan.ExchangeDeclare(
+				exchange,                 // name of the exchange
+				a.exchangeDeclareType,    // type
+				a.exchangeDeclareDurable, // durable
+				false,                    // delete when complete
+				false,                    // internal
+				false,                    // noWait
+				nil,                      // arguments
+			); err != nil {
+				a.conn.Close()
+				return "", fmt.Errorf("amqp failed to declare exchange: %v", err)
+			}
+			a.log.Debugf("Exchange %s does not exist, declaring", exchange)
+			// add the exchange name to exchangeDeclarationStatus
+			exchangeStatusMap.Store(exchange, "true")
+			return exchange, nil
+		}
+	}
+	return exchange, nil
 }
 
 func (a *amqp09Writer) Write(ctx context.Context, msg *service.Message) error {
@@ -423,9 +447,14 @@ func (a *amqp09Writer) Write(ctx context.Context, msg *service.Message) error {
 		return nil
 	})
 
+	exchange, err := a.declareExchange(msg)
+	if err != nil {
+		conn.Close()
+		return fmt.Errorf("amqp failed to declare exchange: %s", err)
+	}
 	conf, err := amqpChan.PublishWithDeferredConfirmWithContext(
 		ctx,
-		a.exchange,  // publish to an exchange
+		exchange,    // publish to an exchange
 		bindingKey,  // routing to 0 or more queues
 		a.mandatory, // mandatory
 		a.immediate, // immediate
