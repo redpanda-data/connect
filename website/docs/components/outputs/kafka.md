@@ -458,7 +458,7 @@ Default: `false`
 
 ### `custom_topic_creation.partitions`
 
-The number of partitions to create for new topics. Must be greater than 1
+The number of partitions to create for new topics. Leave at -1 to use the broker configured default. Must be >= 1.
 
 
 Type: `int`  
@@ -466,7 +466,7 @@ Default: `-1`
 
 ### `custom_topic_creation.replication_factor`
 
-The replication factor to use for new topics. Must be an odd number, and less then or equal to the number of brokers
+The replication factor to use for new topics. Leave at -1 to use the broker configured default. Must be an odd number, and less then or equal to the number of brokers.
 
 
 Type: `int`  
