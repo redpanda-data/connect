@@ -38,7 +38,15 @@ You can access these metadata fields using [function interpolation](/docs/config
 			service.NewURLField(urlField).
 				Description("A URL to connect to.").
 				Example("amqp://localhost:5672/").
-				Example("amqps://guest:guest@localhost:5672/"),
+				Example("amqps://guest:guest@localhost:5672/").
+				Optional(),
+			service.NewURLListField(urlsField).
+				Description("A list of URLs to connect to. The first URL to successfully establish a connection will be used until the connection is closed. If an item of the list contains commas it will be expanded into multiple URLs.").
+				Example([]string{"amqp://guest:guest@127.0.0.1:5672/"}).
+				Example([]string{"amqp://127.0.0.1:5672/,amqp://127.0.0.2:5672/"}).
+				Example([]string{"amqp://127.0.0.1:5672/", "amqp://127.0.0.2:5672/"}).
+				Optional().
+				Version("T.B.D"),
 			service.NewStringField(sourceAddrField).
 				Description("The source address to consume from.").
 				Example("/foo").
@@ -67,7 +75,7 @@ func init() {
 //------------------------------------------------------------------------------
 
 type amqp1Reader struct {
-	url        string
+	urls       []string
 	sourceAddr string
 	renewLock  bool
 	connOpts   *amqp.ConnOptions
@@ -83,9 +91,27 @@ func amqp1ReaderFromParsed(conf *service.ParsedConfig, mgr *service.Resources) (
 		connOpts: &amqp.ConnOptions{},
 	}
 
-	var err error
-	if a.url, err = conf.FieldString(urlField); err != nil {
+	urlStrs, err := conf.FieldStringList(urlsField)
+	if err != nil {
 		return nil, err
+	}
+
+	for _, u := range urlStrs {
+		for _, splitURL := range strings.Split(u, ",") {
+			if trimmed := strings.TrimSpace(splitURL); len(trimmed) > 0 {
+				a.urls = append(a.urls, trimmed)
+			}
+		}
+	}
+
+	if len(a.urls) == 0 {
+		singleURL, err := conf.FieldString(urlField)
+		if err != nil {
+			return nil, err
+		}
+
+		a.urls = append(a.urls, singleURL)
+
 	}
 
 	if a.sourceAddr, err = conf.FieldString(sourceAddrField); err != nil {
@@ -125,8 +151,8 @@ func (a *amqp1Reader) Connect(ctx context.Context) (err error) {
 	}
 
 	// Create client
-	if conn.client, err = amqp.Dial(ctx, a.url, a.connOpts); err != nil {
-		return
+	if conn.client, err = a.reDial(ctx, a.urls); err != nil {
+		return err
 	}
 
 	// Open a session
@@ -247,6 +273,26 @@ func (a *amqp1Reader) ReadBatch(ctx context.Context) (service.MessageBatch, serv
 
 func (a *amqp1Reader) Close(ctx context.Context) error {
 	return a.disconnect(ctx)
+}
+
+// reDial connection to amqp with one or more fallback URLs.
+func (a *amqp1Reader) reDial(ctx context.Context, urls []string) (conn *amqp.Conn, err error) {
+	for i, url := range urls {
+		conn, err = amqp.Dial(ctx, url, a.connOpts)
+		if err != nil {
+			a.log.With("error", err).Warnf("unable to connect to url %q #%d, trying next", url, i)
+
+			continue
+		}
+
+		a.log.Tracef("successful connection to use %q #%d", url, i)
+
+		return conn, nil
+	}
+
+	a.log.With("error", err).Tracef("unable to connect to any of %d urls, return error", len(a.urls))
+
+	return nil, err
 }
 
 //------------------------------------------------------------------------------
