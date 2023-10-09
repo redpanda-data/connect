@@ -275,6 +275,8 @@ func (a *amqp09Reader) Connect(ctx context.Context) (err error) {
 			false,             // noWait
 			nil,               // arguments
 		); err != nil {
+			_ = amqpChan.Close()
+			_ = conn.Close()
 			return fmt.Errorf("queue Declare: %s", err)
 		}
 	}
@@ -287,6 +289,8 @@ func (a *amqp09Reader) Connect(ctx context.Context) (err error) {
 			false,            // noWait
 			nil,              // arguments
 		); err != nil {
+			_ = amqpChan.Close()
+			_ = conn.Close()
 			return fmt.Errorf("queue Bind: %s", err)
 		}
 	}
@@ -294,6 +298,8 @@ func (a *amqp09Reader) Connect(ctx context.Context) (err error) {
 	if err = amqpChan.Qos(
 		a.prefetchCount, a.prefetchSize, false,
 	); err != nil {
+		_ = amqpChan.Close()
+		_ = conn.Close()
 		return fmt.Errorf("qos: %s", err)
 	}
 
@@ -306,6 +312,8 @@ func (a *amqp09Reader) Connect(ctx context.Context) (err error) {
 		false,         // noWait
 		nil,           // arguments
 	); err != nil {
+		_ = amqpChan.Close()
+		_ = conn.Close()
 		return fmt.Errorf("queue Consume: %s", err)
 	}
 
