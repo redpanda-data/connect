@@ -3,7 +3,6 @@ package amqp1
 import (
 	"context"
 	"fmt"
-	"runtime"
 	"testing"
 	"time"
 
@@ -17,10 +16,6 @@ import (
 
 func TestIntegrationAMQP1(t *testing.T) {
 	integration.CheckSkip(t)
-	if runtime.GOOS == "darwin" {
-		t.Skip("skipping test on macos")
-	}
-
 	t.Parallel()
 
 	pool, err := dockertest.NewPool("")

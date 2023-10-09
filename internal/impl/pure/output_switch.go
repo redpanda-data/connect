@@ -135,7 +135,7 @@ output:
       - check: this.type == "foo"
         output:
           amqp_1:
-            url: amqps://guest:guest@localhost:5672/
+            urls: [ amqps://guest:guest@localhost:5672/ ]
             target_address: queue:/the_foos
 
       - check: this.type == "bar"
@@ -167,7 +167,7 @@ output:
       - check: 'this.user.interests.contains("walks").catch(false)'
         output:
           amqp_1:
-            url: amqps://guest:guest@localhost:5672/
+            urls: [ amqps://guest:guest@localhost:5672/ ]
             target_address: queue:/people_what_think_good
         continue: true
 
