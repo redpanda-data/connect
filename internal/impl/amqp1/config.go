@@ -11,6 +11,7 @@ import (
 const (
 	// Shared
 	urlField      = "url"
+	urlsField     = "urls"
 	tlsField      = "tls"
 	saslField     = "sasl"
 	saslMechField = "mechanism"
