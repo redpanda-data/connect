@@ -21,7 +21,6 @@ type Config struct {
 	Dynamic      DynamicConfig      `json:"dynamic" yaml:"dynamic"`
 	Fallback     TryConfig          `json:"fallback" yaml:"fallback"`
 	Inproc       string             `json:"inproc" yaml:"inproc"`
-	Kafka        KafkaConfig        `json:"kafka" yaml:"kafka"`
 	MQTT         MQTTConfig         `json:"mqtt" yaml:"mqtt"`
 	Nanomsg      NanomsgConfig      `json:"nanomsg" yaml:"nanomsg"`
 	NSQ          NSQConfig          `json:"nsq" yaml:"nsq"`
@@ -53,7 +52,6 @@ func NewConfig() Config {
 		Dynamic:      NewDynamicConfig(),
 		Fallback:     NewTryConfig(),
 		Inproc:       "",
-		Kafka:        NewKafkaConfig(),
 		MQTT:         NewMQTTConfig(),
 		Nanomsg:      NewNanomsgConfig(),
 		NSQ:          NewNSQConfig(),
