@@ -1368,6 +1368,32 @@ Parse parameter string as ISO 8601 period and add it to value with high precisio
 
 **`duration`** &lt;string&gt; Duration in ISO 8601 format  
 
+### `ts_between`
+
+:::caution BETA
+This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
+:::
+Returns the absolute difference in nanoseconds between the target timestamp (t1) and the timestamp provided as paramater (t2). The [`ts_parse`](#ts_parse) method can be used in order to parse different timestamp formats.
+
+Introduced in version 4.23.0.
+
+
+#### Parameters
+
+**`t2`** &lt;string&gt; The second timestamp in RFC 3339 format.  
+
+#### Examples
+
+
+Use the method `ts_parse` to convert a timestamp string into RFC 3339 format.
+
+```coffee
+root.between = this.started_at.ts_between("2020-08-14T05:54:23Z")
+
+# In:  {"started_at":"2020-08-13T05:54:23Z"}
+# Out: {"between":86400000000000}
+```
+
 ### `ts_format`
 
 :::caution BETA

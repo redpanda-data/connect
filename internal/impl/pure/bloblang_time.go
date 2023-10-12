@@ -589,4 +589,36 @@ The output format is defined by showing how the reference time, defined to be Mo
 	if err := bloblang.RegisterMethodV2("format_timestamp_unix_nano", formatTSUnixNanoSpecDep, formatTSUnixNanoCtor); err != nil {
 		panic(err)
 	}
+
+	tsBetweenSpec := bloblang.NewPluginSpec().
+		Beta().
+		Static().
+		Category(query.MethodCategoryTime).
+		Description(`Returns the absolute difference in nanoseconds between the target timestamp (t1) and the timestamp provided as paramater (t2). The `+"[`ts_parse`](#ts_parse)"+` method can be used in order to parse different timestamp formats.`).
+		Param(bloblang.NewStringParam("t2").Description("The second timestamp in RFC 3339 format.")).
+		Version("4.23.0").
+		Example("Use the method `ts_parse` to convert a timestamp string into RFC 3339 format.",
+			`root.between = this.started_at.ts_between("2020-08-14T05:54:23Z")`,
+			[2]string{
+				`{"started_at":"2020-08-13T05:54:23Z"}`,
+				`{"between":86400000000000}`,
+			})
+
+	tsBetweenCtor := func(args *bloblang.ParsedParams) (bloblang.Method, error) {
+		s, err := args.GetString("t2")
+		if err != nil {
+			return nil, err
+		}
+		return bloblang.TimestampMethod(func(t1 time.Time) (any, error) {
+			t2, err := time.Parse(time.RFC3339, s)
+			if err != nil {
+				return nil, err
+			}
+			return t1.Sub(t2).Abs().Nanoseconds(), nil
+		}), nil
+	}
+
+	if err := bloblang.RegisterMethodV2("ts_between", tsBetweenSpec, tsBetweenCtor); err != nil {
+		panic(err)
+	}
 }
