@@ -14,11 +14,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/impl/kafka"
 	"github.com/benthosdev/benthos/v4/internal/integration"
-	"github.com/benthosdev/benthos/v4/internal/manager/mock"
-	"github.com/benthosdev/benthos/v4/internal/message"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
@@ -487,11 +484,17 @@ func TestIntegrationSaramaOld(t *testing.T) {
 	address := fmt.Sprintf("%v:%v", hostIP, kafkaPortStr)
 
 	require.NoError(t, pool.Retry(func() error {
-		outConf := output.NewKafkaConfig()
-		outConf.TargetVersion = "2.1.0"
-		outConf.Addresses = []string{address}
-		outConf.Topic = "pls_ignore_just_testing_connection"
-		tmpOutput, serr := kafka.NewKafkaWriter(outConf, mock.NewManager())
+		outConf, err := kafka.OSKConfigSpec().ParseYAML(fmt.Sprintf(`
+addresses:
+  - %v
+target_version: 2.1.0
+topic: pls_ignore_just_testing_connection
+`, address), nil)
+		if err != nil {
+			return err
+		}
+
+		tmpOutput, serr := kafka.NewKafkaWriterFromParsed(outConf, service.MockResources())
 		if serr != nil {
 			return serr
 		}
@@ -499,9 +502,9 @@ func TestIntegrationSaramaOld(t *testing.T) {
 		if serr := tmpOutput.Connect(context.Background()); serr != nil {
 			return serr
 		}
-		return tmpOutput.WriteBatch(context.Background(), message.QuickBatch([][]byte{
-			[]byte("foo message"),
-		}))
+		return tmpOutput.WriteBatch(context.Background(), service.MessageBatch{
+			service.NewMessage([]byte("foo message")),
+		})
 	}))
 
 	template := fmt.Sprintf(`

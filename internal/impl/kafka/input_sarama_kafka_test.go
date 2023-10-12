@@ -1,14 +1,24 @@
 package kafka_test
 
 import (
+	"fmt"
 	"testing"
 
+	"github.com/Jeffail/gabs/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"gopkg.in/yaml.v3"
 
 	"github.com/benthosdev/benthos/v4/internal/component/input"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 )
+
+func parseYAMLInputConf(t testing.TB, formatStr string, args ...any) (conf input.Config) {
+	t.Helper()
+	conf = input.NewConfig()
+	require.NoError(t, yaml.Unmarshal(fmt.Appendf(nil, formatStr, args...), &conf))
+	return
+}
 
 func TestKafkaBadParams(t *testing.T) {
 	testCases := []struct {
@@ -36,10 +46,11 @@ func TestKafkaBadParams(t *testing.T) {
 	for _, test := range testCases {
 		test := test
 		t.Run(test.name, func(t *testing.T) {
-			conf := input.NewConfig()
-			conf.Type = "kafka"
-			conf.Kafka.Addresses = []string{"example.com:1234"}
-			conf.Kafka.Topics = test.topics
+			conf := parseYAMLInputConf(t, `
+kafka:
+  addresses: [ example.com:1234 ]
+  topics: %v
+`, gabs.Wrap(test.topics).String())
 
 			_, err := mock.NewManager().NewInput(conf)
 			require.Error(t, err)

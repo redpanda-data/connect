@@ -1,6 +1,7 @@
 package tracing
 
 import (
+	"context"
 	"strings"
 
 	"go.opentelemetry.io/otel"
@@ -18,6 +19,12 @@ const (
 // doesn't have a span attached.
 func GetSpan(p *message.Part) *Span {
 	ctx := message.GetContext(p)
+	return GetSpanFromContext(ctx)
+}
+
+// GetSpan returns a span within a context. Returns nil if the context doesn't
+// have a span attached.
+func GetSpanFromContext(ctx context.Context) *Span {
 	t := trace.SpanFromContext(ctx)
 	return otelSpan(ctx, t)
 }
