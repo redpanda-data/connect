@@ -313,4 +313,4 @@ require (
 	modernc.org/token v1.1.0 // indirect
 )
 
-go 1.21
+go 1.20
