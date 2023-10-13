@@ -2,6 +2,7 @@ package bloblang
 
 import (
 	"encoding/json"
+	"time"
 
 	"github.com/benthosdev/benthos/v4/internal/bloblang/query"
 )
@@ -16,6 +17,14 @@ type ParamDefinition struct {
 func NewStringParam(name string) ParamDefinition {
 	return ParamDefinition{
 		def: query.ParamString(name, ""),
+	}
+}
+
+// NewTimestampParam creates a new timestamp typed parameter. Parameter names
+// must match the regular expression /^[a-z0-9]+(_[a-z0-9]+)*$/ (snake case).
+func NewTimestampParam(name string) ParamDefinition {
+	return ParamDefinition{
+		def: query.ParamTimestamp(name, ""),
 	}
 }
 
@@ -313,6 +322,17 @@ func (p *ParsedParams) GetString(name string) (string, error) {
 // was defined, otherwise nil.
 func (p *ParsedParams) GetOptionalString(name string) (*string, error) {
 	return p.par.FieldOptionalString(name)
+}
+
+// GetTimestamp returns a timestamp argument value with a given name.
+func (p *ParsedParams) GetTimestamp(name string) (time.Time, error) {
+	return p.par.FieldTimestamp(name)
+}
+
+// GetOptionalTimestamp returns a timestamp argument value with a given name if
+// it was defined, otherwise nil.
+func (p *ParsedParams) GetOptionalTimestamp(name string) (*time.Time, error) {
+	return p.par.FieldOptionalTimestamp(name)
 }
 
 // GetInt64 returns an integer argument value with a given name.
