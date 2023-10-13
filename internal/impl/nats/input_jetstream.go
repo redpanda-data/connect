@@ -12,6 +12,7 @@ import (
 
 	"github.com/nats-io/nats.go"
 
+	"github.com/benthosdev/benthos/v4/internal/component/input/span"
 	"github.com/benthosdev/benthos/v4/internal/impl/nats/auth"
 	"github.com/benthosdev/benthos/v4/internal/shutdown"
 	"github.com/benthosdev/benthos/v4/public/service"
@@ -79,14 +80,19 @@ You can access these metadata fields using
 			Advanced().
 			Default(1024)).
 		Field(service.NewTLSToggledField("tls")).
-		Field(service.NewInternalField(auth.FieldSpec()))
+		Field(service.NewInternalField(auth.FieldSpec())).
+		Field(span.ExtractTracingSpanMappingDocs().Version(tracingVersion))
 }
 
 func init() {
 	err := service.RegisterInput(
 		"nats_jetstream", natsJetStreamInputConfig(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Input, error) {
-			return newJetStreamReaderFromConfig(conf, mgr)
+			input, err := newJetStreamReaderFromConfig(conf, mgr)
+			if err != nil {
+				return nil, err
+			}
+			return span.NewInput("nats_jetstream", conf, input, mgr)
 		})
 	if err != nil {
 		panic(err)

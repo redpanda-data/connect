@@ -13,6 +13,8 @@ const (
 	metaKVDelta     = "nats_kv_delta"
 	metaKVOperation = "nats_kv_operation"
 	metaKVCreated   = "nats_kv_created"
+
+	tracingVersion = "4.23.0"
 )
 
 func newMessageFromKVEntry(entry nats.KeyValueEntry) *service.Message {
