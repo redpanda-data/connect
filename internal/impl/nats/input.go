@@ -10,6 +10,7 @@ import (
 
 	"github.com/nats-io/nats.go"
 
+	"github.com/benthosdev/benthos/v4/internal/component/input/span"
 	"github.com/benthosdev/benthos/v4/internal/impl/nats/auth"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
@@ -53,7 +54,8 @@ You can access these metadata fields using [function interpolation](/docs/config
 			Default(nats.DefaultSubPendingMsgsLimit).
 			LintRule(`root = if this < 0 { ["prefetch count must be greater than or equal to zero"] }`)).
 		Field(service.NewTLSToggledField("tls")).
-		Field(service.NewInternalField(auth.FieldSpec()))
+		Field(service.NewInternalField(auth.FieldSpec())).
+		Field(span.ExtractTracingSpanMappingDocs().Version(tracingVersion))
 }
 
 func init() {
@@ -61,7 +63,10 @@ func init() {
 		"nats", natsInputConfig(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Input, error) {
 			input, err := newNATSReader(conf, mgr)
-			return service.AutoRetryNacks(input), err
+			if err != nil {
+				return nil, err
+			}
+			return span.NewInput("nats", conf, service.AutoRetryNacks(input), mgr)
 		},
 	)
 	if err != nil {
