@@ -12,7 +12,8 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
-- Allow labels on caches and rate limit resources when writing configs in CUE
+- Allow labels on caches and rate limit resources when writing configs in CUE.
+- Go API: `log/slog` loggers injected into a stream builder via `StreamBuilder.SetLogger` should now respect formatting strings.
 
 ## 4.22.0 - 2023-10-03
 
