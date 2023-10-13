@@ -36,9 +36,19 @@ auth:
 		msg := service.NewMessage((nil))
 		msg.MetaSet("Timestamp", "1651485106")
 		assert.Equal(t, "url1,url2", e.urls)
-		assert.Equal(t, "testsubject", e.subjectStr.String(msg))
-		assert.Equal(t, "application/json", e.headers["Content-Type"].String(msg))
-		assert.Equal(t, "1651485106", e.headers["Timestamp"].String(msg))
+
+		subject, err := e.subjectStr.TryString(msg)
+		require.NoError(t, err)
+		assert.Equal(t, "testsubject", subject)
+
+		contentType, err := e.headers["Content-Type"].TryString(msg)
+		require.NoError(t, err)
+		assert.Equal(t, "application/json", contentType)
+
+		timestamp, err := e.headers["Timestamp"].TryString(msg)
+		require.NoError(t, err)
+		assert.Equal(t, "1651485106", timestamp)
+
 		assert.Equal(t, "test auth n key file", e.authConf.NKeyFile)
 		assert.Equal(t, "test auth user creds file", e.authConf.UserCredentialsFile)
 		assert.Equal(t, "test auth inline user JWT", e.authConf.UserJWT)
