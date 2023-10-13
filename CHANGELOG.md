@@ -9,7 +9,8 @@ All notable changes to this project will be documented in this file.
 
 - The `amqp_0_9` output now supports dynamic interpolation functions within the `exchange` field.
 - Field `custom_topic_creation` added to the `kafka` output.
-- New bloblang timestamp method `ts_between`.
+- New Bloblang method `ts_sub`.
+- The Bloblang method `abs` now supports integers in and integers out.
 
 ### Fixed
 

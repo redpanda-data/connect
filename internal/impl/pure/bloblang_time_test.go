@@ -178,8 +178,8 @@ func TestTimestampMethods(t *testing.T) {
 			output:  int64(1645561265),
 		},
 		{
-			name:    "check ts_between",
-			mapping: `root = "2023-10-12T14:59:10.12345+03:00".ts_between("2023-10-02T02:55:03.6789Z")`,
+			name:    "check ts_sub",
+			mapping: `root = "2023-10-12T14:59:10.12345+03:00".ts_sub("2023-10-02T02:55:03.6789Z")`,
 			output:  int64(896646444550000),
 		},
 	}

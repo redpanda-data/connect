@@ -866,19 +866,18 @@ root.new_value = this.value.re_replace_all("ADD ([0-9]+)","+($1)")
 
 ### `abs`
 
-Returns the absolute value of a number.
+Returns the absolute value of an int64 or float64 number. As a special case, when an integer is provided that is the minimum value it is converted to the maximum value.
 
 #### Examples
 
 
 ```coffee
-root.new_value = this.value.abs()
 
-# In:  {"value":5.3}
-# Out: {"new_value":5.3}
+root.outs = this.ins.map_each(ele -> ele.abs())
 
-# In:  {"value":-5.9}
-# Out: {"new_value":5.9}
+
+# In:  {"ins":[9,-18,1.23,-4.56]}
+# Out: {"outs":[9,18,1.23,4.56]}
 ```
 
 ### `ceil`
@@ -1368,32 +1367,6 @@ Parse parameter string as ISO 8601 period and add it to value with high precisio
 
 **`duration`** &lt;string&gt; Duration in ISO 8601 format  
 
-### `ts_between`
-
-:::caution BETA
-This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
-:::
-Returns the absolute difference in nanoseconds between the target timestamp (t1) and the timestamp provided as paramater (t2). The [`ts_parse`](#ts_parse) method can be used in order to parse different timestamp formats.
-
-Introduced in version 4.23.0.
-
-
-#### Parameters
-
-**`t2`** &lt;string&gt; The second timestamp in RFC 3339 format.  
-
-#### Examples
-
-
-Use the method `ts_parse` to convert a timestamp string into RFC 3339 format.
-
-```coffee
-root.between = this.started_at.ts_between("2020-08-14T05:54:23Z")
-
-# In:  {"started_at":"2020-08-13T05:54:23Z"}
-# Out: {"between":86400000000000}
-```
-
 ### `ts_format`
 
 :::caution BETA
@@ -1569,6 +1542,32 @@ root.doc.timestamp = this.doc.timestamp.ts_strptime("%Y-%b-%d %H:%M:%S.%f")
 
 # In:  {"doc":{"timestamp":"2020-Aug-14 11:50:26.371000"}}
 # Out: {"doc":{"timestamp":"2020-08-14T11:50:26.371Z"}}
+```
+
+### `ts_sub`
+
+:::caution BETA
+This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
+:::
+Returns the difference in nanoseconds between the target timestamp (t1) and the timestamp provided as a parameter (t2). The [`ts_parse`](#ts_parse) method can be used in order to parse different timestamp formats.
+
+Introduced in version 4.23.0.
+
+
+#### Parameters
+
+**`t2`** &lt;timestamp&gt; The second timestamp to be subtracted from the method target.  
+
+#### Examples
+
+
+Use the `.abs()` method in order to calculate an absolute duration between two timestamps.
+
+```coffee
+root.between = this.started_at.ts_sub("2020-08-14T05:54:23Z").abs()
+
+# In:  {"started_at":"2020-08-13T05:54:23Z"}
+# Out: {"between":86400000000000}
 ```
 
 ### `ts_sub_iso8601`

@@ -523,11 +523,11 @@ const (
 	maxUint32 = ^uint32(0)
 	maxUint16 = ^uint16(0)
 	maxUint8  = ^uint8(0)
-	maxInt    = maxUint >> 1
+	MaxInt    = maxUint >> 1
 	maxInt32  = maxUint32 >> 1
 	maxInt16  = maxUint16 >> 1
 	maxInt8   = maxUint8 >> 1
-	minInt    = ^int64(maxInt)
+	MinInt    = ^int64(MaxInt)
 	minInt32  = ^int32(maxInt32)
 	minInt16  = ^int16(maxInt16)
 	minInt8   = ^int8(maxInt8)
@@ -556,7 +556,7 @@ func IToInt(v any) (int64, error) {
 	case uint32:
 		return int64(t), nil
 	case uint64:
-		if t > maxInt {
+		if t > MaxInt {
 			return 0, errors.New("unsigned integer value is too large to be cast as a signed integer")
 		}
 		return int64(t), nil
@@ -567,10 +567,10 @@ func IToInt(v any) (int64, error) {
 		if math.IsNaN(t) {
 			return 0, errors.New("cannot convert NAN to an integer")
 		}
-		if t > float64(maxInt) {
+		if t > float64(MaxInt) {
 			return 0, errors.New("float value is too large to be cast as a signed integer")
 		}
-		if t < float64(minInt) {
+		if t < float64(MinInt) {
 			return 0, errors.New("float value is too small to be cast as a signed integer")
 		}
 		if t-float64(int64(t)) != 0 {
