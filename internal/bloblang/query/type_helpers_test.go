@@ -43,19 +43,19 @@ func TestIToInt(t *testing.T) {
 			out: 123,
 		},
 		{
-			in:  maxInt,
-			out: int64(maxInt),
+			in:  MaxInt,
+			out: int64(MaxInt),
 		},
 		{
-			in:  minInt,
-			out: minInt,
+			in:  MinInt,
+			out: MinInt,
 		},
 		{
-			in:          float64(maxInt) + 10000,
+			in:          float64(MaxInt) + 10000,
 			errContains: "value is too large to be cast as a",
 		},
 		{
-			in:          float64(minInt) - 10000,
+			in:          float64(MinInt) - 10000,
 			errContains: "value is too small to be cast as a",
 		},
 	} {
