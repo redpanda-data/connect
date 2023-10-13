@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // ParamDefinition describes a single parameter for a function or method.
@@ -37,6 +38,14 @@ func ParamString(name, description string) ParamDefinition {
 	return ParamDefinition{
 		Name: name, Description: description,
 		ValueType: ValueString,
+	}
+}
+
+// ParamTimestamp creates a new timestamp typed parameter.
+func ParamTimestamp(name, description string) ParamDefinition {
+	return ParamDefinition{
+		Name: name, Description: description,
+		ValueType: ValueTimestamp,
 	}
 }
 
@@ -146,6 +155,8 @@ func (d ParamDefinition) parseArgValue(v any) (any, error) {
 		case []byte:
 			return string(t), nil
 		}
+	case ValueTimestamp:
+		return IGetTimestamp(v)
 	case ValueBool:
 		return IGetBool(v)
 	case ValueArray:
@@ -569,6 +580,36 @@ func (p *ParsedParams) FieldOptionalString(n string) (*string, error) {
 		return nil, NewTypeError(v, ValueString)
 	}
 	return &str, nil
+}
+
+// FieldTimestamp returns a timestamp argument value with a given name.
+func (p *ParsedParams) FieldTimestamp(n string) (time.Time, error) {
+	v, err := p.Field(n)
+	if err != nil {
+		return time.Time{}, err
+	}
+	t, ok := v.(time.Time)
+	if !ok {
+		return time.Time{}, NewTypeError(v, ValueTimestamp)
+	}
+	return t, nil
+}
+
+// FieldOptionalTimestamp returns a timestamp argument value with a given name
+// if it was defined, otherwise nil.
+func (p *ParsedParams) FieldOptionalTimestamp(n string) (*time.Time, error) {
+	v, err := p.Field(n)
+	if err != nil {
+		return nil, err
+	}
+	if v == nil {
+		return nil, nil
+	}
+	t, ok := v.(time.Time)
+	if !ok {
+		return nil, NewTypeError(v, ValueTimestamp)
+	}
+	return &t, nil
 }
 
 // FieldInt64 returns an integer argument value with a given name.
