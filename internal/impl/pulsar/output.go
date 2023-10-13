@@ -191,10 +191,22 @@ func (p *pulsarWriter) Write(ctx context.Context, msg *service.Message) error {
 	m := &pulsar.ProducerMessage{
 		Payload: b,
 	}
-	if key := p.key.Bytes(msg); len(key) > 0 {
+
+	key, err := p.key.TryBytes(msg)
+	if err != nil {
+		return err
+	}
+
+	if len(key) > 0 {
 		m.Key = string(key)
 	}
-	if orderingKey := p.orderingKey.Bytes(msg); len(orderingKey) > 0 {
+
+	orderingKey, err := p.orderingKey.TryBytes(msg)
+	if err != nil {
+		return err
+	}
+
+	if len(orderingKey) > 0 {
 		m.OrderingKey = string(orderingKey)
 	}
 

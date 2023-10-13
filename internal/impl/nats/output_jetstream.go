@@ -3,6 +3,7 @@ package nats
 import (
 	"context"
 	"crypto/tls"
+	"fmt"
 	"strings"
 	"sync"
 
@@ -193,14 +194,25 @@ func (j *jetStreamOutput) Write(ctx context.Context, msg *service.Message) error
 		return service.ErrNotConnected
 	}
 
-	jsmsg := nats.NewMsg(j.subjectStr.String(msg))
+	subject, err := j.subjectStr.TryString(msg)
+	if err != nil {
+		return fmt.Errorf(`failed string interpolation on field "subject": %w`, err)
+	}
+
+	jsmsg := nats.NewMsg(subject)
 	msgBytes, err := msg.AsBytes()
 	if err != nil {
 		return err
 	}
+
 	jsmsg.Data = msgBytes
 	for k, v := range j.headers {
-		jsmsg.Header.Add(k, v.String(msg))
+		value, err := v.TryString(msg)
+		if err != nil {
+			return fmt.Errorf(`failed string interpolation on header %q: %w`, k, err)
+		}
+
+		jsmsg.Header.Add(k, value)
 	}
 	_ = j.metaFilter.Walk(msg, func(key, value string) error {
 		jsmsg.Header.Add(key, value)
