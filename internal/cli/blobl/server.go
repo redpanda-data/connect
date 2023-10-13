@@ -27,7 +27,7 @@ import (
 	_ "embed"
 )
 
-//go:embed resources/bloglang_editor_page.html
+//go:embed resources/bloblang_editor_page.html
 var bloblangEditorPage string
 
 func openBrowserAt(url string) {
