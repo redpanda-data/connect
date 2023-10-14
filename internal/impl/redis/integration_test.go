@@ -189,6 +189,31 @@ input:
 		})
 	})
 
+	// SCAN
+	t.Run("scan", func(t *testing.T) {
+		t.Parallel()
+		template := `
+input:
+  redis_scan:
+    url: 'tcp://localhost:$PORT'
+    match: '*'
+`
+		client := redis.NewClient(&redis.Options{
+			Addr:    fmt.Sprintf("localhost:%v", resource.GetPort("6379/tcp")),
+			Network: "tcp",
+		})
+		client.Set(context.Background(), "foo", "hello world", time.Minute)
+		suite := integration.StreamTests(
+			integration.StreamTestFiniteInput(`{"key":"foo","value":"hello world"}`),
+		)
+		suite.Run(
+			t, template,
+			integration.StreamTestOptSleepAfterInput(100*time.Millisecond),
+			integration.StreamTestOptSleepAfterOutput(100*time.Millisecond),
+			integration.StreamTestOptPort(resource.GetPort("6379/tcp")),
+		)
+	})
+
 	// HASH
 	t.Run("hash", func(t *testing.T) {
 		t.Parallel()

@@ -475,6 +475,10 @@ func closeConnectors(t testing.TB, env *streamTestEnvironment, input iinput.Stre
 		output.TriggerCloseNow()
 		require.NoError(t, output.WaitForClose(env.ctx))
 	}
+	closeInput(t, env, input)
+}
+
+func closeInput(t testing.TB, env *streamTestEnvironment, input iinput.Streamed) {
 	if input != nil {
 		input.TriggerStopConsuming()
 		require.NoError(t, input.WaitForClose(env.ctx))

@@ -34,6 +34,23 @@ func StreamTestOpenClose() StreamTestDefinition {
 	)
 }
 
+// StreamTestFiniteInput ensures that both the input and output can be started and
+// stopped within a reasonable length of time. A single message is sent to check
+// the connection.
+func StreamTestFiniteInput(content string) StreamTestDefinition {
+	return namedStreamTest(
+		"can get messages from input",
+		func(t *testing.T, env *streamTestEnvironment) {
+			input := initInput(t, env)
+			t.Cleanup(func() {
+				closeInput(t, env, input)
+			})
+
+			messageMatch(t, receiveMessage(env.ctx, t, input.TransactionChan(), nil), content)
+		},
+	)
+}
+
 // StreamTestOpenCloseIsolated ensures that both the input and output can be
 // started and stopped within a reasonable length of time. A single message is
 // sent to check the connection but the input is only started after the message
