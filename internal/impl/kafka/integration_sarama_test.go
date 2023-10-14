@@ -433,47 +433,27 @@ func TestIntegrationSaramaOld(t *testing.T) {
 
 	pool.MaxWait = time.Minute
 
-	networks, _ := pool.Client.ListNetworks()
-	hostIP := ""
-	for _, network := range networks {
-		if network.Name == "bridge" {
-			hostIP = network.IPAM.Config[0].Gateway
-		}
-	}
-
-	zkResource, err := pool.RunWithOptions(&dockertest.RunOptions{
-		Repository: "wurstmeister/zookeeper",
-		Tag:        "latest",
-	})
-	require.NoError(t, err)
-	t.Cleanup(func() {
-		require.NoError(t, pool.Purge(zkResource))
-	})
-	_ = zkResource.Expire(900)
-	zkAddr := fmt.Sprintf("%v:2181", zkResource.Container.NetworkSettings.IPAddress)
-
 	kafkaPort, err := integration.GetFreePort()
 	require.NoError(t, err)
 
 	kafkaPortStr := strconv.Itoa(kafkaPort)
-	env := []string{
-		"KAFKA_ADVERTISED_HOST_NAME=" + hostIP,
-		"KAFKA_BROKER_ID=1",
-		"KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=OUTSIDE:PLAINTEXT,INSIDE:PLAINTEXT",
-		"KAFKA_LISTENERS=OUTSIDE://:" + kafkaPortStr + ",INSIDE://:9092",
-		"KAFKA_ADVERTISED_LISTENERS=OUTSIDE://" + hostIP + ":" + kafkaPortStr + ",INSIDE://:9092",
-		"KAFKA_INTER_BROKER_LISTENER_NAME=INSIDE",
-		"KAFKA_ZOOKEEPER_CONNECT=" + zkAddr,
-	}
 
 	kafkaResource, err := pool.RunWithOptions(&dockertest.RunOptions{
-		Repository:   "wurstmeister/kafka",
+		Repository:   "bitnami/kafka",
 		Tag:          "latest",
-		ExposedPorts: []string{kafkaPortStr + "/tcp"},
+		ExposedPorts: []string{"9092"},
 		PortBindings: map[docker.Port][]docker.PortBinding{
-			docker.Port(kafkaPortStr + "/tcp"): {{HostIP: "", HostPort: kafkaPortStr}},
+			"9092/tcp": {{HostIP: "", HostPort: kafkaPortStr}},
 		},
-		Env: env,
+		Env: []string{
+			"KAFKA_CFG_NODE_ID=0",
+			"KAFKA_CFG_PROCESS_ROLES=controller,broker",
+			"KAFKA_CFG_CONTROLLER_QUORUM_VOTERS=0@localhost:9093",
+			"KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER",
+			"KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT",
+			"KAFKA_CFG_LISTENERS=PLAINTEXT://0.0.0.0:9092,CONTROLLER://:9093",
+			"KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://localhost:" + kafkaPortStr,
+		},
 	})
 	require.NoError(t, err)
 	t.Cleanup(func() {
@@ -481,7 +461,7 @@ func TestIntegrationSaramaOld(t *testing.T) {
 	})
 	_ = kafkaResource.Expire(900)
 
-	address := fmt.Sprintf("%v:%v", hostIP, kafkaPortStr)
+	address := fmt.Sprintf("localhost:%v", kafkaPortStr)
 
 	require.NoError(t, pool.Retry(func() error {
 		outConf, err := kafka.OSKConfigSpec().ParseYAML(fmt.Sprintf(`
