@@ -43,61 +43,70 @@ func azureComponentSpec(forBlobStorage bool) *service.ConfigSpec {
 	return spec
 }
 
-func blobStorageClientFromParsed(pConf *service.ParsedConfig) (*azblob.Client, error) {
+func blobStorageClientFromParsed(pConf *service.ParsedConfig, container string) (*azblob.Client, bool, error) {
 	connectionString, err := pConf.FieldString(bscFieldStorageConnectionString)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	storageAccount, err := pConf.FieldString(bscFieldStorageAccount)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	storageAccessKey, err := pConf.FieldString(bscFieldStorageAccessKey)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	storageSASToken, err := pConf.FieldString(bscFieldStorageSASToken)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	if storageAccount == "" && connectionString == "" {
-		return nil, errors.New("invalid azure storage account credentials")
+		return nil, false, errors.New("invalid azure storage account credentials")
 	}
-	return getBlobStorageClient(connectionString, storageAccount, storageAccessKey, storageSASToken)
+	return getBlobStorageClient(connectionString, storageAccount, storageAccessKey, storageSASToken, container)
 }
 
 const (
 	blobEndpointExp = "https://%s.blob.core.windows.net"
 )
 
-func getBlobStorageClient(storageConnectionString, storageAccount, storageAccessKey, storageSASToken string) (*azblob.Client, error) {
+func getBlobStorageClient(storageConnectionString, storageAccount, storageAccessKey, storageSASToken string, container string) (*azblob.Client, bool, error) {
 	var client *azblob.Client
 	var err error
+	var containerSASToken bool
 	if len(storageConnectionString) > 0 {
 		storageConnectionString := parseStorageConnectionString(storageConnectionString, storageAccount)
 		client, err = azblob.NewClientFromConnectionString(storageConnectionString, nil)
 	} else if len(storageAccessKey) > 0 {
 		cred, credErr := azblob.NewSharedKeyCredential(storageAccount, storageAccessKey)
 		if credErr != nil {
-			return nil, fmt.Errorf("error creating shared key credential: %w", credErr)
+			return nil, false, fmt.Errorf("error creating shared key credential: %w", credErr)
 		}
 		serviceURL := fmt.Sprintf(blobEndpointExp, storageAccount)
 		client, err = azblob.NewClientWithSharedKeyCredential(serviceURL, cred, nil)
 	} else if len(storageSASToken) > 0 {
-		serviceURL := fmt.Sprintf("%s/%s", fmt.Sprintf(blobEndpointExp, storageAccount), storageSASToken)
+		var serviceURL string
+		if strings.HasPrefix(storageSASToken, "sp=") {
+			// container SAS token
+			containerSASToken = true
+			serviceURL = fmt.Sprintf("%s/%s?%s", fmt.Sprintf(blobEndpointExp, storageAccount), container, storageSASToken)
+		} else {
+			// storage account SAS token
+			serviceURL = fmt.Sprintf("%s/%s", fmt.Sprintf(blobEndpointExp, storageAccount), storageSASToken)
+		}
 		client, err = azblob.NewClientWithNoCredential(serviceURL, nil)
 	} else {
 		cred, credErr := azidentity.NewDefaultAzureCredential(nil)
 		if credErr != nil {
-			return nil, fmt.Errorf("error getting default Azure credentials: %v", credErr)
+			return nil, false, fmt.Errorf("error getting default Azure credentials: %v", credErr)
 		}
 		serviceURL := fmt.Sprintf(blobEndpointExp, storageAccount)
 		client, err = azblob.NewClient(serviceURL, cred, nil)
 	}
 	if err != nil {
-		return nil, fmt.Errorf("invalid azure storage account credentials: %v", err)
+		return nil, false, fmt.Errorf("invalid azure storage account credentials: %v", err)
 	}
-	return client, err
+	return client, containerSASToken, err
 }
 
 // getEmulatorConnectionString returns the Azurite connection string for the provided service ports
