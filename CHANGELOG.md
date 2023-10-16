@@ -17,6 +17,7 @@ All notable changes to this project will be documented in this file.
 
 - Allow labels on caches and rate limit resources when writing configs in CUE.
 - Go API: `log/slog` loggers injected into a stream builder via `StreamBuilder.SetLogger` should now respect formatting strings.
+- All Azure components now support container SAS tokens for authentication.
 
 ## 4.22.0 - 2023-10-03
 
