@@ -32,11 +32,20 @@ type bsoConfig struct {
 }
 
 func bsoConfigFromParsed(pConf *service.ParsedConfig) (conf bsoConfig, err error) {
-	if conf.client, err = blobStorageClientFromParsed(pConf); err != nil {
-		return
-	}
 	if conf.Container, err = pConf.FieldInterpolatedString(bsoFieldContainer); err != nil {
 		return
+	}
+	var containerSASToken bool
+	c, err := conf.Container.TryString(service.NewMessage([]byte("")))
+	if err != nil {
+		return
+	}
+	if conf.client, containerSASToken, err = blobStorageClientFromParsed(pConf, c); err != nil {
+		return
+	}
+	if containerSASToken {
+		// if using a container SAS token, the container is already implicit
+		conf.Container, _ = service.NewInterpolatedString("")
 	}
 	if conf.Path, err = pConf.FieldInterpolatedString(bsoFieldPath); err != nil {
 		return
