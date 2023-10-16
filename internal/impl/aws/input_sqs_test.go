@@ -24,6 +24,12 @@ type mockSqsInput struct {
 	mesTimeouts  map[string]int
 }
 
+func (m *mockSqsInput) do(fn func()) {
+	<-m.mtx
+	defer func() { m.mtx <- struct{}{} }()
+	fn()
+}
+
 func (m *mockSqsInput) TimeoutLoop(ctx context.Context) {
 	t := time.NewTicker(time.Second)
 	defer t.Stop()
@@ -174,8 +180,10 @@ func TestSQSInput(t *testing.T) {
 	default:
 	}
 	// Check that even if they are not visible, messages haven't been deleted from the queue
-	require.Len(t, mockInput.messages, expectedMessages)
-	require.Len(t, mockInput.mesTimeouts, expectedMessages)
+	mockInput.do(func() {
+		require.Len(t, mockInput.messages, expectedMessages)
+		require.Len(t, mockInput.mesTimeouts, expectedMessages)
+	})
 
 	// Ack all messages and ensure that they are deleted from SQS
 	for _, message := range receivedMessages {
@@ -183,6 +191,10 @@ func TestSQSInput(t *testing.T) {
 	}
 
 	require.Eventually(t, func() bool {
-		return len(mockInput.messages) == 0
+		msgsLen := 0
+		mockInput.do(func() {
+			msgsLen = len(mockInput.messages)
+		})
+		return msgsLen == 0
 	}, 5*time.Second, time.Second)
 }
