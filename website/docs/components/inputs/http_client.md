@@ -787,6 +787,7 @@ Requires version 3.42.0 or newer
 | `regex:(?m)^\d\d:\d\d:\d\d` | Consume the file in segments divided by regular expression. |
 | `skipbom` | Skip one or more byte order marks for each opened reader, this codec should precede another codec, e.g. `skipbom/csv`, etc. |
 | `tar` | Parse the file as a tar archive, and consume each file of the archive as a message. |
+| `json-array` | Consume and decode a json array one object at the time. |
 
 
 ```yml

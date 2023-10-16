@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/csv"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -44,6 +45,7 @@ var ReaderDocs = docs.FieldString(
 	"regex:(?m)^\\d\\d:\\d\\d:\\d\\d", "Consume the file in segments divided by regular expression.",
 	"skipbom", "Skip one or more byte order marks for each opened reader, this codec should precede another codec, e.g. `skipbom/csv`, etc.",
 	"tar", "Parse the file as a tar archive, and consume each file of the archive as a message.",
+	"json-array", "Consume and decode a json array one object at the time.",
 )
 
 //------------------------------------------------------------------------------
@@ -252,6 +254,10 @@ func partReader(codec string, conf ReaderConfig) (ReaderConstructor, bool, error
 		}, true, nil
 	case "tar":
 		return newTarReader, true, nil
+	case "json-array":
+		return func(path string, r io.ReadCloser, fn ReaderAckFn) (Reader, error) {
+			return newJSONArrayReader(r, fn)
+		}, true, nil
 	}
 
 	if strings.HasPrefix(codec, "avro-ocf:") {
@@ -1172,4 +1178,91 @@ func (a *regexReader) Close(ctx context.Context) error {
 		_ = a.sourceAck(ctx, nil)
 	}
 	return a.r.Close()
+}
+
+//------------------------------------------------------------------------------
+
+type jsonArrayReader struct {
+	dec       *json.Decoder
+	r         io.ReadCloser
+	sourceAck ReaderAckFn
+
+	mut      sync.Mutex
+	finished bool
+	pending  int32
+}
+
+func (a *jsonArrayReader) Next(ctx context.Context) ([]*message.Part, ReaderAckFn, error) {
+	var obj any
+	err := a.dec.Decode(&obj)
+
+	a.mut.Lock()
+	defer a.mut.Unlock()
+
+	if err != nil {
+		if errors.Is(err, io.EOF) {
+			a.finished = true
+		} else {
+			_ = a.sourceAck(ctx, err)
+		}
+		return nil, nil, err
+	}
+
+	if !a.dec.More() {
+		// read closing bracket
+		if _, err = a.dec.Token(); err != nil {
+			return nil, nil, err
+		}
+	}
+
+	a.pending++
+
+	part := message.NewPart(nil)
+	part.SetStructuredMut(obj)
+
+	return []*message.Part{part}, a.ack, nil
+}
+
+func (a *jsonArrayReader) Close(ctx context.Context) error {
+	a.mut.Lock()
+	defer a.mut.Unlock()
+
+	if !a.finished {
+		_ = a.sourceAck(ctx, errors.New("service shutting down"))
+	}
+	if a.pending == 0 {
+		_ = a.sourceAck(ctx, nil)
+	}
+	return a.r.Close()
+}
+
+func (a *jsonArrayReader) ack(ctx context.Context, err error) error {
+	a.mut.Lock()
+	a.pending--
+	doAck := a.pending == 0 && a.finished
+	a.mut.Unlock()
+
+	if err != nil {
+		return a.sourceAck(ctx, err)
+	}
+	if doAck {
+		return a.sourceAck(ctx, nil)
+	}
+	return nil
+}
+
+func newJSONArrayReader(r io.ReadCloser, ackFn ReaderAckFn) (Reader, error) {
+	dec := json.NewDecoder(r)
+
+	// read open bracket
+	_, err := dec.Token()
+	if err != nil {
+		return nil, err
+	}
+
+	return &jsonArrayReader{
+		dec:       dec,
+		r:         r,
+		sourceAck: ackOnce(ackFn),
+	}, nil
 }

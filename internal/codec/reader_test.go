@@ -925,3 +925,13 @@ func TestRegexpSplitReader(t *testing.T) {
 	data = []byte("")
 	testReaderSuite(t, "regex:split", "", data)
 }
+
+func TestJSONArrayReader(t *testing.T) {
+	data := []byte("[{\"key_1\":\"value 1\"},{\"key_2\":\"value 2\"},{\"key_3\":\"value 3\"}]")
+	testReaderSuite(
+		t, "json-array", "", data,
+		`{"key_1":"value 1"}`,
+		`{"key_2":"value 2"}`,
+		`{"key_3":"value 3"}`,
+	)
+}
