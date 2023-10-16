@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/cenkalti/backoff/v4"
@@ -71,29 +71,10 @@ input:
 	}
 }
 
-// TODO: Replace with atomic.Pointer.
-type wrappedInput struct {
-	i input.Streamed
-	m sync.Mutex
-}
-
-func (w *wrappedInput) Get() input.Streamed {
-	w.m.Lock()
-	i := w.i
-	w.m.Unlock()
-	return i
-}
-
-func (w *wrappedInput) Set(i input.Streamed) {
-	w.m.Lock()
-	w.i = i
-	w.m.Unlock()
-}
-
 type readUntilInput struct {
 	conf input.ReadUntilConfig
 
-	wrappedInputLocked *wrappedInput
+	wrappedInputLocked *atomic.Pointer[input.Streamed]
 	check              *mapping.Executor
 
 	wrapperMgr bundle.NewManagement
@@ -128,13 +109,13 @@ func newReadUntilInput(conf input.Config, mgr bundle.NewManagement, log log.Modu
 		return nil, errors.New("a check query is required")
 	}
 
+	wInputLocked := &atomic.Pointer[input.Streamed]{}
+	wInputLocked.Store(&wrapped)
 	rdr := &readUntilInput{
 		conf: conf.ReadUntil,
 
-		wrapperMgr: wMgr,
-		wrappedInputLocked: &wrappedInput{
-			i: wrapped,
-		},
+		wrapperMgr:         wMgr,
+		wrappedInputLocked: wInputLocked,
 
 		log:          log,
 		stats:        stats,
@@ -150,8 +131,9 @@ func newReadUntilInput(conf input.Config, mgr bundle.NewManagement, log log.Modu
 
 func (r *readUntilInput) loop() {
 	defer func() {
-		wrapped := r.wrappedInputLocked.Get()
-		if wrapped != nil {
+		wrappedP := r.wrappedInputLocked.Load()
+		if wrappedP != nil {
+			wrapped := *wrappedP
 			wrapped.TriggerStopConsuming()
 			wrapped.TriggerCloseNow()
 			_ = wrapped.WaitForClose(context.Background())
@@ -174,8 +156,9 @@ func (r *readUntilInput) loop() {
 
 runLoop:
 	for !r.shutSig.ShouldCloseAtLeisure() {
-		wrapped := r.wrappedInputLocked.Get()
-		if wrapped == nil {
+		var wrapped input.Streamed
+		wrappedP := r.wrappedInputLocked.Load()
+		if wrappedP == nil {
 			if r.conf.Restart {
 				select {
 				case <-time.After(restartBackoff.NextBackOff()):
@@ -187,17 +170,19 @@ runLoop:
 					r.log.Errorf("Failed to create input '%v': %v\n", r.conf.Input.Type, err)
 					return
 				}
-				r.wrappedInputLocked.Set(wrapped)
+				r.wrappedInputLocked.Store(&wrapped)
 			} else {
 				return
 			}
+		} else {
+			wrapped = *wrappedP
 		}
 
 		var tran message.Transaction
 		select {
 		case tran, open = <-wrapped.TransactionChan():
 			if !open {
-				r.wrappedInputLocked.Set(nil)
+				r.wrappedInputLocked.Store(nil)
 				continue runLoop
 			}
 			restartBackoff.Reset()
@@ -257,8 +242,9 @@ func (r *readUntilInput) TransactionChan() <-chan message.Transaction {
 // Connected returns a boolean indicating whether this input is currently
 // connected to its target.
 func (r *readUntilInput) Connected() bool {
-	i := r.wrappedInputLocked.Get()
-	if i != nil {
+	wrappedP := r.wrappedInputLocked.Load()
+	if wrappedP != nil {
+		i := *wrappedP
 		return i.Connected()
 	}
 	return false
