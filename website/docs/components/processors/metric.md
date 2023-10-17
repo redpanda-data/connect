@@ -68,7 +68,7 @@ labels:
 
 ### `value`
 
-For some metric types specifies a value to set, increment.
+For some metric types specifies a value to set, increment. Certain metrics exporters such as Prometheus support floating point values, but those that do not will cast a floating point value into an integer.
 This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
 
 

@@ -73,12 +73,24 @@ func (p *promGauge) Incr(count int64) {
 	p.ctr.Add(float64(count))
 }
 
+func (p *promGauge) IncrFloat64(count float64) {
+	p.ctr.Add(count)
+}
+
 func (p *promGauge) Decr(count int64) {
 	p.ctr.Add(float64(-count))
 }
 
+func (p *promGauge) DecrFloat64(count float64) {
+	p.ctr.Add(-count)
+}
+
 func (p *promGauge) Set(value int64) {
 	p.ctr.Set(float64(value))
+}
+
+func (p *promGauge) SetFloat64(value float64) {
+	p.ctr.Set(value)
 }
 
 type promCounter struct {
@@ -87,6 +99,10 @@ type promCounter struct {
 
 func (p *promCounter) Incr(count int64) {
 	p.ctr.Add(float64(count))
+}
+
+func (p *promCounter) IncrFloat64(count float64) {
+	p.ctr.Add(count)
 }
 
 type promTiming struct {
