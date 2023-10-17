@@ -14,6 +14,7 @@ import (
 	"github.com/nats-io/stan.go"
 
 	"github.com/benthosdev/benthos/v4/internal/component/output"
+	"github.com/benthosdev/benthos/v4/internal/component/output/span"
 	"github.com/benthosdev/benthos/v4/internal/impl/nats/auth"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
@@ -87,6 +88,7 @@ The NATS Streaming Server is being deprecated. Critical bug fixes and security f
 				Description("The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
 			service.NewTLSToggledField(soFieldTLS),
 			service.NewInternalField(auth.FieldSpec()),
+			span.InjectTracingSpanMappingDocs().Version(tracingVersion),
 		)
 }
 
@@ -103,7 +105,11 @@ func init() {
 				return nil, 0, err
 			}
 			w, err := newNATSStreamWriter(pConf, mgr)
-			return w, maxInFlight, err
+			if err != nil {
+				return nil, 0, err
+			}
+			spanOutput, err := span.NewOutput("nats_stream", conf, w, mgr)
+			return spanOutput, maxInFlight, err
 		})
 	if err != nil {
 		panic(err)

@@ -61,6 +61,7 @@ output:
       user_credentials_file: ./user.creds # No default (optional)
       user_jwt: "" # No default (optional)
       user_nkey_seed: "" # No default (optional)
+    inject_tracing_map: meta = @.merge(this) # No default (optional)
 ```
 
 </TabItem>
@@ -347,5 +348,21 @@ This field contains sensitive information that usually shouldn't be added to a c
 
 
 Type: `string`  
+
+### `inject_tracing_map`
+
+EXPERIMENTAL: A [Bloblang mapping](/docs/guides/bloblang/about) used to inject an object containing tracing propagation information into outbound messages. The specification of the injected fields will match the format used by the service wide tracer.
+
+
+Type: `string`  
+Requires version 4.23.0 or newer  
+
+```yml
+# Examples
+
+inject_tracing_map: meta = @.merge(this)
+
+inject_tracing_map: root.meta.span = this
+```
 
 
