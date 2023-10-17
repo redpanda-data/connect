@@ -29,31 +29,26 @@ Host endpoints (` + "`/metrics` and `/stats`" + `) for Prometheus scraping.`,
 		Footnotes: `
 ## Push Gateway
 
-The field ` + "`push_url`" + ` is optional and when set will trigger a push of
-metrics to a [Prometheus Push Gateway](https://prometheus.io/docs/instrumenting/pushing/)
-once Benthos shuts down. It is also possible to specify a
-` + "`push_interval`" + ` which results in periodic pushes.
+The field ` + "`push_url`" + ` is optional and when set will trigger a push of metrics to a [Prometheus Push Gateway](https://prometheus.io/docs/instrumenting/pushing/) once Benthos shuts down. It is also possible to specify a ` + "`push_interval`" + ` which results in periodic pushes.
 
-The Push Gateway is useful for when Benthos instances are short lived. Do not
-include the "/metrics/jobs/..." path in the push URL.
+The Push Gateway is useful for when Benthos instances are short lived. Do not include the "/metrics/jobs/..." path in the push URL.
 
-If the Push Gateway requires HTTP Basic Authentication it can be configured with
-` + "`push_basic_auth`.",
+If the Push Gateway requires HTTP Basic Authentication it can be configured with ` + "`push_basic_auth`.",
 		Config: docs.FieldComponent().WithChildren(
 			docs.FieldBool("use_histogram_timing", "Whether to export timing metrics as a histogram, if `false` a summary is used instead. When exporting histogram timings the delta values are converted from nanoseconds into seconds in order to better fit within bucket definitions. For more information on histograms and summaries refer to: https://prometheus.io/docs/practices/histograms/.").HasDefault(false).Advanced().AtVersion("3.63.0"),
-			docs.FieldFloat("histogram_buckets", "Timing metrics histogram buckets (in seconds). If left empty defaults to DefBuckets (https://pkg.go.dev/github.com/prometheus/client_golang/prometheus#pkg-variables)").Array().HasDefault([]any{}).Advanced().AtVersion("3.63.0"),
-			docs.FieldObject("summary_quantiles_objectives", "Timing metrics summary buckets (as quantiles) as key with allowed error level as value.", []map[string]float64{
+			docs.FieldFloat("histogram_buckets", "Timing metrics histogram buckets (in seconds). If left empty defaults to DefBuckets (https://pkg.go.dev/github.com/prometheus/client_golang/prometheus#pkg-variables). Applicable when `use_histogram_timing` is set to `true`.").Array().HasDefault([]any{}).Advanced().AtVersion("3.63.0"),
+			docs.FieldObject("summary_quantiles_objectives", "A list of timing metrics summary buckets (as quantiles). Applicable when `use_histogram_timing` is set to `false`.", []map[string]float64{
 				{"quantile": 0.5, "error": 0.05},
 				{"quantile": 0.9, "error": 0.01},
 				{"quantile": 0.99, "error": 0.001},
 			}).Array().WithChildren(
-				docs.FieldFloat("quantile", "Quantile value.").HasDefault(""),
-				docs.FieldFloat("error", "Permissible margin of error for quantile calculations. Precise calculations in a streaming context (without prior knowledge of the full dataset) can be resource-intensive. To balance accuracy with computational efficiency, an error margin is introduced. For instance, if the 90th quantile (`0.9`) is determined to be `100ms` with a 1% error margin (`0.01`), the true value will fall within the `[99ms, 101ms]` range.)").HasDefault(""),
+				docs.FieldFloat("quantile", "Quantile value.").HasDefault(0.0),
+				docs.FieldFloat("error", "Permissible margin of error for quantile calculations. Precise calculations in a streaming context (without prior knowledge of the full dataset) can be resource-intensive. To balance accuracy with computational efficiency, an error margin is introduced. For instance, if the 90th quantile (`0.9`) is determined to be `100ms` with a 1% error margin (`0.01`), the true value will fall within the `[99ms, 101ms]` range.)").HasDefault(0.0),
 			).Advanced().HasDefault([]map[string]float64{
 				{"quantile": 0.5, "error": 0.05},
 				{"quantile": 0.9, "error": 0.01},
 				{"quantile": 0.99, "error": 0.001},
-			}).AtVersion(("4.22.0")),
+			}).AtVersion(("4.23.0")),
 			docs.FieldBool("add_process_metrics", "Whether to export process metrics such as CPU and memory usage in addition to Benthos metrics.").Advanced().HasDefault(false),
 			docs.FieldBool("add_go_metrics", "Whether to export Go runtime metrics such as GC pauses in addition to Benthos metrics.").Advanced().HasDefault(false),
 			docs.FieldURL("push_url", "An optional [Push Gateway URL](#push-gateway) to push metrics to.").Advanced().HasDefault(""),

@@ -12,6 +12,7 @@ All notable changes to this project will be documented in this file.
 - New Bloblang method `ts_sub`.
 - The Bloblang method `abs` now supports integers in and integers out.
 - New `_fail_fast` variants for the `broker` output `fan_out` and `fan_out_sequential` patterns.
+- Field `summary_quantiles_objectives` added to the `prometheus` metrics exporter.
 
 ### Fixed
 
