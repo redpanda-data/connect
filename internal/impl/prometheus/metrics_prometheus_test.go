@@ -127,9 +127,13 @@ func TestPrometheusMetrics(t *testing.T) {
 	ctrTwo := nm.GetCounterVec("countertwo", "label1")
 	ctrTwo.With("value1").Incr(10)
 	ctrTwo.With("value2").Incr(11)
+	ctrTwo.With("value3").IncrFloat64(10.452)
 
 	ggeTwo := nm.GetGaugeVec("gaugetwo", "label2")
 	ggeTwo.With("value3").Set(12)
+
+	ggeThree := nm.GetGauge("gaugethree")
+	ggeThree.SetFloat64(10.452)
 
 	tmrTwo := nm.GetTimerVec("timertwo", "label3", "label4")
 	tmrTwo.With("value4", "value5").Timing(13)
@@ -141,8 +145,10 @@ func TestPrometheusMetrics(t *testing.T) {
 	assert.Contains(t, body, "\ntimerone_count 1")
 	assert.Contains(t, body, "\ncountertwo{label1=\"value1\"} 10")
 	assert.Contains(t, body, "\ncountertwo{label1=\"value2\"} 11")
+	assert.Contains(t, body, "\ncountertwo{label1=\"value3\"} 10.452")
 	assert.Contains(t, body, "\ngaugetwo{label2=\"value3\"} 12")
 	assert.Contains(t, body, "\ntimertwo_sum{label3=\"value4\",label4=\"value5\"} 13")
+	assert.Contains(t, body, "\ngaugethree 10.452")
 }
 
 func TestPrometheusHistMetrics(t *testing.T) {

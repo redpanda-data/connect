@@ -51,6 +51,11 @@ func (c *combinedCounter) Incr(count int64) {
 	c.c2.Incr(count)
 }
 
+func (c *combinedCounter) IncrFloat64(count float64) {
+	c.c1.IncrFloat64(count)
+	c.c2.IncrFloat64(count)
+}
+
 type combinedTimer struct {
 	c1 StatTimer
 	c2 StatTimer
@@ -71,14 +76,29 @@ func (c *combinedGauge) Set(value int64) {
 	c.c2.Set(value)
 }
 
+func (c *combinedGauge) SetFloat64(value float64) {
+	c.c1.SetFloat64(value)
+	c.c2.SetFloat64(value)
+}
+
 func (c *combinedGauge) Incr(count int64) {
 	c.c1.Incr(count)
 	c.c2.Incr(count)
 }
 
+func (c *combinedGauge) IncrFloat64(count float64) {
+	c.c1.IncrFloat64(count)
+	c.c2.IncrFloat64(count)
+}
+
 func (c *combinedGauge) Decr(count int64) {
 	c.c1.Decr(count)
 	c.c2.Decr(count)
+}
+
+func (c *combinedGauge) DecrFloat64(count float64) {
+	c.c1.DecrFloat64(count)
+	c.c2.DecrFloat64(count)
 }
 
 //------------------------------------------------------------------------------

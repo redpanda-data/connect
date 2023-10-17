@@ -45,7 +45,7 @@ Custom metrics such as these are emitted along with Benthos internal metrics, wh
 					"topic": "${! meta(\"kafka_topic\") }",
 				},
 			).IsInterpolated().Map(),
-			docs.FieldString("value", "For some metric types specifies a value to set, increment.").IsInterpolated(),
+			docs.FieldString("value", "For some metric types specifies a value to set, increment. Certain metrics exporters such as Prometheus support floating point values, but those that do not will cast a floating point value into an integer.").IsInterpolated(),
 		).ChildDefaultAndTypesFromStruct(processor.NewMetricConfig()),
 		Examples: []docs.AnnotatedExample{
 			{
@@ -278,44 +278,68 @@ func (m *metricProcessor) handleCounter(val string, index int, msg message.Batch
 	return nil
 }
 
-func (m *metricProcessor) handleCounterBy(val string, index int, msg message.Batch) error {
-	i, err := strconv.ParseInt(val, 10, 64)
+func withNumberStr(val string, ifn func(i int64) error, ffn func(f float64) error) error {
+	if i, err := strconv.ParseInt(val, 10, 64); err == nil {
+		if i < 0 {
+			return fmt.Errorf("value %d is negative", i)
+		}
+		return ifn(i)
+	}
+
+	f, err := strconv.ParseFloat(val, 64)
 	if err != nil {
 		return err
 	}
-	if i < 0 {
-		return errors.New("value is negative")
+	if f < 0 {
+		return fmt.Errorf("value %f is negative", f)
 	}
+	return ffn(f)
+}
+
+func (m *metricProcessor) handleCounterBy(val string, index int, msg message.Batch) error {
 	if len(m.labels) > 0 {
 		labelValues, err := m.labels.values(index, msg)
 		if err != nil {
 			return err
 		}
-		m.mCounterVec.With(labelValues...).Incr(i)
-	} else {
-		m.mCounter.Incr(i)
+		return withNumberStr(val, func(i int64) error {
+			m.mCounterVec.With(labelValues...).Incr(i)
+			return nil
+		}, func(f float64) error {
+			m.mCounterVec.With(labelValues...).IncrFloat64(f)
+			return nil
+		})
 	}
-	return nil
+	return withNumberStr(val, func(i int64) error {
+		m.mCounter.Incr(i)
+		return nil
+	}, func(f float64) error {
+		m.mCounter.IncrFloat64(f)
+		return nil
+	})
 }
 
 func (m *metricProcessor) handleGauge(val string, index int, msg message.Batch) error {
-	i, err := strconv.ParseInt(val, 10, 64)
-	if err != nil {
-		return err
-	}
-	if i < 0 {
-		return errors.New("value is negative")
-	}
 	if len(m.labels) > 0 {
 		labelValues, err := m.labels.values(index, msg)
 		if err != nil {
 			return err
 		}
-		m.mGaugeVec.With(labelValues...).Set(i)
-	} else {
-		m.mGauge.Set(i)
+		return withNumberStr(val, func(i int64) error {
+			m.mGaugeVec.With(labelValues...).Set(i)
+			return nil
+		}, func(f float64) error {
+			m.mGaugeVec.With(labelValues...).SetFloat64(f)
+			return nil
+		})
 	}
-	return nil
+	return withNumberStr(val, func(i int64) error {
+		m.mGauge.Set(i)
+		return nil
+	}, func(f float64) error {
+		m.mGauge.SetFloat64(f)
+		return nil
+	})
 }
 
 func (m *metricProcessor) handleTimer(val string, index int, msg message.Batch) error {

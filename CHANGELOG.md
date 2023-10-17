@@ -15,6 +15,7 @@ All notable changes to this project will be documented in this file.
 - Experimental `inject_tracing_map` field added to the `nats`, `nats_jetstream` and `nats_stream` outputs.
 - New `_fail_fast` variants for the `broker` output `fan_out` and `fan_out_sequential` patterns.
 - Field `summary_quantiles_objectives` added to the `prometheus` metrics exporter.
+- The `metric` processor now supports floating point values for `counter_by` and `gauge` types.
 
 ### Fixed
 

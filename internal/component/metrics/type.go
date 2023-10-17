@@ -7,8 +7,11 @@ import (
 // StatCounter is a representation of a single counter metric stat. Interactions
 // with this stat are thread safe.
 type StatCounter interface {
-	// Incr increments a counter by an amount.
+	// Incr increments a counter by an integer amount.
 	Incr(count int64)
+
+	// IncrFloat64 increments a counter by a decimal amount.
+	IncrFloat64(count float64)
 }
 
 // StatTimer is a representation of a single timer metric stat, timing values
@@ -22,14 +25,23 @@ type StatTimer interface {
 // StatGauge is a representation of a single gauge metric stat. Interactions
 // with this stat are thread safe.
 type StatGauge interface {
-	// Set sets the value of a gauge metric.
+	// Set sets the integer value of a gauge metric.
 	Set(value int64)
 
-	// Incr increments a gauge by an amount.
+	// Incr increments with an integer value a gauge by an amount.
 	Incr(count int64)
 
-	// Decr decrements a gauge by an amount.
+	// Decr decrements a gauge by an integer amount.
 	Decr(count int64)
+
+	// SetFloat64 sets the value of a gauge metric.
+	SetFloat64(value float64)
+
+	// IncrFloat64 increments a gauge by an amount.
+	IncrFloat64(count float64)
+
+	// DecrFloat64 decrements a gauge by an amount.
+	DecrFloat64(count float64)
 }
 
 //------------------------------------------------------------------------------
