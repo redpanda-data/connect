@@ -8,12 +8,12 @@ require (
 	cloud.google.com/go/storage v1.33.0
 	cuelang.org/go v0.6.0
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.8.0
-	github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.3.1
+	github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.4.0
 	github.com/Azure/azure-sdk-for-go/sdk/data/aztables v1.0.2
-	github.com/Azure/azure-sdk-for-go/sdk/storage/azblob v1.1.0
+	github.com/Azure/azure-sdk-for-go/sdk/storage/azblob v1.2.0
 	github.com/Azure/azure-sdk-for-go/sdk/storage/azqueue v1.0.0
 	github.com/Azure/go-amqp v1.0.2
-	github.com/ClickHouse/clickhouse-go/v2 v2.14.2
+	github.com/ClickHouse/clickhouse-go/v2 v2.14.3
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/trace v1.20.0
 	github.com/IBM/sarama v1.41.2
 	github.com/Jeffail/gabs/v2 v2.7.0
@@ -24,7 +24,7 @@ require (
 	github.com/PaesslerAG/jsonpath v0.1.1
 	github.com/apache/pulsar-client-go v0.11.0
 	github.com/aws/aws-lambda-go v1.41.0
-	github.com/aws/aws-sdk-go v1.45.24
+	github.com/aws/aws-sdk-go v1.45.25
 	github.com/beanstalkd/go-beanstalk v0.2.0
 	github.com/benhoyt/goawk v1.25.0
 	github.com/bradfitz/gomemcache v0.0.0-20230124162541-5f7a7d875746
@@ -50,7 +50,7 @@ require (
 	github.com/gofrs/uuid v4.4.0+incompatible
 	github.com/golang-jwt/jwt v3.2.2+incompatible
 	github.com/golang-jwt/jwt/v4 v4.5.0
-	github.com/google/go-cmp v0.5.9
+	github.com/google/go-cmp v0.6.0
 	github.com/gorilla/handlers v1.5.1
 	github.com/gorilla/mux v1.8.0
 	github.com/gorilla/websocket v1.5.0
@@ -63,14 +63,14 @@ require (
 	github.com/itchyny/timefmt-go v0.1.5
 	github.com/jhump/protoreflect v1.15.3
 	github.com/jmespath/go-jmespath v0.4.0
-	github.com/klauspost/compress v1.17.0
+	github.com/klauspost/compress v1.17.1
 	github.com/klauspost/pgzip v1.2.6
 	github.com/lib/pq v1.10.9
 	github.com/linkedin/goavro/v2 v2.12.0
 	github.com/matoous/go-nanoid/v2 v2.0.0
 	github.com/microcosm-cc/bluemonday v1.0.25
 	github.com/mitchellh/mapstructure v1.5.0
-	github.com/nats-io/nats.go v1.30.2
+	github.com/nats-io/nats.go v1.31.0
 	github.com/nats-io/nkeys v0.4.5
 	github.com/nats-io/stan.go v0.10.4
 	github.com/nsf/jsondiff v0.0.0-20210926074059-1e845ec5d249
@@ -123,11 +123,11 @@ require (
 	go.uber.org/multierr v1.11.0
 	golang.org/x/crypto v0.14.0
 	golang.org/x/exp v0.0.0-20230725093048-515e97ebf090
-	golang.org/x/net v0.16.0
+	golang.org/x/net v0.17.0
 	golang.org/x/oauth2 v0.13.0
 	golang.org/x/sync v0.4.0
 	golang.org/x/text v0.13.0
-	google.golang.org/api v0.145.0
+	google.golang.org/api v0.147.0
 	google.golang.org/protobuf v1.31.0
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 	gopkg.in/yaml.v3 v3.0.1
@@ -135,10 +135,10 @@ require (
 )
 
 require (
-	cloud.google.com/go v0.110.7 // indirect
+	cloud.google.com/go v0.110.8 // indirect
 	cloud.google.com/go/compute v1.23.0 // indirect
 	cloud.google.com/go/compute/metadata v0.2.3 // indirect
-	cloud.google.com/go/iam v1.1.1 // indirect
+	cloud.google.com/go/iam v1.1.2 // indirect
 	cloud.google.com/go/trace v1.10.1 // indirect
 	github.com/99designs/go-keychain v0.0.0-20191008050251-8e49817e8af4 // indirect
 	github.com/99designs/keyring v1.2.2 // indirect
@@ -292,9 +292,9 @@ require (
 	golang.org/x/tools v0.13.0 // indirect
 	golang.org/x/xerrors v0.0.0-20220907171357-04be3eba64a2 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
-	google.golang.org/genproto v0.0.0-20230913181813-007df8e322eb // indirect
-	google.golang.org/genproto/googleapis/api v0.0.0-20230913181813-007df8e322eb // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20230920204549-e6e6cdab5c13 // indirect
+	google.golang.org/genproto v0.0.0-20231002182017-d307bd883b97 // indirect
+	google.golang.org/genproto/googleapis/api v0.0.0-20231002182017-d307bd883b97 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20231009173412-8bfb1ae86b6c // indirect
 	google.golang.org/grpc v1.58.2 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/jcmturner/aescts.v1 v1.0.1 // indirect

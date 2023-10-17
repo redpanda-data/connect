@@ -40,6 +40,13 @@ metrics:
   prometheus:
     use_histogram_timing: false
     histogram_buckets: []
+    summary_quantiles_objectives:
+      - quantile: 0.5
+        error: 0.05
+      - quantile: 0.9
+        error: 0.01
+      - quantile: 0.99
+        error: 0.001
     add_process_metrics: false
     add_go_metrics: false
     push_url: ""
@@ -68,12 +75,49 @@ Requires version 3.63.0 or newer
 
 ### `histogram_buckets`
 
-Timing metrics histogram buckets (in seconds). If left empty defaults to DefBuckets (https://pkg.go.dev/github.com/prometheus/client_golang/prometheus#pkg-variables)
+Timing metrics histogram buckets (in seconds). If left empty defaults to DefBuckets (https://pkg.go.dev/github.com/prometheus/client_golang/prometheus#pkg-variables). Applicable when `use_histogram_timing` is set to `true`.
 
 
 Type: `array`  
 Default: `[]`  
 Requires version 3.63.0 or newer  
+
+### `summary_quantiles_objectives`
+
+A list of timing metrics summary buckets (as quantiles). Applicable when `use_histogram_timing` is set to `false`.
+
+
+Type: `array`  
+Default: `[{"error":0.05,"quantile":0.5},{"error":0.01,"quantile":0.9},{"error":0.001,"quantile":0.99}]`  
+Requires version 4.23.0 or newer  
+
+```yml
+# Examples
+
+summary_quantiles_objectives:
+  - error: 0.05
+    quantile: 0.5
+  - error: 0.01
+    quantile: 0.9
+  - error: 0.001
+    quantile: 0.99
+```
+
+### `summary_quantiles_objectives[].quantile`
+
+Quantile value.
+
+
+Type: `float`  
+Default: `0`  
+
+### `summary_quantiles_objectives[].error`
+
+Permissible margin of error for quantile calculations. Precise calculations in a streaming context (without prior knowledge of the full dataset) can be resource-intensive. To balance accuracy with computational efficiency, an error margin is introduced. For instance, if the 90th quantile (`0.9`) is determined to be `100ms` with a 1% error margin (`0.01`), the true value will fall within the `[99ms, 101ms]` range.)
+
+
+Type: `float`  
+Default: `0`  
 
 ### `add_process_metrics`
 
@@ -151,14 +195,9 @@ Default: `""`
 
 ## Push Gateway
 
-The field `push_url` is optional and when set will trigger a push of
-metrics to a [Prometheus Push Gateway](https://prometheus.io/docs/instrumenting/pushing/)
-once Benthos shuts down. It is also possible to specify a
-`push_interval` which results in periodic pushes.
+The field `push_url` is optional and when set will trigger a push of metrics to a [Prometheus Push Gateway](https://prometheus.io/docs/instrumenting/pushing/) once Benthos shuts down. It is also possible to specify a `push_interval` which results in periodic pushes.
 
-The Push Gateway is useful for when Benthos instances are short lived. Do not
-include the "/metrics/jobs/..." path in the push URL.
+The Push Gateway is useful for when Benthos instances are short lived. Do not include the "/metrics/jobs/..." path in the push URL.
 
-If the Push Gateway requires HTTP Basic Authentication it can be configured with
-`push_basic_auth`.
+If the Push Gateway requires HTTP Basic Authentication it can be configured with `push_basic_auth`.
 

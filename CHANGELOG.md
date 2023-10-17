@@ -13,11 +13,14 @@ All notable changes to this project will be documented in this file.
 - The Bloblang method `abs` now supports integers in and integers out.
 - Experimental `extract_tracing_map` field added to the `nats`, `nats_jetstream` and `nats_stream` inputs.
 - Experimental `inject_tracing_map` field added to the `nats`, `nats_jetstream` and `nats_stream` outputs.
+- New `_fail_fast` variants for the `broker` output `fan_out` and `fan_out_sequential` patterns.
+- Field `summary_quantiles_objectives` added to the `prometheus` metrics exporter.
 
 ### Fixed
 
 - Allow labels on caches and rate limit resources when writing configs in CUE.
 - Go API: `log/slog` loggers injected into a stream builder via `StreamBuilder.SetLogger` should now respect formatting strings.
+- All Azure components now support container SAS tokens for authentication.
 
 ## 4.22.0 - 2023-10-03
 
