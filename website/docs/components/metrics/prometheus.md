@@ -75,7 +75,7 @@ Requires version 3.63.0 or newer
 
 ### `histogram_buckets`
 
-Timing metrics histogram buckets (in seconds). If left empty defaults to DefBuckets (https://pkg.go.dev/github.com/prometheus/client_golang/prometheus#pkg-variables)
+Timing metrics histogram buckets (in seconds). If left empty defaults to DefBuckets (https://pkg.go.dev/github.com/prometheus/client_golang/prometheus#pkg-variables). Applicable when `use_histogram_timing` is set to `true`.
 
 
 Type: `array`  
@@ -84,12 +84,12 @@ Requires version 3.63.0 or newer
 
 ### `summary_quantiles_objectives`
 
-Timing metrics summary buckets (as quantiles) as key with allowed error level as value.
+A list of timing metrics summary buckets (as quantiles). Applicable when `use_histogram_timing` is set to `false`.
 
 
 Type: `array`  
 Default: `[{"error":0.05,"quantile":0.5},{"error":0.01,"quantile":0.9},{"error":0.001,"quantile":0.99}]`  
-Requires version 4.22.0 or newer  
+Requires version 4.23.0 or newer  
 
 ```yml
 # Examples
@@ -109,7 +109,7 @@ Quantile value.
 
 
 Type: `float`  
-Default: `""`  
+Default: `0`  
 
 ### `summary_quantiles_objectives[].error`
 
@@ -117,7 +117,7 @@ Permissible margin of error for quantile calculations. Precise calculations in a
 
 
 Type: `float`  
-Default: `""`  
+Default: `0`  
 
 ### `add_process_metrics`
 
@@ -195,14 +195,9 @@ Default: `""`
 
 ## Push Gateway
 
-The field `push_url` is optional and when set will trigger a push of
-metrics to a [Prometheus Push Gateway](https://prometheus.io/docs/instrumenting/pushing/)
-once Benthos shuts down. It is also possible to specify a
-`push_interval` which results in periodic pushes.
+The field `push_url` is optional and when set will trigger a push of metrics to a [Prometheus Push Gateway](https://prometheus.io/docs/instrumenting/pushing/) once Benthos shuts down. It is also possible to specify a `push_interval` which results in periodic pushes.
 
-The Push Gateway is useful for when Benthos instances are short lived. Do not
-include the "/metrics/jobs/..." path in the push URL.
+The Push Gateway is useful for when Benthos instances are short lived. Do not include the "/metrics/jobs/..." path in the push URL.
 
-If the Push Gateway requires HTTP Basic Authentication it can be configured with
-`push_basic_auth`.
+If the Push Gateway requires HTTP Basic Authentication it can be configured with `push_basic_auth`.
 
