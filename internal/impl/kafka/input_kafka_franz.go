@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/tls"
 	"errors"
-	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -253,12 +252,12 @@ type msgWithRecord struct {
 
 func (f *franzKafkaReader) recordToMessage(record *kgo.Record) *msgWithRecord {
 	msg := service.NewMessage(record.Value)
-	msg.MetaSet("kafka_key", string(record.Key))
-	msg.MetaSet("kafka_topic", record.Topic)
-	msg.MetaSet("kafka_partition", strconv.Itoa(int(record.Partition)))
-	msg.MetaSet("kafka_offset", strconv.Itoa(int(record.Offset)))
-	msg.MetaSet("kafka_timestamp_unix", strconv.FormatInt(record.Timestamp.Unix(), 10))
-	msg.MetaSet("kafka_tombstone_message", strconv.FormatBool(record.Value == nil))
+	msg.MetaSetMut("kafka_key", string(record.Key))
+	msg.MetaSetMut("kafka_topic", record.Topic)
+	msg.MetaSetMut("kafka_partition", int(record.Partition))
+	msg.MetaSetMut("kafka_offset", int(record.Offset))
+	msg.MetaSetMut("kafka_timestamp_unix", record.Timestamp.Unix())
+	msg.MetaSetMut("kafka_tombstone_message", record.Value == nil)
 	if f.multiHeader {
 		// in multi header mode we gather headers so we can encode them as lists
 		headers := map[string][]any{}
@@ -272,7 +271,7 @@ func (f *franzKafkaReader) recordToMessage(record *kgo.Record) *msgWithRecord {
 		}
 	} else {
 		for _, hdr := range record.Headers {
-			msg.MetaSet(hdr.Key, string(hdr.Value))
+			msg.MetaSetMut(hdr.Key, string(hdr.Value))
 		}
 	}
 
