@@ -96,8 +96,9 @@ Unfortunately this error message will appear for a wide range of connection prob
 				).
 				Version("3.33.0"),
 			service.NewStringField(iskFieldTargetVersion).
-				Description("The version of the Kafka protocol to use. This limits the capabilities used by the client and should ideally match the version of your brokers.").
-				Default("2.0.0"),
+				Description("The version of the Kafka protocol to use. This limits the capabilities used by the client and should ideally match the version of your brokers. Defaults to the oldest supported stable version.").
+				Examples(sarama.DefaultVersion.String(), "3.1.0").
+				Optional(),
 			service.NewTLSToggledField(iskFieldTLS),
 			SaramaSASLField(),
 			service.NewStringField(iskFieldConsumerGroup).
@@ -426,12 +427,11 @@ func (k *kafkaReader) closeGroupAndConsumers() {
 func (k *kafkaReader) saramaConfigFromParsed(conf *service.ParsedConfig) (*sarama.Config, error) {
 	config := sarama.NewConfig()
 
-	targetVersionStr, err := conf.FieldString(iskFieldTargetVersion)
-	if err != nil {
-		return nil, err
-	}
-	if config.Version, err = sarama.ParseKafkaVersion(targetVersionStr); err != nil {
-		return nil, err
+	var err error
+	if targetVersionStr, _ := conf.FieldString(iskFieldTargetVersion); targetVersionStr != "" {
+		if config.Version, err = sarama.ParseKafkaVersion(targetVersionStr); err != nil {
+			return nil, err
+		}
 	}
 
 	if config.ClientID, err = conf.FieldString(iskFieldClientID); err != nil {

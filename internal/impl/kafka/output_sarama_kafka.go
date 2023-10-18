@@ -89,8 +89,9 @@ Unfortunately this error message will appear for a wide range of connection prob
 				Description("An identifier for the client connection.").
 				Advanced().Default("benthos"),
 			service.NewStringField(oskFieldTargetVersion).
-				Description("The version of the Kafka protocol to use. This limits the capabilities used by the client and should ideally match the version of your brokers.").
-				Default("2.0.0"),
+				Description("The version of the Kafka protocol to use. This limits the capabilities used by the client and should ideally match the version of your brokers. Defaults to the oldest supported stable version.").
+				Examples(sarama.DefaultVersion.String(), "3.1.0").
+				Optional(),
 			service.NewStringField(oskFieldRackID).
 				Description("A rack identifier for this client.").
 				Advanced().Default(""),
@@ -376,12 +377,11 @@ func (k *kafkaWriter) buildUserDefinedHeaders(staticHeaders map[string]string) [
 func (k *kafkaWriter) saramaConfigFromParsed(conf *service.ParsedConfig) (*sarama.Config, error) {
 	config := sarama.NewConfig()
 
-	targetVersionStr, err := conf.FieldString(oskFieldTargetVersion)
-	if err != nil {
-		return nil, err
-	}
-	if config.Version, err = sarama.ParseKafkaVersion(targetVersionStr); err != nil {
-		return nil, err
+	var err error
+	if targetVersionStr, _ := conf.FieldString(oskFieldTargetVersion); targetVersionStr != "" {
+		if config.Version, err = sarama.ParseKafkaVersion(targetVersionStr); err != nil {
+			return nil, err
+		}
 	}
 
 	if config.ClientID, err = conf.FieldString(oskFieldClientID); err != nil {
