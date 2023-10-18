@@ -31,7 +31,7 @@ input:
   kafka:
     addresses: [] # No default (required)
     topics: [] # No default (required)
-    target_version: 2.0.0
+    target_version: 2.1.0 # No default (optional)
     consumer_group: ""
     checkpoint_limit: 1024
 ```
@@ -46,7 +46,7 @@ input:
   kafka:
     addresses: [] # No default (required)
     topics: [] # No default (required)
-    target_version: 2.0.0
+    target_version: 2.1.0 # No default (optional)
     tls:
       enabled: false
       skip_cert_verify: false
@@ -178,11 +178,18 @@ topics:
 
 ### `target_version`
 
-The version of the Kafka protocol to use. This limits the capabilities used by the client and should ideally match the version of your brokers.
+The version of the Kafka protocol to use. This limits the capabilities used by the client and should ideally match the version of your brokers. Defaults to the oldest supported stable version.
 
 
 Type: `string`  
-Default: `"2.0.0"`  
+
+```yml
+# Examples
+
+target_version: 2.1.0
+
+target_version: 3.1.0
+```
 
 ### `tls`
 

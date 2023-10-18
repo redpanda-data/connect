@@ -31,7 +31,7 @@ output:
   kafka:
     addresses: [] # No default (required)
     topic: "" # No default (required)
-    target_version: 2.0.0
+    target_version: 2.1.0 # No default (optional)
     key: ""
     partitioner: fnv1a_hash
     compression: none
@@ -71,7 +71,7 @@ output:
       token_key: ""
     topic: "" # No default (required)
     client_id: benthos
-    target_version: 2.0.0
+    target_version: 2.1.0 # No default (optional)
     rack_id: ""
     key: ""
     partitioner: fnv1a_hash
@@ -398,11 +398,18 @@ Default: `"benthos"`
 
 ### `target_version`
 
-The version of the Kafka protocol to use. This limits the capabilities used by the client and should ideally match the version of your brokers.
+The version of the Kafka protocol to use. This limits the capabilities used by the client and should ideally match the version of your brokers. Defaults to the oldest supported stable version.
 
 
 Type: `string`  
-Default: `"2.0.0"`  
+
+```yml
+# Examples
+
+target_version: 2.1.0
+
+target_version: 3.1.0
+```
 
 ### `rack_id`
 
