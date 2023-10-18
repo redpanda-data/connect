@@ -93,8 +93,8 @@ github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/trace v1.20.
 github.com/GoogleCloudPlatform/opentelemetry-operations-go/internal/cloudmock v0.44.0 h1:ew7SfeajMJ3I4iXA1LERYY62fGCKO4TjVPw5QTPt47k=
 github.com/GoogleCloudPlatform/opentelemetry-operations-go/internal/resourcemapping v0.44.0 h1:GjWPDY9PUlNWwTI95L/lktUp35BLtzBoBElH314eafM=
 github.com/GoogleCloudPlatform/opentelemetry-operations-go/internal/resourcemapping v0.44.0/go.mod h1:qkFPtMouQjW5ugdHIOthiTbweVHUTqbS0Qsu55KqXks=
-github.com/IBM/sarama v1.41.2 h1:ZDBZfGPHAD4uuAtSv4U22fRZBgst0eEwGFzLj0fb85c=
-github.com/IBM/sarama v1.41.2/go.mod h1:xdpu7sd6OE1uxNdjYTSKUfY8FaKkJES9/+EyjSgiGQk=
+github.com/IBM/sarama v1.41.3 h1:MWBEJ12vHC8coMjdEXFq/6ftO6DUZnQlFYcxtOJFa7c=
+github.com/IBM/sarama v1.41.3/go.mod h1:Xxho9HkHd4K/MDUo/T/sOqwtX/17D33++E9Wib6hUdQ=
 github.com/Jeffail/gabs/v2 v2.7.0 h1:Y2edYaTcE8ZpRsR2AtmPu5xQdFDIthFG0jYhu5PY8kg=
 github.com/Jeffail/gabs/v2 v2.7.0/go.mod h1:dp5ocw1FvBBQYssgHsG7I1WYsiLRtkUaB1FEtSwvNUw=
 github.com/Jeffail/grok v1.1.0 h1:kiHmZ+0J5w/XUihRgU3DY9WIxKrNQCDjnfAb6bMLFaE=
