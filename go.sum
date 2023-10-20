@@ -863,8 +863,8 @@ github.com/tetratelabs/wazero v1.5.0/go.mod h1:0U0G41+ochRKoPKCJlh0jMg1CHkyfK8kD
 github.com/tidwall/pretty v1.0.0/go.mod h1:XNkn88O1ChpSDQmQeStsy+sBenx6DDtFZJxhVysOjyk=
 github.com/tilinna/z85 v1.0.0 h1:uqFnJBlD01dosSeo5sK1G1YGbPuwqVHqR+12OJDRjUw=
 github.com/tilinna/z85 v1.0.0/go.mod h1:EfpFU/DUY4ddEy6CRvk2l+UQNEzHbh+bqBQS+04Nkxs=
-github.com/trinodb/trino-go-client v0.312.0 h1:O7bfMFCrt8pWChx1NAJEYwTVlwKjwGDZ+ZaMHRzk0O0=
-github.com/trinodb/trino-go-client v0.312.0/go.mod h1:yI2MwYvoFWr4Xb9BCBUEbth9eXrnqGw9CtpL6ae6Wns=
+github.com/trinodb/trino-go-client v0.313.0 h1:lp8N9JKTqMuZ9LlAwLjgUtkwDnJc8fjpJmunpZ3afjk=
+github.com/trinodb/trino-go-client v0.313.0/go.mod h1:YpZf2WAClFhU+n0ZhdkmMbugYaMRM/mjywiQru0wpeQ=
 github.com/trivago/grok v1.0.0 h1:oV2ljyZT63tgXkmgEHg2U0jMqiKKuL0hkn49s6aRavQ=
 github.com/trivago/grok v1.0.0/go.mod h1:9t59xLInhrncYq9a3J7488NgiBZi5y5yC7bss+w4NHM=
 github.com/trivago/tgo v1.0.7 h1:uaWH/XIy9aWYWpjm2CU3RpcqZXmX2ysQ9/Go+d9gyrM=
