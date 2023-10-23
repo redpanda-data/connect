@@ -24,7 +24,7 @@ require (
 	github.com/PaesslerAG/jsonpath v0.1.1
 	github.com/apache/pulsar-client-go v0.11.0
 	github.com/aws/aws-lambda-go v1.41.0
-	github.com/aws/aws-sdk-go v1.45.25
+	github.com/aws/aws-sdk-go v1.46.1
 	github.com/beanstalkd/go-beanstalk v0.2.0
 	github.com/benhoyt/goawk v1.25.0
 	github.com/bradfitz/gomemcache v0.0.0-20230124162541-5f7a7d875746
@@ -33,7 +33,7 @@ require (
 	github.com/cenkalti/backoff/v4 v4.2.1
 	github.com/clbanning/mxj/v2 v2.7.0
 	github.com/colinmarc/hdfs v1.1.3
-	github.com/couchbase/gocb/v2 v2.6.4
+	github.com/couchbase/gocb/v2 v2.6.5
 	github.com/denisenkom/go-mssqldb v0.12.3
 	github.com/dgraph-io/ristretto v0.1.1
 	github.com/dop251/goja v0.0.0-20220815083517-0c74f9139fd6
@@ -41,7 +41,7 @@ require (
 	github.com/dustin/go-humanize v1.0.1
 	github.com/eclipse/paho.mqtt.golang v1.4.3
 	github.com/fatih/color v1.15.0
-	github.com/fsnotify/fsnotify v1.6.0
+	github.com/fsnotify/fsnotify v1.7.0
 	github.com/generikvault/gvalstrings v0.0.0-20180926130504-471f38f0112a
 	github.com/getsentry/sentry-go v0.25.0
 	github.com/go-faker/faker/v4 v4.2.0
@@ -63,12 +63,12 @@ require (
 	github.com/itchyny/timefmt-go v0.1.5
 	github.com/jhump/protoreflect v1.15.3
 	github.com/jmespath/go-jmespath v0.4.0
-	github.com/klauspost/compress v1.17.1
+	github.com/klauspost/compress v1.17.2
 	github.com/klauspost/pgzip v1.2.6
 	github.com/lib/pq v1.10.9
 	github.com/linkedin/goavro/v2 v2.12.0
 	github.com/matoous/go-nanoid/v2 v2.0.0
-	github.com/microcosm-cc/bluemonday v1.0.25
+	github.com/microcosm-cc/bluemonday v1.0.26
 	github.com/mitchellh/mapstructure v1.5.0
 	github.com/nats-io/nats.go v1.31.0
 	github.com/nats-io/nkeys v0.4.5
@@ -83,7 +83,7 @@ require (
 	github.com/pierrec/lz4/v4 v4.1.18
 	github.com/pkg/sftp v1.13.6
 	github.com/prometheus/client_golang v1.17.0
-	github.com/prometheus/common v0.44.0
+	github.com/prometheus/common v0.45.0
 	github.com/pusher/pusher-http-go v4.0.1+incompatible
 	github.com/quipo/dependencysolver v0.0.0-20170801134659-2b009cb4ddcc
 	github.com/rabbitmq/amqp091-go v1.9.0
@@ -102,8 +102,8 @@ require (
 	github.com/tetratelabs/wazero v1.5.0
 	github.com/tilinna/z85 v1.0.0
 	github.com/trinodb/trino-go-client v0.313.0
-	github.com/twmb/franz-go v1.15.0
-	github.com/twmb/franz-go/pkg/kmsg v1.6.1
+	github.com/twmb/franz-go v1.15.1
+	github.com/twmb/franz-go/pkg/kmsg v1.7.0
 	github.com/urfave/cli/v2 v2.25.7
 	github.com/vmihailenco/msgpack/v5 v5.4.0
 	github.com/xdg/scram v1.0.5
@@ -127,7 +127,7 @@ require (
 	golang.org/x/oauth2 v0.13.0
 	golang.org/x/sync v0.4.0
 	golang.org/x/text v0.13.0
-	google.golang.org/api v0.147.0
+	google.golang.org/api v0.148.0
 	google.golang.org/protobuf v1.31.0
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 	gopkg.in/yaml.v3 v3.0.1
@@ -178,7 +178,7 @@ require (
 	github.com/cespare/xxhash/v2 v2.2.0 // indirect
 	github.com/cockroachdb/apd/v3 v3.2.0 // indirect
 	github.com/containerd/continuity v0.3.0 // indirect
-	github.com/couchbase/gocbcore/v10 v10.2.8 // indirect
+	github.com/couchbase/gocbcore/v10 v10.2.9 // indirect
 	github.com/cpuguy83/go-md2man/v2 v2.0.2 // indirect
 	github.com/danieljoos/wincred v1.2.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
@@ -242,7 +242,7 @@ require (
 	github.com/mattn/go-colorable v0.1.13 // indirect
 	github.com/mattn/go-isatty v0.0.19 // indirect
 	github.com/mattn/go-runewidth v0.0.14 // indirect
-	github.com/matttproud/golang_protobuf_extensions v1.0.4 // indirect
+	github.com/matttproud/golang_protobuf_extensions/v2 v2.0.0 // indirect
 	github.com/minio/asm2plan9s v0.0.0-20200509001527-cdd76441f9d8 // indirect
 	github.com/minio/c2goasm v0.0.0-20190812172519-36a3d3bbc4f3 // indirect
 	github.com/moby/term v0.5.0 // indirect
@@ -294,8 +294,8 @@ require (
 	google.golang.org/appengine v1.6.7 // indirect
 	google.golang.org/genproto v0.0.0-20231002182017-d307bd883b97 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20231002182017-d307bd883b97 // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20231009173412-8bfb1ae86b6c // indirect
-	google.golang.org/grpc v1.58.2 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20231012201019-e917dd12ba7a // indirect
+	google.golang.org/grpc v1.58.3 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/jcmturner/aescts.v1 v1.0.1 // indirect
 	gopkg.in/jcmturner/dnsutils.v1 v1.0.1 // indirect
