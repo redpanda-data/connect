@@ -56,7 +56,7 @@ func ITypeOf(i any) ValueType {
 		return ValueString
 	case []byte:
 		return ValueBytes
-	case int, int8, int16, int32, int64, uint8, uint16, uint32, uint64, float64, json.Number:
+	case int, int8, int16, int32, int64, uint8, uint16, uint32, uint64, float32, float64, json.Number:
 		return ValueNumber
 	case bool:
 		return ValueBool
