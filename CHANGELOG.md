@@ -24,6 +24,7 @@ All notable changes to this project will be documented in this file.
 - All Azure components now support container SAS tokens for authentication.
 - The `kafka_franz` input now provides properly typed metadata values.
 - The `trino` driver for the various `sql_*` components no longer panics when trying to insert nulls.
+- The `http_client` input no longer sends a phantom request body on subsequent requests when an empty `payload` is specified.
 
 ## 4.22.0 - 2023-10-03
 

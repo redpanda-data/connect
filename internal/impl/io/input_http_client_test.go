@@ -51,6 +51,11 @@ func TestHTTPClientGET(t *testing.T) {
 		if exp, act := "GET", r.Method; exp != act {
 			t.Errorf("Wrong method: %v != %v", act, exp)
 		}
+
+		reqBytes, err := io.ReadAll(r.Body)
+		require.NoError(t, err)
+		assert.Empty(t, reqBytes)
+
 		atomic.AddUint32(&reqCount, 1)
 		_, _ = w.Write([]byte(inputs[index%len(inputs)]))
 		index++
