@@ -25,6 +25,7 @@ All notable changes to this project will be documented in this file.
 - The `kafka_franz` input now provides properly typed metadata values.
 - The `trino` driver for the various `sql_*` components no longer panics when trying to insert nulls.
 - The `http_client` input no longer sends a phantom request body on subsequent requests when an empty `payload` is specified.
+- The `schema_registry_encode` and `schema_registry_decode` processors should no longer fail to obtain schemas containing slashes (or other URL path unfriendly characters).
 
 ## 4.22.0 - 2023-10-03
 

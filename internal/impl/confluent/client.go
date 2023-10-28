@@ -102,9 +102,9 @@ func (c *schemaRegistryClient) GetSchemaByID(ctx context.Context, id int) (resPa
 func (c *schemaRegistryClient) GetSchemaBySubjectAndVersion(ctx context.Context, subject string, version *int) (resPayload SchemaInfo, err error) {
 	var path string
 	if version != nil {
-		path = fmt.Sprintf("/subjects/%s/versions/%v", subject, *version)
+		path = fmt.Sprintf("/subjects/%s/versions/%v", url.PathEscape(subject), *version)
 	} else {
-		path = fmt.Sprintf("/subjects/%s/versions/latest", subject)
+		path = fmt.Sprintf("/subjects/%s/versions/latest", url.PathEscape(subject))
 	}
 
 	var resCode int
