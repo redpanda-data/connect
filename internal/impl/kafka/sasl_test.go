@@ -1,33 +1,30 @@
 package kafka_test
 
 import (
+	"context"
 	"testing"
 
 	"github.com/IBM/sarama"
 	"github.com/stretchr/testify/require"
-	"gopkg.in/yaml.v3"
 
 	"github.com/benthosdev/benthos/v4/internal/impl/kafka"
-	"github.com/benthosdev/benthos/v4/internal/impl/kafka/sasl"
-	"github.com/benthosdev/benthos/v4/internal/manager"
-	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 
 	_ "github.com/benthosdev/benthos/v4/public/components/pure"
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
 func TestApplyPlaintext(t *testing.T) {
+	saslConf := service.NewConfigSpec().Field(kafka.SaramaSASLField())
+	pConf, err := saslConf.ParseYAML(`
+sasl:
+  mechanism: PLAIN
+  user: foo
+  password: bar
+`, nil)
+	require.NoError(t, err)
+
 	conf := &sarama.Config{}
-
-	saslConf := sasl.Config{
-		Mechanism: string(sarama.SASLTypePlaintext),
-		User:      "foo",
-		Password:  "bar",
-	}
-
-	err := kafka.ApplySASLConfig(saslConf, mock.NewManager(), conf)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, kafka.ApplySaramaSASLFromParsed(pConf, service.MockResources(), conf))
 
 	if !conf.Net.SASL.Enable {
 		t.Errorf("SASL not enabled")
@@ -47,17 +44,16 @@ func TestApplyPlaintext(t *testing.T) {
 }
 
 func TestApplyOAuthBearerStaticProvider(t *testing.T) {
+	saslConf := service.NewConfigSpec().Field(kafka.SaramaSASLField())
+	pConf, err := saslConf.ParseYAML(`
+sasl:
+  mechanism: OAUTHBEARER
+  access_token: foo
+`, nil)
+	require.NoError(t, err)
+
 	conf := &sarama.Config{}
-
-	saslConf := sasl.Config{
-		Mechanism:   string(sarama.SASLTypeOAuth),
-		AccessToken: "foo",
-	}
-
-	err := kafka.ApplySASLConfig(saslConf, mock.NewManager(), conf)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, kafka.ApplySaramaSASLFromParsed(pConf, service.MockResources(), conf))
 
 	if !conf.Net.SASL.Enable {
 		t.Errorf("SASL not enabled")
@@ -78,27 +74,22 @@ func TestApplyOAuthBearerStaticProvider(t *testing.T) {
 }
 
 func TestApplyOAuthBearerCacheProvider(t *testing.T) {
-	conf := &sarama.Config{}
-
-	saslConf := sasl.Config{
-		Mechanism:  string(sarama.SASLTypeOAuth),
-		TokenCache: "token_provider",
-		TokenKey:   "jwt",
-	}
-
-	resConf := manager.NewResourceConfig()
-	require.NoError(t, yaml.Unmarshal([]byte(`
-cache_resources:
-  - label: token_provider
-    memory:
-      init_values:
-        jwt: foo
-`), &resConf))
-
-	mgr, err := manager.New(resConf)
+	saslConf := service.NewConfigSpec().Field(kafka.SaramaSASLField())
+	pConf, err := saslConf.ParseYAML(`
+sasl:
+  mechanism: OAUTHBEARER
+  token_cache: token_provider
+  token_key: jwt
+`, nil)
 	require.NoError(t, err)
 
-	require.NoError(t, kafka.ApplySASLConfig(saslConf, mgr, conf))
+	mockResources := service.MockResources(service.MockResourcesOptAddCache("token_provider"))
+	require.NoError(t, mockResources.AccessCache(context.Background(), "token_provider", func(c service.Cache) {
+		require.NoError(t, c.Add(context.Background(), "jwt", []byte("foo"), nil))
+	}))
+
+	conf := &sarama.Config{}
+	require.NoError(t, kafka.ApplySaramaSASLFromParsed(pConf, mockResources, conf))
 
 	if !conf.Net.SASL.Enable {
 		t.Errorf("SASL not enabled")
@@ -118,11 +109,16 @@ cache_resources:
 	}
 
 	// Test with missing key
-	saslConf.TokenKey = "bar"
-	err = kafka.ApplySASLConfig(saslConf, mgr, conf)
-	if err != nil {
-		t.Fatal(err)
-	}
+	pConf, err = saslConf.ParseYAML(`
+sasl:
+  mechanism: OAUTHBEARER
+  token_cache: token_provider
+  token_key: bar
+`, nil)
+	require.NoError(t, err)
+
+	conf = &sarama.Config{}
+	require.NoError(t, kafka.ApplySaramaSASLFromParsed(pConf, mockResources, conf))
 
 	if _, err := conf.Net.SASL.TokenProvider.Token(); err == nil {
 		t.Errorf("Expected failure to get token")
@@ -130,14 +126,13 @@ cache_resources:
 }
 
 func TestApplyUnknownMechanism(t *testing.T) {
+	saslConf := service.NewConfigSpec().Field(kafka.SaramaSASLField())
+	pConf, err := saslConf.ParseYAML(`
+sasl:
+  mechanism: foo
+`, nil)
+	require.NoError(t, err)
+
 	conf := &sarama.Config{}
-
-	saslConf := sasl.Config{
-		Mechanism: "foo",
-	}
-
-	err := kafka.ApplySASLConfig(saslConf, mock.NewManager(), conf)
-	if err != kafka.ErrUnsupportedSASLMechanism {
-		t.Errorf("Err %v != %v", err, kafka.ErrUnsupportedSASLMechanism)
-	}
+	require.Error(t, kafka.ApplySaramaSASLFromParsed(pConf, service.MockResources(), conf))
 }

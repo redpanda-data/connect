@@ -62,6 +62,7 @@ func TestNamespacedNothing(t *testing.T) {
 	ctrTwo := nm.GetCounterVec("countertwo", "label1")
 	ctrTwo.With("value1").Incr(10)
 	ctrTwo.With("value2").Incr(11)
+	ctrTwo.With("value3").IncrFloat64(10.452)
 
 	ggeTwo := nm.GetGaugeVec("gaugetwo", "label2")
 	ggeTwo.With("value3").Set(12)
@@ -76,6 +77,7 @@ func TestNamespacedNothing(t *testing.T) {
 	assert.Contains(t, body, "\ntimerone_sum 1.3e-08")
 	assert.Contains(t, body, "\ncountertwo{label1=\"value1\"} 10")
 	assert.Contains(t, body, "\ncountertwo{label1=\"value2\"} 11")
+	assert.Contains(t, body, "\ncountertwo{label1=\"value3\"} 10.452")
 	assert.Contains(t, body, "\ngaugetwo{label2=\"value3\"} 12")
 	assert.Contains(t, body, "\ntimertwo_sum{label3=\"value4\",label4=\"value5\"} 1.3e-08")
 }

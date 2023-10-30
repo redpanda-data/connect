@@ -2,6 +2,7 @@ package bloblang
 
 import (
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -78,9 +79,10 @@ func TestParsedParams(t *testing.T) {
 		Param(NewStringParam("first").Optional()).
 		Param(NewInt64Param("second").Optional()).
 		Param(NewFloat64Param("third").Optional()).
-		Param(NewBoolParam("fourth").Optional())
+		Param(NewBoolParam("fourth").Optional()).
+		Param(NewTimestampParam("fifth").Optional())
 
-	parsedInternal, err := params.params.PopulateNameless("one", 2, 3.0, true)
+	parsedInternal, err := params.params.PopulateNameless("one", 2, 3.0, true, "2023-10-13T08:39:28+00:00")
 	require.NoError(t, err)
 
 	parsed := &ParsedParams{par: parsedInternal}
@@ -100,6 +102,10 @@ func TestParsedParams(t *testing.T) {
 	b, err := parsed.GetBool("fourth")
 	require.NoError(t, err)
 	assert.Equal(t, true, b)
+
+	ts, err := parsed.GetTimestamp("fifth")
+	require.NoError(t, err)
+	assert.Equal(t, ts.UTC(), time.Unix(1697186368, 0).UTC())
 }
 
 func TestParsedParamsOptional(t *testing.T) {
@@ -107,9 +113,10 @@ func TestParsedParamsOptional(t *testing.T) {
 		Param(NewStringParam("first").Optional()).
 		Param(NewInt64Param("second").Optional()).
 		Param(NewFloat64Param("third").Optional()).
-		Param(NewBoolParam("fourth").Optional())
+		Param(NewBoolParam("fourth").Optional()).
+		Param(NewTimestampParam("fifth").Optional())
 
-	parsedInternal, err := params.params.PopulateNameless("one", 2, 3.0, true)
+	parsedInternal, err := params.params.PopulateNameless("one", 2, 3.0, true, "2023-10-13T08:39:28+00:00")
 	require.NoError(t, err)
 
 	parsed := &ParsedParams{par: parsedInternal}
@@ -134,6 +141,11 @@ func TestParsedParamsOptional(t *testing.T) {
 	require.NotNil(t, b)
 	assert.Equal(t, true, *b)
 
+	ts, err := parsed.GetOptionalTimestamp("fifth")
+	require.NoError(t, err)
+	require.NotNil(t, ts)
+	assert.Equal(t, ts.UTC(), time.Unix(1697186368, 0).UTC())
+
 	// Without any args
 	parsedInternal, err = params.params.PopulateNameless()
 	require.NoError(t, err)
@@ -155,4 +167,8 @@ func TestParsedParamsOptional(t *testing.T) {
 	b, err = parsed.GetOptionalBool("fourth")
 	require.NoError(t, err)
 	assert.Nil(t, b)
+
+	ts, err = parsed.GetOptionalTimestamp("fifth")
+	require.NoError(t, err)
+	assert.Nil(t, ts)
 }

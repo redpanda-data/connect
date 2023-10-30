@@ -54,6 +54,7 @@ input:
     key: "" # No default (required)
     max_in_flight: 0
     timeout: 5s
+    command: blpop
 ```
 
 </TabItem>
@@ -272,5 +273,15 @@ The length of time to poll for new messages before reattempting.
 
 Type: `string`  
 Default: `"5s"`  
+
+### `command`
+
+The command used to pop elements from the Redis list
+
+
+Type: `string`  
+Default: `"blpop"`  
+Requires version 4.22.0 or newer  
+Options: `blpop`, `brpop`.
 
 

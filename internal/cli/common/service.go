@@ -38,12 +38,13 @@ func RunService(c *cli.Context, version, dateBuilt string, streamsMode bool) int
 		return 1
 	}
 
+	verLogger := logger.With("benthos_version", version)
 	if mainPath == "" {
-		logger.Infof("Running without a main config file")
+		verLogger.Infof("Running without a main config file")
 	} else if inferredMainPath {
-		logger.With("path", mainPath).Infof("Running main config from file found in a default path")
+		verLogger.With("path", mainPath).Infof("Running main config from file found in a default path")
 	} else {
-		logger.With("path", mainPath).Infof("Running main config from specified file")
+		verLogger.With("path", mainPath).Infof("Running main config from specified file")
 	}
 
 	strict := !c.Bool("chilled")

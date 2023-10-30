@@ -7,6 +7,32 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
+- The `amqp_0_9` output now supports dynamic interpolation functions within the `exchange` field.
+- Field `custom_topic_creation` added to the `kafka` output.
+- New Bloblang method `ts_sub`.
+- The Bloblang method `abs` now supports integers in and integers out.
+- Experimental `extract_tracing_map` field added to the `nats`, `nats_jetstream` and `nats_stream` inputs.
+- Experimental `inject_tracing_map` field added to the `nats`, `nats_jetstream` and `nats_stream` outputs.
+- New `_fail_fast` variants for the `broker` output `fan_out` and `fan_out_sequential` patterns.
+- Field `summary_quantiles_objectives` added to the `prometheus` metrics exporter.
+- The `metric` processor now supports floating point values for `counter_by` and `gauge` types.
+
+### Fixed
+
+- Allow labels on caches and rate limit resources when writing configs in CUE.
+- Go API: `log/slog` loggers injected into a stream builder via `StreamBuilder.SetLogger` should now respect formatting strings.
+- All Azure components now support container SAS tokens for authentication.
+- The `kafka_franz` input now provides properly typed metadata values.
+- The `trino` driver for the various `sql_*` components no longer panics when trying to insert nulls.
+- The `http_client` input no longer sends a phantom request body on subsequent requests when an empty `payload` is specified.
+- The `schema_registry_encode` and `schema_registry_decode` processors should no longer fail to obtain schemas containing slashes (or other URL path unfriendly characters).
+- The `parse_log` processor no longer extracts structured fields that are incompatible with Bloblang mappings.
+- Fixed occurrences where Bloblang would fail to recognise `float32` values.
+
+## 4.22.0 - 2023-10-03
+
+### Added
+
 - The `-e/--env-file` cli flag for importing environment variable files now supports glob patterns.
 - Environment variables imported via `-e/--env-file` cli flags now support triple quoted strings.
 - New experimental `counter` function added to Bloblang. It is recommended that this function, although experimental, should be used instead of the now deprecated `count` function.
@@ -14,6 +40,7 @@ All notable changes to this project will be documented in this file.
 - Field `metadata` added to the `nats` and `nats_jetstream` outputs.
 - The `cached` processor field `ttl` now supports interpolation functions.
 - Many new properties fields have been added to the `amqp_0_9` output.
+- Field `command` added to the `redis_list` input and output.
 
 ### Fixed
 
@@ -21,6 +48,8 @@ All notable changes to this project will be documented in this file.
 - Fixed an issue where a `redis_streams` input that is rejected from read attempts enters a reconnect loop without backoff.
 - The `sqs` input now periodically refreshes the visibility timeout of messages that take a significant amount of time to process.
 - The `ts_add_iso8601` and `ts_sub_iso8601` bloblang methods now return the correct error for certain invalid durations.
+- The `discord` output no longer ignores structured message fields containing underscores.
+- Fixed an issue where the `kafka_franz` input was ignoring batching periods and stalling.
 
 ### Changed
 

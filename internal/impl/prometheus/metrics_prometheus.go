@@ -29,19 +29,26 @@ Host endpoints (` + "`/metrics` and `/stats`" + `) for Prometheus scraping.`,
 		Footnotes: `
 ## Push Gateway
 
-The field ` + "`push_url`" + ` is optional and when set will trigger a push of
-metrics to a [Prometheus Push Gateway](https://prometheus.io/docs/instrumenting/pushing/)
-once Benthos shuts down. It is also possible to specify a
-` + "`push_interval`" + ` which results in periodic pushes.
+The field ` + "`push_url`" + ` is optional and when set will trigger a push of metrics to a [Prometheus Push Gateway](https://prometheus.io/docs/instrumenting/pushing/) once Benthos shuts down. It is also possible to specify a ` + "`push_interval`" + ` which results in periodic pushes.
 
-The Push Gateway is useful for when Benthos instances are short lived. Do not
-include the "/metrics/jobs/..." path in the push URL.
+The Push Gateway is useful for when Benthos instances are short lived. Do not include the "/metrics/jobs/..." path in the push URL.
 
-If the Push Gateway requires HTTP Basic Authentication it can be configured with
-` + "`push_basic_auth`.",
+If the Push Gateway requires HTTP Basic Authentication it can be configured with ` + "`push_basic_auth`.",
 		Config: docs.FieldComponent().WithChildren(
 			docs.FieldBool("use_histogram_timing", "Whether to export timing metrics as a histogram, if `false` a summary is used instead. When exporting histogram timings the delta values are converted from nanoseconds into seconds in order to better fit within bucket definitions. For more information on histograms and summaries refer to: https://prometheus.io/docs/practices/histograms/.").HasDefault(false).Advanced().AtVersion("3.63.0"),
-			docs.FieldFloat("histogram_buckets", "Timing metrics histogram buckets (in seconds). If left empty defaults to DefBuckets (https://pkg.go.dev/github.com/prometheus/client_golang/prometheus#pkg-variables)").Array().HasDefault([]any{}).Advanced().AtVersion("3.63.0"),
+			docs.FieldFloat("histogram_buckets", "Timing metrics histogram buckets (in seconds). If left empty defaults to DefBuckets (https://pkg.go.dev/github.com/prometheus/client_golang/prometheus#pkg-variables). Applicable when `use_histogram_timing` is set to `true`.").Array().HasDefault([]any{}).Advanced().AtVersion("3.63.0"),
+			docs.FieldObject("summary_quantiles_objectives", "A list of timing metrics summary buckets (as quantiles). Applicable when `use_histogram_timing` is set to `false`.", []map[string]float64{
+				{"quantile": 0.5, "error": 0.05},
+				{"quantile": 0.9, "error": 0.01},
+				{"quantile": 0.99, "error": 0.001},
+			}).Array().WithChildren(
+				docs.FieldFloat("quantile", "Quantile value.").HasDefault(0.0),
+				docs.FieldFloat("error", "Permissible margin of error for quantile calculations. Precise calculations in a streaming context (without prior knowledge of the full dataset) can be resource-intensive. To balance accuracy with computational efficiency, an error margin is introduced. For instance, if the 90th quantile (`0.9`) is determined to be `100ms` with a 1% error margin (`0.01`), the true value will fall within the `[99ms, 101ms]` range.)").HasDefault(0.0),
+			).Advanced().HasDefault([]map[string]float64{
+				{"quantile": 0.5, "error": 0.05},
+				{"quantile": 0.9, "error": 0.01},
+				{"quantile": 0.99, "error": 0.001},
+			}).AtVersion(("4.23.0")),
 			docs.FieldBool("add_process_metrics", "Whether to export process metrics such as CPU and memory usage in addition to Benthos metrics.").Advanced().HasDefault(false),
 			docs.FieldBool("add_go_metrics", "Whether to export Go runtime metrics such as GC pauses in addition to Benthos metrics.").Advanced().HasDefault(false),
 			docs.FieldURL("push_url", "An optional [Push Gateway URL](#push-gateway) to push metrics to.").Advanced().HasDefault(""),
@@ -66,12 +73,24 @@ func (p *promGauge) Incr(count int64) {
 	p.ctr.Add(float64(count))
 }
 
+func (p *promGauge) IncrFloat64(count float64) {
+	p.ctr.Add(count)
+}
+
 func (p *promGauge) Decr(count int64) {
 	p.ctr.Add(float64(-count))
 }
 
+func (p *promGauge) DecrFloat64(count float64) {
+	p.ctr.Add(-count)
+}
+
 func (p *promGauge) Set(value int64) {
 	p.ctr.Set(float64(value))
+}
+
+func (p *promGauge) SetFloat64(value float64) {
+	p.ctr.Set(value)
 }
 
 type promCounter struct {
@@ -80,6 +99,10 @@ type promCounter struct {
 
 func (p *promCounter) Incr(count int64) {
 	p.ctr.Add(float64(count))
+}
+
+func (p *promCounter) IncrFloat64(count float64) {
+	p.ctr.Add(count)
 }
 
 type promTiming struct {
@@ -154,6 +177,8 @@ type prometheusMetrics struct {
 	useHistogramTiming bool
 	histogramBuckets   []float64
 
+	summaryQuantilesObj []metrics.PrometheusSummaryQuantilesConfig
+
 	pusher *push.Pusher
 	reg    *prometheus.Registry
 
@@ -168,20 +193,37 @@ type prometheusMetrics struct {
 func newPrometheus(config metrics.Config, nm bundle.NewManagement) (metrics.Type, error) {
 	promConf := config.Prometheus
 	p := &prometheusMetrics{
-		log:                nm.Logger(),
-		running:            1,
-		closedChan:         make(chan struct{}),
-		useHistogramTiming: promConf.UseHistogramTiming,
-		histogramBuckets:   promConf.HistogramBuckets,
-		reg:                prometheus.NewRegistry(),
-		counters:           map[string]*promCounterVec{},
-		gauges:             map[string]*promGaugeVec{},
-		timers:             map[string]*promTimingVec{},
-		timersHist:         map[string]*promTimingHistVec{},
+		log:                 nm.Logger(),
+		running:             1,
+		closedChan:          make(chan struct{}),
+		useHistogramTiming:  promConf.UseHistogramTiming,
+		histogramBuckets:    promConf.HistogramBuckets,
+		summaryQuantilesObj: promConf.SummaryQuantilesObj,
+		reg:                 prometheus.NewRegistry(),
+		counters:            map[string]*promCounterVec{},
+		gauges:              map[string]*promGaugeVec{},
+		timers:              map[string]*promTimingVec{},
+		timersHist:          map[string]*promTimingHistVec{},
 	}
 
 	if len(p.histogramBuckets) == 0 {
 		p.histogramBuckets = prometheus.DefBuckets
+	}
+
+	if len(p.summaryQuantilesObj) == 0 {
+		p.summaryQuantilesObj = []metrics.PrometheusSummaryQuantilesConfig{
+			{
+				Quantile: 0.5,
+				Error:    0.05,
+			},
+			{
+				Quantile: 0.9,
+				Error:    0.01,
+			},
+			{
+				Quantile: 0.99,
+				Error:    0.001,
+			}}
 	}
 
 	if promConf.AddProcessMetrics {
@@ -235,6 +277,14 @@ func (p *prometheusMetrics) HandlerFunc() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		promhttp.HandlerFor(p.reg, promhttp.HandlerOpts{}).ServeHTTP(w, r)
 	}
+}
+
+func (p *prometheusMetrics) GetQuantilesAsFloatMap() map[float64]float64 {
+	resultFloatMap := make(map[float64]float64)
+	for _, config := range p.summaryQuantilesObj {
+		resultFloatMap[config.Quantile] = config.Error
+	}
+	return resultFloatMap
 }
 
 func (p *prometheusMetrics) GetCounter(path string) metrics.StatCounter {
@@ -299,7 +349,7 @@ func (p *prometheusMetrics) GetTimerVec(path string, labelNames ...string) metri
 		tmr := prometheus.NewSummaryVec(prometheus.SummaryOpts{
 			Name:       path,
 			Help:       "Benthos Timing metric",
-			Objectives: map[float64]float64{0.5: 0.05, 0.9: 0.01, 0.99: 0.001},
+			Objectives: p.GetQuantilesAsFloatMap(),
 		}, labelNames)
 		p.reg.MustRegister(tmr)
 

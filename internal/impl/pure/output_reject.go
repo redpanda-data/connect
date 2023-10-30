@@ -46,7 +46,7 @@ output:
       - check: '!errored()'
         output:
           amqp_1:
-            url: amqps://guest:guest@localhost:5672/
+            urls: [ amqps://guest:guest@localhost:5672/ ]
             target_address: queue:/the_foos
 
       - output:

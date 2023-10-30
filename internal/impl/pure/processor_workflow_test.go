@@ -967,7 +967,7 @@ workflow:
 	defer done()
 
 	go func() {
-		require.NoError(t, strm.Run(tCtx))
+		assert.NoError(t, strm.Run(tCtx))
 	}()
 	require.NoError(t, inFunc(tCtx, service.NewMessage([]byte(`{"id":"hello world","content":"waddup"}`))))
 	require.NoError(t, strm.Stop(tCtx))

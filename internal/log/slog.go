@@ -1,6 +1,9 @@
+//go:build go1.21
+
 package log
 
 import (
+	"fmt"
 	"os"
 
 	"log/slog"
@@ -32,28 +35,28 @@ func (l *logHandler) With(keyValues ...any) Modular {
 }
 
 func (l *logHandler) Fatalf(format string, v ...any) {
-	l.slog.Error(format, v...)
+	l.slog.Error(fmt.Sprintf(format, v...))
 	os.Exit(1)
 }
 
 func (l *logHandler) Errorf(format string, v ...any) {
-	l.slog.Error(format, v...)
+	l.slog.Error(fmt.Sprintf(format, v...))
 }
 
 func (l *logHandler) Warnf(format string, v ...any) {
-	l.slog.Warn(format, v...)
+	l.slog.Warn(fmt.Sprintf(format, v...))
 }
 
 func (l *logHandler) Infof(format string, v ...any) {
-	l.slog.Info(format, v...)
+	l.slog.Info(fmt.Sprintf(format, v...))
 }
 
 func (l *logHandler) Debugf(format string, v ...any) {
-	l.slog.Debug(format, v...)
+	l.slog.Debug(fmt.Sprintf(format, v...))
 }
 
 func (l *logHandler) Tracef(format string, v ...any) {
-	l.slog.Debug(format, v...)
+	l.slog.Debug(fmt.Sprintf(format, v...))
 }
 
 func (l *logHandler) Fatalln(message string) {

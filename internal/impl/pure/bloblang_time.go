@@ -589,4 +589,32 @@ The output format is defined by showing how the reference time, defined to be Mo
 	if err := bloblang.RegisterMethodV2("format_timestamp_unix_nano", formatTSUnixNanoSpecDep, formatTSUnixNanoCtor); err != nil {
 		panic(err)
 	}
+
+	tsSubSpec := bloblang.NewPluginSpec().
+		Beta().
+		Static().
+		Category(query.MethodCategoryTime).
+		Description(`Returns the difference in nanoseconds between the target timestamp (t1) and the timestamp provided as a parameter (t2). The `+"[`ts_parse`](#ts_parse)"+` method can be used in order to parse different timestamp formats.`).
+		Param(bloblang.NewTimestampParam("t2").Description("The second timestamp to be subtracted from the method target.")).
+		Version("4.23.0").
+		Example("Use the `.abs()` method in order to calculate an absolute duration between two timestamps.",
+			`root.between = this.started_at.ts_sub("2020-08-14T05:54:23Z").abs()`,
+			[2]string{
+				`{"started_at":"2020-08-13T05:54:23Z"}`,
+				`{"between":86400000000000}`,
+			})
+
+	tsSubCtor := func(args *bloblang.ParsedParams) (bloblang.Method, error) {
+		t2, err := args.GetTimestamp("t2")
+		if err != nil {
+			return nil, err
+		}
+		return bloblang.TimestampMethod(func(t1 time.Time) (any, error) {
+			return t1.Sub(t2).Nanoseconds(), nil
+		}), nil
+	}
+
+	if err := bloblang.RegisterMethodV2("ts_sub", tsSubSpec, tsSubCtor); err != nil {
+		panic(err)
+	}
 }

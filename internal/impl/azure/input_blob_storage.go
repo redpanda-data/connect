@@ -38,11 +38,16 @@ type bsiConfig struct {
 }
 
 func bsiConfigFromParsed(pConf *service.ParsedConfig) (conf bsiConfig, err error) {
-	if conf.client, err = blobStorageClientFromParsed(pConf); err != nil {
-		return
-	}
 	if conf.Container, err = pConf.FieldString(bsiFieldContainer); err != nil {
 		return
+	}
+	var containerSASToken bool
+	if conf.client, containerSASToken, err = blobStorageClientFromParsed(pConf, conf.Container); err != nil {
+		return
+	}
+	if containerSASToken {
+		// when using a container SAS token, the container is already implicit
+		conf.Container = ""
 	}
 	if conf.Prefix, err = pConf.FieldString(bsiFieldPrefix); err != nil {
 		return

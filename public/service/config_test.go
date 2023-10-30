@@ -354,7 +354,8 @@ b: this is ${! json( } an invalid interp string
 	iConf, err := parsedConfig.FieldInterpolatedString("a")
 	require.NoError(t, err)
 
-	res := iConf.String(NewMessage([]byte("hello world")))
+	res, err := iConf.TryString(NewMessage([]byte("hello world")))
+	require.NoError(t, err)
 	assert.Equal(t, "foo hello world bar", res)
 }
 
@@ -382,10 +383,12 @@ b:
 	iConf, err := parsedConfig.FieldInterpolatedStringMap("a")
 	require.NoError(t, err)
 
-	res := iConf["c"].String(NewMessage([]byte("hello world")))
+	res, err := iConf["c"].TryString(NewMessage([]byte("hello world")))
+	require.NoError(t, err)
 	assert.Equal(t, "foo hello world bar", res)
 
-	res = iConf["d"].String(NewMessage([]byte("hello world")))
+	res, err = iConf["d"].TryString(NewMessage([]byte("hello world")))
+	require.NoError(t, err)
 	assert.Equal(t, "xyzzy hello world baz", res)
 }
 

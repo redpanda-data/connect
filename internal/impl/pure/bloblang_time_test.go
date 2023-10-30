@@ -177,6 +177,11 @@ func TestTimestampMethods(t *testing.T) {
 			mapping: `root = 1677097265.ts_sub_iso8601("P1Y").ts_unix()`,
 			output:  int64(1645561265),
 		},
+		{
+			name:    "check ts_sub",
+			mapping: `root = "2023-10-12T14:59:10.12345+03:00".ts_sub("2023-10-02T02:55:03.6789Z")`,
+			output:  int64(896646444550000),
+		},
 	}
 
 	for _, test := range tests {

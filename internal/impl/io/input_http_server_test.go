@@ -203,8 +203,9 @@ func getFreePort(t testing.TB) int {
 	listener, err := net.ListenTCP("tcp", addr)
 	require.NoError(t, err)
 
-	defer listener.Close()
-	return listener.Addr().(*net.TCPAddr).Port
+	port := listener.Addr().(*net.TCPAddr).Port
+	require.NoError(t, listener.Close())
+	return port
 }
 
 func TestHTTPServerLifecycle(t *testing.T) {
@@ -520,12 +521,17 @@ http_server:
 
 	dummyData := []byte("a bunch of jolly leprechauns await")
 	go func() {
-		req, cerr := http.NewRequest("POST", serverURL.String(), bytes.NewReader(dummyData))
-		require.NoError(t, cerr)
-		req.Header.Set("Content-Type", "text/plain")
-		resp, cerr := http.DefaultClient.Do(req)
-		require.NoError(t, cerr)
-		defer resp.Body.Close()
+		assert.Eventually(t, func() (succeeded bool) {
+			req, cerr := http.NewRequest("POST", serverURL.String(), bytes.NewReader(dummyData))
+			require.NoError(t, cerr)
+			req.Header.Set("Content-Type", "text/plain")
+
+			if resp, cerr := http.DefaultClient.Do(req); cerr == nil {
+				succeeded = true
+				_ = resp.Body.Close()
+			}
+			return
+		}, time.Second, 50*time.Millisecond)
 	}()
 
 	readNextMsg := func() (message.Batch, error) {
@@ -582,12 +588,17 @@ http_server:
 
 	dummyData := []byte("a bunch of jolly leprechauns await")
 	go func() {
-		req, cerr := http.NewRequest("POST", serverURL.String(), bytes.NewReader(dummyData))
-		require.NoError(t, cerr)
-		req.Header.Set("Content-Type", "text/plain")
-		resp, cerr := http.DefaultClient.Do(req)
-		require.NoError(t, cerr)
-		defer resp.Body.Close()
+		require.Eventually(t, func() (succeeded bool) {
+			req, cerr := http.NewRequest("POST", serverURL.String(), bytes.NewReader(dummyData))
+			require.NoError(t, cerr)
+			req.Header.Set("Content-Type", "text/plain")
+
+			if resp, cerr := http.DefaultClient.Do(req); cerr == nil {
+				succeeded = true
+				_ = resp.Body.Close()
+			}
+			return
+		}, time.Second, 50*time.Millisecond)
 	}()
 
 	readNextMsg := func() (message.Batch, error) {
@@ -1306,16 +1317,21 @@ http_server:
 		assert.NoError(t, server.WaitForClose(tCtx))
 	}()
 
-	req, cerr := http.NewRequest("OPTIONS", fmt.Sprintf("http://localhost:%v/test/foo1/bar1", freePort), http.NoBody)
-	require.NoError(t, cerr)
+	var resp *http.Response
+	require.Eventually(t, func() (succeeded bool) {
+		req, cerr := http.NewRequest("OPTIONS", fmt.Sprintf("http://localhost:%v/test/foo1/bar1", freePort), http.NoBody)
+		require.NoError(t, cerr)
 
-	req.Header.Add("Origin", "foo")
-	req.Header.Add("Access-Control-Request-Method", "POST")
-	req.Header.Set("Content-Type", "text/plain")
+		req.Header.Add("Origin", "foo")
+		req.Header.Add("Access-Control-Request-Method", "POST")
+		req.Header.Set("Content-Type", "text/plain")
 
-	resp, cerr := http.DefaultClient.Do(req)
-	require.NoError(t, cerr)
-	resp.Body.Close()
+		if resp, cerr = http.DefaultClient.Do(req); cerr == nil {
+			succeeded = true
+			resp.Body.Close()
+		}
+		return
+	}, time.Second, 50*time.Millisecond)
 
 	assert.Equal(t, "200 OK", resp.Status)
 	assert.Equal(t, "foo", resp.Header.Get("Access-Control-Allow-Origin"))

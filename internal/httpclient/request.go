@@ -92,6 +92,9 @@ func RequestCreatorFromOldConfig(conf OldConfig, mgr bundle.NewManagement, opts 
 // reference messages for headers and metadata, and use the expression for
 // creating a body.
 func WithExplicitBody(e *field.Expression) RequestOpt {
+	if e == nil {
+		e = field.NewExpression(field.StaticResolver(""))
+	}
 	return func(r *RequestCreator) {
 		r.explicitBody = e
 	}

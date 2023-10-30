@@ -11,7 +11,6 @@ import (
 	"go.opentelemetry.io/otel/trace"
 
 	"github.com/benthosdev/benthos/v4/internal/batch"
-	"github.com/benthosdev/benthos/v4/internal/bloblang/mapping"
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/internal/log"
@@ -47,8 +46,6 @@ type AsyncWriter struct {
 	maxInflight int
 	writer      AsyncSink
 
-	injectTracingMap *mapping.Executor
-
 	log    log.Modular
 	stats  metrics.Type
 	tracer trace.TracerProvider
@@ -73,12 +70,6 @@ func NewAsyncWriter(typeStr string, maxInflight int, w AsyncSink, mgr component.
 	return aWriter, nil
 }
 
-// SetInjectTracingMap sets a mapping to be used for injecting tracing events
-// into messages.
-func (w *AsyncWriter) SetInjectTracingMap(exec *mapping.Executor) {
-	w.injectTracingMap = exec
-}
-
 //------------------------------------------------------------------------------
 
 func (w *AsyncWriter) latencyMeasuringWrite(ctx context.Context, msg message.Batch) (latencyNs int64, err error) {
@@ -88,30 +79,6 @@ func (w *AsyncWriter) latencyMeasuringWrite(ctx context.Context, msg message.Bat
 		latencyNs = 1
 	}
 	return latencyNs, err
-}
-
-func (w *AsyncWriter) injectSpans(msg message.Batch, spans []*tracing.Span) {
-	if w.injectTracingMap == nil || msg.Len() > len(spans) {
-		return
-	}
-
-	for i := 0; i < msg.Len(); i++ {
-		spanMapGeneric, err := spans[i].TextMap()
-		if err != nil {
-			w.log.Warnf("Failed to inject span: %v", err)
-			continue
-		}
-
-		spanPart := message.NewPart(nil)
-		spanPart.SetStructuredMut(spanMapGeneric)
-
-		spanMsg := message.Batch{spanPart}
-		if tmpMsg, err := w.injectTracingMap.MapOnto(msg.Get(i), 0, spanMsg); err != nil {
-			w.log.Warnf("Failed to inject span: %v", err)
-		} else {
-			msg[i] = tmpMsg
-		}
-	}
 }
 
 // loop is an internal loop that brokers incoming messages to output pipe.
@@ -231,7 +198,6 @@ func (w *AsyncWriter) loop() {
 
 			w.log.Tracef("Attempting to write %v messages to '%v'.\n", ts.Payload.Len(), w.typeStr)
 			_, spans := tracing.WithChildSpans(w.tracer, traceName, ts.Payload)
-			w.injectSpans(ts.Payload, spans)
 
 			latency, err := w.latencyMeasuringWrite(closeLeisureCtx, ts.Payload)
 

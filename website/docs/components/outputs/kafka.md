@@ -29,13 +29,13 @@ The kafka output type writes a batch of messages to Kafka brokers and waits for 
 output:
   label: ""
   kafka:
-    addresses: []
-    topic: ""
-    target_version: 2.0.0
+    addresses: [] # No default (required)
+    topic: "" # No default (required)
+    target_version: 1.0.0 # No default (optional)
     key: ""
     partitioner: fnv1a_hash
     compression: none
-    static_headers: {}
+    static_headers: {} # No default (optional)
     metadata:
       exclude_prefixes: []
     max_in_flight: 64
@@ -54,7 +54,7 @@ output:
 output:
   label: ""
   kafka:
-    addresses: []
+    addresses: [] # No default (required)
     tls:
       enabled: false
       skip_cert_verify: false
@@ -69,18 +69,22 @@ output:
       access_token: ""
       token_cache: ""
       token_key: ""
-    topic: ""
+    topic: "" # No default (required)
     client_id: benthos
-    target_version: 2.0.0
+    target_version: 1.0.0 # No default (optional)
     rack_id: ""
     key: ""
     partitioner: fnv1a_hash
     partition: ""
+    custom_topic_creation:
+      enabled: false
+      partitions: -1
+      replication_factor: -1
     compression: none
-    static_headers: {}
+    static_headers: {} # No default (optional)
     metadata:
       exclude_prefixes: []
-    inject_tracing_map: ""
+    inject_tracing_map: meta = @.merge(this) # No default (optional)
     max_in_flight: 64
     ack_replicas: false
     max_msg_bytes: 1000000
@@ -91,7 +95,7 @@ output:
       byte_size: 0
       period: ""
       check: ""
-      processors: []
+      processors: [] # No default (optional)
     max_retries: 0
     backoff:
       initial_interval: 3s
@@ -142,7 +146,6 @@ A list of broker addresses to connect to. If an item of the list contains commas
 
 
 Type: `array`  
-Default: `[]`  
 
 ```yml
 # Examples
@@ -315,11 +318,11 @@ Default: `"none"`
 
 | Option | Summary |
 |---|---|
-| `none` | Default, no SASL authentication. |
-| `PLAIN` | Plain text authentication. NOTE: When using plain text auth it is extremely likely that you'll also need to [enable TLS](#tlsenabled). |
 | `OAUTHBEARER` | OAuth Bearer based authentication. |
+| `PLAIN` | Plain text authentication. NOTE: When using plain text auth it is extremely likely that you'll also need to [enable TLS](#tlsenabled). |
 | `SCRAM-SHA-256` | Authentication using the SCRAM-SHA-256 mechanism. |
 | `SCRAM-SHA-512` | Authentication using the SCRAM-SHA-512 mechanism. |
+| `none` | Default, no SASL authentication. |
 
 
 ### `sasl.user`
@@ -384,7 +387,6 @@ This field supports [interpolation functions](/docs/configuration/interpolation#
 
 
 Type: `string`  
-Default: `""`  
 
 ### `client_id`
 
@@ -396,11 +398,18 @@ Default: `"benthos"`
 
 ### `target_version`
 
-The version of the Kafka protocol to use. This limits the capabilities used by the client and should ideally match the version of your brokers.
+The version of the Kafka protocol to use. This limits the capabilities used by the client and should ideally match the version of your brokers. Defaults to the oldest supported stable version.
 
 
 Type: `string`  
-Default: `"2.0.0"`  
+
+```yml
+# Examples
+
+target_version: 1.0.0
+
+target_version: 3.1.0
+```
 
 ### `rack_id`
 
@@ -437,6 +446,37 @@ This field supports [interpolation functions](/docs/configuration/interpolation#
 Type: `string`  
 Default: `""`  
 
+### `custom_topic_creation`
+
+If enabled, topics will be created with the specified number of partitions and replication factor if they do not already exist.
+
+
+Type: `object`  
+
+### `custom_topic_creation.enabled`
+
+Whether to enable custom topic creation.
+
+
+Type: `bool`  
+Default: `false`  
+
+### `custom_topic_creation.partitions`
+
+The number of partitions to create for new topics. Leave at -1 to use the broker configured default. Must be >= 1.
+
+
+Type: `int`  
+Default: `-1`  
+
+### `custom_topic_creation.replication_factor`
+
+The replication factor to use for new topics. Leave at -1 to use the broker configured default. Must be an odd number, and less then or equal to the number of brokers.
+
+
+Type: `int`  
+Default: `-1`  
+
 ### `compression`
 
 The compression algorithm to use.
@@ -452,7 +492,6 @@ An optional map of static headers that should be added to messages in addition t
 
 
 Type: `object`  
-Default: `{}`  
 
 ```yml
 # Examples
@@ -483,20 +522,19 @@ EXPERIMENTAL: A [Bloblang mapping](/docs/guides/bloblang/about) used to inject a
 
 
 Type: `string`  
-Default: `""`  
 Requires version 3.45.0 or newer  
 
 ```yml
 # Examples
 
-inject_tracing_map: meta = meta().merge(this)
+inject_tracing_map: meta = @.merge(this)
 
 inject_tracing_map: root.meta.span = this
 ```
 
 ### `max_in_flight`
 
-The maximum number of parallel message batches to have in flight at any given time.
+The maximum number of messages to have in flight at a given time. Increase this to improve throughput.
 
 
 Type: `int`  
@@ -613,7 +651,6 @@ A list of [processors](/docs/components/processors/about) to apply to a batch as
 
 
 Type: `array`  
-Default: `[]`  
 
 ```yml
 # Examples
@@ -654,20 +691,44 @@ The initial period to wait between retry attempts.
 Type: `string`  
 Default: `"3s"`  
 
+```yml
+# Examples
+
+initial_interval: 50ms
+
+initial_interval: 1s
+```
+
 ### `backoff.max_interval`
 
-The maximum period to wait between retry attempts.
+The maximum period to wait between retry attempts
 
 
 Type: `string`  
 Default: `"10s"`  
 
+```yml
+# Examples
+
+max_interval: 5s
+
+max_interval: 1m
+```
+
 ### `backoff.max_elapsed_time`
 
-The maximum period to wait before retry attempts are abandoned. If zero then no limit is used.
+The maximum overall period of time to spend on retry attempts before the request is aborted. Setting this value to a zeroed duration (such as `0s`) will result in unbounded retries.
 
 
 Type: `string`  
 Default: `"30s"`  
+
+```yml
+# Examples
+
+max_elapsed_time: 1m
+
+max_elapsed_time: 1h
+```
 
 

@@ -11,9 +11,7 @@ import (
 
 	"github.com/IBM/sarama"
 
-	"github.com/benthosdev/benthos/v4/internal/batch/policy"
-	"github.com/benthosdev/benthos/v4/internal/batch/policy/batchconfig"
-	"github.com/benthosdev/benthos/v4/internal/message"
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
 type closureOffsetTracker struct {
@@ -31,24 +29,23 @@ func (k *kafkaReader) runPartitionConsumer(
 	partition int32,
 	consumer sarama.PartitionConsumer,
 ) {
-	k.log.Debugf("Consuming messages from topic '%v' partition '%v'\n", topic, partition)
-	defer k.log.Debugf("Stopped consuming messages from topic '%v' partition '%v'\n", topic, partition)
+	k.mgr.Logger().Debugf("Consuming messages from topic '%v' partition '%v'\n", topic, partition)
+	defer k.mgr.Logger().Debugf("Stopped consuming messages from topic '%v' partition '%v'\n", topic, partition)
 	defer wg.Done()
 
-	batchPolicy, err := policy.New(k.conf.Batching, k.mgr.IntoPath("kafka", "batching"))
+	batchPolicy, err := k.batching.NewBatcher(k.mgr)
 	if err != nil {
-		k.log.Errorf("Failed to initialise batch policy: %v, falling back to no policy.\n", err)
-		conf := batchconfig.NewConfig()
-		conf.Count = 1
-		if batchPolicy, err = policy.New(conf, k.mgr.IntoPath("kafka", "batching")); err != nil {
+		k.mgr.Logger().Errorf("Failed to initialise batch policy: %v, falling back to no policy.\n", err)
+		conf := service.BatchPolicy{Count: 1}
+		if batchPolicy, err = conf.NewBatcher(k.mgr); err != nil {
 			panic(err)
 		}
 	}
 	defer batchPolicy.Close(context.Background())
 
 	var nextTimedBatchChan <-chan time.Time
-	var flushBatch func(context.Context, chan<- asyncMessage, message.Batch, int64) bool
-	if k.conf.CheckpointLimit > 1 {
+	var flushBatch func(context.Context, chan<- asyncMessage, service.MessageBatch, int64) bool
+	if k.checkpointLimit > 1 {
 		flushBatch = k.asyncCheckpointer(topic, partition)
 	} else {
 		flushBatch = k.syncCheckpointer(topic, partition)
@@ -59,28 +56,38 @@ func (k *kafkaReader) runPartitionConsumer(
 partMsgLoop:
 	for {
 		if nextTimedBatchChan == nil {
-			if tNext := batchPolicy.UntilNext(); tNext >= 0 {
+			if tNext, exists := batchPolicy.UntilNext(); exists {
 				nextTimedBatchChan = time.After(tNext)
 			}
 		}
 		select {
 		case <-nextTimedBatchChan:
 			nextTimedBatchChan = nil
-			if !flushBatch(ctx, k.msgChan, batchPolicy.Flush(ctx), latestOffset+1) {
+			flushedBatch, err := batchPolicy.Flush(ctx)
+			if err != nil {
+				k.mgr.Logger().Debugf("Timed flush batch error: %w", err)
+				break partMsgLoop
+			}
+			if !flushBatch(ctx, k.msgChan, flushedBatch, latestOffset+1) {
 				break partMsgLoop
 			}
 		case data, open := <-consumer.Messages():
 			if !open {
 				break partMsgLoop
 			}
-			k.log.Tracef("Received message from topic %v partition %v\n", topic, partition)
+			k.mgr.Logger().Tracef("Received message from topic %v partition %v\n", topic, partition)
 
 			latestOffset = data.Offset
-			part := dataToPart(consumer.HighWaterMarkOffset(), data, k.conf.MultiHeader)
+			part := dataToPart(consumer.HighWaterMarkOffset(), data, k.multiHeader)
 
 			if batchPolicy.Add(part) {
 				nextTimedBatchChan = nil
-				if !flushBatch(ctx, k.msgChan, batchPolicy.Flush(ctx), latestOffset+1) {
+				flushedBatch, err := batchPolicy.Flush(ctx)
+				if err != nil {
+					k.mgr.Logger().Debugf("Flush batch error: %w", err)
+					break partMsgLoop
+				}
+				if !flushBatch(ctx, k.msgChan, flushedBatch, latestOffset+1) {
 					break partMsgLoop
 				}
 			}
@@ -89,7 +96,7 @@ partMsgLoop:
 				break partMsgLoop
 			}
 			if err != nil && !strings.HasSuffix(err.Error(), "EOF") {
-				k.log.Errorf("Kafka message recv error: %v\n", err)
+				k.mgr.Logger().Errorf("Kafka message recv error: %v\n", err)
 			}
 		case <-ctx.Done():
 			break partMsgLoop
@@ -148,8 +155,8 @@ func (k *kafkaReader) connectExplicitTopics(ctx context.Context, config *sarama.
 	if client, err = sarama.NewClient(k.addresses, config); err != nil {
 		return err
 	}
-	if len(k.conf.ConsumerGroup) > 0 {
-		if coordinator, err = client.Coordinator(k.conf.ConsumerGroup); err != nil {
+	if len(k.consumerGroup) > 0 {
+		if coordinator, err = client.Coordinator(k.consumerGroup); err != nil {
 			return err
 		}
 	}
@@ -159,7 +166,7 @@ func (k *kafkaReader) connectExplicitTopics(ctx context.Context, config *sarama.
 
 	offsetGetReq := sarama.OffsetFetchRequest{
 		Version:       k.offsetVersion(),
-		ConsumerGroup: k.conf.ConsumerGroup,
+		ConsumerGroup: k.consumerGroup,
 	}
 	for topic, parts := range k.topicPartitions {
 		for _, part := range parts {
@@ -180,7 +187,7 @@ func (k *kafkaReader) connectExplicitTopics(ctx context.Context, config *sarama.
 		offsetRes = &sarama.OffsetFetchResponse{}
 	}
 
-	offsetPutReq := k.offsetPartitionPutRequest(k.conf.ConsumerGroup)
+	offsetPutReq := k.offsetPartitionPutRequest(k.consumerGroup)
 	offsetTracker := &closureOffsetTracker{
 		// Note: We don't need to wrap this call in a mutex lock because the
 		// checkpointer that uses it already does this, but it's not
@@ -203,7 +210,7 @@ func (k *kafkaReader) connectExplicitTopics(ctx context.Context, config *sarama.
 			partition := partition
 
 			offset := sarama.OffsetNewest
-			if k.conf.StartFromOldest {
+			if k.startFromOldest {
 				offset = sarama.OffsetOldest
 			}
 			if block := offsetRes.GetBlock(topic, partition); block != nil {
@@ -212,21 +219,21 @@ func (k *kafkaReader) connectExplicitTopics(ctx context.Context, config *sarama.
 						offset = block.Offset
 					}
 				} else {
-					k.log.Debugf("Failed to acquire offset for topic %v partition %v: %v\n", topic, partition, block.Err)
+					k.mgr.Logger().Debugf("Failed to acquire offset for topic %v partition %v: %v\n", topic, partition, block.Err)
 				}
 			} else {
-				k.log.Debugf("Failed to acquire offset for topic %v partition %v\n", topic, partition)
+				k.mgr.Logger().Debugf("Failed to acquire offset for topic %v partition %v\n", topic, partition)
 			}
 
 			var partConsumer sarama.PartitionConsumer
 			if partConsumer, err = consumer.ConsumePartition(topic, partition, offset); err != nil {
 				// TODO: Actually verify the error was caused by a non-existent offset
-				if k.conf.StartFromOldest {
+				if k.startFromOldest {
 					offset = sarama.OffsetOldest
-					k.log.Warnf("Failed to read from stored offset, restarting from oldest offset: %v\n", err)
+					k.mgr.Logger().Warnf("Failed to read from stored offset, restarting from oldest offset: %v\n", err)
 				} else {
 					offset = sarama.OffsetNewest
-					k.log.Warnf("Failed to read from stored offset, restarting from newest offset: %v\n", err)
+					k.mgr.Logger().Warnf("Failed to read from stored offset, restarting from newest offset: %v\n", err)
 				}
 				if partConsumer, err = consumer.ConsumePartition(topic, partition, offset); err != nil {
 					doneFn()
@@ -239,7 +246,7 @@ func (k *kafkaReader) connectExplicitTopics(ctx context.Context, config *sarama.
 			go k.runPartitionConsumer(ctx, &consumerWG, topic, partition, partConsumer)
 		}
 
-		k.log.Infof("Consuming kafka topic %v, partitions %v from brokers %s as group '%v'\n", topic, partitions, k.addresses, k.conf.ConsumerGroup)
+		k.mgr.Logger().Infof("Consuming kafka topic %v, partitions %v from brokers %s as group '%v'\n", topic, partitions, k.addresses, k.consumerGroup)
 	}
 
 	doneCtx, doneFn := context.WithCancel(context.Background())
@@ -254,11 +261,11 @@ func (k *kafkaReader) connectExplicitTopics(ctx context.Context, config *sarama.
 			}
 			k.cMut.Lock()
 			putReq := offsetPutReq
-			offsetPutReq = k.offsetPartitionPutRequest(k.conf.ConsumerGroup)
+			offsetPutReq = k.offsetPartitionPutRequest(k.consumerGroup)
 			k.cMut.Unlock()
 			if coordinator != nil {
 				if _, err := coordinator.CommitOffset(putReq); err != nil {
-					k.log.Errorf("Failed to commit offsets: %v\n", err)
+					k.mgr.Logger().Errorf("Failed to commit offsets: %v\n", err)
 				}
 			}
 		}

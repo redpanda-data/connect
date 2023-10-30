@@ -1,3 +1,5 @@
+//go:build go1.21
+
 package log
 
 import (
@@ -63,4 +65,21 @@ func TestSlogToBenthosLoggerAdapterMapKV(t *testing.T) {
 	} {
 		assert.Contains(t, bufStr, exp)
 	}
+}
+
+func TestSlogMessageFormatting(t *testing.T) {
+	var buf bytes.Buffer
+	h := slog.NewTextHandler(&buf, &slog.HandlerOptions{ReplaceAttr: clearTimeAttr, Level: slog.LevelDebug})
+	s := slog.New(h)
+
+	var logger Modular = NewBenthosLogAdapter(s)
+	require.NotNil(t, logger)
+
+	logger.Debugf("Hello %s %d", "World", 1)
+	logger.Infof("Hello %s %d", "World", 2)
+	logger.Warnf("Hello %s %d", "World", 3)
+	logger.Errorf("Hello %s %d", "World", 4)
+
+	expected := "time=\"\" level=DEBUG msg=\"Hello World 1\"\ntime=\"\" level=INFO msg=\"Hello World 2\"\ntime=\"\" level=WARN msg=\"Hello World 3\"\ntime=\"\" level=ERROR msg=\"Hello World 4\"\n"
+	assert.Equal(t, expected, buf.String())
 }

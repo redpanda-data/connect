@@ -3,11 +3,13 @@ package nats
 import (
 	"context"
 	"crypto/tls"
+	"fmt"
 	"strings"
 	"sync"
 
 	"github.com/nats-io/nats.go"
 
+	"github.com/benthosdev/benthos/v4/internal/component/output/span"
 	"github.com/benthosdev/benthos/v4/internal/impl/nats/auth"
 	"github.com/benthosdev/benthos/v4/internal/shutdown"
 	"github.com/benthosdev/benthos/v4/public/service"
@@ -43,7 +45,8 @@ func natsJetStreamOutputConfig() *service.ConfigSpec {
 			Description("The maximum number of messages to have in flight at a given time. Increase this to improve throughput.").
 			Default(1024)).
 		Field(service.NewTLSToggledField("tls")).
-		Field(service.NewInternalField(auth.FieldSpec()))
+		Field(service.NewInternalField(auth.FieldSpec())).
+		Field(span.InjectTracingSpanMappingDocs().Version(tracingVersion))
 }
 
 func init() {
@@ -55,7 +58,11 @@ func init() {
 				return nil, 0, err
 			}
 			w, err := newJetStreamWriterFromConfig(conf, mgr)
-			return w, maxInFlight, err
+			if err != nil {
+				return nil, 0, err
+			}
+			spanOutput, err := span.NewOutput("nats_jetstream", conf, w, mgr)
+			return spanOutput, maxInFlight, err
 		})
 	if err != nil {
 		panic(err)
@@ -193,14 +200,25 @@ func (j *jetStreamOutput) Write(ctx context.Context, msg *service.Message) error
 		return service.ErrNotConnected
 	}
 
-	jsmsg := nats.NewMsg(j.subjectStr.String(msg))
+	subject, err := j.subjectStr.TryString(msg)
+	if err != nil {
+		return fmt.Errorf(`failed string interpolation on field "subject": %w`, err)
+	}
+
+	jsmsg := nats.NewMsg(subject)
 	msgBytes, err := msg.AsBytes()
 	if err != nil {
 		return err
 	}
+
 	jsmsg.Data = msgBytes
 	for k, v := range j.headers {
-		jsmsg.Header.Add(k, v.String(msg))
+		value, err := v.TryString(msg)
+		if err != nil {
+			return fmt.Errorf(`failed string interpolation on header %q: %w`, k, err)
+		}
+
+		jsmsg.Header.Add(k, value)
 	}
 	_ = j.metaFilter.Walk(msg, func(key, value string) error {
 		jsmsg.Header.Add(key, value)

@@ -140,7 +140,7 @@ func TestProtobufReferences(t *testing.T) {
 syntax = "proto3";
 package things;
 
-import "stuffs.proto";
+import "stuffs/thething.proto";
 
 message foo {
   float a = 1;
@@ -168,13 +168,13 @@ message bar {
 				"schemaType": "PROTOBUF",
 				"references": []any{
 					map[string]any{
-						"name":    "stuffs.proto",
-						"subject": "stuffs.proto",
+						"name":    "stuffs/thething.proto",
+						"subject": "stuffs/thething.proto",
 						"version": 10,
 					},
 				},
 			}), nil
-		case "/subjects/stuffs.proto/versions/10", "/schemas/ids/2":
+		case "/subjects/stuffs%2Fthething.proto/versions/10", "/schemas/ids/2":
 			return mustJBytes(t, map[string]any{
 				"id":         2,
 				"version":    10,

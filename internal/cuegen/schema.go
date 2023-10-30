@@ -71,6 +71,7 @@ func GenerateSchema(sch schema.Full) ([]byte, error) {
 		&componentOptions{
 			collectionIdent:  identCacheCollection,
 			disjunctionIdent: identCacheDisjunction,
+			canLabel:         true,
 		},
 	)
 	if err != nil {
@@ -83,6 +84,7 @@ func GenerateSchema(sch schema.Full) ([]byte, error) {
 		&componentOptions{
 			collectionIdent:  identRateLimitCollection,
 			disjunctionIdent: identRateLimitDisjunction,
+			canLabel:         true,
 		},
 	)
 	if err != nil {

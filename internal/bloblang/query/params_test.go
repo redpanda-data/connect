@@ -2,6 +2,7 @@ package query
 
 import (
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -84,12 +85,13 @@ func TestParamsNameless(t *testing.T) {
 				Add(ParamFloat("fourth", "")).
 				Add(ParamQuery("fifth", "", false)).
 				Add(ParamArray("sixth", "")).
-				Add(ParamObject("seventh", "")),
+				Add(ParamObject("seventh", "")).
+				Add(ParamTimestamp("eighth", "")),
 			input: []any{
-				"foo", 5, false, 6.4, NewFieldFunction("nah"), []any{"one", "two"}, map[string]any{"a": "aaa", "b": "bbb"},
+				"foo", 5, false, 6.4, NewFieldFunction("nah"), []any{"one", "two"}, map[string]any{"a": "aaa", "b": "bbb"}, 1697185186,
 			},
 			output: []any{
-				"foo", int64(5), false, 6.4, NewFieldFunction("nah"), []any{"one", "two"}, map[string]any{"a": "aaa", "b": "bbb"},
+				"foo", int64(5), false, 6.4, NewFieldFunction("nah"), []any{"one", "two"}, map[string]any{"a": "aaa", "b": "bbb"}, time.Unix(1697185186, 0),
 			},
 		},
 		{
@@ -97,10 +99,11 @@ func TestParamsNameless(t *testing.T) {
 			params: NewParams().
 				Add(ParamString("first", "")).
 				Add(ParamInt64("second", "").Default(5)).
-				Add(ParamBool("third", "").Default(true)),
+				Add(ParamBool("third", "").Default(true)).
+				Add(ParamTimestamp("fourth", "").Default(1697185186)),
 			input: []any{"bar"},
 			output: []any{
-				"bar", int64(5), true,
+				"bar", int64(5), true, time.Unix(1697185186, 0),
 			},
 		},
 		{
@@ -108,10 +111,11 @@ func TestParamsNameless(t *testing.T) {
 			params: NewParams().
 				Add(ParamString("first", "")).
 				Add(ParamInt64("second", "").Optional()).
-				Add(ParamBool("third", "").Optional()),
+				Add(ParamBool("third", "").Optional()).
+				Add(ParamTimestamp("fourth", "").Optional()),
 			input: []any{"bar"},
 			output: []any{
-				"bar", nil, nil,
+				"bar", nil, nil, nil,
 			},
 		},
 		{
@@ -149,6 +153,15 @@ func TestParamsNameless(t *testing.T) {
 				Add(ParamBool("third", "").Default(true)),
 			input:       []any{"foo", true, 10},
 			errContains: "field second: expected number",
+		},
+		{
+			name: "bad timestamp arg",
+			params: NewParams().
+				Add(ParamString("first", "")).
+				Add(ParamTimestamp("second", "").Default(1697185186)).
+				Add(ParamBool("third", "").Default(true)),
+			input:       []any{"foo", true, 10},
+			errContains: "field second: expected number or string",
 		},
 		{
 			name: "bad query type",

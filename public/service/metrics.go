@@ -56,7 +56,7 @@ type MetricCounter struct {
 	cv metrics.StatCounterVec
 }
 
-// Incr increments a counter metric by an amount, the number of label values
+// Incr increments a counter metric by an integer amount, the number of label values
 // must match the number and order of labels specified when the counter was
 // created.
 func (c *MetricCounter) Incr(count int64, labelValues ...string) {
@@ -64,6 +64,16 @@ func (c *MetricCounter) Incr(count int64, labelValues ...string) {
 		return
 	}
 	c.cv.With(labelValues...).Incr(count)
+}
+
+// IncrFloat64 increments a counter metric by a decimal amount, the number of label values
+// must match the number and order of labels specified when the counter was
+// created.
+func (c *MetricCounter) IncrFloat64(count float64, labelValues ...string) {
+	if c == nil {
+		return
+	}
+	c.cv.With(labelValues...).IncrFloat64(count)
 }
 
 // MetricTimer represents a timing metric of a given name and labels.
@@ -97,6 +107,17 @@ func (g *MetricGauge) Set(value int64, labelValues ...string) {
 	g.gv.With(labelValues...).Set(value)
 }
 
+// SetFloat64 sets a gauge metric to a float64 value. Not all metrics exporters
+// support floats, in which case the value will be cast to an int64. The number
+// of label values must match the number and order of labels specified when the
+// gauge was created.
+func (g *MetricGauge) SetFloat64(value float64, labelValues ...string) {
+	if g == nil {
+		return
+	}
+	g.gv.With(labelValues...).SetFloat64(value)
+}
+
 //------------------------------------------------------------------------------
 
 // MetricsExporter is an interface implemented by Benthos metrics exporters.
@@ -125,10 +146,16 @@ type MetricsExporterGaugeCtor func(labelValues ...string) MetricsExporterGauge
 // MetricsExporterCounter represents a counter metric of a given name and
 // labels.
 type MetricsExporterCounter interface {
-	// Incr increments a counter metric by an amount, the number of label values
+	// Incr increments a counter metric by an integer amount, the number of label values
 	// must match the number and order of labels specified when the counter was
 	// created.
 	Incr(count int64)
+
+	// IncrFloat64 increments a counter metric by a decimal amount, the number of label values
+	// must match the number and order of labels specified when the counter was
+	// created.
+	// TODO: V5 Add this (or replace the int based method)
+	// IncrFloat64(count float64)
 }
 
 // MetricsExporterTimer represents a timing metric of a given name and labels.
@@ -143,9 +170,14 @@ type MetricsExporterTimer interface {
 
 // MetricsExporterGauge represents a gauge metric of a given name and labels.
 type MetricsExporterGauge interface {
-	// Set a gauge metric, the number of label values must match the number and
+	// Set sets a gauge metric with an int64 value, the number of label values must match the number and
 	// order of labels specified when the gauge was created.
 	Set(value int64)
+
+	// SetFloat64 sets a gauge metric with a float64 value, the number of label values must match the number and
+	// order of labels specified when the gauge was created.
+	// TODO: V5 Add this (or replace the int based method)
+	// SetFloat64(value float64)
 }
 
 //------------------------------------------------------------------------------
@@ -160,6 +192,8 @@ func newAirGapMetrics(m MetricsExporter) metrics.Type {
 }
 
 type airGapGauge struct {
+	// TODO: This is a hack and we don't really use incr/decr internally in our
+	// metrics. Can we ditch it?
 	v         int64
 	airGapped MetricsExporterGauge
 }
@@ -169,9 +203,28 @@ func (a *airGapGauge) Incr(by int64) {
 	a.airGapped.Set(value)
 }
 
+func (a *airGapGauge) IncrFloat64(count float64) {
+	a.Incr(int64(count))
+}
+
+func (a *airGapGauge) SetFloat64(value float64) {
+	atomic.StoreInt64(&a.v, int64(value))
+	if fer, ok := a.airGapped.(interface {
+		SetFloat64(float64)
+	}); ok {
+		fer.SetFloat64(value)
+	} else {
+		a.airGapped.Set(int64(value))
+	}
+}
+
 func (a *airGapGauge) Decr(by int64) {
 	value := atomic.AddInt64(&a.v, -by)
 	a.airGapped.Set(value)
+}
+
+func (a *airGapGauge) DecrFloat64(count float64) {
+	a.Decr(int64(count))
 }
 
 func (a *airGapGauge) Set(value int64) {
@@ -185,6 +238,16 @@ type airGapCounter struct {
 
 func (a *airGapCounter) Incr(count int64) {
 	a.airGapped.Incr(count)
+}
+
+func (a *airGapCounter) IncrFloat64(count float64) {
+	if fer, ok := a.airGapped.(interface {
+		IncrFloat64(float64)
+	}); ok {
+		fer.IncrFloat64(count)
+	} else {
+		a.airGapped.Incr(int64(count))
+	}
 }
 
 type airGapTiming struct {

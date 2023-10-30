@@ -1,6 +1,7 @@
 package pure
 
 import (
+	"math"
 	"strings"
 
 	"github.com/benthosdev/benthos/v4/internal/bloblang/query"
@@ -136,6 +137,37 @@ root.out = this.in.float32()
 		func(args *bloblang.ParsedParams) (bloblang.Method, error) {
 			return func(input any) (any, error) {
 				return query.IToFloat32(input)
+			}, nil
+		}); err != nil {
+		panic(err)
+	}
+
+	if err := bloblang.RegisterMethodV2("abs",
+		bloblang.NewPluginSpec().
+			Category(query.MethodCategoryNumbers).
+			Description(`Returns the absolute value of an int64 or float64 number. As a special case, when an integer is provided that is the minimum value it is converted to the maximum value.`).
+			Example("", `
+root.outs = this.ins.map_each(ele -> ele.abs())
+`,
+				[2]string{`{"ins":[9,-18,1.23,-4.56]}`, `{"outs":[9,18,1.23,4.56]}`},
+			),
+		func(args *bloblang.ParsedParams) (bloblang.Method, error) {
+			return func(input any) (any, error) {
+				sanitInput := query.ISanitize(input)
+				switch v := sanitInput.(type) {
+				case float64:
+					return math.Abs(v), nil
+				case int64:
+					switch {
+					case v >= 0:
+						return v, nil
+					case v == query.MinInt:
+						return query.MaxInt, nil
+					default:
+						return -v, nil
+					}
+				}
+				return nil, query.NewTypeError(input, query.ValueNumber, query.ValueInt)
 			}, nil
 		}); err != nil {
 		panic(err)

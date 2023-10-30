@@ -13,6 +13,7 @@ import (
 	"github.com/nats-io/stan.go"
 
 	"github.com/benthosdev/benthos/v4/internal/component"
+	"github.com/benthosdev/benthos/v4/internal/component/input/span"
 	"github.com/benthosdev/benthos/v4/internal/impl/nats/auth"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
@@ -151,6 +152,7 @@ You can access these metadata fields using [function interpolation](/docs/config
 				Default("30s"),
 			service.NewTLSToggledField(siFieldTLS),
 			service.NewInternalField(auth.FieldSpec()),
+			span.ExtractTracingSpanMappingDocs().Version(tracingVersion),
 		)
 }
 
@@ -162,7 +164,11 @@ func init() {
 			if err != nil {
 				return nil, err
 			}
-			return newNATSStreamReader(pConf, mgr)
+			input, err := newNATSStreamReader(pConf, mgr)
+			if err != nil {
+				return nil, err
+			}
+			return span.NewInput("nats_stream", conf, input, mgr)
 		})
 	if err != nil {
 		panic(err)

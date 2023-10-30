@@ -33,6 +33,19 @@ func (f fauxOldMessage) Len() int {
 	return 1
 }
 
+// Static returns the underlying contents of the interpolated string only if it
+// contains zero dynamic expressions, and is therefore static, otherwise an
+// empty string is returned. A second boolean parameter is also returned
+// indicating whether the string was static, helping to distinguish between a
+// static empty string versus a non-static string.
+func (i *InterpolatedString) Static() (string, bool) {
+	if i.expr.NumDynamicExpressions() > 0 {
+		return "", false
+	}
+	s, _ := i.expr.String(0, nil)
+	return s, true
+}
+
 // TryString resolves the interpolated field for a given message as a string,
 // returns an error if any interpolation functions fail.
 func (i *InterpolatedString) TryString(m *Message) (string, error) {
