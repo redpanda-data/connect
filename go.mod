@@ -68,7 +68,7 @@ require (
 	github.com/lib/pq v1.10.9
 	github.com/linkedin/goavro/v2 v2.12.0
 	github.com/matoous/go-nanoid/v2 v2.0.0
-	github.com/microcosm-cc/bluemonday v1.0.26
+	github.com/microcosm-cc/bluemonday v1.0.25
 	github.com/mitchellh/mapstructure v1.5.0
 	github.com/nats-io/nats.go v1.31.0
 	github.com/nats-io/nkeys v0.4.5
