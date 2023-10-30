@@ -1155,6 +1155,34 @@ root.new_value = [10,this.value].min()
 # Out: {"new_value":10}
 ```
 
+### `pow`
+
+Returns the number raised to the specified exponent.
+
+#### Parameters
+
+**`exponent`** &lt;float&gt; The exponent you want to raise to the power of.  
+
+#### Examples
+
+
+```coffee
+root.new_value = this.value.pow(2)
+
+# In:  {"value":2}
+# Out: {"new_value":4}
+
+# In:  {"value":5}
+# Out: {"new_value":25}
+```
+
+```coffee
+root.new_value = this.value * 10.pow(-2)
+
+# In:  {"value":2}
+# Out: {"new_value":0.02}
+```
+
 ### `round`
 
 Rounds numbers to the nearest integer, rounding half away from zero. If the resulting value fits within a 64-bit integer then that is returned, otherwise a new floating point number is returned.

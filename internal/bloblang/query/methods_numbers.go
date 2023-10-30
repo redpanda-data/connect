@@ -231,3 +231,39 @@ var _ = registerSimpleMethod(
 		}), nil
 	},
 )
+
+var _ = registerSimpleMethod(
+	NewMethodSpec(
+		"pow", "Returns the number raised to the specified exponent.",
+	).InCategory(
+		MethodCategoryNumbers,
+		"",
+		NewExampleSpec("",
+			`root.new_value = this.value.pow(2)`,
+			`{"value":2}`,
+			`{"new_value":4}`,
+			`{"value":5}`,
+			`{"new_value":25}`,
+		),
+		NewExampleSpec("",
+			`root.new_value = this.value * 10.pow(-2)`,
+			`{"value":2}`,
+			`{"new_value":0.02}`,
+		),
+	).Param(ParamFloat("exponent", "The exponent you want to raise to the power of.")),
+	func(args *ParsedParams) (simpleMethod, error) {
+		return numberMethod(func(f *float64, i *int64, ui *uint64) (any, error) {
+			v, err := args.FieldFloat("exponent")
+			if err != nil {
+				return nil, err
+			}
+			if f != nil {
+				return math.Pow(*f, v), nil
+			}
+			if i != nil {
+				return math.Pow(float64(*i), v), nil
+			}
+			return math.Pow(float64(*ui), v), nil
+		}), nil
+	},
+)
