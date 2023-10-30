@@ -56,7 +56,7 @@ func ITypeOf(i any) ValueType {
 		return ValueString
 	case []byte:
 		return ValueBytes
-	case int, int8, int16, int32, int64, uint8, uint16, uint32, uint64, float64, json.Number:
+	case int, int8, int16, int32, int64, uint8, uint16, uint32, uint64, float32, float64, json.Number:
 		return ValueNumber
 	case bool:
 		return ValueBool
@@ -181,6 +181,8 @@ func IGetInt(v any) (int64, error) {
 	case uint32:
 		return int64(t), nil
 	case uint64:
+		return int64(t), nil
+	case float32:
 		return int64(t), nil
 	case float64:
 		return int64(t), nil
@@ -560,6 +562,8 @@ func IToInt(v any) (int64, error) {
 			return 0, errors.New("unsigned integer value is too large to be cast as a signed integer")
 		}
 		return int64(t), nil
+	case float32:
+		return IToInt(float64(t))
 	case float64:
 		if math.IsInf(t, 0) {
 			return 0, errors.New("cannot convert +/-INF to an integer")
