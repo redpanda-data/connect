@@ -5,6 +5,8 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 4.23.0 - 2023-10-30
+
 ### Added
 
 - The `amqp_0_9` output now supports dynamic interpolation functions within the `exchange` field.
