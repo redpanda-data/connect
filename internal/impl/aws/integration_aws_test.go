@@ -26,7 +26,9 @@ func createBucketQueue(s3Port, sqsPort, id string) error {
 	bucket := "bucket-" + id
 	sqsQueue := "queue-" + id
 	sqsEndpoint := fmt.Sprintf("http://localhost:%v", sqsPort)
-	sqsQueueURL := fmt.Sprintf("%v/queue/%v", sqsEndpoint, sqsQueue)
+	// sqsQueueURL := fmt.Sprintf("%v/queue/%v", sqsEndpoint, sqsQueue)
+	// https://github.com/localstack/localstack/issues/9185
+	sqsQueueURL := fmt.Sprintf("%v/000000000000/%v", sqsEndpoint, sqsQueue)
 
 	var s3Client *s3.S3
 	if s3Port != "" {
@@ -51,7 +53,7 @@ func createBucketQueue(s3Port, sqsPort, id string) error {
 		if _, err := s3Client.CreateBucket(&s3.CreateBucketInput{
 			Bucket: &bucket,
 		}); err != nil {
-			return err
+			return fmt.Errorf("create bucket: %w", err)
 		}
 	}
 
@@ -59,7 +61,7 @@ func createBucketQueue(s3Port, sqsPort, id string) error {
 		if _, err := sqsClient.CreateQueue(&sqs.CreateQueueInput{
 			QueueName: aws.String(sqsQueue),
 		}); err != nil {
-			return err
+			return fmt.Errorf("create queue: %w", err)
 		}
 	}
 
@@ -67,7 +69,7 @@ func createBucketQueue(s3Port, sqsPort, id string) error {
 		if err := s3Client.WaitUntilBucketExists(&s3.HeadBucketInput{
 			Bucket: &bucket,
 		}); err != nil {
-			return err
+			return fmt.Errorf("wait for bucket: %w", err)
 		}
 	}
 
@@ -78,7 +80,7 @@ func createBucketQueue(s3Port, sqsPort, id string) error {
 			AttributeNames: []*string{aws.String("All")},
 		})
 		if err != nil {
-			return err
+			return fmt.Errorf("get queue attributes: %w", err)
 		}
 		sqsQueueArn = res.Attributes["QueueArn"]
 	}
@@ -97,7 +99,7 @@ func createBucketQueue(s3Port, sqsPort, id string) error {
 				},
 			},
 		}); err != nil {
-			return err
+			return fmt.Errorf("put bucket notification config: %w", err)
 		}
 	}
 	return nil
