@@ -141,7 +141,15 @@ func parserRFC5424(bestEffort bool) parserFormat {
 			resMap["msgid"] = *res.MsgID
 		}
 		if res.StructuredData != nil {
-			resMap["structureddata"] = *res.StructuredData
+			structuredData := make(map[string]any, len(*res.StructuredData))
+			for key, dataItem := range *res.StructuredData {
+				elements := make(map[string]any, len(dataItem))
+				for itemKey, itemVal := range dataItem {
+					elements[itemKey] = itemVal
+				}
+				structuredData[key] = elements
+			}
+			resMap["structureddata"] = structuredData
 		}
 
 		return resMap, nil
