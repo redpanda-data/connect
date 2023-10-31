@@ -18,6 +18,7 @@ type Config struct {
 	Generate     GenerateConfig     `json:"generate" yaml:"generate"`
 	Inproc       InprocConfig       `json:"inproc" yaml:"inproc"`
 	MQTT         MQTTConfig         `json:"mqtt" yaml:"mqtt"`
+	MQTTv5       MQTTConfig         `json:"mqtt5" yaml:"mqtt5"`
 	Nanomsg      NanomsgConfig      `json:"nanomsg" yaml:"nanomsg"`
 	NSQ          NSQConfig          `json:"nsq" yaml:"nsq"`
 	Plugin       any                `json:"plugin,omitempty" yaml:"plugin,omitempty"`
@@ -44,6 +45,7 @@ func NewConfig() Config {
 		Generate:     NewGenerateConfig(),
 		Inproc:       NewInprocConfig(),
 		MQTT:         NewMQTTConfig(),
+		MQTTv5:       NewMQTTConfig(),
 		Nanomsg:      NewNanomsgConfig(),
 		NSQ:          NewNSQConfig(),
 		Plugin:       nil,

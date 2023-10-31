@@ -29,6 +29,7 @@ import (
 	_ "github.com/benthosdev/benthos/v4/public/components/memcached"
 	_ "github.com/benthosdev/benthos/v4/public/components/mongodb"
 	_ "github.com/benthosdev/benthos/v4/public/components/mqtt"
+	_ "github.com/benthosdev/benthos/v4/public/components/mqtt5"
 	_ "github.com/benthosdev/benthos/v4/public/components/msgpack"
 	_ "github.com/benthosdev/benthos/v4/public/components/nanomsg"
 	_ "github.com/benthosdev/benthos/v4/public/components/nats"

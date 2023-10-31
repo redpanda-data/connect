@@ -22,6 +22,7 @@ type Config struct {
 	Fallback     TryConfig          `json:"fallback" yaml:"fallback"`
 	Inproc       string             `json:"inproc" yaml:"inproc"`
 	MQTT         MQTTConfig         `json:"mqtt" yaml:"mqtt"`
+	MQTTv5       MQTTConfig         `json:"mqtt5" yaml:"mqtt5"`
 	Nanomsg      NanomsgConfig      `json:"nanomsg" yaml:"nanomsg"`
 	NSQ          NSQConfig          `json:"nsq" yaml:"nsq"`
 	Plugin       any                `json:"plugin,omitempty" yaml:"plugin,omitempty"`
