@@ -73,7 +73,7 @@ func testRawProcessors(name string, fn func(t *testing.T, insertProc, selectProc
 	return func(t *testing.T, driver, dsn, table string) {
 		t.Run(name, func(t *testing.T) {
 			valuesStr := `(?, ?, ?)`
-			if driver == "postgres" || driver == "clickhouse" {
+			if driver == "postgres" || driver == "pgx" || driver == "clickhouse" {
 				valuesStr = `($1, $2, $3)`
 			} else if driver == "oracle" {
 				valuesStr = `(:1, :2, :3)`
@@ -87,7 +87,7 @@ exec_only: true
 `, driver, dsn, table)
 
 			placeholderStr := "?"
-			if driver == "postgres" || driver == "clickhouse" {
+			if driver == "postgres" || driver == "pgx" || driver == "clickhouse" {
 				placeholderStr = "$1"
 			} else if driver == "oracle" {
 				placeholderStr = ":1"
@@ -124,7 +124,7 @@ func testRawDeprecatedProcessors(name string, fn func(t *testing.T, insertProc, 
 	return func(t *testing.T, driver, dsn, table string) {
 		t.Run(name, func(t *testing.T) {
 			valuesStr := `(?, ?, ?)`
-			if driver == "postgres" || driver == "clickhouse" {
+			if driver == "postgres" || driver == "pgx" || driver == "clickhouse" {
 				valuesStr = `($1, $2, $3)`
 			} else if driver == "oracle" {
 				valuesStr = `(:1, :2, :3)`
@@ -137,7 +137,7 @@ args_mapping: 'root = [ this.foo, this.bar.floor(), this.baz ]'
 `, driver, dsn, table)
 
 			placeholderStr := "?"
-			if driver == "postgres" || driver == "clickhouse" {
+			if driver == "postgres" || driver == "pgx" || driver == "clickhouse" {
 				placeholderStr = "$1"
 			} else if driver == "oracle" {
 				placeholderStr = ":1"
@@ -445,7 +445,7 @@ func testBatchInputOutputRaw(t *testing.T, driver, dsn, table string) {
 		)
 
 		valuesStr := `(?, ?, ?)`
-		if driver == "postgres" || driver == "clickhouse" {
+		if driver == "postgres" || driver == "pgx" || driver == "clickhouse" {
 			valuesStr = `($1, $2, $3)`
 		} else if driver == "oracle" {
 			valuesStr = `(:1, :2, :3)`
@@ -667,7 +667,9 @@ func TestIntegrationPostgres(t *testing.T) {
 	}
 	pool.MaxWait = 3 * time.Minute
 
-	resource, err := pool.RunWithOptions(&dockertest.RunOptions{
+	var resource *dockertest.Resource
+
+	resource, err = pool.RunWithOptions(&dockertest.RunOptions{
 		Repository:   "postgres",
 		ExposedPorts: []string{"5432/tcp"},
 		Env: []string{
@@ -678,44 +680,56 @@ func TestIntegrationPostgres(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	var db *sql.DB
 	t.Cleanup(func() {
 		if err = pool.Purge(resource); err != nil {
 			t.Logf("Failed to clean up docker resource: %s", err)
 		}
-		if db != nil {
-			db.Close()
-		}
-	})
+	},
+	)
 
-	createTable := func(name string) (string, error) {
-		_, err := db.Exec(fmt.Sprintf(`create table %s (
-  "foo" varchar(50) not null,
-  "bar" integer not null,
-  "baz" varchar(50) not null,
-  primary key ("foo")
+	for _, driver := range []string{
+		"postgres",
+		"pgx",
+	} {
+		t.Run(fmt.Sprintf("driver %s", driver), func(t *testing.T) {
+			var db *sql.DB
+
+			t.Cleanup(func() {
+				if db != nil {
+					db.Close()
+				}
+			})
+
+			createTable := func(name string) (string, error) {
+				_, err := db.Exec(fmt.Sprintf(`create table %s (
+					"foo" varchar(50) not null,
+					"bar" integer not null,
+					"baz" varchar(50) not null,
+					primary key ("foo")
 		)`, name))
-		return name, err
+				return name, err
+			}
+
+			dsn := fmt.Sprintf("postgres://testuser:testpass@localhost:%s/testdb?sslmode=disable", resource.GetPort("5432/tcp"))
+			require.NoError(t, pool.Retry(func() error {
+				db, err = sql.Open(driver, dsn)
+				if err != nil {
+					return err
+				}
+				if err = db.Ping(); err != nil {
+					db.Close()
+					db = nil
+					return err
+				}
+				if _, err := createTable(fmt.Sprintf("footable_%s", driver)); err != nil {
+					return err
+				}
+				return nil
+			}))
+			testSuite(t, driver, dsn, createTable)
+		})
+
 	}
-
-	dsn := fmt.Sprintf("postgres://testuser:testpass@localhost:%s/testdb?sslmode=disable", resource.GetPort("5432/tcp"))
-	require.NoError(t, pool.Retry(func() error {
-		db, err = sql.Open("postgres", dsn)
-		if err != nil {
-			return err
-		}
-		if err = db.Ping(); err != nil {
-			db.Close()
-			db = nil
-			return err
-		}
-		if _, err := createTable("footable"); err != nil {
-			return err
-		}
-		return nil
-	}))
-
-	testSuite(t, "postgres", dsn, createTable)
 }
 
 func TestIntegrationMySQL(t *testing.T) {
