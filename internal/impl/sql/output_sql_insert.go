@@ -165,13 +165,13 @@ func newSQLInsertOutputFromConfig(conf *service.ParsedConfig, mgr *service.Resou
 
 	s.builder = squirrel.Insert(tableStr).Columns(columns...)
 	switch s.driver {
-	case "postgres", "clickhouse":
+	case "postgres", "pgx", "clickhouse":
 		s.builder = s.builder.PlaceholderFormat(squirrel.Dollar)
 	case "oracle", "gocosmos":
 		s.builder = s.builder.PlaceholderFormat(squirrel.Colon)
 	}
 
-	if s.driver == "postgres" {
+	if s.driver == "postgres" || s.driver == "pgx" {
 		s.argsConverter = bloblValuesToPgSQLValues
 	} else {
 		s.argsConverter = func(v []any) []any { return v }
