@@ -91,7 +91,7 @@ func testRawProcessors(name string, fn func(t *testing.T, insertProc, selectProc
 		t.Run(name, func(t *testing.T) {
 			valuesStr := `(?, ?, ?)`
 			switch driver {
-			case "postgres", "clickhouse":
+			case "postgres", "pgx", "clickhouse":
 				valuesStr = `($1, $2, $3)`
 			case "oracle":
 				valuesStr = `(:1, :2, :3)`
@@ -106,7 +106,7 @@ exec_only: true
 
 			placeholderStr := "?"
 			switch driver {
-			case "postgres", "clickhouse":
+			case "postgres", "pgx", "clickhouse":
 				placeholderStr = "$1"
 			case "oracle":
 				placeholderStr = ":1"
@@ -148,7 +148,7 @@ func testRawTransactionalProcessors(name string, fn func(t *testing.T, insertPro
 			placeholderStr := "?"
 			valuesStr := `(?, ?, ?)`
 			switch driver {
-			case "postgres", "clickhouse":
+			case "postgres", "pgx", "clickhouse":
 				valuesStr = `($1, $2, $3)`
 				placeholderStr = "$1"
 			case "oracle":
@@ -208,7 +208,7 @@ func testRawDeprecatedProcessors(name string, fn func(t *testing.T, insertProc, 
 		t.Run(name, func(t *testing.T) {
 			valuesStr := `(?, ?, ?)`
 			switch driver {
-			case "postgres", "clickhouse":
+			case "postgres", "pgx", "clickhouse":
 				valuesStr = `($1, $2, $3)`
 			case "oracle":
 				valuesStr = `(:1, :2, :3)`
@@ -222,7 +222,7 @@ args_mapping: 'root = [ this.foo, this.bar.floor(), this.baz ]'
 
 			placeholderStr := "?"
 			switch driver {
-			case "postgres", "clickhouse":
+			case "postgres", "pgx", "clickhouse":
 				placeholderStr = "$1"
 			case "oracle":
 				placeholderStr = ":1"
@@ -494,7 +494,7 @@ func testBatchInputOutputRaw(t *testing.T, driver, dsn, table string) {
 		placeholderStr := "?"
 		valuesStr := `(?, ?, ?)`
 		switch driver {
-		case "postgres", "clickhouse":
+		case "postgres", "pgx", "clickhouse":
 			valuesStr = `($1, $2, $3)`
 			placeholderStr = "$1"
 		case "oracle":
