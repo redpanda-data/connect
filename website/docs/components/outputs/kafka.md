@@ -31,7 +31,7 @@ output:
   kafka:
     addresses: [] # No default (required)
     topic: "" # No default (required)
-    target_version: 1.0.0 # No default (optional)
+    target_version: 2.1.0 # No default (optional)
     key: ""
     partitioner: fnv1a_hash
     compression: none
@@ -71,7 +71,7 @@ output:
       token_key: ""
     topic: "" # No default (required)
     client_id: benthos
-    target_version: 1.0.0 # No default (optional)
+    target_version: 2.1.0 # No default (optional)
     rack_id: ""
     key: ""
     partitioner: fnv1a_hash
@@ -406,7 +406,7 @@ Type: `string`
 ```yml
 # Examples
 
-target_version: 1.0.0
+target_version: 2.1.0
 
 target_version: 3.1.0
 ```
