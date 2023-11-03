@@ -53,6 +53,11 @@ func cassandraConfigSpec() *service.ConfigSpec {
 			Description("If true, will use snap compressor").
 			Advanced().
 			Optional().
+			Version("4.XX.X")).
+		Field(service.NewBoolField("default_idempotence").
+			Description("If true, enable the defaut idempotence. non-idempotence queries are not retried").
+			Advanced().
+			Optional().
 			Version("4.XX.X"))
 	spec = spec.
 		Example("Minimal Select (Cassandra/Scylla)",
@@ -149,6 +154,14 @@ func newCassandraInput(conf *service.ParsedConfig, mgr *service.Resources) (serv
 		}
 	}
 
+	var defIdempotence bool
+	if conf.Contains("default_idempotence") {
+		useCompressor, err = conf.FieldBool("default_idempotence")
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	query, err := conf.FieldString("query")
 	if err != nil {
 		return nil, err
@@ -192,6 +205,7 @@ func newCassandraInput(conf *service.ParsedConfig, mgr *service.Resources) (serv
 		useTAHP:         useTAHP,
 		shuffleReplicas: shuffleReplicas,
 		useCompressor:   useCompressor,
+		defIdempotence:  defIdempotence,
 		query:           query,
 		maxRetries:      retries,
 		backoff:         backoff,
@@ -277,6 +291,7 @@ type cassandraInput struct {
 	useTAHP         bool
 	shuffleReplicas bool
 	useCompressor   bool
+	defIdempotence  bool
 	query           string
 	maxRetries      int
 	backoff         backOff
@@ -331,6 +346,8 @@ func (c *cassandraInput) Connect(ctx context.Context) error {
 	if c.useCompressor {
 		conn.Compressor = gocql.SnappyCompressor{}
 	}
+
+	conn.DefaultIdempotence = c.defIdempotence
 
 	session, err := conn.CreateSession()
 	if err != nil {

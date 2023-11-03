@@ -40,6 +40,7 @@ output:
     use_token_aware_host_policy: false
     shuffle_replicas: false
     use_compressor: false
+    default_idempotence: false
     max_in_flight: 64
     batching:
       count: 0
@@ -82,6 +83,7 @@ output:
     use_token_aware_host_policy: false
     shuffle_replicas: false
     use_compressor: false
+    default_idempotence: false
     max_in_flight: 64
     batching:
       count: 0
@@ -466,6 +468,15 @@ Requires version 4.XX.X or newer
 ### `use_compressor`
 
 if true, will use a snap compressor
+
+
+Type: `bool`  
+Default: `false`  
+Requires version 4.XX.X or newer  
+
+### `default_idempotence`
+
+set queries as default idempotent. non idempotent queries are not retried
 
 
 Type: `bool`  

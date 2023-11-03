@@ -29,6 +29,7 @@ type CassandraConfig struct {
 	UseTokenAwareHostPolicy  bool                  `json:"use_token_aware_host_policy" yaml:"use_token_aware_host_policy"`
 	ShuffleReplicas          bool                  `json:"shuffle_replicas" yaml:"shuffle_replicas"`
 	UseCompressor            bool                  `json:"use_compressor" yaml:"use_compressor"`
+	DefaultIdempotence       bool                  `json:"default_idempotence" yaml:"default_idempotence"`
 	// TODO: V4 Remove this and replace with explicit values.
 	retries.Config `json:",inline" yaml:",inline"`
 	MaxInFlight    int                `json:"max_in_flight" yaml:"max_in_flight"`
@@ -64,5 +65,6 @@ func NewCassandraConfig() CassandraConfig {
 		UseTokenAwareHostPolicy:  false,
 		ShuffleReplicas:          false,
 		UseCompressor:            false,
+		DefaultIdempotence:       false,
 	}
 }
