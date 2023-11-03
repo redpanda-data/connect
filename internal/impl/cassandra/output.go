@@ -150,6 +150,8 @@ type cassandraWriter struct {
 
 	argsMapping *mapping.Executor
 	batchType   gocql.BatchType
+
+	label string
 }
 
 func newCassandraWriter(conf output.CassandraConfig, mgr bundle.NewManagement) (*cassandraWriter, error) {
@@ -157,6 +159,7 @@ func newCassandraWriter(conf output.CassandraConfig, mgr bundle.NewManagement) (
 		log:   mgr.Logger(),
 		stats: mgr.Metrics(),
 		conf:  conf,
+		label: mgr.Label(),
 	}
 
 	var err error
@@ -230,6 +233,9 @@ func (c *cassandraWriter) Connect(ctx context.Context) error {
 			return fmt.Errorf("failed to parse timeout string: %v", err)
 		}
 	}
+
+	conn.Logger = newDebugWrapper(c.log.With("cassandra_output", c.label))
+
 	session, err := conn.CreateSession()
 	if err != nil {
 		return fmt.Errorf("creating Cassandra session: %w", err)

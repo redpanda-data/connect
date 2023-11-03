@@ -78,14 +78,14 @@ func init() {
 	err := service.RegisterInput(
 		"cassandra", cassandraConfigSpec(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Input, error) {
-			return newCassandraInput(conf)
+			return newCassandraInput(conf, mgr)
 		})
 	if err != nil {
 		panic(err)
 	}
 }
 
-func newCassandraInput(conf *service.ParsedConfig) (service.Input, error) {
+func newCassandraInput(conf *service.ParsedConfig, mgr *service.Resources) (service.Input, error) {
 	addrs, err := conf.FieldStringList("addresses")
 	if err != nil {
 		return nil, err
@@ -139,6 +139,8 @@ func newCassandraInput(conf *service.ParsedConfig) (service.Input, error) {
 		maxRetries: retries,
 		backoff:    backoff,
 		timeout:    timeout,
+		log:        mgr.Logger(),
+		label:      mgr.Label(),
 	}), nil
 }
 
@@ -221,6 +223,9 @@ type cassandraInput struct {
 
 	session *gocql.Session
 	iter    *gocql.Iter
+
+	log   *service.Logger
+	label string
 }
 
 func (c *cassandraInput) Connect(ctx context.Context) error {
@@ -246,6 +251,8 @@ func (c *cassandraInput) Connect(ctx context.Context) error {
 	}
 
 	conn.Timeout = c.timeout
+
+	conn.Logger = newDebugWrapper(c.log.With("cassandra_input", c.label))
 
 	session, err := conn.CreateSession()
 	if err != nil {
