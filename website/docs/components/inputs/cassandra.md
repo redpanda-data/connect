@@ -60,6 +60,7 @@ input:
     connect_timeout: 600ms
     use_token_aware_host_policy: false # No default (optional)
     shuffle_replicas: false # No default (optional)
+    use_compressor: false # No default (optional)
 ```
 
 </TabItem>
@@ -220,6 +221,14 @@ Requires version 4.XX.X or newer
 ### `shuffle_replicas`
 
 If `use_token_aware_host_policy` is enabled the driver will shuffle replicas before pick one.
+
+
+Type: `bool`  
+Requires version 4.XX.X or newer  
+
+### `use_compressor`
+
+If true, will use snap compressor
 
 
 Type: `bool`  

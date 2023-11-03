@@ -48,6 +48,11 @@ func cassandraConfigSpec() *service.ConfigSpec {
 			Description("If `use_token_aware_host_policy` is enabled the driver will shuffle replicas before pick one.").
 			Advanced().
 			Optional().
+			Version("4.XX.X")).
+		Field(service.NewBoolField("use_compressor").
+			Description("If true, will use snap compressor").
+			Advanced().
+			Optional().
 			Version("4.XX.X"))
 	spec = spec.
 		Example("Minimal Select (Cassandra/Scylla)",
@@ -136,6 +141,14 @@ func newCassandraInput(conf *service.ParsedConfig, mgr *service.Resources) (serv
 		}
 	}
 
+	var useCompressor bool
+	if conf.Contains("use_compressor") {
+		useCompressor, err = conf.FieldBool("use_compressor")
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	query, err := conf.FieldString("query")
 	if err != nil {
 		return nil, err
@@ -178,6 +191,7 @@ func newCassandraInput(conf *service.ParsedConfig, mgr *service.Resources) (serv
 		disableIHL:      disableIHL,
 		useTAHP:         useTAHP,
 		shuffleReplicas: shuffleReplicas,
+		useCompressor:   useCompressor,
 		query:           query,
 		maxRetries:      retries,
 		backoff:         backoff,
@@ -262,6 +276,7 @@ type cassandraInput struct {
 	disableIHL      bool
 	useTAHP         bool
 	shuffleReplicas bool
+	useCompressor   bool
 	query           string
 	maxRetries      int
 	backoff         backOff

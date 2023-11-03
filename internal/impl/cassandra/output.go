@@ -129,6 +129,7 @@ output:
 			docs.FieldString("connect_timeout", "The client connection timeout.").AtVersion("4.XX.X"),
 			docs.FieldBool("use_token_aware_host_policy", "if true, enable token aware host policy").AtVersion("4.XX.X"),
 			docs.FieldBool("shuffle_replicas", "combining with `use_token_aware_host_policy`, will force shuffle replicas when pick the next host").AtVersion("4.XX.X"),
+			docs.FieldBool("use_compressor", "if true, will use a snap compressor").AtVersion("4.XX.X"),
 		).WithChildren(
 			docs.FieldInt("max_in_flight", "The maximum number of parallel message batches to have in flight at any given time."),
 			policy.FieldSpec(),
@@ -253,6 +254,10 @@ func (c *cassandraWriter) Connect(ctx context.Context) error {
 		} else {
 			conn.PoolConfig.HostSelectionPolicy = gocql.TokenAwareHostPolicy(fallback)
 		}
+	}
+
+	if c.conf.UseCompressor {
+		conn.Compressor = gocql.SnappyCompressor{}
 	}
 
 	session, err := conn.CreateSession()

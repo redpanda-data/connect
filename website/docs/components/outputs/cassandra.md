@@ -39,6 +39,7 @@ output:
     connect_timeout: 600ms
     use_token_aware_host_policy: false
     shuffle_replicas: false
+    use_compressor: false
     max_in_flight: 64
     batching:
       count: 0
@@ -80,6 +81,7 @@ output:
     connect_timeout: 600ms
     use_token_aware_host_policy: false
     shuffle_replicas: false
+    use_compressor: false
     max_in_flight: 64
     batching:
       count: 0
@@ -455,6 +457,15 @@ Requires version 4.XX.X or newer
 ### `shuffle_replicas`
 
 combining with `use_token_aware_host_policy`, will force shuffle replicas when pick the next host
+
+
+Type: `bool`  
+Default: `false`  
+Requires version 4.XX.X or newer  
+
+### `use_compressor`
+
+if true, will use a snap compressor
 
 
 Type: `bool`  
