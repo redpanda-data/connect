@@ -24,6 +24,7 @@ type CassandraConfig struct {
 	ArgsMapping              string                `json:"args_mapping" yaml:"args_mapping"`
 	Consistency              string                `json:"consistency" yaml:"consistency"`
 	Timeout                  string                `json:"timeout" yaml:"timeout"`
+	ConnectTimeout           string                `json:"connect_timeout" yaml:"connect_timeout"`
 	LoggedBatch              bool                  `json:"logged_batch" yaml:"logged_batch"`
 	// TODO: V4 Remove this and replace with explicit values.
 	retries.Config `json:",inline" yaml:",inline"`
@@ -52,6 +53,7 @@ func NewCassandraConfig() CassandraConfig {
 		ArgsMapping:              "",
 		Consistency:              "QUORUM",
 		Timeout:                  "600ms",
+		ConnectTimeout:           "600ms",
 		Config:                   rConf,
 		MaxInFlight:              64,
 		Batching:                 batchconfig.NewConfig(),

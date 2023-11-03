@@ -57,6 +57,7 @@ input:
       initial_interval: "" # No default (optional)
       max_interval: "" # No default (optional)
     timeout: 600ms
+    connect_timeout: 600ms
 ```
 
 </TabItem>
@@ -179,7 +180,7 @@ Type: `string`
 
 ### `timeout`
 
-Sorry! This field is missing documentation.
+cassandra query timeout
 
 
 Type: `string`  
@@ -189,6 +190,21 @@ Default: `"600ms"`
 # Examples
 
 timeout: 600ms
+```
+
+### `connect_timeout`
+
+cassandra connect timeout
+
+
+Type: `string`  
+Default: `"600ms"`  
+Requires version 4.XX.X or newer  
+
+```yml
+# Examples
+
+connect_timeout: 600ms
 ```
 
 

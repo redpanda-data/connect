@@ -36,6 +36,7 @@ output:
     query: ""
     args_mapping: ""
     timeout: 600ms
+    connect_timeout: 600ms
     max_in_flight: 64
     batching:
       count: 0
@@ -74,6 +75,7 @@ output:
       initial_interval: 1s
       max_interval: 5s
     timeout: 600ms
+    connect_timeout: 600ms
     max_in_flight: 64
     batching:
       count: 0
@@ -421,12 +423,21 @@ Default: `"5s"`
 
 ### `timeout`
 
-The client connection timeout.
+The client query timeout.
 
 
 Type: `string`  
 Default: `"600ms"`  
 Requires version 3.63.0 or newer  
+
+### `connect_timeout`
+
+The client connection timeout.
+
+
+Type: `string`  
+Default: `"600ms"`  
+Requires version 4.XX.X or newer  
 
 ### `max_in_flight`
 

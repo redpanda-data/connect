@@ -125,7 +125,8 @@ output:
 				docs.FieldString("max_interval", "The maximum period to wait between retry attempts."),
 				docs.FieldString("max_elapsed_time", "").Deprecated(),
 			).Advanced(),
-			docs.FieldString("timeout", "The client connection timeout.").AtVersion("3.63.0"),
+			docs.FieldString("timeout", "The client query timeout.").AtVersion("3.63.0"),
+			docs.FieldString("connect_timeout", "The client connection timeout.").AtVersion("4.XX.X"),
 		).WithChildren(
 			docs.FieldInt("max_in_flight", "The maximum number of parallel message batches to have in flight at any given time."),
 			policy.FieldSpec(),
@@ -231,6 +232,12 @@ func (c *cassandraWriter) Connect(ctx context.Context) error {
 		var err error
 		if conn.Timeout, err = time.ParseDuration(tout); err != nil {
 			return fmt.Errorf("failed to parse timeout string: %v", err)
+		}
+	}
+	if ctout := c.conf.ConnectTimeout; len(ctout) > 0 {
+		var err error
+		if conn.ConnectTimeout, err = time.ParseDuration(ctout); err != nil {
+			return fmt.Errorf("failed to parse connection timeout string: %v", err)
 		}
 	}
 

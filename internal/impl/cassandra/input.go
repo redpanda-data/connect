@@ -30,9 +30,15 @@ func cassandraConfigSpec() *service.ConfigSpec {
 			Optional()).
 		Field(service.NewInternalField(fieldBackoff())).
 		Field(service.NewStringField("timeout").
-			Description("").
+			Description("cassandra query timeout").
 			Default("600ms").
-			Example("600ms"))
+			Example("600ms")).
+		Field(service.NewStringField("connect_timeout").
+			Description("cassandra connect timeout").
+			Default("600ms").
+			Example("600ms").
+			Advanced().
+			Version("4.XX.X"))
 	spec = spec.
 		Example("Minimal Select (Cassandra/Scylla)",
 			`
@@ -131,16 +137,26 @@ func newCassandraInput(conf *service.ParsedConfig, mgr *service.Resources) (serv
 		return nil, err
 	}
 
+	ctout, err := conf.FieldString("connect_timeout")
+	if err != nil {
+		return nil, err
+	}
+	connectTimeout, err := time.ParseDuration(ctout)
+	if err != nil {
+		return nil, err
+	}
+
 	return service.AutoRetryNacks(&cassandraInput{
-		addresses:  addrs,
-		auth:       pAuth,
-		disableIHL: disable,
-		query:      query,
-		maxRetries: retries,
-		backoff:    backoff,
-		timeout:    timeout,
-		log:        mgr.Logger(),
-		label:      mgr.Label(),
+		addresses:      addrs,
+		auth:           pAuth,
+		disableIHL:     disable,
+		query:          query,
+		maxRetries:     retries,
+		backoff:        backoff,
+		timeout:        timeout,
+		connectTimeout: connectTimeout,
+		log:            mgr.Logger(),
+		label:          mgr.Label(),
 	}), nil
 }
 
@@ -213,13 +229,14 @@ type backOff struct {
 }
 
 type cassandraInput struct {
-	addresses  []string
-	auth       passwordAuthenticator
-	disableIHL bool
-	query      string
-	maxRetries int
-	backoff    backOff
-	timeout    time.Duration
+	addresses      []string
+	auth           passwordAuthenticator
+	disableIHL     bool
+	query          string
+	maxRetries     int
+	backoff        backOff
+	timeout        time.Duration
+	connectTimeout time.Duration
 
 	session *gocql.Session
 	iter    *gocql.Iter
@@ -251,6 +268,8 @@ func (c *cassandraInput) Connect(ctx context.Context) error {
 	}
 
 	conn.Timeout = c.timeout
+
+	conn.ConnectTimeout = c.connectTimeout
 
 	conn.Logger = newDebugWrapper(c.log.With("cassandra_input", c.label))
 
