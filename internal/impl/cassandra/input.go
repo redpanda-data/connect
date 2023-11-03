@@ -328,6 +328,10 @@ func (c *cassandraInput) Connect(ctx context.Context) error {
 		}
 	}
 
+	if c.useCompressor {
+		conn.Compressor = gocql.SnappyCompressor{}
+	}
+
 	session, err := conn.CreateSession()
 	if err != nil {
 		return fmt.Errorf("creating Cassandra session: %w", err)
