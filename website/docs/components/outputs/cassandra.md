@@ -37,6 +37,8 @@ output:
     args_mapping: ""
     timeout: 600ms
     connect_timeout: 600ms
+    use_token_aware_host_policy: false
+    shuffle_replicas: false
     max_in_flight: 64
     batching:
       count: 0
@@ -76,6 +78,8 @@ output:
       max_interval: 5s
     timeout: 600ms
     connect_timeout: 600ms
+    use_token_aware_host_policy: false
+    shuffle_replicas: false
     max_in_flight: 64
     batching:
       count: 0
@@ -437,6 +441,24 @@ The client connection timeout.
 
 Type: `string`  
 Default: `"600ms"`  
+Requires version 4.XX.X or newer  
+
+### `use_token_aware_host_policy`
+
+if true, enable token aware host policy
+
+
+Type: `bool`  
+Default: `false`  
+Requires version 4.XX.X or newer  
+
+### `shuffle_replicas`
+
+combining with `use_token_aware_host_policy`, will force shuffle replicas when pick the next host
+
+
+Type: `bool`  
+Default: `false`  
 Requires version 4.XX.X or newer  
 
 ### `max_in_flight`

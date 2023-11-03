@@ -58,6 +58,8 @@ input:
       max_interval: "" # No default (optional)
     timeout: 600ms
     connect_timeout: 600ms
+    use_token_aware_host_policy: false # No default (optional)
+    shuffle_replicas: false # No default (optional)
 ```
 
 </TabItem>
@@ -194,7 +196,7 @@ timeout: 600ms
 
 ### `connect_timeout`
 
-cassandra connect timeout
+cassandra connect timeout.
 
 
 Type: `string`  
@@ -206,5 +208,21 @@ Requires version 4.XX.X or newer
 
 connect_timeout: 600ms
 ```
+
+### `use_token_aware_host_policy`
+
+If enabled the driver will use a token aware host selection policy.
+
+
+Type: `bool`  
+Requires version 4.XX.X or newer  
+
+### `shuffle_replicas`
+
+If `use_token_aware_host_policy` is enabled the driver will shuffle replicas before pick one.
+
+
+Type: `bool`  
+Requires version 4.XX.X or newer  
 
 
