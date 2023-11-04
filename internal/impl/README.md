@@ -8,4 +8,4 @@ If you intend to create a new component type then use the docs at [https://pkg.g
 - Input example: [./nats/input_jetstream.go](./nats/input_jetstream.go)
 - Output example: [./nats/output_jetstream.go](./nats/output_jetstream.go)
 - Processor example: [./confluent/processor_schema_registry_encode.go](./confluent/processor_schema_registry_encode.go)
-- Buffer example: [./generic/buffer_system_window.go](./generic/buffer_system_window.go)
+- Buffer example: [./pure/buffer_system_window.go](./pure/buffer_system_window.go)
