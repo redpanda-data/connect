@@ -62,6 +62,7 @@ input:
     shuffle_replicas: false # No default (optional)
     use_compressor: false # No default (optional)
     default_idempotence: false # No default (optional)
+    keyspace: "" # No default (optional)
 ```
 
 </TabItem>
@@ -241,6 +242,14 @@ If true, enable the defaut idempotence. non-idempotence queries are not retried
 
 
 Type: `bool`  
+Requires version 4.XX.X or newer  
+
+### `keyspace`
+
+initial keyspace.
+
+
+Type: `string`  
 Requires version 4.XX.X or newer  
 
 

@@ -36,11 +36,6 @@ output:
     query: ""
     args_mapping: ""
     timeout: 600ms
-    connect_timeout: 600ms
-    use_token_aware_host_policy: false
-    shuffle_replicas: false
-    use_compressor: false
-    default_idempotence: false
     max_in_flight: 64
     batching:
       count: 0
@@ -84,6 +79,7 @@ output:
     shuffle_replicas: false
     use_compressor: false
     default_idempotence: false
+    keyspace: ""
     max_in_flight: 64
     batching:
       count: 0
@@ -481,6 +477,15 @@ set queries as default idempotent. non idempotent queries are not retried
 
 Type: `bool`  
 Default: `false`  
+Requires version 4.XX.X or newer  
+
+### `keyspace`
+
+Initial keyspace.
+
+
+Type: `string`  
+Default: `""`  
 Requires version 4.XX.X or newer  
 
 ### `max_in_flight`

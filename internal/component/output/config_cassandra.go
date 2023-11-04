@@ -25,6 +25,7 @@ type CassandraConfig struct {
 	Consistency              string                `json:"consistency" yaml:"consistency"`
 	Timeout                  string                `json:"timeout" yaml:"timeout"`
 	ConnectTimeout           string                `json:"connect_timeout" yaml:"connect_timeout"`
+	Keyspace                 string                `json:"keyspace" yaml:"keyspace"`
 	LoggedBatch              bool                  `json:"logged_batch" yaml:"logged_batch"`
 	UseTokenAwareHostPolicy  bool                  `json:"use_token_aware_host_policy" yaml:"use_token_aware_host_policy"`
 	ShuffleReplicas          bool                  `json:"shuffle_replicas" yaml:"shuffle_replicas"`
@@ -58,6 +59,7 @@ func NewCassandraConfig() CassandraConfig {
 		Consistency:              "QUORUM",
 		Timeout:                  "600ms",
 		ConnectTimeout:           "600ms",
+		Keyspace:                 "",
 		Config:                   rConf,
 		MaxInFlight:              64,
 		Batching:                 batchconfig.NewConfig(),
