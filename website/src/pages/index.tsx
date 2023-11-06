@@ -215,7 +215,7 @@ const features = [
     description: (
       <ReactPlayer
         className={classnames('col col-6 padding--lg')}
-        url='https://youtu.be/WT90ePOzSWY'
+        url='https://youtu.be/uvbp2LCmQMY'
         controls={true}
       />
     ),

@@ -45,7 +45,6 @@ module.exports = {
         {to: 'cookbooks', label: 'Cookbooks', position: 'left'},
         {to: 'https://studio.benthos.dev', label: 'Studio', position: 'left'},
         {to: 'blog', label: 'Blog', position: 'left'},
-        {to: 'videos', label: 'Videos', position: 'left'},
         {to: 'community', label: 'Community', position: 'right'},
         {to: 'support', label: 'Support', position: 'right'},
         {
@@ -54,12 +53,12 @@ module.exports = {
           className: 'header-download-link header-icon-link',
           'aria-label': 'Download',
         },
-        /*{
+        {
           href: 'https://github.com/benthosdev/benthos',
           position: 'right',
           className: 'header-github-link header-icon-link',
           'aria-label': 'GitHub repository',
-        },*/
+        },
       ],
     },
     footer: {
