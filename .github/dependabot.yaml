@@ -10,6 +10,8 @@ updates:
       development-dependencies:
         dependency-type: "development"
     open-pull-requests-limit: 10
+    ignore:
+      - dependency-name: github.com/microcosm-cc/bluemonday
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
