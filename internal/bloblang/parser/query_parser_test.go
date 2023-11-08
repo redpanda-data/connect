@@ -16,7 +16,7 @@ func TestFunctionParserErrors(t *testing.T) {
 	}{
 		"bad function 2": {
 			input: `not_a_function()`,
-			err:   `line 1 char 1: unrecognised function 'not_a_function'`,
+			err:   `line 1 char 17: unrecognised function 'not_a_function'`,
 		},
 		"bad args 2": {
 			input: `json("foo`,
@@ -32,11 +32,11 @@ func TestFunctionParserErrors(t *testing.T) {
 		},
 		"bad args 7": {
 			input: `json(5)`,
-			err:   `line 1 char 1: field path: wrong argument type, expected string, got number`,
+			err:   `line 1 char 8: field path: wrong argument type, expected string, got number`,
 		},
 		"bad args 8": {
 			input: `json(false)`,
-			err:   `line 1 char 1: field path: wrong argument type, expected string, got bool`,
+			err:   `line 1 char 12: field path: wrong argument type, expected string, got bool`,
 		},
 		"unfinished named arg first": {
 			input: `foo.parse_timestamp(format: "meow", tz:)`,
@@ -48,7 +48,7 @@ func TestFunctionParserErrors(t *testing.T) {
 		},
 		"cannot mix args types": {
 			input: `foo.slice(0, high: 5)`,
-			err:   `line 1 char 5: cannot mix named and nameless arguments`,
+			err:   `line 1 char 22: cannot mix named and nameless arguments`,
 		},
 		"bad operators": {
 			input: `json("foo") + `,
@@ -68,11 +68,11 @@ func TestFunctionParserErrors(t *testing.T) {
 		},
 		"bad method": {
 			input: `json("foo").not_a_thing()`,
-			err:   `line 1 char 13: unrecognised method 'not_a_thing'`,
+			err:   `line 1 char 26: unrecognised method 'not_a_thing'`,
 		},
 		"bad method 2": {
 			input: `json("foo").not_a_thing()`,
-			err:   `line 1 char 13: unrecognised method 'not_a_thing'`,
+			err:   `line 1 char 26: unrecognised method 'not_a_thing'`,
 		},
 		"bad method args 2": {
 			input: `json("foo").from(`,
@@ -80,15 +80,15 @@ func TestFunctionParserErrors(t *testing.T) {
 		},
 		"bad method args 3": {
 			input: `json("foo").from()`,
-			err:   `line 1 char 13: missing parameter: index`,
+			err:   `line 1 char 19: missing parameter: index`,
 		},
 		"bad method args 4": {
 			input: `json("foo").from("nah")`,
-			err:   `line 1 char 13: field index: expected number value, got string ("nah")`,
+			err:   `line 1 char 24: field index: expected number value, got string ("nah")`,
 		},
 		"bad map args": {
 			input: `json("foo").map()`,
-			err:   `line 1 char 13: missing parameter: query`,
+			err:   `line 1 char 18: missing parameter: query`,
 		},
 		"gibberish": {
 			input: `json("foo").(=)`,

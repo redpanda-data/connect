@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Fixed
+
+- Bloblang error messages for bad function/method names or parameters should now be improved in mappings that use shorthand for `root = ...`.
+
 ## 4.23.0 - 2023-10-30
 
 ### Added
