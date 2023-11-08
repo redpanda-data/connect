@@ -23,6 +23,7 @@ const (
 	fieldMessage        = "message"
 	fieldImportPaths    = "import_paths"
 	fieldDiscardUnknown = "discard_unknown"
+	fieldUseProtoNames  = "use_proto_names"
 )
 
 func protobufProcessorSpec() *service.ConfigSpec {
@@ -52,6 +53,9 @@ Attempts to create a target protobuf message from a generic JSON structure.
 			Description("The fully qualified name of the protobuf message to convert to/from."),
 		service.NewBoolField(fieldDiscardUnknown).
 			Description("If true, from_json discards unknown fields to schema.").
+			Default(false),
+		service.NewBoolField(fieldUseProtoNames).
+			Description("If true, to_json unserializes fields exactly as named in schema file.").
 			Default(false),
 		service.NewStringListField(fieldImportPaths).
 			Description("A list of directories containing .proto files, including all definitions required for parsing the target message. If left empty the current directory is used. Each directory listed will be walked with all found .proto files imported.").
@@ -149,7 +153,7 @@ func init() {
 
 type protobufOperator func(part *service.Message) error
 
-func newProtobufToJSONOperator(f ifs.FS, msg string, importPaths []string) (protobufOperator, error) {
+func newProtobufToJSONOperator(f ifs.FS, msg string, importPaths []string, useProtoNames bool) (protobufOperator, error) {
 	if msg == "" {
 		return nil, errors.New("message field must not be empty")
 	}
@@ -181,7 +185,8 @@ func newProtobufToJSONOperator(f ifs.FS, msg string, importPaths []string) (prot
 		}
 
 		opts := protojson.MarshalOptions{
-			Resolver: types,
+			Resolver:      types,
+			UseProtoNames: useProtoNames,
 		}
 		data, err := opts.Marshal(dynMsg)
 		if err != nil {
@@ -238,10 +243,10 @@ func newProtobufFromJSONOperator(f ifs.FS, msg string, importPaths []string, dis
 	}, nil
 }
 
-func strToProtobufOperator(f ifs.FS, opStr, message string, importPaths []string, discardUnknown bool) (protobufOperator, error) {
+func strToProtobufOperator(f ifs.FS, opStr, message string, importPaths []string, discardUnknown bool, useProtoNames bool) (protobufOperator, error) {
 	switch opStr {
 	case "to_json":
-		return newProtobufToJSONOperator(f, message, importPaths)
+		return newProtobufToJSONOperator(f, message, importPaths, useProtoNames)
 	case "from_json":
 		return newProtobufFromJSONOperator(f, message, importPaths, discardUnknown)
 	}
@@ -306,7 +311,12 @@ func newProtobuf(conf *service.ParsedConfig, mgr *service.Resources) (*protobufP
 		return nil, err
 	}
 
-	if p.operator, err = strToProtobufOperator(mgr.FS(), operatorStr, message, importPaths, discardUnknown); err != nil {
+	var useProtoNames bool
+	if useProtoNames, err = conf.FieldBool(fieldUseProtoNames); err != nil {
+		return nil, err
+	}
+
+	if p.operator, err = strToProtobufOperator(mgr.FS(), operatorStr, message, importPaths, discardUnknown, useProtoNames); err != nil {
 		return nil, err
 	}
 	return p, nil
