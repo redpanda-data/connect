@@ -19,6 +19,7 @@ func TestProtobufFromJSON(t *testing.T) {
 		importPath     string
 		input          string
 		outputContains []string
+		discardUnknown bool
 	}
 
 	tests := []testCase{
@@ -44,6 +45,14 @@ func TestProtobufFromJSON(t *testing.T) {
 			outputContains: []string{"caleb"},
 		},
 		{
+			name:           "json to protobuf with discard_unknown",
+			message:        "testing.Person",
+			importPath:     "../../../config/test/protobuf/schema",
+			input:          `{"firstName":"caleb","lastName":"quaye","missingfield":"anyvalue"}`,
+			outputContains: []string{"caleb"},
+			discardUnknown: true,
+		},
+		{
 			name:           "any: json to protobuf 1",
 			message:        "testing.Envelope",
 			importPath:     "../../../config/test/protobuf/schema",
@@ -65,7 +74,8 @@ func TestProtobufFromJSON(t *testing.T) {
 operator: from_json
 message: %v
 import_paths: [ %v ]
-`, test.message, test.importPath), nil)
+discard_unknown: %t
+`, test.message, test.importPath, test.discardUnknown), nil)
 			require.NoError(t, err)
 
 			proc, err := newProtobuf(conf, service.MockResources())

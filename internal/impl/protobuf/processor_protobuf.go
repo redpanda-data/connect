@@ -19,9 +19,10 @@ import (
 )
 
 const (
-	fieldOperator    = "operator"
-	fieldMessage     = "message"
-	fieldImportPaths = "import_paths"
+	fieldOperator       = "operator"
+	fieldMessage        = "message"
+	fieldImportPaths    = "import_paths"
+	fieldDiscardUnknown = "discard_unknown"
 )
 
 func protobufProcessorSpec() *service.ConfigSpec {
@@ -49,6 +50,9 @@ Attempts to create a target protobuf message from a generic JSON structure.
 			Description("The [operator](#operators) to execute"),
 		service.NewStringField(fieldMessage).
 			Description("The fully qualified name of the protobuf message to convert to/from."),
+		service.NewBoolField(fieldDiscardUnknown).
+			Description("If true, from_json discards unknown fields to schema.").
+			Default(false),
 		service.NewStringListField(fieldImportPaths).
 			Description("A list of directories containing .proto files, including all definitions required for parsing the target message. If left empty the current directory is used. Each directory listed will be walked with all found .proto files imported.").
 			Default([]string{}),
@@ -189,7 +193,7 @@ func newProtobufToJSONOperator(f ifs.FS, msg string, importPaths []string) (prot
 	}, nil
 }
 
-func newProtobufFromJSONOperator(f ifs.FS, msg string, importPaths []string) (protobufOperator, error) {
+func newProtobufFromJSONOperator(f ifs.FS, msg string, importPaths []string, discardUnknown bool) (protobufOperator, error) {
 	if msg == "" {
 		return nil, errors.New("message field must not be empty")
 	}
@@ -217,7 +221,8 @@ func newProtobufFromJSONOperator(f ifs.FS, msg string, importPaths []string) (pr
 		dynMsg := dynamicpb.NewMessage(md.Descriptor())
 
 		opts := protojson.UnmarshalOptions{
-			Resolver: types,
+			Resolver:       types,
+			DiscardUnknown: discardUnknown,
 		}
 		if err := opts.Unmarshal(msgBytes, dynMsg); err != nil {
 			return fmt.Errorf("failed to unmarshal JSON message '%v': %w", msg, err)
@@ -233,12 +238,12 @@ func newProtobufFromJSONOperator(f ifs.FS, msg string, importPaths []string) (pr
 	}, nil
 }
 
-func strToProtobufOperator(f ifs.FS, opStr, message string, importPaths []string) (protobufOperator, error) {
+func strToProtobufOperator(f ifs.FS, opStr, message string, importPaths []string, discardUnknown bool) (protobufOperator, error) {
 	switch opStr {
 	case "to_json":
 		return newProtobufToJSONOperator(f, message, importPaths)
 	case "from_json":
-		return newProtobufFromJSONOperator(f, message, importPaths)
+		return newProtobufFromJSONOperator(f, message, importPaths, discardUnknown)
 	}
 	return nil, fmt.Errorf("operator not recognised: %v", opStr)
 }
@@ -296,7 +301,12 @@ func newProtobuf(conf *service.ParsedConfig, mgr *service.Resources) (*protobufP
 		return nil, err
 	}
 
-	if p.operator, err = strToProtobufOperator(mgr.FS(), operatorStr, message, importPaths); err != nil {
+	var discardUnknown bool
+	if discardUnknown, err = conf.FieldBool(fieldDiscardUnknown); err != nil {
+		return nil, err
+	}
+
+	if p.operator, err = strToProtobufOperator(mgr.FS(), operatorStr, message, importPaths, discardUnknown); err != nil {
 		return nil, err
 	}
 	return p, nil
