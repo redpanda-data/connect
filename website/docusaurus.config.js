@@ -125,7 +125,7 @@ module.exports = {
       appId: 'WBY9Z65YR4',
       apiKey: 'a6c476911e6ecef76049a55d9798a51b',
       indexName: 'benthos',
-      contextualSearch: false
+      contextualSearch: true
     }
   },
   presets: [
