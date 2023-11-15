@@ -8,6 +8,7 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 
 - Bloblang error messages for bad function/method names or parameters should now be improved in mappings that use shorthand for `root = ...`.
+- All redis components now support usernames within the configured URL for authentication.
 
 ## 4.23.0 - 2023-10-30
 
