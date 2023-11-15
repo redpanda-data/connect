@@ -257,10 +257,6 @@ func NewKafkaWriterFromParsed(conf *service.ParsedConfig, mgr *service.Resources
 		return backoff.WithMaxRetries(&boff, uint64(maxRetries))
 	}
 
-	if k.admin, err = sarama.NewClusterAdmin(k.addresses, sarama.NewConfig()); err != nil {
-		return nil, err
-	}
-
 	if k.retryAsBatch, err = conf.FieldBool(oskFieldRetryAsBatch); err != nil {
 		return nil, err
 	}
@@ -290,6 +286,11 @@ func NewKafkaWriterFromParsed(conf *service.ParsedConfig, mgr *service.Resources
 	if k.saramConf, err = k.saramaConfigFromParsed(conf); err != nil {
 		return nil, err
 	}
+
+	if k.admin, err = sarama.NewClusterAdmin(k.addresses, k.saramConf); err != nil {
+		return nil, err
+	}
+
 	return &k, nil
 }
 

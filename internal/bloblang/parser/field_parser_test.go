@@ -48,7 +48,7 @@ func TestFieldExpressionParserErrors(t *testing.T) {
 		},
 		"bad function 2": {
 			input: `static string ${!not_a_function()} hello world`,
-			err:   `char 18: unrecognised function 'not_a_function'`,
+			err:   `char 34: unrecognised function 'not_a_function'`,
 		},
 		"bad args": {
 			input: `foo ${!json("foo") whats this?} bar`,

@@ -12,12 +12,11 @@ import (
 
 // ParamDefinition describes a single parameter for a function or method.
 type ParamDefinition struct {
-	Name        string    `json:"name"`
-	Description string    `json:"description,omitempty"`
-	ValueType   ValueType `json:"type"`
-	NoDynamic   bool      `json:"no_dynamic"`
-
-	castScalarsToLiteral bool
+	Name             string    `json:"name"`
+	Description      string    `json:"description,omitempty"`
+	ValueType        ValueType `json:"type"`
+	NoDynamic        bool      `json:"no_dynamic"`
+	ScalarsToLiteral bool      `json:"scalars_to_literal"`
 
 	// IsOptional is implicit when there's a DefaultValue. However, there are
 	// times when a parameter is used to change behaviour without having a
@@ -95,8 +94,8 @@ func ParamObject(name, description string) ParamDefinition {
 func ParamQuery(name, description string, wrapScalars bool) ParamDefinition {
 	return ParamDefinition{
 		Name: name, Description: description,
-		ValueType:            ValueQuery,
-		castScalarsToLiteral: wrapScalars,
+		ValueType:        ValueQuery,
+		ScalarsToLiteral: wrapScalars,
 	}
 }
 
@@ -171,7 +170,7 @@ func (d ParamDefinition) parseArgValue(v any) (any, error) {
 		if _, isDyn := v.(Function); isDyn {
 			return v, nil
 		}
-		if d.castScalarsToLiteral {
+		if d.ScalarsToLiteral {
 			return NewLiteralFunction("", v), nil
 		}
 	case ValueUnknown:

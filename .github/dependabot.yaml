@@ -1,16 +1,18 @@
 version: 2
 updates:
-- package-ecosystem: "gomod"
-  directory: "/"
-  schedule:
-    interval: "weekly"
-  groups:
-    production-dependencies:
-      dependency-type: "production"
-    development-dependencies:
-      dependency-type: "development"
-  open-pull-requests-limit: 10
-- package-ecosystem: "github-actions"
-  directory: "/"
-  schedule:
-    interval: "weekly"
+  - package-ecosystem: "gomod"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    groups:
+      production-dependencies:
+        dependency-type: "production"
+      development-dependencies:
+        dependency-type: "development"
+    open-pull-requests-limit: 10
+    ignore:
+      - dependency-name: github.com/microcosm-cc/bluemonday
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
