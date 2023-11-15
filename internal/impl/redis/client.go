@@ -23,6 +23,7 @@ Some cloud hosted instances of Redis (such as Azure Cache) might need some hand 
 			Description("The URL of the target Redis server. Database is optional and is supplied as the URL path.").
 			Example("redis://:6397").
 			Example("redis://localhost:6379").
+			Example("redis://foousername:foopassword@redisplace:6379").
 			Example("redis://:foopassword@redisplace:6379").
 			Example("redis://localhost:6379/1").
 			Example("redis://localhost:6379/1,redis://localhost:6380/1"),
@@ -65,6 +66,7 @@ func getClient(parsedConf *service.ParsedConfig) (redis.UniversalClient, error) 
 
 	// We default to Redis DB 0 for backward compatibility
 	var redisDB int
+	var user string
 	var pass string
 	var addrs []string
 
@@ -86,6 +88,7 @@ func getClient(parsedConf *service.ParsedConfig) (redis.UniversalClient, error) 
 
 		addrs = append(addrs, rurl.Addr)
 		redisDB = rurl.DB
+		user = rurl.Username
 		pass = rurl.Password
 	}
 
@@ -93,6 +96,7 @@ func getClient(parsedConf *service.ParsedConfig) (redis.UniversalClient, error) 
 	opts := &redis.UniversalOptions{
 		Addrs:     addrs,
 		DB:        redisDB,
+		Username:  user,
 		Password:  pass,
 		TLSConfig: tlsConf,
 	}
