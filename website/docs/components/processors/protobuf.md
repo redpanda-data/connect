@@ -24,6 +24,8 @@ label: ""
 protobuf:
   operator: "" # No default (required)
   message: "" # No default (required)
+  discard_unknown: false
+  use_proto_names: false
   import_paths: []
 ```
 
@@ -41,31 +43,6 @@ Converts protobuf messages into a generic JSON structure. This makes it easier t
 
 Attempts to create a target protobuf message from a generic JSON structure.
 
-
-## Fields
-
-### `operator`
-
-The [operator](#operators) to execute
-
-
-Type: `string`  
-Options: `to_json`, `from_json`.
-
-### `message`
-
-The fully qualified name of the protobuf message to convert to/from.
-
-
-Type: `string`  
-
-### `import_paths`
-
-A list of directories containing .proto files, including all definitions required for parsing the target message. If left empty the current directory is used. Each directory listed will be walked with all found .proto files imported.
-
-
-Type: `array`  
-Default: `[]`  
 
 ## Examples
 
@@ -165,5 +142,46 @@ pipeline:
 
 </TabItem>
 </Tabs>
+
+## Fields
+
+### `operator`
+
+The [operator](#operators) to execute
+
+
+Type: `string`  
+Options: `to_json`, `from_json`.
+
+### `message`
+
+The fully qualified name of the protobuf message to convert to/from.
+
+
+Type: `string`  
+
+### `discard_unknown`
+
+If true, from_json discards unknown fields to schema.
+
+
+Type: `bool`  
+Default: `false`  
+
+### `use_proto_names`
+
+If true, to_json unserializes fields exactly as named in schema file.
+
+
+Type: `bool`  
+Default: `false`  
+
+### `import_paths`
+
+A list of directories containing .proto files, including all definitions required for parsing the target message. If left empty the current directory is used. Each directory listed will be walked with all found .proto files imported.
+
+
+Type: `array`  
+Default: `[]`  
 
 
