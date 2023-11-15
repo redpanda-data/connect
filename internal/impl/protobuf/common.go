@@ -35,6 +35,11 @@ func RegistriesFromMap(filesMap map[string]string) (*protoregistry.Files, *proto
 			if err := types.RegisterMessage(dynamicpb.NewMessageType(t.UnwrapMessage())); err != nil {
 				return nil, nil, fmt.Errorf("failed to register type '%v': %w", t.GetName(), err)
 			}
+			for _, nt := range t.GetNestedMessageTypes() {
+				if err := types.RegisterMessage(dynamicpb.NewMessageType(nt.UnwrapMessage())); err != nil {
+					return nil, nil, fmt.Errorf("failed to register type '%v': %w", nt.GetFullyQualifiedName(), err)
+				}
+			}
 		}
 	}
 	return files, types, nil

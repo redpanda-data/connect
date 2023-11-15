@@ -66,6 +66,13 @@ func TestProtobufFromJSON(t *testing.T) {
 			input:          `{"id":747,"content":{"@type":"type.googleapis.com/testing.House","address":"123"}}`,
 			outputContains: []string{"type.googleapis.com/testing.House"},
 		},
+		{
+			name:           "any: json to protobuf with nested message",
+			message:        "testing.House.Mailbox",
+			importPath:     "../../../config/test/protobuf/schema",
+			input:          `{"color":"red","identifier":"123"}`,
+			outputContains: []string{"red"},
+		},
 	}
 
 	for i, test := range tests {

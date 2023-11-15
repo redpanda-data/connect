@@ -4,6 +4,11 @@ package testing;
 import "person.proto";
 
 message House {
+  message Mailbox {
+    string color = 1;
+    string identifier = 2;
+  }
   repeated testing.Person people = 1;
   string address = 2;
+  Mailbox mailbox = 3;
 }
