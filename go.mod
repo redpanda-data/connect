@@ -96,7 +96,7 @@ require (
 	github.com/sijms/go-ora/v2 v2.7.19
 	github.com/sirupsen/logrus v1.9.3
 	github.com/smira/go-statsd v1.3.3
-	github.com/snowflakedb/gosnowflake v1.6.25
+	github.com/snowflakedb/gosnowflake v1.7.0
 	github.com/sourcegraph/conc v0.3.0
 	github.com/stretchr/testify v1.8.4
 	github.com/tetratelabs/wazero v1.5.0
