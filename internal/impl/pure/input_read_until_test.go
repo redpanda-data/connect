@@ -27,7 +27,7 @@ func TestReadUntilErrs(t *testing.T) {
 	conf.ReadUntil.Input = &inConf
 
 	_, err := bmock.NewManager().NewInput(conf)
-	assert.EqualError(t, err, "failed to init input <no label>: a check query is required")
+	assert.EqualError(t, err, "failed to init input <no label>: it is required to set either check or idle_timeout")
 }
 
 func TestReadUntilInput(t *testing.T) {
