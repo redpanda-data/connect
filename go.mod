@@ -63,7 +63,7 @@ require (
 	github.com/itchyny/timefmt-go v0.1.5
 	github.com/jhump/protoreflect v1.15.3
 	github.com/jmespath/go-jmespath v0.4.0
-	github.com/klauspost/compress v1.17.2
+	github.com/klauspost/compress v1.17.3
 	github.com/klauspost/pgzip v1.2.6
 	github.com/lib/pq v1.10.9
 	github.com/linkedin/goavro/v2 v2.12.0
