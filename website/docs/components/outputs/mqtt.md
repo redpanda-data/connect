@@ -14,7 +14,6 @@ categories: ["Services"]
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-
 Pushes messages to an MQTT broker.
 
 
@@ -30,11 +29,11 @@ Pushes messages to an MQTT broker.
 output:
   label: ""
   mqtt:
-    urls: []
-    topic: ""
+    urls: [] # No default (required)
     client_id: ""
-    qos: 1
     connect_timeout: 30s
+    topic: "" # No default (required)
+    qos: 1
     write_timeout: 3s
     retained: false
     max_in_flight: 64
@@ -48,15 +47,10 @@ output:
 output:
   label: ""
   mqtt:
-    urls: []
-    topic: ""
+    urls: [] # No default (required)
     client_id: ""
-    dynamic_client_id_suffix: ""
-    qos: 1
+    dynamic_client_id_suffix: "" # No default (optional)
     connect_timeout: 30s
-    write_timeout: 3s
-    retained: false
-    retained_interpolated: ""
     will:
       enabled: false
       qos: 0
@@ -73,15 +67,18 @@ output:
       root_cas: ""
       root_cas_file: ""
       client_certs: []
+    topic: "" # No default (required)
+    qos: 1
+    write_timeout: 3s
+    retained: false
+    retained_interpolated: "" # No default (optional)
     max_in_flight: 64
 ```
 
 </TabItem>
 </Tabs>
 
-The `topic` field can be dynamically set using function interpolations
-described [here](/docs/configuration/interpolation#bloblang-queries). When sending batched
-messages these interpolations are performed per message part.
+The `topic` field can be dynamically set using function interpolations described [here](/docs/configuration/interpolation#bloblang-queries). When sending batched messages these interpolations are performed per message part.
 
 ## Performance
 
@@ -97,7 +94,6 @@ A list of URLs to connect to. If an item of the list contains commas it will be 
 
 
 Type: `array`  
-Default: `[]`  
 
 ```yml
 # Examples
@@ -105,14 +101,6 @@ Default: `[]`
 urls:
   - tcp://localhost:1883
 ```
-
-### `topic`
-
-The topic to publish messages to.
-
-
-Type: `string`  
-Default: `""`  
 
 ### `client_id`
 
@@ -128,21 +116,11 @@ Append a dynamically generated suffix to the specified `client_id` on each run o
 
 
 Type: `string`  
-Default: `""`  
 
 | Option | Summary |
 |---|---|
 | `nanoid` | append a nanoid of length 21 characters |
 
-
-### `qos`
-
-The QoS value to set for each message.
-
-
-Type: `int`  
-Default: `1`  
-Options: `0`, `1`, `2`.
 
 ### `connect_timeout`
 
@@ -161,41 +139,6 @@ connect_timeout: 1s
 connect_timeout: 500ms
 ```
 
-### `write_timeout`
-
-The maximum amount of time to wait to write data before the attempt is abandoned.
-
-
-Type: `string`  
-Default: `"3s"`  
-Requires version 3.58.0 or newer  
-
-```yml
-# Examples
-
-write_timeout: 1s
-
-write_timeout: 500ms
-```
-
-### `retained`
-
-Set message as retained on the topic.
-
-
-Type: `bool`  
-Default: `false`  
-
-### `retained_interpolated`
-
-Override the value of `retained` with an interpolable value, this allows it to be dynamically set based on message contents. The value must resolve to either `true` or `false`.
-This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
-
-
-Type: `string`  
-Default: `""`  
-Requires version 3.59.0 or newer  
-
 ### `will`
 
 Set last will message in case of Benthos failure
@@ -213,12 +156,11 @@ Default: `false`
 
 ### `will.qos`
 
-Set QoS for last will message.
+Set QoS for last will message. Valid values are: 0, 1, 2.
 
 
 Type: `int`  
 Default: `0`  
-Options: `0`, `1`, `2`.
 
 ### `will.retained`
 
@@ -277,7 +219,6 @@ Custom TLS settings can be used to override system defaults.
 
 
 Type: `object`  
-Requires version 3.45.0 or newer  
 
 ### `tls.enabled`
 
@@ -411,6 +352,56 @@ password: foo
 
 password: ${KEY_PASSWORD}
 ```
+
+### `topic`
+
+The topic to publish messages to.
+This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
+
+
+Type: `string`  
+
+### `qos`
+
+The QoS value to set for each message. Has options 0, 1, 2.
+
+
+Type: `int`  
+Default: `1`  
+
+### `write_timeout`
+
+The maximum amount of time to wait to write data before the attempt is abandoned.
+
+
+Type: `string`  
+Default: `"3s"`  
+Requires version 3.58.0 or newer  
+
+```yml
+# Examples
+
+write_timeout: 1s
+
+write_timeout: 500ms
+```
+
+### `retained`
+
+Set message as retained on the topic.
+
+
+Type: `bool`  
+Default: `false`  
+
+### `retained_interpolated`
+
+Override the value of `retained` with an interpolable value, this allows it to be dynamically set based on message contents. The value must resolve to either `true` or `false`.
+This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
+
+
+Type: `string`  
+Requires version 3.59.0 or newer  
 
 ### `max_in_flight`
 
