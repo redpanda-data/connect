@@ -43,7 +43,9 @@ https://www.freecodecamp.org/news/the-apache-cassandra-beginner-tutorial/
 Then if we want to select everything from the table users_by_country, we should use the configuration below.
 If we specify the stdin output, the result will look like:
 
+`+"```json"+`
 {"age":23,"country":"UK","first_name":"Bob","last_name":"Sandler","user_email":"bob@email.com"}
+`+"```"+`
 
 This configuration also works for Scylla.
 `,
