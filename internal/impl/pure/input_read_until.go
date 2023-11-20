@@ -30,7 +30,7 @@ Reads messages from a child input until a consumed message passes a [Bloblang qu
 		Description: `
 Messages are read continuously while the query check returns false, when the query returns true the message that triggered the check is sent out and the input is closed. Use this to define inputs where the stream should end once a certain message appears.
 
-If the idle timeout is configured, the input will be closed after that period of time if no new messages arrive. Use this field if you want to empty out and close an input that doesn't have a logical end.
+If the idle timeout is configured, the input will be closed if no new messages arrive after that period of time. Use this field if you want to empty out and close an input that doesn't have a logical end.
 
 Sometimes inputs close themselves. For example, when the ` + "`file`" + ` input type reaches the end of a file it will shut down. By default this type will also shut down. If you wish for the input type to be restarted every time it shuts down until the query check is met then set ` + "`restart_input` to `true`." + `
 
