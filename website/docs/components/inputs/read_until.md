@@ -15,7 +15,7 @@ import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
 
-Reads messages from a child input until a consumed message passes a [Bloblang query](/docs/guides/bloblang/about/), at which point the input closes.
+Reads messages from a child input until a consumed message passes a [Bloblang query](/docs/guides/bloblang/about/), at which point the input closes. It is also possible to configure a timeout after which the input is closed if no new messages arrive in that period.
 
 ```yml
 # Config fields, showing default values
@@ -24,10 +24,13 @@ input:
   read_until:
     input: null
     check: ""
+    idle_timeout: ""
     restart_input: false
 ```
 
 Messages are read continuously while the query check returns false, when the query returns true the message that triggered the check is sent out and the input is closed. Use this to define inputs where the stream should end once a certain message appears.
+
+If the idle timeout is configured, the input will be closed if no new messages arrive after that period of time. Use this field if you want to empty out and close an input that doesn't have a logical end.
 
 Sometimes inputs close themselves. For example, when the `file` input type reaches the end of a file it will shut down. By default this type will also shut down. If you wish for the input type to be restarted every time it shuts down until the query check is met then set `restart_input` to `true`.
 
@@ -61,6 +64,20 @@ check: this.type == "foo"
 check: count("messages") >= 100
 ```
 
+### `idle_timeout`
+
+The maximum amount of time without receiving new messages after which the input is closed.
+
+
+Type: `string`  
+Default: `""`  
+
+```yml
+# Examples
+
+idle_timeout: 5s
+```
+
 ### `restart_input`
 
 Whether the input should be reopened if it closes itself before the condition has resolved to true.
@@ -73,6 +90,7 @@ Default: `false`
 
 <Tabs defaultValue="Consume N Messages" values={[
 { label: 'Consume N Messages', value: 'Consume N Messages', },
+{ label: 'Read from a kafka and close when empty', value: 'Read from a kafka and close when empty', },
 ]}>
 
 <TabItem value="Consume N Messages">
@@ -84,6 +102,23 @@ A common reason to use this input is to consume only N messages from an input an
 input:
   read_until:
     check: count("messages") >= 100
+    input:
+      kafka:
+        addresses: [ TODO ]
+        topics: [ foo, bar ]
+        consumer_group: foogroup
+```
+
+</TabItem>
+<TabItem value="Read from a kafka and close when empty">
+
+A common reason to use this input is a job that consumes all messages and exits once its empty:
+
+```yaml
+# Consumes all messages and exit when the last message was consumed 5s ago.
+input:
+  read_until:
+    idle_timeout: 5s
     input:
       kafka:
         addresses: [ TODO ]
