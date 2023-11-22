@@ -64,6 +64,7 @@ output:
     partition: ${! meta("partition") } # No default (optional)
     client_id: benthos
     rack_id: ""
+    disable_idempotent_write: false
     metadata:
       include_prefixes: []
       include_patterns: []
@@ -178,6 +179,14 @@ A rack identifier for this client.
 
 Type: `string`  
 Default: `""`  
+
+### `disable_idempotent_write`
+
+Disabled the idempotent write producer option, meaning the IDEMPOTENT_WRITE permission on CLUSTER is no longer required. Not recommended unless absolutely necessary
+
+
+Type: `bool`  
+Default: `false`  
 
 ### `metadata`
 
