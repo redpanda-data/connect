@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- Field `idempotent_write` added to the `kafka_franz` output.
+
 ### Fixed
 
 - Bloblang error messages for bad function/method names or parameters should now be improved in mappings that use shorthand for `root = ...`.
