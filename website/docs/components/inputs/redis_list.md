@@ -76,6 +76,8 @@ url: redis://:6397
 
 url: redis://localhost:6379
 
+url: redis://foousername:foopassword@redisplace:6379
+
 url: redis://:foopassword@redisplace:6379
 
 url: redis://localhost:6379/1

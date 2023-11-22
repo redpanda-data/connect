@@ -31,7 +31,7 @@ input:
   kafka:
     addresses: [] # No default (required)
     topics: [] # No default (required)
-    target_version: 1.0.0 # No default (optional)
+    target_version: 2.1.0 # No default (optional)
     consumer_group: ""
     checkpoint_limit: 1024
 ```
@@ -46,7 +46,7 @@ input:
   kafka:
     addresses: [] # No default (required)
     topics: [] # No default (required)
-    target_version: 1.0.0 # No default (optional)
+    target_version: 2.1.0 # No default (optional)
     tls:
       enabled: false
       skip_cert_verify: false
@@ -186,7 +186,7 @@ Type: `string`
 ```yml
 # Examples
 
-target_version: 1.0.0
+target_version: 2.1.0
 
 target_version: 3.1.0
 ```

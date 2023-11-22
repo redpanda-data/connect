@@ -17,7 +17,6 @@ type Config struct {
 	Dynamic      DynamicConfig      `json:"dynamic" yaml:"dynamic"`
 	Generate     GenerateConfig     `json:"generate" yaml:"generate"`
 	Inproc       InprocConfig       `json:"inproc" yaml:"inproc"`
-	MQTT         MQTTConfig         `json:"mqtt" yaml:"mqtt"`
 	Nanomsg      NanomsgConfig      `json:"nanomsg" yaml:"nanomsg"`
 	NSQ          NSQConfig          `json:"nsq" yaml:"nsq"`
 	Plugin       any                `json:"plugin,omitempty" yaml:"plugin,omitempty"`
@@ -43,7 +42,6 @@ func NewConfig() Config {
 		Dynamic:      NewDynamicConfig(),
 		Generate:     NewGenerateConfig(),
 		Inproc:       NewInprocConfig(),
-		MQTT:         NewMQTTConfig(),
 		Nanomsg:      NewNanomsgConfig(),
 		NSQ:          NewNSQConfig(),
 		Plugin:       nil,

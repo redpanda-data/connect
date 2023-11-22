@@ -15,7 +15,7 @@ require (
 	github.com/Azure/go-amqp v1.0.2
 	github.com/ClickHouse/clickhouse-go/v2 v2.14.3
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/trace v1.20.0
-	github.com/IBM/sarama v1.40.1
+	github.com/IBM/sarama v1.42.1
 	github.com/Jeffail/gabs/v2 v2.7.0
 	github.com/Jeffail/grok v1.1.0
 	github.com/Masterminds/squirrel v1.5.4

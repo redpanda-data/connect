@@ -10,7 +10,6 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"path"
 
 	"github.com/benthosdev/benthos/v4/internal/httpclient"
 	"github.com/benthosdev/benthos/v4/public/service"
@@ -171,7 +170,9 @@ func (c *schemaRegistryClient) walkReferencesTracked(ctx context.Context, seen m
 
 func (c *schemaRegistryClient) doRequest(ctx context.Context, verb, reqPath string) (resCode int, resBody []byte, err error) {
 	reqURL := *c.schemaRegistryBaseURL
-	reqURL.Path = path.Join(reqURL.Path, reqPath)
+	if reqURL.Path, err = url.JoinPath(reqURL.Path, reqPath); err != nil {
+		return
+	}
 
 	var req *http.Request
 	if req, err = http.NewRequestWithContext(ctx, verb, reqURL.String(), http.NoBody); err != nil {
