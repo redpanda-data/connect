@@ -8,6 +8,7 @@ All notable changes to this project will be documented in this file.
 ### Added
 
 - Field `idempotent_write` added to the `kafka_franz` output.
+- Field `idle_timeout` added to the `read_until` input.
 
 ### Fixed
 

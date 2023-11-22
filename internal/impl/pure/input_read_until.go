@@ -205,18 +205,24 @@ runLoop:
 		}
 
 		var tran message.Transaction
-		select {
-		case tran, open = <-wrapped.TransactionChan():
-			if !open {
-				r.wrappedInputLocked.Store(nil)
-				continue runLoop
+		{
+			timeoutChan, timeoutDone := resetIdleTimeout(r.idleTimeout)
+			select {
+			case tran, open = <-wrapped.TransactionChan():
+				timeoutDone()
+				if !open {
+					r.wrappedInputLocked.Store(nil)
+					continue runLoop
+				}
+				restartBackoff.Reset()
+			case <-r.shutSig.CloseAtLeisureChan():
+				timeoutDone()
+				return
+			case <-timeoutChan:
+				timeoutDone()
+				r.log.Infoln("Idle timeout reached")
+				return
 			}
-			restartBackoff.Reset()
-		case <-r.shutSig.CloseAtLeisureChan():
-			return
-		case <-resetIdleTimeout(r.idleTimeout):
-			r.log.Infoln("Idle timeout reached")
-			return
 		}
 
 		var err error
@@ -300,10 +306,14 @@ func (r *readUntilInput) WaitForClose(ctx context.Context) error {
 	return nil
 }
 
-func resetIdleTimeout(d time.Duration) <-chan time.Time {
-	var waitForTimeout <-chan time.Time
+func resetIdleTimeout(d time.Duration) (waitForTimeout <-chan time.Time, done func()) {
+	done = func() {}
 	if d > 0 {
-		waitForTimeout = time.After(d)
+		timer := time.NewTimer(d)
+		waitForTimeout = timer.C
+		done = func() {
+			_ = timer.Stop()
+		}
 	}
-	return waitForTimeout
+	return
 }
