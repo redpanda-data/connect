@@ -2,6 +2,7 @@ package pure
 
 import (
 	"go.opentelemetry.io/otel/trace"
+	"go.opentelemetry.io/otel/trace/noop"
 
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component/tracer"
@@ -10,7 +11,7 @@ import (
 
 func init() {
 	_ = bundle.AllTracers.Add(func(c tracer.Config, nm bundle.NewManagement) (trace.TracerProvider, error) {
-		return trace.NewNoopTracerProvider(), nil
+		return noop.NewTracerProvider(), nil
 	}, docs.ComponentSpec{
 		Name:    "none",
 		Type:    docs.TypeTracer,

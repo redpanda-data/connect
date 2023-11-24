@@ -8,6 +8,7 @@ import (
 	"sync"
 
 	"go.opentelemetry.io/otel/trace"
+	"go.opentelemetry.io/otel/trace/noop"
 
 	"github.com/benthosdev/benthos/v4/internal/bloblang"
 	"github.com/benthosdev/benthos/v4/internal/bloblang/query"
@@ -184,7 +185,7 @@ func New(conf ResourceConfig, opts ...OptFunc) (*Type, error) {
 
 		logger: log.Noop(),
 		stats:  metrics.Noop(),
-		tracer: trace.NewNoopTracerProvider(),
+		tracer: noop.NewTracerProvider(),
 
 		fs: ifs.OS(),
 

@@ -147,7 +147,7 @@ document_map: |
 
 	// Validate the record is in the MongoDB
 	result := collection.FindOne(tCtx, bson.M{"a": "foo1", "b": "bar1"})
-	b, err := result.DecodeBytes()
+	b, err := result.Raw()
 	assert.NoError(t, err)
 	aVal := b.Lookup("a")
 	bVal := b.Lookup("b")
@@ -155,7 +155,7 @@ document_map: |
 	assert.Equal(t, `"bar1"`, bVal.String())
 
 	result = collection.FindOne(tCtx, bson.M{"a": "foo2", "b": "bar2"})
-	b, err = result.DecodeBytes()
+	b, err = result.Raw()
 	assert.NoError(t, err)
 	aVal = b.Lookup("a")
 	bVal = b.Lookup("b")
@@ -191,7 +191,7 @@ filter_map: |
 
 	// Validate the record has been deleted from the db
 	result := collection.FindOne(context.Background(), bson.M{"a": "foo_delete", "b": "bar_delete"})
-	b, err := result.DecodeBytes()
+	b, err := result.Raw()
 	assert.Nil(t, b)
 	assert.Error(t, err, "mongo: no documents in result")
 }
@@ -229,7 +229,7 @@ filter_map: |
 
 	// Validate the record has been deleted from the db
 	result := collection.FindOne(context.Background(), bson.M{"a": "foo_delete_many", "b": "bar_delete_many"})
-	b, err := result.DecodeBytes()
+	b, err := result.Raw()
 	assert.Nil(t, b)
 	assert.Error(t, err, "mongo: no documents in result")
 }
@@ -265,7 +265,7 @@ filter_map: |
 
 	// Validate the record has been updated in the db
 	result := collection.FindOne(context.Background(), bson.M{"a": "foo_replace", "b": "bar_new"})
-	b, err := result.DecodeBytes()
+	b, err := result.Raw()
 	assert.NoError(t, err)
 	aVal := b.Lookup("a")
 	bVal := b.Lookup("b")
@@ -305,7 +305,7 @@ filter_map: |
 
 	// Validate the record has been updated in the db
 	result := collection.FindOne(context.Background(), bson.M{"a": "foo_update", "b": "bar_update_new"})
-	b, err := result.DecodeBytes()
+	b, err := result.Raw()
 	assert.NoError(t, err)
 	aVal := b.Lookup("a")
 	bVal := b.Lookup("b")
@@ -351,7 +351,7 @@ upsert: true
 
 	// Validate the record is in the MongoDB
 	result := collection.FindOne(tCtx, bson.M{"a": "foo1"})
-	b, err := result.DecodeBytes()
+	b, err := result.Raw()
 	assert.NoError(t, err)
 	aVal := b.Lookup("a")
 	bVal := b.Lookup("b")
@@ -359,7 +359,7 @@ upsert: true
 	assert.Equal(t, `"bar1"`, bVal.String())
 
 	result = collection.FindOne(tCtx, bson.M{"a": "foo2"})
-	b, err = result.DecodeBytes()
+	b, err = result.Raw()
 	assert.NoError(t, err)
 	aVal = b.Lookup("a")
 	bVal = b.Lookup("b")
@@ -381,7 +381,7 @@ upsert: true
 
 	// Validate the record is in the MongoDB
 	result = collection.FindOne(tCtx, bson.M{"a": "foo1"})
-	b, err = result.DecodeBytes()
+	b, err = result.Raw()
 	assert.NoError(t, err)
 	aVal = b.Lookup("a")
 	bVal = b.Lookup("b")
@@ -389,7 +389,7 @@ upsert: true
 	assert.Equal(t, `"bar3"`, bVal.String())
 
 	result = collection.FindOne(tCtx, bson.M{"a": "foo2"})
-	b, err = result.DecodeBytes()
+	b, err = result.Raw()
 	assert.NoError(t, err)
 	aVal = b.Lookup("a")
 	bVal = b.Lookup("b")

@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	"go.opentelemetry.io/otel/trace"
+	"go.opentelemetry.io/otel/trace/noop"
 
 	"github.com/benthosdev/benthos/v4/internal/bloblang"
 	"github.com/benthosdev/benthos/v4/internal/bundle"
@@ -55,7 +56,7 @@ func NewManager() *Manager {
 		CustomFS:   ifs.OS(),
 		M:          metrics.Noop(),
 		L:          log.Noop(),
-		T:          trace.NewNoopTracerProvider(),
+		T:          noop.NewTracerProvider(),
 	}
 }
 
