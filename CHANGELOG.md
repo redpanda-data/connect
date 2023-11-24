@@ -5,6 +5,8 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 4.24.0 - 2023-11-24
+
 ### Added
 
 - Field `idempotent_write` added to the `kafka_franz` output.
