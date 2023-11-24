@@ -9,6 +9,8 @@ All notable changes to this project will be documented in this file.
 
 - Field `idempotent_write` added to the `kafka_franz` output.
 - Field `idle_timeout` added to the `read_until` input.
+- Field `delay_seconds` added to the `aws_sqs` output.
+- Fields `discard_unknown` and `use_proto_names` added to the `protobuf` processors.
 
 ### Fixed
 

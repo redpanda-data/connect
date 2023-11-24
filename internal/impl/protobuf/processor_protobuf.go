@@ -52,10 +52,10 @@ Attempts to create a target protobuf message from a generic JSON structure.
 		service.NewStringField(fieldMessage).
 			Description("The fully qualified name of the protobuf message to convert to/from."),
 		service.NewBoolField(fieldDiscardUnknown).
-			Description("If true, from_json discards unknown fields to schema.").
+			Description("If `true`, the `from_json` operator discards fields that are unknown to the schema.").
 			Default(false),
 		service.NewBoolField(fieldUseProtoNames).
-			Description("If true, to_json unserializes fields exactly as named in schema file.").
+			Description("If `true`, the `to_json` operator deserializes fields exactly as named in schema file.").
 			Default(false),
 		service.NewStringListField(fieldImportPaths).
 			Description("A list of directories containing .proto files, including all definitions required for parsing the target message. If left empty the current directory is used. Each directory listed will be walked with all found .proto files imported.").

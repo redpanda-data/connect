@@ -159,7 +159,7 @@ input:
     region: eu-west-1
     delete_objects: true
     sqs:
-      url: http://localhost:$PORT/queue/queue-$ID
+      url: http://localhost:$PORT/000000000000/queue-$ID
       key_path: Records.*.s3.object.key
       endpoint: http://localhost:$PORT
     credentials:
@@ -214,7 +214,7 @@ input:
     delete_objects: true
     codec: lines
     sqs:
-      url: http://localhost:$PORT/queue/queue-$ID
+      url: http://localhost:$PORT/000000000000/queue-$ID
       key_path: Records.*.s3.object.key
       endpoint: http://localhost:$PORT
       delay_period: 1s
@@ -286,7 +286,7 @@ input:
 		template := `
 output:
   aws_sqs:
-    url: http://localhost:$PORT/queue/queue-$ID
+    url: http://localhost:$PORT/000000000000/queue-$ID
     endpoint: http://localhost:$PORT
     region: eu-west-1
     credentials:
@@ -299,7 +299,7 @@ output:
 
 input:
   aws_sqs:
-    url: http://localhost:$PORT/queue/queue-$ID
+    url: http://localhost:$PORT/000000000000/queue-$ID
     endpoint: http://localhost:$PORT
     region: eu-west-1
     credentials:

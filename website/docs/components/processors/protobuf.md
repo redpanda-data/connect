@@ -162,7 +162,7 @@ Type: `string`
 
 ### `discard_unknown`
 
-If true, from_json discards unknown fields to schema.
+If `true`, the `from_json` operator discards fields that are unknown to the schema.
 
 
 Type: `bool`  
@@ -170,7 +170,7 @@ Default: `false`
 
 ### `use_proto_names`
 
-If true, to_json unserializes fields exactly as named in schema file.
+If `true`, the `to_json` operator deserializes fields exactly as named in schema file.
 
 
 Type: `bool`  
