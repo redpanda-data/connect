@@ -19,6 +19,7 @@ func TestProtobufFromJSON(t *testing.T) {
 		importPath     string
 		input          string
 		outputContains []string
+		discardUnknown bool
 	}
 
 	tests := []testCase{
@@ -42,6 +43,14 @@ func TestProtobufFromJSON(t *testing.T) {
 			importPath:     "../../../config/test/protobuf/schema",
 			input:          `{"firstName":"caleb","lastName":"quaye","email":"caleb@myspace.com"}`,
 			outputContains: []string{"caleb"},
+		},
+		{
+			name:           "json to protobuf with discard_unknown",
+			message:        "testing.Person",
+			importPath:     "../../../config/test/protobuf/schema",
+			input:          `{"firstName":"caleb","lastName":"quaye","missingfield":"anyvalue"}`,
+			outputContains: []string{"caleb"},
+			discardUnknown: true,
 		},
 		{
 			name:           "any: json to protobuf 1",
@@ -72,7 +81,8 @@ func TestProtobufFromJSON(t *testing.T) {
 operator: from_json
 message: %v
 import_paths: [ %v ]
-`, test.message, test.importPath), nil)
+discard_unknown: %t
+`, test.message, test.importPath, test.discardUnknown), nil)
 			require.NoError(t, err)
 
 			proc, err := newProtobuf(conf, service.MockResources())
@@ -96,11 +106,12 @@ import_paths: [ %v ]
 
 func TestProtobufToJSON(t *testing.T) {
 	type testCase struct {
-		name       string
-		message    string
-		importPath string
-		input      []byte
-		output     string
+		name          string
+		message       string
+		importPath    string
+		input         []byte
+		output        string
+		useProtoNames bool
 	}
 
 	tests := []testCase{
@@ -128,6 +139,18 @@ func TestProtobufToJSON(t *testing.T) {
 				0x6d,
 			},
 			output: `{"firstName":"caleb","lastName":"quaye","email":"caleb@myspace.com"}`,
+		},
+		{
+			name:          "protobuf to json with use_proto_names",
+			message:       "testing.Person",
+			importPath:    "../../../config/test/protobuf/schema",
+			useProtoNames: true,
+			input: []byte{
+				0x0a, 0x05, 0x63, 0x61, 0x6c, 0x65, 0x62, 0x12, 0x05, 0x71, 0x75, 0x61, 0x79, 0x65, 0x32, 0x11,
+				0x63, 0x61, 0x6c, 0x65, 0x62, 0x40, 0x6d, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x2e, 0x63, 0x6f,
+				0x6d,
+			},
+			output: `{"first_name":"caleb","last_name":"quaye","email":"caleb@myspace.com"}`,
 		},
 		{
 			name:       "any: protobuf to json 1",
@@ -159,7 +182,8 @@ func TestProtobufToJSON(t *testing.T) {
 operator: to_json
 message: %v
 import_paths: [ %v ]
-`, test.message, test.importPath), nil)
+use_proto_names: %t
+`, test.message, test.importPath, test.useProtoNames), nil)
 			require.NoError(t, err)
 
 			proc, err := newProtobuf(conf, service.MockResources())
