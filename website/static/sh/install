@@ -145,6 +145,10 @@ install_benthos()
 	chmod +x "$PREFIX/tmp/$benthos_bin"
 
 	echo "Putting benthos in $benthos_install_path (may require password)"
+	if [ -n "$sudo_cmd" ] && [ -n "$(find "$benthos_install_path" -prune -user "$(id -u)")" ]; then
+		# Skip sudo if the current user is the owner of the Benthos install path
+		sudo_cmd=""
+	fi
 	$sudo_cmd mv "$PREFIX/tmp/$benthos_bin" "$benthos_install_path/$benthos_bin"
 	$sudo_cmd rm -- "$dl"
 
