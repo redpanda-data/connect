@@ -29,11 +29,11 @@ Subscribe to an NSQ instance topic and channel.
 input:
   label: ""
   nsq:
-    nsqd_tcp_addresses: []
-    lookupd_http_addresses: []
-    topic: ""
-    channel: ""
-    user_agent: ""
+    nsqd_tcp_addresses: [] # No default (required)
+    lookupd_http_addresses: [] # No default (required)
+    topic: "" # No default (required)
+    channel: "" # No default (required)
+    user_agent: "" # No default (optional)
     max_in_flight: 100
     max_attempts: 5
 ```
@@ -46,8 +46,8 @@ input:
 input:
   label: ""
   nsq:
-    nsqd_tcp_addresses: []
-    lookupd_http_addresses: []
+    nsqd_tcp_addresses: [] # No default (required)
+    lookupd_http_addresses: [] # No default (required)
     tls:
       enabled: false
       skip_cert_verify: false
@@ -55,9 +55,9 @@ input:
       root_cas: ""
       root_cas_file: ""
       client_certs: []
-    topic: ""
-    channel: ""
-    user_agent: ""
+    topic: "" # No default (required)
+    channel: "" # No default (required)
+    user_agent: "" # No default (optional)
     max_in_flight: 100
     max_attempts: 5
 ```
@@ -87,7 +87,6 @@ A list of nsqd addresses to connect to.
 
 
 Type: `array`  
-Default: `[]`  
 
 ### `lookupd_http_addresses`
 
@@ -95,7 +94,6 @@ A list of nsqlookupd addresses to connect to.
 
 
 Type: `array`  
-Default: `[]`  
 
 ### `tls`
 
@@ -243,7 +241,6 @@ The topic to consume from.
 
 
 Type: `string`  
-Default: `""`  
 
 ### `channel`
 
@@ -251,7 +248,6 @@ The channel to consume from.
 
 
 Type: `string`  
-Default: `""`  
 
 ### `user_agent`
 
@@ -259,7 +255,6 @@ A user agent to assume when connecting.
 
 
 Type: `string`  
-Default: `""`  
 
 ### `max_in_flight`
 

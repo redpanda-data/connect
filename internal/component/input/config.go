@@ -17,7 +17,6 @@ type Config struct {
 	Dynamic      DynamicConfig      `json:"dynamic" yaml:"dynamic"`
 	Generate     GenerateConfig     `json:"generate" yaml:"generate"`
 	Inproc       InprocConfig       `json:"inproc" yaml:"inproc"`
-	NSQ          NSQConfig          `json:"nsq" yaml:"nsq"`
 	Plugin       any                `json:"plugin,omitempty" yaml:"plugin,omitempty"`
 	ReadUntil    ReadUntilConfig    `json:"read_until" yaml:"read_until"`
 	Resource     string             `json:"resource" yaml:"resource"`
@@ -41,7 +40,6 @@ func NewConfig() Config {
 		Dynamic:      NewDynamicConfig(),
 		Generate:     NewGenerateConfig(),
 		Inproc:       NewInprocConfig(),
-		NSQ:          NewNSQConfig(),
 		Plugin:       nil,
 		ReadUntil:    NewReadUntilConfig(),
 		Resource:     "",
