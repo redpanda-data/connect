@@ -1,0 +1,28 @@
+# Surprisingly, there still seems to be absolutely no options available for
+# running a single node set up of NSQ for testing purposes, which means it's
+# extremely awkward to write real integration tests. Instead, we have this
+# docker-compose set up where if you run it and then execute unit tests for this
+# package it'll run them.
+version: '3'
+services:
+  nsqlookupd:
+    image: nsqio/nsq
+    command: /nsqlookupd
+    ports:
+      - "4160:4160"
+      - "4161"
+  nsqd:
+    image: nsqio/nsq
+    command: /nsqd --lookupd-tcp-address=nsqlookupd:4160
+    depends_on:
+      - nsqlookupd
+    ports:
+      - "4150:4150"
+      - "4151"
+  nsqadmin:
+    image: nsqio/nsq
+    command: /nsqadmin --lookupd-http-address=nsqlookupd:4161
+    depends_on:
+      - nsqlookupd  
+    ports:
+      - "4171"

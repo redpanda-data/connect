@@ -21,7 +21,6 @@ type Config struct {
 	Dynamic      DynamicConfig      `json:"dynamic" yaml:"dynamic"`
 	Fallback     TryConfig          `json:"fallback" yaml:"fallback"`
 	Inproc       string             `json:"inproc" yaml:"inproc"`
-	NSQ          NSQConfig          `json:"nsq" yaml:"nsq"`
 	Plugin       any                `json:"plugin,omitempty" yaml:"plugin,omitempty"`
 	Reject       string             `json:"reject" yaml:"reject"`
 	Resource     string             `json:"resource" yaml:"resource"`
@@ -50,7 +49,6 @@ func NewConfig() Config {
 		Dynamic:      NewDynamicConfig(),
 		Fallback:     NewTryConfig(),
 		Inproc:       "",
-		NSQ:          NewNSQConfig(),
 		Plugin:       nil,
 		Reject:       "",
 		Resource:     "",
