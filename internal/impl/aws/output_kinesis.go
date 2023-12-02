@@ -215,7 +215,7 @@ func (a *kinesisWriter) Connect(ctx context.Context) error {
 }
 
 func isStreamARN(stream string) (bool, error) {
-	match, err := regexp.MatchString(`^arn:(aws|aws-us-gov|aws-cn):kinesis:[a-z\-0-9]+:\d{12}:stream\/.+`, stream)
+	match, err := regexp.MatchString(`^arn:(aws|aws-us-gov|aws-cn):kinesis:[a-z\-0-9]+:\d{12}:stream\/[a-zA-Z0-9_.-]{1,128}$`, stream)
 	if err != nil {
 		return false, err
 	}
