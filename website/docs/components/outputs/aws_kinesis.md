@@ -99,7 +99,7 @@ Batches can be formed at both the input and output level. You can find out more
 
 ### `stream`
 
-The stream to publish messages to.
+The stream to publish messages to. Can be an ARN or just the stream name.
 
 
 Type: `string`  
