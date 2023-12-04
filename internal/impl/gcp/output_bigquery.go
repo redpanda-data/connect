@@ -60,6 +60,7 @@ type gcpBigQueryOutputConfig struct {
 	MaxBadRecords       int
 	JobLabels           map[string]string
 
+	Credentials []option.ClientOption
 	// CSV options
 	CSVOptions gcpBigQueryCSVConfig
 }
@@ -101,14 +102,17 @@ func gcpBigQueryOutputConfigFromParsed(conf *service.ParsedConfig) (gconf gcpBig
 	if gconf.CSVOptions, err = gcpBigQueryCSVConfigFromParsed(conf.Namespace("csv")); err != nil {
 		return
 	}
+	if gconf.Credentials, err = GetGoogleCloudCredentials(conf); err != nil {
+		return
+	}
 	return
 }
 
 type gcpBQClientURL string
 
-func (g gcpBQClientURL) NewClient(ctx context.Context, projectID string) (*bigquery.Client, error) {
+func (g gcpBQClientURL) NewClient(ctx context.Context, projectID string, credentials []option.ClientOption) (*bigquery.Client, error) {
 	if g == "" {
-		return bigquery.NewClient(ctx, projectID)
+		return bigquery.NewClient(ctx, projectID, credentials...)
 	}
 	return bigquery.NewClient(ctx, projectID, option.WithoutAuthentication(), option.WithEndpoint(string(g)))
 }
@@ -209,7 +213,8 @@ For the CSV format when the field `+"`csv.header`"+` is specified a header row w
 				Advanced().
 				Default(1),
 		).Description("Specify how CSV data should be interpretted.")).
-		Field(service.NewBatchPolicyField("batching"))
+		Field(service.NewBatchPolicyField("batching")).
+		Fields(CredentialsFields()...)
 }
 
 func init() {
@@ -302,7 +307,7 @@ func (g *gcpBigQueryOutput) Connect(ctx context.Context) (err error) {
 	defer g.connMut.Unlock()
 
 	var client *bigquery.Client
-	if client, err = g.clientURL.NewClient(context.Background(), g.conf.ProjectID); err != nil {
+	if client, err = g.clientURL.NewClient(context.Background(), g.conf.ProjectID, g.conf.Credentials); err != nil {
 		err = fmt.Errorf("error creating big query client: %w", err)
 		return
 	}

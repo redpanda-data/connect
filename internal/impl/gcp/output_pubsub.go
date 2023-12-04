@@ -90,7 +90,8 @@ pipeline:
 				Advanced(),
 			service.NewBatchPolicyField("batching").
 				Description("Configures a batching policy on this output. While the PubSub client maintains its own internal buffering mechanism, preparing larger batches of messages can futher trade-off some latency for throughput."),
-		)
+		).
+		Fields(CredentialsFields()...)
 }
 
 type pubsubOutput struct {
@@ -180,6 +181,15 @@ func newPubSubOutput(conf *service.ParsedConfig) (*pubsubOutput, error) {
 	var opt []option.ClientOption
 	if len(endpoint) > 0 {
 		opt = []option.ClientOption{option.WithEndpoint(endpoint)}
+	}
+
+	var credentials []option.ClientOption
+	if credentials, err = GetGoogleCloudCredentials(conf); err != nil {
+		return nil, err
+	}
+
+	if credentials != nil {
+		opt = append(opt, credentials...)
 	}
 
 	return &pubsubOutput{
