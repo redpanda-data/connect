@@ -82,6 +82,18 @@ output:
       period: ""
       check: ""
       processors: [] # No default (optional)
+    credentials_path: "" # No default (optional)
+    credentials:
+      type: service_account
+      project_id: "" # No default (required)
+      private_key_id: "" # No default (required)
+      private_key: "" # No default (required)
+      client_email: "" # No default (required)
+      client_id: "" # No default (required)
+      auth_uri: https://accounts.google.com/o/oauth2/auth
+      token_uri: https://oauth2.googleapis.com/token
+      auth_provider_x509_cert_url: https://www.googleapis.com/oauth2/v1/certs
+      client_x509_cert_url: "" # No default (required)
 ```
 
 </TabItem>
@@ -374,5 +386,114 @@ processors:
   - archive:
       format: json_array
 ```
+
+### `credentials_path`
+
+The path for custom credentials of Google Cloud.
+:::warning Secret
+This field contains sensitive information that usually shouldn't be added to a config directly, read our [secrets page for more info](/docs/configuration/secrets).
+:::
+
+
+Type: `string`  
+
+### `credentials`
+
+Optional manual configuration of Google Cloud credentials to use. More information can be found [in this document](/docs/guides/cloud/gcp).
+:::warning Secret
+This field contains sensitive information that usually shouldn't be added to a config directly, read our [secrets page for more info](/docs/configuration/secrets).
+:::
+
+
+Type: `object`  
+
+### `credentials.type`
+
+The type of the account (always "service_account" for a service account).
+
+
+Type: `string`  
+Default: `"service_account"`  
+
+### `credentials.project_id`
+
+The ID of your Google Cloud project.
+
+
+Type: `string`  
+
+### `credentials.private_key_id`
+
+The ID of your private key.
+:::warning Secret
+This field contains sensitive information that usually shouldn't be added to a config directly, read our [secrets page for more info](/docs/configuration/secrets).
+:::
+
+
+Type: `string`  
+
+### `credentials.private_key`
+
+Your private key.
+:::warning Secret
+This field contains sensitive information that usually shouldn't be added to a config directly, read our [secrets page for more info](/docs/configuration/secrets).
+:::
+
+
+Type: `string`  
+
+### `credentials.client_email`
+
+The email address of your service account.
+:::warning Secret
+This field contains sensitive information that usually shouldn't be added to a config directly, read our [secrets page for more info](/docs/configuration/secrets).
+:::
+
+
+Type: `string`  
+
+### `credentials.client_id`
+
+The ID of your service account.
+:::warning Secret
+This field contains sensitive information that usually shouldn't be added to a config directly, read our [secrets page for more info](/docs/configuration/secrets).
+:::
+
+
+Type: `string`  
+
+### `credentials.auth_uri`
+
+The URI for OAuth2 authorization.
+
+
+Type: `string`  
+Default: `"https://accounts.google.com/o/oauth2/auth"`  
+
+### `credentials.token_uri`
+
+The URI that provides the OAuth2 tokens.
+
+
+Type: `string`  
+Default: `"https://oauth2.googleapis.com/token"`  
+
+### `credentials.auth_provider_x509_cert_url`
+
+The URL of the authentication provider's X.509 public key certificate.
+
+
+Type: `string`  
+Default: `"https://www.googleapis.com/oauth2/v1/certs"`  
+
+### `credentials.client_x509_cert_url`
+
+The URL of the service account's X.509 public key certificate. Typically: https://www.googleapis.com/robot/v1/metadata/x509/your-service-account-email%40your-project-id.iam.gserviceaccount.com
+:::warning Secret
+This field contains sensitive information that usually shouldn't be added to a config directly, read our [secrets page for more info](/docs/configuration/secrets).
+:::
+
+
+Type: `string`  
 
 
