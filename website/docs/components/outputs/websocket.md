@@ -42,6 +42,7 @@ output:
   label: ""
   websocket:
     url: "" # No default (required)
+    proxy_url: "" # No default (optional)
     tls:
       enabled: false
       skip_cert_verify: false
@@ -75,6 +76,13 @@ output:
 ### `url`
 
 The URL to connect to.
+
+
+Type: `string`  
+
+### `proxy_url`
+
+An optional HTTP proxy URL.
 
 
 Type: `string`  

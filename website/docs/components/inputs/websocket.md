@@ -43,6 +43,7 @@ input:
   label: ""
   websocket:
     url: ws://localhost:4195/get/ws # No default (required)
+    proxy_url: "" # No default (optional)
     open_message: "" # No default (optional)
     open_message_type: binary
     auto_replay_nacks: true
@@ -92,6 +93,13 @@ Type: `string`
 
 url: ws://localhost:4195/get/ws
 ```
+
+### `proxy_url`
+
+An optional HTTP proxy URL.
+
+
+Type: `string`  
 
 ### `open_message`
 
