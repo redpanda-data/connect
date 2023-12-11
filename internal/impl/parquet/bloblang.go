@@ -5,7 +5,7 @@ import (
 	"errors"
 	"io"
 
-	"github.com/segmentio/parquet-go"
+	"github.com/parquet-go/parquet-go"
 
 	"github.com/benthosdev/benthos/v4/internal/bloblang/query"
 	"github.com/benthosdev/benthos/v4/public/bloblang"
@@ -19,18 +19,12 @@ func init() {
 		Category("Parsing").
 		Description("Decodes a [Parquet file](https://parquet.apache.org/docs/) into an array of objects, one for each row within the file.").
 		Param(bloblang.NewBoolParam("byte_array_as_string").
-			Description("Whether to extract BYTE_ARRAY and FIXED_LEN_BYTE_ARRAY values as strings rather than byte slices in all cases. Values with a logical type of UTF8 will automatically be extracted as strings irrespective of this parameter. Enabling this field makes serialising the data as JSON more intuitive as `[]byte` values are serialised as base64 encoded strings by default.").Default(false)).
-		Example("", `root = content().parse_parquet()`).
-		Example("", `root = content().parse_parquet(byte_array_as_string: true)`)
+			Description("Deprecated: This parameter is no longer used.").Default(false)).
+		Example("", `root = content().parse_parquet()`)
 
 	if err := bloblang.RegisterMethodV2(
 		"parse_parquet", parquetParseSpec,
 		func(args *bloblang.ParsedParams) (bloblang.Method, error) {
-			var conf extractConfig
-			var err error
-			if conf.byteArrayAsStrings, err = args.GetBool("byte_array_as_string"); err != nil {
-				return nil, err
-			}
 			return func(v any) (any, error) {
 				b, err := query.IGetBytes(v)
 				if err != nil {
@@ -38,14 +32,13 @@ func init() {
 				}
 
 				rdr := bytes.NewReader(b)
-				pRdr := parquet.NewReader(rdr)
+				pRdr := parquet.NewGenericReader[any](rdr)
 
-				rowBuf := make([]parquet.Row, 10)
+				rowBuf := make([]any, 10)
 				var result []any
 
-				schema := pRdr.Schema()
 				for {
-					n, err := pRdr.ReadRows(rowBuf)
+					n, err := pRdr.Read(rowBuf)
 					if err != nil && !errors.Is(err, io.EOF) {
 						return nil, err
 					}
@@ -54,12 +47,7 @@ func init() {
 					}
 
 					for i := 0; i < n; i++ {
-						row := rowBuf[i]
-
-						mappedData := map[string]any{}
-						_, _ = conf.extractPQValueGroup(schema.Fields(), row, mappedData, 0, 0)
-
-						result = append(result, mappedData)
+						result = append(result, rowBuf[i])
 					}
 				}
 

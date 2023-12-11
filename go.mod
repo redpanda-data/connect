@@ -79,6 +79,7 @@ require (
 	github.com/olivere/elastic/v7 v7.0.32
 	github.com/ory/dockertest/v3 v3.10.0
 	github.com/oschwald/geoip2-golang v1.9.0
+	github.com/parquet-go/parquet-go v0.20.0
 	github.com/pebbe/zmq4 v1.2.10
 	github.com/pierrec/lz4/v4 v4.1.18
 	github.com/pkg/sftp v1.13.6
@@ -92,7 +93,6 @@ require (
 	github.com/rickb777/date v1.20.5
 	github.com/robfig/cron/v3 v3.0.1
 	github.com/segmentio/ksuid v1.0.4
-	github.com/segmentio/parquet-go v0.0.0-20220830163417-b03c0471ebb0
 	github.com/sijms/go-ora/v2 v2.7.22
 	github.com/sirupsen/logrus v1.9.3
 	github.com/smira/go-statsd v1.3.3
@@ -269,7 +269,7 @@ require (
 	github.com/rivo/uniseg v0.4.4 // indirect
 	github.com/russross/blackfriday/v2 v2.1.0 // indirect
 	github.com/segmentio/asm v1.2.0 // indirect
-	github.com/segmentio/encoding v0.3.5 // indirect
+	github.com/segmentio/encoding v0.3.6 // indirect
 	github.com/shopspring/decimal v1.3.1 // indirect
 	github.com/spaolacci/murmur3 v1.1.0 // indirect
 	github.com/stretchr/objx v0.5.0 // indirect
