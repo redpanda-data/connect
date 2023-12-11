@@ -28,6 +28,7 @@ type Config struct {
 	JMESPath     JMESPathConfig     `json:"jmespath" yaml:"jmespath"`
 	JQ           JQConfig           `json:"jq" yaml:"jq"`
 	JSONSchema   JSONSchemaConfig   `json:"json_schema" yaml:"json_schema"`
+	KV           KVConfig           `json:"kv" yaml:"kv"`
 	Log          LogConfig          `json:"log" yaml:"log"`
 	Metric       MetricConfig       `json:"metric" yaml:"metric"`
 	Noop         struct{}           `json:"noop" yaml:"noop"`
