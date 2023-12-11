@@ -3,13 +3,11 @@ package parquet
 import (
 	"bytes"
 	"context"
-	"errors"
 	"fmt"
 
-	"github.com/segmentio/parquet-go"
-	"github.com/segmentio/parquet-go/compress"
+	"github.com/parquet-go/parquet-go"
+	"github.com/parquet-go/parquet-go/compress"
 
-	"github.com/benthosdev/benthos/v4/internal/bloblang/query"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
@@ -32,7 +30,7 @@ func parquetEncodeProcessorConfig() *service.ConfigSpec {
 			Advanced().
 			Version("4.11.0")).
 		Description(`
-This processor uses [https://github.com/segmentio/parquet-go](https://github.com/segmentio/parquet-go), which is itself experimental. Therefore changes could be made into how this processor functions outside of major version releases.
+This processor uses [https://github.com/parquet-go/parquet-go](https://github.com/parquet-go/parquet-go), which is itself experimental. Therefore changes could be made into how this processor functions outside of major version releases.
 `).
 		Version("4.4.0").
 		// TODO: Add an example that demonstrates error handling
@@ -228,6 +226,17 @@ func newParquetEncodeProcessor(logger *service.Logger, schema *parquet.Schema, c
 	return s, nil
 }
 
+func writeWithoutPanic(pWtr *parquet.GenericWriter[any], rows []any) (err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = fmt.Errorf("encoding panic: %v", r)
+		}
+	}()
+
+	_, err = pWtr.Write(rows)
+	return
+}
+
 func (s *parquetEncodeProcessor) ProcessBatch(ctx context.Context, batch service.MessageBatch) ([]service.MessageBatch, error) {
 	if len(batch) == 0 {
 		return nil, nil
@@ -236,24 +245,20 @@ func (s *parquetEncodeProcessor) ProcessBatch(ctx context.Context, batch service
 	buf := bytes.NewBuffer(nil)
 	pWtr := parquet.NewGenericWriter[any](buf, s.schema, parquet.Compression(s.compressionType))
 
-	rows := make([]parquet.Row, len(batch))
+	rows := make([]any, len(batch))
 	for i, m := range batch {
 		ms, err := m.AsStructured()
 		if err != nil {
 			return nil, err
 		}
 
-		obj, isObj := ms.(map[string]any)
-		if !isObj {
+		var isObj bool
+		if rows[i], isObj = scrubJSONNumbers(ms).(map[string]any); !isObj {
 			return nil, fmt.Errorf("unable to encode message type %T as parquet row", ms)
-		}
-
-		if rows[i], err = (&inserterConfig{}).toPQValuesGroup(s.schema.Fields(), obj, 0, 0); err != nil {
-			return nil, err
 		}
 	}
 
-	if _, err := pWtr.WriteRows(rows); err != nil {
+	if err := writeWithoutPanic(pWtr, rows); err != nil {
 		return nil, err
 	}
 	if err := pWtr.Close(); err != nil {
@@ -267,182 +272,4 @@ func (s *parquetEncodeProcessor) ProcessBatch(ctx context.Context, batch service
 
 func (s *parquetEncodeProcessor) Close(ctx context.Context) error {
 	return nil
-}
-
-//------------------------------------------------------------------------------
-
-type inserterConfig struct {
-	colIndex      int
-	firstRepOf    *int
-	parentMissing bool
-}
-
-func (c *inserterConfig) toPQValue(f parquet.Field, data any, defLevel, repLevel int) (parquet.Row, error) {
-	if f.Repeated() {
-		repLevel++
-
-		var arr []any
-		if data != nil {
-			var isArray bool
-			if arr, isArray = data.([]any); !isArray {
-				return nil, fmt.Errorf("expected array, got %T", data)
-			}
-		}
-
-		if len(arr) > 0 {
-			defLevel++
-		}
-
-		return c.toPQValuesRepeated(f, arr, defLevel, repLevel)
-	}
-
-	if data == nil && !f.Optional() && !c.parentMissing {
-		return nil, errors.New("missing and non-optional")
-	}
-
-	return c.toPQValueNotRepeated(f, data, defLevel, repLevel)
-}
-
-func (c *inserterConfig) toPQValueNotRepeated(f parquet.Field, data any, defLevel, repLevel int) (parquet.Row, error) {
-	if len(f.Fields()) > 0 {
-		var obj map[string]any
-		if data != nil {
-			var isObj bool
-			if obj, isObj = data.(map[string]any); !isObj {
-				return nil, fmt.Errorf("expected object, got %T", data)
-			}
-		}
-
-		cCopy := *c
-		if f.Optional() {
-			if obj != nil {
-				defLevel++
-			}
-			cCopy.parentMissing = true
-		}
-
-		res, err := cCopy.toPQValuesGroup(f.Fields(), obj, defLevel, repLevel)
-		if err != nil {
-			return nil, err
-		}
-		c.colIndex = cCopy.colIndex
-		c.firstRepOf = cCopy.firstRepOf
-		return res, err
-	}
-
-	var leafValue parquet.Value
-	if data == nil {
-		leafValue = parquet.ValueOf(nil)
-	} else {
-		if f.Optional() {
-			defLevel++
-		}
-
-		switch f.Type().Kind() {
-		case parquet.Boolean:
-			b, err := query.IGetBool(data)
-			if err != nil {
-				return nil, err
-			}
-			leafValue = parquet.ValueOf(b)
-		case parquet.Int32:
-			iv, err := query.IGetInt(data)
-			if err != nil {
-				return nil, err
-			}
-			leafValue = parquet.ValueOf(int32(iv))
-		case parquet.Int64:
-			iv, err := query.IGetInt(data)
-			if err != nil {
-				return nil, err
-			}
-			leafValue = parquet.ValueOf(iv)
-		case parquet.Int96:
-			return nil, errors.New("columns of type Int96 are not currently supported")
-		case parquet.Float:
-			fv, err := query.IGetNumber(data)
-			if err != nil {
-				return nil, err
-			}
-			leafValue = parquet.ValueOf(float32(fv))
-		case parquet.Double:
-			fv, err := query.IGetNumber(data)
-			if err != nil {
-				return nil, err
-			}
-			leafValue = parquet.ValueOf(fv)
-		case parquet.ByteArray:
-			bv, err := query.IGetBytes(data)
-			if err != nil {
-				return nil, err
-			}
-			leafValue = parquet.ValueOf(bv)
-		default:
-			leafValue = parquet.ValueOf(data)
-		}
-	}
-
-	if c.firstRepOf != nil {
-		repLevel = *c.firstRepOf - 1
-	}
-	leafValue = leafValue.Level(repLevel, defLevel, c.colIndex)
-	c.colIndex++
-
-	return parquet.Row{leafValue}, nil
-}
-
-func (c *inserterConfig) toPQValuesRepeated(field parquet.Field, data []any, defLevel, repLevel int) (parquet.Row, error) {
-	if len(data) == 0 {
-		if c.firstRepOf == nil {
-			c.firstRepOf = &repLevel
-		}
-
-		v, err := c.toPQValueNotRepeated(field, nil, defLevel, repLevel)
-		if err != nil {
-			return nil, err
-		}
-		return v, nil
-	}
-
-	endColIndex := c.colIndex
-
-	var row parquet.Row
-	for i, e := range data {
-		// Prevent column index from being incremented on each iteration
-		cCopy := *c
-		if i == 0 {
-			if cCopy.firstRepOf == nil {
-				cCopy.firstRepOf = &repLevel
-			}
-		} else {
-			cCopy.firstRepOf = nil
-		}
-
-		v, err := cCopy.toPQValueNotRepeated(field, e, defLevel, repLevel)
-		if err != nil {
-			return nil, err
-		}
-		row = append(row, v...)
-
-		// Save the highest seen column index
-		if cCopy.colIndex > endColIndex {
-			endColIndex = cCopy.colIndex
-		}
-	}
-	c.colIndex = endColIndex
-	return row, nil
-}
-
-// https://www.waitingforcode.com/apache-parquet/nested-data-representation-parquet/read
-// https://stackoverflow.com/questions/43568132/dremel-repetition-and-definition-level
-// https://blog.twitter.com/engineering/en_us/a/2013/dremel-made-simple-with-parquet
-func (c *inserterConfig) toPQValuesGroup(fields []parquet.Field, data map[string]any, defLevel, repLevel int) (row parquet.Row, err error) {
-	for _, f := range fields {
-		v, err := c.toPQValue(f, data[f.Name()], defLevel, repLevel)
-		if err != nil {
-			return nil, fmt.Errorf("field %v: %w", f.Name(), err)
-		}
-		row = append(row, v...)
-	}
-	return
 }

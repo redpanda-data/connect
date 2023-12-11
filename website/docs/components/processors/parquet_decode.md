@@ -24,27 +24,10 @@ Introduced in version 4.4.0.
 ```yml
 # Config fields, showing default values
 label: ""
-parquet_decode:
-  byte_array_as_string: false
+parquet_decode: {}
 ```
 
-This processor uses [https://github.com/segmentio/parquet-go](https://github.com/segmentio/parquet-go), which is itself experimental. Therefore changes could be made into how this processor functions outside of major version releases.
-
-By default any BYTE_ARRAY or FIXED_LEN_BYTE_ARRAY value will be extracted as a byte slice (`[]byte`) unless the logical type is UTF8, in which case they are extracted as a string (`string`).
-
-When a value extracted as a byte slice exists within a document which is later JSON serialized by default it will be base 64 encoded into strings, which is the default for arbitrary data fields. It is possible to convert these binary values to strings (or other data types) using Bloblang transformations such as `root.foo = this.foo.string()` or `root.foo = this.foo.encode("hex")`, etc.
-
-However, in cases where all BYTE_ARRAY values are strings within your data it may be easier to set the config field `byte_array_as_string` to `true` in order to automatically extract all of these values as strings.
-
-## Fields
-
-### `byte_array_as_string`
-
-Whether to extract BYTE_ARRAY and FIXED_LEN_BYTE_ARRAY values as strings rather than byte slices in all cases. Values with a logical type of UTF8 will automatically be extracted as strings irrespective of this field. Enabling this field makes serialising the data as JSON more intuitive as `[]byte` values are serialised as base64 encoded strings by default.
-
-
-Type: `bool`  
-Default: `false`  
+This processor uses [https://github.com/parquet-go/parquet-go](https://github.com/parquet-go/parquet-go), which is itself experimental. Therefore changes could be made into how this processor functions outside of major version releases.
 
 ## Examples
 
@@ -65,8 +48,7 @@ input:
     sqs:
       url: TODO
   processors:
-    - parquet_decode:
-        byte_array_as_string: true
+    - parquet_decode: {}
 
 output:
   file:
