@@ -20,7 +20,7 @@ func init() {
 		return processor.NewAutoObservedProcessor("kv", p, mgr), nil
 	}, docs.ComponentSpec{
 		Name:    "kv",
-		Summary: `This processor is designed to transform messages in the format 'foo=bar john=doe' into JSON representation, effectively parsing and structuring key-value pairs within the message.`,
+		Summary: `This processor is designed to convert messages formatted as 'foo=bar bar=baz' into a structured JSON representation.`,
 		Config: docs.FieldComponent().WithChildren(
 			docs.FieldString("field_split", "Delimiter to use for splitting key-value pairs."),
 			docs.FieldString("value_split", "Delimiter to use for splitting the key from the value within a key-value pairs."),

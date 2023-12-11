@@ -13,7 +13,7 @@ status: stable
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-This processor is designed to transform messages in the format 'foo=bar john=doe' into JSON representation, effectively parsing and structuring key-value pairs within the message.
+This processor is designed to convert messages formatted as 'foo=bar bar=baz' into a structured JSON representation.
 
 ```yml
 # Config fields, showing default values
