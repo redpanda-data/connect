@@ -150,7 +150,10 @@ func (r *parquetReader) getOpenFile() (*openParquetFile, error) {
 		return nil, err
 	}
 
-	rdr := parquet.NewGenericReader[any](inFile)
+	rdr, err := newReaderWithoutPanic(inFile)
+	if err != nil {
+		return nil, err
+	}
 
 	r.openFile = &openParquetFile{
 		schema: rdr.Schema(),
@@ -188,7 +191,7 @@ func (r *parquetReader) ReadBatch(ctx context.Context) (service.MessageBatch, se
 			return nil, nil, err
 		}
 
-		if n, err = f.rdr.Read(rowBuf); errors.Is(err, io.EOF) {
+		if n, err = readWithoutPanic(f.rdr, rowBuf); errors.Is(err, io.EOF) {
 			// If we finished this file we close the handle and forget it so
 			// that the next call moves on.
 			if closeErr := f.Close(); closeErr != nil {
