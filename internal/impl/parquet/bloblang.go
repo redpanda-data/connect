@@ -5,8 +5,6 @@ import (
 	"errors"
 	"io"
 
-	"github.com/parquet-go/parquet-go"
-
 	"github.com/benthosdev/benthos/v4/internal/bloblang/query"
 	"github.com/benthosdev/benthos/v4/public/bloblang"
 )
@@ -32,13 +30,16 @@ func init() {
 				}
 
 				rdr := bytes.NewReader(b)
-				pRdr := parquet.NewGenericReader[any](rdr)
+				pRdr, err := newReaderWithoutPanic(rdr)
+				if err != nil {
+					return nil, err
+				}
 
 				rowBuf := make([]any, 10)
 				var result []any
 
 				for {
-					n, err := pRdr.Read(rowBuf)
+					n, err := readWithoutPanic(pRdr, rowBuf)
 					if err != nil && !errors.Is(err, io.EOF) {
 						return nil, err
 					}

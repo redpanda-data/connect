@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 
 	"github.com/parquet-go/parquet-go"
@@ -65,6 +66,28 @@ type parquetDecodeProcessor struct {
 	logger *service.Logger
 }
 
+func newReaderWithoutPanic(r io.ReaderAt) (pRdr *parquet.GenericReader[any], err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = fmt.Errorf("parquet read panic: %v", r)
+		}
+	}()
+
+	pRdr = parquet.NewGenericReader[any](r)
+	return
+}
+
+func readWithoutPanic(pRdr *parquet.GenericReader[any], rows []any) (n int, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = fmt.Errorf("decoding panic: %v", r)
+		}
+	}()
+
+	n, err = pRdr.Read(rows)
+	return
+}
+
 func (s *parquetDecodeProcessor) Process(ctx context.Context, msg *service.Message) (service.MessageBatch, error) {
 	mBytes, err := msg.AsBytes()
 	if err != nil {
@@ -76,13 +99,16 @@ func (s *parquetDecodeProcessor) Process(ctx context.Context, msg *service.Messa
 		return nil, err
 	}
 
-	pRdr := parquet.NewGenericReader[any](inFile)
+	pRdr, err := newReaderWithoutPanic(inFile)
+	if err != nil {
+		return nil, err
+	}
 
 	rowBuf := make([]any, 10)
 	var resBatch service.MessageBatch
 
 	for {
-		n, err := pRdr.Read(rowBuf)
+		n, err := readWithoutPanic(pRdr, rowBuf)
 		if err != nil && !errors.Is(err, io.EOF) {
 			return nil, err
 		}

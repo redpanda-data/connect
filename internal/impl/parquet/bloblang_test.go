@@ -52,3 +52,11 @@ func TestParquetParseBloblangAsStrings(t *testing.T) {
   {"ID": 4, "A": 14, "B": 24, "C": 34, "D": "fourth", "E": "fourth"}
 ]`, string(actualDataBytes))
 }
+
+func TestParquetParseBloblangPanicInit(t *testing.T) {
+	exec, err := bloblang.Parse(`root = this.parse_parquet()`)
+	require.NoError(t, err)
+
+	_, err = exec.Query([]byte(`hello world lol`))
+	require.Error(t, err)
+}
