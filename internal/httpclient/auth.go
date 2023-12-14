@@ -90,13 +90,13 @@ func oAuth2FieldSpec() *service.ConfigField {
 
 		service.NewStringListField("scopes").
 			Description("A list of optional requested permissions.").
-			Default([]string{}).
+			Default([]any{}).
 			Advanced().
 			Version("3.45.0"),
 
 		service.NewAnyMapField("endpoint_params").
 			Description("A list of optional endpoint parameters, values should be arrays of strings.").
-			Default(map[string][]string{}).
+			Default(map[string]any{}).
 			Advanced().
 			Example(map[string]any{
 				"foo": []string{"meow", "quack"},

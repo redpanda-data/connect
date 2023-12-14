@@ -8,6 +8,7 @@ let rate_limits_docs = listPaths("rate_limits");
 let buffers_docs = listPaths("buffers");
 let metrics_docs = listPaths("metrics");
 let tracers_docs = listPaths("tracers");
+let scanners_docs = listPaths("scanners");
 
 module.exports = {
   docs: [
@@ -45,6 +46,11 @@ module.exports = {
           type: 'category',
           label: 'Inputs',
           items: inputs_docs,
+        },
+        {
+          type: 'category',
+          label: 'Scanners',
+          items: scanners_docs,
         },
         {
           type: 'category',

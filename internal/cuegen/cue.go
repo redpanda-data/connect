@@ -157,6 +157,8 @@ func doScalarField(spec docs.FieldSpec) (*ast.Field, error) {
 		val, optional = identMetricDisjunction, optionalMark
 	case docs.FieldTypeTracer:
 		val, optional = identTracerDisjunction, optionalMark
+	case docs.FieldTypeScanner:
+		val, optional = identScannerDisjunction, optionalMark
 	default:
 		return nil, fmt.Errorf("unrecognised field type: %s", spec.Type)
 	}

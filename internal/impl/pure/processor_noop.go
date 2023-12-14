@@ -15,7 +15,7 @@ func init() {
 	}, docs.ComponentSpec{
 		Name:    "noop",
 		Summary: "Noop is a processor that does nothing, the message passes through unchanged. Why? Sometimes doing nothing is the braver option.",
-		Config:  docs.FieldObject("", "").HasDefault(struct{}{}),
+		Config:  docs.FieldObject("", "").HasDefault(map[string]any{}),
 	})
 	if err != nil {
 		panic(err)

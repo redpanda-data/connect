@@ -6,69 +6,61 @@ import (
 	"io"
 	"os"
 
-	"github.com/benthosdev/benthos/v4/internal/bundle"
-	"github.com/benthosdev/benthos/v4/internal/codec"
+	"github.com/benthosdev/benthos/v4/internal/codec/interop"
 	"github.com/benthosdev/benthos/v4/internal/component"
-	"github.com/benthosdev/benthos/v4/internal/component/input"
-	"github.com/benthosdev/benthos/v4/internal/component/input/processors"
-	"github.com/benthosdev/benthos/v4/internal/docs"
-	"github.com/benthosdev/benthos/v4/internal/message"
+	"github.com/benthosdev/benthos/v4/internal/component/scanner"
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
-func init() {
-	err := bundle.AllInputs.Add(processors.WrapConstructor(func(conf input.Config, nm bundle.NewManagement) (input.Streamed, error) {
-		rdr, err := newStdinConsumer(conf.STDIN)
-		if err != nil {
-			return nil, err
-		}
-		return input.NewAsyncReader("stdin", input.NewAsyncCutOff(input.NewAsyncPreserver(rdr)), nm)
-	}), docs.ComponentSpec{
-		Name:    "stdin",
-		Summary: `Consumes data piped to stdin as line delimited messages.`,
-		Description: `
-If the multipart option is set to true then lines are interpretted as message parts, and an empty line indicates the end of the message.
+// TODO: Fan this out when appropriate?
+func getStdinReader() io.ReadCloser {
+	return io.NopCloser(os.Stdin)
+}
 
-If the delimiter field is left empty then line feed (\n) is used.`,
-		Config: docs.FieldComponent().WithChildren(
-			codec.ReaderDocs.AtVersion("3.42.0"),
-			docs.FieldInt("max_buffer", "The maximum message buffer size. Must exceed the largest message to be consumed.").Advanced(),
-		).ChildDefaultAndTypesFromStruct(input.NewSTDINConfig()),
-		Categories: []string{
-			"Local",
-		},
-	})
+func init() {
+	err := service.RegisterBatchInput(
+		"stdin", service.NewConfigSpec().
+			Stable().
+			Categories("Local").
+			Summary(`Consumes data piped to stdin, chopping it into individual messages according to the specified scanner.`).
+			Fields(interop.OldReaderCodecFields("lines")...),
+		func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchInput, error) {
+			rdr, err := newStdinConsumerFromParsed(conf)
+			if err != nil {
+				return nil, err
+			}
+			return service.AutoRetryNacksBatched(rdr), nil
+		})
 	if err != nil {
 		panic(err)
 	}
 }
 
 type stdinConsumer struct {
-	scanner codec.Reader
+	scanner interop.FallbackReaderStream
 }
 
-func newStdinConsumer(conf input.STDINConfig) (*stdinConsumer, error) {
-	codecConf := codec.NewReaderConfig()
-	codecConf.MaxScanTokenSize = conf.MaxBuffer
-	ctor, err := codec.GetReader(conf.Codec, codecConf)
+func newStdinConsumerFromParsed(conf *service.ParsedConfig) (*stdinConsumer, error) {
+	c, err := interop.OldReaderCodecFromParsed(conf)
 	if err != nil {
 		return nil, err
 	}
 
-	scanner, err := ctor("", io.NopCloser(os.Stdin), func(_ context.Context, err error) error {
+	s, err := c.Create(getStdinReader(), func(_ context.Context, err error) error {
 		return nil
-	})
+	}, scanner.SourceDetails{})
 	if err != nil {
 		return nil, err
 	}
-	return &stdinConsumer{scanner}, nil
+	return &stdinConsumer{scanner: s}, nil
 }
 
 func (s *stdinConsumer) Connect(ctx context.Context) error {
 	return nil
 }
 
-func (s *stdinConsumer) ReadBatch(ctx context.Context) (message.Batch, input.AsyncAckFn, error) {
-	parts, codecAckFn, err := s.scanner.Next(ctx)
+func (s *stdinConsumer) ReadBatch(ctx context.Context) (service.MessageBatch, service.AckFunc, error) {
+	parts, codecAckFn, err := s.scanner.NextBatch(ctx)
 	if err != nil {
 		if errors.Is(err, context.Canceled) ||
 			errors.Is(err, context.DeadlineExceeded) {
@@ -78,18 +70,17 @@ func (s *stdinConsumer) ReadBatch(ctx context.Context) (message.Batch, input.Asy
 			s.scanner.Close(ctx)
 		}
 		if errors.Is(err, io.EOF) {
-			return nil, nil, component.ErrTypeClosed
+			return nil, nil, service.ErrEndOfInput
 		}
 		return nil, nil, err
 	}
 	_ = codecAckFn(ctx, nil)
 
-	msg := message.Batch(parts)
-	if msg.Len() == 0 {
+	if len(parts) == 0 {
 		return nil, nil, component.ErrTimeout
 	}
 
-	return msg, func(rctx context.Context, res error) error {
+	return parts, func(rctx context.Context, res error) error {
 		return nil
 	}, nil
 }

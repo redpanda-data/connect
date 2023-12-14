@@ -64,7 +64,7 @@ Where latter stages will overwrite matching field names of a former stage.`)).
 				Default(false),
 			service.NewInterpolatedStringMapField(hoFieldFields).
 				Description("A map of key/value pairs to set as hash fields.").
-				Default(map[string]string{}),
+				Default(map[string]any{}),
 			service.NewOutputMaxInFlightField(),
 		)
 }

@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- Field `address_cache` added to the `socket_server` input.
+- All inputs with a `codec` field now supports a new field `scanner` to replace it. Scanners are more powerful as they are configured in a structured way similar to all other component types rather than via a single string field, for more information [check out the scanners page](https://www.benthos.dev/docs/components/scanners/about).
+
 ### Changed
 
 - The `parse_parquet` Bloblang function, `parquet_decode`, `parquet_encode` processors and the `parquet` input have all been upgraded to the latest version of the underlying Parquet library. Since this underlying library is experimental it is likely that behaviour changes will result. One significant change is that encoding numerical values that are larger than the column type (`float64` into `FLOAT`, `int64` into `INT32`, etc) will no longer be automatically converted.
@@ -628,7 +633,7 @@ This is a major version release, for more information and guidance on how to mig
 - The `switch` output field `retry_until_success` now defaults to `false`.
 - All AWS components now have a default `region` field that is empty, allowing environment variables or profile values to be used by default.
 - Serverless distributions of Benthos (AWS lambda, etc) have had the default output config changed to reject messages when the processing fails, this should make it easier to handle errors from invocation.
-- The standard metrics emitted by Benthos have been largely simplified and improved, for more information [check out the metrics page](/docs/components/metrics/about).
+- The standard metrics emitted by Benthos have been largely simplified and improved, for more information [check out the metrics page](https://www.benthos.dev/docs/components/metrics/about).
 - The default metrics type is now `prometheus`.
 - The `http_server` metrics type has been renamed to `json_api`.
 - The `stdout` metrics type has been renamed to `logger`.

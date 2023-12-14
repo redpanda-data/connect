@@ -1,41 +1,57 @@
-// Package shared contains docs fields that need to be shared across old and new
-// component implementations, it needs to be separate from the parent package in
-// order to avoid circular dependencies (for now).
-package shared
+package sftp
 
 import (
 	"fmt"
+	"io/fs"
 	"net"
 
 	"github.com/pkg/sftp"
 	"golang.org/x/crypto/ssh"
 
-	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/filepath/ifs"
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
-// CredentialsDocs returns a documentation field spec for SFTP credentials
-// fields within a Config.
-func CredentialsDocs() docs.FieldSpecs {
-	return docs.FieldSpecs{
-		docs.FieldString("username", "The username to connect to the SFTP server."),
-		docs.FieldString("password", "The password for the username to connect to the SFTP server.").Secret(),
-		docs.FieldString("private_key_file", "The private key for the username to connect to the SFTP server."),
-		docs.FieldString("private_key_pass", "Optional passphrase for private key.").Secret(),
+const (
+	scFieldCredentialsUsername       = "username"
+	scFieldCredentialsPassword       = "password"
+	scFieldCredentialsPrivateKeyFile = "private_key_file"
+	scFieldCredentialsPrivateKeyPass = "private_key_pass"
+)
+
+func credentialsFields() []*service.ConfigField {
+	return []*service.ConfigField{
+		service.NewStringField(scFieldCredentialsUsername).Description("The username to connect to the SFTP server.").Default(""),
+		service.NewStringField(scFieldCredentialsPassword).Description("The password for the username to connect to the SFTP server.").Secret().Default(""),
+		service.NewStringField(scFieldCredentialsPrivateKeyFile).Description("The private key for the username to connect to the SFTP server.").Default(""),
+		service.NewStringField(scFieldCredentialsPrivateKeyPass).Description("Optional passphrase for private key.").Secret().Default(""),
 	}
 }
 
-// Credentials contains the credentials for connecting to the SFTP server.
-type Credentials struct {
-	Username       string `json:"username" yaml:"username"`
-	Password       string `json:"password" yaml:"password"`
-	PrivateKeyFile string `json:"private_key_file" yaml:"private_key_file"`
-	PrivateKeyPass string `json:"private_key_pass" yaml:"private_key_pass"`
+func credentialsFromParsed(pConf *service.ParsedConfig) (creds Credentials, err error) {
+	if creds.Username, err = pConf.FieldString(scFieldCredentialsUsername); err != nil {
+		return
+	}
+	if creds.Password, err = pConf.FieldString(scFieldCredentialsPassword); err != nil {
+		return
+	}
+	if creds.PrivateKeyFile, err = pConf.FieldString(scFieldCredentialsPrivateKeyFile); err != nil {
+		return
+	}
+	if creds.PrivateKeyPass, err = pConf.FieldString(scFieldCredentialsPrivateKeyPass); err != nil {
+		return
+	}
+	return
 }
 
-// GetClient establishes a fresh sftp client from a set of credentials and an
-// address.
-func (c Credentials) GetClient(fs ifs.FS, address string) (*sftp.Client, error) {
+type Credentials struct {
+	Username       string
+	Password       string
+	PrivateKeyFile string
+	PrivateKeyPass string
+}
+
+func (c Credentials) GetClient(fs fs.FS, address string) (*sftp.Client, error) {
 	host, port, err := net.SplitHostPort(address)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse address: %v", err)

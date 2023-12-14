@@ -184,7 +184,7 @@ For the CSV format when the field `+"`csv.header`"+` is specified a header row w
 			Description("Indicates if we should automatically infer the options and schema for CSV and JSON sources. If the table doesn't exist and this field is set to `false` the output may not be able to insert data and will throw insertion error. Be careful using this field since it delegates to the GCP BigQuery service the schema detection and values like `\"no\"` may be treated as booleans for the CSV format.").
 			Advanced().
 			Default(false)).
-		Field(service.NewStringMapField("job_labels").Description("A list of labels to add to the load job.").Default(map[string]string{})).
+		Field(service.NewStringMapField("job_labels").Description("A list of labels to add to the load job.").Default(map[string]any{})).
 		Field(service.NewObjectField("csv",
 			service.NewStringListField("header").
 				Description("A list of values to use as header for each batch of messages. If not specified the first line of each message will be used as header.").

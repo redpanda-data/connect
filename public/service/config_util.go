@@ -27,7 +27,7 @@ func extractConfig(
 	pluginConfig, componentConfig any,
 ) (*ParsedConfig, error) {
 	if pluginConfig != nil {
-		return spec.configFromNode(nm, pluginConfig.(*yaml.Node))
+		return spec.configFromAny(nm, pluginConfig)
 	}
 
 	// TODO: V4 We won't need the below fallback once it's not possible to

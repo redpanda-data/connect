@@ -28,4 +28,7 @@ var (
 
 	identTracerDisjunction = ast.NewIdent("#Tracer")
 	identTracerCollection  = ast.NewIdent("#AllTracers")
+
+	identScannerDisjunction = ast.NewIdent("#Scanner")
+	identScannerCollection  = ast.NewIdent("#AllScanners")
 )

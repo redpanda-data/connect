@@ -53,7 +53,7 @@ For more information please read [Synchronous Responses](/docs/guides/sync_respo
 		Categories: []string{
 			"Utility",
 		},
-		Config: docs.FieldObject("", "").HasDefault(struct{}{}),
+		Config: docs.FieldObject("", "").HasDefault(map[string]any{}),
 	})
 	if err != nil {
 		panic(err)

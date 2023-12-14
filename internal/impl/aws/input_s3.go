@@ -18,14 +18,11 @@ import (
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/sqs"
 
-	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/codec"
+	"github.com/benthosdev/benthos/v4/internal/codec/interop"
 	"github.com/benthosdev/benthos/v4/internal/component"
-	"github.com/benthosdev/benthos/v4/internal/component/input"
-	"github.com/benthosdev/benthos/v4/internal/component/interop"
+	"github.com/benthosdev/benthos/v4/internal/component/scanner"
 	"github.com/benthosdev/benthos/v4/internal/impl/aws/config"
-	"github.com/benthosdev/benthos/v4/internal/log"
-	"github.com/benthosdev/benthos/v4/internal/message"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
@@ -42,8 +39,6 @@ const (
 
 	// S3 Input Fields
 	s3iFieldBucket             = "bucket"
-	s3iFieldCodec              = "codec"
-	s3iFieldMaxBuffer          = "max_buffer"
 	s3iFieldPrefix             = "prefix"
 	s3iFieldForcePathStyleURLs = "force_path_style_urls"
 	s3iFieldDeleteObjects      = "delete_objects"
@@ -91,12 +86,11 @@ func s3iSQSConfigFromParsed(pConf *service.ParsedConfig) (conf s3iSQSConfig, err
 
 type s3iConfig struct {
 	Bucket             string
-	Codec              string
-	MaxBuffer          int
 	Prefix             string
 	ForcePathStyleURLs bool
 	DeleteObjects      bool
 	SQS                s3iSQSConfig
+	CodecCtor          interop.FallbackReaderCodec
 }
 
 func s3iConfigFromParsed(pConf *service.ParsedConfig) (conf s3iConfig, err error) {
@@ -106,10 +100,7 @@ func s3iConfigFromParsed(pConf *service.ParsedConfig) (conf s3iConfig, err error
 	if conf.Prefix, err = pConf.FieldString(s3iFieldPrefix); err != nil {
 		return
 	}
-	if conf.Codec, err = pConf.FieldString(s3iFieldCodec); err != nil {
-		return
-	}
-	if conf.MaxBuffer, err = pConf.FieldInt(s3iFieldMaxBuffer); err != nil {
+	if conf.CodecCtor, err = interop.OldReaderCodecFromParsed(pConf); err != nil {
 		return
 	}
 	if conf.ForcePathStyleURLs, err = pConf.FieldBool(s3iFieldForcePathStyleURLs); err != nil {
@@ -184,11 +175,9 @@ You can access these metadata fields using [function interpolation](/docs/config
 				Description("Whether to delete downloaded objects from the bucket once they are processed.").
 				Default(false).
 				Advanced(),
-			service.NewInternalField(codec.ReaderDocs).Default("all-bytes"),
-			service.NewIntField(s3iFieldMaxBuffer).
-				Description("The largest token size expected when consuming objects with a tokenised codec such as `lines`.").
-				Default(1_000_000).
-				Advanced(),
+		).
+		Fields(interop.OldReaderCodecFields("to_the_end")...).
+		Fields(
 			service.NewObjectField(s3iFieldSQS,
 				service.NewStringField(s3iSQSFieldURL).
 					Description("An optional SQS URL to connect to. When specified this queue will control which objects are downloaded.").
@@ -230,18 +219,6 @@ You can access these metadata fields using [function interpolation](/docs/config
 func init() {
 	err := service.RegisterBatchInput("aws_s3", s3InputSpec(),
 		func(pConf *service.ParsedConfig, res *service.Resources) (service.BatchInput, error) {
-			// NOTE: We're using interop to punch an internal implementation up
-			// to the public plugin API. The only blocker from using the full
-			// public suite is the codec field.
-			//
-			// Since codecs are likely to get refactored soon I figured it
-			// wasn't worth investing in a public wrapper since the old style
-			// will likely get deprecated.
-			//
-			// This does mean that for now all codec based components will need
-			// to keep internal implementations. However, the config specs are
-			// the biggest time sink when converting to the new APIs so it's not
-			// a big deal to leave these tasks pending.
 			conf, err := s3iConfigFromParsed(pConf)
 			if err != nil {
 				return nil, err
@@ -254,9 +231,8 @@ func init() {
 				return nil, err
 			}
 
-			mgr := interop.UnwrapManagement(res)
-			var rdr input.Async
-			if rdr, err = newAmazonS3Reader(conf, sess, mgr); err != nil {
+			var rdr service.BatchInput
+			if rdr, err = newAmazonS3Reader(conf, sess, res); err != nil {
 				return nil, err
 			}
 
@@ -264,14 +240,9 @@ func init() {
 			// there's no concept of propagating nacks upstream, therefore wrap
 			// our reader within a preserver in order to retry indefinitely.
 			if conf.SQS.URL == "" {
-				rdr = input.NewAsyncPreserver(rdr)
+				rdr = service.AutoRetryNacksBatched(rdr)
 			}
-			i, err := input.NewAsyncReader("aws_s3", rdr, mgr)
-			if err != nil {
-				return nil, err
-			}
-
-			return interop.NewUnwrapInternalInput(i), nil
+			return rdr, nil
 		})
 	if err != nil {
 		panic(err)
@@ -339,7 +310,7 @@ type staticTargetReader struct {
 func newStaticTargetReader(
 	ctx context.Context,
 	conf s3iConfig,
-	log log.Modular,
+	log *service.Logger,
 	s3Client *s3.S3,
 ) (*staticTargetReader, error) {
 	listInput := &s3.ListObjectsV2Input{
@@ -406,7 +377,7 @@ func (s staticTargetReader) Close(context.Context) error {
 
 type sqsTargetReader struct {
 	conf s3iConfig
-	log  log.Modular
+	log  *service.Logger
 	sqs  *sqs.SQS
 	s3   *s3.S3
 
@@ -417,7 +388,7 @@ type sqsTargetReader struct {
 
 func newSQSTargetReader(
 	conf s3iConfig,
-	log log.Modular,
+	log *service.Logger,
 	s3 *s3.S3,
 	sqs *sqs.SQS,
 ) *sqsTargetReader {
@@ -570,19 +541,19 @@ func (s *sqsTargetReader) readSQSEvents(ctx context.Context) ([]*s3ObjectTarget,
 
 		if sqsMsg.Body == nil {
 			addDudFn(sqsMsg)
-			s.log.Errorln("Received empty SQS message")
+			s.log.Error("Received empty SQS message")
 			continue
 		}
 
 		objects, err := s.parseObjectPaths(sqsMsg.Body)
 		if err != nil {
 			addDudFn(sqsMsg)
-			s.log.Errorf("SQS extract key error: %v\n", err)
+			s.log.Errorf("SQS extract key error: %v", err)
 			continue
 		}
 		if len(objects) == 0 {
 			addDudFn(sqsMsg)
-			s.log.Debugln("Extracted zero target keys from SQS message")
+			s.log.Debug("Extracted zero target keys from SQS message")
 			continue
 		}
 
@@ -666,7 +637,7 @@ func (s *sqsTargetReader) ackSQSMessage(ctx context.Context, msg *sqs.Message) e
 type awsS3Reader struct {
 	conf s3iConfig
 
-	objectScannerCtor codec.ReaderConstructor
+	objectScannerCtor interop.FallbackReaderCodec
 	keyReader         s3ObjectTargetReader
 
 	session *session.Session
@@ -678,18 +649,18 @@ type awsS3Reader struct {
 	objectMut sync.Mutex
 	object    *s3PendingObject
 
-	log log.Modular
+	log *service.Logger
 }
 
 type s3PendingObject struct {
 	target    *s3ObjectTarget
 	obj       *s3.GetObjectOutput
 	extracted int
-	scanner   codec.Reader
+	scanner   interop.FallbackReaderStream
 }
 
 // NewAmazonS3 creates a new Amazon S3 bucket reader.Type.
-func newAmazonS3Reader(conf s3iConfig, sess *session.Session, nm bundle.NewManagement) (*awsS3Reader, error) {
+func newAmazonS3Reader(conf s3iConfig, sess *session.Session, nm *service.Resources) (*awsS3Reader, error) {
 	if conf.Bucket == "" && conf.SQS.URL == "" {
 		return nil, errors.New("either a bucket or an sqs.url must be specified")
 	}
@@ -697,19 +668,13 @@ func newAmazonS3Reader(conf s3iConfig, sess *session.Session, nm bundle.NewManag
 		return nil, errors.New("cannot specify both a prefix and sqs.url")
 	}
 	s := &awsS3Reader{
-		conf:    conf,
-		session: sess,
-		log:     nm.Logger(),
-	}
-
-	readerConfig := codec.NewReaderConfig()
-	readerConfig.MaxScanTokenSize = conf.MaxBuffer
-
-	var err error
-	if s.objectScannerCtor, err = codec.GetReader(conf.Codec, readerConfig); err != nil {
-		return nil, err
+		conf:              conf,
+		session:           sess,
+		log:               nm.Logger(),
+		objectScannerCtor: conf.CodecCtor,
 	}
 	if len(conf.SQS.DelayPeriod) > 0 {
+		var err error
 		if s.gracePeriod, err = time.ParseDuration(conf.SQS.DelayPeriod); err != nil {
 			return nil, fmt.Errorf("failed to parse grace period: %w", err)
 		}
@@ -755,9 +720,8 @@ func (a *awsS3Reader) Connect(ctx context.Context) error {
 	return nil
 }
 
-func s3MsgFromParts(p *s3PendingObject, parts []*message.Part) message.Batch {
-	msg := message.Batch(parts)
-	_ = msg.Iter(func(_ int, part *message.Part) error {
+func s3MetaToBatch(p *s3PendingObject, parts service.MessageBatch) {
+	for _, part := range parts {
 		part.MetaSetMut("s3_key", p.target.key)
 		part.MetaSetMut("s3_bucket", p.target.bucket)
 		if p.obj.LastModified != nil {
@@ -778,9 +742,7 @@ func s3MsgFromParts(p *s3PendingObject, parts []*message.Part) message.Batch {
 				part.MetaSetMut(k, *v)
 			}
 		}
-		return nil
-	})
-	return msg
+	}
 }
 
 func (a *awsS3Reader) getObjectTarget(ctx context.Context) (*s3PendingObject, error) {
@@ -817,7 +779,9 @@ func (a *awsS3Reader) getObjectTarget(ctx context.Context) (*s3PendingObject, er
 		target: target,
 		obj:    obj,
 	}
-	if object.scanner, err = a.objectScannerCtor(target.key, obj.Body, target.ackFn); err != nil {
+	if object.scanner, err = a.objectScannerCtor.Create(obj.Body, target.ackFn, scanner.SourceDetails{
+		Name: target.key,
+	}); err != nil {
 		// Warning: NEVER return io.EOF from a scanner constructor, as this will
 		// falsely indicate that we've reached the end of our list of object
 		// targets when running an SQS feed.
@@ -833,16 +797,16 @@ func (a *awsS3Reader) getObjectTarget(ctx context.Context) (*s3PendingObject, er
 }
 
 // ReadBatch attempts to read a new message from the target S3 bucket.
-func (a *awsS3Reader) ReadBatch(ctx context.Context) (msg message.Batch, ackFn input.AsyncAckFn, err error) {
+func (a *awsS3Reader) ReadBatch(ctx context.Context) (msg service.MessageBatch, ackFn service.AckFunc, err error) {
 	a.objectMut.Lock()
 	defer a.objectMut.Unlock()
 	if a.session == nil {
-		return nil, nil, component.ErrNotConnected
+		return nil, nil, service.ErrNotConnected
 	}
 
 	defer func() {
 		if errors.Is(err, io.EOF) {
-			err = component.ErrTypeClosed
+			err = service.ErrEndOfInput
 		} else if errors.Is(err, context.Canceled) ||
 			errors.Is(err, context.DeadlineExceeded) ||
 			(err != nil && strings.HasSuffix(err.Error(), "context canceled")) {
@@ -855,11 +819,11 @@ func (a *awsS3Reader) ReadBatch(ctx context.Context) (msg message.Batch, ackFn i
 		return
 	}
 
-	var parts []*message.Part
-	var scnAckFn codec.ReaderAckFn
+	var resBatch service.MessageBatch
+	var scnAckFn service.AckFunc
 
 	for {
-		if parts, scnAckFn, err = object.scanner.Next(ctx); err == nil {
+		if resBatch, scnAckFn, err = object.scanner.NextBatch(ctx); err == nil {
 			object.extracted++
 			break
 		}
@@ -868,17 +832,19 @@ func (a *awsS3Reader) ReadBatch(ctx context.Context) (msg message.Batch, ackFn i
 			return
 		}
 		if err = object.scanner.Close(ctx); err != nil {
-			a.log.Warnf("Failed to close bucket object scanner cleanly: %v\n", err)
+			a.log.Warnf("Failed to close bucket object scanner cleanly: %v", err)
 		}
 		if object.extracted == 0 {
-			a.log.Debugf("Extracted zero messages from key %v\n", object.target.key)
+			a.log.Debugf("Extracted zero messages from key %v", object.target.key)
 		}
 		if object, err = a.getObjectTarget(ctx); err != nil {
 			return
 		}
 	}
 
-	return s3MsgFromParts(object, parts), func(rctx context.Context, res error) error {
+	s3MetaToBatch(object, resBatch)
+
+	return resBatch, func(rctx context.Context, res error) error {
 		return scnAckFn(rctx, res)
 	}, nil
 }

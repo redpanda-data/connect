@@ -9,7 +9,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/benthosdev/benthos/v4/internal/filepath/ifs"
-	"github.com/benthosdev/benthos/v4/internal/impl/sftp/shared"
 	"github.com/benthosdev/benthos/v4/internal/integration"
 
 	// Bring in memory cache.
@@ -43,7 +42,7 @@ func TestIntegrationSFTP(t *testing.T) {
 
 	_ = resource.Expire(900)
 
-	creds := shared.Credentials{
+	creds := Credentials{
 		Username: sftpUsername,
 		Password: sftpPassword,
 	}

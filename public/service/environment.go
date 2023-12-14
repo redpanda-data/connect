@@ -16,8 +16,10 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/component/output/batcher"
 	oprocessors "github.com/benthosdev/benthos/v4/internal/component/output/processors"
+	"github.com/benthosdev/benthos/v4/internal/component/plugin"
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/component/ratelimit"
+	"github.com/benthosdev/benthos/v4/internal/component/scanner"
 	"github.com/benthosdev/benthos/v4/internal/component/tracer"
 	"github.com/benthosdev/benthos/v4/internal/config"
 	"github.com/benthosdev/benthos/v4/internal/docs"
@@ -487,6 +489,38 @@ func (e *Environment) RegisterOtelTracerProvider(name string, spec *ConfigSpec, 
 // available to an environment cannot be modified.
 func (e *Environment) WalkTracers(fn func(name string, config *ConfigView)) {
 	for _, v := range bundle.AllTracers.Docs() {
+		fn(v.Name, &ConfigView{
+			component: v,
+		})
+	}
+}
+
+// RegisterBatchScannerCreator attempts to register a new batched scanner plugin
+// by providing a description of the configuration for the plugin as well as a
+// constructor for the scanner creator itself. The constructor will be called
+// for each instantiation of the component within a config.
+func (e *Environment) RegisterBatchScannerCreator(name string, spec *ConfigSpec, ctor BatchScannerCreatorConstructor) error {
+	componentSpec := spec.component
+	componentSpec.Name = name
+	componentSpec.Type = docs.TypeScanner
+	return e.internal.ScannerAdd(func(conf plugin.Config, nm bundle.NewManagement) (scanner.Creator, error) {
+		pluginConf, err := extractConfig(nm, spec, name, conf.Plugin, conf)
+		if err != nil {
+			return nil, err
+		}
+		c, err := ctor(pluginConf, newResourcesFromManager(nm))
+		if err != nil {
+			return nil, err
+		}
+		return newAirGapBatchScannerCreator(c), nil
+	}, componentSpec)
+}
+
+// WalkScanners executes a provided function argument for every scanner
+// component that has been registered to the environment. Note that scanner
+// components available to an environment cannot be modified.
+func (e *Environment) WalkScanners(fn func(name string, config *ConfigView)) {
+	for _, v := range bundle.AllScanners.Docs() {
 		fn(v.Name, &ConfigView{
 			component: v,
 		})

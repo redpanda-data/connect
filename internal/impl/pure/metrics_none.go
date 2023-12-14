@@ -13,6 +13,6 @@ func init() {
 		Name:    "none",
 		Type:    docs.TypeMetrics,
 		Summary: `Disable metrics entirely.`,
-		Config:  docs.FieldObject("", "").HasDefault(struct{}{}),
+		Config:  docs.FieldObject("", "").HasDefault(map[string]any{}),
 	})
 }

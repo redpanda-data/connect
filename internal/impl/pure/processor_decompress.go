@@ -40,7 +40,7 @@ type decompressProc struct {
 }
 
 func newDecompress(conf processor.DecompressConfig, mgr bundle.NewManagement) (*decompressProc, error) {
-	dcor, err := strToDecompressor(conf.Algorithm)
+	dcor, err := strToDecompressFunc(conf.Algorithm)
 	if err != nil {
 		return nil, err
 	}

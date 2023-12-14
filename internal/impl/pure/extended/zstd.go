@@ -1,7 +1,6 @@
 package extended
 
 import (
-	"bytes"
 	"io"
 
 	"github.com/klauspost/compress/zstd"
@@ -9,33 +8,19 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/impl/pure"
 )
 
-var _ = pure.AddCompressFunc("zstd", func(level int, b []byte) ([]byte, error) {
-	buf := &bytes.Buffer{}
-	w, err := zstd.NewWriter(buf)
-	if err != nil {
-		return nil, err
-	}
-
-	if _, err = w.Write(b); err != nil {
-		w.Close()
-		return nil, err
-	}
-	// Must flush writer before calling buf.Bytes()
-	w.Close()
-	return buf.Bytes(), nil
-})
-
-var _ = pure.AddDecompressFunc("zstd", func(b []byte) ([]byte, error) {
-	r, err := zstd.NewReader(bytes.NewBuffer(b))
-	if err != nil {
-		return nil, err
-	}
-
-	outBuf := bytes.Buffer{}
-	if _, err = io.Copy(&outBuf, r); err != nil {
-		r.Close()
-		return nil, err
-	}
-	r.Close()
-	return outBuf.Bytes(), nil
+var _ = pure.AddKnownCompressionAlgorithm("zstd", pure.KnownCompressionAlgorithm{
+	CompressWriter: func(level int, w io.Writer) (io.Writer, error) {
+		aw, err := zstd.NewWriter(w, zstd.WithEncoderLevel(zstd.EncoderLevelFromZstd(level)))
+		if err != nil {
+			return nil, err
+		}
+		return &pure.CombinedWriteCloser{Primary: aw, Sink: w}, nil
+	},
+	DecompressReader: func(r io.Reader) (io.Reader, error) {
+		ar, err := zstd.NewReader(r)
+		if err != nil {
+			return nil, err
+		}
+		return &pure.CombinedReadCloser{Primary: ar, Source: r}, nil
+	},
 })

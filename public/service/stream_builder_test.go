@@ -887,8 +887,7 @@ file:
 					typeStr: "output",
 					name:    "stdout",
 					conf: `label: ""
-stdout:
-    codec: lines`,
+stdout: {} # No default (required)`,
 				},
 				{
 					typeStr: "metrics",

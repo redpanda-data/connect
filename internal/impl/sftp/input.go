@@ -10,85 +10,81 @@ import (
 
 	"github.com/pkg/sftp"
 
-	"github.com/benthosdev/benthos/v4/internal/bundle"
-	"github.com/benthosdev/benthos/v4/internal/codec"
+	"github.com/benthosdev/benthos/v4/internal/codec/interop"
 	"github.com/benthosdev/benthos/v4/internal/component"
-	"github.com/benthosdev/benthos/v4/internal/component/cache"
-	"github.com/benthosdev/benthos/v4/internal/component/input"
-	"github.com/benthosdev/benthos/v4/internal/component/input/processors"
-	"github.com/benthosdev/benthos/v4/internal/docs"
-	sftpSetup "github.com/benthosdev/benthos/v4/internal/impl/sftp/shared"
-	"github.com/benthosdev/benthos/v4/internal/log"
-	"github.com/benthosdev/benthos/v4/internal/message"
+	"github.com/benthosdev/benthos/v4/internal/component/scanner"
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
-func init() {
-	watcherDocs := docs.FieldSpecs{
-		docs.FieldBool(
-			"enabled",
-			"Whether file watching is enabled.",
-		),
-		docs.FieldString(
-			"minimum_age",
-			"The minimum period of time since a file was last updated before attempting to consume it. Increasing this period decreases the likelihood that a file will be consumed whilst it is still being written to.",
-			"10s", "1m", "10m",
-		),
-		docs.FieldString(
-			"poll_interval",
-			"The interval between each attempt to scan the target paths for new files.",
-			"100ms", "1s",
-		),
-		docs.FieldString(
-			"cache",
-			"A [cache resource](/docs/components/caches/about) for storing the paths of files already consumed.",
-		),
-	}
+const (
+	siFieldAddress             = "address"
+	siFieldCredentials         = "credentials"
+	siFieldPaths               = "paths"
+	siFieldDeleteOnFinish      = "delete_on_finish"
+	siFieldWatcher             = "watcher"
+	siFieldWatcherEnabled      = "enabled"
+	siFieldWatcherMinimumAge   = "minimum_age"
+	siFieldWatcherPollInterval = "poll_interval"
+	siFieldWatcherCache        = "cache"
+)
 
-	err := bundle.AllInputs.Add(processors.WrapConstructor(func(conf input.Config, nm bundle.NewManagement) (input.Streamed, error) {
-		r, err := newSFTPReader(conf.SFTP, nm)
-		if err != nil {
-			return nil, err
-		}
-		return input.NewAsyncReader("sftp", input.NewAsyncPreserver(r), nm)
-	}), docs.ComponentSpec{
-		Name:    "sftp",
-		Status:  docs.StatusBeta,
-		Version: "3.39.0",
-		Summary: `Consumes files from a server over SFTP.`,
-		Description: `
+func sftpInputSpec() *service.ConfigSpec {
+	return service.NewConfigSpec().
+		Beta().
+		Categories("Network").
+		Version("3.39.0").
+		Summary(`Consumes files from an SFTP server.`).
+		Description(`
 ## Metadata
 
 This input adds the following metadata fields to each message:
 
-` + "```" + `
+`+"```"+`
 - sftp_path
-` + "```" + `
+`+"```"+`
 
-You can access these metadata fields using [function interpolation](/docs/configuration/interpolation#bloblang-queries).`,
-		Config: docs.FieldComponent().WithChildren(
-			docs.FieldString(
-				"address",
-				"The address of the server to connect to that has the target files.",
-			),
-			docs.FieldObject(
-				"credentials",
-				"The credentials to use to log into the server.",
-			).WithChildren(sftpSetup.CredentialsDocs()...),
-			docs.FieldString(
-				"paths",
-				"A list of paths to consume sequentially. Glob patterns are supported.",
-			).Array(),
-			codec.ReaderDocs,
-			docs.FieldBool("delete_on_finish", "Whether to delete files from the server once they are processed.").Advanced(),
-			docs.FieldInt("max_buffer", "The largest token size expected when consuming delimited files.").Advanced(),
-			docs.FieldObject(
-				"watcher",
-				"An experimental mode whereby the input will periodically scan the target paths for new files and consume them, when all files are consumed the input will continue polling for new files.",
-			).WithChildren(watcherDocs...).AtVersion("3.42.0"),
-		).ChildDefaultAndTypesFromStruct(input.NewSFTPConfig()),
-		Categories: []string{
-			"Network",
-		},
+You can access these metadata fields using [function interpolation](/docs/configuration/interpolation#bloblang-queries).`).
+		Fields(
+			service.NewStringField(siFieldAddress).
+				Description("The address of the server to connect to."),
+			service.NewObjectField(siFieldCredentials, credentialsFields()...).
+				Description("The credentials to use to log into the target server."),
+			service.NewStringListField(siFieldPaths).
+				Description("A list of paths to consume sequentially. Glob patterns are supported."),
+		).
+		Fields(interop.OldReaderCodecFields("to_the_end")...).
+		Fields(
+			service.NewBoolField(siFieldDeleteOnFinish).
+				Description("Whether to delete files from the server once they are processed.").
+				Advanced().
+				Default(false),
+			service.NewObjectField(siFieldWatcher,
+				service.NewBoolField(siFieldWatcherEnabled).
+					Description("Whether file watching is enabled.").
+					Default(false),
+				service.NewDurationField(siFieldWatcherMinimumAge).
+					Description("The minimum period of time since a file was last updated before attempting to consume it. Increasing this period decreases the likelihood that a file will be consumed whilst it is still being written to.").
+					Default("1s").
+					Examples("10s", "1m", "10m"),
+				service.NewDurationField(siFieldWatcherPollInterval).
+					Description("The interval between each attempt to scan the target paths for new files.").
+					Default("1s").
+					Examples("100ms", "1s"),
+				service.NewStringField(siFieldWatcherCache).
+					Description("A [cache resource](/docs/components/caches/about) for storing the paths of files already consumed.").
+					Default(""),
+			).Description("An experimental mode whereby the input will periodically scan the target paths for new files and consume them, when all files are consumed the input will continue polling for new files.").
+				Version("3.42.0"),
+		)
+}
+
+func init() {
+	err := service.RegisterBatchInput("sftp", sftpInputSpec(), func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchInput, error) {
+		r, err := newSFTPReaderFromParsed(conf, mgr)
+		if err != nil {
+			return nil, err
+		}
+		return service.AutoRetryNacksBatched(r), nil
 	})
 	if err != nil {
 		panic(err)
@@ -98,61 +94,68 @@ You can access these metadata fields using [function interpolation](/docs/config
 //------------------------------------------------------------------------------
 
 type sftpReader struct {
-	conf input.SFTPConfig
-
-	log log.Modular
-	mgr bundle.NewManagement
+	log *service.Logger
+	mgr *service.Resources
 
 	client *sftp.Client
 
-	paths       []string
-	scannerCtor codec.ReaderConstructor
+	address        string
+	paths          []string
+	creds          Credentials
+	scannerCtor    interop.FallbackReaderCodec
+	deleteOnFinish bool
 
 	scannerMut  sync.Mutex
-	scanner     codec.Reader
+	scanner     interop.FallbackReaderStream
 	currentPath string
 
+	watcherEnabled      bool
+	watcherCache        string
 	watcherPollInterval time.Duration
 	watcherMinAge       time.Duration
 }
 
-func newSFTPReader(conf input.SFTPConfig, mgr bundle.NewManagement) (*sftpReader, error) {
-	codecConf := codec.NewReaderConfig()
-	codecConf.MaxScanTokenSize = conf.MaxBuffer
-	ctor, err := codec.GetReader(conf.Codec, codecConf)
-	if err != nil {
-		return nil, err
+func newSFTPReaderFromParsed(conf *service.ParsedConfig, mgr *service.Resources) (s *sftpReader, err error) {
+	s = &sftpReader{
+		log: mgr.Logger(),
+		mgr: mgr,
 	}
 
-	var watcherPollInterval, watcherMinAge time.Duration
-	if conf.Watcher.Enabled {
-		if watcherPollInterval, err = time.ParseDuration(conf.Watcher.PollInterval); err != nil {
-			return nil, fmt.Errorf("failed to parse watcher poll interval: %w", err)
-		}
+	if s.address, err = conf.FieldString(siFieldAddress); err != nil {
+		return
+	}
+	if s.paths, err = conf.FieldStringList(siFieldPaths); err != nil {
+		return
+	}
+	if s.creds, err = credentialsFromParsed(conf.Namespace(siFieldCredentials)); err != nil {
+		return
+	}
+	if s.scannerCtor, err = interop.OldReaderCodecFromParsed(conf); err != nil {
+		return
+	}
+	if s.deleteOnFinish, err = conf.FieldBool(siFieldDeleteOnFinish); err != nil {
+		return
+	}
 
-		if watcherMinAge, err = time.ParseDuration(conf.Watcher.MinimumAge); err != nil {
-			return nil, fmt.Errorf("failed to parse watcher minimum age: %w", err)
-		}
-
-		if conf.Watcher.Cache == "" {
-			return nil, errors.New("a cache must be specified when watcher mode is enabled")
-		}
-
-		if !mgr.ProbeCache(conf.Watcher.Cache) {
-			return nil, fmt.Errorf("cache resource '%v' was not found", conf.Watcher.Cache)
+	{
+		wConf := conf.Namespace(siFieldWatcher)
+		if s.watcherEnabled, _ = wConf.FieldBool(siFieldWatcherEnabled); s.watcherEnabled {
+			if s.watcherCache, err = wConf.FieldString(siFieldWatcherCache); err != nil {
+				return
+			}
+			if s.watcherPollInterval, err = wConf.FieldDuration(siFieldWatcherPollInterval); err != nil {
+				return
+			}
+			if s.watcherMinAge, err = wConf.FieldDuration(siFieldWatcherMinimumAge); err != nil {
+				return
+			}
+			if !mgr.HasCache(s.watcherCache) {
+				return nil, fmt.Errorf("cache resource '%v' was not found", s.watcherCache)
+			}
 		}
 	}
 
-	s := &sftpReader{
-		conf:                conf,
-		log:                 mgr.Logger(),
-		mgr:                 mgr,
-		scannerCtor:         ctor,
-		watcherPollInterval: watcherPollInterval,
-		watcherMinAge:       watcherMinAge,
-	}
-
-	return s, err
+	return
 }
 
 func (s *sftpReader) Connect(ctx context.Context) error {
@@ -166,10 +169,10 @@ func (s *sftpReader) Connect(ctx context.Context) error {
 	}
 
 	if s.client == nil {
-		if s.client, err = s.conf.Credentials.GetClient(s.mgr.FS(), s.conf.Address); err != nil {
+		if s.client, err = s.creds.GetClient(s.mgr.FS(), s.address); err != nil {
 			return err
 		}
-		s.log.Debugln("Finding more paths")
+		s.log.Debug("Finding more paths")
 		s.paths, err = s.getFilePaths(ctx)
 		if err != nil {
 			return err
@@ -177,11 +180,11 @@ func (s *sftpReader) Connect(ctx context.Context) error {
 	}
 
 	if len(s.paths) == 0 {
-		if !s.conf.Watcher.Enabled {
+		if !s.watcherEnabled {
 			s.client.Close()
 			s.client = nil
-			s.log.Debugln("Paths exhausted, closing input")
-			return component.ErrTypeClosed
+			s.log.Debug("Paths exhausted, closing input")
+			return service.ErrEndOfInput
 		}
 		select {
 		case <-time.After(s.watcherPollInterval):
@@ -199,12 +202,12 @@ func (s *sftpReader) Connect(ctx context.Context) error {
 		return err
 	}
 
-	if s.scanner, err = s.scannerCtor(nextPath, file, func(ctx context.Context, err error) error {
-		if err == nil && s.conf.DeleteOnFinish {
+	if s.scanner, err = s.scannerCtor.Create(file, func(ctx context.Context, err error) error {
+		if err == nil && s.deleteOnFinish {
 			return s.client.Remove(nextPath)
 		}
 		return nil
-	}); err != nil {
+	}, scanner.SourceDetails{Name: nextPath}); err != nil {
 		file.Close()
 		return err
 	}
@@ -212,28 +215,28 @@ func (s *sftpReader) Connect(ctx context.Context) error {
 	s.currentPath = nextPath
 	s.paths = s.paths[1:]
 
-	s.log.Infof("Consuming from file '%v'\n", nextPath)
+	s.log.Infof("Consuming from file '%v'", nextPath)
 	return err
 }
 
-func (s *sftpReader) ReadBatch(ctx context.Context) (message.Batch, input.AsyncAckFn, error) {
+func (s *sftpReader) ReadBatch(ctx context.Context) (service.MessageBatch, service.AckFunc, error) {
 	s.scannerMut.Lock()
 	defer s.scannerMut.Unlock()
 
 	if s.scanner == nil || s.client == nil {
-		return nil, nil, component.ErrNotConnected
+		return nil, nil, service.ErrNotConnected
 	}
 
-	parts, codecAckFn, err := s.scanner.Next(ctx)
+	parts, codecAckFn, err := s.scanner.NextBatch(ctx)
 	if err != nil {
 		if errors.Is(err, context.Canceled) ||
 			errors.Is(err, context.DeadlineExceeded) {
 			err = component.ErrTimeout
 		}
 		if err != component.ErrTimeout {
-			if s.conf.Watcher.Enabled {
+			if s.watcherEnabled {
 				var setErr error
-				if cerr := s.mgr.AccessCache(ctx, s.conf.Watcher.Cache, func(cache cache.V1) {
+				if cerr := s.mgr.AccessCache(ctx, s.watcherCache, func(cache service.Cache) {
 					setErr = cache.Set(ctx, s.currentPath, []byte("@"), nil)
 				}); cerr != nil {
 					return nil, nil, fmt.Errorf("failed to get the cache for sftp watcher mode: %v", cerr)
@@ -255,8 +258,7 @@ func (s *sftpReader) ReadBatch(ctx context.Context) (message.Batch, input.AsyncA
 		part.MetaSetMut("sftp_path", s.currentPath)
 	}
 
-	msg := message.Batch(parts)
-	return msg, func(ctx context.Context, res error) error {
+	return parts, func(ctx context.Context, res error) error {
 		return codecAckFn(ctx, res)
 	}, nil
 }
@@ -279,11 +281,11 @@ func (s *sftpReader) Close(ctx context.Context) (err error) {
 
 func (s *sftpReader) getFilePaths(ctx context.Context) ([]string, error) {
 	var filepaths []string
-	if !s.conf.Watcher.Enabled {
-		for _, p := range s.conf.Paths {
+	if !s.watcherEnabled {
+		for _, p := range s.paths {
 			paths, err := s.client.Glob(p)
 			if err != nil {
-				s.log.Warnf("Failed to scan files from path %v: %v\n", p, err)
+				s.log.Warnf("Failed to scan files from path %v: %v", p, err)
 				continue
 			}
 			filepaths = append(filepaths, paths...)
@@ -291,18 +293,18 @@ func (s *sftpReader) getFilePaths(ctx context.Context) ([]string, error) {
 		return filepaths, nil
 	}
 
-	if cerr := s.mgr.AccessCache(ctx, s.conf.Watcher.Cache, func(cache cache.V1) {
-		for _, p := range s.conf.Paths {
+	if cerr := s.mgr.AccessCache(ctx, s.watcherCache, func(cache service.Cache) {
+		for _, p := range s.paths {
 			paths, err := s.client.Glob(p)
 			if err != nil {
-				s.log.Warnf("Failed to scan files from path %v: %v\n", p, err)
+				s.log.Warnf("Failed to scan files from path %v: %v", p, err)
 				continue
 			}
 
 			for _, path := range paths {
 				info, err := s.client.Stat(path)
 				if err != nil {
-					s.log.Warnf("Failed to stat path %v: %v\n", path, err)
+					s.log.Warnf("Failed to stat path %v: %v", path, err)
 					continue
 				}
 				if time.Since(info.ModTime()) < s.watcherMinAge {
@@ -311,7 +313,7 @@ func (s *sftpReader) getFilePaths(ctx context.Context) ([]string, error) {
 				if _, err := cache.Get(ctx, path); err != nil {
 					filepaths = append(filepaths, path)
 				} else if err = cache.Set(ctx, path, []byte("@"), nil); err != nil { // Reset the TTL for the path
-					s.log.Warnf("Failed to set key in cache for path %v: %v\n", path, err)
+					s.log.Warnf("Failed to set key in cache for path %v: %v", path, err)
 				}
 			}
 		}
