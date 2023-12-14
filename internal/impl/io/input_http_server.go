@@ -258,7 +258,7 @@ You can access these metadata fields using [function interpolation](/docs/config
 					Default("200"),
 				service.NewInterpolatedStringMapField(hsiFieldResponseHeaders).
 					Description("Specify headers to return with synchronous responses.").
-					Default(map[string]string{
+					Default(map[string]any{
 						"Content-Type": "application/octet-stream",
 					}),
 				service.NewMetadataFilterField(hsiFieldResponseExtractMetadata).

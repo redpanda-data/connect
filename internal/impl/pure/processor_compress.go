@@ -44,7 +44,7 @@ type compressProc struct {
 }
 
 func newCompress(conf processor.CompressConfig, mgr bundle.NewManagement) (*compressProc, error) {
-	cor, err := strToCompressor(conf.Algorithm)
+	cor, err := strToCompressFunc(conf.Algorithm)
 	if err != nil {
 		return nil, err
 	}

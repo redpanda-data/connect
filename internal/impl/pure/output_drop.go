@@ -18,7 +18,7 @@ func init() {
 		Name:       "drop",
 		Summary:    `Drops all messages.`,
 		Categories: []string{"Utility"},
-		Config:     docs.FieldObject("", "").HasDefault(struct{}{}),
+		Config:     docs.FieldObject("", "").HasDefault(map[string]any{}),
 	})
 	if err != nil {
 		panic(err)

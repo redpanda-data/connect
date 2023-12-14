@@ -112,7 +112,7 @@ func TestIntegrationAWS(t *testing.T) {
 	pool, err := dockertest.NewPool("")
 	require.NoError(t, err)
 
-	pool.MaxWait = time.Second * 30
+	pool.MaxWait = time.Minute * 3
 
 	resource, err := pool.RunWithOptions(&dockertest.RunOptions{
 		Repository:   "localstack/localstack",
@@ -187,6 +187,61 @@ input:
 	})
 
 	t.Run("s3_to_sqs_lines", func(t *testing.T) {
+		template := `
+output:
+  aws_s3:
+    bucket: bucket-$ID
+    endpoint: http://localhost:$PORT
+    force_path_style_urls: true
+    region: eu-west-1
+    path: ${!count("$ID")}.txt
+    credentials:
+      id: xxxxx
+      secret: xxxxx
+      token: xxxxx
+    batching:
+      count: $OUTPUT_BATCH_COUNT
+      processors:
+        - archive:
+            format: lines
+
+input:
+  aws_s3:
+    bucket: bucket-$ID
+    endpoint: http://localhost:$PORT
+    force_path_style_urls: true
+    region: eu-west-1
+    delete_objects: true
+    scanner: { lines: {} }
+    sqs:
+      url: http://localhost:$PORT/000000000000/queue-$ID
+      key_path: Records.*.s3.object.key
+      endpoint: http://localhost:$PORT
+      delay_period: 1s
+    credentials:
+      id: xxxxx
+      secret: xxxxx
+      token: xxxxx
+`
+		integration.StreamTests(
+			integration.StreamTestOpenClose(),
+			integration.StreamTestStreamSequential(20),
+			integration.StreamTestSendBatchCount(10),
+			integration.StreamTestStreamParallelLossyThroughReconnect(20),
+		).Run(
+			t, template,
+			integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, testID string, vars *integration.StreamTestConfigVars) {
+				if vars.OutputBatchCount == 0 {
+					vars.OutputBatchCount = 1
+				}
+				require.NoError(t, createBucketQueue(servicePort, servicePort, testID))
+			}),
+			integration.StreamTestOptPort(servicePort),
+			integration.StreamTestOptAllowDupes(),
+		)
+	})
+
+	t.Run("s3_to_sqs_lines_old_codec", func(t *testing.T) {
 		template := `
 output:
   aws_s3:

@@ -43,6 +43,7 @@ func main() {
 	service.GlobalEnvironment().WalkProcessors(viewForDir(path.Join(docsDir, "./processors")))
 	service.GlobalEnvironment().WalkRateLimits(viewForDir(path.Join(docsDir, "./rate_limits")))
 	service.GlobalEnvironment().WalkTracers(viewForDir(path.Join(docsDir, "./tracers")))
+	service.GlobalEnvironment().WalkScanners(viewForDir(path.Join(docsDir, "./scanners")))
 
 	// Bloblang stuff
 	doBloblang(docsDir)

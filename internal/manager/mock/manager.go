@@ -16,8 +16,10 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/component/input"
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
+	"github.com/benthosdev/benthos/v4/internal/component/plugin"
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/component/ratelimit"
+	"github.com/benthosdev/benthos/v4/internal/component/scanner"
 	"github.com/benthosdev/benthos/v4/internal/filepath/ifs"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
@@ -124,6 +126,11 @@ func (m *Manager) StoreRateLimit(ctx context.Context, name string, conf ratelimi
 	return component.ErrInvalidType("rate_limit", conf.Type)
 }
 
+// NewScanner attempts to create a new scanner component from a config.
+func (m *Manager) NewScanner(conf plugin.Config) (scanner.Creator, error) {
+	return bundle.AllScanners.Init(conf, m)
+}
+
 // Path always returns empty.
 func (m *Manager) Path() []string { return nil }
 
@@ -149,6 +156,11 @@ func (m *Manager) RegisterEndpoint(path, desc string, h http.HandlerFunc) {
 // FS returns CustomFS, which wraps the os package unless overridden.
 func (m *Manager) FS() ifs.FS {
 	return m.CustomFS
+}
+
+// Environment always returns the global environment.
+func (m *Manager) Environment() *bundle.Environment {
+	return bundle.GlobalEnvironment
 }
 
 // BloblEnvironment always returns the global environment.

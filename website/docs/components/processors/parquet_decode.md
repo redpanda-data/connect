@@ -37,14 +37,15 @@ This processor uses [https://github.com/parquet-go/parquet-go](https://github.co
 
 <TabItem value="Reading Parquet Files from AWS S3">
 
-In this example we consume files from AWS S3 as they're written by listening onto an SQS queue for upload events. We make sure to use the `all-bytes` codec which means files are read into memory in full, which then allows us to use a `parquet_decode` processor to expand each file into a batch of messages. Finally, we write the data out to local files as newline delimited JSON.
+In this example we consume files from AWS S3 as they're written by listening onto an SQS queue for upload events. We make sure to use the `to_the_end` scanner which means files are read into memory in full, which then allows us to use a `parquet_decode` processor to expand each file into a batch of messages. Finally, we write the data out to local files as newline delimited JSON.
 
 ```yaml
 input:
   aws_s3:
     bucket: TODO
     prefix: foos/
-    codec: all-bytes
+    scanner:
+      to_the_end: {}
     sqs:
       url: TODO
   processors:

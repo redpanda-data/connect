@@ -118,8 +118,8 @@ This output benefits from sending messages as a batch for improved performance. 
 				Description("The table to store messages in."),
 			service.NewInterpolatedStringMapField(ddboFieldStringColumns).
 				Description("A map of column keys to string values to store.").
-				Default(map[string]string{}).
-				Example(map[string]string{
+				Default(map[string]any{}).
+				Example(map[string]any{
 					"id":           "${!json(\"id\")}",
 					"title":        "${!json(\"body.title\")}",
 					"topic":        "${!meta(\"kafka_topic\")}",
@@ -127,8 +127,8 @@ This output benefits from sending messages as a batch for improved performance. 
 				}),
 			service.NewStringMapField(ddboFieldJSONMapColumns).
 				Description("A map of column keys to [field paths](/docs/configuration/field_paths) pointing to value data within messages.").
-				Default(map[string]string{}).
-				Example(map[string]string{
+				Default(map[string]any{}).
+				Example(map[string]any{
 					"user":           "path.to.user",
 					"whole_document": ".",
 				}).

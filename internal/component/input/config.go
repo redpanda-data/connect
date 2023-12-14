@@ -11,22 +11,18 @@ import (
 // Deprecated: Do not add new components here. Instead, use the public plugin
 // APIs. Examples can be found in: ./internal/impl.
 type Config struct {
-	Label        string             `json:"label" yaml:"label"`
-	Type         string             `json:"type" yaml:"type"`
-	Broker       BrokerConfig       `json:"broker" yaml:"broker"`
-	Dynamic      DynamicConfig      `json:"dynamic" yaml:"dynamic"`
-	Generate     GenerateConfig     `json:"generate" yaml:"generate"`
-	Inproc       InprocConfig       `json:"inproc" yaml:"inproc"`
-	Plugin       any                `json:"plugin,omitempty" yaml:"plugin,omitempty"`
-	ReadUntil    ReadUntilConfig    `json:"read_until" yaml:"read_until"`
-	Resource     string             `json:"resource" yaml:"resource"`
-	Sequence     SequenceConfig     `json:"sequence" yaml:"sequence"`
-	SFTP         SFTPConfig         `json:"sftp" yaml:"sftp"`
-	Socket       SocketConfig       `json:"socket" yaml:"socket"`
-	SocketServer SocketServerConfig `json:"socket_server" yaml:"socket_server"`
-	STDIN        STDINConfig        `json:"stdin" yaml:"stdin"`
-	Subprocess   SubprocessConfig   `json:"subprocess" yaml:"subprocess"`
-	Processors   []processor.Config `json:"processors" yaml:"processors"`
+	Label      string             `json:"label" yaml:"label"`
+	Type       string             `json:"type" yaml:"type"`
+	Broker     BrokerConfig       `json:"broker" yaml:"broker"`
+	Dynamic    DynamicConfig      `json:"dynamic" yaml:"dynamic"`
+	Generate   GenerateConfig     `json:"generate" yaml:"generate"`
+	Inproc     InprocConfig       `json:"inproc" yaml:"inproc"`
+	Plugin     any                `json:"plugin,omitempty" yaml:"plugin,omitempty"`
+	ReadUntil  ReadUntilConfig    `json:"read_until" yaml:"read_until"`
+	Resource   string             `json:"resource" yaml:"resource"`
+	Sequence   SequenceConfig     `json:"sequence" yaml:"sequence"`
+	Subprocess SubprocessConfig   `json:"subprocess" yaml:"subprocess"`
+	Processors []processor.Config `json:"processors" yaml:"processors"`
 }
 
 // NewConfig returns a configuration struct fully populated with default values.
@@ -34,22 +30,18 @@ type Config struct {
 // APIs. Examples can be found in: ./internal/impl.
 func NewConfig() Config {
 	return Config{
-		Label:        "",
-		Type:         "stdin",
-		Broker:       NewBrokerConfig(),
-		Dynamic:      NewDynamicConfig(),
-		Generate:     NewGenerateConfig(),
-		Inproc:       NewInprocConfig(),
-		Plugin:       nil,
-		ReadUntil:    NewReadUntilConfig(),
-		Resource:     "",
-		Sequence:     NewSequenceConfig(),
-		SFTP:         NewSFTPConfig(),
-		Socket:       NewSocketConfig(),
-		SocketServer: NewSocketServerConfig(),
-		STDIN:        NewSTDINConfig(),
-		Subprocess:   NewSubprocessConfig(),
-		Processors:   []processor.Config{},
+		Label:      "",
+		Type:       "stdin",
+		Broker:     NewBrokerConfig(),
+		Dynamic:    NewDynamicConfig(),
+		Generate:   NewGenerateConfig(),
+		Inproc:     NewInprocConfig(),
+		Plugin:     nil,
+		ReadUntil:  NewReadUntilConfig(),
+		Resource:   "",
+		Sequence:   NewSequenceConfig(),
+		Subprocess: NewSubprocessConfig(),
+		Processors: []processor.Config{},
 	}
 }
 
@@ -81,4 +73,10 @@ func (conf *Config) UnmarshalYAML(value *yaml.Node) error {
 
 	*conf = Config(aliased)
 	return nil
+}
+
+// FromYAML is for old style tests.
+func FromYAML(confStr string) (conf Config, err error) {
+	err = yaml.Unmarshal([]byte(confStr), &conf)
+	return
 }

@@ -72,8 +72,10 @@ A common use case for sequence might be to generate a message at the end of our 
 input:
   sequence:
     inputs:
-      - csv:
+      - file:
           paths: [ ./dataset.csv ]
+          scanner:
+            csv: {}
       - generate:
           count: 1
           mapping: 'root = {"status":"finished"}'
@@ -118,10 +120,12 @@ input:
       id_path: uuid
       merge_strategy: array
     inputs:
-      - csv:
+      - file:
           paths:
             - ./hobbies.csv
             - ./main.csv
+          scanner:
+            csv: {}
 ```
 
 </TabItem>
@@ -164,11 +168,14 @@ input:
       iterations: 10
       merge_strategy: array
     inputs:
-      - csv:
-          paths: [ ./main.csv ]
       - file:
-          codec: lines
+          paths: [ ./main.csv ]
+          scanner:
+            csv: {}
+      - file:
           paths: [ ./hobbies.ndjson ]
+          scanner:
+            lines: {}
         processors:
           - mapping: |
               root.uuid = this.document.uuid

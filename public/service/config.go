@@ -265,6 +265,19 @@ type ConfigSpec struct {
 	component docs.ComponentSpec
 }
 
+func (c *ConfigSpec) configFromAny(mgr bundle.NewManagement, v any) (*ParsedConfig, error) {
+	switch t := v.(type) {
+	case *yaml.Node:
+		return c.configFromNode(mgr, t)
+	default:
+		fields, err := c.component.Config.AnyToValue(v, docs.ToValueConfig{})
+		if err != nil {
+			return nil, err
+		}
+		return &ParsedConfig{mgr: mgr, generic: fields}, nil
+	}
+}
+
 func (c *ConfigSpec) configFromNode(mgr bundle.NewManagement, node *yaml.Node) (*ParsedConfig, error) {
 	fields, err := c.component.Config.YAMLToValue(node, docs.ToValueConfig{})
 	if err != nil {
@@ -511,6 +524,7 @@ func (c *ConfigView) RenderDocs() ([]byte, error) {
 		"cache":      {},
 		"rate_limit": {},
 		"processor":  {},
+		"scanner":    {},
 	}[string(c.component.Type)]
 
 	conf := map[string]any{

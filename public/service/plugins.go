@@ -183,3 +183,16 @@ type OtelTracerProviderConstructor func(conf *ParsedConfig) (trace.TracerProvide
 func RegisterOtelTracerProvider(name string, spec *ConfigSpec, ctor OtelTracerProviderConstructor) error {
 	return globalEnvironment.RegisterOtelTracerProvider(name, spec, ctor)
 }
+
+// BatchScannerCreatorConstructor is a func that's provided a configuration type
+// and access to a service manager and must return an instantiation of a batch
+// scanner creator.
+type BatchScannerCreatorConstructor func(conf *ParsedConfig, mgr *Resources) (BatchScannerCreator, error)
+
+// RegisterBatchScannerCreator attempts to register a new batch scanner exporter
+// plugin by providing a description of the configuration for the plugin as well
+// as a constructor for the scanner itself. The constructor will be called for
+// each instantiation of the component within a config.
+func RegisterBatchScannerCreator(name string, spec *ConfigSpec, ctor BatchScannerCreatorConstructor) error {
+	return globalEnvironment.RegisterBatchScannerCreator(name, spec, ctor)
+}

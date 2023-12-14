@@ -60,8 +60,8 @@ These values can be overridden during execution.`).
 			Default(lruCacheFieldCapDefaultValue)).
 		Field(service.NewStringMapField(lruCacheFieldInitValuesLabel).
 			Description("A table of key/value pairs that should be present in the cache on initialization. This can be used to create static lookup tables.").
-			Default(map[string]string{}).
-			Example(map[string]string{
+			Default(map[string]any{}).
+			Example(map[string]any{
 				"Nickelback":       "1995",
 				"Spice Girls":      "1994",
 				"The Human League": "1977",

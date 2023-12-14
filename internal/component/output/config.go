@@ -25,12 +25,9 @@ type Config struct {
 	Reject       string             `json:"reject" yaml:"reject"`
 	Resource     string             `json:"resource" yaml:"resource"`
 	Retry        RetryConfig        `json:"retry" yaml:"retry"`
-	SFTP         SFTPConfig         `json:"sftp" yaml:"sftp"`
-	STDOUT       STDOUTConfig       `json:"stdout" yaml:"stdout"`
 	Subprocess   SubprocessConfig   `json:"subprocess" yaml:"subprocess"`
 	Switch       SwitchConfig       `json:"switch" yaml:"switch"`
 	SyncResponse struct{}           `json:"sync_response" yaml:"sync_response"`
-	Socket       SocketConfig       `json:"socket" yaml:"socket"`
 	Processors   []processor.Config `json:"processors" yaml:"processors"`
 }
 
@@ -53,12 +50,9 @@ func NewConfig() Config {
 		Reject:       "",
 		Resource:     "",
 		Retry:        NewRetryConfig(),
-		SFTP:         NewSFTPConfig(),
-		STDOUT:       NewSTDOUTConfig(),
 		Subprocess:   NewSubprocessConfig(),
 		Switch:       NewSwitchConfig(),
 		SyncResponse: struct{}{},
-		Socket:       NewSocketConfig(),
 		Processors:   []processor.Config{},
 	}
 }
@@ -91,4 +85,10 @@ func (conf *Config) UnmarshalYAML(value *yaml.Node) error {
 
 	*conf = Config(aliased)
 	return nil
+}
+
+// FromYAML is for old style tests.
+func FromYAML(confStr string) (conf Config, err error) {
+	err = yaml.Unmarshal([]byte(confStr), &conf)
+	return
 }

@@ -28,6 +28,7 @@ type MappedDocsProvider struct {
 	processorMap  map[string]ComponentSpec
 	rateLimitMap  map[string]ComponentSpec
 	tracerMap     map[string]ComponentSpec
+	scannerMap    map[string]ComponentSpec
 	componentLock sync.Mutex
 }
 
@@ -42,6 +43,7 @@ func NewMappedDocsProvider() *MappedDocsProvider {
 		processorMap: map[string]ComponentSpec{},
 		rateLimitMap: map[string]ComponentSpec{},
 		tracerMap:    map[string]ComponentSpec{},
+		scannerMap:   map[string]ComponentSpec{},
 	}
 }
 
@@ -57,6 +59,7 @@ func (m *MappedDocsProvider) Clone() *MappedDocsProvider {
 		processorMap: map[string]ComponentSpec{},
 		rateLimitMap: map[string]ComponentSpec{},
 		tracerMap:    map[string]ComponentSpec{},
+		scannerMap:   map[string]ComponentSpec{},
 	}
 
 	for k, v := range m.bufferMap {
@@ -83,6 +86,9 @@ func (m *MappedDocsProvider) Clone() *MappedDocsProvider {
 	for k, v := range m.tracerMap {
 		newM.tracerMap[k] = v
 	}
+	for k, v := range m.scannerMap {
+		newM.scannerMap[k] = v
+	}
 	return newM
 }
 
@@ -108,6 +114,8 @@ func (m *MappedDocsProvider) RegisterDocs(spec ComponentSpec) {
 		m.rateLimitMap[spec.Name] = spec
 	case TypeTracer:
 		m.tracerMap[spec.Name] = spec
+	case TypeScanner:
+		m.scannerMap[spec.Name] = spec
 	}
 }
 
@@ -136,6 +144,8 @@ func (m *MappedDocsProvider) GetDocs(name string, ctype Type) (ComponentSpec, bo
 		spec, ok = m.rateLimitMap[name]
 	case TypeTracer:
 		spec, ok = m.tracerMap[name]
+	case TypeScanner:
+		spec, ok = m.scannerMap[name]
 	}
 
 	return spec, ok

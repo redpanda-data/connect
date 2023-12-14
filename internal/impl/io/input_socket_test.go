@@ -15,11 +15,20 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/benthosdev/benthos/v4/internal/component/input"
-	"github.com/benthosdev/benthos/v4/internal/component/metrics"
-	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
 )
+
+func inputFromConf(t testing.TB, confStr string, bits ...any) input.Streamed {
+	t.Helper()
+
+	conf, err := input.FromYAML(fmt.Sprintf(confStr, bits...))
+	require.NoError(t, err)
+
+	s, err := mock.NewManager().NewInput(conf)
+	require.NoError(t, err)
+	return s
+}
 
 func TestSocketInputBasic(t *testing.T) {
 	ctx, done := context.WithTimeout(context.Background(), time.Second*20)
@@ -33,14 +42,11 @@ func TestSocketInputBasic(t *testing.T) {
 	}
 	defer ln.Close()
 
-	conf := input.NewConfig()
-	conf.Socket.Network = ln.Addr().Network()
-	conf.Socket.Address = ln.Addr().String()
-
-	rdr, err := newSocketInput(conf, mock.NewManager(), log.Noop(), metrics.Noop())
-	if err != nil {
-		t.Fatal(err)
-	}
+	rdr := inputFromConf(t, `
+socket:
+  network: %v
+  address: %v
+`, ln.Addr().Network(), ln.Addr().String())
 
 	defer func() {
 		rdr.TriggerStopConsuming()
@@ -123,14 +129,11 @@ func TestSocketInputReconnect(t *testing.T) {
 	}
 	defer ln.Close()
 
-	conf := input.NewConfig()
-	conf.Socket.Network = ln.Addr().Network()
-	conf.Socket.Address = ln.Addr().String()
-
-	rdr, err := newSocketInput(conf, mock.NewManager(), log.Noop(), metrics.Noop())
-	if err != nil {
-		t.Fatal(err)
-	}
+	rdr := inputFromConf(t, `
+socket:
+  network: %v
+  address: %v
+`, ln.Addr().Network(), ln.Addr().String())
 
 	defer func() {
 		rdr.TriggerStopConsuming()
@@ -154,9 +157,8 @@ func TestSocketInputReconnect(t *testing.T) {
 		}
 		conn.Close()
 		conn, cerr = ln.Accept()
-		if cerr != nil {
-			t.Error(cerr)
-		}
+		require.NoError(t, cerr)
+
 		if _, cerr := conn.Write([]byte("bar\n")); cerr != nil {
 			t.Error(cerr)
 		}
@@ -219,15 +221,12 @@ func TestSocketInputMultipart(t *testing.T) {
 	}
 	defer ln.Close()
 
-	conf := input.NewConfig()
-	conf.Socket.Codec = "lines/multipart"
-	conf.Socket.Network = ln.Addr().Network()
-	conf.Socket.Address = ln.Addr().String()
-
-	rdr, err := newSocketInput(conf, mock.NewManager(), log.Noop(), metrics.Noop())
-	if err != nil {
-		t.Fatal(err)
-	}
+	rdr := inputFromConf(t, `
+socket:
+  network: %v
+  address: %v
+  codec: lines/multipart
+`, ln.Addr().Network(), ln.Addr().String())
 
 	defer func() {
 		rdr.TriggerStopConsuming()
@@ -305,15 +304,12 @@ func TestSocketMultipartCustomDelim(t *testing.T) {
 	}
 	defer ln.Close()
 
-	conf := input.NewConfig()
-	conf.Socket.Codec = "delim:@/multipart"
-	conf.Socket.Network = ln.Addr().Network()
-	conf.Socket.Address = ln.Addr().String()
-
-	rdr, err := newSocketInput(conf, mock.NewManager(), log.Noop(), metrics.Noop())
-	if err != nil {
-		t.Fatal(err)
-	}
+	rdr := inputFromConf(t, `
+socket:
+  network: %v
+  address: %v
+  codec: delim:@/multipart
+`, ln.Addr().Network(), ln.Addr().String())
 
 	defer func() {
 		rdr.TriggerStopConsuming()
@@ -391,15 +387,12 @@ func TestSocketMultipartShutdown(t *testing.T) {
 	}
 	defer ln.Close()
 
-	conf := input.NewConfig()
-	conf.Socket.Codec = "lines/multipart"
-	conf.Socket.Network = ln.Addr().Network()
-	conf.Socket.Address = ln.Addr().String()
-
-	rdr, err := newSocketInput(conf, mock.NewManager(), log.Noop(), metrics.Noop())
-	if err != nil {
-		t.Fatal(err)
-	}
+	rdr := inputFromConf(t, `
+socket:
+  network: %v
+  address: %v
+  codec: lines/multipart
+`, ln.Addr().Network(), ln.Addr().String())
 
 	defer func() {
 		rdr.TriggerStopConsuming()
@@ -477,14 +470,11 @@ func TestTCPSocketInputBasic(t *testing.T) {
 	}
 	defer ln.Close()
 
-	conf := input.NewConfig()
-	conf.Socket.Network = "tcp"
-	conf.Socket.Address = ln.Addr().String()
-
-	rdr, err := newSocketInput(conf, mock.NewManager(), log.Noop(), metrics.Noop())
-	if err != nil {
-		t.Fatal(err)
-	}
+	rdr := inputFromConf(t, `
+socket:
+  network: tcp
+  address: %v
+`, ln.Addr().String())
 
 	defer func() {
 		rdr.TriggerStopConsuming()
@@ -567,14 +557,11 @@ func TestTCPSocketReconnect(t *testing.T) {
 	}
 	defer ln.Close()
 
-	conf := input.NewConfig()
-	conf.Socket.Network = "tcp"
-	conf.Socket.Address = ln.Addr().String()
-
-	rdr, err := newSocketInput(conf, mock.NewManager(), log.Noop(), metrics.Noop())
-	if err != nil {
-		t.Fatal(err)
-	}
+	rdr := inputFromConf(t, `
+socket:
+  network: tcp
+  address: %v
+`, ln.Addr().String())
 
 	defer func() {
 		rdr.TriggerStopConsuming()
@@ -663,15 +650,12 @@ func TestTCPSocketInputMultipart(t *testing.T) {
 	}
 	defer ln.Close()
 
-	conf := input.NewConfig()
-	conf.Socket.Network = "tcp"
-	conf.Socket.Codec = "lines/multipart"
-	conf.Socket.Address = ln.Addr().String()
-
-	rdr, err := newSocketInput(conf, mock.NewManager(), log.Noop(), metrics.Noop())
-	if err != nil {
-		t.Fatal(err)
-	}
+	rdr := inputFromConf(t, `
+socket:
+  network: tcp
+  address: %v
+  codec: lines/multipart
+`, ln.Addr().String())
 
 	defer func() {
 		rdr.TriggerStopConsuming()
@@ -749,15 +733,12 @@ func TestTCPSocketMultipartCustomDelim(t *testing.T) {
 	}
 	defer ln.Close()
 
-	conf := input.NewConfig()
-	conf.Socket.Network = "tcp"
-	conf.Socket.Codec = "delim:@/multipart"
-	conf.Socket.Address = ln.Addr().String()
-
-	rdr, err := newSocketInput(conf, mock.NewManager(), log.Noop(), metrics.Noop())
-	if err != nil {
-		t.Fatal(err)
-	}
+	rdr := inputFromConf(t, `
+socket:
+  network: tcp
+  address: %v
+  codec: delim:@/multipart
+`, ln.Addr().String())
 
 	defer func() {
 		rdr.TriggerStopConsuming()
@@ -835,15 +816,12 @@ func TestTCPSocketMultipartShutdown(t *testing.T) {
 	}
 	defer ln.Close()
 
-	conf := input.NewConfig()
-	conf.Socket.Network = "tcp"
-	conf.Socket.Codec = "lines/multipart"
-	conf.Socket.Address = ln.Addr().String()
-
-	rdr, err := newSocketInput(conf, mock.NewManager(), log.Noop(), metrics.Noop())
-	if err != nil {
-		t.Fatal(err)
-	}
+	rdr := inputFromConf(t, `
+socket:
+  network: tcp
+  address: %v
+  codec: lines/multipart
+`, ln.Addr().String())
 
 	defer func() {
 		rdr.TriggerStopConsuming()
@@ -922,15 +900,11 @@ func BenchmarkTCPSocketWithCutOff(b *testing.B) {
 		ln.Close()
 	})
 
-	conf := input.NewConfig()
-	conf.Socket.Network = "tcp"
-	conf.Socket.Address = ln.Addr().String()
-
-	sRdr, err := newSocketReader(conf.Socket, log.Noop())
-	require.NoError(b, err)
-
-	rdr, err := input.NewAsyncReader("socket", input.NewAsyncCutOff(input.NewAsyncPreserver(sRdr)), mock.NewManager())
-	require.NoError(b, err)
+	rdr := inputFromConf(b, `
+socket:
+  network: tcp
+  address: %v
+`, ln.Addr().String())
 
 	defer func() {
 		rdr.TriggerStopConsuming()
@@ -992,15 +966,11 @@ func BenchmarkTCPSocketNoCutOff(b *testing.B) {
 		ln.Close()
 	})
 
-	conf := input.NewConfig()
-	conf.Socket.Network = "tcp"
-	conf.Socket.Address = ln.Addr().String()
-
-	sRdr, err := newSocketReader(conf.Socket, log.Noop())
-	require.NoError(b, err)
-
-	rdr, err := input.NewAsyncReader("socket", input.NewAsyncPreserver(sRdr), mock.NewManager())
-	require.NoError(b, err)
+	rdr := inputFromConf(b, `
+socket:
+  network: tcp
+  address: %v
+`, ln.Addr().String())
 
 	defer func() {
 		rdr.TriggerStopConsuming()

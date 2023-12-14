@@ -149,8 +149,8 @@ func GetPluginConfigYAML(name string, node *yaml.Node) (yaml.Node, error) {
 
 func (f FieldSpec) shouldOmitYAML(parentFields FieldSpecs, fieldNode, parentNode *yaml.Node) (why string, shouldOmit bool) {
 	conf := ToValueConfig{
-		Passive:             true,
-		FallbackToInterface: true,
+		Passive:       true,
+		FallbackToAny: true,
 	}
 
 	if f.omitWhenFn == nil {
@@ -435,8 +435,8 @@ func customLintFromYAML(ctx LintContext, spec FieldSpec, node *yaml.Node) []Lint
 		return nil
 	}
 	fieldValue, err := spec.YAMLToValue(node, ToValueConfig{
-		Passive:             true,
-		FallbackToInterface: true,
+		Passive:       true,
+		FallbackToAny: true,
 	})
 	if err != nil {
 		// If we weren't able to infer a value type then it's assumed
@@ -758,7 +758,7 @@ type ToValueConfig struct {
 	// When a field spec is for a non-scalar type (a component) fall back to
 	// decoding it into an interface, otherwise the raw yaml.Node is
 	// returned in its place.
-	FallbackToInterface bool
+	FallbackToAny bool
 }
 
 // YAMLToValue converts a yaml node into a generic value by referencing the
@@ -847,7 +847,7 @@ func (f FieldSpec) YAMLToValue(node *yaml.Node, conf ToValueConfig) (any, error)
 		return f.Children.YAMLToMap(node, conf)
 	}
 
-	if conf.FallbackToInterface {
+	if conf.FallbackToAny {
 		// We don't know what the field actually is (likely a component
 		// type), so if we we can either decode into a generic interface
 		// or return the raw node itself.

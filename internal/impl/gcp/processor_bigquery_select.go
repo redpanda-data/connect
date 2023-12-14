@@ -85,7 +85,7 @@ func newBigQuerySelectProcessorConfig() *service.ConfigSpec {
 			Example("user_id = ?").
 			Optional(),
 		).
-		Field(service.NewStringMapField("job_labels").Description("A list of labels to add to the query job.").Default(map[string]string{})).
+		Field(service.NewStringMapField("job_labels").Description("A list of labels to add to the query job.").Default(map[string]any{})).
 		Field(service.NewBloblangField("args_mapping").
 			Description("An optional [Bloblang mapping](/docs/guides/bloblang/about) which should evaluate to an array of values matching in size to the number of placeholder arguments in the field `where`.").
 			Example(`root = [ "article", now().ts_format("2006-01-02") ]`).

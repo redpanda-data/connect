@@ -210,8 +210,8 @@ output:
 				Example(`${!json("doc.namespace")}/${!json("doc.id")}.json`),
 			service.NewInterpolatedStringMapField(s3oFieldTags).
 				Description("Key/value pairs to store with the object as tags.").
-				Default(map[string]string{}).
-				Example(map[string]string{
+				Default(map[string]any{}).
+				Example(map[string]any{
 					"Key1":      "Value1",
 					"Timestamp": `${!meta("Timestamp")}`,
 				}),

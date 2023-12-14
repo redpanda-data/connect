@@ -19,6 +19,7 @@ module.exports = {
       buffers: components("buffers"),
       metrics: components("metrics"),
       tracers: components("tracers"),
+      scanners: components("scanners"),
     },
   },
   themeConfig: {
