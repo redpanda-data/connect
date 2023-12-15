@@ -25,13 +25,19 @@ import (
 )
 
 const (
-	issFieldNetwork       = "network"
-	issFieldAddress       = "address"
-	issFieldAddressCache  = "address_cache"
-	issFieldTLS           = "tls"
-	issFieldTLSCertFile   = "cert_file"
-	issFieldTLSKeyFile    = "key_file"
-	issFieldTLSSelfSigned = "self_signed"
+	issFieldNetwork                    = "network"
+	issFieldAddress                    = "address"
+	issFieldAddressCache               = "address_cache"
+	issFieldTLS                        = "tls"
+	issFieldTLSCertFile                = "cert_file"
+	issFieldTLSKeyFile                 = "key_file"
+	issFieldTLSSelfSigned              = "self_signed"
+	issFieldTLSClientAuth              = "client_auth"
+	issFieldTLSClientAuthNoClientCert  = "no"
+	issFieldTLSClientAuthRequestCert   = "request"
+	issFieldTLSClientAuthRequireAny    = "require_any"
+	issFieldTLSClientAuthRequireValid  = "require_valid"
+	issFieldTLSClientAuthVerifyIfGiven = "verify_if_given"
 )
 
 func socketServerInputSpec() *service.ConfigSpec {
@@ -59,6 +65,16 @@ func socketServerInputSpec() *service.ConfigSpec {
 				service.NewBoolField(issFieldTLSSelfSigned).
 					Description("Whether to generate self signed certificates.").
 					Default(false),
+				service.NewStringAnnotatedEnumField(issFieldTLSClientAuth, map[string]string{
+					issFieldTLSClientAuthNoClientCert:  "client certificate is not requested nor required.",
+					issFieldTLSClientAuthRequestCert:   "will request client certificate, not require it.",
+					issFieldTLSClientAuthRequireAny:    "will accept any client certificate, even if not valid.",
+					issFieldTLSClientAuthRequireValid:  "requires a valid client certificate.",
+					issFieldTLSClientAuthVerifyIfGiven: "will verify a certificate, if one is sent by the client.",
+				}).
+					Description("How client authentication is handled.").
+					Default(issFieldTLSClientAuthNoClientCert).
+					Version("4.25.0"),
 			).
 				Description("TLS specific configuration, valid when the `network` is set to `tls`.").
 				Optional(),
@@ -98,6 +114,7 @@ type socketServerInput struct {
 	tlsCert       string
 	tlsKey        string
 	tlsSelfSigned bool
+	tlsClientAuth tls.ClientAuthType
 	codecCtor     interop.FallbackReaderCodec
 
 	messages chan service.MessageBatch
@@ -125,6 +142,22 @@ func newSocketServerInputFromParsed(conf *service.ParsedConfig, mgr *service.Res
 	t.tlsKey, _ = tlsConf.FieldString(issFieldTLSKeyFile)
 	t.tlsSelfSigned, _ = tlsConf.FieldBool(issFieldTLSSelfSigned)
 
+	tlsConfClientAuth, _ := tlsConf.FieldString(issFieldTLSClientAuth)
+	switch tlsConfClientAuth {
+	case issFieldTLSClientAuthNoClientCert:
+		t.tlsClientAuth = tls.NoClientCert
+	case issFieldTLSClientAuthRequestCert:
+		t.tlsClientAuth = tls.RequestClientCert
+	case issFieldTLSClientAuthRequireAny:
+		t.tlsClientAuth = tls.RequireAnyClientCert
+	case issFieldTLSClientAuthRequireValid:
+		t.tlsClientAuth = tls.RequireAndVerifyClientCert
+	case issFieldTLSClientAuthVerifyIfGiven:
+		t.tlsClientAuth = tls.VerifyClientCertIfGiven
+	default:
+		return
+	}
+
 	if t.codecCtor, err = interop.OldReaderCodecFromParsed(conf); err != nil {
 		return
 	}
@@ -146,6 +179,7 @@ func (t *socketServerInput) Connect(ctx context.Context) error {
 		}
 		config := &tls.Config{
 			Certificates: []tls.Certificate{cert},
+			ClientAuth:   t.tlsClientAuth,
 		}
 		ln, err = tls.Listen("tcp", t.address, config)
 	case "udp":

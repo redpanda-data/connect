@@ -9,6 +9,7 @@ All notable changes to this project will be documented in this file.
 
 - Field `address_cache` added to the `socket_server` input.
 - All inputs with a `codec` field now supports a new field `scanner` to replace it. Scanners are more powerful as they are configured in a structured way similar to all other component types rather than via a single string field, for more information [check out the scanners page](https://www.benthos.dev/docs/components/scanners/about).
+- Field `tls.client_auth` added to the `socket_server` input.
 
 ### Changed
 

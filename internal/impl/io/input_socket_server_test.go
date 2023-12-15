@@ -2,9 +2,15 @@ package io_test
 
 import (
 	"context"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
 	"crypto/tls"
+	"crypto/x509"
+	"encoding/pem"
 	"errors"
 	"fmt"
+	"math/big"
 	"net"
 	"path/filepath"
 	"sort"
@@ -1268,4 +1274,82 @@ socket_server:
 
 	wg.Wait()
 	conn.Close()
+}
+
+func TestTLSSocketServerClientAuthRequireValid(t *testing.T) {
+	tCtx, done := context.WithTimeout(context.Background(), time.Second*20)
+	defer done()
+
+	rdr, addr := socketServerInputFromConf(t, `
+socket_server:
+  network: tls
+  address: 127.0.0.1:0
+  tls:
+    self_signed: true
+    client_auth: "require_valid"
+`)
+
+	defer func() {
+		rdr.TriggerStopConsuming()
+		assert.NoError(t, rdr.WaitForClose(tCtx))
+	}()
+
+	cert, err := createSelfSignedCertificate()
+	require.NoError(t, err)
+
+	conn, err := tls.Dial("tcp", addr, &tls.Config{
+		InsecureSkipVerify: true,
+		Certificates:       []tls.Certificate{cert},
+	})
+	require.NoError(t, err)
+
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+	go func() {
+		_ = conn.SetWriteDeadline(time.Now().Add(time.Second * 5))
+
+		_, cerr := conn.Write([]byte("foo\n"))
+		require.NoError(t, cerr)
+
+		wg.Done()
+	}()
+
+	readNextMsg := func() (message.Batch, error) {
+		var tran message.Transaction
+		select {
+		case tran = <-rdr.TransactionChan():
+			require.NoError(t, tran.Ack(tCtx, nil))
+		case <-time.After(time.Second):
+			return nil, errors.New("timed out")
+		}
+		return tran.Payload, nil
+	}
+
+	_, err = readNextMsg()
+	require.Error(t, err) // we'll accept only valid certs!
+
+	wg.Wait()
+	conn.Close()
+}
+
+func createSelfSignedCertificate() (tls.Certificate, error) {
+	priv, _ := ecdsa.GenerateKey(elliptic.P521(), rand.Reader)
+	certOptions := &x509.Certificate{
+		SerialNumber: &big.Int{},
+	}
+
+	certBytes, _ := x509.CreateCertificate(rand.Reader, certOptions, certOptions, &priv.PublicKey, priv)
+	pemcert := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certBytes})
+	key, err := x509.MarshalECPrivateKey(priv)
+	if err != nil {
+		return tls.Certificate{}, err
+	}
+
+	keyBytes := pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: key})
+	cert, err := tls.X509KeyPair(pemcert, keyBytes)
+	if err != nil {
+		return tls.Certificate{}, err
+	}
+
+	return cert, nil
 }
