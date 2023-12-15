@@ -237,6 +237,17 @@ func writeWithoutPanic(pWtr *parquet.GenericWriter[any], rows []any) (err error)
 	return
 }
 
+func closeWithoutPanic(pWtr *parquet.GenericWriter[any]) (err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = fmt.Errorf("encoding panic: %v", r)
+		}
+	}()
+
+	err = pWtr.Close()
+	return
+}
+
 func (s *parquetEncodeProcessor) ProcessBatch(ctx context.Context, batch service.MessageBatch) ([]service.MessageBatch, error) {
 	if len(batch) == 0 {
 		return nil, nil
@@ -261,7 +272,7 @@ func (s *parquetEncodeProcessor) ProcessBatch(ctx context.Context, batch service
 	if err := writeWithoutPanic(pWtr, rows); err != nil {
 		return nil, err
 	}
-	if err := pWtr.Close(); err != nil {
+	if err := closeWithoutPanic(pWtr); err != nil {
 		return nil, err
 	}
 
