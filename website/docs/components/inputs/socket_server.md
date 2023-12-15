@@ -28,6 +28,7 @@ input:
       cert_file: "" # No default (optional)
       key_file: "" # No default (optional)
       self_signed: false
+      client_auth: "no"
     scanner:
       lines: {}
 ```
@@ -93,6 +94,24 @@ Whether to generate self signed certificates.
 
 Type: `bool`  
 Default: `false`  
+
+### `tls.client_auth`
+
+How client authentication is handled.
+
+
+Type: `string`  
+Default: `"no"`  
+Requires version 4.25.0 or newer  
+
+| Option | Summary |
+|---|---|
+| `no` | client certificate is not requested nor required. |
+| `request` | will request client certificate, not require it. |
+| `require_any` | will accept any client certificate, even if not valid. |
+| `require_valid` | requires a valid client certificate. |
+| `verify_if_given` | will verify a certificate, if one is sent by the client. |
+
 
 ### `scanner`
 
