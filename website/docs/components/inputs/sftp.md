@@ -156,6 +156,7 @@ The [scanner](/docs/components/scanners/about) by which the stream of bytes cons
 
 Type: `scanner`  
 Default: `{"to_the_end":{}}`  
+Requires version 4.25.0 or newer  
 
 ### `delete_on_finish`
 

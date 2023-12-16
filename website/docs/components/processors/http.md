@@ -92,7 +92,7 @@ http:
     - 429
   drop_on: []
   successful_on: []
-  proxy_url: ""
+  proxy_url: "" # No default (optional)
   batch_as_multipart: false
   parallel: false
 ```
@@ -712,7 +712,6 @@ An optional HTTP proxy URL.
 
 
 Type: `string`  
-Default: `""`  
 
 ### `batch_as_multipart`
 

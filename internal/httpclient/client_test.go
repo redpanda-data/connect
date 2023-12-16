@@ -16,12 +16,25 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Jeffail/gabs/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
+	"github.com/benthosdev/benthos/v4/public/service"
 )
+
+func clientConfig(t testing.TB, confStr string, args ...any) OldConfig {
+	t.Helper()
+
+	spec := service.NewConfigSpec().Field(ConfigField("GET", false))
+	parsed, err := spec.ParseYAML(fmt.Sprintf(confStr, args...), nil)
+	require.NoError(t, err)
+
+	conf, err := ConfigFromParsed(parsed)
+	require.NoError(t, err)
+	return conf
+}
 
 func TestHTTPClientRetries(t *testing.T) {
 	var reqCount uint32
@@ -31,32 +44,33 @@ func TestHTTPClientRetries(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	conf := NewOldConfig()
-	conf.URL = ts.URL + "/testpost"
-	conf.Retry = "1ms"
-	conf.NumRetries = 3
+	conf := clientConfig(t, `
+url: %v
+retry_period: 1ms
+retries: 3
+`, ts.URL+"/testpost")
 
-	h, err := NewClientFromOldConfig(conf, mock.NewManager())
+	h, err := NewClientFromOldConfig(conf, service.MockResources())
 	require.NoError(t, err)
 	defer h.Close(context.Background())
 
-	out := message.QuickBatch([][]byte{[]byte("test")})
-	_, err = h.Send(context.Background(), out)
+	_, err = h.Send(context.Background(), service.MessageBatch{service.NewMessage([]byte("test"))})
 	assert.Error(t, err)
 	assert.Equal(t, uint32(4), atomic.LoadUint32(&reqCount))
 }
 
 func TestHTTPClientBadRequest(t *testing.T) {
-	conf := NewOldConfig()
-	conf.URL = "htp://notvalid:1111"
-	conf.Verb = "notvalid\n"
-	conf.NumRetries = 3
+	conf := clientConfig(t, `
+url: htp://notvalid:1111
+verb: notvalid
+retry_period: 1ms
+retries: 3
+`)
 
-	h, err := NewClientFromOldConfig(conf, mock.NewManager())
+	h, err := NewClientFromOldConfig(conf, service.MockResources())
 	require.NoError(t, err)
 
-	out := message.QuickBatch([][]byte{[]byte("test")})
-	_, err = h.Send(context.Background(), out)
+	_, err = h.Send(context.Background(), service.MessageBatch{service.NewMessage([]byte("test"))})
 	assert.Error(t, err)
 }
 
@@ -77,15 +91,18 @@ func TestHTTPClientSendBasic(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	conf := NewOldConfig()
-	conf.URL = ts.URL + "/testpost"
+	conf := clientConfig(t, `
+url: %v
+`, ts.URL+"/testpost")
 
-	h, err := NewClientFromOldConfig(conf, mock.NewManager())
+	h, err := NewClientFromOldConfig(conf, service.MockResources())
 	require.NoError(t, err)
 
 	for i := 0; i < nTestLoops; i++ {
 		testStr := fmt.Sprintf("test%v", i)
-		testMsg := message.QuickBatch([][]byte{[]byte(testStr)})
+		testMsg := service.MessageBatch{
+			service.NewMessage([]byte(testStr)),
+		}
 
 		_, err = h.Send(context.Background(), testMsg)
 		require.NoError(t, err)
@@ -110,19 +127,23 @@ func TestHTTPClientBadContentType(t *testing.T) {
 	}))
 	t.Cleanup(ts.Close)
 
-	conf := NewOldConfig()
-	conf.URL = ts.URL + "/testpost"
+	conf := clientConfig(t, `
+url: %v
+`, ts.URL+"/testpost")
 
-	h, err := NewClientFromOldConfig(conf, mock.NewManager())
+	h, err := NewClientFromOldConfig(conf, service.MockResources())
 	require.NoError(t, err)
 
-	testMsg := message.QuickBatch([][]byte{[]byte("hello world")})
+	testMsg := service.MessageBatch{service.NewMessage([]byte("hello world"))}
 
 	res, err := h.Send(context.Background(), testMsg)
 	require.NoError(t, err)
 
-	require.Equal(t, 1, res.Len())
-	assert.Equal(t, "HELLO WORLD", string(res.Get(0).AsBytes()))
+	require.Equal(t, 1, len(res))
+
+	mBytes, err := res[0].AsBytes()
+	require.NoError(t, err)
+	assert.Equal(t, "HELLO WORLD", string(mBytes))
 }
 
 func TestHTTPClientDropOn(t *testing.T) {
@@ -132,14 +153,15 @@ func TestHTTPClientDropOn(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	conf := NewOldConfig()
-	conf.URL = ts.URL + "/testpost"
-	conf.DropOn = []int{400}
+	conf := clientConfig(t, `
+url: %v
+drop_on: [ 400 ]
+`, ts.URL+"/testpost")
 
-	h, err := NewClientFromOldConfig(conf, mock.NewManager())
+	h, err := NewClientFromOldConfig(conf, service.MockResources())
 	require.NoError(t, err)
 
-	testMsg := message.QuickBatch([][]byte{[]byte(`{"bar":"baz"}`)})
+	testMsg := service.MessageBatch{service.NewMessage([]byte(`{"bar":"baz"}`))}
 
 	_, err = h.Send(context.Background(), testMsg)
 	require.Error(t, err)
@@ -154,18 +176,21 @@ func TestHTTPClientSuccessfulOn(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	conf := NewOldConfig()
-	conf.URL = ts.URL + "/testpost"
-	conf.SuccessfulOn = []int{400}
+	conf := clientConfig(t, `
+url: %v
+successful_on: [ 400 ]
+`, ts.URL+"/testpost")
 
-	h, err := NewClientFromOldConfig(conf, mock.NewManager())
+	h, err := NewClientFromOldConfig(conf, service.MockResources())
 	require.NoError(t, err)
 
-	testMsg := message.QuickBatch([][]byte{[]byte(`{"bar":"baz"}`)})
+	testMsg := service.MessageBatch{service.NewMessage([]byte(`{"bar":"baz"}`))}
 	resMsg, err := h.Send(context.Background(), testMsg)
 	require.NoError(t, err)
 
-	assert.Equal(t, `{"foo":"bar"}`, string(resMsg.Get(0).AsBytes()))
+	mBytes, err := resMsg[0].AsBytes()
+	require.NoError(t, err)
+	assert.Equal(t, `{"foo":"bar"}`, string(mBytes))
 	assert.Equal(t, int32(1), atomic.LoadInt32(&reqs))
 }
 
@@ -191,18 +216,20 @@ func TestHTTPClientSendInterpolate(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	conf := NewOldConfig()
-	conf.URL = ts.URL + `/${! json("foo.bar") }`
-	conf.Headers["static"] = "foo"
-	conf.Headers["dynamic"] = `hdr-${!json("foo.baz")}`
-	conf.Headers["Host"] = "simpleHost.com"
+	conf := clientConfig(t, `
+url: %v
+headers:
+  "static": "foo"
+  "dynamic": 'hdr-${!json("foo.baz")}'
+  "Host": "simpleHost.com"
+`, ts.URL+`/${! json("foo.bar") }`)
 
-	h, err := NewClientFromOldConfig(conf, mock.NewManager())
+	h, err := NewClientFromOldConfig(conf, service.MockResources())
 	require.NoError(t, err)
 
 	for i := 0; i < nTestLoops; i++ {
 		testStr := fmt.Sprintf(`{"test":%v,"foo":{"bar":"firstvar","baz":"secondvar"}}`, i)
-		testMsg := message.QuickBatch([][]byte{[]byte(testStr)})
+		testMsg := service.MessageBatch{service.NewMessage([]byte(testStr))}
 
 		_, err = h.Send(context.Background(), testMsg)
 		require.NoError(t, err)
@@ -253,18 +280,19 @@ func TestHTTPClientSendMultipart(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	conf := NewOldConfig()
-	conf.URL = ts.URL + "/testpost"
+	conf := clientConfig(t, `
+url: %v
+`, ts.URL+"/testpost")
 
-	h, err := NewClientFromOldConfig(conf, mock.NewManager())
+	h, err := NewClientFromOldConfig(conf, service.MockResources())
 	require.NoError(t, err)
 
 	for i := 0; i < nTestLoops; i++ {
 		testStr := fmt.Sprintf("test%v", i)
-		testMsg := message.QuickBatch([][]byte{
-			[]byte(testStr + "PART-A"),
-			[]byte(testStr + "PART-B"),
-		})
+		testMsg := service.MessageBatch{
+			service.NewMessage([]byte(testStr + "PART-A")),
+			service.NewMessage([]byte(testStr + "PART-B")),
+		}
 
 		_, err = h.Send(context.Background(), testMsg)
 		require.NoError(t, err)
@@ -293,10 +321,11 @@ func TestHTTPClientReceive(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	conf := NewOldConfig()
-	conf.URL = ts.URL + "/testpost"
+	conf := clientConfig(t, `
+url: %v
+`, ts.URL+"/testpost")
 
-	h, err := NewClientFromOldConfig(conf, mock.NewManager())
+	h, err := NewClientFromOldConfig(conf, service.MockResources())
 	require.NoError(t, err)
 
 	for i := 0; i < nTestLoops; i++ {
@@ -304,10 +333,16 @@ func TestHTTPClientReceive(t *testing.T) {
 		resMsg, err := h.Send(context.Background(), nil)
 		require.NoError(t, err)
 
-		assert.Equal(t, 1, resMsg.Len())
-		assert.Equal(t, testStr+"PART-A", string(resMsg.Get(0).AsBytes()))
-		assert.Equal(t, "", resMsg.Get(0).MetaGetStr("foo-bar"))
-		assert.Equal(t, "201", resMsg.Get(0).MetaGetStr("http_status_code"))
+		assert.Equal(t, 1, len(resMsg))
+
+		mBytes, err := resMsg[0].AsBytes()
+		require.NoError(t, err)
+		assert.Equal(t, testStr+"PART-A", string(mBytes))
+
+		v, _ := resMsg[0].MetaGet("foo-bar")
+		assert.Equal(t, "", v)
+		v, _ = resMsg[0].MetaGet("http_status_code")
+		assert.Equal(t, "201", v)
 	}
 }
 
@@ -328,15 +363,17 @@ bar_b: %v
 	}))
 	defer ts.Close()
 
-	conf := NewOldConfig()
-	conf.URL = ts.URL + "/testpost"
-	conf.Metadata.IncludePrefixes = []string{"foo_"}
+	conf := clientConfig(t, `
+url: %v
+metadata:
+  include_prefixes: [ "foo_" ]
+`, ts.URL+"/testpost")
 
-	h, err := NewClientFromOldConfig(conf, mock.NewManager())
+	h, err := NewClientFromOldConfig(conf, service.MockResources())
 	require.NoError(t, err)
 
-	sendMsg := message.QuickBatch([][]byte{[]byte("hello world")})
-	part := sendMsg.Get(0)
+	sendMsg := service.MessageBatch{service.NewMessage([]byte("hello world"))}
+	part := sendMsg[0]
 	part.MetaSetMut("foo_a", "foo a value")
 	part.MetaSetMut("foo_b", "foo b value")
 	part.MetaSetMut("bar_a", "bar a value")
@@ -345,13 +382,17 @@ bar_b: %v
 	resMsg, err := h.Send(context.Background(), sendMsg)
 	require.NoError(t, err)
 
-	assert.Equal(t, 1, resMsg.Len())
+	assert.Equal(t, 1, len(resMsg))
+
+	mBytes, err := resMsg[0].AsBytes()
+	require.NoError(t, err)
+
 	assert.Equal(t, `
 foo_a: foo a value
 bar_a: 
 foo_b: foo b value
 bar_b: 
-`, string(resMsg.Get(0).AsBytes()))
+`, string(mBytes))
 }
 
 func TestHTTPClientReceiveHeadersWithMetadataFiltering(t *testing.T) {
@@ -361,9 +402,6 @@ func TestHTTPClientReceiveHeadersWithMetadataFiltering(t *testing.T) {
 		w.WriteHeader(http.StatusCreated)
 	}))
 	defer ts.Close()
-
-	conf := NewOldConfig()
-	conf.URL = ts.URL
 
 	for _, tt := range []struct {
 		name            string
@@ -384,9 +422,20 @@ func TestHTTPClientReceiveHeadersWithMetadataFiltering(t *testing.T) {
 			includePatterns: []string{".*bar"},
 		},
 	} {
-		conf.ExtractMetadata.IncludePrefixes = tt.includePrefixes
-		conf.ExtractMetadata.IncludePatterns = tt.includePatterns
-		h, err := NewClientFromOldConfig(conf, mock.NewManager())
+		if tt.includePrefixes == nil {
+			tt.includePrefixes = []string{}
+		}
+		if tt.includePatterns == nil {
+			tt.includePatterns = []string{}
+		}
+		conf := clientConfig(t, `
+url: %v
+extract_headers:
+  include_prefixes: %v
+  include_patterns: %v
+`, ts.URL, gabs.Wrap(tt.includePrefixes).String(), gabs.Wrap(tt.includePatterns).String())
+
+		h, err := NewClientFromOldConfig(conf, service.MockResources())
 		if err != nil {
 			t.Fatalf("%s: %s", tt.name, err)
 		}
@@ -397,17 +446,21 @@ func TestHTTPClientReceiveHeadersWithMetadataFiltering(t *testing.T) {
 		}
 
 		metadataCount := 0
-		_ = resMsg.Get(0).MetaIterStr(func(_, _ string) error { metadataCount++; return nil })
+		_ = resMsg[0].MetaWalk(func(_, _ string) error { metadataCount++; return nil })
 
 		if tt.noExtraMetadata {
 			if metadataCount > 1 {
 				t.Errorf("%s: wrong number of metadata items: %d", tt.name, metadataCount)
 			}
-			if exp, act := "", resMsg.Get(0).MetaGetStr("foobar"); exp != act {
+			v, _ := resMsg[0].MetaGet("foobar")
+			if exp, act := "", v; exp != act {
 				t.Errorf("%s: wrong metadata value: %v != %v", tt.name, act, exp)
 			}
-		} else if exp, act := "baz", resMsg.Get(0).MetaGetStr("foobar"); exp != act {
-			t.Errorf("%s: wrong metadata value: %v != %v", tt.name, act, exp)
+		} else {
+			v, _ := resMsg[0].MetaGet("foobar")
+			if exp, act := "baz", v; exp != act {
+				t.Errorf("%s: wrong metadata value: %v != %v", tt.name, act, exp)
+			}
 		}
 	}
 }
@@ -419,22 +472,25 @@ func TestHTTPClientReceiveMultipart(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testStr := fmt.Sprintf("test%v", j)
 		j++
-		msg := message.QuickBatch([][]byte{
-			[]byte(testStr + "PART-A"),
-			[]byte(testStr + "PART-B"),
-		})
+		msg := service.MessageBatch{
+			service.NewMessage([]byte(testStr + "PART-A")),
+			service.NewMessage([]byte(testStr + "PART-B")),
+		}
 
 		body := &bytes.Buffer{}
 		writer := multipart.NewWriter(body)
 
-		for i := 0; i < msg.Len(); i++ {
+		for i := 0; i < len(msg); i++ {
 			part, err := writer.CreatePart(textproto.MIMEHeader{
 				"Content-Type": []string{"application/octet-stream"},
 				"foo-bar":      []string{"baz-" + strconv.Itoa(i), "ignored"},
 			})
 			require.NoError(t, err)
 
-			_, err = io.Copy(part, bytes.NewReader(msg.Get(i).AsBytes()))
+			mBytes, err := msg[i].AsBytes()
+			require.NoError(t, err)
+
+			_, err = io.Copy(part, bytes.NewReader(mBytes))
 			require.NoError(t, err)
 		}
 		writer.Close()
@@ -445,10 +501,11 @@ func TestHTTPClientReceiveMultipart(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	conf := NewOldConfig()
-	conf.URL = ts.URL + "/testpost"
+	conf := clientConfig(t, `
+url: %v
+`, ts.URL)
 
-	h, err := NewClientFromOldConfig(conf, mock.NewManager())
+	h, err := NewClientFromOldConfig(conf, service.MockResources())
 	require.NoError(t, err)
 
 	for i := 0; i < nTestLoops; i++ {
@@ -456,13 +513,27 @@ func TestHTTPClientReceiveMultipart(t *testing.T) {
 		resMsg, err := h.Send(context.Background(), nil)
 		require.NoError(t, err)
 
-		assert.Equal(t, 2, resMsg.Len())
-		assert.Equal(t, testStr+"PART-A", string(resMsg.Get(0).AsBytes()))
-		assert.Equal(t, testStr+"PART-B", string(resMsg.Get(1).AsBytes()))
-		assert.Equal(t, "", resMsg.Get(0).MetaGetStr("foo-bar"))
-		assert.Equal(t, "201", resMsg.Get(0).MetaGetStr("http_status_code"))
-		assert.Equal(t, "", resMsg.Get(1).MetaGetStr("foo-bar"))
-		assert.Equal(t, "201", resMsg.Get(1).MetaGetStr("http_status_code"))
+		assert.Equal(t, 2, len(resMsg))
+
+		mBytes, err := resMsg[0].AsBytes()
+		require.NoError(t, err)
+		assert.Equal(t, testStr+"PART-A", string(mBytes))
+
+		mBytes, err = resMsg[1].AsBytes()
+		require.NoError(t, err)
+		assert.Equal(t, testStr+"PART-B", string(mBytes))
+
+		v, _ := resMsg[0].MetaGet("foo-bar")
+		assert.Equal(t, "", v)
+
+		v, _ = resMsg[0].MetaGet("http_status_code")
+		assert.Equal(t, "201", v)
+
+		v, _ = resMsg[1].MetaGet("foo-bar")
+		assert.Equal(t, "", v)
+
+		v, _ = resMsg[1].MetaGet("http_status_code")
+		assert.Equal(t, "201", v)
 	}
 }
 
@@ -474,15 +545,16 @@ func TestHTTPClientBadTLS(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	conf := NewOldConfig()
-	conf.URL = ts.URL + "/testpost"
-	conf.NumRetries = 0
+	conf := clientConfig(t, `
+url: %v
+retries: 0
+`, ts.URL)
 
-	h, err := NewClientFromOldConfig(conf, mock.NewManager())
+	h, err := NewClientFromOldConfig(conf, service.MockResources())
 	require.NoError(t, err)
 
-	_, err = h.Send(context.Background(), message.Batch{
-		message.NewPart([]byte("hello world")),
+	_, err = h.Send(context.Background(), service.MessageBatch{
+		service.NewMessage([]byte("hello world")),
 	})
 	require.Error(t, err)
 }
@@ -501,20 +573,22 @@ func TestHTTPClientProxyConf(t *testing.T) {
 	}))
 	defer tsProxy.Close()
 
-	conf := NewOldConfig()
-	conf.URL = ts.URL + "/testpost"
-	conf.ProxyURL = tsProxy.URL
+	conf := clientConfig(t, `
+url: %v
+proxy_url: %v
+`, ts.URL+"/testpost", tsProxy.URL)
 
-	h, err := NewClientFromOldConfig(conf, mock.NewManager())
+	h, err := NewClientFromOldConfig(conf, service.MockResources())
 	require.NoError(t, err)
 
-	resBatch, err := h.Send(context.Background(), message.Batch{
-		message.NewPart([]byte("hello world")),
+	resBatch, err := h.Send(context.Background(), service.MessageBatch{
+		service.NewMessage([]byte("hello world")),
 	})
 	require.NoError(t, err)
 	require.Len(t, resBatch, 1)
 
-	mBytes := resBatch[0].AsBytes()
+	mBytes, err := resBatch[0].AsBytes()
+	require.NoError(t, err)
 	assert.Equal(t, "HELLO WORLD", string(mBytes))
 }
 
@@ -532,22 +606,25 @@ func TestHTTPClientProxyAndTLSConf(t *testing.T) {
 	}))
 	defer tsProxy.Close()
 
-	conf := NewOldConfig()
-	conf.URL = ts.URL + "/testpost"
-	conf.TLS.Enabled = true
-	conf.TLS.InsecureSkipVerify = true
-	conf.ProxyURL = tsProxy.URL
+	conf := clientConfig(t, `
+url: %v
+tls:
+  enabled: true
+  skip_cert_verify: true
+proxy_url: %v
+`, ts.URL+"/testpost", tsProxy.URL)
 
-	h, err := NewClientFromOldConfig(conf, mock.NewManager())
+	h, err := NewClientFromOldConfig(conf, service.MockResources())
 	require.NoError(t, err)
 
-	resBatch, err := h.Send(context.Background(), message.Batch{
-		message.NewPart([]byte("hello world")),
+	resBatch, err := h.Send(context.Background(), service.MessageBatch{
+		service.NewMessage([]byte("hello world")),
 	})
 	require.NoError(t, err)
 	require.Len(t, resBatch, 1)
 
-	mBytes := resBatch[0].AsBytes()
+	mBytes, err := resBatch[0].AsBytes()
+	require.NoError(t, err)
 	assert.Equal(t, "HELLO WORLD", string(mBytes))
 }
 
@@ -569,23 +646,26 @@ func TestHTTPClientOAuth2Conf(t *testing.T) {
 	}))
 	defer tsOAuth2.Close()
 
-	conf := NewOldConfig()
-	conf.URL = ts.URL + "/testpost"
-	conf.OAuth2.Enabled = true
-	conf.OAuth2.TokenURL = tsOAuth2.URL
-	conf.OAuth2.ClientKey = "fookey"
-	conf.OAuth2.ClientSecret = "foosecret"
+	conf := clientConfig(t, `
+url: %v
+oauth2:
+  enabled: true
+  token_url: %v
+  client_key: fookey
+  client_secret: foosecret
+`, ts.URL+"/testpost", tsOAuth2.URL)
 
-	h, err := NewClientFromOldConfig(conf, mock.NewManager())
+	h, err := NewClientFromOldConfig(conf, service.MockResources())
 	require.NoError(t, err)
 
-	resBatch, err := h.Send(context.Background(), message.Batch{
-		message.NewPart([]byte("hello world")),
+	resBatch, err := h.Send(context.Background(), service.MessageBatch{
+		service.NewMessage([]byte("hello world")),
 	})
 	require.NoError(t, err)
 	require.Len(t, resBatch, 1)
 
-	mBytes := resBatch[0].AsBytes()
+	mBytes, err := resBatch[0].AsBytes()
+	require.NoError(t, err)
 	assert.Equal(t, "HELLO WORLD", string(mBytes))
 }
 
@@ -607,24 +687,28 @@ func TestHTTPClientOAuth2AndTLSConf(t *testing.T) {
 	}))
 	defer tsOAuth2.Close()
 
-	conf := NewOldConfig()
-	conf.URL = ts.URL + "/testpost"
-	conf.TLS.Enabled = true
-	conf.TLS.InsecureSkipVerify = true
-	conf.OAuth2.Enabled = true
-	conf.OAuth2.TokenURL = tsOAuth2.URL
-	conf.OAuth2.ClientKey = "fookey"
-	conf.OAuth2.ClientSecret = "foosecret"
+	conf := clientConfig(t, `
+url: %v
+oauth2:
+  enabled: true
+  token_url: %v
+  client_key: fookey
+  client_secret: foosecret
+tls:
+  enabled: true
+  skip_cert_verify: true
+`, ts.URL+"/testpost", tsOAuth2.URL)
 
-	h, err := NewClientFromOldConfig(conf, mock.NewManager())
+	h, err := NewClientFromOldConfig(conf, service.MockResources())
 	require.NoError(t, err)
 
-	resBatch, err := h.Send(context.Background(), message.Batch{
-		message.NewPart([]byte("hello world")),
+	resBatch, err := h.Send(context.Background(), service.MessageBatch{
+		service.NewMessage([]byte("hello world")),
 	})
 	require.NoError(t, err)
 	require.Len(t, resBatch, 1)
 
-	mBytes := resBatch[0].AsBytes()
+	mBytes, err := resBatch[0].AsBytes()
+	require.NoError(t, err)
 	assert.Equal(t, "HELLO WORLD", string(mBytes))
 }

@@ -5,13 +5,8 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component"
-	"github.com/benthosdev/benthos/v4/internal/component/interop"
-	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/httpclient"
-	"github.com/benthosdev/benthos/v4/internal/log"
-	"github.com/benthosdev/benthos/v4/internal/message"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
@@ -69,12 +64,7 @@ func init() {
 	err := service.RegisterBatchProcessor(
 		"http", httpProcSpec(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchProcessor, error) {
-			oldMgr := interop.UnwrapManagement(mgr)
-			p, err := newHTTPProcFromParsed(conf, oldMgr)
-			if err != nil {
-				return nil, err
-			}
-			return interop.NewUnwrapInternalBatchProcessor(processor.NewAutoObservedBatchedProcessor("http", p, oldMgr)), nil
+			return newHTTPProcFromParsed(conf, mgr)
 		})
 	if err != nil {
 		panic(err)
@@ -86,16 +76,11 @@ type httpProc struct {
 	asMultipart bool
 	parallel    bool
 	rawURL      string
-	log         log.Modular
+	log         *service.Logger
 }
 
-func newHTTPProcFromParsed(conf *service.ParsedConfig, mgr bundle.NewManagement) (processor.AutoObservedBatched, error) {
-	genericConf, err := conf.FieldAny()
-	if err != nil {
-		return nil, err
-	}
-
-	oldConf, err := httpclient.ConfigFromAny(genericConf)
+func newHTTPProcFromParsed(conf *service.ParsedConfig, mgr *service.Resources) (*httpProc, error) {
+	oldConf, err := httpclient.ConfigFromParsed(conf)
 	if err != nil {
 		return nil, err
 	}
@@ -110,8 +95,10 @@ func newHTTPProcFromParsed(conf *service.ParsedConfig, mgr bundle.NewManagement)
 		return nil, err
 	}
 
+	rawURL, _ := conf.FieldString("url")
+
 	g := &httpProc{
-		rawURL:      oldConf.URL,
+		rawURL:      rawURL,
 		log:         mgr.Logger(),
 		asMultipart: asMultipart,
 		parallel:    parallel,
@@ -122,10 +109,10 @@ func newHTTPProcFromParsed(conf *service.ParsedConfig, mgr bundle.NewManagement)
 	return g, nil
 }
 
-func (h *httpProc) ProcessBatch(ctx *processor.BatchProcContext, msg message.Batch) ([]message.Batch, error) {
-	var responseMsg message.Batch
+func (h *httpProc) ProcessBatch(ctx context.Context, msg service.MessageBatch) ([]service.MessageBatch, error) {
+	var responseMsg service.MessageBatch
 
-	if h.asMultipart || msg.Len() == 1 {
+	if h.asMultipart || len(msg) == 1 {
 		// Easy, just do a single request.
 		resultMsg, err := h.client.Send(context.Background(), msg)
 		if err != nil {
@@ -135,83 +122,83 @@ func (h *httpProc) ProcessBatch(ctx *processor.BatchProcContext, msg message.Bat
 				code = hErr.Code
 			}
 			h.log.Errorf("HTTP request to '%v' failed: %v", h.rawURL, err)
-			responseMsg = msg.ShallowCopy()
-			_ = responseMsg.Iter(func(i int, p *message.Part) error {
+			responseMsg = msg.Copy()
+			for _, p := range responseMsg {
 				if code > 0 {
 					p.MetaSetMut("http_status_code", code)
 				}
-				p.ErrorSet(err)
-				return nil
-			})
+				p.SetError(err)
+			}
 		} else {
-			parts := make([]*message.Part, resultMsg.Len())
-			_ = resultMsg.Iter(func(i int, p *message.Part) error {
-				if i < msg.Len() {
-					parts[i] = msg.Get(i).ShallowCopy()
+			parts := make(service.MessageBatch, len(resultMsg))
+			for i, p := range resultMsg {
+				if i < len(msg) {
+					parts[i] = msg[i].Copy()
 				} else {
-					parts[i] = msg.Get(0).ShallowCopy()
+					parts[i] = msg[0].Copy()
 				}
-				parts[i].SetBytes(p.AsBytes())
-				_ = p.MetaIterMut(func(k string, v any) error {
+				mBytes, err := p.AsBytes()
+				if err != nil {
+					return nil, err
+				}
+				parts[i].SetBytes(mBytes)
+				_ = p.MetaWalkMut(func(k string, v any) error {
 					parts[i].MetaSetMut(k, v)
 					return nil
 				})
-				return nil
-			})
+			}
 			responseMsg = parts
 		}
 	} else if !h.parallel {
-		responseMsg = message.QuickBatch(nil)
-
-		_ = msg.Iter(func(i int, p *message.Part) error {
-			tmpMsg := message.QuickBatch(nil)
-			tmpMsg = append(tmpMsg, p)
+		for _, p := range msg {
+			tmpMsg := service.MessageBatch{p}
 			result, err := h.client.Send(context.Background(), tmpMsg)
 			if err != nil {
 				h.log.Errorf("HTTP request to '%v' failed: %v", h.rawURL, err)
 
-				errPart := p.ShallowCopy()
+				errPart := p.Copy()
 				var hErr component.ErrUnexpectedHTTPRes
 				if ok := errors.As(err, &hErr); ok {
 					errPart.MetaSetMut("http_status_code", hErr.Code)
 				}
-				errPart.ErrorSet(err)
+				errPart.SetError(err)
 				responseMsg = append(responseMsg, errPart)
-				return nil
 			}
 
-			_ = result.Iter(func(i int, rp *message.Part) error {
-				tmpPart := p.ShallowCopy()
-				tmpPart.SetBytes(rp.AsBytes())
-				_ = rp.MetaIterMut(func(k string, v any) error {
+			for _, rp := range result {
+				tmpPart := p.Copy()
+				mBytes, err := rp.AsBytes()
+				if err != nil {
+					return nil, err
+				}
+				tmpPart.SetBytes(mBytes)
+				_ = rp.MetaWalkMut(func(k string, v any) error {
 					tmpPart.MetaSetMut(k, v)
 					return nil
 				})
 				responseMsg = append(responseMsg, tmpPart)
-				return nil
-			})
-			return nil
-		})
+			}
+		}
 	} else {
 		// Hard, need to do parallel requests limited by max parallelism.
-		results := make([]*message.Part, msg.Len())
-		_ = msg.Iter(func(i int, p *message.Part) error {
-			results[i] = p.ShallowCopy()
-			return nil
-		})
+		results := make(service.MessageBatch, len(msg))
+		for i, p := range msg {
+			results[i] = p.Copy()
+		}
 		reqChan, resChan := make(chan int), make(chan error)
 
-		for i := 0; i < msg.Len(); i++ {
+		for i := 0; i < len(msg); i++ {
 			go func() {
 				for index := range reqChan {
-					tmpMsg := message.Batch{msg.Get(index)}
+					tmpMsg := service.MessageBatch{msg[index]}
 					result, err := h.client.Send(context.Background(), tmpMsg)
-					if err == nil && result.Len() != 1 {
-						err = fmt.Errorf("unexpected response size: %v", result.Len())
+					if err == nil && len(result) != 1 {
+						err = fmt.Errorf("unexpected response size: %v", len(result))
 					}
 					if err == nil {
-						results[index].SetBytes(result.Get(0).AsBytes())
-						_ = result.Get(0).MetaIterMut(func(k string, v any) error {
+						mBytes, _ := result[0].AsBytes()
+						results[index].SetBytes(mBytes)
+						_ = result[0].MetaWalkMut(func(k string, v any) error {
 							results[index].MetaSetMut(k, v)
 							return nil
 						})
@@ -220,18 +207,18 @@ func (h *httpProc) ProcessBatch(ctx *processor.BatchProcContext, msg message.Bat
 						if ok := errors.As(err, &hErr); ok {
 							results[index].MetaSetMut("http_status_code", hErr.Code)
 						}
-						results[index].ErrorSet(err)
+						results[index].SetError(err)
 					}
 					resChan <- err
 				}
 			}()
 		}
 		go func() {
-			for i := 0; i < msg.Len(); i++ {
+			for i := 0; i < len(msg); i++ {
 				reqChan <- i
 			}
 		}()
-		for i := 0; i < msg.Len(); i++ {
+		for i := 0; i < len(msg); i++ {
 			if err := <-resChan; err != nil {
 				h.log.Errorf("HTTP parallel request to '%v' failed: %v", h.rawURL, err)
 			}
@@ -241,10 +228,10 @@ func (h *httpProc) ProcessBatch(ctx *processor.BatchProcContext, msg message.Bat
 		responseMsg = results
 	}
 
-	if responseMsg.Len() < 1 {
+	if len(responseMsg) < 1 {
 		return nil, fmt.Errorf("HTTP response from '%v' was empty", h.rawURL)
 	}
-	return []message.Batch{responseMsg}, nil
+	return []service.MessageBatch{responseMsg}, nil
 }
 
 func (h *httpProc) Close(ctx context.Context) error {
