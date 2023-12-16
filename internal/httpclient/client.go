@@ -13,15 +13,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component"
-	"github.com/benthosdev/benthos/v4/internal/component/metrics"
-	"github.com/benthosdev/benthos/v4/internal/component/ratelimit"
-	"github.com/benthosdev/benthos/v4/internal/log"
-	"github.com/benthosdev/benthos/v4/internal/message"
-	"github.com/benthosdev/benthos/v4/internal/metadata"
 	"github.com/benthosdev/benthos/v4/internal/old/util/throttle"
-	"github.com/benthosdev/benthos/v4/internal/tracing"
+	"github.com/benthosdev/benthos/v4/internal/tracing/v2"
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
 // Client is a component able to send and receive Benthos messages over HTTP.
@@ -42,29 +37,30 @@ type Client struct {
 	successOn     map[int]struct{}
 
 	// Response extraction
-	metaExtractFilter *metadata.IncludeFilter
+	metaExtractFilter *service.MetadataFilter
 
 	// Observability
-	log log.Modular
-	mgr bundle.NewManagement
+	log *service.Logger
+	mgr *service.Resources
 
-	mLatency metrics.StatTimer
-	mCodes   map[int]metrics.StatCounter
+	mLatency *service.MetricTimer
+	mCodes   map[int]*service.MetricCounter
 	codesMut sync.RWMutex
 }
 
 // NewClientFromOldConfig creates a new request creator from an old struct style
 // config. Eventually I'd like to phase these out for the more dynamic service
 // style parses, but it'll take a while so we have this for now.
-func NewClientFromOldConfig(conf OldConfig, mgr bundle.NewManagement, opts ...RequestOpt) (*Client, error) {
+func NewClientFromOldConfig(conf OldConfig, mgr *service.Resources, opts ...RequestOpt) (*Client, error) {
 	reqCreator, err := RequestCreatorFromOldConfig(conf, mgr, opts...)
 	if err != nil {
 		return nil, err
 	}
 
 	h := Client{
-		reqCreator: reqCreator,
-		client:     &http.Client{},
+		reqCreator:        reqCreator,
+		client:            &http.Client{},
+		metaExtractFilter: conf.ExtractMetadata,
 
 		backoffOn: map[int]struct{}{},
 		dropOn:    map[int]struct{}{},
@@ -75,27 +71,18 @@ func NewClientFromOldConfig(conf OldConfig, mgr bundle.NewManagement, opts ...Re
 	}
 	h.clientCtx, h.clientCancel = context.WithCancel(context.Background())
 
-	if tout := conf.Timeout; len(tout) > 0 {
-		var err error
-		if h.client.Timeout, err = time.ParseDuration(tout); err != nil {
-			return nil, fmt.Errorf("failed to parse timeout string: %v", err)
-		}
+	if conf.Timeout > 0 {
+		h.client.Timeout = conf.Timeout
 	}
 
-	if conf.TLS.Enabled {
-		tlsConf, err := conf.TLS.Get(mgr.FS())
-		if err != nil {
-			return nil, err
-		}
-		if tlsConf != nil {
-			if c, ok := http.DefaultTransport.(*http.Transport); ok {
-				cloned := c.Clone()
-				cloned.TLSClientConfig = tlsConf
-				h.client.Transport = cloned
-			} else {
-				h.client.Transport = &http.Transport{
-					TLSClientConfig: tlsConf,
-				}
+	if conf.TLSEnabled && conf.TLSConf != nil {
+		if c, ok := http.DefaultTransport.(*http.Transport); ok {
+			cloned := c.Clone()
+			cloned.TLSClientConfig = conf.TLSConf
+			h.client.Transport = cloned
+		} else {
+			h.client.Transport = &http.Transport{
+				TLSClientConfig: conf.TLSConf,
 			}
 		}
 	}
@@ -135,29 +122,11 @@ func NewClientFromOldConfig(conf OldConfig, mgr bundle.NewManagement, opts ...Re
 		h.successOn[c] = struct{}{}
 	}
 
-	if h.metaExtractFilter, err = conf.ExtractMetadata.CreateFilter(); err != nil {
-		return nil, fmt.Errorf("failed to construct metadata extract filter: %w", err)
-	}
-
-	h.mLatency = h.mgr.Metrics().GetTimer("http_request_latency_ns")
-	h.mCodes = map[int]metrics.StatCounter{}
-
-	var retry, maxBackoff time.Duration
-	if tout := conf.Retry; len(tout) > 0 {
-		var err error
-		if retry, err = time.ParseDuration(tout); err != nil {
-			return nil, fmt.Errorf("failed to parse retry duration string: %v", err)
-		}
-	}
-	if tout := conf.MaxBackoff; len(tout) > 0 {
-		var err error
-		if maxBackoff, err = time.ParseDuration(tout); err != nil {
-			return nil, fmt.Errorf("failed to parse max backoff duration string: %v", err)
-		}
-	}
+	h.mLatency = h.mgr.Metrics().NewTimer("http_request_latency_ns")
+	h.mCodes = map[int]*service.MetricCounter{}
 
 	if h.rateLimit = conf.RateLimit; h.rateLimit != "" {
-		if !h.mgr.ProbeRateLimit(h.rateLimit) {
+		if !h.mgr.HasRateLimit(h.rateLimit) {
 			return nil, fmt.Errorf("rate limit resource '%v' was not found", h.rateLimit)
 		}
 	}
@@ -165,8 +134,8 @@ func NewClientFromOldConfig(conf OldConfig, mgr bundle.NewManagement, opts ...Re
 	h.numRetries = conf.NumRetries
 	h.retryThrottle = throttle.New(
 		throttle.OptMaxUnthrottledRetries(0),
-		throttle.OptThrottlePeriod(retry),
-		throttle.OptMaxExponentPeriod(maxBackoff),
+		throttle.OptThrottlePeriod(conf.Retry),
+		throttle.OptMaxExponentPeriod(conf.MaxBackoff),
 	)
 
 	return &h, nil
@@ -188,7 +157,7 @@ func (h *Client) incrCode(code int) {
 	if tier < 0 || tier > 5 {
 		return
 	}
-	ctr = h.mgr.Metrics().GetCounter(fmt.Sprintf("http_request_code_%vxx", tier))
+	ctr = h.mgr.Metrics().NewCounter(fmt.Sprintf("http_request_code_%vxx", tier))
 	ctr.Incr(1)
 
 	h.codesMut.Lock()
@@ -203,7 +172,7 @@ func (h *Client) waitForAccess(ctx context.Context) bool {
 	for {
 		var period time.Duration
 		var err error
-		if rerr := h.mgr.AccessRateLimit(ctx, h.rateLimit, func(rl ratelimit.V1) {
+		if rerr := h.mgr.AccessRateLimit(ctx, h.rateLimit, func(rl service.RateLimit) {
 			period, err = rl.Access(ctx)
 		}); rerr != nil {
 			err = rerr
@@ -226,12 +195,12 @@ func (h *Client) waitForAccess(ctx context.Context) bool {
 }
 
 // ResponseToBatch attempts to parse an HTTP response into a 2D slice of bytes.
-func (h *Client) ResponseToBatch(res *http.Response) (message.Batch, error) {
-	resMsg := message.QuickBatch(nil)
+func (h *Client) ResponseToBatch(res *http.Response) (service.MessageBatch, error) {
+	var resMsg service.MessageBatch
 
-	annotatePart := func(p *message.Part) {
+	annotatePart := func(p *service.Message) {
 		p.MetaSetMut("http_status_code", res.StatusCode)
-		if h.metaExtractFilter.IsSet() {
+		if !h.metaExtractFilter.IsEmpty() {
 			for k, values := range res.Header {
 				normalisedHeader := strings.ToLower(k)
 				if len(values) > 0 && h.metaExtractFilter.Match(normalisedHeader) {
@@ -242,7 +211,7 @@ func (h *Client) ResponseToBatch(res *http.Response) (message.Batch, error) {
 	}
 
 	if res.Body == nil {
-		nextPart := message.NewPart(nil)
+		nextPart := service.NewMessage(nil)
 		annotatePart(nextPart)
 		resMsg = append(resMsg, nextPart)
 		return resMsg, nil
@@ -266,7 +235,7 @@ func (h *Client) ResponseToBatch(res *http.Response) (message.Batch, error) {
 			return resMsg, err
 		}
 
-		nextPart := message.NewPart(nil)
+		nextPart := service.NewMessage(nil)
 		if bytesRead > 0 {
 			nextPart.SetBytes(buffer.Bytes()[:bytesRead])
 		}
@@ -293,7 +262,7 @@ func (h *Client) ResponseToBatch(res *http.Response) (message.Batch, error) {
 			return resMsg, err
 		}
 
-		nextPart := message.NewPart(buffer.Bytes()[bufferIndex : bufferIndex+bytesRead])
+		nextPart := service.NewMessage(buffer.Bytes()[bufferIndex : bufferIndex+bytesRead])
 		bufferIndex += bytesRead
 
 		annotatePart(nextPart)
@@ -333,10 +302,10 @@ func (h *Client) checkStatus(code int) (succeeded bool, retStrat retryStrategy) 
 // SendToResponse attempts to create an HTTP request from a provided message,
 // performs it, and then returns the *http.Response, allowing the raw response
 // to be consumed.
-func (h *Client) SendToResponse(ctx context.Context, sendMsg message.Batch) (res *http.Response, err error) {
+func (h *Client) SendToResponse(ctx context.Context, sendMsg service.MessageBatch) (res *http.Response, err error) {
 	var spans []*tracing.Span
 	if sendMsg != nil {
-		sendMsg, spans = tracing.WithChildSpans(h.mgr.Tracer(), "http_request", sendMsg)
+		sendMsg, spans = tracing.WithChildSpans(h.mgr.OtelTracer(), "http_request", sendMsg)
 		defer func() {
 			for _, s := range spans {
 				s.Finish()
@@ -448,7 +417,7 @@ func unexpectedErr(res *http.Response) error {
 //
 // If the request is successful then the response is parsed into a message,
 // including headers added as metadata (when configured to do so).
-func (h *Client) Send(ctx context.Context, sendMsg message.Batch) (message.Batch, error) {
+func (h *Client) Send(ctx context.Context, sendMsg service.MessageBatch) (service.MessageBatch, error) {
 	res, err := h.SendToResponse(ctx, sendMsg)
 	if err != nil {
 		return nil, err

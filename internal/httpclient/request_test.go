@@ -3,26 +3,34 @@ package httpclient
 import (
 	"testing"
 
-	"github.com/benthosdev/benthos/v4/internal/manager/mock"
-	"github.com/benthosdev/benthos/v4/internal/message"
+	"github.com/benthosdev/benthos/v4/public/service"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 func TestSingleMessageHeaders(t *testing.T) {
-	oldConf := NewOldConfig()
-	oldConf.Headers["Content-Type"] = "foo"
-	oldConf.Metadata.IncludePrefixes = []string{"more_"}
-
-	reqCreator, err := RequestCreatorFromOldConfig(oldConf, mock.NewManager())
+	spec := service.NewConfigSpec().Field(ConfigField("GET", false))
+	parsed, err := spec.ParseYAML(`
+url: example.com/foo
+headers:
+  "Content-Type": "foo"
+metadata:
+  include_prefixes: [ "more_" ]
+`, nil)
 	require.NoError(t, err)
 
-	part := message.NewPart([]byte("hello world"))
+	oldConf, err := ConfigFromParsed(parsed)
+	require.NoError(t, err)
+
+	reqCreator, err := RequestCreatorFromOldConfig(oldConf, service.MockResources())
+	require.NoError(t, err)
+
+	part := service.NewMessage([]byte("hello world"))
 	part.MetaSetMut("more_bar", "barvalue")
 	part.MetaSetMut("ignore_baz", "bazvalue")
 
-	b := message.Batch{part}
+	b := service.MessageBatch{part}
 
 	req, err := reqCreator.Create(b)
 	require.NoError(t, err)

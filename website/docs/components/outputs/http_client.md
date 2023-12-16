@@ -99,7 +99,7 @@ output:
       - 429
     drop_on: []
     successful_on: []
-    proxy_url: ""
+    proxy_url: "" # No default (optional)
     batch_as_multipart: false
     propagate_response: false
     max_in_flight: 64
@@ -698,7 +698,6 @@ An optional HTTP proxy URL.
 
 
 Type: `string`  
-Default: `""`  
 
 ### `batch_as_multipart`
 

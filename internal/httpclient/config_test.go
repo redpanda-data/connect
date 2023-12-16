@@ -10,18 +10,12 @@ import (
 )
 
 func TestNewStyleConfigs(t *testing.T) {
-	fromDefault := func(fn func(o *OldConfig)) OldConfig {
-		c := NewOldConfig()
-		fn(&c)
-		return c
-	}
-
 	tests := []struct {
 		name         string
 		verbOverride string
 		forOutput    bool
 		inputYAML    string
-		outputConf   OldConfig
+		validator    func(t *testing.T, c *OldConfig)
 	}{
 		{
 			name: "basic fields",
@@ -32,14 +26,20 @@ headers:
   foo1: bar1
   foo2: bar2
 `,
-			outputConf: fromDefault(func(o *OldConfig) {
-				o.URL = "example.com/foo1"
-				o.Verb = "PUT"
-				o.Headers = map[string]string{
+			validator: func(t *testing.T, o *OldConfig) {
+				sURL, _ := o.URL.Static()
+				assert.Equal(t, "example.com/foo1", sURL)
+				assert.Equal(t, "PUT", o.Verb)
+
+				sHeaders := map[string]string{}
+				for k, v := range o.Headers {
+					sHeaders[k], _ = v.Static()
+				}
+				assert.Equal(t, map[string]string{
 					"foo1": "bar1",
 					"foo2": "bar2",
-				}
-			}),
+				}, sHeaders)
+			},
 		},
 		{
 			name: "verb default",
@@ -48,11 +48,12 @@ url: example.com/foo2
 rate_limit: nah
 `,
 			verbOverride: "GET",
-			outputConf: fromDefault(func(o *OldConfig) {
-				o.URL = "example.com/foo2"
-				o.Verb = "GET"
-				o.RateLimit = "nah"
-			}),
+			validator: func(t *testing.T, o *OldConfig) {
+				sURL, _ := o.URL.Static()
+				assert.Equal(t, "example.com/foo2", sURL)
+				assert.Equal(t, "GET", o.Verb)
+				assert.Equal(t, "nah", o.RateLimit)
+			},
 		},
 		{
 			name: "code overrides",
@@ -62,12 +63,13 @@ successful_on: [ 1, 2, 3 ]
 backoff_on: [ 4, 5, 6 ]
 drop_on: [ 7, 8, 9 ]
 `,
-			outputConf: fromDefault(func(o *OldConfig) {
-				o.URL = "example.com/foo3"
-				o.SuccessfulOn = []int{1, 2, 3}
-				o.BackoffOn = []int{4, 5, 6}
-				o.DropOn = []int{7, 8, 9}
-			}),
+			validator: func(t *testing.T, o *OldConfig) {
+				sURL, _ := o.URL.Static()
+				assert.Equal(t, "example.com/foo3", sURL)
+				assert.Equal(t, []int{1, 2, 3}, o.SuccessfulOn)
+				assert.Equal(t, []int{4, 5, 6}, o.BackoffOn)
+				assert.Equal(t, []int{7, 8, 9}, o.DropOn)
+			},
 		},
 		{
 			name: "tls and auth overrides",
@@ -75,28 +77,41 @@ drop_on: [ 7, 8, 9 ]
 url: example.com/foo4
 tls:
   enabled: true
-  root_cas: meow
+  skip_cert_verify: true
 oauth:
+  enabled: true
   consumer_key: woof
 basic_auth:
+  enabled: true
   username: quack
 jwt:
+  enabled: true
   headers:
     this: tweet
 oauth2:
+  enabled: true
   client_key: moo
 `,
-			outputConf: fromDefault(func(o *OldConfig) {
-				o.URL = "example.com/foo4"
-				o.TLS.Enabled = true
-				o.TLS.RootCAs = "meow"
-				o.OAuth.ConsumerKey = "woof"
-				o.BasicAuth.Username = "quack"
-				o.JWT.Headers = map[string]any{
+			validator: func(t *testing.T, o *OldConfig) {
+				sURL, _ := o.URL.Static()
+				assert.Equal(t, "example.com/foo4", sURL)
+				assert.True(t, o.TLSEnabled)
+				assert.True(t, o.TLSConf.InsecureSkipVerify)
+
+				assert.True(t, o.Auth.BasicAuth.Enabled)
+				assert.Equal(t, "quack", o.Auth.BasicAuth.Username)
+
+				assert.True(t, o.Auth.OAuth.Enabled)
+				assert.Equal(t, "woof", o.Auth.OAuth.ConsumerKey)
+
+				assert.True(t, o.Auth.JWT.Enabled)
+				assert.Equal(t, map[string]any{
 					"this": "tweet",
-				}
-				o.OAuth2.ClientKey = "moo"
-			}),
+				}, o.Auth.JWT.Headers)
+
+				assert.True(t, o.OAuth2.Enabled)
+				assert.Equal(t, "moo", o.OAuth2.ClientKey)
+			},
 		},
 	}
 
@@ -112,13 +127,10 @@ oauth2:
 			parsed, err := spec.ParseYAML(test.inputYAML, nil)
 			require.NoError(t, err)
 
-			raw, err := parsed.FieldAny()
+			conf, err := ConfigFromParsed(parsed)
 			require.NoError(t, err)
 
-			conf, err := ConfigFromAny(raw)
-			require.NoError(t, err)
-
-			assert.Equal(t, test.outputConf, conf)
+			test.validator(t, &conf)
 		})
 	}
 }

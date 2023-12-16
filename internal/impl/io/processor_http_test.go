@@ -299,6 +299,7 @@ func TestHTTPClientSerial(t *testing.T) {
 	conf := parseYAMLProcConf(t, `
 http:
   url: %v/testpost
+  retry_period: 1ms
 `, ts.URL)
 
 	h, err := mock.NewManager().NewProcessor(conf)

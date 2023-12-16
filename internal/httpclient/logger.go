@@ -9,30 +9,26 @@ import (
 	"strings"
 	"time"
 
-	"github.com/benthosdev/benthos/v4/internal/log"
+	"github.com/benthosdev/benthos/v4/public/service"
 
 	"go.uber.org/multierr"
 )
 
 type roundTripper struct {
 	base   http.RoundTripper
-	logger log.Modular
+	logger *service.Logger
 	level  string
 }
 
 var _ http.RoundTripper = (*roundTripper)(nil)
 
-func newRequestLog(base http.RoundTripper, logger log.Modular, lvl string) (http.RoundTripper, error) {
+func newRequestLog(base http.RoundTripper, logger *service.Logger, lvl string) (http.RoundTripper, error) {
 	if base == nil {
 		base = http.DefaultTransport
 	}
 
 	if lvl == "" {
 		return base, nil
-	}
-
-	if logger == nil {
-		return nil, fmt.Errorf("logger on dump_request_log is not configured")
 	}
 
 	return &roundTripper{
@@ -141,17 +137,17 @@ func (r *roundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
 
 	switch r.level {
 	case "TRACE":
-		logger.Traceln(msg)
+		logger.Trace(msg)
 	case "DEBUG":
-		logger.Debugln(msg)
+		logger.Debug(msg)
 	case "INFO":
-		logger.Infoln(msg)
+		logger.Info(msg)
 	case "WARN":
-		logger.Warnln(msg)
+		logger.Warn(msg)
 	case "ERROR":
-		logger.Errorln(msg)
+		logger.Error(msg)
 	case "FATAL":
-		logger.Fatalln(msg)
+		logger.Error(msg)
 	}
 
 	return respOriginal, roundTripErr
