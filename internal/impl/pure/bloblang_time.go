@@ -210,6 +210,31 @@ func init() {
 
 	//--------------------------------------------------------------------------
 
+	parseTimestampSpec := bloblang.NewPluginSpec().
+		Static().
+		Category(query.MethodCategoryTime).
+		Description(`Attempts to parse an integer of nanoseconds and returns a string as a duration.`).
+		Example("",
+			`root.delay_for = this.delay_for_ns.ts_duration()`,
+			[2]string{
+				`{"delay_for_ns":50000}`,
+				`{"delay_for":"50us"}`,
+			},
+		)
+
+	parseTimestampCtor := func(args *bloblang.ParsedParams) (bloblang.Method, error) {
+		return bloblang.Int64Method(func(ts int64) (any, error) {
+			timestamp := time.Duration(ts).String()
+			return timestamp, nil
+		}), nil
+	}
+
+	if err := bloblang.RegisterMethodV2("ts_duration", parseTimestampSpec, parseTimestampCtor); err != nil {
+		panic(err)
+	}
+
+	//--------------------------------------------------------------------------
+
 	parseTSSpec := bloblang.NewPluginSpec().
 		Category(query.MethodCategoryTime).
 		Beta().

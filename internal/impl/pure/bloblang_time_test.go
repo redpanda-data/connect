@@ -182,6 +182,11 @@ func TestTimestampMethods(t *testing.T) {
 			mapping: `root = "2023-10-12T14:59:10.12345+03:00".ts_sub("2023-10-02T02:55:03.6789Z")`,
 			output:  int64(896646444550000),
 		},
+		{
+			name:    "check ts_duration",
+			mapping: `root = 50000.ts_duration()`,
+			output:  "50µs",
+		},
 	}
 
 	for _, test := range tests {
