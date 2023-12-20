@@ -26,7 +26,7 @@ func TestResourceInput(t *testing.T) {
 
 	nConf := input.NewConfig()
 	nConf.Type = "resource"
-	nConf.Resource = "foo"
+	nConf.Plugin = "foo"
 
 	p, err := mgr.NewInput(nConf)
 	require.NoError(t, err)
@@ -80,7 +80,7 @@ func TestResourceInputEarlyTermination(t *testing.T) {
 
 	nConf := input.NewConfig()
 	nConf.Type = "resource"
-	nConf.Resource = "foo"
+	nConf.Plugin = "foo"
 
 	p, err := mgr.NewInput(nConf)
 	require.NoError(t, err)
@@ -119,7 +119,7 @@ func TestResourceInputEarlyTermination(t *testing.T) {
 func TestResourceInputBadName(t *testing.T) {
 	conf := input.NewConfig()
 	conf.Type = "resource"
-	conf.Resource = "foo"
+	conf.Plugin = "foo"
 
 	_, err := mock.NewManager().NewInput(conf)
 	if err == nil {

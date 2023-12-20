@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/benthosdev/benthos/v4/internal/component/input"
 	bmanager "github.com/benthosdev/benthos/v4/internal/manager"
 	"github.com/benthosdev/benthos/v4/internal/stream"
 	"github.com/benthosdev/benthos/v4/internal/stream/manager"
@@ -30,10 +31,13 @@ func TestTypeUnderStress(t *testing.T) {
 	mgr := manager.New(res)
 
 	conf := stream.NewConfig()
-	conf.Input.Type = "generate"
-	conf.Input.Generate.Count = 3
-	conf.Input.Generate.Interval = "1us"
-	conf.Input.Generate.Mapping = "root.id = uuid_v4()"
+	conf.Input, err = input.FromYAML(`
+generate:
+  count: 3
+  interval: 1us
+  mapping: 'root.id = uuid_v4()'
+`)
+	require.NoError(t, err)
 	conf.Output.Type = "drop"
 
 	wg := sync.WaitGroup{}

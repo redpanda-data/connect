@@ -24,12 +24,14 @@ import (
 func TestBundleInputTracing(t *testing.T) {
 	tenv, summary := tracing.TracedBundle(bundle.GlobalEnvironment)
 
-	inConfig := input.NewConfig()
-	inConfig.Label = "foo"
-	inConfig.Type = "generate"
-	inConfig.Generate.Count = 10
-	inConfig.Generate.Interval = "1us"
-	inConfig.Generate.Mapping = `root.count = count("counting the number of input tracing messages")`
+	inConfig, err := input.FromYAML(`
+label: foo
+generate:
+  count: 10
+  interval: 1us
+  mapping: 'root.count = counter()'
+`)
+	require.NoError(t, err)
 
 	mgr, err := manager.New(
 		manager.NewResourceConfig(),
@@ -73,12 +75,14 @@ func TestBundleInputTracing(t *testing.T) {
 func TestBundleInputTracingFlush(t *testing.T) {
 	tenv, summary := tracing.TracedBundle(bundle.GlobalEnvironment)
 
-	inConfig := input.NewConfig()
-	inConfig.Label = "foo"
-	inConfig.Type = "generate"
-	inConfig.Generate.Count = 10
-	inConfig.Generate.Interval = "1us"
-	inConfig.Generate.Mapping = `root.count = count("counting the number of input tracing messages with flushing")`
+	inConfig, err := input.FromYAML(`
+label: foo
+generate:
+  count: 10
+  interval: 1us
+  mapping: 'root.count = counter()'
+`)
+	require.NoError(t, err)
 
 	mgr, err := manager.New(
 		manager.NewResourceConfig(),
@@ -129,7 +133,14 @@ func TestBundleInputTracingFlush(t *testing.T) {
 	require.Len(t, inEvents["foo"], 0)
 
 	// Run more stuff
-	inConfig.Generate.Count = 5
+	inConfig, err = input.FromYAML(`
+label: foo
+generate:
+  count: 5
+  interval: 1us
+  mapping: 'root.count = counter()'
+`)
+	require.NoError(t, err)
 
 	in, err = mgr.NewInput(inConfig)
 	require.NoError(t, err)
@@ -154,7 +165,7 @@ func TestBundleInputTracingFlush(t *testing.T) {
 
 	for i, e := range events {
 		assert.Equal(t, tracing.EventProduce, e.Type)
-		assert.Equal(t, fmt.Sprintf(`{"count":%v}`, i+11), e.Content)
+		assert.Equal(t, fmt.Sprintf(`{"count":%v}`, i+1), e.Content)
 	}
 }
 
@@ -162,12 +173,14 @@ func TestBundleInputTracingDisabled(t *testing.T) {
 	tenv, summary := tracing.TracedBundle(bundle.GlobalEnvironment)
 	summary.SetEnabled(false)
 
-	inConfig := input.NewConfig()
-	inConfig.Label = "foo"
-	inConfig.Type = "generate"
-	inConfig.Generate.Count = 10
-	inConfig.Generate.Interval = "1us"
-	inConfig.Generate.Mapping = `root.count = count("counting the number of input tracing messages")`
+	inConfig, err := input.FromYAML(`
+label: foo
+generate:
+  count: 10
+  interval: 1us
+  mapping: 'root.count = counter()'
+`)
+	require.NoError(t, err)
 
 	mgr, err := manager.New(
 		manager.NewResourceConfig(),

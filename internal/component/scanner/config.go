@@ -1,4 +1,4 @@
-package plugin
+package scanner
 
 import (
 	"fmt"
@@ -15,6 +15,8 @@ type Config struct {
 
 func FromAny(prov docs.Provider, cType docs.Type, value any) (conf Config, err error) {
 	switch t := value.(type) {
+	case Config:
+		return t, nil
 	case *yaml.Node:
 		return fromYAML(prov, cType, t)
 	case map[string]any:
@@ -30,7 +32,11 @@ func fromMap(prov docs.Provider, cType docs.Type, value map[string]any) (conf Co
 		return
 	}
 
-	conf.Plugin = value[conf.Type]
+	if p, exists := value[conf.Type]; exists {
+		conf.Plugin = p
+	} else if p, exists := value["plugin"]; exists {
+		conf.Plugin = p
+	}
 	return
 }
 

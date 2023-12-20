@@ -15,7 +15,7 @@ func TestBrokerConfigs(t *testing.T) {
 	for _, test := range []struct {
 		name   string
 		config string
-		output map[string]struct{}
+		output map[string]int
 	}{
 		{
 			name: "simple inputs",
@@ -31,9 +31,29 @@ broker:
         interval: ""
         mapping: 'root = "hello world 2"'
 `,
-			output: map[string]struct{}{
-				"hello world 1": {},
-				"hello world 2": {},
+			output: map[string]int{
+				"hello world 1": 1,
+				"hello world 2": 1,
+			},
+		},
+		{
+			name: "inputs with copies",
+			config: `
+broker:
+  copies: 2
+  inputs:
+    - generate:
+        count: 1
+        interval: ""
+        mapping: 'root = "hello world 1"'
+    - generate:
+        count: 1
+        interval: ""
+        mapping: 'root = "hello world 2"'
+`,
+			output: map[string]int{
+				"hello world 1": 2,
+				"hello world 2": 2,
 			},
 		},
 		{
@@ -50,8 +70,8 @@ broker:
 processors:
   - bloblang: 'root = "meow " + content().string()'
 `,
-			output: map[string]struct{}{
-				"meow HELLO WORLD 1": {},
+			output: map[string]int{
+				"meow HELLO WORLD 1": 1,
 			},
 		},
 		{
@@ -74,8 +94,8 @@ broker:
 processors:
   - bloblang: 'root = "meow " + content().string()'
 `,
-			output: map[string]struct{}{
-				"meow HELLO WORLD 1\nHELLO WORLD 1\nHELLO WORLD 1 woof": {},
+			output: map[string]int{
+				"meow HELLO WORLD 1\nHELLO WORLD 1\nHELLO WORLD 1 woof": 1,
 			},
 		},
 	} {
@@ -85,10 +105,10 @@ processors:
 			require.NoError(t, builder.AddInputYAML(test.config))
 			require.NoError(t, builder.SetLoggerYAML(`level: none`))
 
-			outputMsgs := map[string]struct{}{}
+			outputMsgs := map[string]int{}
 			require.NoError(t, builder.AddConsumerFunc(func(ctx context.Context, msg *service.Message) error {
 				mBytes, _ := msg.AsBytes()
-				outputMsgs[string(mBytes)] = struct{}{}
+				outputMsgs[string(mBytes)]++
 				return nil
 			}))
 

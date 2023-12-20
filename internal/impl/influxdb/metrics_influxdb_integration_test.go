@@ -1,6 +1,7 @@
 package influxdb
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"runtime"
@@ -9,10 +10,9 @@ import (
 
 	client "github.com/influxdata/influxdb1-client/v2"
 	"github.com/ory/dockertest/v3"
+	"github.com/stretchr/testify/require"
 
-	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/internal/integration"
-	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 )
 
 func TestInfluxIntegration(t *testing.T) {
@@ -72,29 +72,29 @@ func TestInfluxIntegration(t *testing.T) {
 		t.Fatalf("Could not connect to influxdb docker container: %s", err)
 	}
 
-	globalConfig := metrics.NewConfig()
-	config := metrics.NewInfluxDBConfig()
-	config.URL = url
-	config.DB = "db0"
-	config.Interval = "1s"
-	config.Tags = map[string]string{"hostname": "localhost"}
-	globalConfig.InfluxDB = config
+	pConf, err := ConfigSpec().ParseYAML(fmt.Sprintf(`
+url: %v
+db: db0
+interval: 1s
+tags:
+  hostname: localhost
+`, url), nil)
+	require.NoError(t, err)
 
-	flux, err := newInfluxDB(globalConfig, mock.NewManager())
+	i, err := fromParsed(pConf, nil)
 	if err != nil {
 		t.Fatalf("problem creating to InfluxDB: %s", err)
 	}
-	i := flux.(*influxDBMetrics)
 	i.client = c
 
 	t.Run("testInfluxConnect", func(t *testing.T) {
-		testInfluxConnect(t, flux, c)
+		testInfluxConnect(t, i, c)
 	})
 }
 
-func testInfluxConnect(t *testing.T, i metrics.Type, c client.Client) {
-	i.GetGauge("testing").Set(31337)
-	i.Close()
+func testInfluxConnect(t *testing.T, i *influxDBMetrics, c client.Client) {
+	i.NewGaugeCtor("testing")().Set(31337)
+	i.Close(context.Background())
 
 	resp, err := c.Query(client.Query{Command: `SELECT "hostname"::tag, "value"::field FROM "testing"`, Database: "db0"})
 	if err != nil {

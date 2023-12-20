@@ -20,6 +20,10 @@ import (
 	"github.com/stretchr/testify/require"
 	yaml "gopkg.in/yaml.v3"
 
+	"github.com/benthosdev/benthos/v4/internal/component/input"
+	"github.com/benthosdev/benthos/v4/internal/component/output"
+	"github.com/benthosdev/benthos/v4/internal/config"
+	"github.com/benthosdev/benthos/v4/internal/docs"
 	bmanager "github.com/benthosdev/benthos/v4/internal/manager"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
@@ -247,7 +251,7 @@ func TestTypeAPIBasicOperations(t *testing.T) {
 	info = parseGetBody(t, response.Body)
 	assert.True(t, info.Active)
 
-	assert.Equal(t, map[string]any{}, gabs.Wrap(info.Config).S("buffer", "memory").Data())
+	assert.True(t, gabs.Wrap(info.Config).Exists("buffer", "memory"))
 
 	request = genRequest("DELETE", "/streams/foo", conf)
 	response = httptest.NewRecorder()
@@ -406,7 +410,7 @@ func TestTypeAPIBasicOperationsYAML(t *testing.T) {
 
 	info = parseGetBody(t, response.Body)
 	require.True(t, info.Active)
-	assert.Equal(t, map[string]any{}, gabs.Wrap(info.Config).S("buffer", "memory").Data())
+	assert.True(t, gabs.Wrap(info.Config).Exists("buffer", "memory"))
 
 	request = genYAMLRequest("DELETE", "/streams/foo", conf)
 	response = httptest.NewRecorder()
@@ -439,8 +443,11 @@ func TestTypeAPIList(t *testing.T) {
 	}
 
 	conf := stream.NewConfig()
-	conf.Input.Type = "generate"
-	conf.Input.Generate.Mapping = "root = deleted()"
+	conf.Input, err = input.FromYAML(`
+generate:
+  mapping: 'root = deleted()'
+`)
+	require.NoError(t, err)
 	conf.Output.Type = "drop"
 
 	if err := mgr.Create("foo", conf); err != nil {
@@ -468,9 +475,15 @@ func TestTypeAPISetStreams(t *testing.T) {
 	r := router(mgr)
 
 	origConf := stream.NewConfig()
-	origConf.Input.Type = "generate"
-	origConf.Input.Generate.Mapping = "root = deleted()"
-	origConf.Output.Type = "drop"
+	origConf.Input, err = input.FromYAML(`
+generate:
+  mapping: 'root = deleted()'
+`)
+	require.NoError(t, err)
+	origConf.Output, err = output.FromYAML(`
+drop: {}
+`)
+	require.NoError(t, err)
 
 	require.NoError(t, mgr.Create("foo", origConf))
 	require.NoError(t, mgr.Create("bar", origConf))
@@ -536,6 +549,22 @@ func TestTypeAPISetStreams(t *testing.T) {
 	assert.Equal(t, "root = this.BAZ_ONE", gabs.Wrap(conf.Config).S("input", "generate", "mapping").Data())
 }
 
+func testConfToAny(t testing.TB, conf any) any {
+	var node yaml.Node
+	err := node.Encode(conf)
+	require.NoError(t, err)
+
+	sanitConf := docs.NewSanitiseConfig()
+	sanitConf.RemoveTypeField = true
+	sanitConf.ScrubSecrets = true
+	err = config.Spec().SanitiseYAML(&node, sanitConf)
+	require.NoError(t, err)
+
+	var v any
+	require.NoError(t, node.Decode(&v))
+	return v
+}
+
 func TestTypeAPIStreamsDefaultConf(t *testing.T) {
 	res, err := bmanager.New(bmanager.NewResourceConfig())
 	require.NoError(t, err)
@@ -567,7 +596,9 @@ func TestTypeAPIStreamsDefaultConf(t *testing.T) {
 	status, err := mgr.Read("foo")
 	require.NoError(t, err)
 
-	assert.Equal(t, status.Config().Input.Generate.Interval, "1s")
+	v := testConfToAny(t, status.Config())
+
+	assert.Equal(t, nil, gabs.Wrap(v).S("input", "generate", "interval").Data())
 }
 
 func TestTypeAPIStreamsLinting(t *testing.T) {
@@ -658,7 +689,8 @@ func TestTypeAPIDefaultConf(t *testing.T) {
 	status, err := mgr.Read("foo")
 	require.NoError(t, err)
 
-	assert.Equal(t, status.Config().Input.Generate.Interval, "1s")
+	v := testConfToAny(t, status.Config())
+	assert.Equal(t, nil, gabs.Wrap(v).S("input", "generate", "interval").Data())
 }
 
 func TestTypeAPILinting(t *testing.T) {
@@ -812,8 +844,11 @@ func TestTypeAPIGetStats(t *testing.T) {
 	r := router(smgr)
 
 	origConf := stream.NewConfig()
-	origConf.Input.Type = "generate"
-	origConf.Input.Generate.Mapping = "root = deleted()"
+	origConf.Input, err = input.FromYAML(`
+generate:
+  mapping: 'root = deleted()'
+`)
+	require.NoError(t, err)
 	origConf.Output.Type = "drop"
 
 	err = smgr.Create("foo", origConf)
@@ -871,7 +906,7 @@ file:
 
 	streamConf := stream.NewConfig()
 	streamConf.Input.Type = "inproc"
-	streamConf.Input.Inproc = "feed_in"
+	streamConf.Input.Plugin = "feed_in"
 	streamConf.Output.Type = "cache"
 	streamConf.Output.Cache.Key = `${! json("id") }`
 	streamConf.Output.Cache.Target = "foocache"

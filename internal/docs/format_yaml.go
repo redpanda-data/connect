@@ -133,16 +133,20 @@ func GetPluginConfigYAML(name string, node *yaml.Node) (yaml.Node, error) {
 	node = unwrapDocumentNode(node)
 	for i := 0; i < len(node.Content)-1; i += 2 {
 		if node.Content[i].Value == name {
+			if node.Content[i+1].Kind == 0 {
+				break
+			}
 			return *node.Content[i+1], nil
 		}
 	}
-	pluginStruct := struct {
-		Plugin yaml.Node `yaml:"plugin"`
-	}{}
-	if err := node.Decode(&pluginStruct); err != nil {
-		return yaml.Node{}, err
+	for i := 0; i < len(node.Content)-1; i += 2 {
+		if node.Content[i].Value == "plugin" {
+			return *node.Content[i+1], nil
+		}
 	}
-	return pluginStruct.Plugin, nil
+	var n yaml.Node
+	_ = n.Encode(nil)
+	return n, nil
 }
 
 //------------------------------------------------------------------------------

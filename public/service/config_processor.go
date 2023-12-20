@@ -20,14 +20,15 @@ func NewProcessorField(name string) *ConfigField {
 	}
 }
 
-func procConfigFromAny(v any) (conf processor.Config, err error) {
-	pNode, ok := v.(*yaml.Node)
-	if !ok {
+func procConfFromAny(v any) (conf processor.Config, err error) {
+	switch t := v.(type) {
+	case *yaml.Node:
+		err = t.Decode(&conf)
+	case processor.Config:
+		conf = t
+	default:
 		err = fmt.Errorf("unexpected value, expected object, got %T", v)
-		return
 	}
-
-	err = pNode.Decode(&conf)
 	return
 }
 
@@ -39,11 +40,13 @@ func (p *ParsedConfig) FieldProcessor(path ...string) (*OwnedProcessor, error) {
 	if !exists {
 		return nil, fmt.Errorf("field '%v' was not found in the config", strings.Join(path, "."))
 	}
-	procConf, err := procConfigFromAny(v)
+
+	conf, err := procConfFromAny(v)
 	if err != nil {
 		return nil, err
 	}
-	iproc, err := p.mgr.IntoPath(path...).NewProcessor(procConf)
+
+	iproc, err := p.mgr.IntoPath(path...).NewProcessor(conf)
 	if err != nil {
 		return nil, err
 	}
@@ -72,7 +75,7 @@ func (p *ParsedConfig) fieldProcessorListConfigs(path ...string) ([]processor.Co
 
 	var procConfigs []processor.Config
 	for i, iConf := range procsArray {
-		pconf, err := procConfigFromAny(iConf)
+		pconf, err := procConfFromAny(iConf)
 		if err != nil {
 			return nil, fmt.Errorf("value %v: %w", i, err)
 		}

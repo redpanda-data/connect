@@ -26,8 +26,8 @@ func writeFiles(t *testing.T, dir string, nameToContent map[string]string) {
 }
 
 func testInput(t testing.TB, confPattern string, args ...any) input.Streamed {
-	iConf := input.NewConfig()
-	require.NoError(t, yaml.Unmarshal(fmt.Appendf(nil, confPattern, args...), &iConf))
+	iConf, err := input.FromYAML(fmt.Sprintf(confPattern, args...))
+	require.NoError(t, err)
 
 	i, err := mock.NewManager().NewInput(iConf)
 	require.NoError(t, err)

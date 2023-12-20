@@ -1,43 +1,41 @@
 package io
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"time"
 
-	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
-	"github.com/benthosdev/benthos/v4/internal/docs"
-	"github.com/benthosdev/benthos/v4/internal/log"
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
 func init() {
-	_ = bundle.AllMetrics.Add(newJSONAPI,
-		docs.ComponentSpec{
-			Name:    "json_api",
-			Type:    docs.TypeMetrics,
-			Summary: `Serves metrics as JSON object with the service wide HTTP service at the endpoints ` + "`/stats` and `/metrics`" + `.`,
-			Description: `
-This metrics type is useful for debugging as it provides a human readable format that you can parse with tools such as ` + "`jq`" + ``,
-			Config: docs.FieldObject("", "").HasDefault(map[string]any{}),
+	err := service.RegisterMetricsExporter("json_api", service.NewConfigSpec().
+		Stable().
+		Summary(`Serves metrics as JSON object with the service wide HTTP service at the endpoints `+"`/stats` and `/metrics`"+`.`).
+		Description(`This metrics type is useful for debugging as it provides a human readable format that you can parse with tools such as `+"`jq`"+``).
+		Field(service.NewObjectField("").Default(map[string]any{})),
+		func(conf *service.ParsedConfig, log *service.Logger) (service.MetricsExporter, error) {
+			return newJSONAPI(log)
 		})
+	if err != nil {
+		panic(err)
+	}
 }
 
 //------------------------------------------------------------------------------
 
 type jsonAPIMetrics struct {
 	local     *metrics.Local
-	log       log.Modular
 	timestamp time.Time
 }
 
-func newJSONAPI(config metrics.Config, nm bundle.NewManagement) (metrics.Type, error) {
-	t := &jsonAPIMetrics{
+func newJSONAPI(logger *service.Logger) (*jsonAPIMetrics, error) {
+	return &jsonAPIMetrics{
 		local:     metrics.NewLocal(),
 		timestamp: time.Now(),
-		log:       nm.Logger(),
-	}
-	return t, nil
+	}, nil
 }
 
 //------------------------------------------------------------------------------
@@ -72,30 +70,27 @@ func (h *jsonAPIMetrics) HandlerFunc() http.HandlerFunc {
 	}
 }
 
-func (h *jsonAPIMetrics) GetCounter(path string) metrics.StatCounter {
-	return h.local.GetCounter(path)
+func (h *jsonAPIMetrics) NewCounterCtor(path string, n ...string) service.MetricsExporterCounterCtor {
+	tmp := h.local.GetCounterVec(path, n...)
+	return func(labelValues ...string) service.MetricsExporterCounter {
+		return tmp.With(labelValues...)
+	}
 }
 
-func (h *jsonAPIMetrics) GetCounterVec(path string, n ...string) metrics.StatCounterVec {
-	return h.local.GetCounterVec(path, n...)
+func (h *jsonAPIMetrics) NewTimerCtor(path string, n ...string) service.MetricsExporterTimerCtor {
+	tmp := h.local.GetTimerVec(path, n...)
+	return func(labelValues ...string) service.MetricsExporterTimer {
+		return tmp.With(labelValues...)
+	}
 }
 
-func (h *jsonAPIMetrics) GetTimer(path string) metrics.StatTimer {
-	return h.local.GetTimer(path)
+func (h *jsonAPIMetrics) NewGaugeCtor(path string, n ...string) service.MetricsExporterGaugeCtor {
+	tmp := h.local.GetGaugeVec(path, n...)
+	return func(labelValues ...string) service.MetricsExporterGauge {
+		return tmp.With(labelValues...)
+	}
 }
 
-func (h *jsonAPIMetrics) GetTimerVec(path string, n ...string) metrics.StatTimerVec {
-	return h.local.GetTimerVec(path, n...)
-}
-
-func (h *jsonAPIMetrics) GetGauge(path string) metrics.StatGauge {
-	return h.local.GetGauge(path)
-}
-
-func (h *jsonAPIMetrics) GetGaugeVec(path string, n ...string) metrics.StatGaugeVec {
-	return h.local.GetGaugeVec(path, n...)
-}
-
-func (h *jsonAPIMetrics) Close() error {
+func (h *jsonAPIMetrics) Close(context.Context) error {
 	return nil
 }

@@ -13,15 +13,7 @@ import (
 type Config struct {
 	Label      string             `json:"label" yaml:"label"`
 	Type       string             `json:"type" yaml:"type"`
-	Broker     BrokerConfig       `json:"broker" yaml:"broker"`
-	Dynamic    DynamicConfig      `json:"dynamic" yaml:"dynamic"`
-	Generate   GenerateConfig     `json:"generate" yaml:"generate"`
-	Inproc     InprocConfig       `json:"inproc" yaml:"inproc"`
 	Plugin     any                `json:"plugin,omitempty" yaml:"plugin,omitempty"`
-	ReadUntil  ReadUntilConfig    `json:"read_until" yaml:"read_until"`
-	Resource   string             `json:"resource" yaml:"resource"`
-	Sequence   SequenceConfig     `json:"sequence" yaml:"sequence"`
-	Subprocess SubprocessConfig   `json:"subprocess" yaml:"subprocess"`
 	Processors []processor.Config `json:"processors" yaml:"processors"`
 }
 
@@ -32,15 +24,7 @@ func NewConfig() Config {
 	return Config{
 		Label:      "",
 		Type:       "stdin",
-		Broker:     NewBrokerConfig(),
-		Dynamic:    NewDynamicConfig(),
-		Generate:   NewGenerateConfig(),
-		Inproc:     NewInprocConfig(),
 		Plugin:     nil,
-		ReadUntil:  NewReadUntilConfig(),
-		Resource:   "",
-		Sequence:   NewSequenceConfig(),
-		Subprocess: NewSubprocessConfig(),
 		Processors: []processor.Config{},
 	}
 }

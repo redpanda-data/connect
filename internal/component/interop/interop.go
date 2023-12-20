@@ -3,6 +3,7 @@ package interop
 import (
 	"context"
 
+	"github.com/benthosdev/benthos/v4/internal/batch/policy"
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/input"
@@ -131,5 +132,14 @@ func (u *UnwrapInternalOutput) Close(ctx context.Context) error {
 func UnwrapManagement(r *service.Resources) bundle.NewManagement {
 	return r.XUnwrapper().(interface {
 		Unwrap() bundle.NewManagement
+	}).Unwrap()
+}
+
+// UnwrapBatcher unwraps a public *service.Batcher type into an internal
+// *policy.Batcher type. This solution will eventually be phased out as it is
+// only used for migrating components.
+func UnwrapBatcher(b *service.Batcher) *policy.Batcher {
+	return b.XUnwrapper().(interface {
+		Unwrap() *policy.Batcher
 	}).Unwrap()
 }

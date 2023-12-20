@@ -104,6 +104,19 @@ func (b BatchPolicy) NewBatcher(res *Resources) (*Batcher, error) {
 	return &Batcher{mgr: mgr, p: p}, nil
 }
 
+type batcherUnwrapper struct {
+	p *policy.Batcher
+}
+
+func (w batcherUnwrapper) Unwrap() *policy.Batcher {
+	return w.p
+}
+
+// XUnwrapper is for internal use only, do not use this.
+func (b *Batcher) XUnwrapper() any {
+	return batcherUnwrapper{p: b.p}
+}
+
 //------------------------------------------------------------------------------
 
 // NewBatchPolicyField defines a new object type config field that describes a

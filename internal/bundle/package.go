@@ -23,7 +23,6 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/component/input"
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
-	"github.com/benthosdev/benthos/v4/internal/component/plugin"
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/component/ratelimit"
 	"github.com/benthosdev/benthos/v4/internal/component/scanner"
@@ -62,7 +61,7 @@ type NewManagement interface {
 	NewProcessor(conf processor.Config) (processor.V1, error)
 	NewOutput(conf output.Config, pipelines ...processor.PipelineConstructorFunc) (output.Streamed, error)
 	NewRateLimit(conf ratelimit.Config) (ratelimit.V1, error)
-	NewScanner(conf plugin.Config) (scanner.Creator, error)
+	NewScanner(conf scanner.Config) (scanner.Creator, error)
 
 	ProbeCache(name string) bool
 	AccessCache(ctx context.Context, name string, fn func(cache.V1)) error

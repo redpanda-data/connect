@@ -7,9 +7,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/benthosdev/benthos/v4/internal/component/input"
 	"github.com/benthosdev/benthos/v4/internal/manager"
-	bmock "github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
 )
 
@@ -26,12 +24,9 @@ func TestInprocDryRun(t *testing.T) {
 
 	mgr.SetPipe("foo", make(chan message.Transaction))
 
-	conf := input.NewConfig()
-	conf.Type = "inproc"
-	conf.Inproc = "foo"
-
-	ip, err := mgr.NewInput(conf)
-	require.NoError(t, err)
+	ip := testInput(t, `
+inproc: foo
+`)
 
 	<-time.After(time.Millisecond * 100)
 
@@ -47,17 +42,12 @@ func TestInprocDryRunNoConn(t *testing.T) {
 
 	t.Parallel()
 
-	conf := input.NewConfig()
-	conf.Type = "inproc"
-	conf.Inproc = "foo"
-
-	ip, err := bmock.NewManager().NewInput(conf)
-	require.NoError(t, err)
+	ip := testInput(t, `
+inproc: foo
+`)
 
 	<-time.After(time.Millisecond * 100)
 
 	ip.TriggerStopConsuming()
-	if err = ip.WaitForClose(ctx); err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, ip.WaitForClose(ctx))
 }
