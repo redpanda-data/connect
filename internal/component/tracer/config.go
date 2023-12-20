@@ -15,21 +15,15 @@ func init() {
 
 // Config is the all encompassing configuration struct for all tracer types.
 type Config struct {
-	Type       string           `json:"type" yaml:"type"`
-	Jaeger     JaegerConfig     `json:"jaeger" yaml:"jaeger"`
-	CloudTrace CloudTraceConfig `json:"gcp_cloudtrace" yaml:"gcp_cloudtrace"`
-	None       struct{}         `json:"none" yaml:"none"`
-	Plugin     any              `json:"plugin,omitempty" yaml:"plugin,omitempty"`
+	Type   string `json:"type" yaml:"type"`
+	Plugin any    `json:"plugin,omitempty" yaml:"plugin,omitempty"`
 }
 
 // NewConfig returns a configuration struct fully populated with default values.
 func NewConfig() Config {
 	return Config{
-		Type:       "none",
-		Jaeger:     NewJaegerConfig(),
-		CloudTrace: NewCloudTraceConfig(),
-		None:       struct{}{},
-		Plugin:     nil,
+		Type:   "none",
+		Plugin: nil,
 	}
 }
 

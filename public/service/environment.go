@@ -16,7 +16,6 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/component/output/batcher"
 	oprocessors "github.com/benthosdev/benthos/v4/internal/component/output/processors"
-	"github.com/benthosdev/benthos/v4/internal/component/plugin"
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/component/ratelimit"
 	"github.com/benthosdev/benthos/v4/internal/component/scanner"
@@ -503,7 +502,7 @@ func (e *Environment) RegisterBatchScannerCreator(name string, spec *ConfigSpec,
 	componentSpec := spec.component
 	componentSpec.Name = name
 	componentSpec.Type = docs.TypeScanner
-	return e.internal.ScannerAdd(func(conf plugin.Config, nm bundle.NewManagement) (scanner.Creator, error) {
+	return e.internal.ScannerAdd(func(conf scanner.Config, nm bundle.NewManagement) (scanner.Creator, error) {
 		pluginConf, err := extractConfig(nm, spec, name, conf.Plugin, conf)
 		if err != nil {
 			return nil, err

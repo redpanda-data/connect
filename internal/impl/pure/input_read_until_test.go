@@ -20,13 +20,14 @@ import (
 )
 
 func TestReadUntilErrs(t *testing.T) {
-	conf := input.NewConfig()
-	conf.Type = "read_until"
+	conf, err := input.FromYAML(`
+read_until:
+  input:
+    stdin: {}
+`)
+	require.NoError(t, err)
 
-	inConf := input.NewConfig()
-	conf.ReadUntil.Input = &inConf
-
-	_, err := bmock.NewManager().NewInput(conf)
+	_, err = bmock.NewManager().NewInput(conf)
 	assert.EqualError(t, err, "failed to init input <no label>: it is required to set either check or idle_timeout")
 }
 
@@ -49,31 +50,32 @@ baz`)
 		t.Fatal(err)
 	}
 
-	inconf := input.NewConfig()
-	require.NoError(t, yaml.Unmarshal(fmt.Appendf(nil, `
-file:
-  paths: [ "%v" ]
-`, tmpfile.Name()), &inconf))
+	inConfStr := fmt.Sprintf(`
+read_until:
+  input:
+    file:
+      paths: [ "%v" ]
+`, tmpfile.Name())
 
 	t.Run("ReadUntilBasic", func(te *testing.T) {
-		testReadUntilBasic(inconf, te)
+		testReadUntilBasic(inConfStr, te)
 	})
 	t.Run("ReadUntilRestart", func(te *testing.T) {
-		testReadUntilRestart(inconf, te)
+		testReadUntilRestart(inConfStr, te)
 	})
 	t.Run("ReadUntilRetry", func(te *testing.T) {
-		testReadUntilRetry(inconf, te)
+		testReadUntilRetry(inConfStr, te)
 	})
 }
 
-func testReadUntilBasic(inConf input.Config, t *testing.T) {
+func testReadUntilBasic(inConf string, t *testing.T) {
 	ctx, done := context.WithTimeout(context.Background(), time.Second*5)
 	defer done()
 
-	rConf := input.NewConfig()
-	rConf.Type = "read_until"
-	rConf.ReadUntil.Input = &inConf
-	rConf.ReadUntil.Check = `content() == "bar"`
+	rConf, err := input.FromYAML(inConf + `
+  check: 'content() == "bar"'
+`)
+	require.NoError(t, err)
 
 	in, err := bmock.NewManager().NewInput(rConf)
 	if err != nil {
@@ -125,15 +127,15 @@ func testReadUntilBasic(inConf input.Config, t *testing.T) {
 	}
 }
 
-func testReadUntilRestart(inConf input.Config, t *testing.T) {
+func testReadUntilRestart(inConf string, t *testing.T) {
 	ctx, done := context.WithTimeout(context.Background(), time.Second*5)
 	defer done()
 
-	rConf := input.NewConfig()
-	rConf.Type = "read_until"
-	rConf.ReadUntil.Input = &inConf
-	rConf.ReadUntil.Check = `false`
-	rConf.ReadUntil.Restart = true
+	rConf, err := input.FromYAML(inConf + `
+  check: 'false'
+  restart_input: true
+`)
+	require.NoError(t, err)
 
 	in, err := bmock.NewManager().NewInput(rConf)
 	require.NoError(t, err)
@@ -165,14 +167,14 @@ func testReadUntilRestart(inConf input.Config, t *testing.T) {
 	require.NoError(t, in.WaitForClose(ctx))
 }
 
-func testReadUntilRetry(inConf input.Config, t *testing.T) {
+func testReadUntilRetry(inConf string, t *testing.T) {
 	ctx, done := context.WithTimeout(context.Background(), time.Second*5)
 	defer done()
 
-	rConf := input.NewConfig()
-	rConf.Type = "read_until"
-	rConf.ReadUntil.Input = &inConf
-	rConf.ReadUntil.Check = `content() == "bar"`
+	rConf, err := input.FromYAML(inConf + `
+  check: 'content() == "bar"'
+`)
+	require.NoError(t, err)
 
 	in, err := bmock.NewManager().NewInput(rConf)
 	if err != nil {

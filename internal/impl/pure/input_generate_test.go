@@ -9,22 +9,29 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/benthosdev/benthos/v4/internal/component/input"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 )
+
+func testGenReader(t testing.TB, confStr string, args ...any) *generateReader {
+	pConf, err := genInputSpec().ParseYAML(fmt.Sprintf(confStr, args...), nil)
+	require.NoError(t, err)
+
+	r, err := newGenerateReaderFromParsed(pConf, mock.NewManager())
+	require.NoError(t, err)
+
+	return r
+}
 
 func TestBloblangInterval(t *testing.T) {
 	ctx, done := context.WithTimeout(context.Background(), time.Millisecond*80)
 	defer done()
 
-	conf := input.NewGenerateConfig()
-	conf.Mapping = `root = "hello world"`
-	conf.Interval = "50ms"
+	b := testGenReader(t, `
+mapping: 'root = "hello world"'
+interval: 50ms
+`)
 
-	b, err := newGenerateReader(mock.NewManager(), conf)
-	require.NoError(t, err)
-
-	err = b.Connect(ctx)
+	err := b.Connect(ctx)
 	require.NoError(t, err)
 
 	// First read is immediate.
@@ -47,11 +54,10 @@ func TestBloblangInterval(t *testing.T) {
 }
 
 func TestBloblangZeroInterval(t *testing.T) {
-	conf := input.NewGenerateConfig()
-	conf.Mapping = `root = "hello world"`
-	conf.Interval = "0s"
-	_, err := newGenerateReader(mock.NewManager(), conf)
-	require.NoError(t, err)
+	_ = testGenReader(t, `
+mapping: 'root = "hello world"'
+interval: 0s
+`)
 }
 
 func TestBloblangCron(t *testing.T) {
@@ -60,16 +66,15 @@ func TestBloblangCron(t *testing.T) {
 	ctx, done := context.WithTimeout(context.Background(), time.Millisecond*1100)
 	defer done()
 
-	conf := input.NewGenerateConfig()
-	conf.Mapping = `root = "hello world"`
-	conf.Interval = "@every 1s"
+	b := testGenReader(t, `
+mapping: 'root = "hello world"'
+interval: '@every 1s'
+`)
 
-	b, err := newGenerateReader(mock.NewManager(), conf)
-	require.NoError(t, err)
 	assert.NotNil(t, b.schedule)
 	assert.NotNil(t, b.location)
 
-	err = b.Connect(ctx)
+	err := b.Connect(ctx)
 	require.NoError(t, err)
 
 	// First takes 1s so.
@@ -89,16 +94,15 @@ func TestBloblangMapping(t *testing.T) {
 	ctx, done := context.WithTimeout(context.Background(), time.Millisecond*100)
 	defer done()
 
-	conf := input.NewGenerateConfig()
-	conf.Mapping = `root = {
-		"id": count("docs")
-	}`
-	conf.Interval = "1ms"
+	b := testGenReader(t, `
+mapping: |
+  root = {
+    "id": count("docs")
+  }
+interval: 1ms
+`)
 
-	b, err := newGenerateReader(mock.NewManager(), conf)
-	require.NoError(t, err)
-
-	err = b.Connect(ctx)
+	err := b.Connect(ctx)
 	require.NoError(t, err)
 
 	for i := 0; i < 10; i++ {
@@ -113,15 +117,13 @@ func TestBloblangRemaining(t *testing.T) {
 	ctx, done := context.WithTimeout(context.Background(), time.Millisecond*100)
 	defer done()
 
-	conf := input.NewGenerateConfig()
-	conf.Mapping = `root = "foobar"`
-	conf.Interval = "1ms"
-	conf.Count = 10
+	b := testGenReader(t, `
+mapping: 'root = "foobar"'
+interval: 1ms
+count: 10
+`)
 
-	b, err := newGenerateReader(mock.NewManager(), conf)
-	require.NoError(t, err)
-
-	err = b.Connect(ctx)
+	err := b.Connect(ctx)
 	require.NoError(t, err)
 
 	for i := 0; i < 10; i++ {
@@ -145,16 +147,14 @@ func TestBloblangRemainingBatched(t *testing.T) {
 	ctx, done := context.WithTimeout(context.Background(), time.Millisecond*100)
 	defer done()
 
-	conf := input.NewGenerateConfig()
-	conf.Mapping = `root = "foobar"`
-	conf.Interval = "1ms"
-	conf.BatchSize = 2
-	conf.Count = 9
+	b := testGenReader(t, `
+mapping: 'root = "foobar"'
+interval: 1ms
+count: 9
+batch_size: 2
+`)
 
-	b, err := newGenerateReader(mock.NewManager(), conf)
-	require.NoError(t, err)
-
-	err = b.Connect(ctx)
+	err := b.Connect(ctx)
 	require.NoError(t, err)
 
 	for i := 0; i < 5; i++ {
@@ -183,14 +183,12 @@ func TestBloblangUnbounded(t *testing.T) {
 	ctx, done := context.WithTimeout(context.Background(), time.Millisecond*100)
 	defer done()
 
-	conf := input.NewGenerateConfig()
-	conf.Mapping = `root = "foobar"`
-	conf.Interval = "0s"
+	b := testGenReader(t, `
+mapping: 'root = "foobar"'
+interval: 0s
+`)
 
-	b, err := newGenerateReader(mock.NewManager(), conf)
-	require.NoError(t, err)
-
-	err = b.Connect(ctx)
+	err := b.Connect(ctx)
 	require.NoError(t, err)
 
 	for i := 0; i < 10; i++ {
@@ -207,14 +205,12 @@ func TestBloblangUnboundedEmpty(t *testing.T) {
 	ctx, done := context.WithTimeout(context.Background(), time.Millisecond*100)
 	defer done()
 
-	conf := input.NewGenerateConfig()
-	conf.Mapping = `root = "foobar"`
-	conf.Interval = ""
+	b := testGenReader(t, `
+mapping: 'root = "foobar"'
+interval: ""
+`)
 
-	b, err := newGenerateReader(mock.NewManager(), conf)
-	require.NoError(t, err)
-
-	err = b.Connect(ctx)
+	err := b.Connect(ctx)
 	require.NoError(t, err)
 
 	for i := 0; i < 10; i++ {

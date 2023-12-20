@@ -14,7 +14,6 @@ categories: ["Utility"]
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-
 Reads messages from a child input until a consumed message passes a [Bloblang query](/docs/guides/bloblang/about/), at which point the input closes. It is also possible to configure a timeout after which the input is closed if no new messages arrive in that period.
 
 ```yml
@@ -22,9 +21,9 @@ Reads messages from a child input until a consumed message passes a [Bloblang qu
 input:
   label: ""
   read_until:
-    input: null
-    check: ""
-    idle_timeout: ""
+    input: null # No default (required)
+    check: this.type == "foo" # No default (optional)
+    idle_timeout: 5s # No default (optional)
     restart_input: false
 ```
 
@@ -46,7 +45,6 @@ The child input to consume from.
 
 
 Type: `input`  
-Default: `null`  
 
 ### `check`
 
@@ -54,7 +52,6 @@ A [Bloblang query](/docs/guides/bloblang/about/) that should return a boolean va
 
 
 Type: `string`  
-Default: `""`  
 
 ```yml
 # Examples
@@ -70,7 +67,6 @@ The maximum amount of time without receiving new messages after which the input 
 
 
 Type: `string`  
-Default: `""`  
 
 ```yml
 # Examples

@@ -70,10 +70,8 @@ generate:
 	assert.Equal(t, 200, res.Code)
 	assert.Equal(t, `label: ""
 generate:
-    mapping: root.source = "foo"
+    mapping: 'root.source = "foo"'
     interval: 100ms
-    count: 0
-    batch_size: 1
 `, res.Body.String())
 
 	req = httptest.NewRequest("GET", "/inputs/foo/uptime", nil)

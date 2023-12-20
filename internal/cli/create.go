@@ -49,6 +49,8 @@ func addExpression(conf *config.Type, expression string) error {
 		}
 	} else if lInputs > 1 {
 		conf.Input.Type = "broker"
+
+		var inputsList []input.Config
 		for _, t := range inputTypes {
 			c := input.NewConfig()
 			if _, exists := bundle.AllInputs.DocsFor(t); exists {
@@ -56,7 +58,11 @@ func addExpression(conf *config.Type, expression string) error {
 			} else {
 				return fmt.Errorf("unrecognised input type '%v'", t)
 			}
-			conf.Input.Broker.Inputs = append(conf.Input.Broker.Inputs, c)
+			inputsList = append(inputsList, c)
+		}
+
+		conf.Input.Plugin = map[string]any{
+			"inputs": inputsList,
 		}
 	}
 

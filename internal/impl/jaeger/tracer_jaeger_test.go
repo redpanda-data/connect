@@ -13,7 +13,6 @@ import (
 	semconv "go.opentelemetry.io/otel/semconv/v1.7.0"
 
 	"github.com/benthosdev/benthos/v4/internal/cli"
-	"github.com/benthosdev/benthos/v4/internal/component/tracer"
 )
 
 func TestGetAgentOps(t *testing.T) {
@@ -93,10 +92,9 @@ func TestNewJaeger(t *testing.T) {
 	for _, test := range tests {
 		exporter.Reset()
 
-		cfg := tracer.NewConfig()
-		cfg.Jaeger.Tags = test.Tags
-
-		jaegerProvider, err := NewJaeger(cfg, nil)
+		jaegerProvider, err := NewJaeger(jaegerConfig{
+			Tags: test.Tags,
+		})
 		require.NoError(t, err, test.Name)
 
 		// Add a span and flush it

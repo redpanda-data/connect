@@ -11,47 +11,77 @@ import (
 	semconv "go.opentelemetry.io/otel/semconv/v1.7.0"
 	"go.opentelemetry.io/otel/trace"
 
-	"github.com/benthosdev/benthos/v4/internal/bundle"
-	"github.com/benthosdev/benthos/v4/internal/component/tracer"
-	"github.com/benthosdev/benthos/v4/internal/docs"
+	"github.com/benthosdev/benthos/v4/public/service"
 )
+
+const (
+	ctFieldProject       = "project"
+	ctFieldSamplingRatio = "sampling_ratio"
+	ctFieldTags          = "tags"
+	ctFieldFlushInterval = "flush_interval"
+)
+
+func cloudTraceSpec() *service.ConfigSpec {
+	return service.NewConfigSpec().
+		Version("4.2.0").
+		Summary(`Send tracing events to a [Google Cloud Trace](https://cloud.google.com/trace).`).
+		Fields(
+			service.NewStringField(ctFieldProject).
+				Description("The google project with Cloud Trace API enabled. If this is omitted then the Google Cloud SDK will attempt auto-detect it from the environment."),
+			service.NewFloatField(ctFieldSamplingRatio).Description("Sets the ratio of traces to sample. Tuning the sampling ratio is recommended for high-volume production workloads.").
+				Example(1.0).
+				Default(1.0),
+			service.NewStringMapField(ctFieldTags).
+				Description("A map of tags to add to tracing spans.").
+				Advanced().
+				Default(map[string]any{}),
+			service.NewDurationField(ctFieldFlushInterval).
+				Description("The period of time between each flush of tracing spans.").
+				Optional(),
+		)
+}
 
 var _ gcptrace.Exporter
 
 func init() {
-	_ = bundle.AllTracers.Add(NewCloudTrace, docs.ComponentSpec{
-		Name:    "gcp_cloudtrace",
-		Type:    docs.TypeTracer,
-		Status:  docs.StatusExperimental,
-		Version: "4.2.0",
-		Summary: `Send tracing events to a [Google Cloud Trace](https://cloud.google.com/trace).`,
-		Config: docs.FieldObject("", "").WithChildren(
-			docs.FieldString("project", "The google project with Cloud Trace API enabled. If this is omitted then the Google Cloud SDK will attempt auto-detect it from the environment.").HasDefault(""),
-			docs.FieldFloat("sampling_ratio", "Sets the ratio of traces to sample. Tuning the sampling ratio is recommended for high-volume production workloads.", 1.0).HasDefault(1.0),
-			docs.FieldString("tags", "A map of tags to add to tracing spans.").Map().Advanced().HasDefault(map[string]any{}),
-			docs.FieldString("flush_interval", "The period of time between each flush of tracing spans.").HasDefault(""),
-		),
+	err := service.RegisterOtelTracerProvider("gcp_cloudtrace", cloudTraceSpec(), func(conf *service.ParsedConfig) (trace.TracerProvider, error) {
+		return cloudTraceFromParsed(conf)
 	})
+	if err != nil {
+		panic(err)
+	}
 }
 
-//------------------------------------------------------------------------------
+func cloudTraceFromParsed(conf *service.ParsedConfig) (trace.TracerProvider, error) {
+	sampleRatio, err := conf.FieldFloat(ctFieldSamplingRatio)
+	if err != nil {
+		return nil, err
+	}
 
-// NewCloudTrace creates new Google Cloud Trace tracer.
-func NewCloudTrace(config tracer.Config, nm bundle.NewManagement) (trace.TracerProvider, error) {
-	sampler := tracesdk.ParentBased(tracesdk.TraceIDRatioBased(config.CloudTrace.SamplingRatio))
+	sampler := tracesdk.ParentBased(tracesdk.TraceIDRatioBased(sampleRatio))
 
-	exp, err := gcptrace.New(gcptrace.WithProjectID(config.CloudTrace.Project))
+	projID, err := conf.FieldString(ctFieldProject)
+	if err != nil {
+		return nil, err
+	}
+
+	exp, err := gcptrace.New(gcptrace.WithProjectID(projID))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create cloud trace exporter: %w", err)
 	}
 
+	tags, err := conf.FieldStringMap(ctFieldTags)
+	if err != nil {
+		return nil, err
+	}
+
 	var attrs []attribute.KeyValue
-	for k, v := range config.CloudTrace.Tags {
+	for k, v := range tags {
 		attrs = append(attrs, attribute.String(k, v))
 	}
 
 	var batchOpts []tracesdk.BatchSpanProcessorOption
-	if i := config.CloudTrace.FlushInterval; len(i) > 0 {
+	if i, _ := conf.FieldString(ctFieldFlushInterval); len(i) > 0 {
 		flushInterval, err := time.ParseDuration(i)
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse flush interval '%s': %v", i, err)

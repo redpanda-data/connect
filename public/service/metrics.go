@@ -307,6 +307,11 @@ func (m *airGapMetrics) GetGaugeVec(path string, labelNames ...string) metrics.S
 }
 
 func (m *airGapMetrics) HandlerFunc() http.HandlerFunc {
+	if hf, ok := m.airGapped.(interface {
+		HandlerFunc() http.HandlerFunc
+	}); ok {
+		return hf.HandlerFunc()
+	}
 	return nil
 }
 

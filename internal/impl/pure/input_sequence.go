@@ -4,38 +4,64 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strconv"
 	"sync"
 	"time"
 
 	"github.com/Jeffail/gabs/v2"
 	"github.com/OneOfOne/xxhash"
 
-	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component/input"
-	"github.com/benthosdev/benthos/v4/internal/component/input/processors"
-	"github.com/benthosdev/benthos/v4/internal/docs"
-	"github.com/benthosdev/benthos/v4/internal/log"
+	"github.com/benthosdev/benthos/v4/internal/component/interop"
 	"github.com/benthosdev/benthos/v4/internal/message"
 	"github.com/benthosdev/benthos/v4/internal/shutdown"
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
-func init() {
-	err := bundle.AllInputs.Add(processors.WrapConstructor(func(c input.Config, nm bundle.NewManagement) (input.Streamed, error) {
-		return newSequenceInput(c, nm, nm.Logger())
-	}), docs.ComponentSpec{
-		Name: "sequence",
-		Summary: `
-Reads messages from a sequence of child inputs, starting with the first and once
-that input gracefully terminates starts consuming from the next, and so on.`,
-		Description: `
-This input is useful for consuming from inputs that have an explicit end but
-must not be consumed in parallel.`,
-		Examples: []docs.AnnotatedExample{
-			{
-				Title:   "End of Stream Message",
-				Summary: "A common use case for sequence might be to generate a message at the end of our main input. With the following config once the records within `./dataset.csv` are exhausted our final payload `{\"status\":\"finished\"}` will be routed through the pipeline.",
-				Config: `
+const (
+	siFieldShardedJoinType          = "type"
+	siFieldShardedJoinIDPath        = "id_path"
+	siFieldShardedJoinIterations    = "iterations"
+	siFieldShardedJoinMergeStrategy = "merge_strategy"
+	siFieldShardedJoin              = "sharded_join"
+	siFieldInputs                   = "inputs"
+)
+
+func sequenceInputSpec() *service.ConfigSpec {
+	return service.NewConfigSpec().
+		Stable().
+		Categories("Utility").
+		Summary("Reads messages from a sequence of child inputs, starting with the first and once that input gracefully terminates starts consuming from the next, and so on.").
+		Description("This input is useful for consuming from inputs that have an explicit end but must not be consumed in parallel.").
+		Fields(
+			service.NewObjectField(siFieldShardedJoin,
+				// TODO: V5 Remove "full-outter" and "outter"
+				service.NewStringEnumField(siFieldShardedJoinType, "none", "full-outer", "outer", "full-outter", "outter").
+					Description("The type of join to perform. A `full-outer` ensures that all identifiers seen in any of the input sequences are sent, and is performed by consuming all input sequences before flushing the joined results. An `outer` join consumes all input sequences but only writes data joined from the last input in the sequence, similar to a left or right outer join. With an `outer` join if an identifier appears multiple times within the final sequence input it will be flushed each time it appears. `full-outter` and `outter` have been deprecated in favour of `full-outer` and `outer`.").
+					Default("none"),
+				service.NewStringField(siFieldShardedJoinIDPath).
+					Description("A [dot path](/docs/configuration/field_paths) that points to a common field within messages of each fragmented data set and can be used to join them. Messages that are not structured or are missing this field will be dropped. This field must be set in order to enable joins.").
+					Default(""),
+				service.NewIntField(siFieldShardedJoinIterations).
+					Description("The total number of iterations (shards), increasing this number will increase the overall time taken to process the data, but reduces the memory used in the process. The real memory usage required is significantly higher than the real size of the data and therefore the number of iterations should be at least an order of magnitude higher than the available memory divided by the overall size of the dataset.").
+					Default(1),
+				service.NewStringEnumField(siFieldShardedJoinMergeStrategy, "array", "replace", "keep").
+					Description("The chosen strategy to use when a data join would otherwise result in a collision of field values. The strategy `array` means non-array colliding values are placed into an array and colliding arrays are merged. The strategy `replace` replaces old values with new values. The strategy `keep` keeps the old value.").
+					Default("array"),
+			).
+				Description(`EXPERIMENTAL: Provides a way to perform outer joins of arbitrarily structured and unordered data resulting from the input sequence, even when the overall size of the data surpasses the memory available on the machine.
+
+When configured the sequence of inputs will be consumed one or more times according to the number of iterations, and when more than one iteration is specified each iteration will process an entirely different set of messages by sharding them by the ID field. Increasing the number of iterations reduces the memory consumption at the cost of needing to fully parse the data each time.
+
+Each message must be structured (JSON or otherwise processed into a structured form) and the fields will be aggregated with those of other messages sharing the ID. At the end of each iteration the joined messages are flushed downstream before the next iteration begins, hence keeping memory usage limited.`).
+				Version("3.40.0").
+				Advanced(),
+			service.NewInputListField(siFieldInputs).
+				Description("An array of inputs to read from sequentially."),
+		).
+		Example(
+			"End of Stream Message",
+			"A common use case for sequence might be to generate a message at the end of our main input. With the following config once the records within `./dataset.csv` are exhausted our final payload `{\"status\":\"finished\"}` will be routed through the pipeline.",
+			`
 input:
   sequence:
     inputs:
@@ -47,37 +73,37 @@ input:
           count: 1
           mapping: 'root = {"status":"finished"}'
 `,
-			},
-			{
-				Title: "Joining Data (Simple)",
-				Summary: `Benthos can be used to join unordered data from fragmented datasets in memory by specifying a common identifier field and a number of sharded iterations. For example, given two CSV files, the first called "main.csv", which contains rows of user data:
+		).
+		Example(
+			"Joining Data (Simple)",
+			`Benthos can be used to join unordered data from fragmented datasets in memory by specifying a common identifier field and a number of sharded iterations. For example, given two CSV files, the first called "main.csv", which contains rows of user data:
 
-` + "```csv" + `
+`+"```csv"+`
 uuid,name,age
 AAA,Melanie,34
 BBB,Emma,28
 CCC,Geri,45
-` + "```" + `
+`+"```"+`
 
 And the second called "hobbies.csv" that, for each user, contains zero or more rows of hobbies:
 
-` + "```csv" + `
+`+"```csv"+`
 uuid,hobby
 CCC,pokemon go
 AAA,rowing
 AAA,golf
-` + "```" + `
+`+"```"+`
 
 We can parse and join this data into a single dataset:
 
-` + "```json" + `
+`+"```json"+`
 {"uuid":"AAA","name":"Melanie","age":34,"hobbies":["rowing","golf"]}
 {"uuid":"BBB","name":"Emma","age":28}
 {"uuid":"CCC","name":"Geri","age":45,"hobbies":["pokemon go"]}
-` + "```" + `
+`+"```"+`
 
 With the following config:`,
-				Config: `
+			`
 input:
   sequence:
     sharded_join:
@@ -92,37 +118,37 @@ input:
           scanner:
             csv: {}
 `,
-			},
-			{
-				Title: "Joining Data (Advanced)",
-				Summary: `In this example we are able to join unordered and fragmented data from a combination of CSV files and newline-delimited JSON documents by specifying multiple sequence inputs with their own processors for extracting the structured data.
+		).
+		Example(
+			"Joining Data (Advanced)",
+			`In this example we are able to join unordered and fragmented data from a combination of CSV files and newline-delimited JSON documents by specifying multiple sequence inputs with their own processors for extracting the structured data.
 
 The first file "main.csv" contains straight forward CSV data:
 
-` + "```csv" + `
+`+"```csv"+`
 uuid,name,age
 AAA,Melanie,34
 BBB,Emma,28
 CCC,Geri,45
-` + "```" + `
+`+"```"+`
 
 And the second file called "hobbies.ndjson" contains JSON documents, one per line, that associate an identifier with an array of hobbies. However, these data objects are in a nested format:
 
-` + "```json" + `
+`+"```json"+`
 {"document":{"uuid":"CCC","hobbies":[{"type":"pokemon go"}]}}
 {"document":{"uuid":"AAA","hobbies":[{"type":"rowing"},{"type":"golf"}]}}
-` + "```" + `
+`+"```"+`
 
 And so we will want to map these into a flattened structure before the join, and then we will end up with a single dataset that looks like this:
 
-` + "```json" + `
+`+"```json"+`
 {"uuid":"AAA","name":"Melanie","age":34,"hobbies":["rowing","golf"]}
 {"uuid":"BBB","name":"Emma","age":28}
 {"uuid":"CCC","name":"Geri","age":45,"hobbies":["pokemon go"]}
-` + "```" + `
+`+"```"+`
 
 With the following config:`,
-				Config: `
+			`
 input:
   sequence:
     sharded_join:
@@ -144,32 +170,18 @@ input:
               root.uuid = this.document.uuid
               root.hobbies = this.document.hobbies.map_each(this.type)
 `,
-			},
-		},
-		Config: docs.FieldComponent().WithChildren(
-			docs.FieldObject(
-				"sharded_join",
-				`EXPERIMENTAL: Provides a way to perform outer joins of arbitrarily structured and unordered data resulting from the input sequence, even when the overall size of the data surpasses the memory available on the machine.
+		)
+}
 
-When configured the sequence of inputs will be consumed one or more times according to the number of iterations, and when more than one iteration is specified each iteration will process an entirely different set of messages by sharding them by the ID field. Increasing the number of iterations reduces the memory consumption at the cost of needing to fully parse the data each time.
-
-Each message must be structured (JSON or otherwise processed into a structured form) and the fields will be aggregated with those of other messages sharing the ID. At the end of each iteration the joined messages are flushed downstream before the next iteration begins, hence keeping memory usage limited.`,
-			).WithChildren(
-				// TODO: V5 Remove "full-outter" and "outter"
-				docs.FieldString("type", "The type of join to perform. A `full-outer` ensures that all identifiers seen in any of the input sequences are sent, and is performed by consuming all input sequences before flushing the joined results. An `outer` join consumes all input sequences but only writes data joined from the last input in the sequence, similar to a left or right outer join. With an `outer` join if an identifier appears multiple times within the final sequence input it will be flushed each time it appears. `full-outter` and `outter` have been deprecated in favour of `full-outer` and `outer`.").HasOptions("none", "full-outer", "outer", "full-outter", "outter"),
-				docs.FieldString("id_path", "A [dot path](/docs/configuration/field_paths) that points to a common field within messages of each fragmented data set and can be used to join them. Messages that are not structured or are missing this field will be dropped. This field must be set in order to enable joins."),
-				docs.FieldInt("iterations", "The total number of iterations (shards), increasing this number will increase the overall time taken to process the data, but reduces the memory used in the process. The real memory usage required is significantly higher than the real size of the data and therefore the number of iterations should be at least an order of magnitude higher than the available memory divided by the overall size of the dataset."),
-				docs.FieldString(
-					"merge_strategy",
-					"The chosen strategy to use when a data join would otherwise result in a collision of field values. The strategy `array` means non-array colliding values are placed into an array and colliding arrays are merged. The strategy `replace` replaces old values with new values. The strategy `keep` keeps the old value.",
-				).HasOptions("array", "replace", "keep"),
-			).AtVersion("3.40.0").Advanced(),
-			docs.FieldInput("inputs", "An array of inputs to read from sequentially.").Array(),
-		).ChildDefaultAndTypesFromStruct(input.NewSequenceConfig()),
-		Categories: []string{
-			"Utility",
-		},
-	})
+func init() {
+	err := service.RegisterBatchInput("sequence", sequenceInputSpec(),
+		func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchInput, error) {
+			i, err := newSequenceInputFromParsed(conf, mgr)
+			if err != nil {
+				return nil, err
+			}
+			return interop.NewUnwrapInternalInput(i), nil
+		})
 	if err != nil {
 		panic(err)
 	}
@@ -314,8 +326,6 @@ func (m *messageJoiner) Empty(fn func(message.Batch)) bool {
 //------------------------------------------------------------------------------
 
 type sequenceInput struct {
-	conf input.SequenceConfig
-
 	targetMut sync.Mutex
 	target    input.Streamed
 	remaining []sequenceTarget
@@ -323,8 +333,7 @@ type sequenceInput struct {
 
 	joiner *messageJoiner
 
-	mgr bundle.NewManagement
-	log log.Modular
+	log *service.Logger
 
 	transactions chan message.Transaction
 
@@ -333,16 +342,22 @@ type sequenceInput struct {
 
 type sequenceTarget struct {
 	index  int
-	config input.Config
+	config *service.ParsedConfig
 }
 
-func newSequenceInput(conf input.Config, mgr bundle.NewManagement, log log.Modular) (input.Streamed, error) {
-	if len(conf.Sequence.Inputs) == 0 {
+func newSequenceInputFromParsed(conf *service.ParsedConfig, res *service.Resources) (input.Streamed, error) {
+	pInputConfs, err := conf.FieldAnyList(siFieldInputs)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(pInputConfs) == 0 {
 		return nil, errors.New("requires at least one child input")
 	}
 
-	targets := make([]sequenceTarget, 0, len(conf.Sequence.Inputs))
-	for i, c := range conf.Sequence.Inputs {
+	targets := make([]sequenceTarget, 0, len(pInputConfs))
+	for i, c := range pInputConfs {
+		c := c
 		targets = append(targets, sequenceTarget{
 			index:  i,
 			config: c,
@@ -350,17 +365,13 @@ func newSequenceInput(conf input.Config, mgr bundle.NewManagement, log log.Modul
 	}
 
 	rdr := &sequenceInput{
-		conf:      conf.Sequence,
-		remaining: targets,
-
-		mgr:          mgr,
-		log:          log,
+		remaining:    targets,
+		log:          res.Logger(),
 		transactions: make(chan message.Transaction),
 		shutSig:      shutdown.NewSignaller(),
 	}
 
-	var err error
-	if rdr.joiner, err = validateShardedConfig(rdr.conf.ShardedJoin); err != nil {
+	if rdr.joiner, err = shardedConfigFromParsed(conf.Namespace(siFieldShardedJoin)); err != nil {
 		return nil, fmt.Errorf("invalid sharded join config: %w", err)
 	}
 
@@ -374,9 +385,14 @@ func newSequenceInput(conf input.Config, mgr bundle.NewManagement, log log.Modul
 	return rdr, nil
 }
 
-func validateShardedConfig(s input.SequenceShardedJoinConfig) (*messageJoiner, error) {
+func shardedConfigFromParsed(conf *service.ParsedConfig) (*messageJoiner, error) {
+	typeStr, err := conf.FieldString(siFieldShardedJoinType)
+	if err != nil {
+		return nil, err
+	}
+
 	var flushOnLast bool
-	switch s.Type {
+	switch typeStr {
 	case "none":
 		return nil, nil
 	case "full-outer", "full-outter":
@@ -384,21 +400,34 @@ func validateShardedConfig(s input.SequenceShardedJoinConfig) (*messageJoiner, e
 	case "outer", "outter":
 		flushOnLast = true
 	default:
-		return nil, fmt.Errorf("join type '%v' was not recognized", s.Type)
+		return nil, fmt.Errorf("join type '%v' was not recognized", typeStr)
 	}
-	if s.IDPath == "" {
+
+	idPath, _ := conf.FieldString(siFieldShardedJoinIDPath)
+	if idPath == "" {
 		return nil, errors.New("the id path must not be empty")
 	}
-	if s.Iterations <= 0 {
-		return nil, fmt.Errorf("invalid number of iterations: %v", s.Iterations)
+
+	iterations, err := conf.FieldInt(siFieldShardedJoinIterations)
+	if err != nil {
+		return nil, err
 	}
-	collisionFn, err := getMessageJoinerCollisionFn(s.MergeStrategy)
+	if iterations <= 0 {
+		return nil, fmt.Errorf("invalid number of iterations: %v", iterations)
+	}
+
+	mergeStrat, err := conf.FieldString(siFieldShardedJoinMergeStrategy)
+	if err != nil {
+		return nil, err
+	}
+
+	collisionFn, err := getMessageJoinerCollisionFn(mergeStrat)
 	if err != nil {
 		return nil, err
 	}
 	return &messageJoiner{
-		totalIterations: s.Iterations,
-		idPath:          s.IDPath,
+		totalIterations: iterations,
+		idPath:          idPath,
 		messages:        map[string]*joinedMessage{},
 		collisionFn:     collisionFn,
 		flushOnLast:     flushOnLast,
@@ -423,12 +452,12 @@ func (r *sequenceInput) createNextTarget() (input.Streamed, bool, error) {
 	r.target = nil
 	if len(r.remaining) > 0 {
 		next := r.remaining[0]
-		wMgr := r.mgr.IntoPath("sequence", "inputs", strconv.Itoa(next.index))
-		if target, err = wMgr.NewInput(next.config); err == nil {
+		if iInput, err := next.config.FieldInput(); err == nil {
+			target = interop.UnwrapOwnedInput(iInput)
 			r.spent = append(r.spent, next)
 			r.remaining = r.remaining[1:]
 		} else {
-			err = fmt.Errorf("failed to initialize input index %v: %w", r.remaining[0].index, err)
+			return nil, false, fmt.Errorf("failed to initialize input index %v: %w", r.remaining[0].index, err)
 		}
 	}
 	if target != nil {
@@ -528,13 +557,13 @@ runLoop:
 				})
 				shardJoinWG.Wait()
 				if lastIteration {
-					r.log.Infoln("Finished all sharded iterations and exhausted all sequence inputs, shutting down.")
+					r.log.Info("Finished all sharded iterations and exhausted all sequence inputs, shutting down.")
 					return
 				}
 				r.resetTargets()
 				continue runLoop
 			} else {
-				r.log.Infoln("Exhausted all sequence inputs, shutting down.")
+				r.log.Info("Exhausted all sequence inputs, shutting down.")
 				return
 			}
 		}

@@ -19,6 +19,18 @@ func NewInputField(name string) *ConfigField {
 	}
 }
 
+func inputConfFromAny(v any) (conf input.Config, err error) {
+	switch t := v.(type) {
+	case *yaml.Node:
+		err = t.Decode(&conf)
+	case input.Config:
+		conf = t
+	default:
+		err = fmt.Errorf("unexpected value, expected object, got %T", v)
+	}
+	return
+}
+
 // FieldInput accesses a field from a parsed config that was defined with
 // NewInputField and returns an OwnedInput, or an error if the configuration was
 // invalid.
@@ -28,13 +40,8 @@ func (p *ParsedConfig) FieldInput(path ...string) (*OwnedInput, error) {
 		return nil, fmt.Errorf("field '%v' was not found in the config", strings.Join(path, "."))
 	}
 
-	pNode, ok := field.(*yaml.Node)
-	if !ok {
-		return nil, fmt.Errorf("unexpected value, expected object, got %T", field)
-	}
-
-	var conf input.Config
-	if err := pNode.Decode(&conf); err != nil {
+	conf, err := inputConfFromAny(field)
+	if err != nil {
 		return nil, err
 	}
 
@@ -70,13 +77,8 @@ func (p *ParsedConfig) FieldInputList(path ...string) ([]*OwnedInput, error) {
 
 	var configs []input.Config
 	for i, iConf := range fieldArray {
-		node, ok := iConf.(*yaml.Node)
-		if !ok {
-			return nil, fmt.Errorf("value %v returned unexpected value, expected object, got %T", i, iConf)
-		}
-
-		var conf input.Config
-		if err := node.Decode(&conf); err != nil {
+		conf, err := inputConfFromAny(iConf)
+		if err != nil {
 			return nil, fmt.Errorf("value %v: %w", i, err)
 		}
 		configs = append(configs, conf)
@@ -90,6 +92,47 @@ func (p *ParsedConfig) FieldInputList(path ...string) ([]*OwnedInput, error) {
 			return nil, fmt.Errorf("input %v: %w", i, err)
 		}
 		ins[i] = &OwnedInput{iproc}
+	}
+
+	return ins, nil
+}
+
+// NewInputMapField defines a new input map field, it is then possible to
+// extract a map of OwnedInput from the resulting parsed config with the
+// method FieldInputMap.
+func NewInputMapField(name string) *ConfigField {
+	return &ConfigField{
+		field: docs.FieldInput(name, "").Map(),
+	}
+}
+
+// FieldInputMap accesses a field from a parsed config that was defined
+// with NewInputMapField and returns a map of OwnedInput, or an error if the
+// configuration was invalid.
+func (p *ParsedConfig) FieldInputMap(path ...string) (map[string]*OwnedInput, error) {
+	field, exists := p.field(path...)
+	if !exists {
+		return nil, fmt.Errorf("field '%v' was not found in the config", strings.Join(path, "."))
+	}
+
+	fieldMap, ok := field.(map[string]any)
+	if !ok {
+		return nil, fmt.Errorf("unexpected value, expected object, got %T", field)
+	}
+
+	tmpMgr := p.mgr.IntoPath(path...)
+	ins := make(map[string]*OwnedInput, len(fieldMap))
+	for k, v := range fieldMap {
+		conf, err := inputConfFromAny(v)
+		if err != nil {
+			return nil, fmt.Errorf("value %v: %w", k, err)
+		}
+
+		iproc, err := tmpMgr.IntoPath(k).NewInput(conf)
+		if err != nil {
+			return nil, fmt.Errorf("input %v: %w", k, err)
+		}
+		ins[k] = &OwnedInput{iproc}
 	}
 
 	return ins, nil

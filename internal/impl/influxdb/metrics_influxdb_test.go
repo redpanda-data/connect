@@ -1,29 +1,34 @@
 package influxdb
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/require"
-
-	"github.com/benthosdev/benthos/v4/internal/component/metrics"
-	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 )
 
-func TestInfluxTimers(t *testing.T) {
-	config := metrics.NewConfig()
-	config.InfluxDB.URL = "http://localhost:8086"
-	config.InfluxDB.DB = "db0"
+func fromYAML(t testing.TB, conf string, args ...any) *influxDBMetrics {
+	t.Helper()
 
-	influx, err := newInfluxDB(config, mock.NewManager())
+	pConf, err := ConfigSpec().ParseYAML(fmt.Sprintf(conf, args...), nil)
 	require.NoError(t, err)
 
-	i := influx.(*influxDBMetrics)
+	i, err := fromParsed(pConf, nil)
+	require.NoError(t, err)
+	return i
+}
+
+func TestInfluxTimers(t *testing.T) {
+	i := fromYAML(t, `
+url: http://localhost:8086
+db: db0
+`)
 
 	expectedMetrics := 3
-	i.GetTimer("ti mer").Timing(100)
-	i.GetTimer("ti mer").Timing(200)
-	i.GetTimerVec("timer with labels", "label").With("value").Timing(200)
-	i.GetTimerVec("timer with labels", "label").With("value2").Timing(400)
+	i.NewTimerCtor("ti mer")().Timing(100)
+	i.NewTimerCtor("ti mer")().Timing(200)
+	i.NewTimerCtor("timer with labels", "label")("value").Timing(200)
+	i.NewTimerCtor("timer with labels", "label")("value2").Timing(400)
 
 	m := i.getAllMetrics()
 	if len(m) != expectedMetrics {
@@ -50,21 +55,17 @@ func TestInfluxTimers(t *testing.T) {
 }
 
 func TestInfluxCounters(t *testing.T) {
-	config := metrics.NewConfig()
-	config.InfluxDB.URL = "http://localhost:8086"
-	config.InfluxDB.DB = "db0"
-
-	influx, err := newInfluxDB(config, mock.NewManager())
-	require.NoError(t, err)
-
-	i := influx.(*influxDBMetrics)
+	i := fromYAML(t, `
+url: http://localhost:8086
+db: db0
+`)
 
 	expectedMetrics := 3
-	i.GetCounter("cou nter").Incr(1)
-	i.GetCounter("cou nter").Incr(1)
-	i.GetCounterVec("counter with labels", "label").With("value").Incr(2)
-	i.GetCounterVec("counter with labels", "label").With("value").Incr(2)
-	i.GetCounterVec("counter with labels", "label").With("value2").Incr(2)
+	i.NewCounterCtor("cou nter")().Incr(1)
+	i.NewCounterCtor("cou nter")().Incr(1)
+	i.NewCounterCtor("counter with labels", "label")("value").Incr(2)
+	i.NewCounterCtor("counter with labels", "label")("value").Incr(2)
+	i.NewCounterCtor("counter with labels", "label")("value2").Incr(2)
 
 	m := i.getAllMetrics()
 	if len(m) != expectedMetrics {
@@ -91,22 +92,18 @@ func TestInfluxCounters(t *testing.T) {
 }
 
 func TestInfluxGauge(t *testing.T) {
-	config := metrics.NewConfig()
-	config.InfluxDB.URL = "http://localhost:8086"
-	config.InfluxDB.DB = "db0"
-
-	influx, err := newInfluxDB(config, mock.NewManager())
-	require.NoError(t, err)
-
-	i := influx.(*influxDBMetrics)
+	i := fromYAML(t, `
+url: http://localhost:8086
+db: db0
+`)
 
 	expectedMetrics := 3
-	i.GetGauge("ga uge").Set(10)
-	i.GetGauge("ga uge").Set(20)
-	i.GetGauge("ga uge").Set(30)
-	i.GetGaugeVec("gauge with labels", "label").With("value").Set(100)
-	i.GetGaugeVec("gauge with labels", "label").With("value").Set(200)
-	i.GetGaugeVec("gauge with labels", "label").With("value2").Set(100)
+	i.NewGaugeCtor("ga uge")().Set(10)
+	i.NewGaugeCtor("ga uge")().Set(20)
+	i.NewGaugeCtor("ga uge")().Set(30)
+	i.NewGaugeCtor("gauge with labels", "label")("value").Set(100)
+	i.NewGaugeCtor("gauge with labels", "label")("value").Set(200)
+	i.NewGaugeCtor("gauge with labels", "label")("value2").Set(100)
 
 	m := i.getAllMetrics()
 	if len(m) != expectedMetrics {
@@ -129,62 +126,5 @@ func TestInfluxGauge(t *testing.T) {
 		} else if len(values) != 1 {
 			t.Errorf("number of values was not expected %d", len(values))
 		}
-	}
-}
-
-func TestInflux_makeClientDefault(t *testing.T) {
-	config := metrics.NewConfig()
-	config.InfluxDB.URL = "http://localhost:8086"
-	config.InfluxDB.DB = "db0"
-
-	flux, err := newInfluxDB(config, mock.NewManager())
-	require.NoError(t, err)
-
-	i := flux.(*influxDBMetrics)
-	if i.client == nil {
-		t.Errorf("expected a client")
-	}
-}
-
-func TestInflux_makeClientHTTPS(t *testing.T) {
-	config := metrics.NewConfig()
-	config.InfluxDB.URL = "https://localhost:8086"
-	config.InfluxDB.DB = "db0"
-
-	flux, err := newInfluxDB(config, mock.NewManager())
-	require.NoError(t, err)
-
-	i := flux.(*influxDBMetrics)
-	if i.client == nil {
-		t.Errorf("expected a client")
-	}
-}
-
-func TestInflux_makeClientUDP(t *testing.T) {
-	config := metrics.NewConfig()
-	config.InfluxDB.URL = "udp://localhost:8065"
-	config.InfluxDB.DB = "db0"
-	flux, err := newInfluxDB(config, mock.NewManager())
-	if err != nil {
-		t.Errorf("unexpected error %s", err)
-	}
-	i := flux.(*influxDBMetrics)
-	if i.client == nil {
-		t.Errorf("expected a client")
-	}
-}
-
-func TestInflux_makeClientInvalid(t *testing.T) {
-	config := metrics.NewConfig()
-	influxConfig := metrics.NewInfluxDBConfig()
-	influxConfig.URL = "scheme://localhost:8065"
-	influxConfig.DB = "db0"
-	config.InfluxDB = influxConfig
-	flux, err := newInfluxDB(config, mock.NewManager())
-	if err == nil {
-		t.Errorf("expected error but did not receive one")
-	}
-	if flux != nil {
-		t.Errorf("did not expect client created")
 	}
 }

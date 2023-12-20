@@ -16,7 +16,6 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/component/input"
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
-	"github.com/benthosdev/benthos/v4/internal/component/plugin"
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/component/ratelimit"
 	"github.com/benthosdev/benthos/v4/internal/component/scanner"
@@ -127,7 +126,7 @@ func (m *Manager) StoreRateLimit(ctx context.Context, name string, conf ratelimi
 }
 
 // NewScanner attempts to create a new scanner component from a config.
-func (m *Manager) NewScanner(conf plugin.Config) (scanner.Creator, error) {
+func (m *Manager) NewScanner(conf scanner.Config) (scanner.Creator, error) {
 	return bundle.AllScanners.Init(conf, m)
 }
 

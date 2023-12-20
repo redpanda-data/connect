@@ -138,6 +138,22 @@ func NewFloatField(name string) *ConfigField {
 	}
 }
 
+// NewFloatListField describes a new config field consisting of a list of
+// floats.
+func NewFloatListField(name string) *ConfigField {
+	return &ConfigField{
+		field: docs.FieldFloat(name, "").Array(),
+	}
+}
+
+// NewFloatMapField describes a new config field consisting of an object of
+// arbitrary keys with float values.
+func NewFloatMapField(name string) *ConfigField {
+	return &ConfigField{
+		field: docs.FieldFloat(name, "").Map(),
+	}
+}
+
 // NewBoolField describes a new bool type config field.
 func NewBoolField(name string) *ConfigField {
 	return &ConfigField{
@@ -283,7 +299,6 @@ func (c *ConfigSpec) configFromNode(mgr bundle.NewManagement, node *yaml.Node) (
 	if err != nil {
 		return nil, err
 	}
-
 	return &ParsedConfig{mgr: mgr, generic: fields}, nil
 }
 
@@ -804,6 +819,56 @@ func (p *ParsedConfig) FieldFloat(path ...string) (float64, error) {
 		return 0, fmt.Errorf("expected field '%v' to be a float, got %T", p.fullDotPath(path...), v)
 	}
 	return f, nil
+}
+
+// FieldIntList accesses a field that is a list of integers from the parsed
+// config by its name and returns the value. Returns an error if the field is
+// not found, or is not a list of integers.
+func (p *ParsedConfig) FieldFloatList(path ...string) ([]float64, error) {
+	v, exists := p.field(path...)
+	if !exists {
+		return nil, fmt.Errorf("field '%v' was not found in the config", p.fullDotPath(path...))
+	}
+	iList, ok := v.([]any)
+	if !ok {
+		if sList, ok := v.([]float64); ok {
+			return sList, nil
+		}
+		return nil, fmt.Errorf("expected field '%v' to be an float list, got %T", p.fullDotPath(path...), v)
+	}
+	sList := make([]float64, len(iList))
+	for i, ev := range iList {
+		var err error
+		if sList[i], err = query.IGetNumber(ev); err != nil {
+			return nil, fmt.Errorf("expected field '%v' to be an float list, found an element of type %T", p.fullDotPath(path...), ev)
+		}
+	}
+	return sList, nil
+}
+
+// FieldFloatMap accesses a field that is an object of arbitrary keys and
+// float values from the parsed config by its name and returns the value.
+// Returns an error if the field is not found, or is not an object of floats.
+func (p *ParsedConfig) FieldFloatMap(path ...string) (map[string]float64, error) {
+	v, exists := p.field(path...)
+	if !exists {
+		return nil, fmt.Errorf("field '%v' was not found in the config", p.fullDotPath(path...))
+	}
+	iMap, ok := v.(map[string]any)
+	if !ok {
+		if sMap, ok := v.(map[string]float64); ok {
+			return sMap, nil
+		}
+		return nil, fmt.Errorf("expected field '%v' to be an float map, got %T", p.fullDotPath(path...), v)
+	}
+	sMap := make(map[string]float64, len(iMap))
+	for k, ev := range iMap {
+		var err error
+		if sMap[k], err = query.IGetNumber(ev); err != nil {
+			return nil, fmt.Errorf("expected field '%v' to be an float map, found an element of type %T", p.fullDotPath(path...), ev)
+		}
+	}
+	return sMap, nil
 }
 
 // FieldBool accesses a bool field from the parsed config by its name and

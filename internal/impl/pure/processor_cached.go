@@ -130,7 +130,9 @@ func newCachedProcessorFromParsedConf(manager *service.Resources, conf *service.
 		}
 	}
 
-	proc.processors, err = conf.FieldProcessorList("processors")
+	if proc.processors, err = conf.FieldProcessorList("processors"); err != nil {
+		return
+	}
 
 	if conf.Contains("skip_on") {
 		var skipOn *bloblang.Executor

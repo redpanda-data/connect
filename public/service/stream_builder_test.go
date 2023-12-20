@@ -179,7 +179,7 @@ generate:
 	require.NoError(t, err)
 
 	exp := []string{
-		` mapping: root = "foo"`,
+		` mapping: 'root = "foo"'`,
 		`level: warn`,
 	}
 
@@ -405,7 +405,7 @@ type: local`))
     label: ""
     generate:`,
 		`buffer:
-    memory: {}`,
+    memory: null`,
 		`pipeline:
     threads: 10
     processors:`,
@@ -519,7 +519,6 @@ drop: {}
 		`input:
     label: ""
     broker:
-        copies: 1
         inputs:`,
 		`            - label: foo
               generate:`,
@@ -745,10 +744,7 @@ output:
 					name:    "generate",
 					conf: `label: ""
 generate:
-    mapping: root = deleted()
-    interval: 1s
-    count: 0
-    batch_size: 1`,
+    mapping: 'root = deleted()'`,
 				},
 				{
 					typeStr: "buffer",
@@ -801,10 +797,7 @@ output:
 					name:    "generate",
 					conf: `label: ""
 generate:
-    mapping: root = deleted()
-    interval: 1s
-    count: 0
-    batch_size: 1
+    mapping: 'root = deleted()'
 processors:
     - label: ""
       mutation: 'root = "hm"'`,
@@ -866,16 +859,13 @@ input:
 dynamic:
     inputs:
         foo:
-            label: ""
             file:
-                paths: [aaa.txt]
-    prefix: ""`,
+                paths: [aaa.txt]`,
 				},
 				{
 					typeStr: "input",
 					name:    "file",
-					conf: `label: ""
-file:
+					conf: `file:
     paths: [aaa.txt]`,
 				},
 				{

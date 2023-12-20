@@ -175,7 +175,7 @@ func (s *StreamBuilder) AddProducerFunc() (MessageHandlerFunc, error) {
 
 	conf := input.NewConfig()
 	conf.Type = "inproc"
-	conf.Inproc = input.InprocConfig(s.producerID)
+	conf.Plugin = s.producerID
 	s.inputs = append(s.inputs, conf)
 
 	return func(ctx context.Context, m *Message) error {
@@ -223,7 +223,7 @@ func (s *StreamBuilder) AddBatchProducerFunc() (MessageBatchHandlerFunc, error) 
 
 	conf := input.NewConfig()
 	conf.Type = "inproc"
-	conf.Inproc = input.InprocConfig(s.producerID)
+	conf.Plugin = s.producerID
 	s.inputs = append(s.inputs, conf)
 
 	return func(ctx context.Context, b MessageBatch) error {
@@ -884,7 +884,13 @@ func (s *StreamBuilder) buildConfig() builderConfig {
 		conf.Input = s.inputs[0]
 	} else if len(s.inputs) > 1 {
 		conf.Input.Type = "broker"
-		conf.Input.Broker.Inputs = s.inputs
+		iSlice := make([]any, len(s.inputs))
+		for i, v := range s.inputs {
+			iSlice[i] = v
+		}
+		conf.Input.Plugin = map[string]any{
+			"inputs": iSlice,
+		}
 	}
 
 	conf.Buffer = s.buffer

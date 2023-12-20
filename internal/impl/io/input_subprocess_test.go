@@ -2,6 +2,7 @@ package io_test
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -31,6 +32,16 @@ func readMsg(t *testing.T, tranChan <-chan message.Transaction) message.Batch {
 	return nil
 }
 
+func testInput(t testing.TB, confPattern string, args ...any) input.Streamed {
+	iConf, err := input.FromYAML(fmt.Sprintf(confPattern, args...))
+	require.NoError(t, err)
+
+	i, err := mock.NewManager().NewInput(iConf)
+	require.NoError(t, err)
+
+	return i
+}
+
 func TestSubprocessBasic(t *testing.T) {
 	filePath := testProgram(t, `package main
 
@@ -45,13 +56,11 @@ func main() {
 }
 `)
 
-	conf := input.NewConfig()
-	conf.Type = "subprocess"
-	conf.Subprocess.Name = "go"
-	conf.Subprocess.Args = []string{"run", filePath}
-
-	i, err := mock.NewManager().NewInput(conf)
-	require.NoError(t, err)
+	i := testInput(t, `
+subprocess:
+  name: go
+  args: [ "run", "%v" ]
+`, filePath)
 
 	msg := readMsg(t, i.TransactionChan())
 	assert.Equal(t, 1, msg.Len())
@@ -90,14 +99,12 @@ func main() {
 }
 `)
 
-	conf := input.NewConfig()
-	conf.Type = "subprocess"
-	conf.Subprocess.Name = "go"
-	conf.Subprocess.RestartOnExit = true
-	conf.Subprocess.Args = []string{"run", filePath}
-
-	i, err := mock.NewManager().NewInput(conf)
-	require.NoError(t, err)
+	i := testInput(t, `
+subprocess:
+  name: go
+  args: [ "run", "%v" ]
+  restart_on_exit: true
+`, filePath)
 
 	msg := readMsg(t, i.TransactionChan())
 	assert.Equal(t, 1, msg.Len())
@@ -146,13 +153,11 @@ func main() {
 }
 `)
 
-	conf := input.NewConfig()
-	conf.Type = "subprocess"
-	conf.Subprocess.Name = "go"
-	conf.Subprocess.Args = []string{"run", filePath}
-
-	i, err := mock.NewManager().NewInput(conf)
-	require.NoError(t, err)
+	i := testInput(t, `
+subprocess:
+  name: go
+  args: [ "run", "%v" ]
+`, filePath)
 
 	msg := readMsg(t, i.TransactionChan())
 	assert.Equal(t, 1, msg.Len())

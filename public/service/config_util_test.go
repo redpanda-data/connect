@@ -6,27 +6,21 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/benthosdev/benthos/v4/internal/component/input"
+	"github.com/benthosdev/benthos/v4/internal/component/processor"
 )
 
 func TestConfigDeprecatedExraction(t *testing.T) {
-	inputConf := input.NewConfig()
-	inputConf.Type = "generate"
-	inputConf.Generate.Interval = "5m"
-	inputConf.Generate.Mapping = `root = "foobar"`
+	oldConf := processor.NewConfig()
+	oldConf.Type = "insert_part"
+	oldConf.InsertPart.Index = 3
 
 	spec := NewConfigSpec().
-		Field(NewStringField("interval")).
-		Field(NewStringField("mapping"))
+		Field(NewIntField("index"))
 
-	pConf, err := extractConfig(nil, spec, "generate", nil, inputConf)
+	pConf, err := extractConfig(nil, spec, "insert_part", nil, oldConf)
 	require.NoError(t, err)
 
-	v, err := pConf.FieldString("interval")
+	v, err := pConf.FieldInt("index")
 	require.NoError(t, err)
-	assert.Equal(t, "5m", v)
-
-	v, err = pConf.FieldString("mapping")
-	require.NoError(t, err)
-	assert.Equal(t, `root = "foobar"`, v)
+	assert.Equal(t, 3, v)
 }

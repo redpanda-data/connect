@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	"github.com/benthosdev/benthos/v4/internal/bundle"
-	"github.com/benthosdev/benthos/v4/internal/component/plugin"
+	"github.com/benthosdev/benthos/v4/internal/component/scanner"
 	"github.com/benthosdev/benthos/v4/internal/docs"
 )
 
@@ -19,7 +19,7 @@ func NewScannerField(name string) *ConfigField {
 }
 
 func ownedScannerCreatorFromConfAny(mgr bundle.NewManagement, field any) (*OwnedScannerCreator, error) {
-	pluginConf, err := plugin.FromAny(mgr.Environment(), docs.TypeScanner, field)
+	pluginConf, err := scanner.FromAny(mgr.Environment(), docs.TypeScanner, field)
 	if err != nil {
 		return nil, err
 	}

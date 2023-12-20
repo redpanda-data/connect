@@ -5,7 +5,6 @@ import (
 	"sort"
 
 	"github.com/benthosdev/benthos/v4/internal/component"
-	"github.com/benthosdev/benthos/v4/internal/component/plugin"
 	"github.com/benthosdev/benthos/v4/internal/component/scanner"
 	"github.com/benthosdev/benthos/v4/internal/docs"
 )
@@ -24,7 +23,7 @@ func (e *Environment) ScannerAdd(constructor ScannerConstructor, spec docs.Compo
 }
 
 // ScannerInit attempts to initialise a scanner creator from a config.
-func (e *Environment) ScannerInit(conf plugin.Config, nm NewManagement) (scanner.Creator, error) {
+func (e *Environment) ScannerInit(conf scanner.Config, nm NewManagement) (scanner.Creator, error) {
 	return e.scanners.Init(conf, nm)
 }
 
@@ -36,7 +35,7 @@ func (e *Environment) ScannerDocs() []docs.ComponentSpec {
 //------------------------------------------------------------------------------
 
 // ScannerConstructor constructs a scanner component.
-type ScannerConstructor func(plugin.Config, NewManagement) (scanner.Creator, error)
+type ScannerConstructor func(scanner.Config, NewManagement) (scanner.Creator, error)
 
 type scannerSpec struct {
 	constructor ScannerConstructor
@@ -68,7 +67,7 @@ func (s *ScannerSet) Add(constructor ScannerConstructor, spec docs.ComponentSpec
 }
 
 // Init attempts to initialise a scanner from a config.
-func (s *ScannerSet) Init(conf plugin.Config, nm NewManagement) (scanner.Creator, error) {
+func (s *ScannerSet) Init(conf scanner.Config, nm NewManagement) (scanner.Creator, error) {
 	spec, exists := s.specs[conf.Type]
 	if !exists {
 		return nil, component.ErrInvalidType("scanner", conf.Type)
