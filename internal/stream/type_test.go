@@ -63,7 +63,7 @@ generate:
 `)
 	require.NoError(t, err)
 	conf.Output.Type = "inproc"
-	conf.Output.Inproc = "foo"
+	conf.Output.Plugin = "foo"
 
 	newMgr, err := manager.New(manager.NewResourceConfig())
 	require.NoError(t, err)

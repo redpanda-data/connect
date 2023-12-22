@@ -9,126 +9,40 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/Jeffail/gabs/v2"
-
 	"github.com/benthosdev/benthos/v4/internal/batch"
 	"github.com/benthosdev/benthos/v4/internal/bloblang/mapping"
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component"
+	"github.com/benthosdev/benthos/v4/internal/component/interop"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
-	"github.com/benthosdev/benthos/v4/internal/component/output/processors"
-	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
 	"github.com/benthosdev/benthos/v4/internal/shutdown"
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
-var (
-	// ErrSwitchNoConditionMet is returned when a message does not match any
-	// output conditions.
-	ErrSwitchNoConditionMet = errors.New("no switch output conditions were met by message")
-	// ErrSwitchNoCasesMatched is returned when a message does not match any
-	// output cases.
-	ErrSwitchNoCasesMatched = errors.New("no switch cases were matched by message")
-	// ErrSwitchNoOutputs is returned when creating a switchOutput type with less than
-	// 2 outputs.
-	ErrSwitchNoOutputs = errors.New("attempting to create switch with fewer than 2 cases")
+const (
+	soFieldRetryUntilSuccess = "retry_until_success"
+	soFieldStrictMode        = "strict_mode"
+	soFieldCases             = "cases"
+	soFieldCasesCheck        = "check"
+	soFieldCasesContinue     = "continue"
+	soFieldCasesOutput       = "output"
 )
 
-func init() {
-	err := bundle.AllOutputs.Add(processors.WrapConstructor(func(c output.Config, nm bundle.NewManagement) (output.Streamed, error) {
-		return newSwitchOutput(c.Switch, nm)
-	}), docs.ComponentSpec{
-		Name: "switch",
-		Summary: `
-The switch output type allows you to route messages to different outputs based on their contents.`,
-		Description: `
-Messages that do not pass the check of a single output case are effectively dropped. In order to prevent this outcome set the field ` + "[`strict_mode`](#strict_mode) to `true`" + `, in which case messages that do not pass at least one case are considered failed and will be nacked and/or reprocessed depending on your input.`,
-		Config: docs.FieldComponent().WithChildren(
-			docs.FieldBool(
-				"retry_until_success", `
-If a selected output fails to send a message this field determines whether it is
-reattempted indefinitely. If set to false the error is instead propagated back
-to the input level.
+func switchOutputSpec() *service.ConfigSpec {
+	return service.NewConfigSpec().
+		Categories("Utility").
+		Stable().
+		Summary(`The switch output type allows you to route messages to different outputs based on their contents.`).
+		Description(`Messages that do not pass the check of a single output case are effectively dropped. In order to prevent this outcome set the field `+"[`strict_mode`](#strict_mode) to `true`"+`, in which case messages that do not pass at least one case are considered failed and will be nacked and/or reprocessed depending on your input.`).
+		Example(
+			"Basic Multiplexing",
+			`
+The most common use for a switch output is to multiplex messages across a range of output destinations. The following config checks the contents of the field `+"`type` of messages and sends `foo` type messages to an `amqp_1` output, `bar` type messages to a `gcp_pubsub` output, and everything else to a `redis_streams` output"+`.
 
-If a message can be routed to >1 outputs it is usually best to set this to true
-in order to avoid duplicate messages being routed to an output.`,
-			).HasDefault(false),
-			docs.FieldBool(
-				"strict_mode", `
-This field determines whether an error should be reported if no condition is met.
-If set to true, an error is propagated back to the input level. The default
-behavior is false, which will drop the message.`,
-			).Advanced().HasDefault(false),
-			docs.FieldObject(
-				"cases",
-				"A list of switch cases, outlining outputs that can be routed to.",
-				[]any{
-					map[string]any{
-						"check": `this.urls.contains("http://benthos.dev")`,
-						"output": map[string]any{
-							"cache": map[string]any{
-								"target": "foo",
-								"key":    "${!json(\"id\")}",
-							},
-						},
-						"continue": true,
-					},
-					map[string]any{
-						"output": map[string]any{
-							"s3": map[string]any{
-								"bucket": "bar",
-								"path":   "${!json(\"id\")}",
-							},
-						},
-					},
-				},
-			).Array().WithChildren(
-				docs.FieldBloblang(
-					"check",
-					"A [Bloblang query](/docs/guides/bloblang/about/) that should return a boolean value indicating whether a message should be routed to the case output. If left empty the case always passes.",
-					`this.type == "foo"`,
-					`this.contents.urls.contains("https://benthos.dev/")`,
-				).HasDefault(""),
-				docs.FieldOutput(
-					"output", "An [output](/docs/components/outputs/about/) for messages that pass the check to be routed to.",
-				).HasDefault(map[string]any{}),
-				docs.FieldBool(
-					"continue",
-					"Indicates whether, if this case passes for a message, the next case should also be tested.",
-				).HasDefault(false).Advanced(),
-			).HasDefault([]any{}),
-		).LinterFunc(func(ctx docs.LintContext, line, col int, value any) []docs.Lint {
-			if _, ok := value.(map[string]any); !ok {
-				return nil
-			}
-			gObj := gabs.Wrap(value)
-			retry, exists := gObj.S("retry_until_success").Data().(bool)
-			if !exists || !retry {
-				return nil
-			}
-			for _, cObj := range gObj.S("cases").Children() {
-				typeStr, _ := cObj.S("output", "type").Data().(string)
-				isReject := cObj.Exists("output", "reject")
-				if typeStr == "reject" || isReject {
-					return []docs.Lint{
-						docs.NewLintError(line, docs.LintCustom, errors.New("a `switch` output with a `reject` case output must have the field `switch.retry_until_success` set to `false`, otherwise the `reject` child output will result in infinite retries")),
-					}
-				}
-			}
-			return nil
-		}),
-		Categories: []string{
-			"Utility",
-		},
-		Examples: []docs.AnnotatedExample{
-			{
-				Title: "Basic Multiplexing",
-				Summary: `
-The most common use for a switch output is to multiplex messages across a range of output destinations. The following config checks the contents of the field ` + "`type` of messages and sends `foo` type messages to an `amqp_1` output, `bar` type messages to a `gcp_pubsub` output, and everything else to a `redis_streams` output" + `.
-
-Outputs can have their own processors associated with them, and in this example the ` + "`redis_streams`" + ` output has a processor that enforces the presence of a type field before sending it.`,
-				Config: `
+Outputs can have their own processors associated with them, and in this example the `+"`redis_streams`"+` output has a processor that enforces the presence of a type field before sending it.`,
+			`
 output:
   switch:
     cases:
@@ -153,14 +67,14 @@ output:
                 root = this
                 root.type = this.type | "unknown"
 `,
-			},
-			{
-				Title: "Control Flow",
-				Summary: `
-The ` + "`continue`" + ` field allows messages that have passed a case to be tested against the next one also. This can be useful when combining non-mutually-exclusive case checks.
+		).
+		Example(
+			"Control Flow",
+			`
+The `+"`continue`"+` field allows messages that have passed a case to be tested against the next one also. This can be useful when combining non-mutually-exclusive case checks.
 
 In the following example a message that passes both the check of the first case as well as the second will be routed to both.`,
-				Config: `
+			`
 output:
   switch:
     cases:
@@ -177,9 +91,87 @@ output:
             project: people
             topic: that_i_dont_want_to_hang_with
 `,
-			},
-		},
-	})
+		).
+		LintRule(`if this.exists("retry_until_success") && this.retry_until_success {
+  if this.cases.or([]).any(oconf -> oconf.output.type.or("") == "reject" || oconf.output.reject.type() == "string" ) {
+    "a 'switch' output with a 'reject' case output must have the field 'switch.retry_until_success' set to 'false', otherwise the 'reject' child output will result in infinite retries"
+  }
+}`).
+		Fields(
+			service.NewBoolField(soFieldRetryUntilSuccess).
+				Description(`
+If a selected output fails to send a message this field determines whether it is reattempted indefinitely. If set to false the error is instead propagated back to the input level.
+
+If a message can be routed to >1 outputs it is usually best to set this to true in order to avoid duplicate messages being routed to an output.`).
+				Default(false),
+			service.NewBoolField(soFieldStrictMode).
+				Description(`This field determines whether an error should be reported if no condition is met. If set to true, an error is propagated back to the input level. The default behavior is false, which will drop the message.`).
+				Advanced().
+				Default(false),
+			service.NewObjectListField(soFieldCases,
+				service.NewBloblangField(soFieldCasesCheck).
+					Description("A [Bloblang query](/docs/guides/bloblang/about/) that should return a boolean value indicating whether a message should be routed to the case output. If left empty the case always passes.").
+					Examples(
+						`this.type == "foo"`,
+						`this.contents.urls.contains("https://benthos.dev/")`,
+					).
+					Default(""),
+				service.NewOutputField(soFieldCasesOutput).
+					Description("An [output](/docs/components/outputs/about/) for messages that pass the check to be routed to."),
+				service.NewBoolField(soFieldCasesContinue).
+					Description("Indicates whether, if this case passes for a message, the next case should also be tested.").
+					Default(false).
+					Advanced(),
+			).
+				Description("A list of switch cases, outlining outputs that can be routed to.").
+				Example([]any{
+					map[string]any{
+						"check": `this.urls.contains("http://benthos.dev")`,
+						"output": map[string]any{
+							"cache": map[string]any{
+								"target": "foo",
+								"key":    "${!json(\"id\")}",
+							},
+						},
+						"continue": true,
+					},
+					map[string]any{
+						"output": map[string]any{
+							"s3": map[string]any{
+								"bucket": "bar",
+								"path":   "${!json(\"id\")}",
+							},
+						},
+					},
+				}),
+		)
+}
+
+var (
+	// ErrSwitchNoConditionMet is returned when a message does not match any
+	// output conditions.
+	ErrSwitchNoConditionMet = errors.New("no switch output conditions were met by message")
+	// ErrSwitchNoCasesMatched is returned when a message does not match any
+	// output cases.
+	ErrSwitchNoCasesMatched = errors.New("no switch cases were matched by message")
+	// ErrSwitchNoOutputs is returned when creating a switchOutput type with less than
+	// 2 outputs.
+	ErrSwitchNoOutputs = errors.New("attempting to create switch with fewer than 2 cases")
+)
+
+func init() {
+	err := service.RegisterBatchOutput(
+		"switch", switchOutputSpec(),
+		func(conf *service.ParsedConfig, mgr *service.Resources) (out service.BatchOutput, batchPolicy service.BatchPolicy, maxInFlight int, err error) {
+			maxInFlight = 1
+
+			var s output.Streamed
+			if s, err = switchOutputFromParsed(conf, interop.UnwrapManagement(mgr)); err != nil {
+				return
+			}
+			out = interop.NewUnwrapInternalOutput(s)
+			return
+		})
 	if err != nil {
 		panic(err)
 	}
@@ -200,15 +192,30 @@ type switchOutput struct {
 	shutSig *shutdown.Signaller
 }
 
-func newSwitchOutput(conf output.SwitchConfig, mgr bundle.NewManagement) (output.Streamed, error) {
+func switchOutputFromParsed(conf *service.ParsedConfig, mgr bundle.NewManagement) (*switchOutput, error) {
+	strictMode, err := conf.FieldBool(soFieldStrictMode)
+	if err != nil {
+		return nil, err
+	}
+
+	retryUntilSuccess, err := conf.FieldBool(soFieldRetryUntilSuccess)
+	if err != nil {
+		return nil, err
+	}
+
+	cases, err := conf.FieldObjectList(soFieldCases)
+	if err != nil {
+		return nil, err
+	}
+
 	o := &switchOutput{
 		logger:       mgr.Logger(),
 		transactions: nil,
-		strictMode:   conf.StrictMode,
+		strictMode:   strictMode,
 		shutSig:      shutdown.NewSignaller(),
 	}
 
-	lCases := len(conf.Cases)
+	lCases := len(cases)
 	if lCases < 2 {
 		return nil, ErrSwitchNoOutputs
 	}
@@ -219,23 +226,28 @@ func newSwitchOutput(conf output.SwitchConfig, mgr bundle.NewManagement) (output
 		o.fallthroughs = make([]bool, lCases)
 	}
 
-	var err error
-	for i, cConf := range conf.Cases {
-		oMgr := mgr.IntoPath("switch", strconv.Itoa(i), "output")
-		if o.outputs[i], err = oMgr.NewOutput(cConf.Output); err != nil {
+	for i, cConf := range cases {
+		w, err := cConf.FieldOutput(soFieldCasesOutput)
+		if err != nil {
 			return nil, err
 		}
-		if conf.RetryUntilSuccess {
+		o.outputs[i] = interop.UnwrapOwnedOutput(w)
+
+		oMgr := mgr.IntoPath("switch", strconv.Itoa(i), "output")
+		if retryUntilSuccess {
 			if o.outputs[i], err = RetryOutputIndefinitely(oMgr, o.outputs[i]); err != nil {
-				return nil, fmt.Errorf("failed to create case '%v' output type '%v': %v", i, cConf.Output.Type, err)
+				return nil, fmt.Errorf("failed to create case '%v' output: %v", i, err)
 			}
 		}
-		if len(cConf.Check) > 0 {
-			if o.checks[i], err = mgr.BloblEnvironment().NewMapping(cConf.Check); err != nil {
+
+		if checkStr, _ := cConf.FieldString(soFieldCasesCheck); checkStr != "" {
+			if o.checks[i], err = mgr.BloblEnvironment().NewMapping(checkStr); err != nil {
 				return nil, fmt.Errorf("failed to parse case '%v' check mapping: %v", i, err)
 			}
 		}
-		o.continues[i] = cConf.Continue
+		if o.continues[i], err = cConf.FieldBool(soFieldCasesContinue); err != nil {
+			return nil, err
+		}
 	}
 
 	o.outputTSChans = make([]chan message.Transaction, len(o.outputs))

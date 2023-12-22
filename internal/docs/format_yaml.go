@@ -133,7 +133,7 @@ func GetPluginConfigYAML(name string, node *yaml.Node) (yaml.Node, error) {
 	node = unwrapDocumentNode(node)
 	for i := 0; i < len(node.Content)-1; i += 2 {
 		if node.Content[i].Value == name {
-			if node.Content[i+1].Kind == 0 {
+			if yamlIsNil(node.Content[i+1]) {
 				break
 			}
 			return *node.Content[i+1], nil
@@ -173,6 +173,16 @@ func (f FieldSpec) shouldOmitYAML(parentFields FieldSpecs, fieldNode, parentNode
 		return
 	}
 	return f.omitWhenFn(field, parent)
+}
+
+func yamlIsNil(node *yaml.Node) bool {
+	if node.Kind == 0 {
+		return true
+	}
+	if node.Kind == yaml.ScalarNode && node.Tag == "!!null" && node.Value == "null" {
+		return true
+	}
+	return false
 }
 
 // SanitiseYAML takes a yaml.Node and a config spec and sorts the fields of the
@@ -224,7 +234,12 @@ func SanitiseYAML(cType Type, node *yaml.Node, conf SanitiseConfig) error {
 	nameFound := false
 	for i := 0; i < len(node.Content)-1; i += 2 {
 		if node.Content[i].Value == "plugin" && cSpec.Plugin {
-			node.Content[i].Value = name
+			if !yamlIsNil(node.Content[i+1]) {
+				// Plugin conf is here but the value is null because it's
+				// non-existant. This can happen in cases where a config is
+				// parsed out with `{type: foo}` form.
+				node.Content[i].Value = name
+			}
 		}
 
 		if node.Content[i].Value != name {
@@ -258,10 +273,16 @@ func SanitiseYAML(cType Type, node *yaml.Node, conf SanitiseConfig) error {
 
 	reservedFields := ReservedFieldsByType(cType)
 	for i := 0; i < len(node.Content)-1; i += 2 {
-		if node.Content[i].Value == name || node.Content[i].Value == "type" || node.Content[i].Value == "label" {
+		nodeKey := node.Content[i].Value
+		if _, exists := map[string]struct{}{
+			name:     {},
+			"type":   {},
+			"label":  {},
+			"plugin": {},
+		}[nodeKey]; exists {
 			continue
 		}
-		if spec, exists := reservedFields[node.Content[i].Value]; exists {
+		if spec, exists := reservedFields[nodeKey]; exists {
 			if _, omit := spec.shouldOmitYAML(nil, node.Content[i+1], node); omit {
 				continue
 			}

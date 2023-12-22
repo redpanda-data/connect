@@ -90,6 +90,16 @@ func (u *UnwrapInternalBatchProcessor) Close(ctx context.Context) error {
 
 //------------------------------------------------------------------------------
 
+// UnwrapOwnedOutput attempts to unwrap a public owned component into an internal
+// variant. This is useful in cases where we're migrating internal components to
+// use the public configuration APIs but aren't quite ready to move the full
+// implementation yet.
+func UnwrapOwnedOutput(o *service.OwnedOutput) output.Streamed {
+	return o.XUnwrapper().(interface {
+		Unwrap() output.Streamed
+	}).Unwrap()
+}
+
 // UnwrapInternalOutput is a no-op implementation of an internal component that
 // allows a public/service environment to unwrap it straight into the needed
 // format during construction. This is useful in cases where we're migrating

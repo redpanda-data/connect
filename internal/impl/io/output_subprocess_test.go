@@ -82,8 +82,10 @@ func main() {
 
 	conf := output.NewConfig()
 	conf.Type = "subprocess"
-	conf.Subprocess.Name = "go"
-	conf.Subprocess.Args = []string{"run", filePath}
+	conf.Plugin = map[string]any{
+		"name": "go",
+		"args": []any{"run", filePath},
+	}
 
 	o, err := mock.NewManager().NewOutput(conf)
 	require.NoError(t, err)
@@ -143,8 +145,10 @@ func main() {
 
 	conf := output.NewConfig()
 	conf.Type = "subprocess"
-	conf.Subprocess.Name = "go"
-	conf.Subprocess.Args = []string{"run", filePath}
+	conf.Plugin = map[string]any{
+		"name": "go",
+		"args": []any{"run", filePath},
+	}
 
 	o, err := mock.NewManager().NewOutput(conf)
 	require.NoError(t, err)

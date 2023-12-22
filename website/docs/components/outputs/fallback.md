@@ -14,7 +14,6 @@ categories: ["Utility"]
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-
 Attempts to send each message to a child output, starting from the first output on the list. If an output attempt fails then the next output in the list is attempted, and so on.
 
 Introduced in version 3.58.0.
@@ -23,7 +22,7 @@ Introduced in version 3.58.0.
 # Config fields, showing default values
 output:
   label: ""
-  fallback: [] # No default (required)
+  fallback: []
 ```
 
 This pattern is useful for triggering events in the case where certain output targets have broken. For example, if you had an output type `http_client` but wished to reroute messages whenever the endpoint becomes unreachable you could use this pattern:

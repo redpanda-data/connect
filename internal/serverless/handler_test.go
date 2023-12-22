@@ -182,19 +182,15 @@ func TestHandlerCombined(t *testing.T) {
 	defer ts.Close()
 
 	conf := config.New()
-	conf.Output.Type = "broker"
-
-	cConf := output.NewConfig()
-	cConf.Type = ServerlessResponseType
-
-	conf.Output.Broker.Outputs = append(conf.Output.Broker.Outputs, cConf)
-
-	cConf = parseYAMLOutputConf(t, `
-http_client:
-  url: %v
-`, ts.URL)
-
-	conf.Output.Broker.Outputs = append(conf.Output.Broker.Outputs, cConf)
+	var err error
+	conf.Output, err = output.FromYAML(fmt.Sprintf(`
+broker:
+  outputs:
+    - sync_response: {}
+    - http_client:
+        url: %v
+`, ts.URL))
+	require.NoError(t, err)
 
 	h, err := NewHandler(conf)
 	if err != nil {

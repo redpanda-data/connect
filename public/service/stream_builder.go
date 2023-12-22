@@ -323,7 +323,7 @@ func (s *StreamBuilder) AddConsumerFunc(fn MessageHandlerFunc) error {
 
 	conf := output.NewConfig()
 	conf.Type = "inproc"
-	conf.Inproc = s.consumerID
+	conf.Plugin = s.consumerID
 	s.outputs = append(s.outputs, conf)
 
 	return nil
@@ -359,7 +359,7 @@ func (s *StreamBuilder) AddBatchConsumerFunc(fn MessageBatchHandlerFunc) error {
 
 	conf := output.NewConfig()
 	conf.Type = "inproc"
-	conf.Inproc = s.consumerID
+	conf.Plugin = s.consumerID
 	s.outputs = append(s.outputs, conf)
 
 	return nil
@@ -902,7 +902,13 @@ func (s *StreamBuilder) buildConfig() builderConfig {
 		conf.Output = s.outputs[0]
 	} else if len(s.outputs) > 1 {
 		conf.Output.Type = "broker"
-		conf.Output.Broker.Outputs = s.outputs
+		iSlice := make([]any, len(s.outputs))
+		for i, v := range s.outputs {
+			iSlice[i] = v
+		}
+		conf.Output.Plugin = map[string]any{
+			"outputs": iSlice,
+		}
 	}
 
 	conf.ResourceConfig = s.resources

@@ -908,8 +908,10 @@ file:
 	streamConf.Input.Type = "inproc"
 	streamConf.Input.Plugin = "feed_in"
 	streamConf.Output.Type = "cache"
-	streamConf.Output.Cache.Key = `${! json("id") }`
-	streamConf.Output.Cache.Target = "foocache"
+	streamConf.Output.Plugin = map[string]any{
+		"key":    `${! json("id") }`,
+		"target": "foocache",
+	}
 
 	request = genYAMLRequest("POST", "/streams/foo?chilled=true", streamConf)
 	hResponse = httptest.NewRecorder()

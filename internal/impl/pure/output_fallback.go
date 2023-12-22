@@ -3,27 +3,26 @@ package pure
 import (
 	"context"
 	"errors"
-	"strconv"
 
-	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component"
+	"github.com/benthosdev/benthos/v4/internal/component/interop"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
-	"github.com/benthosdev/benthos/v4/internal/component/output/processors"
-	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/message"
 	"github.com/benthosdev/benthos/v4/internal/shutdown"
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
 func init() {
-	err := bundle.AllOutputs.Add(processors.WrapConstructor(newFallback), docs.ComponentSpec{
-		Name:    "fallback",
-		Version: "3.58.0",
-		Summary: `
-Attempts to send each message to a child output, starting from the first output on the list. If an output attempt fails then the next output in the list is attempted, and so on.`,
-		Description: `
-This pattern is useful for triggering events in the case where certain output targets have broken. For example, if you had an output type ` + "`http_client`" + ` but wished to reroute messages whenever the endpoint becomes unreachable you could use this pattern:
+	err := service.RegisterBatchOutput(
+		"fallback", service.NewConfigSpec().
+			Stable().
+			Categories("Utility").
+			Version("3.58.0").
+			Summary("Attempts to send each message to a child output, starting from the first output on the list. If an output attempt fails then the next output in the list is attempted, and so on.").
+			Description(`
+This pattern is useful for triggering events in the case where certain output targets have broken. For example, if you had an output type `+"`http_client`"+` but wished to reroute messages whenever the endpoint becomes unreachable you could use this pattern:
 
-` + "```yaml" + `
+`+"```yaml"+`
 output:
   fallback:
     - http_client:
@@ -38,17 +37,17 @@ output:
         - mapping: 'root = "failed to send this message to foo: " + content()'
     - file:
         path: /usr/local/benthos/everything_failed.jsonl
-` + "```" + `
+`+"```"+`
 
 ### Metadata
 
-When a given output fails the message routed to the following output will have a metadata value named ` + "`fallback_error`" + ` containing a string error message outlining the cause of the failure. The content of this string will depend on the particular output and can be used to enrich the message or provide information used to broker the data to an appropriate output using something like a ` + "`switch`" + ` output.
+When a given output fails the message routed to the following output will have a metadata value named `+"`fallback_error`"+` containing a string error message outlining the cause of the failure. The content of this string will depend on the particular output and can be used to enrich the message or provide information used to broker the data to an appropriate output using something like a `+"`switch`"+` output.
 
 ### Batching
 
 When an output within a fallback sequence uses batching, like so:
 
-` + "```yaml" + `
+`+"```yaml"+`
 output:
   fallback:
     - aws_dynamodb:
@@ -61,16 +60,21 @@ output:
           period: 1s
     - file:
         path: /usr/local/benthos/failed_stuff.jsonl
-` + "```" + `
+`+"```"+`
 
 Benthos makes a best attempt at inferring which specific messages of the batch failed, and only propagates those individual messages to the next fallback tier.
 
-However, depending on the output and the error returned it is sometimes not possible to determine the individual messages that failed, in which case the whole batch is passed to the next tier in order to preserve at-least-once delivery guarantees.`,
-		Categories: []string{
-			"Utility",
-		},
-		Config: docs.FieldOutput("", "").Array(),
-	})
+However, depending on the output and the error returned it is sometimes not possible to determine the individual messages that failed, in which case the whole batch is passed to the next tier in order to preserve at-least-once delivery guarantees.`).
+			Field(service.NewOutputListField("").Default([]any{})),
+		func(conf *service.ParsedConfig, mgr *service.Resources) (out service.BatchOutput, batchPolicy service.BatchPolicy, maxInFlight int, err error) {
+			var w *fallbackBroker
+			if w, err = newFallbackFromParsed(conf); err != nil {
+				return
+			}
+
+			out = interop.NewUnwrapInternalOutput(w)
+			return
+		})
 	if err != nil {
 		panic(err)
 	}
@@ -78,19 +82,18 @@ However, depending on the output and the error returned it is sometimes not poss
 
 //------------------------------------------------------------------------------
 
-func newFallback(conf output.Config, mgr bundle.NewManagement) (output.Streamed, error) {
-	outputConfs := conf.Fallback
-	if len(outputConfs) == 0 {
+func newFallbackFromParsed(conf *service.ParsedConfig) (*fallbackBroker, error) {
+	pOutputs, err := conf.FieldOutputList()
+	if err != nil {
+		return nil, err
+	}
+	if len(pOutputs) == 0 {
 		return nil, ErrBrokerNoOutputs
 	}
-	outputs := make([]output.Streamed, len(outputConfs))
 
-	var err error
-	for i, oConf := range outputConfs {
-		oMgr := mgr.IntoPath("fallback", strconv.Itoa(i))
-		if outputs[i], err = oMgr.NewOutput(oConf); err != nil {
-			return nil, err
-		}
+	outputs := make([]output.Streamed, len(pOutputs))
+	for i, po := range pOutputs {
+		outputs[i] = interop.UnwrapOwnedOutput(po)
 	}
 
 	var t *fallbackBroker

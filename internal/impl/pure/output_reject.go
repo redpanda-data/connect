@@ -7,38 +7,28 @@ import (
 
 	"github.com/benthosdev/benthos/v4/internal/bloblang/field"
 	"github.com/benthosdev/benthos/v4/internal/bundle"
+	"github.com/benthosdev/benthos/v4/internal/component/interop"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
-	"github.com/benthosdev/benthos/v4/internal/component/output/processors"
-	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
 func init() {
-	err := bundle.AllOutputs.Add(processors.WrapConstructor(func(c output.Config, nm bundle.NewManagement) (output.Streamed, error) {
-		f, err := newRejectWriter(nm, c.Reject)
-		if err != nil {
-			return nil, err
-		}
-		return output.NewAsyncWriter("reject", 1, f, nm)
-	}), docs.ComponentSpec{
-		Name:   "reject",
-		Status: docs.StatusStable,
-		Summary: `
-Rejects all messages, treating them as though the output destination failed to publish them.`,
-		Description: `
+	err := service.RegisterBatchOutput(
+		"reject", service.NewConfigSpec().
+			Stable().
+			Categories("Utility").
+			Summary(`Rejects all messages, treating them as though the output destination failed to publish them.`).
+			Description(`
 The routing of messages after this output depends on the type of input it came from. For inputs that support propagating nacks upstream such as AMQP or NATS the message will be nacked. However, for inputs that are sequential such as files or Kafka the messages will simply be reprocessed from scratch.
 
-If you're still scratching your head as to when this output could be useful check out [the examples below](#examples).`,
-		Categories: []string{
-			"Utility",
-		},
-		Examples: []docs.AnnotatedExample{
-			{
-				Title: "Rejecting Failed Messages",
-				Summary: `
+If you're still scratching your head as to when this output could be useful check out [the examples below](#examples).`).
+			Example(
+				"Rejecting Failed Messages",
+				`
 This input is particularly useful for routing messages that have failed during processing, where instead of routing them to some sort of dead letter queue we wish to push the error upstream. We can do this with a switch broker:`,
-				Config: `
+				`
 output:
   switch:
     retry_until_success: false
@@ -52,10 +42,28 @@ output:
       - output:
           reject: "processing failed due to: ${! error() }"
 `,
-			},
-		},
-		Config: docs.FieldString("", "").HasDefault(""),
-	})
+			).
+			Field(service.NewStringField("").Default("")),
+		func(conf *service.ParsedConfig, res *service.Resources) (out service.BatchOutput, batchPolicy service.BatchPolicy, maxInFlight int, err error) {
+			var rejMsg string
+			if rejMsg, err = conf.FieldString(); err != nil {
+				return
+			}
+
+			mgr := interop.UnwrapManagement(res)
+
+			var w *rejectWriter
+			if w, err = newRejectWriter(mgr, rejMsg); err != nil {
+				return
+			}
+
+			var s output.Streamed
+			if s, err = output.NewAsyncWriter("reject", 1, w, mgr); err != nil {
+				return
+			}
+			out = interop.NewUnwrapInternalOutput(s)
+			return
+		})
 	if err != nil {
 		panic(err)
 	}
