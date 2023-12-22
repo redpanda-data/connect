@@ -13,7 +13,6 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	yaml "gopkg.in/yaml.v3"
 
 	"github.com/benthosdev/benthos/v4/internal/component/output"
 	bmock "github.com/benthosdev/benthos/v4/internal/manager/mock"
@@ -22,11 +21,11 @@ import (
 	_ "github.com/benthosdev/benthos/v4/public/components/pure"
 )
 
-func parseYAMLOutputConf(t testing.TB, formatStr string, args ...any) (conf output.Config) {
+func parseYAMLOutputConf(t testing.TB, formatStr string, args ...any) output.Config {
 	t.Helper()
-	conf = output.NewConfig()
-	require.NoError(t, yaml.Unmarshal(fmt.Appendf(nil, formatStr, args...), &conf))
-	return
+	conf, err := output.FromYAML(fmt.Sprintf(formatStr, args...))
+	require.NoError(t, err)
+	return conf
 }
 
 func TestDropOnNothing(t *testing.T) {
@@ -37,16 +36,14 @@ func TestDropOnNothing(t *testing.T) {
 		ts.Close()
 	})
 
-	childConf := parseYAMLOutputConf(t, `
-http_client:
-  url: %v
-  drop_on: [ %v ]
+	dropConf := parseYAMLOutputConf(t, `
+drop_on:
+  error: false
+  output:
+    http_client:
+      url: %v
+      drop_on: [ %v ]
 `, ts.URL, http.StatusForbidden)
-
-	dropConf := output.NewConfig()
-	dropConf.Type = "drop_on"
-	dropConf.DropOn.Error = false
-	dropConf.DropOn.Output = &childConf
 
 	d, err := bmock.NewManager().NewOutput(dropConf)
 	require.NoError(t, err)
@@ -86,16 +83,14 @@ func TestDropOnError(t *testing.T) {
 		ts.Close()
 	})
 
-	childConf := parseYAMLOutputConf(t, `
-http_client:
-  url: %v
-  drop_on: [ %v ]
+	dropConf := parseYAMLOutputConf(t, `
+drop_on:
+  error: true
+  output:
+    http_client:
+      url: %v
+      drop_on: [ %v ]
 `, ts.URL, http.StatusForbidden)
-
-	dropConf := output.NewConfig()
-	dropConf.Type = "drop_on"
-	dropConf.DropOn.Error = true
-	dropConf.DropOn.Output = &childConf
 
 	d, err := bmock.NewManager().NewOutput(dropConf)
 	require.NoError(t, err)

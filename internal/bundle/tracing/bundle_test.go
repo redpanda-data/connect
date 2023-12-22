@@ -406,19 +406,17 @@ func TestBundleOutputWithProcessorsTracing(t *testing.T) {
 func TestBundleOutputWithBatchProcessorsTracing(t *testing.T) {
 	tenv, summary := tracing.TracedBundle(bundle.GlobalEnvironment)
 
-	dropConfig := output.NewConfig()
-	dropConfig.Label = "foo"
-	dropConfig.Type = "drop"
-
-	outConfig := output.NewConfig()
-	outConfig.Type = "broker"
-	outConfig.Broker.Outputs = append(outConfig.Broker.Outputs, dropConfig)
-	outConfig.Broker.Batching.Count = 2
-
-	blobConf := processor.NewConfig()
-	blobConf.Type = "bloblang"
-	blobConf.Bloblang = "root = content().uppercase()"
-	outConfig.Broker.Batching.Processors = append(outConfig.Broker.Batching.Processors, blobConf)
+	outConfig, err := output.FromYAML(`
+broker:
+  outputs:
+    - label: foo
+      drop: {}
+  batching:
+    count: 2
+    processors:
+      - mapping: 'root = content().uppercase()'
+`)
+	require.NoError(t, err)
 
 	mgr, err := manager.New(
 		manager.NewResourceConfig(),

@@ -2,47 +2,34 @@ package pure
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"time"
 
-	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component"
+	"github.com/benthosdev/benthos/v4/internal/component/interop"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
-	"github.com/benthosdev/benthos/v4/internal/component/output/processors"
-	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
 	"github.com/benthosdev/benthos/v4/internal/shutdown"
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
-func init() {
-	err := bundle.AllOutputs.Add(processors.WrapConstructor(func(c output.Config, nm bundle.NewManagement) (output.Streamed, error) {
-		if c.DropOn.Output == nil {
-			return nil, errors.New("cannot create a drop_on output without a child")
-		}
-		wrapped, err := nm.NewOutput(*c.DropOn.Output)
-		if err != nil {
-			return nil, err
-		}
-		return newDropOnWriter(c.DropOn.DropOnConditions, wrapped, nm.Logger())
-	}), docs.ComponentSpec{
-		Name:        "drop_on",
-		Summary:     `Attempts to write messages to a child output and if the write fails for one of a list of configurable reasons the message is dropped instead of being reattempted.`,
-		Description: `Regular Benthos outputs will apply back pressure when downstream services aren't accessible, and Benthos retries (or nacks) all messages that fail to be delivered. However, in some circumstances, or for certain output types, we instead might want to relax these mechanisms, which is when this output becomes useful.`,
-		Categories: []string{
-			"Utility",
-		},
-		Config: docs.FieldComponent().WithChildren(
-			docs.FieldBool("error", "Whether messages should be dropped when the child output returns an error. For example, this could be when an http_client output gets a 4XX response code."),
-			docs.FieldString("back_pressure", "An optional duration string that determines the maximum length of time to wait for a given message to be accepted by the child output before the message should be dropped instead. The most common reason for an output to block is when waiting for a lost connection to be re-established. Once a message has been dropped due to back pressure all subsequent messages are dropped immediately until the output is ready to process them again. Note that if `error` is set to `false` and this field is specified then messages dropped due to back pressure will return an error response.", "30s", "1m"),
-			docs.FieldOutput("output", "A child output.").HasDefault(nil),
-		).ChildDefaultAndTypesFromStruct(output.NewDropOnConfig()),
-		Examples: []docs.AnnotatedExample{
-			{
-				Title:   "Dropping failed HTTP requests",
-				Summary: "In this example we have a fan_out broker, where we guarantee delivery to our Kafka output, but drop messages if they fail our secondary HTTP client output.",
-				Config: `
+const (
+	dooFieldError        = "error"
+	dooFieldBackPressure = "back_pressure"
+	dooFieldOutput       = "output"
+)
+
+func dropOnOutputSpec() *service.ConfigSpec {
+	return service.NewConfigSpec().
+		Stable().
+		Categories("Utility").
+		Summary(`Attempts to write messages to a child output and if the write fails for one of a list of configurable reasons the message is dropped instead of being reattempted.`).
+		Description(`Regular Benthos outputs will apply back pressure when downstream services aren't accessible, and Benthos retries (or nacks) all messages that fail to be delivered. However, in some circumstances, or for certain output types, we instead might want to relax these mechanisms, which is when this output becomes useful.`).
+		Example(
+			"Dropping failed HTTP requests",
+			"In this example we have a fan_out broker, where we guarantee delivery to our Kafka output, but drop messages if they fail our secondary HTTP client output.",
+			`
 output:
   broker:
     pattern: fan_out
@@ -57,11 +44,11 @@ output:
               url: http://example.com/foo/messages
               verb: POST
 `,
-			},
-			{
-				Title:   "Dropping from outputs that cannot connect",
-				Summary: "Most outputs that attempt to establish and long-lived connection will apply back-pressure when the connection is lost. The following example has a websocket output where if it takes longer than 10 seconds to establish a connection, or recover a lost one, pending messages are dropped.",
-				Config: `
+		).
+		Example(
+			"Dropping from outputs that cannot connect",
+			"Most outputs that attempt to establish and long-lived connection will apply back-pressure when the connection is lost. The following example has a websocket output where if it takes longer than 10 seconds to establish a connection, or recover a lost one, pending messages are dropped.",
+			`
 output:
   drop_on:
     back_pressure: 10s
@@ -69,9 +56,32 @@ output:
       websocket:
         url: ws://example.com/foo/messages
 `,
-			},
-		},
-	})
+		).
+		Fields(
+			service.NewBoolField(dooFieldError).
+				Description("Whether messages should be dropped when the child output returns an error. For example, this could be when an http_client output gets a 4XX response code.").
+				Default(false),
+			service.NewDurationField(dooFieldBackPressure).
+				Description("An optional duration string that determines the maximum length of time to wait for a given message to be accepted by the child output before the message should be dropped instead. The most common reason for an output to block is when waiting for a lost connection to be re-established. Once a message has been dropped due to back pressure all subsequent messages are dropped immediately until the output is ready to process them again. Note that if `error` is set to `false` and this field is specified then messages dropped due to back pressure will return an error response.").
+				Examples("30s", "1m").
+				Optional(),
+			service.NewOutputField(dooFieldOutput).
+				Description("A child output to wrap with this drop mechanism."),
+		)
+}
+
+func init() {
+	err := service.RegisterBatchOutput(
+		"drop_on", dropOnOutputSpec(),
+		func(conf *service.ParsedConfig, mgr *service.Resources) (out service.BatchOutput, batchPolicy service.BatchPolicy, maxInFlight int, err error) {
+			maxInFlight = 1
+			var s output.Streamed
+			if s, err = newDropOnWriter(conf, interop.UnwrapManagement(mgr).Logger()); err != nil {
+				return
+			}
+			out = interop.NewUnwrapInternalOutput(s)
+			return
+		})
 	if err != nil {
 		panic(err)
 	}
@@ -92,21 +102,31 @@ type dropOnWriter struct {
 	shutSig *shutdown.Signaller
 }
 
-func newDropOnWriter(conf output.DropOnConditions, wrapped output.Streamed, log log.Modular) (*dropOnWriter, error) {
+func newDropOnWriter(conf *service.ParsedConfig, log log.Modular) (*dropOnWriter, error) {
+	onError, err := conf.FieldBool(dooFieldError)
+	if err != nil {
+		return nil, err
+	}
+
 	var backPressure time.Duration
-	if len(conf.BackPressure) > 0 {
+	if bpStr, _ := conf.FieldString(dooFieldBackPressure); bpStr != "" {
 		var err error
-		if backPressure, err = time.ParseDuration(conf.BackPressure); err != nil {
+		if backPressure, err = time.ParseDuration(bpStr); err != nil {
 			return nil, fmt.Errorf("failed to parse back_pressure duration: %w", err)
 		}
 	}
 
+	pOut, err := conf.FieldOutput(dooFieldOutput)
+	if err != nil {
+		return nil, err
+	}
+
 	return &dropOnWriter{
 		log:             log,
-		wrapped:         wrapped,
+		wrapped:         interop.UnwrapOwnedOutput(pOut),
 		transactionsOut: make(chan message.Transaction),
 
-		onError:        conf.Error,
+		onError:        onError,
 		onBackpressure: backPressure,
 
 		shutSig: shutdown.NewSignaller(),

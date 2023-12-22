@@ -85,6 +85,8 @@ func addExpression(conf *config.Type, expression string) error {
 		}
 	} else if lOutputs > 1 {
 		conf.Output.Type = "broker"
+
+		var outputsList []output.Config
 		for _, t := range outputTypes {
 			c := output.NewConfig()
 			if _, exists := bundle.AllOutputs.DocsFor(t); exists {
@@ -92,7 +94,11 @@ func addExpression(conf *config.Type, expression string) error {
 			} else {
 				return fmt.Errorf("unrecognised output type '%v'", t)
 			}
-			conf.Output.Broker.Outputs = append(conf.Output.Broker.Outputs, c)
+			outputsList = append(outputsList, c)
+		}
+
+		conf.Output.Plugin = map[string]any{
+			"outputs": outputsList,
 		}
 	}
 	return nil

@@ -405,7 +405,7 @@ type: local`))
     label: ""
     generate:`,
 		`buffer:
-    memory: null`,
+    memory: {}`,
 		`pipeline:
     threads: 10
     processors:`,
@@ -527,8 +527,6 @@ drop: {}
 		`output:
     label: ""
     broker:
-        copies: 1
-        pattern: fan_out
         outputs:`,
 		`            - label: baz
               drop:`,
@@ -736,7 +734,7 @@ pipeline:
       label: fooproc
 
 output:
-  reject: "lol nah"
+  reject: lol nah
 `,
 			output: []walkedComponent{
 				{
@@ -787,7 +785,7 @@ input:
     - mutation: 'root = "hm"'
 
 output:
-  reject: "lol nah"
+  reject: lol nah
   processors:
     - mutation: 'root = "eh"'
 `,

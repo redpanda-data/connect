@@ -37,18 +37,20 @@ func Run() {
 	conf.Metrics.Type = "none"
 	conf.Logger.Format = "json"
 
-	conf.Output.Type = "switch"
-	conf.Output.Switch.RetryUntilSuccess = false
-
-	errorCase := output.NewSwitchConfigCase()
-	errorCase.Check = "errored()"
-	errorCase.Output.Type = "reject"
-	errorCase.Output.Reject = "processing failed due to: ${! error() }"
-
-	responseCase := output.NewSwitchConfigCase()
-	responseCase.Output.Type = "sync_response"
-
-	conf.Output.Switch.Cases = append(conf.Output.Switch.Cases, errorCase, responseCase)
+	var err error
+	if conf.Output, err = output.FromYAML(`
+switch:
+  retry_until_success: false
+  cases:
+    - check: 'errored()'
+      output:
+        reject: "processing failed due to: ${! error() }"
+    - output:
+        sync_response: {}
+`); err != nil {
+		fmt.Fprintf(os.Stderr, "Config init error: %v\n", err)
+		os.Exit(1)
+	}
 
 	if confStr := os.Getenv("BENTHOS_CONFIG"); len(confStr) > 0 {
 		confBytes, err := config.ReplaceEnvVariables([]byte(confStr), os.LookupEnv)
@@ -80,7 +82,6 @@ func Run() {
 		}
 	}
 
-	var err error
 	if handler, err = serverless.NewHandler(conf); err != nil {
 		fmt.Fprintf(os.Stderr, "Initialisation error: %v\n", err)
 		os.Exit(1)

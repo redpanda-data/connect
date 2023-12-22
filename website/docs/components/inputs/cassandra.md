@@ -33,8 +33,8 @@ input:
   label: ""
   cassandra:
     addresses: [] # No default (required)
-    query: "" # No default (required)
     timeout: 600ms
+    query: "" # No default (required)
 ```
 
 </TabItem>
@@ -46,17 +46,24 @@ input:
   label: ""
   cassandra:
     addresses: [] # No default (required)
+    tls:
+      enabled: false
+      skip_cert_verify: false
+      enable_renegotiation: false
+      root_cas: ""
+      root_cas_file: ""
+      client_certs: []
     password_authenticator:
-      enabled: false # No default (optional)
-      username: "" # No default (optional)
-      password: "" # No default (optional)
-    disable_initial_host_lookup: false # No default (optional)
-    query: "" # No default (required)
-    max_retries: 0 # No default (optional)
+      enabled: false
+      username: ""
+      password: ""
+    disable_initial_host_lookup: false
+    max_retries: 3
     backoff:
-      initial_interval: "" # No default (optional)
-      max_interval: "" # No default (optional)
+      initial_interval: 1s
+      max_interval: 5s
     timeout: 600ms
+    query: "" # No default (required)
 ```
 
 </TabItem>
@@ -101,10 +108,164 @@ input:
 
 ### `addresses`
 
-A list of Cassandra nodes to connect to.
+A list of Cassandra nodes to connect to. Multiple comma separated addresses can be specified on a single line.
 
 
 Type: `array`  
+
+```yml
+# Examples
+
+addresses:
+  - localhost:9042
+
+addresses:
+  - foo:9042
+  - bar:9042
+
+addresses:
+  - foo:9042,bar:9042
+```
+
+### `tls`
+
+Custom TLS settings can be used to override system defaults.
+
+
+Type: `object`  
+
+### `tls.enabled`
+
+Whether custom TLS settings are enabled.
+
+
+Type: `bool`  
+Default: `false`  
+
+### `tls.skip_cert_verify`
+
+Whether to skip server side certificate verification.
+
+
+Type: `bool`  
+Default: `false`  
+
+### `tls.enable_renegotiation`
+
+Whether to allow the remote server to repeatedly request renegotiation. Enable this option if you're seeing the error message `local error: tls: no renegotiation`.
+
+
+Type: `bool`  
+Default: `false`  
+Requires version 3.45.0 or newer  
+
+### `tls.root_cas`
+
+An optional root certificate authority to use. This is a string, representing a certificate chain from the parent trusted root certificate, to possible intermediate signing certificates, to the host certificate.
+:::warning Secret
+This field contains sensitive information that usually shouldn't be added to a config directly, read our [secrets page for more info](/docs/configuration/secrets).
+:::
+
+
+Type: `string`  
+Default: `""`  
+
+```yml
+# Examples
+
+root_cas: |-
+  -----BEGIN CERTIFICATE-----
+  ...
+  -----END CERTIFICATE-----
+```
+
+### `tls.root_cas_file`
+
+An optional path of a root certificate authority file to use. This is a file, often with a .pem extension, containing a certificate chain from the parent trusted root certificate, to possible intermediate signing certificates, to the host certificate.
+
+
+Type: `string`  
+Default: `""`  
+
+```yml
+# Examples
+
+root_cas_file: ./root_cas.pem
+```
+
+### `tls.client_certs`
+
+A list of client certificates to use. For each certificate either the fields `cert` and `key`, or `cert_file` and `key_file` should be specified, but not both.
+
+
+Type: `array`  
+Default: `[]`  
+
+```yml
+# Examples
+
+client_certs:
+  - cert: foo
+    key: bar
+
+client_certs:
+  - cert_file: ./example.pem
+    key_file: ./example.key
+```
+
+### `tls.client_certs[].cert`
+
+A plain text certificate to use.
+
+
+Type: `string`  
+Default: `""`  
+
+### `tls.client_certs[].key`
+
+A plain text certificate key to use.
+:::warning Secret
+This field contains sensitive information that usually shouldn't be added to a config directly, read our [secrets page for more info](/docs/configuration/secrets).
+:::
+
+
+Type: `string`  
+Default: `""`  
+
+### `tls.client_certs[].cert_file`
+
+The path of a certificate to use.
+
+
+Type: `string`  
+Default: `""`  
+
+### `tls.client_certs[].key_file`
+
+The path of a certificate key to use.
+
+
+Type: `string`  
+Default: `""`  
+
+### `tls.client_certs[].password`
+
+A plain text password for when the private key is password encrypted in PKCS#1 or PKCS#8 format. The obsolete `pbeWithMD5AndDES-CBC` algorithm is not supported for the PKCS#8 format. Warning: Since it does not authenticate the ciphertext, it is vulnerable to padding oracle attacks that can let an attacker recover the plaintext.
+:::warning Secret
+This field contains sensitive information that usually shouldn't be added to a config directly, read our [secrets page for more info](/docs/configuration/secrets).
+:::
+
+
+Type: `string`  
+Default: `""`  
+
+```yml
+# Examples
+
+password: foo
+
+password: ${KEY_PASSWORD}
+```
 
 ### `password_authenticator`
 
@@ -119,23 +280,26 @@ Whether to use password authentication
 
 
 Type: `bool`  
+Default: `false`  
 
 ### `password_authenticator.username`
 
-A username
+The username to authenticate as.
 
 
 Type: `string`  
+Default: `""`  
 
 ### `password_authenticator.password`
 
-A password
+The password to authenticate with.
 :::warning Secret
 This field contains sensitive information that usually shouldn't be added to a config directly, read our [secrets page for more info](/docs/configuration/secrets).
 :::
 
 
 Type: `string`  
+Default: `""`  
 
 ### `disable_initial_host_lookup`
 
@@ -143,13 +307,7 @@ If enabled the driver will not attempt to get host info from the system.peers ta
 
 
 Type: `bool`  
-
-### `query`
-
-A query to execute.
-
-
-Type: `string`  
+Default: `false`  
 
 ### `max_retries`
 
@@ -157,6 +315,7 @@ The maximum number of retries before giving up on a request.
 
 
 Type: `int`  
+Default: `3`  
 
 ### `backoff`
 
@@ -171,6 +330,7 @@ The initial period to wait between retry attempts.
 
 
 Type: `string`  
+Default: `"1s"`  
 
 ### `backoff.max_interval`
 
@@ -178,19 +338,21 @@ The maximum period to wait between retry attempts.
 
 
 Type: `string`  
+Default: `"5s"`  
 
 ### `timeout`
 
-Sorry! This field is missing documentation.
+The client connection timeout.
 
 
 Type: `string`  
 Default: `"600ms"`  
 
-```yml
-# Examples
+### `query`
 
-timeout: 600ms
-```
+A query to execute.
+
+
+Type: `string`  
 
 
