@@ -25,6 +25,7 @@ import (
 	_ "github.com/benthosdev/benthos/v4/public/components/jaeger"
 	_ "github.com/benthosdev/benthos/v4/public/components/javascript"
 	_ "github.com/benthosdev/benthos/v4/public/components/kafka"
+	_ "github.com/benthosdev/benthos/v4/public/components/kv"
 	_ "github.com/benthosdev/benthos/v4/public/components/maxmind"
 	_ "github.com/benthosdev/benthos/v4/public/components/memcached"
 	_ "github.com/benthosdev/benthos/v4/public/components/mongodb"

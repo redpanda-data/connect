@@ -1,7 +1,7 @@
 ---
 title: kv
 type: processor
-status: stable
+status: experimental
 ---
 
 <!--
@@ -13,66 +13,43 @@ status: stable
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
+:::caution EXPERIMENTAL
+This component is experimental and therefore subject to change or removal outside of major version releases.
+:::
 This processor is designed to convert messages formatted as 'foo=bar bar=baz' into a structured JSON representation.
+
+Introduced in version 4.16.0.
 
 ```yml
 # Config fields, showing default values
 label: ""
 kv:
-  field_split: ' '
-  value_split: =
+  pair_delimiter: "" # No default (required)
+  key_value_separator: "" # No default (required)
+  target_field: "" # No default (optional)
 ```
 
 ## Fields
 
-### `field_split`
+### `pair_delimiter`
 
-Delimiter to use for splitting key-value pairs.
-
-
-Type: `string`  
-Default: `" "`  
-
-### `value_split`
-
-Delimiter to use for splitting the key from the value within a key-value pairs.
+Regex pattern to use for splitting key-value pairs.
 
 
 Type: `string`  
-Default: `"="`  
 
-## Examples
+### `key_value_separator`
 
-<Tabs defaultValue="Mapping" values={[
-{ label: 'Mapping', value: 'Mapping', },
-]}>
-
-<TabItem value="Mapping">
+Regex pattern to use for splitting the key from the value within a key-value pairs.
 
 
-When providing the following message:
-```
-level=info msg=this is a message logSource=source
-```
-The resulting logs will be formatted as:
-```json
-{
-  "level": "info",
-  "logSource": "source",
-  "msg": "this is a message"
-}
-```
+Type: `string`  
+
+### `target_field`
+
+The field to insert the extracted keys into.
 
 
-```yaml
-pipeline:
-  processors:
-  - kv:
-      field_split: " "
-      value_split: "="
-```
-
-</TabItem>
-</Tabs>
+Type: `string`  
 
 
