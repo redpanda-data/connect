@@ -1,0 +1,17 @@
+input:
+  generate:
+    count: 10000
+    mapping: 'root.id = uuid_v4()'
+    batch_size: 100
+    interval: 1us
+  processors:
+    - archive:
+        format: lines
+
+output:
+  sftp:
+    address: localhost:4223
+    credentials:
+      username: foo
+      password: pass
+    path: /upload/${! timestamp_unix_nano() }-${! counter() }.jsonl

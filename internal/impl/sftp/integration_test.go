@@ -20,7 +20,7 @@ var (
 	sftpPassword = "pass"
 )
 
-func TestIntegrationSFTP(t *testing.T) {
+func TestIntegration(t *testing.T) {
 	integration.CheckSkip(t)
 	t.Parallel()
 
@@ -96,17 +96,19 @@ cache_resources:
 			integration.StreamTestOptVarTwo("false"),
 		)
 
-		watcherSuite := integration.StreamTests(
-			integration.StreamTestOpenClose(),
-			integration.StreamTestStreamParallel(50),
-			integration.StreamTestStreamSequential(20),
-			integration.StreamTestStreamParallelLossyThroughReconnect(20),
-		)
-		watcherSuite.Run(
-			t, template,
-			integration.StreamTestOptPort(resource.GetPort("22/tcp")),
-			integration.StreamTestOptVarOne("all-bytes"),
-			integration.StreamTestOptVarTwo("true"),
-		)
+		t.Run("watcher", func(t *testing.T) {
+			watcherSuite := integration.StreamTests(
+				integration.StreamTestOpenClose(),
+				integration.StreamTestStreamParallel(50),
+				integration.StreamTestStreamSequential(20),
+				integration.StreamTestStreamParallelLossyThroughReconnect(20),
+			)
+			watcherSuite.Run(
+				t, template,
+				integration.StreamTestOptPort(resource.GetPort("22/tcp")),
+				integration.StreamTestOptVarOne("all-bytes"),
+				integration.StreamTestOptVarTwo("true"),
+			)
+		})
 	})
 }
