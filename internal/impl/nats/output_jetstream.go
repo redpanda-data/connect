@@ -139,7 +139,7 @@ func newJetStreamWriterFromConfig(conf *service.ParsedConfig, mgr *service.Resou
 
 //------------------------------------------------------------------------------
 
-func (j *jetStreamOutput) Connect(ctx context.Context) error {
+func (j *jetStreamOutput) Connect(ctx context.Context) (err error) {
 	j.connMut.Lock()
 	defer j.connMut.Unlock()
 
@@ -149,7 +149,6 @@ func (j *jetStreamOutput) Connect(ctx context.Context) error {
 
 	var natsConn *nats.Conn
 	var jCtx nats.JetStreamContext
-	var err error
 
 	defer func() {
 		if err != nil && natsConn != nil {
