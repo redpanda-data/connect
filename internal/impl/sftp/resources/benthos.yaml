@@ -1,0 +1,16 @@
+input:
+  sftp:
+    address: localhost:4223
+    credentials:
+      username: foo
+      password: pass
+    paths:
+      - '/upload/*'
+    delete_on_finish: true
+    codec: lines
+
+output:
+  drop: {}
+  processors:
+    - sleep:
+        duration: 1ms

@@ -59,8 +59,6 @@ func init() {
 //------------------------------------------------------------------------------
 
 type sftpWriter struct {
-	client *sftp.Client
-
 	log *service.Logger
 	mgr *service.Resources
 
@@ -71,6 +69,7 @@ type sftpWriter struct {
 	appendMode bool
 
 	handleMut  sync.Mutex
+	client     *sftp.Client
 	handlePath string
 	handle     io.WriteCloser
 }
@@ -102,13 +101,16 @@ func newWriterFromParsed(conf *service.ParsedConfig, mgr *service.Resources) (s 
 	return s, nil
 }
 
-func (s *sftpWriter) Connect(ctx context.Context) error {
+func (s *sftpWriter) Connect(ctx context.Context) (err error) {
 	s.handleMut.Lock()
 	defer s.handleMut.Unlock()
 
-	var err error
+	if s.client != nil {
+		return
+	}
+
 	s.client, err = s.creds.GetClient(s.mgr.FS(), s.address)
-	return err
+	return
 }
 
 func (s *sftpWriter) writeTo(wtr io.Writer, p *service.Message) error {
@@ -131,6 +133,9 @@ func (s *sftpWriter) writeTo(wtr io.Writer, p *service.Message) error {
 }
 
 func (s *sftpWriter) Write(ctx context.Context, msg *service.Message) error {
+	s.handleMut.Lock()
+	defer s.handleMut.Unlock()
+
 	if s.client == nil {
 		return service.ErrNotConnected
 	}
@@ -140,17 +145,16 @@ func (s *sftpWriter) Write(ctx context.Context, msg *service.Message) error {
 		return fmt.Errorf("path interpolation error: %w", err)
 	}
 
-	s.handleMut.Lock()
-	defer s.handleMut.Unlock()
-
 	if s.handle != nil && path == s.handlePath {
 		// TODO: Detect underlying connection failure here and drop client.
 		return s.writeTo(s.handle, msg)
 	}
 	if s.handle != nil {
 		if err := s.handle.Close(); err != nil {
-			return err
+			s.log.With("error", err).Error("Failed to close written file")
 		}
+		s.handle = nil
+		s.handlePath = ""
 	}
 
 	flag := os.O_CREATE | os.O_WRONLY
@@ -167,7 +171,6 @@ func (s *sftpWriter) Write(ctx context.Context, msg *service.Message) error {
 		return err
 	}
 
-	s.handlePath = path
 	handle, err := s.client.OpenFile(path, flag)
 	if err != nil {
 		if errors.Is(err, sftp.ErrSshFxConnectionLost) {
@@ -183,23 +186,30 @@ func (s *sftpWriter) Write(ctx context.Context, msg *service.Message) error {
 
 	if s.appendMode {
 		s.handle = handle
+		s.handlePath = path
 	} else {
-		_ = handle.Close()
+		if err := handle.Close(); err != nil {
+			s.log.With("error", err).Error("Failed to close written file")
+		}
 	}
 	return nil
 }
 
-func (s *sftpWriter) Close(ctx context.Context) (err error) {
+func (s *sftpWriter) Close(ctx context.Context) error {
 	s.handleMut.Lock()
 	defer s.handleMut.Unlock()
 
 	if s.handle != nil {
-		err = s.handle.Close()
+		if err := s.handle.Close(); err != nil {
+			s.log.With("error", err).Error("Failed to close written file")
+		}
 		s.handle = nil
 	}
-	if err == nil && s.client != nil {
-		err = s.client.Close()
+	if s.client != nil {
+		if err := s.client.Close(); err != nil {
+			s.log.With("error", err).Error("Failed to close client")
+		}
 		s.client = nil
 	}
-	return
+	return nil
 }
