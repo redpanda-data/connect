@@ -11,7 +11,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	yaml "gopkg.in/yaml.v3"
 
 	"github.com/benthosdev/benthos/v4/internal/component/input"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
@@ -386,8 +385,7 @@ func TestSequenceSad(t *testing.T) {
 
 	writeFiles(t, tmpDir, files)
 
-	conf := input.NewConfig()
-	require.NoError(t, yaml.Unmarshal(fmt.Appendf(nil, `
+	conf, err := input.FromYAML(fmt.Sprintf(`
 sequence:
   inputs:
     - file:
@@ -399,7 +397,8 @@ sequence:
     - file:
         paths:
           - "%v/f3"
-`, tmpDir, tmpDir, tmpDir), &conf))
+`, tmpDir, tmpDir, tmpDir))
+	require.NoError(t, err)
 
 	rdr, err := mock.NewManager().NewInput(conf)
 	require.NoError(t, err)
@@ -464,14 +463,14 @@ func TestSequenceEarlyTermination(t *testing.T) {
 		"f1": "foo\nbar\nbaz",
 	})
 
-	conf := input.NewConfig()
-	require.NoError(t, yaml.Unmarshal(fmt.Appendf(nil, `
+	conf, err := input.FromYAML(fmt.Sprintf(`
 sequence:
   inputs:
     - file:
         paths:
           - "%v/f1"
-`, tmpDir), &conf))
+`, tmpDir))
+	require.NoError(t, err)
 
 	rdr, err := mock.NewManager().NewInput(conf)
 	require.NoError(t, err)

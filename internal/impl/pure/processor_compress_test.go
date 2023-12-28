@@ -12,6 +12,7 @@ import (
 	"github.com/klauspost/compress/zlib"
 	"github.com/klauspost/pgzip"
 	"github.com/pierrec/lz4/v4"
+	"github.com/stretchr/testify/require"
 
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
@@ -19,20 +20,24 @@ import (
 )
 
 func TestCompressBadAlgo(t *testing.T) {
-	conf := processor.NewConfig()
-	conf.Type = "compress"
-	conf.Compress.Algorithm = "does not exist"
+	conf, err := processor.FromYAML(`
+compress:
+  algorithm: does not exist
+`)
+	require.NoError(t, err)
 
-	_, err := mock.NewManager().NewProcessor(conf)
+	_, err = mock.NewManager().NewProcessor(conf)
 	if err == nil {
 		t.Error("Expected error from bad algo")
 	}
 }
 
 func TestCompressGZIP(t *testing.T) {
-	conf := processor.NewConfig()
-	conf.Type = "compress"
-	conf.Compress.Algorithm = "gzip"
+	conf, err := processor.FromYAML(`
+compress:
+  algorithm: gzip
+`)
+	require.NoError(t, err)
 
 	input := [][]byte{
 		[]byte("hello world first part"),
@@ -75,9 +80,11 @@ func TestCompressGZIP(t *testing.T) {
 }
 
 func TestCompressPGZIP(t *testing.T) {
-	conf := processor.NewConfig()
-	conf.Type = "compress"
-	conf.Compress.Algorithm = "pgzip"
+	conf, err := processor.FromYAML(`
+compress:
+  algorithm: pgzip
+`)
+	require.NoError(t, err)
 
 	input := [][]byte{
 		[]byte("hello world first part"),
@@ -120,9 +127,11 @@ func TestCompressPGZIP(t *testing.T) {
 }
 
 func TestCompressZLIB(t *testing.T) {
-	conf := processor.NewConfig()
-	conf.Type = "compress"
-	conf.Compress.Algorithm = "zlib"
+	conf, err := processor.FromYAML(`
+compress:
+  algorithm: zlib
+`)
+	require.NoError(t, err)
 
 	input := [][]byte{
 		[]byte("hello world first part"),
@@ -165,9 +174,11 @@ func TestCompressZLIB(t *testing.T) {
 }
 
 func TestCompressFlate(t *testing.T) {
-	conf := processor.NewConfig()
-	conf.Type = "compress"
-	conf.Compress.Algorithm = "flate"
+	conf, err := processor.FromYAML(`
+compress:
+  algorithm: flate
+`)
+	require.NoError(t, err)
 
 	input := [][]byte{
 		[]byte("hello world first part"),
@@ -182,7 +193,7 @@ func TestCompressFlate(t *testing.T) {
 	for i := range input {
 		var buf bytes.Buffer
 
-		zw, err := flate.NewWriter(&buf, conf.Compress.Level)
+		zw, err := flate.NewWriter(&buf, -1)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -213,9 +224,11 @@ func TestCompressFlate(t *testing.T) {
 }
 
 func TestCompressSnappy(t *testing.T) {
-	conf := processor.NewConfig()
-	conf.Type = "compress"
-	conf.Compress.Algorithm = "snappy"
+	conf, err := processor.FromYAML(`
+compress:
+  algorithm: snappy
+`)
+	require.NoError(t, err)
 
 	input := [][]byte{
 		[]byte("hello world first part"),
@@ -253,9 +266,11 @@ func TestCompressSnappy(t *testing.T) {
 }
 
 func TestCompressLZ4(t *testing.T) {
-	conf := processor.NewConfig()
-	conf.Type = "compress"
-	conf.Compress.Algorithm = "lz4"
+	conf, err := processor.FromYAML(`
+compress:
+  algorithm: lz4
+`)
+	require.NoError(t, err)
 
 	input := [][]byte{
 		[]byte("hello world first part"),

@@ -13,6 +13,7 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/config"
 	"github.com/benthosdev/benthos/v4/internal/docs"
 
+	_ "github.com/benthosdev/benthos/v4/public/components/io"
 	_ "github.com/benthosdev/benthos/v4/public/components/pure"
 )
 

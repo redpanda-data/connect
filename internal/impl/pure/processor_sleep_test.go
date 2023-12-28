@@ -14,9 +14,11 @@ import (
 )
 
 func TestSleep(t *testing.T) {
-	conf := processor.NewConfig()
-	conf.Type = "sleep"
-	conf.Sleep.Duration = "1ns"
+	conf, err := processor.FromYAML(`
+sleep:
+  duration: 1ns
+`)
+	require.NoError(t, err)
 
 	slp, err := mock.NewManager().NewProcessor(conf)
 	if err != nil {
@@ -32,9 +34,11 @@ func TestSleep(t *testing.T) {
 }
 
 func TestSleepExit(t *testing.T) {
-	conf := processor.NewConfig()
-	conf.Type = "sleep"
-	conf.Sleep.Duration = "10s"
+	conf, err := processor.FromYAML(`
+sleep:
+  duration: 10s
+`)
+	require.NoError(t, err)
 
 	slp, err := mock.NewManager().NewProcessor(conf)
 	if err != nil {
@@ -59,9 +63,11 @@ func TestSleepExit(t *testing.T) {
 }
 
 func TestSleep200Millisecond(t *testing.T) {
-	conf := processor.NewConfig()
-	conf.Type = "sleep"
-	conf.Sleep.Duration = "200ms"
+	conf, err := processor.FromYAML(`
+sleep:
+  duration: 200ms
+`)
+	require.NoError(t, err)
 
 	slp, err := mock.NewManager().NewProcessor(conf)
 	if err != nil {
@@ -80,9 +86,11 @@ func TestSleep200Millisecond(t *testing.T) {
 }
 
 func TestSleepInterpolated(t *testing.T) {
-	conf := processor.NewConfig()
-	conf.Type = "sleep"
-	conf.Sleep.Duration = "${!json(\"foo\")}ms"
+	conf, err := processor.FromYAML(`
+sleep:
+  duration: '${!json("foo")}ms'
+`)
+	require.NoError(t, err)
 
 	slp, err := mock.NewManager().NewProcessor(conf)
 	if err != nil {

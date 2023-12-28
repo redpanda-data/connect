@@ -20,7 +20,7 @@ Sleep for a period of time specified as a duration string for each message. This
 # Config fields, showing default values
 label: ""
 sleep:
-  duration: ""
+  duration: "" # No default (required)
 ```
 
 ## Fields
@@ -32,6 +32,5 @@ This field supports [interpolation functions](/docs/configuration/interpolation#
 
 
 Type: `string`  
-Default: `""`  
 
 

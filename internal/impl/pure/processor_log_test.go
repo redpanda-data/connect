@@ -79,9 +79,11 @@ func (m *mockLog) Traceln(message string) {
 }
 
 func TestLogBadLevel(t *testing.T) {
-	conf := processor.NewConfig()
-	conf.Type = "log"
-	conf.Log.Level = "does not exist"
+	conf, err := processor.FromYAML(`
+log:
+  level: does not exist
+`)
+	require.NoError(t, err)
 
 	if _, err := mock.NewManager().NewProcessor(conf); err == nil {
 		t.Error("expected err from bad log level")
@@ -89,15 +91,16 @@ func TestLogBadLevel(t *testing.T) {
 }
 
 func TestLogLevelTrace(t *testing.T) {
-	conf := processor.NewConfig()
-	conf.Type = "log"
-	conf.Log.Message = "${!json(\"foo\")}"
-
 	logMock := &mockLog{}
 
 	levels := []string{"TRACE", "DEBUG", "INFO", "WARN", "ERROR"}
 	for _, level := range levels {
-		conf.Log.Level = level
+		conf, err := processor.FromYAML(`
+log:
+  message: '${!json("foo")}'
+  level: ` + level + `
+`)
+		require.NoError(t, err)
 
 		mgr := mock.NewManager()
 		mgr.L = logMock
@@ -136,17 +139,17 @@ func TestLogLevelTrace(t *testing.T) {
 }
 
 func TestLogWithFields(t *testing.T) {
-	conf := processor.NewConfig()
-	conf.Type = "log"
-	conf.Log.Message = "${!json(\"foo\")}"
-	conf.Log.Fields = map[string]string{
-		"static":  "foo",
-		"dynamic": "${!json(\"bar\")}",
-	}
+	conf, err := processor.FromYAML(`
+log:
+  message: '${!json("foo")}'
+  level: INFO
+  fields:
+    static: foo
+    dynamic: '${!json("bar")}'
+`)
+	require.NoError(t, err)
 
 	logMock := &mockLog{}
-
-	conf.Log.Level = "INFO"
 
 	mgr := mock.NewManager()
 	mgr.L = logMock
@@ -203,17 +206,18 @@ func TestLogWithFields(t *testing.T) {
 }
 
 func TestLogWithFieldsMapping(t *testing.T) {
-	conf := processor.NewConfig()
-	conf.Type = "log"
-	conf.Log.Message = "hello world"
-	conf.Log.FieldsMapping = `
-root.static = "static value"
-root.age = this.age + 2
-root.is_cool = this.is_cool`
+	conf, err := processor.FromYAML(`
+log:
+  message: 'hello world'
+  level: INFO
+  fields_mapping: |
+    root.static = "static value"
+    root.age = this.age + 2
+    root.is_cool = this.is_cool
+`)
+	require.NoError(t, err)
 
 	logMock := &mockLog{}
-
-	conf.Log.Level = "INFO"
 
 	mgr := mock.NewManager()
 	mgr.L = logMock

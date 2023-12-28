@@ -6,7 +6,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	yaml "gopkg.in/yaml.v3"
 
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
@@ -16,36 +15,18 @@ import (
 )
 
 func TestGroupBy(t *testing.T) {
-	conf := processor.NewConfig()
-	conf.Type = "group_by"
-
-	procConf := processor.NewConfig()
-	require.NoError(t, yaml.Unmarshal([]byte(`
-archive:
-  format: lines`), &procConf))
-
-	conf.GroupBy = append(conf.GroupBy, processor.GroupByElement{
-		Check: `content().contains("foo")`,
-		Processors: []processor.Config{
-			procConf,
-		},
-	})
-
-	procConf = processor.NewConfig()
-	procConf.Type = "bloblang"
-	procConf.Bloblang = `root = content().uppercase()`
-
-	procConf2 := processor.NewConfig()
-	procConf2.Type = "bloblang"
-	procConf2.Bloblang = `root = content().trim()`
-
-	conf.GroupBy = append(conf.GroupBy, processor.GroupByElement{
-		Check: `content().contains("bar")`,
-		Processors: []processor.Config{
-			procConf,
-			procConf2,
-		},
-	})
+	conf, err := processor.FromYAML(`
+group_by:
+  - check: 'content().contains("foo")'
+    processors:
+      - archive:
+          format: lines
+  - check: 'content().contains("bar")'
+    processors:
+      - bloblang: 'root = content().uppercase()'
+      - bloblang: 'root = content().trim()'
+`)
+	require.NoError(t, err)
 
 	proc, err := mock.NewManager().NewProcessor(conf)
 	require.NoError(t, err)
@@ -88,21 +69,15 @@ archive:
 }
 
 func TestGroupByErrs(t *testing.T) {
-	conf := processor.NewConfig()
-	conf.Type = "group_by"
+	conf, err := processor.FromYAML(`
+group_by:
+  - processors:
+      - archive:
+          format: lines
+`)
+	require.NoError(t, err)
 
-	procConf := processor.NewConfig()
-	require.NoError(t, yaml.Unmarshal([]byte(`
-archive:
-  format: lines`), &procConf))
-
-	conf.GroupBy = append(conf.GroupBy, processor.GroupByElement{
-		Processors: []processor.Config{
-			procConf,
-		},
-	})
-
-	_, err := mock.NewManager().NewProcessor(conf)
+	_, err = mock.NewManager().NewProcessor(conf)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "a group definition must have a check query")
+	require.Contains(t, err.Error(), "field 'check' is required")
 }

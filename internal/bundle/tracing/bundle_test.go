@@ -333,7 +333,7 @@ func TestBundleOutputWithProcessorsTracing(t *testing.T) {
 
 	blobConf := processor.NewConfig()
 	blobConf.Type = "bloblang"
-	blobConf.Bloblang = "root = content().uppercase()"
+	blobConf.Plugin = "root = content().uppercase()"
 	outConfig.Processors = append(outConfig.Processors, blobConf)
 
 	mgr, err := manager.New(
@@ -502,7 +502,7 @@ func TestBundleProcessorTracing(t *testing.T) {
 	procConfig := processor.NewConfig()
 	procConfig.Label = "foo"
 	procConfig.Type = "bloblang"
-	procConfig.Bloblang = `
+	procConfig.Plugin = `
 let ctr = content().number()
 root.count = if $ctr % 2 == 0 { throw("nah %v".format($ctr)) } else { $ctr }
 meta bar = "new bar value"
@@ -575,7 +575,7 @@ func TestBundleProcessorTracingError(t *testing.T) {
 	procConfig := processor.NewConfig()
 	procConfig.Label = "foo"
 	procConfig.Type = "bloblang"
-	procConfig.Bloblang = `let nope`
+	procConfig.Plugin = `let nope`
 
 	mgr, err := manager.New(
 		manager.NewResourceConfig(),
@@ -597,7 +597,7 @@ func TestBundleProcessorTracingDisabled(t *testing.T) {
 	procConfig := processor.NewConfig()
 	procConfig.Label = "foo"
 	procConfig.Type = "bloblang"
-	procConfig.Bloblang = `
+	procConfig.Plugin = `
 let ctr = content().number()
 root.count = if $ctr % 2 == 0 { throw("nah %v".format($ctr)) } else { $ctr }
 meta bar = "new bar value"

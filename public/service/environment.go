@@ -124,7 +124,7 @@ func (e *Environment) RegisterBatchBuffer(name string, spec *ConfigSpec, ctor Ba
 	componentSpec.Name = name
 	componentSpec.Type = docs.TypeBuffer
 	return e.internal.BufferAdd(func(conf buffer.Config, nm bundle.NewManagement) (buffer.Streamed, error) {
-		pluginConf, err := extractConfig(nm, spec, name, conf.Plugin, conf)
+		pluginConf, err := extractConfig(nm, spec, name, conf.Plugin)
 		if err != nil {
 			return nil, err
 		}
@@ -155,7 +155,7 @@ func (e *Environment) RegisterCache(name string, spec *ConfigSpec, ctor CacheCon
 	componentSpec.Name = name
 	componentSpec.Type = docs.TypeCache
 	return e.internal.CacheAdd(func(conf cache.Config, nm bundle.NewManagement) (cache.V1, error) {
-		pluginConf, err := extractConfig(nm, spec, name, conf.Plugin, conf)
+		pluginConf, err := extractConfig(nm, spec, name, conf.Plugin)
 		if err != nil {
 			return nil, err
 		}
@@ -190,7 +190,7 @@ func (e *Environment) RegisterInput(name string, spec *ConfigSpec, ctor InputCon
 	componentSpec.Name = name
 	componentSpec.Type = docs.TypeInput
 	return e.internal.InputAdd(iprocessors.WrapConstructor(func(conf input.Config, nm bundle.NewManagement) (input.Streamed, error) {
-		pluginConf, err := extractConfig(nm, spec, name, conf.Plugin, conf)
+		pluginConf, err := extractConfig(nm, spec, name, conf.Plugin)
 		if err != nil {
 			return nil, err
 		}
@@ -217,7 +217,7 @@ func (e *Environment) RegisterBatchInput(name string, spec *ConfigSpec, ctor Bat
 	componentSpec.Name = name
 	componentSpec.Type = docs.TypeInput
 	return e.internal.InputAdd(iprocessors.WrapConstructor(func(conf input.Config, nm bundle.NewManagement) (input.Streamed, error) {
-		pluginConf, err := extractConfig(nm, spec, name, conf.Plugin, conf)
+		pluginConf, err := extractConfig(nm, spec, name, conf.Plugin)
 		if err != nil {
 			return nil, err
 		}
@@ -255,7 +255,7 @@ func (e *Environment) RegisterOutput(name string, spec *ConfigSpec, ctor OutputC
 	componentSpec.Type = docs.TypeOutput
 	return e.internal.OutputAdd(oprocessors.WrapConstructor(
 		func(conf output.Config, nm bundle.NewManagement) (output.Streamed, error) {
-			pluginConf, err := extractConfig(nm, spec, name, conf.Plugin, conf)
+			pluginConf, err := extractConfig(nm, spec, name, conf.Plugin)
 			if err != nil {
 				return nil, err
 			}
@@ -294,7 +294,7 @@ func (e *Environment) RegisterBatchOutput(name string, spec *ConfigSpec, ctor Ba
 	componentSpec.Type = docs.TypeOutput
 	return e.internal.OutputAdd(oprocessors.WrapConstructor(
 		func(conf output.Config, nm bundle.NewManagement) (output.Streamed, error) {
-			pluginConf, err := extractConfig(nm, spec, name, conf.Plugin, conf)
+			pluginConf, err := extractConfig(nm, spec, name, conf.Plugin)
 			if err != nil {
 				return nil, err
 			}
@@ -344,7 +344,7 @@ func (e *Environment) RegisterProcessor(name string, spec *ConfigSpec, ctor Proc
 	componentSpec.Name = name
 	componentSpec.Type = docs.TypeProcessor
 	return e.internal.ProcessorAdd(func(conf processor.Config, nm bundle.NewManagement) (processor.V1, error) {
-		pluginConf, err := extractConfig(nm, spec, name, conf.Plugin, conf)
+		pluginConf, err := extractConfig(nm, spec, name, conf.Plugin)
 		if err != nil {
 			return nil, err
 		}
@@ -369,7 +369,7 @@ func (e *Environment) RegisterBatchProcessor(name string, spec *ConfigSpec, ctor
 	componentSpec.Name = name
 	componentSpec.Type = docs.TypeProcessor
 	return e.internal.ProcessorAdd(func(conf processor.Config, nm bundle.NewManagement) (processor.V1, error) {
-		pluginConf, err := extractConfig(nm, spec, name, conf.Plugin, conf)
+		pluginConf, err := extractConfig(nm, spec, name, conf.Plugin)
 		if err != nil {
 			return nil, err
 		}
@@ -405,7 +405,7 @@ func (e *Environment) RegisterRateLimit(name string, spec *ConfigSpec, ctor Rate
 	componentSpec.Name = name
 	componentSpec.Type = docs.TypeRateLimit
 	return e.internal.RateLimitAdd(func(conf ratelimit.Config, nm bundle.NewManagement) (ratelimit.V1, error) {
-		pluginConf, err := extractConfig(nm, spec, name, conf.Plugin, conf)
+		pluginConf, err := extractConfig(nm, spec, name, conf.Plugin)
 		if err != nil {
 			return nil, err
 		}
@@ -435,7 +435,7 @@ func (e *Environment) RegisterMetricsExporter(name string, spec *ConfigSpec, cto
 	componentSpec.Name = name
 	componentSpec.Type = docs.TypeMetrics
 	return e.internal.MetricsAdd(func(conf metrics.Config, nm bundle.NewManagement) (metrics.Type, error) {
-		pluginConf, err := extractConfig(nm, spec, name, conf.Plugin, conf)
+		pluginConf, err := extractConfig(nm, spec, name, conf.Plugin)
 		if err != nil {
 			return nil, err
 		}
@@ -471,7 +471,7 @@ func (e *Environment) RegisterOtelTracerProvider(name string, spec *ConfigSpec, 
 	componentSpec.Name = name
 	componentSpec.Type = docs.TypeTracer
 	return e.internal.TracersAdd(func(conf tracer.Config, nm bundle.NewManagement) (trace.TracerProvider, error) {
-		pluginConf, err := extractConfig(nm, spec, name, conf.Plugin, conf)
+		pluginConf, err := extractConfig(nm, spec, name, conf.Plugin)
 		if err != nil {
 			return nil, err
 		}
@@ -503,7 +503,7 @@ func (e *Environment) RegisterBatchScannerCreator(name string, spec *ConfigSpec,
 	componentSpec.Name = name
 	componentSpec.Type = docs.TypeScanner
 	return e.internal.ScannerAdd(func(conf scanner.Config, nm bundle.NewManagement) (scanner.Creator, error) {
-		pluginConf, err := extractConfig(nm, spec, name, conf.Plugin, conf)
+		pluginConf, err := extractConfig(nm, spec, name, conf.Plugin)
 		if err != nil {
 			return nil, err
 		}

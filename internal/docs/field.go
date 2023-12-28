@@ -335,6 +335,12 @@ func lintsFromAny(line int, v any) (lints []Lint) {
 // binary that defines it as the function cannot be serialized into a portable
 // schema.
 func (f FieldSpec) LinterBlobl(blobl string) FieldSpec {
+	if blobl == "" {
+		f.Linter = blobl
+		f.customLintFn = nil
+		return f
+	}
+
 	env := bloblang.NewEnvironment().OnlyPure()
 
 	m, err := env.Parse(blobl)

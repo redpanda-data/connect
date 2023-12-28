@@ -14,7 +14,6 @@ categories: ["Parsing"]
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-
 Parses messages into a structured format by attempting to apply a list of Grok expressions, the first expression to result in at least one value replaces the original message with a JSON object containing the values.
 
 
@@ -29,7 +28,7 @@ Parses messages into a structured format by attempting to apply a list of Grok e
 # Common config fields, showing default values
 label: ""
 grok:
-  expressions: []
+  expressions: [] # No default (required)
   pattern_definitions: {}
   pattern_paths: []
 ```
@@ -41,7 +40,7 @@ grok:
 # All config fields, showing default values
 label: ""
 grok:
-  expressions: []
+  expressions: [] # No default (required)
   pattern_definitions: {}
   pattern_paths: []
   named_captures_only: true
@@ -102,7 +101,6 @@ One or more Grok expressions to attempt against incoming messages. The first exp
 
 
 Type: `array`  
-Default: `[]`  
 
 ### `pattern_definitions`
 

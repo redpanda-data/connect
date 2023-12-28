@@ -5,7 +5,10 @@ import (
 	"fmt"
 	"os"
 	"reflect"
+	"strconv"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
@@ -13,13 +16,15 @@ import (
 )
 
 func TestInsertBoundaries(t *testing.T) {
-	conf := processor.NewConfig()
-	conf.Type = "insert_part"
-	conf.InsertPart.Content = "hello world"
-
 	for i := 0; i < 10; i++ {
 		for j := -5; j <= 5; j++ {
-			conf.InsertPart.Index = j
+			conf, err := processor.FromYAML(fmt.Sprintf(`
+insert_part:
+  content: hello world
+  index: %v
+`, j))
+			require.NoError(t, err)
+
 			proc, err := mock.NewManager().NewProcessor(conf)
 			if err != nil {
 				t.Error(err)
@@ -45,10 +50,6 @@ func TestInsertBoundaries(t *testing.T) {
 }
 
 func TestInsertPart(t *testing.T) {
-	conf := processor.NewConfig()
-	conf.Type = "insert_part"
-	conf.InsertPart.Content = "hello world"
-
 	type test struct {
 		index int
 		in    [][]byte
@@ -162,7 +163,13 @@ func TestInsertPart(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		conf.InsertPart.Index = test.index
+		conf, err := processor.FromYAML(`
+insert_part:
+  content: hello world
+  index: ` + strconv.Itoa(test.index) + `
+`)
+		require.NoError(t, err)
+
 		proc, err := mock.NewManager().NewProcessor(conf)
 		if err != nil {
 			t.Error(err)
@@ -182,9 +189,11 @@ func TestInsertPart(t *testing.T) {
 }
 
 func TestInsertPartInterpolation(t *testing.T) {
-	conf := processor.NewConfig()
-	conf.Type = "insert_part"
-	conf.InsertPart.Content = "hello ${!hostname()} world"
+	conf, err := processor.FromYAML(`
+insert_part:
+  content: 'hello ${!hostname()} world'
+`)
+	require.NoError(t, err)
 
 	hostname, _ := os.Hostname()
 

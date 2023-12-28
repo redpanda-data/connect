@@ -100,6 +100,14 @@ func NewStringListField(name string) *ConfigField {
 	}
 }
 
+// NewStringListOfListsField describes a new config field consisting of a list
+// of lists of strings (a 2D array of strings).
+func NewStringListOfListsField(name string) *ConfigField {
+	return &ConfigField{
+		field: docs.FieldString(name, "").ArrayOfArrays(),
+	}
+}
+
 // NewStringMapField describes a new config field consisting of an object of
 // arbitrary keys with string values.
 func NewStringMapField(name string) *ConfigField {
@@ -179,6 +187,15 @@ func NewObjectListField(name string, fields ...*ConfigField) *ConfigField {
 	objField := NewObjectField(name, fields...)
 	return &ConfigField{
 		field: objField.field.Array(),
+	}
+}
+
+// NewObjectMapField describes a new map type config field consisting of
+// objects with one or more child fields.
+func NewObjectMapField(name string, fields ...*ConfigField) *ConfigField {
+	objField := NewObjectField(name, fields...)
+	return &ConfigField{
+		field: objField.field.Map(),
 	}
 }
 
@@ -716,6 +733,39 @@ func (p *ParsedConfig) FieldStringList(path ...string) ([]string, error) {
 	return sList, nil
 }
 
+// FieldStringListOfLists accesses a field that is a list of lists of strings
+// from the parsed config by its name and returns the value. Returns an error if
+// the field is not found, or is not a list of lists of strings.
+func (p *ParsedConfig) FieldStringListOfLists(path ...string) ([][]string, error) {
+	v, exists := p.field(path...)
+	if !exists {
+		return nil, fmt.Errorf("field '%v' was not found in the config", p.fullDotPath(path...))
+	}
+	iList, ok := v.([]any)
+	if !ok {
+		if sList, ok := v.([][]string); ok {
+			return sList, nil
+		}
+		return nil, fmt.Errorf("expected field '%v' to be a list of string lists, got %T", p.fullDotPath(path...), v)
+	}
+	sList := make([][]string, len(iList))
+	for i, ev := range iList {
+		switch t := ev.(type) {
+		case []string:
+			sList[i] = t
+		case []any:
+			tmpList := make([]string, len(t))
+			for j, evv := range t {
+				if tmpList[j], ok = evv.(string); !ok {
+					return nil, fmt.Errorf("expected field '%v' to be a string list, found an element of type %T", p.fullDotPath(path...), evv)
+				}
+			}
+			sList[i] = tmpList
+		}
+	}
+	return sList, nil
+}
+
 // FieldStringMap accesses a field that is an object of arbitrary keys and
 // string values from the parsed config by its name and returns the value.
 // Returns an error if the field is not found, or is not an object of strings.
@@ -907,4 +957,27 @@ func (p *ParsedConfig) FieldObjectList(path ...string) ([]*ParsedConfig, error) 
 		}
 	}
 	return sList, nil
+}
+
+// FieldObjectMap accesses a field that is a map of objects from the parsed
+// config by its name and returns the value as a map of *ParsedConfig types,
+// where each one represents an object in the map. Returns an error if the
+// field is not found, or is not a map of objects.
+func (p *ParsedConfig) FieldObjectMap(path ...string) (map[string]*ParsedConfig, error) {
+	v, exists := p.field(path...)
+	if !exists {
+		return nil, fmt.Errorf("field '%v' was not found in the config", p.fullDotPath(path...))
+	}
+	iMap, ok := v.(map[string]any)
+	if !ok {
+		return nil, fmt.Errorf("expected field '%v' to be a map, got %T", p.fullDotPath(path...), v)
+	}
+	sMap := make(map[string]*ParsedConfig, len(iMap))
+	for i, ev := range iMap {
+		sMap[i] = &ParsedConfig{
+			mgr:     p.mgr,
+			generic: ev,
+		}
+	}
+	return sMap, nil
 }

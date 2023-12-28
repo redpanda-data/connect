@@ -2,8 +2,11 @@ package pure_test
 
 import (
 	"context"
+	"fmt"
 	"reflect"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
@@ -11,9 +14,11 @@ import (
 )
 
 func TestSelectParts(t *testing.T) {
-	conf := processor.NewConfig()
-	conf.Type = "select_parts"
-	conf.SelectParts.Parts = []int{1, 3}
+	conf, err := processor.FromYAML(`
+select_parts:
+  parts: [ 1, 3 ]
+`)
+	require.NoError(t, err)
 
 	proc, err := mock.NewManager().NewProcessor(conf)
 	if err != nil {
@@ -79,10 +84,6 @@ func TestSelectParts(t *testing.T) {
 }
 
 func TestSelectPartsIndexBounds(t *testing.T) {
-	conf := processor.NewConfig()
-	conf.Type = "select_parts"
-	conf.SelectParts.Parts = []int{1, 3}
-
 	input := [][]byte{
 		[]byte("0"),
 		[]byte("1"),
@@ -105,7 +106,12 @@ func TestSelectPartsIndexBounds(t *testing.T) {
 	}
 
 	for i, exp := range tests {
-		conf.SelectParts.Parts = []int{i}
+		conf, err := processor.FromYAML(fmt.Sprintf(`
+select_parts:
+  parts: [ %v ]
+`, i))
+		require.NoError(t, err)
+
 		proc, err := mock.NewManager().NewProcessor(conf)
 		if err != nil {
 			t.Fatal(err)
@@ -124,9 +130,11 @@ func TestSelectPartsIndexBounds(t *testing.T) {
 }
 
 func TestSelectPartsEmpty(t *testing.T) {
-	conf := processor.NewConfig()
-	conf.Type = "select_parts"
-	conf.SelectParts.Parts = []int{3}
+	conf, err := processor.FromYAML(`
+select_parts:
+  parts: [ 3 ]
+`)
+	require.NoError(t, err)
 
 	proc, err := mock.NewManager().NewProcessor(conf)
 	if err != nil {

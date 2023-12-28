@@ -3,12 +3,15 @@ package pure_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sort"
 	"strconv"
+	"strings"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/Jeffail/gabs/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -26,7 +29,7 @@ func TestWorkflowDeps(t *testing.T) {
 		branches      [][2]string
 		inputOrdering [][]string
 		ordering      [][]string
-		err           string
+		errContains   string
 	}{
 		{
 			branches: [][2]string{
@@ -103,7 +106,7 @@ func TestWorkflowDeps(t *testing.T) {
 					"root.foo = this",
 				},
 			},
-			err: "failed to automatically resolve DAG, circular dependencies detected for branches: [0 1 2]",
+			errContains: "failed to automatically resolve DAG, circular dependencies detected for branches: [0 1 2]",
 		},
 		{
 			branches: [][2]string{
@@ -123,7 +126,7 @@ func TestWorkflowDeps(t *testing.T) {
 			inputOrdering: [][]string{
 				{"1"}, {"0"},
 			},
-			err: "the following branches were missing from order: [2]",
+			errContains: "the following branches were missing from order: [2]",
 		},
 		{
 			branches: [][2]string{
@@ -143,7 +146,7 @@ func TestWorkflowDeps(t *testing.T) {
 			inputOrdering: [][]string{
 				{"1"}, {"0", "2"}, {"1"},
 			},
-			err: "branch specified in order listed multiple times: 1",
+			errContains: "branch specified in order listed multiple times: 1",
 		},
 		{
 			branches: [][2]string{
@@ -157,7 +160,7 @@ func TestWorkflowDeps(t *testing.T) {
 				},
 				{
 					`root.bar = this.bar
-					root.baz = this.baz`,
+root.baz = this.baz`,
 					"root.buz = this",
 				},
 			},
@@ -170,26 +173,42 @@ func TestWorkflowDeps(t *testing.T) {
 	for i, test := range tests {
 		test := test
 		t.Run(strconv.Itoa(i), func(t *testing.T) {
-			conf := processor.NewConfig()
-			conf.Workflow.Order = test.inputOrdering
+			if test.inputOrdering == nil {
+				test.inputOrdering = [][]string{}
+			}
+			confStr := fmt.Sprintf(`
+workflow:
+  order: %v
+  branches:
+`, gabs.Wrap(test.inputOrdering).String())
+
 			for j, mappings := range test.branches {
-				branchConf := processor.NewBranchConfig()
-				branchConf.RequestMap = mappings[0]
-				branchConf.ResultMap = mappings[1]
-				dudProc := processor.NewConfig()
-				dudProc.Type = "bloblang"
-				dudProc.Bloblang = "root = this"
-				branchConf.Processors = append(branchConf.Processors, dudProc)
-				conf.Workflow.Branches[strconv.Itoa(j)] = branchConf
+				confStr += fmt.Sprintf(`
+    %v:
+      request_map: |
+        %v
+      processors:
+        - bloblang: root = this
+      result_map: |
+        %v
+`,
+					strconv.Itoa(j),
+					strings.ReplaceAll(mappings[0], "\n", "\n        "),
+					strings.ReplaceAll(mappings[1], "\n", "\n        "),
+				)
 			}
 
-			p, err := pure.NewWorkflow(conf.Workflow, mock.NewManager())
-			if len(test.err) > 0 {
-				assert.EqualError(t, err, test.err)
+			conf, err := processor.FromYAML(confStr)
+			require.NoError(t, err)
+
+			p, err := mock.NewManager().NewProcessor(conf)
+			if len(test.errContains) > 0 {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), test.errContains)
 			} else {
 				require.NoError(t, err)
 
-				dag := p.Flow()
+				dag := p.(*pure.Workflow).Flow()
 				for _, d := range dag {
 					sort.Strings(d)
 				}
@@ -207,25 +226,31 @@ func newMockProcProvider(t *testing.T, confs map[string]processor.Config) bundle
 		v.Label = k
 		resConf.ResourceProcessors = append(resConf.ResourceProcessors, v)
 	}
-
 	mgr, err := manager.New(resConf)
 	require.NoError(t, err)
 
 	return mgr
 }
 
-func quickTestBranches(branches ...[4]string) map[string]processor.Config {
+func quickTestBranches(t testing.TB, branches ...[4]string) map[string]processor.Config {
+	t.Helper()
 	m := map[string]processor.Config{}
 	for _, b := range branches {
-		blobConf := processor.NewConfig()
-		blobConf.Type = "bloblang"
-		blobConf.Bloblang = b[2]
-
-		conf := processor.NewConfig()
-		conf.Type = "branch"
-		conf.Branch.RequestMap = b[1]
-		conf.Branch.Processors = append(conf.Branch.Processors, blobConf)
-		conf.Branch.ResultMap = b[3]
+		conf, err := processor.FromYAML(fmt.Sprintf(`
+branch:
+  request_map: |
+    %v
+  processors:
+    - bloblang: |
+        %v
+  result_map: |
+    %v
+`,
+			strings.ReplaceAll(b[1], "\n", "\n    "),
+			strings.ReplaceAll(b[2], "\n", "\n        "),
+			strings.ReplaceAll(b[3], "\n", "\n    "),
+		))
+		require.NoError(t, err)
 
 		m[b[0]] = conf
 	}
@@ -233,29 +258,34 @@ func quickTestBranches(branches ...[4]string) map[string]processor.Config {
 }
 
 func TestWorkflowMissingResources(t *testing.T) {
-	conf := processor.NewConfig()
-	conf.Workflow.Order = [][]string{
-		{"foo", "bar", "baz"},
-	}
+	conf, err := processor.FromYAML(`
+workflow:
+  order: [[ foo, bar, baz ]]
+  branches:
+    bar:
+      request_map: root = this
+      processors:
+        - bloblang: root = this
+      result_map: root = this
+`)
+	require.NoError(t, err)
 
-	branchConf := processor.NewConfig()
-	branchConf.Branch.RequestMap = "root = this"
-	branchConf.Branch.ResultMap = "root = this"
-
-	blobConf := processor.NewConfig()
-	blobConf.Type = "bloblang"
-	blobConf.Bloblang = "root = this"
-
-	branchConf.Branch.Processors = append(branchConf.Branch.Processors, blobConf)
-
-	conf.Workflow.Branches["bar"] = branchConf.Branch
+	branchConf, err := processor.FromYAML(`
+branch:
+  request_map: root = this
+  processors:
+    - bloblang: root = this
+  result_map: root = this
+`)
+	require.NoError(t, err)
 
 	mgr := newMockProcProvider(t, map[string]processor.Config{
 		"baz": branchConf,
 	})
 
-	_, err := pure.NewWorkflow(conf.Workflow, mgr)
-	require.EqualError(t, err, "processor resource 'foo' was not found")
+	_, err = mgr.NewProcessor(conf)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "processor resource 'foo' was not found")
 }
 
 type mockMsg struct {
@@ -384,7 +414,7 @@ func TestWorkflows(t *testing.T) {
 				},
 				{
 					`root.bar = this.bar.not_null()
-					root.baz = this.baz.not_null()`,
+root.baz = this.baz.not_null()`,
 					"root = this",
 					"root.buz = this.bar + this.baz",
 				},
@@ -405,12 +435,12 @@ func TestWorkflows(t *testing.T) {
 				{
 					`root = this`,
 					`root = this
-					 root.name_upper = this.name.uppercase()`,
+root.name_upper = this.name.uppercase()`,
 					`root.result = if this.failme.bool(false) {
-						throw("this is a branch error")
-					} else {
-						this.name_upper
-					}`,
+  throw("this is a branch error")
+} else {
+  this.name_upper
+}`,
 				},
 			},
 			input: []mockMsg{
@@ -431,20 +461,37 @@ func TestWorkflows(t *testing.T) {
 	for i, test := range tests {
 		test := test
 		t.Run(strconv.Itoa(i), func(t *testing.T) {
-			conf := processor.NewConfig()
-			conf.Workflow.Order = test.order
+			if test.order == nil {
+				test.order = [][]string{}
+			}
+			confStr := fmt.Sprintf(`
+workflow:
+  order: %v
+  branches:
+`, gabs.Wrap(test.order).String())
+
 			for j, mappings := range test.branches {
-				branchConf := processor.NewBranchConfig()
-				branchConf.RequestMap = mappings[0]
-				branchConf.ResultMap = mappings[2]
-				proc := processor.NewConfig()
-				proc.Type = "bloblang"
-				proc.Bloblang = mappings[1]
-				branchConf.Processors = append(branchConf.Processors, proc)
-				conf.Workflow.Branches[strconv.Itoa(j)] = branchConf
+				confStr += fmt.Sprintf(`
+    %v:
+      request_map: |
+        %v
+      processors:
+        - bloblang: |
+            %v
+      result_map: |
+        %v
+`,
+					strconv.Itoa(j),
+					strings.ReplaceAll(mappings[0], "\n", "\n        "),
+					strings.ReplaceAll(mappings[1], "\n", "\n            "),
+					strings.ReplaceAll(mappings[2], "\n", "\n        "),
+				)
 			}
 
-			p, err := pure.NewWorkflow(conf.Workflow, mock.NewManager())
+			conf, err := processor.FromYAML(confStr)
+			require.NoError(t, err)
+
+			p, err := mock.NewManager().NewProcessor(conf)
 			require.NoError(t, err)
 
 			inputMsg := message.QuickBatch(nil)
@@ -634,14 +681,19 @@ func TestWorkflowsWithResources(t *testing.T) {
 	for i, test := range tests {
 		test := test
 		t.Run(strconv.Itoa(i), func(t *testing.T) {
-			conf := processor.NewConfig()
-			conf.Workflow.BranchResources = []string{}
+			var branchNames []string
 			for _, b := range test.branches {
-				conf.Workflow.BranchResources = append(conf.Workflow.BranchResources, b[0])
+				branchNames = append(branchNames, b[0])
 			}
 
-			mgr := newMockProcProvider(t, quickTestBranches(test.branches...))
-			p, err := pure.NewWorkflow(conf.Workflow, mgr)
+			conf, err := processor.FromYAML(fmt.Sprintf(`
+workflow:
+  branch_resources: %v
+`, gabs.Wrap(branchNames).String()))
+			require.NoError(t, err)
+
+			mgr := newMockProcProvider(t, quickTestBranches(t, test.branches...))
+			p, err := mgr.NewProcessor(conf)
 			require.NoError(t, err)
 
 			var parts [][]byte
@@ -701,15 +753,20 @@ func TestWorkflowsParallel(t *testing.T) {
 		`{"bar":5,"baz":10,"buz":12,"foo":"5","meta":{"workflow":{"succeeded":["0","1","2"]}}}`,
 	}
 
-	conf := processor.NewConfig()
-	conf.Workflow.BranchResources = []string{}
+	var branchNames []string
 	for _, b := range branches {
-		conf.Workflow.BranchResources = append(conf.Workflow.BranchResources, b[0])
+		branchNames = append(branchNames, b[0])
 	}
 
+	conf, err := processor.FromYAML(fmt.Sprintf(`
+workflow:
+  branch_resources: %v
+`, gabs.Wrap(branchNames).String()))
+	require.NoError(t, err)
+
 	for loops := 0; loops < 10; loops++ {
-		mgr := newMockProcProvider(t, quickTestBranches(branches...))
-		p, err := pure.NewWorkflow(conf.Workflow, mgr)
+		mgr := newMockProcProvider(t, quickTestBranches(t, branches...))
+		p, err := mgr.NewProcessor(conf)
 		require.NoError(t, err)
 
 		startChan := make(chan struct{})
@@ -897,11 +954,17 @@ func TestWorkflowsWithOrderResources(t *testing.T) {
 	for i, test := range tests {
 		test := test
 		t.Run(strconv.Itoa(i), func(t *testing.T) {
-			conf := processor.NewConfig()
-			conf.Workflow.Order = test.order
+			if test.order == nil {
+				test.order = [][]string{}
+			}
+			conf, err := processor.FromYAML(fmt.Sprintf(`
+workflow:
+  order: %v
+`, gabs.Wrap(test.order).String()))
+			require.NoError(t, err)
 
-			mgr := newMockProcProvider(t, quickTestBranches(test.branches...))
-			p, err := pure.NewWorkflow(conf.Workflow, mgr)
+			mgr := newMockProcProvider(t, quickTestBranches(t, test.branches...))
+			p, err := mgr.NewProcessor(conf)
 			require.NoError(t, err)
 
 			var parts [][]byte

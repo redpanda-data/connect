@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"sort"
-	"strconv"
 	"time"
 
 	"go.opentelemetry.io/otel/trace"
@@ -13,97 +12,42 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/bloblang/mapping"
 	"github.com/benthosdev/benthos/v4/internal/bloblang/query"
 	"github.com/benthosdev/benthos/v4/internal/bundle"
+	"github.com/benthosdev/benthos/v4/internal/component/interop"
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
-	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
 	"github.com/benthosdev/benthos/v4/internal/tracing"
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
-var branchFields = docs.FieldSpecs{
-	docs.FieldBloblang(
-		"request_map",
-		"A [Bloblang mapping](/docs/guides/bloblang/about) that describes how to create a request payload suitable for the child processors of this branch. If left empty then the branch will begin with an exact copy of the origin message (including metadata).",
-		`root = {
-	"id": this.doc.id,
-	"content": this.doc.body.text
-}`,
-		`root = if this.type == "foo" {
-	this.foo.request
-} else {
-	deleted()
-}`,
-	).HasDefault(""),
-	docs.FieldProcessor(
-		"processors",
-		"A list of processors to apply to mapped requests. When processing message batches the resulting batch must match the size and ordering of the input batch, therefore filtering, grouping should not be performed within these processors.",
-	).Array().HasDefault([]any{}),
-	docs.FieldBloblang(
-		"result_map",
-		"A [Bloblang mapping](/docs/guides/bloblang/about) that describes how the resulting messages from branched processing should be mapped back into the original payload. If left empty the origin message will remain unchanged (including metadata).",
-		`meta foo_code = meta("code")
-root.foo_result = this`,
-		`meta = meta()
-root.bar.body = this.body
-root.bar.id = this.user.id`,
-		`root.raw_result = content().string()`,
-		`root.enrichments.foo = if meta("request_failed") != null {
-  throw(meta("request_failed"))
-} else {
-  this
-}`,
-	).HasDefault(""),
-}
+const (
+	branchProcFieldReqMap = "request_map"
+	branchProcFieldProcs  = "processors"
+	branchProcFieldResMap = "result_map"
+)
 
-func init() {
-	err := bundle.AllProcessors.Add(func(conf processor.Config, mgr bundle.NewManagement) (processor.V1, error) {
-		return newBranch(conf.Branch, mgr)
-	}, docs.ComponentSpec{
-		Name:   "branch",
-		Status: docs.StatusStable,
-		Categories: []string{
-			"Composition",
-		},
-		Summary: `
-The ` + "`branch`" + ` processor allows you to create a new request message via
-a [Bloblang mapping](/docs/guides/bloblang/about), execute a list of processors
-on the request messages, and, finally, map the result back into the source
-message using another mapping.`,
-		Description: `
-This is useful for preserving the original message contents when using
-processors that would otherwise replace the entire contents.
+func branchProcSpec() *service.ConfigSpec {
+	return service.NewConfigSpec().
+		Categories("Composition").
+		Stable().
+		Summary(`The `+"`branch`"+` processor allows you to create a new request message via a [Bloblang mapping](/docs/guides/bloblang/about), execute a list of processors on the request messages, and, finally, map the result back into the source message using another mapping.`).
+		Description(`
+This is useful for preserving the original message contents when using processors that would otherwise replace the entire contents.
 
 ### Metadata
 
-Metadata fields that are added to messages during branch processing will not be
-automatically copied into the resulting message. In order to do this you should
-explicitly declare in your ` + "`result_map`" + ` either a wholesale copy with
-` + "`meta = meta()`" + `, or selective copies with
-` + "`meta foo = meta(\"bar\")`" + ` and so on.
+Metadata fields that are added to messages during branch processing will not be automatically copied into the resulting message. In order to do this you should explicitly declare in your `+"`result_map`"+` either a wholesale copy with `+"`meta = meta()`"+`, or selective copies with `+"`meta foo = meta(\"bar\")`"+` and so on.
 
 ### Error Handling
 
-If the ` + "`request_map`" + ` fails the child processors will not be executed.
-If the child processors themselves result in an (uncaught) error then the
-` + "`result_map`" + ` will not be executed. If the ` + "`result_map`" + ` fails
-the message will remain unchanged. Under any of these conditions standard
-[error handling methods](/docs/configuration/error_handling) can be used in
-order to filter, DLQ or recover the failed messages.
+If the `+"`request_map`"+` fails the child processors will not be executed. If the child processors themselves result in an (uncaught) error then the `+"`result_map`"+` will not be executed. If the `+"`result_map`"+` fails the message will remain unchanged. Under any of these conditions standard [error handling methods](/docs/configuration/error_handling) can be used in order to filter, DLQ or recover the failed messages.
 
 ### Conditional Branching
 
-If the root of your request map is set to ` + "`deleted()`" + ` then the branch
-processors are skipped for the given message, this allows you to conditionally
-branch messages.`,
-		Examples: []docs.AnnotatedExample{
-			{
-				Title: "HTTP Request",
-				Summary: `
-This example strips the request message into an empty body, grabs an HTTP
-payload, and places the result back into the original message at the path
-` + "`image.pull_count`" + `:`,
-				Config: `
+If the root of your request map is set to `+"`deleted()`"+` then the branch processors are skipped for the given message, this allows you to conditionally branch messages.`).
+		Example("HTTP Request", `
+This example strips the request message into an empty body, grabs an HTTP payload, and places the result back into the original message at the path `+"`image.pull_count`"+`:`, `
 pipeline:
   processors:
     - branch:
@@ -116,13 +60,9 @@ pipeline:
 
 # Example input:  {"id":"foo","some":"pre-existing data"}
 # Example output: {"id":"foo","some":"pre-existing data","image":{"pull_count":1234}}
-`,
-			},
-			{
-				Title: "Non Structured Results",
-				Summary: `
-When the result of your branch processors is unstructured and you wish to simply set a resulting field to the raw output use the content function to obtain the raw bytes of the resulting message and then coerce it into your value type of choice:`,
-				Config: `
+`).
+		Example("Non Structured Results", `
+When the result of your branch processors is unstructured and you wish to simply set a resulting field to the raw output use the content function to obtain the raw bytes of the resulting message and then coerce it into your value type of choice:`, `
 pipeline:
   processors:
     - branch:
@@ -136,15 +76,9 @@ pipeline:
 
 # Example input:  {"document":{"id":"foo","content":"hello world"}}
 # Example output: {"document":{"id":"foo","content":"hello world","description":"this is a cool doc"}}
-`,
-			},
-			{
-				Title: "Lambda Function",
-				Summary: `
-This example maps a new payload for triggering a lambda function with an ID and
-username from the original message, and the result of the lambda is discarded,
-meaning the original message is unchanged.`,
-				Config: `
+`).
+		Example("Lambda Function", `
+This example maps a new payload for triggering a lambda function with an ID and username from the original message, and the result of the lambda is discarded, meaning the original message is unchanged.`, `
 pipeline:
   processors:
     - branch:
@@ -155,14 +89,9 @@ pipeline:
 
 # Example input: {"doc":{"id":"foo","body":"hello world"},"user":{"name":"fooey"}}
 # Output matches the input, which is unchanged
-`,
-			},
-			{
-				Title: "Conditional Caching",
-				Summary: `
-This example caches a document by a message ID only when the type of the
-document is a foo:`,
-				Config: `
+`).
+		Example("Conditional Caching", `
+This example caches a document by a message ID only when the type of the document is a foo:`, `
 pipeline:
   processors:
     - branch:
@@ -179,11 +108,53 @@ pipeline:
               operator: set
               key: ${! meta("id") }
               value: ${! content() }
-`,
-			},
-		},
-		Config: docs.FieldComponent().WithChildren(branchFields...),
-	})
+`).
+		Fields(branchSpecFields()...)
+}
+
+func branchSpecFields() []*service.ConfigField {
+	return []*service.ConfigField{
+		service.NewBloblangField(branchProcFieldReqMap).
+			Description("A [Bloblang mapping](/docs/guides/bloblang/about) that describes how to create a request payload suitable for the child processors of this branch. If left empty then the branch will begin with an exact copy of the origin message (including metadata).").
+			Examples(`root = {
+	"id": this.doc.id,
+	"content": this.doc.body.text
+}`,
+				`root = if this.type == "foo" {
+	this.foo.request
+} else {
+	deleted()
+}`).
+			Default(""),
+		service.NewProcessorListField(branchProcFieldProcs).
+			Description("A list of processors to apply to mapped requests. When processing message batches the resulting batch must match the size and ordering of the input batch, therefore filtering, grouping should not be performed within these processors."),
+		service.NewBloblangField(branchProcFieldResMap).
+			Description("A [Bloblang mapping](/docs/guides/bloblang/about) that describes how the resulting messages from branched processing should be mapped back into the original payload. If left empty the origin message will remain unchanged (including metadata).").
+			Examples(`meta foo_code = meta("code")
+root.foo_result = this`,
+				`meta = meta()
+root.bar.body = this.body
+root.bar.id = this.user.id`,
+				`root.raw_result = content().string()`,
+				`root.enrichments.foo = if meta("request_failed") != null {
+  throw(meta("request_failed"))
+} else {
+  this
+}`).
+			Default(""),
+	}
+}
+
+func init() {
+	err := service.RegisterBatchProcessor(
+		"branch", branchProcSpec(),
+		func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchProcessor, error) {
+			b, err := newBranchFromParsed(conf, interop.UnwrapManagement(mgr))
+			if err != nil {
+				return nil, err
+			}
+			return interop.NewUnwrapInternalBatchProcessor(b), nil
+		})
 	if err != nil {
 		panic(err)
 	}
@@ -209,25 +180,11 @@ type Branch struct {
 	mLatency       metrics.StatTimer
 }
 
-func newBranch(conf processor.BranchConfig, mgr bundle.NewManagement) (*Branch, error) {
-	children := make([]processor.V1, 0, len(conf.Processors))
-	for i, pconf := range conf.Processors {
-		pMgr := mgr.IntoPath("branch", "processors", strconv.Itoa(i))
-		proc, err := pMgr.NewProcessor(pconf)
-		if err != nil {
-			return nil, fmt.Errorf("failed to init processor %v: %w", i, err)
-		}
-		children = append(children, proc)
-	}
-	if len(children) == 0 {
-		return nil, errors.New("the branch processor requires at least one child processor")
-	}
-
+func newBranchFromParsed(conf *service.ParsedConfig, mgr bundle.NewManagement) (b *Branch, err error) {
 	stats := mgr.Metrics()
-	b := &Branch{
-		children: children,
-		log:      mgr.Logger(),
-		tracer:   mgr.Tracer(),
+	b = &Branch{
+		log:    mgr.Logger(),
+		tracer: mgr.Tracer(),
 
 		mReceived:      stats.GetCounter("processor_received"),
 		mBatchReceived: stats.GetCounter("processor_batch_received"),
@@ -237,14 +194,25 @@ func newBranch(conf processor.BranchConfig, mgr bundle.NewManagement) (*Branch, 
 		mLatency:       stats.GetTimer("processor_latency_ns"),
 	}
 
-	var err error
-	if len(conf.RequestMap) > 0 {
-		if b.requestMap, err = mgr.BloblEnvironment().NewMapping(conf.RequestMap); err != nil {
+	var pChildren []*service.OwnedProcessor
+	if pChildren, err = conf.FieldProcessorList(branchProcFieldProcs); err != nil {
+		return
+	}
+	if len(pChildren) == 0 {
+		return nil, errors.New("the branch processor requires at least one child processor")
+	}
+	b.children = make([]processor.V1, len(pChildren))
+	for i, c := range pChildren {
+		b.children[i] = interop.UnwrapOwnedProcessor(c)
+	}
+
+	if reqMapStr, _ := conf.FieldString(branchProcFieldReqMap); len(reqMapStr) > 0 {
+		if b.requestMap, err = mgr.BloblEnvironment().NewMapping(reqMapStr); err != nil {
 			return nil, fmt.Errorf("failed to parse request mapping: %w", err)
 		}
 	}
-	if len(conf.ResultMap) > 0 {
-		if b.resultMap, err = mgr.BloblEnvironment().NewMapping(conf.ResultMap); err != nil {
+	if resMapStr, _ := conf.FieldString(branchProcFieldResMap); len(resMapStr) > 0 {
+		if b.resultMap, err = mgr.BloblEnvironment().NewMapping(resMapStr); err != nil {
 			return nil, fmt.Errorf("failed to parse result mapping: %w", err)
 		}
 	}

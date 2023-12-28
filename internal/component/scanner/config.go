@@ -13,21 +13,21 @@ type Config struct {
 	Plugin any
 }
 
-func FromAny(prov docs.Provider, cType docs.Type, value any) (conf Config, err error) {
+func FromAny(prov docs.Provider, value any) (conf Config, err error) {
 	switch t := value.(type) {
 	case Config:
 		return t, nil
 	case *yaml.Node:
-		return fromYAML(prov, cType, t)
+		return fromYAML(prov, t)
 	case map[string]any:
-		return fromMap(prov, cType, t)
+		return fromMap(prov, t)
 	}
 	err = fmt.Errorf("unexpected value, expected object, got %T", value)
 	return
 }
 
-func fromMap(prov docs.Provider, cType docs.Type, value map[string]any) (conf Config, err error) {
-	if conf.Type, _, err = docs.GetInferenceCandidateFromMap(prov, cType, value); err != nil {
+func fromMap(prov docs.Provider, value map[string]any) (conf Config, err error) {
+	if conf.Type, _, err = docs.GetInferenceCandidateFromMap(prov, docs.TypeScanner, value); err != nil {
 		err = docs.NewLintError(0, docs.LintComponentNotFound, err)
 		return
 	}
@@ -40,8 +40,8 @@ func fromMap(prov docs.Provider, cType docs.Type, value map[string]any) (conf Co
 	return
 }
 
-func fromYAML(prov docs.Provider, cType docs.Type, value *yaml.Node) (conf Config, err error) {
-	if conf.Type, _, err = docs.GetInferenceCandidateFromYAML(prov, cType, value); err != nil {
+func fromYAML(prov docs.Provider, value *yaml.Node) (conf Config, err error) {
+	if conf.Type, _, err = docs.GetInferenceCandidateFromYAML(prov, docs.TypeScanner, value); err != nil {
 		err = docs.NewLintError(value.Line, docs.LintComponentNotFound, err)
 		return
 	}

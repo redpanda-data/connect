@@ -50,7 +50,7 @@ func TestCase(t *testing.T) {
 
 	procConf = processor.NewConfig()
 	procConf.Type = "bloblang"
-	procConf.Bloblang = `root = content().uppercase()`
+	procConf.Plugin = `root = content().uppercase()`
 	if proc, err = mock.NewManager().NewProcessor(procConf); err != nil {
 		t.Fatal(err)
 	}
@@ -58,7 +58,7 @@ func TestCase(t *testing.T) {
 
 	procConf = processor.NewConfig()
 	procConf.Type = "bloblang"
-	procConf.Bloblang = `root = deleted()`
+	procConf.Plugin = `root = deleted()`
 	if proc, err = mock.NewManager().NewProcessor(procConf); err != nil {
 		t.Fatal(err)
 	}
@@ -66,7 +66,7 @@ func TestCase(t *testing.T) {
 
 	procConf = processor.NewConfig()
 	procConf.Type = "bloblang"
-	procConf.Bloblang = `root = if batch_index() == 0 { count("batch_id") }`
+	procConf.Plugin = `root = if batch_index() == 0 { count("batch_id") }`
 	if proc, err = mock.NewManager().NewProcessor(procConf); err != nil {
 		t.Fatal(err)
 	}
@@ -277,7 +277,7 @@ func TestFileCaseInputs(t *testing.T) {
 	procConf := processor.NewConfig()
 
 	procConf.Type = "bloblang"
-	procConf.Bloblang = `root = "hello world " + content().string()`
+	procConf.Plugin = `root = "hello world " + content().string()`
 	proc, err := mock.NewManager().NewProcessor(procConf)
 	require.NoError(t, err)
 
@@ -336,7 +336,7 @@ func TestFileCaseConditions(t *testing.T) {
 	procConf := processor.NewConfig()
 
 	procConf.Type = "bloblang"
-	procConf.Bloblang = `root = content().uppercase()`
+	procConf.Plugin = `root = content().uppercase()`
 	proc, err := mock.NewManager().NewProcessor(procConf)
 	require.NoError(t, err)
 

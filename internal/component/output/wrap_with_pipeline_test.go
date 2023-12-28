@@ -125,14 +125,18 @@ func TestBasicWrapPipelinesOrdering(t *testing.T) {
 
 	mockOut := &mockOutput{}
 
-	firstProc := processor.NewConfig()
-	firstProc.Type = "insert_part"
-	firstProc.InsertPart.Content = "foo"
-	firstProc.InsertPart.Index = 0
+	firstProc, err := processor.FromYAML(`
+insert_part:
+  content: foo
+  index: 0
+`)
+	require.NoError(t, err)
 
-	secondProc := processor.NewConfig()
-	secondProc.Type = "select_parts"
-	secondProc.SelectParts.Parts = []int{0}
+	secondProc, err := processor.FromYAML(`
+select_parts:
+  parts: [ 0 ]
+`)
+	require.NoError(t, err)
 
 	conf := output.NewConfig()
 	conf.Processors = append(conf.Processors, firstProc)

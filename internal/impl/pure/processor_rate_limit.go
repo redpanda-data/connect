@@ -8,33 +8,42 @@ import (
 
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component"
+	"github.com/benthosdev/benthos/v4/internal/component/interop"
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/component/ratelimit"
-	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/message"
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
+const (
+	rlimitFieldResource = "resource"
+)
+
+func rlimitProcSpec() *service.ConfigSpec {
+	return service.NewConfigSpec().
+		Categories("Utility").
+		Stable().
+		Summary(`Throttles the throughput of a pipeline according to a specified ` + "[`rate_limit`](/docs/components/rate_limits/about)" + ` resource. Rate limits are shared across components and therefore apply globally to all processing pipelines.`).
+		Field(service.NewStringField(rlimitFieldResource).
+			Description("The target [`rate_limit` resource](/docs/components/rate_limits/about)."))
+}
+
 func init() {
-	err := bundle.AllProcessors.Add(func(conf processor.Config, mgr bundle.NewManagement) (processor.V1, error) {
-		p, err := newRateLimitProc(conf.RateLimit, mgr)
-		if err != nil {
-			return nil, err
-		}
-		return processor.NewAutoObservedProcessor("rate_limit", p, mgr), nil
-	}, docs.ComponentSpec{
-		Name: "rate_limit",
-		Categories: []string{
-			"Utility",
-		},
-		Summary: `
-Throttles the throughput of a pipeline according to a specified
-` + "[`rate_limit`](/docs/components/rate_limits/about)" + ` resource. Rate limits are
-shared across components and therefore apply globally to all processing
-pipelines.`,
-		Config: docs.FieldComponent().WithChildren(
-			docs.FieldString("resource", "The target [`rate_limit` resource](/docs/components/rate_limits/about).").HasDefault(""),
-		),
-	})
+	err := service.RegisterBatchProcessor(
+		"rate_limit", rlimitProcSpec(),
+		func(conf *service.ParsedConfig, res *service.Resources) (service.BatchProcessor, error) {
+			resStr, err := conf.FieldString(rlimitFieldResource)
+			if err != nil {
+				return nil, err
+			}
+
+			mgr := interop.UnwrapManagement(res)
+			r, err := newRateLimitProc(resStr, mgr)
+			if err != nil {
+				return nil, err
+			}
+			return interop.NewUnwrapInternalBatchProcessor(processor.NewAutoObservedProcessor("rate_limit", r, mgr)), nil
+		})
 	if err != nil {
 		panic(err)
 	}
@@ -48,12 +57,12 @@ type rateLimitProc struct {
 	closeOnce sync.Once
 }
 
-func newRateLimitProc(conf processor.RateLimitConfig, mgr bundle.NewManagement) (*rateLimitProc, error) {
-	if !mgr.ProbeRateLimit(conf.Resource) {
-		return nil, fmt.Errorf("rate limit resource '%v' was not found", conf.Resource)
+func newRateLimitProc(resStr string, mgr bundle.NewManagement) (*rateLimitProc, error) {
+	if !mgr.ProbeRateLimit(resStr) {
+		return nil, fmt.Errorf("rate limit resource '%v' was not found", resStr)
 	}
 	r := &rateLimitProc{
-		rlName:    conf.Resource,
+		rlName:    resStr,
 		mgr:       mgr,
 		closeChan: make(chan struct{}),
 	}

@@ -19,7 +19,7 @@ func NewScannerField(name string) *ConfigField {
 }
 
 func ownedScannerCreatorFromConfAny(mgr bundle.NewManagement, field any) (*OwnedScannerCreator, error) {
-	pluginConf, err := scanner.FromAny(mgr.Environment(), docs.TypeScanner, field)
+	pluginConf, err := scanner.FromAny(mgr.Environment(), field)
 	if err != nil {
 		return nil, err
 	}

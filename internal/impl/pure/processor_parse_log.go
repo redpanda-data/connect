@@ -11,83 +11,127 @@ import (
 	"github.com/influxdata/go-syslog/v3/rfc5424"
 
 	"github.com/benthosdev/benthos/v4/internal/bundle"
+	"github.com/benthosdev/benthos/v4/internal/component/interop"
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
-	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
-func init() {
-	err := bundle.AllProcessors.Add(func(conf processor.Config, mgr bundle.NewManagement) (processor.V1, error) {
-		p, err := newParseLog(conf.ParseLog, mgr)
-		if err != nil {
-			return nil, err
-		}
-		return processor.NewAutoObservedProcessor("parse_log", p, mgr), nil
-	}, docs.ComponentSpec{
-		Name: "parse_log",
-		Categories: []string{
-			"Parsing",
-		},
-		Summary: `
-Parses common log [formats](#formats) into [structured data](#codecs). This is
-easier and often much faster than ` + "[`grok`](/docs/components/processors/grok)" + `.`,
-		Config: docs.FieldComponent().WithChildren(
-			docs.FieldString("format", "A common log [format](#formats) to parse.").HasOptions(
-				"syslog_rfc5424", "syslog_rfc3164",
-			),
-			docs.FieldString("codec", "Specifies the structured format to parse a log into.").HasOptions(
-				"json",
-			),
-			docs.FieldBool("best_effort", "Still returns partially parsed messages even if an error occurs.").Advanced(),
-			docs.FieldBool("allow_rfc3339", "Also accept timestamps in rfc3339 format while parsing."+
-				" Applicable to format `syslog_rfc3164`.").Advanced(),
-			docs.FieldString("default_year", "Sets the strategy used to set the year for rfc3164 timestamps."+
-				" Applicable to format `syslog_rfc3164`. When set to `current` the current year will be set, when"+
-				" set to an integer that value will be used. Leave this field empty to not set a default year at all.").Advanced(),
-			docs.FieldString("default_timezone", "Sets the strategy to decide the timezone for rfc3164 timestamps."+
-				" Applicable to format `syslog_rfc3164`. This value should follow the [time.LoadLocation](https://golang.org/pkg/time/#LoadLocation) format.").Advanced(),
-		).ChildDefaultAndTypesFromStruct(processor.NewParseLogConfig()),
-		Footnotes: `
+const (
+	plpFieldFormat       = "format"
+	plpFieldCodec        = "codec"
+	plpFieldBestEffort   = "best_effort"
+	plpFieldWithRFC3339  = "allow_rfc3339"
+	plpFieldWithYear     = "default_year"
+	plpFieldWithTimezone = "default_timezone"
+)
+
+func parseLogSpec() *service.ConfigSpec {
+	return service.NewConfigSpec().
+		Categories("Parsing").
+		Stable().
+		Summary(`Parses common log [formats](#formats) into [structured data](#codecs). This is easier and often much faster than `+"[`grok`](/docs/components/processors/grok)"+`.`).
+		Footnotes(`
 ## Codecs
 
-Currently the only supported structured data codec is ` + "`json`" + `.
+Currently the only supported structured data codec is `+"`json`"+`.
 
 ## Formats
 
-### ` + "`syslog_rfc5424`" + `
+### `+"`syslog_rfc5424`"+`
 
-Attempts to parse a log following the [Syslog rfc5424](https://tools.ietf.org/html/rfc5424)
-spec. The resulting structured document may contain any of the following fields:
+Attempts to parse a log following the [Syslog rfc5424](https://tools.ietf.org/html/rfc5424) spec. The resulting structured document may contain any of the following fields:
 
-- ` + "`message`" + ` (string)
-- ` + "`timestamp`" + ` (string, RFC3339)
-- ` + "`facility`" + ` (int)
-- ` + "`severity`" + ` (int)
-- ` + "`priority`" + ` (int)
-- ` + "`version`" + ` (int)
-- ` + "`hostname`" + ` (string)
-- ` + "`procid`" + ` (string)
-- ` + "`appname`" + ` (string)
-- ` + "`msgid`" + ` (string)
-- ` + "`structureddata`" + ` (object)
+- `+"`message`"+` (string)
+- `+"`timestamp`"+` (string, RFC3339)
+- `+"`facility`"+` (int)
+- `+"`severity`"+` (int)
+- `+"`priority`"+` (int)
+- `+"`version`"+` (int)
+- `+"`hostname`"+` (string)
+- `+"`procid`"+` (string)
+- `+"`appname`"+` (string)
+- `+"`msgid`"+` (string)
+- `+"`structureddata`"+` (object)
 
-### ` + "`syslog_rfc3164`" + `
+### `+"`syslog_rfc3164`"+`
 
-Attempts to parse a log following the [Syslog rfc3164](https://tools.ietf.org/html/rfc3164)
-spec. The resulting structured document may contain any of the following fields:
+Attempts to parse a log following the [Syslog rfc3164](https://tools.ietf.org/html/rfc3164) spec. The resulting structured document may contain any of the following fields:
 
-- ` + "`message`" + ` (string)
-- ` + "`timestamp`" + ` (string, RFC3339)
-- ` + "`facility`" + ` (int)
-- ` + "`severity`" + ` (int)
-- ` + "`priority`" + ` (int)
-- ` + "`hostname`" + ` (string)
-- ` + "`procid`" + ` (string)
-- ` + "`appname`" + ` (string)
-- ` + "`msgid`" + ` (string)
-`,
-	})
+- `+"`message`"+` (string)
+- `+"`timestamp`"+` (string, RFC3339)
+- `+"`facility`"+` (int)
+- `+"`severity`"+` (int)
+- `+"`priority`"+` (int)
+- `+"`hostname`"+` (string)
+- `+"`procid`"+` (string)
+- `+"`appname`"+` (string)
+- `+"`msgid`"+` (string)
+`).
+		Fields(
+			service.NewStringEnumField(plpFieldFormat, "syslog_rfc5424", "syslog_rfc3164").
+				Description("A common log [format](#formats) to parse."),
+			service.NewBoolField(plpFieldBestEffort).
+				Description("Still returns partially parsed messages even if an error occurs.").
+				Advanced().
+				Default(true),
+			service.NewBoolField(plpFieldWithRFC3339).
+				Description("Also accept timestamps in rfc3339 format while parsing. Applicable to format `syslog_rfc3164`.").
+				Advanced().
+				Default(true),
+			service.NewStringField(plpFieldWithYear).
+				Description("Sets the strategy used to set the year for rfc3164 timestamps. Applicable to format `syslog_rfc3164`. When set to `current` the current year will be set, when set to an integer that value will be used. Leave this field empty to not set a default year at all.").
+				Advanced().
+				Default("current"),
+			service.NewStringField(plpFieldWithTimezone).
+				Description("Sets the strategy to decide the timezone for rfc3164 timestamps. Applicable to format `syslog_rfc3164`. This value should follow the [time.LoadLocation](https://golang.org/pkg/time/#LoadLocation) format.").
+				Advanced().
+				Default("UTC"),
+			service.NewStringField(plpFieldCodec).Deprecated(),
+		)
+}
+
+type parseLogConfig struct {
+	Format       string
+	Codec        string
+	BestEffort   bool
+	WithRFC3339  bool
+	WithYear     string
+	WithTimezone string
+}
+
+func init() {
+	err := service.RegisterBatchProcessor(
+
+		"parse_log", parseLogSpec(),
+		func(conf *service.ParsedConfig, res *service.Resources) (service.BatchProcessor, error) {
+			var c parseLogConfig
+			var err error
+
+			if c.Format, err = conf.FieldString(plpFieldFormat); err != nil {
+				return nil, err
+			}
+			if c.BestEffort, err = conf.FieldBool(plpFieldBestEffort); err != nil {
+				return nil, err
+			}
+			if c.WithRFC3339, err = conf.FieldBool(plpFieldWithRFC3339); err != nil {
+				return nil, err
+			}
+			if c.WithYear, err = conf.FieldString(plpFieldWithYear); err != nil {
+				return nil, err
+			}
+			if c.WithTimezone, err = conf.FieldString(plpFieldWithTimezone); err != nil {
+				return nil, err
+			}
+
+			mgr := interop.UnwrapManagement(res)
+			p, err := newParseLog(c, mgr)
+			if err != nil {
+				return nil, err
+			}
+			return interop.NewUnwrapInternalBatchProcessor(processor.NewAutoObservedProcessor("parse_log", p, mgr)), nil
+		})
 	if err != nil {
 		panic(err)
 	}
@@ -244,7 +288,7 @@ type parseLogProc struct {
 	log       log.Modular
 }
 
-func newParseLog(conf processor.ParseLogConfig, mgr bundle.NewManagement) (processor.AutoObserved, error) {
+func newParseLog(conf parseLogConfig, mgr bundle.NewManagement) (processor.AutoObserved, error) {
 	s := &parseLogProc{
 		formatStr: conf.Format,
 		log:       mgr.Logger(),

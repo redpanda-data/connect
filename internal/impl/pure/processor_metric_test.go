@@ -14,25 +14,33 @@ import (
 )
 
 func TestMetricBad(t *testing.T) {
-	conf := processor.NewConfig()
-	conf.Type = "metric"
-	conf.Metric.Type = "bad type"
-	conf.Metric.Name = "some.path"
-	_, err := mock.NewManager().NewProcessor(conf)
+	conf, err := processor.FromYAML(`
+metric:
+  type: bad type
+  name: some.path
+`)
+	require.NoError(t, err)
+
+	_, err = mock.NewManager().NewProcessor(conf)
 	require.Error(t, err)
 
-	conf = processor.NewConfig()
-	conf.Type = "metric"
+	conf, err = processor.FromYAML(`
+type: metric
+`)
+	require.NoError(t, err)
+
 	_, err = mock.NewManager().NewProcessor(conf)
 	require.Error(t, err)
 }
 
 func TestMetricCounter(t *testing.T) {
-	conf := processor.NewConfig()
-	conf.Type = "metric"
-	conf.Metric.Type = "counter"
-	conf.Metric.Name = "foo.bar"
-	conf.Metric.Value = "${!json(\"foo.bar\")}"
+	conf, err := processor.FromYAML(`
+metric:
+  type: counter
+  name: foo.bar
+  value: '${!json("foo.bar")}'
+`)
+	require.NoError(t, err)
 
 	mockMetrics := metrics.NewLocal()
 
@@ -75,11 +83,13 @@ func TestMetricCounter(t *testing.T) {
 }
 
 func TestMetricCounterBy(t *testing.T) {
-	conf := processor.NewConfig()
-	conf.Type = "metric"
-	conf.Metric.Type = "counter_by"
-	conf.Metric.Name = "foo.bar"
-	conf.Metric.Value = "${!json(\"foo.bar\")}"
+	conf, err := processor.FromYAML(`
+metric:
+  type: counter_by
+  name: foo.bar
+  value: '${!json("foo.bar")}'
+`)
+	require.NoError(t, err)
 
 	mockMetrics := metrics.NewLocal()
 
@@ -125,11 +135,13 @@ func TestMetricCounterBy(t *testing.T) {
 }
 
 func TestMetricGauge(t *testing.T) {
-	conf := processor.NewConfig()
-	conf.Type = "metric"
-	conf.Metric.Type = "gauge"
-	conf.Metric.Name = "foo.bar"
-	conf.Metric.Value = "${!json(\"foo.bar\")}"
+	conf, err := processor.FromYAML(`
+metric:
+  type: gauge
+  name: foo.bar
+  value: '${!json("foo.bar")}'
+`)
+	require.NoError(t, err)
 
 	mockMetrics := metrics.NewLocal()
 
@@ -175,11 +187,13 @@ func TestMetricGauge(t *testing.T) {
 }
 
 func TestMetricTiming(t *testing.T) {
-	conf := processor.NewConfig()
-	conf.Type = "metric"
-	conf.Metric.Type = "timing"
-	conf.Metric.Name = "foo.bar"
-	conf.Metric.Value = "${!json(\"foo.bar\")}"
+	conf, err := processor.FromYAML(`
+metric:
+  type: timing
+  name: foo.bar
+  value: '${!json("foo.bar")}'
+`)
+	require.NoError(t, err)
 
 	mockMetrics := metrics.NewLocal()
 

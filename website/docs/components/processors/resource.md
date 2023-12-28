@@ -14,7 +14,6 @@ categories: ["Utility"]
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-
 Resource is a processor type that runs a processor resource identified by its label.
 
 ```yml

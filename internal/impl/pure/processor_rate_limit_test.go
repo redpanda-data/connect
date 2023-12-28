@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
@@ -27,9 +28,12 @@ func TestRateLimitBasic(t *testing.T) {
 	mgr := mock.NewManager()
 	mgr.RateLimits["foo"] = rlFn
 
-	conf := processor.NewConfig()
-	conf.Type = "rate_limit"
-	conf.RateLimit.Resource = "foo"
+	conf, err := processor.FromYAML(`
+rate_limit:
+  resource: foo
+`)
+	require.NoError(t, err)
+
 	proc, err := mgr.NewProcessor(conf)
 	if err != nil {
 		t.Fatal(err)
@@ -67,9 +71,12 @@ func TestRateLimitErroredOut(t *testing.T) {
 	mgr := mock.NewManager()
 	mgr.RateLimits["foo"] = rlFn
 
-	conf := processor.NewConfig()
-	conf.Type = "rate_limit"
-	conf.RateLimit.Resource = "foo"
+	conf, err := processor.FromYAML(`
+rate_limit:
+  resource: foo
+`)
+	require.NoError(t, err)
+
 	proc, err := mgr.NewProcessor(conf)
 	if err != nil {
 		t.Fatal(err)
@@ -117,9 +124,12 @@ func TestRateLimitBlocked(t *testing.T) {
 	mgr := mock.NewManager()
 	mgr.RateLimits["foo"] = rlFn
 
-	conf := processor.NewConfig()
-	conf.Type = "rate_limit"
-	conf.RateLimit.Resource = "foo"
+	conf, err := processor.FromYAML(`
+rate_limit:
+  resource: foo
+`)
+	require.NoError(t, err)
+
 	proc, err := mgr.NewProcessor(conf)
 	if err != nil {
 		t.Fatal(err)

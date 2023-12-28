@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
@@ -16,8 +17,10 @@ import (
 )
 
 func TestCatchEmpty(t *testing.T) {
-	conf := processor.NewConfig()
-	conf.Type = "catch"
+	conf, err := processor.FromYAML(`
+catch: []
+`)
+	require.NoError(t, err)
 
 	proc, err := mock.NewManager().NewProcessor(conf)
 	if err != nil {
@@ -47,13 +50,11 @@ func TestCatchEmpty(t *testing.T) {
 }
 
 func TestCatchBasic(t *testing.T) {
-	encodeConf := processor.NewConfig()
-	encodeConf.Type = "bloblang"
-	encodeConf.Bloblang = `root = if batch_index() == 0 { content().encode("base64") }`
-
-	conf := processor.NewConfig()
-	conf.Type = "catch"
-	conf.Catch = append(conf.Catch, encodeConf)
+	conf, err := processor.FromYAML(`
+catch:
+  - bloblang: 'root = if batch_index() == 0 { content().encode("base64") }'
+`)
+	require.NoError(t, err)
 
 	proc, err := mock.NewManager().NewProcessor(conf)
 	if err != nil {
@@ -96,13 +97,11 @@ func TestCatchBasic(t *testing.T) {
 }
 
 func TestCatchFilterSome(t *testing.T) {
-	filterConf := processor.NewConfig()
-	filterConf.Type = "bloblang"
-	filterConf.Bloblang = `root = if !content().contains("foo") { deleted() }`
-
-	conf := processor.NewConfig()
-	conf.Type = "catch"
-	conf.Catch = append(conf.Catch, filterConf)
+	conf, err := processor.FromYAML(`
+catch:
+  - bloblang: 'root = if !content().contains("foo") { deleted() }'
+`)
+	require.NoError(t, err)
 
 	proc, err := mock.NewManager().NewProcessor(conf)
 	if err != nil {
@@ -143,17 +142,12 @@ func TestCatchFilterSome(t *testing.T) {
 }
 
 func TestCatchMultiProcs(t *testing.T) {
-	encodeConf := processor.NewConfig()
-	encodeConf.Type = "bloblang"
-	encodeConf.Bloblang = `root = if batch_index() == 0 { content().encode("base64") }`
-
-	filterConf := processor.NewConfig()
-	filterConf.Type = "bloblang"
-	filterConf.Bloblang = `root = if !content().contains("foo") { deleted() }`
-
-	conf := processor.NewConfig()
-	conf.Type = "catch"
-	conf.Catch = append(conf.Catch, filterConf, encodeConf)
+	conf, err := processor.FromYAML(`
+catch:
+  - bloblang: 'root = if !content().contains("foo") { deleted() }'
+  - bloblang: 'root = if batch_index() == 0 { content().encode("base64") }'
+`)
+	require.NoError(t, err)
 
 	proc, err := mock.NewManager().NewProcessor(conf)
 	if err != nil {
@@ -194,13 +188,11 @@ func TestCatchMultiProcs(t *testing.T) {
 }
 
 func TestCatchNotFails(t *testing.T) {
-	encodeConf := processor.NewConfig()
-	encodeConf.Type = "bloblang"
-	encodeConf.Bloblang = `root = if batch_index() == 0 { content().encode("base64") }`
-
-	conf := processor.NewConfig()
-	conf.Type = "catch"
-	conf.Catch = append(conf.Catch, encodeConf)
+	conf, err := processor.FromYAML(`
+catch:
+  - bloblang: 'root = if batch_index() == 0 { content().encode("base64") }'
+`)
+	require.NoError(t, err)
 
 	proc, err := mock.NewManager().NewProcessor(conf)
 	if err != nil {
@@ -240,13 +232,11 @@ func TestCatchNotFails(t *testing.T) {
 }
 
 func TestCatchFilterAll(t *testing.T) {
-	filterConf := processor.NewConfig()
-	filterConf.Type = "bloblang"
-	filterConf.Bloblang = `root = if !content().contains("foo") { deleted() }`
-
-	conf := processor.NewConfig()
-	conf.Type = "catch"
-	conf.Catch = append(conf.Catch, filterConf)
+	conf, err := processor.FromYAML(`
+catch:
+  - bloblang: 'root = if !content().contains("foo") { deleted() }'
+`)
+	require.NoError(t, err)
 
 	proc, err := mock.NewManager().NewProcessor(conf)
 	if err != nil {

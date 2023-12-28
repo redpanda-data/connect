@@ -17,38 +17,20 @@ import (
 )
 
 func TestSwitchCases(t *testing.T) {
-	conf := processor.NewConfig()
-	conf.Type = "switch"
-
-	procConf := processor.NewConfig()
-	procConf.Type = "bloblang"
-	procConf.Bloblang = `root = "Hit case 0: " + content().string()`
-
-	conf.Switch = append(conf.Switch, processor.SwitchCaseConfig{
-		Check:       `content().contains("A")`,
-		Processors:  []processor.Config{procConf},
-		Fallthrough: false,
-	})
-
-	procConf = processor.NewConfig()
-	procConf.Type = "bloblang"
-	procConf.Bloblang = `root = "Hit case 1: " + content().string()`
-
-	conf.Switch = append(conf.Switch, processor.SwitchCaseConfig{
-		Check:       `content().contains("B")`,
-		Processors:  []processor.Config{procConf},
-		Fallthrough: true,
-	})
-
-	procConf = processor.NewConfig()
-	procConf.Type = "bloblang"
-	procConf.Bloblang = `root = "Hit case 2: " + content().string()`
-
-	conf.Switch = append(conf.Switch, processor.SwitchCaseConfig{
-		Check:       `content().contains("C")`,
-		Processors:  []processor.Config{procConf},
-		Fallthrough: false,
-	})
+	conf, err := processor.FromYAML(`
+switch:
+  - check: 'content().contains("A")'
+    processors:
+      - bloblang: 'root = "Hit case 0: " + content().string()'
+  - check: 'content().contains("B")'
+    processors:
+      - bloblang: 'root = "Hit case 1: " + content().string()'
+    fallthrough: true
+  - check: 'content().contains("C")'
+    processors:
+      - bloblang: 'root = "Hit case 2: " + content().string()'
+`)
+	require.NoError(t, err)
 
 	c, err := mock.NewManager().NewProcessor(conf)
 	require.NoError(t, err)
@@ -134,28 +116,16 @@ func TestSwitchCases(t *testing.T) {
 }
 
 func TestSwitchError(t *testing.T) {
-	conf := processor.NewConfig()
-	conf.Type = "switch"
-
-	procConf := processor.NewConfig()
-	procConf.Type = "bloblang"
-	procConf.Bloblang = `root = "Hit case 0: " + content().string()`
-
-	conf.Switch = append(conf.Switch, processor.SwitchCaseConfig{
-		Check:       `this.id.not_empty().contains("foo")`,
-		Processors:  []processor.Config{procConf},
-		Fallthrough: false,
-	})
-
-	procConf = processor.NewConfig()
-	procConf.Type = "bloblang"
-	procConf.Bloblang = `root = "Hit case 1: " + content().string()`
-
-	conf.Switch = append(conf.Switch, processor.SwitchCaseConfig{
-		Check:       `this.content.contains("bar")`,
-		Processors:  []processor.Config{procConf},
-		Fallthrough: false,
-	})
+	conf, err := processor.FromYAML(`
+switch:
+  - check: 'this.id.not_empty().contains("foo")'
+    processors:
+      - bloblang: 'root = "Hit case 0: " + content().string()'
+  - check: 'this.content.contains("bar")'
+    processors:
+      - bloblang: 'root = "Hit case 1: " + content().string()'
+`)
+	require.NoError(t, err)
 
 	c, err := mock.NewManager().NewProcessor(conf)
 	require.NoError(t, err)
@@ -195,38 +165,20 @@ func TestSwitchError(t *testing.T) {
 }
 
 func BenchmarkSwitch10(b *testing.B) {
-	conf := processor.NewConfig()
-	conf.Type = "switch"
-
-	procConf := processor.NewConfig()
-	procConf.Type = "bloblang"
-	procConf.Bloblang = `root = "Hit case 0: " + content().string()`
-
-	conf.Switch = append(conf.Switch, processor.SwitchCaseConfig{
-		Check:       `content().contains("A")`,
-		Processors:  []processor.Config{procConf},
-		Fallthrough: false,
-	})
-
-	procConf = processor.NewConfig()
-	procConf.Type = "bloblang"
-	procConf.Bloblang = `root = "Hit case 1: " + content().string()`
-
-	conf.Switch = append(conf.Switch, processor.SwitchCaseConfig{
-		Check:       `content().contains("B")`,
-		Processors:  []processor.Config{procConf},
-		Fallthrough: true,
-	})
-
-	procConf = processor.NewConfig()
-	procConf.Type = "bloblang"
-	procConf.Bloblang = `root = "Hit case 2: " + content().string()`
-
-	conf.Switch = append(conf.Switch, processor.SwitchCaseConfig{
-		Check:       `content().contains("C")`,
-		Processors:  []processor.Config{procConf},
-		Fallthrough: false,
-	})
+	conf, err := processor.FromYAML(`
+switch:
+  - check: 'content().contains("A")'
+    processors:
+      - bloblang: 'root = "Hit case 0: " + content().string()'
+  - check: 'content().contains("B")'
+    processors:
+      - bloblang: 'root = "Hit case 1: " + content().string()'
+    fallthrough: true
+  - check: 'content().contains("C")'
+    processors:
+      - bloblang: 'root = "Hit case 2: " + content().string()'
+`)
+	require.NoError(b, err)
 
 	c, err := mock.NewManager().NewProcessor(conf)
 	require.NoError(b, err)
@@ -272,38 +224,20 @@ func BenchmarkSwitch10(b *testing.B) {
 }
 
 func BenchmarkSwitch1(b *testing.B) {
-	conf := processor.NewConfig()
-	conf.Type = "switch"
-
-	procConf := processor.NewConfig()
-	procConf.Type = "bloblang"
-	procConf.Bloblang = `root = "Hit case 0: " + content().string()`
-
-	conf.Switch = append(conf.Switch, processor.SwitchCaseConfig{
-		Check:       `content().contains("A")`,
-		Processors:  []processor.Config{procConf},
-		Fallthrough: false,
-	})
-
-	procConf = processor.NewConfig()
-	procConf.Type = "bloblang"
-	procConf.Bloblang = `root = "Hit case 1: " + content().string()`
-
-	conf.Switch = append(conf.Switch, processor.SwitchCaseConfig{
-		Check:       `content().contains("B")`,
-		Processors:  []processor.Config{procConf},
-		Fallthrough: true,
-	})
-
-	procConf = processor.NewConfig()
-	procConf.Type = "bloblang"
-	procConf.Bloblang = `root = "Hit case 2: " + content().string()`
-
-	conf.Switch = append(conf.Switch, processor.SwitchCaseConfig{
-		Check:       `content().contains("C")`,
-		Processors:  []processor.Config{procConf},
-		Fallthrough: false,
-	})
+	conf, err := processor.FromYAML(`
+switch:
+  - check: 'content().contains("A")'
+    processors:
+      - bloblang: 'root = "Hit case 0: " + content().string()'
+  - check: 'content().contains("B")'
+    processors:
+      - bloblang: 'root = "Hit case 1: " + content().string()'
+    fallthrough: true
+  - check: 'content().contains("C")'
+    processors:
+      - bloblang: 'root = "Hit case 2: " + content().string()'
+`)
+	require.NoError(b, err)
 
 	c, err := mock.NewManager().NewProcessor(conf)
 	require.NoError(b, err)
