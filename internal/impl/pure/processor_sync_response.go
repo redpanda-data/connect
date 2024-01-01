@@ -3,34 +3,27 @@ package pure
 import (
 	"context"
 
-	"github.com/benthosdev/benthos/v4/internal/bundle"
-	"github.com/benthosdev/benthos/v4/internal/component/processor"
-	"github.com/benthosdev/benthos/v4/internal/docs"
+	"github.com/benthosdev/benthos/v4/internal/component/interop"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
 	"github.com/benthosdev/benthos/v4/internal/transaction"
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
 func init() {
-	err := bundle.AllProcessors.Add(func(conf processor.Config, mgr bundle.NewManagement) (processor.V1, error) {
-		return &syncResponseProc{log: mgr.Logger()}, nil
-	}, docs.ComponentSpec{
-		Name: "sync_response",
-		Categories: []string{
-			"Utility",
-		},
-		Summary: `
-Adds the payload in its current state as a synchronous response to the input
-source, where it is dealt with according to that specific input type.`,
-		Description: `
-For most inputs this mechanism is ignored entirely, in which case the sync
-response is dropped without penalty. It is therefore safe to use this processor
-even when combining input types that might not have support for sync responses.
-An example of an input able to utilise this is the ` + "`http_server`" + `.
+	err := service.RegisterBatchProcessor("sync_response", service.NewConfigSpec().
+		Categories("Utility").
+		Stable().
+		Summary("Adds the payload in its current state as a synchronous response to the input source, where it is dealt with according to that specific input type.").
+		Description(`
+For most inputs this mechanism is ignored entirely, in which case the sync response is dropped without penalty. It is therefore safe to use this processor even when combining input types that might not have support for sync responses. An example of an input able to utilise this is the `+"`http_server`"+`.
 
-For more information please read [Synchronous Responses](/docs/guides/sync_responses).`,
-		Config: docs.FieldObject("", "").HasDefault(struct{}{}),
-	})
+For more information please read [Synchronous Responses](/docs/guides/sync_responses).`).
+		Field(service.NewObjectField("").Default(map[string]any{})),
+		func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchProcessor, error) {
+			p := &syncResponseProc{log: interop.UnwrapManagement(mgr).Logger()}
+			return interop.NewUnwrapInternalBatchProcessor(p), nil
+		})
 	if err != nil {
 		panic(err)
 	}

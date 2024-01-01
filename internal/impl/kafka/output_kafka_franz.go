@@ -56,6 +56,10 @@ This output often out-performs the traditional ` + "`kafka`" + ` output as well 
 			Description("A rack identifier for this client.").
 			Default("").
 			Advanced()).
+		Field(service.NewBoolField("idempotent_write").
+			Description("Enable the idempotent write producer option. This requires the `IDEMPOTENT_WRITE` permission on `CLUSTER` and can be disabled if this permission is not available.").
+			Default(true).
+			Advanced()).
 		Field(service.NewMetadataFilterField("metadata").
 			Description("Determine which (if any) metadata values should be added to messages as headers.").
 			Optional()).
@@ -121,6 +125,7 @@ type franzKafkaWriter struct {
 	partition        *service.InterpolatedString
 	clientID         string
 	rackID           string
+	idempotentWrite  bool
 	tlsConf          *tls.Config
 	saslConfs        []sasl.Mechanism
 	metaFilter       *service.MetadataFilter
@@ -235,6 +240,10 @@ func newFranzKafkaWriterFromConfig(conf *service.ParsedConfig, log *service.Logg
 		return nil, err
 	}
 
+	if f.idempotentWrite, err = conf.FieldBool("idempotent_write"); err != nil {
+		return nil, err
+	}
+
 	if conf.Contains("metadata") {
 		if f.metaFilter, err = conf.FieldMetadataFilter("metadata"); err != nil {
 			return nil, err
@@ -277,6 +286,9 @@ func (f *franzKafkaWriter) Connect(ctx context.Context) error {
 	}
 	if f.partitioner != nil {
 		clientOpts = append(clientOpts, kgo.RecordPartitioner(f.partitioner))
+	}
+	if !f.idempotentWrite {
+		clientOpts = append(clientOpts, kgo.DisableIdempotentWrite())
 	}
 	if len(f.compressionPrefs) > 0 {
 		clientOpts = append(clientOpts, kgo.ProducerBatchCompression(f.compressionPrefs...))

@@ -4,17 +4,14 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"io/fs"
 	"mime/multipart"
 	"net/http"
 	"net/textproto"
 	"strings"
 
-	"github.com/benthosdev/benthos/v4/internal/bloblang/field"
 	"github.com/benthosdev/benthos/v4/internal/bloblang/query"
-	"github.com/benthosdev/benthos/v4/internal/bundle"
-	"github.com/benthosdev/benthos/v4/internal/filepath/ifs"
-	"github.com/benthosdev/benthos/v4/internal/message"
-	"github.com/benthosdev/benthos/v4/internal/metadata"
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
 // MultipartExpressions represents three dynamic expressions that define a
@@ -22,30 +19,26 @@ import (
 // can be used as a way of creating HTTP requests that overrides the default
 // behaviour.
 type MultipartExpressions struct {
-	ContentDisposition *field.Expression
-	ContentType        *field.Expression
-	Body               *field.Expression
+	ContentDisposition *service.InterpolatedString
+	ContentType        *service.InterpolatedString
+	Body               *service.InterpolatedString
 }
-
-// RequestSigner is a closure configured to enrich requests with various
-// functions, usually authentication.
-type RequestSigner func(f ifs.FS, req *http.Request) error
 
 // RequestCreator creates *http.Request types from messages based on various
 // configurable parameters.
 type RequestCreator struct {
 	// Explicit body overrides, in order of precedence
-	explicitBody       *field.Expression
+	explicitBody       *service.InterpolatedString
 	explicitMultiparts []MultipartExpressions
 
-	fs        ifs.FS
+	fs        fs.FS
 	reqSigner RequestSigner
 
-	url              *field.Expression
-	host             *field.Expression
+	url              *service.InterpolatedString
+	host             *service.InterpolatedString
 	verb             string
-	headers          map[string]*field.Expression
-	metaInsertFilter *metadata.IncludeFilter
+	headers          map[string]*service.InterpolatedString
+	metaInsertFilter *service.MetadataFilter
 }
 
 // RequestOpt represents a customisation of a request creator.
@@ -54,36 +47,24 @@ type RequestOpt func(r *RequestCreator)
 // RequestCreatorFromOldConfig creates a new request creator from an old struct
 // style config. Eventually I'd like to phase these out for the more dynamic
 // service style parses, but it'll take a while so we have this for now.
-func RequestCreatorFromOldConfig(conf OldConfig, mgr bundle.NewManagement, opts ...RequestOpt) (*RequestCreator, error) {
+func RequestCreatorFromOldConfig(conf OldConfig, mgr *service.Resources, opts ...RequestOpt) (*RequestCreator, error) {
 	r := &RequestCreator{
-		fs:        mgr.FS(),
-		reqSigner: conf.AuthConfig.Sign,
-		verb:      conf.Verb,
-		headers:   map[string]*field.Expression{},
+		fs:               mgr.FS(),
+		url:              conf.URL,
+		reqSigner:        conf.Auth.Sign,
+		verb:             conf.Verb,
+		headers:          conf.Headers,
+		metaInsertFilter: conf.Metadata,
 	}
 	for _, opt := range opts {
 		opt(r)
 	}
-
-	var err error
-	if r.url, err = mgr.BloblEnvironment().NewField(conf.URL); err != nil {
-		return nil, fmt.Errorf("failed to parse URL expression: %v", err)
-	}
-
-	for k, v := range conf.Headers {
-		if strings.EqualFold(k, "host") {
-			if r.host, err = mgr.BloblEnvironment().NewField(v); err != nil {
-				return nil, fmt.Errorf("failed to parse header 'host' expression: %v", err)
-			}
-		} else {
-			if r.headers[k], err = mgr.BloblEnvironment().NewField(v); err != nil {
-				return nil, fmt.Errorf("failed to parse header '%v' expression: %v", k, err)
-			}
+	for k, v := range r.headers {
+		if strings.ToLower(k) == "host" {
+			r.host = v
+			delete(r.headers, k)
+			break
 		}
-	}
-
-	if r.metaInsertFilter, err = conf.Metadata.CreateFilter(); err != nil {
-		return nil, fmt.Errorf("failed to construct metadata filter: %w", err)
 	}
 	return r, nil
 }
@@ -91,9 +72,9 @@ func RequestCreatorFromOldConfig(conf OldConfig, mgr bundle.NewManagement, opts 
 // WithExplicitBody modifies the request creator to instead only use input
 // reference messages for headers and metadata, and use the expression for
 // creating a body.
-func WithExplicitBody(e *field.Expression) RequestOpt {
+func WithExplicitBody(e *service.InterpolatedString) RequestOpt {
 	if e == nil {
-		e = field.NewExpression(field.StaticResolver(""))
+		e, _ = service.NewInterpolatedString("")
 	}
 	return func(r *RequestCreator) {
 		r.explicitBody = e
@@ -109,29 +90,29 @@ func WithExplicitMultipart(m []MultipartExpressions) RequestOpt {
 	}
 }
 
-func (r *RequestCreator) bodyFromExplicit(refBatch message.Batch) (body io.Reader, overrideContentType string, err error) {
+func (r *RequestCreator) bodyFromExplicit(refBatch service.MessageBatch) (body io.Reader, overrideContentType string, err error) {
 	if _, exists := r.headers["Content-Type"]; !exists {
 		overrideContentType = "application/octet-stream"
 	}
 	var bBytes []byte
-	if bBytes, err = r.explicitBody.Bytes(0, refBatch); err != nil {
+	if bBytes, err = refBatch.TryInterpolatedBytes(0, r.explicitBody); err != nil {
 		return
 	}
 	body = bytes.NewBuffer(bBytes)
 	return
 }
 
-func (r *RequestCreator) bodyFromExplicitMultipart(refBatch message.Batch) (body io.Reader, overrideContentType string, err error) {
+func (r *RequestCreator) bodyFromExplicitMultipart(refBatch service.MessageBatch) (body io.Reader, overrideContentType string, err error) {
 	buf := &bytes.Buffer{}
 	writer := multipart.NewWriter(buf)
 	for _, v := range r.explicitMultiparts {
 		mh := make(textproto.MIMEHeader)
 		var cTypeStr, cDispStr string
-		if cTypeStr, err = v.ContentType.String(0, refBatch); err != nil {
+		if cTypeStr, err = refBatch.TryInterpolatedString(0, v.ContentType); err != nil {
 			err = fmt.Errorf("content-type interpolation error: %w", err)
 			return
 		}
-		if cDispStr, err = v.ContentDisposition.String(0, refBatch); err != nil {
+		if cDispStr, err = refBatch.TryInterpolatedString(0, v.ContentDisposition); err != nil {
 			err = fmt.Errorf("content-disposition interpolation error: %w", err)
 			return
 		}
@@ -143,7 +124,7 @@ func (r *RequestCreator) bodyFromExplicitMultipart(refBatch message.Batch) (body
 			return
 		}
 		var partBytes []byte
-		if partBytes, err = v.Body.Bytes(0, refBatch); err != nil {
+		if partBytes, err = refBatch.TryInterpolatedBytes(0, v.Body); err != nil {
 			err = fmt.Errorf("part body interpolation error: %w", err)
 			return
 		}
@@ -157,7 +138,7 @@ func (r *RequestCreator) bodyFromExplicitMultipart(refBatch message.Batch) (body
 	return
 }
 
-func (r *RequestCreator) body(refBatch message.Batch) (body io.Reader, overrideContentType string, err error) {
+func (r *RequestCreator) body(refBatch service.MessageBatch) (body io.Reader, overrideContentType string, err error) {
 	if r.explicitBody != nil {
 		body, overrideContentType, err = r.bodyFromExplicit(refBatch)
 		return
@@ -176,7 +157,11 @@ func (r *RequestCreator) body(refBatch message.Batch) (body io.Reader, overrideC
 		if _, exists := r.headers["Content-Type"]; !exists {
 			overrideContentType = "application/octet-stream"
 		}
-		body = bytes.NewBuffer(refBatch[0].AsBytes())
+		var bodyBytes []byte
+		if bodyBytes, err = refBatch[0].AsBytes(); err != nil {
+			return
+		}
+		body = bytes.NewBuffer(bodyBytes)
 		return
 	}
 
@@ -188,7 +173,7 @@ func (r *RequestCreator) body(refBatch message.Batch) (body io.Reader, overrideC
 	for i, p := range refBatch {
 		contentType := "application/octet-stream"
 		if v, exists := r.headers["Content-Type"]; exists {
-			if contentType, err = v.String(i, refBatch); err != nil {
+			if contentType, err = refBatch.TryInterpolatedString(i, v); err != nil {
 				err = fmt.Errorf("content-type interpolation error: %w", err)
 				return
 			}
@@ -197,7 +182,7 @@ func (r *RequestCreator) body(refBatch message.Batch) (body io.Reader, overrideC
 		headers := textproto.MIMEHeader{
 			"Content-Type": []string{contentType},
 		}
-		_ = r.metaInsertFilter.Iter(p, func(k string, v any) error {
+		_ = r.metaInsertFilter.WalkMut(p, func(k string, v any) error {
 			headers[k] = append(headers[k], query.IToString(v))
 			return nil
 		})
@@ -206,7 +191,12 @@ func (r *RequestCreator) body(refBatch message.Batch) (body io.Reader, overrideC
 		if part, err = writer.CreatePart(headers); err != nil {
 			return
 		}
-		if _, err = io.Copy(part, bytes.NewReader(p.AsBytes())); err != nil {
+
+		var pBytes []byte
+		if pBytes, err = p.AsBytes(); err != nil {
+			return
+		}
+		if _, err = io.Copy(part, bytes.NewReader(pBytes)); err != nil {
 			return
 		}
 	}
@@ -222,7 +212,7 @@ func (r *RequestCreator) body(refBatch message.Batch) (body io.Reader, overrideC
 // and headers of the request. It's possible that the creator has been given
 // explicit overrides for the body, in which case the reference batch is only
 // used for general request headers/metadata enrichment.
-func (r *RequestCreator) Create(refBatch message.Batch) (req *http.Request, err error) {
+func (r *RequestCreator) Create(refBatch service.MessageBatch) (req *http.Request, err error) {
 	var overrideContentType string
 	var body io.Reader
 	if body, overrideContentType, err = r.body(refBatch); err != nil {
@@ -230,7 +220,7 @@ func (r *RequestCreator) Create(refBatch message.Batch) (req *http.Request, err 
 	}
 
 	var urlStr string
-	if urlStr, err = r.url.String(0, refBatch); err != nil {
+	if urlStr, err = refBatch.TryInterpolatedString(0, r.url); err != nil {
 		err = fmt.Errorf("url interpolation error: %w", err)
 		return
 	}
@@ -240,21 +230,21 @@ func (r *RequestCreator) Create(refBatch message.Batch) (req *http.Request, err 
 
 	for k, v := range r.headers {
 		var hStr string
-		if hStr, err = v.String(0, refBatch); err != nil {
+		if hStr, err = refBatch.TryInterpolatedString(0, v); err != nil {
 			err = fmt.Errorf("header '%v' interpolation error: %w", k, err)
 			return
 		}
 		req.Header.Add(k, hStr)
 	}
 	if len(refBatch) > 0 {
-		_ = r.metaInsertFilter.Iter(refBatch[0], func(k string, v any) error {
+		_ = r.metaInsertFilter.WalkMut(refBatch[0], func(k string, v any) error {
 			req.Header.Add(k, query.IToString(v))
 			return nil
 		})
 	}
 
 	if r.host != nil {
-		if req.Host, err = r.host.String(0, refBatch); err != nil {
+		if req.Host, err = refBatch.TryInterpolatedString(0, r.host); err != nil {
 			err = fmt.Errorf("host interpolation error: %w", err)
 			return
 		}

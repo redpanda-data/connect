@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel/trace"
+	"go.opentelemetry.io/otel/trace/noop"
 
 	"github.com/benthosdev/benthos/v4/public/service"
 
@@ -31,7 +32,7 @@ func TestOtelTracingPlugin(t *testing.T) {
 				return nil, err
 			}
 			testValue = testStr
-			return trace.NewNoopTracerProvider(), nil
+			return noop.NewTracerProvider(), nil
 		}))
 
 	builder := env.NewStreamBuilder()

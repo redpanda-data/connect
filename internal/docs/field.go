@@ -30,6 +30,7 @@ var (
 	FieldTypeOutput    FieldType = "output"
 	FieldTypeMetrics   FieldType = "metrics"
 	FieldTypeTracer    FieldType = "tracer"
+	FieldTypeScanner   FieldType = "scanner"
 )
 
 // IsCoreComponent returns the core component type of a field if applicable.
@@ -51,6 +52,8 @@ func (t FieldType) IsCoreComponent() (Type, bool) {
 		return TypeTracer, true
 	case FieldTypeMetrics:
 		return TypeMetrics, true
+	case FieldTypeScanner:
+		return TypeScanner, true
 	}
 	return "", false
 }
@@ -332,6 +335,12 @@ func lintsFromAny(line int, v any) (lints []Lint) {
 // binary that defines it as the function cannot be serialized into a portable
 // schema.
 func (f FieldSpec) LinterBlobl(blobl string) FieldSpec {
+	if blobl == "" {
+		f.Linter = blobl
+		f.customLintFn = nil
+		return f
+	}
+
 	env := bloblang.NewEnvironment().OnlyPure()
 
 	m, err := env.Parse(blobl)
@@ -552,6 +561,11 @@ func FieldMetrics(name, description string, examples ...any) FieldSpec {
 // FieldTracer returns a field spec for a tracer typed field.
 func FieldTracer(name, description string, examples ...any) FieldSpec {
 	return newField(name, description, examples...).HasType(FieldTypeTracer)
+}
+
+// FieldScanner returns a field spec for a scanner typed field.
+func FieldScanner(name, description string, examples ...any) FieldSpec {
+	return newField(name, description, examples...).HasType(FieldTypeScanner)
 }
 
 func newField(name, description string, examples ...any) FieldSpec {

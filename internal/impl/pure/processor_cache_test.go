@@ -19,12 +19,15 @@ func TestCacheSet(t *testing.T) {
 	mgr := mock.NewManager()
 	mgr.Caches["foocache"] = map[string]mock.CacheItem{}
 
-	conf := processor.NewConfig()
-	conf.Type = "cache"
-	conf.Cache.Operator = "set"
-	conf.Cache.Key = "${!json(\"key\")}"
-	conf.Cache.Value = "${!json(\"value\")}"
-	conf.Cache.Resource = "foocache"
+	conf, err := processor.FromYAML(`
+cache:
+  operator: set
+  key: ${!json("key")}
+  value: ${!json("value")}
+  resource: foocache
+`)
+	require.NoError(t, err)
+
 	proc, err := mgr.NewProcessor(conf)
 	if err != nil {
 		t.Fatal(err)
@@ -62,12 +65,15 @@ func TestCacheAdd(t *testing.T) {
 	mgr := mock.NewManager()
 	mgr.Caches["foocache"] = map[string]mock.CacheItem{}
 
-	conf := processor.NewConfig()
-	conf.Type = "cache"
-	conf.Cache.Key = "${!json(\"key\")}"
-	conf.Cache.Value = "${!json(\"value\")}"
-	conf.Cache.Resource = "foocache"
-	conf.Cache.Operator = "add"
+	conf, err := processor.FromYAML(`
+cache:
+  key: ${!json("key")}
+  value: ${!json("value")}
+  resource: foocache
+  operator: add
+`)
+	require.NoError(t, err)
+
 	proc, err := mgr.NewProcessor(conf)
 	if err != nil {
 		t.Fatal(err)
@@ -112,11 +118,14 @@ func TestCacheGet(t *testing.T) {
 		"2": {Value: "foo 2"},
 	}
 
-	conf := processor.NewConfig()
-	conf.Type = "cache"
-	conf.Cache.Key = "${!json(\"key\")}"
-	conf.Cache.Resource = "foocache"
-	conf.Cache.Operator = "get"
+	conf, err := processor.FromYAML(`
+cache:
+  operator: get
+  key: ${!json("key")}
+  resource: foocache
+`)
+	require.NoError(t, err)
+
 	proc, err := mgr.NewProcessor(conf)
 	if err != nil {
 		t.Fatal(err)
@@ -159,11 +168,14 @@ func TestCacheDelete(t *testing.T) {
 		"3": {Value: "foo 3"},
 	}
 
-	conf := processor.NewConfig()
-	conf.Type = "cache"
-	conf.Cache.Key = "${!json(\"key\")}"
-	conf.Cache.Resource = "foocache"
-	conf.Cache.Operator = "delete"
+	conf, err := processor.FromYAML(`
+cache:
+  operator: delete
+  key: ${!json("key")}
+  resource: foocache
+`)
+	require.NoError(t, err)
+
 	proc, err := mgr.NewProcessor(conf)
 	if err != nil {
 		t.Fatal(err)

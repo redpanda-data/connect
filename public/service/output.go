@@ -3,8 +3,9 @@ package service
 import (
 	"context"
 	"sync"
+	"sync/atomic"
 
-	ioutput "github.com/benthosdev/benthos/v4/internal/component/output"
+	"github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/message"
 )
 
@@ -74,7 +75,7 @@ type airGapWriter struct {
 	w Output
 }
 
-func newAirGapWriter(w Output) ioutput.AsyncSink {
+func newAirGapWriter(w Output) output.AsyncSink {
 	return &airGapWriter{w: w}
 }
 
@@ -97,7 +98,7 @@ type airGapBatchWriter struct {
 	w BatchOutput
 }
 
-func newAirGapBatchWriter(w BatchOutput) ioutput.AsyncSink {
+func newAirGapBatchWriter(w BatchOutput) output.AsyncSink {
 	return &airGapBatchWriter{w: w}
 }
 
@@ -122,10 +123,10 @@ func (a *airGapBatchWriter) Close(ctx context.Context) error {
 
 // ResourceOutput provides access to an output resource.
 type ResourceOutput struct {
-	o ioutput.Sync
+	o output.Sync
 }
 
-func newResourceOutput(o ioutput.Sync) *ResourceOutput {
+func newResourceOutput(o output.Sync) *ResourceOutput {
 	return &ResourceOutput{o: o}
 }
 
@@ -170,30 +171,57 @@ func (o *ResourceOutput) writeMsg(ctx context.Context, payload message.Batch) er
 // of this type should only be concerned with writing messages and eventually
 // calling Close to terminate the output.
 type OwnedOutput struct {
-	o         ioutput.Streamed
+	o         output.Streamed
 	closeOnce sync.Once
-	t         chan message.Transaction
+	t         atomic.Pointer[chan message.Transaction]
+	primeMut  sync.Mutex
 }
 
-func newOwnedOutput(o ioutput.Streamed) (*OwnedOutput, error) {
-	tChan := make(chan message.Transaction)
-	if err := o.Consume(tChan); err != nil {
-		return nil, err
-	}
+func newOwnedOutput(o output.Streamed) (*OwnedOutput, error) {
 	return &OwnedOutput{
 		o: o,
-		t: tChan,
 	}, nil
+}
+
+// Prime attempts to establish the output connection ready for consuming data.
+// This is done automatically once data is written. However, pre-emptively
+// priming the connection before data is received is generally a better idea for
+// short lived outputs as it'll speed up the first write.
+func (o *OwnedOutput) Prime() error {
+	o.primeMut.Lock()
+	defer o.primeMut.Unlock()
+
+	tChan := make(chan message.Transaction)
+	if err := o.o.Consume(tChan); err != nil {
+		return err
+	}
+	o.t.Store(&tChan)
+	return nil
+}
+
+func (o *OwnedOutput) getTChan() (chan message.Transaction, error) {
+	if t := o.t.Load(); t != nil {
+		return *t, nil
+	}
+	if err := o.Prime(); err != nil {
+		return nil, err
+	}
+	return *o.t.Load(), nil
 }
 
 // Write a message to the output, or return an error either if delivery is not
 // possible or the context is cancelled.
 func (o *OwnedOutput) Write(ctx context.Context, m *Message) error {
+	t, err := o.getTChan()
+	if err != nil {
+		return err
+	}
+
 	payload := message.Batch{m.part}
 
 	resChan := make(chan error, 1)
 	select {
-	case o.t <- message.NewTransaction(payload, resChan):
+	case t <- message.NewTransaction(payload, resChan):
 	case <-ctx.Done():
 		return ctx.Err()
 	}
@@ -209,6 +237,11 @@ func (o *OwnedOutput) Write(ctx context.Context, m *Message) error {
 // WriteBatch attempts to write a message batch to the output, and returns an
 // error either if delivery is not possible or the context is cancelled.
 func (o *OwnedOutput) WriteBatch(ctx context.Context, b MessageBatch) error {
+	t, err := o.getTChan()
+	if err != nil {
+		return err
+	}
+
 	payload := make(message.Batch, len(b))
 	for i, m := range b {
 		payload[i] = m.part
@@ -216,7 +249,7 @@ func (o *OwnedOutput) WriteBatch(ctx context.Context, b MessageBatch) error {
 
 	resChan := make(chan error, 1)
 	select {
-	case o.t <- message.NewTransaction(payload, resChan):
+	case t <- message.NewTransaction(payload, resChan):
 	case <-ctx.Done():
 		return ctx.Err()
 	}
@@ -232,7 +265,22 @@ func (o *OwnedOutput) WriteBatch(ctx context.Context, b MessageBatch) error {
 // Close the output.
 func (o *OwnedOutput) Close(ctx context.Context) error {
 	o.closeOnce.Do(func() {
-		close(o.t)
+		if t := o.t.Load(); t != nil {
+			close(*t)
+		}
 	})
 	return o.o.WaitForClose(ctx)
+}
+
+type outputUnwrapper struct {
+	o output.Streamed
+}
+
+func (w outputUnwrapper) Unwrap() output.Streamed {
+	return w.o
+}
+
+// XUnwrapper is for internal use only, do not use this.
+func (o *OwnedOutput) XUnwrapper() any {
+	return outputUnwrapper{o: o.o}
 }

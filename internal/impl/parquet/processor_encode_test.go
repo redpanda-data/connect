@@ -7,12 +7,31 @@ import (
 	"io"
 	"testing"
 
-	"github.com/segmentio/parquet-go"
+	"github.com/parquet-go/parquet-go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/benthosdev/benthos/v4/public/service"
 )
+
+func TestParquetEncodePanic(t *testing.T) {
+	encodeConf, err := parquetEncodeProcessorConfig().ParseYAML(`
+schema:
+  - { name: id, type: FLOAT }
+  - { name: name, type: UTF8 }
+`, nil)
+	require.NoError(t, err)
+
+	encodeProc, err := newParquetEncodeProcessorFromConfig(encodeConf, nil)
+	require.NoError(t, err)
+
+	tctx := context.Background()
+	_, err = encodeProc.ProcessBatch(tctx, service.MessageBatch{
+		service.NewMessage([]byte(`{"id":12,"name":"foo"}`)),
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "cannot create parquet value of type FLOAT from go value of type int64")
+}
 
 func TestParquetEncodeDecodeRoundTrip(t *testing.T) {
 	encodeConf, err := parquetEncodeProcessorConfig().ParseYAML(`
@@ -20,9 +39,9 @@ schema:
   - { name: id, type: INT64 }
   - { name: as, type: DOUBLE, repeated: true }
   - { name: b, type: BYTE_ARRAY }
-  - { name: c, type: FLOAT }
+  - { name: c, type: DOUBLE }
   - { name: d, type: BOOLEAN }
-  - { name: e, type: INT32, optional: true }
+  - { name: e, type: INT64, optional: true }
   - { name: f, type: INT64 }
   - { name: g, type: UTF8 }
   - name: nested_stuff
@@ -54,9 +73,9 @@ schema:
   - { name: id, type: INT64 }
   - { name: as, type: DOUBLE, repeated: true }
   - { name: b, type: BYTE_ARRAY }
-  - { name: c, type: FLOAT }
+  - { name: c, type: DOUBLE }
   - { name: d, type: BOOLEAN }
-  - { name: e, type: INT32, optional: true }
+  - { name: e, type: INT64, optional: true }
   - { name: f, type: INT64 }
   - { name: g, type: UTF8 }
   - name: nested_stuff
@@ -136,7 +155,7 @@ func testParquetEncodeDecodeRoundTrip(t *testing.T, encodeProc *parquetEncodePro
 }`,
 			output: `{
   "id": 3,
-  "as": null,
+  "as": [],
   "b": "hello world basic values",
   "c": 0.5,
   "d": true,
@@ -201,143 +220,66 @@ schema:
 	require.NoError(t, err)
 }
 
-// Designed to contain all manner of structured data nasties, separated from the
-// decode struct so that we can modify them separately.
-type testMP struct {
-	ID       int64
-	Foo      testMPFoo
-	A        int64
-	Bar      testMPBar
-	B        int64
-	Foos     []testMPFoo
-	C        int64
-	MaybeFoo *testMPFoo
-	D        int64
-	E        int64
-	Fs       []int64
-	OA       *int64
-	Bars     []testMPBar
-	OB       *int64
-	OFoo     *testMPFoo
-	OC       *int64
-	OD       *int64
-	TailEs   []int64
-}
-
-type testMPFoo struct {
-	First  *int64
-	Second *int64
-	Third  *int64
-}
-
-type testMPBar struct {
-	Meows      []int64
-	NestedFoos []testMPFoo
-}
-
 func TestParquetEncodeProcessor(t *testing.T) {
+	type obj map[string]any
+	type arr []any
+
 	tests := []struct {
 		name  string
-		input testMP
+		input any
 	}{
 		{
 			name: "Empty values",
-			input: testMP{
-				// Comparing in tests is bad as we fail on [] versus null here
-				Foos: []testMPFoo{},
-				Bar: testMPBar{
-					Meows:      []int64{},
-					NestedFoos: []testMPFoo{},
+			input: obj{
+				"ID": 0,
+				"A":  0,
+				"Foo": obj{
+					"First":  nil,
+					"Second": nil,
+					"Third":  nil,
 				},
-				Fs:     []int64{},
-				Bars:   []testMPBar{},
-				TailEs: []int64{},
+				"Bar": obj{
+					"Meows":      arr{},
+					"NestedFoos": arr{},
+				},
 			},
 		},
 		{
 			name: "Basic values",
-			input: testMP{
-				ID: 1,
-				Foo: testMPFoo{
-					First: iPtr(21),
-					Third: iPtr(22),
+			input: obj{
+				"ID": 1,
+				"Foo": obj{
+					"First":  21,
+					"Second": nil,
+					"Third":  22,
 				},
-				A: 2,
-				Bar: testMPBar{
-					Meows: []int64{41, 42},
-					NestedFoos: []testMPFoo{
-						{First: iPtr(27)},
-						{Second: iPtr(28), Third: iPtr(29)},
+				"A": 2,
+				"Bar": obj{
+					"Meows": arr{41, 42},
+					"NestedFoos": arr{
+						obj{"First": 27, "Second": nil, "Third": nil},
+						obj{"First": nil, "Second": 28, "Third": 29},
 					},
 				},
-				B: 3,
-				Foos: []testMPFoo{
-					{Second: iPtr(23)},
-					{Third: iPtr(24)},
-				},
-				C:  4,
-				D:  5,
-				E:  6,
-				Fs: []int64{31, 33},
-				Bars: []testMPBar{
-					{
-						Meows: []int64{43, 44},
-						NestedFoos: []testMPFoo{
-							{First: iPtr(60)},
-							{Second: iPtr(61), Third: iPtr(62)},
-						},
-					},
-					{
-						Meows: []int64{45},
-						NestedFoos: []testMPFoo{
-							{First: iPtr(63)},
-							{Second: iPtr(64), Third: iPtr(65)},
-						},
-					},
-				},
-				OB: iPtr(7),
-				OFoo: &testMPFoo{
-					Second: iPtr(26),
-				},
-				OD:     iPtr(8),
-				TailEs: []int64{34, 35, 36},
 			},
 		},
 		{
 			name: "Empty array trickery",
-			input: testMP{
-				Bar: testMPBar{
-					Meows: []int64{},
-					NestedFoos: []testMPFoo{
-						{},
-						{Second: iPtr(28), Third: iPtr(29)},
+			input: obj{
+				"ID": 0,
+				"A":  0,
+				"Foo": obj{
+					"First":  nil,
+					"Second": nil,
+					"Third":  nil,
+				},
+				"Bar": obj{
+					"Meows": arr{},
+					"NestedFoos": arr{
+						obj{"First": nil, "Second": nil, "Third": nil},
+						obj{"First": nil, "Second": 28, "Third": 29},
 					},
 				},
-				B: 3,
-				Foos: []testMPFoo{
-					{},
-					{Third: iPtr(24)},
-					{},
-				},
-				E:  6,
-				Fs: []int64{},
-				Bars: []testMPBar{
-					{
-						Meows: []int64{},
-						NestedFoos: []testMPFoo{
-							{First: iPtr(60)},
-							{Second: iPtr(61), Third: iPtr(62)},
-						},
-					},
-					{
-						Meows: []int64{},
-						NestedFoos: []testMPFoo{
-							{First: iPtr(63)},
-							{Second: iPtr(64), Third: iPtr(65)},
-						},
-					},
-				},
-				TailEs: []int64{34, 35, 36},
 			},
 		},
 	}
@@ -348,9 +290,7 @@ func TestParquetEncodeProcessor(t *testing.T) {
 			expectedDataBytes, err := json.Marshal(test.input)
 			require.NoError(t, err)
 
-			schema := parquet.SchemaOf(test.input)
-
-			reader, err := newParquetEncodeProcessor(nil, schema, &parquet.Uncompressed)
+			reader, err := newParquetEncodeProcessor(nil, testPMSchema(), &parquet.Uncompressed)
 			require.NoError(t, err)
 
 			readerResBatches, err := reader.ProcessBatch(context.Background(), service.MessageBatch{
@@ -364,10 +304,10 @@ func TestParquetEncodeProcessor(t *testing.T) {
 			pqDataBytes, err := readerResBatches[0][0].AsBytes()
 			require.NoError(t, err)
 
-			pRdr := parquet.NewGenericReader[testMP](bytes.NewReader(pqDataBytes))
+			pRdr := parquet.NewGenericReader[any](bytes.NewReader(pqDataBytes), testPMSchema())
 			require.NoError(t, err)
 
-			outRows := make([]testMP, 1)
+			outRows := make([]any, 1)
 			_, err = pRdr.Read(outRows)
 			require.NoError(t, err)
 			require.NoError(t, err)
@@ -394,9 +334,7 @@ func TestParquetEncodeProcessor(t *testing.T) {
 			inBatch = append(inBatch, service.NewMessage(dataBytes))
 		}
 
-		schema := parquet.SchemaOf(tests[0].input)
-
-		reader, err := newParquetEncodeProcessor(nil, schema, &parquet.Uncompressed)
+		reader, err := newParquetEncodeProcessor(nil, testPMSchema(), &parquet.Uncompressed)
 		require.NoError(t, err)
 
 		readerResBatches, err := reader.ProcessBatch(context.Background(), inBatch)
@@ -408,12 +346,12 @@ func TestParquetEncodeProcessor(t *testing.T) {
 		pqDataBytes, err := readerResBatches[0][0].AsBytes()
 		require.NoError(t, err)
 
-		pRdr := parquet.NewGenericReader[testMP](bytes.NewReader(pqDataBytes))
+		pRdr := parquet.NewGenericReader[any](bytes.NewReader(pqDataBytes), testPMSchema())
 		require.NoError(t, err)
 
-		var outRows []testMP
+		var outRows []any
 		for {
-			outRowsTmp := make([]testMP, 1)
+			outRowsTmp := make([]any, 1)
 			_, err := pRdr.Read(outRowsTmp)
 			if err != nil {
 				require.ErrorIs(t, err, io.EOF)

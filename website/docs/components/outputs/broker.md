@@ -14,7 +14,6 @@ categories: ["Utility"]
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-
 Allows you to route messages to multiple child outputs using a range of brokering [patterns](#patterns).
 
 
@@ -31,7 +30,7 @@ output:
   label: ""
   broker:
     pattern: fan_out
-    outputs: []
+    outputs: [] # No default (required)
     batching:
       count: 0
       byte_size: 0
@@ -49,7 +48,7 @@ output:
   broker:
     copies: 1
     pattern: fan_out
-    outputs: []
+    outputs: [] # No default (required)
     batching:
       count: 0
       byte_size: 0
@@ -104,7 +103,6 @@ A list of child outputs to broker.
 
 
 Type: `array`  
-Default: `[]`  
 
 ### `batching`
 

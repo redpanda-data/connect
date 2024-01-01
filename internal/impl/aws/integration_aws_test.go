@@ -26,7 +26,9 @@ func createBucketQueue(s3Port, sqsPort, id string) error {
 	bucket := "bucket-" + id
 	sqsQueue := "queue-" + id
 	sqsEndpoint := fmt.Sprintf("http://localhost:%v", sqsPort)
-	sqsQueueURL := fmt.Sprintf("%v/queue/%v", sqsEndpoint, sqsQueue)
+	// sqsQueueURL := fmt.Sprintf("%v/queue/%v", sqsEndpoint, sqsQueue)
+	// https://github.com/localstack/localstack/issues/9185
+	sqsQueueURL := fmt.Sprintf("%v/000000000000/%v", sqsEndpoint, sqsQueue)
 
 	var s3Client *s3.S3
 	if s3Port != "" {
@@ -51,7 +53,7 @@ func createBucketQueue(s3Port, sqsPort, id string) error {
 		if _, err := s3Client.CreateBucket(&s3.CreateBucketInput{
 			Bucket: &bucket,
 		}); err != nil {
-			return err
+			return fmt.Errorf("create bucket: %w", err)
 		}
 	}
 
@@ -59,7 +61,7 @@ func createBucketQueue(s3Port, sqsPort, id string) error {
 		if _, err := sqsClient.CreateQueue(&sqs.CreateQueueInput{
 			QueueName: aws.String(sqsQueue),
 		}); err != nil {
-			return err
+			return fmt.Errorf("create queue: %w", err)
 		}
 	}
 
@@ -67,7 +69,7 @@ func createBucketQueue(s3Port, sqsPort, id string) error {
 		if err := s3Client.WaitUntilBucketExists(&s3.HeadBucketInput{
 			Bucket: &bucket,
 		}); err != nil {
-			return err
+			return fmt.Errorf("wait for bucket: %w", err)
 		}
 	}
 
@@ -78,7 +80,7 @@ func createBucketQueue(s3Port, sqsPort, id string) error {
 			AttributeNames: []*string{aws.String("All")},
 		})
 		if err != nil {
-			return err
+			return fmt.Errorf("get queue attributes: %w", err)
 		}
 		sqsQueueArn = res.Attributes["QueueArn"]
 	}
@@ -97,7 +99,7 @@ func createBucketQueue(s3Port, sqsPort, id string) error {
 				},
 			},
 		}); err != nil {
-			return err
+			return fmt.Errorf("put bucket notification config: %w", err)
 		}
 	}
 	return nil
@@ -110,7 +112,7 @@ func TestIntegrationAWS(t *testing.T) {
 	pool, err := dockertest.NewPool("")
 	require.NoError(t, err)
 
-	pool.MaxWait = time.Second * 30
+	pool.MaxWait = time.Minute * 3
 
 	resource, err := pool.RunWithOptions(&dockertest.RunOptions{
 		Repository:   "localstack/localstack",
@@ -157,7 +159,7 @@ input:
     region: eu-west-1
     delete_objects: true
     sqs:
-      url: http://localhost:$PORT/queue/queue-$ID
+      url: http://localhost:$PORT/000000000000/queue-$ID
       key_path: Records.*.s3.object.key
       endpoint: http://localhost:$PORT
     credentials:
@@ -210,9 +212,64 @@ input:
     force_path_style_urls: true
     region: eu-west-1
     delete_objects: true
+    scanner: { lines: {} }
+    sqs:
+      url: http://localhost:$PORT/000000000000/queue-$ID
+      key_path: Records.*.s3.object.key
+      endpoint: http://localhost:$PORT
+      delay_period: 1s
+    credentials:
+      id: xxxxx
+      secret: xxxxx
+      token: xxxxx
+`
+		integration.StreamTests(
+			integration.StreamTestOpenClose(),
+			integration.StreamTestStreamSequential(20),
+			integration.StreamTestSendBatchCount(10),
+			integration.StreamTestStreamParallelLossyThroughReconnect(20),
+		).Run(
+			t, template,
+			integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, testID string, vars *integration.StreamTestConfigVars) {
+				if vars.OutputBatchCount == 0 {
+					vars.OutputBatchCount = 1
+				}
+				require.NoError(t, createBucketQueue(servicePort, servicePort, testID))
+			}),
+			integration.StreamTestOptPort(servicePort),
+			integration.StreamTestOptAllowDupes(),
+		)
+	})
+
+	t.Run("s3_to_sqs_lines_old_codec", func(t *testing.T) {
+		template := `
+output:
+  aws_s3:
+    bucket: bucket-$ID
+    endpoint: http://localhost:$PORT
+    force_path_style_urls: true
+    region: eu-west-1
+    path: ${!count("$ID")}.txt
+    credentials:
+      id: xxxxx
+      secret: xxxxx
+      token: xxxxx
+    batching:
+      count: $OUTPUT_BATCH_COUNT
+      processors:
+        - archive:
+            format: lines
+
+input:
+  aws_s3:
+    bucket: bucket-$ID
+    endpoint: http://localhost:$PORT
+    force_path_style_urls: true
+    region: eu-west-1
+    delete_objects: true
     codec: lines
     sqs:
-      url: http://localhost:$PORT/queue/queue-$ID
+      url: http://localhost:$PORT/000000000000/queue-$ID
       key_path: Records.*.s3.object.key
       endpoint: http://localhost:$PORT
       delay_period: 1s
@@ -284,7 +341,7 @@ input:
 		template := `
 output:
   aws_sqs:
-    url: http://localhost:$PORT/queue/queue-$ID
+    url: http://localhost:$PORT/000000000000/queue-$ID
     endpoint: http://localhost:$PORT
     region: eu-west-1
     credentials:
@@ -297,7 +354,7 @@ output:
 
 input:
   aws_sqs:
-    url: http://localhost:$PORT/queue/queue-$ID
+    url: http://localhost:$PORT/000000000000/queue-$ID
     endpoint: http://localhost:$PORT
     region: eu-west-1
     credentials:

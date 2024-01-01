@@ -17,10 +17,12 @@ func TestInputWrapperSwap(t *testing.T) {
 	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
 	defer done()
 
-	conf := input.NewConfig()
-	conf.Type = "generate"
-	conf.Generate.Interval = "10ms"
-	conf.Generate.Mapping = `root.name = "from root generate"`
+	conf, err := input.FromYAML(`
+generate:
+  interval: 10ms
+  mapping: 'root.name = "from root generate"'
+`)
+	require.NoError(t, err)
 
 	bMgr := bmock.NewManager()
 
@@ -38,10 +40,12 @@ func TestInputWrapperSwap(t *testing.T) {
 	}
 
 	for i := 0; i < 5; i++ {
-		conf = input.NewConfig()
-		conf.Type = "generate"
-		conf.Generate.Interval = "10ms"
-		conf.Generate.Mapping = fmt.Sprintf(`root.name = "from generate %v"`, i)
+		conf, err := input.FromYAML(fmt.Sprintf(`
+generate:
+  interval: 10ms
+  mapping: 'root.name = "from generate %v"'
+`, i))
+		require.NoError(t, err)
 
 		go func() {
 			assert.NoError(t, iWrapper.closeExistingInput(ctx, true))

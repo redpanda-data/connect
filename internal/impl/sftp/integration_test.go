@@ -9,7 +9,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/benthosdev/benthos/v4/internal/filepath/ifs"
-	"github.com/benthosdev/benthos/v4/internal/impl/sftp/shared"
 	"github.com/benthosdev/benthos/v4/internal/integration"
 
 	// Bring in memory cache.
@@ -21,7 +20,7 @@ var (
 	sftpPassword = "pass"
 )
 
-func TestIntegrationSFTP(t *testing.T) {
+func TestIntegration(t *testing.T) {
 	integration.CheckSkip(t)
 	t.Parallel()
 
@@ -43,7 +42,7 @@ func TestIntegrationSFTP(t *testing.T) {
 
 	_ = resource.Expire(900)
 
-	creds := shared.Credentials{
+	creds := Credentials{
 		Username: sftpUsername,
 		Password: sftpPassword,
 	}
@@ -97,17 +96,19 @@ cache_resources:
 			integration.StreamTestOptVarTwo("false"),
 		)
 
-		watcherSuite := integration.StreamTests(
-			integration.StreamTestOpenClose(),
-			integration.StreamTestStreamParallel(50),
-			integration.StreamTestStreamSequential(20),
-			integration.StreamTestStreamParallelLossyThroughReconnect(20),
-		)
-		watcherSuite.Run(
-			t, template,
-			integration.StreamTestOptPort(resource.GetPort("22/tcp")),
-			integration.StreamTestOptVarOne("all-bytes"),
-			integration.StreamTestOptVarTwo("true"),
-		)
+		t.Run("watcher", func(t *testing.T) {
+			watcherSuite := integration.StreamTests(
+				integration.StreamTestOpenClose(),
+				integration.StreamTestStreamParallel(50),
+				integration.StreamTestStreamSequential(20),
+				integration.StreamTestStreamParallelLossyThroughReconnect(20),
+			)
+			watcherSuite.Run(
+				t, template,
+				integration.StreamTestOptPort(resource.GetPort("22/tcp")),
+				integration.StreamTestOptVarOne("all-bytes"),
+				integration.StreamTestOptVarTwo("true"),
+			)
+		})
 	})
 }

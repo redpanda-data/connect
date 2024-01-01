@@ -16,39 +16,47 @@ import (
 
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component"
+	"github.com/benthosdev/benthos/v4/internal/component/interop"
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
-	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
 	"github.com/benthosdev/benthos/v4/internal/shutdown"
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
-func init() {
-	err := bundle.AllProcessors.Add(func(conf processor.Config, mgr bundle.NewManagement) (processor.V1, error) {
-		p, err := newSubprocess(conf.Subprocess, mgr)
-		if err != nil {
-			return nil, err
-		}
-		return processor.NewAutoObservedProcessor("subprocess", p, mgr), nil
-	}, docs.ComponentSpec{
-		Name: "subprocess",
-		Categories: []string{
-			"Integration",
-		},
-		Summary: `
-Executes a command as a subprocess and, for each message, will pipe its contents to the stdin stream of the process followed by a newline.`,
-		Description: `
+const (
+	spFieldName      = "name"
+	spFieldArgs      = "args"
+	spFieldMaxBuffer = "max_buffer"
+	spFieldCodecSend = "codec_send"
+	spFieldCodecRecv = "codec_recv"
+)
+
+type subprocConfig struct {
+	Name      string
+	Args      []string
+	MaxBuffer int
+	CodecSend string
+	CodecRecv string
+}
+
+func subProcSpec() *service.ConfigSpec {
+	return service.NewConfigSpec().
+		Categories("Integration").
+		Stable().
+		Summary("Executes a command as a subprocess and, for each message, will pipe its contents to the stdin stream of the process followed by a newline.").
+		Description(`
 :::info
-This processor keeps the subprocess alive and requires very specific behaviour from the command executed. If you wish to simply execute a command for each message take a look at the [` + "`command`" + ` processor](/docs/components/processors/command) instead.
+This processor keeps the subprocess alive and requires very specific behaviour from the command executed. If you wish to simply execute a command for each message take a look at the [`+"`command`"+` processor](/docs/components/processors/command) instead.
 :::
 
 The subprocess must then either return a line over stdout or stderr. If a response is returned over stdout then its contents will replace the message. If a response is instead returned from stderr it will be logged and the message will continue unchanged and will be [marked as failed](/docs/configuration/error_handling).
 
-Rather than separating data by a newline it's possible to specify alternative ` + "[`codec_send`](#codec_send) and [`codec_recv`](#codec_recv)" + ` values, which allow binary messages to be encoded for logical separation.
+Rather than separating data by a newline it's possible to specify alternative `+"[`codec_send`](#codec_send) and [`codec_recv`](#codec_recv)"+` values, which allow binary messages to be encoded for logical separation.
 
 The execution environment of the subprocess is the same as the Benthos instance, including environment variables and the current working directory.
 
-The field ` + "`max_buffer`" + ` defines the maximum response size able to be read from the subprocess. This value should be set significantly above the real expected maximum response size.
+The field `+"`max_buffer`"+` defines the maximum response size able to be read from the subprocess. This value should be set significantly above the real expected maximum response size.
 
 ## Subprocess requirements
 
@@ -56,19 +64,60 @@ It is required that subprocesses flush their stdout and stderr pipes for each li
 
 ## Messages containing line breaks
 
-If a message contains line breaks each line of the message is piped to the subprocess and flushed, and a response is expected from the subprocess before another line is fed in.`,
-		Config: docs.FieldComponent().WithChildren(
-			docs.FieldString("name", "The command to execute as a subprocess.", "cat", "sed", "awk"),
-			docs.FieldString("args", "A list of arguments to provide the command.").Array(),
-			docs.FieldInt("max_buffer", "The maximum expected response size.").Advanced(),
-			docs.FieldString(
-				"codec_send", "Determines how messages written to the subprocess are encoded, which allows them to be logically separated.",
-			).HasOptions("lines", "length_prefixed_uint32_be", "netstring").AtVersion("3.37.0").Advanced(),
-			docs.FieldString(
-				"codec_recv", "Determines how messages read from the subprocess are decoded, which allows them to be logically separated.",
-			).HasOptions("lines", "length_prefixed_uint32_be", "netstring").AtVersion("3.37.0").Advanced(),
-		).ChildDefaultAndTypesFromStruct(processor.NewSubprocessConfig()),
-	})
+If a message contains line breaks each line of the message is piped to the subprocess and flushed, and a response is expected from the subprocess before another line is fed in.`).
+		Fields(
+			service.NewStringField(spFieldName).
+				Description("The command to execute as a subprocess.").
+				Examples("cat", "sed", "awk"),
+			service.NewStringListField(spFieldArgs).
+				Description("A list of arguments to provide the command.").
+				Default([]any{}),
+			service.NewIntField(spFieldMaxBuffer).
+				Description("The maximum expected response size.").
+				Advanced().
+				Default(bufio.MaxScanTokenSize),
+			service.NewStringEnumField(spFieldCodecSend, "lines", "length_prefixed_uint32_be", "netstring").
+				Description("Determines how messages written to the subprocess are encoded, which allows them to be logically separated.").
+				Version("3.37.0").
+				Advanced().
+				Default("lines"),
+			service.NewStringEnumField(spFieldCodecRecv, "lines", "length_prefixed_uint32_be", "netstring").
+				Description("Determines how messages read from the subprocess are decoded, which allows them to be logically separated.").
+				Version("3.37.0").
+				Advanced().
+				Default("lines"),
+		)
+}
+
+func init() {
+	err := service.RegisterBatchProcessor(
+		"subprocess", subProcSpec(),
+		func(conf *service.ParsedConfig, res *service.Resources) (service.BatchProcessor, error) {
+			var sConf subprocConfig
+			var err error
+			if sConf.Name, err = conf.FieldString(spFieldName); err != nil {
+				return nil, err
+			}
+			if sConf.Args, err = conf.FieldStringList(spFieldArgs); err != nil {
+				return nil, err
+			}
+			if sConf.MaxBuffer, err = conf.FieldInt(spFieldMaxBuffer); err != nil {
+				return nil, err
+			}
+			if sConf.CodecSend, err = conf.FieldString(spFieldCodecSend); err != nil {
+				return nil, err
+			}
+			if sConf.CodecRecv, err = conf.FieldString(spFieldCodecRecv); err != nil {
+				return nil, err
+			}
+
+			mgr := interop.UnwrapManagement(res)
+			p, err := newSubprocess(sConf, mgr)
+			if err != nil {
+				return nil, err
+			}
+			return interop.NewUnwrapInternalBatchProcessor(processor.NewAutoObservedProcessor("subprocess", p, mgr)), nil
+		})
 	if err != nil {
 		panic(err)
 	}
@@ -82,7 +131,7 @@ type subprocessProc struct {
 	mut      sync.Mutex
 }
 
-func newSubprocess(conf processor.SubprocessConfig, mgr bundle.NewManagement) (*subprocessProc, error) {
+func newSubprocess(conf subprocConfig, mgr bundle.NewManagement) (*subprocessProc, error) {
 	e := &subprocessProc{
 		log: mgr.Logger(),
 	}

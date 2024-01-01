@@ -87,7 +87,7 @@ output:
 		}
 
 		filter := bson.M{"id": idInt}
-		document, err := collection.FindOne(context.Background(), filter).DecodeBytes()
+		document, err := collection.FindOne(context.Background(), filter).Raw()
 		if err != nil {
 			return "", nil, err
 		}

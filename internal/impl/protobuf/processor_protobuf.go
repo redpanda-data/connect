@@ -19,9 +19,11 @@ import (
 )
 
 const (
-	fieldOperator    = "operator"
-	fieldMessage     = "message"
-	fieldImportPaths = "import_paths"
+	fieldOperator       = "operator"
+	fieldMessage        = "message"
+	fieldImportPaths    = "import_paths"
+	fieldDiscardUnknown = "discard_unknown"
+	fieldUseProtoNames  = "use_proto_names"
 )
 
 func protobufProcessorSpec() *service.ConfigSpec {
@@ -49,6 +51,12 @@ Attempts to create a target protobuf message from a generic JSON structure.
 			Description("The [operator](#operators) to execute"),
 		service.NewStringField(fieldMessage).
 			Description("The fully qualified name of the protobuf message to convert to/from."),
+		service.NewBoolField(fieldDiscardUnknown).
+			Description("If `true`, the `from_json` operator discards fields that are unknown to the schema.").
+			Default(false),
+		service.NewBoolField(fieldUseProtoNames).
+			Description("If `true`, the `to_json` operator deserializes fields exactly as named in schema file.").
+			Default(false),
 		service.NewStringListField(fieldImportPaths).
 			Description("A list of directories containing .proto files, including all definitions required for parsing the target message. If left empty the current directory is used. Each directory listed will be walked with all found .proto files imported.").
 			Default([]string{}),
@@ -145,7 +153,7 @@ func init() {
 
 type protobufOperator func(part *service.Message) error
 
-func newProtobufToJSONOperator(f ifs.FS, msg string, importPaths []string) (protobufOperator, error) {
+func newProtobufToJSONOperator(f ifs.FS, msg string, importPaths []string, useProtoNames bool) (protobufOperator, error) {
 	if msg == "" {
 		return nil, errors.New("message field must not be empty")
 	}
@@ -177,7 +185,8 @@ func newProtobufToJSONOperator(f ifs.FS, msg string, importPaths []string) (prot
 		}
 
 		opts := protojson.MarshalOptions{
-			Resolver: types,
+			Resolver:      types,
+			UseProtoNames: useProtoNames,
 		}
 		data, err := opts.Marshal(dynMsg)
 		if err != nil {
@@ -189,7 +198,7 @@ func newProtobufToJSONOperator(f ifs.FS, msg string, importPaths []string) (prot
 	}, nil
 }
 
-func newProtobufFromJSONOperator(f ifs.FS, msg string, importPaths []string) (protobufOperator, error) {
+func newProtobufFromJSONOperator(f ifs.FS, msg string, importPaths []string, discardUnknown bool) (protobufOperator, error) {
 	if msg == "" {
 		return nil, errors.New("message field must not be empty")
 	}
@@ -217,7 +226,8 @@ func newProtobufFromJSONOperator(f ifs.FS, msg string, importPaths []string) (pr
 		dynMsg := dynamicpb.NewMessage(md.Descriptor())
 
 		opts := protojson.UnmarshalOptions{
-			Resolver: types,
+			Resolver:       types,
+			DiscardUnknown: discardUnknown,
 		}
 		if err := opts.Unmarshal(msgBytes, dynMsg); err != nil {
 			return fmt.Errorf("failed to unmarshal JSON message '%v': %w", msg, err)
@@ -233,12 +243,12 @@ func newProtobufFromJSONOperator(f ifs.FS, msg string, importPaths []string) (pr
 	}, nil
 }
 
-func strToProtobufOperator(f ifs.FS, opStr, message string, importPaths []string) (protobufOperator, error) {
+func strToProtobufOperator(f ifs.FS, opStr, message string, importPaths []string, discardUnknown bool, useProtoNames bool) (protobufOperator, error) {
 	switch opStr {
 	case "to_json":
-		return newProtobufToJSONOperator(f, message, importPaths)
+		return newProtobufToJSONOperator(f, message, importPaths, useProtoNames)
 	case "from_json":
-		return newProtobufFromJSONOperator(f, message, importPaths)
+		return newProtobufFromJSONOperator(f, message, importPaths, discardUnknown)
 	}
 	return nil, fmt.Errorf("operator not recognised: %v", opStr)
 }
@@ -296,7 +306,17 @@ func newProtobuf(conf *service.ParsedConfig, mgr *service.Resources) (*protobufP
 		return nil, err
 	}
 
-	if p.operator, err = strToProtobufOperator(mgr.FS(), operatorStr, message, importPaths); err != nil {
+	var discardUnknown bool
+	if discardUnknown, err = conf.FieldBool(fieldDiscardUnknown); err != nil {
+		return nil, err
+	}
+
+	var useProtoNames bool
+	if useProtoNames, err = conf.FieldBool(fieldUseProtoNames); err != nil {
+		return nil, err
+	}
+
+	if p.operator, err = strToProtobufOperator(mgr.FS(), operatorStr, message, importPaths, discardUnknown, useProtoNames); err != nil {
 		return nil, err
 	}
 	return p, nil

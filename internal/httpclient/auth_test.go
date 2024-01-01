@@ -68,3 +68,35 @@ jwt:
 	assert.Equal(t, "foomethod", authConf.JWT.SigningMethod)
 	assert.Equal(t, "fookeyfile", authConf.JWT.PrivateKeyFile)
 }
+
+func TestAuthConfigOAuth2Parsing(t *testing.T) {
+	spec := service.NewConfigSpec().Field(oAuth2FieldSpec())
+
+	parsedConf, err := spec.ParseYAML(`
+oauth2:
+  enabled: true
+  client_key: foo
+  client_secret: bar
+  token_url: example.com/token
+  scopes: [ meow, woof, moo ]
+  endpoint_params:
+    first: [ 'this', 'and this' ]
+    second: [ 'that' ]
+    third: [ 'and those' ]
+`, service.NewEnvironment())
+	require.NoError(t, err)
+
+	authConf, err := oauth2FromParsed(parsedConf)
+	require.NoError(t, err)
+
+	assert.True(t, authConf.Enabled)
+	assert.Equal(t, "foo", authConf.ClientKey)
+	assert.Equal(t, "bar", authConf.ClientSecret)
+	assert.Equal(t, "example.com/token", authConf.TokenURL)
+	assert.Equal(t, []string{"meow", "woof", "moo"}, authConf.Scopes)
+	assert.Equal(t, map[string][]string{
+		"first":  {"this", "and this"},
+		"second": {"that"},
+		"third":  {"and those"},
+	}, authConf.EndpointParams)
+}

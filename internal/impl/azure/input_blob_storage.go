@@ -14,10 +14,9 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
 
 	"github.com/benthosdev/benthos/v4/internal/codec"
+	"github.com/benthosdev/benthos/v4/internal/codec/interop"
 	"github.com/benthosdev/benthos/v4/internal/component"
-	"github.com/benthosdev/benthos/v4/internal/component/input"
-	"github.com/benthosdev/benthos/v4/internal/component/interop"
-	"github.com/benthosdev/benthos/v4/internal/message"
+	"github.com/benthosdev/benthos/v4/internal/component/scanner"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
@@ -25,7 +24,6 @@ const (
 	// Blob Storage Input Fields
 	bsiFieldContainer     = "container"
 	bsiFieldPrefix        = "prefix"
-	bsiFieldCodec         = "codec"
 	bsiFieldDeleteObjects = "delete_objects"
 )
 
@@ -33,8 +31,8 @@ type bsiConfig struct {
 	client        *azblob.Client
 	Container     string
 	Prefix        string
-	Codec         string
 	DeleteObjects bool
+	Codec         interop.FallbackReaderCodec
 }
 
 func bsiConfigFromParsed(pConf *service.ParsedConfig) (conf bsiConfig, err error) {
@@ -52,7 +50,7 @@ func bsiConfigFromParsed(pConf *service.ParsedConfig) (conf bsiConfig, err error
 	if conf.Prefix, err = pConf.FieldString(bsiFieldPrefix); err != nil {
 		return
 	}
-	if conf.Codec, err = pConf.FieldString(bsiFieldCodec); err != nil {
+	if conf.Codec, err = interop.OldReaderCodecFromParsed(pConf); err != nil {
 		return
 	}
 	if conf.DeleteObjects, err = pConf.FieldBool(bsiFieldDeleteObjects); err != nil {
@@ -103,7 +101,9 @@ You can access these metadata fields using [function interpolation](/docs/config
 			service.NewStringField(bsiFieldPrefix).
 				Description("An optional path prefix, if set only objects with the prefix are consumed.").
 				Default(""),
-			service.NewInternalField(codec.ReaderDocs).Default("all-bytes"),
+		).
+		Fields(interop.OldReaderCodecFields("to_the_end")...).
+		Fields(
 			service.NewBoolField(bsiFieldDeleteObjects).
 				Description("Whether to delete downloaded objects from the blob once they are processed.").
 				Advanced().
@@ -114,36 +114,16 @@ You can access these metadata fields using [function interpolation](/docs/config
 func init() {
 	err := service.RegisterBatchInput("azure_blob_storage", bsiSpec(),
 		func(pConf *service.ParsedConfig, res *service.Resources) (service.BatchInput, error) {
-			// NOTE: We're using interop to punch an internal implementation up
-			// to the public plugin API. The only blocker from using the full
-			// public suite is the codec field.
-			//
-			// Since codecs are likely to get refactored soon I figured it
-			// wasn't worth investing in a public wrapper since the old style
-			// will likely get deprecated.
-			//
-			// This does mean that for now all codec based components will need
-			// to keep internal implementations. However, the config specs are
-			// the biggest time sink when converting to the new APIs so it's not
-			// a big deal to leave these tasks pending.
 			conf, err := bsiConfigFromParsed(pConf)
 			if err != nil {
 				return nil, err
 			}
 
-			mgr := interop.UnwrapManagement(res)
-			var rdr input.Async
-			if rdr, err = newAzureBlobStorage(conf, res.Logger()); err != nil {
-				return nil, err
-			}
-
-			rdr = input.NewAsyncPreserver(rdr)
-			i, err := input.NewAsyncReader("azure_blob_storage", rdr, mgr)
+			rdr, err := newAzureBlobStorage(conf, res.Logger())
 			if err != nil {
 				return nil, err
 			}
-
-			return interop.NewUnwrapInternalInput(i), nil
+			return service.AutoRetryNacksBatched(rdr), nil
 		})
 	if err != nil {
 		panic(err)
@@ -174,7 +154,7 @@ func deleteAzureObjectAckFn(
 	containerName string,
 	key string,
 	del bool,
-	prev codec.ReaderAckFn,
+	prev scanner.AckFn,
 ) codec.ReaderAckFn {
 	return func(ctx context.Context, err error) error {
 		if prev != nil {
@@ -196,7 +176,7 @@ type azurePendingObject struct {
 	target    *azureObjectTarget
 	obj       azblob.DownloadStreamResponse
 	extracted int
-	scanner   codec.Reader
+	scanner   interop.FallbackReaderStream
 }
 
 type azureTargetReader struct {
@@ -271,7 +251,7 @@ func (s azureTargetReader) Close(context.Context) error {
 type azureBlobStorage struct {
 	conf bsiConfig
 
-	objectScannerCtor codec.ReaderConstructor
+	objectScannerCtor interop.FallbackReaderCodec
 	keyReader         *azureTargetReader
 
 	objectMut sync.Mutex
@@ -281,16 +261,11 @@ type azureBlobStorage struct {
 }
 
 func newAzureBlobStorage(conf bsiConfig, log *service.Logger) (*azureBlobStorage, error) {
-	objectScannerCtor, err := codec.GetReader(conf.Codec, codec.NewReaderConfig())
-	if err != nil {
-		return nil, fmt.Errorf("invalid azure storage codec: %w", err)
-	}
 	a := &azureBlobStorage{
 		conf:              conf,
-		objectScannerCtor: objectScannerCtor,
+		objectScannerCtor: conf.Codec,
 		log:               log,
 	}
-
 	return a, nil
 }
 
@@ -319,7 +294,7 @@ func (a *azureBlobStorage) getObjectTarget(ctx context.Context) (*azurePendingOb
 		target: target,
 		obj:    obj,
 	}
-	if object.scanner, err = a.objectScannerCtor(target.key, obj.NewRetryReader(ctx, nil), target.ackFn); err != nil {
+	if object.scanner, err = a.objectScannerCtor.Create(obj.NewRetryReader(ctx, nil), target.ackFn, scanner.SourceDetails{Name: target.key}); err != nil {
 		_ = target.ackFn(ctx, err)
 		return nil, err
 	}
@@ -328,9 +303,8 @@ func (a *azureBlobStorage) getObjectTarget(ctx context.Context) (*azurePendingOb
 	return object, nil
 }
 
-func blobStorageMsgFromParts(p *azurePendingObject, containerName string, parts []*message.Part) message.Batch {
-	msg := message.Batch(parts)
-	_ = msg.Iter(func(_ int, part *message.Part) error {
+func blobStorageMetaToBatch(p *azurePendingObject, containerName string, parts service.MessageBatch) {
+	for _, part := range parts {
 		part.MetaSetMut("blob_storage_key", p.target.key)
 		part.MetaSetMut("blob_storage_container", containerName)
 		if p.obj.LastModified != nil {
@@ -347,21 +321,19 @@ func blobStorageMsgFromParts(p *azurePendingObject, containerName string, parts 
 		for k, v := range p.obj.Metadata {
 			part.MetaSetMut(k, v)
 		}
-		return nil
-	})
-	return msg
+	}
 }
 
-func (a *azureBlobStorage) ReadBatch(ctx context.Context) (msg message.Batch, ackFn input.AsyncAckFn, err error) {
+func (a *azureBlobStorage) ReadBatch(ctx context.Context) (msg service.MessageBatch, ackFn service.AckFunc, err error) {
 	a.objectMut.Lock()
 	defer a.objectMut.Unlock()
 
 	defer func() {
 		if errors.Is(err, io.EOF) {
-			err = component.ErrTypeClosed
+			err = service.ErrEndOfInput
 		} else if serr, ok := err.(*azcore.ResponseError); ok && serr.StatusCode == http.StatusForbidden {
 			a.log.Warnf("error downloading blob: %v", err)
-			err = component.ErrTypeClosed
+			err = service.ErrEndOfInput
 		} else if errors.Is(err, context.Canceled) ||
 			errors.Is(err, context.DeadlineExceeded) ||
 			(err != nil && strings.HasSuffix(err.Error(), "context canceled")) {
@@ -374,11 +346,11 @@ func (a *azureBlobStorage) ReadBatch(ctx context.Context) (msg message.Batch, ac
 		return
 	}
 
-	var parts []*message.Part
-	var scnAckFn codec.ReaderAckFn
+	var parts service.MessageBatch
+	var scnAckFn service.AckFunc
 
 	for {
-		if parts, scnAckFn, err = object.scanner.Next(ctx); err == nil {
+		if parts, scnAckFn, err = object.scanner.NextBatch(ctx); err == nil {
 			object.extracted++
 			break
 		}
@@ -387,17 +359,19 @@ func (a *azureBlobStorage) ReadBatch(ctx context.Context) (msg message.Batch, ac
 			return
 		}
 		if err = object.scanner.Close(ctx); err != nil {
-			a.log.Warnf("Failed to close blob object scanner cleanly: %v\n", err)
+			a.log.Warnf("Failed to close blob object scanner cleanly: %v", err)
 		}
 		if object.extracted == 0 {
-			a.log.Debugf("Extracted zero messages from key %v\n", object.target.key)
+			a.log.Debugf("Extracted zero messages from key %v", object.target.key)
 		}
 		if object, err = a.getObjectTarget(ctx); err != nil {
 			return
 		}
 	}
 
-	return blobStorageMsgFromParts(object, a.conf.Container, parts), func(rctx context.Context, res error) error {
+	blobStorageMetaToBatch(object, a.conf.Container, parts)
+
+	return parts, func(rctx context.Context, res error) error {
 		return scnAckFn(rctx, res)
 	}, nil
 }

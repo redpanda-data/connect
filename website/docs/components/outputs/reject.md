@@ -14,7 +14,6 @@ categories: ["Utility"]
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-
 Rejects all messages, treating them as though the output destination failed to publish them.
 
 ```yml

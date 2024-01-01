@@ -8,6 +8,7 @@ import (
 	"sync"
 
 	"go.opentelemetry.io/otel/trace"
+	"go.opentelemetry.io/otel/trace/noop"
 
 	"github.com/benthosdev/benthos/v4/internal/bloblang"
 	"github.com/benthosdev/benthos/v4/internal/bloblang/query"
@@ -20,6 +21,7 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/component/ratelimit"
+	"github.com/benthosdev/benthos/v4/internal/component/scanner"
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/filepath/ifs"
 	"github.com/benthosdev/benthos/v4/internal/log"
@@ -184,7 +186,7 @@ func New(conf ResourceConfig, opts ...OptFunc) (*Type, error) {
 
 		logger: log.Noop(),
 		stats:  metrics.Noop(),
-		tracer: trace.NewNoopTracerProvider(),
+		tracer: noop.NewTracerProvider(),
 
 		fs: ifs.OS(),
 
@@ -850,6 +852,13 @@ func (t *Type) RemoveRateLimit(ctx context.Context, name string) error {
 		return err
 	}
 	return closeErr
+}
+
+//------------------------------------------------------------------------------
+
+// NewScanner attempts to create a new scanner component from a config.
+func (t *Type) NewScanner(conf scanner.Config) (scanner.Creator, error) {
+	return t.env.ScannerInit(conf, t)
 }
 
 //------------------------------------------------------------------------------

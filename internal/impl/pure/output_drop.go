@@ -3,23 +3,29 @@ package pure
 import (
 	"context"
 
-	"github.com/benthosdev/benthos/v4/internal/bundle"
+	"github.com/benthosdev/benthos/v4/internal/component/interop"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
-	"github.com/benthosdev/benthos/v4/internal/component/output/processors"
-	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
 func init() {
-	err := bundle.AllOutputs.Add(processors.WrapConstructor(func(c output.Config, nm bundle.NewManagement) (output.Streamed, error) {
-		return output.NewAsyncWriter("drop", 1, newDropWriter(c.Drop, nm.Logger()), nm)
-	}), docs.ComponentSpec{
-		Name:       "drop",
-		Summary:    `Drops all messages.`,
-		Categories: []string{"Utility"},
-		Config:     docs.FieldObject("", "").HasDefault(struct{}{}),
-	})
+	err := service.RegisterBatchOutput(
+		"drop", service.NewConfigSpec().
+			Stable().
+			Categories("Utility").
+			Summary(`Drops all messages.`).
+			Field(service.NewObjectField("").Default(map[string]any{})),
+		func(conf *service.ParsedConfig, res *service.Resources) (out service.BatchOutput, batchPolicy service.BatchPolicy, maxInFlight int, err error) {
+			nm := interop.UnwrapManagement(res)
+			var o output.Streamed
+			if o, err = output.NewAsyncWriter("drop", 1, newDropWriter(nm.Logger()), nm); err != nil {
+				return
+			}
+			out = interop.NewUnwrapInternalOutput(o)
+			return
+		})
 	if err != nil {
 		panic(err)
 	}
@@ -29,7 +35,7 @@ type dropWriter struct {
 	log log.Modular
 }
 
-func newDropWriter(conf output.DropConfig, log log.Modular) *dropWriter {
+func newDropWriter(log log.Modular) *dropWriter {
 	return &dropWriter{log: log}
 }
 

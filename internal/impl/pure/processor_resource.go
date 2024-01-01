@@ -5,37 +5,33 @@ import (
 	"fmt"
 
 	"github.com/benthosdev/benthos/v4/internal/bundle"
+	"github.com/benthosdev/benthos/v4/internal/component/interop"
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
-	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
 func init() {
-	err := bundle.AllProcessors.Add(func(conf processor.Config, mgr bundle.NewManagement) (processor.V1, error) {
-		return newResourceProcessor(conf, mgr, mgr.Logger())
-	}, docs.ComponentSpec{
-		Name: "resource",
-		Categories: []string{
-			"Utility",
-		},
-		Summary: `
-Resource is a processor type that runs a processor resource identified by its label.`,
-		Description: `
+	err := service.RegisterBatchProcessor("resource", service.NewConfigSpec().
+		Stable().
+		Categories("Utility").
+		Summary("Resource is a processor type that runs a processor resource identified by its label.").
+		Description(`
 This processor allows you to reference the same configured processor resource in multiple places, and can also tidy up large nested configs. For example, the config:
 
-` + "```yaml" + `
+`+"```yaml"+`
 pipeline:
   processors:
     - mapping: |
         root.message = this
         root.meta.link_count = this.links.length()
         root.user.age = this.user.age.number()
-` + "```" + `
+`+"```"+`
 
 Is equivalent to:
 
-` + "```yaml" + `
+`+"```yaml"+`
 pipeline:
   processors:
     - resource: foo_proc
@@ -46,11 +42,21 @@ processor_resources:
       root.message = this
       root.meta.link_count = this.links.length()
       root.user.age = this.user.age.number()
-` + "```" + `
+`+"```"+`
 
-You can find out more about resources [in this document.](/docs/configuration/resources)`,
-		Config: docs.FieldString("", "").HasDefault(""),
-	})
+You can find out more about resources [in this document.](/docs/configuration/resources)`).
+		Field(service.NewStringField("").Default("")),
+		func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchProcessor, error) {
+			name, err := conf.FieldString()
+			if err != nil {
+				return nil, err
+			}
+			p, err := newResourceProcessor(name, interop.UnwrapManagement(mgr))
+			if err != nil {
+				return nil, err
+			}
+			return interop.NewUnwrapInternalBatchProcessor(p), nil
+		})
 	if err != nil {
 		panic(err)
 	}
@@ -62,14 +68,14 @@ type resourceProcessor struct {
 	log  log.Modular
 }
 
-func newResourceProcessor(conf processor.Config, mgr bundle.NewManagement, log log.Modular) (*resourceProcessor, error) {
-	if !mgr.ProbeProcessor(conf.Resource) {
-		return nil, fmt.Errorf("processor resource '%v' was not found", conf.Resource)
+func newResourceProcessor(name string, mgr bundle.NewManagement) (*resourceProcessor, error) {
+	if !mgr.ProbeProcessor(name) {
+		return nil, fmt.Errorf("processor resource '%v' was not found", name)
 	}
 	return &resourceProcessor{
 		mgr:  mgr,
-		name: conf.Resource,
-		log:  log,
+		name: name,
+		log:  mgr.Logger(),
 	}, nil
 }
 

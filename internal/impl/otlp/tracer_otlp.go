@@ -39,7 +39,7 @@ func init() {
 		).Description("A list of grpc collectors.")).
 		Field(service.NewStringMapField("tags").
 			Description("A map of tags to add to all tracing spans.").
-			Default(map[string]string{}).
+			Default(map[string]any{}).
 			Advanced())
 
 	err := service.RegisterOtelTracerProvider(

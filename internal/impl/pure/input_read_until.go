@@ -10,36 +10,40 @@ import (
 	"github.com/cenkalti/backoff/v4"
 
 	"github.com/benthosdev/benthos/v4/internal/bloblang/mapping"
-	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component/input"
-	"github.com/benthosdev/benthos/v4/internal/component/input/processors"
-	"github.com/benthosdev/benthos/v4/internal/component/metrics"
-	"github.com/benthosdev/benthos/v4/internal/docs"
+	"github.com/benthosdev/benthos/v4/internal/component/interop"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
 	"github.com/benthosdev/benthos/v4/internal/shutdown"
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
-func init() {
-	err := bundle.AllInputs.Add(processors.WrapConstructor(func(c input.Config, nm bundle.NewManagement) (input.Streamed, error) {
-		return newReadUntilInput(c, nm, nm.Logger(), nm.Metrics())
-	}), docs.ComponentSpec{
-		Name: "read_until",
-		Summary: `
-Reads messages from a child input until a consumed message passes a [Bloblang query](/docs/guides/bloblang/about/), at which point the input closes.`,
-		Description: `
+const (
+	ruiFieldInput       = "input"
+	ruiFieldRestart     = "restart_input"
+	ruiFieldCheck       = "check"
+	ruiFieldIdleTimeout = "idle_timeout"
+)
+
+func readUntilInputSpec() *service.ConfigSpec {
+	return service.NewConfigSpec().
+		Stable().
+		Categories("Utility").
+		Summary("Reads messages from a child input until a consumed message passes a [Bloblang query](/docs/guides/bloblang/about/), at which point the input closes. It is also possible to configure a timeout after which the input is closed if no new messages arrive in that period.").
+		Description(`
 Messages are read continuously while the query check returns false, when the query returns true the message that triggered the check is sent out and the input is closed. Use this to define inputs where the stream should end once a certain message appears.
 
-Sometimes inputs close themselves. For example, when the ` + "`file`" + ` input type reaches the end of a file it will shut down. By default this type will also shut down. If you wish for the input type to be restarted every time it shuts down until the query check is met then set ` + "`restart_input` to `true`." + `
+If the idle timeout is configured, the input will be closed if no new messages arrive after that period of time. Use this field if you want to empty out and close an input that doesn't have a logical end.
+
+Sometimes inputs close themselves. For example, when the `+"`file`"+` input type reaches the end of a file it will shut down. By default this type will also shut down. If you wish for the input type to be restarted every time it shuts down until the query check is met then set `+"`restart_input` to `true`."+`
 
 ### Metadata
 
-A metadata key ` + "`benthos_read_until` containing the value `final`" + ` is added to the first part of the message that triggers the input to stop.`,
-		Examples: []docs.AnnotatedExample{
-			{
-				Title:   "Consume N Messages",
-				Summary: "A common reason to use this input is to consume only N messages from an input and then stop. This can easily be done with the [`count` function](/docs/guides/bloblang/functions/#count):",
-				Config: `
+A metadata key `+"`benthos_read_until` containing the value `final`"+` is added to the first part of the message that triggers the input to stop.`).
+		Example(
+			"Consume N Messages",
+			"A common reason to use this input is to consume only N messages from an input and then stop. This can easily be done with the [`count` function](/docs/guides/bloblang/functions/#count):",
+			`
 # Only read 100 messages, and then exit.
 input:
   read_until:
@@ -50,76 +54,121 @@ input:
         topics: [ foo, bar ]
         consumer_group: foogroup
 `,
-			},
-		},
-		Config: docs.FieldComponent().WithChildren(
-			docs.FieldInput("input", "The child input to consume from.").HasDefault(nil),
-			docs.FieldBloblang(
-				"check",
-				"A [Bloblang query](/docs/guides/bloblang/about/) that should return a boolean value indicating whether the input should now be closed.",
+		).
+		Example(
+			"Read from a kafka and close when empty",
+			"A common reason to use this input is a job that consumes all messages and exits once its empty:",
+			`
+# Consumes all messages and exit when the last message was consumed 5s ago.
+input:
+  read_until:
+    idle_timeout: 5s
+    input:
+      kafka:
+        addresses: [ TODO ]
+        topics: [ foo, bar ]
+        consumer_group: foogroup
+`,
+		).Fields(
+		service.NewInputField(ruiFieldInput).
+			Description("The child input to consume from."),
+		service.NewBloblangField(ruiFieldCheck).
+			Description("A [Bloblang query](/docs/guides/bloblang/about/) that should return a boolean value indicating whether the input should now be closed.").
+			Examples(
 				`this.type == "foo"`,
 				`count("messages") >= 100`,
-			).HasDefault(""),
-			docs.FieldBool("restart_input", "Whether the input should be reopened if it closes itself before the condition has resolved to true.").HasDefault(false),
-		),
-		Categories: []string{
-			"Utility",
-		},
-	})
+			).
+			Optional(),
+		service.NewDurationField(ruiFieldIdleTimeout).
+			Description("The maximum amount of time without receiving new messages after which the input is closed.").
+			Example("5s").
+			Optional(),
+		service.NewBoolField(ruiFieldRestart).
+			Description("Whether the input should be reopened if it closes itself before the condition has resolved to true.").
+			Default(false),
+	)
+}
+
+func init() {
+	err := service.RegisterBatchInput("read_until", readUntilInputSpec(),
+		func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchInput, error) {
+			i, err := newReadUntilInputFromParsed(conf, mgr)
+			if err != nil {
+				return nil, err
+			}
+			return interop.NewUnwrapInternalInput(i), nil
+		})
 	if err != nil {
 		panic(err)
 	}
 }
 
 type readUntilInput struct {
-	conf input.ReadUntilConfig
+	restart bool
 
 	wrappedInputLocked *atomic.Pointer[input.Streamed]
 	check              *mapping.Executor
+	idleTimeout        time.Duration
 
-	wrapperMgr bundle.NewManagement
+	wrappedCtor func() (input.Streamed, error)
 
-	stats metrics.Type
-	log   log.Modular
+	log log.Modular
 
 	transactions chan message.Transaction
 
 	shutSig *shutdown.Signaller
 }
 
-func newReadUntilInput(conf input.Config, mgr bundle.NewManagement, log log.Modular, stats metrics.Type) (input.Streamed, error) {
-	if conf.ReadUntil.Input == nil {
-		return nil, errors.New("cannot create read_until input without a child")
+func newReadUntilInputFromParsed(conf *service.ParsedConfig, res *service.Resources) (input.Streamed, error) {
+	mgr := interop.UnwrapManagement(res)
+
+	wrappedCtor := func() (input.Streamed, error) {
+		ownedInput, err := conf.FieldInput(ruiFieldInput)
+		if err != nil {
+			return nil, err
+		}
+		return interop.UnwrapOwnedInput(ownedInput), nil
 	}
 
-	wMgr := mgr.IntoPath("read_until", "input")
-	wrapped, err := wMgr.NewInput(*conf.ReadUntil.Input)
+	wrapped, err := wrappedCtor()
+	if err != nil {
+		return nil, err
+	}
+
+	restart, err := conf.FieldBool(ruiFieldRestart)
 	if err != nil {
 		return nil, err
 	}
 
 	var check *mapping.Executor
-	if len(conf.ReadUntil.Check) > 0 {
-		if check, err = mgr.BloblEnvironment().NewMapping(conf.ReadUntil.Check); err != nil {
+	if checkStr, _ := conf.FieldString(ruiFieldCheck); len(checkStr) > 0 {
+		if check, err = mgr.BloblEnvironment().NewMapping(checkStr); err != nil {
 			return nil, fmt.Errorf("failed to parse check query: %w", err)
 		}
 	}
 
-	if check == nil {
-		return nil, errors.New("a check query is required")
+	var idleTimeout time.Duration = -1
+	if idleTimeoutStr, _ := conf.FieldString(ruiFieldIdleTimeout); len(idleTimeoutStr) > 0 {
+		if idleTimeout, err = time.ParseDuration(idleTimeoutStr); err != nil {
+			return nil, fmt.Errorf("failed to parse idle_timeout string: %v", err)
+		}
+	}
+
+	if check == nil && idleTimeout < 0 {
+		return nil, errors.New("it is required to set either check or idle_timeout")
 	}
 
 	wInputLocked := &atomic.Pointer[input.Streamed]{}
 	wInputLocked.Store(&wrapped)
 	rdr := &readUntilInput{
-		conf: conf.ReadUntil,
+		restart: restart,
 
-		wrapperMgr:         wMgr,
+		wrappedCtor:        wrappedCtor,
 		wrappedInputLocked: wInputLocked,
 
-		log:          log,
-		stats:        stats,
+		log:          mgr.Logger(),
 		check:        check,
+		idleTimeout:  idleTimeout,
 		transactions: make(chan message.Transaction),
 
 		shutSig: shutdown.NewSignaller(),
@@ -159,15 +208,15 @@ runLoop:
 		var wrapped input.Streamed
 		wrappedP := r.wrappedInputLocked.Load()
 		if wrappedP == nil {
-			if r.conf.Restart {
+			if r.restart {
 				select {
 				case <-time.After(restartBackoff.NextBackOff()):
 				case <-r.shutSig.CloseAtLeisureChan():
 					return
 				}
 				var err error
-				if wrapped, err = r.wrapperMgr.NewInput(*r.conf.Input); err != nil {
-					r.log.Errorf("Failed to create input '%v': %v\n", r.conf.Input.Type, err)
+				if wrapped, err = r.wrappedCtor(); err != nil {
+					r.log.Errorf("Failed to create input: %v\n", err)
 					return
 				}
 				r.wrappedInputLocked.Store(&wrapped)
@@ -179,21 +228,34 @@ runLoop:
 		}
 
 		var tran message.Transaction
-		select {
-		case tran, open = <-wrapped.TransactionChan():
-			if !open {
-				r.wrappedInputLocked.Store(nil)
-				continue runLoop
+		{
+			timeoutChan, timeoutDone := resetIdleTimeout(r.idleTimeout)
+			select {
+			case tran, open = <-wrapped.TransactionChan():
+				timeoutDone()
+				if !open {
+					r.wrappedInputLocked.Store(nil)
+					continue runLoop
+				}
+				restartBackoff.Reset()
+			case <-r.shutSig.CloseAtLeisureChan():
+				timeoutDone()
+				return
+			case <-timeoutChan:
+				timeoutDone()
+				r.log.Infoln("Idle timeout reached")
+				return
 			}
-			restartBackoff.Reset()
-		case <-r.shutSig.CloseAtLeisureChan():
-			return
 		}
 
-		check, err := r.check.QueryPart(0, tran.Payload)
-		if err != nil {
-			check = false
-			r.log.Errorf("Failed to execute check query: %v\n", err)
+		var err error
+		check := false
+		if r.check != nil {
+			check, err = r.check.QueryPart(0, tran.Payload)
+			if err != nil {
+				check = false
+				r.log.Errorf("Failed to execute check query: %v\n", err)
+			}
 		}
 		if !check {
 			select {
@@ -265,4 +327,16 @@ func (r *readUntilInput) WaitForClose(ctx context.Context) error {
 		return ctx.Err()
 	}
 	return nil
+}
+
+func resetIdleTimeout(d time.Duration) (waitForTimeout <-chan time.Time, done func()) {
+	done = func() {}
+	if d > 0 {
+		timer := time.NewTimer(d)
+		waitForTimeout = timer.C
+		done = func() {
+			_ = timer.Stop()
+		}
+	}
+	return
 }

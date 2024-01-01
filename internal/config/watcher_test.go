@@ -22,7 +22,8 @@ import (
 func TestReaderFileWatching(t *testing.T) {
 	dummyConfig := []byte(`
 input:
-  generate: {}
+  generate:
+    mapping: 'root = "foo"'
 output:
   drop: {}
 `)
@@ -66,7 +67,8 @@ output:
 func TestReaderFileWatchingSymlinkReplace(t *testing.T) {
 	dummyConfig := []byte(`
 input:
-  generate: {}
+  generate:
+    mapping: 'root = "foo"'
 output:
   drop: {}
 `)

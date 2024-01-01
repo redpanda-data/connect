@@ -24,6 +24,22 @@ type MetadataFilter struct {
 	f *metadata.IncludeFilter
 }
 
+// IsEmpty returns true if there aren't any rules configured for matching.
+func (m *MetadataFilter) IsEmpty() bool {
+	if m == nil || m.f == nil {
+		return true
+	}
+	return !m.f.IsSet()
+}
+
+// Match returns true if the provided key matches the filter.
+func (m *MetadataFilter) Match(k string) bool {
+	if m == nil || m.f == nil {
+		return false
+	}
+	return m.f.Match(k)
+}
+
 // Walk iterates the filtered metadata key/value pairs from a message and
 // executes a provided closure function for each pair. An error returned by the
 // closure will be returned by this function and prevent subsequent pairs from

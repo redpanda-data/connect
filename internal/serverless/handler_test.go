@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
-	yaml "gopkg.in/yaml.v3"
 
 	"github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
@@ -21,13 +20,6 @@ import (
 	_ "github.com/benthosdev/benthos/v4/public/components/io"
 	_ "github.com/benthosdev/benthos/v4/public/components/pure"
 )
-
-func parseYAMLOutputConf(t testing.TB, formatStr string, args ...any) (conf output.Config) {
-	t.Helper()
-	conf = output.NewConfig()
-	require.NoError(t, yaml.Unmarshal(fmt.Appendf(nil, formatStr, args...), &conf))
-	return
-}
 
 func TestHandlerAsync(t *testing.T) {
 	var results [][]byte
@@ -46,11 +38,13 @@ func TestHandlerAsync(t *testing.T) {
 	}))
 	defer ts.Close()
 
+	var err error
 	conf := config.New()
-	conf.Output = parseYAMLOutputConf(t, `
+	conf.Output, err = output.FromYAML(fmt.Sprintf(`
 http_client:
   url: %v
-`, ts.URL)
+`, ts.URL))
+	require.NoError(t, err)
 
 	h, err := NewHandler(conf)
 	if err != nil {
@@ -99,9 +93,11 @@ func TestHandlerSyncBatch(t *testing.T) {
 	conf := config.New()
 	conf.Output.Type = ServerlessResponseType
 
-	pConf := processor.NewConfig()
-	pConf.Type = "select_parts"
-	pConf.SelectParts.Parts = []int{0, 0, 0}
+	pConf, err := processor.FromYAML(`
+select_parts:
+  parts: [ 0, 0, 0 ]
+`)
+	require.NoError(t, err)
 
 	conf.Pipeline.Processors = append(conf.Pipeline.Processors, pConf)
 
@@ -131,9 +127,11 @@ func TestHandlerSyncBatches(t *testing.T) {
 	conf := config.New()
 	conf.Output.Type = ServerlessResponseType
 
-	pConf := processor.NewConfig()
-	pConf.Type = "select_parts"
-	pConf.SelectParts.Parts = []int{0, 0, 0}
+	pConf, err := processor.FromYAML(`
+select_parts:
+  parts: [ 0, 0, 0 ]
+`)
+	require.NoError(t, err)
 
 	conf.Pipeline.Processors = append(conf.Pipeline.Processors, pConf)
 
@@ -182,19 +180,15 @@ func TestHandlerCombined(t *testing.T) {
 	defer ts.Close()
 
 	conf := config.New()
-	conf.Output.Type = "broker"
-
-	cConf := output.NewConfig()
-	cConf.Type = ServerlessResponseType
-
-	conf.Output.Broker.Outputs = append(conf.Output.Broker.Outputs, cConf)
-
-	cConf = parseYAMLOutputConf(t, `
-http_client:
-  url: %v
-`, ts.URL)
-
-	conf.Output.Broker.Outputs = append(conf.Output.Broker.Outputs, cConf)
+	var err error
+	conf.Output, err = output.FromYAML(fmt.Sprintf(`
+broker:
+  outputs:
+    - sync_response: {}
+    - http_client:
+        url: %v
+`, ts.URL))
+	require.NoError(t, err)
 
 	h, err := NewHandler(conf)
 	if err != nil {

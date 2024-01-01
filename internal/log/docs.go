@@ -20,7 +20,7 @@ func Spec() docs.FieldSpecs {
 		docs.FieldString("level_name", "The name of the level field added to logs when the `format` is `json`.").HasDefault("level"),
 		docs.FieldString("timestamp_name", "The name of the timestamp field added to logs when `add_timestamp` is set to `true` and the `format` is `json`.").HasDefault("time"),
 		docs.FieldString("message_name", "The name of the message field added to logs when the the `format` is `json`.").HasDefault("msg"),
-		docs.FieldString("static_fields", "A map of key/value pairs to add to each structured log.").Map().HasDefault(map[string]string{
+		docs.FieldString("static_fields", "A map of key/value pairs to add to each structured log.").Map().HasDefault(map[string]any{
 			"@service": "benthos",
 		}),
 		docs.FieldObject("file", "Experimental: Specify fields for optionally writing logs to a file.").WithChildren(

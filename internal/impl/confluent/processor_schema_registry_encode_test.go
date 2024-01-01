@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
 	"net/http"
 	"sync/atomic"
 	"testing"
@@ -13,11 +14,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/benthosdev/benthos/v4/internal/filepath/ifs"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
-var noopReqSign = func(ifs.FS, *http.Request) error { return nil }
+var noopReqSign = func(fs.FS, *http.Request) error { return nil }
 
 func TestSchemaRegistryEncoderConfigParse(t *testing.T) {
 	configTests := []struct {

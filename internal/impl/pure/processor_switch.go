@@ -2,64 +2,42 @@ package pure
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
-	"strconv"
 
 	"github.com/benthosdev/benthos/v4/internal/bloblang/mapping"
 	"github.com/benthosdev/benthos/v4/internal/bundle"
+	"github.com/benthosdev/benthos/v4/internal/component/interop"
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
-	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
-func init() {
-	err := bundle.AllProcessors.Add(func(conf processor.Config, mgr bundle.NewManagement) (processor.V1, error) {
-		p, err := newSwitchProc(conf.Switch, mgr)
-		if err != nil {
-			return nil, err
-		}
-		return processor.NewAutoObservedBatchedProcessor("switch", p, mgr), nil
-	}, docs.ComponentSpec{
-		Name: "switch",
-		Categories: []string{
-			"Composition",
-		},
-		Summary: `
-Conditionally processes messages based on their contents.`,
-		Description: `
-For each switch case a [Bloblang query](/docs/guides/bloblang/about) is checked and, if the result is true (or the check is empty) the child processors are executed on the message.`,
-		Footnotes: `
+const (
+	spFieldCheck       = "check"
+	spFieldProcessors  = "processors"
+	spFieldFallthrough = "fallthrough"
+)
+
+func switchProcSpec() *service.ConfigSpec {
+	return service.NewConfigSpec().
+		Categories("Composition").
+		Stable().
+		Summary(`Conditionally processes messages based on their contents.`).
+		Description(`For each switch case a [Bloblang query](/docs/guides/bloblang/about) is checked and, if the result is true (or the check is empty) the child processors are executed on the message.`).
+		Footnotes(`
 ## Batching
 
 When a switch processor executes on a [batch of messages](/docs/configuration/batching) they are checked individually and can be matched independently against cases. During processing the messages matched against a case are processed as a batch, although the ordering of messages during case processing cannot be guaranteed to match the order as received.
 
-At the end of switch processing the resulting batch will follow the same ordering as the batch was received. If any child processors have split or otherwise grouped messages this grouping will be lost as the result of a switch is always a single batch. In order to perform conditional grouping and/or splitting use the [` + "`group_by`" + ` processor](/docs/components/processors/group_by).`,
-		Config: docs.FieldComponent().Array().WithChildren(
-			docs.FieldBloblang(
-				"check",
-				"A [Bloblang query](/docs/guides/bloblang/about) that should return a boolean value indicating whether a message should have the processors of this case executed on it. If left empty the case always passes. If the check mapping throws an error the message will be flagged [as having failed](/docs/configuration/error_handling) and will not be tested against any other cases.",
-				`this.type == "foo"`,
-				`this.contents.urls.contains("https://benthos.dev/")`,
-			).HasDefault(""),
-			docs.FieldProcessor(
-				"processors",
-				"A list of [processors](/docs/components/processors/about/) to execute on a message.",
-			).HasDefault([]any{}).Array(),
-			docs.FieldBool(
-				"fallthrough",
-				"Indicates whether, if this case passes for a message, the next case should also be executed.",
-			).HasDefault(false).Advanced(),
-		),
-		Examples: []docs.AnnotatedExample{
-			{
-				Title: "I Hate George",
-				Summary: `
+At the end of switch processing the resulting batch will follow the same ordering as the batch was received. If any child processors have split or otherwise grouped messages this grouping will be lost as the result of a switch is always a single batch. In order to perform conditional grouping and/or splitting use the [`+"`group_by`"+` processor](/docs/components/processors/group_by).`).
+		Example("I Hate George", `
 We have a system where we're counting a metric for all messages that pass through our system. However, occasionally we get messages from George where he's rambling about dumb stuff we don't care about.
 
 For Georges messages we want to instead emit a metric that gauges how angry he is about being ignored and then we drop it.`,
-				Config: `
+			`
 pipeline:
   processors:
     - switch:
@@ -76,9 +54,45 @@ pipeline:
                 value: ${! json("user.anger") }
             - mapping: root = deleted()
 `,
-			},
-		},
-	})
+		).
+		Field(service.NewObjectListField("",
+			service.NewBloblangField(spFieldCheck).
+				Description("A [Bloblang query](/docs/guides/bloblang/about) that should return a boolean value indicating whether a message should have the processors of this case executed on it. If left empty the case always passes. If the check mapping throws an error the message will be flagged [as having failed](/docs/configuration/error_handling) and will not be tested against any other cases.").
+				Examples(
+					`this.type == "foo"`,
+					`this.contents.urls.contains("https://benthos.dev/")`,
+				).
+				Default(""),
+			service.NewProcessorListField(spFieldProcessors).
+				Description("A list of [processors](/docs/components/processors/about/) to execute on a message.").
+				Default([]any{}),
+			service.NewBoolField(spFieldFallthrough).
+				Description("Indicates whether, if this case passes for a message, the next case should also be executed.").
+				Advanced().
+				Default(false),
+		))
+}
+
+func init() {
+	err := service.RegisterBatchProcessor(
+		"switch", switchProcSpec(),
+		func(conf *service.ParsedConfig, res *service.Resources) (service.BatchProcessor, error) {
+			caseConfs, err := conf.FieldObjectList()
+			if err != nil {
+				return nil, err
+			}
+
+			mgr := interop.UnwrapManagement(res)
+			p := &switchProc{log: mgr.Logger()}
+			p.cases = make([]switchCase, len(caseConfs))
+			for i, c := range caseConfs {
+				if p.cases[i], err = switchCaseFromParsed(c, mgr); err != nil {
+					return nil, fmt.Errorf("case '%v' parse error: %w", i, err)
+				}
+			}
+
+			return interop.NewUnwrapInternalBatchProcessor(processor.NewAutoObservedBatchedProcessor("switch", p, mgr)), nil
+		})
 	if err != nil {
 		panic(err)
 	}
@@ -92,47 +106,34 @@ type switchCase struct {
 	fallThrough bool
 }
 
+func switchCaseFromParsed(conf *service.ParsedConfig, mgr bundle.NewManagement) (c switchCase, err error) {
+	if checkStr, _ := conf.FieldString(spFieldCheck); checkStr != "" {
+		if c.check, err = mgr.BloblEnvironment().NewMapping(checkStr); err != nil {
+			return
+		}
+	}
+
+	c.fallThrough, _ = conf.FieldBool(spFieldFallthrough)
+
+	var iProcs []*service.OwnedProcessor
+	if iProcs, err = conf.FieldProcessorList(spFieldProcessors); err != nil {
+		return
+	}
+	if len(iProcs) == 0 {
+		err = errors.New("case has no processors, in order to have a no-op case use a `noop` processor")
+		return
+	}
+
+	c.processors = make([]processor.V1, len(iProcs))
+	for i, proc := range iProcs {
+		c.processors[i] = interop.UnwrapOwnedProcessor(proc)
+	}
+	return
+}
+
 type switchProc struct {
 	cases []switchCase
 	log   log.Modular
-}
-
-func newSwitchProc(conf processor.SwitchConfig, mgr bundle.NewManagement) (*switchProc, error) {
-	var cases []switchCase
-	for i, caseConf := range conf {
-		var err error
-		var check *mapping.Executor
-		var procs []processor.V1
-
-		if len(caseConf.Check) > 0 {
-			if check, err = mgr.BloblEnvironment().NewMapping(caseConf.Check); err != nil {
-				return nil, fmt.Errorf("failed to parse case %v check: %w", i, err)
-			}
-		}
-
-		if len(caseConf.Processors) == 0 {
-			return nil, fmt.Errorf("case [%v] has no processors, in order to have a no-op case use a `noop` processor", i)
-		}
-
-		for j, procConf := range caseConf.Processors {
-			pMgr := mgr.IntoPath("switch", strconv.Itoa(i), "processors", strconv.Itoa(j))
-			proc, err := pMgr.NewProcessor(procConf)
-			if err != nil {
-				return nil, fmt.Errorf("case [%v] processor [%v]: %w", i, j, err)
-			}
-			procs = append(procs, proc)
-		}
-
-		cases = append(cases, switchCase{
-			check:       check,
-			processors:  procs,
-			fallThrough: caseConf.Fallthrough,
-		})
-	}
-	return &switchProc{
-		cases: cases,
-		log:   mgr.Logger(),
-	}, nil
 }
 
 // SwitchReorderFromGroup takes a message sort group and rearranges a slice of

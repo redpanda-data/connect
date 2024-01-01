@@ -70,6 +70,7 @@ func listComponents(c *cli.Context) {
 			"buffers",
 			"metrics",
 			"tracers",
+			"scanners",
 			"bloblang-functions",
 			"bloblang-methods",
 		} {

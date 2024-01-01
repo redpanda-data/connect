@@ -3,6 +3,7 @@ package pure_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -81,12 +82,10 @@ func TestBranchBasic(t *testing.T) {
 		"do not carry error into branch": {
 			requestMap: `root = this`,
 			processorMap: `root = this
-				root.name_upper = this.name.uppercase()`,
+        root.name_upper = this.name.uppercase()`,
 			resultMap: `root.result = if this.failme.bool(false) {
-					throw("this is a branch error")
-				} else {
-					this.name_upper
-				}`,
+      throw("this is a branch error") } else { this.name_upper
+    }`,
 			input: []mockMsg{
 				msg(`{"id":0,"name":"first"}`).withErr(errors.New("this is a pre-existing failure")),
 				msg(`{"failme":true,"id":1,"name":"second"}`),
@@ -113,16 +112,16 @@ func TestBranchBasic(t *testing.T) {
 		},
 		"filtered and failed mappings": {
 			requestMap: `root = match {
-				this.id == 0 => throw("i dont like zero"),
-				this.id == 3 => deleted(),
-				_ => {"name":this.name,"id":this.id}
-			}`,
+      this.id == 0 => throw("i dont like zero"),
+      this.id == 3 => deleted(),
+      _ => {"name":this.name,"id":this.id}
+    }`,
 			processorMap: `root = this
-			root.name_upper = this.name.uppercase()`,
+        root.name_upper = this.name.uppercase()`,
 			resultMap: `root.result = match {
-				this.id == 2 => throw("i dont like two either"),
-				_ => this.name_upper
-			}`,
+      this.id == 2 => throw("i dont like two either"),
+      _ => this.name_upper
+    }`,
 			input: []mockMsg{
 				msg(`{"id":0,"name":"first"}`),
 				msg(`{"id":1,"name":"second"}`),
@@ -202,15 +201,17 @@ func TestBranchBasic(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 
-			procConf := processor.NewConfig()
-			procConf.Type = "bloblang"
-			procConf.Bloblang = test.processorMap
-
-			conf := processor.NewConfig()
-			conf.Type = "branch"
-			conf.Branch.RequestMap = test.requestMap
-			conf.Branch.Processors = append(conf.Branch.Processors, procConf)
-			conf.Branch.ResultMap = test.resultMap
+			conf, err := processor.FromYAML(fmt.Sprintf(`
+branch:
+  request_map: |
+    %v
+  processors:
+    - bloblang: |
+        %v
+  result_map: |
+    %v
+`, test.requestMap, test.processorMap, test.resultMap))
+			require.NoError(t, err)
 
 			proc, err := mock.NewManager().NewProcessor(conf)
 			require.NoError(t, err)

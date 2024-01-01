@@ -14,7 +14,6 @@ categories: ["Utility"]
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-
 The switch output type allows you to route messages to different outputs based on their contents.
 
 
@@ -31,7 +30,7 @@ output:
   label: ""
   switch:
     retry_until_success: false
-    cases: []
+    cases: [] # No default (required)
 ```
 
 </TabItem>
@@ -44,7 +43,7 @@ output:
   switch:
     retry_until_success: false
     strict_mode: false
-    cases: []
+    cases: [] # No default (required)
 ```
 
 </TabItem>
@@ -125,12 +124,9 @@ output:
 
 ### `retry_until_success`
 
-If a selected output fails to send a message this field determines whether it is
-reattempted indefinitely. If set to false the error is instead propagated back
-to the input level.
+If a selected output fails to send a message this field determines whether it is reattempted indefinitely. If set to false the error is instead propagated back to the input level.
 
-If a message can be routed to >1 outputs it is usually best to set this to true
-in order to avoid duplicate messages being routed to an output.
+If a message can be routed to >1 outputs it is usually best to set this to true in order to avoid duplicate messages being routed to an output.
 
 
 Type: `bool`  
@@ -138,9 +134,7 @@ Default: `false`
 
 ### `strict_mode`
 
-This field determines whether an error should be reported if no condition is met.
-If set to true, an error is propagated back to the input level. The default
-behavior is false, which will drop the message.
+This field determines whether an error should be reported if no condition is met. If set to true, an error is propagated back to the input level. The default behavior is false, which will drop the message.
 
 
 Type: `bool`  
@@ -152,7 +146,6 @@ A list of switch cases, outlining outputs that can be routed to.
 
 
 Type: `array`  
-Default: `[]`  
 
 ```yml
 # Examples
@@ -192,7 +185,6 @@ An [output](/docs/components/outputs/about/) for messages that pass the check to
 
 
 Type: `output`  
-Default: `{}`  
 
 ### `cases[].continue`
 

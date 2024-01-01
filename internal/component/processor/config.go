@@ -1,6 +1,8 @@
 package processor
 
 import (
+	"fmt"
+
 	yaml "gopkg.in/yaml.v3"
 
 	"github.com/benthosdev/benthos/v4/internal/docs"
@@ -10,42 +12,9 @@ import (
 // Deprecated: Do not add new components here. Instead, use the public plugin
 // APIs. Examples can be found in: ./internal/impl.
 type Config struct {
-	Label        string             `json:"label" yaml:"label"`
-	Type         string             `json:"type" yaml:"type"`
-	Bloblang     string             `json:"bloblang" yaml:"bloblang"`
-	BoundsCheck  BoundsCheckConfig  `json:"bounds_check" yaml:"bounds_check"`
-	Branch       BranchConfig       `json:"branch" yaml:"branch"`
-	Cache        CacheConfig        `json:"cache" yaml:"cache"`
-	Catch        []Config           `json:"catch" yaml:"catch"`
-	Compress     CompressConfig     `json:"compress" yaml:"compress"`
-	Decompress   DecompressConfig   `json:"decompress" yaml:"decompress"`
-	Dedupe       DedupeConfig       `json:"dedupe" yaml:"dedupe"`
-	ForEach      []Config           `json:"for_each" yaml:"for_each"`
-	Grok         GrokConfig         `json:"grok" yaml:"grok"`
-	GroupBy      GroupByConfig      `json:"group_by" yaml:"group_by"`
-	GroupByValue GroupByValueConfig `json:"group_by_value" yaml:"group_by_value"`
-	InsertPart   InsertPartConfig   `json:"insert_part" yaml:"insert_part"`
-	JMESPath     JMESPathConfig     `json:"jmespath" yaml:"jmespath"`
-	JQ           JQConfig           `json:"jq" yaml:"jq"`
-	JSONSchema   JSONSchemaConfig   `json:"json_schema" yaml:"json_schema"`
-	Log          LogConfig          `json:"log" yaml:"log"`
-	Metric       MetricConfig       `json:"metric" yaml:"metric"`
-	Noop         struct{}           `json:"noop" yaml:"noop"`
-	Plugin       any                `json:"plugin,omitempty" yaml:"plugin,omitempty"`
-	Parallel     ParallelConfig     `json:"parallel" yaml:"parallel"`
-	ParseLog     ParseLogConfig     `json:"parse_log" yaml:"parse_log"`
-	RateLimit    RateLimitConfig    `json:"rate_limit" yaml:"rate_limit"`
-	Resource     string             `json:"resource" yaml:"resource"`
-	SelectParts  SelectPartsConfig  `json:"select_parts" yaml:"select_parts"`
-	Sleep        SleepConfig        `json:"sleep" yaml:"sleep"`
-	Split        SplitConfig        `json:"split" yaml:"split"`
-	Subprocess   SubprocessConfig   `json:"subprocess" yaml:"subprocess"`
-	Switch       SwitchConfig       `json:"switch" yaml:"switch"`
-	SyncResponse struct{}           `json:"sync_response" yaml:"sync_response"`
-	Try          []Config           `json:"try" yaml:"try"`
-	While        WhileConfig        `json:"while" yaml:"while"`
-	Workflow     WorkflowConfig     `json:"workflow" yaml:"workflow"`
-	XML          XMLConfig          `json:"xml" yaml:"xml"`
+	Label  string `json:"label" yaml:"label"`
+	Type   string `json:"type" yaml:"type"`
+	Plugin any    `json:"plugin,omitempty" yaml:"plugin,omitempty"`
 }
 
 // NewConfig returns a configuration struct fully populated with default values.
@@ -53,42 +22,9 @@ type Config struct {
 // APIs. Examples can be found in: ./internal/impl.
 func NewConfig() Config {
 	return Config{
-		Label:        "",
-		Type:         "bounds_check",
-		Bloblang:     "",
-		BoundsCheck:  NewBoundsCheckConfig(),
-		Branch:       NewBranchConfig(),
-		Cache:        NewCacheConfig(),
-		Catch:        []Config{},
-		Compress:     NewCompressConfig(),
-		Decompress:   NewDecompressConfig(),
-		Dedupe:       NewDedupeConfig(),
-		ForEach:      []Config{},
-		Grok:         NewGrokConfig(),
-		GroupBy:      NewGroupByConfig(),
-		GroupByValue: NewGroupByValueConfig(),
-		InsertPart:   NewInsertPartConfig(),
-		JMESPath:     NewJMESPathConfig(),
-		JQ:           NewJQConfig(),
-		JSONSchema:   NewJSONSchemaConfig(),
-		Log:          NewLogConfig(),
-		Metric:       NewMetricConfig(),
-		Noop:         struct{}{},
-		Plugin:       nil,
-		Parallel:     NewParallelConfig(),
-		ParseLog:     NewParseLogConfig(),
-		RateLimit:    NewRateLimitConfig(),
-		Resource:     "",
-		SelectParts:  NewSelectPartsConfig(),
-		Sleep:        NewSleepConfig(),
-		Split:        NewSplitConfig(),
-		Subprocess:   NewSubprocessConfig(),
-		Switch:       NewSwitchConfig(),
-		SyncResponse: struct{}{},
-		Try:          []Config{},
-		While:        NewWhileConfig(),
-		Workflow:     NewWorkflowConfig(),
-		XML:          NewXMLConfig(),
+		Label:  "",
+		Type:   "bounds_check",
+		Plugin: nil,
 	}
 }
 
@@ -120,4 +56,62 @@ func (conf *Config) UnmarshalYAML(value *yaml.Node) error {
 
 	*conf = Config(aliased)
 	return nil
+}
+
+// FromYAML is for old style tests.
+func FromYAML(confStr string) (conf Config, err error) {
+	err = yaml.Unmarshal([]byte(confStr), &conf)
+	return
+}
+
+func FromAny(prov docs.Provider, value any) (conf Config, err error) {
+	switch t := value.(type) {
+	case Config:
+		return t, nil
+	case *yaml.Node:
+		return fromYAML(prov, t)
+	case map[string]any:
+		return fromMap(prov, t)
+	}
+	err = fmt.Errorf("unexpected value, expected object, got %T", value)
+	return
+}
+
+func fromMap(prov docs.Provider, value map[string]any) (conf Config, err error) {
+	if conf.Type, _, err = docs.GetInferenceCandidateFromMap(prov, docs.TypeProcessor, value); err != nil {
+		err = docs.NewLintError(0, docs.LintComponentNotFound, err)
+		return
+	}
+
+	conf.Label, _ = value["label"].(string)
+
+	if p, exists := value[conf.Type]; exists {
+		conf.Plugin = p
+	} else if p, exists := value["plugin"]; exists {
+		conf.Plugin = p
+	}
+	return
+}
+
+func fromYAML(prov docs.Provider, value *yaml.Node) (conf Config, err error) {
+	if conf.Type, _, err = docs.GetInferenceCandidateFromYAML(prov, docs.TypeProcessor, value); err != nil {
+		err = docs.NewLintError(value.Line, docs.LintComponentNotFound, err)
+		return
+	}
+
+	for i := 0; i < len(value.Content)-1; i += 2 {
+		if value.Content[i].Value == "label" {
+			conf.Label = value.Content[i+1].Value
+			break
+		}
+	}
+
+	pluginNode, err := docs.GetPluginConfigYAML(conf.Type, value)
+	if err != nil {
+		err = docs.NewLintError(value.Line, docs.LintFailedRead, err)
+		return
+	}
+
+	conf.Plugin = &pluginNode
+	return
 }

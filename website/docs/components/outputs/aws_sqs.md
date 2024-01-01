@@ -34,6 +34,7 @@ output:
     url: "" # No default (required)
     message_group_id: "" # No default (optional)
     message_deduplication_id: "" # No default (optional)
+    delay_seconds: "" # No default (optional)
     max_in_flight: 64
     metadata:
       exclude_prefixes: []
@@ -55,6 +56,7 @@ output:
     url: "" # No default (required)
     message_group_id: "" # No default (optional)
     message_deduplication_id: "" # No default (optional)
+    delay_seconds: "" # No default (optional)
     max_in_flight: 64
     metadata:
       exclude_prefixes: []
@@ -86,7 +88,7 @@ output:
 
 Metadata values are sent along with the payload as attributes with the data type String. If the number of metadata values in a message exceeds the message attribute limit (10) then the top ten keys ordered alphabetically will be selected.
 
-The fields `message_group_id` and `message_deduplication_id` can be set dynamically using [function interpolations](/docs/configuration/interpolation#bloblang-queries), which are resolved individually for each message of a batch.
+The fields `message_group_id`, `message_deduplication_id` and `delay_seconds` can be set dynamically using [function interpolations](/docs/configuration/interpolation#bloblang-queries), which are resolved individually for each message of a batch.
 
 ### Credentials
 
@@ -122,6 +124,14 @@ Type: `string`
 ### `message_deduplication_id`
 
 An optional deduplication ID to set for messages.
+This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
+
+
+Type: `string`  
+
+### `delay_seconds`
+
+An optional delay time in seconds for message. Value between 0 and 900
 This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
 
 

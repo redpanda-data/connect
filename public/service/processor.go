@@ -219,3 +219,16 @@ func ExecuteProcessors(ctx context.Context, processors []*OwnedProcessor, inbatc
 
 	return ExecuteProcessors(ctx, processors[1:], nextBatches...)
 }
+
+type processorUnwrapper struct {
+	p processor.V1
+}
+
+func (w processorUnwrapper) Unwrap() processor.V1 {
+	return w.p
+}
+
+// XUnwrapper is for internal use only, do not use this.
+func (o *OwnedProcessor) XUnwrapper() any {
+	return processorUnwrapper{p: o.p}
+}

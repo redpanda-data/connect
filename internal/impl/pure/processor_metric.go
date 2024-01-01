@@ -10,48 +10,79 @@ import (
 
 	"github.com/benthosdev/benthos/v4/internal/bloblang/field"
 	"github.com/benthosdev/benthos/v4/internal/bundle"
+	"github.com/benthosdev/benthos/v4/internal/component/interop"
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
-	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
-func init() {
-	err := bundle.AllProcessors.Add(func(conf processor.Config, mgr bundle.NewManagement) (processor.V1, error) {
-		return newMetricProcessor(conf, mgr, mgr.Logger(), mgr.Metrics())
-	}, docs.ComponentSpec{
-		Name: "metric",
-		Categories: []string{
-			"Utility",
-		},
-		Summary: "Emit custom metrics by extracting values from messages.",
-		Description: `
-This processor works by evaluating an [interpolated field ` + "`value`" + `](/docs/configuration/interpolation#bloblang-queries) for each message and updating a emitted metric according to the [type](#types).
+const (
+	metProcFieldType   = "type"
+	metProcFieldName   = "name"
+	metProcFieldLabels = "labels"
+	metProcFieldValue  = "value"
+)
 
-Custom metrics such as these are emitted along with Benthos internal metrics, where you can customize where metrics are sent, which metric names are emitted and rename them as/when appropriate. For more information check out the [metrics docs here](/docs/components/metrics/about).`,
-		Config: docs.FieldComponent().WithChildren(
-			docs.FieldString("type", "The metric [type](#types) to create.").HasOptions(
-				"counter",
-				"counter_by",
-				"gauge",
-				"timing",
-			),
-			docs.FieldString("name", "The name of the metric to create, this must be unique across all Benthos components otherwise it will overwrite those other metrics."),
-			docs.FieldString(
-				"labels", "A map of label names and values that can be used to enrich metrics. Labels are not supported by some metric destinations, in which case the metrics series are combined.",
-				map[string]string{
-					"type":  "${! json(\"doc.type\") }",
-					"topic": "${! meta(\"kafka_topic\") }",
-				},
-			).IsInterpolated().Map(),
-			docs.FieldString("value", "For some metric types specifies a value to set, increment. Certain metrics exporters such as Prometheus support floating point values, but those that do not will cast a floating point value into an integer.").IsInterpolated(),
-		).ChildDefaultAndTypesFromStruct(processor.NewMetricConfig()),
-		Examples: []docs.AnnotatedExample{
-			{
-				Title:   "Counter",
-				Summary: "In this example we emit a counter metric called `Foos`, which increments for every message processed, and we label the metric with some metadata about where the message came from and a field from the document that states what type it is. We also configure our metrics to emit to CloudWatch, and explicitly only allow our custom metric and some internal Benthos metrics to emit.",
-				Config: `
+func metProcSpec() *service.ConfigSpec {
+	return service.NewConfigSpec().
+		Categories("Utility").
+		Stable().
+		Summary("Emit custom metrics by extracting values from messages.").
+		Description(`
+This processor works by evaluating an [interpolated field `+"`value`"+`](/docs/configuration/interpolation#bloblang-queries) for each message and updating a emitted metric according to the [type](#types).
+
+Custom metrics such as these are emitted along with Benthos internal metrics, where you can customize where metrics are sent, which metric names are emitted and rename them as/when appropriate. For more information check out the [metrics docs here](/docs/components/metrics/about).`).
+		Footnotes(`
+## Types
+
+### `+"`counter`"+`
+
+Increments a counter by exactly 1, the contents of `+"`value`"+` are ignored
+by this type.
+
+### `+"`counter_by`"+`
+
+If the contents of `+"`value`"+` can be parsed as a positive integer value
+then the counter is incremented by this value.
+
+For example, the following configuration will increment the value of the
+`+"`count.custom.field` metric by the contents of `field.some.value`"+`:
+
+`+"```yaml"+`
+pipeline:
+  processors:
+    - metric:
+        type: counter_by
+        name: CountCustomField
+        value: ${!json("field.some.value")}
+`+"```"+`
+
+### `+"`gauge`"+`
+
+If the contents of `+"`value`"+` can be parsed as a positive integer value
+then the gauge is set to this value.
+
+For example, the following configuration will set the value of the
+`+"`gauge.custom.field` metric to the contents of `field.some.value`"+`:
+
+`+"```yaml"+`
+pipeline:
+  processors:
+    - metric:
+        type: gauge
+        name: GaugeCustomField
+        value: ${!json("field.some.value")}
+`+"```"+`
+
+### `+"`timing`"+`
+
+Equivalent to `+"`gauge`"+` where instead the metric is a timing. It is recommended that timing values are recorded in nanoseconds in order to be consistent with standard Benthos timing metrics, as in some cases these values are automatically converted into other units such as when exporting timings as histograms with Prometheus metrics.`).
+		Example(
+			"Counter",
+			"In this example we emit a counter metric called `Foos`, which increments for every message processed, and we label the metric with some metadata about where the message came from and a field from the document that states what type it is. We also configure our metrics to emit to CloudWatch, and explicitly only allow our custom metric and some internal Benthos metrics to emit.",
+			`
 pipeline:
   processors:
     - metric:
@@ -72,11 +103,11 @@ metrics:
   aws_cloudwatch:
     namespace: ProdConsumer
 `,
-			},
-			{
-				Title:   "Gauge",
-				Summary: "In this example we emit a gauge metric called `FooSize`, which is given a value extracted from JSON messages at the path `foo.size`. We then also configure our Prometheus metric exporter to only emit this custom metric and nothing else. We also label the metric with some metadata.",
-				Config: `
+		).
+		Example(
+			"Gauge",
+			"In this example we emit a gauge metric called `FooSize`, which is given a value extracted from JSON messages at the path `foo.size`. We then also configure our Prometheus metric exporter to only emit this custom metric and nothing else. We also label the metric with some metadata.",
+			`
 pipeline:
   processors:
     - metric:
@@ -90,63 +121,66 @@ metrics:
   mapping: 'if this != "FooSize" { deleted() }'
   prometheus: {}
 `,
-			},
-		},
-		Footnotes: `
-## Types
+		).
+		Fields(
+			service.NewStringEnumField(metProcFieldType, "counter", "counter_by", "gauge", "timing").
+				Description("The metric [type](#types) to create."),
+			service.NewStringField(metProcFieldName).
+				Description("The name of the metric to create, this must be unique across all Benthos components otherwise it will overwrite those other metrics."),
+			service.NewInterpolatedStringMapField(metProcFieldLabels).
+				Description("A map of label names and values that can be used to enrich metrics. Labels are not supported by some metric destinations, in which case the metrics series are combined.").
+				Example(map[string]any{
+					"type":  "${! json(\"doc.type\") }",
+					"topic": "${! meta(\"kafka_topic\") }",
+				}).
+				Optional(),
+			service.NewInterpolatedStringField(metProcFieldValue).
+				Description("For some metric types specifies a value to set, increment. Certain metrics exporters such as Prometheus support floating point values, but those that do not will cast a floating point value into an integer.").
+				Default(""),
+		)
+}
 
-### ` + "`counter`" + `
+func init() {
+	err := service.RegisterBatchProcessor(
+		"metric", metProcSpec(),
+		func(conf *service.ParsedConfig, res *service.Resources) (service.BatchProcessor, error) {
+			procTypeStr, err := conf.FieldString(metProcFieldType)
+			if err != nil {
+				return nil, err
+			}
 
-Increments a counter by exactly 1, the contents of ` + "`value`" + ` are ignored
-by this type.
+			procName, err := conf.FieldString(metProcFieldName)
+			if err != nil {
+				return nil, err
+			}
 
-### ` + "`counter_by`" + `
+			var labelMap map[string]string
+			if conf.Contains(metProcFieldLabels) {
+				if labelMap, err = conf.FieldStringMap(metProcFieldLabels); err != nil {
+					return nil, err
+				}
+			}
 
-If the contents of ` + "`value`" + ` can be parsed as a positive integer value
-then the counter is incremented by this value.
+			valueStr, err := conf.FieldString(metProcFieldValue)
+			if err != nil {
+				return nil, err
+			}
 
-For example, the following configuration will increment the value of the
-` + "`count.custom.field` metric by the contents of `field.some.value`" + `:
+			mgr := interop.UnwrapManagement(res)
+			p, err := newMetricProcessor(procTypeStr, procName, valueStr, labelMap, mgr)
+			if err != nil {
+				return nil, err
+			}
 
-` + "```yaml" + `
-pipeline:
-  processors:
-    - metric:
-        type: counter_by
-        name: CountCustomField
-        value: ${!json("field.some.value")}
-` + "```" + `
-
-### ` + "`gauge`" + `
-
-If the contents of ` + "`value`" + ` can be parsed as a positive integer value
-then the gauge is set to this value.
-
-For example, the following configuration will set the value of the
-` + "`gauge.custom.field` metric to the contents of `field.some.value`" + `:
-
-` + "```yaml" + `
-pipeline:
-  processors:
-    - metric:
-        type: gauge
-        name: GaugeCustomField
-        value: ${!json("field.some.value")}
-` + "```" + `
-
-### ` + "`timing`" + `
-
-Equivalent to ` + "`gauge`" + ` where instead the metric is a timing. It is recommended that timing values are recorded in nanoseconds in order to be consistent with standard Benthos timing metrics, as in some cases these values are automatically converted into other units such as when exporting timings as histograms with Prometheus metrics.`,
-	})
+			return interop.NewUnwrapInternalBatchProcessor(p), nil
+		})
 	if err != nil {
 		panic(err)
 	}
 }
 
 type metricProcessor struct {
-	conf  processor.Config
-	log   log.Modular
-	stats metrics.Type
+	log log.Modular
 
 	value  *field.Expression
 	labels labels
@@ -194,32 +228,29 @@ func (l labels) values(index int, msg message.Batch) ([]string, error) {
 	return values, nil
 }
 
-func newMetricProcessor(conf processor.Config, mgr bundle.NewManagement, log log.Modular, stats metrics.Type) (processor.V1, error) {
-	value, err := mgr.BloblEnvironment().NewField(conf.Metric.Value)
+func newMetricProcessor(typeStr, name, valueStr string, labels map[string]string, mgr bundle.NewManagement) (processor.V1, error) {
+	value, err := mgr.BloblEnvironment().NewField(valueStr)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse value expression: %v", err)
 	}
 
 	m := &metricProcessor{
-		conf:  conf,
-		log:   log,
-		stats: stats,
+		log:   mgr.Logger(),
 		value: value,
 	}
 
-	name := conf.Metric.Name
 	if name == "" {
 		return nil, errors.New("metric name must not be empty")
 	}
 
-	labelNames := make([]string, 0, len(conf.Metric.Labels))
-	for n := range conf.Metric.Labels {
+	labelNames := make([]string, 0, len(labels))
+	for n := range labels {
 		labelNames = append(labelNames, n)
 	}
 	sort.Strings(labelNames)
 
 	for _, n := range labelNames {
-		v, err := mgr.BloblEnvironment().NewField(conf.Metric.Labels[n])
+		v, err := mgr.BloblEnvironment().NewField(labels[n])
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse label '%v' expression: %v", n, err)
 		}
@@ -229,7 +260,8 @@ func newMetricProcessor(conf processor.Config, mgr bundle.NewManagement, log log
 		})
 	}
 
-	switch strings.ToLower(conf.Metric.Type) {
+	stats := mgr.Metrics()
+	switch strings.ToLower(typeStr) {
 	case "counter":
 		if len(m.labels) > 0 {
 			m.mCounterVec = stats.GetCounterVec(name, m.labels.names()...)
@@ -259,7 +291,7 @@ func newMetricProcessor(conf processor.Config, mgr bundle.NewManagement, log log
 		}
 		m.handler = m.handleTimer
 	default:
-		return nil, fmt.Errorf("metric type unrecognised: %v", conf.Metric.Type)
+		return nil, fmt.Errorf("metric type unrecognised: %v", typeStr)
 	}
 
 	return m, nil

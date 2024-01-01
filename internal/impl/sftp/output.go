@@ -4,61 +4,53 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"sync"
 
 	"github.com/pkg/sftp"
 
-	"github.com/benthosdev/benthos/v4/internal/bloblang/field"
-	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/codec"
-	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
-	"github.com/benthosdev/benthos/v4/internal/component/output/processors"
-	"github.com/benthosdev/benthos/v4/internal/docs"
-	sftpSetup "github.com/benthosdev/benthos/v4/internal/impl/sftp/shared"
-	"github.com/benthosdev/benthos/v4/internal/log"
-	"github.com/benthosdev/benthos/v4/internal/message"
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
+const (
+	soFieldAddress     = "address"
+	soFieldCredentials = "credentials"
+	soFieldPath        = "path"
+)
+
+func sftpOutputSpec() *service.ConfigSpec {
+	return service.NewConfigSpec().
+		Beta().
+		Categories("Network").
+		Version("3.39.0").
+		Summary(`Writes files to an SFTP server.`).
+		Description(output.Description(true, false, `In order to have a different path for each object you should use function interpolations described [here](/docs/configuration/interpolation#bloblang-queries).`)).
+		Fields(
+			service.NewStringField(soFieldAddress).
+				Description("The address of the server to connect to."),
+			service.NewInterpolatedStringField(soFieldPath).
+				Description("The file to save the messages to on the server."),
+			service.NewInternalField(codec.NewWriterDocs("codec").HasDefault("all-bytes")),
+			service.NewObjectField(soFieldCredentials, credentialsFields()...).
+				Description("The credentials to use to log into the target server."),
+			service.NewOutputMaxInFlightField(),
+		)
+}
+
 func init() {
-	err := bundle.AllOutputs.Add(processors.WrapConstructor(func(conf output.Config, nm bundle.NewManagement) (output.Streamed, error) {
-		sftp, err := newSFTPWriter(conf.SFTP, nm)
-		if err != nil {
-			return nil, err
-		}
-		a, err := output.NewAsyncWriter("sftp", conf.SFTP.MaxInFlight, sftp, nm)
-		if err != nil {
-			return nil, err
-		}
-		return output.OnlySinglePayloads(a), nil
-	}), docs.ComponentSpec{
-		Name:        "sftp",
-		Status:      docs.StatusBeta,
-		Version:     "3.39.0",
-		Summary:     `Writes files to a server over SFTP.`,
-		Description: output.Description(true, false, `In order to have a different path for each object you should use function interpolations described [here](/docs/configuration/interpolation#bloblang-queries).`),
-		Config: docs.FieldComponent().WithChildren(
-			docs.FieldString(
-				"address",
-				"The address of the server to connect to that has the target files.",
-			),
-			docs.FieldString(
-				"path",
-				"The file to save the messages to on the server.",
-			),
-			codec.WriterDocs,
-			docs.FieldObject(
-				"credentials",
-				"The credentials to use to log into the server.",
-			).WithChildren(sftpSetup.CredentialsDocs()...),
-			docs.FieldInt("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
-		).ChildDefaultAndTypesFromStruct(output.NewSFTPConfig()),
-		Categories: []string{
-			"Network",
-		},
-	})
+	err := service.RegisterOutput(
+		"sftp", sftpOutputSpec(),
+		func(conf *service.ParsedConfig, mgr *service.Resources) (out service.Output, maxInFlight int, err error) {
+			if maxInFlight, err = conf.FieldMaxInFlight(); err != nil {
+				return
+			}
+			out, err = newWriterFromParsed(conf, mgr)
+			return
+		})
 	if err != nil {
 		panic(err)
 	}
@@ -67,127 +59,157 @@ func init() {
 //------------------------------------------------------------------------------
 
 type sftpWriter struct {
-	conf output.SFTPConfig
+	log *service.Logger
+	mgr *service.Resources
 
-	client *sftp.Client
-
-	log log.Modular
-	mgr bundle.NewManagement
-
-	path      *field.Expression
-	codec     codec.WriterConstructor
-	codecConf codec.WriterConfig
+	address    string
+	creds      Credentials
+	path       *service.InterpolatedString
+	suffixFn   codec.SuffixFn
+	appendMode bool
 
 	handleMut  sync.Mutex
+	client     *sftp.Client
 	handlePath string
-	handle     codec.Writer
+	handle     io.WriteCloser
 }
 
-func newSFTPWriter(conf output.SFTPConfig, mgr bundle.NewManagement) (*sftpWriter, error) {
-	s := &sftpWriter{
-		conf: conf,
-		log:  mgr.Logger(),
-		mgr:  mgr,
+func newWriterFromParsed(conf *service.ParsedConfig, mgr *service.Resources) (s *sftpWriter, err error) {
+	s = &sftpWriter{
+		log: mgr.Logger(),
+		mgr: mgr,
 	}
 
-	var err error
-	if s.codec, s.codecConf, err = codec.GetWriter(conf.Codec); err != nil {
+	var codecStr string
+	if codecStr, err = conf.FieldString("codec"); err != nil {
+		return
+	}
+	if s.suffixFn, s.appendMode, err = codec.GetWriter(codecStr); err != nil {
 		return nil, err
 	}
-	if s.path, err = mgr.BloblEnvironment().NewField(conf.Path); err != nil {
-		return nil, fmt.Errorf("failed to parse path expression: %w", err)
+
+	if s.address, err = conf.FieldString(soFieldAddress); err != nil {
+		return
+	}
+	if s.path, err = conf.FieldInterpolatedString(soFieldPath); err != nil {
+		return
+	}
+	if s.creds, err = credentialsFromParsed(conf.Namespace(soFieldCredentials)); err != nil {
+		return
 	}
 
 	return s, nil
 }
 
-func (s *sftpWriter) Connect(ctx context.Context) error {
+func (s *sftpWriter) Connect(ctx context.Context) (err error) {
 	s.handleMut.Lock()
 	defer s.handleMut.Unlock()
 
-	var err error
-	s.client, err = s.conf.Credentials.GetClient(s.mgr.FS(), s.conf.Address)
-	return err
-}
-
-func (s *sftpWriter) WriteBatch(ctx context.Context, msg message.Batch) error {
-	if s.client == nil {
-		return component.ErrNotConnected
+	if s.client != nil {
+		return
 	}
 
-	return output.IterateBatchedSend(msg, func(i int, p *message.Part) error {
-		path, err := s.path.String(i, msg)
-		if err != nil {
-			return fmt.Errorf("path interpolation error: %w", err)
-		}
-
-		s.handleMut.Lock()
-		defer s.handleMut.Unlock()
-
-		if s.handle != nil && path == s.handlePath {
-			// TODO: Detect underlying connection failure here and drop client.
-			return s.handle.Write(ctx, p)
-		}
-		if s.handle != nil {
-			if err := s.handle.Close(ctx); err != nil {
-				return err
-			}
-		}
-
-		flag := os.O_CREATE | os.O_WRONLY
-		if s.codecConf.Append {
-			flag |= os.O_APPEND
-		}
-		if s.codecConf.Truncate {
-			flag |= os.O_TRUNC
-		}
-
-		if err := s.client.MkdirAll(filepath.Dir(path)); err != nil {
-			if errors.Is(err, sftp.ErrSshFxConnectionLost) {
-				return component.ErrNotConnected
-			}
-			return err
-		}
-
-		file, err := s.client.OpenFile(path, flag)
-		if err != nil {
-			if errors.Is(err, sftp.ErrSshFxConnectionLost) {
-				return component.ErrNotConnected
-			}
-			return err
-		}
-
-		s.handlePath = path
-		handle, err := s.codec(file)
-		if err != nil {
-			return err
-		}
-
-		if err = handle.Write(ctx, p); err != nil {
-			handle.Close(ctx)
-			return err
-		}
-
-		if !s.codecConf.CloseAfter {
-			s.handle = handle
-		} else {
-			handle.Close(ctx)
-		}
-		return nil
-	})
+	s.client, err = s.creds.GetClient(s.mgr.FS(), s.address)
+	return
 }
 
-func (s *sftpWriter) Close(ctx context.Context) (err error) {
+func (s *sftpWriter) writeTo(wtr io.Writer, p *service.Message) error {
+	mBytes, err := p.AsBytes()
+	if err != nil {
+		return err
+	}
+
+	suffix, addSuffix := s.suffixFn(mBytes)
+
+	if _, err := wtr.Write(mBytes); err != nil {
+		return err
+	}
+	if addSuffix {
+		if _, err := wtr.Write(suffix); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *sftpWriter) Write(ctx context.Context, msg *service.Message) error {
+	s.handleMut.Lock()
+	defer s.handleMut.Unlock()
+
+	if s.client == nil {
+		return service.ErrNotConnected
+	}
+
+	path, err := s.path.TryString(msg)
+	if err != nil {
+		return fmt.Errorf("path interpolation error: %w", err)
+	}
+
+	if s.handle != nil && path == s.handlePath {
+		// TODO: Detect underlying connection failure here and drop client.
+		return s.writeTo(s.handle, msg)
+	}
+	if s.handle != nil {
+		if err := s.handle.Close(); err != nil {
+			s.log.With("error", err).Error("Failed to close written file")
+		}
+		s.handle = nil
+		s.handlePath = ""
+	}
+
+	flag := os.O_CREATE | os.O_WRONLY
+	if s.appendMode {
+		flag |= os.O_APPEND
+	} else {
+		flag |= os.O_TRUNC
+	}
+
+	if err := s.client.MkdirAll(filepath.Dir(path)); err != nil {
+		if errors.Is(err, sftp.ErrSshFxConnectionLost) {
+			return service.ErrNotConnected
+		}
+		return err
+	}
+
+	handle, err := s.client.OpenFile(path, flag)
+	if err != nil {
+		if errors.Is(err, sftp.ErrSshFxConnectionLost) {
+			return service.ErrNotConnected
+		}
+		return err
+	}
+
+	if err := s.writeTo(handle, msg); err != nil {
+		_ = handle.Close()
+		return err
+	}
+
+	if s.appendMode {
+		s.handle = handle
+		s.handlePath = path
+	} else {
+		if err := handle.Close(); err != nil {
+			s.log.With("error", err).Error("Failed to close written file")
+		}
+	}
+	return nil
+}
+
+func (s *sftpWriter) Close(ctx context.Context) error {
 	s.handleMut.Lock()
 	defer s.handleMut.Unlock()
 
 	if s.handle != nil {
-		err = s.handle.Close(ctx)
+		if err := s.handle.Close(); err != nil {
+			s.log.With("error", err).Error("Failed to close written file")
+		}
 		s.handle = nil
 	}
-	if err == nil && s.client != nil {
-		err = s.client.Close()
+	if s.client != nil {
+		if err := s.client.Close(); err != nil {
+			s.log.With("error", err).Error("Failed to close client")
+		}
 		s.client = nil
 	}
-	return
+	return nil
 }

@@ -7,6 +7,7 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/bloblang/mapping"
 	"github.com/benthosdev/benthos/v4/internal/bloblang/query"
 	"github.com/benthosdev/benthos/v4/internal/message"
+	"github.com/benthosdev/benthos/v4/internal/transaction"
 	"github.com/benthosdev/benthos/v4/public/bloblang"
 )
 
@@ -546,4 +547,17 @@ func (b MessageBatch) InterpolatedBytes(index int, i *InterpolatedString) []byte
 	}
 	bRes, _ := i.expr.Bytes(index, msg)
 	return bRes
+}
+
+// AddSyncResponse attempts to add this batch of messages, in its exact current
+// condition, to the synchronous response destined for the original source input
+// of this data. Synchronous responses aren't supported by all inputs, and so
+// it's possible that attempting to mark a batch as ready for a synchronous
+// response will return an error.
+func (b MessageBatch) AddSyncResponse() error {
+	parts := make([]*message.Part, len(b))
+	for i, m := range b {
+		parts[i] = m.part
+	}
+	return transaction.SetAsResponse(parts)
 }

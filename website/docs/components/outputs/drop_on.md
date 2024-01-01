@@ -22,8 +22,8 @@ output:
   label: ""
   drop_on:
     error: false
-    back_pressure: ""
-    output: null
+    back_pressure: 30s # No default (optional)
+    output: null # No default (required)
 ```
 
 Regular Benthos outputs will apply back pressure when downstream services aren't accessible, and Benthos retries (or nacks) all messages that fail to be delivered. However, in some circumstances, or for certain output types, we instead might want to relax these mechanisms, which is when this output becomes useful.
@@ -44,7 +44,6 @@ An optional duration string that determines the maximum length of time to wait f
 
 
 Type: `string`  
-Default: `""`  
 
 ```yml
 # Examples
@@ -56,11 +55,10 @@ back_pressure: 1m
 
 ### `output`
 
-A child output.
+A child output to wrap with this drop mechanism.
 
 
 Type: `output`  
-Default: `null`  
 
 ## Examples
 

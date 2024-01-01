@@ -21,8 +21,8 @@ Connects to a (tcp/udp/unix) server and sends a continuous stream of data, divid
 output:
   label: ""
   socket:
-    network: ""
-    address: ""
+    network: "" # No default (required)
+    address: /tmp/benthos.sock # No default (required)
     codec: lines
 ```
 
@@ -30,27 +30,25 @@ output:
 
 ### `network`
 
-The network type to connect as.
+A network type to connect as.
 
 
 Type: `string`  
-Default: `""`  
 Options: `unix`, `tcp`, `udp`.
 
 ### `address`
 
-The address (or path) to connect to.
+The address to connect to.
 
 
 Type: `string`  
-Default: `""`  
 
 ```yml
 # Examples
 
 address: /tmp/benthos.sock
 
-address: localhost:9000
+address: 127.0.0.1:6000
 ```
 
 ### `codec`

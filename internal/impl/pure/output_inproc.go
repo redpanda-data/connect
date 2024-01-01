@@ -5,35 +5,39 @@ import (
 
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component"
+	"github.com/benthosdev/benthos/v4/internal/component/interop"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
-	"github.com/benthosdev/benthos/v4/internal/component/output/processors"
-	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
 	"github.com/benthosdev/benthos/v4/internal/shutdown"
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
 func init() {
-	err := bundle.AllOutputs.Add(processors.WrapConstructor(func(c output.Config, nm bundle.NewManagement) (output.Streamed, error) {
-		return newInprocOutput(c, nm, nm.Logger())
-	}), docs.ComponentSpec{
-		Name: "inproc",
-		Description: `
-Sends data directly to Benthos inputs by connecting to a unique ID. This allows
-you to hook up isolated streams whilst running Benthos in
-` + "[streams mode](/docs/guides/streams_mode/about)" + `, it is NOT recommended
-that you connect the inputs of a stream with an output of the same stream, as
-feedback loops can lead to deadlocks in your message flow.
+	err := service.RegisterBatchOutput(
+		"inproc", service.NewConfigSpec().
+			Stable().
+			Categories("Utility").
+			Description(`
+Sends data directly to Benthos inputs by connecting to a unique ID. This allows you to hook up isolated streams whilst running Benthos in `+"[streams mode](/docs/guides/streams_mode/about)"+`, it is NOT recommended that you connect the inputs of a stream with an output of the same stream, as feedback loops can lead to deadlocks in your message flow.
 
-It is possible to connect multiple inputs to the same inproc ID, resulting in
-messages dispatching in a round-robin fashion to connected inputs. However, only
-one output can assume an inproc ID, and will replace existing outputs if a
-collision occurs.`,
-		Categories: []string{
-			"Utility",
-		},
-		Config: docs.FieldString("", "").HasDefault(""),
-	})
+It is possible to connect multiple inputs to the same inproc ID, resulting in messages dispatching in a round-robin fashion to connected inputs. However, only one output can assume an inproc ID, and will replace existing outputs if a collision occurs.`).
+			Field(service.NewStringField("").Default("")),
+		func(conf *service.ParsedConfig, res *service.Resources) (out service.BatchOutput, batchPolicy service.BatchPolicy, maxInFlight int, err error) {
+			nm := interop.UnwrapManagement(res)
+
+			var id string
+			if id, err = conf.FieldString(); err != nil {
+				return
+			}
+
+			var o output.Streamed
+			if o, err = newInprocOutput(id, nm); err != nil {
+				return
+			}
+			out = interop.NewUnwrapInternalOutput(o)
+			return
+		})
 	if err != nil {
 		panic(err)
 	}
@@ -50,11 +54,11 @@ type inprocOutput struct {
 	shutSig *shutdown.Signaller
 }
 
-func newInprocOutput(conf output.Config, mgr bundle.NewManagement, log log.Modular) (output.Streamed, error) {
+func newInprocOutput(id string, mgr bundle.NewManagement) (output.Streamed, error) {
 	i := &inprocOutput{
-		pipe:            conf.Inproc,
+		pipe:            id,
 		mgr:             mgr,
-		log:             log,
+		log:             mgr.Logger(),
 		transactionsOut: make(chan message.Transaction),
 		shutSig:         shutdown.NewSignaller(),
 	}

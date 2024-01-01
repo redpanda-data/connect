@@ -1,4 +1,4 @@
-package gcp
+package gcp_test
 
 import (
 	"context"
@@ -13,6 +13,8 @@ import (
 	"google.golang.org/api/iterator"
 
 	"github.com/benthosdev/benthos/v4/internal/integration"
+
+	_ "github.com/benthosdev/benthos/v4/public/components/pure"
 )
 
 func createGCPCloudStorageBucket(var1, id string) error {
@@ -110,6 +112,35 @@ input:
 	})
 
 	t.Run("gcs_append", func(t *testing.T) {
+		template := `
+output:
+  gcp_cloud_storage:
+    bucket: $VAR1-$ID
+    path: $VAR2/test.txt
+    max_in_flight: 1
+    collision_mode: append
+input:
+  gcp_cloud_storage:
+    bucket: $VAR1-$ID
+    prefix: $VAR2/test.txt
+    scanner:
+      chunker:
+        size: 14
+`
+		integration.StreamTests(
+			integration.StreamTestOpenCloseIsolated(),
+			integration.StreamTestStreamIsolated(10),
+		).Run(
+			t, template,
+			integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, testID string, vars *integration.StreamTestConfigVars) {
+				require.NoError(t, createGCPCloudStorageBucket(vars.Var1, testID))
+			}),
+			integration.StreamTestOptVarOne(dummyBucketPrefix),
+			integration.StreamTestOptVarTwo(dummyPathPrefix),
+		)
+	})
+
+	t.Run("gcs_append_old_codec", func(t *testing.T) {
 		template := `
 output:
   gcp_cloud_storage:

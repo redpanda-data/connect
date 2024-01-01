@@ -26,7 +26,7 @@ func GetSpan(p *message.Part) *Span {
 // have a span attached.
 func GetSpanFromContext(ctx context.Context) *Span {
 	t := trace.SpanFromContext(ctx)
-	return otelSpan(ctx, t)
+	return OtelSpan(ctx, t)
 }
 
 // GetActiveSpan returns a span attached to a message part. Returns nil if the
@@ -37,7 +37,7 @@ func GetActiveSpan(p *message.Part) *Span {
 	if !t.IsRecording() {
 		return nil
 	}
-	return otelSpan(ctx, t)
+	return OtelSpan(ctx, t)
 }
 
 // GetTraceID returns the traceID from a span attached to a message part. Returns a zeroed traceID if the part
@@ -55,11 +55,11 @@ func WithChildSpan(prov trace.TracerProvider, operationName string, part *messag
 	span := GetActiveSpan(part)
 	if span == nil {
 		ctx, t := prov.Tracer(name).Start(part.GetContext(), operationName)
-		span = otelSpan(ctx, t)
+		span = OtelSpan(ctx, t)
 		part = part.WithContext(ctx)
 	} else {
 		ctx, t := prov.Tracer(name).Start(span.ctx, operationName)
-		span = otelSpan(ctx, t)
+		span = OtelSpan(ctx, t)
 		part = part.WithContext(ctx)
 	}
 	return part, span
@@ -95,13 +95,13 @@ func WithSiblingSpans(prov trace.TracerProvider, operationName string, batch mes
 		otSpan := GetActiveSpan(part)
 		if otSpan == nil {
 			ctx, t := prov.Tracer(name).Start(part.GetContext(), operationName)
-			otSpan = otelSpan(ctx, t)
+			otSpan = OtelSpan(ctx, t)
 		} else {
 			ctx, t := prov.Tracer(name).Start(
 				part.GetContext(), operationName,
 				trace.WithLinks(trace.LinkFromContext(otSpan.ctx)),
 			)
-			otSpan = otelSpan(ctx, t)
+			otSpan = OtelSpan(ctx, t)
 		}
 		newParts[i] = message.WithContext(otSpan.ctx, part)
 		spans = append(spans, otSpan)

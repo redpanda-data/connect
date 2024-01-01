@@ -9,10 +9,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component/cache"
-	"github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/impl/pure"
-	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/manager"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
@@ -20,16 +19,24 @@ import (
 	_ "github.com/benthosdev/benthos/v4/public/components/pure"
 )
 
+func testCacheOutput(t testing.TB, res bundle.NewManagement, confPattern string, args ...any) *pure.CacheWriter {
+	pConf, err := pure.CacheOutputSpec().ParseYAML(fmt.Sprintf(confPattern, args...), nil)
+	require.NoError(t, err)
+
+	w, err := pure.NewCacheWriter(pConf, res)
+	require.NoError(t, err)
+
+	return w
+}
+
 func TestCacheSingle(t *testing.T) {
 	mgr := mock.NewManager()
 	mgr.Caches["foocache"] = map[string]mock.CacheItem{}
 
-	conf := output.NewCacheConfig()
-	conf.Key = `${!json("id")}`
-	conf.Target = "foocache"
-
-	w, err := pure.NewCacheWriter(conf, mgr, log.Noop())
-	require.NoError(t, err)
+	w := testCacheOutput(t, mgr, `
+key: ${!json("id")}
+target: foocache
+`)
 
 	tCtx := context.Background()
 
@@ -46,12 +53,10 @@ func TestCacheBatch(t *testing.T) {
 	mgr := mock.NewManager()
 	mgr.Caches["foocache"] = map[string]mock.CacheItem{}
 
-	conf := output.NewCacheConfig()
-	conf.Key = `${!json("id")}`
-	conf.Target = "foocache"
-
-	w, err := pure.NewCacheWriter(conf, mgr, log.Noop())
-	require.NoError(t, err)
+	w := testCacheOutput(t, mgr, `
+key: ${!json("id")}
+target: foocache
+`)
 
 	tCtx := context.Background()
 
@@ -76,13 +81,11 @@ func TestCacheSingleTTL(t *testing.T) {
 	mgr := mock.NewManager()
 	mgr.Caches["foocache"] = c
 
-	conf := output.NewCacheConfig()
-	conf.Key = `${!json("id")}`
-	conf.Target = "foocache"
-	conf.TTL = "2s"
-
-	w, err := pure.NewCacheWriter(conf, mgr, log.Noop())
-	require.NoError(t, err)
+	w := testCacheOutput(t, mgr, `
+key: ${!json("id")}
+target: foocache
+ttl: 2s
+`)
 
 	tCtx := context.Background()
 
@@ -102,13 +105,11 @@ func TestCacheBatchTTL(t *testing.T) {
 	mgr := mock.NewManager()
 	mgr.Caches["foocache"] = c
 
-	conf := output.NewCacheConfig()
-	conf.Key = `${!json("id")}`
-	conf.Target = "foocache"
-	conf.TTL = "2s"
-
-	w, err := pure.NewCacheWriter(conf, mgr, log.Noop())
-	require.NoError(t, err)
+	w := testCacheOutput(t, mgr, `
+key: ${!json("id")}
+target: foocache
+ttl: 2s
+`)
 
 	tCtx := context.Background()
 
@@ -156,14 +157,10 @@ func TestCacheBasic(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cacheConf := output.NewCacheConfig()
-	cacheConf.Target = "foo"
-	cacheConf.Key = "${!json(\"key\")}"
-
-	c, err := pure.NewCacheWriter(cacheConf, mgr, log.Noop())
-	if err != nil {
-		t.Fatal(err)
-	}
+	c := testCacheOutput(t, mgr, `
+key: ${!json("key")}
+target: foo
+`)
 
 	tCtx := context.Background()
 
@@ -206,14 +203,10 @@ func TestCacheBatches(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cacheConf := output.NewCacheConfig()
-	cacheConf.Target = "foo"
-	cacheConf.Key = "${!json(\"key\")}"
-
-	c, err := pure.NewCacheWriter(cacheConf, mgr, log.Noop())
-	if err != nil {
-		t.Fatal(err)
-	}
+	c := testCacheOutput(t, mgr, `
+key: ${!json("key")}
+target: foo
+`)
 
 	tCtx := context.Background()
 

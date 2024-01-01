@@ -5,13 +5,33 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/Jeffail/gabs/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"gopkg.in/yaml.v3"
 
 	"github.com/benthosdev/benthos/v4/internal/config"
+	"github.com/benthosdev/benthos/v4/internal/docs"
 
+	_ "github.com/benthosdev/benthos/v4/public/components/io"
 	_ "github.com/benthosdev/benthos/v4/public/components/pure"
 )
+
+func testConfToAny(t testing.TB, conf any) any {
+	var node yaml.Node
+	err := node.Encode(conf)
+	require.NoError(t, err)
+
+	sanitConf := docs.NewSanitiseConfig()
+	sanitConf.RemoveTypeField = true
+	sanitConf.ScrubSecrets = true
+	err = config.Spec().SanitiseYAML(&node, sanitConf)
+	require.NoError(t, err)
+
+	var v any
+	require.NoError(t, node.Decode(&v))
+	return v
+}
 
 func TestSetOverridesOnNothing(t *testing.T) {
 	rdr := config.NewReader("", nil, config.OptAddOverrides(
@@ -24,9 +44,10 @@ func TestSetOverridesOnNothing(t *testing.T) {
 	require.NoError(t, err)
 	assert.Empty(t, lints)
 
-	assert.Equal(t, "generate", conf.Input.Type)
-	assert.Equal(t, "this.foo", conf.Input.Generate.Mapping)
-	assert.Equal(t, "drop", conf.Output.Type)
+	v := gabs.Wrap(testConfToAny(t, conf))
+
+	assert.Equal(t, "this.foo", v.S("input", "generate", "mapping").Data())
+	assert.Equal(t, map[string]any{}, v.S("output", "drop").Data())
 }
 
 func TestSetOverrideErrors(t *testing.T) {
@@ -86,12 +107,16 @@ input:
 	require.NoError(t, err)
 	assert.Empty(t, lints)
 
-	assert.Equal(t, "generate", conf.Input.Type)
-	assert.Equal(t, `root = "meow"`, conf.Input.Generate.Mapping)
-	assert.Equal(t, `10s`, conf.Input.Generate.Interval)
-	assert.Equal(t, 5, conf.Input.Generate.Count)
+	v := gabs.Wrap(testConfToAny(t, conf))
 
-	assert.Equal(t, "drop", conf.Output.Type)
+	assert.Equal(t, `root = "meow"`, v.S("input", "generate", "mapping").Data())
+	assert.Equal(t, `10s`, v.S("input", "generate", "interval").Data())
+	assert.Equal(t, 5, v.S("input", "generate", "count").Data())
+
+	oMap := v.S("output").ChildrenMap()
+	assert.Len(t, oMap, 2)
+	assert.Contains(t, oMap, "drop")
+	assert.Contains(t, oMap, "label")
 }
 
 func TestResources(t *testing.T) {
@@ -103,6 +128,8 @@ input:
   generate:
     count: 5
     mapping: 'root = "meow"'
+output:
+  drop: {}
 `), 0o644))
 
 	resourceOnePath := filepath.Join(dir, "res1.yaml")
@@ -136,16 +163,17 @@ tests:
 	require.NoError(t, err)
 	assert.Empty(t, lints)
 
-	assert.Equal(t, "generate", conf.Input.Type)
-	assert.Equal(t, `root = "meow"`, conf.Input.Generate.Mapping)
+	v := gabs.Wrap(testConfToAny(t, conf))
 
-	require.Len(t, conf.ResourceCaches, 2)
+	assert.Equal(t, `root = "meow"`, v.S("input", "generate", "mapping").Data())
 
-	assert.Equal(t, "foo", conf.ResourceCaches[0].Label)
-	assert.Equal(t, "memory", conf.ResourceCaches[0].Type)
+	require.Len(t, v.S("cache_resources").Data(), 2)
 
-	assert.Equal(t, "bar", conf.ResourceCaches[1].Label)
-	assert.Equal(t, "memory", conf.ResourceCaches[1].Type)
+	assert.Equal(t, "foo", v.S("cache_resources", "0", "label").Data())
+	assert.Equal(t, "12s", v.S("cache_resources", "0", "memory", "default_ttl").Data())
+
+	assert.Equal(t, "bar", v.S("cache_resources", "1", "label").Data())
+	assert.Equal(t, "13s", v.S("cache_resources", "1", "memory", "default_ttl").Data())
 }
 
 func TestLints(t *testing.T) {
@@ -158,6 +186,9 @@ input:
   generate:
     count: 5
     mapping: 'root = "meow"'
+
+output:
+  drop: {}
 `), 0o644))
 
 	resourceOnePath := filepath.Join(dir, "res1.yaml")
@@ -187,14 +218,15 @@ cache_resources:
 	assert.Contains(t, lints[1], "/res1.yaml(5,1) field meow2 ")
 	assert.Contains(t, lints[2], "/res2.yaml(5,1) field meow3 ")
 
-	assert.Equal(t, "generate", conf.Input.Type)
-	assert.Equal(t, `root = "meow"`, conf.Input.Generate.Mapping)
+	v := gabs.Wrap(testConfToAny(t, conf))
 
-	require.Len(t, conf.ResourceCaches, 2)
+	assert.Equal(t, `root = "meow"`, v.S("input", "generate", "mapping").Data())
 
-	assert.Equal(t, "foo", conf.ResourceCaches[0].Label)
-	assert.Equal(t, "memory", conf.ResourceCaches[0].Type)
+	require.Len(t, v.S("cache_resources").Data(), 2)
 
-	assert.Equal(t, "bar", conf.ResourceCaches[1].Label)
-	assert.Equal(t, "memory", conf.ResourceCaches[1].Type)
+	assert.Equal(t, "foo", v.S("cache_resources", "0", "label").Data())
+	assert.Equal(t, "12s", v.S("cache_resources", "0", "memory", "default_ttl").Data())
+
+	assert.Equal(t, "bar", v.S("cache_resources", "1", "label").Data())
+	assert.Equal(t, "13s", v.S("cache_resources", "1", "memory", "default_ttl").Data())
 }

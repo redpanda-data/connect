@@ -13,12 +13,14 @@ import (
 )
 
 func TestBoundsCheck(t *testing.T) {
-	conf := processor.NewConfig()
-	conf.Type = "bounds_check"
-	conf.BoundsCheck.MinParts = 2
-	conf.BoundsCheck.MaxParts = 3
-	conf.BoundsCheck.MaxPartSize = 10
-	conf.BoundsCheck.MinPartSize = 1
+	conf, err := processor.FromYAML(`
+bounds_check:
+  min_parts: 2
+  max_parts: 3
+  max_part_size: 10
+  min_part_size: 1
+`)
+	require.NoError(t, err)
 
 	proc, err := mock.NewManager().NewProcessor(conf)
 	if err != nil {

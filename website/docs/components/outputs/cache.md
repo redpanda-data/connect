@@ -29,7 +29,7 @@ Stores each message in a [cache](/docs/components/caches/about).
 output:
   label: ""
   cache:
-    target: ""
+    target: "" # No default (required)
     key: ${!count("items")}-${!timestamp_unix_nano()}
     max_in_flight: 64
 ```
@@ -42,9 +42,9 @@ output:
 output:
   label: ""
   cache:
-    target: ""
+    target: "" # No default (required)
     key: ${!count("items")}-${!timestamp_unix_nano()}
-    ttl: ""
+    ttl: 60s # No default (optional)
     max_in_flight: 64
 ```
 
@@ -85,7 +85,6 @@ The target cache to store messages in.
 
 
 Type: `string`  
-Default: `""`  
 
 ### `key`
 
@@ -113,7 +112,6 @@ This field supports [interpolation functions](/docs/configuration/interpolation#
 
 
 Type: `string`  
-Default: `""`  
 Requires version 3.33.0 or newer  
 
 ```yml

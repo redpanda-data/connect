@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
@@ -92,13 +93,15 @@ func TestXMLCases(t *testing.T) {
 		},
 	}
 
-	conf := processor.NewConfig()
-	conf.Type = "xml"
-	conf.XML.Operator = "to_json"
+	conf, err := processor.FromYAML(`
+xml:
+  operator: to_json
+`)
+	require.NoError(t, err)
+
 	proc, err := mock.NewManager().NewProcessor(conf)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
+
 	for _, test := range tests {
 		t.Run(test.name, func(tt *testing.T) {
 			msgsOut, res := proc.ProcessBatch(context.Background(), message.QuickBatch([][]byte{[]byte(test.input)}))
@@ -117,17 +120,17 @@ func TestXMLCases(t *testing.T) {
 }
 
 func TestXMLWithCast(t *testing.T) {
-	conf := processor.NewConfig()
-	conf.Type = "xml"
-	conf.XML.Cast = true
-	conf.XML.Operator = "to_json"
+	conf, err := processor.FromYAML(`
+xml:
+  operator: to_json
+  cast: true
+`)
+	require.NoError(t, err)
 
 	testString := `<root><title>This is a title</title><number id="99">123</number><bool>True</bool></root>`
 
 	proc, err := mock.NewManager().NewProcessor(conf)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	msgsOut, res := proc.ProcessBatch(context.Background(), message.QuickBatch([][]byte{[]byte(testString)}))
 	if res != nil {

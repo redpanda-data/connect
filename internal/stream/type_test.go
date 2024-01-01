@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/benthosdev/benthos/v4/internal/component/input"
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/manager"
 	"github.com/benthosdev/benthos/v4/internal/message"
@@ -20,9 +21,13 @@ import (
 )
 
 func TestTypeConstruction(t *testing.T) {
+	var err error
 	conf := stream.NewConfig()
-	conf.Input.Type = "generate"
-	conf.Input.Generate.Mapping = "root = {}"
+	conf.Input, err = input.FromYAML(`
+generate:
+  mapping: 'root = {}'
+`)
+	require.NoError(t, err)
 	conf.Buffer.Type = "memory"
 	conf.Output.Type = "drop"
 
@@ -49,12 +54,16 @@ func TestTypeConstruction(t *testing.T) {
 func TestStreamCloseUngraceful(t *testing.T) {
 	t.Parallel()
 
+	var err error
 	conf := stream.NewConfig()
-	conf.Input.Type = "generate"
-	conf.Input.Generate.Mapping = `root = "hello world"`
-	conf.Input.Generate.Interval = ""
+	conf.Input, err = input.FromYAML(`
+generate:
+  interval: ""
+  mapping: 'root = "hello world"'
+`)
+	require.NoError(t, err)
 	conf.Output.Type = "inproc"
-	conf.Output.Inproc = "foo"
+	conf.Output.Plugin = "foo"
 
 	newMgr, err := manager.New(manager.NewResourceConfig())
 	require.NoError(t, err)
@@ -83,9 +92,14 @@ func TestStreamCloseUngraceful(t *testing.T) {
 }
 
 func TestTypeCloseGracefully(t *testing.T) {
+	var err error
 	conf := stream.NewConfig()
-	conf.Input.Type = "generate"
-	conf.Input.Generate.Mapping = "root = {}"
+	conf.Input, err = input.FromYAML(`
+generate:
+  interval: ""
+  mapping: 'root = {}'
+`)
+	require.NoError(t, err)
 	conf.Buffer.Type = "memory"
 	conf.Output.Type = "drop"
 
@@ -113,9 +127,13 @@ func TestTypeCloseGracefully(t *testing.T) {
 }
 
 func TestTypeCloseUnordered(t *testing.T) {
+	var err error
 	conf := stream.NewConfig()
-	conf.Input.Type = "generate"
-	conf.Input.Generate.Mapping = "root = {}"
+	conf.Input, err = input.FromYAML(`
+generate:
+  mapping: 'root = {}'
+`)
+	require.NoError(t, err)
 	conf.Buffer.Type = "memory"
 	conf.Output.Type = "drop"
 
@@ -173,9 +191,13 @@ func validateHealthCheckResponse(t *testing.T, serverURL, expectedResponse strin
 }
 
 func TestHealthCheck(t *testing.T) {
+	var err error
 	conf := stream.NewConfig()
-	conf.Input.Type = "generate"
-	conf.Input.Generate.Mapping = "root = {}"
+	conf.Input, err = input.FromYAML(`
+generate:
+  mapping: 'root = {}'
+`)
+	require.NoError(t, err)
 	conf.Output.Type = "drop"
 
 	mockAPIReg := newMockAPIReg()

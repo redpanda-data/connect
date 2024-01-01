@@ -22,7 +22,9 @@ func getTestProm(t *testing.T) (metrics.Type, http.HandlerFunc) {
 
 	conf := metrics.NewConfig()
 	conf.Type = "prometheus"
-	conf.Prometheus.UseHistogramTiming = true
+	conf.Plugin = map[string]any{
+		"use_histogram_timing": true,
+	}
 
 	ns, err := bundle.AllMetrics.Init(conf, mock.NewManager())
 	require.NoError(t, err)

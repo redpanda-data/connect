@@ -2951,17 +2951,13 @@ Decodes a [Parquet file](https://parquet.apache.org/docs/) into an array of obje
 
 #### Parameters
 
-**`byte_array_as_string`** &lt;bool, default `false`&gt; Whether to extract BYTE_ARRAY and FIXED_LEN_BYTE_ARRAY values as strings rather than byte slices in all cases. Values with a logical type of UTF8 will automatically be extracted as strings irrespective of this parameter. Enabling this field makes serialising the data as JSON more intuitive as `[]byte` values are serialised as base64 encoded strings by default.  
+**`byte_array_as_string`** &lt;bool, default `false`&gt; Deprecated: This parameter is no longer used.  
 
 #### Examples
 
 
 ```coffee
 root = content().parse_parquet()
-```
-
-```coffee
-root = content().parse_parquet(byte_array_as_string: true)
 ```
 
 ### `parse_url`

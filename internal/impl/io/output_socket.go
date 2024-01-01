@@ -2,81 +2,77 @@ package io
 
 import (
 	"context"
-	"fmt"
+	"io"
 	"net"
 	"sync"
 
-	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/codec"
 	"github.com/benthosdev/benthos/v4/internal/component"
-	"github.com/benthosdev/benthos/v4/internal/component/metrics"
-	"github.com/benthosdev/benthos/v4/internal/component/output"
-	"github.com/benthosdev/benthos/v4/internal/component/output/processors"
-	"github.com/benthosdev/benthos/v4/internal/docs"
-	"github.com/benthosdev/benthos/v4/internal/log"
-	"github.com/benthosdev/benthos/v4/internal/message"
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
+const (
+	osFieldNetwork = "network"
+	osFieldAddress = "address"
+)
+
+func socketOutputSpec() *service.ConfigSpec {
+	return service.NewConfigSpec().
+		Stable().
+		Summary(`Connects to a (tcp/udp/unix) server and sends a continuous stream of data, dividing messages according to the specified codec.`).
+		Categories("Network").
+		Fields(
+			service.NewStringEnumField(osFieldNetwork, "unix", "tcp", "udp").
+				Description("A network type to connect as."),
+			service.NewStringField(osFieldAddress).
+				Description("The address to connect to.").
+				Examples("/tmp/benthos.sock", "127.0.0.1:6000"),
+			service.NewInternalField(codec.NewWriterDocs("codec").HasDefault("lines")),
+		)
+}
+
 func init() {
-	err := bundle.AllOutputs.Add(processors.WrapConstructor(func(c output.Config, nm bundle.NewManagement) (output.Streamed, error) {
-		return newSocketOutput(c, nm, nm.Logger(), nm.Metrics())
-	}), docs.ComponentSpec{
-		Name:    "socket",
-		Summary: `Connects to a (tcp/udp/unix) server and sends a continuous stream of data, dividing messages according to the specified codec.`,
-		Config: docs.FieldComponent().WithChildren(
-			docs.FieldString("network", "The network type to connect as.").HasOptions(
-				"unix", "tcp", "udp",
-			),
-			docs.FieldString("address", "The address (or path) to connect to.", "/tmp/benthos.sock", "localhost:9000"),
-			codec.WriterDocs,
-		).ChildDefaultAndTypesFromStruct(output.NewSocketConfig()),
-		Categories: []string{
-			"Network",
-		},
+	err := service.RegisterOutput("socket", socketOutputSpec(), func(conf *service.ParsedConfig, mgr *service.Resources) (out service.Output, maxInFlight int, err error) {
+		maxInFlight = 1
+		out, err = newSocketWriterFromParsed(conf, mgr)
+		return
 	})
 	if err != nil {
 		panic(err)
 	}
 }
 
-func newSocketOutput(conf output.Config, mgr bundle.NewManagement, log log.Modular, stats metrics.Type) (output.Streamed, error) {
-	t, err := newSocketWriter(conf.Socket, mgr, log)
-	if err != nil {
-		return nil, err
-	}
-	return output.NewAsyncWriter("socket", 1, t, mgr)
-}
-
 type socketWriter struct {
-	network   string
-	address   string
-	codec     codec.WriterConstructor
-	codecConf codec.WriterConfig
+	network    string
+	address    string
+	suffixFn   codec.SuffixFn
+	appendMode bool
 
-	log log.Modular
+	log *service.Logger
 
-	writer    codec.Writer
+	writer    io.WriteCloser
 	writerMut sync.Mutex
 }
 
-func newSocketWriter(conf output.SocketConfig, mgr bundle.NewManagement, log log.Modular) (*socketWriter, error) {
-	switch conf.Network {
-	case "tcp", "udp", "unix":
-	default:
-		return nil, fmt.Errorf("socket network '%v' is not supported by this output", conf.Network)
+func newSocketWriterFromParsed(pConf *service.ParsedConfig, mgr *service.Resources) (w *socketWriter, err error) {
+	w = &socketWriter{
+		log: mgr.Logger(),
 	}
-	codec, codecConf, err := codec.GetWriter(conf.Codec)
-	if err != nil {
-		return nil, err
+	if w.address, err = pConf.FieldString(osFieldAddress); err != nil {
+		return
 	}
-	t := socketWriter{
-		network:   conf.Network,
-		address:   conf.Address,
-		codec:     codec,
-		codecConf: codecConf,
-		log:       log,
+	if w.network, err = pConf.FieldString(osFieldNetwork); err != nil {
+		return
 	}
-	return &t, nil
+
+	var codecStr string
+	if codecStr, err = pConf.FieldString("codec"); err != nil {
+		return
+	}
+	if w.suffixFn, w.appendMode, err = codec.GetWriter(codecStr); err != nil {
+		return
+	}
+	return
 }
 
 func (s *socketWriter) Connect(ctx context.Context) error {
@@ -86,14 +82,8 @@ func (s *socketWriter) Connect(ctx context.Context) error {
 		return nil
 	}
 
-	conn, err := net.Dial(s.network, s.address)
-	if err != nil {
-		return err
-	}
-
-	s.writer, err = s.codec(conn)
-	if err != nil {
-		conn.Close()
+	var err error
+	if s.writer, err = net.Dial(s.network, s.address); err != nil {
 		return err
 	}
 
@@ -101,7 +91,26 @@ func (s *socketWriter) Connect(ctx context.Context) error {
 	return nil
 }
 
-func (s *socketWriter) WriteBatch(ctx context.Context, msg message.Batch) error {
+func (s *socketWriter) writeTo(wtr io.Writer, p *service.Message) error {
+	mBytes, err := p.AsBytes()
+	if err != nil {
+		return err
+	}
+
+	suffix, addSuffix := s.suffixFn(mBytes)
+
+	if _, err := wtr.Write(mBytes); err != nil {
+		return err
+	}
+	if addSuffix {
+		if _, err := wtr.Write(suffix); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *socketWriter) Write(ctx context.Context, msg *service.Message) error {
 	s.writerMut.Lock()
 	w := s.writer
 	s.writerMut.Unlock()
@@ -110,16 +119,14 @@ func (s *socketWriter) WriteBatch(ctx context.Context, msg message.Batch) error 
 		return component.ErrNotConnected
 	}
 
-	return msg.Iter(func(i int, part *message.Part) error {
-		serr := w.Write(ctx, part)
-		if serr != nil || s.codecConf.CloseAfter {
-			s.writerMut.Lock()
-			s.writer.Close(ctx)
-			s.writer = nil
-			s.writerMut.Unlock()
-		}
-		return serr
-	})
+	serr := s.writeTo(w, msg)
+	if serr != nil || !s.appendMode {
+		s.writerMut.Lock()
+		_ = s.writer.Close()
+		s.writer = nil
+		s.writerMut.Unlock()
+	}
+	return serr
 }
 
 func (s *socketWriter) Close(ctx context.Context) error {
@@ -128,7 +135,7 @@ func (s *socketWriter) Close(ctx context.Context) error {
 
 	var err error
 	if s.writer != nil {
-		err = s.writer.Close(context.Background())
+		err = s.writer.Close()
 		s.writer = nil
 	}
 	return err

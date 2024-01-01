@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
@@ -17,8 +18,10 @@ import (
 //------------------------------------------------------------------------------
 
 func TestForEachEmpty(t *testing.T) {
-	conf := processor.NewConfig()
-	conf.Type = "for_each"
+	conf, err := processor.FromYAML(`
+for_each: []
+`)
+	require.NoError(t, err)
 
 	proc, err := mock.NewManager().NewProcessor(conf)
 	if err != nil {
@@ -42,13 +45,11 @@ func TestForEachEmpty(t *testing.T) {
 }
 
 func TestForEachBasic(t *testing.T) {
-	encodeConf := processor.NewConfig()
-	encodeConf.Type = "bloblang"
-	encodeConf.Bloblang = `root = if batch_index() == 0 { content().encode("base64") }`
-
-	conf := processor.NewConfig()
-	conf.Type = "for_each"
-	conf.ForEach = append(conf.ForEach, encodeConf)
+	conf, err := processor.FromYAML(`
+for_each:
+  - bloblang: 'root = if batch_index() == 0 { content().encode("base64") }'
+`)
+	require.NoError(t, err)
 
 	proc, err := mock.NewManager().NewProcessor(conf)
 	if err != nil {
@@ -79,13 +80,11 @@ func TestForEachBasic(t *testing.T) {
 }
 
 func TestForEachFilterSome(t *testing.T) {
-	filterConf := processor.NewConfig()
-	filterConf.Type = "bloblang"
-	filterConf.Bloblang = `root = if !content().contains("foo") { deleted() }`
-
-	conf := processor.NewConfig()
-	conf.Type = "for_each"
-	conf.ForEach = append(conf.ForEach, filterConf)
+	conf, err := processor.FromYAML(`
+for_each:
+  - bloblang: 'root = if !content().contains("foo") { deleted() }'
+`)
+	require.NoError(t, err)
 
 	proc, err := mock.NewManager().NewProcessor(conf)
 	if err != nil {
@@ -115,17 +114,12 @@ func TestForEachFilterSome(t *testing.T) {
 }
 
 func TestForEachMultiProcs(t *testing.T) {
-	encodeConf := processor.NewConfig()
-	encodeConf.Type = "bloblang"
-	encodeConf.Bloblang = `root = if batch_index() == 0 { content().encode("base64") }`
-
-	filterConf := processor.NewConfig()
-	filterConf.Type = "bloblang"
-	filterConf.Bloblang = `root = if !content().contains("foo") { deleted() }`
-
-	conf := processor.NewConfig()
-	conf.Type = "for_each"
-	conf.ForEach = append(conf.ForEach, filterConf, encodeConf)
+	conf, err := processor.FromYAML(`
+for_each:
+  - bloblang: 'root = if !content().contains("foo") { deleted() }'
+  - bloblang: 'root = if batch_index() == 0 { content().encode("base64") }'
+`)
+	require.NoError(t, err)
 
 	proc, err := mock.NewManager().NewProcessor(conf)
 	if err != nil {
@@ -155,13 +149,11 @@ func TestForEachMultiProcs(t *testing.T) {
 }
 
 func TestForEachFilterAll(t *testing.T) {
-	filterConf := processor.NewConfig()
-	filterConf.Type = "bloblang"
-	filterConf.Bloblang = `root = if !content().contains("foo") { deleted() }`
-
-	conf := processor.NewConfig()
-	conf.Type = "for_each"
-	conf.ForEach = append(conf.ForEach, filterConf)
+	conf, err := processor.FromYAML(`
+for_each:
+  - bloblang: 'root = if !content().contains("foo") { deleted() }'
+`)
+	require.NoError(t, err)
 
 	proc, err := mock.NewManager().NewProcessor(conf)
 	if err != nil {

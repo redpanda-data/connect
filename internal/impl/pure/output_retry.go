@@ -11,9 +11,8 @@ import (
 
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component"
+	"github.com/benthosdev/benthos/v4/internal/component/interop"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
-	"github.com/benthosdev/benthos/v4/internal/component/output/processors"
-	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
 	"github.com/benthosdev/benthos/v4/internal/shutdown"
@@ -98,40 +97,39 @@ func CommonRetryBackOffCtorFromParsed(pConf *service.ParsedConfig) (ctor func() 
 
 //------------------------------------------------------------------------------
 
+const roFieldOutput = "output"
+
+func retryOutputSpec() *service.ConfigSpec {
+	return service.NewConfigSpec().
+		Categories("Utility").
+		Stable().
+		Summary("Attempts to write messages to a child output and if the write fails for any reason the message is retried either until success or, if the retries or max elapsed time fields are non-zero, either is reached.").
+		Description(`
+All messages in Benthos are always retried on an output error, but this would usually involve propagating the error back to the source of the message, whereby it would be reprocessed before reaching the output layer once again.
+
+This output type is useful whenever we wish to avoid reprocessing a message on the event of a failed send. We might, for example, have a dedupe processor that we want to avoid reapplying to the same message more than once in the pipeline.
+
+Rather than retrying the same output you may wish to retry the send using a different output target (a dead letter queue). In which case you should instead use the ` + "[`fallback`](/docs/components/outputs/fallback)" + ` output type.`).
+		Fields(CommonRetryBackOffFields(0, "500ms", "3s", "0s")...).
+		Fields(
+			service.NewOutputField(roFieldOutput).
+				Description("A child output."),
+		)
+}
+
 func init() {
-	err := bundle.AllOutputs.Add(processors.WrapConstructor(func(conf output.Config, mgr bundle.NewManagement) (output.Streamed, error) {
-		return retryOutputFromConfig(conf.Retry, mgr)
-	}), docs.ComponentSpec{
-		Name: "retry",
-		Summary: `
-Attempts to write messages to a child output and if the write fails for any
-reason the message is retried either until success or, if the retries or max
-elapsed time fields are non-zero, either is reached.`,
-		Description: `
-All messages in Benthos are always retried on an output error, but this would
-usually involve propagating the error back to the source of the message, whereby
-it would be reprocessed before reaching the output layer once again.
+	err := service.RegisterBatchOutput(
+		"retry", retryOutputSpec(),
+		func(conf *service.ParsedConfig, mgr *service.Resources) (out service.BatchOutput, batchPolicy service.BatchPolicy, maxInFlight int, err error) {
+			maxInFlight = 1
 
-This output type is useful whenever we wish to avoid reprocessing a message on
-the event of a failed send. We might, for example, have a dedupe processor that
-we want to avoid reapplying to the same message more than once in the pipeline.
-
-Rather than retrying the same output you may wish to retry the send using a
-different output target (a dead letter queue). In which case you should instead
-use the ` + "[`fallback`](/docs/components/outputs/fallback)" + ` output type.`,
-		Config: docs.FieldComponent().WithChildren(
-			docs.FieldInt("max_retries", "The maximum number of retries before giving up on the request. If set to zero there is no discrete limit.").HasDefault(0).Advanced(),
-			docs.FieldObject("backoff", "Control time intervals between retry attempts.").WithChildren(
-				docs.FieldString("initial_interval", "The initial period to wait between retry attempts.").HasDefault("500ms"),
-				docs.FieldString("max_interval", "The maximum period to wait between retry attempts.").HasDefault("3s"),
-				docs.FieldString("max_elapsed_time", "The maximum period to wait before retry attempts are abandoned. If zero then no limit is used.").HasDefault("0s"),
-			).Advanced(),
-			docs.FieldOutput("output", "A child output."),
-		),
-		Categories: []string{
-			"Utility",
-		},
-	})
+			var s output.Streamed
+			if s, err = retryOutputFromConfig(conf, interop.UnwrapManagement(mgr)); err != nil {
+				return
+			}
+			out = interop.NewUnwrapInternalOutput(s)
+			return
+		})
 	if err != nil {
 		panic(err)
 	}
@@ -146,30 +144,28 @@ func RetryOutputIndefinitely(mgr bundle.NewManagement, wrapped output.Streamed) 
 	return newIndefiniteRetry(mgr, nil, wrapped)
 }
 
-func retryOutputFromConfig(conf output.RetryConfig, mgr bundle.NewManagement) (output.Streamed, error) {
-	if conf.Output == nil {
-		return nil, errors.New("cannot create retry output without a child")
-	}
-
-	wrapped, err := mgr.NewOutput(*conf.Output)
+func retryOutputFromConfig(conf *service.ParsedConfig, mgr bundle.NewManagement) (output.Streamed, error) {
+	pOut, err := conf.FieldOutput(dooFieldOutput)
 	if err != nil {
 		return nil, err
 	}
 
 	var boffCtor func() backoff.BackOff
-	if boffCtor, err = conf.GetCtor(); err != nil {
+	if boffCtor, err = CommonRetryBackOffCtorFromParsed(conf); err != nil {
 		return nil, err
 	}
 
-	return newIndefiniteRetry(mgr, boffCtor, wrapped)
+	return newIndefiniteRetry(mgr, boffCtor, interop.UnwrapOwnedOutput(pOut))
 }
 
 func newIndefiniteRetry(mgr bundle.NewManagement, backoffCtor func() backoff.BackOff, wrapped output.Streamed) (*indefiniteRetry, error) {
 	if backoffCtor == nil {
-		tmpConf := output.NewRetryConfig()
-		var err error
-		if backoffCtor, err = tmpConf.GetCtor(); err != nil {
-			return nil, err
+		backoffCtor = func() backoff.BackOff {
+			boff := backoff.NewExponentialBackOff()
+			boff.InitialInterval = time.Millisecond * 500
+			boff.MaxInterval = time.Second * 3
+			boff.MaxElapsedTime = 0
+			return boff
 		}
 	}
 

@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/Jeffail/gabs/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -24,6 +25,9 @@ input:
   generate:
     count: 10
     mapping: 'root = "meow"'
+
+output:
+  drop: {}
 `), 0o644))
 
 	streamTwoPath := filepath.Join(dir, "second.yaml")
@@ -54,8 +58,10 @@ cache_resources:
 
 	require.Len(t, streamConfs, 2)
 
+	firstAny := gabs.Wrap(testConfToAny(t, streamConfs["first"]))
+
 	assert.Equal(t, "generate", streamConfs["first"].Input.Type)
-	assert.Equal(t, `root = "meow"`, streamConfs["first"].Input.Generate.Mapping)
+	assert.Equal(t, `root = "meow"`, firstAny.S("input", "generate", "mapping").Data())
 }
 
 func TestStreamsDirectoryWalk(t *testing.T) {
@@ -100,7 +106,7 @@ pipeline:
 	require.Contains(t, streamConfs, "inner_second")
 	require.Contains(t, streamConfs, "inner_third")
 
-	assert.Equal(t, `root = "first"`, streamConfs["first"].Pipeline.Processors[0].Bloblang)
-	assert.Equal(t, `root = "second"`, streamConfs["inner_second"].Pipeline.Processors[0].Bloblang)
-	assert.Equal(t, `root = "third"`, streamConfs["inner_third"].Pipeline.Processors[0].Bloblang)
+	assert.Equal(t, `root = "first"`, gabs.Wrap(testConfToAny(t, streamConfs["first"])).S("pipeline", "processors", "0", "bloblang").Data())
+	assert.Equal(t, `root = "second"`, gabs.Wrap(testConfToAny(t, streamConfs["inner_second"])).S("pipeline", "processors", "0", "bloblang").Data())
+	assert.Equal(t, `root = "third"`, gabs.Wrap(testConfToAny(t, streamConfs["inner_third"])).S("pipeline", "processors", "0", "bloblang").Data())
 }

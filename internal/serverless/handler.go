@@ -7,7 +7,7 @@ import (
 	"os"
 	"time"
 
-	"go.opentelemetry.io/otel/trace"
+	"go.opentelemetry.io/otel/trace/noop"
 
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
@@ -127,7 +127,7 @@ func NewHandler(conf config.Type) (*Handler, error) {
 	trac, err := bundle.AllTracers.Init(conf.Tracer, tmpMgr)
 	if err != nil {
 		logger.Errorf("Failed to initialise tracer: %v\n", err)
-		trac = trace.NewNoopTracerProvider()
+		trac = noop.NewTracerProvider()
 	}
 
 	// Create resource manager.
