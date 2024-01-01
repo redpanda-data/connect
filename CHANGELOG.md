@@ -19,6 +19,8 @@ All notable changes to this project will be documented in this file.
 - New `cockroachdb_changefeed` input.
 - The `open_telemetry_collector` tracer now supports sampling.
 - The `aws_kinesis` input and output now support specifying ARNs as the stream target.
+- New `azure_cosmosdb` input, processor and output.
+- All `sql_*` components now support the `gocosmos` driver.
 
 ### Fixed
 

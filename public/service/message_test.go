@@ -114,6 +114,87 @@ func TestMessageQuery(t *testing.T) {
 	}, seen)
 }
 
+func TestMessageQueryValue(t *testing.T) {
+	msg := NewMessage(nil)
+	msg.SetStructured(map[string]any{
+		"content": "hello world",
+	})
+
+	tests := map[string]struct {
+		mapping string
+		exp     any
+		err     string
+	}{
+		"returns string": {
+			mapping: `root = json("content")`,
+			exp:     "hello world",
+		},
+		"returns integer": {
+			mapping: `root = json("content").length()`,
+			exp:     int64(11),
+		},
+		"returns float": {
+			mapping: `root = json("content").length() / 2`,
+			exp:     float64(5.5),
+		},
+		"returns bool": {
+			mapping: `root = json("content").length() > 0`,
+			exp:     true,
+		},
+		"returns bytes": {
+			mapping: `root = content()`,
+			exp:     []byte(`{"content":"hello world"}`),
+		},
+		"returns nil": {
+			mapping: `root = null`,
+			exp:     nil,
+		},
+		"returns null string": {
+			mapping: `root = "null"`,
+			exp:     "null",
+		},
+		"returns an array": {
+			mapping: `root = [ json("content") ]`,
+			exp:     []any{"hello world"},
+		},
+		"returns an object": {
+			mapping: `root.new_content = json("content")`,
+			exp:     map[string]any{"new_content": "hello world"},
+		},
+		"returns an error if the mapping throws": {
+			mapping: `root = throw("kaboom")`,
+			exp:     nil,
+			err:     "failed assignment (line 1): kaboom",
+		},
+		"returns an error if the root is deleted": {
+			mapping: `root = deleted()`,
+			exp:     nil,
+			err:     "root was deleted",
+		},
+		"doesn't error out if a field is deleted": {
+			mapping: `root.foo = deleted()`,
+			exp:     map[string]any{},
+			err:     "",
+		},
+	}
+
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			blobl, err := bloblang.Parse(test.mapping)
+			require.NoError(t, err)
+
+			res, err := msg.BloblangQueryValue(blobl)
+			if test.err != "" {
+				require.ErrorContains(t, err, test.err)
+			} else {
+				require.NoError(t, err)
+			}
+
+			assert.Equal(t, test.exp, res)
+		})
+	}
+}
+
 func TestMessageMutate(t *testing.T) {
 	p := message.NewPart([]byte(`not a json doc`))
 	p.MetaSetMut("foo", "bar")
@@ -262,6 +343,102 @@ func TestMessageBatchMapping(t *testing.T) {
 	assert.Equal(t, map[string]any{
 		"new_content": "hello world 1 - hello world 2",
 	}, resI)
+}
+
+func TestMessageBatchQueryValue(t *testing.T) {
+	partOne := NewMessage(nil)
+	partOne.SetStructured(map[string]any{
+		"content": "hello world 1",
+	})
+
+	partTwo := NewMessage(nil)
+	partTwo.SetStructured(map[string]any{
+		"content": "hello world 2",
+	})
+
+	tests := map[string]struct {
+		mapping    string
+		batchIndex int
+		exp        any
+		err        string
+	}{
+		"returns string": {
+			mapping: `root = json("content")`,
+			exp:     "hello world 1",
+		},
+		"returns integer": {
+			mapping: `root = json("content").length()`,
+			exp:     int64(13),
+		},
+		"returns float": {
+			mapping: `root = json("content").length() / 2`,
+			exp:     float64(6.5),
+		},
+		"returns bool": {
+			mapping: `root = json("content").length() > 0`,
+			exp:     true,
+		},
+		"returns bytes": {
+			mapping: `root = content()`,
+			exp:     []byte(`{"content":"hello world 1"}`),
+		},
+		"returns nil": {
+			mapping: `root = null`,
+			exp:     nil,
+		},
+		"returns null string": {
+			mapping: `root = "null"`,
+			exp:     "null",
+		},
+		"returns an array": {
+			mapping: `root = [ json("content") ]`,
+			exp:     []any{"hello world 1"},
+		},
+		"returns an object": {
+			mapping: `root.new_content = json("content")`,
+			exp:     map[string]any{"new_content": "hello world 1"},
+		},
+		"supports batch-wide queries": {
+			mapping: `root.new_content = json("content").from_all().join(" - ")`,
+			exp:     map[string]any{"new_content": "hello world 1 - hello world 2"},
+		},
+		"handles the specified message index correctly": {
+			mapping:    `root = json("content")`,
+			batchIndex: 1,
+			exp:        "hello world 2",
+		},
+		"returns an error if the mapping throws": {
+			mapping: `root = throw("kaboom")`,
+			exp:     nil,
+			err:     "failed assignment (line 1): kaboom",
+		},
+		"returns an error if the root is deleted": {
+			mapping: `root = deleted()`,
+			exp:     nil,
+			err:     "root was deleted",
+		},
+		"doesn't error out if a field is deleted": {
+			mapping: `root.foo = deleted()`,
+			exp:     map[string]any{},
+			err:     "",
+		},
+	}
+
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			blobl, err := bloblang.Parse(test.mapping)
+			require.NoError(t, err)
+
+			res, err := MessageBatch{partOne, partTwo}.BloblangQueryValue(test.batchIndex, blobl)
+			if test.err != "" {
+				require.ErrorContains(t, err, test.err)
+			} else {
+				require.NoError(t, err)
+			}
+
+			assert.Equal(t, test.exp, res)
+		})
+	}
 }
 
 func BenchmarkMessageMappingNew(b *testing.B) {
