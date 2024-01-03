@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math/rand"
+	"reflect"
 	"strconv"
 	"strings"
 	"sync"
@@ -470,6 +471,11 @@ func amqpSetMetadata(p *service.Message, k string, v any) {
 	var metaValue string
 	metaKey := strings.ReplaceAll(k, "-", "_")
 
+	// If v is a pointer, and the pointer is nil, do nothing
+	if vType := reflect.ValueOf(v); vType.Kind() == reflect.Pointer && vType.IsNil() {
+		return
+	}
+
 	switch v := v.(type) {
 	case bool:
 		metaValue = strconv.FormatBool(v)
@@ -489,6 +495,8 @@ func amqpSetMetadata(p *service.Message, k string, v any) {
 		metaValue = ""
 	case string:
 		metaValue = v
+	case *string:
+		metaValue = *v
 	case []byte:
 		metaValue = string(v)
 	case time.Time:
