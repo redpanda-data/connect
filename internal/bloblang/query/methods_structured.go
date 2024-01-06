@@ -1736,10 +1736,10 @@ func mapWithout(m map[string]any, paths [][]string) map[string]any {
 
 var _ = registerSimpleMethod(
 	NewMethodSpec(
-		"rename_key", "Rename The Key in doc",
+		"rename_key", "Renames a Key in doc",
 	).InCategory(
 		MethodCategoryObjectAndArray,
-		"Rename a key if it exists in an object. Else, this doesn't do anything",
+		"Rename a key via [dot path][field_paths] if it exists in an object. Else, this doesn't do anything",
 		NewExampleSpec("",
 			`root = this.rename_key("name","user_name")`,
 			`{"age":27,"name":"abc"}`,
@@ -1751,8 +1751,8 @@ var _ = registerSimpleMethod(
 			`{"age":27,"name":"abc"}`,
 		),
 	).
-		Param(ParamString("old", "A string key to replace if exist.")).
-		Param(ParamString("new", "A string key to replace with.")),
+		Param(ParamString("old", "A [dot path][field_paths] key to replace if exist.")).
+		Param(ParamString("new", "A [dot path][field_paths] key to replace with.")),
 	renameKey,
 )
 

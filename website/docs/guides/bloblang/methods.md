@@ -2474,12 +2474,12 @@ root = this.foo.merge(this.bar)
 
 ### `rename_key`
 
-Rename a key if it exists in an object. Else, this doesn't do anything
+Rename a key via [dot path][field_paths] if it exists in an object. Else, this doesn't do anything
 
 #### Parameters
 
-**`old`** &lt;string&gt; A string key to replace if exist.  
-**`new`** &lt;string&gt; A string key to replace with.  
+**`old`** &lt;string&gt; A [dot path][field_paths] key to replace if exist.  
+**`new`** &lt;string&gt; A [dot path][field_paths] key to replace with.  
 
 #### Examples
 
