@@ -2474,7 +2474,7 @@ root = this.foo.merge(this.bar)
 
 ### `rename_key`
 
-Replace the key if it exists. Else, this doesn't do anything
+Rename a key if it exists in an object. Else, this doesn't do anything
 
 #### Parameters
 

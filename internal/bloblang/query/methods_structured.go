@@ -1739,7 +1739,7 @@ var _ = registerSimpleMethod(
 		"rename_key", "Rename The Key in doc",
 	).InCategory(
 		MethodCategoryObjectAndArray,
-		"Replace the key if it exists. Else, this doesn't do anything ",
+		"Rename a key if it exists in an object. Else, this doesn't do anything",
 		NewExampleSpec("",
 			`root = this.rename_key("name","user_name")`,
 			`{"age":27,"name":"abc"}`,
