@@ -44,6 +44,7 @@ input:
     urls: [] # No default (optional)
     source_address: /foo # No default (required)
     azure_renew_lock: false
+    read_header: false
     tls:
       enabled: false
       skip_cert_verify: false
@@ -72,6 +73,16 @@ This input adds the following metadata fields to each message:
 ```
 
 You can access these metadata fields using [function interpolation](/docs/configuration/interpolation#bloblang-queries).
+
+By setting `read_header` to `true`, additional message header properties will be added to each message:
+
+``` text
+- amqp_durable
+- amqp_priority
+- amqp_ttl
+- amqp_first_acquirer
+- amqp_delivery_count
+```
 
 ## Fields
 
@@ -122,6 +133,15 @@ Experimental: Azure service bus specific option to renew lock if processing take
 Type: `bool`  
 Default: `false`  
 Requires version 3.45.0 or newer  
+
+### `read_header`
+
+Read additional message header fields into `amqp_*` metadata properties.
+
+
+Type: `bool`  
+Default: `false`  
+Requires version 4.25.0 or newer  
 
 ### `tls`
 
