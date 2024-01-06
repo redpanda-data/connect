@@ -2472,6 +2472,32 @@ root = this.foo.merge(this.bar)
 # Out: {"first_name":"fooer","likes":["bars","foos"],"second_name":"barer"}
 ```
 
+### `rename_key`
+
+Replace the key if it exists. Else, this doesn't do anything
+
+#### Parameters
+
+**`old`** &lt;string&gt; A string key to replace if exist.  
+**`new`** &lt;string&gt; A string key to replace with.  
+
+#### Examples
+
+
+```coffee
+root = this.rename_key("name","user_name")
+
+# In:  {"age":27,"name":"abc"}
+# Out: {"age":27,"user_name":"abc"}
+```
+
+```coffee
+root = this.rename_key("address","home_address")
+
+# In:  {"age":27,"name":"abc"}
+# Out: {"age":27,"name":"abc"}
+```
+
 ### `slice`
 
 Extract a slice from an array by specifying two indices, a low and high bound, which selects a half-open range that includes the first element, but excludes the last one. If the second index is omitted then it defaults to the length of the input sequence.

@@ -1731,3 +1731,54 @@ func mapWithout(m map[string]any, paths [][]string) map[string]any {
 	}
 	return newMap
 }
+
+//------------------------------------------------------------------------------
+
+var _ = registerSimpleMethod(
+	NewMethodSpec(
+		"rename_key", "Rename The Key in doc",
+	).InCategory(
+		MethodCategoryObjectAndArray,
+		"Replace the key if it exists. Else, this doesn't do anything ",
+		NewExampleSpec("",
+			`root = this.rename_key("name","user_name")`,
+			`{"age":27,"name":"abc"}`,
+			`{"age":27,"user_name":"abc"}`,
+		),
+		NewExampleSpec("",
+			`root = this.rename_key("address","home_address")`,
+			`{"age":27,"name":"abc"}`,
+			`{"age":27,"name":"abc"}`,
+		),
+	).
+		Param(ParamString("old", "A string key to replace if exist.")).
+		Param(ParamString("new", "A string key to replace with.")),
+	renameKey,
+)
+
+func renameKey(args *ParsedParams) (simpleMethod, error) {
+	oldStr, err := args.FieldString("old")
+	if err != nil {
+		return nil, err
+	}
+	newStr, err := args.FieldString("new")
+	if err != nil {
+		return nil, err
+	}
+	return func(v any, ctx FunctionContext) (any, error) {
+		jsonParsed := gabs.Wrap(v)
+		var err error
+		if jsonParsed.ExistsP(oldStr) {
+			value := jsonParsed.Path(oldStr).Data()
+			_, err = jsonParsed.SetP(value, newStr)
+			if err != nil {
+				return nil, err
+			}
+			err := jsonParsed.DeleteP(oldStr)
+			if err != nil {
+				return nil, err
+			}
+		}
+		return v, nil
+	}, nil
+}
