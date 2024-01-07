@@ -1744,11 +1744,13 @@ var _ = registerSimpleMethod(
 			`root = this.rename_key("name","user_name")`,
 			`{"age":27,"name":"abc"}`,
 			`{"age":27,"user_name":"abc"}`,
+			`{"age":27,"first_name":"abc"}`,
+			`{"age":27,"first_name":"abc"}`,
 		),
 		NewExampleSpec("",
-			`root = this.rename_key("address","home_address")`,
-			`{"age":27,"name":"abc"}`,
-			`{"age":27,"name":"abc"}`,
+			`root = this.rename_key("details.name","details.first_name")`,
+			`{"details":{"age":27,"name":"abc"}}`,
+			`{"details":{"age":27,"first_name":"abc"}}`,
 		),
 	).
 		Param(ParamString("old", "A [dot path][field_paths] key to replace if exist.")).

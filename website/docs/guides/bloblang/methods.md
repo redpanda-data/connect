@@ -2489,13 +2489,16 @@ root = this.rename_key("name","user_name")
 
 # In:  {"age":27,"name":"abc"}
 # Out: {"age":27,"user_name":"abc"}
+
+# In:  {"age":27,"first_name":"abc"}
+# Out: {"age":27,"first_name":"abc"}
 ```
 
 ```coffee
-root = this.rename_key("address","home_address")
+root = this.rename_key("details.name","details.first_name")
 
-# In:  {"age":27,"name":"abc"}
-# Out: {"age":27,"name":"abc"}
+# In:  {"details":{"age":27,"name":"abc"}}
+# Out: {"details":{"age":27,"first_name":"abc"}}
 ```
 
 ### `slice`
