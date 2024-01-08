@@ -73,9 +73,7 @@ func pbiSpec() *service.ConfigSpec {
 		Stable().
 		Categories("Services", "GCP").
 		Summary(`Consumes messages from a GCP Cloud Pub/Sub subscription.`).
-		Description(`
-For information on how to set up credentials check out [this guide](https://cloud.google.com/docs/authentication/production).
-
+		Description(gcpDescription(`
 ### Metadata
 
 This input adds the following metadata fields to each message:
@@ -87,7 +85,7 @@ This input adds the following metadata fields to each message:
 `+"```"+`
 
 You can access these metadata fields using [function interpolation](/docs/configuration/interpolation#bloblang-queries).
-`).
+`)).
 		Fields(
 			service.NewStringField(pbiFieldProjectID).
 				Description("The project ID of the target subscription."),

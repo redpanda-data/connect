@@ -119,11 +119,7 @@ func gcpBigQueryConfig() *service.ConfigSpec {
 		Categories("GCP", "Services").
 		Version("3.55.0").
 		Summary(`Sends messages as new rows to a Google Cloud BigQuery table.`).
-		Description(output.Description(true, true, `
-## Credentials
-
-By default Benthos will use a shared credentials file when connecting to GCP services. You can find out more [in this document](/docs/guides/cloud/gcp).
-
+		Description(output.Description(true, true, gcpDescription(`
 ## Format
 
 This output currently supports only CSV and NEWLINE_DELIMITED_JSON formats. Learn more about how to use GCP BigQuery with them here:
@@ -153,7 +149,7 @@ The same is true for the CSV format.
 
 ### CSV
 
-For the CSV format when the field `+"`csv.header`"+` is specified a header row will be inserted as the first line of each message batch. If this field is not provided then the first message of each message batch must include a header line.`)).
+For the CSV format when the field `+"`csv.header`"+` is specified a header row will be inserted as the first line of each message batch. If this field is not provided then the first message of each message batch must include a header line.`))).
 		Field(service.NewStringField("project").Description("The project ID of the dataset to insert data to. If not set, it will be inferred from the credentials or read from the GOOGLE_CLOUD_PROJECT environment variable.").Default("")).
 		Field(service.NewStringField("dataset").Description("The BigQuery Dataset ID.")).
 		Field(service.NewStringField("table").Description("The table to insert messages to.")).

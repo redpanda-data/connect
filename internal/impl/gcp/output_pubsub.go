@@ -19,9 +19,7 @@ func newPubSubOutputConfig() *service.ConfigSpec {
 		Stable().
 		Categories("Services", "GCP").
 		Summary("Sends messages to a GCP Cloud Pub/Sub topic. [Metadata](/docs/configuration/metadata) from messages are sent as attributes.").
-		Description(`
-For information on how to set up credentials check out [this guide](https://cloud.google.com/docs/authentication/production).
-
+		Description(gcpDescription(`
 ### Troubleshooting
 
 If you're consistently seeing `+"`Failed to send message to gcp_pubsub: context deadline exceeded`"+` error logs without any further information it is possible that you are encountering https://github.com/benthosdev/benthos/issues/1042, which occurs when metadata values contain characters that are not valid utf-8. This can frequently occur when consuming from Kafka as the key metadata field may be populated with an arbitrary binary value, but this issue is not exclusive to Kafka.
@@ -41,7 +39,7 @@ Or delete all keys with:
 pipeline:
   processors:
     - mapping: meta = deleted()
-`+"```"+``).
+`+"```"+``)).
 		Fields(
 			service.NewStringField("project").Description("The project ID of the topic to publish to."),
 			service.NewInterpolatedStringField("topic").Description("The topic to publish to."),

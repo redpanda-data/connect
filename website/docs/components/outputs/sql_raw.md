@@ -146,6 +146,8 @@ The `snowflake` driver supports multiple DSN formats. Please consult [the docs](
 
 The [`gocosmos`](https://pkg.go.dev/github.com/microsoft/gocosmos) driver is still experimental, but it has support for [hierarchical partition keys](https://learn.microsoft.com/en-us/azure/cosmos-db/hierarchical-partition-keys) as well as [cross-partition queries](https://learn.microsoft.com/en-us/azure/cosmos-db/nosql/how-to-query-container#cross-partition-query). Please refer to the [SQL notes](https://github.com/microsoft/gocosmos/blob/main/SQL.md) for details.
 
+The `bigquery` driver requires a shared credentials file when connecting to a BigQuery instance. You can find out more [in this document](/docs/guides/cloud/gcp).
+
 
 Type: `string`  
 
