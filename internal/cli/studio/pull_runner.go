@@ -49,7 +49,7 @@ const defaultCloseDeadline = time.Second * 30
 // reallocations, or config changes and attempt to reflect those changes in the
 // running stream.
 type PullRunner struct {
-	localConf      config.Type
+	localConf      *config.Type
 	confReader     *config.Reader
 	sessionTracker *sessionTracker
 
@@ -99,7 +99,6 @@ func OptSetNowFn(fn func() time.Time) func(*PullRunner) {
 // that calls into it.
 func NewPullRunner(c *cli.Context, version, dateBuilt, token, secret string, opts ...func(p *PullRunner)) (*PullRunner, error) {
 	r := &PullRunner{
-		localConf:          config.New(),
 		metricsFlushPeriod: time.Second * 30,
 		stoppableStream:    common.NewSwappableStopper(&noopStopper{}),
 		cliContext:         c,
@@ -135,9 +134,11 @@ func NewPullRunner(c *cli.Context, version, dateBuilt, token, secret string, opt
 			config.OptAddOverrides(r.setList...),
 			config.OptTestSuffix("_benthos_test"),
 		)
-		if r.localConf, localLints, err = localReader.Read(); err != nil {
+		var tmpLocalConf config.Type
+		if tmpLocalConf, localLints, err = localReader.Read(); err != nil {
 			return nil, fmt.Errorf("configuration file read error: %w", err)
 		}
+		r.localConf = &tmpLocalConf
 		_ = r.withExitContext(c.Context, func(ctx context.Context) error {
 			return localReader.Close(ctx)
 		})
@@ -145,8 +146,14 @@ func NewPullRunner(c *cli.Context, version, dateBuilt, token, secret string, opt
 
 	// Logger is suuuuper primitive so we only instantiate it from the local
 	// config and cli args.
-	if r.logger, err = common.CreateLogger(c, r.localConf, false); err != nil {
-		return nil, fmt.Errorf("failed to create logger: %w", err)
+	{
+		tmpConf := config.New()
+		if r.localConf != nil {
+			tmpConf = *r.localConf
+		}
+		if r.logger, err = common.CreateLogger(c, tmpConf, false); err != nil {
+			return nil, fmt.Errorf("failed to create logger: %w", err)
+		}
 	}
 
 	r.logLints(localLints)
@@ -237,7 +244,7 @@ func (r *PullRunner) bootstrapConfigReader(ctx context.Context) (bootstrapErr er
 	lintConf.BloblangEnv = bloblang.XWrapEnvironment(bloblEnv).Deactivated()
 
 	confReaderTmp := config.NewReader(initMainFile, initResources,
-		config.OptSetBootstrapConfig(&r.localConf),
+		config.OptSetBootstrapConfig(r.localConf),
 		config.OptAddOverrides(r.setList...),
 		config.OptTestSuffix("_benthos_test"),
 		config.OptUseFS(sessFS),

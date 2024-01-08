@@ -1,4 +1,4 @@
-package query
+package value
 
 import (
 	"encoding/json"
@@ -6,77 +6,65 @@ import (
 	"fmt"
 	"math"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/Jeffail/gabs/v2"
 )
 
-// SliceToDotPath returns a valid dot path from a slice of path segments.
-func SliceToDotPath(path ...string) string {
-	escapes := make([]string, len(path))
-	for i, s := range path {
-		s = strings.ReplaceAll(s, "~", "~0")
-		s = strings.ReplaceAll(s, ".", "~1")
-		escapes[i] = s
-	}
-	return strings.Join(escapes, ".")
-}
-
-//------------------------------------------------------------------------------
-
-// ValueType represents a discrete value type supported by Bloblang queries.
-type ValueType string
+// Type represents a discrete value type supported by Bloblang queries.
+type Type string
 
 // ValueType variants.
 var (
-	ValueString    ValueType = "string"
-	ValueBytes     ValueType = "bytes"
-	ValueNumber    ValueType = "number"
-	ValueBool      ValueType = "bool"
-	ValueTimestamp ValueType = "timestamp"
-	ValueArray     ValueType = "array"
-	ValueObject    ValueType = "object"
-	ValueNull      ValueType = "null"
-	ValueDelete    ValueType = "delete"
-	ValueNothing   ValueType = "nothing"
-	ValueQuery     ValueType = "query expression"
-	ValueUnknown   ValueType = "unknown"
+	TString    Type = "string"
+	TBytes     Type = "bytes"
+	TNumber    Type = "number"
+	TBool      Type = "bool"
+	TTimestamp Type = "timestamp"
+	TArray     Type = "array"
+	TObject    Type = "object"
+	TNull      Type = "null"
+	TDelete    Type = "delete"
+	TNothing   Type = "nothing"
+	TQuery     Type = "query expression"
+	TUnknown   Type = "unknown"
 
 	// Specialised and not generally known over ValueNumber.
-	ValueInt   ValueType = "integer"
-	ValueFloat ValueType = "float"
+	TInt   Type = "integer"
+	TFloat Type = "float"
 )
 
 // ITypeOf returns the type of a boxed value as a discrete ValueType. If the
 // type of the value is unknown then ValueUnknown is returned.
-func ITypeOf(i any) ValueType {
+func ITypeOf(i any) Type {
 	switch i.(type) {
 	case string:
-		return ValueString
+		return TString
 	case []byte:
-		return ValueBytes
+		return TBytes
 	case int, int8, int16, int32, int64, uint8, uint16, uint32, uint64, float32, float64, json.Number:
-		return ValueNumber
+		return TNumber
 	case bool:
-		return ValueBool
+		return TBool
 	case time.Time:
-		return ValueTimestamp
+		return TTimestamp
 	case []any:
-		return ValueArray
+		return TArray
 	case map[string]any:
-		return ValueObject
+		return TObject
 	case Delete:
-		return ValueDelete
+		return TDelete
 	case Nothing:
-		return ValueNothing
+		return TNothing
 	case nil:
-		return ValueNull
+		return TNull
 	}
-	if _, isDyn := i.(Function); isDyn {
-		return ValueQuery
+	if _, isDyn := i.(interface {
+		Annotation() string
+	}); isDyn {
+		return TQuery
 	}
-	return ValueUnknown
+	return TUnknown
 }
 
 //------------------------------------------------------------------------------
@@ -120,7 +108,7 @@ func IGetNumber(v any) (float64, error) {
 	case json.Number:
 		return t.Float64()
 	}
-	return 0, NewTypeError(v, ValueNumber)
+	return 0, NewTypeError(v, TNumber)
 }
 
 // IGetFloat32 takes a boxed value and attempts to extract a number (float32)
@@ -155,7 +143,7 @@ func IGetFloat32(v any) (float32, error) {
 		v, e := t.Float64()
 		return float32(v), e
 	}
-	return 0, NewTypeError(v, ValueNumber)
+	return 0, NewTypeError(v, TNumber)
 }
 
 // IGetInt takes a boxed value and attempts to extract an integer (int64) from
@@ -196,7 +184,7 @@ func IGetInt(v any) (int64, error) {
 		}
 		return 0, err
 	}
-	return 0, NewTypeError(v, ValueNumber)
+	return 0, NewTypeError(v, TNumber)
 }
 
 // IGetBool takes a boxed value and attempts to extract a boolean from it.
@@ -231,7 +219,7 @@ func IGetBool(v any) (bool, error) {
 	case json.Number:
 		return t.String() != "0", nil
 	}
-	return false, NewTypeError(v, ValueBool)
+	return false, NewTypeError(v, TBool)
 }
 
 // IGetString takes a boxed value and attempts to return a string value. Returns
@@ -245,7 +233,7 @@ func IGetString(v any) (string, error) {
 	case time.Time:
 		return t.Format(time.RFC3339Nano), nil
 	}
-	return "", NewTypeError(v, ValueString)
+	return "", NewTypeError(v, TString)
 }
 
 // IGetBytes takes a boxed value and attempts to return a byte slice value.
@@ -259,7 +247,7 @@ func IGetBytes(v any) ([]byte, error) {
 	case time.Time:
 		return t.AppendFormat(nil, time.RFC3339Nano), nil
 	}
-	return nil, NewTypeError(v, ValueBytes)
+	return nil, NewTypeError(v, TBytes)
 }
 
 // IGetTimestamp takes a boxed value and attempts to coerce it into a timestamp,
@@ -293,7 +281,7 @@ func IGetTimestamp(v any) (time.Time, error) {
 	case string:
 		return time.Parse(time.RFC3339Nano, t)
 	}
-	return time.Time{}, NewTypeError(v, ValueNumber, ValueString)
+	return time.Time{}, NewTypeError(v, TNumber, TString)
 }
 
 // IIsNull returns whether a bloblang type is null, this includes Delete and
@@ -309,7 +297,7 @@ func IIsNull(i any) bool {
 	return false
 }
 
-func restrictForComparison(v any) any {
+func RestrictForComparison(v any) any {
 	v = ISanitize(v)
 	switch t := v.(type) {
 	case int64:
@@ -469,7 +457,7 @@ func IToFloat64(v any) (float64, error) {
 	case string:
 		return strconv.ParseFloat(t, 64)
 	}
-	return 0, NewTypeError(v, ValueNumber)
+	return 0, NewTypeError(v, TNumber)
 }
 
 // IToFloat32 takes a boxed value and attempts to extract a number (float32)
@@ -517,7 +505,7 @@ func IToFloat32(v any) (float32, error) {
 		}
 		return float32(f64), nil
 	}
-	return 0, NewTypeError(v, ValueNumber)
+	return 0, NewTypeError(v, TNumber)
 }
 
 const (
@@ -588,7 +576,7 @@ func IToInt(v any) (int64, error) {
 	case string:
 		return strconv.ParseInt(t, 0, 64)
 	}
-	return 0, NewTypeError(v, ValueNumber)
+	return 0, NewTypeError(v, TNumber)
 }
 
 // IToInt32 takes a boxed value and attempts to extract a number (int32) from
@@ -708,7 +696,7 @@ func IToUint(v any) (uint64, error) {
 	case string:
 		return strconv.ParseUint(t, 0, 64)
 	}
-	return 0, NewTypeError(v, ValueNumber)
+	return 0, NewTypeError(v, TNumber)
 }
 
 // IToUint32 takes a boxed value and attempts to extract a number (uint32) from
@@ -800,7 +788,7 @@ func IToBool(v any) (bool, error) {
 			return v, nil
 		}
 	}
-	return false, NewTypeError(v, ValueBool)
+	return false, NewTypeError(v, TBool)
 }
 
 // IClone performs a deep copy of a generic value.
@@ -833,7 +821,7 @@ func ICompare(left, right any) bool {
 	if left == nil && right == nil {
 		return true
 	}
-	switch lhs := restrictForComparison(left).(type) {
+	switch lhs := RestrictForComparison(left).(type) {
 	case string:
 		rhs, err := IGetString(right)
 		if err != nil {
@@ -882,4 +870,21 @@ func ICompare(left, right any) bool {
 		return true
 	}
 	return false
+}
+
+func IGetStringMap(v any) (map[string]string, error) {
+	iMap, ok := v.(map[string]any)
+	if !ok {
+		if sMap, ok := v.(map[string]string); ok {
+			return sMap, nil
+		}
+		return nil, NewTypeError(v, TObject)
+	}
+	sMap := make(map[string]string, len(iMap))
+	for k, ev := range iMap {
+		if sMap[k], ok = ev.(string); !ok {
+			return nil, NewTypeError(ev, TString)
+		}
+	}
+	return sMap, nil
 }

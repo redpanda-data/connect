@@ -13,6 +13,16 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/stream"
 )
 
+const (
+	fieldHTTP               = "http"
+	fieldLogger             = "logger"
+	fieldMetrics            = "metrics"
+	fieldTracer             = "tracer"
+	fieldSystemCloseDelay   = "shutdown_delay"
+	fieldSystemCloseTimeout = "shutdown_timeout"
+	fieldTests              = "tests"
+)
+
 // Type is the Benthos service configuration struct.
 type Type struct {
 	HTTP                   api.Config `json:"http" yaml:"http"`
@@ -50,14 +60,14 @@ func (t *Type) Clone() (Type, error) {
 	return outConf, nil
 }
 
-var httpField = docs.FieldObject("http", "Configures the service-wide HTTP server.").WithChildren(api.Spec()...)
+var httpField = docs.FieldObject(fieldHTTP, "Configures the service-wide HTTP server.").WithChildren(api.Spec()...)
 
 var observabilityFields = docs.FieldSpecs{
-	docs.FieldObject("logger", "Describes how operational logs should be emitted.").WithChildren(log.Spec()...),
-	docs.FieldMetrics("metrics", "A mechanism for exporting metrics.").Optional(),
-	docs.FieldTracer("tracer", "A mechanism for exporting traces.").Optional(),
-	docs.FieldString("shutdown_delay", "A period of time to wait for metrics and traces to be pulled or pushed from the process.").HasDefault("0s"),
-	docs.FieldString("shutdown_timeout", "The maximum period of time to wait for a clean shutdown. If this time is exceeded Benthos will forcefully close.").HasDefault("20s"),
+	docs.FieldObject(fieldLogger, "Describes how operational logs should be emitted.").WithChildren(log.Spec()...),
+	docs.FieldMetrics(fieldMetrics, "A mechanism for exporting metrics.").Optional(),
+	docs.FieldTracer(fieldTracer, "A mechanism for exporting traces.").Optional(),
+	docs.FieldString(fieldSystemCloseDelay, "A period of time to wait for metrics and traces to be pulled or pushed from the process.").HasDefault("0s"),
+	docs.FieldString(fieldSystemCloseTimeout, "The maximum period of time to wait for a clean shutdown. If this time is exceeded Benthos will forcefully close.").HasDefault("20s"),
 }
 
 // Spec returns a docs.FieldSpec for an entire Benthos configuration.
@@ -77,4 +87,52 @@ func SpecWithoutStream() docs.FieldSpecs {
 	fields = append(fields, observabilityFields...)
 	fields = append(fields, tdocs.ConfigSpec())
 	return fields
+}
+
+func (t *Type) FromAny(prov docs.Provider, v any) (err error) {
+	if err = t.Config.FromAny(prov, v); err != nil {
+		return
+	}
+	if err = t.ResourceConfig.FromAny(prov, v); err != nil {
+		return
+	}
+	var pConf *docs.ParsedConfig
+	if pConf, err = Spec().ParsedConfigFromAny(v); err != nil {
+		return
+	}
+	if pConf.Contains(fieldHTTP) {
+		if t.HTTP, err = api.FromParsed(pConf.Namespace(fieldHTTP)); err != nil {
+			return
+		}
+	}
+	if pConf.Contains(fieldLogger) {
+		if t.Logger, err = log.FromParsed(pConf.Namespace(fieldLogger)); err != nil {
+			return
+		}
+	}
+	if ga, _ := pConf.FieldAny(fieldMetrics); ga != nil {
+		if t.Metrics, err = metrics.FromAny(prov, ga); err != nil {
+			return
+		}
+	} else {
+		t.Metrics = metrics.NewConfig()
+	}
+	if ga, _ := pConf.FieldAny(fieldTracer); ga != nil {
+		if t.Tracer, err = tracer.FromAny(prov, ga); err != nil {
+			return
+		}
+	} else {
+		t.Tracer = tracer.NewConfig()
+	}
+	if pConf.Contains(fieldSystemCloseDelay) {
+		if t.SystemCloseDelay, err = pConf.FieldString(fieldSystemCloseDelay); err != nil {
+			return
+		}
+	}
+	if pConf.Contains(fieldSystemCloseTimeout) {
+		if t.SystemCloseTimeout, err = pConf.FieldString(fieldSystemCloseTimeout); err != nil {
+			return
+		}
+	}
+	return
 }

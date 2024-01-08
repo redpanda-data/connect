@@ -1,7 +1,6 @@
 package log
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -13,85 +12,6 @@ import (
 
 	"github.com/benthosdev/benthos/v4/internal/filepath/ifs"
 )
-
-// Config holds configuration options for a logger object.
-type Config struct {
-	LogLevel      string            `json:"level" yaml:"level"`
-	Format        string            `json:"format" yaml:"format"`
-	AddTimeStamp  bool              `json:"add_timestamp" yaml:"add_timestamp"`
-	LevelName     string            `json:"level_name" yaml:"level_name"`
-	MessageName   string            `json:"message_name" yaml:"message_name"`
-	TimestampName string            `json:"timestamp_name" yaml:"timestamp_name"`
-	StaticFields  map[string]string `json:"static_fields" yaml:"static_fields"`
-	File          File              `json:"file" yaml:"file"`
-}
-
-// File contains configuration for file based logging.
-type File struct {
-	Path         string `json:"path" yaml:"path"`
-	Rotate       bool   `json:"rotate" yaml:"rotate"`
-	RotateMaxAge int    `json:"rotate_max_age_days" yaml:"rotate_max_age_days"`
-}
-
-// NewConfig returns a config struct with the default values for each field.
-func NewConfig() Config {
-	return Config{
-		LogLevel:      "INFO",
-		Format:        "logfmt",
-		AddTimeStamp:  false,
-		LevelName:     "level",
-		TimestampName: "time",
-		MessageName:   "msg",
-		StaticFields: map[string]string{
-			"@service": "benthos",
-		},
-	}
-}
-
-//------------------------------------------------------------------------------
-
-// UnmarshalJSON ensures that when parsing configs that are in a slice the
-// default values are still applied.
-func (conf *Config) UnmarshalJSON(bytes []byte) error {
-	type confAlias Config
-	aliased := confAlias(NewConfig())
-
-	defaultFields := aliased.StaticFields
-	aliased.StaticFields = nil
-	if err := json.Unmarshal(bytes, &aliased); err != nil {
-		return err
-	}
-
-	if aliased.StaticFields == nil {
-		aliased.StaticFields = defaultFields
-	}
-
-	*conf = Config(aliased)
-	return nil
-}
-
-// UnmarshalYAML ensures that when parsing configs that are in a slice the
-// default values are still applied.
-func (conf *Config) UnmarshalYAML(unmarshal func(any) error) error {
-	type confAlias Config
-	aliased := confAlias(NewConfig())
-
-	defaultFields := aliased.StaticFields
-	aliased.StaticFields = nil
-
-	if err := unmarshal(&aliased); err != nil {
-		return err
-	}
-
-	if aliased.StaticFields == nil {
-		aliased.StaticFields = defaultFields
-	}
-
-	*conf = Config(aliased)
-	return nil
-}
-
-//------------------------------------------------------------------------------
 
 // Logger is an object with support for levelled logging and modular components.
 type Logger struct {

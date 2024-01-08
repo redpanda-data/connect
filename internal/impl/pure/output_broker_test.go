@@ -11,7 +11,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"gopkg.in/yaml.v3"
 
 	"github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
@@ -24,8 +23,7 @@ import (
 func TestFanOutBroker(t *testing.T) {
 	dir := t.TempDir()
 
-	conf := output.NewConfig()
-	require.NoError(t, yaml.Unmarshal([]byte(strings.ReplaceAll(`
+	conf, err := output.FromYAML(strings.ReplaceAll(`
 broker:
   pattern: fan_out
   outputs:
@@ -39,7 +37,8 @@ broker:
         codec: all-bytes
       processors:
         - bloblang: 'root  = "two-" + content()'
-`, "$DIR", dir)), &conf))
+`, "$DIR", dir))
+	require.NoError(t, err)
 
 	s, err := mock.NewManager().NewOutput(conf)
 	require.NoError(t, err)
@@ -104,8 +103,7 @@ broker:
 func TestRoundRobinBroker(t *testing.T) {
 	dir := t.TempDir()
 
-	conf := output.NewConfig()
-	require.NoError(t, yaml.Unmarshal([]byte(strings.ReplaceAll(`
+	conf, err := output.FromYAML(strings.ReplaceAll(`
 broker:
   pattern: round_robin
   outputs:
@@ -119,7 +117,8 @@ broker:
         codec: all-bytes
       processors:
         - bloblang: 'root  = "two-" + content()'
-`, "$DIR", dir)), &conf))
+`, "$DIR", dir))
+	require.NoError(t, err)
 
 	s, err := mock.NewManager().NewOutput(conf)
 	require.NoError(t, err)
@@ -182,8 +181,7 @@ broker:
 func TestGreedyBroker(t *testing.T) {
 	dir := t.TempDir()
 
-	conf := output.NewConfig()
-	require.NoError(t, yaml.Unmarshal([]byte(strings.ReplaceAll(`
+	conf, err := output.FromYAML(strings.ReplaceAll(`
 broker:
   pattern: greedy
   outputs:
@@ -201,7 +199,8 @@ broker:
         - bloblang: 'root  = "two-" + content()'
         - sleep:
             duration: 50ms
-`, "$DIR", dir)), &conf))
+`, "$DIR", dir))
+	require.NoError(t, err)
 
 	s, err := mock.NewManager().NewOutput(conf)
 	require.NoError(t, err)

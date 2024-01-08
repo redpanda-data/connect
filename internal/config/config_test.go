@@ -74,7 +74,7 @@ func TestSetOverrideErrors(t *testing.T) {
 		{
 			name:  "cant set that",
 			input: "input=meow",
-			err:   "yaml: unmarshal errors",
+			err:   "invalid type !!str, expected object",
 		},
 	}
 

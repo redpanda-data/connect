@@ -7,6 +7,7 @@ import (
 
 	"github.com/benthosdev/benthos/v4/internal/bloblang/query"
 	"github.com/benthosdev/benthos/v4/internal/message"
+	"github.com/benthosdev/benthos/v4/internal/value"
 )
 
 //------------------------------------------------------------------------------
@@ -123,7 +124,7 @@ func (e *Executor) QueryPart(index int, msg Message) (bool, error) {
 	if b, ok := newValue.(bool); ok {
 		return b, nil
 	}
-	return false, query.NewTypeErrorFrom("mapping", newValue, query.ValueBool)
+	return false, value.NewTypeErrorFrom("mapping", newValue, value.TBool)
 }
 
 // MapPart executes the bloblang mapping on a particular message index of a
@@ -132,7 +133,7 @@ func (e *Executor) QueryPart(index int, msg Message) (bool, error) {
 // execute.
 //
 // A resulting mapped message part is returned, unless the mapping results in a
-// query.Delete value, in which case nil is returned and the part should be
+// value.Delete value, in which case nil is returned and the part should be
 // discarded.
 func (e *Executor) MapPart(index int, msg Message) (*message.Part, error) {
 	return e.mapPart(nil, index, msg)
@@ -164,7 +165,7 @@ func (e *Executor) mapPart(appendTo *message.Part, index int, reference Message)
 	}
 
 	var newPart *message.Part
-	var newValue any = query.Nothing(nil)
+	var newValue any = value.Nothing(nil)
 
 	if appendTo == nil {
 		newPart = reference.Get(index).ShallowCopy()
@@ -201,7 +202,7 @@ func (e *Executor) mapPart(appendTo *message.Part, index int, reference Message)
 			}
 			return nil, fmt.Errorf("failed assignment (line %v): %w", line, err)
 		}
-		if _, isNothing := res.(query.Nothing); isNothing {
+		if _, isNothing := res.(value.Nothing); isNothing {
 			// Skip assignment entirely
 			continue
 		}
@@ -219,10 +220,10 @@ func (e *Executor) mapPart(appendTo *message.Part, index int, reference Message)
 	}
 
 	switch newValue.(type) {
-	case query.Delete:
+	case value.Delete:
 		// Return nil (filter the message part)
 		return nil, nil
-	case query.Nothing:
+	case value.Nothing:
 		// Do not change the original contents
 	default:
 		switch t := newValue.(type) {
@@ -270,7 +271,7 @@ func (e *Executor) Exec(ctx query.FunctionContext) (any, error) {
 		return nil, &errStacks{annotation: e.annotation, maxStacks: e.maxMapStacks}
 	}
 
-	var newObj any = query.Nothing(nil)
+	var newObj any = value.Nothing(nil)
 	ctx.NewValue = &newObj
 
 	for _, stmt := range e.statements {
@@ -278,7 +279,7 @@ func (e *Executor) Exec(ctx query.FunctionContext) (any, error) {
 		if err != nil {
 			return nil, formatExecErr(err, true, e.input, stmt.input)
 		}
-		if _, isNothing := res.(query.Nothing); isNothing {
+		if _, isNothing := res.(value.Nothing); isNothing {
 			// Skip assignment entirely
 			continue
 		}
@@ -301,7 +302,7 @@ func (e *Executor) ExecOnto(ctx query.FunctionContext, onto AssignmentContext) e
 		if err != nil {
 			return formatExecErr(err, true, e.input, stmt.input)
 		}
-		if _, isNothing := res.(query.Nothing); isNothing {
+		if _, isNothing := res.(value.Nothing); isNothing {
 			// Skip assignment entirely
 			continue
 		}
@@ -319,7 +320,7 @@ func (e *Executor) ToBytes(ctx query.FunctionContext) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	return query.IToBytes(v), nil
+	return value.IToBytes(v), nil
 }
 
 // ToString executes this function for a message of a batch and returns the
@@ -329,7 +330,7 @@ func (e *Executor) ToString(ctx query.FunctionContext) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return query.IToString(v), nil
+	return value.IToString(v), nil
 }
 
 //------------------------------------------------------------------------------

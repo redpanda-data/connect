@@ -216,20 +216,20 @@ func (r *Reader) readResource(path string, conf *manager.ResourceConfig) (lints 
 	}
 	r.modTimeLastRead[path] = modTime
 
-	var rawNode yaml.Node
-	if err = yaml.Unmarshal(confBytes, &rawNode); err != nil {
+	var rawNode *yaml.Node
+	if rawNode, err = docs.UnmarshalYAML(confBytes); err != nil {
 		return
 	}
 	if !bytes.HasPrefix(confBytes, []byte("# BENTHOS LINT DISABLE")) {
 		allowTest := append(docs.FieldSpecs{
 			tdocs.ConfigSpec(),
 		}, manager.Spec()...)
-		for _, lint := range allowTest.LintYAML(r.lintCtx(), &rawNode) {
+		for _, lint := range allowTest.LintYAML(r.lintCtx(), rawNode) {
 			lints = append(lints, fmt.Sprintf("%v%v", path, lint.Error()))
 		}
 	}
 
-	err = rawNode.Decode(conf)
+	err = conf.FromAny(r.lintConf.DocsProvider, rawNode)
 	return
 }
 

@@ -936,7 +936,7 @@ testlintfooinput:
         foo1: somevalue
         not_recognised: nah`,
 			res: []docs.Lint{
-				docs.NewLintError(4, docs.LintExpectedObject, errors.New("expected object value")),
+				docs.NewLintError(4, docs.LintExpectedObject, errors.New("expected object value, got !!seq")),
 			},
 		},
 		{
@@ -999,7 +999,7 @@ testlintfooinput:
   foo8:
     - wat: nope`,
 			res: []docs.Lint{
-				docs.NewLintError(4, docs.LintExpectedObject, errors.New("expected object value")),
+				docs.NewLintError(4, docs.LintExpectedObject, errors.New("expected object value, got !!seq")),
 			},
 		},
 		{
@@ -1124,7 +1124,7 @@ func TestYAMLLinting(t *testing.T) {
 			),
 			inputConf: `"foo"`,
 			res: []docs.Lint{
-				docs.NewLintError(1, docs.LintExpectedObject, errors.New("expected object value")),
+				docs.NewLintError(1, docs.LintExpectedObject, errors.New("expected object value, got !!str")),
 			},
 		},
 		{

@@ -20,8 +20,6 @@ import (
 	"github.com/stretchr/testify/require"
 	yaml "gopkg.in/yaml.v3"
 
-	"github.com/benthosdev/benthos/v4/internal/component/input"
-	"github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/config"
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	bmanager "github.com/benthosdev/benthos/v4/internal/manager"
@@ -442,13 +440,14 @@ func TestTypeAPIList(t *testing.T) {
 		t.Errorf("Wrong list response: %v != %v", act, exp)
 	}
 
-	conf := stream.NewConfig()
-	conf.Input, err = input.FromYAML(`
-generate:
-  mapping: 'root = deleted()'
+	conf, err := stream.FromYAML(`
+input:
+  generate:
+    mapping: 'root = deleted()'
+output:
+  drop: {}
 `)
 	require.NoError(t, err)
-	conf.Output.Type = "drop"
 
 	if err := mgr.Create("foo", conf); err != nil {
 		t.Fatal(err)
@@ -474,14 +473,12 @@ func TestTypeAPISetStreams(t *testing.T) {
 
 	r := router(mgr)
 
-	origConf := stream.NewConfig()
-	origConf.Input, err = input.FromYAML(`
-generate:
-  mapping: 'root = deleted()'
-`)
-	require.NoError(t, err)
-	origConf.Output, err = output.FromYAML(`
-drop: {}
+	origConf, err := stream.FromYAML(`
+input:
+  generate:
+    mapping: 'root = deleted()'
+output:
+  drop: {}
 `)
 	require.NoError(t, err)
 
@@ -843,13 +840,14 @@ func TestTypeAPIGetStats(t *testing.T) {
 
 	r := router(smgr)
 
-	origConf := stream.NewConfig()
-	origConf.Input, err = input.FromYAML(`
-generate:
-  mapping: 'root = deleted()'
+	origConf, err := stream.FromYAML(`
+input:
+  generate:
+    mapping: 'root = deleted()'
+output:
+  drop: {}
 `)
 	require.NoError(t, err)
-	origConf.Output.Type = "drop"
 
 	err = smgr.Create("foo", origConf)
 	require.NoError(t, err)
@@ -904,14 +902,15 @@ file:
 	r.ServeHTTP(hResponse, request)
 	assert.Equal(t, http.StatusOK, hResponse.Code, hResponse.Body.String())
 
-	streamConf := stream.NewConfig()
-	streamConf.Input.Type = "inproc"
-	streamConf.Input.Plugin = "feed_in"
-	streamConf.Output.Type = "cache"
-	streamConf.Output.Plugin = map[string]any{
-		"key":    `${! json("id") }`,
-		"target": "foocache",
-	}
+	streamConf, err := stream.FromYAML(`
+input:
+  inproc: feed_in
+output:
+  cache:
+    key: '${! json("id") }'
+    target: foocache
+`)
+	require.NoError(t, err)
 
 	request = genYAMLRequest("POST", "/streams/foo?chilled=true", streamConf)
 	hResponse = httptest.NewRecorder()

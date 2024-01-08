@@ -3,6 +3,8 @@ package query
 import (
 	"errors"
 	"fmt"
+
+	"github.com/benthosdev/benthos/v4/internal/value"
 )
 
 var errEndOfIter = errors.New("iterator reached the end")
@@ -154,7 +156,7 @@ func (f *filterMethod) TryIterate(ctx FunctionContext) (Iterator, any, error) {
 func (f *filterMethod) execFallback(ctx FunctionContext, res any) (any, error) {
 	m, ok := res.(map[string]any)
 	if !ok {
-		return nil, ErrFrom(NewTypeError(res, ValueArray, ValueObject), f.target)
+		return nil, ErrFrom(value.NewTypeError(res, value.TArray, value.TObject), f.target)
 	}
 	newMap := make(map[string]any, len(m))
 	for k, v := range m {
@@ -235,8 +237,8 @@ func (m *mapEachMethod) TryIterate(ctx FunctionContext) (Iterator, any, error) {
 					return nil, ErrFrom(err, m.mapFn)
 				}
 				switch newV.(type) {
-				case Delete:
-				case Nothing:
+				case value.Delete:
+				case value.Nothing:
 					return v, nil
 				default:
 					return newV, nil
@@ -249,7 +251,7 @@ func (m *mapEachMethod) TryIterate(ctx FunctionContext) (Iterator, any, error) {
 func (m *mapEachMethod) execFallback(ctx FunctionContext, res any) (any, error) {
 	resMap, ok := res.(map[string]any)
 	if !ok {
-		return nil, ErrFrom(NewTypeError(res, ValueArray, ValueObject), m.target)
+		return nil, ErrFrom(value.NewTypeError(res, value.TArray, value.TObject), m.target)
 	}
 	newMap := make(map[string]any, len(resMap))
 	for k, v := range resMap {
@@ -262,8 +264,8 @@ func (m *mapEachMethod) execFallback(ctx FunctionContext, res any) (any, error) 
 			return nil, fmt.Errorf("failed to process element %v: %w", k, ErrFrom(mapErr, m.mapFn))
 		}
 		switch newV.(type) {
-		case Delete:
-		case Nothing:
+		case value.Delete:
+		case value.Nothing:
 			newMap[k] = v
 		default:
 			newMap[k] = newV

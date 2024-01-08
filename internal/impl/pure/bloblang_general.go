@@ -5,6 +5,7 @@ import (
 	"sync"
 
 	"github.com/benthosdev/benthos/v4/internal/bloblang/query"
+	"github.com/benthosdev/benthos/v4/internal/value"
 	"github.com/benthosdev/benthos/v4/public/bloblang"
 )
 
@@ -140,7 +141,7 @@ root.woof_id = null.apply("foos")
 						*i = min - 1
 					case bloblang.ExecResultNothing:
 					default:
-						iv, err := query.IGetInt(setV)
+						iv, err := value.IGetInt(setV)
 						if err != nil {
 							return nil, fmt.Errorf("failed to resolve set argument: %w", err)
 						}

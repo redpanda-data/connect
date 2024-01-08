@@ -2,6 +2,7 @@ package amqp1
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -118,6 +119,7 @@ func amqp1WriterFromParsed(conf *service.ParsedConfig, mgr *service.Resources) (
 	if len(a.urls) == 0 {
 		singleURL, err := conf.FieldString(urlField)
 		if err != nil {
+			err = errors.New("at least one url must be specified")
 			return nil, err
 		}
 

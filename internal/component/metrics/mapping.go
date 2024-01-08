@@ -10,6 +10,7 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/bloblang/query"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
+	"github.com/benthosdev/benthos/v4/internal/value"
 )
 
 // Mapping is a compiled Bloblang mapping used to rewrite metrics.
@@ -71,7 +72,7 @@ func (m *Mapping) mapPath(path string, labelNames, labelValues []string) (outPat
 		vars[k] = v
 	}
 
-	var v any = query.Nothing(nil)
+	var v any = value.Nothing(nil)
 	if err := m.m.ExecOnto(query.FunctionContext{
 		Maps:     m.m.Maps(),
 		Vars:     vars,
@@ -101,10 +102,10 @@ func (m *Mapping) mapPath(path string, labelNames, labelValues []string) (outPat
 	}
 
 	switch t := v.(type) {
-	case query.Delete:
+	case value.Delete:
 		m.logger.Tracef("Deleting metrics path: %v\n", path)
 		return "", nil, nil
-	case query.Nothing:
+	case value.Nothing:
 		m.logger.Tracef("Metrics path '%v' registered unchanged.\n", path)
 		outPath = path
 		return

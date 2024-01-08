@@ -8,7 +8,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"gopkg.in/yaml.v3"
 
 	"github.com/benthosdev/benthos/v4/internal/batch/policy"
 	"github.com/benthosdev/benthos/v4/internal/batch/policy/batchconfig"
@@ -233,11 +232,11 @@ func TestPolicyArchived(t *testing.T) {
 	conf.Count = 2
 	conf.ByteSize = 0
 
-	procConf := processor.NewConfig()
-	require.NoError(t, yaml.Unmarshal([]byte(`
+	procConf, err := processor.FromYAML(`
 archive:
   format: lines
-`), &procConf))
+`)
+	require.NoError(t, err)
 
 	conf.Processors = append(conf.Processors, procConf)
 

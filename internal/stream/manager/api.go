@@ -25,8 +25,6 @@ import (
 	"github.com/benthosdev/benthos/v4/public/bloblang"
 )
 
-//------------------------------------------------------------------------------
-
 func (m *Type) registerEndpoints(enableCrud bool) {
 	m.manager.RegisterEndpoint(
 		"/ready",
@@ -60,27 +58,6 @@ func (m *Type) registerEndpoints(enableCrud bool) {
 			" streams will be replaced by this new set.",
 		m.HandleStreamsCRUD,
 	)
-}
-
-// ConfigSet is a map of stream configurations mapped by ID, which can be YAML
-// parsed without losing default values inside the stream configs.
-type ConfigSet map[string]stream.Config
-
-// UnmarshalYAML ensures that when parsing configs that are in a map or slice
-// the default values are still applied.
-func (c ConfigSet) UnmarshalYAML(value *yaml.Node) error {
-	tmpSet := map[string]yaml.Node{}
-	if err := value.Decode(&tmpSet); err != nil {
-		return err
-	}
-	for k, v := range tmpSet {
-		conf := stream.NewConfig()
-		if err := v.Decode(&conf); err != nil {
-			return err
-		}
-		c[k] = conf
-	}
-	return nil
 }
 
 type lintErrors struct {
@@ -157,11 +134,12 @@ func (m *Type) HandleStreamsCRUD(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	nodeSet := map[string]yaml.Node{}
+	if requestErr = yaml.Unmarshal(setBytes, &nodeSet); requestErr != nil {
+		return
+	}
+
 	if r.URL.Query().Get("chilled") != "true" {
-		nodeSet := map[string]yaml.Node{}
-		if requestErr = yaml.Unmarshal(setBytes, &nodeSet); requestErr != nil {
-			return
-		}
 		var lints []string
 		for k, n := range nodeSet {
 			for _, l := range m.lintStreamConfigNode(&n) {
@@ -181,25 +159,29 @@ func (m *Type) HandleStreamsCRUD(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	newSet := ConfigSet{}
-	if requestErr = yaml.Unmarshal(setBytes, &newSet); requestErr != nil {
-		return
-	}
-
 	toDelete := []string{}
 	toUpdate := map[string]stream.Config{}
 	toCreate := map[string]stream.Config{}
 
 	for id := range infos {
-		if newConf, exists := newSet[id]; !exists {
+		newConf, exists := nodeSet[id]
+		if !exists {
 			toDelete = append(toDelete, id)
 		} else {
-			toUpdate[id] = newConf
+			tmpConf := stream.NewConfig()
+			if requestErr = tmpConf.FromAny(m.manager.Environment(), &newConf); requestErr != nil {
+				return
+			}
+			toUpdate[id] = tmpConf
 		}
 	}
-	for id, conf := range newSet {
+	for id, conf := range nodeSet {
 		if _, exists := infos[id]; !exists {
-			toCreate[id] = conf
+			tmpConf := stream.NewConfig()
+			if requestErr = tmpConf.FromAny(m.manager.Environment(), &conf); requestErr != nil {
+				return
+			}
+			toCreate[id] = tmpConf
 		}
 	}
 
@@ -304,19 +286,20 @@ func (m *Type) HandleStreamCRUD(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
+		var node *yaml.Node
+		if node, err = docs.UnmarshalYAML(confBytes); err != nil {
+			return
+		}
+
 		if !ignoreLints {
-			var node yaml.Node
-			if err = yaml.Unmarshal(confBytes, &node); err != nil {
-				return
-			}
-			lints = m.lintStreamConfigNode(&node)
+			lints = m.lintStreamConfigNode(node)
 			for _, l := range lints {
 				m.manager.Logger().Infof("Stream '%v' config: %v\n", id, l)
 			}
 		}
 
 		confOut = stream.NewConfig()
-		err = yaml.Unmarshal(confBytes, &confOut)
+		err = confOut.FromAny(m.manager.Environment(), node)
 		return
 	}
 	patchConfig := func(confIn stream.Config) (confOut stream.Config, err error) {
@@ -342,16 +325,13 @@ func (m *Type) HandleStreamCRUD(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		confOut = stream.NewConfig()
-		{
-			var confNode yaml.Node
-			if err = confNode.Encode(gObj.Data()); err != nil {
-				return
-			}
-			if err = confNode.Decode(&confOut); err != nil {
-				return
-			}
+		var confNode yaml.Node
+		if err = confNode.Encode(gObj.Data()); err != nil {
+			return
 		}
+
+		confOut = stream.NewConfig()
+		err = confOut.FromAny(m.manager.Environment(), &confNode)
 		return
 	}
 

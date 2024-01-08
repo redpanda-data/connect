@@ -18,9 +18,6 @@ func (e *Environment) XUnwrapper() any {
 }
 
 // XWrapEnvironment is for internal use only, do not use this.
-func XWrapEnvironment(v any) *Environment {
-	if bEnv, ok := v.(*bloblang.Environment); ok {
-		return &Environment{env: bEnv}
-	}
-	return NewEnvironment()
+func XWrapEnvironment(v *bloblang.Environment) *Environment {
+	return &Environment{env: v}
 }

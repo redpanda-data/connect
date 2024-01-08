@@ -15,9 +15,9 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/filepath/ifs"
 )
 
-// ReadFileLinted will attempt to read a configuration file path into a
+// ReadYAMLFileLinted will attempt to read a configuration file path into a
 // structure. Returns an array of lint messages or an error.
-func ReadFileLinted(fs ifs.FS, path string, skipEnvVarCheck bool, lConf docs.LintConfig, config *Type) ([]docs.Lint, error) {
+func ReadYAMLFileLinted(fs ifs.FS, path string, skipEnvVarCheck bool, lConf docs.LintConfig, config *Type) ([]docs.Lint, error) {
 	configBytes, lints, _, err := ReadFileEnvSwap(fs, path, os.LookupEnv)
 	if err != nil {
 		return nil, err
@@ -33,21 +33,23 @@ func ReadFileLinted(fs ifs.FS, path string, skipEnvVarCheck bool, lConf docs.Lin
 		lints = newLints
 	}
 
-	if err := yaml.Unmarshal(configBytes, config); err != nil {
-		return nil, err
-	}
-
-	newLints, err := LintBytes(lConf, configBytes)
+	cNode, err := docs.UnmarshalYAML(configBytes)
 	if err != nil {
 		return nil, err
 	}
-	lints = append(lints, newLints...)
+	if err = config.FromAny(lConf.DocsProvider, cNode); err != nil {
+		return nil, err
+	}
+
+	if !bytes.HasPrefix(configBytes, []byte("# BENTHOS LINT DISABLE")) {
+		lints = append(lints, Spec().LintYAML(docs.NewLintContext(lConf), cNode)...)
+	}
 	return lints, nil
 }
 
-// LintBytes attempts to report errors within a user config. Returns a slice of
+// LintYAMLBytes attempts to report errors within a user config. Returns a slice of
 // lint results.
-func LintBytes(lintConf docs.LintConfig, rawBytes []byte) ([]docs.Lint, error) {
+func LintYAMLBytes(lintConf docs.LintConfig, rawBytes []byte) ([]docs.Lint, error) {
 	if bytes.HasPrefix(rawBytes, []byte("# BENTHOS LINT DISABLE")) {
 		return nil, nil
 	}

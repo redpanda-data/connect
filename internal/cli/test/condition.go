@@ -14,9 +14,9 @@ import (
 
 	"github.com/benthosdev/benthos/v4/internal/bloblang"
 	"github.com/benthosdev/benthos/v4/internal/bloblang/mapping"
-	"github.com/benthosdev/benthos/v4/internal/bloblang/query"
 	"github.com/benthosdev/benthos/v4/internal/filepath/ifs"
 	"github.com/benthosdev/benthos/v4/internal/message"
+	"github.com/benthosdev/benthos/v4/internal/value"
 )
 
 // Condition is a test case against a message part.
@@ -306,7 +306,7 @@ func (m MetadataEqualsCondition) Check(p *message.Part) error {
 		if !exists {
 			return fmt.Errorf("metadata key '%v' expected but not found", k)
 		}
-		if !query.ICompare(exp, act) {
+		if !value.ICompare(exp, act) {
 			return fmt.Errorf("metadata key '%v' mismatch\n  expected: %v\n  received: %v", k, blue(exp), red(act))
 		}
 	}

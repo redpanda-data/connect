@@ -10,10 +10,10 @@ import (
 	"github.com/Jeffail/gabs/v2"
 	"gopkg.in/yaml.v3"
 
-	"github.com/benthosdev/benthos/v4/internal/bloblang/query"
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/manager"
+	"github.com/benthosdev/benthos/v4/internal/value"
 )
 
 // ConfigField describes a field within a component configuration, to be added
@@ -298,25 +298,17 @@ type ConfigSpec struct {
 	component docs.ComponentSpec
 }
 
-func (c *ConfigSpec) configFromAny(mgr bundle.NewManagement, v any) (*ParsedConfig, error) {
+func (c *ConfigSpec) configFromAny(mgr bundle.NewManagement, v any) (pConf *ParsedConfig, err error) {
+	pConf = &ParsedConfig{
+		mgr: mgr,
+	}
 	switch t := v.(type) {
 	case *yaml.Node:
-		return c.configFromNode(mgr, t)
+		pConf.generic, err = c.component.Config.YAMLToValue(t, docs.ToValueConfig{})
 	default:
-		fields, err := c.component.Config.AnyToValue(v, docs.ToValueConfig{})
-		if err != nil {
-			return nil, err
-		}
-		return &ParsedConfig{mgr: mgr, generic: fields}, nil
+		pConf.generic, err = c.component.Config.AnyToValue(v, docs.ToValueConfig{})
 	}
-}
-
-func (c *ConfigSpec) configFromNode(mgr bundle.NewManagement, node *yaml.Node) (*ParsedConfig, error) {
-	fields, err := c.component.Config.YAMLToValue(node, docs.ToValueConfig{})
-	if err != nil {
-		return nil, err
-	}
-	return &ParsedConfig{mgr: mgr, generic: fields}, nil
+	return
 }
 
 // ParseYAML attempts to parse a YAML document as the defined configuration spec
@@ -331,12 +323,9 @@ func (c *ConfigSpec) ParseYAML(yamlStr string, env *Environment) (*ParsedConfig,
 		env = globalEnvironment
 	}
 
-	var nconf yaml.Node
-	if err := yaml.Unmarshal([]byte(yamlStr), &nconf); err != nil {
+	nconf, err := docs.UnmarshalYAML([]byte(yamlStr))
+	if err != nil {
 		return nil, err
-	}
-	if nconf.Kind == yaml.DocumentNode && len(nconf.Content) > 0 {
-		nconf = *nconf.Content[0]
 	}
 
 	mgr, err := manager.New(
@@ -348,7 +337,11 @@ func (c *ConfigSpec) ParseYAML(yamlStr string, env *Environment) (*ParsedConfig,
 		return nil, fmt.Errorf("failed to instantiate resources: %w", err)
 	}
 
-	return c.configFromNode(mgr, &nconf)
+	fields, err := c.component.Config.YAMLToValue(nconf, docs.ToValueConfig{})
+	if err != nil {
+		return nil, err
+	}
+	return &ParsedConfig{mgr: mgr, generic: fields}, nil
 }
 
 // NewConfigSpec creates a new empty component configuration spec. If the
@@ -797,7 +790,7 @@ func (p *ParsedConfig) FieldInt(path ...string) (int, error) {
 	if !exists {
 		return 0, fmt.Errorf("field '%v' was not found in the config", p.fullDotPath(path...))
 	}
-	i, err := query.IGetInt(v)
+	i, err := value.IGetInt(v)
 	if err != nil {
 		return 0, fmt.Errorf("expected field '%v' to be an int, got %T", p.fullDotPath(path...), v)
 	}
@@ -821,7 +814,7 @@ func (p *ParsedConfig) FieldIntList(path ...string) ([]int, error) {
 	}
 	sList := make([]int, len(iList))
 	for i, ev := range iList {
-		iv, err := query.IToInt(ev)
+		iv, err := value.IToInt(ev)
 		if err != nil {
 			return nil, fmt.Errorf("expected field '%v' to be an integer list, found an element of type %T", p.fullDotPath(path...), ev)
 		}
@@ -847,7 +840,7 @@ func (p *ParsedConfig) FieldIntMap(path ...string) (map[string]int, error) {
 	}
 	sMap := make(map[string]int, len(iMap))
 	for k, ev := range iMap {
-		iv, err := query.IToInt(ev)
+		iv, err := value.IToInt(ev)
 		if err != nil {
 			return nil, fmt.Errorf("expected field '%v' to be an integer map, found an element of type %T", p.fullDotPath(path...), ev)
 		}
@@ -864,7 +857,7 @@ func (p *ParsedConfig) FieldFloat(path ...string) (float64, error) {
 	if !exists {
 		return 0, fmt.Errorf("field '%v' was not found in the config", p.fullDotPath(path...))
 	}
-	f, err := query.IGetNumber(v)
+	f, err := value.IGetNumber(v)
 	if err != nil {
 		return 0, fmt.Errorf("expected field '%v' to be a float, got %T", p.fullDotPath(path...), v)
 	}
@@ -889,7 +882,7 @@ func (p *ParsedConfig) FieldFloatList(path ...string) ([]float64, error) {
 	sList := make([]float64, len(iList))
 	for i, ev := range iList {
 		var err error
-		if sList[i], err = query.IGetNumber(ev); err != nil {
+		if sList[i], err = value.IGetNumber(ev); err != nil {
 			return nil, fmt.Errorf("expected field '%v' to be an float list, found an element of type %T", p.fullDotPath(path...), ev)
 		}
 	}
@@ -914,7 +907,7 @@ func (p *ParsedConfig) FieldFloatMap(path ...string) (map[string]float64, error)
 	sMap := make(map[string]float64, len(iMap))
 	for k, ev := range iMap {
 		var err error
-		if sMap[k], err = query.IGetNumber(ev); err != nil {
+		if sMap[k], err = value.IGetNumber(ev); err != nil {
 			return nil, fmt.Errorf("expected field '%v' to be an float map, found an element of type %T", p.fullDotPath(path...), ev)
 		}
 	}

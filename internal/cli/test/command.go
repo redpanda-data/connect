@@ -101,7 +101,7 @@ func lintTarget(path, testSuffix string) ([]docs.Lint, error) {
 	// environment variables, so in order to test env vars properly we would
 	// need to lint for each case.
 	skipEnvVarCheck := true
-	lints, err := config.ReadFileLinted(ifs.OS(), confPath, skipEnvVarCheck, docs.NewLintConfig(), &dummyConf)
+	lints, err := config.ReadYAMLFileLinted(ifs.OS(), confPath, skipEnvVarCheck, docs.NewLintConfig(), &dummyConf)
 	if err != nil {
 		return nil, err
 	}

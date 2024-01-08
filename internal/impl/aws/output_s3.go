@@ -13,10 +13,10 @@ import (
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
 
-	"github.com/benthosdev/benthos/v4/internal/bloblang/query"
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/impl/aws/config"
+	"github.com/benthosdev/benthos/v4/internal/value"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
@@ -325,7 +325,7 @@ func (a *amazonS3Writer) WriteBatch(wctx context.Context, msg service.MessageBat
 	return msg.WalkWithBatchedErrors(func(i int, m *service.Message) error {
 		metadata := map[string]*string{}
 		_ = a.conf.Metadata.WalkMut(m, func(k string, v any) error {
-			metadata[k] = aws.String(query.IToString(v))
+			metadata[k] = aws.String(value.IToString(v))
 			return nil
 		})
 

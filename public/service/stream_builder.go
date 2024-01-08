@@ -259,8 +259,8 @@ func (s *StreamBuilder) AddInputYAML(conf string) error {
 		return err
 	}
 
-	iconf := input.NewConfig()
-	if err := nconf.Decode(&iconf); err != nil {
+	iconf, err := input.FromAny(s.env.internal, nconf)
+	if err != nil {
 		return convertDocsLintErr(err)
 	}
 
@@ -281,8 +281,8 @@ func (s *StreamBuilder) AddProcessorYAML(conf string) error {
 		return err
 	}
 
-	pconf := processor.NewConfig()
-	if err := nconf.Decode(&pconf); err != nil {
+	pconf, err := processor.FromAny(s.env.internal, nconf)
+	if err != nil {
 		return convertDocsLintErr(err)
 	}
 
@@ -378,8 +378,8 @@ func (s *StreamBuilder) AddOutputYAML(conf string) error {
 		return err
 	}
 
-	oconf := output.NewConfig()
-	if err := nconf.Decode(&oconf); err != nil {
+	oconf, err := output.FromAny(s.env.internal, nconf)
+	if err != nil {
 		return convertDocsLintErr(err)
 	}
 
@@ -399,8 +399,8 @@ func (s *StreamBuilder) AddCacheYAML(conf string) error {
 		return err
 	}
 
-	cconf := cache.NewConfig()
-	if err := nconf.Decode(&cconf); err != nil {
+	cconf, err := cache.FromAny(s.env.internal, nconf)
+	if err != nil {
 		return convertDocsLintErr(err)
 	}
 	if cconf.Label == "" {
@@ -428,8 +428,8 @@ func (s *StreamBuilder) AddRateLimitYAML(conf string) error {
 		return err
 	}
 
-	rconf := ratelimit.NewConfig()
-	if err := nconf.Decode(&rconf); err != nil {
+	rconf, err := ratelimit.FromAny(s.env.internal, nconf)
+	if err != nil {
 		return convertDocsLintErr(err)
 	}
 	if rconf.Label == "" {
@@ -579,8 +579,8 @@ func (s *StreamBuilder) SetBufferYAML(conf string) error {
 		return err
 	}
 
-	bconf := buffer.NewConfig()
-	if err := nconf.Decode(&bconf); err != nil {
+	bconf, err := buffer.FromAny(s.env.internal, nconf)
+	if err != nil {
 		return convertDocsLintErr(err)
 	}
 
@@ -600,8 +600,8 @@ func (s *StreamBuilder) SetMetricsYAML(conf string) error {
 		return err
 	}
 
-	mconf := metrics.NewConfig()
-	if err := nconf.Decode(&mconf); err != nil {
+	mconf, err := metrics.FromAny(s.env.internal, nconf)
+	if err != nil {
 		return convertDocsLintErr(err)
 	}
 
@@ -621,8 +621,8 @@ func (s *StreamBuilder) SetTracerYAML(conf string) error {
 		return err
 	}
 
-	tconf := tracer.NewConfig()
-	if err := nconf.Decode(&tconf); err != nil {
+	tconf, err := tracer.FromAny(s.env.internal, nconf)
+	if err != nil {
 		return convertDocsLintErr(err)
 	}
 
@@ -934,14 +934,7 @@ func (s *StreamBuilder) getYAMLNode(b []byte) (*yaml.Node, error) {
 			return nil, err
 		}
 	}
-	var nconf yaml.Node
-	if err := yaml.Unmarshal(b, &nconf); err != nil {
-		return nil, err
-	}
-	if nconf.Kind == yaml.DocumentNode && len(nconf.Content) > 0 {
-		return nconf.Content[0], nil
-	}
-	return &nconf, nil
+	return docs.UnmarshalYAML(b)
 }
 
 func (s *StreamBuilder) lintYAMLSpec(spec docs.FieldSpecs, node *yaml.Node) error {

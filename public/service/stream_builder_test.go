@@ -547,7 +547,7 @@ func TestStreamBuilderYAMLErrors(t *testing.T) {
 
 	err = b.AddInputYAML(`not valid ! yaml 34324`)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "unmarshal errors")
+	assert.Contains(t, err.Error(), "expected object")
 
 	err = b.SetYAML(`not valid ! yaml 34324`)
 	require.Error(t, err)

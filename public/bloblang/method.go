@@ -3,7 +3,7 @@ package bloblang
 import (
 	"time"
 
-	"github.com/benthosdev/benthos/v4/internal/bloblang/query"
+	"github.com/benthosdev/benthos/v4/internal/value"
 )
 
 // Method defines a Bloblang function that executes on a value. Arguments are
@@ -55,7 +55,7 @@ type AdvancedMethodConstructor func(args *ParsedParams) (AdvancedMethod, error)
 // performing type checking on the method target.
 func StringMethod(methodFn func(string) (any, error)) Method {
 	return func(v any) (any, error) {
-		str, err := query.IGetString(v)
+		str, err := value.IGetString(v)
 		if err != nil {
 			return nil, err
 		}
@@ -67,7 +67,7 @@ func StringMethod(methodFn func(string) (any, error)) Method {
 // performing type checking on the method target.
 func BytesMethod(methodFn func([]byte) (any, error)) Method {
 	return func(v any) (any, error) {
-		b, err := query.IGetBytes(v)
+		b, err := value.IGetBytes(v)
 		if err != nil {
 			return nil, err
 		}
@@ -79,7 +79,7 @@ func BytesMethod(methodFn func([]byte) (any, error)) Method {
 // performing type checking on the method target.
 func TimestampMethod(methodFn func(time.Time) (any, error)) Method {
 	return func(v any) (any, error) {
-		t, err := query.IGetTimestamp(v)
+		t, err := value.IGetTimestamp(v)
 		if err != nil {
 			return nil, err
 		}
@@ -93,7 +93,7 @@ func ArrayMethod(methodFn func([]any) (any, error)) Method {
 	return func(v any) (any, error) {
 		arr, ok := v.([]any)
 		if !ok {
-			return nil, query.NewTypeError(v, query.ValueArray)
+			return nil, value.NewTypeError(v, value.TArray)
 		}
 		return methodFn(arr)
 	}
@@ -103,7 +103,7 @@ func ArrayMethod(methodFn func([]any) (any, error)) Method {
 // performing type checking on the method target.
 func BoolMethod(methodFn func(bool) (any, error)) Method {
 	return func(v any) (any, error) {
-		b, err := query.IGetBool(v)
+		b, err := value.IGetBool(v)
 		if err != nil {
 			return nil, err
 		}
@@ -115,7 +115,7 @@ func BoolMethod(methodFn func(bool) (any, error)) Method {
 // performing type checking on the method target.
 func Int64Method(methodFn func(int64) (any, error)) Method {
 	return func(v any) (any, error) {
-		i, err := query.IGetInt(v)
+		i, err := value.IGetInt(v)
 		if err != nil {
 			return nil, err
 		}
@@ -127,7 +127,7 @@ func Int64Method(methodFn func(int64) (any, error)) Method {
 // performing type checking on the method target.
 func Float64Method(methodFn func(float64) (any, error)) Method {
 	return func(v any) (any, error) {
-		f, err := query.IGetNumber(v)
+		f, err := value.IGetNumber(v)
 		if err != nil {
 			return nil, err
 		}
@@ -141,7 +141,7 @@ func ObjectMethod(methodFn func(obj map[string]any) (any, error)) Method {
 	return func(v any) (any, error) {
 		obj, ok := v.(map[string]any)
 		if !ok {
-			return nil, query.NewTypeError(v, query.ValueObject)
+			return nil, value.NewTypeError(v, value.TObject)
 		}
 		return methodFn(obj)
 	}

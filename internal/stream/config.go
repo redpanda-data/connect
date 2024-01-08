@@ -1,6 +1,8 @@
 package stream
 
 import (
+	"fmt"
+
 	"gopkg.in/yaml.v3"
 
 	"github.com/benthosdev/benthos/v4/internal/component/buffer"
@@ -9,8 +11,6 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/pipeline"
 )
-
-//------------------------------------------------------------------------------
 
 // Config is a configuration struct representing all four layers of a Benthos
 // stream.
@@ -53,4 +53,75 @@ func (c Config) Sanitised() (any, error) {
 	return g, nil
 }
 
-//------------------------------------------------------------------------------
+// FromYAML is for old style tests.
+func FromYAML(confStr string) (conf Config, err error) {
+	var node *yaml.Node
+	if node, err = docs.UnmarshalYAML([]byte(confStr)); err != nil {
+		return
+	}
+	conf = NewConfig()
+	err = conf.fromYAML(docs.DeprecatedProvider, node)
+	return
+}
+
+func (c *Config) FromAny(prov docs.Provider, value any) (err error) {
+	switch t := value.(type) {
+	case Config:
+		*c = t
+		return
+	case *yaml.Node:
+		return c.fromYAML(prov, t)
+	case map[string]any:
+		return c.fromMap(prov, t)
+	}
+	err = fmt.Errorf("unexpected value, expected object, got %T", value)
+	return
+}
+
+func (c *Config) fromMap(prov docs.Provider, value map[string]any) (err error) {
+	if iConf, exists := value["input"]; exists {
+		if c.Input, err = input.FromAny(prov, iConf); err != nil {
+			return
+		}
+	}
+	if pConf, exists := value["pipeline"]; exists {
+		if c.Pipeline, err = pipeline.FromAny(prov, pConf); err != nil {
+			return
+		}
+	}
+	if bConf, exists := value["buffer"]; exists {
+		if c.Buffer, err = buffer.FromAny(prov, bConf); err != nil {
+			return
+		}
+	}
+	if oConf, exists := value["output"]; exists {
+		if c.Output, err = output.FromAny(prov, oConf); err != nil {
+			return
+		}
+	}
+	return
+}
+
+func (c *Config) fromYAML(prov docs.Provider, value *yaml.Node) (err error) {
+	for i := 0; i < len(value.Content)-1; i += 2 {
+		switch value.Content[i].Value {
+		case "input":
+			if c.Input, err = input.FromAny(prov, value.Content[i+1]); err != nil {
+				return
+			}
+		case "buffer":
+			if c.Buffer, err = buffer.FromAny(prov, value.Content[i+1]); err != nil {
+				return
+			}
+		case "pipeline":
+			if c.Pipeline, err = pipeline.FromAny(prov, value.Content[i+1]); err != nil {
+				return
+			}
+		case "output":
+			if c.Output, err = output.FromAny(prov, value.Content[i+1]); err != nil {
+				return
+			}
+		}
+	}
+	return
+}

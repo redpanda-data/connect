@@ -420,7 +420,7 @@ func initInput(t testing.TB, env *streamTestEnvironment) iinput.Streamed {
 	dec.KnownFields(true)
 	require.NoError(t, dec.Decode(&s))
 
-	lints, err := config.LintBytes(docs.NewLintConfig(), confBytes)
+	lints, err := config.LintYAMLBytes(docs.NewLintConfig(), confBytes)
 	require.NoError(t, err)
 	assert.Empty(t, lints)
 
@@ -449,7 +449,7 @@ func initOutput(t testing.TB, trans <-chan message.Transaction, env *streamTestE
 	dec.KnownFields(true)
 	require.NoError(t, dec.Decode(&s))
 
-	lints, err := config.LintBytes(docs.NewLintConfig(), confBytes)
+	lints, err := config.LintYAMLBytes(docs.NewLintConfig(), confBytes)
 	require.NoError(t, err)
 	assert.Empty(t, lints)
 

@@ -205,7 +205,7 @@ func initCache(t *testing.T, env *cacheTestEnvironment) cache.V1 {
 	dec.KnownFields(true)
 	require.NoError(t, dec.Decode(&s))
 
-	lints, err := config.LintBytes(docs.NewLintConfig(), confBytes)
+	lints, err := config.LintYAMLBytes(docs.NewLintConfig(), confBytes)
 	require.NoError(t, err)
 	assert.Empty(t, lints)
 

@@ -45,7 +45,7 @@ type Reader struct {
 	// The filesystem used for reading config files.
 	fs ifs.FS
 
-	bootstrapConf *Type
+	bootstrapConf Type
 
 	// Used for linting configs
 	lintConf docs.LintConfig
@@ -90,7 +90,7 @@ func NewReader(mainPath string, resourcePaths []string, opts ...OptFunc) *Reader
 	r := &Reader{
 		testSuffix:         "_benthos_test",
 		fs:                 ifs.OS(),
-		bootstrapConf:      &defaultBootstrapConf,
+		bootstrapConf:      defaultBootstrapConf,
 		lintConf:           docs.NewLintConfig(),
 		mainPath:           mainPath,
 		resourcePaths:      resourcePaths,
@@ -134,7 +134,11 @@ func OptAddOverrides(overrides ...string) OptFunc {
 // This can be used to change the default behaviours of benthos configs.
 func OptSetBootstrapConfig(conf *Type) OptFunc {
 	return func(r *Reader) {
-		r.bootstrapConf = conf
+		if conf != nil {
+			r.bootstrapConf = *conf
+		} else {
+			r.bootstrapConf = New()
+		}
 	}
 }
 
@@ -282,7 +286,7 @@ func (r *Reader) readMain(mainPath string, conf *Type) (lints []string, err erro
 		return
 	}
 
-	var rawNode yaml.Node
+	var rawNode *yaml.Node
 	var confBytes []byte
 	if mainPath != "" {
 		var dLints []docs.Lint
@@ -294,9 +298,12 @@ func (r *Reader) readMain(mainPath string, conf *Type) (lints []string, err erro
 			lints = append(lints, l.Error())
 		}
 		r.modTimeLastRead[mainPath] = modTime
-		if err = yaml.Unmarshal(confBytes, &rawNode); err != nil {
+		if rawNode, err = docs.UnmarshalYAML(confBytes); err != nil {
 			return
 		}
+	} else {
+		var tmpNode yaml.Node
+		rawNode = &tmpNode
 	}
 
 	confSpec := Spec()
@@ -305,18 +312,18 @@ func (r *Reader) readMain(mainPath string, conf *Type) (lints []string, err erro
 		// input, output, etc)
 		confSpec = SpecWithoutStream()
 	}
-	if err = applyOverrides(confSpec, &rawNode, r.overrides...); err != nil {
+	if err = applyOverrides(confSpec, rawNode, r.overrides...); err != nil {
 		return
 	}
 
 	if !bytes.HasPrefix(confBytes, []byte("# BENTHOS LINT DISABLE")) {
 		lintFilePrefix := mainPath
-		for _, lint := range confSpec.LintYAML(r.lintCtx(), &rawNode) {
+		for _, lint := range confSpec.LintYAML(r.lintCtx(), rawNode) {
 			lints = append(lints, fmt.Sprintf("%v%v", lintFilePrefix, lint.Error()))
 		}
 	}
 
-	err = rawNode.Decode(conf)
+	err = conf.FromAny(r.lintConf.DocsProvider, rawNode)
 	return
 }
 

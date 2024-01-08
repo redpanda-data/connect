@@ -12,7 +12,6 @@ import (
 
 	"github.com/fatih/color"
 	"github.com/urfave/cli/v2"
-	"gopkg.in/yaml.v3"
 
 	"github.com/benthosdev/benthos/v4/internal/config"
 	"github.com/benthosdev/benthos/v4/internal/docs"
@@ -32,7 +31,7 @@ type pathLint struct {
 
 func lintFile(path string, skipEnvVarCheck bool, lConf docs.LintConfig) (pathLints []pathLint) {
 	conf := config.New()
-	lints, err := config.ReadFileLinted(ifs.OS(), path, skipEnvVarCheck, lConf, &conf)
+	lints, err := config.ReadYAMLFileLinted(ifs.OS(), path, skipEnvVarCheck, lConf, &conf)
 	if err != nil {
 		pathLints = append(pathLints, pathLint{
 			source: path,
@@ -77,10 +76,22 @@ func lintMDSnippets(path string, lConf docs.LintConfig) (pathLints []pathLint) {
 		}
 		endOfSnippet = nextSnippet + endOfSnippet + len(endTag)
 
-		conf := config.New()
 		configBytes := rawBytes[nextSnippet : endOfSnippet-len(endTag)]
+		if nextSnippet = bytes.Index(rawBytes[endOfSnippet:], []byte("```yaml")); nextSnippet != -1 {
+			nextSnippet += endOfSnippet
+		}
 
-		if err := yaml.Unmarshal(configBytes, &conf); err != nil {
+		cNode, err := docs.UnmarshalYAML(configBytes)
+		if err != nil {
+			pathLints = append(pathLints, pathLint{
+				source: path,
+				lint:   docs.NewLintError(snippetLine, docs.LintFailedRead, err),
+			})
+			continue
+		}
+
+		conf := config.New()
+		if err := conf.FromAny(lConf.DocsProvider, cNode); err != nil {
 			var l docs.Lint
 			if errors.As(err, &l) {
 				l.Line += snippetLine - 1
@@ -95,24 +106,13 @@ func lintMDSnippets(path string, lConf docs.LintConfig) (pathLints []pathLint) {
 				})
 			}
 		} else {
-			lints, err := config.LintBytes(lConf, configBytes)
-			if err != nil {
-				pathLints = append(pathLints, pathLint{
-					source: path,
-					lint:   docs.NewLintError(snippetLine, docs.LintFailedRead, err),
-				})
-			}
-			for _, l := range lints {
+			for _, l := range config.Spec().LintYAML(docs.NewLintContext(lConf), cNode) {
 				l.Line += snippetLine - 1
 				pathLints = append(pathLints, pathLint{
 					source: path,
 					lint:   l,
 				})
 			}
-		}
-
-		if nextSnippet = bytes.Index(rawBytes[endOfSnippet:], []byte("```yaml")); nextSnippet != -1 {
-			nextSnippet += endOfSnippet
 		}
 	}
 	return

@@ -44,8 +44,6 @@ func inferStreamID(dir, path string) (string, error) {
 }
 
 func (r *Reader) readStreamFileConfig(path string) (conf stream.Config, lints []string, err error) {
-	conf = stream.NewConfig()
-
 	var confBytes []byte
 	var dLints []docs.Lint
 	var modTime time.Time
@@ -57,8 +55,8 @@ func (r *Reader) readStreamFileConfig(path string) (conf stream.Config, lints []
 	}
 	r.modTimeLastRead[path] = modTime
 
-	var rawNode yaml.Node
-	if err = yaml.Unmarshal(confBytes, &rawNode); err != nil {
+	var rawNode *yaml.Node
+	if rawNode, err = docs.UnmarshalYAML(confBytes); err != nil {
 		return
 	}
 
@@ -66,12 +64,13 @@ func (r *Reader) readStreamFileConfig(path string) (conf stream.Config, lints []
 	confSpec = append(confSpec, tdocs.ConfigSpec())
 
 	if !bytes.HasPrefix(confBytes, []byte("# BENTHOS LINT DISABLE")) {
-		for _, lint := range confSpec.LintYAML(r.lintCtx(), &rawNode) {
+		for _, lint := range confSpec.LintYAML(r.lintCtx(), rawNode) {
 			lints = append(lints, fmt.Sprintf("%v%v", path, lint.Error()))
 		}
 	}
 
-	err = rawNode.Decode(&conf)
+	conf = stream.NewConfig()
+	err = conf.FromAny(r.lintConf.DocsProvider, rawNode)
 	return
 }
 

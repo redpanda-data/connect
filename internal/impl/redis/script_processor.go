@@ -7,7 +7,7 @@ import (
 
 	"github.com/redis/go-redis/v9"
 
-	"github.com/benthosdev/benthos/v4/internal/bloblang/query"
+	"github.com/benthosdev/benthos/v4/internal/value"
 	"github.com/benthosdev/benthos/v4/public/bloblang"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
@@ -203,7 +203,7 @@ func getArgsMapping(inBatch service.MessageBatch, index int, mapping *bloblang.E
 	}
 
 	for i, v := range args {
-		args[i] = query.ISanitize(v)
+		args[i] = value.ISanitize(v)
 	}
 	return args, nil
 }
@@ -226,7 +226,7 @@ func getKeysStrMapping(inBatch service.MessageBatch, index int, mapping *bloblan
 
 	strArgs := make([]string, len(args))
 	for i, v := range args {
-		strArgs[i] = query.IToString(v)
+		strArgs[i] = value.IToString(v)
 	}
 	return strArgs, nil
 }

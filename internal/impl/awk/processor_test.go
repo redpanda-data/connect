@@ -9,7 +9,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"gopkg.in/yaml.v3"
 
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
@@ -19,12 +18,12 @@ import (
 )
 
 func TestAWKValidation(t *testing.T) {
-	conf := processor.NewConfig()
-	require.NoError(t, yaml.Unmarshal([]byte(`
+	conf, err := processor.FromYAML(`
 awk:
   codec: json
   program: "{ print foo_bar }"
-`), &conf))
+`)
+	require.NoError(t, err)
 
 	a, err := mock.NewManager().NewProcessor(conf)
 	if err != nil {
@@ -46,8 +45,7 @@ awk:
 		t.Error("Expected fail flag on message part")
 	}
 
-	conf = processor.NewConfig()
-	require.NoError(t, yaml.Unmarshal([]byte(`
+	conf, err = processor.FromYAML(`
 awk:
   codec: not valid
   program: |
@@ -55,19 +53,21 @@ awk:
       json_set("foo.bar", json_get("init.val"));
       json_set("foo.bar", json_get("foo.bar") " extra");
     }
-`), &conf))
+`)
+	require.NoError(t, err)
+
 	if _, err = mock.NewManager().NewProcessor(conf); err == nil {
 		t.Error("Expected error from bad codec")
 	}
 }
 
 func TestAWKBadExitStatus(t *testing.T) {
-	conf := processor.NewConfig()
-	require.NoError(t, yaml.Unmarshal([]byte(`
+	conf, err := processor.FromYAML(`
 awk:
   codec: none
   program: "{ exit 1; print foo }"
-`), &conf))
+`)
+	require.NoError(t, err)
 
 	a, err := mock.NewManager().NewProcessor(conf)
 	if err != nil {
@@ -91,12 +91,12 @@ awk:
 }
 
 func TestAWKBadDateString(t *testing.T) {
-	conf := processor.NewConfig()
-	require.NoError(t, yaml.Unmarshal([]byte(`
+	conf, err := processor.FromYAML(`
 awk:
   codec: none
   program: '{ print timestamp_unix("this isnt a date string") }'
-`), &conf))
+`)
+	require.NoError(t, err)
 
 	a, err := mock.NewManager().NewProcessor(conf)
 	if err != nil {
@@ -117,8 +117,7 @@ awk:
 }
 
 func TestAWKJSONParts(t *testing.T) {
-	conf := processor.NewConfig()
-	require.NoError(t, yaml.Unmarshal([]byte(`
+	conf, err := processor.FromYAML(`
 awk:
   codec: none
   program: |
@@ -126,7 +125,8 @@ awk:
       json_set("foo.bar", json_get("init.val"));
       json_set("foo.bar", json_get("foo.bar") " extra");
     }
-`), &conf))
+`)
+	require.NoError(t, err)
 
 	a, err := mock.NewManager().NewProcessor(conf)
 	if err != nil {
@@ -636,12 +636,12 @@ func TestAWK(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		conf := processor.NewConfig()
-		require.NoError(t, yaml.Unmarshal(fmt.Appendf(nil, `
+		conf, err := processor.FromYAML(fmt.Sprintf(`
 awk:
   codec: %v
   program: %v
-`, test.codec, strconv.Quote(test.program)), &conf))
+`, test.codec, strconv.Quote(test.program)))
+		require.NoError(t, err, "Test '%s' failed", test.name)
 
 		a, err := mock.NewManager().NewProcessor(conf)
 		require.NoError(t, err, "Test '%s' failed", test.name)

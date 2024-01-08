@@ -21,7 +21,6 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"gopkg.in/yaml.v3"
 
 	"github.com/benthosdev/benthos/v4/internal/api"
 	"github.com/benthosdev/benthos/v4/internal/component/input"
@@ -712,14 +711,14 @@ func TestHTTPRateLimit(t *testing.T) {
 
 	reg := apiRegGorillaMutWrapper{mut: mux.NewRouter()}
 
-	mgrConf := manager.NewResourceConfig()
-	require.NoError(t, yaml.Unmarshal([]byte(`
+	mgrConf, err := manager.FromYAML(`
 rate_limit_resources:
   - label: foorl
     local:
       count: 1
       interval: 60s
-`), &mgrConf))
+`)
+	require.NoError(t, err)
 
 	mgr, err := manager.New(mgrConf, manager.OptSetAPIReg(reg))
 	if err != nil {
@@ -872,14 +871,14 @@ func TestHTTPServerWSRateLimit(t *testing.T) {
 
 	reg := apiRegGorillaMutWrapper{mut: mux.NewRouter()}
 
-	mgrConf := manager.NewResourceConfig()
-	require.NoError(t, yaml.Unmarshal([]byte(`
+	mgrConf, err := manager.FromYAML(`
 rate_limit_resources:
   - label: foorl
     local:
       count: 1
       interval: 60s
-`), &mgrConf))
+`)
+	require.NoError(t, err)
 
 	mgr, err := manager.New(mgrConf, manager.OptSetAPIReg(reg))
 	if err != nil {

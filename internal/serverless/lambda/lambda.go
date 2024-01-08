@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/aws/aws-lambda-go/lambda"
-	"gopkg.in/yaml.v3"
 
 	"github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/config"
@@ -65,7 +64,14 @@ switch:
 				os.Exit(1)
 			}
 		}
-		if err := yaml.Unmarshal(confBytes, &conf); err != nil {
+
+		confNode, err := docs.UnmarshalYAML(confBytes)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Configuration file parse error: %v\n", err)
+			os.Exit(1)
+		}
+
+		if err = conf.FromAny(docs.DeprecatedProvider, confNode); err != nil {
 			fmt.Fprintf(os.Stderr, "Configuration file read error: %v\n", err)
 			os.Exit(1)
 		}
@@ -73,7 +79,7 @@ switch:
 		// Iterate default config paths
 		for _, path := range defaultPaths {
 			if _, err := ifs.OS().Stat(path); err == nil {
-				if _, err = config.ReadFileLinted(ifs.OS(), path, false, docs.NewLintConfig(), &conf); err != nil {
+				if _, err = config.ReadYAMLFileLinted(ifs.OS(), path, false, docs.NewLintConfig(), &conf); err != nil {
 					fmt.Fprintf(os.Stderr, "Configuration file read error: %v\n", err)
 					os.Exit(1)
 				}

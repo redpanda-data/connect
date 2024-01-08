@@ -2,6 +2,8 @@ package docs
 
 import (
 	"fmt"
+
+	"github.com/benthosdev/benthos/v4/internal/value"
 )
 
 // GetInferenceCandidateFromMap checks a map config structure for a component
@@ -74,8 +76,19 @@ func (f FieldSpec) AnyToValue(v any, conf ToValueConfig) (any, error) {
 		}
 		return m, nil
 	}
-
-	if f.Type == FieldTypeObject {
+	switch f.Type {
+	case FieldTypeString:
+		return value.IGetString(v)
+	case FieldTypeInt:
+		i64, err := value.IGetInt(v)
+		return int(i64), err
+	case FieldTypeFloat:
+		return value.IGetNumber(v)
+	case FieldTypeBool:
+		return value.IGetBool(v)
+	case FieldTypeUnknown:
+		return v, nil
+	case FieldTypeObject:
 		return f.Children.AnyToMap(v, conf)
 	}
 	return v, nil

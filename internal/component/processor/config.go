@@ -60,8 +60,11 @@ func (conf *Config) UnmarshalYAML(value *yaml.Node) error {
 
 // FromYAML is for old style tests.
 func FromYAML(confStr string) (conf Config, err error) {
-	err = yaml.Unmarshal([]byte(confStr), &conf)
-	return
+	var node *yaml.Node
+	if node, err = docs.UnmarshalYAML([]byte(confStr)); err != nil {
+		return
+	}
+	return fromYAML(docs.DeprecatedProvider, node)
 }
 
 func FromAny(prov docs.Provider, value any) (conf Config, err error) {

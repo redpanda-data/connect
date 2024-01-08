@@ -6,6 +6,7 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/bloblang/mapping"
 	"github.com/benthosdev/benthos/v4/internal/bloblang/query"
 	"github.com/benthosdev/benthos/v4/internal/message"
+	"github.com/benthosdev/benthos/v4/internal/value"
 )
 
 // Executor stores a parsed Bloblang mapping and provides APIs for executing it.
@@ -34,22 +35,22 @@ var ErrRootDeleted = errors.New("root was deleted")
 // If the mapping results in the root of the new document being deleted then
 // ErrRootDeleted is returned, which can be used as a signal to filter rather
 // than fail the mapping.
-func (e *Executor) Query(value any) (any, error) {
+func (e *Executor) Query(val any) (any, error) {
 	res, err := e.exec.Exec(query.FunctionContext{
 		Maps:     e.exec.Maps(),
 		Vars:     map[string]any{},
 		Index:    0,
 		MsgBatch: e.emptyQueryMessage,
-	}.WithValue(value))
+	}.WithValue(val))
 	if err != nil {
 		return nil, err
 	}
 
 	switch res.(type) {
-	case query.Delete:
+	case value.Delete:
 		return nil, ErrRootDeleted
-	case query.Nothing:
-		return value, nil
+	case value.Nothing:
+		return val, nil
 	}
 	return res, nil
 }
@@ -60,7 +61,7 @@ func (e *Executor) Query(value any) (any, error) {
 // If the mapping results in the root of the new document being deleted then
 // ErrRootDeleted is returned, which can be used as a signal to filter rather
 // than fail the mapping.
-func (e *Executor) Overlay(value any, onto *any) error {
+func (e *Executor) Overlay(val any, onto *any) error {
 	vars := map[string]any{}
 
 	if err := e.exec.ExecOnto(query.FunctionContext{
@@ -69,7 +70,7 @@ func (e *Executor) Overlay(value any, onto *any) error {
 		Index:    0,
 		MsgBatch: e.emptyQueryMessage,
 		NewValue: onto,
-	}.WithValue(value), mapping.AssignmentContext{
+	}.WithValue(val), mapping.AssignmentContext{
 		Vars:  vars,
 		Value: onto,
 	}); err != nil {
@@ -77,9 +78,9 @@ func (e *Executor) Overlay(value any, onto *any) error {
 	}
 
 	switch (*onto).(type) {
-	case query.Delete:
+	case value.Delete:
 		return ErrRootDeleted
-	case query.Nothing:
+	case value.Nothing:
 		*onto = nil
 	}
 	return nil

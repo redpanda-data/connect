@@ -15,6 +15,7 @@ import (
 	"github.com/segmentio/ksuid"
 
 	"github.com/benthosdev/benthos/v4/internal/tracing"
+	"github.com/benthosdev/benthos/v4/internal/value"
 )
 
 type fieldFunction struct {
@@ -147,7 +148,7 @@ type Literal struct {
 // Annotation returns a token identifier of the function.
 func (l *Literal) Annotation() string {
 	if l.annotation == "" {
-		return string(ITypeOf(l.Value)) + " literal"
+		return string(value.ITypeOf(l.Value)) + " literal"
 	}
 	return l.annotation
 }
@@ -328,7 +329,7 @@ root.bar = deleted()`,
 		),
 	),
 	func(*ParsedParams) (Function, error) {
-		return NewLiteralFunction("delete", Delete(nil)), nil
+		return NewLiteralFunction("delete", value.Delete(nil)), nil
 	},
 )
 
@@ -453,7 +454,7 @@ func jsonFunction(args *ParsedParams) (Function, error) {
 		if len(argPath) > 0 {
 			gPart = gPart.Search(argPath...)
 		}
-		return ISanitize(gPart.Data()), nil
+		return value.ISanitize(gPart.Data()), nil
 	}, func(ctx TargetsContext) (TargetsContext, []TargetPath) {
 		paths := []TargetPath{
 			NewTargetPath(TargetValue, argPath...),
@@ -664,7 +665,7 @@ var _ = registerFunction(
 var _ = registerFunction(
 	NewHiddenFunctionSpec("nothing"),
 	func(*ParsedParams) (Function, error) {
-		return NewLiteralFunction("nothing", Nothing(nil)), nil
+		return NewLiteralFunction("nothing", value.Nothing(nil)), nil
 	},
 )
 
@@ -735,7 +736,7 @@ func randomIntFunction(args *ParsedParams) (Function, error) {
 				return nil, fmt.Errorf("failed to seed random number generator: %v", err)
 			}
 
-			seed, err := IToInt(seedI)
+			seed, err := value.IToInt(seedI)
 			if err != nil {
 				return nil, fmt.Errorf("failed to seed random number generator: %v", err)
 			}

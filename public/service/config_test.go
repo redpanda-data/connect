@@ -94,7 +94,7 @@ c:
 
 			assert.Equal(t, test.lints, spec.component.Config.Children.LintYAML(docs.NewLintContext(docs.NewLintConfig()), node))
 
-			pConf, err := spec.configFromNode(nil, node)
+			pConf, err := spec.configFromAny(nil, node)
 			require.NoError(t, err)
 
 			var sanitNode yaml.Node

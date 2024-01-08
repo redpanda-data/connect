@@ -35,7 +35,7 @@ func TestComponentExamples(t *testing.T) {
 
 		lConf := docs.NewLintConfig()
 		lConf.RejectDeprecated = !deprecated
-		lints, err := config.LintBytes(lConf, []byte(conf))
+		lints, err := config.LintYAMLBytes(lConf, []byte(conf))
 		assert.NoError(t, err, "%v:%v:%v", componentType, typeName, title)
 		for _, lint := range lints {
 			t.Errorf("%v %v:%v:%v", lint, componentType, typeName, title)
