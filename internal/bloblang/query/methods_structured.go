@@ -1771,8 +1771,7 @@ func renameKey(args *ParsedParams) (simpleMethod, error) {
 		jsonParsed := gabs.Wrap(v)
 		var err error
 		if jsonParsed.ExistsP(oldStr) {
-			value := jsonParsed.Path(oldStr).Data()
-			_, err = jsonParsed.SetP(value, newStr)
+			_, err = jsonParsed.SetP(jsonParsed.Path(oldStr).Data(), newStr)
 			if err != nil {
 				return nil, err
 			}
