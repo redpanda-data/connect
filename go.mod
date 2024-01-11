@@ -65,6 +65,7 @@ require (
 	github.com/jmespath/go-jmespath v0.4.0
 	github.com/klauspost/compress v1.17.3
 	github.com/klauspost/pgzip v1.2.6
+	github.com/kylelemons/godebug v1.1.0
 	github.com/lib/pq v1.10.9
 	github.com/linkedin/goavro/v2 v2.12.0
 	github.com/matoous/go-nanoid/v2 v2.0.0
@@ -87,6 +88,7 @@ require (
 	github.com/prometheus/common v0.45.0
 	github.com/pusher/pusher-http-go v4.0.1+incompatible
 	github.com/quipo/dependencysolver v0.0.0-20170801134659-2b009cb4ddcc
+	github.com/r3labs/diff/v3 v3.0.1
 	github.com/rabbitmq/amqp091-go v1.9.0
 	github.com/rcrowley/go-metrics v0.0.0-20201227073835-cf1acfcdf475
 	github.com/redis/go-redis/v9 v9.3.0
@@ -235,7 +237,6 @@ require (
 	github.com/klauspost/asmfmt v1.3.2 // indirect
 	github.com/klauspost/cpuid/v2 v2.2.5 // indirect
 	github.com/kr/fs v0.1.0 // indirect
-	github.com/kylelemons/godebug v1.1.0 // indirect
 	github.com/lann/builder v0.0.0-20180802200727-47ae307949d0 // indirect
 	github.com/lann/ps v0.0.0-20150810152359-62de8c46ede0 // indirect
 	github.com/mailru/easyjson v0.7.7 // indirect
