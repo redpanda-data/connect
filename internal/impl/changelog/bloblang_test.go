@@ -3,9 +3,10 @@ package changelog
 import (
 	"encoding/json"
 	"fmt"
+	"testing"
+
 	"github.com/benthosdev/benthos/v4/public/bloblang"
 	"github.com/stretchr/testify/assert"
-	"testing"
 )
 
 func Test_Diff__shouldReturnDiff(t *testing.T) {
