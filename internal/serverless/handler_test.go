@@ -13,8 +13,6 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/benthosdev/benthos/v4/internal/component/output"
-	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/config"
 
 	_ "github.com/benthosdev/benthos/v4/public/components/io"
@@ -38,11 +36,10 @@ func TestHandlerAsync(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	var err error
-	conf := config.New()
-	conf.Output, err = output.FromYAML(fmt.Sprintf(`
-http_client:
-  url: %v
+	conf, err := config.FromYAML(fmt.Sprintf(`
+output:
+  http_client:
+    url: %v
 `, ts.URL))
 	require.NoError(t, err)
 
@@ -68,8 +65,11 @@ http_client:
 }
 
 func TestHandlerSync(t *testing.T) {
-	conf := config.New()
-	conf.Output.Type = ServerlessResponseType
+	conf, err := config.FromYAML(`
+output:
+  sync_response: {}
+`)
+	require.NoError(t, err)
 
 	h, err := NewHandler(conf)
 	if err != nil {
@@ -90,16 +90,15 @@ func TestHandlerSync(t *testing.T) {
 }
 
 func TestHandlerSyncBatch(t *testing.T) {
-	conf := config.New()
-	conf.Output.Type = ServerlessResponseType
-
-	pConf, err := processor.FromYAML(`
-select_parts:
-  parts: [ 0, 0, 0 ]
+	conf, err := config.FromYAML(`
+pipeline:
+  processors:
+    - select_parts:
+        parts: [ 0, 0, 0 ]
+output:
+  sync_response: {}
 `)
 	require.NoError(t, err)
-
-	conf.Pipeline.Processors = append(conf.Pipeline.Processors, pConf)
 
 	h, err := NewHandler(conf)
 	if err != nil {
@@ -124,21 +123,16 @@ select_parts:
 }
 
 func TestHandlerSyncBatches(t *testing.T) {
-	conf := config.New()
-	conf.Output.Type = ServerlessResponseType
-
-	pConf, err := processor.FromYAML(`
-select_parts:
-  parts: [ 0, 0, 0 ]
+	conf, err := config.FromYAML(`
+pipeline:
+  processors:
+    - select_parts:
+        parts: [ 0, 0, 0 ]
+    - split: {}
+output:
+  sync_response: {}
 `)
 	require.NoError(t, err)
-
-	conf.Pipeline.Processors = append(conf.Pipeline.Processors, pConf)
-
-	pConf = processor.NewConfig()
-	pConf.Type = "split"
-
-	conf.Pipeline.Processors = append(conf.Pipeline.Processors, pConf)
 
 	h, err := NewHandler(conf)
 	if err != nil {
@@ -179,14 +173,13 @@ func TestHandlerCombined(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	conf := config.New()
-	var err error
-	conf.Output, err = output.FromYAML(fmt.Sprintf(`
-broker:
-  outputs:
-    - sync_response: {}
-    - http_client:
-        url: %v
+	conf, err := config.FromYAML(fmt.Sprintf(`
+output:
+  broker:
+    outputs:
+      - sync_response: {}
+      - http_client:
+          url: %v
 `, ts.URL))
 	require.NoError(t, err)
 

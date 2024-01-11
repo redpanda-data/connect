@@ -147,7 +147,7 @@ func (b *bloblangProc) ProcessBatch(ctx *processor.BatchProcContext, msg message
 		p, err := b.exec.MapPart(i, msg)
 		if err != nil {
 			ctx.OnError(err, i, part)
-			b.log.Errorf("%v", err)
+			b.log.Error("%v", err)
 			p = part
 		}
 		if p != nil {

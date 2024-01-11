@@ -95,13 +95,12 @@ func GetTestTargets(targetPaths []string, testSuffix string) (map[string]Definit
 // errors (false for failed) or returns an error.
 func lintTarget(path, testSuffix string) ([]docs.Lint, error) {
 	confPath, _ := GetPathPair(path, testSuffix)
-	dummyConf := config.New()
 
 	// This is necessary as each test case can provide a different set of
 	// environment variables, so in order to test env vars properly we would
 	// need to lint for each case.
 	skipEnvVarCheck := true
-	lints, err := config.ReadYAMLFileLinted(ifs.OS(), confPath, skipEnvVarCheck, docs.NewLintConfig(), &dummyConf)
+	_, lints, err := config.ReadYAMLFileLinted(ifs.OS(), config.Spec(), confPath, skipEnvVarCheck, docs.NewLintConfig())
 	if err != nil {
 		return nil, err
 	}

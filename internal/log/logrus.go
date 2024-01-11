@@ -140,33 +140,33 @@ func (l *Logger) With(keyValues ...any) Modular {
 
 //------------------------------------------------------------------------------
 
-// Fatalf prints a fatal message to the console. Does NOT cause panic.
-func (l *Logger) Fatalf(format string, v ...any) {
+// Fatal prints a fatal message to the console. Does NOT cause panic.
+func (l *Logger) Fatal(format string, v ...any) {
 	l.entry.Fatalf(strings.TrimSuffix(format, "\n"), v...)
 }
 
-// Errorf prints an error message to the console.
-func (l *Logger) Errorf(format string, v ...any) {
+// Error prints an error message to the console.
+func (l *Logger) Error(format string, v ...any) {
 	l.entry.Errorf(strings.TrimSuffix(format, "\n"), v...)
 }
 
-// Warnf prints a warning message to the console.
-func (l *Logger) Warnf(format string, v ...any) {
+// Warn prints a warning message to the console.
+func (l *Logger) Warn(format string, v ...any) {
 	l.entry.Warnf(strings.TrimSuffix(format, "\n"), v...)
 }
 
-// Infof prints an information message to the console.
-func (l *Logger) Infof(format string, v ...any) {
+// Info prints an information message to the console.
+func (l *Logger) Info(format string, v ...any) {
 	l.entry.Infof(strings.TrimSuffix(format, "\n"), v...)
 }
 
-// Debugf prints a debug message to the console.
-func (l *Logger) Debugf(format string, v ...any) {
+// Debug prints a debug message to the console.
+func (l *Logger) Debug(format string, v ...any) {
 	l.entry.Debugf(strings.TrimSuffix(format, "\n"), v...)
 }
 
-// Tracef prints a trace message to the console.
-func (l *Logger) Tracef(format string, v ...any) {
+// Trace prints a trace message to the console.
+func (l *Logger) Trace(format string, v ...any) {
 	l.entry.Tracef(strings.TrimSuffix(format, "\n"), v...)
 }
 

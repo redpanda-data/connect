@@ -101,13 +101,13 @@ func newBoundsCheck(maxParts, minParts, maxPartSize, minPartSize int, mgr bundle
 func (m *boundsCheck) ProcessBatch(ctx *processor.BatchProcContext, msg message.Batch) ([]message.Batch, error) {
 	lParts := msg.Len()
 	if lParts < m.minParts {
-		m.log.Debugf(
+		m.log.Debug(
 			"Rejecting message due to message parts below minimum (%v): %v\n",
 			m.minParts, lParts,
 		)
 		return nil, nil
 	} else if lParts > m.maxParts {
-		m.log.Debugf(
+		m.log.Debug(
 			"Rejecting message due to message parts exceeding limit (%v): %v\n",
 			m.maxParts, lParts,
 		)
@@ -118,7 +118,7 @@ func (m *boundsCheck) ProcessBatch(ctx *processor.BatchProcContext, msg message.
 	_ = msg.Iter(func(i int, p *message.Part) error {
 		if size := len(p.AsBytes()); size > m.maxPartSize ||
 			size < m.minPartSize {
-			m.log.Debugf(
+			m.log.Debug(
 				"Rejecting message due to message part size (%v -> %v): %v\n",
 				m.minPartSize,
 				m.maxPartSize,

@@ -3,6 +3,7 @@ package service
 import (
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/docs"
+	"github.com/benthosdev/benthos/v4/internal/value"
 )
 
 type fieldUnwrapper struct {
@@ -33,7 +34,7 @@ func extractConfig(
 
 	if pluginConfig == nil {
 		if spec.component.Config.Default != nil {
-			pluginConfig = *spec.component.Config.Default
+			pluginConfig = value.IClone(*spec.component.Config.Default)
 		} else if len(spec.component.Config.Children) > 0 {
 			pluginConfig = map[string]any{}
 		}

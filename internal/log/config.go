@@ -94,7 +94,7 @@ func FromParsed(pConf *docs.ParsedConfig) (conf Config, err error) {
 		return
 	}
 
-	{
+	if pConf.Contains(fieldFile) {
 		fConf := pConf.Namespace(fieldFile)
 		if conf.File.Path, err = fConf.FieldString(fieldFilePath); err != nil {
 			return

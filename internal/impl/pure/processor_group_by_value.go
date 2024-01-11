@@ -94,7 +94,7 @@ func (g *groupByValueProc) ProcessBatch(ctx *processor.BatchProcContext, batch m
 	_ = batch.Iter(func(i int, p *message.Part) error {
 		v, err := g.value.String(i, batch)
 		if err != nil {
-			g.log.Errorf("Group value interpolation error: %v", err)
+			g.log.Error("Group value interpolation error: %v", err)
 			err = fmt.Errorf("group value interpolation error: %w", err)
 			ctx.OnError(err, i, p)
 		}
@@ -104,7 +104,7 @@ func (g *groupByValueProc) ProcessBatch(ctx *processor.BatchProcContext, batch m
 		if group, exists := groupMap[v]; exists {
 			groupMap[v] = append(group, p)
 		} else {
-			g.log.Tracef("New group formed: %v\n", v)
+			g.log.Trace("New group formed: %v\n", v)
 			groupKeys = append(groupKeys, v)
 			groupMap[v] = message.Batch{p}
 		}

@@ -139,7 +139,7 @@ func clearNumbers(v any) (any, bool) {
 func (p *jmespathProc) Process(ctx context.Context, msg *message.Part) ([]*message.Part, error) {
 	jsonPart, err := msg.AsStructuredMut()
 	if err != nil {
-		p.log.Debugf("Failed to parse part into json: %v\n", err)
+		p.log.Debug("Failed to parse part into json: %v\n", err)
 		return nil, err
 	}
 	if v, replace := clearNumbers(jsonPart); replace {
@@ -148,7 +148,7 @@ func (p *jmespathProc) Process(ctx context.Context, msg *message.Part) ([]*messa
 
 	var result any
 	if result, err = safeSearch(jsonPart, p.query); err != nil {
-		p.log.Debugf("Failed to search json: %v\n", err)
+		p.log.Debug("Failed to search json: %v\n", err)
 		return nil, err
 	}
 

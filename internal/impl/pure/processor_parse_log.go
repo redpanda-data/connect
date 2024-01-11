@@ -304,7 +304,7 @@ func newParseLog(conf parseLogConfig, mgr bundle.NewManagement) (processor.AutoO
 func (s *parseLogProc) Process(ctx context.Context, msg *message.Part) ([]*message.Part, error) {
 	dataMap, err := s.format(msg.AsBytes())
 	if err != nil {
-		s.log.Debugf("Failed to parse message as %s: %v", s.formatStr, err)
+		s.log.Debug("Failed to parse message as %s: %v", s.formatStr, err)
 		return nil, err
 	}
 

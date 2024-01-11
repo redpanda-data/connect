@@ -157,7 +157,7 @@ func (e *subprocessProc) getSendSubprocessorFunc(codec string) (func(part *messa
 
 			res, err := e.subproc.Send(lenBuf, m, nil)
 			if err != nil {
-				e.log.Errorf("Failed to send message to subprocess: %v\n", err)
+				e.log.Error("Failed to send message to subprocess: %v\n", err)
 				return err
 			}
 			res2 := make([]byte, len(res))
@@ -172,7 +172,7 @@ func (e *subprocessProc) getSendSubprocessorFunc(codec string) (func(part *messa
 			lenBuf = append(strconv.AppendUint(lenBuf, uint64(len(m)), 10), ':')
 			res, err := e.subproc.Send(lenBuf, m, commaBytes)
 			if err != nil {
-				e.log.Errorf("Failed to send message to subprocess: %v\n", err)
+				e.log.Error("Failed to send message to subprocess: %v\n", err)
 				return err
 			}
 			res2 := make([]byte, len(res))
@@ -191,7 +191,7 @@ func (e *subprocessProc) getSendSubprocessorFunc(codec string) (func(part *messa
 				}
 				res, err := e.subproc.Send(nil, p, newLineBytes)
 				if err != nil {
-					e.log.Errorf("Failed to send message to subprocess: %v\n", err)
+					e.log.Error("Failed to send message to subprocess: %v\n", err)
 					return err
 				}
 				results = append(results, res)
@@ -252,7 +252,7 @@ func newSubprocWrapper(name string, args []string, maxBuf int, codecRecv string,
 		for {
 			select {
 			case <-s.cmdExitChan:
-				log.Warnln("Subprocess exited")
+				log.Warn("Subprocess exited")
 				_ = s.stop()
 
 				// Flush channels
@@ -261,14 +261,14 @@ func newSubprocWrapper(name string, args []string, maxBuf int, codecRecv string,
 					msgBytes = append(msgBytes, stdoutMsg...)
 				}
 				if len(msgBytes) > 0 {
-					log.Infoln(string(msgBytes))
+					log.Info(string(msgBytes))
 				}
 				msgBytes = nil
 				for stderrMsg := range s.stderrChan {
 					msgBytes = append(msgBytes, stderrMsg...)
 				}
 				if len(msgBytes) > 0 {
-					log.Errorln(string(msgBytes))
+					log.Error(string(msgBytes))
 				}
 
 				_ = s.start()
@@ -389,7 +389,7 @@ func (s *subprocWrapper) start() error {
 			stdoutChan <- dataCopy
 		}
 		if err := scanner.Err(); err != nil {
-			s.logger.Errorf("Failed to read subprocess output: %v\n", err)
+			s.logger.Error("Failed to read subprocess output: %v\n", err)
 		}
 	}()
 	go func() {
@@ -415,14 +415,14 @@ func (s *subprocWrapper) start() error {
 			stderrChan <- dataCopy
 		}
 		if err := scanner.Err(); err != nil {
-			s.logger.Errorf("Failed to read subprocess error output: %v\n", err)
+			s.logger.Error("Failed to read subprocess error output: %v\n", err)
 		}
 	}()
 
 	s.cmdExitChan = cmdExitChan
 	s.stdoutChan = stdoutChan
 	s.stderrChan = stderrChan
-	s.logger.Infoln("Subprocess started")
+	s.logger.Info("Subprocess started")
 	return nil
 }
 

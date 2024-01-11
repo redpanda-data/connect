@@ -1,8 +1,6 @@
 package stream
 
 import (
-	"fmt"
-
 	"gopkg.in/yaml.v3"
 
 	"github.com/benthosdev/benthos/v4/internal/component/buffer"
@@ -10,6 +8,13 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/pipeline"
+)
+
+const (
+	fieldInput    = "input"
+	fieldBuffer   = "buffer"
+	fieldPipeline = "pipeline"
+	fieldOutput   = "output"
 )
 
 // Config is a configuration struct representing all four layers of a Benthos
@@ -59,69 +64,43 @@ func FromYAML(confStr string) (conf Config, err error) {
 	if node, err = docs.UnmarshalYAML([]byte(confStr)); err != nil {
 		return
 	}
-	conf = NewConfig()
-	err = conf.fromYAML(docs.DeprecatedProvider, node)
-	return
-}
-
-func (c *Config) FromAny(prov docs.Provider, value any) (err error) {
-	switch t := value.(type) {
-	case Config:
-		*c = t
+	var pConf *docs.ParsedConfig
+	if pConf, err = Spec().ParsedConfigFromAny(node); err != nil {
 		return
-	case *yaml.Node:
-		return c.fromYAML(prov, t)
-	case map[string]any:
-		return c.fromMap(prov, t)
 	}
-	err = fmt.Errorf("unexpected value, expected object, got %T", value)
+	conf, err = FromParsed(docs.DeprecatedProvider, pConf)
 	return
 }
 
-func (c *Config) fromMap(prov docs.Provider, value map[string]any) (err error) {
-	if iConf, exists := value["input"]; exists {
-		if c.Input, err = input.FromAny(prov, iConf); err != nil {
-			return
-		}
-	}
-	if pConf, exists := value["pipeline"]; exists {
-		if c.Pipeline, err = pipeline.FromAny(prov, pConf); err != nil {
-			return
-		}
-	}
-	if bConf, exists := value["buffer"]; exists {
-		if c.Buffer, err = buffer.FromAny(prov, bConf); err != nil {
-			return
-		}
-	}
-	if oConf, exists := value["output"]; exists {
-		if c.Output, err = output.FromAny(prov, oConf); err != nil {
-			return
-		}
-	}
-	return
-}
+func FromParsed(prov docs.Provider, pConf *docs.ParsedConfig) (conf Config, err error) {
+	var v any
 
-func (c *Config) fromYAML(prov docs.Provider, value *yaml.Node) (err error) {
-	for i := 0; i < len(value.Content)-1; i += 2 {
-		switch value.Content[i].Value {
-		case "input":
-			if c.Input, err = input.FromAny(prov, value.Content[i+1]); err != nil {
-				return
-			}
-		case "buffer":
-			if c.Buffer, err = buffer.FromAny(prov, value.Content[i+1]); err != nil {
-				return
-			}
-		case "pipeline":
-			if c.Pipeline, err = pipeline.FromAny(prov, value.Content[i+1]); err != nil {
-				return
-			}
-		case "output":
-			if c.Output, err = output.FromAny(prov, value.Content[i+1]); err != nil {
-				return
-			}
-		}
+	if v, err = pConf.FieldAny(fieldInput); err != nil {
+		return
+	}
+	if conf.Input, err = input.FromAny(prov, v); err != nil {
+		return
+	}
+
+	if v, err = pConf.FieldAny(fieldBuffer); err != nil {
+		return
+	}
+	if conf.Buffer, err = buffer.FromAny(prov, v); err != nil {
+		return
+	}
+
+	if v, err = pConf.FieldAny(fieldPipeline); err != nil {
+		return
+	}
+	if conf.Pipeline, err = pipeline.FromAny(prov, v); err != nil {
+		return
+	}
+
+	if v, err = pConf.FieldAny(fieldOutput); err != nil {
+		return
+	}
+	if conf.Output, err = output.FromAny(prov, v); err != nil {
+		return
 	}
 	return
 }

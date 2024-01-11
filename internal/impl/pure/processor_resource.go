@@ -83,7 +83,7 @@ func (r *resourceProcessor) ProcessBatch(ctx context.Context, msg message.Batch)
 	if err := r.mgr.AccessProcessor(ctx, r.name, func(p processor.V1) {
 		msgs, res = p.ProcessBatch(ctx, msg)
 	}); err != nil {
-		r.log.Errorf("Failed to obtain processor resource '%v': %v", r.name, err)
+		r.log.Error("Failed to obtain processor resource '%v': %v", r.name, err)
 		return nil, err
 	}
 	return msgs, res

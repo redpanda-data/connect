@@ -152,7 +152,7 @@ func (d *dedupeProc) ProcessBatch(ctx *processor.BatchProcContext, batch message
 				return nil
 			}
 
-			d.log.Errorf("Cache error: %v\n", err)
+			d.log.Error("Cache error: %v\n", err)
 			if d.dropOnErr {
 				ctx.Span(i).LogKV("event", "dropped", "type", "deduplicated")
 				return nil

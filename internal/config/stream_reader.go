@@ -60,7 +60,7 @@ func (r *Reader) readStreamFileConfig(path string) (conf stream.Config, lints []
 		return
 	}
 
-	confSpec := stream.Spec()
+	confSpec := append(docs.FieldSpecs{}, r.specStreamOnly...)
 	confSpec = append(confSpec, tdocs.ConfigSpec())
 
 	if !bytes.HasPrefix(confBytes, []byte("# BENTHOS LINT DISABLE")) {
@@ -69,8 +69,12 @@ func (r *Reader) readStreamFileConfig(path string) (conf stream.Config, lints []
 		}
 	}
 
-	conf = stream.NewConfig()
-	err = conf.FromAny(r.lintConf.DocsProvider, rawNode)
+	var pConf *docs.ParsedConfig
+	if pConf, err = confSpec.ParsedConfigFromAny(rawNode); err != nil {
+		return
+	}
+
+	conf, err = stream.FromParsed(r.lintConf.DocsProvider, pConf)
 	return
 }
 
@@ -188,23 +192,23 @@ func (r *Reader) TriggerStreamUpdate(mgr bundle.NewManagement, strict bool, path
 		if !exists {
 			return nil
 		}
-		mgr.Logger().Infof("Stream %v config deleted, attempting to remove stream.", info.id)
+		mgr.Logger().Info("Stream %v config deleted, attempting to remove stream.", info.id)
 
 		if err := r.streamUpdateFn(info.id, nil); err != nil {
-			mgr.Logger().Errorf("Failed to remove deleted stream %v config: %v", info.id, err)
+			mgr.Logger().Error("Failed to remove deleted stream %v config: %v", info.id, err)
 			return err
 		}
-		mgr.Logger().Infof("Removed stream %v.", info.id)
+		mgr.Logger().Info("Removed stream %v.", info.id)
 		return nil
 	}
 	if err != nil {
-		mgr.Logger().Errorf("Failed to read updated stream config: %v", err)
+		mgr.Logger().Error("Failed to read updated stream config: %v", err)
 		return noReread(err)
 	}
 
 	info, exists := r.streamFileInfo[path]
 	if exists {
-		mgr.Logger().Infof("Stream %v config updated, attempting to update stream.", info.id)
+		mgr.Logger().Info("Stream %v config updated, attempting to update stream.", info.id)
 	} else {
 		id, err := inferStreamID(r.findStreamPathWalkedDir(path), path)
 		if err != nil {
@@ -212,22 +216,22 @@ func (r *Reader) TriggerStreamUpdate(mgr bundle.NewManagement, strict bool, path
 		}
 		info = streamFileInfo{id: id}
 		r.streamFileInfo[path] = info
-		mgr.Logger().Infof("Stream %v config added, attempting to create stream.", info.id)
+		mgr.Logger().Info("Stream %v config added, attempting to create stream.", info.id)
 	}
 
 	lintlog := mgr.Logger()
 	for _, lint := range lints {
-		lintlog.Infoln(lint)
+		lintlog.Info(lint)
 	}
 	if strict && len(lints) > 0 {
-		mgr.Logger().Errorf("Rejecting updated stream %v config due to linter errors, to allow linting errors run Benthos with --chilled.", info.id)
+		mgr.Logger().Error("Rejecting updated stream %v config due to linter errors, to allow linting errors run Benthos with --chilled.", info.id)
 		return noReread(errors.New("file contained linting errors and is running in strict mode"))
 	}
 
 	if err := r.streamUpdateFn(info.id, &conf); err != nil {
-		mgr.Logger().Errorf("Failed to apply updated stream %v config: %v", info.id, err)
+		mgr.Logger().Error("Failed to apply updated stream %v config: %v", info.id, err)
 		return err
 	}
-	mgr.Logger().Infof("Updated stream %v config from file.", info.id)
+	mgr.Logger().Info("Updated stream %v config from file.", info.id)
 	return nil
 }

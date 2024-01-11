@@ -87,12 +87,12 @@ func (m *Type) HandleStreamsCRUD(w http.ResponseWriter, r *http.Request) {
 			r.Body.Close()
 		}
 		if serverErr != nil {
-			m.manager.Logger().Errorf("Streams CRUD Error: %v\n", serverErr)
+			m.manager.Logger().Error("Streams CRUD Error: %v\n", serverErr)
 			http.Error(w, fmt.Sprintf("Error: %v", serverErr), http.StatusBadGateway)
 			return
 		}
 		if requestErr != nil {
-			m.manager.Logger().Debugf("Streams request CRUD Error: %v\n", requestErr)
+			m.manager.Logger().Debug("Streams request CRUD Error: %v\n", requestErr)
 			http.Error(w, fmt.Sprintf("Error: %v", requestErr), http.StatusBadRequest)
 			return
 		}
@@ -145,7 +145,7 @@ func (m *Type) HandleStreamsCRUD(w http.ResponseWriter, r *http.Request) {
 			for _, l := range m.lintStreamConfigNode(&n) {
 				keyLint := fmt.Sprintf("stream '%v': %v", k, l)
 				lints = append(lints, keyLint)
-				m.manager.Logger().Debugf("Streams request linting error: %v\n", keyLint)
+				m.manager.Logger().Debug("Streams request linting error: %v\n", keyLint)
 			}
 		}
 		if len(lints) > 0 {
@@ -163,25 +163,31 @@ func (m *Type) HandleStreamsCRUD(w http.ResponseWriter, r *http.Request) {
 	toUpdate := map[string]stream.Config{}
 	toCreate := map[string]stream.Config{}
 
+	spec := stream.Spec()
+
 	for id := range infos {
 		newConf, exists := nodeSet[id]
 		if !exists {
 			toDelete = append(toDelete, id)
 		} else {
-			tmpConf := stream.NewConfig()
-			if requestErr = tmpConf.FromAny(m.manager.Environment(), &newConf); requestErr != nil {
+			var pConf *docs.ParsedConfig
+			if pConf, requestErr = spec.ParsedConfigFromAny(&newConf); requestErr != nil {
 				return
 			}
-			toUpdate[id] = tmpConf
+			if toUpdate[id], requestErr = stream.FromParsed(m.manager.Environment(), pConf); requestErr != nil {
+				return
+			}
 		}
 	}
 	for id, conf := range nodeSet {
 		if _, exists := infos[id]; !exists {
-			tmpConf := stream.NewConfig()
-			if requestErr = tmpConf.FromAny(m.manager.Environment(), &conf); requestErr != nil {
+			var pConf *docs.ParsedConfig
+			if pConf, requestErr = spec.ParsedConfigFromAny(&conf); requestErr != nil {
 				return
 			}
-			toCreate[id] = tmpConf
+			if toCreate[id], requestErr = stream.FromParsed(m.manager.Environment(), pConf); requestErr != nil {
+				return
+			}
 		}
 	}
 
@@ -252,12 +258,12 @@ func (m *Type) HandleStreamCRUD(w http.ResponseWriter, r *http.Request) {
 			r.Body.Close()
 		}
 		if serverErr != nil {
-			m.manager.Logger().Errorf("Streams CRUD Error: %v\n", serverErr)
+			m.manager.Logger().Error("Streams CRUD Error: %v\n", serverErr)
 			http.Error(w, fmt.Sprintf("Error: %v", serverErr), http.StatusBadGateway)
 			return
 		}
 		if requestErr != nil {
-			m.manager.Logger().Debugf("Streams request CRUD Error: %v\n", requestErr)
+			m.manager.Logger().Debug("Streams request CRUD Error: %v\n", requestErr)
 			http.Error(w, fmt.Sprintf("Error: %v", requestErr), http.StatusBadRequest)
 			return
 		}
@@ -294,12 +300,15 @@ func (m *Type) HandleStreamCRUD(w http.ResponseWriter, r *http.Request) {
 		if !ignoreLints {
 			lints = m.lintStreamConfigNode(node)
 			for _, l := range lints {
-				m.manager.Logger().Infof("Stream '%v' config: %v\n", id, l)
+				m.manager.Logger().Info("Stream '%v' config: %v\n", id, l)
 			}
 		}
 
-		confOut = stream.NewConfig()
-		err = confOut.FromAny(m.manager.Environment(), node)
+		var pConf *docs.ParsedConfig
+		if pConf, err = stream.Spec().ParsedConfigFromAny(node); err != nil {
+			return
+		}
+		confOut, err = stream.FromParsed(m.manager.Environment(), pConf)
 		return
 	}
 	patchConfig := func(confIn stream.Config) (confOut stream.Config, err error) {
@@ -330,8 +339,11 @@ func (m *Type) HandleStreamCRUD(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		confOut = stream.NewConfig()
-		err = confOut.FromAny(m.manager.Environment(), &confNode)
+		var pConf *docs.ParsedConfig
+		if pConf, err = stream.Spec().ParsedConfigFromAny(&confNode); err != nil {
+			return
+		}
+		confOut, err = stream.FromParsed(m.manager.Environment(), pConf)
 		return
 	}
 
@@ -424,12 +436,12 @@ func (m *Type) HandleResourceCRUD(w http.ResponseWriter, r *http.Request) {
 			r.Body.Close()
 		}
 		if serverErr != nil {
-			m.manager.Logger().Errorf("Resource CRUD Error: %v\n", serverErr)
+			m.manager.Logger().Error("Resource CRUD Error: %v\n", serverErr)
 			http.Error(w, fmt.Sprintf("Error: %v", serverErr), http.StatusBadGateway)
 			return
 		}
 		if requestErr != nil {
-			m.manager.Logger().Debugf("Resource request CRUD Error: %v\n", requestErr)
+			m.manager.Logger().Debug("Resource request CRUD Error: %v\n", requestErr)
 			http.Error(w, fmt.Sprintf("Error: %v", requestErr), http.StatusBadRequest)
 			return
 		}
@@ -526,7 +538,7 @@ func (m *Type) HandleResourceCRUD(w http.ResponseWriter, r *http.Request) {
 		if !ignoreLints {
 			for _, l := range docs.LintYAML(m.lintCtx(), docType, &node) {
 				lints = append(lints, l.Error())
-				m.manager.Logger().Infof("Resource '%v' config: %v\n", id, l)
+				m.manager.Logger().Info("Resource '%v' config: %v\n", id, l)
 			}
 		}
 	}
@@ -551,12 +563,12 @@ func (m *Type) HandleStreamStats(w http.ResponseWriter, r *http.Request) {
 			r.Body.Close()
 		}
 		if serverErr != nil {
-			m.manager.Logger().Errorf("Stream stats Error: %v\n", serverErr)
+			m.manager.Logger().Error("Stream stats Error: %v\n", serverErr)
 			http.Error(w, fmt.Sprintf("Error: %v", serverErr), http.StatusBadGateway)
 			return
 		}
 		if requestErr != nil {
-			m.manager.Logger().Debugf("Stream request stats Error: %v\n", requestErr)
+			m.manager.Logger().Debug("Stream request stats Error: %v\n", requestErr)
 			http.Error(w, fmt.Sprintf("Error: %v", requestErr), http.StatusBadRequest)
 			return
 		}

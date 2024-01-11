@@ -98,13 +98,13 @@ func (m *Impl) loop() {
 
 	defer func() {
 		// Final flush of remaining documents.
-		m.log.Debugln("Flushing remaining messages of batch.")
+		m.log.Debug("Flushing remaining messages of batch.")
 		flushBatchFn()
 
 		// Wait for all pending acks to resolve.
-		m.log.Debugln("Waiting for pending acks to resolve before shutting down.")
+		m.log.Debug("Waiting for pending acks to resolve before shutting down.")
 		pendingAcks.Wait()
-		m.log.Debugln("Pending acks resolved.")
+		m.log.Debug("Pending acks resolved.")
 	}()
 
 	for {

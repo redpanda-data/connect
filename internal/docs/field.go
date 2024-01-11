@@ -647,6 +647,26 @@ func ShouldDropDeprecated(b bool) FieldFilter {
 	}
 }
 
+// SetDefault attempts to override the current default value of a field,
+// identified by a series of names used to walk the config spec in order to
+// reach the intended field. This function currently does NOT support walking
+// through arrays.
+func (f FieldSpecs) SetDefault(v any, path ...string) {
+	if len(path) == 0 {
+		return
+	}
+	for i, child := range f {
+		if child.Name != path[0] {
+			continue
+		}
+		if len(path) > 1 {
+			child.Children.SetDefault(v, path[1:]...)
+		} else {
+			f[i] = child.HasDefault(v)
+		}
+	}
+}
+
 //------------------------------------------------------------------------------
 
 // LintConfig describes which rules apply when linting benthos configs, and also

@@ -160,7 +160,7 @@ func newWorkflowBranchMap(conf *service.ParsedConfig, mgr bundle.NewManagement) 
 		if dag, err = resolveDynamicBranchDAG(staticBranches); err != nil {
 			return nil, err
 		}
-		mgr.Logger().Infof("Automatically resolved workflow DAG: %v", dag)
+		mgr.Logger().Info("Automatically resolved workflow DAG: %v", dag)
 	}
 
 	return &workflowBranchMap{

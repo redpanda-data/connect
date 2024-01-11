@@ -459,7 +459,7 @@ func (w *Workflow) ProcessBatch(ctx context.Context, msg message.Batch) ([]messa
 	dag, children, unlock, err := w.children.Lock()
 	if err != nil {
 		w.mError.Incr(1)
-		w.log.Errorf("Failed to establish workflow: %v\n", err)
+		w.log.Error("Failed to establish workflow: %v\n", err)
 
 		_ = msg.Iter(func(i int, p *message.Part) error {
 			p.ErrorSet(err)
@@ -535,7 +535,7 @@ func (w *Workflow) ProcessBatch(ctx context.Context, msg message.Batch) ([]messa
 			}
 			if err != nil {
 				w.mError.Incr(1)
-				w.log.Errorf("Failed to perform enrichment '%v': %v\n", id, err)
+				w.log.Error("Failed to perform enrichment '%v': %v\n", id, err)
 				for j := range records {
 					records[j].Failed(id, err.Error())
 				}
@@ -553,7 +553,7 @@ func (w *Workflow) ProcessBatch(ctx context.Context, msg message.Batch) ([]messa
 			pJSON, err := p.AsStructuredMut()
 			if err != nil {
 				w.mError.Incr(1)
-				w.log.Errorf("Failed to parse message for meta update: %v\n", err)
+				w.log.Error("Failed to parse message for meta update: %v\n", err)
 				p.ErrorSet(err)
 				return nil
 			}

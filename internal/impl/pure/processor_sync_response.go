@@ -35,7 +35,7 @@ type syncResponseProc struct {
 
 func (s *syncResponseProc) ProcessBatch(ctx context.Context, msg message.Batch) ([]message.Batch, error) {
 	if err := transaction.SetAsResponse(msg); err != nil {
-		s.log.Debugf("Failed to store message as a sync response: %v\n", err)
+		s.log.Debug("Failed to store message as a sync response: %v\n", err)
 	}
 	return []message.Batch{msg}, nil
 }

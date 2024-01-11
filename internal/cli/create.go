@@ -105,11 +105,11 @@ func addExpression(conf *config.Type, expression string) error {
 }
 
 type minimalCreateConfig struct {
-	Input              input.Config       `json:"input" yaml:"input"`
-	Pipeline           pipeline.Config    `json:"pipeline" yaml:"pipeline"`
-	Output             output.Config      `json:"output" yaml:"output"`
-	ResourceCaches     []cache.Config     `json:"cache_resources,omitempty" yaml:"cache_resources,omitempty"`
-	ResourceRateLimits []ratelimit.Config `json:"rate_limit_resources,omitempty" yaml:"rate_limit_resources,omitempty"`
+	Input              input.Config       `yaml:"input"`
+	Pipeline           pipeline.Config    `yaml:"pipeline"`
+	Output             output.Config      `yaml:"output"`
+	ResourceCaches     []cache.Config     `yaml:"cache_resources,omitempty"`
+	ResourceRateLimits []ratelimit.Config `yaml:"rate_limit_resources,omitempty"`
 }
 
 func createCliCommand() *cli.Command {
@@ -174,7 +174,7 @@ If the expression is omitted a default config is created.`[1:],
 			}
 			if err == nil {
 				var configYAML []byte
-				if configYAML, err = config.MarshalYAML(node); err == nil {
+				if configYAML, err = docs.MarshalYAML(node); err == nil {
 					fmt.Println(string(configYAML))
 				}
 			}

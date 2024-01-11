@@ -166,7 +166,7 @@ func (j *jqProc) getPartValue(part *message.Part, raw bool) (obj any, err error)
 		return string(part.AsBytes()), nil
 	}
 	if obj, err = part.AsStructured(); err != nil {
-		j.log.Debugf("Failed to parse part into json: %v\n", err)
+		j.log.Debug("Failed to parse part into json: %v\n", err)
 		return nil, err
 	}
 	return obj, nil
@@ -203,14 +203,14 @@ func (j *jqProc) Process(ctx context.Context, msg *message.Part) ([]*message.Par
 
 	emitted, err := safeQuery(in, metadata, j.code)
 	if err != nil {
-		j.log.Debugf(err.Error())
+		j.log.Debug(err.Error())
 		return nil, err
 	}
 
 	if j.outRaw {
 		raw, err := j.marshalRaw(emitted)
 		if err != nil {
-			j.log.Debugf("Failed to marshal raw text: %s", err)
+			j.log.Debug("Failed to marshal raw text: %s", err)
 			return nil, err
 		}
 

@@ -82,7 +82,7 @@ func (r *rateLimitProc) Process(ctx context.Context, msg *message.Part) ([]*mess
 			return nil, err
 		}
 		if err != nil {
-			r.mgr.Logger().Errorf("Failed to access rate limit: %v", err)
+			r.mgr.Logger().Error("Failed to access rate limit: %v", err)
 			waitFor = time.Second
 		}
 		if waitFor == 0 {

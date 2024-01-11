@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"sync/atomic"
 
 	"github.com/Jeffail/gabs/v2"
 	"github.com/gofrs/uuid"
@@ -452,12 +453,18 @@ func (s *StreamBuilder) AddResourcesYAML(conf string) error {
 		return err
 	}
 
-	if err := s.lintYAMLSpec(manager.Spec(), node); err != nil {
+	spec := manager.Spec()
+	if err := s.lintYAMLSpec(spec, node); err != nil {
 		return err
 	}
 
-	rconf := manager.NewResourceConfig()
-	if err := node.Decode(&rconf); err != nil {
+	pConf, err := spec.ParsedConfigFromAny(node)
+	if err != nil {
+		return convertDocsLintErr(err)
+	}
+
+	rconf, err := manager.FromParsed(s.env.internal, pConf)
+	if err != nil {
 		return convertDocsLintErr(err)
 	}
 
@@ -482,18 +489,36 @@ func (s *StreamBuilder) SetYAML(conf string) error {
 		return err
 	}
 
-	if err := s.lintYAMLSpec(config.Spec(), node); err != nil {
+	spec := configSpec()
+	if err := s.lintYAMLSpec(spec, node); err != nil {
 		return err
 	}
 
-	sconf := config.New()
-	sconf.HTTP.Enabled = false
-	if err := node.Decode(&sconf); err != nil {
+	pConf, err := spec.ParsedConfigFromAny(node)
+	if err != nil {
+		return convertDocsLintErr(err)
+	}
+
+	sconf, err := config.FromParsed(s.env.internal, pConf)
+	if err != nil {
 		return convertDocsLintErr(err)
 	}
 
 	s.setFromConfig(sconf)
 	return nil
+}
+
+var builderConfigSpec atomic.Pointer[docs.FieldSpecs]
+
+func configSpec() docs.FieldSpecs {
+	spec := builderConfigSpec.Load()
+	if spec == nil {
+		tmpSpec := config.Spec()
+		tmpSpec.SetDefault(false, "http", "enabled")
+		spec = &tmpSpec
+		builderConfigSpec.Store(spec)
+	}
+	return *spec
 }
 
 // SetFields modifies the config by setting one or more fields identified by a
@@ -521,7 +546,7 @@ func (s *StreamBuilder) SetFields(pathValues ...any) error {
 	sanitConf.RemoveDeprecated = false
 	sanitConf.DocsProvider = s.env.internal
 
-	if err := config.Spec().SanitiseYAML(&rootNode, sanitConf); err != nil {
+	if err := configSpec().SanitiseYAML(&rootNode, sanitConf); err != nil {
 		return err
 	}
 
@@ -534,18 +559,23 @@ func (s *StreamBuilder) SetFields(pathValues ...any) error {
 		if !ok {
 			return fmt.Errorf("variadic pair element %v should be a string, got a %T", i, pathValues[i])
 		}
-		if err := config.Spec().SetYAMLPath(s.env.internal, &rootNode, &valueNode, gabs.DotPathToSlice(pathString)...); err != nil {
+		if err := configSpec().SetYAMLPath(s.env.internal, &rootNode, &valueNode, gabs.DotPathToSlice(pathString)...); err != nil {
 			return err
 		}
 	}
 
-	if err := s.lintYAMLSpec(config.Spec(), &rootNode); err != nil {
+	spec := configSpec()
+	if err := s.lintYAMLSpec(spec, &rootNode); err != nil {
 		return err
 	}
 
-	sconf := config.New()
-	sconf.HTTP.Enabled = false
-	if err := rootNode.Decode(&sconf); err != nil {
+	pConf, err := spec.ParsedConfigFromAny(&rootNode)
+	if err != nil {
+		return err
+	}
+
+	sconf, err := config.FromParsed(s.env.internal, pConf)
+	if err != nil {
 		return convertDocsLintErr(err)
 	}
 
@@ -638,13 +668,19 @@ func (s *StreamBuilder) SetLoggerYAML(conf string) error {
 		return err
 	}
 
-	if err := s.lintYAMLSpec(log.Spec(), node); err != nil {
+	spec := log.Spec()
+	if err := s.lintYAMLSpec(spec, node); err != nil {
 		return err
 	}
 
-	lconf := log.NewConfig()
-	if err := node.Decode(&lconf); err != nil {
+	pConf, err := spec.ParsedConfigFromAny(node)
+	if err != nil {
 		return convertDocsLintErr(err)
+	}
+
+	lconf, err := log.FromParsed(pConf)
+	if err != nil {
+		return err
 	}
 
 	s.logger = lconf
@@ -668,7 +704,7 @@ func (s *StreamBuilder) AsYAML() (string, error) {
 	sanitConf.RemoveDeprecated = false
 	sanitConf.DocsProvider = s.env.internal
 
-	if err := config.Spec().SanitiseYAML(&node, sanitConf); err != nil {
+	if err := configSpec().SanitiseYAML(&node, sanitConf); err != nil {
 		return "", err
 	}
 
@@ -711,7 +747,7 @@ func (s *StreamBuilder) WalkComponents(fn func(w *WalkedComponent) error) error 
 	sanitConf.RemoveDeprecated = false
 	sanitConf.DocsProvider = s.env.internal
 
-	spec := config.Spec()
+	spec := configSpec()
 	if err := spec.SanitiseYAML(&node, sanitConf); err != nil {
 		return err
 	}
@@ -826,7 +862,7 @@ func (s *StreamBuilder) buildWithEnv(env *bundle.Environment) (*Stream, error) {
 			sanitConf.RemoveTypeField = true
 			sanitConf.ScrubSecrets = true
 			sanitConf.DocsProvider = env
-			_ = config.Spec().SanitiseYAML(&sanitNode, sanitConf)
+			_ = configSpec().SanitiseYAML(&sanitNode, sanitConf)
 		}
 		if apiType, err = api.New("", "", s.http, sanitNode, logger, stats); err != nil {
 			return nil, fmt.Errorf("unable to create stream HTTP server due to: %w. Tip: you can disable the server with `http.enabled` set to `false`, or override the configured server with SetHTTPMux", err)
@@ -857,7 +893,7 @@ func (s *StreamBuilder) buildWithEnv(env *bundle.Environment) (*Stream, error) {
 
 	return newStream(conf.Config, apiType, mgr, stats, tracer, logger, func() {
 		if err := s.runConsumerFunc(mgr); err != nil {
-			logger.Errorf("Failed to run func consumer: %v", err)
+			logger.Error("Failed to run func consumer: %v", err)
 		}
 	}), nil
 }

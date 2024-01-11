@@ -125,7 +125,7 @@ func RunManagerUntilStopped(
 	if td := conf.SystemCloseDelay; len(td) > 0 {
 		var err error
 		if exitDelay, err = time.ParseDuration(td); err != nil {
-			stopMgr.Manager().Logger().Errorf("Failed to parse shutdown delay period string: %v\n", err)
+			stopMgr.Manager().Logger().Error("Failed to parse shutdown delay period string: %v\n", err)
 			return 1
 		}
 	}
@@ -134,7 +134,7 @@ func RunManagerUntilStopped(
 	if tout := conf.SystemCloseTimeout; len(tout) > 0 {
 		var err error
 		if exitTimeout, err = time.ParseDuration(tout); err != nil {
-			stopMgr.Manager().Logger().Errorf("Failed to parse shutdown timeout period string: %v\n", err)
+			stopMgr.Manager().Logger().Error("Failed to parse shutdown timeout period string: %v\n", err)
 			return 1
 		}
 	}
@@ -142,15 +142,15 @@ func RunManagerUntilStopped(
 	// Defer clean up.
 	defer func() {
 		if exitDelay > 0 {
-			stopMgr.Manager().Logger().Infof("Shutdown delay is in effect for %s\n", exitDelay)
+			stopMgr.Manager().Logger().Info("Shutdown delay is in effect for %s\n", exitDelay)
 			if err := DelayShutdown(c.Context, exitDelay); err != nil {
-				stopMgr.Manager().Logger().Errorf("Shutdown delay failed: %s", err)
+				stopMgr.Manager().Logger().Error("Shutdown delay failed: %s", err)
 			}
 		}
 
 		go func() {
 			<-time.After(exitTimeout + time.Second)
-			stopMgr.Manager().Logger().Warnln(
+			stopMgr.Manager().Logger().Warn(
 				"Service failed to close cleanly within allocated time." +
 					" Exiting forcefully and dumping stack trace to stderr",
 			)
@@ -164,7 +164,7 @@ func RunManagerUntilStopped(
 		}
 
 		if err := stopMgr.Stop(ctx); err != nil {
-			stopMgr.Manager().Logger().Warnf(
+			stopMgr.Manager().Logger().Warn(
 				"Service failed to close resources cleanly within allocated time: %v."+
 					" Exiting forcefully and dumping stack trace to stderr\n", err,
 			)
@@ -206,13 +206,13 @@ func RunManagerUntilStopped(
 		default:
 			sigName = sig.String()
 		}
-		stopMgr.Manager().Logger().Infof("Received %s, the service is closing", sigName)
+		stopMgr.Manager().Logger().Info("Received %s, the service is closing", sigName)
 	case <-dataStreamClosedChan:
-		stopMgr.Manager().Logger().Infoln("Pipeline has terminated. Shutting down the service")
+		stopMgr.Manager().Logger().Info("Pipeline has terminated. Shutting down the service")
 	case <-deadLineTrigger:
-		stopMgr.Manager().Logger().Infoln("Run context deadline about to be reached. Shutting down the service")
+		stopMgr.Manager().Logger().Info("Run context deadline about to be reached. Shutting down the service")
 	case <-c.Context.Done():
-		stopMgr.Manager().Logger().Infoln("Run context was cancelled. Shutting down the service")
+		stopMgr.Manager().Logger().Info("Run context was cancelled. Shutting down the service")
 	}
 	return 0
 }
@@ -227,7 +227,7 @@ func newStoppableManager(api *api.Type, mgr *manager.Type) *StoppableManager {
 	go func() {
 		httpErr := api.ListenAndServe()
 		if httpErr != nil && httpErr != http.ErrServerClosed {
-			mgr.Logger().Errorf("HTTP Server error: %v\n", httpErr)
+			mgr.Logger().Error("HTTP Server error: %v\n", httpErr)
 		}
 		close(s.apiClosedChan)
 	}()
@@ -270,7 +270,7 @@ func (s *StoppableManager) Stop(ctx context.Context) error {
 		case <-ctx.Done():
 		case <-gracefulCutOff:
 		}
-		s.mgr.Logger().Warnln("Service failed to close HTTP server gracefully in time")
+		s.mgr.Logger().Warn("Service failed to close HTTP server gracefully in time")
 	}()
 
 	s.mgr.TriggerStopConsuming()
@@ -278,7 +278,7 @@ func (s *StoppableManager) Stop(ctx context.Context) error {
 		return err
 	}
 	if err := s.mgr.CloseObservability(ctx); err != nil {
-		s.mgr.Logger().Errorf("Failed to cleanly close observability components: %w", err)
+		s.mgr.Logger().Error("Failed to cleanly close observability components: %w", err)
 	}
 	return nil
 }

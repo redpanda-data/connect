@@ -1,10 +1,13 @@
 package docs
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 
 	"gopkg.in/yaml.v3"
+
+	"github.com/benthosdev/benthos/v4/internal/value"
 )
 
 // UnmarshalYAML attempts to parse a byte slice as a YAML document and returns
@@ -15,6 +18,18 @@ func UnmarshalYAML(rawBytes []byte) (*yaml.Node, error) {
 		return nil, err
 	}
 	return unwrapDocumentNode(&rawNode), nil
+}
+
+// MarshalYAML marshals a structure into YAML with consistent formatting across
+// all Benthos components.
+func MarshalYAML(v yaml.Node) ([]byte, error) {
+	var cbytes bytes.Buffer
+	enc := yaml.NewEncoder(&cbytes)
+	enc.SetIndent(2)
+	if err := enc.Encode(v); err != nil {
+		return nil, err
+	}
+	return cbytes.Bytes(), nil
 }
 
 // FieldsFromYAML walks the children of a YAML node and returns a list of fields
@@ -934,7 +949,7 @@ func (f FieldSpecs) YAMLToMap(node *yaml.Node, conf ToValueConfig) (map[string]a
 			}
 			continue
 		}
-		resultMap[k] = defValue
+		resultMap[k] = value.IClone(defValue)
 	}
 
 	return resultMap, nil

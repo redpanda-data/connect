@@ -247,7 +247,7 @@ func (t *Type) ListenAndServe() error {
 		<-t.ctx.Done()
 		return nil
 	}
-	t.log.Infof(
+	t.log.Info(
 		"Listening for HTTP requests at: %v\n",
 		"http://"+t.conf.Address,
 	)

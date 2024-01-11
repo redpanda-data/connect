@@ -874,7 +874,7 @@ dynamic:
 					typeStr: "output",
 					name:    "stdout",
 					conf: `label: ""
-stdout: {} # No default (required)`,
+stdout: {}`,
 				},
 				{
 					typeStr: "metrics",

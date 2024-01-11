@@ -84,7 +84,7 @@ func (m *Mapping) mapPath(path string, labelNames, labelValues []string) (outPat
 		Meta:  outPart,
 		Value: &v,
 	}); err != nil {
-		m.logger.Errorf("Failed to apply path mapping on '%v': %v\n", path, err)
+		m.logger.Error("Failed to apply path mapping on '%v': %v\n", path, err)
 		return path, nil, nil
 	}
 
@@ -96,24 +96,24 @@ func (m *Mapping) mapPath(path string, labelNames, labelValues []string) (outPat
 		sort.Strings(outLabelNames)
 		for _, k := range outLabelNames {
 			v := outPart.MetaGetStr(k)
-			m.logger.Tracef("Metrics label '%v' created with static value '%v'.\n", k, v)
+			m.logger.Trace("Metrics label '%v' created with static value '%v'.\n", k, v)
 			outLabelValues = append(outLabelValues, v)
 		}
 	}
 
 	switch t := v.(type) {
 	case value.Delete:
-		m.logger.Tracef("Deleting metrics path: %v\n", path)
+		m.logger.Trace("Deleting metrics path: %v\n", path)
 		return "", nil, nil
 	case value.Nothing:
-		m.logger.Tracef("Metrics path '%v' registered unchanged.\n", path)
+		m.logger.Trace("Metrics path '%v' registered unchanged.\n", path)
 		outPath = path
 		return
 	case string:
-		m.logger.Tracef("Updated metrics path '%v' to: %v\n", path, t)
+		m.logger.Trace("Updated metrics path '%v' to: %v\n", path, t)
 		outPath = t
 		return
 	}
-	m.logger.Errorf("Path mapping returned invalid result, expected string, found %T\n", v)
+	m.logger.Error("Path mapping returned invalid result, expected string, found %T\n", v)
 	return path, labelNames, labelValues
 }

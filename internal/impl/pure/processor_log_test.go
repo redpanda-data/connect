@@ -36,24 +36,24 @@ func (m *mockLog) With(args ...any) log.Modular {
 	return m
 }
 
-func (m *mockLog) Fatalf(format string, v ...any) {}
-func (m *mockLog) Errorf(format string, v ...any) {
+func (m *mockLog) Fatal(format string, v ...any) {}
+func (m *mockLog) Error(format string, v ...any) {
 	m.errors = append(m.errors, fmt.Sprintf(format, v...))
 }
 
-func (m *mockLog) Warnf(format string, v ...any) {
+func (m *mockLog) Warn(format string, v ...any) {
 	m.warns = append(m.warns, fmt.Sprintf(format, v...))
 }
 
-func (m *mockLog) Infof(format string, v ...any) {
+func (m *mockLog) Info(format string, v ...any) {
 	m.infos = append(m.infos, fmt.Sprintf(format, v...))
 }
 
-func (m *mockLog) Debugf(format string, v ...any) {
+func (m *mockLog) Debug(format string, v ...any) {
 	m.debugs = append(m.debugs, fmt.Sprintf(format, v...))
 }
 
-func (m *mockLog) Tracef(format string, v ...any) {
+func (m *mockLog) Trace(format string, v ...any) {
 	m.traces = append(m.traces, fmt.Sprintf(format, v...))
 }
 

@@ -148,23 +148,23 @@ func (l *logProcessor) levelToLogFn(level string) (func(logger log.Modular, msg 
 	switch level {
 	case "TRACE":
 		return func(logger log.Modular, msg string) {
-			logger.Traceln(msg)
+			logger.Trace(msg)
 		}, nil
 	case "DEBUG":
 		return func(logger log.Modular, msg string) {
-			logger.Debugln(msg)
+			logger.Debug(msg)
 		}, nil
 	case "INFO":
 		return func(logger log.Modular, msg string) {
-			logger.Infoln(msg)
+			logger.Info(msg)
 		}, nil
 	case "WARN":
 		return func(logger log.Modular, msg string) {
-			logger.Warnln(msg)
+			logger.Warn(msg)
 		}, nil
 	case "ERROR":
 		return func(logger log.Modular, msg string) {
-			logger.Errorln(msg)
+			logger.Error(msg)
 		}, nil
 	}
 	return nil, fmt.Errorf("log level not recognised: %v", level)
@@ -176,19 +176,19 @@ func (l *logProcessor) ProcessBatch(ctx *processor.BatchProcContext, msg message
 		if l.fieldsMapping != nil {
 			fieldsMsg, err := l.fieldsMapping.MapPart(i, msg)
 			if err != nil {
-				l.logger.Errorf("Failed to execute fields mapping: %v", err)
+				l.logger.Error("Failed to execute fields mapping: %v", err)
 				return nil
 			}
 
 			v, err := fieldsMsg.AsStructured()
 			if err != nil {
-				l.logger.Errorf("Failed to extract fields object: %v", err)
+				l.logger.Error("Failed to extract fields object: %v", err)
 				return nil
 			}
 
 			vObj, ok := v.(map[string]any)
 			if !ok {
-				l.logger.Errorf("Fields mapping yielded a non-object result: %T", v)
+				l.logger.Error("Fields mapping yielded a non-object result: %T", v)
 				return nil
 			}
 
@@ -210,7 +210,7 @@ func (l *logProcessor) ProcessBatch(ctx *processor.BatchProcContext, msg message
 			for k, vi := range l.fields {
 				var err error
 				if interpFields[k], err = vi.String(i, msg); err != nil {
-					l.logger.Errorf("Field %v interpolation error: %v", k, err)
+					l.logger.Error("Field %v interpolation error: %v", k, err)
 					return nil
 				}
 			}
@@ -218,7 +218,7 @@ func (l *logProcessor) ProcessBatch(ctx *processor.BatchProcContext, msg message
 		}
 		logMsg, err := l.message.String(i, msg)
 		if err != nil {
-			l.logger.Errorf("Message interpolation error: %v", err)
+			l.logger.Error("Message interpolation error: %v", err)
 			return nil
 		}
 		l.printFn(targetLog, logMsg)

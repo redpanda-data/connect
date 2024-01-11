@@ -148,19 +148,19 @@ func newJSONSchema(schemaStr, schemaPath string, mgr bundle.NewManagement) (proc
 func (s *jsonSchemaProc) Process(ctx context.Context, part *message.Part) ([]*message.Part, error) {
 	jsonPart, err := part.AsStructured()
 	if err != nil {
-		s.log.Debugf("Failed to parse part into json: %v", err)
+		s.log.Debug("Failed to parse part into json: %v", err)
 		return nil, err
 	}
 
 	partLoader := jsonschema.NewGoLoader(jsonPart)
 	result, err := s.schema.Validate(partLoader)
 	if err != nil {
-		s.log.Debugf("Failed to validate json: %v", err)
+		s.log.Debug("Failed to validate json: %v", err)
 		return nil, err
 	}
 
 	if !result.Valid() {
-		s.log.Debugf("The document is not valid")
+		s.log.Debug("The document is not valid")
 		var errStr string
 		for i, desc := range result.Errors() {
 			if i > 0 {
@@ -175,7 +175,7 @@ func (s *jsonSchemaProc) Process(ctx context.Context, part *message.Part) ([]*me
 		return nil, errors.New(errStr)
 	}
 
-	s.log.Debugf("The document is valid")
+	s.log.Debug("The document is valid")
 	return []*message.Part{part}, nil
 }
 

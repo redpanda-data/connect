@@ -132,7 +132,7 @@ func (w *whileProc) checkMsg(msg message.Batch) bool {
 	c, err := w.check.QueryPart(0, msg)
 	if err != nil {
 		c = false
-		w.log.Errorf("Query failed for loop: %v", err)
+		w.log.Error("Query failed for loop: %v", err)
 	}
 	return c
 }
@@ -147,11 +147,11 @@ func (w *whileProc) ProcessBatch(ctx *processor.BatchProcContext, msg message.Ba
 			return nil, component.ErrTypeClosed
 		}
 		if w.maxLoops > 0 && loops >= w.maxLoops {
-			w.log.Traceln("Reached max loops count")
+			w.log.Trace("Reached max loops count")
 			break
 		}
 
-		w.log.Traceln("Looped")
+		w.log.Trace("Looped")
 		for i := range msg {
 			ctx.Span(i).LogKV("event", "loop")
 		}

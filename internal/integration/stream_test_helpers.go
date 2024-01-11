@@ -1,7 +1,6 @@
 package integration
 
 import (
-	"bytes"
 	"context"
 	"flag"
 	"fmt"
@@ -27,7 +26,6 @@ import (
 	"github.com/gofrs/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"gopkg.in/yaml.v3"
 )
 
 // CheckSkip marks a test to be skipped unless the integration test has been
@@ -413,23 +411,25 @@ func initConnectors(
 func initInput(t testing.TB, env *streamTestEnvironment) iinput.Streamed {
 	t.Helper()
 
-	confBytes := []byte(env.RenderConfig())
-
-	s := config.New()
-	dec := yaml.NewDecoder(bytes.NewReader(confBytes))
-	dec.KnownFields(true)
-	require.NoError(t, dec.Decode(&s))
-
-	lints, err := config.LintYAMLBytes(docs.NewLintConfig(), confBytes)
+	node, err := docs.UnmarshalYAML([]byte(env.RenderConfig()))
 	require.NoError(t, err)
+
+	spec := config.Spec()
+	lints := spec.LintYAML(docs.NewLintContext(docs.NewLintConfig()), node)
 	assert.Empty(t, lints)
 
+	pConf, err := spec.ParsedConfigFromAny(node)
+	require.NoError(t, err)
+
+	conf, err := config.FromParsed(docs.DeprecatedProvider, pConf)
+	require.NoError(t, err)
+
 	if env.mgr == nil {
-		env.mgr, err = manager.New(s.ResourceConfig, manager.OptSetLogger(env.log), manager.OptSetMetrics(env.stats))
+		env.mgr, err = manager.New(conf.ResourceConfig, manager.OptSetLogger(env.log), manager.OptSetMetrics(env.stats))
 		require.NoError(t, err)
 	}
 
-	input, err := env.mgr.NewInput(s.Input)
+	input, err := env.mgr.NewInput(conf.Input)
 	require.NoError(t, err)
 
 	if env.sleepAfterInput > 0 {
@@ -442,23 +442,25 @@ func initInput(t testing.TB, env *streamTestEnvironment) iinput.Streamed {
 func initOutput(t testing.TB, trans <-chan message.Transaction, env *streamTestEnvironment) ioutput.Streamed {
 	t.Helper()
 
-	confBytes := []byte(env.RenderConfig())
-
-	s := config.New()
-	dec := yaml.NewDecoder(bytes.NewReader(confBytes))
-	dec.KnownFields(true)
-	require.NoError(t, dec.Decode(&s))
-
-	lints, err := config.LintYAMLBytes(docs.NewLintConfig(), confBytes)
+	node, err := docs.UnmarshalYAML([]byte(env.RenderConfig()))
 	require.NoError(t, err)
+
+	spec := config.Spec()
+	lints := spec.LintYAML(docs.NewLintContext(docs.NewLintConfig()), node)
 	assert.Empty(t, lints)
 
+	pConf, err := spec.ParsedConfigFromAny(node)
+	require.NoError(t, err)
+
+	conf, err := config.FromParsed(docs.DeprecatedProvider, pConf)
+	require.NoError(t, err)
+
 	if env.mgr == nil {
-		env.mgr, err = manager.New(s.ResourceConfig, manager.OptSetLogger(env.log), manager.OptSetMetrics(env.stats))
+		env.mgr, err = manager.New(conf.ResourceConfig, manager.OptSetLogger(env.log), manager.OptSetMetrics(env.stats))
 		require.NoError(t, err)
 	}
 
-	output, err := env.mgr.NewOutput(s.Output)
+	output, err := env.mgr.NewOutput(conf.Output)
 	require.NoError(t, err)
 
 	require.NoError(t, output.Consume(trans))

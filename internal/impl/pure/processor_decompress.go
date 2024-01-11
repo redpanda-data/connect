@@ -65,7 +65,7 @@ func newDecompress(algStr string, mgr bundle.NewManagement) (*decompressProc, er
 func (d *decompressProc) Process(ctx context.Context, msg *message.Part) ([]*message.Part, error) {
 	newBytes, err := d.decomp(msg.AsBytes())
 	if err != nil {
-		d.log.Errorf("Failed to decompress message part: %v\n", err)
+		d.log.Error("Failed to decompress message part: %v\n", err)
 		return nil, err
 	}
 

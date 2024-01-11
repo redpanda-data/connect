@@ -8,9 +8,15 @@ import (
 // Spec returns a docs.FieldSpec for a stream configuration.
 func Spec() docs.FieldSpecs {
 	return docs.FieldSpecs{
-		docs.FieldInput("input", "An input to source messages from.").Optional(),
-		docs.FieldBuffer("buffer", "An optional buffer to store messages during transit.").Optional(),
+		docs.FieldInput(fieldInput, "An input to source messages from.").HasDefault(map[string]any{
+			"stdin": map[string]any{},
+		}),
+		docs.FieldBuffer(fieldBuffer, "An optional buffer to store messages during transit.").HasDefault(map[string]any{
+			"none": map[string]any{},
+		}),
 		pipeline.ConfigSpec(),
-		docs.FieldOutput("output", "An output to sink messages to.").Optional(),
+		docs.FieldOutput(fieldOutput, "An output to sink messages to.").HasDefault(map[string]any{
+			"stdout": map[string]any{},
+		}),
 	}
 }

@@ -211,7 +211,7 @@ variables have been resolved:
 					}
 					if err == nil {
 						var configYAML []byte
-						if configYAML, err = config.MarshalYAML(node); err == nil {
+						if configYAML, err = docs.MarshalYAML(node); err == nil {
 							fmt.Println(string(configYAML))
 						}
 					}

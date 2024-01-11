@@ -341,7 +341,7 @@ func (h *httpServerOutput) streamHandler(w http.ResponseWriter, r *http.Request)
 	flusher, ok := w.(http.Flusher)
 	if !ok {
 		http.Error(w, "Server error", http.StatusInternalServerError)
-		h.log.Errorln("Failed to cast response writer to flusher")
+		h.log.Error("Failed to cast response writer to flusher")
 		return
 	}
 
@@ -393,7 +393,7 @@ func (h *httpServerOutput) wsHandler(w http.ResponseWriter, r *http.Request) {
 	defer func() {
 		if err != nil {
 			http.Error(w, "Bad request", http.StatusBadRequest)
-			h.log.Warnf("Websocket request failed: %v\n", err)
+			h.log.Warn("Websocket request failed: %v\n", err)
 			return
 		}
 	}()
@@ -449,22 +449,22 @@ func (h *httpServerOutput) Consume(ts <-chan message.Transaction) error {
 	if h.server != nil {
 		go func() {
 			if len(h.conf.KeyFile) > 0 || len(h.conf.CertFile) > 0 {
-				h.log.Infof(
+				h.log.Info(
 					"Serving messages through HTTPS GET request at: https://%s\n",
 					h.conf.Address+h.conf.Path,
 				)
 				if err := h.server.ListenAndServeTLS(
 					h.conf.CertFile, h.conf.KeyFile,
 				); err != http.ErrServerClosed {
-					h.log.Errorf("Server error: %v\n", err)
+					h.log.Error("Server error: %v\n", err)
 				}
 			} else {
-				h.log.Infof(
+				h.log.Info(
 					"Serving messages through HTTP GET request at: http://%s\n",
 					h.conf.Address+h.conf.Path,
 				)
 				if err := h.server.ListenAndServe(); err != http.ErrServerClosed {
-					h.log.Errorf("Server error: %v\n", err)
+					h.log.Error("Server error: %v\n", err)
 				}
 			}
 

@@ -8,7 +8,6 @@ import (
 
 	"github.com/aws/aws-lambda-go/lambda"
 
-	"github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/config"
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/filepath/ifs"
@@ -32,22 +31,9 @@ func Run() {
 		defaultPaths = append([]string{path}, defaultPaths...)
 	}
 
-	conf := config.New()
-	conf.Metrics.Type = "none"
-	conf.Logger.Format = "json"
-
-	var err error
-	if conf.Output, err = output.FromYAML(`
-switch:
-  retry_until_success: false
-  cases:
-    - check: 'errored()'
-      output:
-        reject: "processing failed due to: ${! error() }"
-    - output:
-        sync_response: {}
-`); err != nil {
-		fmt.Fprintf(os.Stderr, "Config init error: %v\n", err)
+	conf, confSpec, err := DefaultConfigAndSpec()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Configuration file create error: %v\n", err)
 		os.Exit(1)
 	}
 
@@ -71,7 +57,14 @@ switch:
 			os.Exit(1)
 		}
 
-		if err = conf.FromAny(docs.DeprecatedProvider, confNode); err != nil {
+		pConf, err := confSpec.ParsedConfigFromAny(confNode)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Configuration file parse error: %v\n", err)
+			os.Exit(1)
+		}
+
+		conf, err = config.FromParsed(docs.DeprecatedProvider, pConf)
+		if err != nil {
 			fmt.Fprintf(os.Stderr, "Configuration file read error: %v\n", err)
 			os.Exit(1)
 		}
@@ -79,7 +72,8 @@ switch:
 		// Iterate default config paths
 		for _, path := range defaultPaths {
 			if _, err := ifs.OS().Stat(path); err == nil {
-				if _, err = config.ReadYAMLFileLinted(ifs.OS(), path, false, docs.NewLintConfig(), &conf); err != nil {
+				conf, _, err = config.ReadYAMLFileLinted(ifs.OS(), confSpec, path, false, docs.NewLintConfig())
+				if err != nil {
 					fmt.Fprintf(os.Stderr, "Configuration file read error: %v\n", err)
 					os.Exit(1)
 				}

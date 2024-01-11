@@ -56,43 +56,43 @@ func (l *wrapped) With(keyValues ...any) Modular {
 	return l
 }
 
-// Fatalf prints a fatal message to the console. Does NOT cause panic.
-func (l *wrapped) Fatalf(format string, v ...any) {
+// Fatal prints a fatal message to the console. Does NOT cause panic.
+func (l *wrapped) Fatal(format string, v ...any) {
 	if LogFatal <= l.level {
 		l.pf.Printf(format, v...)
 	}
 }
 
-// Errorf prints an error message to the console.
-func (l *wrapped) Errorf(format string, v ...any) {
+// Error prints an error message to the console.
+func (l *wrapped) Error(format string, v ...any) {
 	if LogError <= l.level {
 		l.pf.Printf(format, v...)
 	}
 }
 
-// Warnf prints a warning message to the console.
-func (l *wrapped) Warnf(format string, v ...any) {
+// Warn prints a warning message to the console.
+func (l *wrapped) Warn(format string, v ...any) {
 	if LogWarn <= l.level {
 		l.pf.Printf(format, v...)
 	}
 }
 
-// Infof prints an information message to the console.
-func (l *wrapped) Infof(format string, v ...any) {
+// Info prints an information message to the console.
+func (l *wrapped) Info(format string, v ...any) {
 	if LogInfo <= l.level {
 		l.pf.Printf(format, v...)
 	}
 }
 
-// Debugf prints a debug message to the console.
-func (l *wrapped) Debugf(format string, v ...any) {
+// Debug prints a debug message to the console.
+func (l *wrapped) Debug(format string, v ...any) {
 	if LogDebug <= l.level {
 		l.pf.Printf(format, v...)
 	}
 }
 
-// Tracef prints a trace message to the console.
-func (l *wrapped) Tracef(format string, v ...any) {
+// Trace prints a trace message to the console.
+func (l *wrapped) Trace(format string, v ...any) {
 	if LogTrace <= l.level {
 		l.pf.Printf(format, v...)
 	}

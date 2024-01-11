@@ -204,7 +204,7 @@ func (d *dynamicFanOutOutputBroker) loop() {
 					// First, always remove the previous output if it exists.
 					if _, exists := d.outputs[wrappedOutput.Name]; exists {
 						if err := d.removeOutput(wrappedOutput.Ctx, wrappedOutput.Name); err != nil {
-							d.log.Errorf("Failed to stop old copy of dynamic output '%v' in time: %v, the output will continue to shut down in the background.\n", wrappedOutput.Name, err)
+							d.log.Error("Failed to stop old copy of dynamic output '%v' in time: %v, the output will continue to shut down in the background.\n", wrappedOutput.Name, err)
 						}
 						d.onRemove(wrappedOutput.Name)
 					}
@@ -215,7 +215,7 @@ func (d *dynamicFanOutOutputBroker) loop() {
 					} else {
 						err := d.addOutput(wrappedOutput.Name, wrappedOutput.Output)
 						if err != nil {
-							d.log.Errorf("Failed to start new dynamic output '%v': %v\n", wrappedOutput.Name, err)
+							d.log.Error("Failed to start new dynamic output '%v': %v\n", wrappedOutput.Name, err)
 						} else {
 							d.onAdd(wrappedOutput.Name)
 						}

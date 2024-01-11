@@ -315,7 +315,7 @@ func (b *Branch) ProcessBatch(ctx context.Context, batch message.Batch) ([]messa
 
 	for _, e := range mapErrs {
 		batch.Get(e.index).ErrorSet(e.err)
-		b.log.Errorf("Branch error: %v", e.err)
+		b.log.Error("Branch error: %v", e.err)
 	}
 
 	if mapErrs, err = b.overlayResult(batch, resultParts); err != nil {
@@ -327,7 +327,7 @@ func (b *Branch) ProcessBatch(ctx context.Context, batch message.Batch) ([]messa
 	}
 	for _, e := range mapErrs {
 		batch.Get(e.index).ErrorSet(e.err)
-		b.log.Errorf("Branch error: %v", e.err)
+		b.log.Error("Branch error: %v", e.err)
 	}
 
 	b.mLatency.Timing(time.Since(startedAt).Nanoseconds())
@@ -370,7 +370,7 @@ func (b *Branch) createResult(ctx context.Context, parts []*message.Part, refere
 			newPart, err := b.requestMap.MapOnto(parts[i], i, referenceMsg)
 			if err != nil {
 				b.mError.Incr(1)
-				b.log.Debugf("Failed to map request '%v': %v\n", i, err)
+				b.log.Debug("Failed to map request '%v': %v\n", i, err)
 
 				// Skip if message part fails mapping.
 				failed = append(failed, i)
@@ -400,7 +400,7 @@ func (b *Branch) createResult(ctx context.Context, parts []*message.Part, refere
 		}
 		if err != nil {
 			b.mError.Incr(1)
-			b.log.Errorf("Child processors failed: %v\n", err)
+			b.log.Error("Child processors failed: %v\n", err)
 			return nil, mapErrs, err
 		}
 	}
@@ -409,7 +409,7 @@ func (b *Branch) createResult(ctx context.Context, parts []*message.Part, refere
 	var alignedResult []*message.Part
 	if alignedResult, err = alignBranchResult(originalLen, skipped, failed, procResults); err != nil {
 		b.mError.Incr(1)
-		b.log.Errorf("Failed to align branch result: %v. Avoid using filters or archive/unarchive processors within your branch, or anything that increases or reduces the number of messages. These processors should instead be applied before or after the branch processor.\n", err)
+		b.log.Error("Failed to align branch result: %v. Avoid using filters or archive/unarchive processors within your branch, or anything that increases or reduces the number of messages. These processors should instead be applied before or after the branch processor.\n", err)
 		return nil, mapErrs, err
 	}
 
@@ -448,7 +448,7 @@ func (b *Branch) overlayResult(payload message.Batch, results []*message.Part) (
 			newPart, err := b.resultMap.MapOnto(payload.Get(i), i, message.Batch(results))
 			if err != nil {
 				b.mError.Incr(1)
-				b.log.Debugf("Failed to map result '%v': %v\n", i, err)
+				b.log.Debug("Failed to map result '%v': %v\n", i, err)
 
 				failed = append(failed, newBranchMapError(i, fmt.Errorf("result mapping failed: %w", err)))
 				continue

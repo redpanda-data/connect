@@ -30,8 +30,7 @@ type pathLint struct {
 }
 
 func lintFile(path string, skipEnvVarCheck bool, lConf docs.LintConfig) (pathLints []pathLint) {
-	conf := config.New()
-	lints, err := config.ReadYAMLFileLinted(ifs.OS(), path, skipEnvVarCheck, lConf, &conf)
+	_, lints, err := config.ReadYAMLFileLinted(ifs.OS(), config.Spec(), path, skipEnvVarCheck, lConf)
 	if err != nil {
 		pathLints = append(pathLints, pathLint{
 			source: path,
@@ -90,8 +89,25 @@ func lintMDSnippets(path string, lConf docs.LintConfig) (pathLints []pathLint) {
 			continue
 		}
 
-		conf := config.New()
-		if err := conf.FromAny(lConf.DocsProvider, cNode); err != nil {
+		spec := config.Spec()
+		pConf, err := spec.ParsedConfigFromAny(cNode)
+		if err != nil {
+			var l docs.Lint
+			if errors.As(err, &l) {
+				l.Line += snippetLine - 1
+				pathLints = append(pathLints, pathLint{
+					source: path,
+					lint:   l,
+				})
+			} else {
+				pathLints = append(pathLints, pathLint{
+					source: path,
+					lint:   docs.NewLintError(snippetLine, docs.LintFailedRead, err),
+				})
+			}
+		}
+
+		if _, err := config.FromParsed(lConf.DocsProvider, pConf); err != nil {
 			var l docs.Lint
 			if errors.As(err, &l) {
 				l.Line += snippetLine - 1
@@ -106,7 +122,7 @@ func lintMDSnippets(path string, lConf docs.LintConfig) (pathLints []pathLint) {
 				})
 			}
 		} else {
-			for _, l := range config.Spec().LintYAML(docs.NewLintContext(lConf), cNode) {
+			for _, l := range spec.LintYAML(docs.NewLintContext(lConf), cNode) {
 				l.Line += snippetLine - 1
 				pathLints = append(pathLints, pathLint{
 					source: path,

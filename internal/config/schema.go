@@ -1,7 +1,7 @@
 package config
 
 import (
-	"github.com/mitchellh/mapstructure"
+	"gopkg.in/yaml.v3"
 
 	"github.com/benthosdev/benthos/v4/internal/api"
 	tdocs "github.com/benthosdev/benthos/v4/internal/cli/test/docs"
@@ -51,23 +51,47 @@ func New() Type {
 	}
 }
 
-// Clone a config, creating a new copy that can be mutated in isolation.
-func (t *Type) Clone() (Type, error) {
-	var outConf Type
-	if err := mapstructure.Decode(t, &outConf); err != nil {
-		return Type{}, err
+// Sanitised returns a sanitised copy of the Benthos configuration, meaning
+// fields of no consequence (unused inputs, outputs, processors etc) are
+// excluded.
+func (c Type) Sanitised() (any, error) {
+	var node yaml.Node
+	if err := node.Encode(c); err != nil {
+		return nil, err
 	}
-	return outConf, nil
+
+	sanitConf := docs.NewSanitiseConfig()
+	sanitConf.RemoveTypeField = true
+	if err := Spec().SanitiseYAML(&node, sanitConf); err != nil {
+		return nil, err
+	}
+
+	var g any
+	if err := node.Decode(&g); err != nil {
+		return nil, err
+	}
+	return g, nil
 }
 
 var httpField = docs.FieldObject(fieldHTTP, "Configures the service-wide HTTP server.").WithChildren(api.Spec()...)
 
-var observabilityFields = docs.FieldSpecs{
-	docs.FieldObject(fieldLogger, "Describes how operational logs should be emitted.").WithChildren(log.Spec()...),
-	docs.FieldMetrics(fieldMetrics, "A mechanism for exporting metrics.").Optional(),
-	docs.FieldTracer(fieldTracer, "A mechanism for exporting traces.").Optional(),
-	docs.FieldString(fieldSystemCloseDelay, "A period of time to wait for metrics and traces to be pulled or pushed from the process.").HasDefault("0s"),
-	docs.FieldString(fieldSystemCloseTimeout, "The maximum period of time to wait for a clean shutdown. If this time is exceeded Benthos will forcefully close.").HasDefault("20s"),
+func observabilityFields() docs.FieldSpecs {
+	defaultMetrics := "none"
+	if _, exists := docs.DeprecatedProvider.GetDocs("prometheus", docs.TypeMetrics); exists {
+		defaultMetrics = "prometheus"
+	}
+	return docs.FieldSpecs{
+		docs.FieldObject(fieldLogger, "Describes how operational logs should be emitted.").WithChildren(log.Spec()...),
+		docs.FieldMetrics(fieldMetrics, "A mechanism for exporting metrics.").HasDefault(map[string]any{
+			"mapping":      "",
+			defaultMetrics: map[string]any{},
+		}),
+		docs.FieldTracer(fieldTracer, "A mechanism for exporting traces.").HasDefault(map[string]any{
+			"none": map[string]any{},
+		}),
+		docs.FieldString(fieldSystemCloseDelay, "A period of time to wait for metrics and traces to be pulled or pushed from the process.").HasDefault("0s"),
+		docs.FieldString(fieldSystemCloseTimeout, "The maximum period of time to wait for a clean shutdown. If this time is exceeded Benthos will forcefully close.").HasDefault("20s"),
+	}
 }
 
 // Spec returns a docs.FieldSpec for an entire Benthos configuration.
@@ -75,7 +99,7 @@ func Spec() docs.FieldSpecs {
 	fields := docs.FieldSpecs{httpField}
 	fields = append(fields, stream.Spec()...)
 	fields = append(fields, manager.Spec()...)
-	fields = append(fields, observabilityFields...)
+	fields = append(fields, observabilityFields()...)
 	fields = append(fields, tdocs.ConfigSpec())
 	return fields
 }
@@ -84,53 +108,72 @@ func Spec() docs.FieldSpecs {
 func SpecWithoutStream() docs.FieldSpecs {
 	fields := docs.FieldSpecs{httpField}
 	fields = append(fields, manager.Spec()...)
-	fields = append(fields, observabilityFields...)
+	fields = append(fields, observabilityFields()...)
 	fields = append(fields, tdocs.ConfigSpec())
 	return fields
 }
 
-func (t *Type) FromAny(prov docs.Provider, v any) (err error) {
-	if err = t.Config.FromAny(prov, v); err != nil {
+// FromYAML is for old style tests.
+func FromYAML(confStr string) (Type, error) {
+	node, err := docs.UnmarshalYAML([]byte(confStr))
+	if err != nil {
+		return Type{}, err
+	}
+
+	pConf, err := Spec().ParsedConfigFromAny(node)
+	if err != nil {
+		return Type{}, err
+	}
+	return FromParsed(docs.DeprecatedProvider, pConf)
+}
+
+func FromParsed(prov docs.Provider, pConf *docs.ParsedConfig) (conf Type, err error) {
+	if conf.Config, err = stream.FromParsed(prov, pConf); err != nil {
 		return
 	}
-	if err = t.ResourceConfig.FromAny(prov, v); err != nil {
+	if conf.ResourceConfig, err = manager.FromParsed(prov, pConf); err != nil {
 		return
 	}
-	var pConf *docs.ParsedConfig
-	if pConf, err = Spec().ParsedConfigFromAny(v); err != nil {
-		return
-	}
+	err = noStreamFromParsed(prov, pConf, &conf)
+	return
+}
+
+func noStreamFromParsed(prov docs.Provider, pConf *docs.ParsedConfig, conf *Type) (err error) {
 	if pConf.Contains(fieldHTTP) {
-		if t.HTTP, err = api.FromParsed(pConf.Namespace(fieldHTTP)); err != nil {
+		if conf.HTTP, err = api.FromParsed(pConf.Namespace(fieldHTTP)); err != nil {
 			return
 		}
+	} else {
+		conf.HTTP = api.NewConfig()
 	}
 	if pConf.Contains(fieldLogger) {
-		if t.Logger, err = log.FromParsed(pConf.Namespace(fieldLogger)); err != nil {
+		if conf.Logger, err = log.FromParsed(pConf.Namespace(fieldLogger)); err != nil {
 			return
 		}
+	} else {
+		conf.Logger = log.NewConfig()
 	}
 	if ga, _ := pConf.FieldAny(fieldMetrics); ga != nil {
-		if t.Metrics, err = metrics.FromAny(prov, ga); err != nil {
+		if conf.Metrics, err = metrics.FromAny(prov, ga); err != nil {
 			return
 		}
 	} else {
-		t.Metrics = metrics.NewConfig()
+		conf.Metrics = metrics.NewConfig()
 	}
 	if ga, _ := pConf.FieldAny(fieldTracer); ga != nil {
-		if t.Tracer, err = tracer.FromAny(prov, ga); err != nil {
+		if conf.Tracer, err = tracer.FromAny(prov, ga); err != nil {
 			return
 		}
 	} else {
-		t.Tracer = tracer.NewConfig()
+		conf.Tracer = tracer.NewConfig()
 	}
 	if pConf.Contains(fieldSystemCloseDelay) {
-		if t.SystemCloseDelay, err = pConf.FieldString(fieldSystemCloseDelay); err != nil {
+		if conf.SystemCloseDelay, err = pConf.FieldString(fieldSystemCloseDelay); err != nil {
 			return
 		}
 	}
 	if pConf.Contains(fieldSystemCloseTimeout) {
-		if t.SystemCloseTimeout, err = pConf.FieldString(fieldSystemCloseTimeout); err != nil {
+		if conf.SystemCloseTimeout, err = pConf.FieldString(fieldSystemCloseTimeout); err != nil {
 			return
 		}
 	}

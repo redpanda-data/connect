@@ -9,18 +9,16 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"gopkg.in/yaml.v3"
-
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/filepath/ifs"
 )
 
 // ReadYAMLFileLinted will attempt to read a configuration file path into a
 // structure. Returns an array of lint messages or an error.
-func ReadYAMLFileLinted(fs ifs.FS, path string, skipEnvVarCheck bool, lConf docs.LintConfig, config *Type) ([]docs.Lint, error) {
+func ReadYAMLFileLinted(fs ifs.FS, spec docs.FieldSpecs, path string, skipEnvVarCheck bool, lConf docs.LintConfig) (Type, []docs.Lint, error) {
 	configBytes, lints, _, err := ReadFileEnvSwap(fs, path, os.LookupEnv)
 	if err != nil {
-		return nil, err
+		return Type{}, nil, err
 	}
 
 	if skipEnvVarCheck {
@@ -35,16 +33,23 @@ func ReadYAMLFileLinted(fs ifs.FS, path string, skipEnvVarCheck bool, lConf docs
 
 	cNode, err := docs.UnmarshalYAML(configBytes)
 	if err != nil {
-		return nil, err
+		return Type{}, nil, err
 	}
-	if err = config.FromAny(lConf.DocsProvider, cNode); err != nil {
-		return nil, err
+
+	var pConf *docs.ParsedConfig
+	if pConf, err = spec.ParsedConfigFromAny(cNode); err != nil {
+		return Type{}, nil, err
+	}
+
+	conf, err := FromParsed(lConf.DocsProvider, pConf)
+	if err != nil {
+		return Type{}, nil, err
 	}
 
 	if !bytes.HasPrefix(configBytes, []byte("# BENTHOS LINT DISABLE")) {
-		lints = append(lints, Spec().LintYAML(docs.NewLintContext(lConf), cNode)...)
+		lints = append(lints, spec.LintYAML(docs.NewLintContext(lConf), cNode)...)
 	}
-	return lints, nil
+	return conf, lints, nil
 }
 
 // LintYAMLBytes attempts to report errors within a user config. Returns a slice of
@@ -54,12 +59,12 @@ func LintYAMLBytes(lintConf docs.LintConfig, rawBytes []byte) ([]docs.Lint, erro
 		return nil, nil
 	}
 
-	var rawNode yaml.Node
-	if err := yaml.Unmarshal(rawBytes, &rawNode); err != nil {
+	rawNode, err := docs.UnmarshalYAML(rawBytes)
+	if err != nil {
 		return nil, err
 	}
 
-	return Spec().LintYAML(docs.NewLintContext(lintConf), &rawNode), nil
+	return Spec().LintYAML(docs.NewLintContext(lintConf), rawNode), nil
 }
 
 // ReadFileEnvSwap reads a file and replaces any environment variable

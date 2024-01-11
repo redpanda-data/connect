@@ -182,7 +182,7 @@ func (s *switchProc) ProcessBatch(ctx *processor.BatchProcContext, msg message.B
 			if !test {
 				var err error
 				if test, err = switchCase.check.QueryPart(j, testMsg); err != nil {
-					s.log.Errorf("Failed to test case %v: %v\n", i, err)
+					s.log.Error("Failed to test case %v: %v\n", i, err)
 					ctx.OnError(fmt.Errorf("failed to test case %v: %w", i, err), -1, p)
 					processor.MarkErr(p, nil, err)
 					result = append(result, p)

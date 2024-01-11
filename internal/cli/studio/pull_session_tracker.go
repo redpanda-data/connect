@@ -17,7 +17,6 @@ import (
 
 	"github.com/benthosdev/benthos/v4/internal/cli/studio/metrics"
 	"github.com/benthosdev/benthos/v4/internal/cli/studio/tracing"
-	"github.com/benthosdev/benthos/v4/internal/log"
 )
 
 // DeploymentConfigMeta describes a file that makes up part of a deployment.
@@ -43,7 +42,7 @@ func addAuthHeaders(token, secret string, req *http.Request) {
 }
 
 type sessionTracker struct {
-	logger        log.Modular
+	logger        *hotSwapLogger
 	baseURL       string
 	nodeName      string
 	token, secret string
@@ -62,7 +61,7 @@ type sessionTracker struct {
 func initSessionTracker(
 	ctx context.Context,
 	nowFn func() time.Time,
-	logger log.Modular,
+	logger *hotSwapLogger,
 	nodeName, baseURLStr, token, secret string,
 ) (*sessionTracker, error) {
 	tracker := &sessionTracker{
@@ -192,7 +191,7 @@ func (s *sessionTracker) doRateLimitedReq(ctx context.Context, reqFn func() (*ht
 		if res != nil {
 			errFields["status"] = res.Status
 		}
-		s.logger.WithFields(errFields).Errorf("Studio request failed")
+		s.logger.WithFields(errFields).Error("Studio request failed")
 
 		s.mut.Lock()
 		s.rateLimitTo = &nextWait
@@ -246,7 +245,7 @@ func (s *sessionTracker) init(ctx context.Context) error {
 	s.logger.WithFields(map[string]string{
 		"deployment_id":   response.DeploymentID,
 		"deployment_name": response.DeploymentName,
-	}).Infoln("Synced with session and preparing to load files from deployment")
+	}).Info("Synced with session and preparing to load files from deployment")
 
 	s.guideMetricsFlushPeriod = time.Second * time.Duration(response.MetricsGuidePeriodSeconds)
 	s.deploymentID = response.DeploymentID
@@ -458,7 +457,7 @@ func (s *sessionTracker) Sync(
 		s.logger.WithFields(map[string]string{
 			"deployment_id":   response.Reassignment.ID,
 			"deployment_name": response.Reassignment.Name,
-		}).Infoln("Synced with session and reassigned to a different deployment")
+		}).Info("Synced with session and reassigned to a different deployment")
 
 		// We will need to sync again in order to obtain the new deployment
 		// configs. We do this straight away as there's no sense in delaying,
@@ -473,7 +472,7 @@ func (s *sessionTracker) Sync(
 
 	s.logger.WithFields(map[string]string{
 		"deployment_id": depID,
-	}).Infoln("Synced with session")
+	}).Info("Synced with session")
 	requestsTraces = response.RequestedTraces
 
 	// Reflect the diff returned in our new summary of files.

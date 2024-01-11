@@ -152,7 +152,7 @@ func newDynamicOutputFromParsed(conf *service.ParsedConfig, res *service.Resourc
 		outputYAMLConfs[id] = dynOutputAnyToYAMLConf(newConf)
 		outputConfigsMut.Unlock()
 		if err = fanOut.SetOutput(ctx, id, newOutput); err != nil {
-			mgr.Logger().Errorf("Failed to set output '%v': %v", id, err)
+			mgr.Logger().Error("Failed to set output '%v': %v", id, err)
 			outputConfigsMut.Lock()
 			delete(outputYAMLConfs, id)
 			outputConfigsMut.Unlock()
@@ -162,7 +162,7 @@ func newDynamicOutputFromParsed(conf *service.ParsedConfig, res *service.Resourc
 	dynAPI.OnDelete(func(ctx context.Context, id string) error {
 		err := fanOut.SetOutput(ctx, id, nil)
 		if err != nil {
-			mgr.Logger().Errorf("Failed to close output '%v': %v", id, err)
+			mgr.Logger().Error("Failed to close output '%v': %v", id, err)
 		}
 		return err
 	})

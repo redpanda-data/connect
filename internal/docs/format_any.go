@@ -129,7 +129,7 @@ func (f FieldSpecs) AnyToMap(v any, conf ToValueConfig) (map[string]any, error) 
 			}
 			continue
 		}
-		m[k] = defValue
+		m[k] = value.IClone(defValue)
 	}
 
 	return m, nil

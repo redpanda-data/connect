@@ -121,7 +121,7 @@ func (b *bloblangProc) ProcessBatch(ctx *processor.BatchProcContext, msg message
 		if err != nil {
 			p = part.ShallowCopy()
 			ctx.OnError(err, i, p)
-			b.log.Errorf("%v\n", err)
+			b.log.Error("%v\n", err)
 		}
 		if p != nil {
 			newParts = append(newParts, p)

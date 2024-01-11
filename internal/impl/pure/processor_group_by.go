@@ -143,7 +143,7 @@ func (g *groupByProc) ProcessBatch(ctx *processor.BatchProcContext, msg message.
 			res, err := group.Check.QueryPart(i, msg)
 			if err != nil {
 				res = false
-				g.log.Errorf("Failed to test group %v: %v\n", j, err)
+				g.log.Error("Failed to test group %v: %v\n", j, err)
 			}
 			if res {
 				groupStr := strconv.Itoa(j)
@@ -172,7 +172,7 @@ func (g *groupByProc) ProcessBatch(ctx *processor.BatchProcContext, msg message.
 		}
 		if res != nil {
 			if err := res; err != nil {
-				g.log.Errorf("Processor error: %v\n", err)
+				g.log.Error("Processor error: %v\n", err)
 			}
 		}
 	}

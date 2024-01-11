@@ -398,11 +398,11 @@ func (m *metricProcessor) ProcessBatch(ctx context.Context, msg message.Batch) (
 	_ = msg.Iter(func(i int, p *message.Part) error {
 		value, err := m.value.String(i, msg)
 		if err != nil {
-			m.log.Errorf("Value interpolation error: %v", err)
+			m.log.Error("Value interpolation error: %v", err)
 			return nil
 		}
 		if err := m.handler(value, i, msg); err != nil {
-			m.log.Errorf("Handler error: %v", err)
+			m.log.Error("Handler error: %v", err)
 		}
 		return nil
 	})

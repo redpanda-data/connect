@@ -76,7 +76,7 @@ func (s *splitProc) ProcessBatch(ctx *processor.BatchProcContext, msg message.Ba
 				nextMsg = message.QuickBatch(nil)
 				byteSize = 0
 			} else {
-				s.log.Warnf("A single message exceeds the target batch byte size of '%v', actual size: '%v'", s.byteSize, len(p.AsBytes()))
+				s.log.Warn("A single message exceeds the target batch byte size of '%v', actual size: '%v'", s.byteSize, len(p.AsBytes()))
 			}
 		}
 		nextMsg = append(nextMsg, p)

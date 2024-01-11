@@ -156,7 +156,7 @@ func newDynamicInputFromParsed(conf *service.ParsedConfig, res *service.Resource
 		inputYAMLConfs[id] = dynInputAnyToYAMLConf(newConf)
 		inputConfigsMut.Unlock()
 		if err = fanIn.SetInput(ctx, id, newInput); err != nil {
-			mgr.Logger().Errorf("Failed to set input '%v': %v", id, err)
+			mgr.Logger().Error("Failed to set input '%v': %v", id, err)
 			inputConfigsMut.Lock()
 			delete(inputYAMLConfs, id)
 			inputConfigsMut.Unlock()
@@ -167,7 +167,7 @@ func newDynamicInputFromParsed(conf *service.ParsedConfig, res *service.Resource
 	dynAPI.OnDelete(func(ctx context.Context, id string) error {
 		err := fanIn.SetInput(ctx, id, nil)
 		if err != nil {
-			mgr.Logger().Errorf("Failed to close input '%v': %v", id, err)
+			mgr.Logger().Error("Failed to close input '%v': %v", id, err)
 		}
 		return err
 	})

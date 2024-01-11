@@ -77,7 +77,7 @@ func newCompress(algStr string, level int, mgr bundle.NewManagement) (*compressP
 func (c *compressProc) Process(ctx context.Context, msg *message.Part) ([]*message.Part, error) {
 	newBytes, err := c.comp(c.level, msg.AsBytes())
 	if err != nil {
-		c.log.Errorf("Failed to compress message: %v\n", err)
+		c.log.Error("Failed to compress message: %v\n", err)
 		return nil, err
 	}
 	msg.SetBytes(newBytes)

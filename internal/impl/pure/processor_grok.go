@@ -221,7 +221,7 @@ func (g *grokProc) Process(ctx context.Context, msg *message.Part) ([]*message.P
 	for _, compiler := range g.gparsers {
 		var err error
 		if values, err = compiler.ParseTyped(body); err != nil {
-			g.log.Debugf("Failed to parse body: %v\n", err)
+			g.log.Debug("Failed to parse body: %v\n", err)
 			continue
 		}
 		if len(values) > 0 {
@@ -229,7 +229,7 @@ func (g *grokProc) Process(ctx context.Context, msg *message.Part) ([]*message.P
 		}
 	}
 	if len(values) == 0 {
-		g.log.Debugf("No matches found for payload: %s\n", body)
+		g.log.Debug("No matches found for payload: %s\n", body)
 		return nil, errors.New("no pattern matches found")
 	}
 

@@ -69,12 +69,12 @@ func (s *sleepProc) ProcessBatch(ctx *processor.BatchProcContext, msg message.Ba
 	_ = msg.Iter(func(i int, p *message.Part) error {
 		periodStr, err := s.durationStr.String(i, msg)
 		if err != nil {
-			s.log.Errorf("Period interpolation error: %v", err)
+			s.log.Error("Period interpolation error: %v", err)
 			return nil
 		}
 		period, err := time.ParseDuration(periodStr)
 		if err != nil {
-			s.log.Errorf("Failed to parse duration: %v", err)
+			s.log.Error("Failed to parse duration: %v", err)
 			return nil
 		}
 		select {

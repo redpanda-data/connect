@@ -86,7 +86,7 @@ func newInsertPart(index int, contentStr string, mgr bundle.NewManagement) (proc
 func (p *insertPart) ProcessBatch(ctx *processor.BatchProcContext, msg message.Batch) ([]message.Batch, error) {
 	newPartBytes, err := p.part.Bytes(0, msg)
 	if err != nil {
-		p.log.Errorf("Content interpolation error: %v", err)
+		p.log.Error("Content interpolation error: %v", err)
 		return []message.Batch{msg}, nil
 	}
 

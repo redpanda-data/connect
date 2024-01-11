@@ -17,6 +17,7 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/filepath/ifs"
+	"github.com/benthosdev/benthos/v4/internal/manager"
 	"github.com/benthosdev/benthos/v4/internal/stream"
 )
 
@@ -45,7 +46,11 @@ type Reader struct {
 	// The filesystem used for reading config files.
 	fs ifs.FS
 
-	bootstrapConf Type
+	// Specs for various config types.
+	specFullConfig    docs.FieldSpecs
+	specStreamOnly    docs.FieldSpecs
+	specObservability docs.FieldSpecs
+	specResources     docs.FieldSpecs
 
 	// Used for linting configs
 	lintConf docs.LintConfig
@@ -86,11 +91,9 @@ func NewReader(mainPath string, resourcePaths []string, opts ...OptFunc) *Reader
 	if mainPath != "" {
 		mainPath = filepath.Clean(mainPath)
 	}
-	defaultBootstrapConf := New()
 	r := &Reader{
 		testSuffix:         "_benthos_test",
 		fs:                 ifs.OS(),
-		bootstrapConf:      defaultBootstrapConf,
 		lintConf:           docs.NewLintConfig(),
 		mainPath:           mainPath,
 		resourcePaths:      resourcePaths,
@@ -101,6 +104,11 @@ func NewReader(mainPath string, resourcePaths []string, opts ...OptFunc) *Reader
 		changeFlushPeriod:  defaultChangeFlushPeriod,
 		changeDelayPeriod:  defaultChangeDelayPeriod,
 		filesRefreshPeriod: defaultFilesRefreshPeriod,
+
+		specFullConfig:    Spec(),
+		specStreamOnly:    stream.Spec(),
+		specObservability: SpecWithoutStream(),
+		specResources:     manager.Spec(),
 	}
 	for _, opt := range opts {
 		opt(r)
@@ -112,6 +120,14 @@ func NewReader(mainPath string, resourcePaths []string, opts ...OptFunc) *Reader
 
 // OptFunc is an opt function that changes the behaviour of a config reader.
 type OptFunc func(*Reader)
+
+// OptSetFullSpec overrides the default general config spec with the provided
+// one.
+func OptSetFullSpec(spec docs.FieldSpecs) OptFunc {
+	return func(r *Reader) {
+		r.specFullConfig = spec
+	}
+}
 
 // OptTestSuffix configures the suffix given to unit test definition files, this
 // is used in order to exclude unit tests from being run in streams mode with
@@ -127,18 +143,6 @@ func OptTestSuffix(suffix string) OptFunc {
 func OptAddOverrides(overrides ...string) OptFunc {
 	return func(r *Reader) {
 		r.overrides = append(r.overrides, overrides...)
-	}
-}
-
-// OptSetBootstrapConfig sets a config to be used as the default for each parse.
-// This can be used to change the default behaviours of benthos configs.
-func OptSetBootstrapConfig(conf *Type) OptFunc {
-	return func(r *Reader) {
-		if conf != nil {
-			r.bootstrapConf = *conf
-		} else {
-			r.bootstrapConf = New()
-		}
 	}
 }
 
@@ -175,10 +179,7 @@ func (r *Reader) lintCtx() docs.LintContext {
 
 // Read a Benthos config from the files and options specified.
 func (r *Reader) Read() (conf Type, lints []string, err error) {
-	if conf, err = r.bootstrapConf.Clone(); err != nil {
-		return
-	}
-	if lints, err = r.readMain(r.mainPath, &conf); err != nil {
+	if conf, lints, err = r.readMain(r.mainPath); err != nil {
 		return
 	}
 	r.configFileInfo = resInfoFromConfig(&conf.ResourceConfig)
@@ -275,16 +276,12 @@ func applyOverrides(specs docs.FieldSpecs, root *yaml.Node, overrides ...string)
 	return nil
 }
 
-func (r *Reader) readMain(mainPath string, conf *Type) (lints []string, err error) {
+func (r *Reader) readMain(mainPath string) (conf Type, lints []string, err error) {
 	defer func() {
 		if err != nil && mainPath != "" {
 			err = fmt.Errorf("%v: %w", mainPath, err)
 		}
 	}()
-
-	if mainPath == "" && len(r.overrides) == 0 {
-		return
-	}
 
 	var rawNode *yaml.Node
 	var confBytes []byte
@@ -298,19 +295,23 @@ func (r *Reader) readMain(mainPath string, conf *Type) (lints []string, err erro
 			lints = append(lints, l.Error())
 		}
 		r.modTimeLastRead[mainPath] = modTime
+
 		if rawNode, err = docs.UnmarshalYAML(confBytes); err != nil {
 			return
 		}
 	} else {
 		var tmpNode yaml.Node
+		if err = tmpNode.Encode(map[string]any{}); err != nil {
+			return
+		}
 		rawNode = &tmpNode
 	}
 
-	confSpec := Spec()
+	confSpec := r.specFullConfig
 	if r.streamsMode {
 		// Spec is limited to just non-stream fields when in streams mode (no
 		// input, output, etc)
-		confSpec = SpecWithoutStream()
+		confSpec = r.specStreamOnly
 	}
 	if err = applyOverrides(confSpec, rawNode, r.overrides...); err != nil {
 		return
@@ -323,7 +324,16 @@ func (r *Reader) readMain(mainPath string, conf *Type) (lints []string, err erro
 		}
 	}
 
-	err = conf.FromAny(r.lintConf.DocsProvider, rawNode)
+	var pConf *docs.ParsedConfig
+	if pConf, err = confSpec.ParsedConfigFromAny(rawNode); err != nil {
+		return
+	}
+
+	if r.streamsMode {
+		err = noStreamFromParsed(r.lintConf.DocsProvider, pConf, &conf)
+	} else {
+		conf, err = FromParsed(r.lintConf.DocsProvider, pConf)
+	}
 	return
 }
 
@@ -331,14 +341,10 @@ func (r *Reader) readMain(mainPath string, conf *Type) (lints []string, err erro
 // the provided main update func, and apply changes to resources to the provided
 // manager as appropriate.
 func (r *Reader) TriggerMainUpdate(mgr bundle.NewManagement, strict bool, newPath string) error {
-	conf, err := r.bootstrapConf.Clone()
-	if err != nil {
-		return err
-	}
-	lints, err := r.readMain(newPath, &conf)
+	conf, lints, err := r.readMain(newPath)
 	if errors.Is(err, fs.ErrNotExist) {
 		if r.mainPath != newPath {
-			mgr.Logger().Errorf("Failed to read changed main config: %v", err)
+			mgr.Logger().Error("Failed to read changed main config: %v", err)
 			return noReread(err)
 		}
 		// Ignore main file deletes for now
@@ -346,26 +352,26 @@ func (r *Reader) TriggerMainUpdate(mgr bundle.NewManagement, strict bool, newPat
 	}
 	if err != nil {
 		if r.mainPath != newPath {
-			mgr.Logger().Errorf("Failed to read new main config %v: %v", newPath, err)
+			mgr.Logger().Error("Failed to read new main config %v: %v", newPath, err)
 		} else {
-			mgr.Logger().Errorf("Failed to read updated config: %v", err)
+			mgr.Logger().Error("Failed to read updated config: %v", err)
 		}
 
 		// Rejecting due to invalid file means we do not want to try again.
 		return noReread(err)
 	}
 	if r.mainPath != newPath {
-		mgr.Logger().Infof("Main config changed to %v, attempting to update pipeline.", newPath)
+		mgr.Logger().Info("Main config changed to %v, attempting to update pipeline.", newPath)
 	} else {
-		mgr.Logger().Infoln("Main config updated, attempting to update pipeline.")
+		mgr.Logger().Info("Main config updated, attempting to update pipeline.")
 	}
 
 	lintlog := mgr.Logger()
 	for _, lint := range lints {
-		lintlog.Infoln(lint)
+		lintlog.Info(lint)
 	}
 	if strict && len(lints) > 0 {
-		mgr.Logger().Errorln("Rejecting updated main config due to linter errors, to allow linting errors run Benthos with --chilled")
+		mgr.Logger().Error("Rejecting updated main config due to linter errors, to allow linting errors run Benthos with --chilled")
 
 		// Rejecting from linters means we do not want to try again.
 		return noReread(errors.New("file contained linting errors and is running in strict mode"))
@@ -390,10 +396,10 @@ func (r *Reader) TriggerMainUpdate(mgr bundle.NewManagement, strict bool, newPat
 
 	if r.mainUpdateFn != nil {
 		if err := r.mainUpdateFn(&conf); err != nil {
-			mgr.Logger().Errorf("Failed to apply updated config: %v", err)
+			mgr.Logger().Error("Failed to apply updated config: %v", err)
 			return err
 		}
-		mgr.Logger().Infoln("Updated main config")
+		mgr.Logger().Info("Updated main config")
 	}
 	return nil
 }
