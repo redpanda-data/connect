@@ -7,13 +7,13 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/benthosdev/benthos/v4/internal/component/processor"
+	"github.com/benthosdev/benthos/v4/internal/component/testutil"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
 )
 
 func TestBoundsCheck(t *testing.T) {
-	conf, err := processor.FromYAML(`
+	conf, err := testutil.ProcessorFromYAML(`
 bounds_check:
   min_parts: 2
   max_parts: 3

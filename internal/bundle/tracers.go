@@ -63,7 +63,6 @@ func (s *TracerSet) Add(constructor TracerConstructor, spec docs.ComponentSpec) 
 		constructor: constructor,
 		spec:        spec,
 	}
-	docs.DeprecatedProvider.RegisterDocs(spec)
 	return nil
 }
 

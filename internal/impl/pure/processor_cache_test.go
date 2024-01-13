@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/benthosdev/benthos/v4/internal/component/processor"
+	"github.com/benthosdev/benthos/v4/internal/component/testutil"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
 
@@ -19,7 +19,7 @@ func TestCacheSet(t *testing.T) {
 	mgr := mock.NewManager()
 	mgr.Caches["foocache"] = map[string]mock.CacheItem{}
 
-	conf, err := processor.FromYAML(`
+	conf, err := testutil.ProcessorFromYAML(`
 cache:
   operator: set
   key: ${!json("key")}
@@ -65,7 +65,7 @@ func TestCacheAdd(t *testing.T) {
 	mgr := mock.NewManager()
 	mgr.Caches["foocache"] = map[string]mock.CacheItem{}
 
-	conf, err := processor.FromYAML(`
+	conf, err := testutil.ProcessorFromYAML(`
 cache:
   key: ${!json("key")}
   value: ${!json("value")}
@@ -118,7 +118,7 @@ func TestCacheGet(t *testing.T) {
 		"2": {Value: "foo 2"},
 	}
 
-	conf, err := processor.FromYAML(`
+	conf, err := testutil.ProcessorFromYAML(`
 cache:
   operator: get
   key: ${!json("key")}
@@ -168,7 +168,7 @@ func TestCacheDelete(t *testing.T) {
 		"3": {Value: "foo 3"},
 	}
 
-	conf, err := processor.FromYAML(`
+	conf, err := testutil.ProcessorFromYAML(`
 cache:
   operator: delete
   key: ${!json("key")}

@@ -15,6 +15,7 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/component/ratelimit"
+	"github.com/benthosdev/benthos/v4/internal/component/testutil"
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/manager"
 	"github.com/benthosdev/benthos/v4/internal/message"
@@ -363,14 +364,14 @@ func TestManagerProcessorListErrors(t *testing.T) {
 }
 
 func TestManagerInputList(t *testing.T) {
-	cFoo, err := input.FromYAML(`
+	cFoo, err := testutil.InputFromYAML(`
 label: foo
 generate:
   mapping: 'root = {}'
 `)
 	require.NoError(t, err)
 
-	cBar, err := input.FromYAML(`
+	cBar, err := testutil.InputFromYAML(`
 label: bar
 generate:
   mapping: 'root = {}'

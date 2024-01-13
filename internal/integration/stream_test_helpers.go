@@ -415,13 +415,13 @@ func initInput(t testing.TB, env *streamTestEnvironment) iinput.Streamed {
 	require.NoError(t, err)
 
 	spec := config.Spec()
-	lints := spec.LintYAML(docs.NewLintContext(docs.NewLintConfig()), node)
+	lints := spec.LintYAML(docs.NewLintContext(docs.NewLintConfig(bundle.GlobalEnvironment)), node)
 	assert.Empty(t, lints)
 
 	pConf, err := spec.ParsedConfigFromAny(node)
 	require.NoError(t, err)
 
-	conf, err := config.FromParsed(docs.DeprecatedProvider, pConf)
+	conf, err := config.FromParsed(bundle.GlobalEnvironment, pConf, nil)
 	require.NoError(t, err)
 
 	if env.mgr == nil {
@@ -446,13 +446,13 @@ func initOutput(t testing.TB, trans <-chan message.Transaction, env *streamTestE
 	require.NoError(t, err)
 
 	spec := config.Spec()
-	lints := spec.LintYAML(docs.NewLintContext(docs.NewLintConfig()), node)
+	lints := spec.LintYAML(docs.NewLintContext(docs.NewLintConfig(bundle.GlobalEnvironment)), node)
 	assert.Empty(t, lints)
 
 	pConf, err := spec.ParsedConfigFromAny(node)
 	require.NoError(t, err)
 
-	conf, err := config.FromParsed(docs.DeprecatedProvider, pConf)
+	conf, err := config.FromParsed(bundle.GlobalEnvironment, pConf, nil)
 	require.NoError(t, err)
 
 	if env.mgr == nil {

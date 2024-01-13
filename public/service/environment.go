@@ -141,6 +141,7 @@ func (e *Environment) RegisterBatchBuffer(name string, spec *ConfigSpec, ctor Ba
 func (e *Environment) WalkBuffers(fn func(name string, config *ConfigView)) {
 	for _, v := range e.internal.BufferDocs() {
 		fn(v.Name, &ConfigView{
+			prov:      e.internal,
 			component: v,
 		})
 	}
@@ -172,6 +173,7 @@ func (e *Environment) RegisterCache(name string, spec *ConfigSpec, ctor CacheCon
 func (e *Environment) WalkCaches(fn func(name string, config *ConfigView)) {
 	for _, v := range e.internal.CacheDocs() {
 		fn(v.Name, &ConfigView{
+			prov:      e.internal,
 			component: v,
 		})
 	}
@@ -240,6 +242,7 @@ func (e *Environment) RegisterBatchInput(name string, spec *ConfigSpec, ctor Bat
 func (e *Environment) WalkInputs(fn func(name string, config *ConfigView)) {
 	for _, v := range e.internal.InputDocs() {
 		fn(v.Name, &ConfigView{
+			prov:      e.internal,
 			component: v,
 		})
 	}
@@ -327,6 +330,7 @@ func (e *Environment) RegisterBatchOutput(name string, spec *ConfigSpec, ctor Ba
 func (e *Environment) WalkOutputs(fn func(name string, config *ConfigView)) {
 	for _, v := range e.internal.OutputDocs() {
 		fn(v.Name, &ConfigView{
+			prov:      e.internal,
 			component: v,
 		})
 	}
@@ -391,6 +395,7 @@ func (e *Environment) RegisterBatchProcessor(name string, spec *ConfigSpec, ctor
 func (e *Environment) WalkProcessors(fn func(name string, config *ConfigView)) {
 	for _, v := range e.internal.ProcessorDocs() {
 		fn(v.Name, &ConfigView{
+			prov:      e.internal,
 			component: v,
 		})
 	}
@@ -422,6 +427,7 @@ func (e *Environment) RegisterRateLimit(name string, spec *ConfigSpec, ctor Rate
 func (e *Environment) WalkRateLimits(fn func(name string, config *ConfigView)) {
 	for _, v := range e.internal.RateLimitDocs() {
 		fn(v.Name, &ConfigView{
+			prov:      e.internal,
 			component: v,
 		})
 	}
@@ -453,6 +459,7 @@ func (e *Environment) RegisterMetricsExporter(name string, spec *ConfigSpec, cto
 func (e *Environment) WalkMetrics(fn func(name string, config *ConfigView)) {
 	for _, v := range bundle.AllMetrics.Docs() {
 		fn(v.Name, &ConfigView{
+			prov:      e.internal,
 			component: v,
 		})
 	}
@@ -489,6 +496,7 @@ func (e *Environment) RegisterOtelTracerProvider(name string, spec *ConfigSpec, 
 func (e *Environment) WalkTracers(fn func(name string, config *ConfigView)) {
 	for _, v := range bundle.AllTracers.Docs() {
 		fn(v.Name, &ConfigView{
+			prov:      e.internal,
 			component: v,
 		})
 	}
@@ -521,6 +529,7 @@ func (e *Environment) RegisterBatchScannerCreator(name string, spec *ConfigSpec,
 func (e *Environment) WalkScanners(fn func(name string, config *ConfigView)) {
 	for _, v := range bundle.AllScanners.Docs() {
 		fn(v.Name, &ConfigView{
+			prov:      e.internal,
 			component: v,
 		})
 	}

@@ -389,7 +389,7 @@ func (f FieldSpec) SanitiseYAML(node *yaml.Node, conf SanitiseConfig) error {
 			if err != nil {
 				return err
 			}
-			if scrubValue, err = f.scrubValue(scrubValue); err != nil {
+			if scrubValue, err = f.ScrubValue(scrubValue); err != nil {
 				return err
 			}
 			comment := n.LineComment
@@ -480,7 +480,7 @@ func lintYAMLFromOmit(parentSpec FieldSpecs, lintTargetSpec FieldSpec, parent, n
 }
 
 func customLintFromYAML(ctx LintContext, spec FieldSpec, node *yaml.Node) []Lint {
-	lintFn := spec.getLintFunc()
+	lintFn := spec.GetLintFunc()
 	if lintFn == nil {
 		return nil
 	}

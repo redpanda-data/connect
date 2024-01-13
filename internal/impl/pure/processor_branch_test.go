@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/benthosdev/benthos/v4/internal/component/processor"
+	"github.com/benthosdev/benthos/v4/internal/component/testutil"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
 
@@ -201,7 +201,7 @@ func TestBranchBasic(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 
-			conf, err := processor.FromYAML(fmt.Sprintf(`
+			conf, err := testutil.ProcessorFromYAML(fmt.Sprintf(`
 branch:
   request_map: |
     %v

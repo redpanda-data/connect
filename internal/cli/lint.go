@@ -13,6 +13,7 @@ import (
 	"github.com/fatih/color"
 	"github.com/urfave/cli/v2"
 
+	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/config"
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	ifilepath "github.com/benthosdev/benthos/v4/internal/filepath"
@@ -107,7 +108,7 @@ func lintMDSnippets(path string, lConf docs.LintConfig) (pathLints []pathLint) {
 			}
 		}
 
-		if _, err := config.FromParsed(lConf.DocsProvider, pConf); err != nil {
+		if _, err := config.FromParsed(lConf.DocsProvider, pConf, nil); err != nil {
 			var l docs.Lint
 			if errors.As(err, &l) {
 				l.Line += snippetLine - 1
@@ -187,7 +188,7 @@ func LintAction(c *cli.Context, stderr io.Writer) int {
 	}
 	targets = append(targets, c.StringSlice("resources")...)
 
-	lConf := docs.NewLintConfig()
+	lConf := docs.NewLintConfig(bundle.GlobalEnvironment)
 	lConf.RejectDeprecated = c.Bool("deprecated")
 	lConf.RequireLabels = c.Bool("labels")
 	skipEnvVarCheck := c.Bool("skip-env-var-check")

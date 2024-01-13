@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/benthosdev/benthos/v4/internal/component/processor"
+	"github.com/benthosdev/benthos/v4/internal/component/testutil"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
 
@@ -17,7 +17,7 @@ import (
 )
 
 func TestCatchEmpty(t *testing.T) {
-	conf, err := processor.FromYAML(`
+	conf, err := testutil.ProcessorFromYAML(`
 catch: []
 `)
 	require.NoError(t, err)
@@ -50,7 +50,7 @@ catch: []
 }
 
 func TestCatchBasic(t *testing.T) {
-	conf, err := processor.FromYAML(`
+	conf, err := testutil.ProcessorFromYAML(`
 catch:
   - bloblang: 'root = if batch_index() == 0 { content().encode("base64") }'
 `)
@@ -97,7 +97,7 @@ catch:
 }
 
 func TestCatchFilterSome(t *testing.T) {
-	conf, err := processor.FromYAML(`
+	conf, err := testutil.ProcessorFromYAML(`
 catch:
   - bloblang: 'root = if !content().contains("foo") { deleted() }'
 `)
@@ -142,7 +142,7 @@ catch:
 }
 
 func TestCatchMultiProcs(t *testing.T) {
-	conf, err := processor.FromYAML(`
+	conf, err := testutil.ProcessorFromYAML(`
 catch:
   - bloblang: 'root = if !content().contains("foo") { deleted() }'
   - bloblang: 'root = if batch_index() == 0 { content().encode("base64") }'
@@ -188,7 +188,7 @@ catch:
 }
 
 func TestCatchNotFails(t *testing.T) {
-	conf, err := processor.FromYAML(`
+	conf, err := testutil.ProcessorFromYAML(`
 catch:
   - bloblang: 'root = if batch_index() == 0 { content().encode("base64") }'
 `)
@@ -232,7 +232,7 @@ catch:
 }
 
 func TestCatchFilterAll(t *testing.T) {
-	conf, err := processor.FromYAML(`
+	conf, err := testutil.ProcessorFromYAML(`
 catch:
   - bloblang: 'root = if !content().contains("foo") { deleted() }'
 `)

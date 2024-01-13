@@ -7,7 +7,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/benthosdev/benthos/v4/internal/component/processor"
+	"github.com/benthosdev/benthos/v4/internal/component/testutil"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
 
@@ -15,7 +15,7 @@ import (
 )
 
 func TestGroupByValueBasic(t *testing.T) {
-	conf, err := processor.FromYAML(`
+	conf, err := testutil.ProcessorFromYAML(`
 group_by_value:
   value: ${!json("foo")}
 `)

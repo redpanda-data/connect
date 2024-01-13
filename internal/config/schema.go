@@ -1,12 +1,11 @@
 package config
 
 import (
-	"gopkg.in/yaml.v3"
-
 	"github.com/benthosdev/benthos/v4/internal/api"
-	tdocs "github.com/benthosdev/benthos/v4/internal/cli/test/docs"
+	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/internal/component/tracer"
+	"github.com/benthosdev/benthos/v4/internal/config/test"
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/manager"
@@ -25,59 +24,28 @@ const (
 
 // Type is the Benthos service configuration struct.
 type Type struct {
-	HTTP                   api.Config `json:"http" yaml:"http"`
-	stream.Config          `json:",inline" yaml:",inline"`
-	manager.ResourceConfig `json:",inline" yaml:",inline"`
-	Logger                 log.Config     `json:"logger" yaml:"logger"`
-	Metrics                metrics.Config `json:"metrics" yaml:"metrics"`
-	Tracer                 tracer.Config  `json:"tracer" yaml:"tracer"`
-	SystemCloseDelay       string         `json:"shutdown_delay" yaml:"shutdown_delay"`
-	SystemCloseTimeout     string         `json:"shutdown_timeout" yaml:"shutdown_timeout"`
-	Tests                  []any          `json:"tests,omitempty" yaml:"tests,omitempty"`
+	HTTP                   api.Config `yaml:"http"`
+	stream.Config          `yaml:",inline"`
+	manager.ResourceConfig `yaml:",inline"`
+	Logger                 log.Config     `yaml:"logger"`
+	Metrics                metrics.Config `yaml:"metrics"`
+	Tracer                 tracer.Config  `yaml:"tracer"`
+	SystemCloseDelay       string         `yaml:"shutdown_delay"`
+	SystemCloseTimeout     string         `yaml:"shutdown_timeout"`
+	Tests                  []any          `yaml:"tests"`
+
+	rawSource any
 }
 
-// New returns a new configuration with default values.
-func New() Type {
-	return Type{
-		HTTP:               api.NewConfig(),
-		Config:             stream.NewConfig(),
-		ResourceConfig:     manager.NewResourceConfig(),
-		Logger:             log.NewConfig(),
-		Metrics:            metrics.NewConfig(),
-		Tracer:             tracer.NewConfig(),
-		SystemCloseDelay:   "",
-		SystemCloseTimeout: "20s",
-		Tests:              nil,
-	}
-}
-
-// Sanitised returns a sanitised copy of the Benthos configuration, meaning
-// fields of no consequence (unused inputs, outputs, processors etc) are
-// excluded.
-func (c Type) Sanitised() (any, error) {
-	var node yaml.Node
-	if err := node.Encode(c); err != nil {
-		return nil, err
-	}
-
-	sanitConf := docs.NewSanitiseConfig()
-	sanitConf.RemoveTypeField = true
-	if err := Spec().SanitiseYAML(&node, sanitConf); err != nil {
-		return nil, err
-	}
-
-	var g any
-	if err := node.Decode(&g); err != nil {
-		return nil, err
-	}
-	return g, nil
+func (t *Type) GetRawSource() any {
+	return t.rawSource
 }
 
 var httpField = docs.FieldObject(fieldHTTP, "Configures the service-wide HTTP server.").WithChildren(api.Spec()...)
 
 func observabilityFields() docs.FieldSpecs {
 	defaultMetrics := "none"
-	if _, exists := docs.DeprecatedProvider.GetDocs("prometheus", docs.TypeMetrics); exists {
+	if _, exists := bundle.GlobalEnvironment.GetDocs("prometheus", docs.TypeMetrics); exists {
 		defaultMetrics = "prometheus"
 	}
 	return docs.FieldSpecs{
@@ -100,7 +68,7 @@ func Spec() docs.FieldSpecs {
 	fields = append(fields, stream.Spec()...)
 	fields = append(fields, manager.Spec()...)
 	fields = append(fields, observabilityFields()...)
-	fields = append(fields, tdocs.ConfigSpec())
+	fields = append(fields, test.ConfigSpec().Advanced())
 	return fields
 }
 
@@ -109,26 +77,13 @@ func SpecWithoutStream() docs.FieldSpecs {
 	fields := docs.FieldSpecs{httpField}
 	fields = append(fields, manager.Spec()...)
 	fields = append(fields, observabilityFields()...)
-	fields = append(fields, tdocs.ConfigSpec())
+	fields = append(fields, test.ConfigSpec())
 	return fields
 }
 
-// FromYAML is for old style tests.
-func FromYAML(confStr string) (Type, error) {
-	node, err := docs.UnmarshalYAML([]byte(confStr))
-	if err != nil {
-		return Type{}, err
-	}
-
-	pConf, err := Spec().ParsedConfigFromAny(node)
-	if err != nil {
-		return Type{}, err
-	}
-	return FromParsed(docs.DeprecatedProvider, pConf)
-}
-
-func FromParsed(prov docs.Provider, pConf *docs.ParsedConfig) (conf Type, err error) {
-	if conf.Config, err = stream.FromParsed(prov, pConf); err != nil {
+func FromParsed(prov docs.Provider, pConf *docs.ParsedConfig, rawSource any) (conf Type, err error) {
+	conf.rawSource = rawSource
+	if conf.Config, err = stream.FromParsed(prov, pConf, nil); err != nil {
 		return
 	}
 	if conf.ResourceConfig, err = manager.FromParsed(prov, pConf); err != nil {
@@ -175,6 +130,16 @@ func noStreamFromParsed(prov docs.Provider, pConf *docs.ParsedConfig, conf *Type
 	if pConf.Contains(fieldSystemCloseTimeout) {
 		if conf.SystemCloseTimeout, err = pConf.FieldString(fieldSystemCloseTimeout); err != nil {
 			return
+		}
+	}
+	if pConf.Contains(fieldTests) {
+		var tmpTests []*docs.ParsedConfig
+		if tmpTests, err = pConf.FieldAnyList(fieldTests); err != nil {
+			return
+		}
+		for _, v := range tmpTests {
+			t, _ := v.FieldAny()
+			conf.Tests = append(conf.Tests, t)
 		}
 	}
 	return

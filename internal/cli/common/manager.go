@@ -73,7 +73,7 @@ func CreateManager(
 	// Create HTTP API with a sanitised service config.
 	var sanitNode yaml.Node
 	if err = sanitNode.Encode(conf); err == nil {
-		sanitConf := docs.NewSanitiseConfig()
+		sanitConf := docs.NewSanitiseConfig(bundle.GlobalEnvironment)
 		sanitConf.RemoveTypeField = true
 		sanitConf.ScrubSecrets = true
 		err = config.Spec().SanitiseYAML(&sanitNode, sanitConf)

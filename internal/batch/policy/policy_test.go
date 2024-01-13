@@ -12,6 +12,7 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/batch/policy"
 	"github.com/benthosdev/benthos/v4/internal/batch/policy/batchconfig"
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
+	"github.com/benthosdev/benthos/v4/internal/component/testutil"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
 
@@ -232,7 +233,7 @@ func TestPolicyArchived(t *testing.T) {
 	conf.Count = 2
 	conf.ByteSize = 0
 
-	procConf, err := processor.FromYAML(`
+	procConf, err := testutil.ProcessorFromYAML(`
 archive:
   format: lines
 `)

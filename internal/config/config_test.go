@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v3"
 
+	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/config"
 	"github.com/benthosdev/benthos/v4/internal/docs"
@@ -28,7 +29,7 @@ func testConfToAny(t testing.TB, conf any) any {
 	err := node.Encode(conf)
 	require.NoError(t, err)
 
-	sanitConf := docs.NewSanitiseConfig()
+	sanitConf := docs.NewSanitiseConfig(bundle.GlobalEnvironment)
 	sanitConf.RemoveTypeField = true
 	sanitConf.ScrubSecrets = true
 	err = config.Spec().SanitiseYAML(&node, sanitConf)
@@ -262,7 +263,7 @@ func TestDefaultBasedOverridesWithYAML(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	c, err := config.FromParsed(docs.DeprecatedProvider, pConf)
+	c, err := config.FromParsed(bundle.GlobalEnvironment, pConf, nil)
 	require.NoError(t, err)
 
 	s, err := stream.New(c.Config, mock.NewManager())
@@ -299,7 +300,7 @@ input:
 	pConf, err := spec.ParsedConfigFromAny(node)
 	require.NoError(t, err)
 
-	c, err := config.FromParsed(docs.DeprecatedProvider, pConf)
+	c, err := config.FromParsed(bundle.GlobalEnvironment, pConf, nil)
 	require.NoError(t, err)
 
 	s, err := stream.New(c.Config, mock.NewManager())
@@ -339,7 +340,7 @@ input:
 	pConf, err := spec.ParsedConfigFromAny(node)
 	require.NoError(t, err)
 
-	c, err := config.FromParsed(docs.DeprecatedProvider, pConf)
+	c, err := config.FromParsed(bundle.GlobalEnvironment, pConf, nil)
 	require.NoError(t, err)
 
 	s, err := stream.New(c.Config, mock.NewManager())

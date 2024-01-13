@@ -116,14 +116,6 @@ func defaultTypeByType(docProvider Provider, t Type) string {
 	return ""
 }
 
-// DefaultTypeOf returns the standard default implementation of a given
-// component type, which is the implementation used in a stream when no config
-// for the component is present. Only some component types have a default, for
-// those that do not an empty string is returned.
-func DefaultTypeOf(t Type) string {
-	return defaultTypeByType(DeprecatedProvider, t)
-}
-
 func getInferenceCandidateFromList(docProvider Provider, t Type, l []string) (string, ComponentSpec, error) {
 	ignore := ReservedFieldsByType(t)
 
@@ -177,8 +169,8 @@ type SanitiseConfig struct {
 }
 
 // NewSanitiseConfig creates a new sanitise config.
-func NewSanitiseConfig() SanitiseConfig {
+func NewSanitiseConfig(prov Provider) SanitiseConfig {
 	return SanitiseConfig{
-		DocsProvider: DeprecatedProvider,
+		DocsProvider: prov,
 	}
 }

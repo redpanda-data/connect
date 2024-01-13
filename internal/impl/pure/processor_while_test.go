@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
+	"github.com/benthosdev/benthos/v4/internal/component/testutil"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
 
@@ -26,7 +27,7 @@ func TestWhileErrs(t *testing.T) {
 }
 
 func TestWhileWithCount(t *testing.T) {
-	conf, err := processor.FromYAML(`
+	conf, err := testutil.ProcessorFromYAML(`
 while:
   check: 'count("while_test_1") < 3'
   processors:
@@ -52,7 +53,7 @@ while:
 }
 
 func TestWhileWithContentCheck(t *testing.T) {
-	conf, err := processor.FromYAML(`
+	conf, err := testutil.ProcessorFromYAML(`
 while:
   check: 'batch_size() <= 3'
   processors:
@@ -84,7 +85,7 @@ while:
 }
 
 func TestWhileWithCountALO(t *testing.T) {
-	conf, err := processor.FromYAML(`
+	conf, err := testutil.ProcessorFromYAML(`
 while:
   check: 'count("while_test_2") < 3'
   at_least_once: true
@@ -117,7 +118,7 @@ while:
 }
 
 func TestWhileMaxLoops(t *testing.T) {
-	conf, err := processor.FromYAML(`
+	conf, err := testutil.ProcessorFromYAML(`
 while:
   check: 'true'
   max_loops: 3
@@ -150,7 +151,7 @@ while:
 }
 
 func TestWhileWithStaticTrue(t *testing.T) {
-	conf, err := processor.FromYAML(`
+	conf, err := testutil.ProcessorFromYAML(`
 while:
   check: 'true'
   processors:

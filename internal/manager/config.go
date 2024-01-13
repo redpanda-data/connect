@@ -1,8 +1,6 @@
 package manager
 
 import (
-	"gopkg.in/yaml.v3"
-
 	"github.com/benthosdev/benthos/v4/internal/component/cache"
 	"github.com/benthosdev/benthos/v4/internal/component/input"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
@@ -22,11 +20,11 @@ const (
 // ResourceConfig contains fields for specifying resource components at the root
 // of a Benthos config.
 type ResourceConfig struct {
-	ResourceInputs     []input.Config     `json:"input_resources,omitempty" yaml:"input_resources,omitempty"`
-	ResourceProcessors []processor.Config `json:"processor_resources,omitempty" yaml:"processor_resources,omitempty"`
-	ResourceOutputs    []output.Config    `json:"output_resources,omitempty" yaml:"output_resources,omitempty"`
-	ResourceCaches     []cache.Config     `json:"cache_resources,omitempty" yaml:"cache_resources,omitempty"`
-	ResourceRateLimits []ratelimit.Config `json:"rate_limit_resources,omitempty" yaml:"rate_limit_resources,omitempty"`
+	ResourceInputs     []input.Config     `yaml:"input_resources,omitempty"`
+	ResourceProcessors []processor.Config `yaml:"processor_resources,omitempty"`
+	ResourceOutputs    []output.Config    `yaml:"output_resources,omitempty"`
+	ResourceCaches     []cache.Config     `yaml:"cache_resources,omitempty"`
+	ResourceRateLimits []ratelimit.Config `yaml:"rate_limit_resources,omitempty"`
 }
 
 // NewResourceConfig creates a ResourceConfig with default values.
@@ -51,18 +49,12 @@ func (r *ResourceConfig) AddFrom(extra *ResourceConfig) error {
 	return nil
 }
 
-// FromYAML is for old style tests.
-func FromYAML(confStr string) (conf ResourceConfig, err error) {
-	var node *yaml.Node
-	if node, err = docs.UnmarshalYAML([]byte(confStr)); err != nil {
-		return
-	}
+func FromAny(prov docs.Provider, v any) (conf ResourceConfig, err error) {
 	var pConf *docs.ParsedConfig
-	if pConf, err = Spec().ParsedConfigFromAny(node); err != nil {
+	if pConf, err = Spec().ParsedConfigFromAny(v); err != nil {
 		return
 	}
-	conf, err = FromParsed(docs.DeprecatedProvider, pConf)
-	return
+	return FromParsed(prov, pConf)
 }
 
 func FromParsed(prov docs.Provider, pConf *docs.ParsedConfig) (conf ResourceConfig, err error) {

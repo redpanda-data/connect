@@ -10,7 +10,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/benthosdev/benthos/v4/internal/component/processor"
+	"github.com/benthosdev/benthos/v4/internal/component/testutil"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
 )
@@ -77,7 +77,7 @@ func TestJSONSchemaExternalSchemaCheck(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			conf, err := processor.FromYAML(fmt.Sprintf(`
+			conf, err := testutil.ProcessorFromYAML(fmt.Sprintf(`
 json_schema:
   schema_path: '%v'
 `, tt.fields.schemaPath))
@@ -168,7 +168,7 @@ func TestJSONSchemaInlineSchemaCheck(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			conf, err := processor.FromYAML(fmt.Sprintf(`
+			conf, err := testutil.ProcessorFromYAML(fmt.Sprintf(`
 json_schema:
   schema: |
     %v
@@ -273,7 +273,7 @@ func TestJSONSchemaLowercaseDescriptionCheck(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			conf, err := processor.FromYAML(fmt.Sprintf(`
+			conf, err := testutil.ProcessorFromYAML(fmt.Sprintf(`
 json_schema:
   schema: |
     %v
@@ -306,7 +306,7 @@ json_schema:
 }
 
 func TestJSONSchemaPathNotExist(t *testing.T) {
-	conf, err := processor.FromYAML(`
+	conf, err := testutil.ProcessorFromYAML(`
 json_schema:
   schema_path: file://path_does_not_exist
 `)
@@ -335,7 +335,7 @@ func TestJSONSchemaInvalidSchema(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	conf, err := processor.FromYAML(`
+	conf, err := testutil.ProcessorFromYAML(`
 json_schema:
   schema_path: ` + fmt.Sprintf("file://%s", tmpSchemaFile.Name()) + `
 `)

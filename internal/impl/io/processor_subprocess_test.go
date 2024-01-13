@@ -13,7 +13,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/benthosdev/benthos/v4/internal/component/processor"
+	"github.com/benthosdev/benthos/v4/internal/component/testutil"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
 )
@@ -21,7 +21,7 @@ import (
 func TestSubprocessWithSed(t *testing.T) {
 	t.Skip("disabled for now")
 
-	conf, err := processor.FromYAML(`
+	conf, err := testutil.ProcessorFromYAML(`
 subprocess:
   name: sed
   args: [ "s/foo/bar/g", "-u" ]
@@ -63,7 +63,7 @@ subprocess:
 func TestSubprocessWithCat(t *testing.T) {
 	t.Skip("disabled for now")
 
-	conf, err := processor.FromYAML(`
+	conf, err := testutil.ProcessorFromYAML(`
 subprocess:
   name: cat
 `)
@@ -104,7 +104,7 @@ subprocess:
 func TestSubprocessLineBreaks(t *testing.T) {
 	t.Skip("disabled for now")
 
-	conf, err := processor.FromYAML(`
+	conf, err := testutil.ProcessorFromYAML(`
 subprocess:
   name: sed
   args: [ "s/\\(^$\\)\\|\\(foo\\)/bar/", "-u" ]
@@ -148,7 +148,7 @@ subprocess:
 }
 
 func TestSubprocessWithErrors(t *testing.T) {
-	conf, err := processor.FromYAML(`
+	conf, err := testutil.ProcessorFromYAML(`
 subprocess:
   name: sh
   args: [ "-c", "cat 1>&2" ]
@@ -252,7 +252,7 @@ func main() {
 }
 `)
 	f := func(formatSend, formatRecv string, extra bool) {
-		conf, err := processor.FromYAML(fmt.Sprintf(`
+		conf, err := testutil.ProcessorFromYAML(fmt.Sprintf(`
 subprocess:
   name: go
   args: %v

@@ -12,14 +12,14 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/shutdown"
 )
 
-var _ input.Streamed = &inputWrapper{}
+var _ input.Streamed = &InputWrapper{}
 
 type inputCtrl struct {
 	input         input.Streamed
 	closedForSwap *int32
 }
 
-type inputWrapper struct {
+type InputWrapper struct {
 	ctrl      *inputCtrl
 	inputLock sync.Mutex
 
@@ -27,9 +27,9 @@ type inputWrapper struct {
 	shutSig  *shutdown.Signaller
 }
 
-func wrapInput(i input.Streamed) *inputWrapper {
+func WrapInput(i input.Streamed) *InputWrapper {
 	var s int32
-	w := &inputWrapper{
+	w := &InputWrapper{
 		ctrl: &inputCtrl{
 			input:         i,
 			closedForSwap: &s,
@@ -41,7 +41,7 @@ func wrapInput(i input.Streamed) *inputWrapper {
 	return w
 }
 
-func (w *inputWrapper) closeExistingInput(ctx context.Context, forSwap bool) error {
+func (w *InputWrapper) CloseExistingInput(ctx context.Context, forSwap bool) error {
 	w.inputLock.Lock()
 	tmpInput := w.ctrl.input
 	if forSwap {
@@ -59,7 +59,7 @@ func (w *inputWrapper) closeExistingInput(ctx context.Context, forSwap bool) err
 	return tmpInput.WaitForClose(ctx)
 }
 
-func (w *inputWrapper) swapInput(i input.Streamed) {
+func (w *InputWrapper) SwapInput(i input.Streamed) {
 	var s int32
 	w.inputLock.Lock()
 	w.ctrl = &inputCtrl{
@@ -69,18 +69,18 @@ func (w *inputWrapper) swapInput(i input.Streamed) {
 	w.inputLock.Unlock()
 }
 
-func (w *inputWrapper) TransactionChan() <-chan message.Transaction {
+func (w *InputWrapper) TransactionChan() <-chan message.Transaction {
 	return w.tranChan
 }
 
-func (w *inputWrapper) Connected() bool {
+func (w *InputWrapper) Connected() bool {
 	w.inputLock.Lock()
 	con := w.ctrl.input != nil && w.ctrl.input.Connected()
 	w.inputLock.Unlock()
 	return con
 }
 
-func (w *inputWrapper) loop() {
+func (w *InputWrapper) loop() {
 	defer func() {
 		w.inputLock.Lock()
 		tmpInput := w.ctrl.input
@@ -142,15 +142,15 @@ func (w *inputWrapper) loop() {
 	}
 }
 
-func (w *inputWrapper) TriggerStopConsuming() {
+func (w *InputWrapper) TriggerStopConsuming() {
 	w.shutSig.CloseAtLeisure()
 }
 
-func (w *inputWrapper) TriggerCloseNow() {
+func (w *InputWrapper) TriggerCloseNow() {
 	w.shutSig.CloseNow()
 }
 
-func (w *inputWrapper) WaitForClose(ctx context.Context) error {
+func (w *InputWrapper) WaitForClose(ctx context.Context) error {
 	select {
 	case <-w.shutSig.HasClosedChan():
 	case <-ctx.Done():

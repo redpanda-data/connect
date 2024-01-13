@@ -10,13 +10,13 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/benthosdev/benthos/v4/internal/component/processor"
+	"github.com/benthosdev/benthos/v4/internal/component/testutil"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
 )
 
 func TestJQAllParts(t *testing.T) {
-	conf, err := processor.FromYAML(`
+	conf, err := testutil.ProcessorFromYAML(`
 jq:
   query: .foo.bar
 `)
@@ -39,7 +39,7 @@ jq:
 }
 
 func TestJQValidation(t *testing.T) {
-	conf, err := processor.FromYAML(`
+	conf, err := testutil.ProcessorFromYAML(`
 jq:
   query: .foo.bar
 `)
@@ -58,7 +58,7 @@ jq:
 }
 
 func TestJQMutation(t *testing.T) {
-	conf, err := processor.FromYAML(`
+	conf, err := testutil.ProcessorFromYAML(`
 jq:
   query: '{foo: .foo} | .foo.bar = "baz"'
 `)
@@ -165,7 +165,7 @@ func TestJQ(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			conf, err := processor.FromYAML(`
+			conf, err := testutil.ProcessorFromYAML(`
 jq:
   query: '` + test.path + `'
 `)
@@ -268,7 +268,7 @@ func TestJQ_OutputRaw(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			conf, err := processor.FromYAML(`
+			conf, err := testutil.ProcessorFromYAML(`
 jq:
   query: '` + test.path + `'
   output_raw: true

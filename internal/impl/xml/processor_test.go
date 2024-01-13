@@ -7,7 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/benthosdev/benthos/v4/internal/component/processor"
+	"github.com/benthosdev/benthos/v4/internal/component/testutil"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
 )
@@ -93,7 +93,7 @@ func TestXMLCases(t *testing.T) {
 		},
 	}
 
-	conf, err := processor.FromYAML(`
+	conf, err := testutil.ProcessorFromYAML(`
 xml:
   operator: to_json
 `)
@@ -120,7 +120,7 @@ xml:
 }
 
 func TestXMLWithCast(t *testing.T) {
-	conf, err := processor.FromYAML(`
+	conf, err := testutil.ProcessorFromYAML(`
 xml:
   operator: to_json
   cast: true

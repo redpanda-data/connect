@@ -12,6 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
+	"github.com/benthosdev/benthos/v4/internal/component/testutil"
 	"github.com/benthosdev/benthos/v4/internal/manager"
 	"github.com/benthosdev/benthos/v4/internal/message"
 	"github.com/benthosdev/benthos/v4/internal/stream"
@@ -20,7 +21,7 @@ import (
 )
 
 func TestTypeConstruction(t *testing.T) {
-	conf, err := stream.FromYAML(`
+	conf, err := testutil.StreamFromYAML(`
 input:
   generate:
     mapping: 'root = {}'
@@ -54,7 +55,7 @@ output:
 func TestStreamCloseUngraceful(t *testing.T) {
 	t.Parallel()
 
-	conf, err := stream.FromYAML(`
+	conf, err := testutil.StreamFromYAML(`
 input:
   generate:
     interval: ""
@@ -91,7 +92,7 @@ output:
 }
 
 func TestTypeCloseGracefully(t *testing.T) {
-	conf, err := stream.FromYAML(`
+	conf, err := testutil.StreamFromYAML(`
 input:
   generate:
     interval: ""
@@ -127,7 +128,7 @@ output:
 }
 
 func TestTypeCloseUnordered(t *testing.T) {
-	conf, err := stream.FromYAML(`
+	conf, err := testutil.StreamFromYAML(`
 input:
   generate:
     mapping: 'root = {}'
@@ -192,7 +193,7 @@ func validateHealthCheckResponse(t *testing.T, serverURL, expectedResponse strin
 }
 
 func TestHealthCheck(t *testing.T) {
-	conf, err := stream.FromYAML(`
+	conf, err := testutil.StreamFromYAML(`
 input:
   generate:
     mapping: 'root = {}'

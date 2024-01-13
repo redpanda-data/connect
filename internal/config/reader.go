@@ -94,7 +94,7 @@ func NewReader(mainPath string, resourcePaths []string, opts ...OptFunc) *Reader
 	r := &Reader{
 		testSuffix:         "_benthos_test",
 		fs:                 ifs.OS(),
-		lintConf:           docs.NewLintConfig(),
+		lintConf:           docs.NewLintConfig(bundle.GlobalEnvironment),
 		mainPath:           mainPath,
 		resourcePaths:      resourcePaths,
 		modTimeLastRead:    map[string]time.Time{},
@@ -269,7 +269,7 @@ func applyOverrides(specs docs.FieldSpecs, root *yaml.Node, overrides ...string)
 			Kind:  yaml.ScalarNode,
 			Value: value,
 		}
-		if err := specs.SetYAMLPath(docs.DeprecatedProvider, root, &valNode, gabs.DotPathToSlice(path)...); err != nil {
+		if err := specs.SetYAMLPath(bundle.GlobalEnvironment, root, &valNode, gabs.DotPathToSlice(path)...); err != nil {
 			return fmt.Errorf("failed to set config field override: %w", err)
 		}
 	}
@@ -324,15 +324,19 @@ func (r *Reader) readMain(mainPath string) (conf Type, lints []string, err error
 		}
 	}
 
+	var rawSource any
+	_ = rawNode.Decode(&rawSource)
+
 	var pConf *docs.ParsedConfig
 	if pConf, err = confSpec.ParsedConfigFromAny(rawNode); err != nil {
 		return
 	}
 
 	if r.streamsMode {
+		conf.rawSource = rawSource
 		err = noStreamFromParsed(r.lintConf.DocsProvider, pConf, &conf)
 	} else {
-		conf, err = FromParsed(r.lintConf.DocsProvider, pConf)
+		conf, err = FromParsed(r.lintConf.DocsProvider, pConf, rawSource)
 	}
 	return
 }

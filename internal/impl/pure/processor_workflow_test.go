@@ -17,6 +17,7 @@ import (
 
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
+	"github.com/benthosdev/benthos/v4/internal/component/testutil"
 	"github.com/benthosdev/benthos/v4/internal/impl/pure"
 	"github.com/benthosdev/benthos/v4/internal/manager"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
@@ -198,7 +199,7 @@ workflow:
 				)
 			}
 
-			conf, err := processor.FromYAML(confStr)
+			conf, err := testutil.ProcessorFromYAML(confStr)
 			require.NoError(t, err)
 
 			p, err := mock.NewManager().NewProcessor(conf)
@@ -236,7 +237,7 @@ func quickTestBranches(t testing.TB, branches ...[4]string) map[string]processor
 	t.Helper()
 	m := map[string]processor.Config{}
 	for _, b := range branches {
-		conf, err := processor.FromYAML(fmt.Sprintf(`
+		conf, err := testutil.ProcessorFromYAML(fmt.Sprintf(`
 branch:
   request_map: |
     %v
@@ -258,7 +259,7 @@ branch:
 }
 
 func TestWorkflowMissingResources(t *testing.T) {
-	conf, err := processor.FromYAML(`
+	conf, err := testutil.ProcessorFromYAML(`
 workflow:
   order: [[ foo, bar, baz ]]
   branches:
@@ -270,7 +271,7 @@ workflow:
 `)
 	require.NoError(t, err)
 
-	branchConf, err := processor.FromYAML(`
+	branchConf, err := testutil.ProcessorFromYAML(`
 branch:
   request_map: root = this
   processors:
@@ -488,7 +489,7 @@ workflow:
 				)
 			}
 
-			conf, err := processor.FromYAML(confStr)
+			conf, err := testutil.ProcessorFromYAML(confStr)
 			require.NoError(t, err)
 
 			p, err := mock.NewManager().NewProcessor(conf)
@@ -686,13 +687,14 @@ func TestWorkflowsWithResources(t *testing.T) {
 				branchNames = append(branchNames, b[0])
 			}
 
-			conf, err := processor.FromYAML(fmt.Sprintf(`
+			mgr := newMockProcProvider(t, quickTestBranches(t, test.branches...))
+
+			conf, err := testutil.ProcessorFromYAML(fmt.Sprintf(`
 workflow:
   branch_resources: %v
 `, gabs.Wrap(branchNames).String()))
 			require.NoError(t, err)
 
-			mgr := newMockProcProvider(t, quickTestBranches(t, test.branches...))
 			p, err := mgr.NewProcessor(conf)
 			require.NoError(t, err)
 
@@ -758,7 +760,7 @@ func TestWorkflowsParallel(t *testing.T) {
 		branchNames = append(branchNames, b[0])
 	}
 
-	conf, err := processor.FromYAML(fmt.Sprintf(`
+	conf, err := testutil.ProcessorFromYAML(fmt.Sprintf(`
 workflow:
   branch_resources: %v
 `, gabs.Wrap(branchNames).String()))
@@ -957,7 +959,7 @@ func TestWorkflowsWithOrderResources(t *testing.T) {
 			if test.order == nil {
 				test.order = [][]string{}
 			}
-			conf, err := processor.FromYAML(fmt.Sprintf(`
+			conf, err := testutil.ProcessorFromYAML(fmt.Sprintf(`
 workflow:
   order: %v
 `, gabs.Wrap(test.order).String()))

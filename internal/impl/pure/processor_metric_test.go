@@ -8,13 +8,13 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
-	"github.com/benthosdev/benthos/v4/internal/component/processor"
+	"github.com/benthosdev/benthos/v4/internal/component/testutil"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
 )
 
 func TestMetricBad(t *testing.T) {
-	conf, err := processor.FromYAML(`
+	conf, err := testutil.ProcessorFromYAML(`
 metric:
   type: bad type
   name: some.path
@@ -24,7 +24,7 @@ metric:
 	_, err = mock.NewManager().NewProcessor(conf)
 	require.Error(t, err)
 
-	conf, err = processor.FromYAML(`
+	conf, err = testutil.ProcessorFromYAML(`
 type: metric
 `)
 	require.NoError(t, err)
@@ -34,7 +34,7 @@ type: metric
 }
 
 func TestMetricCounter(t *testing.T) {
-	conf, err := processor.FromYAML(`
+	conf, err := testutil.ProcessorFromYAML(`
 metric:
   type: counter
   name: foo.bar
@@ -83,7 +83,7 @@ metric:
 }
 
 func TestMetricCounterBy(t *testing.T) {
-	conf, err := processor.FromYAML(`
+	conf, err := testutil.ProcessorFromYAML(`
 metric:
   type: counter_by
   name: foo.bar
@@ -135,7 +135,7 @@ metric:
 }
 
 func TestMetricGauge(t *testing.T) {
-	conf, err := processor.FromYAML(`
+	conf, err := testutil.ProcessorFromYAML(`
 metric:
   type: gauge
   name: foo.bar
@@ -187,7 +187,7 @@ metric:
 }
 
 func TestMetricTiming(t *testing.T) {
-	conf, err := processor.FromYAML(`
+	conf, err := testutil.ProcessorFromYAML(`
 metric:
   type: timing
   name: foo.bar

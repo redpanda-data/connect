@@ -12,6 +12,7 @@ import (
 
 	"github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
+	"github.com/benthosdev/benthos/v4/internal/component/testutil"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
 	"github.com/benthosdev/benthos/v4/internal/pipeline"
@@ -125,14 +126,14 @@ func TestBasicWrapPipelinesOrdering(t *testing.T) {
 
 	mockOut := &mockOutput{}
 
-	firstProc, err := processor.FromYAML(`
+	firstProc, err := testutil.ProcessorFromYAML(`
 insert_part:
   content: foo
   index: 0
 `)
 	require.NoError(t, err)
 
-	secondProc, err := processor.FromYAML(`
+	secondProc, err := testutil.ProcessorFromYAML(`
 select_parts:
   parts: [ 0 ]
 `)

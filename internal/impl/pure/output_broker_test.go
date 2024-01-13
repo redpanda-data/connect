@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/benthosdev/benthos/v4/internal/component/output"
+	"github.com/benthosdev/benthos/v4/internal/component/testutil"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
 
@@ -23,7 +23,7 @@ import (
 func TestFanOutBroker(t *testing.T) {
 	dir := t.TempDir()
 
-	conf, err := output.FromYAML(strings.ReplaceAll(`
+	conf, err := testutil.OutputFromYAML(strings.ReplaceAll(`
 broker:
   pattern: fan_out
   outputs:
@@ -103,7 +103,7 @@ broker:
 func TestRoundRobinBroker(t *testing.T) {
 	dir := t.TempDir()
 
-	conf, err := output.FromYAML(strings.ReplaceAll(`
+	conf, err := testutil.OutputFromYAML(strings.ReplaceAll(`
 broker:
   pattern: round_robin
   outputs:
@@ -181,7 +181,7 @@ broker:
 func TestGreedyBroker(t *testing.T) {
 	dir := t.TempDir()
 
-	conf, err := output.FromYAML(strings.ReplaceAll(`
+	conf, err := testutil.OutputFromYAML(strings.ReplaceAll(`
 broker:
   pattern: greedy
   outputs:

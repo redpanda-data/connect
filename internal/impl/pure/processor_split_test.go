@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
+	"github.com/benthosdev/benthos/v4/internal/component/testutil"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
 )
@@ -60,7 +61,7 @@ func TestSplitToSingleParts(t *testing.T) {
 }
 
 func TestSplitToMultipleParts(t *testing.T) {
-	conf, err := processor.FromYAML(`
+	conf, err := testutil.ProcessorFromYAML(`
 split:
   size: 2
 `)
@@ -99,7 +100,7 @@ split:
 }
 
 func TestSplitByBytes(t *testing.T) {
-	conf, err := processor.FromYAML(`
+	conf, err := testutil.ProcessorFromYAML(`
 split:
   size: 0
   byte_size: 6
@@ -138,7 +139,7 @@ split:
 }
 
 func TestSplitByBytesTooLarge(t *testing.T) {
-	conf, err := processor.FromYAML(`
+	conf, err := testutil.ProcessorFromYAML(`
 split:
   size: 0
   byte_size: 2

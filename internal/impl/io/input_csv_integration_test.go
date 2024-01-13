@@ -14,13 +14,14 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/benthosdev/benthos/v4/internal/component/input"
+	"github.com/benthosdev/benthos/v4/internal/component/testutil"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 
 	_ "github.com/benthosdev/benthos/v4/internal/impl/io"
 )
 
 func csvInput(t testing.TB, confPattern string, args ...any) input.Streamed {
-	iConf, err := input.FromYAML(fmt.Sprintf(confPattern, args...))
+	iConf, err := testutil.InputFromYAML(fmt.Sprintf(confPattern, args...))
 	require.NoError(t, err)
 
 	i, err := mock.NewManager().NewInput(iConf)

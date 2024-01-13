@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/benthosdev/benthos/v4/internal/component/input"
+	"github.com/benthosdev/benthos/v4/internal/component/testutil"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 )
 
@@ -25,7 +26,7 @@ func writeFiles(t *testing.T, dir string, nameToContent map[string]string) {
 }
 
 func testInput(t testing.TB, confPattern string, args ...any) input.Streamed {
-	iConf, err := input.FromYAML(fmt.Sprintf(confPattern, args...))
+	iConf, err := testutil.InputFromYAML(fmt.Sprintf(confPattern, args...))
 	require.NoError(t, err)
 
 	i, err := mock.NewManager().NewInput(iConf)
@@ -385,7 +386,7 @@ func TestSequenceSad(t *testing.T) {
 
 	writeFiles(t, tmpDir, files)
 
-	conf, err := input.FromYAML(fmt.Sprintf(`
+	conf, err := testutil.InputFromYAML(fmt.Sprintf(`
 sequence:
   inputs:
     - file:
@@ -463,7 +464,7 @@ func TestSequenceEarlyTermination(t *testing.T) {
 		"f1": "foo\nbar\nbaz",
 	})
 
-	conf, err := input.FromYAML(fmt.Sprintf(`
+	conf, err := testutil.InputFromYAML(fmt.Sprintf(`
 sequence:
   inputs:
     - file:

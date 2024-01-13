@@ -7,7 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/benthosdev/benthos/v4/internal/component/processor"
+	"github.com/benthosdev/benthos/v4/internal/component/testutil"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
 )
@@ -20,7 +20,7 @@ func TestDedupe(t *testing.T) {
 	mgr := mock.NewManager()
 	mgr.Caches["foocache"] = map[string]mock.CacheItem{}
 
-	conf, err := processor.FromYAML(`
+	conf, err := testutil.ProcessorFromYAML(`
 dedupe:
   cache: foocache
   key: ${! content() }
@@ -58,7 +58,7 @@ dedupe:
 }
 
 func TestDedupeBadCache(t *testing.T) {
-	conf, err := processor.FromYAML(`
+	conf, err := testutil.ProcessorFromYAML(`
 dedupe:
   cache: foocache
 `)
@@ -70,7 +70,7 @@ dedupe:
 }
 
 func TestDedupeCacheErrors(t *testing.T) {
-	conf, err := processor.FromYAML(`
+	conf, err := testutil.ProcessorFromYAML(`
 dedupe:
   cache: foocache
   key: ${! content() }
@@ -89,7 +89,7 @@ dedupe:
 	require.NoError(t, err)
 	assert.Len(t, msgs, 0)
 
-	conf, err = processor.FromYAML(`
+	conf, err = testutil.ProcessorFromYAML(`
 dedupe:
   cache: foocache
   key: ${! content() }

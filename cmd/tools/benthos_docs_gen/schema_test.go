@@ -21,10 +21,10 @@ func TestComponentExamples(t *testing.T) {
 		pConf, err := confSpec.ParsedConfigFromAny(node)
 		require.NoError(t, err, "%v:%v:%v", componentType, typeName, title)
 
-		_, err = config.FromParsed(docs.DeprecatedProvider, pConf)
+		_, err = config.FromParsed(bundle.GlobalEnvironment, pConf, nil)
 		require.NoError(t, err, "%v:%v:%v", componentType, typeName, title)
 
-		lConf := docs.NewLintConfig()
+		lConf := docs.NewLintConfig(bundle.GlobalEnvironment)
 		lConf.RejectDeprecated = !deprecated
 		lints := confSpec.LintYAML(docs.NewLintContext(lConf), node)
 		for _, lint := range lints {

@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/benthosdev/benthos/v4/internal/component/processor"
+	"github.com/benthosdev/benthos/v4/internal/component/testutil"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
 
@@ -17,7 +17,7 @@ import (
 )
 
 func TestSwitchCases(t *testing.T) {
-	conf, err := processor.FromYAML(`
+	conf, err := testutil.ProcessorFromYAML(`
 switch:
   - check: 'content().contains("A")'
     processors:
@@ -116,7 +116,7 @@ switch:
 }
 
 func TestSwitchError(t *testing.T) {
-	conf, err := processor.FromYAML(`
+	conf, err := testutil.ProcessorFromYAML(`
 switch:
   - check: 'this.id.not_empty().contains("foo")'
     processors:
@@ -165,7 +165,7 @@ switch:
 }
 
 func BenchmarkSwitch10(b *testing.B) {
-	conf, err := processor.FromYAML(`
+	conf, err := testutil.ProcessorFromYAML(`
 switch:
   - check: 'content().contains("A")'
     processors:
@@ -224,7 +224,7 @@ switch:
 }
 
 func BenchmarkSwitch1(b *testing.B) {
-	conf, err := processor.FromYAML(`
+	conf, err := testutil.ProcessorFromYAML(`
 switch:
   - check: 'content().contains("A")'
     processors:

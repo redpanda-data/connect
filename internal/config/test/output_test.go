@@ -5,106 +5,88 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"reflect"
 	"testing"
 
 	"github.com/fatih/color"
 	"github.com/nsf/jsondiff"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	yaml "gopkg.in/yaml.v3"
 
+	"github.com/benthosdev/benthos/v4/internal/bundle"
+	"github.com/benthosdev/benthos/v4/internal/docs"
+	"github.com/benthosdev/benthos/v4/internal/filepath/ifs"
 	"github.com/benthosdev/benthos/v4/internal/message"
 )
 
+func condsFromYAML(t testing.TB, str string, args ...any) OutputConditionsMap {
+	t.Helper()
+
+	node, err := docs.UnmarshalYAML(fmt.Appendf(nil, str, args...))
+	require.NoError(t, err)
+
+	pConf, err := outputFields().ParsedConfigFromAny(node)
+	require.NoError(t, err)
+
+	m, err := OutputConditionsFromParsed(pConf)
+	require.NoError(t, err)
+
+	return m
+}
+
 func TestConditionUnmarshal(t *testing.T) {
-	conf := `
-tests:
-  content_equals: "foo bar"
-  metadata_equals:
-    foo: bar`
+	conds := condsFromYAML(t, `
+content_equals: "foo bar"
+metadata_equals:
+  foo: bar
+`)
 
-	tests := struct {
-		Tests ConditionsMap
-	}{
-		Tests: ConditionsMap{},
-	}
-
-	if err := yaml.Unmarshal([]byte(conf), &tests); err != nil {
-		t.Fatal(err)
-	}
-
-	exp := ConditionsMap{
+	exp := OutputConditionsMap{
 		"content_equals": ContentEqualsCondition("foo bar"),
 		"metadata_equals": MetadataEqualsCondition{
 			"foo": "bar",
 		},
 	}
 
-	if act := tests.Tests; !reflect.DeepEqual(exp, act) {
-		t.Errorf("Wrong conditions map: %s != %s", act, exp)
-	}
+	assert.Equal(t, exp, conds)
 }
 
 func TestBloblangConditionHappy(t *testing.T) {
-	conf := `
-tests:
-  bloblang: 'content() == "foo bar"'`
+	conds := condsFromYAML(t, `
+bloblang: 'content() == "foo bar"'
+`)
 
-	tests := struct {
-		Tests ConditionsMap
-	}{
-		Tests: ConditionsMap{},
-	}
-
-	require.NoError(t, yaml.Unmarshal([]byte(conf), &tests))
-
-	assert.Empty(t, tests.Tests.CheckAll("", message.NewPart([]byte("foo bar"))))
-	assert.NotEmpty(t, tests.Tests.CheckAll("", message.NewPart([]byte("bar baz"))))
+	assert.Empty(t, conds.CheckAll(ifs.OS(), "", message.NewPart([]byte("foo bar"))))
+	assert.NotEmpty(t, conds.CheckAll(ifs.OS(), "", message.NewPart([]byte("bar baz"))))
 }
 
 func TestBloblangConditionSad(t *testing.T) {
-	conf := `
-tests:
-  bloblang: 'content() =='`
+	pConf, err := outputFields().ParsedConfigFromAny(map[string]any{
+		"bloblang": "content() ==",
+	})
+	require.NoError(t, err)
 
-	tests := struct {
-		Tests ConditionsMap
-	}{
-		Tests: ConditionsMap{},
-	}
-
-	require.EqualError(t, yaml.Unmarshal([]byte(conf), &tests), "line 3: expected query, but reached end of input")
+	_, err = OutputConditionsFromParsed(pConf)
+	require.EqualError(t, err, "bloblang: expected query, but reached end of input")
 }
 
 func TestConditionUnmarshalUnknownCond(t *testing.T) {
-	conf := `
-tests:
-  this_doesnt_exist: "foo bar"
-  metadata_equals:
-    key: foo
-    value: bar`
+	node, err := docs.UnmarshalYAML([]byte(`
+this_doesnt_exist: "foo bar"
+metadata_equals:
+  key:   "foo"
+  value: "bar"
+`))
+	require.NoError(t, err)
 
-	tests := struct {
-		Tests ConditionsMap
-	}{
-		Tests: ConditionsMap{},
-	}
-
-	err := yaml.Unmarshal([]byte(conf), &tests)
-	if err == nil {
-		t.Fatal("Expected error")
-	}
-
-	if exp, act := "line 3: message part condition type not recognised: this_doesnt_exist", err.Error(); exp != act {
-		t.Errorf("Unexpected error message: %v != %v", act, exp)
-	}
+	lints := outputFields().LintYAML(docs.NewLintContext(docs.NewLintConfig(bundle.GlobalEnvironment)), node)
+	require.Len(t, lints, 1)
+	assert.Equal(t, "(2,1) field this_doesnt_exist not recognised", lints[0].Error())
 }
 
 func TestConditionCheckAll(t *testing.T) {
 	color.NoColor = true
 
-	conds := ConditionsMap{
+	conds := OutputConditionsMap{
 		"content_equals": ContentEqualsCondition("foo bar"),
 		"metadata_equals": &MetadataEqualsCondition{
 			"foo": "bar",
@@ -113,18 +95,18 @@ func TestConditionCheckAll(t *testing.T) {
 
 	part := message.NewPart([]byte("foo bar"))
 	part.MetaSetMut("foo", "bar")
-	errs := conds.CheckAll("", part)
+	errs := conds.CheckAll(ifs.OS(), "", part)
 	require.Len(t, errs, 0)
 
 	part = message.NewPart([]byte("nope"))
-	errs = conds.CheckAll("", part)
+	errs = conds.CheckAll(ifs.OS(), "", part)
 	require.Len(t, errs, 2)
 	assert.Contains(t, "content_equals: content mismatch\n  expected: foo bar\n  received: nope", errs[0].Error())
 	assert.Contains(t, "metadata_equals: metadata key 'foo' expected but not found", errs[1].Error())
 
 	part = message.NewPart([]byte("foo bar"))
 	part.MetaSetMut("foo", "wrong")
-	errs = conds.CheckAll("", part)
+	errs = conds.CheckAll(ifs.OS(), "", part)
 	if exp, act := 1, len(errs); exp != act {
 		t.Fatalf("Wrong count of errors: %v != %v", act, exp)
 	}
@@ -134,7 +116,7 @@ func TestConditionCheckAll(t *testing.T) {
 
 	part = message.NewPart([]byte("wrong"))
 	part.MetaSetMut("foo", "bar")
-	errs = conds.CheckAll("", part)
+	errs = conds.CheckAll(ifs.OS(), "", part)
 	if exp, act := 1, len(errs); exp != act {
 		t.Fatalf("Wrong count of errors: %v != %v", act, exp)
 	}
@@ -169,7 +151,7 @@ func TestContentCondition(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(tt *testing.T) {
-			actErr := cond.Check(message.NewPart([]byte(test.input)))
+			actErr := cond.Check(ifs.OS(), "", message.NewPart([]byte(test.input)))
 			if test.expected == nil && actErr == nil {
 				return
 			}
@@ -220,7 +202,7 @@ func TestContentMatchesCondition(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(tt *testing.T) {
-			actErr := cond.Check(message.NewPart([]byte(test.input)))
+			actErr := cond.Check(ifs.OS(), "", message.NewPart([]byte(test.input)))
 			if test.expected == nil && actErr == nil {
 				return
 			}
@@ -280,7 +262,7 @@ func TestMetadataEqualsCondition(t *testing.T) {
 			for k, v := range test.input {
 				part.MetaSetMut(k, v)
 			}
-			actErr := cond.Check(part)
+			actErr := cond.Check(ifs.OS(), "", part)
 			if test.expected == nil && actErr == nil {
 				return
 			}
@@ -337,7 +319,7 @@ func TestJSONEqualsCondition(t *testing.T) {
 		}
 
 		t.Run(test.name, func(tt *testing.T) {
-			actErr := cond.Check(message.NewPart([]byte(test.input)))
+			actErr := cond.Check(ifs.OS(), "", message.NewPart([]byte(test.input)))
 			if expected == nil && actErr == nil {
 				return
 			}
@@ -394,7 +376,7 @@ func TestJSONContainsCondition(t *testing.T) {
 		}
 
 		t.Run(test.name, func(tt *testing.T) {
-			actErr := cond.Check(message.NewPart([]byte(test.input)))
+			actErr := cond.Check(ifs.OS(), "", message.NewPart([]byte(test.input)))
 			if expected == nil && actErr == nil {
 				return
 			}
@@ -459,7 +441,7 @@ func TestFileEqualsCondition(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(tt *testing.T) {
-			actErr := FileEqualsCondition(test.path).checkFrom(tmpDir, message.NewPart([]byte(test.input)))
+			actErr := FileEqualsCondition(test.path).Check(ifs.OS(), tmpDir, message.NewPart([]byte(test.input)))
 			if test.errContains == "" {
 				assert.NoError(t, actErr)
 			} else {
@@ -521,7 +503,7 @@ func TestFileJSONEqualsCondition(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(tt *testing.T) {
 			testPath := filepath.Join(tmpDir, test.path)
-			actErr := FileJSONEqualsCondition(testPath).Check(message.NewPart([]byte(test.input)))
+			actErr := FileJSONEqualsCondition(testPath).Check(ifs.OS(), "", message.NewPart([]byte(test.input)))
 			if test.errContains == "" {
 				assert.NoError(t, actErr)
 			} else {
@@ -588,7 +570,7 @@ func TestFileJSONContainsCondition(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(tt *testing.T) {
 			testPath := filepath.Join(tmpDir, test.path)
-			actErr := FileJSONContainsCondition(testPath).Check(message.NewPart([]byte(test.input)))
+			actErr := FileJSONContainsCondition(testPath).Check(ifs.OS(), "", message.NewPart([]byte(test.input)))
 			if test.errContains == "" {
 				assert.NoError(t, actErr)
 			} else {

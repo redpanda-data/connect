@@ -10,11 +10,6 @@ type Provider interface {
 	GetDocs(name string, ctype Type) (ComponentSpec, bool)
 }
 
-// DeprecatedProvider is a globally declared docs provider that enables the old
-// config parse style to work with dynamic plugins. Eventually we can eliminate
-// all the UnmarshalYAML methods on config structs and remove this as well.
-var DeprecatedProvider = NewMappedDocsProvider()
-
 //------------------------------------------------------------------------------
 
 // MappedDocsProvider stores component documentation in maps, protected by a

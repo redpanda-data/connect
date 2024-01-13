@@ -36,12 +36,15 @@ func ReadYAMLFileLinted(fs ifs.FS, spec docs.FieldSpecs, path string, skipEnvVar
 		return Type{}, nil, err
 	}
 
+	var rawSource any
+	_ = cNode.Decode(&rawSource)
+
 	var pConf *docs.ParsedConfig
 	if pConf, err = spec.ParsedConfigFromAny(cNode); err != nil {
 		return Type{}, nil, err
 	}
 
-	conf, err := FromParsed(lConf.DocsProvider, pConf)
+	conf, err := FromParsed(lConf.DocsProvider, pConf, rawSource)
 	if err != nil {
 		return Type{}, nil, err
 	}

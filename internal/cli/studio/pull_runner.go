@@ -151,8 +151,7 @@ func NewPullRunner(c *cli.Context, version, dateBuilt, token, secret string, opt
 			}
 
 			newSpec := config.Spec()
-			sanitConf, _ := tmpConf.Sanitised()
-			sanitObj, _ := sanitConf.(map[string]any)
+			sanitObj, _ := tmpConf.GetRawSource().(map[string]any)
 			for _, k := range []string{
 				"http", "input", "buffer", "output", "logger", "metrics", "tracer",
 			} {
@@ -247,7 +246,7 @@ func (r *PullRunner) bootstrapConfigReader(ctx context.Context) (bootstrapErr er
 		return ifs.ReadFile(sessFS, name)
 	})
 
-	lintConf := docs.NewLintConfig()
+	lintConf := docs.NewLintConfig(bundle.GlobalEnvironment)
 	lintConf.BloblangEnv = bloblang.XWrapEnvironment(bloblEnv).Deactivated()
 
 	confReaderTmp := config.NewReader(initMainFile, initResources,

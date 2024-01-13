@@ -20,12 +20,13 @@ import (
 	"github.com/stretchr/testify/require"
 	yaml "gopkg.in/yaml.v3"
 
+	"github.com/benthosdev/benthos/v4/internal/bundle"
+	"github.com/benthosdev/benthos/v4/internal/component/testutil"
 	"github.com/benthosdev/benthos/v4/internal/config"
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	bmanager "github.com/benthosdev/benthos/v4/internal/manager"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	"github.com/benthosdev/benthos/v4/internal/stream"
 	"github.com/benthosdev/benthos/v4/internal/stream/manager"
 
 	_ "github.com/benthosdev/benthos/v4/public/components/io"
@@ -249,7 +250,7 @@ func TestTypeAPIBasicOperations(t *testing.T) {
 	info = parseGetBody(t, response.Body)
 	assert.True(t, info.Active)
 
-	assert.True(t, gabs.Wrap(info.Config).Exists("buffer", "memory"))
+	assert.Equal(t, "memory", gabs.Wrap(info.Config).S("buffer", "type").Data())
 
 	request = genRequest("DELETE", "/streams/foo", conf)
 	response = httptest.NewRecorder()
@@ -408,7 +409,7 @@ func TestTypeAPIBasicOperationsYAML(t *testing.T) {
 
 	info = parseGetBody(t, response.Body)
 	require.True(t, info.Active)
-	assert.True(t, gabs.Wrap(info.Config).Exists("buffer", "memory"))
+	assert.Equal(t, "memory", gabs.Wrap(info.Config).S("buffer", "type").Data())
 
 	request = genYAMLRequest("DELETE", "/streams/foo", conf)
 	response = httptest.NewRecorder()
@@ -440,7 +441,7 @@ func TestTypeAPIList(t *testing.T) {
 		t.Errorf("Wrong list response: %v != %v", act, exp)
 	}
 
-	conf, err := stream.FromYAML(`
+	conf, err := testutil.StreamFromYAML(`
 input:
   generate:
     mapping: 'root = deleted()'
@@ -473,7 +474,7 @@ func TestTypeAPISetStreams(t *testing.T) {
 
 	r := router(mgr)
 
-	origConf, err := stream.FromYAML(`
+	origConf, err := testutil.StreamFromYAML(`
 input:
   generate:
     mapping: 'root = deleted()'
@@ -551,7 +552,7 @@ func testConfToAny(t testing.TB, conf any) any {
 	err := node.Encode(conf)
 	require.NoError(t, err)
 
-	sanitConf := docs.NewSanitiseConfig()
+	sanitConf := docs.NewSanitiseConfig(bundle.GlobalEnvironment)
 	sanitConf.RemoveTypeField = true
 	sanitConf.ScrubSecrets = true
 	err = config.Spec().SanitiseYAML(&node, sanitConf)
@@ -840,7 +841,7 @@ func TestTypeAPIGetStats(t *testing.T) {
 
 	r := router(smgr)
 
-	origConf, err := stream.FromYAML(`
+	origConf, err := testutil.StreamFromYAML(`
 input:
   generate:
     mapping: 'root = deleted()'
@@ -902,7 +903,7 @@ file:
 	r.ServeHTTP(hResponse, request)
 	assert.Equal(t, http.StatusOK, hResponse.Code, hResponse.Body.String())
 
-	streamConf, err := stream.FromYAML(`
+	streamConf, err := testutil.StreamFromYAML(`
 input:
   inproc: feed_in
 output:

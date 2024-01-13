@@ -508,6 +508,7 @@ func (c *ConfigSpec) LintRule(blobl string) *ConfigSpec {
 // the list of registered components and provides access to information about
 // the component.
 type ConfigView struct {
+	prov      docs.Provider
 	component docs.ComponentSpec
 }
 
@@ -564,7 +565,7 @@ func (c *ConfigView) RenderDocs() ([]byte, error) {
 		}
 	}
 
-	return c.component.AsMarkdown(!rootOnly, conf)
+	return c.component.AsMarkdown(c.prov, !rootOnly, conf)
 }
 
 //------------------------------------------------------------------------------

@@ -8,7 +8,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/benthosdev/benthos/v4/internal/component/processor"
+	"github.com/benthosdev/benthos/v4/internal/component/testutil"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
 	"github.com/benthosdev/benthos/v4/public/bloblang"
@@ -48,7 +48,7 @@ func TestParseLogCases(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		conf, err := processor.FromYAML(fmt.Sprintf(`
+		conf, err := testutil.ProcessorFromYAML(fmt.Sprintf(`
 parse_log:
   format: %v
   best_effort: %v
@@ -93,7 +93,7 @@ func TestParseLogRFC5424(t *testing.T) {
 		},
 	}
 
-	conf, err := processor.FromYAML(`
+	conf, err := testutil.ProcessorFromYAML(`
 parse_log:
   format: syslog_rfc5424
   best_effort: true

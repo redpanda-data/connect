@@ -28,45 +28,6 @@ func NewConfig() Config {
 	}
 }
 
-// UnmarshalYAML ensures that when parsing configs that are in a slice the
-// default values are still applied.
-func (conf *Config) UnmarshalYAML(value *yaml.Node) error {
-	type confAlias Config
-	aliased := confAlias(NewConfig())
-
-	err := value.Decode(&aliased)
-	if err != nil {
-		return docs.NewLintError(value.Line, docs.LintFailedRead, err)
-	}
-
-	var spec docs.ComponentSpec
-	if aliased.Type, spec, err = docs.GetInferenceCandidateFromYAML(docs.DeprecatedProvider, docs.TypeProcessor, value); err != nil {
-		return docs.NewLintError(value.Line, docs.LintComponentMissing, err)
-	}
-
-	if spec.Plugin {
-		pluginNode, err := docs.GetPluginConfigYAML(aliased.Type, value)
-		if err != nil {
-			return docs.NewLintError(value.Line, docs.LintFailedRead, err)
-		}
-		aliased.Plugin = &pluginNode
-	} else {
-		aliased.Plugin = nil
-	}
-
-	*conf = Config(aliased)
-	return nil
-}
-
-// FromYAML is for old style tests.
-func FromYAML(confStr string) (conf Config, err error) {
-	var node *yaml.Node
-	if node, err = docs.UnmarshalYAML([]byte(confStr)); err != nil {
-		return
-	}
-	return fromYAML(docs.DeprecatedProvider, node)
-}
-
 func FromAny(prov docs.Provider, value any) (conf Config, err error) {
 	switch t := value.(type) {
 	case Config:

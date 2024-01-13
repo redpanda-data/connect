@@ -10,7 +10,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/benthosdev/benthos/v4/internal/component/processor"
+	"github.com/benthosdev/benthos/v4/internal/component/testutil"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
 )
@@ -18,7 +18,7 @@ import (
 func TestInsertBoundaries(t *testing.T) {
 	for i := 0; i < 10; i++ {
 		for j := -5; j <= 5; j++ {
-			conf, err := processor.FromYAML(fmt.Sprintf(`
+			conf, err := testutil.ProcessorFromYAML(fmt.Sprintf(`
 insert_part:
   content: hello world
   index: %v
@@ -163,7 +163,7 @@ func TestInsertPart(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		conf, err := processor.FromYAML(`
+		conf, err := testutil.ProcessorFromYAML(`
 insert_part:
   content: hello world
   index: ` + strconv.Itoa(test.index) + `
@@ -189,7 +189,7 @@ insert_part:
 }
 
 func TestInsertPartInterpolation(t *testing.T) {
-	conf, err := processor.FromYAML(`
+	conf, err := testutil.ProcessorFromYAML(`
 insert_part:
   content: 'hello ${!hostname()} world'
 `)

@@ -15,6 +15,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/benthosdev/benthos/v4/internal/component/input"
+	"github.com/benthosdev/benthos/v4/internal/component/testutil"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
 )
@@ -22,7 +23,7 @@ import (
 func inputFromConf(t testing.TB, confStr string, bits ...any) input.Streamed {
 	t.Helper()
 
-	conf, err := input.FromYAML(fmt.Sprintf(confStr, bits...))
+	conf, err := testutil.InputFromYAML(fmt.Sprintf(confStr, bits...))
 	require.NoError(t, err)
 
 	s, err := mock.NewManager().NewInput(conf)

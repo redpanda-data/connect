@@ -10,8 +10,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/benthosdev/benthos/v4/internal/component/testutil"
 	bmanager "github.com/benthosdev/benthos/v4/internal/manager"
-	"github.com/benthosdev/benthos/v4/internal/stream"
 	"github.com/benthosdev/benthos/v4/internal/stream/manager"
 
 	// Import pure components for tests.
@@ -29,7 +29,7 @@ func TestTypeUnderStress(t *testing.T) {
 
 	mgr := manager.New(res)
 
-	conf, err := stream.FromYAML(`
+	conf, err := testutil.StreamFromYAML(`
 input:
   generate:
     count: 3

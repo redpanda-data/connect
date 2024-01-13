@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/benthosdev/benthos/v4/internal/component/processor"
+	"github.com/benthosdev/benthos/v4/internal/component/testutil"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
 
@@ -18,7 +18,7 @@ import (
 //------------------------------------------------------------------------------
 
 func TestForEachEmpty(t *testing.T) {
-	conf, err := processor.FromYAML(`
+	conf, err := testutil.ProcessorFromYAML(`
 for_each: []
 `)
 	require.NoError(t, err)
@@ -45,7 +45,7 @@ for_each: []
 }
 
 func TestForEachBasic(t *testing.T) {
-	conf, err := processor.FromYAML(`
+	conf, err := testutil.ProcessorFromYAML(`
 for_each:
   - bloblang: 'root = if batch_index() == 0 { content().encode("base64") }'
 `)
@@ -80,7 +80,7 @@ for_each:
 }
 
 func TestForEachFilterSome(t *testing.T) {
-	conf, err := processor.FromYAML(`
+	conf, err := testutil.ProcessorFromYAML(`
 for_each:
   - bloblang: 'root = if !content().contains("foo") { deleted() }'
 `)
@@ -114,7 +114,7 @@ for_each:
 }
 
 func TestForEachMultiProcs(t *testing.T) {
-	conf, err := processor.FromYAML(`
+	conf, err := testutil.ProcessorFromYAML(`
 for_each:
   - bloblang: 'root = if !content().contains("foo") { deleted() }'
   - bloblang: 'root = if batch_index() == 0 { content().encode("base64") }'
@@ -149,7 +149,7 @@ for_each:
 }
 
 func TestForEachFilterAll(t *testing.T) {
-	conf, err := processor.FromYAML(`
+	conf, err := testutil.ProcessorFromYAML(`
 for_each:
   - bloblang: 'root = if !content().contains("foo") { deleted() }'
 `)

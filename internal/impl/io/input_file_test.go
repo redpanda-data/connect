@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/benthosdev/benthos/v4/internal/component/input"
+	"github.com/benthosdev/benthos/v4/internal/component/testutil"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
 )
@@ -57,7 +57,7 @@ func TestFileDirectory(t *testing.T) {
 	}
 	act := map[string]struct{}{}
 
-	conf, err := input.FromYAML(fmt.Sprintf(`
+	conf, err := testutil.InputFromYAML(fmt.Sprintf(`
 file:
   paths:
     - "%v/*.txt"
@@ -144,7 +144,7 @@ func TestFileDirectoryDeprecated(t *testing.T) {
 	}
 	act := map[string]struct{}{}
 
-	conf, err := input.FromYAML(fmt.Sprintf(`
+	conf, err := testutil.InputFromYAML(fmt.Sprintf(`
 file:
   paths:
     - "%v/*.txt"

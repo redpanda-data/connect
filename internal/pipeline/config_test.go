@@ -6,6 +6,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/pipeline"
 )
@@ -44,7 +45,7 @@ processors:
 			n, err := docs.UnmarshalYAML([]byte(test.input))
 			require.NoError(t, err)
 
-			conf, err := pipeline.FromAny(docs.DeprecatedProvider, n)
+			conf, err := pipeline.FromAny(bundle.GlobalEnvironment, n)
 			if test.errContains == "" {
 				require.NoError(t, err)
 				test.validateFn(t, conf)

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/benthosdev/benthos/v4/internal/value"
 	"github.com/benthosdev/benthos/v4/public/bloblang"
 )
 
@@ -412,7 +413,7 @@ root = $value_parts.map_each(part -> if $options.exists(part) || part.apply("is_
 	return f
 }
 
-func (f FieldSpec) scrubValue(v any) (any, error) {
+func (f FieldSpec) ScrubValue(v any) (any, error) {
 	if f.Scrubber == "" {
 		return v, nil
 	}
@@ -434,7 +435,7 @@ func (f FieldSpec) scrubValue(v any) (any, error) {
 	return res, nil
 }
 
-func (f FieldSpec) getLintFunc() LintFunc {
+func (f FieldSpec) GetLintFunc() LintFunc {
 	fn := f.customLintFn
 	if fn == nil && len(f.Linter) > 0 {
 		fn = f.LinterBlobl(f.Linter).customLintFn
@@ -686,9 +687,9 @@ type LintConfig struct {
 }
 
 // NewLintConfig creates a default linting config.
-func NewLintConfig() LintConfig {
+func NewLintConfig(prov Provider) LintConfig {
 	return LintConfig{
-		DocsProvider: DeprecatedProvider,
+		DocsProvider: prov,
 		BloblangEnv:  bloblang.GlobalEnvironment().Deactivated(),
 	}
 }
@@ -828,7 +829,22 @@ func (f FieldSpec) needsDefault() bool {
 
 func getDefault(pathName string, field FieldSpec) (any, error) {
 	if field.Default != nil {
-		// TODO: Should be deep copy here?
+		if len(field.Children) > 0 && field.Kind == KindScalar {
+			if tmp, ok := value.IClone(*field.Default).(map[string]any); ok {
+				for _, v := range field.Children {
+					if _, exists := tmp[v.Name]; exists {
+						continue
+					}
+					defV, err := getDefault(pathName+"."+v.Name, v)
+					if err == nil {
+						tmp[v.Name] = defV
+					} else if v.needsDefault() {
+						return nil, err
+					}
+				}
+				return tmp, nil
+			}
+		}
 		return *field.Default, nil
 	} else if field.Kind == KindArray {
 		return []any{}, nil

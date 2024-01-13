@@ -9,10 +9,11 @@ import (
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v3"
 
+	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/docs"
 )
 
-func TestSecretScrubbing(t *testing.T) {
+func TestSecretScrubbingYAML(t *testing.T) {
 	fields := docs.FieldSpecs{
 		docs.FieldString("foo", "").Secret(),
 		docs.FieldString("bar", ""),
@@ -72,7 +73,7 @@ bevers:
 			var node yaml.Node
 			require.NoError(t, yaml.Unmarshal([]byte(test.input), &node))
 
-			sanitConf := docs.NewSanitiseConfig()
+			sanitConf := docs.NewSanitiseConfig(bundle.GlobalEnvironment)
 			sanitConf.DocsProvider = docs.NewMappedDocsProvider()
 
 			require.NoError(t, fields.SanitiseYAML(&node, sanitConf))
@@ -1017,7 +1018,7 @@ testlintfooinput:
 	for _, test := range tests {
 		test := test
 		t.Run(test.name, func(t *testing.T) {
-			lConf := docs.NewLintConfig()
+			lConf := docs.NewLintConfig(bundle.GlobalEnvironment)
 			lConf.RejectDeprecated = test.rejectDeprecated
 			lConf.RequireLabels = test.requireLabels
 			lConf.DocsProvider = prov
@@ -1041,7 +1042,7 @@ func TestYAMLLintYAMLMerge(t *testing.T) {
 		),
 	})
 
-	lConf := docs.NewLintConfig()
+	lConf := docs.NewLintConfig(bundle.GlobalEnvironment)
 	lConf.DocsProvider = prov
 
 	lintConf := func(t *testing.T, name, conf string, expected []docs.Lint) {
@@ -1171,7 +1172,7 @@ func TestYAMLLinting(t *testing.T) {
 			var node yaml.Node
 			require.NoError(t, yaml.Unmarshal([]byte(test.inputConf), &node))
 
-			lints := test.inputSpec.LintYAML(docs.NewLintContext(docs.NewLintConfig()), &node)
+			lints := test.inputSpec.LintYAML(docs.NewLintContext(docs.NewLintConfig(bundle.GlobalEnvironment)), &node)
 			assert.Equal(t, test.res, lints)
 		})
 	}
@@ -1386,7 +1387,7 @@ processors:
 			var node yaml.Node
 			require.NoError(t, yaml.Unmarshal([]byte(test.inputConf), &node))
 
-			sanitConf := docs.NewSanitiseConfig()
+			sanitConf := docs.NewSanitiseConfig(bundle.GlobalEnvironment)
 			sanitConf.DocsProvider = prov
 			sanitConf.RemoveTypeField = true
 			sanitConf.Filter = test.inputFilter

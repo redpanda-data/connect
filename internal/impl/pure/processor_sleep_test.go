@@ -8,13 +8,13 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/benthosdev/benthos/v4/internal/component/processor"
+	"github.com/benthosdev/benthos/v4/internal/component/testutil"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
 )
 
 func TestSleep(t *testing.T) {
-	conf, err := processor.FromYAML(`
+	conf, err := testutil.ProcessorFromYAML(`
 sleep:
   duration: 1ns
 `)
@@ -34,7 +34,7 @@ sleep:
 }
 
 func TestSleepExit(t *testing.T) {
-	conf, err := processor.FromYAML(`
+	conf, err := testutil.ProcessorFromYAML(`
 sleep:
   duration: 10s
 `)
@@ -63,7 +63,7 @@ sleep:
 }
 
 func TestSleep200Millisecond(t *testing.T) {
-	conf, err := processor.FromYAML(`
+	conf, err := testutil.ProcessorFromYAML(`
 sleep:
   duration: 200ms
 `)
@@ -86,7 +86,7 @@ sleep:
 }
 
 func TestSleepInterpolated(t *testing.T) {
-	conf, err := processor.FromYAML(`
+	conf, err := testutil.ProcessorFromYAML(`
 sleep:
   duration: '${!json("foo")}ms'
 `)

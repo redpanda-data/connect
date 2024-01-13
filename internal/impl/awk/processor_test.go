@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/benthosdev/benthos/v4/internal/component/processor"
+	"github.com/benthosdev/benthos/v4/internal/component/testutil"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
 
@@ -18,7 +18,7 @@ import (
 )
 
 func TestAWKValidation(t *testing.T) {
-	conf, err := processor.FromYAML(`
+	conf, err := testutil.ProcessorFromYAML(`
 awk:
   codec: json
   program: "{ print foo_bar }"
@@ -45,7 +45,7 @@ awk:
 		t.Error("Expected fail flag on message part")
 	}
 
-	conf, err = processor.FromYAML(`
+	conf, err = testutil.ProcessorFromYAML(`
 awk:
   codec: not valid
   program: |
@@ -62,7 +62,7 @@ awk:
 }
 
 func TestAWKBadExitStatus(t *testing.T) {
-	conf, err := processor.FromYAML(`
+	conf, err := testutil.ProcessorFromYAML(`
 awk:
   codec: none
   program: "{ exit 1; print foo }"
@@ -91,7 +91,7 @@ awk:
 }
 
 func TestAWKBadDateString(t *testing.T) {
-	conf, err := processor.FromYAML(`
+	conf, err := testutil.ProcessorFromYAML(`
 awk:
   codec: none
   program: '{ print timestamp_unix("this isnt a date string") }'
@@ -117,7 +117,7 @@ awk:
 }
 
 func TestAWKJSONParts(t *testing.T) {
-	conf, err := processor.FromYAML(`
+	conf, err := testutil.ProcessorFromYAML(`
 awk:
   codec: none
   program: |
@@ -636,7 +636,7 @@ func TestAWK(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		conf, err := processor.FromYAML(fmt.Sprintf(`
+		conf, err := testutil.ProcessorFromYAML(fmt.Sprintf(`
 awk:
   codec: %v
   program: %v

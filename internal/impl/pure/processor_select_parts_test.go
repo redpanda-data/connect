@@ -8,13 +8,13 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/benthosdev/benthos/v4/internal/component/processor"
+	"github.com/benthosdev/benthos/v4/internal/component/testutil"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
 )
 
 func TestSelectParts(t *testing.T) {
-	conf, err := processor.FromYAML(`
+	conf, err := testutil.ProcessorFromYAML(`
 select_parts:
   parts: [ 1, 3 ]
 `)
@@ -106,7 +106,7 @@ func TestSelectPartsIndexBounds(t *testing.T) {
 	}
 
 	for i, exp := range tests {
-		conf, err := processor.FromYAML(fmt.Sprintf(`
+		conf, err := testutil.ProcessorFromYAML(fmt.Sprintf(`
 select_parts:
   parts: [ %v ]
 `, i))
@@ -130,7 +130,7 @@ select_parts:
 }
 
 func TestSelectPartsEmpty(t *testing.T) {
-	conf, err := processor.FromYAML(`
+	conf, err := testutil.ProcessorFromYAML(`
 select_parts:
   parts: [ 3 ]
 `)

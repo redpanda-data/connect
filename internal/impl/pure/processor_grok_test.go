@@ -2,7 +2,6 @@ package pure_test
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -12,16 +11,16 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/benthosdev/benthos/v4/internal/component/processor"
+	"github.com/benthosdev/benthos/v4/internal/component/testutil"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
 )
 
 func TestGrokAllParts(t *testing.T) {
-	conf, err := processor.FromYAML(`
+	conf, err := testutil.ProcessorFromYAML(`
 grok:
   expressions:
-    - "%{WORD:first},%{INT:second:int}"
+    - "%%{WORD:first},%%{INT:second:int}"
 `)
 	require.NoError(t, err)
 
@@ -92,17 +91,16 @@ func TestGrok(t *testing.T) {
 			if test.definitions == nil {
 				test.definitions = map[string]any{}
 			}
-			ts := fmt.Sprintf(`
+			conf, err := testutil.ProcessorFromYAML(`
 grok:
   expressions:
     - '%v'
   pattern_definitions: %v
 `, test.pattern, gabs.Wrap(test.definitions).String())
-			conf, err := processor.FromYAML(ts)
-			require.NoError(t, err, ts)
+			require.NoError(t, err)
 
 			gSet, err := mock.NewManager().NewProcessor(conf)
-			require.NoError(t, err, ts)
+			require.NoError(t, err)
 
 			inMsg := message.QuickBatch([][]byte{[]byte(test.input)})
 			msgs, _ := gSet.ProcessBatch(context.Background(), inMsg)
@@ -117,13 +115,12 @@ grok:
 			if test.definitions == nil {
 				test.definitions = map[string]any{}
 			}
-			ts := fmt.Sprintf(`
+			conf, err := testutil.ProcessorFromYAML(`
 grok:
   expressions:
     - '%v'
   pattern_definitions: %v
 `, test.pattern, gabs.Wrap(test.definitions).String())
-			conf, err := processor.FromYAML(ts)
 			require.NoError(t, err)
 
 			gSet, err := mock.NewManager().NewProcessor(conf)
@@ -147,13 +144,13 @@ FOONESTED %{INT:nested.first:int} %{WORD:nested.second} %{WORD:nested.third}
 `), 0o777)
 	require.NoError(t, err)
 
-	conf, err := processor.FromYAML(fmt.Sprintf(`
+	conf, err := testutil.ProcessorFromYAML(`
 grok:
   expressions:
     - "%%{FOONESTED}"
     - "%%{FOOFLAT}"
   pattern_paths: [ %v ]
-`, tmpDir))
+`, tmpDir)
 	require.NoError(t, err)
 
 	gSet, err := mock.NewManager().NewProcessor(conf)

@@ -22,6 +22,7 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/config"
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/stream"
+	"github.com/benthosdev/benthos/v4/internal/value"
 	"github.com/benthosdev/benthos/v4/public/bloblang"
 )
 
@@ -65,7 +66,7 @@ type lintErrors struct {
 }
 
 func (m *Type) lintCtx() docs.LintContext {
-	lConf := docs.NewLintConfig()
+	lConf := docs.NewLintConfig(m.manager.Environment())
 	lConf.BloblangEnv = bloblang.XWrapEnvironment(m.manager.BloblEnvironment()).Deactivated()
 	return docs.NewLintContext(lConf)
 }
@@ -170,22 +171,30 @@ func (m *Type) HandleStreamsCRUD(w http.ResponseWriter, r *http.Request) {
 		if !exists {
 			toDelete = append(toDelete, id)
 		} else {
+			var rawSource any
+			if requestErr = newConf.Decode(&rawSource); requestErr != nil {
+				return
+			}
 			var pConf *docs.ParsedConfig
 			if pConf, requestErr = spec.ParsedConfigFromAny(&newConf); requestErr != nil {
 				return
 			}
-			if toUpdate[id], requestErr = stream.FromParsed(m.manager.Environment(), pConf); requestErr != nil {
+			if toUpdate[id], requestErr = stream.FromParsed(m.manager.Environment(), pConf, rawSource); requestErr != nil {
 				return
 			}
 		}
 	}
 	for id, conf := range nodeSet {
 		if _, exists := infos[id]; !exists {
+			var rawSource any
+			if requestErr = conf.Decode(&rawSource); requestErr != nil {
+				return
+			}
 			var pConf *docs.ParsedConfig
 			if pConf, requestErr = spec.ParsedConfigFromAny(&conf); requestErr != nil {
 				return
 			}
-			if toCreate[id], requestErr = stream.FromParsed(m.manager.Environment(), pConf); requestErr != nil {
+			if toCreate[id], requestErr = stream.FromParsed(m.manager.Environment(), pConf, rawSource); requestErr != nil {
 				return
 			}
 		}
@@ -304,11 +313,14 @@ func (m *Type) HandleStreamCRUD(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
+		var rawSource any
+		_ = node.Decode(&rawSource)
+
 		var pConf *docs.ParsedConfig
 		if pConf, err = stream.Spec().ParsedConfigFromAny(node); err != nil {
 			return
 		}
-		confOut, err = stream.FromParsed(m.manager.Environment(), pConf)
+		confOut, err = stream.FromParsed(m.manager.Environment(), pConf, rawSource)
 		return
 	}
 	patchConfig := func(confIn stream.Config) (confOut stream.Config, err error) {
@@ -317,10 +329,7 @@ func (m *Type) HandleStreamCRUD(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		var cRoot any
-		if cRoot, err = confIn.Sanitised(); err != nil {
-			return
-		}
+		cRoot := value.IClone(confIn.GetRawSource())
 
 		var pRoot any
 		if err = yaml.Unmarshal(patchBytes, &pRoot); err != nil {
@@ -343,7 +352,7 @@ func (m *Type) HandleStreamCRUD(w http.ResponseWriter, r *http.Request) {
 		if pConf, err = stream.Spec().ParsedConfigFromAny(&confNode); err != nil {
 			return
 		}
-		confOut, err = stream.FromParsed(m.manager.Environment(), pConf)
+		confOut, err = stream.FromParsed(m.manager.Environment(), pConf, gObj.Data())
 		return
 	}
 
@@ -367,7 +376,8 @@ func (m *Type) HandleStreamCRUD(w http.ResponseWriter, r *http.Request) {
 	case "GET":
 		var info *StreamStatus
 		if info, serverErr = m.Read(id); serverErr == nil {
-			sanit, _ := info.Config().Sanitised()
+			conf := info.Config()
+			sanit := conf.GetRawSource()
 
 			var bodyBytes []byte
 			if bodyBytes, serverErr = json.Marshal(struct {
@@ -466,40 +476,40 @@ func (m *Type) HandleResourceCRUD(w http.ResponseWriter, r *http.Request) {
 	switch docType {
 	case docs.TypeCache:
 		storeFn = func(n *yaml.Node) {
-			cacheConf := cache.NewConfig()
-			if requestErr = n.Decode(&cacheConf); requestErr != nil {
+			var cacheConf cache.Config
+			if cacheConf, requestErr = cache.FromAny(m.manager.Environment(), n); requestErr != nil {
 				return
 			}
 			serverErr = m.manager.StoreCache(ctx, id, cacheConf)
 		}
 	case docs.TypeInput:
 		storeFn = func(n *yaml.Node) {
-			inputConf := input.NewConfig()
-			if requestErr = n.Decode(&inputConf); requestErr != nil {
+			var inputConf input.Config
+			if inputConf, requestErr = input.FromAny(m.manager.Environment(), n); requestErr != nil {
 				return
 			}
 			serverErr = m.manager.StoreInput(ctx, id, inputConf)
 		}
 	case docs.TypeOutput:
 		storeFn = func(n *yaml.Node) {
-			outputConf := output.NewConfig()
-			if requestErr = n.Decode(&outputConf); requestErr != nil {
+			var outputConf output.Config
+			if outputConf, requestErr = output.FromAny(m.manager.Environment(), n); requestErr != nil {
 				return
 			}
 			serverErr = m.manager.StoreOutput(ctx, id, outputConf)
 		}
 	case docs.TypeProcessor:
 		storeFn = func(n *yaml.Node) {
-			procConf := processor.NewConfig()
-			if requestErr = n.Decode(&procConf); requestErr != nil {
+			var procConf processor.Config
+			if procConf, requestErr = processor.FromAny(m.manager.Environment(), n); requestErr != nil {
 				return
 			}
 			serverErr = m.manager.StoreProcessor(ctx, id, procConf)
 		}
 	case docs.TypeRateLimit:
 		storeFn = func(n *yaml.Node) {
-			rlConf := ratelimit.NewConfig()
-			if requestErr = n.Decode(&rlConf); requestErr != nil {
+			var rlConf ratelimit.Config
+			if rlConf, requestErr = ratelimit.FromAny(m.manager.Environment(), n); requestErr != nil {
 				return
 			}
 			serverErr = m.manager.StoreRateLimit(ctx, id, rlConf)

@@ -8,13 +8,13 @@ import (
 	"github.com/Jeffail/gabs/v2"
 	"github.com/stretchr/testify/require"
 
-	"github.com/benthosdev/benthos/v4/internal/component/processor"
+	"github.com/benthosdev/benthos/v4/internal/component/testutil"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
 )
 
 func TestJMESPathAllParts(t *testing.T) {
-	conf, err := processor.FromYAML(`
+	conf, err := testutil.ProcessorFromYAML(`
 jmespath:
   query: foo.bar
 `)
@@ -45,7 +45,7 @@ jmespath:
 }
 
 func TestJMESPathValidation(t *testing.T) {
-	conf, err := processor.FromYAML(`
+	conf, err := testutil.ProcessorFromYAML(`
 jmespath:
   query: foo.bar
 `)
@@ -70,7 +70,7 @@ jmespath:
 }
 
 func TestJMESPathMutation(t *testing.T) {
-	conf, err := processor.FromYAML(`
+	conf, err := testutil.ProcessorFromYAML(`
 jmespath:
   query: "{foo: merge(foo, {bar:'baz'})}"
 `)
@@ -163,7 +163,7 @@ func TestJMESPath(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		conf, err := processor.FromYAML(`
+		conf, err := testutil.ProcessorFromYAML(`
 jmespath:
   query: "` + test.path + `"
 `)

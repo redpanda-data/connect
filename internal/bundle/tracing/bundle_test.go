@@ -9,9 +9,9 @@ import (
 
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/bundle/tracing"
-	"github.com/benthosdev/benthos/v4/internal/component/input"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
+	"github.com/benthosdev/benthos/v4/internal/component/testutil"
 	"github.com/benthosdev/benthos/v4/internal/manager"
 	"github.com/benthosdev/benthos/v4/internal/message"
 
@@ -24,7 +24,7 @@ import (
 func TestBundleInputTracing(t *testing.T) {
 	tenv, summary := tracing.TracedBundle(bundle.GlobalEnvironment)
 
-	inConfig, err := input.FromYAML(`
+	inConfig, err := testutil.InputFromYAML(`
 label: foo
 generate:
   count: 10
@@ -34,7 +34,7 @@ generate:
 	require.NoError(t, err)
 
 	mgr, err := manager.New(
-		manager.NewResourceConfig(),
+		manager.ResourceConfig{},
 		manager.OptSetEnvironment(tenv),
 	)
 	require.NoError(t, err)
@@ -75,7 +75,7 @@ generate:
 func TestBundleInputTracingFlush(t *testing.T) {
 	tenv, summary := tracing.TracedBundle(bundle.GlobalEnvironment)
 
-	inConfig, err := input.FromYAML(`
+	inConfig, err := testutil.InputFromYAML(`
 label: foo
 generate:
   count: 10
@@ -85,7 +85,7 @@ generate:
 	require.NoError(t, err)
 
 	mgr, err := manager.New(
-		manager.NewResourceConfig(),
+		manager.ResourceConfig{},
 		manager.OptSetEnvironment(tenv),
 	)
 	require.NoError(t, err)
@@ -133,7 +133,7 @@ generate:
 	require.Len(t, inEvents["foo"], 0)
 
 	// Run more stuff
-	inConfig, err = input.FromYAML(`
+	inConfig, err = testutil.InputFromYAML(`
 label: foo
 generate:
   count: 5
@@ -173,7 +173,7 @@ func TestBundleInputTracingDisabled(t *testing.T) {
 	tenv, summary := tracing.TracedBundle(bundle.GlobalEnvironment)
 	summary.SetEnabled(false)
 
-	inConfig, err := input.FromYAML(`
+	inConfig, err := testutil.InputFromYAML(`
 label: foo
 generate:
   count: 10
@@ -183,7 +183,7 @@ generate:
 	require.NoError(t, err)
 
 	mgr, err := manager.New(
-		manager.NewResourceConfig(),
+		manager.ResourceConfig{},
 		manager.OptSetEnvironment(tenv),
 	)
 	require.NoError(t, err)
@@ -224,7 +224,7 @@ func TestBundleOutputTracing(t *testing.T) {
 	outConfig.Type = "drop"
 
 	mgr, err := manager.New(
-		manager.NewResourceConfig(),
+		manager.ResourceConfig{},
 		manager.OptSetEnvironment(tenv),
 	)
 	require.NoError(t, err)
@@ -281,7 +281,7 @@ func TestBundleOutputTracingDisabled(t *testing.T) {
 	outConfig.Type = "drop"
 
 	mgr, err := manager.New(
-		manager.NewResourceConfig(),
+		manager.ResourceConfig{},
 		manager.OptSetEnvironment(tenv),
 	)
 	require.NoError(t, err)
@@ -337,7 +337,7 @@ func TestBundleOutputWithProcessorsTracing(t *testing.T) {
 	outConfig.Processors = append(outConfig.Processors, blobConf)
 
 	mgr, err := manager.New(
-		manager.NewResourceConfig(),
+		manager.ResourceConfig{},
 		manager.OptSetEnvironment(tenv),
 	)
 	require.NoError(t, err)
@@ -406,7 +406,7 @@ func TestBundleOutputWithProcessorsTracing(t *testing.T) {
 func TestBundleOutputWithBatchProcessorsTracing(t *testing.T) {
 	tenv, summary := tracing.TracedBundle(bundle.GlobalEnvironment)
 
-	outConfig, err := output.FromYAML(`
+	outConfig, err := testutil.OutputFromYAML(`
 broker:
   outputs:
     - label: foo
@@ -419,7 +419,7 @@ broker:
 	require.NoError(t, err)
 
 	mgr, err := manager.New(
-		manager.NewResourceConfig(),
+		manager.ResourceConfig{},
 		manager.OptSetEnvironment(tenv),
 	)
 	require.NoError(t, err)
@@ -509,7 +509,7 @@ meta bar = "new bar value"
 `
 
 	mgr, err := manager.New(
-		manager.NewResourceConfig(),
+		manager.ResourceConfig{},
 		manager.OptSetEnvironment(tenv),
 	)
 	require.NoError(t, err)
@@ -578,7 +578,7 @@ func TestBundleProcessorTracingError(t *testing.T) {
 	procConfig.Plugin = `let nope`
 
 	mgr, err := manager.New(
-		manager.NewResourceConfig(),
+		manager.ResourceConfig{},
 		manager.OptSetEnvironment(tenv),
 	)
 	require.NoError(t, err)
@@ -604,7 +604,7 @@ meta bar = "new bar value"
 `
 
 	mgr, err := manager.New(
-		manager.NewResourceConfig(),
+		manager.ResourceConfig{},
 		manager.OptSetEnvironment(tenv),
 	)
 	require.NoError(t, err)

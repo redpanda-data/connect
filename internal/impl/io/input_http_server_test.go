@@ -25,6 +25,7 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/api"
 	"github.com/benthosdev/benthos/v4/internal/component/input"
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
+	"github.com/benthosdev/benthos/v4/internal/component/testutil"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/manager"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
@@ -51,7 +52,7 @@ func TestHTTPBasic(t *testing.T) {
 	nTestLoops := 100
 
 	reg := apiRegGorillaMutWrapper{mut: mux.NewRouter()}
-	mgr, err := manager.New(manager.NewResourceConfig(), manager.OptSetAPIReg(reg))
+	mgr, err := manager.New(manager.ResourceConfig{}, manager.OptSetAPIReg(reg))
 	require.NoError(t, err)
 
 	conf := parseYAMLInputConf(t, `
@@ -231,7 +232,7 @@ func TestHTTPServerLifecycle(t *testing.T) {
 		_ = apiImpl.Shutdown(context.Background())
 	}()
 
-	mgr, err := manager.New(manager.NewResourceConfig(), manager.OptSetAPIReg(apiImpl))
+	mgr, err := manager.New(manager.ResourceConfig{}, manager.OptSetAPIReg(apiImpl))
 	require.NoError(t, err)
 
 	conf := parseYAMLInputConf(t, `
@@ -297,7 +298,7 @@ func TestHTTPServerMetadata(t *testing.T) {
 	defer done()
 
 	reg := apiRegGorillaMutWrapper{mut: mux.NewRouter()}
-	mgr, err := manager.New(manager.NewResourceConfig(), manager.OptSetAPIReg(reg))
+	mgr, err := manager.New(manager.ResourceConfig{}, manager.OptSetAPIReg(reg))
 	require.NoError(t, err)
 
 	conf := parseYAMLInputConf(t, `
@@ -362,7 +363,7 @@ func TestHTTPServerPathParameters(t *testing.T) {
 	defer done()
 
 	reg := apiRegGorillaMutWrapper{mut: mux.NewRouter()}
-	mgr, err := manager.New(manager.NewResourceConfig(), manager.OptSetAPIReg(reg))
+	mgr, err := manager.New(manager.ResourceConfig{}, manager.OptSetAPIReg(reg))
 	require.NoError(t, err)
 
 	conf := parseYAMLInputConf(t, `
@@ -429,7 +430,7 @@ func TestHTTPServerPathIsPrefix(t *testing.T) {
 	defer done()
 
 	reg := apiRegGorillaMutWrapper{mut: mux.NewRouter()}
-	mgr, err := manager.New(manager.NewResourceConfig(), manager.OptSetAPIReg(reg))
+	mgr, err := manager.New(manager.ResourceConfig{}, manager.OptSetAPIReg(reg))
 	require.NoError(t, err)
 
 	conf := parseYAMLInputConf(t, `
@@ -631,7 +632,7 @@ func TestHTTPBadRequests(t *testing.T) {
 	defer done()
 
 	reg := apiRegGorillaMutWrapper{mut: mux.NewRouter()}
-	mgr, err := manager.New(manager.NewResourceConfig(), manager.OptSetAPIReg(reg))
+	mgr, err := manager.New(manager.ResourceConfig{}, manager.OptSetAPIReg(reg))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -667,7 +668,7 @@ func TestHTTPTimeout(t *testing.T) {
 	t.Parallel()
 
 	reg := apiRegGorillaMutWrapper{mut: mux.NewRouter()}
-	mgr, err := manager.New(manager.NewResourceConfig(), manager.OptSetAPIReg(reg))
+	mgr, err := manager.New(manager.ResourceConfig{}, manager.OptSetAPIReg(reg))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -711,7 +712,7 @@ func TestHTTPRateLimit(t *testing.T) {
 
 	reg := apiRegGorillaMutWrapper{mut: mux.NewRouter()}
 
-	mgrConf, err := manager.FromYAML(`
+	mgrConf, err := testutil.ManagerFromYAML(`
 rate_limit_resources:
   - label: foorl
     local:
@@ -786,7 +787,7 @@ func TestHTTPServerWebsockets(t *testing.T) {
 
 	reg := apiRegGorillaMutWrapper{mut: mux.NewRouter()}
 
-	mgr, err := manager.New(manager.NewResourceConfig(), manager.OptSetAPIReg(reg))
+	mgr, err := manager.New(manager.ResourceConfig{}, manager.OptSetAPIReg(reg))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -871,7 +872,7 @@ func TestHTTPServerWSRateLimit(t *testing.T) {
 
 	reg := apiRegGorillaMutWrapper{mut: mux.NewRouter()}
 
-	mgrConf, err := manager.FromYAML(`
+	mgrConf, err := testutil.ManagerFromYAML(`
 rate_limit_resources:
   - label: foorl
     local:
@@ -960,7 +961,7 @@ func TestHTTPSyncResponseHeaders(t *testing.T) {
 	t.Parallel()
 
 	reg := apiRegGorillaMutWrapper{mut: mux.NewRouter()}
-	mgr, err := manager.New(manager.NewResourceConfig(), manager.OptSetAPIReg(reg))
+	mgr, err := manager.New(manager.ResourceConfig{}, manager.OptSetAPIReg(reg))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1109,7 +1110,7 @@ func TestHTTPSyncResponseMultipart(t *testing.T) {
 	t.Parallel()
 
 	reg := apiRegGorillaMutWrapper{mut: mux.NewRouter()}
-	mgr, err := manager.New(manager.NewResourceConfig(), manager.OptSetAPIReg(reg))
+	mgr, err := manager.New(manager.ResourceConfig{}, manager.OptSetAPIReg(reg))
 	require.NoError(t, err)
 
 	conf := parseYAMLInputConf(t, `
@@ -1185,7 +1186,7 @@ func TestHTTPSyncResponseHeadersStatus(t *testing.T) {
 	t.Parallel()
 
 	reg := apiRegGorillaMutWrapper{mut: mux.NewRouter()}
-	mgr, err := manager.New(manager.NewResourceConfig(), manager.OptSetAPIReg(reg))
+	mgr, err := manager.New(manager.ResourceConfig{}, manager.OptSetAPIReg(reg))
 	if err != nil {
 		t.Fatal(err)
 	}

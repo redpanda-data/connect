@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/benthosdev/benthos/v4/internal/component/processor"
+	"github.com/benthosdev/benthos/v4/internal/component/testutil"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
 
@@ -28,7 +28,7 @@ func TestRateLimitBasic(t *testing.T) {
 	mgr := mock.NewManager()
 	mgr.RateLimits["foo"] = rlFn
 
-	conf, err := processor.FromYAML(`
+	conf, err := testutil.ProcessorFromYAML(`
 rate_limit:
   resource: foo
 `)
@@ -71,7 +71,7 @@ func TestRateLimitErroredOut(t *testing.T) {
 	mgr := mock.NewManager()
 	mgr.RateLimits["foo"] = rlFn
 
-	conf, err := processor.FromYAML(`
+	conf, err := testutil.ProcessorFromYAML(`
 rate_limit:
   resource: foo
 `)
@@ -124,7 +124,7 @@ func TestRateLimitBlocked(t *testing.T) {
 	mgr := mock.NewManager()
 	mgr.RateLimits["foo"] = rlFn
 
-	conf, err := processor.FromYAML(`
+	conf, err := testutil.ProcessorFromYAML(`
 rate_limit:
   resource: foo
 `)

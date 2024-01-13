@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/benthosdev/benthos/v4/internal/component/processor"
+	"github.com/benthosdev/benthos/v4/internal/component/testutil"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
@@ -79,7 +79,7 @@ func (m *mockLog) Traceln(message string) {
 }
 
 func TestLogBadLevel(t *testing.T) {
-	conf, err := processor.FromYAML(`
+	conf, err := testutil.ProcessorFromYAML(`
 log:
   level: does not exist
 `)
@@ -95,7 +95,7 @@ func TestLogLevelTrace(t *testing.T) {
 
 	levels := []string{"TRACE", "DEBUG", "INFO", "WARN", "ERROR"}
 	for _, level := range levels {
-		conf, err := processor.FromYAML(`
+		conf, err := testutil.ProcessorFromYAML(`
 log:
   message: '${!json("foo")}'
   level: ` + level + `
@@ -139,7 +139,7 @@ log:
 }
 
 func TestLogWithFields(t *testing.T) {
-	conf, err := processor.FromYAML(`
+	conf, err := testutil.ProcessorFromYAML(`
 log:
   message: '${!json("foo")}'
   level: INFO
@@ -206,7 +206,7 @@ log:
 }
 
 func TestLogWithFieldsMapping(t *testing.T) {
-	conf, err := processor.FromYAML(`
+	conf, err := testutil.ProcessorFromYAML(`
 log:
   message: 'hello world'
   level: INFO

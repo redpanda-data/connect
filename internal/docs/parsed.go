@@ -15,6 +15,7 @@ func (f FieldSpec) ParsedConfigFromAny(v any) (pConf *ParsedConfig, err error) {
 	pConf = &ParsedConfig{}
 	switch t := v.(type) {
 	case *yaml.Node:
+		pConf.line = &t.Line
 		pConf.generic, err = f.YAMLToValue(t, ToValueConfig{})
 	default:
 		pConf.generic, err = f.AnyToValue(v, ToValueConfig{})
@@ -26,6 +27,7 @@ func (f FieldSpecs) ParsedConfigFromAny(v any) (pConf *ParsedConfig, err error) 
 	pConf = &ParsedConfig{}
 	switch t := v.(type) {
 	case *yaml.Node:
+		pConf.line = &t.Line
 		pConf.generic, err = f.YAMLToMap(t, ToValueConfig{})
 	default:
 		pConf.generic, err = f.AnyToMap(v, ToValueConfig{})
@@ -39,6 +41,18 @@ func (f FieldSpecs) ParsedConfigFromAny(v any) (pConf *ParsedConfig, err error) 
 type ParsedConfig struct {
 	hiddenPath []string
 	generic    any
+	line       *int
+}
+
+func (p *ParsedConfig) Raw() any {
+	return p.generic
+}
+
+func (p *ParsedConfig) Line() (int, bool) {
+	if p.line == nil {
+		return 0, false
+	}
+	return *p.line, true
 }
 
 // Namespace returns a version of the parsed config at a given field namespace.
@@ -406,6 +420,41 @@ func (p *ParsedConfig) FieldObjectList(path ...string) ([]*ParsedConfig, error) 
 	for i, ev := range iList {
 		sList[i] = &ParsedConfig{
 			generic: ev,
+		}
+	}
+	return sList, nil
+}
+
+// FieldObjectListOfLists accesses a field that is a list of lists of objects
+// from the parsed config by its name and returns the value as an array of
+// arrays of *ParsedConfig types, where each one represents an object in the
+// list. Returns an error if the field is not found, or is not a list of lists
+// of objects.
+func (p *ParsedConfig) FieldObjectListOfLists(path ...string) ([][]*ParsedConfig, error) {
+	v, exists := p.field(path...)
+	if !exists {
+		return nil, fmt.Errorf("field '%v' was not found in the config", p.fullDotPath(path...))
+	}
+	iList, ok := v.([]any)
+	if !ok {
+		if sList, ok := v.([][]*ParsedConfig); ok {
+			return sList, nil
+		}
+		return nil, fmt.Errorf("expected field '%v' to be a list of object lists, got %T", p.fullDotPath(path...), v)
+	}
+	sList := make([][]*ParsedConfig, len(iList))
+	for i, ev := range iList {
+		switch t := ev.(type) {
+		case []*ParsedConfig:
+			sList[i] = t
+		case []any:
+			tmpList := make([]*ParsedConfig, len(t))
+			for j, evv := range t {
+				tmpList[j] = &ParsedConfig{
+					generic: evv,
+				}
+			}
+			sList[i] = tmpList
 		}
 	}
 	return sList, nil

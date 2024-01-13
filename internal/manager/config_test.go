@@ -6,6 +6,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/benthosdev/benthos/v4/internal/component/testutil"
 	"github.com/benthosdev/benthos/v4/internal/manager"
 )
 
@@ -70,7 +71,7 @@ rate_limit_resources:
 	for _, test := range tests {
 		test := test
 		t.Run(test.name, func(t *testing.T) {
-			conf, err := manager.FromYAML(test.input)
+			conf, err := testutil.ManagerFromYAML(test.input)
 			if test.errContains == "" {
 				require.NoError(t, err)
 				test.validateFn(t, conf)

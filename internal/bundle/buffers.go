@@ -61,7 +61,6 @@ func (s *BufferSet) Add(constructor BufferConstructor, spec docs.ComponentSpec) 
 		constructor: constructor,
 		spec:        spec,
 	}
-	docs.DeprecatedProvider.RegisterDocs(spec)
 	return nil
 }
 

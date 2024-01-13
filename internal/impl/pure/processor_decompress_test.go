@@ -14,13 +14,13 @@ import (
 	"github.com/pierrec/lz4/v4"
 	"github.com/stretchr/testify/require"
 
-	"github.com/benthosdev/benthos/v4/internal/component/processor"
+	"github.com/benthosdev/benthos/v4/internal/component/testutil"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
 )
 
 func TestDecompressBadAlgo(t *testing.T) {
-	conf, err := processor.FromYAML(`
+	conf, err := testutil.ProcessorFromYAML(`
 decompress:
   algorithm: does not exist
 `)
@@ -33,7 +33,7 @@ decompress:
 }
 
 func TestDecompressGZIP(t *testing.T) {
-	conf, err := processor.FromYAML(`
+	conf, err := testutil.ProcessorFromYAML(`
 decompress:
   algorithm: gzip
 `)
@@ -82,7 +82,7 @@ decompress:
 }
 
 func TestDecompressPGZIP(t *testing.T) {
-	conf, err := processor.FromYAML(`
+	conf, err := testutil.ProcessorFromYAML(`
 decompress:
   algorithm: pgzip
 `)
@@ -131,7 +131,7 @@ decompress:
 }
 
 func TestDecompressSnappy(t *testing.T) {
-	conf, err := processor.FromYAML(`
+	conf, err := testutil.ProcessorFromYAML(`
 decompress:
   algorithm: snappy
 `)
@@ -173,7 +173,7 @@ decompress:
 }
 
 func TestDecompressZLIB(t *testing.T) {
-	conf, err := processor.FromYAML(`
+	conf, err := testutil.ProcessorFromYAML(`
 decompress:
   algorithm: zlib
 `)
@@ -222,7 +222,7 @@ decompress:
 }
 
 func TestDecompressFlate(t *testing.T) {
-	conf, err := processor.FromYAML(`
+	conf, err := testutil.ProcessorFromYAML(`
 decompress:
   algorithm: flate
 `)
@@ -274,7 +274,7 @@ decompress:
 }
 
 func TestDecompressLZ4(t *testing.T) {
-	conf, err := processor.FromYAML(`
+	conf, err := testutil.ProcessorFromYAML(`
 decompress:
   algorithm: lz4
 `)

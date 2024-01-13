@@ -13,8 +13,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/benthosdev/benthos/v4/internal/config"
-
+	"github.com/benthosdev/benthos/v4/internal/component/testutil"
 	_ "github.com/benthosdev/benthos/v4/public/components/io"
 	_ "github.com/benthosdev/benthos/v4/public/components/pure"
 )
@@ -36,7 +35,7 @@ func TestHandlerAsync(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	conf, err := config.FromYAML(fmt.Sprintf(`
+	conf, err := testutil.ConfigFromYAML(fmt.Sprintf(`
 output:
   http_client:
     url: %v
@@ -65,7 +64,7 @@ output:
 }
 
 func TestHandlerSync(t *testing.T) {
-	conf, err := config.FromYAML(`
+	conf, err := testutil.ConfigFromYAML(`
 output:
   sync_response: {}
 `)
@@ -90,7 +89,7 @@ output:
 }
 
 func TestHandlerSyncBatch(t *testing.T) {
-	conf, err := config.FromYAML(`
+	conf, err := testutil.ConfigFromYAML(`
 pipeline:
   processors:
     - select_parts:
@@ -123,7 +122,7 @@ output:
 }
 
 func TestHandlerSyncBatches(t *testing.T) {
-	conf, err := config.FromYAML(`
+	conf, err := testutil.ConfigFromYAML(`
 pipeline:
   processors:
     - select_parts:
@@ -173,7 +172,7 @@ func TestHandlerCombined(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	conf, err := config.FromYAML(fmt.Sprintf(`
+	conf, err := testutil.ConfigFromYAML(fmt.Sprintf(`
 output:
   broker:
     outputs:

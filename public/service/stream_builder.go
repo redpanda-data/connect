@@ -84,7 +84,7 @@ func NewStreamBuilder() *StreamBuilder {
 }
 
 func (s *StreamBuilder) getLintContext() docs.LintContext {
-	conf := docs.NewLintConfig()
+	conf := docs.NewLintConfig(s.env.internal)
 	conf.DocsProvider = s.env.internal
 	conf.BloblangEnv = s.env.bloblangEnv.Deactivated()
 	return docs.NewLintContext(conf)
@@ -499,7 +499,7 @@ func (s *StreamBuilder) SetYAML(conf string) error {
 		return convertDocsLintErr(err)
 	}
 
-	sconf, err := config.FromParsed(s.env.internal, pConf)
+	sconf, err := config.FromParsed(s.env.internal, pConf, nil)
 	if err != nil {
 		return convertDocsLintErr(err)
 	}
@@ -541,7 +541,7 @@ func (s *StreamBuilder) SetFields(pathValues ...any) error {
 		return err
 	}
 
-	sanitConf := docs.NewSanitiseConfig()
+	sanitConf := docs.NewSanitiseConfig(s.env.internal)
 	sanitConf.RemoveTypeField = true
 	sanitConf.RemoveDeprecated = false
 	sanitConf.DocsProvider = s.env.internal
@@ -574,7 +574,7 @@ func (s *StreamBuilder) SetFields(pathValues ...any) error {
 		return err
 	}
 
-	sconf, err := config.FromParsed(s.env.internal, pConf)
+	sconf, err := config.FromParsed(s.env.internal, pConf, nil)
 	if err != nil {
 		return convertDocsLintErr(err)
 	}
@@ -699,7 +699,7 @@ func (s *StreamBuilder) AsYAML() (string, error) {
 		return "", err
 	}
 
-	sanitConf := docs.NewSanitiseConfig()
+	sanitConf := docs.NewSanitiseConfig(s.env.internal)
 	sanitConf.RemoveTypeField = true
 	sanitConf.RemoveDeprecated = false
 	sanitConf.DocsProvider = s.env.internal
@@ -742,7 +742,7 @@ func (s *StreamBuilder) WalkComponents(fn func(w *WalkedComponent) error) error 
 		return err
 	}
 
-	sanitConf := docs.NewSanitiseConfig()
+	sanitConf := docs.NewSanitiseConfig(s.env.internal)
 	sanitConf.RemoveTypeField = true
 	sanitConf.RemoveDeprecated = false
 	sanitConf.DocsProvider = s.env.internal
@@ -858,7 +858,7 @@ func (s *StreamBuilder) buildWithEnv(env *bundle.Environment) (*Stream, error) {
 		var sanitNode yaml.Node
 		err := sanitNode.Encode(conf)
 		if err == nil {
-			sanitConf := docs.NewSanitiseConfig()
+			sanitConf := docs.NewSanitiseConfig(s.env.internal)
 			sanitConf.RemoveTypeField = true
 			sanitConf.ScrubSecrets = true
 			sanitConf.DocsProvider = env
@@ -908,9 +908,7 @@ type builderConfig struct {
 }
 
 func (s *StreamBuilder) buildConfig() builderConfig {
-	conf := builderConfig{
-		Config: stream.NewConfig(),
-	}
+	conf := builderConfig{}
 
 	if s.apiMut == nil {
 		conf.HTTP = &s.http

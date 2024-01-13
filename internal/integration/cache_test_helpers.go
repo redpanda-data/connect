@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component/cache"
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/internal/docs"
@@ -199,13 +200,13 @@ func initCache(t *testing.T, env *cacheTestEnvironment) cache.V1 {
 	require.NoError(t, err)
 
 	spec := manager.Spec()
-	lints := spec.LintYAML(docs.NewLintContext(docs.NewLintConfig()), node)
+	lints := spec.LintYAML(docs.NewLintContext(docs.NewLintConfig(bundle.GlobalEnvironment)), node)
 	assert.Empty(t, lints)
 
 	pConf, err := spec.ParsedConfigFromAny(node)
 	require.NoError(t, err)
 
-	conf, err := manager.FromParsed(docs.DeprecatedProvider, pConf)
+	conf, err := manager.FromParsed(bundle.GlobalEnvironment, pConf)
 	require.NoError(t, err)
 
 	manager, err := manager.New(conf, manager.OptSetLogger(env.log), manager.OptSetMetrics(env.stats))
