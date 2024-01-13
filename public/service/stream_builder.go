@@ -925,6 +925,9 @@ func (s *StreamBuilder) buildConfig() builderConfig {
 		conf.Input.Plugin = map[string]any{
 			"inputs": iSlice,
 		}
+	} else {
+		// TODO: V5 Prevent default input/output
+		conf.Input = input.NewConfig()
 	}
 
 	conf.Buffer = s.buffer
@@ -943,6 +946,9 @@ func (s *StreamBuilder) buildConfig() builderConfig {
 		conf.Output.Plugin = map[string]any{
 			"outputs": iSlice,
 		}
+	} else {
+		// TODO: V5 Prevent default input/output
+		conf.Output = output.NewConfig()
 	}
 
 	conf.ResourceConfig = s.resources

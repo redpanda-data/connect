@@ -89,33 +89,6 @@ func ReservedFieldsByType(t Type) map[string]FieldSpec {
 	return m
 }
 
-func defaultTypeByType(docProvider Provider, t Type) string {
-	switch t {
-	case TypeBuffer:
-		return "none"
-	case TypeInput:
-		return "stdin"
-	case TypeMetrics:
-		// If prometheus isn't imported then fall back to none
-		if _, exists := docProvider.GetDocs("prometheus", TypeMetrics); exists {
-			return "prometheus"
-		}
-		return "none"
-	case TypeOutput:
-		return "stdout"
-	case TypeTracer:
-		return "none"
-	// No defaults for the following
-	case TypeCache:
-		return ""
-	case TypeProcessor:
-		return ""
-	case TypeRateLimit:
-		return ""
-	}
-	return ""
-}
-
 func getInferenceCandidateFromList(docProvider Provider, t Type, l []string) (string, ComponentSpec, error) {
 	ignore := ReservedFieldsByType(t)
 
@@ -141,13 +114,7 @@ func getInferenceCandidateFromList(docProvider Provider, t Type, l []string) (st
 	}
 
 	if len(candidates) == 0 {
-		defaultType := defaultTypeByType(docProvider, t)
-		if spec, exists := docProvider.GetDocs(defaultType, t); exists {
-			return defaultType, spec, nil
-		}
-		if inferred == "" {
-			return "", ComponentSpec{}, fmt.Errorf("an explicit %v type must be specified", string(t))
-		}
+		return "", ComponentSpec{}, fmt.Errorf("an explicit %v type must be specified", string(t))
 	}
 
 	if inferred == "" {
