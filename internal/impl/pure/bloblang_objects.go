@@ -112,6 +112,8 @@ If a key within a nested path does not exist then it is ignored.`).
 			),
 		func(args *bloblang.ParsedParams) (bloblang.Method, error) {
 			sizeError := fmt.Errorf("can't zip different length array values")
+			argError := fmt.Errorf("zip requires at least one argument")
+
 			argAnys := args.AsSlice()
 			argSlices := make([][]any, len(argAnys))
 			for i, a := range argAnys {
@@ -125,6 +127,9 @@ If a key within a nested path does not exist then it is ignored.`).
 			}
 
 			return bloblang.ArrayMethod(func(i []any) (any, error) {
+				if len(argSlices) == 0 {
+					return nil, argError
+				}
 				if len(i) != len(argSlices[0]) {
 					return nil, sizeError
 				}
