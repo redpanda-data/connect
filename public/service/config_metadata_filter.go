@@ -76,9 +76,9 @@ func (m *MetadataFilter) WalkMut(msg *Message, fn func(key string, value any) er
 // with NewMetdataFilterField and returns a MetadataFilter, or an error if the
 // configuration was invalid.
 func (p *ParsedConfig) FieldMetadataFilter(path ...string) (f *MetadataFilter, err error) {
-	confNode, exists := p.field(path...)
+	confNode, exists := p.i.Field(path...)
 	if !exists {
-		return nil, fmt.Errorf("field '%v' was not found in the config", p.fullDotPath(path...))
+		return nil, fmt.Errorf("field '%v' was not found in the config", p.i.FullDotPath(path...))
 	}
 
 	var node yaml.Node
@@ -156,9 +156,9 @@ func (m *MetadataExcludeFilter) WalkMut(msg *Message, fn func(key string, value 
 // defined with NewMetdataExcludeFilterField and returns a
 // MetadataExcludeFilter, or an error if the configuration was invalid.
 func (p *ParsedConfig) FieldMetadataExcludeFilter(path ...string) (f *MetadataExcludeFilter, err error) {
-	confNode, exists := p.field(path...)
+	confNode, exists := p.i.Field(path...)
 	if !exists {
-		return nil, fmt.Errorf("field '%v' was not found in the config", p.fullDotPath(path...))
+		return nil, fmt.Errorf("field '%v' was not found in the config", p.i.FullDotPath(path...))
 	}
 
 	var node yaml.Node

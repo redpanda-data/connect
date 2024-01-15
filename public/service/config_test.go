@@ -98,8 +98,11 @@ c:
 			pConf, err := spec.configFromAny(nil, node)
 			require.NoError(t, err)
 
+			a, err := pConf.FieldAny()
+			require.NoError(t, err)
+
 			var sanitNode yaml.Node
-			require.NoError(t, sanitNode.Encode(pConf.generic))
+			require.NoError(t, sanitNode.Encode(a))
 
 			sanitConf := docs.NewSanitiseConfig(bundle.GlobalEnvironment)
 			sanitConf.RemoveTypeField = true

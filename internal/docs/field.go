@@ -234,7 +234,9 @@ func (f FieldSpec) AtVersion(v string) FieldSpec {
 }
 
 // HasAnnotatedOptions returns a new FieldSpec that specifies a specific list of
-// annotated options. Either.
+// annotated options. Field values are linted to ensure they match one of the
+// given options by a case insensitive match, use a custom lint function in
+// order to change this default behaviour.
 func (f FieldSpec) HasAnnotatedOptions(options ...string) FieldSpec {
 	if len(f.Options) > 0 {
 		panic("cannot combine annotated and non-annotated options for a field")
@@ -247,16 +249,19 @@ func (f FieldSpec) HasAnnotatedOptions(options ...string) FieldSpec {
 			options[i], options[i+1],
 		})
 	}
-	return f.lintOptions()
+	return f.lintOptions(false)
 }
 
 // HasOptions returns a new FieldSpec that specifies a specific list of options.
+// Field values are linted to ensure they match one of the given options by a
+// case insensitive match, use a custom lint function in order to change this
+// default behaviour.
 func (f FieldSpec) HasOptions(options ...string) FieldSpec {
 	if len(f.AnnotatedOptions) > 0 {
 		panic("cannot combine annotated and non-annotated options for a field")
 	}
 	f.Options = options
-	return f.lintOptions()
+	return f.lintOptions(false)
 }
 
 // WithChildren returns a new FieldSpec that has child fields.
@@ -372,19 +377,14 @@ func (f FieldSpec) LinterBlobl(blobl string) FieldSpec {
 // and returns a linting error if that is not the case. This is currently opt-in
 // because some fields express options that are only a subset due to deprecated
 // functionality.
-func (f FieldSpec) lintOptions() FieldSpec {
-	var optionsBuilder, patternOptionsBuilder strings.Builder
-
+func (f FieldSpec) lintOptions(caseSensitive bool) FieldSpec {
+	var optionsBuilder strings.Builder
 	_, _ = optionsBuilder.WriteString("{\n")
-	_, _ = patternOptionsBuilder.WriteString("{\n")
-
 	addFn := func(o string) {
-		o = strings.ToLower(o)
-		if colonN := strings.Index(o, ":"); colonN != -1 {
-			_, _ = fmt.Fprintf(&patternOptionsBuilder, "  %q: true,\n", o[:colonN])
-		} else {
-			_, _ = fmt.Fprintf(&optionsBuilder, "  %q: true,\n", o)
+		if !caseSensitive {
+			o = strings.ToLower(o)
 		}
+		_, _ = fmt.Fprintf(&optionsBuilder, "  %q: true,\n", o)
 	}
 
 	for _, o := range f.Options {
@@ -393,23 +393,19 @@ func (f FieldSpec) lintOptions() FieldSpec {
 	for _, kv := range f.AnnotatedOptions {
 		addFn(kv[0])
 	}
-
 	_, _ = optionsBuilder.WriteString("}\n")
-	_, _ = patternOptionsBuilder.WriteString("}\n")
+
+	maybeLowerCase := ""
+	if !caseSensitive {
+		maybeLowerCase = ".lowercase()"
+	}
 
 	f.Linter = fmt.Sprintf(`
 let options = %v
-map is_pattern_option {
-  let pattern_options = %v
-  let parts = this.split(":")
-  root = $parts.length() >= 2 && $pattern_options.exists($parts.index(0))
+root = if !$options.exists(this.string()%v) {
+  {"type": 2, "what": "value %%v is not a valid option for this field".format(this.string())}
 }
-# Codec arguments can be chained with a / (i.e. "lines/multipart")
-let value_parts = if this.type() == "string" { this.split("/").map_each(part -> part.lowercase()) } else { [] }
-root = $value_parts.map_each(part -> if $options.exists(part) || part.apply("is_pattern_option") { null } else {
-  {"type": 2, "what": "value %%v is not a valid option for this field".format(part)}
-}).filter(ele -> ele != null)
-`, optionsBuilder.String(), patternOptionsBuilder.String())
+`, optionsBuilder.String(), maybeLowerCase)
 	return f
 }
 

@@ -21,7 +21,7 @@ func NewOutputField(name string) *ConfigField {
 // NewOutputField and returns an OwnedOutput, or an error if the configuration
 // was invalid.
 func (p *ParsedConfig) FieldOutput(path ...string) (*OwnedOutput, error) {
-	field, exists := p.field(path...)
+	field, exists := p.i.Field(path...)
 	if !exists {
 		return nil, fmt.Errorf("field '%v' was not found in the config", strings.Join(path, "."))
 	}
@@ -51,7 +51,7 @@ func NewOutputListField(name string) *ConfigField {
 // with NewOutputListField and returns a slice of OwnedOutput, or an error
 // if the configuration was invalid.
 func (p *ParsedConfig) FieldOutputList(path ...string) ([]*OwnedOutput, error) {
-	field, exists := p.field(path...)
+	field, exists := p.i.Field(path...)
 	if !exists {
 		return nil, fmt.Errorf("field '%v' was not found in the config", strings.Join(path, "."))
 	}
@@ -98,7 +98,7 @@ func NewOutputMapField(name string) *ConfigField {
 // with NewOutputMapField and returns a map of OwnedOutput, or an error if the
 // configuration was invalid.
 func (p *ParsedConfig) FieldOutputMap(path ...string) (map[string]*OwnedOutput, error) {
-	field, exists := p.field(path...)
+	field, exists := p.i.Field(path...)
 	if !exists {
 		return nil, fmt.Errorf("field '%v' was not found in the config", strings.Join(path, "."))
 	}

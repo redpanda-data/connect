@@ -110,9 +110,9 @@ func TestFieldLinting(t *testing.T) {
 			},
 		},
 		{
-			name:  "enum valid pattern option",
-			f:     docs.FieldString("foo", "").HasOptions("foo", "bar", "baz:x"),
-			input: "baz:a",
+			name:  "enum valid case insensitive option",
+			f:     docs.FieldString("foo", "").HasOptions("foo", "bar", "baz"),
+			input: "BAR",
 		},
 		{
 			name:  "enum invalid pattern option",

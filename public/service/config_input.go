@@ -21,7 +21,7 @@ func NewInputField(name string) *ConfigField {
 // NewInputField and returns an OwnedInput, or an error if the configuration was
 // invalid.
 func (p *ParsedConfig) FieldInput(path ...string) (*OwnedInput, error) {
-	field, exists := p.field(path...)
+	field, exists := p.i.Field(path...)
 	if !exists {
 		return nil, fmt.Errorf("field '%v' was not found in the config", strings.Join(path, "."))
 	}
@@ -51,7 +51,7 @@ func NewInputListField(name string) *ConfigField {
 // with NewInputListField and returns a slice of OwnedInput, or an error
 // if the configuration was invalid.
 func (p *ParsedConfig) FieldInputList(path ...string) ([]*OwnedInput, error) {
-	field, exists := p.field(path...)
+	field, exists := p.i.Field(path...)
 	if !exists {
 		return nil, fmt.Errorf("field '%v' was not found in the config", strings.Join(path, "."))
 	}
@@ -96,7 +96,7 @@ func NewInputMapField(name string) *ConfigField {
 // with NewInputMapField and returns a map of OwnedInput, or an error if the
 // configuration was invalid.
 func (p *ParsedConfig) FieldInputMap(path ...string) (map[string]*OwnedInput, error) {
-	field, exists := p.field(path...)
+	field, exists := p.i.Field(path...)
 	if !exists {
 		return nil, fmt.Errorf("field '%v' was not found in the config", strings.Join(path, "."))
 	}

@@ -35,7 +35,7 @@ func ownedScannerCreatorFromConfAny(mgr bundle.NewManagement, field any) (*Owned
 // NewScannerField and returns an OwnedScannerCreator, or an error if the
 // configuration was invalid.
 func (p *ParsedConfig) FieldScanner(path ...string) (*OwnedScannerCreator, error) {
-	field, exists := p.field(path...)
+	field, exists := p.i.Field(path...)
 	if !exists {
 		return nil, fmt.Errorf("field '%v' was not found in the config", strings.Join(path, "."))
 	}

@@ -64,10 +64,10 @@ func (p *ParsedConfig) Namespace(path ...string) *ParsedConfig {
 	return &tmpConfig
 }
 
-// Field accesses a field from the parsed config by its name and returns the
-// value if the field is found and a boolean indicating whether it was found.
-// Nested fields can be accessed by specifying the series of field names.
-func (p *ParsedConfig) field(path ...string) (any, bool) {
+// Field accesses a Field from the parsed config by its name and returns the
+// value if the Field is found and a boolean indicating whether it was found.
+// Nested fields can be accessed by specifying the series of Field names.
+func (p *ParsedConfig) Field(path ...string) (any, bool) {
 	gObj := gabs.Wrap(p.generic).S(p.hiddenPath...)
 	if exists := gObj.Exists(path...); !exists {
 		return nil, false
@@ -75,7 +75,7 @@ func (p *ParsedConfig) field(path ...string) (any, bool) {
 	return gObj.S(path...).Data(), true
 }
 
-func (p *ParsedConfig) fullDotPath(path ...string) string {
+func (p *ParsedConfig) FullDotPath(path ...string) string {
 	var fullPath []string
 	fullPath = append(fullPath, p.hiddenPath...)
 	fullPath = append(fullPath, path...)
@@ -92,9 +92,9 @@ func (p *ParsedConfig) Contains(path ...string) bool {
 // FieldAny accesses a field from the parsed config by its name that can assume
 // any value type. If the field is not found an error is returned.
 func (p *ParsedConfig) FieldAny(path ...string) (any, error) {
-	v, exists := p.field(path...)
+	v, exists := p.Field(path...)
 	if !exists {
-		return nil, fmt.Errorf("field '%v' was not found in the config", p.fullDotPath(path...))
+		return nil, fmt.Errorf("field '%v' was not found in the config", p.FullDotPath(path...))
 	}
 	return v, nil
 }
@@ -104,13 +104,13 @@ func (p *ParsedConfig) FieldAny(path ...string) (any, error) {
 // types, where each one represents an object or value in the list. Returns an
 // error if the field is not found, or is not a list of values.
 func (p *ParsedConfig) FieldAnyList(path ...string) ([]*ParsedConfig, error) {
-	v, exists := p.field(path...)
+	v, exists := p.Field(path...)
 	if !exists {
-		return nil, fmt.Errorf("field '%v' was not found in the config", p.fullDotPath(path...))
+		return nil, fmt.Errorf("field '%v' was not found in the config", p.FullDotPath(path...))
 	}
 	iList, ok := v.([]any)
 	if !ok {
-		return nil, fmt.Errorf("expected field '%v' to be a list, got %T", p.fullDotPath(path...), v)
+		return nil, fmt.Errorf("expected field '%v' to be a list, got %T", p.FullDotPath(path...), v)
 	}
 	sList := make([]*ParsedConfig, len(iList))
 	for i, ev := range iList {
@@ -126,13 +126,13 @@ func (p *ParsedConfig) FieldAnyList(path ...string) ([]*ParsedConfig, error) {
 // types, where each one represents an object or value in the map. Returns an
 // error if the field is not found, or is not an object.
 func (p *ParsedConfig) FieldAnyMap(path ...string) (map[string]*ParsedConfig, error) {
-	v, exists := p.field(path...)
+	v, exists := p.Field(path...)
 	if !exists {
-		return nil, fmt.Errorf("field '%v' was not found in the config", p.fullDotPath(path...))
+		return nil, fmt.Errorf("field '%v' was not found in the config", p.FullDotPath(path...))
 	}
 	iMap, ok := v.(map[string]any)
 	if !ok {
-		return nil, fmt.Errorf("expected field '%v' to be a string map, got %T", p.fullDotPath(path...), v)
+		return nil, fmt.Errorf("expected field '%v' to be a string map, got %T", p.FullDotPath(path...), v)
 	}
 	sMap := make(map[string]*ParsedConfig, len(iMap))
 	for k, v := range iMap {
@@ -146,13 +146,13 @@ func (p *ParsedConfig) FieldAnyMap(path ...string) (map[string]*ParsedConfig, er
 // FieldString accesses a string field from the parsed config by its name. If
 // the field is not found or is not a string an error is returned.
 func (p *ParsedConfig) FieldString(path ...string) (string, error) {
-	v, exists := p.field(path...)
+	v, exists := p.Field(path...)
 	if !exists {
-		return "", fmt.Errorf("field '%v' was not found in the config", p.fullDotPath(path...))
+		return "", fmt.Errorf("field '%v' was not found in the config", p.FullDotPath(path...))
 	}
 	str, ok := v.(string)
 	if !ok {
-		return "", fmt.Errorf("expected field '%v' to be a string, got %T", p.fullDotPath(path...), v)
+		return "", fmt.Errorf("expected field '%v' to be a string, got %T", p.FullDotPath(path...), v)
 	}
 	return str, nil
 }
@@ -161,17 +161,17 @@ func (p *ParsedConfig) FieldString(path ...string) (string, error) {
 // name. If the field is not found or is not a valid duration string an error is
 // returned.
 func (p *ParsedConfig) FieldDuration(path ...string) (time.Duration, error) {
-	v, exists := p.field(path...)
+	v, exists := p.Field(path...)
 	if !exists {
-		return 0, fmt.Errorf("field '%v' was not found in the config", p.fullDotPath(path...))
+		return 0, fmt.Errorf("field '%v' was not found in the config", p.FullDotPath(path...))
 	}
 	str, ok := v.(string)
 	if !ok {
-		return 0, fmt.Errorf("expected field '%v' to be a string, got %T", p.fullDotPath(path...), v)
+		return 0, fmt.Errorf("expected field '%v' to be a string, got %T", p.FullDotPath(path...), v)
 	}
 	d, err := time.ParseDuration(str)
 	if err != nil {
-		return 0, fmt.Errorf("failed to parse '%v' as a duration string: %w", p.fullDotPath(path...), err)
+		return 0, fmt.Errorf("failed to parse '%v' as a duration string: %w", p.FullDotPath(path...), err)
 	}
 	return d, nil
 }
@@ -180,21 +180,21 @@ func (p *ParsedConfig) FieldDuration(path ...string) (time.Duration, error) {
 // config by its name and returns the value. Returns an error if the field is
 // not found, or is not a list of strings.
 func (p *ParsedConfig) FieldStringList(path ...string) ([]string, error) {
-	v, exists := p.field(path...)
+	v, exists := p.Field(path...)
 	if !exists {
-		return nil, fmt.Errorf("field '%v' was not found in the config", p.fullDotPath(path...))
+		return nil, fmt.Errorf("field '%v' was not found in the config", p.FullDotPath(path...))
 	}
 	iList, ok := v.([]any)
 	if !ok {
 		if sList, ok := v.([]string); ok {
 			return sList, nil
 		}
-		return nil, fmt.Errorf("expected field '%v' to be a string list, got %T", p.fullDotPath(path...), v)
+		return nil, fmt.Errorf("expected field '%v' to be a string list, got %T", p.FullDotPath(path...), v)
 	}
 	sList := make([]string, len(iList))
 	for i, ev := range iList {
 		if sList[i], ok = ev.(string); !ok {
-			return nil, fmt.Errorf("expected field '%v' to be a string list, found an element of type %T", p.fullDotPath(path...), ev)
+			return nil, fmt.Errorf("expected field '%v' to be a string list, found an element of type %T", p.FullDotPath(path...), ev)
 		}
 	}
 	return sList, nil
@@ -204,16 +204,16 @@ func (p *ParsedConfig) FieldStringList(path ...string) ([]string, error) {
 // from the parsed config by its name and returns the value. Returns an error if
 // the field is not found, or is not a list of lists of strings.
 func (p *ParsedConfig) FieldStringListOfLists(path ...string) ([][]string, error) {
-	v, exists := p.field(path...)
+	v, exists := p.Field(path...)
 	if !exists {
-		return nil, fmt.Errorf("field '%v' was not found in the config", p.fullDotPath(path...))
+		return nil, fmt.Errorf("field '%v' was not found in the config", p.FullDotPath(path...))
 	}
 	iList, ok := v.([]any)
 	if !ok {
 		if sList, ok := v.([][]string); ok {
 			return sList, nil
 		}
-		return nil, fmt.Errorf("expected field '%v' to be a list of string lists, got %T", p.fullDotPath(path...), v)
+		return nil, fmt.Errorf("expected field '%v' to be a list of string lists, got %T", p.FullDotPath(path...), v)
 	}
 	sList := make([][]string, len(iList))
 	for i, ev := range iList {
@@ -224,7 +224,7 @@ func (p *ParsedConfig) FieldStringListOfLists(path ...string) ([][]string, error
 			tmpList := make([]string, len(t))
 			for j, evv := range t {
 				if tmpList[j], ok = evv.(string); !ok {
-					return nil, fmt.Errorf("expected field '%v' to be a string list, found an element of type %T", p.fullDotPath(path...), evv)
+					return nil, fmt.Errorf("expected field '%v' to be a string list, found an element of type %T", p.FullDotPath(path...), evv)
 				}
 			}
 			sList[i] = tmpList
@@ -237,21 +237,21 @@ func (p *ParsedConfig) FieldStringListOfLists(path ...string) ([][]string, error
 // string values from the parsed config by its name and returns the value.
 // Returns an error if the field is not found, or is not an object of strings.
 func (p *ParsedConfig) FieldStringMap(path ...string) (map[string]string, error) {
-	v, exists := p.field(path...)
+	v, exists := p.Field(path...)
 	if !exists {
-		return nil, fmt.Errorf("field '%v' was not found in the config", p.fullDotPath(path...))
+		return nil, fmt.Errorf("field '%v' was not found in the config", p.FullDotPath(path...))
 	}
 	iMap, ok := v.(map[string]any)
 	if !ok {
 		if sMap, ok := v.(map[string]string); ok {
 			return sMap, nil
 		}
-		return nil, fmt.Errorf("expected field '%v' to be a string map, got %T", p.fullDotPath(path...), v)
+		return nil, fmt.Errorf("expected field '%v' to be a string map, got %T", p.FullDotPath(path...), v)
 	}
 	sMap := make(map[string]string, len(iMap))
 	for k, ev := range iMap {
 		if sMap[k], ok = ev.(string); !ok {
-			return nil, fmt.Errorf("expected field '%v' to be a string map, found an element of type %T", p.fullDotPath(path...), ev)
+			return nil, fmt.Errorf("expected field '%v' to be a string map, found an element of type %T", p.FullDotPath(path...), ev)
 		}
 	}
 	return sMap, nil
@@ -260,13 +260,13 @@ func (p *ParsedConfig) FieldStringMap(path ...string) (map[string]string, error)
 // FieldInt accesses an int field from the parsed config by its name and returns
 // the value. Returns an error if the field is not found or is not an int.
 func (p *ParsedConfig) FieldInt(path ...string) (int, error) {
-	v, exists := p.field(path...)
+	v, exists := p.Field(path...)
 	if !exists {
-		return 0, fmt.Errorf("field '%v' was not found in the config", p.fullDotPath(path...))
+		return 0, fmt.Errorf("field '%v' was not found in the config", p.FullDotPath(path...))
 	}
 	i, err := value.IGetInt(v)
 	if err != nil {
-		return 0, fmt.Errorf("expected field '%v' to be an int, got %T", p.fullDotPath(path...), v)
+		return 0, fmt.Errorf("expected field '%v' to be an int, got %T", p.FullDotPath(path...), v)
 	}
 	return int(i), nil
 }
@@ -275,22 +275,22 @@ func (p *ParsedConfig) FieldInt(path ...string) (int, error) {
 // config by its name and returns the value. Returns an error if the field is
 // not found, or is not a list of integers.
 func (p *ParsedConfig) FieldIntList(path ...string) ([]int, error) {
-	v, exists := p.field(path...)
+	v, exists := p.Field(path...)
 	if !exists {
-		return nil, fmt.Errorf("field '%v' was not found in the config", p.fullDotPath(path...))
+		return nil, fmt.Errorf("field '%v' was not found in the config", p.FullDotPath(path...))
 	}
 	iList, ok := v.([]any)
 	if !ok {
 		if sList, ok := v.([]int); ok {
 			return sList, nil
 		}
-		return nil, fmt.Errorf("expected field '%v' to be an integer list, got %T", p.fullDotPath(path...), v)
+		return nil, fmt.Errorf("expected field '%v' to be an integer list, got %T", p.FullDotPath(path...), v)
 	}
 	sList := make([]int, len(iList))
 	for i, ev := range iList {
 		iv, err := value.IToInt(ev)
 		if err != nil {
-			return nil, fmt.Errorf("expected field '%v' to be an integer list, found an element of type %T", p.fullDotPath(path...), ev)
+			return nil, fmt.Errorf("expected field '%v' to be an integer list, found an element of type %T", p.FullDotPath(path...), ev)
 		}
 		sList[i] = int(iv)
 	}
@@ -301,22 +301,22 @@ func (p *ParsedConfig) FieldIntList(path ...string) ([]int, error) {
 // integer values from the parsed config by its name and returns the value.
 // Returns an error if the field is not found, or is not an object of integers.
 func (p *ParsedConfig) FieldIntMap(path ...string) (map[string]int, error) {
-	v, exists := p.field(path...)
+	v, exists := p.Field(path...)
 	if !exists {
-		return nil, fmt.Errorf("field '%v' was not found in the config", p.fullDotPath(path...))
+		return nil, fmt.Errorf("field '%v' was not found in the config", p.FullDotPath(path...))
 	}
 	iMap, ok := v.(map[string]any)
 	if !ok {
 		if sMap, ok := v.(map[string]int); ok {
 			return sMap, nil
 		}
-		return nil, fmt.Errorf("expected field '%v' to be an integer map, got %T", p.fullDotPath(path...), v)
+		return nil, fmt.Errorf("expected field '%v' to be an integer map, got %T", p.FullDotPath(path...), v)
 	}
 	sMap := make(map[string]int, len(iMap))
 	for k, ev := range iMap {
 		iv, err := value.IToInt(ev)
 		if err != nil {
-			return nil, fmt.Errorf("expected field '%v' to be an integer map, found an element of type %T", p.fullDotPath(path...), ev)
+			return nil, fmt.Errorf("expected field '%v' to be an integer map, found an element of type %T", p.FullDotPath(path...), ev)
 		}
 		sMap[k] = int(iv)
 	}
@@ -327,13 +327,13 @@ func (p *ParsedConfig) FieldIntMap(path ...string) (map[string]int, error) {
 // returns the value. Returns an error if the field is not found or is not a
 // float.
 func (p *ParsedConfig) FieldFloat(path ...string) (float64, error) {
-	v, exists := p.field(path...)
+	v, exists := p.Field(path...)
 	if !exists {
-		return 0, fmt.Errorf("field '%v' was not found in the config", p.fullDotPath(path...))
+		return 0, fmt.Errorf("field '%v' was not found in the config", p.FullDotPath(path...))
 	}
 	f, err := value.IGetNumber(v)
 	if err != nil {
-		return 0, fmt.Errorf("expected field '%v' to be a float, got %T", p.fullDotPath(path...), v)
+		return 0, fmt.Errorf("expected field '%v' to be a float, got %T", p.FullDotPath(path...), v)
 	}
 	return f, nil
 }
@@ -342,22 +342,22 @@ func (p *ParsedConfig) FieldFloat(path ...string) (float64, error) {
 // config by its name and returns the value. Returns an error if the field is
 // not found, or is not a list of integers.
 func (p *ParsedConfig) FieldFloatList(path ...string) ([]float64, error) {
-	v, exists := p.field(path...)
+	v, exists := p.Field(path...)
 	if !exists {
-		return nil, fmt.Errorf("field '%v' was not found in the config", p.fullDotPath(path...))
+		return nil, fmt.Errorf("field '%v' was not found in the config", p.FullDotPath(path...))
 	}
 	iList, ok := v.([]any)
 	if !ok {
 		if sList, ok := v.([]float64); ok {
 			return sList, nil
 		}
-		return nil, fmt.Errorf("expected field '%v' to be an float list, got %T", p.fullDotPath(path...), v)
+		return nil, fmt.Errorf("expected field '%v' to be an float list, got %T", p.FullDotPath(path...), v)
 	}
 	sList := make([]float64, len(iList))
 	for i, ev := range iList {
 		var err error
 		if sList[i], err = value.IGetNumber(ev); err != nil {
-			return nil, fmt.Errorf("expected field '%v' to be an float list, found an element of type %T", p.fullDotPath(path...), ev)
+			return nil, fmt.Errorf("expected field '%v' to be an float list, found an element of type %T", p.FullDotPath(path...), ev)
 		}
 	}
 	return sList, nil
@@ -367,22 +367,22 @@ func (p *ParsedConfig) FieldFloatList(path ...string) ([]float64, error) {
 // float values from the parsed config by its name and returns the value.
 // Returns an error if the field is not found, or is not an object of floats.
 func (p *ParsedConfig) FieldFloatMap(path ...string) (map[string]float64, error) {
-	v, exists := p.field(path...)
+	v, exists := p.Field(path...)
 	if !exists {
-		return nil, fmt.Errorf("field '%v' was not found in the config", p.fullDotPath(path...))
+		return nil, fmt.Errorf("field '%v' was not found in the config", p.FullDotPath(path...))
 	}
 	iMap, ok := v.(map[string]any)
 	if !ok {
 		if sMap, ok := v.(map[string]float64); ok {
 			return sMap, nil
 		}
-		return nil, fmt.Errorf("expected field '%v' to be an float map, got %T", p.fullDotPath(path...), v)
+		return nil, fmt.Errorf("expected field '%v' to be an float map, got %T", p.FullDotPath(path...), v)
 	}
 	sMap := make(map[string]float64, len(iMap))
 	for k, ev := range iMap {
 		var err error
 		if sMap[k], err = value.IGetNumber(ev); err != nil {
-			return nil, fmt.Errorf("expected field '%v' to be an float map, found an element of type %T", p.fullDotPath(path...), ev)
+			return nil, fmt.Errorf("expected field '%v' to be an float map, found an element of type %T", p.FullDotPath(path...), ev)
 		}
 	}
 	return sMap, nil
@@ -392,13 +392,13 @@ func (p *ParsedConfig) FieldFloatMap(path ...string) (map[string]float64, error)
 // returns the value. Returns an error if the field is not found or is not a
 // bool.
 func (p *ParsedConfig) FieldBool(path ...string) (bool, error) {
-	v, e := p.field(path...)
+	v, e := p.Field(path...)
 	if !e {
-		return false, fmt.Errorf("field '%v' was not found in the config", p.fullDotPath(path...))
+		return false, fmt.Errorf("field '%v' was not found in the config", p.FullDotPath(path...))
 	}
 	b, ok := v.(bool)
 	if !ok {
-		return false, fmt.Errorf("expected field '%v' to be a bool, got %T", p.fullDotPath(path...), v)
+		return false, fmt.Errorf("expected field '%v' to be a bool, got %T", p.FullDotPath(path...), v)
 	}
 	return b, nil
 }
@@ -408,13 +408,13 @@ func (p *ParsedConfig) FieldBool(path ...string) (bool, error) {
 // where each one represents an object in the list. Returns an error if the
 // field is not found, or is not a list of objects.
 func (p *ParsedConfig) FieldObjectList(path ...string) ([]*ParsedConfig, error) {
-	v, exists := p.field(path...)
+	v, exists := p.Field(path...)
 	if !exists {
-		return nil, fmt.Errorf("field '%v' was not found in the config", p.fullDotPath(path...))
+		return nil, fmt.Errorf("field '%v' was not found in the config", p.FullDotPath(path...))
 	}
 	iList, ok := v.([]any)
 	if !ok {
-		return nil, fmt.Errorf("expected field '%v' to be a list, got %T", p.fullDotPath(path...), v)
+		return nil, fmt.Errorf("expected field '%v' to be a list, got %T", p.FullDotPath(path...), v)
 	}
 	sList := make([]*ParsedConfig, len(iList))
 	for i, ev := range iList {
@@ -431,16 +431,16 @@ func (p *ParsedConfig) FieldObjectList(path ...string) ([]*ParsedConfig, error) 
 // list. Returns an error if the field is not found, or is not a list of lists
 // of objects.
 func (p *ParsedConfig) FieldObjectListOfLists(path ...string) ([][]*ParsedConfig, error) {
-	v, exists := p.field(path...)
+	v, exists := p.Field(path...)
 	if !exists {
-		return nil, fmt.Errorf("field '%v' was not found in the config", p.fullDotPath(path...))
+		return nil, fmt.Errorf("field '%v' was not found in the config", p.FullDotPath(path...))
 	}
 	iList, ok := v.([]any)
 	if !ok {
 		if sList, ok := v.([][]*ParsedConfig); ok {
 			return sList, nil
 		}
-		return nil, fmt.Errorf("expected field '%v' to be a list of object lists, got %T", p.fullDotPath(path...), v)
+		return nil, fmt.Errorf("expected field '%v' to be a list of object lists, got %T", p.FullDotPath(path...), v)
 	}
 	sList := make([][]*ParsedConfig, len(iList))
 	for i, ev := range iList {
@@ -465,13 +465,13 @@ func (p *ParsedConfig) FieldObjectListOfLists(path ...string) ([][]*ParsedConfig
 // where each one represents an object in the map. Returns an error if the
 // field is not found, or is not a map of objects.
 func (p *ParsedConfig) FieldObjectMap(path ...string) (map[string]*ParsedConfig, error) {
-	v, exists := p.field(path...)
+	v, exists := p.Field(path...)
 	if !exists {
-		return nil, fmt.Errorf("field '%v' was not found in the config", p.fullDotPath(path...))
+		return nil, fmt.Errorf("field '%v' was not found in the config", p.FullDotPath(path...))
 	}
 	iMap, ok := v.(map[string]any)
 	if !ok {
-		return nil, fmt.Errorf("expected field '%v' to be a map, got %T", p.fullDotPath(path...), v)
+		return nil, fmt.Errorf("expected field '%v' to be a map, got %T", p.FullDotPath(path...), v)
 	}
 	sMap := make(map[string]*ParsedConfig, len(iMap))
 	for i, ev := range iMap {

@@ -22,7 +22,7 @@ func NewProcessorField(name string) *ConfigField {
 // NewProcessorField and returns an OwnedProcessor, or an error if the
 // configuration was invalid.
 func (p *ParsedConfig) FieldProcessor(path ...string) (*OwnedProcessor, error) {
-	v, exists := p.field(path...)
+	v, exists := p.i.Field(path...)
 	if !exists {
 		return nil, fmt.Errorf("field '%v' was not found in the config", strings.Join(path, "."))
 	}
@@ -49,7 +49,7 @@ func NewProcessorListField(name string) *ConfigField {
 }
 
 func (p *ParsedConfig) fieldProcessorListConfigs(path ...string) ([]processor.Config, error) {
-	proc, exists := p.field(path...)
+	proc, exists := p.i.Field(path...)
 	if !exists {
 		return nil, fmt.Errorf("field '%v' was not found in the config", strings.Join(path, "."))
 	}

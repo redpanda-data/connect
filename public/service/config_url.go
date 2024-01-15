@@ -22,7 +22,7 @@ func NewURLField(name string) *ConfigField {
 // NewURLField and returns either a *url.URL or an error if the string was
 // invalid.
 func (p *ParsedConfig) FieldURL(path ...string) (*url.URL, error) {
-	v, exists := p.field(path...)
+	v, exists := p.i.Field(path...)
 	if !exists {
 		return nil, fmt.Errorf("field '%v' was not found in the config", strings.Join(path, "."))
 	}
@@ -67,7 +67,7 @@ func urlsFromStr(str string) (urls []*url.URL, err error) {
 // NewURLListField and returns either a []*url.URL or an error if one or more
 // strings were invalid.
 func (p *ParsedConfig) FieldURLList(path ...string) ([]*url.URL, error) {
-	v, exists := p.field(path...)
+	v, exists := p.i.Field(path...)
 	if !exists {
 		return nil, fmt.Errorf("field '%v' was not found in the config", strings.Join(path, "."))
 	}
@@ -88,7 +88,7 @@ func (p *ParsedConfig) FieldURLList(path ...string) ([]*url.URL, error) {
 			}
 			return uList, nil
 		default:
-			return nil, fmt.Errorf("expected field '%v' to be a string list, got %T", p.fullDotPath(path...), v)
+			return nil, fmt.Errorf("expected field '%v' to be a string list, got %T", p.i.FullDotPath(path...), v)
 		}
 	}
 

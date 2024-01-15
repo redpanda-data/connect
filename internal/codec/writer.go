@@ -19,7 +19,7 @@ func NewWriterDocs(name string) docs.FieldSpec {
 		"append", "Append each message to the output stream without any delimiter or special encoding.",
 		"lines", "Append each message to the output stream followed by a line break.",
 		"delim:x", "Append each message to the output stream followed by a custom delimiter.",
-	)
+	).LinterBlobl("")
 }
 
 //------------------------------------------------------------------------------
