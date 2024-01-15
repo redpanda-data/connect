@@ -8,6 +8,7 @@ import (
 	"github.com/fatih/color"
 
 	"github.com/benthosdev/benthos/v4/internal/cli/test"
+	dtest "github.com/benthosdev/benthos/v4/internal/config/test"
 	"github.com/benthosdev/benthos/v4/internal/log"
 )
 
@@ -26,13 +27,13 @@ pipeline:
 	}
 	defer os.RemoveAll(testDir)
 
-	def := test.Definition{
-		Cases: []test.Case{
-			(test.Case{
-				Name:             "foo test 1",
-				Environment:      map[string]string{},
-				TargetProcessors: "/pipeline/processors",
-				InputBatch: []test.InputPart{
+	def := []dtest.Case{
+		{
+			Name:             "foo test 1",
+			Environment:      map[string]string{},
+			TargetProcessors: "/pipeline/processors",
+			InputBatches: [][]dtest.InputConfig{
+				{
 					{
 						Content: "foo bar baz",
 						Metadata: map[string]any{
@@ -46,27 +47,27 @@ pipeline:
 						},
 					},
 				},
-				OutputBatches: [][]test.ConditionsMap{
+			},
+			OutputBatches: [][]dtest.OutputConditionsMap{
+				{
 					{
-						{
-							"content_equals": test.ContentEqualsCondition("FOO BAR baz"),
-							"metadata_equals": test.MetadataEqualsCondition{
-								"key1": "value1",
-							},
+						"content_equals": dtest.ContentEqualsCondition("FOO BAR baz"),
+						"metadata_equals": dtest.MetadataEqualsCondition{
+							"key1": "value1",
 						},
-						{
-							"content_equals": test.ContentEqualsCondition("ONE TWO THREE"),
-							"metadata_equals": test.MetadataEqualsCondition{
-								"key1": "value3",
-							},
+					},
+					{
+						"content_equals": dtest.ContentEqualsCondition("ONE TWO THREE"),
+						"metadata_equals": dtest.MetadataEqualsCondition{
+							"key1": "value3",
 						},
 					},
 				},
-			}).AtLine(10),
+			},
 		},
 	}
 
-	failures, err := def.Execute(filepath.Join(testDir, "config1.yaml"), nil, log.Noop())
+	failures, err := test.Execute(def, filepath.Join(testDir, "config1.yaml"), nil, log.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -74,10 +75,10 @@ pipeline:
 	if exp, act := 2, len(failures); exp != act {
 		t.Fatalf("Wrong count of failures: %v != %v", act, exp)
 	}
-	if exp, act := "foo test 1 [line 10]: batch 0 message 0: content_equals: content mismatch\n  expected: FOO BAR baz\n  received: FOO BAR BAZ", failures[0].String(); exp != act {
+	if exp, act := "foo test 1: batch 0 message 0: content_equals: content mismatch\n  expected: FOO BAR baz\n  received: FOO BAR BAZ", failures[0].String(); exp != act {
 		t.Errorf("Mismatched fail message: %v != %v", act, exp)
 	}
-	if exp, act := "foo test 1 [line 10]: batch 0 message 1: metadata_equals: metadata key 'key1' mismatch\n  expected: value3\n  received: value2", failures[1].String(); exp != act {
+	if exp, act := "foo test 1: batch 0 message 1: metadata_equals: metadata key 'key1' mismatch\n  expected: value3\n  received: value2", failures[1].String(); exp != act {
 		t.Errorf("Mismatched fail message: %v != %v", act, exp)
 	}
 }
@@ -97,13 +98,13 @@ pipeline:
 	}
 	defer os.RemoveAll(testDir)
 
-	def := test.Definition{
-		Cases: []test.Case{
-			(test.Case{
-				Name:             "foo test 1",
-				Environment:      map[string]string{},
-				TargetProcessors: "/pipeline/processors",
-				InputBatch: []test.InputPart{
+	def := []dtest.Case{
+		{
+			Name:             "foo test 1",
+			Environment:      map[string]string{},
+			TargetProcessors: "/pipeline/processors",
+			InputBatches: [][]dtest.InputConfig{
+				{
 					{
 						Content: "foo bar baz",
 						Metadata: map[string]any{
@@ -111,22 +112,24 @@ pipeline:
 						},
 					},
 				},
-				OutputBatches: [][]test.ConditionsMap{
+			},
+			OutputBatches: [][]dtest.OutputConditionsMap{
+				{
 					{
-						{
-							"content_equals": test.ContentEqualsCondition("FOO BAR baz"),
-							"metadata_equals": test.MetadataEqualsCondition{
-								"key1": "value1",
-							},
+						"content_equals": dtest.ContentEqualsCondition("FOO BAR baz"),
+						"metadata_equals": dtest.MetadataEqualsCondition{
+							"key1": "value1",
 						},
 					},
 				},
-			}).AtLine(10),
-			(test.Case{
-				Name:             "foo test 2",
-				Environment:      map[string]string{},
-				TargetProcessors: "/pipeline/processors",
-				InputBatch: []test.InputPart{
+			},
+		},
+		{
+			Name:             "foo test 2",
+			Environment:      map[string]string{},
+			TargetProcessors: "/pipeline/processors",
+			InputBatches: [][]dtest.InputConfig{
+				{
 					{
 						Content: "one two three",
 						Metadata: map[string]any{
@@ -134,21 +137,21 @@ pipeline:
 						},
 					},
 				},
-				OutputBatches: [][]test.ConditionsMap{
+			},
+			OutputBatches: [][]dtest.OutputConditionsMap{
+				{
 					{
-						{
-							"content_equals": test.ContentEqualsCondition("ONE TWO THREE"),
-							"metadata_equals": test.MetadataEqualsCondition{
-								"key1": "value3",
-							},
+						"content_equals": dtest.ContentEqualsCondition("ONE TWO THREE"),
+						"metadata_equals": dtest.MetadataEqualsCondition{
+							"key1": "value3",
 						},
 					},
 				},
-			}).AtLine(20),
+			},
 		},
 	}
 
-	failures, err := def.Execute(filepath.Join(testDir, "config1.yaml"), nil, log.Noop())
+	failures, err := test.Execute(def, filepath.Join(testDir, "config1.yaml"), nil, log.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -156,10 +159,10 @@ pipeline:
 	if exp, act := 2, len(failures); exp != act {
 		t.Fatalf("Wrong count of failures: %v != %v", act, exp)
 	}
-	if exp, act := "foo test 1 [line 10]: batch 0 message 0: content_equals: content mismatch\n  expected: FOO BAR baz\n  received: FOO BAR BAZ", failures[0].String(); exp != act {
+	if exp, act := "foo test 1: batch 0 message 0: content_equals: content mismatch\n  expected: FOO BAR baz\n  received: FOO BAR BAZ", failures[0].String(); exp != act {
 		t.Errorf("Mismatched fail message: %v != %v", act, exp)
 	}
-	if exp, act := "foo test 2 [line 20]: batch 0 message 0: metadata_equals: metadata key 'key1' mismatch\n  expected: value3\n  received: value2", failures[1].String(); exp != act {
+	if exp, act := "foo test 2: batch 0 message 0: metadata_equals: metadata key 'key1' mismatch\n  expected: value3\n  received: value2", failures[1].String(); exp != act {
 		t.Errorf("Mismatched fail message: %v != %v", act, exp)
 	}
 }

@@ -9,10 +9,16 @@ All notable changes to this project will be documented in this file.
 
 - Field `address_cache` added to the `socket_server` input.
 - All inputs with a `codec` field now support a new field `scanner` to replace it. Scanners are more powerful as they are configured in a structured way similar to other component types rather than via a single string field, for more information [check out the scanners page](https://www.benthos.dev/docs/components/scanners/about).
+- New `diff` and `patch` Bloblang methods.
+
+### Fixed
+
+- The `javascript` processor now handles module imports correctly.
 
 ### Changed
 
 - The `parse_parquet` Bloblang function, `parquet_decode`, `parquet_encode` processors and the `parquet` input have all been upgraded to the latest version of the underlying Parquet library. Since this underlying library is experimental it is likely that behaviour changes will result. One significant change is that encoding numerical values that are larger than the column type (`float64` into `FLOAT`, `int64` into `INT32`, etc) will no longer be automatically converted.
+- The `parse_log` processor field `codec` is now deprecated.
 
 ## 4.24.0 - 2023-11-24
 

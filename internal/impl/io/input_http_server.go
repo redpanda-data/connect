@@ -491,12 +491,12 @@ func (h *httpServerInput) postHandler(w http.ResponseWriter, r *http.Request) {
 			tUntil, err = rl.Access(r.Context())
 		}); rerr != nil {
 			http.Error(w, "Server error", http.StatusBadGateway)
-			h.log.Warnf("Failed to access rate limit: %v\n", rerr)
+			h.log.Warn("Failed to access rate limit: %v\n", rerr)
 			return
 		}
 		if err != nil {
 			http.Error(w, "Server error", http.StatusBadGateway)
-			h.log.Warnf("Failed to access rate limit: %v\n", err)
+			h.log.Warn("Failed to access rate limit: %v\n", err)
 			return
 		} else if tUntil > 0 {
 			w.Header().Add("Retry-After", strconv.Itoa(int(tUntil.Seconds())))
@@ -508,7 +508,7 @@ func (h *httpServerInput) postHandler(w http.ResponseWriter, r *http.Request) {
 	msg, err := h.extractMessageFromRequest(r)
 	if err != nil {
 		http.Error(w, "Bad request", http.StatusBadRequest)
-		h.log.Warnf("Request read failed: %v\n", err)
+		h.log.Warn("Request read failed: %v\n", err)
 		return
 	}
 	defer tracing.FinishSpans(msg)
@@ -519,7 +519,7 @@ func (h *httpServerInput) postHandler(w http.ResponseWriter, r *http.Request) {
 	transaction.AddResultStore(msg, store)
 
 	h.mPostRcvd.Incr(int64(msg.Len()))
-	h.log.Tracef("Consumed %v messages from POST to '%v'.\n", msg.Len(), h.conf.Path)
+	h.log.Trace("Consumed %v messages from POST to '%v'.\n", msg.Len(), h.conf.Path)
 
 	resChan := make(chan error, 1)
 	select {
@@ -567,7 +567,7 @@ func (h *httpServerInput) postHandler(w http.ResponseWriter, r *http.Request) {
 		for k, v := range h.conf.Response.Headers {
 			headerStr, err := svcBatch.TryInterpolatedString(0, v)
 			if err != nil {
-				h.log.Errorf("Interpolation of response header %v error: %v", k, err)
+				h.log.Error("Interpolation of response header %v error: %v", k, err)
 				continue
 			}
 			w.Header().Set(k, headerStr)
@@ -576,13 +576,13 @@ func (h *httpServerInput) postHandler(w http.ResponseWriter, r *http.Request) {
 		statusCode := 200
 		statusCodeStr, err := svcBatch.TryInterpolatedString(0, h.conf.Response.Status)
 		if err != nil {
-			h.log.Errorf("Interpolation of response status code error: %v", err)
+			h.log.Error("Interpolation of response status code error: %v", err)
 			w.WriteHeader(http.StatusBadGateway)
 			return
 		}
 		if statusCodeStr != "200" {
 			if statusCode, err = strconv.Atoi(statusCodeStr); err != nil {
-				h.log.Errorf("Failed to parse sync response status code expression: %v\n", err)
+				h.log.Error("Failed to parse sync response status code expression: %v\n", err)
 				w.WriteHeader(http.StatusBadGateway)
 				return
 			}
@@ -596,7 +596,7 @@ func (h *httpServerInput) postHandler(w http.ResponseWriter, r *http.Request) {
 			})
 			payload, err := part.AsBytes()
 			if err != nil {
-				h.log.Errorf("Failed to extract message bytes for sync response: %v\n", err)
+				h.log.Error("Failed to extract message bytes for sync response: %v\n", err)
 				w.WriteHeader(http.StatusBadGateway)
 				return
 			}
@@ -620,7 +620,7 @@ func (h *httpServerInput) postHandler(w http.ResponseWriter, r *http.Request) {
 				})
 				payload, err := part.AsBytes()
 				if err != nil {
-					h.log.Errorf("Failed to extract message bytes for sync response: %v\n", err)
+					h.log.Error("Failed to extract message bytes for sync response: %v\n", err)
 					continue
 				}
 
@@ -628,7 +628,7 @@ func (h *httpServerInput) postHandler(w http.ResponseWriter, r *http.Request) {
 				if customContentTypeExists {
 					contentTypeStr, err := svcBatch.TryInterpolatedString(i, customContentType)
 					if err != nil {
-						h.log.Errorf("Interpolation of content-type header error: %v", err)
+						h.log.Error("Interpolation of content-type header error: %v", err)
 						mimeHeader.Set("Content-Type", http.DetectContentType(payload))
 					} else {
 						mimeHeader.Set("Content-Type", contentTypeStr)
@@ -650,7 +650,7 @@ func (h *httpServerInput) postHandler(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(statusCode)
 				_, _ = buf.WriteTo(w)
 			} else {
-				h.log.Errorf("Failed to return sync response: %v\n", merr)
+				h.log.Error("Failed to return sync response: %v\n", merr)
 				w.WriteHeader(http.StatusBadGateway)
 			}
 		}
@@ -670,7 +670,7 @@ func (h *httpServerInput) wsHandler(w http.ResponseWriter, r *http.Request) {
 	defer func() {
 		if err != nil {
 			http.Error(w, "Bad request", http.StatusBadRequest)
-			h.log.Warnf("Websocket request failed: %v\n", err)
+			h.log.Warn("Websocket request failed: %v\n", err)
 		}
 	}()
 
@@ -687,7 +687,7 @@ func (h *httpServerInput) wsHandler(w http.ResponseWriter, r *http.Request) {
 
 	if welMsg := h.conf.WSWelcomeMessage; len(welMsg) > 0 {
 		if err = ws.WriteMessage(websocket.BinaryMessage, []byte(welMsg)); err != nil {
-			h.log.Errorf("Failed to send welcome message: %v\n", err)
+			h.log.Error("Failed to send welcome message: %v\n", err)
 		}
 	}
 
@@ -705,16 +705,16 @@ func (h *httpServerInput) wsHandler(w http.ResponseWriter, r *http.Request) {
 			if rerr := h.mgr.AccessRateLimit(r.Context(), h.conf.RateLimit, func(rl ratelimit.V1) {
 				tUntil, err = rl.Access(r.Context())
 			}); rerr != nil {
-				h.log.Warnf("Failed to access rate limit: %v\n", rerr)
+				h.log.Warn("Failed to access rate limit: %v\n", rerr)
 				err = rerr
 			}
 			if err != nil || tUntil > 0 {
 				if err != nil {
-					h.log.Warnf("Failed to access rate limit: %v\n", err)
+					h.log.Warn("Failed to access rate limit: %v\n", err)
 				}
 				if rlMsg := h.conf.WSRateLimitMessage; len(rlMsg) > 0 {
 					if err = ws.WriteMessage(websocket.BinaryMessage, []byte(rlMsg)); err != nil {
-						h.log.Errorf("Failed to send rate limit message: %v\n", err)
+						h.log.Error("Failed to send rate limit message: %v\n", err)
 					}
 				}
 				continue
@@ -773,7 +773,7 @@ func (h *httpServerInput) wsHandler(w http.ResponseWriter, r *http.Request) {
 			if err := responseMsg.Iter(func(i int, part *message.Part) error {
 				return ws.WriteMessage(websocket.TextMessage, part.AsBytes())
 			}); err != nil {
-				h.log.Errorf("Failed to send sync response over websocket: %v\n", err)
+				h.log.Error("Failed to send sync response over websocket: %v\n", err)
 			}
 		}
 
@@ -787,7 +787,7 @@ func (h *httpServerInput) loop() {
 	defer func() {
 		if h.server != nil {
 			if err := h.server.Shutdown(context.Background()); err != nil {
-				h.log.Errorf("Failed to gracefully terminate http_server: %v\n", err)
+				h.log.Error("Failed to gracefully terminate http_server: %v\n", err)
 			}
 		} else {
 			// We are using the service-wide HTTP server. In order to prevent
@@ -824,22 +824,22 @@ func (h *httpServerInput) loop() {
 	if h.server != nil {
 		go func() {
 			if len(h.conf.KeyFile) > 0 || len(h.conf.CertFile) > 0 {
-				h.log.Infof(
+				h.log.Info(
 					"Receiving HTTPS messages at: https://%s\n",
 					h.conf.Address+h.conf.Path,
 				)
 				if err := h.server.ListenAndServeTLS(
 					h.conf.CertFile, h.conf.KeyFile,
 				); err != http.ErrServerClosed {
-					h.log.Errorf("Server error: %v\n", err)
+					h.log.Error("Server error: %v\n", err)
 				}
 			} else {
-				h.log.Infof(
+				h.log.Info(
 					"Receiving HTTP messages at: http://%s\n",
 					h.conf.Address+h.conf.Path,
 				)
 				if err := h.server.ListenAndServe(); err != http.ErrServerClosed {
-					h.log.Errorf("Server error: %v\n", err)
+					h.log.Error("Server error: %v\n", err)
 				}
 			}
 		}()

@@ -139,7 +139,7 @@ func NewCacheWriter(conf *service.ParsedConfig, mgr bundle.NewManagement) (*Cach
 
 // Connect does nothing.
 func (c *CacheWriter) Connect(ctx context.Context) error {
-	c.log.Infof("Writing message parts as items in cache: %v\n", c.target)
+	c.log.Info("Writing message parts as items in cache: %v\n", c.target)
 	return nil
 }
 
@@ -154,7 +154,7 @@ func (c *CacheWriter) writeMulti(ctx context.Context, msg message.Batch) (err er
 		if ttls != "" {
 			t, terr := time.ParseDuration(ttls)
 			if terr != nil {
-				c.log.Debugf("Invalid duration string for TTL field: %v\n", terr)
+				c.log.Debug("Invalid duration string for TTL field: %v\n", terr)
 				return fmt.Errorf("ttl field: %w", terr)
 			}
 			ttl = &t
@@ -197,7 +197,7 @@ func (c *CacheWriter) WriteBatch(ctx context.Context, msg message.Batch) (err er
 	if ttls != "" {
 		t, err := time.ParseDuration(ttls)
 		if err != nil {
-			c.log.Debugf("Invalid duration string for TTL field: %v", err)
+			c.log.Debug("Invalid duration string for TTL field: %v", err)
 			return fmt.Errorf("ttl field: %w", err)
 		}
 		ttl = &t

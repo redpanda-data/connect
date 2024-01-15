@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"os/exec"
 
-	"github.com/benthosdev/benthos/v4/internal/bloblang/query"
+	"github.com/benthosdev/benthos/v4/internal/value"
 	"github.com/benthosdev/benthos/v4/public/bloblang"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
@@ -125,12 +125,12 @@ func (c *commandProc) Process(ctx context.Context, msg *service.Message) (servic
 		case []any:
 			args = make([]string, len(t))
 			for i, v := range t {
-				args[i] = query.IToString(v)
+				args[i] = value.IToString(v)
 			}
 		case []string:
 			args = t
 		default:
-			return nil, fmt.Errorf("args mapping result error: %w", query.NewTypeError(mapResI, query.ValueArray))
+			return nil, fmt.Errorf("args mapping result error: %w", value.NewTypeError(mapResI, value.TArray))
 		}
 	}
 

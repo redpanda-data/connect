@@ -16,11 +16,11 @@ import (
 	"github.com/aws/aws-sdk-go/service/sqs/sqsiface"
 	"github.com/cenkalti/backoff/v4"
 
-	"github.com/benthosdev/benthos/v4/internal/bloblang/query"
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/impl/aws/config"
 	"github.com/benthosdev/benthos/v4/internal/impl/pure"
+	"github.com/benthosdev/benthos/v4/internal/value"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
@@ -181,7 +181,7 @@ func (a *sqsWriter) getSQSAttributes(batch service.MessageBatch, i int) (sqsAttr
 	msg := batch[i]
 	keys := []string{}
 	_ = a.conf.Metadata.WalkMut(msg, func(k string, v any) error {
-		if isValidSQSAttribute(k, query.IToString(v)) {
+		if isValidSQSAttribute(k, value.IToString(v)) {
 			keys = append(keys, k)
 		} else {
 			a.log.Debugf("Rejecting metadata key '%v' due to invalid characters\n", k)

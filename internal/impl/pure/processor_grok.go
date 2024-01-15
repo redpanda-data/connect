@@ -11,60 +11,54 @@ import (
 	"github.com/Jeffail/grok"
 
 	"github.com/benthosdev/benthos/v4/internal/bundle"
+	"github.com/benthosdev/benthos/v4/internal/component/interop"
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
-	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/filepath"
 	"github.com/benthosdev/benthos/v4/internal/filepath/ifs"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
-func init() {
-	err := bundle.AllProcessors.Add(func(conf processor.Config, mgr bundle.NewManagement) (processor.V1, error) {
-		p, err := newGrok(conf.Grok, mgr)
-		if err != nil {
-			return nil, err
-		}
-		return processor.NewAutoObservedProcessor("grok", p, mgr), nil
-	}, docs.ComponentSpec{
-		Name: "grok",
-		Categories: []string{
-			"Parsing",
-		},
-		Summary: `
-Parses messages into a structured format by attempting to apply a list of Grok expressions, the first expression to result in at least one value replaces the original message with a JSON object containing the values.`,
-		Description: `
-Type hints within patterns are respected, therefore with the pattern ` + "`%{WORD:first},%{INT:second:int}`" + ` and a payload of ` + "`foo,1`" + ` the resulting payload would be ` + "`{\"first\":\"foo\",\"second\":1}`" + `.
+const (
+	gpFieldExpressions        = "expressions"
+	gpFieldRemoveEmpty        = "remove_empty_values"
+	gpFieldNamedOnly          = "named_captures_only"
+	gpFieldUseDefaults        = "use_default_patterns"
+	gpFieldPatternPaths       = "pattern_paths"
+	gpFieldPatternDefinitions = "pattern_definitions"
+)
+
+func grokProcSpec() *service.ConfigSpec {
+	return service.NewConfigSpec().
+		Categories("Parsing").
+		Stable().
+		Summary("Parses messages into a structured format by attempting to apply a list of Grok expressions, the first expression to result in at least one value replaces the original message with a JSON object containing the values.").
+		Description(`
+Type hints within patterns are respected, therefore with the pattern `+"`%{WORD:first},%{INT:second:int}`"+` and a payload of `+"`foo,1`"+` the resulting payload would be `+"`{\"first\":\"foo\",\"second\":1}`"+`.
 
 ### Performance
 
-This processor currently uses the [Go RE2](https://golang.org/s/re2syntax) regular expression engine, which is guaranteed to run in time linear to the size of the input. However, this property often makes it less performant than PCRE based implementations of grok. For more information see [https://swtch.com/~rsc/regexp/regexp1.html](https://swtch.com/~rsc/regexp/regexp1.html).`,
-		Config: docs.FieldComponent().WithChildren(
-			docs.FieldString("expressions", "One or more Grok expressions to attempt against incoming messages. The first expression to match at least one value will be used to form a result.").Array(),
-			docs.FieldString("pattern_definitions", "A map of pattern definitions that can be referenced within `patterns`.").Map(),
-			docs.FieldString("pattern_paths", "A list of paths to load Grok patterns from. This field supports wildcards, including super globs (double star).").Array(),
-			docs.FieldBool("named_captures_only", "Whether to only capture values from named patterns.").Advanced(),
-			docs.FieldBool("use_default_patterns", "Whether to use a [default set of patterns](#default-patterns).").Advanced(),
-			docs.FieldBool("remove_empty_values", "Whether to remove values that are empty from the resulting structure.").Advanced(),
-		).ChildDefaultAndTypesFromStruct(processor.NewGrokConfig()),
-		Examples: []docs.AnnotatedExample{
-			{
-				Title: "VPC Flow Logs",
-				Summary: `
+This processor currently uses the [Go RE2](https://golang.org/s/re2syntax) regular expression engine, which is guaranteed to run in time linear to the size of the input. However, this property often makes it less performant than PCRE based implementations of grok. For more information see [https://swtch.com/~rsc/regexp/regexp1.html](https://swtch.com/~rsc/regexp/regexp1.html).`).
+		Footnotes(`
+## Default Patterns
+
+A summary of the default patterns on offer can be [found here](https://github.com/Jeffail/grok/blob/master/patterns.go#L5).`).
+		Example("VPC Flow Logs", `
 Grok can be used to parse unstructured logs such as VPC flow logs that look like this:
 
-` + "```text" + `
+`+"```text"+`
 2 123456789010 eni-1235b8ca123456789 172.31.16.139 172.31.16.21 20641 22 6 20 4249 1418530010 1418530070 ACCEPT OK
-` + "```" + `
+`+"```"+`
 
 Into structured objects that look like this:
 
-` + "```json" + `
+`+"```json"+`
 {"accountid":"123456789010","action":"ACCEPT","bytes":4249,"dstaddr":"172.31.16.21","dstport":22,"end":1418530070,"interfaceid":"eni-1235b8ca123456789","logstatus":"OK","packets":20,"protocol":6,"srcaddr":"172.31.16.139","srcport":20641,"start":1418530010,"version":2}
-` + "```" + `
+`+"```"+`
 
 With the following config:`,
-				Config: `
+			`
 pipeline:
   processors:
     - grok:
@@ -73,13 +67,74 @@ pipeline:
         pattern_definitions:
           VPCFLOWLOG: '%{NUMBER:version:int} %{NUMBER:accountid} %{NOTSPACE:interfaceid} %{NOTSPACE:srcaddr} %{NOTSPACE:dstaddr} %{NOTSPACE:srcport:int} %{NOTSPACE:dstport:int} %{NOTSPACE:protocol:int} %{NOTSPACE:packets:int} %{NOTSPACE:bytes:int} %{NUMBER:start:int} %{NUMBER:end:int} %{NOTSPACE:action} %{NOTSPACE:logstatus}'
 `,
-			},
-		},
-		Footnotes: `
-## Default Patterns
+		).
+		Fields(
+			service.NewStringListField(gpFieldExpressions).
+				Description("One or more Grok expressions to attempt against incoming messages. The first expression to match at least one value will be used to form a result."),
+			service.NewStringMapField(gpFieldPatternDefinitions).
+				Description("A map of pattern definitions that can be referenced within `patterns`.").
+				Default(map[string]any{}),
+			service.NewStringListField(gpFieldPatternPaths).
+				Description("A list of paths to load Grok patterns from. This field supports wildcards, including super globs (double star).").
+				Default([]any{}),
+			service.NewBoolField(gpFieldNamedOnly).
+				Description("Whether to only capture values from named patterns.").
+				Advanced().
+				Default(true),
+			service.NewBoolField(gpFieldUseDefaults).
+				Description("Whether to use a [default set of patterns](#default-patterns).").
+				Advanced().
+				Default(true),
+			service.NewBoolField(gpFieldRemoveEmpty).
+				Description("Whether to remove values that are empty from the resulting structure.").
+				Advanced().
+				Default(true),
+		)
+}
 
-A summary of the default patterns on offer can be [found here](https://github.com/Jeffail/grok/blob/master/patterns.go#L5).`,
-	})
+type grokProcConfig struct {
+	Expressions        []string
+	RemoveEmpty        bool
+	NamedOnly          bool
+	UseDefaults        bool
+	PatternPaths       []string
+	PatternDefinitions map[string]string
+}
+
+func init() {
+	err := service.RegisterBatchProcessor(
+		"grok", grokProcSpec(),
+		func(conf *service.ParsedConfig, res *service.Resources) (service.BatchProcessor, error) {
+			var g grokProcConfig
+			var err error
+
+			if g.Expressions, err = conf.FieldStringList(gpFieldExpressions); err != nil {
+				return nil, err
+			}
+			if g.PatternDefinitions, err = conf.FieldStringMap(gpFieldPatternDefinitions); err != nil {
+				return nil, err
+			}
+			if g.PatternPaths, err = conf.FieldStringList(gpFieldPatternPaths); err != nil {
+				return nil, err
+			}
+
+			if g.RemoveEmpty, err = conf.FieldBool(gpFieldRemoveEmpty); err != nil {
+				return nil, err
+			}
+			if g.NamedOnly, err = conf.FieldBool(gpFieldNamedOnly); err != nil {
+				return nil, err
+			}
+			if g.UseDefaults, err = conf.FieldBool(gpFieldUseDefaults); err != nil {
+				return nil, err
+			}
+
+			mgr := interop.UnwrapManagement(res)
+			p, err := newGrok(g, mgr)
+			if err != nil {
+				return nil, err
+			}
+			return interop.NewUnwrapInternalBatchProcessor(processor.NewAutoObservedProcessor("grok", p, mgr)), nil
+		})
 	if err != nil {
 		panic(err)
 	}
@@ -90,7 +145,7 @@ type grokProc struct {
 	log      log.Modular
 }
 
-func newGrok(conf processor.GrokConfig, mgr bundle.NewManagement) (processor.AutoObserved, error) {
+func newGrok(conf grokProcConfig, mgr bundle.NewManagement) (processor.AutoObserved, error) {
 	grokConf := grok.Config{
 		RemoveEmptyValues:   conf.RemoveEmpty,
 		NamedCapturesOnly:   conf.NamedOnly,
@@ -166,7 +221,7 @@ func (g *grokProc) Process(ctx context.Context, msg *message.Part) ([]*message.P
 	for _, compiler := range g.gparsers {
 		var err error
 		if values, err = compiler.ParseTyped(body); err != nil {
-			g.log.Debugf("Failed to parse body: %v\n", err)
+			g.log.Debug("Failed to parse body: %v\n", err)
 			continue
 		}
 		if len(values) > 0 {
@@ -174,7 +229,7 @@ func (g *grokProc) Process(ctx context.Context, msg *message.Part) ([]*message.P
 		}
 	}
 	if len(values) == 0 {
-		g.log.Debugf("No matches found for payload: %s\n", body)
+		g.log.Debug("No matches found for payload: %s\n", body)
 		return nil, errors.New("no pattern matches found")
 	}
 

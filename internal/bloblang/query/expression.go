@@ -2,6 +2,8 @@ package query
 
 import (
 	"fmt"
+
+	"github.com/benthosdev/benthos/v4/internal/value"
 )
 
 // MatchCase represents a single match case of a match expression, where a case
@@ -47,7 +49,7 @@ func NewMatchFunction(contextFn Function, cases ...MatchCase) Function {
 				return c.queryFn.Exec(caseCtx)
 			}
 		}
-		return Nothing(nil), nil
+		return value.Nothing(nil), nil
 	}, func(ctx TargetsContext) (TargetsContext, []TargetPath) {
 		contextCtx, contextTargets := contextFn.QueryTargets(ctx)
 		contextCtx = contextCtx.WithValues(contextTargets).WithValuesAsContext()
@@ -106,7 +108,7 @@ func NewIfFunction(queryFn, ifFn Function, elseIfs []ElseIf, elseFn Function) Fu
 		if elseFn != nil {
 			return elseFn.Exec(ctx)
 		}
-		return Nothing(nil), nil
+		return value.Nothing(nil), nil
 	}, aggregateTargetPaths(allFns...))
 }
 

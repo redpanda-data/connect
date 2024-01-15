@@ -280,11 +280,11 @@ func (r *indefiniteRetry) loop() {
 
 					nextBackoff := backOff.NextBackOff()
 					if nextBackoff == backoff.Stop {
-						r.log.Errorf("Failed to send message: %v\n", res)
+						r.log.Error("Failed to send message: %v\n", res)
 						resOut = errors.New("message failed to reach a target destination")
 						break
 					} else {
-						r.log.Warnf("Failed to send message: %v\n", res)
+						r.log.Warn("Failed to send message: %v\n", res)
 					}
 					select {
 					case <-time.After(nextBackoff):

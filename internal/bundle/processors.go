@@ -63,7 +63,6 @@ func (s *ProcessorSet) Add(constructor ProcessorConstructor, spec docs.Component
 		constructor: constructor,
 		spec:        spec,
 	}
-	docs.DeprecatedProvider.RegisterDocs(spec)
 	return nil
 }
 

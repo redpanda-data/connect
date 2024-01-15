@@ -34,28 +34,28 @@ func (l *logHandler) With(keyValues ...any) Modular {
 	return c
 }
 
-func (l *logHandler) Fatalf(format string, v ...any) {
+func (l *logHandler) Fatal(format string, v ...any) {
 	l.slog.Error(fmt.Sprintf(format, v...))
 	os.Exit(1)
 }
 
-func (l *logHandler) Errorf(format string, v ...any) {
+func (l *logHandler) Error(format string, v ...any) {
 	l.slog.Error(fmt.Sprintf(format, v...))
 }
 
-func (l *logHandler) Warnf(format string, v ...any) {
+func (l *logHandler) Warn(format string, v ...any) {
 	l.slog.Warn(fmt.Sprintf(format, v...))
 }
 
-func (l *logHandler) Infof(format string, v ...any) {
+func (l *logHandler) Info(format string, v ...any) {
 	l.slog.Info(fmt.Sprintf(format, v...))
 }
 
-func (l *logHandler) Debugf(format string, v ...any) {
+func (l *logHandler) Debug(format string, v ...any) {
 	l.slog.Debug(fmt.Sprintf(format, v...))
 }
 
-func (l *logHandler) Tracef(format string, v ...any) {
+func (l *logHandler) Trace(format string, v ...any) {
 	l.slog.Debug(fmt.Sprintf(format, v...))
 }
 

@@ -6,6 +6,7 @@ import (
 	"github.com/Jeffail/gabs/v2"
 
 	"github.com/benthosdev/benthos/v4/internal/bloblang/query"
+	"github.com/benthosdev/benthos/v4/internal/value"
 	"github.com/benthosdev/benthos/v4/public/bloblang"
 )
 
@@ -50,7 +51,7 @@ If a key within a nested path does not exist then it is ignored.`).
 		func(args *bloblang.ParsedParams) (bloblang.Method, error) {
 			includeList := make([][]string, 0, len(args.AsSlice()))
 			for i, argVal := range args.AsSlice() {
-				argStr, err := query.IGetString(argVal)
+				argStr, err := value.IGetString(argVal)
 				if err != nil {
 					return nil, fmt.Errorf("argument %v: %w", i, err)
 				}
@@ -81,7 +82,7 @@ If a key within a nested path does not exist then it is ignored.`).
 			for i, a := range argAnys {
 				var ok bool
 				if argSlices[i], ok = a.([]any); !ok {
-					return nil, query.NewTypeError(a, query.ValueArray)
+					return nil, value.NewTypeError(a, value.TArray)
 				}
 				tally += len(argSlices[i])
 			}
@@ -116,7 +117,7 @@ If a key within a nested path does not exist then it is ignored.`).
 			for i, a := range argAnys {
 				var ok bool
 				if argSlices[i], ok = a.([]any); !ok {
-					return nil, query.NewTypeError(a, query.ValueArray)
+					return nil, value.NewTypeError(a, value.TArray)
 				}
 				if len(argSlices[i]) != len(argSlices[0]) {
 					return nil, sizeError

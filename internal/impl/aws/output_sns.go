@@ -12,10 +12,10 @@ import (
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/sns"
 
-	"github.com/benthosdev/benthos/v4/internal/bloblang/query"
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/impl/aws/config"
+	"github.com/benthosdev/benthos/v4/internal/value"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
@@ -154,7 +154,7 @@ func isValidSNSAttribute(k, v string) bool {
 func (a *snsWriter) getSNSAttributes(msg *service.Message) (snsAttributes, error) {
 	keys := []string{}
 	_ = a.conf.Metadata.WalkMut(msg, func(k string, v any) error {
-		if isValidSNSAttribute(k, query.IToString(v)) {
+		if isValidSNSAttribute(k, value.IToString(v)) {
 			keys = append(keys, k)
 		} else {
 			a.log.Debugf("Rejecting metadata key '%v' due to invalid characters\n", k)

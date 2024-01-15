@@ -11,6 +11,7 @@ import (
 
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component/cache"
+	"github.com/benthosdev/benthos/v4/internal/component/testutil"
 	"github.com/benthosdev/benthos/v4/internal/impl/pure"
 	"github.com/benthosdev/benthos/v4/internal/manager"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
@@ -145,17 +146,15 @@ ttl: 2s
 //------------------------------------------------------------------------------
 
 func TestCacheBasic(t *testing.T) {
-	mgrConf := manager.NewResourceConfig()
-
-	fooCache := cache.NewConfig()
-	fooCache.Label = "foo"
-
-	mgrConf.ResourceCaches = append(mgrConf.ResourceCaches, fooCache)
+	mgrConf, err := testutil.ManagerFromYAML(`
+cache_resources:
+  - label: foo
+    memory: {}
+`)
+	require.NoError(t, err)
 
 	mgr, err := manager.New(mgrConf)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	c := testCacheOutput(t, mgr, `
 key: ${!json("key")}
@@ -191,17 +190,15 @@ target: foo
 }
 
 func TestCacheBatches(t *testing.T) {
-	mgrConf := manager.NewResourceConfig()
-
-	fooCache := cache.NewConfig()
-	fooCache.Label = "foo"
-
-	mgrConf.ResourceCaches = append(mgrConf.ResourceCaches, fooCache)
+	mgrConf, err := testutil.ManagerFromYAML(`
+cache_resources:
+  - label: foo
+    memory: {}
+`)
+	require.NoError(t, err)
 
 	mgr, err := manager.New(mgrConf)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	c := testCacheOutput(t, mgr, `
 key: ${!json("key")}

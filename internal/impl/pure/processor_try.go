@@ -2,34 +2,26 @@ package pure
 
 import (
 	"context"
-	"strconv"
 
 	"github.com/benthosdev/benthos/v4/internal/bundle"
+	"github.com/benthosdev/benthos/v4/internal/component/interop"
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
-	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
 func init() {
-	err := bundle.AllProcessors.Add(func(conf processor.Config, mgr bundle.NewManagement) (processor.V1, error) {
-		p, err := newTryProc(conf.Try, mgr)
-		if err != nil {
-			return nil, err
-		}
-		return processor.NewAutoObservedBatchedProcessor("try", p, mgr), nil
-	}, docs.ComponentSpec{
-		Name: "try",
-		Categories: []string{
-			"Composition",
-		},
-		Summary: `Executes a list of child processors on messages only if no prior processors have failed (or the errors have been cleared).`,
-		Description: `
-This processor behaves similarly to the ` + "[`for_each`](/docs/components/processors/for_each)" + ` processor, where a list of child processors are applied to individual messages of a batch. However, if a message has failed any prior processor (before or during the try block) then that message will skip all following processors.
+	err := service.RegisterBatchProcessor("try", service.NewConfigSpec().
+		Stable().
+		Categories("Composition").
+		Summary("Executes a list of child processors on messages only if no prior processors have failed (or the errors have been cleared).").
+		Description(`
+This processor behaves similarly to the `+"[`for_each`](/docs/components/processors/for_each)"+` processor, where a list of child processors are applied to individual messages of a batch. However, if a message has failed any prior processor (before or during the try block) then that message will skip all following processors.
 
 For example, with the following config:
 
-` + "```yaml" + `
+`+"```yaml"+`
 pipeline:
   processors:
     - resource: foo
@@ -37,21 +29,21 @@ pipeline:
       - resource: bar
       - resource: baz
       - resource: buz
-` + "```" + `
+`+"```"+`
 
-If the processor ` + "`bar`" + ` fails for a particular message, that message will skip the processors ` + "`baz` and `buz`" + `. Similarly, if ` + "`bar`" + ` succeeds but ` + "`baz`" + ` does not then ` + "`buz`" + ` will be skipped. If the processor ` + "`foo`" + ` fails for a message then none of ` + "`bar`, `baz` or `buz`" + ` are executed on that message.
+If the processor `+"`bar`"+` fails for a particular message, that message will skip the processors `+"`baz` and `buz`"+`. Similarly, if `+"`bar`"+` succeeds but `+"`baz`"+` does not then `+"`buz`"+` will be skipped. If the processor `+"`foo`"+` fails for a message then none of `+"`bar`, `baz` or `buz`"+` are executed on that message.
 
-This processor is useful for when child processors depend on the successful output of previous processors. This processor can be followed with a ` + "[catch](/docs/components/processors/catch)" + ` processor for defining child processors to be applied only to failed messages.
+This processor is useful for when child processors depend on the successful output of previous processors. This processor can be followed with a `+"[catch](/docs/components/processors/catch)"+` processor for defining child processors to be applied only to failed messages.
 
 More information about error handing can be found [here](/docs/configuration/error_handling).
 
 ### Nesting within a catch block
 
-In some cases it might be useful to nest a try block within a catch block, since the ` + "[`catch` processor](/docs/components/processors/catch)" + ` only clears errors _after_ executing its child processors this means a nested try processor will not execute unless the errors are explicitly cleared beforehand.
+In some cases it might be useful to nest a try block within a catch block, since the `+"[`catch` processor](/docs/components/processors/catch)"+` only clears errors _after_ executing its child processors this means a nested try processor will not execute unless the errors are explicitly cleared beforehand.
 
 This can be done by inserting an empty catch block before the try block like as follows:
 
-` + "```yaml" + `
+`+"```yaml"+`
 pipeline:
   processors:
     - resource: foo
@@ -63,12 +55,28 @@ pipeline:
       - try:
         - resource: bar
         - resource: baz
-` + "```" + `
+`+"```"+``).
+		Field(service.NewProcessorListField("").Default([]any{})),
+		func(conf *service.ParsedConfig, res *service.Resources) (service.BatchProcessor, error) {
+			mgr := interop.UnwrapManagement(res)
+			childPubProcs, err := conf.FieldProcessorList()
+			if err != nil {
+				return nil, err
+			}
 
+			childProcs := make([]processor.V1, len(childPubProcs))
+			for i, p := range childPubProcs {
+				childProcs[i] = interop.UnwrapOwnedProcessor(p)
+			}
 
-`,
-		Config: docs.FieldProcessor("", "").Array().HasDefault([]any{}),
-	})
+			tp, err := newTryProc(childProcs, mgr)
+			if err != nil {
+				return nil, err
+			}
+
+			p := processor.NewAutoObservedBatchedProcessor("try", tp, mgr)
+			return interop.NewUnwrapInternalBatchProcessor(p), nil
+		})
 	if err != nil {
 		panic(err)
 	}
@@ -79,16 +87,7 @@ type tryProc struct {
 	log      log.Modular
 }
 
-func newTryProc(conf []processor.Config, mgr bundle.NewManagement) (*tryProc, error) {
-	var children []processor.V1
-	for i, pconf := range conf {
-		pMgr := mgr.IntoPath("try", strconv.Itoa(i))
-		proc, err := pMgr.NewProcessor(pconf)
-		if err != nil {
-			return nil, err
-		}
-		children = append(children, proc)
-	}
+func newTryProc(children []processor.V1, mgr bundle.NewManagement) (*tryProc, error) {
 	return &tryProc{
 		children: children,
 		log:      mgr.Logger(),

@@ -1,18 +1,26 @@
 package config_test
 
 import (
+	"bytes"
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/Jeffail/gabs/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v3"
 
+	"github.com/benthosdev/benthos/v4/internal/bundle"
+	"github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/config"
 	"github.com/benthosdev/benthos/v4/internal/docs"
+	"github.com/benthosdev/benthos/v4/internal/manager/mock"
+	"github.com/benthosdev/benthos/v4/internal/stream"
 
+	_ "github.com/benthosdev/benthos/v4/public/components/io"
 	_ "github.com/benthosdev/benthos/v4/public/components/pure"
 )
 
@@ -21,7 +29,7 @@ func testConfToAny(t testing.TB, conf any) any {
 	err := node.Encode(conf)
 	require.NoError(t, err)
 
-	sanitConf := docs.NewSanitiseConfig()
+	sanitConf := docs.NewSanitiseConfig(bundle.GlobalEnvironment)
 	sanitConf.RemoveTypeField = true
 	sanitConf.ScrubSecrets = true
 	err = config.Spec().SanitiseYAML(&node, sanitConf)
@@ -73,7 +81,7 @@ func TestSetOverrideErrors(t *testing.T) {
 		{
 			name:  "cant set that",
 			input: "input=meow",
-			err:   "yaml: unmarshal errors",
+			err:   "invalid type !!str, expected object",
 		},
 	}
 
@@ -228,4 +236,120 @@ cache_resources:
 
 	assert.Equal(t, "bar", v.S("cache_resources", "1", "label").Data())
 	assert.Equal(t, "13s", v.S("cache_resources", "1", "memory", "default_ttl").Data())
+}
+
+func TestDefaultBasedOverridesWithYAML(t *testing.T) {
+	tmpDir := t.TempDir()
+	outFile := filepath.Join(tmpDir, "foo.txt")
+
+	var v yaml.Node
+	require.NoError(t, v.Encode(map[string]any{
+		"file": map[string]any{
+			"path": outFile,
+		},
+	}))
+
+	spec := config.Spec()
+	spec.SetDefault(&v, "output")
+
+	pConf, err := spec.ParsedConfigFromAny(map[string]any{
+		"input": map[string]any{
+			"generate": map[string]any{
+				"mapping":  `root.foo = "bar"`,
+				"count":    1,
+				"interval": "1us",
+			},
+		},
+	})
+	require.NoError(t, err)
+
+	c, err := config.FromParsed(bundle.GlobalEnvironment, pConf, nil)
+	require.NoError(t, err)
+
+	s, err := stream.New(c.Config, mock.NewManager())
+	require.NoError(t, err)
+
+	assert.Eventually(t, func() bool {
+		fBytes, _ := os.ReadFile(outFile)
+		return bytes.Contains(fBytes, []byte(`{"foo":"bar"}`))
+	}, time.Second, time.Millisecond*10)
+
+	require.NoError(t, s.Stop(context.Background()))
+}
+
+func TestDefaultBasedOverridesWithAny(t *testing.T) {
+	tmpDir := t.TempDir()
+	outFile := filepath.Join(tmpDir, "foo.txt")
+
+	spec := config.Spec()
+	spec.SetDefault(map[string]any{
+		"file": map[string]any{
+			"path": outFile,
+		},
+	}, "output")
+
+	node, err := docs.UnmarshalYAML([]byte(`
+input:
+  generate:
+    mapping: 'root.foo = "bar"'
+    count: 1
+    interval: 1us
+`))
+	require.NoError(t, err)
+
+	pConf, err := spec.ParsedConfigFromAny(node)
+	require.NoError(t, err)
+
+	c, err := config.FromParsed(bundle.GlobalEnvironment, pConf, nil)
+	require.NoError(t, err)
+
+	s, err := stream.New(c.Config, mock.NewManager())
+	require.NoError(t, err)
+
+	assert.Eventually(t, func() bool {
+		fBytes, _ := os.ReadFile(outFile)
+		return bytes.Contains(fBytes, []byte(`{"foo":"bar"}`))
+	}, time.Second, time.Millisecond*10)
+
+	require.NoError(t, s.Stop(context.Background()))
+}
+
+func TestDefaultBasedOverridesWithExplicit(t *testing.T) {
+	tmpDir := t.TempDir()
+	outFile := filepath.Join(tmpDir, "foo.txt")
+
+	outConf := output.Config{
+		Type: "file",
+		Plugin: map[string]any{
+			"path": outFile,
+		},
+	}
+
+	spec := config.Spec()
+	spec.SetDefault(outConf, "output")
+
+	node, err := docs.UnmarshalYAML([]byte(`
+input:
+  generate:
+    mapping: 'root.foo = "bar"'
+    count: 1
+    interval: 1us
+`))
+	require.NoError(t, err)
+
+	pConf, err := spec.ParsedConfigFromAny(node)
+	require.NoError(t, err)
+
+	c, err := config.FromParsed(bundle.GlobalEnvironment, pConf, nil)
+	require.NoError(t, err)
+
+	s, err := stream.New(c.Config, mock.NewManager())
+	require.NoError(t, err)
+
+	assert.Eventually(t, func() bool {
+		fBytes, _ := os.ReadFile(outFile)
+		return bytes.Contains(fBytes, []byte(`{"foo":"bar"}`))
+	}, time.Second, time.Millisecond*10)
+
+	require.NoError(t, s.Stop(context.Background()))
 }

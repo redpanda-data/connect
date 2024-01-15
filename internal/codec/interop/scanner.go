@@ -44,9 +44,9 @@ func OldReaderCodecFromParsed(conf *service.ParsedConfig) (FallbackReaderCodec, 
 			return nil, err
 		}
 
-		maxBuffer, err := conf.FieldInt(crFieldMaxBuffer)
-		if err != nil {
-			return nil, err
+		maxBuffer, _ := conf.FieldInt(crFieldMaxBuffer)
+		if maxBuffer == 0 {
+			maxBuffer = 1000000
 		}
 
 		oldCtor, err := codec.GetReader(codecName, codec.ReaderConfig{

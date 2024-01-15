@@ -12,8 +12,8 @@ import (
 
 	"github.com/fatih/color"
 	"github.com/urfave/cli/v2"
-	"gopkg.in/yaml.v3"
 
+	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/config"
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	ifilepath "github.com/benthosdev/benthos/v4/internal/filepath"
@@ -31,8 +31,7 @@ type pathLint struct {
 }
 
 func lintFile(path string, skipEnvVarCheck bool, lConf docs.LintConfig) (pathLints []pathLint) {
-	conf := config.New()
-	lints, err := config.ReadFileLinted(ifs.OS(), path, skipEnvVarCheck, lConf, &conf)
+	_, lints, err := config.ReadYAMLFileLinted(ifs.OS(), config.Spec(), path, skipEnvVarCheck, lConf)
 	if err != nil {
 		pathLints = append(pathLints, pathLint{
 			source: path,
@@ -77,10 +76,39 @@ func lintMDSnippets(path string, lConf docs.LintConfig) (pathLints []pathLint) {
 		}
 		endOfSnippet = nextSnippet + endOfSnippet + len(endTag)
 
-		conf := config.New()
 		configBytes := rawBytes[nextSnippet : endOfSnippet-len(endTag)]
+		if nextSnippet = bytes.Index(rawBytes[endOfSnippet:], []byte("```yaml")); nextSnippet != -1 {
+			nextSnippet += endOfSnippet
+		}
 
-		if err := yaml.Unmarshal(configBytes, &conf); err != nil {
+		cNode, err := docs.UnmarshalYAML(configBytes)
+		if err != nil {
+			pathLints = append(pathLints, pathLint{
+				source: path,
+				lint:   docs.NewLintError(snippetLine, docs.LintFailedRead, err),
+			})
+			continue
+		}
+
+		spec := config.Spec()
+		pConf, err := spec.ParsedConfigFromAny(cNode)
+		if err != nil {
+			var l docs.Lint
+			if errors.As(err, &l) {
+				l.Line += snippetLine - 1
+				pathLints = append(pathLints, pathLint{
+					source: path,
+					lint:   l,
+				})
+			} else {
+				pathLints = append(pathLints, pathLint{
+					source: path,
+					lint:   docs.NewLintError(snippetLine, docs.LintFailedRead, err),
+				})
+			}
+		}
+
+		if _, err := config.FromParsed(lConf.DocsProvider, pConf, nil); err != nil {
 			var l docs.Lint
 			if errors.As(err, &l) {
 				l.Line += snippetLine - 1
@@ -95,24 +123,13 @@ func lintMDSnippets(path string, lConf docs.LintConfig) (pathLints []pathLint) {
 				})
 			}
 		} else {
-			lints, err := config.LintBytes(lConf, configBytes)
-			if err != nil {
-				pathLints = append(pathLints, pathLint{
-					source: path,
-					lint:   docs.NewLintError(snippetLine, docs.LintFailedRead, err),
-				})
-			}
-			for _, l := range lints {
+			for _, l := range spec.LintYAML(docs.NewLintContext(lConf), cNode) {
 				l.Line += snippetLine - 1
 				pathLints = append(pathLints, pathLint{
 					source: path,
 					lint:   l,
 				})
 			}
-		}
-
-		if nextSnippet = bytes.Index(rawBytes[endOfSnippet:], []byte("```yaml")); nextSnippet != -1 {
-			nextSnippet += endOfSnippet
 		}
 	}
 	return
@@ -171,7 +188,7 @@ func LintAction(c *cli.Context, stderr io.Writer) int {
 	}
 	targets = append(targets, c.StringSlice("resources")...)
 
-	lConf := docs.NewLintConfig()
+	lConf := docs.NewLintConfig(bundle.GlobalEnvironment)
 	lConf.RejectDeprecated = c.Bool("deprecated")
 	lConf.RequireLabels = c.Bool("labels")
 	skipEnvVarCheck := c.Bool("skip-env-var-check")

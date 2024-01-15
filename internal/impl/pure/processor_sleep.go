@@ -9,29 +9,37 @@ import (
 
 	"github.com/benthosdev/benthos/v4/internal/bloblang/field"
 	"github.com/benthosdev/benthos/v4/internal/bundle"
+	"github.com/benthosdev/benthos/v4/internal/component/interop"
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
-	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
+	"github.com/benthosdev/benthos/v4/public/service"
+)
+
+const (
+	spFieldDuration = "duration"
 )
 
 func init() {
-	err := bundle.AllProcessors.Add(func(conf processor.Config, mgr bundle.NewManagement) (processor.V1, error) {
-		p, err := newSleep(conf.Sleep, mgr)
-		if err != nil {
-			return nil, err
-		}
-		return processor.NewAutoObservedBatchedProcessor("sleep", p, mgr), nil
-	}, docs.ComponentSpec{
-		Name: "sleep",
-		Categories: []string{
-			"Utility",
-		},
-		Summary: `Sleep for a period of time specified as a duration string for each message. This processor will interpolate functions within the ` + "`duration`" + ` field, you can find a list of functions [here](/docs/configuration/interpolation#bloblang-queries).`,
-		Config: docs.FieldComponent().WithChildren(
-			docs.FieldInterpolatedString("duration", "The duration of time to sleep for each execution.").HasDefault(""),
-		),
-	})
+	err := service.RegisterBatchProcessor("sleep", service.NewConfigSpec().
+		Categories("Utility").
+		Stable().
+		Summary(`Sleep for a period of time specified as a duration string for each message. This processor will interpolate functions within the `+"`duration`"+` field, you can find a list of functions [here](/docs/configuration/interpolation#bloblang-queries).`).
+		Field(service.NewInterpolatedStringField(spFieldDuration).
+			Description("The duration of time to sleep for each execution.")),
+		func(conf *service.ParsedConfig, res *service.Resources) (service.BatchProcessor, error) {
+			sleepStr, err := conf.FieldString(spFieldDuration)
+			if err != nil {
+				return nil, err
+			}
+
+			mgr := interop.UnwrapManagement(res)
+			p, err := newSleep(sleepStr, mgr)
+			if err != nil {
+				return nil, err
+			}
+			return interop.NewUnwrapInternalBatchProcessor(processor.NewAutoObservedBatchedProcessor("sleep", p, mgr)), nil
+		})
 	if err != nil {
 		panic(err)
 	}
@@ -44,8 +52,8 @@ type sleepProc struct {
 	log         log.Modular
 }
 
-func newSleep(conf processor.SleepConfig, mgr bundle.NewManagement) (*sleepProc, error) {
-	durationStr, err := mgr.BloblEnvironment().NewField(conf.Duration)
+func newSleep(sleepStr string, mgr bundle.NewManagement) (*sleepProc, error) {
+	durationStr, err := mgr.BloblEnvironment().NewField(sleepStr)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse duration expression: %v", err)
 	}
@@ -61,12 +69,12 @@ func (s *sleepProc) ProcessBatch(ctx *processor.BatchProcContext, msg message.Ba
 	_ = msg.Iter(func(i int, p *message.Part) error {
 		periodStr, err := s.durationStr.String(i, msg)
 		if err != nil {
-			s.log.Errorf("Period interpolation error: %v", err)
+			s.log.Error("Period interpolation error: %v", err)
 			return nil
 		}
 		period, err := time.ParseDuration(periodStr)
 		if err != nil {
-			s.log.Errorf("Failed to parse duration: %v", err)
+			s.log.Error("Failed to parse duration: %v", err)
 			return nil
 		}
 		select {

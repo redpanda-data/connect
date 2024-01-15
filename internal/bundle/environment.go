@@ -93,8 +93,6 @@ func (e *Environment) GetDocs(name string, ctype docs.Type) (docs.ComponentSpec,
 		spec, ok = e.tracers.DocsFor(name)
 	case docs.TypeScanner:
 		spec, ok = e.scanners.DocsFor(name)
-	default:
-		return docs.DeprecatedProvider.GetDocs(name, ctype)
 	}
 
 	return spec, ok

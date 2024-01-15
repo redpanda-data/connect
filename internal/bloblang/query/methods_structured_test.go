@@ -5,6 +5,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/benthosdev/benthos/v4/internal/value"
 )
 
 func TestMethodImmutability(t *testing.T) {
@@ -128,8 +130,8 @@ func TestMethodImmutability(t *testing.T) {
 	for _, test := range testCases {
 		test := test
 		t.Run(test.name, func(t *testing.T) {
-			targetClone := IClone(test.target)
-			argsClone := IClone(test.args).([]any)
+			targetClone := value.IClone(test.target)
+			argsClone := value.IClone(test.args).([]any)
 
 			fn, err := InitMethodHelper(test.method, NewLiteralFunction("", targetClone), argsClone...)
 			require.NoError(t, err)

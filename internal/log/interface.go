@@ -5,17 +5,10 @@ type Modular interface {
 	WithFields(fields map[string]string) Modular
 	With(keyValues ...any) Modular
 
-	Fatalf(format string, v ...any)
-	Errorf(format string, v ...any)
-	Warnf(format string, v ...any)
-	Infof(format string, v ...any)
-	Debugf(format string, v ...any)
-	Tracef(format string, v ...any)
-
-	Fatalln(message string)
-	Errorln(message string)
-	Warnln(message string)
-	Infoln(message string)
-	Debugln(message string)
-	Traceln(message string)
+	Fatal(format string, v ...any)
+	Error(format string, v ...any)
+	Warn(format string, v ...any)
+	Info(format string, v ...any)
+	Debug(format string, v ...any)
+	Trace(format string, v ...any)
 }

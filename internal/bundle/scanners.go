@@ -62,7 +62,6 @@ func (s *ScannerSet) Add(constructor ScannerConstructor, spec docs.ComponentSpec
 		constructor: constructor,
 		spec:        spec,
 	}
-	docs.DeprecatedProvider.RegisterDocs(spec)
 	return nil
 }
 

@@ -117,7 +117,7 @@ func (w *AsyncWriter) loop() {
 				if w.shutSig.ShouldCloseAtLeisure() || errors.Is(err, component.ErrTypeClosed) {
 					return false
 				}
-				w.log.Errorf("Failed to connect to %v: %v\n", w.typeStr, err)
+				w.log.Error("Failed to connect to %v: %v\n", w.typeStr, err)
 				mFailedConn.Incr(1)
 
 				var nextBoff time.Duration
@@ -196,7 +196,7 @@ func (w *AsyncWriter) loop() {
 				return
 			}
 
-			w.log.Tracef("Attempting to write %v messages to '%v'.\n", ts.Payload.Len(), w.typeStr)
+			w.log.Trace("Attempting to write %v messages to '%v'.\n", ts.Payload.Len(), w.typeStr)
 			_, spans := tracing.WithChildSpans(w.tracer, traceName, ts.Payload)
 
 			latency, err := w.latencyMeasuringWrite(closeLeisureCtx, ts.Payload)
@@ -217,15 +217,15 @@ func (w *AsyncWriter) loop() {
 				if w.typeStr != "reject" {
 					// TODO: Maybe reintroduce a sleep here if we encounter a
 					// busy retry loop.
-					w.log.Errorf("Failed to send message to %v: %v\n", w.typeStr, err)
+					w.log.Error("Failed to send message to %v: %v\n", w.typeStr, err)
 				} else {
-					w.log.Debugf("Rejecting message: %v\n", err)
+					w.log.Debug("Rejecting message: %v\n", err)
 				}
 			} else {
 				mBatchSent.Incr(1)
 				mSent.Incr(int64(batch.MessageCollapsedCount(ts.Payload)))
 				mLatency.Timing(latency)
-				w.log.Tracef("Successfully wrote %v messages to '%v'.\n", ts.Payload.Len(), w.typeStr)
+				w.log.Trace("Successfully wrote %v messages to '%v'.\n", ts.Payload.Len(), w.typeStr)
 			}
 
 			for _, s := range spans {

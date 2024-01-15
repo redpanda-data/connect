@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v3"
 
+	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/docs"
 )
 
@@ -92,15 +93,18 @@ c:
 			node, err := NewStreamBuilder().getYAMLNode(confBytes)
 			require.NoError(t, err)
 
-			assert.Equal(t, test.lints, spec.component.Config.Children.LintYAML(docs.NewLintContext(docs.NewLintConfig()), node))
+			assert.Equal(t, test.lints, spec.component.Config.Children.LintYAML(docs.NewLintContext(docs.NewLintConfig(bundle.GlobalEnvironment)), node))
 
-			pConf, err := spec.configFromNode(nil, node)
+			pConf, err := spec.configFromAny(nil, node)
+			require.NoError(t, err)
+
+			a, err := pConf.FieldAny()
 			require.NoError(t, err)
 
 			var sanitNode yaml.Node
-			require.NoError(t, sanitNode.Encode(pConf.generic))
+			require.NoError(t, sanitNode.Encode(a))
 
-			sanitConf := docs.NewSanitiseConfig()
+			sanitConf := docs.NewSanitiseConfig(bundle.GlobalEnvironment)
 			sanitConf.RemoveTypeField = true
 			sanitConf.RemoveDeprecated = true
 

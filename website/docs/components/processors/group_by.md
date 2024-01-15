@@ -14,7 +14,6 @@ categories: ["Composition"]
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-
 Splits a [batch of messages](/docs/configuration/batching) into N batches, where each resulting batch contains a group of messages determined by a [Bloblang query](/docs/guides/bloblang/about).
 
 ```yml
@@ -35,7 +34,6 @@ A [Bloblang query](/docs/guides/bloblang/about) that should return a boolean val
 
 
 Type: `string`  
-Default: `""`  
 
 ```yml
 # Examples

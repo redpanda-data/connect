@@ -8,15 +8,17 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/benthosdev/benthos/v4/internal/component/processor"
+	"github.com/benthosdev/benthos/v4/internal/component/testutil"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
 )
 
 func TestSleep(t *testing.T) {
-	conf := processor.NewConfig()
-	conf.Type = "sleep"
-	conf.Sleep.Duration = "1ns"
+	conf, err := testutil.ProcessorFromYAML(`
+sleep:
+  duration: 1ns
+`)
+	require.NoError(t, err)
 
 	slp, err := mock.NewManager().NewProcessor(conf)
 	if err != nil {
@@ -32,9 +34,11 @@ func TestSleep(t *testing.T) {
 }
 
 func TestSleepExit(t *testing.T) {
-	conf := processor.NewConfig()
-	conf.Type = "sleep"
-	conf.Sleep.Duration = "10s"
+	conf, err := testutil.ProcessorFromYAML(`
+sleep:
+  duration: 10s
+`)
+	require.NoError(t, err)
 
 	slp, err := mock.NewManager().NewProcessor(conf)
 	if err != nil {
@@ -59,9 +63,11 @@ func TestSleepExit(t *testing.T) {
 }
 
 func TestSleep200Millisecond(t *testing.T) {
-	conf := processor.NewConfig()
-	conf.Type = "sleep"
-	conf.Sleep.Duration = "200ms"
+	conf, err := testutil.ProcessorFromYAML(`
+sleep:
+  duration: 200ms
+`)
+	require.NoError(t, err)
 
 	slp, err := mock.NewManager().NewProcessor(conf)
 	if err != nil {
@@ -80,9 +86,11 @@ func TestSleep200Millisecond(t *testing.T) {
 }
 
 func TestSleepInterpolated(t *testing.T) {
-	conf := processor.NewConfig()
-	conf.Type = "sleep"
-	conf.Sleep.Duration = "${!json(\"foo\")}ms"
+	conf, err := testutil.ProcessorFromYAML(`
+sleep:
+  duration: '${!json("foo")}ms'
+`)
+	require.NoError(t, err)
 
 	slp, err := mock.NewManager().NewProcessor(conf)
 	if err != nil {

@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/benthosdev/benthos/v4/internal/bloblang/query"
+	"github.com/benthosdev/benthos/v4/internal/value"
 )
 
 func TestEnvFunctionCaching(t *testing.T) {
@@ -68,21 +69,21 @@ func TestFileFunctionCaching(t *testing.T) {
 
 	res, err := eCached.Exec(query.FunctionContext{})
 	require.NoError(t, err)
-	assert.Equal(t, "hello world 123", query.IToString(res))
+	assert.Equal(t, "hello world 123", value.IToString(res))
 
 	res, err = eNotCached.Exec(query.FunctionContext{})
 	require.NoError(t, err)
-	assert.Equal(t, "hello world 123", query.IToString(res))
+	assert.Equal(t, "hello world 123", value.IToString(res))
 
 	require.NoError(t, os.WriteFile(fooFile, []byte("hello world 456"), 0x644))
 
 	res, err = eCached.Exec(query.FunctionContext{})
 	require.NoError(t, err)
-	assert.Equal(t, "hello world 123", query.IToString(res))
+	assert.Equal(t, "hello world 123", value.IToString(res))
 
 	res, err = eNotCached.Exec(query.FunctionContext{})
 	require.NoError(t, err)
-	assert.Equal(t, "hello world 456", query.IToString(res))
+	assert.Equal(t, "hello world 456", value.IToString(res))
 }
 
 func TestFileRelFunctionCaching(t *testing.T) {
@@ -99,19 +100,19 @@ func TestFileRelFunctionCaching(t *testing.T) {
 
 	res, err := eCached.Exec(query.FunctionContext{})
 	require.NoError(t, err)
-	assert.Equal(t, "hello world 123", query.IToString(res))
+	assert.Equal(t, "hello world 123", value.IToString(res))
 
 	res, err = eNotCached.Exec(query.FunctionContext{})
 	require.NoError(t, err)
-	assert.Equal(t, "hello world 123", query.IToString(res))
+	assert.Equal(t, "hello world 123", value.IToString(res))
 
 	require.NoError(t, os.WriteFile(fooFile, []byte("hello world 456"), 0x644))
 
 	res, err = eCached.Exec(query.FunctionContext{})
 	require.NoError(t, err)
-	assert.Equal(t, "hello world 123", query.IToString(res))
+	assert.Equal(t, "hello world 123", value.IToString(res))
 
 	res, err = eNotCached.Exec(query.FunctionContext{})
 	require.NoError(t, err)
-	assert.Equal(t, "hello world 456", query.IToString(res))
+	assert.Equal(t, "hello world 456", value.IToString(res))
 }

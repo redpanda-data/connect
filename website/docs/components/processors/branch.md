@@ -14,46 +14,30 @@ categories: ["Composition"]
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-
-The `branch` processor allows you to create a new request message via
-a [Bloblang mapping](/docs/guides/bloblang/about), execute a list of processors
-on the request messages, and, finally, map the result back into the source
-message using another mapping.
+The `branch` processor allows you to create a new request message via a [Bloblang mapping](/docs/guides/bloblang/about), execute a list of processors on the request messages, and, finally, map the result back into the source message using another mapping.
 
 ```yml
 # Config fields, showing default values
 label: ""
 branch:
   request_map: ""
-  processors: []
+  processors: [] # No default (required)
   result_map: ""
 ```
 
-This is useful for preserving the original message contents when using
-processors that would otherwise replace the entire contents.
+This is useful for preserving the original message contents when using processors that would otherwise replace the entire contents.
 
 ### Metadata
 
-Metadata fields that are added to messages during branch processing will not be
-automatically copied into the resulting message. In order to do this you should
-explicitly declare in your `result_map` either a wholesale copy with
-`meta = meta()`, or selective copies with
-`meta foo = meta("bar")` and so on.
+Metadata fields that are added to messages during branch processing will not be automatically copied into the resulting message. In order to do this you should explicitly declare in your `result_map` either a wholesale copy with `meta = meta()`, or selective copies with `meta foo = meta("bar")` and so on.
 
 ### Error Handling
 
-If the `request_map` fails the child processors will not be executed.
-If the child processors themselves result in an (uncaught) error then the
-`result_map` will not be executed. If the `result_map` fails
-the message will remain unchanged. Under any of these conditions standard
-[error handling methods](/docs/configuration/error_handling) can be used in
-order to filter, DLQ or recover the failed messages.
+If the `request_map` fails the child processors will not be executed. If the child processors themselves result in an (uncaught) error then the `result_map` will not be executed. If the `result_map` fails the message will remain unchanged. Under any of these conditions standard [error handling methods](/docs/configuration/error_handling) can be used in order to filter, DLQ or recover the failed messages.
 
 ### Conditional Branching
 
-If the root of your request map is set to `deleted()` then the branch
-processors are skipped for the given message, this allows you to conditionally
-branch messages.
+If the root of your request map is set to `deleted()` then the branch processors are skipped for the given message, this allows you to conditionally branch messages.
 
 ## Fields
 
@@ -88,7 +72,6 @@ A list of processors to apply to mapped requests. When processing message batche
 
 
 Type: `array`  
-Default: `[]`  
 
 ### `result_map`
 
@@ -132,9 +115,7 @@ result_map: |-
 <TabItem value="HTTP Request">
 
 
-This example strips the request message into an empty body, grabs an HTTP
-payload, and places the result back into the original message at the path
-`image.pull_count`:
+This example strips the request message into an empty body, grabs an HTTP payload, and places the result back into the original message at the path `image.pull_count`:
 
 ```yaml
 pipeline:
@@ -177,9 +158,7 @@ pipeline:
 <TabItem value="Lambda Function">
 
 
-This example maps a new payload for triggering a lambda function with an ID and
-username from the original message, and the result of the lambda is discarded,
-meaning the original message is unchanged.
+This example maps a new payload for triggering a lambda function with an ID and username from the original message, and the result of the lambda is discarded, meaning the original message is unchanged.
 
 ```yaml
 pipeline:
@@ -198,8 +177,7 @@ pipeline:
 <TabItem value="Conditional Caching">
 
 
-This example caches a document by a message ID only when the type of the
-document is a foo:
+This example caches a document by a message ID only when the type of the document is a foo:
 
 ```yaml
 pipeline:

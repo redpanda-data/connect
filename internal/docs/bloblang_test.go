@@ -1,9 +1,12 @@
-package docs
+package docs_test
 
 import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
+	"github.com/benthosdev/benthos/v4/internal/bundle"
+	"github.com/benthosdev/benthos/v4/internal/docs"
 )
 
 func TestLintBloblangMapping(t *testing.T) {
@@ -11,7 +14,7 @@ func TestLintBloblangMapping(t *testing.T) {
 		mapping   string
 		line      int
 		col       int
-		wantLints []Lint
+		wantLints []docs.Lint
 	}
 	tests := map[string]Test{
 		"mapping": {
@@ -28,23 +31,23 @@ func TestLintBloblangMapping(t *testing.T) {
 			mapping: `this.foo = #`,
 			line:    2,
 			col:     4,
-			wantLints: []Lint{
+			wantLints: []docs.Lint{
 				{
 					Line:   2,
 					Column: 16,
-					Level:  LintError,
-					Type:   LintBadBloblang,
+					Level:  docs.LintError,
+					Type:   docs.LintBadBloblang,
 					What:   `expected query, got: #`,
 				},
 			},
 		},
 	}
 
-	ctx := NewLintContext(NewLintConfig())
+	ctx := docs.NewLintContext(docs.NewLintConfig(bundle.GlobalEnvironment))
 	for name, test := range tests {
 		test := test
 		t.Run(name, func(t *testing.T) {
-			gotLints := LintBloblangMapping(ctx, test.line, test.col, test.mapping)
+			gotLints := docs.LintBloblangMapping(ctx, test.line, test.col, test.mapping)
 			require.EqualValues(t, test.wantLints, gotLints)
 		})
 	}
@@ -55,7 +58,7 @@ func TestLintBloblangField(t *testing.T) {
 		mapping   string
 		line      int
 		col       int
-		wantLints []Lint
+		wantLints []docs.Lint
 	}
 	tests := map[string]Test{
 		"static string field": {
@@ -77,12 +80,12 @@ func TestLintBloblangField(t *testing.T) {
 			mapping: `${! whoopsie{} }`,
 			line:    2,
 			col:     4,
-			wantLints: []Lint{
+			wantLints: []docs.Lint{
 				{
 					Line:   2,
 					Column: 17,
-					Level:  LintError,
-					Type:   LintBadBloblang,
+					Level:  docs.LintError,
+					Type:   docs.LintBadBloblang,
 					What:   `required: expected end of expression, got: {} }`,
 				},
 			},
@@ -91,23 +94,23 @@ func TestLintBloblangField(t *testing.T) {
 			mapping: `${! }`,
 			line:    2,
 			col:     4,
-			wantLints: []Lint{
+			wantLints: []docs.Lint{
 				{
 					Line:   2,
 					Column: 9,
-					Level:  LintError,
-					Type:   LintBadBloblang,
+					Level:  docs.LintError,
+					Type:   docs.LintBadBloblang,
 					What:   `required: expected query, got: }`,
 				},
 			},
 		},
 	}
 
-	ctx := NewLintContext(NewLintConfig())
+	ctx := docs.NewLintContext(docs.NewLintConfig(bundle.GlobalEnvironment))
 	for name, test := range tests {
 		test := test
 		t.Run(name, func(t *testing.T) {
-			gotLints := LintBloblangField(ctx, test.line, test.col, test.mapping)
+			gotLints := docs.LintBloblangField(ctx, test.line, test.col, test.mapping)
 			require.EqualValues(t, test.wantLints, gotLints)
 		})
 	}

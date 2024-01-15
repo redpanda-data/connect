@@ -124,7 +124,7 @@ func newKVOutput(conf *service.ParsedConfig, mgr *service.Resources) (*kvOutput,
 
 //------------------------------------------------------------------------------
 
-func (kv *kvOutput) Connect(ctx context.Context) error {
+func (kv *kvOutput) Connect(ctx context.Context) (err error) {
 	kv.connMut.Lock()
 	defer kv.connMut.Unlock()
 
@@ -133,7 +133,6 @@ func (kv *kvOutput) Connect(ctx context.Context) error {
 	}
 
 	var natsConn *nats.Conn
-	var err error
 
 	defer func() {
 		if err != nil && natsConn != nil {

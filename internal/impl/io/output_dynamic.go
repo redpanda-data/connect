@@ -8,8 +8,10 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/benthosdev/benthos/v4/internal/api"
+	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component/interop"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
+	"github.com/benthosdev/benthos/v4/internal/component/testutil"
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/impl/pure"
 	"github.com/benthosdev/benthos/v4/public/service"
@@ -134,7 +136,7 @@ func newDynamicOutputFromParsed(conf *service.ParsedConfig, res *service.Resourc
 	}
 
 	dynAPI.OnUpdate(func(ctx context.Context, id string, c []byte) error {
-		newConf, err := output.FromYAML(string(c))
+		newConf, err := testutil.OutputFromYAML(string(c))
 		if err != nil {
 			return err
 		}
@@ -152,7 +154,7 @@ func newDynamicOutputFromParsed(conf *service.ParsedConfig, res *service.Resourc
 		outputYAMLConfs[id] = dynOutputAnyToYAMLConf(newConf)
 		outputConfigsMut.Unlock()
 		if err = fanOut.SetOutput(ctx, id, newOutput); err != nil {
-			mgr.Logger().Errorf("Failed to set output '%v': %v", id, err)
+			mgr.Logger().Error("Failed to set output '%v': %v", id, err)
 			outputConfigsMut.Lock()
 			delete(outputYAMLConfs, id)
 			outputConfigsMut.Unlock()
@@ -162,7 +164,7 @@ func newDynamicOutputFromParsed(conf *service.ParsedConfig, res *service.Resourc
 	dynAPI.OnDelete(func(ctx context.Context, id string) error {
 		err := fanOut.SetOutput(ctx, id, nil)
 		if err != nil {
-			mgr.Logger().Errorf("Failed to close output '%v': %v", id, err)
+			mgr.Logger().Error("Failed to close output '%v': %v", id, err)
 		}
 		return err
 	})
@@ -193,7 +195,7 @@ func dynOutputAnyToYAMLConf(v any) []byte {
 		return nil
 	}
 
-	sanitConf := docs.NewSanitiseConfig()
+	sanitConf := docs.NewSanitiseConfig(bundle.GlobalEnvironment)
 	sanitConf.RemoveTypeField = true
 	sanitConf.ScrubSecrets = true
 	if err := docs.FieldOutput("output", "").SanitiseYAML(&node, sanitConf); err != nil {

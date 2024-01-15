@@ -137,7 +137,7 @@ func getZMQInputType(t string) (zmq4.Type, error) {
 	return zmq4.PULL, errors.New("invalid ZMQ socket type")
 }
 
-func (z *zmqInput) Connect(ignored context.Context) error {
+func (z *zmqInput) Connect(ignored context.Context) (err error) {
 	if z.socket != nil {
 		return nil
 	}

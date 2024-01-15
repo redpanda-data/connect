@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/benthosdev/benthos/v4/internal/message"
+	"github.com/benthosdev/benthos/v4/internal/value"
 )
 
 func TestExpressions(t *testing.T) {
@@ -45,7 +46,7 @@ func TestExpressions(t *testing.T) {
 				nil,
 				nil,
 			),
-			output: Nothing(nil),
+			output: value.Nothing(nil),
 		},
 		"if false else": {
 			input: NewIfFunction(
@@ -95,7 +96,7 @@ func TestExpressions(t *testing.T) {
 				)),
 				NewLiteralFunction("", "foo"),
 				nil,
-				NewLiteralFunction("", Nothing(nil)),
+				NewLiteralFunction("", value.Nothing(nil)),
 			),
 			output: "foo",
 		},
@@ -155,7 +156,7 @@ func TestExpressions(t *testing.T) {
 				NewMatchCase(NewLiteralFunction("", false), NewLiteralFunction("", "foo")),
 				NewMatchCase(NewLiteralFunction("", false), NewLiteralFunction("", "bar")),
 			),
-			output: Nothing(nil),
+			output: value.Nothing(nil),
 		},
 		"named context map arithmetic": {
 			input: mustFunc(NewArithmeticExpression(

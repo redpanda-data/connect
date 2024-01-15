@@ -14,7 +14,6 @@ categories: ["Integration"]
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-
 Executes a command as a subprocess and, for each message, will pipe its contents to the stdin stream of the process followed by a newline.
 
 
@@ -29,7 +28,7 @@ Executes a command as a subprocess and, for each message, will pipe its contents
 # Common config fields, showing default values
 label: ""
 subprocess:
-  name: ""
+  name: cat # No default (required)
   args: []
 ```
 
@@ -40,7 +39,7 @@ subprocess:
 # All config fields, showing default values
 label: ""
 subprocess:
-  name: ""
+  name: cat # No default (required)
   args: []
   max_buffer: 65536
   codec_send: lines
@@ -78,7 +77,6 @@ The command to execute as a subprocess.
 
 
 Type: `string`  
-Default: `""`  
 
 ```yml
 # Examples

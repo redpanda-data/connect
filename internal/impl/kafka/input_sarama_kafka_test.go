@@ -7,16 +7,17 @@ import (
 	"github.com/Jeffail/gabs/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"gopkg.in/yaml.v3"
 
 	"github.com/benthosdev/benthos/v4/internal/component/input"
+	"github.com/benthosdev/benthos/v4/internal/component/testutil"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 )
 
 func parseYAMLInputConf(t testing.TB, formatStr string, args ...any) (conf input.Config) {
 	t.Helper()
-	conf = input.NewConfig()
-	require.NoError(t, yaml.Unmarshal(fmt.Appendf(nil, formatStr, args...), &conf))
+	var err error
+	conf, err = testutil.InputFromYAML(fmt.Sprintf(formatStr, args...))
+	require.NoError(t, err)
 	return
 }
 

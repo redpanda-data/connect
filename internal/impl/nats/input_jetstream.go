@@ -221,7 +221,7 @@ func newJetStreamReaderFromConfig(conf *service.ParsedConfig, mgr *service.Resou
 
 //------------------------------------------------------------------------------
 
-func (j *jetStreamReader) Connect(ctx context.Context) error {
+func (j *jetStreamReader) Connect(ctx context.Context) (err error) {
 	j.connMut.Lock()
 	defer j.connMut.Unlock()
 
@@ -231,7 +231,6 @@ func (j *jetStreamReader) Connect(ctx context.Context) error {
 
 	var natsConn *nats.Conn
 	var natsSub *nats.Subscription
-	var err error
 
 	defer func() {
 		if err != nil {
