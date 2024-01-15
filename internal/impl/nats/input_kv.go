@@ -144,15 +144,13 @@ func newKVReader(conf *service.ParsedConfig, mgr *service.Resources) (*kvReader,
 	return r, nil
 }
 
-func (r *kvReader) Connect(ctx context.Context) error {
+func (r *kvReader) Connect(ctx context.Context) (err error) {
 	r.connMut.Lock()
 	defer r.connMut.Unlock()
 
 	if r.natsConn != nil {
 		return nil
 	}
-
-	var err error
 
 	defer func() {
 		if err != nil {

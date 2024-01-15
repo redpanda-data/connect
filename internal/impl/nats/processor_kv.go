@@ -347,15 +347,13 @@ func (p *kvProcessor) addMetadata(msg *service.Message, key string, revision uin
 	msg.MetaSetMut(metaKVOperation, operation.String())
 }
 
-func (p *kvProcessor) Connect(ctx context.Context) error {
+func (p *kvProcessor) Connect(ctx context.Context) (err error) {
 	p.connMut.Lock()
 	defer p.connMut.Unlock()
 
 	if p.natsConn != nil {
 		return nil
 	}
-
-	var err error
 
 	defer func() {
 		if err != nil {
