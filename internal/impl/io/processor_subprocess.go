@@ -329,11 +329,10 @@ func netstringSplitFunc(data []byte, atEOF bool) (advance int, token []byte, err
 	return 0, nil, nil
 }
 
-func (s *subprocWrapper) start() error {
+func (s *subprocWrapper) start() (err error) {
 	s.cmdMut.Lock()
 	defer s.cmdMut.Unlock()
 
-	var err error
 	cmdCtx, cmdCancelFn := context.WithCancel(context.Background())
 	defer func() {
 		if err != nil {
