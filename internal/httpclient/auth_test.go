@@ -3,7 +3,7 @@ package httpclient
 import (
 	"testing"
 
-	"github.com/golang-jwt/jwt"
+	"github.com/golang-jwt/jwt/v4"
 
 	"github.com/benthosdev/benthos/v4/public/service"
 
