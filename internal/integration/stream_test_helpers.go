@@ -14,10 +14,8 @@ import (
 
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component/input"
-	iinput "github.com/benthosdev/benthos/v4/internal/component/input"
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
-	ioutput "github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/filepath/ifs"
 	"github.com/benthosdev/benthos/v4/internal/log"
@@ -401,7 +399,7 @@ func initConnectors(
 	t testing.TB,
 	trans <-chan message.Transaction,
 	env *streamTestEnvironment,
-) (input iinput.Streamed, output ioutput.Streamed) {
+) (input input.Streamed, output output.Streamed) {
 	t.Helper()
 
 	out := initOutput(t, trans, env)
@@ -409,7 +407,7 @@ func initConnectors(
 	return in, out
 }
 
-func initInput(t testing.TB, env *streamTestEnvironment) iinput.Streamed {
+func initInput(t testing.TB, env *streamTestEnvironment) input.Streamed {
 	t.Helper()
 
 	node, err := docs.UnmarshalYAML([]byte(env.RenderConfig()))
@@ -451,7 +449,7 @@ func initInput(t testing.TB, env *streamTestEnvironment) iinput.Streamed {
 	return input
 }
 
-func initOutput(t testing.TB, trans <-chan message.Transaction, env *streamTestEnvironment) ioutput.Streamed {
+func initOutput(t testing.TB, trans <-chan message.Transaction, env *streamTestEnvironment) output.Streamed {
 	t.Helper()
 
 	node, err := docs.UnmarshalYAML([]byte(env.RenderConfig()))
@@ -495,7 +493,7 @@ func initOutput(t testing.TB, trans <-chan message.Transaction, env *streamTestE
 	return output
 }
 
-func closeConnectors(t testing.TB, env *streamTestEnvironment, input iinput.Streamed, output ioutput.Streamed) {
+func closeConnectors(t testing.TB, env *streamTestEnvironment, input input.Streamed, output output.Streamed) {
 	if output != nil {
 		output.TriggerCloseNow()
 		require.NoError(t, output.WaitForClose(env.ctx))
