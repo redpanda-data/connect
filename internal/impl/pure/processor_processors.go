@@ -33,13 +33,13 @@ pipeline:
     - label: my_super_feature
       processors:
         - log:
-            message: "Let's do something cool"
+			message: "Let's do something cool"
 		- archive:
 			format: json_array
 		- mapping: root.items = this
 		- http:
-			url: https://example.com/endpoint
-	        verb: POST
+			url: "https://example.com/endpoint"
+			verb: POST
 `,
 		).
 		Field(service.NewProcessorListField("").Default([]any{}))
