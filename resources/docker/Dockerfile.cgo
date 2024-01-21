@@ -18,7 +18,8 @@ RUN make TAGS=x_benthos_extra
 # Pack
 FROM debian:latest
 
-LABEL maintainer="Ashley Jeffs <ash@jeffail.uk>"
+LABEL maintainer="Ashley Jeffs <ash@benthos.dev>"
+LABEL org.opencontainers.image.source="https://github.com/benthosdev/benthos"
 
 WORKDIR /root/
 
