@@ -14,6 +14,7 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 
 - The `javascript` processor now handles module imports correctly.
+- Bloblang `if` statements now provide explicit errors when query expressions resolve to non-boolean values.
 
 ### Changed
 

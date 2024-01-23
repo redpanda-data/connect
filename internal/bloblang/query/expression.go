@@ -91,7 +91,12 @@ func NewIfFunction(queryFn, ifFn Function, elseIfs []ElseIf, elseFn Function) Fu
 		if err != nil {
 			return nil, fmt.Errorf("failed to check if condition: %w", err)
 		}
-		if queryRes, _ := queryVal.(bool); queryRes {
+
+		queryRes, isBool := queryVal.(bool)
+		if !isBool {
+			return nil, fmt.Errorf("%v resolved to a non-boolean value %v (%T)", queryFn.Annotation(), queryVal, queryVal)
+		}
+		if queryRes {
 			return ifFn.Exec(ctx)
 		}
 
@@ -100,7 +105,11 @@ func NewIfFunction(queryFn, ifFn Function, elseIfs []ElseIf, elseFn Function) Fu
 			if err != nil {
 				return nil, fmt.Errorf("failed to check if condition %v: %w", i+1, err)
 			}
-			if queryRes, _ := queryVal.(bool); queryRes {
+			queryRes, isBool := queryVal.(bool)
+			if !isBool {
+				return nil, fmt.Errorf("%v resolved to a non-boolean value %v (%T)", eFn.QueryFn.Annotation(), queryVal, queryVal)
+			}
+			if queryRes {
 				return eFn.MapFn.Exec(ctx)
 			}
 		}
