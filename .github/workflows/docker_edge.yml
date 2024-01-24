@@ -9,6 +9,9 @@ jobs:
   build:
     if: ${{ github.repository == 'benthosdev/benthos' || github.event_name != 'schedule' }}
     runs-on: ubuntu-latest
+    permissions:
+      packages: write
+      contents: read
     steps:
 
     - name: Check Out Repo
@@ -30,6 +33,9 @@ jobs:
         username: ${{ secrets.DOCKER_HUB_USERNAME }}
         password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
 
+    - name: Log in to registry
+      run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u $ --password-stdin
+
     - name: Install Buildx
       id: buildx
       uses: docker/setup-buildx-action@v3
@@ -42,7 +48,7 @@ jobs:
         builder: ${{ steps.buildx.outputs.name }}
         platforms: linux/amd64,linux/arm64
         push: true
-        tags: jeffail/benthos:edge
+        tags: jeffail/benthos:edge,ghcr.io/${{ github.repository_owner }}/benthos:edge
 
     - name: Build and push CGO
       uses: docker/build-push-action@v5
@@ -50,4 +56,4 @@ jobs:
         context: ./
         file: ./resources/docker/Dockerfile.cgo
         push: true
-        tags: jeffail/benthos:edge-cgo
+        tags: jeffail/benthos:edge-cgo,ghcr.io/${{ github.repository_owner }}/benthos:edge-cgo
