@@ -13,10 +13,9 @@ import (
 	"time"
 
 	"github.com/benthosdev/benthos/v4/internal/bundle"
-	iinput "github.com/benthosdev/benthos/v4/internal/component/input"
+	"github.com/benthosdev/benthos/v4/internal/component/input"
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
-	ioutput "github.com/benthosdev/benthos/v4/internal/component/output"
-	"github.com/benthosdev/benthos/v4/internal/config"
+	"github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/filepath/ifs"
 	"github.com/benthosdev/benthos/v4/internal/log"
@@ -400,7 +399,7 @@ func initConnectors(
 	t testing.TB,
 	trans <-chan message.Transaction,
 	env *streamTestEnvironment,
-) (input iinput.Streamed, output ioutput.Streamed) {
+) (input input.Streamed, output output.Streamed) {
 	t.Helper()
 
 	out := initOutput(t, trans, env)
@@ -408,28 +407,39 @@ func initConnectors(
 	return in, out
 }
 
-func initInput(t testing.TB, env *streamTestEnvironment) iinput.Streamed {
+func initInput(t testing.TB, env *streamTestEnvironment) input.Streamed {
 	t.Helper()
 
 	node, err := docs.UnmarshalYAML([]byte(env.RenderConfig()))
 	require.NoError(t, err)
 
-	spec := config.Spec()
+	spec := docs.FieldSpecs{
+		docs.FieldAnything("output", "").Optional(),
+		docs.FieldInput("input", "An input to source messages from."),
+	}
+	spec = append(spec, manager.Spec()...)
+
 	lints := spec.LintYAML(docs.NewLintContext(docs.NewLintConfig(bundle.GlobalEnvironment)), node)
 	assert.Empty(t, lints)
 
 	pConf, err := spec.ParsedConfigFromAny(node)
 	require.NoError(t, err)
 
-	conf, err := config.FromParsed(bundle.GlobalEnvironment, pConf, nil)
+	pVal, err := pConf.FieldAny("input")
+	require.NoError(t, err)
+
+	iConf, err := input.FromAny(bundle.GlobalEnvironment, pVal)
+	require.NoError(t, err)
+
+	mConf, err := manager.FromParsed(bundle.GlobalEnvironment, pConf)
 	require.NoError(t, err)
 
 	if env.mgr == nil {
-		env.mgr, err = manager.New(conf.ResourceConfig, manager.OptSetLogger(env.log), manager.OptSetMetrics(env.stats))
+		env.mgr, err = manager.New(mConf, manager.OptSetLogger(env.log), manager.OptSetMetrics(env.stats))
 		require.NoError(t, err)
 	}
 
-	input, err := env.mgr.NewInput(conf.Input)
+	input, err := env.mgr.NewInput(iConf)
 	require.NoError(t, err)
 
 	if env.sleepAfterInput > 0 {
@@ -439,28 +449,39 @@ func initInput(t testing.TB, env *streamTestEnvironment) iinput.Streamed {
 	return input
 }
 
-func initOutput(t testing.TB, trans <-chan message.Transaction, env *streamTestEnvironment) ioutput.Streamed {
+func initOutput(t testing.TB, trans <-chan message.Transaction, env *streamTestEnvironment) output.Streamed {
 	t.Helper()
 
 	node, err := docs.UnmarshalYAML([]byte(env.RenderConfig()))
 	require.NoError(t, err)
 
-	spec := config.Spec()
+	spec := docs.FieldSpecs{
+		docs.FieldAnything("input", "").Optional(),
+		docs.FieldOutput("output", "An output to source messages to."),
+	}
+	spec = append(spec, manager.Spec()...)
+
 	lints := spec.LintYAML(docs.NewLintContext(docs.NewLintConfig(bundle.GlobalEnvironment)), node)
 	assert.Empty(t, lints)
 
 	pConf, err := spec.ParsedConfigFromAny(node)
 	require.NoError(t, err)
 
-	conf, err := config.FromParsed(bundle.GlobalEnvironment, pConf, nil)
+	pVal, err := pConf.FieldAny("output")
+	require.NoError(t, err)
+
+	oConf, err := output.FromAny(bundle.GlobalEnvironment, pVal)
+	require.NoError(t, err)
+
+	mConf, err := manager.FromParsed(bundle.GlobalEnvironment, pConf)
 	require.NoError(t, err)
 
 	if env.mgr == nil {
-		env.mgr, err = manager.New(conf.ResourceConfig, manager.OptSetLogger(env.log), manager.OptSetMetrics(env.stats))
+		env.mgr, err = manager.New(mConf, manager.OptSetLogger(env.log), manager.OptSetMetrics(env.stats))
 		require.NoError(t, err)
 	}
 
-	output, err := env.mgr.NewOutput(conf.Output)
+	output, err := env.mgr.NewOutput(oConf)
 	require.NoError(t, err)
 
 	require.NoError(t, output.Consume(trans))
@@ -472,7 +493,7 @@ func initOutput(t testing.TB, trans <-chan message.Transaction, env *streamTestE
 	return output
 }
 
-func closeConnectors(t testing.TB, env *streamTestEnvironment, input iinput.Streamed, output ioutput.Streamed) {
+func closeConnectors(t testing.TB, env *streamTestEnvironment, input input.Streamed, output output.Streamed) {
 	if output != nil {
 		output.TriggerCloseNow()
 		require.NoError(t, output.WaitForClose(env.ctx))
