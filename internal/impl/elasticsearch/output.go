@@ -45,6 +45,7 @@ const (
 	esoFieldDocument        = "doc"
 	esoFieldScript          = "script"
 	esoFieldUpsert          = "upsert"
+	esoFieldParams          = "params"
 )
 
 type esoConfig struct {
@@ -63,6 +64,7 @@ type esoConfig struct {
 	docStr      *service.InterpolatedString
 	scriptStr   *service.InterpolatedString
 	upsertStr   *service.InterpolatedString
+	paramsStr   *service.InterpolatedString
 }
 
 func esoConfigFromParsed(pConf *service.ParsedConfig) (conf esoConfig, err error) {
@@ -176,6 +178,9 @@ func esoConfigFromParsed(pConf *service.ParsedConfig) (conf esoConfig, err error
 		if conf.upsertStr, err = pConf.FieldInterpolatedString(esoFieldUpsert); err != nil {
 			return
 		}
+		if conf.paramsStr, err = pConf.FieldInterpolatedString(esoFieldParams); err != nil {
+			return
+		}
 	}
 	return
 }
@@ -270,6 +275,9 @@ It's possible to enable AWS connectivity with this output using the `+"`aws`"+` 
 			service.NewInterpolatedStringField(esoFieldUpsert).
 				Description("Set upsert (only if action is `update`).").
 				Default(""),
+			service.NewInterpolatedStringField(esoFieldParams).
+				Description("Set Params (only if action is `update` and `script` is defined).").
+				Default(""),
 		).
 		Fields(pure.CommonRetryBackOffFields(0, "1s", "5s", "30s")...).
 		Fields(
@@ -354,6 +362,7 @@ type pendingBulkIndex struct {
 	Doc      string
 	Script   string
 	Upsert   any
+	Params   map[string]any
 	ID       string
 }
 
@@ -378,6 +387,18 @@ func (e *Output) WriteBatch(ctx context.Context, msg service.MessageBatch) error
 			if pbi.Script, err = msg.TryInterpolatedString(i, e.conf.scriptStr); err != nil {
 				return fmt.Errorf("action interpolation error: %w", err)
 			}
+
+			paramsStr, err := msg.TryInterpolatedString(i, e.conf.paramsStr)
+			if err != nil {
+				return fmt.Errorf("action interpolation error: %w", err)
+			}
+			pbi.Params = make(map[string]any)
+			if paramsStr != "" {
+				if err := json.Unmarshal([]byte(paramsStr), &pbi.Params); err != nil {
+					return fmt.Errorf("action interpolation error: %w", err)
+				}
+			}
+
 			if upsert, err := msg.TryInterpolatedString(i, e.conf.upsertStr); err != nil {
 				return fmt.Errorf("action interpolation error: %w", err)
 			} else if upsert != "" {
@@ -497,7 +518,9 @@ func (e *Output) buildBulkableRequest(p *pendingBulkIndex) (elastic.BulkableRequ
 			r = r.Upsert(p.Upsert)
 		}
 		if p.Script != "" {
-			r = r.Script(elastic.NewScript(p.Script))
+			script := elastic.NewScript(p.Script)
+			script = script.Params(p.Params)
+			r = r.Script(script)
 		}
 		if p.Type != "" {
 			r = r.Type(p.Type)
