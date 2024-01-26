@@ -81,9 +81,9 @@ func (p *catchProc) ProcessBatch(ctx *processor.BatchProcContext, msg message.Ba
 		return nil
 	})
 
-	var res error
-	if resultMsgs, res = processor.ExecuteCatchAll(ctx.Context(), p.children, resultMsgs...); res != nil || len(resultMsgs) == 0 {
-		return nil, res
+	var err error
+	if resultMsgs, err = processor.ExecuteCatchAll(ctx.Context(), p.children, resultMsgs...); err != nil || len(resultMsgs) == 0 {
+		return nil, err
 	}
 
 	resMsg := message.QuickBatch(nil)
@@ -94,7 +94,7 @@ func (p *catchProc) ProcessBatch(ctx *processor.BatchProcContext, msg message.Ba
 		})
 	}
 	if resMsg.Len() == 0 {
-		return nil, res
+		return nil, nil
 	}
 
 	_ = resMsg.Iter(func(i int, p *message.Part) error {

@@ -180,6 +180,10 @@ func New(
 			pprof.Index,
 		)
 		t.RegisterEndpoint(
+			"/debug/pprof/allocs", "DEBUG: Responds with a pprof-formatted allocs profile.",
+			pprof.Index,
+		)
+		t.RegisterEndpoint(
 			"/debug/pprof/symbol", "DEBUG: looks up the program counters listed"+
 				" in the request, responding with a table mapping program"+
 				" counters to function names.",
