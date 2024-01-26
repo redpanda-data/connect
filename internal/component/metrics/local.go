@@ -1,6 +1,7 @@
 package metrics
 
 import (
+	"github.com/rcrowley/go-metrics"
 	"net/http"
 	"sort"
 	"strconv"
@@ -8,8 +9,6 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
-
-	"github.com/rcrowley/go-metrics"
 )
 
 // not sure if this is necessary yet.
@@ -46,6 +45,12 @@ func (l *LocalStat) DecrFloat64(count float64) {
 
 func (l *LocalStat) SetFloat64(value float64) {
 	l.Set(int64(value))
+}
+
+func (l *LocalStat) Delete() bool {
+	//unsafePointer := unsafe.Pointer(l.Value)
+	//atomic.StorePointer((*unsafe.Pointer)(unsafePointer), nil)
+	return true
 }
 
 // LocalTiming is a representation of a single metric timing.

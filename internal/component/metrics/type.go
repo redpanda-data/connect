@@ -42,6 +42,8 @@ type StatGauge interface {
 
 	// DecrFloat64 decrements a gauge by an amount.
 	DecrFloat64(count float64)
+
+	Delete() bool
 }
 
 //------------------------------------------------------------------------------

@@ -26,6 +26,10 @@ func (d DudStat) IncrFloat64(count float64) {}
 // DecrFloat64 does nothing
 func (d DudStat) DecrFloat64(count float64) {}
 
+func (d DudStat) Delete() bool {
+	return true
+}
+
 //------------------------------------------------------------------------------
 
 var _ Type = DudType{}
