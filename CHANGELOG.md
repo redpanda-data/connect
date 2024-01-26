@@ -13,6 +13,7 @@ All notable changes to this project will be documented in this file.
 - New `diff` and `patch` Bloblang methods.
 - New `processors` processor.
 - Field `read_header` added to the `amqp_1` input.
+- A debug endpoint `/debug/pprof/allocs` has been added for profiling allocations.
 
 ### Fixed
 
