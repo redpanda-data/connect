@@ -101,9 +101,9 @@ func (p *tryProc) ProcessBatch(ctx *processor.BatchProcContext, msg message.Batc
 		return nil
 	})
 
-	var res error
-	if resultMsgs, res = processor.ExecuteTryAll(ctx.Context(), p.children, resultMsgs...); res != nil || len(resultMsgs) == 0 {
-		return nil, res
+	var err error
+	if resultMsgs, err = processor.ExecuteTryAll(ctx.Context(), p.children, resultMsgs...); err != nil || len(resultMsgs) == 0 {
+		return nil, err
 	}
 
 	resMsg := message.QuickBatch(nil)
@@ -114,7 +114,7 @@ func (p *tryProc) ProcessBatch(ctx *processor.BatchProcContext, msg message.Batc
 		})
 	}
 	if resMsg.Len() == 0 {
-		return nil, res
+		return nil, nil
 	}
 
 	resMsgs := [1]message.Batch{resMsg}

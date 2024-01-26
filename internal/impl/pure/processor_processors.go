@@ -15,15 +15,8 @@ func processorsProcSpec() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Categories("Composition").
 		Stable().
-		Summary(`A processor grouping several sub-processors while retaining batches`).
-		Description(`
-Quite often you will come across a case where you want to collect several processors under a single processor, whether 
-it is for making your configuration easier to read and navigate, or for improving the testability of your 
-configuration. You could use a the ['try'](https://benthos.dev/docs/components/processors/try) processor for this 
-purpose, if you can live with each message being processed individually. However, if you want to retain the messages
-in their batch, you can use this processor instead.'
-
-You can find out more about batching [in this doc](/docs/configuration/batching).`).
+		Summary(`A processor grouping several sub-processors.`).
+		Description("This processor is useful in situations where you want to collect several processors under a single resource identifier, whether it is for making your configuration easier to read and navigate, or for improving the testability of your configuration. The behaviour of child processors will match exactly the behaviour they would have under any other processors block.").
 		Example(
 			"Grouped Processing",
 			"Imagine we have a collection of processors who cover a specific functionality. We could use this processor to group them together and make it easier to read and mock during testing by giving the whole block a label:",
@@ -87,22 +80,14 @@ func (p *processorProc) ProcessBatch(ctx *processor.BatchProcContext, msg messag
 		return nil, nil
 	}
 
-	msgs := []message.Batch{}
-	resultMsgs, res := processor.ExecuteAll(ctx.Context(), p.children, msg)
-	if len(resultMsgs) > 0 {
-		msgs = append(msgs, resultMsgs...)
+	resultMsgs, err := processor.ExecuteAll(ctx.Context(), p.children, msg)
+	if err != nil {
+		return nil, err
 	}
-	if res != nil {
-		if err := res; err != nil {
-			p.log.Error("Processor error: %v\n", err)
-		}
-	}
-
-	if len(msgs) == 0 {
+	if len(resultMsgs) == 0 {
 		return nil, nil
 	}
-
-	return msgs, nil
+	return resultMsgs, nil
 }
 
 func (p *processorProc) Close(ctx context.Context) error {
