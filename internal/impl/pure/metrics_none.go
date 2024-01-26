@@ -48,3 +48,4 @@ func (n noopMetrics) IncrFloat64(count float64) {}
 func (n noopMetrics) Timing(delta int64)        {}
 func (n noopMetrics) Set(value int64)           {}
 func (n noopMetrics) SetFloat64(value float64)  {}
+func (n noopMetrics) Delete()                   {}

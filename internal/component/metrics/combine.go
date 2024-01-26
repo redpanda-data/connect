@@ -101,6 +101,11 @@ func (c *combinedGauge) DecrFloat64(count float64) {
 	c.c2.DecrFloat64(count)
 }
 
+func (c *combinedGauge) Delete() {
+	c.c1.Delete()
+	c.c2.Delete()
+}
+
 //------------------------------------------------------------------------------
 
 type combinedCounterVec struct {

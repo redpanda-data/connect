@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/benthosdev/benthos/v4/public/bloblang"
 	"sort"
 	"strconv"
 	"strings"
@@ -19,10 +20,11 @@ import (
 )
 
 const (
-	metProcFieldType   = "type"
-	metProcFieldName   = "name"
-	metProcFieldLabels = "labels"
-	metProcFieldValue  = "value"
+	metProcFieldType       = "type"
+	metProcFieldName       = "name"
+	metProcFieldLabels     = "labels"
+	metProcFieldValue      = "value"
+	metProcFieldClearValue = "clear_value"
 )
 
 func metProcSpec() *service.ConfigSpec {
@@ -137,6 +139,10 @@ metrics:
 			service.NewInterpolatedStringField(metProcFieldValue).
 				Description("For some metric types specifies a value to set, increment. Certain metrics exporters such as Prometheus support floating point values, but those that do not will cast a floating point value into an integer.").
 				Default(""),
+			service.NewBloblangField(metProcFieldClearValue).
+				Description("Delete metric.").
+				Optional().
+				Default("false"),
 		)
 }
 
@@ -166,8 +172,13 @@ func init() {
 				return nil, err
 			}
 
+			shouldClearValue, err := conf.FieldBloblang(metProcFieldClearValue)
+			if err != nil {
+				return nil, err
+			}
+
 			mgr := interop.UnwrapManagement(res)
-			p, err := newMetricProcessor(procTypeStr, procName, valueStr, labelMap, mgr)
+			p, err := newMetricProcessor(procTypeStr, procName, valueStr, shouldClearValue, labelMap, mgr)
 			if err != nil {
 				return nil, err
 			}
@@ -192,6 +203,8 @@ type metricProcessor struct {
 	mCounterVec metrics.StatCounterVec
 	mGaugeVec   metrics.StatGaugeVec
 	mTimerVec   metrics.StatTimerVec
+
+	shouldClearValue *bloblang.Executor
 
 	handler func(string, int, message.Batch) error
 }
@@ -228,15 +241,16 @@ func (l labels) values(index int, msg message.Batch) ([]string, error) {
 	return values, nil
 }
 
-func newMetricProcessor(typeStr, name, valueStr string, labels map[string]string, mgr bundle.NewManagement) (processor.V1, error) {
+func newMetricProcessor(typeStr, name, valueStr string, shouldClearValue *bloblang.Executor, labels map[string]string, mgr bundle.NewManagement) (processor.V1, error) {
 	value, err := mgr.BloblEnvironment().NewField(valueStr)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse value expression: %v", err)
 	}
 
 	m := &metricProcessor{
-		log:   mgr.Logger(),
-		value: value,
+		log:              mgr.Logger(),
+		value:            value,
+		shouldClearValue: shouldClearValue,
 	}
 
 	if name == "" {
@@ -357,11 +371,24 @@ func (m *metricProcessor) handleGauge(val string, index int, msg message.Batch) 
 		if err != nil {
 			return err
 		}
+		gaugeVec := m.mGaugeVec.With(labelValues...)
+		shouldClearValueVal, err := m.shouldClearValue.Query(msg)
+		if err != nil {
+			return err
+		}
+		shouldClearValue, ok := shouldClearValueVal.(bool)
+		if !ok {
+			return fmt.Errorf("could not convert %s into bool, current type %T", metProcFieldClearValue, shouldClearValueVal)
+		}
+		if shouldClearValue {
+			gaugeVec.Delete()
+			return nil
+		}
 		return withNumberStr(val, func(i int64) error {
-			m.mGaugeVec.With(labelValues...).Set(i)
+			gaugeVec.Set(i)
 			return nil
 		}, func(f float64) error {
-			m.mGaugeVec.With(labelValues...).SetFloat64(f)
+			gaugeVec.SetFloat64(f)
 			return nil
 		})
 	}

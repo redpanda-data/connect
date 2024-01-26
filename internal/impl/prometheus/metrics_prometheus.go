@@ -158,6 +158,12 @@ func (p *promGauge) SetFloat64(value float64) {
 	p.ctr.Set(value)
 }
 
+func (p *promGauge) Delete() {
+	// TODO this is ugly and will not work because even though it does the desired effect of removing the metric
+	// but when the metric will be re-set, it will need to re-registered
+	//p.reg.Unregister(p.ctr)
+}
+
 type promCounter struct {
 	ctr prometheus.Counter
 }

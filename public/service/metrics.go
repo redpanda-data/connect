@@ -178,6 +178,7 @@ type MetricsExporterGauge interface {
 	// order of labels specified when the gauge was created.
 	// TODO: V5 Add this (or replace the int based method)
 	// SetFloat64(value float64)
+	// Delete()
 }
 
 //------------------------------------------------------------------------------
@@ -230,6 +231,14 @@ func (a *airGapGauge) DecrFloat64(count float64) {
 func (a *airGapGauge) Set(value int64) {
 	atomic.StoreInt64(&a.v, value)
 	a.airGapped.Set(value)
+}
+
+func (a *airGapGauge) Delete() {
+	if fer, ok := a.airGapped.(interface {
+		Delete()
+	}); ok {
+		fer.Delete()
+	}
 }
 
 type airGapCounter struct {
