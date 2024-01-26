@@ -28,6 +28,10 @@ All notable changes to this project will be documented in this file.
 - The `parse_log` processor field `codec` is now deprecated.
 - *WARNING*: Many components have had their underlying implementations moved onto newer internal APIs for defining and extracting their configuration fields. It's recommended that upgrades to this version are performed cautiously.
 
+### Fixed
+
+- The `amqp_0_9` output no longer prints bogus exchange name when connecting to the server.
+
 ## 4.24.0 - 2023-11-24
 
 ### Added
