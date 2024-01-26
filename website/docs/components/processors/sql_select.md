@@ -112,7 +112,7 @@ A database [driver](#drivers) to use.
 
 
 Type: `string`  
-Options: `mysql`, `postgres`, `clickhouse`, `mssql`, `sqlite`, `oracle`, `snowflake`, `trino`.
+Options: `mysql`, `postgres`, `clickhouse`, `mssql`, `sqlite`, `oracle`, `snowflake`, `trino`, `pgx`.
 
 ### `dsn`
 
@@ -126,14 +126,15 @@ The following is a list of supported drivers, their placeholder style, and their
 |---|---|
 | `clickhouse` | [`clickhouse://[username[:password]@][netloc][:port]/dbname[?param1=value1&...&paramN=valueN]`](https://github.com/ClickHouse/clickhouse-go#dsn) |
 | `mysql` | `[username[:password]@][protocol[(address)]]/dbname[?param1=value1&...&paramN=valueN]` |
-| `postgres` | `postgres://[user[:password]@][netloc][:port][/dbname][?param1=value1&...]` |
+| `postgres` and `pgx` | `postgres://[user[:password]@][netloc][:port][/dbname][?param1=value1&...]` |
 | `mssql` | `sqlserver://[user[:password]@][netloc][:port][?database=dbname&param1=value1&...]` |
 | `sqlite` | `file:/path/to/filename.db[?param&=value1&...]` |
 | `oracle` | `oracle://[username[:password]@][netloc][:port]/service_name?server=server2&server=server3` |
 | `snowflake` | `username[:password]@account_identifier/dbname/schemaname[?param1=value&...&paramN=valueN]` |
 | `trino` | [`http[s]://user[:pass]@host[:port][?parameters]`](https://github.com/trinodb/trino-go-client#dsn-data-source-name)
 
-Please note that the `postgres` driver enforces SSL by default, you can override this with the parameter `sslmode=disable` if required.
+Please note that the `postgres` and `pgx` drivers enforce SSL by default, you can override this with the parameter `sslmode=disable` if required.
+The `pgx` driver is an alternative to the standard `postgres` (pq) driver and comes with extra functionality such as support for array insertion.
 
 The `snowflake` driver supports multiple DSN formats. Please consult [the docs](https://pkg.go.dev/github.com/snowflakedb/gosnowflake#hdr-Connection_String) for more details. For [key pair authentication](https://docs.snowflake.com/en/user-guide/key-pair-auth.html#configuring-key-pair-authentication), the DSN has the following format: `<snowflake_user>@<snowflake_account>/<db_name>/<schema_name>?warehouse=<warehouse>&role=<role>&authenticator=snowflake_jwt&privateKey=<base64_url_encoded_private_key>`, where the value for the `privateKey` parameter can be constructed from an unencrypted RSA private key file `rsa_key.p8` using `openssl enc -d -base64 -in rsa_key.p8 | basenc --base64url -w0` (you can use `gbasenc` insted of `basenc` on OSX if you install `coreutils` via Homebrew). If you have a password-encrypted private key, you can decrypt it using `openssl pkcs8 -in rsa_key_encrypted.p8 -out rsa_key.p8`. Also, make sure fields such as the username are URL-encoded.
 
