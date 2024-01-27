@@ -361,6 +361,9 @@ func (n *natsStreamReader) Read(ctx context.Context) (*service.Message, service.
 }
 
 func (n *natsStreamReader) Close(ctx context.Context) (err error) {
+	go func() {
+		n.disconnect()
+	}()
 	n.interruptOnce.Do(func() {
 		close(n.interruptChan)
 	})
