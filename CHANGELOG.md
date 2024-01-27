@@ -22,6 +22,7 @@ All notable changes to this project will be documented in this file.
 - Some metadata fields from the `amqp_1` input were always empty due to type mismatch, this should no longer be the case.
 - The `zip` Bloblang method no longer fails when executed without arguments.
 - The `amqp_0_9` output no longer prints bogus exchange name when connecting to the server.
+- The `generate` input no longer adds an extra second to `interval: '@every x'` syntax.
 
 ### Changed
 
