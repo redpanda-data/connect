@@ -311,7 +311,7 @@ func (r *Reader) readMain(mainPath string) (conf Type, lints []string, err error
 	if r.streamsMode {
 		// Spec is limited to just non-stream fields when in streams mode (no
 		// input, output, etc)
-		confSpec = r.specStreamOnly
+		confSpec = r.specObservability
 	}
 	if err = applyOverrides(confSpec, rawNode, r.overrides...); err != nil {
 		return

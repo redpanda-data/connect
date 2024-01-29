@@ -76,7 +76,11 @@ func CreateManager(
 		sanitConf := docs.NewSanitiseConfig(bundle.GlobalEnvironment)
 		sanitConf.RemoveTypeField = true
 		sanitConf.ScrubSecrets = true
-		err = config.Spec().SanitiseYAML(&sanitNode, sanitConf)
+		sanitSpec := config.Spec()
+		if streamsMode {
+			sanitSpec = config.SpecWithoutStream()
+		}
+		err = sanitSpec.SanitiseYAML(&sanitNode, sanitConf)
 	}
 	if err != nil {
 		err = fmt.Errorf("failed to generate sanitised config: %w", err)
