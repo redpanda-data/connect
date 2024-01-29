@@ -22,7 +22,7 @@ var (
 	ErrLeaseNotAcquired = errors.New("the shard could not be leased due to a collision")
 )
 
-type kiddbConfig struct {
+type dynamoCheckpointConfig struct {
 	Table              string
 	Create             bool
 	ReadCapacityUnits  int64
@@ -30,7 +30,7 @@ type kiddbConfig struct {
 	BillingMode        string
 }
 
-func kinesisInputDynamoDBConfigFromParsed(pConf *service.ParsedConfig) (conf kiddbConfig, err error) {
+func inputDynamoDBConfigFromParsed(pConf *service.ParsedConfig) (conf dynamoCheckpointConfig, err error) {
 	if conf.Table, err = pConf.FieldString(kiddbFieldTable); err != nil {
 		return
 	}
@@ -49,10 +49,10 @@ func kinesisInputDynamoDBConfigFromParsed(pConf *service.ParsedConfig) (conf kid
 	return
 }
 
-// awsKinesisCheckpointer manages the shard checkpointing for a given client
+// awsStreamCheckpointer manages the shard checkpointing for a given client
 // identifier.
-type awsKinesisCheckpointer struct {
-	conf kiddbConfig
+type awsStreamCheckpointer struct {
+	conf dynamoCheckpointConfig
 
 	clientID      string
 	leaseDuration time.Duration
@@ -60,16 +60,16 @@ type awsKinesisCheckpointer struct {
 	svc           dynamodbiface.DynamoDBAPI
 }
 
-// newAWSKinesisCheckpointer creates a new DynamoDB checkpointer from an AWS
+// newAWSStreamCheckpointer creates a new DynamoDB checkpointer from an AWS
 // session and a configuration struct.
-func newAWSKinesisCheckpointer(
+func newAWSStreamCheckpointer(
 	session *session.Session,
 	clientID string,
-	conf kiddbConfig,
+	conf dynamoCheckpointConfig,
 	leaseDuration time.Duration,
 	commitPeriod time.Duration,
-) (*awsKinesisCheckpointer, error) {
-	c := &awsKinesisCheckpointer{
+) (*awsStreamCheckpointer, error) {
+	c := &awsStreamCheckpointer{
 		conf:          conf,
 		leaseDuration: leaseDuration,
 		commitPeriod:  commitPeriod,
@@ -85,7 +85,7 @@ func newAWSKinesisCheckpointer(
 
 //------------------------------------------------------------------------------
 
-func (k *awsKinesisCheckpointer) ensureTableExists() error {
+func (k *awsStreamCheckpointer) ensureTableExists() error {
 	_, err := k.svc.DescribeTable(&dynamodb.DescribeTableInput{
 		TableName: aws.String(k.conf.Table),
 	})
@@ -123,15 +123,15 @@ func (k *awsKinesisCheckpointer) ensureTableExists() error {
 	return nil
 }
 
-// awsKinesisCheckpoint contains details of a shard checkpoint.
-type awsKinesisCheckpoint struct {
+// awsStreamCheckpoint contains details of a shard checkpoint.
+type awsStreamCheckpoint struct {
 	SequenceNumber string
 	ClientID       *string
 	LeaseTimeout   *time.Time
 }
 
 // Both checkpoint and err can be nil when the item does not exist.
-func (k *awsKinesisCheckpointer) getCheckpoint(ctx context.Context, streamID, shardID string) (*awsKinesisCheckpoint, error) {
+func (k *awsStreamCheckpointer) getCheckpoint(ctx context.Context, streamID, shardID string) (*awsStreamCheckpoint, error) {
 	rawItem, err := k.svc.GetItemWithContext(ctx, &dynamodb.GetItemInput{
 		TableName: aws.String(k.conf.Table),
 		Key: map[string]*dynamodb.AttributeValue{
@@ -152,7 +152,7 @@ func (k *awsKinesisCheckpointer) getCheckpoint(ctx context.Context, streamID, sh
 		return nil, err
 	}
 
-	c := awsKinesisCheckpoint{}
+	c := awsStreamCheckpoint{}
 
 	if s, ok := rawItem.Item["SequenceNumber"]; ok && s.S != nil {
 		c.SequenceNumber = *s.S
@@ -177,16 +177,16 @@ func (k *awsKinesisCheckpointer) getCheckpoint(ctx context.Context, streamID, sh
 
 //------------------------------------------------------------------------------
 
-// awsKinesisClientClaim represents a shard claimed by a client.
-type awsKinesisClientClaim struct {
+// awsStreamClientClaim represents a shard claimed by a client.
+type awsStreamClientClaim struct {
 	ShardID      string
 	LeaseTimeout time.Time
 }
 
 // AllClaims returns a map of client IDs to shards claimed by that client,
 // including the lease timeout of the claim.
-func (k *awsKinesisCheckpointer) AllClaims(ctx context.Context, streamID string) (map[string][]awsKinesisClientClaim, error) {
-	clientClaims := make(map[string][]awsKinesisClientClaim)
+func (k *awsStreamCheckpointer) AllClaims(ctx context.Context, streamID string) (map[string][]awsStreamClientClaim, error) {
+	clientClaims := make(map[string][]awsStreamClientClaim)
 	var scanErr error
 
 	if err := k.svc.ScanPagesWithContext(ctx, &dynamodb.ScanInput{
@@ -206,7 +206,7 @@ func (k *awsKinesisCheckpointer) AllClaims(ctx context.Context, streamID string)
 				continue
 			}
 
-			var claim awsKinesisClientClaim
+			var claim awsStreamClientClaim
 			if s, ok := i["ShardID"]; ok && s.S != nil {
 				claim.ShardID = *s.S
 			}
@@ -245,7 +245,7 @@ func (k *awsKinesisCheckpointer) AllClaims(ctx context.Context, streamID string)
 // for a period of time before reacquiring the sequence ID. This allows the
 // client we're claiming from to gracefully update the sequence number before
 // stopping.
-func (k *awsKinesisCheckpointer) Claim(ctx context.Context, streamID, shardID, fromClientID string) (string, error) {
+func (k *awsStreamCheckpointer) Claim(ctx context.Context, streamID, shardID, fromClientID string) (string, error) {
 	newLeaseTimeoutString := time.Now().Add(k.leaseDuration).Format(time.RFC3339Nano)
 
 	var conditionalExpression string
@@ -336,7 +336,7 @@ func (k *awsKinesisCheckpointer) Claim(ctx context.Context, streamID, shardID, f
 //
 // If final is true the client ID is removed from the checkpoint, indicating
 // that this client is finished with the shard.
-func (k *awsKinesisCheckpointer) Checkpoint(ctx context.Context, streamID, shardID, sequenceNumber string, final bool) (bool, error) {
+func (k *awsStreamCheckpointer) Checkpoint(ctx context.Context, streamID, shardID, sequenceNumber string, final bool) (bool, error) {
 	item := map[string]*dynamodb.AttributeValue{
 		"StreamID": {
 			S: &streamID,
@@ -388,7 +388,7 @@ func (k *awsKinesisCheckpointer) Checkpoint(ctx context.Context, streamID, shard
 //
 // This call is entirely optional, but the benefit is a reduction in duplicated
 // messages during a rebalance of shards.
-func (k *awsKinesisCheckpointer) Yield(ctx context.Context, streamID, shardID, sequenceNumber string) error {
+func (k *awsStreamCheckpointer) Yield(ctx context.Context, streamID, shardID, sequenceNumber string) error {
 	if sequenceNumber == "" {
 		// Nothing to present to the thief
 		return nil
@@ -416,7 +416,7 @@ func (k *awsKinesisCheckpointer) Yield(ctx context.Context, streamID, shardID, s
 
 // Delete attempts to delete a checkpoint, this should be called when a shard is
 // emptied.
-func (k *awsKinesisCheckpointer) Delete(ctx context.Context, streamID, shardID string) error {
+func (k *awsStreamCheckpointer) Delete(ctx context.Context, streamID, shardID string) error {
 	_, err := k.svc.DeleteItemWithContext(ctx, &dynamodb.DeleteItemInput{
 		TableName: aws.String(k.conf.Table),
 		Key: map[string]*dynamodb.AttributeValue{
