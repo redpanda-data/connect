@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"errors"
+	"expvar"
 	"fmt"
 	"net/http"
 	"net/http/pprof"
@@ -195,6 +196,10 @@ func New(
 				" Tracing lasts for duration specified in seconds GET"+
 				" parameter, or for 1 second if not specified.",
 			pprof.Trace,
+		)
+		t.RegisterEndpoint(
+			"/debug/vars", "DEBUG: Responds with the current expvar stats in JSON format.",
+			expvar.Handler().ServeHTTP,
 		)
 	}
 
