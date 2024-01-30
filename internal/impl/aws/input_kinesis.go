@@ -13,7 +13,6 @@ import (
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/kinesis"
-	"github.com/aws/aws-sdk-go/service/kinesis/kinesisiface"
 	"github.com/cenkalti/backoff/v4"
 	"github.com/gofrs/uuid"
 
@@ -181,7 +180,7 @@ type kinesisReader struct {
 
 	boffPool sync.Pool
 
-	svc          kinesisiface.KinesisAPI
+	svc          *kinesis.Kinesis
 	checkpointer *awsKinesisCheckpointer
 
 	streamShards    map[string][]string

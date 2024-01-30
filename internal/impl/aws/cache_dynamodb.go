@@ -10,7 +10,6 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
-	"github.com/aws/aws-sdk-go/service/dynamodb/dynamodbiface"
 	"github.com/aws/aws-sdk-go/service/dynamodb/expression"
 	"github.com/cenkalti/backoff/v4"
 
@@ -127,7 +126,7 @@ func newDynamodbCacheFromConfig(conf *service.ParsedConfig) (*dynamodbCache, err
 //------------------------------------------------------------------------------
 
 type dynamodbCache struct {
-	client dynamodbiface.DynamoDBAPI
+	client dynamoDBAPI
 
 	table          *string
 	hashKey        string
@@ -140,7 +139,7 @@ type dynamodbCache struct {
 }
 
 func newDynamodbCache(
-	client dynamodbiface.DynamoDBAPI,
+	client dynamoDBAPI,
 	table, hashKey, dataKey string,
 	consistentRead bool,
 	ttlKey *string, ttl *time.Duration,

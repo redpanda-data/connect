@@ -7,19 +7,19 @@ import (
 	"testing"
 	"time"
 
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/request"
 	"github.com/aws/aws-sdk-go/service/cloudwatch"
-	"github.com/aws/aws-sdk-go/service/cloudwatch/cloudwatchiface"
 	"github.com/stretchr/testify/assert"
 )
 
 type mockCloudWatchClient struct {
-	cloudwatchiface.CloudWatchAPI
 	errs []error
 
 	inputs []cloudwatch.PutMetricDataInput
 }
 
-func cwmMock(svc cloudwatchiface.CloudWatchAPI) *cwMetrics {
+func cwmMock(svc cloudWatchAPI) *cwMetrics {
 	return &cwMetrics{
 		config:    cwmConfig{Namespace: "Benthos", FlushPeriod: 100 * time.Millisecond},
 		datumses:  map[string]*cloudWatchDatum{},
@@ -29,7 +29,7 @@ func cwmMock(svc cloudwatchiface.CloudWatchAPI) *cwMetrics {
 	}
 }
 
-func (m *mockCloudWatchClient) PutMetricData(input *cloudwatch.PutMetricDataInput) (*cloudwatch.PutMetricDataOutput, error) {
+func (m *mockCloudWatchClient) PutMetricDataWithContext(ctx aws.Context, input *cloudwatch.PutMetricDataInput, opts ...request.Option) (*cloudwatch.PutMetricDataOutput, error) {
 	m.inputs = append(m.inputs, *input)
 	if len(m.errs) > 0 {
 		err := m.errs[0]

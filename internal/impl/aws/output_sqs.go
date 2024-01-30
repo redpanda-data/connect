@@ -13,7 +13,6 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/sqs"
-	"github.com/aws/aws-sdk-go/service/sqs/sqsiface"
 	"github.com/cenkalti/backoff/v4"
 
 	"github.com/benthosdev/benthos/v4/internal/component"
@@ -136,7 +135,7 @@ func init() {
 
 type sqsWriter struct {
 	conf sqsoConfig
-	sqs  sqsiface.SQSAPI
+	sqs  sqsAPI
 
 	closer    sync.Once
 	closeChan chan struct{}
@@ -296,7 +295,7 @@ func (a *sqsWriter) WriteBatch(ctx context.Context, batch service.MessageBatch) 
 		wait := backOff.NextBackOff()
 
 		var batchResult *sqs.SendMessageBatchOutput
-		if batchResult, err = a.sqs.SendMessageBatch(input); err != nil {
+		if batchResult, err = a.sqs.SendMessageBatchWithContext(ctx, input); err != nil {
 			a.log.Warnf("SQS error: %v\n", err)
 			// bail if a message is too large or all retry attempts expired
 			if wait == backoff.Stop {
