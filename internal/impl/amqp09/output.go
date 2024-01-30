@@ -282,12 +282,12 @@ func (a *amqp09Writer) Connect(ctx context.Context) error {
 	var amqpChan *amqp.Channel
 	if amqpChan, err = conn.Channel(); err != nil {
 		conn.Close()
-		return fmt.Errorf("amqp failed to create channel: %v", err)
+		return fmt.Errorf("amqp failed to create channel: %w", err)
 	}
 
 	if err = amqpChan.Confirm(false); err != nil {
 		conn.Close()
-		return fmt.Errorf("amqp channel could not be put into confirm mode: %v", err)
+		return fmt.Errorf("amqp channel could not be put into confirm mode: %w", err)
 	}
 
 	a.conn = conn
@@ -300,9 +300,12 @@ func (a *amqp09Writer) Connect(ctx context.Context) error {
 		if err := a.declareExchange(sExchange); err != nil {
 			a.log.Errorf("Failed to declare exchange: %w", err)
 		}
+
+		a.log.Infof("Sending AMQP messages to exchange: %s", sExchange)
+	} else {
+		a.log.Infof("Sending AMQP messages to dynamic interpolated exchange")
 	}
 
-	a.log.Infof("Sending AMQP messages to exchange: %v\n", a.exchange)
 	return nil
 }
 
@@ -316,7 +319,7 @@ func (a *amqp09Writer) disconnect() error {
 	}
 	if a.conn != nil {
 		if err := a.conn.Close(); err != nil {
-			a.log.Errorf("Failed to close connection cleanly: %v\n", err)
+			a.log.Errorf("Failed to close connection cleanly: %w", err)
 		}
 		a.conn = nil
 	}
@@ -413,7 +416,7 @@ func (a *amqp09Writer) Write(ctx context.Context, msg *service.Message) error {
 			return fmt.Errorf("failed to parse valid integer from priority expression: %w", err)
 		}
 		if priorityInt > 9 || priorityInt < 0 {
-			return fmt.Errorf("invalid priority parsed from expression, must be <= 9 and >= 0, got %v", priorityInt)
+			return fmt.Errorf("invalid priority parsed from expression, must be <= 9 and >= 0, got %d", priorityInt)
 		}
 		priority = uint8(priorityInt)
 	}
@@ -458,7 +461,7 @@ func (a *amqp09Writer) Write(ctx context.Context, msg *service.Message) error {
 		return fmt.Errorf("exchange name interpolation error: %w", err)
 	}
 	if err := a.declareExchange(exchange); err != nil {
-		return fmt.Errorf("amqp failed to declare exchange: %s", err)
+		return fmt.Errorf("amqp failed to declare exchange: %w", err)
 	}
 
 	conf, err := amqpChan.PublishWithDeferredConfirmWithContext(
@@ -486,7 +489,7 @@ func (a *amqp09Writer) Write(ctx context.Context, msg *service.Message) error {
 	)
 	if err != nil {
 		_ = a.disconnect()
-		a.log.Errorf("Failed to send message: %v\n", err)
+		a.log.Errorf("Failed to send message: %w", err)
 		return service.ErrNotConnected
 	}
 	if !conf.Wait() {
@@ -536,18 +539,18 @@ func (a *amqp09Writer) dial(amqpURL string) (conn *amqp.Connection, err error) {
 		if u.User != nil {
 			conn, err = amqp.DialTLS(amqpURL, a.tlsConf)
 			if err != nil {
-				return nil, fmt.Errorf("%w: %s", errAMQP09Connect, err)
+				return nil, fmt.Errorf("%w: %w", errAMQP09Connect, err)
 			}
 		} else {
 			conn, err = amqp.DialTLS_ExternalAuth(amqpURL, a.tlsConf)
 			if err != nil {
-				return nil, fmt.Errorf("%w: %s", errAMQP09Connect, err)
+				return nil, fmt.Errorf("%w: %w", errAMQP09Connect, err)
 			}
 		}
 	} else {
 		conn, err = amqp.Dial(amqpURL)
 		if err != nil {
-			return nil, fmt.Errorf("%w: %s", errAMQP09Connect, err)
+			return nil, fmt.Errorf("%w: %w", errAMQP09Connect, err)
 		}
 	}
 

@@ -6,7 +6,6 @@ import (
 	"fmt"
 
 	"github.com/aws/aws-sdk-go/service/dynamodb"
-	"github.com/aws/aws-sdk-go/service/dynamodb/dynamodbiface"
 	"github.com/mitchellh/mapstructure"
 
 	"github.com/benthosdev/benthos/v4/internal/impl/aws/config"
@@ -81,7 +80,7 @@ pipeline:
 
 type dynamoDBPartiQL struct {
 	logger *service.Logger
-	client dynamodbiface.DynamoDBAPI
+	client dynamoDBAPI
 
 	query    string
 	dynQuery *service.InterpolatedString
@@ -90,7 +89,7 @@ type dynamoDBPartiQL struct {
 
 func newDynamoDBPartiQL(
 	logger *service.Logger,
-	client dynamodbiface.DynamoDBAPI,
+	client dynamoDBAPI,
 	query string,
 	dynQuery *service.InterpolatedString,
 	args *bloblang.Executor,

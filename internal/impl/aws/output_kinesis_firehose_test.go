@@ -10,7 +10,6 @@ import (
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/firehose"
-	"github.com/aws/aws-sdk-go/service/firehose/firehoseiface"
 	"github.com/cenkalti/backoff/v4"
 	"github.com/stretchr/testify/require"
 
@@ -18,7 +17,7 @@ import (
 )
 
 type mockKinesisFirehose struct {
-	firehoseiface.FirehoseAPI
+	firehoseAPI
 	fn func(input *firehose.PutRecordBatchInput) (*firehose.PutRecordBatchOutput, error)
 }
 

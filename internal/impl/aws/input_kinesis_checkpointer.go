@@ -12,7 +12,6 @@ import (
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
-	"github.com/aws/aws-sdk-go/service/dynamodb/dynamodbiface"
 
 	"github.com/benthosdev/benthos/v4/public/service"
 )
@@ -57,7 +56,7 @@ type awsKinesisCheckpointer struct {
 	clientID      string
 	leaseDuration time.Duration
 	commitPeriod  time.Duration
-	svc           dynamodbiface.DynamoDBAPI
+	svc           *dynamodb.DynamoDB
 }
 
 // newAWSKinesisCheckpointer creates a new DynamoDB checkpointer from an AWS

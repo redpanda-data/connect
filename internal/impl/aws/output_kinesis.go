@@ -8,7 +8,6 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/kinesis"
-	"github.com/aws/aws-sdk-go/service/kinesis/kinesisiface"
 	"github.com/cenkalti/backoff/v4"
 
 	"github.com/benthosdev/benthos/v4/internal/component"
@@ -111,9 +110,13 @@ const (
 	mebibyte               = 1048576
 )
 
+type kinesisAPI interface {
+	PutRecords(input *kinesis.PutRecordsInput) (*kinesis.PutRecordsOutput, error)
+}
+
 type kinesisWriter struct {
 	conf    koConfig
-	kinesis kinesisiface.KinesisAPI
+	kinesis kinesisAPI
 	log     *service.Logger
 }
 

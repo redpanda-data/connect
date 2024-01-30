@@ -8,8 +8,8 @@ import (
 	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/request"
 	"github.com/aws/aws-sdk-go/service/lambda"
-	"github.com/aws/aws-sdk-go/service/lambda/lambdaiface"
 
 	"github.com/benthosdev/benthos/v4/internal/impl/aws/config"
 	"github.com/benthosdev/benthos/v4/public/service"
@@ -137,6 +137,10 @@ pipeline:
 
 //------------------------------------------------------------------------------
 
+type lambdaAPI interface {
+	InvokeWithContext(aws.Context, *lambda.InvokeInput, ...request.Option) (*lambda.InvokeOutput, error)
+}
+
 type lambdaProc struct {
 	client   *lambdaClient
 	parallel bool
@@ -146,7 +150,7 @@ type lambdaProc struct {
 }
 
 func newLambdaProc(
-	lambda lambdaiface.LambdaAPI,
+	lambda lambdaAPI,
 	parallel bool,
 	function string,
 	numRetries int,
@@ -204,7 +208,7 @@ func (l *lambdaProc) Close(context.Context) error {
 //------------------------------------------------------------------------------
 
 type lambdaClient struct {
-	lambda lambdaiface.LambdaAPI
+	lambda lambdaAPI
 
 	log *service.Logger
 	mgr *service.Resources
@@ -216,7 +220,7 @@ type lambdaClient struct {
 }
 
 func newLambdaClient(
-	lambda lambdaiface.LambdaAPI,
+	lambda lambdaAPI,
 	function string,
 	numRetries int,
 	rateLimit string,

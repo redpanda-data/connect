@@ -18,6 +18,12 @@ import (
 func TestStreamsLints(t *testing.T) {
 	dir := t.TempDir()
 
+	generalConfPath := filepath.Join(dir, "main.yaml")
+	require.NoError(t, os.WriteFile(generalConfPath, []byte(`
+logger:
+  level: ALL
+`), 0o644))
+
 	streamOnePath := filepath.Join(dir, "first.yaml")
 	require.NoError(t, os.WriteFile(streamOnePath, []byte(`
 input:
@@ -42,7 +48,7 @@ cache_resources:
       ttl: 13
 `), 0o644))
 
-	rdr := config.NewReader("", nil, config.OptSetStreamPaths(streamOnePath, streamTwoPath))
+	rdr := config.NewReader(generalConfPath, nil, config.OptSetStreamPaths(streamOnePath, streamTwoPath))
 
 	_, lints, err := rdr.Read()
 	require.NoError(t, err)
