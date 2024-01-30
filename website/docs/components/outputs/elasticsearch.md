@@ -56,6 +56,8 @@ output:
     id: ${!count("elastic_ids")}-${!timestamp_unix()}
     type: ""
     routing: ""
+    stored_script: ""
+    script_params: ""
     sniff: true
     healthcheck: true
     timeout: 5s
@@ -184,6 +186,29 @@ This field supports [interpolation functions](/docs/configuration/interpolation#
 
 Type: `string`  
 Default: `""`  
+
+### `stored_script`
+
+The id of the [stored script](https://www.elastic.co/guide/en/elasticsearch/reference/current/modules-scripting-using.html#script-stored-scripts). Ignored if action is not `update` or `upsert`
+This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
+
+
+Type: `string`  
+Default: `""`  
+
+### `script_params`
+
+A [Bloblang query](/docs/guides/bloblang/about/) with the script params. Ignored if action is not `update` or `upsert`
+
+
+Type: `string`  
+Default: `""`  
+
+```yml
+# Examples
+
+script_params: root.doc = this
+```
 
 ### `sniff`
 
