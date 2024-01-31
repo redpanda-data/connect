@@ -19,14 +19,14 @@ import (
 )
 
 //go:embed input_description.md
-var input_description string
+var inputDescription string
 
 func amqp1InputSpec() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Stable().
 		Categories("Services").
 		Summary("Reads messages from an AMQP (1.0) server.").
-		Description(input_description).
+		Description(inputDescription).
 		Fields(
 			service.NewURLField(urlField).
 				Description("A URL to connect to.").
