@@ -17,6 +17,7 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/httpclient"
 	"github.com/benthosdev/benthos/v4/internal/impl/aws/config"
 	"github.com/benthosdev/benthos/v4/internal/impl/pure"
+	"github.com/benthosdev/benthos/v4/public/bloblang"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
@@ -29,6 +30,8 @@ const (
 	esoFieldIndex           = "index"
 	esoFieldPipeline        = "pipeline"
 	esoFieldRouting         = "routing"
+	esoFieldStoredScript    = "stored_script"
+	esoFieldScriptParams    = "script_params"
 	esoFieldType            = "type"
 	esoFieldTimeout         = "timeout"
 	esoFieldTLS             = "tls"
@@ -48,12 +51,14 @@ type esoConfig struct {
 	clientOpts  []elastic.ClientOptionFunc
 	backoffCtor func() backoff.BackOff
 
-	actionStr   *service.InterpolatedString
-	idStr       *service.InterpolatedString
-	indexStr    *service.InterpolatedString
-	pipelineStr *service.InterpolatedString
-	routingStr  *service.InterpolatedString
-	typeStr     *service.InterpolatedString
+	actionStr         *service.InterpolatedString
+	idStr             *service.InterpolatedString
+	indexStr          *service.InterpolatedString
+	pipelineStr       *service.InterpolatedString
+	routingStr        *service.InterpolatedString
+	typeStr           *service.InterpolatedString
+	storedScriptStr   *service.InterpolatedString
+	scriptParamsBlobl *bloblang.Executor
 }
 
 func esoConfigFromParsed(pConf *service.ParsedConfig) (conf esoConfig, err error) {
@@ -154,6 +159,14 @@ func esoConfigFromParsed(pConf *service.ParsedConfig) (conf esoConfig, err error
 	if conf.typeStr, err = pConf.FieldInterpolatedString(esoFieldType); err != nil {
 		return
 	}
+	if conf.storedScriptStr, err = pConf.FieldInterpolatedString(esoFieldStoredScript); err != nil {
+		return
+	}
+	if probeStr, _ := pConf.FieldString(esoFieldScriptParams); probeStr != "" {
+		if conf.scriptParamsBlobl, err = pConf.FieldBloblang(esoFieldScriptParams); err != nil {
+			return
+		}
+	}
 	return
 }
 
@@ -219,6 +232,15 @@ It's possible to enable AWS connectivity with this output using the `+"`aws`"+` 
 			service.NewInterpolatedStringField(esoFieldRouting).
 				Description("The routing key to use for the document.").
 				Advanced().
+				Default(""),
+			service.NewInterpolatedStringField(esoFieldStoredScript).
+				Description("The id of the [stored script](https://www.elastic.co/guide/en/elasticsearch/reference/current/modules-scripting-using.html#script-stored-scripts). Ignored if action is not `update` or `upsert`").
+				Advanced().
+				Default(""),
+			service.NewBloblangField(esoFieldScriptParams).
+				Description("A [Bloblang query](/docs/guides/bloblang/about/) with the script params. Ignored if action is not `update` or `upsert`").
+				Advanced().
+				Examples(mapExamples()...).
 				Default(""),
 			service.NewBoolField(esoFieldSniff).
 				Description("Prompts Benthos to sniff for brokers to connect to when establishing a connection.").
@@ -310,13 +332,15 @@ func shouldRetry(s int) bool {
 }
 
 type pendingBulkIndex struct {
-	Action   string
-	Index    string
-	Pipeline string
-	Routing  string
-	Type     string
-	Doc      any
-	ID       string
+	Action       string
+	Index        string
+	Pipeline     string
+	Routing      string
+	Type         string
+	StoredScript string
+	ScriptParams any
+	Doc          any
+	ID           string
 }
 
 func (e *Output) WriteBatch(ctx context.Context, msg service.MessageBatch) error {
@@ -353,6 +377,18 @@ func (e *Output) WriteBatch(ctx context.Context, msg service.MessageBatch) error
 		}
 		if pbi.ID, ierr = msg.TryInterpolatedString(i, e.conf.idStr); ierr != nil {
 			return fmt.Errorf("id interpolation error: %w", ierr)
+		}
+		if pbi.StoredScript, ierr = msg.TryInterpolatedString(i, e.conf.storedScriptStr); ierr != nil {
+			return fmt.Errorf("stored script interpolation error: %w", ierr)
+		}
+		if e.conf.scriptParamsBlobl != nil {
+			scriptParamsMsg, ierr := msg.BloblangQuery(i, e.conf.scriptParamsBlobl)
+			if ierr != nil {
+				return fmt.Errorf("script params bloblang error: %w", ierr)
+			}
+			if pbi.ScriptParams, ierr = scriptParamsMsg.AsStructured(); ierr != nil {
+				return fmt.Errorf("script params bloblang as structured error: %w", ierr)
+			}
 		}
 		requests[i] = pbi
 	}
@@ -433,8 +469,14 @@ func (e *Output) buildBulkableRequest(p *pendingBulkIndex) (elastic.BulkableRequ
 		r := elastic.NewBulkUpdateRequest().
 			Index(p.Index).
 			Routing(p.Routing).
-			Id(p.ID).
-			Doc(p.Doc)
+			Id(p.ID)
+
+		if p.StoredScript == "" {
+			r.Doc(p.Doc)
+		} else {
+			addScript(p, r)
+		}
+
 		if p.Type != "" {
 			r = r.Type(p.Type)
 		}
@@ -444,8 +486,12 @@ func (e *Output) buildBulkableRequest(p *pendingBulkIndex) (elastic.BulkableRequ
 			Index(p.Index).
 			Routing(p.Routing).
 			Id(p.ID).
-			DocAsUpsert(true).
-			Doc(p.Doc)
+			Upsert(p.Doc)
+
+		if p.StoredScript != "" {
+			addScript(p, r).ScriptedUpsert(true)
+		}
+
 		if p.Type != "" {
 			r = r.Type(p.Type)
 		}
@@ -484,4 +530,17 @@ func (e *Output) buildBulkableRequest(p *pendingBulkIndex) (elastic.BulkableRequ
 	default:
 		return nil, fmt.Errorf("elasticsearch action '%s' is not allowed", p.Action)
 	}
+}
+
+func addScript(p *pendingBulkIndex, r *elastic.BulkUpdateRequest) *elastic.BulkUpdateRequest {
+	script := elastic.NewScriptStored(p.StoredScript)
+	if p.ScriptParams != nil {
+		script.Params(p.ScriptParams.(map[string]interface{}))
+	}
+	return r.Script(script)
+}
+
+func mapExamples() []any {
+	examples := []any{"root.doc = this"}
+	return examples
 }
