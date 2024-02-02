@@ -154,6 +154,14 @@ func TestIntegrationWriter(t *testing.T) {
 	t.Run("TestElasticBatchIDCollision", func(te *testing.T) {
 		testElasticBatchIDCollision(urls, client, te)
 	})
+
+	t.Run("TestElasticBatchUpsertWithStoredScript", func(te *testing.T) {
+		testElasticBatchUpsertWithStoredScript(urls, client, te)
+	})
+
+	t.Run("TestElasticBatchUpdateWithStoredScript", func(te *testing.T) {
+		testElasticBatchUpdateWithStoredScript(urls, client, te)
+	})
 }
 
 func testElasticNoIndex(urls []string, client *elastic.Client, t *testing.T) {
@@ -584,4 +592,145 @@ sniff: false
 	require.NoError(t, json.Unmarshal(get.Source, &doc))
 	assert.Equal(t, "updated", doc.User)
 	assert.Equal(t, "goodbye", doc.Message)
+}
+
+func testElasticBatchUpsertWithStoredScript(urls []string, client *elastic.Client, t *testing.T) {
+	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+	defer done()
+
+	body := map[string]interface{}{
+		"script": map[string]interface{}{
+			"lang":   "painless",
+			"source": `ctx._source.script_value = params['script_param_value']`,
+		},
+	}
+
+	_, err := client.PutScript().Id("stored_script").BodyJson(body).Do(ctx)
+	require.NoError(t, err)
+
+	defer client.DeleteScript()
+
+	m := outputFromConf(t, `
+index: ${! @index }
+id: 'baz-${!count("baz")}'
+urls: %v
+type: _doc
+sniff: false
+action: upsert
+stored_script: "stored_script"
+script_params: |
+  root.script_param_value = "VALUE"
+`, urls)
+
+	require.NoError(t, m.Connect(ctx))
+	defer func() {
+		require.NoError(t, m.Close(ctx))
+	}()
+
+	N := 10
+
+	var expectedMsg [][]byte
+	var testBatch service.MessageBatch
+	for i := 0; i < N; i++ {
+		expectedMsg = append(expectedMsg, []byte(fmt.Sprintf(`{"message":"hello world","user":"%v","script_value":"VALUE"}`, i)))
+		testBatch = append(testBatch, service.NewMessage([]byte(fmt.Sprintf(`{"message":"hello world","user":"%v"}`, i))))
+		testBatch[i].MetaSetMut("index", "test_conn_index")
+	}
+
+	require.NoError(t, m.WriteBatch(ctx, testBatch))
+
+	for i := 0; i < N; i++ {
+		id := fmt.Sprintf("baz-%v", i+1)
+		// nolint:staticcheck // Ignore SA1019 Type is deprecated warning for .Index()
+		get, err := client.Get().
+			Index("test_conn_index").
+			Id(id).
+			Do(ctx)
+		require.NoError(t, err)
+		assert.True(t, get.Found)
+
+		var sourceBytes []byte
+		sourceBytes, err = get.Source.MarshalJSON()
+		require.NoError(t, err)
+		assert.Equal(t, string(expectedMsg[i]), string(sourceBytes))
+	}
+}
+
+func testElasticBatchUpdateWithStoredScript(urls []string, client *elastic.Client, t *testing.T) {
+	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+	defer done()
+
+	body := map[string]interface{}{
+		"script": map[string]interface{}{
+			"lang":   "painless",
+			"source": `ctx._source.script_value = params['script_param_value']`,
+		},
+	}
+
+	N := 10
+
+	bulk := client.Bulk()
+	var expectedMsg [][]byte
+	var testBatch service.MessageBatch
+	for i := 0; i < N; i++ {
+		msg := map[string]string{
+			"message": "hello world",
+			"user":    fmt.Sprintf("%v", i),
+		}
+
+		msgBytes, err := json.Marshal(msg)
+		require.NoError(t, err)
+
+		expectedMsg = append(expectedMsg, []byte(fmt.Sprintf(`{"message":"hello world","user":"%v","script_value":"VALUE"}`, i)))
+		testBatch = append(testBatch, service.NewMessage(msgBytes))
+		testBatch[i].MetaSetMut("index", "test_conn_index")
+
+		bulk.Add(
+			elastic.NewBulkCreateRequest().
+				Index("test_conn_index").
+				Id(fmt.Sprintf("baz-%v", i+1)).
+				Doc(msg))
+	}
+	_, err := bulk.Do(ctx)
+	require.NoError(t, err)
+
+	_, err = client.PutScript().Id("stored_script").BodyJson(body).Do(ctx)
+	require.NoError(t, err)
+
+	defer client.DeleteScript()
+
+	m := outputFromConf(t, `
+index: ${! @index }
+id: 'baz-${!count("baz")}'
+urls: %v
+type: _doc
+sniff: false
+action: update
+stored_script: "stored_script"
+script_params: |
+  root.script_param_value = "VALUE"
+`, urls)
+
+	require.NoError(t, m.Connect(ctx))
+	defer func() {
+		require.NoError(t, m.Close(ctx))
+	}()
+
+	require.NoError(t, m.WriteBatch(ctx, testBatch))
+
+	for i := 0; i < N; i++ {
+		id := fmt.Sprintf("baz-%v", i+1)
+		// nolint:staticcheck // Ignore SA1019 Type is deprecated warning for .Index()
+		get, err := client.Get().
+			Index("test_conn_index").
+			Id(id).
+			Do(ctx)
+		require.NoError(t, err)
+		assert.True(t, get.Found)
+
+		var sourceBytes []byte
+		sourceBytes, err = get.Source.MarshalJSON()
+		require.NoError(t, err)
+		assert.Equal(t, string(expectedMsg[i]), string(sourceBytes))
+	}
 }

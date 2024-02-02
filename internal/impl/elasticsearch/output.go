@@ -26,6 +26,7 @@ import (
 	"github.com/cenkalti/backoff/v4"
 	"github.com/olivere/elastic/v7"
 
+	"github.com/redpanda-data/benthos/v4/public/bloblang"
 	"github.com/redpanda-data/benthos/v4/public/service"
 
 	"github.com/redpanda-data/connect/v4/internal/impl/aws/config"
@@ -42,6 +43,8 @@ const (
 	esoFieldPipeline        = "pipeline"
 	esoFieldRouting         = "routing"
 	esoFieldRetryOnConflict = "retry_on_conflict"
+	esoFieldStoredScript    = "stored_script"
+	esoFieldScriptParams    = "script_params"
 	esoFieldType            = "type"
 	esoFieldTimeout         = "timeout"
 	esoFieldTLS             = "tls"
@@ -63,13 +66,15 @@ type esoConfig struct {
 	clientOpts  []elastic.ClientOptionFunc
 	backoffCtor func() backoff.BackOff
 
-	actionStr       *service.InterpolatedString
-	idStr           *service.InterpolatedString
-	indexStr        *service.InterpolatedString
-	pipelineStr     *service.InterpolatedString
-	routingStr      *service.InterpolatedString
-	typeStr         *service.InterpolatedString
-	retryOnConflict int
+	actionStr         *service.InterpolatedString
+	idStr             *service.InterpolatedString
+	indexStr          *service.InterpolatedString
+	pipelineStr       *service.InterpolatedString
+	routingStr        *service.InterpolatedString
+	typeStr           *service.InterpolatedString
+	retryOnConflict   int
+	storedScriptStr   *service.InterpolatedString
+	scriptParamsBlobl *bloblang.Executor
 }
 
 func esoConfigFromParsed(pConf *service.ParsedConfig) (conf esoConfig, err error) {
@@ -184,6 +189,14 @@ func esoConfigFromParsed(pConf *service.ParsedConfig) (conf esoConfig, err error
 	if conf.retryOnConflict, err = pConf.FieldInt(esoFieldRetryOnConflict); err != nil {
 		return
 	}
+	if conf.storedScriptStr, err = pConf.FieldInterpolatedString(esoFieldStoredScript); err != nil {
+		return
+	}
+	if probeStr, _ := pConf.FieldString(esoFieldScriptParams); probeStr != "" {
+		if conf.scriptParamsBlobl, err = pConf.FieldBloblang(esoFieldScriptParams); err != nil {
+			return
+		}
+	}
 	return
 }
 
@@ -254,6 +267,15 @@ It's possible to enable AWS connectivity with this output using the `+"`aws`"+` 
 				Description("When using the update or upsert action, retry_on_conflict can be used to specify how many times an update should be retried in the case of a version conflict.").
 				Advanced().
 				Default(0),
+			service.NewInterpolatedStringField(esoFieldStoredScript).
+				Description("The id of the [stored script](https://www.elastic.co/guide/en/elasticsearch/reference/current/modules-scripting-using.html#script-stored-scripts). Ignored if action is not `update` or `upsert`").
+				Advanced().
+				Default(""),
+			service.NewBloblangField(esoFieldScriptParams).
+				Description("A [Bloblang query](/docs/guides/bloblang/about/) with the script params. Ignored if action is not `update` or `upsert`").
+				Advanced().
+				Examples(mapExamples()...).
+				Default(""),
 			service.NewBoolField(esoFieldSniff).
 				Description("Prompts Redpanda Connect to sniff for brokers to connect to when establishing a connection.").
 				Advanced().
@@ -383,6 +405,8 @@ type pendingBulkIndex struct {
 	Type            string
 	Doc             any
 	ID              string
+	StoredScript    string
+	ScriptParams    any
 }
 
 // WriteBatch writes a message batch to the output.
@@ -420,6 +444,18 @@ func (e *Output) WriteBatch(ctx context.Context, msg service.MessageBatch) error
 		}
 		if pbi.ID, ierr = msg.TryInterpolatedString(i, e.conf.idStr); ierr != nil {
 			return fmt.Errorf("id interpolation error: %w", ierr)
+		}
+		if pbi.StoredScript, ierr = msg.TryInterpolatedString(i, e.conf.storedScriptStr); ierr != nil {
+			return fmt.Errorf("stored script interpolation error: %w", ierr)
+		}
+		if e.conf.scriptParamsBlobl != nil {
+			scriptParamsMsg, ierr := msg.BloblangExecutor(e.conf.scriptParamsBlobl).Query(i)
+			if ierr != nil {
+				return fmt.Errorf("script params bloblang error: %w", ierr)
+			}
+			if pbi.ScriptParams, ierr = scriptParamsMsg.AsStructured(); ierr != nil {
+				return fmt.Errorf("script params bloblang as structured error: %w", ierr)
+			}
 		}
 		requests[i] = pbi
 	}
@@ -504,6 +540,13 @@ func (e *Output) buildBulkableRequest(p *pendingBulkIndex) (elastic.BulkableRequ
 			RetryOnConflict(p.RetryOnConflict).
 			Id(p.ID).
 			Doc(p.Doc)
+
+		if p.StoredScript == "" {
+			r.Doc(p.Doc)
+		} else {
+			addScript(p, r)
+		}
+
 		if p.Type != "" {
 			r = r.Type(p.Type)
 		}
@@ -514,8 +557,12 @@ func (e *Output) buildBulkableRequest(p *pendingBulkIndex) (elastic.BulkableRequ
 			Routing(p.Routing).
 			RetryOnConflict(p.RetryOnConflict).
 			Id(p.ID).
-			DocAsUpsert(true).
-			Doc(p.Doc)
+			Upsert(p.Doc)
+
+		if p.StoredScript != "" {
+			addScript(p, r).ScriptedUpsert(true)
+		}
+
 		if p.Type != "" {
 			r = r.Type(p.Type)
 		}
@@ -554,4 +601,17 @@ func (e *Output) buildBulkableRequest(p *pendingBulkIndex) (elastic.BulkableRequ
 	default:
 		return nil, fmt.Errorf("elasticsearch action '%s' is not allowed", p.Action)
 	}
+}
+
+func addScript(p *pendingBulkIndex, r *elastic.BulkUpdateRequest) *elastic.BulkUpdateRequest {
+	script := elastic.NewScriptStored(p.StoredScript)
+	if p.ScriptParams != nil {
+		script.Params(p.ScriptParams.(map[string]interface{}))
+	}
+	return r.Script(script)
+}
+
+func mapExamples() []any {
+	examples := []any{"root.doc = this"}
+	return examples
 }
