@@ -299,9 +299,9 @@ func (j *jetStreamReader) Connect(ctx context.Context) (err error) {
 		if j.bind {
 			if j.stream != "" && j.durable != "" {
 				options = append(options, nats.Bind(j.stream, j.durable))
-			} else if j.stream != "" {
-				options = append(options, nats.BindStream(j.stream))
 			}
+		} else if j.stream != "" {
+			options = append(options, nats.BindStream(j.stream))
 		}
 
 		if j.queue == "" {
