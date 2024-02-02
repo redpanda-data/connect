@@ -39,8 +39,18 @@ func init() {
 		).Description("A list of grpc collectors.")).
 		Field(service.NewStringMapField("tags").
 			Description("A map of tags to add to all tracing spans.").
-			Default(map[string]any{}).
-			Advanced())
+			Default(map[string]string{}).
+			Advanced()).
+		Field(service.NewObjectField("sampling",
+			service.NewBoolField("enabled").
+				Description("Whether trace sampling is enabled or not. Sampling is recommended for high-volume production workloads.").
+				Default(false).
+				Optional(),
+			service.NewFloatField("ratio").
+				Description("Sets the ratio of traces to sample.").
+				Default(1.0).
+				Advanced().
+				Optional()))
 
 	err := service.RegisterOtelTracerProvider(
 		"open_telemetry_collector",
@@ -62,10 +72,16 @@ type collector struct {
 	secure bool
 }
 
+type sampleConfig struct {
+	enabled bool
+	ratio   float64
+}
+
 type otlp struct {
-	grpc []collector
-	http []collector
-	tags map[string]string
+	grpc     []collector
+	http     []collector
+	tags     map[string]string
+	sampling sampleConfig
 }
 
 func newOtlpConfig(conf *service.ParsedConfig) (*otlp, error) {
@@ -84,10 +100,16 @@ func newOtlpConfig(conf *service.ParsedConfig) (*otlp, error) {
 		return nil, err
 	}
 
+	sampling, err := sampleConfigFromParsed(conf)
+	if err != nil {
+		return nil, err
+	}
+
 	return &otlp{
 		grpc,
 		http,
 		tags,
+		sampling,
 	}, nil
 }
 
@@ -116,11 +138,33 @@ func collectors(conf *service.ParsedConfig, name string) ([]collector, error) {
 	return collectors, nil
 }
 
-//------------------------------------------------------------------------------
+func sampleConfigFromParsed(conf *service.ParsedConfig) (sampleConfig, error) {
+	conf = conf.Namespace("sampling")
+	enabled, err := conf.FieldBool("enabled")
+	if err != nil {
+		return sampleConfig{}, err
+	}
+
+	ratio, err := conf.FieldFloat("ratio")
+	if err != nil {
+		return sampleConfig{}, err
+	}
+
+	return sampleConfig{
+		enabled: enabled,
+		ratio:   ratio,
+	}, nil
+}
+
+// ------------------------------------------------------------------------------
 
 func newOtlp(config *otlp) (trace.TracerProvider, error) {
 	ctx := context.TODO()
 	var opts []tracesdk.TracerProviderOption
+
+	if config.sampling.enabled {
+		opts = append(opts, tracesdk.WithSampler(tracesdk.TraceIDRatioBased(config.sampling.ratio)))
+	}
 
 	opts, err := addGrpcCollectors(ctx, config.grpc, opts)
 	if err != nil {
