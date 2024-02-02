@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"cloud.google.com/go/storage"
+	"google.golang.org/api/option"
 
 	"github.com/benthosdev/benthos/v4/public/service"
 )
@@ -19,7 +20,9 @@ func gcpCloudStorageCacheConfig() *service.ConfigSpec {
 		Field(service.NewStringField("bucket").
 			Description("The Google Cloud Storage bucket to store items in.")).
 		Field(service.NewStringField("content_type").
-			Description("Optional field to explicitly set the Content-Type.").Optional())
+			Description("Optional field to explicitly set the Content-Type.").
+			Optional()).
+		Fields(CredentialsFields()...)
 
 	return spec
 }
@@ -49,7 +52,12 @@ func newGcpCloudStorageCacheFromConfig(parsedConf *service.ParsedConfig) (*gcpCl
 		}
 	}
 
-	client, err := storage.NewClient(context.Background())
+	credentials, err := GetGoogleCloudCredentials(parsedConf)
+	if err != nil {
+		return nil, err
+	}
+
+	client, err := storage.NewClient(context.Background(), credentials...)
 	if err != nil {
 		return nil, err
 	}
@@ -57,6 +65,7 @@ func newGcpCloudStorageCacheFromConfig(parsedConf *service.ParsedConfig) (*gcpCl
 	return &gcpCloudStorageCache{
 		bucketHandle: client.Bucket(bucket),
 		contentType:  contentType,
+		credentials:  credentials,
 	}, nil
 }
 
@@ -65,6 +74,7 @@ func newGcpCloudStorageCacheFromConfig(parsedConf *service.ParsedConfig) (*gcpCl
 type gcpCloudStorageCache struct {
 	bucketHandle *storage.BucketHandle
 	contentType  string
+	credentials  []option.ClientOption
 }
 
 func (c *gcpCloudStorageCache) Get(ctx context.Context, key string) ([]byte, error) {

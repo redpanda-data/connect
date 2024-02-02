@@ -8,6 +8,7 @@ import (
 
 	"cloud.google.com/go/bigquery"
 	"google.golang.org/api/iterator"
+	"google.golang.org/api/option"
 
 	"github.com/benthosdev/benthos/v4/internal/shutdown"
 	"github.com/benthosdev/benthos/v4/public/bloblang"
@@ -20,6 +21,7 @@ type bigQuerySelectInputConfig struct {
 	argsMapping   *bloblang.Executor
 	queryPriority bigquery.QueryPriority
 	jobLabels     map[string]string
+	credentials   []option.ClientOption
 }
 
 func bigQuerySelectInputConfigFromParsed(inConf *service.ParsedConfig) (conf bigQuerySelectInputConfig, err error) {
@@ -72,6 +74,10 @@ func bigQuerySelectInputConfigFromParsed(inConf *service.ParsedConfig) (conf big
 		return
 	}
 
+	if conf.credentials, err = GetGoogleCloudCredentials(inConf); err != nil {
+		return
+	}
+
 	return
 }
 
@@ -103,6 +109,7 @@ func newBigQuerySelectInputConfig() *service.ConfigSpec {
 		Field(service.NewStringField("suffix").
 			Description("An optional suffix to append to the select query.").
 			Optional()).
+		Fields(CredentialsFields()...).
 		Example("Word counts",
 			`
 Here we query the public corpus of Shakespeare's works to generate a stream of the top 10 words that are 3 or more characters long:`,
@@ -156,7 +163,7 @@ func (inp *bigQuerySelectInput) Connect(ctx context.Context) error {
 	jobctx, _ := inp.shutdownSig.CloseAtLeisureCtx(context.Background())
 
 	if inp.client == nil {
-		client, err := bigquery.NewClient(jobctx, inp.config.project)
+		client, err := bigquery.NewClient(jobctx, inp.config.project, inp.config.credentials...)
 		if err != nil {
 			return fmt.Errorf("failed to create bigquery client: %w", err)
 		}

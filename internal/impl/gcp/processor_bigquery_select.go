@@ -20,6 +20,7 @@ type bigQuerySelectProcessorConfig struct {
 	queryParts  *bqQueryParts
 	jobLabels   map[string]string
 	argsMapping *bloblang.Executor
+	credentials []option.ClientOption
 }
 
 func bigQuerySelectProcessorConfigFromParsed(inConf *service.ParsedConfig) (conf bigQuerySelectProcessorConfig, err error) {
@@ -37,6 +38,10 @@ func bigQuerySelectProcessorConfigFromParsed(inConf *service.ParsedConfig) (conf
 	}
 
 	if conf.jobLabels, err = inConf.FieldStringMap("job_labels"); err != nil {
+		return
+	}
+
+	if conf.credentials, err = GetGoogleCloudCredentials(inConf); err != nil {
 		return
 	}
 
@@ -96,6 +101,7 @@ func newBigQuerySelectProcessorConfig() *service.ConfigSpec {
 		Field(service.NewStringField("suffix").
 			Description("An optional suffix to append to the select query.").
 			Optional()).
+		Fields(CredentialsFields()...).
 		Example("Word count",
 			`
 Given a stream of English terms, enrich the messages with the word count from Shakespeare's public works:`,
@@ -143,6 +149,8 @@ func newBigQuerySelectProcessor(inConf *service.ParsedConfig, options *bigQueryP
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse config: %w", err)
 	}
+
+	options.clientOptions = append(options.clientOptions, conf.credentials...)
 
 	closeCtx, closeF := context.WithCancel(context.Background())
 

@@ -35,6 +35,7 @@ type pbiConfig struct {
 	Sync                   bool
 	CreateEnabled          bool
 	CreateTopicID          string
+	Credentials            []option.ClientOption
 }
 
 func pbiConfigFromParsed(pConf *service.ParsedConfig) (conf pbiConfig, err error) {
@@ -64,6 +65,9 @@ func pbiConfigFromParsed(pConf *service.ParsedConfig) (conf pbiConfig, err error
 		if conf.CreateTopicID, err = createConf.FieldString(pbiFieldCreateSubTopicID); err != nil {
 			return
 		}
+	}
+	if conf.Credentials, err = GetGoogleCloudCredentials(pConf); err != nil {
+		return
 	}
 	return
 }
@@ -116,7 +120,8 @@ You can access these metadata fields using [function interpolation](/docs/config
 			).
 				Description("Allows you to configure the input subscription and creates if it doesn't exist.").
 				Advanced(),
-		)
+		).
+		Fields(CredentialsFields()...)
 }
 
 func init() {
@@ -176,6 +181,8 @@ func newGCPPubSubReader(conf pbiConfig, res *service.Resources) (*gcpPubSubReade
 	if len(strings.TrimSpace(conf.Endpoint)) > 0 {
 		opt = []option.ClientOption{option.WithEndpoint(conf.Endpoint)}
 	}
+
+	opt = append(opt, conf.Credentials...)
 
 	client, err := pubsub.NewClient(context.Background(), conf.ProjectID, opt...)
 	if err != nil {
