@@ -23,6 +23,7 @@ All notable changes to this project will be documented in this file.
 - The `zip` Bloblang method no longer fails when executed without arguments.
 - The `amqp_0_9` output no longer prints bogus exchange name when connecting to the server.
 - The `generate` input no longer adds an extra second to `interval: '@every x'` syntax.
+- The `nats_jetstream` input no longer fails to locate mirrored streams.
 
 ### Changed
 
