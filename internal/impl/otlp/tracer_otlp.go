@@ -43,14 +43,14 @@ func init() {
 			Advanced()).
 		Field(service.NewObjectField("sampling",
 			service.NewBoolField("enabled").
-				Description("Whether trace sampling is enabled or not. Sampling is recommended for high-volume production workloads.").
+				Description("Whether to enable sampling.").
 				Default(false).
 				Optional(),
 			service.NewFloatField("ratio").
 				Description("Sets the ratio of traces to sample.").
 				Default(1.0).
 				Advanced().
-				Optional()))
+				Optional()).Description("Settings for trace sampling. Sampling is recommended for high-volume production workloads."))
 
 	err := service.RegisterOtelTracerProvider(
 		"open_telemetry_collector",
@@ -156,7 +156,6 @@ func sampleConfigFromParsed(conf *service.ParsedConfig) (sampleConfig, error) {
 	}, nil
 }
 
-// ------------------------------------------------------------------------------
 
 func newOtlp(config *otlp) (trace.TracerProvider, error) {
 	ctx := context.TODO()
