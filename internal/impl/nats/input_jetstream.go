@@ -300,10 +300,8 @@ func (j *jetStreamReader) Connect(ctx context.Context) (err error) {
 			options = append(options, nats.MaxAckPending(j.maxAckPending))
 		}
 
-		if j.bind {
-			if j.stream != "" && j.durable != "" {
-				options = append(options, nats.Bind(j.stream, j.durable))
-			}
+		if j.bind && j.stream != "" && j.durable != "" {
+			options = append(options, nats.Bind(j.stream, j.durable))
 		} else if j.stream != "" {
 			options = append(options, nats.BindStream(j.stream))
 		}
