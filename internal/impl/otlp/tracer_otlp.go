@@ -50,7 +50,8 @@ func init() {
 				Description("Sets the ratio of traces to sample.").
 				Default(1.0).
 				Advanced().
-				Optional()).Description("Settings for trace sampling. Sampling is recommended for high-volume production workloads."))
+				Optional()).
+			Description("Settings for trace sampling. Sampling is recommended for high-volume production workloads."))
 
 	err := service.RegisterOtelTracerProvider(
 		"open_telemetry_collector",
@@ -155,6 +156,8 @@ func sampleConfigFromParsed(conf *service.ParsedConfig) (sampleConfig, error) {
 		ratio:   ratio,
 	}, nil
 }
+
+//------------------------------------------------------------------------------
 
 func newOtlp(config *otlp) (trace.TracerProvider, error) {
 	ctx := context.TODO()
