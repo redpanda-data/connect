@@ -156,7 +156,6 @@ func sampleConfigFromParsed(conf *service.ParsedConfig) (sampleConfig, error) {
 	}, nil
 }
 
-
 func newOtlp(config *otlp) (trace.TracerProvider, error) {
 	ctx := context.TODO()
 	var opts []tracesdk.TracerProviderOption
