@@ -49,6 +49,15 @@ func TestKVProcessor(t *testing.T) {
 				"key3": "",
 			},
 		},
+		{
+			name:              "empty pair and key-value delimiter",
+			input:             "key1=val1|key2=value2|key3=val3",
+			pairDelimiter:     "",
+			keyValueSeparator: "",
+			output: map[string]string{
+				"original_message": "key1=val1|key2=value2|key3=val3",
+			},
+		},
 	}
 
 	for _, test := range tests {

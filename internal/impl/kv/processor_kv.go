@@ -59,8 +59,8 @@ func newKVProcessor(conf *service.ParsedConfig, mgr *service.Resources) (*kvProc
 
 func newKVProcessorConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
-		Version("4.16.0").
-		Summary("This processor is designed to convert messages formatted as 'foo=bar bar=baz' into a structured JSON representation.").
+		Version("4.25").
+		Summary("This processor is designed to convert messages with key-value pairs, using any specified delimiter, into a structured JSON representation.").
 		Fields(
 			service.NewStringField("pair_delimiter").
 				Description("Regex pattern to use for splitting key-value pairs."),
@@ -87,6 +87,10 @@ func (k kvProcessor) Process(ctx context.Context, msg *service.Message) (service
 			value := parts[1]
 			obj[key] = value
 		}
+	}
+
+	if len(obj) == 0 {
+		obj["original_message"] = msgStr
 	}
 
 	if k.targetField != "" {

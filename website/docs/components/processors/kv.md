@@ -16,9 +16,9 @@ import TabItem from '@theme/TabItem';
 :::caution EXPERIMENTAL
 This component is experimental and therefore subject to change or removal outside of major version releases.
 :::
-This processor is designed to convert messages formatted as 'foo=bar bar=baz' into a structured JSON representation.
+This processor is designed to convert messages with key-value pairs, using any specified delimiter, into a structured JSON representation.
 
-Introduced in version 4.16.0.
+Introduced in version 4.25.
 
 ```yml
 # Config fields, showing default values
@@ -50,6 +50,4 @@ Type: `string`
 The field to insert the extracted keys into.
 
 
-Type: `string`  
-
-
+Type: `string`
