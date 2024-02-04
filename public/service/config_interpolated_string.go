@@ -52,7 +52,7 @@ func NewInterpolatedStringListField(name string) *ConfigField {
 // defined with NewInterpolatedStringField and returns either an
 // *InterpolatedString or an error if the string was invalid.
 func (p *ParsedConfig) FieldInterpolatedString(path ...string) (*InterpolatedString, error) {
-	v, exists := p.field(path...)
+	v, exists := p.i.Field(path...)
 	if !exists {
 		return nil, fmt.Errorf("field '%v' was not found in the config", strings.Join(path, "."))
 	}
@@ -77,9 +77,9 @@ func (p *ParsedConfig) FieldInterpolatedString(path ...string) (*InterpolatedStr
 // Returns an error if the field is not found, or is not an object of
 // interpolated strings.
 func (p *ParsedConfig) FieldInterpolatedStringMap(path ...string) (map[string]*InterpolatedString, error) {
-	v, exists := p.field(path...)
+	v, exists := p.i.Field(path...)
 	if !exists {
-		return nil, fmt.Errorf("field '%v' was not found in the config", p.fullDotPath(path...))
+		return nil, fmt.Errorf("field '%v' was not found in the config", p.i.FullDotPath(path...))
 	}
 	iMap, ok := v.(map[string]any)
 	if !ok {
@@ -94,13 +94,13 @@ func (p *ParsedConfig) FieldInterpolatedStringMap(path ...string) (map[string]*I
 			}
 			return iMap, nil
 		}
-		return nil, fmt.Errorf("expected field '%v' to be a string map, got %T", p.fullDotPath(path...), v)
+		return nil, fmt.Errorf("expected field '%v' to be a string map, got %T", p.i.FullDotPath(path...), v)
 	}
 	sMap := make(map[string]*InterpolatedString, len(iMap))
 	for k, ev := range iMap {
 		str, ok := ev.(string)
 		if !ok {
-			return nil, fmt.Errorf("expected field '%v' to be a string map, found an element of type %T", p.fullDotPath(path...), ev)
+			return nil, fmt.Errorf("expected field '%v' to be a string map, found an element of type %T", p.i.FullDotPath(path...), ev)
 		}
 		e, err := p.mgr.BloblEnvironment().NewField(str)
 		if err != nil {
@@ -117,14 +117,14 @@ func (p *ParsedConfig) FieldInterpolatedStringMap(path ...string) (map[string]*I
 // Returns an error if the field is not found, or is not an list of interpolated
 // strings.
 func (p *ParsedConfig) FieldInterpolatedStringList(path ...string) ([]*InterpolatedString, error) {
-	v, exists := p.field(path...)
+	v, exists := p.i.Field(path...)
 	if !exists {
-		return nil, fmt.Errorf("field '%v' was not found in the config", p.fullDotPath(path...))
+		return nil, fmt.Errorf("field '%v' was not found in the config", p.i.FullDotPath(path...))
 	}
 
 	raw, ok := v.([]any)
 	if !ok {
-		return nil, fmt.Errorf("expected field '%v' to be a string list, got %T", p.fullDotPath(path...), v)
+		return nil, fmt.Errorf("expected field '%v' to be a string list, got %T", p.i.FullDotPath(path...), v)
 	}
 
 	values := make([]*InterpolatedString, 0, len(raw))
@@ -132,7 +132,7 @@ func (p *ParsedConfig) FieldInterpolatedStringList(path ...string) ([]*Interpola
 		var parsed string
 		var ok bool
 		if parsed, ok = rawValue.(string); !ok {
-			return nil, fmt.Errorf("expected field '%v' to be a string list, found an element of type %T", p.fullDotPath(path...), rawValue)
+			return nil, fmt.Errorf("expected field '%v' to be a string list, found an element of type %T", p.i.FullDotPath(path...), rawValue)
 		}
 
 		e, err := p.mgr.BloblEnvironment().NewField(parsed)

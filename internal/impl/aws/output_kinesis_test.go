@@ -8,7 +8,6 @@ import (
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/kinesis"
-	"github.com/aws/aws-sdk-go/service/kinesis/kinesisiface"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -16,7 +15,6 @@ import (
 )
 
 type mockKinesis struct {
-	kinesisiface.KinesisAPI
 	fn func(input *kinesis.PutRecordsInput) (*kinesis.PutRecordsOutput, error)
 }
 

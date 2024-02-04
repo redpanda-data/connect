@@ -11,35 +11,34 @@ import (
 	"go.opentelemetry.io/otel/trace"
 
 	"github.com/benthosdev/benthos/v4/internal/bundle"
+	"github.com/benthosdev/benthos/v4/internal/component/interop"
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
-	"github.com/benthosdev/benthos/v4/internal/component/processor"
-	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
 	"github.com/benthosdev/benthos/v4/internal/tracing"
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
-func init() {
-	err := bundle.AllProcessors.Add(func(conf processor.Config, mgr bundle.NewManagement) (processor.V1, error) {
-		p, err := NewWorkflow(conf.Workflow, mgr)
-		return p, err
-	}, docs.ComponentSpec{
-		Name: "workflow",
-		Categories: []string{
-			"Composition",
-		},
-		Status: docs.StatusStable,
-		Summary: `
-Executes a topology of ` + "[`branch` processors][processors.branch]" + `,
-performing them in parallel where possible.`,
-		Description: `
+const (
+	wflowProcFieldMetaPath        = "meta_path"
+	wflowProcFieldOrder           = "order"
+	wflowProcFieldBranchResources = "branch_resources"
+	wflowProcFieldBranches        = "branches"
+)
+
+func workflowProcSpec() *service.ConfigSpec {
+	return service.NewConfigSpec().
+		Categories("Composition").
+		Stable().
+		Summary(`Executes a topology of `+"[`branch` processors][processors.branch]"+`, performing them in parallel where possible.`).
+		Description(`
 ## Why Use a Workflow
 
 ### Performance
 
 Most of the time the best way to compose processors is also the simplest, just configure them in series. This is because processors are often CPU bound, low-latency, and you can gain vertical scaling by increasing the number of processor pipeline threads, allowing Benthos to process [multiple messages in parallel][configuration.pipelines].
 
-However, some processors such as ` + "[`http`][processors.http], [`aws_lambda`][processors.aws_lambda] or [`cache`][processors.cache]" + ` interact with external services and therefore spend most of their time waiting for a response. These processors tend to be high-latency and low CPU activity, which causes messages to process slowly.
+However, some processors such as `+"[`http`][processors.http], [`aws_lambda`][processors.aws_lambda] or [`cache`][processors.cache]"+` interact with external services and therefore spend most of their time waiting for a response. These processors tend to be high-latency and low CPU activity, which causes messages to process slowly.
 
 When a processing pipeline contains multiple network processors that aren't dependent on each other we can benefit from performing these processors in parallel for each individual message, reducing the overall message processing latency.
 
@@ -49,31 +48,31 @@ A workflow is often expressed as a [DAG][dag_wiki] of processing stages, where e
 
 For example, if we had processing stages A, B, C and D, where stage A could result in either stage B or C being next, always followed by D, it might look something like this:
 
-` + "```text" + `
+`+"```text"+`
      /--> B --\
 A --|          |--> D
      \--> C --/
-` + "```" + `
+`+"```"+`
 
-This flow would be easy to express in a standard Benthos config, we could simply use a ` + "[`switch` processor][processors.switch]" + ` to route to either B or C depending on a condition on the result of A. However, this method of flow control quickly becomes unfeasible as the DAG gets more complicated, imagine expressing this flow using switch processors:
+This flow would be easy to express in a standard Benthos config, we could simply use a `+"[`switch` processor][processors.switch]"+` to route to either B or C depending on a condition on the result of A. However, this method of flow control quickly becomes unfeasible as the DAG gets more complicated, imagine expressing this flow using switch processors:
 
-` + "```text" + `
+`+"```text"+`
       /--> B -------------|--> D
      /                   /
 A --|          /--> E --|
      \--> C --|          \
                \----------|--> F
-` + "```" + `
+`+"```"+`
 
-And imagine doing so knowing that the diagram is subject to change over time. Yikes! Instead, with a workflow we can either trust it to automatically resolve the DAG or express it manually as simply as ` + "`order: [ [ A ], [ B, C ], [ E ], [ D, F ] ]`" + `, and the conditional logic for determining if a stage is executed is defined as part of the branch itself.`,
-		Footnotes: `
+And imagine doing so knowing that the diagram is subject to change over time. Yikes! Instead, with a workflow we can either trust it to automatically resolve the DAG or express it manually as simply as `+"`order: [ [ A ], [ B, C ], [ E ], [ D, F ] ]`"+`, and the conditional logic for determining if a stage is executed is defined as part of the branch itself.`).
+		Footnotes(`
 ## Structured Metadata
 
-When the field ` + "`meta_path`" + ` is non-empty the workflow processor creates an object describing which workflows were successful, skipped or failed for each message and stores the object within the message at the end.
+When the field `+"`meta_path`"+` is non-empty the workflow processor creates an object describing which workflows were successful, skipped or failed for each message and stores the object within the message at the end.
 
 The object is of the following form:
 
-` + "```json" + `
+`+"```json"+`
 {
 	"succeeded": [ "foo" ],
 	"skipped": [ "bar" ],
@@ -81,21 +80,21 @@ The object is of the following form:
 		"baz": "the error message from the branch"
 	}
 }
-` + "```" + `
+`+"```"+`
 
 If a message already has a meta object at the given path when it is processed then the object is used in order to determine which branches have already been performed on the message (or skipped) and can therefore be skipped on this run.
 
 This is a useful pattern when replaying messages that have failed some branches previously. For example, given the above example object the branches foo and bar would automatically be skipped, and baz would be reattempted.
 
-The previous meta object will also be preserved in the field ` + "`<meta_path>.previous`" + ` when the new meta object is written, preserving a full record of all workflow executions.
+The previous meta object will also be preserved in the field `+"`<meta_path>.previous`"+` when the new meta object is written, preserving a full record of all workflow executions.
 
-If a field ` + "`<meta_path>.apply`" + ` exists in the meta object for a message and is an array then it will be used as an explicit list of stages to apply, all other stages will be skipped.
+If a field `+"`<meta_path>.apply`"+` exists in the meta object for a message and is an array then it will be used as an explicit list of stages to apply, all other stages will be skipped.
 
 ## Resources
 
-It's common to configure processors (and other components) [as resources][configuration.resources] in order to keep the pipeline configuration cleaner. With the workflow processor you can include branch processors configured as resources within your workflow either by specifying them by name in the field ` + "`order`" + `, if Benthos doesn't find a branch within the workflow configuration of that name it'll refer to the resources.
+It's common to configure processors (and other components) [as resources][configuration.resources] in order to keep the pipeline configuration cleaner. With the workflow processor you can include branch processors configured as resources within your workflow either by specifying them by name in the field `+"`order`"+`, if Benthos doesn't find a branch within the workflow configuration of that name it'll refer to the resources.
 
-Alternatively, if you do not wish to have an explicit ordering, you can add resource names to the field ` + "`branch_resources`" + ` and they will be included in the workflow with automatic DAG resolution along with any branches configured in the ` + "`branches`" + ` field.
+Alternatively, if you do not wish to have an explicit ordering, you can add resource names to the field `+"`branch_resources`"+` and they will be included in the workflow with automatic DAG resolution along with any branches configured in the `+"`branches`"+` field.
 
 ### Resource Error Conditions
 
@@ -109,9 +108,9 @@ The second error case is when automatic DAG resolution is being used and a resou
 
 The recommended approach to handle failures within a workflow is to query against the [structured metadata](#structured-metadata) it provides, as it provides granular information about exactly which branches failed and which ones succeeded and therefore aren't necessary to perform again.
 
-For example, if our meta object is stored at the path ` + "`meta.workflow`" + ` and we wanted to check whether a message has failed for any branch we can do that using a [Bloblang query][guides.bloblang] like ` + "`this.meta.workflow.failed.length() | 0 > 0`" + `, or to check whether a specific branch failed we can use ` + "`this.exists(\"meta.workflow.failed.foo\")`" + `.
+For example, if our meta object is stored at the path `+"`meta.workflow`"+` and we wanted to check whether a message has failed for any branch we can do that using a [Bloblang query][guides.bloblang] like `+"`this.meta.workflow.failed.length() | 0 > 0`"+`, or to check whether a specific branch failed we can use `+"`this.exists(\"meta.workflow.failed.foo\")`"+`.
 
-However, if structured metadata is disabled by setting the field ` + "`meta_path`" + ` to empty then the workflow processor instead adds a general error flag to messages when any executed branch fails. In this case it's possible to handle failures using [standard error handling patterns][configuration.error-handling].
+However, if structured metadata is disabled by setting the field `+"`meta_path`"+` to empty then the workflow processor instead adds a general error flag to messages when any executed branch fails. In this case it's possible to handle failures using [standard error handling patterns][configuration.error-handling].
 
 [dag_wiki]: https://en.wikipedia.org/wiki/Directed_acyclic_graph
 [processors.switch]: /docs/components/processors/switch
@@ -123,13 +122,9 @@ However, if structured metadata is disabled by setting the field ` + "`meta_path
 [configuration.pipelines]: /docs/configuration/processing_pipelines
 [configuration.error-handling]: /docs/configuration/error_handling
 [configuration.resources]: /docs/configuration/resources
-`,
-		Examples: []docs.AnnotatedExample{
-			{
-				Title: "Automatic Ordering",
-				Summary: `
-When the field ` + "`order`" + ` is omitted a best attempt is made to determine a dependency tree between branches based on their request and result mappings. In the following example the branches foo and bar will be executed first in parallel, and afterwards the branch baz will be executed.`,
-				Config: `
+`).
+		Example("Automatic Ordering", `
+When the field `+"`order`"+` is omitted a best attempt is made to determine a dependency tree between branches based on their request and result mappings. In the following example the branches foo and bar will be executed first in parallel, and afterwards the branch baz will be executed.`, `
 pipeline:
   processors:
     - workflow:
@@ -159,13 +154,9 @@ pipeline:
                   operator: set
                   key: ${! json("fooid") }
                   value: ${! json("barstuff") }
-`,
-			},
-			{
-				Title: "Conditional Branches",
-				Summary: `
-Branches of a workflow are skipped when the ` + "`request_map`" + ` assigns ` + "`deleted()`" + ` to the root. In this example the branch A is executed when the document type is "foo", and branch B otherwise. Branch C is executed afterwards and is skipped unless either A or B successfully provided a result at ` + "`tmp.result`" + `.`,
-				Config: `
+`).
+		Example("Conditional Branches", `
+Branches of a workflow are skipped when the `+"`request_map`"+` assigns `+"`deleted()`"+` to the root. In this example the branch A is executed when the document type is "foo", and branch B otherwise. Branch C is executed afterwards and is skipped unless either A or B successfully provided a result at `+"`tmp.result`"+`.`, `
 pipeline:
   processors:
     - workflow:
@@ -199,13 +190,9 @@ pipeline:
               - http:
                   url: TODO_SOMEWHERE_ELSE
             result_map: 'root.tmp.result = this'
-`,
-			},
-			{
-				Title: "Resources",
-				Summary: `
-The ` + "`order`" + ` field can be used in order to refer to [branch processor resources](#resources), this can sometimes make your pipeline configuration cleaner, as well as allowing you to reuse branch configurations in order places. It's also possible to mix and match branches configured within the workflow and configured as resources.`,
-				Config: `
+`).
+		Example("Resources", `
+The `+"`order`"+` field can be used in order to refer to [branch processor resources](#resources), this can sometimes make your pipeline configuration cleaner, as well as allowing you to reuse branch configurations in order places. It's also possible to mix and match branches configured within the workflow and configured as resources.`, `
 pipeline:
   processors:
     - workflow:
@@ -238,27 +225,39 @@ processor_resources:
             operator: set
             key: ${! json("fooid") }
             value: ${! json("barstuff") }
-`,
-			},
-		},
-		Config: docs.FieldComponent().WithChildren(
-			docs.FieldString("meta_path", "A [dot path](/docs/configuration/field_paths) indicating where to store and reference [structured metadata](#structured-metadata) about the workflow execution.").HasDefault("meta.workflow"),
-			docs.FieldString(
-				"order",
-				"An explicit declaration of branch ordered tiers, which describes the order in which parallel tiers of branches should be executed. Branches should be identified by the name as they are configured in the field `branches`. It's also possible to specify branch processors configured [as a resource](#resources).",
-				[][]string{{"foo", "bar"}, {"baz"}},
-				[][]string{{"foo"}, {"bar"}, {"baz"}},
-			).ArrayOfArrays().HasDefault([]any{}),
-			docs.FieldString(
-				"branch_resources",
-				"An optional list of [`branch` processor](/docs/components/processors/branch) names that are configured as [resources](#resources). These resources will be included in the workflow with any branches configured inline within the [`branches`](#branches) field. The order and parallelism in which branches are executed is automatically resolved based on the mappings of each branch. When using resources with an explicit order it is not necessary to list resources in this field.",
-			).AtVersion("3.38.0").Advanced().Array().HasDefault([]any{}),
-			docs.FieldObject(
-				"branches",
-				"An object of named [`branch` processors](/docs/components/processors/branch) that make up the workflow. The order and parallelism in which branches are executed can either be made explicit with the field `order`, or if omitted an attempt is made to automatically resolve an ordering based on the mappings of each branch.",
-			).Map().WithChildren(branchFields...).HasDefault(map[string]any{}),
-		),
-	})
+`).
+		Fields(
+			service.NewStringField(wflowProcFieldMetaPath).
+				Description("A [dot path](/docs/configuration/field_paths) indicating where to store and reference [structured metadata](#structured-metadata) about the workflow execution.").
+				Default("meta.workflow"),
+			service.NewStringListOfListsField(wflowProcFieldOrder).
+				Description("An explicit declaration of branch ordered tiers, which describes the order in which parallel tiers of branches should be executed. Branches should be identified by the name as they are configured in the field `branches`. It's also possible to specify branch processors configured [as a resource](#resources).").
+				Examples(
+					[]any{[]any{"foo", "bar"}, []any{"baz"}},
+					[]any{[]any{"foo"}, []any{"bar"}, []any{"baz"}},
+				).
+				Default([]any{}),
+			service.NewStringListField(wflowProcFieldBranchResources).
+				Description("An optional list of [`branch` processor](/docs/components/processors/branch) names that are configured as [resources](#resources). These resources will be included in the workflow with any branches configured inline within the [`branches`](#branches) field. The order and parallelism in which branches are executed is automatically resolved based on the mappings of each branch. When using resources with an explicit order it is not necessary to list resources in this field.").
+				Version("3.38.0").
+				Advanced().
+				Default([]any{}),
+			service.NewObjectMapField(wflowProcFieldBranches, branchSpecFields()...).
+				Description("An object of named [`branch` processors](/docs/components/processors/branch) that make up the workflow. The order and parallelism in which branches are executed can either be made explicit with the field `order`, or if omitted an attempt is made to automatically resolve an ordering based on the mappings of each branch.").
+				Default(map[string]any{}),
+		)
+}
+
+func init() {
+	err := service.RegisterBatchProcessor(
+		"workflow", workflowProcSpec(),
+		func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchProcessor, error) {
+			w, err := NewWorkflow(conf, interop.UnwrapManagement(mgr))
+			if err != nil {
+				return nil, err
+			}
+			return interop.NewUnwrapInternalBatchProcessor(w), nil
+		})
 	if err != nil {
 		panic(err)
 	}
@@ -287,7 +286,7 @@ type Workflow struct {
 }
 
 // NewWorkflow instanciates a new workflow processor.
-func NewWorkflow(conf processor.WorkflowConfig, mgr bundle.NewManagement) (*Workflow, error) {
+func NewWorkflow(conf *service.ParsedConfig, mgr bundle.NewManagement) (*Workflow, error) {
 	stats := mgr.Metrics()
 	w := &Workflow{
 		log:    mgr.Logger(),
@@ -303,11 +302,15 @@ func NewWorkflow(conf processor.WorkflowConfig, mgr bundle.NewManagement) (*Work
 		mError:         stats.GetCounter("processor_error"),
 		mLatency:       stats.GetTimer("processor_latency_ns"),
 	}
-	if len(conf.MetaPath) > 0 {
-		w.metaPath = gabs.DotPathToSlice(conf.MetaPath)
+
+	metaStr, err := conf.FieldString(wflowProcFieldMetaPath)
+	if err != nil {
+		return nil, err
+	}
+	if len(metaStr) > 0 {
+		w.metaPath = gabs.DotPathToSlice(metaStr)
 	}
 
-	var err error
 	if w.children, err = newWorkflowBranchMap(conf, mgr); err != nil {
 		return nil, err
 	}
@@ -456,7 +459,7 @@ func (w *Workflow) ProcessBatch(ctx context.Context, msg message.Batch) ([]messa
 	dag, children, unlock, err := w.children.Lock()
 	if err != nil {
 		w.mError.Incr(1)
-		w.log.Errorf("Failed to establish workflow: %v\n", err)
+		w.log.Error("Failed to establish workflow: %v\n", err)
 
 		_ = msg.Iter(func(i int, p *message.Part) error {
 			p.ErrorSet(err)
@@ -532,7 +535,7 @@ func (w *Workflow) ProcessBatch(ctx context.Context, msg message.Batch) ([]messa
 			}
 			if err != nil {
 				w.mError.Incr(1)
-				w.log.Errorf("Failed to perform enrichment '%v': %v\n", id, err)
+				w.log.Error("Failed to perform enrichment '%v': %v\n", id, err)
 				for j := range records {
 					records[j].Failed(id, err.Error())
 				}
@@ -550,7 +553,7 @@ func (w *Workflow) ProcessBatch(ctx context.Context, msg message.Batch) ([]messa
 			pJSON, err := p.AsStructuredMut()
 			if err != nil {
 				w.mError.Incr(1)
-				w.log.Errorf("Failed to parse message for meta update: %v\n", err)
+				w.log.Error("Failed to parse message for meta update: %v\n", err)
 				p.ErrorSet(err)
 				return nil
 			}

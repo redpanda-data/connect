@@ -8,7 +8,6 @@ import (
 
 	"github.com/aws/aws-sdk-go/aws/request"
 	"github.com/aws/aws-sdk-go/service/lambda"
-	"github.com/aws/aws-sdk-go/service/lambda/lambdaiface"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -16,7 +15,6 @@ import (
 )
 
 type mockLambda struct {
-	lambdaiface.LambdaAPI
 	fn func(*lambda.InvokeInput) (*lambda.InvokeOutput, error)
 }
 

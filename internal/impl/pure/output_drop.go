@@ -40,7 +40,7 @@ func newDropWriter(log log.Modular) *dropWriter {
 }
 
 func (d *dropWriter) Connect(ctx context.Context) error {
-	d.log.Infoln("Dropping messages.")
+	d.log.Info("Dropping messages.")
 	return nil
 }
 

@@ -40,29 +40,29 @@ func RunService(c *cli.Context, version, dateBuilt string, streamsMode bool) int
 
 	verLogger := logger.With("benthos_version", version)
 	if mainPath == "" {
-		verLogger.Infof("Running without a main config file")
+		verLogger.Info("Running without a main config file")
 	} else if inferredMainPath {
-		verLogger.With("path", mainPath).Infof("Running main config from file found in a default path")
+		verLogger.With("path", mainPath).Info("Running main config from file found in a default path")
 	} else {
-		verLogger.With("path", mainPath).Infof("Running main config from specified file")
+		verLogger.With("path", mainPath).Info("Running main config from specified file")
 	}
 
 	strict := !c.Bool("chilled")
 	for _, lint := range lints {
 		if strict {
-			logger.With("lint", lint).Errorln("Config lint error")
+			logger.With("lint", lint).Error("Config lint error")
 		} else {
-			logger.With("lint", lint).Warnln("Config lint error")
+			logger.With("lint", lint).Warn("Config lint error")
 		}
 	}
 	if strict && len(lints) > 0 {
-		logger.Errorln("Shutting down due to linter errors, to prevent shutdown run Benthos with --chilled")
+		logger.Error("Shutting down due to linter errors, to prevent shutdown run Benthos with --chilled")
 		return 1
 	}
 
 	stoppableManager, err := CreateManager(c, logger, streamsMode, version, dateBuilt, conf)
 	if err != nil {
-		logger.Errorln(err.Error())
+		logger.Error(err.Error())
 		return 1
 	}
 
@@ -122,23 +122,23 @@ func initStreamsMode(
 
 	for _, lint := range lints {
 		if strict {
-			logger.With("lint", lint).Errorln("Config lint error")
+			logger.With("lint", lint).Error("Config lint error")
 		} else {
-			logger.With("lint", lint).Warnln("Config lint error")
+			logger.With("lint", lint).Warn("Config lint error")
 		}
 	}
 	if strict && len(lints) > 0 {
-		logger.Errorln("Shutting down due to stream linter errors, to prevent shutdown run Benthos with --chilled")
+		logger.Error("Shutting down due to stream linter errors, to prevent shutdown run Benthos with --chilled")
 		os.Exit(1)
 	}
 
 	for id, conf := range streamConfs {
 		if err := streamMgr.Create(id, conf); err != nil {
-			logger.Errorf("Failed to create stream (%v): %v\n", id, err)
+			logger.Error("Failed to create stream (%v): %v\n", id, err)
 			os.Exit(1)
 		}
 	}
-	logger.Infoln("Launching benthos in streams mode, use CTRL+C to close")
+	logger.Info("Launching benthos in streams mode, use CTRL+C to close")
 
 	if err := confReader.SubscribeStreamChanges(func(id string, newStreamConf *stream.Config) error {
 		ctx, done := context.WithTimeout(context.Background(), time.Second*30)
@@ -156,13 +156,13 @@ func initStreamsMode(
 		}
 		return updateErr
 	}); err != nil {
-		logger.Errorf("Failed to create stream config watcher: %v", err)
+		logger.Error("Failed to create stream config watcher: %v", err)
 		os.Exit(1)
 	}
 
 	if watching {
 		if err := confReader.BeginFileWatching(mgr, strict); err != nil {
-			logger.Errorf("Failed to create stream config watcher: %v", err)
+			logger.Error("Failed to create stream config watcher: %v", err)
 			os.Exit(1)
 		}
 	}
@@ -191,12 +191,12 @@ func initNormalMode(
 
 	var stoppableStream *SwappableStopper
 	if initStream, err := streamInit(); err != nil {
-		logger.Errorf("Service closing due to: %v\n", err)
+		logger.Error("Service closing due to: %v\n", err)
 		os.Exit(1)
 	} else {
 		stoppableStream = NewSwappableStopper(initStream)
 	}
-	logger.Infoln("Launching a benthos instance, use CTRL+C to close")
+	logger.Info("Launching a benthos instance, use CTRL+C to close")
 
 	if err := confReader.SubscribeConfigChanges(func(newStreamConf *config.Type) error {
 		ctx, done := context.WithTimeout(context.Background(), 30*time.Second)
@@ -207,13 +207,13 @@ func initNormalMode(
 			return streamInit()
 		})
 	}); err != nil {
-		logger.Errorf("Failed to create config file watcher: %v", err)
+		logger.Error("Failed to create config file watcher: %v", err)
 		os.Exit(1)
 	}
 
 	if watching {
 		if err := confReader.BeginFileWatching(mgr, strict); err != nil {
-			logger.Errorf("Failed to create config file watcher: %v", err)
+			logger.Error("Failed to create config file watcher: %v", err)
 			os.Exit(1)
 		}
 	}

@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/benthosdev/benthos/v4/internal/bloblang/query"
+	"github.com/benthosdev/benthos/v4/internal/value"
 )
 
 func matchCaseParser(pCtx Context) Func {
@@ -49,7 +50,7 @@ func matchCaseParser(pCtx Context) Func {
 					if v == nil {
 						return false, nil
 					}
-					return query.ICompare(*v, lit.Value), nil
+					return value.ICompare(*v, lit.Value), nil
 				}, nil)
 			} else {
 				caseFn = t

@@ -10,6 +10,7 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/bloblang/query"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
+	"github.com/benthosdev/benthos/v4/internal/value"
 )
 
 // Mapping is a compiled Bloblang mapping used to rewrite metrics.
@@ -71,7 +72,7 @@ func (m *Mapping) mapPath(path string, labelNames, labelValues []string) (outPat
 		vars[k] = v
 	}
 
-	var v any = query.Nothing(nil)
+	var v any = value.Nothing(nil)
 	if err := m.m.ExecOnto(query.FunctionContext{
 		Maps:     m.m.Maps(),
 		Vars:     vars,
@@ -83,7 +84,7 @@ func (m *Mapping) mapPath(path string, labelNames, labelValues []string) (outPat
 		Meta:  outPart,
 		Value: &v,
 	}); err != nil {
-		m.logger.Errorf("Failed to apply path mapping on '%v': %v\n", path, err)
+		m.logger.Error("Failed to apply path mapping on '%v': %v\n", path, err)
 		return path, nil, nil
 	}
 
@@ -95,24 +96,24 @@ func (m *Mapping) mapPath(path string, labelNames, labelValues []string) (outPat
 		sort.Strings(outLabelNames)
 		for _, k := range outLabelNames {
 			v := outPart.MetaGetStr(k)
-			m.logger.Tracef("Metrics label '%v' created with static value '%v'.\n", k, v)
+			m.logger.Trace("Metrics label '%v' created with static value '%v'.\n", k, v)
 			outLabelValues = append(outLabelValues, v)
 		}
 	}
 
 	switch t := v.(type) {
-	case query.Delete:
-		m.logger.Tracef("Deleting metrics path: %v\n", path)
+	case value.Delete:
+		m.logger.Trace("Deleting metrics path: %v\n", path)
 		return "", nil, nil
-	case query.Nothing:
-		m.logger.Tracef("Metrics path '%v' registered unchanged.\n", path)
+	case value.Nothing:
+		m.logger.Trace("Metrics path '%v' registered unchanged.\n", path)
 		outPath = path
 		return
 	case string:
-		m.logger.Tracef("Updated metrics path '%v' to: %v\n", path, t)
+		m.logger.Trace("Updated metrics path '%v' to: %v\n", path, t)
 		outPath = t
 		return
 	}
-	m.logger.Errorf("Path mapping returned invalid result, expected string, found %T\n", v)
+	m.logger.Error("Path mapping returned invalid result, expected string, found %T\n", v)
 	return path, labelNames, labelValues
 }

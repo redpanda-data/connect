@@ -2,6 +2,8 @@ package query
 
 import (
 	"fmt"
+
+	"github.com/benthosdev/benthos/v4/internal/value"
 )
 
 // MatchCase represents a single match case of a match expression, where a case
@@ -47,7 +49,7 @@ func NewMatchFunction(contextFn Function, cases ...MatchCase) Function {
 				return c.queryFn.Exec(caseCtx)
 			}
 		}
-		return Nothing(nil), nil
+		return value.Nothing(nil), nil
 	}, func(ctx TargetsContext) (TargetsContext, []TargetPath) {
 		contextCtx, contextTargets := contextFn.QueryTargets(ctx)
 		contextCtx = contextCtx.WithValues(contextTargets).WithValuesAsContext()
@@ -89,7 +91,12 @@ func NewIfFunction(queryFn, ifFn Function, elseIfs []ElseIf, elseFn Function) Fu
 		if err != nil {
 			return nil, fmt.Errorf("failed to check if condition: %w", err)
 		}
-		if queryRes, _ := queryVal.(bool); queryRes {
+
+		queryRes, isBool := queryVal.(bool)
+		if !isBool {
+			return nil, fmt.Errorf("%v resolved to a non-boolean value %v (%T)", queryFn.Annotation(), queryVal, queryVal)
+		}
+		if queryRes {
 			return ifFn.Exec(ctx)
 		}
 
@@ -98,7 +105,11 @@ func NewIfFunction(queryFn, ifFn Function, elseIfs []ElseIf, elseFn Function) Fu
 			if err != nil {
 				return nil, fmt.Errorf("failed to check if condition %v: %w", i+1, err)
 			}
-			if queryRes, _ := queryVal.(bool); queryRes {
+			queryRes, isBool := queryVal.(bool)
+			if !isBool {
+				return nil, fmt.Errorf("%v resolved to a non-boolean value %v (%T)", eFn.QueryFn.Annotation(), queryVal, queryVal)
+			}
+			if queryRes {
 				return eFn.MapFn.Exec(ctx)
 			}
 		}
@@ -106,7 +117,7 @@ func NewIfFunction(queryFn, ifFn Function, elseIfs []ElseIf, elseFn Function) Fu
 		if elseFn != nil {
 			return elseFn.Exec(ctx)
 		}
-		return Nothing(nil), nil
+		return value.Nothing(nil), nil
 	}, aggregateTargetPaths(allFns...))
 }
 

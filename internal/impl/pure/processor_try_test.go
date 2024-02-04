@@ -6,8 +6,9 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
-	"github.com/benthosdev/benthos/v4/internal/component/processor"
+	"github.com/benthosdev/benthos/v4/internal/component/testutil"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
 
@@ -15,8 +16,10 @@ import (
 )
 
 func TestTryEmpty(t *testing.T) {
-	conf := processor.NewConfig()
-	conf.Type = "try"
+	conf, err := testutil.ProcessorFromYAML(`
+try: []
+`)
+	require.NoError(t, err)
 
 	proc, err := mock.NewManager().NewProcessor(conf)
 	if err != nil {
@@ -40,13 +43,11 @@ func TestTryEmpty(t *testing.T) {
 }
 
 func TestTryBasic(t *testing.T) {
-	encodeConf := processor.NewConfig()
-	encodeConf.Type = "bloblang"
-	encodeConf.Bloblang = `root = if batch_index() == 0 { content().encode("base64") }`
-
-	conf := processor.NewConfig()
-	conf.Type = "try"
-	conf.Try = append(conf.Try, encodeConf)
+	conf, err := testutil.ProcessorFromYAML(`
+try:
+  - bloblang: 'root = if batch_index() == 0 { content().encode("base64") }'
+`)
+	require.NoError(t, err)
 
 	proc, err := mock.NewManager().NewProcessor(conf)
 	if err != nil {
@@ -77,13 +78,11 @@ func TestTryBasic(t *testing.T) {
 }
 
 func TestTryFilterSome(t *testing.T) {
-	filterConf := processor.NewConfig()
-	filterConf.Type = "bloblang"
-	filterConf.Bloblang = `root = if !content().contains("foo") { deleted() }`
-
-	conf := processor.NewConfig()
-	conf.Type = "try"
-	conf.Try = append(conf.Try, filterConf)
+	conf, err := testutil.ProcessorFromYAML(`
+try:
+  - bloblang: 'root = if !content().contains("foo") { deleted() }'
+`)
+	require.NoError(t, err)
 
 	proc, err := mock.NewManager().NewProcessor(conf)
 	if err != nil {
@@ -113,17 +112,12 @@ func TestTryFilterSome(t *testing.T) {
 }
 
 func TestTryMultiProcs(t *testing.T) {
-	encodeConf := processor.NewConfig()
-	encodeConf.Type = "bloblang"
-	encodeConf.Bloblang = `root = if batch_index() == 0 { content().encode("base64") }`
-
-	filterConf := processor.NewConfig()
-	filterConf.Type = "bloblang"
-	filterConf.Bloblang = `root = if !content().contains("foo") { deleted() }`
-
-	conf := processor.NewConfig()
-	conf.Type = "try"
-	conf.Try = append(conf.Try, filterConf, encodeConf)
+	conf, err := testutil.ProcessorFromYAML(`
+try:
+  - bloblang: 'root = if !content().contains("foo") { deleted() }'
+  - bloblang: 'root = if batch_index() == 0 { content().encode("base64") }'
+`)
+	require.NoError(t, err)
 
 	proc, err := mock.NewManager().NewProcessor(conf)
 	if err != nil {
@@ -153,17 +147,13 @@ func TestTryMultiProcs(t *testing.T) {
 }
 
 func TestTryFailJSON(t *testing.T) {
-	encodeConf := processor.NewConfig()
-	encodeConf.Type = "bloblang"
-	encodeConf.Bloblang = `root = if batch_index() == 0 { content().encode("base64") }`
-
-	jmespathConf := processor.NewConfig()
-	jmespathConf.Type = "jmespath"
-	jmespathConf.JMESPath.Query = "foo"
-
-	conf := processor.NewConfig()
-	conf.Type = "try"
-	conf.Try = append(conf.Try, jmespathConf, encodeConf)
+	conf, err := testutil.ProcessorFromYAML(`
+try:
+  - jmespath:
+      query: 'foo'
+  - bloblang: 'root = if batch_index() == 0 { content().encode("base64") }'
+`)
+	require.NoError(t, err)
 
 	proc, err := mock.NewManager().NewProcessor(conf)
 	if err != nil {
@@ -203,13 +193,11 @@ func TestTryFailJSON(t *testing.T) {
 }
 
 func TestTryFilterAll(t *testing.T) {
-	filterConf := processor.NewConfig()
-	filterConf.Type = "bloblang"
-	filterConf.Bloblang = `root = if !content().contains("foo") { deleted() }`
-
-	conf := processor.NewConfig()
-	conf.Type = "try"
-	conf.Try = append(conf.Try, filterConf)
+	conf, err := testutil.ProcessorFromYAML(`
+try:
+  - bloblang: 'root = if !content().contains("foo") { deleted() }'
+`)
+	require.NoError(t, err)
 
 	proc, err := mock.NewManager().NewProcessor(conf)
 	if err != nil {

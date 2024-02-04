@@ -609,7 +609,7 @@ input:
 	assert.Eventually(t, func() bool {
 		data, _ := os.ReadFile(filepath.Join(tmpDir, "outa.jsonl"))
 		return strings.Contains(string(data), `{"id":"first"}`)
-	}, time.Second*30, time.Millisecond*10)
+	}, time.Second*5, time.Millisecond*10)
 
 	require.NoError(t, pr.Stop(ctx))
 	waitFn(ctx)

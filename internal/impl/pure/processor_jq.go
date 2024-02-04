@@ -9,66 +9,50 @@ import (
 	"github.com/itchyny/gojq"
 
 	"github.com/benthosdev/benthos/v4/internal/bundle"
+	"github.com/benthosdev/benthos/v4/internal/component/interop"
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
-	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
-func init() {
-	err := bundle.AllProcessors.Add(func(conf processor.Config, mgr bundle.NewManagement) (processor.V1, error) {
-		p, err := newJQ(conf.JQ, mgr)
-		if err != nil {
-			return nil, err
-		}
-		return processor.NewAutoObservedProcessor("jq", p, mgr), nil
-	}, docs.ComponentSpec{
-		Name:   "jq",
-		Status: docs.StatusStable,
-		Categories: []string{
-			"Mapping",
-		},
-		Summary: `
-Transforms and filters messages using jq queries.`,
-		Description: `
+const (
+	jqpFieldQuery     = "query"
+	jqpFieldRaw       = "raw"
+	jqpFieldOutputRaw = "output_raw"
+)
+
+func jqProcSpec() *service.ConfigSpec {
+	return service.NewConfigSpec().
+		Categories("Mapping").
+		Stable().
+		Summary("Transforms and filters messages using jq queries.").
+		Description(`
 :::note Try out Bloblang
-For better performance and improved capabilities try out native Benthos mapping with the [` + "`mapping`" + ` processor](/docs/components/processors/mapping).
+For better performance and improved capabilities try out native Benthos mapping with the [`+"`mapping`"+` processor](/docs/components/processors/mapping).
 :::
 
-The provided query is executed on each message, targeting either the contents
-as a structured JSON value or as a raw string using the field ` + "`raw`" + `,
-and the message is replaced with the query result.
+The provided query is executed on each message, targeting either the contents as a structured JSON value or as a raw string using the field `+"`raw`"+`, and the message is replaced with the query result.
 
-Message metadata is also accessible within the query from the variable
-` + "`$metadata`" + `.
+Message metadata is also accessible within the query from the variable `+"`$metadata`"+`.
 
-This processor uses the [gojq library][gojq], and therefore does not require
-jq to be installed as a dependency. However, this also means there are some
-differences in how these queries are executed versus the jq cli which you can
-[read about here][gojq-difference].
+This processor uses the [gojq library][gojq], and therefore does not require jq to be installed as a dependency. However, this also means there are some differences in how these queries are executed versus the jq cli which you can [read about here][gojq-difference].
 
-If the query does not emit any value then the message is filtered, if the query
-returns multiple values then the resulting message will be an array containing
-all values.
+If the query does not emit any value then the message is filtered, if the query returns multiple values then the resulting message will be an array containing all values.
 
 The full query syntax is described in [jq's documentation][jq-docs].
 
 ## Error Handling
 
-Queries can fail, in which case the message remains unchanged, errors are
-logged, and the message is flagged as having failed, allowing you to use
-[standard processor error handling patterns](/docs/configuration/error_handling).`,
-		Footnotes: `
+Queries can fail, in which case the message remains unchanged, errors are logged, and the message is flagged as having failed, allowing you to use [standard processor error handling patterns](/docs/configuration/error_handling).`).
+		Footnotes(`
 [gojq]: https://github.com/itchyny/gojq
 [gojq-difference]: https://github.com/itchyny/gojq#difference-to-jq
-[jq-docs]: https://stedolan.github.io/jq/manual/`,
-		Examples: []docs.AnnotatedExample{
-			{
-				Title: "Mapping",
-				Summary: `
+[jq-docs]: https://stedolan.github.io/jq/manual/`).
+		Example("Mapping", `
 When receiving JSON documents of the form:
 
-` + "```json" + `
+`+"```json"+`
 {
   "locations": [
     {"name": "Seattle", "state": "WA"},
@@ -77,29 +61,61 @@ When receiving JSON documents of the form:
     {"name": "Olympia", "state": "WA"}
   ]
 }
-` + "```" + `
+`+"```"+`
 
-We could collapse the location names from the state of Washington into a field ` + "`Cities`" + `:
+We could collapse the location names from the state of Washington into a field `+"`Cities`"+`:
 
-` + "```json" + `
+`+"```json"+`
 {"Cities": "Bellevue, Olympia, Seattle"}
-` + "```" + `
+`+"```"+`
 
 With the following config:`,
-				Config: `
+			`
 pipeline:
   processors:
     - jq:
         query: '{Cities: .locations | map(select(.state == "WA").name) | sort | join(", ") }'
 `,
-			},
-		},
-		Config: docs.FieldComponent().WithChildren(
-			docs.FieldString("query", "The jq query to filter and transform messages with."),
-			docs.FieldBool("raw", "Whether to process the input as a raw string instead of as JSON.").Advanced(),
-			docs.FieldBool("output_raw", "Whether to output raw text (unquoted) instead of JSON strings when the emitted values are string types.").Advanced(),
-		).ChildDefaultAndTypesFromStruct(processor.NewJQConfig()),
-	})
+		).
+		Fields(
+			service.NewStringField(jqpFieldQuery).
+				Description("The jq query to filter and transform messages with."),
+			service.NewBoolField(jqpFieldRaw).
+				Description("Whether to process the input as a raw string instead of as JSON.").
+				Advanced().
+				Default(false),
+			service.NewBoolField(jqpFieldOutputRaw).
+				Description("Whether to output raw text (unquoted) instead of JSON strings when the emitted values are string types.").
+				Advanced().
+				Default(false),
+		)
+}
+
+func init() {
+	err := service.RegisterBatchProcessor(
+		"jq", jqProcSpec(),
+		func(conf *service.ParsedConfig, res *service.Resources) (service.BatchProcessor, error) {
+			query, err := conf.FieldString(jqpFieldQuery)
+			if err != nil {
+				return nil, err
+			}
+			raw, err := conf.FieldBool(jqpFieldRaw)
+			if err != nil {
+				return nil, err
+			}
+			outputRaw, err := conf.FieldBool(jqpFieldOutputRaw)
+			if err != nil {
+				return nil, err
+			}
+
+			mgr := interop.UnwrapManagement(res)
+
+			p, err := newJQ(query, raw, outputRaw, mgr)
+			if err != nil {
+				return nil, err
+			}
+			return interop.NewUnwrapInternalBatchProcessor(processor.NewAutoObservedProcessor("jq", p, mgr)), nil
+		})
 	if err != nil {
 		panic(err)
 	}
@@ -116,14 +132,14 @@ type jqProc struct {
 	code   *gojq.Code
 }
 
-func newJQ(conf processor.JQConfig, mgr bundle.NewManagement) (*jqProc, error) {
+func newJQ(queryStr string, raw, outputRaw bool, mgr bundle.NewManagement) (*jqProc, error) {
 	j := &jqProc{
-		inRaw:  conf.Raw,
-		outRaw: conf.OutputRaw,
+		inRaw:  raw,
+		outRaw: outputRaw,
 		log:    mgr.Logger(),
 	}
 
-	query, err := gojq.Parse(conf.Query)
+	query, err := gojq.Parse(queryStr)
 	if err != nil {
 		return nil, fmt.Errorf("error parsing jq query: %w", err)
 	}
@@ -150,7 +166,7 @@ func (j *jqProc) getPartValue(part *message.Part, raw bool) (obj any, err error)
 		return string(part.AsBytes()), nil
 	}
 	if obj, err = part.AsStructured(); err != nil {
-		j.log.Debugf("Failed to parse part into json: %v\n", err)
+		j.log.Debug("Failed to parse part into json: %v\n", err)
 		return nil, err
 	}
 	return obj, nil
@@ -187,14 +203,14 @@ func (j *jqProc) Process(ctx context.Context, msg *message.Part) ([]*message.Par
 
 	emitted, err := safeQuery(in, metadata, j.code)
 	if err != nil {
-		j.log.Debugf(err.Error())
+		j.log.Debug(err.Error())
 		return nil, err
 	}
 
 	if j.outRaw {
 		raw, err := j.marshalRaw(emitted)
 		if err != nil {
-			j.log.Debugf("Failed to marshal raw text: %s", err)
+			j.log.Debug("Failed to marshal raw text: %s", err)
 			return nil, err
 		}
 

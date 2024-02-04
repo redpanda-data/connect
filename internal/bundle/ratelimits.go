@@ -61,7 +61,6 @@ func (s *RateLimitSet) Add(constructor RateLimitConstructor, spec docs.Component
 		constructor: constructor,
 		spec:        spec,
 	}
-	docs.DeprecatedProvider.RegisterDocs(spec)
 	return nil
 }
 

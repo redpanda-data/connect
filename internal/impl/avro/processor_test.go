@@ -10,9 +10,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"gopkg.in/yaml.v3"
 
-	"github.com/benthosdev/benthos/v4/internal/component/processor"
+	"github.com/benthosdev/benthos/v4/internal/component/testutil"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
 )
@@ -104,8 +103,7 @@ func TestAvroBasic(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(tt *testing.T) {
-			conf := processor.NewConfig()
-			require.NoError(t, yaml.Unmarshal(fmt.Appendf(nil, `
+			conf, err := testutil.ProcessorFromYAML(`
 avro:
   operator: %v
   encoding: %v
@@ -127,7 +125,8 @@ avro:
         } ], "default": null }
       ]
     }
-`, test.operator, test.encoding), &conf))
+`, test.operator, test.encoding)
+			require.NoError(t, err)
 
 			proc, err := mock.NewManager().NewProcessor(conf)
 			if err != nil {
@@ -280,13 +279,13 @@ func TestAvroSchemaPath(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(tt *testing.T) {
-			conf := processor.NewConfig()
-			require.NoError(t, yaml.Unmarshal(fmt.Appendf(nil, `
+			conf, err := testutil.ProcessorFromYAML(`
 avro:
   operator: %v
   encoding: %v
   schema_path: %v
-`, test.operator, test.encoding, fmt.Sprintf("file://%s", tmpSchemaFile.Name())), &conf))
+`, test.operator, test.encoding, fmt.Sprintf("file://%s", tmpSchemaFile.Name()))
+			require.NoError(t, err)
 
 			proc, err := mock.NewManager().NewProcessor(conf)
 			if err != nil {
@@ -324,13 +323,13 @@ avro:
 }
 
 func TestAvroSchemaPathNotExist(t *testing.T) {
-	conf := processor.NewConfig()
-	require.NoError(t, yaml.Unmarshal([]byte(`
+	conf, err := testutil.ProcessorFromYAML(`
 avro:
   schema_path: "file://path_does_not_exist"
-`), &conf))
+`)
+	require.NoError(t, err)
 
-	_, err := mock.NewManager().NewProcessor(conf)
+	_, err = mock.NewManager().NewProcessor(conf)
 	if err == nil {
 		t.Error("expected error from loading non existent schema file")
 	}

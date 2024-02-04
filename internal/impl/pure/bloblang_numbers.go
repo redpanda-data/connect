@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/benthosdev/benthos/v4/internal/bloblang/query"
+	"github.com/benthosdev/benthos/v4/internal/value"
 	"github.com/benthosdev/benthos/v4/public/bloblang"
 )
 
@@ -50,56 +51,56 @@ func init() {
 		"int64", "64-bit signed integer",
 		`"0xDEADBEEF"`, "3735928559",
 		func(input any) (any, error) {
-			return query.IToInt(input)
+			return value.IToInt(input)
 		})
 
 	registerIntMethod(
 		"int32", "32-bit signed integer",
 		`"0xDEAD"`, "57005",
 		func(input any) (any, error) {
-			return query.IToInt32(input)
+			return value.IToInt32(input)
 		})
 
 	registerIntMethod(
 		"int16", "16-bit signed integer",
 		`"0xDE"`, "222",
 		func(input any) (any, error) {
-			return query.IToInt16(input)
+			return value.IToInt16(input)
 		})
 
 	registerIntMethod(
 		"int8", "8-bit signed integer",
 		`"0xD"`, "13",
 		func(input any) (any, error) {
-			return query.IToInt8(input)
+			return value.IToInt8(input)
 		})
 
 	registerIntMethod(
 		"uint64", "64-bit unsigned integer",
 		`"0xDEADBEEF"`, "3735928559",
 		func(input any) (any, error) {
-			return query.IToUint(input)
+			return value.IToUint(input)
 		})
 
 	registerIntMethod(
 		"uint32", "32-bit unsigned integer",
 		`"0xDEAD"`, "57005",
 		func(input any) (any, error) {
-			return query.IToUint32(input)
+			return value.IToUint32(input)
 		})
 
 	registerIntMethod(
 		"uint16", "16-bit unsigned integer",
 		`"0xDE"`, "222",
 		func(input any) (any, error) {
-			return query.IToUint16(input)
+			return value.IToUint16(input)
 		})
 
 	registerIntMethod(
 		"uint8", "8-bit unsigned integer",
 		`"0xD"`, "13",
 		func(input any) (any, error) {
-			return query.IToUint8(input)
+			return value.IToUint8(input)
 		})
 
 	if err := bloblang.RegisterMethodV2("float64",
@@ -116,7 +117,7 @@ root.out = this.in.float64()
 			),
 		func(args *bloblang.ParsedParams) (bloblang.Method, error) {
 			return func(input any) (any, error) {
-				return query.IToFloat64(input)
+				return value.IToFloat64(input)
 			}, nil
 		}); err != nil {
 		panic(err)
@@ -136,7 +137,7 @@ root.out = this.in.float32()
 			),
 		func(args *bloblang.ParsedParams) (bloblang.Method, error) {
 			return func(input any) (any, error) {
-				return query.IToFloat32(input)
+				return value.IToFloat32(input)
 			}, nil
 		}); err != nil {
 		panic(err)
@@ -153,7 +154,7 @@ root.outs = this.ins.map_each(ele -> ele.abs())
 			),
 		func(args *bloblang.ParsedParams) (bloblang.Method, error) {
 			return func(input any) (any, error) {
-				sanitInput := query.ISanitize(input)
+				sanitInput := value.ISanitize(input)
 				switch v := sanitInput.(type) {
 				case float64:
 					return math.Abs(v), nil
@@ -161,13 +162,13 @@ root.outs = this.ins.map_each(ele -> ele.abs())
 					switch {
 					case v >= 0:
 						return v, nil
-					case v == query.MinInt:
-						return query.MaxInt, nil
+					case v == value.MinInt:
+						return value.MaxInt, nil
 					default:
 						return -v, nil
 					}
 				}
-				return nil, query.NewTypeError(input, query.ValueNumber, query.ValueInt)
+				return nil, value.NewTypeError(input, value.TNumber, value.TInt)
 			}, nil
 		}); err != nil {
 		panic(err)

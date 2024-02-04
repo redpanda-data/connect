@@ -10,6 +10,7 @@ import (
 
 	"github.com/benthosdev/benthos/v4/internal/bloblang/query"
 	"github.com/benthosdev/benthos/v4/internal/message"
+	"github.com/benthosdev/benthos/v4/internal/value"
 )
 
 func TestAssignments(t *testing.T) {
@@ -40,7 +41,7 @@ func TestAssignments(t *testing.T) {
 			mapping: NewExecutor("", nil, nil,
 				NewStatement(nil, NewJSONAssignment("foo"), query.NewFieldFunction("bar")),
 				NewStatement(nil, NewJSONAssignment("bar"), query.NewLiteralFunction("", "test2")),
-				NewStatement(nil, NewJSONAssignment("zed"), query.NewLiteralFunction("", query.Delete(nil))),
+				NewStatement(nil, NewJSONAssignment("zed"), query.NewLiteralFunction("", value.Delete(nil))),
 			),
 			input:  []part{{Content: `{"bar":"test1","zed":"gone"}`}},
 			output: &part{Content: `{"bar":"test2","foo":"test1"}`},
@@ -74,14 +75,14 @@ func TestAssignments(t *testing.T) {
 		},
 		"delete root": {
 			mapping: NewExecutor("", nil, nil,
-				NewStatement(nil, NewJSONAssignment(), query.NewLiteralFunction("", query.Delete(nil))),
+				NewStatement(nil, NewJSONAssignment(), query.NewLiteralFunction("", value.Delete(nil))),
 			),
 			input:  []part{{Content: `{"bar":"test1","zed":"gone"}`}},
 			output: nil,
 		},
 		"no mapping to root": {
 			mapping: NewExecutor("", nil, nil,
-				NewStatement(nil, NewJSONAssignment(), query.NewLiteralFunction("", query.Nothing(nil))),
+				NewStatement(nil, NewJSONAssignment(), query.NewLiteralFunction("", value.Nothing(nil))),
 			),
 			input:  []part{{Content: `{"bar":"test1","zed":"gone"}`}},
 			output: &part{Content: `{"bar":"test1","zed":"gone"}`},
@@ -122,7 +123,7 @@ func TestAssignments(t *testing.T) {
 		},
 		"meta deletion": {
 			mapping: NewExecutor("", nil, nil,
-				NewStatement(nil, NewMetaAssignment(metaKey("and")), query.NewLiteralFunction("", query.Delete(nil))),
+				NewStatement(nil, NewMetaAssignment(metaKey("and")), query.NewLiteralFunction("", value.Delete(nil))),
 			),
 			input: []part{{
 				Content: `{}`,
@@ -169,7 +170,7 @@ func TestAssignments(t *testing.T) {
 		},
 		"meta delete all": {
 			mapping: NewExecutor("", nil, nil,
-				NewStatement(nil, NewMetaAssignment(nil), query.NewLiteralFunction("", query.Delete(nil))),
+				NewStatement(nil, NewMetaAssignment(nil), query.NewLiteralFunction("", value.Delete(nil))),
 			),
 			input: []part{{
 				Content: `{}`,
@@ -217,7 +218,7 @@ func TestAssignments(t *testing.T) {
 			mapping: NewExecutor("", nil, nil,
 				NewStatement(nil, NewJSONAssignment("bar"), query.NewLiteralFunction("", "test2")),
 				NewStatement(nil, NewJSONAssignment("foo"), query.NewFieldFunction("bar")),
-				NewStatement(nil, NewJSONAssignment("zed"), query.NewLiteralFunction("", query.Delete(nil))),
+				NewStatement(nil, NewJSONAssignment("zed"), query.NewLiteralFunction("", value.Delete(nil))),
 			),
 			input: []part{{Content: `{@#$ not valid json`}},
 			err:   errors.New("failed assignment (line 0): unable to reference message as structured (with 'this.bar'): parse as json: invalid character '@' looking for beginning of object key string"),
@@ -226,7 +227,7 @@ func TestAssignments(t *testing.T) {
 			mapping: NewExecutor("", nil, nil,
 				NewStatement(nil, NewJSONAssignment("bar"), query.NewLiteralFunction("", "test2")),
 				NewStatement(nil, NewJSONAssignment("foo"), query.NewFieldFunction("bar")),
-				NewStatement(nil, NewJSONAssignment("zed"), query.NewLiteralFunction("", query.Delete(nil))),
+				NewStatement(nil, NewJSONAssignment("zed"), query.NewLiteralFunction("", value.Delete(nil))),
 			),
 			input: []part{{Content: ``}},
 			err:   errors.New("failed assignment (line 0): unable to reference message as structured (with 'this.bar'): message is empty"),
@@ -501,7 +502,7 @@ func TestQueries(t *testing.T) {
 		},
 		"json query deleted message": {
 			mapping: NewExecutor("", nil, nil,
-				NewStatement(nil, NewJSONAssignment(), query.NewLiteralFunction("delete", query.Delete(nil))),
+				NewStatement(nil, NewJSONAssignment(), query.NewLiteralFunction("delete", value.Delete(nil))),
 			),
 			input: []part{{Content: `{"bar":{"is":"an object"}}`}},
 			err:   errors.New("query mapping resulted in deleted message, expected a boolean value"),

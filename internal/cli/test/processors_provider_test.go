@@ -187,7 +187,7 @@ pipeline:
 		os.RemoveAll(testDir)
 	})
 
-	mocks := map[string]yaml.Node{}
+	mocks := map[string]any{}
 	require.NoError(t, yaml.Unmarshal([]byte(`
 "/pipeline/processors/0":
   bloblang: 'root = content().string() + " first mock"'
@@ -237,7 +237,7 @@ pipeline:
 		os.RemoveAll(testDir)
 	})
 
-	mocks := map[string]yaml.Node{}
+	mocks := map[string]any{}
 	require.NoError(t, yaml.Unmarshal([]byte(`
 "first_http":
   bloblang: 'root = content().string() + " first mock"'
@@ -287,7 +287,7 @@ pipeline:
 		os.RemoveAll(testDir)
 	})
 
-	mocks := map[string]yaml.Node{}
+	mocks := map[string]any{}
 	require.NoError(t, yaml.Unmarshal([]byte(`
 "first_http":
   bloblang: 'root = content().string() + " first mock"'

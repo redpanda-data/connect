@@ -142,7 +142,7 @@ func newGenerateReaderFromParsed(conf *service.ParsedConfig, mgr bundle.NewManag
 				return nil, fmt.Errorf("failed to parse interval as duration string: %v, or as cron expression: %w", err, cerr)
 			}
 			firstIsFree = false
-			duration = getDurationTillNextSchedule(*schedule, location)
+			duration = getDurationTillNextSchedule(time.Now(), *schedule, location)
 		}
 		if duration > 0 {
 			timer = time.NewTicker(duration)
@@ -178,13 +178,12 @@ func newGenerateReaderFromParsed(conf *service.ParsedConfig, mgr bundle.NewManag
 	}, nil
 }
 
-func getDurationTillNextSchedule(schedule cron.Schedule, location *time.Location) time.Duration {
-	now := time.Now().In(location)
-	nowRounded := now.Round(time.Second)
-	if nowRounded.Before(now) {
-		nowRounded = nowRounded.Add(time.Second)
+func getDurationTillNextSchedule(previous time.Time, schedule cron.Schedule, location *time.Location) time.Duration {
+	tUntil := time.Until(schedule.Next(previous))
+	if tUntil < 1 {
+		return 1
 	}
-	return schedule.Next(nowRounded).Sub(now)
+	return tUntil
 }
 
 func parseCronExpression(cronExpression string) (*cron.Schedule, *time.Location, error) {
@@ -230,12 +229,12 @@ func (b *generateReader) ReadBatch(ctx context.Context) (message.Batch, input.As
 
 	if !b.firstIsFree && b.timer != nil {
 		select {
-		case _, open := <-b.timer.C:
+		case t, open := <-b.timer.C:
 			if !open {
 				return nil, nil, component.ErrTypeClosed
 			}
 			if b.schedule != nil {
-				b.timer.Reset(getDurationTillNextSchedule(*b.schedule, b.location))
+				b.timer.Reset(getDurationTillNextSchedule(t, *b.schedule, b.location))
 			}
 		case <-ctx.Done():
 			return nil, nil, component.ErrTimeout

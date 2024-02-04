@@ -256,6 +256,9 @@ func (n *natsReader) Read(ctx context.Context) (*service.Message, service.AckFun
 }
 
 func (n *natsReader) Close(ctx context.Context) (err error) {
+	go func() {
+		n.disconnect()
+	}()
 	n.interruptOnce.Do(func() {
 		close(n.interruptChan)
 	})

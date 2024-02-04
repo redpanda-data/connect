@@ -10,7 +10,6 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/service/s3"
-	"github.com/aws/aws-sdk-go/service/s3/s3iface"
 	"github.com/cenkalti/backoff/v4"
 
 	"github.com/benthosdev/benthos/v4/internal/impl/aws/config"
@@ -94,7 +93,7 @@ func newS3CacheFromConfig(conf *service.ParsedConfig) (*s3Cache, error) {
 //------------------------------------------------------------------------------
 
 type s3Cache struct {
-	s3 s3iface.S3API
+	s3 *s3.S3
 
 	bucket      string
 	contentType string
@@ -102,7 +101,7 @@ type s3Cache struct {
 	boffPool sync.Pool
 }
 
-func newS3Cache(bucket, contentType string, backOff *backoff.ExponentialBackOff, s3 s3iface.S3API) *s3Cache {
+func newS3Cache(bucket, contentType string, backOff *backoff.ExponentialBackOff, s3 *s3.S3) *s3Cache {
 	return &s3Cache{
 		s3: s3,
 

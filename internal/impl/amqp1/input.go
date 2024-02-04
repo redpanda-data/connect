@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math/rand"
+	"reflect"
 	"strconv"
 	"strings"
 	"sync"
@@ -33,7 +34,17 @@ This input adds the following metadata fields to each message:
 - All string typed message annotations
 `+"```"+`
 
-You can access these metadata fields using [function interpolation](/docs/configuration/interpolation#bloblang-queries).`).
+You can access these metadata fields using [function interpolation](/docs/configuration/interpolation#bloblang-queries).
+
+By setting `+"`read_header` to `true`"+`, additional message header properties will be added to each message:
+
+`+"``` text"+`
+- amqp_durable
+- amqp_priority
+- amqp_ttl
+- amqp_first_acquirer
+- amqp_delivery_count
+`+"```").
 		Fields(
 			service.NewURLField(urlField).
 				Description("A URL to connect to.").
@@ -58,6 +69,10 @@ You can access these metadata fields using [function interpolation](/docs/config
 				Version("3.45.0").
 				Default(false).
 				Advanced(),
+			service.NewBoolField(getMessageHeaderField).
+				Description("Read additional message header fields into `amqp_*` metadata properties.").
+				Version("4.25.0").
+				Default(false).Advanced(),
 			service.NewTLSToggledField(tlsField),
 			saslFieldSpec(),
 		).LintRule(`
@@ -83,6 +98,7 @@ type amqp1Reader struct {
 	urls       []string
 	sourceAddr string
 	renewLock  bool
+	getHeader  bool
 	connOpts   *amqp.ConnOptions
 	log        *service.Logger
 
@@ -112,6 +128,7 @@ func amqp1ReaderFromParsed(conf *service.ParsedConfig, mgr *service.Resources) (
 	if len(a.urls) == 0 {
 		singleURL, err := conf.FieldString(urlField)
 		if err != nil {
+			err = errors.New("at least one url must be specified")
 			return nil, err
 		}
 
@@ -124,6 +141,10 @@ func amqp1ReaderFromParsed(conf *service.ParsedConfig, mgr *service.Resources) (
 	}
 
 	if a.renewLock, err = conf.FieldBool(azureRenewLockField); err != nil {
+		return nil, err
+	}
+
+	if a.getHeader, err = conf.FieldBool(getMessageHeaderField); err != nil {
 		return nil, err
 	}
 
@@ -242,6 +263,14 @@ func (a *amqp1Reader) ReadBatch(ctx context.Context) (service.MessageBatch, serv
 		amqpSetMetadata(part, "amqp_content_encoding", amqpMsg.Properties.ContentEncoding)
 		amqpSetMetadata(part, "amqp_creation_time", amqpMsg.Properties.CreationTime)
 	}
+	if a.getHeader && amqpMsg.Header != nil {
+		amqpSetMetadata(part, "amqp_durable", amqpMsg.Header.Durable)
+		amqpSetMetadata(part, "amqp_priority", amqpMsg.Header.Priority)
+		amqpSetMetadata(part, "amqp_ttl", amqpMsg.Header.TTL)
+		amqpSetMetadata(part, "amqp_first_acquirer", amqpMsg.Header.FirstAcquirer)
+		amqpSetMetadata(part, "amqp_delivery_count", amqpMsg.Header.DeliveryCount)
+	}
+
 	if amqpMsg.Annotations != nil {
 		for k, v := range amqpMsg.Annotations {
 			keyStr, keyIsStr := k.(string)
@@ -469,6 +498,11 @@ func amqpSetMetadata(p *service.Message, k string, v any) {
 	var metaValue string
 	metaKey := strings.ReplaceAll(k, "-", "_")
 
+	// If v is a pointer, and the pointer is nil, do nothing
+	if vType := reflect.ValueOf(v); vType.Kind() == reflect.Pointer && vType.IsNil() {
+		return
+	}
+
 	switch v := v.(type) {
 	case bool:
 		metaValue = strconv.FormatBool(v)
@@ -482,16 +516,22 @@ func amqpSetMetadata(p *service.Message, k string, v any) {
 		metaValue = strconv.Itoa(int(v))
 	case int32:
 		metaValue = strconv.Itoa(int(v))
+	case uint32:
+		metaValue = strconv.Itoa(int(v))
 	case int64:
 		metaValue = strconv.Itoa(int(v))
 	case nil:
 		metaValue = ""
 	case string:
 		metaValue = v
+	case *string:
+		metaValue = *v
 	case []byte:
 		metaValue = string(v)
 	case time.Time:
 		metaValue = v.Format(time.RFC3339)
+	case time.Duration:
+		metaValue = v.String()
 	default:
 		metaValue = ""
 	}

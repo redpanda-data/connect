@@ -10,6 +10,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/benthosdev/benthos/v4/internal/bloblang/parser"
+	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/cli/blobl"
 	"github.com/benthosdev/benthos/v4/internal/cli/common"
 	"github.com/benthosdev/benthos/v4/internal/cli/studio"
@@ -204,14 +205,14 @@ variables have been resolved:
 					}
 					var node yaml.Node
 					if err = node.Encode(conf); err == nil {
-						sanitConf := docs.NewSanitiseConfig()
+						sanitConf := docs.NewSanitiseConfig(bundle.GlobalEnvironment)
 						sanitConf.RemoveTypeField = true
 						sanitConf.ScrubSecrets = true
 						err = config.Spec().SanitiseYAML(&node, sanitConf)
 					}
 					if err == nil {
 						var configYAML []byte
-						if configYAML, err = config.MarshalYAML(node); err == nil {
+						if configYAML, err = docs.MarshalYAML(node); err == nil {
 							fmt.Println(string(configYAML))
 						}
 					}

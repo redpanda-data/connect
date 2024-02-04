@@ -123,7 +123,7 @@ func (r *resourceOutput) loop() {
 			err = oerr
 		}
 		if err != nil {
-			r.log.Errorf("Failed to obtain output resource '%v': %v", r.name, err)
+			r.log.Error("Failed to obtain output resource '%v': %v", r.name, err)
 			select {
 			case <-time.After(time.Second):
 			case <-r.shutSig.CloseNowChan():
@@ -149,7 +149,7 @@ func (r *resourceOutput) Connected() (isConnected bool) {
 	if err = r.mgr.AccessOutput(context.Background(), r.name, func(o output.Sync) {
 		isConnected = o.Connected()
 	}); err != nil {
-		r.log.Errorf("Failed to obtain output resource '%v': %v", r.name, err)
+		r.log.Error("Failed to obtain output resource '%v': %v", r.name, err)
 	}
 	return
 }

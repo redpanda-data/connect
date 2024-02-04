@@ -8,18 +8,15 @@ import (
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v3"
 
-	"github.com/benthosdev/benthos/v4/internal/component/cache"
-	"github.com/benthosdev/benthos/v4/internal/component/input"
-	"github.com/benthosdev/benthos/v4/internal/component/output"
-	"github.com/benthosdev/benthos/v4/internal/component/processor"
-	"github.com/benthosdev/benthos/v4/internal/component/ratelimit"
+	"github.com/benthosdev/benthos/v4/internal/bundle"
+	"github.com/benthosdev/benthos/v4/internal/component/testutil"
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/manager"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
 func testSanitConf() docs.SanitiseConfig {
-	sanitConf := docs.NewSanitiseConfig()
+	sanitConf := docs.NewSanitiseConfig(bundle.GlobalEnvironment)
 	sanitConf.RemoveTypeField = true
 	sanitConf.RemoveDeprecated = true
 	return sanitConf
@@ -46,8 +43,8 @@ test_cache_plugin_with_config:
     a: 20
 `
 
-	cacheConf := cache.NewConfig()
-	require.NoError(t, yaml.Unmarshal([]byte(cacheConfStr), &cacheConf))
+	cacheConf, err := testutil.CacheFromYAML(cacheConfStr)
+	require.NoError(t, err)
 
 	var cacheNode yaml.Node
 	require.NoError(t, cacheNode.Encode(cacheConf))
@@ -83,8 +80,8 @@ func TestCachePluginWithoutConfig(t *testing.T) {
 test_cache_plugin_without_config: null # No default (required)
 `
 
-	cacheConf := cache.NewConfig()
-	require.NoError(t, yaml.Unmarshal([]byte(cacheConfStr), &cacheConf))
+	cacheConf, err := testutil.CacheFromYAML(cacheConfStr)
+	require.NoError(t, err)
 
 	var cacheNode yaml.Node
 	require.NoError(t, cacheNode.Encode(cacheConf))
@@ -125,8 +122,8 @@ test_input_plugin_with_config:
     a: 20
 `
 
-	inConf := input.NewConfig()
-	require.NoError(t, yaml.Unmarshal([]byte(inConfStr), &inConf))
+	inConf, err := testutil.InputFromYAML(inConfStr)
+	require.NoError(t, err)
 
 	var outNode yaml.Node
 	require.NoError(t, outNode.Encode(inConf))
@@ -162,8 +159,8 @@ func TestInputPluginWithoutConfig(t *testing.T) {
 test_input_plugin_without_config: null # No default (required)
 `
 
-	inConf := input.NewConfig()
-	require.NoError(t, yaml.Unmarshal([]byte(inConfStr), &inConf))
+	inConf, err := testutil.InputFromYAML(inConfStr)
+	require.NoError(t, err)
 
 	var outNode yaml.Node
 	require.NoError(t, outNode.Encode(inConf))
@@ -203,8 +200,8 @@ test_output_plugin_with_config:
     a: 20
 `
 
-	inConf := output.NewConfig()
-	require.NoError(t, yaml.Unmarshal([]byte(inConfStr), &inConf))
+	inConf, err := testutil.OutputFromYAML(inConfStr)
+	require.NoError(t, err)
 
 	var outNode yaml.Node
 	require.NoError(t, outNode.Encode(inConf))
@@ -240,8 +237,8 @@ func TestOutputPluginWithoutConfig(t *testing.T) {
 test_output_plugin_without_config: null # No default (required)
 `
 
-	inConf := output.NewConfig()
-	require.NoError(t, yaml.Unmarshal([]byte(inConfStr), &inConf))
+	inConf, err := testutil.OutputFromYAML(inConfStr)
+	require.NoError(t, err)
 
 	var outNode yaml.Node
 	require.NoError(t, outNode.Encode(inConf))
@@ -284,8 +281,8 @@ test_batch_output_plugin_with_config:
     count: 21
 `
 
-	inConf := output.NewConfig()
-	require.NoError(t, yaml.Unmarshal([]byte(inConfStr), &inConf))
+	inConf, err := testutil.OutputFromYAML(inConfStr)
+	require.NoError(t, err)
 
 	var outNode yaml.Node
 	require.NoError(t, outNode.Encode(inConf))
@@ -321,8 +318,8 @@ func TestBatchOutputPluginWithoutConfig(t *testing.T) {
 test_batch_output_plugin_without_config: null # No default (required)
 `
 
-	inConf := output.NewConfig()
-	require.NoError(t, yaml.Unmarshal([]byte(inConfStr), &inConf))
+	inConf, err := testutil.OutputFromYAML(inConfStr)
+	require.NoError(t, err)
 
 	var outNode yaml.Node
 	require.NoError(t, outNode.Encode(inConf))
@@ -361,8 +358,8 @@ test_processor_plugin_with_config:
     a: 20
 `
 
-	inConf := processor.NewConfig()
-	require.NoError(t, yaml.Unmarshal([]byte(inConfStr), &inConf))
+	inConf, err := testutil.ProcessorFromYAML(inConfStr)
+	require.NoError(t, err)
 
 	var outNode yaml.Node
 	require.NoError(t, outNode.Encode(inConf))
@@ -397,8 +394,8 @@ func TestProcessorPluginWithoutConfig(t *testing.T) {
 test_processor_plugin_without_config: null # No default (required)
 `
 
-	inConf := processor.NewConfig()
-	require.NoError(t, yaml.Unmarshal([]byte(inConfStr), &inConf))
+	inConf, err := testutil.ProcessorFromYAML(inConfStr)
+	require.NoError(t, err)
 
 	var outNode yaml.Node
 	require.NoError(t, outNode.Encode(inConf))
@@ -437,8 +434,8 @@ test_batch_processor_plugin_with_config:
     a: 20
 `
 
-	inConf := processor.NewConfig()
-	require.NoError(t, yaml.Unmarshal([]byte(inConfStr), &inConf))
+	inConf, err := testutil.ProcessorFromYAML(inConfStr)
+	require.NoError(t, err)
 
 	var outNode yaml.Node
 	require.NoError(t, outNode.Encode(inConf))
@@ -473,8 +470,8 @@ func TestBatchProcessorPluginWithoutConfig(t *testing.T) {
 test_batch_processor_plugin_without_config: null # No default (required)
 `
 
-	inConf := processor.NewConfig()
-	require.NoError(t, yaml.Unmarshal([]byte(inConfStr), &inConf))
+	inConf, err := testutil.ProcessorFromYAML(inConfStr)
+	require.NoError(t, err)
 
 	var outNode yaml.Node
 	require.NoError(t, outNode.Encode(inConf))
@@ -513,8 +510,8 @@ test_rate_limit_plugin_with_config:
     a: 20
 `
 
-	inConf := ratelimit.NewConfig()
-	require.NoError(t, yaml.Unmarshal([]byte(inConfStr), &inConf))
+	inConf, err := testutil.RateLimitFromYAML(inConfStr)
+	require.NoError(t, err)
 
 	var outNode yaml.Node
 	require.NoError(t, outNode.Encode(inConf))
@@ -549,8 +546,8 @@ func TestRateLimitPluginWithoutConfig(t *testing.T) {
 test_rate_limit_plugin_without_config: null # No default (required)
 `
 
-	inConf := ratelimit.NewConfig()
-	require.NoError(t, yaml.Unmarshal([]byte(inConfStr), &inConf))
+	inConf, err := testutil.RateLimitFromYAML(inConfStr)
+	require.NoError(t, err)
 
 	var outNode yaml.Node
 	require.NoError(t, outNode.Encode(inConf))

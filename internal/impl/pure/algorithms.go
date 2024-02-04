@@ -5,6 +5,7 @@ import (
 	"compress/bzip2"
 	"fmt"
 	"io"
+	"sort"
 	"sync"
 
 	"github.com/klauspost/compress/flate"
@@ -69,6 +70,32 @@ func AddKnownCompressionAlgorithm(name string, a KnownCompressionAlgorithm) stru
 	knownCompressionAlgorithms[name] = a
 	knownCompressionAlgorithmsLock.Unlock()
 	return struct{}{}
+}
+
+func CompressionAlgsList() (v []string) {
+	knownCompressionAlgorithmsLock.Lock()
+	v = make([]string, 0, len(knownCompressionAlgorithms))
+	for k, a := range knownCompressionAlgorithms {
+		if a.CompressFunc != nil {
+			v = append(v, k)
+		}
+	}
+	knownCompressionAlgorithmsLock.Unlock()
+	sort.Strings(v)
+	return v
+}
+
+func DecompressionAlgsList() (v []string) {
+	knownCompressionAlgorithmsLock.Lock()
+	v = make([]string, 0, len(knownCompressionAlgorithms))
+	for k, a := range knownCompressionAlgorithms {
+		if a.DecompressFunc != nil {
+			v = append(v, k)
+		}
+	}
+	knownCompressionAlgorithmsLock.Unlock()
+	sort.Strings(v)
+	return v
 }
 
 func strToCompressAlg(str string) (KnownCompressionAlgorithm, error) {

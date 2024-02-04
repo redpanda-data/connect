@@ -6,79 +6,81 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+
+	"github.com/benthosdev/benthos/v4/internal/value"
 )
 
 func TestTypeError(t *testing.T) {
 	tests := map[string]struct {
 		from   string
 		actual any
-		types  []ValueType
+		types  []value.Type
 		exp    string
 	}{
 		"want nothing get str": {
 			actual: "hello world",
-			types:  []ValueType{},
+			types:  []value.Type{},
 			exp:    `unexpected value, got string ("hello world")`,
 		},
 		"want num get str": {
 			actual: "hello world",
-			types:  []ValueType{ValueNumber},
+			types:  []value.Type{value.TNumber},
 			exp:    `expected number value, got string ("hello world")`,
 		},
 		"want num get str from": {
 			from:   "method foo",
 			actual: "hello world",
-			types:  []ValueType{ValueNumber},
+			types:  []value.Type{value.TNumber},
 			exp:    `expected number value, got string from method foo ("hello world")`,
 		},
 		"want num or bool get str": {
 			actual: "hello world",
-			types:  []ValueType{ValueNumber, ValueBool},
+			types:  []value.Type{value.TNumber, value.TBool},
 			exp:    `expected number or bool value, got string ("hello world")`,
 		},
 		"want num, bool or array get str": {
 			actual: "hello world",
-			types:  []ValueType{ValueNumber, ValueBool, ValueArray},
+			types:  []value.Type{value.TNumber, value.TBool, value.TArray},
 			exp:    `expected number, bool or array value, got string ("hello world")`,
 		},
 		"want num get bytes": {
 			actual: []byte("foo"),
-			types:  []ValueType{ValueNumber},
+			types:  []value.Type{value.TNumber},
 			exp:    `expected number value, got bytes`,
 		},
 		"want num get bool": {
 			actual: false,
-			types:  []ValueType{ValueNumber},
+			types:  []value.Type{value.TNumber},
 			exp:    `expected number value, got bool (false)`,
 		},
 		"want num get array": {
 			actual: []any{"foo"},
-			types:  []ValueType{ValueNumber},
+			types:  []value.Type{value.TNumber},
 			exp:    `expected number value, got array`,
 		},
 		"want num get object": {
 			actual: map[string]any{"foo": "bar"},
-			types:  []ValueType{ValueNumber},
+			types:  []value.Type{value.TNumber},
 			exp:    `expected number value, got object`,
 		},
 		"want num get null": {
 			actual: nil,
-			types:  []ValueType{ValueNumber},
+			types:  []value.Type{value.TNumber},
 			exp:    `expected number value, got null`,
 		},
 		"want num get delete": {
-			actual: Delete(nil),
-			types:  []ValueType{ValueNumber},
+			actual: value.Delete(nil),
+			types:  []value.Type{value.TNumber},
 			exp:    `expected number value, got delete`,
 		},
 		"want num get nothing": {
-			actual: Nothing(nil),
-			types:  []ValueType{ValueNumber},
+			actual: value.Nothing(nil),
+			types:  []value.Type{value.TNumber},
 			exp:    `expected number value, got nothing`,
 		},
 		"want num get unknown": {
 			actual: []string{"unknown"},
-			types:  []ValueType{ValueNumber},
+			types:  []value.Type{value.TNumber},
 			exp:    `expected number value, got unknown`,
 		},
 	}
@@ -86,7 +88,7 @@ func TestTypeError(t *testing.T) {
 	for name, test := range tests {
 		test := test
 		t.Run(name, func(t *testing.T) {
-			assert.Equal(t, test.exp, NewTypeErrorFrom(test.from, test.actual, test.types...).Error())
+			assert.Equal(t, test.exp, value.NewTypeErrorFrom(test.from, test.actual, test.types...).Error())
 		})
 	}
 }
@@ -101,7 +103,7 @@ func TestErrorFromError(t *testing.T) {
 	err = ErrFrom(fmt.Errorf("wat: %w", err), NewLiteralFunction("baz", nil))
 	assert.EqualError(t, err, "wat: bar: foo")
 
-	err = ErrFrom(fmt.Errorf("wat: %w", NewTypeError("hello", ValueBool)), NewLiteralFunction("baz", nil))
+	err = ErrFrom(fmt.Errorf("wat: %w", value.NewTypeError("hello", value.TBool)), NewLiteralFunction("baz", nil))
 	assert.EqualError(t, err, "baz: wat: expected bool value, got string (\"hello\")")
 }
 

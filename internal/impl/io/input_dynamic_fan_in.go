@@ -61,7 +61,7 @@ func newDynamicFanInInput(
 	}
 	for key, input := range inputs {
 		if err := d.addInput(key, input); err != nil {
-			d.log.Errorf("Failed to start new dynamic input '%v': %v\n", key, err)
+			d.log.Error("Failed to start new dynamic input '%v': %v\n", key, err)
 		}
 	}
 	go d.managerLoop()
@@ -179,13 +179,13 @@ func (d *dynamicFanInInput) managerLoop() {
 			var err error
 			if _, exists := d.inputs[wrappedInput.Name]; exists {
 				if err = d.removeInput(wrappedInput.ctx, wrappedInput.Name); err != nil {
-					d.log.Errorf("Failed to stop old copy of dynamic input '%v': %v\n", wrappedInput.Name, err)
+					d.log.Error("Failed to stop old copy of dynamic input '%v': %v\n", wrappedInput.Name, err)
 				}
 			}
 			if err == nil && wrappedInput.Input != nil {
 				// If the input is nil then we only wanted to remove the input.
 				if err = d.addInput(wrappedInput.Name, wrappedInput.Input); err != nil {
-					d.log.Errorf("Failed to start new dynamic input '%v': %v\n", wrappedInput.Name, err)
+					d.log.Error("Failed to start new dynamic input '%v': %v\n", wrappedInput.Name, err)
 				}
 			}
 			select {

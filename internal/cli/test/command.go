@@ -10,9 +10,10 @@ import (
 	"strings"
 
 	"github.com/fatih/color"
-	yaml "gopkg.in/yaml.v3"
 
+	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/config"
+	"github.com/benthosdev/benthos/v4/internal/config/test"
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	ifilepath "github.com/benthosdev/benthos/v4/internal/filepath"
 	"github.com/benthosdev/benthos/v4/internal/filepath/ifs"
@@ -23,7 +24,6 @@ var (
 	green  = color.New(color.FgGreen).SprintFunc()
 	red    = color.New(color.FgRed).SprintFunc()
 	yellow = color.New(color.FgYellow).SprintFunc()
-	blue   = color.New(color.FgBlue).SprintFunc()
 )
 
 //------------------------------------------------------------------------------
@@ -44,7 +44,7 @@ func GetPathPair(fullPath, testSuffix string) (configPath, definitionPath string
 	return
 }
 
-func getDefinition(targetPath, definitionPath string) (*Definition, error) {
+func getDefinition(targetPath, definitionPath string) ([]test.Case, error) {
 	if _, err := ifs.OS().Stat(targetPath); err != nil {
 		return nil, fmt.Errorf("unable to access target config file '%v': %v", targetPath, err)
 	}
@@ -53,40 +53,46 @@ func getDefinition(targetPath, definitionPath string) (*Definition, error) {
 			return nil, fmt.Errorf("unable to access test definition file '%v': %v", definitionPath, err)
 		}
 		if !strings.HasSuffix(targetPath, ".yaml") && !strings.HasSuffix(targetPath, ".yml") {
-			return &Definition{}, nil
+			return nil, nil
 		}
 		definitionPath = targetPath
 	}
-	var definition Definition
 	defBytes, err := ifs.ReadFile(ifs.OS(), definitionPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read test definition from '%v': %v", definitionPath, err)
 	}
-	if err := yaml.Unmarshal(defBytes, &definition); err != nil {
+
+	node, err := docs.UnmarshalYAML(defBytes)
+	if err != nil {
 		return nil, fmt.Errorf("failed to parse test definition from '%v': %v", definitionPath, err)
 	}
-	return &definition, nil
+
+	cases, err := test.FromAny(node)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse test definition from '%v': %v", definitionPath, err)
+	}
+	return cases, nil
 }
 
 // GetTestTargets searches for test definition targets in a path with a given
 // test suffix.
-func GetTestTargets(targetPaths []string, testSuffix string) (map[string]Definition, error) {
+func GetTestTargets(targetPaths []string, testSuffix string) (map[string][]test.Case, error) {
 	targetPaths, err := ifilepath.GlobsAndSuperPaths(ifs.OS(), targetPaths, "yaml", "yml")
 	if err != nil {
 		return nil, err
 	}
 
-	targetDefinitions := map[string]Definition{}
+	targetDefinitions := map[string][]test.Case{}
 	for _, tPath := range targetPaths {
 		configPath, definitionPath := GetPathPair(tPath, testSuffix)
 		def, err := getDefinition(configPath, definitionPath)
 		if err != nil {
 			return nil, err
 		}
-		if len(def.Cases) == 0 {
+		if len(def) == 0 {
 			continue
 		}
-		targetDefinitions[filepath.Clean(configPath)] = *def
+		targetDefinitions[filepath.Clean(configPath)] = def
 	}
 	return targetDefinitions, nil
 }
@@ -95,13 +101,12 @@ func GetTestTargets(targetPaths []string, testSuffix string) (map[string]Definit
 // errors (false for failed) or returns an error.
 func lintTarget(path, testSuffix string) ([]docs.Lint, error) {
 	confPath, _ := GetPathPair(path, testSuffix)
-	dummyConf := config.New()
 
 	// This is necessary as each test case can provide a different set of
 	// environment variables, so in order to test env vars properly we would
 	// need to lint for each case.
 	skipEnvVarCheck := true
-	lints, err := config.ReadFileLinted(ifs.OS(), confPath, skipEnvVarCheck, docs.NewLintConfig(), &dummyConf)
+	_, lints, err := config.ReadYAMLFileLinted(ifs.OS(), config.Spec(), confPath, skipEnvVarCheck, docs.NewLintConfig(bundle.GlobalEnvironment))
 	if err != nil {
 		return nil, err
 	}
@@ -146,7 +151,7 @@ func RunAll(paths []string, testSuffix string, lint bool, logger log.Modular, re
 				return false
 			}
 		}
-		if failCases, err = targets[target].Execute(target, resourcesPaths, logger); err != nil {
+		if failCases, err = Execute(targets[target], target, resourcesPaths, logger); err != nil {
 			fmt.Fprintf(os.Stderr, "Failed to execute test target '%v': %v\n", target, err)
 			return false
 		}

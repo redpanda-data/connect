@@ -8,8 +8,10 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/benthosdev/benthos/v4/internal/api"
+	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component/input"
 	"github.com/benthosdev/benthos/v4/internal/component/interop"
+	"github.com/benthosdev/benthos/v4/internal/component/testutil"
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
@@ -77,7 +79,7 @@ func dynInputAnyToYAMLConf(v any) []byte {
 		return nil
 	}
 
-	sanitConf := docs.NewSanitiseConfig()
+	sanitConf := docs.NewSanitiseConfig(bundle.GlobalEnvironment)
 	sanitConf.RemoveTypeField = true
 	sanitConf.ScrubSecrets = true
 	if err := docs.FieldInput("input", "").SanitiseYAML(&node, sanitConf); err != nil {
@@ -141,7 +143,7 @@ func newDynamicInputFromParsed(conf *service.ParsedConfig, res *service.Resource
 	}
 
 	dynAPI.OnUpdate(func(ctx context.Context, id string, c []byte) error {
-		newConf, err := input.FromYAML(string(c))
+		newConf, err := testutil.InputFromYAML(string(c))
 		if err != nil {
 			return err
 		}
@@ -156,7 +158,7 @@ func newDynamicInputFromParsed(conf *service.ParsedConfig, res *service.Resource
 		inputYAMLConfs[id] = dynInputAnyToYAMLConf(newConf)
 		inputConfigsMut.Unlock()
 		if err = fanIn.SetInput(ctx, id, newInput); err != nil {
-			mgr.Logger().Errorf("Failed to set input '%v': %v", id, err)
+			mgr.Logger().Error("Failed to set input '%v': %v", id, err)
 			inputConfigsMut.Lock()
 			delete(inputYAMLConfs, id)
 			inputConfigsMut.Unlock()
@@ -167,7 +169,7 @@ func newDynamicInputFromParsed(conf *service.ParsedConfig, res *service.Resource
 	dynAPI.OnDelete(func(ctx context.Context, id string) error {
 		err := fanIn.SetInput(ctx, id, nil)
 		if err != nil {
-			mgr.Logger().Errorf("Failed to close input '%v': %v", id, err)
+			mgr.Logger().Error("Failed to close input '%v': %v", id, err)
 		}
 		return err
 	})

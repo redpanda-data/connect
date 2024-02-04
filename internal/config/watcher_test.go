@@ -46,7 +46,7 @@ output:
 	}))
 
 	// Watch for configuration changes
-	testMgr, err := manager.New(manager.NewResourceConfig())
+	testMgr, err := manager.New(manager.ResourceConfig{})
 	require.NoError(t, err)
 	require.NoError(t, rdr.BeginFileWatching(testMgr, true))
 
@@ -98,7 +98,7 @@ output:
 	}))
 
 	// Watch for configuration changes
-	testMgr, err := manager.New(manager.NewResourceConfig())
+	testMgr, err := manager.New(manager.ResourceConfig{})
 	require.NoError(t, err)
 	require.NoError(t, rdr.BeginFileWatching(testMgr, true))
 
@@ -182,7 +182,7 @@ func TestReaderStreamDirectWatching(t *testing.T) {
 	}))
 
 	// Watch for configuration changes
-	testMgr, err := manager.New(manager.NewResourceConfig())
+	testMgr, err := manager.New(manager.ResourceConfig{})
 	require.NoError(t, err)
 	require.NoError(t, rdr.BeginFileWatching(testMgr, true))
 
@@ -266,7 +266,7 @@ func TestReaderStreamWildcardWatching(t *testing.T) {
 	}))
 
 	// Watch for configuration changes
-	testMgr, err := manager.New(manager.NewResourceConfig())
+	testMgr, err := manager.New(manager.ResourceConfig{})
 	require.NoError(t, err)
 	require.NoError(t, rdr.BeginFileWatching(testMgr, true))
 
@@ -350,7 +350,7 @@ func TestReaderStreamDirWatching(t *testing.T) {
 	}))
 
 	// Watch for configuration changes
-	testMgr, err := manager.New(manager.NewResourceConfig())
+	testMgr, err := manager.New(manager.ResourceConfig{})
 	require.NoError(t, err)
 	require.NoError(t, rdr.BeginFileWatching(testMgr, true))
 
@@ -441,7 +441,7 @@ func TestReaderWatcherRace(t *testing.T) {
 	}))
 
 	// Watch for configuration changes
-	testMgr, err := manager.New(manager.NewResourceConfig())
+	testMgr, err := manager.New(manager.ResourceConfig{})
 	require.NoError(t, err)
 	require.NoError(t, rdr.BeginFileWatching(testMgr, true))
 
@@ -521,7 +521,7 @@ processor_resources:
 	}))
 
 	// Watch for configuration changes
-	testMgr, err := manager.New(manager.NewResourceConfig())
+	testMgr, err := manager.New(manager.ResourceConfig{})
 	require.NoError(t, err)
 	require.NoError(t, rdr.BeginFileWatching(testMgr, true))
 

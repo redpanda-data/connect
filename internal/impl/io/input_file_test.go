@@ -11,9 +11,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"gopkg.in/yaml.v3"
 
-	"github.com/benthosdev/benthos/v4/internal/component/input"
+	"github.com/benthosdev/benthos/v4/internal/component/testutil"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
 )
@@ -58,15 +57,15 @@ func TestFileDirectory(t *testing.T) {
 	}
 	act := map[string]struct{}{}
 
-	conf := input.NewConfig()
-	require.NoError(t, yaml.Unmarshal(fmt.Appendf(nil, `
+	conf, err := testutil.InputFromYAML(fmt.Sprintf(`
 file:
   paths:
     - "%v/*.txt"
     - "%v/**/*.txt"
   scanner:
     to_the_end: {}
-`, tmpDir, tmpDir), &conf))
+`, tmpDir, tmpDir))
+	require.NoError(t, err)
 
 	i, err := mock.NewManager().NewInput(conf)
 	require.NoError(t, err)
@@ -145,14 +144,14 @@ func TestFileDirectoryDeprecated(t *testing.T) {
 	}
 	act := map[string]struct{}{}
 
-	conf := input.NewConfig()
-	require.NoError(t, yaml.Unmarshal(fmt.Appendf(nil, `
+	conf, err := testutil.InputFromYAML(fmt.Sprintf(`
 file:
   paths:
     - "%v/*.txt"
     - "%v/**/*.txt"
   codec: all-bytes
-`, tmpDir, tmpDir), &conf))
+`, tmpDir, tmpDir))
+	require.NoError(t, err)
 
 	i, err := mock.NewManager().NewInput(conf)
 	require.NoError(t, err)

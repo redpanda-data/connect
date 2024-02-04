@@ -6,16 +6,19 @@ import (
 	"testing"
 
 	"github.com/Jeffail/gabs/v2"
+	"github.com/stretchr/testify/require"
 
-	"github.com/benthosdev/benthos/v4/internal/component/processor"
+	"github.com/benthosdev/benthos/v4/internal/component/testutil"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
 )
 
 func TestJMESPathAllParts(t *testing.T) {
-	conf := processor.NewConfig()
-	conf.Type = "jmespath"
-	conf.JMESPath.Query = "foo.bar"
+	conf, err := testutil.ProcessorFromYAML(`
+jmespath:
+  query: foo.bar
+`)
+	require.NoError(t, err)
 
 	jSet, err := mock.NewManager().NewProcessor(conf)
 	if err != nil {
@@ -42,9 +45,11 @@ func TestJMESPathAllParts(t *testing.T) {
 }
 
 func TestJMESPathValidation(t *testing.T) {
-	conf := processor.NewConfig()
-	conf.Type = "jmespath"
-	conf.JMESPath.Query = "foo.bar"
+	conf, err := testutil.ProcessorFromYAML(`
+jmespath:
+  query: foo.bar
+`)
+	require.NoError(t, err)
 
 	jSet, err := mock.NewManager().NewProcessor(conf)
 	if err != nil {
@@ -65,9 +70,11 @@ func TestJMESPathValidation(t *testing.T) {
 }
 
 func TestJMESPathMutation(t *testing.T) {
-	conf := processor.NewConfig()
-	conf.Type = "jmespath"
-	conf.JMESPath.Query = "{foo: merge(foo, {bar:'baz'})}"
+	conf, err := testutil.ProcessorFromYAML(`
+jmespath:
+  query: "{foo: merge(foo, {bar:'baz'})}"
+`)
+	require.NoError(t, err)
 
 	jSet, err := mock.NewManager().NewProcessor(conf)
 	if err != nil {
@@ -156,9 +163,11 @@ func TestJMESPath(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		conf := processor.NewConfig()
-		conf.Type = "jmespath"
-		conf.JMESPath.Query = test.path
+		conf, err := testutil.ProcessorFromYAML(`
+jmespath:
+  query: "` + test.path + `"
+`)
+		require.NoError(t, err)
 
 		jSet, err := mock.NewManager().NewProcessor(conf)
 		if err != nil {

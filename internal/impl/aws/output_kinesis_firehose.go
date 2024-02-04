@@ -8,7 +8,6 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/firehose"
-	"github.com/aws/aws-sdk-go/service/firehose/firehoseiface"
 	"github.com/cenkalti/backoff/v4"
 
 	"github.com/benthosdev/benthos/v4/internal/component"
@@ -91,8 +90,13 @@ func init() {
 	}
 }
 
+type firehoseAPI interface {
+	DescribeDeliveryStream(*firehose.DescribeDeliveryStreamInput) (*firehose.DescribeDeliveryStreamOutput, error)
+	PutRecordBatch(input *firehose.PutRecordBatchInput) (*firehose.PutRecordBatchOutput, error)
+}
+
 type kinesisFirehoseWriter struct {
-	firehose firehoseiface.FirehoseAPI
+	firehose firehoseAPI
 
 	conf kfoConfig
 	log  *service.Logger

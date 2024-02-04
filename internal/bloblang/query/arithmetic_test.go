@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/benthosdev/benthos/v4/internal/message"
+	"github.com/benthosdev/benthos/v4/internal/value"
 )
 
 func TestArithmeticNumberDegradation(t *testing.T) {
@@ -704,8 +705,8 @@ func TestArithmetic(t *testing.T) {
 		"coalesce delete unmapped": {
 			input: arithmetic(
 				[]Function{
-					NewLiteralFunction("", Delete(nil)),
-					NewLiteralFunction("", Nothing(nil)),
+					NewLiteralFunction("", value.Delete(nil)),
+					NewLiteralFunction("", value.Nothing(nil)),
 					NewLiteralFunction("", "this"),
 				},
 				[]ArithmeticOperator{

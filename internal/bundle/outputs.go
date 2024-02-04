@@ -66,7 +66,6 @@ func (s *OutputSet) Add(constructor OutputConstructor, spec docs.ComponentSpec) 
 		constructor: constructor,
 		spec:        spec,
 	}
-	docs.DeprecatedProvider.RegisterDocs(spec)
 	return nil
 }
 

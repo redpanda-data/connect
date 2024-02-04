@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/benthosdev/benthos/v4/internal/value"
 	"github.com/benthosdev/benthos/v4/public/bloblang"
 )
 
@@ -233,7 +234,9 @@ func (f FieldSpec) AtVersion(v string) FieldSpec {
 }
 
 // HasAnnotatedOptions returns a new FieldSpec that specifies a specific list of
-// annotated options. Either.
+// annotated options. Field values are linted to ensure they match one of the
+// given options by a case insensitive match, use a custom lint function in
+// order to change this default behaviour.
 func (f FieldSpec) HasAnnotatedOptions(options ...string) FieldSpec {
 	if len(f.Options) > 0 {
 		panic("cannot combine annotated and non-annotated options for a field")
@@ -246,16 +249,19 @@ func (f FieldSpec) HasAnnotatedOptions(options ...string) FieldSpec {
 			options[i], options[i+1],
 		})
 	}
-	return f.lintOptions()
+	return f.lintOptions(false)
 }
 
 // HasOptions returns a new FieldSpec that specifies a specific list of options.
+// Field values are linted to ensure they match one of the given options by a
+// case insensitive match, use a custom lint function in order to change this
+// default behaviour.
 func (f FieldSpec) HasOptions(options ...string) FieldSpec {
 	if len(f.AnnotatedOptions) > 0 {
 		panic("cannot combine annotated and non-annotated options for a field")
 	}
 	f.Options = options
-	return f.lintOptions()
+	return f.lintOptions(false)
 }
 
 // WithChildren returns a new FieldSpec that has child fields.
@@ -335,6 +341,12 @@ func lintsFromAny(line int, v any) (lints []Lint) {
 // binary that defines it as the function cannot be serialized into a portable
 // schema.
 func (f FieldSpec) LinterBlobl(blobl string) FieldSpec {
+	if blobl == "" {
+		f.Linter = blobl
+		f.customLintFn = nil
+		return f
+	}
+
 	env := bloblang.NewEnvironment().OnlyPure()
 
 	m, err := env.Parse(blobl)
@@ -365,19 +377,14 @@ func (f FieldSpec) LinterBlobl(blobl string) FieldSpec {
 // and returns a linting error if that is not the case. This is currently opt-in
 // because some fields express options that are only a subset due to deprecated
 // functionality.
-func (f FieldSpec) lintOptions() FieldSpec {
-	var optionsBuilder, patternOptionsBuilder strings.Builder
-
+func (f FieldSpec) lintOptions(caseSensitive bool) FieldSpec {
+	var optionsBuilder strings.Builder
 	_, _ = optionsBuilder.WriteString("{\n")
-	_, _ = patternOptionsBuilder.WriteString("{\n")
-
 	addFn := func(o string) {
-		o = strings.ToLower(o)
-		if colonN := strings.Index(o, ":"); colonN != -1 {
-			_, _ = fmt.Fprintf(&patternOptionsBuilder, "  %q: true,\n", o[:colonN])
-		} else {
-			_, _ = fmt.Fprintf(&optionsBuilder, "  %q: true,\n", o)
+		if !caseSensitive {
+			o = strings.ToLower(o)
 		}
+		_, _ = fmt.Fprintf(&optionsBuilder, "  %q: true,\n", o)
 	}
 
 	for _, o := range f.Options {
@@ -386,27 +393,23 @@ func (f FieldSpec) lintOptions() FieldSpec {
 	for _, kv := range f.AnnotatedOptions {
 		addFn(kv[0])
 	}
-
 	_, _ = optionsBuilder.WriteString("}\n")
-	_, _ = patternOptionsBuilder.WriteString("}\n")
+
+	maybeLowerCase := ""
+	if !caseSensitive {
+		maybeLowerCase = ".lowercase()"
+	}
 
 	f.Linter = fmt.Sprintf(`
 let options = %v
-map is_pattern_option {
-  let pattern_options = %v
-  let parts = this.split(":")
-  root = $parts.length() >= 2 && $pattern_options.exists($parts.index(0))
+root = if !$options.exists(this.string()%v) {
+  {"type": 2, "what": "value %%v is not a valid option for this field".format(this.string())}
 }
-# Codec arguments can be chained with a / (i.e. "lines/multipart")
-let value_parts = if this.type() == "string" { this.split("/").map_each(part -> part.lowercase()) } else { [] }
-root = $value_parts.map_each(part -> if $options.exists(part) || part.apply("is_pattern_option") { null } else {
-  {"type": 2, "what": "value %%v is not a valid option for this field".format(part)}
-}).filter(ele -> ele != null)
-`, optionsBuilder.String(), patternOptionsBuilder.String())
+`, optionsBuilder.String(), maybeLowerCase)
 	return f
 }
 
-func (f FieldSpec) scrubValue(v any) (any, error) {
+func (f FieldSpec) ScrubValue(v any) (any, error) {
 	if f.Scrubber == "" {
 		return v, nil
 	}
@@ -428,7 +431,7 @@ func (f FieldSpec) scrubValue(v any) (any, error) {
 	return res, nil
 }
 
-func (f FieldSpec) getLintFunc() LintFunc {
+func (f FieldSpec) GetLintFunc() LintFunc {
 	fn := f.customLintFn
 	if fn == nil && len(f.Linter) > 0 {
 		fn = f.LinterBlobl(f.Linter).customLintFn
@@ -641,6 +644,26 @@ func ShouldDropDeprecated(b bool) FieldFilter {
 	}
 }
 
+// SetDefault attempts to override the current default value of a field,
+// identified by a series of names used to walk the config spec in order to
+// reach the intended field. This function currently does NOT support walking
+// through arrays.
+func (f FieldSpecs) SetDefault(v any, path ...string) {
+	if len(path) == 0 {
+		return
+	}
+	for i, child := range f {
+		if child.Name != path[0] {
+			continue
+		}
+		if len(path) > 1 {
+			child.Children.SetDefault(v, path[1:]...)
+		} else {
+			f[i] = child.HasDefault(v)
+		}
+	}
+}
+
 //------------------------------------------------------------------------------
 
 // LintConfig describes which rules apply when linting benthos configs, and also
@@ -660,9 +683,9 @@ type LintConfig struct {
 }
 
 // NewLintConfig creates a default linting config.
-func NewLintConfig() LintConfig {
+func NewLintConfig(prov Provider) LintConfig {
 	return LintConfig{
-		DocsProvider: DeprecatedProvider,
+		DocsProvider: prov,
 		BloblangEnv:  bloblang.GlobalEnvironment().Deactivated(),
 	}
 }
@@ -802,7 +825,22 @@ func (f FieldSpec) needsDefault() bool {
 
 func getDefault(pathName string, field FieldSpec) (any, error) {
 	if field.Default != nil {
-		// TODO: Should be deep copy here?
+		if len(field.Children) > 0 && field.Kind == KindScalar {
+			if tmp, ok := value.IClone(*field.Default).(map[string]any); ok {
+				for _, v := range field.Children {
+					if _, exists := tmp[v.Name]; exists {
+						continue
+					}
+					defV, err := getDefault(pathName+"."+v.Name, v)
+					if err == nil {
+						tmp[v.Name] = defV
+					} else if v.needsDefault() {
+						return nil, err
+					}
+				}
+				return tmp, nil
+			}
+		}
 		return *field.Default, nil
 	} else if field.Kind == KindArray {
 		return []any{}, nil

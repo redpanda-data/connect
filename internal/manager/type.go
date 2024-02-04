@@ -72,7 +72,7 @@ type Type struct {
 	apiReg APIReg
 	fs     ifs.FS
 
-	inputs     *liveResources[*inputWrapper]
+	inputs     *liveResources[*InputWrapper]
 	caches     *liveResources[cache.V1]
 	processors *liveResources[processor.V1]
 	outputs    *liveResources[*outputWrapper]
@@ -174,7 +174,7 @@ func New(conf ResourceConfig, opts ...OptFunc) (*Type, error) {
 		apiReg:                   mock.NewManager(),
 		namespaceStreamEndpoints: true,
 
-		inputs:     newLiveResources[*inputWrapper](),
+		inputs:     newLiveResources[*InputWrapper](),
 		caches:     newLiveResources[cache.V1](),
 		processors: newLiveResources[processor.V1](),
 		outputs:    newLiveResources[*outputWrapper](),
@@ -538,7 +538,7 @@ func (t *Type) ProbeInput(name string) bool {
 // resource will not be closed or removed. However, it is possible for the
 // resource to be accessed by any number of components in parallel.
 func (t *Type) AccessInput(ctx context.Context, name string, fn func(input.Streamed)) (err error) {
-	if rerr := t.inputs.RAccess(name, func(t *inputWrapper) {
+	if rerr := t.inputs.RAccess(name, func(t *InputWrapper) {
 		if t == nil {
 			err = ErrResourceNotFound(name)
 			return
@@ -560,12 +560,12 @@ func (t *Type) NewInput(conf input.Config) (input.Streamed, error) {
 // initialized in order to avoid duplicate connections.
 func (t *Type) StoreInput(ctx context.Context, name string, conf input.Config) error {
 	var initErr error
-	if err := t.inputs.Access(name, true, func(i **inputWrapper, set func(**inputWrapper)) {
+	if err := t.inputs.Access(name, true, func(i **InputWrapper, set func(**InputWrapper)) {
 		if i != nil {
 			// If a previous resource exists with the same name then we do NOT allow
 			// it to be replaced unless it can be successfully closed. This ensures
 			// that we do not leak connections.
-			if initErr = (*i).closeExistingInput(ctx, true); initErr != nil {
+			if initErr = (*i).CloseExistingInput(ctx, true); initErr != nil {
 				return
 			}
 		}
@@ -581,9 +581,9 @@ func (t *Type) StoreInput(ctx context.Context, name string, conf input.Config) e
 		}
 
 		if i != nil {
-			(*i).swapInput(newInput)
+			(*i).SwapInput(newInput)
 		} else {
-			ni := wrapInput(newInput)
+			ni := WrapInput(newInput)
 			set(&ni)
 		}
 	}); err != nil {
@@ -595,11 +595,11 @@ func (t *Type) StoreInput(ctx context.Context, name string, conf input.Config) e
 // RemoveInput attempts to close and remove an existing input resource.
 func (t *Type) RemoveInput(ctx context.Context, name string) error {
 	var closeErr error
-	if err := t.inputs.Access(name, false, func(i **inputWrapper, set func(i **inputWrapper)) {
+	if err := t.inputs.Access(name, false, func(i **InputWrapper, set func(i **InputWrapper)) {
 		if i == nil {
 			return
 		}
-		if closeErr = (*i).closeExistingInput(ctx, false); closeErr != nil {
+		if closeErr = (*i).CloseExistingInput(ctx, false); closeErr != nil {
 			return
 		}
 		set(nil)
@@ -886,7 +886,7 @@ func (t *Type) CloseObservability(ctx context.Context) error {
 // TriggerStopConsuming instructs the manager to stop resource inputs and
 // outputs from consuming data. This call does not block.
 func (t *Type) TriggerStopConsuming() {
-	_ = t.inputs.RWalk(func(name string, i *inputWrapper) error {
+	_ = t.inputs.RWalk(func(name string, i *InputWrapper) error {
 		i.TriggerStopConsuming()
 		return nil
 	})
@@ -899,7 +899,7 @@ func (t *Type) TriggerStopConsuming() {
 // TriggerCloseNow triggers the absolute shut down of this component but should
 // not block the calling goroutine.
 func (t *Type) TriggerCloseNow() {
-	_ = t.inputs.RWalk(func(name string, i *inputWrapper) error {
+	_ = t.inputs.RWalk(func(name string, i *InputWrapper) error {
 		i.TriggerCloseNow()
 		return nil
 	})
@@ -912,7 +912,7 @@ func (t *Type) TriggerCloseNow() {
 // WaitForClose is a blocking call to wait until the component has finished
 // shutting down and cleaning up resources.
 func (t *Type) WaitForClose(ctx context.Context) error {
-	if err := t.inputs.Walk(func(name string, i **inputWrapper, set func(i **inputWrapper)) error {
+	if err := t.inputs.Walk(func(name string, i **InputWrapper, set func(i **InputWrapper)) error {
 		if i == nil {
 			return nil
 		}

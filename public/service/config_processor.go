@@ -5,8 +5,6 @@ import (
 	"strconv"
 	"strings"
 
-	"gopkg.in/yaml.v3"
-
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/docs"
 )
@@ -20,28 +18,16 @@ func NewProcessorField(name string) *ConfigField {
 	}
 }
 
-func procConfFromAny(v any) (conf processor.Config, err error) {
-	switch t := v.(type) {
-	case *yaml.Node:
-		err = t.Decode(&conf)
-	case processor.Config:
-		conf = t
-	default:
-		err = fmt.Errorf("unexpected value, expected object, got %T", v)
-	}
-	return
-}
-
 // FieldProcessor accesses a field from a parsed config that was defined with
 // NewProcessorField and returns an OwnedProcessor, or an error if the
 // configuration was invalid.
 func (p *ParsedConfig) FieldProcessor(path ...string) (*OwnedProcessor, error) {
-	v, exists := p.field(path...)
+	v, exists := p.i.Field(path...)
 	if !exists {
 		return nil, fmt.Errorf("field '%v' was not found in the config", strings.Join(path, "."))
 	}
 
-	conf, err := procConfFromAny(v)
+	conf, err := processor.FromAny(p.mgr.Environment(), v)
 	if err != nil {
 		return nil, err
 	}
@@ -63,7 +49,7 @@ func NewProcessorListField(name string) *ConfigField {
 }
 
 func (p *ParsedConfig) fieldProcessorListConfigs(path ...string) ([]processor.Config, error) {
-	proc, exists := p.field(path...)
+	proc, exists := p.i.Field(path...)
 	if !exists {
 		return nil, fmt.Errorf("field '%v' was not found in the config", strings.Join(path, "."))
 	}
@@ -75,7 +61,7 @@ func (p *ParsedConfig) fieldProcessorListConfigs(path ...string) ([]processor.Co
 
 	var procConfigs []processor.Config
 	for i, iConf := range procsArray {
-		pconf, err := procConfFromAny(iConf)
+		pconf, err := processor.FromAny(p.mgr.Environment(), iConf)
 		if err != nil {
 			return nil, fmt.Errorf("value %v: %w", i, err)
 		}

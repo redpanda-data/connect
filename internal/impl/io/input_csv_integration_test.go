@@ -12,17 +12,17 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"gopkg.in/yaml.v3"
 
 	"github.com/benthosdev/benthos/v4/internal/component/input"
+	"github.com/benthosdev/benthos/v4/internal/component/testutil"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 
 	_ "github.com/benthosdev/benthos/v4/internal/impl/io"
 )
 
 func csvInput(t testing.TB, confPattern string, args ...any) input.Streamed {
-	iConf := input.NewConfig()
-	require.NoError(t, yaml.Unmarshal(fmt.Appendf(nil, confPattern, args...), &iConf))
+	iConf, err := testutil.InputFromYAML(fmt.Sprintf(confPattern, args...))
+	require.NoError(t, err)
 
 	i, err := mock.NewManager().NewInput(iConf)
 	require.NoError(t, err)

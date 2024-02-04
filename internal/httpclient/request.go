@@ -10,7 +10,7 @@ import (
 	"net/textproto"
 	"strings"
 
-	"github.com/benthosdev/benthos/v4/internal/bloblang/query"
+	"github.com/benthosdev/benthos/v4/internal/value"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
@@ -183,7 +183,7 @@ func (r *RequestCreator) body(refBatch service.MessageBatch) (body io.Reader, ov
 			"Content-Type": []string{contentType},
 		}
 		_ = r.metaInsertFilter.WalkMut(p, func(k string, v any) error {
-			headers[k] = append(headers[k], query.IToString(v))
+			headers[k] = append(headers[k], value.IToString(v))
 			return nil
 		})
 
@@ -238,7 +238,7 @@ func (r *RequestCreator) Create(refBatch service.MessageBatch) (req *http.Reques
 	}
 	if len(refBatch) > 0 {
 		_ = r.metaInsertFilter.WalkMut(refBatch[0], func(k string, v any) error {
-			req.Header.Add(k, query.IToString(v))
+			req.Header.Add(k, value.IToString(v))
 			return nil
 		})
 	}

@@ -6,6 +6,8 @@ import (
 	"strconv"
 
 	"github.com/Jeffail/gabs/v2"
+
+	"github.com/benthosdev/benthos/v4/internal/value"
 )
 
 var _ = registerMethod(
@@ -101,7 +103,7 @@ func boolMethod(target Function, args *ParsedParams) (Function, error) {
 			}
 			return nil, err
 		}
-		f, err := IToBool(v)
+		f, err := value.IToBool(v)
 		if err != nil {
 			if defaultBool != nil {
 				return *defaultBool, nil
@@ -359,7 +361,7 @@ func (n *notMethod) Exec(ctx FunctionContext) (any, error) {
 	}
 	b, ok := v.(bool)
 	if !ok {
-		return nil, NewTypeErrorFrom(n.fn.Annotation(), v, ValueBool)
+		return nil, value.NewTypeErrorFrom(n.fn.Annotation(), v, value.TBool)
 	}
 	return !b, nil
 }
@@ -427,7 +429,7 @@ func numberCoerceMethod(target Function, args *ParsedParams) (Function, error) {
 			}
 			return nil, err
 		}
-		f, err := IToNumber(v)
+		f, err := value.IToNumber(v)
 		if err != nil {
 			if defaultNum != nil {
 				return *defaultNum, nil
@@ -455,7 +457,7 @@ func orMethod(fn Function, args *ParsedParams) (Function, error) {
 	}
 	return ClosureFunction("method or", func(ctx FunctionContext) (any, error) {
 		res, err := fn.Exec(ctx)
-		if err != nil || IIsNull(res) {
+		if err != nil || value.IIsNull(res) {
 			return orFn.Exec(ctx)
 		}
 		return res, err
@@ -504,7 +506,7 @@ root.foo_type = this.foo.type()`,
 	),
 	func(*ParsedParams) (simpleMethod, error) {
 		return func(v any, ctx FunctionContext) (any, error) {
-			return string(ITypeOf(v)), nil
+			return string(value.ITypeOf(v)), nil
 		}, nil
 	},
 )

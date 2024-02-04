@@ -93,7 +93,7 @@ func (w *rejectWriter) WriteBatch(ctx context.Context, msg message.Batch) error 
 	errStr, err := w.errExpr.String(0, msg)
 	if err != nil {
 		// Wow this would be awkward
-		w.log.Errorf("Reject message interpolation error: %v", err)
+		w.log.Error("Reject message interpolation error: %v", err)
 		return fmt.Errorf("reject message interpolation error: %w", err)
 	}
 	return errors.New(errStr)

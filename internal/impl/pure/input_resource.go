@@ -109,7 +109,7 @@ func (r *resourceInput) loop() {
 		if err := r.mgr.AccessInput(context.Background(), r.name, func(i input.Streamed) {
 			resourceTChan = i.TransactionChan()
 		}); err != nil {
-			r.log.Errorf("Failed to obtain input resource '%v': %v", r.name, err)
+			r.log.Error("Failed to obtain input resource '%v': %v", r.name, err)
 			select {
 			case <-r.shutSig.CloseAtLeisureChan():
 				return
@@ -147,7 +147,7 @@ func (r *resourceInput) Connected() (isConnected bool) {
 	if err := r.mgr.AccessInput(context.Background(), r.name, func(i input.Streamed) {
 		isConnected = i.Connected()
 	}); err != nil {
-		r.log.Errorf("Failed to obtain input resource '%v': %v", r.name, err)
+		r.log.Error("Failed to obtain input resource '%v': %v", r.name, err)
 	}
 	return
 }

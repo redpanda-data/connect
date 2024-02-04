@@ -9,33 +9,33 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/bloblang/field"
 	"github.com/benthosdev/benthos/v4/internal/bloblang/mapping"
 	"github.com/benthosdev/benthos/v4/internal/bundle"
+	"github.com/benthosdev/benthos/v4/internal/component/interop"
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
-	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
-func init() {
-	err := bundle.AllProcessors.Add(func(conf processor.Config, mgr bundle.NewManagement) (processor.V1, error) {
-		p, err := newLogProcessor(conf, mgr, mgr.Logger())
-		if err != nil {
-			return nil, err
-		}
-		return processor.NewAutoObservedBatchedProcessor("log", p, mgr), nil
-	}, docs.ComponentSpec{
-		Name: "log",
-		Categories: []string{
-			"Utility",
-		},
-		Summary: `Prints a log event for each message. Messages always remain unchanged. The log message can be set using function interpolations described [here](/docs/configuration/interpolation#bloblang-queries) which allows you to log the contents and metadata of messages.`,
-		Description: `
-The ` + "`level`" + ` field determines the log level of the printed events and can be any of the following values: TRACE, DEBUG, INFO, WARN, ERROR.
+const (
+	logPFieldLevel         = "level"
+	logPFieldFields        = "fields"
+	logPFieldFieldsMapping = "fields_mapping"
+	logPFieldMessage       = "message"
+)
+
+func logProcSpec() *service.ConfigSpec {
+	return service.NewConfigSpec().
+		Categories("Utility").
+		Stable().
+		Summary(`Prints a log event for each message. Messages always remain unchanged. The log message can be set using function interpolations described [here](/docs/configuration/interpolation#bloblang-queries) which allows you to log the contents and metadata of messages.`).
+		Description(`
+The `+"`level`"+` field determines the log level of the printed events and can be any of the following values: TRACE, DEBUG, INFO, WARN, ERROR.
 
 ### Structured Fields
 
-It's also possible add custom fields to logs when the format is set to a structured form such as ` + "`json` or `logfmt`" + ` with the config field ` + "[`fields_mapping`](#fields_mapping)" + `:
+It's also possible add custom fields to logs when the format is set to a structured form such as `+"`json` or `logfmt`"+` with the config field `+"[`fields_mapping`](#fields_mapping)"+`:
 
-` + "```yaml" + `
+`+"```yaml"+`
 pipeline:
   processors:
     - log:
@@ -46,21 +46,60 @@ pipeline:
           root.id = this.id
           root.age = this.user.age
           root.kafka_topic = meta("kafka_topic")
-` + "```" + `
-`,
-		Config: docs.FieldComponent().WithChildren(
-			docs.FieldString("level", "The log level to use.").HasOptions("FATAL", "ERROR", "WARN", "INFO", "DEBUG", "TRACE", "ALL").LinterFunc(nil),
-			docs.FieldString("fields", "A map of fields to print along with the log message.").IsInterpolated().Map().Deprecated(),
-			docs.FieldString(
-				"fields_mapping", "An optional [Bloblang mapping](/docs/guides/bloblang/about) that can be used to specify extra fields to add to the log. If log fields are also added with the `fields` field then those values will override matching keys from this mapping.",
-				`root.reason = "cus I wana"
+`+"```"+`
+`).
+		Fields(
+			service.NewStringEnumField(logPFieldLevel, "FATAL", "ERROR", "WARN", "INFO", "DEBUG", "TRACE", "ALL").
+				Description("The log level to use.").
+				LintRule(``).
+				Default("INFO"),
+			service.NewBloblangField(logPFieldFieldsMapping).
+				Description("An optional [Bloblang mapping](/docs/guides/bloblang/about) that can be used to specify extra fields to add to the log. If log fields are also added with the `fields` field then those values will override matching keys from this mapping.").
+				Examples(
+					`root.reason = "cus I wana"
 root.id = this.id
 root.age = this.user.age.number()
 root.kafka_topic = meta("kafka_topic")`,
-			).AtVersion("3.40.0").IsBloblang(),
-			docs.FieldString("message", "The message to print.").IsInterpolated(),
-		).ChildDefaultAndTypesFromStruct(processor.NewLogConfig()),
-	})
+				).
+				Optional(),
+			service.NewInterpolatedStringField(logPFieldMessage).
+				Description("The message to print.").
+				Default(""),
+			service.NewInterpolatedStringMapField(logPFieldFields).
+				Description("A map of fields to print along with the log message.").
+				Optional().
+				Deprecated(),
+		)
+}
+
+func init() {
+	err := service.RegisterBatchProcessor(
+		"log", logProcSpec(),
+		func(conf *service.ParsedConfig, res *service.Resources) (service.BatchProcessor, error) {
+			logLevel, err := conf.FieldString(logPFieldLevel)
+			if err != nil {
+				return nil, err
+			}
+
+			messageStr, err := conf.FieldString(logPFieldMessage)
+			if err != nil {
+				return nil, err
+			}
+
+			depFields, _ := conf.FieldStringMap(logPFieldFields)
+			if err != nil {
+				return nil, err
+			}
+
+			fieldsMappingStr, _ := conf.FieldString(logPFieldFieldsMapping)
+
+			mgr := interop.UnwrapManagement(res)
+			p, err := newLogProcessor(messageStr, logLevel, fieldsMappingStr, depFields, mgr)
+			if err != nil {
+				return nil, err
+			}
+			return interop.NewUnwrapInternalBatchProcessor(processor.NewAutoObservedBatchedProcessor("log", p, mgr)), nil
+		})
 	if err != nil {
 		panic(err)
 	}
@@ -75,26 +114,26 @@ type logProcessor struct {
 	fieldsMapping *mapping.Executor
 }
 
-func newLogProcessor(conf processor.Config, mgr bundle.NewManagement, logger log.Modular) (processor.AutoObservedBatched, error) {
-	message, err := mgr.BloblEnvironment().NewField(conf.Log.Message)
+func newLogProcessor(messageStr, levelStr, fieldsMappingStr string, depFields map[string]string, mgr bundle.NewManagement) (processor.AutoObservedBatched, error) {
+	message, err := mgr.BloblEnvironment().NewField(messageStr)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse message expression: %v", err)
 	}
 	l := &logProcessor{
-		logger:  logger,
-		level:   conf.Log.Level,
+		logger:  mgr.Logger(),
+		level:   levelStr,
 		fields:  map[string]*field.Expression{},
 		message: message,
 	}
-	if len(conf.Log.Fields) > 0 {
-		for k, v := range conf.Log.Fields {
+	if len(depFields) > 0 {
+		for k, v := range depFields {
 			if l.fields[k], err = mgr.BloblEnvironment().NewField(v); err != nil {
 				return nil, fmt.Errorf("failed to parse field '%v' expression: %v", k, err)
 			}
 		}
 	}
-	if len(conf.Log.FieldsMapping) > 0 {
-		if l.fieldsMapping, err = mgr.BloblEnvironment().NewMapping(conf.Log.FieldsMapping); err != nil {
+	if len(fieldsMappingStr) > 0 {
+		if l.fieldsMapping, err = mgr.BloblEnvironment().NewMapping(fieldsMappingStr); err != nil {
 			return nil, fmt.Errorf("failed to parse fields mapping: %w", err)
 		}
 	}
@@ -109,23 +148,23 @@ func (l *logProcessor) levelToLogFn(level string) (func(logger log.Modular, msg 
 	switch level {
 	case "TRACE":
 		return func(logger log.Modular, msg string) {
-			logger.Traceln(msg)
+			logger.Trace(msg)
 		}, nil
 	case "DEBUG":
 		return func(logger log.Modular, msg string) {
-			logger.Debugln(msg)
+			logger.Debug(msg)
 		}, nil
 	case "INFO":
 		return func(logger log.Modular, msg string) {
-			logger.Infoln(msg)
+			logger.Info(msg)
 		}, nil
 	case "WARN":
 		return func(logger log.Modular, msg string) {
-			logger.Warnln(msg)
+			logger.Warn(msg)
 		}, nil
 	case "ERROR":
 		return func(logger log.Modular, msg string) {
-			logger.Errorln(msg)
+			logger.Error(msg)
 		}, nil
 	}
 	return nil, fmt.Errorf("log level not recognised: %v", level)
@@ -137,19 +176,19 @@ func (l *logProcessor) ProcessBatch(ctx *processor.BatchProcContext, msg message
 		if l.fieldsMapping != nil {
 			fieldsMsg, err := l.fieldsMapping.MapPart(i, msg)
 			if err != nil {
-				l.logger.Errorf("Failed to execute fields mapping: %v", err)
+				l.logger.Error("Failed to execute fields mapping: %v", err)
 				return nil
 			}
 
 			v, err := fieldsMsg.AsStructured()
 			if err != nil {
-				l.logger.Errorf("Failed to extract fields object: %v", err)
+				l.logger.Error("Failed to extract fields object: %v", err)
 				return nil
 			}
 
 			vObj, ok := v.(map[string]any)
 			if !ok {
-				l.logger.Errorf("Fields mapping yielded a non-object result: %T", v)
+				l.logger.Error("Fields mapping yielded a non-object result: %T", v)
 				return nil
 			}
 
@@ -171,7 +210,7 @@ func (l *logProcessor) ProcessBatch(ctx *processor.BatchProcContext, msg message
 			for k, vi := range l.fields {
 				var err error
 				if interpFields[k], err = vi.String(i, msg); err != nil {
-					l.logger.Errorf("Field %v interpolation error: %v", k, err)
+					l.logger.Error("Field %v interpolation error: %v", k, err)
 					return nil
 				}
 			}
@@ -179,7 +218,7 @@ func (l *logProcessor) ProcessBatch(ctx *processor.BatchProcContext, msg message
 		}
 		logMsg, err := l.message.String(i, msg)
 		if err != nil {
-			l.logger.Errorf("Message interpolation error: %v", err)
+			l.logger.Error("Message interpolation error: %v", err)
 			return nil
 		}
 		l.printFn(targetLog, logMsg)

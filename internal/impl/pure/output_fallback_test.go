@@ -15,10 +15,10 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	yaml "gopkg.in/yaml.v3"
 
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
+	"github.com/benthosdev/benthos/v4/internal/component/testutil"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
 )
@@ -27,8 +27,9 @@ var _ output.Streamed = &fallbackBroker{}
 
 func parseYAMLOutputConf(t testing.TB, formatStr string, args ...any) (conf output.Config) {
 	t.Helper()
-	conf = output.NewConfig()
-	require.NoError(t, yaml.Unmarshal(fmt.Appendf(nil, formatStr, args...), &conf))
+	var err error
+	conf, err = testutil.OutputFromYAML(fmt.Sprintf(formatStr, args...))
+	require.NoError(t, err)
 	return
 }
 

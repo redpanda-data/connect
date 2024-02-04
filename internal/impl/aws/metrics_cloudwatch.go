@@ -11,7 +11,6 @@ import (
 	"github.com/aws/aws-sdk-go/aws/request"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/cloudwatch"
-	"github.com/aws/aws-sdk-go/service/cloudwatch/cloudwatchiface"
 
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/internal/impl/aws/config"
@@ -278,8 +277,12 @@ func (c *cloudWatchGaugeVec) With(labelValues ...string) metrics.StatGauge {
 
 //------------------------------------------------------------------------------
 
+type cloudWatchAPI interface {
+	PutMetricDataWithContext(aws.Context, *cloudwatch.PutMetricDataInput, ...request.Option) (*cloudwatch.PutMetricDataOutput, error)
+}
+
 type cwMetrics struct {
-	client cloudwatchiface.CloudWatchAPI
+	client cloudWatchAPI
 
 	datumses  map[string]*cloudWatchDatum
 	datumLock *sync.Mutex
@@ -485,7 +488,7 @@ func (c *cwMetrics) flush() error {
 		}
 		throttled = false
 
-		if _, err := c.client.PutMetricData(&input); err != nil {
+		if _, err := c.client.PutMetricDataWithContext(context.Background(), &input); err != nil {
 			if request.IsErrorThrottle(err) {
 				throttled = true
 				c.log.Warn("Metrics request was throttled. Either increase flush period or reduce number of services sending metrics.")

@@ -5,9 +5,9 @@ import (
 	"errors"
 
 	"github.com/benthosdev/benthos/v4/internal/bloblang/mapping"
-	"github.com/benthosdev/benthos/v4/internal/bloblang/query"
 	"github.com/benthosdev/benthos/v4/internal/message"
 	"github.com/benthosdev/benthos/v4/internal/transaction"
+	"github.com/benthosdev/benthos/v4/internal/value"
 	"github.com/benthosdev/benthos/v4/public/bloblang"
 )
 
@@ -288,7 +288,7 @@ func (m *Message) MetaGet(key string) (string, bool) {
 	if !exists {
 		return "", false
 	}
-	return query.IToString(v), true
+	return value.IToString(v), true
 }
 
 // MetaGetMut attempts to find a metadata key from the message and returns the
