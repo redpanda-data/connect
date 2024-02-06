@@ -210,7 +210,7 @@ func SaramaSASLField() *service.ConfigField {
 				"SCRAM-SHA-256": "Authentication using the SCRAM-SHA-256 mechanism.",
 				"SCRAM-SHA-512": "Authentication using the SCRAM-SHA-512 mechanism.",
 			}).
-			Description("The SASL authentication mechanism, if left empty SASL authentication is not used. Warning: SCRAM based methods within Benthos have not received a security audit.").
+			Description("The SASL authentication mechanism, if left empty SASL authentication is not used.").
 			Default("none"),
 		service.NewStringField(saramaFieldSASLUser).
 			Description("A PLAIN username. It is recommended that you use environment variables to populate this field.").
