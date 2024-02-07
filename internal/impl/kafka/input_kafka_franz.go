@@ -368,7 +368,7 @@ func (p *partitionTracker) loop() {
 				defer p.batcherLock.Unlock()
 
 				flushBatch = nil
-				if tNext, exists := p.batcher.UntilNext(); !exists || tNext > 0 {
+				if tNext, exists := p.batcher.UntilNext(); !exists || tNext > 1 {
 					// This can happen if a pushed message triggered a batch before
 					// the last known flush period. In this case we simply enter the
 					// loop again which readjusts our flush batch timer.

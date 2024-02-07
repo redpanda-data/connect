@@ -189,8 +189,8 @@ func (p *Batcher) UntilNext() time.Duration {
 		return -1
 	}
 	tUntil := time.Until(p.lastBatch.Add(p.period))
-	if tUntil < 0 {
-		tUntil = 0
+	if tUntil <= 0 {
+		tUntil = 1
 	}
 	return tUntil
 }
