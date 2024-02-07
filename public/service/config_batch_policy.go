@@ -68,7 +68,7 @@ func (b *Batcher) Add(msg *Message) bool {
 // then the duration returned should be ignored.
 func (b *Batcher) UntilNext() (time.Duration, bool) {
 	t := b.p.UntilNext()
-	if t >= 0 {
+	if t > 0 {
 		return t, true
 	}
 	return 0, false
