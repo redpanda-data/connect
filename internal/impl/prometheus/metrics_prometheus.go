@@ -155,17 +155,40 @@ func (p *promGauge) DecrFloat64(count float64) {
 }
 
 func (p *promGauge) Set(value int64) {
+	p.tryReRegisterMetric()
 	p.ctr.Set(float64(value))
 }
 
 func (p *promGauge) SetFloat64(value float64) {
+	p.tryReRegisterMetric()
 	p.ctr.Set(value)
 }
 
-func (p *promGauge) Delete() {
-	// TODO this is ugly and will not work because even though it does the desired effect of removing the metric
-	// but when the metric will be re-set, it will need to re-registered
-	//p.reg.Unregister(p.ctr)
+func (p *promGauge) tryReRegisterMetric() {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	delKey := "__deleted__" + p.name + "__deleted__"
+	delGauge, ok := p.gauges[delKey]
+	if ok {
+		delete(p.gauges, delKey)
+		p.gauges[p.name] = delGauge
+		p.reg.MustRegister(delGauge.ctr)
+	}
+}
+
+func (p *promGauge) Delete() bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	oldGauge, ok := p.gauges[p.name]
+	if !ok {
+		return false
+	}
+	p.gauges["__deleted__"+p.name+"__deleted__"] = oldGauge
+	delete(p.gauges, p.name)
+	p.reg.Unregister(p.ctr)
+	return true
 }
 
 type promCounter struct {
