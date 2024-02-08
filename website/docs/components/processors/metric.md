@@ -24,53 +24,12 @@ metric:
   name: "" # No default (required)
   labels: {} # No default (optional)
   value: ""
+  delete_metric: "false"
 ```
 
 This processor works by evaluating an [interpolated field `value`](/docs/configuration/interpolation#bloblang-queries) for each message and updating a emitted metric according to the [type](#types).
 
 Custom metrics such as these are emitted along with Benthos internal metrics, where you can customize where metrics are sent, which metric names are emitted and rename them as/when appropriate. For more information check out the [metrics docs here](/docs/components/metrics/about).
-
-## Fields
-
-### `type`
-
-The metric [type](#types) to create.
-
-
-Type: `string`  
-Options: `counter`, `counter_by`, `gauge`, `timing`.
-
-### `name`
-
-The name of the metric to create, this must be unique across all Benthos components otherwise it will overwrite those other metrics.
-
-
-Type: `string`  
-
-### `labels`
-
-A map of label names and values that can be used to enrich metrics. Labels are not supported by some metric destinations, in which case the metrics series are combined.
-This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
-
-
-Type: `object`  
-
-```yml
-# Examples
-
-labels:
-  topic: ${! meta("kafka_topic") }
-  type: ${! json("doc.type") }
-```
-
-### `value`
-
-For some metric types specifies a value to set, increment. Certain metrics exporters such as Prometheus support floating point values, but those that do not will cast a floating point value into an integer.
-This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
-
-
-Type: `string`  
-Default: `""`  
 
 ## Examples
 
@@ -127,6 +86,57 @@ metrics:
 
 </TabItem>
 </Tabs>
+
+## Fields
+
+### `type`
+
+The metric [type](#types) to create.
+
+
+Type: `string`  
+Options: `counter`, `counter_by`, `gauge`, `timing`.
+
+### `name`
+
+The name of the metric to create, this must be unique across all Benthos components otherwise it will overwrite those other metrics.
+
+
+Type: `string`  
+
+### `labels`
+
+A map of label names and values that can be used to enrich metrics. Labels are not supported by some metric destinations, in which case the metrics series are combined.
+This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
+
+
+Type: `object`  
+
+```yml
+# Examples
+
+labels:
+  topic: ${! meta("kafka_topic") }
+  type: ${! json("doc.type") }
+```
+
+### `value`
+
+For some metric types specifies a value to set, increment. Certain metrics exporters such as Prometheus support floating point values, but those that do not will cast a floating point value into an integer.
+This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
+
+
+Type: `string`  
+Default: `""`  
+
+### `delete_metric`
+
+When set to true, the metric will be deleted. Currently this is only supported for Prometheus metrics.
+This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
+
+
+Type: `string`  
+Default: `"false"`  
 
 ## Types
 
