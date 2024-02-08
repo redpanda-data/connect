@@ -286,6 +286,7 @@ func (a *airGapTimingVec) With(labelValues ...string) metrics.StatTimer {
 
 type airGapGaugeVec struct {
 	ctor MetricsExporterGaugeCtor
+	name string
 }
 
 func (a *airGapGaugeVec) With(labelValues ...string) metrics.StatGauge {
@@ -313,7 +314,10 @@ func (m *airGapMetrics) GetGauge(path string) metrics.StatGauge {
 }
 
 func (m *airGapMetrics) GetGaugeVec(path string, labelNames ...string) metrics.StatGaugeVec {
-	return &airGapGaugeVec{m.airGapped.NewGaugeCtor(path, labelNames...)}
+	return &airGapGaugeVec{
+		ctor: m.airGapped.NewGaugeCtor(path, labelNames...),
+		name: path,
+	}
 }
 
 func (m *airGapMetrics) HandlerFunc() http.HandlerFunc {
