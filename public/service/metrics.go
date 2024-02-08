@@ -233,12 +233,13 @@ func (a *airGapGauge) Set(value int64) {
 	a.airGapped.Set(value)
 }
 
-func (a *airGapGauge) Delete() {
+func (a *airGapGauge) Delete() bool {
 	if fer, ok := a.airGapped.(interface {
-		Delete()
+		Delete() bool
 	}); ok {
-		fer.Delete()
+		return fer.Delete()
 	}
+	return true
 }
 
 type airGapCounter struct {
