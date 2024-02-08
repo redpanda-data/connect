@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/benthosdev/benthos/v4/public/bloblang"
 	"sort"
 	"strconv"
 	"strings"
@@ -20,11 +19,11 @@ import (
 )
 
 const (
-	metProcFieldType       = "type"
-	metProcFieldName       = "name"
-	metProcFieldLabels     = "labels"
-	metProcFieldValue      = "value"
-	metProcFieldClearValue = "clear_value"
+	metProcFieldType         = "type"
+	metProcFieldName         = "name"
+	metProcFieldLabels       = "labels"
+	metProcFieldValue        = "value"
+	metProcFieldDeleteMetric = "delete_metric"
 )
 
 func metProcSpec() *service.ConfigSpec {
@@ -139,8 +138,8 @@ metrics:
 			service.NewInterpolatedStringField(metProcFieldValue).
 				Description("For some metric types specifies a value to set, increment. Certain metrics exporters such as Prometheus support floating point values, but those that do not will cast a floating point value into an integer.").
 				Default(""),
-			service.NewBloblangField(metProcFieldClearValue).
-				Description("Delete metric.").
+			service.NewInterpolatedStringField(metProcFieldDeleteMetric).
+				Description("When set to true, the metric will be deleted. Currently this is only supported for Prometheus metrics.").
 				Optional().
 				Default("false"),
 		)
@@ -172,13 +171,13 @@ func init() {
 				return nil, err
 			}
 
-			shouldClearValue, err := conf.FieldBloblang(metProcFieldClearValue)
+			shouldDeleteMetric, err := conf.FieldString(metProcFieldDeleteMetric)
 			if err != nil {
 				return nil, err
 			}
 
 			mgr := interop.UnwrapManagement(res)
-			p, err := newMetricProcessor(procTypeStr, procName, valueStr, shouldClearValue, labelMap, mgr)
+			p, err := newMetricProcessor(procTypeStr, procName, valueStr, shouldDeleteMetric, labelMap, mgr)
 			if err != nil {
 				return nil, err
 			}
@@ -204,7 +203,7 @@ type metricProcessor struct {
 	mGaugeVec   metrics.StatGaugeVec
 	mTimerVec   metrics.StatTimerVec
 
-	shouldClearValue *bloblang.Executor
+	shouldDeleteMetric *field.Expression
 
 	handler func(string, int, message.Batch) error
 }
@@ -241,16 +240,21 @@ func (l labels) values(index int, msg message.Batch) ([]string, error) {
 	return values, nil
 }
 
-func newMetricProcessor(typeStr, name, valueStr string, shouldClearValue *bloblang.Executor, labels map[string]string, mgr bundle.NewManagement) (processor.V1, error) {
+func newMetricProcessor(typeStr, name, valueStr, shouldDeleteMetric string, labels map[string]string, mgr bundle.NewManagement) (processor.V1, error) {
 	value, err := mgr.BloblEnvironment().NewField(valueStr)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse value expression: %v", err)
 	}
 
+	deleteMetric, err := mgr.BloblEnvironment().NewField(shouldDeleteMetric)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse value expression: %v", err)
+	}
+
 	m := &metricProcessor{
-		log:              mgr.Logger(),
-		value:            value,
-		shouldClearValue: shouldClearValue,
+		log:                mgr.Logger(),
+		value:              value,
+		shouldDeleteMetric: deleteMetric,
 	}
 
 	if name == "" {
