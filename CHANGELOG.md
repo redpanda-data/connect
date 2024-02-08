@@ -14,6 +14,7 @@ All notable changes to this project will be documented in this file.
 - New `processors` processor.
 - Field `read_header` added to the `amqp_1` input.
 - A debug endpoint `/debug/pprof/allocs` has been added for profiling allocations.
+- New `cockroachdb_changefeed` input.
 
 ### Fixed
 
