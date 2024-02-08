@@ -370,21 +370,22 @@ func (m *metricProcessor) handleCounterBy(val string, index int, msg message.Bat
 }
 
 func (m *metricProcessor) handleGauge(val string, index int, msg message.Batch) error {
+	shouldDeleteMetricStr, err := m.shouldDeleteMetric.String(index, msg)
+	if err != nil {
+		return err
+	}
+	shouldDeleteMetric, err := strconv.ParseBool(shouldDeleteMetricStr)
+	if err != nil {
+		return fmt.Errorf("could not convert %s into bool, current type: [%T], value: [%v]", metProcFieldDeleteMetric, shouldDeleteMetricStr, shouldDeleteMetricStr)
+	}
+
 	if len(m.labels) > 0 {
 		labelValues, err := m.labels.values(index, msg)
 		if err != nil {
 			return err
 		}
 		gaugeVec := m.mGaugeVec.With(labelValues...)
-		shouldClearValueVal, err := m.shouldClearValue.Query(msg)
-		if err != nil {
-			return err
-		}
-		shouldClearValue, ok := shouldClearValueVal.(bool)
-		if !ok {
-			return fmt.Errorf("could not convert %s into bool, current type %T", metProcFieldClearValue, shouldClearValueVal)
-		}
-		if shouldClearValue {
+		if shouldDeleteMetric {
 			gaugeVec.Delete()
 			return nil
 		}
@@ -396,11 +397,16 @@ func (m *metricProcessor) handleGauge(val string, index int, msg message.Batch) 
 			return nil
 		})
 	}
+	gauge := m.mGauge
+	if shouldDeleteMetric {
+		gauge.Delete()
+		return nil
+	}
 	return withNumberStr(val, func(i int64) error {
-		m.mGauge.Set(i)
+		gauge.Set(i)
 		return nil
 	}, func(f float64) error {
-		m.mGauge.SetFloat64(f)
+		gauge.SetFloat64(f)
 		return nil
 	})
 }
