@@ -2,7 +2,8 @@ package gcp
 
 import (
 	"context"
-	"io"
+	"log"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -10,8 +11,9 @@ import (
 	"time"
 
 	"cloud.google.com/go/bigquery"
-	"github.com/stretchr/testify/assert"
+	"cloud.google.com/go/bigquery/storage/apiv1/storagepb"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc"
 
 	"github.com/benthosdev/benthos/v4/public/service"
 )
@@ -176,67 +178,6 @@ func TestGCPBigQueryOutputConvertToIsoError(t *testing.T) {
 	require.Error(t, err)
 }
 
-func TestGCPBigQueryOutputCreateTableLoaderOk(t *testing.T) {
-	server := httptest.NewServer(
-		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			_, _ = w.Write([]byte(`{"id" : "dataset_meow"}`))
-		}),
-	)
-	defer server.Close()
-
-	// Setting non-default values
-	outputConfig := gcpBigQueryConfFromYAML(t, `
-project: project_meow
-dataset: dataset_meow
-table: table_meow
-write_disposition: WRITE_TRUNCATE
-create_disposition: CREATE_NEVER
-format: CSV
-auto_detect: true
-ignore_unknown_values: true
-max_bad_records: 123
-csv:
-  field_delimiter: ';'
-  allow_jagged_rows: true
-  allow_quoted_newlines: true
-  encoding: ISO-8859-1
-  skip_leading_rows: 10
-`)
-
-	output, err := newGCPBigQueryOutput(outputConfig, nil)
-	require.NoError(t, err)
-
-	output.clientURL = gcpBQClientURL(server.URL)
-	err = output.Connect(context.Background())
-	defer output.Close(context.Background())
-	require.NoError(t, err)
-
-	data := []byte("1,2,3")
-	loader := output.createTableLoader(&data)
-
-	assert.Equal(t, "table_meow", loader.Dst.TableID)
-	assert.Equal(t, "dataset_meow", loader.Dst.DatasetID)
-	assert.Equal(t, "project_meow", loader.Dst.ProjectID)
-	assert.Equal(t, bigquery.TableWriteDisposition(outputConfig.WriteDisposition), loader.WriteDisposition)
-	assert.Equal(t, bigquery.TableCreateDisposition(outputConfig.CreateDisposition), loader.CreateDisposition)
-
-	readerSource, ok := loader.Src.(*bigquery.ReaderSource)
-	require.True(t, ok)
-
-	assert.Equal(t, bigquery.DataFormat(outputConfig.Format), readerSource.SourceFormat)
-	assert.Equal(t, outputConfig.AutoDetect, readerSource.AutoDetect)
-	assert.Equal(t, outputConfig.IgnoreUnknownValues, readerSource.IgnoreUnknownValues)
-	assert.Equal(t, int64(outputConfig.MaxBadRecords), readerSource.MaxBadRecords)
-
-	expectedCsvOptions := outputConfig.CSVOptions
-
-	assert.Equal(t, expectedCsvOptions.FieldDelimiter, readerSource.FieldDelimiter)
-	assert.Equal(t, expectedCsvOptions.AllowJaggedRows, readerSource.AllowJaggedRows)
-	assert.Equal(t, expectedCsvOptions.AllowQuotedNewlines, readerSource.AllowQuotedNewlines)
-	assert.Equal(t, bigquery.Encoding(expectedCsvOptions.Encoding), readerSource.Encoding)
-	assert.Equal(t, int64(expectedCsvOptions.SkipLeadingRows), readerSource.SkipLeadingRows)
-}
-
 func TestGCPBigQueryOutputDatasetDoNotExists(t *testing.T) {
 	server := httptest.NewServer(
 		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -245,6 +186,8 @@ func TestGCPBigQueryOutputDatasetDoNotExists(t *testing.T) {
 		}),
 	)
 	defer server.Close()
+
+	_, fakeStorageAddr := makeFakeStorageServer(t)
 
 	config := gcpBigQueryConfFromYAML(t, `
 project: project_meow
@@ -256,6 +199,7 @@ table: table_meow
 	require.NoError(t, err)
 
 	output.clientURL = gcpBQClientURL(server.URL)
+	output.mwClientURL = gcpMWClientURL(fakeStorageAddr)
 
 	err = output.Connect(context.Background())
 	defer output.Close(context.Background())
@@ -272,6 +216,8 @@ func TestGCPBigQueryOutputDatasetDoNotExistsUnknownError(t *testing.T) {
 	)
 	defer server.Close()
 
+	_, fakeStorageAddr := makeFakeStorageServer(t)
+
 	config := gcpBigQueryConfFromYAML(t, `
 project: project_meow
 dataset: dataset_meow
@@ -282,6 +228,7 @@ table: table_meow
 	require.NoError(t, err)
 
 	output.clientURL = gcpBQClientURL(server.URL)
+	output.mwClientURL = gcpMWClientURL(fakeStorageAddr)
 
 	ctx, done := context.WithTimeout(context.Background(), time.Millisecond*200)
 	defer done()
@@ -308,17 +255,19 @@ func TestGCPBigQueryOutputTableDoNotExists(t *testing.T) {
 	)
 	defer server.Close()
 
+	_, fakeStorageAddr := makeFakeStorageServer(t)
+
 	config := gcpBigQueryConfFromYAML(t, `
 project: project_meow
 dataset: dataset_meow
 table: table_meow
-create_disposition: CREATE_NEVER
 `)
 
 	output, err := newGCPBigQueryOutput(config, nil)
 	require.NoError(t, err)
 
 	output.clientURL = gcpBQClientURL(server.URL)
+	output.mwClientURL = gcpMWClientURL(fakeStorageAddr)
 
 	ctx, done := context.WithTimeout(context.Background(), time.Millisecond*200)
 	defer done()
@@ -345,17 +294,19 @@ func TestGCPBigQueryOutputTableDoNotExistsUnknownError(t *testing.T) {
 	)
 	defer server.Close()
 
+	_, fakeStorageAddr := makeFakeStorageServer(t)
+
 	config := gcpBigQueryConfFromYAML(t, `
 project: project_meow
 dataset: dataset_meow
 table: table_meow
-create_disposition: CREATE_NEVER
 `)
 
 	output, err := newGCPBigQueryOutput(config, nil)
 	require.NoError(t, err)
 
 	output.clientURL = gcpBQClientURL(server.URL)
+	output.mwClientURL = gcpMWClientURL(fakeStorageAddr)
 
 	ctx, done := context.WithTimeout(context.Background(), time.Millisecond*200)
 	defer done()
@@ -375,37 +326,7 @@ func TestGCPBigQueryOutputConnectOk(t *testing.T) {
 	)
 	defer server.Close()
 
-	config := gcpBigQueryConfFromYAML(t, `
-project: project_meow
-dataset: dataset_meow
-table: table_meow
-`)
-
-	output, err := newGCPBigQueryOutput(config, nil)
-	require.NoError(t, err)
-
-	output.clientURL = gcpBQClientURL(server.URL)
-
-	err = output.Connect(context.Background())
-	defer output.Close(context.Background())
-
-	require.NoError(t, err)
-}
-
-func TestGCPBigQueryOutputConnectWithoutTableOk(t *testing.T) {
-	server := httptest.NewServer(
-		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if r.URL.Path == "/projects/project_meow/datasets/dataset_meow" {
-				_, _ = w.Write([]byte(`{"id" : "dataset_meow"}`))
-
-				return
-			}
-
-			w.WriteHeader(http.StatusNotFound)
-			_, _ = w.Write([]byte("{}"))
-		}),
-	)
-	defer server.Close()
+	_, fakeStorageAddr := makeFakeStorageServer(t)
 
 	config := gcpBigQueryConfFromYAML(t, `
 project: project_meow
@@ -417,6 +338,7 @@ table: table_meow
 	require.NoError(t, err)
 
 	output.clientURL = gcpBQClientURL(server.URL)
+	output.mwClientURL = gcpMWClientURL(fakeStorageAddr)
 
 	err = output.Connect(context.Background())
 	defer output.Close(context.Background())
@@ -426,7 +348,6 @@ table: table_meow
 
 func TestGCPBigQueryOutputWriteOk(t *testing.T) {
 	serverCalledCount := 0
-	var body []byte
 	server := httptest.NewServer(
 		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			serverCalledCount++
@@ -437,22 +358,18 @@ func TestGCPBigQueryOutputWriteOk(t *testing.T) {
 				return
 			}
 
-			// job execution called with job.Run()
-			if r.URL.Path == "/upload/bigquery/v2/projects/project_meow/jobs" {
-				var err error
-				body, err = io.ReadAll(r.Body)
-				if err != nil {
-					w.WriteHeader(http.StatusInternalServerError)
-					return
-				}
-
-				_, _ = w.Write([]byte(`{"jobReference" : {"jobId" : "1"}}`))
-				return
-			}
-
-			// job status called with job.Wait()
-			if r.URL.Path == "/projects/project_meow/jobs/1" {
-				_, _ = w.Write([]byte(`{"status":{"state":"DONE"}}`))
+			// checking table existence
+			if r.URL.Path == "/projects/project_meow/datasets/dataset_meow/tables/table_meow" {
+				_, _ = w.Write([]byte(`{
+  "id": "table_meow",
+  "schema": {
+    "fields": [
+      { "name": "what1", "type": "STRING" },
+      { "name": "what2", "type": "INTEGER" },
+      { "name": "what3", "type": "BOOLEAN" }
+    ]
+  }
+}`))
 				return
 			}
 
@@ -461,6 +378,8 @@ func TestGCPBigQueryOutputWriteOk(t *testing.T) {
 		}),
 	)
 	defer server.Close()
+
+	fakeStorageServer, fakeStorageAddr := makeFakeStorageServer(t)
 
 	config := gcpBigQueryConfFromYAML(t, `
 project: project_meow
@@ -472,6 +391,7 @@ table: table_meow
 	require.NoError(t, err)
 
 	output.clientURL = gcpBQClientURL(server.URL)
+	output.mwClientURL = gcpMWClientURL(fakeStorageAddr)
 
 	err = output.Connect(context.Background())
 	defer output.Close(context.Background())
@@ -484,11 +404,10 @@ table: table_meow
 	})
 	require.NoError(t, err)
 
-	require.NotNil(t, body)
+	require.NotNil(t, fakeStorageServer.Data)
 
-	require.Equal(t, 3, serverCalledCount)
-
-	require.True(t, strings.Contains(string(body), `{"what1":"meow1","what2":1,"what3":true}`+"\n"+`{"what1":"meow2","what2":2,"what3":false}`))
+	require.Equal(t, 2, serverCalledCount)
+	require.True(t, strings.Contains(string(fakeStorageServer.Data), `{"what1":"meow1","what2":1,"what3":true}`+"\n"+`{"what1":"meow2","what2":2,"what3":false}`))
 }
 
 func TestGCPBigQueryOutputWriteError(t *testing.T) {
@@ -500,11 +419,19 @@ func TestGCPBigQueryOutputWriteError(t *testing.T) {
 				return
 			}
 
+			// checking table existence
+			if r.URL.Path == "/projects/project_meow/datasets/dataset_meow/tables/table_meow" {
+				_, _ = w.Write([]byte(`{"id" : "table_meow"}`))
+				return
+			}
+
 			w.WriteHeader(http.StatusInternalServerError)
 			_, _ = w.Write([]byte("{}"))
 		}),
 	)
 	defer server.Close()
+
+	_, fakeStorageAddr := makeFakeStorageServer(t)
 
 	config := gcpBigQueryConfFromYAML(t, `
 project: project_meow
@@ -516,6 +443,7 @@ table: table_meow
 	require.NoError(t, err)
 
 	output.clientURL = gcpBQClientURL(server.URL)
+	output.mwClientURL = gcpMWClientURL(fakeStorageAddr)
 
 	err = output.Connect(context.Background())
 	defer output.Close(context.Background())
@@ -527,4 +455,21 @@ table: table_meow
 		service.NewMessage([]byte(`{"what1":"meow2","what2":2,"what3":false}`)),
 	})
 	require.Error(t, err)
+}
+
+func makeFakeStorageServer(t *testing.T) (*fakeBigQueryWriteServer, string) {
+	fakeServer := &fakeBigQueryWriteServer{}
+	grpcServer := grpc.NewServer()
+	storagepb.RegisterBigQueryWriteServer(grpcServer, fakeServer)
+
+	listener, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	go func() {
+		if err := grpcServer.Serve(listener); err != nil {
+			log.Fatal(err)
+		}
+	}()
+	return fakeServer, listener.Addr().String()
 }
