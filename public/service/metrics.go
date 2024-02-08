@@ -178,7 +178,7 @@ type MetricsExporterGauge interface {
 	// order of labels specified when the gauge was created.
 	// TODO: V5 Add this (or replace the int based method)
 	// SetFloat64(value float64)
-	// Delete()
+	// Delete() bool
 }
 
 //------------------------------------------------------------------------------
