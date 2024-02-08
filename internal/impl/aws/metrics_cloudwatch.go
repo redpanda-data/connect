@@ -119,6 +119,10 @@ type cloudWatchStat struct {
 	dimensions []*cloudwatch.Dimension
 }
 
+func (c *cloudWatchStat) Delete() bool {
+	return true
+}
+
 func (c *cloudWatchStat) SetFloat64(value float64) {
 	c.Set(int64(value))
 }
