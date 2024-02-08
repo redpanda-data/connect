@@ -131,7 +131,11 @@ func init() {
 //------------------------------------------------------------------------------
 
 type promGauge struct {
-	ctr prometheus.Gauge
+	ctr    prometheus.Gauge
+	reg    *prometheus.Registry
+	gauges map[string]*promGaugeVec
+	name   string
+	mu     sync.Mutex
 }
 
 func (p *promGauge) Incr(count int64) {
@@ -226,13 +230,19 @@ func (p *promTimingHistVec) With(labelValues ...string) metrics.StatTimer {
 }
 
 type promGaugeVec struct {
-	ctr   *prometheus.GaugeVec
-	count int
+	ctr    *prometheus.GaugeVec
+	reg    *prometheus.Registry
+	gauges map[string]*promGaugeVec
+	count  int
+	name   string
 }
 
 func (p *promGaugeVec) With(labelValues ...string) metrics.StatGauge {
 	return &promGauge{
-		ctr: p.ctr.WithLabelValues(labelValues...),
+		ctr:    p.ctr.WithLabelValues(labelValues...),
+		reg:    p.reg,
+		gauges: p.gauges,
+		name:   p.name,
 	}
 }
 
@@ -499,8 +509,11 @@ func (p *Metrics) NewGaugeCtor(path string, labelNames ...string) service.Metric
 		p.reg.MustRegister(ctr)
 
 		pv = &promGaugeVec{
-			ctr:   ctr,
-			count: len(labelNames),
+			ctr:    ctr,
+			reg:    p.reg,
+			gauges: p.gauges,
+			count:  len(labelNames),
+			name:   path,
 		}
 		p.gauges[path] = pv
 	}
