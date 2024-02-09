@@ -27,10 +27,11 @@ linters-settings:
       - ifElseChain # Mostly false positives
       - ptrToRefParam # False positives?
       - importShadow # Probably not worth the hassle...
-  depguard:
-    include-go-root: true
-    packages:
-      - "io/ioutil"
+  # depguard:
+  #   rules:
+  #     main:
+  #       deny:
+  #         - pkg: "io/ioutil"
 
 linters:
   disable-all: true
@@ -41,7 +42,6 @@ linters:
     - govet
     - ineffassign
     - staticcheck
-    # Another linter bites the dust, for some reason this is false erroring on github actions
     - typecheck
     - unused
     # Extra linters:
