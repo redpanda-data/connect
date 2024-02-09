@@ -190,7 +190,6 @@ type httpServerOutput struct {
 
 	mWSSent      metrics.StatCounter
 	mWSBatchSent metrics.StatCounter
-	mWSLatency   metrics.StatTimer
 	mWSError     metrics.StatCounter
 
 	mStreamSent      metrics.StatCounter
@@ -217,7 +216,6 @@ func newHTTPServerOutput(conf hsoConfig, mgr bundle.NewManagement) (output.Strea
 	stats := mgr.Metrics()
 	mSent := stats.GetCounter("output_sent")
 	mBatchSent := stats.GetCounter("output_batch_sent")
-	mLatency := stats.GetTimer("output_latency_ns")
 	mError := stats.GetCounter("output_error")
 
 	h := httpServerOutput{
@@ -233,7 +231,6 @@ func newHTTPServerOutput(conf hsoConfig, mgr bundle.NewManagement) (output.Strea
 		mWSSent:      mSent,
 		mWSBatchSent: mBatchSent,
 		mWSError:     mError,
-		mWSLatency:   mLatency,
 
 		mStreamSent:      mSent,
 		mStreamBatchSent: mBatchSent,
