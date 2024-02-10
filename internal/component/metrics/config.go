@@ -49,6 +49,8 @@ func fromMap(prov docs.Provider, value map[string]any) (conf Config, err error) 
 	} else if p, exists := value["plugin"]; exists {
 		conf.Plugin = p
 	}
+
+	conf.Mapping, _ = value["mapping"].(string)
 	return
 }
 
@@ -56,6 +58,13 @@ func fromYAML(prov docs.Provider, value *yaml.Node) (conf Config, err error) {
 	if conf.Type, _, err = docs.GetInferenceCandidateFromYAML(prov, docs.TypeMetrics, value); err != nil {
 		err = docs.NewLintError(value.Line, docs.LintComponentNotFound, err)
 		return
+	}
+
+	for i := 0; i < len(value.Content)-1; i += 2 {
+		if value.Content[i].Value == "mapping" {
+			conf.Mapping = value.Content[i+1].Value
+			break
+		}
 	}
 
 	pluginNode, err := docs.GetPluginConfigYAML(conf.Type, value)
