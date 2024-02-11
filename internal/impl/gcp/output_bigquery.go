@@ -9,9 +9,17 @@ import (
 	"sync"
 
 	"cloud.google.com/go/bigquery"
+	"cloud.google.com/go/bigquery/storage/managedwriter"
 	"golang.org/x/text/encoding/charmap"
 	"google.golang.org/api/googleapi"
 	"google.golang.org/api/option"
+	"google.golang.org/grpc"
+	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/reflect/protodesc"
+	"google.golang.org/protobuf/reflect/protoreflect"
+	"google.golang.org/protobuf/types/descriptorpb"
+	"google.golang.org/protobuf/types/dynamicpb"
 
 	"github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/public/service"
@@ -49,16 +57,10 @@ func gcpBigQueryCSVConfigFromParsed(conf *service.ParsedConfig) (csvconf gcpBigQ
 }
 
 type gcpBigQueryOutputConfig struct {
-	ProjectID           string
-	DatasetID           string
-	TableID             string
-	Format              string
-	WriteDisposition    string
-	CreateDisposition   string
-	AutoDetect          bool
-	IgnoreUnknownValues bool
-	MaxBadRecords       int
-	JobLabels           map[string]string
+	ProjectID string
+	DatasetID string
+	TableID   string
+	Format    string
 
 	// CSV options
 	CSVOptions gcpBigQueryCSVConfig
@@ -80,24 +82,6 @@ func gcpBigQueryOutputConfigFromParsed(conf *service.ParsedConfig) (gconf gcpBig
 	if gconf.Format, err = conf.FieldString("format"); err != nil {
 		return
 	}
-	if gconf.WriteDisposition, err = conf.FieldString("write_disposition"); err != nil {
-		return
-	}
-	if gconf.CreateDisposition, err = conf.FieldString("create_disposition"); err != nil {
-		return
-	}
-	if gconf.IgnoreUnknownValues, err = conf.FieldBool("ignore_unknown_values"); err != nil {
-		return
-	}
-	if gconf.MaxBadRecords, err = conf.FieldInt("max_bad_records"); err != nil {
-		return
-	}
-	if gconf.AutoDetect, err = conf.FieldBool("auto_detect"); err != nil {
-		return
-	}
-	if gconf.JobLabels, err = conf.FieldStringMap("job_labels"); err != nil {
-		return
-	}
 	if gconf.CSVOptions, err = gcpBigQueryCSVConfigFromParsed(conf.Namespace("csv")); err != nil {
 		return
 	}
@@ -111,6 +95,20 @@ func (g gcpBQClientURL) NewClient(ctx context.Context, projectID string) (*bigqu
 		return bigquery.NewClient(ctx, projectID)
 	}
 	return bigquery.NewClient(ctx, projectID, option.WithoutAuthentication(), option.WithEndpoint(string(g)))
+}
+
+type gcpMWClientURL string
+
+func (g gcpMWClientURL) NewClient(ctx context.Context, projectID string) (*managedwriter.Client, error) {
+	if g == "" {
+		return managedwriter.NewClient(ctx, projectID)
+	}
+	return managedwriter.NewClient(ctx,
+		projectID,
+		option.WithoutAuthentication(),
+		option.WithEndpoint(string(g)),
+		option.WithGRPCDialOption(grpc.WithInsecure()),
+	)
 }
 
 func gcpBigQueryConfig() *service.ConfigSpec {
@@ -163,28 +161,6 @@ For the CSV format when the field `+"`csv.header`"+` is specified a header row w
 		Field(service.NewIntField("max_in_flight").
 			Description("The maximum number of message batches to have in flight at a given time. Increase this to improve throughput.").
 			Default(64)). // TODO: Tune this default
-		Field(service.NewStringEnumField("write_disposition",
-			string(bigquery.WriteAppend), string(bigquery.WriteEmpty), string(bigquery.WriteTruncate)).
-			Description("Specifies how existing data in a destination table is treated.").
-			Advanced().
-			Default(string(bigquery.WriteAppend))).
-		Field(service.NewStringEnumField("create_disposition", string(bigquery.CreateIfNeeded), string(bigquery.CreateNever)).
-			Description("Specifies the circumstances under which destination table will be created. If CREATE_IF_NEEDED is used the GCP BigQuery will create the table if it does not already exist and tables are created atomically on successful completion of a job. The CREATE_NEVER option ensures the table must already exist and will not be automatically created.").
-			Advanced().
-			Default(string(bigquery.CreateIfNeeded))).
-		Field(service.NewBoolField("ignore_unknown_values").
-			Description("Causes values not matching the schema to be tolerated. Unknown values are ignored. For CSV this ignores extra values at the end of a line. For JSON this ignores named values that do not match any column name. If this field is set to false (the default value), records containing unknown values are treated as bad records. The max_bad_records field can be used to customize how bad records are handled.").
-			Advanced().
-			Default(false)).
-		Field(service.NewIntField("max_bad_records").
-			Description("The maximum number of bad records that will be ignored when reading data.").
-			Advanced().
-			Default(0)).
-		Field(service.NewBoolField("auto_detect").
-			Description("Indicates if we should automatically infer the options and schema for CSV and JSON sources. If the table doesn't exist and this field is set to `false` the output may not be able to insert data and will throw insertion error. Be careful using this field since it delegates to the GCP BigQuery service the schema detection and values like `\"no\"` may be treated as booleans for the CSV format.").
-			Advanced().
-			Default(false)).
-		Field(service.NewStringMapField("job_labels").Description("A list of labels to add to the load job.").Default(map[string]any{})).
 		Field(service.NewObjectField("csv",
 			service.NewStringListField("header").
 				Description("A list of values to use as header for each batch of messages. If not specified the first line of each message will be used as header.").
@@ -235,11 +211,16 @@ func init() {
 }
 
 type gcpBigQueryOutput struct {
-	conf      gcpBigQueryOutputConfig
-	clientURL gcpBQClientURL
+	conf        gcpBigQueryOutputConfig
+	clientURL   gcpBQClientURL
+	mwClientURL gcpMWClientURL
 
-	client  *bigquery.Client
-	connMut sync.RWMutex
+	client   *bigquery.Client
+	mwClient *managedwriter.Client
+	connMut  sync.RWMutex
+
+	managedStream     *managedwriter.ManagedStream
+	messageDescriptor *protoreflect.MessageDescriptor
 
 	fieldDelimiterBytes []byte
 	csvHeaderBytes      []byte
@@ -302,13 +283,24 @@ func (g *gcpBigQueryOutput) Connect(ctx context.Context) (err error) {
 	defer g.connMut.Unlock()
 
 	var client *bigquery.Client
-	if client, err = g.clientURL.NewClient(context.Background(), g.conf.ProjectID); err != nil {
+	if client, err = g.clientURL.NewClient(ctx, g.conf.ProjectID); err != nil {
 		err = fmt.Errorf("error creating big query client: %w", err)
 		return
 	}
 	defer func() {
 		if err != nil {
 			client.Close()
+		}
+	}()
+
+	var mwClient *managedwriter.Client
+	if mwClient, err = g.mwClientURL.NewClient(ctx, g.conf.ProjectID); err != nil {
+		err = fmt.Errorf("error creating BigQuery managed writer client: %w", err)
+		return
+	}
+	defer func() {
+		if err != nil {
+			mwClient.Close()
 		}
 	}()
 
@@ -322,19 +314,41 @@ func (g *gcpBigQueryOutput) Connect(ctx context.Context) (err error) {
 		return
 	}
 
-	if g.conf.CreateDisposition == string(bigquery.CreateNever) {
-		table := dataset.Table(g.conf.TableID)
-		if _, err = table.Metadata(ctx); err != nil {
-			if hasStatusCode(err, http.StatusNotFound) {
-				err = fmt.Errorf("table does not exist: %v", g.conf.TableID)
-			} else {
-				err = fmt.Errorf("error checking table existence: %w", err)
-			}
-			return
+	table := dataset.Table(g.conf.TableID)
+	metadata, err := table.Metadata(ctx)
+	if err != nil {
+		if hasStatusCode(err, http.StatusNotFound) {
+			err = fmt.Errorf("table does not exist: %v", g.conf.TableID)
+		} else {
+			err = fmt.Errorf("error checking table existence: %w", err)
 		}
+		return
 	}
 
+	dp := getDescriptor(metadata.Schema)
+	md, err := getMessageDescriptor(dp)
+	if err != nil {
+		return err
+	}
+	ms, err := mwClient.NewManagedStream(ctx,
+		managedwriter.WithDestinationTable(managedwriter.TableParentFromParts(g.conf.ProjectID, g.conf.DatasetID, g.conf.TableID)),
+		managedwriter.WithType(managedwriter.DefaultStream),
+		managedwriter.WithSchemaDescriptor(dp),
+	)
+	if err != nil {
+		err = fmt.Errorf("error creating BigQuery managed stream: %w", err)
+		return
+	}
+	defer func() {
+		if err != nil {
+			ms.Close()
+		}
+	}()
+
 	g.client = client
+	g.mwClient = mwClient
+	g.managedStream = ms
+	g.messageDescriptor = md
 	g.log.Infof("Inserting messages as objects to GCP BigQuery: %v:%v:%v\n", client.Project(), g.conf.DatasetID, g.conf.TableID)
 	return nil
 }
@@ -360,55 +374,37 @@ func (g *gcpBigQueryOutput) WriteBatch(ctx context.Context, batch service.Messag
 		_, _ = data.Write(g.csvHeaderBytes)
 	}
 
+	var rows [][]byte
 	for _, msg := range batch {
 		msgBytes, err := msg.AsBytes()
 		if err != nil {
 			return err
 		}
-		if data.Len() > 0 {
-			_, _ = data.Write(g.newLineBytes)
+		message := dynamicpb.NewMessage(*g.messageDescriptor)
+		if err := protojson.Unmarshal(msgBytes, message); err != nil {
+			return err
 		}
-		_, _ = data.Write(msgBytes)
+		b, err := proto.Marshal(message)
+		if err != nil {
+			return err
+		}
+		rows = append(rows, b)
 	}
 
-	dataBytes := data.Bytes()
-	job, err := g.createTableLoader(&dataBytes).Run(ctx)
+	result, err := g.managedStream.AppendRows(ctx, rows)
 	if err != nil {
 		return err
 	}
 
-	status, err := job.Wait(ctx)
+	o, err := result.GetResult(ctx)
 	if err != nil {
-		return fmt.Errorf("error while waiting on bigquery job: %w", err)
+		return err
+	}
+	if o != managedwriter.NoStreamOffset {
+		return fmt.Errorf("offset mismatch, got %d want %d", o, managedwriter.NoStreamOffset)
 	}
 
-	return errorFromStatus(status)
-}
-
-func (g *gcpBigQueryOutput) createTableLoader(data *[]byte) *bigquery.Loader {
-	table := g.client.DatasetInProject(g.client.Project(), g.conf.DatasetID).Table(g.conf.TableID)
-
-	source := bigquery.NewReaderSource(bytes.NewReader(*data))
-	source.SourceFormat = bigquery.DataFormat(g.conf.Format)
-	source.AutoDetect = g.conf.AutoDetect
-	source.IgnoreUnknownValues = g.conf.IgnoreUnknownValues
-	source.MaxBadRecords = int64(g.conf.MaxBadRecords)
-
-	if g.conf.Format == string(bigquery.CSV) {
-		source.FieldDelimiter = g.conf.CSVOptions.FieldDelimiter
-		source.AllowJaggedRows = g.conf.CSVOptions.AllowJaggedRows
-		source.AllowQuotedNewlines = g.conf.CSVOptions.AllowQuotedNewlines
-		source.Encoding = bigquery.Encoding(g.conf.CSVOptions.Encoding)
-		source.SkipLeadingRows = int64(g.conf.CSVOptions.SkipLeadingRows)
-	}
-
-	loader := table.LoaderFrom(source)
-
-	loader.CreateDisposition = bigquery.TableCreateDisposition(g.conf.CreateDisposition)
-	loader.WriteDisposition = bigquery.TableWriteDisposition(g.conf.WriteDisposition)
-	loader.Labels = g.conf.JobLabels
-
-	return loader
+	return nil
 }
 
 func (g *gcpBigQueryOutput) Close(ctx context.Context) error {
@@ -419,4 +415,61 @@ func (g *gcpBigQueryOutput) Close(ctx context.Context) error {
 	}
 	g.connMut.Unlock()
 	return nil
+}
+
+func getDescriptor(schema bigquery.Schema) *descriptorpb.DescriptorProto {
+	dp := &descriptorpb.DescriptorProto{
+		Name:  proto.String("Row"),
+		Field: []*descriptorpb.FieldDescriptorProto{},
+	}
+	for i, f := range schema {
+		dp.Field = append(dp.Field, &descriptorpb.FieldDescriptorProto{
+			Name:   proto.String(f.Name),
+			Number: proto.Int32(int32(i + 1)),
+			Label:  descriptorpb.FieldDescriptorProto_LABEL_OPTIONAL.Enum(),
+			Type:   protoFieldType(f.Type).Enum(),
+		})
+	}
+	return dp
+}
+
+func protoFieldType(ft bigquery.FieldType) descriptorpb.FieldDescriptorProto_Type {
+	switch ft {
+	case bigquery.IntegerFieldType:
+		return descriptorpb.FieldDescriptorProto_TYPE_INT64
+	case bigquery.NumericFieldType:
+		return descriptorpb.FieldDescriptorProto_TYPE_INT64
+	case bigquery.FloatFieldType:
+		return descriptorpb.FieldDescriptorProto_TYPE_DOUBLE
+	case bigquery.BooleanFieldType:
+		return descriptorpb.FieldDescriptorProto_TYPE_BOOL
+	case bigquery.BytesFieldType:
+		return descriptorpb.FieldDescriptorProto_TYPE_BYTES
+	case bigquery.RecordFieldType:
+		return descriptorpb.FieldDescriptorProto_TYPE_MESSAGE
+	case bigquery.JSONFieldType:
+		return descriptorpb.FieldDescriptorProto_TYPE_MESSAGE
+	default:
+		return descriptorpb.FieldDescriptorProto_TYPE_STRING
+	}
+}
+
+func getMessageDescriptor(dp *descriptorpb.DescriptorProto) (*protoreflect.MessageDescriptor, error) {
+	fdp := &descriptorpb.FileDescriptorProto{
+		Name:        proto.String("dynamic.proto"),
+		Syntax:      proto.String("proto3"),
+		Package:     proto.String("dynamic"),
+		MessageType: []*descriptorpb.DescriptorProto{dp},
+	}
+
+	fd, err := protodesc.NewFile(fdp, nil)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to create file descriptor: %v", err)
+	}
+
+	md := fd.Messages().ByName("Row")
+	if md == nil {
+		return nil, fmt.Errorf("MessageDescriptor not found")
+	}
+	return &md, nil
 }

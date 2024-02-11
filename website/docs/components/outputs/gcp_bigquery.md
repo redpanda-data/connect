@@ -39,7 +39,6 @@ output:
     table: "" # No default (required)
     format: NEWLINE_DELIMITED_JSON
     max_in_flight: 64
-    job_labels: {}
     csv:
       header: []
       field_delimiter: ','
@@ -63,12 +62,6 @@ output:
     table: "" # No default (required)
     format: NEWLINE_DELIMITED_JSON
     max_in_flight: 64
-    write_disposition: WRITE_APPEND
-    create_disposition: CREATE_IF_NEEDED
-    ignore_unknown_values: false
-    max_bad_records: 0
-    auto_detect: false
-    job_labels: {}
     csv:
       header: []
       field_delimiter: ','
@@ -172,56 +165,6 @@ The maximum number of message batches to have in flight at a given time. Increas
 
 Type: `int`  
 Default: `64`  
-
-### `write_disposition`
-
-Specifies how existing data in a destination table is treated.
-
-
-Type: `string`  
-Default: `"WRITE_APPEND"`  
-Options: `WRITE_APPEND`, `WRITE_EMPTY`, `WRITE_TRUNCATE`.
-
-### `create_disposition`
-
-Specifies the circumstances under which destination table will be created. If CREATE_IF_NEEDED is used the GCP BigQuery will create the table if it does not already exist and tables are created atomically on successful completion of a job. The CREATE_NEVER option ensures the table must already exist and will not be automatically created.
-
-
-Type: `string`  
-Default: `"CREATE_IF_NEEDED"`  
-Options: `CREATE_IF_NEEDED`, `CREATE_NEVER`.
-
-### `ignore_unknown_values`
-
-Causes values not matching the schema to be tolerated. Unknown values are ignored. For CSV this ignores extra values at the end of a line. For JSON this ignores named values that do not match any column name. If this field is set to false (the default value), records containing unknown values are treated as bad records. The max_bad_records field can be used to customize how bad records are handled.
-
-
-Type: `bool`  
-Default: `false`  
-
-### `max_bad_records`
-
-The maximum number of bad records that will be ignored when reading data.
-
-
-Type: `int`  
-Default: `0`  
-
-### `auto_detect`
-
-Indicates if we should automatically infer the options and schema for CSV and JSON sources. If the table doesn't exist and this field is set to `false` the output may not be able to insert data and will throw insertion error. Be careful using this field since it delegates to the GCP BigQuery service the schema detection and values like `"no"` may be treated as booleans for the CSV format.
-
-
-Type: `bool`  
-Default: `false`  
-
-### `job_labels`
-
-A list of labels to add to the load job.
-
-
-Type: `object`  
-Default: `{}`  
 
 ### `csv`
 
