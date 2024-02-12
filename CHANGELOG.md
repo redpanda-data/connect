@@ -14,6 +14,7 @@ All notable changes to this project will be documented in this file.
 - New `processors` processor.
 - Field `read_header` added to the `amqp_1` input.
 - A debug endpoint `/debug/pprof/allocs` has been added for profiling allocations.
+- New `cockroachdb_changefeed` input.
 
 ### Fixed
 
@@ -24,6 +25,7 @@ All notable changes to this project will be documented in this file.
 - The `amqp_0_9` output no longer prints bogus exchange name when connecting to the server.
 - The `generate` input no longer adds an extra second to `interval: '@every x'` syntax.
 - The `nats_jetstream` input no longer fails to locate mirrored streams.
+- Fixed a rare panic in batching mechanisms with a specified `period`, where data arrives in low volumes and is sporadic.
 
 ### Changed
 

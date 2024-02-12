@@ -4,12 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net/http"
 	"strings"
 
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component/interop"
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
+	"github.com/benthosdev/benthos/v4/internal/filepath/ifs"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
 	"github.com/benthosdev/benthos/v4/public/service"
@@ -122,7 +122,7 @@ func newJSONSchema(schemaStr, schemaPath string, mgr bundle.NewManagement) (proc
 			return nil, fmt.Errorf("invalid schema_path provided, must start with file:// or http://")
 		}
 
-		schema, err = jsonschema.NewSchema(jsonschema.NewReferenceLoaderFileSystem(schemaPath, http.FS(mgr.FS())))
+		schema, err = jsonschema.NewSchema(jsonschema.NewReferenceLoaderFileSystem(schemaPath, ifs.ToHTTP(mgr.FS())))
 		if err != nil {
 			return nil, fmt.Errorf("failed to load JSON schema definition: %v", err)
 		}

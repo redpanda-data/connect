@@ -8,12 +8,65 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/benthosdev/benthos/v4/internal/component/testutil"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
 )
+
+func TestJSONSchemaExternalSchemaRelativePath(t *testing.T) {
+	schema := `{
+  "$id": "https://example.com/person.schema.json",
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Person",
+  "type": "object",
+  "properties": {
+    "firstName": {
+      "type": "string",
+      "description": "The person's first name."
+    },
+    "lastName": {
+      "type": "string",
+      "description": "The person's last name."
+    },
+    "age": {
+      "description": "Age in years which must be equal to or greater than zero.",
+      "type": "integer",
+      "minimum": 0
+    }
+  }
+}`
+
+	tmpDir := t.TempDir()
+
+	sFileName := filepath.Join(tmpDir, "foo")
+	require.NoError(t, os.WriteFile(sFileName, []byte(schema), 0o777))
+
+	cwd, err := os.Getwd()
+	require.NoError(t, err)
+
+	sFileName, err = filepath.Rel(cwd, sFileName)
+	require.NoError(t, err)
+
+	conf, err := testutil.ProcessorFromYAML(fmt.Sprintf(`
+json_schema:
+  schema_path: file://%v
+`, sFileName))
+	require.NoError(t, err)
+
+	c, err := mock.NewManager().NewProcessor(conf)
+	require.NoError(t, err)
+
+	msgs, _ := c.ProcessBatch(context.Background(), message.Batch{
+		message.NewPart([]byte(`{"firstName":"John","lastName":"Doe","age":21}`)),
+	})
+	require.Len(t, msgs, 1)
+
+	assert.Equal(t, `{"firstName":"John","lastName":"Doe","age":21}`, string(msgs[0][0].AsBytes()))
+	assert.NoError(t, msgs[0][0].ErrorGet())
+}
 
 func TestJSONSchemaExternalSchemaCheck(t *testing.T) {
 	schema := `{
@@ -56,7 +109,7 @@ func TestJSONSchemaExternalSchemaCheck(t *testing.T) {
 		{
 			name: "schema match",
 			fields: fields{
-				schemaPath: fmt.Sprintf("file:///%s", sFileName),
+				schemaPath: fmt.Sprintf("file://%s", sFileName),
 			},
 			arg: [][]byte{
 				[]byte(`{"firstName":"John","lastName":"Doe","age":21}`),
@@ -66,7 +119,7 @@ func TestJSONSchemaExternalSchemaCheck(t *testing.T) {
 		{
 			name: "schema no match",
 			fields: fields{
-				schemaPath: fmt.Sprintf("file:///%s", sFileName),
+				schemaPath: fmt.Sprintf("file://%s", sFileName),
 			},
 			arg: [][]byte{
 				[]byte(`{"firstName":"John","lastName":"Doe","age":-20}`),

@@ -94,7 +94,16 @@ func NewIfFunction(queryFn, ifFn Function, elseIfs []ElseIf, elseFn Function) Fu
 
 		queryRes, isBool := queryVal.(bool)
 		if !isBool {
-			return nil, fmt.Errorf("%v resolved to a non-boolean value %v (%T)", queryFn.Annotation(), queryVal, queryVal)
+			if queryVal == nil {
+				// TODO V5: Remove this, we want to enforce only explicit
+				// boolean true/false. However, we realised that users had
+				// `if foo { ... }` in places where `foo` could potentially be a
+				// boolean or `null` and so we're allowing `null` to be an
+				// honorary `false` until v5.
+				queryRes = false
+			} else {
+				return nil, fmt.Errorf("%v resolved to a non-boolean value %v (%T)", queryFn.Annotation(), queryVal, queryVal)
+			}
 		}
 		if queryRes {
 			return ifFn.Exec(ctx)
@@ -107,7 +116,12 @@ func NewIfFunction(queryFn, ifFn Function, elseIfs []ElseIf, elseFn Function) Fu
 			}
 			queryRes, isBool := queryVal.(bool)
 			if !isBool {
-				return nil, fmt.Errorf("%v resolved to a non-boolean value %v (%T)", eFn.QueryFn.Annotation(), queryVal, queryVal)
+				if queryVal == nil {
+					// TODO V5: Remove this, as above
+					queryRes = false
+				} else {
+					return nil, fmt.Errorf("%v resolved to a non-boolean value %v (%T)", eFn.QueryFn.Annotation(), queryVal, queryVal)
+				}
 			}
 			if queryRes {
 				return eFn.MapFn.Exec(ctx)
