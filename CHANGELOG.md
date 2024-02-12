@@ -5,6 +5,8 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 4.25.0 - TBD
+
 ### Added
 
 - Field `address_cache` added to the `socket_server` input.
