@@ -3,6 +3,8 @@ package aws
 import (
 	"context"
 	"fmt"
+	"regexp"
+	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -69,7 +71,7 @@ Both the `+"`partition_key`"+`(required) and `+"`hash_key`"+` (optional) fields 
 By default Benthos will use a shared credentials file when connecting to AWS services. It's also possible to set them explicitly at the component level, allowing you to transfer data across accounts. You can find out more [in this document](/docs/guides/cloud/aws).`)).
 		Fields(
 			service.NewStringField(koFieldStream).
-				Description("The stream to publish messages to."),
+				Description("The stream to publish messages to. Can be an ARN or just the stream name."),
 			service.NewInterpolatedStringField(koFieldPartitionKey).
 				Description("A required key for partitioning messages."),
 			service.NewInterpolatedStringField(koFieldHashKey).
@@ -178,15 +180,34 @@ func (a *kinesisWriter) Connect(ctx context.Context) error {
 	}
 
 	k := kinesis.New(a.conf.session)
-	if _, err := k.DescribeStreamWithContext(ctx, &kinesis.DescribeStreamInput{
-		StreamName: &a.conf.Stream,
-	}); err != nil {
+
+	isARN, err := isStreamARN(a.conf.Stream)
+	if err != nil {
 		return err
 	}
 
-	if err := k.WaitUntilStreamExistsWithContext(ctx, &kinesis.DescribeStreamInput{
-		StreamName: &a.conf.Stream,
-	}); err != nil {
+	var input *kinesis.DescribeStreamInput
+
+	if isARN {
+		streamName, err := extractStreamNameFromARN(a.conf.Stream)
+		if err != nil {
+			return err
+		}
+		input = &kinesis.DescribeStreamInput{
+			StreamARN:  &a.conf.Stream,
+			StreamName: &streamName,
+		}
+	} else {
+		input = &kinesis.DescribeStreamInput{
+			StreamName: &a.conf.Stream,
+		}
+	}
+
+	if _, err := k.DescribeStreamWithContext(ctx, input); err != nil {
+		return err
+	}
+
+	if err := k.WaitUntilStreamExistsWithContext(ctx, input); err != nil {
 		return err
 	}
 
@@ -194,6 +215,22 @@ func (a *kinesisWriter) Connect(ctx context.Context) error {
 	a.log.Infof("Sending messages to Kinesis stream: %v\n", a.conf.Stream)
 
 	return nil
+}
+
+func isStreamARN(stream string) (bool, error) {
+	match, err := regexp.MatchString(`^arn:(aws|aws-us-gov|aws-cn):kinesis:[a-z\-0-9]+:\d{12}:stream\/[a-zA-Z0-9_.-]{1,128}$`, stream)
+	if err != nil {
+		return false, err
+	}
+	return match, nil
+}
+
+func extractStreamNameFromARN(arn string) (string, error) {
+	parts := strings.Split(arn, "/")
+	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
+		return "", fmt.Errorf("invalid Kinesis stream ARN: %s", arn)
+	}
+	return parts[1], nil
 }
 
 func (a *kinesisWriter) WriteBatch(ctx context.Context, batch service.MessageBatch) error {
@@ -208,9 +245,27 @@ func (a *kinesisWriter) WriteBatch(ctx context.Context, batch service.MessageBat
 		return err
 	}
 
-	input := &kinesis.PutRecordsInput{
-		Records:    records,
-		StreamName: &a.conf.Stream,
+	isARN, err := isStreamARN(a.conf.Stream)
+	if err != nil {
+		return err
+	}
+
+	var input *kinesis.PutRecordsInput
+	if isARN {
+		streamName, err := extractStreamNameFromARN(a.conf.Stream)
+		if err != nil {
+			return err
+		}
+		input = &kinesis.PutRecordsInput{
+			Records:    records,
+			StreamARN:  &a.conf.Stream,
+			StreamName: &streamName,
+		}
+	} else {
+		input = &kinesis.PutRecordsInput{
+			Records:    records,
+			StreamName: &a.conf.Stream,
+		}
 	}
 
 	// trim input record length to max kinesis batch size

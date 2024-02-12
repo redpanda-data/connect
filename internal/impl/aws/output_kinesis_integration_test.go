@@ -77,17 +77,31 @@ credentials:
 		Endpoint:    aws.String(endpoint),
 		Region:      aws.String("us-east-1"),
 	})))
-	if err := pool.Retry(func() error {
-		_, err := client.CreateStream(&kinesis.CreateStreamInput{
-			ShardCount: aws.Int64(1),
-			StreamName: aws.String("foo"),
+	// Function to create a Kinesis stream
+	createStream := func(streamName string) error {
+		return pool.Retry(func() error {
+			_, err := client.CreateStream(&kinesis.CreateStreamInput{
+				ShardCount: aws.Int64(1),
+				StreamName: aws.String(streamName),
+			})
+			return err
 		})
-		return err
-	}); err != nil {
-		t.Fatalf("Could not connect to docker resource: %s", err)
+	}
+
+	if err := createStream("foo"); err != nil {
+		t.Fatalf("Could not create stream 'foo': %s", err)
+	}
+
+	if err := createStream("bar"); err != nil {
+		t.Fatalf("Could not create stream 'bar': %s", err)
 	}
 
 	t.Run("testKinesisConnect", func(t *testing.T) {
+		testKinesisConnect(t, config, client)
+	})
+
+	t.Run("testKinesisConnectWithARN", func(t *testing.T) {
+		config.Stream = "arn:aws:kinesis:us-east-1:000000000000:stream/bar"
 		testKinesisConnect(t, config, client)
 	})
 
@@ -125,11 +139,27 @@ func testKinesisConnect(t *testing.T, c koConfig, client *kinesis.Kinesis) {
 		t.Fatal(err)
 	}
 
-	iterator, err := client.GetShardIterator(&kinesis.GetShardIteratorInput{
+	iteratorInput := &kinesis.GetShardIteratorInput{
 		ShardId:           aws.String("shardId-000000000000"),
 		ShardIteratorType: aws.String(kinesis.ShardIteratorTypeTrimHorizon),
-		StreamName:        aws.String(c.Stream),
-	})
+	}
+
+	isARN, err := isStreamARN(c.Stream)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if isARN {
+		streamName, err := extractStreamNameFromARN(c.Stream)
+		if err != nil {
+			t.Fatal(err)
+		}
+		iteratorInput.StreamARN = aws.String(c.Stream)
+		iteratorInput.StreamName = aws.String(streamName)
+	} else {
+		iteratorInput.StreamName = aws.String(c.Stream)
+	}
+
+	iterator, err := client.GetShardIterator(iteratorInput)
 	if err != nil {
 		t.Fatal(err)
 	}
