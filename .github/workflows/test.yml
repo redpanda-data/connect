@@ -51,7 +51,7 @@ jobs:
         check-latest: true
 
     - name: Lint
-      uses: golangci/golangci-lint-action@v3
+      uses: golangci/golangci-lint-action@v4
       with:
         version: v1.54.1
         args: --timeout 30m cmd/... internal/... public/...
