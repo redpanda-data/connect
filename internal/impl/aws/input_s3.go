@@ -13,10 +13,10 @@ import (
 	"time"
 
 	"github.com/Jeffail/gabs/v2"
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/s3"
-	"github.com/aws/aws-sdk-go/service/sqs"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/aws/aws-sdk-go-v2/service/sqs"
+	sqstypes "github.com/aws/aws-sdk-go-v2/service/sqs/types"
 
 	"github.com/benthosdev/benthos/v4/internal/codec"
 	"github.com/benthosdev/benthos/v4/internal/codec/interop"
@@ -224,9 +224,7 @@ func init() {
 				return nil, err
 			}
 
-			sess, err := GetSession(pConf, func(c *aws.Config) {
-				c.S3ForcePathStyle = aws.Bool(conf.ForcePathStyleURLs)
-			})
+			sess, err := GetSession(context.Background(), pConf)
 			if err != nil {
 				return nil, err
 			}
@@ -276,7 +274,7 @@ type s3ObjectTargetReader interface {
 //------------------------------------------------------------------------------
 
 func deleteS3ObjectAckFn(
-	s3Client *s3.S3,
+	s3Client *s3.Client,
 	bucket, key string,
 	del bool,
 	prev codec.ReaderAckFn,
@@ -290,9 +288,9 @@ func deleteS3ObjectAckFn(
 		if !del || err != nil {
 			return nil
 		}
-		_, aerr := s3Client.DeleteObjectWithContext(ctx, &s3.DeleteObjectInput{
-			Bucket: aws.String(bucket),
-			Key:    aws.String(key),
+		_, aerr := s3Client.DeleteObject(ctx, &s3.DeleteObjectInput{
+			Bucket: &bucket,
+			Key:    &key,
 		})
 		return aerr
 	}
@@ -302,7 +300,7 @@ func deleteS3ObjectAckFn(
 
 type staticTargetReader struct {
 	pending    []*s3ObjectTarget
-	s3         *s3.S3
+	s3         *s3.Client
 	conf       s3iConfig
 	startAfter *string
 }
@@ -311,16 +309,17 @@ func newStaticTargetReader(
 	ctx context.Context,
 	conf s3iConfig,
 	log *service.Logger,
-	s3Client *s3.S3,
+	s3Client *s3.Client,
 ) (*staticTargetReader, error) {
+	maxKeys := int32(100)
 	listInput := &s3.ListObjectsV2Input{
-		Bucket:  aws.String(conf.Bucket),
-		MaxKeys: aws.Int64(100),
+		Bucket:  &conf.Bucket,
+		MaxKeys: &maxKeys,
 	}
 	if len(conf.Prefix) > 0 {
-		listInput.Prefix = aws.String(conf.Prefix)
+		listInput.Prefix = &conf.Prefix
 	}
-	output, err := s3Client.ListObjectsV2WithContext(ctx, listInput)
+	output, err := s3Client.ListObjectsV2(ctx, listInput)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list objects: %v", err)
 	}
@@ -339,17 +338,18 @@ func newStaticTargetReader(
 }
 
 func (s *staticTargetReader) Pop(ctx context.Context) (*s3ObjectTarget, error) {
+	maxKeys := int32(100)
 	if len(s.pending) == 0 && s.startAfter != nil {
 		s.pending = nil
 		listInput := &s3.ListObjectsV2Input{
-			Bucket:     aws.String(s.conf.Bucket),
-			MaxKeys:    aws.Int64(100),
+			Bucket:     &s.conf.Bucket,
+			MaxKeys:    &maxKeys,
 			StartAfter: s.startAfter,
 		}
 		if len(s.conf.Prefix) > 0 {
-			listInput.Prefix = aws.String(s.conf.Prefix)
+			listInput.Prefix = &s.conf.Prefix
 		}
-		output, err := s.s3.ListObjectsV2WithContext(ctx, listInput)
+		output, err := s.s3.ListObjectsV2(ctx, listInput)
 		if err != nil {
 			return nil, fmt.Errorf("failed to list objects: %v", err)
 		}
@@ -378,8 +378,8 @@ func (s staticTargetReader) Close(context.Context) error {
 type sqsTargetReader struct {
 	conf s3iConfig
 	log  *service.Logger
-	sqs  *sqs.SQS
-	s3   *s3.S3
+	sqs  *sqs.Client
+	s3   *s3.Client
 
 	nextRequest time.Time
 
@@ -389,8 +389,8 @@ type sqsTargetReader struct {
 func newSQSTargetReader(
 	conf s3iConfig,
 	log *service.Logger,
-	s3 *s3.S3,
-	sqs *sqs.SQS,
+	s3 *s3.Client,
+	sqs *sqs.Client,
 ) *sqsTargetReader {
 	return &sqsTargetReader{conf: conf, log: log, sqs: sqs, s3: s3, nextRequest: time.Time{}, pending: nil}
 }
@@ -506,21 +506,24 @@ func (s *sqsTargetReader) parseObjectPaths(sqsMsg *string) ([]s3ObjectTarget, er
 }
 
 func (s *sqsTargetReader) readSQSEvents(ctx context.Context) ([]*s3ObjectTarget, error) {
-	var dudMessageHandles []*sqs.ChangeMessageVisibilityBatchRequestEntry
-	addDudFn := func(m *sqs.Message) {
-		dudMessageHandles = append(dudMessageHandles, &sqs.ChangeMessageVisibilityBatchRequestEntry{
+	var dudMessageHandles []sqstypes.ChangeMessageVisibilityBatchRequestEntry
+	addDudFn := func(m sqstypes.Message) {
+		dudMessageHandles = append(dudMessageHandles, sqstypes.ChangeMessageVisibilityBatchRequestEntry{
 			Id:                m.MessageId,
 			ReceiptHandle:     m.ReceiptHandle,
-			VisibilityTimeout: aws.Int64(0),
+			VisibilityTimeout: 0,
 		})
 	}
 
-	output, err := s.sqs.ReceiveMessageWithContext(ctx, &sqs.ReceiveMessageInput{
-		QueueUrl:            aws.String(s.conf.SQS.URL),
-		MaxNumberOfMessages: aws.Int64(s.conf.SQS.MaxMessages),
-		WaitTimeSeconds:     aws.Int64(s.conf.SQS.WaitTimeSeconds),
-		AttributeNames: []*string{
-			aws.String("SentTimestamp"),
+	output, err := s.sqs.ReceiveMessage(ctx, &sqs.ReceiveMessageInput{
+		QueueUrl:            &s.conf.SQS.URL,
+		MaxNumberOfMessages: int32(s.conf.SQS.MaxMessages),
+		WaitTimeSeconds:     int32(s.conf.SQS.WaitTimeSeconds),
+		AttributeNames: []sqstypes.QueueAttributeName{
+			sqstypes.QueueAttributeName(sqstypes.MessageSystemAttributeNameSentTimestamp),
+		},
+		MessageAttributeNames: []string{
+			string(sqstypes.MessageSystemAttributeNameSentTimestamp),
 		},
 	})
 	if err != nil {
@@ -533,8 +536,8 @@ func (s *sqsTargetReader) readSQSEvents(ctx context.Context) ([]*s3ObjectTarget,
 		sqsMsg := sqsMsg
 
 		var notificationAt time.Time
-		if rcvd, ok := sqsMsg.Attributes["SentTimestamp"]; ok && rcvd != nil {
-			if millis, _ := strconv.Atoi(*rcvd); millis > 0 {
+		if rcvd, ok := sqsMsg.Attributes["SentTimestamp"]; ok {
+			if millis, _ := strconv.Atoi(rcvd); millis > 0 {
 				notificationAt = time.Unix(0, int64(millis*1e6))
 			}
 		}
@@ -607,23 +610,23 @@ func (s *sqsTargetReader) readSQSEvents(ctx context.Context) ([]*s3ObjectTarget,
 		} else {
 			dudMessageHandles = nil
 		}
-		_, _ = s.sqs.ChangeMessageVisibilityBatch(&input)
+		_, _ = s.sqs.ChangeMessageVisibilityBatch(ctx, &input)
 	}
 
 	return pendingObjects, nil
 }
 
-func (s *sqsTargetReader) nackSQSMessage(ctx context.Context, msg *sqs.Message) error {
-	_, err := s.sqs.ChangeMessageVisibilityWithContext(ctx, &sqs.ChangeMessageVisibilityInput{
-		QueueUrl:          aws.String(s.conf.SQS.URL),
+func (s *sqsTargetReader) nackSQSMessage(ctx context.Context, msg sqstypes.Message) error {
+	_, err := s.sqs.ChangeMessageVisibility(ctx, &sqs.ChangeMessageVisibilityInput{
+		QueueUrl:          &s.conf.SQS.URL,
 		ReceiptHandle:     msg.ReceiptHandle,
-		VisibilityTimeout: aws.Int64(0),
+		VisibilityTimeout: 0,
 	})
 	return err
 }
 
-func (s *sqsTargetReader) ackSQSMessage(ctx context.Context, msg *sqs.Message) error {
-	_, err := s.sqs.DeleteMessageWithContext(ctx, &sqs.DeleteMessageInput{
+func (s *sqsTargetReader) ackSQSMessage(ctx context.Context, msg sqstypes.Message) error {
+	_, err := s.sqs.DeleteMessage(ctx, &sqs.DeleteMessageInput{
 		QueueUrl:      aws.String(s.conf.SQS.URL),
 		ReceiptHandle: msg.ReceiptHandle,
 	})
@@ -640,9 +643,9 @@ type awsS3Reader struct {
 	objectScannerCtor interop.FallbackReaderCodec
 	keyReader         s3ObjectTargetReader
 
-	session *session.Session
-	s3      *s3.S3
-	sqs     *sqs.SQS
+	awsConf aws.Config
+	s3      *s3.Client
+	sqs     *sqs.Client
 
 	gracePeriod time.Duration
 
@@ -660,7 +663,7 @@ type s3PendingObject struct {
 }
 
 // NewAmazonS3 creates a new Amazon S3 bucket reader.Type.
-func newAmazonS3Reader(conf s3iConfig, sess *session.Session, nm *service.Resources) (*awsS3Reader, error) {
+func newAmazonS3Reader(conf s3iConfig, awsConf aws.Config, nm *service.Resources) (*awsS3Reader, error) {
 	if conf.Bucket == "" && conf.SQS.URL == "" {
 		return nil, errors.New("either a bucket or an sqs.url must be specified")
 	}
@@ -669,7 +672,7 @@ func newAmazonS3Reader(conf s3iConfig, sess *session.Session, nm *service.Resour
 	}
 	s := &awsS3Reader{
 		conf:              conf,
-		session:           sess,
+		awsConf:           awsConf,
 		log:               nm.Logger(),
 		objectScannerCtor: conf.CodecCtor,
 	}
@@ -696,13 +699,15 @@ func (a *awsS3Reader) Connect(ctx context.Context) error {
 		return nil
 	}
 
-	a.s3 = s3.New(a.session)
+	a.s3 = s3.NewFromConfig(a.awsConf, func(o *s3.Options) {
+		o.UsePathStyle = a.conf.ForcePathStyleURLs
+	})
 	if a.conf.SQS.URL != "" {
-		sqsSess := a.session.Copy()
+		sqsConf := a.awsConf.Copy()
 		if len(a.conf.SQS.Endpoint) > 0 {
-			sqsSess.Config.Endpoint = &a.conf.SQS.Endpoint
+			sqsConf.BaseEndpoint = &a.conf.SQS.Endpoint
 		}
-		a.sqs = sqs.New(sqsSess)
+		a.sqs = sqs.NewFromConfig(sqsConf)
 	}
 
 	var err error
@@ -738,9 +743,7 @@ func s3MetaToBatch(p *s3PendingObject, parts service.MessageBatch) {
 			part.MetaSetMut("s3_version_id", *p.obj.VersionId)
 		}
 		for k, v := range p.obj.Metadata {
-			if v != nil {
-				part.MetaSetMut(k, *v)
-			}
+			part.MetaSetMut(k, v)
 		}
 	}
 }
@@ -766,7 +769,7 @@ func (a *awsS3Reader) getObjectTarget(ctx context.Context) (*s3PendingObject, er
 		}
 	}
 
-	obj, err := a.s3.GetObject(&s3.GetObjectInput{
+	obj, err := a.s3.GetObject(ctx, &s3.GetObjectInput{
 		Bucket: aws.String(target.bucket),
 		Key:    aws.String(target.key),
 	})
@@ -800,7 +803,7 @@ func (a *awsS3Reader) getObjectTarget(ctx context.Context) (*s3PendingObject, er
 func (a *awsS3Reader) ReadBatch(ctx context.Context) (msg service.MessageBatch, ackFn service.AckFunc, err error) {
 	a.objectMut.Lock()
 	defer a.objectMut.Unlock()
-	if a.session == nil {
+	if a.s3 == nil {
 		return nil, nil, service.ErrNotConnected
 	}
 

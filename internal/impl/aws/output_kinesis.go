@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/kinesis"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/kinesis"
+	"github.com/aws/aws-sdk-go-v2/service/kinesis/types"
 	"github.com/cenkalti/backoff/v4"
 
 	"github.com/benthosdev/benthos/v4/internal/component"
@@ -30,7 +30,7 @@ type koConfig struct {
 	HashKey      *service.InterpolatedString
 	PartitionKey *service.InterpolatedString
 
-	session     *session.Session
+	aconf       aws.Config
 	backoffCtor func() backoff.BackOff
 }
 
@@ -46,7 +46,7 @@ func koConfigFromParsed(pConf *service.ParsedConfig) (conf koConfig, err error) 
 			return
 		}
 	}
-	if conf.session, err = GetSession(pConf); err != nil {
+	if conf.aconf, err = GetSession(context.TODO(), pConf); err != nil {
 		return
 	}
 	if conf.backoffCtor, err = pure.CommonRetryBackOffCtorFromParsed(pConf); err != nil {
@@ -111,7 +111,7 @@ const (
 )
 
 type kinesisAPI interface {
-	PutRecords(input *kinesis.PutRecordsInput) (*kinesis.PutRecordsOutput, error)
+	PutRecords(ctx context.Context, params *kinesis.PutRecordsInput, optFns ...func(*kinesis.Options)) (*kinesis.PutRecordsOutput, error)
 }
 
 type kinesisWriter struct {
@@ -132,8 +132,8 @@ func newKinesisWriter(conf koConfig, mgr *service.Resources) (*kinesisWriter, er
 // and passing each new message through the partition and hash key interpolation
 // process, allowing the user to define the partition and hash key per message
 // part.
-func (a *kinesisWriter) toRecords(batch service.MessageBatch) ([]*kinesis.PutRecordsRequestEntry, error) {
-	entries := make([]*kinesis.PutRecordsRequestEntry, len(batch))
+func (a *kinesisWriter) toRecords(batch service.MessageBatch) ([]types.PutRecordsRequestEntry, error) {
+	entries := make([]types.PutRecordsRequestEntry, len(batch))
 
 	err := batch.WalkWithBatchedErrors(func(i int, m *service.Message) error {
 		partKey, err := batch.TryInterpolatedString(i, a.conf.PartitionKey)
@@ -145,7 +145,7 @@ func (a *kinesisWriter) toRecords(batch service.MessageBatch) ([]*kinesis.PutRec
 		if err != nil {
 			return err
 		}
-		entry := kinesis.PutRecordsRequestEntry{
+		entry := types.PutRecordsRequestEntry{
 			Data:         mBytes,
 			PartitionKey: aws.String(partKey),
 		}
@@ -165,7 +165,7 @@ func (a *kinesisWriter) toRecords(batch service.MessageBatch) ([]*kinesis.PutRec
 			entry.ExplicitHashKey = aws.String(hashKey)
 		}
 
-		entries[i] = &entry
+		entries[i] = entry
 		return nil
 	})
 
@@ -177,16 +177,18 @@ func (a *kinesisWriter) Connect(ctx context.Context) error {
 		return nil
 	}
 
-	k := kinesis.New(a.conf.session)
-	if _, err := k.DescribeStreamWithContext(ctx, &kinesis.DescribeStreamInput{
+	k := kinesis.NewFromConfig(a.conf.aconf)
+	if _, err := k.DescribeStream(ctx, &kinesis.DescribeStreamInput{
 		StreamName: &a.conf.Stream,
 	}); err != nil {
 		return err
 	}
 
-	if err := k.WaitUntilStreamExistsWithContext(ctx, &kinesis.DescribeStreamInput{
+	waiter := kinesis.NewStreamExistsWaiter(k)
+
+	if err := waiter.Wait(ctx, &kinesis.DescribeStreamInput{
 		StreamName: &a.conf.Stream,
-	}); err != nil {
+	}, time.Minute); err != nil {
 		return err
 	}
 
@@ -220,13 +222,13 @@ func (a *kinesisWriter) WriteBatch(ctx context.Context, batch service.MessageBat
 		records = nil
 	}
 
-	var failed []*kinesis.PutRecordsRequestEntry
+	var failed []types.PutRecordsRequestEntry
 	backOff.Reset()
 	for len(input.Records) > 0 {
 		wait := backOff.NextBackOff()
 
 		// batch write to kinesis
-		output, err := a.kinesis.PutRecords(input)
+		output, err := a.kinesis.PutRecords(ctx, input)
 		if err != nil {
 			a.log.Warnf("kinesis error: %v\n", err)
 			// bail if a message is too large or all retry attempts expired
@@ -243,9 +245,9 @@ func (a *kinesisWriter) WriteBatch(ctx context.Context, batch service.MessageBat
 				if entry.ErrorCode != nil {
 					failed = append(failed, input.Records[i])
 					switch *entry.ErrorCode {
-					case kinesis.ErrCodeProvisionedThroughputExceededException:
+					case "ProvisionedThroughputExceededException":
 						a.log.Errorf("Kinesis record write request rate too high, either the frequency or the size of the data exceeds your available throughput.")
-					case kinesis.ErrCodeKMSThrottlingException:
+					case "KMSThrottlingException":
 						a.log.Errorf("Kinesis record write request throttling exception, the send traffic exceeds your request quota.")
 					default:
 						err = fmt.Errorf("record failed with code [%s] %s: %+v", *entry.ErrorCode, *entry.ErrorMessage, input.Records[i])

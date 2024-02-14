@@ -8,10 +8,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/awserr"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/dynamodb"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 
 	"github.com/benthosdev/benthos/v4/public/service"
 )
@@ -56,13 +55,13 @@ type awsKinesisCheckpointer struct {
 	clientID      string
 	leaseDuration time.Duration
 	commitPeriod  time.Duration
-	svc           *dynamodb.DynamoDB
+	svc           *dynamodb.Client
 }
 
 // newAWSKinesisCheckpointer creates a new DynamoDB checkpointer from an AWS
 // session and a configuration struct.
 func newAWSKinesisCheckpointer(
-	session *session.Session,
+	aConf aws.Config,
 	clientID string,
 	conf kiddbConfig,
 	leaseDuration time.Duration,
@@ -72,11 +71,11 @@ func newAWSKinesisCheckpointer(
 		conf:          conf,
 		leaseDuration: leaseDuration,
 		commitPeriod:  commitPeriod,
-		svc:           dynamodb.New(session),
+		svc:           dynamodb.NewFromConfig(aConf),
 		clientID:      clientID,
 	}
 
-	if err := c.ensureTableExists(); err != nil {
+	if err := c.ensureTableExists(context.TODO()); err != nil {
 		return nil, err
 	}
 	return c, nil
@@ -84,39 +83,39 @@ func newAWSKinesisCheckpointer(
 
 //------------------------------------------------------------------------------
 
-func (k *awsKinesisCheckpointer) ensureTableExists() error {
-	_, err := k.svc.DescribeTable(&dynamodb.DescribeTableInput{
+func (k *awsKinesisCheckpointer) ensureTableExists(ctx context.Context) error {
+	_, err := k.svc.DescribeTable(ctx, &dynamodb.DescribeTableInput{
 		TableName: aws.String(k.conf.Table),
 	})
-	if err == nil {
-		return nil
-	}
-	if aerr, ok := err.(awserr.Error); !ok || aerr.Code() != dynamodb.ErrCodeResourceNotFoundException {
-		return err
+	{
+		var aerr *types.ResourceNotFoundException
+		if err == nil || !errors.As(err, &aerr) {
+			return err
+		}
 	}
 	if !k.conf.Create {
 		return fmt.Errorf("target table %v does not exist", k.conf.Table)
 	}
 
 	input := &dynamodb.CreateTableInput{
-		AttributeDefinitions: []*dynamodb.AttributeDefinition{
-			{AttributeName: aws.String("StreamID"), AttributeType: aws.String("S")},
-			{AttributeName: aws.String("ShardID"), AttributeType: aws.String("S")},
+		AttributeDefinitions: []types.AttributeDefinition{
+			{AttributeName: aws.String("StreamID"), AttributeType: types.ScalarAttributeTypeS},
+			{AttributeName: aws.String("ShardID"), AttributeType: types.ScalarAttributeTypeS},
 		},
-		BillingMode: aws.String(k.conf.BillingMode),
-		KeySchema: []*dynamodb.KeySchemaElement{
-			{AttributeName: aws.String("StreamID"), KeyType: aws.String("HASH")},
-			{AttributeName: aws.String("ShardID"), KeyType: aws.String("RANGE")},
+		BillingMode: types.BillingMode(k.conf.BillingMode),
+		KeySchema: []types.KeySchemaElement{
+			{AttributeName: aws.String("StreamID"), KeyType: types.KeyTypeHash},
+			{AttributeName: aws.String("ShardID"), KeyType: types.KeyTypeRange},
 		},
 		TableName: aws.String(k.conf.Table),
 	}
 	if k.conf.BillingMode == "PROVISIONED" {
-		input.ProvisionedThroughput = &dynamodb.ProvisionedThroughput{
-			ReadCapacityUnits:  aws.Int64(k.conf.ReadCapacityUnits),
-			WriteCapacityUnits: aws.Int64(k.conf.WriteCapacityUnits),
+		input.ProvisionedThroughput = &types.ProvisionedThroughput{
+			ReadCapacityUnits:  &k.conf.ReadCapacityUnits,
+			WriteCapacityUnits: &k.conf.WriteCapacityUnits,
 		}
 	}
-	if _, err = k.svc.CreateTable(input); err != nil {
+	if _, err = k.svc.CreateTable(ctx, input); err != nil {
 		return fmt.Errorf("failed to create table: %w", err)
 	}
 	return nil
@@ -131,40 +130,39 @@ type awsKinesisCheckpoint struct {
 
 // Both checkpoint and err can be nil when the item does not exist.
 func (k *awsKinesisCheckpointer) getCheckpoint(ctx context.Context, streamID, shardID string) (*awsKinesisCheckpoint, error) {
-	rawItem, err := k.svc.GetItemWithContext(ctx, &dynamodb.GetItemInput{
+	rawItem, err := k.svc.GetItem(ctx, &dynamodb.GetItemInput{
 		TableName: aws.String(k.conf.Table),
-		Key: map[string]*dynamodb.AttributeValue{
-			"ShardID": {
-				S: aws.String(shardID),
+		Key: map[string]types.AttributeValue{
+			"ShardID": &types.AttributeValueMemberS{
+				Value: shardID,
 			},
-			"StreamID": {
-				S: aws.String(streamID),
+			"StreamID": &types.AttributeValueMemberS{
+				Value: streamID,
 			},
 		},
 	})
 	if err != nil {
-		if aerr, ok := err.(awserr.Error); ok {
-			if aerr.Code() == dynamodb.ErrCodeResourceNotFoundException {
-				return nil, nil
-			}
+		var aerr *types.ResourceNotFoundException
+		if errors.As(err, &aerr) {
+			return nil, nil
 		}
 		return nil, err
 	}
 
 	c := awsKinesisCheckpoint{}
 
-	if s, ok := rawItem.Item["SequenceNumber"]; ok && s.S != nil {
-		c.SequenceNumber = *s.S
+	if s, ok := rawItem.Item["SequenceNumber"].(*types.AttributeValueMemberS); ok {
+		c.SequenceNumber = s.Value
 	} else {
 		return nil, errors.New("sequence ID was not found in checkpoint")
 	}
 
-	if s, ok := rawItem.Item["ClientID"]; ok && s.S != nil {
-		c.ClientID = s.S
+	if s, ok := rawItem.Item["ClientID"].(*types.AttributeValueMemberS); ok {
+		c.ClientID = &s.Value
 	}
 
-	if s, ok := rawItem.Item["LeaseTimeout"]; ok && s.S != nil {
-		timeout, err := time.Parse(time.RFC3339Nano, *s.S)
+	if s, ok := rawItem.Item["LeaseTimeout"].(*types.AttributeValueMemberS); ok {
+		timeout, err := time.Parse(time.RFC3339Nano, s.Value)
 		if err != nil {
 			return nil, err
 		}
@@ -188,49 +186,45 @@ func (k *awsKinesisCheckpointer) AllClaims(ctx context.Context, streamID string)
 	clientClaims := make(map[string][]awsKinesisClientClaim)
 	var scanErr error
 
-	if err := k.svc.ScanPagesWithContext(ctx, &dynamodb.ScanInput{
+	scanRes, err := k.svc.Scan(ctx, &dynamodb.ScanInput{
 		TableName:        aws.String(k.conf.Table),
 		FilterExpression: aws.String("StreamID = :stream_id"),
-		ExpressionAttributeValues: map[string]*dynamodb.AttributeValue{
-			":stream_id": {
-				S: &streamID,
+		ExpressionAttributeValues: map[string]types.AttributeValue{
+			":stream_id": &types.AttributeValueMemberS{
+				Value: streamID,
 			},
 		},
-	}, func(page *dynamodb.ScanOutput, last bool) bool {
-		for _, i := range page.Items {
-			var clientID string
-			if s, ok := i["ClientID"]; ok && s.S != nil {
-				clientID = *s.S
-			} else {
-				continue
-			}
+	})
+	if err != nil {
+		return nil, err
+	}
 
-			var claim awsKinesisClientClaim
-			if s, ok := i["ShardID"]; ok && s.S != nil {
-				claim.ShardID = *s.S
-			}
-			if claim.ShardID == "" {
-				scanErr = errors.New("failed to extract shard id from claim")
-				return false
-			}
-
-			if s, ok := i["LeaseTimeout"]; ok && s.S != nil {
-				if claim.LeaseTimeout, scanErr = time.Parse(time.RFC3339Nano, *s.S); scanErr != nil {
-					scanErr = fmt.Errorf("failed to parse claim lease: %w", scanErr)
-					return false
-				}
-			}
-			if claim.LeaseTimeout.IsZero() {
-				scanErr = errors.New("failed to extract lease timeout from claim")
-				return false
-			}
-
-			clientClaims[clientID] = append(clientClaims[clientID], claim)
+	for _, i := range scanRes.Items {
+		var clientID string
+		if s, ok := i["ClientID"].(*types.AttributeValueMemberS); ok {
+			clientID = s.Value
+		} else {
+			continue
 		}
 
-		return true
-	}); err != nil {
-		return nil, err
+		var claim awsKinesisClientClaim
+		if s, ok := i["ShardID"].(*types.AttributeValueMemberS); ok {
+			claim.ShardID = s.Value
+		}
+		if claim.ShardID == "" {
+			return nil, errors.New("failed to extract shard id from claim")
+		}
+
+		if s, ok := i["LeaseTimeout"].(*types.AttributeValueMemberS); ok {
+			if claim.LeaseTimeout, scanErr = time.Parse(time.RFC3339Nano, s.Value); scanErr != nil {
+				return nil, fmt.Errorf("failed to parse claim lease: %w", scanErr)
+			}
+		}
+		if claim.LeaseTimeout.IsZero() {
+			return nil, errors.New("failed to extract lease timeout from claim")
+		}
+
+		clientClaims[clientID] = append(clientClaims[clientID], claim)
 	}
 
 	return clientClaims, scanErr
@@ -248,56 +242,56 @@ func (k *awsKinesisCheckpointer) Claim(ctx context.Context, streamID, shardID, f
 	newLeaseTimeoutString := time.Now().Add(k.leaseDuration).Format(time.RFC3339Nano)
 
 	var conditionalExpression string
-	expressionAttributeValues := map[string]*dynamodb.AttributeValue{
-		":new_client_id": {
-			S: &k.clientID,
+	expressionAttributeValues := map[string]types.AttributeValue{
+		":new_client_id": &types.AttributeValueMemberS{
+			Value: k.clientID,
 		},
-		":new_lease_timeout": {
-			S: &newLeaseTimeoutString,
+		":new_lease_timeout": &types.AttributeValueMemberS{
+			Value: newLeaseTimeoutString,
 		},
 	}
 
 	if len(fromClientID) > 0 {
 		conditionalExpression = "ClientID = :old_client_id"
-		expressionAttributeValues[":old_client_id"] = &dynamodb.AttributeValue{
-			S: &fromClientID,
+		expressionAttributeValues[":old_client_id"] = &types.AttributeValueMemberS{
+			Value: fromClientID,
 		}
 	} else {
 		conditionalExpression = "attribute_not_exists(ClientID)"
 	}
 
-	res, err := k.svc.UpdateItemWithContext(ctx, &dynamodb.UpdateItemInput{
-		ReturnValues:              aws.String("ALL_OLD"),
-		TableName:                 aws.String(k.conf.Table),
-		ConditionExpression:       aws.String(conditionalExpression),
-		UpdateExpression:          aws.String("SET ClientID = :new_client_id, LeaseTimeout = :new_lease_timeout"),
+	exp := "SET ClientID = :new_client_id, LeaseTimeout = :new_lease_timeout"
+	res, err := k.svc.UpdateItem(ctx, &dynamodb.UpdateItemInput{
+		ReturnValues:              types.ReturnValueAllOld,
+		TableName:                 &k.conf.Table,
+		ConditionExpression:       &conditionalExpression,
+		UpdateExpression:          &exp,
 		ExpressionAttributeValues: expressionAttributeValues,
-		Key: map[string]*dynamodb.AttributeValue{
-			"StreamID": {
-				S: &streamID,
+		Key: map[string]types.AttributeValue{
+			"StreamID": &types.AttributeValueMemberS{
+				Value: streamID,
 			},
-			"ShardID": {
-				S: &shardID,
+			"ShardID": &types.AttributeValueMemberS{
+				Value: shardID,
 			},
 		},
 	})
 	if err != nil {
-		if awsErr, ok := err.(awserr.Error); ok {
-			if awsErr.Code() == dynamodb.ErrCodeConditionalCheckFailedException {
-				return "", ErrLeaseNotAcquired
-			}
+		var aerr *types.ConditionalCheckFailedException
+		if errors.As(err, &aerr) {
+			return "", ErrLeaseNotAcquired
 		}
 		return "", err
 	}
 
 	var startingSequence string
-	if s, ok := res.Attributes["SequenceNumber"]; ok && s.S != nil {
-		startingSequence = *s.S
+	if s, ok := res.Attributes["SequenceNumber"].(*types.AttributeValueMemberS); ok {
+		startingSequence = s.Value
 	}
 
 	var currentLease time.Time
-	if s, ok := res.Attributes["LeaseTimeout"]; ok && s.S != nil {
-		currentLease, _ = time.Parse(time.RFC3339Nano, *s.S)
+	if s, ok := res.Attributes["LeaseTimeout"].(*types.AttributeValueMemberS); ok {
+		currentLease, _ = time.Parse(time.RFC3339Nano, s.Value)
 	}
 
 	// Since we've aggressively stolen a shard then it's pretty much guaranteed
@@ -336,44 +330,43 @@ func (k *awsKinesisCheckpointer) Claim(ctx context.Context, streamID, shardID, f
 // If final is true the client ID is removed from the checkpoint, indicating
 // that this client is finished with the shard.
 func (k *awsKinesisCheckpointer) Checkpoint(ctx context.Context, streamID, shardID, sequenceNumber string, final bool) (bool, error) {
-	item := map[string]*dynamodb.AttributeValue{
-		"StreamID": {
-			S: &streamID,
+	item := map[string]types.AttributeValue{
+		"StreamID": &types.AttributeValueMemberS{
+			Value: streamID,
 		},
-		"ShardID": {
-			S: &shardID,
+		"ShardID": &types.AttributeValueMemberS{
+			Value: shardID,
 		},
 	}
 
 	if len(sequenceNumber) > 0 {
-		item["SequenceNumber"] = &dynamodb.AttributeValue{
-			S: &sequenceNumber,
+		item["SequenceNumber"] = &types.AttributeValueMemberS{
+			Value: sequenceNumber,
 		}
 	}
 
 	if !final {
-		item["ClientID"] = &dynamodb.AttributeValue{
-			S: &k.clientID,
+		item["ClientID"] = &types.AttributeValueMemberS{
+			Value: k.clientID,
 		}
-		item["LeaseTimeout"] = &dynamodb.AttributeValue{
-			S: aws.String(time.Now().Add(k.leaseDuration).Format(time.RFC3339Nano)),
+		item["LeaseTimeout"] = &types.AttributeValueMemberS{
+			Value: time.Now().Add(k.leaseDuration).Format(time.RFC3339Nano),
 		}
 	}
 
-	if _, err := k.svc.PutItem(&dynamodb.PutItemInput{
+	if _, err := k.svc.PutItem(ctx, &dynamodb.PutItemInput{
 		ConditionExpression: aws.String("ClientID = :client_id"),
-		ExpressionAttributeValues: map[string]*dynamodb.AttributeValue{
-			":client_id": {
-				S: &k.clientID,
+		ExpressionAttributeValues: map[string]types.AttributeValue{
+			":client_id": &types.AttributeValueMemberS{
+				Value: k.clientID,
 			},
 		},
 		TableName: aws.String(k.conf.Table),
 		Item:      item,
 	}); err != nil {
-		if awsErr, ok := err.(awserr.Error); ok {
-			if awsErr.Code() == dynamodb.ErrCodeConditionalCheckFailedException {
-				return false, nil
-			}
+		var aerr *types.ConditionalCheckFailedException
+		if errors.As(err, &aerr) {
+			return false, nil
 		}
 		return false, err
 	}
@@ -393,19 +386,19 @@ func (k *awsKinesisCheckpointer) Yield(ctx context.Context, streamID, shardID, s
 		return nil
 	}
 
-	_, err := k.svc.UpdateItemWithContext(ctx, &dynamodb.UpdateItemInput{
+	_, err := k.svc.UpdateItem(ctx, &dynamodb.UpdateItemInput{
 		TableName: aws.String(k.conf.Table),
-		Key: map[string]*dynamodb.AttributeValue{
-			"StreamID": {
-				S: &streamID,
+		Key: map[string]types.AttributeValue{
+			"StreamID": &types.AttributeValueMemberS{
+				Value: streamID,
 			},
-			"ShardID": {
-				S: &shardID,
+			"ShardID": &types.AttributeValueMemberS{
+				Value: shardID,
 			},
 		},
-		ExpressionAttributeValues: map[string]*dynamodb.AttributeValue{
-			":new_sequence_number": {
-				S: &sequenceNumber,
+		ExpressionAttributeValues: map[string]types.AttributeValue{
+			":new_sequence_number": &types.AttributeValueMemberS{
+				Value: sequenceNumber,
 			},
 		},
 		UpdateExpression: aws.String("SET SequenceNumber = :new_sequence_number"),
@@ -416,14 +409,14 @@ func (k *awsKinesisCheckpointer) Yield(ctx context.Context, streamID, shardID, s
 // Delete attempts to delete a checkpoint, this should be called when a shard is
 // emptied.
 func (k *awsKinesisCheckpointer) Delete(ctx context.Context, streamID, shardID string) error {
-	_, err := k.svc.DeleteItemWithContext(ctx, &dynamodb.DeleteItemInput{
+	_, err := k.svc.DeleteItem(ctx, &dynamodb.DeleteItemInput{
 		TableName: aws.String(k.conf.Table),
-		Key: map[string]*dynamodb.AttributeValue{
-			"StreamID": {
-				S: &streamID,
+		Key: map[string]types.AttributeValue{
+			"StreamID": &types.AttributeValueMemberS{
+				Value: streamID,
 			},
-			"ShardID": {
-				S: &shardID,
+			"ShardID": &types.AttributeValueMemberS{
+				Value: shardID,
 			},
 		},
 	})

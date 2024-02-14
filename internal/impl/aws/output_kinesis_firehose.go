@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/firehose"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/firehose"
+	"github.com/aws/aws-sdk-go-v2/service/firehose/types"
 	"github.com/cenkalti/backoff/v4"
 
 	"github.com/benthosdev/benthos/v4/internal/component"
@@ -25,7 +25,7 @@ const (
 type kfoConfig struct {
 	Stream string
 
-	session     *session.Session
+	aconf       aws.Config
 	backoffCtor func() backoff.BackOff
 }
 
@@ -33,7 +33,7 @@ func kfoConfigFromParsed(pConf *service.ParsedConfig) (conf kfoConfig, err error
 	if conf.Stream, err = pConf.FieldString(kfoFieldStream); err != nil {
 		return
 	}
-	if conf.session, err = GetSession(pConf); err != nil {
+	if conf.aconf, err = GetSession(context.TODO(), pConf); err != nil {
 		return
 	}
 	if conf.backoffCtor, err = pure.CommonRetryBackOffCtorFromParsed(pConf); err != nil {
@@ -91,8 +91,8 @@ func init() {
 }
 
 type firehoseAPI interface {
-	DescribeDeliveryStream(*firehose.DescribeDeliveryStreamInput) (*firehose.DescribeDeliveryStreamOutput, error)
-	PutRecordBatch(input *firehose.PutRecordBatchInput) (*firehose.PutRecordBatchOutput, error)
+	DescribeDeliveryStream(ctx context.Context, params *firehose.DescribeDeliveryStreamInput, optFns ...func(*firehose.Options)) (*firehose.DescribeDeliveryStreamOutput, error)
+	PutRecordBatch(ctx context.Context, params *firehose.PutRecordBatchInput, optFns ...func(*firehose.Options)) (*firehose.PutRecordBatchOutput, error)
 }
 
 type kinesisFirehoseWriter struct {
@@ -114,11 +114,11 @@ func newKinesisFirehoseWriter(conf kfoConfig, log *service.Logger) (*kinesisFire
 // and passing each new message through the partition and hash key interpolation
 // process, allowing the user to define the partition and hash key per message
 // part.
-func (a *kinesisFirehoseWriter) toRecords(batch service.MessageBatch) ([]*firehose.Record, error) {
-	entries := make([]*firehose.Record, len(batch))
+func (a *kinesisFirehoseWriter) toRecords(batch service.MessageBatch) ([]types.Record, error) {
+	entries := make([]types.Record, len(batch))
 
 	for i, p := range batch {
-		var entry firehose.Record
+		var entry types.Record
 		var err error
 		if entry.Data, err = p.AsBytes(); err != nil {
 			return nil, err
@@ -129,7 +129,7 @@ func (a *kinesisFirehoseWriter) toRecords(batch service.MessageBatch) ([]*fireho
 			return nil, component.ErrMessageTooLarge
 		}
 
-		entries[i] = &entry
+		entries[i] = entry
 	}
 
 	return entries, nil
@@ -144,8 +144,8 @@ func (a *kinesisFirehoseWriter) Connect(ctx context.Context) error {
 		return nil
 	}
 
-	a.firehose = firehose.New(a.conf.session)
-	if _, err := a.firehose.DescribeDeliveryStream(&firehose.DescribeDeliveryStreamInput{
+	a.firehose = firehose.NewFromConfig(a.conf.aconf)
+	if _, err := a.firehose.DescribeDeliveryStream(ctx, &firehose.DescribeDeliveryStreamInput{
 		DeliveryStreamName: aws.String(a.conf.Stream),
 	}); err != nil {
 		return err
@@ -182,12 +182,12 @@ func (a *kinesisFirehoseWriter) WriteBatch(ctx context.Context, batch service.Me
 		records = nil
 	}
 
-	var failed []*firehose.Record
+	var failed []types.Record
 	for len(input.Records) > 0 {
 		wait := backOff.NextBackOff()
 
 		// batch write to kinesis firehose
-		output, err := a.firehose.PutRecordBatch(input)
+		output, err := a.firehose.PutRecordBatch(ctx, input)
 		if err != nil {
 			a.log.Warnf("kinesis firehose error: %v\n", err)
 			// bail if a message is too large or all retry attempts expired
@@ -203,7 +203,7 @@ func (a *kinesisFirehoseWriter) WriteBatch(ctx context.Context, batch service.Me
 			for i, entry := range output.RequestResponses {
 				if entry.ErrorCode != nil {
 					failed = append(failed, input.Records[i])
-					if *entry.ErrorCode != firehose.ErrCodeServiceUnavailableException {
+					if *entry.ErrorCode != "ServiceUnavailableException" {
 						err = fmt.Errorf("record failed with code [%s] %s: %+v", *entry.ErrorCode, *entry.ErrorMessage, input.Records[i])
 						a.log.Errorf("kinesis firehose record error: %v\n", err)
 						return err

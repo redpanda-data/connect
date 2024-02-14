@@ -6,10 +6,11 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/credentials"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/firehose"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/credentials"
+	"github.com/aws/aws-sdk-go-v2/service/firehose"
+	"github.com/aws/aws-sdk-go-v2/service/firehose/types"
 	"github.com/cenkalti/backoff/v4"
 	"github.com/stretchr/testify/require"
 
@@ -21,12 +22,18 @@ type mockKinesisFirehose struct {
 	fn func(input *firehose.PutRecordBatchInput) (*firehose.PutRecordBatchOutput, error)
 }
 
-func (m *mockKinesisFirehose) PutRecordBatch(input *firehose.PutRecordBatchInput) (*firehose.PutRecordBatchOutput, error) {
+func (m *mockKinesisFirehose) PutRecordBatch(ctx context.Context, input *firehose.PutRecordBatchInput, optFns ...func(*firehose.Options)) (*firehose.PutRecordBatchOutput, error) {
 	return m.fn(input)
 }
 
 func testKFO(t *testing.T, m *mockKinesisFirehose) *kinesisFirehoseWriter {
 	t.Helper()
+
+	conf, err := config.LoadDefaultConfig(context.TODO(),
+		config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider("xxxxx", "xxxxx", "xxxxx")),
+		config.WithRegion("us-east-1"),
+	)
+	require.NoError(t, err)
 
 	return &kinesisFirehoseWriter{
 		conf: kfoConfig{
@@ -34,9 +41,7 @@ func testKFO(t *testing.T, m *mockKinesisFirehose) *kinesisFirehoseWriter {
 			backoffCtor: func() backoff.BackOff {
 				return backoff.NewExponentialBackOff()
 			},
-			session: session.Must(session.NewSession(&aws.Config{
-				Credentials: credentials.NewStaticCredentials("xxxxx", "xxxxx", "xxxxx"),
-			})),
+			aconf: conf,
 		},
 		firehose: m,
 	}
@@ -131,20 +136,20 @@ func TestKinesisFirehoseWriteChunkWithThrottling(t *testing.T) {
 			fn: func(input *firehose.PutRecordBatchInput) (*firehose.PutRecordBatchOutput, error) {
 				count := len(input.Records)
 				batchLengths = append(batchLengths, count)
-				var failed int64
+				var failed int32
 				output := firehose.PutRecordBatchOutput{
-					RequestResponses: make([]*firehose.PutRecordBatchResponseEntry, count),
+					RequestResponses: make([]types.PutRecordBatchResponseEntry, count),
 				}
 				for i := 0; i < count; i++ {
-					var entry firehose.PutRecordBatchResponseEntry
+					var entry types.PutRecordBatchResponseEntry
 					if i >= 300 {
 						failed++
-						entry.SetErrorCode(firehose.ErrCodeServiceUnavailableException)
-						entry.SetErrorMessage("Mocked ProvisionedThroughputExceededException")
+						entry.ErrorCode = aws.String("ServiceUnavailableException")
+						entry.ErrorMessage = aws.String("Mocked ProvisionedThroughputExceededException")
 					}
-					output.RequestResponses[i] = &entry
+					output.RequestResponses[i] = entry
 				}
-				output.SetFailedPutCount(failed)
+				output.FailedPutCount = &failed
 				return &output, nil
 			},
 		},
@@ -203,25 +208,25 @@ func TestKinesisFirehoseWriteError(t *testing.T) {
 
 func TestKinesisFirehoseWriteMessageThrottling(t *testing.T) {
 	t.Parallel()
-	var calls [][]*firehose.Record
+	var calls [][]types.Record
 
 	k := testKFO(t,
 		&mockKinesisFirehose{
 			fn: func(input *firehose.PutRecordBatchInput) (*firehose.PutRecordBatchOutput, error) {
-				records := make([]*firehose.Record, len(input.Records))
+				records := make([]types.Record, len(input.Records))
 				copy(records, input.Records)
 				calls = append(calls, records)
-				var failed int64
+				var failed int32
 				var output firehose.PutRecordBatchOutput
 				for i := 0; i < len(input.Records); i++ {
-					entry := firehose.PutRecordBatchResponseEntry{}
+					entry := types.PutRecordBatchResponseEntry{}
 					if i > 0 {
 						failed++
-						entry.SetErrorCode(firehose.ErrCodeServiceUnavailableException)
+						entry.ErrorCode = aws.String("ServiceUnavailableException")
 					}
-					output.RequestResponses = append(output.RequestResponses, &entry)
+					output.RequestResponses = append(output.RequestResponses, entry)
 				}
-				output.SetFailedPutCount(failed)
+				output.FailedPutCount = &failed
 				return &output, nil
 			},
 		},
@@ -255,9 +260,9 @@ func TestKinesisFirehoseWriteBackoffMaxRetriesExceeded(t *testing.T) {
 			fn: func(input *firehose.PutRecordBatchInput) (*firehose.PutRecordBatchOutput, error) {
 				calls++
 				var output firehose.PutRecordBatchOutput
-				output.SetFailedPutCount(int64(1))
-				output.RequestResponses = append(output.RequestResponses, &firehose.PutRecordBatchResponseEntry{
-					ErrorCode: aws.String(firehose.ErrCodeServiceUnavailableException),
+				output.FailedPutCount = aws.Int32(1)
+				output.RequestResponses = append(output.RequestResponses, types.PutRecordBatchResponseEntry{
+					ErrorCode: aws.String("ServiceUnavailableException"),
 				})
 				return &output, nil
 			},

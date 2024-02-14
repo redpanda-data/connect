@@ -6,8 +6,9 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/service/kinesis"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/kinesis"
+	"github.com/aws/aws-sdk-go-v2/service/kinesis/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -18,7 +19,7 @@ type mockKinesis struct {
 	fn func(input *kinesis.PutRecordsInput) (*kinesis.PutRecordsOutput, error)
 }
 
-func (m *mockKinesis) PutRecords(input *kinesis.PutRecordsInput) (*kinesis.PutRecordsOutput, error) {
+func (m *mockKinesis) PutRecords(ctx context.Context, input *kinesis.PutRecordsInput, optFns ...func(*kinesis.Options)) (*kinesis.PutRecordsOutput, error) {
 	return m.fn(input)
 }
 
@@ -151,19 +152,19 @@ partition_key: ${! json("id") }
 		fn: func(input *kinesis.PutRecordsInput) (*kinesis.PutRecordsOutput, error) {
 			count := len(input.Records)
 			batchLengths = append(batchLengths, count)
-			var failed int64
+			var failed int32
 			output := kinesis.PutRecordsOutput{
-				Records: make([]*kinesis.PutRecordsResultEntry, count),
+				Records: make([]types.PutRecordsResultEntry, count),
 			}
 			for i := 0; i < count; i++ {
-				var entry kinesis.PutRecordsResultEntry
+				var entry types.PutRecordsResultEntry
 				if i >= 300 {
 					failed++
-					entry.SetErrorCode(kinesis.ErrCodeProvisionedThroughputExceededException)
+					entry.ErrorCode = aws.String("ProvisionedThroughputExceededException")
 				}
-				output.Records[i] = &entry
+				output.Records[i] = entry
 			}
-			output.SetFailedRecordCount(failed)
+			output.FailedRecordCount = aws.Int32(failed)
 			return &output, nil
 		},
 	}
@@ -221,7 +222,7 @@ max_retries: 2
 
 func TestKinesisWriteMessageThrottling(t *testing.T) {
 	t.Parallel()
-	var calls [][]*kinesis.PutRecordsRequestEntry
+	var calls [][]types.PutRecordsRequestEntry
 
 	k := testKOWriter(t, `
 stream: foo
@@ -229,20 +230,20 @@ partition_key: ${! json("id") }
 `)
 	k.kinesis = &mockKinesis{
 		fn: func(input *kinesis.PutRecordsInput) (*kinesis.PutRecordsOutput, error) {
-			records := make([]*kinesis.PutRecordsRequestEntry, len(input.Records))
+			records := make([]types.PutRecordsRequestEntry, len(input.Records))
 			copy(records, input.Records)
 			calls = append(calls, records)
-			var failed int64
+			var failed int32
 			var output kinesis.PutRecordsOutput
 			for i := 0; i < len(input.Records); i++ {
-				entry := kinesis.PutRecordsResultEntry{}
+				entry := types.PutRecordsResultEntry{}
 				if i > 0 {
 					failed++
-					entry.SetErrorCode(kinesis.ErrCodeProvisionedThroughputExceededException)
+					entry.ErrorCode = aws.String("ProvisionedThroughputExceededException")
 				}
-				output.Records = append(output.Records, &entry)
+				output.Records = append(output.Records, entry)
 			}
-			output.SetFailedRecordCount(failed)
+			output.FailedRecordCount = aws.Int32(failed)
 			return &output, nil
 		},
 	}
@@ -279,9 +280,9 @@ max_retries: 2
 		fn: func(input *kinesis.PutRecordsInput) (*kinesis.PutRecordsOutput, error) {
 			calls++
 			var output kinesis.PutRecordsOutput
-			output.FailedRecordCount = aws.Int64(1)
-			output.Records = append(output.Records, &kinesis.PutRecordsResultEntry{
-				ErrorCode: aws.String(kinesis.ErrCodeProvisionedThroughputExceededException),
+			output.FailedRecordCount = aws.Int32(1)
+			output.Records = append(output.Records, types.PutRecordsResultEntry{
+				ErrorCode: aws.String("ProvisionedThroughputExceededException"),
 			})
 			return &output, nil
 		},

@@ -9,10 +9,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/awserr"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/kinesis"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/kinesis"
+	"github.com/aws/aws-sdk-go-v2/service/kinesis/types"
 	"github.com/cenkalti/backoff/v4"
 	"github.com/gofrs/uuid"
 
@@ -162,7 +161,7 @@ func init() {
 
 //------------------------------------------------------------------------------
 
-var awsKinesisDefaultLimit = int64(10e3)
+var awsKinesisDefaultLimit = int32(10e3)
 
 type asyncMessage struct {
 	msg   service.MessageBatch
@@ -173,14 +172,14 @@ type kinesisReader struct {
 	conf     kiConfig
 	clientID string
 
-	sess    *session.Session
+	sess    aws.Config
 	batcher service.BatchPolicy
 	log     *service.Logger
 	mgr     *service.Resources
 
 	boffPool sync.Pool
 
-	svc          *kinesis.Kinesis
+	svc          *kinesis.Client
 	checkpointer *awsKinesisCheckpointer
 
 	streamShards    map[string][]string
@@ -207,7 +206,7 @@ func newKinesisReaderFromParsed(pConf *service.ParsedConfig, mgr *service.Resour
 	if err != nil {
 		return nil, err
 	}
-	sess, err := GetSession(pConf)
+	sess, err := GetSession(context.TODO(), pConf)
 	if err != nil {
 		return nil, err
 	}
@@ -218,7 +217,7 @@ func newKinesisReaderFromParsed(pConf *service.ParsedConfig, mgr *service.Resour
 	return newKinesisReaderFromConfig(conf, batcher, sess, mgr)
 }
 
-func newKinesisReaderFromConfig(conf kiConfig, batcher service.BatchPolicy, sess *session.Session, mgr *service.Resources) (*kinesisReader, error) {
+func newKinesisReaderFromConfig(conf kiConfig, batcher service.BatchPolicy, sess aws.Config, mgr *service.Resources) (*kinesisReader, error) {
 	if batcher.IsNoop() {
 		batcher.Count = 1
 	}
@@ -293,21 +292,21 @@ const (
 )
 
 func (k *kinesisReader) getIter(streamID, shardID, sequence string) (string, error) {
-	iterType := kinesis.ShardIteratorTypeTrimHorizon
+	iterType := types.ShardIteratorTypeTrimHorizon
 	if !k.conf.StartFromOldest {
-		iterType = kinesis.ShardIteratorTypeLatest
+		iterType = types.ShardIteratorTypeLatest
 	}
 	var startingSequence *string
 	if len(sequence) > 0 {
-		iterType = kinesis.ShardIteratorTypeAfterSequenceNumber
+		iterType = types.ShardIteratorTypeAfterSequenceNumber
 		startingSequence = &sequence
 	}
 
-	res, err := k.svc.GetShardIteratorWithContext(k.ctx, &kinesis.GetShardIteratorInput{
+	res, err := k.svc.GetShardIterator(k.ctx, &kinesis.GetShardIteratorInput{
 		StreamName:             &streamID,
 		ShardId:                &shardID,
 		StartingSequenceNumber: startingSequence,
-		ShardIteratorType:      &iterType,
+		ShardIteratorType:      iterType,
 	})
 	if err != nil {
 		return "", err
@@ -319,12 +318,12 @@ func (k *kinesisReader) getIter(streamID, shardID, sequence string) (string, err
 	}
 	if iter == "" {
 		// If we failed to obtain from a sequence we start from beginning
-		iterType = kinesis.ShardIteratorTypeTrimHorizon
+		iterType = types.ShardIteratorTypeTrimHorizon
 
-		res, err := k.svc.GetShardIteratorWithContext(k.ctx, &kinesis.GetShardIteratorInput{
+		res, err := k.svc.GetShardIterator(k.ctx, &kinesis.GetShardIteratorInput{
 			StreamName:        &streamID,
 			ShardId:           &shardID,
-			ShardIteratorType: &iterType,
+			ShardIteratorType: iterType,
 		})
 		if err != nil {
 			return "", err
@@ -345,8 +344,8 @@ func (k *kinesisReader) getIter(streamID, shardID, sequence string) (string, err
 // replacing the current iterator with this return param should always be safe.
 //
 // Do NOT modify this method without preserving this behaviour.
-func (k *kinesisReader) getRecords(streamID, shardID, shardIter string) ([]*kinesis.Record, string, error) {
-	res, err := k.svc.GetRecordsWithContext(k.ctx, &kinesis.GetRecordsInput{
+func (k *kinesisReader) getRecords(streamID, shardID, shardIter string) ([]types.Record, string, error) {
+	res, err := k.svc.GetRecords(k.ctx, &kinesis.GetRecordsInput{
 		Limit:         &awsKinesisDefaultLimit,
 		ShardIterator: &shardIter,
 	})
@@ -398,7 +397,7 @@ func (k *kinesisReader) runConsumer(wg *sync.WaitGroup, streamID, shardID, start
 	boff := k.boffPool.Get().(backoff.BackOff)
 
 	// Stores consumed records that have yet to be added to the batcher.
-	var pending []*kinesis.Record
+	var pending []types.Record
 	var iter string
 	if iter, initErr = k.getIter(streamID, shardID, startingSequence); initErr != nil {
 		return initErr
@@ -474,7 +473,8 @@ func (k *kinesisReader) runConsumer(wg *sync.WaitGroup, streamID, shardID, start
 					if !awsErrIsTimeout(err) {
 						nextPullChan = time.After(boff.NextBackOff())
 
-						if aerr, ok := err.(awserr.Error); ok && aerr.Code() == kinesis.ErrCodeExpiredIteratorException {
+						var aerr *types.ExpiredIteratorException
+						if errors.As(err, &aerr) {
 							k.log.Warn("Shard iterator expired, attempting to refresh")
 							newIter, err := k.getIter(streamID, shardID, recordBatcher.GetSequence())
 							if err != nil {
@@ -516,7 +516,7 @@ func (k *kinesisReader) runConsumer(wg *sync.WaitGroup, streamID, shardID, start
 					}
 				} else if len(pending) > 0 {
 					var i int
-					var r *kinesis.Record
+					var r types.Record
 					for i, r = range pending {
 						if recordBatcher.AddRecord(r) {
 							if pendingMsg, err = recordBatcher.FlushMessage(commitCtx); err != nil {
@@ -581,7 +581,7 @@ func (k *kinesisReader) runConsumer(wg *sync.WaitGroup, streamID, shardID, start
 
 //------------------------------------------------------------------------------
 
-func isShardFinished(s *kinesis.Shard) bool {
+func isShardFinished(s types.Shard) bool {
 	if s.SequenceNumberRange == nil {
 		return false
 	}
@@ -603,8 +603,8 @@ func (k *kinesisReader) runBalancedShards() {
 
 	for {
 		for _, streamID := range k.balancedStreams {
-			shardsRes, err := k.svc.ListShardsWithContext(k.ctx, &kinesis.ListShardsInput{
-				StreamName: aws.String(streamID),
+			shardsRes, err := k.svc.ListShards(k.ctx, &kinesis.ListShardsInput{
+				StreamName: &streamID,
 			})
 
 			var clientClaims map[string][]awsKinesisClientClaim
@@ -768,9 +768,10 @@ func (k *kinesisReader) waitUntilStreamsExists(ctx context.Context) error {
 	results := make(chan error, len(streams))
 	for _, s := range streams {
 		go func(stream string) {
-			results <- k.svc.WaitUntilStreamExistsWithContext(ctx, &kinesis.DescribeStreamInput{
+			waiter := kinesis.NewStreamExistsWaiter(k.svc)
+			results <- waiter.Wait(ctx, &kinesis.DescribeStreamInput{
 				StreamName: &stream,
-			})
+			}, time.Second*30)
 		}(s)
 	}
 
@@ -792,7 +793,7 @@ func (k *kinesisReader) Connect(ctx context.Context) error {
 		return nil
 	}
 
-	svc := kinesis.New(k.sess)
+	svc := kinesis.NewFromConfig(k.sess)
 	checkpointer, err := newAWSKinesisCheckpointer(k.sess, k.clientID, k.conf.DynamoDB, k.leasePeriod, k.commitPeriod)
 	if err != nil {
 		return err

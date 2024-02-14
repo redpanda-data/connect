@@ -6,11 +6,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/awserr"
-	"github.com/aws/aws-sdk-go/aws/request"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/sqs"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/sqs"
+	"github.com/aws/aws-sdk-go-v2/service/sqs/types"
 	"github.com/cenkalti/backoff/v4"
 
 	"github.com/benthosdev/benthos/v4/internal/component"
@@ -110,7 +108,7 @@ You can access these metadata fields using
 func init() {
 	err := service.RegisterInput("aws_sqs", sqsInputSpec(),
 		func(pConf *service.ParsedConfig, mgr *service.Resources) (service.Input, error) {
-			sess, err := GetSession(pConf)
+			sess, err := GetSession(context.TODO(), pConf)
 			if err != nil {
 				return nil, err
 			}
@@ -130,19 +128,19 @@ func init() {
 //------------------------------------------------------------------------------
 
 type sqsAPI interface {
-	ReceiveMessageWithContext(aws.Context, *sqs.ReceiveMessageInput, ...request.Option) (*sqs.ReceiveMessageOutput, error)
-	DeleteMessageBatchWithContext(aws.Context, *sqs.DeleteMessageBatchInput, ...request.Option) (*sqs.DeleteMessageBatchOutput, error)
-	ChangeMessageVisibilityBatchWithContext(aws.Context, *sqs.ChangeMessageVisibilityBatchInput, ...request.Option) (*sqs.ChangeMessageVisibilityBatchOutput, error)
-	SendMessageBatchWithContext(aws.Context, *sqs.SendMessageBatchInput, ...request.Option) (*sqs.SendMessageBatchOutput, error)
+	ReceiveMessage(context.Context, *sqs.ReceiveMessageInput, ...func(*sqs.Options)) (*sqs.ReceiveMessageOutput, error)
+	DeleteMessageBatch(context.Context, *sqs.DeleteMessageBatchInput, ...func(*sqs.Options)) (*sqs.DeleteMessageBatchOutput, error)
+	ChangeMessageVisibilityBatch(context.Context, *sqs.ChangeMessageVisibilityBatchInput, ...func(*sqs.Options)) (*sqs.ChangeMessageVisibilityBatchOutput, error)
+	SendMessageBatch(context.Context, *sqs.SendMessageBatchInput, ...func(*sqs.Options)) (*sqs.SendMessageBatchOutput, error)
 }
 
 type awsSQSReader struct {
 	conf sqsiConfig
 
-	session *session.Session
-	sqs     sqsAPI
+	aconf aws.Config
+	sqs   sqsAPI
 
-	messagesChan     chan *sqs.Message
+	messagesChan     chan types.Message
 	ackMessagesChan  chan sqsMessageHandle
 	nackMessagesChan chan sqsMessageHandle
 	closeSignal      *shutdown.Signaller
@@ -150,12 +148,12 @@ type awsSQSReader struct {
 	log *service.Logger
 }
 
-func newAWSSQSReader(conf sqsiConfig, sess *session.Session, log *service.Logger) (*awsSQSReader, error) {
+func newAWSSQSReader(conf sqsiConfig, aconf aws.Config, log *service.Logger) (*awsSQSReader, error) {
 	return &awsSQSReader{
 		conf:             conf,
-		session:          sess,
+		aconf:            aconf,
 		log:              log,
-		messagesChan:     make(chan *sqs.Message),
+		messagesChan:     make(chan types.Message),
 		ackMessagesChan:  make(chan sqsMessageHandle),
 		nackMessagesChan: make(chan sqsMessageHandle),
 		closeSignal:      shutdown.NewSignaller(),
@@ -166,7 +164,7 @@ func newAWSSQSReader(conf sqsiConfig, sess *session.Session, log *service.Logger
 // queue.
 func (a *awsSQSReader) Connect(ctx context.Context) error {
 	if a.sqs == nil {
-		a.sqs = sqs.New(a.session)
+		a.sqs = sqs.NewFromConfig(a.aconf)
 	}
 
 	ift := &sqsInFlightTracker{
@@ -223,7 +221,7 @@ func (t *sqsInFlightTracker) Remove(id string) {
 	delete(t.handles, id)
 }
 
-func (t *sqsInFlightTracker) AddNew(messages ...*sqs.Message) {
+func (t *sqsInFlightTracker) AddNew(messages ...types.Message) {
 	t.m.Lock()
 	defer t.m.Unlock()
 
@@ -237,10 +235,10 @@ func (t *sqsInFlightTracker) AddNew(messages ...*sqs.Message) {
 			receiptHandle:  *m.ReceiptHandle,
 			addedAt:        time.Now(),
 		}
-		if timeoutStr, exists := m.Attributes[sqsiAttributeNameVisibilityTimeout]; exists && timeoutStr != nil {
+		if timeoutStr, exists := m.Attributes[sqsiAttributeNameVisibilityTimeout]; exists {
 			// Might as well keep the queue timeout setting refreshed as we
 			// consume new data.
-			if tmpTimeoutSeconds, err := strconv.Atoi(*timeoutStr); err == nil {
+			if tmpTimeoutSeconds, err := strconv.Atoi(timeoutStr); err == nil {
 				handle.timeoutSeconds = tmpTimeoutSeconds
 			}
 		}
@@ -327,7 +325,7 @@ ackLoop:
 func (a *awsSQSReader) readLoop(wg *sync.WaitGroup, inFlightTracker *sqsInFlightTracker) {
 	defer wg.Done()
 
-	var pendingMsgs []*sqs.Message
+	var pendingMsgs []types.Message
 	defer func() {
 		if len(pendingMsgs) > 0 {
 			tmpNacks := make([]sqsMessageHandle, 0, len(pendingMsgs))
@@ -357,16 +355,16 @@ func (a *awsSQSReader) readLoop(wg *sync.WaitGroup, inFlightTracker *sqsInFlight
 	backoff.MaxElapsedTime = 0
 
 	getMsgs := func() {
-		res, err := a.sqs.ReceiveMessageWithContext(closeAtLeisureCtx, &sqs.ReceiveMessageInput{
+		res, err := a.sqs.ReceiveMessage(closeAtLeisureCtx, &sqs.ReceiveMessageInput{
 			QueueUrl:              aws.String(a.conf.URL),
-			MaxNumberOfMessages:   aws.Int64(int64(a.conf.MaxNumberOfMessages)),
-			WaitTimeSeconds:       aws.Int64(int64(a.conf.WaitTimeSeconds)),
-			AttributeNames:        []*string{aws.String("All")},
-			MessageAttributeNames: []*string{aws.String("All")},
+			MaxNumberOfMessages:   int32(a.conf.MaxNumberOfMessages),
+			WaitTimeSeconds:       int32(a.conf.WaitTimeSeconds),
+			AttributeNames:        []types.QueueAttributeName{types.QueueAttributeNameAll},
+			MessageAttributeNames: []string{"All"},
 		})
 		if err != nil {
-			if aerr, ok := err.(awserr.Error); !ok || aerr.Code() != request.CanceledErrorCode {
-				a.log.Errorf("Failed to pull new SQS messages: %v", aerr)
+			if !awsErrIsTimeout(err) {
+				a.log.Errorf("Failed to pull new SQS messages: %v", err)
 			}
 			return
 		}
@@ -411,13 +409,14 @@ func (a *awsSQSReader) deleteMessages(ctx context.Context, msgs ...sqsMessageHan
 	for len(msgs) > 0 {
 		input := sqs.DeleteMessageBatchInput{
 			QueueUrl: aws.String(a.conf.URL),
-			Entries:  []*sqs.DeleteMessageBatchRequestEntry{},
+			Entries:  []types.DeleteMessageBatchRequestEntry{},
 		}
 
 		for _, msg := range msgs {
-			input.Entries = append(input.Entries, &sqs.DeleteMessageBatchRequestEntry{
-				Id:            aws.String(msg.id),
-				ReceiptHandle: aws.String(msg.receiptHandle),
+			msg := msg
+			input.Entries = append(input.Entries, types.DeleteMessageBatchRequestEntry{
+				Id:            &msg.id,
+				ReceiptHandle: &msg.receiptHandle,
 			})
 			if len(input.Entries) == a.conf.MaxNumberOfMessages {
 				break
@@ -425,7 +424,7 @@ func (a *awsSQSReader) deleteMessages(ctx context.Context, msgs ...sqsMessageHan
 		}
 
 		msgs = msgs[len(input.Entries):]
-		response, err := a.sqs.DeleteMessageBatchWithContext(ctx, &input)
+		response, err := a.sqs.DeleteMessageBatch(ctx, &input)
 		if err != nil {
 			return err
 		}
@@ -448,14 +447,15 @@ func (a *awsSQSReader) updateVisibilityMessages(ctx context.Context, timeout int
 	for len(msgs) > 0 {
 		input := sqs.ChangeMessageVisibilityBatchInput{
 			QueueUrl: aws.String(a.conf.URL),
-			Entries:  []*sqs.ChangeMessageVisibilityBatchRequestEntry{},
+			Entries:  []types.ChangeMessageVisibilityBatchRequestEntry{},
 		}
 
 		for _, msg := range msgs {
-			input.Entries = append(input.Entries, &sqs.ChangeMessageVisibilityBatchRequestEntry{
-				Id:                aws.String(msg.id),
-				ReceiptHandle:     aws.String(msg.receiptHandle),
-				VisibilityTimeout: aws.Int64(int64(timeout)),
+			msg := msg
+			input.Entries = append(input.Entries, types.ChangeMessageVisibilityBatchRequestEntry{
+				Id:                &msg.id,
+				ReceiptHandle:     &msg.receiptHandle,
+				VisibilityTimeout: int32(timeout),
 			})
 			if len(input.Entries) == a.conf.MaxNumberOfMessages {
 				break
@@ -463,7 +463,7 @@ func (a *awsSQSReader) updateVisibilityMessages(ctx context.Context, timeout int
 		}
 
 		msgs = msgs[len(input.Entries):]
-		response, err := a.sqs.ChangeMessageVisibilityBatchWithContext(ctx, &input)
+		response, err := a.sqs.ChangeMessageVisibilityBatch(ctx, &input)
 		if err != nil {
 			return err
 		}
@@ -474,11 +474,11 @@ func (a *awsSQSReader) updateVisibilityMessages(ctx context.Context, timeout int
 	return nil
 }
 
-func addSQSMetadata(p *service.Message, sqsMsg *sqs.Message) {
+func addSQSMetadata(p *service.Message, sqsMsg types.Message) {
 	p.MetaSetMut("sqs_message_id", *sqsMsg.MessageId)
 	p.MetaSetMut("sqs_receipt_handle", *sqsMsg.ReceiptHandle)
-	if rCountStr := sqsMsg.Attributes["ApproximateReceiveCount"]; rCountStr != nil {
-		p.MetaSetMut("sqs_approximate_receive_count", *rCountStr)
+	if rCountStr, exists := sqsMsg.Attributes["ApproximateReceiveCount"]; exists {
+		p.MetaSetMut("sqs_approximate_receive_count", rCountStr)
 	}
 	for k, v := range sqsMsg.MessageAttributes {
 		if v.StringValue != nil {
@@ -493,7 +493,7 @@ func (a *awsSQSReader) Read(ctx context.Context) (*service.Message, service.AckF
 		return nil, nil, service.ErrNotConnected
 	}
 
-	var next *sqs.Message
+	var next types.Message
 	var open bool
 	select {
 	case next, open = <-a.messagesChan:

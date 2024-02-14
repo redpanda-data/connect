@@ -6,11 +6,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/credentials"
-	"github.com/aws/aws-sdk-go/aws/request"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/sqs"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/credentials"
+	"github.com/aws/aws-sdk-go-v2/service/sqs"
+	"github.com/aws/aws-sdk-go-v2/service/sqs/types"
 	"github.com/stretchr/testify/require"
 )
 
@@ -18,9 +18,9 @@ type mockSqsInput struct {
 	sqsAPI
 
 	mtx          chan struct{}
-	queueTimeout int
-	messages     []*sqs.Message
-	mesTimeouts  map[string]int
+	queueTimeout int32
+	messages     []types.Message
+	mesTimeouts  map[string]int32
 }
 
 func (m *mockSqsInput) do(fn func()) {
@@ -54,11 +54,11 @@ func (m *mockSqsInput) TimeoutLoop(ctx context.Context) {
 	}
 }
 
-func (m *mockSqsInput) ReceiveMessageWithContext(ctx aws.Context, input *sqs.ReceiveMessageInput, opts ...request.Option) (*sqs.ReceiveMessageOutput, error) {
+func (m *mockSqsInput) ReceiveMessage(context.Context, *sqs.ReceiveMessageInput, ...func(*sqs.Options)) (*sqs.ReceiveMessageOutput, error) {
 	<-m.mtx
 	defer func() { m.mtx <- struct{}{} }()
 
-	messages := make([]*sqs.Message, 0, len(m.messages))
+	messages := make([]types.Message, 0, len(m.messages))
 
 	for _, message := range m.messages {
 		if timeout, found := m.mesTimeouts[*message.MessageId]; !found || timeout == 0 {
@@ -71,23 +71,23 @@ func (m *mockSqsInput) ReceiveMessageWithContext(ctx aws.Context, input *sqs.Rec
 }
 
 func (m *mockSqsInput) GetQueueAttributes(input *sqs.GetQueueAttributesInput) (*sqs.GetQueueAttributesOutput, error) {
-	return &sqs.GetQueueAttributesOutput{Attributes: map[string]*string{sqsiAttributeNameVisibilityTimeout: aws.String(strconv.Itoa(m.queueTimeout))}}, nil
+	return &sqs.GetQueueAttributesOutput{Attributes: map[string]string{sqsiAttributeNameVisibilityTimeout: strconv.Itoa(int(m.queueTimeout))}}, nil
 }
 
-func (m *mockSqsInput) ChangeMessageVisibilityBatchWithContext(ctx aws.Context, input *sqs.ChangeMessageVisibilityBatchInput, opts ...request.Option) (*sqs.ChangeMessageVisibilityBatchOutput, error) {
+func (m *mockSqsInput) ChangeMessageVisibilityBatch(ctx context.Context, input *sqs.ChangeMessageVisibilityBatchInput, opts ...func(*sqs.Options)) (*sqs.ChangeMessageVisibilityBatchOutput, error) {
 	<-m.mtx
 	defer func() { m.mtx <- struct{}{} }()
 
 	for _, entry := range input.Entries {
 		if _, found := m.mesTimeouts[*entry.Id]; found {
-			m.mesTimeouts[*entry.Id] = int(*entry.VisibilityTimeout)
+			m.mesTimeouts[*entry.Id] = entry.VisibilityTimeout
 		}
 	}
 
 	return &sqs.ChangeMessageVisibilityBatchOutput{}, nil
 }
 
-func (m *mockSqsInput) DeleteMessageBatchWithContext(ctx aws.Context, input *sqs.DeleteMessageBatchInput, opts ...request.Option) (*sqs.DeleteMessageBatchOutput, error) {
+func (m *mockSqsInput) DeleteMessageBatch(ctx context.Context, input *sqs.DeleteMessageBatchInput, opts ...func(*sqs.Options)) (*sqs.DeleteMessageBatchOutput, error) {
 	<-m.mtx
 	defer func() { m.mtx <- struct{}{} }()
 
@@ -107,7 +107,7 @@ func TestSQSInput(t *testing.T) {
 	tCtx := context.Background()
 	defer tCtx.Done()
 
-	messages := []*sqs.Message{
+	messages := []types.Message{
 		{
 			Body:          aws.String("message-1"),
 			MessageId:     aws.String("message-1"),
@@ -126,6 +126,11 @@ func TestSQSInput(t *testing.T) {
 	}
 	expectedMessages := len(messages)
 
+	conf, err := config.LoadDefaultConfig(context.Background(),
+		config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider("xxxxx", "xxxxx", "xxxxx")),
+	)
+	require.NoError(t, err)
+
 	r, err := newAWSSQSReader(
 		sqsiConfig{
 			URL:                 "http://foo.example.com",
@@ -134,9 +139,7 @@ func TestSQSInput(t *testing.T) {
 			ResetVisibility:     true,
 			MaxNumberOfMessages: 10,
 		},
-		session.Must(session.NewSession(&aws.Config{
-			Credentials: credentials.NewStaticCredentials("xxxxx", "xxxxx", "xxxxx"),
-		})),
+		conf,
 		nil,
 	)
 	require.NoError(t, err)
@@ -145,7 +148,7 @@ func TestSQSInput(t *testing.T) {
 		mtx:          make(chan struct{}, 1),
 		queueTimeout: 10,
 		messages:     messages,
-		mesTimeouts:  make(map[string]int, expectedMessages),
+		mesTimeouts:  make(map[string]int32, expectedMessages),
 	}
 	mockInput.mtx <- struct{}{}
 	r.sqs = mockInput
@@ -155,7 +158,7 @@ func TestSQSInput(t *testing.T) {
 	err = r.Connect(tCtx)
 	require.NoError(t, err)
 
-	receivedMessages := make([]sqs.Message, 0, expectedMessages)
+	receivedMessages := make([]types.Message, 0, expectedMessages)
 
 	// Check that all messages are received from the reader
 	require.Eventually(t, func() bool {
@@ -163,7 +166,7 @@ func TestSQSInput(t *testing.T) {
 		for {
 			select {
 			case mes := <-r.messagesChan:
-				receivedMessages = append(receivedMessages, *mes)
+				receivedMessages = append(receivedMessages, mes)
 			default:
 				break out
 			}
