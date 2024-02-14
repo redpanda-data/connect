@@ -34,6 +34,7 @@ tracer:
     grpc: [] # No default (required)
     sampling:
       enabled: false
+      ratio: 0.85 # No default (optional)
 ```
 
 </TabItem>
@@ -48,7 +49,7 @@ tracer:
     tags: {}
     sampling:
       enabled: false
-      ratio: 1
+      ratio: 0.85 # No default (optional)
 ```
 
 </TabItem>
@@ -116,6 +117,7 @@ Settings for trace sampling. Sampling is recommended for high-volume production 
 
 
 Type: `object`  
+Requires version 4.25.0 or newer  
 
 ### `sampling.enabled`
 
@@ -131,6 +133,13 @@ Sets the ratio of traces to sample.
 
 
 Type: `float`  
-Default: `1`  
+
+```yml
+# Examples
+
+ratio: 0.85
+
+ratio: 0.5
+```
 
 

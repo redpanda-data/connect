@@ -39,19 +39,18 @@ func init() {
 		).Description("A list of grpc collectors.")).
 		Field(service.NewStringMapField("tags").
 			Description("A map of tags to add to all tracing spans.").
-			Default(map[string]string{}).
+			Default(map[string]any{}).
 			Advanced()).
 		Field(service.NewObjectField("sampling",
 			service.NewBoolField("enabled").
 				Description("Whether to enable sampling.").
-				Default(false).
-				Optional(),
+				Default(false),
 			service.NewFloatField("ratio").
 				Description("Sets the ratio of traces to sample.").
-				Default(1.0).
-				Advanced().
+				Examples(0.85, 0.5).
 				Optional()).
-			Description("Settings for trace sampling. Sampling is recommended for high-volume production workloads."))
+			Description("Settings for trace sampling. Sampling is recommended for high-volume production workloads.").
+			Version("4.25.0"))
 
 	err := service.RegisterOtelTracerProvider(
 		"open_telemetry_collector",
@@ -146,9 +145,11 @@ func sampleConfigFromParsed(conf *service.ParsedConfig) (sampleConfig, error) {
 		return sampleConfig{}, err
 	}
 
-	ratio, err := conf.FieldFloat("ratio")
-	if err != nil {
-		return sampleConfig{}, err
+	var ratio float64
+	if conf.Contains("ratio") {
+		if ratio, err = conf.FieldFloat("ratio"); err != nil {
+			return sampleConfig{}, err
+		}
 	}
 
 	return sampleConfig{
