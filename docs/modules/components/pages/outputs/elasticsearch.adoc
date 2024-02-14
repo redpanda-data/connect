@@ -68,6 +68,8 @@ output:
     type: ""
     routing: ""
     retry_on_conflict: 0
+    stored_script: ""
+    script_params: ""
     sniff: true
     healthcheck: true
     timeout: 5s
@@ -233,6 +235,31 @@ When using the update or upsert action, retry_on_conflict can be used to specify
 *Type*: `int`
 
 *Default*: `0`
+
+=== `stored_script`
+
+The id of the [stored script](https://www.elastic.co/guide/en/elasticsearch/reference/current/modules-scripting-using.html#script-stored-scripts). Ignored if action is not `update` or `upsert`
+This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
+
+
+*Type*: `string`
+
+*Default*: `""`
+
+=== `script_params`
+
+A [Bloblang query](/docs/guides/bloblang/about/) with the script params. Ignored if action is not `update` or `upsert`
+
+
+*Type*: `string`
+
+*Default*: `""`
+
+```yml
+# Examples
+
+script_params: root.doc = this
+```
 
 === `sniff`
 
