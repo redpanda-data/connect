@@ -46,7 +46,7 @@ func ConfigSpec() *service.ConfigSpec {
 		).
 		Field(service.NewFloatListField("histogram_buckets").
 			Description("Timing metrics histogram buckets (in seconds). If left empty defaults to [ 0, 5, 10, 25, 50, 75, 100, 250, 500, 750, 1000, 2500, 5000, 7500, 10000 ] as per the Open Telemetry specification.").
-			Default([]any{}).
+			Default([]float64{0, 5, 10, 25, 50, 75, 100, 250, 500, 750, 1000, 2500, 5000, 7500, 10000}).
 			Advanced(),
 		)
 }
@@ -100,7 +100,7 @@ func NewOtlpMetricsConfig(conf *service.ParsedConfig) (*otlpMetricsConfig, error
 	}
 
 	var buckets []float64
-	buckets, err = conf.FieldFloatList("buckets")
+	buckets, err = conf.FieldFloatList("histogram_buckets")
 	if err != nil {
 		buckets = []float64{0, 5, 10, 25, 50, 75, 100, 250, 500, 750, 1000, 2500, 5000, 7500, 10000}
 	}
