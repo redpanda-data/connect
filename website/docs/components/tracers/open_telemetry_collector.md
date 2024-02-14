@@ -32,6 +32,8 @@ tracer:
   open_telemetry_collector:
     http: [] # No default (required)
     grpc: [] # No default (required)
+    sampling:
+      enabled: false
 ```
 
 </TabItem>
@@ -44,6 +46,9 @@ tracer:
     http: [] # No default (required)
     grpc: [] # No default (required)
     tags: {}
+    sampling:
+      enabled: false
+      ratio: 1
 ```
 
 </TabItem>
@@ -104,5 +109,28 @@ A map of tags to add to all tracing spans.
 
 Type: `object`  
 Default: `{}`  
+
+### `sampling`
+
+Settings for trace sampling. Sampling is recommended for high-volume production workloads.
+
+
+Type: `object`  
+
+### `sampling.enabled`
+
+Whether to enable sampling.
+
+
+Type: `bool`  
+Default: `false`  
+
+### `sampling.ratio`
+
+Sets the ratio of traces to sample.
+
+
+Type: `float`  
+Default: `1`  
 
 
