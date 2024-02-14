@@ -8,9 +8,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/sns"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/sns"
+	"github.com/aws/aws-sdk-go-v2/service/sns/types"
 
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
@@ -35,7 +35,7 @@ type snsoConfig struct {
 	Timeout                time.Duration
 	Metadata               *service.MetadataExcludeFilter
 
-	session *session.Session
+	aconf aws.Config
 }
 
 func snsoConfigFromParsed(pConf *service.ParsedConfig) (conf snsoConfig, err error) {
@@ -58,7 +58,7 @@ func snsoConfigFromParsed(pConf *service.ParsedConfig) (conf snsoConfig, err err
 	if conf.Timeout, err = pConf.FieldDuration(snsoFieldTimeout); err != nil {
 		return
 	}
-	if conf.session, err = GetSession(pConf); err != nil {
+	if conf.aconf, err = GetSession(context.TODO(), pConf); err != nil {
 		return
 	}
 	return
@@ -117,7 +117,7 @@ func init() {
 
 type snsWriter struct {
 	conf snsoConfig
-	sns  *sns.SNS
+	sns  *sns.Client
 	log  *service.Logger
 }
 
@@ -133,14 +133,14 @@ func (a *snsWriter) Connect(ctx context.Context) error {
 	if a.sns != nil {
 		return nil
 	}
-	a.sns = sns.New(a.conf.session)
+	a.sns = sns.NewFromConfig(a.conf.aconf)
 
 	a.log.Infof("Sending messages to Amazon SNS ARN: %v\n", a.conf.TopicArn)
 	return nil
 }
 
 type snsAttributes struct {
-	attrMap  map[string]*sns.MessageAttributeValue
+	attrMap  map[string]types.MessageAttributeValue
 	groupID  *string
 	dedupeID *string
 }
@@ -161,14 +161,14 @@ func (a *snsWriter) getSNSAttributes(msg *service.Message) (snsAttributes, error
 		}
 		return nil
 	})
-	var values map[string]*sns.MessageAttributeValue
+	var values map[string]types.MessageAttributeValue
 	if len(keys) > 0 {
 		sort.Strings(keys)
-		values = map[string]*sns.MessageAttributeValue{}
+		values = map[string]types.MessageAttributeValue{}
 
 		for _, k := range keys {
 			vStr, _ := msg.MetaGet(k)
-			values[k] = &sns.MessageAttributeValue{
+			values[k] = types.MessageAttributeValue{
 				DataType:    aws.String("String"),
 				StringValue: aws.String(vStr),
 			}
@@ -222,7 +222,7 @@ func (a *snsWriter) Write(wctx context.Context, msg *service.Message) error {
 		MessageGroupId:         attrs.groupID,
 		MessageDeduplicationId: attrs.dedupeID,
 	}
-	_, err = a.sns.PublishWithContext(ctx, message)
+	_, err = a.sns.Publish(ctx, message)
 	return err
 }
 

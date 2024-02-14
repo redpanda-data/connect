@@ -10,9 +10,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/sqs"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/sqs"
+	"github.com/aws/aws-sdk-go-v2/service/sqs/types"
 	"github.com/cenkalti/backoff/v4"
 
 	"github.com/benthosdev/benthos/v4/internal/component"
@@ -42,7 +42,7 @@ type sqsoConfig struct {
 	DelaySeconds           *service.InterpolatedString
 
 	Metadata    *service.MetadataExcludeFilter
-	session     *session.Session
+	aconf       aws.Config
 	backoffCtor func() backoff.BackOff
 }
 
@@ -68,7 +68,7 @@ func sqsoConfigFromParsed(pConf *service.ParsedConfig) (conf sqsoConfig, err err
 	if conf.Metadata, err = pConf.FieldMetadataExcludeFilter(sqsoFieldMetadata); err != nil {
 		return
 	}
-	if conf.session, err = GetSession(pConf); err != nil {
+	if conf.aconf, err = GetSession(context.TODO(), pConf); err != nil {
 		return
 	}
 	if conf.backoffCtor, err = pure.CommonRetryBackOffCtorFromParsed(pConf); err != nil {
@@ -157,16 +157,16 @@ func (a *sqsWriter) Connect(ctx context.Context) error {
 		return nil
 	}
 
-	a.sqs = sqs.New(a.conf.session)
+	a.sqs = sqs.NewFromConfig(a.conf.aconf)
 	a.log.Infof("Sending messages to Amazon SQS URL: %v\n", a.conf.URL)
 	return nil
 }
 
 type sqsAttributes struct {
-	attrMap      map[string]*sqs.MessageAttributeValue
+	attrMap      map[string]types.MessageAttributeValue
 	groupID      *string
 	dedupeID     *string
-	delaySeconds *int64
+	delaySeconds int32
 	content      *string
 }
 
@@ -187,16 +187,17 @@ func (a *sqsWriter) getSQSAttributes(batch service.MessageBatch, i int) (sqsAttr
 		}
 		return nil
 	})
-	var values map[string]*sqs.MessageAttributeValue
+	var values map[string]types.MessageAttributeValue
 	if len(keys) > 0 {
 		sort.Strings(keys)
-		values = map[string]*sqs.MessageAttributeValue{}
+		values = map[string]types.MessageAttributeValue{}
 
 		for i, k := range keys {
 			v, _ := msg.MetaGet(k)
-			values[k] = &sqs.MessageAttributeValue{
-				DataType:    aws.String("String"),
-				StringValue: aws.String(v),
+			dataType := "String"
+			values[k] = types.MessageAttributeValue{
+				DataType:    &dataType,
+				StringValue: &v,
 			}
 			if i == 9 {
 				break
@@ -205,7 +206,7 @@ func (a *sqsWriter) getSQSAttributes(batch service.MessageBatch, i int) (sqsAttr
 	}
 
 	var groupID, dedupeID *string
-	var delaySeconds *int64
+	var delaySeconds int32
 	if a.conf.MessageGroupID != nil {
 		groupIDStr, err := batch.TryInterpolatedString(i, a.conf.MessageGroupID)
 		if err != nil {
@@ -232,7 +233,7 @@ func (a *sqsWriter) getSQSAttributes(batch service.MessageBatch, i int) (sqsAttr
 		if delaySecondsInt64 < 0 || delaySecondsInt64 > 900 {
 			return sqsAttributes{}, fmt.Errorf("delay seconds must be between 0 and 900")
 		}
-		delaySeconds = aws.Int64(delaySecondsInt64)
+		delaySeconds = int32(delaySecondsInt64)
 	}
 
 	msgBytes, err := msg.AsBytes()
@@ -256,7 +257,7 @@ func (a *sqsWriter) WriteBatch(ctx context.Context, batch service.MessageBatch) 
 
 	backOff := a.conf.backoffCtor()
 
-	entries := []*sqs.SendMessageBatchRequestEntry{}
+	entries := []types.SendMessageBatchRequestEntry{}
 	attrMap := map[string]sqsAttributes{}
 
 	for i := 0; i < len(batch); i++ {
@@ -268,8 +269,8 @@ func (a *sqsWriter) WriteBatch(ctx context.Context, batch service.MessageBatch) 
 
 		attrMap[id] = attrs
 
-		entries = append(entries, &sqs.SendMessageBatchRequestEntry{
-			Id:                     aws.String(id),
+		entries = append(entries, types.SendMessageBatchRequestEntry{
+			Id:                     &id,
 			MessageBody:            attrs.content,
 			MessageAttributes:      attrs.attrMap,
 			MessageGroupId:         attrs.groupID,
@@ -295,7 +296,7 @@ func (a *sqsWriter) WriteBatch(ctx context.Context, batch service.MessageBatch) 
 		wait := backOff.NextBackOff()
 
 		var batchResult *sqs.SendMessageBatchOutput
-		if batchResult, err = a.sqs.SendMessageBatchWithContext(ctx, input); err != nil {
+		if batchResult, err = a.sqs.SendMessageBatch(ctx, input); err != nil {
 			a.log.Warnf("SQS error: %v\n", err)
 			// bail if a message is too large or all retry attempts expired
 			if wait == backoff.Stop {
@@ -312,15 +313,15 @@ func (a *sqsWriter) WriteBatch(ctx context.Context, batch service.MessageBatch) 
 		}
 
 		if unproc := batchResult.Failed; len(unproc) > 0 {
-			input.Entries = []*sqs.SendMessageBatchRequestEntry{}
+			input.Entries = []types.SendMessageBatchRequestEntry{}
 			for _, v := range unproc {
-				if *v.SenderFault {
+				if v.SenderFault {
 					err = fmt.Errorf("record failed with code: %v, message: %v", *v.Code, *v.Message)
 					a.log.Errorf("SQS record error: %v\n", err)
 					return err
 				}
 				aMap := attrMap[*v.Id]
-				input.Entries = append(input.Entries, &sqs.SendMessageBatchRequestEntry{
+				input.Entries = append(input.Entries, types.SendMessageBatchRequestEntry{
 					Id:                     v.Id,
 					MessageBody:            aMap.content,
 					MessageAttributes:      aMap.attrMap,

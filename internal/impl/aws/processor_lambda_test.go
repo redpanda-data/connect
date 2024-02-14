@@ -6,8 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/aws/aws-sdk-go/aws/request"
-	"github.com/aws/aws-sdk-go/service/lambda"
+	"github.com/aws/aws-sdk-go-v2/service/lambda"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -18,7 +17,7 @@ type mockLambda struct {
 	fn func(*lambda.InvokeInput) (*lambda.InvokeOutput, error)
 }
 
-func (m *mockLambda) InvokeWithContext(ctx context.Context, in *lambda.InvokeInput, opt ...request.Option) (*lambda.InvokeOutput, error) {
+func (m *mockLambda) Invoke(ctx context.Context, in *lambda.InvokeInput, opts ...func(*lambda.Options)) (*lambda.InvokeOutput, error) {
 	return m.fn(in)
 }
 

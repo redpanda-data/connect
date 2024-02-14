@@ -5,8 +5,9 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/service/dynamodb"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -19,12 +20,12 @@ type mockDynamoDB struct {
 	batchFn func(*dynamodb.BatchWriteItemInput) (*dynamodb.BatchWriteItemOutput, error)
 }
 
-func (m *mockDynamoDB) PutItem(input *dynamodb.PutItemInput) (*dynamodb.PutItemOutput, error) {
-	return m.fn(input)
+func (m *mockDynamoDB) PutItem(ctx context.Context, params *dynamodb.PutItemInput, optFns ...func(*dynamodb.Options)) (*dynamodb.PutItemOutput, error) {
+	return m.fn(params)
 }
 
-func (m *mockDynamoDB) BatchWriteItem(input *dynamodb.BatchWriteItemInput) (*dynamodb.BatchWriteItemOutput, error) {
-	return m.batchFn(input)
+func (m *mockDynamoDB) BatchWriteItem(ctx context.Context, params *dynamodb.BatchWriteItemInput, optFns ...func(*dynamodb.Options)) (*dynamodb.BatchWriteItemOutput, error) {
+	return m.batchFn(params)
 }
 
 func testDDBOWriter(t *testing.T, conf string) *dynamoDBWriter {
@@ -50,7 +51,7 @@ string_columns:
   content: ${!json("content")}
 `)
 
-	var request map[string][]*dynamodb.WriteRequest
+	var request map[string][]types.WriteRequest
 
 	db.client = &mockDynamoDB{
 		fn: func(input *dynamodb.PutItemInput) (*dynamodb.PutItemOutput, error) {
@@ -68,28 +69,28 @@ string_columns:
 		service.NewMessage([]byte(`{"id":"bar","content":"bar stuff"}`)),
 	}))
 
-	expected := map[string][]*dynamodb.WriteRequest{
+	expected := map[string][]types.WriteRequest{
 		"FooTable": {
-			&dynamodb.WriteRequest{
-				PutRequest: &dynamodb.PutRequest{
-					Item: map[string]*dynamodb.AttributeValue{
-						"id": {
-							S: aws.String("foo"),
+			types.WriteRequest{
+				PutRequest: &types.PutRequest{
+					Item: map[string]types.AttributeValue{
+						"id": &types.AttributeValueMemberS{
+							Value: "foo",
 						},
-						"content": {
-							S: aws.String("foo stuff"),
+						"content": &types.AttributeValueMemberS{
+							Value: "foo stuff",
 						},
 					},
 				},
 			},
-			&dynamodb.WriteRequest{
-				PutRequest: &dynamodb.PutRequest{
-					Item: map[string]*dynamodb.AttributeValue{
-						"id": {
-							S: aws.String("bar"),
+			types.WriteRequest{
+				PutRequest: &types.PutRequest{
+					Item: map[string]types.AttributeValue{
+						"id": &types.AttributeValueMemberS{
+							Value: "bar",
 						},
-						"content": {
-							S: aws.String("bar stuff"),
+						"content": &types.AttributeValueMemberS{
+							Value: "bar stuff",
 						},
 					},
 				},
@@ -112,7 +113,7 @@ backoff:
   max_elapsed_time: 100ms
 `)
 
-	var batchRequest []*dynamodb.WriteRequest
+	var batchRequest []types.WriteRequest
 	var requests []*dynamodb.PutItemInput
 
 	db.client = &mockDynamoDB{
@@ -126,7 +127,7 @@ backoff:
 				return nil, errors.New("not implemented")
 			}
 			if request, ok := input.RequestItems["FooTable"]; ok {
-				items := make([]*dynamodb.WriteRequest, len(request))
+				items := make([]types.WriteRequest, len(request))
 				copy(items, request)
 				batchRequest = items
 			} else {
@@ -142,28 +143,28 @@ backoff:
 		service.NewMessage([]byte(`{"id":"baz","content":"baz stuff"}`)),
 	}))
 
-	batchExpected := []*dynamodb.WriteRequest{
+	batchExpected := []types.WriteRequest{
 		{
-			PutRequest: &dynamodb.PutRequest{
-				Item: map[string]*dynamodb.AttributeValue{
-					"id":      {S: aws.String("foo")},
-					"content": {S: aws.String("foo stuff")},
+			PutRequest: &types.PutRequest{
+				Item: map[string]types.AttributeValue{
+					"id":      &types.AttributeValueMemberS{Value: "foo"},
+					"content": &types.AttributeValueMemberS{Value: "foo stuff"},
 				},
 			},
 		},
 		{
-			PutRequest: &dynamodb.PutRequest{
-				Item: map[string]*dynamodb.AttributeValue{
-					"id":      {S: aws.String("bar")},
-					"content": {S: aws.String("bar stuff")},
+			PutRequest: &types.PutRequest{
+				Item: map[string]types.AttributeValue{
+					"id":      &types.AttributeValueMemberS{Value: "bar"},
+					"content": &types.AttributeValueMemberS{Value: "bar stuff"},
 				},
 			},
 		},
 		{
-			PutRequest: &dynamodb.PutRequest{
-				Item: map[string]*dynamodb.AttributeValue{
-					"id":      {S: aws.String("baz")},
-					"content": {S: aws.String("baz stuff")},
+			PutRequest: &types.PutRequest{
+				Item: map[string]types.AttributeValue{
+					"id":      &types.AttributeValueMemberS{Value: "baz"},
+					"content": &types.AttributeValueMemberS{Value: "baz stuff"},
 				},
 			},
 		},
@@ -174,23 +175,23 @@ backoff:
 	expected := []*dynamodb.PutItemInput{
 		{
 			TableName: aws.String("FooTable"),
-			Item: map[string]*dynamodb.AttributeValue{
-				"id":      {S: aws.String("foo")},
-				"content": {S: aws.String("foo stuff")},
+			Item: map[string]types.AttributeValue{
+				"id":      &types.AttributeValueMemberS{Value: "foo"},
+				"content": &types.AttributeValueMemberS{Value: "foo stuff"},
 			},
 		},
 		{
 			TableName: aws.String("FooTable"),
-			Item: map[string]*dynamodb.AttributeValue{
-				"id":      {S: aws.String("bar")},
-				"content": {S: aws.String("bar stuff")},
+			Item: map[string]types.AttributeValue{
+				"id":      &types.AttributeValueMemberS{Value: "bar"},
+				"content": &types.AttributeValueMemberS{Value: "bar stuff"},
 			},
 		},
 		{
 			TableName: aws.String("FooTable"),
-			Item: map[string]*dynamodb.AttributeValue{
-				"id":      {S: aws.String("baz")},
-				"content": {S: aws.String("baz stuff")},
+			Item: map[string]types.AttributeValue{
+				"id":      &types.AttributeValueMemberS{Value: "baz"},
+				"content": &types.AttributeValueMemberS{Value: "baz stuff"},
 			},
 		},
 	}
@@ -208,7 +209,7 @@ string_columns:
   content: ${!json("content")}
 `)
 
-	var requests [][]*dynamodb.WriteRequest
+	var requests [][]types.WriteRequest
 
 	db.client = &mockDynamoDB{
 		fn: func(input *dynamodb.PutItemInput) (*dynamodb.PutItemOutput, error) {
@@ -218,13 +219,13 @@ string_columns:
 		batchFn: func(input *dynamodb.BatchWriteItemInput) (output *dynamodb.BatchWriteItemOutput, err error) {
 			if len(requests) == 0 {
 				output = &dynamodb.BatchWriteItemOutput{
-					UnprocessedItems: map[string][]*dynamodb.WriteRequest{
+					UnprocessedItems: map[string][]types.WriteRequest{
 						"FooTable": {
 							{
-								PutRequest: &dynamodb.PutRequest{
-									Item: map[string]*dynamodb.AttributeValue{
-										"id":      {S: aws.String("bar")},
-										"content": {S: aws.String("bar stuff")},
+								PutRequest: &types.PutRequest{
+									Item: map[string]types.AttributeValue{
+										"id":      &types.AttributeValueMemberS{Value: "bar"},
+										"content": &types.AttributeValueMemberS{Value: "bar stuff"},
 									},
 								},
 							},
@@ -235,7 +236,7 @@ string_columns:
 				output = &dynamodb.BatchWriteItemOutput{}
 			}
 			if request, ok := input.RequestItems["FooTable"]; ok {
-				items := make([]*dynamodb.WriteRequest, len(request))
+				items := make([]types.WriteRequest, len(request))
 				copy(items, request)
 				requests = append(requests, items)
 			} else {
@@ -251,39 +252,39 @@ string_columns:
 		service.NewMessage([]byte(`{"id":"baz","content":"baz stuff"}`)),
 	}))
 
-	expected := [][]*dynamodb.WriteRequest{
+	expected := [][]types.WriteRequest{
 		{
 			{
-				PutRequest: &dynamodb.PutRequest{
-					Item: map[string]*dynamodb.AttributeValue{
-						"id":      {S: aws.String("foo")},
-						"content": {S: aws.String("foo stuff")},
+				PutRequest: &types.PutRequest{
+					Item: map[string]types.AttributeValue{
+						"id":      &types.AttributeValueMemberS{Value: "foo"},
+						"content": &types.AttributeValueMemberS{Value: "foo stuff"},
 					},
 				},
 			},
 			{
-				PutRequest: &dynamodb.PutRequest{
-					Item: map[string]*dynamodb.AttributeValue{
-						"id":      {S: aws.String("bar")},
-						"content": {S: aws.String("bar stuff")},
+				PutRequest: &types.PutRequest{
+					Item: map[string]types.AttributeValue{
+						"id":      &types.AttributeValueMemberS{Value: "bar"},
+						"content": &types.AttributeValueMemberS{Value: "bar stuff"},
 					},
 				},
 			},
 			{
-				PutRequest: &dynamodb.PutRequest{
-					Item: map[string]*dynamodb.AttributeValue{
-						"id":      {S: aws.String("baz")},
-						"content": {S: aws.String("baz stuff")},
+				PutRequest: &types.PutRequest{
+					Item: map[string]types.AttributeValue{
+						"id":      &types.AttributeValueMemberS{Value: "baz"},
+						"content": &types.AttributeValueMemberS{Value: "baz stuff"},
 					},
 				},
 			},
 		},
 		{
 			{
-				PutRequest: &dynamodb.PutRequest{
-					Item: map[string]*dynamodb.AttributeValue{
-						"id":      {S: aws.String("bar")},
-						"content": {S: aws.String("bar stuff")},
+				PutRequest: &types.PutRequest{
+					Item: map[string]types.AttributeValue{
+						"id":      &types.AttributeValueMemberS{Value: "bar"},
+						"content": &types.AttributeValueMemberS{Value: "bar stuff"},
 					},
 				},
 			},
@@ -303,7 +304,7 @@ string_columns:
   content: ${!json("content")}
 `)
 
-	var batchRequest []*dynamodb.WriteRequest
+	var batchRequest []types.WriteRequest
 	var requests []*dynamodb.PutItemInput
 
 	barErr := errors.New("dont like bar")
@@ -313,7 +314,7 @@ string_columns:
 			if len(requests) < 3 {
 				requests = append(requests, input)
 			}
-			if *input.Item["id"].S == "bar" {
+			if input.Item["id"].(*types.AttributeValueMemberS).Value == "bar" {
 				return nil, barErr
 			}
 			return nil, nil
@@ -324,7 +325,7 @@ string_columns:
 				return nil, errors.New("not implemented")
 			}
 			if request, ok := input.RequestItems["FooTable"]; ok {
-				items := make([]*dynamodb.WriteRequest, len(request))
+				items := make([]types.WriteRequest, len(request))
 				copy(items, request)
 				batchRequest = items
 			} else {
@@ -344,28 +345,28 @@ string_columns:
 	expErr.Failed(1, barErr)
 	require.Equal(t, expErr, db.WriteBatch(context.Background(), msg))
 
-	batchExpected := []*dynamodb.WriteRequest{
+	batchExpected := []types.WriteRequest{
 		{
-			PutRequest: &dynamodb.PutRequest{
-				Item: map[string]*dynamodb.AttributeValue{
-					"id":      {S: aws.String("foo")},
-					"content": {S: aws.String("foo stuff")},
+			PutRequest: &types.PutRequest{
+				Item: map[string]types.AttributeValue{
+					"id":      &types.AttributeValueMemberS{Value: "foo"},
+					"content": &types.AttributeValueMemberS{Value: "foo stuff"},
 				},
 			},
 		},
 		{
-			PutRequest: &dynamodb.PutRequest{
-				Item: map[string]*dynamodb.AttributeValue{
-					"id":      {S: aws.String("bar")},
-					"content": {S: aws.String("bar stuff")},
+			PutRequest: &types.PutRequest{
+				Item: map[string]types.AttributeValue{
+					"id":      &types.AttributeValueMemberS{Value: "bar"},
+					"content": &types.AttributeValueMemberS{Value: "bar stuff"},
 				},
 			},
 		},
 		{
-			PutRequest: &dynamodb.PutRequest{
-				Item: map[string]*dynamodb.AttributeValue{
-					"id":      {S: aws.String("baz")},
-					"content": {S: aws.String("baz stuff")},
+			PutRequest: &types.PutRequest{
+				Item: map[string]types.AttributeValue{
+					"id":      &types.AttributeValueMemberS{Value: "baz"},
+					"content": &types.AttributeValueMemberS{Value: "baz stuff"},
 				},
 			},
 		},
@@ -376,23 +377,23 @@ string_columns:
 	expected := []*dynamodb.PutItemInput{
 		{
 			TableName: aws.String("FooTable"),
-			Item: map[string]*dynamodb.AttributeValue{
-				"id":      {S: aws.String("foo")},
-				"content": {S: aws.String("foo stuff")},
+			Item: map[string]types.AttributeValue{
+				"id":      &types.AttributeValueMemberS{Value: "foo"},
+				"content": &types.AttributeValueMemberS{Value: "foo stuff"},
 			},
 		},
 		{
 			TableName: aws.String("FooTable"),
-			Item: map[string]*dynamodb.AttributeValue{
-				"id":      {S: aws.String("bar")},
-				"content": {S: aws.String("bar stuff")},
+			Item: map[string]types.AttributeValue{
+				"id":      &types.AttributeValueMemberS{Value: "bar"},
+				"content": &types.AttributeValueMemberS{Value: "bar stuff"},
 			},
 		},
 		{
 			TableName: aws.String("FooTable"),
-			Item: map[string]*dynamodb.AttributeValue{
-				"id":      {S: aws.String("baz")},
-				"content": {S: aws.String("baz stuff")},
+			Item: map[string]types.AttributeValue{
+				"id":      &types.AttributeValueMemberS{Value: "baz"},
+				"content": &types.AttributeValueMemberS{Value: "baz stuff"},
 			},
 		},
 	}
@@ -410,7 +411,7 @@ string_columns:
   content: ${!json("content")}
 `)
 
-	var requests [][]*dynamodb.WriteRequest
+	var requests [][]types.WriteRequest
 
 	db.client = &mockDynamoDB{
 		fn: func(input *dynamodb.PutItemInput) (*dynamodb.PutItemOutput, error) {
@@ -419,13 +420,13 @@ string_columns:
 		},
 		batchFn: func(input *dynamodb.BatchWriteItemInput) (output *dynamodb.BatchWriteItemOutput, err error) {
 			output = &dynamodb.BatchWriteItemOutput{
-				UnprocessedItems: map[string][]*dynamodb.WriteRequest{
+				UnprocessedItems: map[string][]types.WriteRequest{
 					"FooTable": {
 						{
-							PutRequest: &dynamodb.PutRequest{
-								Item: map[string]*dynamodb.AttributeValue{
-									"id":      {S: aws.String("bar")},
-									"content": {S: aws.String("bar stuff")},
+							PutRequest: &types.PutRequest{
+								Item: map[string]types.AttributeValue{
+									"id":      &types.AttributeValueMemberS{Value: "bar"},
+									"content": &types.AttributeValueMemberS{Value: "bar stuff"},
 								},
 							},
 						},
@@ -434,7 +435,7 @@ string_columns:
 			}
 			if len(requests) < 2 {
 				if request, ok := input.RequestItems["FooTable"]; ok {
-					items := make([]*dynamodb.WriteRequest, len(request))
+					items := make([]types.WriteRequest, len(request))
 					copy(items, request)
 					requests = append(requests, items)
 				} else {
@@ -451,43 +452,41 @@ string_columns:
 		service.NewMessage([]byte(`{"id":"baz","content":"baz stuff"}`)),
 	}
 
-	expErr := service.NewBatchError(msg, errors.New("failed to set 1 items"))
-	expErr.Failed(1, errors.New("failed to set item"))
-	require.Equal(t, expErr, db.WriteBatch(context.Background(), msg))
+	require.Equal(t, errors.New("failed to set 1 items"), db.WriteBatch(context.Background(), msg))
 
-	expected := [][]*dynamodb.WriteRequest{
+	expected := [][]types.WriteRequest{
 		{
 			{
-				PutRequest: &dynamodb.PutRequest{
-					Item: map[string]*dynamodb.AttributeValue{
-						"id":      {S: aws.String("foo")},
-						"content": {S: aws.String("foo stuff")},
+				PutRequest: &types.PutRequest{
+					Item: map[string]types.AttributeValue{
+						"id":      &types.AttributeValueMemberS{Value: "foo"},
+						"content": &types.AttributeValueMemberS{Value: "foo stuff"},
 					},
 				},
 			},
 			{
-				PutRequest: &dynamodb.PutRequest{
-					Item: map[string]*dynamodb.AttributeValue{
-						"id":      {S: aws.String("bar")},
-						"content": {S: aws.String("bar stuff")},
+				PutRequest: &types.PutRequest{
+					Item: map[string]types.AttributeValue{
+						"id":      &types.AttributeValueMemberS{Value: "bar"},
+						"content": &types.AttributeValueMemberS{Value: "bar stuff"},
 					},
 				},
 			},
 			{
-				PutRequest: &dynamodb.PutRequest{
-					Item: map[string]*dynamodb.AttributeValue{
-						"id":      {S: aws.String("baz")},
-						"content": {S: aws.String("baz stuff")},
+				PutRequest: &types.PutRequest{
+					Item: map[string]types.AttributeValue{
+						"id":      &types.AttributeValueMemberS{Value: "baz"},
+						"content": &types.AttributeValueMemberS{Value: "baz stuff"},
 					},
 				},
 			},
 		},
 		{
 			{
-				PutRequest: &dynamodb.PutRequest{
-					Item: map[string]*dynamodb.AttributeValue{
-						"id":      {S: aws.String("bar")},
-						"content": {S: aws.String("bar stuff")},
+				PutRequest: &types.PutRequest{
+					Item: map[string]types.AttributeValue{
+						"id":      &types.AttributeValueMemberS{Value: "bar"},
+						"content": &types.AttributeValueMemberS{Value: "bar stuff"},
 					},
 				},
 			},

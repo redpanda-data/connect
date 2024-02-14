@@ -2,15 +2,16 @@ package aws
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strconv"
 	"sync"
 	"time"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/awserr"
-	"github.com/aws/aws-sdk-go/service/dynamodb"
-	"github.com/aws/aws-sdk-go/service/dynamodb/expression"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/expression"
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"github.com/cenkalti/backoff/v4"
 
 	"github.com/benthosdev/benthos/v4/internal/impl/aws/config"
@@ -67,7 +68,7 @@ func init() {
 			if err != nil {
 				return nil, err
 			}
-			if err := d.verify(); err != nil {
+			if err := d.verify(context.Background()); err != nil {
 				return nil, err
 			}
 			return d, nil
@@ -110,11 +111,11 @@ func newDynamodbCacheFromConfig(conf *service.ParsedConfig) (*dynamodbCache, err
 		}
 		ttlKey = &ttlKeyTmp
 	}
-	sess, err := GetSession(conf)
+	sess, err := GetSession(context.Background(), conf)
 	if err != nil {
 		return nil, err
 	}
-	client := dynamodb.New(sess)
+	client := dynamodb.NewFromConfig(sess)
 
 	backOff, err := conf.FieldBackOff("retries")
 	if err != nil {
@@ -125,10 +126,18 @@ func newDynamodbCacheFromConfig(conf *service.ParsedConfig) (*dynamodbCache, err
 
 //------------------------------------------------------------------------------
 
-type dynamodbCache struct {
-	client dynamoDBAPI
+type dynamoDBAPIV2 interface {
+	PutItem(ctx context.Context, params *dynamodb.PutItemInput, optFns ...func(*dynamodb.Options)) (*dynamodb.PutItemOutput, error)
+	BatchWriteItem(ctx context.Context, params *dynamodb.BatchWriteItemInput, optFns ...func(*dynamodb.Options)) (*dynamodb.BatchWriteItemOutput, error)
+	DescribeTable(ctx context.Context, params *dynamodb.DescribeTableInput, optFns ...func(*dynamodb.Options)) (*dynamodb.DescribeTableOutput, error)
+	GetItem(ctx context.Context, params *dynamodb.GetItemInput, optFns ...func(*dynamodb.Options)) (*dynamodb.GetItemOutput, error)
+	DeleteItem(ctx context.Context, params *dynamodb.DeleteItemInput, optFns ...func(*dynamodb.Options)) (*dynamodb.DeleteItemOutput, error)
+}
 
-	table          *string
+type dynamodbCache struct {
+	client dynamoDBAPIV2
+
+	table          string
 	hashKey        string
 	dataKey        string
 	consistentRead bool
@@ -139,7 +148,7 @@ type dynamodbCache struct {
 }
 
 func newDynamodbCache(
-	client dynamoDBAPI,
+	client dynamoDBAPIV2,
 	table, hashKey, dataKey string,
 	consistentRead bool,
 	ttlKey *string, ttl *time.Duration,
@@ -147,7 +156,7 @@ func newDynamodbCache(
 ) *dynamodbCache {
 	return &dynamodbCache{
 		client:         client,
-		table:          aws.String(table),
+		table:          table,
 		hashKey:        hashKey,
 		dataKey:        dataKey,
 		consistentRead: consistentRead,
@@ -163,18 +172,17 @@ func newDynamodbCache(
 	}
 }
 
-func (d *dynamodbCache) verify() error {
-	out, err := d.client.DescribeTable(&dynamodb.DescribeTableInput{
-		TableName: d.table,
+func (d *dynamodbCache) verify(ctx context.Context) error {
+	out, err := d.client.DescribeTable(ctx, &dynamodb.DescribeTableInput{
+		TableName: &d.table,
 	})
 	if err != nil {
 		return err
 	}
 	if out == nil ||
 		out.Table == nil ||
-		out.Table.TableStatus == nil ||
-		*out.Table.TableStatus != dynamodb.TableStatusActive {
-		return fmt.Errorf("table '%s' must be active", *d.table)
+		out.Table.TableStatus != types.TableStatusActive {
+		return fmt.Errorf("table '%s' must be active", d.table)
 	}
 	return nil
 }
@@ -188,7 +196,7 @@ func (d *dynamodbCache) Get(ctx context.Context, key string) ([]byte, error) {
 		d.boffPool.Put(boff)
 	}()
 
-	result, err := d.get(key)
+	result, err := d.get(ctx, key)
 	for err != nil && err != service.ErrKeyNotFound {
 		wait := boff.NextBackOff()
 		if wait == backoff.Stop {
@@ -199,31 +207,31 @@ func (d *dynamodbCache) Get(ctx context.Context, key string) ([]byte, error) {
 		case <-ctx.Done():
 			return nil, err
 		}
-		result, err = d.get(key)
+		result, err = d.get(ctx, key)
 	}
 
 	return result, err
 }
 
-func (d *dynamodbCache) get(key string) ([]byte, error) {
-	res, err := d.client.GetItem(&dynamodb.GetItemInput{
-		Key: map[string]*dynamodb.AttributeValue{
-			d.hashKey: {
-				S: aws.String(key),
+func (d *dynamodbCache) get(ctx context.Context, key string) ([]byte, error) {
+	res, err := d.client.GetItem(ctx, &dynamodb.GetItemInput{
+		Key: map[string]types.AttributeValue{
+			d.hashKey: &types.AttributeValueMemberS{
+				Value: key,
 			},
 		},
-		TableName:      d.table,
+		TableName:      &d.table,
 		ConsistentRead: aws.Bool(d.consistentRead),
 	})
 	if err != nil {
 		return nil, err
 	}
 
-	val, ok := res.Item[d.dataKey]
-	if !ok || val.B == nil {
+	val, ok := res.Item[d.dataKey].(*types.AttributeValueMemberB)
+	if !ok {
 		return nil, service.ErrKeyNotFound
 	}
-	return val.B, nil
+	return val.Value, nil
 }
 
 func (d *dynamodbCache) Set(ctx context.Context, key string, value []byte, ttl *time.Duration) error {
@@ -233,7 +241,7 @@ func (d *dynamodbCache) Set(ctx context.Context, key string, value []byte, ttl *
 		d.boffPool.Put(boff)
 	}()
 
-	_, err := d.client.PutItem(d.putItemInput(key, value, ttl))
+	_, err := d.client.PutItem(ctx, d.putItemInput(key, value, ttl))
 	for err != nil {
 		wait := boff.NextBackOff()
 		if wait == backoff.Stop {
@@ -244,7 +252,7 @@ func (d *dynamodbCache) Set(ctx context.Context, key string, value []byte, ttl *
 		case <-ctx.Done():
 			return err
 		}
-		_, err = d.client.PutItem(d.putItemInput(key, value, ttl))
+		_, err = d.client.PutItem(ctx, d.putItemInput(key, value, ttl))
 	}
 
 	return err
@@ -257,10 +265,10 @@ func (d *dynamodbCache) SetMulti(ctx context.Context, items ...service.CacheItem
 		d.boffPool.Put(boff)
 	}()
 
-	writeReqs := []*dynamodb.WriteRequest{}
+	writeReqs := []types.WriteRequest{}
 	for _, kv := range items {
-		writeReqs = append(writeReqs, &dynamodb.WriteRequest{
-			PutRequest: &dynamodb.PutRequest{
+		writeReqs = append(writeReqs, types.WriteRequest{
+			PutRequest: &types.PutRequest{
 				Item: d.putItemInput(kv.Key, kv.Value, kv.TTL).Item,
 			},
 		})
@@ -270,13 +278,13 @@ func (d *dynamodbCache) SetMulti(ctx context.Context, items ...service.CacheItem
 	for len(writeReqs) > 0 {
 		wait := boff.NextBackOff()
 		var batchResult *dynamodb.BatchWriteItemOutput
-		batchResult, err = d.client.BatchWriteItem(&dynamodb.BatchWriteItemInput{
-			RequestItems: map[string][]*dynamodb.WriteRequest{
-				*d.table: writeReqs,
+		batchResult, err = d.client.BatchWriteItem(ctx, &dynamodb.BatchWriteItemInput{
+			RequestItems: map[string][]types.WriteRequest{
+				d.table: writeReqs,
 			},
 		})
 		if err == nil {
-			if unproc := batchResult.UnprocessedItems[*d.table]; len(unproc) > 0 {
+			if unproc := batchResult.UnprocessedItems[d.table]; len(unproc) > 0 {
 				writeReqs = unproc
 				err = fmt.Errorf("failed to set %v items", len(unproc))
 			} else {
@@ -305,7 +313,7 @@ func (d *dynamodbCache) Add(ctx context.Context, key string, value []byte, ttl *
 		d.boffPool.Put(boff)
 	}()
 
-	err := d.add(key, value, ttl)
+	err := d.add(ctx, key, value, ttl)
 	for err != nil && err != service.ErrKeyAlreadyExists {
 		wait := boff.NextBackOff()
 		if wait == backoff.Stop {
@@ -316,13 +324,13 @@ func (d *dynamodbCache) Add(ctx context.Context, key string, value []byte, ttl *
 		case <-ctx.Done():
 			return err
 		}
-		err = d.add(key, value, ttl)
+		err = d.add(ctx, key, value, ttl)
 	}
 
 	return err
 }
 
-func (d *dynamodbCache) add(key string, value []byte, ttl *time.Duration) error {
+func (d *dynamodbCache) add(ctx context.Context, key string, value []byte, ttl *time.Duration) error {
 	input := d.putItemInput(key, value, ttl)
 
 	expr, err := expression.NewBuilder().
@@ -334,11 +342,10 @@ func (d *dynamodbCache) add(key string, value []byte, ttl *time.Duration) error 
 	input.ExpressionAttributeNames = expr.Names()
 	input.ConditionExpression = expr.Condition()
 
-	if _, err = d.client.PutItem(input); err != nil {
-		if aerr, ok := err.(awserr.Error); ok {
-			if aerr.Code() == dynamodb.ErrCodeConditionalCheckFailedException {
-				return service.ErrKeyAlreadyExists
-			}
+	if _, err = d.client.PutItem(ctx, input); err != nil {
+		var derr *types.ConditionalCheckFailedException
+		if errors.As(err, &derr) {
+			return service.ErrKeyAlreadyExists
 		}
 		return err
 	}
@@ -352,7 +359,7 @@ func (d *dynamodbCache) Delete(ctx context.Context, key string) error {
 		d.boffPool.Put(boff)
 	}()
 
-	err := d.delete(key)
+	err := d.delete(ctx, key)
 	for err != nil {
 		wait := boff.NextBackOff()
 		if wait == backoff.Stop {
@@ -363,42 +370,42 @@ func (d *dynamodbCache) Delete(ctx context.Context, key string) error {
 		case <-ctx.Done():
 			return err
 		}
-		err = d.delete(key)
+		err = d.delete(ctx, key)
 	}
 	return err
 }
 
-func (d *dynamodbCache) delete(key string) error {
-	_, err := d.client.DeleteItem(&dynamodb.DeleteItemInput{
-		Key: map[string]*dynamodb.AttributeValue{
-			d.hashKey: {
-				S: aws.String(key),
+func (d *dynamodbCache) delete(ctx context.Context, key string) error {
+	_, err := d.client.DeleteItem(ctx, &dynamodb.DeleteItemInput{
+		Key: map[string]types.AttributeValue{
+			d.hashKey: &types.AttributeValueMemberS{
+				Value: key,
 			},
 		},
-		TableName: d.table,
+		TableName: &d.table,
 	})
 	return err
 }
 
 func (d *dynamodbCache) putItemInput(key string, value []byte, ttl *time.Duration) *dynamodb.PutItemInput {
 	input := dynamodb.PutItemInput{
-		Item: map[string]*dynamodb.AttributeValue{
-			d.hashKey: {
-				S: aws.String(key),
+		Item: map[string]types.AttributeValue{
+			d.hashKey: &types.AttributeValueMemberS{
+				Value: key,
 			},
-			d.dataKey: {
-				B: value,
+			d.dataKey: &types.AttributeValueMemberB{
+				Value: value,
 			},
 		},
-		TableName: d.table,
+		TableName: &d.table,
 	}
 
 	if ttl == nil {
 		ttl = d.ttl
 	}
 	if ttl != nil && d.ttlKey != nil {
-		input.Item[*d.ttlKey] = &dynamodb.AttributeValue{
-			N: aws.String(strconv.FormatInt(time.Now().Add(*ttl).Unix(), 10)),
+		input.Item[*d.ttlKey] = &types.AttributeValueMemberN{
+			Value: strconv.FormatInt(time.Now().Add(*ttl).Unix(), 10),
 		}
 	}
 

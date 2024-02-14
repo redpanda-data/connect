@@ -10,12 +10,10 @@ import (
 	"time"
 
 	"github.com/Jeffail/gabs/v2"
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/request"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/dynamodb"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"github.com/cenkalti/backoff/v4"
-	"github.com/google/go-cmp/cmp"
 
 	"github.com/benthosdev/benthos/v4/internal/impl/aws/config"
 	"github.com/benthosdev/benthos/v4/internal/impl/pure"
@@ -40,7 +38,7 @@ type ddboConfig struct {
 	TTL            string
 	TTLKey         string
 
-	session     *session.Session
+	aconf       aws.Config
 	backoffCtor func() backoff.BackOff
 }
 
@@ -60,7 +58,7 @@ func ddboConfigFromParsed(pConf *service.ParsedConfig) (conf ddboConfig, err err
 	if conf.TTLKey, err = pConf.FieldString(ddboFieldTTLKey); err != nil {
 		return
 	}
-	if conf.session, err = GetSession(pConf); err != nil {
+	if conf.aconf, err = GetSession(context.TODO(), pConf); err != nil {
 		return
 	}
 	if conf.backoffCtor, err = pure.CommonRetryBackOffCtorFromParsed(pConf); err != nil {
@@ -172,12 +170,12 @@ func init() {
 }
 
 type dynamoDBAPI interface {
-	PutItem(input *dynamodb.PutItemInput) (*dynamodb.PutItemOutput, error)
-	BatchWriteItem(input *dynamodb.BatchWriteItemInput) (*dynamodb.BatchWriteItemOutput, error)
-	BatchExecuteStatementWithContext(aws.Context, *dynamodb.BatchExecuteStatementInput, ...request.Option) (*dynamodb.BatchExecuteStatementOutput, error)
-	DescribeTable(*dynamodb.DescribeTableInput) (*dynamodb.DescribeTableOutput, error)
-	GetItem(*dynamodb.GetItemInput) (*dynamodb.GetItemOutput, error)
-	DeleteItem(*dynamodb.DeleteItemInput) (*dynamodb.DeleteItemOutput, error)
+	PutItem(ctx context.Context, params *dynamodb.PutItemInput, optFns ...func(*dynamodb.Options)) (*dynamodb.PutItemOutput, error)
+	BatchWriteItem(ctx context.Context, params *dynamodb.BatchWriteItemInput, optFns ...func(*dynamodb.Options)) (*dynamodb.BatchWriteItemOutput, error)
+	BatchExecuteStatement(ctx context.Context, params *dynamodb.BatchExecuteStatementInput, optFns ...func(*dynamodb.Options)) (*dynamodb.BatchExecuteStatementOutput, error)
+	DescribeTable(ctx context.Context, params *dynamodb.DescribeTableInput, optFns ...func(*dynamodb.Options)) (*dynamodb.DescribeTableOutput, error)
+	GetItem(ctx context.Context, params *dynamodb.GetItemInput, optFns ...func(*dynamodb.Options)) (*dynamodb.GetItemOutput, error)
+	DeleteItem(ctx context.Context, params *dynamodb.DeleteItemInput, optFns ...func(*dynamodb.Options)) (*dynamodb.DeleteItemOutput, error)
 }
 
 type dynamoDBWriter struct {
@@ -225,13 +223,13 @@ func (d *dynamoDBWriter) Connect(ctx context.Context) error {
 		return nil
 	}
 
-	client := dynamodb.New(d.conf.session)
-	out, err := client.DescribeTable(&dynamodb.DescribeTableInput{
+	client := dynamodb.NewFromConfig(d.conf.aconf)
+	out, err := client.DescribeTable(ctx, &dynamodb.DescribeTableInput{
 		TableName: d.table,
 	})
 	if err != nil {
 		return err
-	} else if out == nil || out.Table == nil || out.Table.TableStatus == nil || *out.Table.TableStatus != dynamodb.TableStatusActive {
+	} else if out == nil || out.Table == nil || out.Table.TableStatus != types.TableStatusActive {
 		return fmt.Errorf("dynamodb table '%s' must be active", d.conf.Table)
 	}
 
@@ -240,64 +238,64 @@ func (d *dynamoDBWriter) Connect(ctx context.Context) error {
 	return nil
 }
 
-func walkJSON(root any) *dynamodb.AttributeValue {
+func anyToAttributeValue(root any) types.AttributeValue {
 	switch v := root.(type) {
 	case map[string]any:
-		m := make(map[string]*dynamodb.AttributeValue, len(v))
+		m := make(map[string]types.AttributeValue, len(v))
 		for k, v2 := range v {
-			m[k] = walkJSON(v2)
+			m[k] = anyToAttributeValue(v2)
 		}
-		return &dynamodb.AttributeValue{
-			M: m,
+		return &types.AttributeValueMemberM{
+			Value: m,
 		}
 	case []any:
-		l := make([]*dynamodb.AttributeValue, len(v))
+		l := make([]types.AttributeValue, len(v))
 		for i, v2 := range v {
-			l[i] = walkJSON(v2)
+			l[i] = anyToAttributeValue(v2)
 		}
-		return &dynamodb.AttributeValue{
-			L: l,
+		return &types.AttributeValueMemberL{
+			Value: l,
 		}
 	case string:
-		return &dynamodb.AttributeValue{
-			S: aws.String(v),
+		return &types.AttributeValueMemberS{
+			Value: v,
 		}
 	case json.Number:
-		return &dynamodb.AttributeValue{
-			N: aws.String(v.String()),
+		return &types.AttributeValueMemberS{
+			Value: v.String(),
 		}
 	case float64:
-		return &dynamodb.AttributeValue{
-			N: aws.String(strconv.FormatFloat(v, 'f', -1, 64)),
+		return &types.AttributeValueMemberN{
+			Value: strconv.FormatFloat(v, 'f', -1, 64),
 		}
 	case int:
-		return &dynamodb.AttributeValue{
-			N: aws.String(strconv.Itoa(v)),
+		return &types.AttributeValueMemberN{
+			Value: strconv.Itoa(v),
 		}
 	case int64:
-		return &dynamodb.AttributeValue{
-			N: aws.String(strconv.Itoa(int(v))),
+		return &types.AttributeValueMemberN{
+			Value: strconv.Itoa(int(v)),
 		}
 	case bool:
-		return &dynamodb.AttributeValue{
-			BOOL: aws.Bool(v),
+		return &types.AttributeValueMemberBOOL{
+			Value: v,
 		}
 	case nil:
-		return &dynamodb.AttributeValue{
-			NULL: aws.Bool(true),
+		return &types.AttributeValueMemberNULL{
+			Value: true,
 		}
 	}
-	return &dynamodb.AttributeValue{
-		S: aws.String(fmt.Sprintf("%v", root)),
+	return &types.AttributeValueMemberS{
+		Value: fmt.Sprintf("%v", root),
 	}
 }
 
-func jsonToMap(path string, root any) (*dynamodb.AttributeValue, error) {
+func jsonToMap(path string, root any) (types.AttributeValue, error) {
 	gObj := gabs.Wrap(root)
 	if len(path) > 0 {
 		gObj = gObj.Path(path)
 	}
-	return walkJSON(gObj.Data()), nil
+	return anyToAttributeValue(gObj.Data()), nil
 }
 
 func (d *dynamoDBWriter) WriteBatch(ctx context.Context, b service.MessageBatch) error {
@@ -311,12 +309,12 @@ func (d *dynamoDBWriter) WriteBatch(ctx context.Context, b service.MessageBatch)
 		d.boffPool.Put(boff)
 	}()
 
-	writeReqs := []*dynamodb.WriteRequest{}
+	writeReqs := []types.WriteRequest{}
 	if err := b.WalkWithBatchedErrors(func(i int, p *service.Message) error {
-		items := map[string]*dynamodb.AttributeValue{}
+		items := map[string]types.AttributeValue{}
 		if d.ttl != 0 && d.conf.TTLKey != "" {
-			items[d.conf.TTLKey] = &dynamodb.AttributeValue{
-				N: aws.String(strconv.FormatInt(time.Now().Add(d.ttl).Unix(), 10)),
+			items[d.conf.TTLKey] = &types.AttributeValueMemberN{
+				Value: strconv.FormatInt(time.Now().Add(d.ttl).Unix(), 10),
 			}
 		}
 		for k, v := range d.conf.StringColumns {
@@ -324,8 +322,8 @@ func (d *dynamoDBWriter) WriteBatch(ctx context.Context, b service.MessageBatch)
 			if err != nil {
 				return fmt.Errorf("string column %v interpolation error: %w", k, err)
 			}
-			items[k] = &dynamodb.AttributeValue{
-				S: &s,
+			items[k] = &types.AttributeValueMemberS{
+				Value: s,
 			}
 		}
 		if len(d.conf.JSONMapColumns) > 0 {
@@ -337,8 +335,12 @@ func (d *dynamoDBWriter) WriteBatch(ctx context.Context, b service.MessageBatch)
 			for k, v := range d.conf.JSONMapColumns {
 				if attr, err := jsonToMap(v, jRoot); err == nil {
 					if k == "" {
-						for ak, av := range attr.M {
-							items[ak] = av
+						if mv, ok := attr.(*types.AttributeValueMemberM); ok {
+							for ak, av := range mv.Value {
+								items[ak] = av
+							}
+						} else {
+							items[k] = attr
 						}
 					} else {
 						items[k] = attr
@@ -349,8 +351,8 @@ func (d *dynamoDBWriter) WriteBatch(ctx context.Context, b service.MessageBatch)
 				}
 			}
 		}
-		writeReqs = append(writeReqs, &dynamodb.WriteRequest{
-			PutRequest: &dynamodb.PutRequest{
+		writeReqs = append(writeReqs, types.WriteRequest{
+			PutRequest: &types.PutRequest{
 				Item: items,
 			},
 		})
@@ -359,8 +361,8 @@ func (d *dynamoDBWriter) WriteBatch(ctx context.Context, b service.MessageBatch)
 		return err
 	}
 
-	batchResult, err := d.client.BatchWriteItem(&dynamodb.BatchWriteItemInput{
-		RequestItems: map[string][]*dynamodb.WriteRequest{
+	batchResult, err := d.client.BatchWriteItem(ctx, &dynamodb.BatchWriteItemInput{
+		RequestItems: map[string][]types.WriteRequest{
 			*d.table: writeReqs,
 		},
 	})
@@ -372,10 +374,10 @@ func (d *dynamoDBWriter) WriteBatch(ctx context.Context, b service.MessageBatch)
 		for err != nil {
 			batchErr := service.NewBatchError(b, headlineErr)
 			for i, req := range writeReqs {
-				if req == nil {
+				if req.PutRequest == nil {
 					continue
 				}
-				if _, iErr := d.client.PutItem(&dynamodb.PutItemInput{
+				if _, iErr := d.client.PutItem(ctx, &dynamodb.PutItemInput{
 					TableName: d.table,
 					Item:      req.PutRequest.Item,
 				}); iErr != nil {
@@ -391,7 +393,7 @@ func (d *dynamoDBWriter) WriteBatch(ctx context.Context, b service.MessageBatch)
 					}
 					batchErr.Failed(i, iErr)
 				} else {
-					writeReqs[i] = nil
+					writeReqs[i].PutRequest = nil
 				}
 			}
 			if batchErr.IndexedErrors() == 0 {
@@ -416,8 +418,8 @@ unprocessedLoop:
 		case <-ctx.Done():
 			break unprocessedLoop
 		}
-		if batchResult, err = d.client.BatchWriteItem(&dynamodb.BatchWriteItemInput{
-			RequestItems: map[string][]*dynamodb.WriteRequest{
+		if batchResult, err = d.client.BatchWriteItem(ctx, &dynamodb.BatchWriteItemInput{
+			RequestItems: map[string][]types.WriteRequest{
 				*d.table: unproc,
 			},
 		}); err != nil {
@@ -433,27 +435,7 @@ unprocessedLoop:
 		if err == nil {
 			err = errors.New("ran out of request retries")
 		}
-
-		// Sad, we have unprocessed messages, we need to map the requests back
-		// to the origin message index. The DynamoDB API doesn't make this easy.
-		batchErr := service.NewBatchError(b, err)
-
-	requestsLoop:
-		for _, req := range unproc {
-			for i, src := range writeReqs {
-				if cmp.Equal(req, src) {
-					batchErr.Failed(i, errors.New("failed to set item"))
-					continue requestsLoop
-				}
-			}
-			// If we're unable to map a single request to the origin message
-			// then we return a general error.
-			return err
-		}
-
-		err = batchErr
 	}
-
 	return err
 }
 

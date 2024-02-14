@@ -2,11 +2,11 @@ package aws
 
 import (
 	"context"
-	"encoding/json"
+	"errors"
 	"fmt"
 
-	"github.com/aws/aws-sdk-go/service/dynamodb"
-	"github.com/mitchellh/mapstructure"
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 
 	"github.com/benthosdev/benthos/v4/internal/impl/aws/config"
 	"github.com/benthosdev/benthos/v4/public/bloblang"
@@ -47,11 +47,11 @@ pipeline:
 	err := service.RegisterBatchProcessor(
 		"aws_dynamodb_partiql", conf,
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchProcessor, error) {
-			sess, err := GetSession(conf)
+			sess, err := GetSession(context.TODO(), conf)
 			if err != nil {
 				return nil, err
 			}
-			client := dynamodb.New(sess)
+			client := dynamodb.NewFromConfig(sess)
 			query, err := conf.FieldString("query")
 			if err != nil {
 				return nil, err
@@ -103,27 +103,10 @@ func newDynamoDBPartiQL(
 	}
 }
 
-func cleanNulls(v any) {
-	switch t := v.(type) {
-	case map[string]any:
-		for k, v := range t {
-			if v == nil {
-				delete(t, k)
-			} else {
-				cleanNulls(v)
-			}
-		}
-	case []any:
-		for _, v := range t {
-			cleanNulls(v)
-		}
-	}
-}
-
 func (d *dynamoDBPartiQL) ProcessBatch(ctx context.Context, batch service.MessageBatch) ([]service.MessageBatch, error) {
-	stmts := []*dynamodb.BatchStatementRequest{}
+	stmts := []types.BatchStatementRequest{}
 	for i := range batch {
-		req := &dynamodb.BatchStatementRequest{}
+		req := types.BatchStatementRequest{}
 		req.Statement = &d.query
 		if d.dynQuery != nil {
 			query, err := batch.TryInterpolatedString(i, d.dynQuery)
@@ -143,14 +126,23 @@ func (d *dynamoDBPartiQL) ProcessBatch(ctx context.Context, batch service.Messag
 			return nil, fmt.Errorf("error evaluating arg mapping as structured at index %d: %v", i, err)
 		}
 
-		if err := mapstructure.Decode(argStructured, &req.Parameters); err != nil {
-			return nil, fmt.Errorf("error converting structured message as dynamodb item at index %d: %v", i, err)
+		argsSlice, ok := argStructured.([]any)
+		if !ok {
+			return nil, fmt.Errorf("arg mapping resulted in non-array value at index %d: %T", i, argStructured)
+		}
+
+		for i, a := range argsSlice {
+			tmp, err := objFormToAttributeValue(a)
+			if err != nil {
+				return nil, fmt.Errorf("arg mapping index %d failed to map to an attribute value: %v", i, err)
+			}
+			req.Parameters = append(req.Parameters, tmp)
 		}
 
 		stmts = append(stmts, req)
 	}
 
-	batchResult, err := d.client.BatchExecuteStatementWithContext(ctx, &dynamodb.BatchExecuteStatementInput{
+	batchResult, err := d.client.BatchExecuteStatement(ctx, &dynamodb.BatchExecuteStatementInput{
 		Statements: stmts,
 	})
 	if err != nil {
@@ -159,25 +151,15 @@ func (d *dynamoDBPartiQL) ProcessBatch(ctx context.Context, batch service.Messag
 
 	for i, res := range batchResult.Responses {
 		if res.Error != nil {
-			code := ""
-			if res.Error.Code != nil {
-				code = fmt.Sprintf(" (%v)", *res.Error.Code)
-			}
+			code := fmt.Sprintf(" (%v)", res.Error.Code)
 			batch[i].SetError(fmt.Errorf("failed to process statement%v: %v", code, *res.Error.Message))
 			continue
 		}
 		if res.Item != nil {
-			itemBytes, err := json.Marshal(res.Item)
-			if err != nil {
-				batch[i].SetError(fmt.Errorf("failed to encode PartiQL result: %v", err))
-				continue
+			resMap := map[string]any{}
+			for k, v := range res.Item {
+				resMap[k] = attributeValueToObjForm(v)
 			}
-			var resMap any
-			if err := json.Unmarshal(itemBytes, &resMap); err != nil {
-				batch[i].SetError(fmt.Errorf("failed to decode PartiQL result: %v", err))
-				continue
-			}
-			cleanNulls(resMap)
 			batch[i].SetStructuredMut(resMap)
 		}
 	}
@@ -187,4 +169,184 @@ func (d *dynamoDBPartiQL) ProcessBatch(ctx context.Context, batch service.Messag
 
 func (d *dynamoDBPartiQL) Close(ctx context.Context) error {
 	return nil
+}
+
+//------------------------------------------------------------------------------
+
+func attributeValueToObjForm(v types.AttributeValue) map[string]any {
+	switch t := v.(type) {
+	case *types.AttributeValueMemberB:
+		return map[string]any{
+			"B": t.Value,
+		}
+	case *types.AttributeValueMemberBOOL:
+		return map[string]any{
+			"BOOL": t.Value,
+		}
+	case *types.AttributeValueMemberBS:
+		lAny := make([]any, len(t.Value))
+		for i, v := range t.Value {
+			lAny[i] = v
+		}
+		return map[string]any{
+			"BS": lAny,
+		}
+	case *types.AttributeValueMemberL:
+		lAny := make([]any, len(t.Value))
+		for i, v := range t.Value {
+			lAny[i] = attributeValueToObjForm(v)
+		}
+		return map[string]any{
+			"L": lAny,
+		}
+	case *types.AttributeValueMemberM:
+		mAny := make(map[string]any, len(t.Value))
+		for k, v := range t.Value {
+			mAny[k] = attributeValueToObjForm(v)
+		}
+		return map[string]any{
+			"M": mAny,
+		}
+	case *types.AttributeValueMemberN:
+		return map[string]any{
+			"N": t.Value,
+		}
+	case *types.AttributeValueMemberNS:
+		lAny := make([]any, len(t.Value))
+		for i, v := range t.Value {
+			lAny[i] = v
+		}
+		return map[string]any{
+			"NS": lAny,
+		}
+	case *types.AttributeValueMemberNULL:
+		return map[string]any{
+			"NULL": t.Value,
+		}
+	case *types.AttributeValueMemberS:
+		return map[string]any{
+			"S": t.Value,
+		}
+	case *types.AttributeValueMemberSS:
+		lAny := make([]any, len(t.Value))
+		for i, v := range t.Value {
+			lAny[i] = v
+		}
+		return map[string]any{
+			"SS": lAny,
+		}
+	}
+	return map[string]any{
+		"NULL": true,
+	}
+}
+
+func objFormToAttributeValue(v any) (types.AttributeValue, error) {
+	obj, ok := v.(map[string]any)
+	if !ok {
+		return nil, fmt.Errorf("expected object value, got %T", v)
+	}
+
+	if v, ok := obj["B"].([]byte); ok {
+		return &types.AttributeValueMemberB{
+			Value: v,
+		}, nil
+	}
+	if v, ok := obj["B"].(string); ok {
+		return &types.AttributeValueMemberB{
+			Value: []byte(v),
+		}, nil
+	}
+	if v, ok := obj["BOOL"].(bool); ok {
+		return &types.AttributeValueMemberBOOL{
+			Value: v,
+		}, nil
+	}
+	if v, ok := obj["BS"].([]any); ok {
+		var a [][]byte
+		for _, vs := range v {
+			switch t := vs.(type) {
+			case string:
+				a = append(a, []byte(t))
+			case []byte:
+				a = append(a, t)
+			}
+		}
+		return &types.AttributeValueMemberBS{
+			Value: a,
+		}, nil
+	}
+	if v, ok := obj["L"].([]any); ok {
+		var a []types.AttributeValue
+		for i, vl := range v {
+			tmp, err := objFormToAttributeValue(vl)
+			if err != nil {
+				return nil, fmt.Errorf("%v: %w", i, err)
+			}
+			a = append(a, tmp)
+		}
+		return &types.AttributeValueMemberL{
+			Value: a,
+		}, nil
+	}
+	if v, ok := obj["M"].(map[string]any); ok {
+		a := map[string]types.AttributeValue{}
+		for k, vl := range v {
+			tmp, err := objFormToAttributeValue(vl)
+			if err != nil {
+				return nil, fmt.Errorf("%v: %w", k, err)
+			}
+			a[k] = tmp
+		}
+		return &types.AttributeValueMemberM{
+			Value: a,
+		}, nil
+	}
+	if v, exists := obj["N"]; exists {
+		switch t := v.(type) {
+		case string:
+			return &types.AttributeValueMemberN{
+				Value: t,
+			}, nil
+		default:
+			return &types.AttributeValueMemberN{
+				Value: fmt.Sprintf("%v", t),
+			}, nil
+		}
+	}
+	if v, ok := obj["NS"].([]any); ok {
+		var a []string
+		for _, e := range v {
+			switch t := e.(type) {
+			case string:
+				a = append(a, t)
+			default:
+				a = append(a, fmt.Sprintf("%v", t))
+			}
+		}
+		return &types.AttributeValueMemberNS{
+			Value: a,
+		}, nil
+	}
+	if v, ok := obj["NULL"].(bool); ok {
+		return &types.AttributeValueMemberNULL{
+			Value: v,
+		}, nil
+	}
+	if v, ok := obj["S"].(string); ok {
+		return &types.AttributeValueMemberS{
+			Value: v,
+		}, nil
+	}
+	if v, ok := obj["SS"].([]any); ok {
+		var a []string
+		for _, e := range v {
+			s, _ := e.(string)
+			a = append(a, s)
+		}
+		return &types.AttributeValueMemberSS{
+			Value: a,
+		}, nil
+	}
+	return nil, errors.New("expected object to contain attribute key")
 }

@@ -4,9 +4,9 @@ import (
 	"context"
 	"testing"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/request"
-	"github.com/aws/aws-sdk-go/service/dynamodb"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -19,8 +19,8 @@ type mockProcDynamoDB struct {
 	pbatchFn func(context.Context, *dynamodb.BatchExecuteStatementInput) (*dynamodb.BatchExecuteStatementOutput, error)
 }
 
-func (m *mockProcDynamoDB) BatchExecuteStatementWithContext(ctx context.Context, input *dynamodb.BatchExecuteStatementInput, _ ...request.Option) (*dynamodb.BatchExecuteStatementOutput, error) {
-	return m.pbatchFn(ctx, input)
+func (m *mockProcDynamoDB) BatchExecuteStatement(ctx context.Context, params *dynamodb.BatchExecuteStatementInput, optFns ...func(*dynamodb.Options)) (*dynamodb.BatchExecuteStatementOutput, error) {
+	return m.pbatchFn(ctx, params)
 }
 
 func assertBatchMatches(t *testing.T, exp service.MessageBatch, act []service.MessageBatch) {
@@ -44,7 +44,7 @@ root."-".S = json("content")
 `)
 	require.NoError(t, err)
 
-	var request []*dynamodb.BatchStatementRequest
+	var request []types.BatchStatementRequest
 	client := &mockProcDynamoDB{
 		pbatchFn: func(_ context.Context, input *dynamodb.BatchExecuteStatementInput) (*dynamodb.BatchExecuteStatementOutput, error) {
 			request = input.Statements
@@ -63,19 +63,19 @@ root."-".S = json("content")
 	require.NoError(t, err)
 	assertBatchMatches(t, reqBatch, resBatch)
 
-	expected := []*dynamodb.BatchStatementRequest{
+	expected := []types.BatchStatementRequest{
 		{
 			Statement: aws.String("INSERT INTO \"FooTable\" VALUE {'id':'?','content':'?'}"),
-			Parameters: []*dynamodb.AttributeValue{
-				{S: aws.String("foo")},
-				{S: aws.String("foo stuff")},
+			Parameters: []types.AttributeValue{
+				&types.AttributeValueMemberS{Value: "foo"},
+				&types.AttributeValueMemberS{Value: "foo stuff"},
 			},
 		},
 		{
 			Statement: aws.String("INSERT INTO \"FooTable\" VALUE {'id':'?','content':'?'}"),
-			Parameters: []*dynamodb.AttributeValue{
-				{S: aws.String("bar")},
-				{S: aws.String("bar stuff")},
+			Parameters: []types.AttributeValue{
+				&types.AttributeValueMemberS{Value: "bar"},
+				&types.AttributeValueMemberS{Value: "bar stuff"},
 			},
 		},
 	}
@@ -91,22 +91,22 @@ root."-".S = json("id")
 `)
 	require.NoError(t, err)
 
-	var request []*dynamodb.BatchStatementRequest
+	var request []types.BatchStatementRequest
 	client := &mockProcDynamoDB{
 		pbatchFn: func(_ context.Context, input *dynamodb.BatchExecuteStatementInput) (*dynamodb.BatchExecuteStatementOutput, error) {
 			request = input.Statements
 			return &dynamodb.BatchExecuteStatementOutput{
-				Responses: []*dynamodb.BatchStatementResponse{
+				Responses: []types.BatchStatementResponse{
 					{
-						Item: map[string]*dynamodb.AttributeValue{
-							"meow":  {S: aws.String("meow1")},
-							"meow2": {S: aws.String("meow2")},
+						Item: map[string]types.AttributeValue{
+							"meow":  &types.AttributeValueMemberS{Value: "meow1"},
+							"meow2": &types.AttributeValueMemberS{Value: "meow2"},
 						},
 					},
 					{
-						Item: map[string]*dynamodb.AttributeValue{
-							"meow":  {S: aws.String("meow1")},
-							"meow2": {S: aws.String("meow2")},
+						Item: map[string]types.AttributeValue{
+							"meow":  &types.AttributeValueMemberS{Value: "meow1"},
+							"meow2": &types.AttributeValueMemberS{Value: "meow2"},
 						},
 					},
 				},
@@ -135,17 +135,17 @@ root."-".S = json("id")
 	err = resBatch[0][1].GetError()
 	assert.NoError(t, err)
 
-	expected := []*dynamodb.BatchStatementRequest{
+	expected := []types.BatchStatementRequest{
 		{
 			Statement: aws.String("SELECT * FROM Orders WHERE OrderID = ?"),
-			Parameters: []*dynamodb.AttributeValue{
-				{S: aws.String("foo")},
+			Parameters: []types.AttributeValue{
+				&types.AttributeValueMemberS{Value: "foo"},
 			},
 		},
 		{
 			Statement: aws.String("SELECT * FROM Orders WHERE OrderID = ?"),
-			Parameters: []*dynamodb.AttributeValue{
-				{S: aws.String("bar")},
+			Parameters: []types.AttributeValue{
+				&types.AttributeValueMemberS{Value: "bar"},
 			},
 		},
 	}
@@ -164,17 +164,17 @@ root."-".S = json("content")
 `)
 	require.NoError(t, err)
 
-	var requests [][]*dynamodb.BatchStatementRequest
+	var requests [][]types.BatchStatementRequest
 	client := &mockProcDynamoDB{
 		pbatchFn: func(_ context.Context, input *dynamodb.BatchExecuteStatementInput) (output *dynamodb.BatchExecuteStatementOutput, err error) {
 			if len(requests) == 0 {
 				output = &dynamodb.BatchExecuteStatementOutput{
-					Responses: make([]*dynamodb.BatchStatementResponse, len(input.Statements)),
+					Responses: make([]types.BatchStatementResponse, len(input.Statements)),
 				}
 				for i, stmt := range input.Statements {
-					res := &dynamodb.BatchStatementResponse{}
-					if *stmt.Parameters[0].S == "bar" {
-						res.Error = &dynamodb.BatchStatementError{
+					res := types.BatchStatementResponse{}
+					if stmt.Parameters[0].(*types.AttributeValueMemberS).Value == "bar" {
+						res.Error = &types.BatchStatementError{
 							Message: aws.String("it all went wrong"),
 						}
 					}
@@ -183,7 +183,7 @@ root."-".S = json("content")
 			} else {
 				output = &dynamodb.BatchExecuteStatementOutput{}
 			}
-			stmts := make([]*dynamodb.BatchStatementRequest, len(input.Statements))
+			stmts := make([]types.BatchStatementRequest, len(input.Statements))
 			copy(stmts, input.Statements)
 			requests = append(requests, stmts)
 			return
@@ -212,27 +212,27 @@ root."-".S = json("content")
 	err = resBatch[0][2].GetError()
 	require.NoError(t, err)
 
-	expected := [][]*dynamodb.BatchStatementRequest{
+	expected := [][]types.BatchStatementRequest{
 		{
 			{
 				Statement: aws.String("INSERT INTO \"FooTable\" VALUE {'id':'?','content':'?'}"),
-				Parameters: []*dynamodb.AttributeValue{
-					{S: aws.String("foo")},
-					{S: aws.String("foo stuff")},
+				Parameters: []types.AttributeValue{
+					&types.AttributeValueMemberS{Value: "foo"},
+					&types.AttributeValueMemberS{Value: "foo stuff"},
 				},
 			},
 			{
 				Statement: aws.String("INSERT INTO \"FooTable\" VALUE {'id':'?','content':'?'}"),
-				Parameters: []*dynamodb.AttributeValue{
-					{S: aws.String("bar")},
-					{S: aws.String("bar stuff")},
+				Parameters: []types.AttributeValue{
+					&types.AttributeValueMemberS{Value: "bar"},
+					&types.AttributeValueMemberS{Value: "bar stuff"},
 				},
 			},
 			{
 				Statement: aws.String("INSERT INTO \"FooTable\" VALUE {'id':'?','content':'?'}"),
-				Parameters: []*dynamodb.AttributeValue{
-					{S: aws.String("baz")},
-					{S: aws.String("baz stuff")},
+				Parameters: []types.AttributeValue{
+					&types.AttributeValueMemberS{Value: "baz"},
+					&types.AttributeValueMemberS{Value: "baz stuff"},
 				},
 			},
 		},

@@ -53,7 +53,7 @@ For guidance on building your own custom plugins in Go check out [the public API
 
 ## Visual Interface
 
-If you're looking for a visual interface for Benthos check out [Benthos Studio][benthos-studio], it's a config builder, linter, and deployment management solution all baked into a single application.
+Do you like looking at stuff? Get angry and smash things when you're forced to read? If you're looking for a visual interface for Benthos check out [Benthos Studio][benthos-studio], it's a config builder, linter, and deployment management solution all baked into a single application.
 
 ## Install
 

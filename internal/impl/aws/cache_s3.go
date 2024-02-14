@@ -3,13 +3,13 @@ package aws
 import (
 	"bytes"
 	"context"
+	"errors"
 	"io"
 	"sync"
 	"time"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/awserr"
-	"github.com/aws/aws-sdk-go/service/s3"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/cenkalti/backoff/v4"
 
 	"github.com/benthosdev/benthos/v4/internal/impl/aws/config"
@@ -74,13 +74,14 @@ func newS3CacheFromConfig(conf *service.ParsedConfig) (*s3Cache, error) {
 		return nil, err
 	}
 
-	sess, err := GetSession(conf, func(c *aws.Config) {
-		c.S3ForcePathStyle = aws.Bool(forcePathStyleURLs)
-	})
+	sess, err := GetSession(context.Background(), conf)
 	if err != nil {
 		return nil, err
 	}
-	client := s3.New(sess)
+
+	client := s3.NewFromConfig(sess, func(o *s3.Options) {
+		o.UsePathStyle = forcePathStyleURLs
+	})
 
 	backOff, err := conf.FieldBackOff("retries")
 	if err != nil {
@@ -93,7 +94,7 @@ func newS3CacheFromConfig(conf *service.ParsedConfig) (*s3Cache, error) {
 //------------------------------------------------------------------------------
 
 type s3Cache struct {
-	s3 *s3.S3
+	s3 *s3.Client
 
 	bucket      string
 	contentType string
@@ -101,7 +102,7 @@ type s3Cache struct {
 	boffPool sync.Pool
 }
 
-func newS3Cache(bucket, contentType string, backOff *backoff.ExponentialBackOff, s3 *s3.S3) *s3Cache {
+func newS3Cache(bucket, contentType string, backOff *backoff.ExponentialBackOff, s3 *s3.Client) *s3Cache {
 	return &s3Cache{
 		s3: s3,
 
@@ -129,11 +130,12 @@ func (s *s3Cache) Get(ctx context.Context, key string) (body []byte, err error) 
 
 	var obj *s3.GetObjectOutput
 	for {
-		if obj, err = s.s3.GetObjectWithContext(ctx, &s3.GetObjectInput{
+		if obj, err = s.s3.GetObject(ctx, &s3.GetObjectInput{
 			Bucket: &s.bucket,
 			Key:    &key,
 		}); err != nil {
-			if aerr, ok := err.(awserr.Error); ok && aerr.Code() == s3.ErrCodeNoSuchKey {
+			var aerr *types.NoSuchKey
+			if errors.As(err, &aerr) {
 				err = service.ErrKeyNotFound
 				return
 			}
@@ -164,7 +166,7 @@ func (s *s3Cache) Set(ctx context.Context, key string, value []byte, _ *time.Dur
 	}()
 
 	for {
-		if _, err = s.s3.PutObjectWithContext(ctx, &s3.PutObjectInput{
+		if _, err = s.s3.PutObject(ctx, &s3.PutObjectInput{
 			Bucket:      &s.bucket,
 			Key:         &key,
 			Body:        bytes.NewReader(value),
@@ -186,7 +188,7 @@ func (s *s3Cache) Set(ctx context.Context, key string, value []byte, _ *time.Dur
 }
 
 func (s *s3Cache) Add(ctx context.Context, key string, value []byte, _ *time.Duration) error {
-	if _, err := s.s3.HeadObject(&s3.HeadObjectInput{
+	if _, err := s.s3.HeadObject(ctx, &s3.HeadObjectInput{
 		Bucket: &s.bucket,
 		Key:    &key,
 	}); err == nil {
@@ -203,7 +205,7 @@ func (s *s3Cache) Delete(ctx context.Context, key string) (err error) {
 	}()
 
 	for {
-		if _, err = s.s3.DeleteObjectWithContext(ctx, &s3.DeleteObjectInput{
+		if _, err = s.s3.DeleteObject(ctx, &s3.DeleteObjectInput{
 			Bucket: &s.bucket,
 			Key:    &key,
 		}); err == nil {

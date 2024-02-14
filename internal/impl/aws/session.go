@@ -1,11 +1,14 @@
 package aws
 
 import (
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/credentials"
-	"github.com/aws/aws-sdk-go/aws/credentials/ec2rolecreds"
-	"github.com/aws/aws-sdk-go/aws/credentials/stscreds"
-	"github.com/aws/aws-sdk-go/aws/session"
+	"context"
+
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/credentials"
+	"github.com/aws/aws-sdk-go-v2/credentials/ec2rolecreds"
+	"github.com/aws/aws-sdk-go-v2/credentials/stscreds"
+	"github.com/aws/aws-sdk-go-v2/service/sts"
 
 	"github.com/benthosdev/benthos/v4/public/service"
 )
@@ -18,54 +21,47 @@ func int64Field(conf *service.ParsedConfig, path ...string) (int64, error) {
 	return int64(i), nil
 }
 
-// GetSession attempts to create an AWS session based on the parsedConfig.
-func GetSession(parsedConf *service.ParsedConfig, opts ...func(*aws.Config)) (*session.Session, error) {
-	awsConf := aws.NewConfig()
-
+func GetSession(ctx context.Context, parsedConf *service.ParsedConfig, opts ...func(*config.LoadOptions) error) (aws.Config, error) {
 	if region, _ := parsedConf.FieldString("region"); region != "" {
-		awsConf = awsConf.WithRegion(region)
+		opts = append(opts, config.WithRegion(region))
 	}
-	if endpoint, _ := parsedConf.FieldString("endpoint"); endpoint != "" {
-		awsConf = awsConf.WithEndpoint(endpoint)
-	}
-	if profile, _ := parsedConf.FieldString("credentials", "profile"); profile != "" {
-		awsConf = awsConf.WithCredentials(credentials.NewSharedCredentials(
-			"", profile,
-		))
-	} else if id, _ := parsedConf.FieldString("credentials", "id"); id != "" {
-		secret, _ := parsedConf.FieldString("credentials", "secret")
-		token, _ := parsedConf.FieldString("credentials", "token")
-		awsConf = awsConf.WithCredentials(credentials.NewStaticCredentials(
+
+	credsConf := parsedConf.Namespace("credentials")
+	if profile, _ := credsConf.FieldString("profile"); profile != "" {
+		opts = append(opts, config.WithSharedConfigProfile(profile))
+	} else if id, _ := credsConf.FieldString("id"); id != "" {
+		secret, _ := credsConf.FieldString("secret")
+		token, _ := credsConf.FieldString("token")
+		opts = append(opts, config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(
 			id, secret, token,
-		))
+		)))
 	}
 
-	for _, opt := range opts {
-		opt(awsConf)
-	}
-
-	sess, err := session.NewSession(awsConf)
+	conf, err := config.LoadDefaultConfig(ctx, opts...)
 	if err != nil {
-		return nil, err
+		return conf, err
 	}
 
-	if role, _ := parsedConf.FieldString("credentials", "role"); role != "" {
-		var opts []func(*stscreds.AssumeRoleProvider)
-		if externalID, _ := parsedConf.FieldString("credentials", "role_external_id"); externalID != "" {
-			opts = []func(*stscreds.AssumeRoleProvider){
-				func(p *stscreds.AssumeRoleProvider) {
-					p.ExternalID = &externalID
-				},
-			}
+	if endpoint, _ := parsedConf.FieldString("endpoint"); endpoint != "" {
+		conf.BaseEndpoint = &endpoint
+	}
+
+	if role, _ := credsConf.FieldString("role"); role != "" {
+		stsSvc := sts.NewFromConfig(conf)
+
+		var stsOpts []func(*stscreds.AssumeRoleOptions)
+		if externalID, _ := credsConf.FieldString("role_external_id"); externalID != "" {
+			stsOpts = append(stsOpts, func(aro *stscreds.AssumeRoleOptions) {
+				aro.ExternalID = &externalID
+			})
 		}
-		sess.Config = sess.Config.WithCredentials(
-			stscreds.NewCredentials(sess, role, opts...),
-		)
+
+		creds := stscreds.NewAssumeRoleProvider(stsSvc, role, stsOpts...)
+		conf.Credentials = aws.NewCredentialsCache(creds)
 	}
 
-	if useEC2, _ := parsedConf.FieldBool("from_ec2_role"); useEC2 {
-		sess.Config = sess.Config.WithCredentials(ec2rolecreds.NewCredentials(sess))
+	if useEC2, _ := credsConf.FieldBool("from_ec2_role"); useEC2 {
+		conf.Credentials = aws.NewCredentialsCache(ec2rolecreds.New())
 	}
-
-	return sess, nil
+	return conf, nil
 }

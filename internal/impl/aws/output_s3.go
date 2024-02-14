@@ -11,9 +11,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/s3/s3manager"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
@@ -65,8 +66,9 @@ type s3oConfig struct {
 	Timeout                 time.Duration
 	KMSKeyID                string
 	ServerSideEncryption    string
+	UsePathStyle            bool
 
-	session *session.Session
+	aconf aws.Config
 }
 
 func s3oConfigFromParsed(pConf *service.ParsedConfig) (conf s3oConfig, err error) {
@@ -74,8 +76,7 @@ func s3oConfigFromParsed(pConf *service.ParsedConfig) (conf s3oConfig, err error
 		return
 	}
 
-	var forcePathStyleURLs bool
-	if forcePathStyleURLs, err = pConf.FieldBool(s3oFieldForcePathStyleURLs); err != nil {
+	if conf.UsePathStyle, err = pConf.FieldBool(s3oFieldForcePathStyleURLs); err != nil {
 		return
 	}
 
@@ -133,10 +134,7 @@ func s3oConfigFromParsed(pConf *service.ParsedConfig) (conf s3oConfig, err error
 	if conf.ServerSideEncryption, err = pConf.FieldString(s3oFieldServerSideEncryption); err != nil {
 		return
 	}
-
-	if conf.session, err = GetSession(pConf, func(c *aws.Config) {
-		c.S3ForcePathStyle = aws.Bool(forcePathStyleURLs)
-	}); err != nil {
+	if conf.aconf, err = GetSession(context.TODO(), pConf); err != nil {
 		return
 	}
 	return
@@ -304,7 +302,7 @@ func init() {
 
 type amazonS3Writer struct {
 	conf     s3oConfig
-	uploader *s3manager.Uploader
+	uploader *manager.Uploader
 	log      *service.Logger
 }
 
@@ -320,7 +318,11 @@ func (a *amazonS3Writer) Connect(ctx context.Context) error {
 	if a.uploader != nil {
 		return nil
 	}
-	a.uploader = s3manager.NewUploader(a.conf.session)
+
+	client := s3.NewFromConfig(a.conf.aconf, func(o *s3.Options) {
+		o.UsePathStyle = a.conf.UsePathStyle
+	})
+	a.uploader = manager.NewUploader(client)
 
 	a.log.Infof("Uploading message parts as objects to Amazon S3 bucket: %v\n", a.conf.Bucket)
 	return nil
@@ -335,9 +337,9 @@ func (a *amazonS3Writer) WriteBatch(wctx context.Context, msg service.MessageBat
 	defer cancel()
 
 	return msg.WalkWithBatchedErrors(func(i int, m *service.Message) error {
-		metadata := map[string]*string{}
+		metadata := map[string]string{}
 		_ = a.conf.Metadata.WalkMut(m, func(k string, v any) error {
-			metadata[k] = aws.String(value.IToString(v))
+			metadata[k] = value.IToString(v)
 			return nil
 		})
 
@@ -398,7 +400,7 @@ func (a *amazonS3Writer) WriteBatch(wctx context.Context, msg service.MessageBat
 			return err
 		}
 
-		uploadInput := &s3manager.UploadInput{
+		uploadInput := &s3.PutObjectInput{
 			Bucket:                  &a.conf.Bucket,
 			Key:                     aws.String(key),
 			Body:                    uploadBody,
@@ -408,7 +410,7 @@ func (a *amazonS3Writer) WriteBatch(wctx context.Context, msg service.MessageBat
 			ContentDisposition:      contentDisposition,
 			ContentLanguage:         contentLanguage,
 			WebsiteRedirectLocation: websiteRedirectLocation,
-			StorageClass:            aws.String(storageClass),
+			StorageClass:            types.StorageClass(storageClass),
 			Metadata:                metadata,
 		}
 
@@ -426,7 +428,7 @@ func (a *amazonS3Writer) WriteBatch(wctx context.Context, msg service.MessageBat
 		}
 
 		if a.conf.KMSKeyID != "" {
-			uploadInput.ServerSideEncryption = aws.String("aws:kms")
+			uploadInput.ServerSideEncryption = types.ServerSideEncryptionAwsKms
 			uploadInput.SSEKMSKeyId = &a.conf.KMSKeyID
 		}
 
@@ -434,10 +436,10 @@ func (a *amazonS3Writer) WriteBatch(wctx context.Context, msg service.MessageBat
 		// backwards compatibility, where it is allowed to only set kms_key_id in the config and
 		// the ServerSideEncryption value of "aws:kms" is implied.
 		if a.conf.ServerSideEncryption != "" {
-			uploadInput.ServerSideEncryption = &a.conf.ServerSideEncryption
+			uploadInput.ServerSideEncryption = types.ServerSideEncryption(a.conf.ServerSideEncryption)
 		}
 
-		if _, err := a.uploader.UploadWithContext(ctx, uploadInput); err != nil {
+		if _, err := a.uploader.Upload(ctx, uploadInput); err != nil {
 			return err
 		}
 		return nil

@@ -6,11 +6,11 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/credentials"
-	"github.com/aws/aws-sdk-go/aws/request"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/sqs"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/credentials"
+	"github.com/aws/aws-sdk-go-v2/service/sqs"
+	"github.com/aws/aws-sdk-go-v2/service/sqs/types"
 	"github.com/cenkalti/backoff/v4"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -115,7 +115,7 @@ type mockSqs struct {
 	fn func(*sqs.SendMessageBatchInput) (*sqs.SendMessageBatchOutput, error)
 }
 
-func (m *mockSqs) SendMessageBatchWithContext(ctx aws.Context, input *sqs.SendMessageBatchInput, opts ...request.Option) (*sqs.SendMessageBatchOutput, error) {
+func (m *mockSqs) SendMessageBatch(ctx context.Context, input *sqs.SendMessageBatchInput, opts ...func(*sqs.Options)) (*sqs.SendMessageBatchOutput, error) {
 	return m.fn(input)
 }
 
@@ -128,14 +128,17 @@ type inEntries []inMsg
 func TestSQSRetries(t *testing.T) {
 	tCtx := context.Background()
 
+	conf, err := config.LoadDefaultConfig(context.Background(),
+		config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider("xxxxx", "xxxxx", "xxxxx")),
+	)
+	require.NoError(t, err)
+
 	w, err := newSQSWriter(sqsoConfig{
 		URL: "http://foo.example.com",
 		backoffCtor: func() backoff.BackOff {
 			return backoff.NewExponentialBackOff()
 		},
-		session: session.Must(session.NewSession(&aws.Config{
-			Credentials: credentials.NewStaticCredentials("xxxxx", "xxxxx", "xxxxx"),
-		})),
+		aconf: conf,
 	}, service.MockResources())
 	require.NoError(t, err)
 
@@ -163,12 +166,12 @@ func TestSQSRetries(t *testing.T) {
 
 	out = []*sqs.SendMessageBatchOutput{
 		{
-			Failed: []*sqs.BatchResultErrorEntry{
+			Failed: []types.BatchResultErrorEntry{
 				{
 					Code:        aws.String("xx"),
 					Id:          aws.String("1"),
 					Message:     aws.String("test error"),
-					SenderFault: aws.Bool(false),
+					SenderFault: false,
 				},
 			},
 		},
@@ -196,14 +199,17 @@ func TestSQSRetries(t *testing.T) {
 func TestSQSSendLimit(t *testing.T) {
 	tCtx := context.Background()
 
+	conf, err := config.LoadDefaultConfig(context.Background(),
+		config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider("xxxxx", "xxxxx", "xxxxx")),
+	)
+	require.NoError(t, err)
+
 	w, err := newSQSWriter(sqsoConfig{
 		URL: "http://foo.example.com",
 		backoffCtor: func() backoff.BackOff {
 			return backoff.NewExponentialBackOff()
 		},
-		session: session.Must(session.NewSession(&aws.Config{
-			Credentials: credentials.NewStaticCredentials("xxxxx", "xxxxx", "xxxxx"),
-		})),
+		aconf: conf,
 	}, service.MockResources())
 	require.NoError(t, err)
 
