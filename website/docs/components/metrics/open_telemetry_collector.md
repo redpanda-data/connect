@@ -45,7 +45,22 @@ metrics:
     http: [] # No default (required)
     grpc: [] # No default (required)
     labels: {}
-    histogram_buckets: []
+    histogram_buckets:
+      - 0
+      - 5
+      - 10
+      - 25
+      - 50
+      - 75
+      - 100
+      - 250
+      - 500
+      - 750
+      - 1000
+      - 2500
+      - 5000
+      - 7500
+      - 10000
   mapping: ""
 ```
 
@@ -114,6 +129,6 @@ Timing metrics histogram buckets (in seconds). If left empty defaults to [ 0, 5,
 
 
 Type: `array`  
-Default: `[]`  
+Default: `[0,5,10,25,50,75,100,250,500,750,1000,2500,5000,7500,10000]`  
 
 
