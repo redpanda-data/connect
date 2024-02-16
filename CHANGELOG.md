@@ -18,6 +18,7 @@ All notable changes to this project will be documented in this file.
 - A debug endpoint `/debug/pprof/allocs` has been added for profiling allocations.
 - New `cockroachdb_changefeed` input.
 - The `open_telemetry_collector` tracer now supports sampling.
+- The `aws_kinesis` input and output now support specifying ARNs as the stream target.
 
 ### Fixed
 

@@ -30,14 +30,14 @@ type awsKinesisRecordBatcher struct {
 	ackedWG       sync.WaitGroup
 }
 
-func (k *kinesisReader) newAWSKinesisRecordBatcher(streamID, shardID, sequence string) (*awsKinesisRecordBatcher, error) {
+func (k *kinesisReader) newAWSKinesisRecordBatcher(info streamInfo, shardID, sequence string) (*awsKinesisRecordBatcher, error) {
 	batchPolicy, err := k.batcher.NewBatcher(k.mgr)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize batch policy for shard consumer: %w", err)
 	}
 
 	return &awsKinesisRecordBatcher{
-		streamID:      streamID,
+		streamID:      info.id,
 		shardID:       shardID,
 		batchPolicy:   batchPolicy,
 		checkpointer:  checkpoint.NewCapped[string](int64(k.conf.CheckpointLimit)),

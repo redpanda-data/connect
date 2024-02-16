@@ -3,6 +3,7 @@ package aws
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -69,7 +70,8 @@ Both the `+"`partition_key`"+`(required) and `+"`hash_key`"+` (optional) fields 
 By default Benthos will use a shared credentials file when connecting to AWS services. It's also possible to set them explicitly at the component level, allowing you to transfer data across accounts. You can find out more [in this document](/docs/guides/cloud/aws).`)).
 		Fields(
 			service.NewStringField(koFieldStream).
-				Description("The stream to publish messages to."),
+				Description("The stream to publish messages to. Streams can either be specified by their name or full ARN.").
+				Examples("foo", "arn:aws:kinesis:*:111122223333:stream/my-stream"),
 			service.NewInterpolatedStringField(koFieldPartitionKey).
 				Description("A required key for partitioning messages."),
 			service.NewInterpolatedStringField(koFieldHashKey).
@@ -115,9 +117,10 @@ type kinesisAPI interface {
 }
 
 type kinesisWriter struct {
-	conf    koConfig
-	kinesis kinesisAPI
-	log     *service.Logger
+	conf      koConfig
+	streamARN string
+	kinesis   kinesisAPI
+	log       *service.Logger
 }
 
 func newKinesisWriter(conf koConfig, mgr *service.Resources) (*kinesisWriter, error) {
@@ -178,20 +181,21 @@ func (a *kinesisWriter) Connect(ctx context.Context) error {
 	}
 
 	k := kinesis.NewFromConfig(a.conf.aconf)
-	if _, err := k.DescribeStream(ctx, &kinesis.DescribeStreamInput{
-		StreamName: &a.conf.Stream,
-	}); err != nil {
-		return err
-	}
 
 	waiter := kinesis.NewStreamExistsWaiter(k)
 
-	if err := waiter.Wait(ctx, &kinesis.DescribeStreamInput{
-		StreamName: &a.conf.Stream,
-	}, time.Minute); err != nil {
+	in := &kinesis.DescribeStreamInput{}
+	if strings.HasPrefix(a.conf.Stream, "arn:") {
+		in.StreamARN = &a.conf.Stream
+	} else {
+		in.StreamName = &a.conf.Stream
+	}
+	out, err := waiter.WaitForOutput(ctx, in, time.Minute)
+	if err != nil {
 		return err
 	}
 
+	a.streamARN = *out.StreamDescription.StreamARN
 	a.kinesis = k
 	a.log.Infof("Sending messages to Kinesis stream: %v\n", a.conf.Stream)
 
@@ -211,8 +215,8 @@ func (a *kinesisWriter) WriteBatch(ctx context.Context, batch service.MessageBat
 	}
 
 	input := &kinesis.PutRecordsInput{
-		Records:    records,
-		StreamName: &a.conf.Stream,
+		Records:   records,
+		StreamARN: &a.streamARN,
 	}
 
 	// trim input record length to max kinesis batch size
