@@ -148,13 +148,13 @@ func (d *dedupeProc) ProcessBatch(ctx *processor.BatchProcContext, batch message
 		}
 		if err != nil {
 			if errors.Is(err, component.ErrKeyAlreadyExists) {
-				ctx.Span(i).LogKV("event", "dropped", "type", "deduplicated")
+				ctx.Span(i).LogKV("dropped", "type", "deduplicated")
 				return nil
 			}
 
 			d.log.Error("Cache error: %v\n", err)
 			if d.dropOnErr {
-				ctx.Span(i).LogKV("event", "dropped", "type", "deduplicated")
+				ctx.Span(i).LogKV("dropped", "type", "deduplicated")
 				return nil
 			}
 

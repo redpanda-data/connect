@@ -5,6 +5,7 @@ import (
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/trace"
 )
@@ -41,6 +42,16 @@ func (s *Span) LogKV(name string, kv ...string) {
 		attrs = append(attrs, attribute.String(kv[i], kv[i+1]))
 	}
 	s.w.AddEvent(name, trace.WithAttributes(attrs...))
+}
+
+// RecordError adds an error to the span.
+func (s *Span) RecordError(err error, recordStackTrace bool) {
+	if s == nil || err == nil {
+		return
+	}
+
+	s.w.RecordError(err, trace.WithStackTrace(recordStackTrace))
+	s.w.SetStatus(codes.Error, err.Error())
 }
 
 // SetTag sets a given tag to a value.

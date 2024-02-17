@@ -19,10 +19,6 @@ func MarkErr(part *message.Part, span *tracing.Span, err error) {
 		span = tracing.GetActiveSpan(part)
 	}
 	if span != nil {
-		span.SetTag("error", "true")
-		span.LogKV(
-			"event", "error",
-			"type", err.Error(),
-		)
+		span.RecordError(err, true)
 	}
 }
