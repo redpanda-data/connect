@@ -55,6 +55,7 @@ type Stream struct {
 	log     log.Modular
 	tracer  trace.TracerProvider
 	typeStr string
+	label   string
 
 	buffer ReaderWriter
 
@@ -74,6 +75,7 @@ func NewStream(typeStr string, buffer ReaderWriter, mgr component.Observability)
 		stats:       mgr.Metrics(),
 		log:         mgr.Logger(),
 		tracer:      mgr.Tracer(),
+		label:       mgr.Label(),
 		buffer:      buffer,
 		shutSig:     shutdown.NewSignaller(),
 		messagesOut: make(chan message.Transaction),
@@ -129,7 +131,7 @@ func (m *Stream) inputLoop() {
 
 		batchLen := tr.Payload.Len()
 
-		writeBatch, _ := tracing.WithSiblingSpans(m.tracer, m.typeStr, tr.Payload)
+		writeBatch, _ := tracing.WithSiblingSpans(m.tracer, m.typeStr, m.label, tr.Payload)
 		err := m.buffer.Write(closeAtLeisureCtx, writeBatch, ackFunc)
 		if err == nil {
 			mReceivedCount.Incr(int64(batchLen))
@@ -176,7 +178,7 @@ func (m *Stream) outputLoop() {
 		}
 
 		// It's possible that the buffer wiped our previous root span.
-		tracing.InitSpans(m.tracer, m.typeStr, msg)
+		tracing.InitSpans(m.tracer, m.typeStr, m.label, msg)
 
 		batchLen := msg.Len()
 

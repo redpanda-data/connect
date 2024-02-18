@@ -166,6 +166,7 @@ func init() {
 type Branch struct {
 	log    log.Modular
 	tracer trace.TracerProvider
+	label  string
 
 	requestMap *mapping.Executor
 	resultMap  *mapping.Executor
@@ -185,6 +186,7 @@ func newBranchFromParsed(conf *service.ParsedConfig, mgr bundle.NewManagement) (
 	b = &Branch{
 		log:    mgr.Logger(),
 		tracer: mgr.Tracer(),
+		label:  mgr.Label(),
 
 		mReceived:      stats.GetCounter("processor_received"),
 		mBatchReceived: stats.GetCounter("processor_batch_received"),
@@ -283,7 +285,7 @@ func (b *Branch) ProcessBatch(ctx context.Context, batch message.Batch) ([]messa
 	b.mBatchReceived.Incr(1)
 	startedAt := time.Now()
 
-	branchMsg, propSpans := tracing.WithChildSpans(b.tracer, "branch", batch.ShallowCopy())
+	branchMsg, propSpans := tracing.WithChildSpans(b.tracer, "branch", b.label, batch.ShallowCopy())
 	defer func() {
 		for _, s := range propSpans {
 			s.Finish()

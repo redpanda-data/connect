@@ -16,6 +16,15 @@ type Span struct {
 	w   trace.Span
 }
 
+// GetSpanName creates a span name from a component type and a label.
+func GetSpanName(componentType string, label string) string {
+	if label == "" {
+		return componentType
+	}
+
+	return label
+}
+
 // OtelSpan creates a common span from the open telemetry package.
 func OtelSpan(ctx context.Context, s trace.Span) *Span {
 	if s == nil {

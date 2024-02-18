@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/trace"
 
@@ -12,7 +13,8 @@ import (
 )
 
 const (
-	name = "benthos"
+	name                   = "benthos"
+	componentTypeAttribute = "benthos.component.type"
 )
 
 // GetSpan returns a span attached to a message part. Returns nil if the part
@@ -48,14 +50,19 @@ func GetTraceID(p *service.Message) string {
 // WithChildSpan takes a message, extracts a span, creates a new child span,
 // and returns a new message with that span embedded. The original message is
 // unchanged.
-func WithChildSpan(prov trace.TracerProvider, operationName string, part *service.Message) (*service.Message, *Span) {
+func WithChildSpan(prov trace.TracerProvider, componentType string, componentLabel string, part *service.Message) (*service.Message, *Span) {
 	span := GetActiveSpan(part)
+	var (
+		spanName      = GetSpanName(componentType, componentLabel)
+		spanAttribute = attribute.String(componentTypeAttribute, componentType)
+	)
+
 	if span == nil {
-		ctx, t := prov.Tracer(name).Start(part.Context(), operationName)
+		ctx, t := prov.Tracer(name).Start(part.Context(), spanName, trace.WithAttributes(spanAttribute))
 		span = OtelSpan(ctx, t)
 		part = part.WithContext(ctx)
 	} else {
-		ctx, t := prov.Tracer(name).Start(span.ctx, operationName)
+		ctx, t := prov.Tracer(name).Start(span.ctx, spanName, trace.WithAttributes(spanAttribute))
 		span = OtelSpan(ctx, t)
 		part = part.WithContext(ctx)
 	}
@@ -65,7 +72,7 @@ func WithChildSpan(prov trace.TracerProvider, operationName string, part *servic
 // WithChildSpans takes a message, extracts spans per message part, creates new
 // child spans, and returns a new message with those spans embedded. The
 // original message is unchanged.
-func WithChildSpans(prov trace.TracerProvider, operationName string, batch service.MessageBatch) (service.MessageBatch, []*Span) {
+func WithChildSpans(prov trace.TracerProvider, componentType string, componentLabel string, batch service.MessageBatch) (service.MessageBatch, []*Span) {
 	spans := make([]*Span, 0, len(batch))
 	newParts := make(service.MessageBatch, len(batch))
 	for i, part := range batch {
@@ -73,7 +80,7 @@ func WithChildSpans(prov trace.TracerProvider, operationName string, batch servi
 			continue
 		}
 		var otSpan *Span
-		newParts[i], otSpan = WithChildSpan(prov, operationName, part)
+		newParts[i], otSpan = WithChildSpan(prov, componentType, componentLabel, part)
 		spans = append(spans, otSpan)
 	}
 	return newParts, spans
@@ -82,21 +89,28 @@ func WithChildSpans(prov trace.TracerProvider, operationName string, batch servi
 // WithSiblingSpans takes a message, extracts spans per message part, creates
 // new sibling spans, and returns a new message with those spans embedded. The
 // original message is unchanged.
-func WithSiblingSpans(prov trace.TracerProvider, operationName string, batch service.MessageBatch) (service.MessageBatch, []*Span) {
+func WithSiblingSpans(prov trace.TracerProvider, componentType string, componentLabel string, batch service.MessageBatch) (service.MessageBatch, []*Span) {
 	spans := make([]*Span, 0, len(batch))
 	newParts := make([]*service.Message, len(batch))
+
+	var (
+		spanName      = GetSpanName(componentType, componentLabel)
+		spanAttribute = attribute.String(componentTypeAttribute, componentType)
+	)
+
 	for i, part := range batch {
 		if part == nil {
 			continue
 		}
 		otSpan := GetActiveSpan(part)
 		if otSpan == nil {
-			ctx, t := prov.Tracer(name).Start(part.Context(), operationName)
+			ctx, t := prov.Tracer(name).Start(part.Context(), spanName, trace.WithAttributes(spanAttribute))
 			otSpan = OtelSpan(ctx, t)
 		} else {
 			ctx, t := prov.Tracer(name).Start(
-				part.Context(), operationName,
+				part.Context(), spanName,
 				trace.WithLinks(trace.LinkFromContext(otSpan.ctx)),
+				trace.WithAttributes(spanAttribute),
 			)
 			otSpan = OtelSpan(ctx, t)
 		}
@@ -110,25 +124,25 @@ func WithSiblingSpans(prov trace.TracerProvider, operationName string, batch ser
 
 // InitSpans sets up OpenTracing spans on each message part if one does not
 // already exist.
-func InitSpans(prov trace.TracerProvider, operationName string, batch service.MessageBatch) {
+func InitSpans(prov trace.TracerProvider, componentType string, componentLabel string, batch service.MessageBatch) {
 	for i, p := range batch {
-		batch[i] = InitSpan(prov, operationName, p)
+		batch[i] = InitSpan(prov, componentType, componentLabel, p)
 	}
 }
 
 // InitSpan sets up an OpenTracing span on a message part if one does not
 // already exist.
-func InitSpan(prov trace.TracerProvider, operationName string, part *service.Message) *service.Message {
+func InitSpan(prov trace.TracerProvider, componentType string, componentLabel string, part *service.Message) *service.Message {
 	if GetActiveSpan(part) != nil {
 		return part
 	}
-	ctx, _ := prov.Tracer(name).Start(part.Context(), operationName)
+	ctx, _ := prov.Tracer(name).Start(part.Context(), GetSpanName(componentType, componentLabel), trace.WithAttributes(attribute.String(componentTypeAttribute, componentType)))
 	return part.WithContext(ctx)
 }
 
 // InitSpansFromParentTextMap obtains a span parent reference from a text map
 // and creates child spans for each message.
-func InitSpansFromParentTextMap(prov trace.TracerProvider, operationName string, textMapGeneric map[string]any, batch service.MessageBatch) error {
+func InitSpansFromParentTextMap(prov trace.TracerProvider, componentType string, componentLabel string, textMapGeneric map[string]any, batch service.MessageBatch) error {
 	c := propagation.MapCarrier{}
 	for k, v := range textMapGeneric {
 		if vStr, ok := v.(string); ok {
@@ -139,7 +153,7 @@ func InitSpansFromParentTextMap(prov trace.TracerProvider, operationName string,
 	textProp := otel.GetTextMapPropagator()
 	for i, p := range batch {
 		ctx := textProp.Extract(p.Context(), c)
-		pCtx, _ := prov.Tracer(name).Start(ctx, operationName)
+		pCtx, _ := prov.Tracer(name).Start(ctx, GetSpanName(componentType, componentLabel), trace.WithAttributes(attribute.String(componentTypeAttribute, componentType)))
 		batch[i] = p.WithContext(pCtx)
 	}
 	return nil
