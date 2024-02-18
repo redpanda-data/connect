@@ -111,6 +111,10 @@ func Noop() Modular {
 // WithFields returns a logger with new fields added to the JSON formatted
 // output.
 func (l *Logger) WithFields(inboundFields map[string]string) Modular {
+	if len(inboundFields) == 0 {
+		return l
+	}
+
 	newFields := make(logrus.Fields, len(inboundFields))
 	for k, v := range inboundFields {
 		newFields[k] = v
