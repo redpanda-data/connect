@@ -98,8 +98,9 @@ func init() {
 
 func newServiceInput(conf *service.ParsedConfig, mgr *service.Resources) (service.Input, error) {
 	srv := &natsService{
-		log: mgr.Logger(),
-		fs:  mgr.FS(),
+		label: mgr.Label(),
+		log:   mgr.Logger(),
+		fs:    mgr.FS(),
 	}
 
 	urlList, err := conf.FieldStringList("urls")
