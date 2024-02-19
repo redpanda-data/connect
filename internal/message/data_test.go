@@ -98,3 +98,20 @@ func TestConcurrentMutationsFromStructured(t *testing.T) {
 	close(kickOffChan)
 	wg.Wait()
 }
+
+func TestSetNil(t *testing.T) {
+	source := newMessageBytes(nil)
+	source.SetStructured(map[string]any{
+		"foo": "bar",
+	})
+
+	v, err := source.AsStructured()
+	require.NoError(t, err)
+	assert.Equal(t, map[string]any{"foo": "bar"}, v)
+
+	source.SetStructured(nil)
+
+	v, err = source.AsStructured()
+	require.NoError(t, err)
+	assert.Equal(t, nil, v)
+}
