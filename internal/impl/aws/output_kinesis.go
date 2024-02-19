@@ -182,8 +182,6 @@ func (a *kinesisWriter) Connect(ctx context.Context) error {
 
 	k := kinesis.NewFromConfig(a.conf.aconf)
 
-	waiter := kinesis.NewStreamExistsWaiter(k)
-
 	in := &kinesis.DescribeStreamInput{}
 	if strings.HasPrefix(a.conf.Stream, "arn:") {
 		in.StreamARN = &a.conf.Stream
@@ -191,8 +189,7 @@ func (a *kinesisWriter) Connect(ctx context.Context) error {
 		in.StreamName = &a.conf.Stream
 	}
 
-	// Note: keep the timer here low as we call Connect continously.
-	out, err := waiter.WaitForOutput(ctx, in, time.Second*5)
+	out, err := k.DescribeStream(ctx, in)
 	if err != nil {
 		return err
 	}
