@@ -190,7 +190,9 @@ func (a *kinesisWriter) Connect(ctx context.Context) error {
 	} else {
 		in.StreamName = &a.conf.Stream
 	}
-	out, err := waiter.WaitForOutput(ctx, in, time.Minute)
+
+	// Note: keep the timer here low as we call Connect continously.
+	out, err := waiter.WaitForOutput(ctx, in, time.Second*5)
 	if err != nil {
 		return err
 	}
