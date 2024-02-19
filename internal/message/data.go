@@ -38,6 +38,8 @@ func (m *messageData) SetStructured(jObj any) {
 	m.rawBytes = nil
 	if jObj == nil {
 		m.rawBytes = []byte(`null`)
+		m.structured = nil
+		m.readOnlyStructured = false
 		return
 	}
 	m.rawBytes = nil
