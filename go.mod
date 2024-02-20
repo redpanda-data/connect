@@ -91,6 +91,7 @@ require (
 	github.com/nsqio/go-nsq v1.1.0
 	github.com/oklog/ulid v1.3.1
 	github.com/olivere/elastic/v7 v7.0.32
+	github.com/opensearch-project/opensearch-go/v2 v2.3.0
 	github.com/ory/dockertest/v3 v3.10.0
 	github.com/oschwald/geoip2-golang v1.9.0
 	github.com/parquet-go/parquet-go v0.20.0
