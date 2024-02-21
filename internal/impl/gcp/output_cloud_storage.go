@@ -13,6 +13,7 @@ import (
 	"go.uber.org/multierr"
 
 	"github.com/benthosdev/benthos/v4/internal/component/output"
+	"github.com/benthosdev/benthos/v4/internal/value"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
@@ -26,6 +27,7 @@ const (
 	csoFieldMaxInFlight     = "max_in_flight"
 	csoFieldBatching        = "batching"
 	csoFieldCollisionMode   = "collision_mode"
+	csoFieldMetadata        = "metadata"
 	csoFieldTimeout         = "timeout"
 
 	// GCPCloudStorageErrorIfExistsCollisionMode - error-if-exists.
@@ -48,6 +50,7 @@ type csoConfig struct {
 	ContentEncoding *service.InterpolatedString
 	ChunkSize       int
 	CollisionMode   string
+	Metadata        *service.MetadataExcludeFilter
 	Timeout         time.Duration
 }
 
@@ -68,6 +71,9 @@ func csoConfigFromParsed(pConf *service.ParsedConfig) (conf csoConfig, err error
 		return
 	}
 	if conf.CollisionMode, err = pConf.FieldString(csoFieldCollisionMode); err != nil {
+		return
+	}
+	if conf.Metadata, err = pConf.FieldMetadataExcludeFilter(csoFieldMetadata); err != nil {
 		return
 	}
 	if conf.Timeout, err = pConf.FieldDuration(csoFieldTimeout); err != nil {
@@ -156,6 +162,8 @@ output:
 				Description("An optional chunk size which controls the maximum number of bytes of the object that the Writer will attempt to send to the server in a single request. If ChunkSize is set to zero, chunking will be disabled.").
 				Advanced().
 				Default(16*1024*1024), // googleapi.DefaultUploadChunkSize
+			service.NewMetadataExcludeFilterField(csoFieldMetadata).
+				Description("Specify criteria for which metadata values are attached to objects as headers."),
 			service.NewDurationField(csoFieldTimeout).
 				Description("The maximum period to wait on an upload before abandoning it and reattempting.").
 				Example("1s").
@@ -240,8 +248,8 @@ func (g *gcpCloudStorageOutput) WriteBatch(ctx context.Context, batch service.Me
 
 	return batch.WalkWithBatchedErrors(func(i int, msg *service.Message) error {
 		metadata := map[string]string{}
-		_ = msg.MetaWalk(func(k, v string) error {
-			metadata[k] = v
+		_ = g.conf.Metadata.WalkMut(msg, func(k string, v any) error {
+			metadata[k] = value.IToString(v)
 			return nil
 		})
 
