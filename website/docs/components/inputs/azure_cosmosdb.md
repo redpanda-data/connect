@@ -1,7 +1,7 @@
 ---
 title: azure_cosmosdb
 type: input
-status: beta
+status: experimental
 categories: ["Azure"]
 ---
 
@@ -14,8 +14,8 @@ categories: ["Azure"]
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-:::caution BETA
-This component is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with the component is found.
+:::caution EXPERIMENTAL
+This component is experimental and therefore subject to change or removal outside of major version releases.
 :::
 Executes a SQL query against [Azure CosmosDB](https://learn.microsoft.com/en-us/azure/cosmos-db/introduction) and creates a batch of messages from each page of items.
 
@@ -39,13 +39,12 @@ input:
     connection_string: '!!!SECRET_SCRUBBED!!!' # No default (optional)
     database: testdb # No default (required)
     container: testcontainer # No default (required)
-    partition_keys: root = "blobfish" # No default (required)
+    partition_keys_map: root = "blobfish" # No default (required)
     query: SELECT c.foo FROM testcontainer AS c WHERE c.bar = "baz" AND c.timestamp < @timestamp # No default (required)
-    args_mapping: | # No default (optional)
-      args_mapping: |
-        root = [
-          { "Name": "@name", "Value": "benthos" },
-        ]
+    args_mapping: |- # No default (optional)
+      root = [
+        { "Name": "@name", "Value": "benthos" },
+      ]
 ```
 
 </TabItem>
@@ -61,13 +60,12 @@ input:
     connection_string: '!!!SECRET_SCRUBBED!!!' # No default (optional)
     database: testdb # No default (required)
     container: testcontainer # No default (required)
-    partition_keys: root = "blobfish" # No default (required)
+    partition_keys_map: root = "blobfish" # No default (required)
     query: SELECT c.foo FROM testcontainer AS c WHERE c.bar = "baz" AND c.timestamp < @timestamp # No default (required)
-    args_mapping: | # No default (optional)
-      args_mapping: |
-        root = [
-          { "Name": "@name", "Value": "benthos" },
-        ]
+    args_mapping: |- # No default (optional)
+      root = [
+        { "Name": "@name", "Value": "benthos" },
+      ]
     batch_count: -1
 ```
 
@@ -116,7 +114,7 @@ input:
     account_key: C2y6yDjf5/R+ob0N8A7Cgv30VRDJIWEHLM+4QDU5DE2nQ9nDuVTqobD4b8mGGyPMbIZnqyMsEcaGQy67XIw/Jw==
     database: blobbase
     container: blobfish
-    partition_keys: root = "AbyssalPlain"
+    partition_keys_map: root = "AbyssalPlain"
     query: SELECT * FROM blobfish AS b WHERE b.species = @species
     args_mapping: |
       root = [
@@ -200,7 +198,7 @@ Type: `string`
 container: testcontainer
 ```
 
-### `partition_keys`
+### `partition_keys_map`
 
 A [Bloblang mapping](/docs/guides/bloblang/about) which should evaluate to a single partition key value or an array of partition key values of type string, integer or boolean. Currently, hierarchical partition keys are not supported so only one value may be provided.
 
@@ -210,15 +208,15 @@ Type: `string`
 ```yml
 # Examples
 
-partition_keys: root = "blobfish"
+partition_keys_map: root = "blobfish"
 
-partition_keys: root = 41
+partition_keys_map: root = 41
 
-partition_keys: root = true
+partition_keys_map: root = true
 
-partition_keys: root = null
+partition_keys_map: root = null
 
-partition_keys: root = now().ts_format("2006-01-02")
+partition_keys_map: root = now().ts_format("2006-01-02")
 ```
 
 ### `query`
@@ -244,11 +242,10 @@ Type: `string`
 ```yml
 # Examples
 
-args_mapping: |2
-  args_mapping: |
-    root = [
-      { "Name": "@name", "Value": "benthos" },
-    ]
+args_mapping: |-
+  root = [
+    { "Name": "@name", "Value": "benthos" },
+  ]
 ```
 
 ### `batch_count`

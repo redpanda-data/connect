@@ -368,7 +368,10 @@ func (m *Message) BloblangQuery(blobl *bloblang.Executor) (*Message, error) {
 }
 
 // BloblangQueryValue executes a parsed Bloblang mapping on a message and
-// returns the result or an error if the mapping fails.
+// returns the raw value result, or an error if either the mapping fails.
+// The error bloblang.ErrRootDeleted is returned if the root of the mapping
+// value is deleted, this is in order to allow distinction between a real nil
+// value and a deleted value.
 func (m *Message) BloblangQueryValue(blobl *bloblang.Executor) (any, error) {
 	uw := blobl.XUnwrapper().(interface {
 		Unwrap() *mapping.Executor
@@ -483,8 +486,10 @@ func (b MessageBatch) BloblangQuery(index int, blobl *bloblang.Executor) (*Messa
 }
 
 // BloblangQueryValue executes a parsed Bloblang mapping on a message batch,
-// from the perspective of a particular message index, and returns the result or
-// an error if the mapping fails.
+// from the perspective of a particular message index, and returns the raw value
+// result or an error if the mapping fails. The error bloblang.ErrRootDeleted is
+// returned if the root of the mapping value is deleted, this is in order to
+// allow distinction between a real nil value and a deleted value.
 //
 // This method allows mappings to perform windowed aggregations across message
 // batches.

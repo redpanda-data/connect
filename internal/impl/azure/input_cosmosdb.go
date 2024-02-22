@@ -8,21 +8,21 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/runtime"
 	"github.com/Azure/azure-sdk-for-go/sdk/data/azcosmos"
+	"github.com/mitchellh/mapstructure"
+
 	"github.com/benthosdev/benthos/v4/internal/impl/azure/cosmosdb"
 	"github.com/benthosdev/benthos/v4/public/service"
-	"github.com/mitchellh/mapstructure"
 )
 
 const (
-	cdbiFieldPartitionKeys = "partition_keys"
-	cdbiFieldQuery         = "query"
-	cdbiFieldArgsMapping   = "args_mapping"
-	cdbiFieldBatchCount    = "batch_count"
+	cdbiFieldQuery       = "query"
+	cdbiFieldArgsMapping = "args_mapping"
+	cdbiFieldBatchCount  = "batch_count"
 )
 
 func cosmosDBInputSpec() *service.ConfigSpec {
 	return service.NewConfigSpec().
-		Beta().
+		// Beta().
 		Categories("Azure").
 		Version("v4.25.0").
 		Summary(`Executes a SQL query against [Azure CosmosDB](https://learn.microsoft.com/en-us/azure/cosmos-db/introduction) and creates a batch of messages from each page of items.`).
@@ -36,12 +36,9 @@ Cross-partition queries are currently not supported by the underlying driver. Fo
 		Field(cosmosdb.PartitionKeysField(true)).
 		Field(service.NewStringField(cdbiFieldQuery).Description("The query to execute").Example(`SELECT c.foo FROM testcontainer AS c WHERE c.bar = "baz" AND c.timestamp < @timestamp`)).
 		Field(service.NewBloblangField(cdbiFieldArgsMapping).
-			Description("A [Bloblang mapping](/docs/guides/bloblang/about) that, for each message, creates a list of arguments to use with the query.").Optional().Example(`
-args_mapping: |
-  root = [
-    { "Name": "@name", "Value": "benthos" },
-  ]
-`)).
+			Description("A [Bloblang mapping](/docs/guides/bloblang/about) that, for each message, creates a list of arguments to use with the query.").Optional().Example(`root = [
+  { "Name": "@name", "Value": "benthos" },
+]`)).
 		Field(service.NewIntField(cdbiFieldBatchCount).
 			Description(`The maximum number of messages that should be accumulated into each batch. Use '-1' specify dynamic page size.`).
 			Default(-1).
@@ -54,7 +51,7 @@ input:
     account_key: C2y6yDjf5/R+ob0N8A7Cgv30VRDJIWEHLM+4QDU5DE2nQ9nDuVTqobD4b8mGGyPMbIZnqyMsEcaGQy67XIw/Jw==
     database: blobbase
     container: blobfish
-    partition_keys: root = "AbyssalPlain"
+    partition_keys_map: root = "AbyssalPlain"
     query: SELECT * FROM blobfish AS b WHERE b.species = @species
     args_mapping: |
       root = [
@@ -89,7 +86,7 @@ func newCosmosDBReaderFromParsed(conf *service.ParsedConfig, mgr *service.Resour
 		return nil, err
 	}
 
-	partitionKeysMapping, err := conf.FieldBloblang(cdbiFieldPartitionKeys)
+	partitionKeysMapping, err := conf.FieldBloblang(cosmosdb.FieldPartitionKeys)
 	if err != nil {
 		return nil, err
 	}
@@ -177,5 +174,3 @@ func (c *cosmosDBReader) ReadBatch(ctx context.Context) (service.MessageBatch, s
 }
 
 func (c *cosmosDBReader) Close(ctx context.Context) error { return nil }
-
-//------------------------------------------------------------------------------
