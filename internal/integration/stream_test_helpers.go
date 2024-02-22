@@ -45,12 +45,7 @@ func CheckSkipExact(t testing.TB) {
 // GetFreePort attempts to get a free port. This involves creating a bind and
 // then immediately dropping it and so it's ever so slightly flakey.
 func GetFreePort() (int, error) {
-	addr, err := net.ResolveTCPAddr("tcp", "localhost:0")
-	if err != nil {
-		return 0, err
-	}
-
-	listener, err := net.ListenTCP("tcp", addr)
+	listener, err := net.Listen("tcp", ":0")
 	if err != nil {
 		return 0, err
 	}
@@ -97,6 +92,7 @@ type StreamTestConfigVars struct {
 	Var2 string
 	Var3 string
 	Var4 string
+	Var5 string
 }
 
 // StreamPreTestFn is an optional closure to be called before tests are run,
@@ -121,20 +117,6 @@ type streamTestEnvironment struct {
 	// Ugly work arounds for slow connectors.
 	sleepAfterInput  time.Duration
 	sleepAfterOutput time.Duration
-}
-
-func getFreePort() (int, error) {
-	addr, err := net.ResolveTCPAddr("tcp", "localhost:0")
-	if err != nil {
-		return 0, err
-	}
-
-	listener, err := net.ListenTCP("tcp", addr)
-	if err != nil {
-		return 0, err
-	}
-	defer listener.Close()
-	return listener.Addr().(*net.TCPAddr).Port, nil
 }
 
 func newStreamTestEnvironment(t testing.TB, confTemplate string) streamTestEnvironment {
@@ -167,6 +149,7 @@ func (e streamTestEnvironment) RenderConfig() string {
 		"$VAR2", e.configVars.Var2,
 		"$VAR3", e.configVars.Var3,
 		"$VAR4", e.configVars.Var4,
+		"$VAR5", e.configVars.Var5,
 		"$INPUT_BATCH_COUNT", strconv.Itoa(e.configVars.InputBatchCount),
 		"$OUTPUT_BATCH_COUNT", strconv.Itoa(e.configVars.OutputBatchCount),
 		"$OUTPUT_META_EXCLUDE_PREFIX", e.configVars.OutputMetaExcludePrefix,
@@ -257,6 +240,22 @@ func StreamTestOptVarThree(v string) StreamTestOptFunc {
 	}
 }
 
+// StreamTestOptVarFour sets a third arbitrary variable for the test that can
+// be injected into templated configs.
+func StreamTestOptVarFour(v string) StreamTestOptFunc {
+	return func(env *streamTestEnvironment) {
+		env.configVars.Var4 = v
+	}
+}
+
+// StreamTestOptVarFive sets a third arbitrary variable for the test that can
+// be injected into templated configs.
+func StreamTestOptVarFive(v string) StreamTestOptFunc {
+	return func(env *streamTestEnvironment) {
+		env.configVars.Var5 = v
+	}
+}
+
 // StreamTestOptSleepAfterInput adds a sleep to tests after the input has been
 // created.
 func StreamTestOptSleepAfterInput(t time.Duration) StreamTestOptFunc {
@@ -322,7 +321,7 @@ func (i StreamTestList) Run(t *testing.T, configTemplate string, opts ...StreamT
 
 	for j, test := range i {
 		if envs[j].configVars.port == "" {
-			p, err := getFreePort()
+			p, err := GetFreePort()
 			if err != nil {
 				t.Fatal(err)
 			}

@@ -72,7 +72,7 @@ A database [driver](#drivers) to use.
 
 
 Type: `string`  
-Options: `mysql`, `postgres`, `clickhouse`, `mssql`, `sqlite`, `oracle`, `snowflake`, `trino`.
+Options: `mysql`, `postgres`, `clickhouse`, `mssql`, `sqlite`, `oracle`, `snowflake`, `trino`, `gocosmos`.
 
 ### `data_source_name`
 
@@ -83,7 +83,7 @@ Type: `string`
 
 ### `query`
 
-The query to execute. The style of placeholder to use depends on the driver, some drivers require question marks (`?`) whereas others expect incrementing dollar signs (`$1`, `$2`, and so on). The style to use is outlined in this table:
+The query to execute. The style of placeholder to use depends on the driver, some drivers require question marks (`?`) whereas others expect incrementing dollar signs (`$1`, `$2`, and so on) or colons (`:1`, `:2` and so on). The style to use is outlined in this table:
 
 | Driver | Placeholder Style |
 |---|---|
@@ -95,6 +95,7 @@ The query to execute. The style of placeholder to use depends on the driver, som
 | `oracle` | Colon |
 | `snowflake` | Question mark |
 | `trino` | Question mark |
+| `gocosmos` | Colon |
 
 
 Type: `string`  

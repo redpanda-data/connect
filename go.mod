@@ -9,6 +9,7 @@ require (
 	cuelang.org/go v0.7.0
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.9.2
 	github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.5.1
+	github.com/Azure/azure-sdk-for-go/sdk/data/azcosmos v0.3.6
 	github.com/Azure/azure-sdk-for-go/sdk/data/aztables v1.1.0
 	github.com/Azure/azure-sdk-for-go/sdk/storage/azblob v1.2.1
 	github.com/Azure/azure-sdk-for-go/sdk/storage/azqueue v1.0.0
@@ -81,6 +82,7 @@ require (
 	github.com/linkedin/goavro/v2 v2.12.0
 	github.com/matoous/go-nanoid/v2 v2.0.0
 	github.com/microcosm-cc/bluemonday v1.0.25
+	github.com/microsoft/gocosmos v1.1.1
 	github.com/mitchellh/mapstructure v1.5.0
 	github.com/nats-io/nats.go v1.32.0
 	github.com/nats-io/nkeys v0.4.7
@@ -157,6 +159,7 @@ require (
 	github.com/99designs/go-keychain v0.0.0-20191008050251-8e49817e8af4 // indirect
 	github.com/99designs/keyring v1.2.2 // indirect
 	github.com/AthenZ/athenz v1.10.43 // indirect
+	github.com/Azure/azure-sdk-for-go v68.0.0+incompatible // indirect
 	github.com/Azure/azure-sdk-for-go/sdk/internal v1.5.2 // indirect
 	github.com/Azure/go-ansiterm v0.0.0-20210617225240-d185dfc1b5a1 // indirect
 	github.com/AzureAD/microsoft-authentication-library-for-go v1.2.1 // indirect
@@ -191,6 +194,12 @@ require (
 	github.com/aymerick/douceur v0.2.0 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/bits-and-blooms/bitset v1.4.0 // indirect
+	github.com/btnguyen2k/consu/checksum v1.1.0 // indirect
+	github.com/btnguyen2k/consu/g18 v0.1.0 // indirect
+	github.com/btnguyen2k/consu/gjrc v0.2.2 // indirect
+	github.com/btnguyen2k/consu/olaf v0.1.3 // indirect
+	github.com/btnguyen2k/consu/reddo v0.1.8 // indirect
+	github.com/btnguyen2k/consu/semita v0.1.5 // indirect
 	github.com/bufbuild/protocompile v0.8.0 // indirect
 	github.com/cespare/xxhash/v2 v2.2.0 // indirect
 	github.com/cockroachdb/apd/v3 v3.2.1 // indirect
