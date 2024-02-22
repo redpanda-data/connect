@@ -38,7 +38,7 @@ azure_cosmosdb:
   connection_string: '!!!SECRET_SCRUBBED!!!' # No default (optional)
   database: testdb # No default (required)
   container: testcontainer # No default (required)
-  partition_keys: root = "blobfish" # No default (required)
+  partition_keys_map: root = "blobfish" # No default (required)
   operation: Create
   item_id: ${! json("id") } # No default (optional)
 ```
@@ -55,7 +55,7 @@ azure_cosmosdb:
   connection_string: '!!!SECRET_SCRUBBED!!!' # No default (optional)
   database: testdb # No default (required)
   container: testcontainer # No default (required)
-  partition_keys: root = "blobfish" # No default (required)
+  partition_keys_map: root = "blobfish" # No default (required)
   operation: Create
   patch_operations: [] # No default (optional)
   patch_condition: from c where not is_defined(c.blobfish) # No default (optional)
@@ -114,7 +114,7 @@ input:
     account_key: C2y6yDjf5/R+ob0N8A7Cgv30VRDJIWEHLM+4QDU5DE2nQ9nDuVTqobD4b8mGGyPMbIZnqyMsEcaGQy67XIw/Jw==
     database: blobbase
     container: blobfish
-    partition_keys: root = "AbyssalPlain"
+    partition_keys_map: root = "AbyssalPlain"
     query: SELECT * FROM blobfish
 
   processors:
@@ -127,21 +127,21 @@ input:
         account_key: C2y6yDjf5/R+ob0N8A7Cgv30VRDJIWEHLM+4QDU5DE2nQ9nDuVTqobD4b8mGGyPMbIZnqyMsEcaGQy67XIw/Jw==
         database: testdb
         container: blobfish
-        partition_keys: root = json("habitat")
+        partition_keys_map: root = json("habitat")
         item_id: ${! meta("id") }
         operation: Patch
         patch_operations:
           # Add a new /diet field
           - operation: Add
             path: /diet
-            value: root = json("diet")
+            value_map: root = json("diet")
           # Remove the first location from the /locations array field
           - operation: Remove
             path: /locations/0
           # Add new location at the end of the /locations array field
           - operation: Add
             path: /locations/-
-            value: root = "Challenger Deep"
+            value_map: root = "Challenger Deep"
         # Return the updated document
         enable_content_response_on_write: true
 ```
@@ -222,7 +222,7 @@ Type: `string`
 container: testcontainer
 ```
 
-### `partition_keys`
+### `partition_keys_map`
 
 A [Bloblang mapping](/docs/guides/bloblang/about) which should evaluate to a single partition key value or an array of partition key values of type string, integer or boolean. Currently, hierarchical partition keys are not supported so only one value may be provided.
 
@@ -232,15 +232,15 @@ Type: `string`
 ```yml
 # Examples
 
-partition_keys: root = "blobfish"
+partition_keys_map: root = "blobfish"
 
-partition_keys: root = 41
+partition_keys_map: root = 41
 
-partition_keys: root = true
+partition_keys_map: root = true
 
-partition_keys: root = null
+partition_keys_map: root = null
 
-partition_keys: root = json("blobfish").depth
+partition_keys_map: root = json("blobfish").depth
 ```
 
 ### `operation`
@@ -298,7 +298,7 @@ Type: `string`
 path: /foo/bar/baz
 ```
 
-### `patch_operations[].value`
+### `patch_operations[].value_map`
 
 A [Bloblang mapping](/docs/guides/bloblang/about) which should evaluate to a value of any type that is supported by CosmosDB.
 
@@ -308,15 +308,15 @@ Type: `string`
 ```yml
 # Examples
 
-value: root = "blobfish"
+value_map: root = "blobfish"
 
-value: root = 41
+value_map: root = 41
 
-value: root = true
+value_map: root = true
 
-value: root = json("blobfish").depth
+value_map: root = json("blobfish").depth
 
-value: root = [1, 2, 3]
+value_map: root = [1, 2, 3]
 ```
 
 ### `patch_condition`

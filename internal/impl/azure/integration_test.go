@@ -291,7 +291,7 @@ output:
     account_key: $VAR1
     database: $VAR2-$ID
     container: $VAR3
-    partition_keys: root = "$VAR5"
+    partition_keys_map: root = "$VAR5"
     auto_id: true
     operation: Create
   processors:
@@ -306,7 +306,7 @@ input:
     account_key: $VAR1
     database: $VAR2-$ID
     container: $VAR3
-    partition_keys: root = "$VAR5"
+    partition_keys_map: root = "$VAR5"
     query: |
       select * from $VAR3 as c where c.foo = @foo
     args_mapping: |
@@ -351,7 +351,7 @@ endpoint: http://localhost:%s
 account_key: %s
 database: %s
 container: %s
-partition_keys: root = "%s"
+partition_keys_map: root = "%s"
 auto_id: false
 operation: Create
 `, servicePort, emulatorKey, database, dummyContainer, dummyPartitionKeyValue), env)
@@ -362,7 +362,7 @@ endpoint: http://localhost:%s
 account_key: %s
 database: %s
 container: %s
-partition_keys: root = "%s"
+partition_keys_map: root = "%s"
 item_id: ${! json("id") }
 operation: Read
 `, servicePort, emulatorKey, database, dummyContainer, dummyPartitionKeyValue), env)
@@ -373,13 +373,13 @@ endpoint: http://localhost:%s
 account_key: %s
 database: %s
 container: %s
-partition_keys: root = "%s"
+partition_keys_map: root = "%s"
 operation: Patch
 patch_condition: from c where not is_defined(c.blobfish)
 patch_operations:
   - operation: Add
     path: /blobfish
-    value: root = json("blobfish")
+    value_map: root = json("blobfish")
 item_id: ${! json("id") }
 enable_content_response_on_write: true
 `, servicePort, emulatorKey, database, dummyContainer, dummyPartitionKeyValue), env)

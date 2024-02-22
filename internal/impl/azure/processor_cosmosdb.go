@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/data/azcosmos"
+
 	"github.com/benthosdev/benthos/v4/internal/impl/azure/cosmosdb"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
@@ -37,7 +38,7 @@ input:
     account_key: C2y6yDjf5/R+ob0N8A7Cgv30VRDJIWEHLM+4QDU5DE2nQ9nDuVTqobD4b8mGGyPMbIZnqyMsEcaGQy67XIw/Jw==
     database: blobbase
     container: blobfish
-    partition_keys: root = "AbyssalPlain"
+    partition_keys_map: root = "AbyssalPlain"
     query: SELECT * FROM blobfish
 
   processors:
@@ -50,21 +51,21 @@ input:
         account_key: C2y6yDjf5/R+ob0N8A7Cgv30VRDJIWEHLM+4QDU5DE2nQ9nDuVTqobD4b8mGGyPMbIZnqyMsEcaGQy67XIw/Jw==
         database: testdb
         container: blobfish
-        partition_keys: root = json("habitat")
+        partition_keys_map: root = json("habitat")
         item_id: ${! meta("id") }
         operation: Patch
         patch_operations:
           # Add a new /diet field
           - operation: Add
             path: /diet
-            value: root = json("diet")
+            value_map: root = json("diet")
           # Remove the first location from the /locations array field
           - operation: Remove
             path: /locations/0
           # Add new location at the end of the /locations array field
           - operation: Add
             path: /locations/-
-            value: root = "Challenger Deep"
+            value_map: root = "Challenger Deep"
         # Return the updated document
         enable_content_response_on_write: true
 `)
@@ -147,5 +148,3 @@ func (c *cosmosDBProcessor) ProcessBatch(ctx context.Context, batch service.Mess
 }
 
 func (c *cosmosDBProcessor) Close(ctx context.Context) error { return nil }
-
-//------------------------------------------------------------------------------

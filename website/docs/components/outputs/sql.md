@@ -105,7 +105,7 @@ The query to execute. The style of placeholder to use depends on the driver, som
 | `oracle` | Colon |
 | `snowflake` | Question mark |
 | `trino` | Question mark |
-| `gocosmos` | Dollar sign |
+| `gocosmos` | Colon |
 
 
 Type: `string`  

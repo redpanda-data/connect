@@ -114,7 +114,7 @@ func rawQueryField() *service.ConfigField {
 ` + "| `oracle` | Colon |" + `
 ` + "| `snowflake` | Question mark |" + `
 ` + "| `trino` | Question mark |" + `
-` + "| `gocosmos` | Dollar sign |" + `
+` + "| `gocosmos` | Colon |" + `
 `)
 }
 

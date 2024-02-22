@@ -5,6 +5,7 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	"github.com/Azure/azure-sdk-for-go/sdk/data/azcosmos"
+
 	"github.com/benthosdev/benthos/v4/public/bloblang"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
@@ -15,13 +16,13 @@ const (
 	fieldConnectionString = "connection_string"
 	fieldDatabase         = "database"
 	fieldContainer        = "container"
-	fieldPartitionKeys    = "partition_keys"
+	FieldPartitionKeys    = "partition_keys_map"
 	fieldOperation        = "operation"
 	fieldPatchOperations  = "patch_operations"
 	fieldPatchCondition   = "patch_condition"
 	fieldPatchOperation   = "operation"
 	fieldPatchPath        = "path"
-	fieldPatchValue       = "value"
+	fieldPatchValue       = "value_map"
 	fieldAutoID           = "auto_id"
 	fieldItemID           = "item_id"
 )
@@ -154,12 +155,12 @@ root."-" = if $hasPatchCondition && (!$hasPatchOperations || this.operation != "
   "The ` + "`patch_condition` " + ` field only applies to ` + "`Patch`" + ` operations and it requires one or more ` + "`patch_operations`" + `."
 }
 
-root."-" = if this.operation == "Patch" && this.patch_operations.any(o -> o.operation != "Remove" && o.value.or("") == "") {
-  "The ` + "`patch_operations` " + "`value`" + ` field must be set when ` + "`operation`" + ` is not ` + "`Remove`" + `."
+root."-" = if this.operation == "Patch" && this.patch_operations.any(o -> o.operation != "Remove" && o.value_map.or("") == "") {
+  "The ` + "`patch_operations` " + "`value_map`" + ` field must be set when ` + "`operation`" + ` is not ` + "`Remove`" + `."
 }
 
-root."-" = if this.operation == "Patch" && this.patch_operations.any(o -> o.operation == "Remove" && o.value.or("") != "") {
-  "The ` + "`patch_operations` " + "`value`" + ` field must not be set when ` + "`operation`" + ` is ` + "`Remove`" + `."
+root."-" = if this.operation == "Patch" && this.patch_operations.any(o -> o.operation == "Remove" && o.value_map.or("") != "") {
+  "The ` + "`patch_operations` " + "`value_map`" + ` field must not be set when ` + "`operation`" + ` is ` + "`Remove`" + `."
 }
 `
 
@@ -181,7 +182,7 @@ func PartitionKeysField(isInputField bool) *service.ConfigField {
 	// TODO: Add examples for hierarchical / empty Partition Keys this when the following issues are addressed:
 	// - https://github.com/Azure/azure-sdk-for-go/issues/18578
 	// - https://github.com/Azure/azure-sdk-for-go/issues/21063
-	field := service.NewBloblangField(fieldPartitionKeys).Description("A [Bloblang mapping](/docs/guides/bloblang/about) which should evaluate to a single partition key value or an array of partition key values of type string, integer or boolean. Currently, hierarchical partition keys are not supported so only one value may be provided.").Example(`root = "blobfish"`).Example(`root = 41`).Example(`root = true`).Example(`root = null`)
+	field := service.NewBloblangField(FieldPartitionKeys).Description("A [Bloblang mapping](/docs/guides/bloblang/about) which should evaluate to a single partition key value or an array of partition key values of type string, integer or boolean. Currently, hierarchical partition keys are not supported so only one value may be provided.").Example(`root = "blobfish"`).Example(`root = 41`).Example(`root = true`).Example(`root = null`)
 
 	// Add dynamic examples
 	if !isInputField {
@@ -297,7 +298,7 @@ func CRUDConfigFromParsed(conf *service.ParsedConfig) (CRUDConfig, error) {
 	var c CRUDConfig
 	var err error
 
-	if c.PartitionKeys, err = conf.FieldBloblang(fieldPartitionKeys); err != nil {
+	if c.PartitionKeys, err = conf.FieldBloblang(FieldPartitionKeys); err != nil {
 		return CRUDConfig{}, err
 	}
 

@@ -41,7 +41,7 @@ output:
     account_key: C2y6yDjf5/R+ob0N8A7Cgv30VRDJIWEHLM+4QDU5DE2nQ9nDuVTqobD4b8mGGyPMbIZnqyMsEcaGQy67XIw/Jw==
     database: blobbase
     container: blobfish
-    partition_keys: root = json("habitat")
+    partition_keys_map: root = json("habitat")
     operation: Create
 `).
 		Example("Patch documents", "Execute the Patch operation on documents from the `blobfish` container.", `
@@ -51,21 +51,21 @@ output:
     account_key: C2y6yDjf5/R+ob0N8A7Cgv30VRDJIWEHLM+4QDU5DE2nQ9nDuVTqobD4b8mGGyPMbIZnqyMsEcaGQy67XIw/Jw==
     database: testdb
     container: blobfish
-    partition_keys: root = json("habitat")
+    partition_keys_map: root = json("habitat")
     item_id: ${! json("id") }
     operation: Patch
     patch_operations:
       # Add a new /diet field
       - operation: Add
         path: /diet
-        value: root = json("diet")
+        value_map: root = json("diet")
       # Remove the first location from the /locations array field
       - operation: Remove
         path: /locations/0
       # Add new location at the end of the /locations array field
       - operation: Add
         path: /locations/-
-        value: root = "Challenger Deep"
+        value_map: root = "Challenger Deep"
 `)
 }
 
@@ -145,5 +145,3 @@ func (c *cosmosDBWriter) WriteBatch(ctx context.Context, batch service.MessageBa
 }
 
 func (c *cosmosDBWriter) Close(ctx context.Context) error { return nil }
-
-//------------------------------------------------------------------------------
