@@ -353,6 +353,12 @@ func (p *ProcessorsProvider) getConfs(jsonPtr string, environment map[string]str
 			return confs, fmt.Errorf("failed to merge resources from '%v': %v", path, err)
 		}
 	}
+
+	// We can clear all input and output resources as they're not used by procs
+	// under any circumstances.
+	mgrWrapper.ResourceInputs = nil
+	mgrWrapper.ResourceOutputs = nil
+
 	confs.mgr = mgrWrapper
 
 	var pathSlice []string

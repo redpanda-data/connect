@@ -6,3 +6,10 @@ pipeline:
           {
             json_set_int("result", json_get("result") + metadata_get("foo") + metadata_get("bar"));
           }
+
+# This will be ignored during test execution
+output_resources:
+  - label: foo
+    kafka:
+      addresses: [ example.com:1234 ]
+      topic: foo
