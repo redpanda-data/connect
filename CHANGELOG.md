@@ -32,12 +32,14 @@ All notable changes to this project will be documented in this file.
 - The `generate` input no longer adds an extra second to `interval: '@every x'` syntax.
 - The `nats_jetstream` input no longer fails to locate mirrored streams.
 - Fixed a rare panic in batching mechanisms with a specified `period`, where data arrives in low volumes and is sporadic.
+- Executing config unit tests should no longer fail due to output resources failing to connect.
 
 ### Changed
 
 - The `parse_parquet` Bloblang function, `parquet_decode`, `parquet_encode` processors and the `parquet` input have all been upgraded to the latest version of the underlying Parquet library. Since this underlying library is experimental it is likely that behaviour changes will result. One significant change is that encoding numerical values that are larger than the column type (`float64` into `FLOAT`, `int64` into `INT32`, etc) will no longer be automatically converted.
 - The `parse_log` processor field `codec` is now deprecated.
 - *WARNING*: Many components have had their underlying implementations moved onto newer internal APIs for defining and extracting their configuration fields. It's recommended that upgrades to this version are performed cautiously.
+- *WARNING*: All AWS components have been upgraded to the latest client libraries. Although lots of testing has been done, these libraries have the potential to differ in discrete ways in terms of how credentials are evaluated, cross-account connections are performed, and so on. It's recommended that upgrades to this version are performed cautiously.
 
 ## 4.24.0 - 2023-11-24
 
