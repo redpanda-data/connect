@@ -30,8 +30,11 @@ Send tracing events to an [Open Telemetry collector](https://opentelemetry.io/do
 # Common config fields, showing default values
 tracer:
   open_telemetry_collector:
-    http: []
-    grpc: []
+    http: [] # No default (required)
+    grpc: [] # No default (required)
+    sampling:
+      enabled: false
+      ratio: 0.85 # No default (optional)
 ```
 
 </TabItem>
@@ -41,9 +44,12 @@ tracer:
 # All config fields, showing default values
 tracer:
   open_telemetry_collector:
-    http: []
-    grpc: []
+    http: [] # No default (required)
+    grpc: [] # No default (required)
     tags: {}
+    sampling:
+      enabled: false
+      ratio: 0.85 # No default (optional)
 ```
 
 </TabItem>
@@ -66,6 +72,14 @@ The URL of a collector to send tracing events to.
 Type: `string`  
 Default: `"localhost:4318"`  
 
+### `http[].secure`
+
+Connect to the collector over HTTPS
+
+
+Type: `bool`  
+Default: `false`  
+
 ### `grpc`
 
 A list of grpc collectors.
@@ -81,6 +95,14 @@ The URL of a collector to send tracing events to.
 Type: `string`  
 Default: `"localhost:4317"`  
 
+### `grpc[].secure`
+
+Connect to the collector with client transport security
+
+
+Type: `bool`  
+Default: `false`  
+
 ### `tags`
 
 A map of tags to add to all tracing spans.
@@ -88,5 +110,36 @@ A map of tags to add to all tracing spans.
 
 Type: `object`  
 Default: `{}`  
+
+### `sampling`
+
+Settings for trace sampling. Sampling is recommended for high-volume production workloads.
+
+
+Type: `object`  
+Requires version 4.25.0 or newer  
+
+### `sampling.enabled`
+
+Whether to enable sampling.
+
+
+Type: `bool`  
+Default: `false`  
+
+### `sampling.ratio`
+
+Sets the ratio of traces to sample.
+
+
+Type: `float`  
+
+```yml
+# Examples
+
+ratio: 0.85
+
+ratio: 0.5
+```
 
 

@@ -25,6 +25,7 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/component/ratelimit"
+	"github.com/benthosdev/benthos/v4/internal/component/scanner"
 	"github.com/benthosdev/benthos/v4/internal/filepath/ifs"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
@@ -49,6 +50,7 @@ type NewManagement interface {
 	Logger() log.Modular
 	Tracer() trace.TracerProvider
 	FS() ifs.FS
+	Environment() *Environment
 	BloblEnvironment() *bloblang.Environment
 
 	RegisterEndpoint(path, desc string, h http.HandlerFunc)
@@ -59,6 +61,7 @@ type NewManagement interface {
 	NewProcessor(conf processor.Config) (processor.V1, error)
 	NewOutput(conf output.Config, pipelines ...processor.PipelineConstructorFunc) (output.Streamed, error)
 	NewRateLimit(conf ratelimit.Config) (ratelimit.V1, error)
+	NewScanner(conf scanner.Config) (scanner.Creator, error)
 
 	ProbeCache(name string) bool
 	AccessCache(ctx context.Context, name string, fn func(cache.V1)) error

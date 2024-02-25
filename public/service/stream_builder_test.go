@@ -179,7 +179,7 @@ generate:
 	require.NoError(t, err)
 
 	exp := []string{
-		` mapping: root = "foo"`,
+		` mapping: 'root = "foo"'`,
 		`level: warn`,
 	}
 
@@ -414,8 +414,7 @@ type: local`))
           bloblang: ""`,
 		`
         - label: ""
-          jmespath:
-            query: ""`,
+          jmespath: {}`,
 		`output:
     label: ""
     drop:`,
@@ -519,7 +518,6 @@ drop: {}
 		`input:
     label: ""
     broker:
-        copies: 1
         inputs:`,
 		`            - label: foo
               generate:`,
@@ -528,8 +526,6 @@ drop: {}
 		`output:
     label: ""
     broker:
-        copies: 1
-        pattern: fan_out
         outputs:`,
 		`            - label: baz
               drop:`,
@@ -551,7 +547,7 @@ func TestStreamBuilderYAMLErrors(t *testing.T) {
 
 	err = b.AddInputYAML(`not valid ! yaml 34324`)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "unmarshal errors")
+	assert.Contains(t, err.Error(), "expected object")
 
 	err = b.SetYAML(`not valid ! yaml 34324`)
 	require.Error(t, err)
@@ -737,7 +733,7 @@ pipeline:
       label: fooproc
 
 output:
-  reject: "lol nah"
+  reject: lol nah
 `,
 			output: []walkedComponent{
 				{
@@ -745,10 +741,7 @@ output:
 					name:    "generate",
 					conf: `label: ""
 generate:
-    mapping: root = deleted()
-    interval: 1s
-    count: 0
-    batch_size: 1`,
+    mapping: 'root = deleted()'`,
 				},
 				{
 					typeStr: "buffer",
@@ -791,7 +784,7 @@ input:
     - mutation: 'root = "hm"'
 
 output:
-  reject: "lol nah"
+  reject: lol nah
   processors:
     - mutation: 'root = "eh"'
 `,
@@ -801,10 +794,7 @@ output:
 					name:    "generate",
 					conf: `label: ""
 generate:
-    mapping: root = deleted()
-    interval: 1s
-    count: 0
-    batch_size: 1
+    mapping: 'root = deleted()'
 processors:
     - label: ""
       mutation: 'root = "hm"'`,
@@ -866,25 +856,14 @@ input:
 dynamic:
     inputs:
         foo:
-            label: ""
             file:
-                paths:
-                    - aaa.txt
-                codec: lines
-                max_buffer: 1000000
-                delete_on_finish: false
-    prefix: ""`,
+                paths: [aaa.txt]`,
 				},
 				{
 					typeStr: "input",
 					name:    "file",
-					conf: `label: ""
-file:
-    paths:
-        - aaa.txt
-    codec: lines
-    max_buffer: 1000000
-    delete_on_finish: false`,
+					conf: `file:
+    paths: [aaa.txt]`,
 				},
 				{
 					typeStr: "buffer",
@@ -895,8 +874,7 @@ file:
 					typeStr: "output",
 					name:    "stdout",
 					conf: `label: ""
-stdout:
-    codec: lines`,
+stdout: {}`,
 				},
 				{
 					typeStr: "metrics",
@@ -969,8 +947,7 @@ output:
           bloblang: ""`,
 		`
         - label: ""
-          jmespath:
-            query: ""`,
+          jmespath: {}`,
 		`output:
     label: ""
     drop:`,
@@ -1205,4 +1182,140 @@ logger:
 
 		require.NoError(b, strm.Run(context.Background()))
 	}
+}
+
+func TestStreamBuilderLargeNestingSmoke(t *testing.T) {
+	b := service.NewStreamBuilder()
+	require.NoError(t, b.SetYAML(`
+input:
+  label: ibroker0
+  broker:
+    inputs:
+      - label: ifoo
+        generate:
+          count: 1
+          interval: 1ms
+          mapping: 'root = "ifoo: " + counter().string()'
+        processors:
+          - mutation: 'root = content().string() + " pfoo0"'
+          - mutation: 'root = content().string() + " pfoo1"'
+      - label: ibroker1
+        broker:
+          inputs:
+            - label: ibar
+              generate:
+                count: 1
+                interval: 1ms
+                mapping: 'root = "ibar: " + counter().string()'
+              processors:
+                - mutation: 'root = content().string() + " pbar0"'
+            - label: ibaz
+              generate:
+                count: 1
+                interval: 1ms
+                mapping: 'root = "ibaz: " + counter().string()'
+              processors:
+                - mutation: 'root = content().string() + " pbaz0"'
+        processors:
+          - mutation: 'root = content().string() + " pibroker10"'
+  processors:
+    - mutation: 'root = content().string() + " pibroker00"'
+
+pipeline:
+  processors:
+    - try:
+      - mutation: 'root = content().string() + " pquack0"'
+      - for_each:
+        - mutation: 'root = content().string() + " pwoof0"'
+
+output:
+  label: obroker0
+  broker:
+    outputs:
+      - label: ofoo
+        drop: {}
+        processors:
+          - mutation: 'root = content().string() + " pofoo0"'
+      - label: obroker1
+        broker:
+          outputs:
+            - label: obar
+              drop: {}
+            - label: obaz
+              drop: {}
+              processors:
+                - mutation: 'root = content().string() + " pobaz0"'
+        processors:
+          - mutation: 'root = content().string() + " pobroker10"'
+  processors:
+    - mutation: 'root = content().string() + " pobroker00"'
+`))
+
+	strm, tracSum, err := b.BuildTraced()
+	require.NoError(t, err)
+
+	tCtx, done := context.WithTimeout(context.Background(), time.Second)
+	defer done()
+	require.NoError(t, strm.Run(tCtx))
+
+	eventKeys := map[string]map[string]struct{}{}
+	for k, v := range tracSum.InputEvents() {
+		eMap := map[string]struct{}{}
+		for _, e := range v {
+			eMap[e.Content] = struct{}{}
+		}
+		eventKeys[k] = eMap
+	}
+
+	assert.Equal(t, map[string]map[string]struct{}{
+		"ifoo": {"ifoo: 1 pfoo0 pfoo1": struct{}{}},
+		"ibar": {"ibar: 1 pbar0": struct{}{}},
+		"ibaz": {"ibaz: 1 pbaz0": struct{}{}},
+		"ibroker0": {
+			"ifoo: 1 pfoo0 pfoo1 pibroker00":      struct{}{},
+			"ibar: 1 pbar0 pibroker10 pibroker00": struct{}{},
+			"ibaz: 1 pbaz0 pibroker10 pibroker00": struct{}{},
+		},
+		"ibroker1": {
+			"ibar: 1 pbar0 pibroker10": struct{}{},
+			"ibaz: 1 pbaz0 pibroker10": struct{}{},
+		},
+	}, eventKeys)
+
+	eventKeys = map[string]map[string]struct{}{}
+	for k, v := range tracSum.OutputEvents() {
+		eMap := map[string]struct{}{}
+		for _, e := range v {
+			eMap[e.Content] = struct{}{}
+		}
+		eventKeys[k] = eMap
+	}
+
+	assert.Equal(t, map[string]map[string]struct{}{
+		"ofoo": {
+			"ifoo: 1 pfoo0 pfoo1 pibroker00 pquack0 pwoof0 pobroker00 pofoo0":      struct{}{},
+			"ibar: 1 pbar0 pibroker10 pibroker00 pquack0 pwoof0 pobroker00 pofoo0": struct{}{},
+			"ibaz: 1 pbaz0 pibroker10 pibroker00 pquack0 pwoof0 pobroker00 pofoo0": struct{}{},
+		},
+		"obar": {
+			"ifoo: 1 pfoo0 pfoo1 pibroker00 pquack0 pwoof0 pobroker00 pobroker10":      struct{}{},
+			"ibar: 1 pbar0 pibroker10 pibroker00 pquack0 pwoof0 pobroker00 pobroker10": struct{}{},
+			"ibaz: 1 pbaz0 pibroker10 pibroker00 pquack0 pwoof0 pobroker00 pobroker10": struct{}{},
+		},
+		"obaz": {
+			"ifoo: 1 pfoo0 pfoo1 pibroker00 pquack0 pwoof0 pobroker00 pobroker10 pobaz0":      struct{}{},
+			"ibar: 1 pbar0 pibroker10 pibroker00 pquack0 pwoof0 pobroker00 pobroker10 pobaz0": struct{}{},
+			"ibaz: 1 pbaz0 pibroker10 pibroker00 pquack0 pwoof0 pobroker00 pobroker10 pobaz0": struct{}{},
+		},
+		"obroker0": {
+			"ifoo: 1 pfoo0 pfoo1 pibroker00 pquack0 pwoof0 pobroker00":      struct{}{},
+			"ibar: 1 pbar0 pibroker10 pibroker00 pquack0 pwoof0 pobroker00": struct{}{},
+			"ibaz: 1 pbaz0 pibroker10 pibroker00 pquack0 pwoof0 pobroker00": struct{}{},
+		},
+		"obroker1": {
+			"ifoo: 1 pfoo0 pfoo1 pibroker00 pquack0 pwoof0 pobroker00 pobroker10":      struct{}{},
+			"ibar: 1 pbar0 pibroker10 pibroker00 pquack0 pwoof0 pobroker00 pobroker10": struct{}{},
+			"ibaz: 1 pbaz0 pibroker10 pibroker00 pquack0 pwoof0 pobroker00 pobroker10": struct{}{},
+		},
+	}, eventKeys)
 }

@@ -7,10 +7,10 @@ import (
 	"time"
 
 	"github.com/aws/aws-lambda-go/lambda"
-	"gopkg.in/yaml.v3"
 
-	"github.com/benthosdev/benthos/v4/internal/component/output"
+	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/config"
+	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/filepath/ifs"
 	"github.com/benthosdev/benthos/v4/internal/serverless"
 )
@@ -32,22 +32,11 @@ func Run() {
 		defaultPaths = append([]string{path}, defaultPaths...)
 	}
 
-	conf := config.New()
-	conf.Metrics.Type = "none"
-	conf.Logger.Format = "json"
-
-	conf.Output.Type = "switch"
-	conf.Output.Switch.RetryUntilSuccess = false
-
-	errorCase := output.NewSwitchConfigCase()
-	errorCase.Check = "errored()"
-	errorCase.Output.Type = "reject"
-	errorCase.Output.Reject = "processing failed due to: ${! error() }"
-
-	responseCase := output.NewSwitchConfigCase()
-	responseCase.Output.Type = "sync_response"
-
-	conf.Output.Switch.Cases = append(conf.Output.Switch.Cases, errorCase, responseCase)
+	conf, confSpec, err := DefaultConfigAndSpec()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Configuration file create error: %v\n", err)
+		os.Exit(1)
+	}
 
 	if confStr := os.Getenv("BENTHOS_CONFIG"); len(confStr) > 0 {
 		confBytes, err := config.ReplaceEnvVariables([]byte(confStr), os.LookupEnv)
@@ -62,7 +51,21 @@ func Run() {
 				os.Exit(1)
 			}
 		}
-		if err := yaml.Unmarshal(confBytes, &conf); err != nil {
+
+		confNode, err := docs.UnmarshalYAML(confBytes)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Configuration file parse error: %v\n", err)
+			os.Exit(1)
+		}
+
+		pConf, err := confSpec.ParsedConfigFromAny(confNode)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Configuration file parse error: %v\n", err)
+			os.Exit(1)
+		}
+
+		conf, err = config.FromParsed(bundle.GlobalEnvironment, pConf, nil)
+		if err != nil {
 			fmt.Fprintf(os.Stderr, "Configuration file read error: %v\n", err)
 			os.Exit(1)
 		}
@@ -70,7 +73,8 @@ func Run() {
 		// Iterate default config paths
 		for _, path := range defaultPaths {
 			if _, err := ifs.OS().Stat(path); err == nil {
-				if _, err = config.ReadFileLinted(ifs.OS(), path, config.LintOptions{}, &conf); err != nil {
+				conf, _, err = config.ReadYAMLFileLinted(ifs.OS(), confSpec, path, false, docs.NewLintConfig(bundle.GlobalEnvironment))
+				if err != nil {
 					fmt.Fprintf(os.Stderr, "Configuration file read error: %v\n", err)
 					os.Exit(1)
 				}
@@ -79,7 +83,6 @@ func Run() {
 		}
 	}
 
-	var err error
 	if handler, err = serverless.NewHandler(conf); err != nil {
 		fmt.Fprintf(os.Stderr, "Initialisation error: %v\n", err)
 		os.Exit(1)

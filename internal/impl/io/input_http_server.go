@@ -17,69 +17,185 @@ import (
 	"sync"
 	"time"
 
-	"github.com/klauspost/compress/gzip"
-
 	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
+	"github.com/klauspost/compress/gzip"
 
-	"github.com/benthosdev/benthos/v4/internal/bloblang/field"
+	"github.com/benthosdev/benthos/v4/internal/api"
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component/input"
-	"github.com/benthosdev/benthos/v4/internal/component/input/processors"
+	"github.com/benthosdev/benthos/v4/internal/component/interop"
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/internal/component/ratelimit"
-	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/httpserver"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	imetadata "github.com/benthosdev/benthos/v4/internal/metadata"
 	"github.com/benthosdev/benthos/v4/internal/old/util/throttle"
 	"github.com/benthosdev/benthos/v4/internal/shutdown"
 	"github.com/benthosdev/benthos/v4/internal/tracing"
 	"github.com/benthosdev/benthos/v4/internal/transaction"
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
-func init() {
+const (
+	hsiFieldAddress                 = "address"
+	hsiFieldPath                    = "path"
+	hsiFieldWSPath                  = "ws_path"
+	hsiFieldWSWelcomeMessage        = "ws_welcome_message"
+	hsiFieldWSRateLimitMessage      = "ws_rate_limit_message"
+	hsiFieldAllowedVerbs            = "allowed_verbs"
+	hsiFieldTimeout                 = "timeout"
+	hsiFieldRateLimit               = "rate_limit"
+	hsiFieldCertFile                = "cert_file"
+	hsiFieldKeyFile                 = "key_file"
+	hsiFieldCORS                    = "cors"
+	hsiFieldCORSEnabled             = "enabled"
+	hsiFieldCORSAllowedOrigins      = "allowed_origins"
+	hsiFieldResponse                = "sync_response"
+	hsiFieldResponseStatus          = "status"
+	hsiFieldResponseHeaders         = "headers"
+	hsiFieldResponseExtractMetadata = "metadata_headers"
+)
+
+type hsiConfig struct {
+	Address            string
+	Path               string
+	WSPath             string
+	WSWelcomeMessage   string
+	WSRateLimitMessage string
+	AllowedVerbs       map[string]struct{}
+	Timeout            time.Duration
+	RateLimit          string
+	CertFile           string
+	KeyFile            string
+	CORS               httpserver.CORSConfig
+	Response           hsiResponseConfig
+}
+
+type hsiResponseConfig struct {
+	Status          *service.InterpolatedString
+	Headers         map[string]*service.InterpolatedString
+	ExtractMetadata *service.MetadataFilter
+}
+
+func hsiConfigFromParsed(pConf *service.ParsedConfig) (conf hsiConfig, err error) {
+	if conf.Address, err = pConf.FieldString(hsiFieldAddress); err != nil {
+		return
+	}
+	if conf.Path, err = pConf.FieldString(hsiFieldPath); err != nil {
+		return
+	}
+	if conf.WSPath, err = pConf.FieldString(hsiFieldWSPath); err != nil {
+		return
+	}
+	if conf.WSWelcomeMessage, err = pConf.FieldString(hsiFieldWSWelcomeMessage); err != nil {
+		return
+	}
+	if conf.WSRateLimitMessage, err = pConf.FieldString(hsiFieldWSRateLimitMessage); err != nil {
+		return
+	}
+	{
+		var verbsList []string
+		if verbsList, err = pConf.FieldStringList(hsiFieldAllowedVerbs); err != nil {
+			return
+		}
+		if len(verbsList) == 0 {
+			err = errors.New("must specify at least one allowed verb")
+			return
+		}
+		conf.AllowedVerbs = map[string]struct{}{}
+		for _, v := range verbsList {
+			conf.AllowedVerbs[v] = struct{}{}
+		}
+	}
+	if conf.Timeout, err = pConf.FieldDuration(hsiFieldTimeout); err != nil {
+		return
+	}
+	if conf.RateLimit, err = pConf.FieldString(hsiFieldRateLimit); err != nil {
+		return
+	}
+	if conf.CertFile, err = pConf.FieldString(hsiFieldCertFile); err != nil {
+		return
+	}
+	if conf.KeyFile, err = pConf.FieldString(hsiFieldKeyFile); err != nil {
+		return
+	}
+	if conf.CORS, err = corsConfigFromParsed(pConf.Namespace(hsiFieldCORS)); err != nil {
+		return
+	}
+	if conf.Response, err = hsiResponseConfigFromParsed(pConf.Namespace(hsiFieldResponse)); err != nil {
+		return
+	}
+	return
+}
+
+func corsConfigFromParsed(pConf *service.ParsedConfig) (conf httpserver.CORSConfig, err error) {
+	if conf.Enabled, err = pConf.FieldBool(hsiFieldCORSEnabled); err != nil {
+		return
+	}
+	if conf.AllowedOrigins, err = pConf.FieldStringList(hsiFieldCORSAllowedOrigins); err != nil {
+		return
+	}
+	return
+}
+
+func hsiResponseConfigFromParsed(pConf *service.ParsedConfig) (conf hsiResponseConfig, err error) {
+	if conf.Status, err = pConf.FieldInterpolatedString(hsiFieldResponseStatus); err != nil {
+		return
+	}
+	if conf.Headers, err = pConf.FieldInterpolatedStringMap(hsiFieldResponseHeaders); err != nil {
+		return
+	}
+	if conf.ExtractMetadata, err = pConf.FieldMetadataFilter(hsiFieldResponseExtractMetadata); err != nil {
+		return
+	}
+	return
+}
+
+func hsiSpec() *service.ConfigSpec {
 	corsSpec := httpserver.ServerCORSFieldSpec()
 	corsSpec.Description += " Only valid with a custom `address`."
 
-	err := bundle.AllInputs.Add(processors.WrapConstructor(newHTTPServerInput), docs.ComponentSpec{
-		Name:    "http_server",
-		Summary: `Receive messages POSTed over HTTP(S). HTTP 2.0 is supported when using TLS, which is enabled when key and cert files are specified.`,
-		Description: `
-If the ` + "`address`" + ` config field is left blank the [service-wide HTTP server](/docs/components/http/about) will be used.
+	return service.NewConfigSpec().
+		Stable().
+		Categories("Network").
+		Summary(`Receive messages POSTed over HTTP(S). HTTP 2.0 is supported when using TLS, which is enabled when key and cert files are specified.`).
+		Description(`
+If the `+"`address`"+` config field is left blank the [service-wide HTTP server](/docs/components/http/about) will be used.
 
-The field ` + "`rate_limit`" + ` allows you to specify an optional ` + "[`rate_limit` resource](/docs/components/rate_limits/about)" + `, which will be applied to each HTTP request made and each websocket payload received.
+The field `+"`rate_limit`"+` allows you to specify an optional `+"[`rate_limit` resource](/docs/components/rate_limits/about)"+`, which will be applied to each HTTP request made and each websocket payload received.
 
-When the rate limit is breached HTTP requests will have a 429 response returned with a Retry-After header. Websocket payloads will be dropped and an optional response payload will be sent as per ` + "`ws_rate_limit_message`" + `.
+When the rate limit is breached HTTP requests will have a 429 response returned with a Retry-After header. Websocket payloads will be dropped and an optional response payload will be sent as per `+"`ws_rate_limit_message`"+`.
 
 ### Responses
 
-It's possible to return a response for each message received using [synchronous responses](/docs/guides/sync_responses). When doing so you can customise headers with the ` + "`sync_response` field `headers`" + `, which can also use [function interpolation](/docs/configuration/interpolation#bloblang-queries) in the value based on the response message contents.
+It's possible to return a response for each message received using [synchronous responses](/docs/guides/sync_responses). When doing so you can customise headers with the `+"`sync_response` field `headers`"+`, which can also use [function interpolation](/docs/configuration/interpolation#bloblang-queries) in the value based on the response message contents.
 
 ### Endpoints
 
-The following fields specify endpoints that are registered for sending messages, and support path parameters of the form ` + "`/{foo}`" + `, which are added to ingested messages as metadata:
+The following fields specify endpoints that are registered for sending messages, and support path parameters of the form `+"`/{foo}`"+`, which are added to ingested messages as metadata. A path ending in `+"`/`"+` will match against all extensions of that path:
 
-#### ` + "`path` (defaults to `/post`)" + `
+#### `+"`path` (defaults to `/post`)"+`
 
 This endpoint expects POST requests where the entire request body is consumed as a single message.
 
-If the request contains a multipart ` + "`content-type`" + ` header as per [rfc1341](https://www.w3.org/Protocols/rfc1341/7_2_Multipart.html) then the multiple parts are consumed as a batch of messages, where each body part is a message of the batch.
+If the request contains a multipart `+"`content-type`"+` header as per [rfc1341](https://www.w3.org/Protocols/rfc1341/7_2_Multipart.html) then the multiple parts are consumed as a batch of messages, where each body part is a message of the batch.
 
-#### ` + "`ws_path` (defaults to `/post/ws`)" + `
+#### `+"`ws_path` (defaults to `/post/ws`)"+`
 
 Creates a websocket connection, where payloads received on the socket are passed through the pipeline as a batch of one message.
 
-You may specify an optional ` + "`ws_welcome_message`" + `, which is a static payload to be sent to all clients once a websocket connection is first established.
+`+api.EndpointCaveats()+`
 
-It's also possible to specify a ` + "`ws_rate_limit_message`" + `, which is a static payload to be sent to clients that have triggered the servers rate limit.
+You may specify an optional `+"`ws_welcome_message`"+`, which is a static payload to be sent to all clients once a websocket connection is first established.
+
+It's also possible to specify a `+"`ws_rate_limit_message`"+`, which is a static payload to be sent to clients that have triggered the servers rate limit.
 
 ### Metadata
 
 This input adds the following metadata fields to each message:
 
-` + "``` text" + `
+`+"``` text"+`
 - http_server_user_agent
 - http_server_request_path
 - http_server_verb
@@ -88,44 +204,91 @@ This input adds the following metadata fields to each message:
 - All query parameters
 - All path parameters
 - All cookies
-` + "```" + `
+`+"```"+`
+
 If HTTPS is enabled, the following fields are added as well:
-` + "``` text" + `
+`+"``` text"+`
 - http_server_tls_version
 - http_server_tls_subject
 - http_server_tls_cipher_suite
-` + "```" + `
-You can access these metadata fields using [function interpolation](/docs/configuration/interpolation#bloblang-queries).`,
-		Config: docs.FieldComponent().WithChildren(
-			docs.FieldString("address", "An alternative address to host from. If left empty the service wide address is used."),
-			docs.FieldString("path", "The endpoint path to listen for POST requests."),
-			docs.FieldString("ws_path", "The endpoint path to create websocket connections from."),
-			docs.FieldString("ws_welcome_message", "An optional message to deliver to fresh websocket connections.").Advanced(),
-			docs.FieldString("ws_rate_limit_message", "An optional message to delivery to websocket connections that are rate limited.").Advanced(),
-			docs.FieldString("allowed_verbs", "An array of verbs that are allowed for the `path` endpoint.").AtVersion("3.33.0").Array(),
-			docs.FieldString("timeout", "Timeout for requests. If a consumed messages takes longer than this to be delivered the connection is closed, but the message may still be delivered."),
-			docs.FieldString("rate_limit", "An optional [rate limit](/docs/components/rate_limits/about) to throttle requests by."),
-			docs.FieldString("cert_file", "Enable TLS by specifying a certificate and key file. Only valid with a custom `address`.").Advanced(),
-			docs.FieldString("key_file", "Enable TLS by specifying a certificate and key file. Only valid with a custom `address`.").Advanced(),
-			corsSpec,
-			docs.FieldObject("sync_response", "Customise messages returned via [synchronous responses](/docs/guides/sync_responses).").WithChildren(
-				docs.FieldString(
-					"status",
-					"Specify the status code to return with synchronous responses. This is a string value, which allows you to customize it based on resulting payloads and their metadata.",
-					"200", `${! json("status") }`, `${! meta("status") }`,
-				).IsInterpolated(),
-				docs.FieldString("headers", "Specify headers to return with synchronous responses.").
-					IsInterpolated().Map().
-					HasDefault(map[string]string{
+`+"```"+`
+
+You can access these metadata fields using [function interpolation](/docs/configuration/interpolation#bloblang-queries).`).
+		Fields(
+			service.NewStringField(hsiFieldAddress).
+				Description("An alternative address to host from. If left empty the service wide address is used.").
+				Default(""),
+			service.NewStringField(hsiFieldPath).
+				Description("The endpoint path to listen for POST requests.").
+				Default("/post"),
+			service.NewStringField(hsiFieldWSPath).
+				Description("The endpoint path to create websocket connections from.").
+				Default("/post/ws"),
+			service.NewStringField(hsiFieldWSWelcomeMessage).
+				Description("An optional message to deliver to fresh websocket connections.").
+				Advanced().
+				Default(""),
+			service.NewStringField(hsiFieldWSRateLimitMessage).
+				Description("An optional message to delivery to websocket connections that are rate limited.").
+				Advanced().
+				Default(""),
+			service.NewStringListField(hsiFieldAllowedVerbs).
+				Description("An array of verbs that are allowed for the `path` endpoint.").
+				Version("3.33.0").
+				Default([]any{"POST"}),
+			service.NewDurationField(hsiFieldTimeout).
+				Description("Timeout for requests. If a consumed messages takes longer than this to be delivered the connection is closed, but the message may still be delivered.").
+				Default("5s"),
+			service.NewStringField(hsiFieldRateLimit).
+				Description("An optional [rate limit](/docs/components/rate_limits/about) to throttle requests by.").
+				Default(""),
+			service.NewStringField(hsiFieldCertFile).
+				Description("Enable TLS by specifying a certificate and key file. Only valid with a custom `address`.").
+				Advanced().
+				Default(""),
+			service.NewStringField(hsiFieldKeyFile).
+				Description("Enable TLS by specifying a certificate and key file. Only valid with a custom `address`.").
+				Advanced().
+				Default(""),
+			service.NewInternalField(corsSpec),
+			service.NewObjectField(hsiFieldResponse,
+				service.NewInterpolatedStringField(hsiFieldResponseStatus).
+					Description("Specify the status code to return with synchronous responses. This is a string value, which allows you to customize it based on resulting payloads and their metadata.").
+					Examples(`${! json("status") }`, `${! meta("status") }`).
+					Default("200"),
+				service.NewInterpolatedStringMapField(hsiFieldResponseHeaders).
+					Description("Specify headers to return with synchronous responses.").
+					Default(map[string]any{
 						"Content-Type": "application/octet-stream",
 					}),
-				docs.FieldObject("metadata_headers", "Specify criteria for which metadata values are added to the response as headers.").WithChildren(imetadata.IncludeFilterDocs()...),
-			).Advanced(),
-		).ChildDefaultAndTypesFromStruct(input.NewHTTPServerConfig()),
-		Categories: []string{
-			"Network",
-		},
-	})
+				service.NewMetadataFilterField(hsiFieldResponseExtractMetadata).
+					Description("Specify criteria for which metadata values are added to the response as headers."),
+			).
+				Description("Customise messages returned via [synchronous responses](/docs/guides/sync_responses).").
+				Advanced(),
+		)
+}
+
+func init() {
+	err := service.RegisterBatchInput(
+		"http_server", hsiSpec(),
+		func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchInput, error) {
+			hsiConf, err := hsiConfigFromParsed(conf)
+			if err != nil {
+				return nil, err
+			}
+
+			// TODO: If we refactor this input to implement ReadBatch then we
+			// can return a proper service.BatchInput implementation.
+
+			oldMgr := interop.UnwrapManagement(mgr)
+			i, err := newHTTPServerInput(hsiConf, oldMgr)
+			if err != nil {
+				return nil, err
+			}
+
+			return interop.NewUnwrapInternalInput(i), nil
+		})
 	if err != nil {
 		panic(err)
 	}
@@ -134,98 +297,59 @@ You can access these metadata fields using [function interpolation](/docs/config
 //------------------------------------------------------------------------------
 
 type httpServerInput struct {
-	conf input.HTTPServerConfig
+	conf hsiConfig
 	log  log.Modular
 	mgr  bundle.NewManagement
 
-	mux     *mux.Router
-	server  *http.Server
-	timeout time.Duration
-
-	responseStatus  *field.Expression
-	responseHeaders map[string]*field.Expression
-	metaFilter      *imetadata.IncludeFilter
+	mux    *mux.Router
+	server *http.Server
 
 	handlerWG    sync.WaitGroup
 	transactions chan message.Transaction
 
 	shutSig *shutdown.Signaller
 
-	allowedVerbs map[string]struct{}
-
 	mPostRcvd metrics.StatCounter
 	mWSRcvd   metrics.StatCounter
 	mLatency  metrics.StatTimer
 }
 
-func newHTTPServerInput(conf input.Config, mgr bundle.NewManagement) (input.Streamed, error) {
+func newHTTPServerInput(conf hsiConfig, mgr bundle.NewManagement) (input.Streamed, error) {
 	var gMux *mux.Router
 	var server *http.Server
 
 	var err error
-	if len(conf.HTTPServer.Address) > 0 {
+	if len(conf.Address) > 0 {
 		gMux = mux.NewRouter()
-		server = &http.Server{Addr: conf.HTTPServer.Address}
-		if server.Handler, err = conf.HTTPServer.CORS.WrapHandler(gMux); err != nil {
+		server = &http.Server{Addr: conf.Address}
+		if server.Handler, err = conf.CORS.WrapHandler(gMux); err != nil {
 			return nil, fmt.Errorf("bad CORS configuration: %w", err)
 		}
 	}
 
-	var timeout time.Duration
-	if len(conf.HTTPServer.Timeout) > 0 {
-		if timeout, err = time.ParseDuration(conf.HTTPServer.Timeout); err != nil {
-			return nil, fmt.Errorf("failed to parse timeout string: %v", err)
-		}
-	}
-
-	verbs := map[string]struct{}{}
-	for _, v := range conf.HTTPServer.AllowedVerbs {
-		verbs[v] = struct{}{}
-	}
-	if len(verbs) == 0 {
-		return nil, errors.New("must provide at least one allowed verb")
-	}
-
 	mRcvd := mgr.Metrics().GetCounter("input_received")
 	h := httpServerInput{
-		shutSig:         shutdown.NewSignaller(),
-		conf:            conf.HTTPServer,
-		log:             mgr.Logger(),
-		mgr:             mgr,
-		mux:             gMux,
-		server:          server,
-		timeout:         timeout,
-		responseHeaders: map[string]*field.Expression{},
-		transactions:    make(chan message.Transaction),
-
-		allowedVerbs: verbs,
+		shutSig:      shutdown.NewSignaller(),
+		conf:         conf,
+		log:          mgr.Logger(),
+		mgr:          mgr,
+		mux:          gMux,
+		server:       server,
+		transactions: make(chan message.Transaction),
 
 		mLatency:  mgr.Metrics().GetTimer("input_latency_ns"),
 		mWSRcvd:   mRcvd,
 		mPostRcvd: mRcvd,
 	}
 
-	if h.responseStatus, err = mgr.BloblEnvironment().NewField(h.conf.Response.Status); err != nil {
-		return nil, fmt.Errorf("failed to parse response status expression: %v", err)
-	}
-	for k, v := range h.conf.Response.Headers {
-		if h.responseHeaders[strings.ToLower(k)], err = mgr.BloblEnvironment().NewField(v); err != nil {
-			return nil, fmt.Errorf("failed to parse response header '%v' expression: %v", k, err)
-		}
-	}
-
-	if h.metaFilter, err = h.conf.Response.ExtractMetadata.CreateFilter(); err != nil {
-		return nil, fmt.Errorf("failed to construct metadata filter: %w", err)
-	}
-
 	postHdlr := gzipHandler(h.postHandler)
 	wsHdlr := gzipHandler(h.wsHandler)
 	if gMux != nil {
 		if len(h.conf.Path) > 0 {
-			gMux.PathPrefix(h.conf.Path).Handler(postHdlr)
+			api.GetMuxRoute(gMux, h.conf.Path).Handler(postHdlr)
 		}
 		if len(h.conf.WSPath) > 0 {
-			gMux.PathPrefix(h.conf.WSPath).Handler(wsHdlr)
+			api.GetMuxRoute(gMux, h.conf.WSPath).Handler(wsHdlr)
 		}
 	} else {
 		if len(h.conf.Path) > 0 {
@@ -346,11 +470,16 @@ func (h *httpServerInput) extractMessageFromRequest(r *http.Request) (message.Ba
 }
 
 func (h *httpServerInput) postHandler(w http.ResponseWriter, r *http.Request) {
+	if h.shutSig.ShouldCloseAtLeisure() {
+		http.Error(w, "Server closing", http.StatusServiceUnavailable)
+		return
+	}
+
 	h.handlerWG.Add(1)
 	defer h.handlerWG.Done()
 	defer r.Body.Close()
 
-	if _, exists := h.allowedVerbs[r.Method]; !exists {
+	if _, exists := h.conf.AllowedVerbs[r.Method]; !exists {
 		http.Error(w, "Incorrect method", http.StatusMethodNotAllowed)
 		return
 	}
@@ -362,12 +491,12 @@ func (h *httpServerInput) postHandler(w http.ResponseWriter, r *http.Request) {
 			tUntil, err = rl.Access(r.Context())
 		}); rerr != nil {
 			http.Error(w, "Server error", http.StatusBadGateway)
-			h.log.Warnf("Failed to access rate limit: %v\n", rerr)
+			h.log.Warn("Failed to access rate limit: %v\n", rerr)
 			return
 		}
 		if err != nil {
 			http.Error(w, "Server error", http.StatusBadGateway)
-			h.log.Warnf("Failed to access rate limit: %v\n", err)
+			h.log.Warn("Failed to access rate limit: %v\n", err)
 			return
 		} else if tUntil > 0 {
 			w.Header().Add("Retry-After", strconv.Itoa(int(tUntil.Seconds())))
@@ -379,7 +508,7 @@ func (h *httpServerInput) postHandler(w http.ResponseWriter, r *http.Request) {
 	msg, err := h.extractMessageFromRequest(r)
 	if err != nil {
 		http.Error(w, "Bad request", http.StatusBadRequest)
-		h.log.Warnf("Request read failed: %v\n", err)
+		h.log.Warn("Request read failed: %v\n", err)
 		return
 	}
 	defer tracing.FinishSpans(msg)
@@ -390,12 +519,12 @@ func (h *httpServerInput) postHandler(w http.ResponseWriter, r *http.Request) {
 	transaction.AddResultStore(msg, store)
 
 	h.mPostRcvd.Incr(int64(msg.Len()))
-	h.log.Tracef("Consumed %v messages from POST to '%v'.\n", msg.Len(), h.conf.Path)
+	h.log.Trace("Consumed %v messages from POST to '%v'.\n", msg.Len(), h.conf.Path)
 
 	resChan := make(chan error, 1)
 	select {
 	case h.transactions <- message.NewTransaction(msg, resChan):
-	case <-time.After(h.timeout):
+	case <-time.After(h.conf.Timeout):
 		http.Error(w, "Request timed out", http.StatusRequestTimeout)
 		return
 	case <-r.Context().Done():
@@ -417,7 +546,7 @@ func (h *httpServerInput) postHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		tTaken := time.Since(startedAt).Nanoseconds()
 		h.mLatency.Timing(tTaken)
-	case <-time.After(h.timeout):
+	case <-time.After(h.conf.Timeout):
 		http.Error(w, "Request timed out", http.StatusRequestTimeout)
 		return
 	case <-r.Context().Done():
@@ -428,70 +557,78 @@ func (h *httpServerInput) postHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	responseMsg := message.QuickBatch(nil)
+	var svcBatch service.MessageBatch
 	for _, resMsg := range store.Get() {
-		_ = resMsg.Iter(func(i int, part *message.Part) error {
-			responseMsg = append(responseMsg, part)
-			return nil
-		})
+		for i := 0; i < len(resMsg); i++ {
+			svcBatch = append(svcBatch, service.NewInternalMessage(resMsg[i]))
+		}
 	}
-	if responseMsg.Len() > 0 {
-		for k, v := range h.responseHeaders {
-			headerStr, err := v.String(0, responseMsg)
+	if len(svcBatch) > 0 {
+		for k, v := range h.conf.Response.Headers {
+			headerStr, err := svcBatch.TryInterpolatedString(0, v)
 			if err != nil {
-				h.log.Errorf("Interpolation of response header %v error: %v", k, err)
+				h.log.Error("Interpolation of response header %v error: %v", k, err)
 				continue
 			}
 			w.Header().Set(k, headerStr)
 		}
 
 		statusCode := 200
-		statusCodeStr, err := h.responseStatus.String(0, responseMsg)
+		statusCodeStr, err := svcBatch.TryInterpolatedString(0, h.conf.Response.Status)
 		if err != nil {
-			h.log.Errorf("Interpolation of response status code error: %v", err)
+			h.log.Error("Interpolation of response status code error: %v", err)
 			w.WriteHeader(http.StatusBadGateway)
 			return
 		}
 		if statusCodeStr != "200" {
 			if statusCode, err = strconv.Atoi(statusCodeStr); err != nil {
-				h.log.Errorf("Failed to parse sync response status code expression: %v\n", err)
+				h.log.Error("Failed to parse sync response status code expression: %v\n", err)
 				w.WriteHeader(http.StatusBadGateway)
 				return
 			}
 		}
 
-		if plen := responseMsg.Len(); plen == 1 {
-			part := responseMsg.Get(0)
-			_ = h.metaFilter.IterStr(part, func(k, v string) error {
+		if plen := len(svcBatch); plen == 1 {
+			part := svcBatch[0]
+			_ = h.conf.Response.ExtractMetadata.Walk(part, func(k, v string) error {
 				w.Header().Set(k, v)
 				return nil
 			})
-			payload := part.AsBytes()
+			payload, err := part.AsBytes()
+			if err != nil {
+				h.log.Error("Failed to extract message bytes for sync response: %v\n", err)
+				w.WriteHeader(http.StatusBadGateway)
+				return
+			}
 			if w.Header().Get("Content-Type") == "" {
 				w.Header().Set("Content-Type", http.DetectContentType(payload))
 			}
 			w.WriteHeader(statusCode)
 			_, _ = w.Write(payload)
 		} else if plen > 1 {
-			customContentType, customContentTypeExists := h.responseHeaders["content-type"]
+			customContentType, customContentTypeExists := h.conf.Response.Headers["content-type"]
 
 			var buf bytes.Buffer
 			writer := multipart.NewWriter(&buf)
 
 			var merr error
 			for i := 0; i < plen && merr == nil; i++ {
-				part := responseMsg.Get(i)
-				_ = h.metaFilter.IterStr(part, func(k, v string) error {
+				part := svcBatch[i]
+				_ = h.conf.Response.ExtractMetadata.Walk(part, func(k, v string) error {
 					w.Header().Set(k, v)
 					return nil
 				})
-				payload := part.AsBytes()
+				payload, err := part.AsBytes()
+				if err != nil {
+					h.log.Error("Failed to extract message bytes for sync response: %v\n", err)
+					continue
+				}
 
 				mimeHeader := textproto.MIMEHeader{}
 				if customContentTypeExists {
-					contentTypeStr, err := customContentType.String(i, responseMsg)
+					contentTypeStr, err := svcBatch.TryInterpolatedString(i, customContentType)
 					if err != nil {
-						h.log.Errorf("Interpolation of content-type header error: %v", err)
+						h.log.Error("Interpolation of content-type header error: %v", err)
 						mimeHeader.Set("Content-Type", http.DetectContentType(payload))
 					} else {
 						mimeHeader.Set("Content-Type", contentTypeStr)
@@ -513,7 +650,7 @@ func (h *httpServerInput) postHandler(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(statusCode)
 				_, _ = buf.WriteTo(w)
 			} else {
-				h.log.Errorf("Failed to return sync response: %v\n", merr)
+				h.log.Error("Failed to return sync response: %v\n", merr)
 				w.WriteHeader(http.StatusBadGateway)
 			}
 		}
@@ -521,6 +658,11 @@ func (h *httpServerInput) postHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *httpServerInput) wsHandler(w http.ResponseWriter, r *http.Request) {
+	if h.shutSig.ShouldCloseAtLeisure() {
+		http.Error(w, "Server closing", http.StatusServiceUnavailable)
+		return
+	}
+
 	h.handlerWG.Add(1)
 	defer h.handlerWG.Done()
 
@@ -528,7 +670,7 @@ func (h *httpServerInput) wsHandler(w http.ResponseWriter, r *http.Request) {
 	defer func() {
 		if err != nil {
 			http.Error(w, "Bad request", http.StatusBadRequest)
-			h.log.Warnf("Websocket request failed: %v\n", err)
+			h.log.Warn("Websocket request failed: %v\n", err)
 		}
 	}()
 
@@ -545,7 +687,7 @@ func (h *httpServerInput) wsHandler(w http.ResponseWriter, r *http.Request) {
 
 	if welMsg := h.conf.WSWelcomeMessage; len(welMsg) > 0 {
 		if err = ws.WriteMessage(websocket.BinaryMessage, []byte(welMsg)); err != nil {
-			h.log.Errorf("Failed to send welcome message: %v\n", err)
+			h.log.Error("Failed to send welcome message: %v\n", err)
 		}
 	}
 
@@ -563,16 +705,16 @@ func (h *httpServerInput) wsHandler(w http.ResponseWriter, r *http.Request) {
 			if rerr := h.mgr.AccessRateLimit(r.Context(), h.conf.RateLimit, func(rl ratelimit.V1) {
 				tUntil, err = rl.Access(r.Context())
 			}); rerr != nil {
-				h.log.Warnf("Failed to access rate limit: %v\n", rerr)
+				h.log.Warn("Failed to access rate limit: %v\n", rerr)
 				err = rerr
 			}
 			if err != nil || tUntil > 0 {
 				if err != nil {
-					h.log.Warnf("Failed to access rate limit: %v\n", err)
+					h.log.Warn("Failed to access rate limit: %v\n", err)
 				}
 				if rlMsg := h.conf.WSRateLimitMessage; len(rlMsg) > 0 {
 					if err = ws.WriteMessage(websocket.BinaryMessage, []byte(rlMsg)); err != nil {
-						h.log.Errorf("Failed to send rate limit message: %v\n", err)
+						h.log.Error("Failed to send rate limit message: %v\n", err)
 					}
 				}
 				continue
@@ -631,7 +773,7 @@ func (h *httpServerInput) wsHandler(w http.ResponseWriter, r *http.Request) {
 			if err := responseMsg.Iter(func(i int, part *message.Part) error {
 				return ws.WriteMessage(websocket.TextMessage, part.AsBytes())
 			}); err != nil {
-				h.log.Errorf("Failed to send sync response over websocket: %v\n", err)
+				h.log.Error("Failed to send sync response over websocket: %v\n", err)
 			}
 		}
 
@@ -645,15 +787,32 @@ func (h *httpServerInput) loop() {
 	defer func() {
 		if h.server != nil {
 			if err := h.server.Shutdown(context.Background()); err != nil {
-				h.log.Errorf("Failed to gracefully terminate http_server: %v\n", err)
+				h.log.Error("Failed to gracefully terminate http_server: %v\n", err)
 			}
 		} else {
-			if len(h.conf.Path) > 0 {
-				h.mgr.RegisterEndpoint(h.conf.Path, "Does nothing.", http.NotFound)
-			}
-			if len(h.conf.WSPath) > 0 {
-				h.mgr.RegisterEndpoint(h.conf.WSPath, "Does nothing.", http.NotFound)
-			}
+			// We are using the service-wide HTTP server. In order to prevent
+			// situations where a slow shutdown results in serving an abundance
+			// of 503 responses we wait until either the current requests are
+			// handled and shutdown can commence, or we've been instructed to
+			// close immediately, which prevents these requests from
+			// indefinitely blocking shutdown.
+			go func() {
+				select {
+				case <-h.shutSig.HasClosedChan():
+				case <-h.shutSig.CloseNowChan():
+				}
+
+				if len(h.conf.Path) > 0 {
+					h.mgr.RegisterEndpoint(h.conf.Path, "Endpoint disabled.", func(w http.ResponseWriter, r *http.Request) {
+						http.Error(w, "Service unavailable", http.StatusServiceUnavailable)
+					})
+				}
+				if len(h.conf.WSPath) > 0 {
+					h.mgr.RegisterEndpoint(h.conf.WSPath, "Endpoint disabled.", func(w http.ResponseWriter, r *http.Request) {
+						http.Error(w, "Service unavailable", http.StatusServiceUnavailable)
+					})
+				}
+			}()
 		}
 
 		h.handlerWG.Wait()
@@ -665,22 +824,22 @@ func (h *httpServerInput) loop() {
 	if h.server != nil {
 		go func() {
 			if len(h.conf.KeyFile) > 0 || len(h.conf.CertFile) > 0 {
-				h.log.Infof(
+				h.log.Info(
 					"Receiving HTTPS messages at: https://%s\n",
 					h.conf.Address+h.conf.Path,
 				)
 				if err := h.server.ListenAndServeTLS(
 					h.conf.CertFile, h.conf.KeyFile,
 				); err != http.ErrServerClosed {
-					h.log.Errorf("Server error: %v\n", err)
+					h.log.Error("Server error: %v\n", err)
 				}
 			} else {
-				h.log.Infof(
+				h.log.Info(
 					"Receiving HTTP messages at: http://%s\n",
 					h.conf.Address+h.conf.Path,
 				)
 				if err := h.server.ListenAndServe(); err != http.ErrServerClosed {
-					h.log.Errorf("Server error: %v\n", err)
+					h.log.Error("Server error: %v\n", err)
 				}
 			}
 		}()

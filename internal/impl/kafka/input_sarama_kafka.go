@@ -2,48 +2,58 @@ package kafka
 
 import (
 	"context"
-	"crypto/tls"
 	"errors"
-	"fmt"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/Shopify/sarama"
+	"github.com/IBM/sarama"
 
-	"github.com/benthosdev/benthos/v4/internal/batch/policy"
-	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/checkpoint"
-	"github.com/benthosdev/benthos/v4/internal/component"
-	"github.com/benthosdev/benthos/v4/internal/component/input"
-	"github.com/benthosdev/benthos/v4/internal/component/input/processors"
 	"github.com/benthosdev/benthos/v4/internal/component/input/span"
-	"github.com/benthosdev/benthos/v4/internal/component/metrics"
-	"github.com/benthosdev/benthos/v4/internal/docs"
-	"github.com/benthosdev/benthos/v4/internal/impl/kafka/sasl"
-	"github.com/benthosdev/benthos/v4/internal/log"
-	"github.com/benthosdev/benthos/v4/internal/message"
-	btls "github.com/benthosdev/benthos/v4/internal/tls"
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
-func init() {
-	err := bundle.AllInputs.Add(processors.WrapConstructor(func(c input.Config, nm bundle.NewManagement) (input.Streamed, error) {
-		return newKafkaInput(c, nm, nm.Logger(), nm.Metrics())
-	}), docs.ComponentSpec{
-		Name:    "kafka",
-		Summary: `Connects to Kafka brokers and consumes one or more topics.`,
-		Description: `
+const (
+	iskFieldAddresses                     = "addresses"
+	iskFieldTopics                        = "topics"
+	iskFieldTargetVersion                 = "target_version"
+	iskFieldTLS                           = "tls"
+	iskFieldConsumerGroup                 = "consumer_group"
+	iskFieldClientID                      = "client_id"
+	iskFieldRackID                        = "rack_id"
+	iskFieldStartFromOldest               = "start_from_oldest"
+	iskFieldCheckpointLimit               = "checkpoint_limit"
+	iskFieldCommitPeriod                  = "commit_period"
+	iskFieldMaxProcessingPeriod           = "max_processing_period"
+	iskFieldGroup                         = "group"
+	iskFieldGroupSessionTimeout           = "session_timeout"
+	iskFieldGroupSessionHeartbeatInterval = "heartbeat_interval"
+	iskFieldGroupSessionRebalanceTimeout  = "rebalance_timeout"
+	iskFieldFetchBufferCap                = "fetch_buffer_cap"
+	iskFieldMultiHeader                   = "multi_header"
+	iskFieldBatching                      = "batching"
+)
+
+func iskConfigSpec() *service.ConfigSpec {
+	return service.NewConfigSpec().
+		Stable().
+		Categories("Services").
+		Summary(`Connects to Kafka brokers and consumes one or more topics.`).
+		Description(`
 Offsets are managed within Kafka under the specified consumer group, and partitions for each topic are automatically balanced across members of the consumer group.
 
-The Kafka input allows parallel processing of messages from different topic partitions, but by default messages of the same topic partition are processed in lockstep in order to enforce ordered processing. This protection often means that batching messages at the output level can stall, in which case it can be tuned by increasing the field ` + "[`checkpoint_limit`](#checkpoint_limit)" + `, ideally to a value greater than the number of messages you expect to batch.
+The Kafka input allows parallel processing of messages from different topic partitions, and messages of the same topic partition are processed with a maximum parallelism determined by the field `+"[`checkpoint_limit`](#checkpoint_limit)"+`.
 
-Alternatively, if you perform batching at the input level using the ` + "[`batching`](#batching)" + ` field it is done per-partition and therefore avoids stalling.
+In order to enforce ordered processing of partition messages set the `+"[`checkpoint_limit`](#checkpoint_limit) to `1`"+` and this will force partitions to be processed in lock-step, where a message will only be processed once the prior message is delivered.
+
+Batching messages before processing can be enabled using the `+"[`batching`](#batching)"+` field, and this batching is performed per-partition such that messages of a batch will always originate from the same partition. This batching mechanism is capable of creating batches of greater size than the `+"[`checkpoint_limit`](#checkpoint_limit)"+`, in which case the next batch will only be created upon delivery of the current one.
 
 ### Metadata
 
 This input adds the following metadata fields to each message:
 
-` + "``` text" + `
+`+"``` text"+`
 - kafka_key
 - kafka_topic
 - kafka_partition
@@ -52,91 +62,110 @@ This input adds the following metadata fields to each message:
 - kafka_timestamp_unix
 - kafka_tombstone_message
 - All existing message headers (version 0.11+)
-` + "```" + `
+`+"```"+`
 
-The field ` + "`kafka_lag`" + ` is the calculated difference between the high water mark offset of the partition at the time of ingestion and the current message offset.
+The field `+"`kafka_lag`"+` is the calculated difference between the high water mark offset of the partition at the time of ingestion and the current message offset.
 
 You can access these metadata fields using [function interpolation](/docs/configuration/interpolation#bloblang-queries).
 
 ### Ordering
 
-By default messages of a topic partition can be processed in parallel, up to a limit determined by the field ` + "`checkpoint_limit`" + `. However, if strict ordered processing is required then this value must be set to 1 in order to process shard messages in lock-step. When doing so it is recommended that you perform batching at this component for performance as it will not be possible to batch lock-stepped messages at the output level.
+By default messages of a topic partition can be processed in parallel, up to a limit determined by the field `+"`checkpoint_limit`"+`. However, if strict ordered processing is required then this value must be set to 1 in order to process shard messages in lock-step. When doing so it is recommended that you perform batching at this component for performance as it will not be possible to batch lock-stepped messages at the output level.
 
 ### Troubleshooting
 
-If you're seeing issues writing to or reading from Kafka with this component then it's worth trying out the newer ` + "[`kafka_franz` input](/docs/components/inputs/kafka_franz)" + `.
+If you're seeing issues writing to or reading from Kafka with this component then it's worth trying out the newer `+"[`kafka_franz` input](/docs/components/inputs/kafka_franz)"+`.
 
-- I'm seeing logs that report ` + "`Failed to connect to kafka: kafka: client has run out of available brokers to talk to (Is your cluster reachable?)`" + `, but the brokers are definitely reachable.
+- I'm seeing logs that report `+"`Failed to connect to kafka: kafka: client has run out of available brokers to talk to (Is your cluster reachable?)`"+`, but the brokers are definitely reachable.
 
-Unfortunately this error message will appear for a wide range of connection problems even when the broker endpoint can be reached. Double check your authentication configuration and also ensure that you have [enabled TLS](#tlsenabled) if applicable.`,
-		Config: docs.FieldComponent().WithChildren(
-			docs.FieldString(
-				"addresses", "A list of broker addresses to connect to. If an item of the list contains commas it will be expanded into multiple addresses.",
-				[]string{"localhost:9092"}, []string{"localhost:9041,localhost:9042"}, []string{"localhost:9041", "localhost:9042"},
-			).Array(),
-			docs.FieldString(
-				"topics",
-				"A list of topics to consume from. Multiple comma separated topics can be listed in a single element. Partitions are automatically distributed across consumers of a topic. Alternatively, it's possible to specify explicit partitions to consume from with a colon after the topic name, e.g. `foo:0` would consume the partition 0 of the topic foo. This syntax supports ranges, e.g. `foo:0-10` would consume partitions 0 through to 10 inclusive.",
-				[]string{"foo", "bar"},
-				[]string{"foo,bar"},
-				[]string{"foo:0", "bar:1", "bar:3"},
-				[]string{"foo:0,bar:1,bar:3"},
-				[]string{"foo:0-5"},
-			).AtVersion("3.33.0").Array(),
-			docs.FieldString("target_version", "The version of the Kafka protocol to use. This limits the capabilities used by the client and should ideally match the version of your brokers."),
-			btls.FieldSpec(),
-			sasl.FieldSpec(),
-			docs.FieldString("consumer_group", "An identifier for the consumer group of the connection. This field can be explicitly made empty in order to disable stored offsets for the consumed topic partitions."),
-			docs.FieldString("client_id", "An identifier for the client connection.").Advanced(),
-			docs.FieldString("rack_id", "A rack identifier for this client.").Advanced(),
-			docs.FieldBool("start_from_oldest", "If an offset is not found for a topic partition, determines whether to consume from the oldest available offset, otherwise messages are consumed from the latest offset.").Advanced(),
-			docs.FieldInt(
-				"checkpoint_limit", "The maximum number of messages of the same topic and partition that can be processed at a given time. Increasing this limit enables parallel processing and batching at the output level to work on individual partitions. Any given offset will not be committed unless all messages under that offset are delivered in order to preserve at least once delivery guarantees.",
-			).AtVersion("3.33.0"),
-			docs.FieldString("commit_period", "The period of time between each commit of the current partition offsets. Offsets are always committed during shutdown.").Advanced(),
-			docs.FieldString("max_processing_period", "A maximum estimate for the time taken to process a message, this is used for tuning consumer group synchronization.").Advanced(),
-			span.ExtractTracingSpanMappingDocs,
-			docs.FieldObject("group", "Tuning parameters for consumer group synchronization.").WithChildren(
-				docs.FieldString("session_timeout", "A period after which a consumer of the group is kicked after no heartbeats.").Advanced(),
-				docs.FieldString("heartbeat_interval", "A period in which heartbeats should be sent out.").Advanced(),
-				docs.FieldString("rebalance_timeout", "A period after which rebalancing is abandoned if unresolved.").Advanced(),
-			).Advanced(),
-			docs.FieldInt("fetch_buffer_cap", "The maximum number of unprocessed messages to fetch at a given time.").Advanced(),
-			docs.FieldBool("multi_header", "Decode headers into lists to allow handling of multiple values with the same key").Advanced(),
-			func() docs.FieldSpec {
-				b := policy.FieldSpec()
-				b.IsAdvanced = true
-				return b
-			}(),
-		).ChildDefaultAndTypesFromStruct(input.NewKafkaConfig()),
-		Categories: []string{
-			"Services",
-		},
+Unfortunately this error message will appear for a wide range of connection problems even when the broker endpoint can be reached. Double check your authentication configuration and also ensure that you have [enabled TLS](#tlsenabled) if applicable.`).
+		Fields(
+			service.NewStringListField(iskFieldAddresses).
+				Description("A list of broker addresses to connect to. If an item of the list contains commas it will be expanded into multiple addresses.").
+				Examples(
+					[]string{"localhost:9092"},
+					[]string{"localhost:9041,localhost:9042"},
+					[]string{"localhost:9041", "localhost:9042"},
+				),
+			service.NewStringListField(iskFieldTopics).
+				Description("A list of topics to consume from. Multiple comma separated topics can be listed in a single element. Partitions are automatically distributed across consumers of a topic. Alternatively, it's possible to specify explicit partitions to consume from with a colon after the topic name, e.g. `foo:0` would consume the partition 0 of the topic foo. This syntax supports ranges, e.g. `foo:0-10` would consume partitions 0 through to 10 inclusive.").
+				Examples(
+					[]string{"foo", "bar"},
+					[]string{"foo,bar"},
+					[]string{"foo:0", "bar:1", "bar:3"},
+					[]string{"foo:0,bar:1,bar:3"},
+					[]string{"foo:0-5"},
+				).
+				Version("3.33.0"),
+			service.NewStringField(iskFieldTargetVersion).
+				Description("The version of the Kafka protocol to use. This limits the capabilities used by the client and should ideally match the version of your brokers. Defaults to the oldest supported stable version.").
+				Examples(sarama.DefaultVersion.String(), "3.1.0").
+				Optional(),
+			service.NewTLSToggledField(iskFieldTLS),
+			SaramaSASLField(),
+			service.NewStringField(iskFieldConsumerGroup).
+				Description("An identifier for the consumer group of the connection. This field can be explicitly made empty in order to disable stored offsets for the consumed topic partitions.").
+				Default(""),
+			service.NewStringField(iskFieldClientID).
+				Description("An identifier for the client connection.").
+				Advanced().Default("benthos"),
+			service.NewStringField(iskFieldRackID).
+				Description("A rack identifier for this client.").
+				Advanced().Default(""),
+			service.NewBoolField(iskFieldStartFromOldest).
+				Description("Determines whether to consume from the oldest available offset, otherwise messages are consumed from the latest offset. The setting is applied when creating a new consumer group or the saved offset no longer exists.").
+				Advanced().Default(true),
+			service.NewIntField(iskFieldCheckpointLimit).
+				Description("The maximum number of messages of the same topic and partition that can be processed at a given time. Increasing this limit enables parallel processing and batching at the output level to work on individual partitions. Any given offset will not be committed unless all messages under that offset are delivered in order to preserve at least once delivery guarantees.").
+				Version("3.33.0").Default(1024),
+			service.NewDurationField(iskFieldCommitPeriod).
+				Description("The period of time between each commit of the current partition offsets. Offsets are always committed during shutdown.").
+				Advanced().Default("1s"),
+			service.NewDurationField(iskFieldMaxProcessingPeriod).
+				Description("A maximum estimate for the time taken to process a message, this is used for tuning consumer group synchronization.").
+				Advanced().Default("100ms"),
+			span.ExtractTracingSpanMappingDocs(),
+			service.NewObjectField(iskFieldGroup,
+				service.NewDurationField(iskFieldGroupSessionTimeout).
+					Description("A period after which a consumer of the group is kicked after no heartbeats.").
+					Default("10s"),
+				service.NewDurationField(iskFieldGroupSessionHeartbeatInterval).
+					Description("A period in which heartbeats should be sent out.").
+					Default("3s"),
+				service.NewDurationField(iskFieldGroupSessionRebalanceTimeout).
+					Description("A period after which rebalancing is abandoned if unresolved.").
+					Default("60s"),
+			).
+				Description("Tuning parameters for consumer group synchronization.").
+				Advanced(),
+			service.NewIntField(iskFieldFetchBufferCap).
+				Description("The maximum number of unprocessed messages to fetch at a given time.").
+				Advanced().Default(256),
+			service.NewBoolField(iskFieldMultiHeader).
+				Description("Decode headers into lists to allow handling of multiple values with the same key").
+				Advanced().Default(false),
+			service.NewBatchPolicyField(iskFieldBatching).Advanced(),
+		)
+}
+
+func init() {
+	err := service.RegisterBatchInput("kafka", iskConfigSpec(), func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchInput, error) {
+		i, err := newKafkaReaderFromParsed(conf, mgr)
+		if err != nil {
+			return nil, err
+		}
+		return span.NewBatchInput("kafka", conf, service.AutoRetryNacksBatched(i), mgr)
 	})
 	if err != nil {
 		panic(err)
 	}
 }
 
-func newKafkaInput(conf input.Config, mgr bundle.NewManagement, log log.Modular, stats metrics.Type) (input.Streamed, error) {
-	var rdr input.Async
-	var err error
-	if rdr, err = newKafkaReader(conf.Kafka, mgr, log); err != nil {
-		return nil, err
-	}
-	if conf.Kafka.ExtractTracingMap != "" {
-		if rdr, err = span.NewReader("kafka", conf.Kafka.ExtractTracingMap, rdr, mgr); err != nil {
-			return nil, err
-		}
-	}
-	return input.NewAsyncReader("kafka", input.NewAsyncPreserver(rdr), mgr)
-}
-
 //------------------------------------------------------------------------------
 
 type asyncMessage struct {
-	msg   message.Batch
-	ackFn input.AsyncAckFn
+	msg   service.MessageBatch
+	ackFn service.AckFunc
 }
 
 type offsetMarker interface {
@@ -144,18 +173,18 @@ type offsetMarker interface {
 }
 
 type kafkaReader struct {
-	version   sarama.KafkaVersion
-	tlsConf   *tls.Config
-	addresses []string
+	saramConf *sarama.Config
+
+	addresses       []string
+	batching        service.BatchPolicy
+	checkpointLimit int
+	commitPeriod    time.Duration
+	consumerGroup   string
+	multiHeader     bool
+	startFromOldest bool
 
 	topicPartitions map[string][]int32
 	balancedTopics  []string
-
-	commitPeriod      time.Duration
-	sessionTimeout    time.Duration
-	heartbeatInterval time.Duration
-	rebalanceTimeout  time.Duration
-	maxProcPeriod     time.Duration
 
 	// Connection resources
 	cMut            sync.Mutex
@@ -164,9 +193,7 @@ type kafkaReader struct {
 	msgChan         chan asyncMessage
 	session         offsetMarker
 
-	conf input.KafkaConfig
-	log  log.Modular
-	mgr  bundle.NewManagement
+	mgr *service.Resources
 
 	closeOnce  sync.Once
 	closedChan chan struct{}
@@ -174,36 +201,41 @@ type kafkaReader struct {
 
 var errCannotMixBalanced = errors.New("it is not currently possible to include balanced and explicit partition topics in the same kafka input")
 
-func newKafkaReader(conf input.KafkaConfig, mgr bundle.NewManagement, log log.Modular) (*kafkaReader, error) {
-	if conf.Batching.IsNoop() {
-		conf.Batching.Count = 1
-	}
+func newKafkaReaderFromParsed(conf *service.ParsedConfig, mgr *service.Resources) (*kafkaReader, error) {
 	k := kafkaReader{
-		conf:            conf,
 		consumerCloseFn: nil,
-		log:             log,
 		mgr:             mgr,
 		closedChan:      make(chan struct{}),
 		topicPartitions: map[string][]int32{},
 	}
-	if conf.TLS.Enabled {
-		var err error
-		if k.tlsConf, err = conf.TLS.Get(mgr.FS()); err != nil {
-			return nil, err
-		}
+
+	cAddresses, err := conf.FieldStringList(iskFieldAddresses)
+	if err != nil {
+		return nil, err
 	}
-	for _, addr := range conf.Addresses {
+	for _, addr := range cAddresses {
 		for _, splitAddr := range strings.Split(addr, ",") {
 			if trimmed := strings.TrimSpace(splitAddr); len(trimmed) > 0 {
 				k.addresses = append(k.addresses, trimmed)
 			}
 		}
 	}
-	if len(conf.Topics) == 0 {
+
+	if k.batching, err = conf.FieldBatchPolicy(iskFieldBatching); err != nil {
+		return nil, err
+	} else if k.batching.IsNoop() {
+		k.batching.Count = 1
+	}
+
+	topics, err := conf.FieldStringList(iskFieldTopics)
+	if err != nil {
+		return nil, err
+	}
+	if len(topics) == 0 {
 		return nil, errors.New("must specify at least one topic in the topics field")
 	}
 
-	balancedTopics, topicPartitions, err := parseTopics(conf.Topics, -1, false)
+	balancedTopics, topicPartitions, err := parseTopics(topics, -1, false)
 	if err != nil {
 		return nil, err
 	}
@@ -224,41 +256,27 @@ func newKafkaReader(conf input.KafkaConfig, mgr bundle.NewManagement, log log.Mo
 		}
 	}
 
-	if tout := conf.CommitPeriod; len(tout) > 0 {
-		var err error
-		if k.commitPeriod, err = time.ParseDuration(tout); err != nil {
-			return nil, fmt.Errorf("failed to parse commit period string: %v", err)
-		}
+	if k.checkpointLimit, err = conf.FieldInt(iskFieldCheckpointLimit); err != nil {
+		return nil, err
 	}
-	if tout := conf.Group.SessionTimeout; len(tout) > 0 {
-		var err error
-		if k.sessionTimeout, err = time.ParseDuration(tout); err != nil {
-			return nil, fmt.Errorf("failed to parse session timeout string: %v", err)
-		}
+	if k.commitPeriod, err = conf.FieldDuration(iskFieldCommitPeriod); err != nil {
+		return nil, err
 	}
-	if tout := conf.Group.HeartbeatInterval; len(tout) > 0 {
-		var err error
-		if k.heartbeatInterval, err = time.ParseDuration(tout); err != nil {
-			return nil, fmt.Errorf("failed to parse heartbeat interval string: %v", err)
-		}
+	if k.consumerGroup, err = conf.FieldString(iskFieldConsumerGroup); err != nil {
+		return nil, err
 	}
-	if tout := conf.Group.RebalanceTimeout; len(tout) > 0 {
-		var err error
-		if k.rebalanceTimeout, err = time.ParseDuration(tout); err != nil {
-			return nil, fmt.Errorf("failed to parse rebalance timeout string: %v", err)
-		}
+	if k.multiHeader, err = conf.FieldBool(iskFieldMultiHeader); err != nil {
+		return nil, err
 	}
-	if tout := conf.MaxProcessingPeriod; len(tout) > 0 {
-		var err error
-		if k.maxProcPeriod, err = time.ParseDuration(tout); err != nil {
-			return nil, fmt.Errorf("failed to parse max processing period string: %v", err)
-		}
+	if k.startFromOldest, err = conf.FieldBool(iskFieldStartFromOldest); err != nil {
+		return nil, err
 	}
-	if conf.ConsumerGroup == "" && len(k.balancedTopics) > 0 {
+
+	if k.consumerGroup == "" && len(k.balancedTopics) > 0 {
 		return nil, errors.New("a consumer group must be specified when consuming balanced topics")
 	}
 
-	if k.version, err = sarama.ParseKafkaVersion(conf.TargetVersion); err != nil {
+	if k.saramConf, err = k.saramaConfigFromParsed(conf); err != nil {
 		return nil, err
 	}
 	return &k, nil
@@ -266,16 +284,16 @@ func newKafkaReader(conf input.KafkaConfig, mgr bundle.NewManagement, log log.Mo
 
 //------------------------------------------------------------------------------
 
-func (k *kafkaReader) asyncCheckpointer(topic string, partition int32) func(context.Context, chan<- asyncMessage, message.Batch, int64) bool {
-	cp := checkpoint.NewCapped[int64](int64(k.conf.CheckpointLimit))
-	return func(ctx context.Context, c chan<- asyncMessage, msg message.Batch, offset int64) bool {
+func (k *kafkaReader) asyncCheckpointer(topic string, partition int32) func(context.Context, chan<- asyncMessage, service.MessageBatch, int64) bool {
+	cp := checkpoint.NewCapped[int64](int64(k.checkpointLimit))
+	return func(ctx context.Context, c chan<- asyncMessage, msg service.MessageBatch, offset int64) bool {
 		if msg == nil {
 			return true
 		}
-		resolveFn, err := cp.Track(ctx, offset, int64(msg.Len()))
+		resolveFn, err := cp.Track(ctx, offset, int64(len(msg)))
 		if err != nil {
-			if ctx.Err() == nil && err != component.ErrTimeout {
-				k.log.Errorf("Failed to checkpoint offset: %v\n", err)
+			if ctx.Err() == nil {
+				k.mgr.Logger().Errorf("Failed to checkpoint offset: %v\n", err)
 			}
 			return false
 		}
@@ -289,10 +307,10 @@ func (k *kafkaReader) asyncCheckpointer(topic string, partition int32) func(cont
 				}
 				k.cMut.Lock()
 				if k.session != nil {
-					k.log.Tracef("Marking offset for topic '%v' partition '%v'.\n", topic, partition)
+					k.mgr.Logger().Tracef("Marking offset for topic '%v' partition '%v'.\n", topic, partition)
 					k.session.MarkOffset(topic, partition, *maxOffset, "")
 				} else {
-					k.log.Debugf("Unable to mark offset for topic '%v' partition '%v'.\n", topic, partition)
+					k.mgr.Logger().Debugf("Unable to mark offset for topic '%v' partition '%v'.\n", topic, partition)
 				}
 				k.cMut.Unlock()
 				return nil
@@ -305,9 +323,9 @@ func (k *kafkaReader) asyncCheckpointer(topic string, partition int32) func(cont
 	}
 }
 
-func (k *kafkaReader) syncCheckpointer(topic string, partition int32) func(context.Context, chan<- asyncMessage, message.Batch, int64) bool {
+func (k *kafkaReader) syncCheckpointer(topic string, partition int32) func(context.Context, chan<- asyncMessage, service.MessageBatch, int64) bool {
 	ackedChan := make(chan error)
-	return func(ctx context.Context, c chan<- asyncMessage, msg message.Batch, offset int64) bool {
+	return func(ctx context.Context, c chan<- asyncMessage, msg service.MessageBatch, offset int64) bool {
 		if msg == nil {
 			return true
 		}
@@ -319,10 +337,10 @@ func (k *kafkaReader) syncCheckpointer(topic string, partition int32) func(conte
 				if resErr == nil {
 					k.cMut.Lock()
 					if k.session != nil {
-						k.log.Debugf("Marking offset for topic '%v' partition '%v'.\n", topic, partition)
+						k.mgr.Logger().Debugf("Marking offset for topic '%v' partition '%v'.\n", topic, partition)
 						k.session.MarkOffset(topic, partition, offset, "")
 					} else {
-						k.log.Debugf("Unable to mark offset for topic '%v' partition '%v'.\n", topic, partition)
+						k.mgr.Logger().Debugf("Unable to mark offset for topic '%v' partition '%v'.\n", topic, partition)
 					}
 					k.cMut.Unlock()
 				}
@@ -336,7 +354,7 @@ func (k *kafkaReader) syncCheckpointer(topic string, partition int32) func(conte
 			select {
 			case resErr := <-ackedChan:
 				if resErr != nil {
-					k.log.Errorf("Received error from message batch: %v, shutting down consumer.\n", resErr)
+					k.mgr.Logger().Errorf("Received error from message batch: %v, shutting down consumer.\n", resErr)
 					return false
 				}
 			case <-ctx.Done():
@@ -349,8 +367,8 @@ func (k *kafkaReader) syncCheckpointer(topic string, partition int32) func(conte
 	}
 }
 
-func dataToPart(highestOffset int64, data *sarama.ConsumerMessage, multiHeader bool) *message.Part {
-	part := message.NewPart(data.Value)
+func dataToPart(highestOffset int64, data *sarama.ConsumerMessage, multiHeader bool) *service.Message {
+	part := service.NewMessage(data.Value)
 
 	if multiHeader {
 		// in multi header mode we gather headers so we can encode them as lists
@@ -395,10 +413,10 @@ func (k *kafkaReader) closeGroupAndConsumers() {
 	k.cMut.Unlock()
 
 	if consumerCloseFn != nil {
-		k.log.Debugln("Waiting for topic consumers to close.")
+		k.mgr.Logger().Debug("Waiting for topic consumers to close.")
 		consumerCloseFn()
 		<-consumerDoneCtx.Done()
-		k.log.Debugln("Topic consumers are closed.")
+		k.mgr.Logger().Debug("Topic consumers are closed.")
 	}
 
 	k.closeOnce.Do(func() {
@@ -408,21 +426,29 @@ func (k *kafkaReader) closeGroupAndConsumers() {
 
 //------------------------------------------------------------------------------
 
-// Connect establishes a kafkaReader connection.
-func (k *kafkaReader) Connect(ctx context.Context) error {
-	k.cMut.Lock()
-	defer k.cMut.Unlock()
-	if k.msgChan != nil {
-		return nil
+func (k *kafkaReader) saramaConfigFromParsed(conf *service.ParsedConfig) (*sarama.Config, error) {
+	config := sarama.NewConfig()
+
+	var err error
+	if targetVersionStr, _ := conf.FieldString(iskFieldTargetVersion); targetVersionStr != "" {
+		if config.Version, err = sarama.ParseKafkaVersion(targetVersionStr); err != nil {
+			return nil, err
+		}
 	}
 
-	config := sarama.NewConfig()
-	config.ClientID = k.conf.ClientID
-	config.RackID = k.conf.RackID
+	if config.ClientID, err = conf.FieldString(iskFieldClientID); err != nil {
+		return nil, err
+	}
+
+	if config.RackID, err = conf.FieldString(iskFieldRackID); err != nil {
+		return nil, err
+	}
+
 	config.Net.DialTimeout = time.Second
-	config.Version = k.version
 	config.Consumer.Return.Errors = true
-	config.Consumer.MaxProcessingTime = k.maxProcPeriod
+	if config.Consumer.MaxProcessingTime, err = conf.FieldDuration(iskFieldMaxProcessingPeriod); err != nil {
+		return nil, err
+	}
 
 	// NOTE: The following activates an async goroutine that periodically
 	// commits marked offsets, but that does NOT mean we automatically commit
@@ -433,55 +459,76 @@ func (k *kafkaReader) Connect(ctx context.Context) error {
 	config.Consumer.Offsets.AutoCommit.Enable = true
 	config.Consumer.Offsets.AutoCommit.Interval = k.commitPeriod
 
-	config.Consumer.Group.Session.Timeout = k.sessionTimeout
-	config.Consumer.Group.Heartbeat.Interval = k.heartbeatInterval
-	config.Consumer.Group.Rebalance.Timeout = k.rebalanceTimeout
-	config.ChannelBufferSize = k.conf.FetchBufferCap
+	{
+		cConf := conf.Namespace(iskFieldGroup)
+		if config.Consumer.Group.Session.Timeout, err = cConf.FieldDuration(iskFieldGroupSessionTimeout); err != nil {
+			return nil, err
+		}
+		if config.Consumer.Group.Heartbeat.Interval, err = cConf.FieldDuration(iskFieldGroupSessionHeartbeatInterval); err != nil {
+			return nil, err
+		}
+		if config.Consumer.Group.Rebalance.Timeout, err = cConf.FieldDuration(iskFieldGroupSessionRebalanceTimeout); err != nil {
+			return nil, err
+		}
+	}
+	if config.ChannelBufferSize, err = conf.FieldInt(iskFieldFetchBufferCap); err != nil {
+		return nil, err
+	}
 
-	if config.Net.ReadTimeout <= k.sessionTimeout {
-		config.Net.ReadTimeout = k.sessionTimeout * 2
+	if config.Net.ReadTimeout <= config.Consumer.Group.Session.Timeout {
+		config.Net.ReadTimeout = config.Consumer.Group.Session.Timeout * 2
 	}
-	if config.Net.ReadTimeout <= k.rebalanceTimeout {
-		config.Net.ReadTimeout = k.rebalanceTimeout * 2
+	if config.Net.ReadTimeout <= config.Consumer.Group.Rebalance.Timeout {
+		config.Net.ReadTimeout = config.Consumer.Group.Rebalance.Timeout * 2
 	}
 
-	config.Net.TLS.Enable = k.conf.TLS.Enabled
-	if k.conf.TLS.Enabled {
-		config.Net.TLS.Config = k.tlsConf
+	if config.Net.TLS.Config, config.Net.TLS.Enable, err = conf.FieldTLSToggled(iskFieldTLS); err != nil {
+		return nil, err
 	}
-	if k.conf.StartFromOldest {
+
+	if k.startFromOldest {
 		config.Consumer.Offsets.Initial = sarama.OffsetOldest
 	}
 
-	if err := ApplySASLConfig(k.conf.SASL, k.mgr, config); err != nil {
-		return err
+	if err := ApplySaramaSASLFromParsed(conf, k.mgr, config); err != nil {
+		return nil, err
+	}
+	return config, nil
+}
+
+// Connect establishes a kafkaReader connection.
+func (k *kafkaReader) Connect(ctx context.Context) error {
+	k.cMut.Lock()
+	defer k.cMut.Unlock()
+	if k.msgChan != nil {
+		return nil
 	}
 
 	if len(k.topicPartitions) > 0 {
-		return k.connectExplicitTopics(ctx, config)
+		return k.connectExplicitTopics(ctx, k.saramConf)
 	}
-	return k.connectBalancedTopics(ctx, config)
+	return k.connectBalancedTopics(ctx, k.saramConf)
 }
 
 // ReadBatch attempts to read a message from a kafkaReader topic.
-func (k *kafkaReader) ReadBatch(ctx context.Context) (message.Batch, input.AsyncAckFn, error) {
+func (k *kafkaReader) ReadBatch(ctx context.Context) (service.MessageBatch, service.AckFunc, error) {
 	k.cMut.Lock()
 	msgChan := k.msgChan
 	k.cMut.Unlock()
 
 	if msgChan == nil {
-		return nil, nil, component.ErrNotConnected
+		return nil, nil, service.ErrNotConnected
 	}
 
 	select {
 	case m, open := <-msgChan:
 		if !open {
-			return nil, nil, component.ErrNotConnected
+			return nil, nil, service.ErrNotConnected
 		}
 		return m.msg, m.ackFn, nil
 	case <-ctx.Done():
 	}
-	return nil, nil, component.ErrTimeout
+	return nil, nil, ctx.Err()
 }
 
 // CloseAsync shuts down the kafkaReader input and stops processing requests.

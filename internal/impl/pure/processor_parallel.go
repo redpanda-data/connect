@@ -2,38 +2,55 @@ package pure
 
 import (
 	"context"
-	"strconv"
 	"sync"
 
-	"github.com/benthosdev/benthos/v4/internal/bundle"
+	"github.com/benthosdev/benthos/v4/internal/component/interop"
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
-	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/message"
+	"github.com/benthosdev/benthos/v4/public/service"
+)
+
+const (
+	parProcFieldCap        = "cap"
+	parProcFieldProcessors = "processors"
 )
 
 func init() {
-	err := bundle.AllProcessors.Add(func(conf processor.Config, mgr bundle.NewManagement) (processor.V1, error) {
-		p, err := newParallel(conf.Parallel, mgr)
-		if err != nil {
-			return nil, err
-		}
-		return processor.NewAutoObservedBatchedProcessor("parallel", p, mgr), nil
-	}, docs.ComponentSpec{
-		Name: "parallel",
-		Categories: []string{
-			"Composition",
-		},
-		Summary: `
-A processor that applies a list of child processors to messages of a batch as though they were each a batch of one message (similar to the ` + "[`for_each`](/docs/components/processors/for_each)" + ` processor), but where each message is processed in parallel.`,
-		Description: `
-The field ` + "`cap`" + `, if greater than zero, caps the maximum number of parallel processing threads.
+	err := service.RegisterBatchProcessor(
+		"parallel", service.NewConfigSpec().
+			Categories("Composition").
+			Stable().
+			Summary(`A processor that applies a list of child processors to messages of a batch as though they were each a batch of one message (similar to the `+"[`for_each`](/docs/components/processors/for_each)"+` processor), but where each message is processed in parallel.`).
+			Description(`
+The field `+"`cap`"+`, if greater than zero, caps the maximum number of parallel processing threads.
 
-The functionality of this processor depends on being applied across messages that are batched. You can find out more about batching [in this doc](/docs/configuration/batching).`,
-		Config: docs.FieldComponent().WithChildren(
-			docs.FieldInt("cap", "The maximum number of messages to have processing at a given time."),
-			docs.FieldProcessor("processors", "A list of child processors to apply.").Array(),
-		).ChildDefaultAndTypesFromStruct(processor.NewParallelConfig()),
-	})
+The functionality of this processor depends on being applied across messages that are batched. You can find out more about batching [in this doc](/docs/configuration/batching).`).
+			Fields(
+				service.NewIntField(parProcFieldCap).
+					Description("The maximum number of messages to have processing at a given time.").
+					Default(0),
+				service.NewProcessorListField(parProcFieldProcessors).
+					Description("A list of child processors to apply."),
+			),
+		func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchProcessor, error) {
+			var p parallelProc
+			var err error
+
+			if p.cap, err = conf.FieldInt(parProcFieldCap); err != nil {
+				return nil, err
+			}
+
+			var pChildren []*service.OwnedProcessor
+			if pChildren, err = conf.FieldProcessorList(parProcFieldProcessors); err != nil {
+				return nil, err
+			}
+			p.children = make([]processor.V1, len(pChildren))
+			for i, c := range pChildren {
+				p.children[i] = interop.UnwrapOwnedProcessor(c)
+			}
+
+			return interop.NewUnwrapInternalBatchProcessor(processor.NewAutoObservedBatchedProcessor("parallel", &p, interop.UnwrapManagement(mgr))), nil
+		})
 	if err != nil {
 		panic(err)
 	}
@@ -42,22 +59,6 @@ The functionality of this processor depends on being applied across messages tha
 type parallelProc struct {
 	children []processor.V1
 	cap      int
-}
-
-func newParallel(conf processor.ParallelConfig, mgr bundle.NewManagement) (processor.AutoObservedBatched, error) {
-	var children []processor.V1
-	for i, pconf := range conf.Processors {
-		pMgr := mgr.IntoPath("parallel", strconv.Itoa(i))
-		proc, err := pMgr.NewProcessor(pconf)
-		if err != nil {
-			return nil, err
-		}
-		children = append(children, proc)
-	}
-	return &parallelProc{
-		children: children,
-		cap:      conf.Cap,
-	}, nil
 }
 
 func (p *parallelProc) ProcessBatch(ctx *processor.BatchProcContext, msg message.Batch) ([]message.Batch, error) {

@@ -7,18 +7,20 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/benthosdev/benthos/v4/internal/component/processor"
+	"github.com/benthosdev/benthos/v4/internal/component/testutil"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
 )
 
 func TestBoundsCheck(t *testing.T) {
-	conf := processor.NewConfig()
-	conf.Type = "bounds_check"
-	conf.BoundsCheck.MinParts = 2
-	conf.BoundsCheck.MaxParts = 3
-	conf.BoundsCheck.MaxPartSize = 10
-	conf.BoundsCheck.MinPartSize = 1
+	conf, err := testutil.ProcessorFromYAML(`
+bounds_check:
+  min_parts: 2
+  max_parts: 3
+  max_part_size: 10
+  min_part_size: 1
+`)
+	require.NoError(t, err)
 
 	proc, err := mock.NewManager().NewProcessor(conf)
 	if err != nil {

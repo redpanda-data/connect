@@ -9,6 +9,7 @@ import (
 	"github.com/Jeffail/gabs/v2"
 
 	"github.com/benthosdev/benthos/v4/internal/bloblang/query"
+	"github.com/benthosdev/benthos/v4/internal/value"
 )
 
 //------------------------------------------------------------------------------
@@ -50,11 +51,11 @@ func NewVarAssignment(name string) *VarAssignment {
 }
 
 // Apply a value to a variable.
-func (v *VarAssignment) Apply(value any, ctx AssignmentContext) error {
-	if _, deleted := value.(query.Delete); deleted {
+func (v *VarAssignment) Apply(val any, ctx AssignmentContext) error {
+	if _, deleted := val.(value.Delete); deleted {
 		delete(ctx.Vars, v.name)
 	} else {
-		ctx.Vars[v.name] = value
+		ctx.Vars[v.name] = val
 	}
 	return nil
 }
@@ -81,13 +82,13 @@ func NewMetaAssignment(key *string) *MetaAssignment {
 }
 
 // Apply a value to a metadata key.
-func (m *MetaAssignment) Apply(value any, ctx AssignmentContext) error {
+func (m *MetaAssignment) Apply(val any, ctx AssignmentContext) error {
 	if ctx.Meta == nil {
 		return errors.New("unable to assign metadata in the current context")
 	}
-	_, deleted := value.(query.Delete)
+	_, deleted := val.(value.Delete)
 	if !deleted {
-		value = query.IClone(value)
+		val = value.IClone(val)
 	}
 	if m.key == nil {
 		if deleted {
@@ -96,7 +97,7 @@ func (m *MetaAssignment) Apply(value any, ctx AssignmentContext) error {
 				return nil
 			})
 		} else {
-			if m, ok := value.(map[string]any); ok {
+			if m, ok := val.(map[string]any); ok {
 				_ = ctx.Meta.MetaIterMut(func(k string, _ any) error {
 					ctx.Meta.MetaDelete(k)
 					return nil
@@ -105,7 +106,7 @@ func (m *MetaAssignment) Apply(value any, ctx AssignmentContext) error {
 					ctx.Meta.MetaSetMut(k, v)
 				}
 			} else {
-				return fmt.Errorf("setting root meta object requires object value, received: %T", value)
+				return fmt.Errorf("setting root meta object requires object value, received: %T", val)
 			}
 		}
 		return nil
@@ -113,7 +114,7 @@ func (m *MetaAssignment) Apply(value any, ctx AssignmentContext) error {
 	if deleted {
 		ctx.Meta.MetaDelete(*m.key)
 	} else {
-		ctx.Meta.MetaSetMut(*m.key, value)
+		ctx.Meta.MetaSetMut(*m.key, val)
 	}
 	return nil
 }
@@ -144,7 +145,7 @@ func NewJSONAssignment(path ...string) *JSONAssignment {
 
 func findTheNonObject(gObj *gabs.Container, allowArray bool, paths ...string) (culprit, typeStr string) {
 	if _, isObj := gObj.Data().(map[string]any); !isObj {
-		return "", string(query.ITypeOf(gObj.Data()))
+		return "", string(value.ITypeOf(gObj.Data()))
 	}
 
 	var culpritSlice []string
@@ -155,24 +156,24 @@ func findTheNonObject(gObj *gabs.Container, allowArray bool, paths ...string) (c
 		_, isObj := gObj.Data().(map[string]any)
 		_, isArray := gObj.Data().([]any)
 		if !isObj && (!isArray || !allowArray) {
-			return strings.Join(culpritSlice, "."), string(query.ITypeOf(gObj.Data()))
+			return strings.Join(culpritSlice, "."), string(value.ITypeOf(gObj.Data()))
 		}
 	}
 
-	return strings.Join(culpritSlice, "."), string(query.ITypeOf(gObj.Data()))
+	return strings.Join(culpritSlice, "."), string(value.ITypeOf(gObj.Data()))
 }
 
 // Apply a value to the target JSON path.
-func (j *JSONAssignment) Apply(value any, ctx AssignmentContext) error {
-	_, deleted := value.(query.Delete)
+func (j *JSONAssignment) Apply(val any, ctx AssignmentContext) error {
+	_, deleted := val.(value.Delete)
 	if !deleted {
-		value = query.IClone(value)
+		val = value.IClone(val)
 	}
 	if len(j.path) == 0 {
-		*ctx.Value = value
+		*ctx.Value = val
 		return nil
 	}
-	if _, isNothing := (*ctx.Value).(query.Nothing); isNothing || *ctx.Value == nil {
+	if _, isNothing := (*ctx.Value).(value.Nothing); isNothing || *ctx.Value == nil {
 		*ctx.Value = map[string]any{}
 	}
 
@@ -182,14 +183,14 @@ func (j *JSONAssignment) Apply(value any, ctx AssignmentContext) error {
 			_ = gObj.Delete(j.path...)
 		}
 	} else {
-		_, err := gObj.Set(value, j.path...)
+		_, err := gObj.Set(val, j.path...)
 		if err != nil && err.Error() == "unable to append new array index at root of path" {
 			if s, ok := (*ctx.Value).([]any); ok {
 				newPath := make([]string, len(j.path))
 				copy(newPath, j.path)
 				newPath[0] = strconv.Itoa(len(s))
 				gObj = gabs.Wrap(append(s, map[string]any{}))
-				_, err = gObj.Set(value, newPath...)
+				_, err = gObj.Set(val, newPath...)
 			}
 		}
 		if err != nil {

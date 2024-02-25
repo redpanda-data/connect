@@ -2,33 +2,45 @@ package pure
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/benthosdev/benthos/v4/internal/bundle"
+	"github.com/benthosdev/benthos/v4/internal/component/interop"
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
-	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
+	"github.com/benthosdev/benthos/v4/public/service"
+)
+
+const (
+	decompressPFieldAlgorithm = "algorithm"
 )
 
 func init() {
-	err := bundle.AllProcessors.Add(func(conf processor.Config, mgr bundle.NewManagement) (processor.V1, error) {
-		p, err := newDecompress(conf.Decompress, mgr)
-		if err != nil {
-			return nil, err
-		}
-		return processor.NewAutoObservedProcessor("decompress", p, mgr), nil
-	}, docs.ComponentSpec{
-		Name: "decompress",
-		Categories: []string{
-			"Parsing",
-		},
-		Summary: `
-Decompresses messages according to the selected algorithm. Supported
-decompression types are: gzip, pgzip, zlib, bzip2, flate, snappy, lz4.`,
-		Config: docs.FieldComponent().WithChildren(
-			docs.FieldString("algorithm", "The decompression algorithm to use.").HasOptions("gzip", "pgzip", "zlib", "bzip2", "flate", "snappy", "lz4"),
-		).ChildDefaultAndTypesFromStruct(processor.NewDecompressConfig()),
-	})
+	compAlgs := DecompressionAlgsList()
+	err := service.RegisterBatchProcessor(
+		"decompress", service.NewConfigSpec().
+			Categories("Parsing").
+			Stable().
+			Summary(fmt.Sprintf("Decompresses messages according to the selected algorithm. Supported decompression algorithms are: %v", compAlgs)).
+			Fields(
+				service.NewStringEnumField(decompressPFieldAlgorithm, compAlgs...).
+					Description("The decompression algorithm to use.").
+					LintRule(``),
+			),
+		func(conf *service.ParsedConfig, res *service.Resources) (service.BatchProcessor, error) {
+			algStr, err := conf.FieldString(compressPFieldAlgorithm)
+			if err != nil {
+				return nil, err
+			}
+
+			mgr := interop.UnwrapManagement(res)
+			p, err := newDecompress(algStr, mgr)
+			if err != nil {
+				return nil, err
+			}
+			return interop.NewUnwrapInternalBatchProcessor(processor.NewAutoObservedProcessor("decompress", p, mgr)), nil
+		})
 	if err != nil {
 		panic(err)
 	}
@@ -39,8 +51,8 @@ type decompressProc struct {
 	log    log.Modular
 }
 
-func newDecompress(conf processor.DecompressConfig, mgr bundle.NewManagement) (*decompressProc, error) {
-	dcor, err := strToDecompressor(conf.Algorithm)
+func newDecompress(algStr string, mgr bundle.NewManagement) (*decompressProc, error) {
+	dcor, err := strToDecompressFunc(algStr)
 	if err != nil {
 		return nil, err
 	}
@@ -53,7 +65,7 @@ func newDecompress(conf processor.DecompressConfig, mgr bundle.NewManagement) (*
 func (d *decompressProc) Process(ctx context.Context, msg *message.Part) ([]*message.Part, error) {
 	newBytes, err := d.decomp(msg.AsBytes())
 	if err != nil {
-		d.log.Errorf("Failed to decompress message part: %v\n", err)
+		d.log.Error("Failed to decompress message part: %v\n", err)
 		return nil, err
 	}
 

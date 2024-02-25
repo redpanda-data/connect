@@ -7,53 +7,37 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/bloblang/mapping"
 	"github.com/benthosdev/benthos/v4/internal/bloblang/parser"
 	"github.com/benthosdev/benthos/v4/internal/bundle"
+	"github.com/benthosdev/benthos/v4/internal/component/interop"
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
-	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
 func init() {
-	err := bundle.AllProcessors.Add(func(conf processor.Config, mgr bundle.NewManagement) (processor.V1, error) {
-		p, err := newBloblang(conf.Bloblang, mgr)
-		if err != nil {
-			return nil, err
-		}
-		return processor.NewAutoObservedBatchedProcessor("bloblang", p, mgr), nil
-	}, docs.ComponentSpec{
-		Name: "bloblang",
-		Categories: []string{
-			"Mapping",
-			"Parsing",
-		},
-		Config: docs.FieldString("", "").IsBloblang().HasDefault(""),
-		Summary: `
-Executes a [Bloblang](/docs/guides/bloblang/about) mapping on messages.`,
-		Description: `
+	err := service.RegisterBatchProcessor("bloblang", service.NewConfigSpec().
+		Stable().
+		Categories("Mapping", "Parsing").
+		Summary("Executes a [Bloblang](/docs/guides/bloblang/about) mapping on messages.").
+		Description(`
 Bloblang is a powerful language that enables a wide range of mapping, transformation and filtering tasks. For more information [check out the docs](/docs/guides/bloblang/about).
 
-If your mapping is large and you'd prefer for it to live in a separate file then you can execute a mapping directly from a file with the expression ` + "`from \"<path>\"`" + `, where the path must be absolute, or relative from the location that Benthos is executed from.
+If your mapping is large and you'd prefer for it to live in a separate file then you can execute a mapping directly from a file with the expression `+"`from \"<path>\"`"+`, where the path must be absolute, or relative from the location that Benthos is executed from.
 
 ## Component Rename
 
-This processor was recently renamed to the ` + "[`mapping` processor](/docs/components/processors/mapping)" + ` in order to make the purpose of the processor more prominent. It is still valid to use the existing ` + "`bloblang`" + ` name but eventually it will be deprecated and replaced by the new name in example configs.`,
-		Footnotes: `
+This processor was recently renamed to the `+"[`mapping` processor](/docs/components/processors/mapping)"+` in order to make the purpose of the processor more prominent. It is still valid to use the existing `+"`bloblang`"+` name but eventually it will be deprecated and replaced by the new name in example configs.`).
+		Footnotes(`
 ## Error Handling
 
-Bloblang mappings can fail, in which case the message remains unchanged, errors
-are logged, and the message is flagged as having failed, allowing you to use
+Bloblang mappings can fail, in which case the message remains unchanged, errors are logged, and the message is flagged as having failed, allowing you to use
 [standard processor error handling patterns](/docs/configuration/error_handling).
 
-However, Bloblang itself also provides powerful ways of ensuring your mappings
-do not fail by specifying desired fallback behaviour, which you can read about
-[in this section](/docs/guides/bloblang/about#error-handling).`,
-		Examples: []docs.AnnotatedExample{
-			{
-				Title: "Mapping",
-				Summary: `
+However, Bloblang itself also provides powerful ways of ensuring your mappings do not fail by specifying desired fallback behaviour, which you can read about [in this section](/docs/guides/bloblang/about#error-handling).`).
+		Example("Mapping", `
 Given JSON documents containing an array of fans:
 
-` + "```json" + `
+`+"```json"+`
 {
   "id":"foo",
   "description":"a show about foo",
@@ -64,11 +48,11 @@ Given JSON documents containing an array of fans:
     {"name":"vic","obsession":0.43}
   ]
 }
-` + "```" + `
+`+"```"+`
 
 We can reduce the fans to only those with an obsession score above 0.5, giving us:
 
-` + "```json" + `
+`+"```json"+`
 {
   "id":"foo",
   "description":"a show about foo",
@@ -77,23 +61,21 @@ We can reduce the fans to only those with an obsession score above 0.5, giving u
     {"name":"ali","obsession":0.89}
   ]
 }
-` + "```" + `
+`+"```"+`
 
 With the following config:`,
-				Config: `
+			`
 pipeline:
   processors:
   - bloblang: |
       root = this
       root.fans = this.fans.filter(fan -> fan.obsession > 0.5)
 `,
-			},
-			{
-				Title: "More Mapping",
-				Summary: `
+		).
+		Example("More Mapping", `
 When receiving JSON documents of the form:
 
-` + "```json" + `
+`+"```json"+`
 {
   "locations": [
     {"name": "Seattle", "state": "WA"},
@@ -102,16 +84,16 @@ When receiving JSON documents of the form:
     {"name": "Olympia", "state": "WA"}
   ]
 }
-` + "```" + `
+`+"```"+`
 
-We could collapse the location names from the state of Washington into a field ` + "`Cities`" + `:
+We could collapse the location names from the state of Washington into a field `+"`Cities`"+`:
 
-` + "```json" + `
+`+"```json"+`
 {"Cities": "Bellevue, Olympia, Seattle"}
-` + "```" + `
+`+"```"+`
 
 With the following config:`,
-				Config: `
+			`
 pipeline:
   processors:
     - bloblang: |
@@ -119,10 +101,22 @@ pipeline:
                         filter(loc -> loc.state == "WA").
                         map_each(loc -> loc.name).
                         sort().join(", ")
-`,
-			},
-		},
-	})
+`).
+		Field(service.NewBloblangField("").Default("")),
+		func(conf *service.ParsedConfig, res *service.Resources) (service.BatchProcessor, error) {
+			m, err := conf.FieldString()
+			if err != nil {
+				return nil, err
+			}
+			mgr := interop.UnwrapManagement(res)
+			p, err := newBloblang(m, mgr)
+			if err != nil {
+				return nil, err
+			}
+			return interop.NewUnwrapInternalBatchProcessor(
+				processor.NewAutoObservedBatchedProcessor("bloblang", p, mgr),
+			), nil
+		})
 	if err != nil {
 		panic(err)
 	}
@@ -153,7 +147,7 @@ func (b *bloblangProc) ProcessBatch(ctx *processor.BatchProcContext, msg message
 		p, err := b.exec.MapPart(i, msg)
 		if err != nil {
 			ctx.OnError(err, i, part)
-			b.log.Errorf("%v", err)
+			b.log.Error("%v", err)
 			p = part
 		}
 		if p != nil {

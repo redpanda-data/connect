@@ -10,9 +10,18 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/benthosdev/benthos/v4/internal/component/output"
+	"github.com/benthosdev/benthos/v4/internal/component/testutil"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
 )
+
+func parseYAMLOutputConf(t testing.TB, formatStr string, args ...any) (conf output.Config) {
+	t.Helper()
+	var err error
+	conf, err = testutil.OutputFromYAML(fmt.Sprintf(formatStr, args...))
+	require.NoError(t, err)
+	return
+}
 
 func TestHTTPServerOutputBasic(t *testing.T) {
 	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
@@ -20,10 +29,12 @@ func TestHTTPServerOutputBasic(t *testing.T) {
 
 	nTestLoops := 10
 
-	conf := output.NewConfig()
-	conf.Type = "http_server"
-	conf.HTTPServer.Address = "localhost:1237"
-	conf.HTTPServer.Path = "/testpost"
+	port := getFreePort(t)
+	conf := parseYAMLOutputConf(t, `
+http_server:
+  address: localhost:%v
+  path: /testpost
+`, port)
 
 	h, err := mock.NewManager().NewOutput(conf)
 	require.NoError(t, err)
@@ -63,7 +74,7 @@ func TestHTTPServerOutputBasic(t *testing.T) {
 			}
 		}()
 
-		res, err := http.Get("http://localhost:1237/testpost")
+		res, err := http.Get(fmt.Sprintf("http://localhost:%v/testpost", port))
 		if err != nil {
 			t.Error(err)
 			return
@@ -83,10 +94,12 @@ func TestHTTPServerOutputBadRequests(t *testing.T) {
 	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
 	defer done()
 
-	conf := output.NewConfig()
-	conf.Type = "http_server"
-	conf.HTTPServer.Address = "localhost:1236"
-	conf.HTTPServer.Path = "/testpost"
+	port := getFreePort(t)
+	conf := parseYAMLOutputConf(t, `
+http_server:
+  address: localhost:%v
+  path: /testpost
+`, port)
 
 	h, err := mock.NewManager().NewOutput(conf)
 	require.NoError(t, err)
@@ -103,7 +116,7 @@ func TestHTTPServerOutputBadRequests(t *testing.T) {
 	h.TriggerCloseNow()
 	require.NoError(t, h.WaitForClose(ctx))
 
-	_, err = http.Get("http://localhost:1236/testpost")
+	_, err = http.Get(fmt.Sprintf("http://localhost:%v/testpost", port))
 	if err == nil {
 		t.Error("request success when service should be closed")
 	}
@@ -113,11 +126,13 @@ func TestHTTPServerOutputTimeout(t *testing.T) {
 	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
 	defer done()
 
-	conf := output.NewConfig()
-	conf.Type = "http_server"
-	conf.HTTPServer.Address = "localhost:1235"
-	conf.HTTPServer.Path = "/testpost"
-	conf.HTTPServer.Timeout = "1ms"
+	port := getFreePort(t)
+	conf := parseYAMLOutputConf(t, `
+http_server:
+  address: localhost:%v
+  path: /testpost
+  timeout: 1ms
+`, port)
 
 	h, err := mock.NewManager().NewOutput(conf)
 	require.NoError(t, err)
@@ -132,7 +147,7 @@ func TestHTTPServerOutputTimeout(t *testing.T) {
 	<-time.After(time.Millisecond * 100)
 
 	var res *http.Response
-	res, err = http.Get("http://localhost:1235/testpost")
+	res, err = http.Get(fmt.Sprintf("http://localhost:%v/testpost", port))
 	if err != nil {
 		t.Error(err)
 		return

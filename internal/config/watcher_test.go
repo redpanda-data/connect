@@ -22,7 +22,8 @@ import (
 func TestReaderFileWatching(t *testing.T) {
 	dummyConfig := []byte(`
 input:
-  generate: {}
+  generate:
+    mapping: 'root = "foo"'
 output:
   drop: {}
 `)
@@ -36,15 +37,16 @@ output:
 	rdr := newDummyReader(confFilePath, nil)
 
 	changeChan := make(chan struct{})
+	once := sync.Once{}
 	var updatedConf stream.Config
 	require.NoError(t, rdr.SubscribeConfigChanges(func(conf *Type) error {
 		updatedConf = conf.Config
-		close(changeChan)
+		once.Do(func() { close(changeChan) })
 		return nil
 	}))
 
 	// Watch for configuration changes
-	testMgr, err := manager.New(manager.NewResourceConfig())
+	testMgr, err := manager.New(manager.ResourceConfig{})
 	require.NoError(t, err)
 	require.NoError(t, rdr.BeginFileWatching(testMgr, true))
 
@@ -65,7 +67,8 @@ output:
 func TestReaderFileWatchingSymlinkReplace(t *testing.T) {
 	dummyConfig := []byte(`
 input:
-  generate: {}
+  generate:
+    mapping: 'root = "foo"'
 output:
   drop: {}
 `)
@@ -95,7 +98,7 @@ output:
 	}))
 
 	// Watch for configuration changes
-	testMgr, err := manager.New(manager.NewResourceConfig())
+	testMgr, err := manager.New(manager.ResourceConfig{})
 	require.NoError(t, err)
 	require.NoError(t, rdr.BeginFileWatching(testMgr, true))
 
@@ -179,7 +182,7 @@ func TestReaderStreamDirectWatching(t *testing.T) {
 	}))
 
 	// Watch for configuration changes
-	testMgr, err := manager.New(manager.NewResourceConfig())
+	testMgr, err := manager.New(manager.ResourceConfig{})
 	require.NoError(t, err)
 	require.NoError(t, rdr.BeginFileWatching(testMgr, true))
 
@@ -263,7 +266,7 @@ func TestReaderStreamWildcardWatching(t *testing.T) {
 	}))
 
 	// Watch for configuration changes
-	testMgr, err := manager.New(manager.NewResourceConfig())
+	testMgr, err := manager.New(manager.ResourceConfig{})
 	require.NoError(t, err)
 	require.NoError(t, rdr.BeginFileWatching(testMgr, true))
 
@@ -347,7 +350,7 @@ func TestReaderStreamDirWatching(t *testing.T) {
 	}))
 
 	// Watch for configuration changes
-	testMgr, err := manager.New(manager.NewResourceConfig())
+	testMgr, err := manager.New(manager.ResourceConfig{})
 	require.NoError(t, err)
 	require.NoError(t, rdr.BeginFileWatching(testMgr, true))
 
@@ -438,7 +441,7 @@ func TestReaderWatcherRace(t *testing.T) {
 	}))
 
 	// Watch for configuration changes
-	testMgr, err := manager.New(manager.NewResourceConfig())
+	testMgr, err := manager.New(manager.ResourceConfig{})
 	require.NoError(t, err)
 	require.NoError(t, rdr.BeginFileWatching(testMgr, true))
 
@@ -518,7 +521,7 @@ processor_resources:
 	}))
 
 	// Watch for configuration changes
-	testMgr, err := manager.New(manager.NewResourceConfig())
+	testMgr, err := manager.New(manager.ResourceConfig{})
 	require.NoError(t, err)
 	require.NoError(t, rdr.BeginFileWatching(testMgr, true))
 

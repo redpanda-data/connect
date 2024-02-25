@@ -17,7 +17,7 @@ import TabItem from '@theme/TabItem';
 :::caution BETA
 This component is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with the component is found.
 :::
-Stores message parts in an Azure Table Storage table.
+Stores messages in an Azure Table Storage table.
 
 Introduced in version 3.36.0.
 
@@ -37,7 +37,8 @@ output:
     storage_account: ""
     storage_access_key: ""
     storage_connection_string: ""
-    table_name: ""
+    storage_sas_token: ""
+    table_name: ${! meta("kafka_topic") } # No default (required)
     partition_key: ""
     row_key: ""
     properties: {}
@@ -60,7 +61,8 @@ output:
     storage_account: ""
     storage_access_key: ""
     storage_connection_string: ""
-    table_name: ""
+    storage_sas_token: ""
+    table_name: ${! meta("kafka_topic") } # No default (required)
     partition_key: ""
     row_key: ""
     properties: {}
@@ -72,7 +74,7 @@ output:
       byte_size: 0
       period: ""
       check: ""
-      processors: []
+      processors: [] # No default (optional)
 ```
 
 </TabItem>
@@ -82,11 +84,12 @@ Only one authentication method is required, `storage_connection_string` or `stor
 
 In order to set the `table_name`,  `partition_key` and `row_key` you can use function interpolations described [here](/docs/configuration/interpolation#bloblang-queries), which are calculated per message of a batch.
 
-If the `properties` are not set in the config, all the `json` fields are marshaled and stored in the table, which will be created if it does not exist.
+If the `properties` are not set in the config, all the `json` fields are marshalled and stored in the table, which will be created if it does not exist.
 
 The `object` and `array` fields are marshaled as strings. e.g.:
 
 The JSON message:
+
 ```json
 {
   "foo": 55,
@@ -99,6 +102,7 @@ The JSON message:
 ```
 
 Will store in the table the following properties:
+
 ```yml
 foo: '55'
 bar: '{ "baz": "a", "bez": "b" }'
@@ -127,7 +131,7 @@ Batches can be formed at both the input and output level. You can find out more
 
 ### `storage_account`
 
-The storage account to upload messages to. This field is ignored if `storage_connection_string` is set.
+The storage account to access. This field is ignored if `storage_connection_string` is set.
 
 
 Type: `string`  
@@ -143,7 +147,15 @@ Default: `""`
 
 ### `storage_connection_string`
 
-A storage account connection string. This field is required if `storage_account` and `storage_access_key` are not set.
+A storage account connection string. This field is required if `storage_account` and `storage_access_key` / `storage_sas_token` are not set.
+
+
+Type: `string`  
+Default: `""`  
+
+### `storage_sas_token`
+
+The storage account SAS token. This field is ignored if `storage_connection_string` or `storage_access_key` are set.
 
 
 Type: `string`  
@@ -156,7 +168,6 @@ This field supports [interpolation functions](/docs/configuration/interpolation#
 
 
 Type: `string`  
-Default: `""`  
 
 ```yml
 # Examples
@@ -207,12 +218,13 @@ Default: `{}`
 
 ### `transaction_type`
 
-Type of transaction operation. Valid options are `INSERT`, `INSERT_MERGE`, `INSERT_REPLACE`, `UPDATE_MERGE`, `UPDATE_REPLACE` and `DELETE`
+Type of transaction operation.
 This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
 
 
 Type: `string`  
 Default: `"INSERT"`  
+Options: `INSERT`, `INSERT_MERGE`, `INSERT_REPLACE`, `UPDATE_MERGE`, `UPDATE_REPLACE`, `DELETE`.
 
 ```yml
 # Examples
@@ -319,7 +331,6 @@ A list of [processors](/docs/components/processors/about) to apply to a batch as
 
 
 Type: `array`  
-Default: `[]`  
 
 ```yml
 # Examples

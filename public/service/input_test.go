@@ -168,6 +168,52 @@ func TestBatchInputAirGapSad(t *testing.T) {
 	assert.Equal(t, component.ErrTypeClosed, err)
 }
 
+func TestBatchInputAirGapSadWithBackOff(t *testing.T) {
+	i := &fnBatchInput{
+		connect: func() error {
+			return NewErrBackOff(errors.New("bad connect"), time.Second*2)
+		},
+		read: func() (MessageBatch, AckFunc, error) {
+			return nil, nil, NewErrBackOff(errors.New("bad read"), time.Second*3)
+		},
+	}
+	agi := newAirGapBatchReader(i)
+
+	err := agi.Connect(context.Background())
+	assert.EqualError(t, err, "bad connect")
+
+	var e *component.ErrBackOff
+	assert.True(t, errors.As(err, &e))
+	assert.Equal(t, e.Wait, time.Second*2)
+	assert.EqualError(t, e.Err, "bad connect")
+	assert.Equal(t, e.Error(), "bad connect")
+
+	_, _, err = agi.ReadBatch(context.Background())
+	assert.EqualError(t, err, "bad read")
+
+	assert.True(t, errors.As(err, &e))
+	assert.Equal(t, e.Wait, time.Second*3)
+	assert.EqualError(t, e.Err, "bad read")
+	assert.Equal(t, e.Error(), "bad read")
+
+	i.read = func() (MessageBatch, AckFunc, error) {
+		return nil, nil, NewErrBackOff(ErrNotConnected, time.Second*2)
+	}
+
+	_, _, err = agi.ReadBatch(context.Background())
+
+	assert.True(t, errors.As(err, &e))
+	assert.Equal(t, e.Wait, time.Second*2)
+	assert.True(t, errors.Is(e.Err, component.ErrNotConnected))
+
+	i.read = func() (MessageBatch, AckFunc, error) {
+		return nil, nil, ErrEndOfInput
+	}
+
+	_, _, err = agi.ReadBatch(context.Background())
+	assert.Equal(t, component.ErrTypeClosed, err)
+}
+
 func TestBatchInputAirGapHappy(t *testing.T) {
 	var ackErr error
 	ackFn := func(ctx context.Context, err error) error {

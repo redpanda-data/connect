@@ -14,33 +14,7 @@ import (
 func init() {
 	err := service.RegisterOutput(
 		"pulsar",
-		service.NewConfigSpec().
-			Version("3.43.0").
-			Categories("Services").
-			Summary("Write messages to an Apache Pulsar server.").
-			Field(service.NewURLField("url").
-				Description("A URL to connect to.").
-				Example("pulsar://localhost:6650").
-				Example("pulsar://pulsar.us-west.example.com:6650").
-				Example("pulsar+ssl://pulsar.us-west.example.com:6651")).
-			Field(service.NewStringField("topic").
-				Description("The topic to publish to.")).
-			Field(service.NewObjectField("tls",
-				service.NewStringField("root_cas_file").
-					Description("An optional path of a root certificate authority file to use. This is a file, often with a .pem extension, containing a certificate chain from the parent trusted root certificate, to possible intermediate signing certificates, to the host certificate.").
-					Default("").
-					Example("./root_cas.pem")).
-				Description("Specify the path to a custom CA certificate to trust broker TLS service.")).
-			Field(service.NewInterpolatedStringField("key").
-				Description("The key to publish messages with.").
-				Default("")).
-			Field(service.NewInterpolatedStringField("ordering_key").
-				Description("The ordering key to publish messages with.").
-				Default("")).
-			Field(service.NewIntField("max_in_flight").
-				Description("The maximum number of messages to have in flight at a given time. Increase this to improve throughput.").
-				Default(64)).
-			Field(authField()),
+		outputConfigSpec(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Output, int, error) {
 			w, err := newPulsarWriterFromParsed(conf, mgr.Logger())
 			if err != nil {
@@ -55,6 +29,36 @@ func init() {
 	if err != nil {
 		panic(err)
 	}
+}
+
+func outputConfigSpec() *service.ConfigSpec {
+	return service.NewConfigSpec().
+		Version("3.43.0").
+		Categories("Services").
+		Summary("Write messages to an Apache Pulsar server.").
+		Field(service.NewURLField("url").
+			Description("A URL to connect to.").
+			Example("pulsar://localhost:6650").
+			Example("pulsar://pulsar.us-west.example.com:6650").
+			Example("pulsar+ssl://pulsar.us-west.example.com:6651")).
+		Field(service.NewStringField("topic").
+			Description("The topic to publish to.")).
+		Field(service.NewObjectField("tls",
+			service.NewStringField("root_cas_file").
+				Description("An optional path of a root certificate authority file to use. This is a file, often with a .pem extension, containing a certificate chain from the parent trusted root certificate, to possible intermediate signing certificates, to the host certificate.").
+				Default("").
+				Example("./root_cas.pem")).
+			Description("Specify the path to a custom CA certificate to trust broker TLS service.")).
+		Field(service.NewInterpolatedStringField("key").
+			Description("The key to publish messages with.").
+			Default("")).
+		Field(service.NewInterpolatedStringField("ordering_key").
+			Description("The ordering key to publish messages with.").
+			Default("")).
+		Field(service.NewIntField("max_in_flight").
+			Description("The maximum number of messages to have in flight at a given time. Increase this to improve throughput.").
+			Default(64)).
+		Field(authField())
 }
 
 //------------------------------------------------------------------------------
@@ -187,10 +191,22 @@ func (p *pulsarWriter) Write(ctx context.Context, msg *service.Message) error {
 	m := &pulsar.ProducerMessage{
 		Payload: b,
 	}
-	if key := p.key.Bytes(msg); len(key) > 0 {
+
+	key, err := p.key.TryBytes(msg)
+	if err != nil {
+		return err
+	}
+
+	if len(key) > 0 {
 		m.Key = string(key)
 	}
-	if orderingKey := p.orderingKey.Bytes(msg); len(orderingKey) > 0 {
+
+	orderingKey, err := p.orderingKey.TryBytes(msg)
+	if err != nil {
+		return err
+	}
+
+	if len(orderingKey) > 0 {
 		m.OrderingKey = string(orderingKey)
 	}
 

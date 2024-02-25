@@ -28,7 +28,7 @@ func TestInproc(t *testing.T) {
 
 	conf := output.NewConfig()
 	conf.Type = "inproc"
-	conf.Inproc = "foo"
+	conf.Plugin = "foo"
 
 	ip, err := mgr.NewOutput(conf)
 	require.NoError(t, err)

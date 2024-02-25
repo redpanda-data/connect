@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"io/fs"
@@ -16,7 +17,6 @@ import (
 
 	"github.com/benthosdev/benthos/v4/internal/cli/studio/metrics"
 	"github.com/benthosdev/benthos/v4/internal/cli/studio/tracing"
-	"github.com/benthosdev/benthos/v4/internal/log"
 )
 
 // DeploymentConfigMeta describes a file that makes up part of a deployment.
@@ -42,7 +42,7 @@ func addAuthHeaders(token, secret string, req *http.Request) {
 }
 
 type sessionTracker struct {
-	logger        log.Modular
+	logger        *hotSwapLogger
 	baseURL       string
 	nodeName      string
 	token, secret string
@@ -61,7 +61,7 @@ type sessionTracker struct {
 func initSessionTracker(
 	ctx context.Context,
 	nowFn func() time.Time,
-	logger log.Modular,
+	logger *hotSwapLogger,
 	nodeName, baseURLStr, token, secret string,
 ) (*sessionTracker, error) {
 	tracker := &sessionTracker{
@@ -79,9 +79,18 @@ func initSessionTracker(
 	return tracker, nil
 }
 
-func (s *sessionTracker) checkResponse(res *http.Response) (waitUntil *time.Time, err error) {
+type studioAPIErr struct {
+	StatusCode int
+	BodyBytes  []byte
+}
+
+func (s *studioAPIErr) Error() string {
+	return fmt.Sprintf("request failed with status %v: %s", s.StatusCode, s.BodyBytes)
+}
+
+func (s *sessionTracker) checkResponse(res *http.Response) (waitUntil *time.Time, abortReq bool, err error) {
 	if res.StatusCode == http.StatusOK {
-		return nil, nil
+		return nil, false, nil
 	}
 	if res.StatusCode == http.StatusTooManyRequests {
 		if retAfterInt, err := strconv.ParseInt(res.Header.Get("Retry-After"), 10, 64); err == nil {
@@ -89,8 +98,11 @@ func (s *sessionTracker) checkResponse(res *http.Response) (waitUntil *time.Time
 			waitUntil = &retUntil
 		}
 	}
+	_, abortReq = map[int]struct{}{
+		http.StatusNotFound: {},
+	}[res.StatusCode]
 	bodyBytes, _ := io.ReadAll(res.Body)
-	err = fmt.Errorf("request failed with status %v: %s", res.StatusCode, bodyBytes)
+	err = &studioAPIErr{StatusCode: res.StatusCode, BodyBytes: bodyBytes}
 	return
 }
 
@@ -152,17 +164,18 @@ func (s *sessionTracker) doRateLimitedReq(ctx context.Context, reqFn func() (*ht
 
 		// Wait for one second after an error by default
 		nextWait := s.nowFn().Add(time.Second)
+		var abortReq bool
 		if res, err = http.DefaultClient.Do(req.WithContext(ctx)); err == nil {
 			// No request error, but also check the response status and rate
 			// limit suggestions.
 			var nextWaitTmp *time.Time
-			if nextWaitTmp, err = s.checkResponse(res); nextWaitTmp != nil {
+			if nextWaitTmp, abortReq, err = s.checkResponse(res); nextWaitTmp != nil {
 				// The response has suggested a time to wait for, so we use
 				// that instead of our default.
 				nextWait = *nextWaitTmp
 			}
 		}
-		if err == nil {
+		if err == nil || abortReq {
 			return
 		}
 		if ctxErr := ctx.Err(); ctxErr != nil {
@@ -178,7 +191,7 @@ func (s *sessionTracker) doRateLimitedReq(ctx context.Context, reqFn func() (*ht
 		if res != nil {
 			errFields["status"] = res.Status
 		}
-		s.logger.WithFields(errFields).Errorf("Studio request failed")
+		s.logger.WithFields(errFields).Error("Studio request failed")
 
 		s.mut.Lock()
 		s.rateLimitTo = &nextWait
@@ -232,7 +245,7 @@ func (s *sessionTracker) init(ctx context.Context) error {
 	s.logger.WithFields(map[string]string{
 		"deployment_id":   response.DeploymentID,
 		"deployment_name": response.DeploymentName,
-	}).Infoln("Synced with session and preparing to load files from deployment")
+	}).Info("Synced with session and preparing to load files from deployment")
 
 	s.guideMetricsFlushPeriod = time.Second * time.Duration(response.MetricsGuidePeriodSeconds)
 	s.deploymentID = response.DeploymentID
@@ -282,19 +295,28 @@ func (s *sessionTracker) Leave(ctx context.Context) error {
 }
 
 // ReadFile attempts to read a given file from the session we're synced with.
-func (s *sessionTracker) ReadFile(ctx context.Context, name string) (fs.File, error) {
+func (s *sessionTracker) ReadFile(ctx context.Context, name string, headOnly bool) (fs.File, error) {
 	if err := s.waitForRateLimit(ctx); err != nil {
 		return nil, err
 	}
 
-	fileURL, err := url.Parse(s.baseURL)
-	if err != nil {
-		return nil, err
+	var fileURLStr string
+	{
+		fileURL, err := url.Parse(s.baseURL)
+		if err != nil {
+			return nil, err
+		}
+		fileURL.Path = path.Join(fileURL.Path, "/download")
+		fileURLStr = fileURL.String() + "/" + url.PathEscape(path.Clean(name))
 	}
-	fileURL.Path = path.Join(fileURL.Path, fmt.Sprintf("/download/%v", url.PathEscape(path.Clean(name))))
+
+	method := "GET"
+	if headOnly {
+		method = "HEAD"
+	}
 
 	res, err := s.doRateLimitedReq(ctx, func() (*http.Request, error) {
-		req, err := http.NewRequest("GET", fileURL.String(), http.NoBody)
+		req, err := http.NewRequest(method, fileURLStr, http.NoBody)
 		if err != nil {
 			return nil, err
 		}
@@ -302,6 +324,10 @@ func (s *sessionTracker) ReadFile(ctx context.Context, name string) (fs.File, er
 		return req, err
 	})
 	if err != nil {
+		var sErr *studioAPIErr
+		if errors.As(err, &sErr) && sErr.StatusCode == 404 {
+			return nil, fs.ErrNotExist
+		}
 		return nil, err
 	}
 
@@ -331,7 +357,11 @@ func (s *sessionTracker) ReadFile(ctx context.Context, name string) (fs.File, er
 		s.mut.Unlock()
 	}
 
-	return &sessionFile{res: res}, nil
+	return &sessionFile{
+		res:     res,
+		path:    name,
+		modTime: time.UnixMilli(int64(modTimeMillis)),
+	}, nil
 }
 
 //------------------------------------------------------------------------------
@@ -427,7 +457,7 @@ func (s *sessionTracker) Sync(
 		s.logger.WithFields(map[string]string{
 			"deployment_id":   response.Reassignment.ID,
 			"deployment_name": response.Reassignment.Name,
-		}).Infoln("Synced with session and reassigned to a different deployment")
+		}).Info("Synced with session and reassigned to a different deployment")
 
 		// We will need to sync again in order to obtain the new deployment
 		// configs. We do this straight away as there's no sense in delaying,
@@ -442,7 +472,7 @@ func (s *sessionTracker) Sync(
 
 	s.logger.WithFields(map[string]string{
 		"deployment_id": depID,
-	}).Infoln("Synced with session")
+	}).Info("Synced with session")
 	requestsTraces = response.RequestedTraces
 
 	// Reflect the diff returned in our new summary of files.

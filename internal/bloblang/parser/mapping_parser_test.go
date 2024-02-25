@@ -44,6 +44,10 @@ func TestMappingErrors(t *testing.T) {
    `,
 			errContains: `line 2 char 4: expected import, map, or assignment`,
 		},
+		"comment with no mapping": {
+			mapping:     `# foobar`,
+			errContains: `line 1 char 1: expected import, map, or assignment`,
+		},
 		"double mapping": {
 			mapping:     `foo = bar bar = baz`,
 			errContains: `line 1 char 11: expected line break`,
@@ -124,16 +128,29 @@ foo = bar.apply("foo")`,
 			errContains: `line 1 char 5: required: expected map name`,
 		},
 		"no file import": {
-			mapping: `import "this file doesnt exist (i hope)"
+			mapping: `import "this file doesn't exist (I hope)"
 
 foo = bar.apply("from_import")`,
-			errContains: `this file doesnt exist (i hope): no such file or directory`,
+			errContains: `this file doesn't exist (I hope): no such file or directory`,
+		},
+		"no file directly imported mapping": {
+			mapping:     `from "this file doesn't exist (I hope)"`,
+			errContains: `this file doesn't exist (I hope): no such file or directory`,
 		},
 		"bad file import": {
 			mapping: fmt.Sprintf(`import "%v"
 
 foo = bar.apply("from_import")`, badMapFile),
 			errContains: fmt.Sprintf(`line 1 char 1: failed to parse import '%v': line 1 char 5: expected =`, badMapFile),
+		},
+		"bad file directly imported mapping": {
+			mapping:     fmt.Sprintf(`from "%v"`, badMapFile),
+			errContains: fmt.Sprintf(`line 1 char 1: failed to parse import '%v': line 1 char 5: expected =`, badMapFile),
+		},
+		"unexpected content after directly imported mapping": {
+			mapping: fmt.Sprintf(`from "%v"
+root.foo = "not allowed"`, goodMapFile),
+			errContains: `line 1 char 1: unexpected content after single root import: root.foo = "not allowed"`,
 		},
 		"no maps file import": {
 			mapping: fmt.Sprintf(`import "%v"
@@ -142,7 +159,7 @@ foo = bar.apply("from_import")`, noMapsFile),
 			errContains: fmt.Sprintf(`line 1 char 1: no maps to import from '%v'`, noMapsFile),
 		},
 		"colliding maps file import": {
-			mapping: fmt.Sprintf(`map "foo" { this = that }			
+			mapping: fmt.Sprintf(`map "foo" { this = that }
 
 import "%v"
 
@@ -152,7 +169,7 @@ foo = bar.apply("foo")`, goodMapFile),
 		"quotes at root": {
 			mapping: `
 "root.something" = 5 + 2`,
-			errContains: "line 2 char 1: expected import, map, or assignment",
+			errContains: "line 2 char 18: expected the mapping to end here as the beginning is shorthand for `root = \"root.someth...`, but this shorthand form cannot be followed with more assignments",
 		},
 	}
 
@@ -227,12 +244,12 @@ zed = deleted()
 			output: part{Content: `{"bar":"test1","foo":12}`},
 		},
 		"simple json map 3": {
-			mapping: `  
+			mapping: `
   foo = foo + 2
-      
+
    bar = "test1"
 
-zed = deleted()   
+zed = deleted()
   `,
 			input:  []part{{Content: `{"foo":10,"zed":"gone"}`}},
 			output: part{Content: `{"bar":"test1","foo":12}`},
@@ -412,6 +429,17 @@ foo = "static"`,
 				Content: `static string`,
 			},
 		},
+		"test map without mapping": {
+			mapping: `map foo {
+  foo = "static foo"
+}`,
+			input: []part{
+				{Content: `{"foo":"bar"}`},
+			},
+			output: part{
+				Content: `{"foo":"bar"}`,
+			},
+		},
 		"test maps": {
 			mapping: `map foo {
   foo = "static foo"
@@ -446,6 +474,25 @@ root = this.apply("foo")`,
 				Content: `{"applied":["bar","foo"],"foo":{"bar":{"outer":{"inner":"hello world"}},"static":"this is valid"}}`,
 			},
 		},
+		"test single root mapping": {
+			mapping: `"foo" == "bar"`,
+			input: []part{
+				{Content: ``},
+			},
+			output: part{
+				Content: `false`,
+			},
+		},
+		"test single root mapping with blobl shebang": {
+			mapping: `#!blobl
+"foo" == "bar"`,
+			input: []part{
+				{Content: ``},
+			},
+			output: part{
+				Content: `false`,
+			},
+		},
 		"test imported map": {
 			mapping: fmt.Sprintf(`import "%v"
 
@@ -457,8 +504,31 @@ root = this.apply("foo")`, goodMapFile),
 				Content: `{"foo":"this is valid","nested":{"outer":{"inner":"hello world"}}}`,
 			},
 		},
-		"test directly imported map": {
+		"test imported map with blobl shebang": {
+			mapping: fmt.Sprintf(`#!blobl
+import "%v"
+
+root = this.apply("foo")`, goodMapFile),
+			input: []part{
+				{Content: `{"outer":{"inner":"hello world"}}`},
+			},
+			output: part{
+				Content: `{"foo":"this is valid","nested":{"outer":{"inner":"hello world"}}}`,
+			},
+		},
+		"test directly imported mapping": {
 			mapping: fmt.Sprintf(`from "%v"`, directMapFile),
+			input: []part{
+				{Content: `{"inner":"hello world"}`},
+			},
+			output: part{
+				Content: `{"nested":{"inner":"hello world"}}`,
+			},
+		},
+		"test directly imported mapping with blobl shebang": {
+			mapping: fmt.Sprintf(`#!blobl
+
+from "%v"`, directMapFile),
 			input: []part{
 				{Content: `{"inner":"hello world"}`},
 			},

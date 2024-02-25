@@ -2,40 +2,44 @@ package pure
 
 import (
 	"context"
-	"fmt"
-	"strconv"
 
 	"github.com/benthosdev/benthos/v4/internal/bundle"
+	"github.com/benthosdev/benthos/v4/internal/component/interop"
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
-	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/message"
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
 func init() {
-	err := bundle.AllProcessors.Add(func(conf processor.Config, mgr bundle.NewManagement) (processor.V1, error) {
-		p, err := newForEach(conf.ForEach, mgr)
-		if err != nil {
-			return nil, err
-		}
-		return processor.NewAutoObservedBatchedProcessor("for_each", p, mgr), nil
-	}, docs.ComponentSpec{
-		Name: "for_each",
-		Categories: []string{
-			"Composition",
-		},
-		Summary: `
-A processor that applies a list of child processors to messages of a batch as
-though they were each a batch of one message.`,
-		Description: `
-This is useful for forcing batch wide processors such as
-` + "[`dedupe`](/docs/components/processors/dedupe)" + ` or interpolations such
-as the ` + "`value`" + ` field of the ` + "`metadata`" + ` processor to execute
-on individual message parts of a batch instead.
+	err := service.RegisterBatchProcessor("for_each", service.NewConfigSpec().
+		Stable().
+		Categories("Composition").
+		Summary("A processor that applies a list of child processors to messages of a batch as though they were each a batch of one message.").
+		Description(`
+This is useful for forcing batch wide processors such as `+"[`dedupe`](/docs/components/processors/dedupe)"+` or interpolations such as the `+"`value`"+` field of the `+"`metadata`"+` processor to execute on individual message parts of a batch instead.
 
-Please note that most processors already process per message of a batch, and
-this processor is not needed in those cases.`,
-		Config: docs.FieldProcessor("", "").Array().HasDefault([]any{}),
-	})
+Please note that most processors already process per message of a batch, and this processor is not needed in those cases.`).
+		Field(service.NewProcessorListField("").Default([]any{})),
+		func(conf *service.ParsedConfig, res *service.Resources) (service.BatchProcessor, error) {
+			mgr := interop.UnwrapManagement(res)
+			childPubProcs, err := conf.FieldProcessorList()
+			if err != nil {
+				return nil, err
+			}
+
+			childProcs := make([]processor.V1, len(childPubProcs))
+			for i, p := range childPubProcs {
+				childProcs[i] = interop.UnwrapOwnedProcessor(p)
+			}
+
+			tp, err := newForEach(childProcs, mgr)
+			if err != nil {
+				return nil, err
+			}
+
+			p := processor.NewAutoObservedBatchedProcessor("for_each", tp, mgr)
+			return interop.NewUnwrapInternalBatchProcessor(p), nil
+		})
 	if err != nil {
 		panic(err)
 	}
@@ -45,16 +49,7 @@ type forEachProc struct {
 	children []processor.V1
 }
 
-func newForEach(conf []processor.Config, mgr bundle.NewManagement) (*forEachProc, error) {
-	var children []processor.V1
-	for i, pconf := range conf {
-		pMgr := mgr.IntoPath("for_each", strconv.Itoa(i))
-		proc, err := pMgr.NewProcessor(pconf)
-		if err != nil {
-			return nil, fmt.Errorf("child processor [%v]: %w", i, err)
-		}
-		children = append(children, proc)
-	}
+func newForEach(children []processor.V1, mgr bundle.NewManagement) (*forEachProc, error) {
 	return &forEachProc{children: children}, nil
 }
 

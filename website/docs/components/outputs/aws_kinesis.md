@@ -14,7 +14,6 @@ categories: ["Services","AWS"]
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-
 Sends messages to a Kinesis stream.
 
 Introduced in version 3.36.0.
@@ -32,8 +31,8 @@ Introduced in version 3.36.0.
 output:
   label: ""
   aws_kinesis:
-    stream: ""
-    partition_key: ""
+    stream: foo # No default (required)
+    partition_key: "" # No default (required)
     max_in_flight: 64
     batching:
       count: 0
@@ -50,16 +49,16 @@ output:
 output:
   label: ""
   aws_kinesis:
-    stream: ""
-    partition_key: ""
-    hash_key: ""
+    stream: foo # No default (required)
+    partition_key: "" # No default (required)
+    hash_key: "" # No default (optional)
     max_in_flight: 64
     batching:
       count: 0
       byte_size: 0
       period: ""
       check: ""
-      processors: []
+      processors: [] # No default (optional)
     region: ""
     endpoint: ""
     credentials:
@@ -80,17 +79,11 @@ output:
 </TabItem>
 </Tabs>
 
-Both the `partition_key`(required) and `hash_key` (optional)
-fields can be dynamically set using function interpolations described
-[here](/docs/configuration/interpolation#bloblang-queries). When sending batched messages the
-interpolations are performed per message part.
+Both the `partition_key`(required) and `hash_key` (optional) fields can be dynamically set using function interpolations described [here](/docs/configuration/interpolation#bloblang-queries). When sending batched messages the interpolations are performed per message part.
 
 ### Credentials
 
-By default Benthos will use a shared credentials file when connecting to AWS
-services. It's also possible to set them explicitly at the component level,
-allowing you to transfer data across accounts. You can find out more
-[in this document](/docs/guides/cloud/aws).
+By default Benthos will use a shared credentials file when connecting to AWS services. It's also possible to set them explicitly at the component level, allowing you to transfer data across accounts. You can find out more [in this document](/docs/guides/cloud/aws).
 
 ## Performance
 
@@ -106,11 +99,18 @@ Batches can be formed at both the input and output level. You can find out more
 
 ### `stream`
 
-The stream to publish messages to.
+The stream to publish messages to. Streams can either be specified by their name or full ARN.
 
 
 Type: `string`  
-Default: `""`  
+
+```yml
+# Examples
+
+stream: foo
+
+stream: arn:aws:kinesis:*:111122223333:stream/my-stream
+```
 
 ### `partition_key`
 
@@ -119,7 +119,6 @@ This field supports [interpolation functions](/docs/configuration/interpolation#
 
 
 Type: `string`  
-Default: `""`  
 
 ### `hash_key`
 
@@ -128,7 +127,6 @@ This field supports [interpolation functions](/docs/configuration/interpolation#
 
 
 Type: `string`  
-Default: `""`  
 
 ### `max_in_flight`
 
@@ -217,7 +215,6 @@ A list of [processors](/docs/components/processors/about) to apply to a batch as
 
 
 Type: `array`  
-Default: `[]`  
 
 ```yml
 # Examples
@@ -277,6 +274,9 @@ Default: `""`
 ### `credentials.secret`
 
 The secret for the credentials being used.
+:::warning Secret
+This field contains sensitive information that usually shouldn't be added to a config directly, read our [secrets page for more info](/docs/configuration/secrets).
+:::
 
 
 Type: `string`  

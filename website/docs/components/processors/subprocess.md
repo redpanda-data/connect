@@ -14,7 +14,6 @@ categories: ["Integration"]
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-
 Executes a command as a subprocess and, for each message, will pipe its contents to the stdin stream of the process followed by a newline.
 
 
@@ -29,7 +28,7 @@ Executes a command as a subprocess and, for each message, will pipe its contents
 # Common config fields, showing default values
 label: ""
 subprocess:
-  name: ""
+  name: cat # No default (required)
   args: []
 ```
 
@@ -40,7 +39,7 @@ subprocess:
 # All config fields, showing default values
 label: ""
 subprocess:
-  name: ""
+  name: cat # No default (required)
   args: []
   max_buffer: 65536
   codec_send: lines
@@ -49,6 +48,10 @@ subprocess:
 
 </TabItem>
 </Tabs>
+
+:::info
+This processor keeps the subprocess alive and requires very specific behaviour from the command executed. If you wish to simply execute a command for each message take a look at the [`command` processor](/docs/components/processors/command) instead.
+:::
 
 The subprocess must then either return a line over stdout or stderr. If a response is returned over stdout then its contents will replace the message. If a response is instead returned from stderr it will be logged and the message will continue unchanged and will be [marked as failed](/docs/configuration/error_handling).
 
@@ -74,7 +77,6 @@ The command to execute as a subprocess.
 
 
 Type: `string`  
-Default: `""`  
 
 ```yml
 # Examples

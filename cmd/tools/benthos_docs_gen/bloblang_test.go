@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/propagation"
-	"go.opentelemetry.io/otel/trace"
+	"go.opentelemetry.io/otel/trace/noop"
 
 	"github.com/benthosdev/benthos/v4/internal/bloblang"
 	"github.com/benthosdev/benthos/v4/internal/bloblang/query"
@@ -41,6 +41,9 @@ func TestFunctionExamples(t *testing.T) {
 		t.Run(spec.Name, func(t *testing.T) {
 			t.Parallel()
 			for i, e := range spec.Examples {
+				if e.SkipTesting {
+					continue
+				}
 				m, err := bloblang.GlobalEnvironment().NewMapping(e.Mapping)
 				require.NoError(t, err)
 
@@ -50,7 +53,7 @@ func TestFunctionExamples(t *testing.T) {
 						"traceparent": "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01",
 					}
 					otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}))
-					require.NoError(t, tracing.InitSpansFromParentTextMap(trace.NewNoopTracerProvider(), "test", textMap, msg))
+					require.NoError(t, tracing.InitSpansFromParentTextMap(noop.NewTracerProvider(), "test", textMap, msg))
 
 					p, err := m.MapPart(0, msg)
 					exp := io[1]
@@ -96,6 +99,9 @@ func TestMethodExamples(t *testing.T) {
 		t.Run(spec.Name, func(t *testing.T) {
 			t.Parallel()
 			for i, e := range spec.Examples {
+				if e.SkipTesting {
+					continue
+				}
 				m, err := bloblang.GlobalEnvironment().NewMapping(e.Mapping)
 				require.NoError(t, err)
 
@@ -117,6 +123,9 @@ func TestMethodExamples(t *testing.T) {
 			}
 			for _, target := range spec.Categories {
 				for i, e := range target.Examples {
+					if e.SkipTesting {
+						continue
+					}
 					m, err := bloblang.GlobalEnvironment().NewMapping(e.Mapping)
 					require.NoError(t, err)
 

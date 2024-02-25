@@ -33,7 +33,7 @@ Introduced in version 3.48.0.
 # Common config fields, showing default values
 label: ""
 aws_dynamodb_partiql:
-  query: ""
+  query: "" # No default (required)
   args_mapping: ""
 ```
 
@@ -44,7 +44,7 @@ aws_dynamodb_partiql:
 # All config fields, showing default values
 label: ""
 aws_dynamodb_partiql:
-  query: ""
+  query: "" # No default (required)
   unsafe_dynamic_query: false
   args_mapping: ""
   region: ""

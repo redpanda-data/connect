@@ -2,75 +2,96 @@ package azure
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/runtime"
 	"github.com/Azure/azure-sdk-for-go/sdk/data/aztables"
 
-	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component"
-	"github.com/benthosdev/benthos/v4/internal/component/input"
-	"github.com/benthosdev/benthos/v4/internal/component/input/processors"
-	"github.com/benthosdev/benthos/v4/internal/component/metrics"
-	"github.com/benthosdev/benthos/v4/internal/docs"
-	"github.com/benthosdev/benthos/v4/internal/impl/azure/shared"
-	"github.com/benthosdev/benthos/v4/internal/log"
-	"github.com/benthosdev/benthos/v4/internal/message"
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
-func init() {
-	err := bundle.AllInputs.Add(processors.WrapConstructor(func(conf input.Config, nm bundle.NewManagement) (input.Streamed, error) {
-		r, err := newAzureTableStorage(conf.AzureTableStorage, nm.Logger(), nm.Metrics())
-		if err != nil {
-			return nil, err
-		}
-		return input.NewAsyncReader("azure_table_storage", input.NewAsyncPreserver(r), nm)
-	}), docs.ComponentSpec{
-		Name:    "azure_table_storage",
-		Status:  docs.StatusBeta,
-		Version: "4.10.0",
-		Summary: `
-Queries an Azure Storage Account Table, optionally with multiple filters.`,
-		Description: `
+const (
+	// Table Storage Input Fields
+	tsiFieldTableName = "table_name"
+	tsiFieldFilter    = "filter"
+	tsiFieldSelect    = "select"
+	tsiFieldPageSize  = "page_size"
+)
+
+type tsiConfig struct {
+	client    *aztables.Client
+	TableName string
+	Filter    string
+	Select    string
+	PageSize  int32
+}
+
+func tsiConfigFromParsed(pConf *service.ParsedConfig) (conf tsiConfig, err error) {
+	var svcClient *aztables.ServiceClient
+	if svcClient, err = tablesServiceClientFromParsed(pConf); err != nil {
+		return
+	}
+	if conf.TableName, err = pConf.FieldString(tsiFieldTableName); err != nil {
+		return
+	}
+	if conf.Filter, err = pConf.FieldString(tsiFieldFilter); err != nil {
+		return
+	}
+	if conf.Select, err = pConf.FieldString(tsiFieldSelect); err != nil {
+		return
+	}
+	var pageSize int
+	if pageSize, err = pConf.FieldInt(tsiFieldPageSize); err != nil {
+		return
+	}
+	conf.PageSize = int32(pageSize)
+	conf.client = svcClient.NewClient(conf.TableName)
+	return
+}
+
+func tsiSpec() *service.ConfigSpec {
+	return azureComponentSpec(false).
+		Beta().
+		Version("4.10.0").
+		Summary(`Queries an Azure Storage Account Table, optionally with multiple filters.`).
+		Description(`
 Queries an Azure Storage Account Table, optionally with multiple filters.
 ## Metadata
 This input adds the following metadata fields to each message:
-` + "```" + `
+`+"```"+`
 - table_storage_name
 - row_num
-` + "```" + `
-You can access these metadata fields using [function interpolation](/docs/configuration/interpolation#bloblang-queries).`,
-		Config: docs.FieldComponent().WithChildren(
-			docs.FieldString(
-				"storage_account",
-				"The storage account to upload messages to. This field is ignored if `storage_connection_string` is set.",
-			),
-			docs.FieldString(
-				"storage_access_key",
-				"The storage account access key. This field is ignored if `storage_connection_string` is set.",
-			),
-			docs.FieldString(
-				"storage_connection_string",
-				"A storage account connection string. This field is required if `storage_account` and `storage_access_key` are not set.",
-			),
-			docs.FieldString("table_name", "The table to read messages from.",
-				`Foo`,
-			),
-			docs.FieldString("filter", "OData filter expression. Is not set all rows are returned. Valid operators are `eq, ne, gt, lt, ge and le`",
-				`PartitionKey eq 'foo' and RowKey gt '1000'`,
-			).Advanced(),
-			docs.FieldString("select", "Select expression using OData notation. Limits the columns on each record to just those requested.",
-				`PartitionKey,RowKey,Foo,Bar,Timestamp`,
-			).Advanced(),
-			docs.FieldInt("page_size", "Maximum number of records to return on each page.",
-				`1000`,
-			).Advanced(),
-		).ChildDefaultAndTypesFromStruct(input.NewAzureTableStorageConfig()),
-		Categories: []string{
-			"Services",
-			"Azure",
-		},
-	})
+`+"```"+`
+You can access these metadata fields using [function interpolation](/docs/configuration/interpolation#bloblang-queries).`).
+		Fields(
+			service.NewStringField(tsiFieldTableName).
+				Description("The table to read messages from.").
+				Example(`Foo`),
+			service.NewStringField(tsiFieldFilter).
+				Description("OData filter expression. Is not set all rows are returned. Valid operators are `eq, ne, gt, lt, ge and le`").Example(`PartitionKey eq 'foo' and RowKey gt '1000'`).
+				Advanced().
+				Default(""),
+			service.NewStringField(tsiFieldSelect).
+				Description("Select expression using OData notation. Limits the columns on each record to just those requested.").
+				Example(`PartitionKey,RowKey,Foo,Bar,Timestamp`).
+				Advanced().
+				Default(""),
+			service.NewIntField(tsiFieldPageSize).
+				Description("Maximum number of records to return on each page.").
+				Advanced().
+				Default(1000),
+		)
+}
+
+func init() {
+	err := service.RegisterBatchInput("azure_table_storage", tsiSpec(),
+		func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchInput, error) {
+			pConf, err := tsiConfigFromParsed(conf)
+			if err != nil {
+				return nil, err
+			}
+			return newAzureTableStorage(pConf, mgr)
+		})
 	if err != nil {
 		panic(err)
 	}
@@ -81,25 +102,17 @@ You can access these metadata fields using [function interpolation](/docs/config
 // AzureTableStorage is a benthos reader.Type implementation that reads rows
 // from an Azure Storage Table.
 type azureTableStorage struct {
-	conf   input.AzureTableStorageConfig
-	client *aztables.Client
-	pager  *runtime.Pager[aztables.ListEntitiesResponse]
-	row    int
-	log    log.Modular
-	stats  metrics.Type
+	conf  tsiConfig
+	pager *runtime.Pager[aztables.ListEntitiesResponse]
+	row   int
+	log   *service.Logger
 }
 
 // newAzureTableStorage creates a new Azure Table Storage input type.
-func newAzureTableStorage(conf input.AzureTableStorageConfig, log log.Modular, stats metrics.Type) (*azureTableStorage, error) {
-	client, err := shared.GetServiceClient(conf.StorageAccount, conf.StorageAccessKey, conf.StorageConnectionString)
-	if err != nil {
-		return nil, fmt.Errorf("invalid azure storage account credentials: %v", err)
-	}
+func newAzureTableStorage(conf tsiConfig, mgr *service.Resources) (*azureTableStorage, error) {
 	a := &azureTableStorage{
-		conf:   conf,
-		log:    log,
-		stats:  stats,
-		client: client.NewClient(conf.TableName),
+		conf: conf,
+		log:  mgr.Logger(),
 	}
 	return a, nil
 }
@@ -111,7 +124,7 @@ func (a *azureTableStorage) Connect(ctx context.Context) error {
 		Select: stringOrNil(a.conf.Select),
 		Top:    int32OrNil(a.conf.PageSize),
 	}
-	a.pager = a.client.NewListEntitiesPager(options)
+	a.pager = a.conf.client.NewListEntitiesPager(options)
 	return nil
 }
 
@@ -130,7 +143,7 @@ func int32OrNil(val int32) *int32 {
 }
 
 // ReadBatch attempts to read a new page from the target Azure Storage Table.
-func (a *azureTableStorage) ReadBatch(ctx context.Context) (msg message.Batch, ackFn input.AsyncAckFn, err error) {
+func (a *azureTableStorage) ReadBatch(ctx context.Context) (batch service.MessageBatch, ackFn service.AckFunc, err error) {
 	if a.pager.More() {
 		resp, err := a.pager.NextPage(ctx)
 		if err != nil {
@@ -139,16 +152,15 @@ func (a *azureTableStorage) ReadBatch(ctx context.Context) (msg message.Batch, a
 		}
 		if len(resp.Entities) > 0 {
 			for _, entity := range resp.Entities {
-				p := message.NewPart(entity)
-				msg = append(msg, p)
+				p := service.NewMessage(entity)
+				batch = append(batch, p)
 			}
-			_ = msg.Iter(func(_ int, part *message.Part) error {
+			for i := 0; i < len(batch); i++ {
 				a.row++
-				part.MetaSetMut("table_storage_name", a.conf.TableName)
-				part.MetaSetMut("row_num", a.row)
-				return nil
-			})
-			return msg, func(rctx context.Context, res error) error {
+				batch[i].MetaSetMut("table_storage_name", a.conf.TableName)
+				batch[i].MetaSetMut("row_num", a.row)
+			}
+			return batch, func(rctx context.Context, res error) error {
 				return nil
 			}, err
 		}

@@ -12,22 +12,11 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
-	yaml "gopkg.in/yaml.v3"
 
-	"github.com/benthosdev/benthos/v4/internal/component/output"
-	"github.com/benthosdev/benthos/v4/internal/component/processor"
-	"github.com/benthosdev/benthos/v4/internal/config"
-
+	"github.com/benthosdev/benthos/v4/internal/component/testutil"
 	_ "github.com/benthosdev/benthos/v4/public/components/io"
 	_ "github.com/benthosdev/benthos/v4/public/components/pure"
 )
-
-func parseYAMLOutputConf(t testing.TB, formatStr string, args ...any) (conf output.Config) {
-	t.Helper()
-	conf = output.NewConfig()
-	require.NoError(t, yaml.Unmarshal(fmt.Appendf(nil, formatStr, args...), &conf))
-	return
-}
 
 func TestHandlerAsync(t *testing.T) {
 	var results [][]byte
@@ -46,11 +35,12 @@ func TestHandlerAsync(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	conf := config.New()
-	conf.Output = parseYAMLOutputConf(t, `
-http_client:
-  url: %v
-`, ts.URL)
+	conf, err := testutil.ConfigFromYAML(fmt.Sprintf(`
+output:
+  http_client:
+    url: %v
+`, ts.URL))
+	require.NoError(t, err)
 
 	h, err := NewHandler(conf)
 	if err != nil {
@@ -74,8 +64,11 @@ http_client:
 }
 
 func TestHandlerSync(t *testing.T) {
-	conf := config.New()
-	conf.Output.Type = ServerlessResponseType
+	conf, err := testutil.ConfigFromYAML(`
+output:
+  sync_response: {}
+`)
+	require.NoError(t, err)
 
 	h, err := NewHandler(conf)
 	if err != nil {
@@ -96,14 +89,15 @@ func TestHandlerSync(t *testing.T) {
 }
 
 func TestHandlerSyncBatch(t *testing.T) {
-	conf := config.New()
-	conf.Output.Type = ServerlessResponseType
-
-	pConf := processor.NewConfig()
-	pConf.Type = "select_parts"
-	pConf.SelectParts.Parts = []int{0, 0, 0}
-
-	conf.Pipeline.Processors = append(conf.Pipeline.Processors, pConf)
+	conf, err := testutil.ConfigFromYAML(`
+pipeline:
+  processors:
+    - select_parts:
+        parts: [ 0, 0, 0 ]
+output:
+  sync_response: {}
+`)
+	require.NoError(t, err)
 
 	h, err := NewHandler(conf)
 	if err != nil {
@@ -128,19 +122,16 @@ func TestHandlerSyncBatch(t *testing.T) {
 }
 
 func TestHandlerSyncBatches(t *testing.T) {
-	conf := config.New()
-	conf.Output.Type = ServerlessResponseType
-
-	pConf := processor.NewConfig()
-	pConf.Type = "select_parts"
-	pConf.SelectParts.Parts = []int{0, 0, 0}
-
-	conf.Pipeline.Processors = append(conf.Pipeline.Processors, pConf)
-
-	pConf = processor.NewConfig()
-	pConf.Type = "split"
-
-	conf.Pipeline.Processors = append(conf.Pipeline.Processors, pConf)
+	conf, err := testutil.ConfigFromYAML(`
+pipeline:
+  processors:
+    - select_parts:
+        parts: [ 0, 0, 0 ]
+    - split: {}
+output:
+  sync_response: {}
+`)
+	require.NoError(t, err)
 
 	h, err := NewHandler(conf)
 	if err != nil {
@@ -181,20 +172,15 @@ func TestHandlerCombined(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	conf := config.New()
-	conf.Output.Type = "broker"
-
-	cConf := output.NewConfig()
-	cConf.Type = ServerlessResponseType
-
-	conf.Output.Broker.Outputs = append(conf.Output.Broker.Outputs, cConf)
-
-	cConf = parseYAMLOutputConf(t, `
-http_client:
-  url: %v
-`, ts.URL)
-
-	conf.Output.Broker.Outputs = append(conf.Output.Broker.Outputs, cConf)
+	conf, err := testutil.ConfigFromYAML(fmt.Sprintf(`
+output:
+  broker:
+    outputs:
+      - sync_response: {}
+      - http_client:
+          url: %v
+`, ts.URL))
+	require.NoError(t, err)
 
 	h, err := NewHandler(conf)
 	if err != nil {

@@ -29,8 +29,8 @@ Connects to an AMQP (0.91) queue. AMQP is a messaging protocol used by various m
 input:
   label: ""
   amqp_0_9:
-    urls: []
-    queue: ""
+    urls: [] # No default (required)
+    queue: "" # No default (required)
     consumer_tag: ""
     prefetch_count: 10
 ```
@@ -43,13 +43,13 @@ input:
 input:
   label: ""
   amqp_0_9:
-    urls: []
-    queue: ""
+    urls: [] # No default (required)
+    queue: "" # No default (required)
     queue_declare:
       enabled: false
       durable: true
       auto_delete: false
-    bindings_declare: []
+    bindings_declare: [] # No default (optional)
     consumer_tag: ""
     auto_ack: false
     nack_reject_patterns: []
@@ -309,6 +309,7 @@ A list of client certificates to use. For each certificate either the fields `ce
 
 
 Type: `array`  
+Default: `[]`  
 
 ```yml
 # Examples

@@ -12,22 +12,26 @@ import (
 
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component"
-	"github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
 )
 
 func TestRetryConfigErrs(t *testing.T) {
-	conf := output.NewConfig()
-	conf.Type = "retry"
+	conf := parseYAMLOutputConf(t, `
+retry: {}
+`)
 
 	if _, err := bundle.AllOutputs.Init(conf, mock.NewManager()); err == nil {
 		t.Error("Expected error from bad retry output")
 	}
 
-	oConf := output.NewConfig()
-	conf.Retry.Output = &oConf
-	conf.Retry.Backoff.InitialInterval = "not a time period"
+	conf = parseYAMLOutputConf(t, `
+retry:
+  output:
+    drop: {}
+  backoff:
+    initial_interval: not a time period
+`)
 
 	if _, err := bundle.AllOutputs.Init(conf, mock.NewManager()); err == nil {
 		t.Error("Expected error from bad initial period")
@@ -50,11 +54,11 @@ func TestRetryBasic(t *testing.T) {
 	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
 	defer done()
 
-	conf := output.NewConfig()
-	conf.Type = "retry"
-
-	childConf := output.NewConfig()
-	conf.Retry.Output = &childConf
+	conf := parseYAMLOutputConf(t, `
+retry:
+  output:
+    drop: {}
+`)
 
 	output, err := bundle.AllOutputs.Init(conf, mock.NewManager())
 	if err != nil {
@@ -112,13 +116,14 @@ func TestRetrySadPath(t *testing.T) {
 	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
 	defer done()
 
-	conf := output.NewConfig()
-	conf.Type = "retry"
-
-	childConf := output.NewConfig()
-	conf.Retry.Output = &childConf
-	conf.Retry.Backoff.InitialInterval = "10us"
-	conf.Retry.Backoff.MaxInterval = "10us"
+	conf := parseYAMLOutputConf(t, `
+retry:
+  output:
+    drop: {}
+  backoff:
+    initial_interval: 10us
+    max_interval: 10us
+`)
 
 	output, err := bundle.AllOutputs.Init(conf, mock.NewManager())
 	if err != nil {
@@ -264,13 +269,14 @@ func TestRetryParallel(t *testing.T) {
 	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
 	defer done()
 
-	conf := output.NewConfig()
-	conf.Type = "retry"
-
-	childConf := output.NewConfig()
-	conf.Retry.Output = &childConf
-	conf.Retry.Backoff.InitialInterval = "10us"
-	conf.Retry.Backoff.MaxInterval = "10us"
+	conf := parseYAMLOutputConf(t, `
+retry:
+  output:
+    drop: {}
+  backoff:
+    initial_interval: 10us
+    max_interval: 10us
+`)
 
 	output, err := bundle.AllOutputs.Init(conf, mock.NewManager())
 	if err != nil {
@@ -323,13 +329,14 @@ func TestRetryParallel(t *testing.T) {
 func TestRetryMutations(t *testing.T) {
 	mockOutput := &mock.OutputChanneled{}
 
-	conf := output.NewConfig()
-	conf.Type = "retry"
-
-	childConf := output.NewConfig()
-	conf.Retry.Output = &childConf
-	conf.Retry.Backoff.InitialInterval = "10us"
-	conf.Retry.Backoff.MaxInterval = "10us"
+	conf := parseYAMLOutputConf(t, `
+retry:
+  output:
+    drop: {}
+  backoff:
+    initial_interval: 10us
+    max_interval: 10us
+`)
 
 	output, err := bundle.AllOutputs.Init(conf, mock.NewManager())
 	require.NoError(t, err)

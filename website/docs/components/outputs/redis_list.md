@@ -14,9 +14,7 @@ categories: ["Services"]
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-
-Pushes messages onto the end of a Redis list (which is created if it doesn't
-already exist) using the RPUSH command.
+Pushes messages onto the end of a Redis list (which is created if it doesn't already exist) using the RPUSH command.
 
 
 <Tabs defaultValue="common" values={[
@@ -31,8 +29,8 @@ already exist) using the RPUSH command.
 output:
   label: ""
   redis_list:
-    url: ""
-    key: ""
+    url: redis://:6397 # No default (required)
+    key: some_list # No default (required)
     max_in_flight: 64
     batching:
       count: 0
@@ -49,7 +47,7 @@ output:
 output:
   label: ""
   redis_list:
-    url: ""
+    url: redis://:6397 # No default (required)
     kind: simple
     master: ""
     tls:
@@ -59,22 +57,21 @@ output:
       root_cas: ""
       root_cas_file: ""
       client_certs: []
-    key: ""
+    key: some_list # No default (required)
     max_in_flight: 64
     batching:
       count: 0
       byte_size: 0
       period: ""
       check: ""
-      processors: []
+      processors: [] # No default (optional)
+    command: rpush
 ```
 
 </TabItem>
 </Tabs>
 
-The field `key` supports
-[interpolation functions](/docs/configuration/interpolation#bloblang-queries), allowing
-you to create a unique key for each message.
+The field `key` supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries), allowing you to create a unique key for each message.
 
 ## Performance
 
@@ -90,20 +87,19 @@ Batches can be formed at both the input and output level. You can find out more
 
 ### `url`
 
-The URL of the target Redis server. Database is optional and is supplied as the URL path. The scheme `tcp` is equivalent to `redis`.
+The URL of the target Redis server. Database is optional and is supplied as the URL path.
 
 
 Type: `string`  
-Default: `""`  
 
 ```yml
 # Examples
 
-url: :6397
-
-url: localhost:6397
+url: redis://:6397
 
 url: redis://localhost:6379
+
+url: redis://foousername:foopassword@redisplace:6379
 
 url: redis://:foopassword@redisplace:6379
 
@@ -119,16 +115,7 @@ Specifies a simple, cluster-aware, or failover-aware redis client.
 
 Type: `string`  
 Default: `"simple"`  
-
-```yml
-# Examples
-
-kind: simple
-
-kind: cluster
-
-kind: failover
-```
+Options: `simple`, `cluster`, `failover`.
 
 ### `master`
 
@@ -295,23 +282,22 @@ This field supports [interpolation functions](/docs/configuration/interpolation#
 
 
 Type: `string`  
-Default: `""`  
 
 ```yml
 # Examples
 
-key: benthos_list
+key: some_list
 
-key: ${!meta("kafka_key")}
+key: ${! @.kafka_key )}
 
-key: ${!json("doc.id")}
+key: ${! this.doc.id }
 
-key: ${!count("msgs")}
+key: ${! count("msgs") }
 ```
 
 ### `max_in_flight`
 
-The maximum number of parallel message batches to have in flight at any given time.
+The maximum number of messages to have in flight at a given time. Increase this to improve throughput.
 
 
 Type: `int`  
@@ -396,7 +382,6 @@ A list of [processors](/docs/components/processors/about) to apply to a batch as
 
 
 Type: `array`  
-Default: `[]`  
 
 ```yml
 # Examples
@@ -413,5 +398,15 @@ processors:
   - archive:
       format: json_array
 ```
+
+### `command`
+
+The command used to push elements to the Redis list
+
+
+Type: `string`  
+Default: `"rpush"`  
+Requires version 4.22.0 or newer  
+Options: `rpush`, `lpush`.
 
 

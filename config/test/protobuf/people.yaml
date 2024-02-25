@@ -36,7 +36,7 @@ tests:
       - content: '{"firstName":"caleb","lastName":"quaye","email":"caleb@myspace.com"}'
       - content: '{"firstName":"bad","lastName":"data","contains":"unrecognized fields"}'
     output_batches:
-      - - content_equals: '{"firstName":"john","lastName":"oates","fullName":"john oates","age":20}'
-        - content_equals: '{"firstName":"daryl","lastName":"hall","fullName":"daryl hall","age":10}'
-        - content_equals: '{"firstName":"caleb","lastName":"quaye","fullName":"caleb quaye","age":10,"email":"caleb@myspace.com"}'
-        - content_equals: 'error: failed to unmarshal JSON message: message type testing.Person has no known field named contains'
+      - - json_equals: '{"firstName":"john","lastName":"oates","fullName":"john oates","age":20}'
+        - json_equals: '{"firstName":"daryl","lastName":"hall","fullName":"daryl hall","age":10}'
+        - json_equals: '{"firstName":"caleb","lastName":"quaye","fullName":"caleb quaye","age":10,"email":"caleb@myspace.com"}'
+        - content_matches: "unknown field \"contains\"$"

@@ -75,6 +75,14 @@ Whether to include timestamps in logs.
 Type: `bool`  
 Default: `false`  
 
+### `level_name`
+
+The name of the level field added to logs when the `format` is `json`.
+
+
+Type: `string`  
+Default: `"level"`  
+
 ### `timestamp_name`
 
 The name of the timestamp field added to logs when `add_timestamp` is set to `true` and the `format` is `json`.

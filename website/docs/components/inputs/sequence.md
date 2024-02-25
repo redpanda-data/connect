@@ -14,9 +14,7 @@ categories: ["Utility"]
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-
-Reads messages from a sequence of child inputs, starting with the first and once
-that input gracefully terminates starts consuming from the next, and so on.
+Reads messages from a sequence of child inputs, starting with the first and once that input gracefully terminates starts consuming from the next, and so on.
 
 
 <Tabs defaultValue="common" values={[
@@ -31,7 +29,7 @@ that input gracefully terminates starts consuming from the next, and so on.
 input:
   label: ""
   sequence:
-    inputs: []
+    inputs: [] # No default (required)
 ```
 
 </TabItem>
@@ -47,14 +45,13 @@ input:
       id_path: ""
       iterations: 1
       merge_strategy: array
-    inputs: []
+    inputs: [] # No default (required)
 ```
 
 </TabItem>
 </Tabs>
 
-This input is useful for consuming from inputs that have an explicit end but
-must not be consumed in parallel.
+This input is useful for consuming from inputs that have an explicit end but must not be consumed in parallel.
 
 ## Examples
 
@@ -72,8 +69,10 @@ A common use case for sequence might be to generate a message at the end of our 
 input:
   sequence:
     inputs:
-      - csv:
+      - file:
           paths: [ ./dataset.csv ]
+          scanner:
+            csv: {}
       - generate:
           count: 1
           mapping: 'root = {"status":"finished"}'
@@ -118,10 +117,12 @@ input:
       id_path: uuid
       merge_strategy: array
     inputs:
-      - csv:
+      - file:
           paths:
             - ./hobbies.csv
             - ./main.csv
+          scanner:
+            csv: {}
 ```
 
 </TabItem>
@@ -164,11 +165,14 @@ input:
       iterations: 10
       merge_strategy: array
     inputs:
-      - csv:
-          paths: [ ./main.csv ]
       - file:
-          codec: lines
+          paths: [ ./main.csv ]
+          scanner:
+            csv: {}
+      - file:
           paths: [ ./hobbies.ndjson ]
+          scanner:
+            lines: {}
         processors:
           - mapping: |
               root.uuid = this.document.uuid
@@ -232,6 +236,5 @@ An array of inputs to read from sequentially.
 
 
 Type: `array`  
-Default: `[]`  
 
 

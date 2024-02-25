@@ -26,7 +26,10 @@ listfield:
 
 	var out []string
 	for _, f := range field {
-		out = append(out, f.String(msg))
+		str, err := f.TryString(msg)
+		require.NoError(t, err)
+
+		out = append(out, str)
 	}
 
 	require.Equal(t, []string{"hello WORLD", "see you in 3 days"}, out)

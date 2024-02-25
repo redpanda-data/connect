@@ -10,6 +10,7 @@ import (
 
 	"github.com/nats-io/nats.go"
 
+	"github.com/benthosdev/benthos/v4/internal/component/output/span"
 	"github.com/benthosdev/benthos/v4/internal/impl/nats/auth"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
@@ -21,7 +22,7 @@ func natsOutputConfig() *service.ConfigSpec {
 		Summary("Publish to an NATS subject.").
 		Description(`This output will interpolate functions within the subject field, you can find a list of functions [here](/docs/configuration/interpolation#bloblang-queries).
 
-` + auth.Description()).
+` + ConnectionNameDescription() + auth.Description()).
 		Field(service.NewStringListField("urls").
 			Description("A list of URLs to connect to. If an item of the list contains commas it will be expanded into multiple URLs.").
 			Example([]string{"nats://127.0.0.1:4222"}).
@@ -36,11 +37,15 @@ func natsOutputConfig() *service.ConfigSpec {
 				"Content-Type": "application/json",
 				"Timestamp":    `${!meta("Timestamp")}`,
 			})).
+		Field(service.NewMetadataFilterField("metadata").
+			Description("Determine which (if any) metadata values should be added to messages as headers.").
+			Optional()).
 		Field(service.NewIntField("max_in_flight").
 			Description("The maximum number of messages to have in flight at a given time. Increase this to improve throughput.").
 			Default(64)).
 		Field(service.NewTLSToggledField("tls")).
-		Field(service.NewInternalField(auth.FieldSpec()))
+		Field(service.NewInternalField(auth.FieldSpec())).
+		Field(span.InjectTracingSpanMappingDocs().Version(tracingVersion))
 }
 
 func init() {
@@ -52,7 +57,11 @@ func init() {
 				return nil, 0, err
 			}
 			w, err := newNATSWriter(conf, mgr)
-			return w, maxInFlight, err
+			if err != nil {
+				return nil, 0, err
+			}
+			spanOutput, err := span.NewOutput("nats", conf, w, mgr)
+			return spanOutput, maxInFlight, err
 		},
 	)
 	if err != nil {
@@ -61,8 +70,10 @@ func init() {
 }
 
 type natsWriter struct {
+	label         string
 	urls          string
 	headers       map[string]*service.InterpolatedString
+	metaFilter    *service.MetadataFilter
 	subjectStr    *service.InterpolatedString
 	subjectStrRaw string
 	authConf      auth.Config
@@ -77,6 +88,7 @@ type natsWriter struct {
 
 func newNATSWriter(conf *service.ParsedConfig, mgr *service.Resources) (*natsWriter, error) {
 	n := natsWriter{
+		label:   mgr.Label(),
 		log:     mgr.Logger(),
 		fs:      mgr.FS(),
 		headers: make(map[string]*service.InterpolatedString),
@@ -97,6 +109,12 @@ func newNATSWriter(conf *service.ParsedConfig, mgr *service.Resources) (*natsWri
 
 	if n.headers, err = conf.FieldInterpolatedStringMap("headers"); err != nil {
 		return nil, err
+	}
+
+	if conf.Contains("metadata") {
+		if n.metaFilter, err = conf.FieldMetadataFilter("metadata"); err != nil {
+			return nil, err
+		}
 	}
 
 	tlsConf, tlsEnabled, err := conf.FieldTLSToggled("tls")
@@ -128,6 +146,7 @@ func (n *natsWriter) Connect(ctx context.Context) error {
 		opts = append(opts, nats.Secure(n.tlsConf))
 	}
 
+	opts = append(opts, nats.Name(n.label))
 	opts = append(opts, authConfToOptions(n.authConf, n.fs)...)
 	opts = append(opts, errorHandlerOption(n.log))
 
@@ -173,6 +192,10 @@ func (n *natsWriter) Write(context context.Context, msg *service.Message) error 
 			}
 			nMsg.Header.Add(k, headerStr)
 		}
+		_ = n.metaFilter.Walk(msg, func(key, value string) error {
+			nMsg.Header.Add(key, value)
+			return nil
+		})
 	}
 
 	if err = conn.PublishMsg(nMsg); errors.Is(err, nats.ErrConnectionClosed) {

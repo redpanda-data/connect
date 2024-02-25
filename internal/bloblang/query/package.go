@@ -7,6 +7,7 @@ import (
 	"fmt"
 
 	"github.com/benthosdev/benthos/v4/internal/message"
+	"github.com/benthosdev/benthos/v4/internal/value"
 )
 
 type badFunctionErr string
@@ -148,7 +149,7 @@ func ExecToString(fn Function, ctx FunctionContext) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return IToString(v), nil
+	return value.IToString(v), nil
 }
 
 // ExecToBytes returns a byte slice from a function execution.
@@ -157,5 +158,5 @@ func ExecToBytes(fn Function, ctx FunctionContext) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	return IToBytes(v), nil
+	return value.IToBytes(v), nil
 }

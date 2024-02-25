@@ -10,15 +10,17 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/benthosdev/benthos/v4/internal/component/processor"
+	"github.com/benthosdev/benthos/v4/internal/component/testutil"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
 )
 
 func TestJQAllParts(t *testing.T) {
-	conf := processor.NewConfig()
-	conf.Type = "jq"
-	conf.JQ.Query = ".foo.bar"
+	conf, err := testutil.ProcessorFromYAML(`
+jq:
+  query: .foo.bar
+`)
+	require.NoError(t, err)
 
 	jSet, err := mock.NewManager().NewProcessor(conf)
 	require.NoError(t, err)
@@ -37,9 +39,11 @@ func TestJQAllParts(t *testing.T) {
 }
 
 func TestJQValidation(t *testing.T) {
-	conf := processor.NewConfig()
-	conf.Type = "jq"
-	conf.JQ.Query = ".foo.bar"
+	conf, err := testutil.ProcessorFromYAML(`
+jq:
+  query: .foo.bar
+`)
+	require.NoError(t, err)
 
 	jSet, err := mock.NewManager().NewProcessor(conf)
 	require.NoError(t, err)
@@ -54,9 +58,11 @@ func TestJQValidation(t *testing.T) {
 }
 
 func TestJQMutation(t *testing.T) {
-	conf := processor.NewConfig()
-	conf.Type = "jq"
-	conf.JQ.Query = `{foo: .foo} | .foo.bar = "baz"`
+	conf, err := testutil.ProcessorFromYAML(`
+jq:
+  query: '{foo: .foo} | .foo.bar = "baz"'
+`)
+	require.NoError(t, err)
 
 	jSet, err := mock.NewManager().NewProcessor(conf)
 	require.NoError(t, err)
@@ -159,9 +165,11 @@ func TestJQ(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			conf := processor.NewConfig()
-			conf.Type = "jq"
-			conf.JQ.Query = test.path
+			conf, err := testutil.ProcessorFromYAML(`
+jq:
+  query: '` + test.path + `'
+`)
+			require.NoError(t, err)
 
 			jSet, err := mock.NewManager().NewProcessor(conf)
 			require.NoError(t, err)
@@ -260,10 +268,12 @@ func TestJQ_OutputRaw(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			conf := processor.NewConfig()
-			conf.Type = "jq"
-			conf.JQ.Query = test.path
-			conf.JQ.OutputRaw = true
+			conf, err := testutil.ProcessorFromYAML(`
+jq:
+  query: '` + test.path + `'
+  output_raw: true
+`)
+			require.NoError(t, err)
 
 			jSet, err := mock.NewManager().NewProcessor(conf)
 			require.NoError(t, err)

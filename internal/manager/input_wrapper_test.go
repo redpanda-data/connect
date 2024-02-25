@@ -1,4 +1,4 @@
-package manager
+package manager_test
 
 import (
 	"context"
@@ -6,7 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/benthosdev/benthos/v4/internal/component/input"
+	"github.com/benthosdev/benthos/v4/internal/component/testutil"
+	"github.com/benthosdev/benthos/v4/internal/manager"
 	bmock "github.com/benthosdev/benthos/v4/internal/manager/mock"
 
 	"github.com/stretchr/testify/assert"
@@ -17,17 +18,19 @@ func TestInputWrapperSwap(t *testing.T) {
 	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
 	defer done()
 
-	conf := input.NewConfig()
-	conf.Type = "generate"
-	conf.Generate.Interval = "10ms"
-	conf.Generate.Mapping = `root.name = "from root generate"`
+	conf, err := testutil.InputFromYAML(`
+generate:
+  interval: 10ms
+  mapping: 'root.name = "from root generate"'
+`)
+	require.NoError(t, err)
 
 	bMgr := bmock.NewManager()
 
 	iWrapped, err := bMgr.NewInput(conf)
 	require.NoError(t, err)
 
-	iWrapper := wrapInput(iWrapped)
+	iWrapper := manager.WrapInput(iWrapped)
 	select {
 	case tran, open := <-iWrapper.TransactionChan():
 		require.True(t, open)
@@ -38,18 +41,20 @@ func TestInputWrapperSwap(t *testing.T) {
 	}
 
 	for i := 0; i < 5; i++ {
-		conf = input.NewConfig()
-		conf.Type = "generate"
-		conf.Generate.Interval = "10ms"
-		conf.Generate.Mapping = fmt.Sprintf(`root.name = "from generate %v"`, i)
+		conf, err := testutil.InputFromYAML(fmt.Sprintf(`
+generate:
+  interval: 10ms
+  mapping: 'root.name = "from generate %v"'
+`, i))
+		require.NoError(t, err)
 
 		go func() {
-			assert.NoError(t, iWrapper.closeExistingInput(ctx, true))
+			assert.NoError(t, iWrapper.CloseExistingInput(ctx, true))
 
 			iWrapped, err = bMgr.NewInput(conf)
 			assert.NoError(t, err)
 
-			iWrapper.swapInput(iWrapped)
+			iWrapper.SwapInput(iWrapped)
 		}()
 
 		expected := fmt.Sprintf(`{"name":"from generate %v"}`, i)

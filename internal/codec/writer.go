@@ -2,149 +2,62 @@ package codec
 
 import (
 	"bytes"
-	"context"
 	"errors"
 	"fmt"
-	"io"
 	"strings"
 
 	"github.com/benthosdev/benthos/v4/internal/docs"
-	"github.com/benthosdev/benthos/v4/internal/message"
 )
 
-// WriterDocs is a static field documentation for output codecs.
-var WriterDocs = docs.FieldString(
-	"codec", "The way in which the bytes of messages should be written out into the output data stream. It's possible to write lines using a custom delimiter with the `delim:x` codec, where x is the character sequence custom delimiter.", "lines", "delim:\t", "delim:foobar",
-).HasAnnotatedOptions(
-	"all-bytes", "Only applicable to file based outputs. Writes each message to a file in full, if the file already exists the old content is deleted.",
-	"append", "Append each message to the output stream without any delimiter or special encoding.",
-	"lines", "Append each message to the output stream followed by a line break.",
-	"delim:x", "Append each message to the output stream followed by a custom delimiter.",
-)
+var WriterDocs = NewWriterDocs("codec")
+
+func NewWriterDocs(name string) docs.FieldSpec {
+	return docs.FieldString(
+		name, "The way in which the bytes of messages should be written out into the output data stream. It's possible to write lines using a custom delimiter with the `delim:x` codec, where x is the character sequence custom delimiter.", "lines", "delim:\t", "delim:foobar",
+	).HasAnnotatedOptions(
+		"all-bytes", "Only applicable to file based outputs. Writes each message to a file in full, if the file already exists the old content is deleted.",
+		"append", "Append each message to the output stream without any delimiter or special encoding.",
+		"lines", "Append each message to the output stream followed by a line break.",
+		"delim:x", "Append each message to the output stream followed by a custom delimiter.",
+	).LinterBlobl("")
+}
 
 //------------------------------------------------------------------------------
 
-// Writer is a codec type that reads message parts from a source.
-type Writer interface {
-	Write(context.Context, *message.Part) error
-	Close(context.Context) error
-}
+type SuffixFn func(data []byte) ([]byte, bool)
 
-// WriterConfig contains custom configuration specific to a codec describing how
-// handles should be provided.
 type WriterConfig struct {
-	Append     bool
-	Truncate   bool
-	CloseAfter bool
+	Append bool
 }
 
-// WriterConstructor creates a writer from an io.WriteCloser.
-type WriterConstructor func(io.WriteCloser) (Writer, error)
-
-// GetWriter returns a constructor that creates write codecs.
-func GetWriter(codec string) (WriterConstructor, WriterConfig, error) {
+func GetWriter(codec string) (sFn SuffixFn, appendMode bool, err error) {
 	switch codec {
 	case "all-bytes":
-		return func(w io.WriteCloser) (Writer, error) {
-			return &allBytesWriter{w}, nil
-		}, allBytesConfig, nil
+		return func(data []byte) ([]byte, bool) { return nil, false }, false, nil
 	case "append":
-		return func(w io.WriteCloser) (Writer, error) {
-			return newCustomDelimWriter(w, "")
-		}, customDelimConfig, nil
+		return customDelimSuffixFn(""), true, nil
 	case "lines":
-		return newLinesWriter, linesWriterConfig, nil
+		return customDelimSuffixFn("\n"), true, nil
 	}
 	if strings.HasPrefix(codec, "delim:") {
 		by := strings.TrimPrefix(codec, "delim:")
 		if by == "" {
-			return nil, WriterConfig{}, errors.New("custom delimiter codec requires a non-empty delimiter")
+			return nil, false, errors.New("custom delimiter codec requires a non-empty delimiter")
 		}
-		return func(w io.WriteCloser) (Writer, error) {
-			return newCustomDelimWriter(w, by)
-		}, customDelimConfig, nil
+		return customDelimSuffixFn(by), true, nil
 	}
-	return nil, WriterConfig{}, fmt.Errorf("codec was not recognised: %v", codec)
+	return nil, false, fmt.Errorf("codec was not recognised: %v", codec)
 }
 
-//------------------------------------------------------------------------------
-
-var allBytesConfig = WriterConfig{
-	Truncate:   true,
-	CloseAfter: true,
-}
-
-type allBytesWriter struct {
-	o io.WriteCloser
-}
-
-func (a *allBytesWriter) Write(ctx context.Context, msg *message.Part) error {
-	_, err := a.o.Write(msg.AsBytes())
-	return err
-}
-
-func (a *allBytesWriter) Close(ctx context.Context) error {
-	return a.o.Close()
-}
-
-//------------------------------------------------------------------------------
-
-var linesWriterConfig = WriterConfig{
-	Append: true,
-}
-
-type linesWriter struct {
-	w io.WriteCloser
-}
-
-func newLinesWriter(w io.WriteCloser) (Writer, error) {
-	return &linesWriter{w: w}, nil
-}
-
-func (l *linesWriter) Write(ctx context.Context, p *message.Part) error {
-	partBytes := p.AsBytes()
-	if _, err := l.w.Write(partBytes); err != nil {
-		return err
+func customDelimSuffixFn(suffix string) SuffixFn {
+	suffixB := []byte(suffix)
+	return func(data []byte) ([]byte, bool) {
+		if len(suffixB) == 0 {
+			return nil, false
+		}
+		if !bytes.HasSuffix(data, suffixB) {
+			return suffixB, true
+		}
+		return nil, false
 	}
-	if !bytes.HasSuffix(partBytes, []byte("\n")) {
-		_, err := l.w.Write([]byte("\n"))
-		return err
-	}
-	return nil
-}
-
-func (l *linesWriter) Close(ctx context.Context) error {
-	return l.w.Close()
-}
-
-//------------------------------------------------------------------------------
-
-var customDelimConfig = WriterConfig{
-	Append: true,
-}
-
-type customDelimWriter struct {
-	w     io.WriteCloser
-	delim []byte
-}
-
-func newCustomDelimWriter(w io.WriteCloser, delim string) (Writer, error) {
-	delimBytes := []byte(delim)
-	return &customDelimWriter{w: w, delim: delimBytes}, nil
-}
-
-func (d *customDelimWriter) Write(ctx context.Context, p *message.Part) error {
-	partBytes := p.AsBytes()
-	if _, err := d.w.Write(partBytes); err != nil {
-		return err
-	}
-	if !bytes.HasSuffix(partBytes, d.delim) {
-		_, err := d.w.Write(d.delim)
-		return err
-	}
-	return nil
-}
-
-func (d *customDelimWriter) Close(ctx context.Context) error {
-	return d.w.Close()
 }

@@ -5,7 +5,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/aws/aws-sdk-go/aws"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -13,6 +12,9 @@ import (
 func TestDynamoDBCacheConfig(t *testing.T) {
 	durPtr := func(d time.Duration) *time.Duration {
 		return &d
+	}
+	strPtr := func(s string) *string {
+		return &s
 	}
 
 	tests := map[string]struct {
@@ -41,7 +43,7 @@ hash_key: bar
 data_key: baz
 `,
 			exp: &dynamodbCache{
-				table:          aws.String("foo"),
+				table:          "foo",
 				hashKey:        "bar",
 				dataKey:        "baz",
 				consistentRead: false,
@@ -57,12 +59,12 @@ default_ttl: 1s
 ttl_key: buz
 `,
 			exp: &dynamodbCache{
-				table:          aws.String("foo"),
+				table:          "foo",
 				hashKey:        "bar",
 				dataKey:        "baz",
 				consistentRead: true,
 				ttl:            durPtr(time.Second),
-				ttlKey:         aws.String("buz"),
+				ttlKey:         strPtr("buz"),
 			},
 		},
 	}

@@ -12,42 +12,55 @@ import (
 	"cloud.google.com/go/storage"
 	"google.golang.org/api/iterator"
 
-	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/codec"
+	"github.com/benthosdev/benthos/v4/internal/codec/interop"
 	"github.com/benthosdev/benthos/v4/internal/component"
-	"github.com/benthosdev/benthos/v4/internal/component/input"
-	"github.com/benthosdev/benthos/v4/internal/component/input/processors"
-	"github.com/benthosdev/benthos/v4/internal/component/metrics"
-	"github.com/benthosdev/benthos/v4/internal/docs"
-	"github.com/benthosdev/benthos/v4/internal/log"
-	"github.com/benthosdev/benthos/v4/internal/message"
+	"github.com/benthosdev/benthos/v4/internal/component/scanner"
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
-func init() {
-	err := bundle.AllInputs.Add(processors.WrapConstructor(func(c input.Config, nm bundle.NewManagement) (input.Streamed, error) {
-		r, err := newGCPCloudStorageInput(c.GCPCloudStorage, nm.Logger(), nm.Metrics())
-		if err != nil {
-			return nil, err
-		}
-		return input.NewAsyncReader("gcp_cloud_storage", input.NewAsyncPreserver(r), nm)
-	}), docs.ComponentSpec{
-		Name:       "gcp_cloud_storage",
-		Type:       docs.TypeInput,
-		Status:     docs.StatusBeta,
-		Version:    "3.43.0",
-		Categories: []string{"Services", "GCP"},
-		Summary: `
-Downloads objects within a Google Cloud Storage bucket, optionally filtered by a prefix.`,
-		Description: `
-## Downloading Large Files
+const (
+	// Cloud Storage Input Fields
+	csiFieldBucket        = "bucket"
+	csiFieldPrefix        = "prefix"
+	csiFieldDeleteObjects = "delete_objects"
+)
 
-When downloading large files it's often necessary to process it in streamed parts in order to avoid loading the entire file in memory at a given time. In order to do this a ` + "[`codec`](#codec)" + ` can be specified that determines how to break the input into smaller individual messages.
+type csiConfig struct {
+	Bucket        string
+	Prefix        string
+	DeleteObjects bool
+	Codec         interop.FallbackReaderCodec
+}
 
+func csiConfigFromParsed(pConf *service.ParsedConfig) (conf csiConfig, err error) {
+	if conf.Bucket, err = pConf.FieldString(csiFieldBucket); err != nil {
+		return
+	}
+	if conf.Prefix, err = pConf.FieldString(csiFieldPrefix); err != nil {
+		return
+	}
+	if conf.Codec, err = interop.OldReaderCodecFromParsed(pConf); err != nil {
+		return
+	}
+	if conf.DeleteObjects, err = pConf.FieldBool(csiFieldDeleteObjects); err != nil {
+		return
+	}
+	return
+}
+
+func csiSpec() *service.ConfigSpec {
+	return service.NewConfigSpec().
+		Beta().
+		Version("3.43.0").
+		Categories("Services", "GCP").
+		Summary(`Downloads objects within a Google Cloud Storage bucket, optionally filtered by a prefix.`).
+		Description(`
 ## Metadata
 
 This input adds the following metadata fields to each message:
 
-` + "```" + `
+`+"```"+`
 - gcs_key
 - gcs_bucket
 - gcs_last_modified
@@ -55,21 +68,43 @@ This input adds the following metadata fields to each message:
 - gcs_content_type
 - gcs_content_encoding
 - All user defined metadata
-` + "```" + `
+`+"```"+`
 
 You can access these metadata fields using [function interpolation](/docs/configuration/interpolation#bloblang-queries).
 
 ### Credentials
 
-By default Benthos will use a shared credentials file when connecting to GCP
-services. You can find out more [in this document](/docs/guides/cloud/gcp).`,
-		Config: docs.FieldComponent().WithChildren(
-			docs.FieldString("bucket", "The name of the bucket from which to download objects."),
-			docs.FieldString("prefix", "An optional path prefix, if set only objects with the prefix are consumed."),
-			codec.ReaderDocs,
-			docs.FieldBool("delete_objects", "Whether to delete downloaded objects from the bucket once they are processed.").Advanced(),
-		).ChildDefaultAndTypesFromStruct(input.NewGCPCloudStorageConfig()),
-	})
+By default Benthos will use a shared credentials file when connecting to GCP services. You can find out more [in this document](/docs/guides/cloud/gcp).`).
+		Fields(
+			service.NewStringField(csiFieldBucket).
+				Description("The name of the bucket from which to download objects."),
+			service.NewStringField(csiFieldPrefix).
+				Description("An optional path prefix, if set only objects with the prefix are consumed.").
+				Default(""),
+		).
+		Fields(interop.OldReaderCodecFields("to_the_end")...).
+		Fields(
+			service.NewBoolField(csiFieldDeleteObjects).
+				Description("Whether to delete downloaded objects from the bucket once they are processed.").
+				Advanced().
+				Default(false),
+		)
+}
+
+func init() {
+	err := service.RegisterBatchInput("gcp_cloud_storage", csiSpec(),
+		func(pConf *service.ParsedConfig, res *service.Resources) (service.BatchInput, error) {
+			conf, err := csiConfigFromParsed(pConf)
+			if err != nil {
+				return nil, err
+			}
+
+			var rdr service.BatchInput
+			if rdr, err = newGCPCloudStorageInput(conf, res); err != nil {
+				return nil, err
+			}
+			return service.AutoRetryNacksBatched(rdr), nil
+		})
 	if err != nil {
 		panic(err)
 	}
@@ -121,20 +156,20 @@ type gcpCloudStoragePendingObject struct {
 	target    *gcpCloudStorageObjectTarget
 	obj       *storage.ObjectAttrs
 	extracted int
-	scanner   codec.Reader
+	scanner   interop.FallbackReaderStream
 }
 
 type gcpCloudStorageTargetReader struct {
 	pending    []*gcpCloudStorageObjectTarget
 	bucket     *storage.BucketHandle
-	conf       input.GCPCloudStorageConfig
+	conf       csiConfig
 	startAfter *storage.ObjectIterator
 }
 
 func newGCPCloudStorageTargetReader(
 	ctx context.Context,
-	conf input.GCPCloudStorageConfig,
-	log log.Modular,
+	conf csiConfig,
+	log *service.Logger,
 	bucket *storage.BucketHandle,
 ) (*gcpCloudStorageTargetReader, error) {
 	staticKeys := gcpCloudStorageTargetReader{
@@ -195,9 +230,9 @@ func (r gcpCloudStorageTargetReader) Close(context.Context) error {
 // gcpCloudStorage is a benthos reader.Type implementation that reads messages
 // from a Google Cloud Storage bucket.
 type gcpCloudStorageInput struct {
-	conf input.GCPCloudStorageConfig
+	conf csiConfig
 
-	objectScannerCtor codec.ReaderConstructor
+	objectScannerCtor interop.FallbackReaderCodec
 	keyReader         *gcpCloudStorageTargetReader
 
 	objectMut sync.Mutex
@@ -205,25 +240,16 @@ type gcpCloudStorageInput struct {
 
 	client *storage.Client
 
-	log   log.Modular
-	stats metrics.Type
+	log *service.Logger
 }
 
 // newGCPCloudStorageInput creates a new Google Cloud Storage input type.
-func newGCPCloudStorageInput(conf input.GCPCloudStorageConfig, log log.Modular, stats metrics.Type) (*gcpCloudStorageInput, error) {
-	var objectScannerCtor codec.ReaderConstructor
-	var err error
-	if objectScannerCtor, err = codec.GetReader(conf.Codec, codec.NewReaderConfig()); err != nil {
-		return nil, fmt.Errorf("invalid google cloud storage codec: %v", err)
-	}
-
+func newGCPCloudStorageInput(conf csiConfig, res *service.Resources) (*gcpCloudStorageInput, error) {
 	g := &gcpCloudStorageInput{
 		conf:              conf,
-		objectScannerCtor: objectScannerCtor,
-		log:               log,
-		stats:             stats,
+		objectScannerCtor: conf.Codec,
+		log:               res.Logger(),
 	}
-
 	return g, nil
 }
 
@@ -268,7 +294,7 @@ func (g *gcpCloudStorageInput) getObjectTarget(ctx context.Context) (*gcpCloudSt
 		target: target,
 		obj:    objAttributes,
 	}
-	if object.scanner, err = g.objectScannerCtor(target.key, objReader, target.ackFn); err != nil {
+	if object.scanner, err = g.objectScannerCtor.Create(objReader, target.ackFn, scanner.SourceDetails{Name: target.key}); err != nil {
 		_ = target.ackFn(ctx, err)
 		return nil, err
 	}
@@ -277,9 +303,8 @@ func (g *gcpCloudStorageInput) getObjectTarget(ctx context.Context) (*gcpCloudSt
 	return object, nil
 }
 
-func gcpCloudStorageMsgFromParts(p *gcpCloudStoragePendingObject, parts []*message.Part) message.Batch {
-	msg := message.Batch(parts)
-	_ = msg.Iter(func(_ int, part *message.Part) error {
+func gcpCloudStorageMetaToParts(p *gcpCloudStoragePendingObject, parts service.MessageBatch) {
+	for _, part := range parts {
 		part.MetaSetMut("gcs_key", p.target.key)
 		part.MetaSetMut("gcs_bucket", p.obj.Bucket)
 		part.MetaSetMut("gcs_last_modified", p.obj.Updated.Format(time.RFC3339))
@@ -290,21 +315,18 @@ func gcpCloudStorageMsgFromParts(p *gcpCloudStoragePendingObject, parts []*messa
 		for k, v := range p.obj.Metadata {
 			part.MetaSetMut(k, v)
 		}
-		return nil
-	})
-
-	return msg
+	}
 }
 
 // ReadBatch attempts to read a new message from the target Google Cloud
 // Storage bucket.
-func (g *gcpCloudStorageInput) ReadBatch(ctx context.Context) (msg message.Batch, ackFn input.AsyncAckFn, err error) {
+func (g *gcpCloudStorageInput) ReadBatch(ctx context.Context) (msg service.MessageBatch, ackFn service.AckFunc, err error) {
 	g.objectMut.Lock()
 	defer g.objectMut.Unlock()
 
 	defer func() {
 		if errors.Is(err, io.EOF) {
-			err = component.ErrTypeClosed
+			err = service.ErrEndOfInput
 		} else if errors.Is(err, context.Canceled) ||
 			errors.Is(err, context.DeadlineExceeded) ||
 			(err != nil && strings.HasSuffix(err.Error(), "context canceled")) {
@@ -317,11 +339,11 @@ func (g *gcpCloudStorageInput) ReadBatch(ctx context.Context) (msg message.Batch
 		return
 	}
 
-	var parts []*message.Part
-	var scnAckFn codec.ReaderAckFn
+	var parts service.MessageBatch
+	var scnAckFn service.AckFunc
 
 	for {
-		if parts, scnAckFn, err = object.scanner.Next(ctx); err == nil {
+		if parts, scnAckFn, err = object.scanner.NextBatch(ctx); err == nil {
 			object.extracted++
 			break
 		}
@@ -340,7 +362,9 @@ func (g *gcpCloudStorageInput) ReadBatch(ctx context.Context) (msg message.Batch
 		}
 	}
 
-	return gcpCloudStorageMsgFromParts(object, parts), func(rctx context.Context, res error) error {
+	gcpCloudStorageMetaToParts(object, parts)
+
+	return parts, func(rctx context.Context, res error) error {
 		return scnAckFn(rctx, res)
 	}, nil
 }

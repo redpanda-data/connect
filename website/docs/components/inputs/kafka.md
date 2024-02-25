@@ -29,9 +29,9 @@ Connects to Kafka brokers and consumes one or more topics.
 input:
   label: ""
   kafka:
-    addresses: []
-    topics: []
-    target_version: 2.0.0
+    addresses: [] # No default (required)
+    topics: [] # No default (required)
+    target_version: 2.1.0 # No default (optional)
     consumer_group: ""
     checkpoint_limit: 1024
 ```
@@ -44,9 +44,9 @@ input:
 input:
   label: ""
   kafka:
-    addresses: []
-    topics: []
-    target_version: 2.0.0
+    addresses: [] # No default (required)
+    topics: [] # No default (required)
+    target_version: 2.1.0 # No default (optional)
     tls:
       enabled: false
       skip_cert_verify: false
@@ -68,7 +68,7 @@ input:
     checkpoint_limit: 1024
     commit_period: 1s
     max_processing_period: 100ms
-    extract_tracing_map: ""
+    extract_tracing_map: root = @ # No default (optional)
     group:
       session_timeout: 10s
       heartbeat_interval: 3s
@@ -80,7 +80,7 @@ input:
       byte_size: 0
       period: ""
       check: ""
-      processors: []
+      processors: [] # No default (optional)
 ```
 
 </TabItem>
@@ -88,9 +88,11 @@ input:
 
 Offsets are managed within Kafka under the specified consumer group, and partitions for each topic are automatically balanced across members of the consumer group.
 
-The Kafka input allows parallel processing of messages from different topic partitions, but by default messages of the same topic partition are processed in lockstep in order to enforce ordered processing. This protection often means that batching messages at the output level can stall, in which case it can be tuned by increasing the field [`checkpoint_limit`](#checkpoint_limit), ideally to a value greater than the number of messages you expect to batch.
+The Kafka input allows parallel processing of messages from different topic partitions, and messages of the same topic partition are processed with a maximum parallelism determined by the field [`checkpoint_limit`](#checkpoint_limit).
 
-Alternatively, if you perform batching at the input level using the [`batching`](#batching) field it is done per-partition and therefore avoids stalling.
+In order to enforce ordered processing of partition messages set the [`checkpoint_limit`](#checkpoint_limit) to `1` and this will force partitions to be processed in lock-step, where a message will only be processed once the prior message is delivered.
+
+Batching messages before processing can be enabled using the [`batching`](#batching) field, and this batching is performed per-partition such that messages of a batch will always originate from the same partition. This batching mechanism is capable of creating batches of greater size than the [`checkpoint_limit`](#checkpoint_limit), in which case the next batch will only be created upon delivery of the current one.
 
 ### Metadata
 
@@ -131,7 +133,6 @@ A list of broker addresses to connect to. If an item of the list contains commas
 
 
 Type: `array`  
-Default: `[]`  
 
 ```yml
 # Examples
@@ -153,7 +154,6 @@ A list of topics to consume from. Multiple comma separated topics can be listed 
 
 
 Type: `array`  
-Default: `[]`  
 Requires version 3.33.0 or newer  
 
 ```yml
@@ -180,11 +180,18 @@ topics:
 
 ### `target_version`
 
-The version of the Kafka protocol to use. This limits the capabilities used by the client and should ideally match the version of your brokers.
+The version of the Kafka protocol to use. This limits the capabilities used by the client and should ideally match the version of your brokers. Defaults to the oldest supported stable version.
 
 
 Type: `string`  
-Default: `"2.0.0"`  
+
+```yml
+# Examples
+
+target_version: 2.1.0
+
+target_version: 3.1.0
+```
 
 ### `tls`
 
@@ -335,7 +342,7 @@ Type: `object`
 
 ### `sasl.mechanism`
 
-The SASL authentication mechanism, if left empty SASL authentication is not used. Warning: SCRAM based methods within Benthos have not received a security audit.
+The SASL authentication mechanism, if left empty SASL authentication is not used.
 
 
 Type: `string`  
@@ -343,11 +350,11 @@ Default: `"none"`
 
 | Option | Summary |
 |---|---|
-| `none` | Default, no SASL authentication. |
-| `PLAIN` | Plain text authentication. NOTE: When using plain text auth it is extremely likely that you'll also need to [enable TLS](#tlsenabled). |
 | `OAUTHBEARER` | OAuth Bearer based authentication. |
+| `PLAIN` | Plain text authentication. NOTE: When using plain text auth it is extremely likely that you'll also need to [enable TLS](#tlsenabled). |
 | `SCRAM-SHA-256` | Authentication using the SCRAM-SHA-256 mechanism. |
 | `SCRAM-SHA-512` | Authentication using the SCRAM-SHA-512 mechanism. |
+| `none` | Default, no SASL authentication. |
 
 
 ### `sasl.user`
@@ -431,7 +438,7 @@ Default: `""`
 
 ### `start_from_oldest`
 
-If an offset is not found for a topic partition, determines whether to consume from the oldest available offset, otherwise messages are consumed from the latest offset.
+Determines whether to consume from the oldest available offset, otherwise messages are consumed from the latest offset. The setting is applied when creating a new consumer group or the saved offset no longer exists.
 
 
 Type: `bool`  
@@ -468,13 +475,12 @@ EXPERIMENTAL: A [Bloblang mapping](/docs/guides/bloblang/about) that attempts to
 
 
 Type: `string`  
-Default: `""`  
 Requires version 3.45.0 or newer  
 
 ```yml
 # Examples
 
-extract_tracing_map: root = meta()
+extract_tracing_map: root = @
 
 extract_tracing_map: root = this.meta.span
 ```
@@ -605,7 +611,6 @@ A list of [processors](/docs/components/processors/about) to apply to a batch as
 
 
 Type: `array`  
-Default: `[]`  
 
 ```yml
 # Examples

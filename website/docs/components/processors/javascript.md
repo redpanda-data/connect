@@ -25,8 +25,8 @@ Introduced in version 4.14.0.
 # Config fields, showing default values
 label: ""
 javascript:
-  code: ""
-  file: ""
+  code: "" # No default (optional)
+  file: "" # No default (optional)
   global_folders: []
 ```
 
@@ -145,6 +145,20 @@ Obtain the root of the processed message as a structured value. If the message i
 
 ```javascript
 let foo = benthos.v0_msg_as_structured().foo;
+```
+
+### `benthos.v0_msg_exists_meta`
+
+Check that a metadata key exists.
+
+#### Parameters
+
+**`name`** &lt;string&gt; The metadata key to search for.  
+
+#### Examples
+
+```javascript
+if (benthos.v0_msg_exists_meta("kafka_key")) {}
 ```
 
 ### `benthos.v0_msg_get_meta`

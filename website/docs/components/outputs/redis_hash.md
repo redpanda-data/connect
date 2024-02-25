@@ -29,8 +29,8 @@ Sets Redis hash objects using the HMSET command.
 output:
   label: ""
   redis_hash:
-    url: ""
-    key: ""
+    url: redis://:6397 # No default (required)
+    key: ${! @.kafka_key )} # No default (required)
     walk_metadata: false
     walk_json_object: false
     fields: {}
@@ -45,7 +45,7 @@ output:
 output:
   label: ""
   redis_hash:
-    url: ""
+    url: redis://:6397 # No default (required)
     kind: simple
     master: ""
     tls:
@@ -55,7 +55,7 @@ output:
       root_cas: ""
       root_cas_file: ""
       client_certs: []
-    key: ""
+    key: ${! @.kafka_key )} # No default (required)
     walk_metadata: false
     walk_json_object: false
     fields: {}
@@ -65,12 +65,9 @@ output:
 </TabItem>
 </Tabs>
 
-The field `key` supports
-[interpolation functions](/docs/configuration/interpolation#bloblang-queries), allowing
-you to create a unique key for each message.
+The field `key` supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries), allowing you to create a unique key for each message.
 
-The field `fields` allows you to specify an explicit map of field
-names to interpolated values, also evaluated per message of a batch:
+The field `fields` allows you to specify an explicit map of field names to interpolated values, also evaluated per message of a batch:
 
 ```yaml
 output:
@@ -83,13 +80,9 @@ output:
       content: ${!json("document.text")}
 ```
 
-If the field `walk_metadata` is set to `true` then Benthos
-will walk all metadata fields of messages and add them to the list of hash
-fields to set.
+If the field `walk_metadata` is set to `true` then Benthos will walk all metadata fields of messages and add them to the list of hash fields to set.
 
-If the field `walk_json_object` is set to `true` then
-Benthos will walk each message as a JSON object, extracting keys and the string
-representation of their value and adds them to the list of hash fields to set.
+If the field `walk_json_object` is set to `true` then Benthos will walk each message as a JSON object, extracting keys and the string representation of their value and adds them to the list of hash fields to set.
 
 The order of hash field extraction is as follows:
 
@@ -109,20 +102,19 @@ message batches) with the field `max_in_flight`.
 
 ### `url`
 
-The URL of the target Redis server. Database is optional and is supplied as the URL path. The scheme `tcp` is equivalent to `redis`.
+The URL of the target Redis server. Database is optional and is supplied as the URL path.
 
 
 Type: `string`  
-Default: `""`  
 
 ```yml
 # Examples
 
-url: :6397
-
-url: localhost:6397
+url: redis://:6397
 
 url: redis://localhost:6379
+
+url: redis://foousername:foopassword@redisplace:6379
 
 url: redis://:foopassword@redisplace:6379
 
@@ -138,16 +130,7 @@ Specifies a simple, cluster-aware, or failover-aware redis client.
 
 Type: `string`  
 Default: `"simple"`  
-
-```yml
-# Examples
-
-kind: simple
-
-kind: cluster
-
-kind: failover
-```
+Options: `simple`, `cluster`, `failover`.
 
 ### `master`
 
@@ -314,16 +297,15 @@ This field supports [interpolation functions](/docs/configuration/interpolation#
 
 
 Type: `string`  
-Default: `""`  
 
 ```yml
 # Examples
 
-key: ${!meta("kafka_key")}
+key: ${! @.kafka_key )}
 
-key: ${!json("doc.id")}
+key: ${! this.doc.id }
 
-key: ${!count("msgs")}
+key: ${! count("msgs") }
 ```
 
 ### `walk_metadata`

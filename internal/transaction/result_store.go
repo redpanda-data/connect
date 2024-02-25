@@ -8,8 +8,6 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/message"
 )
 
-//------------------------------------------------------------------------------
-
 // ErrNoStore is an error returned by components attempting to write a message
 // batch to a ResultStore but are unable to locate the store within the batch
 // context.
@@ -102,5 +100,3 @@ func SetAsResponse(msg message.Batch) error {
 	store.Add(msg)
 	return nil
 }
-
-//------------------------------------------------------------------------------

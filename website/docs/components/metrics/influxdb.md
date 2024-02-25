@@ -32,8 +32,8 @@ Introduced in version 3.36.0.
 # Common config fields, showing default values
 metrics:
   influxdb:
-    url: ""
-    db: ""
+    url: "" # No default (required)
+    db: "" # No default (required)
   mapping: ""
 ```
 
@@ -44,8 +44,8 @@ metrics:
 # All config fields, showing default values
 metrics:
   influxdb:
-    url: ""
-    db: ""
+    url: "" # No default (required)
+    db: "" # No default (required)
     tls:
       enabled: false
       skip_cert_verify: false
@@ -63,8 +63,8 @@ metrics:
     precision: s
     timeout: 5s
     tags: {}
-    retention_policy: ""
-    write_consistency: ""
+    retention_policy: "" # No default (optional)
+    write_consistency: "" # No default (optional)
   mapping: ""
 ```
 
@@ -81,7 +81,6 @@ A URL of the format `[https|http|udp]://host:port` to the InfluxDB host.
 
 
 Type: `string`  
-Default: `""`  
 
 ### `db`
 
@@ -89,7 +88,6 @@ The name of the database to use.
 
 
 Type: `string`  
-Default: `""`  
 
 ### `tls`
 
@@ -163,6 +161,7 @@ A list of client certificates to use. For each certificate either the fields `ce
 
 
 Type: `array`  
+Default: `[]`  
 
 ```yml
 # Examples
@@ -338,7 +337,6 @@ Sets the retention policy for each write.
 
 
 Type: `string`  
-Default: `""`  
 
 ### `write_consistency`
 
@@ -346,6 +344,5 @@ Default: `""`
 
 
 Type: `string`  
-Default: `""`  
 
 

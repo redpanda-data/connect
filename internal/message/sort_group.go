@@ -9,8 +9,8 @@ type SortGroup struct {
 	Len int
 }
 
-// NewSortGroupParts creates a sort group associated with a slice of parts.
-func NewSortGroupParts(parts []*Part) (*SortGroup, []*Part) {
+// NewSortGroup creates a sort group associated with a slice of parts.
+func NewSortGroup(parts Batch) (*SortGroup, Batch) {
 	g := &SortGroup{Len: len(parts)}
 	newParts := make([]*Part, len(parts))
 
@@ -36,19 +36,6 @@ func NewSortGroupParts(parts []*Part) (*SortGroup, []*Part) {
 	}
 
 	return g, newParts
-}
-
-// NewSortGroup creates a new sort group to be associated with messages in a
-// batch.
-func NewSortGroup(m Batch) (*SortGroup, Batch) {
-	inParts := make([]*Part, len(m))
-	_ = m.Iter(func(i int, part *Part) error {
-		inParts[i] = part
-		return nil
-	})
-
-	group, outParts := NewSortGroupParts(inParts)
-	return group, outParts
 }
 
 // GetIndex attempts to determine the original index of a message part relative

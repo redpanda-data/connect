@@ -5,12 +5,9 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/Shopify/sarama"
+	"github.com/IBM/sarama"
 
-	"github.com/benthosdev/benthos/v4/internal/bundle"
-	"github.com/benthosdev/benthos/v4/internal/component/cache"
 	"github.com/benthosdev/benthos/v4/internal/impl/aws/config"
-	ksasl "github.com/benthosdev/benthos/v4/internal/impl/kafka/sasl"
 	"github.com/benthosdev/benthos/v4/public/service"
 
 	"github.com/twmb/franz-go/pkg/sasl"
@@ -191,21 +188,100 @@ var (
 	ErrUnsupportedSASLMechanism = errors.New("unsupported SASL mechanism")
 )
 
-// ApplySASLConfig applies a SASL config to a sarama config.
-func ApplySASLConfig(s ksasl.Config, mgr bundle.NewManagement, conf *sarama.Config) error {
-	switch s.Mechanism {
+const (
+	saramaFieldSASL            = "sasl"
+	saramaFieldSASLMechanism   = "mechanism"
+	saramaFieldSASLUser        = "user"
+	saramaFieldSASLPassword    = "password"
+	saramaFieldSASLAccessToken = "access_token"
+	saramaFieldSASLTokenCache  = "token_cache"
+	saramaFieldSASLTokenKey    = "token_key"
+)
+
+// SaramaSASLField returns a field spec definition for SASL within the sarama
+// components.
+func SaramaSASLField() *service.ConfigField {
+	return service.NewObjectField(saramaFieldSASL,
+		service.NewStringAnnotatedEnumField(saramaFieldSASLMechanism,
+			map[string]string{
+				"none":          "Default, no SASL authentication.",
+				"PLAIN":         "Plain text authentication. NOTE: When using plain text auth it is extremely likely that you'll also need to [enable TLS](#tlsenabled).",
+				"OAUTHBEARER":   "OAuth Bearer based authentication.",
+				"SCRAM-SHA-256": "Authentication using the SCRAM-SHA-256 mechanism.",
+				"SCRAM-SHA-512": "Authentication using the SCRAM-SHA-512 mechanism.",
+			}).
+			Description("The SASL authentication mechanism, if left empty SASL authentication is not used.").
+			Default("none"),
+		service.NewStringField(saramaFieldSASLUser).
+			Description("A PLAIN username. It is recommended that you use environment variables to populate this field.").
+			Example("${USER}").
+			Default(""),
+		service.NewStringField(saramaFieldSASLPassword).
+			Description("A PLAIN password. It is recommended that you use environment variables to populate this field.").
+			Example("${PASSWORD}").
+			Default("").
+			Secret(),
+		service.NewStringField(saramaFieldSASLAccessToken).
+			Description("A static OAUTHBEARER access token").
+			Default(""),
+		service.NewStringField(saramaFieldSASLTokenCache).
+			Description("Instead of using a static `access_token` allows you to query a [`cache`](/docs/components/caches/about) resource to fetch OAUTHBEARER tokens from").
+			Default(""),
+		service.NewStringField(saramaFieldSASLTokenKey).
+			Description("Required when using a `token_cache`, the key to query the cache with for tokens.").
+			Default(""),
+	).
+		Description("Enables SASL authentication.").
+		Optional().
+		Advanced()
+}
+
+// ApplySaramaSASLFromParsed applies a parsed config containing a SASL field to
+// a sarama.Config.
+func ApplySaramaSASLFromParsed(pConf *service.ParsedConfig, mgr *service.Resources, conf *sarama.Config) error {
+	pConf = pConf.Namespace(saramaFieldSASL)
+
+	mechanism, err := pConf.FieldString(saramaFieldSASLMechanism)
+	if err != nil {
+		return err
+	}
+
+	username, err := pConf.FieldString(saramaFieldSASLUser)
+	if err != nil {
+		return nil
+	}
+
+	password, err := pConf.FieldString(saramaFieldSASLPassword)
+	if err != nil {
+		return nil
+	}
+
+	accessToken, err := pConf.FieldString(saramaFieldSASLAccessToken)
+	if err != nil {
+		return nil
+	}
+
+	tokenCache, err := pConf.FieldString(saramaFieldSASLTokenCache)
+	if err != nil {
+		return nil
+	}
+
+	tokenKey, err := pConf.FieldString(saramaFieldSASLTokenKey)
+	if err != nil {
+		return nil
+	}
+
+	switch mechanism {
 	case sarama.SASLTypeOAuth:
 		var tp sarama.AccessTokenProvider
 		var err error
 
-		if s.TokenCache != "" {
-			tp, err = newCacheAccessTokenProvider(mgr, s.TokenCache, s.TokenKey)
-			if err != nil {
+		if tokenCache != "" {
+			if tp, err = newCacheAccessTokenProvider(mgr, tokenCache, tokenKey); err != nil {
 				return err
 			}
 		} else {
-			tp, err = newStaticAccessTokenProvider(s.AccessToken)
-			if err != nil {
+			if tp, err = newStaticAccessTokenProvider(accessToken); err != nil {
 				return err
 			}
 		}
@@ -214,17 +290,17 @@ func ApplySASLConfig(s ksasl.Config, mgr bundle.NewManagement, conf *sarama.Conf
 		conf.Net.SASL.SCRAMClientGeneratorFunc = func() sarama.SCRAMClient {
 			return &XDGSCRAMClient{HashGeneratorFcn: SHA256}
 		}
-		conf.Net.SASL.User = s.User
-		conf.Net.SASL.Password = s.Password
+		conf.Net.SASL.User = username
+		conf.Net.SASL.Password = password
 	case sarama.SASLTypeSCRAMSHA512:
 		conf.Net.SASL.SCRAMClientGeneratorFunc = func() sarama.SCRAMClient {
 			return &XDGSCRAMClient{HashGeneratorFcn: SHA512}
 		}
-		conf.Net.SASL.User = s.User
-		conf.Net.SASL.Password = s.Password
+		conf.Net.SASL.User = username
+		conf.Net.SASL.Password = password
 	case sarama.SASLTypePlaintext:
-		conf.Net.SASL.User = s.User
-		conf.Net.SASL.Password = s.Password
+		conf.Net.SASL.User = username
+		conf.Net.SASL.Password = password
 	case "", "none":
 		return nil
 	default:
@@ -232,7 +308,7 @@ func ApplySASLConfig(s ksasl.Config, mgr bundle.NewManagement, conf *sarama.Conf
 	}
 
 	conf.Net.SASL.Enable = true
-	conf.Net.SASL.Mechanism = sarama.SASLMechanism(s.Mechanism)
+	conf.Net.SASL.Mechanism = sarama.SASLMechanism(mechanism)
 
 	return nil
 }
@@ -241,13 +317,13 @@ func ApplySASLConfig(s ksasl.Config, mgr bundle.NewManagement, conf *sarama.Conf
 
 // cacheAccessTokenProvider fetches SASL OAUTHBEARER access tokens from a cache.
 type cacheAccessTokenProvider struct {
-	mgr       bundle.NewManagement
+	mgr       *service.Resources
 	cacheName string
 	key       string
 }
 
-func newCacheAccessTokenProvider(mgr bundle.NewManagement, cache, key string) (*cacheAccessTokenProvider, error) {
-	if !mgr.ProbeCache(cache) {
+func newCacheAccessTokenProvider(mgr *service.Resources, cache, key string) (*cacheAccessTokenProvider, error) {
+	if !mgr.HasCache(cache) {
 		return nil, fmt.Errorf("cache resource '%v' was not found", cache)
 	}
 	return &cacheAccessTokenProvider{
@@ -260,7 +336,7 @@ func newCacheAccessTokenProvider(mgr bundle.NewManagement, cache, key string) (*
 func (c *cacheAccessTokenProvider) Token() (*sarama.AccessToken, error) {
 	var tok []byte
 	var terr error
-	if err := c.mgr.AccessCache(context.Background(), c.cacheName, func(cache cache.V1) {
+	if err := c.mgr.AccessCache(context.Background(), c.cacheName, func(cache service.Cache) {
 		tok, terr = cache.Get(context.Background(), c.key)
 	}); err != nil {
 		return nil, fmt.Errorf("failed to obtain cache resource '%v': %v", c.cacheName, err)

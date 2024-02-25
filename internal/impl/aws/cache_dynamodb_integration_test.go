@@ -2,15 +2,15 @@ package aws
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"testing"
 	"time"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/awserr"
-	"github.com/aws/aws-sdk-go/aws/credentials"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/dynamodb"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/credentials"
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"github.com/ory/dockertest/v3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -24,50 +24,58 @@ func createTable(ctx context.Context, t testing.TB, dynamoPort, id string) error
 	table := id
 	hashKey := "id"
 
-	client := dynamodb.New(session.Must(session.NewSession(&aws.Config{
-		Credentials: credentials.NewStaticCredentials("xxxxx", "xxxxx", "xxxxx"),
-		Endpoint:    aws.String(endpoint),
-		Region:      aws.String("us-east-1"),
-	})))
+	conf, err := config.LoadDefaultConfig(ctx,
+		config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider("xxxxx", "xxxxx", "xxxxx")),
+		config.WithRegion("us-east-1"),
+	)
+	require.NoError(t, err)
 
-	ta, err := client.DescribeTable(&dynamodb.DescribeTableInput{
-		TableName: aws.String(table),
+	conf.BaseEndpoint = &endpoint
+	client := dynamodb.NewFromConfig(conf)
+
+	ta, err := client.DescribeTable(ctx, &dynamodb.DescribeTableInput{
+		TableName: &table,
 	})
 	if err != nil {
-		if aerr, ok := err.(awserr.Error); !ok || aerr.Code() != dynamodb.ErrCodeResourceNotFoundException {
+		var derr *types.ResourceNotFoundException
+		if !errors.As(err, &derr) {
 			return err
 		}
 	}
 
-	if ta != nil && ta.Table != nil && ta.Table.TableStatus != nil && *ta.Table.TableStatus == dynamodb.TableStatusActive {
+	if ta != nil && ta.Table != nil && ta.Table.TableStatus == types.TableStatusActive {
 		return nil
 	}
 
+	intPtr := func(i int64) *int64 {
+		return &i
+	}
+
 	t.Logf("Creating table: %v\n", table)
-	_, _ = client.CreateTable(&dynamodb.CreateTableInput{
-		AttributeDefinitions: []*dynamodb.AttributeDefinition{
+	_, _ = client.CreateTable(ctx, &dynamodb.CreateTableInput{
+		AttributeDefinitions: []types.AttributeDefinition{
 			{
-				AttributeName: aws.String(hashKey),
-				AttributeType: aws.String("S"),
+				AttributeName: &hashKey,
+				AttributeType: types.ScalarAttributeTypeS,
 			},
 		},
-		KeySchema: []*dynamodb.KeySchemaElement{
+		KeySchema: []types.KeySchemaElement{
 			{
-				AttributeName: aws.String(hashKey),
-				KeyType:       aws.String(dynamodb.KeyTypeHash),
+				AttributeName: &hashKey,
+				KeyType:       types.KeyTypeHash,
 			},
 		},
-		ProvisionedThroughput: &dynamodb.ProvisionedThroughput{
-			ReadCapacityUnits:  aws.Int64(5),
-			WriteCapacityUnits: aws.Int64(5),
+		ProvisionedThroughput: &types.ProvisionedThroughput{
+			ReadCapacityUnits:  intPtr(5),
+			WriteCapacityUnits: intPtr(5),
 		},
-		TableName: aws.String(table),
+		TableName: &table,
 	})
 
-	// wait for table to exist
-	return client.WaitUntilTableExistsWithContext(ctx, &dynamodb.DescribeTableInput{
-		TableName: aws.String(table),
-	})
+	waiter := dynamodb.NewTableExistsWaiter(client)
+	return waiter.Wait(ctx, &dynamodb.DescribeTableInput{
+		TableName: &table,
+	}, time.Minute)
 }
 
 func TestIntegrationDynamoDBCache(t *testing.T) {
@@ -80,7 +88,7 @@ func TestIntegrationDynamoDBCache(t *testing.T) {
 	pool.MaxWait = time.Second * 30
 
 	resource, err := pool.RunWithOptions(&dockertest.RunOptions{
-		Repository:   "peopleperhour/dynamodb",
+		Repository:   "amazon/dynamodb-local",
 		ExposedPorts: []string{"8000/tcp"},
 	})
 	require.NoError(t, err)

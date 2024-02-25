@@ -7,31 +7,23 @@ import (
 
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component"
+	"github.com/benthosdev/benthos/v4/internal/component/interop"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
-	"github.com/benthosdev/benthos/v4/internal/component/output/processors"
-	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
 	"github.com/benthosdev/benthos/v4/internal/shutdown"
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
 func init() {
-	err := bundle.AllOutputs.Add(processors.WrapConstructor(func(c output.Config, nm bundle.NewManagement) (output.Streamed, error) {
-		if !nm.ProbeOutput(c.Resource) {
-			return nil, fmt.Errorf("output resource '%v' was not found", c.Resource)
-		}
-		return &resourceOutput{
-			mgr:     nm,
-			name:    c.Resource,
-			log:     nm.Logger(),
-			shutSig: shutdown.NewSignaller(),
-		}, nil
-	}), docs.ComponentSpec{
-		Name:    "resource",
-		Summary: `Resource is an output type that channels messages to a resource output, identified by its name.`,
-		Description: `Resources allow you to tidy up deeply nested configs. For example, the config:
+	err := service.RegisterBatchOutput(
+		"resource", service.NewConfigSpec().
+			Stable().
+			Categories("Utility").
+			Summary(`Resource is an output type that channels messages to a resource output, identified by its name.`).
+			Description(`Resources allow you to tidy up deeply nested configs. For example, the config:
 
-` + "```yaml" + `
+`+"```yaml"+`
 output:
   broker:
     pattern: fan_out
@@ -42,11 +34,11 @@ output:
     - gcp_pubsub:
         project: bar
         topic: baz
-` + "```" + `
+`+"```"+`
 
 Could also be expressed as:
 
-` + "```yaml" + `
+`+"```yaml"+`
 output:
   broker:
     pattern: fan_out
@@ -64,14 +56,29 @@ output_resources:
     gcp_pubsub:
       project: bar
       topic: baz
- ` + "```" + `
+ `+"```"+`
 
-You can find out more about resources [in this document.](/docs/configuration/resources)`,
-		Categories: []string{
-			"Utility",
-		},
-		Config: docs.FieldString("", "").HasDefault(""),
-	})
+You can find out more about resources [in this document.](/docs/configuration/resources)`).
+			Field(service.NewStringField("").Default("")),
+		func(conf *service.ParsedConfig, res *service.Resources) (out service.BatchOutput, batchPolicy service.BatchPolicy, maxInFlight int, err error) {
+			var resName string
+			if resName, err = conf.FieldString(); err != nil {
+				return
+			}
+			if !res.HasOutput(resName) {
+				err = fmt.Errorf("output resource '%v' was not found", resName)
+				return
+			}
+
+			mgr := interop.UnwrapManagement(res)
+			out = interop.NewUnwrapInternalOutput(&resourceOutput{
+				mgr:     mgr,
+				name:    resName,
+				log:     mgr.Logger(),
+				shutSig: shutdown.NewSignaller(),
+			})
+			return
+		})
 	if err != nil {
 		panic(err)
 	}
@@ -116,7 +123,7 @@ func (r *resourceOutput) loop() {
 			err = oerr
 		}
 		if err != nil {
-			r.log.Errorf("Failed to obtain output resource '%v': %v", r.name, err)
+			r.log.Error("Failed to obtain output resource '%v': %v", r.name, err)
 			select {
 			case <-time.After(time.Second):
 			case <-r.shutSig.CloseNowChan():
@@ -142,7 +149,7 @@ func (r *resourceOutput) Connected() (isConnected bool) {
 	if err = r.mgr.AccessOutput(context.Background(), r.name, func(o output.Sync) {
 		isConnected = o.Connected()
 	}); err != nil {
-		r.log.Errorf("Failed to obtain output resource '%v': %v", r.name, err)
+		r.log.Error("Failed to obtain output resource '%v': %v", r.name, err)
 	}
 	return
 }

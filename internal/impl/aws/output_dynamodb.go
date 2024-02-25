@@ -10,49 +10,71 @@ import (
 	"time"
 
 	"github.com/Jeffail/gabs/v2"
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/service/dynamodb"
-	"github.com/aws/aws-sdk-go/service/dynamodb/dynamodbiface"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"github.com/cenkalti/backoff/v4"
-	"github.com/google/go-cmp/cmp"
 
-	"github.com/benthosdev/benthos/v4/internal/batch"
-	"github.com/benthosdev/benthos/v4/internal/batch/policy"
-	"github.com/benthosdev/benthos/v4/internal/bloblang/field"
-	"github.com/benthosdev/benthos/v4/internal/bundle"
-	"github.com/benthosdev/benthos/v4/internal/component"
-	"github.com/benthosdev/benthos/v4/internal/component/output"
-	"github.com/benthosdev/benthos/v4/internal/component/output/batcher"
-	"github.com/benthosdev/benthos/v4/internal/component/output/processors"
-	"github.com/benthosdev/benthos/v4/internal/docs"
-	"github.com/benthosdev/benthos/v4/internal/impl/aws/session"
-	"github.com/benthosdev/benthos/v4/internal/log"
-	"github.com/benthosdev/benthos/v4/internal/message"
-	"github.com/benthosdev/benthos/v4/internal/old/util/retries"
+	"github.com/benthosdev/benthos/v4/internal/impl/aws/config"
+	"github.com/benthosdev/benthos/v4/internal/impl/pure"
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
-func init() {
-	err := bundle.AllOutputs.Add(processors.WrapConstructor(func(c output.Config, nm bundle.NewManagement) (output.Streamed, error) {
-		dyn, err := newDynamoDBWriter(c.AWSDynamoDB, nm)
-		if err != nil {
-			return nil, err
-		}
-		w, err := output.NewAsyncWriter("aws_dynamodb", c.AWSDynamoDB.MaxInFlight, dyn, nm)
-		if err != nil {
-			return nil, err
-		}
-		return batcher.NewFromConfig(c.AWSDynamoDB.Batching, w, nm)
-	}), docs.ComponentSpec{
-		Name:    "aws_dynamodb",
-		Version: "3.36.0",
-		Summary: `
-Inserts items into a DynamoDB table.`,
-		Description: output.Description(true, true, `
-The field `+"`string_columns`"+` is a map of column names to string values,
-where the values are
-[function interpolated](/docs/configuration/interpolation#bloblang-queries) per message of a
-batch. This allows you to populate string columns of an item by extracting
-fields within the document payload or metadata like follows:
+const (
+	// DynamoDB Output Fields
+	ddboField               = "namespace"
+	ddboFieldTable          = "table"
+	ddboFieldStringColumns  = "string_columns"
+	ddboFieldJSONMapColumns = "json_map_columns"
+	ddboFieldTTL            = "ttl"
+	ddboFieldTTLKey         = "ttl_key"
+	ddboFieldBatching       = "batching"
+)
+
+type ddboConfig struct {
+	Table          string
+	StringColumns  map[string]*service.InterpolatedString
+	JSONMapColumns map[string]string
+	TTL            string
+	TTLKey         string
+
+	aconf       aws.Config
+	backoffCtor func() backoff.BackOff
+}
+
+func ddboConfigFromParsed(pConf *service.ParsedConfig) (conf ddboConfig, err error) {
+	if conf.Table, err = pConf.FieldString(ddboFieldTable); err != nil {
+		return
+	}
+	if conf.StringColumns, err = pConf.FieldInterpolatedStringMap(ddboFieldStringColumns); err != nil {
+		return
+	}
+	if conf.JSONMapColumns, err = pConf.FieldStringMap(ddboFieldJSONMapColumns); err != nil {
+		return
+	}
+	if conf.TTL, err = pConf.FieldString(ddboFieldTTL); err != nil {
+		return
+	}
+	if conf.TTLKey, err = pConf.FieldString(ddboFieldTTLKey); err != nil {
+		return
+	}
+	if conf.aconf, err = GetSession(context.TODO(), pConf); err != nil {
+		return
+	}
+	if conf.backoffCtor, err = pure.CommonRetryBackOffCtorFromParsed(pConf); err != nil {
+		return
+	}
+	return
+}
+
+func ddboOutputSpec() *service.ConfigSpec {
+	return service.NewConfigSpec().
+		Stable().
+		Version("3.36.0").
+		Categories("Services", "AWS").
+		Summary(`Inserts items into a DynamoDB table.`).
+		Description(`
+The field `+"`string_columns`"+` is a map of column names to string values, where the values are [function interpolated](/docs/configuration/interpolation#bloblang-queries) per message of a batch. This allows you to populate string columns of an item by extracting fields within the document payload or metadata like follows:
 
 `+"```yml"+`
 string_columns:
@@ -62,11 +84,7 @@ string_columns:
   full_content: ${!content()}
 `+"```"+`
 
-The field `+"`json_map_columns`"+` is a map of column names to json paths,
-where the [dot path](/docs/configuration/field_paths) is extracted from each document and
-converted into a map value. Both an empty path and the path `+"`.`"+` are
-interpreted as the root of the document. This allows you to populate map columns
-of an item like follows:
+The field `+"`json_map_columns`"+` is a map of column names to json paths, where the [dot path](/docs/configuration/field_paths) is extracted from each document and converted into a map value. Both an empty path and the path `+"`.`"+` are interpreted as the root of the document. This allows you to populate map columns of an item like follows:
 
 `+"```yml"+`
 json_map_columns:
@@ -81,86 +99,109 @@ json_map_columns:
   "": .
 `+"```"+`
 
-In which case the top level document fields will be written at the root of the
-item, potentially overwriting previously defined column values. If a path is not
-found within a document the column will not be populated.
+In which case the top level document fields will be written at the root of the item, potentially overwriting previously defined column values. If a path is not found within a document the column will not be populated.
 
 ### Credentials
 
-By default Benthos will use a shared credentials file when connecting to AWS
-services. It's also possible to set them explicitly at the component level,
-allowing you to transfer data across accounts. You can find out more
-[in this document](/docs/guides/cloud/aws).`),
-		Config: docs.FieldComponent().WithChildren(
-			docs.FieldString("table", "The table to store messages in."),
-			docs.FieldString("string_columns", "A map of column keys to string values to store.",
-				map[string]string{
+By default Benthos will use a shared credentials file when connecting to AWS services. It's also possible to set them explicitly at the component level, allowing you to transfer data across accounts. You can find out more [in this document](/docs/guides/cloud/aws).
+
+## Performance
+
+This output benefits from sending multiple messages in flight in parallel for improved performance. You can tune the max number of in flight messages (or message batches) with the field `+"`max_in_flight`"+`.
+
+This output benefits from sending messages as a batch for improved performance. Batches can be formed at both the input and output level. You can find out more [in this doc](/docs/configuration/batching).
+`).
+		Fields(
+			service.NewStringField(ddboFieldTable).
+				Description("The table to store messages in."),
+			service.NewInterpolatedStringMapField(ddboFieldStringColumns).
+				Description("A map of column keys to string values to store.").
+				Default(map[string]any{}).
+				Example(map[string]any{
 					"id":           "${!json(\"id\")}",
 					"title":        "${!json(\"body.title\")}",
 					"topic":        "${!meta(\"kafka_topic\")}",
 					"full_content": "${!content()}",
-				},
-			).IsInterpolated().Map(),
-			docs.FieldString("json_map_columns", "A map of column keys to [field paths](/docs/configuration/field_paths) pointing to value data within messages.",
-				map[string]string{
+				}),
+			service.NewStringMapField(ddboFieldJSONMapColumns).
+				Description("A map of column keys to [field paths](/docs/configuration/field_paths) pointing to value data within messages.").
+				Default(map[string]any{}).
+				Example(map[string]any{
 					"user":           "path.to.user",
 					"whole_document": ".",
-				},
-				map[string]string{
+				}).
+				Example(map[string]string{
 					"": ".",
-				},
-			).Map(),
-			docs.FieldString("ttl", "An optional TTL to set for items, calculated from the moment the message is sent.").Advanced(),
-			docs.FieldString("ttl_key", "The column key to place the TTL value within.").Advanced(),
-			docs.FieldInt("max_in_flight", "The maximum number of parallel message batches to have in flight at any given time."),
-			policy.FieldSpec(),
-		).WithChildren(session.FieldSpecs()...).WithChildren(retries.FieldSpecs()...).ChildDefaultAndTypesFromStruct(output.NewDynamoDBConfig()),
-		Categories: []string{
-			"Services",
-			"AWS",
-		},
-	})
+				}),
+			service.NewStringField(ddboFieldTTL).
+				Description("An optional TTL to set for items, calculated from the moment the message is sent.").
+				Default("").
+				Advanced(),
+			service.NewStringField(ddboFieldTTLKey).
+				Description("The column key to place the TTL value within.").
+				Default("").
+				Advanced(),
+			service.NewOutputMaxInFlightField(),
+			service.NewBatchPolicyField(ddboFieldBatching),
+		).
+		Fields(config.SessionFields()...).
+		Fields(pure.CommonRetryBackOffFields(3, "1s", "5s", "30s")...)
+}
+
+func init() {
+	err := service.RegisterBatchOutput("aws_dynamodb", ddboOutputSpec(),
+		func(conf *service.ParsedConfig, mgr *service.Resources) (out service.BatchOutput, batchPolicy service.BatchPolicy, maxInFlight int, err error) {
+			if maxInFlight, err = conf.FieldMaxInFlight(); err != nil {
+				return
+			}
+			if batchPolicy, err = conf.FieldBatchPolicy(ddboFieldBatching); err != nil {
+				return
+			}
+			var wConf ddboConfig
+			if wConf, err = ddboConfigFromParsed(conf); err != nil {
+				return
+			}
+			out, err = newDynamoDBWriter(wConf, mgr)
+			return
+		})
 	if err != nil {
 		panic(err)
 	}
 }
 
-type dynamoDBWriter struct {
-	client dynamodbiface.DynamoDBAPI
-	conf   output.DynamoDBConfig
-	log    log.Modular
-
-	backoffCtor func() backoff.BackOff
-	boffPool    sync.Pool
-
-	table          *string
-	ttl            time.Duration
-	strColumns     map[string]*field.Expression
-	jsonMapColumns map[string]string
+type dynamoDBAPI interface {
+	PutItem(ctx context.Context, params *dynamodb.PutItemInput, optFns ...func(*dynamodb.Options)) (*dynamodb.PutItemOutput, error)
+	BatchWriteItem(ctx context.Context, params *dynamodb.BatchWriteItemInput, optFns ...func(*dynamodb.Options)) (*dynamodb.BatchWriteItemOutput, error)
+	BatchExecuteStatement(ctx context.Context, params *dynamodb.BatchExecuteStatementInput, optFns ...func(*dynamodb.Options)) (*dynamodb.BatchExecuteStatementOutput, error)
+	DescribeTable(ctx context.Context, params *dynamodb.DescribeTableInput, optFns ...func(*dynamodb.Options)) (*dynamodb.DescribeTableOutput, error)
+	GetItem(ctx context.Context, params *dynamodb.GetItemInput, optFns ...func(*dynamodb.Options)) (*dynamodb.GetItemOutput, error)
+	DeleteItem(ctx context.Context, params *dynamodb.DeleteItemInput, optFns ...func(*dynamodb.Options)) (*dynamodb.DeleteItemOutput, error)
 }
 
-func newDynamoDBWriter(conf output.DynamoDBConfig, mgr bundle.NewManagement) (*dynamoDBWriter, error) {
+type dynamoDBWriter struct {
+	client dynamoDBAPI
+	conf   ddboConfig
+	log    *service.Logger
+
+	boffPool sync.Pool
+
+	table *string
+	ttl   time.Duration
+}
+
+func newDynamoDBWriter(conf ddboConfig, mgr *service.Resources) (*dynamoDBWriter, error) {
 	db := &dynamoDBWriter{
-		conf:           conf,
-		log:            mgr.Logger(),
-		table:          aws.String(conf.Table),
-		strColumns:     map[string]*field.Expression{},
-		jsonMapColumns: map[string]string{},
+		conf:  conf,
+		log:   mgr.Logger(),
+		table: aws.String(conf.Table),
 	}
 	if len(conf.StringColumns) == 0 && len(conf.JSONMapColumns) == 0 {
 		return nil, errors.New("you must provide at least one column")
 	}
-	var err error
-	for k, v := range conf.StringColumns {
-		if db.strColumns[k], err = mgr.BloblEnvironment().NewField(v); err != nil {
-			return nil, fmt.Errorf("failed to parse column '%v' expression: %v", k, err)
-		}
-	}
 	for k, v := range conf.JSONMapColumns {
 		if v == "." {
-			v = ""
+			conf.JSONMapColumns[k] = ""
 		}
-		db.jsonMapColumns[k] = v
 	}
 	if conf.TTL != "" {
 		ttl, err := time.ParseDuration(conf.TTL)
@@ -169,12 +210,9 @@ func newDynamoDBWriter(conf output.DynamoDBConfig, mgr bundle.NewManagement) (*d
 		}
 		db.ttl = ttl
 	}
-	if db.backoffCtor, err = conf.Config.GetCtor(); err != nil {
-		return nil, err
-	}
 	db.boffPool = sync.Pool{
 		New: func() any {
-			return db.backoffCtor()
+			return db.conf.backoffCtor()
 		},
 	}
 	return db, nil
@@ -185,18 +223,13 @@ func (d *dynamoDBWriter) Connect(ctx context.Context) error {
 		return nil
 	}
 
-	sess, err := GetSessionFromConf(d.conf.SessionConfig.Config)
-	if err != nil {
-		return err
-	}
-
-	client := dynamodb.New(sess)
-	out, err := client.DescribeTable(&dynamodb.DescribeTableInput{
+	client := dynamodb.NewFromConfig(d.conf.aconf)
+	out, err := client.DescribeTable(ctx, &dynamodb.DescribeTableInput{
 		TableName: d.table,
 	})
 	if err != nil {
 		return err
-	} else if out == nil || out.Table == nil || out.Table.TableStatus == nil || *out.Table.TableStatus != dynamodb.TableStatusActive {
+	} else if out == nil || out.Table == nil || out.Table.TableStatus != types.TableStatusActive {
 		return fmt.Errorf("dynamodb table '%s' must be active", d.conf.Table)
 	}
 
@@ -205,69 +238,69 @@ func (d *dynamoDBWriter) Connect(ctx context.Context) error {
 	return nil
 }
 
-func walkJSON(root any) *dynamodb.AttributeValue {
+func anyToAttributeValue(root any) types.AttributeValue {
 	switch v := root.(type) {
 	case map[string]any:
-		m := make(map[string]*dynamodb.AttributeValue, len(v))
+		m := make(map[string]types.AttributeValue, len(v))
 		for k, v2 := range v {
-			m[k] = walkJSON(v2)
+			m[k] = anyToAttributeValue(v2)
 		}
-		return &dynamodb.AttributeValue{
-			M: m,
+		return &types.AttributeValueMemberM{
+			Value: m,
 		}
 	case []any:
-		l := make([]*dynamodb.AttributeValue, len(v))
+		l := make([]types.AttributeValue, len(v))
 		for i, v2 := range v {
-			l[i] = walkJSON(v2)
+			l[i] = anyToAttributeValue(v2)
 		}
-		return &dynamodb.AttributeValue{
-			L: l,
+		return &types.AttributeValueMemberL{
+			Value: l,
 		}
 	case string:
-		return &dynamodb.AttributeValue{
-			S: aws.String(v),
+		return &types.AttributeValueMemberS{
+			Value: v,
 		}
 	case json.Number:
-		return &dynamodb.AttributeValue{
-			N: aws.String(v.String()),
+		return &types.AttributeValueMemberS{
+			Value: v.String(),
 		}
 	case float64:
-		return &dynamodb.AttributeValue{
-			N: aws.String(strconv.FormatFloat(v, 'f', -1, 64)),
+		return &types.AttributeValueMemberN{
+			Value: strconv.FormatFloat(v, 'f', -1, 64),
 		}
 	case int:
-		return &dynamodb.AttributeValue{
-			N: aws.String(strconv.Itoa(v)),
+		return &types.AttributeValueMemberN{
+			Value: strconv.Itoa(v),
 		}
 	case int64:
-		return &dynamodb.AttributeValue{
-			N: aws.String(strconv.Itoa(int(v))),
+		return &types.AttributeValueMemberN{
+			Value: strconv.Itoa(int(v)),
 		}
 	case bool:
-		return &dynamodb.AttributeValue{
-			BOOL: aws.Bool(v),
+		return &types.AttributeValueMemberBOOL{
+			Value: v,
 		}
 	case nil:
-		return &dynamodb.AttributeValue{
-			NULL: aws.Bool(true),
+		return &types.AttributeValueMemberNULL{
+			Value: true,
 		}
 	}
-	return &dynamodb.AttributeValue{
-		S: aws.String(fmt.Sprintf("%v", root)),
+	return &types.AttributeValueMemberS{
+		Value: fmt.Sprintf("%v", root),
 	}
 }
 
-func jsonToMap(path string, root any) (*dynamodb.AttributeValue, error) {
+func jsonToMap(path string, root any) (types.AttributeValue, error) {
 	gObj := gabs.Wrap(root)
 	if len(path) > 0 {
 		gObj = gObj.Path(path)
 	}
-	return walkJSON(gObj.Data()), nil
+	return anyToAttributeValue(gObj.Data()), nil
 }
 
-func (d *dynamoDBWriter) WriteBatch(ctx context.Context, msg message.Batch) error {
+func (d *dynamoDBWriter) WriteBatch(ctx context.Context, b service.MessageBatch) error {
 	if d.client == nil {
-		return component.ErrNotConnected
+		return service.ErrNotConnected
 	}
 
 	boff := d.boffPool.Get().(backoff.BackOff)
@@ -276,34 +309,38 @@ func (d *dynamoDBWriter) WriteBatch(ctx context.Context, msg message.Batch) erro
 		d.boffPool.Put(boff)
 	}()
 
-	writeReqs := []*dynamodb.WriteRequest{}
-	if err := msg.Iter(func(i int, p *message.Part) error {
-		items := map[string]*dynamodb.AttributeValue{}
+	writeReqs := []types.WriteRequest{}
+	if err := b.WalkWithBatchedErrors(func(i int, p *service.Message) error {
+		items := map[string]types.AttributeValue{}
 		if d.ttl != 0 && d.conf.TTLKey != "" {
-			items[d.conf.TTLKey] = &dynamodb.AttributeValue{
-				N: aws.String(strconv.FormatInt(time.Now().Add(d.ttl).Unix(), 10)),
+			items[d.conf.TTLKey] = &types.AttributeValueMemberN{
+				Value: strconv.FormatInt(time.Now().Add(d.ttl).Unix(), 10),
 			}
 		}
-		for k, v := range d.strColumns {
-			s, err := v.String(i, msg)
+		for k, v := range d.conf.StringColumns {
+			s, err := b.TryInterpolatedString(i, v)
 			if err != nil {
 				return fmt.Errorf("string column %v interpolation error: %w", k, err)
 			}
-			items[k] = &dynamodb.AttributeValue{
-				S: &s,
+			items[k] = &types.AttributeValueMemberS{
+				Value: s,
 			}
 		}
-		if len(d.jsonMapColumns) > 0 {
+		if len(d.conf.JSONMapColumns) > 0 {
 			jRoot, err := p.AsStructured()
 			if err != nil {
 				d.log.Errorf("Failed to extract JSON maps from document: %v", err)
 				return err
 			}
-			for k, v := range d.jsonMapColumns {
+			for k, v := range d.conf.JSONMapColumns {
 				if attr, err := jsonToMap(v, jRoot); err == nil {
 					if k == "" {
-						for ak, av := range attr.M {
-							items[ak] = av
+						if mv, ok := attr.(*types.AttributeValueMemberM); ok {
+							for ak, av := range mv.Value {
+								items[ak] = av
+							}
+						} else {
+							items[k] = attr
 						}
 					} else {
 						items[k] = attr
@@ -314,8 +351,8 @@ func (d *dynamoDBWriter) WriteBatch(ctx context.Context, msg message.Batch) erro
 				}
 			}
 		}
-		writeReqs = append(writeReqs, &dynamodb.WriteRequest{
-			PutRequest: &dynamodb.PutRequest{
+		writeReqs = append(writeReqs, types.WriteRequest{
+			PutRequest: &types.PutRequest{
 				Item: items,
 			},
 		})
@@ -324,21 +361,23 @@ func (d *dynamoDBWriter) WriteBatch(ctx context.Context, msg message.Batch) erro
 		return err
 	}
 
-	batchResult, err := d.client.BatchWriteItem(&dynamodb.BatchWriteItemInput{
-		RequestItems: map[string][]*dynamodb.WriteRequest{
+	batchResult, err := d.client.BatchWriteItem(ctx, &dynamodb.BatchWriteItemInput{
+		RequestItems: map[string][]types.WriteRequest{
 			*d.table: writeReqs,
 		},
 	})
 	if err != nil {
+		headlineErr := err
+
 		// None of the messages were successful, attempt to send individually
 	individualRequestsLoop:
 		for err != nil {
-			batchErr := batch.NewError(msg, err)
+			batchErr := service.NewBatchError(b, headlineErr)
 			for i, req := range writeReqs {
-				if req == nil {
+				if req.PutRequest == nil {
 					continue
 				}
-				if _, iErr := d.client.PutItem(&dynamodb.PutItemInput{
+				if _, iErr := d.client.PutItem(ctx, &dynamodb.PutItemInput{
 					TableName: d.table,
 					Item:      req.PutRequest.Item,
 				}); iErr != nil {
@@ -354,7 +393,7 @@ func (d *dynamoDBWriter) WriteBatch(ctx context.Context, msg message.Batch) erro
 					}
 					batchErr.Failed(i, iErr)
 				} else {
-					writeReqs[i] = nil
+					writeReqs[i].PutRequest = nil
 				}
 			}
 			if batchErr.IndexedErrors() == 0 {
@@ -379,8 +418,8 @@ unprocessedLoop:
 		case <-ctx.Done():
 			break unprocessedLoop
 		}
-		if batchResult, err = d.client.BatchWriteItem(&dynamodb.BatchWriteItemInput{
-			RequestItems: map[string][]*dynamodb.WriteRequest{
+		if batchResult, err = d.client.BatchWriteItem(ctx, &dynamodb.BatchWriteItemInput{
+			RequestItems: map[string][]types.WriteRequest{
 				*d.table: unproc,
 			},
 		}); err != nil {
@@ -396,27 +435,7 @@ unprocessedLoop:
 		if err == nil {
 			err = errors.New("ran out of request retries")
 		}
-
-		// Sad, we have unprocessed messages, we need to map the requests back
-		// to the origin message index. The DynamoDB API doesn't make this easy.
-		batchErr := batch.NewError(msg, err)
-
-	requestsLoop:
-		for _, req := range unproc {
-			for i, src := range writeReqs {
-				if cmp.Equal(req, src) {
-					batchErr.Failed(i, errors.New("failed to set item"))
-					continue requestsLoop
-				}
-			}
-			// If we're unable to map a single request to the origin message
-			// then we return a general error.
-			return err
-		}
-
-		err = batchErr
 	}
-
 	return err
 }
 

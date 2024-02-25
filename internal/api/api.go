@@ -15,37 +15,8 @@ import (
 	yaml "gopkg.in/yaml.v3"
 
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
-	"github.com/benthosdev/benthos/v4/internal/httpserver"
 	"github.com/benthosdev/benthos/v4/internal/log"
 )
-
-// Config contains the configuration fields for the Benthos API.
-type Config struct {
-	Address        string                     `json:"address" yaml:"address"`
-	Enabled        bool                       `json:"enabled" yaml:"enabled"`
-	RootPath       string                     `json:"root_path" yaml:"root_path"`
-	DebugEndpoints bool                       `json:"debug_endpoints" yaml:"debug_endpoints"`
-	CertFile       string                     `json:"cert_file" yaml:"cert_file"`
-	KeyFile        string                     `json:"key_file" yaml:"key_file"`
-	CORS           httpserver.CORSConfig      `json:"cors" yaml:"cors"`
-	BasicAuth      httpserver.BasicAuthConfig `json:"basic_auth" yaml:"basic_auth"`
-}
-
-// NewConfig creates a new API config with default values.
-func NewConfig() Config {
-	return Config{
-		Address:        "0.0.0.0:4195",
-		Enabled:        true,
-		RootPath:       "/benthos",
-		DebugEndpoints: false,
-		CertFile:       "",
-		KeyFile:        "",
-		CORS:           httpserver.NewServerCORSConfig(),
-		BasicAuth:      httpserver.NewBasicAuthConfig(),
-	}
-}
-
-//------------------------------------------------------------------------------
 
 // OptFunc applies an option to an API type during construction.
 type OptFunc func(t *Type)
@@ -209,6 +180,10 @@ func New(
 			pprof.Index,
 		)
 		t.RegisterEndpoint(
+			"/debug/pprof/allocs", "DEBUG: Responds with a pprof-formatted allocs profile.",
+			pprof.Index,
+		)
+		t.RegisterEndpoint(
 			"/debug/pprof/symbol", "DEBUG: looks up the program counters listed"+
 				" in the request, responding with a table mapping program"+
 				" counters to function names.",
@@ -264,8 +239,8 @@ func (t *Type) RegisterEndpoint(path, desc string, handlerFunc http.HandlerFunc)
 			h(w, r)
 		})
 
-		t.mux.PathPrefix(path).Handler(wrapHandler)
-		t.mux.PathPrefix(t.conf.RootPath + path).Handler(wrapHandler)
+		GetMuxRoute(t.mux, path).Handler(wrapHandler)
+		GetMuxRoute(t.mux, t.conf.RootPath+path).Handler(wrapHandler)
 	}
 	t.handlers[path] = handlerFunc
 }
@@ -276,7 +251,7 @@ func (t *Type) ListenAndServe() error {
 		<-t.ctx.Done()
 		return nil
 	}
-	t.log.Infof(
+	t.log.Info(
 		"Listening for HTTP requests at: %v\n",
 		"http://"+t.conf.Address,
 	)

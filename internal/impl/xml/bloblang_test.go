@@ -8,6 +8,7 @@ import (
 
 	"github.com/benthosdev/benthos/v4/internal/bloblang/query"
 	_ "github.com/benthosdev/benthos/v4/internal/impl/xml"
+	"github.com/benthosdev/benthos/v4/internal/value"
 )
 
 func TestParseXML(t *testing.T) {
@@ -44,8 +45,8 @@ func TestParseXML(t *testing.T) {
 	for _, test := range testCases {
 		test := test
 		t.Run(test.name, func(t *testing.T) {
-			targetClone := query.IClone(test.target)
-			argsClone := query.IClone(test.args).([]any)
+			targetClone := value.IClone(test.target)
+			argsClone := value.IClone(test.args).([]any)
 
 			fn, err := query.InitMethodHelper(test.method, query.NewLiteralFunction("", targetClone), argsClone...)
 			require.NoError(t, err)

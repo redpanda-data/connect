@@ -29,10 +29,10 @@ Sends messages to an HTTP server.
 output:
   label: ""
   http_client:
-    url: ""
+    url: "" # No default (required)
     verb: POST
     headers: {}
-    rate_limit: ""
+    rate_limit: "" # No default (optional)
     timeout: 5s
     max_in_flight: 64
     batching:
@@ -50,7 +50,7 @@ output:
 output:
   label: ""
   http_client:
-    url: ""
+    url: "" # No default (required)
     verb: POST
     headers: {}
     metadata:
@@ -69,6 +69,7 @@ output:
       client_secret: ""
       token_url: ""
       scopes: []
+      endpoint_params: {}
     basic_auth:
       enabled: false
       username: ""
@@ -89,7 +90,7 @@ output:
     extract_headers:
       include_prefixes: []
       include_patterns: []
-    rate_limit: ""
+    rate_limit: "" # No default (optional)
     timeout: 5s
     retry_period: 1s
     max_retry_backoff: 300s
@@ -98,7 +99,7 @@ output:
       - 429
     drop_on: []
     successful_on: []
-    proxy_url: ""
+    proxy_url: "" # No default (optional)
     batch_as_multipart: false
     propagate_response: false
     max_in_flight: 64
@@ -107,7 +108,7 @@ output:
       byte_size: 0
       period: ""
       check: ""
-      processors: []
+      processors: [] # No default (optional)
     multipart: []
 ```
 
@@ -340,6 +341,26 @@ Type: `array`
 Default: `[]`  
 Requires version 3.45.0 or newer  
 
+### `oauth2.endpoint_params`
+
+A list of optional endpoint parameters, values should be arrays of strings.
+
+
+Type: `object`  
+Default: `{}`  
+Requires version 4.21.0 or newer  
+
+```yml
+# Examples
+
+endpoint_params:
+  bar:
+    - woof
+  foo:
+    - meow
+    - quack
+```
+
 ### `basic_auth`
 
 Allows you to specify basic authentication.
@@ -493,6 +514,7 @@ A list of client certificates to use. For each certificate either the fields `ce
 
 
 Type: `array`  
+Default: `[]`  
 
 ```yml
 # Examples
@@ -676,7 +698,6 @@ An optional HTTP proxy URL.
 
 
 Type: `string`  
-Default: `""`  
 
 ### `batch_as_multipart`
 

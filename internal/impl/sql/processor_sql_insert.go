@@ -138,7 +138,7 @@ func NewSQLInsertProcessorFromConfig(conf *service.ParsedConfig, mgr *service.Re
 	s.builder = squirrel.Insert(tableStr).Columns(columns...)
 	if driverStr == "postgres" || driverStr == "clickhouse" {
 		s.builder = s.builder.PlaceholderFormat(squirrel.Dollar)
-	} else if driverStr == "oracle" {
+	} else if driverStr == "oracle" || driverStr == "gocosmos" {
 		s.builder = s.builder.PlaceholderFormat(squirrel.Colon)
 	}
 

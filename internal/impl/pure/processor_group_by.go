@@ -2,41 +2,36 @@ package pure
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"strconv"
 
 	"github.com/benthosdev/benthos/v4/internal/bloblang/mapping"
 	"github.com/benthosdev/benthos/v4/internal/bundle"
+	"github.com/benthosdev/benthos/v4/internal/component/interop"
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
-	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
-func init() {
-	err := bundle.AllProcessors.Add(func(conf processor.Config, mgr bundle.NewManagement) (processor.V1, error) {
-		p, err := newGroupBy(conf.GroupBy, mgr)
-		if err != nil {
-			return nil, err
-		}
-		return processor.NewAutoObservedBatchedProcessor("group_by", p, mgr), nil
-	}, docs.ComponentSpec{
-		Name: "group_by",
-		Categories: []string{
-			"Composition",
-		},
-		Summary: `
-Splits a [batch of messages](/docs/configuration/batching) into N batches, where each resulting batch contains a group of messages determined by a [Bloblang query](/docs/guides/bloblang/about).`,
-		Description: `
+const (
+	gbpFieldCheck      = "check"
+	gbpFieldProcessors = "processors"
+)
+
+func groupByProcSpec() *service.ConfigSpec {
+	return service.NewConfigSpec().
+		Categories("Composition").
+		Stable().
+		Summary(`Splits a [batch of messages](/docs/configuration/batching) into N batches, where each resulting batch contains a group of messages determined by a [Bloblang query](/docs/guides/bloblang/about).`).
+		Description(`
 Once the groups are established a list of processors are applied to their respective grouped batch, which can be used to label the batch as per their grouping. Messages that do not pass the check of any specified group are placed in their own group.
 
-The functionality of this processor depends on being applied across messages that are batched. You can find out more about batching [in this doc](/docs/configuration/batching).`,
-		Examples: []docs.AnnotatedExample{
-			{
-				Title:   "Grouped Processing",
-				Summary: "Imagine we have a batch of messages that we wish to split into a group of foos and everything else, which should be sent to different output destinations based on those groupings. We also need to send the foos as a tar gzip archive. For this purpose we can use the `group_by` processor with a [`switch`](/docs/components/outputs/switch) output:",
-				Config: `
+The functionality of this processor depends on being applied across messages that are batched. You can find out more about batching [in this doc](/docs/configuration/batching).`).
+		Example(
+			"Grouped Processing",
+			"Imagine we have a batch of messages that we wish to split into a group of foos and everything else, which should be sent to different output destinations based on those groupings. We also need to send the foos as a tar gzip archive. For this purpose we can use the `group_by` processor with a [`switch`](/docs/components/outputs/switch) output:",
+			`
 pipeline:
   processors:
     - group_by:
@@ -61,22 +56,41 @@ output:
             project: somewhere_else
             topic: no_foos_here
 `,
-			},
-		},
-		Config: docs.FieldComponent().Array().WithChildren(
-			docs.FieldBloblang(
-				"check",
-				"A [Bloblang query](/docs/guides/bloblang/about) that should return a boolean value indicating whether a message belongs to a given group.",
-				`this.type == "foo"`,
-				`this.contents.urls.contains("https://benthos.dev/")`,
-				`true`,
-			).HasDefault(""),
-			docs.FieldProcessor(
-				"processors",
-				"A list of [processors](/docs/components/processors/about) to execute on the newly formed group.",
-			).HasDefault([]any{}).Array(),
-		),
-	})
+		).
+		Field(service.NewObjectListField("",
+			service.NewBloblangField(gbpFieldCheck).
+				Description("A [Bloblang query](/docs/guides/bloblang/about) that should return a boolean value indicating whether a message belongs to a given group.").
+				Examples(
+					`this.type == "foo"`,
+					`this.contents.urls.contains("https://benthos.dev/")`,
+					`true`,
+				),
+			service.NewProcessorListField(gbpFieldProcessors).
+				Description("A list of [processors](/docs/components/processors/about) to execute on the newly formed group.").
+				Default([]any{}),
+		))
+}
+
+func init() {
+	err := service.RegisterBatchProcessor(
+		"group_by", groupByProcSpec(),
+		func(conf *service.ParsedConfig, res *service.Resources) (service.BatchProcessor, error) {
+			groupConfs, err := conf.FieldObjectList()
+			if err != nil {
+				return nil, err
+			}
+
+			mgr := interop.UnwrapManagement(res)
+			p := &groupByProc{log: mgr.Logger()}
+			p.groups = make([]group, len(groupConfs))
+			for i, c := range groupConfs {
+				if p.groups[i], err = groupFromParsed(c, mgr); err != nil {
+					return nil, fmt.Errorf("group '%v' parse error: %w", i, err)
+				}
+			}
+
+			return interop.NewUnwrapInternalBatchProcessor(processor.NewAutoObservedBatchedProcessor("group_by", p, mgr)), nil
+		})
 	if err != nil {
 		panic(err)
 	}
@@ -87,38 +101,30 @@ type group struct {
 	Processors []processor.V1
 }
 
+func groupFromParsed(conf *service.ParsedConfig, mgr bundle.NewManagement) (g group, err error) {
+	var checkStr string
+	if checkStr, err = conf.FieldString(gbpFieldCheck); err != nil {
+		return
+	}
+	if g.Check, err = mgr.BloblEnvironment().NewMapping(checkStr); err != nil {
+		return
+	}
+
+	var iProcs []*service.OwnedProcessor
+	if iProcs, err = conf.FieldProcessorList(gbpFieldProcessors); err != nil {
+		return
+	}
+
+	g.Processors = make([]processor.V1, len(iProcs))
+	for i, c := range iProcs {
+		g.Processors[i] = interop.UnwrapOwnedProcessor(c)
+	}
+	return
+}
+
 type groupByProc struct {
 	log    log.Modular
 	groups []group
-}
-
-func newGroupBy(conf processor.GroupByConfig, mgr bundle.NewManagement) (processor.AutoObservedBatched, error) {
-	var err error
-	groups := make([]group, len(conf))
-
-	for i, gConf := range conf {
-		if len(gConf.Check) > 0 {
-			if groups[i].Check, err = mgr.BloblEnvironment().NewMapping(gConf.Check); err != nil {
-				return nil, fmt.Errorf("failed to parse check for group '%v': %v", i, err)
-			}
-		} else {
-			return nil, errors.New("a group definition must have a check query")
-		}
-
-		for j, pConf := range gConf.Processors {
-			pMgr := mgr.IntoPath("group_by", strconv.Itoa(i), "processors", strconv.Itoa(j))
-			proc, err := pMgr.NewProcessor(pConf)
-			if err != nil {
-				return nil, err
-			}
-			groups[i].Processors = append(groups[i].Processors, proc)
-		}
-	}
-
-	return &groupByProc{
-		log:    mgr.Logger(),
-		groups: groups,
-	}, nil
 }
 
 func (g *groupByProc) ProcessBatch(ctx *processor.BatchProcContext, msg message.Batch) ([]message.Batch, error) {
@@ -137,7 +143,7 @@ func (g *groupByProc) ProcessBatch(ctx *processor.BatchProcContext, msg message.
 			res, err := group.Check.QueryPart(i, msg)
 			if err != nil {
 				res = false
-				g.log.Errorf("Failed to test group %v: %v\n", j, err)
+				g.log.Error("Failed to test group %v: %v\n", j, err)
 			}
 			if res {
 				groupStr := strconv.Itoa(j)
@@ -166,7 +172,7 @@ func (g *groupByProc) ProcessBatch(ctx *processor.BatchProcContext, msg message.
 		}
 		if res != nil {
 			if err := res; err != nil {
-				g.log.Errorf("Processor error: %v\n", err)
+				g.log.Error("Processor error: %v\n", err)
 			}
 		}
 	}

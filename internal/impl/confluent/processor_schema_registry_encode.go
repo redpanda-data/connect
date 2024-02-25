@@ -4,18 +4,11 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/binary"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
-	"net/http"
-	"net/url"
-	"path"
 	"sync"
 	"sync/atomic"
 	"time"
-
-	"github.com/linkedin/goavro/v2"
 
 	"github.com/benthosdev/benthos/v4/internal/httpclient"
 	"github.com/benthosdev/benthos/v4/internal/shutdown"
@@ -33,7 +26,7 @@ Encodes messages automatically from schemas obtains from a [Confluent Schema Reg
 
 If a message fails to encode under the schema then it will remain unchanged and the error can be caught using error handling methods outlined [here](/docs/configuration/error_handling).
 
-Currently only Avro schemas are supported.
+Avro, Protobuf and Json schemas are supported, all are capable of expanding from schema references as of v4.22.0.
 
 ### Avro JSON Format
 
@@ -50,9 +43,19 @@ For example, the union schema ` + "`[\"null\",\"string\",\"Foo\"]`, where `Foo`"
 
 However, it is possible to instead consume documents in [standard/raw JSON format](https://pkg.go.dev/github.com/linkedin/goavro/v2#NewCodecForStandardJSONFull) by setting the field ` + "[`avro_raw_json`](#avro_raw_json) to `true`" + `.
 
-### Known Issues
+#### Known Issues
 
 Important! There is an outstanding issue in the [avro serializing library](https://github.com/linkedin/goavro) that benthos uses which means it [doesn't encode logical types correctly](https://github.com/linkedin/goavro/issues/252). It's still possible to encode logical types that are in-line with the spec if ` + "`avro_raw_json` is set to true" + `, though now of course non-logical types will not be in-line with the spec.
+
+### Protobuf Format
+
+This processor encodes protobuf messages either from any format parsed within Benthos (encoded as JSON by default), or from raw JSON documents, you can read more about JSON mapping of protobuf messages here: https://developers.google.com/protocol-buffers/docs/proto3#json
+
+#### Multiple Message Support
+
+When a target subject presents a protobuf schema that contains multiple messages it becomes ambiguous which message definition a given input data should be encoded against. In such scenarios Benthos will attempt to encode the data against each of them and select the first to successfully match against the data, this process currently *ignores all nested message definitions*. In order to speed up this exhaustive search the last known successful message will be attempted first for each subsequent input.
+
+We will be considering alternative approaches in future so please [get in touch](/community) with thoughts and feedback.
 `).
 		Field(service.NewURLField("url").Description("The base URL of the schema registry service.")).
 		Field(service.NewInterpolatedStringField("subject").Description("The schema subject to derive schemas from.").
@@ -88,13 +91,10 @@ func init() {
 //------------------------------------------------------------------------------
 
 type schemaRegistryEncoder struct {
-	client             *http.Client
+	client             *schemaRegistryClient
 	subject            *service.InterpolatedString
 	avroRawJSON        bool
 	schemaRefreshAfter time.Duration
-
-	schemaRegistryBaseURL *url.URL
-	requestSigner         httpclient.RequestSigner
 
 	schemas    map[string]*cachedSchemaEncoder
 	cacheMut   sync.RWMutex
@@ -151,36 +151,19 @@ func newSchemaRegistryEncoder(
 	schemaRefreshAfter, schemaRefreshTicker time.Duration,
 	mgr *service.Resources,
 ) (*schemaRegistryEncoder, error) {
-	u, err := url.Parse(urlStr)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse url: %w", err)
-	}
-
 	s := &schemaRegistryEncoder{
-		schemaRegistryBaseURL: u,
-		requestSigner:         reqSigner,
-		subject:               subject,
-		avroRawJSON:           avroRawJSON,
-		schemaRefreshAfter:    schemaRefreshAfter,
-		schemas:               map[string]*cachedSchemaEncoder{},
-		shutSig:               shutdown.NewSignaller(),
-		logger:                mgr.Logger(),
-		mgr:                   mgr,
-		nowFn:                 time.Now,
+		subject:            subject,
+		avroRawJSON:        avroRawJSON,
+		schemaRefreshAfter: schemaRefreshAfter,
+		schemas:            map[string]*cachedSchemaEncoder{},
+		shutSig:            shutdown.NewSignaller(),
+		logger:             mgr.Logger(),
+		mgr:                mgr,
+		nowFn:              time.Now,
 	}
-
-	s.client = http.DefaultClient
-	if tlsConf != nil {
-		s.client = &http.Client{}
-		if c, ok := http.DefaultTransport.(*http.Transport); ok {
-			cloned := c.Clone()
-			cloned.TLSClientConfig = tlsConf
-			s.client.Transport = cloned
-		} else {
-			s.client.Transport = &http.Transport{
-				TLSClientConfig: tlsConf,
-			}
-		}
+	var err error
+	if s.client, err = newSchemaRegistryClient(urlStr, reqSigner, tlsConf, mgr); err != nil {
+		return nil, err
 	}
 
 	go func() {
@@ -315,101 +298,29 @@ func (s *schemaRegistryEncoder) getLatestEncoder(subject string) (schemaEncoder,
 	ctx, done := context.WithTimeout(context.Background(), time.Second*5)
 	defer done()
 
-	reqURL := *s.schemaRegistryBaseURL
-	reqURL.Path = path.Join(reqURL.Path, fmt.Sprintf("/subjects/%s/versions/latest", subject))
-
-	req, err := http.NewRequestWithContext(ctx, "GET", reqURL.String(), http.NoBody)
+	resPayload, err := s.client.GetSchemaBySubjectAndVersion(ctx, subject, nil)
 	if err != nil {
 		return nil, 0, err
 	}
-	req.Header.Add("Accept", "application/vnd.schemaregistry.v1+json")
-	if err := s.requestSigner(s.mgr.FS(), req); err != nil {
-		return nil, 0, err
-	}
 
-	var resBytes []byte
-	for i := 0; i < 3; i++ {
-		var res *http.Response
-		if res, err = s.client.Do(req); err != nil {
-			s.logger.Errorf("request failed for schema subject '%v': %v", subject, err)
-			continue
-		}
+	s.logger.Tracef("Loaded new codec for subject %v: %s", subject, resPayload.Schema)
 
-		if res.StatusCode == http.StatusNotFound {
-			err = fmt.Errorf("schema subject '%v' not found by registry", subject)
-			s.logger.Errorf(err.Error())
-			break
-		}
-
-		if res.StatusCode != http.StatusOK {
-			err = fmt.Errorf("request failed for schema subject '%v'", subject)
-			s.logger.Errorf(err.Error())
-			// TODO: Best attempt at parsing out the body
-			continue
-		}
-
-		if res.Body == nil {
-			s.logger.Errorf("request for schema subject latest '%v' returned an empty body", subject)
-			err = errors.New("schema request returned an empty body")
-			continue
-		}
-
-		resBytes, err = io.ReadAll(res.Body)
-		res.Body.Close()
-		if err != nil {
-			s.logger.Errorf("failed to read response for schema subject '%v': %v", subject, err)
-			continue
-		}
-
-		break
+	var encoder schemaEncoder
+	switch resPayload.Type {
+	case "PROTOBUF":
+		encoder, err = s.getProtobufEncoder(ctx, resPayload)
+	case "", "AVRO":
+		encoder, err = s.getAvroEncoder(ctx, resPayload)
+	case "JSON":
+		encoder, err = s.getJSONEncoder(ctx, resPayload)
+	default:
+		err = fmt.Errorf("schema type %v not supported", resPayload.Type)
 	}
 	if err != nil {
 		return nil, 0, err
 	}
 
-	resPayload := struct {
-		Schema string `json:"schema"`
-		ID     int    `json:"id"`
-	}{}
-	if err = json.Unmarshal(resBytes, &resPayload); err != nil {
-		s.logger.Errorf("failed to parse response for schema subject '%v': %v", subject, err)
-		return nil, 0, err
-	}
-
-	s.logger.Tracef("Loaded new codec for subject %v: %s", subject, resBytes)
-
-	var codec *goavro.Codec
-	if s.avroRawJSON {
-		if codec, err = goavro.NewCodecForStandardJSONFull(resPayload.Schema); err != nil {
-			s.logger.Errorf("failed to parse response for schema subject '%v': %v", subject, err)
-			return nil, 0, err
-		}
-	} else {
-		if codec, err = goavro.NewCodec(resPayload.Schema); err != nil {
-			s.logger.Errorf("failed to parse response for schema subject '%v': %v", subject, err)
-			return nil, 0, err
-		}
-	}
-
-	return func(m *service.Message) error {
-		b, err := m.AsBytes()
-		if err != nil {
-			return err
-		}
-
-		datum, _, err := codec.NativeFromTextual(b)
-		if err != nil {
-			return err
-		}
-
-		binary, err := codec.BinaryFromNative(nil, datum)
-		if err != nil {
-			return err
-		}
-
-		m.SetBytes(binary)
-		return nil
-	}, resPayload.ID, nil
+	return encoder, resPayload.ID, nil
 }
 
 func (s *schemaRegistryEncoder) getEncoder(subject string) (schemaEncoder, int, error) {

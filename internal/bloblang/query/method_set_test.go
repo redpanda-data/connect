@@ -10,8 +10,8 @@ import (
 )
 
 func listMethods(m *MethodSet) []string {
-	methodNames := make([]string, 0, len(m.constructors))
-	for k := range m.constructors {
+	methodNames := make([]string, 0, len(m.methods))
+	for k := range m.methods {
 		methodNames = append(methodNames, k)
 	}
 	sort.Strings(methodNames)

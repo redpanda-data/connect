@@ -29,9 +29,9 @@ Publish to a NATS Stream subject.
 output:
   label: ""
   nats_stream:
-    urls: []
-    cluster_id: ""
-    subject: ""
+    urls: [] # No default (required)
+    cluster_id: "" # No default (required)
+    subject: "" # No default (required)
     client_id: ""
     max_in_flight: 64
 ```
@@ -44,9 +44,9 @@ output:
 output:
   label: ""
   nats_stream:
-    urls: []
-    cluster_id: ""
-    subject: ""
+    urls: [] # No default (required)
+    cluster_id: "" # No default (required)
+    subject: "" # No default (required)
     client_id: ""
     max_in_flight: 64
     tls:
@@ -57,14 +57,19 @@ output:
       root_cas_file: ""
       client_certs: []
     auth:
-      nkey_file: ""
-      user_credentials_file: ""
-      user_jwt: ""
-      user_nkey_seed: ""
+      nkey_file: ./seed.nk # No default (optional)
+      user_credentials_file: ./user.creds # No default (optional)
+      user_jwt: "" # No default (optional)
+      user_nkey_seed: "" # No default (optional)
+    inject_tracing_map: meta = @.merge(this) # No default (optional)
 ```
 
 </TabItem>
 </Tabs>
+
+:::caution Deprecation Notice
+The NATS Streaming Server is being deprecated. Critical bug fixes and security fixes will be applied until June of 2023. NATS-enabled applications requiring persistence should use [JetStream](https://docs.nats.io/nats-concepts/jetstream).
+:::
 
 ### Authentication
 
@@ -110,7 +115,6 @@ A list of URLs to connect to. If an item of the list contains commas it will be 
 
 
 Type: `array`  
-Default: `[]`  
 
 ```yml
 # Examples
@@ -128,7 +132,6 @@ The cluster ID to publish to.
 
 
 Type: `string`  
-Default: `""`  
 
 ### `subject`
 
@@ -136,7 +139,6 @@ The subject to publish to.
 
 
 Type: `string`  
-Default: `""`  
 
 ### `client_id`
 
@@ -307,7 +309,6 @@ An optional file containing a NKey seed.
 
 
 Type: `string`  
-Default: `""`  
 
 ```yml
 # Examples
@@ -321,7 +322,6 @@ An optional file containing user credentials which consist of an user JWT and co
 
 
 Type: `string`  
-Default: `""`  
 
 ```yml
 # Examples
@@ -338,7 +338,6 @@ This field contains sensitive information that usually shouldn't be added to a c
 
 
 Type: `string`  
-Default: `""`  
 
 ### `auth.user_nkey_seed`
 
@@ -349,6 +348,21 @@ This field contains sensitive information that usually shouldn't be added to a c
 
 
 Type: `string`  
-Default: `""`  
+
+### `inject_tracing_map`
+
+EXPERIMENTAL: A [Bloblang mapping](/docs/guides/bloblang/about) used to inject an object containing tracing propagation information into outbound messages. The specification of the injected fields will match the format used by the service wide tracer.
+
+
+Type: `string`  
+Requires version 4.23.0 or newer  
+
+```yml
+# Examples
+
+inject_tracing_map: meta = @.merge(this)
+
+inject_tracing_map: root.meta.span = this
+```
 
 

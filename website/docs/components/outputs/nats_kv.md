@@ -1,7 +1,7 @@
 ---
 title: nats_kv
 type: output
-status: experimental
+status: beta
 categories: ["Services"]
 ---
 
@@ -14,8 +14,8 @@ categories: ["Services"]
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-:::caution EXPERIMENTAL
-This component is experimental and therefore subject to change or removal outside of major version releases.
+:::caution BETA
+This component is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with the component is found.
 :::
 Put messages in a NATS key-value bucket.
 
@@ -34,9 +34,9 @@ Introduced in version 4.12.0.
 output:
   label: ""
   nats_kv:
-    urls: []
-    bucket: ""
-    key: ""
+    urls: [] # No default (required)
+    bucket: my_kv_bucket # No default (required)
+    key: foo # No default (required)
     max_in_flight: 1024
 ```
 
@@ -48,9 +48,9 @@ output:
 output:
   label: ""
   nats_kv:
-    urls: []
-    bucket: ""
-    key: ""
+    urls: [] # No default (required)
+    bucket: my_kv_bucket # No default (required)
+    key: foo # No default (required)
     max_in_flight: 1024
     tls:
       enabled: false
@@ -60,10 +60,10 @@ output:
       root_cas_file: ""
       client_certs: []
     auth:
-      nkey_file: ""
-      user_credentials_file: ""
-      user_jwt: ""
-      user_nkey_seed: ""
+      nkey_file: ./seed.nk # No default (optional)
+      user_credentials_file: ./user.creds # No default (optional)
+      user_jwt: "" # No default (optional)
+      user_nkey_seed: "" # No default (optional)
 ```
 
 </TabItem>
@@ -73,6 +73,14 @@ The field `key` supports
 [interpolation functions](/docs/configuration/interpolation#bloblang-queries), allowing
 you to create a unique key for each message.
 
+### Connection Name
+
+When monitoring and managing a production NATS system, it is often useful to
+know which connection a message was send/received from. This can be achieved by
+setting the connection name option when creating a NATS connection.
+
+Benthos will automatically set the connection name based off the label of the given
+NATS component, so that monitoring tools between NATS and benthos can stay in sync.
 ### Authentication
 
 There are several components within Benthos which utilise NATS services. You will find that each of these components
@@ -233,6 +241,7 @@ A list of client certificates to use. For each certificate either the fields `ce
 
 
 Type: `array`  
+Default: `[]`  
 
 ```yml
 # Examples

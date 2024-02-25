@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 
 	"github.com/benthosdev/benthos/v4/internal/api"
-	tdocs "github.com/benthosdev/benthos/v4/internal/cli/test/docs"
+	"github.com/benthosdev/benthos/v4/internal/config/test"
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/template"
@@ -43,6 +43,7 @@ func main() {
 	service.GlobalEnvironment().WalkProcessors(viewForDir(path.Join(docsDir, "./processors")))
 	service.GlobalEnvironment().WalkRateLimits(viewForDir(path.Join(docsDir, "./rate_limits")))
 	service.GlobalEnvironment().WalkTracers(viewForDir(path.Join(docsDir, "./tracers")))
+	service.GlobalEnvironment().WalkScanners(viewForDir(path.Join(docsDir, "./scanners")))
 
 	// Bloblang stuff
 	doBloblang(docsDir)
@@ -86,7 +87,7 @@ func doBloblang(dir string) {
 }
 
 func doTestDocs(dir string) {
-	mdSpec, err := tdocs.DocsMarkdown()
+	mdSpec, err := test.DocsMarkdown()
 	if err != nil {
 		panic(fmt.Sprintf("Failed to generate docs for unit tests: %v", err))
 	}

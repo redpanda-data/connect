@@ -16,9 +16,9 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"gopkg.in/yaml.v3"
 
 	"github.com/benthosdev/benthos/v4/internal/component/input"
+	"github.com/benthosdev/benthos/v4/internal/component/testutil"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
 
@@ -27,8 +27,9 @@ import (
 
 func parseYAMLInputConf(t testing.TB, formatStr string, args ...any) (conf input.Config) {
 	t.Helper()
-	conf = input.NewConfig()
-	require.NoError(t, yaml.Unmarshal(fmt.Appendf(nil, formatStr, args...), &conf))
+	var err error
+	conf, err = testutil.InputFromYAML(fmt.Sprintf(formatStr, args...))
+	require.NoError(t, err)
 	return
 }
 
@@ -51,6 +52,11 @@ func TestHTTPClientGET(t *testing.T) {
 		if exp, act := "GET", r.Method; exp != act {
 			t.Errorf("Wrong method: %v != %v", act, exp)
 		}
+
+		reqBytes, err := io.ReadAll(r.Body)
+		require.NoError(t, err)
+		assert.Empty(t, reqBytes)
+
 		atomic.AddUint32(&reqCount, 1)
 		_, _ = w.Write([]byte(inputs[index%len(inputs)]))
 		index++

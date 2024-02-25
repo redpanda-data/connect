@@ -29,8 +29,8 @@ Sends messages to an AMQP (1.0) server.
 output:
   label: ""
   amqp_1:
-    url: ""
-    target_address: ""
+    urls: [] # No default (optional)
+    target_address: /foo # No default (required)
     max_in_flight: 64
     metadata:
       exclude_prefixes: []
@@ -44,8 +44,8 @@ output:
 output:
   label: ""
   amqp_1:
-    url: ""
-    target_address: ""
+    urls: [] # No default (optional)
+    target_address: /foo # No default (required)
     max_in_flight: 64
     tls:
       enabled: false
@@ -54,7 +54,7 @@ output:
       root_cas: ""
       root_cas_file: ""
       client_certs: []
-    application_properties_map: ""
+    application_properties_map: "" # No default (optional)
     sasl:
       mechanism: none
       user: ""
@@ -76,19 +76,26 @@ This output benefits from sending multiple messages in flight in parallel for im
 
 ## Fields
 
-### `url`
+### `urls`
 
-A URL to connect to.
+A list of URLs to connect to. The first URL to successfully establish a connection will be used until the connection is closed. If an item of the list contains commas it will be expanded into multiple URLs.
 
 
-Type: `string`  
+Type: `array`  
+Requires version 4.23.0 or newer  
 
 ```yml
 # Examples
 
-url: amqp://localhost:5672/
+urls:
+  - amqp://guest:guest@127.0.0.1:5672/
 
-url: amqps://guest:guest@localhost:5672/
+urls:
+  - amqp://127.0.0.1:5672/,amqp://127.0.0.2:5672/
+
+urls:
+  - amqp://127.0.0.1:5672/
+  - amqp://127.0.0.2:5672/
 ```
 
 ### `target_address`
@@ -188,6 +195,7 @@ A list of client certificates to use. For each certificate either the fields `ce
 
 
 Type: `array`  
+Default: `[]`  
 
 ```yml
 # Examples
@@ -279,6 +287,7 @@ Default: `"none"`
 
 | Option | Summary |
 |---|---|
+| `anonymous` | Anonymous SASL authentication. |
 | `none` | No SASL based authentication. |
 | `plain` | Plain text SASL authentication. |
 

@@ -7,63 +7,69 @@ import (
 	"sync"
 	"time"
 
-	"github.com/benthosdev/benthos/v4/internal/bundle"
-	"github.com/benthosdev/benthos/v4/internal/codec"
+	"github.com/benthosdev/benthos/v4/internal/codec/interop"
 	"github.com/benthosdev/benthos/v4/internal/component"
-	"github.com/benthosdev/benthos/v4/internal/component/input"
-	"github.com/benthosdev/benthos/v4/internal/component/input/processors"
-	"github.com/benthosdev/benthos/v4/internal/docs"
+	"github.com/benthosdev/benthos/v4/internal/component/scanner"
 	"github.com/benthosdev/benthos/v4/internal/filepath"
-	"github.com/benthosdev/benthos/v4/internal/log"
-	"github.com/benthosdev/benthos/v4/internal/message"
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
-func init() {
-	err := bundle.AllInputs.Add(processors.WrapConstructor(func(conf input.Config, nm bundle.NewManagement) (input.Streamed, error) {
-		rdr, err := newFileConsumer(conf.File, nm)
-		if err != nil {
-			return nil, err
-		}
-		return input.NewAsyncReader("file", input.NewAsyncPreserver(rdr), nm)
-	}), docs.ComponentSpec{
-		Name: "file",
-		Summary: `
-Consumes data from files on disk, emitting messages according to a chosen codec.`,
-		Config: docs.FieldComponent().WithChildren(
-			docs.FieldString("paths", "A list of paths to consume sequentially. Glob patterns are supported, including super globs (double star).").Array(),
-			codec.ReaderDocs,
-			docs.FieldInt("max_buffer", "The largest token size expected when consuming files with a tokenised codec such as `lines`.").Advanced(),
-			docs.FieldBool("delete_on_finish", "Whether to delete input files from the disk once they are fully consumed.").Advanced(),
-		).ChildDefaultAndTypesFromStruct(input.NewFileConfig()),
-		Description: `
+const (
+	fileInputFieldPaths          = "paths"
+	fileInputFieldDeleteOnFinish = "delete_on_finish"
+)
+
+func fileInputSpec() *service.ConfigSpec {
+	return service.NewConfigSpec().
+		Stable().
+		Categories("Local").
+		Summary(`Consumes data from files on disk, emitting messages according to a chosen codec.`).
+		Description(`
 ### Metadata
 
 This input adds the following metadata fields to each message:
 
-` + "```text" + `
+`+"```text"+`
 - path
 - mod_time_unix
 - mod_time (RFC3339)
-` + "```" + `
+`+"```"+`
 
 You can access these metadata fields using
-[function interpolation](/docs/configuration/interpolation#bloblang-queries).`,
-		Categories: []string{
-			"Local",
-		},
-		Examples: []docs.AnnotatedExample{
-			{
-				Title:   "Read a Bunch of CSVs",
-				Summary: "If we wished to consume a directory of CSV files as structured documents we can use a glob pattern and the `csv` codec:",
-				Config: `
+[function interpolation](/docs/configuration/interpolation#bloblang-queries).`).
+		Example(
+			"Read a Bunch of CSVs",
+			"If we wished to consume a directory of CSV files as structured documents we can use a glob pattern and the `csv` scanner:",
+			`
 input:
   file:
     paths: [ ./data/*.csv ]
-    codec: csv
+    scanner:
+      csv: {}
 `,
-			},
-		},
-	})
+		).
+		Fields(
+			service.NewStringListField(fileInputFieldPaths).
+				Description("A list of paths to consume sequentially. Glob patterns are supported, including super globs (double star)."),
+		).
+		Fields(interop.OldReaderCodecFields("lines")...).
+		Fields(
+			service.NewBoolField(fileInputFieldDeleteOnFinish).
+				Description("Whether to delete input files from the disk once they are fully consumed.").
+				Advanced().
+				Default(false),
+		)
+}
+
+func init() {
+	err := service.RegisterBatchInput("file", fileInputSpec(),
+		func(pConf *service.ParsedConfig, res *service.Resources) (service.BatchInput, error) {
+			r, err := fileConsumerFromParsed(pConf, res)
+			if err != nil {
+				return nil, err
+			}
+			return service.AutoRetryNacksBatched(r), nil
+		})
 	if err != nil {
 		panic(err)
 	}
@@ -72,17 +78,17 @@ input:
 //------------------------------------------------------------------------------
 
 type scannerInfo struct {
-	scanner     codec.Reader
+	scanner     interop.FallbackReaderStream
 	currentPath string
 	modTimeUTC  time.Time
 }
 
 type fileConsumer struct {
-	log log.Modular
-	nm  bundle.NewManagement
+	log *service.Logger
+	nm  *service.Resources
 
 	paths       []string
-	scannerCtor codec.ReaderConstructor
+	scannerCtor interop.FallbackReaderCodec
 
 	scannerMut  sync.Mutex
 	scannerInfo *scannerInfo
@@ -90,15 +96,23 @@ type fileConsumer struct {
 	delete bool
 }
 
-func newFileConsumer(conf input.FileConfig, nm bundle.NewManagement) (*fileConsumer, error) {
-	expandedPaths, err := filepath.Globs(nm.FS(), conf.Paths)
+func fileConsumerFromParsed(conf *service.ParsedConfig, nm *service.Resources) (*fileConsumer, error) {
+	paths, err := conf.FieldStringList(fileInputFieldPaths)
 	if err != nil {
 		return nil, err
 	}
 
-	codecConf := codec.NewReaderConfig()
-	codecConf.MaxScanTokenSize = conf.MaxBuffer
-	ctor, err := codec.GetReader(conf.Codec, codecConf)
+	deleteOnFinish, err := conf.FieldBool(fileInputFieldDeleteOnFinish)
+	if err != nil {
+		return nil, err
+	}
+
+	expandedPaths, err := filepath.Globs(nm.FS(), paths)
+	if err != nil {
+		return nil, err
+	}
+
+	ctor, err := interop.OldReaderCodecFromParsed(conf)
 	if err != nil {
 		return nil, err
 	}
@@ -108,7 +122,7 @@ func newFileConsumer(conf input.FileConfig, nm bundle.NewManagement) (*fileConsu
 		log:         nm.Logger(),
 		scannerCtor: ctor,
 		paths:       expandedPaths,
-		delete:      conf.DeleteOnFinish,
+		delete:      deleteOnFinish,
 	}, nil
 }
 
@@ -135,12 +149,16 @@ func (f *fileConsumer) getReader(ctx context.Context) (scannerInfo, error) {
 		return scannerInfo{}, err
 	}
 
-	scanner, err := f.scannerCtor(nextPath, file, func(ctx context.Context, err error) error {
+	details := scanner.SourceDetails{
+		Name: nextPath,
+	}
+
+	scanner, err := f.scannerCtor.Create(file, func(ctx context.Context, err error) error {
 		if err == nil && f.delete {
 			return f.nm.FS().Remove(nextPath)
 		}
 		return nil
-	})
+	}, details)
 	if err != nil {
 		file.Close()
 		return scannerInfo{}, err
@@ -165,14 +183,14 @@ func (f *fileConsumer) getReader(ctx context.Context) (scannerInfo, error) {
 	return *f.scannerInfo, nil
 }
 
-func (f *fileConsumer) ReadBatch(ctx context.Context) (message.Batch, input.AsyncAckFn, error) {
+func (f *fileConsumer) ReadBatch(ctx context.Context) (service.MessageBatch, service.AckFunc, error) {
 	for {
 		scannerInfo, err := f.getReader(ctx)
 		if err != nil {
 			return nil, nil, err
 		}
 
-		parts, codecAckFn, err := scannerInfo.scanner.Next(ctx)
+		parts, codecAckFn, err := scannerInfo.scanner.NextBatch(ctx)
 		if err != nil {
 			if errors.Is(err, context.Canceled) ||
 				errors.Is(err, context.DeadlineExceeded) {
@@ -188,24 +206,18 @@ func (f *fileConsumer) ReadBatch(ctx context.Context) (message.Batch, input.Asyn
 			return nil, nil, err
 		}
 
-		msg := message.QuickBatch(nil)
 		for _, part := range parts {
-			if len(part.AsBytes()) == 0 {
-				continue
-			}
-
 			part.MetaSetMut("path", scannerInfo.currentPath)
 			part.MetaSetMut("mod_time_unix", scannerInfo.modTimeUTC.Unix())
 			part.MetaSetMut("mod_time", scannerInfo.modTimeUTC.Format(time.RFC3339))
-
-			msg = append(msg, part)
 		}
-		if msg.Len() == 0 {
+
+		if len(parts) == 0 {
 			_ = codecAckFn(ctx, nil)
 			return nil, nil, component.ErrTimeout
 		}
 
-		return msg, func(rctx context.Context, res error) error {
+		return parts, func(rctx context.Context, res error) error {
 			return codecAckFn(rctx, res)
 		}, nil
 	}

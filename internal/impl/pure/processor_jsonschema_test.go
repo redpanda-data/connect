@@ -4,46 +4,97 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 
-	"github.com/benthosdev/benthos/v4/internal/component/processor"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/benthosdev/benthos/v4/internal/component/testutil"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
 )
 
+func TestJSONSchemaExternalSchemaRelativePath(t *testing.T) {
+	schema := `{
+  "$id": "https://example.com/person.schema.json",
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Person",
+  "type": "object",
+  "properties": {
+    "firstName": {
+      "type": "string",
+      "description": "The person's first name."
+    },
+    "lastName": {
+      "type": "string",
+      "description": "The person's last name."
+    },
+    "age": {
+      "description": "Age in years which must be equal to or greater than zero.",
+      "type": "integer",
+      "minimum": 0
+    }
+  }
+}`
+
+	tmpDir := t.TempDir()
+
+	sFileName := filepath.Join(tmpDir, "foo")
+	require.NoError(t, os.WriteFile(sFileName, []byte(schema), 0o777))
+
+	cwd, err := os.Getwd()
+	require.NoError(t, err)
+
+	sFileName, err = filepath.Rel(cwd, sFileName)
+	require.NoError(t, err)
+
+	conf, err := testutil.ProcessorFromYAML(fmt.Sprintf(`
+json_schema:
+  schema_path: file://%v
+`, sFileName))
+	require.NoError(t, err)
+
+	c, err := mock.NewManager().NewProcessor(conf)
+	require.NoError(t, err)
+
+	msgs, _ := c.ProcessBatch(context.Background(), message.Batch{
+		message.NewPart([]byte(`{"firstName":"John","lastName":"Doe","age":21}`)),
+	})
+	require.Len(t, msgs, 1)
+
+	assert.Equal(t, `{"firstName":"John","lastName":"Doe","age":21}`, string(msgs[0][0].AsBytes()))
+	assert.NoError(t, msgs[0][0].ErrorGet())
+}
+
 func TestJSONSchemaExternalSchemaCheck(t *testing.T) {
 	schema := `{
-		"$id": "https://example.com/person.schema.json",
-		"$schema": "http://json-schema.org/draft-07/schema#",
-		"title": "Person",
-		"type": "object",
-		"properties": {
-		  "firstName": {
-			"type": "string",
-			"description": "The person's first name."
-		  },
-		  "lastName": {
-			"type": "string",
-			"description": "The person's last name."
-		  },
-		  "age": {
-			"description": "Age in years which must be equal to or greater than zero.",
-			"type": "integer",
-			"minimum": 0
-		  }
-		}
-	}`
+  "$id": "https://example.com/person.schema.json",
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Person",
+  "type": "object",
+  "properties": {
+    "firstName": {
+      "type": "string",
+      "description": "The person's first name."
+    },
+    "lastName": {
+      "type": "string",
+      "description": "The person's last name."
+    },
+    "age": {
+      "description": "Age in years which must be equal to or greater than zero.",
+      "type": "integer",
+      "minimum": 0
+    }
+  }
+}`
 
-	tmpSchemaFile, err := os.CreateTemp("", "benthos_jsonschema_test")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.Remove(tmpSchemaFile.Name())
+	tmpDir := t.TempDir()
 
-	// write schema definition to tmpfile
-	if _, err := tmpSchemaFile.WriteString(schema); err != nil {
-		t.Fatal(err)
-	}
+	sFileName := filepath.Join(tmpDir, "foo")
+	require.NoError(t, os.WriteFile(sFileName, []byte(schema), 0o777))
 
 	type fields struct {
 		schemaPath string
@@ -58,7 +109,7 @@ func TestJSONSchemaExternalSchemaCheck(t *testing.T) {
 		{
 			name: "schema match",
 			fields: fields{
-				schemaPath: fmt.Sprintf("file://%s", tmpSchemaFile.Name()),
+				schemaPath: fmt.Sprintf("file://%s", sFileName),
 			},
 			arg: [][]byte{
 				[]byte(`{"firstName":"John","lastName":"Doe","age":21}`),
@@ -68,7 +119,7 @@ func TestJSONSchemaExternalSchemaCheck(t *testing.T) {
 		{
 			name: "schema no match",
 			fields: fields{
-				schemaPath: fmt.Sprintf("file://%s", tmpSchemaFile.Name()),
+				schemaPath: fmt.Sprintf("file://%s", sFileName),
 			},
 			arg: [][]byte{
 				[]byte(`{"firstName":"John","lastName":"Doe","age":-20}`),
@@ -79,9 +130,11 @@ func TestJSONSchemaExternalSchemaCheck(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			conf := processor.NewConfig()
-			conf.Type = "json_schema"
-			conf.JSONSchema.SchemaPath = tt.fields.schemaPath
+			conf, err := testutil.ProcessorFromYAML(fmt.Sprintf(`
+json_schema:
+  schema_path: '%v'
+`, tt.fields.schemaPath))
+			require.NoError(t, err)
 
 			c, err := mock.NewManager().NewProcessor(conf)
 			if err != nil {
@@ -110,26 +163,26 @@ func TestJSONSchemaExternalSchemaCheck(t *testing.T) {
 
 func TestJSONSchemaInlineSchemaCheck(t *testing.T) {
 	schemaDef := `{
-		"$id": "https://example.com/person.schema.json",
-		"$schema": "http://json-schema.org/draft-07/schema#",
-		"title": "Person",
-		"type": "object",
-		"properties": {
-		  "firstName": {
-			"type": "string",
-			"description": "The person's first name."
-		  },
-		  "lastName": {
-			"type": "string",
-			"description": "The person's last name."
-		  },
-		  "age": {
-			"description": "Age in years which must be equal to or greater than zero.",
-			"type": "integer",
-			"minimum": 0
-		  }
-		}
-	}`
+  "$id": "https://example.com/person.schema.json",
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Person",
+  "type": "object",
+  "properties": {
+    "firstName": {
+      "type": "string",
+      "description": "The person's first name."
+    },
+    "lastName": {
+      "type": "string",
+      "description": "The person's last name."
+    },
+    "age": {
+      "description": "Age in years which must be equal to or greater than zero.",
+      "type": "integer",
+      "minimum": 0
+    }
+  }
+}`
 
 	type fields struct {
 		schema string
@@ -168,9 +221,12 @@ func TestJSONSchemaInlineSchemaCheck(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			conf := processor.NewConfig()
-			conf.Type = "json_schema"
-			conf.JSONSchema.Schema = tt.fields.schema
+			conf, err := testutil.ProcessorFromYAML(fmt.Sprintf(`
+json_schema:
+  schema: |
+    %v
+`, strings.ReplaceAll(tt.fields.schema, "\n", " ")))
+			require.NoError(t, err)
 
 			c, err := mock.NewManager().NewProcessor(conf)
 			if err != nil {
@@ -199,39 +255,39 @@ func TestJSONSchemaInlineSchemaCheck(t *testing.T) {
 
 func TestJSONSchemaLowercaseDescriptionCheck(t *testing.T) {
 	schema := `{
-		"$id": "https://example.com/person.schema.json",
-		"$schema": "http://json-schema.org/draft-07/schema#",
-		"title": "Person",
-		"type": "object",
-		"properties": {
-		  "firstName": {
-			"type": "string",
-			"description": "The person's first name."
-		  },
-		  "addresses": {
-			"description": "The person's addresses.'",
-			"type": "array",
-			"items": {
-			"type": "object",
-			"properties": {
-			  "cityName": {
-				"description": "The city's name'",
-				"type": "string",
-				"maxLength": 50
-			  },
-			  "postCode": {
-				"description": "The city's postal code'",
-				"type": "string",
-				"maxLength": 50
-			  }
-			},
-			"required": [
-			  "cityName"
-			]
-		  }
-		}
+  "$id": "https://example.com/person.schema.json",
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Person",
+  "type": "object",
+  "properties": {
+    "firstName": {
+      "type": "string",
+      "description": "The person's first name."
+    },
+    "addresses": {
+      "description": "The person's addresses.'",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "cityName": {
+            "description": "The city's name'",
+            "type": "string",
+            "maxLength": 50
+          },
+          "postCode": {
+            "description": "The city's postal code'",
+            "type": "string",
+            "maxLength": 50
+          }
+        },
+        "required": [
+          "cityName"
+        ]
       }
-	}`
+    }
+  }
+}`
 
 	type fields struct {
 		schema string
@@ -270,9 +326,12 @@ func TestJSONSchemaLowercaseDescriptionCheck(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			conf := processor.NewConfig()
-			conf.Type = "json_schema"
-			conf.JSONSchema.Schema = tt.fields.schema
+			conf, err := testutil.ProcessorFromYAML(fmt.Sprintf(`
+json_schema:
+  schema: |
+    %v
+`, strings.ReplaceAll(tt.fields.schema, "\n", " ")))
+			require.NoError(t, err)
 
 			c, err := mock.NewManager().NewProcessor(conf)
 			if err != nil {
@@ -300,11 +359,13 @@ func TestJSONSchemaLowercaseDescriptionCheck(t *testing.T) {
 }
 
 func TestJSONSchemaPathNotExist(t *testing.T) {
-	conf := processor.NewConfig()
-	conf.Type = "json_schema"
-	conf.JSONSchema.SchemaPath = "file://path_does_not_exist"
+	conf, err := testutil.ProcessorFromYAML(`
+json_schema:
+  schema_path: file://path_does_not_exist
+`)
+	require.NoError(t, err)
 
-	_, err := mock.NewManager().NewProcessor(conf)
+	_, err = mock.NewManager().NewProcessor(conf)
 	if err == nil {
 		t.Error("expected error from loading non existent schema file")
 	}
@@ -327,9 +388,11 @@ func TestJSONSchemaInvalidSchema(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	conf := processor.NewConfig()
-	conf.Type = "json_schema"
-	conf.JSONSchema.SchemaPath = fmt.Sprintf("file://%s", tmpSchemaFile.Name())
+	conf, err := testutil.ProcessorFromYAML(`
+json_schema:
+  schema_path: ` + fmt.Sprintf("file://%s", tmpSchemaFile.Name()) + `
+`)
+	require.NoError(t, err)
 
 	_, err = mock.NewManager().NewProcessor(conf)
 	if err == nil {

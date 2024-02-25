@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+
+	"github.com/benthosdev/benthos/v4/internal/value"
 )
 
 //------------------------------------------------------------------------------
@@ -100,29 +102,29 @@ type (
 // integers the integer func is called, otherwise the float func is called.
 func numberDegradationFunc(op ArithmeticOperator, iFn intArithmeticFunc, fFn floatArithmeticFunc) arithmeticOpFunc {
 	return func(lhs, rhs Function, left, right any) (any, error) {
-		left = ISanitize(left)
-		right = ISanitize(right)
+		left = value.ISanitize(left)
+		right = value.ISanitize(right)
 
 		if leftFloat, leftIsFloat := left.(float64); leftIsFloat {
-			rightFloat, err := IGetNumber(right)
+			rightFloat, err := value.IGetNumber(right)
 			if err != nil {
 				return nil, NewTypeMismatch(op.String(), lhs, rhs, left, right)
 			}
 			return fFn(leftFloat, rightFloat)
 		}
 		if rightFloat, rightIsFloat := right.(float64); rightIsFloat {
-			leftFloat, err := IGetNumber(left)
+			leftFloat, err := value.IGetNumber(left)
 			if err != nil {
 				return nil, NewTypeMismatch(op.String(), lhs, rhs, left, right)
 			}
 			return fFn(leftFloat, rightFloat)
 		}
 
-		leftInt, err := IGetInt(left)
+		leftInt, err := value.IGetInt(left)
 		if err != nil {
 			return nil, NewTypeMismatch(op.String(), lhs, rhs, left, right)
 		}
-		rightInt, err := IGetInt(right)
+		rightInt, err := value.IGetInt(right)
 		if err != nil {
 			return nil, NewTypeMismatch(op.String(), lhs, rhs, left, right)
 		}
@@ -145,11 +147,11 @@ func prodOp(op ArithmeticOperator) (arithmeticOpFunc, bool) {
 	case ArithmeticDiv:
 		// Only executes on float values.
 		return func(lFn, rFn Function, left, right any) (any, error) {
-			lhs, err := IGetNumber(left)
+			lhs, err := value.IGetNumber(left)
 			if err != nil {
 				return nil, NewTypeMismatch(op.String(), lFn, rFn, left, right)
 			}
-			rhs, err := IGetNumber(right)
+			rhs, err := value.IGetNumber(right)
 			if err != nil {
 				return nil, NewTypeMismatch(op.String(), lFn, rFn, left, right)
 			}
@@ -161,11 +163,11 @@ func prodOp(op ArithmeticOperator) (arithmeticOpFunc, bool) {
 	case ArithmeticMod:
 		// Only executes on integer values.
 		return func(lFn, rFn Function, left, right any) (any, error) {
-			lhs, err := IGetInt(left)
+			lhs, err := value.IGetInt(left)
 			if err != nil {
 				return nil, NewTypeMismatch(op.String(), lFn, rFn, left, right)
 			}
-			rhs, err := IGetInt(right)
+			rhs, err := value.IGetInt(right)
 			if err != nil {
 				return nil, NewTypeMismatch(op.String(), lFn, rFn, left, right)
 			}
@@ -194,11 +196,11 @@ func sumOp(op ArithmeticOperator) (arithmeticOpFunc, bool) {
 			case float64, int, int64, uint64, json.Number:
 				return numberAdd(lFn, rFn, left, right)
 			case string, []byte:
-				lhs, err := IGetString(left)
+				lhs, err := value.IGetString(left)
 				if err != nil {
 					return nil, NewTypeMismatch(op.String(), lFn, rFn, left, right)
 				}
-				rhs, err := IGetString(right)
+				rhs, err := value.IGetString(right)
 				if err != nil {
 					return nil, NewTypeMismatch(op.String(), lFn, rFn, left, right)
 				}
@@ -298,10 +300,10 @@ func compareBoolFn(op ArithmeticOperator) func(lhs, rhs bool) bool {
 func compareGenericFn(op ArithmeticOperator) func(lhs, rhs any) bool {
 	switch op {
 	case ArithmeticEq:
-		return ICompare
+		return value.ICompare
 	case ArithmeticNeq:
 		return func(lhs, rhs any) bool {
-			return !ICompare(lhs, rhs)
+			return !value.ICompare(lhs, rhs)
 		}
 	}
 	return nil
@@ -320,41 +322,41 @@ func compareOp(op ArithmeticOperator) (arithmeticOpFunc, bool) {
 		boolOpFn := compareBoolFn(op)
 		genericOpFn := compareGenericFn(op)
 		return func(lFn, rFn Function, left, right any) (any, error) {
-			switch lhs := restrictForComparison(left).(type) {
+			switch lhs := value.RestrictForComparison(left).(type) {
 			case string:
 				if strOpFn == nil {
 					return nil, NewTypeMismatch(op.String(), lFn, rFn, left, right)
 				}
-				rhs, err := IGetString(right)
+				rhs, err := value.IGetString(right)
 				if err != nil {
 					if genericOpFn == nil {
 						return nil, NewTypeMismatch(op.String(), lFn, rFn, left, right)
 					}
-					return genericOpFn(lhs, restrictForComparison(right)), nil
+					return genericOpFn(lhs, value.RestrictForComparison(right)), nil
 				}
 				return strOpFn(lhs, rhs), nil
 			case float64:
 				if numOpFn == nil {
 					return nil, NewTypeMismatch(op.String(), lFn, rFn, left, right)
 				}
-				rhs, err := IGetNumber(right)
+				rhs, err := value.IGetNumber(right)
 				if err != nil {
 					if genericOpFn == nil {
 						return nil, NewTypeMismatch(op.String(), lFn, rFn, left, right)
 					}
-					return genericOpFn(lhs, restrictForComparison(right)), nil
+					return genericOpFn(lhs, value.RestrictForComparison(right)), nil
 				}
 				return numOpFn(lhs, rhs), nil
 			case bool:
 				if boolOpFn == nil {
 					return nil, NewTypeMismatch(op.String(), lFn, rFn, left, right)
 				}
-				rhs, err := IGetBool(right)
+				rhs, err := value.IGetBool(right)
 				if err != nil {
 					if genericOpFn == nil {
 						return nil, NewTypeMismatch(op.String(), lFn, rFn, left, right)
 					}
-					return genericOpFn(lhs, restrictForComparison(right)), nil
+					return genericOpFn(lhs, value.RestrictForComparison(right)), nil
 				}
 				return boolOpFn(lhs, rhs), nil
 			default:
@@ -374,7 +376,7 @@ func boolOr(lhs, rhs Function) Function {
 		if err != nil {
 			return nil, err
 		}
-		b, err := IGetBool(lhsV)
+		b, err := value.IGetBool(lhsV)
 		if err != nil {
 			return nil, err
 		}
@@ -385,7 +387,7 @@ func boolOr(lhs, rhs Function) Function {
 		if err != nil {
 			return nil, err
 		}
-		if b, err = IGetBool(rhsV); err != nil {
+		if b, err = value.IGetBool(rhsV); err != nil {
 			return nil, err
 		}
 		return b, nil
@@ -398,7 +400,7 @@ func boolAnd(lhs, rhs Function) Function {
 		if err != nil {
 			return nil, err
 		}
-		b, err := IGetBool(lhsV)
+		b, err := value.IGetBool(lhsV)
 		if err != nil {
 			return nil, err
 		}
@@ -409,7 +411,7 @@ func boolAnd(lhs, rhs Function) Function {
 		if err != nil {
 			return nil, err
 		}
-		if b, err = IGetBool(rhsV); err != nil {
+		if b, err = value.IGetBool(rhsV); err != nil {
 			return nil, err
 		}
 		return b, nil
@@ -419,7 +421,7 @@ func boolAnd(lhs, rhs Function) Function {
 func coalesce(lhs, rhs Function) Function {
 	return ClosureFunction(rhs.Annotation(), func(ctx FunctionContext) (any, error) {
 		lhsV, err := lhs.Exec(ctx)
-		if err == nil && !IIsNull(lhsV) {
+		if err == nil && !value.IIsNull(lhsV) {
 			return lhsV, nil
 		}
 		return rhs.Exec(ctx)

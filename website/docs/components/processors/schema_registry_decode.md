@@ -31,7 +31,7 @@ Automatically decodes and validates messages with schemas from a Confluent Schem
 # Common config fields, showing default values
 label: ""
 schema_registry_decode:
-  url: ""
+  url: "" # No default (required)
 ```
 
 </TabItem>
@@ -42,7 +42,7 @@ schema_registry_decode:
 label: ""
 schema_registry_decode:
   avro_raw_json: false
-  url: ""
+  url: "" # No default (required)
   oauth:
     enabled: false
     consumer_key: ""
@@ -72,7 +72,7 @@ schema_registry_decode:
 
 Decodes messages automatically from a schema stored within a [Confluent Schema Registry service](https://docs.confluent.io/platform/current/schema-registry/index.html) by extracting a schema ID from the message and obtaining the associated schema from the registry. If a message fails to match against the schema then it will remain unchanged and the error can be caught using error handling methods outlined [here](/docs/configuration/error_handling).
 
-Currently only Avro schemas are supported.
+Avro, Protobuf and Json schemas are supported, all are capable of expanding from schema references as of v4.22.0.
 
 ### Avro JSON Format
 
@@ -88,6 +88,10 @@ For example, the union schema `["null","string","Foo"]`, where `Foo` is a record
 - a `Foo` instance as `{"Foo": {...}}`, where `{...}` indicates the JSON encoding of a `Foo` instance.
 
 However, it is possible to instead create documents in [standard/raw JSON format](https://pkg.go.dev/github.com/linkedin/goavro/v2#NewCodecForStandardJSONFull) by setting the field [`avro_raw_json`](#avro_raw_json) to `true`.
+### Protobuf Format
+
+This processor decodes protobuf messages to JSON documents, you can read more about JSON mapping of protobuf messages here: https://developers.google.com/protocol-buffers/docs/proto3#json
+
 
 ## Fields
 
@@ -307,6 +311,7 @@ A list of client certificates to use. For each certificate either the fields `ce
 
 
 Type: `array`  
+Default: `[]`  
 
 ```yml
 # Examples

@@ -14,7 +14,6 @@ categories: ["Services","AWS"]
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-
 Sends messages to an AWS SNS topic.
 
 Introduced in version 3.36.0.
@@ -32,9 +31,9 @@ Introduced in version 3.36.0.
 output:
   label: ""
   aws_sns:
-    topic_arn: ""
-    message_group_id: ""
-    message_deduplication_id: ""
+    topic_arn: "" # No default (required)
+    message_group_id: "" # No default (optional)
+    message_deduplication_id: "" # No default (optional)
     max_in_flight: 64
     metadata:
       exclude_prefixes: []
@@ -48,9 +47,9 @@ output:
 output:
   label: ""
   aws_sns:
-    topic_arn: ""
-    message_group_id: ""
-    message_deduplication_id: ""
+    topic_arn: "" # No default (required)
+    message_group_id: "" # No default (optional)
+    message_deduplication_id: "" # No default (optional)
     max_in_flight: 64
     metadata:
       exclude_prefixes: []
@@ -72,10 +71,7 @@ output:
 
 ### Credentials
 
-By default Benthos will use a shared credentials file when connecting to AWS
-services. It's also possible to set them explicitly at the component level,
-allowing you to transfer data across accounts. You can find out more
-[in this document](/docs/guides/cloud/aws).
+By default Benthos will use a shared credentials file when connecting to AWS services. It's also possible to set them explicitly at the component level, allowing you to transfer data across accounts. You can find out more [in this document](/docs/guides/cloud/aws).
 
 ## Performance
 
@@ -91,7 +87,6 @@ The topic to publish to.
 
 
 Type: `string`  
-Default: `""`  
 
 ### `message_group_id`
 
@@ -100,7 +95,6 @@ This field supports [interpolation functions](/docs/configuration/interpolation#
 
 
 Type: `string`  
-Default: `""`  
 Requires version 3.60.0 or newer  
 
 ### `message_deduplication_id`
@@ -110,7 +104,6 @@ This field supports [interpolation functions](/docs/configuration/interpolation#
 
 
 Type: `string`  
-Default: `""`  
 Requires version 3.60.0 or newer  
 
 ### `max_in_flight`
@@ -187,6 +180,9 @@ Default: `""`
 ### `credentials.secret`
 
 The secret for the credentials being used.
+:::warning Secret
+This field contains sensitive information that usually shouldn't be added to a config directly, read our [secrets page for more info](/docs/configuration/secrets).
+:::
 
 
 Type: `string`  

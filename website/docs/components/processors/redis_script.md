@@ -33,10 +33,10 @@ Introduced in version 4.11.0.
 # Common config fields, showing default values
 label: ""
 redis_script:
-  url: ""
-  script: ""
-  args_mapping: ""
-  keys_mapping: ""
+  url: redis://:6397 # No default (required)
+  script: return redis.call('set', KEYS[1], ARGV[1]) # No default (required)
+  args_mapping: root = [ this.key ] # No default (required)
+  keys_mapping: root = [ this.key ] # No default (required)
 ```
 
 </TabItem>
@@ -46,7 +46,7 @@ redis_script:
 # All config fields, showing default values
 label: ""
 redis_script:
-  url: ""
+  url: redis://:6397 # No default (required)
   kind: simple
   master: ""
   tls:
@@ -56,9 +56,9 @@ redis_script:
     root_cas: ""
     root_cas_file: ""
     client_certs: []
-  script: ""
-  args_mapping: ""
-  keys_mapping: ""
+  script: return redis.call('set', KEYS[1], ARGV[1]) # No default (required)
+  args_mapping: root = [ this.key ] # No default (required)
+  keys_mapping: root = [ this.key ] # No default (required)
   retries: 3
   retry_period: 500ms
 ```
@@ -114,11 +114,11 @@ Type: `string`
 ```yml
 # Examples
 
-url: :6397
-
-url: localhost:6397
+url: redis://:6397
 
 url: redis://localhost:6379
+
+url: redis://foousername:foopassword@redisplace:6379
 
 url: redis://:foopassword@redisplace:6379
 
@@ -226,6 +226,7 @@ A list of client certificates to use. For each certificate either the fields `ce
 
 
 Type: `array`  
+Default: `[]`  
 
 ```yml
 # Examples

@@ -14,13 +14,12 @@ categories: ["Composition"]
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-
 Conditionally processes messages based on their contents.
 
 ```yml
 # Config fields, showing default values
 label: ""
-switch: []
+switch: [] # No default (required)
 ```
 
 For each switch case a [Bloblang query](/docs/guides/bloblang/about) is checked and, if the result is true (or the check is empty) the child processors are executed on the message.

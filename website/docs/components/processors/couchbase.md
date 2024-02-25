@@ -33,12 +33,12 @@ Introduced in version 4.11.0.
 # Common config fields, showing default values
 label: ""
 couchbase:
-  url: ""
-  username: ""
-  password: ""
-  bucket: ""
-  id: ""
-  content: ""
+  url: couchbase://localhost:11210 # No default (required)
+  username: "" # No default (optional)
+  password: "" # No default (optional)
+  bucket: "" # No default (required)
+  id: ${! json("id") } # No default (required)
+  content: "" # No default (optional)
   operation: get
 ```
 
@@ -49,15 +49,15 @@ couchbase:
 # All config fields, showing default values
 label: ""
 couchbase:
-  url: ""
-  username: ""
-  password: ""
-  bucket: ""
+  url: couchbase://localhost:11210 # No default (required)
+  username: "" # No default (optional)
+  password: "" # No default (optional)
+  bucket: "" # No default (required)
   collection: _default
   transcoder: legacy
   timeout: 15s
-  id: ""
-  content: ""
+  id: ${! json("id") } # No default (required)
+  content: "" # No default (optional)
   operation: get
 ```
 

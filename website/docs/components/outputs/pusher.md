@@ -39,12 +39,12 @@ output:
       byte_size: 0
       period: ""
       check: ""
-    channel: ""
-    event: ""
-    appId: ""
-    key: ""
-    secret: ""
-    cluster: ""
+    channel: my_channel # No default (required)
+    event: "" # No default (required)
+    appId: "" # No default (required)
+    key: "" # No default (required)
+    secret: "" # No default (required)
+    cluster: "" # No default (required)
     secure: true
     max_in_flight: 1
 ```
@@ -62,13 +62,13 @@ output:
       byte_size: 0
       period: ""
       check: ""
-      processors: []
-    channel: ""
-    event: ""
-    appId: ""
-    key: ""
-    secret: ""
-    cluster: ""
+      processors: [] # No default (optional)
+    channel: my_channel # No default (required)
+    event: "" # No default (required)
+    appId: "" # No default (required)
+    key: "" # No default (required)
+    secret: "" # No default (required)
+    cluster: "" # No default (required)
     secure: true
     max_in_flight: 1
 ```

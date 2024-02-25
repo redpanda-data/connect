@@ -7,37 +7,51 @@ import (
 	"sync"
 	"time"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/request"
-	"github.com/aws/aws-sdk-go/service/cloudwatch"
-	"github.com/aws/aws-sdk-go/service/cloudwatch/cloudwatchiface"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/cloudwatch"
+	"github.com/aws/aws-sdk-go-v2/service/cloudwatch/types"
 
-	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
-	"github.com/benthosdev/benthos/v4/internal/docs"
-	"github.com/benthosdev/benthos/v4/internal/impl/aws/session"
-	"github.com/benthosdev/benthos/v4/internal/log"
+	"github.com/benthosdev/benthos/v4/internal/impl/aws/config"
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
-func init() {
-	_ = bundle.AllMetrics.Add(func(c metrics.Config, nm bundle.NewManagement) (metrics.Type, error) {
-		return newCloudWatch(c.AWSCloudWatch, nm.Logger())
-	}, docs.ComponentSpec{
-		Name:    "aws_cloudwatch",
-		Type:    docs.TypeMetrics,
-		Status:  docs.StatusStable,
-		Version: "3.36.0",
-		Summary: `Send metrics to AWS CloudWatch using the PutMetricData endpoint.`,
-		Description: `
+const (
+	// CW Metrics Fields
+	cwmFieldNamespace   = "namespace"
+	cwmFieldFlushPeriod = "flush_period"
+)
+
+type cwmConfig struct {
+	Namespace   string
+	FlushPeriod time.Duration
+}
+
+func cwmConfigFromParsed(pConf *service.ParsedConfig) (conf cwmConfig, err error) {
+	if conf.Namespace, err = pConf.FieldString(cwmFieldNamespace); err != nil {
+		return
+	}
+	if conf.FlushPeriod, err = pConf.FieldDuration(cwmFieldFlushPeriod); err != nil {
+		return
+	}
+	return
+}
+
+func cwMetricsSpec() *service.ConfigSpec {
+	return service.NewConfigSpec().
+		Stable().
+		Version("3.36.0").
+		Summary(`Send metrics to AWS CloudWatch using the PutMetricData endpoint.`).
+		Description(`
 ### Timing Metrics
 
-The smallest timing unit that CloudWatch supports is microseconds, therefore timing metrics are automatically downgraded to microseconds (by dividing delta values by 1000). This conversion will also apply to custom timing metrics produced with a ` + "`metric`" + ` processor.
+The smallest timing unit that CloudWatch supports is microseconds, therefore timing metrics are automatically downgraded to microseconds (by dividing delta values by 1000). This conversion will also apply to custom timing metrics produced with a `+"`metric`"+` processor.
 
 ### Billing
 
-AWS bills per metric series exported, it is therefore STRONGLY recommended that you reduce the metrics that are exposed with a ` + "`mapping`" + ` like this:
+AWS bills per metric series exported, it is therefore STRONGLY recommended that you reduce the metrics that are exposed with a `+"`mapping`"+` like this:
 
-` + "```yaml" + `
+`+"```yaml"+`
 metrics:
   mapping: |
     if ![
@@ -47,14 +61,35 @@ metrics:
     ].contains(this) { deleted() }
   aws_cloudwatch:
     namespace: Foo
-` + "```" + ``,
-		Config: docs.FieldComponent().WithChildren(
-			append(docs.FieldSpecs{
-				docs.FieldString("namespace", "The namespace used to distinguish metrics from other services.").HasDefault("Benthos"),
-				docs.FieldString("flush_period", "The period of time between PutMetricData requests.").Advanced().HasDefault("100ms"),
-			}, session.FieldSpecs()...)...,
-		),
-	})
+`+"```"+``).
+		Fields(
+			service.NewStringField(cwmFieldNamespace).
+				Description("The namespace used to distinguish metrics from other services.").
+				Default("Benthos"),
+			service.NewDurationField(cwmFieldFlushPeriod).
+				Description("The period of time between PutMetricData requests.").
+				Advanced().
+				Default("100ms"),
+		).
+		Fields(config.SessionFields()...)
+}
+
+func init() {
+	err := service.RegisterMetricsExporter("aws_cloudwatch", cwMetricsSpec(),
+		func(conf *service.ParsedConfig, log *service.Logger) (service.MetricsExporter, error) {
+			cwConf, err := cwmConfigFromParsed(conf)
+			if err != nil {
+				return nil, err
+			}
+			sess, err := GetSession(context.Background(), conf)
+			if err != nil {
+				return nil, err
+			}
+			return newCloudWatch(cwConf, sess, log)
+		})
+	if err != nil {
+		panic(err)
+	}
 }
 
 //------------------------------------------------------------------------------
@@ -67,8 +102,8 @@ const (
 
 type cloudWatchDatum struct {
 	MetricName string
-	Unit       string
-	Dimensions []*cloudwatch.Dimension
+	Unit       types.StandardUnit
+	Dimensions []types.Dimension
 	Timestamp  time.Time
 	Value      int64
 	Values     map[int64]int64
@@ -78,8 +113,20 @@ type cloudWatchStat struct {
 	root       *cwMetrics
 	id         string
 	name       string
-	unit       string
-	dimensions []*cloudwatch.Dimension
+	unit       types.StandardUnit
+	dimensions []types.Dimension
+}
+
+func (c *cloudWatchStat) SetFloat64(value float64) {
+	c.Set(int64(value))
+}
+
+func (c *cloudWatchStat) IncrFloat64(count float64) {
+	c.Incr(int64(count))
+}
+
+func (c *cloudWatchStat) DecrFloat64(count float64) {
+	c.Decr(int64(count))
 }
 
 // Trims a map of datum values to a ceiling. The primary goal here is to be fast
@@ -147,7 +194,7 @@ func (c *cloudWatchStat) addValue(v int64) {
 	c.root.datumLock.Unlock()
 }
 
-// Incr increments a metric by an amount.
+// Incr increments a metric by an int64 amount.
 func (c *cloudWatchStat) Incr(count int64) {
 	c.addValue(count)
 }
@@ -172,7 +219,7 @@ func (c *cloudWatchStat) Set(value int64) {
 type cloudWatchStatVec struct {
 	root       *cwMetrics
 	name       string
-	unit       string
+	unit       types.StandardUnit
 	labelNames []string
 }
 
@@ -181,7 +228,7 @@ func (c *cloudWatchStatVec) with(labelValues ...string) *cloudWatchStat {
 	if lDim >= maxCloudWatchDimensions {
 		lDim = maxCloudWatchDimensions
 	}
-	dimensions := make([]*cloudwatch.Dimension, 0, lDim)
+	dimensions := make([]types.Dimension, 0, lDim)
 	for i, k := range c.labelNames {
 		if len(labelValues) <= i || i >= maxCloudWatchDimensions {
 			break
@@ -189,7 +236,7 @@ func (c *cloudWatchStatVec) with(labelValues ...string) *cloudWatchStat {
 		if len(labelValues[i]) == 0 {
 			continue
 		}
-		dimensions = append(dimensions, &cloudwatch.Dimension{
+		dimensions = append(dimensions, types.Dimension{
 			Name:  aws.String(k),
 			Value: aws.String(labelValues[i]),
 		})
@@ -229,22 +276,24 @@ func (c *cloudWatchGaugeVec) With(labelValues ...string) metrics.StatGauge {
 
 //------------------------------------------------------------------------------
 
+type cloudWatchAPI interface {
+	PutMetricData(ctx context.Context, params *cloudwatch.PutMetricDataInput, optFns ...func(*cloudwatch.Options)) (*cloudwatch.PutMetricDataOutput, error)
+}
+
 type cwMetrics struct {
-	client cloudwatchiface.CloudWatchAPI
+	client cloudWatchAPI
 
 	datumses  map[string]*cloudWatchDatum
 	datumLock *sync.Mutex
 
-	flushPeriod time.Duration
-
 	ctx    context.Context
 	cancel func()
 
-	config metrics.CloudWatchConfig
-	log    log.Modular
+	config cwmConfig
+	log    *service.Logger
 }
 
-func newCloudWatch(config metrics.CloudWatchConfig, log log.Modular) (metrics.Type, error) {
+func newCloudWatch(config cwmConfig, sess aws.Config, log *service.Logger) (service.MetricsExporter, error) {
 	c := &cwMetrics{
 		config:    config,
 		datumses:  map[string]*cloudWatchDatum{},
@@ -253,87 +302,86 @@ func newCloudWatch(config metrics.CloudWatchConfig, log log.Modular) (metrics.Ty
 	}
 
 	c.ctx, c.cancel = context.WithCancel(context.Background())
-
-	sess, err := GetSessionFromConf(config.Config)
-	if err != nil {
-		return nil, err
-	}
-
-	if c.flushPeriod, err = time.ParseDuration(config.FlushPeriod); err != nil {
-		return nil, fmt.Errorf("failed to parse flush period: %v", err)
-	}
-
-	c.client = cloudwatch.New(sess)
+	c.client = cloudwatch.NewFromConfig(sess)
 	go c.loop()
 	return c, nil
 }
 
 //------------------------------------------------------------------------------
 
-func (c *cwMetrics) GetCounter(path string) metrics.StatCounter {
-	return &cloudWatchStat{
-		root: c,
-		id:   path,
-		name: path,
-		unit: cloudwatch.StandardUnitCount,
+func (c *cwMetrics) NewCounterCtor(name string, labelKeys ...string) service.MetricsExporterCounterCtor {
+	if len(labelKeys) == 0 {
+		return func(labelValues ...string) service.MetricsExporterCounter {
+			return &cloudWatchStat{
+				root: c,
+				id:   name,
+				name: name,
+				unit: types.StandardUnitCount,
+			}
+		}
+	}
+	return func(labelValues ...string) service.MetricsExporterCounter {
+		return (&cloudWatchCounterVec{
+			cloudWatchStatVec: cloudWatchStatVec{
+				root:       c,
+				name:       name,
+				unit:       types.StandardUnitCount,
+				labelNames: labelKeys,
+			},
+		}).With(labelValues...)
 	}
 }
 
-func (c *cwMetrics) GetCounterVec(path string, n ...string) metrics.StatCounterVec {
-	return &cloudWatchCounterVec{
-		cloudWatchStatVec: cloudWatchStatVec{
-			root:       c,
-			name:       path,
-			unit:       cloudwatch.StandardUnitCount,
-			labelNames: n,
-		},
+func (c *cwMetrics) NewTimerCtor(name string, labelKeys ...string) service.MetricsExporterTimerCtor {
+	if len(labelKeys) == 0 {
+		return func(labelValues ...string) service.MetricsExporterTimer {
+			return &cloudWatchStat{
+				root: c,
+				id:   name,
+				name: name,
+				unit: types.StandardUnitMicroseconds,
+			}
+		}
+	}
+	return func(labelValues ...string) service.MetricsExporterTimer {
+		return (&cloudWatchTimerVec{
+			cloudWatchStatVec: cloudWatchStatVec{
+				root:       c,
+				name:       name,
+				unit:       types.StandardUnitMicroseconds,
+				labelNames: labelKeys,
+			},
+		}).With(labelValues...)
 	}
 }
 
-func (c *cwMetrics) GetTimer(path string) metrics.StatTimer {
-	return &cloudWatchStat{
-		root: c,
-		id:   path,
-		name: path,
-		unit: cloudwatch.StandardUnitMicroseconds,
+func (c *cwMetrics) NewGaugeCtor(name string, labelKeys ...string) service.MetricsExporterGaugeCtor {
+	if len(labelKeys) == 0 {
+		return func(labelValues ...string) service.MetricsExporterGauge {
+			return &cloudWatchStat{
+				root: c,
+				id:   name,
+				name: name,
+				unit: types.StandardUnitNone,
+			}
+		}
 	}
-}
-
-func (c *cwMetrics) GetTimerVec(path string, n ...string) metrics.StatTimerVec {
-	return &cloudWatchTimerVec{
-		cloudWatchStatVec: cloudWatchStatVec{
-			root:       c,
-			name:       path,
-			unit:       cloudwatch.StandardUnitMicroseconds,
-			labelNames: n,
-		},
-	}
-}
-
-func (c *cwMetrics) GetGauge(path string) metrics.StatGauge {
-	return &cloudWatchStat{
-		root: c,
-		id:   path,
-		name: path,
-		unit: cloudwatch.StandardUnitNone,
-	}
-}
-
-func (c *cwMetrics) GetGaugeVec(path string, n ...string) metrics.StatGaugeVec {
-	return &cloudWatchGaugeVec{
-		cloudWatchStatVec: cloudWatchStatVec{
-			root:       c,
-			name:       path,
-			unit:       cloudwatch.StandardUnitNone,
-			labelNames: n,
-		},
+	return func(labelValues ...string) service.MetricsExporterGauge {
+		return (&cloudWatchGaugeVec{
+			cloudWatchStatVec: cloudWatchStatVec{
+				root:       c,
+				name:       name,
+				unit:       types.StandardUnitNone,
+				labelNames: labelKeys,
+			},
+		}).With(labelValues...)
 	}
 }
 
 //------------------------------------------------------------------------------
 
 func (c *cwMetrics) loop() {
-	ticker := time.NewTicker(c.flushPeriod)
+	ticker := time.NewTicker(c.config.FlushPeriod)
 	defer ticker.Stop()
 	for {
 		select {
@@ -345,18 +393,18 @@ func (c *cwMetrics) loop() {
 	}
 }
 
-func valuesMapToSlices(m map[int64]int64) (values, counts []*float64) {
+func valuesMapToSlices(m map[int64]int64) (values, counts []float64) {
 	ceiling := maxCloudWatchValues
 	lM := len(m)
 
 	useCounts := false
 	if lM < ceiling {
-		values = make([]*float64, 0, lM)
-		counts = make([]*float64, 0, lM)
+		values = make([]float64, 0, lM)
+		counts = make([]float64, 0, lM)
 
 		for k, v := range m {
-			values = append(values, aws.Float64(float64(k)))
-			counts = append(counts, aws.Float64(float64(v)))
+			values = append(values, float64(k))
+			counts = append(counts, float64(v))
 			if v > 1 {
 				useCounts = true
 			}
@@ -368,8 +416,8 @@ func valuesMapToSlices(m map[int64]int64) (values, counts []*float64) {
 		return
 	}
 
-	values = make([]*float64, 0, ceiling)
-	counts = make([]*float64, 0, ceiling)
+	values = make([]float64, 0, ceiling)
+	counts = make([]float64, 0, ceiling)
 
 	// Try and make our target without taking values with one count.
 	for k, v := range m {
@@ -377,8 +425,8 @@ func valuesMapToSlices(m map[int64]int64) (values, counts []*float64) {
 			return
 		}
 		if v > 1 {
-			values = append(values, aws.Float64(float64(k)))
-			counts = append(counts, aws.Float64(float64(v)))
+			values = append(values, float64(k))
+			counts = append(counts, float64(v))
 			useCounts = true
 			delete(m, k)
 		}
@@ -389,8 +437,8 @@ func valuesMapToSlices(m map[int64]int64) (values, counts []*float64) {
 		if len(values) == ceiling {
 			break
 		}
-		values = append(values, aws.Float64(float64(k)))
-		counts = append(counts, aws.Float64(float64(v)))
+		values = append(values, float64(k))
+		counts = append(counts, float64(v))
 	}
 
 	if !useCounts {
@@ -405,13 +453,13 @@ func (c *cwMetrics) flush() error {
 	c.datumses = map[string]*cloudWatchDatum{}
 	c.datumLock.Unlock()
 
-	datums := []*cloudwatch.MetricDatum{}
+	datums := []types.MetricDatum{}
 	for _, v := range datumMap {
 		if v != nil {
-			d := cloudwatch.MetricDatum{
+			d := types.MetricDatum{
 				MetricName: &v.MetricName,
 				Dimensions: v.Dimensions,
-				Unit:       &v.Unit,
+				Unit:       v.Unit,
 				Timestamp:  &v.Timestamp,
 			}
 			if len(v.Values) > 0 {
@@ -419,7 +467,7 @@ func (c *cwMetrics) flush() error {
 			} else {
 				d.Value = aws.Float64(float64(v.Value))
 			}
-			datums = append(datums, &d)
+			datums = append(datums, d)
 		}
 	}
 
@@ -439,13 +487,12 @@ func (c *cwMetrics) flush() error {
 		}
 		throttled = false
 
-		if _, err := c.client.PutMetricData(&input); err != nil {
-			if request.IsErrorThrottle(err) {
-				throttled = true
-				c.log.Warnln("Metrics request was throttled. Either increase flush period or reduce number of services sending metrics.")
-			} else {
-				c.log.Errorf("Failed to send metric data: %v\n", err)
+		if _, err := c.client.PutMetricData(c.ctx, &input); err != nil {
+			if c.ctx.Err() != nil {
+				return err
 			}
+			c.log.Errorf("Failed to send metric data: %v", err)
+
 			select {
 			case <-time.After(time.Second):
 			case <-c.ctx.Done():
@@ -467,7 +514,7 @@ func (c *cwMetrics) HandlerFunc() http.HandlerFunc {
 	return nil
 }
 
-func (c *cwMetrics) Close() error {
+func (c *cwMetrics) Close(ctx context.Context) error {
 	c.cancel()
 	c.flush()
 	return nil

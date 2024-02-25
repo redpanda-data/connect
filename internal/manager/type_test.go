@@ -15,6 +15,7 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/component/ratelimit"
+	"github.com/benthosdev/benthos/v4/internal/component/testutil"
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/manager"
 	"github.com/benthosdev/benthos/v4/internal/message"
@@ -37,7 +38,7 @@ func TestManagerProcessorLabels(t *testing.T) {
 	for _, l := range goodLabels {
 		conf := processor.NewConfig()
 		conf.Type = "bloblang"
-		conf.Bloblang = "root = this"
+		conf.Plugin = "root = this"
 		conf.Label = l
 
 		mgr, err := manager.New(manager.NewResourceConfig())
@@ -56,7 +57,7 @@ func TestManagerProcessorLabels(t *testing.T) {
 	for _, l := range badLabels {
 		conf := processor.NewConfig()
 		conf.Type = "bloblang"
-		conf.Bloblang = "root = this"
+		conf.Plugin = "root = this"
 		conf.Label = l
 
 		mgr, err := manager.New(manager.NewResourceConfig())
@@ -99,7 +100,7 @@ func TestManagerResourceCRUD(t *testing.T) {
 
 	inConf := input.NewConfig()
 	inConf.Type = "inproc"
-	inConf.Inproc = "meow"
+	inConf.Plugin = "meow"
 
 	outConf := output.NewConfig()
 	outConf.Type = "drop"
@@ -363,15 +364,19 @@ func TestManagerProcessorListErrors(t *testing.T) {
 }
 
 func TestManagerInputList(t *testing.T) {
-	cFoo := input.NewConfig()
-	cFoo.Type = "generate"
-	cFoo.Generate.Mapping = "root = {}"
-	cFoo.Label = "foo"
+	cFoo, err := testutil.InputFromYAML(`
+label: foo
+generate:
+  mapping: 'root = {}'
+`)
+	require.NoError(t, err)
 
-	cBar := input.NewConfig()
-	cBar.Type = "generate"
-	cBar.Generate.Mapping = "root = {}"
-	cBar.Label = "bar"
+	cBar, err := testutil.InputFromYAML(`
+label: bar
+generate:
+  mapping: 'root = {}'
+`)
+	require.NoError(t, err)
 
 	conf := manager.NewResourceConfig()
 	conf.ResourceInputs = append(conf.ResourceInputs, cFoo, cBar)

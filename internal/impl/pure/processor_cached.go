@@ -31,7 +31,9 @@ func newCachedProcessorConfigSpec() *service.ConfigSpec {
 			Example(`${! this.document.id }`).
 			Example(`${! meta("kafka_key") }`).
 			Example(`${! meta("kafka_topic") }`)).
-		Field(service.NewDurationField("ttl").Description("An optional expiry period to set for each cache entry. Some caches only have a general TTL and will therefore ignore this setting.").Optional()).
+		Field(service.NewInterpolatedStringField("ttl").
+			Description("An optional expiry period to set for each cache entry. Some caches only have a general TTL and will therefore ignore this setting.").
+			Optional()).
 		Field(service.NewProcessorListField("processors").Description("The list of processors whose result will be cached.")).
 		Example(
 			"Cached Enrichment",
@@ -100,7 +102,7 @@ type cachedProcessor struct {
 
 	cacheName  string
 	key        *service.InterpolatedString
-	ttl        *time.Duration
+	ttl        *service.InterpolatedString
 	processors []*service.OwnedProcessor
 	skipOn     *bloblang.Executor
 }
@@ -122,15 +124,15 @@ func newCachedProcessorFromParsedConf(manager *service.Resources, conf *service.
 	}
 
 	if conf.Contains("ttl") {
-		var ttl time.Duration
-		if ttl, err = conf.FieldDuration("ttl"); err != nil {
+		proc.ttl, err = conf.FieldInterpolatedString("ttl")
+		if err != nil {
 			return nil, err
 		}
-
-		proc.ttl = &ttl
 	}
 
-	proc.processors, err = conf.FieldProcessorList("processors")
+	if proc.processors, err = conf.FieldProcessorList("processors"); err != nil {
+		return
+	}
 
 	if conf.Contains("skip_on") {
 		var skipOn *bloblang.Executor
@@ -144,10 +146,28 @@ func newCachedProcessorFromParsedConf(manager *service.Resources, conf *service.
 }
 
 func (proc *cachedProcessor) Process(ctx context.Context, msg *service.Message) (service.MessageBatch, error) {
-	cacheKey := proc.key.String(msg)
+	cacheKey, err := proc.key.TryString(msg)
+	if err != nil {
+		return nil, fmt.Errorf("failed to interpolate key expression: %w", err)
+	}
+
+	var ttl *time.Duration
+
+	if proc.ttl != nil {
+		duration, err := proc.ttl.TryString(msg)
+		if err != nil {
+			return nil, fmt.Errorf("failed to interpolate ttl expression: %w", err)
+		}
+
+		tempTTL, err := time.ParseDuration(duration)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse ttl expression: %w", err)
+		}
+
+		ttl = &tempTTL
+	}
 
 	var cachedBytes []byte
-	var err error
 	if cerr := proc.manager.AccessCache(ctx, proc.cacheName, func(cache service.Cache) {
 		cachedBytes, err = cache.Get(ctx, cacheKey)
 	}); cerr != nil {
@@ -158,7 +178,7 @@ func (proc *cachedProcessor) Process(ctx context.Context, msg *service.Message) 
 	if err == nil {
 		batch, err := cachedProcResultToBatch(msg, cachedBytes)
 		if err != nil {
-			err = fmt.Errorf("failed to parsed cached result, this indicates the data was not set by this processor: %w", err)
+			err = fmt.Errorf("failed to parse cached result, this indicates the data was not set by this processor: %w", err)
 		}
 		return batch, err
 	}
@@ -201,7 +221,7 @@ func (proc *cachedProcessor) Process(ctx context.Context, msg *service.Message) 
 
 	var setErr error
 	cerr := proc.manager.AccessCache(ctx, proc.cacheName, func(cache service.Cache) {
-		setErr = cache.Set(ctx, cacheKey, result, proc.ttl)
+		setErr = cache.Set(ctx, cacheKey, result, ttl)
 	})
 	if cerr != nil {
 		proc.manager.Logger().Errorf("failed to access cache for result: %w", err)

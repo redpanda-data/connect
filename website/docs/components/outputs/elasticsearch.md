@@ -14,9 +14,7 @@ categories: ["Services"]
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-
-Publishes messages into an Elasticsearch index. If the index does not exist then
-it is created with a dynamic mapping.
+Publishes messages into an Elasticsearch index. If the index does not exist then it is created with a dynamic mapping.
 
 
 <Tabs defaultValue="common" values={[
@@ -31,8 +29,8 @@ it is created with a dynamic mapping.
 output:
   label: ""
   elasticsearch:
-    urls: []
-    index: ""
+    urls: [] # No default (required)
+    index: "" # No default (required)
     id: ${!count("elastic_ids")}-${!timestamp_unix()}
     type: ""
     max_in_flight: 64
@@ -51,8 +49,8 @@ output:
 output:
   label: ""
   elasticsearch:
-    urls: []
-    index: ""
+    urls: [] # No default (required)
+    index: "" # No default (required)
     action: index
     pipeline: ""
     id: ${!count("elastic_ids")}-${!timestamp_unix()}
@@ -83,7 +81,7 @@ output:
       byte_size: 0
       period: ""
       check: ""
-      processors: []
+      processors: [] # No default (optional)
     aws:
       enabled: false
       region: ""
@@ -102,15 +100,11 @@ output:
 </TabItem>
 </Tabs>
 
-Both the `id` and `index` fields can be dynamically set using function
-interpolations described [here](/docs/configuration/interpolation#bloblang-queries). When
-sending batched messages these interpolations are performed per message part.
+Both the `id` and `index` fields can be dynamically set using function interpolations described [here](/docs/configuration/interpolation#bloblang-queries). When sending batched messages these interpolations are performed per message part.
 
 ### AWS
 
-It's possible to enable AWS connectivity with this output using the `aws`
-fields. However, you may need to set `sniff` and `healthcheck` to
-false for connections to succeed.
+It's possible to enable AWS connectivity with this output using the `aws` fields. However, you may need to set `sniff` and `healthcheck` to false for connections to succeed.
 
 ## Performance
 
@@ -130,7 +124,6 @@ A list of URLs to connect to. If an item of the list contains commas it will be 
 
 
 Type: `array`  
-Default: `[]`  
 
 ```yml
 # Examples
@@ -146,7 +139,6 @@ This field supports [interpolation functions](/docs/configuration/interpolation#
 
 
 Type: `string`  
-Default: `""`  
 
 ### `action`
 
@@ -359,7 +351,7 @@ password: ${KEY_PASSWORD}
 
 ### `max_in_flight`
 
-The maximum number of parallel message batches to have in flight at any given time.
+The maximum number of messages to have in flight at a given time. Increase this to improve throughput.
 
 
 Type: `int`  
@@ -517,7 +509,6 @@ A list of [processors](/docs/components/processors/about) to apply to a batch as
 
 
 Type: `array`  
-Default: `[]`  
 
 ```yml
 # Examples
@@ -592,6 +583,9 @@ Default: `""`
 ### `aws.credentials.secret`
 
 The secret for the credentials being used.
+:::warning Secret
+This field contains sensitive information that usually shouldn't be added to a config directly, read our [secrets page for more info](/docs/configuration/secrets).
+:::
 
 
 Type: `string`  

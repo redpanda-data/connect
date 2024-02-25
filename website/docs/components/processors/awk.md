@@ -20,8 +20,8 @@ Executes an AWK program on messages. This processor is very powerful as it offer
 # Config fields, showing default values
 label: ""
 awk:
-  codec: ""
-  program: ""
+  codec: "" # No default (required)
+  program: "" # No default (required)
 ```
 
 Works by feeding message contents as the program input based on a chosen [codec](#codecs) and replaces the contents of each message with the result. If the result is empty (nothing is printed by the program) then the original message contents remain unchanged.

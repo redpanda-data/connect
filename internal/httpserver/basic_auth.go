@@ -16,6 +16,16 @@ import (
 )
 
 const (
+	fieldBasicAuth             = "basic_auth"
+	fieldBasicAuthEnabled      = "enabled"
+	fieldBasicAuthRealm        = "realm"
+	fieldBasicAuthUsername     = "username"
+	fieldBasicAuthPasswordHash = "password_hash"
+	fieldBasicAuthAlgorithm    = "algorithm"
+	fieldBasicAuthSalt         = "salt"
+)
+
+const (
 	scryptN      = 32768
 	scryptR      = 8
 	scryptP      = 1
@@ -102,14 +112,37 @@ func (b BasicAuthConfig) WrapHandler(next http.HandlerFunc) http.HandlerFunc {
 
 // BasicAuthFieldSpec returns the spec for an HTTP BasicAuth component.
 func BasicAuthFieldSpec() docs.FieldSpec {
-	return docs.FieldObject("basic_auth", "Allows you to enforce and customise basic authentication for requests to the HTTP server.").WithChildren(
-		docs.FieldBool("enabled", "Enable basic authentication").HasDefault(false),
-		docs.FieldString("realm", "Custom realm name").HasDefault("restricted"),
-		docs.FieldString("username", "Username required to authenticate.").HasDefault(""),
-		docs.FieldString("password_hash", "Hashed password required to authenticate. (base64 encoded)").HasDefault(""),
-		docs.FieldString("algorithm", "Encryption algorithm used to generate `password_hash`.", "md5", "sha256", "bcrypt", "scrypt").HasDefault("sha256"),
-		docs.FieldString("salt", "Salt for scrypt algorithm. (base64 encoded)").HasDefault(""),
+	return docs.FieldObject(fieldBasicAuth, "Allows you to enforce and customise basic authentication for requests to the HTTP server.").WithChildren(
+		docs.FieldBool(fieldBasicAuthEnabled, "Enable basic authentication").HasDefault(false),
+		docs.FieldString(fieldBasicAuthRealm, "Custom realm name").HasDefault("restricted"),
+		docs.FieldString(fieldBasicAuthUsername, "Username required to authenticate.").HasDefault(""),
+		docs.FieldString(fieldBasicAuthPasswordHash, "Hashed password required to authenticate. (base64 encoded)").HasDefault(""),
+		docs.FieldString(fieldBasicAuthAlgorithm, "Encryption algorithm used to generate `password_hash`.", "md5", "sha256", "bcrypt", "scrypt").HasDefault("sha256"),
+		docs.FieldString(fieldBasicAuthSalt, "Salt for scrypt algorithm. (base64 encoded)").HasDefault(""),
 	).Advanced()
+}
+
+func BasicAuthConfigFromParsed(pConf *docs.ParsedConfig) (conf BasicAuthConfig, err error) {
+	pConf = pConf.Namespace(fieldBasicAuth)
+	if conf.Enabled, err = pConf.FieldBool(fieldBasicAuthEnabled); err != nil {
+		return
+	}
+	if conf.Username, err = pConf.FieldString(fieldBasicAuthUsername); err != nil {
+		return
+	}
+	if conf.PasswordHash, err = pConf.FieldString(fieldBasicAuthPasswordHash); err != nil {
+		return
+	}
+	if conf.Realm, err = pConf.FieldString(fieldBasicAuthRealm); err != nil {
+		return
+	}
+	if conf.Algorithm, err = pConf.FieldString(fieldBasicAuthAlgorithm); err != nil {
+		return
+	}
+	if conf.Salt, err = pConf.FieldString(fieldBasicAuthSalt); err != nil {
+		return
+	}
+	return
 }
 
 func (b BasicAuthConfig) matches(user, pass string) (bool, error) {

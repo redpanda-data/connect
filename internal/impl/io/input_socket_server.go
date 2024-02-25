@@ -17,41 +17,62 @@ import (
 	"sync"
 	"time"
 
-	"github.com/benthosdev/benthos/v4/internal/bundle"
-	"github.com/benthosdev/benthos/v4/internal/codec"
+	"github.com/benthosdev/benthos/v4/internal/codec/interop"
 	"github.com/benthosdev/benthos/v4/internal/component"
-	"github.com/benthosdev/benthos/v4/internal/component/input"
-	"github.com/benthosdev/benthos/v4/internal/component/input/processors"
-	"github.com/benthosdev/benthos/v4/internal/component/metrics"
-	"github.com/benthosdev/benthos/v4/internal/docs"
-	"github.com/benthosdev/benthos/v4/internal/log"
-	"github.com/benthosdev/benthos/v4/internal/message"
+	"github.com/benthosdev/benthos/v4/internal/component/scanner"
+	"github.com/benthosdev/benthos/v4/internal/shutdown"
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
+const (
+	issFieldNetwork       = "network"
+	issFieldAddress       = "address"
+	issFieldAddressCache  = "address_cache"
+	issFieldTLS           = "tls"
+	issFieldTLSCertFile   = "cert_file"
+	issFieldTLSKeyFile    = "key_file"
+	issFieldTLSSelfSigned = "self_signed"
+)
+
+func socketServerInputSpec() *service.ConfigSpec {
+	return service.NewConfigSpec().
+		Stable().
+		Summary(`Creates a server that receives a stream of messages over a tcp, udp or unix socket.`).
+		Categories("Network").
+		Fields(
+			service.NewStringEnumField(issFieldNetwork, "unix", "tcp", "udp", "tls").
+				Description("A network type to accept."),
+			service.NewStringField(isFieldAddress).
+				Description("The address to listen from.").
+				Examples("/tmp/benthos.sock", "0.0.0.0:6000"),
+			service.NewStringField(issFieldAddressCache).
+				Description("An optional [`cache`](/docs/components/caches/about) within which this input should write it's bound address once known. The key of the cache item containing the address will be the label of the component suffixed with `_address` (e.g. `foo_address`), or `socket_server_address` when a label has not been provided. This is useful in situations where the address is dynamically allocated by the server (`127.0.0.1:0`) and you want to store the allocated address somewhere for reference by other systems and components.").
+				Optional().
+				Version("4.25.0"),
+			service.NewObjectField(issFieldTLS,
+				service.NewStringField(issFieldTLSCertFile).
+					Description("PEM encoded certificate for use with TLS.").
+					Optional(),
+				service.NewStringField(issFieldTLSKeyFile).
+					Description("PEM encoded private key for use with TLS.").
+					Optional(),
+				service.NewBoolField(issFieldTLSSelfSigned).
+					Description("Whether to generate self signed certificates.").
+					Default(false),
+			).
+				Description("TLS specific configuration, valid when the `network` is set to `tls`.").
+				Optional(),
+		).
+		Fields(interop.OldReaderCodecFields("lines")...)
+}
+
 func init() {
-	err := bundle.AllInputs.Add(processors.WrapConstructor(func(conf input.Config, nm bundle.NewManagement) (input.Streamed, error) {
-		return newSocketServerInput(conf, nm, nm.Logger(), nm.Metrics())
-	}), docs.ComponentSpec{
-		Name:    "socket_server",
-		Summary: `Creates a server that receives a stream of messages over a tcp, udp or unix socket.`,
-		Description: `
-The field ` + "`max_buffer`" + ` specifies the maximum amount of memory to allocate _per connection_ for buffering lines of data. If a line of data from a connection exceeds this value then the connection will be closed.`,
-		Config: docs.FieldComponent().WithChildren(
-			docs.FieldString("network", "A network type to accept.").HasOptions(
-				"unix", "tcp", "udp", "tls",
-			),
-			docs.FieldString("address", "The address to listen from.", "/tmp/benthos.sock", "0.0.0.0:6000"),
-			codec.ReaderDocs.AtVersion("3.42.0"),
-			docs.FieldInt("max_buffer", "The maximum message buffer size. Must exceed the largest message to be consumed.").Advanced(),
-			docs.FieldObject("tls", "TLS specific configuration, valid when the `network` is set to `tls`.").WithChildren(
-				docs.FieldString("cert_file", "PEM encoded certificate for use with TLS.").HasDefault(""),
-				docs.FieldString("key_file", "PEM encoded private key for use with TLS.").HasDefault(""),
-				docs.FieldBool("self_signed", "Whether to generate self signed certificates.").HasDefault(false),
-			),
-		).ChildDefaultAndTypesFromStruct(input.NewSocketConfig()),
-		Categories: []string{
-			"Network",
-		},
+	err := service.RegisterBatchInput("socket_server", socketServerInputSpec(), func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchInput, error) {
+		i, err := newSocketServerInputFromParsed(conf, mgr)
+		if err != nil {
+			return nil, err
+		}
+		return service.AutoRetryNacksBatched(i), nil
 	})
 	if err != nil {
 		panic(err)
@@ -68,230 +89,185 @@ func (w *wrapPacketConn) Read(p []byte) (n int, err error) {
 }
 
 type socketServerInput struct {
-	conf  input.SocketServerConfig
-	stats metrics.Type
-	log   log.Modular
+	log *service.Logger
+	mgr *service.Resources
 
-	codecCtor codec.ReaderConstructor
-	listener  net.Listener
-	conn      net.PacketConn
+	network       string
+	address       string
+	addressCache  string
+	tlsCert       string
+	tlsKey        string
+	tlsSelfSigned bool
+	codecCtor     interop.FallbackReaderCodec
 
-	retriesMut   sync.RWMutex
-	transactions chan message.Transaction
-
-	ctx        context.Context
-	closeFn    func()
-	closedChan chan struct{}
-
-	mLatency metrics.StatTimer
-	mRcvd    metrics.StatCounter
+	messages chan service.MessageBatch
+	shutSig  *shutdown.Signaller
 }
 
-func newSocketServerInput(conf input.Config, mgr bundle.NewManagement, log log.Modular, stats metrics.Type) (input.Streamed, error) {
-	var ln net.Listener
-	var cn net.PacketConn
-	var err error
-
-	sconf := conf.SocketServer
-
-	codecConf := codec.NewReaderConfig()
-	codecConf.MaxScanTokenSize = sconf.MaxBuffer
-	ctor, err := codec.GetReader(sconf.Codec, codecConf)
-	if err != nil {
-		return nil, err
-	}
-
-	switch sconf.Network {
-	case "tcp", "unix":
-		ln, err = net.Listen(sconf.Network, sconf.Address)
-	case "udp":
-		cn, err = net.ListenPacket(sconf.Network, sconf.Address)
-	case "tls":
-		var cert tls.Certificate
-		if cert, err = loadOrCreateCertificate(sconf.TLS); err != nil {
-			return nil, err
-		}
-		config := &tls.Config{
-			Certificates: []tls.Certificate{cert},
-		}
-		ln, err = tls.Listen("tcp", sconf.Address, config)
-	default:
-		return nil, fmt.Errorf("socket network '%v' is not supported by this input", sconf.Network)
-	}
-	if err != nil {
-		return nil, err
-	}
-
+func newSocketServerInputFromParsed(conf *service.ParsedConfig, mgr *service.Resources) (i *socketServerInput, err error) {
 	t := socketServerInput{
-		conf:  conf.SocketServer,
-		stats: stats,
-		log:   log,
-
-		codecCtor: ctor,
-		listener:  ln,
-		conn:      cn,
-
-		transactions: make(chan message.Transaction),
-		closedChan:   make(chan struct{}),
-
-		mRcvd:    stats.GetCounter("input_received"),
-		mLatency: stats.GetTimer("input_latency_ns"),
+		log:      mgr.Logger(),
+		mgr:      mgr,
+		shutSig:  shutdown.NewSignaller(),
+		messages: make(chan service.MessageBatch),
 	}
-	t.ctx, t.closeFn = context.WithCancel(context.Background())
 
-	if ln == nil {
-		go t.udpLoop()
-	} else {
-		go t.loop()
+	if t.network, err = conf.FieldString(issFieldNetwork); err != nil {
+		return
+	}
+	if t.address, err = conf.FieldString(issFieldAddress); err != nil {
+		return
+	}
+	t.addressCache, _ = conf.FieldString(issFieldAddressCache)
+
+	tlsConf := conf.Namespace(issFieldTLS)
+	t.tlsCert, _ = tlsConf.FieldString(issFieldTLSCertFile)
+	t.tlsKey, _ = tlsConf.FieldString(issFieldTLSKeyFile)
+	t.tlsSelfSigned, _ = tlsConf.FieldBool(issFieldTLSSelfSigned)
+
+	if t.codecCtor, err = interop.OldReaderCodecFromParsed(conf); err != nil {
+		return
 	}
 	return &t, nil
 }
 
-func (t *socketServerInput) Addr() net.Addr {
-	if t.listener != nil {
-		return t.listener.Addr()
-	}
-	return t.conn.LocalAddr()
-}
+func (t *socketServerInput) Connect(ctx context.Context) error {
+	var ln net.Listener
+	var cn net.PacketConn
 
-func (t *socketServerInput) sendMsg(msg message.Batch) bool {
-	tStarted := time.Now()
-
-	// Block whilst retries are happening
-	t.retriesMut.Lock()
-	// nolint:staticcheck, gocritic // Ignore SA2001 empty critical section, Ignore badLock
-	t.retriesMut.Unlock()
-
-	resChan := make(chan error)
-	select {
-	case t.transactions <- message.NewTransaction(msg, resChan):
-	case <-t.ctx.Done():
-		return false
-	}
-
-	go func() {
-		hasLocked := false
-		defer func() {
-			if hasLocked {
-				t.retriesMut.RUnlock()
-			}
-		}()
-		for {
-			select {
-			case res, open := <-resChan:
-				if !open {
-					return
-				}
-				var sendErr error
-				if res != nil {
-					sendErr = res
-				}
-				if sendErr == nil || sendErr == component.ErrTypeClosed {
-					if sendErr == nil {
-						t.mLatency.Timing(time.Since(tStarted).Nanoseconds())
-					}
-					return
-				}
-				if !hasLocked {
-					hasLocked = true
-					t.retriesMut.RLock()
-				}
-				t.log.Errorf("failed to send message: %v\n", sendErr)
-
-				// Wait before attempting again
-				select {
-				case <-time.After(time.Second):
-				case <-t.ctx.Done():
-					return
-				}
-
-				// And then resend the transaction
-				select {
-				case t.transactions <- message.NewTransaction(msg, resChan):
-				case <-t.ctx.Done():
-					return
-				}
-			case <-t.ctx.Done():
-				return
-			}
+	var err error
+	switch t.network {
+	case "tcp", "unix":
+		ln, err = net.Listen(t.network, t.address)
+	case "tls":
+		var cert tls.Certificate
+		if cert, err = loadOrCreateCertificate(t.tlsCert, t.tlsKey, t.tlsSelfSigned); err != nil {
+			return err
 		}
-	}()
-	return true
+		config := &tls.Config{
+			Certificates: []tls.Certificate{cert},
+		}
+		ln, err = tls.Listen("tcp", t.address, config)
+	case "udp":
+		cn, err = net.ListenPacket(t.network, t.address)
+	default:
+		return fmt.Errorf("socket network '%v' is not supported by this input", t.network)
+	}
+	if err != nil {
+		return err
+	}
+
+	if ln == nil {
+		go t.udpLoop(cn)
+	} else {
+		go t.loop(ln)
+	}
+
+	var addr net.Addr
+	if ln != nil {
+		addr = ln.Addr()
+		t.log.Infof("Receiving %v socket messages from address: %v", t.network, addr.String())
+	} else {
+		addr = cn.LocalAddr()
+		t.log.Infof("Receiving udp socket messages from address: %v", addr.String())
+	}
+	if t.addressCache != "" {
+		key := "socket_server_address"
+		if l := t.mgr.Label(); l != "" {
+			key = l + "_address"
+		}
+		_ = t.mgr.AccessCache(ctx, t.addressCache, func(c service.Cache) {
+			if err := c.Set(ctx, key, []byte(addr.String()), nil); err != nil {
+				t.log.Errorf("Failed to set address in cache: %v", err)
+			}
+		})
+	}
+	return nil
 }
 
-func (t *socketServerInput) loop() {
+func (t *socketServerInput) ReadBatch(ctx context.Context) (service.MessageBatch, service.AckFunc, error) {
+	select {
+	case b, open := <-t.messages:
+		if open {
+			return b, func(ctx context.Context, err error) error {
+				return nil
+			}, nil
+		}
+		return nil, nil, service.ErrEndOfInput
+	case <-ctx.Done():
+		return nil, nil, ctx.Err()
+	}
+}
+
+func (t *socketServerInput) loop(listener net.Listener) {
 	var wg sync.WaitGroup
 
 	defer func() {
 		wg.Wait()
-
-		t.retriesMut.Lock()
-		// nolint:staticcheck, gocritic // Ignore SA2001 empty critical section, Ignore badLock
-		t.retriesMut.Unlock()
-
-		t.listener.Close()
-
-		close(t.transactions)
-		close(t.closedChan)
+		_ = listener.Close()
+		close(t.messages)
+		t.shutSig.ShutdownComplete()
 	}()
-
-	t.log.Infof("Receiving %v socket messages from address: %v\n", t.conf.Network, t.listener.Addr())
 
 	go func() {
-		<-t.ctx.Done()
-		t.listener.Close()
+		<-t.shutSig.CloseAtLeisureChan()
+		_ = listener.Close()
 	}()
+
+	closeCtx, done := t.shutSig.CloseAtLeisureCtx(context.Background())
+	defer done()
 
 acceptLoop:
 	for {
-		conn, err := t.listener.Accept()
+		conn, err := listener.Accept()
 		if err != nil {
 			if !strings.Contains(err.Error(), "use of closed network connection") {
-				t.log.Errorf("Failed to accept Socket connection: %v\n", err)
+				t.log.Errorf("Failed to accept Socket connection: %v", err)
 			}
 			select {
 			case <-time.After(time.Second):
 				continue acceptLoop
-			case <-t.ctx.Done():
+			case <-t.shutSig.CloseAtLeisureChan():
 				return
 			}
 		}
-		connCtx, connDone := context.WithCancel(t.ctx)
+
 		go func() {
-			<-connCtx.Done()
-			conn.Close()
+			<-t.shutSig.CloseAtLeisureChan()
+			_ = conn.Close()
 		}()
+
 		wg.Add(1)
 		go func(c net.Conn) {
 			defer func() {
-				connDone()
+				_ = c.Close()
 				wg.Done()
-				c.Close()
 			}()
-			codec, err := t.codecCtor("", c, func(ctx context.Context, err error) error {
+
+			codec, err := t.codecCtor.Create(c, func(ctx context.Context, err error) error {
 				return nil
-			})
+			}, scanner.SourceDetails{})
 			if err != nil {
-				t.log.Errorf("Failed to create codec for new connection: %v\n", err)
+				t.log.Errorf("Failed to create codec for new connection: %v", err)
 				return
 			}
 
 			for {
-				parts, ackFn, err := codec.Next(t.ctx)
+				parts, ackFn, err := codec.NextBatch(closeCtx)
 				if err != nil {
-					if err != io.EOF && err != component.ErrTimeout {
+					if !errors.Is(err, io.EOF) {
 						t.log.Errorf("Connection dropped due to: %v\n", err)
 					}
 					return
 				}
-				t.mRcvd.Incr(int64(len(parts)))
 
 				// We simply bounce rejected messages in a loop downstream so
 				// there's no benefit to aggregating acks.
-				_ = ackFn(t.ctx, nil)
+				_ = ackFn(closeCtx, nil)
 
-				msg := message.Batch(parts)
-				if !t.sendMsg(msg) {
+				select {
+				case t.messages <- parts:
+				case <-t.shutSig.CloseAtLeisureChan():
 					return
 				}
 			}
@@ -299,72 +275,54 @@ acceptLoop:
 	}
 }
 
-func (t *socketServerInput) udpLoop() {
+func (t *socketServerInput) udpLoop(conn net.PacketConn) {
 	defer func() {
-		t.retriesMut.Lock()
-		// nolint:staticcheck, gocritic // Ignore SA2001 empty critical section, Ignore badLock
-		t.retriesMut.Unlock()
-
-		close(t.transactions)
-		close(t.closedChan)
+		_ = conn.Close()
+		close(t.messages)
+		t.shutSig.ShutdownComplete()
 	}()
 
-	codec, err := t.codecCtor("", &wrapPacketConn{PacketConn: t.conn}, func(ctx context.Context, err error) error {
+	go func() {
+		<-t.shutSig.CloseAtLeisureChan()
+		_ = conn.Close()
+	}()
+
+	closeCtx, done := t.shutSig.CloseAtLeisureCtx(context.Background())
+	defer done()
+
+	codec, err := t.codecCtor.Create(&wrapPacketConn{PacketConn: conn}, func(ctx context.Context, err error) error {
 		return nil
-	})
+	}, scanner.SourceDetails{})
 	if err != nil {
-		t.log.Errorf("Connection error due to: %v\n", err)
+		t.log.Errorf("Connection error due to: %v", err)
 		return
 	}
 
-	go func() {
-		<-t.ctx.Done()
-		codec.Close(context.Background())
-		t.conn.Close()
-	}()
-
-	t.log.Infof("Receiving udp socket messages from address: %v\n", t.conn.LocalAddr())
-
 	for {
-		parts, ackFn, err := codec.Next(t.ctx)
+		parts, ackFn, err := codec.NextBatch(closeCtx)
 		if err != nil {
 			if err != io.EOF && err != component.ErrTimeout {
-				t.log.Errorf("Connection dropped due to: %v\n", err)
+				t.log.Errorf("Connection dropped due to: %v", err)
 			}
 			return
 		}
-		t.mRcvd.Incr(int64(len(parts)))
 
 		// We simply bounce rejected messages in a loop downstream so
 		// there's no benefit to aggregating acks.
-		_ = ackFn(t.ctx, nil)
+		_ = ackFn(closeCtx, nil)
 
-		msg := message.Batch(parts)
-		if !t.sendMsg(msg) {
+		select {
+		case t.messages <- parts:
+		case <-t.shutSig.CloseAtLeisureChan():
 			return
 		}
 	}
 }
 
-func (t *socketServerInput) TransactionChan() <-chan message.Transaction {
-	return t.transactions
-}
-
-func (t *socketServerInput) Connected() bool {
-	return true
-}
-
-func (t *socketServerInput) TriggerStopConsuming() {
-	t.closeFn()
-}
-
-func (t *socketServerInput) TriggerCloseNow() {
-	t.closeFn()
-}
-
-func (t *socketServerInput) WaitForClose(ctx context.Context) error {
+func (t *socketServerInput) Close(ctx context.Context) error {
+	t.shutSig.CloseAtLeisure()
 	select {
-	case <-t.closedChan:
+	case <-t.shutSig.HasClosedChan():
 	case <-ctx.Done():
 		return ctx.Err()
 	}
@@ -395,17 +353,17 @@ func createSelfSignedCertificate() (tls.Certificate, error) {
 	return cert, nil
 }
 
-func loadOrCreateCertificate(sconf input.SocketServerTLSConfig) (tls.Certificate, error) {
+func loadOrCreateCertificate(certFile, keyFile string, selfSigned bool) (tls.Certificate, error) {
 	var cert tls.Certificate
 	var err error
-	if sconf.CertFile != "" && sconf.KeyFile != "" {
-		cert, err = tls.LoadX509KeyPair(sconf.CertFile, sconf.KeyFile)
+	if certFile != "" && keyFile != "" {
+		cert, err = tls.LoadX509KeyPair(certFile, keyFile)
 		if err != nil {
 			return tls.Certificate{}, err
 		}
 		return cert, nil
 	}
-	if !sconf.SelfSigned {
+	if !selfSigned {
 		return tls.Certificate{}, errors.New("must specify either a certificate file or enable self signed")
 	}
 

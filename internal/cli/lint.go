@@ -12,8 +12,8 @@ import (
 
 	"github.com/fatih/color"
 	"github.com/urfave/cli/v2"
-	"gopkg.in/yaml.v3"
 
+	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/config"
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	ifilepath "github.com/benthosdev/benthos/v4/internal/filepath"
@@ -30,22 +30,13 @@ type pathLint struct {
 	lint   docs.Lint
 }
 
-func lintFile(path string, opts config.LintOptions) (pathLints []pathLint) {
-	conf := config.New()
-	lints, err := config.ReadFileLinted(ifs.OS(), path, opts, &conf)
+func lintFile(path string, skipEnvVarCheck bool, lConf docs.LintConfig) (pathLints []pathLint) {
+	_, lints, err := config.ReadYAMLFileLinted(ifs.OS(), config.Spec(), path, skipEnvVarCheck, lConf)
 	if err != nil {
-		var l docs.Lint
-		if errors.As(err, &l) {
-			pathLints = append(pathLints, pathLint{
-				source: path,
-				lint:   l,
-			})
-		} else {
-			pathLints = append(pathLints, pathLint{
-				source: path,
-				lint:   docs.NewLintError(1, docs.LintFailedRead, err.Error()),
-			})
-		}
+		pathLints = append(pathLints, pathLint{
+			source: path,
+			lint:   docs.NewLintError(1, docs.LintFailedRead, err),
+		})
 		return
 	}
 	for _, l := range lints {
@@ -57,12 +48,12 @@ func lintFile(path string, opts config.LintOptions) (pathLints []pathLint) {
 	return
 }
 
-func lintMDSnippets(path string, opts config.LintOptions) (pathLints []pathLint) {
+func lintMDSnippets(path string, lConf docs.LintConfig) (pathLints []pathLint) {
 	rawBytes, err := ifs.ReadFile(ifs.OS(), path)
 	if err != nil {
 		pathLints = append(pathLints, pathLint{
 			source: path,
-			lint:   docs.NewLintError(1, docs.LintFailedRead, err.Error()),
+			lint:   docs.NewLintError(1, docs.LintFailedRead, err),
 		})
 		return
 	}
@@ -79,16 +70,29 @@ func lintMDSnippets(path string, opts config.LintOptions) (pathLints []pathLint)
 		if endOfSnippet == -1 {
 			pathLints = append(pathLints, pathLint{
 				source: path,
-				lint:   docs.NewLintError(snippetLine, docs.LintFailedRead, "markdown snippet not terminated"),
+				lint:   docs.NewLintError(snippetLine, docs.LintFailedRead, errors.New("markdown snippet not terminated")),
 			})
 			return
 		}
 		endOfSnippet = nextSnippet + endOfSnippet + len(endTag)
 
-		conf := config.New()
 		configBytes := rawBytes[nextSnippet : endOfSnippet-len(endTag)]
+		if nextSnippet = bytes.Index(rawBytes[endOfSnippet:], []byte("```yaml")); nextSnippet != -1 {
+			nextSnippet += endOfSnippet
+		}
 
-		if err := yaml.Unmarshal(configBytes, &conf); err != nil {
+		cNode, err := docs.UnmarshalYAML(configBytes)
+		if err != nil {
+			pathLints = append(pathLints, pathLint{
+				source: path,
+				lint:   docs.NewLintError(snippetLine, docs.LintFailedRead, err),
+			})
+			continue
+		}
+
+		spec := config.Spec()
+		pConf, err := spec.ParsedConfigFromAny(cNode)
+		if err != nil {
 			var l docs.Lint
 			if errors.As(err, &l) {
 				l.Line += snippetLine - 1
@@ -99,28 +103,33 @@ func lintMDSnippets(path string, opts config.LintOptions) (pathLints []pathLint)
 			} else {
 				pathLints = append(pathLints, pathLint{
 					source: path,
-					lint:   docs.NewLintError(snippetLine, docs.LintFailedRead, err.Error()),
+					lint:   docs.NewLintError(snippetLine, docs.LintFailedRead, err),
+				})
+			}
+		}
+
+		if _, err := config.FromParsed(lConf.DocsProvider, pConf, nil); err != nil {
+			var l docs.Lint
+			if errors.As(err, &l) {
+				l.Line += snippetLine - 1
+				pathLints = append(pathLints, pathLint{
+					source: path,
+					lint:   l,
+				})
+			} else {
+				pathLints = append(pathLints, pathLint{
+					source: path,
+					lint:   docs.NewLintError(snippetLine, docs.LintFailedRead, err),
 				})
 			}
 		} else {
-			lints, err := config.LintBytes(opts, configBytes)
-			if err != nil {
-				pathLints = append(pathLints, pathLint{
-					source: path,
-					lint:   docs.NewLintError(snippetLine, docs.LintFailedRead, err.Error()),
-				})
-			}
-			for _, l := range lints {
+			for _, l := range spec.LintYAML(docs.NewLintContext(lConf), cNode) {
 				l.Line += snippetLine - 1
 				pathLints = append(pathLints, pathLint{
 					source: path,
 					lint:   l,
 				})
 			}
-		}
-
-		if nextSnippet = bytes.Index(rawBytes[endOfSnippet:], []byte("```yaml")); nextSnippet != -1 {
-			nextSnippet += endOfSnippet
 		}
 	}
 	return
@@ -177,12 +186,12 @@ func LintAction(c *cli.Context, stderr io.Writer) int {
 	if conf := c.String("config"); len(conf) > 0 {
 		targets = append(targets, conf)
 	}
+	targets = append(targets, c.StringSlice("resources")...)
 
-	lintOpts := config.LintOptions{
-		RejectDeprecated: c.Bool("deprecated"),
-		RequireLabels:    c.Bool("labels"),
-		SkipEnvVarCheck:  c.Bool("skip-env-var-check"),
-	}
+	lConf := docs.NewLintConfig(bundle.GlobalEnvironment)
+	lConf.RejectDeprecated = c.Bool("deprecated")
+	lConf.RequireLabels = c.Bool("labels")
+	skipEnvVarCheck := c.Bool("skip-env-var-check")
 
 	var pathLintMut sync.Mutex
 	var pathLints []pathLint
@@ -201,9 +210,9 @@ func LintAction(c *cli.Context, stderr io.Writer) int {
 				}
 				var lints []pathLint
 				if path.Ext(target) == ".md" {
-					lints = lintMDSnippets(target, lintOpts)
+					lints = lintMDSnippets(target, lConf)
 				} else {
-					lints = lintFile(target, lintOpts)
+					lints = lintFile(target, skipEnvVarCheck, lConf)
 				}
 				if len(lints) > 0 {
 					pathLintMut.Lock()

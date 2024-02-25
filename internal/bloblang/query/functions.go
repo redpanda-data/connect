@@ -15,6 +15,7 @@ import (
 	"github.com/segmentio/ksuid"
 
 	"github.com/benthosdev/benthos/v4/internal/tracing"
+	"github.com/benthosdev/benthos/v4/internal/value"
 )
 
 type fieldFunction struct {
@@ -147,7 +148,7 @@ type Literal struct {
 // Annotation returns a token identifier of the function.
 func (l *Literal) Annotation() string {
 	if l.annotation == "" {
-		return string(ITypeOf(l.Value)) + " literal"
+		return string(value.ITypeOf(l.Value)) + " literal"
 	}
 	return l.annotation
 }
@@ -265,8 +266,8 @@ var _ = registerSimpleFunction(
 //------------------------------------------------------------------------------
 
 var _ = registerFunction(
-	NewFunctionSpec(
-		FunctionCategoryGeneral, "count",
+	NewDeprecatedFunctionSpec(
+		"count",
 		"The `count` function is a counter starting at 1 which increments after each time it is called. Count takes an argument which is an identifier for the counter, allowing you to specify multiple unique counters in your configuration.",
 		NewExampleSpec("",
 			`root = this
@@ -328,7 +329,7 @@ root.bar = deleted()`,
 		),
 	),
 	func(*ParsedParams) (Function, error) {
-		return NewLiteralFunction("delete", Delete(nil)), nil
+		return NewLiteralFunction("delete", value.Delete(nil)), nil
 	},
 )
 
@@ -453,7 +454,7 @@ func jsonFunction(args *ParsedParams) (Function, error) {
 		if len(argPath) > 0 {
 			gPart = gPart.Search(argPath...)
 		}
-		return ISanitize(gPart.Data()), nil
+		return value.ISanitize(gPart.Data()), nil
 	}, func(ctx TargetsContext) (TargetsContext, []TargetPath) {
 		paths := []TargetPath{
 			NewTargetPath(TargetValue, argPath...),
@@ -664,7 +665,7 @@ var _ = registerFunction(
 var _ = registerFunction(
 	NewHiddenFunctionSpec("nothing"),
 	func(*ParsedParams) (Function, error) {
-		return NewLiteralFunction("nothing", Nothing(nil)), nil
+		return NewLiteralFunction("nothing", value.Nothing(nil)), nil
 	},
 )
 
@@ -672,8 +673,10 @@ var _ = registerFunction(
 
 var _ = registerFunction(
 	NewFunctionSpec(
-		FunctionCategoryGeneral, "random_int",
-		"Generates a non-negative pseudo-random 64-bit integer. An optional integer argument can be provided in order to seed the random number generator. Optional `min` and `max` arguments can be provided to make the generated numbers within a range.",
+		FunctionCategoryGeneral, "random_int", `
+Generates a non-negative pseudo-random 64-bit integer. An optional integer argument can be provided in order to seed the random number generator.
+
+Optional `+"`min` and `max`"+` arguments can be provided in order to only generate numbers within a range. Neither of these parameters can be set via a dynamic expression (i.e. from values taken from mapped data). Instead, for dynamic ranges extract a min and max manually using a modulo operator (`+"`random_int() % a + b`"+`).`,
 		NewExampleSpec("",
 			`root.first = random_int()
 root.second = random_int(1)
@@ -693,8 +696,8 @@ root.sixth = random_int(seed:timestamp_unix_nano(), max:20)
 			"A seed to use, if a query is provided it will only be resolved once during the lifetime of the mapping.",
 			true,
 		).Default(NewLiteralFunction("", 0))).
-		Param(ParamInt64("min", "The minimum value the random generated number will have. The default value is 0.").Default(0)).
-		Param(ParamInt64("max", fmt.Sprintf("The maximum value the random generated number will have. The default value is %d (math.MaxInt64 - 1).", uint64(math.MaxInt64-1))).Default(int64(math.MaxInt64-1))),
+		Param(ParamInt64("min", "The minimum value the random generated number will have. The default value is 0.").Default(0).DisableDynamic()).
+		Param(ParamInt64("max", fmt.Sprintf("The maximum value the random generated number will have. The default value is %d (math.MaxInt64 - 1).", uint64(math.MaxInt64-1))).Default(int64(math.MaxInt64-1)).DisableDynamic()),
 	randomIntFunction,
 )
 
@@ -733,7 +736,7 @@ func randomIntFunction(args *ParsedParams) (Function, error) {
 				return nil, fmt.Errorf("failed to seed random number generator: %v", err)
 			}
 
-			seed, err := IToInt(seedI)
+			seed, err := value.IToInt(seedI)
 			if err != nil {
 				return nil, fmt.Errorf("failed to seed random number generator: %v", err)
 			}

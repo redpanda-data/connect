@@ -6,18 +6,19 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"os"
 	"path/filepath"
 	"time"
 
 	"gopkg.in/yaml.v3"
 
 	"github.com/benthosdev/benthos/v4/internal/bundle"
-	tdocs "github.com/benthosdev/benthos/v4/internal/cli/test/docs"
 	"github.com/benthosdev/benthos/v4/internal/component/cache"
 	"github.com/benthosdev/benthos/v4/internal/component/input"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/component/ratelimit"
+	"github.com/benthosdev/benthos/v4/internal/config/test"
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	ifilepath "github.com/benthosdev/benthos/v4/internal/filepath"
 	"github.com/benthosdev/benthos/v4/internal/manager"
@@ -66,7 +67,7 @@ func (r *resourceSourceInfo) populateFrom(path string, info *resourceFileInfo) {
 func (r *resourceSourceInfo) removeOwnedCache(ctx context.Context, label, path string, mgr bundle.NewManagement) {
 	if r.caches[label] == path {
 		if err := mgr.RemoveCache(ctx, label); err != nil {
-			mgr.Logger().Errorf("Failed to remove deleted resource %v: %v", label, err)
+			mgr.Logger().Error("Failed to remove deleted resource %v: %v", label, err)
 		} else {
 			delete(r.caches, label)
 		}
@@ -76,7 +77,7 @@ func (r *resourceSourceInfo) removeOwnedCache(ctx context.Context, label, path s
 func (r *resourceSourceInfo) removeOwnedInput(ctx context.Context, label, path string, mgr bundle.NewManagement) {
 	if r.inputs[label] == path {
 		if err := mgr.RemoveInput(ctx, label); err != nil {
-			mgr.Logger().Errorf("Failed to remove deleted resource %v: %v", label, err)
+			mgr.Logger().Error("Failed to remove deleted resource %v: %v", label, err)
 		} else {
 			delete(r.inputs, label)
 		}
@@ -86,7 +87,7 @@ func (r *resourceSourceInfo) removeOwnedInput(ctx context.Context, label, path s
 func (r *resourceSourceInfo) removeOwnedOutput(ctx context.Context, label, path string, mgr bundle.NewManagement) {
 	if r.outputs[label] == path {
 		if err := mgr.RemoveOutput(ctx, label); err != nil {
-			mgr.Logger().Errorf("Failed to remove deleted resource %v: %v", label, err)
+			mgr.Logger().Error("Failed to remove deleted resource %v: %v", label, err)
 		} else {
 			delete(r.outputs, label)
 		}
@@ -96,7 +97,7 @@ func (r *resourceSourceInfo) removeOwnedOutput(ctx context.Context, label, path 
 func (r *resourceSourceInfo) removeOwnedProcessor(ctx context.Context, label, path string, mgr bundle.NewManagement) {
 	if r.processors[label] == path {
 		if err := mgr.RemoveProcessor(ctx, label); err != nil {
-			mgr.Logger().Errorf("Failed to remove deleted resource %v: %v", label, err)
+			mgr.Logger().Error("Failed to remove deleted resource %v: %v", label, err)
 		} else {
 			delete(r.processors, label)
 		}
@@ -106,7 +107,7 @@ func (r *resourceSourceInfo) removeOwnedProcessor(ctx context.Context, label, pa
 func (r *resourceSourceInfo) removeOwnedRateLimit(ctx context.Context, label, path string, mgr bundle.NewManagement) {
 	if r.rateLimits[label] == path {
 		if err := mgr.RemoveRateLimit(ctx, label); err != nil {
-			mgr.Logger().Errorf("Failed to remove deleted resource %v: %v", label, err)
+			mgr.Logger().Error("Failed to remove deleted resource %v: %v", label, err)
 		} else {
 			delete(r.rateLimits, label)
 		}
@@ -178,9 +179,9 @@ func (r *Reader) readResources(conf *manager.ResourceConfig) (lints []string, er
 		return nil, err
 	}
 	for _, path := range resourcesPaths {
-		rconf := manager.NewResourceConfig()
+		var rconf manager.ResourceConfig
 		var rLints []string
-		if rLints, err = r.readResource(path, &rconf); err != nil {
+		if rconf, rLints, err = r.readResource(path); err != nil {
 			return
 		}
 		lints = append(lints, rLints...)
@@ -197,7 +198,7 @@ func (r *Reader) readResources(conf *manager.ResourceConfig) (lints []string, er
 	return
 }
 
-func (r *Reader) readResource(path string, conf *manager.ResourceConfig) (lints []string, err error) {
+func (r *Reader) readResource(path string) (conf manager.ResourceConfig, lints []string, err error) {
 	defer func() {
 		if err != nil {
 			err = fmt.Errorf("%v: %w", path, err)
@@ -207,7 +208,7 @@ func (r *Reader) readResource(path string, conf *manager.ResourceConfig) (lints 
 	var confBytes []byte
 	var dLints []docs.Lint
 	var modTime time.Time
-	if confBytes, dLints, modTime, err = ReadFileEnvSwap(r.fs, path); err != nil {
+	if confBytes, dLints, modTime, err = ReadFileEnvSwap(r.fs, path, os.LookupEnv); err != nil {
 		return
 	}
 	for _, l := range dLints {
@@ -215,50 +216,55 @@ func (r *Reader) readResource(path string, conf *manager.ResourceConfig) (lints 
 	}
 	r.modTimeLastRead[path] = modTime
 
-	var rawNode yaml.Node
-	if err = yaml.Unmarshal(confBytes, &rawNode); err != nil {
+	var rawNode *yaml.Node
+	if rawNode, err = docs.UnmarshalYAML(confBytes); err != nil {
 		return
 	}
+
+	spec := append(docs.FieldSpecs{
+		test.ConfigSpec(),
+	}, r.specResources...)
 	if !bytes.HasPrefix(confBytes, []byte("# BENTHOS LINT DISABLE")) {
-		allowTest := append(docs.FieldSpecs{
-			tdocs.ConfigSpec(),
-		}, manager.Spec()...)
-		for _, lint := range allowTest.LintYAML(docs.NewLintContext(), &rawNode) {
+		for _, lint := range spec.LintYAML(r.lintCtx(), rawNode) {
 			lints = append(lints, fmt.Sprintf("%v%v", path, lint.Error()))
 		}
 	}
 
-	err = rawNode.Decode(conf)
+	var pConf *docs.ParsedConfig
+	if pConf, err = spec.ParsedConfigFromAny(rawNode); err != nil {
+		return
+	}
+
+	conf, err = manager.FromParsed(r.lintConf.DocsProvider, pConf)
 	return
 }
 
 // TriggerResourceUpdate attempts to re-read a resource configuration file and
 // apply changes to the provided manager as appropriate.
 func (r *Reader) TriggerResourceUpdate(mgr bundle.NewManagement, strict bool, path string) error {
-	newResConf := manager.NewResourceConfig()
-	lints, err := r.readResource(path, &newResConf)
+	newResConf, lints, err := r.readResource(path)
 	if errors.Is(err, fs.ErrNotExist) {
 		return r.TriggerResourceDelete(mgr, path)
 	}
 	if err != nil {
-		mgr.Logger().Errorf("Failed to read updated resources config: %v", err)
+		mgr.Logger().Error("Failed to read updated resources config: %v", err)
 		return noReread(err)
 	}
 
 	prevInfo, exists := r.resourceFileInfo[path]
 	if exists {
-		mgr.Logger().Infof("Resource %v config updated, attempting to update resources.", path)
+		mgr.Logger().Info("Resource %v config updated, attempting to update resources.", path)
 	} else {
 		prevInfo = resInfoEmpty()
-		mgr.Logger().Infof("Resource %v config created, attempting to add resources.", path)
+		mgr.Logger().Info("Resource %v config created, attempting to add resources.", path)
 	}
 
 	lintlog := mgr.Logger()
 	for _, lint := range lints {
-		lintlog.Infoln(lint)
+		lintlog.Info(lint)
 	}
 	if strict && len(lints) > 0 {
-		mgr.Logger().Errorln("Rejecting updated resource config due to linter errors, to allow linting errors run Benthos with --chilled")
+		mgr.Logger().Error("Rejecting updated resource config due to linter errors, to allow linting errors run Benthos with --chilled")
 		return noReread(errors.New("file contained linting errors and is running in strict mode"))
 	}
 
@@ -278,7 +284,7 @@ func (r *Reader) TriggerResourceDelete(mgr bundle.NewManagement, path string) er
 	if !exists {
 		return nil
 	}
-	mgr.Logger().Infof("Resource file %v deleted, attempting to remove resources.", path)
+	mgr.Logger().Info("Resource file %v deleted, attempting to remove resources.", path)
 
 	newInfo := resInfoEmpty()
 	if err := r.applyResourceChanges(path, mgr, newInfo, prevInfo); err != nil {
@@ -304,10 +310,10 @@ func (r *Reader) applyResourceChanges(path string, mgr bundle.NewManagement, cur
 	for k, v := range currentInfo.rateLimits {
 		delete(unaccounted, k)
 		if err := mgr.StoreRateLimit(ctx, k, *v); err != nil {
-			mgr.Logger().Errorf("Failed to update resource %v: %v", k, err)
+			mgr.Logger().Error("Failed to update resource %v: %v", k, err)
 			return fmt.Errorf("resource %v: %w", k, err)
 		}
-		mgr.Logger().Infof("Updated resource %v config from file.", k)
+		mgr.Logger().Info("Updated resource %v config from file.", k)
 	}
 	for k := range unaccounted {
 		r.resourceSources.removeOwnedRateLimit(ctx, k, path, mgr)
@@ -320,10 +326,10 @@ func (r *Reader) applyResourceChanges(path string, mgr bundle.NewManagement, cur
 	for k, v := range currentInfo.caches {
 		delete(unaccounted, k)
 		if err := mgr.StoreCache(ctx, k, *v); err != nil {
-			mgr.Logger().Errorf("Failed to update resource %v: %v", k, err)
+			mgr.Logger().Error("Failed to update resource %v: %v", k, err)
 			return fmt.Errorf("resource %v: %w", k, err)
 		}
-		mgr.Logger().Infof("Updated resource %v config from file.", k)
+		mgr.Logger().Info("Updated resource %v config from file.", k)
 	}
 	for k := range unaccounted {
 		r.resourceSources.removeOwnedCache(ctx, k, path, mgr)
@@ -336,10 +342,10 @@ func (r *Reader) applyResourceChanges(path string, mgr bundle.NewManagement, cur
 	for k, v := range currentInfo.processors {
 		delete(unaccounted, k)
 		if err := mgr.StoreProcessor(ctx, k, *v); err != nil {
-			mgr.Logger().Errorf("Failed to update resource %v: %v", k, err)
+			mgr.Logger().Error("Failed to update resource %v: %v", k, err)
 			return fmt.Errorf("resource %v: %w", k, err)
 		}
-		mgr.Logger().Infof("Updated resource %v config from file.", k)
+		mgr.Logger().Info("Updated resource %v config from file.", k)
 	}
 	for k := range unaccounted {
 		r.resourceSources.removeOwnedProcessor(ctx, k, path, mgr)
@@ -352,10 +358,10 @@ func (r *Reader) applyResourceChanges(path string, mgr bundle.NewManagement, cur
 	for k, v := range currentInfo.inputs {
 		delete(unaccounted, k)
 		if err := mgr.StoreInput(ctx, k, *v); err != nil {
-			mgr.Logger().Errorf("Failed to update resource %v: %v", k, err)
+			mgr.Logger().Error("Failed to update resource %v: %v", k, err)
 			return fmt.Errorf("resource %v: %w", k, err)
 		}
-		mgr.Logger().Infof("Updated resource %v config from file.", k)
+		mgr.Logger().Info("Updated resource %v config from file.", k)
 	}
 	for k := range unaccounted {
 		r.resourceSources.removeOwnedInput(ctx, k, path, mgr)
@@ -368,10 +374,10 @@ func (r *Reader) applyResourceChanges(path string, mgr bundle.NewManagement, cur
 	for k, v := range currentInfo.outputs {
 		delete(unaccounted, k)
 		if err := mgr.StoreOutput(ctx, k, *v); err != nil {
-			mgr.Logger().Errorf("Failed to update resource %v: %v", k, err)
+			mgr.Logger().Error("Failed to update resource %v: %v", k, err)
 			return fmt.Errorf("resource %v: %w", k, err)
 		}
-		mgr.Logger().Infof("Updated resource %v config from file.", k)
+		mgr.Logger().Info("Updated resource %v config from file.", k)
 	}
 	for k := range unaccounted {
 		r.resourceSources.removeOwnedOutput(ctx, k, path, mgr)

@@ -39,7 +39,7 @@ This behaviour is the default and free of caveats, which also makes deploying an
 
 ## Supported Sources & Sinks
 
-AWS (DynamoDB, Kinesis, S3, SQS, SNS), Azure (Blob storage, Queue storage, Table storage), GCP (Pub/Sub, Cloud storage, Big query), Kafka, NATS (JetStream, Streaming), NSQ, MQTT, AMQP 0.91 (RabbitMQ), AMQP 1, Redis (streams, list, pubsub, hashes), Cassandra, Elasticsearch, HDFS, HTTP (server and client, including websockets), MongoDB, SQL (MySQL, PostgreSQL, Clickhouse, MSSQL), and [many][input-categories] [more][output-categories].
+AWS (DynamoDB, Kinesis, S3, SQS, SNS), Azure (Blob storage, Queue storage, Table storage), GCP (Pub/Sub, Cloud storage, Big query), Kafka, NATS (JetStream, Streaming), NSQ, MQTT, AMQP 0.91 (RabbitMQ), AMQP 1, Redis (streams, list, pubsub, hashes), Cassandra, Elasticsearch, HDFS, HTTP (server and client, including websockets), MongoDB, SQL (MySQL, PostgreSQL, Clickhouse, MSSQL), and [you know what just click here to see them all, they don't fit in a README][about-categories].
 
 Connectors are being added constantly, if something you want is missing then [open an issue](https://github.com/benthosdev/benthos/issues/new).
 
@@ -50,6 +50,10 @@ If you want to dive fully into Benthos then don't waste your time in this dump, 
 For guidance on how to configure more advanced stream processing concepts such as stream joins, enrichment workflows, etc, check out the [cookbooks section.][cookbooks]
 
 For guidance on building your own custom plugins in Go check out [the public APIs.][godoc-url]
+
+## Visual Interface
+
+Do you like looking at stuff? Get angry and smash things when you're forced to read? If you're looking for a visual interface for Benthos check out [Benthos Studio][benthos-studio], it's a config builder, linter, and deployment management solution all baked into a single application.
 
 ## Install
 
@@ -103,11 +107,11 @@ Benthos serves two HTTP endpoints for health checks:
 
 ### Metrics
 
-Benthos [exposes lots of metrics][metrics] either to Statsd, Prometheus or for debugging purposes an HTTP endpoint that returns a JSON formatted object.
+Benthos [exposes lots of metrics][metrics] either to Statsd, Prometheus, a JSON HTTP endpoint, [and more][metrics].
 
 ### Tracing
 
-Benthos also [emits tracing events][tracers] to a tracer of your choice (currently only [Jaeger][jaeger] is supported) which can be used to visualise the processors within a pipeline.
+Benthos also [emits open telemetry tracing events][tracers], which can be used to visualise the processors within a pipeline.
 
 ## Configuration
 
@@ -174,8 +178,7 @@ docker run --rm \
 Contributions are welcome, please [read the guidelines](CONTRIBUTING.md), come and chat (links are on the [community page][community]), and watch your back.
 
 [inputs]: https://www.benthos.dev/docs/components/inputs/about
-[input-categories]: https://www.benthos.dev/docs/components/inputs/about#categories
-[output-categories]: https://www.benthos.dev/docs/components/outputs/about#categories
+[about-categories]: https://www.benthos.dev/docs/about#components
 [processors]: https://www.benthos.dev/docs/components/processors/about
 [outputs]: https://www.benthos.dev/docs/components/outputs/about
 [metrics]: https://www.benthos.dev/docs/components/metrics/about
@@ -191,6 +194,7 @@ Contributions are welcome, please [read the guidelines](CONTRIBUTING.md), come a
 [releases]: https://github.com/benthosdev/benthos/releases
 [plugin-repo]: https://github.com/benthosdev/benthos-plugin-example
 [getting-started]: https://www.benthos.dev/docs/guides/getting_started
+[benthos-studio]: https://studio.benthos.dev
 
 [godoc-badge]: https://pkg.go.dev/badge/github.com/benthosdev/benthos/v4/public
 [godoc-url]: https://pkg.go.dev/github.com/benthosdev/benthos/v4/public

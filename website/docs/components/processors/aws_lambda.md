@@ -31,7 +31,7 @@ Introduced in version 3.36.0.
 label: ""
 aws_lambda:
   parallel: false
-  function: ""
+  function: "" # No default (required)
 ```
 
 </TabItem>
@@ -42,7 +42,7 @@ aws_lambda:
 label: ""
 aws_lambda:
   parallel: false
-  function: ""
+  function: "" # No default (required)
   rate_limit: ""
   region: ""
   endpoint: ""

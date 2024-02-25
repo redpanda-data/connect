@@ -30,27 +30,49 @@ func init() {
 	if err := bloblang.RegisterFunctionV2("env",
 		bloblang.NewPluginSpec().
 			Impure().
-			Static().
+			StaticWithFunc(func(args *bloblang.ParsedParams) bool {
+				noCache, _ := args.GetBool("no_cache")
+				return !noCache
+			}).
 			Category(query.FunctionCategoryEnvironment).
 			Description("Returns the value of an environment variable, or `null` if the environment variable does not exist.").
-			Param(bloblang.NewStringParam("name").Description("The name of an environment variable.")).
+			Param(bloblang.NewStringParam("name").
+				Description("The name of an environment variable.")).
+			Param(bloblang.NewBoolParam("no_cache").
+				Description("Force the variable lookup to occur for each mapping invocation.").
+				Default(false)).
 			Example("", `root.thing.key = env("key").or("default value")`).
+			Example("", `root.thing.key = env(this.thing.key_name)`).
 			Example(
-				"When the argument is static this function will only resolve once and yield the same result for each invocation as an optimisation, this means that updates to env vars during runtime will not be reflected. You can work around this optimisation by using variables as the argument as this will force a new evaluation for each execution of the mapping.", `let env_key = "key"
-root.thing.key = env($env_key).or("default_value")`),
+				"When the name parameter is static this function will only resolve once and yield the same result for each invocation as an optimisation, this means that updates to env vars during runtime will not be reflected. You can disable this cache with the optional parameter `no_cache`, which when set to `true` will cause the variable lookup to be performed for each execution of the mapping.",
+				`root.thing.key = env(name: "key", no_cache: true)`,
+			),
 		func(args *bloblang.ParsedParams) (bloblang.Function, error) {
 			name, err := args.GetString("name")
 			if err != nil {
 				return nil, err
 			}
 
-			var value any
-			if valueStr, exists := os.LookupEnv(name); exists {
-				value = valueStr
+			noCache, err := args.GetBool("no_cache")
+			if err != nil {
+				return nil, err
+			}
+
+			var cachedValue any
+			if !noCache {
+				if valueStr, exists := os.LookupEnv(name); exists {
+					cachedValue = valueStr
+				}
 			}
 
 			return func() (any, error) {
-				return value, nil
+				if noCache {
+					if valueStr, exists := os.LookupEnv(name); exists {
+						return valueStr, nil
+					}
+					return nil, nil
+				}
+				return cachedValue, nil
 			}, nil
 		},
 	); err != nil {
@@ -60,17 +82,24 @@ root.thing.key = env($env_key).or("default_value")`),
 	if err := bloblang.RegisterFunctionV2("file",
 		bloblang.NewPluginSpec().
 			Impure().
-			Static().
+			StaticWithFunc(func(args *bloblang.ParsedParams) bool {
+				noCache, _ := args.GetBool("no_cache")
+				return !noCache
+			}).
 			Category(query.FunctionCategoryEnvironment).
-			Description("Reads a file and returns its contents. Relative paths are resolved from the directory of the process executing the mapping.").
-			Param(bloblang.NewStringParam("path").Description("The path of the target file.")).
+			Description("Reads a file and returns its contents. Relative paths are resolved from the directory of the process executing the mapping. In order to read files relative to the mapping file use the newer [`file_rel` function](#file_rel)").
+			Param(bloblang.NewStringParam("path").
+				Description("The path of the target file.")).
+			Param(bloblang.NewBoolParam("no_cache").
+				Description("Force the file to be read for each mapping invocation.").
+				Default(false)).
 			Example("", `root.doc = file(env("BENTHOS_TEST_BLOBLANG_FILE")).parse_json()`, [2]string{
 				`{}`,
 				`{"doc":{"foo":"bar"}}`,
 			}).
 			Example(
-				"When the argument is static this function will only resolve once and yield the same result for each invocation as an optimisation, this means that updates to files during runtime will not be reflected. You can work around this optimisation by using variables as the argument as this will force a new file read for each execution of the mapping.", `let env_key = "BENTHOS_TEST_BLOBLANG_FILE"
-root.doc = file(env($env_key)).parse_json()`,
+				"When the path parameter is static this function will only read the specified file once and yield the same result for each invocation as an optimisation, this means that updates to files during runtime will not be reflected. You can disable this cache with the optional parameter `no_cache`, which when set to `true` will cause the file to be read for each execution of the mapping.",
+				`root.doc = file(path: env("BENTHOS_TEST_BLOBLANG_FILE"), no_cache: true).parse_json()`,
 				[2]string{`{}`, `{"doc":{"foo":"bar"}}`},
 			),
 		func(args *bloblang.ParsedParams) (bloblang.Function, error) {
@@ -79,14 +108,76 @@ root.doc = file(env($env_key)).parse_json()`,
 				return nil, err
 			}
 
-			// TODO: Obtain FS from bloblang environment.
-			pathBytes, err := os.ReadFile(path)
+			noCache, err := args.GetBool("no_cache")
 			if err != nil {
 				return nil, err
 			}
 
+			var cachedPathBytes []byte
+			if !noCache {
+				// TODO: Obtain FS from bloblang environment.
+				if cachedPathBytes, err = os.ReadFile(path); err != nil {
+					return nil, err
+				}
+			}
+
 			return func() (any, error) {
-				return pathBytes, nil
+				if noCache {
+					return os.ReadFile(path)
+				}
+				return cachedPathBytes, nil
+			}, nil
+		},
+	); err != nil {
+		panic(err)
+	}
+
+	if err := bloblang.RegisterFunctionV2("file_rel",
+		bloblang.NewPluginSpec().
+			Impure().
+			StaticWithFunc(func(args *bloblang.ParsedParams) bool {
+				noCache, _ := args.GetBool("no_cache")
+				return !noCache
+			}).
+			Category(query.FunctionCategoryEnvironment).
+			Description("Reads a file and returns its contents. Relative paths are resolved from the directory of the mapping.").
+			Param(bloblang.NewStringParam("path").
+				Description("The path of the target file.")).
+			Param(bloblang.NewBoolParam("no_cache").
+				Description("Force the file to be read for each mapping invocation.").
+				Default(false)).
+			Example("", `root.doc = file_rel(env("BENTHOS_TEST_BLOBLANG_FILE")).parse_json()`, [2]string{
+				`{}`,
+				`{"doc":{"foo":"bar"}}`,
+			}).
+			Example(
+				"When the path parameter is static this function will only read the specified file once and yield the same result for each invocation as an optimisation, this means that updates to files during runtime will not be reflected. You can disable this cache with the optional parameter `no_cache`, which when set to `true` will cause the file to be read for each execution of the mapping.",
+				`root.doc = file_rel(path: env("BENTHOS_TEST_BLOBLANG_FILE"), no_cache: true).parse_json()`,
+				[2]string{`{}`, `{"doc":{"foo":"bar"}}`},
+			),
+		func(args *bloblang.ParsedParams) (bloblang.Function, error) {
+			path, err := args.GetString("path")
+			if err != nil {
+				return nil, err
+			}
+
+			noCache, err := args.GetBool("no_cache")
+			if err != nil {
+				return nil, err
+			}
+
+			var cachedPathBytes []byte
+			if !noCache {
+				if cachedPathBytes, err = args.ImportFile(path); err != nil {
+					return nil, err
+				}
+			}
+
+			return func() (any, error) {
+				if noCache {
+					return args.ImportFile(path)
+				}
+				return cachedPathBytes, nil
 			}, nil
 		},
 	); err != nil {

@@ -14,7 +14,6 @@ categories: ["Utility"]
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-
 The switch output type allows you to route messages to different outputs based on their contents.
 
 
@@ -31,7 +30,7 @@ output:
   label: ""
   switch:
     retry_until_success: false
-    cases: []
+    cases: [] # No default (required)
 ```
 
 </TabItem>
@@ -44,13 +43,13 @@ output:
   switch:
     retry_until_success: false
     strict_mode: false
-    cases: []
+    cases: [] # No default (required)
 ```
 
 </TabItem>
 </Tabs>
 
-Messages must successfully route to one or more outputs, otherwise this is considered an error and the message is reprocessed. In order to explicitly drop messages that do not match your cases add one final case with a [drop output](/docs/components/outputs/drop).
+Messages that do not pass the check of a single output case are effectively dropped. In order to prevent this outcome set the field [`strict_mode`](#strict_mode) to `true`, in which case messages that do not pass at least one case are considered failed and will be nacked and/or reprocessed depending on your input.
 
 ## Examples
 
@@ -73,7 +72,7 @@ output:
       - check: this.type == "foo"
         output:
           amqp_1:
-            url: amqps://guest:guest@localhost:5672/
+            urls: [ amqps://guest:guest@localhost:5672/ ]
             target_address: queue:/the_foos
 
       - check: this.type == "bar"
@@ -107,7 +106,7 @@ output:
       - check: 'this.user.interests.contains("walks").catch(false)'
         output:
           amqp_1:
-            url: amqps://guest:guest@localhost:5672/
+            urls: [ amqps://guest:guest@localhost:5672/ ]
             target_address: queue:/people_what_think_good
         continue: true
 
@@ -125,12 +124,9 @@ output:
 
 ### `retry_until_success`
 
-If a selected output fails to send a message this field determines whether it is
-reattempted indefinitely. If set to false the error is instead propagated back
-to the input level.
+If a selected output fails to send a message this field determines whether it is reattempted indefinitely. If set to false the error is instead propagated back to the input level.
 
-If a message can be routed to >1 outputs it is usually best to set this to true
-in order to avoid duplicate messages being routed to an output.
+If a message can be routed to >1 outputs it is usually best to set this to true in order to avoid duplicate messages being routed to an output.
 
 
 Type: `bool`  
@@ -138,9 +134,7 @@ Default: `false`
 
 ### `strict_mode`
 
-This field determines whether an error should be reported if no condition is met.
-If set to true, an error is propagated back to the input level. The default
-behavior is false, which will drop the message.
+This field determines whether an error should be reported if no condition is met. If set to true, an error is propagated back to the input level. The default behavior is false, which will drop the message.
 
 
 Type: `bool`  
@@ -152,7 +146,6 @@ A list of switch cases, outlining outputs that can be routed to.
 
 
 Type: `array`  
-Default: `[]`  
 
 ```yml
 # Examples
@@ -192,7 +185,6 @@ An [output](/docs/components/outputs/about/) for messages that pass the check to
 
 
 Type: `output`  
-Default: `{}`  
 
 ### `cases[].continue`
 

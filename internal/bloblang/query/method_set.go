@@ -6,19 +6,22 @@ import (
 	"sort"
 )
 
+type methodDetails struct {
+	ctor MethodCtor
+	spec MethodSpec
+}
+
 // MethodSet contains an explicit set of methods to be available in a Bloblang
 // query.
 type MethodSet struct {
 	disableCtors bool
-	constructors map[string]MethodCtor
-	specs        map[string]MethodSpec
+	methods      map[string]methodDetails
 }
 
 // NewMethodSet creates a method set without any methods in it.
 func NewMethodSet() *MethodSet {
 	return &MethodSet{
-		constructors: map[string]MethodCtor{},
-		specs:        map[string]MethodSpec{},
+		methods: map[string]methodDetails{},
 	}
 }
 
@@ -32,16 +35,15 @@ func (m *MethodSet) Add(spec MethodSpec, ctor MethodCtor) error {
 	if err := spec.Params.validate(); err != nil {
 		return err
 	}
-	m.constructors[spec.Name] = ctor
-	m.specs[spec.Name] = spec
+	m.methods[spec.Name] = methodDetails{ctor: ctor, spec: spec}
 	return nil
 }
 
 // Docs returns a slice of method specs, which document each method.
 func (m *MethodSet) Docs() []MethodSpec {
-	specSlice := make([]MethodSpec, 0, len(m.specs))
-	for _, v := range m.specs {
-		specSlice = append(specSlice, v)
+	specSlice := make([]MethodSpec, 0, len(m.methods))
+	for _, v := range m.methods {
+		specSlice = append(specSlice, v.spec)
 	}
 	sort.Slice(specSlice, func(i, j int) bool {
 		return specSlice[i].Name < specSlice[j].Name
@@ -51,24 +53,24 @@ func (m *MethodSet) Docs() []MethodSpec {
 
 // Params attempts to obtain an argument specification for a given method type.
 func (m *MethodSet) Params(name string) (Params, error) {
-	spec, exists := m.specs[name]
+	details, exists := m.methods[name]
 	if !exists {
 		return VariadicParams(), badMethodErr(name)
 	}
-	return spec.Params, nil
+	return details.spec.Params, nil
 }
 
 // Init attempts to initialize a method of the set by name from a target
 // function and zero or more arguments.
 func (m *MethodSet) Init(name string, target Function, args *ParsedParams) (Function, error) {
-	ctor, exists := m.constructors[name]
+	details, exists := m.methods[name]
 	if !exists {
 		return nil, badMethodErr(name)
 	}
 	if m.disableCtors {
 		return disabledMethod(name), nil
 	}
-	return wrapMethodCtorWithDynamicArgs(name, target, args, ctor)
+	return wrapMethodCtorWithDynamicArgs(name, target, args, details.ctor)
 }
 
 // Without creates a clone of the method set that can be mutated in isolation,
@@ -79,29 +81,22 @@ func (m *MethodSet) Without(methods ...string) *MethodSet {
 		excludeMap[k] = struct{}{}
 	}
 
-	constructors := make(map[string]MethodCtor, len(m.constructors))
-	for k, v := range m.constructors {
+	details := make(map[string]methodDetails, len(m.methods))
+	for k, v := range m.methods {
 		if _, exists := excludeMap[k]; !exists {
-			constructors[k] = v
+			details[k] = v
 		}
 	}
-
-	specs := map[string]MethodSpec{}
-	for _, v := range m.specs {
-		if _, exists := excludeMap[v.Name]; !exists {
-			specs[v.Name] = v
-		}
-	}
-	return &MethodSet{disableCtors: m.disableCtors, constructors: constructors, specs: specs}
+	return &MethodSet{disableCtors: m.disableCtors, methods: details}
 }
 
 // OnlyPure creates a clone of the methods set that can be mutated in isolation,
 // where all impure methods are removed.
 func (m *MethodSet) OnlyPure() *MethodSet {
 	var excludes []string
-	for _, v := range m.specs {
-		if v.Impure {
-			excludes = append(excludes, v.Name)
+	for _, v := range m.methods {
+		if v.spec.Impure {
+			excludes = append(excludes, v.spec.Name)
 		}
 	}
 	return m.Without(excludes...)
@@ -138,11 +133,11 @@ func registerMethod(spec MethodSpec, ctor MethodCtor) struct{} {
 // InitMethodHelper attempts to initialise a method by its name, target function
 // and arguments, this is convenient for writing tests.
 func InitMethodHelper(name string, target Function, args ...any) (Function, error) {
-	spec, ok := AllMethods.specs[name]
+	details, ok := AllMethods.methods[name]
 	if !ok {
 		return nil, badMethodErr(name)
 	}
-	parsedArgs, err := spec.Params.PopulateNameless(args...)
+	parsedArgs, err := details.spec.Params.PopulateNameless(args...)
 	if err != nil {
 		return nil, err
 	}

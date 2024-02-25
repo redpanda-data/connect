@@ -2,7 +2,9 @@ package amqp1
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"strings"
 	"sync"
 
 	"github.com/Azure/go-amqp"
@@ -29,7 +31,16 @@ This output benefits from sending multiple messages in flight in parallel for im
 			service.NewURLField(urlField).
 				Description("A URL to connect to.").
 				Example("amqp://localhost:5672/").
-				Example("amqps://guest:guest@localhost:5672/"),
+				Example("amqps://guest:guest@localhost:5672/").
+				Deprecated().
+				Optional(),
+			service.NewURLListField(urlsField).
+				Description("A list of URLs to connect to. The first URL to successfully establish a connection will be used until the connection is closed. If an item of the list contains commas it will be expanded into multiple URLs.").
+				Example([]string{"amqp://guest:guest@127.0.0.1:5672/"}).
+				Example([]string{"amqp://127.0.0.1:5672/,amqp://127.0.0.2:5672/"}).
+				Example([]string{"amqp://127.0.0.1:5672/", "amqp://127.0.0.2:5672/"}).
+				Optional().
+				Version("4.23.0"),
 			service.NewStringField(targetAddrField).
 				Description("The target address to write to.").
 				Example("/foo").
@@ -44,7 +55,11 @@ This output benefits from sending multiple messages in flight in parallel for im
 			saslFieldSpec(),
 			service.NewMetadataExcludeFilterField(metaFilterField).
 				Description("Specify criteria for which metadata values are attached to messages as headers."),
-		)
+		).LintRule(`
+root = if this.url.or("") == "" && this.urls.or([]).length() == 0 {
+  "field 'urls' must be set"
+}
+`)
 }
 
 func init() {
@@ -68,15 +83,15 @@ func init() {
 }
 
 type amqp1Writer struct {
-	client  *amqp.Client
+	client  *amqp.Conn
 	session *amqp.Session
 	sender  *amqp.Sender
 
-	url                      string
+	urls                     []string
 	targetAddr               string
 	metaFilter               *service.MetadataExcludeFilter
 	applicationPropertiesMap *bloblang.Executor
-	connOpts                 []amqp.ConnOption
+	connOpts                 *amqp.ConnOptions
 
 	log      *service.Logger
 	connLock sync.RWMutex
@@ -84,19 +99,38 @@ type amqp1Writer struct {
 
 func amqp1WriterFromParsed(conf *service.ParsedConfig, mgr *service.Resources) (*amqp1Writer, error) {
 	a := amqp1Writer{
-		log: mgr.Logger(),
+		log:      mgr.Logger(),
+		connOpts: &amqp.ConnOptions{},
 	}
 
-	var err error
-	if a.url, err = conf.FieldString(urlField); err != nil {
+	urlStrs, err := conf.FieldStringList(urlsField)
+	if err != nil {
 		return nil, err
+	}
+
+	for _, u := range urlStrs {
+		for _, splitURL := range strings.Split(u, ",") {
+			if trimmed := strings.TrimSpace(splitURL); len(trimmed) > 0 {
+				a.urls = append(a.urls, trimmed)
+			}
+		}
+	}
+
+	if len(a.urls) == 0 {
+		singleURL, err := conf.FieldString(urlField)
+		if err != nil {
+			err = errors.New("at least one url must be specified")
+			return nil, err
+		}
+
+		a.urls = []string{singleURL}
 	}
 
 	if a.targetAddr, err = conf.FieldString(targetAddrField); err != nil {
 		return nil, err
 	}
 
-	if a.connOpts, err = saslOptFnsFromParsed(conf); err != nil {
+	if err := saslOptFnsFromParsed(conf, a.connOpts); err != nil {
 		return nil, err
 	}
 
@@ -105,7 +139,7 @@ func amqp1WriterFromParsed(conf *service.ParsedConfig, mgr *service.Resources) (
 		return nil, err
 	}
 	if enabled {
-		a.connOpts = append(a.connOpts, amqp.ConnTLS(true), amqp.ConnTLSConfig(tlsConf))
+		a.connOpts.TLSConfig = tlsConf
 	}
 
 	if conf.Contains(appPropsMapField) {
@@ -129,26 +163,24 @@ func (a *amqp1Writer) Connect(ctx context.Context) (err error) {
 	}
 
 	var (
-		client  *amqp.Client
+		client  *amqp.Conn
 		session *amqp.Session
 		sender  *amqp.Sender
 	)
 
 	// Create client
-	if client, err = amqp.Dial(a.url, a.connOpts...); err != nil {
-		return
+	if client, err = a.reDial(ctx, a.urls); err != nil {
+		return err
 	}
 
 	// Open a session
-	if session, err = client.NewSession(); err != nil {
+	if session, err = client.NewSession(ctx, nil); err != nil {
 		_ = client.Close()
 		return
 	}
 
 	// Create a sender
-	if sender, err = session.NewSender(
-		amqp.LinkTargetAddress(a.targetAddr),
-	); err != nil {
+	if sender, err = session.NewSender(ctx, a.targetAddr, nil); err != nil {
 		_ = session.Close(ctx)
 		_ = client.Close()
 		return
@@ -237,15 +269,11 @@ func (a *amqp1Writer) Write(ctx context.Context, msg *service.Message) error {
 		return nil
 	})
 
-	if err = s.Send(ctx, m); err != nil {
-		if err == amqp.ErrTimeout || ctx.Err() != nil {
+	if err = s.Send(ctx, m, nil); err != nil {
+		if ctx.Err() != nil {
 			err = component.ErrTimeout
 		} else {
-			if dErr, isDetachError := err.(*amqp.DetachError); isDetachError && dErr.RemoteError != nil {
-				a.log.Errorf("Lost connection due to: %v\n", dErr.RemoteError)
-			} else {
-				a.log.Errorf("Lost connection due to: %v\n", err)
-			}
+			a.log.Errorf("Lost connection due to: %v\n", err)
 			_ = a.disconnect(ctx)
 			err = service.ErrNotConnected
 		}
@@ -255,4 +283,24 @@ func (a *amqp1Writer) Write(ctx context.Context, msg *service.Message) error {
 
 func (a *amqp1Writer) Close(ctx context.Context) error {
 	return a.disconnect(ctx)
+}
+
+// reDial connection to amqp with one or more fallback URLs.
+func (a *amqp1Writer) reDial(ctx context.Context, urls []string) (conn *amqp.Conn, err error) {
+	for i, url := range urls {
+		conn, err = amqp.Dial(ctx, url, a.connOpts)
+		if err != nil {
+			a.log.With("error", err).Warnf("unable to connect to url %q #%d, trying next", url, i)
+
+			continue
+		}
+
+		a.log.Tracef("successful connection to use %q #%d", url, i)
+
+		return conn, nil
+	}
+
+	a.log.With("error", err).Tracef("unable to connect to any of %d urls, return error", len(a.urls))
+
+	return nil, err
 }

@@ -3,6 +3,7 @@ package interop
 import (
 	"context"
 
+	"github.com/benthosdev/benthos/v4/internal/batch/policy"
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/input"
@@ -57,6 +58,16 @@ func (u *UnwrapInternalInput) Close(ctx context.Context) error {
 
 //------------------------------------------------------------------------------
 
+// UnwrapOwnedProcessor attempts to unwrap a public owned component into an
+// internal variant. This is useful in cases where we're migrating internal
+// components to use the public configuration APIs but aren't quite ready to
+// move the full implementation yet.
+func UnwrapOwnedProcessor(o *service.OwnedProcessor) processor.V1 {
+	return o.XUnwrapper().(interface {
+		Unwrap() processor.V1
+	}).Unwrap()
+}
+
 // UnwrapInternalBatchProcessor is a no-op implementation of an internal
 // component that allows a public/service environment to unwrap it straight into
 // the needed format during construction. This is useful in cases where we're
@@ -88,6 +99,16 @@ func (u *UnwrapInternalBatchProcessor) Close(ctx context.Context) error {
 }
 
 //------------------------------------------------------------------------------
+
+// UnwrapOwnedOutput attempts to unwrap a public owned component into an internal
+// variant. This is useful in cases where we're migrating internal components to
+// use the public configuration APIs but aren't quite ready to move the full
+// implementation yet.
+func UnwrapOwnedOutput(o *service.OwnedOutput) output.Streamed {
+	return o.XUnwrapper().(interface {
+		Unwrap() output.Streamed
+	}).Unwrap()
+}
 
 // UnwrapInternalOutput is a no-op implementation of an internal component that
 // allows a public/service environment to unwrap it straight into the needed
@@ -131,5 +152,14 @@ func (u *UnwrapInternalOutput) Close(ctx context.Context) error {
 func UnwrapManagement(r *service.Resources) bundle.NewManagement {
 	return r.XUnwrapper().(interface {
 		Unwrap() bundle.NewManagement
+	}).Unwrap()
+}
+
+// UnwrapBatcher unwraps a public *service.Batcher type into an internal
+// *policy.Batcher type. This solution will eventually be phased out as it is
+// only used for migrating components.
+func UnwrapBatcher(b *service.Batcher) *policy.Batcher {
+	return b.XUnwrapper().(interface {
+		Unwrap() *policy.Batcher
 	}).Unwrap()
 }

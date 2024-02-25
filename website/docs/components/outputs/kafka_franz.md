@@ -34,10 +34,10 @@ Introduced in version 3.61.0.
 output:
   label: ""
   kafka_franz:
-    seed_brokers: []
-    topic: ""
-    key: ""
-    partition: ""
+    seed_brokers: [] # No default (required)
+    topic: "" # No default (required)
+    key: "" # No default (optional)
+    partition: ${! meta("partition") } # No default (optional)
     metadata:
       include_prefixes: []
       include_patterns: []
@@ -57,11 +57,14 @@ output:
 output:
   label: ""
   kafka_franz:
-    seed_brokers: []
-    topic: ""
-    key: ""
-    partitioner: ""
-    partition: ""
+    seed_brokers: [] # No default (required)
+    topic: "" # No default (required)
+    key: "" # No default (optional)
+    partitioner: "" # No default (optional)
+    partition: ${! meta("partition") } # No default (optional)
+    client_id: benthos
+    rack_id: ""
+    idempotent_write: true
     metadata:
       include_prefixes: []
       include_patterns: []
@@ -72,9 +75,9 @@ output:
       byte_size: 0
       period: ""
       check: ""
-      processors: []
+      processors: [] # No default (optional)
     max_message_bytes: 1MB
-    compression: ""
+    compression: "" # No default (optional)
     tls:
       enabled: false
       skip_cert_verify: false
@@ -82,7 +85,7 @@ output:
       root_cas: ""
       root_cas_file: ""
       client_certs: []
-    sasl: []
+    sasl: [] # No default (optional)
 ```
 
 </TabItem>
@@ -160,6 +163,30 @@ Type: `string`
 
 partition: ${! meta("partition") }
 ```
+
+### `client_id`
+
+An identifier for the client connection.
+
+
+Type: `string`  
+Default: `"benthos"`  
+
+### `rack_id`
+
+A rack identifier for this client.
+
+
+Type: `string`  
+Default: `""`  
+
+### `idempotent_write`
+
+Enable the idempotent write producer option. This requires the `IDEMPOTENT_WRITE` permission on `CLUSTER` and can be disabled if this permission is not available.
+
+
+Type: `bool`  
+Default: `true`  
 
 ### `metadata`
 
@@ -416,6 +443,7 @@ A list of client certificates to use. For each certificate either the fields `ce
 
 
 Type: `array`  
+Default: `[]`  
 
 ```yml
 # Examples

@@ -13,6 +13,8 @@ const (
 	metaKVDelta     = "nats_kv_delta"
 	metaKVOperation = "nats_kv_operation"
 	metaKVCreated   = "nats_kv_created"
+
+	tracingVersion = "4.23.0"
 )
 
 func newMessageFromKVEntry(entry nats.KeyValueEntry) *service.Message {
@@ -25,4 +27,16 @@ func newMessageFromKVEntry(entry nats.KeyValueEntry) *service.Message {
 	msg.MetaSetMut(metaKVCreated, entry.Created())
 
 	return msg
+}
+
+func ConnectionNameDescription() string {
+	return `### Connection Name
+
+When monitoring and managing a production NATS system, it is often useful to
+know which connection a message was send/received from. This can be achieved by
+setting the connection name option when creating a NATS connection.
+
+Benthos will automatically set the connection name based off the label of the given
+NATS component, so that monitoring tools between NATS and benthos can stay in sync.
+`
 }

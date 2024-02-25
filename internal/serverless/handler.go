@@ -7,7 +7,7 @@ import (
 	"os"
 	"time"
 
-	"go.opentelemetry.io/otel/trace"
+	"go.opentelemetry.io/otel/trace/noop"
 
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
@@ -119,15 +119,15 @@ func NewHandler(conf config.Type) (*Handler, error) {
 	// Create our metrics type.
 	var stats *metrics.Namespaced
 	if stats, err = bundle.AllMetrics.Init(conf.Metrics, tmpMgr); err != nil {
-		logger.Errorf("Failed to connect metrics aggregator: %v\n", err)
+		logger.Error("Failed to connect metrics aggregator: %v\n", err)
 		stats = metrics.NewNamespaced(metrics.Noop())
 	}
 
 	// Create our tracer type.
 	trac, err := bundle.AllTracers.Init(conf.Tracer, tmpMgr)
 	if err != nil {
-		logger.Errorf("Failed to initialise tracer: %v\n", err)
-		trac = trace.NewNoopTracerProvider()
+		logger.Error("Failed to initialise tracer: %v\n", err)
+		trac = noop.NewTracerProvider()
 	}
 
 	// Create resource manager.
@@ -190,11 +190,9 @@ func NewHandler(conf config.Type) (*Handler, error) {
 			}()
 
 			if sCloseErr := stats.Close(); sCloseErr != nil {
-				logger.Errorf("Failed to cleanly close metrics aggregator: %v\n", sCloseErr)
+				logger.Error("Failed to cleanly close metrics aggregator: %v\n", sCloseErr)
 			}
 			return nil
 		},
 	}, nil
 }
-
-//------------------------------------------------------------------------------

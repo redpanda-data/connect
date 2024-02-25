@@ -30,10 +30,10 @@ Introduced in version 3.65.0.
 # Common config fields, showing default values
 label: ""
 sql_raw:
-  driver: ""
-  dsn: ""
-  query: ""
-  args_mapping: ""
+  driver: "" # No default (required)
+  dsn: clickhouse://username:password@host1:9000,host2:9000/database?dial_timeout=200ms&max_execution_time=60 # No default (required)
+  query: INSERT INTO footable (foo, bar, baz) VALUES (?, ?, ?); # No default (required)
+  args_mapping: root = [ this.cat.meow, this.doc.woofs[0] ] # No default (optional)
   exec_only: false
 ```
 
@@ -44,18 +44,24 @@ sql_raw:
 # All config fields, showing default values
 label: ""
 sql_raw:
-  driver: ""
-  dsn: ""
-  query: ""
+  driver: "" # No default (required)
+  dsn: clickhouse://username:password@host1:9000,host2:9000/database?dial_timeout=200ms&max_execution_time=60 # No default (required)
+  query: INSERT INTO footable (foo, bar, baz) VALUES (?, ?, ?); # No default (required)
   unsafe_dynamic_query: false
-  args_mapping: ""
+  args_mapping: root = [ this.cat.meow, this.doc.woofs[0] ] # No default (optional)
   exec_only: false
-  init_files: []
-  init_statement: ""
-  conn_max_idle_time: ""
-  conn_max_life_time: ""
+  init_files: [] # No default (optional)
+  init_statement: | # No default (optional)
+    CREATE TABLE IF NOT EXISTS some_table (
+      foo varchar(50) not null,
+      bar integer,
+      baz varchar(50),
+      primary key (foo)
+    ) WITHOUT ROWID;
+  conn_max_idle_time: "" # No default (optional)
+  conn_max_life_time: "" # No default (optional)
   conn_max_idle: 2
-  conn_max_open: 0
+  conn_max_open: 0 # No default (optional)
 ```
 
 </TabItem>
@@ -114,7 +120,7 @@ A database [driver](#drivers) to use.
 
 
 Type: `string`  
-Options: `mysql`, `postgres`, `clickhouse`, `mssql`, `sqlite`, `oracle`, `snowflake`, `trino`.
+Options: `mysql`, `postgres`, `clickhouse`, `mssql`, `sqlite`, `oracle`, `snowflake`, `trino`, `gocosmos`.
 
 ### `dsn`
 
@@ -133,11 +139,14 @@ The following is a list of supported drivers, their placeholder style, and their
 | `sqlite` | `file:/path/to/filename.db[?param&=value1&...]` |
 | `oracle` | `oracle://[username[:password]@][netloc][:port]/service_name?server=server2&server=server3` |
 | `snowflake` | `username[:password]@account_identifier/dbname/schemaname[?param1=value&...&paramN=valueN]` |
-| `trino` | [`http[s]://user[:pass]@host[:port][?parameters]`](https://github.com/trinodb/trino-go-client#dsn-data-source-name)
+| `trino` | [`http[s]://user[:pass]@host[:port][?parameters]`](https://github.com/trinodb/trino-go-client#dsn-data-source-name) |
+| `gocosmos` | [`AccountEndpoint=<cosmosdb-endpoint>;AccountKey=<cosmosdb-account-key>[;TimeoutMs=<timeout-in-ms>][;Version=<cosmosdb-api-version>][;DefaultDb/Db=<db-name>][;AutoId=<true/false>][;InsecureSkipVerify=<true/false>]`](https://pkg.go.dev/github.com/microsoft/gocosmos#readme-example-usage) |
 
 Please note that the `postgres` driver enforces SSL by default, you can override this with the parameter `sslmode=disable` if required.
 
 The `snowflake` driver supports multiple DSN formats. Please consult [the docs](https://pkg.go.dev/github.com/snowflakedb/gosnowflake#hdr-Connection_String) for more details. For [key pair authentication](https://docs.snowflake.com/en/user-guide/key-pair-auth.html#configuring-key-pair-authentication), the DSN has the following format: `<snowflake_user>@<snowflake_account>/<db_name>/<schema_name>?warehouse=<warehouse>&role=<role>&authenticator=snowflake_jwt&privateKey=<base64_url_encoded_private_key>`, where the value for the `privateKey` parameter can be constructed from an unencrypted RSA private key file `rsa_key.p8` using `openssl enc -d -base64 -in rsa_key.p8 | basenc --base64url -w0` (you can use `gbasenc` insted of `basenc` on OSX if you install `coreutils` via Homebrew). If you have a password-encrypted private key, you can decrypt it using `openssl pkcs8 -in rsa_key_encrypted.p8 -out rsa_key.p8`. Also, make sure fields such as the username are URL-encoded.
+
+The [`gocosmos`](https://pkg.go.dev/github.com/microsoft/gocosmos) driver is still experimental, but it has support for [hierarchical partition keys](https://learn.microsoft.com/en-us/azure/cosmos-db/hierarchical-partition-keys) as well as [cross-partition queries](https://learn.microsoft.com/en-us/azure/cosmos-db/nosql/how-to-query-container#cross-partition-query). Please refer to the [SQL notes](https://github.com/microsoft/gocosmos/blob/main/SQL.md) for details.
 
 
 Type: `string`  
@@ -156,7 +165,7 @@ dsn: oracle://foouser:foopass@localhost:1521/service_name
 
 ### `query`
 
-The query to execute. The style of placeholder to use depends on the driver, some drivers require question marks (`?`) whereas others expect incrementing dollar signs (`$1`, `$2`, and so on). The style to use is outlined in this table:
+The query to execute. The style of placeholder to use depends on the driver, some drivers require question marks (`?`) whereas others expect incrementing dollar signs (`$1`, `$2`, and so on) or colons (`:1`, `:2` and so on). The style to use is outlined in this table:
 
 | Driver | Placeholder Style |
 |---|---|
@@ -168,6 +177,7 @@ The query to execute. The style of placeholder to use depends on the driver, som
 | `oracle` | Colon |
 | `snowflake` | Question mark |
 | `trino` | Question mark |
+| `gocosmos` | Colon |
 
 
 Type: `string`  
@@ -260,21 +270,21 @@ init_statement: |2
 
 ### `conn_max_idle_time`
 
-An optional maximum amount of time a connection may be idle. Expired connections may be closed lazily before reuse. If value <= 0, connections are not closed due to a connection's idle time.
+An optional maximum amount of time a connection may be idle. Expired connections may be closed lazily before reuse. If `value <= 0`, connections are not closed due to a connections idle time.
 
 
 Type: `string`  
 
 ### `conn_max_life_time`
 
-An optional maximum amount of time a connection may be reused. Expired connections may be closed lazily before reuse. If value <= 0, connections are not closed due to a connection's age.
+An optional maximum amount of time a connection may be reused. Expired connections may be closed lazily before reuse. If `value <= 0`, connections are not closed due to a connections age.
 
 
 Type: `string`  
 
 ### `conn_max_idle`
 
-An optional maximum number of connections in the idle connection pool. If conn_max_open is greater than 0 but less than the new conn_max_idle, then the new conn_max_idle will be reduced to match the conn_max_open limit. If value <= 0, no idle connections are retained. The default max idle connections is currently 2. This may change in a future release.
+An optional maximum number of connections in the idle connection pool. If conn_max_open is greater than 0 but less than the new conn_max_idle, then the new conn_max_idle will be reduced to match the conn_max_open limit. If `value <= 0`, no idle connections are retained. The default max idle connections is currently 2. This may change in a future release.
 
 
 Type: `int`  
@@ -282,7 +292,7 @@ Default: `2`
 
 ### `conn_max_open`
 
-An optional maximum number of open connections to the database. If conn_max_idle is greater than 0 and the new conn_max_open is less than conn_max_idle, then conn_max_idle will be reduced to match the new conn_max_open limit. If value <= 0, then there is no limit on the number of open connections. The default is 0 (unlimited).
+An optional maximum number of open connections to the database. If conn_max_idle is greater than 0 and the new conn_max_open is less than conn_max_idle, then conn_max_idle will be reduced to match the new conn_max_open limit. If `value <= 0`, then there is no limit on the number of open connections. The default is 0 (unlimited).
 
 
 Type: `int`  

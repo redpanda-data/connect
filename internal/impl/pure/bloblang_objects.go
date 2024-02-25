@@ -6,6 +6,7 @@ import (
 	"github.com/Jeffail/gabs/v2"
 
 	"github.com/benthosdev/benthos/v4/internal/bloblang/query"
+	"github.com/benthosdev/benthos/v4/internal/value"
 	"github.com/benthosdev/benthos/v4/public/bloblang"
 )
 
@@ -50,7 +51,7 @@ If a key within a nested path does not exist then it is ignored.`).
 		func(args *bloblang.ParsedParams) (bloblang.Method, error) {
 			includeList := make([][]string, 0, len(args.AsSlice()))
 			for i, argVal := range args.AsSlice() {
-				argStr, err := query.IGetString(argVal)
+				argStr, err := value.IGetString(argVal)
 				if err != nil {
 					return nil, fmt.Errorf("argument %v: %w", i, err)
 				}
@@ -81,7 +82,7 @@ If a key within a nested path does not exist then it is ignored.`).
 			for i, a := range argAnys {
 				var ok bool
 				if argSlices[i], ok = a.([]any); !ok {
-					return nil, query.NewTypeError(a, query.ValueArray)
+					return nil, value.NewTypeError(a, value.TArray)
 				}
 				tally += len(argSlices[i])
 			}
@@ -91,6 +92,55 @@ If a key within a nested path does not exist then it is ignored.`).
 				resSlice = append(resSlice, i...)
 				for _, s := range argSlices {
 					resSlice = append(resSlice, s...)
+				}
+				return resSlice, nil
+			}), nil
+		}); err != nil {
+		panic(err)
+	}
+
+	if err := bloblang.RegisterMethodV2("zip",
+		bloblang.NewPluginSpec().
+			Category(query.MethodCategoryObjectAndArray).
+			Variadic().
+			Description("Zip an array value with one or more argument arrays. Each array must match in length.").
+			Example("", `root.foo = this.foo.zip(this.bar, this.baz)`,
+				[2]string{
+					`{"foo":["a","b","c"],"bar":[1,2,3],"baz":[4,5,6]}`,
+					`{"foo":[["a",1,4],["b",2,5],["c",3,6]]}`,
+				},
+			),
+		func(args *bloblang.ParsedParams) (bloblang.Method, error) {
+			sizeError := fmt.Errorf("can't zip different length array values")
+			argError := fmt.Errorf("zip requires at least one argument")
+
+			argAnys := args.AsSlice()
+			argSlices := make([][]any, len(argAnys))
+			for i, a := range argAnys {
+				var ok bool
+				if argSlices[i], ok = a.([]any); !ok {
+					return nil, value.NewTypeError(a, value.TArray)
+				}
+				if len(argSlices[i]) != len(argSlices[0]) {
+					return nil, sizeError
+				}
+			}
+
+			return bloblang.ArrayMethod(func(i []any) (any, error) {
+				if len(argSlices) == 0 {
+					return nil, argError
+				}
+				if len(i) != len(argSlices[0]) {
+					return nil, sizeError
+				}
+				resSlice := make([]any, 0, len(i))
+				for offset, value := range i {
+					zipValue := make([]any, 0, len(argSlices)+1)
+					zipValue = append(zipValue, value)
+					for _, argSlice := range argSlices {
+						zipValue = append(zipValue, argSlice[offset])
+					}
+					resSlice = append(resSlice, zipValue)
 				}
 				return resSlice, nil
 			}), nil

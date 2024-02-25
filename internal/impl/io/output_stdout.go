@@ -2,60 +2,51 @@ package io
 
 import (
 	"context"
+	"io"
 	"os"
 
-	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/codec"
-	"github.com/benthosdev/benthos/v4/internal/component/output"
-	"github.com/benthosdev/benthos/v4/internal/component/output/processors"
-	"github.com/benthosdev/benthos/v4/internal/docs"
-	"github.com/benthosdev/benthos/v4/internal/message"
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
 func init() {
-	err := bundle.AllOutputs.Add(processors.WrapConstructor(func(conf output.Config, nm bundle.NewManagement) (output.Streamed, error) {
-		f, err := newStdoutWriter(conf.STDOUT.Codec)
-		if err != nil {
-			return nil, err
-		}
-		w, err := output.NewAsyncWriter("stdout", 1, f, nm)
-		if err != nil {
-			return nil, err
-		}
-		return w, nil
-	}), docs.ComponentSpec{
-		Name: "stdout",
-		Summary: `
-Prints messages to stdout as a continuous stream of data, dividing messages according to the specified codec.`,
-		Config: docs.FieldComponent().WithChildren(
-			codec.WriterDocs.AtVersion("3.46.0").HasDefault("lines"),
-		),
-		Categories: []string{
-			"Local",
-		},
-	})
+	err := service.RegisterOutput(
+		"stdout", service.NewConfigSpec().
+			Stable().
+			Categories("Local").
+			Summary(`Prints messages to stdout as a continuous stream of data.`).
+			Fields(service.NewInternalField(codec.NewWriterDocs("codec").AtVersion("3.46.0").HasDefault("lines"))),
+		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Output, int, error) {
+			w, err := newStdoutWriterFromParsed(conf)
+			if err != nil {
+				return nil, 0, err
+			}
+			return w, 1, nil
+		})
 	if err != nil {
 		panic(err)
 	}
 }
 
 type stdoutWriter struct {
-	handle codec.Writer
+	suffixFn codec.SuffixFn
+	handle   io.WriteCloser
 }
 
-func newStdoutWriter(codecStr string) (*stdoutWriter, error) {
+func newStdoutWriterFromParsed(conf *service.ParsedConfig) (*stdoutWriter, error) {
+	codecStr, err := conf.FieldString("codec")
+	if err != nil {
+		return nil, err
+	}
+
 	codec, _, err := codec.GetWriter(codecStr)
 	if err != nil {
 		return nil, err
 	}
 
-	handle, err := codec(os.Stdout)
-	if err != nil {
-		return nil, err
-	}
-
 	return &stdoutWriter{
-		handle: handle,
+		suffixFn: codec,
+		handle:   os.Stdout,
 	}, nil
 }
 
@@ -63,10 +54,27 @@ func (w *stdoutWriter) Connect(ctx context.Context) error {
 	return nil
 }
 
-func (w *stdoutWriter) WriteBatch(ctx context.Context, msg message.Batch) error {
-	return output.IterateBatchedSend(msg, func(i int, p *message.Part) error {
-		return w.handle.Write(ctx, p)
-	})
+func (w *stdoutWriter) writeTo(wtr io.Writer, p *service.Message) error {
+	mBytes, err := p.AsBytes()
+	if err != nil {
+		return err
+	}
+
+	suffix, addSuffix := w.suffixFn(mBytes)
+
+	if _, err := wtr.Write(mBytes); err != nil {
+		return err
+	}
+	if addSuffix {
+		if _, err := wtr.Write(suffix); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (w *stdoutWriter) Write(ctx context.Context, msg *service.Message) error {
+	return w.writeTo(w.handle, msg)
 }
 
 func (w *stdoutWriter) Close(ctx context.Context) error {

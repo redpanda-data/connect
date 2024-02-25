@@ -263,7 +263,7 @@ func (a *amqp09Reader) Connect(ctx context.Context) (err error) {
 
 	amqpChan, err = conn.Channel()
 	if err != nil {
-		return fmt.Errorf("AMQP 0.9 Channel: %s", err)
+		return fmt.Errorf("AMQP 0.9 Channel: %w", err)
 	}
 
 	if a.queueDeclare {
@@ -275,7 +275,9 @@ func (a *amqp09Reader) Connect(ctx context.Context) (err error) {
 			false,             // noWait
 			nil,               // arguments
 		); err != nil {
-			return fmt.Errorf("queue Declare: %s", err)
+			_ = amqpChan.Close()
+			_ = conn.Close()
+			return fmt.Errorf("queue Declare: %w", err)
 		}
 	}
 
@@ -287,14 +289,18 @@ func (a *amqp09Reader) Connect(ctx context.Context) (err error) {
 			false,            // noWait
 			nil,              // arguments
 		); err != nil {
-			return fmt.Errorf("queue Bind: %s", err)
+			_ = amqpChan.Close()
+			_ = conn.Close()
+			return fmt.Errorf("queue Bind: %w", err)
 		}
 	}
 
 	if err = amqpChan.Qos(
 		a.prefetchCount, a.prefetchSize, false,
 	); err != nil {
-		return fmt.Errorf("qos: %s", err)
+		_ = amqpChan.Close()
+		_ = conn.Close()
+		return fmt.Errorf("qos: %w", err)
 	}
 
 	if consumerChan, err = amqpChan.Consume(
@@ -306,14 +312,16 @@ func (a *amqp09Reader) Connect(ctx context.Context) (err error) {
 		false,         // noWait
 		nil,           // arguments
 	); err != nil {
-		return fmt.Errorf("queue Consume: %s", err)
+		_ = amqpChan.Close()
+		_ = conn.Close()
+		return fmt.Errorf("queue Consume: %w", err)
 	}
 
 	a.conn = conn
 	a.amqpChan = amqpChan
 	a.consumerChan = consumerChan
 
-	a.log.Infof("Receiving AMQP 0.9 messages from queue: %v\n", a.queue)
+	a.log.Infof("Receiving AMQP 0.9 messages from queue: %s", a.queue)
 	return
 }
 
@@ -324,13 +332,13 @@ func (a *amqp09Reader) disconnect() error {
 
 	if a.amqpChan != nil {
 		if err := a.amqpChan.Cancel(a.consumerTag, true); err != nil {
-			a.log.Errorf("Failed to cancel consumer: %v\n", err)
+			a.log.Errorf("Failed to cancel consumer: %w", err)
 		}
 		a.amqpChan = nil
 	}
 	if a.conn != nil {
 		if err := a.conn.Close(); err != nil {
-			a.log.Errorf("Failed to close connection cleanly: %v\n", err)
+			a.log.Errorf("Failed to close connection cleanly: %w", err)
 		}
 		a.conn = nil
 	}
@@ -378,7 +386,7 @@ func amqpSetMetadata(p *service.Message, k string, v any) {
 		return
 	case []interface{}:
 		for key, value := range v {
-			amqpSetMetadata(p, fmt.Sprintf("%s_%v", metaKey, key), value)
+			amqpSetMetadata(p, fmt.Sprintf("%s_%d", metaKey, key), value)
 		}
 		return
 	default:
@@ -495,18 +503,18 @@ func (a *amqp09Reader) dial(amqpURL string) (conn *amqp.Connection, err error) {
 		if u.User != nil {
 			conn, err = amqp.DialTLS(amqpURL, a.tlsConf)
 			if err != nil {
-				return nil, fmt.Errorf("%w: %s", errAMQP09Connect, err)
+				return nil, fmt.Errorf("%w: %w", errAMQP09Connect, err)
 			}
 		} else {
 			conn, err = amqp.DialTLS_ExternalAuth(amqpURL, a.tlsConf)
 			if err != nil {
-				return nil, fmt.Errorf("%w: %s", errAMQP09Connect, err)
+				return nil, fmt.Errorf("%w: %w", errAMQP09Connect, err)
 			}
 		}
 	} else {
 		conn, err = amqp.Dial(amqpURL)
 		if err != nil {
-			return nil, fmt.Errorf("%w: %s", errAMQP09Connect, err)
+			return nil, fmt.Errorf("%w: %w", errAMQP09Connect, err)
 		}
 	}
 

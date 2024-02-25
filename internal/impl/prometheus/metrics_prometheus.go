@@ -1,6 +1,7 @@
 package prometheus
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"sync"
@@ -13,47 +14,118 @@ import (
 	"github.com/prometheus/client_golang/prometheus/push"
 	"github.com/prometheus/common/model"
 
-	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
-	"github.com/benthosdev/benthos/v4/internal/docs"
-	"github.com/benthosdev/benthos/v4/internal/log"
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
-func init() {
-	_ = bundle.AllMetrics.Add(newPrometheus, docs.ComponentSpec{
-		Name:   "prometheus",
-		Type:   docs.TypeMetrics,
-		Status: docs.StatusStable,
-		Summary: `
-Host endpoints (` + "`/metrics` and `/stats`" + `) for Prometheus scraping.`,
-		Footnotes: `
+const (
+	pmFieldUseHistogramTiming          = "use_histogram_timing"
+	pmFieldHistogramBuckets            = "histogram_buckets"
+	pmFieldSummaryQuantilesObj         = "summary_quantiles_objectives"
+	pmFieldSummaryQuantilesObjQuantile = "quantile"
+	pmFieldSummaryQuantilesObjError    = "error"
+	pmFieldAddProcessMetrics           = "add_process_metrics"
+	pmFieldAddGoMetrics                = "add_go_metrics"
+	pmFieldPushURL                     = "push_url"
+	pmFieldPushBasicAuth               = "push_basic_auth"
+	pmFieldPushBasicAuthUsername       = "username"
+	pmFieldPushBasicAuthPassword       = "password"
+	pmFieldPushInterval                = "push_interval"
+	pmFieldPushJobName                 = "push_job_name"
+	pmFieldFileOutputPath              = "file_output_path"
+)
+
+func ConfigSpec() *service.ConfigSpec {
+	return service.NewConfigSpec().
+		Stable().
+		Summary("Host endpoints (`/metrics` and `/stats`) for Prometheus scraping.").
+		Footnotes(`
 ## Push Gateway
 
-The field ` + "`push_url`" + ` is optional and when set will trigger a push of
-metrics to a [Prometheus Push Gateway](https://prometheus.io/docs/instrumenting/pushing/)
-once Benthos shuts down. It is also possible to specify a
-` + "`push_interval`" + ` which results in periodic pushes.
+The field `+"`push_url`"+` is optional and when set will trigger a push of metrics to a [Prometheus Push Gateway](https://prometheus.io/docs/instrumenting/pushing/) once Benthos shuts down. It is also possible to specify a `+"`push_interval`"+` which results in periodic pushes.
 
-The Push Gateway is useful for when Benthos instances are short lived. Do not
-include the "/metrics/jobs/..." path in the push URL.
+The Push Gateway is useful for when Benthos instances are short lived. Do not include the "/metrics/jobs/..." path in the push URL.
 
-If the Push Gateway requires HTTP Basic Authentication it can be configured with
-` + "`push_basic_auth`.",
-		Config: docs.FieldComponent().WithChildren(
-			docs.FieldBool("use_histogram_timing", "Whether to export timing metrics as a histogram, if `false` a summary is used instead. When exporting histogram timings the delta values are converted from nanoseconds into seconds in order to better fit within bucket definitions. For more information on histograms and summaries refer to: https://prometheus.io/docs/practices/histograms/.").HasDefault(false).Advanced().AtVersion("3.63.0"),
-			docs.FieldFloat("histogram_buckets", "Timing metrics histogram buckets (in seconds). If left empty defaults to DefBuckets (https://pkg.go.dev/github.com/prometheus/client_golang/prometheus#pkg-variables)").Array().HasDefault([]any{}).Advanced().AtVersion("3.63.0"),
-			docs.FieldBool("add_process_metrics", "Whether to export process metrics such as CPU and memory usage in addition to Benthos metrics.").Advanced().HasDefault(false),
-			docs.FieldBool("add_go_metrics", "Whether to export Go runtime metrics such as GC pauses in addition to Benthos metrics.").Advanced().HasDefault(false),
-			docs.FieldURL("push_url", "An optional [Push Gateway URL](#push-gateway) to push metrics to.").Advanced().HasDefault(""),
-			docs.FieldString("push_interval", "The period of time between each push when sending metrics to a Push Gateway.").Advanced().HasDefault(""),
-			docs.FieldString("push_job_name", "An identifier for push jobs.").Advanced().HasDefault("benthos_push"),
-			docs.FieldObject("push_basic_auth", "The Basic Authentication credentials.").WithChildren(
-				docs.FieldString("username", "The Basic Authentication username.").HasDefault(""),
-				docs.FieldString("password", "The Basic Authentication password.").HasDefault("").Secret(),
-			).Advanced(),
-			docs.FieldString("file_output_path", "An optional file path to write all prometheus metrics on service shutdown.").Advanced().HasDefault(""),
-		),
-	})
+If the Push Gateway requires HTTP Basic Authentication it can be configured with `+"`push_basic_auth`.").
+		Fields(
+			service.NewBoolField(pmFieldUseHistogramTiming).
+				Description("Whether to export timing metrics as a histogram, if `false` a summary is used instead. When exporting histogram timings the delta values are converted from nanoseconds into seconds in order to better fit within bucket definitions. For more information on histograms and summaries refer to: https://prometheus.io/docs/practices/histograms/.").
+				Version("3.63.0").
+				Advanced().
+				Default(false),
+			service.NewFloatListField(pmFieldHistogramBuckets).
+				Description("Timing metrics histogram buckets (in seconds). If left empty defaults to DefBuckets (https://pkg.go.dev/github.com/prometheus/client_golang/prometheus#pkg-variables). Applicable when `use_histogram_timing` is set to `true`.").
+				Advanced().
+				Version("3.63.0").
+				Default([]any{}),
+			service.NewObjectListField(pmFieldSummaryQuantilesObj,
+				service.NewFloatField(pmFieldSummaryQuantilesObjQuantile).
+					Description("Quantile value.").
+					Default(0.0),
+				service.NewFloatField(pmFieldSummaryQuantilesObjError).
+					Description("Permissible margin of error for quantile calculations. Precise calculations in a streaming context (without prior knowledge of the full dataset) can be resource-intensive. To balance accuracy with computational efficiency, an error margin is introduced. For instance, if the 90th quantile (`0.9`) is determined to be `100ms` with a 1% error margin (`0.01`), the true value will fall within the `[99ms, 101ms]` range.)").
+					Default(0.0),
+			).
+				Description("A list of timing metrics summary buckets (as quantiles). Applicable when `use_histogram_timing` is set to `false`.").
+				Example([]map[string]float64{
+					{"quantile": 0.5, "error": 0.05},
+					{"quantile": 0.9, "error": 0.01},
+					{"quantile": 0.99, "error": 0.001},
+				}).
+				Advanced().
+				Version("4.23.0").
+				Default([]map[string]float64{
+					{"quantile": 0.5, "error": 0.05},
+					{"quantile": 0.9, "error": 0.01},
+					{"quantile": 0.99, "error": 0.001},
+				}),
+			service.NewBoolField(pmFieldAddProcessMetrics).
+				Description("Whether to export process metrics such as CPU and memory usage in addition to Benthos metrics.").
+				Advanced().
+				Default(false),
+			service.NewBoolField(pmFieldAddGoMetrics).
+				Description("Whether to export Go runtime metrics such as GC pauses in addition to Benthos metrics.").
+				Advanced().
+				Default(false),
+			service.NewURLField(pmFieldPushURL).
+				Description("An optional [Push Gateway URL](#push-gateway) to push metrics to.").
+				Advanced().
+				Optional(),
+			service.NewDurationField(pmFieldPushInterval).
+				Description("The period of time between each push when sending metrics to a Push Gateway.").
+				Advanced().
+				Optional(),
+			service.NewStringField(pmFieldPushJobName).
+				Description("An identifier for push jobs.").
+				Advanced().
+				Default("benthos_push"),
+			service.NewObjectField(pmFieldPushBasicAuth,
+				service.NewStringField(pmFieldPushBasicAuthUsername).
+					Description("The Basic Authentication username.").
+					Default(""),
+				service.NewStringField(pmFieldPushBasicAuthPassword).
+					Description("The Basic Authentication password.").
+					Secret().
+					Default(""),
+			).Description("The Basic Authentication credentials.").
+				Advanced(),
+			service.NewStringField(pmFieldFileOutputPath).
+				Description("An optional file path to write all prometheus metrics on service shutdown.").
+				Advanced().
+				Default(""),
+		)
+
+}
+
+func init() {
+	err := service.RegisterMetricsExporter(
+		"prometheus", ConfigSpec(),
+		func(conf *service.ParsedConfig, log *service.Logger) (service.MetricsExporter, error) {
+			return FromParsed(conf, log)
+		})
+	if err != nil {
+		panic(err)
+	}
 }
 
 //------------------------------------------------------------------------------
@@ -66,12 +138,24 @@ func (p *promGauge) Incr(count int64) {
 	p.ctr.Add(float64(count))
 }
 
+func (p *promGauge) IncrFloat64(count float64) {
+	p.ctr.Add(count)
+}
+
 func (p *promGauge) Decr(count int64) {
 	p.ctr.Add(float64(-count))
 }
 
+func (p *promGauge) DecrFloat64(count float64) {
+	p.ctr.Add(-count)
+}
+
 func (p *promGauge) Set(value int64) {
 	p.ctr.Set(float64(value))
+}
+
+func (p *promGauge) SetFloat64(value float64) {
+	p.ctr.Set(value)
 }
 
 type promCounter struct {
@@ -80,6 +164,10 @@ type promCounter struct {
 
 func (p *promCounter) Incr(count int64) {
 	p.ctr.Add(float64(count))
+}
+
+func (p *promCounter) IncrFloat64(count float64) {
+	p.ctr.Add(count)
 }
 
 type promTiming struct {
@@ -144,8 +232,8 @@ func (p *promGaugeVec) With(labelValues ...string) metrics.StatGauge {
 
 //------------------------------------------------------------------------------
 
-type prometheusMetrics struct {
-	log        log.Modular
+type Metrics struct {
+	log        *service.Logger
 	closedChan chan struct{}
 	running    int32
 
@@ -153,6 +241,7 @@ type prometheusMetrics struct {
 
 	useHistogramTiming bool
 	histogramBuckets   []float64
+	summaryQuantiles   map[float64]float64
 
 	pusher *push.Pusher
 	reg    *prometheus.Registry
@@ -165,45 +254,82 @@ type prometheusMetrics struct {
 	mut sync.Mutex
 }
 
-func newPrometheus(config metrics.Config, nm bundle.NewManagement) (metrics.Type, error) {
-	promConf := config.Prometheus
-	p := &prometheusMetrics{
-		log:                nm.Logger(),
-		running:            1,
-		closedChan:         make(chan struct{}),
-		useHistogramTiming: promConf.UseHistogramTiming,
-		histogramBuckets:   promConf.HistogramBuckets,
-		reg:                prometheus.NewRegistry(),
-		counters:           map[string]*promCounterVec{},
-		gauges:             map[string]*promGaugeVec{},
-		timers:             map[string]*promTimingVec{},
-		timersHist:         map[string]*promTimingHistVec{},
+func quantilesAsFloatMapFromParsed(confs []*service.ParsedConfig) (map[float64]float64, error) {
+	resultFloatMap := map[float64]float64{}
+	for _, c := range confs {
+		quantile, err := c.FieldFloat(pmFieldSummaryQuantilesObjQuantile)
+		if err != nil {
+			return nil, err
+		}
+		fErr, err := c.FieldFloat(pmFieldSummaryQuantilesObjError)
+		if err != nil {
+			return nil, err
+		}
+		resultFloatMap[quantile] = fErr
+	}
+	return resultFloatMap, nil
+}
+
+func FromParsed(conf *service.ParsedConfig, log *service.Logger) (p *Metrics, err error) {
+	p = &Metrics{
+		log:        log,
+		running:    1,
+		closedChan: make(chan struct{}),
+		reg:        prometheus.NewRegistry(),
+		counters:   map[string]*promCounterVec{},
+		gauges:     map[string]*promGaugeVec{},
+		timers:     map[string]*promTimingVec{},
+		timersHist: map[string]*promTimingHistVec{},
 	}
 
+	if p.useHistogramTiming, err = conf.FieldBool(pmFieldUseHistogramTiming); err != nil {
+		return
+	}
+
+	if p.histogramBuckets, err = conf.FieldFloatList(pmFieldHistogramBuckets); err != nil {
+		return
+	}
 	if len(p.histogramBuckets) == 0 {
 		p.histogramBuckets = prometheus.DefBuckets
 	}
 
-	if promConf.AddProcessMetrics {
+	if quantilesParsedList, _ := conf.FieldObjectList(pmFieldSummaryQuantilesObj); len(quantilesParsedList) > 0 {
+		if p.summaryQuantiles, err = quantilesAsFloatMapFromParsed(quantilesParsedList); err != nil {
+			return
+		}
+	} else {
+		p.summaryQuantiles = map[float64]float64{
+			0.5:  0.05,
+			0.9:  0.01,
+			0.99: 0.001,
+		}
+	}
+
+	if addProcMets, _ := conf.FieldBool(pmFieldAddProcessMetrics); addProcMets {
 		if err := p.reg.Register(collectors.NewProcessCollector(collectors.ProcessCollectorOpts{})); err != nil {
 			return nil, err
 		}
 	}
-	if promConf.AddGoMetrics {
+	if addGoMets, _ := conf.FieldBool(pmFieldAddGoMetrics); addGoMets {
 		if err := p.reg.Register(collectors.NewGoCollector()); err != nil {
 			return nil, err
 		}
 	}
 
-	if len(promConf.PushURL) > 0 {
-		p.pusher = push.New(promConf.PushURL, promConf.PushJobName).Gatherer(p.reg)
+	if pushURL, _ := conf.FieldString(pmFieldPushURL); len(pushURL) > 0 {
+		pushJobName, _ := conf.FieldString(pmFieldPushJobName)
+		p.pusher = push.New(pushURL, pushJobName).Gatherer(p.reg)
 
-		if len(promConf.PushBasicAuth.Username) > 0 && len(promConf.PushBasicAuth.Password) > 0 {
-			p.pusher = p.pusher.BasicAuth(promConf.PushBasicAuth.Username, promConf.PushBasicAuth.Password)
+		basicAuthUsername, _ := conf.FieldString(pmFieldPushBasicAuth, pmFieldPushBasicAuthUsername)
+		basicAuthPassword, _ := conf.FieldString(pmFieldPushBasicAuth, pmFieldPushBasicAuthPassword)
+
+		if len(basicAuthUsername) > 0 && len(basicAuthPassword) > 0 {
+			p.pusher = p.pusher.BasicAuth(basicAuthUsername, basicAuthPassword)
 		}
 
-		if len(promConf.PushInterval) > 0 {
-			interval, err := time.ParseDuration(promConf.PushInterval)
+		pushInterval, _ := conf.FieldString(pmFieldPushInterval)
+		if len(pushInterval) > 0 {
+			interval, err := time.ParseDuration(pushInterval)
 			if err != nil {
 				return nil, fmt.Errorf("failed to parse push interval: %v", err)
 			}
@@ -222,31 +348,24 @@ func newPrometheus(config metrics.Config, nm bundle.NewManagement) (metrics.Type
 		}
 	}
 
-	if len(promConf.FileOutputPath) > 0 {
-		p.fileOutputPath = promConf.FileOutputPath
-	}
-
+	p.fileOutputPath, _ = conf.FieldString(pmFieldFileOutputPath)
 	return p, nil
 }
 
 //------------------------------------------------------------------------------
 
-func (p *prometheusMetrics) HandlerFunc() http.HandlerFunc {
+func (p *Metrics) HandlerFunc() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		promhttp.HandlerFor(p.reg, promhttp.HandlerOpts{}).ServeHTTP(w, r)
 	}
 }
 
-func (p *prometheusMetrics) GetCounter(path string) metrics.StatCounter {
-	return p.GetCounterVec(path).With()
-}
-
-func (p *prometheusMetrics) GetCounterVec(path string, labelNames ...string) metrics.StatCounterVec {
+func (p *Metrics) NewCounterCtor(path string, labelNames ...string) service.MetricsExporterCounterCtor {
 	if !model.IsValidMetricName(model.LabelValue(path)) {
 		p.log.Errorf("Ignoring metric '%v' due to invalid name", path)
-		return metrics.FakeCounterVec(func(l ...string) metrics.StatCounter {
+		return func(labelValues ...string) service.MetricsExporterCounter {
 			return metrics.DudStat{}
-		})
+		}
 	}
 
 	var pv *promCounterVec
@@ -270,21 +389,21 @@ func (p *prometheusMetrics) GetCounterVec(path string, labelNames ...string) met
 
 	if pv.count != len(labelNames) {
 		p.log.Errorf("Metrics label mismatch %v versus %v %v for name '%v', skipping metric", pv.count, len(labelNames), labelNames, path)
-		return metrics.Noop().GetCounterVec(path, labelNames...)
+		return func(labelValues ...string) service.MetricsExporterCounter {
+			return metrics.DudStat{}
+		}
 	}
-	return pv
+	return func(labelValues ...string) service.MetricsExporterCounter {
+		return pv.With(labelValues...)
+	}
 }
 
-func (p *prometheusMetrics) GetTimer(path string) metrics.StatTimer {
-	return p.GetTimerVec(path).With()
-}
-
-func (p *prometheusMetrics) GetTimerVec(path string, labelNames ...string) metrics.StatTimerVec {
+func (p *Metrics) NewTimerCtor(path string, labelNames ...string) service.MetricsExporterTimerCtor {
 	if !model.IsValidMetricName(model.LabelValue(path)) {
 		p.log.Errorf("Ignoring metric '%v' due to invalid name", path)
-		return metrics.FakeTimerVec(func(l ...string) metrics.StatTimer {
-			return &metrics.DudStat{}
-		})
+		return func(labelValues ...string) service.MetricsExporterTimer {
+			return metrics.DudStat{}
+		}
 	}
 
 	if p.useHistogramTiming {
@@ -299,7 +418,7 @@ func (p *prometheusMetrics) GetTimerVec(path string, labelNames ...string) metri
 		tmr := prometheus.NewSummaryVec(prometheus.SummaryOpts{
 			Name:       path,
 			Help:       "Benthos Timing metric",
-			Objectives: map[float64]float64{0.5: 0.05, 0.9: 0.01, 0.99: 0.001},
+			Objectives: p.summaryQuantiles,
 		}, labelNames)
 		p.reg.MustRegister(tmr)
 
@@ -313,12 +432,16 @@ func (p *prometheusMetrics) GetTimerVec(path string, labelNames ...string) metri
 
 	if pv.count != len(labelNames) {
 		p.log.Errorf("Metrics label mismatch %v versus %v %v for name '%v', skipping metric", pv.count, len(labelNames), labelNames, path)
-		return metrics.Noop().GetTimerVec(path, labelNames...)
+		return func(labelValues ...string) service.MetricsExporterTimer {
+			return metrics.DudStat{}
+		}
 	}
-	return pv
+	return func(labelValues ...string) service.MetricsExporterTimer {
+		return pv.With(labelValues...)
+	}
 }
 
-func (p *prometheusMetrics) getTimerHistVec(path string, labelNames ...string) metrics.StatTimerVec {
+func (p *Metrics) getTimerHistVec(path string, labelNames ...string) service.MetricsExporterTimerCtor {
 	var pv *promTimingHistVec
 
 	p.mut.Lock()
@@ -341,21 +464,21 @@ func (p *prometheusMetrics) getTimerHistVec(path string, labelNames ...string) m
 
 	if pv.count != len(labelNames) {
 		p.log.Errorf("Metrics label mismatch %v versus %v %v for name '%v', skipping metric", pv.count, len(labelNames), labelNames, path)
-		return metrics.Noop().GetTimerVec(path, labelNames...)
+		return func(labelValues ...string) service.MetricsExporterTimer {
+			return metrics.DudStat{}
+		}
 	}
-	return pv
+	return func(labelValues ...string) service.MetricsExporterTimer {
+		return pv.With(labelValues...)
+	}
 }
 
-func (p *prometheusMetrics) GetGauge(path string) metrics.StatGauge {
-	return p.GetGaugeVec(path).With()
-}
-
-func (p *prometheusMetrics) GetGaugeVec(path string, labelNames ...string) metrics.StatGaugeVec {
+func (p *Metrics) NewGaugeCtor(path string, labelNames ...string) service.MetricsExporterGaugeCtor {
 	if !model.IsValidMetricName(model.LabelValue(path)) {
 		p.log.Errorf("Ignoring metric '%v' due to invalid name", path)
-		return metrics.FakeGaugeVec(func(l ...string) metrics.StatGauge {
+		return func(labelValues ...string) service.MetricsExporterGauge {
 			return &metrics.DudStat{}
-		})
+		}
 	}
 
 	var pv *promGaugeVec
@@ -379,12 +502,16 @@ func (p *prometheusMetrics) GetGaugeVec(path string, labelNames ...string) metri
 
 	if pv.count != len(labelNames) {
 		p.log.Errorf("Metrics label mismatch %v versus %v %v for name '%v', skipping metric", pv.count, len(labelNames), labelNames, path)
-		return metrics.Noop().GetGaugeVec(path, labelNames...)
+		return func(labelValues ...string) service.MetricsExporterGauge {
+			return metrics.DudStat{}
+		}
 	}
-	return pv
+	return func(labelValues ...string) service.MetricsExporterGauge {
+		return pv.With(labelValues...)
+	}
 }
 
-func (p *prometheusMetrics) Close() error {
+func (p *Metrics) Close(context.Context) error {
 	if atomic.CompareAndSwapInt32(&p.running, 1, 0) {
 		close(p.closedChan)
 	}

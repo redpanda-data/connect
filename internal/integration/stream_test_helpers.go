@@ -1,7 +1,6 @@
 package integration
 
 import (
-	"bytes"
 	"context"
 	"flag"
 	"fmt"
@@ -14,10 +13,10 @@ import (
 	"time"
 
 	"github.com/benthosdev/benthos/v4/internal/bundle"
-	iinput "github.com/benthosdev/benthos/v4/internal/component/input"
+	"github.com/benthosdev/benthos/v4/internal/component/input"
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
-	ioutput "github.com/benthosdev/benthos/v4/internal/component/output"
-	"github.com/benthosdev/benthos/v4/internal/config"
+	"github.com/benthosdev/benthos/v4/internal/component/output"
+	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/filepath/ifs"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/manager"
@@ -26,7 +25,6 @@ import (
 	"github.com/gofrs/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"gopkg.in/yaml.v3"
 )
 
 // CheckSkip marks a test to be skipped unless the integration test has been
@@ -47,12 +45,7 @@ func CheckSkipExact(t testing.TB) {
 // GetFreePort attempts to get a free port. This involves creating a bind and
 // then immediately dropping it and so it's ever so slightly flakey.
 func GetFreePort() (int, error) {
-	addr, err := net.ResolveTCPAddr("tcp", "localhost:0")
-	if err != nil {
-		return 0, err
-	}
-
-	listener, err := net.ListenTCP("tcp", addr)
+	listener, err := net.Listen("tcp", ":0")
 	if err != nil {
 		return 0, err
 	}
@@ -99,6 +92,7 @@ type StreamTestConfigVars struct {
 	Var2 string
 	Var3 string
 	Var4 string
+	Var5 string
 }
 
 // StreamPreTestFn is an optional closure to be called before tests are run,
@@ -123,20 +117,6 @@ type streamTestEnvironment struct {
 	// Ugly work arounds for slow connectors.
 	sleepAfterInput  time.Duration
 	sleepAfterOutput time.Duration
-}
-
-func getFreePort() (int, error) {
-	addr, err := net.ResolveTCPAddr("tcp", "localhost:0")
-	if err != nil {
-		return 0, err
-	}
-
-	listener, err := net.ListenTCP("tcp", addr)
-	if err != nil {
-		return 0, err
-	}
-	defer listener.Close()
-	return listener.Addr().(*net.TCPAddr).Port, nil
 }
 
 func newStreamTestEnvironment(t testing.TB, confTemplate string) streamTestEnvironment {
@@ -169,6 +149,7 @@ func (e streamTestEnvironment) RenderConfig() string {
 		"$VAR2", e.configVars.Var2,
 		"$VAR3", e.configVars.Var3,
 		"$VAR4", e.configVars.Var4,
+		"$VAR5", e.configVars.Var5,
 		"$INPUT_BATCH_COUNT", strconv.Itoa(e.configVars.InputBatchCount),
 		"$OUTPUT_BATCH_COUNT", strconv.Itoa(e.configVars.OutputBatchCount),
 		"$OUTPUT_META_EXCLUDE_PREFIX", e.configVars.OutputMetaExcludePrefix,
@@ -259,6 +240,22 @@ func StreamTestOptVarThree(v string) StreamTestOptFunc {
 	}
 }
 
+// StreamTestOptVarFour sets a third arbitrary variable for the test that can
+// be injected into templated configs.
+func StreamTestOptVarFour(v string) StreamTestOptFunc {
+	return func(env *streamTestEnvironment) {
+		env.configVars.Var4 = v
+	}
+}
+
+// StreamTestOptVarFive sets a third arbitrary variable for the test that can
+// be injected into templated configs.
+func StreamTestOptVarFive(v string) StreamTestOptFunc {
+	return func(env *streamTestEnvironment) {
+		env.configVars.Var5 = v
+	}
+}
+
 // StreamTestOptSleepAfterInput adds a sleep to tests after the input has been
 // created.
 func StreamTestOptSleepAfterInput(t time.Duration) StreamTestOptFunc {
@@ -324,7 +321,7 @@ func (i StreamTestList) Run(t *testing.T, configTemplate string, opts ...StreamT
 
 	for j, test := range i {
 		if envs[j].configVars.port == "" {
-			p, err := getFreePort()
+			p, err := GetFreePort()
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -401,7 +398,7 @@ func initConnectors(
 	t testing.TB,
 	trans <-chan message.Transaction,
 	env *streamTestEnvironment,
-) (input iinput.Streamed, output ioutput.Streamed) {
+) (input input.Streamed, output output.Streamed) {
 	t.Helper()
 
 	out := initOutput(t, trans, env)
@@ -409,26 +406,39 @@ func initConnectors(
 	return in, out
 }
 
-func initInput(t testing.TB, env *streamTestEnvironment) iinput.Streamed {
+func initInput(t testing.TB, env *streamTestEnvironment) input.Streamed {
 	t.Helper()
 
-	confBytes := []byte(env.RenderConfig())
-
-	s := config.New()
-	dec := yaml.NewDecoder(bytes.NewReader(confBytes))
-	dec.KnownFields(true)
-	require.NoError(t, dec.Decode(&s))
-
-	lints, err := config.LintBytes(config.LintOptions{}, confBytes)
+	node, err := docs.UnmarshalYAML([]byte(env.RenderConfig()))
 	require.NoError(t, err)
+
+	spec := docs.FieldSpecs{
+		docs.FieldAnything("output", "").Optional(),
+		docs.FieldInput("input", "An input to source messages from."),
+	}
+	spec = append(spec, manager.Spec()...)
+
+	lints := spec.LintYAML(docs.NewLintContext(docs.NewLintConfig(bundle.GlobalEnvironment)), node)
 	assert.Empty(t, lints)
 
+	pConf, err := spec.ParsedConfigFromAny(node)
+	require.NoError(t, err)
+
+	pVal, err := pConf.FieldAny("input")
+	require.NoError(t, err)
+
+	iConf, err := input.FromAny(bundle.GlobalEnvironment, pVal)
+	require.NoError(t, err)
+
+	mConf, err := manager.FromParsed(bundle.GlobalEnvironment, pConf)
+	require.NoError(t, err)
+
 	if env.mgr == nil {
-		env.mgr, err = manager.New(s.ResourceConfig, manager.OptSetLogger(env.log), manager.OptSetMetrics(env.stats))
+		env.mgr, err = manager.New(mConf, manager.OptSetLogger(env.log), manager.OptSetMetrics(env.stats))
 		require.NoError(t, err)
 	}
 
-	input, err := env.mgr.NewInput(s.Input)
+	input, err := env.mgr.NewInput(iConf)
 	require.NoError(t, err)
 
 	if env.sleepAfterInput > 0 {
@@ -438,26 +448,39 @@ func initInput(t testing.TB, env *streamTestEnvironment) iinput.Streamed {
 	return input
 }
 
-func initOutput(t testing.TB, trans <-chan message.Transaction, env *streamTestEnvironment) ioutput.Streamed {
+func initOutput(t testing.TB, trans <-chan message.Transaction, env *streamTestEnvironment) output.Streamed {
 	t.Helper()
 
-	confBytes := []byte(env.RenderConfig())
-
-	s := config.New()
-	dec := yaml.NewDecoder(bytes.NewReader(confBytes))
-	dec.KnownFields(true)
-	require.NoError(t, dec.Decode(&s))
-
-	lints, err := config.LintBytes(config.LintOptions{}, confBytes)
+	node, err := docs.UnmarshalYAML([]byte(env.RenderConfig()))
 	require.NoError(t, err)
+
+	spec := docs.FieldSpecs{
+		docs.FieldAnything("input", "").Optional(),
+		docs.FieldOutput("output", "An output to source messages to."),
+	}
+	spec = append(spec, manager.Spec()...)
+
+	lints := spec.LintYAML(docs.NewLintContext(docs.NewLintConfig(bundle.GlobalEnvironment)), node)
 	assert.Empty(t, lints)
 
+	pConf, err := spec.ParsedConfigFromAny(node)
+	require.NoError(t, err)
+
+	pVal, err := pConf.FieldAny("output")
+	require.NoError(t, err)
+
+	oConf, err := output.FromAny(bundle.GlobalEnvironment, pVal)
+	require.NoError(t, err)
+
+	mConf, err := manager.FromParsed(bundle.GlobalEnvironment, pConf)
+	require.NoError(t, err)
+
 	if env.mgr == nil {
-		env.mgr, err = manager.New(s.ResourceConfig, manager.OptSetLogger(env.log), manager.OptSetMetrics(env.stats))
+		env.mgr, err = manager.New(mConf, manager.OptSetLogger(env.log), manager.OptSetMetrics(env.stats))
 		require.NoError(t, err)
 	}
 
-	output, err := env.mgr.NewOutput(s.Output)
+	output, err := env.mgr.NewOutput(oConf)
 	require.NoError(t, err)
 
 	require.NoError(t, output.Consume(trans))
@@ -469,7 +492,7 @@ func initOutput(t testing.TB, trans <-chan message.Transaction, env *streamTestE
 	return output
 }
 
-func closeConnectors(t testing.TB, env *streamTestEnvironment, input iinput.Streamed, output ioutput.Streamed) {
+func closeConnectors(t testing.TB, env *streamTestEnvironment, input input.Streamed, output output.Streamed) {
 	if output != nil {
 		output.TriggerCloseNow()
 		require.NoError(t, output.WaitForClose(env.ctx))

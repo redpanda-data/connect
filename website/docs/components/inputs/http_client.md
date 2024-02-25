@@ -29,16 +29,17 @@ Connects to a server and continuously performs requests for a single message.
 input:
   label: ""
   http_client:
-    url: ""
+    url: "" # No default (required)
     verb: GET
     headers: {}
-    rate_limit: ""
+    rate_limit: "" # No default (optional)
     timeout: 5s
-    payload: ""
+    payload: "" # No default (optional)
     stream:
       enabled: false
       reconnect: true
-      codec: lines
+      scanner:
+        lines: {}
 ```
 
 </TabItem>
@@ -49,7 +50,7 @@ input:
 input:
   label: ""
   http_client:
-    url: ""
+    url: "" # No default (required)
     verb: GET
     headers: {}
     metadata:
@@ -68,6 +69,7 @@ input:
       client_secret: ""
       token_url: ""
       scopes: []
+      endpoint_params: {}
     basic_auth:
       enabled: false
       username: ""
@@ -88,7 +90,7 @@ input:
     extract_headers:
       include_prefixes: []
       include_patterns: []
-    rate_limit: ""
+    rate_limit: "" # No default (optional)
     timeout: 5s
     retry_period: 1s
     max_retry_backoff: 300s
@@ -97,14 +99,14 @@ input:
       - 429
     drop_on: []
     successful_on: []
-    proxy_url: ""
-    payload: ""
+    proxy_url: "" # No default (optional)
+    payload: "" # No default (optional)
     drop_empty_bodies: true
     stream:
       enabled: false
       reconnect: true
-      codec: lines
-      max_buffer: 1000000
+      scanner:
+        lines: {}
 ```
 
 </TabItem>
@@ -114,7 +116,7 @@ The URL and header values of this type can be dynamically set using function int
 
 ### Streaming
 
-If you enable streaming then Benthos will consume the body of the response as a continuous stream of data, breaking messages out following a chosen codec. This allows you to consume APIs that provide long lived streamed data feeds (such as Twitter).
+If you enable streaming then Benthos will consume the body of the response as a continuous stream of data, breaking messages out following a chosen scanner. This allows you to consume APIs that provide long lived streamed data feeds (such as Twitter).
 
 ### Pagination
 
@@ -361,6 +363,26 @@ Type: `array`
 Default: `[]`  
 Requires version 3.45.0 or newer  
 
+### `oauth2.endpoint_params`
+
+A list of optional endpoint parameters, values should be arrays of strings.
+
+
+Type: `object`  
+Default: `{}`  
+Requires version 4.21.0 or newer  
+
+```yml
+# Examples
+
+endpoint_params:
+  bar:
+    - woof
+  foo:
+    - meow
+    - quack
+```
+
 ### `basic_auth`
 
 Allows you to specify basic authentication.
@@ -514,6 +536,7 @@ A list of client certificates to use. For each certificate either the fields `ce
 
 
 Type: `array`  
+Default: `[]`  
 
 ```yml
 # Examples
@@ -697,7 +720,6 @@ An optional HTTP proxy URL.
 
 
 Type: `string`  
-Default: `""`  
 
 ### `payload`
 
@@ -738,52 +760,13 @@ Sets whether to re-establish the connection once it is lost.
 Type: `bool`  
 Default: `true`  
 
-### `stream.codec`
+### `stream.scanner`
 
-The way in which the bytes of a continuous stream are converted into messages. It's possible to consume lines using a custom delimiter with the `delim:x` codec, where x is the character sequence custom delimiter. It's not necessary to add gzip in the codec when the response headers specify it as it will be decompressed automatically.
-
-
-Type: `string`  
-Default: `"lines"`  
-Requires version 3.42.0 or newer  
-
-| Option | Summary |
-|---|---|
-| `auto` | EXPERIMENTAL: Attempts to derive a codec for each file based on information such as the extension. For example, a .tar.gz file would be consumed with the `gzip/tar` codec. Defaults to all-bytes. |
-| `all-bytes` | Consume the entire file as a single binary message. |
-| `avro-ocf:marshaler=x` | EXPERIMENTAL: Consume a stream of Avro OCF datum. The `marshaler` parameter is optional and has the options: `goavro` (default), `json`. Use `goavro` if OCF contains logical types. |
-| `chunker:x` | Consume the file in chunks of a given number of bytes. |
-| `csv` | Consume structured rows as comma separated values, the first row must be a header row. |
-| `csv:x` | Consume structured rows as values separated by a custom delimiter, the first row must be a header row. The custom delimiter must be a single character, e.g. the codec `"csv:\t"` would consume a tab delimited file. |
-| `csv-safe` | Consume structured rows like `csv`, but sends messages with empty maps on failure to parse. Includes row number and parsing errors (if any) in the message's metadata. |
-| `delim:x` | Consume the file in segments divided by a custom delimiter. |
-| `gzip` | Decompress a gzip file, this codec should precede another codec, e.g. `gzip/all-bytes`, `gzip/tar`, `gzip/csv`, etc. |
-| `pgzip` | Decompress a gzip file in parallel, this codec should precede another codec, e.g. `pgzip/all-bytes`, `pgzip/tar`, `pgzip/csv`, etc. |
-| `lines` | Consume the file in segments divided by linebreaks. |
-| `multipart` | Consumes the output of another codec and batches messages together. A batch ends when an empty message is consumed. For example, the codec `lines/multipart` could be used to consume multipart messages where an empty line indicates the end of each batch. |
-| `regex:(?m)^\d\d:\d\d:\d\d` | Consume the file in segments divided by regular expression. |
-| `skipbom` | Skip one or more byte order marks for each opened reader, this codec should precede another codec, e.g. `skipbom/csv`, etc. |
-| `tar` | Parse the file as a tar archive, and consume each file of the archive as a message. |
+The [scanner](/docs/components/scanners/about) by which the stream of bytes consumed will be broken out into individual messages. Scanners are useful for processing large sources of data without holding the entirety of it within memory. For example, the `csv` scanner allows you to process individual CSV rows without loading the entire CSV file in memory at once.
 
 
-```yml
-# Examples
-
-codec: lines
-
-codec: "delim:\t"
-
-codec: delim:foobar
-
-codec: csv
-```
-
-### `stream.max_buffer`
-
-Must be larger than the largest line of the stream.
-
-
-Type: `int`  
-Default: `1000000`  
+Type: `scanner`  
+Default: `{"lines":{}}`  
+Requires version 4.25.0 or newer  
 
 

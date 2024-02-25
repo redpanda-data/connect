@@ -10,17 +10,12 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/benthosdev/benthos/v4/internal/bundle"
-	"github.com/benthosdev/benthos/v4/internal/component/cache"
-	"github.com/benthosdev/benthos/v4/internal/component/input"
-	"github.com/benthosdev/benthos/v4/internal/component/output"
-	"github.com/benthosdev/benthos/v4/internal/component/processor"
-	"github.com/benthosdev/benthos/v4/internal/component/ratelimit"
 	"github.com/benthosdev/benthos/v4/internal/config"
 	"github.com/benthosdev/benthos/v4/internal/docs"
-	"github.com/benthosdev/benthos/v4/internal/pipeline"
+	"github.com/benthosdev/benthos/v4/internal/stream"
 )
 
-func addExpression(conf *config.Type, expression string) error {
+func addExpression(conf map[string]any, expression string) error {
 	var inputTypes, processorTypes, outputTypes []string
 	componentTypes := strings.Split(expression, "/")
 	for i, str := range componentTypes {
@@ -43,61 +38,74 @@ func addExpression(conf *config.Type, expression string) error {
 	if lInputs := len(inputTypes); lInputs == 1 {
 		t := inputTypes[0]
 		if _, exists := bundle.AllInputs.DocsFor(t); exists {
-			conf.Input.Type = t
+			conf["input"] = map[string]any{
+				"type": t,
+			}
 		} else {
 			return fmt.Errorf("unrecognised input type '%v'", t)
 		}
 	} else if lInputs > 1 {
-		conf.Input.Type = "broker"
+		var inputsList []any
 		for _, t := range inputTypes {
-			c := input.NewConfig()
 			if _, exists := bundle.AllInputs.DocsFor(t); exists {
-				c.Type = t
+				inputsList = append(inputsList, map[string]any{
+					"type": t,
+				})
 			} else {
 				return fmt.Errorf("unrecognised input type '%v'", t)
 			}
-			conf.Input.Broker.Inputs = append(conf.Input.Broker.Inputs, c)
+		}
+		conf["input"] = map[string]any{
+			"broker": map[string]any{
+				"inputs": inputsList,
+			},
 		}
 	}
 
-	for _, t := range processorTypes {
-		c := processor.NewConfig()
-		if _, exists := bundle.AllProcessors.DocsFor(t); exists {
-			c.Type = t
-		} else {
-			return fmt.Errorf("unrecognised processor type '%v'", t)
+	if len(processorTypes) > 0 {
+		var procsList []any
+		for _, t := range processorTypes {
+			if _, exists := bundle.AllProcessors.DocsFor(t); exists {
+				procsList = append(procsList, map[string]any{
+					"type": t,
+				})
+			} else {
+				return fmt.Errorf("unrecognised processor type '%v'", t)
+			}
 		}
-		conf.Pipeline.Processors = append(conf.Pipeline.Processors, c)
+		conf["pipeline"] = map[string]any{
+			"processors": procsList,
+		}
 	}
 
 	if lOutputs := len(outputTypes); lOutputs == 1 {
 		t := outputTypes[0]
 		if _, exists := bundle.AllOutputs.DocsFor(t); exists {
-			conf.Output.Type = t
+			conf["output"] = map[string]any{
+				"type": t,
+			}
 		} else {
 			return fmt.Errorf("unrecognised output type '%v'", t)
 		}
 	} else if lOutputs > 1 {
-		conf.Output.Type = "broker"
+		var outputsList []any
 		for _, t := range outputTypes {
-			c := output.NewConfig()
 			if _, exists := bundle.AllOutputs.DocsFor(t); exists {
-				c.Type = t
+				outputsList = append(outputsList, map[string]any{
+					"type": t,
+				})
 			} else {
 				return fmt.Errorf("unrecognised output type '%v'", t)
 			}
-			conf.Output.Broker.Outputs = append(conf.Output.Broker.Outputs, c)
+		}
+
+		conf["output"] = map[string]any{
+			"broker": map[string]any{
+				"outputs": outputsList,
+			},
 		}
 	}
 	return nil
-}
-
-type minimalCreateConfig struct {
-	Input              input.Config       `json:"input" yaml:"input"`
-	Pipeline           pipeline.Config    `json:"pipeline" yaml:"pipeline"`
-	Output             output.Config      `json:"output" yaml:"output"`
-	ResourceCaches     []cache.Config     `json:"cache_resources,omitempty" yaml:"cache_resources,omitempty"`
-	ResourceRateLimits []ratelimit.Config `json:"rate_limit_resources,omitempty" yaml:"rate_limit_resources,omitempty"`
 }
 
 func createCliCommand() *cli.Command {
@@ -123,46 +131,54 @@ If the expression is omitted a default config is created.`[1:],
 			},
 		},
 		Action: func(c *cli.Context) error {
-			conf := config.New()
-
+			conf := map[string]any{
+				"input": map[string]any{
+					"stdin": map[string]any{},
+				},
+				"pipeline": map[string]any{
+					"processors": []any{},
+				},
+				"output": map[string]any{
+					"stdout": map[string]any{},
+				},
+			}
 			if expression := c.Args().First(); len(expression) > 0 {
-				if err := addExpression(&conf, expression); err != nil {
+				if err := addExpression(conf, expression); err != nil {
 					fmt.Fprintf(os.Stderr, "Generate error: %v\n", err)
 					os.Exit(1)
 				}
 			}
 
+			spec := config.Spec()
 			var filter docs.FieldFilter
-			var iconf any = conf
-
 			if c.Bool("small") {
-				iconf = minimalCreateConfig{
-					Input:              conf.Input,
-					Pipeline:           conf.Pipeline,
-					Output:             conf.Output,
-					ResourceCaches:     conf.ResourceCaches,
-					ResourceRateLimits: conf.ResourceRateLimits,
-				}
-
+				spec = stream.Spec()
 				filter = func(spec docs.FieldSpec, _ any) bool {
 					return !spec.IsAdvanced
 				}
 			}
 
+			conf, err := spec.AnyToMap(conf, docs.ToValueConfig{
+				FallbackToAny: true,
+			})
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Generate error: %v\n", err)
+				os.Exit(1)
+			}
+
 			var node yaml.Node
-			err := node.Encode(iconf)
-			if err == nil {
-				sanitConf := docs.NewSanitiseConfig()
+			if err = node.Encode(conf); err == nil {
+				sanitConf := docs.NewSanitiseConfig(bundle.GlobalEnvironment)
 				sanitConf.RemoveTypeField = true
 				sanitConf.RemoveDeprecated = true
 				sanitConf.ForExample = true
 				sanitConf.Filter = filter
 
-				err = config.Spec().SanitiseYAML(&node, sanitConf)
+				err = spec.SanitiseYAML(&node, sanitConf)
 			}
 			if err == nil {
 				var configYAML []byte
-				if configYAML, err = config.MarshalYAML(node); err == nil {
+				if configYAML, err = docs.MarshalYAML(node); err == nil {
 					fmt.Println(string(configYAML))
 				}
 			}

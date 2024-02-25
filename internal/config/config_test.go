@@ -1,17 +1,44 @@
 package config_test
 
 import (
+	"bytes"
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
+	"github.com/Jeffail/gabs/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"gopkg.in/yaml.v3"
 
+	"github.com/benthosdev/benthos/v4/internal/bundle"
+	"github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/config"
+	"github.com/benthosdev/benthos/v4/internal/docs"
+	"github.com/benthosdev/benthos/v4/internal/manager/mock"
+	"github.com/benthosdev/benthos/v4/internal/stream"
 
+	_ "github.com/benthosdev/benthos/v4/public/components/io"
 	_ "github.com/benthosdev/benthos/v4/public/components/pure"
 )
+
+func testConfToAny(t testing.TB, conf any) any {
+	var node yaml.Node
+	err := node.Encode(conf)
+	require.NoError(t, err)
+
+	sanitConf := docs.NewSanitiseConfig(bundle.GlobalEnvironment)
+	sanitConf.RemoveTypeField = true
+	sanitConf.ScrubSecrets = true
+	err = config.Spec().SanitiseYAML(&node, sanitConf)
+	require.NoError(t, err)
+
+	var v any
+	require.NoError(t, node.Decode(&v))
+	return v
+}
 
 func TestSetOverridesOnNothing(t *testing.T) {
 	rdr := config.NewReader("", nil, config.OptAddOverrides(
@@ -24,9 +51,10 @@ func TestSetOverridesOnNothing(t *testing.T) {
 	require.NoError(t, err)
 	assert.Empty(t, lints)
 
-	assert.Equal(t, "generate", conf.Input.Type)
-	assert.Equal(t, "this.foo", conf.Input.Generate.Mapping)
-	assert.Equal(t, "drop", conf.Output.Type)
+	v := gabs.Wrap(testConfToAny(t, conf))
+
+	assert.Equal(t, "this.foo", v.S("input", "generate", "mapping").Data())
+	assert.Equal(t, map[string]any{}, v.S("output", "drop").Data())
 }
 
 func TestSetOverrideErrors(t *testing.T) {
@@ -53,7 +81,7 @@ func TestSetOverrideErrors(t *testing.T) {
 		{
 			name:  "cant set that",
 			input: "input=meow",
-			err:   "yaml: unmarshal errors",
+			err:   "invalid type !!str, expected object",
 		},
 	}
 
@@ -86,12 +114,16 @@ input:
 	require.NoError(t, err)
 	assert.Empty(t, lints)
 
-	assert.Equal(t, "generate", conf.Input.Type)
-	assert.Equal(t, `root = "meow"`, conf.Input.Generate.Mapping)
-	assert.Equal(t, `10s`, conf.Input.Generate.Interval)
-	assert.Equal(t, 5, conf.Input.Generate.Count)
+	v := gabs.Wrap(testConfToAny(t, conf))
 
-	assert.Equal(t, "drop", conf.Output.Type)
+	assert.Equal(t, `root = "meow"`, v.S("input", "generate", "mapping").Data())
+	assert.Equal(t, `10s`, v.S("input", "generate", "interval").Data())
+	assert.Equal(t, 5, v.S("input", "generate", "count").Data())
+
+	oMap := v.S("output").ChildrenMap()
+	assert.Len(t, oMap, 2)
+	assert.Contains(t, oMap, "drop")
+	assert.Contains(t, oMap, "label")
 }
 
 func TestResources(t *testing.T) {
@@ -103,6 +135,8 @@ input:
   generate:
     count: 5
     mapping: 'root = "meow"'
+output:
+  drop: {}
 `), 0o644))
 
 	resourceOnePath := filepath.Join(dir, "res1.yaml")
@@ -136,16 +170,17 @@ tests:
 	require.NoError(t, err)
 	assert.Empty(t, lints)
 
-	assert.Equal(t, "generate", conf.Input.Type)
-	assert.Equal(t, `root = "meow"`, conf.Input.Generate.Mapping)
+	v := gabs.Wrap(testConfToAny(t, conf))
 
-	require.Len(t, conf.ResourceCaches, 2)
+	assert.Equal(t, `root = "meow"`, v.S("input", "generate", "mapping").Data())
 
-	assert.Equal(t, "foo", conf.ResourceCaches[0].Label)
-	assert.Equal(t, "memory", conf.ResourceCaches[0].Type)
+	require.Len(t, v.S("cache_resources").Data(), 2)
 
-	assert.Equal(t, "bar", conf.ResourceCaches[1].Label)
-	assert.Equal(t, "memory", conf.ResourceCaches[1].Type)
+	assert.Equal(t, "foo", v.S("cache_resources", "0", "label").Data())
+	assert.Equal(t, "12s", v.S("cache_resources", "0", "memory", "default_ttl").Data())
+
+	assert.Equal(t, "bar", v.S("cache_resources", "1", "label").Data())
+	assert.Equal(t, "13s", v.S("cache_resources", "1", "memory", "default_ttl").Data())
 }
 
 func TestLints(t *testing.T) {
@@ -158,6 +193,9 @@ input:
   generate:
     count: 5
     mapping: 'root = "meow"'
+
+output:
+  drop: {}
 `), 0o644))
 
 	resourceOnePath := filepath.Join(dir, "res1.yaml")
@@ -187,14 +225,131 @@ cache_resources:
 	assert.Contains(t, lints[1], "/res1.yaml(5,1) field meow2 ")
 	assert.Contains(t, lints[2], "/res2.yaml(5,1) field meow3 ")
 
-	assert.Equal(t, "generate", conf.Input.Type)
-	assert.Equal(t, `root = "meow"`, conf.Input.Generate.Mapping)
+	v := gabs.Wrap(testConfToAny(t, conf))
 
-	require.Len(t, conf.ResourceCaches, 2)
+	assert.Equal(t, `root = "meow"`, v.S("input", "generate", "mapping").Data())
 
-	assert.Equal(t, "foo", conf.ResourceCaches[0].Label)
-	assert.Equal(t, "memory", conf.ResourceCaches[0].Type)
+	require.Len(t, v.S("cache_resources").Data(), 2)
 
-	assert.Equal(t, "bar", conf.ResourceCaches[1].Label)
-	assert.Equal(t, "memory", conf.ResourceCaches[1].Type)
+	assert.Equal(t, "foo", v.S("cache_resources", "0", "label").Data())
+	assert.Equal(t, "12s", v.S("cache_resources", "0", "memory", "default_ttl").Data())
+
+	assert.Equal(t, "bar", v.S("cache_resources", "1", "label").Data())
+	assert.Equal(t, "13s", v.S("cache_resources", "1", "memory", "default_ttl").Data())
+}
+
+func TestDefaultBasedOverridesWithYAML(t *testing.T) {
+	tmpDir := t.TempDir()
+	outFile := filepath.Join(tmpDir, "foo.txt")
+
+	var v yaml.Node
+	require.NoError(t, v.Encode(map[string]any{
+		"file": map[string]any{
+			"path": outFile,
+		},
+	}))
+
+	spec := config.Spec()
+	spec.SetDefault(&v, "output")
+
+	pConf, err := spec.ParsedConfigFromAny(map[string]any{
+		"input": map[string]any{
+			"generate": map[string]any{
+				"mapping":  `root.foo = "bar"`,
+				"count":    1,
+				"interval": "1us",
+			},
+		},
+	})
+	require.NoError(t, err)
+
+	c, err := config.FromParsed(bundle.GlobalEnvironment, pConf, nil)
+	require.NoError(t, err)
+
+	s, err := stream.New(c.Config, mock.NewManager())
+	require.NoError(t, err)
+
+	assert.Eventually(t, func() bool {
+		fBytes, _ := os.ReadFile(outFile)
+		return bytes.Contains(fBytes, []byte(`{"foo":"bar"}`))
+	}, time.Second, time.Millisecond*10)
+
+	require.NoError(t, s.Stop(context.Background()))
+}
+
+func TestDefaultBasedOverridesWithAny(t *testing.T) {
+	tmpDir := t.TempDir()
+	outFile := filepath.Join(tmpDir, "foo.txt")
+
+	spec := config.Spec()
+	spec.SetDefault(map[string]any{
+		"file": map[string]any{
+			"path": outFile,
+		},
+	}, "output")
+
+	node, err := docs.UnmarshalYAML([]byte(`
+input:
+  generate:
+    mapping: 'root.foo = "bar"'
+    count: 1
+    interval: 1us
+`))
+	require.NoError(t, err)
+
+	pConf, err := spec.ParsedConfigFromAny(node)
+	require.NoError(t, err)
+
+	c, err := config.FromParsed(bundle.GlobalEnvironment, pConf, nil)
+	require.NoError(t, err)
+
+	s, err := stream.New(c.Config, mock.NewManager())
+	require.NoError(t, err)
+
+	assert.Eventually(t, func() bool {
+		fBytes, _ := os.ReadFile(outFile)
+		return bytes.Contains(fBytes, []byte(`{"foo":"bar"}`))
+	}, time.Second, time.Millisecond*10)
+
+	require.NoError(t, s.Stop(context.Background()))
+}
+
+func TestDefaultBasedOverridesWithExplicit(t *testing.T) {
+	tmpDir := t.TempDir()
+	outFile := filepath.Join(tmpDir, "foo.txt")
+
+	outConf := output.Config{
+		Type: "file",
+		Plugin: map[string]any{
+			"path": outFile,
+		},
+	}
+
+	spec := config.Spec()
+	spec.SetDefault(outConf, "output")
+
+	node, err := docs.UnmarshalYAML([]byte(`
+input:
+  generate:
+    mapping: 'root.foo = "bar"'
+    count: 1
+    interval: 1us
+`))
+	require.NoError(t, err)
+
+	pConf, err := spec.ParsedConfigFromAny(node)
+	require.NoError(t, err)
+
+	c, err := config.FromParsed(bundle.GlobalEnvironment, pConf, nil)
+	require.NoError(t, err)
+
+	s, err := stream.New(c.Config, mock.NewManager())
+	require.NoError(t, err)
+
+	assert.Eventually(t, func() bool {
+		fBytes, _ := os.ReadFile(outFile)
+		return bytes.Contains(fBytes, []byte(`{"foo":"bar"}`))
+	}, time.Second, time.Millisecond*10)
+
+	require.NoError(t, s.Stop(context.Background()))
 }

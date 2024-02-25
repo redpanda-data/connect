@@ -14,7 +14,6 @@ categories: ["Utility"]
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-
 Rejects all messages, treating them as though the output destination failed to publish them.
 
 ```yml
@@ -47,7 +46,7 @@ output:
       - check: '!errored()'
         output:
           amqp_1:
-            url: amqps://guest:guest@localhost:5672/
+            urls: [ amqps://guest:guest@localhost:5672/ ]
             target_address: queue:/the_foos
 
       - output:

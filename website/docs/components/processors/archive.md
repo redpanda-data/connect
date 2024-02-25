@@ -20,7 +20,7 @@ Archives all the messages of a batch into a single message according to the sele
 # Config fields, showing default values
 label: ""
 archive:
-  format: ""
+  format: "" # No default (required)
   path: ""
 ```
 

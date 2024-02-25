@@ -38,13 +38,6 @@ func TestInference(t *testing.T) {
 
 	tests := []testCase{
 		{
-			inputType: docs.TypeInput,
-			inputConf: map[string]any{
-				"processors": "yep",
-			},
-			res: "stdin",
-		},
-		{
 			inputType: docs.TypeOutput,
 			inputConf: map[string]any{
 				"processors": "yep",

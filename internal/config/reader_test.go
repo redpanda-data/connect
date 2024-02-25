@@ -215,7 +215,7 @@ processor_resources:
 	rdr := newDummyReader("", nil, OptUseFS(testFS))
 
 	// Watch for configuration changes
-	testMgr, err := manager.New(manager.NewResourceConfig())
+	testMgr, err := manager.New(manager.ResourceConfig{})
 	require.NoError(t, err)
 
 	changeChan := make(chan struct{})

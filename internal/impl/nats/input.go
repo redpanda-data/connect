@@ -10,6 +10,7 @@ import (
 
 	"github.com/nats-io/nats.go"
 
+	"github.com/benthosdev/benthos/v4/internal/component/input/span"
 	"github.com/benthosdev/benthos/v4/internal/impl/nats/auth"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
@@ -31,7 +32,7 @@ This input adds the following metadata fields to each message:
 
 You can access these metadata fields using [function interpolation](/docs/configuration/interpolation#bloblang-queries).
 
-` + auth.Description()).
+` + ConnectionNameDescription() + auth.Description()).
 		Field(service.NewStringListField("urls").
 			Description("A list of URLs to connect to. If an item of the list contains commas it will be expanded into multiple URLs.").
 			Example([]string{"nats://127.0.0.1:4222"}).
@@ -50,10 +51,11 @@ You can access these metadata fields using [function interpolation](/docs/config
 		Field(service.NewIntField("prefetch_count").
 			Description("The maximum number of messages to pull at a time.").
 			Advanced().
-			Default(32).
+			Default(nats.DefaultSubPendingMsgsLimit).
 			LintRule(`root = if this < 0 { ["prefetch count must be greater than or equal to zero"] }`)).
 		Field(service.NewTLSToggledField("tls")).
-		Field(service.NewInternalField(auth.FieldSpec()))
+		Field(service.NewInternalField(auth.FieldSpec())).
+		Field(span.ExtractTracingSpanMappingDocs().Version(tracingVersion))
 }
 
 func init() {
@@ -61,7 +63,10 @@ func init() {
 		"nats", natsInputConfig(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Input, error) {
 			input, err := newNATSReader(conf, mgr)
-			return service.AutoRetryNacks(input), err
+			if err != nil {
+				return nil, err
+			}
+			return span.NewInput("nats", conf, service.AutoRetryNacks(input), mgr)
 		},
 	)
 	if err != nil {
@@ -70,6 +75,7 @@ func init() {
 }
 
 type natsReader struct {
+	label         string
 	urls          string
 	subject       string
 	queue         string
@@ -92,6 +98,7 @@ type natsReader struct {
 
 func newNATSReader(conf *service.ParsedConfig, mgr *service.Resources) (*natsReader, error) {
 	n := natsReader{
+		label:         mgr.Label(),
 		log:           mgr.Logger(),
 		fs:            mgr.FS(),
 		interruptChan: make(chan struct{}),
@@ -159,6 +166,7 @@ func (n *natsReader) Connect(ctx context.Context) error {
 		opts = append(opts, nats.Secure(n.tlsConf))
 	}
 
+	opts = append(opts, nats.Name(n.label))
 	opts = append(opts, authConfToOptions(n.authConf, n.fs)...)
 	opts = append(opts, errorHandlerOption(n.log))
 
@@ -248,6 +256,9 @@ func (n *natsReader) Read(ctx context.Context) (*service.Message, service.AckFun
 }
 
 func (n *natsReader) Close(ctx context.Context) (err error) {
+	go func() {
+		n.disconnect()
+	}()
 	n.interruptOnce.Do(func() {
 		close(n.interruptChan)
 	})

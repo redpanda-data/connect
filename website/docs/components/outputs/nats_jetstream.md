@@ -1,7 +1,7 @@
 ---
 title: nats_jetstream
 type: output
-status: experimental
+status: stable
 categories: ["Services"]
 ---
 
@@ -14,9 +14,6 @@ categories: ["Services"]
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-:::caution EXPERIMENTAL
-This component is experimental and therefore subject to change or removal outside of major version releases.
-:::
 Write messages to a NATS JetStream subject.
 
 Introduced in version 3.46.0.
@@ -34,9 +31,12 @@ Introduced in version 3.46.0.
 output:
   label: ""
   nats_jetstream:
-    urls: []
-    subject: ""
+    urls: [] # No default (required)
+    subject: foo.bar.baz # No default (required)
     headers: {}
+    metadata:
+      include_prefixes: []
+      include_patterns: []
     max_in_flight: 1024
 ```
 
@@ -48,9 +48,12 @@ output:
 output:
   label: ""
   nats_jetstream:
-    urls: []
-    subject: ""
+    urls: [] # No default (required)
+    subject: foo.bar.baz # No default (required)
     headers: {}
+    metadata:
+      include_prefixes: []
+      include_patterns: []
     max_in_flight: 1024
     tls:
       enabled: false
@@ -60,15 +63,24 @@ output:
       root_cas_file: ""
       client_certs: []
     auth:
-      nkey_file: ""
-      user_credentials_file: ""
-      user_jwt: ""
-      user_nkey_seed: ""
+      nkey_file: ./seed.nk # No default (optional)
+      user_credentials_file: ./user.creds # No default (optional)
+      user_jwt: "" # No default (optional)
+      user_nkey_seed: "" # No default (optional)
+    inject_tracing_map: meta = @.merge(this) # No default (optional)
 ```
 
 </TabItem>
 </Tabs>
 
+### Connection Name
+
+When monitoring and managing a production NATS system, it is often useful to
+know which connection a message was send/received from. This can be achieved by
+setting the connection name option when creating a NATS connection.
+
+Benthos will automatically set the connection name based off the label of the given
+NATS component, so that monitoring tools between NATS and benthos can stay in sync.
 ### Authentication
 
 There are several components within Benthos which utilise NATS services. You will find that each of these components
@@ -154,6 +166,53 @@ headers:
   Timestamp: ${!meta("Timestamp")}
 ```
 
+### `metadata`
+
+Determine which (if any) metadata values should be added to messages as headers.
+
+
+Type: `object`  
+
+### `metadata.include_prefixes`
+
+Provide a list of explicit metadata key prefixes to match against.
+
+
+Type: `array`  
+Default: `[]`  
+
+```yml
+# Examples
+
+include_prefixes:
+  - foo_
+  - bar_
+
+include_prefixes:
+  - kafka_
+
+include_prefixes:
+  - content-
+```
+
+### `metadata.include_patterns`
+
+Provide a list of explicit metadata key regular expression (re2) patterns to match against.
+
+
+Type: `array`  
+Default: `[]`  
+
+```yml
+# Examples
+
+include_patterns:
+  - .*
+
+include_patterns:
+  - _timestamp_unix$
+```
+
 ### `max_in_flight`
 
 The maximum number of messages to have in flight at a given time. Increase this to improve throughput.
@@ -234,6 +293,7 @@ A list of client certificates to use. For each certificate either the fields `ce
 
 
 Type: `array`  
+Default: `[]`  
 
 ```yml
 # Examples
@@ -353,5 +413,21 @@ This field contains sensitive information that usually shouldn't be added to a c
 
 
 Type: `string`  
+
+### `inject_tracing_map`
+
+EXPERIMENTAL: A [Bloblang mapping](/docs/guides/bloblang/about) used to inject an object containing tracing propagation information into outbound messages. The specification of the injected fields will match the format used by the service wide tracer.
+
+
+Type: `string`  
+Requires version 4.23.0 or newer  
+
+```yml
+# Examples
+
+inject_tracing_map: meta = @.merge(this)
+
+inject_tracing_map: root.meta.span = this
+```
 
 

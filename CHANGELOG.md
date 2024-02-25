@@ -5,6 +5,215 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 4.25.0 - TBD
+
+### Added
+
+- Field `address_cache` added to the `socket_server` input.
+- Field `read_header` added to the `amqp_1` input.
+- All inputs with a `codec` field now support a new field `scanner` to replace it. Scanners are more powerful as they are configured in a structured way similar to other component types rather than via a single string field, for more information [check out the scanners page](https://www.benthos.dev/docs/components/scanners/about).
+- New `diff` and `patch` Bloblang methods.
+- New `processors` processor.
+- Field `read_header` added to the `amqp_1` input.
+- A debug endpoint `/debug/pprof/allocs` has been added for profiling allocations.
+- New `cockroachdb_changefeed` input.
+- The `open_telemetry_collector` tracer now supports sampling.
+- The `aws_kinesis` input and output now support specifying ARNs as the stream target.
+- New `azure_cosmosdb` input, processor and output.
+- All `sql_*` components now support the `gocosmos` driver.
+
+### Fixed
+
+- The `javascript` processor now handles module imports correctly.
+- Bloblang `if` statements now provide explicit errors when query expressions resolve to non-boolean values.
+- Some metadata fields from the `amqp_1` input were always empty due to type mismatch, this should no longer be the case.
+- The `zip` Bloblang method no longer fails when executed without arguments.
+- The `amqp_0_9` output no longer prints bogus exchange name when connecting to the server.
+- The `generate` input no longer adds an extra second to `interval: '@every x'` syntax.
+- The `nats_jetstream` input no longer fails to locate mirrored streams.
+- Fixed a rare panic in batching mechanisms with a specified `period`, where data arrives in low volumes and is sporadic.
+- Executing config unit tests should no longer fail due to output resources failing to connect.
+
+### Changed
+
+- The `parse_parquet` Bloblang function, `parquet_decode`, `parquet_encode` processors and the `parquet` input have all been upgraded to the latest version of the underlying Parquet library. Since this underlying library is experimental it is likely that behaviour changes will result. One significant change is that encoding numerical values that are larger than the column type (`float64` into `FLOAT`, `int64` into `INT32`, etc) will no longer be automatically converted.
+- The `parse_log` processor field `codec` is now deprecated.
+- *WARNING*: Many components have had their underlying implementations moved onto newer internal APIs for defining and extracting their configuration fields. It's recommended that upgrades to this version are performed cautiously.
+- *WARNING*: All AWS components have been upgraded to the latest client libraries. Although lots of testing has been done, these libraries have the potential to differ in discrete ways in terms of how credentials are evaluated, cross-account connections are performed, and so on. It's recommended that upgrades to this version are performed cautiously.
+
+## 4.24.0 - 2023-11-24
+
+### Added
+
+- Field `idempotent_write` added to the `kafka_franz` output.
+- Field `idle_timeout` added to the `read_until` input.
+- Field `delay_seconds` added to the `aws_sqs` output.
+- Fields `discard_unknown` and `use_proto_names` added to the `protobuf` processors.
+
+### Fixed
+
+- Bloblang error messages for bad function/method names or parameters should now be improved in mappings that use shorthand for `root = ...`.
+- All redis components now support usernames within the configured URL for authentication.
+- The `protobuf` processor now supports targetting nested types from proto files.
+- The `schema_registry_encode` and `schema_registry_decode` processors should no longer double escape URL unsafe characters within subjects when querying their latest versions.
+
+## 4.23.0 - 2023-10-30
+
+### Added
+
+- The `amqp_0_9` output now supports dynamic interpolation functions within the `exchange` field.
+- Field `custom_topic_creation` added to the `kafka` output.
+- New Bloblang method `ts_sub`.
+- The Bloblang method `abs` now supports integers in and integers out.
+- Experimental `extract_tracing_map` field added to the `nats`, `nats_jetstream` and `nats_stream` inputs.
+- Experimental `inject_tracing_map` field added to the `nats`, `nats_jetstream` and `nats_stream` outputs.
+- New `_fail_fast` variants for the `broker` output `fan_out` and `fan_out_sequential` patterns.
+- Field `summary_quantiles_objectives` added to the `prometheus` metrics exporter.
+- The `metric` processor now supports floating point values for `counter_by` and `gauge` types.
+
+### Fixed
+
+- Allow labels on caches and rate limit resources when writing configs in CUE.
+- Go API: `log/slog` loggers injected into a stream builder via `StreamBuilder.SetLogger` should now respect formatting strings.
+- All Azure components now support container SAS tokens for authentication.
+- The `kafka_franz` input now provides properly typed metadata values.
+- The `trino` driver for the various `sql_*` components no longer panics when trying to insert nulls.
+- The `http_client` input no longer sends a phantom request body on subsequent requests when an empty `payload` is specified.
+- The `schema_registry_encode` and `schema_registry_decode` processors should no longer fail to obtain schemas containing slashes (or other URL path unfriendly characters).
+- The `parse_log` processor no longer extracts structured fields that are incompatible with Bloblang mappings.
+- Fixed occurrences where Bloblang would fail to recognise `float32` values.
+
+## 4.22.0 - 2023-10-03
+
+### Added
+
+- The `-e/--env-file` cli flag for importing environment variable files now supports glob patterns.
+- Environment variables imported via `-e/--env-file` cli flags now support triple quoted strings.
+- New experimental `counter` function added to Bloblang. It is recommended that this function, although experimental, should be used instead of the now deprecated `count` function.
+- The `schema_registry_encode` and `schema_registry_decode` processors now support JSONSchema.
+- Field `metadata` added to the `nats` and `nats_jetstream` outputs.
+- The `cached` processor field `ttl` now supports interpolation functions.
+- Many new properties fields have been added to the `amqp_0_9` output.
+- Field `command` added to the `redis_list` input and output.
+
+### Fixed
+
+- Corrected a scheduling error where the `generate` input with a descriptor interval (`@hourly`, etc) had a chance of firing twice.
+- Fixed an issue where a `redis_streams` input that is rejected from read attempts enters a reconnect loop without backoff.
+- The `sqs` input now periodically refreshes the visibility timeout of messages that take a significant amount of time to process.
+- The `ts_add_iso8601` and `ts_sub_iso8601` bloblang methods now return the correct error for certain invalid durations.
+- The `discord` output no longer ignores structured message fields containing underscores.
+- Fixed an issue where the `kafka_franz` input was ignoring batching periods and stalling.
+
+### Changed
+
+- The `random_int` Bloblang function now prevents instantiations where either the `max` or `min` arguments are dynamic. This is in order to avoid situations where the random number generator is re-initialised across subsequent mappings in a way that surprises map authors.
+
+## 4.21.0 - 2023-09-08
+
+### Added
+
+- Fields `client_id` and `rack_id` added to the `kafka_franz` input and output.
+- New experimental `command` processor.
+- Parameter `no_cache` added to the `file` and `env` Bloblang functions.
+- New `file_rel` function added to Bloblang.
+- Field `endpoint_params` added to the `oauth2` section of HTTP client components.
+
+### Fixed
+
+- Allow comments in single root and directly imported bloblang mappings.
+- The `azure_blob_storage` input no longer adds `blob_storage_content_type` and `blob_storage_content_encoding` metadata values as string pointer types, and instead adds these values as string types only when they are present.
+- The `http_server` input now returns a more appropriate 503 service unavailable status code during shutdown instead of the previous 404 status.
+- Fixed a potential panic when closing a `pusher` output that was never initialised.
+- The `sftp` output now reconnects upon being disconnected by the Azure idle timeout.
+- The `switch` output now produces error logs when messages do not pass at least one case with `strict_mode` enabled, previously these rejected messages were potentially re-processed in a loop without any logs depending on the config. An inaccuracy to the documentation has also been fixed in order to clarify behaviour when strict mode is not enabled.
+- The `log` processor `fields_mapping` field should no longer reject metadata queries using `@` syntax.
+- Fixed an issue where heavily utilised streams with nested resource based outputs could lock-up when performing heavy resource mutating traffic on the streams mode REST API.
+- The Bloblang `zip` method no longer produces values that yield an "Unknown data type".
+
+## 4.20.0 - 2023-08-22
+
+### Added
+
+- The `amqp1` input now supports `anonymous` SASL authentication.
+- New JWT Bloblang methods `parse_jwt_es256`, `parse_jwt_es384`, `parse_jwt_es512`, `parse_jwt_rs256`, `parse_jwt_rs384`, `parse_jwt_rs512`, `sign_jwt_es256`, `sign_jwt_es384` and `sign_jwt_es512` added.
+- The `csv-safe` input codec now supports custom delimiters with the syntax `csv-safe:x`.
+- The `open_telemetry_collector` tracer now supports secure connections, enabled via the `secure` field.
+- Function `v0_msg_exists_meta` added to the `javascript` processor.
+
+### Fixed
+
+- Fixed an issue where saturated output resources could panic under intense CRUD activity.
+- The config linter no longer raises issues with codec fields containing colons within their arguments.
+- The `elasticsearch` output should no longer fail to send basic authentication passwords, this fixes a regression introduced in v4.19.0.
+
+## 4.19.0 - 2023-08-17
+
+### Added
+
+- Field `topics_pattern` added to the `pulsar` input.
+- Both the `schema_registry_encode` and `schema_registry_decode` processors now support protobuf schemas.
+- Both the `schema_registry_encode` and `schema_registry_decode` processors now support references for AVRO and PROTOBUF schemas.
+- New Bloblang method `zip`.
+- New Bloblang `int8`, `int16`, `uint8`, `uint16`, `float32` and `float64` methods.
+
+### Fixed
+
+- Errors encountered by the `gcp_pubsub` output should now present more specific logs.
+- Upgraded `kafka` input and output underlying sarama client library to v1.40.0 at new module path github.com/IBM/sarama
+- The CUE schema for `switch` processor now correctly reflects that it takes a list of clauses.
+- Fixed the CUE schema for fields that take a 2d-array such as `workflow.order`.
+- The `snowflake_put` output has been added back to 32-bit ARM builds since the build incompatibilities have been resolved.
+- The `snowflake_put` output and the `sql_*` components no longer trigger a panic when running on a readonly file system with the `snowflake` driver. This driver still requires access to write temporary files somewhere, which can be configured via the Go [`TMPDIR`](https://pkg.go.dev/os#TempDir) environment variable. Details [here](https://github.com/snowflakedb/gosnowflake/issues/700).
+- The `http_server` input and output now follow the same multiplexer rules regardless of whether the general `http` server block is used or a custom endpoint.
+- Config linting should now respect fields sourced via a merge key (`<<`).
+- The `lint` subcommand should now lint config files pointed to via `-r`/`--resources` flags.
+
+### Changed
+
+- The `snowflake_put` output is now beta.
+- Endpoints specified by `http_server` components using both the general `http` server block or their own custom server addresses should no longer be treated as path prefixes unless the path ends with a slash (`/`), in which case all extensions of the path will match. This corrects a behavioural change introduced in v4.14.0.
+
+## 4.18.0 - 2023-07-02
+
+### Added
+
+- Field `logger.level_name` added for customising the name of log levels in the JSON format.
+- Methods `sign_jwt_rs256`, `sign_jwt_rs384` and `sign_jwt_rs512` added to Bloblang.
+
+### Fixed
+
+- HTTP components no longer ignore `proxy_url` settings when OAuth2 is set.
+- The `PATCH` verb for the streams mode REST API no longer fails to patch over newer components implemented with the latest plugin APIs.
+- The `nats_jetstream` input no longer fails for configs that set `bind` to `true` and do not specify both a `stream` and `durable` together.
+- The `mongodb` processor and output no longer ignores the `upsert` field.
+
+### Changed
+
+- The old `parquet` processor (now superseded by `parquet_encode` and `parquet_decode`) has been removed from 32-bit ARM builds due to build incompatibilities.
+- The `snowflake_put` output has been removed from 32-bit ARM builds due to build incompatibilities.
+- Plugin API: The `(*BatchError).WalkMessages` method has been deprecated in favour of `WalkMessagesIndexedBy`.
+
+## 4.17.0 - 2023-06-13
+
+### Added
+
+- The `dynamic` input and output have a new endpoint `/input/{id}/uptime` and `/output/{id}/uptime` respectively for obtaining the uptime of a given input/output.
+- Field `wait_time_seconds` added to the `aws_sqs` input.
+- Field `timeout` added to the `gcp_cloud_storage` output.
+- All NATS components now set the name of each connection to the component label when specified.
+
+### Fixed
+
+- Restore message ordering support to `gcp_pubsub` output. This issue was introduced in 4.16.0 as a result of [#1836](https://github.com/benthosdev/benthos/pull/1836).
+- Specifying structured metadata values (non-strings) in unit test definitions should no longer cause linting errors.
+
+### Changed
+
+- The `nats` input default value of `prefetch_count` has been increased from `32` to a more appropriate `524288`.
+
+## 4.16.0 - 2023-05-28
+
 ### Added
 
 - Fields `auth.user_jwt` and `auth.user_nkey_seed` added to all NATS components.
@@ -17,6 +226,8 @@ All notable changes to this project will be documented in this file.
 - The `gcp_pubsub` input now adds the metadata field `gcp_pubsub_delivery_attempt` to messages when dead lettering is enabled.
 - The `aws_s3` input now adds `s3_version_id` metadata to versioned messages.
 - All compress/decompress components (codecs, bloblang methods, processors) now support `pgzip`.
+- Field `connection.max_retries` added to the `websocket` input.
+- New `sentry_capture` processor.
 
 ### Fixed
 
@@ -24,6 +235,7 @@ All notable changes to this project will be documented in this file.
 - The `gcp_pubsub` output should see significant performance improvements due to a client library upgrade.
 - The stream builder APIs should now follow `logger.file` config fields.
 - The experimental `cue` format in the cli `list` subcommand no longer introduces infinite recursion for `#Processors`.
+- Config unit tests no longer execute linting rules for missing env var interpolations.
 
 ## 4.15.0 - 2023-05-05
 
@@ -448,7 +660,7 @@ This is a major version release, for more information and guidance on how to mig
 - The `switch` output field `retry_until_success` now defaults to `false`.
 - All AWS components now have a default `region` field that is empty, allowing environment variables or profile values to be used by default.
 - Serverless distributions of Benthos (AWS lambda, etc) have had the default output config changed to reject messages when the processing fails, this should make it easier to handle errors from invocation.
-- The standard metrics emitted by Benthos have been largely simplified and improved, for more information [check out the metrics page](/docs/components/metrics/about).
+- The standard metrics emitted by Benthos have been largely simplified and improved, for more information [check out the metrics page](https://www.benthos.dev/docs/components/metrics/about).
 - The default metrics type is now `prometheus`.
 - The `http_server` metrics type has been renamed to `json_api`.
 - The `stdout` metrics type has been renamed to `logger`.

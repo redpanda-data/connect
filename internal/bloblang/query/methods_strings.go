@@ -33,6 +33,8 @@ import (
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
 	"gopkg.in/yaml.v3"
+
+	"github.com/benthosdev/benthos/v4/internal/value"
 )
 
 var _ = registerSimpleMethod(
@@ -49,7 +51,7 @@ var _ = registerSimpleMethod(
 	),
 	func(*ParsedParams) (simpleMethod, error) {
 		return func(v any, ctx FunctionContext) (any, error) {
-			return IToBytes(v), nil
+			return value.IToBytes(v), nil
 		}, nil
 	},
 )
@@ -76,7 +78,7 @@ var _ = registerSimpleMethod(
 			case []byte:
 				return cases.Title(language.English).Bytes(t), nil
 			}
-			return nil, NewTypeError(v, ValueString)
+			return nil, value.NewTypeError(v, value.TString)
 		}, nil
 	},
 )
@@ -180,7 +182,7 @@ var _ = registerSimpleMethod(
 			case []byte:
 				res, err = schemeFn(t)
 			default:
-				err = NewTypeError(v, ValueString)
+				err = value.NewTypeError(v, value.TString)
 			}
 			return res, err
 		}, nil
@@ -266,7 +268,7 @@ var _ = registerSimpleMethod(
 			case []byte:
 				res, err = schemeFn(t)
 			default:
-				err = NewTypeError(v, ValueString)
+				err = value.NewTypeError(v, value.TString)
 			}
 			return res, err
 		}, nil
@@ -354,7 +356,7 @@ root.encrypted = this.value.encrypt_aes("ctr", $key, $vector).encode("hex")`,
 			case []byte:
 				res, err = schemeFn(t)
 			default:
-				err = NewTypeError(v, ValueString)
+				err = value.NewTypeError(v, value.TString)
 			}
 			return res, err
 		}, nil
@@ -441,7 +443,7 @@ root.decrypted = this.value.decode("hex").decrypt_aes("ctr", $key, $vector).stri
 			case []byte:
 				res, err = schemeFn(t)
 			default:
-				err = NewTypeError(v, ValueString)
+				err = value.NewTypeError(v, value.TString)
 			}
 			return res, err
 		}, nil
@@ -500,7 +502,7 @@ var _ = registerSimpleMethod(
 			case []byte:
 				return int64(bytes.Index(t, []byte(substring))), nil
 			}
-			return nil, NewTypeError(v, ValueString)
+			return nil, value.NewTypeError(v, value.TString)
 		}, nil
 	},
 )
@@ -586,11 +588,11 @@ var _ = registerSimpleMethod(
 		return func(v any, ctx FunctionContext) (any, error) {
 			arr, ok := v.([]any)
 			if !ok {
-				return nil, NewTypeError(v, ValueArray)
+				return nil, value.NewTypeError(v, value.TArray)
 			}
 			strs := make([]string, 0, len(arr))
 			for i, ele := range arr {
-				str, err := IGetString(ele)
+				str, err := value.IGetString(ele)
 				if err != nil {
 					return nil, fmt.Errorf("path element %v: %w", i, err)
 				}
@@ -672,7 +674,7 @@ root.t2 = this.v2.has_prefix("foo")`,
 			case []byte:
 				return bytes.HasPrefix(t, prefixB), nil
 			}
-			return nil, NewTypeError(v, ValueString)
+			return nil, value.NewTypeError(v, value.TString)
 		}, nil
 	},
 )
@@ -705,7 +707,7 @@ root.t2 = this.v2.has_suffix("foo")`,
 			case []byte:
 				return bytes.HasSuffix(t, suffixB), nil
 			}
-			return nil, NewTypeError(v, ValueString)
+			return nil, value.NewTypeError(v, value.TString)
 		}, nil
 	},
 )
@@ -843,7 +845,7 @@ root.h2 = this.value.hash(algorithm: "crc32", polynomial: "Koopman").encode("hex
 			case []byte:
 				res, err = hashFn(t)
 			default:
-				err = NewTypeError(v, ValueString)
+				err = value.NewTypeError(v, value.TString)
 			}
 			return res, err
 		}, nil
@@ -877,7 +879,7 @@ root.joined_numbers = this.numbers.map_each(this.string()).join(",")`,
 		return func(v any, ctx FunctionContext) (any, error) {
 			slice, ok := v.([]any)
 			if !ok {
-				return nil, NewTypeError(v, ValueArray)
+				return nil, value.NewTypeError(v, value.TArray)
 			}
 
 			var buf bytes.Buffer
@@ -891,7 +893,7 @@ root.joined_numbers = this.numbers.map_each(this.string()).join(",")`,
 				case []byte:
 					_, _ = buf.Write(t)
 				default:
-					return nil, fmt.Errorf("failed to join element %v: %w", i, NewTypeError(sv, ValueString))
+					return nil, fmt.Errorf("failed to join element %v: %w", i, value.NewTypeError(sv, value.TString))
 				}
 			}
 			return buf.String(), nil
@@ -921,7 +923,7 @@ var _ = registerSimpleMethod(
 			case []byte:
 				return bytes.ToUpper(t), nil
 			default:
-				return nil, NewTypeError(v, ValueString)
+				return nil, value.NewTypeError(v, value.TString)
 			}
 		}, nil
 	},
@@ -949,7 +951,7 @@ var _ = registerSimpleMethod(
 			case []byte:
 				return bytes.ToLower(t), nil
 			default:
-				return nil, NewTypeError(v, ValueString)
+				return nil, value.NewTypeError(v, value.TString)
 			}
 		}, nil
 	},
@@ -1023,7 +1025,7 @@ func parseCSVMethod(args *ParsedParams) (simpleMethod, error) {
 		case []byte:
 			csvBytes = t
 		default:
-			return nil, NewTypeError(v, ValueString)
+			return nil, value.NewTypeError(v, value.TString)
 		}
 
 		r := csv.NewReader(bytes.NewReader(csvBytes))
@@ -1103,7 +1105,7 @@ var _ = registerSimpleMethod(
 			case []byte:
 				jsonBytes = t
 			default:
-				return nil, NewTypeError(v, ValueString)
+				return nil, value.NewTypeError(v, value.TString)
 			}
 			var jObj any
 			decoder := json.NewDecoder(bytes.NewReader(jsonBytes))
@@ -1139,7 +1141,7 @@ var _ = registerSimpleMethod(
 			case []byte:
 				yamlBytes = t
 			default:
-				return nil, NewTypeError(v, ValueString)
+				return nil, value.NewTypeError(v, value.TString)
 			}
 			var sObj any
 			if err := yaml.Unmarshal(yamlBytes, &sObj); err != nil {
@@ -1323,7 +1325,7 @@ var _ = registerSimpleMethod(
 				return result, nil
 			}
 
-			return nil, NewTypeError(v, ValueString)
+			return nil, value.NewTypeError(v, value.TString)
 		}, nil
 	},
 )
@@ -1419,7 +1421,7 @@ func replaceAllImpl(args *ParsedParams) (simpleMethod, error) {
 			b := append([]byte(nil), t...)
 			return byteReplacer.Replace(b), nil
 		}
-		return nil, NewTypeError(v, ValueString)
+		return nil, value.NewTypeError(v, value.TString)
 	}, nil
 }
 
@@ -1463,11 +1465,11 @@ func replaceAllManyImpl(args *ParsedParams) (simpleMethod, error) {
 	replacePairs := make([]string, len(items))
 
 	for i := 0; i < len(items); i += 2 {
-		from, err := IGetString(items[i])
+		from, err := value.IGetString(items[i])
 		if err != nil {
 			return nil, fmt.Errorf("invalid replacement value at index %v: %w", i, err)
 		}
-		to, err := IGetString(items[i+1])
+		to, err := value.IGetString(items[i+1])
 		if err != nil {
 			return nil, fmt.Errorf("invalid replacement value at index %v: %w", i+1, err)
 		}
@@ -1485,7 +1487,7 @@ func replaceAllManyImpl(args *ParsedParams) (simpleMethod, error) {
 		case []byte:
 			return byteReplacer.Replace(t), nil
 		}
-		return nil, NewTypeError(v, ValueString)
+		return nil, value.NewTypeError(v, value.TString)
 	}, nil
 }
 
@@ -1528,7 +1530,7 @@ var _ = registerSimpleMethod(
 					result = append(result, string(str))
 				}
 			default:
-				return nil, NewTypeError(v, ValueString)
+				return nil, value.NewTypeError(v, value.TString)
 			}
 			return result, nil
 		}, nil
@@ -1582,7 +1584,7 @@ var _ = registerSimpleMethod(
 					result = append(result, r)
 				}
 			default:
-				return nil, NewTypeError(v, ValueString)
+				return nil, value.NewTypeError(v, value.TString)
 			}
 			return result, nil
 		}, nil
@@ -1639,7 +1641,7 @@ var _ = registerSimpleMethod(
 					result[key] = match
 				}
 			default:
-				return nil, NewTypeError(v, ValueString)
+				return nil, value.NewTypeError(v, value.TString)
 			}
 			return result, nil
 		}, nil
@@ -1706,7 +1708,7 @@ var _ = registerSimpleMethod(
 					result = append(result, obj)
 				}
 			default:
-				return nil, NewTypeError(v, ValueString)
+				return nil, value.NewTypeError(v, value.TString)
 			}
 			return result, nil
 		}, nil
@@ -1746,7 +1748,7 @@ var _ = registerSimpleMethod(
 			case []byte:
 				result = re.Match(t)
 			default:
-				return nil, NewTypeError(v, ValueString)
+				return nil, value.NewTypeError(v, value.TString)
 			}
 			return result, nil
 		}, nil
@@ -1801,7 +1803,7 @@ func reReplaceAllImpl(args *ParsedParams) (simpleMethod, error) {
 		case []byte:
 			result = string(re.ReplaceAll(t, withBytes))
 		default:
-			return nil, NewTypeError(v, ValueString)
+			return nil, value.NewTypeError(v, value.TString)
 		}
 		return result, nil
 	}, nil
@@ -1844,7 +1846,7 @@ var _ = registerSimpleMethod(
 				}
 				return vals, nil
 			}
-			return nil, NewTypeError(v, ValueString)
+			return nil, value.NewTypeError(v, value.TString)
 		}, nil
 	},
 )
@@ -1870,7 +1872,7 @@ var _ = registerSimpleMethod(
 	),
 	func(*ParsedParams) (simpleMethod, error) {
 		return func(v any, ctx FunctionContext) (any, error) {
-			return IToString(v), nil
+			return value.IToString(v), nil
 		}, nil
 	},
 )
@@ -1905,7 +1907,7 @@ var _ = registerSimpleMethod(
 			for i, ele := range *tags {
 				var ok bool
 				if tagStrs[i], ok = ele.(string); !ok {
-					return nil, fmt.Errorf("invalid arg at index %v: %w", i, NewTypeError(ele, ValueString))
+					return nil, fmt.Errorf("invalid arg at index %v: %w", i, value.NewTypeError(ele, value.TString))
 				}
 			}
 			p = p.AllowElements(tagStrs...)
@@ -1917,7 +1919,7 @@ var _ = registerSimpleMethod(
 			case []byte:
 				return p.SanitizeBytes(t), nil
 			}
-			return nil, NewTypeError(v, ValueString)
+			return nil, value.NewTypeError(v, value.TString)
 		}, nil
 	},
 )
@@ -1955,7 +1957,7 @@ root.description = this.description.trim()`,
 				}
 				return bytes.Trim(t, *cutset), nil
 			}
-			return nil, NewTypeError(v, ValueString)
+			return nil, value.NewTypeError(v, value.TString)
 		}, nil
 	},
 )
@@ -1987,7 +1989,7 @@ root.description = this.description.trim_prefix("foobar_")`,
 			case []byte:
 				return bytes.TrimPrefix(t, bytesPrefix), nil
 			}
-			return nil, NewTypeError(v, ValueString)
+			return nil, value.NewTypeError(v, value.TString)
 		}, nil
 	},
 )
@@ -2019,7 +2021,7 @@ root.description = this.description.trim_suffix("_foobar")`,
 			case []byte:
 				return bytes.TrimSuffix(t, bytesSuffix), nil
 			}
-			return nil, NewTypeError(v, ValueString)
+			return nil, value.NewTypeError(v, value.TString)
 		}, nil
 	},
 )

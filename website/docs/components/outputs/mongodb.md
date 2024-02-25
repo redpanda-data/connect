@@ -34,12 +34,12 @@ Introduced in version 3.43.0.
 output:
   label: ""
   mongodb:
-    url: ""
-    database: ""
+    url: mongodb://localhost:27017 # No default (required)
+    database: "" # No default (required)
     username: ""
     password: ""
+    collection: "" # No default (required)
     operation: update-one
-    collection: ""
     write_concern:
       w: ""
       j: false
@@ -64,12 +64,12 @@ output:
 output:
   label: ""
   mongodb:
-    url: ""
-    database: ""
+    url: mongodb://localhost:27017 # No default (required)
+    database: "" # No default (required)
     username: ""
     password: ""
+    collection: "" # No default (required)
     operation: update-one
-    collection: ""
     write_concern:
       w: ""
       j: false
@@ -84,12 +84,7 @@ output:
       byte_size: 0
       period: ""
       check: ""
-      processors: []
-    max_retries: 3
-    backoff:
-      initial_interval: 1s
-      max_interval: 5s
-      max_elapsed_time: 30s
+      processors: [] # No default (optional)
 ```
 
 </TabItem>
@@ -110,11 +105,10 @@ Batches can be formed at both the input and output level. You can find out more
 
 ### `url`
 
-The URL of the target MongoDB DB.
+The URL of the target MongoDB server.
 
 
 Type: `string`  
-Default: `""`  
 
 ```yml
 # Examples
@@ -124,11 +118,10 @@ url: mongodb://localhost:27017
 
 ### `database`
 
-The name of the target MongoDB DB.
+The name of the target MongoDB database.
 
 
 Type: `string`  
-Default: `""`  
 
 ### `username`
 
@@ -141,10 +134,20 @@ Default: `""`
 ### `password`
 
 The password to connect to the database.
+:::warning Secret
+This field contains sensitive information that usually shouldn't be added to a config directly, read our [secrets page for more info](/docs/configuration/secrets).
+:::
 
 
 Type: `string`  
 Default: `""`  
+
+### `collection`
+
+The name of the target collection.
+
+
+Type: `string`  
 
 ### `operation`
 
@@ -154,15 +157,6 @@ The mongodb operation to perform.
 Type: `string`  
 Default: `"update-one"`  
 Options: `insert-one`, `delete-one`, `delete-many`, `replace-one`, `update-one`.
-
-### `collection`
-
-The name of the target collection in the MongoDB DB.
-This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
-
-
-Type: `string`  
-Default: `""`  
 
 ### `write_concern`
 
@@ -245,7 +239,7 @@ hint_map: |-
 
 ### `upsert`
 
-The upsert setting is optional and only applies for update-one and replace-one operations. If the filter specified in filter_map matches,the document is updated or replaced accordingly, otherwise it is created.
+The upsert setting is optional and only applies for update-one and replace-one operations. If the filter specified in filter_map matches, the document is updated or replaced accordingly, otherwise it is created.
 
 
 Type: `bool`  
@@ -254,7 +248,7 @@ Requires version 3.60.0 or newer
 
 ### `max_in_flight`
 
-The maximum number of parallel message batches to have in flight at any given time.
+The maximum number of messages to have in flight at a given time. Increase this to improve throughput.
 
 
 Type: `int`  
@@ -339,7 +333,6 @@ A list of [processors](/docs/components/processors/about) to apply to a batch as
 
 
 Type: `array`  
-Default: `[]`  
 
 ```yml
 # Examples
@@ -356,44 +349,5 @@ processors:
   - archive:
       format: json_array
 ```
-
-### `max_retries`
-
-The maximum number of retries before giving up on the request. If set to zero there is no discrete limit.
-
-
-Type: `int`  
-Default: `3`  
-
-### `backoff`
-
-Control time intervals between retry attempts.
-
-
-Type: `object`  
-
-### `backoff.initial_interval`
-
-The initial period to wait between retry attempts.
-
-
-Type: `string`  
-Default: `"1s"`  
-
-### `backoff.max_interval`
-
-The maximum period to wait between retry attempts.
-
-
-Type: `string`  
-Default: `"5s"`  
-
-### `backoff.max_elapsed_time`
-
-The maximum period to wait before retry attempts are abandoned. If zero then no limit is used.
-
-
-Type: `string`  
-Default: `"30s"`  
 
 

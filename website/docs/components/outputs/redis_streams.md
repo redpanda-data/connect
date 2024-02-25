@@ -14,9 +14,7 @@ categories: ["Services"]
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-
-Pushes messages to a Redis (v5.0+) Stream (which is created if it doesn't
-already exist) using the XADD command.
+Pushes messages to a Redis (v5.0+) Stream (which is created if it doesn't already exist) using the XADD command.
 
 
 <Tabs defaultValue="common" values={[
@@ -31,8 +29,8 @@ already exist) using the XADD command.
 output:
   label: ""
   redis_streams:
-    url: ""
-    stream: ""
+    url: redis://:6397 # No default (required)
+    stream: "" # No default (required)
     body_key: body
     max_length: 0
     max_in_flight: 64
@@ -53,7 +51,7 @@ output:
 output:
   label: ""
   redis_streams:
-    url: ""
+    url: redis://:6397 # No default (required)
     kind: simple
     master: ""
     tls:
@@ -63,7 +61,7 @@ output:
       root_cas: ""
       root_cas_file: ""
       client_certs: []
-    stream: ""
+    stream: "" # No default (required)
     body_key: body
     max_length: 0
     max_in_flight: 64
@@ -74,20 +72,15 @@ output:
       byte_size: 0
       period: ""
       check: ""
-      processors: []
+      processors: [] # No default (optional)
 ```
 
 </TabItem>
 </Tabs>
 
-It's possible to specify a maximum length of the target stream by setting it to
-a value greater than 0, in which case this cap is applied only when Redis is
-able to remove a whole macro node, for efficiency.
+It's possible to specify a maximum length of the target stream by setting it to a value greater than 0, in which case this cap is applied only when Redis is able to remove a whole macro node, for efficiency.
 
-Redis stream entries are key/value pairs, as such it is necessary to specify the
-key to be set to the body of the message. All metadata fields of the message
-will also be set as key/value pairs, if there is a key collision between
-a metadata item and the body then the body takes precedence.
+Redis stream entries are key/value pairs, as such it is necessary to specify the key to be set to the body of the message. All metadata fields of the message will also be set as key/value pairs, if there is a key collision between a metadata item and the body then the body takes precedence.
 
 ## Performance
 
@@ -103,20 +96,19 @@ Batches can be formed at both the input and output level. You can find out more
 
 ### `url`
 
-The URL of the target Redis server. Database is optional and is supplied as the URL path. The scheme `tcp` is equivalent to `redis`.
+The URL of the target Redis server. Database is optional and is supplied as the URL path.
 
 
 Type: `string`  
-Default: `""`  
 
 ```yml
 # Examples
 
-url: :6397
-
-url: localhost:6397
+url: redis://:6397
 
 url: redis://localhost:6379
+
+url: redis://foousername:foopassword@redisplace:6379
 
 url: redis://:foopassword@redisplace:6379
 
@@ -132,16 +124,7 @@ Specifies a simple, cluster-aware, or failover-aware redis client.
 
 Type: `string`  
 Default: `"simple"`  
-
-```yml
-# Examples
-
-kind: simple
-
-kind: cluster
-
-kind: failover
-```
+Options: `simple`, `cluster`, `failover`.
 
 ### `master`
 
@@ -308,7 +291,6 @@ This field supports [interpolation functions](/docs/configuration/interpolation#
 
 
 Type: `string`  
-Default: `""`  
 
 ### `body_key`
 
@@ -328,7 +310,7 @@ Default: `0`
 
 ### `max_in_flight`
 
-The maximum number of parallel message batches to have in flight at any given time.
+The maximum number of messages to have in flight at a given time. Increase this to improve throughput.
 
 
 Type: `int`  
@@ -428,7 +410,6 @@ A list of [processors](/docs/components/processors/about) to apply to a batch as
 
 
 Type: `array`  
-Default: `[]`  
 
 ```yml
 # Examples
