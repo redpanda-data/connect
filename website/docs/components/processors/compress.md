@@ -14,15 +14,13 @@ categories: ["Parsing"]
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-
-Compresses messages according to the selected algorithm. Supported compression
-algorithms are: gzip, zlib, flate, snappy, lz4.
+Compresses messages according to the selected algorithm. Supported compression algorithms are: [flate gzip lz4 pgzip snappy zlib]
 
 ```yml
 # Config fields, showing default values
 label: ""
 compress:
-  algorithm: ""
+  algorithm: "" # No default (required)
   level: -1
 ```
 
@@ -36,8 +34,7 @@ The compression algorithm to use.
 
 
 Type: `string`  
-Default: `""`  
-Options: `gzip`, `zlib`, `flate`, `snappy`, `lz4`.
+Options: `flate`, `gzip`, `lz4`, `pgzip`, `snappy`, `zlib`.
 
 ### `level`
 

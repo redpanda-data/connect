@@ -20,9 +20,9 @@ Stores messages in an SQLite database and acknowledges them at the input level.
 # Config fields, showing default values
 buffer:
   sqlite:
-    path: ""
-    pre_processors: []
-    post_processors: []
+    path: "" # No default (required)
+    pre_processors: [] # No default (optional)
+    post_processors: [] # No default (optional)
 ```
 
 Stored messages are then consumed as a stream from the database and deleted only once they are successfully sent at the output level. If the service is restarted Benthos will make a best attempt to finish delivering messages that are already read from the database, and when it starts again it will consume from the oldest message that has not yet been delivered.

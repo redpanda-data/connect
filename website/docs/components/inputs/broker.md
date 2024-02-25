@@ -14,7 +14,6 @@ categories: ["Utility"]
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-
 Allows you to combine multiple inputs into a single stream of data, where each input will be read in parallel.
 
 
@@ -30,7 +29,7 @@ Allows you to combine multiple inputs into a single stream of data, where each i
 input:
   label: ""
   broker:
-    inputs: []
+    inputs: [] # No default (required)
     batching:
       count: 0
       byte_size: 0
@@ -47,13 +46,13 @@ input:
   label: ""
   broker:
     copies: 1
-    inputs: []
+    inputs: [] # No default (required)
     batching:
       count: 0
       byte_size: 0
       period: ""
       check: ""
-      processors: []
+      processors: [] # No default (optional)
 ```
 
 </TabItem>
@@ -89,24 +88,15 @@ input:
           topics: [ benthos_stream:0 ]
 ```
 
-If the number of copies is greater than zero the list will be copied that number
-of times. For example, if your inputs were of type foo and bar, with 'copies'
-set to '2', you would end up with two 'foo' inputs and two 'bar' inputs.
+If the number of copies is greater than zero the list will be copied that number of times. For example, if your inputs were of type foo and bar, with 'copies' set to '2', you would end up with two 'foo' inputs and two 'bar' inputs.
 
 ### Batching
 
-It's possible to configure a [batch policy](/docs/configuration/batching#batch-policy)
-with a broker using the `batching` fields. When doing this the feeds
-from all child inputs are combined. Some inputs do not support broker based
-batching and specify this in their documentation.
+It's possible to configure a [batch policy](/docs/configuration/batching#batch-policy) with a broker using the `batching` fields. When doing this the feeds from all child inputs are combined. Some inputs do not support broker based batching and specify this in their documentation.
 
 ### Processors
 
-It is possible to configure [processors](/docs/components/processors/about) at
-the broker level, where they will be applied to _all_ child inputs, as well as
-on the individual child inputs. If you have processors at both the broker level
-_and_ on child inputs then the broker processors will be applied _after_ the
-child nodes processors.
+It is possible to configure [processors](/docs/components/processors/about) at the broker level, where they will be applied to _all_ child inputs, as well as on the individual child inputs. If you have processors at both the broker level _and_ on child inputs then the broker processors will be applied _after_ the child nodes processors.
 
 ## Fields
 
@@ -124,7 +114,6 @@ A list of inputs to create.
 
 
 Type: `array`  
-Default: `[]`  
 
 ### `batching`
 

@@ -7,6 +7,7 @@ import (
 	"crypto/sha1"
 	"encoding/base64"
 	"fmt"
+	"io/fs"
 	"math/rand"
 	"net/http"
 	"net/url"
@@ -14,7 +15,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/golang-jwt/jwt"
+	"github.com/golang-jwt/jwt/v4"
+	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/clientcredentials"
 
 	"github.com/benthosdev/benthos/v4/internal/filepath/ifs"
@@ -22,9 +24,9 @@ import (
 
 // AuthConfig contains configuration params for various HTTP auth strategies.
 type AuthConfig struct {
-	OAuth     OAuthConfig     `json:"oauth" yaml:"oauth"`
-	BasicAuth BasicAuthConfig `json:"basic_auth" yaml:"basic_auth"`
-	JWT       JWTConfig       `json:"jwt" yaml:"jwt"`
+	OAuth     OAuthConfig
+	BasicAuth BasicAuthConfig
+	JWT       JWTConfig
 }
 
 // NewAuthConfig creates a new Config with default values.
@@ -37,7 +39,7 @@ func NewAuthConfig() AuthConfig {
 }
 
 // Sign method to sign an HTTP request for configured auth strategies.
-func (c AuthConfig) Sign(f ifs.FS, req *http.Request) error {
+func (c AuthConfig) Sign(f fs.FS, req *http.Request) error {
 	if err := c.OAuth.Sign(req); err != nil {
 		return err
 	}
@@ -52,9 +54,9 @@ func (c AuthConfig) Sign(f ifs.FS, req *http.Request) error {
 // BasicAuthConfig contains fields for setting basic authentication in HTTP
 // requests.
 type BasicAuthConfig struct {
-	Enabled  bool   `json:"enabled" yaml:"enabled"`
-	Username string `json:"username" yaml:"username"`
-	Password string `json:"password" yaml:"password"`
+	Enabled  bool
+	Username string
+	Password string
 }
 
 // NewBasicAuthConfig returns a default configuration for basic authentication
@@ -79,11 +81,11 @@ func (basic BasicAuthConfig) Sign(req *http.Request) error {
 
 // JWTConfig holds the configuration parameters for an JWT exchange.
 type JWTConfig struct {
-	Enabled        bool           `json:"enabled" yaml:"enabled"`
-	Claims         jwt.MapClaims  `json:"claims" yaml:"claims"`
-	Headers        map[string]any `json:"headers" yaml:"headers"`
-	SigningMethod  string         `json:"signing_method" yaml:"signing_method"`
-	PrivateKeyFile string         `json:"private_key_file" yaml:"private_key_file"`
+	Enabled        bool
+	Claims         jwt.MapClaims
+	Headers        map[string]any
+	SigningMethod  string
+	PrivateKeyFile string
 
 	// internal private fields
 	keyMx *sync.Mutex
@@ -105,7 +107,7 @@ func NewJWTConfig() JWTConfig {
 }
 
 // Sign method to sign an HTTP request for an JWT exchange.
-func (j JWTConfig) Sign(f ifs.FS, req *http.Request) error {
+func (j JWTConfig) Sign(f fs.FS, req *http.Request) error {
 	if !j.Enabled {
 		return nil
 	}
@@ -143,7 +145,7 @@ func (j JWTConfig) Sign(f ifs.FS, req *http.Request) error {
 
 // parsePrivateKey parses once the RSA private key.
 // Needs mutex locking as Sign might be called by parallel threads.
-func (j JWTConfig) parsePrivateKey(fs ifs.FS) error {
+func (j JWTConfig) parsePrivateKey(fs fs.FS) error {
 	j.keyMx.Lock()
 	defer j.keyMx.Unlock()
 
@@ -173,11 +175,11 @@ func (j JWTConfig) parsePrivateKey(fs ifs.FS) error {
 
 // OAuthConfig holds the configuration parameters for an OAuth exchange.
 type OAuthConfig struct {
-	Enabled           bool   `json:"enabled" yaml:"enabled"`
-	ConsumerKey       string `json:"consumer_key" yaml:"consumer_key"`
-	ConsumerSecret    string `json:"consumer_secret" yaml:"consumer_secret"`
-	AccessToken       string `json:"access_token" yaml:"access_token"`
-	AccessTokenSecret string `json:"access_token_secret" yaml:"access_token_secret"`
+	Enabled           bool
+	ConsumerKey       string
+	ConsumerSecret    string
+	AccessToken       string
+	AccessTokenSecret string
 }
 
 // NewOAuthConfig returns a new OAuthConfig with default values.
@@ -260,37 +262,39 @@ func (oauth OAuthConfig) computeHMAC(
 
 // OAuth2Config holds the configuration parameters for an OAuth2 exchange.
 type OAuth2Config struct {
-	Enabled      bool     `json:"enabled" yaml:"enabled"`
-	ClientKey    string   `json:"client_key" yaml:"client_key"`
-	ClientSecret string   `json:"client_secret" yaml:"client_secret"`
-	TokenURL     string   `json:"token_url" yaml:"token_url"`
-	Scopes       []string `json:"scopes" yaml:"scopes"`
+	Enabled        bool
+	ClientKey      string
+	ClientSecret   string
+	TokenURL       string
+	Scopes         []string
+	EndpointParams map[string][]string
 }
 
 // NewOAuth2Config returns a new OAuth2Config with default values.
 func NewOAuth2Config() OAuth2Config {
 	return OAuth2Config{
-		Enabled:      false,
-		ClientKey:    "",
-		ClientSecret: "",
-		TokenURL:     "",
-		Scopes:       []string{},
+		Enabled:        false,
+		ClientKey:      "",
+		ClientSecret:   "",
+		TokenURL:       "",
+		Scopes:         []string{},
+		EndpointParams: map[string][]string{},
 	}
 }
 
 // Client returns an http.Client with OAuth2 configured.
-func (oauth OAuth2Config) Client(ctx context.Context) *http.Client {
+func (oauth OAuth2Config) Client(ctx context.Context, base *http.Client) *http.Client {
 	if !oauth.Enabled {
-		var client http.Client
-		return &client
+		return base
 	}
 
 	conf := &clientcredentials.Config{
-		ClientID:     oauth.ClientKey,
-		ClientSecret: oauth.ClientSecret,
-		TokenURL:     oauth.TokenURL,
-		Scopes:       oauth.Scopes,
+		ClientID:       oauth.ClientKey,
+		ClientSecret:   oauth.ClientSecret,
+		TokenURL:       oauth.TokenURL,
+		Scopes:         oauth.Scopes,
+		EndpointParams: oauth.EndpointParams,
 	}
 
-	return conf.Client(ctx)
+	return conf.Client(context.WithValue(ctx, oauth2.HTTPClient, base))
 }

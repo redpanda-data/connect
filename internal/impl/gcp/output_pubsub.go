@@ -214,13 +214,20 @@ func (out *pubsubOutput) Connect(_ context.Context) error {
 func (out *pubsubOutput) WriteBatch(ctx context.Context, batch service.MessageBatch) error {
 	topics := make(map[string]pubsubTopic)
 	p := pool.NewWithResults[*serverResult]().WithContext(ctx)
-	batchErr := service.NewBatchError(batch, fmt.Errorf("failed to publish batch"))
+
+	var batchErr *service.BatchError
+	batchErrFailed := func(i int, err error) {
+		if batchErr == nil {
+			batchErr = service.NewBatchError(batch, err)
+		}
+		batchErr.Failed(i, err)
+	}
 
 	for i, msg := range batch {
 		i := i
 		res, err := out.writeMessage(ctx, topics, msg)
 		if err != nil {
-			batchErr.Failed(i, err)
+			batchErrFailed(i, err)
 			continue
 		}
 
@@ -229,7 +236,6 @@ func (out *pubsubOutput) WriteBatch(ctx context.Context, batch service.MessageBa
 			if err != nil {
 				return &serverResult{batchIndex: i, err: err}, nil
 			}
-
 			return nil, nil
 		})
 	}
@@ -243,14 +249,12 @@ func (out *pubsubOutput) WriteBatch(ctx context.Context, batch service.MessageBa
 		if res == nil {
 			continue
 		}
-
-		batchErr.Failed(res.batchIndex, res.err)
+		batchErrFailed(res.batchIndex, res.err)
 	}
 
-	if batchErr.IndexedErrors() > 0 {
+	if batchErr != nil && batchErr.IndexedErrors() > 0 {
 		return batchErr
 	}
-
 	return nil
 }
 
@@ -330,6 +334,10 @@ func (out *pubsubOutput) getTopic(ctx context.Context, name string) (pubsubTopic
 	}
 	if !exists {
 		return nil, fmt.Errorf("topic '%v' does not exist", name)
+	}
+
+	if out.orderingKeyQ != nil {
+		t.EnableOrdering()
 	}
 
 	out.topics[name] = t

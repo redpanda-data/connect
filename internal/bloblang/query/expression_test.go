@@ -1,13 +1,13 @@
 package query
 
 import (
-	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/benthosdev/benthos/v4/internal/message"
+	"github.com/benthosdev/benthos/v4/internal/value"
 )
 
 func TestExpressions(t *testing.T) {
@@ -23,12 +23,12 @@ func TestExpressions(t *testing.T) {
 	}
 
 	tests := map[string]struct {
-		input    Function
-		value    *any
-		output   any
-		err      error
-		messages []easyMsg
-		index    int
+		input       Function
+		value       *any
+		output      any
+		errContains string
+		messages    []easyMsg
+		index       int
 	}{
 		"if false": {
 			input: NewIfFunction(
@@ -45,7 +45,7 @@ func TestExpressions(t *testing.T) {
 				nil,
 				nil,
 			),
-			output: Nothing(nil),
+			output: value.Nothing(nil),
 		},
 		"if false else": {
 			input: NewIfFunction(
@@ -95,7 +95,7 @@ func TestExpressions(t *testing.T) {
 				)),
 				NewLiteralFunction("", "foo"),
 				nil,
-				NewLiteralFunction("", Nothing(nil)),
+				NewLiteralFunction("", value.Nothing(nil)),
 			),
 			output: "foo",
 		},
@@ -106,14 +106,14 @@ func TestExpressions(t *testing.T) {
 				nil,
 				NewLiteralFunction("", "bar"),
 			),
-			err: errors.New("failed to check if condition: variables were undefined"),
+			errContains: "failed to check if condition: variables were undefined",
 		},
 		"match context fails": {
 			input: NewMatchFunction(
 				NewVarFunction("doesnt exist"),
 				NewMatchCase(NewLiteralFunction("", true), NewLiteralFunction("", "foo")),
 			),
-			err: errors.New("variables were undefined"),
+			errContains: "variables were undefined",
 		},
 		"match first case fails": {
 			input: NewMatchFunction(
@@ -121,7 +121,7 @@ func TestExpressions(t *testing.T) {
 				NewMatchCase(NewVarFunction("doesnt exist"), NewLiteralFunction("", "foo")),
 				NewMatchCase(NewLiteralFunction("", true), NewLiteralFunction("", "bar")),
 			),
-			err: errors.New("failed to check match case 0: variables were undefined"),
+			errContains: "failed to check match case 0: variables were undefined",
 		},
 		"match second case fails": {
 			input: NewMatchFunction(
@@ -155,7 +155,7 @@ func TestExpressions(t *testing.T) {
 				NewMatchCase(NewLiteralFunction("", false), NewLiteralFunction("", "foo")),
 				NewMatchCase(NewLiteralFunction("", false), NewLiteralFunction("", "bar")),
 			),
-			output: Nothing(nil),
+			output: value.Nothing(nil),
 		},
 		"named context map arithmetic": {
 			input: mustFunc(NewArithmeticExpression(
@@ -226,6 +226,15 @@ func TestExpressions(t *testing.T) {
 			}(),
 			output: []any{23},
 		},
+		"non-boolean literal": {
+			input: NewIfFunction(
+				NewLiteralFunction("", "hello world"),
+				NewLiteralFunction("", "foo"),
+				nil,
+				NewLiteralFunction("", "buz"),
+			),
+			errContains: "string literal resolved to a non-boolean value hello world",
+		},
 	}
 
 	for name, test := range tests {
@@ -250,8 +259,9 @@ func TestExpressions(t *testing.T) {
 					Index:    test.index,
 					MsgBatch: msg,
 				}.WithValueFunc(func() *any { return test.value }))
-				if test.err != nil {
-					require.EqualError(t, err, test.err.Error())
+				if test.errContains != "" {
+					require.Error(t, err)
+					require.Contains(t, err.Error(), test.errContains)
 				} else {
 					require.NoError(t, err)
 				}

@@ -29,9 +29,9 @@ Subscribe to a NATS subject.
 input:
   label: ""
   nats:
-    urls: []
-    subject: ""
-    queue: ""
+    urls: [] # No default (required)
+    subject: foo.bar.baz # No default (required)
+    queue: "" # No default (optional)
 ```
 
 </TabItem>
@@ -42,11 +42,11 @@ input:
 input:
   label: ""
   nats:
-    urls: []
-    subject: ""
-    queue: ""
-    nak_delay: ""
-    prefetch_count: 32
+    urls: [] # No default (required)
+    subject: foo.bar.baz # No default (required)
+    queue: "" # No default (optional)
+    nak_delay: 1m # No default (optional)
+    prefetch_count: 524288
     tls:
       enabled: false
       skip_cert_verify: false
@@ -55,10 +55,11 @@ input:
       root_cas_file: ""
       client_certs: []
     auth:
-      nkey_file: ""
-      user_credentials_file: ""
-      user_jwt: ""
-      user_nkey_seed: ""
+      nkey_file: ./seed.nk # No default (optional)
+      user_credentials_file: ./user.creds # No default (optional)
+      user_jwt: "" # No default (optional)
+      user_nkey_seed: "" # No default (optional)
+    extract_tracing_map: root = @ # No default (optional)
 ```
 
 </TabItem>
@@ -75,6 +76,14 @@ This input adds the following metadata fields to each message:
 
 You can access these metadata fields using [function interpolation](/docs/configuration/interpolation#bloblang-queries).
 
+### Connection Name
+
+When monitoring and managing a production NATS system, it is often useful to
+know which connection a message was send/received from. This can be achieved by
+setting the connection name option when creating a NATS connection.
+
+Benthos will automatically set the connection name based off the label of the given
+NATS component, so that monitoring tools between NATS and benthos can stay in sync.
 ### Authentication
 
 There are several components within Benthos which utilise NATS services. You will find that each of these components
@@ -169,7 +178,7 @@ The maximum number of messages to pull at a time.
 
 
 Type: `int`  
-Default: `32`  
+Default: `524288`  
 
 ### `tls`
 
@@ -243,6 +252,7 @@ A list of client certificates to use. For each certificate either the fields `ce
 
 
 Type: `array`  
+Default: `[]`  
 
 ```yml
 # Examples
@@ -362,5 +372,21 @@ This field contains sensitive information that usually shouldn't be added to a c
 
 
 Type: `string`  
+
+### `extract_tracing_map`
+
+EXPERIMENTAL: A [Bloblang mapping](/docs/guides/bloblang/about) that attempts to extract an object containing tracing propagation information, which will then be used as the root tracing span for the message. The specification of the extracted fields must match the format used by the service wide tracer.
+
+
+Type: `string`  
+Requires version 4.23.0 or newer  
+
+```yml
+# Examples
+
+extract_tracing_map: root = @
+
+extract_tracing_map: root = this.meta.span
+```
 
 

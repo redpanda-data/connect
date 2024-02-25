@@ -28,10 +28,10 @@ Performs an HTTP request using a message batch as the request body, and replaces
 # Common config fields, showing default values
 label: ""
 http:
-  url: ""
+  url: "" # No default (required)
   verb: POST
   headers: {}
-  rate_limit: ""
+  rate_limit: "" # No default (optional)
   timeout: 5s
   parallel: false
 ```
@@ -43,7 +43,7 @@ http:
 # All config fields, showing default values
 label: ""
 http:
-  url: ""
+  url: "" # No default (required)
   verb: POST
   headers: {}
   metadata:
@@ -62,6 +62,7 @@ http:
     client_secret: ""
     token_url: ""
     scopes: []
+    endpoint_params: {}
   basic_auth:
     enabled: false
     username: ""
@@ -82,7 +83,7 @@ http:
   extract_headers:
     include_prefixes: []
     include_patterns: []
-  rate_limit: ""
+  rate_limit: "" # No default (optional)
   timeout: 5s
   retry_period: 1s
   max_retry_backoff: 300s
@@ -91,7 +92,7 @@ http:
     - 429
   drop_on: []
   successful_on: []
-  proxy_url: ""
+  proxy_url: "" # No default (optional)
   batch_as_multipart: false
   parallel: false
 ```
@@ -354,6 +355,26 @@ Type: `array`
 Default: `[]`  
 Requires version 3.45.0 or newer  
 
+### `oauth2.endpoint_params`
+
+A list of optional endpoint parameters, values should be arrays of strings.
+
+
+Type: `object`  
+Default: `{}`  
+Requires version 4.21.0 or newer  
+
+```yml
+# Examples
+
+endpoint_params:
+  bar:
+    - woof
+  foo:
+    - meow
+    - quack
+```
+
 ### `basic_auth`
 
 Allows you to specify basic authentication.
@@ -507,6 +528,7 @@ A list of client certificates to use. For each certificate either the fields `ce
 
 
 Type: `array`  
+Default: `[]`  
 
 ```yml
 # Examples
@@ -690,7 +712,6 @@ An optional HTTP proxy URL.
 
 
 Type: `string`  
-Default: `""`  
 
 ### `batch_as_multipart`
 

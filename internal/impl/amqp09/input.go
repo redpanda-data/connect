@@ -14,38 +14,23 @@ import (
 
 	amqp "github.com/rabbitmq/amqp091-go"
 
-	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component"
-	"github.com/benthosdev/benthos/v4/internal/component/input"
-	"github.com/benthosdev/benthos/v4/internal/component/input/processors"
-	"github.com/benthosdev/benthos/v4/internal/docs"
-	"github.com/benthosdev/benthos/v4/internal/log"
-	"github.com/benthosdev/benthos/v4/internal/message"
-	btls "github.com/benthosdev/benthos/v4/internal/tls"
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
-func init() {
-	err := bundle.AllInputs.Add(processors.WrapConstructor(func(c input.Config, nm bundle.NewManagement) (input.Streamed, error) {
-		var a input.Async
-		var err error
-		if a, err = newAMQP09Reader(c.AMQP09, nm); err != nil {
-			return nil, err
-		}
-		return input.NewAsyncReader("amqp_0_9", a, nm)
-	}), docs.ComponentSpec{
-		Name: "amqp_0_9",
-		Summary: `
-Connects to an AMQP (0.91) queue. AMQP is a messaging protocol used by various
-message brokers, including RabbitMQ.`,
-		Description: `
-TLS is automatic when connecting to an ` + "`amqps`" + ` URL, but custom
-settings can be enabled in the ` + "`tls`" + ` section.
+func amqp09InputSpec() *service.ConfigSpec {
+	return service.NewConfigSpec().
+		Categories("Services").
+		Stable().
+		Summary(`Connects to an AMQP (0.91) queue. AMQP is a messaging protocol used by various message brokers, including RabbitMQ.`).
+		Description(`
+TLS is automatic when connecting to an `+"`amqps`"+` URL, but custom settings can be enabled in the `+"`tls`"+` section.
 
 ### Metadata
 
 This input adds the following metadata fields to each message:
 
-` + "``` text" + `
+`+"``` text"+`
 - amqp_content_type
 - amqp_content_encoding
 - amqp_delivery_mode
@@ -64,52 +49,84 @@ This input adds the following metadata fields to each message:
 - amqp_exchange
 - amqp_routing_key
 - All existing message headers, including nested headers prefixed with the key of their respective parent.
-` + "```" + `
+`+"```"+`
 
-You can access these metadata fields using
-[function interpolation](/docs/configuration/interpolation#bloblang-queries).`,
-		Categories: []string{
-			"Services",
-		},
-		Config: docs.FieldComponent().WithChildren(
-			docs.FieldURL("urls",
-				"A list of URLs to connect to. The first URL to successfully establish a connection will be used until the connection is closed. If an item of the list contains commas it will be expanded into multiple URLs.",
-				[]string{"amqp://guest:guest@127.0.0.1:5672/"},
-				[]string{"amqp://127.0.0.1:5672/,amqp://127.0.0.2:5672/"},
-				[]string{"amqp://127.0.0.1:5672/", "amqp://127.0.0.2:5672/"},
-			).Array().AtVersion("3.58.0").HasDefault([]any{}),
-			docs.FieldString("queue", "An AMQP queue to consume from.").HasDefault(""),
-			docs.FieldObject("queue_declare", `
-Allows you to passively declare the target queue. If the queue already exists
-then the declaration passively verifies that they match the target fields.`,
-			).WithChildren(
-				docs.FieldBool("enabled", "Whether to enable queue declaration.").HasDefault(false),
-				docs.FieldBool("durable", "Whether the declared queue is durable.").HasDefault(true),
-				docs.FieldBool("auto_delete", "Whether the declared queue will auto-delete.").HasDefault(false),
-			).Advanced(),
-			docs.FieldObject("bindings_declare",
-				"Allows you to passively declare bindings for the target queue.",
-				[]any{
-					map[string]any{
-						"exchange": "foo",
-						"key":      "bar",
-					},
+You can access these metadata fields using [function interpolation](/docs/configuration/interpolation#bloblang-queries).`).Fields(
+		service.NewURLListField(urlsField).
+			Description("A list of URLs to connect to. The first URL to successfully establish a connection will be used until the connection is closed. If an item of the list contains commas it will be expanded into multiple URLs.").
+			Example([]string{"amqp://guest:guest@127.0.0.1:5672/"}).
+			Example([]string{"amqp://127.0.0.1:5672/,amqp://127.0.0.2:5672/"}).
+			Example([]string{"amqp://127.0.0.1:5672/", "amqp://127.0.0.2:5672/"}).
+			Version("3.58.0"),
+		service.NewStringField(queueField).
+			Description("An AMQP queue to consume from."),
+		service.NewObjectField(queueDeclareField,
+			service.NewBoolField(queueDeclareEnabledField).
+				Description("Whether to enable queue declaration.").
+				Default(false),
+			service.NewBoolField(queueDeclareDurableField).
+				Description("Whether the declared queue is durable.").
+				Default(true),
+			service.NewBoolField(queueDeclareAutoDeleteField).
+				Description("Whether the declared queue will auto-delete.").
+				Default(false),
+		).
+			Description(`Allows you to passively declare the target queue. If the queue already exists then the declaration passively verifies that they match the target fields.`).
+			Advanced().
+			Optional(),
+		service.NewObjectListField(bindingsDeclareField,
+			service.NewStringField(bindingsDeclareExchangeField).
+				Description("The exchange of the declared binding.").
+				Default(""),
+			service.NewStringField(bindingsDeclareKeyField).
+				Description("The key of the declared binding.").
+				Default(""),
+		).
+			Description(`Allows you to passively declare bindings for the target queue.`).
+			Advanced().
+			Optional().
+			Example([]any{
+				map[string]any{
+					"exchange": "foo",
+					"key":      "bar",
 				},
-			).Array().WithChildren(
-				docs.FieldString("exchange", "The exchange of the declared binding.").HasDefault(""),
-				docs.FieldString("key", "The key of the declared binding.").HasDefault(""),
-			).Advanced().HasDefault([]any{}),
-			docs.FieldString("consumer_tag", "A consumer tag.").HasDefault(""),
-			docs.FieldBool("auto_ack", "Acknowledge messages automatically as they are consumed rather than waiting for acknowledgments from downstream. This can improve throughput and prevent the pipeline from blocking but at the cost of eliminating delivery guarantees.").Advanced().HasDefault(false),
-			docs.FieldString("nack_reject_patterns", "A list of regular expression patterns whereby if a message that has failed to be delivered by Benthos has an error that matches it will be dropped (or delivered to a dead-letter queue if one exists). By default failed messages are nacked with requeue enabled.", []string{"^reject me please:.+$"}).Array().Advanced().AtVersion("3.64.0").HasDefault([]any{}),
-			docs.FieldInt("prefetch_count", "The maximum number of pending messages to have consumed at a time.").HasDefault(10),
-			docs.FieldInt("prefetch_size", "The maximum amount of pending messages measured in bytes to have consumed at a time.").Advanced().HasDefault(0),
-			btls.FieldSpec(),
-		),
+			}),
+		service.NewStringField(consumerTagField).
+			Description("A consumer tag.").
+			Default(""),
+		service.NewBoolField(autoAckField).
+			Description("Acknowledge messages automatically as they are consumed rather than waiting for acknowledgments from downstream. This can improve throughput and prevent the pipeline from blocking but at the cost of eliminating delivery guarantees.").
+			Default(false).
+			Advanced(),
+		service.NewStringListField(nackRejectPattensField).
+			Description("A list of regular expression patterns whereby if a message that has failed to be delivered by Benthos has an error that matches it will be dropped (or delivered to a dead-letter queue if one exists). By default failed messages are nacked with requeue enabled.").
+			Example([]string{"^reject me please:.+$"}).
+			Advanced().
+			Version("3.64.0").
+			Default([]any{}),
+		service.NewIntField(prefetchCountField).
+			Description("The maximum number of pending messages to have consumed at a time.").
+			Default(10),
+		service.NewIntField(prefetchSizeField).
+			Description("The maximum amount of pending messages measured in bytes to have consumed at a time.").
+			Default(0).
+			Advanced(),
+		service.NewTLSToggledField(tlsField),
+	)
+}
+
+func init() {
+	err := service.RegisterInput("amqp_0_9", amqp09InputSpec(), func(conf *service.ParsedConfig, mgr *service.Resources) (service.Input, error) {
+		return amqp09ReaderFromParsed(conf, mgr)
 	})
 	if err != nil {
 		panic(err)
 	}
+}
+
+type amqp09BindingDeclare struct {
+	exchange   string
+	routingKey string
 }
 
 //------------------------------------------------------------------------------
@@ -121,28 +138,41 @@ type amqp09Reader struct {
 	amqpChan     *amqp.Channel
 	consumerChan <-chan amqp.Delivery
 
-	urls    []string
-	tlsConf *tls.Config
+	urls       []string
+	queue      string
+	tlsEnabled bool
+	tlsConf    *tls.Config
+
+	prefetchCount int
+	prefetchSize  int
+	consumerTag   string
+	autoAck       bool
 
 	nackRejectPattens []*regexp.Regexp
 
-	conf input.AMQP09Config
-	log  log.Modular
+	queueDeclare    bool
+	queueDurable    bool
+	queueAutoDelete bool
 
-	m sync.RWMutex
+	bindingDeclare []amqp09BindingDeclare
+
+	log *service.Logger
+	m   sync.RWMutex
 }
 
-func newAMQP09Reader(conf input.AMQP09Config, mgr bundle.NewManagement) (*amqp09Reader, error) {
+func amqp09ReaderFromParsed(conf *service.ParsedConfig, mgr *service.Resources) (*amqp09Reader, error) {
 	a := amqp09Reader{
-		conf: conf,
-		log:  mgr.Logger(),
+		log: mgr.Logger(),
 	}
 
-	if len(conf.URLs) == 0 {
+	urlStrs, err := conf.FieldStringList(urlsField)
+	if err != nil {
+		return nil, err
+	}
+	if len(urlStrs) == 0 {
 		return nil, errors.New("must specify at least one URL")
 	}
-
-	for _, u := range conf.URLs {
+	for _, u := range urlStrs {
 		for _, splitURL := range strings.Split(u, ",") {
 			if trimmed := strings.TrimSpace(splitURL); len(trimmed) > 0 {
 				a.urls = append(a.urls, trimmed)
@@ -150,20 +180,65 @@ func newAMQP09Reader(conf input.AMQP09Config, mgr bundle.NewManagement) (*amqp09
 		}
 	}
 
-	for _, p := range conf.NackRejectPatterns {
-		r, err := regexp.Compile(p)
-		if err != nil {
-			return nil, fmt.Errorf("failed to compile nack reject pattern: %w", err)
-		}
-		a.nackRejectPattens = append(a.nackRejectPattens, r)
+	if a.queue, err = conf.FieldString(queueField); err != nil {
+		return nil, err
 	}
 
-	if conf.TLS.Enabled {
-		var err error
-		if a.tlsConf, err = conf.TLS.Get(mgr.FS()); err != nil {
+	if a.tlsConf, a.tlsEnabled, err = conf.FieldTLSToggled(tlsField); err != nil {
+		return nil, err
+	}
+
+	if a.prefetchCount, err = conf.FieldInt(prefetchCountField); err != nil {
+		return nil, err
+	}
+	if a.prefetchSize, err = conf.FieldInt(prefetchSizeField); err != nil {
+		return nil, err
+	}
+	if a.consumerTag, err = conf.FieldString(consumerTagField); err != nil {
+		return nil, err
+	}
+	if a.autoAck, err = conf.FieldBool(autoAckField); err != nil {
+		return nil, err
+	}
+
+	if conf.Contains(nackRejectPattensField) {
+		nackPatternStrs, err := conf.FieldStringList(nackRejectPattensField)
+		if err != nil {
 			return nil, err
 		}
+		for _, p := range nackPatternStrs {
+			r, err := regexp.Compile(p)
+			if err != nil {
+				return nil, fmt.Errorf("failed to compile nack reject pattern: %w", err)
+			}
+			a.nackRejectPattens = append(a.nackRejectPattens, r)
+		}
 	}
+
+	if conf.Contains(queueDeclareField) {
+		qdConf := conf.Namespace(queueDeclareField)
+		a.queueDeclare, _ = qdConf.FieldBool(queueDeclareEnabledField)
+		a.queueDurable, _ = qdConf.FieldBool(queueDeclareDurableField)
+		a.queueAutoDelete, _ = qdConf.FieldBool(queueDeclareAutoDeleteField)
+	}
+
+	if conf.Contains(bindingsDeclareField) {
+		qbConfs, err := conf.FieldObjectList(bindingsDeclareField)
+		if err != nil {
+			return nil, err
+		}
+		for _, c := range qbConfs {
+			var dec amqp09BindingDeclare
+			if dec.exchange, err = c.FieldString(bindingsDeclareExchangeField); err != nil {
+				return nil, err
+			}
+			if dec.routingKey, err = c.FieldString(bindingsDeclareKeyField); err != nil {
+				return nil, err
+			}
+			a.bindingDeclare = append(a.bindingDeclare, dec)
+		}
+	}
+
 	return &a, nil
 }
 
@@ -188,57 +263,65 @@ func (a *amqp09Reader) Connect(ctx context.Context) (err error) {
 
 	amqpChan, err = conn.Channel()
 	if err != nil {
-		return fmt.Errorf("AMQP 0.9 Channel: %s", err)
+		return fmt.Errorf("AMQP 0.9 Channel: %w", err)
 	}
 
-	if a.conf.QueueDeclare.Enabled {
+	if a.queueDeclare {
 		if _, err = amqpChan.QueueDeclare(
-			a.conf.Queue,                   // name of the queue
-			a.conf.QueueDeclare.Durable,    // durable
-			a.conf.QueueDeclare.AutoDelete, // delete when unused
-			false,                          // exclusive
-			false,                          // noWait
-			nil,                            // arguments
+			a.queue,           // name of the queue
+			a.queueDurable,    // durable
+			a.queueAutoDelete, // delete when unused
+			false,             // exclusive
+			false,             // noWait
+			nil,               // arguments
 		); err != nil {
-			return fmt.Errorf("queue Declare: %s", err)
+			_ = amqpChan.Close()
+			_ = conn.Close()
+			return fmt.Errorf("queue Declare: %w", err)
 		}
 	}
 
-	for _, bConf := range a.conf.BindingsDeclare {
+	for _, bConf := range a.bindingDeclare {
 		if err = amqpChan.QueueBind(
-			a.conf.Queue,     // name of the queue
-			bConf.RoutingKey, // bindingKey
-			bConf.Exchange,   // sourceExchange
+			a.queue,          // name of the queue
+			bConf.routingKey, // bindingKey
+			bConf.exchange,   // sourceExchange
 			false,            // noWait
 			nil,              // arguments
 		); err != nil {
-			return fmt.Errorf("queue Bind: %s", err)
+			_ = amqpChan.Close()
+			_ = conn.Close()
+			return fmt.Errorf("queue Bind: %w", err)
 		}
 	}
 
 	if err = amqpChan.Qos(
-		a.conf.PrefetchCount, a.conf.PrefetchSize, false,
+		a.prefetchCount, a.prefetchSize, false,
 	); err != nil {
-		return fmt.Errorf("qos: %s", err)
+		_ = amqpChan.Close()
+		_ = conn.Close()
+		return fmt.Errorf("qos: %w", err)
 	}
 
 	if consumerChan, err = amqpChan.Consume(
-		a.conf.Queue,       // name
-		a.conf.ConsumerTag, // consumerTag,
-		a.conf.AutoAck,     // autoAck
-		false,              // exclusive
-		false,              // noLocal
-		false,              // noWait
-		nil,                // arguments
+		a.queue,       // name
+		a.consumerTag, // consumerTag,
+		a.autoAck,     // autoAck
+		false,         // exclusive
+		false,         // noLocal
+		false,         // noWait
+		nil,           // arguments
 	); err != nil {
-		return fmt.Errorf("queue Consume: %s", err)
+		_ = amqpChan.Close()
+		_ = conn.Close()
+		return fmt.Errorf("queue Consume: %w", err)
 	}
 
 	a.conn = conn
 	a.amqpChan = amqpChan
 	a.consumerChan = consumerChan
 
-	a.log.Infof("Receiving AMQP 0.9 messages from queue: %v\n", a.conf.Queue)
+	a.log.Infof("Receiving AMQP 0.9 messages from queue: %s", a.queue)
 	return
 }
 
@@ -248,14 +331,14 @@ func (a *amqp09Reader) disconnect() error {
 	defer a.m.Unlock()
 
 	if a.amqpChan != nil {
-		if err := a.amqpChan.Cancel(a.conf.ConsumerTag, true); err != nil {
-			a.log.Errorf("Failed to cancel consumer: %v\n", err)
+		if err := a.amqpChan.Cancel(a.consumerTag, true); err != nil {
+			a.log.Errorf("Failed to cancel consumer: %w", err)
 		}
 		a.amqpChan = nil
 	}
 	if a.conn != nil {
 		if err := a.conn.Close(); err != nil {
-			a.log.Errorf("Failed to close connection cleanly: %v\n", err)
+			a.log.Errorf("Failed to close connection cleanly: %w", err)
 		}
 		a.conn = nil
 	}
@@ -265,7 +348,7 @@ func (a *amqp09Reader) disconnect() error {
 
 //------------------------------------------------------------------------------
 
-func amqpSetMetadata(p *message.Part, k string, v any) {
+func amqpSetMetadata(p *service.Message, k string, v any) {
 	var metaValue string
 	metaKey := strings.ReplaceAll(k, "-", "_")
 
@@ -303,7 +386,7 @@ func amqpSetMetadata(p *message.Part, k string, v any) {
 		return
 	case []interface{}:
 		for key, value := range v {
-			amqpSetMetadata(p, fmt.Sprintf("%s_%v", metaKey, key), value)
+			amqpSetMetadata(p, fmt.Sprintf("%s_%d", metaKey, key), value)
 		}
 		return
 	default:
@@ -315,8 +398,7 @@ func amqpSetMetadata(p *message.Part, k string, v any) {
 	}
 }
 
-// ReadBatch a new AMQP09 message.
-func (a *amqp09Reader) ReadBatch(ctx context.Context) (message.Batch, input.AsyncAckFn, error) {
+func (a *amqp09Reader) Read(ctx context.Context) (*service.Message, service.AckFunc, error) {
 	var c <-chan amqp.Delivery
 
 	a.m.RLock()
@@ -326,12 +408,11 @@ func (a *amqp09Reader) ReadBatch(ctx context.Context) (message.Batch, input.Asyn
 	a.m.RUnlock()
 
 	if c == nil {
-		return nil, nil, component.ErrNotConnected
+		return nil, nil, service.ErrNotConnected
 	}
 
-	msg := message.QuickBatch(nil)
-	addPart := func(data amqp.Delivery) {
-		part := message.NewPart(data.Body)
+	dataToMsg := func(data amqp.Delivery) *service.Message {
+		part := service.NewMessage(data.Body)
 
 		for k, v := range data.Headers {
 			amqpSetMetadata(part, k, v)
@@ -363,18 +444,17 @@ func (a *amqp09Reader) ReadBatch(ctx context.Context) (message.Batch, input.Asyn
 		amqpSetMetadata(part, "amqp_exchange", data.Exchange)
 		amqpSetMetadata(part, "amqp_routing_key", data.RoutingKey)
 
-		msg = append(msg, part)
+		return part
 	}
 
 	select {
 	case data, open := <-c:
 		if !open {
 			_ = a.disconnect()
-			return nil, nil, component.ErrNotConnected
+			return nil, nil, service.ErrNotConnected
 		}
-		addPart(data)
-		return msg, func(actx context.Context, res error) error {
-			if a.conf.AutoAck {
+		return dataToMsg(data), func(actx context.Context, res error) error {
+			if a.autoAck {
 				return nil
 			}
 			if res != nil {
@@ -419,22 +499,22 @@ func (a *amqp09Reader) dial(amqpURL string) (conn *amqp.Connection, err error) {
 		return nil, fmt.Errorf("invalid AMQP URL: %w", err)
 	}
 
-	if a.conf.TLS.Enabled {
+	if a.tlsEnabled {
 		if u.User != nil {
 			conn, err = amqp.DialTLS(amqpURL, a.tlsConf)
 			if err != nil {
-				return nil, fmt.Errorf("%w: %s", errAMQP09Connect, err)
+				return nil, fmt.Errorf("%w: %w", errAMQP09Connect, err)
 			}
 		} else {
 			conn, err = amqp.DialTLS_ExternalAuth(amqpURL, a.tlsConf)
 			if err != nil {
-				return nil, fmt.Errorf("%w: %s", errAMQP09Connect, err)
+				return nil, fmt.Errorf("%w: %w", errAMQP09Connect, err)
 			}
 		}
 	} else {
 		conn, err = amqp.Dial(amqpURL)
 		if err != nil {
-			return nil, fmt.Errorf("%w: %s", errAMQP09Connect, err)
+			return nil, fmt.Errorf("%w: %w", errAMQP09Connect, err)
 		}
 	}
 

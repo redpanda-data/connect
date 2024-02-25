@@ -10,73 +10,81 @@ import (
 
 	nsq "github.com/nsqio/go-nsq"
 
-	"github.com/benthosdev/benthos/v4/internal/bloblang/field"
-	"github.com/benthosdev/benthos/v4/internal/bundle"
-	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
-	"github.com/benthosdev/benthos/v4/internal/component/output/processors"
-	"github.com/benthosdev/benthos/v4/internal/docs"
-	"github.com/benthosdev/benthos/v4/internal/log"
-	"github.com/benthosdev/benthos/v4/internal/message"
-	btls "github.com/benthosdev/benthos/v4/internal/tls"
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
+const (
+	noFieldNSQDAddr  = "nsqd_tcp_address"
+	noFieldTLS       = "tls"
+	noFieldTopic     = "topic"
+	noFieldUserAgent = "user_agent"
+)
+
+func outputConfigSpec() *service.ConfigSpec {
+	return service.NewConfigSpec().
+		Stable().
+		Categories("Services").
+		Summary(`Publish to an NSQ topic.`).
+		Description(output.Description(true, false, `The `+"`topic`"+` field can be dynamically set using function interpolations described [here](/docs/configuration/interpolation#bloblang-queries). When sending batched messages these interpolations are performed per message part.`)).
+		Fields(
+			service.NewStringField(noFieldNSQDAddr).
+				Description("The address of the target NSQD server."),
+			service.NewInterpolatedStringField(noFieldTopic).
+				Description("The topic to publish to."),
+			service.NewStringField(noFieldUserAgent).
+				Description("A user agent to assume when connecting.").
+				Optional(),
+			service.NewTLSToggledField(noFieldTLS),
+			service.NewOutputMaxInFlightField(),
+		)
+}
+
 func init() {
-	err := bundle.AllOutputs.Add(processors.WrapConstructor(newNSQOutput), docs.ComponentSpec{
-		Name:        "nsq",
-		Summary:     `Publish to an NSQ topic.`,
-		Description: output.Description(true, false, `The `+"`topic`"+` field can be dynamically set using function interpolations described [here](/docs/configuration/interpolation#bloblang-queries). When sending batched messages these interpolations are performed per message part.`),
-		Config: docs.FieldComponent().WithChildren(
-			docs.FieldString("nsqd_tcp_address", "The address of the target NSQD server."),
-			docs.FieldString("topic", "The topic to publish to.").IsInterpolated(),
-			docs.FieldString("user_agent", "A user agent string to connect with."),
-			btls.FieldSpec(),
-			docs.FieldInt("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
-		).ChildDefaultAndTypesFromStruct(output.NewNSQConfig()),
-		Categories: []string{
-			"Services",
-		},
+	err := service.RegisterOutput("nsq", outputConfigSpec(), func(conf *service.ParsedConfig, mgr *service.Resources) (service.Output, int, error) {
+		wtr, err := newNSQWriterFromParsed(conf, mgr)
+		if err != nil {
+			return nil, 0, err
+		}
+		mIF, err := conf.FieldMaxInFlight()
+		if err != nil {
+			return nil, 0, err
+		}
+		return wtr, mIF, nil
 	})
 	if err != nil {
 		panic(err)
 	}
 }
 
-func newNSQOutput(conf output.Config, mgr bundle.NewManagement) (output.Streamed, error) {
-	w, err := newNSQWriter(conf.NSQ, mgr)
-	if err != nil {
-		return nil, err
-	}
-	return output.NewAsyncWriter("nsq", conf.NSQ.MaxInFlight, w, mgr)
-}
-
 type nsqWriter struct {
-	log log.Modular
+	log *service.Logger
 
-	topicStr *field.Expression
+	address   string
+	topicStr  *service.InterpolatedString
+	tlsConf   *tls.Config
+	userAgent string
 
-	tlsConf  *tls.Config
 	connMut  sync.RWMutex
 	producer *nsq.Producer
-
-	conf output.NSQConfig
 }
 
-func newNSQWriter(conf output.NSQConfig, mgr bundle.NewManagement) (*nsqWriter, error) {
-	n := nsqWriter{
-		log:  mgr.Logger(),
-		conf: conf,
+func newNSQWriterFromParsed(conf *service.ParsedConfig, mgr *service.Resources) (n *nsqWriter, err error) {
+	n = &nsqWriter{
+		log: mgr.Logger(),
 	}
-	var err error
-	if n.topicStr, err = mgr.BloblEnvironment().NewField(conf.Topic); err != nil {
-		return nil, fmt.Errorf("failed to parse topic expression: %v", err)
+
+	if n.address, err = conf.FieldString(noFieldNSQDAddr); err != nil {
+		return
 	}
-	if conf.TLS.Enabled {
-		if n.tlsConf, err = conf.TLS.Get(mgr.FS()); err != nil {
-			return nil, err
-		}
+	if n.topicStr, err = conf.FieldInterpolatedString(noFieldTopic); err != nil {
+		return nil, err
 	}
-	return &n, nil
+	if n.tlsConf, _, err = conf.FieldTLSToggled(noFieldTLS); err != nil {
+		return
+	}
+	n.userAgent, _ = conf.FieldString(noFieldUserAgent)
+	return
 }
 
 func (n *nsqWriter) Connect(ctx context.Context) error {
@@ -84,13 +92,13 @@ func (n *nsqWriter) Connect(ctx context.Context) error {
 	defer n.connMut.Unlock()
 
 	cfg := nsq.NewConfig()
-	cfg.UserAgent = n.conf.UserAgent
+	cfg.UserAgent = n.userAgent
 	if n.tlsConf != nil {
 		cfg.TlsV1 = true
 		cfg.TlsConfig = n.tlsConf
 	}
 
-	producer, err := nsq.NewProducer(n.conf.Address, cfg)
+	producer, err := nsq.NewProducer(n.address, cfg)
 	if err != nil {
 		return err
 	}
@@ -101,26 +109,29 @@ func (n *nsqWriter) Connect(ctx context.Context) error {
 		return err
 	}
 	n.producer = producer
-	n.log.Infof("Sending NSQ messages to address: %s\n", n.conf.Address)
+	n.log.Infof("Sending NSQ messages to address: %s", n.address)
 	return nil
 }
 
-func (n *nsqWriter) WriteBatch(ctx context.Context, msg message.Batch) error {
+func (n *nsqWriter) Write(ctx context.Context, msg *service.Message) error {
 	n.connMut.RLock()
 	prod := n.producer
 	n.connMut.RUnlock()
 
 	if prod == nil {
-		return component.ErrNotConnected
+		return service.ErrNotConnected
 	}
 
-	return output.IterateBatchedSend(msg, func(i int, p *message.Part) error {
-		topicStr, err := n.topicStr.String(i, msg)
-		if err != nil {
-			return fmt.Errorf("topic interpolation error: %w", err)
-		}
-		return prod.Publish(topicStr, p.AsBytes())
-	})
+	topicStr, err := n.topicStr.TryString(msg)
+	if err != nil {
+		return fmt.Errorf("topic interpolation error: %w", err)
+	}
+
+	mBytes, err := msg.AsBytes()
+	if err != nil {
+		return err
+	}
+	return prod.Publish(topicStr, mBytes)
 }
 
 func (n *nsqWriter) Close(context.Context) error {

@@ -23,7 +23,7 @@ func TestEnvironment(t *testing.T) {
 	}))
 
 	_, err := env1.Parse(`root = bar()`)
-	assert.EqualError(t, err, "unrecognised function 'bar': bar()")
+	assert.EqualError(t, err, "unrecognised function 'bar'")
 
 	exe, err := env1.Parse(`root = "bar".foo()`)
 	require.NoError(t, err)
@@ -33,7 +33,7 @@ func TestEnvironment(t *testing.T) {
 	assert.Equal(t, "foo:bar", v)
 
 	_, err = env2.Parse(`root = "bar".foo()`)
-	assert.EqualError(t, err, "unrecognised method 'foo': foo()")
+	assert.EqualError(t, err, "unrecognised method 'foo'")
 
 	exe, err = env2.Parse(`root = bar()`)
 	require.NoError(t, err)
@@ -59,7 +59,7 @@ func TestEnvironmentV2(t *testing.T) {
 	}))
 
 	_, err := env1.Parse(`root = bar()`)
-	assert.EqualError(t, err, "unrecognised function 'bar': bar()")
+	assert.EqualError(t, err, "unrecognised function 'bar'")
 
 	exe, err := env1.Parse(`root = "bar".foo()`)
 	require.NoError(t, err)
@@ -69,7 +69,7 @@ func TestEnvironmentV2(t *testing.T) {
 	assert.Equal(t, "foo:bar", v)
 
 	_, err = env2.Parse(`root = "bar".foo()`)
-	assert.EqualError(t, err, "unrecognised method 'foo': foo()")
+	assert.EqualError(t, err, "unrecognised method 'foo'")
 
 	exe, err = env2.Parse(`root = bar()`)
 	require.NoError(t, err)
@@ -89,7 +89,7 @@ func TestEmptyEnvironment(t *testing.T) {
 	}))
 
 	_, err := env.Parse(`root = now()`)
-	assert.EqualError(t, err, "unrecognised function 'now': now()")
+	assert.EqualError(t, err, "unrecognised function 'now'")
 
 	exe, err := env.Parse(`root = "hello world".foo()`)
 	require.NoError(t, err)

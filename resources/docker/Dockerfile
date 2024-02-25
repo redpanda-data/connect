@@ -1,4 +1,4 @@
-FROM golang:1.20 AS build
+FROM golang:1.21 AS build
 
 ENV CGO_ENABLED=0
 ENV GOOS=linux
@@ -18,7 +18,8 @@ RUN make TAGS="timetzdata"
 # Pack
 FROM busybox AS package
 
-LABEL maintainer="Ashley Jeffs <ash@jeffail.uk>"
+LABEL maintainer="Ashley Jeffs <ash@benthos.dev>"
+LABEL org.opencontainers.image.source="https://github.com/benthosdev/benthos"
 
 WORKDIR /
 

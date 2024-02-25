@@ -17,7 +17,6 @@ import TabItem from '@theme/TabItem';
 :::caution BETA
 This component is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with the component is found.
 :::
-
 Queries an Azure Storage Account Table, optionally with multiple filters.
 
 Introduced in version 4.10.0.
@@ -38,7 +37,8 @@ input:
     storage_account: ""
     storage_access_key: ""
     storage_connection_string: ""
-    table_name: ""
+    storage_sas_token: ""
+    table_name: Foo # No default (required)
 ```
 
 </TabItem>
@@ -52,7 +52,8 @@ input:
     storage_account: ""
     storage_access_key: ""
     storage_connection_string: ""
-    table_name: ""
+    storage_sas_token: ""
+    table_name: Foo # No default (required)
     filter: ""
     select: ""
     page_size: 1000
@@ -74,7 +75,7 @@ You can access these metadata fields using [function interpolation](/docs/config
 
 ### `storage_account`
 
-The storage account to upload messages to. This field is ignored if `storage_connection_string` is set.
+The storage account to access. This field is ignored if `storage_connection_string` is set.
 
 
 Type: `string`  
@@ -90,7 +91,15 @@ Default: `""`
 
 ### `storage_connection_string`
 
-A storage account connection string. This field is required if `storage_account` and `storage_access_key` are not set.
+A storage account connection string. This field is required if `storage_account` and `storage_access_key` / `storage_sas_token` are not set.
+
+
+Type: `string`  
+Default: `""`  
+
+### `storage_sas_token`
+
+The storage account SAS token. This field is ignored if `storage_connection_string` or `storage_access_key` are set.
 
 
 Type: `string`  
@@ -102,7 +111,6 @@ The table to read messages from.
 
 
 Type: `string`  
-Default: `""`  
 
 ```yml
 # Examples
@@ -145,11 +153,5 @@ Maximum number of records to return on each page.
 
 Type: `int`  
 Default: `1000`  
-
-```yml
-# Examples
-
-page_size: "1000"
-```
 
 

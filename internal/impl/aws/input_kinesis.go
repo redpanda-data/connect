@@ -9,81 +9,152 @@ import (
 	"sync"
 	"time"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/awserr"
-	"github.com/aws/aws-sdk-go/service/kinesis"
-	"github.com/aws/aws-sdk-go/service/kinesis/kinesisiface"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/kinesis"
+	"github.com/aws/aws-sdk-go-v2/service/kinesis/types"
 	"github.com/cenkalti/backoff/v4"
 	"github.com/gofrs/uuid"
 
-	"github.com/benthosdev/benthos/v4/internal/batch/policy"
-	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component"
-	"github.com/benthosdev/benthos/v4/internal/component/input"
-	"github.com/benthosdev/benthos/v4/internal/component/input/processors"
-	"github.com/benthosdev/benthos/v4/internal/docs"
-	"github.com/benthosdev/benthos/v4/internal/impl/aws/session"
-	"github.com/benthosdev/benthos/v4/internal/log"
-	"github.com/benthosdev/benthos/v4/internal/message"
-	"github.com/benthosdev/benthos/v4/internal/old/util/retries"
+	"github.com/benthosdev/benthos/v4/internal/impl/aws/config"
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
-func init() {
-	err := bundle.AllInputs.Add(processors.WrapConstructor(func(c input.Config, nm bundle.NewManagement) (input.Streamed, error) {
-		rdr, err := newKinesisReader(c.AWSKinesis, nm)
-		if err != nil {
-			return nil, err
+const (
+	// Kinesis Input DynDB Fields
+	kiddbFieldTable              = "table"
+	kiddbFieldCreate             = "create"
+	kiddbFieldReadCapacityUnits  = "read_capacity_units"
+	kiddbFieldWriteCapacityUnits = "write_capacity_units"
+	kiddbFieldBillingMode        = "billing_mode"
+
+	// Kinesis Input Fields
+	kiFieldDynamoDB        = "dynamodb"
+	kiFieldStreams         = "streams"
+	kiFieldCheckpointLimit = "checkpoint_limit"
+	kiFieldCommitPeriod    = "commit_period"
+	kiFieldLeasePeriod     = "lease_period"
+	kiFieldRebalancePeriod = "rebalance_period"
+	kiFieldStartFromOldest = "start_from_oldest"
+	kiFieldBatching        = "batching"
+)
+
+type kiConfig struct {
+	Streams         []string
+	DynamoDB        kiddbConfig
+	CheckpointLimit int
+	CommitPeriod    string
+	LeasePeriod     string
+	RebalancePeriod string
+	StartFromOldest bool
+}
+
+func kinesisInputConfigFromParsed(pConf *service.ParsedConfig) (conf kiConfig, err error) {
+	if conf.Streams, err = pConf.FieldStringList(kiFieldStreams); err != nil {
+		return
+	}
+	if pConf.Contains(kiFieldDynamoDB) {
+		if conf.DynamoDB, err = kinesisInputDynamoDBConfigFromParsed(pConf.Namespace(kiFieldDynamoDB)); err != nil {
+			return
 		}
-		return input.NewAsyncReader("aws_kinesis", input.NewAsyncPreserver(rdr), nm)
-	}), docs.ComponentSpec{
-		Name:    "aws_kinesis",
-		Status:  docs.StatusStable,
-		Version: "3.36.0",
-		Summary: `
-Receive messages from one or more Kinesis streams.`,
-		Description: `
+	}
+	if conf.CheckpointLimit, err = pConf.FieldInt(kiFieldCheckpointLimit); err != nil {
+		return
+	}
+	if conf.CommitPeriod, err = pConf.FieldString(kiFieldCommitPeriod); err != nil {
+		return
+	}
+	if conf.LeasePeriod, err = pConf.FieldString(kiFieldLeasePeriod); err != nil {
+		return
+	}
+	if conf.RebalancePeriod, err = pConf.FieldString(kiFieldRebalancePeriod); err != nil {
+		return
+	}
+	if conf.StartFromOldest, err = pConf.FieldBool(kiFieldStartFromOldest); err != nil {
+		return
+	}
+	return
+}
+
+func kinesisInputSpec() *service.ConfigSpec {
+	spec := service.NewConfigSpec().
+		Stable().
+		Version("3.36.0").
+		Categories("Services", "AWS").
+		Summary("Receive messages from one or more Kinesis streams.").
+		Description(`
 Consumes messages from one or more Kinesis streams either by automatically balancing shards across other instances of this input, or by consuming shards listed explicitly. The latest message sequence consumed by this input is stored within a [DynamoDB table](#table-schema), which allows it to resume at the correct sequence of the shard during restarts. This table is also used for coordination across distributed inputs when shard balancing.
 
 Benthos will not store a consumed sequence unless it is acknowledged at the output level, which ensures at-least-once delivery guarantees.
 
 ### Ordering
 
-By default messages of a shard can be processed in parallel, up to a limit determined by the field ` + "`checkpoint_limit`" + `. However, if strict ordered processing is required then this value must be set to 1 in order to process shard messages in lock-step. When doing so it is recommended that you perform batching at this component for performance as it will not be possible to batch lock-stepped messages at the output level.
+By default messages of a shard can be processed in parallel, up to a limit determined by the field `+"`checkpoint_limit`"+`. However, if strict ordered processing is required then this value must be set to 1 in order to process shard messages in lock-step. When doing so it is recommended that you perform batching at this component for performance as it will not be possible to batch lock-stepped messages at the output level.
 
 ### Table Schema
 
-It's possible to configure Benthos to create the DynamoDB table required for coordination if it does not already exist. However, if you wish to create this yourself (recommended) then create a table with a string HASH key ` + "`StreamID`" + ` and a string RANGE key ` + "`ShardID`" + `.
+It's possible to configure Benthos to create the DynamoDB table required for coordination if it does not already exist. However, if you wish to create this yourself (recommended) then create a table with a string HASH key `+"`StreamID`"+` and a string RANGE key `+"`ShardID`"+`.
 
 ### Batching
 
-Use the ` + "`batching`" + ` fields to configure an optional [batching policy](/docs/configuration/batching#batch-policy). Each stream shard will be batched separately in order to ensure that acknowledgements aren't contaminated.
-`,
-		Config: docs.FieldComponent().WithChildren(
-			docs.FieldString("streams", "One or more Kinesis data streams to consume from. Shards of a stream are automatically balanced across consumers by coordinating through the provided DynamoDB table. Multiple comma separated streams can be listed in a single element. Shards are automatically distributed across consumers of a stream by coordinating through the provided DynamoDB table. Alternatively, it's possible to specify an explicit shard to consume from with a colon after the stream name, e.g. `foo:0` would consume the shard `0` of the stream `foo`.").Array(),
-			docs.FieldObject(
-				"dynamodb", "Determines the table used for storing and accessing the latest consumed sequence for shards, and for coordinating balanced consumers of streams.",
-			).WithChildren(
-				docs.FieldString("table", "The name of the table to access."),
-				docs.FieldBool("create", "Whether, if the table does not exist, it should be created."),
-				docs.FieldString("billing_mode", "When creating the table determines the billing mode.").HasOptions("PROVISIONED", "PAY_PER_REQUEST").Advanced(),
-				docs.FieldInt("read_capacity_units", "Set the provisioned read capacity when creating the table with a `billing_mode` of `PROVISIONED`.").Advanced(),
-				docs.FieldInt("write_capacity_units", "Set the provisioned write capacity when creating the table with a `billing_mode` of `PROVISIONED`.").Advanced(),
-			),
-			docs.FieldInt(
-				"checkpoint_limit", "The maximum gap between the in flight sequence versus the latest acknowledged sequence at a given time. Increasing this limit enables parallel processing and batching at the output level to work on individual shards. Any given sequence will not be committed unless all messages under that offset are delivered in order to preserve at least once delivery guarantees.",
-			),
-			docs.FieldString("commit_period", "The period of time between each update to the checkpoint table."),
-			docs.FieldString("rebalance_period", "The period of time between each attempt to rebalance shards across clients.").Advanced(),
-			docs.FieldString("lease_period", "The period of time after which a client that has failed to update a shard checkpoint is assumed to be inactive.").Advanced(),
-			docs.FieldBool("start_from_oldest", "Whether to consume from the oldest message when a sequence does not yet exist for the stream."),
-		).WithChildren(session.FieldSpecs()...).
-			WithChildren(policy.FieldSpec()).
-			ChildDefaultAndTypesFromStruct(input.NewAWSKinesisConfig()),
-		Categories: []string{
-			"Services",
-			"AWS",
-		},
-	})
+Use the `+"`batching`"+` fields to configure an optional [batching policy](/docs/configuration/batching#batch-policy). Each stream shard will be batched separately in order to ensure that acknowledgements aren't contaminated.
+`).Fields(
+		service.NewStringListField(kiFieldStreams).
+			Description("One or more Kinesis data streams to consume from. Streams can either be specified by their name or full ARN. Shards of a stream are automatically balanced across consumers by coordinating through the provided DynamoDB table. Multiple comma separated streams can be listed in a single element. Shards are automatically distributed across consumers of a stream by coordinating through the provided DynamoDB table. Alternatively, it's possible to specify an explicit shard to consume from with a colon after the stream name, e.g. `foo:0` would consume the shard `0` of the stream `foo`.").
+			Examples([]any{"foo", "arn:aws:kinesis:*:111122223333:stream/my-stream"}),
+		service.NewObjectField(kiFieldDynamoDB,
+			service.NewStringField(kiddbFieldTable).
+				Description("The name of the table to access.").
+				Default(""),
+			service.NewBoolField(kiddbFieldCreate).
+				Description("Whether, if the table does not exist, it should be created.").
+				Default(false),
+			service.NewStringEnumField(kiddbFieldBillingMode, "PROVISIONED", "PAY_PER_REQUEST").
+				Description("When creating the table determines the billing mode.").
+				Default("PAY_PER_REQUEST").
+				Advanced(),
+			service.NewIntField(kiddbFieldReadCapacityUnits).
+				Description("Set the provisioned read capacity when creating the table with a `billing_mode` of `PROVISIONED`.").
+				Default(0).
+				Advanced(),
+			service.NewIntField(kiddbFieldWriteCapacityUnits).
+				Description("Set the provisioned write capacity when creating the table with a `billing_mode` of `PROVISIONED`.").
+				Default(0).
+				Advanced(),
+		).
+			Description("Determines the table used for storing and accessing the latest consumed sequence for shards, and for coordinating balanced consumers of streams."),
+		service.NewIntField(kiFieldCheckpointLimit).
+			Description("The maximum gap between the in flight sequence versus the latest acknowledged sequence at a given time. Increasing this limit enables parallel processing and batching at the output level to work on individual shards. Any given sequence will not be committed unless all messages under that offset are delivered in order to preserve at least once delivery guarantees.").
+			Default(1024),
+		service.NewDurationField(kiFieldCommitPeriod).
+			Description("The period of time between each update to the checkpoint table.").
+			Default("5s"),
+		service.NewDurationField(kiFieldRebalancePeriod).
+			Description("The period of time between each attempt to rebalance shards across clients.").
+			Default("30s").
+			Advanced(),
+		service.NewDurationField(kiFieldLeasePeriod).
+			Description("The period of time after which a client that has failed to update a shard checkpoint is assumed to be inactive.").
+			Default("30s").
+			Advanced(),
+		service.NewBoolField(kiFieldStartFromOldest).
+			Description("Whether to consume from the oldest message when a sequence does not yet exist for the stream.").
+			Default(true),
+	).
+		Fields(config.SessionFields()...).
+		Field(service.NewBatchPolicyField(kiFieldBatching))
+	return spec
+}
+
+func init() {
+	err := service.RegisterBatchInput("aws_kinesis", kinesisInputSpec(),
+		func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchInput, error) {
+			r, err := newKinesisReaderFromParsed(conf, mgr)
+			if err != nil {
+				return nil, err
+			}
+			return service.AutoRetryNacksBatched(r), nil
+		})
 	if err != nil {
 		panic(err)
 	}
@@ -91,28 +162,34 @@ Use the ` + "`batching`" + ` fields to configure an optional [batching policy](/
 
 //------------------------------------------------------------------------------
 
-var awsKinesisDefaultLimit = int64(10e3)
+var awsKinesisDefaultLimit = int32(10e3)
 
 type asyncMessage struct {
-	msg   message.Batch
-	ackFn input.AsyncAckFn
+	msg   service.MessageBatch
+	ackFn service.AckFunc
+}
+
+type streamInfo struct {
+	explicitShards []string
+	id             string // Either a name or arn, extracted from config and used for balancing shards
+	arn            string
 }
 
 type kinesisReader struct {
-	conf     input.AWSKinesisConfig
+	conf     kiConfig
 	clientID string
 
-	log log.Modular
-	mgr bundle.NewManagement
+	sess    aws.Config
+	batcher service.BatchPolicy
+	log     *service.Logger
+	mgr     *service.Resources
 
-	backoffCtor func() backoff.BackOff
-	boffPool    sync.Pool
+	boffPool sync.Pool
 
-	svc          kinesisiface.KinesisAPI
+	svc          *kinesis.Client
 	checkpointer *awsKinesisCheckpointer
 
-	streamShards    map[string][]string
-	balancedStreams []string
+	streams []*streamInfo
 
 	commitPeriod    time.Duration
 	leasePeriod     time.Duration
@@ -130,17 +207,52 @@ type kinesisReader struct {
 
 var errCannotMixBalancedShards = errors.New("it is not currently possible to include balanced and explicit shard streams in the same kinesis input")
 
-func newKinesisReader(conf input.AWSKinesisConfig, mgr bundle.NewManagement) (*kinesisReader, error) {
-	if conf.Batching.IsNoop() {
-		conf.Batching.Count = 1
+func newKinesisReaderFromParsed(pConf *service.ParsedConfig, mgr *service.Resources) (*kinesisReader, error) {
+	conf, err := kinesisInputConfigFromParsed(pConf)
+	if err != nil {
+		return nil, err
+	}
+	sess, err := GetSession(context.TODO(), pConf)
+	if err != nil {
+		return nil, err
+	}
+	batcher, err := pConf.FieldBatchPolicy(kiFieldBatching)
+	if err != nil {
+		return nil, err
+	}
+	return newKinesisReaderFromConfig(conf, batcher, sess, mgr)
+}
+
+func parseStreamID(id string) (remaining string, shard string, err error) {
+	if streamStartsAt := strings.LastIndex(id, "/"); streamStartsAt > 0 {
+		remaining = id[0:streamStartsAt]
+		id = id[streamStartsAt:]
+	}
+
+	withShards := strings.Split(id, ":")
+	if len(withShards) > 2 {
+		err = fmt.Errorf("stream '%v' is invalid, only one shard should be specified and the same stream can be listed multiple times, e.g. use `foo:0,foo:1` not `foo:0:1`", id)
+		return
+	}
+	remaining += strings.TrimSpace(withShards[0])
+	if len(withShards) > 1 {
+		shard = strings.TrimSpace(withShards[1])
+	}
+	return
+}
+
+func newKinesisReaderFromConfig(conf kiConfig, batcher service.BatchPolicy, sess aws.Config, mgr *service.Resources) (*kinesisReader, error) {
+	if batcher.IsNoop() {
+		batcher.Count = 1
 	}
 
 	k := kinesisReader{
-		conf:         conf,
-		log:          mgr.Logger(),
-		mgr:          mgr,
-		closedChan:   make(chan struct{}),
-		streamShards: map[string][]string{},
+		conf:       conf,
+		sess:       sess,
+		batcher:    batcher,
+		log:        mgr.Logger(),
+		mgr:        mgr,
+		closedChan: make(chan struct{}),
 	}
 	k.ctx, k.done = context.WithCancel(context.Background())
 
@@ -150,40 +262,53 @@ func newKinesisReader(conf input.AWSKinesisConfig, mgr bundle.NewManagement) (*k
 	}
 	k.clientID = u4.String()
 
-	rConf := retries.NewConfig()
-	rConf.Backoff.InitialInterval = "300ms"
-	rConf.Backoff.MaxInterval = "5s"
-	if k.backoffCtor, err = rConf.GetCtor(); err != nil {
-		return nil, err
-	}
 	k.boffPool = sync.Pool{
 		New: func() any {
-			return k.backoffCtor()
+			boff := backoff.NewExponentialBackOff()
+			boff.InitialInterval = time.Millisecond * 300
+			boff.MaxInterval = time.Second * 5
+			boff.MaxElapsedTime = 0
+			return boff
 		},
 	}
 
+	shardsByStream := map[string][]string{}
 	for _, t := range conf.Streams {
 		for _, splitStreams := range strings.Split(t, ",") {
-			if trimmed := strings.TrimSpace(splitStreams); len(trimmed) > 0 {
-				if withShards := strings.Split(trimmed, ":"); len(withShards) > 1 {
-					if len(k.balancedStreams) > 0 {
-						return nil, errCannotMixBalancedShards
-					}
-					if len(withShards) > 2 {
-						return nil, fmt.Errorf("stream '%v' is invalid, only one shard should be specified and the same stream can be listed multiple times, e.g. use `foo:0,foo:1` not `foo:0:1`", trimmed)
-					}
-					stream := strings.TrimSpace(withShards[0])
-					shard := strings.TrimSpace(withShards[1])
-					k.streamShards[stream] = append(k.streamShards[stream], shard)
-				} else {
-					if len(k.streamShards) > 0 {
-						return nil, errCannotMixBalancedShards
-					}
-					k.balancedStreams = append(k.balancedStreams, trimmed)
-				}
+			trimmed := strings.TrimSpace(splitStreams)
+			if len(trimmed) == 0 {
+				continue
 			}
+
+			var shardID string
+			if trimmed, shardID, err = parseStreamID(trimmed); err != nil {
+				return nil, err
+			}
+
+			if shardID != "" {
+				if len(k.streams) > 0 {
+					return nil, errCannotMixBalancedShards
+				}
+				shardsByStream[trimmed] = append(shardsByStream[trimmed], shardID)
+			} else {
+				if len(shardsByStream) > 0 {
+					return nil, errCannotMixBalancedShards
+				}
+				k.streams = append(k.streams, &streamInfo{
+					id: trimmed,
+				})
+			}
+
 		}
 	}
+
+	for id, shards := range shardsByStream {
+		k.streams = append(k.streams, &streamInfo{
+			id:             id,
+			explicitShards: shards,
+		})
+	}
+
 	if k.commitPeriod, err = time.ParseDuration(k.conf.CommitPeriod); err != nil {
 		return nil, fmt.Errorf("failed to parse commit period string: %v", err)
 	}
@@ -204,22 +329,22 @@ const (
 	ErrCodeKMSThrottlingException = "KMSThrottlingException"
 )
 
-func (k *kinesisReader) getIter(streamID, shardID, sequence string) (string, error) {
-	iterType := kinesis.ShardIteratorTypeTrimHorizon
+func (k *kinesisReader) getIter(info streamInfo, shardID, sequence string) (string, error) {
+	iterType := types.ShardIteratorTypeTrimHorizon
 	if !k.conf.StartFromOldest {
-		iterType = kinesis.ShardIteratorTypeLatest
+		iterType = types.ShardIteratorTypeLatest
 	}
 	var startingSequence *string
 	if len(sequence) > 0 {
-		iterType = kinesis.ShardIteratorTypeAfterSequenceNumber
+		iterType = types.ShardIteratorTypeAfterSequenceNumber
 		startingSequence = &sequence
 	}
 
-	res, err := k.svc.GetShardIteratorWithContext(k.ctx, &kinesis.GetShardIteratorInput{
-		StreamName:             &streamID,
+	res, err := k.svc.GetShardIterator(k.ctx, &kinesis.GetShardIteratorInput{
+		StreamARN:              &info.arn,
 		ShardId:                &shardID,
 		StartingSequenceNumber: startingSequence,
-		ShardIteratorType:      &iterType,
+		ShardIteratorType:      iterType,
 	})
 	if err != nil {
 		return "", err
@@ -231,12 +356,12 @@ func (k *kinesisReader) getIter(streamID, shardID, sequence string) (string, err
 	}
 	if iter == "" {
 		// If we failed to obtain from a sequence we start from beginning
-		iterType = kinesis.ShardIteratorTypeTrimHorizon
+		iterType = types.ShardIteratorTypeTrimHorizon
 
-		res, err := k.svc.GetShardIteratorWithContext(k.ctx, &kinesis.GetShardIteratorInput{
-			StreamName:        &streamID,
+		res, err := k.svc.GetShardIterator(k.ctx, &kinesis.GetShardIteratorInput{
+			StreamARN:         &info.arn,
 			ShardId:           &shardID,
-			ShardIteratorType: &iterType,
+			ShardIteratorType: iterType,
 		})
 		if err != nil {
 			return "", err
@@ -257,8 +382,9 @@ func (k *kinesisReader) getIter(streamID, shardID, sequence string) (string, err
 // replacing the current iterator with this return param should always be safe.
 //
 // Do NOT modify this method without preserving this behaviour.
-func (k *kinesisReader) getRecords(streamID, shardID, shardIter string) ([]*kinesis.Record, string, error) {
-	res, err := k.svc.GetRecordsWithContext(k.ctx, &kinesis.GetRecordsInput{
+func (k *kinesisReader) getRecords(info streamInfo, shardID, shardIter string) ([]types.Record, string, error) {
+	res, err := k.svc.GetRecords(k.ctx, &kinesis.GetRecordsInput{
+		StreamARN:     &info.arn,
 		Limit:         &awsKinesisDefaultLimit,
 		ShardIterator: &shardIter,
 	})
@@ -289,11 +415,11 @@ const (
 	awsKinesisConsumerClosing
 )
 
-func (k *kinesisReader) runConsumer(wg *sync.WaitGroup, streamID, shardID, startingSequence string) (initErr error) {
+func (k *kinesisReader) runConsumer(wg *sync.WaitGroup, info streamInfo, shardID, startingSequence string) (initErr error) {
 	defer func() {
 		if initErr != nil {
 			wg.Done()
-			if _, err := k.checkpointer.Checkpoint(context.Background(), streamID, shardID, startingSequence, true); err != nil {
+			if _, err := k.checkpointer.Checkpoint(context.Background(), info.id, shardID, startingSequence, true); err != nil {
 				k.log.Errorf("Failed to gracefully yield checkpoint: %v\n", err)
 			}
 		}
@@ -302,7 +428,7 @@ func (k *kinesisReader) runConsumer(wg *sync.WaitGroup, streamID, shardID, start
 	// Stores records, batches them up, and provides the batches for dispatch,
 	// whilst ensuring only N records are in flight at a given time.
 	var recordBatcher *awsKinesisRecordBatcher
-	if recordBatcher, initErr = k.newAWSKinesisRecordBatcher(streamID, shardID, startingSequence); initErr != nil {
+	if recordBatcher, initErr = k.newAWSKinesisRecordBatcher(info, shardID, startingSequence); initErr != nil {
 		return initErr
 	}
 
@@ -310,9 +436,9 @@ func (k *kinesisReader) runConsumer(wg *sync.WaitGroup, streamID, shardID, start
 	boff := k.boffPool.Get().(backoff.BackOff)
 
 	// Stores consumed records that have yet to be added to the batcher.
-	var pending []*kinesis.Record
+	var pending []types.Record
 	var iter string
-	if iter, initErr = k.getIter(streamID, shardID, startingSequence); initErr != nil {
+	if iter, initErr = k.getIter(info, shardID, startingSequence); initErr != nil {
 		return initErr
 	}
 
@@ -349,26 +475,26 @@ func (k *kinesisReader) runConsumer(wg *sync.WaitGroup, streamID, shardID, start
 			switch state {
 			case awsKinesisConsumerFinished:
 				reason = " because the shard is closed"
-				if err := k.checkpointer.Delete(k.ctx, streamID, shardID); err != nil {
-					k.log.Errorf("Failed to remove checkpoint for finished stream '%v' shard '%v': %v\n", streamID, shardID, err)
+				if err := k.checkpointer.Delete(k.ctx, info.id, shardID); err != nil {
+					k.log.Errorf("Failed to remove checkpoint for finished stream '%v' shard '%v': %v", info.id, shardID, err)
 				}
 			case awsKinesisConsumerYielding:
 				reason = " because the shard has been claimed by another client"
-				if err := k.checkpointer.Yield(k.ctx, streamID, shardID, recordBatcher.GetSequence()); err != nil {
-					k.log.Errorf("Failed to yield checkpoint for stolen stream '%v' shard '%v': %v\n", streamID, shardID, err)
+				if err := k.checkpointer.Yield(k.ctx, info.id, shardID, recordBatcher.GetSequence()); err != nil {
+					k.log.Errorf("Failed to yield checkpoint for stolen stream '%v' shard '%v': %v", info.id, shardID, err)
 				}
 			case awsKinesisConsumerClosing:
 				reason = " because the pipeline is shutting down"
-				if _, err := k.checkpointer.Checkpoint(context.Background(), streamID, shardID, recordBatcher.GetSequence(), true); err != nil {
-					k.log.Errorf("Failed to store final checkpoint for stream '%v' shard '%v': %v\n", streamID, shardID, err)
+				if _, err := k.checkpointer.Checkpoint(context.Background(), info.id, shardID, recordBatcher.GetSequence(), true); err != nil {
+					k.log.Errorf("Failed to store final checkpoint for stream '%v' shard '%v': %v", info.id, shardID, err)
 				}
 			}
 
 			wg.Done()
-			k.log.Debugf("Closing stream '%v' shard '%v' as client '%v'%v\n", streamID, shardID, k.checkpointer.clientID, reason)
+			k.log.Debugf("Closing stream '%v' shard '%v' as client '%v'%v", info.id, shardID, k.checkpointer.clientID, reason)
 		}()
 
-		k.log.Debugf("Consuming stream '%v' shard '%v' as client '%v'\n", streamID, shardID, k.checkpointer.clientID)
+		k.log.Debugf("Consuming stream '%v' shard '%v' as client '%v'", info.id, shardID, k.checkpointer.clientID)
 
 		// Switches our pull chan to unblocked only if it's currently blocked,
 		// as otherwise it's set to a timed channel that we do not want to
@@ -382,13 +508,14 @@ func (k *kinesisReader) runConsumer(wg *sync.WaitGroup, streamID, shardID, start
 		for {
 			var err error
 			if state == awsKinesisConsumerConsuming && len(pending) == 0 && nextPullChan == unblockedChan {
-				if pending, iter, err = k.getRecords(streamID, shardID, iter); err != nil {
+				if pending, iter, err = k.getRecords(info, shardID, iter); err != nil {
 					if !awsErrIsTimeout(err) {
 						nextPullChan = time.After(boff.NextBackOff())
 
-						if aerr, ok := err.(awserr.Error); ok && aerr.Code() == kinesis.ErrCodeExpiredIteratorException {
-							k.log.Warnln("Shard iterator expired, attempting to refresh")
-							newIter, err := k.getIter(streamID, shardID, recordBatcher.GetSequence())
+						var aerr *types.ExpiredIteratorException
+						if errors.As(err, &aerr) {
+							k.log.Warn("Shard iterator expired, attempting to refresh")
+							newIter, err := k.getIter(info, shardID, recordBatcher.GetSequence())
 							if err != nil {
 								k.log.Errorf("Failed to refresh shard iterator: %v", err)
 							} else {
@@ -428,7 +555,7 @@ func (k *kinesisReader) runConsumer(wg *sync.WaitGroup, streamID, shardID, start
 					}
 				} else if len(pending) > 0 {
 					var i int
-					var r *kinesis.Record
+					var r types.Record
 					for i, r = range pending {
 						if recordBatcher.AddRecord(r) {
 							if pendingMsg, err = recordBatcher.FlushMessage(commitCtx); err != nil {
@@ -452,7 +579,7 @@ func (k *kinesisReader) runConsumer(wg *sync.WaitGroup, streamID, shardID, start
 			}
 
 			if nextTimedBatchChan == nil {
-				if tNext := recordBatcher.UntilNext(); tNext >= 0 {
+				if tNext, exists := recordBatcher.UntilNext(); exists {
 					nextTimedBatchChan = time.After(tNext)
 				}
 			}
@@ -469,9 +596,9 @@ func (k *kinesisReader) runConsumer(wg *sync.WaitGroup, streamID, shardID, start
 				commitCtxClose()
 				commitCtx, commitCtxClose = context.WithTimeout(k.ctx, k.commitPeriod)
 
-				stillOwned, err := k.checkpointer.Checkpoint(k.ctx, streamID, shardID, recordBatcher.GetSequence(), false)
+				stillOwned, err := k.checkpointer.Checkpoint(k.ctx, info.id, shardID, recordBatcher.GetSequence(), false)
 				if err != nil {
-					k.log.Errorf("Failed to store checkpoint for Kinesis stream '%v' shard '%v': %v\n", streamID, shardID, err)
+					k.log.Errorf("Failed to store checkpoint for Kinesis stream '%v' shard '%v': %v", info.id, shardID, err)
 				} else if !stillOwned {
 					state = awsKinesisConsumerYielding
 					return
@@ -493,7 +620,7 @@ func (k *kinesisReader) runConsumer(wg *sync.WaitGroup, streamID, shardID, start
 
 //------------------------------------------------------------------------------
 
-func isShardFinished(s *kinesis.Shard) bool {
+func isShardFinished(s types.Shard) bool {
 	if s.SequenceNumberRange == nil {
 		return false
 	}
@@ -514,20 +641,20 @@ func (k *kinesisReader) runBalancedShards() {
 	}()
 
 	for {
-		for _, streamID := range k.balancedStreams {
-			shardsRes, err := k.svc.ListShardsWithContext(k.ctx, &kinesis.ListShardsInput{
-				StreamName: aws.String(streamID),
+		for _, info := range k.streams {
+			shardsRes, err := k.svc.ListShards(k.ctx, &kinesis.ListShardsInput{
+				StreamARN: &info.arn,
 			})
 
 			var clientClaims map[string][]awsKinesisClientClaim
 			if err == nil {
-				clientClaims, err = k.checkpointer.AllClaims(k.ctx, streamID)
+				clientClaims, err = k.checkpointer.AllClaims(k.ctx, info.id)
 			}
 			if err != nil {
 				if k.ctx.Err() != nil {
 					return
 				}
-				k.log.Errorf("Failed to obtain stream '%v' shards or claims: %v\n", streamID, err)
+				k.log.Errorf("Failed to obtain stream '%v' shards or claims: %v", info.id, err)
 				continue
 			}
 
@@ -551,18 +678,18 @@ func (k *kinesisReader) runBalancedShards() {
 			// Have a go at grabbing any unclaimed shards
 			if len(unclaimedShards) > 0 {
 				for shardID, clientID := range unclaimedShards {
-					sequence, err := k.checkpointer.Claim(k.ctx, streamID, shardID, clientID)
+					sequence, err := k.checkpointer.Claim(k.ctx, info.id, shardID, clientID)
 					if err != nil {
 						if k.ctx.Err() != nil {
 							return
 						}
 						if !errors.Is(err, ErrLeaseNotAcquired) {
-							k.log.Errorf("Failed to claim unclaimed shard '%v': %v\n", shardID, err)
+							k.log.Errorf("Failed to claim unclaimed shard '%v': %v", shardID, err)
 						}
 						continue
 					}
 					wg.Add(1)
-					if err = k.runConsumer(&wg, streamID, shardID, sequence); err != nil {
+					if err = k.runConsumer(&wg, *info, shardID, sequence); err != nil {
 						k.log.Errorf("Failed to start consumer: %v\n", err)
 					}
 				}
@@ -587,31 +714,31 @@ func (k *kinesisReader) runBalancedShards() {
 				if len(claims) > (selfClaims + 1) {
 					randomShard := claims[(rand.Int() % len(claims))].ShardID
 					k.log.Debugf(
-						"Attempting to steal stream '%v' shard '%v' from client '%v' as client '%v'\n",
-						streamID, randomShard, clientID, k.clientID,
+						"Attempting to steal stream '%v' shard '%v' from client '%v' as client '%v'",
+						info.id, randomShard, clientID, k.clientID,
 					)
 
-					sequence, err := k.checkpointer.Claim(k.ctx, streamID, randomShard, clientID)
+					sequence, err := k.checkpointer.Claim(k.ctx, info.id, randomShard, clientID)
 					if err != nil {
 						if k.ctx.Err() != nil {
 							return
 						}
 						if !errors.Is(err, ErrLeaseNotAcquired) {
-							k.log.Errorf("Failed to steal shard '%v': %v\n", randomShard, err)
+							k.log.Errorf("Failed to steal shard '%v': %v", randomShard, err)
 						}
 						k.log.Debugf(
-							"Aborting theft of stream '%v' shard '%v' from client '%v' as client '%v'\n",
-							streamID, randomShard, clientID, k.clientID,
+							"Aborting theft of stream '%v' shard '%v' from client '%v' as client '%v'",
+							info.id, randomShard, clientID, k.clientID,
 						)
 						continue
 					}
 
 					k.log.Debugf(
-						"Successfully stole stream '%v' shard '%v' from client '%v' as client '%v'\n",
-						streamID, randomShard, clientID, k.clientID,
+						"Successfully stole stream '%v' shard '%v' from client '%v' as client '%v'",
+						info.id, randomShard, clientID, k.clientID,
 					)
 					wg.Add(1)
-					if err = k.runConsumer(&wg, streamID, randomShard, sequence); err != nil {
+					if err = k.runConsumer(&wg, *info, randomShard, sequence); err != nil {
 						k.log.Errorf("Failed to start consumer: %v\n", err)
 					} else {
 						// If we successfully stole the shard then that's enough
@@ -640,30 +767,37 @@ func (k *kinesisReader) runExplicitShards() {
 		})
 	}()
 
+	pendingShards := map[string]streamInfo{}
+	for _, v := range k.streams {
+		pendingShards[v.id] = *v
+	}
+
 	for {
-		for streamID, shards := range k.streamShards {
+		for id, info := range pendingShards {
 			var failedShards []string
-			for _, shardID := range shards {
-				sequence, err := k.checkpointer.Claim(k.ctx, streamID, shardID, "")
+			for _, shardID := range info.explicitShards {
+				sequence, err := k.checkpointer.Claim(k.ctx, id, shardID, "")
 				if err == nil {
 					wg.Add(1)
-					err = k.runConsumer(&wg, streamID, shardID, sequence)
+					err = k.runConsumer(&wg, info, shardID, sequence)
 				}
 				if err != nil {
 					if k.ctx.Err() != nil {
 						return
 					}
 					failedShards = append(failedShards, shardID)
-					k.log.Errorf("Failed to start stream '%v' shard '%v' consumer: %v\n", streamID, shardID, err)
+					k.log.Errorf("Failed to start stream '%v' shard '%v' consumer: %v", id, shardID, err)
 				}
 			}
 			if len(failedShards) > 0 {
-				k.streamShards[streamID] = failedShards
+				tmp := pendingShards[id]
+				tmp.explicitShards = failedShards
+				pendingShards[id] = tmp
 			} else {
-				delete(k.streamShards, streamID)
+				delete(pendingShards, id)
 			}
 		}
-		if len(k.streamShards) == 0 {
+		if len(pendingShards) == 0 {
 			break
 		} else {
 			<-time.After(time.Second)
@@ -671,9 +805,37 @@ func (k *kinesisReader) runExplicitShards() {
 	}
 }
 
+func (k *kinesisReader) waitUntilStreamsExists(ctx context.Context) error {
+	results := make(chan error, len(k.streams))
+	for _, s := range k.streams {
+		s := s
+		go func(info *streamInfo) {
+			waiter := kinesis.NewStreamExistsWaiter(k.svc)
+			input := &kinesis.DescribeStreamInput{}
+			if strings.HasPrefix("arn:", info.id) {
+				input.StreamARN = &info.id
+			} else {
+				input.StreamName = &info.id
+			}
+			out, err := waiter.WaitForOutput(ctx, input, time.Minute)
+			if err == nil {
+				info.arn = *out.StreamDescription.StreamARN
+			}
+			results <- err
+		}(s)
+	}
+
+	for i := 0; i < len(k.streams); i++ {
+		if err := <-results; err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 //------------------------------------------------------------------------------
 
-// Connect establishes a kafkaReader connection.
+// Connect establishes a kinesisReader connection.
 func (k *kinesisReader) Connect(ctx context.Context) error {
 	k.cMut.Lock()
 	defer k.cMut.Unlock()
@@ -681,13 +843,8 @@ func (k *kinesisReader) Connect(ctx context.Context) error {
 		return nil
 	}
 
-	sess, err := GetSessionFromConf(k.conf.Config)
-	if err != nil {
-		return err
-	}
-
-	svc := kinesis.New(sess)
-	checkpointer, err := newAWSKinesisCheckpointer(sess, k.clientID, k.conf.DynamoDB, k.leasePeriod, k.commitPeriod)
+	svc := kinesis.NewFromConfig(k.sess)
+	checkpointer, err := newAWSKinesisCheckpointer(k.sess, k.clientID, k.conf.DynamoDB, k.leasePeriod, k.commitPeriod)
 	if err != nil {
 		return err
 	}
@@ -696,28 +853,33 @@ func (k *kinesisReader) Connect(ctx context.Context) error {
 	k.checkpointer = checkpointer
 	k.msgChan = make(chan asyncMessage)
 
-	if len(k.streamShards) > 0 {
+	if err = k.waitUntilStreamsExists(ctx); err != nil {
+		return err
+	}
+
+	if len(k.streams[0].explicitShards) > 0 {
 		go k.runExplicitShards()
 	} else {
 		go k.runBalancedShards()
 	}
+
 	return nil
 }
 
 // ReadBatch attempts to read a message from Kinesis.
-func (k *kinesisReader) ReadBatch(ctx context.Context) (message.Batch, input.AsyncAckFn, error) {
+func (k *kinesisReader) ReadBatch(ctx context.Context) (service.MessageBatch, service.AckFunc, error) {
 	k.cMut.Lock()
 	msgChan := k.msgChan
 	k.cMut.Unlock()
 
 	if msgChan == nil {
-		return nil, nil, component.ErrNotConnected
+		return nil, nil, service.ErrNotConnected
 	}
 
 	select {
 	case m, open := <-msgChan:
 		if !open {
-			return nil, nil, component.ErrNotConnected
+			return nil, nil, service.ErrNotConnected
 		}
 		return m.msg, m.ackFn, nil
 	case <-ctx.Done():

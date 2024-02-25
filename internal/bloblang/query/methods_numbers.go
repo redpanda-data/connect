@@ -4,32 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"math"
-)
 
-var _ = registerSimpleMethod(
-	NewMethodSpec("abs", "Returns the absolute value of a number.").InCategory(
-		MethodCategoryNumbers, "",
-		NewExampleSpec("",
-			`root.new_value = this.value.abs()`,
-			`{"value":5.3}`,
-			`{"new_value":5.3}`,
-			`{"value":-5.9}`,
-			`{"new_value":5.9}`,
-		),
-	),
-	func(*ParsedParams) (simpleMethod, error) {
-		return numberMethod(func(f *float64, i *int64, ui *uint64) (any, error) {
-			var v float64
-			if f != nil {
-				v = *f
-			} else if i != nil {
-				v = float64(*i)
-			} else {
-				v = float64(*ui)
-			}
-			return math.Abs(v), nil
-		}), nil
-	},
+	"github.com/benthosdev/benthos/v4/internal/value"
 )
 
 var _ = registerSimpleMethod(
@@ -47,7 +23,7 @@ var _ = registerSimpleMethod(
 		return numberMethod(func(f *float64, i *int64, ui *uint64) (any, error) {
 			if f != nil {
 				ceiled := math.Ceil(*f)
-				if i, err := IToInt(ceiled); err == nil {
+				if i, err := value.IToInt(ceiled); err == nil {
 					return i, nil
 				}
 				return ceiled, nil
@@ -76,7 +52,7 @@ var _ = registerSimpleMethod(
 		return numberMethod(func(f *float64, i *int64, ui *uint64) (any, error) {
 			if f != nil {
 				floored := math.Floor(*f)
-				if i, err := IToInt(floored); err == nil {
+				if i, err := value.IToInt(floored); err == nil {
 					return i, nil
 				}
 				return floored, nil
@@ -164,14 +140,14 @@ var _ = registerSimpleMethod(
 		return func(v any, ctx FunctionContext) (any, error) {
 			arr, ok := v.([]any)
 			if !ok {
-				return nil, NewTypeError(v, ValueArray)
+				return nil, value.NewTypeError(v, value.TArray)
 			}
 			if len(arr) == 0 {
 				return nil, errors.New("the array was empty")
 			}
 			var max float64
 			for i, n := range arr {
-				f, err := IGetNumber(n)
+				f, err := value.IGetNumber(n)
 				if err != nil {
 					return nil, fmt.Errorf("index %v of array: %w", i, err)
 				}
@@ -207,14 +183,14 @@ var _ = registerSimpleMethod(
 		return func(v any, ctx FunctionContext) (any, error) {
 			arr, ok := v.([]any)
 			if !ok {
-				return nil, NewTypeError(v, ValueArray)
+				return nil, value.NewTypeError(v, value.TArray)
 			}
 			if len(arr) == 0 {
 				return nil, errors.New("the array was empty")
 			}
 			var max float64
 			for i, n := range arr {
-				f, err := IGetNumber(n)
+				f, err := value.IGetNumber(n)
 				if err != nil {
 					return nil, fmt.Errorf("index %v of array: %w", i, err)
 				}
@@ -245,7 +221,7 @@ var _ = registerSimpleMethod(
 		return numberMethod(func(f *float64, i *int64, ui *uint64) (any, error) {
 			if f != nil {
 				rounded := math.Round(*f)
-				if i, err := IToInt(rounded); err == nil {
+				if i, err := value.IToInt(rounded); err == nil {
 					return i, nil
 				}
 				return rounded, nil

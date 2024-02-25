@@ -7,77 +7,76 @@ import (
 
 	"github.com/redis/go-redis/v9"
 
-	ibatch "github.com/benthosdev/benthos/v4/internal/batch"
-	"github.com/benthosdev/benthos/v4/internal/batch/policy"
-	"github.com/benthosdev/benthos/v4/internal/bloblang/field"
-	"github.com/benthosdev/benthos/v4/internal/bundle"
-	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
-	"github.com/benthosdev/benthos/v4/internal/component/output/batcher"
-	"github.com/benthosdev/benthos/v4/internal/component/output/processors"
-	"github.com/benthosdev/benthos/v4/internal/docs"
-	"github.com/benthosdev/benthos/v4/internal/impl/redis/old"
-	"github.com/benthosdev/benthos/v4/internal/log"
-	"github.com/benthosdev/benthos/v4/internal/message"
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
+const (
+	psoFieldChannel  = "channel"
+	psoFieldBatching = "batching"
+)
+
+func redisPubSubOutputConfig() *service.ConfigSpec {
+	return service.NewConfigSpec().
+		Stable().
+		Summary(`Publishes messages through the Redis PubSub model. It is not possible to guarantee that messages have been received.`).
+		Description(output.Description(true, true, `
+This output will interpolate functions within the channel field, you can find a list of functions [here](/docs/configuration/interpolation#bloblang-queries).`)).
+		Categories("Services").
+		Fields(clientFields()...).
+		Fields(
+			service.NewInterpolatedStringField(psoFieldChannel).
+				Description("The channel to publish messages to."),
+			service.NewOutputMaxInFlightField(),
+			service.NewBatchPolicyField(psoFieldBatching),
+		)
+}
+
 func init() {
-	err := bundle.AllOutputs.Add(processors.WrapConstructor(newRedisPubSubOutput), docs.ComponentSpec{
-		Name: "redis_pubsub",
-		Summary: `
-Publishes messages through the Redis PubSub model. It is not possible to
-guarantee that messages have been received.`,
-		Description: output.Description(true, true, `
-This output will interpolate functions within the channel field, you
-can find a list of functions [here](/docs/configuration/interpolation#bloblang-queries).`),
-		Config: docs.FieldComponent().WithChildren(old.ConfigDocs()...).WithChildren(
-			docs.FieldString("channel", "The channel to publish messages to.").IsInterpolated(),
-			docs.FieldInt("max_in_flight", "The maximum number of parallel message batches to have in flight at any given time."),
-			policy.FieldSpec(),
-		).ChildDefaultAndTypesFromStruct(output.NewRedisPubSubConfig()),
-		Categories: []string{
-			"Services",
-		},
-	})
+	err := service.RegisterBatchOutput(
+		"redis_pubsub", redisPubSubOutputConfig(),
+		func(conf *service.ParsedConfig, mgr *service.Resources) (out service.BatchOutput, batchPol service.BatchPolicy, mif int, err error) {
+			if batchPol, err = conf.FieldBatchPolicy(psoFieldBatching); err != nil {
+				return
+			}
+			if mif, err = conf.FieldMaxInFlight(); err != nil {
+				return
+			}
+			out, err = newRedisPubSubWriter(conf, mgr)
+			return
+		})
 	if err != nil {
 		panic(err)
 	}
 }
 
-func newRedisPubSubOutput(conf output.Config, mgr bundle.NewManagement) (output.Streamed, error) {
-	w, err := newRedisPubSubWriter(conf.RedisPubSub, mgr)
-	if err != nil {
-		return nil, err
-	}
-	a, err := output.NewAsyncWriter("redis_pubsub", conf.RedisPubSub.MaxInFlight, w, mgr)
-	if err != nil {
-		return nil, err
-	}
-	return batcher.NewFromConfig(conf.RedisPubSub.Batching, a, mgr)
-}
-
 type redisPubSubWriter struct {
-	mgr bundle.NewManagement
-	log log.Modular
+	log *service.Logger
 
-	conf       output.RedisPubSubConfig
-	channelStr *field.Expression
+	channelStr string
+	channel    *service.InterpolatedString
 
-	client  redis.UniversalClient
-	connMut sync.RWMutex
+	clientCtor func() (redis.UniversalClient, error)
+	client     redis.UniversalClient
+	connMut    sync.RWMutex
 }
 
-func newRedisPubSubWriter(conf output.RedisPubSubConfig, mgr bundle.NewManagement) (*redisPubSubWriter, error) {
-	r := &redisPubSubWriter{
-		mgr:  mgr,
-		log:  mgr.Logger(),
-		conf: conf,
+func newRedisPubSubWriter(conf *service.ParsedConfig, mgr *service.Resources) (r *redisPubSubWriter, err error) {
+	r = &redisPubSubWriter{
+		log: mgr.Logger(),
+		clientCtor: func() (redis.UniversalClient, error) {
+			return getClient(conf)
+		},
 	}
-	var err error
-	if r.channelStr, err = mgr.BloblEnvironment().NewField(conf.Channel); err != nil {
-		return nil, fmt.Errorf("failed to parse channel expression: %v", err)
+
+	if r.channelStr, err = conf.FieldString(psoFieldChannel); err != nil {
+		return
 	}
-	if _, err = clientFromConfig(mgr.FS(), conf.Config); err != nil {
+	if r.channel, err = conf.FieldInterpolatedString(psoFieldChannel); err != nil {
+		return
+	}
+
+	if _, err := getClient(conf); err != nil {
 		return nil, err
 	}
 	return r, nil
@@ -87,7 +86,7 @@ func (r *redisPubSubWriter) Connect(ctx context.Context) error {
 	r.connMut.Lock()
 	defer r.connMut.Unlock()
 
-	client, err := clientFromConfig(r.mgr.FS(), r.conf.Config)
+	client, err := r.clientCtor()
 	if err != nil {
 		return err
 	}
@@ -95,57 +94,67 @@ func (r *redisPubSubWriter) Connect(ctx context.Context) error {
 		return err
 	}
 
-	r.log.Infof("Pushing messages to Redis channel: %v\n", r.conf.Channel)
-
+	r.log.Infof("Pushing messages to Redis channel: %v\n", r.channelStr)
 	r.client = client
 	return nil
 }
 
-func (r *redisPubSubWriter) WriteBatch(ctx context.Context, msg message.Batch) error {
+func (r *redisPubSubWriter) WriteBatch(ctx context.Context, batch service.MessageBatch) error {
 	r.connMut.RLock()
 	client := r.client
 	r.connMut.RUnlock()
 
 	if client == nil {
-		return component.ErrNotConnected
+		return service.ErrNotConnected
 	}
 
-	if msg.Len() == 1 {
-		channel, err := r.channelStr.String(0, msg)
+	if len(batch) == 1 {
+		channel, err := r.channel.TryString(batch[0])
 		if err != nil {
 			return fmt.Errorf("channel interpolation error: %w", err)
 		}
-		if err := client.Publish(ctx, channel, msg.Get(0).AsBytes()).Err(); err != nil {
+
+		mBytes, err := batch[0].AsBytes()
+		if err != nil {
+			return err
+		}
+
+		if err := client.Publish(ctx, channel, mBytes).Err(); err != nil {
 			_ = r.disconnect()
 			r.log.Errorf("Error from redis: %v\n", err)
-			return component.ErrNotConnected
+			return service.ErrNotConnected
 		}
 		return nil
 	}
 
 	pipe := client.Pipeline()
-	if err := msg.Iter(func(i int, p *message.Part) error {
-		channel, err := r.channelStr.String(i, msg)
+
+	for i := 0; i < len(batch); i++ {
+		channel, err := batch.TryInterpolatedString(i, r.channel)
 		if err != nil {
 			return fmt.Errorf("channel interpolation error: %w", err)
 		}
-		_ = pipe.Publish(ctx, channel, p.AsBytes())
-		return nil
-	}); err != nil {
-		return err
+
+		mBytes, err := batch[i].AsBytes()
+		if err != nil {
+			return err
+		}
+
+		_ = pipe.Publish(ctx, channel, mBytes)
 	}
+
 	cmders, err := pipe.Exec(ctx)
 	if err != nil {
 		_ = r.disconnect()
 		r.log.Errorf("Error from redis: %v\n", err)
-		return component.ErrNotConnected
+		return service.ErrNotConnected
 	}
 
-	var batchErr *ibatch.Error
+	var batchErr *service.BatchError
 	for i, res := range cmders {
 		if res.Err() != nil {
 			if batchErr == nil {
-				batchErr = ibatch.NewError(msg, res.Err())
+				batchErr = service.NewBatchError(batch, res.Err())
 			}
 			batchErr.Failed(i, res.Err())
 		}

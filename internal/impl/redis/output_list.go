@@ -7,84 +7,113 @@ import (
 
 	"github.com/redis/go-redis/v9"
 
-	ibatch "github.com/benthosdev/benthos/v4/internal/batch"
-	"github.com/benthosdev/benthos/v4/internal/batch/policy"
-	"github.com/benthosdev/benthos/v4/internal/bloblang/field"
-	"github.com/benthosdev/benthos/v4/internal/bundle"
-	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
-	"github.com/benthosdev/benthos/v4/internal/component/output/batcher"
-	"github.com/benthosdev/benthos/v4/internal/component/output/processors"
-	"github.com/benthosdev/benthos/v4/internal/docs"
-	"github.com/benthosdev/benthos/v4/internal/impl/redis/old"
-	"github.com/benthosdev/benthos/v4/internal/log"
-	"github.com/benthosdev/benthos/v4/internal/message"
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
+const (
+	loFieldKey      = "key"
+	loFieldBatching = "batching"
+)
+
+type redisPushCommand string
+
+const (
+	rPush redisPushCommand = "rpush"
+	lPush redisPushCommand = "lpush"
+)
+
+func redisListOutputConfig() *service.ConfigSpec {
+	return service.NewConfigSpec().
+		Stable().
+		Summary(`Pushes messages onto the end of a Redis list (which is created if it doesn't already exist) using the RPUSH command.`).
+		Description(output.Description(true, true, `The field `+"`key`"+` supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries), allowing you to create a unique key for each message.`)).
+		Categories("Services").
+		Fields(clientFields()...).
+		Fields(
+			service.NewInterpolatedStringField(loFieldKey).
+				Description("The key for each message, function interpolations can be optionally used to create a unique key per message.").
+				Examples("some_list", "${! @.kafka_key )}", "${! this.doc.id }", "${! count(\"msgs\") }"),
+			service.NewOutputMaxInFlightField(),
+			service.NewBatchPolicyField(loFieldBatching),
+			service.NewStringEnumField("command", string(rPush), string(lPush)).
+				Description("The command used to push elements to the Redis list").
+				Default(string(rPush)).
+				Advanced().
+				Version("4.22.0"),
+		)
+}
+
 func init() {
-	err := bundle.AllOutputs.Add(processors.WrapConstructor(newRedisListOutput), docs.ComponentSpec{
-		Name: "redis_list",
-		Summary: `
-Pushes messages onto the end of a Redis list (which is created if it doesn't
-already exist) using the RPUSH command.`,
-		Description: output.Description(true, true, `
-The field `+"`key`"+` supports
-[interpolation functions](/docs/configuration/interpolation#bloblang-queries), allowing
-you to create a unique key for each message.`),
-		Config: docs.FieldComponent().WithChildren(old.ConfigDocs()...).WithChildren(
-			docs.FieldString(
-				"key", "The key for each message, function interpolations can be optionally used to create a unique key per message.",
-				"benthos_list", "${!meta(\"kafka_key\")}", "${!json(\"doc.id\")}", "${!count(\"msgs\")}",
-			).IsInterpolated(),
-			docs.FieldInt("max_in_flight", "The maximum number of parallel message batches to have in flight at any given time."),
-			policy.FieldSpec(),
-		).ChildDefaultAndTypesFromStruct(output.NewRedisListConfig()),
-		Categories: []string{
-			"Services",
-		},
-	})
+	err := service.RegisterBatchOutput(
+		"redis_list", redisListOutputConfig(),
+		func(conf *service.ParsedConfig, mgr *service.Resources) (out service.BatchOutput, batchPol service.BatchPolicy, mif int, err error) {
+			if batchPol, err = conf.FieldBatchPolicy(loFieldBatching); err != nil {
+				return
+			}
+			if mif, err = conf.FieldMaxInFlight(); err != nil {
+				return
+			}
+			out, err = newRedisListWriter(conf, mgr)
+			return
+		})
 	if err != nil {
 		panic(err)
 	}
 }
 
-func newRedisListOutput(conf output.Config, mgr bundle.NewManagement) (output.Streamed, error) {
-	w, err := newRedisListWriter(conf.RedisList, mgr)
-	if err != nil {
-		return nil, err
-	}
-	a, err := output.NewAsyncWriter("redis_list", conf.RedisList.MaxInFlight, w, mgr)
-	if err != nil {
-		return nil, err
-	}
-	return batcher.NewFromConfig(conf.RedisList.Batching, a, mgr)
-}
-
 type redisListWriter struct {
-	mgr bundle.NewManagement
-	log log.Modular
+	log *service.Logger
 
-	conf output.RedisListConfig
+	key *service.InterpolatedString
 
-	keyStr *field.Expression
-
-	client  redis.UniversalClient
-	connMut sync.RWMutex
+	clientCtor   func() (redis.UniversalClient, error)
+	client       redis.UniversalClient
+	connMut      sync.RWMutex
+	clientPush   func(client redis.UniversalClient, ctx context.Context, key string, values ...interface{}) *redis.IntCmd
+	pipelinePush func(pipe redis.Pipeliner, ctx context.Context, key string, values ...interface{}) *redis.IntCmd
 }
 
-func newRedisListWriter(conf output.RedisListConfig, mgr bundle.NewManagement) (*redisListWriter, error) {
-	r := &redisListWriter{
-		mgr:  mgr,
-		log:  mgr.Logger(),
-		conf: conf,
+func newRedisListWriter(conf *service.ParsedConfig, mgr *service.Resources) (r *redisListWriter, err error) {
+	r = &redisListWriter{
+		log: mgr.Logger(),
+		clientCtor: func() (redis.UniversalClient, error) {
+			return getClient(conf)
+		},
 	}
 
-	var err error
-	if r.keyStr, err = mgr.BloblEnvironment().NewField(conf.Key); err != nil {
-		return nil, fmt.Errorf("failed to parse key expression: %v", err)
+	if r.key, err = conf.FieldInterpolatedString(loFieldKey); err != nil {
+		return
 	}
-	if _, err := clientFromConfig(mgr.FS(), conf.Config); err != nil {
+
+	if _, err := getClient(conf); err != nil {
 		return nil, err
+	}
+
+	pushCommand, err := conf.FieldString("command")
+	if err != nil {
+		return nil, err
+	}
+
+	switch redisPushCommand(pushCommand) {
+	case rPush:
+		r.clientPush = func(client redis.UniversalClient, ctx context.Context, key string, values ...interface{}) *redis.IntCmd {
+			return client.RPush(ctx, key, values)
+		}
+		r.pipelinePush = func(pipe redis.Pipeliner, ctx context.Context, key string, values ...interface{}) *redis.IntCmd {
+			return pipe.RPush(ctx, key, values)
+		}
+
+	case lPush:
+		r.clientPush = func(client redis.UniversalClient, ctx context.Context, key string, values ...interface{}) *redis.IntCmd {
+			return client.LPush(ctx, key, values)
+		}
+		r.pipelinePush = func(pipe redis.Pipeliner, ctx context.Context, key string, values ...interface{}) *redis.IntCmd {
+			return pipe.LPush(ctx, key, values)
+		}
+
+	default:
+		return nil, fmt.Errorf("invalid redis command: %s", pushCommand)
 	}
 
 	return r, nil
@@ -94,7 +123,7 @@ func (r *redisListWriter) Connect(ctx context.Context) error {
 	r.connMut.Lock()
 	defer r.connMut.Unlock()
 
-	client, err := clientFromConfig(r.mgr.FS(), r.conf.Config)
+	client, err := r.clientCtor()
 	if err != nil {
 		return err
 	}
@@ -106,51 +135,62 @@ func (r *redisListWriter) Connect(ctx context.Context) error {
 	return nil
 }
 
-func (r *redisListWriter) WriteBatch(ctx context.Context, msg message.Batch) error {
+func (r *redisListWriter) WriteBatch(ctx context.Context, batch service.MessageBatch) error {
 	r.connMut.RLock()
 	client := r.client
 	r.connMut.RUnlock()
 
 	if client == nil {
-		return component.ErrNotConnected
+		return service.ErrNotConnected
 	}
 
-	if msg.Len() == 1 {
-		key, err := r.keyStr.String(0, msg)
+	if len(batch) == 1 {
+		key, err := r.key.TryString(batch[0])
 		if err != nil {
 			return fmt.Errorf("key interpolation error: %w", err)
 		}
-		if err := client.RPush(ctx, key, msg.Get(0).AsBytes()).Err(); err != nil {
+
+		mBytes, err := batch[0].AsBytes()
+		if err != nil {
+			return err
+		}
+
+		if err := r.clientPush(client, ctx, key, mBytes).Err(); err != nil {
 			_ = r.disconnect()
 			r.log.Errorf("Error from redis: %v\n", err)
-			return component.ErrNotConnected
+			return service.ErrNotConnected
 		}
 		return nil
 	}
 
 	pipe := client.Pipeline()
-	if err := msg.Iter(func(i int, p *message.Part) error {
-		key, err := r.keyStr.String(0, msg)
+
+	for i := 0; i < len(batch); i++ {
+		key, err := batch.TryInterpolatedString(i, r.key)
 		if err != nil {
 			return fmt.Errorf("key interpolation error: %w", err)
 		}
-		_ = pipe.RPush(ctx, key, p.AsBytes())
-		return nil
-	}); err != nil {
-		return err
+
+		mBytes, err := batch[i].AsBytes()
+		if err != nil {
+			return err
+		}
+
+		_ = r.pipelinePush(pipe, ctx, key, mBytes)
 	}
+
 	cmders, err := pipe.Exec(ctx)
 	if err != nil {
 		_ = r.disconnect()
 		r.log.Errorf("Error from redis: %v\n", err)
-		return component.ErrNotConnected
+		return service.ErrNotConnected
 	}
 
-	var batchErr *ibatch.Error
+	var batchErr *service.BatchError
 	for i, res := range cmders {
 		if res.Err() != nil {
 			if batchErr == nil {
-				batchErr = ibatch.NewError(msg, res.Err())
+				batchErr = service.NewBatchError(batch, res.Err())
 			}
 			batchErr.Failed(i, res.Err())
 		}

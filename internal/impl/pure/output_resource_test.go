@@ -32,7 +32,7 @@ func TestResourceOutput(t *testing.T) {
 
 	nConf := output.NewConfig()
 	nConf.Type = "resource"
-	nConf.Resource = "foo"
+	nConf.Plugin = "foo"
 
 	p, err := mgr.NewOutput(nConf)
 	require.NoError(t, err)
@@ -77,7 +77,7 @@ func TestOutputResourceBadName(t *testing.T) {
 
 	conf := output.NewConfig()
 	conf.Type = "resource"
-	conf.Resource = "foo"
+	conf.Plugin = "foo"
 
 	_, err := mgr.NewOutput(conf)
 	if err == nil {

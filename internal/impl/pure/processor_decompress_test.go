@@ -10,28 +10,34 @@ import (
 	"github.com/klauspost/compress/gzip"
 	"github.com/klauspost/compress/snappy"
 	"github.com/klauspost/compress/zlib"
+	"github.com/klauspost/pgzip"
 	"github.com/pierrec/lz4/v4"
+	"github.com/stretchr/testify/require"
 
-	"github.com/benthosdev/benthos/v4/internal/component/processor"
+	"github.com/benthosdev/benthos/v4/internal/component/testutil"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
 )
 
 func TestDecompressBadAlgo(t *testing.T) {
-	conf := processor.NewConfig()
-	conf.Type = "decompress"
-	conf.Decompress.Algorithm = "does not exist"
+	conf, err := testutil.ProcessorFromYAML(`
+decompress:
+  algorithm: does not exist
+`)
+	require.NoError(t, err)
 
-	_, err := mock.NewManager().NewProcessor(conf)
+	_, err = mock.NewManager().NewProcessor(conf)
 	if err == nil {
 		t.Error("Expected error from bad algo")
 	}
 }
 
 func TestDecompressGZIP(t *testing.T) {
-	conf := processor.NewConfig()
-	conf.Type = "decompress"
-	conf.Decompress.Algorithm = "gzip"
+	conf, err := testutil.ProcessorFromYAML(`
+decompress:
+  algorithm: gzip
+`)
+	require.NoError(t, err)
 
 	input := [][]byte{
 		[]byte("hello world first part"),
@@ -75,10 +81,61 @@ func TestDecompressGZIP(t *testing.T) {
 	}
 }
 
+func TestDecompressPGZIP(t *testing.T) {
+	conf, err := testutil.ProcessorFromYAML(`
+decompress:
+  algorithm: pgzip
+`)
+	require.NoError(t, err)
+
+	input := [][]byte{
+		[]byte("hello world first part"),
+		[]byte("hello world second part"),
+		[]byte("third part"),
+		[]byte("fourth"),
+		[]byte("5"),
+	}
+
+	exp := [][]byte{}
+
+	for i := range input {
+		exp = append(exp, input[i])
+
+		var buf bytes.Buffer
+
+		zw := pgzip.NewWriter(&buf)
+		_, _ = zw.Write(input[i])
+		zw.Close()
+
+		input[i] = buf.Bytes()
+	}
+
+	if reflect.DeepEqual(input, exp) {
+		t.Fatal("Input and exp output are the same")
+	}
+
+	proc, err := mock.NewManager().NewProcessor(conf)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	msgs, res := proc.ProcessBatch(context.Background(), message.QuickBatch(input))
+	if len(msgs) != 1 {
+		t.Error("Decompress failed")
+	} else if res != nil {
+		t.Errorf("Expected nil response: %v", res)
+	}
+	if act := message.GetAllBytes(msgs[0]); !reflect.DeepEqual(exp, act) {
+		t.Errorf("Unexpected output: %s != %s", act, exp)
+	}
+}
+
 func TestDecompressSnappy(t *testing.T) {
-	conf := processor.NewConfig()
-	conf.Type = "decompress"
-	conf.Decompress.Algorithm = "snappy"
+	conf, err := testutil.ProcessorFromYAML(`
+decompress:
+  algorithm: snappy
+`)
+	require.NoError(t, err)
 
 	input := [][]byte{
 		[]byte("hello world first part"),
@@ -116,9 +173,11 @@ func TestDecompressSnappy(t *testing.T) {
 }
 
 func TestDecompressZLIB(t *testing.T) {
-	conf := processor.NewConfig()
-	conf.Type = "decompress"
-	conf.Decompress.Algorithm = "zlib"
+	conf, err := testutil.ProcessorFromYAML(`
+decompress:
+  algorithm: zlib
+`)
+	require.NoError(t, err)
 
 	input := [][]byte{
 		[]byte("hello world first part"),
@@ -163,9 +222,11 @@ func TestDecompressZLIB(t *testing.T) {
 }
 
 func TestDecompressFlate(t *testing.T) {
-	conf := processor.NewConfig()
-	conf.Type = "decompress"
-	conf.Decompress.Algorithm = "flate"
+	conf, err := testutil.ProcessorFromYAML(`
+decompress:
+  algorithm: flate
+`)
+	require.NoError(t, err)
 
 	input := [][]byte{
 		[]byte("hello world first part"),
@@ -213,9 +274,11 @@ func TestDecompressFlate(t *testing.T) {
 }
 
 func TestDecompressLZ4(t *testing.T) {
-	conf := processor.NewConfig()
-	conf.Type = "decompress"
-	conf.Decompress.Algorithm = "lz4"
+	conf, err := testutil.ProcessorFromYAML(`
+decompress:
+  algorithm: lz4
+`)
+	require.NoError(t, err)
 
 	input := [][]byte{
 		[]byte("hello world first part"),

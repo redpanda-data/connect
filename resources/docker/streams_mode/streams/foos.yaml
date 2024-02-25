@@ -1,0 +1,9 @@
+input:
+  generate:
+    interval: 100ms
+    mapping: |
+      root.id = uuid_v4()
+      root.purpose = "too foo"
+
+output:
+  resource: to_stdout

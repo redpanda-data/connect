@@ -13,30 +13,28 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/benthosdev/benthos/v4/internal/batch"
-	"github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
 )
 
-func newSwitch(t *testing.T, conf output.Config, mockOutputs []*mock.OutputChanneled) *switchOutput {
+func newSwitch(t testing.TB, mockOutputs []*mock.OutputChanneled, confStr string, args ...any) *switchOutput {
 	t.Helper()
 
 	mgr := mock.NewManager()
 
-	conf.Type = "switch"
-	genType, err := mgr.NewOutput(conf)
+	pConf, err := switchOutputSpec().ParseYAML(fmt.Sprintf(confStr, args...), nil)
 	require.NoError(t, err)
 
-	rType, ok := genType.(*switchOutput)
-	require.True(t, ok)
+	s, err := switchOutputFromParsed(pConf, mgr)
+	require.NoError(t, err)
 
 	for i := 0; i < len(mockOutputs); i++ {
-		close(rType.outputTSChans[i])
-		rType.outputs[i] = mockOutputs[i]
-		rType.outputTSChans[i] = make(chan message.Transaction)
-		_ = mockOutputs[i].Consume(rType.outputTSChans[i])
+		close(s.outputTSChans[i])
+		s.outputs[i] = mockOutputs[i]
+		s.outputTSChans[i] = make(chan message.Transaction)
+		_ = mockOutputs[i].Consume(s.outputTSChans[i])
 	}
-	return rType
+	return s
 }
 
 func TestSwitchNoConditions(t *testing.T) {
@@ -45,15 +43,20 @@ func TestSwitchNoConditions(t *testing.T) {
 
 	nOutputs, nMsgs := 10, 1000
 
-	conf := output.NewConfig()
+	confStr := `
+cases:`
+
 	mockOutputs := []*mock.OutputChanneled{}
 	for i := 0; i < nOutputs; i++ {
-		conf.Switch.Cases = append(conf.Switch.Cases, output.NewSwitchConfigCase())
-		conf.Switch.Cases[i].Continue = true
+		confStr += `
+  - output:
+      drop: {}
+    continue: true
+`
 		mockOutputs = append(mockOutputs, &mock.OutputChanneled{})
 	}
 
-	s := newSwitch(t, conf, mockOutputs)
+	s := newSwitch(t, mockOutputs, confStr)
 
 	readChan := make(chan message.Transaction)
 	resChan := make(chan error, 1)
@@ -100,16 +103,21 @@ func TestSwitchNoRetries(t *testing.T) {
 
 	nOutputs, nMsgs := 10, 1000
 
-	conf := output.NewConfig()
-	conf.Switch.RetryUntilSuccess = false
+	confStr := `
+retry_until_success: false
+cases:`
+
 	mockOutputs := []*mock.OutputChanneled{}
 	for i := 0; i < nOutputs; i++ {
-		conf.Switch.Cases = append(conf.Switch.Cases, output.NewSwitchConfigCase())
-		conf.Switch.Cases[i].Continue = true
+		confStr += `
+  - output:
+      drop: {}
+    continue: true
+`
 		mockOutputs = append(mockOutputs, &mock.OutputChanneled{})
 	}
 
-	s := newSwitch(t, conf, mockOutputs)
+	s := newSwitch(t, mockOutputs, confStr)
 
 	readChan := make(chan message.Transaction)
 	resChan := make(chan error, 1)
@@ -160,26 +168,18 @@ func TestSwitchBatchNoRetries(t *testing.T) {
 	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
 	defer done()
 
-	conf := output.NewConfig()
-	conf.Switch.RetryUntilSuccess = false
+	confStr := `
+retry_until_success: false
+cases:
+  - check: 'root = this.id %% 2 == 0'
+    output:
+      drop: {}
+  - check: 'root = true'
+    output:
+      reject: "meow"
+`
 
-	okOut := output.NewConfig()
-	okOut.Type = "drop"
-	conf.Switch.Cases = append(conf.Switch.Cases, output.SwitchConfigCase{
-		Check:  `root = this.id % 2 == 0`,
-		Output: okOut,
-	})
-
-	errOut := output.NewConfig()
-	errOut.Type = "reject"
-	errOut.Reject = "meow"
-	conf.Switch.Cases = append(conf.Switch.Cases, output.SwitchConfigCase{
-		Check:  `root = true`,
-		Output: errOut,
-	})
-
-	s, err := newSwitchOutput(conf.Switch, mock.NewManager())
-	require.NoError(t, err, 1)
+	s := newSwitch(t, nil, confStr)
 
 	readChan := make(chan message.Transaction)
 	resChan := make(chan error)
@@ -207,7 +207,7 @@ func TestSwitchBatchNoRetries(t *testing.T) {
 		t.Fatal("Timed out responding to broker")
 	}
 
-	err = res
+	err := res
 	require.Error(t, err)
 
 	var bOut *batch.Error
@@ -216,7 +216,7 @@ func TestSwitchBatchNoRetries(t *testing.T) {
 	assert.Equal(t, 2, bOut.IndexedErrors())
 
 	errContents := []string{}
-	bOut.WalkParts(sortGroup, msg, func(i int, p *message.Part, e error) bool {
+	bOut.WalkPartsBySource(sortGroup, msg, func(i int, p *message.Part, e error) bool {
 		if e != nil {
 			errContents = append(errContents, string(p.AsBytes()))
 			assert.EqualError(t, e, "meow")
@@ -236,18 +236,21 @@ func TestSwitchBatchNoRetriesBatchErr(t *testing.T) {
 	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
 	defer done()
 
-	conf := output.NewConfig()
-	conf.Switch.RetryUntilSuccess = false
-	mockOutputs := []*mock.OutputChanneled{}
-	nOutputs := 2
-
-	for i := 0; i < nOutputs; i++ {
-		conf.Switch.Cases = append(conf.Switch.Cases, output.NewSwitchConfigCase())
-		conf.Switch.Cases[i].Continue = true
-		mockOutputs = append(mockOutputs, &mock.OutputChanneled{})
+	confStr := `
+retry_until_success: false
+cases:
+  - output:
+      drop: {}
+    continue: true
+  - output:
+      drop: {}
+    continue: true
+`
+	mockOutputs := []*mock.OutputChanneled{
+		{}, {},
 	}
 
-	s := newSwitch(t, conf, mockOutputs)
+	s := newSwitch(t, mockOutputs, confStr)
 
 	readChan := make(chan message.Transaction)
 	resChan := make(chan error, 1)
@@ -269,7 +272,7 @@ func TestSwitchBatchNoRetriesBatchErr(t *testing.T) {
 	}
 
 	transactions := []message.Transaction{}
-	for j := 0; j < nOutputs; j++ {
+	for j := 0; j < 2; j++ {
 		select {
 		case ts := <-mockOutputs[j].TChan:
 			transactions = append(transactions, ts)
@@ -277,7 +280,7 @@ func TestSwitchBatchNoRetriesBatchErr(t *testing.T) {
 			t.Fatal("Timed out waiting for broker propagate")
 		}
 	}
-	for j := 0; j < nOutputs; j++ {
+	for j := 0; j < 2; j++ {
 		var res error
 		if j == 0 {
 			batchErr := batch.NewError(transactions[j].Payload, errors.New("not this"))
@@ -301,7 +304,7 @@ func TestSwitchBatchNoRetriesBatchErr(t *testing.T) {
 		assert.Equal(t, 2, bOut.IndexedErrors())
 
 		errContents := []string{}
-		bOut.WalkParts(sortGroup, msg, func(i int, p *message.Part, e error) bool {
+		bOut.WalkPartsBySource(sortGroup, msg, func(i int, p *message.Part, e error) bool {
 			if e != nil {
 				errContents = append(errContents, string(p.AsBytes()))
 				assert.EqualError(t, e, fmt.Sprintf("err %v", i))
@@ -327,15 +330,18 @@ func TestSwitchWithConditions(t *testing.T) {
 	nMsgs := 100
 
 	mockOutputs := []*mock.OutputChanneled{{}, {}, {}}
-
-	conf := output.NewConfig()
-	for i := 0; i < len(mockOutputs); i++ {
-		conf.Switch.Cases = append(conf.Switch.Cases, output.NewSwitchConfigCase())
-	}
-	conf.Switch.Cases[0].Check = `this.foo == "bar"`
-	conf.Switch.Cases[1].Check = `this.foo == "baz"`
-
-	s := newSwitch(t, conf, mockOutputs)
+	confStr := `
+cases:
+  - output:
+      drop: {}
+    check: 'this.foo == "bar"'
+  - output:
+      drop: {}
+    check: 'this.foo == "baz"'
+  - output:
+      drop: {}
+`
+	s := newSwitch(t, mockOutputs, confStr)
 
 	readChan := make(chan message.Transaction)
 	resChan := make(chan error, 1)
@@ -424,16 +430,19 @@ func TestSwitchError(t *testing.T) {
 	defer done()
 
 	mockOutputs := []*mock.OutputChanneled{{}, {}, {}}
-
-	conf := output.NewConfig()
-	for i := 0; i < len(mockOutputs); i++ {
-		conf.Switch.Cases = append(conf.Switch.Cases, output.NewSwitchConfigCase())
-	}
-	conf.Switch.Cases[0].Check = `this.foo == "bar"`
-	conf.Switch.Cases[1].Check = `this.foo.not_null() == "baz"`
-	conf.Switch.Cases[2].Check = `this.foo == "buz"`
-
-	s := newSwitch(t, conf, mockOutputs)
+	confStr := `
+cases:
+  - output:
+      drop: {}
+    check: 'this.foo == "bar"'
+  - output:
+      drop: {}
+    check: 'this.foo.not_null() == "baz"'
+  - output:
+      drop: {}
+    check: 'this.foo == "buz"'
+`
+	s := newSwitch(t, mockOutputs, confStr)
 
 	readChan := make(chan message.Transaction)
 	resChan := make(chan error, 1)
@@ -491,16 +500,19 @@ func TestSwitchBatchSplit(t *testing.T) {
 	defer done()
 
 	mockOutputs := []*mock.OutputChanneled{{}, {}, {}}
-
-	conf := output.NewConfig()
-	for i := 0; i < len(mockOutputs); i++ {
-		conf.Switch.Cases = append(conf.Switch.Cases, output.NewSwitchConfigCase())
-	}
-	conf.Switch.Cases[0].Check = `this.foo == "bar"`
-	conf.Switch.Cases[1].Check = `this.foo == "baz"`
-	conf.Switch.Cases[2].Check = `this.foo == "buz"`
-
-	s := newSwitch(t, conf, mockOutputs)
+	confStr := `
+cases:
+  - output:
+      drop: {}
+    check: 'this.foo == "bar"'
+  - output:
+      drop: {}
+    check: 'this.foo == "baz"'
+  - output:
+      drop: {}
+    check: 'this.foo == "buz"'
+`
+	s := newSwitch(t, mockOutputs, confStr)
 
 	readChan := make(chan message.Transaction)
 	resChan := make(chan error, 1)
@@ -555,16 +567,19 @@ func TestSwitchBatchGroup(t *testing.T) {
 	defer done()
 
 	mockOutputs := []*mock.OutputChanneled{{}, {}, {}}
-
-	conf := output.NewConfig()
-	for i := 0; i < len(mockOutputs); i++ {
-		conf.Switch.Cases = append(conf.Switch.Cases, output.NewSwitchConfigCase())
-	}
-	conf.Switch.Cases[0].Check = `json().foo.from(0) == "bar"`
-	conf.Switch.Cases[1].Check = `json().foo.from(0) == "baz"`
-	conf.Switch.Cases[2].Check = `json().foo.from(0) == "buz"`
-
-	s := newSwitch(t, conf, mockOutputs)
+	confStr := `
+cases:
+  - output:
+      drop: {}
+    check: 'json().foo.from(0) == "bar"'
+  - output:
+      drop: {}
+    check: 'json().foo.from(0) == "baz"'
+  - output:
+      drop: {}
+    check: 'json().foo.from(0) == "buz"'
+`
+	s := newSwitch(t, mockOutputs, confStr)
 
 	readChan := make(chan message.Transaction)
 	resChan := make(chan error, 1)
@@ -624,16 +639,19 @@ func TestSwitchNoMatch(t *testing.T) {
 	defer done()
 
 	mockOutputs := []*mock.OutputChanneled{{}, {}, {}}
-
-	conf := output.NewConfig()
-	for i := 0; i < len(mockOutputs); i++ {
-		conf.Switch.Cases = append(conf.Switch.Cases, output.NewSwitchConfigCase())
-	}
-	conf.Switch.Cases[0].Check = `this.foo == "bar"`
-	conf.Switch.Cases[1].Check = `this.foo == "baz"`
-	conf.Switch.Cases[2].Check = `false`
-
-	s := newSwitch(t, conf, mockOutputs)
+	confStr := `
+cases:
+  - output:
+      drop: {}
+    check: 'this.foo == "bar"'
+  - output:
+      drop: {}
+    check: 'this.foo == "baz"'
+  - output:
+      drop: {}
+    check: 'false'
+`
+	s := newSwitch(t, mockOutputs, confStr)
 
 	readChan := make(chan message.Transaction)
 	resChan := make(chan error, 1)
@@ -663,17 +681,20 @@ func TestSwitchNoMatchStrict(t *testing.T) {
 	defer done()
 
 	mockOutputs := []*mock.OutputChanneled{{}, {}, {}}
-
-	conf := output.NewConfig()
-	conf.Switch.StrictMode = true
-	for i := 0; i < len(mockOutputs); i++ {
-		conf.Switch.Cases = append(conf.Switch.Cases, output.NewSwitchConfigCase())
-	}
-	conf.Switch.Cases[0].Check = `this.foo == "bar"`
-	conf.Switch.Cases[1].Check = `this.foo == "baz"`
-	conf.Switch.Cases[2].Check = `false`
-
-	s := newSwitch(t, conf, mockOutputs)
+	confStr := `
+strict_mode: true
+cases:
+  - output:
+      drop: {}
+    check: 'this.foo == "bar"'
+  - output:
+      drop: {}
+    check: 'this.foo == "baz"'
+  - output:
+      drop: {}
+    check: 'false'
+`
+	s := newSwitch(t, mockOutputs, confStr)
 
 	readChan := make(chan message.Transaction)
 	resChan := make(chan error, 1)
@@ -705,15 +726,19 @@ func TestSwitchWithConditionsNoFallthrough(t *testing.T) {
 	nMsgs := 100
 
 	mockOutputs := []*mock.OutputChanneled{{}, {}, {}}
-
-	conf := output.NewConfig()
-	for i := 0; i < len(mockOutputs); i++ {
-		conf.Switch.Cases = append(conf.Switch.Cases, output.NewSwitchConfigCase())
-	}
-	conf.Switch.Cases[0].Check = `this.foo == "bar"`
-	conf.Switch.Cases[1].Check = `this.foo == "baz"`
-
-	s := newSwitch(t, conf, mockOutputs)
+	confStr := `
+strict_mode: true
+cases:
+  - output:
+      drop: {}
+    check: 'this.foo == "bar"'
+  - output:
+      drop: {}
+    check: 'this.foo == "baz"'
+  - output:
+      drop: {}
+`
+	s := newSwitch(t, mockOutputs, confStr)
 
 	readChan := make(chan message.Transaction)
 	resChan := make(chan error, 1)
@@ -796,91 +821,25 @@ func TestSwitchWithConditionsNoFallthrough(t *testing.T) {
 	wg.Wait()
 }
 
-func TestSwitchAtLeastOnce(t *testing.T) {
-	t.Skip("this doesnt currently work with mocked outputs")
-
-	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
-	defer done()
-
-	mockOne := mock.OutputChanneled{}
-	mockTwo := mock.OutputChanneled{}
-
-	mockOutputs := []*mock.OutputChanneled{
-		&mockOne, &mockTwo,
-	}
-
-	conf := output.NewConfig()
-	conf.Switch.RetryUntilSuccess = true
-	for i := 0; i < len(mockOutputs); i++ {
-		outConf := output.NewSwitchConfigCase()
-		outConf.Continue = true
-		conf.Switch.Cases = append(conf.Switch.Cases, outConf)
-	}
-
-	readChan := make(chan message.Transaction)
-	resChan := make(chan error, 1)
-
-	s := newSwitch(t, conf, mockOutputs)
-
-	require.NoError(t, s.Consume(readChan))
-	require.Error(t, s.Consume(readChan))
-
-	select {
-	case readChan <- message.NewTransaction(message.QuickBatch([][]byte{[]byte("hello world")}), resChan):
-	case <-time.After(time.Second):
-		t.Fatal("Timed out waiting for output send")
-	}
-	var ts1, ts2 message.Transaction
-	select {
-	case ts1 = <-mockOne.TChan:
-	case <-time.After(time.Second):
-		t.Fatal("Timed out waiting for mockOne")
-	}
-	select {
-	case ts2 = <-mockTwo.TChan:
-	case <-time.After(time.Second):
-		t.Fatal("Timed out waiting for mockOne")
-	}
-	require.NoError(t, ts1.Ack(ctx, nil))
-	require.NoError(t, ts2.Ack(ctx, errors.New("this is a test")))
-	select {
-	case <-mockOne.TChan:
-		t.Fatal("Received duplicate message to mockOne")
-	case ts2 = <-mockTwo.TChan:
-	case <-resChan:
-		t.Fatal("Received premature response from output")
-	case <-time.After(time.Second):
-		t.Fatal("Timed out waiting for mockTwo")
-	}
-	require.NoError(t, ts2.Ack(ctx, nil))
-	select {
-	case res := <-resChan:
-		assert.NoError(t, res)
-	case <-time.After(time.Second):
-		t.Fatal("Timed out responding to output")
-	}
-
-	close(readChan)
-	require.NoError(t, s.WaitForClose(ctx))
-}
-
 func TestSwitchShutDownFromErrorResponse(t *testing.T) {
 	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
 	defer done()
 
 	mockOutputs := []*mock.OutputChanneled{{}, {}}
-
-	conf := output.NewConfig()
-	for i := 0; i < len(mockOutputs); i++ {
-		outConf := output.NewSwitchConfigCase()
-		outConf.Continue = true
-		conf.Switch.Cases = append(conf.Switch.Cases, outConf)
-	}
+	confStr := `
+cases:
+  - output:
+      drop: {}
+    continue: true
+  - output:
+      drop: {}
+    continue: true
+`
+	s := newSwitch(t, mockOutputs, confStr)
 
 	readChan := make(chan message.Transaction)
 	resChan := make(chan error, 1)
 
-	s := newSwitch(t, conf, mockOutputs)
 	require.NoError(t, s.Consume(readChan))
 
 	select {
@@ -921,18 +880,20 @@ func TestSwitchShutDownFromReceive(t *testing.T) {
 	defer done()
 
 	mockOutputs := []*mock.OutputChanneled{{}, {}}
-
-	conf := output.NewConfig()
-	for i := 0; i < len(mockOutputs); i++ {
-		outConf := output.NewSwitchConfigCase()
-		outConf.Continue = true
-		conf.Switch.Cases = append(conf.Switch.Cases, outConf)
-	}
+	confStr := `
+cases:
+  - output:
+      drop: {}
+    continue: true
+  - output:
+      drop: {}
+    continue: true
+`
+	s := newSwitch(t, mockOutputs, confStr)
 
 	readChan := make(chan message.Transaction)
 	resChan := make(chan error, 1)
 
-	s := newSwitch(t, conf, mockOutputs)
 	require.NoError(t, s.Consume(readChan))
 
 	select {
@@ -964,18 +925,20 @@ func TestSwitchShutDownFromSend(t *testing.T) {
 	defer done()
 
 	mockOutputs := []*mock.OutputChanneled{{}, {}}
-
-	conf := output.NewConfig()
-	for i := 0; i < len(mockOutputs); i++ {
-		outConf := output.NewSwitchConfigCase()
-		outConf.Continue = true
-		conf.Switch.Cases = append(conf.Switch.Cases, outConf)
-	}
+	confStr := `
+cases:
+  - output:
+      drop: {}
+    continue: true
+  - output:
+      drop: {}
+    continue: true
+`
+	s := newSwitch(t, mockOutputs, confStr)
 
 	readChan := make(chan message.Transaction)
 	resChan := make(chan error, 1)
 
-	s := newSwitch(t, conf, mockOutputs)
 	require.NoError(t, s.Consume(readChan))
 
 	select {
@@ -1002,18 +965,20 @@ func TestSwitchBackPressure(t *testing.T) {
 	t.Parallel()
 
 	mockOutputs := []*mock.OutputChanneled{{}, {}}
-
-	conf := output.NewConfig()
-	for i := 0; i < len(mockOutputs); i++ {
-		outConf := output.NewSwitchConfigCase()
-		outConf.Continue = true
-		conf.Switch.Cases = append(conf.Switch.Cases, outConf)
-	}
+	confStr := `
+cases:
+  - output:
+      drop: {}
+    continue: true
+  - output:
+      drop: {}
+    continue: true
+`
+	s := newSwitch(t, mockOutputs, confStr)
 
 	readChan := make(chan message.Transaction)
 	resChan := make(chan error, 1)
 
-	s := newSwitch(t, conf, mockOutputs)
 	require.NoError(t, s.Consume(readChan))
 
 	wg := sync.WaitGroup{}

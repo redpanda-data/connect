@@ -14,10 +14,7 @@ categories: ["Utility"]
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-
-Generates messages at a given interval using a [Bloblang](/docs/guides/bloblang/about)
-mapping executed without a context. This allows you to generate messages for
-testing your pipeline configs.
+Generates messages at a given interval using a [Bloblang](/docs/guides/bloblang/about) mapping executed without a context. This allows you to generate messages for testing your pipeline configs.
 
 Introduced in version 3.40.0.
 
@@ -26,7 +23,7 @@ Introduced in version 3.40.0.
 input:
   label: ""
   generate:
-    mapping: ""
+    mapping: root = "hello world" # No default (required)
     interval: 1s
     count: 0
     batch_size: 1
@@ -40,7 +37,6 @@ A [bloblang](/docs/guides/bloblang/about) mapping to use for generating messages
 
 
 Type: `string`  
-Default: `""`  
 
 ```yml
 # Examples

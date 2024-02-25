@@ -2,155 +2,195 @@ package amqp1
 
 import (
 	"context"
-	"crypto/tls"
+	"errors"
 	"fmt"
+	"strings"
 	"sync"
 
 	"github.com/Azure/go-amqp"
 
-	"github.com/benthosdev/benthos/v4/internal/bloblang/mapping"
-	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component"
-	"github.com/benthosdev/benthos/v4/internal/component/output"
-	"github.com/benthosdev/benthos/v4/internal/component/output/processors"
-	"github.com/benthosdev/benthos/v4/internal/docs"
-	"github.com/benthosdev/benthos/v4/internal/impl/amqp1/shared"
-	"github.com/benthosdev/benthos/v4/internal/log"
-	"github.com/benthosdev/benthos/v4/internal/message"
-	"github.com/benthosdev/benthos/v4/internal/metadata"
-	itls "github.com/benthosdev/benthos/v4/internal/tls"
+	"github.com/benthosdev/benthos/v4/public/bloblang"
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
-func init() {
-	err := bundle.AllOutputs.Add(processors.WrapConstructor(func(c output.Config, nm bundle.NewManagement) (output.Streamed, error) {
-		a, err := newAMQP1Writer(c.AMQP1, nm)
-		if err != nil {
-			return nil, err
-		}
-		w, err := output.NewAsyncWriter("amqp_1", c.AMQP1.MaxInFlight, a, nm)
-		if err != nil {
-			return nil, err
-		}
-		return output.OnlySinglePayloads(w), nil
-	}), docs.ComponentSpec{
-		Name:    "amqp_1",
-		Status:  docs.StatusStable,
-		Summary: `Sends messages to an AMQP (1.0) server.`,
-		Description: output.Description(true, false, `
+func amqp1OutputSpec() *service.ConfigSpec {
+	return service.NewConfigSpec().
+		Stable().
+		Categories("Services").
+		Summary("Sends messages to an AMQP (1.0) server.").
+		Description(`
 ### Metadata
 
-Message metadata is added to each AMQP message as string annotations. In order to control which metadata keys are added use the `+"`metadata`"+` config field.`),
-		Config: docs.FieldComponent().WithChildren(
-			docs.FieldURL("url",
-				"A URL to connect to.",
-				"amqp://localhost:5672/",
-				"amqps://guest:guest@localhost:5672/",
-			).HasDefault(""),
-			docs.FieldString("target_address", "The target address to write to.", "/foo", "queue:/bar", "topic:/baz").HasDefault(""),
-			docs.FieldInt("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput.").HasDefault(64),
-			itls.FieldSpec(),
-			docs.FieldBloblang("application_properties_map", "An optional Bloblang mapping that can be defined in order to set the `application-properties` on output messages.").Advanced().HasDefault(""),
-			shared.SASLFieldSpec(),
-			docs.FieldObject("metadata", "Specify criteria for which metadata values are attached to messages as headers.").
-				WithChildren(metadata.ExcludeFilterFields()...),
-		),
-		Categories: []string{
-			"Services",
-		},
-	})
+Message metadata is added to each AMQP message as string annotations. In order to control which metadata keys are added use the `+"`metadata`"+` config field.
+
+## Performance
+
+This output benefits from sending multiple messages in flight in parallel for improved performance. You can tune the max number of in flight messages (or message batches) with the field `+"`max_in_flight`"+`.`).
+		Fields(
+			service.NewURLField(urlField).
+				Description("A URL to connect to.").
+				Example("amqp://localhost:5672/").
+				Example("amqps://guest:guest@localhost:5672/").
+				Deprecated().
+				Optional(),
+			service.NewURLListField(urlsField).
+				Description("A list of URLs to connect to. The first URL to successfully establish a connection will be used until the connection is closed. If an item of the list contains commas it will be expanded into multiple URLs.").
+				Example([]string{"amqp://guest:guest@127.0.0.1:5672/"}).
+				Example([]string{"amqp://127.0.0.1:5672/,amqp://127.0.0.2:5672/"}).
+				Example([]string{"amqp://127.0.0.1:5672/", "amqp://127.0.0.2:5672/"}).
+				Optional().
+				Version("4.23.0"),
+			service.NewStringField(targetAddrField).
+				Description("The target address to write to.").
+				Example("/foo").
+				Example("queue:/bar").
+				Example("topic:/baz"),
+			service.NewOutputMaxInFlightField(),
+			service.NewTLSToggledField(tlsField),
+			service.NewBloblangField(appPropsMapField).
+				Description("An optional Bloblang mapping that can be defined in order to set the `application-properties` on output messages.").
+				Optional().
+				Advanced(),
+			saslFieldSpec(),
+			service.NewMetadataExcludeFilterField(metaFilterField).
+				Description("Specify criteria for which metadata values are attached to messages as headers."),
+		).LintRule(`
+root = if this.url.or("") == "" && this.urls.or([]).length() == 0 {
+  "field 'urls' must be set"
+}
+`)
+}
+
+func init() {
+	err := service.RegisterOutput("amqp_1", amqp1OutputSpec(),
+		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Output, int, error) {
+			w, err := amqp1WriterFromParsed(conf, mgr)
+			if err != nil {
+				return nil, 0, err
+			}
+
+			mIF, err := conf.FieldMaxInFlight()
+			if err != nil {
+				return nil, 0, err
+			}
+
+			return w, mIF, nil
+		})
 	if err != nil {
 		panic(err)
 	}
 }
 
 type amqp1Writer struct {
-	client  *amqp.Client
+	client  *amqp.Conn
 	session *amqp.Session
 	sender  *amqp.Sender
 
-	metaFilter               *metadata.ExcludeFilter
-	applicationPropertiesMap *mapping.Executor
+	urls                     []string
+	targetAddr               string
+	metaFilter               *service.MetadataExcludeFilter
+	applicationPropertiesMap *bloblang.Executor
+	connOpts                 *amqp.ConnOptions
 
-	log log.Modular
-
-	conf    output.AMQP1Config
-	tlsConf *tls.Config
-
+	log      *service.Logger
 	connLock sync.RWMutex
 }
 
-func newAMQP1Writer(conf output.AMQP1Config, mgr bundle.NewManagement) (*amqp1Writer, error) {
+func amqp1WriterFromParsed(conf *service.ParsedConfig, mgr *service.Resources) (*amqp1Writer, error) {
 	a := amqp1Writer{
-		log:  mgr.Logger(),
-		conf: conf,
+		log:      mgr.Logger(),
+		connOpts: &amqp.ConnOptions{},
 	}
 
-	var err error
-	if conf.ApplicationPropertiesMapping != "" {
-		if a.applicationPropertiesMap, err = mgr.BloblEnvironment().NewMapping(conf.ApplicationPropertiesMapping); err != nil {
-			return nil, fmt.Errorf("failed to construct application_properties_map: %w", err)
+	urlStrs, err := conf.FieldStringList(urlsField)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, u := range urlStrs {
+		for _, splitURL := range strings.Split(u, ",") {
+			if trimmed := strings.TrimSpace(splitURL); len(trimmed) > 0 {
+				a.urls = append(a.urls, trimmed)
+			}
 		}
 	}
 
-	if conf.TLS.Enabled {
-		if a.tlsConf, err = conf.TLS.Get(mgr.FS()); err != nil {
+	if len(a.urls) == 0 {
+		singleURL, err := conf.FieldString(urlField)
+		if err != nil {
+			err = errors.New("at least one url must be specified")
+			return nil, err
+		}
+
+		a.urls = []string{singleURL}
+	}
+
+	if a.targetAddr, err = conf.FieldString(targetAddrField); err != nil {
+		return nil, err
+	}
+
+	if err := saslOptFnsFromParsed(conf, a.connOpts); err != nil {
+		return nil, err
+	}
+
+	tlsConf, enabled, err := conf.FieldTLSToggled(tlsField)
+	if err != nil {
+		return nil, err
+	}
+	if enabled {
+		a.connOpts.TLSConfig = tlsConf
+	}
+
+	if conf.Contains(appPropsMapField) {
+		if a.applicationPropertiesMap, err = conf.FieldBloblang(appPropsMapField); err != nil {
 			return nil, err
 		}
 	}
-	if a.metaFilter, err = conf.Metadata.Filter(); err != nil {
-		return nil, fmt.Errorf("failed to construct metadata filter: %w", err)
+
+	if a.metaFilter, err = conf.FieldMetadataExcludeFilter(metaFilterField); err != nil {
+		return nil, err
 	}
 	return &a, nil
 }
 
-func (a *amqp1Writer) Connect(ctx context.Context) error {
+func (a *amqp1Writer) Connect(ctx context.Context) (err error) {
 	a.connLock.Lock()
 	defer a.connLock.Unlock()
 
 	if a.client != nil {
-		return nil
+		return
 	}
 
 	var (
-		client  *amqp.Client
+		client  *amqp.Conn
 		session *amqp.Session
 		sender  *amqp.Sender
-		err     error
 	)
 
-	opts, err := saslToOptFns(a.conf.SASL)
-	if err != nil {
-		return err
-	}
-	if a.conf.TLS.Enabled {
-		opts = append(opts, amqp.ConnTLS(true), amqp.ConnTLSConfig(a.tlsConf))
-	}
-
 	// Create client
-	if client, err = amqp.Dial(a.conf.URL, opts...); err != nil {
+	if client, err = a.reDial(ctx, a.urls); err != nil {
 		return err
 	}
 
 	// Open a session
-	if session, err = client.NewSession(); err != nil {
-		client.Close()
-		return err
+	if session, err = client.NewSession(ctx, nil); err != nil {
+		_ = client.Close()
+		return
 	}
 
 	// Create a sender
-	if sender, err = session.NewSender(
-		amqp.LinkTargetAddress(a.conf.TargetAddress),
-	); err != nil {
-		session.Close(context.Background())
-		client.Close()
-		return err
+	if sender, err = session.NewSender(ctx, a.targetAddr, nil); err != nil {
+		_ = session.Close(ctx)
+		_ = client.Close()
+		return
 	}
 
 	a.client = client
 	a.session = session
 	a.sender = sender
 
-	a.log.Infof("Sending AMQP 1.0 messages to target: %v\n", a.conf.TargetAddress)
+	a.log.Infof("Sending AMQP 1.0 messages to target: %v\n", a.targetAddr)
 	return nil
 }
 
@@ -180,7 +220,7 @@ func (a *amqp1Writer) disconnect(ctx context.Context) error {
 
 //------------------------------------------------------------------------------
 
-func (a *amqp1Writer) WriteBatch(ctx context.Context, msg message.Batch) error {
+func (a *amqp1Writer) Write(ctx context.Context, msg *service.Message) error {
 	var s *amqp.Sender
 	a.connLock.RLock()
 	if a.sender != nil {
@@ -189,55 +229,78 @@ func (a *amqp1Writer) WriteBatch(ctx context.Context, msg message.Batch) error {
 	a.connLock.RUnlock()
 
 	if s == nil {
-		return component.ErrNotConnected
+		return service.ErrNotConnected
 	}
 
-	return output.IterateBatchedSend(msg, func(i int, p *message.Part) error {
-		m := amqp.NewMessage(p.AsBytes())
+	mBytes, err := msg.AsBytes()
+	if err != nil {
+		return err
+	}
 
-		if a.applicationPropertiesMap != nil {
-			mapMsg, err := a.applicationPropertiesMap.MapPart(i, msg)
-			if err != nil {
+	m := amqp.NewMessage(mBytes)
+
+	if a.applicationPropertiesMap != nil {
+		mapMsg, err := msg.BloblangQuery(a.applicationPropertiesMap)
+		if err != nil {
+			return err
+		}
+
+		var mapVal any
+		if mapMsg != nil {
+			if mapVal, err = mapMsg.AsStructured(); err != nil {
 				return err
 			}
+		}
 
-			mapVal, err := mapMsg.AsStructured()
-			if err != nil {
-				return err
-			}
-
+		if mapVal != nil {
 			applicationProperties, ok := mapVal.(map[string]interface{})
 			if !ok {
 				return fmt.Errorf("application_properties_map resulted in a non-object mapping: %T", mapVal)
 			}
-
 			m.ApplicationProperties = applicationProperties
 		}
-		_ = a.metaFilter.Iter(p, func(k string, v any) error {
-			if m.Annotations == nil {
-				m.Annotations = amqp.Annotations{}
-			}
-			m.Annotations[k] = v
-			return nil
-		})
-		err := s.Send(ctx, m)
-		if err != nil {
-			if err == amqp.ErrTimeout || ctx.Err() != nil {
-				err = component.ErrTimeout
-			} else {
-				if dErr, isDetachError := err.(*amqp.DetachError); isDetachError && dErr.RemoteError != nil {
-					a.log.Errorf("Lost connection due to: %v\n", dErr.RemoteError)
-				} else {
-					a.log.Errorf("Lost connection due to: %v\n", err)
-				}
-				_ = a.disconnect(ctx)
-				err = component.ErrNotConnected
-			}
+	}
+
+	_ = a.metaFilter.WalkMut(msg, func(k string, v any) error {
+		if m.Annotations == nil {
+			m.Annotations = amqp.Annotations{}
 		}
-		return err
+		m.Annotations[k] = v
+		return nil
 	})
+
+	if err = s.Send(ctx, m, nil); err != nil {
+		if ctx.Err() != nil {
+			err = component.ErrTimeout
+		} else {
+			a.log.Errorf("Lost connection due to: %v\n", err)
+			_ = a.disconnect(ctx)
+			err = service.ErrNotConnected
+		}
+	}
+	return err
 }
 
 func (a *amqp1Writer) Close(ctx context.Context) error {
 	return a.disconnect(ctx)
+}
+
+// reDial connection to amqp with one or more fallback URLs.
+func (a *amqp1Writer) reDial(ctx context.Context, urls []string) (conn *amqp.Conn, err error) {
+	for i, url := range urls {
+		conn, err = amqp.Dial(ctx, url, a.connOpts)
+		if err != nil {
+			a.log.With("error", err).Warnf("unable to connect to url %q #%d, trying next", url, i)
+
+			continue
+		}
+
+		a.log.Tracef("successful connection to use %q #%d", url, i)
+
+		return conn, nil
+	}
+
+	a.log.With("error", err).Tracef("unable to connect to any of %d urls, return error", len(a.urls))
+
+	return nil, err
 }

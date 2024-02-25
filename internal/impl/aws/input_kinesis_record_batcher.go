@@ -7,22 +7,21 @@ import (
 	"sync"
 	"time"
 
-	"github.com/aws/aws-sdk-go/service/kinesis"
+	"github.com/aws/aws-sdk-go-v2/service/kinesis/types"
 
-	"github.com/benthosdev/benthos/v4/internal/batch/policy"
 	"github.com/benthosdev/benthos/v4/internal/checkpoint"
 	"github.com/benthosdev/benthos/v4/internal/component"
-	"github.com/benthosdev/benthos/v4/internal/message"
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
 type awsKinesisRecordBatcher struct {
 	streamID string
 	shardID  string
 
-	batchPolicy  *policy.Batcher
+	batchPolicy  *service.Batcher
 	checkpointer *checkpoint.Capped[string]
 
-	flushedMessage message.Batch
+	flushedMessage service.MessageBatch
 
 	batchedSequence string
 
@@ -31,14 +30,14 @@ type awsKinesisRecordBatcher struct {
 	ackedWG       sync.WaitGroup
 }
 
-func (k *kinesisReader) newAWSKinesisRecordBatcher(streamID, shardID, sequence string) (*awsKinesisRecordBatcher, error) {
-	batchPolicy, err := policy.New(k.conf.Batching, k.mgr.IntoPath("aws_kinesis", "batching"))
+func (k *kinesisReader) newAWSKinesisRecordBatcher(info streamInfo, shardID, sequence string) (*awsKinesisRecordBatcher, error) {
+	batchPolicy, err := k.batcher.NewBatcher(k.mgr)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize batch policy for shard consumer: %w", err)
 	}
 
 	return &awsKinesisRecordBatcher{
-		streamID:      streamID,
+		streamID:      info.id,
 		shardID:       shardID,
 		batchPolicy:   batchPolicy,
 		checkpointer:  checkpoint.NewCapped[string](int64(k.conf.CheckpointLimit)),
@@ -46,8 +45,8 @@ func (k *kinesisReader) newAWSKinesisRecordBatcher(streamID, shardID, sequence s
 	}, nil
 }
 
-func (a *awsKinesisRecordBatcher) AddRecord(r *kinesis.Record) bool {
-	p := message.NewPart(r.Data)
+func (a *awsKinesisRecordBatcher) AddRecord(r types.Record) bool {
+	p := service.NewMessage(r.Data)
 	p.MetaSetMut("kinesis_stream", a.streamID)
 	p.MetaSetMut("kinesis_shard", a.shardID)
 	if r.PartitionKey != nil {
@@ -72,12 +71,13 @@ func (a *awsKinesisRecordBatcher) HasPendingMessage() bool {
 
 func (a *awsKinesisRecordBatcher) FlushMessage(ctx context.Context) (asyncMessage, error) {
 	if a.flushedMessage == nil {
-		if a.flushedMessage = a.batchPolicy.Flush(ctx); a.flushedMessage == nil {
-			return asyncMessage{}, nil
+		var err error
+		if a.flushedMessage, err = a.batchPolicy.Flush(ctx); err != nil || a.flushedMessage == nil {
+			return asyncMessage{}, err
 		}
 	}
 
-	resolveFn, err := a.checkpointer.Track(ctx, a.batchedSequence, int64(a.flushedMessage.Len()))
+	resolveFn, err := a.checkpointer.Track(ctx, a.batchedSequence, int64(len(a.flushedMessage)))
 	if err != nil {
 		if ctx.Err() != nil || errors.Is(err, component.ErrTimeout) {
 			// No need to log this error, just continue with no message.
@@ -104,7 +104,7 @@ func (a *awsKinesisRecordBatcher) FlushMessage(ctx context.Context) (asyncMessag
 	return aMsg, nil
 }
 
-func (a *awsKinesisRecordBatcher) UntilNext() time.Duration {
+func (a *awsKinesisRecordBatcher) UntilNext() (time.Duration, bool) {
 	return a.batchPolicy.UntilNext()
 }
 

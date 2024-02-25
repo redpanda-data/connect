@@ -14,9 +14,7 @@ categories: ["Services"]
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-
-Publishes messages through the Redis PubSub model. It is not possible to
-guarantee that messages have been received.
+Publishes messages through the Redis PubSub model. It is not possible to guarantee that messages have been received.
 
 
 <Tabs defaultValue="common" values={[
@@ -31,8 +29,8 @@ guarantee that messages have been received.
 output:
   label: ""
   redis_pubsub:
-    url: ""
-    channel: ""
+    url: redis://:6397 # No default (required)
+    channel: "" # No default (required)
     max_in_flight: 64
     batching:
       count: 0
@@ -49,7 +47,7 @@ output:
 output:
   label: ""
   redis_pubsub:
-    url: ""
+    url: redis://:6397 # No default (required)
     kind: simple
     master: ""
     tls:
@@ -59,21 +57,20 @@ output:
       root_cas: ""
       root_cas_file: ""
       client_certs: []
-    channel: ""
+    channel: "" # No default (required)
     max_in_flight: 64
     batching:
       count: 0
       byte_size: 0
       period: ""
       check: ""
-      processors: []
+      processors: [] # No default (optional)
 ```
 
 </TabItem>
 </Tabs>
 
-This output will interpolate functions within the channel field, you
-can find a list of functions [here](/docs/configuration/interpolation#bloblang-queries).
+This output will interpolate functions within the channel field, you can find a list of functions [here](/docs/configuration/interpolation#bloblang-queries).
 
 ## Performance
 
@@ -89,20 +86,19 @@ Batches can be formed at both the input and output level. You can find out more
 
 ### `url`
 
-The URL of the target Redis server. Database is optional and is supplied as the URL path. The scheme `tcp` is equivalent to `redis`.
+The URL of the target Redis server. Database is optional and is supplied as the URL path.
 
 
 Type: `string`  
-Default: `""`  
 
 ```yml
 # Examples
 
-url: :6397
-
-url: localhost:6397
+url: redis://:6397
 
 url: redis://localhost:6379
+
+url: redis://foousername:foopassword@redisplace:6379
 
 url: redis://:foopassword@redisplace:6379
 
@@ -118,16 +114,7 @@ Specifies a simple, cluster-aware, or failover-aware redis client.
 
 Type: `string`  
 Default: `"simple"`  
-
-```yml
-# Examples
-
-kind: simple
-
-kind: cluster
-
-kind: failover
-```
+Options: `simple`, `cluster`, `failover`.
 
 ### `master`
 
@@ -294,11 +281,10 @@ This field supports [interpolation functions](/docs/configuration/interpolation#
 
 
 Type: `string`  
-Default: `""`  
 
 ### `max_in_flight`
 
-The maximum number of parallel message batches to have in flight at any given time.
+The maximum number of messages to have in flight at a given time. Increase this to improve throughput.
 
 
 Type: `int`  
@@ -383,7 +369,6 @@ A list of [processors](/docs/components/processors/about) to apply to a batch as
 
 
 Type: `array`  
-Default: `[]`  
 
 ```yml
 # Examples

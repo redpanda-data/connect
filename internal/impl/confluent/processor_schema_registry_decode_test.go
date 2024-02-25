@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"testing"
 	"time"
 
@@ -59,7 +60,7 @@ basic_auth:
 
 			e, err := newSchemaRegistryDecoderFromConfig(conf, service.MockResources())
 			if e != nil {
-				assert.Equal(t, test.expectedBaseURL, e.schemaRegistryBaseURL.String())
+				assert.Equal(t, test.expectedBaseURL, e.client.schemaRegistryBaseURL.String())
 			}
 
 			if err == nil {
@@ -75,10 +76,14 @@ basic_auth:
 	}
 }
 
-func runSchemaRegistryServer(t *testing.T, fn func(path string) ([]byte, error)) string {
+func runSchemaRegistryServer(t testing.TB, fn func(path string) ([]byte, error)) string {
 	t.Helper()
 
+	var reqMut sync.Mutex
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		reqMut.Lock()
+		defer reqMut.Unlock()
+
 		b, err := fn(r.URL.Path)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
@@ -167,30 +172,55 @@ const testSchemaLogicalTypes = `{
 	]
 }`
 
+const testProtoSchema = `
+syntax = "proto3";
+package ksql;
+
+message users {
+  int64 registertime = 1;
+  string userid = 2;
+  string regionid = 3;
+  string gender = 4;
+}`
+
+const testJSONSchema = `{
+	"type": "object",
+	"properties": {
+		"Name": {"type": "string"},
+		"Address": {
+			"type": ["object", "null"],
+			"properties": {
+				"City": {"type": "string"},
+				"State": {"type": "string"}
+			},
+			"required": ["State"]
+		},
+		"MaybeHobby": {"type": ["string", "null"]}
+	},
+	"required": ["Name"]
+}`
+
+func mustJBytes(t testing.TB, obj any) []byte {
+	t.Helper()
+	b, err := json.Marshal(obj)
+	require.NoError(t, err)
+	return b
+}
+
 func TestSchemaRegistryDecodeAvro(t *testing.T) {
-	payload3, err := json.Marshal(struct {
-		Schema string `json:"schema"`
-	}{
-		Schema: testSchema,
-	})
-	require.NoError(t, err)
-
-	payload4, err := json.Marshal(struct {
-		Schema string `json:"schema"`
-	}{
-		Schema: testSchemaLogicalTypes,
-	})
-	require.NoError(t, err)
-
 	returnedSchema3 := false
 	urlStr := runSchemaRegistryServer(t, func(path string) ([]byte, error) {
 		switch path {
 		case "/schemas/ids/3":
 			assert.False(t, returnedSchema3)
 			returnedSchema3 = true
-			return payload3, nil
+			return mustJBytes(t, map[string]any{
+				"schema": testSchema,
+			}), nil
 		case "/schemas/ids/4":
-			return payload4, nil
+			return mustJBytes(t, map[string]any{
+				"schema": testSchemaLogicalTypes,
+			}), nil
 		case "/schemas/ids/5":
 			return nil, fmt.Errorf("nope")
 		}
@@ -401,5 +431,142 @@ func TestSchemaRegistryDecodeClearExpired(t *testing.T) {
 		10: {lastUsedUnixSeconds: tNotStale},
 		15: {lastUsedUnixSeconds: tNearlyStale},
 	}, decoder.schemas)
+	decoder.cacheMut.Unlock()
+}
+
+func TestSchemaRegistryDecodeProtobuf(t *testing.T) {
+	payload1, err := json.Marshal(struct {
+		Type   string `json:"schemaType"`
+		Schema string `json:"schema"`
+	}{
+		Type:   "PROTOBUF",
+		Schema: testProtoSchema,
+	})
+	require.NoError(t, err)
+
+	returnedSchema1 := false
+	urlStr := runSchemaRegistryServer(t, func(path string) ([]byte, error) {
+		switch path {
+		case "/schemas/ids/1":
+			assert.False(t, returnedSchema1)
+			returnedSchema1 = true
+			return payload1, nil
+		}
+		return nil, nil
+	})
+
+	decoder, err := newSchemaRegistryDecoder(urlStr, noopReqSign, nil, false, service.MockResources())
+	require.NoError(t, err)
+
+	tests := []struct {
+		name        string
+		input       string
+		output      string
+		errContains string
+	}{
+		{
+			name:   "successful message",
+			input:  "\x00\x00\x00\x00\x01\x00\b\xa2\xb8\xe2\xec\xaf+\x12\x06User_2\x1a\bRegion_9\"\x05OTHER",
+			output: `{"registertime":"1490313321506","userid":"User_2","regionid":"Region_9","gender":"OTHER"}`,
+		},
+		{
+			name:        "not supported message",
+			input:       "\x00\x00\x00\x00\x01\x04\x00\x02\b\xa2\xb8\xe2\xec\xaf+\x12\x06User_2\x1a\bRegion_9\"\x05OTHER",
+			errContains: `is greater than available message definitions`,
+		},
+	}
+
+	for _, test := range tests {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			outMsgs, err := decoder.Process(context.Background(), service.NewMessage([]byte(test.input)))
+			if test.errContains != "" {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), test.errContains)
+			} else {
+				require.NoError(t, err)
+				require.Len(t, outMsgs, 1)
+
+				b, err := outMsgs[0].AsBytes()
+				require.NoError(t, err)
+
+				assert.JSONEq(t, test.output, string(b), "%s: %s", test.name)
+			}
+		})
+	}
+
+	require.NoError(t, decoder.Close(context.Background()))
+	decoder.cacheMut.Lock()
+	assert.Len(t, decoder.schemas, 0)
+	decoder.cacheMut.Unlock()
+}
+
+func TestSchemaRegistryDecodeJson(t *testing.T) {
+	returnedSchema3 := false
+	urlStr := runSchemaRegistryServer(t, func(path string) ([]byte, error) {
+		switch path {
+		case "/schemas/ids/3":
+			assert.False(t, returnedSchema3)
+			returnedSchema3 = true
+			return mustJBytes(t, map[string]any{
+				"schema":     testJSONSchema,
+				"schemaType": "JSON",
+			}), nil
+		case "/schemas/ids/5":
+			return nil, fmt.Errorf("nope")
+		}
+		return nil, nil
+	})
+
+	decoder, err := newSchemaRegistryDecoder(urlStr, noopReqSign, nil, false, service.MockResources())
+	require.NoError(t, err)
+
+	tests := []struct {
+		name        string
+		input       string
+		output      string
+		errContains string
+	}{
+		{
+			name:   "successful message",
+			input:  "\x00\x00\x00\x00\x03{\"Address\":{\"City\":\"foo\",\"State\":\"bar\"},\"MaybeHobby\":\"dancing\",\"Name\":\"foo\"}",
+			output: `{"Address":{"City":"foo","State":"bar"},"MaybeHobby":"dancing","Name":"foo"}`,
+		},
+		{
+			name:   "successful message with null hobby",
+			input:  "\x00\x00\x00\x00\x03{\"Address\":{\"City\":\"foo\",\"State\":\"bar\"},\"MaybeHobby\":null,\"Name\":\"foo\"}",
+			output: `{"Address":{"City":"foo","State":"bar"},"MaybeHobby":null,"Name":"foo"}`,
+		},
+		{
+			name:   "successful message no address and null hobby",
+			input:  "\x00\x00\x00\x00\x03{\"Name\":\"foo\",\"MaybeHobby\":null,\"Address\": null}",
+			output: `{"Name":"foo","MaybeHobby":null,"Address": null}`,
+		},
+	}
+
+	for _, test := range tests {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			outMsgs, err := decoder.Process(context.Background(), service.NewMessage([]byte(test.input)))
+			if test.errContains != "" {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), test.errContains)
+			} else {
+				require.NoError(t, err)
+				require.Len(t, outMsgs, 1)
+
+				b, err := outMsgs[0].AsBytes()
+				require.NoError(t, err)
+
+				jdopts := jsondiff.DefaultJSONOptions()
+				diff, explanation := jsondiff.Compare(b, []byte(test.output), &jdopts)
+				assert.Equalf(t, jsondiff.FullMatch.String(), diff.String(), "%s: %s", test.name, explanation)
+			}
+		})
+	}
+
+	require.NoError(t, decoder.Close(context.Background()))
+	decoder.cacheMut.Lock()
+	assert.Len(t, decoder.schemas, 0)
 	decoder.cacheMut.Unlock()
 }

@@ -3,11 +3,13 @@ package nats
 import (
 	"context"
 	"crypto/tls"
+	"fmt"
 	"strings"
 	"sync"
 
 	"github.com/nats-io/nats.go"
 
+	"github.com/benthosdev/benthos/v4/internal/component/output/span"
 	"github.com/benthosdev/benthos/v4/internal/impl/nats/auth"
 	"github.com/benthosdev/benthos/v4/internal/shutdown"
 	"github.com/benthosdev/benthos/v4/public/service"
@@ -15,11 +17,11 @@ import (
 
 func natsJetStreamOutputConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
-		// Stable(). TODO
+		Stable().
 		Categories("Services").
 		Version("3.46.0").
 		Summary("Write messages to a NATS JetStream subject.").
-		Description(auth.Description()).
+		Description(ConnectionNameDescription() + auth.Description()).
 		Field(service.NewStringListField("urls").
 			Description("A list of URLs to connect to. If an item of the list contains commas it will be expanded into multiple URLs.").
 			Example([]string{"nats://127.0.0.1:4222"}).
@@ -36,11 +38,15 @@ func natsJetStreamOutputConfig() *service.ConfigSpec {
 				"Content-Type": "application/json",
 				"Timestamp":    `${!meta("Timestamp")}`,
 			}).Version("4.1.0")).
+		Field(service.NewMetadataFilterField("metadata").
+			Description("Determine which (if any) metadata values should be added to messages as headers.").
+			Optional()).
 		Field(service.NewIntField("max_in_flight").
 			Description("The maximum number of messages to have in flight at a given time. Increase this to improve throughput.").
 			Default(1024)).
 		Field(service.NewTLSToggledField("tls")).
-		Field(service.NewInternalField(auth.FieldSpec()))
+		Field(service.NewInternalField(auth.FieldSpec())).
+		Field(span.InjectTracingSpanMappingDocs().Version(tracingVersion))
 }
 
 func init() {
@@ -51,8 +57,12 @@ func init() {
 			if err != nil {
 				return nil, 0, err
 			}
-			w, err := newJetStreamWriterFromConfig(conf, mgr.Logger(), mgr.FS())
-			return w, maxInFlight, err
+			w, err := newJetStreamWriterFromConfig(conf, mgr)
+			if err != nil {
+				return nil, 0, err
+			}
+			spanOutput, err := span.NewOutput("nats_jetstream", conf, w, mgr)
+			return spanOutput, maxInFlight, err
 		})
 	if err != nil {
 		panic(err)
@@ -62,10 +72,12 @@ func init() {
 //------------------------------------------------------------------------------
 
 type jetStreamOutput struct {
+	label         string
 	urls          string
 	subjectStrRaw string
 	subjectStr    *service.InterpolatedString
 	headers       map[string]*service.InterpolatedString
+	metaFilter    *service.MetadataFilter
 	authConf      auth.Config
 	tlsConf       *tls.Config
 
@@ -79,10 +91,11 @@ type jetStreamOutput struct {
 	shutSig *shutdown.Signaller
 }
 
-func newJetStreamWriterFromConfig(conf *service.ParsedConfig, log *service.Logger, fs *service.FS) (*jetStreamOutput, error) {
+func newJetStreamWriterFromConfig(conf *service.ParsedConfig, mgr *service.Resources) (*jetStreamOutput, error) {
 	j := jetStreamOutput{
-		log:     log,
-		fs:      fs,
+		label:   mgr.Label(),
+		log:     mgr.Logger(),
+		fs:      mgr.FS(),
 		shutSig: shutdown.NewSignaller(),
 	}
 
@@ -104,6 +117,12 @@ func newJetStreamWriterFromConfig(conf *service.ParsedConfig, log *service.Logge
 		return nil, err
 	}
 
+	if conf.Contains("metadata") {
+		if j.metaFilter, err = conf.FieldMetadataFilter("metadata"); err != nil {
+			return nil, err
+		}
+	}
+
 	tlsConf, tlsEnabled, err := conf.FieldTLSToggled("tls")
 	if err != nil {
 		return nil, err
@@ -120,7 +139,7 @@ func newJetStreamWriterFromConfig(conf *service.ParsedConfig, log *service.Logge
 
 //------------------------------------------------------------------------------
 
-func (j *jetStreamOutput) Connect(ctx context.Context) error {
+func (j *jetStreamOutput) Connect(ctx context.Context) (err error) {
 	j.connMut.Lock()
 	defer j.connMut.Unlock()
 
@@ -130,7 +149,6 @@ func (j *jetStreamOutput) Connect(ctx context.Context) error {
 
 	var natsConn *nats.Conn
 	var jCtx nats.JetStreamContext
-	var err error
 
 	defer func() {
 		if err != nil && natsConn != nil {
@@ -142,6 +160,7 @@ func (j *jetStreamOutput) Connect(ctx context.Context) error {
 	if j.tlsConf != nil {
 		opts = append(opts, nats.Secure(j.tlsConf))
 	}
+	opts = append(opts, nats.Name(j.label))
 	opts = append(opts, authConfToOptions(j.authConf, j.fs)...)
 	opts = append(opts, errorHandlerOption(j.log))
 	if natsConn, err = nats.Connect(j.urls, opts...); err != nil {
@@ -180,15 +199,30 @@ func (j *jetStreamOutput) Write(ctx context.Context, msg *service.Message) error
 		return service.ErrNotConnected
 	}
 
-	jsmsg := nats.NewMsg(j.subjectStr.String(msg))
+	subject, err := j.subjectStr.TryString(msg)
+	if err != nil {
+		return fmt.Errorf(`failed string interpolation on field "subject": %w`, err)
+	}
+
+	jsmsg := nats.NewMsg(subject)
 	msgBytes, err := msg.AsBytes()
 	if err != nil {
 		return err
 	}
+
 	jsmsg.Data = msgBytes
 	for k, v := range j.headers {
-		jsmsg.Header.Add(k, v.String(msg))
+		value, err := v.TryString(msg)
+		if err != nil {
+			return fmt.Errorf(`failed string interpolation on header %q: %w`, k, err)
+		}
+
+		jsmsg.Header.Add(k, value)
 	}
+	_ = j.metaFilter.Walk(msg, func(key, value string) error {
+		jsmsg.Header.Add(key, value)
+		return nil
+	})
 
 	_, err = jCtx.PublishMsg(jsmsg)
 	return err

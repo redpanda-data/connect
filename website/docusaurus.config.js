@@ -19,6 +19,7 @@ module.exports = {
       buffers: components("buffers"),
       metrics: components("metrics"),
       tracers: components("tracers"),
+      scanners: components("scanners"),
     },
   },
   themeConfig: {
@@ -43,8 +44,8 @@ module.exports = {
       items: [
         {to: 'docs/about', label: 'Docs', position: 'left'},
         {to: 'cookbooks', label: 'Cookbooks', position: 'left'},
+        {to: 'https://studio.benthos.dev', label: 'Studio', position: 'left'},
         {to: 'blog', label: 'Blog', position: 'left'},
-        {to: 'videos', label: 'Videos', position: 'left'},
         {to: 'community', label: 'Community', position: 'right'},
         {to: 'support', label: 'Support', position: 'right'},
         {
@@ -125,7 +126,7 @@ module.exports = {
       appId: 'WBY9Z65YR4',
       apiKey: 'a6c476911e6ecef76049a55d9798a51b',
       indexName: 'benthos',
-      contextualSearch: false
+      contextualSearch: true
     }
   },
   presets: [

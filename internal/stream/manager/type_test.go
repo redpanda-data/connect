@@ -9,15 +9,23 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/benthosdev/benthos/v4/internal/component"
+	"github.com/benthosdev/benthos/v4/internal/component/testutil"
 	bmanager "github.com/benthosdev/benthos/v4/internal/manager"
 	"github.com/benthosdev/benthos/v4/internal/stream"
 )
 
-func harmlessConf() stream.Config {
-	c := stream.NewConfig()
-	c.Input.Type = "generate"
-	c.Input.Generate.Mapping = "root = deleted()"
-	c.Output.Type = "drop"
+func harmlessConf(t testing.TB) stream.Config {
+	t.Helper()
+
+	c, err := testutil.StreamFromYAML(`
+input:
+  generate:
+    mapping: 'root = deleted()'
+output:
+  drop: {}
+`)
+	require.NoError(t, err)
+
 	return c
 }
 
@@ -30,17 +38,17 @@ func TestTypeBasicOperations(t *testing.T) {
 
 	mgr := New(res)
 
-	if err := mgr.Update(ctx, "foo", harmlessConf()); err == nil {
+	if err := mgr.Update(ctx, "foo", harmlessConf(t)); err == nil {
 		t.Error("Expected error on empty update")
 	}
 	if _, err := mgr.Read("foo"); err == nil {
 		t.Error("Expected error on empty read")
 	}
 
-	if err := mgr.Create("foo", harmlessConf()); err != nil {
+	if err := mgr.Create("foo", harmlessConf(t)); err != nil {
 		t.Fatal(err)
 	}
-	if err := mgr.Create("foo", harmlessConf()); err == nil {
+	if err := mgr.Create("foo", harmlessConf(t)); err == nil {
 		t.Error("Expected error on duplicate create")
 	}
 
@@ -48,11 +56,11 @@ func TestTypeBasicOperations(t *testing.T) {
 		t.Error(err)
 	} else if !info.IsRunning() {
 		t.Error("Stream not active")
-	} else if act, exp := info.Config(), harmlessConf(); !reflect.DeepEqual(act, exp) {
+	} else if act, exp := info.Config(), harmlessConf(t); !reflect.DeepEqual(act, exp) {
 		t.Errorf("Unexpected config: %v != %v", act, exp)
 	}
 
-	newConf := harmlessConf()
+	newConf := harmlessConf(t)
 	newConf.Buffer.Type = "memory"
 
 	if err := mgr.Update(ctx, "foo", newConf); err != nil {
@@ -78,7 +86,7 @@ func TestTypeBasicOperations(t *testing.T) {
 		t.Error(err)
 	}
 
-	if exp, act := component.ErrTypeClosed, mgr.Create("foo", harmlessConf()); act != exp {
+	if exp, act := component.ErrTypeClosed, mgr.Create("foo", harmlessConf(t)); act != exp {
 		t.Errorf("Unexpected error: %v != %v", act, exp)
 	}
 }
@@ -92,7 +100,7 @@ func TestTypeBasicClose(t *testing.T) {
 
 	mgr := New(res)
 
-	conf := harmlessConf()
+	conf := harmlessConf(t)
 	if err := mgr.Create("foo", conf); err != nil {
 		t.Fatal(err)
 	}
@@ -101,7 +109,7 @@ func TestTypeBasicClose(t *testing.T) {
 		t.Error(err)
 	}
 
-	if exp, act := component.ErrTypeClosed, mgr.Create("foo", harmlessConf()); act != exp {
+	if exp, act := component.ErrTypeClosed, mgr.Create("foo", harmlessConf(t)); act != exp {
 		t.Errorf("Unexpected error: %v != %v", act, exp)
 	}
 }

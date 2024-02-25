@@ -24,6 +24,22 @@ type MetadataFilter struct {
 	f *metadata.IncludeFilter
 }
 
+// IsEmpty returns true if there aren't any rules configured for matching.
+func (m *MetadataFilter) IsEmpty() bool {
+	if m == nil || m.f == nil {
+		return true
+	}
+	return !m.f.IsSet()
+}
+
+// Match returns true if the provided key matches the filter.
+func (m *MetadataFilter) Match(k string) bool {
+	if m == nil || m.f == nil {
+		return false
+	}
+	return m.f.Match(k)
+}
+
 // Walk iterates the filtered metadata key/value pairs from a message and
 // executes a provided closure function for each pair. An error returned by the
 // closure will be returned by this function and prevent subsequent pairs from
@@ -40,13 +56,29 @@ func (m *MetadataFilter) Walk(msg *Message, fn func(key, value string) error) er
 	})
 }
 
+// WalkMut iterates the filtered metadata key/value pairs as mutable structured
+// values from a message and executes a provided closure function for each pair.
+// An error returned by the closure will be returned by this function and
+// prevent subsequent pairs from being accessed.
+func (m *MetadataFilter) WalkMut(msg *Message, fn func(key string, value any) error) error {
+	if m == nil {
+		return nil
+	}
+	return msg.MetaWalkMut(func(key string, value any) error {
+		if !m.f.Match(key) {
+			return nil
+		}
+		return fn(key, value)
+	})
+}
+
 // FieldMetadataFilter accesses a field from a parsed config that was defined
 // with NewMetdataFilterField and returns a MetadataFilter, or an error if the
 // configuration was invalid.
 func (p *ParsedConfig) FieldMetadataFilter(path ...string) (f *MetadataFilter, err error) {
-	confNode, exists := p.field(path...)
+	confNode, exists := p.i.Field(path...)
 	if !exists {
-		return nil, fmt.Errorf("field '%v' was not found in the config", p.fullDotPath(path...))
+		return nil, fmt.Errorf("field '%v' was not found in the config", p.i.FullDotPath(path...))
 	}
 
 	var node yaml.Node
@@ -104,13 +136,29 @@ func (m *MetadataExcludeFilter) Walk(msg *Message, fn func(key, value string) er
 	})
 }
 
+// WalkMut iterates the filtered metadata key/value pairs as mutable structured
+// values from a message and executes a provided closure function for each pair.
+// An error returned by the closure will be returned by this function and
+// prevent subsequent pairs from being accessed.
+func (m *MetadataExcludeFilter) WalkMut(msg *Message, fn func(key string, value any) error) error {
+	if m == nil {
+		return nil
+	}
+	return msg.MetaWalkMut(func(key string, value any) error {
+		if !m.f.Match(key) {
+			return nil
+		}
+		return fn(key, value)
+	})
+}
+
 // FieldMetadataExcludeFilter accesses a field from a parsed config that was
 // defined with NewMetdataExcludeFilterField and returns a
 // MetadataExcludeFilter, or an error if the configuration was invalid.
 func (p *ParsedConfig) FieldMetadataExcludeFilter(path ...string) (f *MetadataExcludeFilter, err error) {
-	confNode, exists := p.field(path...)
+	confNode, exists := p.i.Field(path...)
 	if !exists {
-		return nil, fmt.Errorf("field '%v' was not found in the config", p.fullDotPath(path...))
+		return nil, fmt.Errorf("field '%v' was not found in the config", p.i.FullDotPath(path...))
 	}
 
 	var node yaml.Node

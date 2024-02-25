@@ -15,25 +15,18 @@ import (
 const mongoDuplicateKeyErrCode = 11000
 
 func mongodbCacheConfig() *service.ConfigSpec {
-	spec := service.NewConfigSpec().
+	return service.NewConfigSpec().
 		Version("3.43.0").
-		Summary(`Use a MongoDB instance as a cache.`)
-
-	for _, f := range clientFields() {
-		spec = spec.Field(f)
-	}
-
-	spec = spec.
-		Field(service.NewStringField("database").
-			Description("The name of the target MongoDB database.")).
-		Field(service.NewStringField("collection").
-			Description("The name of the target collection.")).
-		Field(service.NewStringField("key_field").
-			Description("The field in the document that is used as the key.")).
-		Field(service.NewStringField("value_field").
-			Description("The field in the document that is used as the value."))
-
-	return spec
+		Summary(`Use a MongoDB instance as a cache.`).
+		Fields(clientFields()...).
+		Fields(
+			service.NewStringField("collection").
+				Description("The name of the target collection."),
+			service.NewStringField("key_field").
+				Description("The field in the document that is used as the key."),
+			service.NewStringField("value_field").
+				Description("The field in the document that is used as the value."),
+		)
 }
 
 func init() {
@@ -48,12 +41,7 @@ func init() {
 }
 
 func newMongodbCacheFromConfig(parsedConf *service.ParsedConfig) (*mongodbCache, error) {
-	client, err := getClient(parsedConf)
-	if err != nil {
-		return nil, err
-	}
-
-	database, err := parsedConf.FieldString("database")
+	client, database, err := getClient(parsedConf)
 	if err != nil {
 		return nil, err
 	}
@@ -73,7 +61,7 @@ func newMongodbCacheFromConfig(parsedConf *service.ParsedConfig) (*mongodbCache,
 		return nil, err
 	}
 
-	return newMongodbCache(database, collectionName, keyField, valueField, client)
+	return newMongodbCache(collectionName, keyField, valueField, client, database)
 }
 
 //------------------------------------------------------------------------------
@@ -86,13 +74,10 @@ type mongodbCache struct {
 	valueField string
 }
 
-func newMongodbCache(database, collectionName, keyField, valueField string, client *mongo.Client) (*mongodbCache, error) {
-	if err := client.Connect(context.Background()); err != nil {
-		return nil, err
-	}
+func newMongodbCache(collectionName, keyField, valueField string, client *mongo.Client, database *mongo.Database) (*mongodbCache, error) {
 	return &mongodbCache{
 		client:     client,
-		collection: client.Database(database).Collection(collectionName),
+		collection: database.Collection(collectionName),
 		keyField:   keyField,
 		valueField: valueField,
 	}, nil
@@ -100,7 +85,7 @@ func newMongodbCache(database, collectionName, keyField, valueField string, clie
 
 func (m *mongodbCache) Get(ctx context.Context, key string) ([]byte, error) {
 	filter := bson.M{m.keyField: key}
-	document, err := m.collection.FindOne(ctx, filter).DecodeBytes()
+	document, err := m.collection.FindOne(ctx, filter).Raw()
 	if err != nil {
 		return nil, service.ErrKeyNotFound
 	}

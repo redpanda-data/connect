@@ -8,119 +8,171 @@ import (
 	"sync"
 	"time"
 
+	"github.com/cenkalti/backoff/v4"
 	"github.com/redis/go-redis/v9"
 
-	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component"
-	"github.com/benthosdev/benthos/v4/internal/component/input"
-	"github.com/benthosdev/benthos/v4/internal/component/input/processors"
-	"github.com/benthosdev/benthos/v4/internal/docs"
-	"github.com/benthosdev/benthos/v4/internal/impl/redis/old"
-	"github.com/benthosdev/benthos/v4/internal/log"
-	"github.com/benthosdev/benthos/v4/internal/message"
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
+const (
+	siFieldBodyKey         = "body_key"
+	siFieldStreams         = "streams"
+	siFieldLimit           = "limit"
+	siFieldClientID        = "client_id"
+	siFieldConsumerGroup   = "consumer_group"
+	siFieldCreateStreams   = "create_streams"
+	siFieldStartFromOldest = "start_from_oldest"
+	siFieldCommitPeriod    = "commit_period"
+	siFieldTimeout         = "timeout"
+)
+
+func redisStreamsInputConfig() *service.ConfigSpec {
+	return service.NewConfigSpec().
+		Stable().
+		Summary(`Pulls messages from Redis (v5.0+) streams with the XREADGROUP command. The `+"`client_id`"+` should be unique for each consumer of a group.`).
+		Description(`Redis stream entries are key/value pairs, as such it is necessary to specify the key that contains the body of the message. All other keys/value pairs are saved as metadata fields.`).
+		Categories("Services").
+		Fields(clientFields()...).
+		Fields(
+			service.NewStringField(siFieldBodyKey).
+				Description("The field key to extract the raw message from. All other keys will be stored in the message as metadata.").
+				Default("body"),
+			service.NewStringListField(siFieldStreams).
+				Description("A list of streams to consume from."),
+			service.NewIntField(siFieldLimit).
+				Description("The maximum number of messages to consume from a single request.").
+				Default(10),
+			service.NewStringField(siFieldClientID).
+				Description("An identifier for the client connection.").
+				Default(""),
+			service.NewStringField(siFieldConsumerGroup).
+				Description("An identifier for the consumer group of the stream.").
+				Default(""),
+			service.NewBoolField(siFieldCreateStreams).
+				Description("Create subscribed streams if they do not exist (MKSTREAM option).").
+				Advanced().
+				Default(true),
+			service.NewBoolField(siFieldStartFromOldest).
+				Description("If an offset is not found for a stream, determines whether to consume from the oldest available offset, otherwise messages are consumed from the latest offset.").
+				Advanced().
+				Default(true),
+			service.NewDurationField(siFieldCommitPeriod).
+				Description("The period of time between each commit of the current offset. Offsets are always committed during shutdown.").
+				Advanced().
+				Default("1s"),
+			service.NewDurationField(siFieldTimeout).
+				Description("The length of time to poll for new messages before reattempting.").
+				Advanced().
+				Default("1s"),
+		)
+}
+
 func init() {
-	err := bundle.AllInputs.Add(processors.WrapConstructor(newRedisStreamsInput), docs.ComponentSpec{
-		Name: "redis_streams",
-		Summary: `
-Pulls messages from Redis (v5.0+) streams with the XREADGROUP command. The
-` + "`client_id`" + ` should be unique for each consumer of a group.`,
-		Description: `
-Redis stream entries are key/value pairs, as such it is necessary to specify the
-key that contains the body of the message. All other keys/value pairs are saved
-as metadata fields.`,
-		Config: docs.FieldComponent().WithChildren(old.ConfigDocs()...).WithChildren(
-			docs.FieldString("body_key", "The field key to extract the raw message from. All other keys will be stored in the message as metadata."),
-			docs.FieldString("streams", "A list of streams to consume from.").Array(),
-			docs.FieldInt("limit", "The maximum number of messages to consume from a single request."),
-			docs.FieldString("client_id", "An identifier for the client connection."),
-			docs.FieldString("consumer_group", "An identifier for the consumer group of the stream."),
-			docs.FieldBool("create_streams", "Create subscribed streams if they do not exist (MKSTREAM option).").Advanced(),
-			docs.FieldBool("start_from_oldest", "If an offset is not found for a stream, determines whether to consume from the oldest available offset, otherwise messages are consumed from the latest offset.").Advanced(),
-			docs.FieldString("commit_period", "The period of time between each commit of the current offset. Offsets are always committed during shutdown.").Advanced(),
-			docs.FieldString("timeout", "The length of time to poll for new messages before reattempting.").Advanced(),
-		).ChildDefaultAndTypesFromStruct(input.NewRedisStreamsConfig()),
-		Categories: []string{
-			"Services",
-		},
-	})
+	err := service.RegisterBatchInput(
+		"redis_streams", redisStreamsInputConfig(),
+		func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchInput, error) {
+			r, err := newRedisStreamsReader(conf, mgr)
+			if err != nil {
+				return nil, err
+			}
+			return service.AutoRetryNacksBatched(r), nil
+		})
 	if err != nil {
 		panic(err)
 	}
 }
 
-func newRedisStreamsInput(conf input.Config, mgr bundle.NewManagement) (input.Streamed, error) {
-	var c input.Async
-	var err error
-	if c, err = newRedisStreamsReader(conf.RedisStreams, mgr); err != nil {
-		return nil, err
-	}
-	c = input.NewAsyncPreserver(c)
-	return input.NewAsyncReader("redis_streams", c, mgr)
-}
-
 type pendingRedisStreamMsg struct {
-	payload message.Batch
+	payload service.MessageBatch
 	stream  string
 	id      string
 }
 
 type redisStreamsReader struct {
-	client         redis.UniversalClient
-	cMut           sync.Mutex
+	clientCtor func() (redis.UniversalClient, error)
+	client     redis.UniversalClient
+	cMut       sync.Mutex
+
 	pendingMsgs    []pendingRedisStreamMsg
 	pendingMsgsMut sync.Mutex
 
-	timeout      time.Duration
-	commitPeriod time.Duration
-
-	conf input.RedisStreamsConfig
+	bodyKey         string
+	streams         []string
+	createStreams   bool
+	consumerGroup   string
+	clientID        string
+	limit           int64
+	startFromOldest bool
+	commitPeriod    time.Duration
+	timeout         time.Duration
 
 	backlogs map[string]string
 
 	aMut    sync.Mutex
 	ackSend map[string][]string // Acks that can be sent
 
-	mgr bundle.NewManagement
-	log log.Modular
+	log         *service.Logger
+	connBackoff backoff.BackOff
 
 	closeChan  chan struct{}
 	closedChan chan struct{}
 	closeOnce  sync.Once
 }
 
-func newRedisStreamsReader(conf input.RedisStreamsConfig, mgr bundle.NewManagement) (*redisStreamsReader, error) {
-	r := &redisStreamsReader{
-		conf:       conf,
-		log:        mgr.Logger(),
-		mgr:        mgr,
-		backlogs:   make(map[string]string, len(conf.Streams)),
-		ackSend:    make(map[string][]string, len(conf.Streams)),
-		closeChan:  make(chan struct{}),
-		closedChan: make(chan struct{}),
+func newRedisStreamsReader(conf *service.ParsedConfig, mgr *service.Resources) (r *redisStreamsReader, err error) {
+	connBoff := backoff.NewExponentialBackOff()
+	connBoff.InitialInterval = time.Millisecond * 100
+	connBoff.MaxInterval = time.Second
+	connBoff.MaxElapsedTime = 0
+
+	r = &redisStreamsReader{
+		clientCtor: func() (redis.UniversalClient, error) {
+			return getClient(conf)
+		},
+		log:         mgr.Logger(),
+		connBackoff: connBoff,
+		closeChan:   make(chan struct{}),
+		closedChan:  make(chan struct{}),
+	}
+	if _, err = getClient(conf); err != nil {
+		return
 	}
 
-	for _, str := range conf.Streams {
+	if r.bodyKey, err = conf.FieldString(siFieldBodyKey); err != nil {
+		return
+	}
+	if r.streams, err = conf.FieldStringList(siFieldStreams); err != nil {
+		return
+	}
+	if r.createStreams, err = conf.FieldBool(siFieldCreateStreams); err != nil {
+		return
+	}
+	if r.consumerGroup, err = conf.FieldString(siFieldConsumerGroup); err != nil {
+		return
+	}
+	if r.clientID, err = conf.FieldString(siFieldClientID); err != nil {
+		return
+	}
+	var tmpLimit int
+	if tmpLimit, err = conf.FieldInt(siFieldLimit); err != nil {
+		return
+	}
+	r.limit = int64(tmpLimit)
+	if r.startFromOldest, err = conf.FieldBool(siFieldStartFromOldest); err != nil {
+		return
+	}
+	if r.commitPeriod, err = conf.FieldDuration(siFieldCommitPeriod); err != nil {
+		return
+	}
+	if r.timeout, err = conf.FieldDuration(siFieldTimeout); err != nil {
+		return
+	}
+
+	r.ackSend = make(map[string][]string, len(r.streams))
+	r.backlogs = make(map[string]string, len(r.streams))
+	for _, str := range r.streams {
 		r.backlogs[str] = "0"
-	}
-
-	if _, err := clientFromConfig(mgr.FS(), r.conf.Config); err != nil {
-		return nil, err
-	}
-
-	if tout := conf.Timeout; len(tout) > 0 {
-		var err error
-		if r.timeout, err = time.ParseDuration(tout); err != nil {
-			return nil, fmt.Errorf("failed to parse timeout string: %v", err)
-		}
-	}
-
-	if tout := conf.CommitPeriod; len(tout) > 0 {
-		var err error
-		if r.commitPeriod, err = time.ParseDuration(tout); err != nil {
-			return nil, fmt.Errorf("failed to parse commit period string: %v", err)
-		}
 	}
 
 	go r.loop()
@@ -186,7 +238,7 @@ func (r *redisStreamsReader) sendAcks(ctx context.Context) {
 		if len(ids) == 0 {
 			continue
 		}
-		if err := client.XAck(ctx, str, r.conf.ConsumerGroup, ids...).Err(); err != nil {
+		if err := client.XAck(ctx, str, r.consumerGroup, ids...).Err(); err != nil {
 			r.log.Errorf("Failed to ack stream %v: %v\n", str, err)
 		}
 	}
@@ -203,46 +255,45 @@ func (r *redisStreamsReader) Connect(ctx context.Context) error {
 		return nil
 	}
 
-	client, err := clientFromConfig(r.mgr.FS(), r.conf.Config)
+	client, err := r.clientCtor()
 	if err != nil {
 		return err
 	}
+
 	if _, err := client.Ping(ctx).Result(); err != nil {
 		return err
 	}
 
-	for _, s := range r.conf.Streams {
+	for _, s := range r.streams {
 		offset := "$"
-		if r.conf.StartFromOldest {
+		if r.startFromOldest {
 			offset = "0"
 		}
 		var err error
-		if r.conf.CreateStreams {
-			err = client.XGroupCreateMkStream(ctx, s, r.conf.ConsumerGroup, offset).Err()
+		if r.createStreams {
+			err = client.XGroupCreateMkStream(ctx, s, r.consumerGroup, offset).Err()
 		} else {
-			err = client.XGroupCreate(ctx, s, r.conf.ConsumerGroup, offset).Err()
+			err = client.XGroupCreate(ctx, s, r.consumerGroup, offset).Err()
 		}
 		if err != nil && err.Error() != "BUSYGROUP Consumer Group name already exists" {
-			return fmt.Errorf("failed to create group %v for stream %v: %v", r.conf.ConsumerGroup, s, err)
+			return fmt.Errorf("failed to create group %v for stream %v: %v", r.consumerGroup, s, err)
 		}
 	}
 
-	r.log.Infof("Receiving messages from Redis streams: %v\n", r.conf.Streams)
-
+	r.log.Infof("Receiving messages from Redis streams: %v\n", r.streams)
 	r.client = client
 	return nil
 }
 
 func (r *redisStreamsReader) read(ctx context.Context) (pendingRedisStreamMsg, error) {
-	var client redis.UniversalClient
 	var msg pendingRedisStreamMsg
 
 	r.cMut.Lock()
-	client = r.client
+	client := r.client
 	r.cMut.Unlock()
 
 	if client == nil {
-		return msg, component.ErrNotConnected
+		return msg, service.ErrNotConnected
 	}
 
 	r.pendingMsgsMut.Lock()
@@ -253,22 +304,22 @@ func (r *redisStreamsReader) read(ctx context.Context) (pendingRedisStreamMsg, e
 		return msg, nil
 	}
 
-	strs := make([]string, len(r.conf.Streams)*2)
-	for i, str := range r.conf.Streams {
+	strs := make([]string, len(r.streams)*2)
+	for i, str := range r.streams {
 		strs[i] = str
 		if bl := r.backlogs[str]; bl != "" {
-			strs[len(r.conf.Streams)+i] = bl
+			strs[len(r.streams)+i] = bl
 		} else {
-			strs[len(r.conf.Streams)+i] = ">"
+			strs[len(r.streams)+i] = ">"
 		}
 	}
 
 	res, err := client.XReadGroup(ctx, &redis.XReadGroupArgs{
 		Block:    r.timeout,
-		Consumer: r.conf.ClientID,
-		Group:    r.conf.ConsumerGroup,
+		Consumer: r.clientID,
+		Group:    r.consumerGroup,
 		Streams:  strs,
-		Count:    r.conf.Limit,
+		Count:    r.limit,
 	}).Result()
 
 	if err != nil && err != redis.Nil {
@@ -277,8 +328,14 @@ func (r *redisStreamsReader) read(ctx context.Context) (pendingRedisStreamMsg, e
 		}
 		_ = r.disconnect(ctx)
 		r.log.Errorf("Error from redis: %v\n", err)
-		return msg, component.ErrNotConnected
+
+		select {
+		case <-time.After(r.connBackoff.NextBackOff()):
+		case <-ctx.Done():
+		}
+		return msg, service.ErrNotConnected
 	}
+	r.connBackoff.Reset()
 
 	pendingMsgs := []pendingRedisStreamMsg{}
 	for _, strRes := range res {
@@ -290,11 +347,11 @@ func (r *redisStreamsReader) read(ctx context.Context) (pendingRedisStreamMsg, e
 			}
 		}
 		for _, xmsg := range strRes.Messages {
-			body, exists := xmsg.Values[r.conf.BodyKey]
+			body, exists := xmsg.Values[r.bodyKey]
 			if !exists {
 				continue
 			}
-			delete(xmsg.Values, r.conf.BodyKey)
+			delete(xmsg.Values, r.bodyKey)
 
 			var bodyBytes []byte
 			switch t := body.(type) {
@@ -307,14 +364,14 @@ func (r *redisStreamsReader) read(ctx context.Context) (pendingRedisStreamMsg, e
 				continue
 			}
 
-			part := message.NewPart(bodyBytes)
+			part := service.NewMessage(bodyBytes)
 			part.MetaSetMut("redis_stream", xmsg.ID)
 			for k, v := range xmsg.Values {
 				part.MetaSetMut(k, v)
 			}
 
 			nextMsg := pendingRedisStreamMsg{
-				payload: message.QuickBatch(nil),
+				payload: service.MessageBatch{},
 				stream:  strRes.Stream,
 				id:      xmsg.ID,
 			}
@@ -334,7 +391,7 @@ func (r *redisStreamsReader) read(ctx context.Context) (pendingRedisStreamMsg, e
 	return msg, nil
 }
 
-func (r *redisStreamsReader) ReadBatch(ctx context.Context) (message.Batch, input.AsyncAckFn, error) {
+func (r *redisStreamsReader) ReadBatch(ctx context.Context) (service.MessageBatch, service.AckFunc, error) {
 	msg, err := r.read(ctx)
 	if err != nil {
 		if errors.Is(err, component.ErrTimeout) {

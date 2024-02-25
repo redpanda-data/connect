@@ -7,9 +7,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/service/lambda"
-	"github.com/aws/aws-sdk-go/service/lambda/lambdaiface"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/lambda"
 
 	"github.com/benthosdev/benthos/v4/internal/impl/aws/config"
 	"github.com/benthosdev/benthos/v4/public/service"
@@ -98,7 +97,7 @@ pipeline:
 	err := service.RegisterBatchProcessor(
 		"aws_lambda", conf,
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchProcessor, error) {
-			sess, err := GetSession(conf)
+			aconf, err := GetSession(context.TODO(), conf)
 			if err != nil {
 				return nil, err
 			}
@@ -128,7 +127,7 @@ pipeline:
 				return nil, err
 			}
 
-			return newLambdaProc(lambda.New(sess), parallel, function, numRetries, rateLimit, timeout, mgr)
+			return newLambdaProc(lambda.NewFromConfig(aconf), parallel, function, numRetries, rateLimit, timeout, mgr)
 		})
 	if err != nil {
 		panic(err)
@@ -136,6 +135,10 @@ pipeline:
 }
 
 //------------------------------------------------------------------------------
+
+type lambdaAPI interface {
+	Invoke(context.Context, *lambda.InvokeInput, ...func(*lambda.Options)) (*lambda.InvokeOutput, error)
+}
 
 type lambdaProc struct {
 	client   *lambdaClient
@@ -146,7 +149,7 @@ type lambdaProc struct {
 }
 
 func newLambdaProc(
-	lambda lambdaiface.LambdaAPI,
+	lambda lambdaAPI,
 	parallel bool,
 	function string,
 	numRetries int,
@@ -204,7 +207,7 @@ func (l *lambdaProc) Close(context.Context) error {
 //------------------------------------------------------------------------------
 
 type lambdaClient struct {
-	lambda lambdaiface.LambdaAPI
+	lambda lambdaAPI
 
 	log *service.Logger
 	mgr *service.Resources
@@ -216,7 +219,7 @@ type lambdaClient struct {
 }
 
 func newLambdaClient(
-	lambda lambdaiface.LambdaAPI,
+	lambda lambdaAPI,
 	function string,
 	numRetries int,
 	rateLimit string,
@@ -282,7 +285,7 @@ func (l *lambdaClient) InvokeV2(p *service.Message) error {
 		}
 
 		ctx, done := context.WithTimeout(context.Background(), l.timeout)
-		result, err := l.lambda.InvokeWithContext(ctx, &lambda.InvokeInput{
+		result, err := l.lambda.Invoke(ctx, &lambda.InvokeInput{
 			FunctionName: aws.String(l.function),
 			Payload:      mBytes,
 		})

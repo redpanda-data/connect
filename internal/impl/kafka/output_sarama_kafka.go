@@ -2,7 +2,6 @@ package kafka
 
 import (
 	"context"
-	"crypto/tls"
 	"fmt"
 	"hash"
 	"strconv"
@@ -10,32 +9,49 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Shopify/sarama"
+	"github.com/IBM/sarama"
 	"github.com/cenkalti/backoff/v4"
+	"golang.org/x/sync/syncmap"
 
-	batchInternal "github.com/benthosdev/benthos/v4/internal/batch"
-	"github.com/benthosdev/benthos/v4/internal/batch/policy"
-	"github.com/benthosdev/benthos/v4/internal/bloblang/field"
-	"github.com/benthosdev/benthos/v4/internal/bloblang/query"
-	"github.com/benthosdev/benthos/v4/internal/bundle"
-	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
-	"github.com/benthosdev/benthos/v4/internal/component/output/batcher"
-	"github.com/benthosdev/benthos/v4/internal/component/output/processors"
-	"github.com/benthosdev/benthos/v4/internal/docs"
-	"github.com/benthosdev/benthos/v4/internal/impl/kafka/sasl"
-	"github.com/benthosdev/benthos/v4/internal/log"
-	"github.com/benthosdev/benthos/v4/internal/message"
-	"github.com/benthosdev/benthos/v4/internal/metadata"
-	"github.com/benthosdev/benthos/v4/internal/old/util/retries"
-	btls "github.com/benthosdev/benthos/v4/internal/tls"
+	"github.com/benthosdev/benthos/v4/internal/component/output/span"
+	"github.com/benthosdev/benthos/v4/internal/value"
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
-func init() {
-	err := bundle.AllOutputs.Add(processors.WrapConstructor(newKafkaOutput), docs.ComponentSpec{
-		Name:    "kafka",
-		Summary: `The kafka output type writes a batch of messages to Kafka brokers and waits for acknowledgement before propagating it back to the input.`,
-		Description: output.Description(true, true, `
+const (
+	oskFieldAddresses                    = "addresses"
+	oskFieldTopic                        = "topic"
+	oskFieldTargetVersion                = "target_version"
+	oskFieldTLS                          = "tls"
+	oskFieldClientID                     = "client_id"
+	oskFieldRackID                       = "rack_id"
+	oskFieldKey                          = "key"
+	oskFieldPartitioner                  = "partitioner"
+	oskFieldPartition                    = "partition"
+	oskFieldCustomTopic                  = "custom_topic_creation"
+	oskFieldCustomTopicEnabled           = "enabled"
+	oskFieldCustomTopicPartitions        = "partitions"
+	oskFieldCustomTopicReplicationFactor = "replication_factor"
+	oskFieldCompression                  = "compression"
+	oskFieldStaticHeaders                = "static_headers"
+	oskFieldMetadata                     = "metadata"
+	oskFieldAckReplicas                  = "ack_replicas"
+	oskFieldMaxMsgBytes                  = "max_msg_bytes"
+	oskFieldTimeout                      = "timeout"
+	oskFieldRetryAsBatch                 = "retry_as_batch"
+	oskFieldBatching                     = "batching"
+	oskFieldMaxRetries                   = "max_retries"
+	oskFieldBackoff                      = "backoff"
+)
+
+// OSKConfigSpec creates a new config spec for a kafka output.
+func OSKConfigSpec() *service.ConfigSpec {
+	return service.NewConfigSpec().
+		Stable().
+		Categories("Services").
+		Summary(`The kafka output type writes a batch of messages to Kafka brokers and waits for acknowledgement before propagating it back to the input.`).
+		Description(output.Description(true, true, `
 The config field `+"`ack_replicas`"+` determines whether we wait for acknowledgement from all replicas or just a single broker.
 
 Both the `+"`key` and `topic`"+` fields can be dynamically set using function interpolations described [here](/docs/configuration/interpolation#bloblang-queries).
@@ -56,160 +72,223 @@ If you're seeing issues writing to or reading from Kafka with this component the
 
 - I'm seeing logs that report `+"`Failed to connect to kafka: kafka: client has run out of available brokers to talk to (Is your cluster reachable?)`"+`, but the brokers are definitely reachable.
 
-Unfortunately this error message will appear for a wide range of connection problems even when the broker endpoint can be reached. Double check your authentication configuration and also ensure that you have [enabled TLS](#tlsenabled) if applicable.`),
-		Config: docs.FieldComponent().WithChildren(
-			docs.FieldString("addresses", "A list of broker addresses to connect to. If an item of the list contains commas it will be expanded into multiple addresses.", []string{"localhost:9092"}, []string{"localhost:9041,localhost:9042"}, []string{"localhost:9041", "localhost:9042"}).Array(),
-			btls.FieldSpec(),
-			sasl.FieldSpec(),
-			docs.FieldString("topic", "The topic to publish messages to.").IsInterpolated(),
-			docs.FieldString("client_id", "An identifier for the client connection.").Advanced(),
-			docs.FieldString("target_version", "The version of the Kafka protocol to use. This limits the capabilities used by the client and should ideally match the version of your brokers."),
-			docs.FieldString("rack_id", "A rack identifier for this client.").Advanced(),
-			docs.FieldString("key", "The key to publish messages with.").IsInterpolated(),
-			docs.FieldString("partitioner", "The partitioning algorithm to use.").HasOptions("fnv1a_hash", "murmur2_hash", "random", "round_robin", "manual"),
-			docs.FieldString("partition", "The manually-specified partition to publish messages to, relevant only when the field `partitioner` is set to `manual`. Must be able to parse as a 32-bit integer.").IsInterpolated().Advanced(),
-			docs.FieldString("compression", "The compression algorithm to use.").HasOptions("none", "snappy", "lz4", "gzip", "zstd"),
-			docs.FieldString("static_headers", "An optional map of static headers that should be added to messages in addition to metadata.", map[string]string{"first-static-header": "value-1", "second-static-header": "value-2"}).Map(),
-			docs.FieldObject("metadata", "Specify criteria for which metadata values are sent with messages as headers.").WithChildren(metadata.ExcludeFilterFields()...),
-			output.InjectTracingSpanMappingDocs,
-			docs.FieldInt("max_in_flight", "The maximum number of parallel message batches to have in flight at any given time."),
-			docs.FieldBool("ack_replicas", "Ensure that messages have been copied across all replicas before acknowledging receipt.").Advanced(),
-			docs.FieldInt("max_msg_bytes", "The maximum size in bytes of messages sent to the target topic.").Advanced(),
-			docs.FieldString("timeout", "The maximum period of time to wait for message sends before abandoning the request and retrying.").Advanced(),
-			docs.FieldBool("retry_as_batch", "When enabled forces an entire batch of messages to be retried if any individual message fails on a send, otherwise only the individual messages that failed are retried. Disabling this helps to reduce message duplicates during intermittent errors, but also makes it impossible to guarantee strict ordering of messages.").Advanced(),
-			policy.FieldSpec(),
-		).WithChildren(retries.FieldSpecs()...).ChildDefaultAndTypesFromStruct(output.NewKafkaConfig()),
-		Categories: []string{
-			"Services",
-		},
+Unfortunately this error message will appear for a wide range of connection problems even when the broker endpoint can be reached. Double check your authentication configuration and also ensure that you have [enabled TLS](#tlsenabled) if applicable.`)).
+		Fields(
+			service.NewStringListField(oskFieldAddresses).
+				Description("A list of broker addresses to connect to. If an item of the list contains commas it will be expanded into multiple addresses.").
+				Examples(
+					[]string{"localhost:9092"},
+					[]string{"localhost:9041,localhost:9042"},
+					[]string{"localhost:9041", "localhost:9042"},
+				),
+			service.NewTLSToggledField(oskFieldTLS),
+			SaramaSASLField(),
+			service.NewInterpolatedStringField(oskFieldTopic).
+				Description("The topic to publish messages to."),
+			service.NewStringField(oskFieldClientID).
+				Description("An identifier for the client connection.").
+				Advanced().Default("benthos"),
+			service.NewStringField(oskFieldTargetVersion).
+				Description("The version of the Kafka protocol to use. This limits the capabilities used by the client and should ideally match the version of your brokers. Defaults to the oldest supported stable version.").
+				Examples(sarama.DefaultVersion.String(), "3.1.0").
+				Optional(),
+			service.NewStringField(oskFieldRackID).
+				Description("A rack identifier for this client.").
+				Advanced().Default(""),
+			service.NewInterpolatedStringField(oskFieldKey).
+				Description("The key to publish messages with.").
+				Default(""),
+			service.NewStringEnumField(oskFieldPartitioner, "fnv1a_hash", "murmur2_hash", "random", "round_robin", "manual").
+				Description("The partitioning algorithm to use.").
+				Default("fnv1a_hash"),
+			service.NewInterpolatedStringField(oskFieldPartition).
+				Description("The manually-specified partition to publish messages to, relevant only when the field `partitioner` is set to `manual`. Must be able to parse as a 32-bit integer.").
+				Advanced().Default(""),
+			service.NewObjectField(oskFieldCustomTopic,
+				service.NewBoolField(oskFieldCustomTopicEnabled).
+					Description("Whether to enable custom topic creation.").Default(false),
+				service.NewIntField(oskFieldCustomTopicPartitions).
+					Description("The number of partitions to create for new topics. Leave at -1 to use the broker configured default. Must be >= 1.").
+					Default(-1),
+				service.NewIntField(oskFieldCustomTopicReplicationFactor).
+					Description("The replication factor to use for new topics. Leave at -1 to use the broker configured default. Must be an odd number, and less then or equal to the number of brokers.").
+					Default(-1),
+			).Description("If enabled, topics will be created with the specified number of partitions and replication factor if they do not already exist.").
+				Advanced().Optional(),
+			service.NewStringEnumField(oskFieldCompression, "none", "snappy", "lz4", "gzip", "zstd").
+				Description("The compression algorithm to use.").
+				Default("none"),
+			service.NewStringMapField(oskFieldStaticHeaders).
+				Description("An optional map of static headers that should be added to messages in addition to metadata.").
+				Example(map[string]string{"first-static-header": "value-1", "second-static-header": "value-2"}).
+				Optional(),
+			service.NewMetadataExcludeFilterField(oskFieldMetadata).
+				Description("Specify criteria for which metadata values are sent with messages as headers."),
+			span.InjectTracingSpanMappingDocs(),
+			service.NewOutputMaxInFlightField(),
+			service.NewBoolField(oskFieldAckReplicas).
+				Description("Ensure that messages have been copied across all replicas before acknowledging receipt.").
+				Advanced().Default(false),
+			service.NewIntField(oskFieldMaxMsgBytes).
+				Description("The maximum size in bytes of messages sent to the target topic.").
+				Advanced().Default(1000000),
+			service.NewDurationField(oskFieldTimeout).
+				Description("The maximum period of time to wait for message sends before abandoning the request and retrying.").
+				Advanced().Default("5s"),
+			service.NewBoolField(oskFieldRetryAsBatch).
+				Description("When enabled forces an entire batch of messages to be retried if any individual message fails on a send, otherwise only the individual messages that failed are retried. Disabling this helps to reduce message duplicates during intermittent errors, but also makes it impossible to guarantee strict ordering of messages.").
+				Advanced().Default(false),
+			service.NewBatchPolicyField(oskFieldBatching),
+			service.NewIntField(oskFieldMaxRetries).
+				Description("The maximum number of retries before giving up on the request. If set to zero there is no discrete limit.").
+				Advanced().Default(0),
+			service.NewBackOffField(oskFieldBackoff, true, &backoff.ExponentialBackOff{
+				InitialInterval: time.Second * 3,
+				MaxInterval:     time.Second * 10,
+				MaxElapsedTime:  time.Second * 30,
+			}).Description("Control time intervals between retry attempts.").Advanced(),
+		)
+}
+
+func init() {
+	err := service.RegisterBatchOutput("kafka", OSKConfigSpec(), func(conf *service.ParsedConfig, mgr *service.Resources) (o service.BatchOutput, batchPol service.BatchPolicy, mIF int, err error) {
+		if o, err = NewKafkaWriterFromParsed(conf, mgr); err != nil {
+			return
+		}
+
+		if batchPol, err = conf.FieldBatchPolicy(oskFieldBatching); err != nil {
+			return
+		}
+
+		if mIF, err = conf.FieldMaxInFlight(); err != nil {
+			return
+		}
+
+		o, err = span.NewBatchOutput("kafka", conf, o, mgr)
+		return
 	})
+
 	if err != nil {
 		panic(err)
 	}
 }
 
-func newKafkaOutput(conf output.Config, mgr bundle.NewManagement) (output.Streamed, error) {
-	k, err := NewKafkaWriter(conf.Kafka, mgr)
-	if err != nil {
-		return nil, err
-	}
-	w, err := output.NewAsyncWriter("kafka", conf.Kafka.MaxInFlight, k, mgr)
-	if err != nil {
-		return nil, err
-	}
-
-	if conf.Kafka.InjectTracingMap != "" {
-		aw, ok := w.(*output.AsyncWriter)
-		if !ok {
-			return nil, fmt.Errorf("unable to set an inject_tracing_map due to wrong type: %T", w)
-		}
-
-		injectTracingMap, err := mgr.BloblEnvironment().NewMapping(conf.Kafka.InjectTracingMap)
-		if err != nil {
-			return nil, fmt.Errorf("failed to initialize inject tracing map: %v", err)
-		}
-		aw.SetInjectTracingMap(injectTracingMap)
-	}
-
-	return batcher.NewFromConfig(conf.Kafka.Batching, w, mgr)
-}
-
 type kafkaWriter struct {
-	log log.Modular
-	mgr bundle.NewManagement
+	saramConf *sarama.Config
 
+	addresses     []string
+	key           *service.InterpolatedString
+	topic         *service.InterpolatedString
+	partition     *service.InterpolatedString
+	staticHeaders map[string]string
+	metaFilter    *service.MetadataExcludeFilter
+	retryAsBatch  bool
+
+	customTopicCreation bool
+	customTopicParts    int
+	customTopicRepls    int
+
+	mgr         *service.Resources
 	backoffCtor func() backoff.BackOff
 
-	tlsConf *tls.Config
-	timeout time.Duration
+	admin    sarama.ClusterAdmin
+	producer sarama.SyncProducer
 
-	addresses []string
-	version   sarama.KafkaVersion
-	conf      output.KafkaConfig
-
-	key       *field.Expression
-	topic     *field.Expression
-	partition *field.Expression
-
-	producer    sarama.SyncProducer
-	compression sarama.CompressionCodec
-	partitioner sarama.PartitionerConstructor
-
-	staticHeaders map[string]string
-	metaFilter    *metadata.ExcludeFilter
-
-	connMut sync.RWMutex
+	connMut    sync.RWMutex
+	topicCache syncmap.Map
 }
 
-// NewKafkaWriter returns a kafka writer.
-func NewKafkaWriter(conf output.KafkaConfig, mgr bundle.NewManagement) (output.AsyncSink, error) {
-	compression, err := strToCompressionCodec(conf.Compression)
-	if err != nil {
-		return nil, err
-	}
-
-	if conf.Partition == "" && conf.Partitioner == "manual" {
-		return nil, fmt.Errorf("partition field required for 'manual' partitioner")
-	} else if len(conf.Partition) > 0 && conf.Partitioner != "manual" {
-		return nil, fmt.Errorf("partition field can only be specified for 'manual' partitioner")
-	}
-
-	partitioner, err := strToPartitioner(conf.Partitioner)
-	if err != nil {
-		return nil, err
-	}
-
+// NewKafkaWriteFromParsed returns a kafka output from a parsed config.
+func NewKafkaWriterFromParsed(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchOutput, error) {
 	k := kafkaWriter{
-		log: mgr.Logger(),
 		mgr: mgr,
-
-		conf:          conf,
-		compression:   compression,
-		partitioner:   partitioner,
-		staticHeaders: conf.StaticHeaders,
 	}
 
-	if k.metaFilter, err = conf.Metadata.Filter(); err != nil {
-		return nil, fmt.Errorf("failed to construct metadata filter: %w", err)
-	}
-
-	if k.key, err = mgr.BloblEnvironment().NewField(conf.Key); err != nil {
-		return nil, fmt.Errorf("failed to parse key expression: %v", err)
-	}
-	if k.topic, err = mgr.BloblEnvironment().NewField(conf.Topic); err != nil {
-		return nil, fmt.Errorf("failed to parse topic expression: %v", err)
-	}
-	if k.partition, err = mgr.BloblEnvironment().NewField(conf.Partition); err != nil {
-		return nil, fmt.Errorf("failed to parse parition expression: %v", err)
-	}
-	if k.backoffCtor, err = conf.Config.GetCtor(); err != nil {
+	cAddresses, err := conf.FieldStringList(oskFieldAddresses)
+	if err != nil {
 		return nil, err
 	}
-
-	if tout := conf.Timeout; len(tout) > 0 {
-		var err error
-		if k.timeout, err = time.ParseDuration(tout); err != nil {
-			return nil, fmt.Errorf("failed to parse timeout string: %v", err)
-		}
-	}
-
-	if conf.TLS.Enabled {
-		var err error
-		if k.tlsConf, err = conf.TLS.Get(mgr.FS()); err != nil {
-			return nil, err
-		}
-	}
-
-	if k.version, err = sarama.ParseKafkaVersion(conf.TargetVersion); err != nil {
-		return nil, err
-	}
-
-	for _, addr := range conf.Addresses {
+	for _, addr := range cAddresses {
 		for _, splitAddr := range strings.Split(addr, ",") {
 			if trimmed := strings.TrimSpace(splitAddr); len(trimmed) > 0 {
 				k.addresses = append(k.addresses, trimmed)
 			}
 		}
+	}
+
+	if conf.Contains(oskFieldStaticHeaders) {
+		if k.staticHeaders, err = conf.FieldStringMap(oskFieldStaticHeaders); err != nil {
+			return nil, err
+		}
+	} else {
+		k.staticHeaders = map[string]string{}
+	}
+
+	if k.metaFilter, err = conf.FieldMetadataExcludeFilter(oskFieldMetadata); err != nil {
+		return nil, err
+	}
+
+	if k.key, err = conf.FieldInterpolatedString(oskFieldKey); err != nil {
+		return nil, err
+	}
+	if k.topic, err = conf.FieldInterpolatedString(oskFieldTopic); err != nil {
+		return nil, err
+	}
+	if partStr, _ := conf.FieldString(oskFieldPartition); partStr != "" {
+		if k.partition, err = conf.FieldInterpolatedString(oskFieldPartition); err != nil {
+			return nil, err
+		}
+	}
+
+	var expBackoff *backoff.ExponentialBackOff
+	if expBackoff, err = conf.FieldBackOff(oskFieldBackoff); err != nil {
+		return nil, err
+	}
+	var maxRetries int
+	if maxRetries, err = conf.FieldInt(oskFieldMaxRetries); err != nil {
+		return nil, err
+	}
+
+	k.backoffCtor = func() backoff.BackOff {
+		boff := *expBackoff
+		if maxRetries <= 0 {
+			return &boff
+		}
+		return backoff.WithMaxRetries(&boff, uint64(maxRetries))
+	}
+
+	if k.retryAsBatch, err = conf.FieldBool(oskFieldRetryAsBatch); err != nil {
+		return nil, err
+	}
+
+	if conf.Contains(oskFieldCustomTopic) {
+		cConf := conf.Namespace(oskFieldCustomTopic)
+		if k.customTopicCreation, err = cConf.FieldBool(oskFieldCustomTopicEnabled); err != nil {
+			return nil, err
+		}
+		if k.customTopicParts, err = cConf.FieldInt(oskFieldCustomTopicPartitions); err != nil {
+			return nil, err
+		}
+		if k.customTopicRepls, err = cConf.FieldInt(oskFieldCustomTopicReplicationFactor); err != nil {
+			return nil, err
+		}
+	}
+
+	if k.customTopicCreation {
+		if k.customTopicParts != -1 && k.customTopicParts < 2 {
+			return nil, fmt.Errorf("topic_partitions must be greater than one, got %v", k.customTopicParts)
+		}
+		if k.customTopicRepls != -1 && k.customTopicRepls%2 == 0 {
+			return nil, fmt.Errorf("topic_replication_factor must be an odd number, got %v", k.customTopicRepls)
+		}
+	}
+
+	if k.saramConf, err = k.saramaConfigFromParsed(conf); err != nil {
+		return nil, err
+	}
+
+	if k.admin, err = sarama.NewClusterAdmin(k.addresses, k.saramConf); err != nil {
+		return nil, err
 	}
 
 	return &k, nil
@@ -257,13 +336,13 @@ func strToPartitioner(str string) (sarama.PartitionerConstructor, error) {
 
 //------------------------------------------------------------------------------
 
-func (k *kafkaWriter) buildSystemHeaders(part *message.Part) []sarama.RecordHeader {
-	if k.version.IsAtLeast(sarama.V0_11_0_0) {
+func (k *kafkaWriter) buildSystemHeaders(part *service.Message) []sarama.RecordHeader {
+	if k.saramConf.Version.IsAtLeast(sarama.V0_11_0_0) {
 		out := []sarama.RecordHeader{}
-		_ = k.metaFilter.Iter(part, func(k string, v any) error {
+		_ = k.metaFilter.Walk(part, func(k string, v string) error {
 			out = append(out, sarama.RecordHeader{
 				Key:   []byte(k),
-				Value: []byte(query.IToString(v)),
+				Value: []byte(value.IToString(v)),
 			})
 			return nil
 		})
@@ -277,7 +356,7 @@ func (k *kafkaWriter) buildSystemHeaders(part *message.Part) []sarama.RecordHead
 //------------------------------------------------------------------------------
 
 func (k *kafkaWriter) buildUserDefinedHeaders(staticHeaders map[string]string) []sarama.RecordHeader {
-	if k.version.IsAtLeast(sarama.V0_11_0_0) {
+	if k.saramConf.Version.IsAtLeast(sarama.V0_11_0_0) {
 		out := make([]sarama.RecordHeader, 0, len(staticHeaders))
 
 		for name, value := range staticHeaders {
@@ -296,6 +375,76 @@ func (k *kafkaWriter) buildUserDefinedHeaders(staticHeaders map[string]string) [
 
 //------------------------------------------------------------------------------
 
+func (k *kafkaWriter) saramaConfigFromParsed(conf *service.ParsedConfig) (*sarama.Config, error) {
+	config := sarama.NewConfig()
+
+	var err error
+	if targetVersionStr, _ := conf.FieldString(oskFieldTargetVersion); targetVersionStr != "" {
+		if config.Version, err = sarama.ParseKafkaVersion(targetVersionStr); err != nil {
+			return nil, err
+		}
+	}
+
+	if config.ClientID, err = conf.FieldString(oskFieldClientID); err != nil {
+		return nil, err
+	}
+
+	if config.RackID, err = conf.FieldString(oskFieldRackID); err != nil {
+		return nil, err
+	}
+
+	if config.Net.TLS.Config, config.Net.TLS.Enable, err = conf.FieldTLSToggled(oskFieldTLS); err != nil {
+		return nil, err
+	}
+
+	var compressionStr string
+	if compressionStr, err = conf.FieldString(oskFieldCompression); err != nil {
+		return nil, err
+	}
+	if config.Producer.Compression, err = strToCompressionCodec(compressionStr); err != nil {
+		return nil, err
+	}
+
+	var partitionerStr string
+	if partitionerStr, err = conf.FieldString(oskFieldPartitioner); err != nil {
+		return nil, err
+	}
+	if k.partition == nil && partitionerStr == "manual" {
+		return nil, fmt.Errorf("partition field required for 'manual' partitioner")
+	} else if k.partition != nil && partitionerStr != "manual" {
+		return nil, fmt.Errorf("partition field can only be specified for 'manual' partitioner")
+	}
+	if config.Producer.Partitioner, err = strToPartitioner(partitionerStr); err != nil {
+		return nil, err
+	}
+
+	if config.Producer.MaxMessageBytes, err = conf.FieldInt(oskFieldMaxMsgBytes); err != nil {
+		return nil, err
+	}
+	if config.Producer.Timeout, err = conf.FieldDuration(oskFieldTimeout); err != nil {
+		return nil, err
+	}
+
+	config.Producer.Return.Errors = true
+	config.Producer.Return.Successes = true
+
+	var ackReplicas bool
+	if ackReplicas, err = conf.FieldBool(oskFieldAckReplicas); err != nil {
+		return nil, err
+	}
+
+	if ackReplicas {
+		config.Producer.RequiredAcks = sarama.WaitForAll
+	} else {
+		config.Producer.RequiredAcks = sarama.WaitForLocal
+	}
+
+	if err := ApplySaramaSASLFromParsed(conf, k.mgr, config); err != nil {
+		return nil, err
+	}
+	return config, nil
+}
+
 // Connect attempts to establish a connection to a Kafka broker.
 func (k *kafkaWriter) Connect(ctx context.Context) error {
 	k.connMut.Lock()
@@ -305,50 +454,24 @@ func (k *kafkaWriter) Connect(ctx context.Context) error {
 		return nil
 	}
 
-	config := sarama.NewConfig()
-	config.ClientID = k.conf.ClientID
-	config.RackID = k.conf.RackID
-
-	config.Version = k.version
-
-	config.Producer.Compression = k.compression
-	config.Producer.Partitioner = k.partitioner
-	config.Producer.MaxMessageBytes = k.conf.MaxMsgBytes
-	config.Producer.Timeout = k.timeout
-	config.Producer.Return.Errors = true
-	config.Producer.Return.Successes = true
-	config.Net.TLS.Enable = k.conf.TLS.Enabled
-	if k.conf.TLS.Enabled {
-		config.Net.TLS.Config = k.tlsConf
-	}
-	if err := ApplySASLConfig(k.conf.SASL, k.mgr, config); err != nil {
-		return err
-	}
-
-	if k.conf.AckReplicas {
-		config.Producer.RequiredAcks = sarama.WaitForAll
-	} else {
-		config.Producer.RequiredAcks = sarama.WaitForLocal
-	}
-
 	var err error
-	k.producer, err = sarama.NewSyncProducer(k.addresses, config)
+	k.producer, err = sarama.NewSyncProducer(k.addresses, k.saramConf)
 
 	if err == nil {
-		k.log.Infof("Sending Kafka messages to addresses: %s\n", k.addresses)
+		k.mgr.Logger().Infof("Sending Kafka messages to addresses: %s\n", k.addresses)
 	}
 	return err
 }
 
 // WriteBatch will attempt to write a message to Kafka, wait for
 // acknowledgement, and returns an error if applicable.
-func (k *kafkaWriter) WriteBatch(ctx context.Context, msg message.Batch) error {
+func (k *kafkaWriter) WriteBatch(ctx context.Context, msg service.MessageBatch) error {
 	k.connMut.RLock()
 	producer := k.producer
 	k.connMut.RUnlock()
 
 	if producer == nil {
-		return component.ErrNotConnected
+		return service.ErrNotConnected
 	}
 
 	boff := k.backoffCtor()
@@ -356,19 +479,29 @@ func (k *kafkaWriter) WriteBatch(ctx context.Context, msg message.Batch) error {
 	userDefinedHeaders := k.buildUserDefinedHeaders(k.staticHeaders)
 	msgs := []*sarama.ProducerMessage{}
 
-	if err := msg.Iter(func(i int, p *message.Part) error {
-		key, err := k.key.Bytes(i, msg)
+	for i := 0; i < len(msg); i++ {
+		key, err := msg.TryInterpolatedBytes(i, k.key)
 		if err != nil {
 			return fmt.Errorf("key interpolation error: %w", err)
 		}
-		topic, err := k.topic.String(i, msg)
+		topic, err := msg.TryInterpolatedString(i, k.topic)
 		if err != nil {
 			return fmt.Errorf("topic interpolation error: %w", err)
 		}
+		if k.customTopicCreation {
+			if err := k.createTopic(topic); err != nil {
+				return fmt.Errorf("failed to create topic '%v': %w", topic, err)
+			}
+		}
+
+		msgBytes, err := msg[i].AsBytes()
+		if err != nil {
+			return err
+		}
 		nextMsg := &sarama.ProducerMessage{
 			Topic:    topic,
-			Value:    sarama.ByteEncoder(p.AsBytes()),
-			Headers:  append(k.buildSystemHeaders(p), userDefinedHeaders...),
+			Value:    sarama.ByteEncoder(msgBytes),
+			Headers:  append(k.buildSystemHeaders(msg[i]), userDefinedHeaders...),
 			Metadata: i, // Store the original index for later reference.
 		}
 		if len(key) > 0 {
@@ -379,8 +512,8 @@ func (k *kafkaWriter) WriteBatch(ctx context.Context, msg message.Batch) error {
 		// partitioner.  Although samara will (currently) ignore the partition
 		// field when not using a manual partitioner, we should only set it when
 		// we explicitly want that.
-		if k.conf.Partitioner == "manual" {
-			partitionString, err := k.partition.String(i, msg)
+		if k.partition != nil {
+			partitionString, err := msg.TryInterpolatedString(i, k.partition)
 			if err != nil {
 				return fmt.Errorf("partition interpolation error: %w", err)
 			}
@@ -399,18 +532,15 @@ func (k *kafkaWriter) WriteBatch(ctx context.Context, msg message.Batch) error {
 			nextMsg.Partition = int32(partitionInt)
 		}
 		msgs = append(msgs, nextMsg)
-		return nil
-	}); err != nil {
-		return err
 	}
 
 	err := producer.SendMessages(msgs)
 	for err != nil {
-		if pErrs, ok := err.(sarama.ProducerErrors); !k.conf.RetryAsBatch && ok {
+		if pErrs, ok := err.(sarama.ProducerErrors); !k.retryAsBatch && ok {
 			if len(pErrs) == 0 {
 				break
 			}
-			batchErr := batchInternal.NewError(msg, pErrs[0].Err)
+			batchErr := service.NewBatchError(msg, pErrs[0].Err)
 			msgs = nil
 			for _, pErr := range pErrs {
 				if mIndex, ok := pErr.Msg.Metadata.(int); ok {
@@ -424,11 +554,11 @@ func (k *kafkaWriter) WriteBatch(ctx context.Context, msg message.Batch) error {
 				// If these lengths don't match then somehow we failed to obtain
 				// the indexes from metadata, which implies something is wrong
 				// with our logic here.
-				k.log.Warnln("Unable to determine batch index of errors")
+				k.mgr.Logger().Warn("Unable to determine batch index of errors")
 			}
-			k.log.Errorf("Failed to send '%v' messages: %v\n", len(pErrs), err)
+			k.mgr.Logger().Errorf("Failed to send '%v' messages: %v\n", len(pErrs), err)
 		} else {
-			k.log.Errorf("Failed to send messages: %v\n", err)
+			k.mgr.Logger().Errorf("Failed to send messages: %v\n", err)
 		}
 
 		tNext := boff.NextBackOff()
@@ -447,7 +577,7 @@ func (k *kafkaWriter) WriteBatch(ctx context.Context, msg message.Batch) error {
 		k.connMut.RUnlock()
 
 		if producer == nil {
-			return component.ErrNotConnected
+			return service.ErrNotConnected
 		}
 		err = producer.SendMessages(msgs)
 	}
@@ -563,4 +693,43 @@ func (mur *murmur2) Sum32() uint32 {
 	cached := uint32(h)
 	mur.cached = &cached
 	return cached
+}
+
+//------------------------------------------------------------------------------
+
+// createTopic creates a topic in the Kafka cluster if it does not already
+// exist.
+//
+// If k.conf.PartitionsPerNewTopic is set to a value greater than 0, then the
+// topic will be created with that number of partitions.
+func (k *kafkaWriter) createTopic(topic string) error {
+	if exists, err := k.checkIfTopicExists(topic); err != nil {
+		return err
+	} else if exists {
+		return nil
+	}
+
+	k.topicCache.Store(topic, false)
+	topicDetail := sarama.TopicDetail{
+		NumPartitions:     int32(k.customTopicParts),
+		ReplicationFactor: int16(k.customTopicRepls),
+	}
+	return k.admin.CreateTopic(topic, &topicDetail, false)
+}
+
+// checkIfTopicExists checks if a topic exists in the Kafka cluster.
+func (k *kafkaWriter) checkIfTopicExists(topic string) (exists bool, err error) {
+	initialized, ok := k.topicCache.Load(topic)
+	if ok && initialized.(bool) {
+		return true, nil
+	}
+
+	var topics map[string]sarama.TopicDetail
+	if topics, err = k.admin.ListTopics(); err != nil {
+		return
+	}
+
+	_, exists = topics[topic]
+	k.topicCache.Store(topic, exists)
+	return
 }

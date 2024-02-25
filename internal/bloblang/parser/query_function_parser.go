@@ -335,13 +335,7 @@ func extractArgsParserResult(paramsDef query.Params, args []any) (*query.ParsedP
 }
 
 func methodParser(fn query.Function, pCtx Context) Func {
-	p := Sequence(
-		Expect(
-			SnakeCase(),
-			"method",
-		),
-		functionArgsParser(pCtx),
-	)
+	p := Sequence(Expect(SnakeCase(), "method"), functionArgsParser(pCtx))
 
 	return func(input []rune) Result {
 		res := p(input)
@@ -354,30 +348,24 @@ func methodParser(fn query.Function, pCtx Context) Func {
 		targetMethod := seqSlice[0].(string)
 		params, err := pCtx.Methods.Params(targetMethod)
 		if err != nil {
-			return Fail(NewFatalError(input, err), input)
+			return Fail(NewFatalError(res.Remaining, err), input)
 		}
 
 		parsedParams, err := extractArgsParserResult(params, seqSlice[1].([]any))
 		if err != nil {
-			return Fail(NewFatalError(input, err), input)
+			return Fail(NewFatalError(res.Remaining, err), input)
 		}
 
 		method, err := pCtx.InitMethod(targetMethod, fn, parsedParams)
 		if err != nil {
-			return Fail(NewFatalError(input, err), input)
+			return Fail(NewFatalError(res.Remaining, err), input)
 		}
 		return Success(method, res.Remaining)
 	}
 }
 
 func functionParser(pCtx Context) Func {
-	p := Sequence(
-		Expect(
-			SnakeCase(),
-			"function",
-		),
-		functionArgsParser(pCtx),
-	)
+	p := Sequence(Expect(SnakeCase(), "function"), functionArgsParser(pCtx))
 
 	return func(input []rune) Result {
 		res := p(input)
@@ -390,17 +378,17 @@ func functionParser(pCtx Context) Func {
 		targetFunc := seqSlice[0].(string)
 		params, err := pCtx.Functions.Params(targetFunc)
 		if err != nil {
-			return Fail(NewFatalError(input, err), input)
+			return Fail(NewFatalError(res.Remaining, err), input)
 		}
 
 		parsedParams, err := extractArgsParserResult(params, seqSlice[1].([]any))
 		if err != nil {
-			return Fail(NewFatalError(input, err), input)
+			return Fail(NewFatalError(res.Remaining, err), input)
 		}
 
 		fn, err := pCtx.InitFunction(targetFunc, parsedParams)
 		if err != nil {
-			return Fail(NewFatalError(input, err), input)
+			return Fail(NewFatalError(res.Remaining, err), input)
 		}
 		return Success(fn, res.Remaining)
 	}

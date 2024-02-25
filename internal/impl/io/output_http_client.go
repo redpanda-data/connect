@@ -2,17 +2,9 @@ package io
 
 import (
 	"context"
-	"fmt"
 
-	"github.com/benthosdev/benthos/v4/internal/batch/policy/batchconfig"
-	"github.com/benthosdev/benthos/v4/internal/bundle"
-	"github.com/benthosdev/benthos/v4/internal/component/interop"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
-	"github.com/benthosdev/benthos/v4/internal/component/output/batcher"
 	"github.com/benthosdev/benthos/v4/internal/httpclient"
-	"github.com/benthosdev/benthos/v4/internal/log"
-	"github.com/benthosdev/benthos/v4/internal/message"
-	"github.com/benthosdev/benthos/v4/internal/transaction"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
@@ -64,44 +56,15 @@ func init() {
 	err := service.RegisterBatchOutput(
 		"http_client", httpClientOutputSpec(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (bo service.BatchOutput, b service.BatchPolicy, mIF int, err error) {
-			oldMgr := interop.UnwrapManagement(mgr)
-
-			var maxInFlight int
-			if maxInFlight, err = conf.FieldInt("max_in_flight"); err != nil {
+			if mIF, err = conf.FieldInt("max_in_flight"); err != nil {
 				return
 			}
 
-			var batchAsMultipart bool
-			if batchAsMultipart, err = conf.FieldBool("batch_as_multipart"); err != nil {
+			if b, err = conf.FieldBatchPolicy("batching"); err != nil {
 				return
 			}
 
-			var batchPolAny any
-			if batchPolAny, err = conf.FieldAny("batching"); err != nil {
-				return
-			}
-			var batchConf batchconfig.Config
-			if batchConf, err = batchconfig.FromAny(batchPolAny); err != nil {
-				return
-			}
-
-			var wr *httpClientWriter
-			if wr, err = newHTTPClientOutputFromParsed(conf, oldMgr); err != nil {
-				return
-			}
-
-			var o output.Streamed
-			if o, err = output.NewAsyncWriter("http_client", maxInFlight, wr, oldMgr); err != nil {
-				return
-			}
-			if !batchAsMultipart {
-				o = output.OnlySinglePayloads(o)
-			}
-
-			if o, err = batcher.NewFromConfig(batchConf, o, oldMgr); err != nil {
-				return
-			}
-			bo = interop.NewUnwrapInternalOutput(o)
+			bo, err = newHTTPClientOutputFromParsed(conf, mgr)
 			return
 		})
 	if err != nil {
@@ -111,13 +74,14 @@ func init() {
 
 type httpClientWriter struct {
 	client *httpclient.Client
-	log    log.Modular
+	log    *service.Logger
 
-	logURL       string
-	propResponse bool
+	logURL           string
+	propResponse     bool
+	batchAsMultipart bool
 }
 
-func newHTTPClientOutputFromParsed(conf *service.ParsedConfig, mgr bundle.NewManagement) (*httpClientWriter, error) {
+func newHTTPClientOutputFromParsed(conf *service.ParsedConfig, mgr *service.Resources) (*httpClientWriter, error) {
 	opts := []httpclient.RequestOpt{}
 
 	logURL, _ := conf.FieldString("url")
@@ -129,40 +93,22 @@ func newHTTPClientOutputFromParsed(conf *service.ParsedConfig, mgr bundle.NewMan
 	if multiPartObjs, _ := conf.FieldObjectList("multipart"); len(multiPartObjs) > 0 {
 		parts := make([]httpclient.MultipartExpressions, len(multiPartObjs))
 		for i, p := range multiPartObjs {
-			contentDisp, err := p.FieldString("content_disposition")
-			if err != nil {
-				return nil, err
-			}
-			contentType, err := p.FieldString("content_type")
-			if err != nil {
-				return nil, err
-			}
-			body, err := p.FieldString("body")
-			if err != nil {
-				return nil, err
-			}
-
 			var exprPart httpclient.MultipartExpressions
-			if exprPart.ContentDisposition, err = mgr.BloblEnvironment().NewField(contentDisp); err != nil {
-				return nil, fmt.Errorf("failed to parse multipart %v field content_disposition: %v", i, err)
+			if exprPart.ContentDisposition, err = p.FieldInterpolatedString("content_disposition"); err != nil {
+				return nil, err
 			}
-			if exprPart.ContentType, err = mgr.BloblEnvironment().NewField(contentType); err != nil {
-				return nil, fmt.Errorf("failed to parse multipart %v field content_type: %v", i, err)
+			if exprPart.ContentType, err = p.FieldInterpolatedString("content_type"); err != nil {
+				return nil, err
 			}
-			if exprPart.Body, err = mgr.BloblEnvironment().NewField(body); err != nil {
-				return nil, fmt.Errorf("failed to parse multipart %v field data: %v", i, err)
+			if exprPart.Body, err = p.FieldInterpolatedString("body"); err != nil {
+				return nil, err
 			}
 			parts[i] = exprPart
 		}
 		opts = append(opts, httpclient.WithExplicitMultipart(parts))
 	}
 
-	genericHTTPConf, err := conf.FieldAny()
-	if err != nil {
-		return nil, err
-	}
-
-	oldHTTPConf, err := httpclient.ConfigFromAny(genericHTTPConf)
+	oldHTTPConf, err := httpclient.ConfigFromParsed(conf)
 	if err != nil {
 		return nil, err
 	}
@@ -172,11 +118,17 @@ func newHTTPClientOutputFromParsed(conf *service.ParsedConfig, mgr bundle.NewMan
 		return nil, err
 	}
 
+	batchAsMultipart, err := conf.FieldBool("batch_as_multipart")
+	if err != nil {
+		return nil, err
+	}
+
 	return &httpClientWriter{
-		client:       client,
-		log:          mgr.Logger(),
-		logURL:       logURL,
-		propResponse: propResponse,
+		client:           client,
+		log:              mgr.Logger(),
+		logURL:           logURL,
+		propResponse:     propResponse,
+		batchAsMultipart: batchAsMultipart,
 	}, nil
 }
 
@@ -185,26 +137,38 @@ func (h *httpClientWriter) Connect(ctx context.Context) error {
 	return nil
 }
 
-func (h *httpClientWriter) WriteBatch(ctx context.Context, msg message.Batch) error {
+func (h *httpClientWriter) WriteBatch(ctx context.Context, msg service.MessageBatch) error {
+	if len(msg) > 1 && !h.batchAsMultipart {
+		for _, v := range msg {
+			if err := h.WriteBatch(ctx, service.MessageBatch{v}); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+
 	resultMsg, err := h.client.Send(ctx, msg)
 	if err == nil && h.propResponse {
-		parts := make([]*message.Part, resultMsg.Len())
-		_ = resultMsg.Iter(func(i int, p *message.Part) error {
-			if i < msg.Len() {
-				parts[i] = msg.Get(i)
+		parts := make(service.MessageBatch, len(resultMsg))
+		for i, p := range resultMsg {
+			if i < len(msg) {
+				parts[i] = msg[i]
 			} else {
-				parts[i] = msg.Get(0).ShallowCopy()
+				parts[i] = msg[0].Copy()
 			}
-			parts[i].SetBytes(p.AsBytes())
 
-			_ = p.MetaIterMut(func(k string, v any) error {
+			mBytes, err := p.AsBytes()
+			if err != nil {
+				return err
+			}
+			parts[i].SetBytes(mBytes)
+
+			_ = p.MetaWalkMut(func(k string, v any) error {
 				parts[i].MetaSetMut(k, v)
 				return nil
 			})
-
-			return nil
-		})
-		if err := transaction.SetAsResponse(parts); err != nil {
+		}
+		if err := parts.AddSyncResponse(); err != nil {
 			h.log.Warnf("Unable to propagate response to input: %v", err)
 		}
 	}

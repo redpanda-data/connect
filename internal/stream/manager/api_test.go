@@ -20,10 +20,13 @@ import (
 	"github.com/stretchr/testify/require"
 	yaml "gopkg.in/yaml.v3"
 
+	"github.com/benthosdev/benthos/v4/internal/bundle"
+	"github.com/benthosdev/benthos/v4/internal/component/testutil"
+	"github.com/benthosdev/benthos/v4/internal/config"
+	"github.com/benthosdev/benthos/v4/internal/docs"
 	bmanager "github.com/benthosdev/benthos/v4/internal/manager"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	"github.com/benthosdev/benthos/v4/internal/stream"
 	"github.com/benthosdev/benthos/v4/internal/stream/manager"
 
 	_ "github.com/benthosdev/benthos/v4/public/components/io"
@@ -247,7 +250,7 @@ func TestTypeAPIBasicOperations(t *testing.T) {
 	info = parseGetBody(t, response.Body)
 	assert.True(t, info.Active)
 
-	assert.Equal(t, map[string]any{}, gabs.Wrap(info.Config).S("buffer", "memory").Data())
+	assert.Equal(t, "memory", gabs.Wrap(info.Config).S("buffer", "type").Data())
 
 	request = genRequest("DELETE", "/streams/foo", conf)
 	response = httptest.NewRecorder()
@@ -331,14 +334,14 @@ func TestTypeAPIPatch(t *testing.T) {
 	response = httptest.NewRecorder()
 	r.ServeHTTP(response, request)
 	if exp, act := http.StatusOK, response.Code; exp != act {
-		t.Errorf("Unexpected result: %v != %v", act, exp)
+		t.Errorf("Unexpected result: %v != %v: %v", act, exp, response.Body.String())
 	}
 
 	request = genRequest("GET", "/streams/foo", nil)
 	response = httptest.NewRecorder()
 	r.ServeHTTP(response, request)
 	if exp, act := http.StatusOK, response.Code; exp != act {
-		t.Errorf("Unexpected result: %v != %v", act, exp)
+		t.Errorf("Unexpected result: %v != %v: %v", act, exp, response.Body.String())
 	}
 	info := parseGetBody(t, response.Body)
 	if !info.Active {
@@ -406,7 +409,7 @@ func TestTypeAPIBasicOperationsYAML(t *testing.T) {
 
 	info = parseGetBody(t, response.Body)
 	require.True(t, info.Active)
-	assert.Equal(t, map[string]any{}, gabs.Wrap(info.Config).S("buffer", "memory").Data())
+	assert.Equal(t, "memory", gabs.Wrap(info.Config).S("buffer", "type").Data())
 
 	request = genYAMLRequest("DELETE", "/streams/foo", conf)
 	response = httptest.NewRecorder()
@@ -438,10 +441,14 @@ func TestTypeAPIList(t *testing.T) {
 		t.Errorf("Wrong list response: %v != %v", act, exp)
 	}
 
-	conf := stream.NewConfig()
-	conf.Input.Type = "generate"
-	conf.Input.Generate.Mapping = "root = deleted()"
-	conf.Output.Type = "drop"
+	conf, err := testutil.StreamFromYAML(`
+input:
+  generate:
+    mapping: 'root = deleted()'
+output:
+  drop: {}
+`)
+	require.NoError(t, err)
 
 	if err := mgr.Create("foo", conf); err != nil {
 		t.Fatal(err)
@@ -467,10 +474,14 @@ func TestTypeAPISetStreams(t *testing.T) {
 
 	r := router(mgr)
 
-	origConf := stream.NewConfig()
-	origConf.Input.Type = "generate"
-	origConf.Input.Generate.Mapping = "root = deleted()"
-	origConf.Output.Type = "drop"
+	origConf, err := testutil.StreamFromYAML(`
+input:
+  generate:
+    mapping: 'root = deleted()'
+output:
+  drop: {}
+`)
+	require.NoError(t, err)
 
 	require.NoError(t, mgr.Create("foo", origConf))
 	require.NoError(t, mgr.Create("bar", origConf))
@@ -536,6 +547,22 @@ func TestTypeAPISetStreams(t *testing.T) {
 	assert.Equal(t, "root = this.BAZ_ONE", gabs.Wrap(conf.Config).S("input", "generate", "mapping").Data())
 }
 
+func testConfToAny(t testing.TB, conf any) any {
+	var node yaml.Node
+	err := node.Encode(conf)
+	require.NoError(t, err)
+
+	sanitConf := docs.NewSanitiseConfig(bundle.GlobalEnvironment)
+	sanitConf.RemoveTypeField = true
+	sanitConf.ScrubSecrets = true
+	err = config.Spec().SanitiseYAML(&node, sanitConf)
+	require.NoError(t, err)
+
+	var v any
+	require.NoError(t, node.Decode(&v))
+	return v
+}
+
 func TestTypeAPIStreamsDefaultConf(t *testing.T) {
 	res, err := bmanager.New(bmanager.NewResourceConfig())
 	require.NoError(t, err)
@@ -567,7 +594,9 @@ func TestTypeAPIStreamsDefaultConf(t *testing.T) {
 	status, err := mgr.Read("foo")
 	require.NoError(t, err)
 
-	assert.Equal(t, status.Config().Input.Generate.Interval, "1s")
+	v := testConfToAny(t, status.Config())
+
+	assert.Equal(t, nil, gabs.Wrap(v).S("input", "generate", "interval").Data())
 }
 
 func TestTypeAPIStreamsLinting(t *testing.T) {
@@ -658,7 +687,8 @@ func TestTypeAPIDefaultConf(t *testing.T) {
 	status, err := mgr.Read("foo")
 	require.NoError(t, err)
 
-	assert.Equal(t, status.Config().Input.Generate.Interval, "1s")
+	v := testConfToAny(t, status.Config())
+	assert.Equal(t, nil, gabs.Wrap(v).S("input", "generate", "interval").Data())
 }
 
 func TestTypeAPILinting(t *testing.T) {
@@ -811,10 +841,14 @@ func TestTypeAPIGetStats(t *testing.T) {
 
 	r := router(smgr)
 
-	origConf := stream.NewConfig()
-	origConf.Input.Type = "generate"
-	origConf.Input.Generate.Mapping = "root = deleted()"
-	origConf.Output.Type = "drop"
+	origConf, err := testutil.StreamFromYAML(`
+input:
+  generate:
+    mapping: 'root = deleted()'
+output:
+  drop: {}
+`)
+	require.NoError(t, err)
 
 	err = smgr.Create("foo", origConf)
 	require.NoError(t, err)
@@ -869,12 +903,15 @@ file:
 	r.ServeHTTP(hResponse, request)
 	assert.Equal(t, http.StatusOK, hResponse.Code, hResponse.Body.String())
 
-	streamConf := stream.NewConfig()
-	streamConf.Input.Type = "inproc"
-	streamConf.Input.Inproc = "feed_in"
-	streamConf.Output.Type = "cache"
-	streamConf.Output.Cache.Key = `${! json("id") }`
-	streamConf.Output.Cache.Target = "foocache"
+	streamConf, err := testutil.StreamFromYAML(`
+input:
+  inproc: feed_in
+output:
+  cache:
+    key: '${! json("id") }'
+    target: foocache
+`)
+	require.NoError(t, err)
 
 	request = genYAMLRequest("POST", "/streams/foo?chilled=true", streamConf)
 	hResponse = httptest.NewRecorder()

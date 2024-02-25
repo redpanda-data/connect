@@ -33,8 +33,8 @@ Introduced in version 3.58.0.
 # Common config fields, showing default values
 label: ""
 schema_registry_encode:
-  url: ""
-  subject: ""
+  url: "" # No default (required)
+  subject: foo # No default (required)
   refresh_period: 10m
 ```
 
@@ -45,8 +45,8 @@ schema_registry_encode:
 # All config fields, showing default values
 label: ""
 schema_registry_encode:
-  url: ""
-  subject: ""
+  url: "" # No default (required)
+  subject: foo # No default (required)
   refresh_period: 10m
   avro_raw_json: false
   oauth:
@@ -80,7 +80,7 @@ Encodes messages automatically from schemas obtains from a [Confluent Schema Reg
 
 If a message fails to encode under the schema then it will remain unchanged and the error can be caught using error handling methods outlined [here](/docs/configuration/error_handling).
 
-Currently only Avro schemas are supported.
+Avro, Protobuf and Json schemas are supported, all are capable of expanding from schema references as of v4.22.0.
 
 ### Avro JSON Format
 
@@ -97,9 +97,19 @@ For example, the union schema `["null","string","Foo"]`, where `Foo` is a record
 
 However, it is possible to instead consume documents in [standard/raw JSON format](https://pkg.go.dev/github.com/linkedin/goavro/v2#NewCodecForStandardJSONFull) by setting the field [`avro_raw_json`](#avro_raw_json) to `true`.
 
-### Known Issues
+#### Known Issues
 
 Important! There is an outstanding issue in the [avro serializing library](https://github.com/linkedin/goavro) that benthos uses which means it [doesn't encode logical types correctly](https://github.com/linkedin/goavro/issues/252). It's still possible to encode logical types that are in-line with the spec if `avro_raw_json` is set to true, though now of course non-logical types will not be in-line with the spec.
+
+### Protobuf Format
+
+This processor encodes protobuf messages either from any format parsed within Benthos (encoded as JSON by default), or from raw JSON documents, you can read more about JSON mapping of protobuf messages here: https://developers.google.com/protocol-buffers/docs/proto3#json
+
+#### Multiple Message Support
+
+When a target subject presents a protobuf schema that contains multiple messages it becomes ambiguous which message definition a given input data should be encoded against. In such scenarios Benthos will attempt to encode the data against each of them and select the first to successfully match against the data, this process currently *ignores all nested message definitions*. In order to speed up this exhaustive search the last known successful message will be attempted first for each subsequent input.
+
+We will be considering alternative approaches in future so please [get in touch](/community) with thoughts and feedback.
 
 
 ## Fields
@@ -353,6 +363,7 @@ A list of client certificates to use. For each certificate either the fields `ce
 
 
 Type: `array`  
+Default: `[]`  
 
 ```yml
 # Examples

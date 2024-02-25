@@ -2,9 +2,7 @@ package service
 
 import (
 	"context"
-	"errors"
 
-	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/buffer"
 	"github.com/benthosdev/benthos/v4/internal/message"
 	"github.com/benthosdev/benthos/v4/internal/shutdown"
@@ -84,7 +82,7 @@ func newAirGapBatchBuffer(b BatchBuffer) buffer.ReaderWriter {
 func (a *airGapBatchBuffer) Write(ctx context.Context, msg message.Batch, aFn buffer.AckFunc) error {
 	parts := make([]*Message, msg.Len())
 	_ = msg.Iter(func(i int, part *message.Part) error {
-		parts[i] = newMessageFromPart(part)
+		parts[i] = NewInternalMessage(part)
 		return nil
 	})
 	return a.b.WriteBatch(ctx, parts, AckFunc(aFn))
@@ -93,10 +91,7 @@ func (a *airGapBatchBuffer) Write(ctx context.Context, msg message.Batch, aFn bu
 func (a *airGapBatchBuffer) Read(ctx context.Context) (message.Batch, buffer.AckFunc, error) {
 	batch, ackFn, err := a.b.ReadBatch(ctx)
 	if err != nil {
-		if errors.Is(err, ErrEndOfBuffer) {
-			err = component.ErrTypeClosed
-		}
-		return nil, nil, err
+		return nil, nil, publicToInternalErr(err)
 	}
 
 	mBatch := make(message.Batch, len(batch))

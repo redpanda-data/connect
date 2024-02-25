@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"errors"
+	"fmt"
 	"net"
 	"path/filepath"
 	"sort"
@@ -14,10 +15,36 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/benthosdev/benthos/v4/internal/component/cache"
 	"github.com/benthosdev/benthos/v4/internal/component/input"
+	"github.com/benthosdev/benthos/v4/internal/component/testutil"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
 )
+
+func socketServerInputFromConf(t testing.TB, confStr string, bits ...any) (input.Streamed, string) {
+	t.Helper()
+
+	mgr := mock.NewManager()
+	mgr.Caches["testcache"] = map[string]mock.CacheItem{}
+
+	conf, err := testutil.InputFromYAML(fmt.Sprintf(confStr+"\n  address_cache: testcache", bits...))
+	require.NoError(t, err)
+
+	s, err := mgr.NewInput(conf)
+	require.NoError(t, err)
+
+	addr := ""
+	require.Eventually(t, func() bool {
+		_ = mgr.AccessCache(context.Background(), "testcache", func(v cache.V1) {
+			res, _ := v.Get(context.Background(), "socket_server_address")
+			addr = string(res)
+		})
+		return addr != ""
+	}, time.Second, time.Millisecond*10)
+
+	return s, addr
+}
 
 func TestSocketServerBasic(t *testing.T) {
 	ctx, done := context.WithTimeout(context.Background(), time.Second*20)
@@ -25,20 +52,18 @@ func TestSocketServerBasic(t *testing.T) {
 
 	tmpDir := t.TempDir()
 
-	conf := input.NewConfig()
-	conf.Type = "socket_server"
-	conf.SocketServer.Network = "unix"
-	conf.SocketServer.Address = filepath.Join(tmpDir, "benthos.sock")
-
-	rdr, err := mock.NewManager().NewInput(conf)
-	require.NoError(t, err)
+	rdr, addr := socketServerInputFromConf(t, `
+socket_server:
+  network: unix
+  address: %v
+`, filepath.Join(tmpDir, "benthos.sock"))
 
 	defer func() {
 		rdr.TriggerStopConsuming()
 		assert.NoError(t, rdr.WaitForClose(ctx))
 	}()
 
-	conn, err := net.Dial("unix", conf.SocketServer.Address)
+	conn, err := net.Dial("unix", addr)
 	require.NoError(t, err)
 
 	wg := sync.WaitGroup{}
@@ -92,20 +117,18 @@ func TestSocketServerRetries(t *testing.T) {
 
 	tmpDir := t.TempDir()
 
-	conf := input.NewConfig()
-	conf.Type = "socket_server"
-	conf.SocketServer.Network = "unix"
-	conf.SocketServer.Address = filepath.Join(tmpDir, "benthos.sock")
-
-	rdr, err := mock.NewManager().NewInput(conf)
-	require.NoError(t, err)
+	rdr, addr := socketServerInputFromConf(t, `
+socket_server:
+  network: unix
+  address: %v
+`, filepath.Join(tmpDir, "benthos.sock"))
 
 	defer func() {
 		rdr.TriggerStopConsuming()
 		assert.NoError(t, rdr.WaitForClose(ctx))
 	}()
 
-	conn, err := net.Dial("unix", conf.SocketServer.Address)
+	conn, err := net.Dial("unix", addr)
 	require.NoError(t, err)
 
 	wg := sync.WaitGroup{}
@@ -174,15 +197,13 @@ func TestSocketServerWriteClosed(t *testing.T) {
 
 	tmpDir := t.TempDir()
 
-	conf := input.NewConfig()
-	conf.Type = "socket_server"
-	conf.SocketServer.Network = "unix"
-	conf.SocketServer.Address = filepath.Join(tmpDir, "b.sock")
+	rdr, addr := socketServerInputFromConf(t, `
+socket_server:
+  network: unix
+  address: %v
+`, filepath.Join(tmpDir, "benthos.sock"))
 
-	rdr, err := mock.NewManager().NewInput(conf)
-	require.NoError(t, err)
-
-	conn, err := net.Dial("unix", conf.SocketServer.Address)
+	conn, err := net.Dial("unix", addr)
 	require.NoError(t, err)
 
 	_ = conn.SetWriteDeadline(time.Now().Add(time.Second * 5))
@@ -205,22 +226,18 @@ func TestSocketServerRecon(t *testing.T) {
 
 	tmpDir := t.TempDir()
 
-	conf := input.NewConfig()
-	conf.Type = "socket_server"
-	conf.SocketServer.Network = "unix"
-	conf.SocketServer.Address = filepath.Join(tmpDir, "benthos.sock")
-
-	rdr, err := mock.NewManager().NewInput(conf)
-	require.NoError(t, err)
-
-	addr := rdr.(interface{ Addr() net.Addr }).Addr()
+	rdr, addr := socketServerInputFromConf(t, `
+socket_server:
+  network: unix
+  address: %v
+`, filepath.Join(tmpDir, "benthos.sock"))
 
 	defer func() {
 		rdr.TriggerStopConsuming()
 		assert.NoError(t, rdr.WaitForClose(ctx))
 	}()
 
-	conn, err := net.Dial("unix", addr.String())
+	conn, err := net.Dial("unix", addr)
 	require.NoError(t, err)
 
 	wg := sync.WaitGroup{}
@@ -231,7 +248,7 @@ func TestSocketServerRecon(t *testing.T) {
 		require.NoError(t, cerr)
 
 		conn.Close()
-		conn, cerr = net.Dial("unix", addr.String())
+		conn, cerr = net.Dial("unix", addr)
 		require.NoError(t, cerr)
 
 		_, cerr = conn.Write([]byte("bar\n"))
@@ -280,21 +297,19 @@ func TestSocketServerMpart(t *testing.T) {
 
 	tmpDir := t.TempDir()
 
-	conf := input.NewConfig()
-	conf.Type = "socket_server"
-	conf.SocketServer.Network = "unix"
-	conf.SocketServer.Address = filepath.Join(tmpDir, "benthos.sock")
-	conf.SocketServer.Codec = "lines/multipart"
-
-	rdr, err := mock.NewManager().NewInput(conf)
-	require.NoError(t, err)
+	rdr, addr := socketServerInputFromConf(t, `
+socket_server:
+  network: unix
+  address: %v
+  codec: lines/multipart
+`, filepath.Join(tmpDir, "benthos.sock"))
 
 	defer func() {
 		rdr.TriggerStopConsuming()
 		assert.NoError(t, rdr.WaitForClose(ctx))
 	}()
 
-	conn, err := net.Dial("unix", conf.SocketServer.Address)
+	conn, err := net.Dial("unix", addr)
 	require.NoError(t, err)
 
 	wg := sync.WaitGroup{}
@@ -347,21 +362,19 @@ func TestSocketServerMpartCDelim(t *testing.T) {
 
 	tmpDir := t.TempDir()
 
-	conf := input.NewConfig()
-	conf.Type = "socket_server"
-	conf.SocketServer.Network = "unix"
-	conf.SocketServer.Address = filepath.Join(tmpDir, "b.sock")
-	conf.SocketServer.Codec = "delim:@/multipart"
-
-	rdr, err := mock.NewManager().NewInput(conf)
-	require.NoError(t, err)
+	rdr, addr := socketServerInputFromConf(t, `
+socket_server:
+  network: unix
+  address: %v
+  codec: delim:@/multipart
+`, filepath.Join(tmpDir, "b.sock"))
 
 	defer func() {
 		rdr.TriggerStopConsuming()
 		assert.NoError(t, rdr.WaitForClose(ctx))
 	}()
 
-	conn, err := net.Dial("unix", conf.SocketServer.Address)
+	conn, err := net.Dial("unix", addr)
 	require.NoError(t, err)
 
 	wg := sync.WaitGroup{}
@@ -414,21 +427,19 @@ func TestSocketServerMpartSdown(t *testing.T) {
 
 	tmpDir := t.TempDir()
 
-	conf := input.NewConfig()
-	conf.Type = "socket_server"
-	conf.SocketServer.Network = "unix"
-	conf.SocketServer.Address = filepath.Join(tmpDir, "b.sock")
-	conf.SocketServer.Codec = "lines/multipart"
-
-	rdr, err := mock.NewManager().NewInput(conf)
-	require.NoError(t, err)
+	rdr, addr := socketServerInputFromConf(t, `
+socket_server:
+  network: unix
+  address: %v
+  codec: lines/multipart
+`, filepath.Join(tmpDir, "b.sock"))
 
 	defer func() {
 		rdr.TriggerStopConsuming()
 		assert.NoError(t, rdr.WaitForClose(ctx))
 	}()
 
-	conn, err := net.Dial("unix", conf.SocketServer.Address)
+	conn, err := net.Dial("unix", addr)
 	require.NoError(t, err)
 
 	wg := sync.WaitGroup{}
@@ -480,22 +491,18 @@ func TestSocketUDPServerBasic(t *testing.T) {
 	ctx, done := context.WithTimeout(context.Background(), time.Second*20)
 	defer done()
 
-	conf := input.NewConfig()
-	conf.Type = "socket_server"
-	conf.SocketServer.Network = "udp"
-	conf.SocketServer.Address = "127.0.0.1:0"
-
-	rdr, err := mock.NewManager().NewInput(conf)
-	require.NoError(t, err)
-
-	addr := rdr.(interface{ Addr() net.Addr }).Addr()
+	rdr, addr := socketServerInputFromConf(t, `
+socket_server:
+  network: udp
+  address: 127.0.0.1:0
+`)
 
 	defer func() {
 		rdr.TriggerStopConsuming()
 		assert.NoError(t, rdr.WaitForClose(ctx))
 	}()
 
-	conn, err := net.Dial("udp", addr.String())
+	conn, err := net.Dial("udp", addr)
 	require.NoError(t, err)
 
 	wg := sync.WaitGroup{}
@@ -549,22 +556,18 @@ func TestSocketUDPServerRetries(t *testing.T) {
 	ctx, done := context.WithTimeout(context.Background(), time.Second*20)
 	defer done()
 
-	conf := input.NewConfig()
-	conf.Type = "socket_server"
-	conf.SocketServer.Network = "udp"
-	conf.SocketServer.Address = "127.0.0.1:0"
-
-	rdr, err := mock.NewManager().NewInput(conf)
-	require.NoError(t, err)
-
-	addr := rdr.(interface{ Addr() net.Addr }).Addr()
+	rdr, addr := socketServerInputFromConf(t, `
+socket_server:
+  network: udp
+  address: 127.0.0.1:0
+`)
 
 	defer func() {
 		rdr.TriggerStopConsuming()
 		assert.NoError(t, rdr.WaitForClose(ctx))
 	}()
 
-	conn, err := net.Dial("udp", addr.String())
+	conn, err := net.Dial("udp", addr)
 	require.NoError(t, err)
 
 	wg := sync.WaitGroup{}
@@ -633,17 +636,13 @@ func TestUDPServerWriteToClosed(t *testing.T) {
 	ctx, done := context.WithTimeout(context.Background(), time.Second*20)
 	defer done()
 
-	conf := input.NewConfig()
-	conf.Type = "socket_server"
-	conf.SocketServer.Network = "udp"
-	conf.SocketServer.Address = "127.0.0.1:0"
+	rdr, addr := socketServerInputFromConf(t, `
+socket_server:
+  network: udp
+  address: 127.0.0.1:0
+`)
 
-	rdr, err := mock.NewManager().NewInput(conf)
-	require.NoError(t, err)
-
-	addr := rdr.(interface{ Addr() net.Addr }).Addr()
-
-	conn, err := net.Dial("udp", addr.String())
+	conn, err := net.Dial("udp", addr)
 	require.NoError(t, err)
 
 	_ = conn.SetWriteDeadline(time.Now().Add(time.Second * 5))
@@ -664,22 +663,18 @@ func TestSocketUDPServerReconnect(t *testing.T) {
 	ctx, done := context.WithTimeout(context.Background(), time.Second*20)
 	defer done()
 
-	conf := input.NewConfig()
-	conf.Type = "socket_server"
-	conf.SocketServer.Network = "udp"
-	conf.SocketServer.Address = "127.0.0.1:0"
-
-	rdr, err := mock.NewManager().NewInput(conf)
-	require.NoError(t, err)
-
-	addr := rdr.(interface{ Addr() net.Addr }).Addr()
+	rdr, addr := socketServerInputFromConf(t, `
+socket_server:
+  network: udp
+  address: 127.0.0.1:0
+`)
 
 	defer func() {
 		rdr.TriggerStopConsuming()
 		assert.NoError(t, rdr.WaitForClose(ctx))
 	}()
 
-	conn, err := net.Dial("udp", addr.String())
+	conn, err := net.Dial("udp", addr)
 	require.NoError(t, err)
 
 	wg := sync.WaitGroup{}
@@ -691,7 +686,7 @@ func TestSocketUDPServerReconnect(t *testing.T) {
 
 		conn.Close()
 
-		conn, cerr = net.Dial("udp", addr.String())
+		conn, cerr = net.Dial("udp", addr)
 		require.NoError(t, cerr)
 
 		_, cerr = conn.Write([]byte("bar\n"))
@@ -737,23 +732,19 @@ func TestSocketUDPServerCustomDelim(t *testing.T) {
 	ctx, done := context.WithTimeout(context.Background(), time.Second*20)
 	defer done()
 
-	conf := input.NewConfig()
-	conf.Type = "socket_server"
-	conf.SocketServer.Network = "udp"
-	conf.SocketServer.Address = "127.0.0.1:0"
-	conf.SocketServer.Codec = "delim:@"
-
-	rdr, err := mock.NewManager().NewInput(conf)
-	require.NoError(t, err)
-
-	addr := rdr.(interface{ Addr() net.Addr }).Addr()
+	rdr, addr := socketServerInputFromConf(t, `
+socket_server:
+  network: udp
+  address: 127.0.0.1:0
+  codec: delim:@
+`)
 
 	defer func() {
 		rdr.TriggerStopConsuming()
 		assert.NoError(t, rdr.WaitForClose(ctx))
 	}()
 
-	conn, err := net.Dial("udp", addr.String())
+	conn, err := net.Dial("udp", addr)
 	require.NoError(t, err)
 
 	wg := sync.WaitGroup{}
@@ -815,22 +806,18 @@ func TestSocketUDPServerShutdown(t *testing.T) {
 	ctx, done := context.WithTimeout(context.Background(), time.Second*20)
 	defer done()
 
-	conf := input.NewConfig()
-	conf.Type = "socket_server"
-	conf.SocketServer.Network = "udp"
-	conf.SocketServer.Address = "127.0.0.1:0"
-
-	rdr, err := mock.NewManager().NewInput(conf)
-	require.NoError(t, err)
-
-	addr := rdr.(interface{ Addr() net.Addr }).Addr()
+	rdr, addr := socketServerInputFromConf(t, `
+socket_server:
+  network: udp
+  address: 127.0.0.1:0
+`)
 
 	defer func() {
 		rdr.TriggerStopConsuming()
 		assert.NoError(t, rdr.WaitForClose(ctx))
 	}()
 
-	conn, err := net.Dial("udp", addr.String())
+	conn, err := net.Dial("udp", addr)
 	require.NoError(t, err)
 
 	wg := sync.WaitGroup{}
@@ -892,22 +879,18 @@ func TestTCPSocketServerBasic(t *testing.T) {
 	ctx, done := context.WithTimeout(context.Background(), time.Second*20)
 	defer done()
 
-	conf := input.NewConfig()
-	conf.Type = "socket_server"
-	conf.SocketServer.Network = "tcp"
-	conf.SocketServer.Address = "127.0.0.1:0"
-
-	rdr, err := mock.NewManager().NewInput(conf)
-	require.NoError(t, err)
-
-	addr := rdr.(interface{ Addr() net.Addr }).Addr()
+	rdr, addr := socketServerInputFromConf(t, `
+socket_server:
+  network: tcp
+  address: 127.0.0.1:0
+`)
 
 	defer func() {
 		rdr.TriggerStopConsuming()
 		assert.NoError(t, rdr.WaitForClose(ctx))
 	}()
 
-	conn, err := net.Dial("tcp", addr.String())
+	conn, err := net.Dial("tcp", addr)
 	require.NoError(t, err)
 
 	wg := sync.WaitGroup{}
@@ -961,22 +944,18 @@ func TestTCPSocketServerReconnect(t *testing.T) {
 	ctx, done := context.WithTimeout(context.Background(), time.Second*20)
 	defer done()
 
-	conf := input.NewConfig()
-	conf.Type = "socket_server"
-	conf.SocketServer.Network = "tcp"
-	conf.SocketServer.Address = "127.0.0.1:0"
-
-	rdr, err := mock.NewManager().NewInput(conf)
-	require.NoError(t, err)
-
-	addr := rdr.(interface{ Addr() net.Addr }).Addr()
+	rdr, addr := socketServerInputFromConf(t, `
+socket_server:
+  network: tcp
+  address: 127.0.0.1:0
+`)
 
 	defer func() {
 		rdr.TriggerStopConsuming()
 		assert.NoError(t, rdr.WaitForClose(ctx))
 	}()
 
-	conn, err := net.Dial("tcp", addr.String())
+	conn, err := net.Dial("tcp", addr)
 	require.NoError(t, err)
 
 	wg := sync.WaitGroup{}
@@ -989,7 +968,7 @@ func TestTCPSocketServerReconnect(t *testing.T) {
 
 		conn.Close()
 
-		conn, cerr = net.Dial("tcp", addr.String())
+		conn, cerr = net.Dial("tcp", addr)
 		require.NoError(t, cerr)
 
 		_, cerr = conn.Write([]byte("bar\n"))
@@ -1035,23 +1014,19 @@ func TestTCPSocketServerMultipart(t *testing.T) {
 	ctx, done := context.WithTimeout(context.Background(), time.Second*20)
 	defer done()
 
-	conf := input.NewConfig()
-	conf.Type = "socket_server"
-	conf.SocketServer.Network = "tcp"
-	conf.SocketServer.Address = "127.0.0.1:0"
-	conf.SocketServer.Codec = "lines/multipart"
-
-	rdr, err := mock.NewManager().NewInput(conf)
-	require.NoError(t, err)
-
-	addr := rdr.(interface{ Addr() net.Addr }).Addr()
+	rdr, addr := socketServerInputFromConf(t, `
+socket_server:
+  network: tcp
+  address: 127.0.0.1:0
+  codec: lines/multipart
+`)
 
 	defer func() {
 		rdr.TriggerStopConsuming()
 		assert.NoError(t, rdr.WaitForClose(ctx))
 	}()
 
-	conn, err := net.Dial("tcp", addr.String())
+	conn, err := net.Dial("tcp", addr)
 	require.NoError(t, err)
 
 	wg := sync.WaitGroup{}
@@ -1103,23 +1078,19 @@ func TestTCPSocketServerMultipartCustomDelim(t *testing.T) {
 	ctx, done := context.WithTimeout(context.Background(), time.Second*20)
 	defer done()
 
-	conf := input.NewConfig()
-	conf.Type = "socket_server"
-	conf.SocketServer.Network = "tcp"
-	conf.SocketServer.Address = "127.0.0.1:0"
-	conf.SocketServer.Codec = "delim:@/multipart"
-
-	rdr, err := mock.NewManager().NewInput(conf)
-	require.NoError(t, err)
-
-	addr := rdr.(interface{ Addr() net.Addr }).Addr()
+	rdr, addr := socketServerInputFromConf(t, `
+socket_server:
+  network: tcp
+  address: 127.0.0.1:0
+  codec: delim:@/multipart
+`)
 
 	defer func() {
 		rdr.TriggerStopConsuming()
 		assert.NoError(t, rdr.WaitForClose(ctx))
 	}()
 
-	conn, err := net.Dial("tcp", addr.String())
+	conn, err := net.Dial("tcp", addr)
 	require.NoError(t, err)
 
 	wg := sync.WaitGroup{}
@@ -1171,23 +1142,19 @@ func TestTCPSocketServerMultipartShutdown(t *testing.T) {
 	ctx, done := context.WithTimeout(context.Background(), time.Second*20)
 	defer done()
 
-	conf := input.NewConfig()
-	conf.Type = "socket_server"
-	conf.SocketServer.Network = "tcp"
-	conf.SocketServer.Address = "127.0.0.1:0"
-	conf.SocketServer.Codec = "lines/multipart"
-
-	rdr, err := mock.NewManager().NewInput(conf)
-	require.NoError(t, err)
-
-	addr := rdr.(interface{ Addr() net.Addr }).Addr()
+	rdr, addr := socketServerInputFromConf(t, `
+socket_server:
+  network: tcp
+  address: 127.0.0.1:0
+  codec: lines/multipart
+`)
 
 	defer func() {
 		rdr.TriggerStopConsuming()
 		assert.NoError(t, rdr.WaitForClose(ctx))
 	}()
 
-	conn, err := net.Dial("tcp", addr.String())
+	conn, err := net.Dial("tcp", addr)
 	require.NoError(t, err)
 
 	wg := sync.WaitGroup{}
@@ -1239,23 +1206,20 @@ func TestTLSSocketServerBasic(t *testing.T) {
 	tCtx, done := context.WithTimeout(context.Background(), time.Second*20)
 	defer done()
 
-	conf := input.NewConfig()
-	conf.Type = "socket_server"
-	conf.SocketServer.Network = "tls"
-	conf.SocketServer.Address = "127.0.0.1:0"
-	conf.SocketServer.TLS.SelfSigned = true
-
-	rdr, err := mock.NewManager().NewInput(conf)
-	require.NoError(t, err)
-
-	addr := rdr.(interface{ Addr() net.Addr }).Addr()
+	rdr, addr := socketServerInputFromConf(t, `
+socket_server:
+  network: tls
+  address: 127.0.0.1:0
+  tls:
+    self_signed: true
+`)
 
 	defer func() {
 		rdr.TriggerStopConsuming()
 		assert.NoError(t, rdr.WaitForClose(tCtx))
 	}()
 
-	conn, err := tls.Dial("tcp", addr.String(), &tls.Config{
+	conn, err := tls.Dial("tcp", addr, &tls.Config{
 		InsecureSkipVerify: true,
 	})
 	require.NoError(t, err)

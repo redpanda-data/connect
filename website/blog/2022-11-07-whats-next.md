@@ -44,7 +44,7 @@ import ReactPlayer from 'react-player/youtube';
     <ReactPlayer
         className='col'
         height='300px'
-        url='https://www.youtube.com/embed/WT90ePOzSWY'
+        url='https://youtu.be/uvbp2LCmQMY'
         controls={true}
     />
   </div>

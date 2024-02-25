@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/benthosdev/benthos/v4/internal/batch"
-	"github.com/benthosdev/benthos/v4/internal/bloblang/query"
+	"github.com/benthosdev/benthos/v4/internal/value"
 	"github.com/benthosdev/benthos/v4/public/bloblang"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
@@ -286,7 +286,7 @@ func (w *systemWindowBuffer) getTimestamp(i int, batch service.MessageBatch) (ts
 		return
 	}
 
-	if ts, err = query.IGetTimestamp(tsValue); err != nil {
+	if ts, err = value.IGetTimestamp(tsValue); err != nil {
 		w.logger.Errorf("Timestamp mapping failed for message: %v", err)
 		err = fmt.Errorf("unable to parse result of timestamp mapping as timestamp: %w", err)
 	}

@@ -164,7 +164,7 @@ func (m *Stream) outputLoop() {
 		msg, ackFunc, err := m.buffer.Read(closeNowCtx)
 		if err != nil {
 			if err != component.ErrTypeClosed && !errors.Is(err, context.Canceled) {
-				m.log.Errorf("Failed to read buffer: %v\n", err)
+				m.log.Error("Failed to read buffer: %v\n", err)
 				if !m.errThrottle.Retry() {
 					return
 				}
@@ -205,7 +205,7 @@ func (m *Stream) outputLoop() {
 				tracing.FinishSpans(msg)
 				if ackErr := ackFunc(closeNowCtx, res); ackErr != nil {
 					if ackErr != component.ErrTypeClosed {
-						m.log.Errorf("Failed to ack buffer message: %v\n", ackErr)
+						m.log.Error("Failed to ack buffer message: %v\n", ackErr)
 					}
 				}
 			case <-m.shutSig.CloseNowChan():

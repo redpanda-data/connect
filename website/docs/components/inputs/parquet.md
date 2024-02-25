@@ -34,7 +34,7 @@ Introduced in version 4.8.0.
 input:
   label: ""
   parquet:
-    paths: []
+    paths: [] # No default (required)
 ```
 
 </TabItem>
@@ -45,14 +45,14 @@ input:
 input:
   label: ""
   parquet:
-    paths: []
+    paths: [] # No default (required)
     batch_count: 1
 ```
 
 </TabItem>
 </Tabs>
 
-This input uses [https://github.com/segmentio/parquet-go](https://github.com/segmentio/parquet-go), which is itself experimental. Therefore changes could be made into how this processor functions outside of major version releases.
+This input uses [https://github.com/parquet-go/parquet-go](https://github.com/parquet-go/parquet-go), which is itself experimental. Therefore changes could be made into how this processor functions outside of major version releases.
 
 By default any BYTE_ARRAY or FIXED_LEN_BYTE_ARRAY value will be extracted as a byte slice (`[]byte`) unless the logical type is UTF8, in which case they are extracted as a string (`string`).
 

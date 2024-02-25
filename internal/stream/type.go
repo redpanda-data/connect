@@ -250,7 +250,7 @@ func (t *Type) Stop(ctx context.Context) error {
 		return nil
 	}
 	if !(errors.Is(err, context.Canceled) && errors.Is(err, context.DeadlineExceeded)) {
-		t.manager.Logger().Errorf("Encountered error whilst attempting to shut down gracefully: %v\n", err)
+		t.manager.Logger().Error("Encountered error whilst attempting to shut down gracefully: %v\n", err)
 	}
 
 	// If graceful termination failed then call unordered termination, if the
@@ -260,14 +260,14 @@ func (t *Type) Stop(ctx context.Context) error {
 		return nil
 	}
 	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
-		t.manager.Logger().Infoln("Some components prevented forced termination as they were either blocked from delivering data or from acknowledging delivered data within the shutdown timeout. This could potentially cause duplicate messages to be delivered on the next run.")
+		t.manager.Logger().Info("Some components prevented forced termination as they were either blocked from delivering data or from acknowledging delivered data within the shutdown timeout. This could potentially cause duplicate messages to be delivered on the next run.")
 
 		dumpBuf := bytes.NewBuffer(nil)
 		_ = pprof.Lookup("goroutine").WriteTo(dumpBuf, 1)
 
-		t.manager.Logger().Debugln(dumpBuf.String())
+		t.manager.Logger().Debug(dumpBuf.String())
 	} else {
-		t.manager.Logger().Errorf("Encountered error whilst forcefully shutting down: %v\n", err)
+		t.manager.Logger().Error("Encountered error whilst forcefully shutting down: %v\n", err)
 	}
 	return err
 }

@@ -60,7 +60,6 @@ func (s *InputSet) Add(constructor InputConstructor, spec docs.ComponentSpec) er
 		constructor: constructor,
 		spec:        spec,
 	}
-	docs.DeprecatedProvider.RegisterDocs(spec)
 	return nil
 }
 

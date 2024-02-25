@@ -1,7 +1,7 @@
 ---
 title: nats_jetstream
 type: input
-status: experimental
+status: stable
 categories: ["Services"]
 ---
 
@@ -14,9 +14,6 @@ categories: ["Services"]
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-:::caution EXPERIMENTAL
-This component is experimental and therefore subject to change or removal outside of major version releases.
-:::
 Reads messages from NATS JetStream subjects.
 
 Introduced in version 3.46.0.
@@ -34,12 +31,12 @@ Introduced in version 3.46.0.
 input:
   label: ""
   nats_jetstream:
-    urls: []
-    queue: ""
-    subject: ""
-    durable: ""
-    stream: ""
-    bind: false
+    urls: [] # No default (required)
+    queue: "" # No default (optional)
+    subject: foo.bar.baz # No default (optional)
+    durable: "" # No default (optional)
+    stream: "" # No default (optional)
+    bind: false # No default (optional)
     deliver: all
 ```
 
@@ -51,12 +48,12 @@ input:
 input:
   label: ""
   nats_jetstream:
-    urls: []
-    queue: ""
-    subject: ""
-    durable: ""
-    stream: ""
-    bind: false
+    urls: [] # No default (required)
+    queue: "" # No default (optional)
+    subject: foo.bar.baz # No default (optional)
+    durable: "" # No default (optional)
+    stream: "" # No default (optional)
+    bind: false # No default (optional)
     deliver: all
     ack_wait: 30s
     max_ack_pending: 1024
@@ -68,14 +65,19 @@ input:
       root_cas_file: ""
       client_certs: []
     auth:
-      nkey_file: ""
-      user_credentials_file: ""
-      user_jwt: ""
-      user_nkey_seed: ""
+      nkey_file: ./seed.nk # No default (optional)
+      user_credentials_file: ./user.creds # No default (optional)
+      user_jwt: "" # No default (optional)
+      user_nkey_seed: "" # No default (optional)
+    extract_tracing_map: root = @ # No default (optional)
 ```
 
 </TabItem>
 </Tabs>
+
+### Consuming Mirrored Streams
+
+In the case where a stream being consumed is mirrored from a different JetStream domain the stream cannot be resolved from the subject name alone, and so the stream name as well as the subject (if applicable) must both be specified.
 
 ### Metadata
 
@@ -94,6 +96,14 @@ This input adds the following metadata fields to each message:
 You can access these metadata fields using
 [function interpolation](/docs/configuration/interpolation#bloblang-queries).
 
+### Connection Name
+
+When monitoring and managing a production NATS system, it is often useful to
+know which connection a message was send/received from. This can be achieved by
+setting the connection name option when creating a NATS connection.
+
+Benthos will automatically set the connection name based off the label of the given
+NATS component, so that monitoring tools between NATS and benthos can stay in sync.
 ### Authentication
 
 There are several components within Benthos which utilise NATS services. You will find that each of these components
@@ -300,6 +310,7 @@ A list of client certificates to use. For each certificate either the fields `ce
 
 
 Type: `array`  
+Default: `[]`  
 
 ```yml
 # Examples
@@ -419,5 +430,21 @@ This field contains sensitive information that usually shouldn't be added to a c
 
 
 Type: `string`  
+
+### `extract_tracing_map`
+
+EXPERIMENTAL: A [Bloblang mapping](/docs/guides/bloblang/about) that attempts to extract an object containing tracing propagation information, which will then be used as the root tracing span for the message. The specification of the extracted fields must match the format used by the service wide tracer.
+
+
+Type: `string`  
+Requires version 4.23.0 or newer  
+
+```yml
+# Examples
+
+extract_tracing_map: root = @
+
+extract_tracing_map: root = this.meta.span
+```
 
 

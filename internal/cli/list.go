@@ -63,13 +63,13 @@ func listComponents(c *cli.Context) {
 		for _, k := range []string{
 			"inputs",
 			"processors",
-			"conditions",
 			"outputs",
 			"caches",
 			"rate-limits",
 			"buffers",
 			"metrics",
 			"tracers",
+			"scanners",
 			"bloblang-functions",
 			"bloblang-methods",
 		} {

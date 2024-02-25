@@ -47,16 +47,16 @@ var labelField = FieldString(
 	}
 	if err := ValidateLabel(l); err != nil {
 		return []Lint{
-			NewLintError(line, LintBadLabel, fmt.Sprintf("Invalid label '%v': %v", l, err)),
+			NewLintError(line, LintBadLabel, fmt.Errorf("invalid label '%v': %w", l, err)),
 		}
 	}
-	prevLine, exists := ctx.LabelsToLine[l]
+	prevLine, exists := ctx.labelsToLine[l]
 	if exists {
 		return []Lint{
-			NewLintError(line, LintDuplicateLabel, fmt.Sprintf("Label '%v' collides with a previously defined label at line %v", l, prevLine)),
+			NewLintError(line, LintDuplicateLabel, fmt.Errorf("label '%v' collides with a previously defined label at line %v", l, prevLine)),
 		}
 	}
-	ctx.LabelsToLine[l] = line
+	ctx.labelsToLine[l] = line
 	return nil
 }).HasDefault("")
 
@@ -89,41 +89,6 @@ func ReservedFieldsByType(t Type) map[string]FieldSpec {
 	return m
 }
 
-func defaultTypeByType(docProvider Provider, t Type) string {
-	switch t {
-	case TypeBuffer:
-		return "none"
-	case TypeInput:
-		return "stdin"
-	case TypeMetrics:
-		// If prometheus isn't imported then fall back to none
-		if _, exists := docProvider.GetDocs("prometheus", TypeMetrics); exists {
-			return "prometheus"
-		}
-		return "none"
-	case TypeOutput:
-		return "stdout"
-	case TypeTracer:
-		return "none"
-	// No defaults for the following
-	case TypeCache:
-		return ""
-	case TypeProcessor:
-		return ""
-	case TypeRateLimit:
-		return ""
-	}
-	return ""
-}
-
-// DefaultTypeOf returns the standard default implementation of a given
-// component type, which is the implementation used in a stream when no config
-// for the component is present. Only some component types have a default, for
-// those that do not an empty string is returned.
-func DefaultTypeOf(t Type) string {
-	return defaultTypeByType(DeprecatedProvider, t)
-}
-
 func getInferenceCandidateFromList(docProvider Provider, t Type, l []string) (string, ComponentSpec, error) {
 	ignore := ReservedFieldsByType(t)
 
@@ -149,13 +114,7 @@ func getInferenceCandidateFromList(docProvider Provider, t Type, l []string) (st
 	}
 
 	if len(candidates) == 0 {
-		defaultType := defaultTypeByType(docProvider, t)
-		if spec, exists := docProvider.GetDocs(defaultType, t); exists {
-			return defaultType, spec, nil
-		}
-		if inferred == "" {
-			return "", ComponentSpec{}, fmt.Errorf("an explicit %v type must be specified", string(t))
-		}
+		return "", ComponentSpec{}, fmt.Errorf("an explicit %v type must be specified", string(t))
 	}
 
 	if inferred == "" {
@@ -177,8 +136,8 @@ type SanitiseConfig struct {
 }
 
 // NewSanitiseConfig creates a new sanitise config.
-func NewSanitiseConfig() SanitiseConfig {
+func NewSanitiseConfig(prov Provider) SanitiseConfig {
 	return SanitiseConfig{
-		DocsProvider: DeprecatedProvider,
+		DocsProvider: prov,
 	}
 }

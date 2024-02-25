@@ -7,7 +7,6 @@ import (
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 
-	"github.com/benthosdev/benthos/v4/internal/impl/mongodb/client"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
@@ -24,26 +23,28 @@ func mongoConfigSpec() *service.ConfigSpec {
 		Categories("Services").
 		Summary("Executes a find query and creates a message for each row received.").
 		Description(`Once the rows from the query are exhausted this input shuts down, allowing the pipeline to gracefully terminate (or the next input in a [sequence](/docs/components/inputs/sequence) to execute).`).
-		Field(urlField).
-		Field(service.NewStringField("database").Description("The name of the target MongoDB database.")).
+		Fields(clientFields()...).
 		Field(service.NewStringField("collection").Description("The collection to select from.")).
-		Field(service.NewStringField("username").Description("The username to connect to the database.").Default("")).
-		Field(service.NewStringField("password").Description("The password to connect to the database.").Default("")).
 		Field(service.NewStringEnumField("operation", FindInputOperation, AggregateInputOperation).
 			Description("The mongodb operation to perform.").
 			Default(FindInputOperation).Advanced().
 			Version("4.2.0")).
 		Field(service.NewStringAnnotatedEnumField("json_marshal_mode", map[string]string{
-			string(client.JSONMarshalModeCanonical): "A string format that emphasizes type preservation at the expense of readability and interoperability. " +
+			string(JSONMarshalModeCanonical): "A string format that emphasizes type preservation at the expense of readability and interoperability. " +
 				"That is, conversion from canonical to BSON will generally preserve type information except in certain specific cases. ",
-			string(client.JSONMarshalModeRelaxed): "A string format that emphasizes readability and interoperability at the expense of type preservation." +
+			string(JSONMarshalModeRelaxed): "A string format that emphasizes readability and interoperability at the expense of type preservation." +
 				"That is, conversion from relaxed format to BSON can lose type information.",
 		}).
 			Description("The json_marshal_mode setting is optional and controls the format of the output message.").
-			Default(string(client.JSONMarshalModeCanonical)).
+			Default(string(JSONMarshalModeCanonical)).
 			Advanced().
 			Version("4.7.0")).
-		Field(queryField)
+		Field(service.NewBloblangField("query").
+			Description("Bloblang expression describing MongoDB query.").
+			Example(`
+  root.from = {"$lte": timestamp_unix()}
+  root.to = {"$gte": timestamp_unix()}
+`))
 }
 
 func init() {
@@ -58,23 +59,12 @@ func init() {
 }
 
 func newMongoInput(conf *service.ParsedConfig) (service.Input, error) {
-	url, err := conf.FieldString("url")
+	mClient, database, err := getClient(conf)
 	if err != nil {
 		return nil, err
 	}
-	database, err := conf.FieldString("database")
-	if err != nil {
-		return nil, err
-	}
+
 	collection, err := conf.FieldString("collection")
-	if err != nil {
-		return nil, err
-	}
-	username, err := conf.FieldString("username")
-	if err != nil {
-		return nil, err
-	}
-	password, err := conf.FieldString("password")
 	if err != nil {
 		return nil, err
 	}
@@ -94,44 +84,38 @@ func newMongoInput(conf *service.ParsedConfig) (service.Input, error) {
 	if err != nil {
 		return nil, err
 	}
-	config := client.Config{
-		URL:        url,
-		Database:   database,
-		Collection: collection,
-		Username:   username,
-		Password:   password,
-	}
+
 	return service.AutoRetryNacks(&mongoInput{
 		query:        query,
-		config:       config,
+		collection:   collection,
+		client:       mClient,
+		database:     database,
 		operation:    operation,
-		marshalCanon: marshalMode == string(client.JSONMarshalModeCanonical),
+		marshalCanon: marshalMode == string(JSONMarshalModeCanonical),
 	}), nil
 }
 
 type mongoInput struct {
 	query        any
-	config       client.Config
+	collection   string
 	client       *mongo.Client
+	database     *mongo.Database
 	cursor       *mongo.Cursor
 	operation    string
 	marshalCanon bool
 }
 
 func (m *mongoInput) Connect(ctx context.Context) error {
-	var err error
-	m.client, err = m.config.Client()
-	if err != nil {
-		return err
-	}
-	if err = m.client.Connect(ctx); err != nil {
-		return fmt.Errorf("failed to connect: %w", err)
+	if m.cursor != nil {
+		return nil
 	}
 
-	if err = m.client.Ping(ctx, nil); err != nil {
+	err := m.client.Ping(ctx, nil)
+	if err != nil {
 		return fmt.Errorf("ping failed: %v", err)
 	}
-	collection := m.client.Database(m.config.Database).Collection(m.config.Collection)
+
+	collection := m.database.Collection(m.collection)
 	switch m.operation {
 	case "find":
 		m.cursor, err = collection.Find(ctx, m.query)
@@ -148,6 +132,9 @@ func (m *mongoInput) Connect(ctx context.Context) error {
 }
 
 func (m *mongoInput) Read(ctx context.Context) (*service.Message, service.AckFunc, error) {
+	if m.cursor == nil {
+		return nil, nil, service.ErrNotConnected
+	}
 	if !m.cursor.Next(ctx) {
 		return nil, nil, service.ErrEndOfInput
 	}
@@ -169,7 +156,7 @@ func (m *mongoInput) Read(ctx context.Context) (*service.Message, service.AckFun
 }
 
 func (m *mongoInput) Close(ctx context.Context) error {
-	if m.client != nil {
+	if m.cursor != nil && m.client != nil {
 		return m.client.Disconnect(ctx)
 	}
 	return nil

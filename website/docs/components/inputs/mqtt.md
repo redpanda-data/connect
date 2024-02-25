@@ -14,7 +14,6 @@ categories: ["Services"]
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-
 Subscribe to topics on MQTT brokers.
 
 
@@ -30,10 +29,10 @@ Subscribe to topics on MQTT brokers.
 input:
   label: ""
   mqtt:
-    urls: []
-    topics: []
+    urls: [] # No default (required)
     client_id: ""
     connect_timeout: 30s
+    topics: [] # No default (required)
 ```
 
 </TabItem>
@@ -44,19 +43,16 @@ input:
 input:
   label: ""
   mqtt:
-    urls: []
-    topics: []
+    urls: [] # No default (required)
     client_id: ""
-    dynamic_client_id_suffix: ""
-    qos: 1
-    clean_session: true
+    dynamic_client_id_suffix: "" # No default (optional)
+    connect_timeout: 30s
     will:
       enabled: false
       qos: 0
       retained: false
       topic: ""
       payload: ""
-    connect_timeout: 30s
     user: ""
     password: ""
     keepalive: 30
@@ -67,6 +63,9 @@ input:
       root_cas: ""
       root_cas_file: ""
       client_certs: []
+    topics: [] # No default (required)
+    qos: 1
+    clean_session: true
 ```
 
 </TabItem>
@@ -84,8 +83,7 @@ This input adds the following metadata fields to each message:
 - mqtt_message_id
 ```
 
-You can access these metadata fields using
-[function interpolation](/docs/configuration/interpolation#bloblang-queries).
+You can access these metadata fields using [function interpolation](/docs/configuration/interpolation#bloblang-queries).
 
 ## Fields
 
@@ -95,15 +93,13 @@ A list of URLs to connect to. If an item of the list contains commas it will be 
 
 
 Type: `array`  
-Default: `[]`  
 
-### `topics`
+```yml
+# Examples
 
-A list of topics to consume from.
-
-
-Type: `array`  
-Default: `[]`  
+urls:
+  - tcp://localhost:1883
+```
 
 ### `client_id`
 
@@ -119,29 +115,28 @@ Append a dynamically generated suffix to the specified `client_id` on each run o
 
 
 Type: `string`  
-Default: `""`  
 
 | Option | Summary |
 |---|---|
 | `nanoid` | append a nanoid of length 21 characters |
 
 
-### `qos`
+### `connect_timeout`
 
-The level of delivery guarantee to enforce.
-
-
-Type: `int`  
-Default: `1`  
-Options: `0`, `1`, `2`.
-
-### `clean_session`
-
-Set whether the connection is non-persistent.
+The maximum amount of time to wait in order to establish a connection before the attempt is abandoned.
 
 
-Type: `bool`  
-Default: `true`  
+Type: `string`  
+Default: `"30s"`  
+Requires version 3.58.0 or newer  
+
+```yml
+# Examples
+
+connect_timeout: 1s
+
+connect_timeout: 500ms
+```
 
 ### `will`
 
@@ -160,12 +155,11 @@ Default: `false`
 
 ### `will.qos`
 
-Set QoS for last will message.
+Set QoS for last will message. Valid values are: 0, 1, 2.
 
 
 Type: `int`  
 Default: `0`  
-Options: `0`, `1`, `2`.
 
 ### `will.retained`
 
@@ -191,26 +185,9 @@ Set payload for last will message.
 Type: `string`  
 Default: `""`  
 
-### `connect_timeout`
-
-The maximum amount of time to wait in order to establish a connection before the attempt is abandoned.
-
-
-Type: `string`  
-Default: `"30s"`  
-Requires version 3.58.0 or newer  
-
-```yml
-# Examples
-
-connect_timeout: 1s
-
-connect_timeout: 500ms
-```
-
 ### `user`
 
-A username to assume for the connection.
+A username to connect with.
 
 
 Type: `string`  
@@ -218,7 +195,7 @@ Default: `""`
 
 ### `password`
 
-A password to provide for the connection.
+A password to connect with.
 :::warning Secret
 This field contains sensitive information that usually shouldn't be added to a config directly, read our [secrets page for more info](/docs/configuration/secrets).
 :::
@@ -241,7 +218,6 @@ Custom TLS settings can be used to override system defaults.
 
 
 Type: `object`  
-Requires version 3.45.0 or newer  
 
 ### `tls.enabled`
 
@@ -375,5 +351,28 @@ password: foo
 
 password: ${KEY_PASSWORD}
 ```
+
+### `topics`
+
+A list of topics to consume from.
+
+
+Type: `array`  
+
+### `qos`
+
+The level of delivery guarantee to enforce. Has options 0, 1, 2.
+
+
+Type: `int`  
+Default: `1`  
+
+### `clean_session`
+
+Set whether the connection is non-persistent.
+
+
+Type: `bool`  
+Default: `true`  
 
 

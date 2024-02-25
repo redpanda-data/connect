@@ -44,7 +44,7 @@ func New(conf batchconfig.Config, mgr bundle.NewManagement) (*Batcher, error) {
 		return nil, errors.New("batch policy must have at least one active trigger")
 	}
 	if !conf.IsHardLimited() {
-		mgr.Logger().Warnln("Batch policy should have at least one of count, period or byte_size set in order to provide a hard batch ceiling.")
+		mgr.Logger().Warn("Batch policy should have at least one of count, period or byte_size set in order to provide a hard batch ceiling.")
 	}
 	var err error
 	var check *mapping.Executor
@@ -112,7 +112,7 @@ func (p *Batcher) Add(part *message.Part) bool {
 
 	if p.count > 0 && len(p.parts) >= p.count {
 		p.mCountBatch.Incr(1)
-		p.log.Traceln("Batching based on count")
+		p.log.Trace("Batching based on count")
 		p.triggered = true
 		return true
 	}
@@ -121,12 +121,12 @@ func (p *Batcher) Add(part *message.Part) bool {
 		tmpMsg := message.Batch(p.parts)
 		test, err := p.check.QueryPart(tmpMsg.Len()-1, tmpMsg)
 		if err != nil {
-			p.log.Errorf("Failed to execute batch check query: %v\n", err)
+			p.log.Error("Failed to execute batch check query: %v\n", err)
 			return false
 		}
 		if test {
 			p.mCheckBatch.Incr(1)
-			p.log.Traceln("Batching based on check query")
+			p.log.Trace("Batching based on check query")
 			p.triggered = true
 			return true
 		}
@@ -162,7 +162,7 @@ func (p *Batcher) flushAny(ctx context.Context) []message.Batch {
 	if len(p.parts) > 0 {
 		if !p.triggered && p.period > 0 && time.Since(p.lastBatch) > p.period {
 			p.mPeriodBatch.Incr(1)
-			p.log.Traceln("Batching based on period")
+			p.log.Trace("Batching based on period")
 		}
 		newMsg = message.Batch(p.parts)
 	}
@@ -178,7 +178,7 @@ func (p *Batcher) flushAny(ctx context.Context) []message.Batch {
 	if len(p.procs) > 0 {
 		resultMsgs, err := iprocessor.ExecuteAll(ctx, p.procs, newMsg)
 		if err != nil {
-			p.log.Errorf("Batch processors resulted in error: %v, the batch has been dropped.", err)
+			p.log.Error("Batch processors resulted in error: %v, the batch has been dropped.", err)
 			return nil
 		}
 		return resultMsgs
@@ -200,7 +200,11 @@ func (p *Batcher) UntilNext() time.Duration {
 	if p.period <= 0 {
 		return -1
 	}
-	return time.Until(p.lastBatch.Add(p.period))
+	tUntil := time.Until(p.lastBatch.Add(p.period))
+	if tUntil <= 0 {
+		tUntil = 1
+	}
+	return tUntil
 }
 
 //------------------------------------------------------------------------------

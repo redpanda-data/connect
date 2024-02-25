@@ -1,43 +1,51 @@
 package statsd
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"time"
 
 	statsd "github.com/smira/go-statsd"
 
-	"github.com/benthosdev/benthos/v4/internal/bundle"
-	"github.com/benthosdev/benthos/v4/internal/component/metrics"
-	"github.com/benthosdev/benthos/v4/internal/docs"
-	"github.com/benthosdev/benthos/v4/internal/log"
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
+const (
+	smFieldAddress     = "address"
+	smFieldFlushPeriod = "flush_period"
+	smFieldTagFormat   = "tag_format"
+)
+
+func statsdSpec() *service.ConfigSpec {
+	return service.NewConfigSpec().
+		Stable().
+		Summary("Pushes metrics using the [StatsD protocol](https://github.com/statsd/statsd). Supported tagging formats are 'none', 'datadog' and 'influxdb'.").
+		Fields(
+			service.NewStringField(smFieldAddress).
+				Description("The address to send metrics to."),
+			service.NewDurationField(smFieldFlushPeriod).
+				Description("The time interval between metrics flushes.").
+				Default("100ms"),
+			service.NewStringEnumField(smFieldTagFormat, "none", "datadog", "influxdb").
+				Description("Metrics tagging is supported in a variety of formats.").
+				Default("none"),
+		)
+}
+
 func init() {
-	_ = bundle.AllMetrics.Add(newStatsd, docs.ComponentSpec{
-		Name:   "statsd",
-		Type:   docs.TypeMetrics,
-		Status: docs.StatusStable,
-		Summary: `
-Pushes metrics using the [StatsD protocol](https://github.com/statsd/statsd).
-Supported tagging formats are 'none', 'datadog' and 'influxdb'.`,
-		Description: `
-The underlying client library has recently been updated in order to support
-tagging.`,
-		Config: docs.FieldComponent().WithChildren(
-			docs.FieldString("address", "The address to send metrics to.").HasDefault(""),
-			docs.FieldString("flush_period", "The time interval between metrics flushes.").HasDefault("100ms"),
-			docs.FieldString("tag_format", "Metrics tagging is supported in a variety of formats.").HasOptions(
-				"none", "datadog", "influxdb",
-			).HasDefault("none"),
-		),
+	err := service.RegisterMetricsExporter("statsd", statsdSpec(), func(conf *service.ParsedConfig, log *service.Logger) (service.MetricsExporter, error) {
+		return newStatsdFromParsed(conf, log)
 	})
+	if err != nil {
+		panic(err)
+	}
 }
 
 //------------------------------------------------------------------------------
 
 type wrappedDatadogLogger struct {
-	log log.Modular
+	log *service.Logger
 }
 
 func (s wrappedDatadogLogger) Printf(msg string, args ...any) {
@@ -65,8 +73,16 @@ func (s *statsdStat) Incr(count int64) {
 	s.s.Incr(s.path, count, s.tags...)
 }
 
+func (s *statsdStat) IncrFloat64(count float64) {
+	s.Incr(int64(count))
+}
+
 func (s *statsdStat) Decr(count int64) {
 	s.s.Decr(s.path, count, s.tags...)
+}
+
+func (s *statsdStat) DecrFloat64(count float64) {
+	s.Decr(int64(count))
 }
 
 func (s *statsdStat) Timing(delta int64) {
@@ -77,23 +93,25 @@ func (s *statsdStat) Set(value int64) {
 	s.s.Gauge(s.path, value, s.tags...)
 }
 
+func (s *statsdStat) SetFloat64(value float64) {
+	s.Set(int64(value))
+}
+
 //------------------------------------------------------------------------------
 
 type statsdMetrics struct {
-	config metrics.Config
-	s      *statsd.Client
-	log    log.Modular
+	s   *statsd.Client
+	log *service.Logger
 }
 
-func newStatsd(config metrics.Config, nm bundle.NewManagement) (metrics.Type, error) {
-	flushPeriod, err := time.ParseDuration(config.Statsd.FlushPeriod)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse flush period: %s", err)
+func newStatsdFromParsed(conf *service.ParsedConfig, log *service.Logger) (s *statsdMetrics, err error) {
+	s = &statsdMetrics{
+		log: log,
 	}
 
-	s := &statsdMetrics{
-		config: config,
-		log:    nm.Logger(),
+	var flushPeriod time.Duration
+	if flushPeriod, err = conf.FieldDuration(smFieldFlushPeriod); err != nil {
+		return
 	}
 
 	statsdOpts := []statsd.Option{
@@ -101,17 +119,27 @@ func newStatsd(config metrics.Config, nm bundle.NewManagement) (metrics.Type, er
 		statsd.Logger(wrappedDatadogLogger{log: s.log}),
 	}
 
-	switch config.Statsd.TagFormat {
+	var tagFormatStr string
+	if tagFormatStr, err = conf.FieldString(smFieldTagFormat); err != nil {
+		return
+	}
+
+	switch tagFormatStr {
 	case TagFormatInfluxDB:
 		statsdOpts = append(statsdOpts, statsd.TagStyle(statsd.TagFormatInfluxDB))
 	case TagFormatDatadog:
 		statsdOpts = append(statsdOpts, statsd.TagStyle(statsd.TagFormatDatadog))
 	case TagFormatNone:
 	default:
-		return nil, fmt.Errorf("tag format '%s' was not recognised", config.Statsd.TagFormat)
+		return nil, fmt.Errorf("tag format '%s' was not recognised", tagFormatStr)
 	}
 
-	client := statsd.NewClient(config.Statsd.Address, statsdOpts...)
+	var address string
+	if address, err = conf.FieldString(smFieldAddress); err != nil {
+		return
+	}
+
+	client := statsd.NewClient(address, statsdOpts...)
 
 	s.s = client
 	return s, nil
@@ -119,54 +147,42 @@ func newStatsd(config metrics.Config, nm bundle.NewManagement) (metrics.Type, er
 
 //------------------------------------------------------------------------------
 
-func (h *statsdMetrics) GetCounter(path string) metrics.StatCounter {
-	return h.GetCounterVec(path).With()
-}
-
-func (h *statsdMetrics) GetCounterVec(path string, n ...string) metrics.StatCounterVec {
-	return metrics.FakeCounterVec(func(l ...string) metrics.StatCounter {
+func (h *statsdMetrics) NewCounterCtor(path string, n ...string) service.MetricsExporterCounterCtor {
+	return func(labelValues ...string) service.MetricsExporterCounter {
 		return &statsdStat{
 			path: path,
 			s:    h.s,
-			tags: tags(n, l),
+			tags: tags(n, labelValues),
 		}
-	})
+	}
 }
 
-func (h *statsdMetrics) GetTimer(path string) metrics.StatTimer {
-	return h.GetTimerVec(path).With()
-}
-
-func (h *statsdMetrics) GetTimerVec(path string, n ...string) metrics.StatTimerVec {
-	return metrics.FakeTimerVec(func(l ...string) metrics.StatTimer {
+func (h *statsdMetrics) NewTimerCtor(path string, n ...string) service.MetricsExporterTimerCtor {
+	return func(labelValues ...string) service.MetricsExporterTimer {
 		return &statsdStat{
 			path: path,
 			s:    h.s,
-			tags: tags(n, l),
+			tags: tags(n, labelValues),
 		}
-	})
+	}
 }
 
-func (h *statsdMetrics) GetGauge(path string) metrics.StatGauge {
-	return h.GetGaugeVec(path).With()
-}
-
-func (h *statsdMetrics) GetGaugeVec(path string, n ...string) metrics.StatGaugeVec {
-	return metrics.FakeGaugeVec(func(l ...string) metrics.StatGauge {
+func (h *statsdMetrics) NewGaugeCtor(path string, n ...string) service.MetricsExporterGaugeCtor {
+	return func(labelValues ...string) service.MetricsExporterGauge {
 		return &statsdStat{
 			path: path,
 			s:    h.s,
-			tags: tags(n, l),
+			tags: tags(n, labelValues),
 		}
-	})
+	}
 }
 
 func (h *statsdMetrics) HandlerFunc() http.HandlerFunc {
 	return nil
 }
 
-func (h *statsdMetrics) Close() error {
-	h.s.Close()
+func (h *statsdMetrics) Close(context.Context) error {
+	_ = h.s.Close()
 	return nil
 }
 

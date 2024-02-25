@@ -29,7 +29,7 @@ Introduced in version 3.36.0.
 # Common config fields, showing default values
 label: ""
 aws_s3:
-  bucket: ""
+  bucket: "" # No default (required)
   content_type: application/octet-stream
 ```
 
@@ -40,7 +40,7 @@ aws_s3:
 # All config fields, showing default values
 label: ""
 aws_s3:
-  bucket: ""
+  bucket: "" # No default (required)
   content_type: application/octet-stream
   force_path_style_urls: false
   retries:

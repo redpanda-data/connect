@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/Jeffail/gabs/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -17,6 +18,12 @@ import (
 func TestStreamsLints(t *testing.T) {
 	dir := t.TempDir()
 
+	generalConfPath := filepath.Join(dir, "main.yaml")
+	require.NoError(t, os.WriteFile(generalConfPath, []byte(`
+logger:
+  level: ALL
+`), 0o644))
+
 	streamOnePath := filepath.Join(dir, "first.yaml")
 	require.NoError(t, os.WriteFile(streamOnePath, []byte(`
 input:
@@ -24,6 +31,9 @@ input:
   generate:
     count: 10
     mapping: 'root = "meow"'
+
+output:
+  drop: {}
 `), 0o644))
 
 	streamTwoPath := filepath.Join(dir, "second.yaml")
@@ -38,7 +48,7 @@ cache_resources:
       ttl: 13
 `), 0o644))
 
-	rdr := config.NewReader("", nil, config.OptSetStreamPaths(streamOnePath, streamTwoPath))
+	rdr := config.NewReader(generalConfPath, nil, config.OptSetStreamPaths(streamOnePath, streamTwoPath))
 
 	_, lints, err := rdr.Read()
 	require.NoError(t, err)
@@ -54,8 +64,10 @@ cache_resources:
 
 	require.Len(t, streamConfs, 2)
 
+	firstAny := gabs.Wrap(testConfToAny(t, streamConfs["first"]))
+
 	assert.Equal(t, "generate", streamConfs["first"].Input.Type)
-	assert.Equal(t, `root = "meow"`, streamConfs["first"].Input.Generate.Mapping)
+	assert.Equal(t, `root = "meow"`, firstAny.S("input", "generate", "mapping").Data())
 }
 
 func TestStreamsDirectoryWalk(t *testing.T) {
@@ -100,7 +112,7 @@ pipeline:
 	require.Contains(t, streamConfs, "inner_second")
 	require.Contains(t, streamConfs, "inner_third")
 
-	assert.Equal(t, `root = "first"`, streamConfs["first"].Pipeline.Processors[0].Bloblang)
-	assert.Equal(t, `root = "second"`, streamConfs["inner_second"].Pipeline.Processors[0].Bloblang)
-	assert.Equal(t, `root = "third"`, streamConfs["inner_third"].Pipeline.Processors[0].Bloblang)
+	assert.Equal(t, `root = "first"`, gabs.Wrap(testConfToAny(t, streamConfs["first"])).S("pipeline", "processors", "0", "bloblang").Data())
+	assert.Equal(t, `root = "second"`, gabs.Wrap(testConfToAny(t, streamConfs["inner_second"])).S("pipeline", "processors", "0", "bloblang").Data())
+	assert.Equal(t, `root = "third"`, gabs.Wrap(testConfToAny(t, streamConfs["inner_third"])).S("pipeline", "processors", "0", "bloblang").Data())
 }

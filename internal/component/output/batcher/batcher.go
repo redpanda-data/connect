@@ -76,14 +76,14 @@ func (m *Impl) loop() {
 	}()
 
 	var nextTimedBatchChan <-chan time.Time
-	if tNext := m.batcher.UntilNext(); tNext >= 0 {
+	if tNext := m.batcher.UntilNext(); tNext > 0 {
 		nextTimedBatchChan = time.After(tNext)
 	}
 
 	var pendingTrans []*transaction.Tracked
 	for !m.shutSig.ShouldCloseAtLeisure() {
 		if nextTimedBatchChan == nil {
-			if tNext := m.batcher.UntilNext(); tNext >= 0 {
+			if tNext := m.batcher.UntilNext(); tNext > 0 {
 				nextTimedBatchChan = time.After(tNext)
 			}
 		}

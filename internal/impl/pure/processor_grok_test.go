@@ -7,20 +7,22 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/Jeffail/gabs/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/benthosdev/benthos/v4/internal/component/processor"
+	"github.com/benthosdev/benthos/v4/internal/component/testutil"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
 )
 
 func TestGrokAllParts(t *testing.T) {
-	conf := processor.NewConfig()
-	conf.Type = "grok"
-	conf.Grok.Expressions = []string{
-		"%{WORD:first},%{INT:second:int}",
-	}
+	conf, err := testutil.ProcessorFromYAML(`
+grok:
+  expressions:
+    - "%%{WORD:first},%%{INT:second:int}"
+`)
+	require.NoError(t, err)
 
 	gSet, err := mock.NewManager().NewProcessor(conf)
 	if err != nil {
@@ -57,7 +59,7 @@ func TestGrok(t *testing.T) {
 		pattern     string
 		input       string
 		output      string
-		definitions map[string]string
+		definitions map[string]any
 	}
 
 	tests := []gTest{
@@ -69,7 +71,7 @@ func TestGrok(t *testing.T) {
 		},
 		{
 			name: "Test pattern definitions",
-			definitions: map[string]string{
+			definitions: map[string]any{
 				"ACTION": "(pass|deny)",
 			},
 			input:   `pass connection from 127.0.0.1`,
@@ -86,10 +88,16 @@ func TestGrok(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			conf := processor.NewConfig()
-			conf.Type = "grok"
-			conf.Grok.Expressions = []string{test.pattern}
-			conf.Grok.PatternDefinitions = test.definitions
+			if test.definitions == nil {
+				test.definitions = map[string]any{}
+			}
+			conf, err := testutil.ProcessorFromYAML(`
+grok:
+  expressions:
+    - '%v'
+  pattern_definitions: %v
+`, test.pattern, gabs.Wrap(test.definitions).String())
+			require.NoError(t, err)
 
 			gSet, err := mock.NewManager().NewProcessor(conf)
 			require.NoError(t, err)
@@ -104,10 +112,16 @@ func TestGrok(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			conf := processor.NewConfig()
-			conf.Type = "grok"
-			conf.Grok.Expressions = []string{test.pattern}
-			conf.Grok.PatternDefinitions = test.definitions
+			if test.definitions == nil {
+				test.definitions = map[string]any{}
+			}
+			conf, err := testutil.ProcessorFromYAML(`
+grok:
+  expressions:
+    - '%v'
+  pattern_definitions: %v
+`, test.pattern, gabs.Wrap(test.definitions).String())
+			require.NoError(t, err)
 
 			gSet, err := mock.NewManager().NewProcessor(conf)
 			require.NoError(t, err)
@@ -130,10 +144,14 @@ FOONESTED %{INT:nested.first:int} %{WORD:nested.second} %{WORD:nested.third}
 `), 0o777)
 	require.NoError(t, err)
 
-	conf := processor.NewConfig()
-	conf.Type = "grok"
-	conf.Grok.Expressions = []string{`%{FOONESTED}`, `%{FOOFLAT}`}
-	conf.Grok.PatternPaths = []string{tmpDir}
+	conf, err := testutil.ProcessorFromYAML(`
+grok:
+  expressions:
+    - "%%{FOONESTED}"
+    - "%%{FOOFLAT}"
+  pattern_paths: [ %v ]
+`, tmpDir)
+	require.NoError(t, err)
 
 	gSet, err := mock.NewManager().NewProcessor(conf)
 	require.NoError(t, err)

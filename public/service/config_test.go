@@ -1,12 +1,14 @@
 package service
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v3"
 
+	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/docs"
 )
 
@@ -62,7 +64,7 @@ c:
     e: evalue
 `,
 			lints: []docs.Lint{
-				docs.NewLintError(2, docs.LintUnknown, "field not_real not recognised"),
+				docs.NewLintError(2, docs.LintUnknown, errors.New("field not_real not recognised")),
 			},
 		},
 		{
@@ -79,7 +81,7 @@ c:
     e: evalue
 `,
 			lints: []docs.Lint{
-				docs.NewLintError(4, docs.LintUnknown, "field not_real not recognised"),
+				docs.NewLintError(4, docs.LintUnknown, errors.New("field not_real not recognised")),
 			},
 		},
 	}
@@ -91,15 +93,18 @@ c:
 			node, err := NewStreamBuilder().getYAMLNode(confBytes)
 			require.NoError(t, err)
 
-			assert.Equal(t, test.lints, spec.component.Config.Children.LintYAML(docs.NewLintContext(), node))
+			assert.Equal(t, test.lints, spec.component.Config.Children.LintYAML(docs.NewLintContext(docs.NewLintConfig(bundle.GlobalEnvironment)), node))
 
-			pConf, err := spec.configFromNode(nil, node)
+			pConf, err := spec.configFromAny(nil, node)
+			require.NoError(t, err)
+
+			a, err := pConf.FieldAny()
 			require.NoError(t, err)
 
 			var sanitNode yaml.Node
-			require.NoError(t, sanitNode.Encode(pConf.generic))
+			require.NoError(t, sanitNode.Encode(a))
 
-			sanitConf := docs.NewSanitiseConfig()
+			sanitConf := docs.NewSanitiseConfig(bundle.GlobalEnvironment)
 			sanitConf.RemoveTypeField = true
 			sanitConf.RemoveDeprecated = true
 
@@ -353,7 +358,8 @@ b: this is ${! json( } an invalid interp string
 	iConf, err := parsedConfig.FieldInterpolatedString("a")
 	require.NoError(t, err)
 
-	res := iConf.String(NewMessage([]byte("hello world")))
+	res, err := iConf.TryString(NewMessage([]byte("hello world")))
+	require.NoError(t, err)
 	assert.Equal(t, "foo hello world bar", res)
 }
 
@@ -381,10 +387,12 @@ b:
 	iConf, err := parsedConfig.FieldInterpolatedStringMap("a")
 	require.NoError(t, err)
 
-	res := iConf["c"].String(NewMessage([]byte("hello world")))
+	res, err := iConf["c"].TryString(NewMessage([]byte("hello world")))
+	require.NoError(t, err)
 	assert.Equal(t, "foo hello world bar", res)
 
-	res = iConf["d"].String(NewMessage([]byte("hello world")))
+	res, err = iConf["d"].TryString(NewMessage([]byte("hello world")))
+	require.NoError(t, err)
 	assert.Equal(t, "xyzzy hello world baz", res)
 }
 

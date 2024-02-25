@@ -20,12 +20,14 @@ Unarchives messages according to the selected archive format into multiple messa
 # Config fields, showing default values
 label: ""
 unarchive:
-  format: ""
+  format: "" # No default (required)
 ```
 
 When a message is unarchived the new messages replace the original message in the batch. Messages that are selected but fail to unarchive (invalid format) will remain unchanged in the message batch but will be flagged as having failed, allowing you to [error handle them](/docs/configuration/error_handling).
 
-For the unarchive formats that contain file information (tar, zip), a metadata field is added to each message called `archive_filename` with the extracted filename.
+## Metadata
+
+The metadata found on the messages handled by this processor will be copied into the resulting messages. For the unarchive formats that contain file information (tar, zip), a metadata field is also added to each message called `archive_filename` with the extracted filename.
 
 
 ## Fields

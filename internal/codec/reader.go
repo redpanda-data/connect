@@ -16,33 +16,39 @@ import (
 	"sync"
 
 	"github.com/klauspost/compress/gzip"
+	"github.com/klauspost/pgzip"
 
 	goavro "github.com/linkedin/goavro/v2"
 
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	"github.com/benthosdev/benthos/v4/public/service"
 )
 
 // ReaderDocs is a static field documentation for input codecs.
-var ReaderDocs = docs.FieldString(
-	"codec", "The way in which the bytes of a data source should be converted into discrete messages, codecs are useful for specifying how large files or continuous streams of data might be processed in small chunks rather than loading it all in memory. It's possible to consume lines using a custom delimiter with the `delim:x` codec, where x is the character sequence custom delimiter. Codecs can be chained with `/`, for example a gzip compressed CSV file can be consumed with the codec `gzip/csv`.", "lines", "delim:\t", "delim:foobar", "gzip/csv",
-).HasAnnotatedOptions(
-	"auto", "EXPERIMENTAL: Attempts to derive a codec for each file based on information such as the extension. For example, a .tar.gz file would be consumed with the `gzip/tar` codec. Defaults to all-bytes.",
-	"all-bytes", "Consume the entire file as a single binary message.",
-	"avro-ocf:marshaler=x", "EXPERIMENTAL: Consume a stream of Avro OCF datum. The `marshaler` parameter is optional and has the options: `goavro` (default), `json`. Use `goavro` if OCF contains logical types.",
-	"chunker:x", "Consume the file in chunks of a given number of bytes.",
-	"csv", "Consume structured rows as comma separated values, the first row must be a header row.",
-	"csv:x", "Consume structured rows as values separated by a custom delimiter, the first row must be a header row. The custom delimiter must be a single character, e.g. the codec `\"csv:\\t\"` would consume a tab delimited file.",
-	"csv-safe", "Consume structured rows like `csv`, but sends messages with empty maps on failure to parse. Includes row number and parsing errors (if any) in the message's metadata.",
-	"delim:x", "Consume the file in segments divided by a custom delimiter.",
-	"gzip", "Decompress a gzip file, this codec should precede another codec, e.g. `gzip/all-bytes`, `gzip/tar`, `gzip/csv`, etc.",
-	"lines", "Consume the file in segments divided by linebreaks.",
-	"multipart", "Consumes the output of another codec and batches messages together. A batch ends when an empty message is consumed. For example, the codec `lines/multipart` could be used to consume multipart messages where an empty line indicates the end of each batch.",
-	"regex:(?m)^\\d\\d:\\d\\d:\\d\\d", "Consume the file in segments divided by regular expression.",
-	"skipbom", "Skip one or more byte order marks for each opened reader, this codec should precede another codec, e.g. `skipbom/csv`, etc.",
-	"tar", "Parse the file as a tar archive, and consume each file of the archive as a message.",
-)
+var ReaderDocs = NewReaderDocs("codec")
+
+func NewReaderDocs(name string) docs.FieldSpec {
+	return docs.FieldString(
+		name, "The way in which the bytes of a data source should be converted into discrete messages, codecs are useful for specifying how large files or continuous streams of data might be processed in small chunks rather than loading it all in memory. It's possible to consume lines using a custom delimiter with the `delim:x` codec, where x is the character sequence custom delimiter. Codecs can be chained with `/`, for example a gzip compressed CSV file can be consumed with the codec `gzip/csv`.", "lines", "delim:\t", "delim:foobar", "gzip/csv",
+	).HasAnnotatedOptions(
+		"auto", "EXPERIMENTAL: Attempts to derive a codec for each file based on information such as the extension. For example, a .tar.gz file would be consumed with the `gzip/tar` codec. Defaults to all-bytes.",
+		"all-bytes", "Consume the entire file as a single binary message.",
+		"avro-ocf:marshaler=x", "EXPERIMENTAL: Consume a stream of Avro OCF datum. The `marshaler` parameter is optional and has the options: `goavro` (default), `json`. Use `goavro` if OCF contains logical types.",
+		"chunker:x", "Consume the file in chunks of a given number of bytes.",
+		"csv", "Consume structured rows as comma separated values, the first row must be a header row.",
+		"csv:x", "Consume structured rows as values separated by a custom delimiter, the first row must be a header row. The custom delimiter must be a single character, e.g. the codec `\"csv:\\t\"` would consume a tab delimited file.",
+		"csv-safe", "Consume structured rows like `csv`, but sends messages with empty maps on failure to parse. Includes row number and parsing errors (if any) in the message's metadata.",
+		"csv-safe:x", "Consume structured rows like `csv:x` as values separated by a custom delimiter, but sends messages with empty maps on failure to parse. The custom delimiter must be a single character, e.g. the codec `\"csv-safe:\\t\"` would consume a tab delimited file. Includes row number and parsing errors (if any) in the message's metadata.",
+		"delim:x", "Consume the file in segments divided by a custom delimiter.",
+		"gzip", "Decompress a gzip file, this codec should precede another codec, e.g. `gzip/all-bytes`, `gzip/tar`, `gzip/csv`, etc.",
+		"pgzip", "Decompress a gzip file in parallel, this codec should precede another codec, e.g. `pgzip/all-bytes`, `pgzip/tar`, `pgzip/csv`, etc.",
+		"lines", "Consume the file in segments divided by linebreaks.",
+		"multipart", "Consumes the output of another codec and batches messages together. A batch ends when an empty message is consumed. For example, the codec `lines/multipart` could be used to consume multipart messages where an empty line indicates the end of each batch.",
+		"regex:(?m)^\\d\\d:\\d\\d:\\d\\d", "Consume the file in segments divided by regular expression.",
+		"skipbom", "Skip one or more byte order marks for each opened reader, this codec should precede another codec, e.g. `skipbom/csv`, etc.",
+		"tar", "Parse the file as a tar archive, and consume each file of the archive as a message.",
+	).LinterBlobl("")
+}
 
 //------------------------------------------------------------------------------
 
@@ -187,7 +193,8 @@ func chainedReader(codec string, conf ReaderConfig) (ReaderConstructor, error) {
 }
 
 func ioReader(codec string, conf ReaderConfig) (ioReaderConstructor, bool) {
-	if codec == "gzip" {
+	switch codec {
+	case "gzip":
 		return func(_ string, r io.ReadCloser) (io.ReadCloser, error) {
 			g, err := gzip.NewReader(r)
 			if err != nil {
@@ -197,8 +204,17 @@ func ioReader(codec string, conf ReaderConfig) (ioReaderConstructor, bool) {
 			unzipped := ioReadCloserWrapper{Reader: g, underlying: r}
 			return &unzipped, nil
 		}, true
-	}
-	if codec == "skipbom" {
+	case "pgzip":
+		return func(_ string, r io.ReadCloser) (io.ReadCloser, error) {
+			g, err := pgzip.NewReader(r)
+			if err != nil {
+				r.Close()
+				return nil, err
+			}
+			unzipped := ioReadCloserWrapper{Reader: g, underlying: r}
+			return &unzipped, nil
+		}, true
+	case "skipbom":
 		return func(_ string, r io.ReadCloser) (io.ReadCloser, error) {
 			skipBom := ioReadCloserWrapper{Reader: skipBOM(r), underlying: r}
 			return &skipBom, nil
@@ -279,6 +295,20 @@ func partReader(codec string, conf ReaderConfig) (ReaderConstructor, bool, error
 		byRune := byRunes[0]
 		return func(path string, r io.ReadCloser, fn ReaderAckFn) (Reader, error) {
 			return newCSVReader(r, fn, &byRune)
+		}, true, nil
+	}
+	if strings.HasPrefix(codec, "csv-safe:") {
+		by := strings.TrimPrefix(codec, "csv-safe:")
+		if by == "" {
+			return nil, false, errors.New("csv-safe codec requires a non-empty delimiter")
+		}
+		byRunes := []rune(by)
+		if len(byRunes) != 1 {
+			return nil, false, errors.New("csv-safe codec requires a single character delimiter")
+		}
+		byRune := byRunes[0]
+		return func(path string, r io.ReadCloser, fn ReaderAckFn) (Reader, error) {
+			return newCSVSafeReader(r, fn, &byRune)
 		}, true, nil
 	}
 	if strings.HasPrefix(codec, "chunker:") {
@@ -429,27 +459,16 @@ func newAvroOCFReader(conf ReaderConfig, marshaler string, r io.ReadCloser, ackF
 			return nil, err
 		}
 		a.pending++
-		m := service.NewMessage(nil)
 		if !a.logicalTypes {
-			m.SetStructured(datum)
-			mp, err := m.AsBytes()
-			if err != nil {
-				return nil, err
-			}
-			part := message.NewPart(mp)
-			return part, nil
+			msg := message.NewPart(nil)
+			msg.SetStructuredMut(datum)
+			return msg, nil
 		}
 		jb, err := a.avroCodec.TextualFromNative(nil, datum)
 		if err != nil {
 			return nil, err
 		}
-		m.SetBytes(jb)
-		mp, err := m.AsBytes()
-		if err != nil {
-			return nil, err
-		}
-		part := message.NewPart(mp)
-		return part, nil
+		return message.NewPart(jb), nil
 	}
 
 	var logicalTypes bool

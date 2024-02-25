@@ -4,18 +4,11 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/binary"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
-	"net/http"
-	"net/url"
-	"path"
 	"sync"
 	"sync/atomic"
 	"time"
-
-	"github.com/linkedin/goavro/v2"
 
 	"github.com/benthosdev/benthos/v4/internal/httpclient"
 	"github.com/benthosdev/benthos/v4/internal/shutdown"
@@ -30,7 +23,7 @@ func schemaRegistryDecoderConfig() *service.ConfigSpec {
 		Description(`
 Decodes messages automatically from a schema stored within a [Confluent Schema Registry service](https://docs.confluent.io/platform/current/schema-registry/index.html) by extracting a schema ID from the message and obtaining the associated schema from the registry. If a message fails to match against the schema then it will remain unchanged and the error can be caught using error handling methods outlined [here](/docs/configuration/error_handling).
 
-Currently only Avro schemas are supported.
+Avro, Protobuf and Json schemas are supported, all are capable of expanding from schema references as of v4.22.0.
 
 ### Avro JSON Format
 
@@ -45,7 +38,11 @@ For example, the union schema ` + "`[\"null\",\"string\",\"Foo\"]`, where `Foo`"
 - the string ` + "`\"a\"` as `{\"string\": \"a\"}`" + `; and
 - a ` + "`Foo` instance as `{\"Foo\": {...}}`, where `{...}` indicates the JSON encoding of a `Foo`" + ` instance.
 
-However, it is possible to instead create documents in [standard/raw JSON format](https://pkg.go.dev/github.com/linkedin/goavro/v2#NewCodecForStandardJSONFull) by setting the field ` + "[`avro_raw_json`](#avro_raw_json) to `true`" + `.`).
+However, it is possible to instead create documents in [standard/raw JSON format](https://pkg.go.dev/github.com/linkedin/goavro/v2#NewCodecForStandardJSONFull) by setting the field ` + "[`avro_raw_json`](#avro_raw_json) to `true`" + `.
+### Protobuf Format
+
+This processor decodes protobuf messages to JSON documents, you can read more about JSON mapping of protobuf messages here: https://developers.google.com/protocol-buffers/docs/proto3#json
+`).
 		Field(service.NewBoolField("avro_raw_json").
 			Description("Whether Avro messages should be decoded into normal JSON (\"json that meets the expectations of regular internet json\") rather than [Avro JSON](https://avro.apache.org/docs/current/specification/_print/#json-encoding). If `true` the schema returned from the subject should be decoded as [standard json](https://pkg.go.dev/github.com/linkedin/goavro/v2#NewCodecForStandardJSONFull) instead of as [avro json](https://pkg.go.dev/github.com/linkedin/goavro/v2#NewCodec). There is a [comment in goavro](https://github.com/linkedin/goavro/blob/5ec5a5ee7ec82e16e6e2b438d610e1cab2588393/union.go#L224-L249), the [underlining library used for avro serialization](https://github.com/linkedin/goavro), that explains in more detail the difference between the standard json and avro json.").
 			Advanced().Default(false)).
@@ -72,11 +69,8 @@ func init() {
 //------------------------------------------------------------------------------
 
 type schemaRegistryDecoder struct {
-	client      *http.Client
 	avroRawJSON bool
-
-	schemaRegistryBaseURL *url.URL
-	requestSigner         httpclient.RequestSigner
+	client      *schemaRegistryClient
 
 	schemas    map[int]*cachedSchemaDecoder
 	cacheMut   sync.RWMutex
@@ -114,33 +108,16 @@ func newSchemaRegistryDecoder(
 	avroRawJSON bool,
 	mgr *service.Resources,
 ) (*schemaRegistryDecoder, error) {
-	u, err := url.Parse(urlStr)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse url: %w", err)
-	}
-
 	s := &schemaRegistryDecoder{
-		avroRawJSON:           avroRawJSON,
-		schemaRegistryBaseURL: u,
-		requestSigner:         reqSigner,
-		schemas:               map[int]*cachedSchemaDecoder{},
-		shutSig:               shutdown.NewSignaller(),
-		logger:                mgr.Logger(),
-		mgr:                   mgr,
+		avroRawJSON: avroRawJSON,
+		schemas:     map[int]*cachedSchemaDecoder{},
+		shutSig:     shutdown.NewSignaller(),
+		logger:      mgr.Logger(),
+		mgr:         mgr,
 	}
-
-	s.client = http.DefaultClient
-	if tlsConf != nil {
-		s.client = &http.Client{}
-		if c, ok := http.DefaultTransport.(*http.Transport); ok {
-			cloned := c.Clone()
-			cloned.TLSClientConfig = tlsConf
-			s.client.Transport = cloned
-		} else {
-			s.client.Transport = &http.Transport{
-				TLSClientConfig: tlsConf,
-			}
-		}
+	var err error
+	if s.client, err = newSchemaRegistryClient(urlStr, reqSigner, tlsConf, mgr); err != nil {
+		return nil, err
 	}
 
 	go func() {
@@ -267,100 +244,28 @@ func (s *schemaRegistryDecoder) getDecoder(id int) (schemaDecoder, error) {
 		return c.decoder, nil
 	}
 
+	// TODO: Expose this via configuration
 	ctx, done := context.WithTimeout(context.Background(), time.Second*5)
 	defer done()
 
-	reqURL := *s.schemaRegistryBaseURL
-	reqURL.Path = path.Join(reqURL.Path, fmt.Sprintf("/schemas/ids/%v", id))
-
-	req, err := http.NewRequestWithContext(ctx, "GET", reqURL.String(), http.NoBody)
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Add("Accept", "application/vnd.schemaregistry.v1+json")
-	if err := s.requestSigner(s.mgr.FS(), req); err != nil {
-		return nil, err
-	}
-
-	var resBytes []byte
-	for i := 0; i < 3; i++ {
-		var res *http.Response
-		if res, err = s.client.Do(req); err != nil {
-			s.logger.Errorf("request failed for schema '%v': %v", id, err)
-			continue
-		}
-
-		if res.StatusCode == http.StatusNotFound {
-			err = fmt.Errorf("schema '%v' not found by registry", id)
-			s.logger.Errorf(err.Error())
-			break
-		}
-
-		if res.StatusCode != http.StatusOK {
-			err = fmt.Errorf("request failed for schema '%v'", id)
-			s.logger.Errorf(err.Error())
-			// TODO: Best attempt at parsing out the body
-			continue
-		}
-
-		if res.Body == nil {
-			s.logger.Errorf("request for schema '%v' returned an empty body", id)
-			err = errors.New("schema request returned an empty body")
-			continue
-		}
-
-		resBytes, err = io.ReadAll(res.Body)
-		res.Body.Close()
-		if err != nil {
-			s.logger.Errorf("failed to read response for schema '%v': %v", id, err)
-			continue
-		}
-
-		break
-	}
+	resPayload, err := s.client.GetSchemaByID(ctx, id)
 	if err != nil {
 		return nil, err
 	}
 
-	resPayload := struct {
-		Schema string `json:"schema"`
-	}{}
-	if err = json.Unmarshal(resBytes, &resPayload); err != nil {
-		s.logger.Errorf("failed to parse response for schema '%v': %v", id, err)
+	var decoder schemaDecoder
+	switch resPayload.Type {
+	case "PROTOBUF":
+		decoder, err = s.getProtobufDecoder(ctx, resPayload)
+	case "", "AVRO":
+		decoder, err = s.getAvroDecoder(ctx, resPayload)
+	case "JSON":
+		decoder, err = s.getJSONDecoder(ctx, resPayload)
+	default:
+		err = fmt.Errorf("schema type %v not supported", resPayload.Type)
+	}
+	if err != nil {
 		return nil, err
-	}
-
-	var codec *goavro.Codec
-	if s.avroRawJSON {
-		if codec, err = goavro.NewCodecForStandardJSONFull(resPayload.Schema); err != nil {
-			s.logger.Errorf("failed to parse response for schema subject '%v': %v", id, err)
-			return nil, err
-		}
-	} else {
-		if codec, err = goavro.NewCodec(resPayload.Schema); err != nil {
-			s.logger.Errorf("failed to parse response for schema subject '%v': %v", id, err)
-			return nil, err
-		}
-	}
-
-	decoder := func(m *service.Message) error {
-		b, err := m.AsBytes()
-		if err != nil {
-			return err
-		}
-
-		native, _, err := codec.NativeFromBinary(b)
-		if err != nil {
-			return err
-		}
-
-		jb, err := codec.TextualFromNative(nil, native)
-		if err != nil {
-			return err
-		}
-		m.SetBytes(jb)
-
-		return nil
 	}
 
 	s.cacheMut.Lock()

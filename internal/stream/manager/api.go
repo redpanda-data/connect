@@ -10,10 +10,10 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/Jeffail/gabs/v2"
 	"github.com/gorilla/mux"
 	"gopkg.in/yaml.v3"
 
-	"github.com/benthosdev/benthos/v4/internal/component/buffer"
 	"github.com/benthosdev/benthos/v4/internal/component/cache"
 	"github.com/benthosdev/benthos/v4/internal/component/input"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
@@ -21,11 +21,10 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/component/ratelimit"
 	"github.com/benthosdev/benthos/v4/internal/config"
 	"github.com/benthosdev/benthos/v4/internal/docs"
-	"github.com/benthosdev/benthos/v4/internal/pipeline"
 	"github.com/benthosdev/benthos/v4/internal/stream"
+	"github.com/benthosdev/benthos/v4/internal/value"
+	"github.com/benthosdev/benthos/v4/public/bloblang"
 )
-
-//------------------------------------------------------------------------------
 
 func (m *Type) registerEndpoints(enableCrud bool) {
 	m.manager.RegisterEndpoint(
@@ -62,33 +61,18 @@ func (m *Type) registerEndpoints(enableCrud bool) {
 	)
 }
 
-// ConfigSet is a map of stream configurations mapped by ID, which can be YAML
-// parsed without losing default values inside the stream configs.
-type ConfigSet map[string]stream.Config
-
-// UnmarshalYAML ensures that when parsing configs that are in a map or slice
-// the default values are still applied.
-func (c ConfigSet) UnmarshalYAML(value *yaml.Node) error {
-	tmpSet := map[string]yaml.Node{}
-	if err := value.Decode(&tmpSet); err != nil {
-		return err
-	}
-	for k, v := range tmpSet {
-		conf := stream.NewConfig()
-		if err := v.Decode(&conf); err != nil {
-			return err
-		}
-		c[k] = conf
-	}
-	return nil
-}
-
 type lintErrors struct {
 	LintErrs []string `json:"lint_errors"`
 }
 
-func lintStreamConfigNode(node *yaml.Node) (lints []string) {
-	for _, dLint := range stream.Spec().LintYAML(docs.NewLintContext(), node) {
+func (m *Type) lintCtx() docs.LintContext {
+	lConf := docs.NewLintConfig(m.manager.Environment())
+	lConf.BloblangEnv = bloblang.XWrapEnvironment(m.manager.BloblEnvironment()).Deactivated()
+	return docs.NewLintContext(lConf)
+}
+
+func (m *Type) lintStreamConfigNode(node *yaml.Node) (lints []string) {
+	for _, dLint := range stream.Spec().LintYAML(m.lintCtx(), node) {
 		lints = append(lints, dLint.Error())
 	}
 	return
@@ -104,12 +88,12 @@ func (m *Type) HandleStreamsCRUD(w http.ResponseWriter, r *http.Request) {
 			r.Body.Close()
 		}
 		if serverErr != nil {
-			m.manager.Logger().Errorf("Streams CRUD Error: %v\n", serverErr)
+			m.manager.Logger().Error("Streams CRUD Error: %v\n", serverErr)
 			http.Error(w, fmt.Sprintf("Error: %v", serverErr), http.StatusBadGateway)
 			return
 		}
 		if requestErr != nil {
-			m.manager.Logger().Debugf("Streams request CRUD Error: %v\n", requestErr)
+			m.manager.Logger().Debug("Streams request CRUD Error: %v\n", requestErr)
 			http.Error(w, fmt.Sprintf("Error: %v", requestErr), http.StatusBadRequest)
 			return
 		}
@@ -151,17 +135,18 @@ func (m *Type) HandleStreamsCRUD(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	nodeSet := map[string]yaml.Node{}
+	if requestErr = yaml.Unmarshal(setBytes, &nodeSet); requestErr != nil {
+		return
+	}
+
 	if r.URL.Query().Get("chilled") != "true" {
-		nodeSet := map[string]yaml.Node{}
-		if requestErr = yaml.Unmarshal(setBytes, &nodeSet); requestErr != nil {
-			return
-		}
 		var lints []string
 		for k, n := range nodeSet {
-			for _, l := range lintStreamConfigNode(&n) {
+			for _, l := range m.lintStreamConfigNode(&n) {
 				keyLint := fmt.Sprintf("stream '%v': %v", k, l)
 				lints = append(lints, keyLint)
-				m.manager.Logger().Debugf("Streams request linting error: %v\n", keyLint)
+				m.manager.Logger().Debug("Streams request linting error: %v\n", keyLint)
 			}
 		}
 		if len(lints) > 0 {
@@ -175,25 +160,43 @@ func (m *Type) HandleStreamsCRUD(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	newSet := ConfigSet{}
-	if requestErr = yaml.Unmarshal(setBytes, &newSet); requestErr != nil {
-		return
-	}
-
 	toDelete := []string{}
 	toUpdate := map[string]stream.Config{}
 	toCreate := map[string]stream.Config{}
 
+	spec := stream.Spec()
+
 	for id := range infos {
-		if newConf, exists := newSet[id]; !exists {
+		newConf, exists := nodeSet[id]
+		if !exists {
 			toDelete = append(toDelete, id)
 		} else {
-			toUpdate[id] = newConf
+			var rawSource any
+			if requestErr = newConf.Decode(&rawSource); requestErr != nil {
+				return
+			}
+			var pConf *docs.ParsedConfig
+			if pConf, requestErr = spec.ParsedConfigFromAny(&newConf); requestErr != nil {
+				return
+			}
+			if toUpdate[id], requestErr = stream.FromParsed(m.manager.Environment(), pConf, rawSource); requestErr != nil {
+				return
+			}
 		}
 	}
-	for id, conf := range newSet {
+	for id, conf := range nodeSet {
 		if _, exists := infos[id]; !exists {
-			toCreate[id] = conf
+			var rawSource any
+			if requestErr = conf.Decode(&rawSource); requestErr != nil {
+				return
+			}
+			var pConf *docs.ParsedConfig
+			if pConf, requestErr = spec.ParsedConfigFromAny(&conf); requestErr != nil {
+				return
+			}
+			if toCreate[id], requestErr = stream.FromParsed(m.manager.Environment(), pConf, rawSource); requestErr != nil {
+				return
+			}
 		}
 	}
 
@@ -264,12 +267,12 @@ func (m *Type) HandleStreamCRUD(w http.ResponseWriter, r *http.Request) {
 			r.Body.Close()
 		}
 		if serverErr != nil {
-			m.manager.Logger().Errorf("Streams CRUD Error: %v\n", serverErr)
+			m.manager.Logger().Error("Streams CRUD Error: %v\n", serverErr)
 			http.Error(w, fmt.Sprintf("Error: %v", serverErr), http.StatusBadGateway)
 			return
 		}
 		if requestErr != nil {
-			m.manager.Logger().Debugf("Streams request CRUD Error: %v\n", requestErr)
+			m.manager.Logger().Debug("Streams request CRUD Error: %v\n", requestErr)
 			http.Error(w, fmt.Sprintf("Error: %v", requestErr), http.StatusBadRequest)
 			return
 		}
@@ -298,19 +301,26 @@ func (m *Type) HandleStreamCRUD(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
+		var node *yaml.Node
+		if node, err = docs.UnmarshalYAML(confBytes); err != nil {
+			return
+		}
+
 		if !ignoreLints {
-			var node yaml.Node
-			if err = yaml.Unmarshal(confBytes, &node); err != nil {
-				return
-			}
-			lints = lintStreamConfigNode(&node)
+			lints = m.lintStreamConfigNode(node)
 			for _, l := range lints {
-				m.manager.Logger().Infof("Stream '%v' config: %v\n", id, l)
+				m.manager.Logger().Info("Stream '%v' config: %v\n", id, l)
 			}
 		}
 
-		confOut = stream.NewConfig()
-		err = yaml.Unmarshal(confBytes, &confOut)
+		var rawSource any
+		_ = node.Decode(&rawSource)
+
+		var pConf *docs.ParsedConfig
+		if pConf, err = stream.Spec().ParsedConfigFromAny(node); err != nil {
+			return
+		}
+		confOut, err = stream.FromParsed(m.manager.Environment(), pConf, rawSource)
 		return
 	}
 	patchConfig := func(confIn stream.Config) (confOut stream.Config, err error) {
@@ -319,31 +329,30 @@ func (m *Type) HandleStreamCRUD(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		type aliasedIn input.Config
-		type aliasedBuf buffer.Config
-		type aliasedPipe pipeline.Config
-		type aliasedOut output.Config
+		cRoot := value.IClone(confIn.GetRawSource())
 
-		aliasedConf := struct {
-			Input    aliasedIn   `json:"input"`
-			Buffer   aliasedBuf  `json:"buffer"`
-			Pipeline aliasedPipe `json:"pipeline"`
-			Output   aliasedOut  `json:"output"`
-		}{
-			Input:    aliasedIn(confIn.Input),
-			Buffer:   aliasedBuf(confIn.Buffer),
-			Pipeline: aliasedPipe(confIn.Pipeline),
-			Output:   aliasedOut(confIn.Output),
-		}
-		if err = yaml.Unmarshal(patchBytes, &aliasedConf); err != nil {
+		var pRoot any
+		if err = yaml.Unmarshal(patchBytes, &pRoot); err != nil {
 			return
 		}
-		confOut = stream.Config{
-			Input:    input.Config(aliasedConf.Input),
-			Buffer:   buffer.Config(aliasedConf.Buffer),
-			Pipeline: pipeline.Config(aliasedConf.Pipeline),
-			Output:   output.Config(aliasedConf.Output),
+
+		gObj := gabs.Wrap(cRoot)
+		if err = gObj.MergeFn(gabs.Wrap(pRoot), func(destination, source any) any {
+			return source
+		}); err != nil {
+			return
 		}
+
+		var confNode yaml.Node
+		if err = confNode.Encode(gObj.Data()); err != nil {
+			return
+		}
+
+		var pConf *docs.ParsedConfig
+		if pConf, err = stream.Spec().ParsedConfigFromAny(&confNode); err != nil {
+			return
+		}
+		confOut, err = stream.FromParsed(m.manager.Environment(), pConf, gObj.Data())
 		return
 	}
 
@@ -367,7 +376,8 @@ func (m *Type) HandleStreamCRUD(w http.ResponseWriter, r *http.Request) {
 	case "GET":
 		var info *StreamStatus
 		if info, serverErr = m.Read(id); serverErr == nil {
-			sanit, _ := info.Config().Sanitised()
+			conf := info.Config()
+			sanit := conf.GetRawSource()
 
 			var bodyBytes []byte
 			if bodyBytes, serverErr = json.Marshal(struct {
@@ -436,12 +446,12 @@ func (m *Type) HandleResourceCRUD(w http.ResponseWriter, r *http.Request) {
 			r.Body.Close()
 		}
 		if serverErr != nil {
-			m.manager.Logger().Errorf("Resource CRUD Error: %v\n", serverErr)
+			m.manager.Logger().Error("Resource CRUD Error: %v\n", serverErr)
 			http.Error(w, fmt.Sprintf("Error: %v", serverErr), http.StatusBadGateway)
 			return
 		}
 		if requestErr != nil {
-			m.manager.Logger().Debugf("Resource request CRUD Error: %v\n", requestErr)
+			m.manager.Logger().Debug("Resource request CRUD Error: %v\n", requestErr)
 			http.Error(w, fmt.Sprintf("Error: %v", requestErr), http.StatusBadRequest)
 			return
 		}
@@ -466,40 +476,40 @@ func (m *Type) HandleResourceCRUD(w http.ResponseWriter, r *http.Request) {
 	switch docType {
 	case docs.TypeCache:
 		storeFn = func(n *yaml.Node) {
-			cacheConf := cache.NewConfig()
-			if requestErr = n.Decode(&cacheConf); requestErr != nil {
+			var cacheConf cache.Config
+			if cacheConf, requestErr = cache.FromAny(m.manager.Environment(), n); requestErr != nil {
 				return
 			}
 			serverErr = m.manager.StoreCache(ctx, id, cacheConf)
 		}
 	case docs.TypeInput:
 		storeFn = func(n *yaml.Node) {
-			inputConf := input.NewConfig()
-			if requestErr = n.Decode(&inputConf); requestErr != nil {
+			var inputConf input.Config
+			if inputConf, requestErr = input.FromAny(m.manager.Environment(), n); requestErr != nil {
 				return
 			}
 			serverErr = m.manager.StoreInput(ctx, id, inputConf)
 		}
 	case docs.TypeOutput:
 		storeFn = func(n *yaml.Node) {
-			outputConf := output.NewConfig()
-			if requestErr = n.Decode(&outputConf); requestErr != nil {
+			var outputConf output.Config
+			if outputConf, requestErr = output.FromAny(m.manager.Environment(), n); requestErr != nil {
 				return
 			}
 			serverErr = m.manager.StoreOutput(ctx, id, outputConf)
 		}
 	case docs.TypeProcessor:
 		storeFn = func(n *yaml.Node) {
-			procConf := processor.NewConfig()
-			if requestErr = n.Decode(&procConf); requestErr != nil {
+			var procConf processor.Config
+			if procConf, requestErr = processor.FromAny(m.manager.Environment(), n); requestErr != nil {
 				return
 			}
 			serverErr = m.manager.StoreProcessor(ctx, id, procConf)
 		}
 	case docs.TypeRateLimit:
 		storeFn = func(n *yaml.Node) {
-			rlConf := ratelimit.NewConfig()
-			if requestErr = n.Decode(&rlConf); requestErr != nil {
+			var rlConf ratelimit.Config
+			if rlConf, requestErr = ratelimit.FromAny(m.manager.Environment(), n); requestErr != nil {
 				return
 			}
 			serverErr = m.manager.StoreRateLimit(ctx, id, rlConf)
@@ -536,9 +546,9 @@ func (m *Type) HandleResourceCRUD(w http.ResponseWriter, r *http.Request) {
 		confNode = &node
 
 		if !ignoreLints {
-			for _, l := range docs.LintYAML(docs.NewLintContext(), docType, &node) {
+			for _, l := range docs.LintYAML(m.lintCtx(), docType, &node) {
 				lints = append(lints, l.Error())
-				m.manager.Logger().Infof("Resource '%v' config: %v\n", id, l)
+				m.manager.Logger().Info("Resource '%v' config: %v\n", id, l)
 			}
 		}
 	}
@@ -563,12 +573,12 @@ func (m *Type) HandleStreamStats(w http.ResponseWriter, r *http.Request) {
 			r.Body.Close()
 		}
 		if serverErr != nil {
-			m.manager.Logger().Errorf("Stream stats Error: %v\n", serverErr)
+			m.manager.Logger().Error("Stream stats Error: %v\n", serverErr)
 			http.Error(w, fmt.Sprintf("Error: %v", serverErr), http.StatusBadGateway)
 			return
 		}
 		if requestErr != nil {
-			m.manager.Logger().Debugf("Stream request stats Error: %v\n", requestErr)
+			m.manager.Logger().Debug("Stream request stats Error: %v\n", requestErr)
 			http.Error(w, fmt.Sprintf("Error: %v", requestErr), http.StatusBadRequest)
 			return
 		}

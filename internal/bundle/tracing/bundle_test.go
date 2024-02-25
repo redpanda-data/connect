@@ -9,9 +9,9 @@ import (
 
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/bundle/tracing"
-	"github.com/benthosdev/benthos/v4/internal/component/input"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
+	"github.com/benthosdev/benthos/v4/internal/component/testutil"
 	"github.com/benthosdev/benthos/v4/internal/manager"
 	"github.com/benthosdev/benthos/v4/internal/message"
 
@@ -24,15 +24,17 @@ import (
 func TestBundleInputTracing(t *testing.T) {
 	tenv, summary := tracing.TracedBundle(bundle.GlobalEnvironment)
 
-	inConfig := input.NewConfig()
-	inConfig.Label = "foo"
-	inConfig.Type = "generate"
-	inConfig.Generate.Count = 10
-	inConfig.Generate.Interval = "1us"
-	inConfig.Generate.Mapping = `root.count = count("counting the number of input tracing messages")`
+	inConfig, err := testutil.InputFromYAML(`
+label: foo
+generate:
+  count: 10
+  interval: 1us
+  mapping: 'root.count = counter()'
+`)
+	require.NoError(t, err)
 
 	mgr, err := manager.New(
-		manager.NewResourceConfig(),
+		manager.ResourceConfig{},
 		manager.OptSetEnvironment(tenv),
 	)
 	require.NoError(t, err)
@@ -73,15 +75,17 @@ func TestBundleInputTracing(t *testing.T) {
 func TestBundleInputTracingFlush(t *testing.T) {
 	tenv, summary := tracing.TracedBundle(bundle.GlobalEnvironment)
 
-	inConfig := input.NewConfig()
-	inConfig.Label = "foo"
-	inConfig.Type = "generate"
-	inConfig.Generate.Count = 10
-	inConfig.Generate.Interval = "1us"
-	inConfig.Generate.Mapping = `root.count = count("counting the number of input tracing messages with flushing")`
+	inConfig, err := testutil.InputFromYAML(`
+label: foo
+generate:
+  count: 10
+  interval: 1us
+  mapping: 'root.count = counter()'
+`)
+	require.NoError(t, err)
 
 	mgr, err := manager.New(
-		manager.NewResourceConfig(),
+		manager.ResourceConfig{},
 		manager.OptSetEnvironment(tenv),
 	)
 	require.NoError(t, err)
@@ -129,7 +133,14 @@ func TestBundleInputTracingFlush(t *testing.T) {
 	require.Len(t, inEvents["foo"], 0)
 
 	// Run more stuff
-	inConfig.Generate.Count = 5
+	inConfig, err = testutil.InputFromYAML(`
+label: foo
+generate:
+  count: 5
+  interval: 1us
+  mapping: 'root.count = counter()'
+`)
+	require.NoError(t, err)
 
 	in, err = mgr.NewInput(inConfig)
 	require.NoError(t, err)
@@ -154,7 +165,7 @@ func TestBundleInputTracingFlush(t *testing.T) {
 
 	for i, e := range events {
 		assert.Equal(t, tracing.EventProduce, e.Type)
-		assert.Equal(t, fmt.Sprintf(`{"count":%v}`, i+11), e.Content)
+		assert.Equal(t, fmt.Sprintf(`{"count":%v}`, i+1), e.Content)
 	}
 }
 
@@ -162,15 +173,17 @@ func TestBundleInputTracingDisabled(t *testing.T) {
 	tenv, summary := tracing.TracedBundle(bundle.GlobalEnvironment)
 	summary.SetEnabled(false)
 
-	inConfig := input.NewConfig()
-	inConfig.Label = "foo"
-	inConfig.Type = "generate"
-	inConfig.Generate.Count = 10
-	inConfig.Generate.Interval = "1us"
-	inConfig.Generate.Mapping = `root.count = count("counting the number of input tracing messages")`
+	inConfig, err := testutil.InputFromYAML(`
+label: foo
+generate:
+  count: 10
+  interval: 1us
+  mapping: 'root.count = counter()'
+`)
+	require.NoError(t, err)
 
 	mgr, err := manager.New(
-		manager.NewResourceConfig(),
+		manager.ResourceConfig{},
 		manager.OptSetEnvironment(tenv),
 	)
 	require.NoError(t, err)
@@ -211,7 +224,7 @@ func TestBundleOutputTracing(t *testing.T) {
 	outConfig.Type = "drop"
 
 	mgr, err := manager.New(
-		manager.NewResourceConfig(),
+		manager.ResourceConfig{},
 		manager.OptSetEnvironment(tenv),
 	)
 	require.NoError(t, err)
@@ -268,7 +281,7 @@ func TestBundleOutputTracingDisabled(t *testing.T) {
 	outConfig.Type = "drop"
 
 	mgr, err := manager.New(
-		manager.NewResourceConfig(),
+		manager.ResourceConfig{},
 		manager.OptSetEnvironment(tenv),
 	)
 	require.NoError(t, err)
@@ -320,11 +333,11 @@ func TestBundleOutputWithProcessorsTracing(t *testing.T) {
 
 	blobConf := processor.NewConfig()
 	blobConf.Type = "bloblang"
-	blobConf.Bloblang = "root = content().uppercase()"
+	blobConf.Plugin = "root = content().uppercase()"
 	outConfig.Processors = append(outConfig.Processors, blobConf)
 
 	mgr, err := manager.New(
-		manager.NewResourceConfig(),
+		manager.ResourceConfig{},
 		manager.OptSetEnvironment(tenv),
 	)
 	require.NoError(t, err)
@@ -393,22 +406,20 @@ func TestBundleOutputWithProcessorsTracing(t *testing.T) {
 func TestBundleOutputWithBatchProcessorsTracing(t *testing.T) {
 	tenv, summary := tracing.TracedBundle(bundle.GlobalEnvironment)
 
-	dropConfig := output.NewConfig()
-	dropConfig.Label = "foo"
-	dropConfig.Type = "drop"
-
-	outConfig := output.NewConfig()
-	outConfig.Type = "broker"
-	outConfig.Broker.Outputs = append(outConfig.Broker.Outputs, dropConfig)
-	outConfig.Broker.Batching.Count = 2
-
-	blobConf := processor.NewConfig()
-	blobConf.Type = "bloblang"
-	blobConf.Bloblang = "root = content().uppercase()"
-	outConfig.Broker.Batching.Processors = append(outConfig.Broker.Batching.Processors, blobConf)
+	outConfig, err := testutil.OutputFromYAML(`
+broker:
+  outputs:
+    - label: foo
+      drop: {}
+  batching:
+    count: 2
+    processors:
+      - mapping: 'root = content().uppercase()'
+`)
+	require.NoError(t, err)
 
 	mgr, err := manager.New(
-		manager.NewResourceConfig(),
+		manager.ResourceConfig{},
 		manager.OptSetEnvironment(tenv),
 	)
 	require.NoError(t, err)
@@ -491,14 +502,14 @@ func TestBundleProcessorTracing(t *testing.T) {
 	procConfig := processor.NewConfig()
 	procConfig.Label = "foo"
 	procConfig.Type = "bloblang"
-	procConfig.Bloblang = `
+	procConfig.Plugin = `
 let ctr = content().number()
 root.count = if $ctr % 2 == 0 { throw("nah %v".format($ctr)) } else { $ctr }
 meta bar = "new bar value"
 `
 
 	mgr, err := manager.New(
-		manager.NewResourceConfig(),
+		manager.ResourceConfig{},
 		manager.OptSetEnvironment(tenv),
 	)
 	require.NoError(t, err)
@@ -564,10 +575,10 @@ func TestBundleProcessorTracingError(t *testing.T) {
 	procConfig := processor.NewConfig()
 	procConfig.Label = "foo"
 	procConfig.Type = "bloblang"
-	procConfig.Bloblang = `let nope`
+	procConfig.Plugin = `let nope`
 
 	mgr, err := manager.New(
-		manager.NewResourceConfig(),
+		manager.ResourceConfig{},
 		manager.OptSetEnvironment(tenv),
 	)
 	require.NoError(t, err)
@@ -586,14 +597,14 @@ func TestBundleProcessorTracingDisabled(t *testing.T) {
 	procConfig := processor.NewConfig()
 	procConfig.Label = "foo"
 	procConfig.Type = "bloblang"
-	procConfig.Bloblang = `
+	procConfig.Plugin = `
 let ctr = content().number()
 root.count = if $ctr % 2 == 0 { throw("nah %v".format($ctr)) } else { $ctr }
 meta bar = "new bar value"
 `
 
 	mgr, err := manager.New(
-		manager.NewResourceConfig(),
+		manager.ResourceConfig{},
 		manager.OptSetEnvironment(tenv),
 	)
 	require.NoError(t, err)

@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/tls"
 	"errors"
-	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -67,6 +66,14 @@ Finally, it's also possible to specify an explicit offset to consume from by add
 		Field(service.NewStringField("consumer_group").
 			Description("An optional consumer group to consume as. When specified the partitions of specified topics are automatically distributed across consumers sharing a consumer group, and partition offsets are automatically committed and resumed under this name. Consumer groups are not supported when specifying explicit partitions to consume from in the `topics` field.").
 			Optional()).
+		Field(service.NewStringField("client_id").
+			Description("An identifier for the client connection.").
+			Default("benthos").
+			Advanced()).
+		Field(service.NewStringField("rack_id").
+			Description("A rack identifier for this client.").
+			Default("").
+			Advanced()).
 		Field(service.NewIntField("checkpoint_limit").
 			Description("Determines how many messages of the same partition can be processed in parallel before applying back pressure. When a message of a given offset is delivered to the output the offset is only allowed to be committed when all messages of prior offsets have also been delivered, this ensures at-least-once delivery guarantees. However, this mechanism also increases the likelihood of duplicates in the event of crashes or server faults, reducing the checkpoint limit will mitigate this.").
 			Default(1024).
@@ -76,7 +83,7 @@ Finally, it's also possible to specify an explicit offset to consume from by add
 			Default("5s").
 			Advanced()).
 		Field(service.NewBoolField("start_from_oldest").
-			Description("If an offset is not found for a topic partition, determines whether to consume from the oldest available offset, otherwise messages are consumed from the latest offset.").
+			Description("Determines whether to consume from the oldest available offset, otherwise messages are consumed from the latest offset. The setting is applied when creating a new consumer group or the saved offset no longer exists.").
 			Default(true).
 			Advanced()).
 		Field(service.NewTLSToggledField("tls")).
@@ -122,6 +129,8 @@ type franzKafkaReader struct {
 	seedBrokers     []string
 	topics          []string
 	topicPartitions map[string]map[int32]kgo.Offset
+	clientID        string
+	rackID          string
 	consumerGroup   string
 	tlsConf         *tls.Config
 	saslConfs       []sasl.Mechanism
@@ -195,6 +204,14 @@ func newFranzKafkaReaderFromConfig(conf *service.ParsedConfig, res *service.Reso
 		return nil, err
 	}
 
+	if f.clientID, err = conf.FieldString("client_id"); err != nil {
+		return nil, err
+	}
+
+	if f.rackID, err = conf.FieldString("rack_id"); err != nil {
+		return nil, err
+	}
+
 	if f.consumerGroup, err = conf.FieldString("consumer_group"); err != nil {
 		return nil, err
 	}
@@ -235,12 +252,12 @@ type msgWithRecord struct {
 
 func (f *franzKafkaReader) recordToMessage(record *kgo.Record) *msgWithRecord {
 	msg := service.NewMessage(record.Value)
-	msg.MetaSet("kafka_key", string(record.Key))
-	msg.MetaSet("kafka_topic", record.Topic)
-	msg.MetaSet("kafka_partition", strconv.Itoa(int(record.Partition)))
-	msg.MetaSet("kafka_offset", strconv.Itoa(int(record.Offset)))
-	msg.MetaSet("kafka_timestamp_unix", strconv.FormatInt(record.Timestamp.Unix(), 10))
-	msg.MetaSet("kafka_tombstone_message", strconv.FormatBool(record.Value == nil))
+	msg.MetaSetMut("kafka_key", string(record.Key))
+	msg.MetaSetMut("kafka_topic", record.Topic)
+	msg.MetaSetMut("kafka_partition", int(record.Partition))
+	msg.MetaSetMut("kafka_offset", int(record.Offset))
+	msg.MetaSetMut("kafka_timestamp_unix", record.Timestamp.Unix())
+	msg.MetaSetMut("kafka_tombstone_message", record.Value == nil)
 	if f.multiHeader {
 		// in multi header mode we gather headers so we can encode them as lists
 		headers := map[string][]any{}
@@ -254,7 +271,7 @@ func (f *franzKafkaReader) recordToMessage(record *kgo.Record) *msgWithRecord {
 		}
 	} else {
 		for _, hdr := range record.Headers {
-			msg.MetaSet(hdr.Key, string(hdr.Value))
+			msg.MetaSetMut(hdr.Key, string(hdr.Value))
 		}
 	}
 
@@ -351,14 +368,14 @@ func (p *partitionTracker) loop() {
 				defer p.batcherLock.Unlock()
 
 				flushBatch = nil
-				if tNext, exists := p.batcher.UntilNext(); !exists || tNext > 0 {
+				if tNext, exists := p.batcher.UntilNext(); !exists || tNext > 1 {
 					// This can happen if a pushed message triggered a batch before
 					// the last known flush period. In this case we simply enter the
 					// loop again which readjusts our flush batch timer.
 					return
 				}
 
-				if sendBatch, _ := p.batcher.Flush(closeAtLeisureCtx); len(sendBatch) == 0 {
+				if sendBatch, _ = p.batcher.Flush(closeAtLeisureCtx); len(sendBatch) == 0 {
 					return
 				}
 				sendRecord = p.topBatchRecord
@@ -594,6 +611,8 @@ func (f *franzKafkaReader) Connect(ctx context.Context) error {
 		kgo.ConsumeResetOffset(initialOffset),
 		kgo.SASL(f.saslConfs...),
 		kgo.ConsumerGroup(f.consumerGroup),
+		kgo.ClientID(f.clientID),
+		kgo.Rack(f.rackID),
 	}
 
 	if f.consumerGroup != "" {

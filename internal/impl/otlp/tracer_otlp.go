@@ -25,16 +25,32 @@ func init() {
 			service.NewURLField("url").
 				Description("The URL of a collector to send tracing events to.").
 				Default("localhost:4318"),
+			service.NewBoolField("secure").
+				Description("Connect to the collector over HTTPS").
+				Default(false),
 		).Description("A list of http collectors.")).
 		Field(service.NewObjectListField("grpc",
 			service.NewURLField("url").
 				Description("The URL of a collector to send tracing events to.").
 				Default("localhost:4317"),
+			service.NewBoolField("secure").
+				Description("Connect to the collector with client transport security").
+				Default(false),
 		).Description("A list of grpc collectors.")).
 		Field(service.NewStringMapField("tags").
 			Description("A map of tags to add to all tracing spans.").
-			Default(map[string]string{}).
-			Advanced())
+			Default(map[string]any{}).
+			Advanced()).
+		Field(service.NewObjectField("sampling",
+			service.NewBoolField("enabled").
+				Description("Whether to enable sampling.").
+				Default(false),
+			service.NewFloatField("ratio").
+				Description("Sets the ratio of traces to sample.").
+				Examples(0.85, 0.5).
+				Optional()).
+			Description("Settings for trace sampling. Sampling is recommended for high-volume production workloads.").
+			Version("4.25.0"))
 
 	err := service.RegisterOtelTracerProvider(
 		"open_telemetry_collector",
@@ -52,13 +68,20 @@ func init() {
 }
 
 type collector struct {
-	url string
+	url    string
+	secure bool
+}
+
+type sampleConfig struct {
+	enabled bool
+	ratio   float64
 }
 
 type otlp struct {
-	grpc []collector
-	http []collector
-	tags map[string]string
+	grpc     []collector
+	http     []collector
+	tags     map[string]string
+	sampling sampleConfig
 }
 
 func newOtlpConfig(conf *service.ParsedConfig) (*otlp, error) {
@@ -77,10 +100,16 @@ func newOtlpConfig(conf *service.ParsedConfig) (*otlp, error) {
 		return nil, err
 	}
 
+	sampling, err := sampleConfigFromParsed(conf)
+	if err != nil {
+		return nil, err
+	}
+
 	return &otlp{
 		grpc,
 		http,
 		tags,
+		sampling,
 	}, nil
 }
 
@@ -95,9 +124,38 @@ func collectors(conf *service.ParsedConfig, name string) ([]collector, error) {
 		if err != nil {
 			return nil, err
 		}
-		collectors = append(collectors, collector{u})
+
+		secure, err := pc.FieldBool("secure")
+		if err != nil {
+			return nil, err
+		}
+
+		collectors = append(collectors, collector{
+			url:    u,
+			secure: secure,
+		})
 	}
 	return collectors, nil
+}
+
+func sampleConfigFromParsed(conf *service.ParsedConfig) (sampleConfig, error) {
+	conf = conf.Namespace("sampling")
+	enabled, err := conf.FieldBool("enabled")
+	if err != nil {
+		return sampleConfig{}, err
+	}
+
+	var ratio float64
+	if conf.Contains("ratio") {
+		if ratio, err = conf.FieldFloat("ratio"); err != nil {
+			return sampleConfig{}, err
+		}
+	}
+
+	return sampleConfig{
+		enabled: enabled,
+		ratio:   ratio,
+	}, nil
 }
 
 //------------------------------------------------------------------------------
@@ -105,6 +163,10 @@ func collectors(conf *service.ParsedConfig, name string) ([]collector, error) {
 func newOtlp(config *otlp) (trace.TracerProvider, error) {
 	ctx := context.TODO()
 	var opts []tracesdk.TracerProviderOption
+
+	if config.sampling.enabled {
+		opts = append(opts, tracesdk.WithSampler(tracesdk.TraceIDRatioBased(config.sampling.ratio)))
+	}
 
 	opts, err := addGrpcCollectors(ctx, config.grpc, opts)
 	if err != nil {
@@ -142,10 +204,15 @@ func addGrpcCollectors(ctx context.Context, collectors []collector, opts []trace
 	defer cancel()
 
 	for _, c := range collectors {
-		exp, err := otlptrace.New(ctx, otlptracegrpc.NewClient(
-			otlptracegrpc.WithInsecure(),
+		clientOpts := []otlptracegrpc.Option{
 			otlptracegrpc.WithEndpoint(c.url),
-		))
+		}
+
+		if !c.secure {
+			clientOpts = append(clientOpts, otlptracegrpc.WithInsecure())
+		}
+
+		exp, err := otlptrace.New(ctx, otlptracegrpc.NewClient(clientOpts...))
 		if err != nil {
 			return nil, err
 		}
@@ -159,10 +226,14 @@ func addHTTPCollectors(ctx context.Context, collectors []collector, opts []trace
 	defer cancel()
 
 	for _, c := range collectors {
-		exp, err := otlptrace.New(ctx, otlptracehttp.NewClient(
-			otlptracehttp.WithInsecure(),
+		clientOpts := []otlptracehttp.Option{
 			otlptracehttp.WithEndpoint(c.url),
-		))
+		}
+
+		if !c.secure {
+			clientOpts = append(clientOpts, otlptracehttp.WithInsecure())
+		}
+		exp, err := otlptrace.New(ctx, otlptracehttp.NewClient(clientOpts...))
 		if err != nil {
 			return nil, err
 		}

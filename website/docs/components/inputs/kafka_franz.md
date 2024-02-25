@@ -34,10 +34,10 @@ Introduced in version 3.61.0.
 input:
   label: ""
   kafka_franz:
-    seed_brokers: []
-    topics: []
+    seed_brokers: [] # No default (required)
+    topics: [] # No default (required)
     regexp_topics: false
-    consumer_group: ""
+    consumer_group: "" # No default (optional)
 ```
 
 </TabItem>
@@ -48,10 +48,12 @@ input:
 input:
   label: ""
   kafka_franz:
-    seed_brokers: []
-    topics: []
+    seed_brokers: [] # No default (required)
+    topics: [] # No default (required)
     regexp_topics: false
-    consumer_group: ""
+    consumer_group: "" # No default (optional)
+    client_id: benthos
+    rack_id: ""
     checkpoint_limit: 1024
     commit_period: 5s
     start_from_oldest: true
@@ -62,14 +64,14 @@ input:
       root_cas: ""
       root_cas_file: ""
       client_certs: []
-    sasl: []
+    sasl: [] # No default (optional)
     multi_header: false
     batching:
       count: 0
       byte_size: 0
       period: ""
       check: ""
-      processors: []
+      processors: [] # No default (optional)
 ```
 
 </TabItem>
@@ -168,6 +170,22 @@ An optional consumer group to consume as. When specified the partitions of speci
 
 Type: `string`  
 
+### `client_id`
+
+An identifier for the client connection.
+
+
+Type: `string`  
+Default: `"benthos"`  
+
+### `rack_id`
+
+A rack identifier for this client.
+
+
+Type: `string`  
+Default: `""`  
+
 ### `checkpoint_limit`
 
 Determines how many messages of the same partition can be processed in parallel before applying back pressure. When a message of a given offset is delivered to the output the offset is only allowed to be committed when all messages of prior offsets have also been delivered, this ensures at-least-once delivery guarantees. However, this mechanism also increases the likelihood of duplicates in the event of crashes or server faults, reducing the checkpoint limit will mitigate this.
@@ -186,7 +204,7 @@ Default: `"5s"`
 
 ### `start_from_oldest`
 
-If an offset is not found for a topic partition, determines whether to consume from the oldest available offset, otherwise messages are consumed from the latest offset.
+Determines whether to consume from the oldest available offset, otherwise messages are consumed from the latest offset. The setting is applied when creating a new consumer group or the saved offset no longer exists.
 
 
 Type: `bool`  
@@ -264,6 +282,7 @@ A list of client certificates to use. For each certificate either the fields `ce
 
 
 Type: `array`  
+Default: `[]`  
 
 ```yml
 # Examples

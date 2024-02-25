@@ -2,36 +2,55 @@ package pure
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/benthosdev/benthos/v4/internal/bundle"
+	"github.com/benthosdev/benthos/v4/internal/component/interop"
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
-	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
+	"github.com/benthosdev/benthos/v4/public/service"
+)
+
+const (
+	compressPFieldAlgorithm = "algorithm"
+	compressPFieldLevel     = "level"
 )
 
 func init() {
-	err := bundle.AllProcessors.Add(func(conf processor.Config, mgr bundle.NewManagement) (processor.V1, error) {
-		p, err := newCompress(conf.Compress, mgr)
-		if err != nil {
-			return nil, err
-		}
-		return processor.NewAutoObservedProcessor("compress", p, mgr), nil
-	}, docs.ComponentSpec{
-		Name: "compress",
-		Categories: []string{
-			"Parsing",
-		},
-		Summary: `
-Compresses messages according to the selected algorithm. Supported compression
-algorithms are: gzip, zlib, flate, snappy, lz4.`,
-		Description: `
-The 'level' field might not apply to all algorithms.`,
-		Config: docs.FieldComponent().WithChildren(
-			docs.FieldString("algorithm", "The compression algorithm to use.").HasOptions("gzip", "zlib", "flate", "snappy", "lz4"),
-			docs.FieldInt("level", "The level of compression to use. May not be applicable to all algorithms."),
-		).ChildDefaultAndTypesFromStruct(processor.NewCompressConfig()),
-	})
+	compAlgs := CompressionAlgsList()
+	err := service.RegisterBatchProcessor(
+		"compress", service.NewConfigSpec().
+			Categories("Parsing").
+			Stable().
+			Summary(fmt.Sprintf("Compresses messages according to the selected algorithm. Supported compression algorithms are: %v", compAlgs)).
+			Description(`The 'level' field might not apply to all algorithms.`).
+			Fields(
+				service.NewStringEnumField(compressPFieldAlgorithm, compAlgs...).
+					Description("The compression algorithm to use.").
+					LintRule(``),
+				service.NewIntField(compressPFieldLevel).
+					Description("The level of compression to use. May not be applicable to all algorithms.").
+					Default(-1),
+			),
+		func(conf *service.ParsedConfig, res *service.Resources) (service.BatchProcessor, error) {
+			algStr, err := conf.FieldString(compressPFieldAlgorithm)
+			if err != nil {
+				return nil, err
+			}
+
+			level, err := conf.FieldInt(compressPFieldLevel)
+			if err != nil {
+				return nil, err
+			}
+
+			mgr := interop.UnwrapManagement(res)
+			p, err := newCompress(algStr, level, mgr)
+			if err != nil {
+				return nil, err
+			}
+			return interop.NewUnwrapInternalBatchProcessor(processor.NewAutoObservedProcessor("compress", p, mgr)), nil
+		})
 	if err != nil {
 		panic(err)
 	}
@@ -43,13 +62,13 @@ type compressProc struct {
 	log   log.Modular
 }
 
-func newCompress(conf processor.CompressConfig, mgr bundle.NewManagement) (*compressProc, error) {
-	cor, err := strToCompressor(conf.Algorithm)
+func newCompress(algStr string, level int, mgr bundle.NewManagement) (*compressProc, error) {
+	cor, err := strToCompressFunc(algStr)
 	if err != nil {
 		return nil, err
 	}
 	return &compressProc{
-		level: conf.Level,
+		level: level,
 		comp:  cor,
 		log:   mgr.Logger(),
 	}, nil
@@ -58,7 +77,7 @@ func newCompress(conf processor.CompressConfig, mgr bundle.NewManagement) (*comp
 func (c *compressProc) Process(ctx context.Context, msg *message.Part) ([]*message.Part, error) {
 	newBytes, err := c.comp(c.level, msg.AsBytes())
 	if err != nil {
-		c.log.Errorf("Failed to compress message: %v\n", err)
+		c.log.Error("Failed to compress message: %v\n", err)
 		return nil, err
 	}
 	msg.SetBytes(newBytes)

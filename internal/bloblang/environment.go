@@ -193,3 +193,11 @@ func (e *Environment) WalkMethods(fn func(name string, spec query.MethodSpec)) {
 		fn(m.Name, m)
 	}
 }
+
+// ImportFile attempts to read a file from the target filesystem. This defaults
+// to the operating system disk where paths are relative to the bloblang file
+// being parsed. However, custom importers can be configured at the environment
+// level in order to change where and how files are accessed.
+func (e *Environment) ImportFile(name string) ([]byte, error) {
+	return e.pCtx.ImportFile(name)
+}

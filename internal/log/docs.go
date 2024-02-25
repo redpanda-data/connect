@@ -12,20 +12,21 @@ import (
 // Spec returns a field spec for the logger configuration fields.
 func Spec() docs.FieldSpecs {
 	return docs.FieldSpecs{
-		docs.FieldString("level", "Set the minimum severity level for emitting logs.").HasOptions(
+		docs.FieldString(fieldLogLevel, "Set the minimum severity level for emitting logs.").HasOptions(
 			"OFF", "FATAL", "ERROR", "WARN", "INFO", "DEBUG", "TRACE", "ALL", "NONE",
 		).HasDefault("INFO").LinterFunc(nil),
-		docs.FieldString("format", "Set the format of emitted logs.").HasOptions("json", "logfmt").HasDefault("logfmt"),
-		docs.FieldBool("add_timestamp", "Whether to include timestamps in logs.").HasDefault(false),
-		docs.FieldString("timestamp_name", "The name of the timestamp field added to logs when `add_timestamp` is set to `true` and the `format` is `json`.").HasDefault("time"),
-		docs.FieldString("message_name", "The name of the message field added to logs when the the `format` is `json`.").HasDefault("msg"),
-		docs.FieldString("static_fields", "A map of key/value pairs to add to each structured log.").Map().HasDefault(map[string]string{
+		docs.FieldString(fieldFormat, "Set the format of emitted logs.").HasOptions("json", "logfmt").HasDefault("logfmt"),
+		docs.FieldBool(fieldAddTimeStamp, "Whether to include timestamps in logs.").HasDefault(false),
+		docs.FieldString(fieldLevelName, "The name of the level field added to logs when the `format` is `json`.").HasDefault("level"),
+		docs.FieldString(fieldTimestampName, "The name of the timestamp field added to logs when `add_timestamp` is set to `true` and the `format` is `json`.").HasDefault("time"),
+		docs.FieldString(fieldMessageName, "The name of the message field added to logs when the the `format` is `json`.").HasDefault("msg"),
+		docs.FieldString(fieldStaticFields, "A map of key/value pairs to add to each structured log.").Map().HasDefault(map[string]any{
 			"@service": "benthos",
 		}),
-		docs.FieldObject("file", "Experimental: Specify fields for optionally writing logs to a file.").WithChildren(
-			docs.FieldString("path", "The file path to write logs to, if the file does not exist it will be created. Leave this field empty or unset to disable file based logging.").HasDefault(""),
-			docs.FieldBool("rotate", "Whether to rotate log files automatically.").HasDefault(false),
-			docs.FieldInt("rotate_max_age_days", "The maximum number of days to retain old log files based on the timestamp encoded in their filename, after which they are deleted. Setting to zero disables this mechanism.").HasDefault(0),
+		docs.FieldObject(fieldFile, "Experimental: Specify fields for optionally writing logs to a file.").WithChildren(
+			docs.FieldString(fieldFilePath, "The file path to write logs to, if the file does not exist it will be created. Leave this field empty or unset to disable file based logging.").HasDefault(""),
+			docs.FieldBool(fieldFileRotate, "Whether to rotate log files automatically.").HasDefault(false),
+			docs.FieldInt(fieldFileRotateMaxAge, "The maximum number of days to retain old log files based on the timestamp encoded in their filename, after which they are deleted. Setting to zero disables this mechanism.").HasDefault(0),
 		),
 	}
 }

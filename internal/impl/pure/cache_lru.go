@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	lruarcv2 "github.com/hashicorp/golang-lru/arc/v2"
 	lruv2 "github.com/hashicorp/golang-lru/v2"
 
 	"github.com/benthosdev/benthos/v4/public/service"
@@ -53,14 +54,14 @@ cache_resources:
         foo: bar
 ` + "```" + `
 
-These values can be overridden during execution, at which point the configured TTL is respected as usual.`).
+These values can be overridden during execution.`).
 		Field(service.NewIntField(lruCacheFieldCapLabel).
 			Description("The cache maximum capacity (number of entries)").
 			Default(lruCacheFieldCapDefaultValue)).
 		Field(service.NewStringMapField(lruCacheFieldInitValuesLabel).
 			Description("A table of key/value pairs that should be present in the cache on initialization. This can be used to create static lookup tables.").
-			Default(map[string]string{}).
-			Example(map[string]string{
+			Default(map[string]any{}).
+			Example(map[string]any{
 				"Nickelback":       "1995",
 				"Spice Girls":      "1994",
 				"The Human League": "1977",
@@ -172,12 +173,12 @@ func lruMemCache(capacity int,
 			return
 		}
 
-		inner = &lruv2SimpleCacheAdaptor{
+		inner = &lruv2SimpleCacheAdaptor[string, []byte]{
 			Cache: c,
 		}
 
 	case lruCacheFieldAlgorithmValueARC:
-		inner, err = lruv2.NewARC[string, []byte](capacity)
+		inner, err = lruarcv2.NewARC[string, []byte](capacity)
 		if err != nil {
 			return
 		}
@@ -201,20 +202,18 @@ func lruMemCache(capacity int,
 		inner.Add(k, []byte(v))
 	}
 
-	ca = &lruCacheAdapter{
+	return &lruCacheAdapter{
 		inner:      inner,
 		optimistic: optimistic,
-	}
-
-	return ca, nil
+	}, nil
 }
 
 //------------------------------------------------------------------------------
 
 var (
-	_ lruCache = (*lruv2SimpleCacheAdaptor)(nil)
+	_ lruCache = (*lruv2SimpleCacheAdaptor[string, []byte])(nil)
 	_ lruCache = (*lruv2.TwoQueueCache[string, []byte])(nil)
-	_ lruCache = (*lruv2.ARCCache[string, []byte])(nil)
+	_ lruCache = (*lruarcv2.ARCCache[string, []byte])(nil)
 )
 
 type lruCache interface {
@@ -224,15 +223,15 @@ type lruCache interface {
 	Remove(key string)
 }
 
-type lruv2SimpleCacheAdaptor struct {
-	*lruv2.Cache[string, []byte]
+type lruv2SimpleCacheAdaptor[K comparable, V any] struct {
+	*lruv2.Cache[K, V]
 }
 
-func (ad *lruv2SimpleCacheAdaptor) Add(key string, value []byte) {
+func (ad *lruv2SimpleCacheAdaptor[K, V]) Add(key K, value V) {
 	_ = ad.Cache.Add(key, value)
 }
 
-func (ad *lruv2SimpleCacheAdaptor) Remove(key string) {
+func (ad *lruv2SimpleCacheAdaptor[K, V]) Remove(key K) {
 	_ = ad.Cache.Remove(key)
 }
 
@@ -245,21 +244,11 @@ type lruCacheAdapter struct {
 
 	optimistic bool
 
-	sync.RWMutex
+	sync.Mutex
 }
 
 func (ca *lruCacheAdapter) Get(_ context.Context, key string) ([]byte, error) {
-	unlock := func() {}
-	if !ca.optimistic {
-		ca.RWMutex.RLock()
-
-		unlock = ca.RWMutex.RUnlock
-	}
-
 	value, ok := ca.inner.Get(key)
-
-	unlock()
-
 	if !ok {
 		return nil, service.ErrKeyNotFound
 	}
@@ -268,53 +257,38 @@ func (ca *lruCacheAdapter) Get(_ context.Context, key string) ([]byte, error) {
 }
 
 func (ca *lruCacheAdapter) Set(_ context.Context, key string, value []byte, _ *time.Duration) error {
-	unlock := func() {}
-	if !ca.optimistic {
-		ca.RWMutex.Lock()
-
-		unlock = ca.RWMutex.Unlock
-	}
-
 	ca.inner.Add(key, value)
-
-	unlock()
 
 	return nil
 }
 
-func (ca *lruCacheAdapter) Add(ctx context.Context, key string, value []byte, ttl *time.Duration) error {
-	unlock := func() {}
-	if !ca.optimistic {
-		ca.RWMutex.Lock()
-
-		unlock = ca.RWMutex.Unlock
-	}
-
+func (ca *lruCacheAdapter) unsafeAdd(key string, value []byte) error {
 	_, ok := ca.inner.Peek(key)
 	if ok {
-		unlock()
-
 		return service.ErrKeyAlreadyExists
 	}
 
 	ca.inner.Add(key, value)
 
-	unlock()
-
 	return nil
 }
 
-func (ca *lruCacheAdapter) Delete(_ context.Context, key string) error {
-	unlock := func() {}
-	if !ca.optimistic {
-		ca.RWMutex.Lock()
-
-		unlock = ca.RWMutex.Unlock
+func (ca *lruCacheAdapter) Add(_ context.Context, key string, value []byte, _ *time.Duration) error {
+	if ca.optimistic {
+		return ca.unsafeAdd(key, value)
 	}
 
-	ca.inner.Remove(key)
+	ca.Lock()
 
-	unlock()
+	err := ca.unsafeAdd(key, value)
+
+	ca.Unlock()
+
+	return err
+}
+
+func (ca *lruCacheAdapter) Delete(_ context.Context, key string) error {
+	ca.inner.Remove(key)
 
 	return nil
 }

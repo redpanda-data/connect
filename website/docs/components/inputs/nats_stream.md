@@ -29,8 +29,8 @@ Subscribe to a NATS Stream subject. Joining a queue is optional and allows multi
 input:
   label: ""
   nats_stream:
-    urls: []
-    cluster_id: ""
+    urls: [] # No default (required)
+    cluster_id: "" # No default (required)
     client_id: ""
     queue: ""
     subject: ""
@@ -46,8 +46,8 @@ input:
 input:
   label: ""
   nats_stream:
-    urls: []
-    cluster_id: ""
+    urls: [] # No default (required)
+    cluster_id: "" # No default (required)
     client_id: ""
     queue: ""
     subject: ""
@@ -64,14 +64,19 @@ input:
       root_cas_file: ""
       client_certs: []
     auth:
-      nkey_file: ""
-      user_credentials_file: ""
-      user_jwt: ""
-      user_nkey_seed: ""
+      nkey_file: ./seed.nk # No default (optional)
+      user_credentials_file: ./user.creds # No default (optional)
+      user_jwt: "" # No default (optional)
+      user_nkey_seed: "" # No default (optional)
+    extract_tracing_map: root = @ # No default (optional)
 ```
 
 </TabItem>
 </Tabs>
+
+:::caution Deprecation Notice
+The NATS Streaming Server is being deprecated. Critical bug fixes and security fixes will be applied until June of 2023. NATS-enabled applications requiring persistence should use [JetStream](https://docs.nats.io/nats-concepts/jetstream).
+:::
 
 Tracking and persisting offsets through a durable name is also optional and works with or without a queue. If a durable name is not provided then subjects are consumed from the most recently published message.
 
@@ -126,7 +131,6 @@ A list of URLs to connect to. If an item of the list contains commas it will be 
 
 
 Type: `array`  
-Default: `[]`  
 
 ```yml
 # Examples
@@ -144,7 +148,6 @@ The ID of the cluster to consume from.
 
 
 Type: `string`  
-Default: `""`  
 
 ### `client_id`
 
@@ -363,7 +366,6 @@ An optional file containing a NKey seed.
 
 
 Type: `string`  
-Default: `""`  
 
 ```yml
 # Examples
@@ -377,7 +379,6 @@ An optional file containing user credentials which consist of an user JWT and co
 
 
 Type: `string`  
-Default: `""`  
 
 ```yml
 # Examples
@@ -394,7 +395,6 @@ This field contains sensitive information that usually shouldn't be added to a c
 
 
 Type: `string`  
-Default: `""`  
 
 ### `auth.user_nkey_seed`
 
@@ -405,6 +405,21 @@ This field contains sensitive information that usually shouldn't be added to a c
 
 
 Type: `string`  
-Default: `""`  
+
+### `extract_tracing_map`
+
+EXPERIMENTAL: A [Bloblang mapping](/docs/guides/bloblang/about) that attempts to extract an object containing tracing propagation information, which will then be used as the root tracing span for the message. The specification of the extracted fields must match the format used by the service wide tracer.
+
+
+Type: `string`  
+Requires version 4.23.0 or newer  
+
+```yml
+# Examples
+
+extract_tracing_map: root = @
+
+extract_tracing_map: root = this.meta.span
+```
 
 

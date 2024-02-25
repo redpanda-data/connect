@@ -29,7 +29,7 @@ Sends messages to an HTTP server via a websocket connection.
 output:
   label: ""
   websocket:
-    url: ""
+    url: "" # No default (required)
 ```
 
 </TabItem>
@@ -40,7 +40,7 @@ output:
 output:
   label: ""
   websocket:
-    url: ""
+    url: "" # No default (required)
     tls:
       enabled: false
       skip_cert_verify: false
@@ -150,6 +150,7 @@ A list of client certificates to use. For each certificate either the fields `ce
 
 
 Type: `array`  
+Default: `[]`  
 
 ```yml
 # Examples

@@ -33,7 +33,7 @@ Introduced in version 4.4.0.
 # Common config fields, showing default values
 label: ""
 parquet_encode:
-  schema: []
+  schema: [] # No default (required)
   default_compression: uncompressed
 ```
 
@@ -44,7 +44,7 @@ parquet_encode:
 # All config fields, showing default values
 label: ""
 parquet_encode:
-  schema: []
+  schema: [] # No default (required)
   default_compression: uncompressed
   default_encoding: DELTA_LENGTH_BYTE_ARRAY
 ```
@@ -52,7 +52,7 @@ parquet_encode:
 </TabItem>
 </Tabs>
 
-This processor uses [https://github.com/segmentio/parquet-go](https://github.com/segmentio/parquet-go), which is itself experimental. Therefore changes could be made into how this processor functions outside of major version releases.
+This processor uses [https://github.com/parquet-go/parquet-go](https://github.com/parquet-go/parquet-go), which is itself experimental. Therefore changes could be made into how this processor functions outside of major version releases.
 
 
 ## Examples

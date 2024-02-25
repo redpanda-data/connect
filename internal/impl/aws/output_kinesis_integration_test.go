@@ -8,18 +8,17 @@ import (
 	"testing"
 	"time"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/credentials"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/kinesis"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/credentials"
+	"github.com/aws/aws-sdk-go-v2/service/kinesis"
+	"github.com/aws/aws-sdk-go-v2/service/kinesis/types"
 	"github.com/ory/dockertest/v3"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/benthosdev/benthos/v4/internal/component/output"
-	sess "github.com/benthosdev/benthos/v4/internal/impl/aws/session"
 	"github.com/benthosdev/benthos/v4/internal/integration"
-	"github.com/benthosdev/benthos/v4/internal/manager/mock"
-	"github.com/benthosdev/benthos/v4/internal/message"
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
 func TestKinesisIntegration(t *testing.T) {
@@ -57,41 +56,53 @@ func TestKinesisIntegration(t *testing.T) {
 	}
 
 	endpoint := fmt.Sprintf("http://localhost:%d", port)
-	config := output.KinesisConfig{
-		Stream:       "foo",
-		PartitionKey: "${!json(\"id\")}",
-	}
-	config.Region = "us-east-1"
-	config.Endpoint = endpoint
-	config.Credentials = sess.CredentialsConfig{
-		ID:     "xxxxxx",
-		Secret: "xxxxxx",
-		Token:  "xxxxxx",
-	}
+
+	pConf, err := koOutputSpec().ParseYAML(fmt.Sprintf(`
+stream: foo
+partition_key: ${! json("id") }
+region: us-east-1
+endpoint: "%v"
+credentials:
+  id: xxxxxx
+  secret: xxxxxx
+  token: xxxxxx
+`, endpoint), nil)
+	require.NoError(t, err)
+
+	conf, err := config.LoadDefaultConfig(context.TODO(),
+		config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider("xxxxx", "xxxxx", "xxxxx")),
+		config.WithRegion("us-east-1"),
+	)
+	require.NoError(t, err)
+	conf.BaseEndpoint = &endpoint
 
 	// bootstrap kinesis
-	client := kinesis.New(session.Must(session.NewSession(&aws.Config{
-		Credentials: credentials.NewStaticCredentials("xxxxx", "xxxxx", "xxxxx"),
-		Endpoint:    aws.String(endpoint),
-		Region:      aws.String("us-east-1"),
-	})))
+	client := kinesis.NewFromConfig(conf)
 	if err := pool.Retry(func() error {
-		_, err := client.CreateStream(&kinesis.CreateStreamInput{
-			ShardCount: aws.Int64(1),
-			StreamName: aws.String(config.Stream),
+		_, err := client.CreateStream(context.TODO(), &kinesis.CreateStreamInput{
+			ShardCount: aws.Int32(1),
+			StreamName: aws.String("foo"),
 		})
 		return err
 	}); err != nil {
 		t.Fatalf("Could not connect to docker resource: %s", err)
 	}
 
+	koConf, err := koConfigFromParsed(pConf)
+	require.NoError(t, err)
+
 	t.Run("testKinesisConnect", func(t *testing.T) {
-		testKinesisConnect(t, config, client)
+		testKinesisConnect(t, koConf, client)
+	})
+
+	t.Run("testKinesisConnectWithInvalidStream", func(t *testing.T) {
+		koConf.Stream = "invalid-foo"
+		testKinesisConnectWithInvalidStream(t, koConf, client)
 	})
 }
 
-func testKinesisConnect(t *testing.T, c output.KinesisConfig, client *kinesis.Kinesis) {
-	r, err := newKinesisWriter(c, mock.NewManager())
+func testKinesisConnect(t *testing.T, c koConfig, client *kinesis.Client) {
+	r, err := newKinesisWriter(c, service.MockResources())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -109,26 +120,26 @@ func testKinesisConnect(t *testing.T, c output.KinesisConfig, client *kinesis.Ki
 		[]byte(`{"foo":"qux","id":789}`),
 	}
 
-	msg := message.QuickBatch(nil)
+	var msg service.MessageBatch
 	for _, record := range records {
-		msg = append(msg, message.NewPart(record))
+		msg = append(msg, service.NewMessage(record))
 	}
 
 	if err := r.WriteBatch(context.Background(), msg); err != nil {
 		t.Fatal(err)
 	}
 
-	iterator, err := client.GetShardIterator(&kinesis.GetShardIteratorInput{
+	iterator, err := client.GetShardIterator(context.TODO(), &kinesis.GetShardIteratorInput{
 		ShardId:           aws.String("shardId-000000000000"),
-		ShardIteratorType: aws.String(kinesis.ShardIteratorTypeTrimHorizon),
+		ShardIteratorType: types.ShardIteratorTypeTrimHorizon,
 		StreamName:        aws.String(c.Stream),
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	out, err := client.GetRecords(&kinesis.GetRecordsInput{
-		Limit:         aws.Int64(10),
+	out, err := client.GetRecords(context.TODO(), &kinesis.GetRecordsInput{
+		Limit:         aws.Int32(10),
 		ShardIterator: iterator.ShardIterator,
 	})
 	if err != nil {
@@ -141,5 +152,18 @@ func testKinesisConnect(t *testing.T, c output.KinesisConfig, client *kinesis.Ki
 		if !bytes.Equal(out.Records[i].Data, record) {
 			t.Errorf("Expected record %d to equal %v, got %v", i, record, out.Records[i])
 		}
+	}
+}
+
+func testKinesisConnectWithInvalidStream(t *testing.T, c koConfig, client *kinesis.Client) {
+	r, err := newKinesisWriter(c, service.MockResources())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	retries := 3
+	for i := 0; i < retries; i++ {
+		err := r.Connect(context.Background())
+		assert.Error(t, err)
 	}
 }

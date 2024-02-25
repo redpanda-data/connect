@@ -11,7 +11,6 @@ import (
 	"go.opentelemetry.io/otel/trace"
 
 	"github.com/benthosdev/benthos/v4/internal/batch"
-	"github.com/benthosdev/benthos/v4/internal/bloblang/mapping"
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/internal/log"
@@ -47,8 +46,6 @@ type AsyncWriter struct {
 	maxInflight int
 	writer      AsyncSink
 
-	injectTracingMap *mapping.Executor
-
 	log    log.Modular
 	stats  metrics.Type
 	tracer trace.TracerProvider
@@ -73,12 +70,6 @@ func NewAsyncWriter(typeStr string, maxInflight int, w AsyncSink, mgr component.
 	return aWriter, nil
 }
 
-// SetInjectTracingMap sets a mapping to be used for injecting tracing events
-// into messages.
-func (w *AsyncWriter) SetInjectTracingMap(exec *mapping.Executor) {
-	w.injectTracingMap = exec
-}
-
 //------------------------------------------------------------------------------
 
 func (w *AsyncWriter) latencyMeasuringWrite(ctx context.Context, msg message.Batch) (latencyNs int64, err error) {
@@ -88,30 +79,6 @@ func (w *AsyncWriter) latencyMeasuringWrite(ctx context.Context, msg message.Bat
 		latencyNs = 1
 	}
 	return latencyNs, err
-}
-
-func (w *AsyncWriter) injectSpans(msg message.Batch, spans []*tracing.Span) {
-	if w.injectTracingMap == nil || msg.Len() > len(spans) {
-		return
-	}
-
-	for i := 0; i < msg.Len(); i++ {
-		spanMapGeneric, err := spans[i].TextMap()
-		if err != nil {
-			w.log.Warnf("Failed to inject span: %v", err)
-			continue
-		}
-
-		spanPart := message.NewPart(nil)
-		spanPart.SetStructuredMut(spanMapGeneric)
-
-		spanMsg := message.Batch{spanPart}
-		if tmpMsg, err := w.injectTracingMap.MapOnto(msg.Get(i), 0, spanMsg); err != nil {
-			w.log.Warnf("Failed to inject span: %v", err)
-		} else {
-			msg[i] = tmpMsg
-		}
-	}
 }
 
 // loop is an internal loop that brokers incoming messages to output pipe.
@@ -150,11 +117,19 @@ func (w *AsyncWriter) loop() {
 				if w.shutSig.ShouldCloseAtLeisure() || errors.Is(err, component.ErrTypeClosed) {
 					return false
 				}
-				w.log.Errorf("Failed to connect to %v: %v\n", w.typeStr, err)
+				w.log.Error("Failed to connect to %v: %v\n", w.typeStr, err)
 				mFailedConn.Incr(1)
-				select {
-				case <-time.After(connBackoff.NextBackOff()):
-				case <-closeLeisureCtx.Done():
+
+				var nextBoff time.Duration
+
+				var ebo *component.ErrBackOff
+				if errors.As(err, &ebo) {
+					nextBoff = ebo.Wait
+				} else {
+					nextBoff = connBackoff.NextBackOff()
+				}
+
+				if sleepWithCancellation(closeLeisureCtx, nextBoff) != nil {
 					return false
 				}
 			} else {
@@ -221,9 +196,8 @@ func (w *AsyncWriter) loop() {
 				return
 			}
 
-			w.log.Tracef("Attempting to write %v messages to '%v'.\n", ts.Payload.Len(), w.typeStr)
+			w.log.Trace("Attempting to write %v messages to '%v'.\n", ts.Payload.Len(), w.typeStr)
 			_, spans := tracing.WithChildSpans(w.tracer, traceName, ts.Payload)
-			w.injectSpans(ts.Payload, spans)
 
 			latency, err := w.latencyMeasuringWrite(closeLeisureCtx, ts.Payload)
 
@@ -243,15 +217,15 @@ func (w *AsyncWriter) loop() {
 				if w.typeStr != "reject" {
 					// TODO: Maybe reintroduce a sleep here if we encounter a
 					// busy retry loop.
-					w.log.Errorf("Failed to send message to %v: %v\n", w.typeStr, err)
+					w.log.Error("Failed to send message to %v: %v\n", w.typeStr, err)
 				} else {
-					w.log.Debugf("Rejecting message: %v\n", err)
+					w.log.Debug("Rejecting message: %v\n", err)
 				}
 			} else {
 				mBatchSent.Incr(1)
 				mSent.Incr(int64(batch.MessageCollapsedCount(ts.Payload)))
 				mLatency.Timing(latency)
-				w.log.Tracef("Successfully wrote %v messages to '%v'.\n", ts.Payload.Len(), w.typeStr)
+				w.log.Trace("Successfully wrote %v messages to '%v'.\n", ts.Payload.Len(), w.typeStr)
 			}
 
 			for _, s := range spans {
@@ -297,4 +271,16 @@ func (w *AsyncWriter) WaitForClose(ctx context.Context) error {
 		return ctx.Err()
 	}
 	return nil
+}
+
+func sleepWithCancellation(ctx context.Context, d time.Duration) error {
+	t := time.NewTimer(d)
+	defer t.Stop()
+
+	select {
+	case <-t.C:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }

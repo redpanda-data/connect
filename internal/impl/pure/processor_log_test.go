@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/benthosdev/benthos/v4/internal/component/processor"
+	"github.com/benthosdev/benthos/v4/internal/component/testutil"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
@@ -36,24 +36,24 @@ func (m *mockLog) With(args ...any) log.Modular {
 	return m
 }
 
-func (m *mockLog) Fatalf(format string, v ...any) {}
-func (m *mockLog) Errorf(format string, v ...any) {
+func (m *mockLog) Fatal(format string, v ...any) {}
+func (m *mockLog) Error(format string, v ...any) {
 	m.errors = append(m.errors, fmt.Sprintf(format, v...))
 }
 
-func (m *mockLog) Warnf(format string, v ...any) {
+func (m *mockLog) Warn(format string, v ...any) {
 	m.warns = append(m.warns, fmt.Sprintf(format, v...))
 }
 
-func (m *mockLog) Infof(format string, v ...any) {
+func (m *mockLog) Info(format string, v ...any) {
 	m.infos = append(m.infos, fmt.Sprintf(format, v...))
 }
 
-func (m *mockLog) Debugf(format string, v ...any) {
+func (m *mockLog) Debug(format string, v ...any) {
 	m.debugs = append(m.debugs, fmt.Sprintf(format, v...))
 }
 
-func (m *mockLog) Tracef(format string, v ...any) {
+func (m *mockLog) Trace(format string, v ...any) {
 	m.traces = append(m.traces, fmt.Sprintf(format, v...))
 }
 
@@ -79,9 +79,11 @@ func (m *mockLog) Traceln(message string) {
 }
 
 func TestLogBadLevel(t *testing.T) {
-	conf := processor.NewConfig()
-	conf.Type = "log"
-	conf.Log.Level = "does not exist"
+	conf, err := testutil.ProcessorFromYAML(`
+log:
+  level: does not exist
+`)
+	require.NoError(t, err)
 
 	if _, err := mock.NewManager().NewProcessor(conf); err == nil {
 		t.Error("expected err from bad log level")
@@ -89,15 +91,16 @@ func TestLogBadLevel(t *testing.T) {
 }
 
 func TestLogLevelTrace(t *testing.T) {
-	conf := processor.NewConfig()
-	conf.Type = "log"
-	conf.Log.Message = "${!json(\"foo\")}"
-
 	logMock := &mockLog{}
 
 	levels := []string{"TRACE", "DEBUG", "INFO", "WARN", "ERROR"}
 	for _, level := range levels {
-		conf.Log.Level = level
+		conf, err := testutil.ProcessorFromYAML(`
+log:
+  message: '${!json("foo")}'
+  level: ` + level + `
+`)
+		require.NoError(t, err)
 
 		mgr := mock.NewManager()
 		mgr.L = logMock
@@ -136,17 +139,17 @@ func TestLogLevelTrace(t *testing.T) {
 }
 
 func TestLogWithFields(t *testing.T) {
-	conf := processor.NewConfig()
-	conf.Type = "log"
-	conf.Log.Message = "${!json(\"foo\")}"
-	conf.Log.Fields = map[string]string{
-		"static":  "foo",
-		"dynamic": "${!json(\"bar\")}",
-	}
+	conf, err := testutil.ProcessorFromYAML(`
+log:
+  message: '${!json("foo")}'
+  level: INFO
+  fields:
+    static: foo
+    dynamic: '${!json("bar")}'
+`)
+	require.NoError(t, err)
 
 	logMock := &mockLog{}
-
-	conf.Log.Level = "INFO"
 
 	mgr := mock.NewManager()
 	mgr.L = logMock
@@ -203,17 +206,18 @@ func TestLogWithFields(t *testing.T) {
 }
 
 func TestLogWithFieldsMapping(t *testing.T) {
-	conf := processor.NewConfig()
-	conf.Type = "log"
-	conf.Log.Message = "hello world"
-	conf.Log.FieldsMapping = `
-root.static = "static value"
-root.age = this.age + 2
-root.is_cool = this.is_cool`
+	conf, err := testutil.ProcessorFromYAML(`
+log:
+  message: 'hello world'
+  level: INFO
+  fields_mapping: |
+    root.static = "static value"
+    root.age = this.age + 2
+    root.is_cool = this.is_cool
+`)
+	require.NoError(t, err)
 
 	logMock := &mockLog{}
-
-	conf.Log.Level = "INFO"
 
 	mgr := mock.NewManager()
 	mgr.L = logMock

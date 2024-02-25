@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"reflect"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -183,7 +182,7 @@ func (m *Type) Read(id string) (*StreamStatus, error) {
 // of the same stream.
 func (m *Type) Update(ctx context.Context, id string, conf stream.Config) error {
 	m.lock.Lock()
-	wrapper, exists := m.streams[id]
+	_, exists := m.streams[id]
 	closed := m.closed
 	m.lock.Unlock()
 
@@ -192,10 +191,6 @@ func (m *Type) Update(ctx context.Context, id string, conf stream.Config) error 
 	}
 	if !exists {
 		return ErrStreamDoesNotExist
-	}
-
-	if reflect.DeepEqual(wrapper.config, conf) {
-		return nil
 	}
 
 	if err := m.Delete(ctx, id); err != nil {

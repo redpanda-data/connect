@@ -29,9 +29,9 @@ performed for each message and the message contents are replaced with the result
 # Common config fields, showing default values
 label: ""
 redis:
-  url: ""
-  command: ""
-  args_mapping: ""
+  url: redis://:6397 # No default (required)
+  command: scard # No default (optional)
+  args_mapping: root = [ this.key ] # No default (optional)
 ```
 
 </TabItem>
@@ -41,7 +41,7 @@ redis:
 # All config fields, showing default values
 label: ""
 redis:
-  url: ""
+  url: redis://:6397 # No default (required)
   kind: simple
   master: ""
   tls:
@@ -51,8 +51,8 @@ redis:
     root_cas: ""
     root_cas_file: ""
     client_certs: []
-  command: ""
-  args_mapping: ""
+  command: scard # No default (optional)
+  args_mapping: root = [ this.key ] # No default (optional)
   retries: 3
   retry_period: 500ms
 ```
@@ -133,11 +133,11 @@ Type: `string`
 ```yml
 # Examples
 
-url: :6397
-
-url: localhost:6397
+url: redis://:6397
 
 url: redis://localhost:6379
+
+url: redis://foousername:foopassword@redisplace:6379
 
 url: redis://:foopassword@redisplace:6379
 
@@ -245,6 +245,7 @@ A list of client certificates to use. For each certificate either the fields `ce
 
 
 Type: `array`  
+Default: `[]`  
 
 ```yml
 # Examples

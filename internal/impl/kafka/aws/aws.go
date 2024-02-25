@@ -14,14 +14,14 @@ import (
 
 func init() {
 	kafka.AWSSASLFromConfigFn = func(c *service.ParsedConfig) (sasl.Mechanism, error) {
-		awsSession, err := sess.GetSession(c.Namespace("aws"))
+		awsConf, err := sess.GetSession(context.TODO(), c.Namespace("aws"))
 		if err != nil {
 			return nil, err
 		}
 
-		creds := awsSession.Config.Credentials
+		creds := awsConf.Credentials
 		return kaws.ManagedStreamingIAM(func(ctx context.Context) (kaws.Auth, error) {
-			val, err := creds.GetWithContext(ctx)
+			val, err := creds.Retrieve(ctx)
 			if err != nil {
 				return kaws.Auth{}, err
 			}

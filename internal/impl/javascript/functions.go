@@ -200,6 +200,24 @@ var _ = registerVMRunnerFunction("v0_msg_as_structured", `Obtain the root of the
 		}
 	})
 
+var _ = registerVMRunnerFunction("v0_msg_exists_meta", `Check that a metadata key exists.`).
+	Param("name", "string", "The metadata key to search for.").
+	Example(`if (benthos.v0_msg_exists_meta("kafka_key")) {}`).
+	FnCtor(func(r *vmRunner) jsFunction {
+		return func(call goja.FunctionCall, rt *goja.Runtime, l *service.Logger) (interface{}, error) {
+			var name string
+			if err := parseArgs(call, &name); err != nil {
+				return nil, err
+			}
+
+			_, ok := r.targetMessage.MetaGet(name)
+			if !ok {
+				return false, nil
+			}
+			return true, nil
+		}
+	})
+
 var _ = registerVMRunnerFunction("v0_msg_get_meta", `Get the value of a metadata key from the processed message.`).
 	Param("name", "string", "The metadata key to search for.").
 	Example(`let key = benthos.v0_msg_get_meta("kafka_key");`).

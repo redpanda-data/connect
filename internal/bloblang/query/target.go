@@ -1,5 +1,18 @@
 package query
 
+import "strings"
+
+// SliceToDotPath returns a valid dot path from a slice of path segments.
+func SliceToDotPath(path ...string) string {
+	escapes := make([]string, len(path))
+	for i, s := range path {
+		s = strings.ReplaceAll(s, "~", "~0")
+		s = strings.ReplaceAll(s, ".", "~1")
+		escapes[i] = s
+	}
+	return strings.Join(escapes, ".")
+}
+
 // TargetType represents a query target type, which is a source of information
 // that a query might require, such as metadata, structured message contents,
 // the context, etc.

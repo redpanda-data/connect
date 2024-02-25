@@ -1,0 +1,8 @@
+version: '3.3'
+
+services:
+  sftp:
+    image: atmoz/sftp:alpine
+    ports:
+      - "4223:22"
+    command: [ "foo:pass:1001:100:upload" ]

@@ -188,13 +188,13 @@ func (r *Reader) BeginFileWatching(mgr bundle.NewManagement, strict bool) error 
 				}
 			case <-filesTicker.C:
 				if err := refreshFiles(); err != nil {
-					mgr.Logger().Errorf("Failed to refresh watched paths: %v", err)
+					mgr.Logger().Error("Failed to refresh watched paths: %v", err)
 				}
 			case err, ok := <-watcher.Errors:
 				if !ok {
 					return
 				}
-				mgr.Logger().Errorf("Config watcher error: %v", err)
+				mgr.Logger().Error("Config watcher error: %v", err)
 			}
 		}
 	}()

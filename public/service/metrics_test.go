@@ -80,6 +80,12 @@ type mockMetricsExporterType struct {
 	lock   *sync.Mutex
 }
 
+func (m *mockMetricsExporterType) IncrFloat64(count float64) {
+	m.lock.Lock()
+	m.values[m.name] += int64(count)
+	m.lock.Unlock()
+}
+
 func (m *mockMetricsExporterType) Incr(count int64) {
 	m.lock.Lock()
 	m.values[m.name] += count
@@ -96,6 +102,10 @@ func (m *mockMetricsExporterType) Set(value int64) {
 	m.lock.Lock()
 	m.values[m.name] = value
 	m.lock.Unlock()
+}
+
+func (m *mockMetricsExporterType) SetFloat64(value float64) {
+	m.Set(int64(value))
 }
 
 func (m *mockMetricsExporter) NewCounterCtor(name string, labelKeys ...string) MetricsExporterCounterCtor {

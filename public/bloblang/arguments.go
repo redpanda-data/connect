@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"reflect"
 
-	"github.com/benthosdev/benthos/v4/internal/bloblang/query"
+	"github.com/benthosdev/benthos/v4/internal/value"
 )
 
 // ArgSpec provides an API for validating and extracting function or method
@@ -40,7 +40,7 @@ func (a *ArgSpec) IntVar(i *int) *ArgSpec {
 	a.n++
 
 	a.validators = append(a.validators, func(args []any) error {
-		v, err := query.IGetInt(args[index])
+		v, err := value.IGetInt(args[index])
 		if err != nil {
 			return newArgError(index, reflect.Int, args[index])
 		}
@@ -57,7 +57,7 @@ func (a *ArgSpec) Int64Var(i *int64) *ArgSpec {
 	a.n++
 
 	a.validators = append(a.validators, func(args []any) error {
-		v, err := query.IGetInt(args[index])
+		v, err := value.IGetInt(args[index])
 		if err != nil {
 			return newArgError(index, reflect.Int64, args[index])
 		}
@@ -75,7 +75,7 @@ func (a *ArgSpec) Float64Var(f *float64) *ArgSpec {
 	a.n++
 
 	a.validators = append(a.validators, func(args []any) error {
-		v, err := query.IGetNumber(args[index])
+		v, err := value.IGetNumber(args[index])
 		if err != nil {
 			return newArgError(index, reflect.Float64, args[index])
 		}
@@ -92,7 +92,7 @@ func (a *ArgSpec) BoolVar(b *bool) *ArgSpec {
 	a.n++
 
 	a.validators = append(a.validators, func(args []any) error {
-		v, err := query.IGetBool(args[index])
+		v, err := value.IGetBool(args[index])
 		if err != nil {
 			return newArgError(index, reflect.Bool, args[index])
 		}
@@ -110,7 +110,7 @@ func (a *ArgSpec) StringVar(s *string) *ArgSpec {
 	a.n++
 
 	a.validators = append(a.validators, func(args []any) error {
-		v, err := query.IGetString(args[index])
+		v, err := value.IGetString(args[index])
 		if err != nil {
 			return newArgError(index, reflect.String, args[index])
 		}

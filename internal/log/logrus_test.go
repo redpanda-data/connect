@@ -25,15 +25,15 @@ func TestLoggerWith(t *testing.T) {
 	logger, err := New(&buf, ifs.OS(), loggerConfig)
 	require.NoError(t, err)
 
-	logger.Warnf("Warning message root module")
+	logger.Warn("Warning message root module")
 
 	logger2 := logger.WithFields(map[string]string{
 		"foo": "bar", "count": "10", "thing": "is a string", "iscool": "true",
 	})
 	require.NoError(t, err)
-	logger2.Warnln("Warning message foo fields")
+	logger2.Warn("Warning message foo fields")
 
-	logger.Warnf("Warning message root module\n")
+	logger.Warn("Warning message root module\n")
 
 	expected := `level=warning msg="Warning message root module" @service=benthos_service @system=foo
 level=warning msg="Warning message foo fields" @service=benthos_service @system=foo count=10 foo=bar iscool=true thing="is a string"
@@ -63,7 +63,7 @@ func TestLoggerWithOddArgs(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	logger.Warnln("Warning message foo fields")
+	logger.Warn("Warning message foo fields")
 
 	expected := `level=warning msg="Warning message foo fields" @service=benthos_service @system=foo count=10 foo=bar iscool=true thing="is a string"
 `
@@ -93,12 +93,42 @@ func TestLoggerWithNonStringKeys(t *testing.T) {
 		"iscool":    "true",
 	})
 
-	logger.Warnln("Warning message foo fields")
+	logger.Warn("Warning message foo fields")
 
 	expected := `level=warning msg="Warning message foo fields" @service=benthos_service @system=foo component=meow foo=bar iscool=true thing="is a string"
 `
 
 	assert.Equal(t, expected, buf.String())
+}
+
+func TestLoggerWithOtherNames(t *testing.T) {
+	loggerConfig := NewConfig()
+	loggerConfig.AddTimeStamp = false
+	loggerConfig.Format = "json"
+	loggerConfig.LogLevel = "WARN"
+	loggerConfig.StaticFields = map[string]string{
+		"@service": "benthos_service",
+		"@system":  "foo",
+	}
+	loggerConfig.LevelName = "severity"
+	loggerConfig.MessageName = "message"
+
+	var buf bytes.Buffer
+
+	logger, err := New(&buf, ifs.OS(), loggerConfig)
+	require.NoError(t, err)
+
+	logger = logger.WithFields(map[string]string{
+		"foo": "bar",
+	})
+	require.NoError(t, err)
+
+	logger.Warn("Warning message foo fields")
+
+	expected := `{"@service":"benthos_service","@system":"foo","foo":"bar","message":"Warning message foo fields","severity":"warning"}
+`
+
+	require.JSONEq(t, expected, buf.String())
 }
 
 type logCounter struct {
@@ -127,11 +157,11 @@ func TestLogLevels(t *testing.T) {
 		logger, err := New(&buf, ifs.OS(), loggerConfig)
 		require.NoError(t, err)
 
-		logger.Errorln("error test")
-		logger.Warnln("warn test")
-		logger.Infoln("info test")
-		logger.Debugln("info test")
-		logger.Traceln("trace test")
+		logger.Error("error test")
+		logger.Warn("warn test")
+		logger.Info("info test")
+		logger.Debug("info test")
+		logger.Trace("trace test")
 
 		if i != buf.count {
 			t.Errorf("Wrong log count for [%v], %v != %v", loggerConfig.LogLevel, i, buf.count)

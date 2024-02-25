@@ -17,9 +17,7 @@ import TabItem from '@theme/TabItem';
 :::caution BETA
 This component is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with the component is found.
 :::
-
-Parses messages as an XML document, performs a mutation on the data, and then
-overwrites the previous contents with the new value.
+Parses messages as an XML document, performs a mutation on the data, and then overwrites the previous contents with the new value.
 
 ```yml
 # Config fields, showing default values
@@ -33,13 +31,10 @@ xml:
 
 ### `to_json`
 
-Converts an XML document into a JSON structure, where elements appear as keys of
-an object according to the following rules:
+Converts an XML document into a JSON structure, where elements appear as keys of an object according to the following rules:
 
-- If an element contains attributes they are parsed by prefixing a hyphen,
-  `-`, to the attribute label.
-- If the element is a simple element and has attributes, the element value
-  is given the key `#text`.
+- If an element contains attributes they are parsed by prefixing a hyphen, `-`, to the attribute label.
+- If the element is a simple element and has attributes, the element value is given the key `#text`.
 - XML comments, directives, and process instructions are ignored.
 - When elements are repeated the resulting JSON value is an array.
 

@@ -53,6 +53,7 @@ var (
 	TypeProcessor Type = "processor"
 	TypeRateLimit Type = "rate_limit"
 	TypeTracer    Type = "tracer"
+	TypeScanner   Type = "scanner"
 )
 
 // Types returns a slice containing all component types.
@@ -66,6 +67,7 @@ func Types() []Type {
 		TypeProcessor,
 		TypeRateLimit,
 		TypeTracer,
+		TypeScanner,
 	}
 }
 

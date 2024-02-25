@@ -6,37 +6,33 @@ import (
 
 	"github.com/benthosdev/benthos/v4/internal/bloblang/field"
 	"github.com/benthosdev/benthos/v4/internal/bundle"
+	"github.com/benthosdev/benthos/v4/internal/component/interop"
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
-	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
+	"github.com/benthosdev/benthos/v4/public/service"
+)
+
+const (
+	gbvpFieldValue = "value"
 )
 
 func init() {
-	err := bundle.AllProcessors.Add(func(conf processor.Config, mgr bundle.NewManagement) (processor.V1, error) {
-		p, err := newGroupByValue(conf.GroupByValue, mgr)
-		if err != nil {
-			return nil, err
-		}
-		return processor.NewAutoObservedBatchedProcessor("group_by_value", p, mgr), nil
-	}, docs.ComponentSpec{
-		Name: "group_by_value",
-		Categories: []string{
-			"Composition",
-		},
-		Summary: `Splits a batch of messages into N batches, where each resulting batch contains a group of messages determined by a [function interpolated string](/docs/configuration/interpolation#bloblang-queries) evaluated per message.`,
-		Description: `
+	err := service.RegisterBatchProcessor(
+		"group_by_value", service.NewConfigSpec().
+			Categories("Composition").
+			Stable().
+			Summary(`Splits a batch of messages into N batches, where each resulting batch contains a group of messages determined by a [function interpolated string](/docs/configuration/interpolation#bloblang-queries) evaluated per message.`).
+			Description(`
 This allows you to group messages using arbitrary fields within their content or metadata, process them individually, and send them to unique locations as per their group.
 
-The functionality of this processor depends on being applied across messages that are batched. You can find out more about batching [in this doc](/docs/configuration/batching).`,
-		Footnotes: `
+The functionality of this processor depends on being applied across messages that are batched. You can find out more about batching [in this doc](/docs/configuration/batching).`).
+			Footnotes(`
 ## Examples
 
-If we were consuming Kafka messages and needed to group them by their key,
-archive the groups, and send them to S3 with the key as part of the path we
-could achieve that with the following:
+If we were consuming Kafka messages and needed to group them by their key, archive the groups, and send them to S3 with the key as part of the path we could achieve that with the following:
 
-` + "```yaml" + `
+`+"```yaml"+`
 pipeline:
   processors:
     - group_by_value:
@@ -49,14 +45,23 @@ output:
   aws_s3:
     bucket: TODO
     path: docs/${! meta("kafka_key") }/${! count("files") }-${! timestamp_unix_nano() }.tar.gz
-` + "```" + ``,
-		Config: docs.FieldComponent().WithChildren(
-			docs.FieldString(
-				"value", "The interpolated string to group based on.",
-				"${! meta(\"kafka_key\") }", "${! json(\"foo.bar\") }-${! meta(\"baz\") }",
-			).IsInterpolated().HasDefault(""),
-		),
-	})
+`+"```"+``).
+			Field(service.NewInterpolatedStringField(gbvpFieldValue).
+				Description("The interpolated string to group based on.").
+				Examples("${! meta(\"kafka_key\") }", "${! json(\"foo.bar\") }-${! meta(\"baz\") }")),
+		func(conf *service.ParsedConfig, res *service.Resources) (service.BatchProcessor, error) {
+			valueStr, err := conf.FieldString(gbvpFieldValue)
+			if err != nil {
+				return nil, err
+			}
+
+			mgr := interop.UnwrapManagement(res)
+			p, err := newGroupByValue(valueStr, mgr)
+			if err != nil {
+				return nil, err
+			}
+			return interop.NewUnwrapInternalBatchProcessor(processor.NewAutoObservedBatchedProcessor("group_by_value", p, mgr)), nil
+		})
 	if err != nil {
 		panic(err)
 	}
@@ -67,8 +72,8 @@ type groupByValueProc struct {
 	value *field.Expression
 }
 
-func newGroupByValue(conf processor.GroupByValueConfig, mgr bundle.NewManagement) (processor.AutoObservedBatched, error) {
-	value, err := mgr.BloblEnvironment().NewField(conf.Value)
+func newGroupByValue(valueStr string, mgr bundle.NewManagement) (processor.AutoObservedBatched, error) {
+	value, err := mgr.BloblEnvironment().NewField(valueStr)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse value expression: %v", err)
 	}
@@ -89,7 +94,7 @@ func (g *groupByValueProc) ProcessBatch(ctx *processor.BatchProcContext, batch m
 	_ = batch.Iter(func(i int, p *message.Part) error {
 		v, err := g.value.String(i, batch)
 		if err != nil {
-			g.log.Errorf("Group value interpolation error: %v", err)
+			g.log.Error("Group value interpolation error: %v", err)
 			err = fmt.Errorf("group value interpolation error: %w", err)
 			ctx.OnError(err, i, p)
 		}
@@ -99,7 +104,7 @@ func (g *groupByValueProc) ProcessBatch(ctx *processor.BatchProcContext, batch m
 		if group, exists := groupMap[v]; exists {
 			groupMap[v] = append(group, p)
 		} else {
-			g.log.Tracef("New group formed: %v\n", v)
+			g.log.Trace("New group formed: %v\n", v)
 			groupKeys = append(groupKeys, v)
 			groupMap[v] = message.Batch{p}
 		}

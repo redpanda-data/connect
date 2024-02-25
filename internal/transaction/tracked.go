@@ -51,7 +51,7 @@ func (t *Tracked) getResFromGroup(walkable *batch.Error) error {
 	}
 
 	var res error
-	walkable.WalkParts(t.group, t.msg, func(index int, p *message.Part, err error) bool {
+	walkable.WalkPartsBySource(t.group, t.msg, func(index int, p *message.Part, err error) bool {
 		if err != nil {
 			res = err
 			return false

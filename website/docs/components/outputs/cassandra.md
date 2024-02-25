@@ -16,7 +16,6 @@ import TabItem from '@theme/TabItem';
 :::caution BETA
 This component is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with the component is found.
 :::
-
 Runs a query against a Cassandra database for each message in order to insert data.
 
 
@@ -32,10 +31,10 @@ Runs a query against a Cassandra database for each message in order to insert da
 output:
   label: ""
   cassandra:
-    addresses: []
-    query: ""
-    args_mapping: ""
+    addresses: [] # No default (required)
     timeout: 600ms
+    query: "" # No default (required)
+    args_mapping: "" # No default (optional)
     max_in_flight: 64
     batching:
       count: 0
@@ -52,7 +51,7 @@ output:
 output:
   label: ""
   cassandra:
-    addresses: []
+    addresses: [] # No default (required)
     tls:
       enabled: false
       skip_cert_verify: false
@@ -65,22 +64,22 @@ output:
       username: ""
       password: ""
     disable_initial_host_lookup: false
-    query: ""
-    args_mapping: ""
-    consistency: QUORUM
-    logged_batch: true
     max_retries: 3
     backoff:
       initial_interval: 1s
       max_interval: 5s
     timeout: 600ms
+    query: "" # No default (required)
+    args_mapping: "" # No default (optional)
+    consistency: QUORUM
+    logged_batch: true
     max_in_flight: 64
     batching:
       count: 0
       byte_size: 0
       period: ""
       check: ""
-      processors: []
+      processors: [] # No default (optional)
 ```
 
 </TabItem>
@@ -156,7 +155,6 @@ A list of Cassandra nodes to connect to. Multiple comma separated addresses can 
 
 
 Type: `array`  
-Default: `[]`  
 
 ```yml
 # Examples
@@ -314,14 +312,14 @@ password: ${KEY_PASSWORD}
 
 ### `password_authenticator`
 
-An object containing the username and password.
+Optional configuration of Cassandra authentication parameters.
 
 
 Type: `object`  
 
 ### `password_authenticator.enabled`
 
-Whether to use password authentication.
+Whether to use password authentication
 
 
 Type: `bool`  
@@ -329,7 +327,7 @@ Default: `false`
 
 ### `password_authenticator.username`
 
-A username.
+The username to authenticate as.
 
 
 Type: `string`  
@@ -337,7 +335,7 @@ Default: `""`
 
 ### `password_authenticator.password`
 
-A password.
+The password to authenticate with.
 :::warning Secret
 This field contains sensitive information that usually shouldn't be added to a config directly, read our [secrets page for more info](/docs/configuration/secrets).
 :::
@@ -353,40 +351,6 @@ If enabled the driver will not attempt to get host info from the system.peers ta
 
 Type: `bool`  
 Default: `false`  
-
-### `query`
-
-A query to execute for each message.
-
-
-Type: `string`  
-Default: `""`  
-
-### `args_mapping`
-
-A [Bloblang mapping](/docs/guides/bloblang/about) that can be used to provide arguments to Cassandra queries. The result of the query must be an array containing a matching number of elements to the query arguments.
-
-
-Type: `string`  
-Default: `""`  
-Requires version 3.55.0 or newer  
-
-### `consistency`
-
-The consistency level to use.
-
-
-Type: `string`  
-Default: `"QUORUM"`  
-Options: `ANY`, `ONE`, `TWO`, `THREE`, `QUORUM`, `ALL`, `LOCAL_QUORUM`, `EACH_QUORUM`, `LOCAL_ONE`.
-
-### `logged_batch`
-
-If enabled the driver will perform a logged batch. Disabling this prompts unlogged batches to be used instead, which are less efficient but necessary for alternative storages that do not support logged batches.
-
-
-Type: `bool`  
-Default: `true`  
 
 ### `max_retries`
 
@@ -426,11 +390,42 @@ The client connection timeout.
 
 Type: `string`  
 Default: `"600ms"`  
-Requires version 3.63.0 or newer  
+
+### `query`
+
+A query to execute for each message.
+
+
+Type: `string`  
+
+### `args_mapping`
+
+A [Bloblang mapping](/docs/guides/bloblang/about) that can be used to provide arguments to Cassandra queries. The result of the query must be an array containing a matching number of elements to the query arguments.
+
+
+Type: `string`  
+Requires version 3.55.0 or newer  
+
+### `consistency`
+
+The consistency level to use.
+
+
+Type: `string`  
+Default: `"QUORUM"`  
+Options: `ANY`, `ONE`, `TWO`, `THREE`, `QUORUM`, `ALL`, `LOCAL_QUORUM`, `EACH_QUORUM`, `LOCAL_ONE`.
+
+### `logged_batch`
+
+If enabled the driver will perform a logged batch. Disabling this prompts unlogged batches to be used instead, which are less efficient but necessary for alternative storages that do not support logged batches.
+
+
+Type: `bool`  
+Default: `true`  
 
 ### `max_in_flight`
 
-The maximum number of parallel message batches to have in flight at any given time.
+The maximum number of messages to have in flight at a given time. Increase this to improve throughput.
 
 
 Type: `int`  
@@ -515,7 +510,6 @@ A list of [processors](/docs/components/processors/about) to apply to a batch as
 
 
 Type: `array`  
-Default: `[]`  
 
 ```yml
 # Examples

@@ -27,8 +27,8 @@ Use a Redis instance as a cache. The expiration can be set to zero or an empty s
 # Common config fields, showing default values
 label: ""
 redis:
-  url: ""
-  prefix: ""
+  url: redis://:6397 # No default (required)
+  prefix: "" # No default (optional)
 ```
 
 </TabItem>
@@ -38,7 +38,7 @@ redis:
 # All config fields, showing default values
 label: ""
 redis:
-  url: ""
+  url: redis://:6397 # No default (required)
   kind: simple
   master: ""
   tls:
@@ -48,8 +48,8 @@ redis:
     root_cas: ""
     root_cas_file: ""
     client_certs: []
-  prefix: ""
-  default_ttl: ""
+  prefix: "" # No default (optional)
+  default_ttl: "" # No default (optional)
   retries:
     initial_interval: 500ms
     max_interval: 1s
@@ -71,11 +71,11 @@ Type: `string`
 ```yml
 # Examples
 
-url: :6397
-
-url: localhost:6397
+url: redis://:6397
 
 url: redis://localhost:6379
+
+url: redis://foousername:foopassword@redisplace:6379
 
 url: redis://:foopassword@redisplace:6379
 
@@ -183,6 +183,7 @@ A list of client certificates to use. For each certificate either the fields `ce
 
 
 Type: `array`  
+Default: `[]`  
 
 ```yml
 # Examples

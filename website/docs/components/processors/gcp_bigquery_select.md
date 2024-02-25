@@ -25,14 +25,14 @@ Introduced in version 3.64.0.
 # Config fields, showing default values
 label: ""
 gcp_bigquery_select:
-  project: ""
-  table: ""
-  columns: []
-  where: ""
+  project: "" # No default (required)
+  table: bigquery-public-data.samples.shakespeare # No default (required)
+  columns: [] # No default (required)
+  where: type = ? and created_at > ? # No default (optional)
   job_labels: {}
-  args_mapping: ""
-  prefix: ""
-  suffix: ""
+  args_mapping: root = [ "article", now().ts_format("2006-01-02") ] # No default (optional)
+  prefix: "" # No default (optional)
+  suffix: "" # No default (optional)
 ```
 
 ## Examples

@@ -1,0 +1,34 @@
+pipeline:
+  processors:
+    - mutation: |
+        root.foo = "${BENTHOS_TEST_FOO:woof}"
+        root.bar = env("BENTHOS_TEST_BAR").or("meow")
+
+tests:
+  - name: only defaults
+    environment: {}
+    input_batch:
+      - content: '{"id":"1"}'
+    output_batches:
+      -
+        - json_equals: { "id": "1", "foo": "woof", "bar": "meow" }
+
+  - name: both defined
+    environment:
+      BENTHOS_TEST_FOO: quack
+      BENTHOS_TEST_BAR: moo
+    input_batch:
+      - content: '{"id":"1"}'
+    output_batches:
+      -
+        - json_equals: { "id": "1", "foo": "quack", "bar": "moo" }
+
+  - name: both defined again
+    environment:
+      BENTHOS_TEST_FOO: tweet
+      BENTHOS_TEST_BAR: neigh
+    input_batch:
+      - content: '{"id":"1"}'
+    output_batches:
+      -
+        - json_equals: { "id": "1", "foo": "tweet", "bar": "neigh" }

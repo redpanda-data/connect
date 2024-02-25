@@ -9,7 +9,7 @@ import (
 	"io/fs"
 	"sync"
 
-	"github.com/segmentio/parquet-go"
+	"github.com/parquet-go/parquet-go"
 
 	"github.com/benthosdev/benthos/v4/internal/filepath"
 	"github.com/benthosdev/benthos/v4/public/service"
@@ -30,7 +30,7 @@ func parquetInputConfig() *service.ConfigSpec {
 			Default(1).
 			Advanced()).
 		Description(`
-This input uses [https://github.com/segmentio/parquet-go](https://github.com/segmentio/parquet-go), which is itself experimental. Therefore changes could be made into how this processor functions outside of major version releases.
+This input uses [https://github.com/parquet-go/parquet-go](https://github.com/parquet-go/parquet-go), which is itself experimental. Therefore changes could be made into how this processor functions outside of major version releases.
 
 By default any BYTE_ARRAY or FIXED_LEN_BYTE_ARRAY value will be extracted as a byte slice (` + "`[]byte`" + `) unless the logical type is UTF8, in which case they are extracted as a string (` + "`string`" + `).
 
@@ -104,7 +104,6 @@ type parquetReader struct {
 
 	batchSize      int
 	pathsRemaining []string
-	eConf          extractConfig
 
 	mut      sync.Mutex
 	openFile *openParquetFile
@@ -151,7 +150,10 @@ func (r *parquetReader) getOpenFile() (*openParquetFile, error) {
 		return nil, err
 	}
 
-	rdr := parquet.NewGenericReader[any](inFile)
+	rdr, err := newReaderWithoutPanic(inFile)
+	if err != nil {
+		return nil, err
+	}
 
 	r.openFile = &openParquetFile{
 		schema: rdr.Schema(),
@@ -176,7 +178,7 @@ func (r *parquetReader) ReadBatch(ctx context.Context) (service.MessageBatch, se
 	r.mut.Lock()
 	defer r.mut.Unlock()
 
-	rowBuf := make([]parquet.Row, r.batchSize)
+	rowBuf := make([]any, r.batchSize)
 	var f *openParquetFile
 	var n int
 
@@ -189,7 +191,7 @@ func (r *parquetReader) ReadBatch(ctx context.Context) (service.MessageBatch, se
 			return nil, nil, err
 		}
 
-		if n, err = f.rdr.ReadRows(rowBuf); errors.Is(err, io.EOF) {
+		if n, err = readWithoutPanic(f.rdr, rowBuf); errors.Is(err, io.EOF) {
 			// If we finished this file we close the handle and forget it so
 			// that the next call moves on.
 			if closeErr := f.Close(); closeErr != nil {
@@ -214,13 +216,8 @@ func (r *parquetReader) ReadBatch(ctx context.Context) (service.MessageBatch, se
 
 	resBatch := make(service.MessageBatch, n)
 	for i := 0; i < n; i++ {
-		row := rowBuf[i]
-
-		mappedData := map[string]any{}
-		_, _ = r.eConf.extractPQValueGroup(f.schema.Fields(), row, mappedData, 0, 0)
-
 		newMsg := service.NewMessage(nil)
-		newMsg.SetStructuredMut(mappedData)
+		newMsg.SetStructuredMut(rowBuf[i])
 		resBatch[i] = newMsg
 	}
 

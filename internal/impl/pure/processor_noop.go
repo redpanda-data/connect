@@ -3,20 +3,20 @@ package pure
 import (
 	"context"
 
-	"github.com/benthosdev/benthos/v4/internal/bundle"
-	"github.com/benthosdev/benthos/v4/internal/component/processor"
-	"github.com/benthosdev/benthos/v4/internal/docs"
+	"github.com/benthosdev/benthos/v4/internal/component/interop"
 	"github.com/benthosdev/benthos/v4/internal/message"
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
 func init() {
-	err := bundle.AllProcessors.Add(func(c processor.Config, nm bundle.NewManagement) (processor.V1, error) {
-		return &noopProcessor{}, nil
-	}, docs.ComponentSpec{
-		Name:    "noop",
-		Summary: "Noop is a processor that does nothing, the message passes through unchanged. Why? Sometimes doing nothing is the braver option.",
-		Config:  docs.FieldObject("", "").HasDefault(struct{}{}),
-	})
+	err := service.RegisterBatchProcessor("noop", service.NewConfigSpec().
+		Stable().
+		Summary("Noop is a processor that does nothing, the message passes through unchanged. Why? Sometimes doing nothing is the braver option.").
+		Field(service.NewObjectField("").Default(map[string]any{})),
+		func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchProcessor, error) {
+			p := &noopProcessor{}
+			return interop.NewUnwrapInternalBatchProcessor(p), nil
+		})
 	if err != nil {
 		panic(err)
 	}

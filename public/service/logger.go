@@ -22,7 +22,7 @@ func (l *Logger) Tracef(template string, args ...any) {
 	if l == nil {
 		return
 	}
-	l.m.Tracef(template, args...)
+	l.m.Trace(template, args...)
 }
 
 // Trace logs a trace message.
@@ -30,7 +30,7 @@ func (l *Logger) Trace(message string) {
 	if l == nil {
 		return
 	}
-	l.m.Traceln(message)
+	l.m.Trace(message)
 }
 
 // Debugf logs a debug message using fmt.Sprintf when args are specified.
@@ -38,7 +38,7 @@ func (l *Logger) Debugf(template string, args ...any) {
 	if l == nil {
 		return
 	}
-	l.m.Debugf(template, args...)
+	l.m.Debug(template, args...)
 }
 
 // Debug logs a debug message.
@@ -46,7 +46,7 @@ func (l *Logger) Debug(message string) {
 	if l == nil {
 		return
 	}
-	l.m.Debugln(message)
+	l.m.Debug(message)
 }
 
 // Infof logs an info message using fmt.Sprintf when args are specified.
@@ -54,7 +54,7 @@ func (l *Logger) Infof(template string, args ...any) {
 	if l == nil {
 		return
 	}
-	l.m.Infof(template, args...)
+	l.m.Info(template, args...)
 }
 
 // Info logs an info message.
@@ -62,7 +62,7 @@ func (l *Logger) Info(message string) {
 	if l == nil {
 		return
 	}
-	l.m.Infoln(message)
+	l.m.Info(message)
 }
 
 // Warnf logs a warning message using fmt.Sprintf when args are specified.
@@ -70,7 +70,7 @@ func (l *Logger) Warnf(template string, args ...any) {
 	if l == nil {
 		return
 	}
-	l.m.Warnf(template, args...)
+	l.m.Warn(template, args...)
 }
 
 // Warn logs a warning message.
@@ -78,7 +78,7 @@ func (l *Logger) Warn(message string) {
 	if l == nil {
 		return
 	}
-	l.m.Warnln(message)
+	l.m.Warn(message)
 }
 
 // Errorf logs an error message using fmt.Sprintf when args are specified.
@@ -86,7 +86,7 @@ func (l *Logger) Errorf(template string, args ...any) {
 	if l == nil {
 		return
 	}
-	l.m.Errorf(template, args...)
+	l.m.Error(template, args...)
 }
 
 // Error logs an error message.
@@ -94,7 +94,7 @@ func (l *Logger) Error(message string) {
 	if l == nil {
 		return
 	}
-	l.m.Errorln(message)
+	l.m.Error(message)
 }
 
 // With adds a variadic set of fields to a logger. Each field must consist

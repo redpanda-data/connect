@@ -31,4 +31,4 @@ tests:
     input_batch:
       - content: '{"people":[{"firstName":"john","lastName":"oates","age":10}]}'
     output_batches:
-      - - content_equals: '{"firstName":"john","lastName":"oates","age":10}'
+      - - json_equals: '{"firstName":"john","lastName":"oates","age":10}'

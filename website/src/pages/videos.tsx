@@ -35,17 +35,6 @@ function Videos() {
               controls={true}
             />
           </div>
-          <div className="row margin-bottom--lg">
-            <div className="col col--8 col--offset-2">
-              <h2>Code Streams</h2>
-              <p>This playlist contains live coding sessions on the Benthos codebase.</p>
-            </div>
-            <ReactPlayer
-              className={classnames('col col--8 col--offset-2')}
-              url='https://www.youtube-nocookie.com/embed/videoseries?list=PL9hWaP-BQh2ovI1iwEKxzNFF8dVAZgHCA'
-              controls={true}
-            />
-          </div>
         </div>
       </main>
     </Layout>

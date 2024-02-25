@@ -31,7 +31,7 @@ func TestBloblangCrossfire(t *testing.T) {
 
 	conf := processor.NewConfig()
 	conf.Type = "bloblang"
-	conf.Bloblang = `
+	conf.Plugin = `
 	foo = json("foo").from(0)
 	foo.bar_new = "this is swapped now"
 	foo.bar.baz = "and this changed"
@@ -90,7 +90,7 @@ func TestBloblangContext(t *testing.T) {
 
 	conf := processor.NewConfig()
 	conf.Type = "bloblang"
-	conf.Bloblang = `result = foo.bar.baz.uppercase()`
+	conf.Plugin = `result = foo.bar.baz.uppercase()`
 	proc, err := mock.NewManager().NewProcessor(conf)
 	if err != nil {
 		t.Fatal(err)
@@ -127,7 +127,7 @@ func TestBloblangCustomObject(t *testing.T) {
 
 	conf := processor.NewConfig()
 	conf.Type = "bloblang"
-	conf.Bloblang = `root.foos = this.foos`
+	conf.Plugin = `root.foos = this.foos`
 	proc, err := mock.NewManager().NewProcessor(conf)
 	require.NoError(t, err)
 
@@ -150,7 +150,7 @@ func TestBloblangFiltering(t *testing.T) {
 
 	conf := processor.NewConfig()
 	conf.Type = "bloblang"
-	conf.Bloblang = `
+	conf.Plugin = `
 	root = match {
 		(foo | bar).delete.or(false) => deleted(),
 	}
@@ -180,7 +180,7 @@ func TestBloblangFilterAll(t *testing.T) {
 
 	conf := processor.NewConfig()
 	conf.Type = "bloblang"
-	conf.Bloblang = `root = deleted()`
+	conf.Plugin = `root = deleted()`
 	proc, err := mock.NewManager().NewProcessor(conf)
 	if err != nil {
 		t.Fatal(err)
@@ -198,7 +198,7 @@ func TestBloblangJSONError(t *testing.T) {
 
 	conf := processor.NewConfig()
 	conf.Type = "bloblang"
-	conf.Bloblang = `
+	conf.Plugin = `
 	foo = json().bar
 `
 	proc, err := mock.NewManager().NewProcessor(conf)

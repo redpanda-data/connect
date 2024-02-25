@@ -12,6 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
+	"github.com/benthosdev/benthos/v4/internal/component/testutil"
 	"github.com/benthosdev/benthos/v4/internal/manager"
 	"github.com/benthosdev/benthos/v4/internal/message"
 	"github.com/benthosdev/benthos/v4/internal/stream"
@@ -20,11 +21,16 @@ import (
 )
 
 func TestTypeConstruction(t *testing.T) {
-	conf := stream.NewConfig()
-	conf.Input.Type = "generate"
-	conf.Input.Generate.Mapping = "root = {}"
-	conf.Buffer.Type = "memory"
-	conf.Output.Type = "drop"
+	conf, err := testutil.StreamFromYAML(`
+input:
+  generate:
+    mapping: 'root = {}'
+buffer:
+  memory: {}
+output:
+  drop: {}
+`)
+	require.NoError(t, err)
 
 	newMgr, err := manager.New(manager.NewResourceConfig())
 	require.NoError(t, err)
@@ -49,12 +55,15 @@ func TestTypeConstruction(t *testing.T) {
 func TestStreamCloseUngraceful(t *testing.T) {
 	t.Parallel()
 
-	conf := stream.NewConfig()
-	conf.Input.Type = "generate"
-	conf.Input.Generate.Mapping = `root = "hello world"`
-	conf.Input.Generate.Interval = ""
-	conf.Output.Type = "inproc"
-	conf.Output.Inproc = "foo"
+	conf, err := testutil.StreamFromYAML(`
+input:
+  generate:
+    interval: ""
+    mapping: 'root = "hello world"'
+output:
+  inproc: foo
+`)
+	require.NoError(t, err)
 
 	newMgr, err := manager.New(manager.NewResourceConfig())
 	require.NoError(t, err)
@@ -83,11 +92,17 @@ func TestStreamCloseUngraceful(t *testing.T) {
 }
 
 func TestTypeCloseGracefully(t *testing.T) {
-	conf := stream.NewConfig()
-	conf.Input.Type = "generate"
-	conf.Input.Generate.Mapping = "root = {}"
-	conf.Buffer.Type = "memory"
-	conf.Output.Type = "drop"
+	conf, err := testutil.StreamFromYAML(`
+input:
+  generate:
+    interval: ""
+    mapping: 'root = {}'
+buffer:
+  memory: {}
+output:
+  drop: {}
+`)
+	require.NoError(t, err)
 
 	newMgr, err := manager.New(manager.NewResourceConfig())
 	require.NoError(t, err)
@@ -113,11 +128,16 @@ func TestTypeCloseGracefully(t *testing.T) {
 }
 
 func TestTypeCloseUnordered(t *testing.T) {
-	conf := stream.NewConfig()
-	conf.Input.Type = "generate"
-	conf.Input.Generate.Mapping = "root = {}"
-	conf.Buffer.Type = "memory"
-	conf.Output.Type = "drop"
+	conf, err := testutil.StreamFromYAML(`
+input:
+  generate:
+    mapping: 'root = {}'
+buffer:
+  memory: {}
+output:
+  drop: {}
+`)
+	require.NoError(t, err)
 
 	newMgr, err := manager.New(manager.NewResourceConfig())
 	require.NoError(t, err)
@@ -173,10 +193,15 @@ func validateHealthCheckResponse(t *testing.T, serverURL, expectedResponse strin
 }
 
 func TestHealthCheck(t *testing.T) {
-	conf := stream.NewConfig()
-	conf.Input.Type = "generate"
-	conf.Input.Generate.Mapping = "root = {}"
-	conf.Output.Type = "drop"
+	conf, err := testutil.StreamFromYAML(`
+input:
+  generate:
+    mapping: 'root = {}'
+
+output:
+  drop: {}
+`)
+	require.NoError(t, err)
 
 	mockAPIReg := newMockAPIReg()
 	defer mockAPIReg.Close()

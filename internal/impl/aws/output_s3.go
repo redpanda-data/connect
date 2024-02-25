@@ -9,46 +9,137 @@ import (
 	"strings"
 	"time"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/s3/s3manager"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 
-	"github.com/benthosdev/benthos/v4/internal/batch/policy"
-	"github.com/benthosdev/benthos/v4/internal/bloblang/field"
-	"github.com/benthosdev/benthos/v4/internal/bloblang/query"
-	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
-	"github.com/benthosdev/benthos/v4/internal/component/output/batcher"
-	"github.com/benthosdev/benthos/v4/internal/component/output/processors"
-	"github.com/benthosdev/benthos/v4/internal/docs"
-	sess "github.com/benthosdev/benthos/v4/internal/impl/aws/session"
-	"github.com/benthosdev/benthos/v4/internal/log"
-	"github.com/benthosdev/benthos/v4/internal/message"
-	"github.com/benthosdev/benthos/v4/internal/metadata"
+	"github.com/benthosdev/benthos/v4/internal/impl/aws/config"
+	"github.com/benthosdev/benthos/v4/internal/value"
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
-func init() {
-	err := bundle.AllOutputs.Add(processors.WrapConstructor(func(c output.Config, nm bundle.NewManagement) (output.Streamed, error) {
-		sthree, err := newAmazonS3Writer(c.AWSS3, nm)
-		if err != nil {
-			return nil, err
-		}
-		w, err := output.NewAsyncWriter("aws_s3", c.AWSS3.MaxInFlight, sthree, nm)
-		if err != nil {
-			return nil, err
-		}
-		return batcher.NewFromConfig(c.AWSS3.Batching, w, nm)
-	}), docs.ComponentSpec{
-		Name:    "aws_s3",
-		Version: "3.36.0",
-		Summary: `
-Sends message parts as objects to an Amazon S3 bucket. Each object is uploaded
-with the path specified with the ` + "`path`" + ` field.`,
-		Description: output.Description(true, false, `
-In order to have a different path for each object you should use function
-interpolations described [here](/docs/configuration/interpolation#bloblang-queries), which are
-calculated per message of a batch.
+const (
+	// S3 Output Fields
+	s3oFieldBucket                  = "bucket"
+	s3oFieldForcePathStyleURLs      = "force_path_style_urls"
+	s3oFieldPath                    = "path"
+	s3oFieldTags                    = "tags"
+	s3oFieldContentType             = "content_type"
+	s3oFieldContentEncoding         = "content_encoding"
+	s3oFieldCacheControl            = "cache_control"
+	s3oFieldContentDisposition      = "content_disposition"
+	s3oFieldContentLanguage         = "content_language"
+	s3oFieldWebsiteRedirectLocation = "website_redirect_location"
+	s3oFieldMetadata                = "metadata"
+	s3oFieldStorageClass            = "storage_class"
+	s3oFieldTimeout                 = "timeout"
+	s3oFieldKMSKeyID                = "kms_key_id"
+	s3oFieldServerSideEncryption    = "server_side_encryption"
+	s3oFieldBatching                = "batching"
+)
+
+type s3TagPair struct {
+	key   string
+	value *service.InterpolatedString
+}
+
+type s3oConfig struct {
+	Bucket string
+
+	Path                    *service.InterpolatedString
+	Tags                    []s3TagPair
+	ContentType             *service.InterpolatedString
+	ContentEncoding         *service.InterpolatedString
+	CacheControl            *service.InterpolatedString
+	ContentDisposition      *service.InterpolatedString
+	ContentLanguage         *service.InterpolatedString
+	WebsiteRedirectLocation *service.InterpolatedString
+	Metadata                *service.MetadataExcludeFilter
+	StorageClass            *service.InterpolatedString
+	Timeout                 time.Duration
+	KMSKeyID                string
+	ServerSideEncryption    string
+	UsePathStyle            bool
+
+	aconf aws.Config
+}
+
+func s3oConfigFromParsed(pConf *service.ParsedConfig) (conf s3oConfig, err error) {
+	if conf.Bucket, err = pConf.FieldString(s3oFieldBucket); err != nil {
+		return
+	}
+
+	if conf.UsePathStyle, err = pConf.FieldBool(s3oFieldForcePathStyleURLs); err != nil {
+		return
+	}
+
+	if conf.Path, err = pConf.FieldInterpolatedString(s3oFieldPath); err != nil {
+		return
+	}
+
+	var tagMap map[string]*service.InterpolatedString
+	if tagMap, err = pConf.FieldInterpolatedStringMap(s3oFieldTags); err != nil {
+		return
+	}
+
+	conf.Tags = make([]s3TagPair, 0, len(tagMap))
+	for k, v := range tagMap {
+		conf.Tags = append(conf.Tags, s3TagPair{key: k, value: v})
+	}
+	sort.Slice(conf.Tags, func(i, j int) bool {
+		return conf.Tags[i].key < conf.Tags[j].key
+	})
+
+	if conf.ContentType, err = pConf.FieldInterpolatedString(s3oFieldContentType); err != nil {
+		return
+	}
+	if conf.ContentEncoding, err = pConf.FieldInterpolatedString(s3oFieldContentEncoding); err != nil {
+		return
+	}
+	if conf.CacheControl, err = pConf.FieldInterpolatedString(s3oFieldCacheControl); err != nil {
+		return
+	}
+	if conf.ContentDisposition, err = pConf.FieldInterpolatedString(s3oFieldContentDisposition); err != nil {
+		return
+	}
+	if conf.ContentLanguage, err = pConf.FieldInterpolatedString(s3oFieldContentLanguage); err != nil {
+		return
+	}
+	if conf.WebsiteRedirectLocation, err = pConf.FieldInterpolatedString(s3oFieldWebsiteRedirectLocation); err != nil {
+		return
+	}
+	if conf.Metadata, err = pConf.FieldMetadataExcludeFilter(s3oFieldMetadata); err != nil {
+		return
+	}
+	if conf.StorageClass, err = pConf.FieldInterpolatedString(s3oFieldStorageClass); err != nil {
+		return
+	}
+	if conf.Timeout, err = pConf.FieldDuration(s3oFieldTimeout); err != nil {
+		return
+	}
+	if conf.KMSKeyID, err = pConf.FieldString(s3oFieldKMSKeyID); err != nil {
+		return
+	}
+	if conf.ServerSideEncryption, err = pConf.FieldString(s3oFieldServerSideEncryption); err != nil {
+		return
+	}
+	if conf.aconf, err = GetSession(context.TODO(), pConf); err != nil {
+		return
+	}
+	return
+}
+
+func s3oOutputSpec() *service.ConfigSpec {
+	return service.NewConfigSpec().
+		Stable().
+		Version("3.36.0").
+		Categories("Services", "AWS").
+		Summary(`Sends message parts as objects to an Amazon S3 bucket. Each object is uploaded with the path specified with the `+"`path`"+` field.`).
+		Description(output.Description(true, false, `
+In order to have a different path for each object you should use function interpolations described [here](/docs/configuration/interpolation#bloblang-queries), which are calculated per message of a batch.
 
 ### Metadata
 
@@ -56,8 +147,7 @@ Metadata fields on messages will be sent as headers, in order to mutate these va
 
 ### Tags
 
-The tags field allows you to specify key/value pairs to attach to objects as tags, where the values support
-[interpolation functions](/docs/configuration/interpolation#bloblang-queries):
+The tags field allows you to specify key/value pairs to attach to objects as tags, where the values support [interpolation functions](/docs/configuration/interpolation#bloblang-queries):
 
 `+"```yaml"+`
 output:
@@ -71,21 +161,13 @@ output:
 
 ### Credentials
 
-By default Benthos will use a shared credentials file when connecting to AWS
-services. It's also possible to set them explicitly at the component level,
-allowing you to transfer data across accounts. You can find out more
-[in this document](/docs/guides/cloud/aws).
+By default Benthos will use a shared credentials file when connecting to AWS services. It's also possible to set them explicitly at the component level, allowing you to transfer data across accounts. You can find out more [in this document](/docs/guides/cloud/aws).
 
 ### Batching
 
-It's common to want to upload messages to S3 as batched archives, the easiest
-way to do this is to batch your messages at the output level and join the batch
-of messages with an
-`+"[`archive`](/docs/components/processors/archive)"+` and/or
-`+"[`compress`](/docs/components/processors/compress)"+` processor.
+It's common to want to upload messages to S3 as batched archives, the easiest way to do this is to batch your messages at the output level and join the batch of messages with an `+"[`archive`](/docs/components/processors/archive)"+` and/or `+"[`compress`](/docs/components/processors/compress)"+` processor.
 
-For example, if we wished to upload messages as a .tar.gz archive of documents
-we could achieve that with the following config:
+For example, if we wished to upload messages as a .tar.gz archive of documents we could achieve that with the following config:
 
 `+"```yaml"+`
 output:
@@ -102,8 +184,7 @@ output:
             algorithm: gzip
 `+"```"+`
 
-Alternatively, if we wished to upload JSON documents as a single large document
-containing an array of objects we can do that with:
+Alternatively, if we wished to upload JSON documents as a single large document containing an array of objects we can do that with:
 
 `+"```yaml"+`
 output:
@@ -115,174 +196,143 @@ output:
       processors:
         - archive:
             format: json_array
-`+"```"+``),
-		Config: docs.FieldComponent().WithChildren(
-			docs.FieldString("bucket", "The bucket to upload messages to."),
-			docs.FieldString(
-				"path", "The path of each message to upload.",
-				`${!count("files")}-${!timestamp_unix_nano()}.txt`,
-				`${!meta("kafka_key")}.json`,
-				`${!json("doc.namespace")}/${!json("doc.id")}.json`,
-			).IsInterpolated(),
-			docs.FieldString(
-				"tags", "Key/value pairs to store with the object as tags.",
-				map[string]string{
+`+"```"+``)).
+		Fields(
+			service.NewStringField(s3oFieldBucket).
+				Description("The bucket to upload messages to."),
+			service.NewInterpolatedStringField(s3oFieldPath).
+				Description("The path of each message to upload.").
+				Default(`${!count("files")}-${!timestamp_unix_nano()}.txt`).
+				Example(`${!count("files")}-${!timestamp_unix_nano()}.txt`).
+				Example(`${!meta("kafka_key")}.json`).
+				Example(`${!json("doc.namespace")}/${!json("doc.id")}.json`),
+			service.NewInterpolatedStringMapField(s3oFieldTags).
+				Description("Key/value pairs to store with the object as tags.").
+				Default(map[string]any{}).
+				Example(map[string]any{
 					"Key1":      "Value1",
 					"Timestamp": `${!meta("Timestamp")}`,
-				},
-			).IsInterpolated().Map(),
-			docs.FieldString("content_type", "The content type to set for each object.").IsInterpolated(),
-			docs.FieldString("content_encoding", "An optional content encoding to set for each object.").IsInterpolated().Advanced(),
-			docs.FieldString("cache_control", "The cache control to set for each object.").Advanced().IsInterpolated(),
-			docs.FieldString("content_disposition", "The content disposition to set for each object.").Advanced().IsInterpolated(),
-			docs.FieldString("content_language", "The content language to set for each object.").Advanced().IsInterpolated(),
-			docs.FieldString("website_redirect_location", "The website redirect location to set for each object.").Advanced().IsInterpolated(),
-			docs.FieldObject("metadata", "Specify criteria for which metadata values are attached to objects as headers.").WithChildren(metadata.ExcludeFilterFields()...),
-			docs.FieldString("storage_class", "The storage class to set for each object.").HasOptions(
+				}),
+			service.NewInterpolatedStringField(s3oFieldContentType).
+				Description("The content type to set for each object.").
+				Default("application/octet-stream"),
+			service.NewInterpolatedStringField(s3oFieldContentEncoding).
+				Description("An optional content encoding to set for each object.").
+				Default("").
+				Advanced(),
+			service.NewInterpolatedStringField(s3oFieldCacheControl).
+				Description("The cache control to set for each object.").
+				Default("").
+				Advanced(),
+			service.NewInterpolatedStringField(s3oFieldContentDisposition).
+				Description("The content disposition to set for each object.").
+				Default("").
+				Advanced(),
+			service.NewInterpolatedStringField(s3oFieldContentLanguage).
+				Description("The content language to set for each object.").
+				Default("").
+				Advanced(),
+			service.NewInterpolatedStringField(s3oFieldWebsiteRedirectLocation).
+				Description("The website redirect location to set for each object.").
+				Default("").
+				Advanced(),
+			service.NewMetadataExcludeFilterField(s3oFieldMetadata).
+				Description("Specify criteria for which metadata values are attached to objects as headers."),
+			service.NewInterpolatedStringEnumField(s3oFieldStorageClass,
 				"STANDARD", "REDUCED_REDUNDANCY", "GLACIER", "STANDARD_IA", "ONEZONE_IA", "INTELLIGENT_TIERING", "DEEP_ARCHIVE",
-			).IsInterpolated().Advanced(),
-			docs.FieldString("kms_key_id", "An optional server side encryption key.").Advanced(),
-			docs.FieldString("server_side_encryption", "An optional server side encryption algorithm.").AtVersion("3.63.0").Advanced(),
-			docs.FieldBool("force_path_style_urls", "Forces the client API to use path style URLs, which helps when connecting to custom endpoints.").Advanced(),
-			docs.FieldInt("max_in_flight", "The maximum number of parallel message batches to have in flight at any given time."),
-			docs.FieldString("timeout", "The maximum period to wait on an upload before abandoning it and reattempting.").Advanced(),
-			policy.FieldSpec(),
-		).WithChildren(sess.FieldSpecs()...).ChildDefaultAndTypesFromStruct(output.NewAmazonS3Config()),
-		Categories: []string{
-			"Services",
-			"AWS",
-		},
-	})
+			).
+				Description("The storage class to set for each object.").
+				Default("STANDARD").
+				Advanced(),
+			service.NewStringField(s3oFieldKMSKeyID).
+				Description("An optional server side encryption key.").
+				Default("").
+				Advanced(),
+			service.NewStringField(s3oFieldServerSideEncryption).
+				Description("An optional server side encryption algorithm.").
+				Version("3.63.0").
+				Default("").
+				Advanced(),
+			service.NewBoolField(s3oFieldForcePathStyleURLs).
+				Description("Forces the client API to use path style URLs, which helps when connecting to custom endpoints.").
+				Advanced().
+				Default(false),
+			service.NewOutputMaxInFlightField(),
+			service.NewDurationField(s3oFieldTimeout).
+				Description("The maximum period to wait on an upload before abandoning it and reattempting.").
+				Advanced().
+				Default("5s"),
+			service.NewBatchPolicyField(s3oFieldBatching),
+		).
+		Fields(config.SessionFields()...)
+}
+
+func init() {
+	err := service.RegisterBatchOutput("aws_s3", s3oOutputSpec(),
+		func(conf *service.ParsedConfig, mgr *service.Resources) (out service.BatchOutput, batchPolicy service.BatchPolicy, maxInFlight int, err error) {
+			if maxInFlight, err = conf.FieldMaxInFlight(); err != nil {
+				return
+			}
+			if batchPolicy, err = conf.FieldBatchPolicy(koFieldBatching); err != nil {
+				return
+			}
+			var wConf s3oConfig
+			if wConf, err = s3oConfigFromParsed(conf); err != nil {
+				return
+			}
+			out, err = newAmazonS3Writer(wConf, mgr)
+			return
+		})
 	if err != nil {
 		panic(err)
 	}
 }
 
-type s3TagPair struct {
-	key   string
-	value *field.Expression
-}
-
 type amazonS3Writer struct {
-	conf output.AmazonS3Config
-
-	path                    *field.Expression
-	tags                    []s3TagPair
-	contentType             *field.Expression
-	contentEncoding         *field.Expression
-	cacheControl            *field.Expression
-	contentDisposition      *field.Expression
-	contentLanguage         *field.Expression
-	websiteRedirectLocation *field.Expression
-	storageClass            *field.Expression
-	metaFilter              *metadata.ExcludeFilter
-
-	session  *session.Session
-	uploader *s3manager.Uploader
-	timeout  time.Duration
-
-	log log.Modular
+	conf     s3oConfig
+	uploader *manager.Uploader
+	log      *service.Logger
 }
 
-func newAmazonS3Writer(conf output.AmazonS3Config, mgr bundle.NewManagement) (*amazonS3Writer, error) {
-	var timeout time.Duration
-	if tout := conf.Timeout; len(tout) > 0 {
-		var err error
-		if timeout, err = time.ParseDuration(tout); err != nil {
-			return nil, fmt.Errorf("failed to parse timeout period string: %v", err)
-		}
-	}
+func newAmazonS3Writer(conf s3oConfig, mgr *service.Resources) (*amazonS3Writer, error) {
 	a := &amazonS3Writer{
-		conf:    conf,
-		log:     mgr.Logger(),
-		timeout: timeout,
+		conf: conf,
+		log:  mgr.Logger(),
 	}
-	var err error
-	if a.path, err = mgr.BloblEnvironment().NewField(conf.Path); err != nil {
-		return nil, fmt.Errorf("failed to parse path expression: %v", err)
-	}
-	if a.contentType, err = mgr.BloblEnvironment().NewField(conf.ContentType); err != nil {
-		return nil, fmt.Errorf("failed to parse content type expression: %v", err)
-	}
-	if a.contentEncoding, err = mgr.BloblEnvironment().NewField(conf.ContentEncoding); err != nil {
-		return nil, fmt.Errorf("failed to parse content encoding expression: %v", err)
-	}
-	if a.cacheControl, err = mgr.BloblEnvironment().NewField(conf.CacheControl); err != nil {
-		return nil, fmt.Errorf("failed to parse cache control expression: %v", err)
-	}
-	if a.contentDisposition, err = mgr.BloblEnvironment().NewField(conf.ContentDisposition); err != nil {
-		return nil, fmt.Errorf("failed to parse content disposition expression: %v", err)
-	}
-	if a.contentLanguage, err = mgr.BloblEnvironment().NewField(conf.ContentLanguage); err != nil {
-		return nil, fmt.Errorf("failed to parse content language expression: %v", err)
-	}
-	if a.websiteRedirectLocation, err = mgr.BloblEnvironment().NewField(conf.WebsiteRedirectLocation); err != nil {
-		return nil, fmt.Errorf("failed to parse website redirect location expression: %v", err)
-	}
-
-	if a.metaFilter, err = conf.Metadata.Filter(); err != nil {
-		return nil, fmt.Errorf("failed to construct metadata filter: %w", err)
-	}
-	if a.storageClass, err = mgr.BloblEnvironment().NewField(conf.StorageClass); err != nil {
-		return nil, fmt.Errorf("failed to parse storage class expression: %v", err)
-	}
-
-	a.tags = make([]s3TagPair, 0, len(conf.Tags))
-	for k, v := range conf.Tags {
-		vExpr, err := mgr.BloblEnvironment().NewField(v)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse tag expression for key '%v': %v", k, err)
-		}
-		a.tags = append(a.tags, s3TagPair{
-			key:   k,
-			value: vExpr,
-		})
-	}
-	sort.Slice(a.tags, func(i, j int) bool {
-		return a.tags[i].key < a.tags[j].key
-	})
-
 	return a, nil
 }
 
 func (a *amazonS3Writer) Connect(ctx context.Context) error {
-	if a.session != nil {
+	if a.uploader != nil {
 		return nil
 	}
 
-	sess, err := GetSessionFromConf(a.conf.Config, func(c *aws.Config) {
-		c.S3ForcePathStyle = aws.Bool(a.conf.ForcePathStyleURLs)
+	client := s3.NewFromConfig(a.conf.aconf, func(o *s3.Options) {
+		o.UsePathStyle = a.conf.UsePathStyle
 	})
-	if err != nil {
-		return err
-	}
-
-	a.session = sess
-	a.uploader = s3manager.NewUploader(sess)
+	a.uploader = manager.NewUploader(client)
 
 	a.log.Infof("Uploading message parts as objects to Amazon S3 bucket: %v\n", a.conf.Bucket)
 	return nil
 }
 
-func (a *amazonS3Writer) WriteBatch(wctx context.Context, msg message.Batch) error {
-	if a.session == nil {
+func (a *amazonS3Writer) WriteBatch(wctx context.Context, msg service.MessageBatch) error {
+	if a.uploader == nil {
 		return component.ErrNotConnected
 	}
 
-	ctx, cancel := context.WithTimeout(
-		wctx, a.timeout,
-	)
+	ctx, cancel := context.WithTimeout(wctx, a.conf.Timeout)
 	defer cancel()
 
-	return output.IterateBatchedSend(msg, func(i int, p *message.Part) error {
-		metadata := map[string]*string{}
-		_ = a.metaFilter.Iter(p, func(k string, v any) error {
-			metadata[k] = aws.String(query.IToString(v))
+	return msg.WalkWithBatchedErrors(func(i int, m *service.Message) error {
+		metadata := map[string]string{}
+		_ = a.conf.Metadata.WalkMut(m, func(k string, v any) error {
+			metadata[k] = value.IToString(v)
 			return nil
 		})
 
 		var contentEncoding *string
-		ce, err := a.contentEncoding.String(i, msg)
+		ce, err := msg.TryInterpolatedString(i, a.conf.ContentEncoding)
 		if err != nil {
 			return fmt.Errorf("content encoding interpolation: %w", err)
 		}
@@ -290,68 +340,73 @@ func (a *amazonS3Writer) WriteBatch(wctx context.Context, msg message.Batch) err
 			contentEncoding = aws.String(ce)
 		}
 		var cacheControl *string
-		if ce, err = a.cacheControl.String(i, msg); err != nil {
+		if ce, err = msg.TryInterpolatedString(i, a.conf.CacheControl); err != nil {
 			return fmt.Errorf("cache control interpolation: %w", err)
 		}
 		if len(ce) > 0 {
 			cacheControl = aws.String(ce)
 		}
 		var contentDisposition *string
-		if ce, err = a.contentDisposition.String(i, msg); err != nil {
+		if ce, err = msg.TryInterpolatedString(i, a.conf.ContentDisposition); err != nil {
 			return fmt.Errorf("content disposition interpolation: %w", err)
 		}
 		if len(ce) > 0 {
 			contentDisposition = aws.String(ce)
 		}
 		var contentLanguage *string
-		if ce, err = a.contentLanguage.String(i, msg); err != nil {
+		if ce, err = msg.TryInterpolatedString(i, a.conf.ContentLanguage); err != nil {
 			return fmt.Errorf("content language interpolation: %w", err)
 		}
 		if len(ce) > 0 {
 			contentLanguage = aws.String(ce)
 		}
 		var websiteRedirectLocation *string
-		if ce, err = a.websiteRedirectLocation.String(i, msg); err != nil {
+		if ce, err = msg.TryInterpolatedString(i, a.conf.WebsiteRedirectLocation); err != nil {
 			return fmt.Errorf("website redirect location interpolation: %w", err)
 		}
 		if len(ce) > 0 {
 			websiteRedirectLocation = aws.String(ce)
 		}
 
-		key, err := a.path.String(i, msg)
+		key, err := msg.TryInterpolatedString(i, a.conf.Path)
 		if err != nil {
 			return fmt.Errorf("key interpolation: %w", err)
 		}
 
-		contentType, err := a.contentType.String(i, msg)
+		contentType, err := msg.TryInterpolatedString(i, a.conf.ContentType)
 		if err != nil {
 			return fmt.Errorf("content type interpolation: %w", err)
 		}
 
-		storageClass, err := a.storageClass.String(i, msg)
+		storageClass, err := msg.TryInterpolatedString(i, a.conf.StorageClass)
 		if err != nil {
 			return fmt.Errorf("storage class interpolation: %w", err)
 		}
 
-		uploadInput := &s3manager.UploadInput{
+		mBytes, err := m.AsBytes()
+		if err != nil {
+			return err
+		}
+
+		uploadInput := &s3.PutObjectInput{
 			Bucket:                  &a.conf.Bucket,
 			Key:                     aws.String(key),
-			Body:                    bytes.NewReader(p.AsBytes()),
+			Body:                    bytes.NewReader(mBytes),
 			ContentType:             aws.String(contentType),
 			ContentEncoding:         contentEncoding,
 			CacheControl:            cacheControl,
 			ContentDisposition:      contentDisposition,
 			ContentLanguage:         contentLanguage,
 			WebsiteRedirectLocation: websiteRedirectLocation,
-			StorageClass:            aws.String(storageClass),
+			StorageClass:            types.StorageClass(storageClass),
 			Metadata:                metadata,
 		}
 
 		// Prepare tags, escaping keys and values to ensure they're valid query string parameters.
-		if len(a.tags) > 0 {
-			tags := make([]string, len(a.tags))
-			for j, pair := range a.tags {
-				tagStr, err := pair.value.String(i, msg)
+		if len(a.conf.Tags) > 0 {
+			tags := make([]string, len(a.conf.Tags))
+			for j, pair := range a.conf.Tags {
+				tagStr, err := msg.TryInterpolatedString(i, pair.value)
 				if err != nil {
 					return fmt.Errorf("tag %v interpolation: %w", pair.key, err)
 				}
@@ -361,7 +416,7 @@ func (a *amazonS3Writer) WriteBatch(wctx context.Context, msg message.Batch) err
 		}
 
 		if a.conf.KMSKeyID != "" {
-			uploadInput.ServerSideEncryption = aws.String("aws:kms")
+			uploadInput.ServerSideEncryption = types.ServerSideEncryptionAwsKms
 			uploadInput.SSEKMSKeyId = &a.conf.KMSKeyID
 		}
 
@@ -369,10 +424,10 @@ func (a *amazonS3Writer) WriteBatch(wctx context.Context, msg message.Batch) err
 		// backwards compatibility, where it is allowed to only set kms_key_id in the config and
 		// the ServerSideEncryption value of "aws:kms" is implied.
 		if a.conf.ServerSideEncryption != "" {
-			uploadInput.ServerSideEncryption = &a.conf.ServerSideEncryption
+			uploadInput.ServerSideEncryption = types.ServerSideEncryption(a.conf.ServerSideEncryption)
 		}
 
-		if _, err := a.uploader.UploadWithContext(ctx, uploadInput); err != nil {
+		if _, err := a.uploader.Upload(ctx, uploadInput); err != nil {
 			return err
 		}
 		return nil

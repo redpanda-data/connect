@@ -11,9 +11,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/impl/elasticsearch"
 	"github.com/benthosdev/benthos/v4/internal/integration"
+	"github.com/benthosdev/benthos/v4/public/service"
 
 	_ "github.com/benthosdev/benthos/v4/internal/impl/elasticsearch/aws"
 )
@@ -62,15 +62,19 @@ func TestIntegrationElasticsearchAWS(t *testing.T) {
 
 	servicePort := resource.GetPort("4566/tcp")
 
-	aConf := output.NewElasticsearchConfig()
-	aConf.AWS.Enabled = true
-	aConf.AWS.Endpoint = "http://localhost:" + servicePort
-	aConf.AWS.Region = "eu-west-1"
-	aConf.AWS.Credentials.ID = "xxxxx"
-	aConf.AWS.Credentials.Secret = "xxxxx"
-	aConf.AWS.Credentials.Token = "xxxxx"
+	awsConf, err := service.NewConfigSpec().Field(elasticsearch.AWSField()).ParseYAML(fmt.Sprintf(`
+aws:
+  enabled: true
+  endpoint: "http://localhost:%v"
+  region: eu-west-1
+  credentials:
+    id: xxxxx
+    secret: xxxxx
+    token: xxxxx
+`, servicePort), nil)
+	require.NoError(t, err)
 
-	awsOpts, err := elasticsearch.AWSOptFn(aConf)
+	awsOpts, err := elasticsearch.AWSOptFn(awsConf)
 	require.NoError(t, err)
 
 	var client *elastic.Client

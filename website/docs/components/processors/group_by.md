@@ -14,13 +14,12 @@ categories: ["Composition"]
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-
 Splits a [batch of messages](/docs/configuration/batching) into N batches, where each resulting batch contains a group of messages determined by a [Bloblang query](/docs/guides/bloblang/about).
 
 ```yml
 # Config fields, showing default values
 label: ""
-group_by: []
+group_by: [] # No default (required)
 ```
 
 Once the groups are established a list of processors are applied to their respective grouped batch, which can be used to label the batch as per their grouping. Messages that do not pass the check of any specified group are placed in their own group.
@@ -35,7 +34,6 @@ A [Bloblang query](/docs/guides/bloblang/about) that should return a boolean val
 
 
 Type: `string`  
-Default: `""`  
 
 ```yml
 # Examples

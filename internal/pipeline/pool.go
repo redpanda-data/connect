@@ -76,7 +76,7 @@ func (p *Pool) loop() {
 
 	for _, worker := range p.workers {
 		if err := worker.Consume(p.messagesIn); err != nil {
-			p.log.Errorf("Failed to start pipeline worker: %v\n", err)
+			p.log.Error("Failed to start pipeline worker: %v\n", err)
 			atomic.AddInt64(&remainingWorkers, -1)
 			continue
 		}
@@ -149,6 +149,7 @@ func (p *Pool) TriggerCloseNow() {
 	for _, w := range p.workers {
 		w.TriggerCloseNow()
 	}
+	p.shutSig.CloseNow()
 }
 
 // WaitForClose blocks until the component has closed down or the context is

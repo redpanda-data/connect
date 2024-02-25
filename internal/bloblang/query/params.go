@@ -7,15 +7,18 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
+
+	"github.com/benthosdev/benthos/v4/internal/value"
 )
 
 // ParamDefinition describes a single parameter for a function or method.
 type ParamDefinition struct {
-	Name        string    `json:"name"`
-	Description string    `json:"description,omitempty"`
-	ValueType   ValueType `json:"type"`
-
-	castScalarsToLiteral bool
+	Name             string     `json:"name"`
+	Description      string     `json:"description,omitempty"`
+	ValueType        value.Type `json:"type"`
+	NoDynamic        bool       `json:"no_dynamic"`
+	ScalarsToLiteral bool       `json:"scalars_to_literal"`
 
 	// IsOptional is implicit when there's a DefaultValue. However, there are
 	// times when a parameter is used to change behaviour without having a
@@ -35,7 +38,15 @@ func (d ParamDefinition) validate() error {
 func ParamString(name, description string) ParamDefinition {
 	return ParamDefinition{
 		Name: name, Description: description,
-		ValueType: ValueString,
+		ValueType: value.TString,
+	}
+}
+
+// ParamTimestamp creates a new timestamp typed parameter.
+func ParamTimestamp(name, description string) ParamDefinition {
+	return ParamDefinition{
+		Name: name, Description: description,
+		ValueType: value.TTimestamp,
 	}
 }
 
@@ -43,7 +54,7 @@ func ParamString(name, description string) ParamDefinition {
 func ParamInt64(name, description string) ParamDefinition {
 	return ParamDefinition{
 		Name: name, Description: description,
-		ValueType: ValueInt,
+		ValueType: value.TInt,
 	}
 }
 
@@ -51,7 +62,7 @@ func ParamInt64(name, description string) ParamDefinition {
 func ParamFloat(name, description string) ParamDefinition {
 	return ParamDefinition{
 		Name: name, Description: description,
-		ValueType: ValueFloat,
+		ValueType: value.TFloat,
 	}
 }
 
@@ -59,7 +70,7 @@ func ParamFloat(name, description string) ParamDefinition {
 func ParamBool(name, description string) ParamDefinition {
 	return ParamDefinition{
 		Name: name, Description: description,
-		ValueType: ValueBool,
+		ValueType: value.TBool,
 	}
 }
 
@@ -67,7 +78,7 @@ func ParamBool(name, description string) ParamDefinition {
 func ParamArray(name, description string) ParamDefinition {
 	return ParamDefinition{
 		Name: name, Description: description,
-		ValueType: ValueArray,
+		ValueType: value.TArray,
 	}
 }
 
@@ -75,7 +86,7 @@ func ParamArray(name, description string) ParamDefinition {
 func ParamObject(name, description string) ParamDefinition {
 	return ParamDefinition{
 		Name: name, Description: description,
-		ValueType: ValueObject,
+		ValueType: value.TObject,
 	}
 }
 
@@ -85,8 +96,8 @@ func ParamObject(name, description string) ParamDefinition {
 func ParamQuery(name, description string, wrapScalars bool) ParamDefinition {
 	return ParamDefinition{
 		Name: name, Description: description,
-		ValueType:            ValueQuery,
-		castScalarsToLiteral: wrapScalars,
+		ValueType:        value.TQuery,
+		ScalarsToLiteral: wrapScalars,
 	}
 }
 
@@ -94,8 +105,16 @@ func ParamQuery(name, description string, wrapScalars bool) ParamDefinition {
 func ParamAny(name, description string) ParamDefinition {
 	return ParamDefinition{
 		Name: name, Description: description,
-		ValueType: ValueUnknown,
+		ValueType: value.TUnknown,
 	}
+}
+
+// NoDynamic disables any form of dynamic assignment for this parameter. This is
+// quite limiting (prevents variables from being used, etc) and so should only
+// be used with caution.
+func (d ParamDefinition) DisableDynamic() ParamDefinition {
+	d.NoDynamic = true
+	return d
 }
 
 // Optional marks the parameter as optional.
@@ -126,38 +145,40 @@ func (d ParamDefinition) PrettyDefault() string {
 
 func (d ParamDefinition) parseArgValue(v any) (any, error) {
 	switch d.ValueType {
-	case ValueInt:
-		return IGetInt(v)
-	case ValueFloat, ValueNumber:
-		return IGetNumber(v)
-	case ValueString:
+	case value.TInt:
+		return value.IGetInt(v)
+	case value.TFloat, value.TNumber:
+		return value.IGetNumber(v)
+	case value.TString:
 		switch t := v.(type) {
 		case string:
 			return t, nil
 		case []byte:
 			return string(t), nil
 		}
-	case ValueBool:
-		return IGetBool(v)
-	case ValueArray:
+	case value.TTimestamp:
+		return value.IGetTimestamp(v)
+	case value.TBool:
+		return value.IGetBool(v)
+	case value.TArray:
 		if _, isArray := v.([]any); isArray {
 			return v, nil
 		}
-	case ValueObject:
+	case value.TObject:
 		if _, isObj := v.(map[string]any); isObj {
 			return v, nil
 		}
-	case ValueQuery:
+	case value.TQuery:
 		if _, isDyn := v.(Function); isDyn {
 			return v, nil
 		}
-		if d.castScalarsToLiteral {
+		if d.ScalarsToLiteral {
 			return NewLiteralFunction("", v), nil
 		}
-	case ValueUnknown:
+	case value.TUnknown:
 		return v, nil
 	}
-	return nil, fmt.Errorf("wrong argument type, expected %v, got %v", d.ValueType, ITypeOf(v))
+	return nil, fmt.Errorf("wrong argument type, expected %v, got %v", d.ValueType, value.ITypeOf(v))
 }
 
 //------------------------------------------------------------------------------
@@ -203,7 +224,10 @@ func (p Params) PopulateNameless(args ...any) (*ParsedParams, error) {
 		return nil, err
 	}
 
-	dynArgs := p.gatherDynamicArgs(procParams)
+	dynArgs, err := p.gatherDynamicArgs(procParams)
+	if err != nil {
+		return nil, err
+	}
 	return &ParsedParams{
 		source:  p,
 		dynArgs: dynArgs,
@@ -219,7 +243,10 @@ func (p Params) PopulateNamed(args map[string]any) (*ParsedParams, error) {
 		return nil, err
 	}
 
-	dynArgs := p.gatherDynamicArgs(procParams)
+	dynArgs, err := p.gatherDynamicArgs(procParams)
+	if err != nil {
+		return nil, err
+	}
 	return &ParsedParams{
 		source:  p,
 		dynArgs: dynArgs,
@@ -251,7 +278,7 @@ type dynamicArgIndex struct {
 	fn    Function
 }
 
-func (p Params) gatherDynamicArgs(args []any) (dynArgs []dynamicArgIndex) {
+func (p Params) gatherDynamicArgs(args []any) (dynArgs []dynamicArgIndex, err error) {
 	if p.Variadic {
 		for i, arg := range args {
 			if fn, isFn := arg.(Function); isFn {
@@ -261,10 +288,14 @@ func (p Params) gatherDynamicArgs(args []any) (dynArgs []dynamicArgIndex) {
 		return
 	}
 	for i, param := range p.Definitions {
-		if param.ValueType == ValueQuery {
+		if param.ValueType == value.TQuery {
 			continue
 		}
 		if fn, isFn := args[i].(Function); isFn {
+			if param.NoDynamic {
+				err = fmt.Errorf("param %v must not be dynamic", param.Name)
+				return
+			}
 			dynArgs = append(dynArgs, dynamicArgIndex{index: i, fn: fn})
 		}
 	}
@@ -311,7 +342,7 @@ func (p Params) processNameless(args []any) ([]any, error) {
 			continue
 		}
 
-		if lit, isLit := v.(*Literal); isLit && param.ValueType != ValueQuery {
+		if lit, isLit := v.(*Literal); isLit && param.ValueType != value.TQuery {
 			// Literal functions are expanded automatically when the parameter
 			// type is not a dynamic query.
 			v = lit.Value
@@ -363,7 +394,7 @@ func (p Params) processNamed(args map[string]any) ([]any, error) {
 		// Remove found parameter names, any left over are unexpected.
 		delete(args, param.Name)
 
-		if lit, isLit := v.(*Literal); isLit && param.ValueType != ValueQuery {
+		if lit, isLit := v.(*Literal); isLit && param.ValueType != value.TQuery {
 			// Literal functions are expanded automatically when the parameter
 			// type is not a dynamic query.
 			v = lit.Value
@@ -501,7 +532,7 @@ func (p *ParsedParams) FieldArray(n string) ([]any, error) {
 	}
 	a, ok := v.([]any)
 	if !ok {
-		return nil, NewTypeError(v, ValueArray)
+		return nil, value.NewTypeError(v, value.TArray)
 	}
 	return a, nil
 }
@@ -517,7 +548,7 @@ func (p *ParsedParams) FieldOptionalArray(n string) (*[]any, error) {
 	}
 	a, ok := v.([]any)
 	if !ok {
-		return nil, NewTypeError(v, ValueArray)
+		return nil, value.NewTypeError(v, value.TArray)
 	}
 	return &a, nil
 }
@@ -530,7 +561,7 @@ func (p *ParsedParams) FieldString(n string) (string, error) {
 	}
 	str, ok := v.(string)
 	if !ok {
-		return "", NewTypeError(v, ValueString)
+		return "", value.NewTypeError(v, value.TString)
 	}
 	return str, nil
 }
@@ -547,9 +578,39 @@ func (p *ParsedParams) FieldOptionalString(n string) (*string, error) {
 	}
 	str, ok := v.(string)
 	if !ok {
-		return nil, NewTypeError(v, ValueString)
+		return nil, value.NewTypeError(v, value.TString)
 	}
 	return &str, nil
+}
+
+// FieldTimestamp returns a timestamp argument value with a given name.
+func (p *ParsedParams) FieldTimestamp(n string) (time.Time, error) {
+	v, err := p.Field(n)
+	if err != nil {
+		return time.Time{}, err
+	}
+	t, ok := v.(time.Time)
+	if !ok {
+		return time.Time{}, value.NewTypeError(v, value.TTimestamp)
+	}
+	return t, nil
+}
+
+// FieldOptionalTimestamp returns a timestamp argument value with a given name
+// if it was defined, otherwise nil.
+func (p *ParsedParams) FieldOptionalTimestamp(n string) (*time.Time, error) {
+	v, err := p.Field(n)
+	if err != nil {
+		return nil, err
+	}
+	if v == nil {
+		return nil, nil
+	}
+	t, ok := v.(time.Time)
+	if !ok {
+		return nil, value.NewTypeError(v, value.TTimestamp)
+	}
+	return &t, nil
 }
 
 // FieldInt64 returns an integer argument value with a given name.
@@ -560,7 +621,7 @@ func (p *ParsedParams) FieldInt64(n string) (int64, error) {
 	}
 	i, ok := v.(int64)
 	if !ok {
-		return 0, NewTypeError(v, ValueInt)
+		return 0, value.NewTypeError(v, value.TInt)
 	}
 	return i, nil
 }
@@ -577,7 +638,7 @@ func (p *ParsedParams) FieldOptionalInt64(n string) (*int64, error) {
 	}
 	i, ok := v.(int64)
 	if !ok {
-		return nil, NewTypeError(v, ValueInt)
+		return nil, value.NewTypeError(v, value.TInt)
 	}
 	return &i, nil
 }
@@ -590,7 +651,7 @@ func (p *ParsedParams) FieldFloat(n string) (float64, error) {
 	}
 	f, ok := v.(float64)
 	if !ok {
-		return 0, NewTypeError(v, ValueFloat)
+		return 0, value.NewTypeError(v, value.TFloat)
 	}
 	return f, nil
 }
@@ -607,7 +668,7 @@ func (p *ParsedParams) FieldOptionalFloat(n string) (*float64, error) {
 	}
 	f, ok := v.(float64)
 	if !ok {
-		return nil, NewTypeError(v, ValueFloat)
+		return nil, value.NewTypeError(v, value.TFloat)
 	}
 	return &f, nil
 }
@@ -620,7 +681,7 @@ func (p *ParsedParams) FieldBool(n string) (bool, error) {
 	}
 	b, ok := v.(bool)
 	if !ok {
-		return false, NewTypeError(v, ValueBool)
+		return false, value.NewTypeError(v, value.TBool)
 	}
 	return b, nil
 }
@@ -637,7 +698,7 @@ func (p *ParsedParams) FieldOptionalBool(n string) (*bool, error) {
 	}
 	b, ok := v.(bool)
 	if !ok {
-		return nil, NewTypeError(v, ValueBool)
+		return nil, value.NewTypeError(v, value.TBool)
 	}
 	return &b, nil
 }
@@ -650,7 +711,7 @@ func (p *ParsedParams) FieldQuery(n string) (Function, error) {
 	}
 	f, ok := v.(Function)
 	if !ok {
-		return nil, NewTypeError(v, ValueQuery)
+		return nil, value.NewTypeError(v, value.TQuery)
 	}
 	return f, nil
 }
@@ -667,7 +728,7 @@ func (p *ParsedParams) FieldOptionalQuery(n string) (Function, error) {
 	}
 	f, ok := v.(Function)
 	if !ok {
-		return nil, NewTypeError(v, ValueQuery)
+		return nil, value.NewTypeError(v, value.TQuery)
 	}
 	return f, nil
 }

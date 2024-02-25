@@ -93,8 +93,7 @@ func (p *Processor) dispatchMessages(ctx context.Context, msgs []message.Batch, 
 
 	pending := msgs
 	for len(pending) > 0 {
-		wg := sync.WaitGroup{}
-		wg.Add(len(pending))
+		doneChan := make(chan struct{}, len(pending))
 
 		var newPending []message.Batch
 		var newPendingMut sync.Mutex
@@ -107,17 +106,31 @@ func (p *Processor) dispatchMessages(ctx context.Context, msgs []message.Batch, 
 					newPending = append(newPending, b)
 					newPendingMut.Unlock()
 				}
-				wg.Done()
+				select {
+				case doneChan <- struct{}{}:
+				default:
+				}
 				return nil
 			})
 
 			select {
 			case p.messagesOut <- transac:
 			case <-ctx.Done():
+				select {
+				case doneChan <- struct{}{}:
+				default:
+				}
 				return
 			}
 		}
-		wg.Wait()
+
+		for i := 0; i < len(pending); i++ {
+			select {
+			case <-doneChan:
+			case <-ctx.Done():
+				return
+			}
+		}
 
 		if pending = newPending; len(pending) > 0 && !throt.Retry() {
 			return

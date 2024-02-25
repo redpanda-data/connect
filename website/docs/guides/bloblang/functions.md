@@ -32,26 +32,85 @@ root.values_two = range(0, this.max, 2)
 
 ## General
 
-### `count`
+### `counter`
 
-The `count` function is a counter starting at 1 which increments after each time it is called. Count takes an argument which is an identifier for the counter, allowing you to specify multiple unique counters in your configuration.
+:::caution EXPERIMENTAL
+This function is experimental and therefore breaking changes could be made to it outside of major version releases.
+:::
+Returns a non-negative integer that increments each time it is resolved, yielding the minimum (`1` by default) as the first value. Each instantiation of `counter` has its own independent count. Once the maximum integer (or `max` argument) is reached the counter resets back to the minimum.
 
 #### Parameters
 
-**`name`** &lt;string&gt; An identifier for the counter.  
+**`min`** &lt;query expression, default `1`&gt; The minimum value of the counter, this is the first value that will be yielded. If this parameter is dynamic it will be resolved only once during the lifetime of the mapping.  
+**`max`** &lt;query expression, default `9223372036854775807`&gt; The maximum value of the counter, once this value is yielded the counter will reset back to the min. If this parameter is dynamic it will be resolved only once during the lifetime of the mapping.  
+**`set`** &lt;(optional) query expression&gt; An optional mapping that when specified will be executed each time the counter is resolved. When this mapping resolves to a non-negative integer value it will cause the counter to reset to this value and yield it. If this mapping is omitted or doesn't resolve to anything then the counter will increment and yield the value as normal. If this mapping resolves to `null` then the counter is not incremented and the current value is yielded. If this mapping resolves to a deletion then the counter is reset to the `min` value.  
 
 #### Examples
 
 
 ```coffee
-root = this
-root.id = count("bloblang_function_example")
+root.id = counter()
 
-# In:  {"message":"foo"}
-# Out: {"id":1,"message":"foo"}
+# In:  {}
+# Out: {"id":1}
 
-# In:  {"message":"bar"}
-# Out: {"id":2,"message":"bar"}
+# In:  {}
+# Out: {"id":2}
+```
+
+It's possible to increment a counter multiple times within a single mapping invocation using a map.
+
+```coffee
+
+map foos {
+  root = counter()
+}
+
+root.meow_id = null.apply("foos")
+root.woof_id = null.apply("foos")
+
+
+# In:  {}
+# Out: {"meow_id":1,"woof_id":2}
+
+# In:  {}
+# Out: {"meow_id":3,"woof_id":4}
+```
+
+By specifying an optional `set` parameter it is possible to dynamically reset the counter based on input data.
+
+```coffee
+root.consecutive_doggos = counter(min: 1, set: if !this.sound.lowercase().contains("woof") { 0 })
+
+# In:  {"sound":"woof woof"}
+# Out: {"consecutive_doggos":1}
+
+# In:  {"sound":"woofer wooooo"}
+# Out: {"consecutive_doggos":2}
+
+# In:  {"sound":"meow"}
+# Out: {"consecutive_doggos":0}
+
+# In:  {"sound":"uuuuh uh uh woof uhhhhhh"}
+# Out: {"consecutive_doggos":1}
+```
+
+The `set` parameter can also be utilised to peek at the counter without mutating it by returning `null`.
+
+```coffee
+root.things = counter(set: if this.id == null { null })
+
+# In:  {"id":"a"}
+# Out: {"things":1}
+
+# In:  {"id":"b"}
+# Out: {"things":2}
+
+# In:  {"what":"just checking"}
+# Out: {"things":2}
+
+# In:  {"id":"c"}
+# Out: {"things":3}
 ```
 
 ### `deleted`
@@ -119,7 +178,10 @@ root.id = nanoid(54, "abcde")
 
 ### `random_int`
 
-Generates a non-negative pseudo-random 64-bit integer. An optional integer argument can be provided in order to seed the random number generator. Optional `min` and `max` arguments can be provided to make the generated numbers within a range.
+
+Generates a non-negative pseudo-random 64-bit integer. An optional integer argument can be provided in order to seed the random number generator.
+
+Optional `min` and `max` arguments can be provided in order to only generate numbers within a range. Neither of these parameters can be set via a dynamic expression (i.e. from values taken from mapped data). Instead, for dynamic ranges extract a min and max manually using a modulo operator (`random_int() % a + b`).
 
 #### Parameters
 
@@ -407,6 +469,7 @@ Returns the value of an environment variable, or `null` if the environment varia
 #### Parameters
 
 **`name`** &lt;string&gt; The name of an environment variable.  
+**`no_cache`** &lt;bool, default `false`&gt; Force the variable lookup to occur for each mapping invocation.  
 
 #### Examples
 
@@ -415,20 +478,24 @@ Returns the value of an environment variable, or `null` if the environment varia
 root.thing.key = env("key").or("default value")
 ```
 
-When the argument is static this function will only resolve once and yield the same result for each invocation as an optimisation, this means that updates to env vars during runtime will not be reflected. You can work around this optimisation by using variables as the argument as this will force a new evaluation for each execution of the mapping.
+```coffee
+root.thing.key = env(this.thing.key_name)
+```
+
+When the name parameter is static this function will only resolve once and yield the same result for each invocation as an optimisation, this means that updates to env vars during runtime will not be reflected. You can disable this cache with the optional parameter `no_cache`, which when set to `true` will cause the variable lookup to be performed for each execution of the mapping.
 
 ```coffee
-let env_key = "key"
-root.thing.key = env($env_key).or("default_value")
+root.thing.key = env(name: "key", no_cache: true)
 ```
 
 ### `file`
 
-Reads a file and returns its contents. Relative paths are resolved from the directory of the process executing the mapping.
+Reads a file and returns its contents. Relative paths are resolved from the directory of the process executing the mapping. In order to read files relative to the mapping file use the newer [`file_rel` function](#file_rel)
 
 #### Parameters
 
 **`path`** &lt;string&gt; The path of the target file.  
+**`no_cache`** &lt;bool, default `false`&gt; Force the file to be read for each mapping invocation.  
 
 #### Examples
 
@@ -440,11 +507,38 @@ root.doc = file(env("BENTHOS_TEST_BLOBLANG_FILE")).parse_json()
 # Out: {"doc":{"foo":"bar"}}
 ```
 
-When the argument is static this function will only resolve once and yield the same result for each invocation as an optimisation, this means that updates to files during runtime will not be reflected. You can work around this optimisation by using variables as the argument as this will force a new file read for each execution of the mapping.
+When the path parameter is static this function will only read the specified file once and yield the same result for each invocation as an optimisation, this means that updates to files during runtime will not be reflected. You can disable this cache with the optional parameter `no_cache`, which when set to `true` will cause the file to be read for each execution of the mapping.
 
 ```coffee
-let env_key = "BENTHOS_TEST_BLOBLANG_FILE"
-root.doc = file(env($env_key)).parse_json()
+root.doc = file(path: env("BENTHOS_TEST_BLOBLANG_FILE"), no_cache: true).parse_json()
+
+# In:  {}
+# Out: {"doc":{"foo":"bar"}}
+```
+
+### `file_rel`
+
+Reads a file and returns its contents. Relative paths are resolved from the directory of the mapping.
+
+#### Parameters
+
+**`path`** &lt;string&gt; The path of the target file.  
+**`no_cache`** &lt;bool, default `false`&gt; Force the file to be read for each mapping invocation.  
+
+#### Examples
+
+
+```coffee
+root.doc = file_rel(env("BENTHOS_TEST_BLOBLANG_FILE")).parse_json()
+
+# In:  {}
+# Out: {"doc":{"foo":"bar"}}
+```
+
+When the path parameter is static this function will only read the specified file once and yield the same result for each invocation as an optimisation, this means that updates to files during runtime will not be reflected. You can disable this cache with the optional parameter `no_cache`, which when set to `true` will cause the file to be read for each execution of the mapping.
+
+```coffee
+root.doc = file_rel(path: env("BENTHOS_TEST_BLOBLANG_FILE"), no_cache: true).parse_json()
 
 # In:  {}
 # Out: {"doc":{"foo":"bar"}}
@@ -561,6 +655,28 @@ root.uuid = fake("uuid_hyphenated")
 ```
 
 ## Deprecated
+
+### `count`
+
+The `count` function is a counter starting at 1 which increments after each time it is called. Count takes an argument which is an identifier for the counter, allowing you to specify multiple unique counters in your configuration.
+
+#### Parameters
+
+**`name`** &lt;string&gt; An identifier for the counter.  
+
+#### Examples
+
+
+```coffee
+root = this
+root.id = count("bloblang_function_example")
+
+# In:  {"message":"foo"}
+# Out: {"id":1,"message":"foo"}
+
+# In:  {"message":"bar"}
+# Out: {"id":2,"message":"bar"}
+```
 
 ### `meta`
 

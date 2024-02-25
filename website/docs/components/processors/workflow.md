@@ -14,9 +14,7 @@ categories: ["Composition"]
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-
-Executes a topology of [`branch` processors][processors.branch],
-performing them in parallel where possible.
+Executes a topology of [`branch` processors][processors.branch], performing them in parallel where possible.
 
 
 <Tabs defaultValue="common" values={[
@@ -296,7 +294,6 @@ A list of processors to apply to mapped requests. When processing message batche
 
 
 Type: `array`  
-Default: `[]`  
 
 ### `branches.<name>.result_map`
 

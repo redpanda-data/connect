@@ -29,8 +29,8 @@ Reads messages from an AMQP (1.0) server.
 input:
   label: ""
   amqp_1:
-    url: ""
-    source_address: ""
+    urls: [] # No default (optional)
+    source_address: /foo # No default (required)
 ```
 
 </TabItem>
@@ -41,9 +41,10 @@ input:
 input:
   label: ""
   amqp_1:
-    url: ""
-    source_address: ""
+    urls: [] # No default (optional)
+    source_address: /foo # No default (required)
     azure_renew_lock: false
+    read_header: false
     tls:
       enabled: false
       skip_cert_verify: false
@@ -71,25 +72,40 @@ This input adds the following metadata fields to each message:
 - All string typed message annotations
 ```
 
-You can access these metadata fields using
-[function interpolation](/docs/configuration/interpolation#bloblang-queries).
+You can access these metadata fields using [function interpolation](/docs/configuration/interpolation#bloblang-queries).
+
+By setting `read_header` to `true`, additional message header properties will be added to each message:
+
+``` text
+- amqp_durable
+- amqp_priority
+- amqp_ttl
+- amqp_first_acquirer
+- amqp_delivery_count
+```
 
 ## Fields
 
-### `url`
+### `urls`
 
-A URL to connect to.
+A list of URLs to connect to. The first URL to successfully establish a connection will be used until the connection is closed. If an item of the list contains commas it will be expanded into multiple URLs.
 
 
-Type: `string`  
-Default: `""`  
+Type: `array`  
+Requires version 4.23.0 or newer  
 
 ```yml
 # Examples
 
-url: amqp://localhost:5672/
+urls:
+  - amqp://guest:guest@127.0.0.1:5672/
 
-url: amqps://guest:guest@localhost:5672/
+urls:
+  - amqp://127.0.0.1:5672/,amqp://127.0.0.2:5672/
+
+urls:
+  - amqp://127.0.0.1:5672/
+  - amqp://127.0.0.2:5672/
 ```
 
 ### `source_address`
@@ -98,7 +114,6 @@ The source address to consume from.
 
 
 Type: `string`  
-Default: `""`  
 
 ```yml
 # Examples
@@ -118,6 +133,15 @@ Experimental: Azure service bus specific option to renew lock if processing take
 Type: `bool`  
 Default: `false`  
 Requires version 3.45.0 or newer  
+
+### `read_header`
+
+Read additional message header fields into `amqp_*` metadata properties.
+
+
+Type: `bool`  
+Default: `false`  
+Requires version 4.25.0 or newer  
 
 ### `tls`
 
@@ -191,6 +215,7 @@ A list of client certificates to use. For each certificate either the fields `ce
 
 
 Type: `array`  
+Default: `[]`  
 
 ```yml
 # Examples
@@ -275,6 +300,7 @@ Default: `"none"`
 
 | Option | Summary |
 |---|---|
+| `anonymous` | Anonymous SASL authentication. |
 | `none` | No SASL based authentication. |
 | `plain` | Plain text SASL authentication. |
 

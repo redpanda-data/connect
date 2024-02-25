@@ -11,7 +11,9 @@ type mockPubSubClient struct {
 	mock.Mock
 }
 
-func (c *mockPubSubClient) Topic(id string, _ *pubsub.PublishSettings) pubsubTopic {
+var _ pubsubClient = &mockPubSubClient{}
+
+func (c *mockPubSubClient) Topic(id string, settings *pubsub.PublishSettings) pubsubTopic {
 	args := c.Called(id)
 
 	return args.Get(0).(pubsubTopic)
@@ -20,6 +22,8 @@ func (c *mockPubSubClient) Topic(id string, _ *pubsub.PublishSettings) pubsubTop
 type mockTopic struct {
 	mock.Mock
 }
+
+var _ pubsubTopic = &mockTopic{}
 
 func (mt *mockTopic) Exists(context.Context) (bool, error) {
 	args := mt.Called()
@@ -32,6 +36,10 @@ func (mt *mockTopic) Publish(ctx context.Context, msg *pubsub.Message) publishRe
 	return args.Get(0).(publishResult)
 }
 
+func (mt *mockTopic) EnableOrdering() {
+	mt.Called()
+}
+
 func (mt *mockTopic) Stop() {
 	mt.Called()
 }
@@ -39,6 +47,8 @@ func (mt *mockTopic) Stop() {
 type mockPublishResult struct {
 	mock.Mock
 }
+
+var _ publishResult = &mockPublishResult{}
 
 func (m *mockPublishResult) Get(ctx context.Context) (string, error) {
 	args := m.Called()

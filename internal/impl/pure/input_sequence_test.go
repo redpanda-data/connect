@@ -13,7 +13,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/benthosdev/benthos/v4/internal/component/input"
-	bmock "github.com/benthosdev/benthos/v4/internal/manager/mock"
+	"github.com/benthosdev/benthos/v4/internal/component/testutil"
+	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 )
 
 func writeFiles(t *testing.T, dir string, nameToContent map[string]string) {
@@ -22,6 +23,16 @@ func writeFiles(t *testing.T, dir string, nameToContent map[string]string) {
 	for k, v := range nameToContent {
 		require.NoError(t, os.WriteFile(filepath.Join(dir, k), []byte(v), 0o600))
 	}
+}
+
+func testInput(t testing.TB, confPattern string, args ...any) input.Streamed {
+	iConf, err := testutil.InputFromYAML(fmt.Sprintf(confPattern, args...))
+	require.NoError(t, err)
+
+	i, err := mock.NewManager().NewInput(iConf)
+	require.NoError(t, err)
+
+	return i
 }
 
 func TestSequenceHappy(t *testing.T) {
@@ -40,18 +51,20 @@ func TestSequenceHappy(t *testing.T) {
 
 	writeFiles(t, tmpDir, files)
 
-	conf := input.NewConfig()
-	conf.Type = "sequence"
-
-	for _, k := range []string{"f1", "f2", "f3"} {
-		inConf := input.NewConfig()
-		inConf.Type = "file"
-		inConf.File.Paths = []string{filepath.Join(tmpDir, k)}
-		conf.Sequence.Inputs = append(conf.Sequence.Inputs, inConf)
-	}
-
-	rdr, err := bmock.NewManager().NewInput(conf)
-	require.NoError(t, err)
+	rdr := testInput(t, `
+sequence:
+  inputs:
+    - file:
+        paths: [ "%v" ]
+    - file:
+        paths: [ "%v" ]
+    - file:
+        paths: [ "%v" ]
+`,
+		filepath.Join(tmpDir, "f1"),
+		filepath.Join(tmpDir, "f2"),
+		filepath.Join(tmpDir, "f3"),
+	)
 
 	exp, act := []string{
 		"foo", "bar", "baz", "buz", "bev", "bif", "qux", "quz", "qev",
@@ -96,28 +109,23 @@ func TestSequenceJoins(t *testing.T) {
 
 	writeFiles(t, tmpDir, files)
 
-	conf := input.NewConfig()
-	conf.Type = "sequence"
-	conf.Sequence.ShardedJoin.IDPath = "id"
-	conf.Sequence.ShardedJoin.Iterations = 1
-	conf.Sequence.ShardedJoin.Type = "full-outer"
-
-	csvConf := input.NewConfig()
-	csvConf.Type = "csv"
-	csvConf.CSVFile.Paths = []string{
+	rdr := testInput(t, `
+sequence:
+  sharded_join:
+    type: full-outer
+    id_path: id
+    iterations: 1
+    merge_strategy: array
+  inputs:
+    - csv:
+        paths: [ "%v", "%v" ]
+    - file:
+        paths: [ "%v" ]
+`,
 		filepath.Join(tmpDir, "csv1"),
 		filepath.Join(tmpDir, "csv2"),
-	}
-	conf.Sequence.Inputs = append(conf.Sequence.Inputs, csvConf)
-	for _, k := range []string{"ndjson1"} {
-		inConf := input.NewConfig()
-		inConf.Type = "file"
-		inConf.File.Paths = []string{filepath.Join(tmpDir, k)}
-		conf.Sequence.Inputs = append(conf.Sequence.Inputs, inConf)
-	}
-
-	rdr, err := bmock.NewManager().NewInput(conf)
-	require.NoError(t, err)
+		filepath.Join(tmpDir, "ndjson1"),
+	)
 
 	exp, act := []string{
 		`{"age":"20","hobby":["running","gaming"],"id":"aaa","name":"A","stuff":{"first":"foo","second":"baz"}}`,
@@ -219,31 +227,40 @@ func TestSequenceJoinsMergeStrategies(t *testing.T) {
 				"final.csv": test.finalFile,
 			})
 
-			conf := input.NewConfig()
-			conf.Type = "sequence"
-			conf.Sequence.ShardedJoin.IDPath = "id"
-			conf.Sequence.ShardedJoin.MergeStrategy = test.mergeStrat
+			shardType := "full-outer"
 			if test.flushOnFinal {
-				conf.Sequence.ShardedJoin.Type = "outer"
-			} else {
-				conf.Sequence.ShardedJoin.Type = "full-outer"
+				shardType = "outer"
 			}
-			conf.Sequence.ShardedJoin.Iterations = 1
 
-			csvConf := input.NewConfig()
-			csvConf.Type = "csv"
+			conf := fmt.Sprintf(`
+sequence:
+  sharded_join:
+    type: %v
+    id_path: id
+    iterations: 1
+    merge_strategy: %v
+  inputs:
+  - csv:
+      paths:
+`,
+				shardType,
+				test.mergeStrat,
+			)
+
 			for k := range test.files {
-				csvConf.CSVFile.Paths = append(csvConf.CSVFile.Paths, filepath.Join(tmpDir, k))
+				conf += fmt.Sprintf(`
+        - "%v"
+`, filepath.Join(tmpDir, k))
 			}
-			conf.Sequence.Inputs = append(conf.Sequence.Inputs, csvConf)
 
-			finalConf := input.NewConfig()
-			finalConf.Type = "csv"
-			finalConf.CSVFile.Paths = []string{filepath.Join(tmpDir, "final.csv")}
-			conf.Sequence.Inputs = append(conf.Sequence.Inputs, finalConf)
+			conf += fmt.Sprintf(`
+  - csv:
+      paths: [ "%v" ]
+`, filepath.Join(tmpDir, "final.csv"))
 
-			rdr, err := bmock.NewManager().NewInput(conf)
-			require.NoError(t, err)
+			t.Log(conf)
+
+			rdr := testInput(t, conf)
 
 			exp, act := test.result, []string{}
 
@@ -294,23 +311,6 @@ func TestSequenceJoinsBig(t *testing.T) {
 	csvFile, err := os.Create(csvPath)
 	require.NoError(t, err)
 
-	conf := input.NewConfig()
-	conf.Type = "sequence"
-	conf.Sequence.ShardedJoin.IDPath = "id"
-	conf.Sequence.ShardedJoin.Iterations = 5
-	conf.Sequence.ShardedJoin.Type = "full-outer"
-
-	csvConf := input.NewConfig()
-	csvConf.Type = "csv"
-	csvConf.CSVFile.Paths = []string{csvPath}
-	conf.Sequence.Inputs = append(conf.Sequence.Inputs, csvConf)
-
-	jsonConf := input.NewConfig()
-	jsonConf.Type = "file"
-	jsonConf.File.Paths = []string{jsonPath}
-	jsonConf.File.Codec = "lines"
-	conf.Sequence.Inputs = append(conf.Sequence.Inputs, jsonConf)
-
 	totalRows := 1000
 
 	exp, act := []string{}, []string{}
@@ -333,8 +333,20 @@ func TestSequenceJoinsBig(t *testing.T) {
 	require.NoError(t, ndjsonFile.Close())
 	require.NoError(t, csvFile.Close())
 
-	rdr, err := bmock.NewManager().NewInput(conf)
-	require.NoError(t, err)
+	rdr := testInput(t, `
+sequence:
+  sharded_join:
+    type: full-outer
+    id_path: id
+    iterations: 5
+    merge_strategy: array
+  inputs:
+    - csv:
+        paths: [ "%v" ]
+    - file:
+        codec: lines
+        paths: [ "%v" ]
+`, csvPath, jsonPath)
 
 consumeLoop:
 	for {
@@ -374,17 +386,22 @@ func TestSequenceSad(t *testing.T) {
 
 	writeFiles(t, tmpDir, files)
 
-	conf := input.NewConfig()
-	conf.Type = "sequence"
+	conf, err := testutil.InputFromYAML(fmt.Sprintf(`
+sequence:
+  inputs:
+    - file:
+        paths:
+          - "%v/f1"
+    - file:
+        paths:
+          - "%v/f2"
+    - file:
+        paths:
+          - "%v/f3"
+`, tmpDir, tmpDir, tmpDir))
+	require.NoError(t, err)
 
-	for _, k := range []string{"f1", "f2", "f3"} {
-		inConf := input.NewConfig()
-		inConf.Type = "file"
-		inConf.File.Paths = []string{filepath.Join(tmpDir, k)}
-		conf.Sequence.Inputs = append(conf.Sequence.Inputs, inConf)
-	}
-
-	rdr, err := bmock.NewManager().NewInput(conf)
+	rdr, err := mock.NewManager().NewInput(conf)
 	require.NoError(t, err)
 
 	exp := []string{
@@ -447,15 +464,16 @@ func TestSequenceEarlyTermination(t *testing.T) {
 		"f1": "foo\nbar\nbaz",
 	})
 
-	conf := input.NewConfig()
-	conf.Type = "sequence"
+	conf, err := testutil.InputFromYAML(fmt.Sprintf(`
+sequence:
+  inputs:
+    - file:
+        paths:
+          - "%v/f1"
+`, tmpDir))
+	require.NoError(t, err)
 
-	inConf := input.NewConfig()
-	inConf.Type = "file"
-	inConf.File.Paths = []string{filepath.Join(tmpDir, "f1")}
-	conf.Sequence.Inputs = append(conf.Sequence.Inputs, inConf)
-
-	rdr, err := bmock.NewManager().NewInput(conf)
+	rdr, err := mock.NewManager().NewInput(conf)
 	require.NoError(t, err)
 
 	select {

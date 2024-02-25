@@ -31,7 +31,7 @@ func NewTLSField(name string) *ConfigField {
 // NewTLSField and returns a *tls.Config, or an error if the configuration was
 // invalid.
 func (p *ParsedConfig) FieldTLS(path ...string) (*tls.Config, error) {
-	v, exists := p.field(path...)
+	v, exists := p.i.Field(path...)
 	if !exists {
 		return nil, fmt.Errorf("field '%v' was not found in the config", strings.Join(path, "."))
 	}
@@ -67,7 +67,7 @@ func NewTLSToggledField(name string) *ConfigField {
 // whether tls is explicitly enabled, or an error if the configuration was
 // invalid.
 func (p *ParsedConfig) FieldTLSToggled(path ...string) (tconf *tls.Config, enabled bool, err error) {
-	v, exists := p.field(path...)
+	v, exists := p.i.Field(path...)
 	if !exists {
 		return nil, false, fmt.Errorf("field '%v' was not found in the config", strings.Join(path, "."))
 	}

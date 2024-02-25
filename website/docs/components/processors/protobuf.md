@@ -1,7 +1,7 @@
 ---
 title: protobuf
 type: processor
-status: beta
+status: stable
 categories: ["Parsing"]
 ---
 
@@ -14,70 +14,35 @@ categories: ["Parsing"]
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-:::caution BETA
-This component is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with the component is found.
-:::
 
-Performs conversions to or from a protobuf message. This processor uses
-reflection, meaning conversions can be made directly from the target .proto
-files.
+Performs conversions to or from a protobuf message. This processor uses reflection, meaning conversions can be made directly from the target .proto files.
+
 
 ```yml
 # Config fields, showing default values
 label: ""
 protobuf:
-  operator: ""
-  message: ""
+  operator: "" # No default (required)
+  message: "" # No default (required)
+  discard_unknown: false
+  use_proto_names: false
   import_paths: []
 ```
 
-The main functionality of this processor is to map to and from JSON documents,
-you can read more about JSON mapping of protobuf messages here:
-[https://developers.google.com/protocol-buffers/docs/proto3#json](https://developers.google.com/protocol-buffers/docs/proto3#json)
+The main functionality of this processor is to map to and from JSON documents, you can read more about JSON mapping of protobuf messages here: [https://developers.google.com/protocol-buffers/docs/proto3#json](https://developers.google.com/protocol-buffers/docs/proto3#json)
 
-Using reflection for processing protobuf messages in this way is less performant
-than generating and using native code. Therefore when performance is critical it
-is recommended that you use Benthos plugins instead for processing protobuf
-messages natively, you can find an example of Benthos plugins at
-[https://github.com/benthosdev/benthos-plugin-example](https://github.com/benthosdev/benthos-plugin-example)
+Using reflection for processing protobuf messages in this way is less performant than generating and using native code. Therefore when performance is critical it is recommended that you use Benthos plugins instead for processing protobuf messages natively, you can find an example of Benthos plugins at [https://github.com/benthosdev/benthos-plugin-example](https://github.com/benthosdev/benthos-plugin-example)
 
 ## Operators
 
 ### `to_json`
 
-Converts protobuf messages into a generic JSON structure. This makes it easier
-to manipulate the contents of the document within Benthos.
+Converts protobuf messages into a generic JSON structure. This makes it easier to manipulate the contents of the document within Benthos.
 
 ### `from_json`
 
 Attempts to create a target protobuf message from a generic JSON structure.
 
-## Fields
-
-### `operator`
-
-The [operator](#operators) to execute
-
-
-Type: `string`  
-Default: `""`  
-Options: `to_json`, `from_json`.
-
-### `message`
-
-The fully qualified name of the protobuf message to convert to/from.
-
-
-Type: `string`  
-Default: `""`  
-
-### `import_paths`
-
-A list of directories containing .proto files, including all definitions required for parsing the target message. If left empty the current directory is used. Each directory listed will be walked with all found .proto files imported.
-
-
-Type: `array`  
-Default: `[]`  
 
 ## Examples
 
@@ -177,5 +142,46 @@ pipeline:
 
 </TabItem>
 </Tabs>
+
+## Fields
+
+### `operator`
+
+The [operator](#operators) to execute
+
+
+Type: `string`  
+Options: `to_json`, `from_json`.
+
+### `message`
+
+The fully qualified name of the protobuf message to convert to/from.
+
+
+Type: `string`  
+
+### `discard_unknown`
+
+If `true`, the `from_json` operator discards fields that are unknown to the schema.
+
+
+Type: `bool`  
+Default: `false`  
+
+### `use_proto_names`
+
+If `true`, the `to_json` operator deserializes fields exactly as named in schema file.
+
+
+Type: `bool`  
+Default: `false`  
+
+### `import_paths`
+
+A list of directories containing .proto files, including all definitions required for parsing the target message. If left empty the current directory is used. Each directory listed will be walked with all found .proto files imported.
+
+
+Type: `array`  
+Default: `[]`  
 
 

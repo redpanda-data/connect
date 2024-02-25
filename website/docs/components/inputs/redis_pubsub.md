@@ -14,9 +14,7 @@ categories: ["Services"]
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-
-Consume from a Redis publish/subscribe channel using either the SUBSCRIBE or
-PSUBSCRIBE commands.
+Consume from a Redis publish/subscribe channel using either the SUBSCRIBE or PSUBSCRIBE commands.
 
 
 <Tabs defaultValue="common" values={[
@@ -31,8 +29,8 @@ PSUBSCRIBE commands.
 input:
   label: ""
   redis_pubsub:
-    url: ""
-    channels: []
+    url: redis://:6397 # No default (required)
+    channels: [] # No default (required)
     use_patterns: false
 ```
 
@@ -44,7 +42,7 @@ input:
 input:
   label: ""
   redis_pubsub:
-    url: ""
+    url: redis://:6397 # No default (required)
     kind: simple
     master: ""
     tls:
@@ -54,42 +52,38 @@ input:
       root_cas: ""
       root_cas_file: ""
       client_certs: []
-    channels: []
+    channels: [] # No default (required)
     use_patterns: false
 ```
 
 </TabItem>
 </Tabs>
 
-In order to subscribe to channels using the `PSUBSCRIBE` command set
-the field `use_patterns` to `true`, then you can include glob-style
-patterns in your channel names. For example:
+In order to subscribe to channels using the `PSUBSCRIBE` command set the field `use_patterns` to `true`, then you can include glob-style patterns in your channel names. For example:
 
 - `h?llo` subscribes to hello, hallo and hxllo
 - `h*llo` subscribes to hllo and heeeello
 - `h[ae]llo` subscribes to hello and hallo, but not hillo
 
-Use `\` to escape special characters if you want to match them
-verbatim.
+Use `\` to escape special characters if you want to match them verbatim.
 
 ## Fields
 
 ### `url`
 
-The URL of the target Redis server. Database is optional and is supplied as the URL path. The scheme `tcp` is equivalent to `redis`.
+The URL of the target Redis server. Database is optional and is supplied as the URL path.
 
 
 Type: `string`  
-Default: `""`  
 
 ```yml
 # Examples
 
-url: :6397
-
-url: localhost:6397
+url: redis://:6397
 
 url: redis://localhost:6379
+
+url: redis://foousername:foopassword@redisplace:6379
 
 url: redis://:foopassword@redisplace:6379
 
@@ -105,16 +99,7 @@ Specifies a simple, cluster-aware, or failover-aware redis client.
 
 Type: `string`  
 Default: `"simple"`  
-
-```yml
-# Examples
-
-kind: simple
-
-kind: cluster
-
-kind: failover
-```
+Options: `simple`, `cluster`, `failover`.
 
 ### `master`
 
@@ -280,11 +265,10 @@ A list of channels to consume from.
 
 
 Type: `array`  
-Default: `[]`  
 
 ### `use_patterns`
 
-Whether to use the PSUBSCRIBE command.
+Whether to use the PSUBSCRIBE command, allowing for glob-style patterns within target channel names.
 
 
 Type: `bool`  

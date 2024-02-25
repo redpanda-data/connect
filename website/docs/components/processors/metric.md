@@ -20,9 +20,9 @@ Emit custom metrics by extracting values from messages.
 # Config fields, showing default values
 label: ""
 metric:
-  type: ""
-  name: ""
-  labels: {}
+  type: "" # No default (required)
+  name: "" # No default (required)
+  labels: {} # No default (optional)
   value: ""
 ```
 
@@ -38,7 +38,6 @@ The metric [type](#types) to create.
 
 
 Type: `string`  
-Default: `""`  
 Options: `counter`, `counter_by`, `gauge`, `timing`.
 
 ### `name`
@@ -47,7 +46,6 @@ The name of the metric to create, this must be unique across all Benthos compone
 
 
 Type: `string`  
-Default: `""`  
 
 ### `labels`
 
@@ -56,7 +54,6 @@ This field supports [interpolation functions](/docs/configuration/interpolation#
 
 
 Type: `object`  
-Default: `{}`  
 
 ```yml
 # Examples
@@ -68,7 +65,7 @@ labels:
 
 ### `value`
 
-For some metric types specifies a value to set, increment.
+For some metric types specifies a value to set, increment. Certain metrics exporters such as Prometheus support floating point values, but those that do not will cast a floating point value into an integer.
 This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
 
 

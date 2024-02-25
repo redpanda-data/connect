@@ -21,6 +21,7 @@ type Full struct {
 	RateLimits        []docs.ComponentSpec `json:"rate-limits,omitempty"`
 	Metrics           []docs.ComponentSpec `json:"metrics,omitempty"`
 	Tracers           []docs.ComponentSpec `json:"tracers,omitempty"`
+	Scanners          []docs.ComponentSpec `json:"scanners,omitempty"`
 	BloblangFunctions []query.FunctionSpec `json:"bloblang-functions,omitempty"`
 	BloblangMethods   []query.MethodSpec   `json:"bloblang-methods,omitempty"`
 }
@@ -40,6 +41,7 @@ func New(version, date string) Full {
 		RateLimits:        bundle.AllRateLimits.Docs(),
 		Metrics:           bundle.AllMetrics.Docs(),
 		Tracers:           bundle.AllTracers.Docs(),
+		Scanners:          bundle.AllScanners.Docs(),
 		BloblangFunctions: query.FunctionDocs(),
 		BloblangMethods:   query.MethodDocs(),
 	}
@@ -67,6 +69,7 @@ func (f *Full) ReduceToStatus(status string) {
 	f.RateLimits = ofStatus(status, f.RateLimits)
 	f.Metrics = ofStatus(status, f.Metrics)
 	f.Tracers = ofStatus(status, f.Tracers)
+	f.Scanners = ofStatus(status, f.Scanners)
 
 	var newFuncs []query.FunctionSpec
 	for _, s := range f.BloblangFunctions {
@@ -127,6 +130,7 @@ func (f *Full) Flattened() map[string][]string {
 		"rate-limits":        justNames(f.RateLimits),
 		"metrics":            justNames(f.Metrics),
 		"tracers":            justNames(f.Tracers),
+		"scanners":           justNames(f.Scanners),
 		"bloblang-functions": justNamesBloblFuncs(f.BloblangFunctions),
 		"bloblang-methods":   justNamesBloblMethods(f.BloblangMethods),
 	}
@@ -144,6 +148,7 @@ func (f *Full) Scrub() {
 	scrubComponentSpecs(f.RateLimits)
 	scrubComponentSpecs(f.Metrics)
 	scrubComponentSpecs(f.Tracers)
+	scrubComponentSpecs(f.Scanners)
 
 	for i := range f.BloblangFunctions {
 		f.BloblangFunctions[i].Description = ""

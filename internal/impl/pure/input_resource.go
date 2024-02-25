@@ -8,31 +8,19 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/input"
-	"github.com/benthosdev/benthos/v4/internal/component/input/processors"
-	"github.com/benthosdev/benthos/v4/internal/docs"
+	"github.com/benthosdev/benthos/v4/internal/component/interop"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
 	"github.com/benthosdev/benthos/v4/internal/shutdown"
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
-func init() {
-	err := bundle.AllInputs.Add(processors.WrapConstructor(func(c input.Config, nm bundle.NewManagement) (input.Streamed, error) {
-		if !nm.ProbeInput(c.Resource) {
-			return nil, fmt.Errorf("input resource '%v' was not found", c.Resource)
-		}
-		ri := &resourceInput{
-			mgr:     nm,
-			name:    c.Resource,
-			log:     nm.Logger(),
-			tChan:   make(chan message.Transaction),
-			shutSig: shutdown.NewSignaller(),
-		}
-		go ri.loop()
-		return ri, nil
-	}), docs.ComponentSpec{
-		Name:    "resource",
-		Summary: `Resource is an input type that channels messages from a resource input, identified by its name.`,
-		Description: `Resources allow you to tidy up deeply nested configs. For example, the config:
+func resourceInputSpec() *service.ConfigSpec {
+	return service.NewConfigSpec().
+		Stable().
+		Categories("Utility").
+		Summary(`Resource is an input type that channels messages from a resource input, identified by its name.`).
+		Description(`Resources allow you to tidy up deeply nested configs. For example, the config:
 		
 ` + "```yaml" + `
 input:
@@ -71,11 +59,29 @@ input_resources:
 
 Resources also allow you to reference a single input in multiple places, such as multiple streams mode configs, or multiple entries in a broker input. However, when a resource is referenced more than once the messages it produces are distributed across those references, so each message will only be directed to a single reference, not all of them.
 
-You can find out more about resources [in this document.](/docs/configuration/resources)`,
-		Categories: []string{
-			"Utility",
-		},
-		Config: docs.FieldString("", "").HasDefault(""),
+You can find out more about resources [in this document.](/docs/configuration/resources)`).
+		Field(service.NewStringField("").Default(""))
+}
+
+func init() {
+	err := service.RegisterBatchInput("resource", resourceInputSpec(), func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchInput, error) {
+		name, err := conf.FieldString()
+		if err != nil {
+			return nil, err
+		}
+		if !mgr.HasInput(name) {
+			return nil, fmt.Errorf("input resource '%v' was not found", name)
+		}
+		nm := interop.UnwrapManagement(mgr)
+		ri := &resourceInput{
+			mgr:     nm,
+			name:    name,
+			log:     nm.Logger(),
+			tChan:   make(chan message.Transaction),
+			shutSig: shutdown.NewSignaller(),
+		}
+		go ri.loop()
+		return interop.NewUnwrapInternalInput(ri), nil
 	})
 	if err != nil {
 		panic(err)
@@ -103,7 +109,7 @@ func (r *resourceInput) loop() {
 		if err := r.mgr.AccessInput(context.Background(), r.name, func(i input.Streamed) {
 			resourceTChan = i.TransactionChan()
 		}); err != nil {
-			r.log.Errorf("Failed to obtain input resource '%v': %v", r.name, err)
+			r.log.Error("Failed to obtain input resource '%v': %v", r.name, err)
 			select {
 			case <-r.shutSig.CloseAtLeisureChan():
 				return
@@ -141,7 +147,7 @@ func (r *resourceInput) Connected() (isConnected bool) {
 	if err := r.mgr.AccessInput(context.Background(), r.name, func(i input.Streamed) {
 		isConnected = i.Connected()
 	}); err != nil {
-		r.log.Errorf("Failed to obtain input resource '%v': %v", r.name, err)
+		r.log.Error("Failed to obtain input resource '%v': %v", r.name, err)
 	}
 	return
 }

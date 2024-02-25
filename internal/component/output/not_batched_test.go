@@ -228,7 +228,7 @@ func TestNotBatchedBreakOutMessagesErrors(t *testing.T) {
 		require.ErrorAs(t, err, &walkable, "expected error to be walkable batch error")
 
 		errs := map[int]string{}
-		walkable.WalkParts(sortGroup, sourceMessage, func(i int, _ *message.Part, err error) bool {
+		walkable.WalkPartsBySource(sortGroup, sourceMessage, func(i int, _ *message.Part, err error) bool {
 			if err != nil {
 				errs[i] = err.Error()
 			}
@@ -288,7 +288,7 @@ func TestNotBatchedBreakOutMessagesErrorsAsync(t *testing.T) {
 		require.ErrorAs(t, err, &walkable, "expected error to be walkable batch error")
 
 		errs := map[int]string{}
-		walkable.WalkParts(sortGroup, sourceMessage, func(i int, _ *message.Part, err error) bool {
+		walkable.WalkPartsBySource(sortGroup, sourceMessage, func(i int, _ *message.Part, err error) bool {
 			if err != nil {
 				errs[i] = err.Error()
 			}

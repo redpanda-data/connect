@@ -14,7 +14,7 @@ import (
 func TestResourceProc(t *testing.T) {
 	conf := processor.NewConfig()
 	conf.Type = "bloblang"
-	conf.Bloblang = `root = "foo: " + content()`
+	conf.Plugin = `root = "foo: " + content()`
 
 	mgr := mock.NewManager()
 
@@ -33,7 +33,7 @@ func TestResourceProc(t *testing.T) {
 
 	nConf := processor.NewConfig()
 	nConf.Type = "resource"
-	nConf.Resource = "foo"
+	nConf.Plugin = "foo"
 
 	p, err := mgr.NewProcessor(nConf)
 	if err != nil {
@@ -55,7 +55,7 @@ func TestResourceProc(t *testing.T) {
 func TestResourceBadName(t *testing.T) {
 	conf := processor.NewConfig()
 	conf.Type = "resource"
-	conf.Resource = "foo"
+	conf.Plugin = "foo"
 
 	_, err := mock.NewManager().NewProcessor(conf)
 	if err == nil {

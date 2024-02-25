@@ -7,44 +7,47 @@ import (
 	"os/exec"
 	"sync"
 
-	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component"
-	"github.com/benthosdev/benthos/v4/internal/component/output"
-	"github.com/benthosdev/benthos/v4/internal/component/output/processors"
-	"github.com/benthosdev/benthos/v4/internal/docs"
-	"github.com/benthosdev/benthos/v4/internal/log"
-	"github.com/benthosdev/benthos/v4/internal/message"
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
-func init() {
-	err := bundle.AllOutputs.Add(processors.WrapConstructor(func(conf output.Config, nm bundle.NewManagement) (output.Streamed, error) {
-		s, err := newSubprocessWriter(conf.Subprocess, nm.Logger())
-		if err != nil {
-			return nil, err
-		}
-		return output.NewAsyncWriter("subprocess", 1, s, nm)
-	}), docs.ComponentSpec{
-		Name:   "subprocess",
-		Status: docs.StatusBeta,
-		Summary: `
-Executes a command, runs it as a subprocess, and writes messages to it over stdin.`,
-		Description: `
+const (
+	soFieldName  = "name"
+	soFieldArgs  = "args"
+	soFieldCodec = "codec"
+)
+
+func subprocOutputSpec() *service.ConfigSpec {
+	return service.NewConfigSpec().
+		Beta().
+		Categories("Utility").
+		Summary("Executes a command, runs it as a subprocess, and writes messages to it over stdin.").
+		Description(`
 Messages are written according to a specified codec. The process is expected to terminate gracefully when stdin is closed.
 
 If the subprocess exits unexpectedly then Benthos will log anything printed to stderr and will log the exit code, and will attempt to execute the command again until success.
 
-The execution environment of the subprocess is the same as the Benthos instance, including environment variables and the current working directory.`,
-		Config: docs.FieldComponent().WithChildren(
-			docs.FieldString("name", "The command to execute as a subprocess."),
-			docs.FieldString("args", "A list of arguments to provide the command.").Array(),
-			docs.FieldString(
-				"codec", "The way in which messages should be written to the subprocess.",
-			).HasOptions("lines"),
-		).ChildDefaultAndTypesFromStruct(output.NewSubprocessConfig()),
-		Categories: []string{
-			"Utility",
-		},
-	})
+The execution environment of the subprocess is the same as the Benthos instance, including environment variables and the current working directory.`).
+		Fields(
+			service.NewStringField(soFieldName).
+				Description("The command to execute as a subprocess."),
+			service.NewStringListField(soFieldArgs).
+				Description("A list of arguments to provide the command.").
+				Default([]any{}),
+			service.NewStringEnumField(soFieldCodec, "lines").
+				Description("The way in which messages should be written to the subprocess.").
+				Default("lines"),
+		)
+}
+
+func init() {
+	err := service.RegisterBatchOutput(
+		"subprocess", subprocOutputSpec(),
+		func(conf *service.ParsedConfig, mgr *service.Resources) (out service.BatchOutput, batchPolicy service.BatchPolicy, maxInFlight int, err error) {
+			maxInFlight = 1
+			out, err = newSubprocessWriterFromParsed(conf, mgr.Logger())
+			return
+		})
 	if err != nil {
 		panic(err)
 	}
@@ -70,8 +73,9 @@ func subprocOutputCodecFromStr(codec string) (subprocOutputCodec, error) {
 //------------------------------------------------------------------------------
 
 type subprocessWriter struct {
-	log  log.Modular
-	conf output.SubprocessConfig
+	log  *service.Logger
+	name string
+	args []string
 
 	codec subprocOutputCodec
 
@@ -79,13 +83,20 @@ type subprocessWriter struct {
 	stdin  io.WriteCloser
 }
 
-func newSubprocessWriter(conf output.SubprocessConfig, log log.Modular) (*subprocessWriter, error) {
-	s := &subprocessWriter{
-		conf: conf,
-		log:  log,
+func newSubprocessWriterFromParsed(conf *service.ParsedConfig, log *service.Logger) (s *subprocessWriter, err error) {
+	s = &subprocessWriter{log: log}
+	if s.name, err = conf.FieldString(soFieldName); err != nil {
+		return
 	}
-	var err error
-	if s.codec, err = subprocOutputCodecFromStr(s.conf.Codec); err != nil {
+	if s.args, err = conf.FieldStringList(soFieldArgs); err != nil {
+		return
+	}
+
+	var codecStr string
+	if codecStr, err = conf.FieldString(soFieldCodec); err != nil {
+		return
+	}
+	if s.codec, err = subprocOutputCodecFromStr(codecStr); err != nil {
 		return nil, err
 	}
 	return s, nil
@@ -99,7 +110,7 @@ func (s *subprocessWriter) Connect(ctx context.Context) error {
 		return nil
 	}
 
-	cmd := exec.Command(s.conf.Name, s.conf.Args...)
+	cmd := exec.Command(s.name, s.args...)
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
 		return err
@@ -110,7 +121,7 @@ func (s *subprocessWriter) Connect(ctx context.Context) error {
 		if len(stdout) > 0 {
 			s.log.Debugf("Process exited with: %s\n", stdout)
 		} else {
-			s.log.Debugln("Process exited")
+			s.log.Debug("Process exited")
 		}
 		if err != nil {
 			if exitErr, ok := err.(*exec.ExitError); ok {
@@ -135,15 +146,19 @@ func (s *subprocessWriter) Connect(ctx context.Context) error {
 	return nil
 }
 
-func (s *subprocessWriter) WriteBatch(ctx context.Context, msg message.Batch) error {
+func (s *subprocessWriter) WriteBatch(ctx context.Context, b service.MessageBatch) error {
 	s.cmdMut.Lock()
 	defer s.cmdMut.Unlock()
 	if s.stdin == nil {
 		return component.ErrNotConnected
 	}
 
-	return output.IterateBatchedSend(msg, func(i int, p *message.Part) error {
-		return s.codec(s.stdin, p.AsBytes())
+	return b.WalkWithBatchedErrors(func(i int, m *service.Message) error {
+		mBytes, err := m.AsBytes()
+		if err != nil {
+			return err
+		}
+		return s.codec(s.stdin, mBytes)
 	})
 }
 

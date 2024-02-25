@@ -2,6 +2,7 @@ package query
 
 import (
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -84,12 +85,13 @@ func TestParamsNameless(t *testing.T) {
 				Add(ParamFloat("fourth", "")).
 				Add(ParamQuery("fifth", "", false)).
 				Add(ParamArray("sixth", "")).
-				Add(ParamObject("seventh", "")),
+				Add(ParamObject("seventh", "")).
+				Add(ParamTimestamp("eighth", "")),
 			input: []any{
-				"foo", 5, false, 6.4, NewFieldFunction("nah"), []any{"one", "two"}, map[string]any{"a": "aaa", "b": "bbb"},
+				"foo", 5, false, 6.4, NewFieldFunction("nah"), []any{"one", "two"}, map[string]any{"a": "aaa", "b": "bbb"}, 1697185186,
 			},
 			output: []any{
-				"foo", int64(5), false, 6.4, NewFieldFunction("nah"), []any{"one", "two"}, map[string]any{"a": "aaa", "b": "bbb"},
+				"foo", int64(5), false, 6.4, NewFieldFunction("nah"), []any{"one", "two"}, map[string]any{"a": "aaa", "b": "bbb"}, time.Unix(1697185186, 0),
 			},
 		},
 		{
@@ -97,10 +99,11 @@ func TestParamsNameless(t *testing.T) {
 			params: NewParams().
 				Add(ParamString("first", "")).
 				Add(ParamInt64("second", "").Default(5)).
-				Add(ParamBool("third", "").Default(true)),
+				Add(ParamBool("third", "").Default(true)).
+				Add(ParamTimestamp("fourth", "").Default(1697185186)),
 			input: []any{"bar"},
 			output: []any{
-				"bar", int64(5), true,
+				"bar", int64(5), true, time.Unix(1697185186, 0),
 			},
 		},
 		{
@@ -108,10 +111,11 @@ func TestParamsNameless(t *testing.T) {
 			params: NewParams().
 				Add(ParamString("first", "")).
 				Add(ParamInt64("second", "").Optional()).
-				Add(ParamBool("third", "").Optional()),
+				Add(ParamBool("third", "").Optional()).
+				Add(ParamTimestamp("fourth", "").Optional()),
 			input: []any{"bar"},
 			output: []any{
-				"bar", nil, nil,
+				"bar", nil, nil, nil,
 			},
 		},
 		{
@@ -149,6 +153,15 @@ func TestParamsNameless(t *testing.T) {
 				Add(ParamBool("third", "").Default(true)),
 			input:       []any{"foo", true, 10},
 			errContains: "field second: expected number",
+		},
+		{
+			name: "bad timestamp arg",
+			params: NewParams().
+				Add(ParamString("first", "")).
+				Add(ParamTimestamp("second", "").Default(1697185186)).
+				Add(ParamBool("third", "").Default(true)),
+			input:       []any{"foo", true, 10},
+			errContains: "field second: expected number or string",
 		},
 		{
 			name: "bad query type",
@@ -402,18 +415,20 @@ func TestDynamicArgs(t *testing.T) {
 		Add(ParamString("baz", ""))
 
 	exp := []dynamicArgIndex(nil)
-	res := p.gatherDynamicArgs([]any{"first", "second", "third"})
+	res, err := p.gatherDynamicArgs([]any{"first", "second", "third"})
+	require.NoError(t, err)
 	assert.Equal(t, exp, res)
 
 	exp = []dynamicArgIndex{
 		{index: 0, fn: NewFieldFunction("first")},
 		{index: 2, fn: NewFieldFunction("third")},
 	}
-	res = p.gatherDynamicArgs([]any{
+	res, err = p.gatherDynamicArgs([]any{
 		NewFieldFunction("first"),
 		NewFieldFunction("second"),
 		NewFieldFunction("third"),
 	})
+	require.NoError(t, err)
 	assert.Equal(t, exp, res)
 }
 
@@ -421,7 +436,8 @@ func TestDynamicVariadicArgs(t *testing.T) {
 	p := VariadicParams()
 
 	exp := []dynamicArgIndex(nil)
-	res := p.gatherDynamicArgs([]any{"first", "second", "third"})
+	res, err := p.gatherDynamicArgs([]any{"first", "second", "third"})
+	require.NoError(t, err)
 	assert.Equal(t, exp, res)
 
 	dynArgs := []any{
@@ -435,7 +451,8 @@ func TestDynamicVariadicArgs(t *testing.T) {
 		{index: 1, fn: NewFieldFunction("second")},
 		{index: 2, fn: NewFieldFunction("third")},
 	}
-	res = p.gatherDynamicArgs(dynArgs)
+	res, err = p.gatherDynamicArgs(dynArgs)
+	require.NoError(t, err)
 	assert.Equal(t, exp, res)
 
 	parsed, err := p.PopulateNameless(dynArgs...)
@@ -496,6 +513,17 @@ func TestParsedParamsNameless(t *testing.T) {
 	require.Error(t, err)
 
 	_, err = parsed.Field("fourth")
+	require.Error(t, err)
+}
+
+func TestParsedNoDynamic(t *testing.T) {
+	params := NewParams().
+		Add(ParamString("first", "").DisableDynamic())
+
+	_, err := params.PopulateNameless("bar")
+	require.NoError(t, err)
+
+	_, err = params.PopulateNameless(NewVarFunction("foo"))
 	require.Error(t, err)
 }
 

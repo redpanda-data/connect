@@ -5,10 +5,9 @@ import (
 	"io"
 	"time"
 
-	"github.com/Shopify/sarama"
+	"github.com/IBM/sarama"
 
-	"github.com/benthosdev/benthos/v4/internal/batch/policy"
-	"github.com/benthosdev/benthos/v4/internal/message"
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
 // Setup is run at the beginning of a new session, before ConsumeClaim.
@@ -33,13 +32,14 @@ func (k *kafkaReader) Cleanup(sesh sarama.ConsumerGroupSession) error {
 // loop and exit.
 func (k *kafkaReader) ConsumeClaim(sess sarama.ConsumerGroupSession, claim sarama.ConsumerGroupClaim) error {
 	topic, partition := claim.Topic(), claim.Partition()
-	k.log.Debugf("Consuming messages from topic '%v' partition '%v'\n", topic, partition)
-	defer k.log.Debugf("Stopped consuming messages from topic '%v' partition '%v'\n", topic, partition)
+	k.mgr.Logger().Debugf("Consuming messages from topic '%v' partition '%v'\n", topic, partition)
+	defer k.mgr.Logger().Debugf("Stopped consuming messages from topic '%v' partition '%v'\n", topic, partition)
 
 	latestOffset := claim.InitialOffset()
-	batchPolicy, err := policy.New(k.conf.Batching, k.mgr.IntoPath("kafka", "batching"))
+
+	batchPolicy, err := k.batching.NewBatcher(k.mgr)
 	if err != nil {
-		k.log.Errorf("Failed to initialise batch policy: %v.\n", err)
+		k.mgr.Logger().Errorf("Failed to initialise batch policy: %v.\n", err)
 		// The consume claim gets reopened immediately so let's try and
 		// avoid a busy loop (this should never happen anyway).
 		<-time.After(time.Second)
@@ -48,8 +48,8 @@ func (k *kafkaReader) ConsumeClaim(sess sarama.ConsumerGroupSession, claim saram
 	defer batchPolicy.Close(context.Background())
 
 	var nextTimedBatchChan <-chan time.Time
-	var flushBatch func(context.Context, chan<- asyncMessage, message.Batch, int64) bool
-	if k.conf.CheckpointLimit > 1 {
+	var flushBatch func(context.Context, chan<- asyncMessage, service.MessageBatch, int64) bool
+	if k.checkpointLimit > 1 {
 		flushBatch = k.asyncCheckpointer(claim.Topic(), claim.Partition())
 	} else {
 		flushBatch = k.syncCheckpointer(claim.Topic(), claim.Partition())
@@ -57,14 +57,19 @@ func (k *kafkaReader) ConsumeClaim(sess sarama.ConsumerGroupSession, claim saram
 
 	for {
 		if nextTimedBatchChan == nil {
-			if tNext := batchPolicy.UntilNext(); tNext >= 0 {
+			if tNext, exists := batchPolicy.UntilNext(); exists {
 				nextTimedBatchChan = time.After(tNext)
 			}
 		}
 		select {
 		case <-nextTimedBatchChan:
 			nextTimedBatchChan = nil
-			if !flushBatch(sess.Context(), k.msgChan, batchPolicy.Flush(sess.Context()), latestOffset+1) {
+			flushedBatch, err := batchPolicy.Flush(sess.Context())
+			if err != nil {
+				k.mgr.Logger().Debugf("Timed flush batch error: %w", err)
+				return nil
+			}
+			if !flushBatch(sess.Context(), k.msgChan, flushedBatch, latestOffset+1) {
 				return nil
 			}
 		case data, open := <-claim.Messages():
@@ -73,11 +78,16 @@ func (k *kafkaReader) ConsumeClaim(sess sarama.ConsumerGroupSession, claim saram
 			}
 
 			latestOffset = data.Offset
-			part := dataToPart(claim.HighWaterMarkOffset(), data, k.conf.MultiHeader)
+			part := dataToPart(claim.HighWaterMarkOffset(), data, k.multiHeader)
 
 			if batchPolicy.Add(part) {
 				nextTimedBatchChan = nil
-				if !flushBatch(sess.Context(), k.msgChan, batchPolicy.Flush(sess.Context()), latestOffset+1) {
+				flushedBatch, err := batchPolicy.Flush(sess.Context())
+				if err != nil {
+					k.mgr.Logger().Debugf("Flush batch error: %w", err)
+					return nil
+				}
+				if !flushBatch(sess.Context(), k.msgChan, flushedBatch, latestOffset+1) {
 					return nil
 				}
 			}
@@ -91,7 +101,7 @@ func (k *kafkaReader) ConsumeClaim(sess sarama.ConsumerGroupSession, claim saram
 
 func (k *kafkaReader) connectBalancedTopics(ctx context.Context, config *sarama.Config) error {
 	// Start a new consumer group
-	group, err := sarama.NewConsumerGroup(k.addresses, k.conf.ConsumerGroup, config)
+	group, err := sarama.NewConsumerGroup(k.addresses, k.consumerGroup, config)
 	if err != nil {
 		return err
 	}
@@ -104,7 +114,7 @@ func (k *kafkaReader) connectBalancedTopics(ctx context.Context, config *sarama.
 				return
 			}
 			if gerr != nil {
-				k.log.Errorf("Kafka group message recv error: %v\n", gerr)
+				k.mgr.Logger().Errorf("Kafka group message recv error: %v\n", gerr)
 				if cerr, ok := gerr.(*sarama.ConsumerError); ok {
 					if cerr.Err == sarama.ErrUnknownMemberId {
 						// Sarama doesn't seem to recover from this error.
@@ -126,7 +136,7 @@ func (k *kafkaReader) connectBalancedTopics(ctx context.Context, config *sarama.
 			k.consumerCloseFn = doneFn
 			k.cMut.Unlock()
 
-			k.log.Debugln("Starting consumer group")
+			k.mgr.Logger().Debug("Starting consumer group")
 			gerr := group.Consume(ctx, k.balancedTopics, k)
 			select {
 			case <-ctx.Done():
@@ -136,12 +146,12 @@ func (k *kafkaReader) connectBalancedTopics(ctx context.Context, config *sarama.
 			doneFn()
 			if gerr != nil {
 				if gerr != io.EOF {
-					k.log.Errorf("Kafka group session error: %v\n", gerr)
+					k.mgr.Logger().Errorf("Kafka group session error: %v\n", gerr)
 				}
 				break groupLoop
 			}
 		}
-		k.log.Debugln("Closing consumer group")
+		k.mgr.Logger().Debug("Closing consumer group")
 
 		group.Close()
 
@@ -155,6 +165,6 @@ func (k *kafkaReader) connectBalancedTopics(ctx context.Context, config *sarama.
 
 	k.msgChan = make(chan asyncMessage)
 	k.consumerDoneCtx = consumerDoneCtx
-	k.log.Infof("Consuming kafka topics %v from brokers %s as group '%v'\n", k.balancedTopics, k.addresses, k.conf.ConsumerGroup)
+	k.mgr.Logger().Infof("Consuming kafka topics %v from brokers %s as group '%v'\n", k.balancedTopics, k.addresses, k.consumerGroup)
 	return nil
 }

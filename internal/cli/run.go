@@ -10,6 +10,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/benthosdev/benthos/v4/internal/bloblang/parser"
+	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/cli/blobl"
 	"github.com/benthosdev/benthos/v4/internal/cli/common"
 	"github.com/benthosdev/benthos/v4/internal/cli/studio"
@@ -126,7 +127,12 @@ Either run Benthos as a stream processor or choose a command:
   benthos -r "./production/*.yaml" -c ./config.yaml`[1:],
 		Flags: flags,
 		Before: func(c *cli.Context) error {
-			for _, dotEnvFile := range c.StringSlice("env-file") {
+			dotEnvPaths, err := filepath.Globs(ifs.OS(), c.StringSlice("env-file"))
+			if err != nil {
+				fmt.Printf("Failed to resolve env file glob pattern: %v\n", err)
+				os.Exit(1)
+			}
+			for _, dotEnvFile := range dotEnvPaths {
 				dotEnvBytes, err := ifs.ReadFile(ifs.OS(), dotEnvFile)
 				if err != nil {
 					fmt.Printf("Failed to read dotenv file: %v\n", err)
@@ -199,14 +205,14 @@ variables have been resolved:
 					}
 					var node yaml.Node
 					if err = node.Encode(conf); err == nil {
-						sanitConf := docs.NewSanitiseConfig()
+						sanitConf := docs.NewSanitiseConfig(bundle.GlobalEnvironment)
 						sanitConf.RemoveTypeField = true
 						sanitConf.ScrubSecrets = true
 						err = config.Spec().SanitiseYAML(&node, sanitConf)
 					}
 					if err == nil {
 						var configYAML []byte
-						if configYAML, err = config.MarshalYAML(node); err == nil {
+						if configYAML, err = docs.MarshalYAML(node); err == nil {
 							fmt.Println(string(configYAML))
 						}
 					}

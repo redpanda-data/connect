@@ -2,6 +2,8 @@ package query
 
 import (
 	"fmt"
+
+	"github.com/benthosdev/benthos/v4/internal/value"
 )
 
 // MatchCase represents a single match case of a match expression, where a case
@@ -47,7 +49,7 @@ func NewMatchFunction(contextFn Function, cases ...MatchCase) Function {
 				return c.queryFn.Exec(caseCtx)
 			}
 		}
-		return Nothing(nil), nil
+		return value.Nothing(nil), nil
 	}, func(ctx TargetsContext) (TargetsContext, []TargetPath) {
 		contextCtx, contextTargets := contextFn.QueryTargets(ctx)
 		contextCtx = contextCtx.WithValues(contextTargets).WithValuesAsContext()
@@ -89,7 +91,21 @@ func NewIfFunction(queryFn, ifFn Function, elseIfs []ElseIf, elseFn Function) Fu
 		if err != nil {
 			return nil, fmt.Errorf("failed to check if condition: %w", err)
 		}
-		if queryRes, _ := queryVal.(bool); queryRes {
+
+		queryRes, isBool := queryVal.(bool)
+		if !isBool {
+			if queryVal == nil {
+				// TODO V5: Remove this, we want to enforce only explicit
+				// boolean true/false. However, we realised that users had
+				// `if foo { ... }` in places where `foo` could potentially be a
+				// boolean or `null` and so we're allowing `null` to be an
+				// honorary `false` until v5.
+				queryRes = false
+			} else {
+				return nil, fmt.Errorf("%v resolved to a non-boolean value %v (%T)", queryFn.Annotation(), queryVal, queryVal)
+			}
+		}
+		if queryRes {
 			return ifFn.Exec(ctx)
 		}
 
@@ -98,7 +114,16 @@ func NewIfFunction(queryFn, ifFn Function, elseIfs []ElseIf, elseFn Function) Fu
 			if err != nil {
 				return nil, fmt.Errorf("failed to check if condition %v: %w", i+1, err)
 			}
-			if queryRes, _ := queryVal.(bool); queryRes {
+			queryRes, isBool := queryVal.(bool)
+			if !isBool {
+				if queryVal == nil {
+					// TODO V5: Remove this, as above
+					queryRes = false
+				} else {
+					return nil, fmt.Errorf("%v resolved to a non-boolean value %v (%T)", eFn.QueryFn.Annotation(), queryVal, queryVal)
+				}
+			}
+			if queryRes {
 				return eFn.MapFn.Exec(ctx)
 			}
 		}
@@ -106,7 +131,7 @@ func NewIfFunction(queryFn, ifFn Function, elseIfs []ElseIf, elseFn Function) Fu
 		if elseFn != nil {
 			return elseFn.Exec(ctx)
 		}
-		return Nothing(nil), nil
+		return value.Nothing(nil), nil
 	}, aggregateTargetPaths(allFns...))
 }
 
