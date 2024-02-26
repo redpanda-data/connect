@@ -3,7 +3,6 @@ package parser
 import (
 	"errors"
 	"fmt"
-	"strings"
 
 	"github.com/Jeffail/gabs/v2"
 
@@ -427,8 +426,7 @@ func quotedPathLiteralSegmentParser() Func {
 		rawSegment, _ := res.Payload.(string)
 
 		// Convert into a JSON pointer style path string.
-		rawSegment = strings.ReplaceAll(rawSegment, "~", "~0")
-		rawSegment = strings.ReplaceAll(rawSegment, ".", "~1")
+		rawSegment = jsonStyleReplacer.Replace(rawSegment)
 
 		return Success(rawSegment, res.Remaining)
 	}

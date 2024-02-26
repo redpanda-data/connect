@@ -8,6 +8,14 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/bloblang/query"
 )
 
+var (
+	jsonStyleReplacer *strings.Replacer
+)
+
+func init() {
+	jsonStyleReplacer = strings.NewReplacer("~", "~0", ".", "~1")
+}
+
 func functionArgsParser(pCtx Context) Func {
 	begin, comma, end := Char('('), Char(','), Char(')')
 	whitespace := DiscardAll(
@@ -152,8 +160,7 @@ func quotedPathSegmentParser() Func {
 		rawSegment, _ := res.Payload.(string)
 
 		// Convert into a JSON pointer style path string.
-		rawSegment = strings.ReplaceAll(rawSegment, "~", "~0")
-		rawSegment = strings.ReplaceAll(rawSegment, ".", "~1")
+		rawSegment = jsonStyleReplacer.Replace(rawSegment)
 
 		return Success(rawSegment, res.Remaining)
 	}

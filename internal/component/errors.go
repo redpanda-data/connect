@@ -7,6 +7,10 @@ import (
 	"time"
 )
 
+func init() {
+	newLineReplacer = strings.NewReplacer("\n", "")
+}
+
 // ErrNotUnwrapped is returned in cases where a component was meant to be
 // unwrapped either from the public packages or to the public packages but for
 // some reason this did not happen. Unwrapping should only occur in times when
@@ -91,8 +95,13 @@ type ErrUnexpectedHTTPRes struct {
 	Body []byte
 }
 
+var (
+	// initialize in init()
+	newLineReplacer *strings.Replacer
+)
+
 // Error returns the Error string.
 func (e ErrUnexpectedHTTPRes) Error() string {
-	body := strings.ReplaceAll(string(e.Body), "\n", "")
+	body := newLineReplacer.Replace(string(e.Body))
 	return fmt.Sprintf("HTTP request returned unexpected response code (%v): %v, Error: %v", e.Code, e.S, body)
 }

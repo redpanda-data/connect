@@ -14,6 +14,12 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/cuegen"
 )
 
+var dashReplacer *strings.Replacer
+
+func init() {
+	dashReplacer = strings.NewReplacer("-", " ")
+}
+
 func listCliCommand() *cli.Command {
 	return &cli.Command{
 		Name:  "list",
@@ -80,7 +86,7 @@ func listComponents(c *cli.Context) {
 				fmt.Println("")
 			}
 			i++
-			title := cases.Title(language.English).String(strings.ReplaceAll(k, "-", " "))
+			title := cases.Title(language.English).String(dashReplacer.Replace(k))
 			fmt.Printf("%v:\n", title)
 			for _, t := range flat[k] {
 				fmt.Printf("  - %v\n", t)

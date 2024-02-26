@@ -137,6 +137,7 @@ require (
 	go.opentelemetry.io/otel/sdk v1.23.1
 	go.opentelemetry.io/otel/trace v1.23.1
 	go.uber.org/multierr v1.11.0
+	go4.org v0.0.0-20230225012048-214862532bf5
 	golang.org/x/crypto v0.19.0
 	golang.org/x/exp v0.0.0-20231006140011-7918f672742d
 	golang.org/x/net v0.21.0
