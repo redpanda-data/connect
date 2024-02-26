@@ -21,6 +21,7 @@ All notable changes to this project will be documented in this file.
 - The `aws_kinesis` input and output now support specifying ARNs as the stream target.
 - New `azure_cosmosdb` input, processor and output.
 - All `sql_*` components now support the `gocosmos` driver.
+- New `opensearch` output.
 
 ### Fixed
 
