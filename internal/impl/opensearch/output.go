@@ -4,18 +4,20 @@ import (
 	"bytes"
 	"context"
 	"crypto/tls"
-	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
-	os "github.com/opensearch-project/opensearch-go/v2"
-	"github.com/opensearch-project/opensearch-go/v2/opensearchutil"
+	"github.com/opensearch-project/opensearch-go/v3/opensearchapi"
+	"github.com/opensearch-project/opensearch-go/v3/opensearchutil"
 
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/httpclient"
+	"github.com/benthosdev/benthos/v4/internal/impl/aws/config"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
@@ -32,10 +34,35 @@ const (
 	esoFieldAuthUsername = "username"
 	esoFieldAuthPassword = "password"
 	esoFieldBatching     = "batching"
+	esoFieldAWS          = "aws"
+	ESOFieldAWSEnabled   = "enabled"
 )
 
+func notImportedAWSOptFn(conf *service.ParsedConfig, osconf *opensearchapi.Config) error {
+	if enabled, _ := conf.FieldBool(ESOFieldAWSEnabled); !enabled {
+		return nil
+	}
+	return errors.New("unable to configure AWS authentication as this binary does not import components/aws")
+}
+
+// AWSOptFn is populated with the child `aws` package when imported.
+var AWSOptFn = notImportedAWSOptFn
+
+// AWSField represents the aws block within an elasticsearch field. This is
+// exported in order to make unit testing easier within the aws subpackage.
+func AWSField() *service.ConfigField {
+	return service.NewObjectField(esoFieldAWS,
+		append([]*service.ConfigField{
+			service.NewBoolField(ESOFieldAWSEnabled).
+				Description("Whether to connect to Amazon Elastic Service.").
+				Default(false),
+		}, config.SessionFields()...)...).
+		Description("Enables and customises connectivity to Amazon Elastic Service.").
+		Advanced()
+}
+
 type esoConfig struct {
-	clientOpts os.Config
+	clientOpts opensearchapi.Config
 
 	actionStr   *service.InterpolatedString
 	idStr       *service.InterpolatedString
@@ -45,7 +72,7 @@ type esoConfig struct {
 }
 
 func esoConfigFromParsed(pConf *service.ParsedConfig) (conf esoConfig, err error) {
-	conf.clientOpts = os.Config{}
+	conf.clientOpts = opensearchapi.Config{}
 
 	var tmpURLs []string
 	if tmpURLs, err = pConf.FieldStringList(esoFieldURLs); err != nil {
@@ -54,7 +81,7 @@ func esoConfigFromParsed(pConf *service.ParsedConfig) (conf esoConfig, err error
 	for _, u := range tmpURLs {
 		for _, splitURL := range strings.Split(u, ",") {
 			if len(splitURL) > 0 {
-				conf.clientOpts.Addresses = append(conf.clientOpts.Addresses, splitURL)
+				conf.clientOpts.Client.Addresses = append(conf.clientOpts.Client.Addresses, splitURL)
 			}
 		}
 	}
@@ -62,10 +89,10 @@ func esoConfigFromParsed(pConf *service.ParsedConfig) (conf esoConfig, err error
 	{
 		authConf := pConf.Namespace(esoFieldAuth)
 		if enabled, _ := authConf.FieldBool(esoFieldAuthEnabled); enabled {
-			if conf.clientOpts.Username, err = authConf.FieldString(esoFieldAuthUsername); err != nil {
+			if conf.clientOpts.Client.Username, err = authConf.FieldString(esoFieldAuthUsername); err != nil {
 				return
 			}
-			if conf.clientOpts.Password, err = authConf.FieldString(esoFieldAuthPassword); err != nil {
+			if conf.clientOpts.Client.Password, err = authConf.FieldString(esoFieldAuthPassword); err != nil {
 				return
 			}
 		}
@@ -76,7 +103,7 @@ func esoConfigFromParsed(pConf *service.ParsedConfig) (conf esoConfig, err error
 	if tlsConf, tlsEnabled, err = pConf.FieldTLSToggled(esoFieldTLS); err != nil {
 		return
 	} else if tlsEnabled {
-		conf.clientOpts.Transport = &http.Transport{
+		conf.clientOpts.Client.Transport = &http.Transport{
 			TLSClientConfig: tlsConf,
 		}
 	}
@@ -94,6 +121,10 @@ func esoConfigFromParsed(pConf *service.ParsedConfig) (conf esoConfig, err error
 		return
 	}
 	if conf.routingStr, err = pConf.FieldInterpolatedString(esoFieldRouting); err != nil {
+		return
+	}
+
+	if err = AWSOptFn(pConf.Namespace(esoFieldAWS), &conf.clientOpts); err != nil {
 		return
 	}
 	return
@@ -116,14 +147,14 @@ Both the `+"`id` and `index`"+` fields can be dynamically set using function int
 			service.NewInterpolatedStringField(esoFieldIndex).
 				Description("The index to place messages."),
 			service.NewInterpolatedStringField(esoFieldAction).
-				Description("The action to take on the document. This field must resolve to one of the following action types: `create`, `index`, `update`, `upsert` or `delete`."),
+				Description("The action to take on the document. This field must resolve to one of the following action types: `index`, `update` or `delete`."),
+			service.NewInterpolatedStringField(esoFieldID).
+				Description("The ID for indexed messages. Interpolation should be used in order to create a unique ID for each message.").
+				Example(`${!counter()}-${!timestamp_unix()}`),
 			service.NewInterpolatedStringField(esoFieldPipeline).
 				Description("An optional pipeline id to preprocess incoming documents.").
 				Advanced().
 				Default(""),
-			service.NewInterpolatedStringField(esoFieldID).
-				Description("The ID for indexed messages. Interpolation should be used in order to create a unique ID for each message.").
-				Default(`${!count("elastic_ids")}-${!timestamp_unix()}`),
 			service.NewInterpolatedStringField(esoFieldRouting).
 				Description("The routing key to use for the document.").
 				Advanced().
@@ -134,8 +165,20 @@ Both the `+"`id` and `index`"+` fields can be dynamically set using function int
 		Fields(
 			httpclient.BasicAuthField(),
 			service.NewBatchPolicyField(esoFieldBatching),
-		)
-
+			AWSField(),
+		).
+		Example("Updating Documents", "When [updating documents](https://opensearch.org/docs/latest/api-reference/document-apis/update-document/) the request body should contain a combination of a `doc`, `upsert`, and/or `script` fields at the top level, this should be done via mapping processors.", `
+output:
+  processors:
+    - mapping: |
+        meta id = this.id
+        root.doc = this
+  opensearch:
+    urls: [ TODO ]
+    index: foo
+    id: ${! @id }
+    action: update
+`)
 }
 
 func init() {
@@ -160,7 +203,7 @@ type Output struct {
 	log  *service.Logger
 	conf esoConfig
 
-	client *os.Client
+	client *opensearchapi.Client
 }
 
 // OutputFromParsed returns an elasticsearch output writer from a parsed config.
@@ -182,13 +225,13 @@ func (e *Output) Connect(ctx context.Context) error {
 		return nil
 	}
 
-	client, err := os.NewClient(e.conf.clientOpts)
+	client, err := opensearchapi.NewClient(e.conf.clientOpts)
 	if err != nil {
 		return err
 	}
 
 	e.client = client
-	e.log.Infof("Sending messages to Elasticsearch index at urls: %s\n", e.conf.clientOpts.Addresses)
+	e.log.Infof("Sending messages to Elasticsearch index at urls: %s\n", e.conf.clientOpts.Client.Addresses)
 	return nil
 }
 
@@ -197,7 +240,7 @@ type pendingBulkIndex struct {
 	Index    string
 	Pipeline string
 	Routing  string
-	Doc      any
+	Payload  []byte
 	ID       string
 }
 
@@ -209,13 +252,13 @@ func (e *Output) WriteBatch(ctx context.Context, msg service.MessageBatch) error
 	requests := make([]*pendingBulkIndex, len(msg))
 
 	for i := 0; i < len(msg); i++ {
-		jObj, ierr := msg[i].AsStructured()
+		rawBytes, ierr := msg[i].AsBytes()
 		if ierr != nil {
-			e.log.Errorf("Failed to marshal message into JSON document: %v\n", ierr)
-			return fmt.Errorf("failed to marshal message into JSON document: %w", ierr)
+			e.log.Errorf("Failed to obtain message raw data: %v\n", ierr)
+			return fmt.Errorf("failed to obtain message raw data: %w", ierr)
 		}
 
-		pbi := &pendingBulkIndex{Doc: jObj}
+		pbi := &pendingBulkIndex{Payload: rawBytes}
 		if pbi.Action, ierr = msg.TryInterpolatedString(i, e.conf.actionStr); ierr != nil {
 			return fmt.Errorf("action interpolation error: %w", ierr)
 		}
@@ -239,8 +282,20 @@ func (e *Output) WriteBatch(ctx context.Context, msg service.MessageBatch) error
 		Client: e.client,
 	})
 
-	for _, v := range requests {
-		bulkReq, err := e.buildBulkableRequest(v)
+	var bErrMut sync.Mutex
+	var bErr *service.BatchError
+
+	for i, v := range requests {
+		i := i
+		bulkReq, err := e.buildBulkableRequest(v, func(err error) {
+			bErrMut.Lock()
+			defer bErrMut.Unlock()
+
+			if bErr == nil {
+				bErr = service.NewBatchError(msg, err)
+			}
+			bErr = bErr.Failed(i, err)
+		})
 		if err != nil {
 			return err
 		}
@@ -253,26 +308,19 @@ func (e *Output) WriteBatch(ctx context.Context, msg service.MessageBatch) error
 		return err
 	}
 
+	if bErr != nil {
+		return bErr
+	}
+
 	biStats := b.Stats()
 	dur := time.Since(start)
 
-	// TODO: Proper error handling mate???
-	if biStats.NumFailed > 0 {
-		e.log.Errorf(
-			"Indexed [%s] documents with [%s] errors in %s (%s docs/sec)",
-			biStats.NumFlushed,
-			biStats.NumFailed,
-			dur.Truncate(time.Millisecond),
-			int64(1000.0/float64(dur/time.Millisecond)*float64(biStats.NumFlushed)),
-		)
-	} else {
-		e.log.Debugf(
-			"Successfully indexed [%s] documents in %s (%s docs/sec)",
-			biStats.NumFlushed,
-			dur.Truncate(time.Millisecond),
-			int64(1000.0/float64(dur/time.Millisecond)*float64(biStats.NumFlushed)),
-		)
-	}
+	e.log.Debugf(
+		"Successfully dispatched [%s] documents in %s (%s docs/sec)",
+		biStats.NumFlushed,
+		dur.Truncate(time.Millisecond),
+		int64(1000.0/float64(dur/time.Millisecond)*float64(biStats.NumFlushed)),
+	)
 	return nil
 }
 
@@ -281,18 +329,13 @@ func (e *Output) Close(context.Context) error {
 }
 
 // Build a bulkable request for a given pending bulk index item.
-func (e *Output) buildBulkableRequest(p *pendingBulkIndex) (r *opensearchutil.BulkIndexerItem, err error) {
+func (e *Output) buildBulkableRequest(p *pendingBulkIndex, onError func(err error)) (r *opensearchutil.BulkIndexerItem, err error) {
 	switch p.Action {
 	case "update":
-		var jsonData []byte
-		jsonData, err = json.Marshal(p.Doc)
-		if err != nil {
-			return
-		}
 		r = &opensearchutil.BulkIndexerItem{
 			Index:  p.Index,
 			Action: "update",
-			Body:   bytes.NewReader(jsonData),
+			Body:   bytes.NewReader(p.Payload),
 		}
 		if p.ID != "" {
 			r.DocumentID = p.ID
@@ -300,7 +343,6 @@ func (e *Output) buildBulkableRequest(p *pendingBulkIndex) (r *opensearchutil.Bu
 		if p.Routing != "" {
 			r.Routing = &p.Routing
 		}
-		return
 	case "delete":
 		r = &opensearchutil.BulkIndexerItem{
 			Index:      p.Index,
@@ -310,17 +352,11 @@ func (e *Output) buildBulkableRequest(p *pendingBulkIndex) (r *opensearchutil.Bu
 		if p.Routing != "" {
 			r.Routing = &p.Routing
 		}
-		return
 	case "index":
-		var jsonData []byte
-		jsonData, err = json.Marshal(p.Doc)
-		if err != nil {
-			return
-		}
 		r = &opensearchutil.BulkIndexerItem{
 			Index:  p.Index,
 			Action: "index",
-			Body:   bytes.NewReader(jsonData),
+			Body:   bytes.NewReader(p.Payload),
 		}
 		if p.ID != "" {
 			r.DocumentID = p.ID
@@ -328,26 +364,23 @@ func (e *Output) buildBulkableRequest(p *pendingBulkIndex) (r *opensearchutil.Bu
 		if p.Routing != "" {
 			r.Routing = &p.Routing
 		}
-		return
-	case "create":
-		var jsonData []byte
-		jsonData, err = json.Marshal(p.Doc)
-		if err != nil {
-			return
-		}
-		r = &opensearchutil.BulkIndexerItem{
-			Index:  p.Index,
-			Action: "create",
-			Body:   bytes.NewReader(jsonData),
-		}
-		if p.ID != "" {
-			r.DocumentID = p.ID
-		}
-		if p.Routing != "" {
-			r.Routing = &p.Routing
-		}
-		return
 	default:
 		return nil, fmt.Errorf("opensearch action '%s' is not allowed", p.Action)
 	}
+
+	r.OnFailure = func(
+		ctx context.Context,
+		bii opensearchutil.BulkIndexerItem,
+		biri opensearchapi.BulkRespItem,
+		err error,
+	) {
+		if err == nil {
+			if biri.Error.Type == "" {
+				biri.Error.Type = fmt.Sprintf("status %v", biri.Status)
+			}
+			err = fmt.Errorf("%v: %v", biri.Error.Type, biri.Error.Reason)
+		}
+		onError(err)
+	}
+	return
 }

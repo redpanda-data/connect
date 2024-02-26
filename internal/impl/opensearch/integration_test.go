@@ -3,11 +3,6 @@ package opensearch_test
 import (
 	"context"
 	"encoding/json"
-	"io"
-
-	"github.com/benthosdev/benthos/v4/internal/impl/opensearch"
-	"github.com/benthosdev/benthos/v4/public/service"
-
 	"fmt"
 	"net/http"
 	"strings"
@@ -15,14 +10,17 @@ import (
 	"testing"
 	"time"
 
-	os "github.com/opensearch-project/opensearch-go/v2"
-	osapi "github.com/opensearch-project/opensearch-go/v2/opensearchapi"
+	os "github.com/opensearch-project/opensearch-go/v3"
+	osapi "github.com/opensearch-project/opensearch-go/v3/opensearchapi"
 
 	"github.com/ory/dockertest/v3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/benthosdev/benthos/v4/internal/impl/opensearch"
 	"github.com/benthosdev/benthos/v4/internal/integration"
+	_ "github.com/benthosdev/benthos/v4/public/components/pure"
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
 func outputFromConf(t testing.TB, confStr string, args ...any) *opensearch.Output {
@@ -86,19 +84,16 @@ func TestIntegration(t *testing.T) {
 		}
 	}
 }`
-			_, cerr = osapi.IndicesCreateRequest{
-				Index:   "test_conn_index",
-				Body:    strings.NewReader(index),
-				Timeout: time.Second * 20,
-			}.Do(context.Background(), client)
+			_, cerr = client.Do(context.Background(), osapi.IndicesCreateReq{
+				Index: "test_conn_index",
+				Body:  strings.NewReader(index),
+			}, nil)
 			if cerr == nil {
-				_, cerr = osapi.IndicesCreateRequest{
-					Index:   "test_conn_index_2",
-					Body:    strings.NewReader(index),
-					Timeout: time.Second * 20,
-				}.Do(context.Background(), client)
+				_, cerr = client.Do(context.Background(), osapi.IndicesCreateReq{
+					Index: "test_conn_index_2",
+					Body:  strings.NewReader(index),
+				}, nil)
 			}
-
 		}
 		return cerr
 	}); err != nil {
@@ -172,13 +167,23 @@ action: index
 
 	for i := 0; i < 3; i++ {
 		id := fmt.Sprintf("foo-%v", i+1)
-		get, err := osapi.GetRequest{
+		get, err := client.Do(ctx, osapi.DocumentGetReq{
 			Index:      "does_not_exist",
 			DocumentID: id,
-		}.Do(ctx, client)
+		}, nil)
 		require.NoError(t, err, id)
 		assert.False(t, get.IsError())
 	}
+}
+
+func resEqualsJSON(t testing.TB, res *os.Response, exp string) {
+	t.Helper()
+	var tmp struct {
+		Source json.RawMessage `json:"_source"`
+	}
+	dec := json.NewDecoder(res.Body)
+	require.NoError(t, dec.Decode(&tmp))
+	assert.JSONEq(t, exp, string(tmp.Source))
 }
 
 func testOpenSearchParallelWrites(urls []string, client *os.Client, t *testing.T) {
@@ -221,17 +226,14 @@ action: index
 	wg.Wait()
 
 	for id, exp := range docs {
-		get, err := osapi.GetRequest{
+		get, err := client.Do(ctx, osapi.DocumentGetReq{
 			Index:      "new_index_parallel_writes",
 			DocumentID: id,
-		}.Do(ctx, client)
+		}, nil)
 		require.NoError(t, err, id)
 		assert.False(t, get.IsError())
 
-		rawBytes, err := io.ReadAll(get.Body)
-		require.NoError(t, err)
-
-		assert.Equal(t, exp, string(rawBytes), id)
+		resEqualsJSON(t, get, exp)
 	}
 }
 
@@ -291,17 +293,14 @@ action: index
 	}
 	for i := 0; i < N; i++ {
 		id := fmt.Sprintf("foo-%v", i+1)
-		get, err := osapi.GetRequest{
+		get, err := client.Do(ctx, osapi.DocumentGetReq{
 			Index:      "test_conn_index",
 			DocumentID: id,
-		}.Do(ctx, client)
+		}, nil)
 		require.NoError(t, err, id)
 		assert.False(t, get.IsError())
 
-		rawBytes, err := io.ReadAll(get.Body)
-		require.NoError(t, err)
-
-		assert.Equal(t, string(testMsgs[i]), string(rawBytes))
+		resEqualsJSON(t, get, string(testMsgs[i]))
 	}
 }
 
@@ -334,17 +333,14 @@ action: index
 	}
 	for i := 0; i < N; i++ {
 		id := fmt.Sprintf("bar-%v", i+1)
-		get, err := osapi.GetRequest{
+		get, err := client.Do(ctx, osapi.DocumentGetReq{
 			Index:      "test_conn_index",
 			DocumentID: id,
-		}.Do(ctx, client)
+		}, nil)
 		require.NoError(t, err, id)
 		assert.False(t, get.IsError())
 
-		rawBytes, err := io.ReadAll(get.Body)
-		require.NoError(t, err)
-
-		assert.Equal(t, string(testMsgs[i]), string(rawBytes))
+		resEqualsJSON(t, get, string(testMsgs[i]))
 	}
 }
 
@@ -378,17 +374,14 @@ action: index
 
 	for i := 0; i < N; i++ {
 		id := fmt.Sprintf("baz-%v", i+1)
-		get, err := osapi.GetRequest{
+		get, err := client.Do(ctx, osapi.DocumentGetReq{
 			Index:      "test_conn_index",
 			DocumentID: id,
-		}.Do(ctx, client)
+		}, nil)
 		require.NoError(t, err, id)
 		assert.False(t, get.IsError())
 
-		rawBytes, err := io.ReadAll(get.Body)
-		require.NoError(t, err)
-
-		assert.Equal(t, string(testMsg[i]), string(rawBytes))
+		resEqualsJSON(t, get, string(testMsg[i]))
 	}
 }
 
@@ -397,8 +390,8 @@ func testOpenSearchBatchDelete(urls []string, client *os.Client, t *testing.T) {
 	defer done()
 
 	m := outputFromConf(t, `
-index: ${! @index }
-id: 'buz-${!count("elasticBatchDeleteMessages")}'
+index: test_conn_index
+id: ${! @elastic_id }
 urls: %v
 action: ${! @elastic_action }
 `, urls)
@@ -413,27 +406,25 @@ action: ${! @elastic_action }
 	var testMsg [][]byte
 	var testBatch service.MessageBatch
 	for i := 0; i < N; i++ {
+		id := fmt.Sprintf("buz-%v", i+1)
 		testMsg = append(testMsg, []byte(fmt.Sprintf(`{"message":"hello world","user":"%v"}`, i)))
 		testBatch = append(testBatch, service.NewMessage(testMsg[i]))
-		testBatch[i].MetaSetMut("index", "test_conn_index")
 		testBatch[i].MetaSetMut("elastic_action", "index")
+		testBatch[i].MetaSetMut("elastic_id", id)
 	}
 
 	require.NoError(t, m.WriteBatch(ctx, testBatch))
 
 	for i := 0; i < N; i++ {
 		id := fmt.Sprintf("buz-%v", i+1)
-		get, err := osapi.GetRequest{
+		get, err := client.Do(ctx, osapi.DocumentGetReq{
 			Index:      "test_conn_index",
 			DocumentID: id,
-		}.Do(ctx, client)
+		}, nil)
 		require.NoError(t, err, id)
 		assert.False(t, get.IsError())
 
-		rawBytes, err := io.ReadAll(get.Body)
-		require.NoError(t, err)
-
-		assert.Equal(t, string(testMsg[i]), string(rawBytes))
+		resEqualsJSON(t, get, string(testMsg[i]))
 	}
 
 	// Set elastic_action to deleted for some message parts
@@ -445,21 +436,19 @@ action: ${! @elastic_action }
 
 	for i := 0; i < N; i++ {
 		id := fmt.Sprintf("buz-%v", i+1)
-		get, err := osapi.GetRequest{
+		get, err := client.Do(ctx, osapi.DocumentGetReq{
 			Index:      "test_conn_index",
 			DocumentID: id,
-		}.Do(ctx, client)
+		}, nil)
 		require.NoError(t, err, id)
 
 		partAction, _ := testBatch[i].MetaGet("elastic_action")
-		if partAction == "deleted" {
+		if partAction == "delete" {
 			assert.True(t, get.IsError())
 		} else {
 			assert.False(t, get.IsError())
-			rawBytes, err := io.ReadAll(get.Body)
-			require.NoError(t, err)
 
-			assert.Equal(t, string(testMsg[i]), string(rawBytes))
+			resEqualsJSON(t, get, string(testMsg[i]))
 		}
 	}
 }
@@ -496,18 +485,14 @@ action: index
 
 	for i := 0; i < 2; i++ {
 		index, _ := testBatch[i].MetaGet("index")
-
-		get, err := osapi.GetRequest{
+		get, err := client.Do(ctx, osapi.DocumentGetReq{
 			Index:      index,
 			DocumentID: "bar-id",
-		}.Do(ctx, client)
+		}, nil)
 		require.NoError(t, err)
 		assert.False(t, get.IsError())
 
-		rawBytes, err := io.ReadAll(get.Body)
-		require.NoError(t, err)
-
-		assert.Equal(t, string(testMsg[i]), string(rawBytes))
+		resEqualsJSON(t, get, string(testMsg[i]))
 	}
 
 	// testing sequential updates to a document created above
@@ -524,26 +509,24 @@ action: update
 	}()
 
 	testBatch = service.MessageBatch{
-		service.NewMessage([]byte(`{"message":"goodbye"}`)),
-		service.NewMessage([]byte(`{"user": "updated"}`)),
+		service.NewMessage([]byte(`{"doc":{"message":"goodbye"}}`)),
+		service.NewMessage([]byte(`{"doc":{"user": "updated"}}`)),
 	}
 	require.NoError(t, m2.WriteBatch(ctx, testBatch))
 
-	get, err := osapi.GetRequest{
+	get, err := client.Do(ctx, osapi.DocumentGetReq{
 		Index:      "test_conn_index",
 		DocumentID: "bar-id",
-	}.Do(ctx, client)
+	}, nil)
 	require.NoError(t, err)
 	assert.False(t, get.IsError())
 
-	rawBytes, err := io.ReadAll(get.Body)
-	require.NoError(t, err)
-
-	var doc struct {
-		Message string `json:"message"`
-		User    string `json:"user"`
+	var tmp struct {
+		Source map[string]any `json:"_source"`
 	}
-	require.NoError(t, json.Unmarshal(rawBytes, &doc))
-	assert.Equal(t, "updated", doc.User)
-	assert.Equal(t, "goodbye", doc.Message)
+	dec := json.NewDecoder(get.Body)
+	require.NoError(t, dec.Decode(&tmp))
+
+	assert.Equal(t, "updated", tmp.Source["user"])
+	assert.Equal(t, "goodbye", tmp.Source["message"])
 }
