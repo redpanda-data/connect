@@ -21,7 +21,6 @@ func dynamicArrayParser(pCtx Context) Func {
 				DiscardedWhitespaceNewlineComments,
 				charSquareClose,
 			),
-			true,
 		)(input)
 		if res.Err != nil {
 			return res
@@ -58,7 +57,6 @@ func dynamicObjectParser(pCtx Context) Func {
 				DiscardedWhitespaceNewlineComments,
 				charSquigClose,
 			),
-			true,
 		)(input)
 		if res.Err != nil {
 			return res

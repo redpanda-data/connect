@@ -90,7 +90,6 @@ func matchExpressionParser(pCtx Context) Func {
 						DiscardedWhitespaceNewlineComments,
 						charSquigClose,
 					),
-					true,
 				),
 			),
 		)(input)

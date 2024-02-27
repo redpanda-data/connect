@@ -20,7 +20,6 @@ func functionArgsParser(pCtx Context) Func {
 			),
 			MustBe(Expect(Sequence(Discard(SpacesAndTabs), charComma, DiscardedWhitespaceNewlineComments), "comma")),
 			MustBe(Expect(Sequence(DiscardedWhitespaceNewlineComments, charBracketClose), "closing bracket")),
-			true,
 		)(input)
 	}
 }
