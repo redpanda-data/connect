@@ -572,3 +572,16 @@ from "%v"`, directMapFile),
 		})
 	}
 }
+
+func BenchmarkMappingParser(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		_, err := ParseMapping(GlobalContext(), `
+root.foo = this.foo.uppercase()
+root.bar = this.bar.lowercase()
+root.baz = this.baz.slice(0, 10)
+`)
+		if err != nil {
+			b.Error(err.Error())
+		}
+	}
+}

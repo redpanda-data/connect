@@ -15,16 +15,18 @@ func intoStaticResolver(p Func) Func {
 	}
 }
 
-func aFunction(pCtx Context) Func {
-	return func(input []rune) Result {
-		res := Sequence(
-			Term("${!"),
-			Optional(SpacesAndTabs()),
-			MustBe(queryParser(pCtx)),
-			Optional(SpacesAndTabs()),
-			MustBe(Expect(Char('}'), "end of expression")),
-		)(input)
+var interpStart = Term("${!")
 
+func aFunction(pCtx Context) Func {
+	pattern := Sequence(
+		interpStart,
+		Optional(SpacesAndTabs),
+		MustBe(queryParser(pCtx)),
+		Optional(SpacesAndTabs),
+		MustBe(Expect(charSquigClose, "end of expression")),
+	)
+	return func(input []rune) Result {
+		res := pattern(input)
 		if res.Err != nil {
 			return res
 		}
@@ -33,18 +35,25 @@ func aFunction(pCtx Context) Func {
 	}
 }
 
-func escapedBlock(input []rune) Result {
-	res := Sequence(
-		Term("${{!"),
-		MustBe(Expect(UntilTerm("}}"), "end of escaped expression")),
-		Term("}}"),
-	)(input)
-	if res.Err != nil {
+var interpEscapedStart = Term("${{!")
+var interpEscapedEnd = Term("}}")
+var untilInterpEscapedEnd = UntilTerm("}}")
+
+var escapedBlock = func() Func {
+	pattern := Sequence(
+		interpEscapedStart,
+		MustBe(Expect(untilInterpEscapedEnd, "end of escaped expression")),
+		interpEscapedEnd,
+	)
+	return func(input []rune) Result {
+		res := pattern(input)
+		if res.Err != nil {
+			return res
+		}
+		res.Payload = field.StaticResolver("${!" + res.Payload.([]any)[1].(string) + "}")
 		return res
 	}
-	res.Payload = field.StaticResolver("${!" + res.Payload.([]any)[1].(string) + "}")
-	return res
-}
+}()
 
 //------------------------------------------------------------------------------
 
@@ -54,7 +63,7 @@ func parseFieldResolvers(pCtx Context, expr string) ([]field.Resolver, *Error) {
 	p := OneOf(
 		escapedBlock,
 		aFunction(pCtx),
-		intoStaticResolver(Char('$')),
+		intoStaticResolver(charDollar),
 		intoStaticResolver(NotChar('$')),
 	)
 

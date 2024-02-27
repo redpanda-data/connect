@@ -8,16 +8,14 @@ import (
 )
 
 func matchCaseParser(pCtx Context) Func {
-	whitespace := SpacesAndTabs()
-
 	p := Sequence(
 		OneOf(
 			Sequence(
 				Expect(
-					Char('_'),
+					charUnderscore,
 					"match case",
 				),
-				Optional(whitespace),
+				Optional(SpacesAndTabs),
 				Term("=>"),
 			),
 			Sequence(
@@ -25,11 +23,11 @@ func matchCaseParser(pCtx Context) Func {
 					queryParser(pCtx),
 					"match case",
 				),
-				Optional(whitespace),
+				Optional(SpacesAndTabs),
 				Term("=>"),
 			),
 		),
-		Optional(whitespace),
+		Optional(SpacesAndTabs),
 		queryParser(pCtx),
 	)
 
@@ -67,37 +65,30 @@ func matchCaseParser(pCtx Context) Func {
 }
 
 func matchExpressionParser(pCtx Context) Func {
-	whitespace := DiscardAll(
-		OneOf(
-			SpacesAndTabs(),
-			NewlineAllowComment(),
-		),
-	)
-
 	return func(input []rune) Result {
 		res := Sequence(
 			Term("match"),
-			SpacesAndTabs(),
+			SpacesAndTabs,
 			Optional(queryParser(pCtx)),
-			whitespace,
+			DiscardedWhitespaceNewlineComments,
 			MustBe(
 				DelimitedPattern(
 					Sequence(
-						Char('{'),
-						whitespace,
+						charSquigOpen,
+						DiscardedWhitespaceNewlineComments,
 					),
 					matchCaseParser(pCtx),
 					Sequence(
-						Discard(SpacesAndTabs()),
+						Discard(SpacesAndTabs),
 						OneOf(
-							Char(','),
-							NewlineAllowComment(),
+							charComma,
+							NewlineAllowComment,
 						),
-						whitespace,
+						DiscardedWhitespaceNewlineComments,
 					),
 					Sequence(
-						whitespace,
-						Char('}'),
+						DiscardedWhitespaceNewlineComments,
+						charSquigClose,
 					),
 					true,
 				),
@@ -121,48 +112,41 @@ func matchExpressionParser(pCtx Context) Func {
 }
 
 func ifExpressionParser(pCtx Context) Func {
-	optionalWhitespace := DiscardAll(
-		OneOf(
-			SpacesAndTabs(),
-			NewlineAllowComment(),
-		),
-	)
-
 	return func(input []rune) Result {
 		ifParser := Sequence(
 			Term("if"),
-			SpacesAndTabs(),
+			SpacesAndTabs,
 			MustBe(queryParser(pCtx)),
-			optionalWhitespace,
-			MustBe(Char('{')),
-			optionalWhitespace,
+			DiscardedWhitespaceNewlineComments,
+			MustBe(charSquigOpen),
+			DiscardedWhitespaceNewlineComments,
 			MustBe(queryParser(pCtx)),
-			optionalWhitespace,
-			MustBe(Char('}')),
+			DiscardedWhitespaceNewlineComments,
+			MustBe(charSquigClose),
 		)
 
 		elseIfParser := Optional(Sequence(
-			optionalWhitespace,
+			DiscardedWhitespaceNewlineComments,
 			Term("else if"),
-			SpacesAndTabs(),
+			SpacesAndTabs,
 			MustBe(queryParser(pCtx)),
-			optionalWhitespace,
-			MustBe(Char('{')),
-			optionalWhitespace,
+			DiscardedWhitespaceNewlineComments,
+			MustBe(charSquigOpen),
+			DiscardedWhitespaceNewlineComments,
 			MustBe(queryParser(pCtx)),
-			optionalWhitespace,
-			MustBe(Char('}')),
+			DiscardedWhitespaceNewlineComments,
+			MustBe(charSquigClose),
 		))
 
 		elseParser := Optional(Sequence(
-			optionalWhitespace,
+			DiscardedWhitespaceNewlineComments,
 			Term("else"),
-			optionalWhitespace,
-			MustBe(Char('{')),
-			optionalWhitespace,
+			DiscardedWhitespaceNewlineComments,
+			MustBe(charSquigOpen),
+			DiscardedWhitespaceNewlineComments,
 			MustBe(queryParser(pCtx)),
-			optionalWhitespace,
-			MustBe(Char('}')),
+			DiscardedWhitespaceNewlineComments,
+			MustBe(charSquigClose),
 		))
 
 		res := ifParser(input)
@@ -206,22 +190,16 @@ func ifExpressionParser(pCtx Context) Func {
 }
 
 func bracketsExpressionParser(pCtx Context) Func {
-	whitespace := DiscardAll(
-		OneOf(
-			SpacesAndTabs(),
-			NewlineAllowComment(),
-		),
-	)
 	return func(input []rune) Result {
 		res := Sequence(
 			Expect(
-				Char('('),
+				charBracketOpen,
 				"function",
 			),
-			whitespace,
+			DiscardedWhitespaceNewlineComments,
 			queryParser(pCtx),
-			whitespace,
-			MustBe(Expect(Char(')'), "closing bracket")),
+			DiscardedWhitespaceNewlineComments,
+			MustBe(Expect(charBracketClose, "closing bracket")),
 		)(input)
 		if res.Err != nil {
 			return res
@@ -231,28 +209,28 @@ func bracketsExpressionParser(pCtx Context) Func {
 	}
 }
 
-func lambdaExpressionParser(pCtx Context) Func {
-	contextNameParser := Expect(
-		JoinStringPayloads(
-			UntilFail(
-				OneOf(
-					InRange('a', 'z'),
-					InRange('A', 'Z'),
-					InRange('0', '9'),
-					Char('_'),
-				),
+var contextNameParser = Expect(
+	JoinStringPayloads(
+		UntilFail(
+			OneOf(
+				InRange('a', 'z'),
+				InRange('A', 'Z'),
+				InRange('0', '9'),
+				charUnderscore,
 			),
 		),
-		"context name",
-	)
+	),
+	"context name",
+)
 
+func lambdaExpressionParser(pCtx Context) Func {
 	return func(input []rune) Result {
 		res := Expect(
 			Sequence(
 				contextNameParser,
-				SpacesAndTabs(),
+				SpacesAndTabs,
 				Term("->"),
-				SpacesAndTabs(),
+				SpacesAndTabs,
 			),
 			"function",
 		)(input)

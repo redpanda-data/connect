@@ -6,84 +6,81 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/bloblang/query"
 )
 
-//------------------------------------------------------------------------------
+var arithmeticOpPattern = OneOf(
+	Char('+'),
+	Char('-'),
+	Char('/'),
+	Char('*'),
+	Char('%'),
+	Term("&&"),
+	Term("||"),
+	Term("=="),
+	Term("!="),
+	Term(">="),
+	Term("<="),
+	Char('>'),
+	Char('<'),
+	Char('|'),
+)
 
-func arithmeticOpParser() Func {
-	opParser := OneOf(
-		Char('+'),
-		Char('-'),
-		Char('/'),
-		Char('*'),
-		Char('%'),
-		Term("&&"),
-		Term("||"),
-		Term("=="),
-		Term("!="),
-		Term(">="),
-		Term("<="),
-		Char('>'),
-		Char('<'),
-		Char('|'),
-	)
-	return func(input []rune) Result {
-		res := opParser(input)
-		if res.Err != nil {
-			return res
-		}
-		switch res.Payload.(string) {
-		case "+":
-			res.Payload = query.ArithmeticAdd
-		case "-":
-			res.Payload = query.ArithmeticSub
-		case "/":
-			res.Payload = query.ArithmeticDiv
-		case "*":
-			res.Payload = query.ArithmeticMul
-		case "%":
-			res.Payload = query.ArithmeticMod
-		case "==":
-			res.Payload = query.ArithmeticEq
-		case "!=":
-			res.Payload = query.ArithmeticNeq
-		case "&&":
-			res.Payload = query.ArithmeticAnd
-		case "||":
-			res.Payload = query.ArithmeticOr
-		case ">":
-			res.Payload = query.ArithmeticGt
-		case "<":
-			res.Payload = query.ArithmeticLt
-		case ">=":
-			res.Payload = query.ArithmeticGte
-		case "<=":
-			res.Payload = query.ArithmeticLte
-		case "|":
-			res.Payload = query.ArithmeticPipe
-		default:
-			return Fail(
-				NewFatalError(input, fmt.Errorf("operator not recognized: %v", res.Payload)),
-				input,
-			)
-		}
+func arithmeticOpParser(input []rune) Result {
+	res := arithmeticOpPattern(input)
+	if res.Err != nil {
 		return res
 	}
+	switch res.Payload.(string) {
+	case "+":
+		res.Payload = query.ArithmeticAdd
+	case "-":
+		res.Payload = query.ArithmeticSub
+	case "/":
+		res.Payload = query.ArithmeticDiv
+	case "*":
+		res.Payload = query.ArithmeticMul
+	case "%":
+		res.Payload = query.ArithmeticMod
+	case "==":
+		res.Payload = query.ArithmeticEq
+	case "!=":
+		res.Payload = query.ArithmeticNeq
+	case "&&":
+		res.Payload = query.ArithmeticAnd
+	case "||":
+		res.Payload = query.ArithmeticOr
+	case ">":
+		res.Payload = query.ArithmeticGt
+	case "<":
+		res.Payload = query.ArithmeticLt
+	case ">=":
+		res.Payload = query.ArithmeticGte
+	case "<=":
+		res.Payload = query.ArithmeticLte
+	case "|":
+		res.Payload = query.ArithmeticPipe
+	default:
+		return Fail(
+			NewFatalError(input, fmt.Errorf("operator not recognized: %v", res.Payload)),
+			input,
+		)
+	}
+	return res
 }
 
 func arithmeticParser(fnParser Func) Func {
 	whitespace := DiscardAll(
 		OneOf(
-			SpacesAndTabs(),
-			NewlineAllowComment(),
+			SpacesAndTabs,
+			NewlineAllowComment,
 		),
 	)
 	p := Delimited(
 		Sequence(
-			Optional(Sequence(Char('-'), whitespace)),
+			Optional(Sequence(charMinus, whitespace)),
 			fnParser,
 		),
 		Sequence(
-			DiscardAll(SpacesAndTabs()),
-			arithmeticOpParser(),
+			DiscardAll(SpacesAndTabs),
+			arithmeticOpParser,
 			whitespace,
 		),
 	)
@@ -128,5 +125,3 @@ func arithmeticParser(fnParser Func) Func {
 		return Success(fn, res.Remaining)
 	}
 }
-
-//------------------------------------------------------------------------------

@@ -184,7 +184,7 @@ func TestNotInSet(t *testing.T) {
 }
 
 func TestEmptyLine(t *testing.T) {
-	parser := EmptyLine()
+	parser := EmptyLine
 
 	tests := map[string]struct {
 		input     string
@@ -439,7 +439,7 @@ func TestBestMatch(t *testing.T) {
 }
 
 func TestSnakeCase(t *testing.T) {
-	parser := SnakeCase()
+	parser := SnakeCase
 
 	tests := map[string]struct {
 		input     string
@@ -724,7 +724,7 @@ func TestAllOf(t *testing.T) {
 }
 
 func TestDelimited(t *testing.T) {
-	parser := Delimited(Term("abc"), Char('#'))
+	parser := Delimited(Term("abc"), charHash)
 
 	tests := map[string]struct {
 		input     string
@@ -779,7 +779,7 @@ func TestDelimited(t *testing.T) {
 }
 
 func TestDelimitedPattern(t *testing.T) {
-	parser := DelimitedPattern(Char('#'), Term("abc"), Char(','), Char('!'), false)
+	parser := DelimitedPattern(charHash, Term("abc"), charComma, Char('!'), false)
 
 	tests := map[string]struct {
 		input     string
@@ -843,7 +843,7 @@ func TestDelimitedPattern(t *testing.T) {
 }
 
 func TestDelimitedPatternAllowTrailing(t *testing.T) {
-	parser := DelimitedPattern(Char('#'), Term("abc"), Char(','), Char('!'), true)
+	parser := DelimitedPattern(charHash, Term("abc"), charComma, Char('!'), true)
 
 	tests := map[string]struct {
 		input     string
@@ -1245,7 +1245,7 @@ func TestOptional(t *testing.T) {
 }
 
 func TestNumber(t *testing.T) {
-	p := Number()
+	p := Number
 
 	tests := map[string]struct {
 		input     string
@@ -1299,7 +1299,7 @@ func TestNumber(t *testing.T) {
 }
 
 func TestBoolean(t *testing.T) {
-	p := Boolean()
+	p := Boolean
 
 	tests := map[string]struct {
 		input     string
@@ -1348,7 +1348,7 @@ func TestBoolean(t *testing.T) {
 }
 
 func TestQuotedString(t *testing.T) {
-	str := QuotedString()
+	str := QuotedString
 
 	tests := map[string]struct {
 		input     string
@@ -1402,7 +1402,7 @@ func TestQuotedString(t *testing.T) {
 }
 
 func TestQuotedMultilineString(t *testing.T) {
-	str := TripleQuoteString()
+	str := TripleQuoteString
 
 	tests := map[string]struct {
 		input     string
@@ -1657,7 +1657,7 @@ func TestObject(t *testing.T) {
 }
 
 func TestSpacesAndTabs(t *testing.T) {
-	inSet := SpacesAndTabs()
+	inSet := SpacesAndTabs
 
 	tests := map[string]struct {
 		input     string
@@ -1706,7 +1706,7 @@ func TestSpacesAndTabs(t *testing.T) {
 }
 
 func TestNewline(t *testing.T) {
-	inSet := Newline()
+	inSet := Newline
 
 	tests := map[string]struct {
 		input     string
