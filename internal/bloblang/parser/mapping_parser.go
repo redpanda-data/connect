@@ -230,7 +230,7 @@ func importParser(maps map[string]query.Function, pCtx Context) Func {
 func mapParser(maps map[string]query.Function, pCtx Context) Func {
 	p := Sequence(
 		Term("map"),
-		DiscardedWhitespaceNewlineComments,
+		SpacesAndTabs,
 		// Prevents a missing path from being captured by the next parser
 		MustBe(
 			Expect(
@@ -261,7 +261,6 @@ func mapParser(maps map[string]query.Function, pCtx Context) Func {
 				DiscardedWhitespaceNewlineComments,
 				charSquigClose,
 			),
-			true,
 		),
 	)
 

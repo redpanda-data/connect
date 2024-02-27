@@ -778,72 +778,8 @@ func TestDelimited(t *testing.T) {
 	}
 }
 
-func TestDelimitedPattern(t *testing.T) {
-	parser := DelimitedPattern(charHash, Term("abc"), charComma, Char('!'), false)
-
-	tests := map[string]struct {
-		input     string
-		result    any
-		remaining string
-		err       *Error
-	}{
-		"empty input": {
-			err: NewError([]rune(""), "#"),
-		},
-		"no start": {
-			input:     "ab",
-			remaining: "ab",
-			err:       NewError([]rune("ab"), "#"),
-		},
-		"smaller than string": {
-			input:     "#ab",
-			remaining: "#ab",
-			err:       NewError([]rune("ab"), "abc"),
-		},
-		"matches first": {
-			input:     "#abc!No",
-			remaining: "No",
-			result:    []any{"abc"},
-		},
-		"matches some of second": {
-			input:     "#abc,abNo",
-			remaining: "#abc,abNo",
-			err:       NewError([]rune("abNo"), "abc"),
-		},
-		"matches not stopped": {
-			input:     "#abc,abcNo",
-			remaining: "#abc,abcNo",
-			err:       NewError([]rune("No"), ",", "!"),
-		},
-		"matches all": {
-			input:     "#abc,abc!",
-			remaining: "",
-			result:    []any{"abc", "abc"},
-		},
-		"matches some": {
-			input:     "#abc,abc! and this",
-			remaining: " and this",
-			result:    []any{"abc", "abc"},
-		},
-		"matches all of these": {
-			input:     "#abc,abc,abc,abc!def and this",
-			remaining: "def and this",
-			result:    []any{"abc", "abc", "abc", "abc"},
-		},
-	}
-
-	for name, test := range tests {
-		t.Run(name, func(t *testing.T) {
-			res := parser([]rune(test.input))
-			require.Equal(t, test.err, res.Err, "Error")
-			assert.Equal(t, test.result, res.Payload, "Result")
-			assert.Equal(t, test.remaining, string(res.Remaining), "Remaining")
-		})
-	}
-}
-
 func TestDelimitedPatternAllowTrailing(t *testing.T) {
-	parser := DelimitedPattern(charHash, Term("abc"), charComma, Char('!'), true)
+	parser := DelimitedPattern(charHash, Term("abc"), charComma, Char('!'))
 
 	tests := map[string]struct {
 		input     string

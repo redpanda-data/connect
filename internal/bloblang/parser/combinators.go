@@ -279,7 +279,6 @@ func Array() Func {
 			DiscardedWhitespaceNewlineComments,
 		),
 		Sequence(DiscardedWhitespaceNewlineComments, charSquareClose),
-		true,
 	)
 
 	return func(r []rune) Result {
@@ -306,7 +305,6 @@ func Object() Func {
 			DiscardedWhitespaceNewlineComments,
 		),
 		Sequence(DiscardedWhitespaceNewlineComments, charSquigClose),
-		true,
 	)
 
 	return func(input []rune) Result {
@@ -487,15 +485,9 @@ func UntilFail(parser Func) Func {
 // start and stop parser, where after the first parse a delimiter is expected.
 // Parsing is stopped only once an explicit stop parser is successful.
 //
-// If allowTrailing is set to false and a delimiter is parsed but a subsequent
-// primary parse fails then an error is returned.
-//
 // Only the results of the primary parser are returned, the results of the
 // start, delimiter and stop parsers are discarded.
-func DelimitedPattern(
-	start, primary, delimiter, stop Func,
-	allowTrailing bool,
-) Func {
+func DelimitedPattern(start, primary, delimiter, stop Func) Func {
 	return func(input []rune) Result {
 		res := start(input)
 		if res.Err != nil {
@@ -524,11 +516,9 @@ func DelimitedPattern(
 				return Fail(res.Err, input)
 			}
 			if res = primary(res.Remaining); res.Err != nil {
-				if allowTrailing {
-					if resStop := stop(res.Remaining); resStop.Err == nil {
-						resStop.Payload = results
-						return resStop
-					}
+				if resStop := stop(res.Remaining); resStop.Err == nil {
+					resStop.Payload = results
+					return resStop
 				}
 				return Fail(res.Err, input)
 			}
