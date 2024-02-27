@@ -13,14 +13,14 @@ func queryParser(pCtx Context) Func {
 			bracketsExpressionParser(pCtx),
 			literalValueParser(pCtx),
 			functionParser(pCtx),
-			metadataLiteralParser(),
-			variableLiteralParser(),
-			fieldLiteralRootParser(pCtx),
+			metadataReferenceParser,
+			variableReferenceParser,
+			fieldReferenceRootParser(pCtx),
 		),
 		"query",
 	), pCtx)
 	return func(input []rune) Result {
-		res := SpacesAndTabs()(input)
+		res := SpacesAndTabs(input)
 		return arithmeticParser(rootParser)(res.Remaining)
 	}
 }

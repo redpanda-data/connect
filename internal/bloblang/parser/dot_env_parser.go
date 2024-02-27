@@ -4,28 +4,28 @@ import (
 	"fmt"
 )
 
-func dotEnvParser() Func {
+var dotEnvParser = func() Func {
 	assignmentParser := Sequence(
 		NotInSet('=', ' ', '\n', '#'),
-		Optional(SpacesAndTabs()),
-		Char('='),
-		Optional(SpacesAndTabs()),
-		Optional(OneOf(TripleQuoteString(), QuotedString(), NotInSet('#', ' ', '\n'))),
-		Optional(SpacesAndTabs()),
+		Optional(SpacesAndTabs),
+		charEquals,
+		Optional(SpacesAndTabs),
+		Optional(OneOf(TripleQuoteString, QuotedString, NotInSet('#', ' ', '\n'))),
+		Optional(SpacesAndTabs),
 	)
 
 	envFileParser := Delimited(
 		Expect(OneOf(
 			assignmentParser,
-			SpacesAndTabs(),
-			EmptyLine(),
-			EndOfInput(),
+			SpacesAndTabs,
+			EmptyLine,
+			EndOfInput,
 			Sequence(
-				Char('#'),
+				charHash,
 				Optional(UntilFail(NotChar('\n'))),
 			),
 		), "Environment variable assignment"),
-		NewlineAllowComment(),
+		NewlineAllowComment,
 	)
 
 	return func(input []rune) Result {
@@ -45,13 +45,13 @@ func dotEnvParser() Func {
 		res.Payload = vars
 		return res
 	}
-}
+}()
 
 // ParseDotEnvFile attempts to parse a .env file containing environment variable
 // assignments, and returns either a map of key/value assignments or an error.
 func ParseDotEnvFile(envFileBytes []byte) (map[string]string, error) {
 	input := string(envFileBytes)
-	res := dotEnvParser()([]rune(input))
+	res := dotEnvParser([]rune(input))
 	if res.Err != nil {
 		line, _ := LineAndColOf([]rune(input), res.Err.Input)
 		return nil, fmt.Errorf("%v: %v", line, res.Err.ErrorAtPositionStructured("", []rune(input)))

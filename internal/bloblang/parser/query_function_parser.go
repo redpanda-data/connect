@@ -9,25 +9,17 @@ import (
 )
 
 func functionArgsParser(pCtx Context) Func {
-	begin, comma, end := Char('('), Char(','), Char(')')
-	whitespace := DiscardAll(
-		OneOf(
-			SpacesAndTabs(),
-			NewlineAllowComment(),
-		),
-	)
-
 	return func(input []rune) Result {
 		return DelimitedPattern(
-			Expect(Sequence(begin, whitespace), "function arguments"),
+			Expect(Sequence(charBracketOpen, DiscardedWhitespaceNewlineComments), "function arguments"),
 			MustBe(Expect(
 				OneOf(
 					namedArgParser(pCtx),
 					queryParser(pCtx),
 				), "function argument"),
 			),
-			MustBe(Expect(Sequence(Discard(SpacesAndTabs()), comma, whitespace), "comma")),
-			MustBe(Expect(Sequence(whitespace, end), "closing bracket")),
+			MustBe(Expect(Sequence(Discard(SpacesAndTabs), charComma, DiscardedWhitespaceNewlineComments), "comma")),
+			MustBe(Expect(Sequence(DiscardedWhitespaceNewlineComments, charBracketClose), "closing bracket")),
 			true,
 		)(input)
 	}
@@ -39,13 +31,10 @@ type namedArg struct {
 }
 
 func namedArgParser(pCtx Context) Func {
-	colon := Char(':')
-	whitespace := DiscardAll(SpacesAndTabs())
-
 	pattern := Sequence(
-		SnakeCase(),
-		colon,
-		whitespace,
+		SnakeCase,
+		charColon,
+		Discard(SpacesAndTabs),
 		MustBe(Expect(queryParser(pCtx), "argument value")),
 	)
 
@@ -62,28 +51,20 @@ func namedArgParser(pCtx Context) Func {
 }
 
 func parseFunctionTail(fn query.Function, pCtx Context) Func {
-	openBracket := Char('(')
-	closeBracket := Char(')')
-
-	whitespace := DiscardAll(
-		OneOf(
-			SpacesAndTabs(),
-			NewlineAllowComment(),
+	pattern := OneOf(
+		Sequence(
+			Expect(charBracketOpen, "method"),
+			DiscardedWhitespaceNewlineComments,
+			queryParser(pCtx),
+			DiscardedWhitespaceNewlineComments,
+			charBracketClose,
 		),
+		methodParser(fn, pCtx),
+		fieldReferenceParser(fn),
 	)
 
 	return func(input []rune) Result {
-		res := OneOf(
-			Sequence(
-				Expect(openBracket, "method"),
-				whitespace,
-				queryParser(pCtx),
-				whitespace,
-				closeBracket,
-			),
-			methodParser(fn, pCtx),
-			fieldLiteralMapParser(fn),
-		)(input)
+		res := pattern(input)
 		if seqSlice, isSlice := res.Payload.([]any); isSlice {
 			method, err := query.NewMapMethod(fn, seqSlice[2].(query.Function))
 			if err != nil {
@@ -98,20 +79,12 @@ func parseFunctionTail(fn query.Function, pCtx Context) Func {
 }
 
 func parseWithTails(fnParser Func, pCtx Context) Func {
-	delim := Sequence(
-		Char('.'),
-		Discard(
-			Sequence(
-				NewlineAllowComment(),
-				SpacesAndTabs(),
-			),
-		),
-	)
+	delimPattern := Sequence(charDot, DiscardedWhitespaceNewlineComments)
 
 	mightNot := Sequence(
 		Optional(Sequence(
 			Char('!'),
-			Discard(SpacesAndTabs()),
+			Discard(SpacesAndTabs),
 		)),
 		fnParser,
 	)
@@ -126,7 +99,7 @@ func parseWithTails(fnParser Func, pCtx Context) Func {
 		isNot := seq[0] != nil
 		fn := seq[1].(query.Function)
 		for {
-			if res = delim(res.Remaining); res.Err != nil {
+			if res = delimPattern(res.Remaining); res.Err != nil {
 				if isNot {
 					fn = query.Not(fn)
 				}
@@ -140,45 +113,41 @@ func parseWithTails(fnParser Func, pCtx Context) Func {
 	}
 }
 
-func quotedPathSegmentParser() Func {
-	pattern := QuotedString()
-
-	return func(input []rune) Result {
-		res := pattern(input)
-		if res.Err != nil {
-			return res
-		}
-
-		rawSegment, _ := res.Payload.(string)
-
-		// Convert into a JSON pointer style path string.
-		rawSegment = strings.ReplaceAll(rawSegment, "~", "~0")
-		rawSegment = strings.ReplaceAll(rawSegment, ".", "~1")
-
-		return Success(rawSegment, res.Remaining)
+func quotedPathSegmentParser(input []rune) Result {
+	res := QuotedString(input)
+	if res.Err != nil {
+		return res
 	}
+
+	rawSegment, _ := res.Payload.(string)
+
+	// Convert into a JSON pointer style path string.
+	rawSegment = strings.ReplaceAll(rawSegment, "~", "~0")
+	rawSegment = strings.ReplaceAll(rawSegment, ".", "~1")
+
+	return Success(rawSegment, res.Remaining)
 }
 
-func fieldLiteralMapParser(ctxFn query.Function) Func {
-	fieldPathParser := Expect(
-		OneOf(
-			JoinStringPayloads(
-				UntilFail(
-					OneOf(
-						InRange('a', 'z'),
-						InRange('A', 'Z'),
-						InRange('0', '9'),
-						Char('_'),
-					),
+var fieldReferencePattern = Expect(
+	OneOf(
+		JoinStringPayloads(
+			UntilFail(
+				OneOf(
+					InRange('a', 'z'),
+					InRange('A', 'Z'),
+					InRange('0', '9'),
+					charUnderscore,
 				),
 			),
-			quotedPathSegmentParser(),
 		),
-		"field path",
-	)
+		quotedPathSegmentParser,
+	),
+	"field path",
+)
 
+func fieldReferenceParser(ctxFn query.Function) Func {
 	return func(input []rune) Result {
-		res := fieldPathParser(input)
+		res := fieldReferencePattern(input)
 		if res.Err != nil {
 			return res
 		}
@@ -192,88 +161,84 @@ func fieldLiteralMapParser(ctxFn query.Function) Func {
 	}
 }
 
-func variableLiteralParser() Func {
-	varPathParser := Expect(
-		Sequence(
-			Char('$'),
-			JoinStringPayloads(
-				UntilFail(
-					OneOf(
-						InRange('a', 'z'),
-						InRange('A', 'Z'),
-						InRange('0', '9'),
-						Char('_'),
-					),
-				),
-			),
-		),
-		"variable path",
-	)
-
-	return func(input []rune) Result {
-		res := varPathParser(input)
-		if res.Err != nil {
-			return res
-		}
-
-		path := res.Payload.([]any)[1].(string)
-		fn := query.NewVarFunction(path)
-
-		return Success(fn, res.Remaining)
-	}
-}
-
-func metadataLiteralParser() Func {
-	metaPathParser := Expect(
-		Sequence(
-			Char('@'),
-			Optional(OneOf(
-				JoinStringPayloads(
-					UntilFail(
-						OneOf(
-							InRange('a', 'z'),
-							InRange('A', 'Z'),
-							InRange('0', '9'),
-							Char('_'),
-						),
-					),
-				),
-				QuotedString(),
-			)),
-		),
-		"metadata path",
-	)
-
-	return func(input []rune) Result {
-		res := metaPathParser(input)
-		if res.Err != nil {
-			return res
-		}
-
-		path, _ := res.Payload.([]any)[1].(string)
-		fn := query.NewMetaFunction(path)
-
-		return Success(fn, res.Remaining)
-	}
-}
-
-func fieldLiteralRootParser(pCtx Context) Func {
-	fieldPathParser := Expect(
+var variableReferencePattern = Expect(
+	Sequence(
+		charDollar,
 		JoinStringPayloads(
 			UntilFail(
 				OneOf(
 					InRange('a', 'z'),
 					InRange('A', 'Z'),
 					InRange('0', '9'),
-					Char('_'),
+					charUnderscore,
 				),
 			),
 		),
-		"field path",
-	)
+	),
+	"variable path",
+)
 
+func variableReferenceParser(input []rune) Result {
+	res := variableReferencePattern(input)
+	if res.Err != nil {
+		return res
+	}
+
+	path := res.Payload.([]any)[1].(string)
+	fn := query.NewVarFunction(path)
+
+	return Success(fn, res.Remaining)
+}
+
+var metadataReferencePattern = Expect(
+	Sequence(
+		Char('@'),
+		Optional(OneOf(
+			JoinStringPayloads(
+				UntilFail(
+					OneOf(
+						InRange('a', 'z'),
+						InRange('A', 'Z'),
+						InRange('0', '9'),
+						charUnderscore,
+					),
+				),
+			),
+			QuotedString,
+		)),
+	),
+	"metadata path",
+)
+
+func metadataReferenceParser(input []rune) Result {
+	res := metadataReferencePattern(input)
+	if res.Err != nil {
+		return res
+	}
+
+	path, _ := res.Payload.([]any)[1].(string)
+	fn := query.NewMetaFunction(path)
+
+	return Success(fn, res.Remaining)
+}
+
+var fieldReferenceRootPattern = Expect(
+	JoinStringPayloads(
+		UntilFail(
+			OneOf(
+				InRange('a', 'z'),
+				InRange('A', 'Z'),
+				InRange('0', '9'),
+				charUnderscore,
+			),
+		),
+	),
+	"field path",
+)
+
+func fieldReferenceRootParser(pCtx Context) Func {
 	return func(input []rune) Result {
-		res := fieldPathParser(input)
+		res := fieldReferenceRootPattern(input)
 		if res.Err != nil {
 			return res
 		}
@@ -335,7 +300,7 @@ func extractArgsParserResult(paramsDef query.Params, args []any) (*query.ParsedP
 }
 
 func methodParser(fn query.Function, pCtx Context) Func {
-	p := Sequence(Expect(SnakeCase(), "method"), functionArgsParser(pCtx))
+	p := Sequence(Expect(SnakeCase, "method"), functionArgsParser(pCtx))
 
 	return func(input []rune) Result {
 		res := p(input)
@@ -365,7 +330,7 @@ func methodParser(fn query.Function, pCtx Context) Func {
 }
 
 func functionParser(pCtx Context) Func {
-	p := Sequence(Expect(SnakeCase(), "function"), functionArgsParser(pCtx))
+	p := Sequence(Expect(SnakeCase, "function"), functionArgsParser(pCtx))
 
 	return func(input []rune) Result {
 		res := p(input)

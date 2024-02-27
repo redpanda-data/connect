@@ -43,10 +43,6 @@ func ParseMapping(pCtx Context, expr string) (*mapping.Executor, *Error) {
 //------------------------------------------------------------------------------'
 
 func parseExecutor(pCtx Context) Func {
-	newline := NewlineAllowComment()
-	whitespace := SpacesAndTabs()
-	allWhitespace := DiscardAll(OneOf(whitespace, newline))
-
 	return func(input []rune) Result {
 		maps := map[string]query.Function{}
 		statements := []mapping.Statement{}
@@ -59,7 +55,7 @@ func parseExecutor(pCtx Context) Func {
 			plainMappingStatementParser(pCtx),
 		)
 
-		res := allWhitespace(input)
+		res := DiscardedWhitespaceNewlineComments(input)
 
 		res = statement(res.Remaining)
 		if res.Err != nil {
@@ -71,16 +67,16 @@ func parseExecutor(pCtx Context) Func {
 		}
 
 		for {
-			res = Discard(whitespace)(res.Remaining)
+			res = Discard(SpacesAndTabs)(res.Remaining)
 			if len(res.Remaining) == 0 {
 				break
 			}
 
-			if res = newline(res.Remaining); res.Err != nil {
+			if res = NewlineAllowComment(res.Remaining); res.Err != nil {
 				return Fail(res.Err, input)
 			}
 
-			res = allWhitespace(res.Remaining)
+			res = DiscardedWhitespaceNewlineComments(res.Remaining)
 			if len(res.Remaining) == 0 {
 				break
 			}
@@ -97,16 +93,12 @@ func parseExecutor(pCtx Context) Func {
 }
 
 func singleRootImport(pCtx Context) Func {
-	newline := NewlineAllowComment()
-	whitespace := SpacesAndTabs()
-	allWhitespace := DiscardAll(OneOf(whitespace, newline))
-
 	parser := Sequence(
-		allWhitespace,
+		DiscardedWhitespaceNewlineComments,
 		Term("from"),
-		whitespace,
-		QuotedString(),
-		allWhitespace,
+		SpacesAndTabs,
+		QuotedString,
+		DiscardedWhitespaceNewlineComments,
 	)
 
 	return func(input []rune) Result {
@@ -136,12 +128,8 @@ func singleRootImport(pCtx Context) Func {
 }
 
 func singleRootMapping(pCtx Context) Func {
-	newline := NewlineAllowComment()
-	whitespace := SpacesAndTabs()
-	allWhitespace := DiscardAll(OneOf(whitespace, newline))
-
 	return func(input []rune) Result {
-		res := queryParser(pCtx)(allWhitespace(input).Remaining)
+		res := queryParser(pCtx)(DiscardedWhitespaceNewlineComments(input).Remaining)
 		if res.Err != nil {
 			return res
 		}
@@ -150,9 +138,9 @@ func singleRootMapping(pCtx Context) Func {
 		assignmentRunes := input[:len(input)-len(res.Remaining)]
 
 		// Remove all tailing whitespace and ensure no remaining input.
-		res = allWhitespace(res.Remaining)
+		res = DiscardedWhitespaceNewlineComments(res.Remaining)
 		if len(res.Remaining) > 0 {
-			tmpRes := allWhitespace(assignmentRunes)
+			tmpRes := DiscardedWhitespaceNewlineComments(assignmentRunes)
 			assignmentRunes = tmpRes.Remaining
 
 			var assignmentStr string
@@ -173,33 +161,31 @@ func singleRootMapping(pCtx Context) Func {
 
 //------------------------------------------------------------------------------
 
-func varNameParser() Func {
-	return JoinStringPayloads(
-		UntilFail(
-			OneOf(
-				InRange('a', 'z'),
-				InRange('A', 'Z'),
-				InRange('0', '9'),
-				Char('_'),
-			),
+var varNameParser = JoinStringPayloads(
+	UntilFail(
+		OneOf(
+			InRange('a', 'z'),
+			InRange('A', 'Z'),
+			InRange('0', '9'),
+			charUnderscore,
 		),
-	)
-}
+	),
+)
+
+var importParserComb = Sequence(
+	Term("import"),
+	SpacesAndTabs,
+	MustBe(
+		Expect(
+			QuotedString,
+			"filepath",
+		),
+	),
+)
 
 func importParser(maps map[string]query.Function, pCtx Context) Func {
-	p := Sequence(
-		Term("import"),
-		SpacesAndTabs(),
-		MustBe(
-			Expect(
-				QuotedString(),
-				"filepath",
-			),
-		),
-	)
-
 	return func(input []rune) Result {
-		res := p(input)
+		res := importParserComb(input)
 		if res.Err != nil {
 			return res
 		}
@@ -242,28 +228,24 @@ func importParser(maps map[string]query.Function, pCtx Context) Func {
 }
 
 func mapParser(maps map[string]query.Function, pCtx Context) Func {
-	newline := NewlineAllowComment()
-	whitespace := SpacesAndTabs()
-	allWhitespace := DiscardAll(OneOf(whitespace, newline))
-
 	p := Sequence(
 		Term("map"),
-		whitespace,
+		DiscardedWhitespaceNewlineComments,
 		// Prevents a missing path from being captured by the next parser
 		MustBe(
 			Expect(
 				OneOf(
-					QuotedString(),
-					varNameParser(),
+					QuotedString,
+					varNameParser,
 				),
 				"map name",
 			),
 		),
-		SpacesAndTabs(),
+		SpacesAndTabs,
 		DelimitedPattern(
 			Sequence(
-				Char('{'),
-				allWhitespace,
+				charSquigOpen,
+				DiscardedWhitespaceNewlineComments,
 			),
 			OneOf(
 				letStatementParser(pCtx),
@@ -271,13 +253,13 @@ func mapParser(maps map[string]query.Function, pCtx Context) Func {
 				plainMappingStatementParser(pCtx),
 			),
 			Sequence(
-				Discard(whitespace),
-				newline,
-				allWhitespace,
+				Discard(SpacesAndTabs),
+				NewlineAllowComment,
+				DiscardedWhitespaceNewlineComments,
 			),
 			Sequence(
-				allWhitespace,
-				Char('}'),
+				DiscardedWhitespaceNewlineComments,
+				charSquigClose,
 			),
 			true,
 		),
@@ -311,20 +293,20 @@ func mapParser(maps map[string]query.Function, pCtx Context) Func {
 func letStatementParser(pCtx Context) Func {
 	p := Sequence(
 		Expect(Term("let"), "assignment"),
-		SpacesAndTabs(),
+		SpacesAndTabs,
 		// Prevents a missing path from being captured by the next parser
 		MustBe(
 			Expect(
 				OneOf(
-					QuotedString(),
-					varNameParser(),
+					QuotedString,
+					varNameParser,
 				),
 				"variable name",
 			),
 		),
-		SpacesAndTabs(),
-		Char('='),
-		SpacesAndTabs(),
+		SpacesAndTabs,
+		charEquals,
+		SpacesAndTabs,
 		queryParser(pCtx),
 	)
 
@@ -345,31 +327,29 @@ func letStatementParser(pCtx Context) Func {
 	}
 }
 
-func nameLiteralParser() Func {
-	return JoinStringPayloads(
-		UntilFail(
-			OneOf(
-				InRange('a', 'z'),
-				InRange('A', 'Z'),
-				InRange('0', '9'),
-				Char('_'),
-			),
+var nameLiteralParser = JoinStringPayloads(
+	UntilFail(
+		OneOf(
+			InRange('a', 'z'),
+			InRange('A', 'Z'),
+			InRange('0', '9'),
+			charUnderscore,
 		),
-	)
-}
+	),
+)
 
 func metaStatementParser(disabled bool, pCtx Context) Func {
 	p := Sequence(
 		Expect(Term("meta"), "assignment"),
-		SpacesAndTabs(),
+		SpacesAndTabs,
 		Optional(OneOf(
-			QuotedString(),
-			nameLiteralParser(),
+			QuotedString,
+			nameLiteralParser,
 		)),
 		// TODO: Break out root assignment so we can make this mandatory
-		Optional(SpacesAndTabs()),
-		Char('='),
-		SpacesAndTabs(),
+		Optional(SpacesAndTabs),
+		charEquals,
+		SpacesAndTabs,
 		queryParser(pCtx),
 	)
 
@@ -402,84 +382,76 @@ func metaStatementParser(disabled bool, pCtx Context) Func {
 	}
 }
 
-func pathLiteralSegmentParser() Func {
-	return JoinStringPayloads(
-		UntilFail(
-			OneOf(
-				InRange('a', 'z'),
-				InRange('A', 'Z'),
-				InRange('0', '9'),
-				Char('_'),
-			),
+var pathLiteralSegmentParser = JoinStringPayloads(
+	UntilFail(
+		OneOf(
+			InRange('a', 'z'),
+			InRange('A', 'Z'),
+			InRange('0', '9'),
+			charUnderscore,
 		),
-	)
-}
+	),
+)
 
-func quotedPathLiteralSegmentParser() Func {
-	pattern := QuotedString()
-
-	return func(input []rune) Result {
-		res := pattern(input)
-		if res.Err != nil {
-			return res
-		}
-
-		rawSegment, _ := res.Payload.(string)
-
-		// Convert into a JSON pointer style path string.
-		rawSegment = strings.ReplaceAll(rawSegment, "~", "~0")
-		rawSegment = strings.ReplaceAll(rawSegment, ".", "~1")
-
-		return Success(rawSegment, res.Remaining)
+func quotedPathLiteralSegmentParser(input []rune) Result {
+	res := QuotedString(input)
+	if res.Err != nil {
+		return res
 	}
+
+	rawSegment, _ := res.Payload.(string)
+
+	// Convert into a JSON pointer style path string.
+	rawSegment = strings.ReplaceAll(rawSegment, "~", "~0")
+	rawSegment = strings.ReplaceAll(rawSegment, ".", "~1")
+
+	return Success(rawSegment, res.Remaining)
 }
 
-func pathParser() Func {
-	p := Sequence(
-		Expect(pathLiteralSegmentParser(), "assignment"),
-		Optional(
-			Sequence(
-				Char('.'),
-				Delimited(
-					Expect(
-						OneOf(
-							quotedPathLiteralSegmentParser(),
-							pathLiteralSegmentParser(),
-						),
-						"target path",
+var pathParserPattern = Sequence(
+	Expect(pathLiteralSegmentParser, "assignment"),
+	Optional(
+		Sequence(
+			charDot,
+			Delimited(
+				Expect(
+					OneOf(
+						quotedPathLiteralSegmentParser,
+						pathLiteralSegmentParser,
 					),
-					Char('.'),
+					"target path",
 				),
+				charDot,
 			),
 		),
-	)
+	),
+)
 
-	return func(input []rune) Result {
-		res := p(input)
-		if res.Err != nil {
-			return res
-		}
-
-		sequence := res.Payload.([]any)
-		path := []string{sequence[0].(string)}
-
-		if sequence[1] != nil {
-			pathParts := sequence[1].([]any)[1].(DelimitedResult).Primary
-			for _, p := range pathParts {
-				path = append(path, gabs.DotPathToSlice(p.(string))...)
-			}
-		}
-
-		return Success(path, res.Remaining)
+func pathParser(input []rune) Result {
+	res := pathParserPattern(input)
+	if res.Err != nil {
+		return res
 	}
+
+	sequence := res.Payload.([]any)
+	path := []string{sequence[0].(string)}
+
+	if sequence[1] != nil {
+		pathParts := sequence[1].([]any)[1].(DelimitedResult).Primary
+		for _, p := range pathParts {
+			path = append(path, gabs.DotPathToSlice(p.(string))...)
+		}
+	}
+
+	return Success(path, res.Remaining)
 }
 
 func plainMappingStatementParser(pCtx Context) Func {
 	p := Sequence(
-		pathParser(),
-		SpacesAndTabs(),
-		Char('='),
-		SpacesAndTabs(),
+		pathParser,
+		SpacesAndTabs,
+		charEquals,
+		SpacesAndTabs,
 		queryParser(pCtx),
 	)
 

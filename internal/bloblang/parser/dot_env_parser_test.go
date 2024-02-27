@@ -8,7 +8,7 @@ import (
 )
 
 func TestParseDotEnv(t *testing.T) {
-	parser := dotEnvParser()
+	parser := dotEnvParser
 
 	tests := map[string]struct {
 		input     string

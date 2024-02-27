@@ -5,28 +5,21 @@ import (
 )
 
 func dynamicArrayParser(pCtx Context) Func {
-	begin, comma, end := Char('['), Char(','), Char(']')
-	whitespace := DiscardAll(
-		OneOf(
-			NewlineAllowComment(),
-			SpacesAndTabs(),
-		),
-	)
 	return func(input []rune) Result {
 		res := DelimitedPattern(
 			Expect(Sequence(
-				begin,
-				whitespace,
+				charSquareOpen,
+				DiscardedWhitespaceNewlineComments,
 			), "array"),
 			Expect(queryParser(pCtx), "object"),
 			Sequence(
-				Discard(SpacesAndTabs()),
-				comma,
-				whitespace,
+				Discard(SpacesAndTabs),
+				charComma,
+				DiscardedWhitespaceNewlineComments,
 			),
 			Sequence(
-				whitespace,
-				end,
+				DiscardedWhitespaceNewlineComments,
+				charSquareClose,
 			),
 			true,
 		)(input)
@@ -40,38 +33,30 @@ func dynamicArrayParser(pCtx Context) Func {
 }
 
 func dynamicObjectParser(pCtx Context) Func {
-	begin, comma, end := Char('{'), Char(','), Char('}')
-	whitespace := DiscardAll(
-		OneOf(
-			NewlineAllowComment(),
-			SpacesAndTabs(),
-		),
-	)
-
 	return func(input []rune) Result {
 		res := DelimitedPattern(
 			Expect(Sequence(
-				begin,
-				whitespace,
+				charSquigOpen,
+				DiscardedWhitespaceNewlineComments,
 			), "object"),
 			Sequence(
 				OneOf(
-					QuotedString(),
+					QuotedString,
 					Expect(queryParser(pCtx), "object"),
 				),
-				Discard(SpacesAndTabs()),
-				Char(':'),
-				Discard(whitespace),
+				Discard(SpacesAndTabs),
+				charColon,
+				DiscardedWhitespaceNewlineComments,
 				Expect(queryParser(pCtx), "object"),
 			),
 			Sequence(
-				Discard(SpacesAndTabs()),
-				comma,
-				whitespace,
+				Discard(SpacesAndTabs),
+				charComma,
+				DiscardedWhitespaceNewlineComments,
 			),
 			Sequence(
-				whitespace,
-				end,
+				DiscardedWhitespaceNewlineComments,
+				charSquigClose,
 			),
 			true,
 		)(input)
@@ -99,11 +84,11 @@ func dynamicObjectParser(pCtx Context) Func {
 
 func literalValueParser(pCtx Context) Func {
 	p := OneOf(
-		Boolean(),
-		Number(),
-		TripleQuoteString(),
-		QuotedString(),
-		Null(),
+		Boolean,
+		Number,
+		TripleQuoteString,
+		QuotedString,
+		Null,
 		dynamicArrayParser(pCtx),
 		dynamicObjectParser(pCtx),
 	)
