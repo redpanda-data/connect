@@ -269,6 +269,8 @@ func (c *gcpPubSubReader) Read(ctx context.Context) (*service.Message, service.A
 		part.MetaSetMut("gcp_pubsub_delivery_attempt", *gmsg.DeliveryAttempt)
 	}
 
+	part.MetaSetMut("gcp_pubsub_message_id", gmsg.ID)
+
 	return part, func(ctx context.Context, res error) error {
 		if res != nil {
 			gmsg.Nack()
