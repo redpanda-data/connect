@@ -33,7 +33,7 @@ func FieldSpec() docs.FieldSpec {
 		),
 		docs.FieldString("user", "A PLAIN username. It is recommended that you use environment variables to populate this field.", "${USER}"),
 		docs.FieldString("password", "A PLAIN password. It is recommended that you use environment variables to populate this field.", "${PASSWORD}").Secret(),
-		docs.FieldString("access_token", "A static OAUTHBEARER access token"),
+		docs.FieldString("access_token", "A static OAUTHBEARER access token").Secret(),
 		docs.FieldString("token_cache", "Instead of using a static `access_token` allows you to query a [`cache`](/docs/components/caches/about) resource to fetch OAUTHBEARER tokens from"),
 		docs.FieldString("token_key", "Required when using a `token_cache`, the key to query the cache with for tokens."),
 	).Advanced()

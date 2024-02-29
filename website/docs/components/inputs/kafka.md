@@ -391,6 +391,9 @@ password: ${PASSWORD}
 ### `sasl.access_token`
 
 A static OAUTHBEARER access token
+:::warning Secret
+This field contains sensitive information that usually shouldn't be added to a config directly, read our [secrets page for more info](/docs/configuration/secrets).
+:::
 
 
 Type: `string`  
