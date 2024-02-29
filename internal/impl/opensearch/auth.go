@@ -23,6 +23,7 @@ func OAuthAuthField() *service.ConfigField {
 		service.NewStringField(aFieldAuthStaticAccessToken).
 			Description("A static access token to use for authentication.").
 			Advanced().
+			Secret().
 			Default(""),
 		service.NewStringField(aFieldAuthTokenCache).
 			Description("Instead of using a static `access_token` allows you to query a [`cache`](/docs/components/caches/about) resource to fetch tokens from.").
