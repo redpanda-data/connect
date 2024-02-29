@@ -13,6 +13,7 @@ import (
 
 	"github.com/opensearch-project/opensearch-go/v3/opensearchapi"
 	"github.com/opensearch-project/opensearch-go/v3/opensearchutil"
+	"golang.org/x/oauth2"
 
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
@@ -22,13 +23,14 @@ import (
 )
 
 const (
-	esoFieldURLs         = "urls"
-	esoFieldID           = "id"
-	esoFieldAction       = "action"
-	esoFieldIndex        = "index"
-	esoFieldPipeline     = "pipeline"
-	esoFieldRouting      = "routing"
-	esoFieldTLS          = "tls"
+	esoFieldURLs     = "urls"
+	esoFieldID       = "id"
+	esoFieldAction   = "action"
+	esoFieldIndex    = "index"
+	esoFieldPipeline = "pipeline"
+	esoFieldRouting  = "routing"
+	esoFieldTLS      = "tls"
+
 	esoFieldAuth         = "basic_auth"
 	esoFieldAuthEnabled  = "enabled"
 	esoFieldAuthUsername = "username"
@@ -48,7 +50,7 @@ func notImportedAWSOptFn(conf *service.ParsedConfig, osconf *opensearchapi.Confi
 // AWSOptFn is populated with the child `aws` package when imported.
 var AWSOptFn = notImportedAWSOptFn
 
-// AWSField represents the aws block within an elasticsearch field. This is
+// AWSField represents the aws block within an opensearch field. This is
 // exported in order to make unit testing easier within the aws subpackage.
 func AWSField() *service.ConfigField {
 	return service.NewObjectField(esoFieldAWS,
@@ -71,7 +73,7 @@ type esoConfig struct {
 	routingStr  *service.InterpolatedString
 }
 
-func esoConfigFromParsed(pConf *service.ParsedConfig) (conf esoConfig, err error) {
+func esoConfigFromParsed(pConf *service.ParsedConfig, mgr *service.Resources) (conf *esoConfig, err error) {
 	conf.clientOpts = opensearchapi.Config{}
 
 	var tmpURLs []string
@@ -86,25 +88,47 @@ func esoConfigFromParsed(pConf *service.ParsedConfig) (conf esoConfig, err error
 		}
 	}
 
-	{
-		authConf := pConf.Namespace(esoFieldAuth)
-		if enabled, _ := authConf.FieldBool(esoFieldAuthEnabled); enabled {
-			if conf.clientOpts.Client.Username, err = authConf.FieldString(esoFieldAuthUsername); err != nil {
-				return
-			}
-			if conf.clientOpts.Client.Password, err = authConf.FieldString(esoFieldAuthPassword); err != nil {
-				return
-			}
+	authConf := pConf.Namespace(esoFieldAuth)
+	if enabled, _ := authConf.FieldBool(esoFieldAuthEnabled); enabled {
+
+		if conf.clientOpts.Client.Username, err = authConf.FieldString(esoFieldAuthUsername); err != nil {
+			return
+		}
+		if conf.clientOpts.Client.Password, err = authConf.FieldString(esoFieldAuthPassword); err != nil {
+			return
+		}
+	}
+
+	oauth2conf, err := oAuthFromParsed(pConf)
+	if err != nil {
+		return
+	}
+
+	if oauth2conf.Enabled {
+		token, err := oauth2conf.GetToken(mgr)
+		if err != nil {
+			return nil, err
+		}
+		conf.clientOpts.Client.Transport = &oauth2.Transport{
+			Source: oauth2.StaticTokenSource(&oauth2.Token{AccessToken: token}),
+			Base:   http.DefaultTransport,
 		}
 	}
 
 	var tlsConf *tls.Config
 	var tlsEnabled bool
+
+	conf.clientOpts.Client.Transport = http.DefaultTransport
+
 	if tlsConf, tlsEnabled, err = pConf.FieldTLSToggled(esoFieldTLS); err != nil {
 		return
 	} else if tlsEnabled {
-		conf.clientOpts.Client.Transport = &http.Transport{
-			TLSClientConfig: tlsConf,
+		if _, ok := conf.clientOpts.Client.Transport.(*oauth2.Transport).Base.(*http.Transport); ok {
+			conf.clientOpts.Client.Transport.(*oauth2.Transport).Base.(*http.Transport).TLSClientConfig = tlsConf
+		} else {
+			conf.clientOpts.Client.Transport = &http.Transport{
+				TLSClientConfig: tlsConf,
+			}
 		}
 	}
 
@@ -132,12 +156,12 @@ func esoConfigFromParsed(pConf *service.ParsedConfig) (conf esoConfig, err error
 
 //------------------------------------------------------------------------------
 
-// OutputSpec returns the config spec for an elasticsearch output writer.
+// OutputSpec returns the config spec for an opensearch output writer.
 func OutputSpec() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Stable().
 		Categories("Services").
-		Summary(`Publishes messages into an Elasticsearch index. If the index does not exist then it is created with a dynamic mapping.`).
+		Summary(`Publishes messages into an opensearch index. If the index does not exist then it is created with a dynamic mapping.`).
 		Description(output.Description(true, true, `
 Both the `+"`id` and `index`"+` fields can be dynamically set using function interpolations described [here](/docs/configuration/interpolation#bloblang-queries). When sending batched messages these interpolations are performed per message part.`)).
 		Fields(
@@ -166,6 +190,7 @@ Both the `+"`id` and `index`"+` fields can be dynamically set using function int
 			httpclient.BasicAuthField(),
 			service.NewBatchPolicyField(esoFieldBatching),
 			AWSField(),
+			OAuthAuthField(),
 		).
 		Example("Updating Documents", "When [updating documents](https://opensearch.org/docs/latest/api-reference/document-apis/update-document/) the request body should contain a combination of a `doc`, `upsert`, and/or `script` fields at the top level, this should be done via mapping processors.", `
 output:
@@ -198,17 +223,17 @@ func init() {
 	}
 }
 
-// Output implements service.BatchOutput for elasticsearch.
+// Output implements service.BatchOutput for opensearch.
 type Output struct {
 	log  *service.Logger
-	conf esoConfig
+	conf *esoConfig
 
 	client *opensearchapi.Client
 }
 
-// OutputFromParsed returns an elasticsearch output writer from a parsed config.
+// OutputFromParsed returns an opensearch output writer from a parsed config.
 func OutputFromParsed(pConf *service.ParsedConfig, mgr *service.Resources) (*Output, error) {
-	conf, err := esoConfigFromParsed(pConf)
+	conf, err := esoConfigFromParsed(pConf, mgr)
 	if err != nil {
 		return nil, err
 	}
@@ -231,6 +256,7 @@ func (e *Output) Connect(ctx context.Context) error {
 	}
 
 	e.client = client
+	e.log.Infof("Sending messages to opensearch index at urls: %s\n", e.conf.clientOpts.Client.Addresses)
 	return nil
 }
 
