@@ -320,6 +320,7 @@ func SaramaSASLField() *service.ConfigField {
 			Secret(),
 		service.NewStringField(saramaFieldSASLAccessToken).
 			Description("A static OAUTHBEARER access token").
+			Secret().
 			Default(""),
 		service.NewStringField(saramaFieldSASLTokenCache).
 			Description("Instead of using a static `access_token` allows you to query a [`cache`](/docs/components/caches/about) resource to fetch OAUTHBEARER tokens from").
