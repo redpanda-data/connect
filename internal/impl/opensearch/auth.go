@@ -19,7 +19,7 @@ const (
 
 // OAuthAuthField returns a config field spec for basic authentication.
 func OAuthAuthField() *service.ConfigField {
-	return service.NewObjectField(esoFieldOAuth,
+	return service.NewObjectField(aFieldOAuth,
 		service.NewStringField(aFieldAuthStaticAccessToken).
 			Description("A static access token to use for authentication.").
 			Advanced().
