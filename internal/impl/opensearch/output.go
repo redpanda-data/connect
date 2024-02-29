@@ -73,7 +73,7 @@ type esoConfig struct {
 	routingStr  *service.InterpolatedString
 }
 
-func esoConfigFromParsed(pConf *service.ParsedConfig, mgr *service.Resources) (conf *esoConfig, err error) {
+func esoConfigFromParsed(pConf *service.ParsedConfig, mgr *service.Resources) (conf esoConfig, err error) {
 	conf.clientOpts = opensearchapi.Config{}
 
 	var tmpURLs []string
@@ -107,7 +107,7 @@ func esoConfigFromParsed(pConf *service.ParsedConfig, mgr *service.Resources) (c
 	if oauth2conf.Enabled {
 		token, err := oauth2conf.GetToken(mgr)
 		if err != nil {
-			return nil, err
+			return conf, err
 		}
 		conf.clientOpts.Client.Transport = &oauth2.Transport{
 			Source: oauth2.StaticTokenSource(&oauth2.Token{AccessToken: token}),
@@ -226,7 +226,7 @@ func init() {
 // Output implements service.BatchOutput for opensearch.
 type Output struct {
 	log  *service.Logger
-	conf *esoConfig
+	conf esoConfig
 
 	client *opensearchapi.Client
 }
