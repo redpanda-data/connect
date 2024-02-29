@@ -571,6 +571,41 @@ The token to use for a single session's OAUTHBEARER authentication.
 Type: `string`  
 Default: `""`  
 
+### `sasl[].tokenEndpoint`
+
+The endpoint to use for OAUTHBEARER token acquisition.
+
+
+Type: `string`  
+Default: `""`  
+
+### `sasl[].clientId`
+
+The client ID to use for OAUTHBEARER token acquisition.
+
+
+Type: `string`  
+Default: `""`  
+
+### `sasl[].clientSecret`
+
+The client secret to use for OAUTHBEARER token acquisition.
+:::warning Secret
+This field contains sensitive information that usually shouldn't be added to a config directly, read our [secrets page for more info](/docs/configuration/secrets).
+:::
+
+
+Type: `string`  
+Default: `""`  
+
+### `sasl[].scope`
+
+The scope to use for OAUTHBEARER token acquisition.
+
+
+Type: `string`  
+Default: `""`  
+
 ### `sasl[].extensions`
 
 Key/value pairs to add to OAUTHBEARER authentication requests.
