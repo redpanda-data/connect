@@ -12,7 +12,7 @@ func TestParseDotEnv(t *testing.T) {
 
 	tests := map[string]struct {
 		input     string
-		result    any
+		result    map[string]string
 		remaining string
 		err       *Error
 	}{

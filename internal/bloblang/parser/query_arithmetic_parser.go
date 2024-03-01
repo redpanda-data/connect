@@ -23,82 +23,76 @@ var arithmeticOpPattern = OneOf(
 	Char('|'),
 )
 
-func arithmeticOpParser(input []rune) Result {
+func arithmeticOpParser(input []rune) Result[query.ArithmeticOperator] {
 	res := arithmeticOpPattern(input)
 	if res.Err != nil {
-		return res
+		return Fail[query.ArithmeticOperator](res.Err, input)
 	}
-	switch res.Payload.(string) {
+
+	outRes := ResultInto[query.ArithmeticOperator](res)
+	switch res.Payload {
 	case "+":
-		res.Payload = query.ArithmeticAdd
+		outRes.Payload = query.ArithmeticAdd
 	case "-":
-		res.Payload = query.ArithmeticSub
+		outRes.Payload = query.ArithmeticSub
 	case "/":
-		res.Payload = query.ArithmeticDiv
+		outRes.Payload = query.ArithmeticDiv
 	case "*":
-		res.Payload = query.ArithmeticMul
+		outRes.Payload = query.ArithmeticMul
 	case "%":
-		res.Payload = query.ArithmeticMod
+		outRes.Payload = query.ArithmeticMod
 	case "==":
-		res.Payload = query.ArithmeticEq
+		outRes.Payload = query.ArithmeticEq
 	case "!=":
-		res.Payload = query.ArithmeticNeq
+		outRes.Payload = query.ArithmeticNeq
 	case "&&":
-		res.Payload = query.ArithmeticAnd
+		outRes.Payload = query.ArithmeticAnd
 	case "||":
-		res.Payload = query.ArithmeticOr
+		outRes.Payload = query.ArithmeticOr
 	case ">":
-		res.Payload = query.ArithmeticGt
+		outRes.Payload = query.ArithmeticGt
 	case "<":
-		res.Payload = query.ArithmeticLt
+		outRes.Payload = query.ArithmeticLt
 	case ">=":
-		res.Payload = query.ArithmeticGte
+		outRes.Payload = query.ArithmeticGte
 	case "<=":
-		res.Payload = query.ArithmeticLte
+		outRes.Payload = query.ArithmeticLte
 	case "|":
-		res.Payload = query.ArithmeticPipe
+		outRes.Payload = query.ArithmeticPipe
 	default:
-		return Fail(
+		return Fail[query.ArithmeticOperator](
 			NewFatalError(input, fmt.Errorf("operator not recognized: %v", res.Payload)),
 			input,
 		)
 	}
-	return res
+	return outRes
 }
 
-func arithmeticParser(fnParser Func) Func {
-	whitespace := DiscardAll(
-		OneOf(
-			SpacesAndTabs,
-			NewlineAllowComment,
-		),
-	)
+func arithmeticParser(fnParser Func[query.Function]) Func[query.Function] {
 	p := Delimited(
 		Sequence(
-			Optional(Sequence(charMinus, whitespace)),
-			fnParser,
+			FuncAsAny(Optional(JoinStringPayloads(Sequence(charMinus, DiscardedWhitespaceNewlineComments)))),
+			FuncAsAny(fnParser),
 		),
-		Sequence(
-			DiscardAll(SpacesAndTabs),
+		TakeOnly(1, Sequence(
+			ZeroedFuncAs[string, query.ArithmeticOperator](DiscardAll(SpacesAndTabs)),
 			arithmeticOpParser,
-			whitespace,
-		),
+			ZeroedFuncAs[string, query.ArithmeticOperator](DiscardedWhitespaceNewlineComments),
+		)),
 	)
 
-	return func(input []rune) Result {
+	return func(input []rune) Result[query.Function] {
 		var fns []query.Function
-		var ops []query.ArithmeticOperator
 
 		res := p(input)
 		if res.Err != nil {
-			return res
+			return Fail[query.Function](res.Err, input)
 		}
 
-		delimRes := res.Payload.(DelimitedResult)
+		delimRes := res.Payload
 		for _, primaryRes := range delimRes.Primary {
-			fnSeq := primaryRes.([]any)
-			fn := fnSeq[1].(query.Function)
-			if fnSeq[0] != nil {
+			fn := primaryRes[1].(query.Function)
+			if mStr, _ := primaryRes[0].(string); mStr == "-" {
 				var err error
 				if fn, err = query.NewArithmeticExpression(
 					[]query.Function{
@@ -109,18 +103,15 @@ func arithmeticParser(fnParser Func) Func {
 						query.ArithmeticSub,
 					},
 				); err != nil {
-					return Fail(NewFatalError(input, err), input)
+					return Fail[query.Function](NewFatalError(input, err), input)
 				}
 			}
 			fns = append(fns, fn)
 		}
-		for _, op := range delimRes.Delimiter {
-			ops = append(ops, op.([]any)[1].(query.ArithmeticOperator))
-		}
 
-		fn, err := query.NewArithmeticExpression(fns, ops)
+		fn, err := query.NewArithmeticExpression(fns, delimRes.Delimiter)
 		if err != nil {
-			return Fail(NewFatalError(input, err), input)
+			return Fail[query.Function](NewFatalError(input, err), input)
 		}
 		return Success(fn, res.Remaining)
 	}

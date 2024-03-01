@@ -4,7 +4,7 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/bloblang/query"
 )
 
-func queryParser(pCtx Context) Func {
+func queryParser(pCtx Context) Func[query.Function] {
 	rootParser := parseWithTails(Expect(
 		OneOf(
 			matchExpressionParser(pCtx),
@@ -19,7 +19,7 @@ func queryParser(pCtx Context) Func {
 		),
 		"query",
 	), pCtx)
-	return func(input []rune) Result {
+	return func(input []rune) Result[query.Function] {
 		res := SpacesAndTabs(input)
 		return arithmeticParser(rootParser)(res.Remaining)
 	}
@@ -33,5 +33,5 @@ func tryParseQuery(expr string) (query.Function, *Error) {
 	if res.Err != nil {
 		return nil, res.Err
 	}
-	return res.Payload.(query.Function), nil
+	return res.Payload, nil
 }

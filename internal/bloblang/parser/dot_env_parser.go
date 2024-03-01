@@ -4,7 +4,7 @@ import (
 	"fmt"
 )
 
-var dotEnvParser = func() Func {
+var dotEnvParser = func() Func[map[string]string] {
 	assignmentParser := Sequence(
 		NotInSet('=', ' ', '\n', '#'),
 		Optional(SpacesAndTabs),
@@ -17,33 +17,30 @@ var dotEnvParser = func() Func {
 	envFileParser := Delimited(
 		Expect(OneOf(
 			assignmentParser,
-			SpacesAndTabs,
-			EmptyLine,
-			EndOfInput,
-			Sequence(
-				charHash,
-				Optional(UntilFail(NotChar('\n'))),
-			),
+			ZeroedFuncAs[string, []string](SpacesAndTabs),
+			ZeroedFuncAs[any, []string](EmptyLine),
+			ZeroedFuncAs[any, []string](EndOfInput),
+			ZeroedFuncAs[[]any, []string](Sequence(
+				FuncAsAny(charHash),
+				FuncAsAny(Optional(UntilFail(NotChar('\n')))),
+			)),
 		), "Environment variable assignment"),
 		NewlineAllowComment,
 	)
 
-	return func(input []rune) Result {
+	return func(input []rune) Result[map[string]string] {
 		res := envFileParser(input)
 		if res.Err != nil {
-			return res
+			return Fail[map[string]string](res.Err, input)
 		}
 		vars := map[string]string{}
-		for _, line := range res.Payload.(DelimitedResult).Primary {
-			sequence, _ := line.([]any)
-			if len(sequence) == 6 {
-				key := sequence[0].(string)
-				value, _ := sequence[4].(string)
-				vars[key] = value
+		for _, line := range res.Payload.Primary {
+			if len(line) != 6 {
+				continue
 			}
+			vars[line[0]] = line[4]
 		}
-		res.Payload = vars
-		return res
+		return Success(vars, res.Remaining)
 	}
 }()
 
@@ -56,5 +53,5 @@ func ParseDotEnvFile(envFileBytes []byte) (map[string]string, error) {
 		line, _ := LineAndColOf([]rune(input), res.Err.Input)
 		return nil, fmt.Errorf("%v: %v", line, res.Err.ErrorAtPositionStructured("", []rune(input)))
 	}
-	return res.Payload.(map[string]string), nil
+	return res.Payload, nil
 }

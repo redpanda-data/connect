@@ -137,7 +137,7 @@ type arrayLiteral struct {
 // NewArrayLiteral creates an array literal from a slice of values. If all
 // values are static then a static []interface{} value is returned. However, if
 // any values are dynamic a Function is returned.
-func NewArrayLiteral(values ...any) any {
+func NewArrayLiteral(values ...Function) any {
 	var expandedValues []any
 	isDynamic := false
 	for _, v := range values {
@@ -148,7 +148,6 @@ func NewArrayLiteral(values ...any) any {
 			default:
 				expandedValues = append(expandedValues, t.Value)
 			}
-		case value.Delete, value.Nothing:
 		case Function:
 			isDynamic = true
 			expandedValues = append(expandedValues, v)
