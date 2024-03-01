@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- Field `credit` added to the `amqp_1` input to specify the maximum number of unacknowledged messages the sender can transmit. 
+
+### Changed
+
+- The default value of the `amqp_1.credit` input has changed from `1` to `64` 
+
 ## 4.25.1 - 2024-03-01
 
 ### Fixed
