@@ -46,7 +46,7 @@ input:
     source_address: /foo # No default (required)
     azure_renew_lock: false
     read_header: false
-    credit: 1
+    credit: 64
     tls:
       enabled: false
       skip_cert_verify: false
@@ -157,8 +157,8 @@ Specifies the maximum number of unacknowledged messages the sender can transmit.
 
 
 Type: `int`  
-Default: `1`  
-Requires version 4.25.0 or newer  
+Default: `64`  
+Requires version 4.26.0 or newer  
 
 ### `tls`
 
