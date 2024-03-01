@@ -52,16 +52,22 @@ type compiled struct {
 	metricsMapping *metrics.Mapping
 }
 
-// ExpandToNode attempts to apply the template to a provided YAML node and
-// returns the new expanded configuration.
-func (c *compiled) ExpandToNode(node *yaml.Node) (*yaml.Node, error) {
-	generic, err := c.spec.Config.Children.YAMLToMap(node, docs.ToValueConfig{})
+// Render a compiled template by providing a generic config.
+func (c *compiled) Render(node any) (any, error) {
+	var genericConf any
+	var err error
+	switch t := node.(type) {
+	case *yaml.Node:
+		genericConf, err = c.spec.Config.Children.YAMLToMap(t, docs.ToValueConfig{})
+	default:
+		genericConf, err = c.spec.Config.Children.AnyToMap(t, docs.ToValueConfig{})
+	}
 	if err != nil {
 		return nil, fmt.Errorf("invalid config for template component: %w", err)
 	}
 
 	part := message.NewPart(nil)
-	part.SetStructuredMut(generic)
+	part.SetStructuredMut(genericConf)
 	msg := message.Batch{part}
 
 	newPart, err := c.mapping.MapPart(0, msg)
@@ -73,13 +79,7 @@ func (c *compiled) ExpandToNode(node *yaml.Node) (*yaml.Node, error) {
 	if err != nil {
 		return nil, fmt.Errorf("mapping for template component resulted in invalid config: %w", err)
 	}
-
-	var resultNode yaml.Node
-	if err := resultNode.Encode(resultGeneric); err != nil {
-		return nil, fmt.Errorf("mapping for template component resulted in invalid yaml: %w", err)
-	}
-
-	return &resultNode, nil
+	return resultGeneric, nil
 }
 
 //------------------------------------------------------------------------------
@@ -129,13 +129,13 @@ func WithMetricsMapping(nm bundle.NewManagement, m *metrics.Mapping) bundle.NewM
 
 func registerCacheTemplate(tmpl *compiled, env *bundle.Environment) error {
 	return env.CacheAdd(func(c cache.Config, nm bundle.NewManagement) (cache.V1, error) {
-		newNode, err := tmpl.ExpandToNode(c.Plugin.(*yaml.Node))
+		newConf, err := tmpl.Render(c.Plugin)
 		if err != nil {
 			return nil, err
 		}
 
-		conf := cache.NewConfig()
-		if err := newNode.Decode(&conf); err != nil {
+		conf, err := cache.FromAny(env, newConf)
+		if err != nil {
 			return nil, err
 		}
 
@@ -150,13 +150,13 @@ func registerCacheTemplate(tmpl *compiled, env *bundle.Environment) error {
 
 func registerInputTemplate(tmpl *compiled, env *bundle.Environment) error {
 	return env.InputAdd(func(c input.Config, nm bundle.NewManagement) (input.Streamed, error) {
-		newNode, err := tmpl.ExpandToNode(c.Plugin.(*yaml.Node))
+		newConf, err := tmpl.Render(c.Plugin)
 		if err != nil {
 			return nil, err
 		}
 
-		conf := input.NewConfig()
-		if err := newNode.Decode(&conf); err != nil {
+		conf, err := input.FromAny(env, newConf)
+		if err != nil {
 			return nil, err
 		}
 
@@ -174,13 +174,13 @@ func registerInputTemplate(tmpl *compiled, env *bundle.Environment) error {
 
 func registerOutputTemplate(tmpl *compiled, env *bundle.Environment) error {
 	return env.OutputAdd(func(c output.Config, nm bundle.NewManagement, pcf ...processor.PipelineConstructorFunc) (output.Streamed, error) {
-		newNode, err := tmpl.ExpandToNode(c.Plugin.(*yaml.Node))
+		newConf, err := tmpl.Render(c.Plugin)
 		if err != nil {
 			return nil, err
 		}
 
-		conf := output.NewConfig()
-		if err := newNode.Decode(&conf); err != nil {
+		conf, err := output.FromAny(env, newConf)
+		if err != nil {
 			return nil, err
 		}
 
@@ -198,13 +198,13 @@ func registerOutputTemplate(tmpl *compiled, env *bundle.Environment) error {
 
 func registerProcessorTemplate(tmpl *compiled, env *bundle.Environment) error {
 	return env.ProcessorAdd(func(c processor.Config, nm bundle.NewManagement) (processor.V1, error) {
-		newNode, err := tmpl.ExpandToNode(c.Plugin.(*yaml.Node))
+		newConf, err := tmpl.Render(c.Plugin)
 		if err != nil {
 			return nil, err
 		}
 
-		conf := processor.NewConfig()
-		if err := newNode.Decode(&conf); err != nil {
+		conf, err := processor.FromAny(env, newConf)
+		if err != nil {
 			return nil, err
 		}
 
@@ -219,13 +219,13 @@ func registerProcessorTemplate(tmpl *compiled, env *bundle.Environment) error {
 
 func registerRateLimitTemplate(tmpl *compiled, env *bundle.Environment) error {
 	return env.RateLimitAdd(func(c ratelimit.Config, nm bundle.NewManagement) (ratelimit.V1, error) {
-		newNode, err := tmpl.ExpandToNode(c.Plugin.(*yaml.Node))
+		newConf, err := tmpl.Render(c.Plugin)
 		if err != nil {
 			return nil, err
 		}
 
-		conf := ratelimit.NewConfig()
-		if err := newNode.Decode(&conf); err != nil {
+		conf, err := ratelimit.FromAny(env, newConf)
+		if err != nil {
 			return nil, err
 		}
 

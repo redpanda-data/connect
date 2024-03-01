@@ -103,7 +103,7 @@ mapping: |
     root.source = if $config_source != "" { $config_source}
     root.sourcetype = if $config_sourcetype != "" { $config_sourcetype }
     root.index = if $config_index != "" { $config_index }
-  """.format(this.event_host, this.event_source, this.event_sourcetype, this.event_index)
+  """.format(this.event_host, this.event_source, this.event_sourcetype, this.event_index).re_replace_all("\n  ", "\n").trim_prefix("\n")
 
 tests:
   - name: Basic fields
@@ -134,11 +134,19 @@ tests:
         tls:
           enabled: true
           skip_cert_verify: false
-      processors: [
-          {
-              "bloblang": "let config_host = \"\"\nlet config_source = \"\"\nlet config_sourcetype = \"\"\nlet config_index = \"\"\nroot = if (this | {}).exists(\"event\") { this } else {\n  { \"event\": content().string() }\n}\nroot.host = if $config_host != \"\" { $config_host }\nroot.source = if $config_source != \"\" { $config_source}\nroot.sourcetype = if $config_sourcetype != \"\" { $config_sourcetype }\nroot.index = if $config_index != \"\" { $config_index }\n"
-          }
-      ]
+      processors:
+        - bloblang: |
+            let config_host = ""
+            let config_source = ""
+            let config_sourcetype = ""
+            let config_index = ""
+            root = if (this | {}).exists("event") { this } else {
+              { "event": content().string() }
+            }
+            root.host = if $config_host != "" { $config_host }
+            root.source = if $config_source != "" { $config_source}
+            root.sourcetype = if $config_sourcetype != "" { $config_sourcetype }
+            root.index = if $config_index != "" { $config_index }
 
   - name: gzip
     config:
@@ -171,8 +179,16 @@ tests:
         tls:
           enabled: true
           skip_cert_verify: false
-      processors: [
-          {
-              "bloblang": "let config_host = \"\"\nlet config_source = \"\"\nlet config_sourcetype = \"\"\nlet config_index = \"\"\nroot = if (this | {}).exists(\"event\") { this } else {\n  { \"event\": content().string() }\n}\nroot.host = if $config_host != \"\" { $config_host }\nroot.source = if $config_source != \"\" { $config_source}\nroot.sourcetype = if $config_sourcetype != \"\" { $config_sourcetype }\nroot.index = if $config_index != \"\" { $config_index }\n"
-          }
-      ]
+      processors:
+        - bloblang: |
+            let config_host = ""
+            let config_source = ""
+            let config_sourcetype = ""
+            let config_index = ""
+            root = if (this | {}).exists("event") { this } else {
+              { "event": content().string() }
+            }
+            root.host = if $config_host != "" { $config_host }
+            root.source = if $config_source != "" { $config_source}
+            root.sourcetype = if $config_sourcetype != "" { $config_sourcetype }
+            root.index = if $config_index != "" { $config_index }
