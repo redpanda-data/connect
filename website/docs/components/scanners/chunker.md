@@ -1,5 +1,6 @@
 ---
 title: chunker
+slug: chunker
 type: scanner
 status: stable
 ---

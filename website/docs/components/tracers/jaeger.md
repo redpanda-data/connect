@@ -1,5 +1,6 @@
 ---
 title: jaeger
+slug: jaeger
 type: tracer
 status: stable
 ---

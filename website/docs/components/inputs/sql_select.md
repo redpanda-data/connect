@@ -1,5 +1,6 @@
 ---
 title: sql_select
+slug: sql_select
 type: input
 status: beta
 categories: ["Services"]

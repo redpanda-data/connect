@@ -1,5 +1,6 @@
 ---
 title: decompress
+slug: decompress
 type: processor
 status: stable
 categories: ["Parsing"]

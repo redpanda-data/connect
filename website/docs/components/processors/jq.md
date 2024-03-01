@@ -1,5 +1,6 @@
 ---
 title: jq
+slug: jq
 type: processor
 status: stable
 categories: ["Mapping"]

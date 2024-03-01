@@ -1,5 +1,6 @@
 ---
 title: processors
+slug: processors
 type: processor
 status: stable
 categories: ["Composition"]

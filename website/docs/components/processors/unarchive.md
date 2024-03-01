@@ -1,5 +1,6 @@
 ---
 title: unarchive
+slug: unarchive
 type: processor
 status: stable
 categories: ["Parsing","Utility"]

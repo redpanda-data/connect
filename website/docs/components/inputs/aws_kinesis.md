@@ -1,5 +1,6 @@
 ---
 title: aws_kinesis
+slug: aws_kinesis
 type: input
 status: stable
 categories: ["Services","AWS"]

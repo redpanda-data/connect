@@ -1,5 +1,6 @@
 ---
 title: redis_hash
+slug: redis_hash
 type: output
 status: stable
 categories: ["Services"]

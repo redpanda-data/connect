@@ -1,5 +1,6 @@
 ---
 title: tar
+slug: tar
 type: scanner
 status: stable
 ---

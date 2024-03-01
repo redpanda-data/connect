@@ -1,5 +1,6 @@
 ---
 title: cache
+slug: cache
 type: processor
 status: stable
 categories: ["Integration"]

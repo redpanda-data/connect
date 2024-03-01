@@ -1,5 +1,6 @@
 ---
 title: nats_jetstream
+slug: nats_jetstream
 type: input
 status: stable
 categories: ["Services"]

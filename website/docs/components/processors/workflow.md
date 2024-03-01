@@ -1,5 +1,6 @@
 ---
 title: workflow
+slug: workflow
 type: processor
 status: stable
 categories: ["Composition"]

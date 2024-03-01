@@ -1,5 +1,6 @@
 ---
 title: parquet
+slug: parquet
 type: input
 status: experimental
 categories: ["Local"]

@@ -1,5 +1,6 @@
 ---
 title: metric
+slug: metric
 type: processor
 status: stable
 categories: ["Utility"]

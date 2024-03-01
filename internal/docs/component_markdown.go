@@ -28,6 +28,7 @@ type componentContext struct {
 
 var componentTemplate = FieldsTemplate(false) + `---
 title: {{.Name}}
+slug: {{.Name}}
 type: {{.Type}}
 status: {{.Status}}
 {{if gt (len .FrontMatterSummary) 0 -}}

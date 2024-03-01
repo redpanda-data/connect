@@ -1,5 +1,6 @@
 ---
 title: skip_bom
+slug: skip_bom
 type: scanner
 status: stable
 ---

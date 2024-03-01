@@ -1,5 +1,6 @@
 ---
 title: drop
+slug: drop
 type: output
 status: stable
 categories: ["Utility"]

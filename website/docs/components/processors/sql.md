@@ -1,5 +1,6 @@
 ---
 title: sql
+slug: sql
 type: processor
 status: deprecated
 categories: ["Integration"]

@@ -1,5 +1,6 @@
 ---
 title: ristretto
+slug: ristretto
 type: cache
 status: stable
 ---

@@ -1,5 +1,6 @@
 ---
 title: lines
+slug: lines
 type: scanner
 status: stable
 ---

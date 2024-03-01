@@ -1,5 +1,6 @@
 ---
 title: redis_list
+slug: redis_list
 type: output
 status: stable
 categories: ["Services"]

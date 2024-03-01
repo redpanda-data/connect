@@ -1,5 +1,6 @@
 ---
 title: sentry_capture
+slug: sentry_capture
 type: processor
 status: experimental
 ---

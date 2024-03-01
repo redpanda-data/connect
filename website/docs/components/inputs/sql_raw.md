@@ -1,5 +1,6 @@
 ---
 title: sql_raw
+slug: sql_raw
 type: input
 status: beta
 categories: ["Services"]

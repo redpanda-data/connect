@@ -1,5 +1,6 @@
 ---
 title: aws_lambda
+slug: aws_lambda
 type: processor
 status: stable
 categories: ["Integration"]

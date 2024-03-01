@@ -1,5 +1,6 @@
 ---
 title: open_telemetry_collector
+slug: open_telemetry_collector
 type: tracer
 status: experimental
 ---
