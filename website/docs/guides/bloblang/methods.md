@@ -1987,6 +1987,20 @@ root.has_bar = this.thing.contains(20)
 # Out: {"has_bar":false}
 ```
 
+### `diff`
+
+:::caution BETA
+This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
+:::
+Create a diff by comparing the current value with the given one. Wraps the github.com/r3labs/diff/v3 package. See its [docs](https://pkg.go.dev/github.com/r3labs/diff/v3) for more information.
+
+Introduced in version 4.25.0.
+
+
+#### Parameters
+
+**`other`** &lt;unknown&gt; The value to compare against.  
+
 ### `enumerated`
 
 Converts an array into a new array of objects, where each object has a field index containing the `index` of the element and a field `value` containing the original value of the element.
@@ -2471,6 +2485,20 @@ root = this.foo.merge(this.bar)
 # In:  {"foo":{"first_name":"fooer","likes":"bars"},"bar":{"second_name":"barer","likes":"foos"}}
 # Out: {"first_name":"fooer","likes":["bars","foos"],"second_name":"barer"}
 ```
+
+### `patch`
+
+:::caution BETA
+This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
+:::
+Create a diff by comparing the current value with the given one. Wraps the github.com/r3labs/diff/v3 package. See its [docs](https://pkg.go.dev/github.com/r3labs/diff/v3) for more information.
+
+Introduced in version 4.25.0.
+
+
+#### Parameters
+
+**`changelog`** &lt;unknown&gt; The changelog to apply.  
 
 ### `slice`
 
