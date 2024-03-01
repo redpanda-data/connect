@@ -106,6 +106,9 @@ The storage account to access. This field is ignored if `storage_connection_stri
 === `storage_access_key`
 
 The storage account access key. This field is ignored if `storage_connection_string` is set.
+:::warning Secret
+This field contains sensitive information that usually shouldn't be added to a config directly, read our [secrets page for more info](/docs/configuration/secrets).
+:::
 
 
 *Type*: `string`
@@ -115,6 +118,9 @@ The storage account access key. This field is ignored if `storage_connection_str
 === `storage_connection_string`
 
 A storage account connection string. This field is required if `storage_account` and `storage_access_key` / `storage_sas_token` are not set.
+:::warning Secret
+This field contains sensitive information that usually shouldn't be added to a config directly, read our [secrets page for more info](/docs/configuration/secrets).
+:::
 
 
 *Type*: `string`
@@ -124,6 +130,9 @@ A storage account connection string. This field is required if `storage_account`
 === `storage_sas_token`
 
 The storage account SAS token. This field is ignored if `storage_connection_string` or `storage_access_key` are set.
+:::warning Secret
+This field contains sensitive information that usually shouldn't be added to a config directly, read our [secrets page for more info](/docs/configuration/secrets).
+:::
 
 
 *Type*: `string`
@@ -165,7 +174,26 @@ path: ${!meta("kafka_key")}.json
 path: ${!json("doc.namespace")}/${!json("doc.id")}.json
 ```
 
+<<<<<<< HEAD:docs/modules/components/pages/outputs/azure_blob_storage.adoc
 === `blob_type`
+=======
+### `local_file_path`
+
+The path of the local file to upload.
+This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
+
+
+Type: `string`  
+Default: `""`  
+
+```yml
+# Examples
+
+local_file_path: /tmp/file.json
+```
+
+### `blob_type`
+>>>>>>> de746ae3f (chore: Add streaming suport in S3 and Azure Blob (#3)):website/docs/components/outputs/azure_blob_storage.md
 
 Block and Append blobs are comprized of blocks, and each blob can support up to 50,000 blocks. The default value is `+"`BLOCK`"+`.`
 This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].

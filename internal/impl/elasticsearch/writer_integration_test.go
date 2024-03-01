@@ -250,7 +250,6 @@ sniff: false
 		//nolint:staticcheck // Ignore SA1019 Type is deprecated warning for .Index()
 		get, err := client.Get().
 			Index("new_index_parallel_writes").
-			Type("_doc").
 			Id(id).
 			Do(ctx)
 		require.NoError(t, err, id)
@@ -263,7 +262,7 @@ sniff: false
 	}
 }
 
-func testElasticErrorHandling(urls []string, client *elastic.Client, t *testing.T) {
+func testElasticErrorHandling(urls []string, _ *elastic.Client, t *testing.T) {
 	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
 	defer done()
 
@@ -325,7 +324,6 @@ sniff: false
 		//nolint:staticcheck // Ignore SA1019 Type is deprecated warning for .Index()
 		get, err := client.Get().
 			Index("test_conn_index").
-			Type("_doc").
 			Id(id).
 			Do(ctx)
 		require.NoError(t, err)
@@ -358,20 +356,19 @@ sniff: false
 	N := 10
 
 	testMsgs := [][]byte{}
-	for i := 0; i < N; i++ {
-		testMsgs = append(testMsgs, []byte(fmt.Sprintf(`{"message":"hello world","user":"%v"}`, i)))
+	for i := range N {
+		testMsgs = append(testMsgs, fmt.Appendf(nil, `{"message":"hello world","user":"%v"}`, i))
 	}
-	for i := 0; i < N; i++ {
+	for i := range N {
 		msg := service.NewMessage(testMsgs[i])
 		msg.MetaSetMut("index", "test_conn_index")
 		require.NoError(t, m.WriteBatch(ctx, service.MessageBatch{msg}))
 	}
-	for i := 0; i < N; i++ {
+	for i := range N {
 		id := fmt.Sprintf("bar-%v", i+1)
 		//nolint:staticcheck // Ignore SA1019 Type is deprecated warning for .Index()
 		get, err := client.Get().
 			Index("test_conn_index").
-			Type("_doc").
 			Id(id).
 			Do(ctx)
 		require.NoError(t, err)
@@ -405,7 +402,7 @@ sniff: false
 
 	var testMsg [][]byte
 	var testBatch service.MessageBatch
-	for i := 0; i < N; i++ {
+	for i := range N {
 		testMsg = append(testMsg, []byte(fmt.Sprintf(`{"message":"hello world","user":"%v"}`, i)))
 		testBatch = append(testBatch, service.NewMessage(testMsg[i]))
 		testBatch[i].MetaSetMut("index", "test_conn_index")
@@ -413,12 +410,11 @@ sniff: false
 
 	require.NoError(t, m.WriteBatch(ctx, testBatch))
 
-	for i := 0; i < N; i++ {
+	for i := range N {
 		id := fmt.Sprintf("baz-%v", i+1)
 		//nolint:staticcheck // Ignore SA1019 Type is deprecated warning for .Index()
 		get, err := client.Get().
 			Index("test_conn_index").
-			Type("_doc").
 			Id(id).
 			Do(ctx)
 		require.NoError(t, err)
@@ -453,7 +449,7 @@ sniff: false
 
 	var testMsg [][]byte
 	var testBatch service.MessageBatch
-	for i := 0; i < N; i++ {
+	for i := range N {
 		testMsg = append(testMsg, []byte(fmt.Sprintf(`{"message":"hello world","user":"%v"}`, i)))
 		testBatch = append(testBatch, service.NewMessage(testMsg[i]))
 		testBatch[i].MetaSetMut("index", "test_conn_index")
@@ -462,12 +458,11 @@ sniff: false
 
 	require.NoError(t, m.WriteBatch(ctx, testBatch))
 
-	for i := 0; i < N; i++ {
+	for i := range N {
 		id := fmt.Sprintf("buz-%v", i+1)
 		//nolint:staticcheck // Ignore SA1019 Type is deprecated warning for .Index()
 		get, err := client.Get().
 			Index("test_conn_index").
-			Type("_doc").
 			Id(id).
 			Do(ctx)
 
@@ -487,12 +482,11 @@ sniff: false
 
 	require.NoError(t, m.WriteBatch(ctx, testBatch))
 
-	for i := 0; i < N; i++ {
+	for i := range N {
 		id := fmt.Sprintf("buz-%v", i+1)
 		//nolint:staticcheck // Ignore SA1019 Type is deprecated warning for .Index()
 		get, err := client.Get().
 			Index("test_conn_index").
-			Type("_doc").
 			Id(id).
 			Do(ctx)
 		require.NoError(t, err)
@@ -537,13 +531,12 @@ sniff: false
 
 	require.NoError(t, m.WriteBatch(ctx, testBatch))
 
-	for i := 0; i < 2; i++ {
+	for i := range 2 {
 		index, _ := testBatch[i].MetaGet("index")
 
 		//nolint:staticcheck // Ignore SA1019 Type is deprecated warning for .Index()
 		get, err := client.Get().
 			Index(index).
-			Type("_doc").
 			Id("bar-id").
 			Do(ctx)
 		require.NoError(t, err)
@@ -579,7 +572,6 @@ sniff: false
 	//nolint:staticcheck // Ignore SA1019 Type is deprecated warning for .Index()
 	get, err := client.Get().
 		Index("test_conn_index").
-		Type("_doc").
 		Id("bar-id").
 		Do(ctx)
 	require.NoError(t, err)
@@ -631,7 +623,7 @@ script_params: |
 
 	var expectedMsg [][]byte
 	var testBatch service.MessageBatch
-	for i := 0; i < N; i++ {
+	for i := range N {
 		expectedMsg = append(expectedMsg, []byte(fmt.Sprintf(`{"message":"hello world","user":"%v","script_value":"VALUE"}`, i)))
 		testBatch = append(testBatch, service.NewMessage([]byte(fmt.Sprintf(`{"message":"hello world","user":"%v"}`, i))))
 		testBatch[i].MetaSetMut("index", "test_conn_index")
@@ -639,7 +631,7 @@ script_params: |
 
 	require.NoError(t, m.WriteBatch(ctx, testBatch))
 
-	for i := 0; i < N; i++ {
+	for i := range N {
 		id := fmt.Sprintf("baz-%v", i+1)
 		// nolint:staticcheck // Ignore SA1019 Type is deprecated warning for .Index()
 		get, err := client.Get().
@@ -672,7 +664,7 @@ func testElasticBatchUpdateWithStoredScript(urls []string, client *elastic.Clien
 	bulk := client.Bulk()
 	var expectedMsg [][]byte
 	var testBatch service.MessageBatch
-	for i := 0; i < N; i++ {
+	for i := range N {
 		msg := map[string]string{
 			"message": "hello world",
 			"user":    fmt.Sprintf("%v", i),
@@ -718,7 +710,7 @@ script_params: |
 
 	require.NoError(t, m.WriteBatch(ctx, testBatch))
 
-	for i := 0; i < N; i++ {
+	for i := range N {
 		id := fmt.Sprintf("baz-%v", i+1)
 		// nolint:staticcheck // Ignore SA1019 Type is deprecated warning for .Index()
 		get, err := client.Get().
