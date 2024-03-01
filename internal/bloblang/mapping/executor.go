@@ -50,8 +50,8 @@ type Statement struct {
 // NewStatement initialises a new mapping statement from an Assignment and
 // query.Function. The input parameter is an optional slice pointing to the
 // parsed expression that created the statement.
-func NewStatement(input []rune, assignment Assignment, query query.Function) Statement {
-	return Statement{
+func NewStatement(input []rune, assignment Assignment, query query.Function) *Statement {
+	return &Statement{
 		input:      input,
 		assignment: assignment,
 		query:      query,
@@ -66,7 +66,7 @@ type Executor struct {
 	annotation string
 	input      []rune
 	maps       map[string]query.Function
-	statements []Statement
+	statements []*Statement
 
 	maxMapStacks int
 }
@@ -77,7 +77,7 @@ const defaultMaxMapStacks = 5000
 // and a list of assignments to be executed on each mapping. The input parameter
 // is an optional slice pointing to the parsed expression that created the
 // executor.
-func NewExecutor(annotation string, input []rune, maps map[string]query.Function, statements ...Statement) *Executor {
+func NewExecutor(annotation string, input []rune, maps map[string]query.Function, statements ...*Statement) *Executor {
 	return &Executor{
 		annotation:   annotation,
 		input:        input,

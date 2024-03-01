@@ -118,7 +118,7 @@ foo = bar.apply("foo")`,
   meta foo = "bar"
 }
 foo = bar.apply("foo")`,
-			errContains: `line 2 char 3: setting meta fields from within a map is not allowed`,
+			errContains: `line 2 char 3: setting meta fields is not allowed within this block`,
 		},
 		"no name map definition": {
 			mapping: `map {
@@ -298,6 +298,20 @@ meta "bar baz" = deleted()`,
 				Content: `{"bar":{"baz":"test1"}}`,
 				Meta: map[string]any{
 					"foo": "bar",
+				},
+			},
+		},
+		"test mapping metadata empty key": {
+			mapping: `meta "" = foo.bar
+meta "bar baz" = "test1"`,
+			input: []part{
+				{Content: `{"foo":{"bar":"baz"}}`},
+			},
+			output: part{
+				Content: `{"foo":{"bar":"baz"}}`,
+				Meta: map[string]any{
+					"":        "baz",
+					"bar baz": "test1",
 				},
 			},
 		},

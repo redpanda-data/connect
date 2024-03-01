@@ -99,9 +99,9 @@ func TestLiterals(t *testing.T) {
 			input: NewArrayLiteral(
 				NewFieldFunction("first"),
 				NewFieldFunction("second"),
-				value.Delete(nil),
-				"static",
-				value.Nothing(nil),
+				NewLiteralFunction("delete", value.Delete(nil)),
+				NewLiteralFunction("meow", "static"),
+				NewLiteralFunction("woof", value.Nothing(nil)),
 				NewLiteralFunction("", "static literal"),
 			),
 			value: map[string]any{
@@ -121,11 +121,11 @@ func TestLiterals(t *testing.T) {
 		},
 		"static array values": {
 			input: NewArrayLiteral(
-				"static1",
-				value.Delete(nil),
+				NewLiteralFunction("", "static1"),
+				NewLiteralFunction("", value.Delete(nil)),
 				NewLiteralFunction("", "static2"),
-				value.Nothing(nil),
-				"static3",
+				NewLiteralFunction("", value.Nothing(nil)),
+				NewLiteralFunction("", "static3"),
 			),
 			output: []any{
 				"static1",

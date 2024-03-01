@@ -124,7 +124,7 @@ func TestLiteralParser(t *testing.T) {
 			}
 			require.Nil(t, res.Err)
 			require.Implements(t, (*query.Function)(nil), res.Payload)
-			q := res.Payload.(query.Function)
+			q := res.Payload
 
 			result, err := q.Exec(query.FunctionContext{
 				Index: 0, MsgBatch: message.QuickBatch(nil),
