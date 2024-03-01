@@ -57,9 +57,9 @@ func amqp1InputSpec() *service.ConfigSpec {
 				Default(false).Advanced(),
 			service.NewIntField(creditField).
 				Description("Specifies the maximum number of unacknowledged messages the sender can transmit. Once this limit is reached, no more messages will arrive until messages are acknowledged and settled.").
-				LintRule(`root = if this < 1 { [ "`+creditField+`must be at least 1" ] }`).
-				Version("4.25.0").
-				Default(1).
+				LintRule(`root = if this < 1 { [ "`+creditField+` must be at least 1" ] }`).
+				Version("4.26.0").
+				Default(64).
 				Advanced(),
 			service.NewTLSToggledField(tlsField),
 			saslFieldSpec(),
