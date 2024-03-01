@@ -2,8 +2,14 @@ package kafka
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"net/http"
+	"net/url"
+	"strings"
 
 	"github.com/IBM/sarama"
 
@@ -42,6 +48,18 @@ func saslField() *service.ConfigField {
 			Default("").Secret(),
 		service.NewStringField("token").
 			Description("The token to use for a single session's OAUTHBEARER authentication.").
+			Default(""),
+		service.NewStringField("tokenEndpoint").
+			Description("The endpoint to use for OAUTHBEARER token acquisition.").
+			Default(""),
+		service.NewStringField("clientId").
+			Description("The client ID to use for OAUTHBEARER token acquisition.").
+			Default(""),
+		service.NewStringField("clientSecret").
+			Description("The client secret to use for OAUTHBEARER token acquisition.").
+			Default("").Secret(),
+		service.NewStringField("scope").
+			Description("The scope to use for OAUTHBEARER token acquisition.").
 			Default(""),
 		service.NewStringMapField("extensions").
 			Description("Key/value pairs to add to OAUTHBEARER authentication requests.").
@@ -130,21 +148,101 @@ func plainSaslFromConfig(c *service.ParsedConfig) (sasl.Mechanism, error) {
 
 func oauthSaslFromConfig(c *service.ParsedConfig) (sasl.Mechanism, error) {
 	token, err := c.FieldString("token")
-	if err != nil {
-		return nil, err
-	}
-	var extensions map[string]string
-	if c.Contains("extensions") {
-		if extensions, err = c.FieldStringMap("extensions"); err != nil {
+
+	if err != nil && token != "" {
+		if err != nil {
 			return nil, err
 		}
+		var extensions map[string]string
+		if c.Contains("extensions") {
+			if extensions, err = c.FieldStringMap("extensions"); err != nil {
+				return nil, err
+			}
+		}
+		return oauth.Oauth(func(c context.Context) (oauth.Auth, error) {
+			return oauth.Auth{
+				Token:      token,
+				Extensions: extensions,
+			}, nil
+		}), nil
+	} else if c.Contains("tokenEndpoint") {
+		return oauth.Oauth(func(ctx context.Context) (oauth.Auth, error) {
+			shortToken, err := acquireToken(ctx, c)
+			return oauth.Auth{Token: shortToken}, err
+		}), nil
 	}
-	return oauth.Oauth(func(c context.Context) (oauth.Auth, error) {
-		return oauth.Auth{
-			Token:      token,
-			Extensions: extensions,
-		}, nil
-	}), nil
+	return nil, errors.New("field 'token' or 'tokenEndpoint' was not found in the config")
+}
+
+func acquireToken(ctx context.Context, c *service.ParsedConfig) (string, error) {
+
+	tokenEndpoint, err := c.FieldString("tokenEndpoint")
+	if err != nil {
+		return "", err
+	}
+
+	clientId, err := c.FieldString("clientId")
+	if err != nil {
+		return "", err
+	}
+
+	clientSecret, err := c.FieldString("clientSecret")
+	if err != nil {
+		return "", err
+	}
+
+	scope, err := c.FieldString("scope")
+	if err != nil {
+		return "", err
+	}
+
+	authHeaderValue := base64.StdEncoding.EncodeToString([]byte(clientId + ":" + clientSecret))
+
+	queryParams := url.Values{}
+	queryParams.Set("grant_type", "client_credentials")
+	queryParams.Set("scope", scope)
+
+	req, err := http.NewRequestWithContext(ctx, "POST", tokenEndpoint, strings.NewReader(queryParams.Encode()))
+	if err != nil {
+		return "", err
+	}
+
+	req.URL.RawQuery = queryParams.Encode()
+
+	req.Header.Set("Authorization", "Basic "+authHeaderValue)
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", err
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", err
+	}
+
+	if err := resp.Body.Close(); err != nil {
+		return "", err
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("token request failed with status code %d", resp.StatusCode)
+	}
+
+	var tokenResponse map[string]interface{}
+	err = json.Unmarshal(body, &tokenResponse)
+	if err != nil {
+		return "", fmt.Errorf("failed to parse token response: %s", err)
+	}
+
+	accessToken, ok := tokenResponse["access_token"].(string)
+	if !ok {
+		return "", fmt.Errorf("access_token not found in token response")
+	}
+
+	return accessToken, nil
 }
 
 func scram256SaslFromConfig(c *service.ParsedConfig) (sasl.Mechanism, error) {
@@ -223,6 +321,7 @@ func SaramaSASLField() *service.ConfigField {
 			Secret(),
 		service.NewStringField(saramaFieldSASLAccessToken).
 			Description("A static OAUTHBEARER access token").
+			Secret().
 			Default(""),
 		service.NewStringField(saramaFieldSASLTokenCache).
 			Description("Instead of using a static `access_token` allows you to query a [`cache`](/docs/components/caches/about) resource to fetch OAUTHBEARER tokens from").
