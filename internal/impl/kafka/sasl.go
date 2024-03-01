@@ -147,8 +147,9 @@ func plainSaslFromConfig(c *service.ParsedConfig) (sasl.Mechanism, error) {
 }
 
 func oauthSaslFromConfig(c *service.ParsedConfig) (sasl.Mechanism, error) {
-	if c.Contains("token") {
-		token, err := c.FieldString("token")
+	token, err := c.FieldString("token")
+
+	if err != nil && token != "" {
 		if err != nil {
 			return nil, err
 		}
