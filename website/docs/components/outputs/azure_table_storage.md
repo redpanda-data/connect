@@ -140,6 +140,9 @@ Default: `""`
 ### `storage_access_key`
 
 The storage account access key. This field is ignored if `storage_connection_string` is set.
+:::warning Secret
+This field contains sensitive information that usually shouldn't be added to a config directly, read our [secrets page for more info](/docs/configuration/secrets).
+:::
 
 
 Type: `string`  
@@ -148,6 +151,9 @@ Default: `""`
 ### `storage_connection_string`
 
 A storage account connection string. This field is required if `storage_account` and `storage_access_key` / `storage_sas_token` are not set.
+:::warning Secret
+This field contains sensitive information that usually shouldn't be added to a config directly, read our [secrets page for more info](/docs/configuration/secrets).
+:::
 
 
 Type: `string`  
@@ -156,6 +162,9 @@ Default: `""`
 ### `storage_sas_token`
 
 The storage account SAS token. This field is ignored if `storage_connection_string` or `storage_access_key` are set.
+:::warning Secret
+This field contains sensitive information that usually shouldn't be added to a config directly, read our [secrets page for more info](/docs/configuration/secrets).
+:::
 
 
 Type: `string`  

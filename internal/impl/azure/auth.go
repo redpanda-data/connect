@@ -31,14 +31,17 @@ func azureComponentSpec(forBlobStorage bool) *service.ConfigSpec {
 				Default(""),
 			service.NewStringField(bscFieldStorageAccessKey).
 				Description("The storage account access key. This field is ignored if `"+bscFieldStorageConnectionString+"` is set.").
-				Default(""),
+				Default("").
+				Secret(),
 			service.NewStringField(bscFieldStorageConnectionString).
 				Description("A storage account connection string. This field is required if `"+bscFieldStorageAccount+"` and `"+bscFieldStorageAccessKey+"` / `"+bscFieldStorageSASToken+"` are not set.").
-				Default(""),
+				Default("").
+				Secret(),
 		)
 	spec = spec.Field(service.NewStringField(bscFieldStorageSASToken).
 		Description("The storage account SAS token. This field is ignored if `" + bscFieldStorageConnectionString + "` or `" + bscFieldStorageAccessKey + "` are set.").
-		Default("")).
+		Default("").
+		Secret()).
 		LintRule(`root = if this.storage_connection_string != "" && !this.storage_connection_string.contains("AccountName=")  && !this.storage_connection_string.contains("UseDevelopmentStorage=true;") && this.storage_account == "" { [ "storage_account must be set if storage_connection_string does not contain the \"AccountName\" parameter" ] }`)
 	return spec
 }

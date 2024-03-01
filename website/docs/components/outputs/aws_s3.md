@@ -33,6 +33,7 @@ output:
   aws_s3:
     bucket: "" # No default (required)
     path: ${!count("files")}-${!timestamp_unix_nano()}.txt
+    local_file_path: ""
     tags: {}
     content_type: application/octet-stream
     metadata:
@@ -55,6 +56,7 @@ output:
   aws_s3:
     bucket: "" # No default (required)
     path: ${!count("files")}-${!timestamp_unix_nano()}.txt
+    local_file_path: ""
     tags: {}
     content_type: application/octet-stream
     content_encoding: ""
@@ -182,6 +184,21 @@ path: ${!count("files")}-${!timestamp_unix_nano()}.txt
 path: ${!meta("kafka_key")}.json
 
 path: ${!json("doc.namespace")}/${!json("doc.id")}.json
+```
+
+### `local_file_path`
+
+The path of the local file to upload.
+This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
+
+
+Type: `string`  
+Default: `""`  
+
+```yml
+# Examples
+
+local_file_path: /tmp/file.json
 ```
 
 ### `tags`

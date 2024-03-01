@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"net/url"
+	"os"
 	"sort"
 	"strings"
 	"time"
@@ -25,6 +27,7 @@ const (
 	s3oFieldBucket                  = "bucket"
 	s3oFieldForcePathStyleURLs      = "force_path_style_urls"
 	s3oFieldPath                    = "path"
+	s3oFieldLocalFilePath           = "local_file_path"
 	s3oFieldTags                    = "tags"
 	s3oFieldContentType             = "content_type"
 	s3oFieldContentEncoding         = "content_encoding"
@@ -49,6 +52,7 @@ type s3oConfig struct {
 	Bucket string
 
 	Path                    *service.InterpolatedString
+	LocalFilePath           *service.InterpolatedString
 	Tags                    []s3TagPair
 	ContentType             *service.InterpolatedString
 	ContentEncoding         *service.InterpolatedString
@@ -76,6 +80,10 @@ func s3oConfigFromParsed(pConf *service.ParsedConfig) (conf s3oConfig, err error
 	}
 
 	if conf.Path, err = pConf.FieldInterpolatedString(s3oFieldPath); err != nil {
+		return
+	}
+
+	if conf.LocalFilePath, err = pConf.FieldInterpolatedString(s3oFieldLocalFilePath); err != nil {
 		return
 	}
 
@@ -208,6 +216,10 @@ output:
 				Example(`${!count("files")}-${!timestamp_unix_nano()}.txt`).
 				Example(`${!meta("kafka_key")}.json`).
 				Example(`${!json("doc.namespace")}/${!json("doc.id")}.json`),
+			service.NewInterpolatedStringField(s3oFieldLocalFilePath).
+				Description("The path of the local file to upload.").
+				Default(``).
+				Example(`/tmp/file.json`),
 			service.NewInterpolatedStringMapField(s3oFieldTags).
 				Description("Key/value pairs to store with the object as tags.").
 				Default(map[string]any{}).
@@ -381,7 +393,7 @@ func (a *amazonS3Writer) WriteBatch(wctx context.Context, msg service.MessageBat
 			return fmt.Errorf("storage class interpolation: %w", err)
 		}
 
-		mBytes, err := m.AsBytes()
+		uploadBody, err := a.getUploadBody(m)
 		if err != nil {
 			return err
 		}
@@ -389,7 +401,7 @@ func (a *amazonS3Writer) WriteBatch(wctx context.Context, msg service.MessageBat
 		uploadInput := &s3manager.UploadInput{
 			Bucket:                  &a.conf.Bucket,
 			Key:                     aws.String(key),
-			Body:                    bytes.NewReader(mBytes),
+			Body:                    uploadBody,
 			ContentType:             aws.String(contentType),
 			ContentEncoding:         contentEncoding,
 			CacheControl:            cacheControl,
@@ -430,6 +442,28 @@ func (a *amazonS3Writer) WriteBatch(wctx context.Context, msg service.MessageBat
 		}
 		return nil
 	})
+}
+
+func (a *amazonS3Writer) getUploadBody(m *service.Message) (io.Reader, error) {
+	localFilePath, err := a.conf.LocalFilePath.TryString(m)
+	if err != nil {
+		return nil, fmt.Errorf("local file path interpolation error: %w", err)
+	}
+
+	if localFilePath != "" {
+		file, err := os.Open(localFilePath)
+		if err != nil {
+			return nil, fmt.Errorf("local file read error: %w", err)
+		}
+		return file, nil
+	}
+
+	mBytes, err := m.AsBytes()
+	if err != nil {
+		return nil, err
+	}
+
+	return bytes.NewReader(mBytes), nil
 }
 
 func (a *amazonS3Writer) Close(context.Context) error {

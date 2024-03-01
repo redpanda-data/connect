@@ -1,6 +1,7 @@
 package metadata
 
 import (
+	"slices"
 	"strings"
 
 	"github.com/benthosdev/benthos/v4/internal/docs"
@@ -46,7 +47,7 @@ type ExcludeFilter struct {
 // true otherwise. It also returns true if no filters are configured.
 func (f *ExcludeFilter) Match(str string) bool {
 	for _, prefix := range f.excludePrefixes {
-		if strings.HasPrefix(str, prefix) {
+		if strings.HasPrefix(str, prefix) || slices.Contains(f.excludePrefixes, "*") {
 			return false
 		}
 	}
