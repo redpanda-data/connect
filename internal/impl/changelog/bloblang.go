@@ -5,15 +5,16 @@ import (
 	"github.com/r3labs/diff/v3"
 	"go.uber.org/multierr"
 
+	"github.com/benthosdev/benthos/v4/internal/bloblang/query"
 	"github.com/benthosdev/benthos/v4/public/bloblang"
 )
 
 func init() {
 	diffSpec := bloblang.NewPluginSpec().
 		Beta().
-		Category("Object Manipulation").
+		Category(query.MethodCategoryObjectAndArray).
 		Description(`Create a diff by comparing the current value with the given one. Wraps the github.com/r3labs/diff/v3 package. See its [docs](https://pkg.go.dev/github.com/r3labs/diff/v3) for more information.`).
-		Version("4.3.0").
+		Version("4.25.0").
 		Param(bloblang.NewAnyParam("other").Description("The value to compare against."))
 
 	if err := bloblang.RegisterMethodV2("diff", diffSpec, func(args *bloblang.ParsedParams) (bloblang.Method, error) {
@@ -44,9 +45,9 @@ func init() {
 
 	patchSpec := bloblang.NewPluginSpec().
 		Beta().
-		Category("Object Manipulation").
+		Category(query.MethodCategoryObjectAndArray).
 		Description(`Create a diff by comparing the current value with the given one. Wraps the github.com/r3labs/diff/v3 package. See its [docs](https://pkg.go.dev/github.com/r3labs/diff/v3) for more information.`).
-		Version("4.3.0").
+		Version("4.25.0").
 		Param(bloblang.NewAnyParam("changelog").Description("The changelog to apply."))
 
 	if err := bloblang.RegisterMethodV2("patch", patchSpec, func(args *bloblang.ParsedParams) (bloblang.Method, error) {
