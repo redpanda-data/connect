@@ -257,7 +257,7 @@ func ConfigSpec() docs.FieldSpecs {
 		).HasDefault("stable"),
 		docs.FieldString(
 			"categories", "An optional list of tags, which are used for arbitrarily grouping components in documentation.",
-		).Array().HasDefault([]string{}),
+		).Array().HasDefault([]any{}),
 		docs.FieldString("summary", "A short summary of the component.").HasDefault(""),
 		docs.FieldString("description", "A longer form description of the component and how to use it.").HasDefault(""),
 		docs.FieldObject("fields", "The configuration fields of the template, fields specified here will be parsed from a Benthos config and will be accessible from the template mapping.").Array().WithChildren(FieldConfigSpec()...),
