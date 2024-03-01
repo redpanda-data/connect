@@ -1,5 +1,6 @@
 ---
 title: amqp_1
+slug: amqp_1
 type: input
 status: stable
 categories: ["Services"]

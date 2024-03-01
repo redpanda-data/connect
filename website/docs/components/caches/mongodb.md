@@ -1,5 +1,6 @@
 ---
 title: mongodb
+slug: mongodb
 type: cache
 status: experimental
 ---

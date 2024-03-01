@@ -1,5 +1,6 @@
 ---
 title: websocket
+slug: websocket
 type: output
 status: stable
 categories: ["Network"]

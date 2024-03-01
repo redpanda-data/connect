@@ -1,5 +1,6 @@
 ---
 title: sync_response
+slug: sync_response
 type: processor
 status: stable
 categories: ["Utility"]

@@ -1,5 +1,6 @@
 ---
 title: pusher
+slug: pusher
 type: output
 status: experimental
 categories: ["Services"]

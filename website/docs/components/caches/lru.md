@@ -1,5 +1,6 @@
 ---
 title: lru
+slug: lru
 type: cache
 status: stable
 ---

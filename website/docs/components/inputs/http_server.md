@@ -1,5 +1,6 @@
 ---
 title: http_server
+slug: http_server
 type: input
 status: stable
 categories: ["Network"]

@@ -1,5 +1,6 @@
 ---
 title: redis_script
+slug: redis_script
 type: processor
 status: beta
 categories: ["Integration"]

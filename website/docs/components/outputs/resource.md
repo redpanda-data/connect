@@ -1,5 +1,6 @@
 ---
 title: resource
+slug: resource
 type: output
 status: stable
 categories: ["Utility"]

@@ -1,5 +1,6 @@
 ---
 title: branch
+slug: branch
 type: processor
 status: stable
 categories: ["Composition"]

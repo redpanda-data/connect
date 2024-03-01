@@ -1,5 +1,6 @@
 ---
 title: resource
+slug: resource
 type: processor
 status: stable
 categories: ["Utility"]

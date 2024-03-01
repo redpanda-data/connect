@@ -1,5 +1,6 @@
 ---
 title: gcp_bigquery_select
+slug: gcp_bigquery_select
 type: processor
 status: experimental
 categories: ["Integration"]

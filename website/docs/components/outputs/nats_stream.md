@@ -1,5 +1,6 @@
 ---
 title: nats_stream
+slug: nats_stream
 type: output
 status: stable
 categories: ["Services"]

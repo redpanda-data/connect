@@ -1,5 +1,6 @@
 ---
 title: socket
+slug: socket
 type: input
 status: stable
 categories: ["Network"]

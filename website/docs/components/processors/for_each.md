@@ -1,5 +1,6 @@
 ---
 title: for_each
+slug: for_each
 type: processor
 status: stable
 categories: ["Composition"]

@@ -1,5 +1,6 @@
 ---
 title: csv
+slug: csv
 type: input
 status: stable
 categories: ["Local"]

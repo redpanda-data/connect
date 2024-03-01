@@ -1,5 +1,6 @@
 ---
 title: switch
+slug: switch
 type: processor
 status: stable
 categories: ["Composition"]

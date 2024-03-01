@@ -1,5 +1,6 @@
 ---
 title: splunk_hec
+slug: splunk_hec
 type: output
 status: experimental
 categories: ["Services"]

@@ -1,5 +1,6 @@
 ---
 title: sleep
+slug: sleep
 type: processor
 status: stable
 categories: ["Utility"]

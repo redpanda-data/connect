@@ -1,5 +1,6 @@
 ---
 title: sequence
+slug: sequence
 type: input
 status: stable
 categories: ["Utility"]

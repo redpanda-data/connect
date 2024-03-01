@@ -1,5 +1,6 @@
 ---
 title: system_window
+slug: system_window
 type: buffer
 status: beta
 categories: ["Windowing"]

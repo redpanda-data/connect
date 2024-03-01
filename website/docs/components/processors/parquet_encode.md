@@ -1,5 +1,6 @@
 ---
 title: parquet_encode
+slug: parquet_encode
 type: processor
 status: experimental
 categories: ["Parsing"]

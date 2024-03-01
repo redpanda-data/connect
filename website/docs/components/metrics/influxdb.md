@@ -1,5 +1,6 @@
 ---
 title: influxdb
+slug: influxdb
 type: metrics
 status: beta
 ---

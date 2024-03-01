@@ -1,5 +1,6 @@
 ---
 title: aws_dynamodb
+slug: aws_dynamodb
 type: cache
 status: stable
 ---

@@ -1,5 +1,6 @@
 ---
 title: gcp_bigquery
+slug: gcp_bigquery
 type: output
 status: beta
 categories: ["GCP","Services"]

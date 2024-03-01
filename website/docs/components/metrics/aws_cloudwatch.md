@@ -1,5 +1,6 @@
 ---
 title: aws_cloudwatch
+slug: aws_cloudwatch
 type: metrics
 status: stable
 ---

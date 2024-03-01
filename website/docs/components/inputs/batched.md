@@ -1,5 +1,6 @@
 ---
 title: batched
+slug: batched
 type: input
 status: stable
 categories: ["Utility"]

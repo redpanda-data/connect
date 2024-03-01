@@ -1,5 +1,6 @@
 ---
 title: azure_blob_storage
+slug: azure_blob_storage
 type: input
 status: beta
 categories: ["Services","Azure"]

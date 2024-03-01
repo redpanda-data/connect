@@ -1,5 +1,6 @@
 ---
 title: sqlite
+slug: sqlite
 type: buffer
 status: stable
 categories: ["Utility"]
