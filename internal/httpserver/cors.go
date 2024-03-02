@@ -9,6 +9,12 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/docs"
 )
 
+const (
+	fieldCORS               = "cors"
+	fieldCORSEnabled        = "enabled"
+	fieldCORSAllowedOrigins = "allowed_origins"
+)
+
 // CORSConfig contains struct configuration for allowing CORS headers.
 type CORSConfig struct {
 	Enabled        bool     `json:"enabled" yaml:"enabled"`
@@ -40,8 +46,19 @@ func (conf CORSConfig) WrapHandler(handler http.Handler) (http.Handler, error) {
 
 // ServerCORSFieldSpec returns a field spec for an http server CORS component.
 func ServerCORSFieldSpec() docs.FieldSpec {
-	return docs.FieldObject("cors", "Adds Cross-Origin Resource Sharing headers.").WithChildren(
-		docs.FieldBool("enabled", "Whether to allow CORS requests.").HasDefault(false),
-		docs.FieldString("allowed_origins", "An explicit list of origins that are allowed for CORS requests.").Array().HasDefault([]string{}),
+	return docs.FieldObject(fieldCORS, "Adds Cross-Origin Resource Sharing headers.").WithChildren(
+		docs.FieldBool(fieldCORSEnabled, "Whether to allow CORS requests.").HasDefault(false),
+		docs.FieldString(fieldCORSAllowedOrigins, "An explicit list of origins that are allowed for CORS requests.").Array().HasDefault([]any{}),
 	).AtVersion("3.63.0").Advanced()
+}
+
+func CORSConfigFromParsed(pConf *docs.ParsedConfig) (conf CORSConfig, err error) {
+	pConf = pConf.Namespace(fieldCORS)
+	if conf.Enabled, err = pConf.FieldBool(fieldCORSEnabled); err != nil {
+		return
+	}
+	if conf.AllowedOrigins, err = pConf.FieldStringList(fieldCORSAllowedOrigins); err != nil {
+		return
+	}
+	return
 }

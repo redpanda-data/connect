@@ -8,17 +8,18 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
-	"gopkg.in/yaml.v3"
 
 	"github.com/benthosdev/benthos/v4/internal/component/output"
+	"github.com/benthosdev/benthos/v4/internal/component/testutil"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
 )
 
 func parseYAMLOutputConf(t testing.TB, formatStr string, args ...any) (conf output.Config) {
 	t.Helper()
-	conf = output.NewConfig()
-	require.NoError(t, yaml.Unmarshal(fmt.Appendf(nil, formatStr, args...), &conf))
+	var err error
+	conf, err = testutil.OutputFromYAML(fmt.Sprintf(formatStr, args...))
+	require.NoError(t, err)
 	return
 }
 

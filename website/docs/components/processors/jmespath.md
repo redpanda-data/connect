@@ -1,5 +1,6 @@
 ---
 title: jmespath
+slug: jmespath
 type: processor
 status: stable
 categories: ["Mapping"]
@@ -14,15 +15,13 @@ categories: ["Mapping"]
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-
-Executes a [JMESPath query](http://jmespath.org/) on JSON documents and replaces
-the message with the resulting document.
+Executes a [JMESPath query](http://jmespath.org/) on JSON documents and replaces the message with the resulting document.
 
 ```yml
 # Config fields, showing default values
 label: ""
 jmespath:
-  query: ""
+  query: "" # No default (required)
 ```
 
 :::note Try out Bloblang
@@ -38,7 +37,6 @@ The JMESPath query to apply to messages.
 
 
 Type: `string`  
-Default: `""`  
 
 ## Examples
 

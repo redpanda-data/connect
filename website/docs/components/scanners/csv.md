@@ -1,5 +1,6 @@
 ---
 title: csv
+slug: csv
 type: scanner
 status: stable
 ---

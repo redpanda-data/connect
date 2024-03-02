@@ -1,5 +1,6 @@
 ---
 title: avro
+slug: avro
 type: processor
 status: beta
 categories: ["Parsing"]

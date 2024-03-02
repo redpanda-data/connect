@@ -1,5 +1,6 @@
 ---
 title: redis_streams
+slug: redis_streams
 type: output
 status: stable
 categories: ["Services"]

@@ -1,5 +1,6 @@
 ---
 title: cache
+slug: cache
 type: processor
 status: stable
 categories: ["Integration"]
@@ -13,7 +14,6 @@ categories: ["Integration"]
 
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
-
 
 Performs operations against a [cache resource](/docs/components/caches/about) for each message, allowing you to store or retrieve data within message payloads.
 
@@ -29,10 +29,10 @@ Performs operations against a [cache resource](/docs/components/caches/about) fo
 # Common config fields, showing default values
 label: ""
 cache:
-  resource: ""
-  operator: ""
-  key: ""
-  value: ""
+  resource: "" # No default (required)
+  operator: "" # No default (required)
+  key: "" # No default (required)
+  value: "" # No default (optional)
 ```
 
 </TabItem>
@@ -42,11 +42,11 @@ cache:
 # All config fields, showing default values
 label: ""
 cache:
-  resource: ""
-  operator: ""
-  key: ""
-  value: ""
-  ttl: ""
+  resource: "" # No default (required)
+  operator: "" # No default (required)
+  key: "" # No default (required)
+  value: "" # No default (optional)
+  ttl: 60s # No default (optional)
 ```
 
 </TabItem>
@@ -67,10 +67,7 @@ This processor will interpolate functions within the `key` and `value` fields in
 <TabItem value="Deduplication">
 
 
-Deduplication can be done using the add operator with a key extracted from the
-message payload, since it fails when a key already exists we can remove the
-duplicates using a
-[`mapping` processor](/docs/components/processors/mapping):
+Deduplication can be done using the add operator with a key extracted from the message payload, since it fails when a key already exists we can remove the duplicates using a [`mapping` processor](/docs/components/processors/mapping):
 
 ```yaml
 pipeline:
@@ -105,6 +102,7 @@ pipeline:
           } else { deleted() }
         processors:
           - cache:
+              resource: foocache
               operator: add
               key: ${! content() }
               value: t
@@ -119,8 +117,7 @@ pipeline:
 <TabItem value="Hydration">
 
 
-It's possible to enrich payloads with content previously stored in a cache by
-using the [`branch`](/docs/components/processors/branch) processor:
+It's possible to enrich payloads with content previously stored in a cache by using the [`branch`](/docs/components/processors/branch) processor:
 
 ```yaml
 pipeline:
@@ -154,7 +151,6 @@ The [`cache` resource](/docs/components/caches/about) to target with this proces
 
 
 Type: `string`  
-Default: `""`  
 
 ### `operator`
 
@@ -162,7 +158,6 @@ The [operation](#operators) to perform with the cache.
 
 
 Type: `string`  
-Default: `""`  
 Options: `set`, `add`, `get`, `delete`.
 
 ### `key`
@@ -172,7 +167,6 @@ This field supports [interpolation functions](/docs/configuration/interpolation#
 
 
 Type: `string`  
-Default: `""`  
 
 ### `value`
 
@@ -181,7 +175,6 @@ This field supports [interpolation functions](/docs/configuration/interpolation#
 
 
 Type: `string`  
-Default: `""`  
 
 ### `ttl`
 
@@ -190,7 +183,6 @@ This field supports [interpolation functions](/docs/configuration/interpolation#
 
 
 Type: `string`  
-Default: `""`  
 Requires version 3.33.0 or newer  
 
 ```yml

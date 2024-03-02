@@ -1,5 +1,6 @@
 ---
 title: nats_kv
+slug: nats_kv
 type: input
 status: beta
 categories: ["Services"]

@@ -1,5 +1,6 @@
 ---
 title: command
+slug: command
 type: processor
 status: experimental
 categories: ["Integration"]

@@ -10,48 +10,56 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/cache"
+	"github.com/benthosdev/benthos/v4/internal/component/interop"
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
-	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/message"
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
-func init() {
-	err := bundle.AllProcessors.Add(func(conf processor.Config, mgr bundle.NewManagement) (processor.V1, error) {
-		p, err := newCache(conf.Cache, mgr)
-		if err != nil {
-			return nil, err
-		}
-		return processor.NewAutoObservedBatchedProcessor("cache", p, mgr), nil
-	}, docs.ComponentSpec{
-		Name: "cache",
-		Categories: []string{
-			"Integration",
-		},
-		Summary: `
-Performs operations against a [cache resource](/docs/components/caches/about) for each message, allowing you to store or retrieve data within message payloads.`,
-		Description: `
-For use cases where you wish to cache the result of processors consider using the ` + "[`cached` processor](/docs/components/processors/cached)" + ` instead.
+const (
+	cachePFieldResource = "resource"
+	cachePFieldOperator = "operator"
+	cachePFieldKey      = "key"
+	cachePFieldValue    = "value"
+	cachePFieldTTL      = "ttl"
+)
 
-This processor will interpolate functions within the ` + "`key` and `value`" + ` fields individually for each message. This allows you to specify dynamic keys and values based on the contents of the message payloads and metadata. You can find a list of functions [here](/docs/configuration/interpolation#bloblang-queries).`,
-		Config: docs.FieldComponent().WithChildren(
-			docs.FieldString("resource", "The [`cache` resource](/docs/components/caches/about) to target with this processor."),
-			docs.FieldString("operator", "The [operation](#operators) to perform with the cache.").HasOptions("set", "add", "get", "delete"),
-			docs.FieldString("key", "A key to use with the cache.").IsInterpolated(),
-			docs.FieldString("value", "A value to use with the cache (when applicable).").IsInterpolated(),
-			docs.FieldString(
-				"ttl", "The TTL of each individual item as a duration string. After this period an item will be eligible for removal during the next compaction. Not all caches support per-key TTLs, those that do will have a configuration field `default_ttl`, and those that do not will fall back to their generally configured TTL setting.",
-				"60s", "5m", "36h",
-			).IsInterpolated().AtVersion("3.33.0").Advanced(),
-		).ChildDefaultAndTypesFromStruct(processor.NewCacheConfig()),
-		Examples: []docs.AnnotatedExample{
-			{
-				Title: "Deduplication",
-				Summary: `
-Deduplication can be done using the add operator with a key extracted from the
-message payload, since it fails when a key already exists we can remove the
-duplicates using a
-[` + "`mapping` processor" + `](/docs/components/processors/mapping):`,
-				Config: `
+func cacheProcSpec() *service.ConfigSpec {
+	return service.NewConfigSpec().
+		Categories("Integration").
+		Stable().
+		Summary("Performs operations against a [cache resource](/docs/components/caches/about) for each message, allowing you to store or retrieve data within message payloads.").
+		Description(`
+For use cases where you wish to cache the result of processors consider using the `+"[`cached` processor](/docs/components/processors/cached)"+` instead.
+
+This processor will interpolate functions within the `+"`key` and `value`"+` fields individually for each message. This allows you to specify dynamic keys and values based on the contents of the message payloads and metadata. You can find a list of functions [here](/docs/configuration/interpolation#bloblang-queries).`).
+		Footnotes(`
+## Operators
+
+### `+"`set`"+`
+
+Set a key in the cache to a value. If the key already exists the contents are
+overridden.
+
+### `+"`add`"+`
+
+Set a key in the cache to a value. If the key already exists the action fails
+with a 'key already exists' error, which can be detected with
+[processor error handling](/docs/configuration/error_handling).
+
+### `+"`get`"+`
+
+Retrieve the contents of a cached key and replace the original message payload
+with the result. If the key does not exist the action fails with an error, which
+can be detected with [processor error handling](/docs/configuration/error_handling).
+
+### `+"`delete`"+`
+
+Delete a key and its contents from the cache.  If the key does not exist the
+action is a no-op and will not fail with an error.`).
+		Example("Deduplication", `
+Deduplication can be done using the add operator with a key extracted from the message payload, since it fails when a key already exists we can remove the duplicates using a [`+"`mapping` processor"+`](/docs/components/processors/mapping):`,
+			`
 pipeline:
   processors:
     - cache:
@@ -65,13 +73,10 @@ cache_resources:
   - label: foocache
     redis:
       url: tcp://TODO:6379
-`,
-			},
-			{
-				Title: "Deduplication Batch-Wide",
-				Summary: `
-Sometimes it's necessary to deduplicate a batch of messages (AKA a window) by a single identifying value. This can be done by introducing a ` + "[`branch` processor](/docs/components/processors/branch)" + `, which executes the cache only once on behalf of the batch, in this case with a value make from a field extracted from the first and last messages of the batch:`,
-				Config: `
+`).
+		Example("Deduplication Batch-Wide", `
+Sometimes it's necessary to deduplicate a batch of messages (AKA a window) by a single identifying value. This can be done by introducing a `+"[`branch` processor](/docs/components/processors/branch)"+`, which executes the cache only once on behalf of the batch, in this case with a value make from a field extracted from the first and last messages of the batch:`,
+			`
 pipeline:
   processors:
     # Try and add one message to a cache that identifies the whole batch
@@ -82,6 +87,7 @@ pipeline:
           } else { deleted() }
         processors:
           - cache:
+              resource: foocache
               operator: add
               key: ${! content() }
               value: t
@@ -90,14 +96,10 @@ pipeline:
         root = if errored().from(0) {
           deleted()
         }
-`,
-			},
-			{
-				Title: "Hydration",
-				Summary: `
-It's possible to enrich payloads with content previously stored in a cache by
-using the [` + "`branch`" + `](/docs/components/processors/branch) processor:`,
-				Config: `
+`).
+		Example("Hydration", `
+It's possible to enrich payloads with content previously stored in a cache by using the [`+"`branch`"+`](/docs/components/processors/branch) processor:`,
+			`
 pipeline:
   processors:
     - branch:
@@ -116,34 +118,60 @@ cache_resources:
   - label: foocache
     memcached:
       addresses: [ "TODO:11211" ]
-`,
-			},
-		},
-		Footnotes: `
-## Operators
+`).
+		Fields(
+			service.NewStringField(cachePFieldResource).
+				Description("The [`cache` resource](/docs/components/caches/about) to target with this processor."),
+			service.NewStringEnumField(cachePFieldOperator, "set", "add", "get", "delete").
+				Description("The [operation](#operators) to perform with the cache."),
+			service.NewInterpolatedStringField(cachePFieldKey).
+				Description("A key to use with the cache."),
+			service.NewInterpolatedStringField(cachePFieldValue).
+				Description("A value to use with the cache (when applicable).").
+				Optional(),
+			service.NewInterpolatedStringField(cachePFieldTTL).
+				Description("The TTL of each individual item as a duration string. After this period an item will be eligible for removal during the next compaction. Not all caches support per-key TTLs, those that do will have a configuration field `default_ttl`, and those that do not will fall back to their generally configured TTL setting.").
+				Examples("60s", "5m", "36h").
+				Version("3.33.0").
+				Advanced().
+				Optional(),
+		)
+}
 
-### ` + "`set`" + `
+type cacheProcConfig struct {
+	Resource string
+	Operator string
+	Key      string
+	Value    string
+	TTL      string
+}
 
-Set a key in the cache to a value. If the key already exists the contents are
-overridden.
+func init() {
+	err := service.RegisterBatchProcessor(
+		"cache", cacheProcSpec(),
+		func(conf *service.ParsedConfig, res *service.Resources) (service.BatchProcessor, error) {
+			var cConf cacheProcConfig
+			var err error
 
-### ` + "`add`" + `
+			if cConf.Resource, err = conf.FieldString(cachePFieldResource); err != nil {
+				return nil, err
+			}
+			if cConf.Operator, err = conf.FieldString(cachePFieldOperator); err != nil {
+				return nil, err
+			}
+			if cConf.Key, err = conf.FieldString(cachePFieldKey); err != nil {
+				return nil, err
+			}
+			cConf.Value, _ = conf.FieldString(cachePFieldValue)
+			cConf.TTL, _ = conf.FieldString(cachePFieldTTL)
 
-Set a key in the cache to a value. If the key already exists the action fails
-with a 'key already exists' error, which can be detected with
-[processor error handling](/docs/configuration/error_handling).
-
-### ` + "`get`" + `
-
-Retrieve the contents of a cached key and replace the original message payload
-with the result. If the key does not exist the action fails with an error, which
-can be detected with [processor error handling](/docs/configuration/error_handling).
-
-### ` + "`delete`" + `
-
-Delete a key and its contents from the cache.  If the key does not exist the
-action is a no-op and will not fail with an error.`,
-	})
+			mgr := interop.UnwrapManagement(res)
+			p, err := newCache(cConf, mgr)
+			if err != nil {
+				return nil, err
+			}
+			return interop.NewUnwrapInternalBatchProcessor(processor.NewAutoObservedBatchedProcessor("cache", p, mgr)), nil
+		})
 	if err != nil {
 		panic(err)
 	}
@@ -161,7 +189,7 @@ type cacheProc struct {
 	operator  cacheOperator
 }
 
-func newCache(conf processor.CacheConfig, mgr bundle.NewManagement) (*cacheProc, error) {
+func newCache(conf cacheProcConfig, mgr bundle.NewManagement) (*cacheProc, error) {
 	cacheName := conf.Resource
 	if cacheName == "" {
 		return nil, errors.New("cache name must be specified")

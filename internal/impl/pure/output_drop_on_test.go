@@ -15,6 +15,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/benthosdev/benthos/v4/internal/component/output"
+	"github.com/benthosdev/benthos/v4/internal/component/testutil"
 	bmock "github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
 
@@ -23,7 +24,7 @@ import (
 
 func parseYAMLOutputConf(t testing.TB, formatStr string, args ...any) output.Config {
 	t.Helper()
-	conf, err := output.FromYAML(fmt.Sprintf(formatStr, args...))
+	conf, err := testutil.OutputFromYAML(fmt.Sprintf(formatStr, args...))
 	require.NoError(t, err)
 	return conf
 }

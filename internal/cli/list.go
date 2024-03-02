@@ -63,7 +63,6 @@ func listComponents(c *cli.Context) {
 		for _, k := range []string{
 			"inputs",
 			"processors",
-			"conditions",
 			"outputs",
 			"caches",
 			"rate-limits",

@@ -1,5 +1,6 @@
 ---
 title: json_schema
+slug: json_schema
 type: processor
 status: stable
 categories: ["Mapping"]
@@ -14,21 +15,17 @@ categories: ["Mapping"]
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-
-Checks messages against a provided JSONSchema definition but does not change the
-payload under any circumstances. If a message does not match the schema it can
-be caught using error handling methods outlined [here](/docs/configuration/error_handling).
+Checks messages against a provided JSONSchema definition but does not change the payload under any circumstances. If a message does not match the schema it can be caught using error handling methods outlined [here](/docs/configuration/error_handling).
 
 ```yml
 # Config fields, showing default values
 label: ""
 json_schema:
-  schema: ""
-  schema_path: ""
+  schema: "" # No default (optional)
+  schema_path: "" # No default (optional)
 ```
 
-Please refer to the [JSON Schema website](https://json-schema.org/) for
-information and tutorials regarding the syntax of the schema.
+Please refer to the [JSON Schema website](https://json-schema.org/) for information and tutorials regarding the syntax of the schema.
 
 ## Fields
 
@@ -38,7 +35,6 @@ A schema to apply. Use either this or the `schema_path` field.
 
 
 Type: `string`  
-Default: `""`  
 
 ### `schema_path`
 
@@ -46,7 +42,6 @@ The path of a schema document to apply. Use either this or the `schema` field.
 
 
 Type: `string`  
-Default: `""`  
 
 ## Examples
 

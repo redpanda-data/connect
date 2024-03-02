@@ -5,7 +5,9 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/benthosdev/benthos/v4/internal/component/processor"
+	"github.com/stretchr/testify/require"
+
+	"github.com/benthosdev/benthos/v4/internal/component/testutil"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
 
@@ -13,9 +15,11 @@ import (
 )
 
 func TestGroupByValueBasic(t *testing.T) {
-	conf := processor.NewConfig()
-	conf.Type = "group_by_value"
-	conf.GroupByValue.Value = "${!json(\"foo\")}"
+	conf, err := testutil.ProcessorFromYAML(`
+group_by_value:
+  value: ${!json("foo")}
+`)
+	require.NoError(t, err)
 
 	proc, err := mock.NewManager().NewProcessor(conf)
 	if err != nil {

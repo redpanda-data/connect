@@ -2,10 +2,16 @@ package javascript
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io"
+	"io/fs"
+	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 	"sync"
+	"syscall"
 
 	"github.com/dop251/goja"
 	"github.com/dop251/goja_nodejs/console"
@@ -120,6 +126,38 @@ type javascriptProcessor struct {
 	vmPool          sync.Pool
 }
 
+func sourceLoader(serviceFS *service.FS) require.SourceLoader {
+	// Copy of `require.DefaultSourceLoader`: https://github.com/dop251/goja_nodejs/blob/e84d9a924c5ca9e541575e643b7efbca5705862f/require/module.go#L116-L141
+	// with some slight adjustments because we need to use the Benthos manager filesystem for opening and reading files.
+	return func(filename string) ([]byte, error) {
+		fp := filepath.FromSlash(filename)
+		f, err := serviceFS.Open(fp)
+		if err != nil {
+			if errors.Is(err, fs.ErrNotExist) {
+				err = require.ModuleFileDoesNotExistError
+			} else if runtime.GOOS == "windows" {
+				if errors.Is(err, syscall.Errno(0x7b)) { // ERROR_INVALID_NAME, The filename, directory name, or volume label syntax is incorrect.
+					err = require.ModuleFileDoesNotExistError
+				}
+			}
+			return nil, err
+		}
+
+		defer f.Close()
+		// On some systems (e.g. plan9 and FreeBSD) it is possible to use the standard read() call on directories
+		// which means we cannot rely on read() returning an error, we have to do stat() instead.
+		if fi, err := f.Stat(); err == nil {
+			if fi.IsDir() {
+				return nil, require.ModuleFileDoesNotExistError
+			}
+		} else {
+			return nil, err
+		}
+
+		return io.ReadAll(f)
+	}
+}
+
 func newJavascriptProcessorFromConfig(conf *service.ParsedConfig, mgr *service.Resources) (*javascriptProcessor, error) {
 	code, _ := conf.FieldString(codeField)
 	file, _ := conf.FieldString(fileField)
@@ -150,9 +188,8 @@ func newJavascriptProcessorFromConfig(conf *service.ParsedConfig, mgr *service.R
 	}
 	requireRegistry := require.NewRegistry(
 		require.WithGlobalFolders(registryGlobalFolders...),
-		require.WithLoader(func(path string) ([]byte, error) {
-			return ifs.ReadFile(mgr.FS(), path)
-		}))
+		require.WithLoader(sourceLoader(mgr.FS())),
+	)
 	requireRegistry.RegisterNativeModule("console", console.RequireWithPrinter(&Logger{logger}))
 
 	return &javascriptProcessor{

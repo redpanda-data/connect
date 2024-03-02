@@ -1,5 +1,6 @@
 ---
 title: parse_log
+slug: parse_log
 type: processor
 status: stable
 categories: ["Parsing"]
@@ -14,9 +15,7 @@ categories: ["Parsing"]
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-
-Parses common log [formats](#formats) into [structured data](#codecs). This is
-easier and often much faster than [`grok`](/docs/components/processors/grok).
+Parses common log [formats](#formats) into [structured data](#codecs). This is easier and often much faster than [`grok`](/docs/components/processors/grok).
 
 
 <Tabs defaultValue="common" values={[
@@ -30,8 +29,7 @@ easier and often much faster than [`grok`](/docs/components/processors/grok).
 # Common config fields, showing default values
 label: ""
 parse_log:
-  format: ""
-  codec: ""
+  format: "" # No default (required)
 ```
 
 </TabItem>
@@ -41,8 +39,7 @@ parse_log:
 # All config fields, showing default values
 label: ""
 parse_log:
-  format: ""
-  codec: ""
+  format: "" # No default (required)
   best_effort: true
   allow_rfc3339: true
   default_year: current
@@ -60,17 +57,7 @@ A common log [format](#formats) to parse.
 
 
 Type: `string`  
-Default: `""`  
 Options: `syslog_rfc5424`, `syslog_rfc3164`.
-
-### `codec`
-
-Specifies the structured format to parse a log into.
-
-
-Type: `string`  
-Default: `""`  
-Options: `json`.
 
 ### `best_effort`
 
@@ -112,8 +99,7 @@ Currently the only supported structured data codec is `json`.
 
 ### `syslog_rfc5424`
 
-Attempts to parse a log following the [Syslog rfc5424](https://tools.ietf.org/html/rfc5424)
-spec. The resulting structured document may contain any of the following fields:
+Attempts to parse a log following the [Syslog rfc5424](https://tools.ietf.org/html/rfc5424) spec. The resulting structured document may contain any of the following fields:
 
 - `message` (string)
 - `timestamp` (string, RFC3339)
@@ -129,8 +115,7 @@ spec. The resulting structured document may contain any of the following fields:
 
 ### `syslog_rfc3164`
 
-Attempts to parse a log following the [Syslog rfc3164](https://tools.ietf.org/html/rfc3164)
-spec. The resulting structured document may contain any of the following fields:
+Attempts to parse a log following the [Syslog rfc3164](https://tools.ietf.org/html/rfc3164) spec. The resulting structured document may contain any of the following fields:
 
 - `message` (string)
 - `timestamp` (string, RFC3339)

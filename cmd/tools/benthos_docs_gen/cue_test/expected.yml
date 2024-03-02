@@ -23,4 +23,3 @@ testCases:
           - output:
               label: sample_output
               stdout: {}
-    tests: []

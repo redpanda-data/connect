@@ -17,6 +17,7 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/bloblang/query"
 	"github.com/benthosdev/benthos/v4/internal/filepath/ifs"
 	"github.com/benthosdev/benthos/v4/internal/message"
+	"github.com/benthosdev/benthos/v4/internal/value"
 )
 
 var red = color.New(color.FgRed).SprintFunc()
@@ -153,7 +154,7 @@ func (e *execCache) executeMapping(exec *mapping.Executor, rawInput, prettyOutpu
 		delete(e.vars, k)
 	}
 
-	var result any = query.Nothing(nil)
+	var result any = value.Nothing(nil)
 	err := exec.ExecOnto(query.FunctionContext{
 		Maps:     exec.Maps(),
 		Vars:     e.vars,
@@ -183,9 +184,9 @@ func (e *execCache) executeMapping(exec *mapping.Executor, rawInput, prettyOutpu
 		resultStr = t
 	case []byte:
 		resultStr = string(t)
-	case query.Delete:
+	case value.Delete:
 		return "", nil
-	case query.Nothing:
+	case value.Nothing:
 		// Do not change the original contents
 		if v := lazyValue(); v != nil {
 			gObj := gabs.Wrap(v)

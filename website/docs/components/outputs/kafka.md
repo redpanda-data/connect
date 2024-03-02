@@ -1,5 +1,6 @@
 ---
 title: kafka
+slug: kafka
 type: output
 status: stable
 categories: ["Services"]
@@ -310,7 +311,7 @@ Type: `object`
 
 ### `sasl.mechanism`
 
-The SASL authentication mechanism, if left empty SASL authentication is not used. Warning: SCRAM based methods within Benthos have not received a security audit.
+The SASL authentication mechanism, if left empty SASL authentication is not used.
 
 
 Type: `string`  

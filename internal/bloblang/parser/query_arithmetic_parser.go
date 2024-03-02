@@ -6,102 +6,93 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/bloblang/query"
 )
 
-//------------------------------------------------------------------------------
+var arithmeticOpPattern = OneOf(
+	Char('+'),
+	Char('-'),
+	Char('/'),
+	Char('*'),
+	Char('%'),
+	Term("&&"),
+	Term("||"),
+	Term("=="),
+	Term("!="),
+	Term(">="),
+	Term("<="),
+	Char('>'),
+	Char('<'),
+	Char('|'),
+)
 
-func arithmeticOpParser() Func {
-	opParser := OneOf(
-		Char('+'),
-		Char('-'),
-		Char('/'),
-		Char('*'),
-		Char('%'),
-		Term("&&"),
-		Term("||"),
-		Term("=="),
-		Term("!="),
-		Term(">="),
-		Term("<="),
-		Char('>'),
-		Char('<'),
-		Char('|'),
-	)
-	return func(input []rune) Result {
-		res := opParser(input)
-		if res.Err != nil {
-			return res
-		}
-		switch res.Payload.(string) {
-		case "+":
-			res.Payload = query.ArithmeticAdd
-		case "-":
-			res.Payload = query.ArithmeticSub
-		case "/":
-			res.Payload = query.ArithmeticDiv
-		case "*":
-			res.Payload = query.ArithmeticMul
-		case "%":
-			res.Payload = query.ArithmeticMod
-		case "==":
-			res.Payload = query.ArithmeticEq
-		case "!=":
-			res.Payload = query.ArithmeticNeq
-		case "&&":
-			res.Payload = query.ArithmeticAnd
-		case "||":
-			res.Payload = query.ArithmeticOr
-		case ">":
-			res.Payload = query.ArithmeticGt
-		case "<":
-			res.Payload = query.ArithmeticLt
-		case ">=":
-			res.Payload = query.ArithmeticGte
-		case "<=":
-			res.Payload = query.ArithmeticLte
-		case "|":
-			res.Payload = query.ArithmeticPipe
-		default:
-			return Fail(
-				NewFatalError(input, fmt.Errorf("operator not recognized: %v", res.Payload)),
-				input,
-			)
-		}
-		return res
+func arithmeticOpParser(input []rune) Result[query.ArithmeticOperator] {
+	res := arithmeticOpPattern(input)
+	if res.Err != nil {
+		return Fail[query.ArithmeticOperator](res.Err, input)
 	}
+
+	outRes := ResultInto[query.ArithmeticOperator](res)
+	switch res.Payload {
+	case "+":
+		outRes.Payload = query.ArithmeticAdd
+	case "-":
+		outRes.Payload = query.ArithmeticSub
+	case "/":
+		outRes.Payload = query.ArithmeticDiv
+	case "*":
+		outRes.Payload = query.ArithmeticMul
+	case "%":
+		outRes.Payload = query.ArithmeticMod
+	case "==":
+		outRes.Payload = query.ArithmeticEq
+	case "!=":
+		outRes.Payload = query.ArithmeticNeq
+	case "&&":
+		outRes.Payload = query.ArithmeticAnd
+	case "||":
+		outRes.Payload = query.ArithmeticOr
+	case ">":
+		outRes.Payload = query.ArithmeticGt
+	case "<":
+		outRes.Payload = query.ArithmeticLt
+	case ">=":
+		outRes.Payload = query.ArithmeticGte
+	case "<=":
+		outRes.Payload = query.ArithmeticLte
+	case "|":
+		outRes.Payload = query.ArithmeticPipe
+	default:
+		return Fail[query.ArithmeticOperator](
+			NewFatalError(input, fmt.Errorf("operator not recognized: %v", res.Payload)),
+			input,
+		)
+	}
+	return outRes
 }
 
-func arithmeticParser(fnParser Func) Func {
-	whitespace := DiscardAll(
-		OneOf(
-			SpacesAndTabs(),
-			NewlineAllowComment(),
-		),
-	)
+func arithmeticParser(fnParser Func[query.Function]) Func[query.Function] {
 	p := Delimited(
 		Sequence(
-			Optional(Sequence(Char('-'), whitespace)),
-			fnParser,
+			FuncAsAny(Optional(JoinStringPayloads(Sequence(charMinus, DiscardedWhitespaceNewlineComments)))),
+			FuncAsAny(fnParser),
 		),
-		Sequence(
-			DiscardAll(SpacesAndTabs()),
-			arithmeticOpParser(),
-			whitespace,
-		),
+		TakeOnly(1, Sequence(
+			ZeroedFuncAs[string, query.ArithmeticOperator](DiscardAll(SpacesAndTabs)),
+			arithmeticOpParser,
+			ZeroedFuncAs[string, query.ArithmeticOperator](DiscardedWhitespaceNewlineComments),
+		)),
 	)
 
-	return func(input []rune) Result {
+	return func(input []rune) Result[query.Function] {
 		var fns []query.Function
-		var ops []query.ArithmeticOperator
 
 		res := p(input)
 		if res.Err != nil {
-			return res
+			return Fail[query.Function](res.Err, input)
 		}
 
-		delimRes := res.Payload.(DelimitedResult)
+		delimRes := res.Payload
 		for _, primaryRes := range delimRes.Primary {
-			fnSeq := primaryRes.([]any)
-			fn := fnSeq[1].(query.Function)
-			if fnSeq[0] != nil {
+			fn := primaryRes[1].(query.Function)
+			if mStr, _ := primaryRes[0].(string); mStr == "-" {
 				var err error
 				if fn, err = query.NewArithmeticExpression(
 					[]query.Function{
@@ -112,21 +103,16 @@ func arithmeticParser(fnParser Func) Func {
 						query.ArithmeticSub,
 					},
 				); err != nil {
-					return Fail(NewFatalError(input, err), input)
+					return Fail[query.Function](NewFatalError(input, err), input)
 				}
 			}
 			fns = append(fns, fn)
 		}
-		for _, op := range delimRes.Delimiter {
-			ops = append(ops, op.([]any)[1].(query.ArithmeticOperator))
-		}
 
-		fn, err := query.NewArithmeticExpression(fns, ops)
+		fn, err := query.NewArithmeticExpression(fns, delimRes.Delimiter)
 		if err != nil {
-			return Fail(NewFatalError(input, err), input)
+			return Fail[query.Function](NewFatalError(input, err), input)
 		}
 		return Success(fn, res.Remaining)
 	}
 }
-
-//------------------------------------------------------------------------------

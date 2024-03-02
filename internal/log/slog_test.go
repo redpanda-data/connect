@@ -29,8 +29,8 @@ func TestSlogToBenthosLoggerAdapter(t *testing.T) {
 	var logger Modular = NewBenthosLogAdapter(s)
 	require.NotNil(t, logger)
 
-	logger.Warnln("Warning message foo fields")
-	logger.Warnf("Warning message root module\n")
+	logger.Warn("Warning message foo fields")
+	logger.Warn("Warning message root module\n")
 
 	expected := "time=\"\" level=WARN msg=\"Warning message foo fields\" foo=bar count=10 thing=\"is a string\" iscool=true\ntime=\"\" level=WARN msg=\"Warning message root module\\n\" foo=bar count=10 thing=\"is a string\" iscool=true\n"
 	assert.Equal(t, expected, buf.String())
@@ -51,8 +51,8 @@ func TestSlogToBenthosLoggerAdapterMapKV(t *testing.T) {
 
 	logger = logger.With("thing", "is a string", "iscool", "true")
 
-	logger.Warnln("Warning message foo fields")
-	logger.Warnf("Warning message root module\n")
+	logger.Warn("Warning message foo fields")
+	logger.Warn("Warning message root module\n")
 
 	bufStr := buf.String()
 
@@ -75,10 +75,10 @@ func TestSlogMessageFormatting(t *testing.T) {
 	var logger Modular = NewBenthosLogAdapter(s)
 	require.NotNil(t, logger)
 
-	logger.Debugf("Hello %s %d", "World", 1)
-	logger.Infof("Hello %s %d", "World", 2)
-	logger.Warnf("Hello %s %d", "World", 3)
-	logger.Errorf("Hello %s %d", "World", 4)
+	logger.Debug("Hello %s %d", "World", 1)
+	logger.Info("Hello %s %d", "World", 2)
+	logger.Warn("Hello %s %d", "World", 3)
+	logger.Error("Hello %s %d", "World", 4)
 
 	expected := "time=\"\" level=DEBUG msg=\"Hello World 1\"\ntime=\"\" level=INFO msg=\"Hello World 2\"\ntime=\"\" level=WARN msg=\"Hello World 3\"\ntime=\"\" level=ERROR msg=\"Hello World 4\"\n"
 	assert.Equal(t, expected, buf.String())

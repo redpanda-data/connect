@@ -19,8 +19,10 @@ const (
 	saslPassField = "password"
 
 	// Input
-	sourceAddrField     = "source_address"
-	azureRenewLockField = "azure_renew_lock"
+	sourceAddrField       = "source_address"
+	azureRenewLockField   = "azure_renew_lock"
+	getMessageHeaderField = "read_header"
+	creditField           = "credit"
 
 	// Output
 	targetAddrField  = "target_address"

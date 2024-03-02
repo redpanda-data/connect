@@ -197,7 +197,7 @@ func (d *dropOnWriter) loop() {
 					}
 				}
 				if gotBackPressure {
-					d.log.Warnln("Message dropped due to back pressure.")
+					d.log.Warn("Message dropped due to back pressure.")
 					if d.onError {
 						res = nil
 					} else {
@@ -224,7 +224,7 @@ func (d *dropOnWriter) loop() {
 		}
 
 		if res != nil && d.onError {
-			d.log.Warnf("Message dropped due to: %v\n", res)
+			d.log.Warn("Message dropped due to: %v\n", res)
 			res = nil
 		}
 

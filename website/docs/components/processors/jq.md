@@ -1,5 +1,6 @@
 ---
 title: jq
+slug: jq
 type: processor
 status: stable
 categories: ["Mapping"]
@@ -13,7 +14,6 @@ categories: ["Mapping"]
 
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
-
 
 Transforms and filters messages using jq queries.
 
@@ -29,7 +29,7 @@ Transforms and filters messages using jq queries.
 # Common config fields, showing default values
 label: ""
 jq:
-  query: ""
+  query: "" # No default (required)
 ```
 
 </TabItem>
@@ -39,7 +39,7 @@ jq:
 # All config fields, showing default values
 label: ""
 jq:
-  query: ""
+  query: "" # No default (required)
   raw: false
   output_raw: false
 ```
@@ -51,29 +51,19 @@ jq:
 For better performance and improved capabilities try out native Benthos mapping with the [`mapping` processor](/docs/components/processors/mapping).
 :::
 
-The provided query is executed on each message, targeting either the contents
-as a structured JSON value or as a raw string using the field `raw`,
-and the message is replaced with the query result.
+The provided query is executed on each message, targeting either the contents as a structured JSON value or as a raw string using the field `raw`, and the message is replaced with the query result.
 
-Message metadata is also accessible within the query from the variable
-`$metadata`.
+Message metadata is also accessible within the query from the variable `$metadata`.
 
-This processor uses the [gojq library][gojq], and therefore does not require
-jq to be installed as a dependency. However, this also means there are some
-differences in how these queries are executed versus the jq cli which you can
-[read about here][gojq-difference].
+This processor uses the [gojq library][gojq], and therefore does not require jq to be installed as a dependency. However, this also means there are some differences in how these queries are executed versus the jq cli which you can [read about here][gojq-difference].
 
-If the query does not emit any value then the message is filtered, if the query
-returns multiple values then the resulting message will be an array containing
-all values.
+If the query does not emit any value then the message is filtered, if the query returns multiple values then the resulting message will be an array containing all values.
 
 The full query syntax is described in [jq's documentation][jq-docs].
 
 ## Error Handling
 
-Queries can fail, in which case the message remains unchanged, errors are
-logged, and the message is flagged as having failed, allowing you to use
-[standard processor error handling patterns](/docs/configuration/error_handling).
+Queries can fail, in which case the message remains unchanged, errors are logged, and the message is flagged as having failed, allowing you to use [standard processor error handling patterns](/docs/configuration/error_handling).
 
 ## Fields
 
@@ -83,7 +73,6 @@ The jq query to filter and transform messages with.
 
 
 Type: `string`  
-Default: `""`  
 
 ### `raw`
 

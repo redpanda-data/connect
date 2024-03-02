@@ -9,7 +9,7 @@ mapping: |
   root.processors = []
   root.processors."-".bloblang = """
     root = content().uppercase().string()
-  """
+  """.trim()
 
 metrics_mapping: |
   map decrement_processor {
@@ -29,3 +29,11 @@ metrics_mapping: |
   root = if this.contains("processor") {
     this.apply("decrement_processor")
   }
+
+tests:
+  - name: no fields
+    config: {}
+    expected:
+      stdin: {}
+      processors:
+        - bloblang: "root = content().uppercase().string()"

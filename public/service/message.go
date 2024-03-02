@@ -8,6 +8,7 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/bloblang/query"
 	"github.com/benthosdev/benthos/v4/internal/message"
 	"github.com/benthosdev/benthos/v4/internal/transaction"
+	"github.com/benthosdev/benthos/v4/internal/value"
 	"github.com/benthosdev/benthos/v4/public/bloblang"
 )
 
@@ -288,7 +289,7 @@ func (m *Message) MetaGet(key string) (string, bool) {
 	if !exists {
 		return "", false
 	}
-	return query.IToString(v), true
+	return value.IToString(v), true
 }
 
 // MetaGetMut attempts to find a metadata key from the message and returns the
@@ -364,6 +365,37 @@ func (m *Message) BloblangQuery(blobl *bloblang.Executor) (*Message, error) {
 		return NewInternalMessage(res), nil
 	}
 	return nil, nil
+}
+
+// BloblangQueryValue executes a parsed Bloblang mapping on a message and
+// returns the raw value result, or an error if either the mapping fails.
+// The error bloblang.ErrRootDeleted is returned if the root of the mapping
+// value is deleted, this is in order to allow distinction between a real nil
+// value and a deleted value.
+func (m *Message) BloblangQueryValue(blobl *bloblang.Executor) (any, error) {
+	uw := blobl.XUnwrapper().(interface {
+		Unwrap() *mapping.Executor
+	}).Unwrap()
+
+	msg := message.Batch{m.part}
+
+	res, err := uw.Exec(query.FunctionContext{
+		Maps:     uw.Maps(),
+		Vars:     map[string]any{},
+		Index:    0,
+		MsgBatch: msg,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	switch res.(type) {
+	case value.Delete:
+		return nil, bloblang.ErrRootDeleted
+	case value.Nothing:
+		return nil, nil
+	}
+	return res, nil
 }
 
 // BloblangMutate executes a parsed Bloblang mapping onto a message where the
@@ -451,6 +483,43 @@ func (b MessageBatch) BloblangQuery(index int, blobl *bloblang.Executor) (*Messa
 		return NewInternalMessage(res), nil
 	}
 	return nil, nil
+}
+
+// BloblangQueryValue executes a parsed Bloblang mapping on a message batch,
+// from the perspective of a particular message index, and returns the raw value
+// result or an error if the mapping fails. The error bloblang.ErrRootDeleted is
+// returned if the root of the mapping value is deleted, this is in order to
+// allow distinction between a real nil value and a deleted value.
+//
+// This method allows mappings to perform windowed aggregations across message
+// batches.
+func (b MessageBatch) BloblangQueryValue(index int, blobl *bloblang.Executor) (any, error) {
+	uw := blobl.XUnwrapper().(interface {
+		Unwrap() *mapping.Executor
+	}).Unwrap()
+
+	msg := make(message.Batch, len(b))
+	for i, m := range b {
+		msg[i] = m.part
+	}
+
+	res, err := uw.Exec(query.FunctionContext{
+		Maps:     uw.Maps(),
+		Vars:     map[string]any{},
+		Index:    index,
+		MsgBatch: msg,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	switch res.(type) {
+	case value.Delete:
+		return nil, bloblang.ErrRootDeleted
+	case value.Nothing:
+		return nil, nil
+	}
+	return res, nil
 }
 
 // BloblangMutate executes a parsed Bloblang mapping onto a message within the

@@ -1,5 +1,6 @@
 ---
 title: parquet_decode
+slug: parquet_decode
 type: processor
 status: experimental
 categories: ["Parsing"]

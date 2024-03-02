@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/aws/aws-sdk-go/service/kinesis"
+	"github.com/aws/aws-sdk-go-v2/service/kinesis/types"
 
 	"github.com/benthosdev/benthos/v4/internal/checkpoint"
 	"github.com/benthosdev/benthos/v4/internal/component"
@@ -30,14 +30,14 @@ type awsKinesisRecordBatcher struct {
 	ackedWG       sync.WaitGroup
 }
 
-func (k *kinesisReader) newAWSKinesisRecordBatcher(streamID, shardID, sequence string) (*awsKinesisRecordBatcher, error) {
+func (k *kinesisReader) newAWSKinesisRecordBatcher(info streamInfo, shardID, sequence string) (*awsKinesisRecordBatcher, error) {
 	batchPolicy, err := k.batcher.NewBatcher(k.mgr)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize batch policy for shard consumer: %w", err)
 	}
 
 	return &awsKinesisRecordBatcher{
-		streamID:      streamID,
+		streamID:      info.id,
 		shardID:       shardID,
 		batchPolicy:   batchPolicy,
 		checkpointer:  checkpoint.NewCapped[string](int64(k.conf.CheckpointLimit)),
@@ -45,7 +45,7 @@ func (k *kinesisReader) newAWSKinesisRecordBatcher(streamID, shardID, sequence s
 	}, nil
 }
 
-func (a *awsKinesisRecordBatcher) AddRecord(r *kinesis.Record) bool {
+func (a *awsKinesisRecordBatcher) AddRecord(r types.Record) bool {
 	p := service.NewMessage(r.Data)
 	p.MetaSetMut("kinesis_stream", a.streamID)
 	p.MetaSetMut("kinesis_shard", a.shardID)

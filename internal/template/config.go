@@ -11,6 +11,7 @@ import (
 
 	"github.com/benthosdev/benthos/v4/internal/bloblang"
 	"github.com/benthosdev/benthos/v4/internal/bloblang/parser"
+	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/filepath/ifs"
@@ -123,20 +124,17 @@ func (c Config) compile() (*compiled, error) {
 	return &compiled{spec: spec, mapping: mapping, metricsMapping: metricsMapping}, nil
 }
 
-func diffYAMLNodesAsJSON(expNode, actNode *yaml.Node) (string, error) {
-	var iexp, iact any
+func diffYAMLNodesAsJSON(expNode *yaml.Node, actNode any) (string, error) {
+	var iexp any
 	if err := expNode.Decode(&iexp); err != nil {
 		return "", fmt.Errorf("failed to marshal expected %w", err)
-	}
-	if err := actNode.Decode(&iact); err != nil {
-		return "", fmt.Errorf("failed to marshal actual %w", err)
 	}
 
 	expBytes, err := json.Marshal(iexp)
 	if err != nil {
 		return "", fmt.Errorf("failed to marshal expected %w", err)
 	}
-	actBytes, err := json.Marshal(iact)
+	actBytes, err := json.Marshal(actNode)
 	if err != nil {
 		return "", fmt.Errorf("failed to marshal actual %w", err)
 	}
@@ -159,12 +157,18 @@ func (c Config) Test() ([]string, error) {
 
 	var failures []string
 	for _, test := range c.Tests {
-		outConf, err := compiled.ExpandToNode(&test.Config)
+		outConf, err := compiled.Render(&test.Config)
 		if err != nil {
 			return nil, fmt.Errorf("test '%v': %w", test.Name, err)
 		}
-		for _, lint := range docs.LintYAML(docs.NewLintContext(docs.NewLintConfig()), docs.Type(c.Type), outConf) {
-			failures = append(failures, fmt.Sprintf("test '%v': lint error in resulting config: %v", test.Name, lint.Error()))
+
+		var yNode yaml.Node
+		if err := yNode.Encode(outConf); err == nil {
+			for _, lint := range docs.LintYAML(docs.NewLintContext(docs.NewLintConfig(bundle.GlobalEnvironment)), docs.Type(c.Type), &yNode) {
+				failures = append(failures, fmt.Sprintf("test '%v': lint error in resulting config: %v", test.Name, lint.Error()))
+			}
+		} else {
+			failures = append(failures, fmt.Sprintf("test '%v': failed to encode resulting config as YAML: %v", test.Name, err.Error()))
 		}
 		if len(test.Expected.Content) > 0 {
 			diff, err := diffYAMLNodesAsJSON(&test.Expected, outConf)
@@ -192,7 +196,7 @@ func ReadConfigYAML(templateBytes []byte) (conf Config, lints []docs.Lint, err e
 		return
 	}
 
-	lints = ConfigSpec().LintYAML(docs.NewLintContext(docs.NewLintConfig()), &node)
+	lints = ConfigSpec().LintYAML(docs.NewLintContext(docs.NewLintConfig(bundle.GlobalEnvironment)), &node)
 	return
 }
 
@@ -253,7 +257,7 @@ func ConfigSpec() docs.FieldSpecs {
 		).HasDefault("stable"),
 		docs.FieldString(
 			"categories", "An optional list of tags, which are used for arbitrarily grouping components in documentation.",
-		).Array().HasDefault([]string{}),
+		).Array().HasDefault([]any{}),
 		docs.FieldString("summary", "A short summary of the component.").HasDefault(""),
 		docs.FieldString("description", "A longer form description of the component and how to use it.").HasDefault(""),
 		docs.FieldObject("fields", "The configuration fields of the template, fields specified here will be parsed from a Benthos config and will be accessible from the template mapping.").Array().WithChildren(FieldConfigSpec()...),

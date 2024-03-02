@@ -1,11 +1,36 @@
 package docs
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 
 	"gopkg.in/yaml.v3"
+
+	"github.com/benthosdev/benthos/v4/internal/value"
 )
+
+// UnmarshalYAML attempts to parse a byte slice as a YAML document and returns
+// the root of the underlying document contents.
+func UnmarshalYAML(rawBytes []byte) (*yaml.Node, error) {
+	var rawNode yaml.Node
+	if err := yaml.Unmarshal(rawBytes, &rawNode); err != nil {
+		return nil, err
+	}
+	return unwrapDocumentNode(&rawNode), nil
+}
+
+// MarshalYAML marshals a structure into YAML with consistent formatting across
+// all Benthos components.
+func MarshalYAML(v yaml.Node) ([]byte, error) {
+	var cbytes bytes.Buffer
+	enc := yaml.NewEncoder(&cbytes)
+	enc.SetIndent(2)
+	if err := enc.Encode(v); err != nil {
+		return nil, err
+	}
+	return cbytes.Bytes(), nil
+}
 
 // FieldsFromYAML walks the children of a YAML node and returns a list of fields
 // extracted from it. This can be used in order to infer a field spec for a
@@ -108,7 +133,7 @@ func GetInferenceCandidateFromYAML(docProv Provider, t Type, node *yaml.Node) (s
 	node = unwrapDocumentNode(node)
 
 	if node.Kind != yaml.MappingNode {
-		return "", ComponentSpec{}, fmt.Errorf("invalid type %v, expected object", node.Kind)
+		return "", ComponentSpec{}, fmt.Errorf("invalid type %v, expected object", node.ShortTag())
 	}
 
 	var keys []string
@@ -364,7 +389,7 @@ func (f FieldSpec) SanitiseYAML(node *yaml.Node, conf SanitiseConfig) error {
 			if err != nil {
 				return err
 			}
-			if scrubValue, err = f.scrubValue(scrubValue); err != nil {
+			if scrubValue, err = f.ScrubValue(scrubValue); err != nil {
 				return err
 			}
 			comment := n.LineComment
@@ -455,7 +480,7 @@ func lintYAMLFromOmit(parentSpec FieldSpecs, lintTargetSpec FieldSpec, parent, n
 }
 
 func customLintFromYAML(ctx LintContext, spec FieldSpec, node *yaml.Node) []Lint {
-	lintFn := spec.getLintFunc()
+	lintFn := spec.GetLintFunc()
 	if lintFn == nil {
 		return nil
 	}
@@ -598,7 +623,7 @@ func (f FieldSpec) LintYAML(ctx LintContext, node *yaml.Node) []Lint {
 		return lints
 	case KindMap:
 		if node.Kind != yaml.MappingNode {
-			lints = append(lints, NewLintError(node.Line, LintExpectedObject, errors.New("expected object value")))
+			lints = append(lints, NewLintError(node.Line, LintExpectedObject, fmt.Errorf("expected object value, got %v", node.ShortTag())))
 			return lints
 		}
 		for i := 0; i < len(node.Content)-1; i += 2 {
@@ -626,7 +651,7 @@ func (f FieldSpec) LintYAML(ctx LintContext, node *yaml.Node) []Lint {
 		}
 	case FieldTypeObject:
 		if node.Kind != yaml.MappingNode && node.Kind != yaml.AliasNode {
-			lints = append(lints, NewLintError(node.Line, LintExpectedObject, errors.New("expected object value")))
+			lints = append(lints, NewLintError(node.Line, LintExpectedObject, fmt.Errorf("expected object value, got %v", node.ShortTag())))
 		}
 	}
 	return lints
@@ -642,7 +667,7 @@ func (f FieldSpecs) LintYAML(ctx LintContext, node *yaml.Node) []Lint {
 			// TODO: Actually lint through aliases
 			return nil
 		}
-		lints = append(lints, NewLintError(node.Line, LintExpectedObject, errors.New("expected object value")))
+		lints = append(lints, NewLintError(node.Line, LintExpectedObject, fmt.Errorf("expected object value, got %v", node.ShortTag())))
 		return lints
 	}
 
@@ -794,7 +819,7 @@ func (f FieldSpec) YAMLToValue(node *yaml.Node, conf ToValueConfig) (any, error)
 	switch f.Kind {
 	case Kind2DArray:
 		if !conf.Passive && node.Kind != yaml.SequenceNode {
-			return nil, fmt.Errorf("line %v: expected array value, got %v", node.Line, node.Kind)
+			return nil, fmt.Errorf("line %v: expected array value, got %v", node.Line, node.ShortTag())
 		}
 		subSpec := f.Array()
 
@@ -809,7 +834,7 @@ func (f FieldSpec) YAMLToValue(node *yaml.Node, conf ToValueConfig) (any, error)
 		return s, nil
 	case KindArray:
 		if !conf.Passive && node.Kind != yaml.SequenceNode {
-			return nil, fmt.Errorf("line %v: expected array value, got %v", node.Line, node.Kind)
+			return nil, fmt.Errorf("line %v: expected array value, got %v", node.Line, node.ShortTag())
 		}
 		subSpec := f.Scalar()
 
@@ -824,7 +849,7 @@ func (f FieldSpec) YAMLToValue(node *yaml.Node, conf ToValueConfig) (any, error)
 		return s, nil
 	case KindMap:
 		if !conf.Passive && node.Kind != yaml.MappingNode {
-			return nil, fmt.Errorf("line %v: expected map value, got %v", node.Line, node.Kind)
+			return nil, fmt.Errorf("line %v: expected map value, got %v", node.Line, node.ShortTag())
 		}
 		subSpec := f.Scalar()
 
@@ -924,7 +949,7 @@ func (f FieldSpecs) YAMLToMap(node *yaml.Node, conf ToValueConfig) (map[string]a
 			}
 			continue
 		}
-		resultMap[k] = defValue
+		resultMap[k] = value.IClone(defValue)
 	}
 
 	return resultMap, nil

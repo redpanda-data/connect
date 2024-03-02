@@ -2,81 +2,61 @@ package pure
 
 import (
 	"context"
-	"errors"
-	"strconv"
 
-	"github.com/benthosdev/benthos/v4/internal/bundle"
+	"github.com/benthosdev/benthos/v4/internal/component/interop"
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
-	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/message"
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
 func init() {
-	err := bundle.AllProcessors.Add(func(conf processor.Config, mgr bundle.NewManagement) (processor.V1, error) {
-		p, err := newCatch(conf.Catch, mgr)
-		if err != nil {
-			return nil, err
-		}
-		return processor.NewAutoObservedBatchedProcessor("catch", p, mgr), nil
-	}, docs.ComponentSpec{
-		Name: "catch",
-		Categories: []string{
-			"Composition",
-		},
-		Summary: `
-Applies a list of child processors _only_ when a previous processing step has
-failed.`,
-		Description: `
-Behaves similarly to the ` + "[`for_each`](/docs/components/processors/for_each)" + ` processor, where a
-list of child processors are applied to individual messages of a batch. However,
-processors are only applied to messages that failed a processing step prior to
-the catch.
+	err := service.RegisterBatchProcessor("catch", service.NewConfigSpec().
+		Stable().
+		Categories("Composition").
+		Summary("Applies a list of child processors _only_ when a previous processing step has failed.").
+		Description(`
+Behaves similarly to the `+"[`for_each`](/docs/components/processors/for_each)"+` processor, where a list of child processors are applied to individual messages of a batch. However, processors are only applied to messages that failed a processing step prior to the catch.
 
 For example, with the following config:
 
-` + "```yaml" + `
+`+"```yaml"+`
 pipeline:
   processors:
     - resource: foo
     - catch:
       - resource: bar
       - resource: baz
-` + "```" + `
+`+"```"+`
 
-If the processor ` + "`foo`" + ` fails for a particular message, that message
-will be fed into the processors ` + "`bar` and `baz`" + `. Messages that do not
-fail for the processor ` + "`foo`" + ` will skip these processors.
+If the processor `+"`foo`"+` fails for a particular message, that message will be fed into the processors `+"`bar` and `baz`"+`. Messages that do not fail for the processor `+"`foo`"+` will skip these processors.
 
-When messages leave the catch block their fail flags are cleared. This processor
-is useful for when it's possible to recover failed messages, or when special
-actions (such as logging/metrics) are required before dropping them.
+When messages leave the catch block their fail flags are cleared. This processor is useful for when it's possible to recover failed messages, or when special actions (such as logging/metrics) are required before dropping them.
 
-More information about error handling can be found [here](/docs/configuration/error_handling).`,
-		Config: docs.FieldProcessor("", "").Array().
-			LinterFunc(func(ctx docs.LintContext, line, col int, value any) []docs.Lint {
-				childProcs, ok := value.([]any)
-				if !ok {
-					return nil
-				}
-				for _, child := range childProcs {
-					childObj, ok := child.(map[string]any)
-					if !ok {
-						continue
-					}
-					if _, exists := childObj["catch"]; exists {
-						// No need to lint as a nested catch will clear errors,
-						// allowing nested try blocks to work as expected.
-						return nil
-					}
-					if _, exists := childObj["try"]; exists {
-						return []docs.Lint{
-							docs.NewLintError(line, docs.LintCustom, errors.New("`catch` block contains a `try` block which will never execute due to errors only being cleared at the end of the `catch`, for more information about nesting `try` within `catch` read: https://www.benthos.dev/docs/components/processors/try#nesting-within-a-catch-block")),
-						}
-					}
-				}
-				return nil
-			}),
-	})
+More information about error handling can be found [here](/docs/configuration/error_handling).`).
+		LintRule(`if this.or([]).any(pconf -> pconf.type.or("") == "try" || pconf.try.type() == "array" ) {
+  "'catch' block contains a 'try' block which will never execute due to errors only being cleared at the end of the 'catch', for more information about nesting 'try' within 'catch' read: https://www.benthos.dev/docs/components/processors/try#nesting-within-a-catch-block"
+}`).
+		Field(service.NewProcessorListField("").Default([]any{})),
+		func(conf *service.ParsedConfig, res *service.Resources) (service.BatchProcessor, error) {
+			mgr := interop.UnwrapManagement(res)
+			childPubProcs, err := conf.FieldProcessorList()
+			if err != nil {
+				return nil, err
+			}
+
+			childProcs := make([]processor.V1, len(childPubProcs))
+			for i, p := range childPubProcs {
+				childProcs[i] = interop.UnwrapOwnedProcessor(p)
+			}
+
+			tp, err := newCatch(childProcs)
+			if err != nil {
+				return nil, err
+			}
+
+			p := processor.NewAutoObservedBatchedProcessor("catch", tp, mgr)
+			return interop.NewUnwrapInternalBatchProcessor(p), nil
+		})
 	if err != nil {
 		panic(err)
 	}
@@ -88,16 +68,7 @@ type catchProc struct {
 	children []processor.V1
 }
 
-func newCatch(conf []processor.Config, mgr bundle.NewManagement) (*catchProc, error) {
-	var children []processor.V1
-	for i, pconf := range conf {
-		pMgr := mgr.IntoPath("catch", strconv.Itoa(i))
-		proc, err := pMgr.NewProcessor(pconf)
-		if err != nil {
-			return nil, err
-		}
-		children = append(children, proc)
-	}
+func newCatch(children []processor.V1) (*catchProc, error) {
 	return &catchProc{
 		children: children,
 	}, nil
@@ -110,9 +81,9 @@ func (p *catchProc) ProcessBatch(ctx *processor.BatchProcContext, msg message.Ba
 		return nil
 	})
 
-	var res error
-	if resultMsgs, res = processor.ExecuteCatchAll(ctx.Context(), p.children, resultMsgs...); res != nil || len(resultMsgs) == 0 {
-		return nil, res
+	var err error
+	if resultMsgs, err = processor.ExecuteCatchAll(ctx.Context(), p.children, resultMsgs...); err != nil || len(resultMsgs) == 0 {
+		return nil, err
 	}
 
 	resMsg := message.QuickBatch(nil)
@@ -123,7 +94,7 @@ func (p *catchProc) ProcessBatch(ctx *processor.BatchProcContext, msg message.Ba
 		})
 	}
 	if resMsg.Len() == 0 {
-		return nil, res
+		return nil, nil
 	}
 
 	_ = resMsg.Iter(func(i int, p *message.Part) error {

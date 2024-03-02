@@ -4,7 +4,10 @@ import (
 	"context"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
+	"github.com/benthosdev/benthos/v4/internal/component/testutil"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
 )
@@ -58,9 +61,11 @@ func TestSplitToSingleParts(t *testing.T) {
 }
 
 func TestSplitToMultipleParts(t *testing.T) {
-	conf := processor.NewConfig()
-	conf.Type = "split"
-	conf.Split.Size = 2
+	conf, err := testutil.ProcessorFromYAML(`
+split:
+  size: 2
+`)
+	require.NoError(t, err)
 
 	proc, err := mock.NewManager().NewProcessor(conf)
 	if err != nil {
@@ -95,10 +100,12 @@ func TestSplitToMultipleParts(t *testing.T) {
 }
 
 func TestSplitByBytes(t *testing.T) {
-	conf := processor.NewConfig()
-	conf.Type = "split"
-	conf.Split.Size = 0
-	conf.Split.ByteSize = 6
+	conf, err := testutil.ProcessorFromYAML(`
+split:
+  size: 0
+  byte_size: 6
+`)
+	require.NoError(t, err)
 
 	proc, err := mock.NewManager().NewProcessor(conf)
 	if err != nil {
@@ -132,10 +139,12 @@ func TestSplitByBytes(t *testing.T) {
 }
 
 func TestSplitByBytesTooLarge(t *testing.T) {
-	conf := processor.NewConfig()
-	conf.Type = "split"
-	conf.Split.Size = 0
-	conf.Split.ByteSize = 2
+	conf, err := testutil.ProcessorFromYAML(`
+split:
+  size: 0
+  byte_size: 2
+`)
+	require.NoError(t, err)
 
 	proc, err := mock.NewManager().NewProcessor(conf)
 	if err != nil {

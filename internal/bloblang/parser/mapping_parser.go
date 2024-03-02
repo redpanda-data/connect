@@ -24,7 +24,7 @@ func ParseMapping(pCtx Context, expr string) (*mapping.Executor, *Error) {
 		return nil, resDirectImport.Err
 	}
 	if resDirectImport.Err == nil && len(resDirectImport.Remaining) == 0 {
-		return resDirectImport.Payload.(*mapping.Executor), nil
+		return resDirectImport.Payload, nil
 	}
 
 	resExe := parseExecutor(pCtx)(in)
@@ -37,88 +37,92 @@ func ParseMapping(pCtx Context, expr string) (*mapping.Executor, *Error) {
 	if res.Err != nil {
 		return nil, res.Err
 	}
-	return res.Payload.(*mapping.Executor), nil
+	return res.Payload, nil
 }
 
-//------------------------------------------------------------------------------'
+//------------------------------------------------------------------------------
 
-func parseExecutor(pCtx Context) Func {
-	newline := NewlineAllowComment()
-	whitespace := SpacesAndTabs()
-	allWhitespace := DiscardAll(OneOf(whitespace, newline))
+func mappingStatement(pCtx Context, enableMeta bool, maps map[string]query.Function) Func[*mapping.Statement] {
+	toNilStatement := ZeroedFuncAs[string, *mapping.Statement]
 
-	return func(input []rune) Result {
-		maps := map[string]query.Function{}
-		statements := []mapping.Statement{}
-
-		statement := OneOf(
-			importParser(maps, pCtx),
-			mapParser(maps, pCtx),
+	if maps == nil {
+		return OneOf(
+			toNilStatement(importParser(pCtx, maps)),
 			letStatementParser(pCtx),
-			metaStatementParser(false, pCtx),
+			metaStatementParser(pCtx, enableMeta),
 			plainMappingStatementParser(pCtx),
 		)
+	}
+	return OneOf(
+		toNilStatement(importParser(pCtx, maps)),
+		toNilStatement(mapParser(pCtx, maps)),
+		letStatementParser(pCtx),
+		metaStatementParser(pCtx, enableMeta),
+		plainMappingStatementParser(pCtx),
+	)
+}
 
-		res := allWhitespace(input)
+func parseExecutor(pCtx Context) Func[*mapping.Executor] {
+	return func(input []rune) Result[*mapping.Executor] {
+		maps := map[string]query.Function{}
+		statements := []*mapping.Statement{}
 
-		res = statement(res.Remaining)
+		statementPattern := mappingStatement(pCtx, true, maps)
+
+		res := statementPattern(DiscardedWhitespaceNewlineComments(input).Remaining)
 		if res.Err != nil {
 			res.Remaining = input
-			return res
+			return ResultInto[*mapping.Executor](res)
 		}
-		if mStmt, ok := res.Payload.(mapping.Statement); ok {
-			statements = append(statements, mStmt)
+		if res.Payload != nil {
+			statements = append(statements, res.Payload)
 		}
 
 		for {
-			res = Discard(whitespace)(res.Remaining)
-			if len(res.Remaining) == 0 {
+			if res.Remaining = Discard(SpacesAndTabs)(res.Remaining).Remaining; len(res.Remaining) == 0 {
 				break
 			}
 
-			if res = newline(res.Remaining); res.Err != nil {
-				return Fail(res.Err, input)
+			if tmpRes := NewlineAllowComment(res.Remaining); tmpRes.Err != nil {
+				return Fail[*mapping.Executor](tmpRes.Err, input)
+			} else {
+				res.Remaining = tmpRes.Remaining
 			}
 
-			res = allWhitespace(res.Remaining)
-			if len(res.Remaining) == 0 {
+			if res.Remaining = DiscardedWhitespaceNewlineComments(res.Remaining).Remaining; len(res.Remaining) == 0 {
 				break
 			}
 
-			if res = statement(res.Remaining); res.Err != nil {
-				return Fail(res.Err, input)
+			if res = statementPattern(res.Remaining); res.Err != nil {
+				return Fail[*mapping.Executor](res.Err, input)
 			}
-			if mStmt, ok := res.Payload.(mapping.Statement); ok {
-				statements = append(statements, mStmt)
+			if res.Payload != nil {
+				statements = append(statements, res.Payload)
 			}
 		}
 		return Success(mapping.NewExecutor("", input, maps, statements...), res.Remaining)
 	}
 }
 
-func singleRootImport(pCtx Context) Func {
-	newline := NewlineAllowComment()
-	whitespace := SpacesAndTabs()
-	allWhitespace := DiscardAll(OneOf(whitespace, newline))
-
-	parser := Sequence(
-		allWhitespace,
+func singleRootImport(pCtx Context) Func[*mapping.Executor] {
+	parser := TakeOnly(3, Sequence(
+		DiscardedWhitespaceNewlineComments,
 		Term("from"),
-		whitespace,
-		QuotedString(),
-		allWhitespace,
-	)
+		SpacesAndTabs,
+		QuotedString,
+		DiscardedWhitespaceNewlineComments,
+	))
 
-	return func(input []rune) Result {
+	return func(input []rune) Result[*mapping.Executor] {
 		res := parser(input)
 		if res.Err != nil {
-			return res
+			return Fail[*mapping.Executor](res.Err, input)
 		}
 
-		fpath := res.Payload.([]any)[3].(string)
+		fpath := res.Payload
 		contents, err := pCtx.importer.Import(fpath)
 		if err != nil {
-			return Fail(NewFatalError(input, fmt.Errorf("failed to read import: %w", err)), input)
+			return Fail[*mapping.Executor](NewFatalError(input, fmt.Errorf("failed to read import: %w", err)), input)
 		}
 
 		nextCtx := pCtx.WithImporterRelativeToFile(fpath)
@@ -126,34 +130,29 @@ func singleRootImport(pCtx Context) Func {
 		importContent := []rune(string(contents))
 		execRes := parseExecutor(nextCtx)(importContent)
 		if execRes.Err != nil {
-			return Fail(NewFatalError(input, NewImportError(fpath, importContent, execRes.Err)), input)
+			return Fail[*mapping.Executor](NewFatalError(input, NewImportError(fpath, importContent, execRes.Err)), input)
 		}
 		if len(res.Remaining) > 0 {
-			return Fail(NewFatalError(input, fmt.Errorf("unexpected content after single root import: %s", string(res.Remaining))), input)
+			return Fail[*mapping.Executor](NewFatalError(input, fmt.Errorf("unexpected content after single root import: %s", string(res.Remaining))), input)
 		}
-		return Success(execRes.Payload.(*mapping.Executor), res.Remaining)
+		return Success(execRes.Payload, res.Remaining)
 	}
 }
 
-func singleRootMapping(pCtx Context) Func {
-	newline := NewlineAllowComment()
-	whitespace := SpacesAndTabs()
-	allWhitespace := DiscardAll(OneOf(whitespace, newline))
-
-	return func(input []rune) Result {
-		res := queryParser(pCtx)(allWhitespace(input).Remaining)
+func singleRootMapping(pCtx Context) Func[*mapping.Executor] {
+	return func(input []rune) Result[*mapping.Executor] {
+		res := queryParser(pCtx)(DiscardedWhitespaceNewlineComments(input).Remaining)
 		if res.Err != nil {
-			return res
+			return Fail[*mapping.Executor](res.Err, input)
 		}
 
-		fn := res.Payload.(query.Function)
+		fn := res.Payload
 		assignmentRunes := input[:len(input)-len(res.Remaining)]
 
 		// Remove all tailing whitespace and ensure no remaining input.
-		res = allWhitespace(res.Remaining)
-		if len(res.Remaining) > 0 {
-			tmpRes := allWhitespace(assignmentRunes)
-			assignmentRunes = tmpRes.Remaining
+		testRes := DiscardedWhitespaceNewlineComments(res.Remaining)
+		if len(testRes.Remaining) > 0 {
+			assignmentRunes := DiscardedWhitespaceNewlineComments(assignmentRunes).Remaining
 
 			var assignmentStr string
 			if len(assignmentRunes) > 12 {
@@ -163,7 +162,7 @@ func singleRootMapping(pCtx Context) Func {
 			}
 
 			expStr := fmt.Sprintf("the mapping to end here as the beginning is shorthand for `root = %v`, but this shorthand form cannot be followed with more assignments", assignmentStr)
-			return Fail(NewError(res.Remaining, expStr), input)
+			return Fail[*mapping.Executor](NewError(testRes.Remaining, expStr), input)
 		}
 
 		stmt := mapping.NewStatement(input, mapping.NewJSONAssignment(), fn)
@@ -173,41 +172,46 @@ func singleRootMapping(pCtx Context) Func {
 
 //------------------------------------------------------------------------------
 
-func varNameParser() Func {
-	return JoinStringPayloads(
-		UntilFail(
-			OneOf(
-				InRange('a', 'z'),
-				InRange('A', 'Z'),
-				InRange('0', '9'),
-				Char('_'),
-			),
+var varNameParser = JoinStringPayloads(
+	UntilFail(
+		OneOf(
+			InRange('a', 'z'),
+			InRange('A', 'Z'),
+			InRange('0', '9'),
+			charUnderscore,
 		),
-	)
-}
+	),
+)
 
-func importParser(maps map[string]query.Function, pCtx Context) Func {
-	p := Sequence(
-		Term("import"),
-		SpacesAndTabs(),
-		MustBe(
-			Expect(
-				QuotedString(),
-				"filepath",
-			),
+var importParserComb = TakeOnly(2, Sequence(
+	Term("import"),
+	SpacesAndTabs,
+	MustBe(
+		Expect(
+			QuotedString,
+			"filepath",
 		),
-	)
+	),
+))
 
-	return func(input []rune) Result {
-		res := p(input)
+func importParser(pCtx Context, maps map[string]query.Function) Func[string] {
+	return func(input []rune) Result[string] {
+		res := importParserComb(input)
 		if res.Err != nil {
 			return res
 		}
 
-		fpath := res.Payload.([]any)[2].(string)
+		if maps == nil {
+			return Fail[string](
+				NewFatalError(input, errors.New("importing mappings is not allowed within this block")),
+				input,
+			)
+		}
+
+		fpath := res.Payload
 		contents, err := pCtx.importer.Import(fpath)
 		if err != nil {
-			return Fail(NewFatalError(input, fmt.Errorf("failed to read import: %w", err)), input)
+			return Fail[string](NewFatalError(input, fmt.Errorf("failed to read import: %w", err)), input)
 		}
 
 		nextCtx := pCtx.WithImporterRelativeToFile(fpath)
@@ -215,13 +219,13 @@ func importParser(maps map[string]query.Function, pCtx Context) Func {
 		importContent := []rune(string(contents))
 		execRes := parseExecutor(nextCtx)(importContent)
 		if execRes.Err != nil {
-			return Fail(NewFatalError(input, NewImportError(fpath, importContent, execRes.Err)), input)
+			return Fail[string](NewFatalError(input, NewImportError(fpath, importContent, execRes.Err)), input)
 		}
 
-		exec := execRes.Payload.(*mapping.Executor)
+		exec := execRes.Payload
 		if len(exec.Maps()) == 0 {
 			err := fmt.Errorf("no maps to import from '%v'", fpath)
-			return Fail(NewFatalError(input, err), input)
+			return Fail[string](NewFatalError(input, err), input)
 		}
 
 		collisions := []string{}
@@ -234,274 +238,241 @@ func importParser(maps map[string]query.Function, pCtx Context) Func {
 		}
 		if len(collisions) > 0 {
 			err := fmt.Errorf("map name collisions from import '%v': %v", fpath, collisions)
-			return Fail(NewFatalError(input, err), input)
+			return Fail[string](NewFatalError(input, err), input)
 		}
 
 		return Success(fpath, res.Remaining)
 	}
 }
 
-func mapParser(maps map[string]query.Function, pCtx Context) Func {
-	newline := NewlineAllowComment()
-	whitespace := SpacesAndTabs()
-	allWhitespace := DiscardAll(OneOf(whitespace, newline))
-
+func mapParser(pCtx Context, maps map[string]query.Function) Func[string] {
 	p := Sequence(
-		Term("map"),
-		whitespace,
+		FuncAsAny(Term("map")),
+		FuncAsAny(SpacesAndTabs),
 		// Prevents a missing path from being captured by the next parser
-		MustBe(
+		FuncAsAny(MustBe(
 			Expect(
 				OneOf(
-					QuotedString(),
-					varNameParser(),
+					QuotedString,
+					varNameParser,
 				),
 				"map name",
 			),
-		),
-		SpacesAndTabs(),
-		DelimitedPattern(
+		)),
+		FuncAsAny(SpacesAndTabs),
+		FuncAsAny(DelimitedPattern(
 			Sequence(
-				Char('{'),
-				allWhitespace,
+				charSquigOpen,
+				DiscardedWhitespaceNewlineComments,
 			),
-			OneOf(
-				letStatementParser(pCtx),
-				metaStatementParser(true, pCtx), // Prevented for now due to .from(int)
-				plainMappingStatementParser(pCtx),
-			),
+			// Prevent imports, maps and metadata assignments.
+			mappingStatement(pCtx, false, nil),
 			Sequence(
-				Discard(whitespace),
-				newline,
-				allWhitespace,
+				Discard(SpacesAndTabs),
+				NewlineAllowComment,
+				DiscardedWhitespaceNewlineComments,
 			),
 			Sequence(
-				allWhitespace,
-				Char('}'),
+				DiscardedWhitespaceNewlineComments,
+				charSquigClose,
 			),
-			true,
-		),
+		)),
 	)
 
-	return func(input []rune) Result {
+	return func(input []rune) Result[string] {
 		res := p(input)
 		if res.Err != nil {
-			return res
+			return Fail[string](res.Err, input)
 		}
 
-		seqSlice := res.Payload.([]any)
+		if maps == nil {
+			return Fail[string](
+				NewFatalError(input, errors.New("defining maps is not allowed within this block")),
+				input,
+			)
+		}
+
+		seqSlice := res.Payload
 		ident := seqSlice[2].(string)
-		stmtSlice := seqSlice[4].([]any)
+		stmtSlice := seqSlice[4].([]*mapping.Statement)
 
 		if _, exists := maps[ident]; exists {
-			return Fail(NewFatalError(input, fmt.Errorf("map name collision: %v", ident)), input)
+			return Fail[string](NewFatalError(input, fmt.Errorf("map name collision: %v", ident)), input)
 		}
 
-		statements := make([]mapping.Statement, len(stmtSlice))
-		for i, v := range stmtSlice {
-			statements[i] = v.(mapping.Statement)
-		}
-
-		maps[ident] = mapping.NewExecutor("map "+ident, input, maps, statements...)
-
+		maps[ident] = mapping.NewExecutor("map "+ident, input, maps, stmtSlice...)
 		return Success(ident, res.Remaining)
 	}
 }
 
-func letStatementParser(pCtx Context) Func {
+func letStatementParser(pCtx Context) Func[*mapping.Statement] {
 	p := Sequence(
-		Expect(Term("let"), "assignment"),
-		SpacesAndTabs(),
+		FuncAsAny(Expect(Term("let"), "assignment")),
+		FuncAsAny(SpacesAndTabs),
 		// Prevents a missing path from being captured by the next parser
-		MustBe(
+		FuncAsAny(MustBe(
 			Expect(
 				OneOf(
-					QuotedString(),
-					varNameParser(),
+					QuotedString,
+					varNameParser,
 				),
 				"variable name",
 			),
-		),
-		SpacesAndTabs(),
-		Char('='),
-		SpacesAndTabs(),
-		queryParser(pCtx),
+		)),
+		FuncAsAny(SpacesAndTabs),
+		FuncAsAny(charEquals),
+		FuncAsAny(SpacesAndTabs),
+		FuncAsAny(queryParser(pCtx)),
 	)
 
-	return func(input []rune) Result {
+	return func(input []rune) Result[*mapping.Statement] {
 		res := p(input)
 		if res.Err != nil {
-			return res
+			return Fail[*mapping.Statement](res.Err, input)
 		}
-		resSlice := res.Payload.([]any)
-		return Success(
-			mapping.NewStatement(
-				input,
-				mapping.NewVarAssignment(resSlice[2].(string)),
-				resSlice[6].(query.Function),
-			),
-			res.Remaining,
-		)
+		return Success(mapping.NewStatement(
+			input,
+			mapping.NewVarAssignment(res.Payload[2].(string)),
+			res.Payload[6].(query.Function),
+		), res.Remaining)
 	}
 }
 
-func nameLiteralParser() Func {
-	return JoinStringPayloads(
-		UntilFail(
-			OneOf(
-				InRange('a', 'z'),
-				InRange('A', 'Z'),
-				InRange('0', '9'),
-				Char('_'),
-			),
+var nameLiteralParser = JoinStringPayloads(
+	UntilFail(
+		OneOf(
+			InRange('a', 'z'),
+			InRange('A', 'Z'),
+			InRange('0', '9'),
+			charUnderscore,
 		),
-	)
-}
+	),
+)
 
-func metaStatementParser(disabled bool, pCtx Context) Func {
+func metaStatementParser(pCtx Context, enabled bool) Func[*mapping.Statement] {
 	p := Sequence(
-		Expect(Term("meta"), "assignment"),
-		SpacesAndTabs(),
-		Optional(OneOf(
-			QuotedString(),
-			nameLiteralParser(),
-		)),
+		FuncAsAny(Expect(Term("meta"), "assignment")),
+		FuncAsAny(SpacesAndTabs),
+		FuncAsAny(OptionalPtr(OneOf(
+			QuotedString,
+			nameLiteralParser,
+		))),
 		// TODO: Break out root assignment so we can make this mandatory
-		Optional(SpacesAndTabs()),
-		Char('='),
-		SpacesAndTabs(),
-		queryParser(pCtx),
+		FuncAsAny(Optional(SpacesAndTabs)),
+		FuncAsAny(charEquals),
+		FuncAsAny(SpacesAndTabs),
+		FuncAsAny(queryParser(pCtx)),
 	)
 
-	return func(input []rune) Result {
+	return func(input []rune) Result[*mapping.Statement] {
 		res := p(input)
 		if res.Err != nil {
-			return res
+			return Fail[*mapping.Statement](res.Err, input)
 		}
-		if disabled {
-			return Fail(
-				NewFatalError(input, errors.New("setting meta fields from within a map is not allowed")),
+		if !enabled {
+			return Fail[*mapping.Statement](
+				NewFatalError(input, errors.New("setting meta fields is not allowed within this block")),
 				input,
 			)
 		}
-		resSlice := res.Payload.([]any)
+		resSlice := res.Payload
 
-		var keyPtr *string
-		if key, set := resSlice[2].(string); set {
-			keyPtr = &key
-		}
-
-		return Success(
-			mapping.NewStatement(
-				input,
-				mapping.NewMetaAssignment(keyPtr),
-				resSlice[6].(query.Function),
-			),
-			res.Remaining,
-		)
+		return Success(mapping.NewStatement(
+			input,
+			mapping.NewMetaAssignment(resSlice[2].(*string)),
+			resSlice[6].(query.Function),
+		), res.Remaining)
 	}
 }
 
-func pathLiteralSegmentParser() Func {
-	return JoinStringPayloads(
-		UntilFail(
-			OneOf(
-				InRange('a', 'z'),
-				InRange('A', 'Z'),
-				InRange('0', '9'),
-				Char('_'),
-			),
+var pathLiteralSegmentParser = JoinStringPayloads(
+	UntilFail(
+		OneOf(
+			InRange('a', 'z'),
+			InRange('A', 'Z'),
+			InRange('0', '9'),
+			charUnderscore,
 		),
-	)
-}
+	),
+)
 
-func quotedPathLiteralSegmentParser() Func {
-	pattern := QuotedString()
-
-	return func(input []rune) Result {
-		res := pattern(input)
-		if res.Err != nil {
-			return res
-		}
-
-		rawSegment, _ := res.Payload.(string)
-
-		// Convert into a JSON pointer style path string.
-		rawSegment = strings.ReplaceAll(rawSegment, "~", "~0")
-		rawSegment = strings.ReplaceAll(rawSegment, ".", "~1")
-
-		return Success(rawSegment, res.Remaining)
+func quotedPathLiteralSegmentParser(input []rune) Result[string] {
+	res := QuotedString(input)
+	if res.Err != nil {
+		return res
 	}
+
+	// Convert into a JSON pointer style path string.
+	rawSegment := strings.ReplaceAll(res.Payload, "~", "~0")
+	rawSegment = strings.ReplaceAll(rawSegment, ".", "~1")
+
+	return Success(rawSegment, res.Remaining)
 }
 
-func pathParser() Func {
-	p := Sequence(
-		Expect(pathLiteralSegmentParser(), "assignment"),
-		Optional(
-			Sequence(
-				Char('.'),
-				Delimited(
-					Expect(
-						OneOf(
-							quotedPathLiteralSegmentParser(),
-							pathLiteralSegmentParser(),
-						),
-						"target path",
+var pathParserPattern = Sequence(
+	FuncAsAny(Expect(pathLiteralSegmentParser, "assignment")),
+	FuncAsAny(Optional(
+		TakeOnly(1, Sequence(
+			ZeroedFuncAs[string, DelimitedResult[string, string]](charDot),
+			Delimited(
+				Expect(
+					OneOf(
+						quotedPathLiteralSegmentParser,
+						pathLiteralSegmentParser,
 					),
-					Char('.'),
+					"target path",
 				),
+				charDot,
 			),
-		),
-	)
+		)),
+	)),
+)
 
-	return func(input []rune) Result {
-		res := p(input)
-		if res.Err != nil {
-			return res
-		}
-
-		sequence := res.Payload.([]any)
-		path := []string{sequence[0].(string)}
-
-		if sequence[1] != nil {
-			pathParts := sequence[1].([]any)[1].(DelimitedResult).Primary
-			for _, p := range pathParts {
-				path = append(path, gabs.DotPathToSlice(p.(string))...)
-			}
-		}
-
-		return Success(path, res.Remaining)
+func pathParser(input []rune) Result[[]string] {
+	res := pathParserPattern(input)
+	if res.Err != nil {
+		return Fail[[]string](res.Err, input)
 	}
+
+	sequence := res.Payload
+	path := []string{sequence[0].(string)}
+
+	if sequence[1] != nil {
+		pathParts := sequence[1].(DelimitedResult[string, string]).Primary
+		for _, p := range pathParts {
+			path = append(path, gabs.DotPathToSlice(p)...)
+		}
+	}
+
+	return Success(path, res.Remaining)
 }
 
-func plainMappingStatementParser(pCtx Context) Func {
+func plainMappingStatementParser(pCtx Context) Func[*mapping.Statement] {
 	p := Sequence(
-		pathParser(),
-		SpacesAndTabs(),
-		Char('='),
-		SpacesAndTabs(),
-		queryParser(pCtx),
+		FuncAsAny(pathParser),
+		FuncAsAny(SpacesAndTabs),
+		FuncAsAny(charEquals),
+		FuncAsAny(SpacesAndTabs),
+		FuncAsAny(queryParser(pCtx)),
 	)
 
-	return func(input []rune) Result {
+	return func(input []rune) Result[*mapping.Statement] {
 		res := p(input)
 		if res.Err != nil {
-			return res
+			return Fail[*mapping.Statement](res.Err, input)
 		}
-		resSlice := res.Payload.([]any)
+
+		resSlice := res.Payload
 		path := resSlice[0].([]string)
 
 		if len(path) > 0 && path[0] == "root" {
 			path = path[1:]
 		}
 
-		return Success(
-			mapping.NewStatement(
-				input,
-				mapping.NewJSONAssignment(path...),
-				resSlice[4].(query.Function),
-			),
-			res.Remaining,
-		)
+		return Success(mapping.NewStatement(
+			input,
+			mapping.NewJSONAssignment(path...),
+			resSlice[4].(query.Function),
+		), res.Remaining)
 	}
 }

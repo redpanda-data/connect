@@ -1,7 +1,6 @@
 package integration
 
 import (
-	"bytes"
 	"context"
 	"os"
 	"strings"
@@ -11,11 +10,10 @@ import (
 	"github.com/gofrs/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	yaml "gopkg.in/yaml.v3"
 
+	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component/cache"
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
-	"github.com/benthosdev/benthos/v4/internal/config"
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/filepath/ifs"
 	"github.com/benthosdev/benthos/v4/internal/log"
@@ -198,18 +196,20 @@ func namedCacheTest(name string, test cacheTestDefinitionFn) CacheTestDefinition
 func initCache(t *testing.T, env *cacheTestEnvironment) cache.V1 {
 	t.Helper()
 
-	confBytes := []byte(env.RenderConfig())
-
-	s := config.New()
-	dec := yaml.NewDecoder(bytes.NewReader(confBytes))
-	dec.KnownFields(true)
-	require.NoError(t, dec.Decode(&s))
-
-	lints, err := config.LintBytes(docs.NewLintConfig(), confBytes)
+	node, err := docs.UnmarshalYAML([]byte(env.RenderConfig()))
 	require.NoError(t, err)
+
+	spec := manager.Spec()
+	lints := spec.LintYAML(docs.NewLintContext(docs.NewLintConfig(bundle.GlobalEnvironment)), node)
 	assert.Empty(t, lints)
 
-	manager, err := manager.New(s.ResourceConfig, manager.OptSetLogger(env.log), manager.OptSetMetrics(env.stats))
+	pConf, err := spec.ParsedConfigFromAny(node)
+	require.NoError(t, err)
+
+	conf, err := manager.FromParsed(bundle.GlobalEnvironment, pConf)
+	require.NoError(t, err)
+
+	manager, err := manager.New(conf, manager.OptSetLogger(env.log), manager.OptSetMetrics(env.stats))
 	require.NoError(t, err)
 
 	var c cache.V1

@@ -5,8 +5,6 @@ import (
 	"strconv"
 	"strings"
 
-	"gopkg.in/yaml.v3"
-
 	"github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/docs"
 )
@@ -19,28 +17,16 @@ func NewOutputField(name string) *ConfigField {
 	}
 }
 
-func outputConfFromAny(v any) (conf output.Config, err error) {
-	switch t := v.(type) {
-	case *yaml.Node:
-		err = t.Decode(&conf)
-	case output.Config:
-		conf = t
-	default:
-		err = fmt.Errorf("unexpected value, expected object, got %T", v)
-	}
-	return
-}
-
 // FieldOutput accesses a field from a parsed config that was defined with
 // NewOutputField and returns an OwnedOutput, or an error if the configuration
 // was invalid.
 func (p *ParsedConfig) FieldOutput(path ...string) (*OwnedOutput, error) {
-	field, exists := p.field(path...)
+	field, exists := p.i.Field(path...)
 	if !exists {
 		return nil, fmt.Errorf("field '%v' was not found in the config", strings.Join(path, "."))
 	}
 
-	conf, err := outputConfFromAny(field)
+	conf, err := output.FromAny(p.mgr.Environment(), field)
 	if err != nil {
 		return nil, err
 	}
@@ -65,7 +51,7 @@ func NewOutputListField(name string) *ConfigField {
 // with NewOutputListField and returns a slice of OwnedOutput, or an error
 // if the configuration was invalid.
 func (p *ParsedConfig) FieldOutputList(path ...string) ([]*OwnedOutput, error) {
-	field, exists := p.field(path...)
+	field, exists := p.i.Field(path...)
 	if !exists {
 		return nil, fmt.Errorf("field '%v' was not found in the config", strings.Join(path, "."))
 	}
@@ -77,7 +63,7 @@ func (p *ParsedConfig) FieldOutputList(path ...string) ([]*OwnedOutput, error) {
 
 	var configs []output.Config
 	for i, iConf := range fieldArray {
-		conf, err := outputConfFromAny(iConf)
+		conf, err := output.FromAny(p.mgr.Environment(), iConf)
 		if err != nil {
 			return nil, fmt.Errorf("value %v: %w", i, err)
 		}
@@ -112,7 +98,7 @@ func NewOutputMapField(name string) *ConfigField {
 // with NewOutputMapField and returns a map of OwnedOutput, or an error if the
 // configuration was invalid.
 func (p *ParsedConfig) FieldOutputMap(path ...string) (map[string]*OwnedOutput, error) {
-	field, exists := p.field(path...)
+	field, exists := p.i.Field(path...)
 	if !exists {
 		return nil, fmt.Errorf("field '%v' was not found in the config", strings.Join(path, "."))
 	}
@@ -125,7 +111,7 @@ func (p *ParsedConfig) FieldOutputMap(path ...string) (map[string]*OwnedOutput, 
 	tmpMgr := p.mgr.IntoPath(path...)
 	outs := make(map[string]*OwnedOutput, len(fieldMap))
 	for k, v := range fieldMap {
-		conf, err := outputConfFromAny(v)
+		conf, err := output.FromAny(p.mgr.Environment(), v)
 		if err != nil {
 			return nil, fmt.Errorf("value %v: %w", k, err)
 		}

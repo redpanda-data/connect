@@ -1,5 +1,6 @@
 ---
 title: statsd
+slug: statsd
 type: metrics
 status: stable
 ---

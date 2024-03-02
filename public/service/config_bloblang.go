@@ -20,7 +20,7 @@ func NewBloblangField(name string) *ConfigField {
 // NewBloblangField and returns either a *bloblang.Executor or an error if the
 // mapping was invalid.
 func (p *ParsedConfig) FieldBloblang(path ...string) (*bloblang.Executor, error) {
-	v, exists := p.field(path...)
+	v, exists := p.i.Field(path...)
 	if !exists {
 		return nil, fmt.Errorf("field '%v' was not found in the config", strings.Join(path, "."))
 	}

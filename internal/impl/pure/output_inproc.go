@@ -73,7 +73,7 @@ func (i *inprocOutput) loop() {
 		i.shutSig.ShutdownComplete()
 	}()
 
-	i.log.Infof("Sending inproc messages to ID: %s\n", i.pipe)
+	i.log.Info("Sending inproc messages to ID: %s\n", i.pipe)
 
 	var open bool
 	for {

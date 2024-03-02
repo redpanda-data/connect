@@ -1,5 +1,6 @@
 ---
 title: parallel
+slug: parallel
 type: processor
 status: stable
 categories: ["Composition"]
@@ -14,7 +15,6 @@ categories: ["Composition"]
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-
 A processor that applies a list of child processors to messages of a batch as though they were each a batch of one message (similar to the [`for_each`](/docs/components/processors/for_each) processor), but where each message is processed in parallel.
 
 ```yml
@@ -22,7 +22,7 @@ A processor that applies a list of child processors to messages of a batch as th
 label: ""
 parallel:
   cap: 0
-  processors: []
+  processors: [] # No default (required)
 ```
 
 The field `cap`, if greater than zero, caps the maximum number of parallel processing threads.
@@ -45,6 +45,5 @@ A list of child processors to apply.
 
 
 Type: `array`  
-Default: `[]`  
 
 

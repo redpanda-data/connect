@@ -90,8 +90,8 @@ func TestGetBothPaths(t *testing.T) {
 
 func TestGetTargetsSingle(t *testing.T) {
 	testDir, err := initTestFiles(t, map[string]string{
-		"foo.yaml":              `tests: [{}]`,
-		"foo_benthos_test.yaml": `tests: [{}]`,
+		"foo.yaml":              `tests: [{name: ""}]`,
+		"foo_benthos_test.yaml": `tests: [{name: ""}]`,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -142,11 +142,11 @@ func TestGetTargetsSingleError(t *testing.T) {
 func TestGetTargetsDir(t *testing.T) {
 	testDir, err := initTestFiles(t, map[string]string{
 		"foo.yaml":                     `foobar: {}`,
-		"foo_benthos_test.yaml":        `tests: [{}]`,
-		"bar.yaml":                     `tests: [{}]`,
+		"foo_benthos_test.yaml":        `tests: [{name: ""}]`,
+		"bar.yaml":                     `tests: [{name: ""}]`,
 		"not_a_yaml.txt":               `foobar this isnt json or yaml`,
 		"nested/baz.yaml":              `foobar: {}`,
-		"nested/baz_benthos_test.yaml": `tests: [{}]`,
+		"nested/baz_benthos_test.yaml": `tests: [{name: ""}]`,
 		"ignored.yaml":                 `foobar: {}`,
 		"nested/also_ignored.yaml":     `foobar: {}`,
 	})

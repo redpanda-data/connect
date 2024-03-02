@@ -1,5 +1,6 @@
 ---
 title: switch
+slug: switch
 type: processor
 status: stable
 categories: ["Composition"]
@@ -13,7 +14,6 @@ categories: ["Composition"]
 
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
-
 
 Conditionally processes messages based on their contents.
 

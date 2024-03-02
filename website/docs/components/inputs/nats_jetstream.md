@@ -1,5 +1,6 @@
 ---
 title: nats_jetstream
+slug: nats_jetstream
 type: input
 status: stable
 categories: ["Services"]
@@ -74,6 +75,10 @@ input:
 
 </TabItem>
 </Tabs>
+
+### Consuming Mirrored Streams
+
+In the case where a stream being consumed is mirrored from a different JetStream domain the stream cannot be resolved from the subject name alone, and so the stream name as well as the subject (if applicable) must both be specified.
 
 ### Metadata
 

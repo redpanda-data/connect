@@ -1,5 +1,6 @@
 ---
 title: group_by_value
+slug: group_by_value
 type: processor
 status: stable
 categories: ["Composition"]
@@ -20,7 +21,7 @@ Splits a batch of messages into N batches, where each resulting batch contains a
 # Config fields, showing default values
 label: ""
 group_by_value:
-  value: ""
+  value: ${! meta("kafka_key") } # No default (required)
 ```
 
 This allows you to group messages using arbitrary fields within their content or metadata, process them individually, and send them to unique locations as per their group.
@@ -36,7 +37,6 @@ This field supports [interpolation functions](/docs/configuration/interpolation#
 
 
 Type: `string`  
-Default: `""`  
 
 ```yml
 # Examples
@@ -48,9 +48,7 @@ value: ${! json("foo.bar") }-${! meta("baz") }
 
 ## Examples
 
-If we were consuming Kafka messages and needed to group them by their key,
-archive the groups, and send them to S3 with the key as part of the path we
-could achieve that with the following:
+If we were consuming Kafka messages and needed to group them by their key, archive the groups, and send them to S3 with the key as part of the path we could achieve that with the following:
 
 ```yaml
 pipeline:

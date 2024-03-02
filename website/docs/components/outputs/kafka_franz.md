@@ -1,5 +1,6 @@
 ---
 title: kafka_franz
+slug: kafka_franz
 type: output
 status: beta
 categories: ["Services"]

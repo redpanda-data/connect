@@ -1,5 +1,6 @@
 ---
 title: local
+slug: local
 type: rate_limit
 status: stable
 ---

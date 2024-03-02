@@ -1,5 +1,6 @@
 ---
 title: memory
+slug: memory
 type: buffer
 status: stable
 categories: ["Utility"]

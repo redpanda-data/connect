@@ -2,49 +2,55 @@ package parser
 
 import (
 	"github.com/benthosdev/benthos/v4/internal/bloblang/field"
-	"github.com/benthosdev/benthos/v4/internal/bloblang/query"
 )
 
-func intoStaticResolver(p Func) Func {
-	return func(input []rune) Result {
+func intoStaticResolver(p Func[string]) Func[field.Resolver] {
+	return func(input []rune) Result[field.Resolver] {
 		res := p(input)
-		if str, ok := res.Payload.(string); ok {
-			res.Payload = field.StaticResolver(str)
-		}
-		return res
-	}
-}
-
-func aFunction(pCtx Context) Func {
-	return func(input []rune) Result {
-		res := Sequence(
-			Term("${!"),
-			Optional(SpacesAndTabs()),
-			MustBe(queryParser(pCtx)),
-			Optional(SpacesAndTabs()),
-			MustBe(Expect(Char('}'), "end of expression")),
-		)(input)
-
 		if res.Err != nil {
-			return res
+			return Fail[field.Resolver](res.Err, input)
 		}
-		res.Payload = field.NewQueryResolver(res.Payload.([]any)[2].(query.Function))
-		return res
+		return Success[field.Resolver](field.StaticResolver(res.Payload), res.Remaining)
 	}
 }
 
-func escapedBlock(input []rune) Result {
-	res := Sequence(
-		Term("${{!"),
-		MustBe(Expect(UntilTerm("}}"), "end of escaped expression")),
-		Term("}}"),
-	)(input)
-	if res.Err != nil {
-		return res
+var interpStart = Term("${!")
+
+func aFunction(pCtx Context) Func[field.Resolver] {
+	pattern := TakeOnly(2, Sequence(
+		strToQuery(interpStart),
+		strToQuery(Optional(SpacesAndTabs)),
+		MustBe(queryParser(pCtx)),
+		strToQuery(Optional(SpacesAndTabs)),
+		strToQuery(MustBe(Expect(charSquigClose, "end of expression"))),
+	))
+	return func(input []rune) Result[field.Resolver] {
+		res := pattern(input)
+		if res.Err != nil {
+			return Fail[field.Resolver](res.Err, input)
+		}
+		return Success[field.Resolver](field.NewQueryResolver(res.Payload), res.Remaining)
 	}
-	res.Payload = field.StaticResolver("${!" + res.Payload.([]any)[1].(string) + "}")
-	return res
 }
+
+var interpEscapedStart = Term("${{!")
+var interpEscapedEnd = Term("}}")
+var untilInterpEscapedEnd = UntilTerm("}}")
+
+var escapedBlock = func() Func[field.Resolver] {
+	pattern := TakeOnly(1, Sequence(
+		interpEscapedStart,
+		MustBe(Expect(untilInterpEscapedEnd, "end of escaped expression")),
+		interpEscapedEnd,
+	))
+	return func(input []rune) Result[field.Resolver] {
+		res := pattern(input)
+		if res.Err != nil {
+			return Fail[field.Resolver](res.Err, input)
+		}
+		return Success[field.Resolver](field.StaticResolver("${!"+res.Payload+"}"), res.Remaining)
+	}
+}()
 
 //------------------------------------------------------------------------------
 
@@ -54,7 +60,7 @@ func parseFieldResolvers(pCtx Context, expr string) ([]field.Resolver, *Error) {
 	p := OneOf(
 		escapedBlock,
 		aFunction(pCtx),
-		intoStaticResolver(Char('$')),
+		intoStaticResolver(charDollar),
 		intoStaticResolver(NotChar('$')),
 	)
 
@@ -65,7 +71,7 @@ func parseFieldResolvers(pCtx Context, expr string) ([]field.Resolver, *Error) {
 			return nil, res.Err
 		}
 		remaining = res.Remaining
-		resolvers = append(resolvers, res.Payload.(field.Resolver))
+		resolvers = append(resolvers, res.Payload)
 	}
 
 	return resolvers, nil

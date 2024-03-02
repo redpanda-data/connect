@@ -8,39 +8,31 @@ import (
 	jmespath "github.com/jmespath/go-jmespath"
 
 	"github.com/benthosdev/benthos/v4/internal/bundle"
+	"github.com/benthosdev/benthos/v4/internal/component/interop"
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
-	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
-func init() {
-	err := bundle.AllProcessors.Add(func(conf processor.Config, mgr bundle.NewManagement) (processor.V1, error) {
-		p, err := newJMESPath(conf.JMESPath, mgr)
-		if err != nil {
-			return nil, err
-		}
-		return processor.NewAutoObservedProcessor("jmespath", p, mgr), nil
-	}, docs.ComponentSpec{
-		Name: "jmespath",
-		Categories: []string{
-			"Mapping",
-		},
-		Summary: `
-Executes a [JMESPath query](http://jmespath.org/) on JSON documents and replaces
-the message with the resulting document.`,
-		Description: `
+const (
+	jmpFieldQuery = "query"
+)
+
+func jmpProcSpec() *service.ConfigSpec {
+	return service.NewConfigSpec().
+		Categories("Mapping").
+		Stable().
+		Summary("Executes a [JMESPath query](http://jmespath.org/) on JSON documents and replaces the message with the resulting document.").
+		Description(`
 :::note Try out Bloblang
-For better performance and improved capabilities try out native Benthos mapping with the [` + "`mapping`" + ` processor](/docs/components/processors/mapping).
+For better performance and improved capabilities try out native Benthos mapping with the [`+"`mapping`"+` processor](/docs/components/processors/mapping).
 :::
-`,
-		Examples: []docs.AnnotatedExample{
-			{
-				Title: "Mapping",
-				Summary: `
+`).
+		Example("Mapping", `
 When receiving JSON documents of the form:
 
-` + "```json" + `
+`+"```json"+`
 {
   "locations": [
     {"name": "Seattle", "state": "WA"},
@@ -49,27 +41,43 @@ When receiving JSON documents of the form:
     {"name": "Olympia", "state": "WA"}
   ]
 }
-` + "```" + `
+`+"```"+`
 
-We could collapse the location names from the state of Washington into a field ` + "`Cities`" + `:
+We could collapse the location names from the state of Washington into a field `+"`Cities`"+`:
 
-` + "```json" + `
+`+"```json"+`
 {"Cities": "Bellevue, Olympia, Seattle"}
-` + "```" + `
+`+"```"+`
 
 With the following config:`,
-				Config: `
+			`
 pipeline:
   processors:
     - jmespath:
         query: "locations[?state == 'WA'].name | sort(@) | {Cities: join(', ', @)}"
 `,
-			},
-		},
-		Config: docs.FieldComponent().WithChildren(
-			docs.FieldString("query", "The JMESPath query to apply to messages.").HasDefault(""),
-		),
-	})
+		).
+		Field(service.NewStringField(jmpFieldQuery).
+			Description("The JMESPath query to apply to messages."))
+}
+
+func init() {
+	err := service.RegisterBatchProcessor(
+		"jmespath", jmpProcSpec(),
+		func(conf *service.ParsedConfig, res *service.Resources) (service.BatchProcessor, error) {
+			queryStr, err := conf.FieldString(jmpFieldQuery)
+			if err != nil {
+				return nil, err
+			}
+
+			mgr := interop.UnwrapManagement(res)
+			p, err := newJMESPath(queryStr, mgr)
+			if err != nil {
+				return nil, err
+			}
+
+			return interop.NewUnwrapInternalBatchProcessor(processor.NewAutoObservedProcessor("jmespath", p, mgr)), nil
+		})
 	if err != nil {
 		panic(err)
 	}
@@ -80,8 +88,8 @@ type jmespathProc struct {
 	log   log.Modular
 }
 
-func newJMESPath(conf processor.JMESPathConfig, mgr bundle.NewManagement) (processor.AutoObserved, error) {
-	query, err := jmespath.Compile(conf.Query)
+func newJMESPath(queryStr string, mgr bundle.NewManagement) (processor.AutoObserved, error) {
+	query, err := jmespath.Compile(queryStr)
 	if err != nil {
 		return nil, fmt.Errorf("failed to compile JMESPath query: %v", err)
 	}
@@ -131,7 +139,7 @@ func clearNumbers(v any) (any, bool) {
 func (p *jmespathProc) Process(ctx context.Context, msg *message.Part) ([]*message.Part, error) {
 	jsonPart, err := msg.AsStructuredMut()
 	if err != nil {
-		p.log.Debugf("Failed to parse part into json: %v\n", err)
+		p.log.Debug("Failed to parse part into json: %v\n", err)
 		return nil, err
 	}
 	if v, replace := clearNumbers(jsonPart); replace {
@@ -140,7 +148,7 @@ func (p *jmespathProc) Process(ctx context.Context, msg *message.Part) ([]*messa
 
 	var result any
 	if result, err = safeSearch(jsonPart, p.query); err != nil {
-		p.log.Debugf("Failed to search json: %v\n", err)
+		p.log.Debug("Failed to search json: %v\n", err)
 		return nil, err
 	}
 

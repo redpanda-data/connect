@@ -1,5 +1,6 @@
 ---
 title: twitter_search
+slug: twitter_search
 type: input
 status: experimental
 categories: ["Services","Social"]

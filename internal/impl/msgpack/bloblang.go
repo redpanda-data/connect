@@ -3,7 +3,7 @@ package msgpack
 import (
 	"github.com/vmihailenco/msgpack/v5"
 
-	"github.com/benthosdev/benthos/v4/internal/bloblang/query"
+	"github.com/benthosdev/benthos/v4/internal/value"
 	"github.com/benthosdev/benthos/v4/public/bloblang"
 )
 
@@ -31,7 +31,7 @@ func init() {
 		"parse_msgpack", msgpackParseSpec,
 		func(args *bloblang.ParsedParams) (bloblang.Method, error) {
 			return func(v any) (any, error) {
-				b, err := query.IGetBytes(v)
+				b, err := value.IGetBytes(v)
 				if err != nil {
 					return nil, err
 				}

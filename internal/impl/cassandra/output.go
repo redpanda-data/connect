@@ -11,9 +11,9 @@ import (
 
 	"github.com/gocql/gocql"
 
-	"github.com/benthosdev/benthos/v4/internal/bloblang/query"
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
+	"github.com/benthosdev/benthos/v4/internal/value"
 	"github.com/benthosdev/benthos/v4/public/bloblang"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
@@ -308,28 +308,28 @@ type genericValue struct {
 func (g genericValue) MarshalCQL(info gocql.TypeInfo) ([]byte, error) {
 	switch info.Type() {
 	case gocql.TypeTimestamp:
-		t, err := query.IGetTimestamp(g.v)
+		t, err := value.IGetTimestamp(g.v)
 		if err != nil {
 			return nil, err
 		}
 		return gocql.Marshal(info, t)
 	case gocql.TypeDouble:
-		f, err := query.IGetNumber(g.v)
+		f, err := value.IGetNumber(g.v)
 		if err != nil {
 			return nil, err
 		}
 		return gocql.Marshal(info, f)
 	case gocql.TypeFloat:
-		f, err := query.IGetFloat32(g.v)
+		f, err := value.IGetFloat32(g.v)
 		if err != nil {
 			return nil, err
 		}
 		return gocql.Marshal(info, f)
 	case gocql.TypeVarchar:
-		return gocql.Marshal(info, query.IToString(g.v))
+		return gocql.Marshal(info, value.IToString(g.v))
 	}
 	if _, isJSONNum := g.v.(json.Number); isJSONNum {
-		i, err := query.IGetInt(g.v)
+		i, err := value.IGetInt(g.v)
 		if err != nil {
 			return nil, err
 		}

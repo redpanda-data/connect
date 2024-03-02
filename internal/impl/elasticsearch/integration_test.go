@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 
@@ -146,11 +147,14 @@ func TestIntegrationElasticsearchV7(t *testing.T) {
 
 		var cerr error
 		if client, cerr = elastic.NewClient(opts...); cerr == nil {
-			_, cerr = client.
+			_, err = client.
 				CreateIndex("test_conn_index").
 				Timeout("20s").
 				Body(elasticIndex).
 				Do(context.Background())
+			if err != nil && strings.Contains(err.Error(), "already exists") {
+				err = nil
+			}
 		}
 		return cerr
 	}); err != nil {

@@ -1,5 +1,6 @@
 ---
 title: memcached
+slug: memcached
 type: cache
 status: stable
 ---

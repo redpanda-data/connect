@@ -1,5 +1,6 @@
 ---
 title: open_telemetry_collector
+slug: open_telemetry_collector
 type: tracer
 status: experimental
 ---
@@ -32,6 +33,9 @@ tracer:
   open_telemetry_collector:
     http: [] # No default (required)
     grpc: [] # No default (required)
+    sampling:
+      enabled: false
+      ratio: 0.85 # No default (optional)
 ```
 
 </TabItem>
@@ -44,6 +48,9 @@ tracer:
     http: [] # No default (required)
     grpc: [] # No default (required)
     tags: {}
+    sampling:
+      enabled: false
+      ratio: 0.85 # No default (optional)
 ```
 
 </TabItem>
@@ -104,5 +111,36 @@ A map of tags to add to all tracing spans.
 
 Type: `object`  
 Default: `{}`  
+
+### `sampling`
+
+Settings for trace sampling. Sampling is recommended for high-volume production workloads.
+
+
+Type: `object`  
+Requires version 4.25.0 or newer  
+
+### `sampling.enabled`
+
+Whether to enable sampling.
+
+
+Type: `bool`  
+Default: `false`  
+
+### `sampling.ratio`
+
+Sets the ratio of traces to sample.
+
+
+Type: `float`  
+
+```yml
+# Examples
+
+ratio: 0.85
+
+ratio: 0.5
+```
 
 

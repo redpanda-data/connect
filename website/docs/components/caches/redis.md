@@ -1,5 +1,6 @@
 ---
 title: redis
+slug: redis
 type: cache
 status: stable
 ---

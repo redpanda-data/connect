@@ -6,10 +6,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/credentials"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/s3"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/credentials"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/ory/dockertest/v3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -20,23 +19,30 @@ import (
 func createBucket(ctx context.Context, s3Port, bucket string) error {
 	endpoint := fmt.Sprintf("http://localhost:%v", s3Port)
 
-	client := s3.New(session.Must(session.NewSession(&aws.Config{
-		S3ForcePathStyle: aws.Bool(true),
-		Credentials:      credentials.NewStaticCredentials("xxxxx", "xxxxx", "xxxxx"),
-		Endpoint:         aws.String(endpoint),
-		Region:           aws.String("eu-west-1"),
-	})))
+	conf, err := config.LoadDefaultConfig(ctx,
+		config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider("xxxxx", "xxxxx", "xxxxx")),
+	)
+	if err != nil {
+		return err
+	}
 
-	_, err := client.CreateBucket(&s3.CreateBucketInput{
+	conf.BaseEndpoint = &endpoint
+
+	client := s3.NewFromConfig(conf, func(o *s3.Options) {
+		o.UsePathStyle = true
+	})
+
+	_, err = client.CreateBucket(ctx, &s3.CreateBucketInput{
 		Bucket: &bucket,
 	})
 	if err != nil {
 		return err
 	}
 
-	return client.WaitUntilBucketExistsWithContext(ctx, &s3.HeadBucketInput{
+	waiter := s3.NewBucketExistsWaiter(client)
+	return waiter.Wait(ctx, &s3.HeadBucketInput{
 		Bucket: &bucket,
-	})
+	}, time.Minute)
 }
 
 func TestIntegrationS3Cache(t *testing.T) {

@@ -1,5 +1,6 @@
 ---
 title: redis_pubsub
+slug: redis_pubsub
 type: output
 status: stable
 categories: ["Services"]

@@ -1,5 +1,6 @@
 ---
 title: try
+slug: try
 type: processor
 status: stable
 categories: ["Composition"]
@@ -61,8 +62,5 @@ pipeline:
         - resource: bar
         - resource: baz
 ```
-
-
-
 
 

@@ -1,5 +1,6 @@
 ---
 title: none
+slug: none
 type: buffer
 status: stable
 ---

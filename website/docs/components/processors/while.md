@@ -1,5 +1,6 @@
 ---
 title: while
+slug: while
 type: processor
 status: stable
 categories: ["Composition"]
@@ -13,7 +14,6 @@ categories: ["Composition"]
 
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
-
 
 A processor that checks a [Bloblang query](/docs/guides/bloblang/about/) against each batch of messages and executes child processors on them for as long as the query resolves to true.
 
@@ -31,7 +31,7 @@ label: ""
 while:
   at_least_once: false
   check: ""
-  processors: []
+  processors: [] # No default (required)
 ```
 
 </TabItem>
@@ -44,7 +44,7 @@ while:
   at_least_once: false
   max_loops: 0
   check: ""
-  processors: []
+  processors: [] # No default (required)
 ```
 
 </TabItem>
@@ -98,6 +98,5 @@ A list of child processors to execute on each loop.
 
 
 Type: `array`  
-Default: `[]`  
 
 

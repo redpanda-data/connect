@@ -2,6 +2,8 @@ package query
 
 import (
 	"fmt"
+
+	"github.com/benthosdev/benthos/v4/internal/value"
 )
 
 var _ Function = &mapLiteral{}
@@ -37,7 +39,7 @@ func NewMapLiteral(values [][2]any) (any, error) {
 			values[i][1] = t.Value
 			if !isDynamic {
 				switch t.Value.(type) {
-				case Delete, Nothing:
+				case value.Delete, value.Nothing:
 				default:
 					staticValues[key] = t.Value
 				}
@@ -47,7 +49,7 @@ func NewMapLiteral(values [][2]any) (any, error) {
 		default:
 			if !isDynamic {
 				switch kv[1].(type) {
-				case Delete, Nothing:
+				case value.Delete, value.Nothing:
 				default:
 					staticValues[key] = kv[1]
 				}
@@ -68,7 +70,7 @@ func (m *mapLiteral) Exec(ctx FunctionContext) (any, error) {
 	dynMap := make(map[string]any, len(m.keyValues))
 	for _, kv := range m.keyValues {
 		var key string
-		var value any
+		var val any
 
 		var err error
 		switch t := kv[0].(type) {
@@ -92,17 +94,17 @@ func (m *mapLiteral) Exec(ctx FunctionContext) (any, error) {
 		}
 
 		if fn, isFunction := kv[1].(Function); isFunction {
-			if value, err = fn.Exec(ctx); err != nil {
+			if val, err = fn.Exec(ctx); err != nil {
 				return nil, fmt.Errorf("failed to resolve '%v' value: %w", key, err)
 			}
 		} else {
-			value = kv[1]
+			val = kv[1]
 		}
 
-		switch value.(type) {
-		case Delete, Nothing:
+		switch val.(type) {
+		case value.Delete, value.Nothing:
 		default:
-			dynMap[key] = value
+			dynMap[key] = val
 		}
 	}
 	return dynMap, nil
@@ -135,18 +137,17 @@ type arrayLiteral struct {
 // NewArrayLiteral creates an array literal from a slice of values. If all
 // values are static then a static []interface{} value is returned. However, if
 // any values are dynamic a Function is returned.
-func NewArrayLiteral(values ...any) any {
+func NewArrayLiteral(values ...Function) any {
 	var expandedValues []any
 	isDynamic := false
 	for _, v := range values {
 		switch t := v.(type) {
 		case *Literal:
 			switch t.Value.(type) {
-			case Delete, Nothing:
+			case value.Delete, value.Nothing:
 			default:
 				expandedValues = append(expandedValues, t.Value)
 			}
-		case Delete, Nothing:
 		case Function:
 			isDynamic = true
 			expandedValues = append(expandedValues, v)
@@ -174,7 +175,7 @@ func (a *arrayLiteral) Exec(ctx FunctionContext) (any, error) {
 			}
 		}
 		switch v.(type) {
-		case Delete, Nothing:
+		case value.Delete, value.Nothing:
 		default:
 			dynArray = append(dynArray, v)
 		}

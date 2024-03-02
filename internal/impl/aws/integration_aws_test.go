@@ -6,11 +6,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/credentials"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/s3"
-	"github.com/aws/aws-sdk-go/service/sqs"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/credentials"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
+	s3types "github.com/aws/aws-sdk-go-v2/service/s3/types"
+	"github.com/aws/aws-sdk-go-v2/service/sqs"
+	sqstypes "github.com/aws/aws-sdk-go-v2/service/sqs/types"
 	"github.com/gofrs/uuid"
 	"github.com/ory/dockertest/v3"
 	"github.com/stretchr/testify/assert"
@@ -21,7 +23,7 @@ import (
 	_ "github.com/benthosdev/benthos/v4/internal/impl/pure"
 )
 
-func createBucketQueue(s3Port, sqsPort, id string) error {
+func createBucketQueue(ctx context.Context, s3Port, sqsPort, id string) error {
 	endpoint := fmt.Sprintf("http://localhost:%v", s3Port)
 	bucket := "bucket-" + id
 	sqsQueue := "queue-" + id
@@ -30,27 +32,36 @@ func createBucketQueue(s3Port, sqsPort, id string) error {
 	// https://github.com/localstack/localstack/issues/9185
 	sqsQueueURL := fmt.Sprintf("%v/000000000000/%v", sqsEndpoint, sqsQueue)
 
-	var s3Client *s3.S3
+	var s3Client *s3.Client
 	if s3Port != "" {
-		s3Client = s3.New(session.Must(session.NewSession(&aws.Config{
-			S3ForcePathStyle: aws.Bool(true),
-			Credentials:      credentials.NewStaticCredentials("xxxxx", "xxxxx", "xxxxx"),
-			Endpoint:         aws.String(endpoint),
-			Region:           aws.String("eu-west-1"),
-		})))
+		conf, err := config.LoadDefaultConfig(ctx,
+			config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider("xxxxx", "xxxxx", "xxxxx")),
+		)
+		if err != nil {
+			return err
+		}
+		conf.BaseEndpoint = &endpoint
+
+		s3Client = s3.NewFromConfig(conf, func(o *s3.Options) {
+			o.UsePathStyle = true
+		})
 	}
 
-	var sqsClient *sqs.SQS
+	var sqsClient *sqs.Client
 	if sqsPort != "" {
-		sqsClient = sqs.New(session.Must(session.NewSession(&aws.Config{
-			Credentials: credentials.NewStaticCredentials("xxxxx", "xxxxx", "xxxxx"),
-			Endpoint:    aws.String(sqsEndpoint),
-			Region:      aws.String("eu-west-1"),
-		})))
+		conf, err := config.LoadDefaultConfig(ctx,
+			config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider("xxxxx", "xxxxx", "xxxxx")),
+			config.WithRegion("eu-west-1"),
+		)
+		if err != nil {
+			return err
+		}
+		conf.BaseEndpoint = &sqsEndpoint
+		sqsClient = sqs.NewFromConfig(conf)
 	}
 
 	if s3Client != nil {
-		if _, err := s3Client.CreateBucket(&s3.CreateBucketInput{
+		if _, err := s3Client.CreateBucket(ctx, &s3.CreateBucketInput{
 			Bucket: &bucket,
 		}); err != nil {
 			return fmt.Errorf("create bucket: %w", err)
@@ -58,7 +69,7 @@ func createBucketQueue(s3Port, sqsPort, id string) error {
 	}
 
 	if sqsClient != nil {
-		if _, err := sqsClient.CreateQueue(&sqs.CreateQueueInput{
+		if _, err := sqsClient.CreateQueue(ctx, &sqs.CreateQueueInput{
 			QueueName: aws.String(sqsQueue),
 		}); err != nil {
 			return fmt.Errorf("create queue: %w", err)
@@ -66,18 +77,19 @@ func createBucketQueue(s3Port, sqsPort, id string) error {
 	}
 
 	if s3Client != nil {
-		if err := s3Client.WaitUntilBucketExists(&s3.HeadBucketInput{
+		waiter := s3.NewBucketExistsWaiter(s3Client)
+		if err := waiter.Wait(ctx, &s3.HeadBucketInput{
 			Bucket: &bucket,
-		}); err != nil {
-			return fmt.Errorf("wait for bucket: %w", err)
+		}, time.Minute); err != nil {
+			return err
 		}
 	}
 
-	var sqsQueueArn *string
+	var sqsQueueArn string
 	if sqsPort != "" {
-		res, err := sqsClient.GetQueueAttributes(&sqs.GetQueueAttributesInput{
+		res, err := sqsClient.GetQueueAttributes(ctx, &sqs.GetQueueAttributesInput{
 			QueueUrl:       &sqsQueueURL,
-			AttributeNames: []*string{aws.String("All")},
+			AttributeNames: []sqstypes.QueueAttributeName{"All"},
 		})
 		if err != nil {
 			return fmt.Errorf("get queue attributes: %w", err)
@@ -86,15 +98,15 @@ func createBucketQueue(s3Port, sqsPort, id string) error {
 	}
 
 	if s3Port != "" && sqsPort != "" {
-		if _, err := s3Client.PutBucketNotificationConfiguration(&s3.PutBucketNotificationConfigurationInput{
+		if _, err := s3Client.PutBucketNotificationConfiguration(ctx, &s3.PutBucketNotificationConfigurationInput{
 			Bucket: &bucket,
-			NotificationConfiguration: &s3.NotificationConfiguration{
-				QueueConfigurations: []*s3.QueueConfiguration{
+			NotificationConfiguration: &s3types.NotificationConfiguration{
+				QueueConfigurations: []s3types.QueueConfiguration{
 					{
-						Events: []*string{
-							aws.String("s3:ObjectCreated:*"),
+						Events: []s3types.Event{
+							s3types.EventS3ObjectCreated,
 						},
-						QueueArn: sqsQueueArn,
+						QueueArn: &sqsQueueArn,
 					},
 				},
 			},
@@ -128,11 +140,11 @@ func TestIntegrationAWS(t *testing.T) {
 
 	servicePort := resource.GetPort("4566/tcp")
 
-	require.NoError(t, pool.Retry(func() error {
+	require.NoError(t, pool.Retry(func() (err error) {
 		u4, err := uuid.NewV4()
 		require.NoError(t, err)
 
-		return createBucketQueue(servicePort, servicePort, u4.String())
+		return createBucketQueue(context.Background(), servicePort, servicePort, u4.String())
 	}))
 
 	t.Run("s3_to_sqs", func(t *testing.T) {
@@ -179,7 +191,7 @@ input:
 		).Run(
 			t, template,
 			integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, testID string, vars *integration.StreamTestConfigVars) {
-				require.NoError(t, createBucketQueue(servicePort, servicePort, testID))
+				require.NoError(t, createBucketQueue(ctx, servicePort, servicePort, testID))
 			}),
 			integration.StreamTestOptPort(servicePort),
 			integration.StreamTestOptAllowDupes(),
@@ -234,7 +246,7 @@ input:
 				if vars.OutputBatchCount == 0 {
 					vars.OutputBatchCount = 1
 				}
-				require.NoError(t, createBucketQueue(servicePort, servicePort, testID))
+				require.NoError(t, createBucketQueue(ctx, servicePort, servicePort, testID))
 			}),
 			integration.StreamTestOptPort(servicePort),
 			integration.StreamTestOptAllowDupes(),
@@ -289,7 +301,7 @@ input:
 				if vars.OutputBatchCount == 0 {
 					vars.OutputBatchCount = 1
 				}
-				require.NoError(t, createBucketQueue(servicePort, servicePort, testID))
+				require.NoError(t, createBucketQueue(ctx, servicePort, servicePort, testID))
 			}),
 			integration.StreamTestOptPort(servicePort),
 			integration.StreamTestOptAllowDupes(),
@@ -330,7 +342,7 @@ input:
 		).Run(
 			t, template,
 			integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, testID string, vars *integration.StreamTestConfigVars) {
-				require.NoError(t, createBucketQueue(servicePort, "", testID))
+				require.NoError(t, createBucketQueue(ctx, servicePort, "", testID))
 			}),
 			integration.StreamTestOptPort(servicePort),
 			integration.StreamTestOptVarOne("false"),
@@ -372,7 +384,7 @@ input:
 		).Run(
 			t, template,
 			integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, testID string, vars *integration.StreamTestConfigVars) {
-				require.NoError(t, createBucketQueue("", servicePort, testID))
+				require.NoError(t, createBucketQueue(ctx, "", servicePort, testID))
 			}),
 			integration.StreamTestOptPort(servicePort),
 		)

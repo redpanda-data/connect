@@ -1,5 +1,6 @@
 ---
 title: aws_kinesis
+slug: aws_kinesis
 type: output
 status: stable
 categories: ["Services","AWS"]
@@ -31,7 +32,7 @@ Introduced in version 3.36.0.
 output:
   label: ""
   aws_kinesis:
-    stream: "" # No default (required)
+    stream: foo # No default (required)
     partition_key: "" # No default (required)
     max_in_flight: 64
     batching:
@@ -49,7 +50,7 @@ output:
 output:
   label: ""
   aws_kinesis:
-    stream: "" # No default (required)
+    stream: foo # No default (required)
     partition_key: "" # No default (required)
     hash_key: "" # No default (optional)
     max_in_flight: 64
@@ -99,10 +100,18 @@ Batches can be formed at both the input and output level. You can find out more
 
 ### `stream`
 
-The stream to publish messages to.
+The stream to publish messages to. Streams can either be specified by their name or full ARN.
 
 
 Type: `string`  
+
+```yml
+# Examples
+
+stream: foo
+
+stream: arn:aws:kinesis:*:111122223333:stream/my-stream
+```
 
 ### `partition_key`
 

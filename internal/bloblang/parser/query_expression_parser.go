@@ -4,188 +4,168 @@ import (
 	"fmt"
 
 	"github.com/benthosdev/benthos/v4/internal/bloblang/query"
+	"github.com/benthosdev/benthos/v4/internal/value"
 )
 
-func matchCaseParser(pCtx Context) Func {
-	whitespace := SpacesAndTabs()
+func matchCaseParser(pCtx Context) Func[query.MatchCase] {
+	ignoreToFn := ZeroedFuncAs[string, query.Function]
 
 	p := Sequence(
 		OneOf(
-			Sequence(
+			ZeroedFuncAs[[]string, query.Function](Sequence(
 				Expect(
-					Char('_'),
+					charUnderscore,
 					"match case",
 				),
-				Optional(whitespace),
+				Optional(SpacesAndTabs),
 				Term("=>"),
-			),
-			Sequence(
+			)),
+			TakeOnly(0, Sequence(
 				Expect(
 					queryParser(pCtx),
 					"match case",
 				),
-				Optional(whitespace),
-				Term("=>"),
-			),
+				ignoreToFn(Optional(SpacesAndTabs)),
+				ignoreToFn(Term("=>")),
+			)),
 		),
-		Optional(whitespace),
+		ignoreToFn(Optional(SpacesAndTabs)),
 		queryParser(pCtx),
 	)
 
-	return func(input []rune) Result {
+	return func(input []rune) Result[query.MatchCase] {
 		res := p(input)
 		if res.Err != nil {
-			return res
+			return Fail[query.MatchCase](res.Err, input)
 		}
 
-		seqSlice := res.Payload.([]any)
-
 		var caseFn query.Function
-		switch t := seqSlice[0].([]any)[0].(type) {
-		case query.Function:
-			if lit, isLiteral := t.(*query.Literal); isLiteral {
-				caseFn = query.ClosureFunction("case statement", func(ctx query.FunctionContext) (any, error) {
-					v := ctx.Value()
-					if v == nil {
-						return false, nil
-					}
-					return query.ICompare(*v, lit.Value), nil
-				}, nil)
-			} else {
-				caseFn = t
-			}
-		case string:
+
+		if p := res.Payload[0]; p == nil {
 			caseFn = query.NewLiteralFunction("", true)
+		} else if lit, isLiteral := p.(*query.Literal); isLiteral {
+			caseFn = query.ClosureFunction("case statement", func(ctx query.FunctionContext) (any, error) {
+				v := ctx.Value()
+				if v == nil {
+					return false, nil
+				}
+				return value.ICompare(*v, lit.Value), nil
+			}, nil)
+		} else {
+			caseFn = p
 		}
 
 		return Success(
-			query.NewMatchCase(caseFn, seqSlice[2].(query.Function)),
+			query.NewMatchCase(caseFn, res.Payload[2]),
 			res.Remaining,
 		)
 	}
 }
 
-func matchExpressionParser(pCtx Context) Func {
-	whitespace := DiscardAll(
-		OneOf(
-			SpacesAndTabs(),
-			NewlineAllowComment(),
-		),
-	)
-
-	return func(input []rune) Result {
+func matchExpressionParser(pCtx Context) Func[query.Function] {
+	return func(input []rune) Result[query.Function] {
 		res := Sequence(
-			Term("match"),
-			SpacesAndTabs(),
-			Optional(queryParser(pCtx)),
-			whitespace,
-			MustBe(
+			FuncAsAny(Term("match")),
+			FuncAsAny(SpacesAndTabs),
+			FuncAsAny(Optional(queryParser(pCtx))),
+			FuncAsAny(DiscardedWhitespaceNewlineComments),
+			FuncAsAny(MustBe(
 				DelimitedPattern(
 					Sequence(
-						Char('{'),
-						whitespace,
+						charSquigOpen,
+						DiscardedWhitespaceNewlineComments,
 					),
 					matchCaseParser(pCtx),
 					Sequence(
-						Discard(SpacesAndTabs()),
+						Discard(SpacesAndTabs),
 						OneOf(
-							Char(','),
-							NewlineAllowComment(),
+							charComma,
+							NewlineAllowComment,
 						),
-						whitespace,
+						DiscardedWhitespaceNewlineComments,
 					),
 					Sequence(
-						whitespace,
-						Char('}'),
+						DiscardedWhitespaceNewlineComments,
+						charSquigClose,
 					),
-					true,
 				),
-			),
+			)),
 		)(input)
 		if res.Err != nil {
-			return res
+			return Fail[query.Function](res.Err, input)
 		}
 
-		seqSlice := res.Payload.([]any)
+		seqSlice := res.Payload
 		contextFn, _ := seqSlice[2].(query.Function)
 
-		cases := []query.MatchCase{}
-		for _, caseVal := range seqSlice[4].([]any) {
-			cases = append(cases, caseVal.(query.MatchCase))
-		}
+		cases := seqSlice[4].([]query.MatchCase)
 
-		res.Payload = query.NewMatchFunction(contextFn, cases...)
-		return res
+		return Success(query.NewMatchFunction(contextFn, cases...), res.Remaining)
 	}
 }
 
-func ifExpressionParser(pCtx Context) Func {
-	optionalWhitespace := DiscardAll(
-		OneOf(
-			SpacesAndTabs(),
-			NewlineAllowComment(),
-		),
-	)
+var strToQuery = ZeroedFuncAs[string, query.Function]
 
-	return func(input []rune) Result {
+func ifExpressionParser(pCtx Context) Func[query.Function] {
+	return func(input []rune) Result[query.Function] {
 		ifParser := Sequence(
-			Term("if"),
-			SpacesAndTabs(),
+			strToQuery(Term("if")),
+			strToQuery(SpacesAndTabs),
 			MustBe(queryParser(pCtx)),
-			optionalWhitespace,
-			MustBe(Char('{')),
-			optionalWhitespace,
+			strToQuery(DiscardedWhitespaceNewlineComments),
+			strToQuery(MustBe(charSquigOpen)),
+			strToQuery(DiscardedWhitespaceNewlineComments),
 			MustBe(queryParser(pCtx)),
-			optionalWhitespace,
-			MustBe(Char('}')),
+			strToQuery(DiscardedWhitespaceNewlineComments),
+			strToQuery(MustBe(charSquigClose)),
 		)
 
 		elseIfParser := Optional(Sequence(
-			optionalWhitespace,
-			Term("else if"),
-			SpacesAndTabs(),
+			strToQuery(DiscardedWhitespaceNewlineComments),
+			strToQuery(Term("else if")),
+			strToQuery(SpacesAndTabs),
 			MustBe(queryParser(pCtx)),
-			optionalWhitespace,
-			MustBe(Char('{')),
-			optionalWhitespace,
+			strToQuery(DiscardedWhitespaceNewlineComments),
+			strToQuery(MustBe(charSquigOpen)),
+			strToQuery(DiscardedWhitespaceNewlineComments),
 			MustBe(queryParser(pCtx)),
-			optionalWhitespace,
-			MustBe(Char('}')),
+			strToQuery(DiscardedWhitespaceNewlineComments),
+			strToQuery(MustBe(charSquigClose)),
 		))
 
 		elseParser := Optional(Sequence(
-			optionalWhitespace,
-			Term("else"),
-			optionalWhitespace,
-			MustBe(Char('{')),
-			optionalWhitespace,
+			strToQuery(DiscardedWhitespaceNewlineComments),
+			strToQuery(Term("else")),
+			strToQuery(DiscardedWhitespaceNewlineComments),
+			strToQuery(MustBe(charSquigOpen)),
+			strToQuery(DiscardedWhitespaceNewlineComments),
 			MustBe(queryParser(pCtx)),
-			optionalWhitespace,
-			MustBe(Char('}')),
+			strToQuery(DiscardedWhitespaceNewlineComments),
+			strToQuery(MustBe(charSquigClose)),
 		))
 
 		res := ifParser(input)
 		if res.Err != nil {
-			return res
+			return Fail[query.Function](res.Err, input)
 		}
 
-		seqSlice := res.Payload.([]any)
-		queryFn := seqSlice[2].(query.Function)
-		ifFn := seqSlice[6].(query.Function)
+		seqSlice := res.Payload
+		queryFn := seqSlice[2]
+		ifFn := seqSlice[6]
 
 		var elseIfs []query.ElseIf
 		for {
 			res = elseIfParser(res.Remaining)
 			if res.Err != nil {
-				return res
+				return Fail[query.Function](res.Err, input)
 			}
 			if res.Payload == nil {
 				break
 			}
-			seqSlice = res.Payload.([]any)
+			seqSlice = res.Payload
 			elseIfs = append(elseIfs, query.ElseIf{
-				QueryFn: seqSlice[3].(query.Function),
-				MapFn:   seqSlice[7].(query.Function),
+				QueryFn: seqSlice[3],
+				MapFn:   seqSlice[7],
 			})
 		}
 
@@ -193,100 +173,93 @@ func ifExpressionParser(pCtx Context) Func {
 
 		res = elseParser(res.Remaining)
 		if res.Err != nil {
-			return res
+			return Fail[query.Function](res.Err, input)
 		}
 		if res.Payload != nil {
-			elseFn, _ = res.Payload.([]any)[5].(query.Function)
+			elseFn = res.Payload[5]
 		}
 
-		res.Payload = query.NewIfFunction(queryFn, ifFn, elseIfs, elseFn)
-		return res
+		return Success(query.NewIfFunction(queryFn, ifFn, elseIfs, elseFn), res.Remaining)
 	}
 }
 
-func bracketsExpressionParser(pCtx Context) Func {
-	whitespace := DiscardAll(
-		OneOf(
-			SpacesAndTabs(),
-			NewlineAllowComment(),
-		),
-	)
-	return func(input []rune) Result {
+func bracketsExpressionParser(pCtx Context) Func[query.Function] {
+	return func(input []rune) Result[query.Function] {
 		res := Sequence(
-			Expect(
-				Char('('),
+			strToQuery(Expect(
+				charBracketOpen,
 				"function",
-			),
-			whitespace,
+			)),
+			strToQuery(DiscardedWhitespaceNewlineComments),
 			queryParser(pCtx),
-			whitespace,
-			MustBe(Expect(Char(')'), "closing bracket")),
+			strToQuery(DiscardedWhitespaceNewlineComments),
+			strToQuery(MustBe(Expect(charBracketClose, "closing bracket"))),
 		)(input)
 		if res.Err != nil {
-			return res
+			return Fail[query.Function](res.Err, input)
 		}
-		res.Payload = res.Payload.([]any)[2]
-		return res
+		return Success(res.Payload[2], res.Remaining)
 	}
 }
 
-func lambdaExpressionParser(pCtx Context) Func {
-	contextNameParser := Expect(
-		JoinStringPayloads(
-			UntilFail(
-				OneOf(
-					InRange('a', 'z'),
-					InRange('A', 'Z'),
-					InRange('0', '9'),
-					Char('_'),
-				),
+var contextNameParser = Expect(
+	JoinStringPayloads(
+		UntilFail(
+			OneOf(
+				InRange('a', 'z'),
+				InRange('A', 'Z'),
+				InRange('0', '9'),
+				charUnderscore,
 			),
 		),
-		"context name",
+	),
+	"context name",
+)
+
+func lambdaExpressionParser(pCtx Context) Func[query.Function] {
+	nameParser := Expect(
+		TakeOnly(0, Sequence(
+			contextNameParser,
+			SpacesAndTabs,
+			Term("->"),
+			SpacesAndTabs,
+		)),
+		"function",
 	)
 
-	return func(input []rune) Result {
-		res := Expect(
-			Sequence(
-				contextNameParser,
-				SpacesAndTabs(),
-				Term("->"),
-				SpacesAndTabs(),
-			),
-			"function",
-		)(input)
+	return func(input []rune) Result[query.Function] {
+		res := nameParser(input)
 		if res.Err != nil {
-			return res
+			return Fail[query.Function](res.Err, input)
 		}
 
-		seqSlice := res.Payload.([]any)
-		name := seqSlice[0].(string)
-
+		name := res.Payload
 		if name != "_" {
 			if pCtx.HasNamedContext(name) {
-				return Fail(NewFatalError(input, fmt.Errorf("context label `%v` would shadow a parent context", name)), input)
+				return Fail[query.Function](
+					NewFatalError(input, fmt.Errorf("context label `%v` would shadow a parent context", name)),
+					input,
+				)
 			}
 			if _, exists := map[string]struct{}{
 				"root": {},
 				"this": {},
 			}[name]; exists {
-				return Fail(NewFatalError(input, fmt.Errorf("context label `%v` is not allowed", name)), input)
+				return Fail[query.Function](NewFatalError(input, fmt.Errorf("context label `%v` is not allowed", name)), input)
 			}
 			pCtx = pCtx.WithNamedContext(name)
 		}
 
-		res = MustBe(queryParser(pCtx))(res.Remaining)
-		if res.Err != nil {
-			return res
+		queryRes := MustBe(queryParser(pCtx))(res.Remaining)
+		if queryRes.Err != nil {
+			return queryRes
 		}
 
-		queryFn := res.Payload.(query.Function)
+		queryFn := queryRes.Payload
 		if chained, isChained := queryFn.(*query.NamedContextFunction); isChained {
 			err := fmt.Errorf("it would be in poor taste to capture the same context under both '%v' and '%v'", name, chained.Name())
-			return Fail(NewFatalError(input, err), input)
+			return Fail[query.Function](NewFatalError(input, err), input)
 		}
-
-		res.Payload = query.NewNamedContextFunction(name, queryFn)
-		return res
+		return Success(query.NewNamedContextFunction(name, queryFn), queryRes.Remaining)
 	}
 }

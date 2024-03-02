@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/benthosdev/benthos/v4/internal/component/input"
+	"github.com/benthosdev/benthos/v4/internal/component/testutil"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
 
@@ -33,7 +34,7 @@ func readMsg(t *testing.T, tranChan <-chan message.Transaction) message.Batch {
 }
 
 func testInput(t testing.TB, confPattern string, args ...any) input.Streamed {
-	iConf, err := input.FromYAML(fmt.Sprintf(confPattern, args...))
+	iConf, err := testutil.InputFromYAML(fmt.Sprintf(confPattern, args...))
 	require.NoError(t, err)
 
 	i, err := mock.NewManager().NewInput(iConf)

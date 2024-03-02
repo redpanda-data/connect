@@ -10,9 +10,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	yaml "gopkg.in/yaml.v3"
 
-	"github.com/benthosdev/benthos/v4/internal/component/input"
+	"github.com/benthosdev/benthos/v4/internal/component/testutil"
 	bmock "github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
 
@@ -20,7 +19,7 @@ import (
 )
 
 func TestReadUntilErrs(t *testing.T) {
-	conf, err := input.FromYAML(`
+	conf, err := testutil.InputFromYAML(`
 read_until:
   input:
     stdin: {}
@@ -72,7 +71,7 @@ func testReadUntilBasic(inConf string, t *testing.T) {
 	ctx, done := context.WithTimeout(context.Background(), time.Second*5)
 	defer done()
 
-	rConf, err := input.FromYAML(inConf + `
+	rConf, err := testutil.InputFromYAML(inConf + `
   check: 'content() == "bar"'
 `)
 	require.NoError(t, err)
@@ -131,7 +130,7 @@ func testReadUntilRestart(inConf string, t *testing.T) {
 	ctx, done := context.WithTimeout(context.Background(), time.Second*5)
 	defer done()
 
-	rConf, err := input.FromYAML(inConf + `
+	rConf, err := testutil.InputFromYAML(inConf + `
   check: 'false'
   restart_input: true
 `)
@@ -171,7 +170,7 @@ func testReadUntilRetry(inConf string, t *testing.T) {
 	ctx, done := context.WithTimeout(context.Background(), time.Second*5)
 	defer done()
 
-	rConf, err := input.FromYAML(inConf + `
+	rConf, err := testutil.InputFromYAML(inConf + `
   check: 'content() == "bar"'
 `)
 	require.NoError(t, err)
@@ -272,8 +271,7 @@ remainingLoop:
 }
 
 func TestReadUntilTimeout(t *testing.T) {
-	conf := input.NewConfig()
-	require.NoError(t, yaml.Unmarshal([]byte(`
+	conf, err := testutil.InputFromYAML(`
 read_until:
   idle_timeout: 100ms
   input:
@@ -281,7 +279,8 @@ read_until:
       count: 1000
       interval: 1s
       mapping: 'root.id = counter()'
-`), &conf))
+`)
+	require.NoError(t, err)
 
 	strm, err := bmock.NewManager().NewInput(conf)
 	require.NoError(t, err)

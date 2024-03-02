@@ -4,6 +4,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
+	"github.com/benthosdev/benthos/v4/internal/value"
 )
 
 func TestLiterals(t *testing.T) {
@@ -25,8 +27,8 @@ func TestLiterals(t *testing.T) {
 				[][2]any{
 					{"test1", NewFieldFunction("first")},
 					{"test2", NewFieldFunction("second")},
-					{"deleteme", Delete(nil)},
-					{"donotmapme", Nothing(nil)},
+					{"deleteme", value.Delete(nil)},
+					{"donotmapme", value.Nothing(nil)},
 					{"test3", "static"},
 				},
 			)),
@@ -82,8 +84,8 @@ func TestLiterals(t *testing.T) {
 				[][2]any{
 					{"test1", "static1"},
 					{"test2", "static2"},
-					{"deleteme", Delete(nil)},
-					{"donotmapme", Nothing(nil)},
+					{"deleteme", value.Delete(nil)},
+					{"donotmapme", value.Nothing(nil)},
 					{"test3", "static3"},
 				},
 			)),
@@ -97,9 +99,9 @@ func TestLiterals(t *testing.T) {
 			input: NewArrayLiteral(
 				NewFieldFunction("first"),
 				NewFieldFunction("second"),
-				Delete(nil),
-				"static",
-				Nothing(nil),
+				NewLiteralFunction("delete", value.Delete(nil)),
+				NewLiteralFunction("meow", "static"),
+				NewLiteralFunction("woof", value.Nothing(nil)),
 				NewLiteralFunction("", "static literal"),
 			),
 			value: map[string]any{
@@ -119,11 +121,11 @@ func TestLiterals(t *testing.T) {
 		},
 		"static array values": {
 			input: NewArrayLiteral(
-				"static1",
-				Delete(nil),
+				NewLiteralFunction("", "static1"),
+				NewLiteralFunction("", value.Delete(nil)),
 				NewLiteralFunction("", "static2"),
-				Nothing(nil),
-				"static3",
+				NewLiteralFunction("", value.Nothing(nil)),
+				NewLiteralFunction("", "static3"),
 			),
 			output: []any{
 				"static1",

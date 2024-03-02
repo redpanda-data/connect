@@ -129,7 +129,7 @@ func getZMQOutputType(t string) (zmq4.Type, error) {
 
 //------------------------------------------------------------------------------
 
-func (z *zmqOutput) Connect(_ context.Context) error {
+func (z *zmqOutput) Connect(_ context.Context) (err error) {
 	if z.socket != nil {
 		return nil
 	}

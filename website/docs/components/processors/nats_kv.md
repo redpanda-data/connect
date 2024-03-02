@@ -1,5 +1,6 @@
 ---
 title: nats_kv
+slug: nats_kv
 type: processor
 status: beta
 categories: ["Services"]

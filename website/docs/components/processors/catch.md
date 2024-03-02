@@ -1,5 +1,6 @@
 ---
 title: catch
+slug: catch
 type: processor
 status: stable
 categories: ["Composition"]
@@ -14,20 +15,15 @@ categories: ["Composition"]
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-
-Applies a list of child processors _only_ when a previous processing step has
-failed.
+Applies a list of child processors _only_ when a previous processing step has failed.
 
 ```yml
 # Config fields, showing default values
 label: ""
-catch: [] # No default (required)
+catch: []
 ```
 
-Behaves similarly to the [`for_each`](/docs/components/processors/for_each) processor, where a
-list of child processors are applied to individual messages of a batch. However,
-processors are only applied to messages that failed a processing step prior to
-the catch.
+Behaves similarly to the [`for_each`](/docs/components/processors/for_each) processor, where a list of child processors are applied to individual messages of a batch. However, processors are only applied to messages that failed a processing step prior to the catch.
 
 For example, with the following config:
 
@@ -40,13 +36,9 @@ pipeline:
       - resource: baz
 ```
 
-If the processor `foo` fails for a particular message, that message
-will be fed into the processors `bar` and `baz`. Messages that do not
-fail for the processor `foo` will skip these processors.
+If the processor `foo` fails for a particular message, that message will be fed into the processors `bar` and `baz`. Messages that do not fail for the processor `foo` will skip these processors.
 
-When messages leave the catch block their fail flags are cleared. This processor
-is useful for when it's possible to recover failed messages, or when special
-actions (such as logging/metrics) are required before dropping them.
+When messages leave the catch block their fail flags are cleared. This processor is useful for when it's possible to recover failed messages, or when special actions (such as logging/metrics) are required before dropping them.
 
 More information about error handling can be found [here](/docs/configuration/error_handling).
 

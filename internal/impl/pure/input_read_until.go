@@ -216,7 +216,7 @@ runLoop:
 				}
 				var err error
 				if wrapped, err = r.wrappedCtor(); err != nil {
-					r.log.Errorf("Failed to create input: %v\n", err)
+					r.log.Error("Failed to create input: %v\n", err)
 					return
 				}
 				r.wrappedInputLocked.Store(&wrapped)
@@ -243,7 +243,7 @@ runLoop:
 				return
 			case <-timeoutChan:
 				timeoutDone()
-				r.log.Infoln("Idle timeout reached")
+				r.log.Info("Idle timeout reached")
 				return
 			}
 		}
@@ -254,7 +254,7 @@ runLoop:
 			check, err = r.check.QueryPart(0, tran.Payload)
 			if err != nil {
 				check = false
-				r.log.Errorf("Failed to execute check query: %v\n", err)
+				r.log.Error("Failed to execute check query: %v\n", err)
 			}
 		}
 		if !check {

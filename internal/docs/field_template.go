@@ -30,6 +30,7 @@ func FieldsTemplate(lintableExamples bool) string {
 	if lintableExamples {
 		exampleHint = "yaml"
 	}
+	// Use trailing whitespace below to render line breaks in Markdown
 	return `{{define "field_docs" -}}
 {{range $i, $field := .Fields -}}
 ### ` + "`{{$field.FullName}}`" + `

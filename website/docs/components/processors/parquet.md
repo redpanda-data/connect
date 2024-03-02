@@ -1,5 +1,6 @@
 ---
 title: parquet
+slug: parquet
 type: processor
 status: deprecated
 categories: ["Parsing"]

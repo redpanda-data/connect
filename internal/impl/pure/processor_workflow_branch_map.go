@@ -11,6 +11,7 @@ import (
 
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
 type workflowBranch interface {
@@ -88,14 +89,19 @@ func (w *workflowBranchMap) Close(ctx context.Context) error {
 
 var processDAGStageName = regexp.MustCompile("[a-zA-Z0-9-_]+")
 
-func newWorkflowBranchMap(conf processor.WorkflowConfig, mgr bundle.NewManagement) (*workflowBranchMap, error) {
+func newWorkflowBranchMap(conf *service.ParsedConfig, mgr bundle.NewManagement) (*workflowBranchMap, error) {
+	branchObjMap, err := conf.FieldObjectMap(wflowProcFieldBranches)
+	if err != nil {
+		return nil, err
+	}
+
 	dynamicBranches, staticBranches := map[string]workflowBranch{}, map[string]*Branch{}
-	for k, v := range conf.Branches {
+	for k, v := range branchObjMap {
 		if len(processDAGStageName.FindString(k)) != len(k) {
 			return nil, fmt.Errorf("workflow branch name '%v' contains invalid characters", k)
 		}
 
-		child, err := newBranch(v, mgr.IntoPath("workflow", "branches", k))
+		child, err := newBranchFromParsed(v, mgr.IntoPath("workflow", "branches", k))
 		if err != nil {
 			return nil, err
 		}
@@ -104,7 +110,11 @@ func newWorkflowBranchMap(conf processor.WorkflowConfig, mgr bundle.NewManagemen
 		staticBranches[k] = child
 	}
 
-	for _, k := range conf.BranchResources {
+	branchResources, err := conf.FieldStringList(wflowProcFieldBranchResources)
+	if err != nil {
+		return nil, err
+	}
+	for _, k := range branchResources {
 		if _, exists := dynamicBranches[k]; exists {
 			return nil, fmt.Errorf("branch resource name '%v' collides with an explicit branch", k)
 		}
@@ -119,7 +129,11 @@ func newWorkflowBranchMap(conf processor.WorkflowConfig, mgr bundle.NewManagemen
 
 	// When order is specified we infer that names missing from our explicit
 	// branches are resources.
-	for _, tier := range conf.Order {
+	order, err := conf.FieldStringListOfLists(wflowProcFieldOrder)
+	if err != nil {
+		return nil, err
+	}
+	for _, tier := range order {
 		for _, k := range tier {
 			if _, exists := dynamicBranches[k]; !exists {
 				if !mgr.ProbeProcessor(k) {
@@ -136,8 +150,8 @@ func newWorkflowBranchMap(conf processor.WorkflowConfig, mgr bundle.NewManagemen
 	static := len(dynamicBranches) == len(staticBranches)
 
 	var dag [][]string
-	if len(conf.Order) > 0 {
-		dag = conf.Order
+	if len(order) > 0 {
+		dag = order
 		if err := verifyStaticBranchDAG(dag, dynamicBranches); err != nil {
 			return nil, err
 		}
@@ -146,7 +160,7 @@ func newWorkflowBranchMap(conf processor.WorkflowConfig, mgr bundle.NewManagemen
 		if dag, err = resolveDynamicBranchDAG(staticBranches); err != nil {
 			return nil, err
 		}
-		mgr.Logger().Infof("Automatically resolved workflow DAG: %v", dag)
+		mgr.Logger().Info("Automatically resolved workflow DAG: %v", dag)
 	}
 
 	return &workflowBranchMap{

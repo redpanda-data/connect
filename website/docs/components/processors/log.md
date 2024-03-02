@@ -1,5 +1,6 @@
 ---
 title: log
+slug: log
 type: processor
 status: stable
 categories: ["Utility"]
@@ -21,7 +22,11 @@ Prints a log event for each message. Messages always remain unchanged. The log m
 label: ""
 log:
   level: INFO
-  fields_mapping: ""
+  fields_mapping: |- # No default (optional)
+    root.reason = "cus I wana"
+    root.id = this.id
+    root.age = this.user.age.number()
+    root.kafka_topic = meta("kafka_topic")
   message: ""
 ```
 
@@ -62,8 +67,6 @@ An optional [Bloblang mapping](/docs/guides/bloblang/about) that can be used to 
 
 
 Type: `string`  
-Default: `""`  
-Requires version 3.40.0 or newer  
 
 ```yml
 # Examples

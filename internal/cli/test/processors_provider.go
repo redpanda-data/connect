@@ -2,6 +2,7 @@ package test
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/url"
 	"os"
@@ -13,7 +14,9 @@ import (
 
 	"github.com/benthosdev/benthos/v4/internal/bloblang/mapping"
 	"github.com/benthosdev/benthos/v4/internal/bloblang/parser"
+	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
+	"github.com/benthosdev/benthos/v4/internal/component/testutil"
 	"github.com/benthosdev/benthos/v4/internal/config"
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/filepath/ifs"
@@ -71,7 +74,7 @@ func OptProcessorsProviderSetLogger(logger log.Modular) func(*ProcessorsProvider
 // Supports injected mocked components in the parsed config. If the JSON Pointer
 // targets a single processor config it will be constructed and returned as an
 // array of one element.
-func (p *ProcessorsProvider) Provide(jsonPtr string, environment map[string]string, mocks map[string]yaml.Node) ([]processor.V1, error) {
+func (p *ProcessorsProvider) Provide(jsonPtr string, environment map[string]string, mocks map[string]any) ([]processor.V1, error) {
 	confs, err := p.getConfs(jsonPtr, environment, mocks)
 	if err != nil {
 		return nil, err
@@ -121,7 +124,7 @@ func (b *bloblangProc) ProcessBatch(ctx *processor.BatchProcContext, msg message
 		if err != nil {
 			p = part.ShallowCopy()
 			ctx.OnError(err, i, p)
-			b.log.Errorf("%v\n", err)
+			b.log.Error("%v\n", err)
 		}
 		if p != nil {
 			newParts = append(newParts, p)
@@ -157,8 +160,8 @@ func (p *ProcessorsProvider) initProcs(confs cachedConfig) ([]processor.V1, erro
 	return procs, nil
 }
 
-func confTargetID(jsonPtr string, environment map[string]string, mocks map[string]yaml.Node) string {
-	mocksBytes, _ := yaml.Marshal(mocks)
+func confTargetID(jsonPtr string, environment map[string]string, mocks map[string]any) string {
+	mocksBytes, _ := json.Marshal(mocks)
 	return fmt.Sprintf("%v-%v-%s", jsonPtr, environment, mocksBytes)
 }
 
@@ -211,11 +214,16 @@ func resolveProcessorsPointer(targetFile, jsonPtr string) (filePath, procPath st
 	return
 }
 
-func setMock(confSpec docs.FieldSpecs, root, mock *yaml.Node, pathSlice ...string) error {
+func setMock(confSpec docs.FieldSpecs, root *yaml.Node, mock any, pathSlice ...string) error {
+	var mockNode yaml.Node
+	if err := mockNode.Encode(mock); err != nil {
+		return fmt.Errorf("encode mock value: %w", err)
+	}
+
 	labelPull := struct {
 		Label *string `yaml:"label"`
 	}{}
-	if err := mock.Decode(&labelPull); err != nil {
+	if err := mockNode.Decode(&labelPull); err != nil {
 		return fmt.Errorf("decode mock label: %w", err)
 	}
 	if labelPull.Label == nil {
@@ -226,7 +234,7 @@ func setMock(confSpec docs.FieldSpecs, root, mock *yaml.Node, pathSlice ...strin
 		labelPull.Label = nil
 	}
 
-	if err := confSpec.SetYAMLPath(docs.DeprecatedProvider, root, mock, pathSlice...); err != nil {
+	if err := confSpec.SetYAMLPath(bundle.GlobalEnvironment, root, &mockNode, pathSlice...); err != nil {
 		return err
 	}
 	if labelPull.Label != nil {
@@ -234,14 +242,14 @@ func setMock(confSpec docs.FieldSpecs, root, mock *yaml.Node, pathSlice ...strin
 		if err := labelNode.Encode(labelPull.Label); err != nil {
 			return fmt.Errorf("encode mock label: %w", err)
 		}
-		if err := confSpec.SetYAMLPath(docs.DeprecatedProvider, root, &labelNode, append(pathSlice, "label")...); err != nil {
+		if err := confSpec.SetYAMLPath(bundle.GlobalEnvironment, root, &labelNode, append(pathSlice, "label")...); err != nil {
 			return fmt.Errorf("set mock label: %w", err)
 		}
 	}
 	return nil
 }
 
-func (p *ProcessorsProvider) getConfs(jsonPtr string, environment map[string]string, mocks map[string]yaml.Node) (cachedConfig, error) {
+func (p *ProcessorsProvider) getConfs(jsonPtr string, environment map[string]string, mocks map[string]any) (cachedConfig, error) {
 	cacheKey := confTargetID(jsonPtr, environment, mocks)
 
 	confs, exists := p.cachedConfigs[cacheKey]
@@ -274,7 +282,7 @@ func (p *ProcessorsProvider) getConfs(jsonPtr string, environment map[string]str
 		return os.LookupEnv(name)
 	}
 
-	remainingMocks := map[string]yaml.Node{}
+	remainingMocks := map[string]any{}
 	for k, v := range mocks {
 		remainingMocks[k] = v
 	}
@@ -284,8 +292,8 @@ func (p *ProcessorsProvider) getConfs(jsonPtr string, environment map[string]str
 		return confs, fmt.Errorf("failed to parse config file '%v': %v", targetPath, err)
 	}
 
-	root := &yaml.Node{}
-	if err = yaml.Unmarshal(configBytes, root); err != nil {
+	root, err := docs.UnmarshalYAML(configBytes)
+	if err != nil {
 		return confs, fmt.Errorf("failed to parse config file '%v': %v", targetPath, err)
 	}
 
@@ -308,7 +316,7 @@ func (p *ProcessorsProvider) getConfs(jsonPtr string, environment map[string]str
 
 	labelsToPaths := map[string][]string{}
 	if len(remainingMocks) > 0 {
-		confSpec.YAMLLabelsToPaths(docs.DeprecatedProvider, root, labelsToPaths, nil)
+		confSpec.YAMLLabelsToPaths(bundle.GlobalEnvironment, root, labelsToPaths, nil)
 		for k, v := range remainingMocks {
 			mockPathSlice, exists := labelsToPaths[k]
 			if !exists {
@@ -321,8 +329,13 @@ func (p *ProcessorsProvider) getConfs(jsonPtr string, environment map[string]str
 		}
 	}
 
-	mgrWrapper := manager.NewResourceConfig()
-	if err = root.Decode(&mgrWrapper); err != nil {
+	pConf, err := confSpec.ParsedConfigFromAny(root)
+	if err != nil {
+		return confs, fmt.Errorf("failed to parse config file '%v': %v", targetPath, err)
+	}
+
+	mgrWrapper, err := manager.FromParsed(bundle.GlobalEnvironment, pConf)
+	if err != nil {
 		return confs, fmt.Errorf("failed to parse config file '%v': %v", targetPath, err)
 	}
 
@@ -331,14 +344,21 @@ func (p *ProcessorsProvider) getConfs(jsonPtr string, environment map[string]str
 		if err != nil {
 			return confs, fmt.Errorf("failed to parse resources config file '%v': %v", path, err)
 		}
-		extraMgrWrapper := manager.NewResourceConfig()
-		if err = yaml.Unmarshal(resourceBytes, &extraMgrWrapper); err != nil {
+
+		extraMgrWrapper, err := testutil.ManagerFromYAML(string(resourceBytes))
+		if err != nil {
 			return confs, fmt.Errorf("failed to parse resources config file '%v': %v", path, err)
 		}
 		if err = mgrWrapper.AddFrom(&extraMgrWrapper); err != nil {
 			return confs, fmt.Errorf("failed to merge resources from '%v': %v", path, err)
 		}
 	}
+
+	// We can clear all input and output resources as they're not used by procs
+	// under any circumstances.
+	mgrWrapper.ResourceInputs = nil
+	mgrWrapper.ResourceOutputs = nil
+
 	confs.mgr = mgrWrapper
 
 	var pathSlice []string
@@ -348,7 +368,7 @@ func (p *ProcessorsProvider) getConfs(jsonPtr string, environment map[string]str
 		}
 	} else {
 		if len(labelsToPaths) == 0 {
-			confSpec.YAMLLabelsToPaths(docs.DeprecatedProvider, root, labelsToPaths, nil)
+			confSpec.YAMLLabelsToPaths(bundle.GlobalEnvironment, root, labelsToPaths, nil)
 		}
 		if pathSlice, exists = labelsToPaths[procPath]; !exists {
 			return confs, fmt.Errorf("target for label '%v' failed as the label was not found in the test target file, it is not currently possible to target resources imported separate to the test file", procPath)
@@ -360,12 +380,16 @@ func (p *ProcessorsProvider) getConfs(jsonPtr string, environment map[string]str
 	}
 
 	if root.Kind == yaml.SequenceNode {
-		if err = root.Decode(&confs.procs); err != nil {
-			return confs, fmt.Errorf("failed to resolve case processors from '%v': %v", targetPath, err)
+		for _, n := range root.Content {
+			procConf, err := processor.FromAny(bundle.GlobalEnvironment, n)
+			if err != nil {
+				return confs, fmt.Errorf("failed to resolve case processors from '%v': %v", targetPath, err)
+			}
+			confs.procs = append(confs.procs, procConf)
 		}
 	} else {
-		var procConf processor.Config
-		if err = root.Decode(&procConf); err != nil {
+		procConf, err := processor.FromAny(bundle.GlobalEnvironment, root)
+		if err != nil {
 			return confs, fmt.Errorf("failed to resolve case processors from '%v': %v", targetPath, err)
 		}
 		confs.procs = append(confs.procs, procConf)

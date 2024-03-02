@@ -1,5 +1,6 @@
 ---
 title: bloblang
+slug: bloblang
 type: processor
 status: stable
 categories: ["Mapping","Parsing"]
@@ -13,7 +14,6 @@ categories: ["Mapping","Parsing"]
 
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
-
 
 Executes a [Bloblang](/docs/guides/bloblang/about) mapping on messages.
 
@@ -119,11 +119,8 @@ pipeline:
 
 ## Error Handling
 
-Bloblang mappings can fail, in which case the message remains unchanged, errors
-are logged, and the message is flagged as having failed, allowing you to use
+Bloblang mappings can fail, in which case the message remains unchanged, errors are logged, and the message is flagged as having failed, allowing you to use
 [standard processor error handling patterns](/docs/configuration/error_handling).
 
-However, Bloblang itself also provides powerful ways of ensuring your mappings
-do not fail by specifying desired fallback behaviour, which you can read about
-[in this section](/docs/guides/bloblang/about#error-handling).
+However, Bloblang itself also provides powerful ways of ensuring your mappings do not fail by specifying desired fallback behaviour, which you can read about [in this section](/docs/guides/bloblang/about#error-handling).
 

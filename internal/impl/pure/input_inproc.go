@@ -74,14 +74,14 @@ messageLoop:
 			for {
 				var err error
 				if inprocChan, err = i.mgr.GetPipe(i.pipe); err != nil {
-					i.log.Errorf("Failed to connect to inproc output '%v': %v\n", i.pipe, err)
+					i.log.Error("Failed to connect to inproc output '%v': %v\n", i.pipe, err)
 					select {
 					case <-time.After(time.Second):
 					case <-i.shutSig.CloseAtLeisureChan():
 						return
 					}
 				} else {
-					i.log.Infof("Receiving inproc messages from ID: %s\n", i.pipe)
+					i.log.Info("Receiving inproc messages from ID: %s\n", i.pipe)
 					break
 				}
 			}

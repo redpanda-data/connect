@@ -12,17 +12,18 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"gopkg.in/yaml.v3"
 
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
+	"github.com/benthosdev/benthos/v4/internal/component/testutil"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
 )
 
 func parseYAMLProcConf(t testing.TB, formatStr string, args ...any) (conf processor.Config) {
 	t.Helper()
-	conf = processor.NewConfig()
-	require.NoError(t, yaml.Unmarshal(fmt.Appendf(nil, formatStr, args...), &conf))
+	var err error
+	conf, err = testutil.ProcessorFromYAML(fmt.Sprintf(formatStr, args...))
+	require.NoError(t, err)
 	return
 }
 

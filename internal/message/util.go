@@ -72,7 +72,7 @@ func encodeJSON(d any) (rawBytes []byte) {
 	return
 }
 
-// Copy of query.IToString
+// Copy of value.IToString
 func metaToString(i any) string {
 	switch t := i.(type) {
 	case string:

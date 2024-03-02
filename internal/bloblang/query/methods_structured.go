@@ -10,6 +10,8 @@ import (
 
 	"github.com/Jeffail/gabs/v2"
 	jsonschema "github.com/xeipuuv/gojsonschema"
+
+	"github.com/benthosdev/benthos/v4/internal/value"
 )
 
 var _ = registerSimpleMethod(
@@ -35,7 +37,7 @@ var _ = registerSimpleMethod(
 		return func(res any, ctx FunctionContext) (any, error) {
 			arr, ok := res.([]any)
 			if !ok {
-				return nil, NewTypeError(res, ValueArray)
+				return nil, value.NewTypeError(res, value.TArray)
 			}
 			if len(arr) == 0 {
 				return false, nil
@@ -47,7 +49,7 @@ var _ = registerSimpleMethod(
 				}
 				b, ok := res.(bool)
 				if !ok {
-					return nil, fmt.Errorf("element %v: %w", i, NewTypeError(res, ValueBool))
+					return nil, fmt.Errorf("element %v: %w", i, value.NewTypeError(res, value.TBool))
 				}
 				if !b {
 					return false, nil
@@ -81,7 +83,7 @@ var _ = registerSimpleMethod(
 		return func(res any, ctx FunctionContext) (any, error) {
 			arr, ok := res.([]any)
 			if !ok {
-				return nil, NewTypeError(res, ValueArray)
+				return nil, value.NewTypeError(res, value.TArray)
 			}
 
 			if len(arr) == 0 {
@@ -95,7 +97,7 @@ var _ = registerSimpleMethod(
 				}
 				b, ok := res.(bool)
 				if !ok {
-					return nil, fmt.Errorf("element %v: %w", i, NewTypeError(res, ValueBool))
+					return nil, fmt.Errorf("element %v: %w", i, value.NewTypeError(res, value.TBool))
 				}
 				if b {
 					return true, nil
@@ -127,7 +129,7 @@ var _ = registerSimpleMethod(
 		return func(res any, ctx FunctionContext) (any, error) {
 			arr, ok := res.([]any)
 			if !ok {
-				return nil, NewTypeError(res, ValueArray)
+				return nil, value.NewTypeError(res, value.TArray)
 			}
 			copied := make([]any, 0, len(arr)+len(argsList))
 			copied = append(copied, arr...)
@@ -209,8 +211,8 @@ var _ = registerSimpleMethod(
 		if err != nil {
 			return nil, err
 		}
-		sub := IToString(compareRight)
-		bsub := IToBytes(compareRight)
+		sub := value.IToString(compareRight)
+		bsub := value.IToBytes(compareRight)
 		return func(v any, ctx FunctionContext) (any, error) {
 			switch t := v.(type) {
 			case string:
@@ -219,18 +221,18 @@ var _ = registerSimpleMethod(
 				return bytes.Contains(t, bsub), nil
 			case []any:
 				for _, compareLeft := range t {
-					if ICompare(compareRight, compareLeft) {
+					if value.ICompare(compareRight, compareLeft) {
 						return true, nil
 					}
 				}
 			case map[string]any:
 				for _, compareLeft := range t {
-					if ICompare(compareRight, compareLeft) {
+					if value.ICompare(compareRight, compareLeft) {
 						return true, nil
 					}
 				}
 			default:
-				return nil, NewTypeError(v, ValueString, ValueArray, ValueObject)
+				return nil, value.NewTypeError(v, value.TString, value.TArray, value.TObject)
 			}
 			return false, nil
 		}, nil
@@ -255,7 +257,7 @@ var _ = registerSimpleMethod(
 		return func(v any, ctx FunctionContext) (any, error) {
 			arr, ok := v.([]any)
 			if !ok {
-				return nil, NewTypeError(v, ValueArray)
+				return nil, value.NewTypeError(v, value.TArray)
 			}
 			enumerated := make([]any, 0, len(arr))
 			for i, ele := range arr {
@@ -329,7 +331,7 @@ Exploding objects results in an object where the keys match the target object, a
 		return func(v any, ctx FunctionContext) (any, error) {
 			rootMap, ok := v.(map[string]any)
 			if !ok {
-				return nil, NewTypeError(v, ValueObject)
+				return nil, value.NewTypeError(v, value.TObject)
 			}
 
 			target := gabs.Wrap(v).Search(path...)
@@ -339,7 +341,7 @@ Exploding objects results in an object where the keys match the target object, a
 			case []any:
 				result := make([]any, len(t))
 				for i, ele := range t {
-					gExploded := gabs.Wrap(IClone(copyFrom))
+					gExploded := gabs.Wrap(value.IClone(copyFrom))
 					_, _ = gExploded.Set(ele, path...)
 					result[i] = gExploded.Data()
 				}
@@ -347,14 +349,14 @@ Exploding objects results in an object where the keys match the target object, a
 			case map[string]any:
 				result := make(map[string]any, len(t))
 				for key, ele := range t {
-					gExploded := gabs.Wrap(IClone(copyFrom))
+					gExploded := gabs.Wrap(value.IClone(copyFrom))
 					_, _ = gExploded.Set(ele, path...)
 					result[key] = gExploded.Data()
 				}
 				return result, nil
 			}
 
-			return nil, fmt.Errorf("expected array or object value at path '%v', found: %v", pathRaw, ITypeOf(target.Data()))
+			return nil, fmt.Errorf("expected array or object value at path '%v', found: %v", pathRaw, value.ITypeOf(target.Data()))
 		}, nil
 	},
 )
@@ -417,7 +419,7 @@ When filtering objects the mapping query argument is provided a context with a f
 				}
 				resValue = newMap
 			default:
-				return nil, NewTypeError(res, ValueArray, ValueObject)
+				return nil, value.NewTypeError(res, value.TArray, value.TObject)
 			}
 			return resValue, nil
 		}, nil
@@ -452,11 +454,11 @@ var _ = registerSimpleMethod(
 		return func(v any, ctx FunctionContext) (any, error) {
 			array, ok := v.([]any)
 			if !ok {
-				return nil, NewTypeError(v, ValueArray)
+				return nil, value.NewTypeError(v, value.TArray)
 			}
 
 			for i, elem := range array {
-				if ICompare(val, elem) {
+				if value.ICompare(val, elem) {
 					return i, nil
 				}
 			}
@@ -493,12 +495,12 @@ var _ = registerSimpleMethod(
 		return func(v any, ctx FunctionContext) (any, error) {
 			array, ok := v.([]any)
 			if !ok {
-				return nil, NewTypeError(v, ValueArray)
+				return nil, value.NewTypeError(v, value.TArray)
 			}
 
 			output := []any{}
 			for i, elem := range array {
-				if ICompare(val, elem) {
+				if value.ICompare(val, elem) {
 					output = append(output, i)
 				}
 			}
@@ -531,7 +533,7 @@ var _ = registerSimpleMethod(
 		return func(v any, ctx FunctionContext) (any, error) {
 			array, ok := v.([]any)
 			if !ok {
-				return nil, NewTypeError(v, ValueArray)
+				return nil, value.NewTypeError(v, value.TArray)
 			}
 
 			for i, elem := range array {
@@ -541,7 +543,7 @@ var _ = registerSimpleMethod(
 				}
 				isMatch, ok := iIsMatch.(bool)
 				if !ok {
-					return nil, fmt.Errorf("query returned a non-boolean value for index %v: %w", i, NewTypeError(iIsMatch, ValueBool))
+					return nil, fmt.Errorf("query returned a non-boolean value for index %v: %w", i, value.NewTypeError(iIsMatch, value.TBool))
 				}
 				if isMatch {
 					return i, nil
@@ -575,7 +577,7 @@ var _ = registerSimpleMethod(
 		return func(v any, ctx FunctionContext) (any, error) {
 			array, ok := v.([]any)
 			if !ok {
-				return nil, NewTypeError(v, ValueArray)
+				return nil, value.NewTypeError(v, value.TArray)
 			}
 
 			output := []any{}
@@ -586,7 +588,7 @@ var _ = registerSimpleMethod(
 				}
 				isMatch, ok := iIsMatch.(bool)
 				if !ok {
-					return nil, fmt.Errorf("query returned a non-boolean value for index %v: %w", i, NewTypeError(iIsMatch, ValueBool))
+					return nil, fmt.Errorf("query returned a non-boolean value for index %v: %w", i, value.NewTypeError(iIsMatch, value.TBool))
 				}
 				if isMatch {
 					output = append(output, i)
@@ -616,7 +618,7 @@ var _ = registerSimpleMethod(
 		return func(v any, ctx FunctionContext) (any, error) {
 			array, isArray := v.([]any)
 			if !isArray {
-				return nil, NewTypeError(v, ValueArray)
+				return nil, value.NewTypeError(v, value.TArray)
 			}
 			result := make([]any, 0, len(array))
 			for _, child := range array {
@@ -670,10 +672,10 @@ var _ = registerSimpleMethod(
 		return func(res any, ctx FunctionContext) (any, error) {
 			resArray, ok := res.([]any)
 			if !ok {
-				return nil, NewTypeError(res, ValueArray)
+				return nil, value.NewTypeError(res, value.TArray)
 			}
 
-			tally := IClone(foldTallyStart)
+			tally := value.IClone(foldTallyStart)
 			for _, v := range resArray {
 				newV, mapErr := foldFn.Exec(ctx.WithValue(map[string]any{
 					"tally": tally,
@@ -734,7 +736,7 @@ var _ = registerSimpleMethod(
 				}
 				return int64(array[i]), nil
 			default:
-				return nil, NewTypeError(v, ValueArray)
+				return nil, value.NewTypeError(v, value.TArray)
 			}
 		}, nil
 	},
@@ -827,7 +829,7 @@ var _ = registerSimpleMethod(
 				})
 				return keys, nil
 			}
-			return nil, NewTypeError(v, ValueObject)
+			return nil, value.NewTypeError(v, value.TObject)
 		}, nil
 	},
 )
@@ -857,7 +859,7 @@ var _ = registerSimpleMethod(
 				}
 				return keyValues, nil
 			}
-			return nil, NewTypeError(v, ValueObject)
+			return nil, value.NewTypeError(v, value.TObject)
 		}, nil
 	},
 )
@@ -897,7 +899,7 @@ var _ = registerSimpleMethod(
 			case map[string]any:
 				length = int64(len(t))
 			default:
-				return nil, NewTypeError(v, ValueString, ValueArray, ValueObject)
+				return nil, value.NewTypeError(v, value.TString, value.TArray, value.TObject)
 			}
 			return length, nil
 		}, nil
@@ -947,8 +949,8 @@ Apply a mapping to each value of an object and replace the value with the result
 						return nil, fmt.Errorf("failed to process element %v: %w", i, ErrFrom(mapErr, mapFn))
 					}
 					switch newV.(type) {
-					case Delete:
-					case Nothing:
+					case value.Delete:
+					case value.Nothing:
 						newSlice = append(newSlice, v)
 					default:
 						newSlice = append(newSlice, newV)
@@ -967,8 +969,8 @@ Apply a mapping to each value of an object and replace the value with the result
 						return nil, fmt.Errorf("failed to process element %v: %w", k, ErrFrom(mapErr, mapFn))
 					}
 					switch newV.(type) {
-					case Delete:
-					case Nothing:
+					case value.Delete:
+					case value.Nothing:
 						newMap[k] = v
 					default:
 						newMap[k] = newV
@@ -976,7 +978,7 @@ Apply a mapping to each value of an object and replace the value with the result
 				}
 				resValue = newMap
 			default:
-				return nil, NewTypeError(res, ValueArray)
+				return nil, value.NewTypeError(res, value.TArray)
 			}
 			if err != nil {
 				return nil, err
@@ -1012,7 +1014,7 @@ var _ = registerSimpleMethod(
 		return func(res any, ctx FunctionContext) (any, error) {
 			obj, ok := res.(map[string]any)
 			if !ok {
-				return nil, NewTypeError(res, ValueObject)
+				return nil, value.NewTypeError(res, value.TObject)
 			}
 
 			newMap := make(map[string]any, len(obj))
@@ -1026,12 +1028,12 @@ var _ = registerSimpleMethod(
 				switch t := newKey.(type) {
 				// TODO: Revise whether we want this.
 				// case Delete:
-				case Nothing:
+				case value.Nothing:
 					newMap[k] = v
 				case string:
 					newMap[t] = v
 				default:
-					return nil, fmt.Errorf("unexpected result from key mapping: %w", NewTypeError(newKey, ValueString))
+					return nil, fmt.Errorf("unexpected result from key mapping: %w", value.NewTypeError(newKey, value.TString))
 				}
 			}
 			return newMap, nil
@@ -1066,7 +1068,7 @@ func mergeMethod(target Function, args *ParsedParams) (Function, error) {
 			return nil, err
 		}
 
-		mergeFrom := IClone(mergeFromSource)
+		mergeFrom := value.IClone(mergeFromSource)
 		if root, isArray := mergeInto.([]any); isArray {
 			if rhs, isAlsoArray := mergeFrom.([]any); isAlsoArray {
 				return append(root, rhs...), nil
@@ -1075,7 +1077,7 @@ func mergeMethod(target Function, args *ParsedParams) (Function, error) {
 		}
 
 		if _, isObject := mergeInto.(map[string]any); !isObject {
-			return nil, NewTypeErrorFrom(target.Annotation(), mergeInto, ValueObject, ValueArray)
+			return nil, value.NewTypeErrorFrom(target.Annotation(), mergeInto, value.TObject, value.TArray)
 		}
 
 		root := gabs.New()
@@ -1116,7 +1118,7 @@ func assignMethod(target Function, args *ParsedParams) (Function, error) {
 			return nil, err
 		}
 
-		assignFrom := IClone(assignFromSource)
+		assignFrom := value.IClone(assignFromSource)
 		if root, isArray := assignInto.([]any); isArray {
 			if rhs, isAlsoArray := assignFrom.([]any); isAlsoArray {
 				return append(root, rhs...), nil
@@ -1125,7 +1127,7 @@ func assignMethod(target Function, args *ParsedParams) (Function, error) {
 		}
 
 		if _, isObject := assignInto.(map[string]any); !isObject {
-			return nil, NewTypeErrorFrom(target.Annotation(), assignInto, ValueObject, ValueArray)
+			return nil, value.NewTypeErrorFrom(target.Annotation(), assignInto, value.TObject, value.TArray)
 		}
 
 		root := gabs.New()
@@ -1188,7 +1190,7 @@ var _ = registerSimpleMethod(
 					return nil, errors.New("object value is empty")
 				}
 			default:
-				return nil, NewTypeError(v, ValueString, ValueArray, ValueObject)
+				return nil, value.NewTypeError(v, value.TString, value.TArray, value.TObject)
 			}
 			return v, nil
 		}, nil
@@ -1226,27 +1228,27 @@ func sortMethod(target Function, args *ParsedParams) (Function, error) {
 	compareFn := func(ctx FunctionContext, values []any, i, j int) (bool, error) {
 		switch values[i].(type) {
 		case float64, int, int64, uint64, json.Number:
-			lhs, err := IGetNumber(values[i])
+			lhs, err := value.IGetNumber(values[i])
 			if err != nil {
 				return false, fmt.Errorf("sort element %v: %w", i, err)
 			}
-			rhs, err := IGetNumber(values[j])
+			rhs, err := value.IGetNumber(values[j])
 			if err != nil {
 				return false, fmt.Errorf("sort element %v: %w", j, err)
 			}
 			return lhs < rhs, nil
 		case string, []byte:
-			lhs, err := IGetString(values[i])
+			lhs, err := value.IGetString(values[i])
 			if err != nil {
 				return false, fmt.Errorf("sort element %v: %w", i, err)
 			}
-			rhs, err := IGetString(values[j])
+			rhs, err := value.IGetString(values[j])
 			if err != nil {
 				return false, fmt.Errorf("sort element %v: %w", j, err)
 			}
 			return lhs < rhs, nil
 		}
-		return false, fmt.Errorf("sort element %v: %w", i, NewTypeError(values[i], ValueNumber, ValueString))
+		return false, fmt.Errorf("sort element %v: %w", i, value.NewTypeError(values[i], value.TNumber, value.TString))
 	}
 
 	mapFn, err := args.FieldOptionalQuery("compare")
@@ -1266,7 +1268,7 @@ func sortMethod(target Function, args *ParsedParams) (Function, error) {
 			}
 			b, ok := v.(bool)
 			if !ok {
-				return false, NewTypeErrorFrom("sort argument", v, ValueBool)
+				return false, value.NewTypeErrorFrom("sort argument", v, value.TBool)
 			}
 			return b, nil
 		}
@@ -1299,7 +1301,7 @@ func sortMethod(target Function, args *ParsedParams) (Function, error) {
 			}
 			return values, nil
 		}
-		return nil, NewTypeErrorFrom(target.Annotation(), v, ValueArray)
+		return nil, value.NewTypeErrorFrom(target.Annotation(), v, value.TArray)
 	}, targets), nil
 }
 
@@ -1337,27 +1339,27 @@ func sortByMethod(target Function, args *ParsedParams) (Function, error) {
 
 		switch leftValue.(type) {
 		case float64, int, int64, uint64, json.Number:
-			lhs, err := IGetNumber(leftValue)
+			lhs, err := value.IGetNumber(leftValue)
 			if err != nil {
 				return false, fmt.Errorf("sort_by element %v: %w", i, ErrFrom(err, mapFn))
 			}
-			rhs, err := IGetNumber(rightValue)
+			rhs, err := value.IGetNumber(rightValue)
 			if err != nil {
 				return false, fmt.Errorf("sort_by element %v: %w", j, ErrFrom(err, mapFn))
 			}
 			return lhs < rhs, nil
 		case string, []byte:
-			lhs, err := IGetString(leftValue)
+			lhs, err := value.IGetString(leftValue)
 			if err != nil {
 				return false, fmt.Errorf("sort_by element %v: %w", i, ErrFrom(err, mapFn))
 			}
-			rhs, err := IGetString(rightValue)
+			rhs, err := value.IGetString(rightValue)
 			if err != nil {
 				return false, fmt.Errorf("sort_by element %v: %w", j, ErrFrom(err, mapFn))
 			}
 			return lhs < rhs, nil
 		}
-		return false, fmt.Errorf("sort_by element %v: %w", i, ErrFrom(NewTypeError(leftValue, ValueNumber, ValueString), mapFn))
+		return false, fmt.Errorf("sort_by element %v: %w", i, ErrFrom(value.NewTypeError(leftValue, value.TNumber, value.TString), mapFn))
 	}
 
 	return ClosureFunction("method sort_by", func(ctx FunctionContext) (any, error) {
@@ -1382,7 +1384,7 @@ func sortByMethod(target Function, args *ParsedParams) (Function, error) {
 			}
 			return values, nil
 		}
-		return nil, NewTypeErrorFrom(target.Annotation(), v, ValueArray)
+		return nil, value.NewTypeErrorFrom(target.Annotation(), v, value.TArray)
 	}, aggregateTargetPaths(target, mapFn)), nil
 }
 
@@ -1488,7 +1490,7 @@ func sliceMethod(args *ParsedParams) (simpleMethod, error) {
 			}
 			return t[start:end], nil
 		}
-		return nil, NewTypeError(v, ValueArray, ValueString)
+		return nil, value.NewTypeError(v, value.TArray, value.TString)
 	}, nil
 }
 
@@ -1515,13 +1517,13 @@ func sumMethod(target Function, _ *ParsedParams) (Function, error) {
 		if err != nil {
 			return nil, err
 		}
-		switch t := ISanitize(v).(type) {
+		switch t := value.ISanitize(v).(type) {
 		case float64, int64, uint64, json.Number:
 			return v, nil
 		case []any:
 			var total float64
 			for i, v := range t {
-				n, nErr := IGetNumber(v)
+				n, nErr := value.IGetNumber(v)
 				if nErr != nil {
 					err = fmt.Errorf("index %v: %w", i, nErr)
 				} else {
@@ -1533,7 +1535,7 @@ func sumMethod(target Function, _ *ParsedParams) (Function, error) {
 			}
 			return total, nil
 		}
-		return nil, NewTypeErrorFrom(target.Annotation(), v, ValueArray)
+		return nil, value.NewTypeErrorFrom(target.Annotation(), v, value.TArray)
 	}, target.QueryTargets), nil
 }
 
@@ -1567,7 +1569,7 @@ func uniqueMethod(args *ParsedParams) (simpleMethod, error) {
 	return func(v any, ctx FunctionContext) (any, error) {
 		slice, ok := v.([]any)
 		if !ok {
-			return nil, NewTypeError(v, ValueArray)
+			return nil, value.NewTypeError(v, value.TArray)
 		}
 
 		var strCompares map[string]struct{}
@@ -1605,7 +1607,7 @@ func uniqueMethod(args *ParsedParams) (simpleMethod, error) {
 				}
 			}
 			var unique bool
-			switch t := ISanitize(check).(type) {
+			switch t := value.ISanitize(check).(type) {
 			case string:
 				unique = checkStr(t)
 			case []byte:
@@ -1629,7 +1631,7 @@ func uniqueMethod(args *ParsedParams) (simpleMethod, error) {
 			case float64:
 				unique = checkNum(t)
 			default:
-				return nil, fmt.Errorf("index %v: %w", i, NewTypeError(check, ValueString, ValueNumber))
+				return nil, fmt.Errorf("index %v: %w", i, value.NewTypeError(check, value.TString, value.TNumber))
 			}
 			if unique {
 				uniqueSlice = append(uniqueSlice, v)
@@ -1662,7 +1664,7 @@ var _ = registerSimpleMethod(
 				}
 				return values, nil
 			}
-			return nil, NewTypeError(v, ValueObject)
+			return nil, value.NewTypeError(v, value.TObject)
 		}, nil
 	},
 )
@@ -1686,7 +1688,7 @@ If a key within a nested path does not exist or is not an object then it is not 
 	func(args *ParsedParams) (simpleMethod, error) {
 		excludeList := make([][]string, 0, len(args.Raw()))
 		for i, argVal := range args.Raw() {
-			argStr, err := IGetString(argVal)
+			argStr, err := value.IGetString(argVal)
 			if err != nil {
 				return nil, fmt.Errorf("argument %v: %w", i, err)
 			}
@@ -1695,7 +1697,7 @@ If a key within a nested path does not exist or is not an object then it is not 
 		return func(v any, ctx FunctionContext) (any, error) {
 			m, ok := v.(map[string]any)
 			if !ok {
-				return nil, NewTypeError(v, ValueObject)
+				return nil, value.NewTypeError(v, value.TObject)
 			}
 			return mapWithout(m, excludeList), nil
 		}, nil

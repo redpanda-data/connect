@@ -6,10 +6,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/credentials"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/kinesis"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/credentials"
+	"github.com/aws/aws-sdk-go-v2/service/kinesis"
 	"github.com/ory/dockertest/v3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -17,20 +17,24 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/integration"
 )
 
-func createKinesisShards(ctx context.Context, t testing.TB, awsPort, id string, numShards int) ([]string, error) {
+func createKinesisShards(ctx context.Context, t testing.TB, awsPort, id string, numShards int32) ([]string, error) {
 	endpoint := fmt.Sprintf("http://localhost:%v", awsPort)
 
-	client := kinesis.New(session.Must(session.NewSession(&aws.Config{
-		Credentials: credentials.NewStaticCredentials("xxxxx", "xxxxx", "xxxxx"),
-		Endpoint:    aws.String(endpoint),
-		Region:      aws.String("us-east-1"),
-	})))
+	conf, err := config.LoadDefaultConfig(ctx,
+		config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider("xxxxx", "xxxxx", "xxxxx")),
+		config.WithRegion("us-east-1"),
+	)
+	require.NoError(t, err)
 
+	conf.BaseEndpoint = &endpoint
+	client := kinesis.NewFromConfig(conf)
+
+	strmID := "stream-" + id
 	for {
 		t.Logf("Creating stream '%v'", id)
-		_, err := client.CreateStreamWithContext(ctx, &kinesis.CreateStreamInput{
-			ShardCount: aws.Int64(int64(numShards)),
-			StreamName: aws.String("stream-" + id),
+		_, err := client.CreateStream(ctx, &kinesis.CreateStreamInput{
+			ShardCount: &numShards,
+			StreamName: &strmID,
 		})
 		if err == nil {
 			t.Logf("Created stream '%v'", id)
@@ -46,14 +50,15 @@ func createKinesisShards(ctx context.Context, t testing.TB, awsPort, id string, 
 	}
 
 	// wait for stream to exist
-	err := client.WaitUntilStreamExistsWithContext(ctx, &kinesis.DescribeStreamInput{
-		StreamName: aws.String("stream-" + id),
-	})
+	waiter := kinesis.NewStreamExistsWaiter(client)
+	err = waiter.Wait(ctx, &kinesis.DescribeStreamInput{
+		StreamName: &strmID,
+	}, time.Second*30)
 	if err != nil {
 		return nil, err
 	}
 
-	info, err := client.DescribeStream(&kinesis.DescribeStreamInput{
+	info, err := client.DescribeStream(ctx, &kinesis.DescribeStreamInput{
 		StreamName: aws.String("stream-" + id),
 	})
 	if err != nil {

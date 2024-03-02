@@ -432,7 +432,7 @@ func (o *switchOutput) loop() {
 					var err error
 					if test, err = exe.QueryPart(i, trackedMsg); err != nil {
 						test = false
-						o.logger.Errorf("Failed to test case %v: %v\n", j, err)
+						o.logger.Error("Failed to test case %v: %v\n", j, err)
 					}
 				}
 				if test {
@@ -444,7 +444,7 @@ func (o *switchOutput) loop() {
 				}
 			}
 			if !routedAtLeastOnce && o.strictMode {
-				o.logger.Errorln("Message failed to match against at least one output check with strict mode enabled, it will be nacked and/or re-processed")
+				o.logger.Error("Message failed to match against at least one output check with strict mode enabled, it will be nacked and/or re-processed")
 				return ErrSwitchNoConditionMet
 			}
 			return nil

@@ -1,5 +1,6 @@
 ---
 title: aws_kinesis_firehose
+slug: aws_kinesis_firehose
 type: output
 status: stable
 categories: ["Services","AWS"]

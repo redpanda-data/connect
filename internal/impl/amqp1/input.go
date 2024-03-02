@@ -2,9 +2,11 @@ package amqp1
 
 import (
 	"context"
+	_ "embed"
 	"errors"
 	"fmt"
 	"math/rand"
+	"reflect"
 	"strconv"
 	"strings"
 	"sync"
@@ -16,24 +18,15 @@ import (
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
+//go:embed input_description.md
+var inputDescription string
+
 func amqp1InputSpec() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Stable().
 		Categories("Services").
 		Summary("Reads messages from an AMQP (1.0) server.").
-		Description(`
-### Metadata
-
-This input adds the following metadata fields to each message:
-
-`+"``` text"+`
-- amqp_content_type
-- amqp_content_encoding
-- amqp_creation_time
-- All string typed message annotations
-`+"```"+`
-
-You can access these metadata fields using [function interpolation](/docs/configuration/interpolation#bloblang-queries).`).
+		Description(inputDescription).
 		Fields(
 			service.NewURLField(urlField).
 				Description("A URL to connect to.").
@@ -57,6 +50,16 @@ You can access these metadata fields using [function interpolation](/docs/config
 				Description("Experimental: Azure service bus specific option to renew lock if processing takes more then configured lock time").
 				Version("3.45.0").
 				Default(false).
+				Advanced(),
+			service.NewBoolField(getMessageHeaderField).
+				Description("Read additional message header fields into `amqp_*` metadata properties.").
+				Version("4.25.0").
+				Default(false).Advanced(),
+			service.NewIntField(creditField).
+				Description("Specifies the maximum number of unacknowledged messages the sender can transmit. Once this limit is reached, no more messages will arrive until messages are acknowledged and settled.").
+				LintRule(`root = if this < 1 { [ "`+creditField+` must be at least 1" ] }`).
+				Version("4.26.0").
+				Default(64).
 				Advanced(),
 			service.NewTLSToggledField(tlsField),
 			saslFieldSpec(),
@@ -83,6 +86,8 @@ type amqp1Reader struct {
 	urls       []string
 	sourceAddr string
 	renewLock  bool
+	getHeader  bool
+	credit     int // max_in_flight
 	connOpts   *amqp.ConnOptions
 	log        *service.Logger
 
@@ -112,6 +117,7 @@ func amqp1ReaderFromParsed(conf *service.ParsedConfig, mgr *service.Resources) (
 	if len(a.urls) == 0 {
 		singleURL, err := conf.FieldString(urlField)
 		if err != nil {
+			err = errors.New("at least one url must be specified")
 			return nil, err
 		}
 
@@ -124,6 +130,14 @@ func amqp1ReaderFromParsed(conf *service.ParsedConfig, mgr *service.Resources) (
 	}
 
 	if a.renewLock, err = conf.FieldBool(azureRenewLockField); err != nil {
+		return nil, err
+	}
+
+	if a.getHeader, err = conf.FieldBool(getMessageHeaderField); err != nil {
+		return nil, err
+	}
+
+	if a.credit, err = conf.FieldInt(creditField); err != nil {
 		return nil, err
 	}
 
@@ -167,7 +181,9 @@ func (a *amqp1Reader) Connect(ctx context.Context) (err error) {
 	}
 
 	// Create a receiver
-	if conn.receiver, err = conn.session.NewReceiver(ctx, a.sourceAddr, nil); err != nil {
+	if conn.receiver, err = conn.session.NewReceiver(ctx, a.sourceAddr, &amqp.ReceiverOptions{
+		Credit: int32(a.credit),
+	}); err != nil {
 		_ = conn.Close(ctx)
 		return
 	}
@@ -242,6 +258,14 @@ func (a *amqp1Reader) ReadBatch(ctx context.Context) (service.MessageBatch, serv
 		amqpSetMetadata(part, "amqp_content_encoding", amqpMsg.Properties.ContentEncoding)
 		amqpSetMetadata(part, "amqp_creation_time", amqpMsg.Properties.CreationTime)
 	}
+	if a.getHeader && amqpMsg.Header != nil {
+		amqpSetMetadata(part, "amqp_durable", amqpMsg.Header.Durable)
+		amqpSetMetadata(part, "amqp_priority", amqpMsg.Header.Priority)
+		amqpSetMetadata(part, "amqp_ttl", amqpMsg.Header.TTL)
+		amqpSetMetadata(part, "amqp_first_acquirer", amqpMsg.Header.FirstAcquirer)
+		amqpSetMetadata(part, "amqp_delivery_count", amqpMsg.Header.DeliveryCount)
+	}
+
 	if amqpMsg.Annotations != nil {
 		for k, v := range amqpMsg.Annotations {
 			keyStr, keyIsStr := k.(string)
@@ -469,6 +493,11 @@ func amqpSetMetadata(p *service.Message, k string, v any) {
 	var metaValue string
 	metaKey := strings.ReplaceAll(k, "-", "_")
 
+	// If v is a pointer, and the pointer is nil, do nothing
+	if vType := reflect.ValueOf(v); vType.Kind() == reflect.Pointer && vType.IsNil() {
+		return
+	}
+
 	switch v := v.(type) {
 	case bool:
 		metaValue = strconv.FormatBool(v)
@@ -482,16 +511,22 @@ func amqpSetMetadata(p *service.Message, k string, v any) {
 		metaValue = strconv.Itoa(int(v))
 	case int32:
 		metaValue = strconv.Itoa(int(v))
+	case uint32:
+		metaValue = strconv.Itoa(int(v))
 	case int64:
 		metaValue = strconv.Itoa(int(v))
 	case nil:
 		metaValue = ""
 	case string:
 		metaValue = v
+	case *string:
+		metaValue = *v
 	case []byte:
 		metaValue = string(v)
 	case time.Time:
 		metaValue = v.Format(time.RFC3339)
+	case time.Duration:
+		metaValue = v.String()
 	default:
 		metaValue = ""
 	}

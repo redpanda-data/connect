@@ -1,5 +1,6 @@
 ---
 title: bounds_check
+slug: bounds_check
 type: processor
 status: stable
 categories: ["Utility"]
@@ -13,7 +14,6 @@ categories: ["Utility"]
 
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
-
 
 Removes messages (and batches) that do not fit within certain size boundaries.
 

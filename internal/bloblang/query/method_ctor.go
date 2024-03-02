@@ -3,6 +3,8 @@ package query
 import (
 	"encoding/json"
 	"fmt"
+
+	"github.com/benthosdev/benthos/v4/internal/value"
 )
 
 // MethodCtor constructs a new method from a target function and input args.
@@ -34,7 +36,7 @@ type simpleMethod func(v any, ctx FunctionContext) (any, error)
 
 func stringMethod(fn func(v string) (any, error)) simpleMethod {
 	return func(v any, ctx FunctionContext) (any, error) {
-		s, err := IGetString(v)
+		s, err := value.IGetString(v)
 		if err != nil {
 			return nil, err
 		}
@@ -63,7 +65,7 @@ func numberMethod(fn func(f *float64, i *int64, ui *uint64) (any, error)) simple
 				return nil, fmt.Errorf("failed to parse number: %v", err)
 			}
 		default:
-			return nil, NewTypeError(v, ValueNumber)
+			return nil, value.NewTypeError(v, value.TNumber)
 		}
 		return fn(f, i, ui)
 	}

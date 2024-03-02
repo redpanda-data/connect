@@ -9,47 +9,88 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/bloblang/mapping"
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component"
+	"github.com/benthosdev/benthos/v4/internal/component/interop"
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
-	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
 	"github.com/benthosdev/benthos/v4/internal/shutdown"
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
-func init() {
-	err := bundle.AllProcessors.Add(func(conf processor.Config, mgr bundle.NewManagement) (processor.V1, error) {
-		p, err := newWhile(conf.While, mgr)
-		if err != nil {
-			return nil, err
-		}
-		return processor.NewAutoObservedBatchedProcessor("while", p, mgr), nil
-	}, docs.ComponentSpec{
-		Name: "while",
-		Categories: []string{
-			"Composition",
-		},
-		Summary: `
-A processor that checks a [Bloblang query](/docs/guides/bloblang/about/) against each batch of messages and executes child processors on them for as long as the query resolves to true.`,
-		Description: `
-The field ` + "`at_least_once`" + `, if true, ensures that the child processors are always executed at least one time (like a do .. while loop.)
+const (
+	wpFieldAtLeastOnce = "at_least_once"
+	wpFieldMaxLoops    = "max_loops"
+	wpFieldCheck       = "check"
+	wpFieldProcessors  = "processors"
+)
 
-The field ` + "`max_loops`" + `, if greater than zero, caps the number of loops for a message batch to this value.
+func whileProcSpec() *service.ConfigSpec {
+	return service.NewConfigSpec().
+		Categories("Composition").
+		Stable().
+		Summary("A processor that checks a [Bloblang query](/docs/guides/bloblang/about/) against each batch of messages and executes child processors on them for as long as the query resolves to true.").
+		Description(`
+The field `+"`at_least_once`"+`, if true, ensures that the child processors are always executed at least one time (like a do .. while loop.)
+
+The field `+"`max_loops`"+`, if greater than zero, caps the number of loops for a message batch to this value.
 
 If following a loop execution the number of messages in a batch is reduced to zero the loop is exited regardless of the condition result. If following a loop execution there are more than 1 message batches the query is checked against the first batch only.
 
-The conditions of this processor are applied across entire message batches. You can find out more about batching [in this doc](/docs/configuration/batching).`,
-		Config: docs.FieldComponent().WithChildren(
-			docs.FieldBool("at_least_once", "Whether to always run the child processors at least one time."),
-			docs.FieldInt("max_loops", "An optional maximum number of loops to execute. Helps protect against accidentally creating infinite loops.").Advanced(),
-			docs.FieldBloblang(
-				"check",
-				"A [Bloblang query](/docs/guides/bloblang/about/) that should return a boolean value indicating whether the while loop should execute again.",
-				`errored()`,
-				`this.urls.unprocessed.length() > 0`,
-			).HasDefault(""),
-			docs.FieldProcessor("processors", "A list of child processors to execute on each loop.").Array(),
-		).ChildDefaultAndTypesFromStruct(processor.NewWhileConfig()),
-	})
+The conditions of this processor are applied across entire message batches. You can find out more about batching [in this doc](/docs/configuration/batching).`).
+		Fields(
+
+			service.NewBoolField(wpFieldAtLeastOnce).
+				Description("Whether to always run the child processors at least one time.").
+				Default(false),
+			service.NewIntField(wpFieldMaxLoops).
+				Description("An optional maximum number of loops to execute. Helps protect against accidentally creating infinite loops.").
+				Advanced().
+				Default(0),
+			service.NewBloblangField(wpFieldCheck).
+				Description("A [Bloblang query](/docs/guides/bloblang/about/) that should return a boolean value indicating whether the while loop should execute again.").
+				Examples(`errored()`, `this.urls.unprocessed.length() > 0`).
+				Default(""),
+			service.NewProcessorListField(wpFieldProcessors).
+				Description("A list of child processors to execute on each loop."),
+		)
+}
+
+func init() {
+	err := service.RegisterBatchProcessor(
+		"while", whileProcSpec(),
+		func(conf *service.ParsedConfig, res *service.Resources) (service.BatchProcessor, error) {
+			maxLoops, err := conf.FieldInt(wpFieldMaxLoops)
+			if err != nil {
+				return nil, err
+			}
+
+			atLeastOnce, err := conf.FieldBool(wpFieldAtLeastOnce)
+			if err != nil {
+				return nil, err
+			}
+
+			checkStr, err := conf.FieldString(wpFieldCheck)
+			if err != nil {
+				return nil, err
+			}
+
+			iProcs, err := conf.FieldProcessorList(wpFieldProcessors)
+			if err != nil {
+				return nil, err
+			}
+
+			children := make([]processor.V1, len(iProcs))
+			for i, c := range iProcs {
+				children[i] = interop.UnwrapOwnedProcessor(c)
+			}
+
+			mgr := interop.UnwrapManagement(res)
+			p, err := newWhile(maxLoops, atLeastOnce, checkStr, children, mgr)
+			if err != nil {
+				return nil, err
+			}
+			return interop.NewUnwrapInternalBatchProcessor(processor.NewAutoObservedBatchedProcessor("while", p, mgr)), nil
+		})
 	if err != nil {
 		panic(err)
 	}
@@ -65,31 +106,21 @@ type whileProc struct {
 	shutSig *shutdown.Signaller
 }
 
-func newWhile(conf processor.WhileConfig, mgr bundle.NewManagement) (*whileProc, error) {
+func newWhile(maxLoops int, atLeastOnce bool, checkStr string, children []processor.V1, mgr bundle.NewManagement) (*whileProc, error) {
 	var check *mapping.Executor
 	var err error
 
-	if len(conf.Check) > 0 {
-		if check, err = mgr.BloblEnvironment().NewMapping(conf.Check); err != nil {
+	if len(checkStr) > 0 {
+		if check, err = mgr.BloblEnvironment().NewMapping(checkStr); err != nil {
 			return nil, fmt.Errorf("failed to parse check query: %w", err)
 		}
 	} else {
 		return nil, errors.New("a check query is required")
 	}
 
-	var children []processor.V1
-	for i, pconf := range conf.Processors {
-		pMgr := mgr.IntoPath("while", "processors", strconv.Itoa(i))
-		proc, err := pMgr.NewProcessor(pconf)
-		if err != nil {
-			return nil, err
-		}
-		children = append(children, proc)
-	}
-
 	return &whileProc{
-		maxLoops:    conf.MaxLoops,
-		atLeastOnce: conf.AtLeastOnce,
+		maxLoops:    maxLoops,
+		atLeastOnce: atLeastOnce,
 		check:       check,
 		children:    children,
 		log:         mgr.Logger(),
@@ -101,7 +132,7 @@ func (w *whileProc) checkMsg(msg message.Batch) bool {
 	c, err := w.check.QueryPart(0, msg)
 	if err != nil {
 		c = false
-		w.log.Errorf("Query failed for loop: %v", err)
+		w.log.Error("Query failed for loop: %v", err)
 	}
 	return c
 }
@@ -116,11 +147,11 @@ func (w *whileProc) ProcessBatch(ctx *processor.BatchProcContext, msg message.Ba
 			return nil, component.ErrTypeClosed
 		}
 		if w.maxLoops > 0 && loops >= w.maxLoops {
-			w.log.Traceln("Reached max loops count")
+			w.log.Trace("Reached max loops count")
 			break
 		}
 
-		w.log.Traceln("Looped")
+		w.log.Trace("Looped")
 		for i := range msg {
 			ctx.Span(i).LogKV("event", "loop")
 		}

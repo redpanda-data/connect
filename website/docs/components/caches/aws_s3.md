@@ -1,5 +1,6 @@
 ---
 title: aws_s3
+slug: aws_s3
 type: cache
 status: stable
 ---

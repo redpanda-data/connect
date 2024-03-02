@@ -43,9 +43,11 @@ func iskConfigSpec() *service.ConfigSpec {
 		Description(`
 Offsets are managed within Kafka under the specified consumer group, and partitions for each topic are automatically balanced across members of the consumer group.
 
-The Kafka input allows parallel processing of messages from different topic partitions, but by default messages of the same topic partition are processed in lockstep in order to enforce ordered processing. This protection often means that batching messages at the output level can stall, in which case it can be tuned by increasing the field `+"[`checkpoint_limit`](#checkpoint_limit)"+`, ideally to a value greater than the number of messages you expect to batch.
+The Kafka input allows parallel processing of messages from different topic partitions, and messages of the same topic partition are processed with a maximum parallelism determined by the field `+"[`checkpoint_limit`](#checkpoint_limit)"+`.
 
-Alternatively, if you perform batching at the input level using the `+"[`batching`](#batching)"+` field it is done per-partition and therefore avoids stalling.
+In order to enforce ordered processing of partition messages set the `+"[`checkpoint_limit`](#checkpoint_limit) to `1`"+` and this will force partitions to be processed in lock-step, where a message will only be processed once the prior message is delivered.
+
+Batching messages before processing can be enabled using the `+"[`batching`](#batching)"+` field, and this batching is performed per-partition such that messages of a batch will always originate from the same partition. This batching mechanism is capable of creating batches of greater size than the `+"[`checkpoint_limit`](#checkpoint_limit)"+`, in which case the next batch will only be created upon delivery of the current one.
 
 ### Metadata
 

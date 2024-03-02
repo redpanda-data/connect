@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/benthosdev/benthos/v4/internal/component"
-	"github.com/benthosdev/benthos/v4/internal/component/input"
+	"github.com/benthosdev/benthos/v4/internal/component/testutil"
 	bmanager "github.com/benthosdev/benthos/v4/internal/manager"
 	"github.com/benthosdev/benthos/v4/internal/stream"
 )
@@ -17,14 +17,15 @@ import (
 func harmlessConf(t testing.TB) stream.Config {
 	t.Helper()
 
-	var err error
-	c := stream.NewConfig()
-	c.Input, err = input.FromYAML(`
-generate:
-  mapping: 'root = deleted()'
+	c, err := testutil.StreamFromYAML(`
+input:
+  generate:
+    mapping: 'root = deleted()'
+output:
+  drop: {}
 `)
 	require.NoError(t, err)
-	c.Output.Type = "drop"
+
 	return c
 }
 

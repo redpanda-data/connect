@@ -2,16 +2,18 @@ package io_test
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path"
 	"reflect"
 	"testing"
 	"time"
 
+	"github.com/Jeffail/gabs/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/benthosdev/benthos/v4/internal/component/processor"
+	"github.com/benthosdev/benthos/v4/internal/component/testutil"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
 )
@@ -19,10 +21,12 @@ import (
 func TestSubprocessWithSed(t *testing.T) {
 	t.Skip("disabled for now")
 
-	conf := processor.NewConfig()
-	conf.Type = "subprocess"
-	conf.Subprocess.Name = "sed"
-	conf.Subprocess.Args = []string{"s/foo/bar/g", "-u"}
+	conf, err := testutil.ProcessorFromYAML(`
+subprocess:
+  name: sed
+  args: [ "s/foo/bar/g", "-u" ]
+`)
+	require.NoError(t, err)
 
 	proc, err := mock.NewManager().NewProcessor(conf)
 	if err != nil {
@@ -59,9 +63,11 @@ func TestSubprocessWithSed(t *testing.T) {
 func TestSubprocessWithCat(t *testing.T) {
 	t.Skip("disabled for now")
 
-	conf := processor.NewConfig()
-	conf.Type = "subprocess"
-	conf.Subprocess.Name = "cat"
+	conf, err := testutil.ProcessorFromYAML(`
+subprocess:
+  name: cat
+`)
+	require.NoError(t, err)
 
 	proc, err := mock.NewManager().NewProcessor(conf)
 	if err != nil {
@@ -98,10 +104,12 @@ func TestSubprocessWithCat(t *testing.T) {
 func TestSubprocessLineBreaks(t *testing.T) {
 	t.Skip("disabled for now")
 
-	conf := processor.NewConfig()
-	conf.Type = "subprocess"
-	conf.Subprocess.Name = "sed"
-	conf.Subprocess.Args = []string{`s/\(^$\)\|\(foo\)/bar/`, "-u"}
+	conf, err := testutil.ProcessorFromYAML(`
+subprocess:
+  name: sed
+  args: [ "s/\\(^$\\)\\|\\(foo\\)/bar/", "-u" ]
+`)
+	require.NoError(t, err)
 
 	proc, err := mock.NewManager().NewProcessor(conf)
 	if err != nil {
@@ -140,10 +148,12 @@ func TestSubprocessLineBreaks(t *testing.T) {
 }
 
 func TestSubprocessWithErrors(t *testing.T) {
-	conf := processor.NewConfig()
-	conf.Type = "subprocess"
-	conf.Subprocess.Name = "sh"
-	conf.Subprocess.Args = []string{"-c", "cat 1>&2"}
+	conf, err := testutil.ProcessorFromYAML(`
+subprocess:
+  name: sh
+  args: [ "-c", "cat 1>&2" ]
+`)
+	require.NoError(t, err)
 
 	proc, err := mock.NewManager().NewProcessor(conf)
 	if err != nil {
@@ -242,12 +252,14 @@ func main() {
 }
 `)
 	f := func(formatSend, formatRecv string, extra bool) {
-		conf := processor.NewConfig()
-		conf.Type = "subprocess"
-		conf.Subprocess.Name = "go"
-		conf.Subprocess.Args = []string{"run", filePath, "-stdinCodec", formatSend, "-stdoutCodec", formatRecv}
-		conf.Subprocess.CodecSend = formatSend
-		conf.Subprocess.CodecRecv = formatRecv
+		conf, err := testutil.ProcessorFromYAML(fmt.Sprintf(`
+subprocess:
+  name: go
+  args: %v
+  codec_send: %v
+  codec_recv: %v
+`, gabs.Wrap([]string{"run", filePath, "-stdinCodec", formatSend, "-stdoutCodec", formatRecv}).String(), formatSend, formatRecv))
+		require.NoError(t, err)
 
 		proc, err := mock.NewManager().NewProcessor(conf)
 		require.NoError(t, err)

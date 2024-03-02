@@ -1,6 +1,9 @@
 package bloblang
 
-import "github.com/benthosdev/benthos/v4/internal/bloblang/query"
+import (
+	"github.com/benthosdev/benthos/v4/internal/bloblang/query"
+	"github.com/benthosdev/benthos/v4/internal/value"
+)
 
 // ExecContext is an optional context provided to advanced functions and methods
 // that contains information about a given mapping at the time the
@@ -55,9 +58,9 @@ func (e *ExecContext) Exec(fn *ExecFunction) (any, error) {
 		return nil, err
 	}
 	switch v.(type) {
-	case query.Delete:
+	case value.Delete:
 		return ExecResultDelete(nil), nil
-	case query.Nothing:
+	case value.Nothing:
 		return ExecResultNothing(nil), nil
 	}
 	return v, nil
@@ -71,7 +74,7 @@ func (e *ExecContext) ExecToInt64(fn *ExecFunction) (int64, error) {
 	if err != nil {
 		return 0, err
 	}
-	return query.IToInt(v)
+	return value.IToInt(v)
 }
 
 // ExecFunction represents an active Bloblang function that can be executed by

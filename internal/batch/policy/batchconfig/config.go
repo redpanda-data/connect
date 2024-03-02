@@ -1,8 +1,6 @@
 package batchconfig
 
 import (
-	"gopkg.in/yaml.v3"
-
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
 )
 
@@ -24,22 +22,6 @@ func NewConfig() Config {
 		Period:     "",
 		Processors: []processor.Config{},
 	}
-}
-
-// FromAny attempts to extract a Config from any value.
-func FromAny(v any) (conf Config, err error) {
-	conf = NewConfig()
-	if pNode, ok := v.(*yaml.Node); ok {
-		err = pNode.Decode(&conf)
-		return
-	}
-
-	var node yaml.Node
-	if err = node.Encode(v); err != nil {
-		return
-	}
-	err = node.Decode(&conf)
-	return
 }
 
 // IsNoop returns true if this batch policy configuration does nothing.

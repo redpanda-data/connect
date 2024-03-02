@@ -7,12 +7,54 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
+- Field `credit` added to the `amqp_1` input to specify the maximum number of unacknowledged messages the sender can transmit. 
+
+### Changed
+
+- The default value of the `amqp_1.credit` input has changed from `1` to `64` 
+
+## 4.25.1 - 2024-03-01
+
+### Fixed
+
+- Fixed a regression in v4.25.0 where [template based components](https://www.benthos.dev/docs/configuration/templating) were not parsing correctly from configs.
+
+## 4.25.0 - 2024-03-01
+
+### Added
+
 - Field `address_cache` added to the `socket_server` input.
+- Field `read_header` added to the `amqp_1` input.
 - All inputs with a `codec` field now support a new field `scanner` to replace it. Scanners are more powerful as they are configured in a structured way similar to other component types rather than via a single string field, for more information [check out the scanners page](https://www.benthos.dev/docs/components/scanners/about).
+- New `diff` and `patch` Bloblang methods.
+- New `processors` processor.
+- Field `read_header` added to the `amqp_1` input.
+- A debug endpoint `/debug/pprof/allocs` has been added for profiling allocations.
+- New `cockroachdb_changefeed` input.
+- The `open_telemetry_collector` tracer now supports sampling.
+- The `aws_kinesis` input and output now support specifying ARNs as the stream target.
+- New `azure_cosmosdb` input, processor and output.
+- All `sql_*` components now support the `gocosmos` driver.
+- New `opensearch` output.
+
+### Fixed
+
+- The `javascript` processor now handles module imports correctly.
+- Bloblang `if` statements now provide explicit errors when query expressions resolve to non-boolean values.
+- Some metadata fields from the `amqp_1` input were always empty due to type mismatch, this should no longer be the case.
+- The `zip` Bloblang method no longer fails when executed without arguments.
+- The `amqp_0_9` output no longer prints bogus exchange name when connecting to the server.
+- The `generate` input no longer adds an extra second to `interval: '@every x'` syntax.
+- The `nats_jetstream` input no longer fails to locate mirrored streams.
+- Fixed a rare panic in batching mechanisms with a specified `period`, where data arrives in low volumes and is sporadic.
+- Executing config unit tests should no longer fail due to output resources failing to connect.
 
 ### Changed
 
 - The `parse_parquet` Bloblang function, `parquet_decode`, `parquet_encode` processors and the `parquet` input have all been upgraded to the latest version of the underlying Parquet library. Since this underlying library is experimental it is likely that behaviour changes will result. One significant change is that encoding numerical values that are larger than the column type (`float64` into `FLOAT`, `int64` into `INT32`, etc) will no longer be automatically converted.
+- The `parse_log` processor field `codec` is now deprecated.
+- *WARNING*: Many components have had their underlying implementations moved onto newer internal APIs for defining and extracting their configuration fields. It's recommended that upgrades to this version are performed cautiously.
+- *WARNING*: All AWS components have been upgraded to the latest client libraries. Although lots of testing has been done, these libraries have the potential to differ in discrete ways in terms of how credentials are evaluated, cross-account connections are performed, and so on. It's recommended that upgrades to this version are performed cautiously.
 
 ## 4.24.0 - 2023-11-24
 

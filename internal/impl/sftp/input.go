@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"sync"
 	"time"
 
@@ -258,6 +259,9 @@ func (s *sftpReader) ReadBatch(ctx context.Context) (service.MessageBatch, servi
 			s.currentPath = ""
 		}
 		s.scannerMut.Unlock()
+		if errors.Is(err, io.EOF) {
+			err = service.ErrNotConnected
+		}
 		return nil, nil, err
 	}
 

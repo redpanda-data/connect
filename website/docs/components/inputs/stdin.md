@@ -1,5 +1,6 @@
 ---
 title: stdin
+slug: stdin
 type: input
 status: stable
 categories: ["Local"]

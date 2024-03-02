@@ -7,19 +7,17 @@ import (
 	"testing"
 	"time"
 
-	"github.com/aws/aws-sdk-go/service/cloudwatch"
-	"github.com/aws/aws-sdk-go/service/cloudwatch/cloudwatchiface"
+	"github.com/aws/aws-sdk-go-v2/service/cloudwatch"
 	"github.com/stretchr/testify/assert"
 )
 
 type mockCloudWatchClient struct {
-	cloudwatchiface.CloudWatchAPI
 	errs []error
 
 	inputs []cloudwatch.PutMetricDataInput
 }
 
-func cwmMock(svc cloudwatchiface.CloudWatchAPI) *cwMetrics {
+func cwmMock(svc cloudWatchAPI) *cwMetrics {
 	return &cwMetrics{
 		config:    cwmConfig{Namespace: "Benthos", FlushPeriod: 100 * time.Millisecond},
 		datumses:  map[string]*cloudWatchDatum{},
@@ -29,8 +27,8 @@ func cwmMock(svc cloudwatchiface.CloudWatchAPI) *cwMetrics {
 	}
 }
 
-func (m *mockCloudWatchClient) PutMetricData(input *cloudwatch.PutMetricDataInput) (*cloudwatch.PutMetricDataOutput, error) {
-	m.inputs = append(m.inputs, *input)
+func (m *mockCloudWatchClient) PutMetricData(ctx context.Context, params *cloudwatch.PutMetricDataInput, optFns ...func(*cloudwatch.Options)) (*cloudwatch.PutMetricDataOutput, error) {
+	m.inputs = append(m.inputs, *params)
 	if len(m.errs) > 0 {
 		err := m.errs[0]
 		m.errs = m.errs[1:]
@@ -61,7 +59,7 @@ func checkInput(i cloudwatch.PutMetricDataInput) map[string]checkedDatum {
 			}
 		}
 		d := checkedDatum{
-			unit: *datum.Unit,
+			unit: string(datum.Unit),
 		}
 		if len(datum.Dimensions) > 0 {
 			d.dimensions = map[string]string{}
@@ -75,9 +73,9 @@ func checkInput(i cloudwatch.PutMetricDataInput) map[string]checkedDatum {
 			d.values = map[float64]float64{}
 			for i, val := range datum.Values {
 				if len(datum.Counts) > i {
-					d.values[*val] = *datum.Counts[i]
+					d.values[val] = datum.Counts[i]
 				} else {
-					d.values[*val] = 1
+					d.values[val] = 1
 				}
 			}
 		}

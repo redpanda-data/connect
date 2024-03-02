@@ -17,6 +17,7 @@ import (
 
 	"github.com/benthosdev/benthos/v4/internal/component/cache"
 	"github.com/benthosdev/benthos/v4/internal/component/input"
+	"github.com/benthosdev/benthos/v4/internal/component/testutil"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
 )
@@ -27,7 +28,7 @@ func socketServerInputFromConf(t testing.TB, confStr string, bits ...any) (input
 	mgr := mock.NewManager()
 	mgr.Caches["testcache"] = map[string]mock.CacheItem{}
 
-	conf, err := input.FromYAML(fmt.Sprintf(confStr+"\n  address_cache: testcache", bits...))
+	conf, err := testutil.InputFromYAML(fmt.Sprintf(confStr+"\n  address_cache: testcache", bits...))
 	require.NoError(t, err)
 
 	s, err := mgr.NewInput(conf)

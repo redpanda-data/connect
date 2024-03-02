@@ -4,7 +4,7 @@ import (
 	"crypto/sha256"
 	"crypto/sha512"
 
-	"github.com/xdg/scram"
+	"github.com/xdg-go/scram"
 )
 
 // SHA256 generates the SHA256 hash.

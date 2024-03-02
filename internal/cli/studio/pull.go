@@ -120,7 +120,7 @@ files and execute them, replacing the previous stream running.`[1:],
 					pullRunner.Sync(sigCtx)
 				case <-sigCtx.Done():
 					sigNameMut.Lock()
-					pullRunner.logger.Infof("Received signal %s, shutting down", sigName)
+					pullRunner.logger.Info("Received signal %s, shutting down", sigName)
 					sigNameMut.Unlock()
 					if pullRunner.Stop(context.Background()) != nil {
 						os.Exit(1)

@@ -1,5 +1,6 @@
 ---
 title: aws_kinesis
+slug: aws_kinesis
 type: input
 status: stable
 categories: ["Services","AWS"]
@@ -107,10 +108,18 @@ Use the `batching` fields to configure an optional [batching policy](/docs/confi
 
 ### `streams`
 
-One or more Kinesis data streams to consume from. Shards of a stream are automatically balanced across consumers by coordinating through the provided DynamoDB table. Multiple comma separated streams can be listed in a single element. Shards are automatically distributed across consumers of a stream by coordinating through the provided DynamoDB table. Alternatively, it's possible to specify an explicit shard to consume from with a colon after the stream name, e.g. `foo:0` would consume the shard `0` of the stream `foo`.
+One or more Kinesis data streams to consume from. Streams can either be specified by their name or full ARN. Shards of a stream are automatically balanced across consumers by coordinating through the provided DynamoDB table. Multiple comma separated streams can be listed in a single element. Shards are automatically distributed across consumers of a stream by coordinating through the provided DynamoDB table. Alternatively, it's possible to specify an explicit shard to consume from with a colon after the stream name, e.g. `foo:0` would consume the shard `0` of the stream `foo`.
 
 
 Type: `array`  
+
+```yml
+# Examples
+
+streams:
+  - foo
+  - arn:aws:kinesis:*:111122223333:stream/my-stream
+```
 
 ### `dynamodb`
 

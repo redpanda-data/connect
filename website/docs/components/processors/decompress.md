@@ -1,5 +1,6 @@
 ---
 title: decompress
+slug: decompress
 type: processor
 status: stable
 categories: ["Parsing"]
@@ -14,15 +15,13 @@ categories: ["Parsing"]
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-
-Decompresses messages according to the selected algorithm. Supported
-decompression types are: gzip, pgzip, zlib, bzip2, flate, snappy, lz4.
+Decompresses messages according to the selected algorithm. Supported decompression algorithms are: [bzip2 flate gzip lz4 pgzip snappy zlib]
 
 ```yml
 # Config fields, showing default values
 label: ""
 decompress:
-  algorithm: ""
+  algorithm: "" # No default (required)
 ```
 
 ## Fields
@@ -33,7 +32,6 @@ The decompression algorithm to use.
 
 
 Type: `string`  
-Default: `""`  
-Options: `gzip`, `pgzip`, `zlib`, `bzip2`, `flate`, `snappy`, `lz4`.
+Options: `bzip2`, `flate`, `gzip`, `lz4`, `pgzip`, `snappy`, `zlib`.
 
 

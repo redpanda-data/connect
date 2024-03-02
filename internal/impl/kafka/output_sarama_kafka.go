@@ -13,9 +13,9 @@ import (
 	"github.com/cenkalti/backoff/v4"
 	"golang.org/x/sync/syncmap"
 
-	"github.com/benthosdev/benthos/v4/internal/bloblang/query"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/component/output/span"
+	"github.com/benthosdev/benthos/v4/internal/value"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
@@ -342,7 +342,7 @@ func (k *kafkaWriter) buildSystemHeaders(part *service.Message) []sarama.RecordH
 		_ = k.metaFilter.Walk(part, func(k string, v string) error {
 			out = append(out, sarama.RecordHeader{
 				Key:   []byte(k),
-				Value: []byte(query.IToString(v)),
+				Value: []byte(value.IToString(v)),
 			})
 			return nil
 		})

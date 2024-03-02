@@ -1,5 +1,6 @@
 ---
 title: dedupe
+slug: dedupe
 type: processor
 status: stable
 categories: ["Utility"]
@@ -20,8 +21,8 @@ Deduplicates messages by storing a key value in a cache using the `add` operator
 # Config fields, showing default values
 label: ""
 dedupe:
-  cache: ""
-  key: ""
+  cache: "" # No default (required)
+  key: ${! meta("kafka_key") } # No default (required)
   drop_on_err: true
 ```
 
@@ -47,7 +48,6 @@ The [`cache` resource](/docs/components/caches/about) to target with this proces
 
 
 Type: `string`  
-Default: `""`  
 
 ### `key`
 
@@ -56,7 +56,6 @@ This field supports [interpolation functions](/docs/configuration/interpolation#
 
 
 Type: `string`  
-Default: `""`  
 
 ```yml
 # Examples
