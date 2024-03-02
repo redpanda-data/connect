@@ -47,6 +47,11 @@ You can access these metadata fields using
 			Example("foo.bar.baz").
 			Example(`${! meta("kafka_topic") }`).
 			Example(`foo.${! json("meta.type") }`)).
+		Field(service.NewStringField("inbox_prefix").
+			Description("Set an explicit inbox prefix for the response subject").
+			Optional().
+			Advanced().
+			Example("_INBOX_joe")).
 		Field(service.NewInterpolatedStringMapField("headers").
 			Description("Explicit message headers to add to messages.").
 			Default(map[string]any{}).
@@ -73,14 +78,15 @@ func init() {
 }
 
 type requestReplyProcessor struct {
-	label      string
-	urls       string
-	headers    map[string]*service.InterpolatedString
-	metaFilter *service.MetadataFilter
-	subject    *service.InterpolatedString
-	timeout    time.Duration
-	tlsConf    *tls.Config
-	authConf   auth.Config
+	label       string
+	urls        string
+	headers     map[string]*service.InterpolatedString
+	metaFilter  *service.MetadataFilter
+	subject     *service.InterpolatedString
+	inboxPrefix string
+	timeout     time.Duration
+	tlsConf     *tls.Config
+	authConf    auth.Config
 
 	log *service.Logger
 	fs  *service.FS
@@ -104,10 +110,16 @@ func newRequestReplyProcessor(conf *service.ParsedConfig, mgr *service.Resources
 	if p.subject, err = conf.FieldInterpolatedString("subject"); err != nil {
 		return nil, err
 	}
+
+	if conf.Contains("inbox_prefix") {
+		if p.inboxPrefix, err = conf.FieldString("inbox_prefix"); err != nil {
+			return nil, err
+		}
+	}
+
 	if p.headers, err = conf.FieldInterpolatedStringMap("headers"); err != nil {
 		return nil, err
 	}
-
 	timeoutStr, err := conf.FieldString("timeout")
 	if err != nil {
 		return nil, err
@@ -142,6 +154,11 @@ func (p *requestReplyProcessor) connect(ctx context.Context) (err error) {
 	if p.tlsConf != nil {
 		opts = append(opts, nats.Secure(p.tlsConf))
 	}
+
+	if p.inboxPrefix != "" {
+		opts = append(opts, nats.CustomInboxPrefix(p.inboxPrefix))
+	}
+
 	opts = append(opts, nats.Name(p.label))
 	opts = append(opts, authConfToOptions(p.authConf, p.fs)...)
 	opts = append(opts, errorHandlerOption(p.log))
