@@ -86,6 +86,7 @@ output:
         role: ""
         role_external_id: ""
     oauth2:
+      enabled: false
       access_token: ""
       token_cache: ""
       token_key: ""
@@ -579,9 +580,20 @@ Allows you to specify OAuth2 authentication.
 
 Type: `object`  
 
+### `oauth2.enabled`
+
+Whether to use OAuth2 authentication.
+
+
+Type: `bool`  
+Default: `false`  
+
 ### `oauth2.access_token`
 
 A static access token to use for authentication.
+:::warning Secret
+This field contains sensitive information that usually shouldn't be added to a config directly, read our [secrets page for more info](/docs/configuration/secrets).
+:::
 
 
 Type: `string`  
