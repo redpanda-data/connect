@@ -105,9 +105,10 @@ func esoConfigFromParsed(pConf *service.ParsedConfig, mgr *service.Resources) (c
 	}
 
 	if oauth2conf.Enabled {
-		token, err := oauth2conf.GetToken(mgr)
+		token, _ := oauth2conf.GetToken(mgr)
 		if err != nil {
-			return conf, err
+			return
+			//return conf, err
 		}
 		conf.clientOpts.Client.Transport = &oauth2.Transport{
 			Source: oauth2.StaticTokenSource(&oauth2.Token{AccessToken: token}),
@@ -341,7 +342,7 @@ func (e *Output) WriteBatch(ctx context.Context, msg service.MessageBatch) error
 	dur := time.Since(start)
 
 	e.log.Debugf(
-		"Successfully dispatched [%s] documents in %s (%s docs/sec)",
+		"Successfully dispatched [%d] documents in %s (%d docs/sec)",
 		biStats.NumFlushed,
 		dur.Truncate(time.Millisecond),
 		int64(1000.0/float64(dur/time.Millisecond)*float64(biStats.NumFlushed)),

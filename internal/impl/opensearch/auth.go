@@ -2,6 +2,7 @@ package opensearch
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/benthosdev/benthos/v4/public/service"
@@ -20,6 +21,10 @@ const (
 // OAuthAuthField returns a config field spec for basic authentication.
 func OAuthAuthField() *service.ConfigField {
 	return service.NewObjectField(aFieldOAuth,
+		service.NewBoolField(abFieldEnabled).
+			Description("Whether to use OAuth2 authentication.").
+			Advanced().
+			Default(false),
 		service.NewStringField(aFieldAuthStaticAccessToken).
 			Description("A static access token to use for authentication.").
 			Advanced().
@@ -48,7 +53,8 @@ func oAuthFromParsed(conf *service.ParsedConfig) (res OAuthConfig, err error) {
 		return
 	}
 
-	if conf.Contains(aFieldAuthStaticAccessToken) {
+	staticToken, err := conf.FieldString(aFieldAuthStaticAccessToken)
+	if err != nil && staticToken != "" {
 		if res.StaticAccessToken, err = conf.FieldString(aFieldAuthStaticAccessToken); err != nil {
 			return
 		}
@@ -82,10 +88,10 @@ func (c *OAuthConfig) GetToken(mgr *service.Resources) (string, error) {
 	if err := mgr.AccessCache(context.Background(), c.TokenCacheName, func(cache service.Cache) {
 		tok, terr = cache.Get(context.Background(), c.TokenCacheKey)
 	}); err != nil {
-		return "", fmt.Errorf("failed to obtain cache resource '%v': %v", c.TokenCacheName, err)
+		return "", fmt.Errorf("failed to obtain cache resource '%v' with key %v: %v", c.TokenCacheName, c.TokenCacheKey, err)
 	}
 	if terr != nil {
-		return "", terr
+		return "", errors.Join(terr, fmt.Errorf("failed to obtain token wih key %v from cache", c.TokenCacheKey))
 	}
 	return string(tok), nil
 }
