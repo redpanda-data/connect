@@ -357,8 +357,12 @@ func (r *PullRunner) Sync(ctx context.Context) {
 
 	if r.confReader == nil {
 		// We haven't bootstrapped yet, likely due to a bad config on
-		// our first attempt. The latest sync may have fixed the issue
-		// so we can potentially try again.
+		// our first and latest attempt. The latest sync may have fixed the
+		// issue so we can potentially try again but it's only worth it if there
+		// was a diff in the configs available compared to the last attempt.
+		if diff == nil {
+			return
+		}
 
 		if isDisabled {
 			// Except the deployment is disabled now, so don't.
