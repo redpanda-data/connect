@@ -1,0 +1,21 @@
+version: '3.3'
+services:
+  benthos-in:
+    image: jeffail/benthos:local
+    build:
+      context: ../../../
+      dockerfile: ./resources/docker/Dockerfile
+    command: [ '-w', '-c', '/benthos.yaml' ]
+    volumes:
+      - ./in.yaml:/benthos.yaml
+    network_mode: host
+
+  benthos-out:
+    image: jeffail/benthos:local
+    build:
+      context: ../../../
+      dockerfile: ./resources/docker/Dockerfile
+    command: [ '-w', '-c', '/benthos.yaml' ]
+    volumes:
+      - ./out.yaml:/benthos.yaml
+    network_mode: host
