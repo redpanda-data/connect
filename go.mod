@@ -111,6 +111,7 @@ require (
 	github.com/segmentio/ksuid v1.0.4
 	github.com/sijms/go-ora/v2 v2.8.7
 	github.com/sirupsen/logrus v1.9.3
+	github.com/slack-go/slack v0.12.5
 	github.com/smira/go-statsd v1.3.3
 	github.com/snowflakedb/gosnowflake v1.7.2
 	github.com/sourcegraph/conc v0.3.0
