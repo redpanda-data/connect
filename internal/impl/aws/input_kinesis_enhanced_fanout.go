@@ -52,40 +52,45 @@ func (k *kinesisReader) registerEfoConsumer(ctx context.Context, info streamInfo
 
 func (k *kinesisReader) runEfoConsumer(wg *sync.WaitGroup, info streamInfo, shardID, startingSequence string) (initErr error) {
 	//register consumer
-	k.log.Info("hitting efo consumer")
 	consumerARN, err := k.registerEfoConsumer(k.ctx, info, k.conf.EFOConsumerName)
 	if err != nil {
 		return err
+	}
+	iterType := types.ShardIteratorTypeTrimHorizon
+	if !k.conf.StartFromOldest {
+		iterType = types.ShardIteratorTypeLatest
+	}
+	var seq *string
+	if len(startingSequence) > 0 {
+		iterType = types.ShardIteratorTypeAfterSequenceNumber
+		seq = &startingSequence
 	}
 	// busy read from consumer
 	subOutput, err := k.svc.SubscribeToShard(k.ctx, &kinesis.SubscribeToShardInput{
 		ConsumerARN: consumerARN,
 		ShardId:     &shardID,
 		StartingPosition: &types.StartingPosition{
-			Type:           types.ShardIteratorTypeAtSequenceNumber,
-			SequenceNumber: &startingSequence,
+			Type:           iterType,
+			SequenceNumber: seq,
 		},
 	})
 
 	if err != nil {
 		return err
 	}
-	pendingChan := make(chan []types.Record)
+	pendingChan := make(chan []types.Record, 10)
 
 	go func() {
 		for {
 			select {
 			case <-k.ctx.Done():
-				k.log.Info("closing efo stream")
 				subOutput.GetStream().Close()
 				close(pendingChan)
-				k.log.Info("closed efo stream")
 				return
 
 			case ev := <-subOutput.GetStream().Events():
 				if event, ok := ev.(*types.SubscribeToShardEventStreamMemberSubscribeToShardEvent); !ok {
 					if ev == nil {
-						k.log.Infof("nil evt")
 						continue
 					}
 					k.log.Errorf("Received unexpected non nil event type: %T", ev)
@@ -190,17 +195,23 @@ func (k *kinesisReader) runEfoConsumer(wg *sync.WaitGroup, info streamInfo, shar
 			// If its closed, then assume the consumer is finished
 
 			if state == awsKinesisConsumerConsuming && len(pending) == 0 && nextPullChan == unblockedChan {
-				// The getRecords method ensures that it returns the input
-				// iterator whenever it errors out. Therefore, regardless of the
-				// outcome of the call if iter is now empty we have definitely
-				// reached the end of the shard.
-				p, ok := <-pendingChan
-				if !ok {
-					state = awsKinesisConsumerFinished
-				} else {
-					if len(p) > 0 {
-						pending = p
+				select {
+				case p, ok := <-pendingChan:
+					if !ok {
+						state = awsKinesisConsumerFinished
+					} else {
+						if len(p) > 0 {
+							pending = p
+						}
 					}
+				default:
+					// if there is nothing on the stream, unblock
+				}
+				if len(pending) == 0 {
+					nextPullChan = time.After(boff.NextBackOff())
+				} else {
+					boff.Reset()
+					nextPullChan = blockedChan
 				}
 
 			} else {

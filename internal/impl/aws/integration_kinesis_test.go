@@ -241,8 +241,8 @@ input:
   aws_kinesis:
     endpoint: http://localhost:$PORT
     streams: [ stream-$ID$VAR1 ]
-	enhanced_fanout:
-	  consumer_name: test_consumer
+    enhanced_fanout:
+      consumer_name: test_consumer
     checkpoint_limit: $VAR2
     dynamodb:
       table: stream-$ID

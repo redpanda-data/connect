@@ -820,7 +820,9 @@ func (k *kinesisReader) runExplicitShards() {
 						return
 					}
 					failedShards = append(failedShards, shardID)
-					k.log.Errorf("Failed to start stream '%v' shard '%v' consumer: %v", id, shardID, err)
+					if k.conf.EFOConsumerName != "" {
+						k.log.Errorf("Failed to start stream '%v' shard '%v' consumer: %v", id, shardID, err)
+					}
 				}
 			}
 			if len(failedShards) > 0 {
