@@ -1,5 +1,6 @@
 ---
 title: gcp_cloud_storage
+slug: gcp_cloud_storage
 type: cache
 status: beta
 ---

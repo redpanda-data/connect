@@ -8,14 +8,14 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/bloblang/query"
 )
 
-func functionArgsParser(pCtx Context) Func {
-	return func(input []rune) Result {
+func functionArgsParser(pCtx Context) Func[[]any] {
+	return func(input []rune) Result[[]any] {
 		return DelimitedPattern(
 			Expect(Sequence(charBracketOpen, DiscardedWhitespaceNewlineComments), "function arguments"),
 			MustBe(Expect(
 				OneOf(
-					namedArgParser(pCtx),
-					queryParser(pCtx),
+					FuncAsAny(namedArgParser(pCtx)),
+					FuncAsAny(queryParser(pCtx)),
 				), "function argument"),
 			),
 			MustBe(Expect(Sequence(Discard(SpacesAndTabs), charComma, DiscardedWhitespaceNewlineComments), "comma")),
@@ -29,99 +29,119 @@ type namedArg struct {
 	value any
 }
 
-func namedArgParser(pCtx Context) Func {
+func namedArgParser(pCtx Context) Func[namedArg] {
 	pattern := Sequence(
-		SnakeCase,
-		charColon,
-		Discard(SpacesAndTabs),
-		MustBe(Expect(queryParser(pCtx), "argument value")),
+		FuncAsAny(SnakeCase),
+		FuncAsAny(charColon),
+		FuncAsAny(Discard(SpacesAndTabs)),
+		FuncAsAny(MustBe(Expect(queryParser(pCtx), "argument value"))),
 	)
 
-	return func(input []rune) Result {
+	return func(input []rune) Result[namedArg] {
+		res := pattern(input)
+		if res.Err != nil {
+			return Fail[namedArg](res.Err, input)
+		}
+
+		resSlice := res.Payload
+		return Success(namedArg{name: resSlice[0].(string), value: resSlice[3]}, res.Remaining)
+	}
+}
+
+func parseMapExpression(fn query.Function, pCtx Context) Func[query.Function] {
+	// foo.(bar | baz)
+	//     ^---------^
+	pattern := TakeOnly(2, Sequence(
+		strToQuery(Expect(charBracketOpen, "method")),
+		strToQuery(DiscardedWhitespaceNewlineComments),
+		queryParser(pCtx),
+		strToQuery(DiscardedWhitespaceNewlineComments),
+		strToQuery(charBracketClose),
+	))
+
+	return func(input []rune) Result[query.Function] {
 		res := pattern(input)
 		if res.Err != nil {
 			return res
 		}
 
-		resSlice := res.Payload.([]any)
-		res.Payload = namedArg{name: resSlice[0].(string), value: resSlice[3]}
-		return res
-	}
-}
-
-func parseFunctionTail(fn query.Function, pCtx Context) Func {
-	pattern := OneOf(
-		Sequence(
-			Expect(charBracketOpen, "method"),
-			DiscardedWhitespaceNewlineComments,
-			queryParser(pCtx),
-			DiscardedWhitespaceNewlineComments,
-			charBracketClose,
-		),
-		methodParser(fn, pCtx),
-		fieldReferenceParser(fn),
-	)
-
-	return func(input []rune) Result {
-		res := pattern(input)
-		if seqSlice, isSlice := res.Payload.([]any); isSlice {
-			method, err := query.NewMapMethod(fn, seqSlice[2].(query.Function))
-			if err != nil {
-				res.Err = NewFatalError(input, err)
-				res.Remaining = input
-			} else {
-				res.Payload = method
-			}
+		method, err := query.NewMapMethod(fn, res.Payload)
+		if err != nil {
+			res.Err = NewFatalError(input, err)
+			res.Remaining = input
+		} else {
+			res.Payload = method
 		}
 		return res
 	}
 }
 
-func parseWithTails(fnParser Func, pCtx Context) Func {
+func parseFunctionTail(fn query.Function, pCtx Context) Func[query.Function] {
+	return OneOf(
+		// foo.(bar | baz)
+		//     ^---------^
+		parseMapExpression(fn, pCtx),
+		// foo.bar()
+		//     ^---^
+		methodParser(fn, pCtx),
+		// foo.bar
+		//     ^-^
+		fieldReferenceParser(fn),
+	)
+}
+
+func parseWithTails(fnParser Func[query.Function], pCtx Context) Func[query.Function] {
 	delimPattern := Sequence(charDot, DiscardedWhitespaceNewlineComments)
 
 	mightNot := Sequence(
-		Optional(Sequence(
+		FuncAsAny(Optional(TakeOnly(0, Sequence(
 			Char('!'),
 			Discard(SpacesAndTabs),
-		)),
-		fnParser,
+		)))),
+		FuncAsAny(fnParser),
 	)
 
-	return func(input []rune) Result {
-		res := mightNot(input)
-		if res.Err != nil {
-			return res
+	return func(input []rune) Result[query.Function] {
+		var seq []any
+		var remaining []rune
+
+		if res := mightNot(input); res.Err != nil {
+			return Fail[query.Function](res.Err, input)
+		} else {
+			seq = res.Payload
+			remaining = res.Remaining
 		}
 
-		seq := res.Payload.([]any)
-		isNot := seq[0] != nil
+		isNot := seq[0].(string) == "!"
 		fn := seq[1].(query.Function)
 		for {
-			if res = delimPattern(res.Remaining); res.Err != nil {
+			if res := delimPattern(remaining); res.Err != nil {
 				if isNot {
 					fn = query.Not(fn)
 				}
 				return Success(fn, res.Remaining)
+			} else {
+				remaining = res.Remaining
 			}
-			if res = MustBe(parseFunctionTail(fn, pCtx))(res.Remaining); res.Err != nil {
-				return Fail(res.Err, input)
+
+			if res := MustBe(parseFunctionTail(fn, pCtx))(remaining); res.Err != nil {
+				return Fail[query.Function](res.Err, input)
+			} else {
+				fn = res.Payload
+				remaining = res.Remaining
 			}
-			fn = res.Payload.(query.Function)
 		}
 	}
 }
 
-func quotedPathSegmentParser(input []rune) Result {
+func quotedPathSegmentParser(input []rune) Result[string] {
 	res := QuotedString(input)
 	if res.Err != nil {
 		return res
 	}
 
-	rawSegment, _ := res.Payload.(string)
-
 	// Convert into a JSON pointer style path string.
-	rawSegment = strings.ReplaceAll(rawSegment, "~", "~0")
+	rawSegment := strings.ReplaceAll(res.Payload, "~", "~0")
 	rawSegment = strings.ReplaceAll(rawSegment, ".", "~1")
 
 	return Success(rawSegment, res.Remaining)
@@ -144,16 +164,16 @@ var fieldReferencePattern = Expect(
 	"field path",
 )
 
-func fieldReferenceParser(ctxFn query.Function) Func {
-	return func(input []rune) Result {
+func fieldReferenceParser(ctxFn query.Function) Func[query.Function] {
+	return func(input []rune) Result[query.Function] {
 		res := fieldReferencePattern(input)
 		if res.Err != nil {
-			return res
+			return Fail[query.Function](res.Err, input)
 		}
 
-		fn, err := query.NewGetMethod(ctxFn, res.Payload.(string))
+		fn, err := query.NewGetMethod(ctxFn, res.Payload)
 		if err != nil {
-			return Fail(NewFatalError(input, err), input)
+			return Fail[query.Function](NewFatalError(input, err), input)
 		}
 
 		return Success(fn, res.Remaining)
@@ -177,16 +197,12 @@ var variableReferencePattern = Expect(
 	"variable path",
 )
 
-func variableReferenceParser(input []rune) Result {
+func variableReferenceParser(input []rune) Result[query.Function] {
 	res := variableReferencePattern(input)
 	if res.Err != nil {
-		return res
+		return Fail[query.Function](res.Err, input)
 	}
-
-	path := res.Payload.([]any)[1].(string)
-	fn := query.NewVarFunction(path)
-
-	return Success(fn, res.Remaining)
+	return Success(query.NewVarFunction(res.Payload[1]), res.Remaining)
 }
 
 var metadataReferencePattern = Expect(
@@ -209,16 +225,12 @@ var metadataReferencePattern = Expect(
 	"metadata path",
 )
 
-func metadataReferenceParser(input []rune) Result {
+func metadataReferenceParser(input []rune) Result[query.Function] {
 	res := metadataReferencePattern(input)
 	if res.Err != nil {
-		return res
+		return Fail[query.Function](res.Err, input)
 	}
-
-	path, _ := res.Payload.([]any)[1].(string)
-	fn := query.NewMetaFunction(path)
-
-	return Success(fn, res.Remaining)
+	return Success(query.NewMetaFunction(res.Payload[1]), res.Remaining)
 }
 
 var fieldReferenceRootPattern = Expect(
@@ -235,16 +247,16 @@ var fieldReferenceRootPattern = Expect(
 	"field path",
 )
 
-func fieldReferenceRootParser(pCtx Context) Func {
-	return func(input []rune) Result {
+func fieldReferenceRootParser(pCtx Context) Func[query.Function] {
+	return func(input []rune) Result[query.Function] {
 		res := fieldReferenceRootPattern(input)
 		if res.Err != nil {
-			return res
+			return Fail[query.Function](res.Err, input)
 		}
 
 		var fn query.Function
 
-		path := res.Payload.(string)
+		path := res.Payload
 		if path == "this" {
 			fn = query.NewFieldFunction("")
 		} else if path == "root" {
@@ -298,61 +310,61 @@ func extractArgsParserResult(paramsDef query.Params, args []any) (*query.ParsedP
 	return parsedParams, nil
 }
 
-func methodParser(fn query.Function, pCtx Context) Func {
-	p := Sequence(Expect(SnakeCase, "method"), functionArgsParser(pCtx))
+func methodParser(fn query.Function, pCtx Context) Func[query.Function] {
+	p := Sequence(FuncAsAny(Expect(SnakeCase, "method")), FuncAsAny(functionArgsParser(pCtx)))
 
-	return func(input []rune) Result {
+	return func(input []rune) Result[query.Function] {
 		res := p(input)
 		if res.Err != nil {
-			return res
+			return Fail[query.Function](res.Err, input)
 		}
 
-		seqSlice := res.Payload.([]any)
+		seqSlice := res.Payload
 
 		targetMethod := seqSlice[0].(string)
 		params, err := pCtx.Methods.Params(targetMethod)
 		if err != nil {
-			return Fail(NewFatalError(res.Remaining, err), input)
+			return Fail[query.Function](NewFatalError(res.Remaining, err), input)
 		}
 
 		parsedParams, err := extractArgsParserResult(params, seqSlice[1].([]any))
 		if err != nil {
-			return Fail(NewFatalError(res.Remaining, err), input)
+			return Fail[query.Function](NewFatalError(res.Remaining, err), input)
 		}
 
 		method, err := pCtx.InitMethod(targetMethod, fn, parsedParams)
 		if err != nil {
-			return Fail(NewFatalError(res.Remaining, err), input)
+			return Fail[query.Function](NewFatalError(res.Remaining, err), input)
 		}
 		return Success(method, res.Remaining)
 	}
 }
 
-func functionParser(pCtx Context) Func {
-	p := Sequence(Expect(SnakeCase, "function"), functionArgsParser(pCtx))
+func functionParser(pCtx Context) Func[query.Function] {
+	p := Sequence(FuncAsAny(Expect(SnakeCase, "function")), FuncAsAny(functionArgsParser(pCtx)))
 
-	return func(input []rune) Result {
+	return func(input []rune) Result[query.Function] {
 		res := p(input)
 		if res.Err != nil {
-			return res
+			return Fail[query.Function](res.Err, input)
 		}
 
-		seqSlice := res.Payload.([]any)
+		seqSlice := res.Payload
 
 		targetFunc := seqSlice[0].(string)
 		params, err := pCtx.Functions.Params(targetFunc)
 		if err != nil {
-			return Fail(NewFatalError(res.Remaining, err), input)
+			return Fail[query.Function](NewFatalError(res.Remaining, err), input)
 		}
 
 		parsedParams, err := extractArgsParserResult(params, seqSlice[1].([]any))
 		if err != nil {
-			return Fail(NewFatalError(res.Remaining, err), input)
+			return Fail[query.Function](NewFatalError(res.Remaining, err), input)
 		}
 
 		fn, err := pCtx.InitFunction(targetFunc, parsedParams)
 		if err != nil {
-			return Fail(NewFatalError(res.Remaining, err), input)
+			return Fail[query.Function](NewFatalError(res.Remaining, err), input)
 		}
 		return Success(fn, res.Remaining)
 	}

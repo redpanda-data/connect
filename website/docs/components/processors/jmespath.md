@@ -1,5 +1,6 @@
 ---
 title: jmespath
+slug: jmespath
 type: processor
 status: stable
 categories: ["Mapping"]

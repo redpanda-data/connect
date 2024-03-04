@@ -1,5 +1,6 @@
 ---
 title: protobuf
+slug: protobuf
 type: processor
 status: stable
 categories: ["Parsing"]

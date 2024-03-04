@@ -1,5 +1,6 @@
 ---
 title: schema_registry_decode
+slug: schema_registry_decode
 type: processor
 status: beta
 categories: ["Parsing","Integration"]

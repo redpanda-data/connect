@@ -1,5 +1,6 @@
 ---
 title: switch
+slug: switch
 type: scanner
 status: stable
 ---

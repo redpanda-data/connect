@@ -13,7 +13,7 @@ func TestChar(t *testing.T) {
 
 	tests := map[string]struct {
 		input     string
-		result    any
+		result    string
 		remaining string
 		err       *Error
 	}{
@@ -51,7 +51,7 @@ func TestNotChar(t *testing.T) {
 
 	tests := map[string]struct {
 		input     string
-		result    any
+		result    string
 		remaining string
 		err       *Error
 	}{
@@ -95,7 +95,7 @@ func TestInSet(t *testing.T) {
 
 	tests := map[string]struct {
 		input     string
-		result    any
+		result    string
 		remaining string
 		err       *Error
 	}{
@@ -144,7 +144,7 @@ func TestNotInSet(t *testing.T) {
 
 	tests := map[string]struct {
 		input     string
-		result    any
+		result    string
 		remaining string
 		err       *Error
 	}{
@@ -227,7 +227,7 @@ func TestInRange(t *testing.T) {
 
 	tests := map[string]struct {
 		input     string
-		result    any
+		result    string
 		remaining string
 		err       *Error
 	}{
@@ -328,11 +328,11 @@ func TestOneOfErrors(t *testing.T) {
 	}
 
 	for name, test := range tests {
-		childParsers := []Func{}
+		childParsers := []Func[any]{}
 		for _, err := range test.resultErrs {
 			err := err
-			childParsers = append(childParsers, func([]rune) Result {
-				return Result{
+			childParsers = append(childParsers, func([]rune) Result[any] {
+				return Result[any]{
 					Err: err,
 				}
 			})
@@ -346,11 +346,11 @@ func TestOneOfErrors(t *testing.T) {
 
 func TestBestMatch(t *testing.T) {
 	tests := map[string]struct {
-		inputResults []Result
-		result       Result
+		inputResults []Result[any]
+		result       Result[any]
 	}{
 		"Three parsers fail": {
-			inputResults: []Result{
+			inputResults: []Result[any]{
 				{
 					Err:       NewError([]rune("ar"), "foo"),
 					Remaining: []rune("foobar"),
@@ -364,13 +364,13 @@ func TestBestMatch(t *testing.T) {
 					Remaining: []rune("foobar"),
 				},
 			},
-			result: Result{
+			result: Result[any]{
 				Err:       NewError([]rune("ar"), "foo"),
 				Remaining: []rune("foobar"),
 			},
 		},
 		"One parser succeeds": {
-			inputResults: []Result{
+			inputResults: []Result[any]{
 				{
 					Err:       NewError([]rune("ar"), "foo"),
 					Remaining: []rune("foobar"),
@@ -380,13 +380,13 @@ func TestBestMatch(t *testing.T) {
 					Remaining: []rune("bar"),
 				},
 			},
-			result: Result{
+			result: Result[any]{
 				Err:       NewError([]rune("ar"), "foo"),
 				Remaining: []rune("foobar"),
 			},
 		},
 		"One parser succeeds 2": {
-			inputResults: []Result{
+			inputResults: []Result[any]{
 				{
 					Err:       NewError([]rune("ar"), "foo"),
 					Remaining: []rune("foobar"),
@@ -396,13 +396,13 @@ func TestBestMatch(t *testing.T) {
 					Remaining: []rune("r"),
 				},
 			},
-			result: Result{
+			result: Result[any]{
 				Payload:   "test",
 				Remaining: []rune("r"),
 			},
 		},
 		"Three parsers fail one severe": {
-			inputResults: []Result{
+			inputResults: []Result[any]{
 				{
 					Err:       NewError([]rune("ar"), "foo"),
 					Remaining: []rune("foobar"),
@@ -416,7 +416,7 @@ func TestBestMatch(t *testing.T) {
 					Remaining: []rune("foobar"),
 				},
 			},
-			result: Result{
+			result: Result[any]{
 				Err:       NewFatalError([]rune("r"), errors.New("this is a real error")),
 				Remaining: []rune("foobar"),
 			},
@@ -424,10 +424,10 @@ func TestBestMatch(t *testing.T) {
 	}
 
 	for name, test := range tests {
-		childParsers := []Func{}
+		childParsers := []Func[any]{}
 		for _, res := range test.inputResults {
 			res := res
-			childParsers = append(childParsers, func([]rune) Result {
+			childParsers = append(childParsers, func([]rune) Result[any] {
 				return res
 			})
 		}
@@ -443,7 +443,7 @@ func TestSnakeCase(t *testing.T) {
 
 	tests := map[string]struct {
 		input     string
-		result    any
+		result    string
 		remaining string
 		err       string
 	}{
@@ -509,7 +509,7 @@ func TestTerm(t *testing.T) {
 
 	tests := map[string]struct {
 		input     string
-		result    any
+		result    string
 		remaining string
 		err       *Error
 	}{
@@ -545,9 +545,9 @@ func TestTerm(t *testing.T) {
 
 func TestUntilTerm(t *testing.T) {
 	tests := map[string]struct {
-		parser    Func
+		parser    Func[string]
 		input     string
-		result    any
+		result    string
 		remaining string
 		err       *Error
 	}{
@@ -620,7 +620,7 @@ func TestSequence(t *testing.T) {
 
 	tests := map[string]struct {
 		input     string
-		result    any
+		result    []string
 		remaining string
 		err       *Error
 	}{
@@ -645,17 +645,17 @@ func TestSequence(t *testing.T) {
 		"matches all": {
 			input:     "abcdef",
 			remaining: "",
-			result:    []any{"abc", "def"},
+			result:    []string{"abc", "def"},
 		},
 		"matches some": {
 			input:     "abcdef and this",
 			remaining: " and this",
-			result:    []any{"abc", "def"},
+			result:    []string{"abc", "def"},
 		},
 		"matches only one": {
 			input:     "abcdefabcdef",
 			remaining: "abcdef",
-			result:    []any{"abc", "def"},
+			result:    []string{"abc", "def"},
 		},
 	}
 
@@ -674,7 +674,7 @@ func TestAllOf(t *testing.T) {
 
 	tests := map[string]struct {
 		input     string
-		result    any
+		result    []string
 		remaining string
 		err       *Error
 	}{
@@ -689,27 +689,27 @@ func TestAllOf(t *testing.T) {
 		"matches first": {
 			input:     "abcNo",
 			remaining: "No",
-			result:    []any{"abc"},
+			result:    []string{"abc"},
 		},
 		"matches some of second": {
 			input:     "abcabNo",
 			remaining: "abNo",
-			result:    []any{"abc"},
+			result:    []string{"abc"},
 		},
 		"matches all": {
 			input:     "abcabc",
 			remaining: "",
-			result:    []any{"abc", "abc"},
+			result:    []string{"abc", "abc"},
 		},
 		"matches some": {
 			input:     "abcabc and this",
 			remaining: " and this",
-			result:    []any{"abc", "abc"},
+			result:    []string{"abc", "abc"},
 		},
 		"matches all of these": {
 			input:     "abcabcabcabcdef and this",
 			remaining: "def and this",
-			result:    []any{"abc", "abc", "abc", "abc"},
+			result:    []string{"abc", "abc", "abc", "abc"},
 		},
 	}
 
@@ -728,7 +728,7 @@ func TestDelimited(t *testing.T) {
 
 	tests := map[string]struct {
 		input     string
-		result    any
+		result    DelimitedResult[string, string]
 		remaining string
 		err       *Error
 	}{
@@ -753,17 +753,17 @@ func TestDelimited(t *testing.T) {
 		"matches all": {
 			input:     "abc#abc",
 			remaining: "",
-			result: DelimitedResult{
-				Primary:   []any{"abc", "abc"},
-				Delimiter: []any{"#"},
+			result: DelimitedResult[string, string]{
+				Primary:   []string{"abc", "abc"},
+				Delimiter: []string{"#"},
 			},
 		},
 		"matches some": {
 			input:     "abc#abc and this",
 			remaining: " and this",
-			result: DelimitedResult{
-				Primary:   []any{"abc", "abc"},
-				Delimiter: []any{"#"},
+			result: DelimitedResult[string, string]{
+				Primary:   []string{"abc", "abc"},
+				Delimiter: []string{"#"},
 			},
 		},
 	}
@@ -783,7 +783,7 @@ func TestDelimitedPatternAllowTrailing(t *testing.T) {
 
 	tests := map[string]struct {
 		input     string
-		result    any
+		result    []string
 		remaining string
 		err       *Error
 	}{
@@ -803,12 +803,12 @@ func TestDelimitedPatternAllowTrailing(t *testing.T) {
 		"matches first": {
 			input:     "#abc!No",
 			remaining: "No",
-			result:    []any{"abc"},
+			result:    []string{"abc"},
 		},
 		"matches first trailing": {
 			input:     "#abc,!No",
 			remaining: "No",
-			result:    []any{"abc"},
+			result:    []string{"abc"},
 		},
 		"matches some of second": {
 			input:     "#abc,abNo",
@@ -823,22 +823,22 @@ func TestDelimitedPatternAllowTrailing(t *testing.T) {
 		"matches all": {
 			input:     "#abc,abc!",
 			remaining: "",
-			result:    []any{"abc", "abc"},
+			result:    []string{"abc", "abc"},
 		},
 		"matches all trailing": {
 			input:     "#abc,abc,!",
 			remaining: "",
-			result:    []any{"abc", "abc"},
+			result:    []string{"abc", "abc"},
 		},
 		"matches some": {
 			input:     "#abc,abc! and this",
 			remaining: " and this",
-			result:    []any{"abc", "abc"},
+			result:    []string{"abc", "abc"},
 		},
 		"matches all of these": {
 			input:     "#abc,abc,abc,abc!def and this",
 			remaining: "def and this",
-			result:    []any{"abc", "abc", "abc", "abc"},
+			result:    []string{"abc", "abc", "abc", "abc"},
 		},
 	}
 
@@ -854,65 +854,65 @@ func TestDelimitedPatternAllowTrailing(t *testing.T) {
 
 func TestMustBe(t *testing.T) {
 	tests := map[string]struct {
-		inputRes  Result
-		outputRes Result
+		inputRes  Result[any]
+		outputRes Result[any]
 	}{
 		"No error": {
-			inputRes: Result{
+			inputRes: Result[any]{
 				Payload:   "foo",
 				Remaining: []rune("foobar"),
 			},
-			outputRes: Result{
+			outputRes: Result[any]{
 				Payload:   "foo",
 				Remaining: []rune("foobar"),
 			},
 		},
 		"Real error": {
-			inputRes: Result{
+			inputRes: Result[any]{
 				Err:       NewFatalError(nil, errors.New("testerr")),
 				Remaining: []rune("foobar"),
 			},
-			outputRes: Result{
+			outputRes: Result[any]{
 				Err:       NewFatalError(nil, errors.New("testerr")),
 				Remaining: []rune("foobar"),
 			},
 		},
 		"Expected error": {
-			inputRes: Result{
+			inputRes: Result[any]{
 				Err:       NewError(nil, "testerr"),
 				Remaining: []rune("foobar"),
 			},
-			outputRes: Result{
+			outputRes: Result[any]{
 				Err:       NewFatalError(nil, errors.New("required"), "testerr"),
 				Remaining: []rune("foobar"),
 			},
 		},
 		"Expected already fatal error": {
-			inputRes: Result{
+			inputRes: Result[any]{
 				Err:       NewFatalError(nil, errors.New("testerr"), "testerr"),
 				Remaining: []rune("foobar"),
 			},
-			outputRes: Result{
+			outputRes: Result[any]{
 				Err:       NewFatalError(nil, errors.New("testerr"), "testerr"),
 				Remaining: []rune("foobar"),
 			},
 		},
 		"Expected and positioned error": {
-			inputRes: Result{
+			inputRes: Result[any]{
 				Err:       NewError([]rune("foo"), "testerr"),
 				Remaining: []rune("foobar"),
 			},
-			outputRes: Result{
+			outputRes: Result[any]{
 				Err:       NewFatalError([]rune("foo"), errors.New("required"), "testerr"),
 				Remaining: []rune("foobar"),
 			},
 		},
 		"Fatal and positioned error": {
-			inputRes: Result{
+			inputRes: Result[any]{
 				Err:       NewFatalError([]rune("foo"), errors.New("testerr")),
 				Remaining: []rune("foobar"),
 			},
-			outputRes: Result{
+			outputRes: Result[any]{
 				Err:       NewFatalError([]rune("foo"), errors.New("testerr")),
 				Remaining: []rune("foobar"),
 			},
@@ -921,7 +921,7 @@ func TestMustBe(t *testing.T) {
 
 	for name, test := range tests {
 		test := test
-		childParser := func([]rune) Result {
+		childParser := func([]rune) Result[any] {
 			return test.inputRes
 		}
 		t.Run(name, func(t *testing.T) {
@@ -933,45 +933,45 @@ func TestMustBe(t *testing.T) {
 
 func TestInterceptExpectedError(t *testing.T) {
 	tests := map[string]struct {
-		inputRes  Result
-		outputRes Result
+		inputRes  Result[any]
+		outputRes Result[any]
 	}{
 		"No error": {
-			inputRes: Result{
+			inputRes: Result[any]{
 				Payload:   "foo",
 				Remaining: []rune("foobar"),
 			},
-			outputRes: Result{
+			outputRes: Result[any]{
 				Payload:   "foo",
 				Remaining: []rune("foobar"),
 			},
 		},
 		"Real error": {
-			inputRes: Result{
+			inputRes: Result[any]{
 				Err:       NewFatalError(nil, errors.New("testerr")),
 				Remaining: []rune("foobar"),
 			},
-			outputRes: Result{
+			outputRes: Result[any]{
 				Err:       NewFatalError(nil, errors.New("testerr")),
 				Remaining: []rune("foobar"),
 			},
 		},
 		"Expected error": {
-			inputRes: Result{
+			inputRes: Result[any]{
 				Err:       NewError(nil, "testerr"),
 				Remaining: []rune("foobar"),
 			},
-			outputRes: Result{
+			outputRes: Result[any]{
 				Err:       NewError(nil, "foobar"),
 				Remaining: []rune("foobar"),
 			},
 		},
 		"Expected and positioned error": {
-			inputRes: Result{
+			inputRes: Result[any]{
 				Err:       NewError([]rune("foo"), "testerr"),
 				Remaining: []rune("foobar"),
 			},
-			outputRes: Result{
+			outputRes: Result[any]{
 				Err:       NewError([]rune("foo"), "foobar"),
 				Remaining: []rune("foobar"),
 			},
@@ -980,7 +980,7 @@ func TestInterceptExpectedError(t *testing.T) {
 
 	for name, test := range tests {
 		test := test
-		childParser := func([]rune) Result {
+		childParser := func([]rune) Result[any] {
 			return test.inputRes
 		}
 		t.Run(name, func(t *testing.T) {
@@ -995,7 +995,7 @@ func TestMatch(t *testing.T) {
 
 	tests := map[string]struct {
 		input     string
-		result    any
+		result    string
 		remaining string
 		err       *Error
 	}{
@@ -1082,7 +1082,7 @@ func TestDiscard(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			res := parser([]rune(test.input))
 			require.Nil(t, res.Err)
-			assert.Nil(t, res.Payload)
+			assert.Empty(t, res.Payload)
 			assert.Equal(t, test.remaining, string(res.Remaining), "Remaining")
 		})
 	}
@@ -1130,7 +1130,7 @@ func TestDiscardAll(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			res := parser([]rune(test.input))
 			require.Nil(t, res.Err)
-			assert.Nil(t, res.Payload)
+			assert.Empty(t, res.Payload)
 			assert.Equal(t, test.remaining, string(res.Remaining), "Remaining")
 		})
 	}
@@ -1146,7 +1146,7 @@ func TestOptional(t *testing.T) {
 
 	tests := map[string]struct {
 		input     string
-		result    any
+		result    []string
 		remaining string
 		err       *Error
 	}{
@@ -1166,7 +1166,7 @@ func TestOptional(t *testing.T) {
 		"full string": {
 			input:     "abcdef",
 			remaining: "",
-			result:    []any{"abc", "def"},
+			result:    []string{"abc", "def"},
 		},
 	}
 
@@ -1239,7 +1239,7 @@ func TestBoolean(t *testing.T) {
 
 	tests := map[string]struct {
 		input     string
-		result    any
+		result    bool
 		remaining string
 		err       *Error
 	}{
@@ -1288,7 +1288,7 @@ func TestQuotedString(t *testing.T) {
 
 	tests := map[string]struct {
 		input     string
-		result    any
+		result    string
 		remaining string
 		err       *Error
 	}{
@@ -1342,7 +1342,7 @@ func TestQuotedMultilineString(t *testing.T) {
 
 	tests := map[string]struct {
 		input     string
-		result    any
+		result    string
 		remaining string
 		err       *Error
 	}{
@@ -1597,7 +1597,7 @@ func TestSpacesAndTabs(t *testing.T) {
 
 	tests := map[string]struct {
 		input     string
-		result    any
+		result    string
 		remaining string
 		err       *Error
 	}{
@@ -1646,7 +1646,7 @@ func TestNewline(t *testing.T) {
 
 	tests := map[string]struct {
 		input     string
-		result    any
+		result    string
 		remaining string
 		err       *Error
 	}{
@@ -1704,7 +1704,7 @@ func TestAnyOf(t *testing.T) {
 
 	tests := map[string]struct {
 		input     string
-		result    any
+		result    string
 		remaining string
 		err       *Error
 	}{
@@ -1761,6 +1761,45 @@ func TestAnyOf(t *testing.T) {
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
 			res := anyOf([]rune(test.input))
+			require.Equal(t, test.err, res.Err, "Error")
+			assert.Equal(t, test.result, res.Payload, "Result")
+			assert.Equal(t, test.remaining, string(res.Remaining), "Remaining")
+		})
+	}
+}
+
+func TestTakeOnly(t *testing.T) {
+	pattern := TakeOnly(1, UntilFail(OneOf(Char('1'), Char('2'), Char('3'))))
+
+	tests := map[string]struct {
+		input     string
+		result    string
+		remaining string
+		err       *Error
+	}{
+		"empty input": {
+			err: NewError([]rune(""), "1", "2", "3"),
+		},
+		"fewer than needed": {
+			input:     "2",
+			result:    "",
+			remaining: "",
+		},
+		"exactly needed": {
+			input:     "12",
+			result:    "2",
+			remaining: "",
+		},
+		"more than needed": {
+			input:     "123",
+			result:    "2",
+			remaining: "",
+		},
+	}
+
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			res := pattern([]rune(test.input))
 			require.Equal(t, test.err, res.Err, "Error")
 			assert.Equal(t, test.result, res.Payload, "Result")
 			assert.Equal(t, test.remaining, string(res.Remaining), "Remaining")

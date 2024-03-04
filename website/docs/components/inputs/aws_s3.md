@@ -1,5 +1,6 @@
 ---
 title: aws_s3
+slug: aws_s3
 type: input
 status: stable
 categories: ["Services","AWS"]

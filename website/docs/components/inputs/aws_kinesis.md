@@ -1,5 +1,6 @@
 ---
 title: aws_kinesis
+slug: aws_kinesis
 type: input
 status: stable
 categories: ["Services","AWS"]
@@ -32,6 +33,8 @@ input:
   label: ""
   aws_kinesis:
     streams: [] # No default (required)
+    enhanced_fanout:
+      consumer_name: ""
     dynamodb:
       table: ""
       create: false
@@ -54,6 +57,8 @@ input:
   label: ""
   aws_kinesis:
     streams: [] # No default (required)
+    enhanced_fanout:
+      consumer_name: ""
     dynamodb:
       table: ""
       create: false
@@ -119,6 +124,21 @@ streams:
   - foo
   - arn:aws:kinesis:*:111122223333:stream/my-stream
 ```
+
+### `enhanced_fanout`
+
+Determines whether to ingest from Kinesis stream where Enhanced Fanout is enabled.
+
+
+Type: `object`  
+
+### `enhanced_fanout.consumer_name`
+
+The name of consumer. Will register a new consumer with this name if it isnt already registered.
+
+
+Type: `string`  
+Default: `""`  
 
 ### `dynamodb`
 

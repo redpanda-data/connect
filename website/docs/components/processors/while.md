@@ -1,5 +1,6 @@
 ---
 title: while
+slug: while
 type: processor
 status: stable
 categories: ["Composition"]

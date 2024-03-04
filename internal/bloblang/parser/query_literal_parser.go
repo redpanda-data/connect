@@ -4,8 +4,8 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/bloblang/query"
 )
 
-func dynamicArrayParser(pCtx Context) Func {
-	return func(input []rune) Result {
+func dynamicArrayParser(pCtx Context) Func[any] {
+	return func(input []rune) Result[any] {
 		res := DelimitedPattern(
 			Expect(Sequence(
 				charSquareOpen,
@@ -23,16 +23,14 @@ func dynamicArrayParser(pCtx Context) Func {
 			),
 		)(input)
 		if res.Err != nil {
-			return res
+			return Fail[any](res.Err, input)
 		}
-
-		res.Payload = query.NewArrayLiteral(res.Payload.([]any)...)
-		return res
+		return Success[any](query.NewArrayLiteral(res.Payload...), res.Remaining)
 	}
 }
 
-func dynamicObjectParser(pCtx Context) Func {
-	return func(input []rune) Result {
+func dynamicObjectParser(pCtx Context) Func[any] {
+	return func(input []rune) Result[any] {
 		res := DelimitedPattern(
 			Expect(Sequence(
 				charSquigOpen,
@@ -40,13 +38,13 @@ func dynamicObjectParser(pCtx Context) Func {
 			), "object"),
 			Sequence(
 				OneOf(
-					QuotedString,
-					Expect(queryParser(pCtx), "object"),
+					FuncAsAny(QuotedString),
+					FuncAsAny(Expect(queryParser(pCtx), "object")),
 				),
-				Discard(SpacesAndTabs),
-				charColon,
-				DiscardedWhitespaceNewlineComments,
-				Expect(queryParser(pCtx), "object"),
+				FuncAsAny(Discard(SpacesAndTabs)),
+				FuncAsAny(charColon),
+				FuncAsAny(DiscardedWhitespaceNewlineComments),
+				FuncAsAny(Expect(queryParser(pCtx), "object")),
 			),
 			Sequence(
 				Discard(SpacesAndTabs),
@@ -59,49 +57,45 @@ func dynamicObjectParser(pCtx Context) Func {
 			),
 		)(input)
 		if res.Err != nil {
-			return res
+			return Fail[any](res.Err, input)
 		}
 
 		values := [][2]any{}
 
-		for _, sequenceValue := range res.Payload.([]any) {
-			slice := sequenceValue.([]any)
-			values = append(values, [2]any{slice[0], slice[4]})
+		for _, sequenceValue := range res.Payload {
+			values = append(values, [2]any{sequenceValue[0], sequenceValue[4]})
 		}
 
 		lit, err := query.NewMapLiteral(values)
 		if err != nil {
-			res.Err = NewFatalError(input, err)
-			res.Remaining = input
-		} else {
-			res.Payload = lit
+			return Fail[any](NewFatalError(input, err), input)
 		}
-		return res
+
+		return Success(lit, res.Remaining)
 	}
 }
 
-func literalValueParser(pCtx Context) Func {
+func literalValueParser(pCtx Context) Func[query.Function] {
 	p := OneOf(
-		Boolean,
-		Number,
-		TripleQuoteString,
-		QuotedString,
-		Null,
-		dynamicArrayParser(pCtx),
-		dynamicObjectParser(pCtx),
+		FuncAsAny(Boolean),
+		FuncAsAny(Number),
+		FuncAsAny(TripleQuoteString),
+		FuncAsAny(QuotedString),
+		FuncAsAny(Null),
+		FuncAsAny(dynamicArrayParser(pCtx)),
+		FuncAsAny(dynamicObjectParser(pCtx)),
 	)
 
-	return func(input []rune) Result {
+	return func(input []rune) Result[query.Function] {
 		res := p(input)
 		if res.Err != nil {
-			return res
+			return Fail[query.Function](res.Err, res.Remaining)
 		}
 
-		if _, isFunction := res.Payload.(query.Function); isFunction {
-			return res
+		if f, isFunction := res.Payload.(query.Function); isFunction {
+			return Success(f, res.Remaining)
 		}
 
-		res.Payload = query.NewLiteralFunction("", res.Payload)
-		return res
+		return Success[query.Function](query.NewLiteralFunction("", res.Payload), res.Remaining)
 	}
 }

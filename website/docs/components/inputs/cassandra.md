@@ -1,5 +1,6 @@
 ---
 title: cassandra
+slug: cassandra
 type: input
 status: experimental
 categories: ["Services"]

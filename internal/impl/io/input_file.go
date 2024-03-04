@@ -197,8 +197,10 @@ func (f *fileConsumer) ReadBatch(ctx context.Context) (service.MessageBatch, ser
 				err = component.ErrTimeout
 			}
 			if err != component.ErrTimeout {
+				f.scannerMut.Lock()
 				scannerInfo.scanner.Close(ctx)
 				f.scannerInfo = nil
+				f.scannerMut.Unlock()
 			}
 			if errors.Is(err, io.EOF) {
 				continue

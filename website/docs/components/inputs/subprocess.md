@@ -1,5 +1,6 @@
 ---
 title: subprocess
+slug: subprocess
 type: input
 status: beta
 categories: ["Utility"]

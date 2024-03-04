@@ -1,5 +1,6 @@
 ---
 title: snowflake_put
+slug: snowflake_put
 type: output
 status: beta
 categories: ["Services"]

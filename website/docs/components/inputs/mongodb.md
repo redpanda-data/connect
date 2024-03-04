@@ -1,5 +1,6 @@
 ---
 title: mongodb
+slug: mongodb
 type: input
 status: experimental
 categories: ["Services"]

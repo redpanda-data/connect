@@ -1,5 +1,6 @@
 ---
 title: inproc
+slug: inproc
 type: output
 status: stable
 categories: ["Utility"]

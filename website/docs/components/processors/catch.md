@@ -1,5 +1,6 @@
 ---
 title: catch
+slug: catch
 type: processor
 status: stable
 categories: ["Composition"]

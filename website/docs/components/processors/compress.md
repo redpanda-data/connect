@@ -1,5 +1,6 @@
 ---
 title: compress
+slug: compress
 type: processor
 status: stable
 categories: ["Parsing"]

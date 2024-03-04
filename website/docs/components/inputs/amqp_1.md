@@ -1,5 +1,6 @@
 ---
 title: amqp_1
+slug: amqp_1
 type: input
 status: stable
 categories: ["Services"]
@@ -45,6 +46,7 @@ input:
     source_address: /foo # No default (required)
     azure_renew_lock: false
     read_header: false
+    credit: 64
     tls:
       enabled: false
       skip_cert_verify: false
@@ -83,6 +85,12 @@ By setting `read_header` to `true`, additional message header properties will be
 - amqp_first_acquirer
 - amqp_delivery_count
 ```
+
+## Performance
+
+This input benefits from receiving multiple messages in flight in parallel for improved performance. 
+You can tune the max number of in flight messages with the field `credit`.
+
 
 ## Fields
 
@@ -142,6 +150,15 @@ Read additional message header fields into `amqp_*` metadata properties.
 Type: `bool`  
 Default: `false`  
 Requires version 4.25.0 or newer  
+
+### `credit`
+
+Specifies the maximum number of unacknowledged messages the sender can transmit. Once this limit is reached, no more messages will arrive until messages are acknowledged and settled.
+
+
+Type: `int`  
+Default: `64`  
+Requires version 4.26.0 or newer  
 
 ### `tls`
 

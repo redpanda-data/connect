@@ -2,6 +2,7 @@ package amqp1
 
 import (
 	"context"
+	_ "embed"
 	"errors"
 	"fmt"
 	"math/rand"
@@ -17,34 +18,15 @@ import (
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
+//go:embed input_description.md
+var inputDescription string
+
 func amqp1InputSpec() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Stable().
 		Categories("Services").
 		Summary("Reads messages from an AMQP (1.0) server.").
-		Description(`
-### Metadata
-
-This input adds the following metadata fields to each message:
-
-`+"``` text"+`
-- amqp_content_type
-- amqp_content_encoding
-- amqp_creation_time
-- All string typed message annotations
-`+"```"+`
-
-You can access these metadata fields using [function interpolation](/docs/configuration/interpolation#bloblang-queries).
-
-By setting `+"`read_header` to `true`"+`, additional message header properties will be added to each message:
-
-`+"``` text"+`
-- amqp_durable
-- amqp_priority
-- amqp_ttl
-- amqp_first_acquirer
-- amqp_delivery_count
-`+"```").
+		Description(inputDescription).
 		Fields(
 			service.NewURLField(urlField).
 				Description("A URL to connect to.").
@@ -73,6 +55,12 @@ By setting `+"`read_header` to `true`"+`, additional message header properties w
 				Description("Read additional message header fields into `amqp_*` metadata properties.").
 				Version("4.25.0").
 				Default(false).Advanced(),
+			service.NewIntField(creditField).
+				Description("Specifies the maximum number of unacknowledged messages the sender can transmit. Once this limit is reached, no more messages will arrive until messages are acknowledged and settled.").
+				LintRule(`root = if this < 1 { [ "`+creditField+` must be at least 1" ] }`).
+				Version("4.26.0").
+				Default(64).
+				Advanced(),
 			service.NewTLSToggledField(tlsField),
 			saslFieldSpec(),
 		).LintRule(`
@@ -99,6 +87,7 @@ type amqp1Reader struct {
 	sourceAddr string
 	renewLock  bool
 	getHeader  bool
+	credit     int // max_in_flight
 	connOpts   *amqp.ConnOptions
 	log        *service.Logger
 
@@ -148,6 +137,10 @@ func amqp1ReaderFromParsed(conf *service.ParsedConfig, mgr *service.Resources) (
 		return nil, err
 	}
 
+	if a.credit, err = conf.FieldInt(creditField); err != nil {
+		return nil, err
+	}
+
 	if err := saslOptFnsFromParsed(conf, a.connOpts); err != nil {
 		return nil, err
 	}
@@ -188,7 +181,9 @@ func (a *amqp1Reader) Connect(ctx context.Context) (err error) {
 	}
 
 	// Create a receiver
-	if conn.receiver, err = conn.session.NewReceiver(ctx, a.sourceAddr, nil); err != nil {
+	if conn.receiver, err = conn.session.NewReceiver(ctx, a.sourceAddr, &amqp.ReceiverOptions{
+		Credit: int32(a.credit),
+	}); err != nil {
 		_ = conn.Close(ctx)
 		return
 	}

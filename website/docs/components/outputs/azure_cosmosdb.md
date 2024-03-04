@@ -1,5 +1,6 @@
 ---
 title: azure_cosmosdb
+slug: azure_cosmosdb
 type: output
 status: experimental
 categories: ["Azure"]

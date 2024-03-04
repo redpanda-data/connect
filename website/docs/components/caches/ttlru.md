@@ -1,5 +1,6 @@
 ---
 title: ttlru
+slug: ttlru
 type: cache
 status: stable
 ---

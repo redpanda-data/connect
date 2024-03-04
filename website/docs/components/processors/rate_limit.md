@@ -1,5 +1,6 @@
 ---
 title: rate_limit
+slug: rate_limit
 type: processor
 status: stable
 categories: ["Utility"]

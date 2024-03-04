@@ -1,5 +1,6 @@
 ---
 title: grok
+slug: grok
 type: processor
 status: stable
 categories: ["Parsing"]

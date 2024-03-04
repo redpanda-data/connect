@@ -1,5 +1,6 @@
 ---
 title: re_match
+slug: re_match
 type: scanner
 status: stable
 ---

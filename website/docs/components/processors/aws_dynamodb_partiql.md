@@ -1,5 +1,6 @@
 ---
 title: aws_dynamodb_partiql
+slug: aws_dynamodb_partiql
 type: processor
 status: experimental
 categories: ["Integration"]

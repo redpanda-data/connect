@@ -1,5 +1,6 @@
 ---
 title: mongodb
+slug: mongodb
 type: processor
 status: experimental
 categories: ["Services"]

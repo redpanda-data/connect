@@ -1,5 +1,6 @@
 ---
 title: gcp_cloudtrace
+slug: gcp_cloudtrace
 type: tracer
 status: experimental
 ---

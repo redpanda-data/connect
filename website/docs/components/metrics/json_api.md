@@ -1,5 +1,6 @@
 ---
 title: json_api
+slug: json_api
 type: metrics
 status: stable
 ---

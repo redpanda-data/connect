@@ -1,5 +1,6 @@
 ---
 title: javascript
+slug: javascript
 type: processor
 status: experimental
 categories: ["Mapping"]

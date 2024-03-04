@@ -1,5 +1,6 @@
 ---
 title: aws_dynamodb
+slug: aws_dynamodb
 type: output
 status: stable
 categories: ["Services","AWS"]

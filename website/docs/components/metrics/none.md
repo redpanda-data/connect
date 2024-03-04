@@ -1,5 +1,6 @@
 ---
 title: none
+slug: none
 type: metrics
 status: stable
 ---

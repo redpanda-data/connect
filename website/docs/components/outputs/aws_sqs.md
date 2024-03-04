@@ -1,5 +1,6 @@
 ---
 title: aws_sqs
+slug: aws_sqs
 type: output
 status: stable
 categories: ["Services","AWS"]

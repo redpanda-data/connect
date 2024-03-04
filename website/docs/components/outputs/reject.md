@@ -1,5 +1,6 @@
 ---
 title: reject
+slug: reject
 type: output
 status: stable
 categories: ["Utility"]

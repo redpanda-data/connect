@@ -1,5 +1,6 @@
 ---
 title: pulsar
+slug: pulsar
 type: input
 status: experimental
 categories: ["Services"]

@@ -1,5 +1,6 @@
 ---
 title: amqp_0_9
+slug: amqp_0_9
 type: output
 status: stable
 categories: ["Services"]

@@ -1,5 +1,6 @@
 ---
 title: memory
+slug: memory
 type: cache
 status: stable
 ---

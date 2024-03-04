@@ -1,5 +1,6 @@
 ---
 title: mutation
+slug: mutation
 type: processor
 status: stable
 categories: ["Mapping","Parsing"]

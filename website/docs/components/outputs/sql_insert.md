@@ -1,5 +1,6 @@
 ---
 title: sql_insert
+slug: sql_insert
 type: output
 status: stable
 categories: ["Services"]

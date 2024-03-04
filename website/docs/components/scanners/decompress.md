@@ -1,5 +1,6 @@
 ---
 title: decompress
+slug: decompress
 type: scanner
 status: stable
 ---

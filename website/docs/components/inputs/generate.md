@@ -1,5 +1,6 @@
 ---
 title: generate
+slug: generate
 type: input
 status: stable
 categories: ["Utility"]

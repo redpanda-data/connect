@@ -1,5 +1,6 @@
 ---
 title: xml
+slug: xml
 type: processor
 status: beta
 categories: ["Parsing"]

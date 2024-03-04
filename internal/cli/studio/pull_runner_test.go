@@ -299,6 +299,15 @@ output:
 				"main_config": obj{"name": "maina.yaml", "modified": 1001.0},
 				"run_error":   "failed bootstrap config read: maina.yaml: (5,1) unable to infer input type from candidates: [blahbluh]",
 			})
+			jsonResponse(t, w, obj{})
+		}),
+		expectedRequest("/api/v1/node/session/foosession/deployment/depaid/sync", func(t *testing.T, w http.ResponseWriter, r *http.Request) {
+			require.Equal(t, "POST", r.Method)
+			jsonRequestSupersetMatch(t, r, obj{
+				"name":        "foobarnode",
+				"main_config": obj{"name": "maina.yaml", "modified": 1001.0},
+				"run_error":   "failed bootstrap config read: maina.yaml: (5,1) unable to infer input type from candidates: [blahbluh]",
+			})
 			jsonResponse(t, w, obj{
 				"main_config": obj{"name": "maina.yaml", "modified": 1002},
 			})
@@ -324,6 +333,7 @@ output:
 		}),
 	)
 
+	pr.Sync(ctx)
 	pr.Sync(ctx)
 
 	assert.Eventually(t, func() bool {

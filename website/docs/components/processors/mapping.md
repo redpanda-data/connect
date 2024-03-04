@@ -1,5 +1,6 @@
 ---
 title: mapping
+slug: mapping
 type: processor
 status: stable
 categories: ["Mapping","Parsing"]

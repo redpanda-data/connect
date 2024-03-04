@@ -1,5 +1,6 @@
 ---
 title: broker
+slug: broker
 type: input
 status: stable
 categories: ["Utility"]

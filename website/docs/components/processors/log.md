@@ -1,5 +1,6 @@
 ---
 title: log
+slug: log
 type: processor
 status: stable
 categories: ["Utility"]
