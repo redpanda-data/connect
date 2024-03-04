@@ -29,7 +29,7 @@ output:
 ```
 
 		This output POSTs messages to a Slack channel via webhook.
-		The format of a message should be a JSON object should match the [Slack Webhook API message](https://api.slack.com/messaging/webhooks#getting_started) type
+		The format of a message should be a JSON object should match the [Golang Slack WebhookMessage struct](https://github.com/slack-go/slack/blob/v0.12.5/webhooks.go#L13) type
 
 ## Fields
 
