@@ -1,5 +1,6 @@
 ---
 title: split
+slug: split
 type: processor
 status: stable
 categories: ["Utility"]

@@ -1,5 +1,6 @@
 ---
 title: logger
+slug: logger
 type: metrics
 status: beta
 ---

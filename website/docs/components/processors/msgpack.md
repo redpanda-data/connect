@@ -1,5 +1,6 @@
 ---
 title: msgpack
+slug: msgpack
 type: processor
 status: beta
 categories: ["Parsing"]

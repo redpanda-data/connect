@@ -1,5 +1,6 @@
 ---
 title: discord
+slug: discord
 type: output
 status: experimental
 categories: ["Services","Social"]

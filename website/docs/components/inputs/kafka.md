@@ -1,5 +1,6 @@
 ---
 title: kafka
+slug: kafka
 type: input
 status: stable
 categories: ["Services"]

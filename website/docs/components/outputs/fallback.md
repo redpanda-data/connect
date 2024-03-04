@@ -1,5 +1,6 @@
 ---
 title: fallback
+slug: fallback
 type: output
 status: stable
 categories: ["Utility"]

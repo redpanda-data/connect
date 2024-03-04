@@ -1,5 +1,6 @@
 ---
 title: sftp
+slug: sftp
 type: output
 status: beta
 categories: ["Network"]

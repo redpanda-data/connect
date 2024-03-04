@@ -1,5 +1,6 @@
 ---
 title: cassandra
+slug: cassandra
 type: output
 status: beta
 ---

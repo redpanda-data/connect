@@ -1,5 +1,6 @@
 ---
 title: azure_table_storage
+slug: azure_table_storage
 type: input
 status: beta
 categories: ["Services","Azure"]

@@ -1,5 +1,6 @@
 ---
 title: file
+slug: file
 type: input
 status: stable
 categories: ["Local"]

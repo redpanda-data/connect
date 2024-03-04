@@ -1,5 +1,6 @@
 ---
 title: wasm
+slug: wasm
 type: processor
 status: experimental
 categories: ["Utility"]

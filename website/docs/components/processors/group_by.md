@@ -1,5 +1,6 @@
 ---
 title: group_by
+slug: group_by
 type: processor
 status: stable
 categories: ["Composition"]

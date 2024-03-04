@@ -1,5 +1,6 @@
 ---
 title: noop
+slug: noop
 type: processor
 status: stable
 ---

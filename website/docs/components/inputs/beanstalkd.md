@@ -1,5 +1,6 @@
 ---
 title: beanstalkd
+slug: beanstalkd
 type: input
 status: experimental
 categories: ["Services"]

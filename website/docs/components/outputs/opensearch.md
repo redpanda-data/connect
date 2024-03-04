@@ -1,5 +1,6 @@
 ---
 title: opensearch
+slug: opensearch
 type: output
 status: stable
 categories: ["Services"]

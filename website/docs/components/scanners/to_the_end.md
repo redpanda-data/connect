@@ -1,5 +1,6 @@
 ---
 title: to_the_end
+slug: to_the_end
 type: scanner
 status: stable
 ---

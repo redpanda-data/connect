@@ -1,5 +1,6 @@
 ---
 title: nats
+slug: nats
 type: output
 status: stable
 categories: ["Services"]

@@ -1,5 +1,6 @@
 ---
 title: prometheus
+slug: prometheus
 type: metrics
 status: stable
 ---

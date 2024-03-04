@@ -5,7 +5,21 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
-## 4.25.0 - TBD
+### Added
+
+- Field `credit` added to the `amqp_1` input to specify the maximum number of unacknowledged messages the sender can transmit. 
+
+### Changed
+
+- The default value of the `amqp_1.credit` input has changed from `1` to `64` 
+
+## 4.25.1 - 2024-03-01
+
+### Fixed
+
+- Fixed a regression in v4.25.0 where [template based components](https://www.benthos.dev/docs/configuration/templating) were not parsing correctly from configs.
+
+## 4.25.0 - 2024-03-01
 
 ### Added
 

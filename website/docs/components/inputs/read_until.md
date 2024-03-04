@@ -1,5 +1,6 @@
 ---
 title: read_until
+slug: read_until
 type: input
 status: stable
 categories: ["Utility"]

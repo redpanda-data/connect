@@ -1,5 +1,6 @@
 ---
 title: http
+slug: http
 type: processor
 status: stable
 categories: ["Integration"]

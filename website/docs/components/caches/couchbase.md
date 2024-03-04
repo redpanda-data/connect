@@ -1,5 +1,6 @@
 ---
 title: couchbase
+slug: couchbase
 type: cache
 status: experimental
 ---

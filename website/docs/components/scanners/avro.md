@@ -1,5 +1,6 @@
 ---
 title: avro
+slug: avro
 type: scanner
 status: stable
 ---

@@ -1,5 +1,6 @@
 ---
 title: parse_log
+slug: parse_log
 type: processor
 status: stable
 categories: ["Parsing"]

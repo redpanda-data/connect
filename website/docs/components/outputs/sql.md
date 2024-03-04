@@ -1,5 +1,6 @@
 ---
 title: sql
+slug: sql
 type: output
 status: deprecated
 categories: ["Services"]

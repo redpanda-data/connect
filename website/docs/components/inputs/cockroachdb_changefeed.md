@@ -1,5 +1,6 @@
 ---
 title: cockroachdb_changefeed
+slug: cockroachdb_changefeed
 type: input
 status: experimental
 categories: ["Integration"]

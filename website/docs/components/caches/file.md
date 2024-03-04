@@ -1,5 +1,6 @@
 ---
 title: file
+slug: file
 type: cache
 status: stable
 ---

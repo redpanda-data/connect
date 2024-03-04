@@ -1,5 +1,6 @@
 ---
 title: aws_sns
+slug: aws_sns
 type: output
 status: stable
 categories: ["Services","AWS"]

@@ -1,5 +1,6 @@
 ---
 title: schema_registry_encode
+slug: schema_registry_encode
 type: processor
 status: beta
 categories: ["Parsing","Integration"]

@@ -1,5 +1,6 @@
 ---
 title: cached
+slug: cached
 type: processor
 status: experimental
 categories: ["Utility"]

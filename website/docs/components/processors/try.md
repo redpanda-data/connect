@@ -1,5 +1,6 @@
 ---
 title: try
+slug: try
 type: processor
 status: stable
 categories: ["Composition"]

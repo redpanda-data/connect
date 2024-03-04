@@ -1,5 +1,6 @@
 ---
 title: azure_queue_storage
+slug: azure_queue_storage
 type: input
 status: beta
 categories: ["Services","Azure"]

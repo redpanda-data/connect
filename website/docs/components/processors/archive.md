@@ -1,5 +1,6 @@
 ---
 title: archive
+slug: archive
 type: processor
 status: stable
 categories: ["Parsing","Utility"]
