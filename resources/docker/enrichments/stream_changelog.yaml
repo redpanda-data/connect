@@ -1,7 +1,7 @@
 input:
   cockroachdb_changefeed:
     dsn: postgresql://root@localhost:26257/defaultdb?sslmode=disable
-    tables: [ posts, users ]
+    tables: [ posts, comments ]
     cursor_cache: cursor_cache
 
 pipeline:
@@ -15,8 +15,31 @@ pipeline:
         root = this.row.parse_json().after
         root.type = this.table.trim_suffix("s")
 
+    - branch:
+        request_map: |
+          root = if this.type == "comment" {
+            this.post
+          } else {
+            deleted()
+          }
+        processors:
+          - sql_select:
+              driver: postgres
+              dsn: postgresql://root@localhost:26257/defaultdb?sslmode=disable
+              table: posts
+              columns: [ content, author ]
+              where: id = $1
+              args_mapping: '[ content().string() ]'
+        result_map: |
+          root.post = deleted()
+          root.post.content = this.0.content
+          root.post.author = this.0.author
+
 output:
-  stdout: {}
+  nats:
+    urls:
+      - nats://localhost:4222
+    subject: feed.${! this.type }
 
 cache_resources:
   - label: cursor_cache

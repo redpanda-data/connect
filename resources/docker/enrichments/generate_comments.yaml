@@ -4,21 +4,13 @@ input:
     mapping: |
       root.id = "comment-" + random_int(min: 1).string()
       root.content = fake("paragraph")
-      root.post = "post-" + random_int(min: 1, max: 10000).string()
+      root.post = "post-" + random_int(min: 1, max: 10).string()
       root.author = "user-" + random_int(min: 1, max: 1000).string()
 
 output:
   sql_insert:
     driver: postgres
     dsn: postgresql://root@localhost:26257/defaultdb?sslmode=disable
-    init_statement: |
-      CREATE TABLE IF NOT EXISTS comments (
-        id varchar primary key,
-        content varchar,
-        post varchar,
-        author varchar,
-        updated_at timestamp
-      );
     table: comments
     columns: [ id, content, post, author, updated_at ]
     args_mapping: |

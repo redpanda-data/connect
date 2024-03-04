@@ -1,6 +1,6 @@
 input:
   generate:
-    count: 10000
+    count: 1000
     interval: ""
     mapping: |
       root.id = "user-" + counter().string()
@@ -11,13 +11,6 @@ output:
   sql_insert:
     driver: postgres
     dsn: postgresql://root@localhost:26257/defaultdb?sslmode=disable
-    init_statement: |
-      CREATE TABLE IF NOT EXISTS users (
-        id varchar primary key,
-        name varchar,
-        email varchar,
-        updated_at timestamp
-      );
     table: users
     columns: [ id, name, email, updated_at ]
     args_mapping: |
