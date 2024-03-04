@@ -1,0 +1,11 @@
+version: '3.3'
+services:
+  crdb:
+    image: cockroachdb/cockroach
+    command: [ "start-single-node", "--insecure" ]
+    volumes: [ "./init:/docker-entrypoint-initdb.d" ]
+    ports: [ "26257:26257" ]
+
+  nats:
+    image: nats
+    ports: [ "4222:4222" ]

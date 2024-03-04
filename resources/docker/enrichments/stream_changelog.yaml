@@ -1,0 +1,24 @@
+input:
+  cockroachdb_changefeed:
+    dsn: postgresql://root@localhost:26257/defaultdb?sslmode=disable
+    tables: [ posts, users ]
+    cursor_cache: cursor_cache
+
+pipeline:
+  processors:
+    # {
+    #   "primary_key": "[\"1a7ff641-3e3b-47ee-94fe-a0cadb56cd8f\", 2]",
+    #   "row": "{\"after\": {\"k\": \"1a7ff641-3e3b-47ee-94fe-a0cadb56cd8f\", \"v\": 2}, \"updated\": \"1637953249519902405.0000000000\"}",
+    #   "table": "strm_2"
+    # }
+    - mapping: |
+        root = this.row.parse_json().after
+        root.type = this.table.trim_suffix("s")
+
+output:
+  stdout: {}
+
+cache_resources:
+  - label: cursor_cache
+    file:
+      directory: .

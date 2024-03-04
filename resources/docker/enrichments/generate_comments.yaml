@@ -1,0 +1,32 @@
+input:
+  generate:
+    interval: 1s
+    mapping: |
+      root.id = "comment-" + random_int(min: 1).string()
+      root.content = fake("paragraph")
+      root.post = "post-" + random_int(min: 1, max: 10000).string()
+      root.author = "user-" + random_int(min: 1, max: 1000).string()
+
+output:
+  sql_insert:
+    driver: postgres
+    dsn: postgresql://root@localhost:26257/defaultdb?sslmode=disable
+    init_statement: |
+      CREATE TABLE IF NOT EXISTS comments (
+        id varchar primary key,
+        content varchar,
+        post varchar,
+        author varchar,
+        updated_at timestamp
+      );
+    table: comments
+    columns: [ id, content, post, author, updated_at ]
+    args_mapping: |
+      [
+        this.id,
+        this.content,
+        this.post,
+        this.author,
+        now().ts_tz("UTC").ts_strftime("%Y-%b-%d %H:%M:%S"),
+      ]
+    suffix: ON CONFLICT (id) DO UPDATE SET content = $2, post = $3, author = $4, updated_at = $5;

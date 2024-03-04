@@ -1,0 +1,30 @@
+input:
+  generate:
+    count: 10000
+    interval: ""
+    mapping: |
+      root.id = "user-" + counter().string()
+      root.name = fake("name")
+      root.email = fake("email")
+
+output:
+  sql_insert:
+    driver: postgres
+    dsn: postgresql://root@localhost:26257/defaultdb?sslmode=disable
+    init_statement: |
+      CREATE TABLE IF NOT EXISTS users (
+        id varchar primary key,
+        name varchar,
+        email varchar,
+        updated_at timestamp
+      );
+    table: users
+    columns: [ id, name, email, updated_at ]
+    args_mapping: |
+      [
+        this.id,
+        this.name,
+        this.email,
+        now().ts_tz("UTC").ts_strftime("%Y-%b-%d %H:%M:%S"),
+      ]
+    suffix: ON CONFLICT (id) DO UPDATE SET name = $2, email = $3, updated_at = $4;

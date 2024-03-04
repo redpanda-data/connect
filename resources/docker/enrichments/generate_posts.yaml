@@ -1,0 +1,29 @@
+input:
+  generate:
+    interval: 1s
+    mapping: |
+      root.id = "post-" + random_int(min: 1, max: 10000).string()
+      root.content = fake("paragraph")
+      root.author = "user-" + random_int(min: 1, max: 1000).string()
+
+output:
+  sql_insert:
+    driver: postgres
+    dsn: postgresql://root@localhost:26257/defaultdb?sslmode=disable
+    init_statement: |
+      CREATE TABLE IF NOT EXISTS posts (
+        id varchar primary key,
+        content varchar,
+        author varchar,
+        updated_at timestamp
+      );
+    table: posts
+    columns: [ id, content, author, updated_at ]
+    args_mapping: |
+      [
+        this.id,
+        this.content,
+        this.author,
+        now().ts_tz("UTC").ts_strftime("%Y-%b-%d %H:%M:%S"),
+      ]
+    suffix: ON CONFLICT (id) DO UPDATE SET content = $2, author = $3, updated_at = $4;
