@@ -35,6 +35,7 @@ input:
     streams: [] # No default (required)
     enhanced_fanout:
       consumer_name: ""
+      create: false
     dynamodb:
       table: ""
       create: false
@@ -59,6 +60,7 @@ input:
     streams: [] # No default (required)
     enhanced_fanout:
       consumer_name: ""
+      create: false
     dynamodb:
       table: ""
       create: false
@@ -127,7 +129,7 @@ streams:
 
 ### `enhanced_fanout`
 
-Determines whether to ingest from Kinesis stream where Enhanced Fanout is enabled.
+Sorry! This field is missing documentation.
 
 
 Type: `object`  
@@ -139,6 +141,14 @@ The name of consumer. Will register a new consumer with this name if it isnt alr
 
 Type: `string`  
 Default: `""`  
+
+### `enhanced_fanout.create`
+
+Whether the consumer should be registered if it doesnt already exist.
+
+
+Type: `bool`  
+Default: `false`  
 
 ### `dynamodb`
 

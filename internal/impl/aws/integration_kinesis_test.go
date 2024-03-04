@@ -243,6 +243,7 @@ input:
     streams: [ stream-$ID$VAR1 ]
     enhanced_fanout:
       consumer_name: test_consumer
+      create: true
     checkpoint_limit: $VAR2
     dynamodb:
       table: stream-$ID

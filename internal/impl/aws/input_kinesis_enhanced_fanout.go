@@ -3,6 +3,7 @@ package aws
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"time"
 
@@ -21,7 +22,7 @@ func NewEfoConsumer(consumerName string) *efoConsumer {
 	}
 }
 
-func (k *kinesisReader) registerEfoConsumer(ctx context.Context, info streamInfo, consumerName string) (*string, error) {
+func (k *kinesisReader) getEfoConsumer(ctx context.Context, info streamInfo, consumerName string) (*string, error) {
 	res, err := k.svc.DescribeStreamConsumer(ctx, &kinesis.DescribeStreamConsumerInput{
 		ConsumerName: &consumerName,
 		StreamARN:    &info.arn,
@@ -29,20 +30,45 @@ func (k *kinesisReader) registerEfoConsumer(ctx context.Context, info streamInfo
 	var consumer *string
 	// if the consumer isnt already registered, register it
 	if err != nil || res.ConsumerDescription == nil {
-		streamOutput, err := k.svc.RegisterStreamConsumer(ctx, &kinesis.RegisterStreamConsumerInput{
-			ConsumerName: &consumerName,
-			StreamARN:    &info.arn,
-		})
+		if k.conf.EFOConsumerRegister {
+			streamOutput, err := k.svc.RegisterStreamConsumer(ctx, &kinesis.RegisterStreamConsumerInput{
+				ConsumerName: &consumerName,
+				StreamARN:    &info.arn,
+			})
 
-		if err != nil {
-			return nil, err
+			if err != nil {
+				return nil, err
+			}
+
+			// As RegisterStreamConsumer is async, wait at most a minute for the consumer to be registered
+			timeoutChan := time.NewTimer(time.Minute)
+			streamActive := streamOutput.Consumer.ConsumerStatus != types.ConsumerStatusActive
+			for !streamActive {
+				select {
+				case <-timeoutChan.C:
+					return nil, fmt.Errorf("timed out after waiting 1 minute for newly registered stream consumer %v to be active", consumerName)
+				default:
+					res, _ = k.svc.DescribeStreamConsumer(ctx, &kinesis.DescribeStreamConsumerInput{
+						ConsumerName: &consumerName,
+						StreamARN:    &info.arn,
+					})
+					if res != nil {
+						streamActive = res.ConsumerDescription.ConsumerStatus == types.ConsumerStatusActive
+					}
+					// Dont spam it
+					time.Sleep(time.Second * 5)
+				}
+			}
+
+			if streamOutput.Consumer == nil {
+				return nil, errors.New("failed to register consumer - RegisterStreamConsumer returned nil")
+			}
+
+			consumer = streamOutput.Consumer.ConsumerARN
+		} else {
+			return nil, fmt.Errorf("failed to describe kinesis consumer - consumer with name %v not found", consumerName)
 		}
 
-		if streamOutput.Consumer == nil {
-			return nil, errors.New("failed to register consumer - RegisterStreamConsumer returned nil")
-		}
-
-		consumer = streamOutput.Consumer.ConsumerARN
 	} else {
 		consumer = res.ConsumerDescription.ConsumerARN
 	}
@@ -52,7 +78,7 @@ func (k *kinesisReader) registerEfoConsumer(ctx context.Context, info streamInfo
 
 func (k *kinesisReader) runEfoConsumer(wg *sync.WaitGroup, info streamInfo, shardID, startingSequence string) (initErr error) {
 	//register consumer
-	consumerARN, err := k.registerEfoConsumer(k.ctx, info, k.conf.EFOConsumerName)
+	consumerARN, err := k.getEfoConsumer(k.ctx, info, k.conf.EFOConsumerName)
 	if err != nil {
 		return err
 	}
@@ -65,22 +91,27 @@ func (k *kinesisReader) runEfoConsumer(wg *sync.WaitGroup, info streamInfo, shar
 		iterType = types.ShardIteratorTypeAfterSequenceNumber
 		seq = &startingSequence
 	}
-	// busy read from consumer
-	subOutput, err := k.svc.SubscribeToShard(k.ctx, &kinesis.SubscribeToShardInput{
-		ConsumerARN: consumerARN,
-		ShardId:     &shardID,
-		StartingPosition: &types.StartingPosition{
-			Type:           iterType,
-			SequenceNumber: seq,
-		},
-	})
 
+	subToShard := func() (*kinesis.SubscribeToShardOutput, error) {
+		return k.svc.SubscribeToShard(k.ctx, &kinesis.SubscribeToShardInput{
+			ConsumerARN: consumerARN,
+			ShardId:     &shardID,
+			StartingPosition: &types.StartingPosition{
+				Type:           iterType,
+				SequenceNumber: seq,
+			},
+		})
+	}
+	// busy read from consumer
+	// though we need to recall this every 5 mins
+	subOutput, err := subToShard()
 	if err != nil {
 		return err
 	}
 	pendingChan := make(chan []types.Record, 10)
 
 	go func() {
+		lastSubTime := time.Now()
 		for {
 			select {
 			case <-k.ctx.Done():
@@ -95,10 +126,23 @@ func (k *kinesisReader) runEfoConsumer(wg *sync.WaitGroup, info streamInfo, shar
 					}
 					k.log.Errorf("Received unexpected non nil event type: %T", ev)
 				} else {
+					seq = event.Value.ContinuationSequenceNumber
 					if len(event.Value.Records) > 0 {
 						pendingChan <- event.Value.Records
 					}
 				}
+			default:
+				// Connection is only alive for 5 minutes, so give enough time
+				if time.Since(lastSubTime) >= 4*time.Minute {
+					subOutput.GetStream().Close()
+					subOutput, err = subToShard()
+					if err != nil {
+						k.log.Errorf("Resubscribe to EFO shard failed: %v", err)
+						close(pendingChan)
+						return
+					}
+				}
+				lastSubTime = time.Now()
 			}
 		}
 	}()

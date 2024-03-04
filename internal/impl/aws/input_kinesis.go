@@ -41,17 +41,19 @@ const (
 
 	// Kinesis Enhanced Fanout Fields
 	kiefoFieldConsumerName = "consumer_name"
+	kiefoFieldCreate       = "create"
 )
 
 type kiConfig struct {
-	Streams         []string
-	DynamoDB        kiddbConfig
-	CheckpointLimit int
-	CommitPeriod    string
-	LeasePeriod     string
-	RebalancePeriod string
-	StartFromOldest bool
-	EFOConsumerName string
+	Streams             []string
+	DynamoDB            kiddbConfig
+	CheckpointLimit     int
+	CommitPeriod        string
+	LeasePeriod         string
+	RebalancePeriod     string
+	StartFromOldest     bool
+	EFOConsumerName     string
+	EFOConsumerRegister bool
 }
 
 func kinesisInputConfigFromParsed(pConf *service.ParsedConfig) (conf kiConfig, err error) {
@@ -64,15 +66,17 @@ func kinesisInputConfigFromParsed(pConf *service.ParsedConfig) (conf kiConfig, e
 		}
 	}
 	if pConf.Contains(kiFieldEnhancedFanout) {
-		if v, parseErr := pConf.FieldStringMap(kiFieldEnhancedFanout); parseErr == nil {
-			if _, ok := v[kiefoFieldConsumerName]; !ok {
-				err = parseErr
-				return
-			}
-			conf.EFOConsumerName = v[kiefoFieldConsumerName]
+		if v, parseErr := pConf.Namespace(kiFieldEnhancedFanout).FieldString(kiefoFieldConsumerName); parseErr == nil {
+			conf.EFOConsumerName = v
 		} else {
 			err = parseErr
 			return
+		}
+
+		if v, parseErr := pConf.Namespace(kiFieldEnhancedFanout).FieldBool(kiefoFieldCreate); parseErr == nil {
+			conf.EFOConsumerRegister = v
+		} else {
+			conf.EFOConsumerRegister = false
 		}
 	}
 	if conf.CheckpointLimit, err = pConf.FieldInt(kiFieldCheckpointLimit); err != nil {
@@ -122,8 +126,10 @@ Use the `+"`batching`"+` fields to configure an optional [batching policy](/docs
 		service.NewObjectField(kiFieldEnhancedFanout,
 			service.NewStringField(kiefoFieldConsumerName).
 				Description("The name of consumer. Will register a new consumer with this name if it isnt already registered.").
-				Default("")).
-			Description("Determines whether to ingest from Kinesis stream where Enhanced Fanout is enabled."),
+				Default(""),
+			service.NewBoolField(kiefoFieldCreate).
+				Description("Whether the consumer should be registered if it doesnt already exist.").
+				Default(false)),
 		service.NewObjectField(kiFieldDynamoDB,
 			service.NewStringField(kiddbFieldTable).
 				Description("The name of the table to access.").
