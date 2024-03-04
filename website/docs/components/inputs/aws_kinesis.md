@@ -134,7 +134,7 @@ Type: `object`
 
 ### `enhanced_fanout.consumer_name`
 
-The name of consumer.
+The name of consumer. Will register a new consumer with this name if it isnt already registered.
 
 
 Type: `string`  

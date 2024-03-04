@@ -121,7 +121,7 @@ Use the `+"`batching`"+` fields to configure an optional [batching policy](/docs
 			Examples([]any{"foo", "arn:aws:kinesis:*:111122223333:stream/my-stream"}),
 		service.NewObjectField(kiFieldEnhancedFanout,
 			service.NewStringField(kiefoFieldConsumerName).
-				Description("The name of consumer.").
+				Description("The name of consumer. Will register a new consumer with this name if it isnt already registered.").
 				Default("")).
 			Description("Determines whether to ingest from Kinesis stream where Enhanced Fanout is enabled."),
 		service.NewObjectField(kiFieldDynamoDB,
