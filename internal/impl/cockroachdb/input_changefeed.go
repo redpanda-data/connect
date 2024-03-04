@@ -190,6 +190,12 @@ func (c *crdbChangefeedInput) Connect(ctx context.Context) (err error) {
 }
 
 func (c *crdbChangefeedInput) closeConnection() {
+	defer func() {
+		if r := recover(); r != nil {
+			c.logger.Errorf("Recovered connection close panic: %v", r)
+		}
+	}()
+
 	c.dbMut.Lock()
 	defer c.dbMut.Unlock()
 
