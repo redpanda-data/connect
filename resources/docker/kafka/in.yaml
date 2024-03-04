@@ -1,0 +1,39 @@
+http:
+  enabled: false
+
+input:
+  generate:
+    interval: 5s
+    mapping: |
+      root.ID = uuid_v4()
+      root.Name = [ "frosty", "spot", "oodles" ].index(random_int() % 3)
+      root.Gooeyness = (random_int() % 100) / 100
+      root.Bouncing = random_int() % 2 == 0
+
+pipeline:
+  processors:
+    - bloblang: |
+        root = this
+        root.ID = this.ID
+        root.ReNamed = this.Name
+        root.Gooeyness = this.Gooeyness
+        root.Bouncing = this.Bouncing
+
+    - catch:
+        - log:
+            level: ERROR
+            message: ${! error() }
+        - bloblang: root = deleted()
+
+output:
+  label: sink
+  kafka_franz:
+    seed_brokers: [localhost:9092] # No default (required)
+    topic: benthos_redpanda # No default (required)
+    key: "" # No default (optional)
+    sasl:
+      - mechanism: OAUTHBEARER
+        tokenEndpoint: http://localhost:1852/realms/local-development/protocol/openid-connect/token
+        scope: "kafka"
+        clientId: "default-access"
+        clientSecret: "default-access-secret"

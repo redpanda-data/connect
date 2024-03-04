@@ -2,18 +2,24 @@ FROM golang:1.21 AS build
 
 ENV CGO_ENABLED=0
 ENV GOOS=linux
-RUN useradd -u 10001 benthos
+
+# Prepare the build environment
+RUN go env -w GOCACHE=/go-cache; \
+    go env -w GOMODCACHE=/gomod-cache; \
+    useradd -u 10001 benthos
 
 WORKDIR /go/src/github.com/benthosdev/benthos/
 # Update dependencies: On unchanged dependencies, cached layer will be reused
 COPY go.* /go/src/github.com/benthosdev/benthos/
-RUN go mod download
+RUN --mount=type=cache,target=/gomod-cache \
+    go mod download
 
 # Build
 COPY . /go/src/github.com/benthosdev/benthos/
 # Tag timetzdata required for busybox base image:
 # https://github.com/benthosdev/benthos/issues/897
-RUN make TAGS="timetzdata"
+RUN --mount=type=cache,target=/gomod-cache --mount=type=cache,target=/go-cache \
+    make TAGS="timetzdata"
 
 # Pack
 FROM busybox AS package

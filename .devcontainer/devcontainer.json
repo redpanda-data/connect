@@ -1,0 +1,33 @@
+{
+  "name": "Benthos Dev Container",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "args": {
+      "NODE_VERSION": "16",
+      "GOLANGCI_LINT_VERSION": "1.46.2"
+    }
+  },
+  "runArgs": ["--network=host", "--privileged"],
+  "customizations": {
+    // Configure properties specific to VS Code.
+    "vscode": {
+      "extensions": [
+        "golang.Go",
+        "dbaeumer.vscode-eslint",
+        "EditorConfig.EditorConfig",
+        "esbenp.prettier-vscode",
+        "github.vscode-github-actions",
+        "jebbs.plantuml",
+        "GitHub.copilot",
+        "github.vscode-github-actions",
+        "ms-vscode.makefile-tools",
+        "GeorgesHaidar.vsc-benthos"
+      ]
+    }
+  },
+  "features": {
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {}
+  },
+  "postCreateCommand": "go mod download",
+  "remoteUser": "vscode"
+}
