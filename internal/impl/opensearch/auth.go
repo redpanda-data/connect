@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/benthosdev/benthos/v4/public/service"
+	"golang.org/x/oauth2"
 )
 
 const (
@@ -78,24 +79,6 @@ type OAuthConfig struct {
 	TokenCacheKey     string
 }
 
-func (c *OAuthConfig) GetToken(mgr *service.Resources) (string, error) {
-	if c.StaticAccessToken != "" {
-		return c.StaticAccessToken, nil
-	}
-
-	var tok []byte
-	var terr error
-	if err := mgr.AccessCache(context.Background(), c.TokenCacheName, func(cache service.Cache) {
-		tok, terr = cache.Get(context.Background(), c.TokenCacheKey)
-	}); err != nil {
-		return "", fmt.Errorf("failed to obtain cache resource '%v' with key %v: %v", c.TokenCacheName, c.TokenCacheKey, err)
-	}
-	if terr != nil {
-		return "", errors.Join(terr, fmt.Errorf("failed to obtain token wih key %v from cache", c.TokenCacheKey))
-	}
-	return string(tok), nil
-}
-
 func NewOAuth2Config() OAuthConfig {
 	return OAuthConfig{
 		Enabled:           false,
@@ -103,4 +86,36 @@ func NewOAuth2Config() OAuthConfig {
 		TokenCacheName:    "",
 		TokenCacheKey:     "",
 	}
+}
+
+type OsTokenProvider struct {
+	Mgr        *service.Resources
+	OAuth2Conf OAuthConfig
+	Logger     *service.Logger
+}
+
+// Token returns a token or an error.
+func (s OsTokenProvider) Token() (*oauth2.Token, error) {
+	c := s.OAuth2Conf
+	mgr := s.Mgr
+
+	if s.OAuth2Conf.StaticAccessToken != "" {
+		return &oauth2.Token{AccessToken: s.OAuth2Conf.StaticAccessToken}, nil
+	}
+
+	var tok []byte
+	var terr error
+	if err := mgr.AccessCache(context.Background(), c.TokenCacheName, func(cache service.Cache) {
+		tok, terr = cache.Get(context.Background(), c.TokenCacheKey)
+	}); err != nil {
+		return nil, fmt.Errorf("failed to obtain cache resource '%v': %v", c.TokenCacheName, err)
+	}
+	if terr != nil {
+		return nil, errors.Join(terr, fmt.Errorf("failed to obtain token wih key %v from cache", c.TokenCacheKey))
+	}
+	if tok == nil || string(tok) == "null" {
+		return nil, errors.New("token is empty")
+	}
+	return &oauth2.Token{AccessToken: string(tok)}, nil
+
 }
