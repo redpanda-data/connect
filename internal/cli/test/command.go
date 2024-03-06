@@ -104,7 +104,7 @@ func lintTarget(path, testSuffix string) ([]docs.Lint, error) {
 
 	// This is necessary as each test case can provide a different set of
 	// environment variables, so in order to test env vars properly we would
-	// need to lint for each case.
+	// need to Lint for each case.
 	skipEnvVarCheck := true
 	_, lints, err := config.ReadYAMLFileLinted(ifs.OS(), config.Spec(), confPath, skipEnvVarCheck, docs.NewLintConfig(bundle.GlobalEnvironment))
 	if err != nil {
@@ -115,7 +115,7 @@ func lintTarget(path, testSuffix string) ([]docs.Lint, error) {
 
 //------------------------------------------------------------------------------
 
-// RunAll executes the test command for a slice of paths. The path can either be
+// RunAll executes the test command for a slice of Paths. The path can either be
 // a config file, a config files test definition file, a directory, or the
 // wildcard pattern './...'.
 func RunAll(paths []string, testSuffix string, lint bool, logger log.Modular, resourcesPaths []string) bool {

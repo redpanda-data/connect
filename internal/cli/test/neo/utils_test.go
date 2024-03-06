@@ -1,4 +1,4 @@
-package test_test
+package neo_test
 
 import (
 	"fmt"
@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	"github.com/benthosdev/benthos/v4/internal/cli/test"
-	"github.com/benthosdev/benthos/v4/internal/log"
 )
 
 func TestGetBothPaths(t *testing.T) {
@@ -103,7 +102,7 @@ func TestGetTargetsSingle(t *testing.T) {
 		t.Fatal(err)
 	}
 	if exp, act := 1, len(paths); exp != act {
-		t.Fatalf("Wrong count of Paths: %v != %v", act, exp)
+		t.Fatalf("Wrong count of paths: %v != %v", act, exp)
 	}
 	if _, exists := paths[filepath.Join(testDir, "foo.yaml")]; !exists {
 		t.Errorf("Wrong path returned: %v does not contain foo.yaml", paths)
@@ -114,7 +113,7 @@ func TestGetTargetsSingle(t *testing.T) {
 		t.Fatal(err)
 	}
 	if exp, act := 1, len(paths); exp != act {
-		t.Fatalf("Wrong count of Paths: %v != %v", act, exp)
+		t.Fatalf("Wrong count of paths: %v != %v", act, exp)
 	}
 	if _, exists := paths[filepath.Join(testDir, "foo.yaml")]; !exists {
 		t.Errorf("Wrong path returned: %v does not contain foo.yaml", paths)
@@ -160,7 +159,7 @@ func TestGetTargetsDir(t *testing.T) {
 		t.Fatal(err)
 	}
 	if exp, act := 3, len(paths); exp != act {
-		t.Fatalf("Wrong count of Paths: %v != %v", act, exp)
+		t.Fatalf("Wrong count of paths: %v != %v", act, exp)
 	}
 	if _, exists := paths[filepath.Join(testDir, "foo.yaml")]; !exists {
 		t.Errorf("Wrong path returned: %v does not contain foo.yaml", paths)
@@ -204,55 +203,5 @@ func TestGetTargetsDirRecurseError(t *testing.T) {
 
 	if _, err = test.GetTestTargets([]string{testDir + "/..."}, "_benthos_test"); err == nil {
 		t.Error("Expected error")
-	}
-}
-
-func TestCommandRunHappy(t *testing.T) {
-	testDir, err := initTestFiles(t, map[string]string{
-		"foo.yaml": `
-pipeline:
-  meow: woof
-  processors:
-  - bloblang: 'root = content().uppercase()'`,
-		"foo_benthos_test.yaml": `
-tests:
-  - name: example test
-    target_processors: '/pipeline/processors'
-    environment: {}
-    input_batch:
-      - content: 'example content'
-    output_batches:
-      -
-        - content_equals: EXAMPLE CONTENT`,
-		"bar.yaml": `
-pipeline:
-  processors:
-  - bloblang: 'root = content().uppercase()'`,
-		"bar_benthos_test.yaml": `
-tests:
-  - name: example test
-    target_processors: '/pipeline/processors'
-    environment: {}
-    input_batch:
-      - content: 'example content'
-    output_batches:
-      -
-        - content_equals: example content`,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(testDir)
-
-	if !test.RunAll([]string{filepath.Join(testDir, "foo.yaml")}, "_benthos_test", false, log.Noop(), nil) {
-		t.Error("Unexpected result")
-	}
-
-	if test.RunAll([]string{filepath.Join(testDir, "foo.yaml")}, "_benthos_test", true, log.Noop(), nil) {
-		t.Error("Unexpected result")
-	}
-
-	if test.RunAll([]string{testDir}, "_benthos_test", true, log.Noop(), nil) {
-		t.Error("Unexpected result")
 	}
 }
