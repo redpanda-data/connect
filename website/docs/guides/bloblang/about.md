@@ -192,20 +192,26 @@ For more information about these operators and how they work check out [the arit
 
 ## Conditional Mapping
 
-Use `if` expressions to perform maps conditionally:
+Use `if` as either a statement or an expression in order to perform maps conditionally:
 
 ```coffee
 root = this
+
 root.sorted_foo = if this.foo.type() == "array" { this.foo.sort() }
 
-# In:  {"foo":"foobar"}
-# Out: {"foo":"foobar"}
+if this.foo.type() == "string" {
+  root.upper_foo = this.foo.uppercase()
+  root.lower_foo = this.foo.lowercase()
+}
+
+# In:  {"foo":"FooBar"}
+# Out: {"foo":"FooBar","lower_foo":"foobar","upper_foo":"FOOBAR"}
 
 # In:  {"foo":["foo","bar"]}
 # Out: {"foo":["foo","bar"],"sorted_foo":["bar","foo"]}
 ```
 
-And add as many `if else` queries as you like, followed by an optional final fallback `else`:
+And add as many `else if` queries as you like, followed by an optional final fallback `else`:
 
 ```coffee
 root.sound = if this.type == "cat" {
