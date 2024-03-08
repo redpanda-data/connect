@@ -227,7 +227,7 @@ func TestSchemaRegistryDecodeAvro(t *testing.T) {
 		return nil, nil
 	})
 
-	decoder, err := newSchemaRegistryDecoder(urlStr, noopReqSign, nil, false, service.MockResources())
+	decoder, err := newSchemaRegistryDecoder(urlStr, noopReqSign, nil, false, protobufDecoderOpts{}, service.MockResources())
 	require.NoError(t, err)
 
 	tests := []struct {
@@ -330,7 +330,7 @@ func TestSchemaRegistryDecodeAvroRawJson(t *testing.T) {
 		return nil, nil
 	})
 
-	decoder, err := newSchemaRegistryDecoder(urlStr, noopReqSign, nil, true, service.MockResources())
+	decoder, err := newSchemaRegistryDecoder(urlStr, noopReqSign, nil, true, protobufDecoderOpts{}, service.MockResources())
 	require.NoError(t, err)
 
 	tests := []struct {
@@ -408,7 +408,7 @@ func TestSchemaRegistryDecodeClearExpired(t *testing.T) {
 		return nil, fmt.Errorf("nope")
 	})
 
-	decoder, err := newSchemaRegistryDecoder(urlStr, noopReqSign, nil, false, service.MockResources())
+	decoder, err := newSchemaRegistryDecoder(urlStr, noopReqSign, nil, false, protobufDecoderOpts{}, service.MockResources())
 	require.NoError(t, err)
 	require.NoError(t, decoder.Close(context.Background()))
 
@@ -455,7 +455,7 @@ func TestSchemaRegistryDecodeProtobuf(t *testing.T) {
 		return nil, nil
 	})
 
-	decoder, err := newSchemaRegistryDecoder(urlStr, noopReqSign, nil, false, service.MockResources())
+	decoder, err := newSchemaRegistryDecoder(urlStr, noopReqSign, nil, false, protobufDecoderOpts{}, service.MockResources())
 	require.NoError(t, err)
 
 	tests := []struct {
@@ -518,7 +518,7 @@ func TestSchemaRegistryDecodeJson(t *testing.T) {
 		return nil, nil
 	})
 
-	decoder, err := newSchemaRegistryDecoder(urlStr, noopReqSign, nil, false, service.MockResources())
+	decoder, err := newSchemaRegistryDecoder(urlStr, noopReqSign, nil, false, protobufDecoderOpts{}, service.MockResources())
 	require.NoError(t, err)
 
 	tests := []struct {
