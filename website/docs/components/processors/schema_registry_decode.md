@@ -44,6 +44,9 @@ label: ""
 schema_registry_decode:
   avro_raw_json: false
   url: "" # No default (required)
+  protobuf:
+    use_proto_names: false
+    emit_unpopulated: false
   oauth:
     enabled: false
     consumer_key: ""
@@ -110,6 +113,32 @@ The base URL of the schema registry service.
 
 
 Type: `string`  
+
+### `protobuf`
+
+Protobuf decoder specific options
+
+
+Type: `object`  
+Requires version 4.25.1 or newer  
+
+### `protobuf.use_proto_names`
+
+Uses proto field name instead of lowerCamelCase name in JSON
+
+
+Type: `bool`  
+Default: `false`  
+Requires version 4.25.1 or newer  
+
+### `protobuf.emit_unpopulated`
+
+Specifies whether to emit unpopulated fields.
+
+
+Type: `bool`  
+Default: `false`  
+Requires version 4.25.1 or newer  
 
 ### `oauth`
 
