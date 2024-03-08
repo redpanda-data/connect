@@ -15,6 +15,12 @@ import (
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
+const (
+	protobufKey        = "protobuf"
+	useProtoNamesKey   = "use_proto_names"
+	emitUnpopulatedKey = "emit_unpopulated"
+)
+
 func schemaRegistryDecoderConfig() *service.ConfigSpec {
 	spec := service.NewConfigSpec().
 		Beta().
@@ -46,7 +52,24 @@ This processor decodes protobuf messages to JSON documents, you can read more ab
 		Field(service.NewBoolField("avro_raw_json").
 			Description("Whether Avro messages should be decoded into normal JSON (\"json that meets the expectations of regular internet json\") rather than [Avro JSON](https://avro.apache.org/docs/current/specification/_print/#json-encoding). If `true` the schema returned from the subject should be decoded as [standard json](https://pkg.go.dev/github.com/linkedin/goavro/v2#NewCodecForStandardJSONFull) instead of as [avro json](https://pkg.go.dev/github.com/linkedin/goavro/v2#NewCodec). There is a [comment in goavro](https://github.com/linkedin/goavro/blob/5ec5a5ee7ec82e16e6e2b438d610e1cab2588393/union.go#L224-L249), the [underlining library used for avro serialization](https://github.com/linkedin/goavro), that explains in more detail the difference between the standard json and avro json.").
 			Advanced().Default(false)).
-		Field(service.NewURLField("url").Description("The base URL of the schema registry service."))
+		Field(service.NewURLField("url").Description("The base URL of the schema registry service.")).
+		Field(service.NewObjectField(protobufKey,
+
+			service.NewBoolField(useProtoNamesKey).
+				Description("Uses proto field name instead of lowerCamelCase name in JSON").
+				Default(false).
+				Optional().
+				Version("4.25.1"),
+
+			service.NewBoolField(emitUnpopulatedKey).
+				Description("Specifies whether to emit unpopulated fields.").
+				Default(false).
+				Optional().
+				Version("4.25.1"),
+		).Description("Protobuf decoder specific options").
+			Advanced().
+			Optional().
+			Version("4.25.1"))
 
 	for _, f := range httpclient.AuthFieldSpecs() {
 		spec = spec.Field(f.Version("4.7.0"))
@@ -69,8 +92,9 @@ func init() {
 //------------------------------------------------------------------------------
 
 type schemaRegistryDecoder struct {
-	avroRawJSON bool
-	client      *schemaRegistryClient
+	avroRawJSON         bool
+	protobufDecoderOpts protobufDecoderOpts
+	client              *schemaRegistryClient
 
 	schemas    map[int]*cachedSchemaDecoder
 	cacheMut   sync.RWMutex
@@ -98,7 +122,11 @@ func newSchemaRegistryDecoderFromConfig(conf *service.ParsedConfig, mgr *service
 	if err != nil {
 		return nil, err
 	}
-	return newSchemaRegistryDecoder(urlStr, authSigner, tlsConf, avroRawJSON, mgr)
+	protobufDecOpts, err := newProtobufDecoderOptsFromParsedConfig(conf)
+	if err != nil {
+		return nil, err
+	}
+	return newSchemaRegistryDecoder(urlStr, authSigner, tlsConf, avroRawJSON, protobufDecOpts, mgr)
 }
 
 func newSchemaRegistryDecoder(
@@ -106,14 +134,16 @@ func newSchemaRegistryDecoder(
 	reqSigner httpclient.RequestSigner,
 	tlsConf *tls.Config,
 	avroRawJSON bool,
+	protobufDecoderOpts protobufDecoderOpts,
 	mgr *service.Resources,
 ) (*schemaRegistryDecoder, error) {
 	s := &schemaRegistryDecoder{
-		avroRawJSON: avroRawJSON,
-		schemas:     map[int]*cachedSchemaDecoder{},
-		shutSig:     shutdown.NewSignaller(),
-		logger:      mgr.Logger(),
-		mgr:         mgr,
+		avroRawJSON:         avroRawJSON,
+		protobufDecoderOpts: protobufDecoderOpts,
+		schemas:             map[int]*cachedSchemaDecoder{},
+		shutSig:             shutdown.NewSignaller(),
+		logger:              mgr.Logger(),
+		mgr:                 mgr,
 	}
 	var err error
 	if s.client, err = newSchemaRegistryClient(urlStr, reqSigner, tlsConf, mgr); err != nil {
@@ -276,4 +306,28 @@ func (s *schemaRegistryDecoder) getDecoder(id int) (schemaDecoder, error) {
 	s.cacheMut.Unlock()
 
 	return decoder, nil
+}
+
+type protobufDecoderOpts struct {
+	useProtoNames   bool
+	emitUnpopulated bool
+}
+
+func newProtobufDecoderOptsFromParsedConfig(conf *service.ParsedConfig) (protobufDecoderOpts, error) {
+	if !conf.Contains(protobufKey) {
+		return protobufDecoderOpts{}, nil
+	}
+	namespace := conf.Namespace(protobufKey)
+	useProtoNames, err := namespace.FieldBool(useProtoNamesKey)
+	if err != nil {
+		return protobufDecoderOpts{}, err
+	}
+	emitUnpopulated, err := namespace.FieldBool(emitUnpopulatedKey)
+	if err != nil {
+		return protobufDecoderOpts{}, err
+	}
+	return protobufDecoderOpts{
+		useProtoNames:   useProtoNames,
+		emitUnpopulated: emitUnpopulated,
+	}, nil
 }
