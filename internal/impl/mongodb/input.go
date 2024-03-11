@@ -2,6 +2,7 @@ package mongodb
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"go.mongodb.org/mongo-driver/bson"
@@ -15,7 +16,6 @@ import (
 const (
 	FindInputOperation      = "find"
 	AggregateInputOperation = "aggregate"
-	DefaultBatchSize        = 1000
 )
 
 func mongoConfigSpec() *service.ConfigSpec {
@@ -47,23 +47,21 @@ func mongoConfigSpec() *service.ConfigSpec {
   root.from = {"$lte": timestamp_unix()}
   root.to = {"$gte": timestamp_unix()}
 `)).
-		Field(service.NewIntField("batchSize").
-			Description("A number of documents at which the batch should be flushed. Greater than `0`. Operations: `find`, `aggregate`").
+		Field(service.NewIntField("batch_size").
+			Description("A explicit number of documents to batch up before flushing them for processing. Must be greater than `0`. Operations: `find`, `aggregate`").
 			Optional().
-			Default(1000).
-			Version("4.22.0")).
+			Example(1000).
+			Version("4.26.0")).
 		Field(service.NewIntMapField("sort").
-			Description("An object specifying fields to sort by, and the respective sort order (`1` ascending, `-1` descending). Operations: `find`").
+			Description("An object specifying fields to sort by, and the respective sort order (`1` ascending, `-1` descending). Note: The driver currently appears to support only one sorting key. Operations: `find`").
 			Optional().
-			Example(`
-name: 1
-age: -1
-`).
-			Version("4.22.0")).
+			Example(map[string]int{"name": 1}).
+			Example(map[string]int{"age": -1}).
+			Version("4.26.0")).
 		Field(service.NewIntField("limit").
-			Description("A number of documents to return. Operations: `find`").
+			Description("An explicit maximum number of documents to return. Operations: `find`").
 			Optional().
-			Version("4.22.0"))
+			Version("4.26.0"))
 }
 
 func init() {
@@ -79,7 +77,7 @@ func init() {
 
 func newMongoInput(conf *service.ParsedConfig, logger *service.Logger) (service.BatchInput, error) {
 	var (
-		batchSize, limit int
+		limit, batchSize int
 		sort             map[string]int
 	)
 
@@ -107,21 +105,20 @@ func newMongoInput(conf *service.ParsedConfig, logger *service.Logger) (service.
 	if err != nil {
 		return nil, err
 	}
-	if conf.Contains("batchSize") {
-		batchSize, err = conf.FieldInt("batchSize")
-		if err != nil {
+	if conf.Contains("batch_size") {
+		if batchSize, err = conf.FieldInt("batch_size"); err != nil {
 			return nil, err
+		} else if batchSize < 1 {
+			return nil, errors.New("batch_size must be >0")
 		}
 	}
 	if conf.Contains("sort") {
-		sort, err = conf.FieldIntMap("sort")
-		if err != nil {
+		if sort, err = conf.FieldIntMap("sort"); err != nil {
 			return nil, err
 		}
 	}
 	if conf.Contains("limit") {
-		limit, err = conf.FieldInt("limit")
-		if err != nil {
+		if limit, err = conf.FieldInt("limit"); err != nil {
 			return nil, err
 		}
 	}
@@ -192,13 +189,11 @@ func (m *mongoInput) Connect(ctx context.Context) error {
 }
 
 func (m *mongoInput) ReadBatch(ctx context.Context) (service.MessageBatch, service.AckFunc, error) {
-	i := 0
-	batch := make(service.MessageBatch, m.batchSize)
-
 	if m.cursor == nil {
 		return nil, nil, service.ErrNotConnected
 	}
 
+	batch := make(service.MessageBatch, 0, m.batchSize)
 	for m.cursor.Next(ctx) {
 		msg := service.NewMessage(nil)
 		msg.MetaSet("mongo_database", m.database.Name())
@@ -214,12 +209,12 @@ func (m *mongoInput) ReadBatch(ctx context.Context) (service.MessageBatch, servi
 			}
 			msg.SetBytes(data)
 		}
-		batch[i] = msg
-		i++
+
+		batch = append(batch, msg)
 		m.count++
 
-		if m.cursor.RemainingBatchLength() == 0 {
-			return batch[:i], func(ctx context.Context, err error) error {
+		if m.batchSize == 0 || m.cursor.RemainingBatchLength() == 0 {
+			return batch, func(ctx context.Context, err error) error {
 				return nil
 			}, nil
 		}

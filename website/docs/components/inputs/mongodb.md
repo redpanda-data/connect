@@ -43,7 +43,7 @@ input:
     query: |2 # No default (required)
         root.from = {"$lte": timestamp_unix()}
         root.to = {"$gte": timestamp_unix()}
-    batchSize: 1000
+    batch_size: 1000 # No default (optional)
     sort: {} # No default (optional)
     limit: 0 # No default (optional)
 ```
@@ -66,7 +66,7 @@ input:
     query: |2 # No default (required)
         root.from = {"$lte": timestamp_unix()}
         root.to = {"$gte": timestamp_unix()}
-    batchSize: 1000
+    batch_size: 1000 # No default (optional)
     sort: {} # No default (optional)
     limit: 0 # No default (optional)
 ```
@@ -164,37 +164,44 @@ query: |2
     root.to = {"$gte": timestamp_unix()}
 ```
 
-### `batchSize`
+### `batch_size`
 
-A number of documents at which the batch should be flushed. Greater than `0`. Operations: `find`, `aggregate`
+A explicit number of documents to batch up before flushing them for processing. Must be greater than `0`. Operations: `find`, `aggregate`
 
 
 Type: `int`  
-Default: `1000`  
-Requires version 4.22.0 or newer  
-
-### `sort`
-
-An object specifying fields to sort by, and the respective sort order (`1` ascending, `-1` descending). Operations: `find`
-
-
-Type: `object`  
-Requires version 4.22.0 or newer  
+Requires version 4.26.0 or newer  
 
 ```yml
 # Examples
 
-sort: |2
+batch_size: 1000
+```
+
+### `sort`
+
+An object specifying fields to sort by, and the respective sort order (`1` ascending, `-1` descending). Note: The driver currently appears to support only one sorting key. Operations: `find`
+
+
+Type: `object`  
+Requires version 4.26.0 or newer  
+
+```yml
+# Examples
+
+sort:
   name: 1
+
+sort:
   age: -1
 ```
 
 ### `limit`
 
-A number of documents to return. Operations: `find`
+An explicit maximum number of documents to return. Operations: `find`
 
 
 Type: `int`  
-Requires version 4.22.0 or newer  
+Requires version 4.26.0 or newer  
 
 

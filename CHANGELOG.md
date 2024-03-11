@@ -10,6 +10,7 @@ All notable changes to this project will be documented in this file.
 - Field `credit` added to the `amqp_1` input to specify the maximum number of unacknowledged messages the sender can transmit.
 - Bloblang now supports root-level `if` statements.
 - New experimental `sql` cache.
+- Fields `batch_size`, `sort` and `limit` added to the `mongodb` input.
 
 ### Changed
 
