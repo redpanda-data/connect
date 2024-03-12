@@ -227,6 +227,31 @@ root.pet.treats = if this.pet.is_cute {
 
 This is possible because field deletions are expressed as assigned values created with the `deleted()` function. This is cool but also in poor taste, treats should be allocated based on need, not cuteness!
 
+### If Statement
+
+The `if` keyword can also be used as a statement in order to conditionally apply a series of mapping assignments, the previous example can be rewritten as:
+
+```coffee
+root = this
+if this.pet.is_cute {
+  root.pet.treats = this.pet.treats + 10
+} else {
+  root.pet.treats = deleted()
+}
+```
+
+Converting this mapping to use a statement has resulted in a more verbose mapping as we had to specify `root.pet.treats` multiple times as an assignment target. However, using `if` as a statement can be beneficial when multiple assignments rely on the same logic:
+
+```coffee
+root = this
+if this.pet.is_cute {
+  root.pet.treats = this.pet.treats + 10
+  root.pet.toys = this.pet.toys + 10
+}
+```
+
+More treats *and* more toys! Lucky Spot!
+
 ### Match Expression
 
 Another conditional expression is `match` which allows you to list many branches consisting of a condition and a query to execute separated with `=>`, where the first condition to pass is the one that is executed:

@@ -135,6 +135,75 @@ If HTTPS is enabled, the following fields are added as well:
 
 You can access these metadata fields using [function interpolation](/docs/configuration/interpolation#bloblang-queries).
 
+## Examples
+
+<Tabs defaultValue="Path Switching" values={[
+{ label: 'Path Switching', value: 'Path Switching', },
+{ label: 'Mock OAuth 2.0 Server', value: 'Mock OAuth 2.0 Server', },
+]}>
+
+<TabItem value="Path Switching">
+
+This example shows an `http_server` input that captures all requests and processes them by switching on that path:
+
+```yaml
+input:
+  http_server:
+    path: /
+    allowed_verbs: [ GET, POST ]
+    sync_response:
+      headers:
+        Content-Type: application/json
+
+  processors:
+    - switch:
+      - check: '@http_server_request_path == "/foo"'
+        processors:
+          - mapping: |
+              root.title = "You Got Fooed!"
+              root.result = content().string().uppercase()
+
+      - check: '@http_server_request_path == "/bar"'
+        processors:
+          - mapping: 'root.title = "Bar Is Slow"'
+          - sleep: # Simulate a slow endpoint
+              duration: 1s
+```
+
+</TabItem>
+<TabItem value="Mock OAuth 2.0 Server">
+
+This example shows an `http_server` input that mocks an OAuth 2.0 Client Credentials flow server at the endpoint `/oauth2_test`:
+
+```yaml
+input:
+  http_server:
+    path: /oauth2_test
+    allowed_verbs: [ GET, POST ]
+    sync_response:
+      headers:
+        Content-Type: application/json
+
+  processors:
+    - log:
+        message: "Received request"
+        level: INFO
+        fields_mapping: |
+          root = @
+          root.body = content().string()
+
+    - mapping: |
+        root.access_token = "MTQ0NjJkZmQ5OTM2NDE1ZTZjNGZmZjI3"
+        root.token_type = "Bearer"
+        root.expires_in = 3600
+
+    - sync_response: {}
+    - mapping: 'root = deleted()'
+```
+
+</TabItem>
+</Tabs>
+
 ## Fields
 
 ### `address`

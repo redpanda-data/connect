@@ -18,7 +18,7 @@ import (
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
-func TestSQLSelectInputEmptyShutdown(t *testing.T) {
+func TestMongoInputEmptyShutdown(t *testing.T) {
 	conf := `
 url: "mongodb://localhost:27017"
 username: foouser
@@ -32,13 +32,14 @@ query: |
 
 	spec := mongoConfigSpec()
 	env := service.NewEnvironment()
+	resources := service.MockResources()
 
 	mongoConfig, err := spec.ParseYAML(conf, env)
 	require.NoError(t, err)
 
-	selectInput, err := newMongoInput(mongoConfig)
+	mongoInput, err := newMongoInput(mongoConfig, resources.Logger())
 	require.NoError(t, err)
-	require.NoError(t, selectInput.Close(context.Background()))
+	require.NoError(t, mongoInput.Close(context.Background()))
 }
 
 func TestInputIntegration(t *testing.T) {
@@ -128,6 +129,7 @@ func TestInputIntegration(t *testing.T) {
 		placeholderConf string
 		jsonMarshalMode JSONMarshalMode
 	}
+	limit := int64(3)
 	cases := map[string]testCase{
 		"find": {
 			query: func(coll *mongo.Collection) (*mongo.Cursor, error) {
@@ -135,6 +137,11 @@ func TestInputIntegration(t *testing.T) {
 					"age": bson.M{
 						"$gte": 18,
 					},
+				}, &options.FindOptions{
+					Sort: bson.M{
+						"name": 1,
+					},
+					Limit: &limit,
 				})
 			},
 			placeholderConf: `
@@ -146,6 +153,10 @@ collection: "TestCollection"
 json_marshal_mode: relaxed
 query: |
   root.age = {"$gte": 18}
+batchSize: 2
+sort:
+  name: 1
+limit: 3
 `,
 			jsonMarshalMode: JSONMarshalModeRelaxed,
 		},
@@ -160,7 +171,12 @@ query: |
 						},
 					},
 					bson.M{
-						"$limit": 3,
+						"$sort": bson.M{
+							"name": 1,
+						},
+					},
+					bson.M{
+						"$limit": limit,
 					},
 				})
 			},
@@ -182,9 +198,15 @@ query: |
       }
     },
     {
+      "$sort": {
+        "name": 1
+      }
+    },
+    {
       "$limit": 3
     }
   ]
+batchSize: 2
 `,
 			jsonMarshalMode: JSONMarshalModeCanonical,
 		},
@@ -227,27 +249,40 @@ func testInput(
 
 	spec := mongoConfigSpec()
 	env := service.NewEnvironment()
+	resources := service.MockResources()
 
 	mongoConfig, err := spec.ParseYAML(conf, env)
 	require.NoError(t, err)
 
-	selectInput, err := newMongoInput(mongoConfig)
+	mongoInput, err := newMongoInput(mongoConfig, resources.Logger())
 	require.NoError(t, err)
 
 	ctx := context.Background()
-	err = selectInput.Connect(ctx)
+	err = mongoInput.Connect(ctx)
 	require.NoError(t, err)
-	for _, wMsg := range wantMsgs {
-		msg, ack, err := selectInput.Read(ctx)
+
+	// read all batches
+	var actualMsgs service.MessageBatch
+	for {
+		batch, ack, err := mongoInput.ReadBatch(ctx)
+		if err == service.ErrEndOfInput {
+			break
+		}
 		require.NoError(t, err)
+		actualMsgs = append(actualMsgs, batch...)
+		require.NoError(t, ack(ctx, nil))
+	}
+
+	// compare to wanted messages
+	for i, wMsg := range wantMsgs {
+		msg := actualMsgs[i]
 		msgBytes, err := msg.AsBytes()
 		require.NoError(t, err)
 		assert.JSONEq(t, string(wMsg), string(msgBytes))
-		require.NoError(t, ack(ctx, nil))
 	}
-	_, ack, err := selectInput.Read(ctx)
+	_, ack, err := mongoInput.ReadBatch(ctx)
 	assert.Equal(t, service.ErrEndOfInput, err)
 	require.Nil(t, ack)
 
-	require.NoError(t, selectInput.Close(context.Background()))
+	require.NoError(t, mongoInput.Close(context.Background()))
 }

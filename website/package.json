@@ -7,7 +7,7 @@
   },
   "scripts": {
     "prestart": "sh build_plugins.sh",
-    "start": "docusaurus start",
+    "start": "docusaurus start -h 0.0.0.0",
     "prebuild": "sh build_plugins.sh",
     "build": "docusaurus build",
     "swizzle": "docusaurus swizzle",
