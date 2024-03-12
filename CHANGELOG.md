@@ -11,6 +11,7 @@ All notable changes to this project will be documented in this file.
 - Bloblang now supports root-level `if` statements.
 - New experimental `sql` cache.
 - Fields `batch_size`, `sort` and `limit` added to the `mongodb` input.
+- Field `idemponent_write` added to the `kafka` output.
 
 ### Changed
 
