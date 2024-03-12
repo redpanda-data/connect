@@ -16,6 +16,11 @@ All notable changes to this project will be documented in this file.
 
 - The default value of the `amqp_1.credit` input has changed from `1` to `64`.
 
+### Fixed
+
+- Resource config imports containing `%` characters were being incorrectly parsed during unit test execution. This was a regression introduced in v4.25.0.
+- Dynamic input and output config updates containing `%` characters were being incorrectly parsed. This was a regression introduced in v4.25.0.
+
 ## 4.25.1 - 2024-03-01
 
 ### Fixed
