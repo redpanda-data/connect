@@ -32,6 +32,11 @@ https://benthos.dev/docs/configuration/unit_testing`[1:],
 				Value: "",
 				Usage: "allow components to write logs at a provided level to stdout.",
 			},
+			&cli.BoolFlag{
+				Name:  "legacy",
+				Value: true,
+				Usage: "use the legacy test runner.",
+			},
 		},
 		Action: func(c *cli.Context) error {
 			if len(c.StringSlice("set")) > 0 {
@@ -44,22 +49,47 @@ https://benthos.dev/docs/configuration/unit_testing`[1:],
 				fmt.Printf("Failed to resolve resource glob pattern: %v\n", err)
 				os.Exit(1)
 			}
-			if logLevel := c.String("log"); len(logLevel) > 0 {
-				logConf := log.NewConfig()
-				logConf.LogLevel = logLevel
-				logger, err := log.New(os.Stdout, ifs.OS(), logConf)
-				if err != nil {
-					fmt.Printf("Failed to init logger: %v\n", err)
-					os.Exit(1)
-				}
-				if RunAll(c.Args().Slice(), "_benthos_test", true, logger, resourcesPaths) {
-					os.Exit(0)
-				}
-			} else if RunAll(c.Args().Slice(), "_benthos_test", true, log.Noop(), resourcesPaths) {
+
+			logger, err := getLogger(c.String("log"))
+			if err != nil {
+				fmt.Printf("Failed to init Logger: %v\n", err)
+				os.Exit(1)
+			}
+
+			runnerKind := RunnerKind("unknown")
+			if c.Bool("legacy") {
+				runnerKind = LegacyRunner
+			}
+			runner, err := GetRunner(runnerKind)
+			if err != nil {
+				fmt.Printf("Failed to init runner: %v\n", err)
+				os.Exit(1)
+			}
+
+			cfg := RunConfig{
+				Paths:         c.Args().Slice(),
+				TestSuffix:    "_benthos_test",
+				Lint:          true,
+				Logger:        logger,
+				ResourcePaths: resourcesPaths,
+			}
+
+			if runner.Run(cfg) {
 				os.Exit(0)
 			}
+
 			os.Exit(1)
 			return nil
 		},
+	}
+}
+
+func getLogger(logLevel string) (log.Modular, error) {
+	if len(logLevel) > 0 {
+		logConf := log.NewConfig()
+		logConf.LogLevel = logLevel
+		return log.New(os.Stdout, ifs.OS(), logConf)
+	} else {
+		return log.Noop(), nil
 	}
 }

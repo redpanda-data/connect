@@ -1,4 +1,4 @@
-package test
+package neo
 
 import (
 	"context"
@@ -16,6 +16,7 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/bloblang/parser"
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
+	"github.com/benthosdev/benthos/v4/internal/component/testutil"
 	"github.com/benthosdev/benthos/v4/internal/config"
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/filepath/ifs"
@@ -53,14 +54,14 @@ func NewProcessorsProvider(targetPath string, opts ...func(*ProcessorsProvider))
 	return p
 }
 
-// OptAddResourcesPaths adds Paths to files where resources should be parsed.
+// OptAddResourcesPaths adds paths to files where resources should be parsed.
 func OptAddResourcesPaths(paths []string) func(*ProcessorsProvider) {
 	return func(p *ProcessorsProvider) {
 		p.resourcesPaths = paths
 	}
 }
 
-// OptProcessorsProviderSetLogger sets the Logger used by tested components.
+// OptProcessorsProviderSetLogger sets the logger used by tested components.
 func OptProcessorsProviderSetLogger(logger log.Modular) func(*ProcessorsProvider) {
 	return func(p *ProcessorsProvider) {
 		p.logger = logger
@@ -296,7 +297,7 @@ func (p *ProcessorsProvider) getConfs(jsonPtr string, environment map[string]str
 		return confs, fmt.Errorf("failed to parse config file '%v': %v", targetPath, err)
 	}
 
-	// Replace mock components, starting with all absolute Paths in JSON pointer
+	// Replace mock components, starting with all absolute paths in JSON pointer
 	// form, then parsing remaining mock targets as label names.
 	confSpec := config.Spec()
 	for k, v := range remainingMocks {
@@ -344,12 +345,7 @@ func (p *ProcessorsProvider) getConfs(jsonPtr string, environment map[string]str
 			return confs, fmt.Errorf("failed to parse resources config file '%v': %v", path, err)
 		}
 
-		confNode, err := docs.UnmarshalYAML(resourceBytes)
-		if err != nil {
-			return confs, fmt.Errorf("failed to parse resources config file '%v': %v", path, err)
-		}
-
-		extraMgrWrapper, err := manager.FromAny(bundle.GlobalEnvironment, confNode)
+		extraMgrWrapper, err := testutil.ManagerFromYAML(string(resourceBytes))
 		if err != nil {
 			return confs, fmt.Errorf("failed to parse resources config file '%v': %v", path, err)
 		}
@@ -357,12 +353,6 @@ func (p *ProcessorsProvider) getConfs(jsonPtr string, environment map[string]str
 			return confs, fmt.Errorf("failed to merge resources from '%v': %v", path, err)
 		}
 	}
-
-	// We can clear all input and output resources as they're not used by procs
-	// under any circumstances.
-	mgrWrapper.ResourceInputs = nil
-	mgrWrapper.ResourceOutputs = nil
-
 	confs.mgr = mgrWrapper
 
 	var pathSlice []string
