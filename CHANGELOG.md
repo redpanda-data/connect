@@ -16,6 +16,7 @@ All notable changes to this project will be documented in this file.
 
 - The default value of the `amqp_1.credit` input has changed from `1` to `64`.
 - The `mongodb` processor and output now support extended JSON in canonical form for document, filter and hint mappings.
+- The `open_telemetry_collector` tracer has had the `url` field of gRPC and HTTP collectors deprecated in favour of `address`, which more accurately describes the intended format of endpoints. The old style will continue to work, but eventually will have its default value removed and an explicit value will be required.
 
 ### Fixed
 
