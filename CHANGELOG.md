@@ -15,6 +15,7 @@ All notable changes to this project will be documented in this file.
 ### Changed
 
 - The default value of the `amqp_1.credit` input has changed from `1` to `64`.
+- The `mongodb` processor and output now support extended JSON in canonical form for document, filter and hint mappings.
 
 ### Fixed
 
