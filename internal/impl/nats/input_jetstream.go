@@ -2,18 +2,15 @@ package nats
 
 import (
 	"context"
-	"crypto/tls"
 	"errors"
 	"fmt"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 
 	"github.com/nats-io/nats.go"
 
 	"github.com/benthosdev/benthos/v4/internal/component/input/span"
-	"github.com/benthosdev/benthos/v4/internal/impl/nats/auth"
 	"github.com/benthosdev/benthos/v4/internal/shutdown"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
@@ -46,11 +43,8 @@ This input adds the following metadata fields to each message:
 You can access these metadata fields using
 [function interpolation](/docs/configuration/interpolation#bloblang-queries).
 
-` + ConnectionNameDescription() + auth.Description()).
-		Field(service.NewStringListField("urls").
-			Description("A list of URLs to connect to. If an item of the list contains commas it will be expanded into multiple URLs.").
-			Example([]string{"nats://127.0.0.1:4222"}).
-			Example([]string{"nats://username:password@127.0.0.1:4222"})).
+` + ConnectionNameDescription() + authDescription()).
+		Fields(connectionHeadFields()...).
 		Field(service.NewStringField("queue").
 			Description("An optional queue group to consume as.").
 			Optional()).
@@ -83,8 +77,7 @@ You can access these metadata fields using
 			Description("The maximum number of outstanding acks to be allowed before consuming is halted.").
 			Advanced().
 			Default(1024)).
-		Field(service.NewTLSToggledField("tls")).
-		Field(service.NewInternalField(auth.FieldSpec())).
+		Fields(connectionTailFields()...).
 		Field(span.ExtractTracingSpanMappingDocs().Version(tracingVersion))
 }
 
@@ -106,8 +99,7 @@ func init() {
 //------------------------------------------------------------------------------
 
 type jetStreamReader struct {
-	label         string
-	urls          string
+	connDetails   connectionDetails
 	deliverOpt    nats.SubOpt
 	subject       string
 	queue         string
@@ -117,11 +109,8 @@ type jetStreamReader struct {
 	durable       string
 	ackWait       time.Duration
 	maxAckPending int
-	authConf      auth.Config
-	tlsConf       *tls.Config
 
 	log *service.Logger
-	fs  *service.FS
 
 	connMut  sync.Mutex
 	natsConn *nats.Conn
@@ -132,17 +121,14 @@ type jetStreamReader struct {
 
 func newJetStreamReaderFromConfig(conf *service.ParsedConfig, mgr *service.Resources) (*jetStreamReader, error) {
 	j := jetStreamReader{
-		label:   mgr.Label(),
 		log:     mgr.Logger(),
-		fs:      mgr.FS(),
 		shutSig: shutdown.NewSignaller(),
 	}
 
-	urlList, err := conf.FieldStringList("urls")
-	if err != nil {
+	var err error
+	if j.connDetails, err = connectionDetailsFromParsed(conf, mgr); err != nil {
 		return nil, err
 	}
-	j.urls = strings.Join(urlList, ",")
 
 	deliver, err := conf.FieldString("deliver")
 	if err != nil {
@@ -207,19 +193,6 @@ func newJetStreamReaderFromConfig(conf *service.ParsedConfig, mgr *service.Resou
 	if j.maxAckPending, err = conf.FieldInt("max_ack_pending"); err != nil {
 		return nil, err
 	}
-
-	tlsConf, tlsEnabled, err := conf.FieldTLSToggled("tls")
-	if err != nil {
-		return nil, err
-	}
-	if tlsEnabled {
-		j.tlsConf = tlsConf
-	}
-
-	if j.authConf, err = AuthFromParsedConfig(conf.Namespace("auth")); err != nil {
-		return nil, err
-	}
-
 	return &j, nil
 }
 
@@ -247,14 +220,7 @@ func (j *jetStreamReader) Connect(ctx context.Context) (err error) {
 		}
 	}()
 
-	var opts []nats.Option
-	if j.tlsConf != nil {
-		opts = append(opts, nats.Secure(j.tlsConf))
-	}
-	opts = append(opts, nats.Name(j.label))
-	opts = append(opts, authConfToOptions(j.authConf, j.fs)...)
-	opts = append(opts, errorHandlerOption(j.log))
-	if natsConn, err = nats.Connect(j.urls, opts...); err != nil {
+	if natsConn, err = j.connDetails.get(ctx); err != nil {
 		return err
 	}
 

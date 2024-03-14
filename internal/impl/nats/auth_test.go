@@ -8,7 +8,6 @@ import (
 	"github.com/nats-io/nkeys"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/benthosdev/benthos/v4/internal/impl/nats/auth"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
@@ -31,7 +30,7 @@ SUABRFVRZW4YPTRCQOFZKF45ISHYBPRXPUV7NHHZJVF3D3M2HLZLDKIJ2U
 )
 
 func TestNatsAuthConfToOptions(t *testing.T) {
-	conf := auth.New()
+	conf := authConfig{}
 	conf.UserCredentialsFile = "user.creds"
 
 	fs := fstest.MapFS{
