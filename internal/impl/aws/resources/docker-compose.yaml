@@ -4,6 +4,9 @@ services:
   localstack:
     image: localstack/localstack
     environment:
-      SERVICES: dynamodb,kinesis,s3,sqs
+      DEBUG: 1
+      LOCALSTACK_HOST: localhost:4566
     ports:
       - "4566:4566"
+    # volumes:
+    #   - "/var/run/docker.sock:/var/run/docker.sock"

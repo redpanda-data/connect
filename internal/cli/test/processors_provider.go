@@ -16,7 +16,6 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/bloblang/parser"
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
-	"github.com/benthosdev/benthos/v4/internal/component/testutil"
 	"github.com/benthosdev/benthos/v4/internal/config"
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/filepath/ifs"
@@ -345,7 +344,12 @@ func (p *ProcessorsProvider) getConfs(jsonPtr string, environment map[string]str
 			return confs, fmt.Errorf("failed to parse resources config file '%v': %v", path, err)
 		}
 
-		extraMgrWrapper, err := testutil.ManagerFromYAML(string(resourceBytes))
+		confNode, err := docs.UnmarshalYAML(resourceBytes)
+		if err != nil {
+			return confs, fmt.Errorf("failed to parse resources config file '%v': %v", path, err)
+		}
+
+		extraMgrWrapper, err := manager.FromAny(bundle.GlobalEnvironment, confNode)
 		if err != nil {
 			return confs, fmt.Errorf("failed to parse resources config file '%v': %v", path, err)
 		}

@@ -2,9 +2,7 @@ package nats
 
 import (
 	"context"
-	"crypto/tls"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 
@@ -14,7 +12,6 @@ import (
 
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/input/span"
-	"github.com/benthosdev/benthos/v4/internal/impl/nats/auth"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
@@ -35,7 +32,7 @@ const (
 )
 
 type siConfig struct {
-	URLs            []string
+	connDetails     connectionDetails
 	ClusterID       string
 	ClientID        string
 	QueueID         string
@@ -45,13 +42,10 @@ type siConfig struct {
 	Subject         string
 	MaxInflight     int
 	AckWait         time.Duration
-	TLS             *tls.Config
-	TLSEnabled      bool
-	Auth            auth.Config
 }
 
-func siConfigFromParsed(pConf *service.ParsedConfig) (conf siConfig, err error) {
-	if conf.URLs, err = pConf.FieldStringList(siFieldURLs); err != nil {
+func siConfigFromParsed(pConf *service.ParsedConfig, mgr *service.Resources) (conf siConfig, err error) {
+	if conf.connDetails, err = connectionDetailsFromParsed(pConf, mgr); err != nil {
 		return
 	}
 	if conf.ClusterID, err = pConf.FieldString(siFieldClusterID); err != nil {
@@ -79,12 +73,6 @@ func siConfigFromParsed(pConf *service.ParsedConfig) (conf siConfig, err error) 
 		return
 	}
 	if conf.AckWait, err = pConf.FieldDuration(siFieldAckWait); err != nil {
-		return
-	}
-	if conf.TLS, conf.TLSEnabled, err = pConf.FieldTLSToggled(siFieldTLS); err != nil {
-		return
-	}
-	if conf.Auth, err = AuthFromParsedConfig(pConf.Namespace(siFieldAuth)); err != nil {
 		return
 	}
 	return
@@ -115,12 +103,9 @@ This input adds the following metadata fields to each message:
 
 You can access these metadata fields using [function interpolation](/docs/configuration/interpolation#bloblang-queries).
 
-`+auth.Description()).
+`+authDescription()).
+		Fields(connectionHeadFields()...).
 		Fields(
-			service.NewStringListField(siFieldURLs).
-				Description("A list of URLs to connect to. If an item of the list contains commas it will be expanded into multiple URLs.").
-				Example([]string{"nats://127.0.0.1:4222"}).
-				Example([]string{"nats://username:password@127.0.0.1:4222"}),
 			service.NewStringField(siFieldClusterID).
 				Description("The ID of the cluster to consume from."),
 			service.NewStringField(siFieldClientID).
@@ -150,8 +135,9 @@ You can access these metadata fields using [function interpolation](/docs/config
 				Description("An optional duration to specify at which a message that is yet to be acked will be automatically retried.").
 				Advanced().
 				Default("30s"),
-			service.NewTLSToggledField(siFieldTLS),
-			service.NewInternalField(auth.FieldSpec()),
+		).
+		Fields(connectionTailFields()...).
+		Fields(
 			span.ExtractTracingSpanMappingDocs().Version(tracingVersion),
 		)
 }
@@ -160,7 +146,7 @@ func init() {
 	err := service.RegisterInput(
 		"nats_stream", siSpec(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Input, error) {
-			pConf, err := siConfigFromParsed(conf)
+			pConf, err := siConfigFromParsed(conf, mgr)
 			if err != nil {
 				return nil, err
 			}
@@ -177,10 +163,7 @@ func init() {
 
 type natsStreamReader struct {
 	conf siConfig
-	urls string
-
-	log *service.Logger
-	fs  *service.FS
+	log  *service.Logger
 
 	unAckMsgs []*stan.Msg
 
@@ -205,14 +188,12 @@ func newNATSStreamReader(conf siConfig, mgr *service.Resources) (*natsStreamRead
 
 	n := natsStreamReader{
 		conf:          conf,
-		fs:            mgr.FS(),
 		log:           mgr.Logger(),
 		msgChan:       make(chan *stan.Msg),
 		interruptChan: make(chan struct{}),
 	}
 
 	close(n.msgChan)
-	n.urls = strings.Join(conf.URLs, ",")
 	return &n, nil
 }
 
@@ -241,15 +222,7 @@ func (n *natsStreamReader) Connect(ctx context.Context) error {
 		return nil
 	}
 
-	var opts []nats.Option
-	if n.conf.TLSEnabled && n.conf.TLS != nil {
-		opts = append(opts, nats.Secure(n.conf.TLS))
-	}
-
-	opts = append(opts, authConfToOptions(n.conf.Auth, n.fs)...)
-	opts = append(opts, errorHandlerOption(n.log))
-
-	natsConn, err := nats.Connect(n.urls, opts...)
+	natsConn, err := n.conf.connDetails.get(ctx)
 	if err != nil {
 		return err
 	}

@@ -266,7 +266,59 @@ You can access these metadata fields using [function interpolation](/docs/config
 			).
 				Description("Customise messages returned via [synchronous responses](/docs/guides/sync_responses).").
 				Advanced(),
-		)
+		).
+		Example(
+			"Path Switching",
+			"This example shows an `http_server` input that captures all requests and processes them by switching on that path:", `
+input:
+  http_server:
+    path: /
+    allowed_verbs: [ GET, POST ]
+    sync_response:
+      headers:
+        Content-Type: application/json
+
+  processors:
+    - switch:
+      - check: '@http_server_request_path == "/foo"'
+        processors:
+          - mapping: |
+              root.title = "You Got Fooed!"
+              root.result = content().string().uppercase()
+
+      - check: '@http_server_request_path == "/bar"'
+        processors:
+          - mapping: 'root.title = "Bar Is Slow"'
+          - sleep: # Simulate a slow endpoint
+              duration: 1s
+`).
+		Example(
+			"Mock OAuth 2.0 Server",
+			"This example shows an `http_server` input that mocks an OAuth 2.0 Client Credentials flow server at the endpoint `/oauth2_test`:", `
+input:
+  http_server:
+    path: /oauth2_test
+    allowed_verbs: [ GET, POST ]
+    sync_response:
+      headers:
+        Content-Type: application/json
+
+  processors:
+    - log:
+        message: "Received request"
+        level: INFO
+        fields_mapping: |
+          root = @
+          root.body = content().string()
+
+    - mapping: |
+        root.access_token = "MTQ0NjJkZmQ5OTM2NDE1ZTZjNGZmZjI3"
+        root.token_type = "Bearer"
+        root.expires_in = 3600
+
+    - sync_response: {}
+    - mapping: 'root = deleted()'
+`)
 }
 
 func init() {

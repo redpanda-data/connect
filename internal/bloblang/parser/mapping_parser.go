@@ -42,30 +42,30 @@ func ParseMapping(pCtx Context, expr string) (*mapping.Executor, *Error) {
 
 //------------------------------------------------------------------------------
 
-func mappingStatement(pCtx Context, enableMeta bool, maps map[string]query.Function) Func[*mapping.Statement] {
-	toNilStatement := ZeroedFuncAs[string, *mapping.Statement]
+func mappingStatement(pCtx Context, enableMeta bool, maps map[string]query.Function) Func[mapping.Statement] {
+	toNilStatement := ZeroedFuncAs[string, mapping.Statement]
 
-	if maps == nil {
-		return OneOf(
+	var enabledStatements []Func[mapping.Statement]
+	if maps != nil {
+		enabledStatements = []Func[mapping.Statement]{
 			toNilStatement(importParser(pCtx, maps)),
-			letStatementParser(pCtx),
-			metaStatementParser(pCtx, enableMeta),
-			plainMappingStatementParser(pCtx),
-		)
+			toNilStatement(mapParser(pCtx, maps)),
+		}
 	}
-	return OneOf(
-		toNilStatement(importParser(pCtx, maps)),
-		toNilStatement(mapParser(pCtx, maps)),
+	enabledStatements = append(enabledStatements,
 		letStatementParser(pCtx),
 		metaStatementParser(pCtx, enableMeta),
 		plainMappingStatementParser(pCtx),
+		rootLevelIfExpressionParser(pCtx),
 	)
+
+	return OneOf(enabledStatements...)
 }
 
 func parseExecutor(pCtx Context) Func[*mapping.Executor] {
 	return func(input []rune) Result[*mapping.Executor] {
 		maps := map[string]query.Function{}
-		statements := []*mapping.Statement{}
+		statements := []mapping.Statement{}
 
 		statementPattern := mappingStatement(pCtx, true, maps)
 
@@ -165,7 +165,7 @@ func singleRootMapping(pCtx Context) Func[*mapping.Executor] {
 			return Fail[*mapping.Executor](NewError(testRes.Remaining, expStr), input)
 		}
 
-		stmt := mapping.NewStatement(input, mapping.NewJSONAssignment(), fn)
+		stmt := mapping.NewSingleStatement(input, mapping.NewJSONAssignment(), fn)
 		return Success(mapping.NewExecutor("", input, map[string]query.Function{}, stmt), nil)
 	}
 }
@@ -294,7 +294,7 @@ func mapParser(pCtx Context, maps map[string]query.Function) Func[string] {
 
 		seqSlice := res.Payload
 		ident := seqSlice[2].(string)
-		stmtSlice := seqSlice[4].([]*mapping.Statement)
+		stmtSlice := seqSlice[4].([]mapping.Statement)
 
 		if _, exists := maps[ident]; exists {
 			return Fail[string](NewFatalError(input, fmt.Errorf("map name collision: %v", ident)), input)
@@ -305,7 +305,7 @@ func mapParser(pCtx Context, maps map[string]query.Function) Func[string] {
 	}
 }
 
-func letStatementParser(pCtx Context) Func[*mapping.Statement] {
+func letStatementParser(pCtx Context) Func[mapping.Statement] {
 	p := Sequence(
 		FuncAsAny(Expect(Term("let"), "assignment")),
 		FuncAsAny(SpacesAndTabs),
@@ -325,12 +325,12 @@ func letStatementParser(pCtx Context) Func[*mapping.Statement] {
 		FuncAsAny(queryParser(pCtx)),
 	)
 
-	return func(input []rune) Result[*mapping.Statement] {
+	return func(input []rune) Result[mapping.Statement] {
 		res := p(input)
 		if res.Err != nil {
-			return Fail[*mapping.Statement](res.Err, input)
+			return Fail[mapping.Statement](res.Err, input)
 		}
-		return Success(mapping.NewStatement(
+		return Success[mapping.Statement](mapping.NewSingleStatement(
 			input,
 			mapping.NewVarAssignment(res.Payload[2].(string)),
 			res.Payload[6].(query.Function),
@@ -349,7 +349,7 @@ var nameLiteralParser = JoinStringPayloads(
 	),
 )
 
-func metaStatementParser(pCtx Context, enabled bool) Func[*mapping.Statement] {
+func metaStatementParser(pCtx Context, enabled bool) Func[mapping.Statement] {
 	p := Sequence(
 		FuncAsAny(Expect(Term("meta"), "assignment")),
 		FuncAsAny(SpacesAndTabs),
@@ -364,20 +364,20 @@ func metaStatementParser(pCtx Context, enabled bool) Func[*mapping.Statement] {
 		FuncAsAny(queryParser(pCtx)),
 	)
 
-	return func(input []rune) Result[*mapping.Statement] {
+	return func(input []rune) Result[mapping.Statement] {
 		res := p(input)
 		if res.Err != nil {
-			return Fail[*mapping.Statement](res.Err, input)
+			return Fail[mapping.Statement](res.Err, input)
 		}
 		if !enabled {
-			return Fail[*mapping.Statement](
+			return Fail[mapping.Statement](
 				NewFatalError(input, errors.New("setting meta fields is not allowed within this block")),
 				input,
 			)
 		}
 		resSlice := res.Payload
 
-		return Success(mapping.NewStatement(
+		return Success[mapping.Statement](mapping.NewSingleStatement(
 			input,
 			mapping.NewMetaAssignment(resSlice[2].(*string)),
 			resSlice[6].(query.Function),
@@ -447,7 +447,7 @@ func pathParser(input []rune) Result[[]string] {
 	return Success(path, res.Remaining)
 }
 
-func plainMappingStatementParser(pCtx Context) Func[*mapping.Statement] {
+func plainMappingStatementParser(pCtx Context) Func[mapping.Statement] {
 	p := Sequence(
 		FuncAsAny(pathParser),
 		FuncAsAny(SpacesAndTabs),
@@ -456,10 +456,10 @@ func plainMappingStatementParser(pCtx Context) Func[*mapping.Statement] {
 		FuncAsAny(queryParser(pCtx)),
 	)
 
-	return func(input []rune) Result[*mapping.Statement] {
+	return func(input []rune) Result[mapping.Statement] {
 		res := p(input)
 		if res.Err != nil {
-			return Fail[*mapping.Statement](res.Err, input)
+			return Fail[mapping.Statement](res.Err, input)
 		}
 
 		resSlice := res.Payload
@@ -469,7 +469,7 @@ func plainMappingStatementParser(pCtx Context) Func[*mapping.Statement] {
 			path = path[1:]
 		}
 
-		return Success(mapping.NewStatement(
+		return Success[mapping.Statement](mapping.NewSingleStatement(
 			input,
 			mapping.NewJSONAssignment(path...),
 			resSlice[4].(query.Function),

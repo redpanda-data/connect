@@ -39,6 +39,7 @@ const (
 	oskFieldAckReplicas                  = "ack_replicas"
 	oskFieldMaxMsgBytes                  = "max_msg_bytes"
 	oskFieldTimeout                      = "timeout"
+	oskFieldIdempotentWrite              = "idempotent_write"
 	oskFieldRetryAsBatch                 = "retry_as_batch"
 	oskFieldBatching                     = "batching"
 	oskFieldMaxRetries                   = "max_retries"
@@ -126,6 +127,10 @@ Unfortunately this error message will appear for a wide range of connection prob
 				Description("Specify criteria for which metadata values are sent with messages as headers."),
 			span.InjectTracingSpanMappingDocs(),
 			service.NewOutputMaxInFlightField(),
+			service.NewBoolField(oskFieldIdempotentWrite).
+				Description("Enable the idempotent write producer option. This requires the `IDEMPOTENT_WRITE` permission on `CLUSTER` and can be disabled if this permission is not available.").
+				Default(false).
+				Advanced(),
 			service.NewBoolField(oskFieldAckReplicas).
 				Description("Ensure that messages have been copied across all replicas before acknowledging receipt.").
 				Advanced().Default(false),
@@ -430,6 +435,10 @@ func (k *kafkaWriter) saramaConfigFromParsed(conf *service.ParsedConfig) (*saram
 
 	var ackReplicas bool
 	if ackReplicas, err = conf.FieldBool(oskFieldAckReplicas); err != nil {
+		return nil, err
+	}
+
+	if config.Producer.Idempotent, err = conf.FieldBool(oskFieldIdempotentWrite); err != nil {
 		return nil, err
 	}
 

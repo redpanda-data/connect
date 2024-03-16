@@ -104,24 +104,24 @@ func init() {
 //------------------------------------------------------------------------------
 
 type generateReader struct {
-	remaining   int
-	batchSize   int
-	limited     bool
-	firstIsFree bool
-	exec        *mapping.Executor
-	timer       *time.Ticker
-	schedule    *cron.Schedule
-	location    *time.Location
+	remaining    int
+	batchSize    int
+	limited      bool
+	firstIsFree  bool
+	exec         *mapping.Executor
+	timer        *time.Ticker
+	schedule     *cron.Schedule
+	schedulePrev *time.Time
 }
 
 func newGenerateReaderFromParsed(conf *service.ParsedConfig, mgr bundle.NewManagement) (*generateReader, error) {
 	var (
-		duration    time.Duration
-		timer       *time.Ticker
-		schedule    *cron.Schedule
-		location    *time.Location
-		err         error
-		firstIsFree = true
+		duration     time.Duration
+		timer        *time.Ticker
+		schedule     *cron.Schedule
+		schedulePrev *time.Time
+		err          error
+		firstIsFree  = true
 	)
 
 	mappingStr, err := conf.FieldString(giFieldMapping)
@@ -138,11 +138,16 @@ func newGenerateReaderFromParsed(conf *service.ParsedConfig, mgr bundle.NewManag
 		if duration, err = time.ParseDuration(intervalStr); err != nil {
 			// interval is not a duration so try to parse as a cron expression
 			var cerr error
-			if schedule, location, cerr = parseCronExpression(intervalStr); cerr != nil {
+			if schedule, cerr = parseCronExpression(intervalStr); cerr != nil {
 				return nil, fmt.Errorf("failed to parse interval as duration string: %v, or as cron expression: %w", err, cerr)
 			}
 			firstIsFree = false
-			duration = getDurationTillNextSchedule(time.Now(), *schedule, location)
+
+			tNext := (*schedule).Next(time.Now())
+			if duration = time.Until(tNext); duration < 1 {
+				duration = 1
+			}
+			schedulePrev = &tNext
 		}
 		if duration > 0 {
 			timer = time.NewTicker(duration)
@@ -167,47 +172,30 @@ func newGenerateReaderFromParsed(conf *service.ParsedConfig, mgr bundle.NewManag
 	}
 
 	return &generateReader{
-		exec:        exec,
-		remaining:   count,
-		batchSize:   batchSize,
-		limited:     count > 0,
-		timer:       timer,
-		schedule:    schedule,
-		location:    location,
-		firstIsFree: firstIsFree,
+		exec:         exec,
+		remaining:    count,
+		batchSize:    batchSize,
+		limited:      count > 0,
+		timer:        timer,
+		schedule:     schedule,
+		schedulePrev: schedulePrev,
+		firstIsFree:  firstIsFree,
 	}, nil
 }
 
-func getDurationTillNextSchedule(previous time.Time, schedule cron.Schedule, location *time.Location) time.Duration {
-	tUntil := time.Until(schedule.Next(previous))
-	if tUntil < 1 {
-		return 1
-	}
-	return tUntil
-}
-
-func parseCronExpression(cronExpression string) (*cron.Schedule, *time.Location, error) {
+func parseCronExpression(cronExpression string) (*cron.Schedule, error) {
 	// If time zone is not included, set default to UTC
 	if !strings.HasPrefix(cronExpression, "TZ=") {
 		cronExpression = fmt.Sprintf("TZ=%s %s", "UTC", cronExpression)
 	}
 
-	end := strings.Index(cronExpression, " ")
-	eq := strings.Index(cronExpression, "=")
-	tz := cronExpression[eq+1 : end]
-
-	loc, err := time.LoadLocation(tz)
-	if err != nil {
-		return nil, nil, err
-	}
 	parser := cron.NewParser(cron.SecondOptional | cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow | cron.Descriptor)
-
 	cronSchedule, err := parser.Parse(cronExpression)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
-	return &cronSchedule, loc, nil
+	return &cronSchedule, nil
 }
 
 // Connect establishes a Bloblang reader.
@@ -234,7 +222,19 @@ func (b *generateReader) ReadBatch(ctx context.Context) (message.Batch, input.As
 				return nil, nil, component.ErrTypeClosed
 			}
 			if b.schedule != nil {
-				b.timer.Reset(getDurationTillNextSchedule(t, *b.schedule, b.location))
+				if b.schedulePrev != nil {
+					t = *b.schedulePrev
+				}
+
+				tNext := (*b.schedule).Next(t)
+				tNow := time.Now()
+				duration := tNext.Sub(tNow)
+				if duration < 1 {
+					duration = 1
+				}
+
+				b.schedulePrev = &tNext
+				b.timer.Reset(duration)
 			}
 		case <-ctx.Done():
 			return nil, nil, component.ErrTimeout

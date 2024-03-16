@@ -72,7 +72,6 @@ interval: '@every 1s'
 `)
 
 	assert.NotNil(t, b.schedule)
-	assert.NotNil(t, b.location)
 
 	err := b.Connect(ctx)
 	require.NoError(t, err)
