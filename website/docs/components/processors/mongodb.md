@@ -167,7 +167,7 @@ Default: `""`
 
 ### `document_map`
 
-A bloblang map representing the records in the mongo db. Used to generate the document for mongodb by mapping the fields in the message to the mongodb fields. The document map is required for the operations insert-one, replace-one and update-one.
+A bloblang map representing a document to store within MongoDB, expressed as [extended JSON in canonical form](https://www.mongodb.com/docs/manual/reference/mongodb-extended-json/). The document map is required for the operations insert-one, replace-one and update-one.
 
 
 Type: `string`  
@@ -183,7 +183,7 @@ document_map: |-
 
 ### `filter_map`
 
-A bloblang map representing the filter for the mongo db command. The filter map is required for all operations except insert-one. It is used to find the document(s) for the operation. For example in a delete-one case, the filter map should have the fields required to locate the document to delete.
+A bloblang map representing a filter for a MongoDB command, expressed as [extended JSON in canonical form](https://www.mongodb.com/docs/manual/reference/mongodb-extended-json/). The filter map is required for all operations except insert-one. It is used to find the document(s) for the operation. For example in a delete-one case, the filter map should have the fields required to locate the document to delete.
 
 
 Type: `string`  
@@ -199,7 +199,7 @@ filter_map: |-
 
 ### `hint_map`
 
-A bloblang map representing the hint for the mongo db command. This map is optional and is used with all operations except insert-one. It is used to improve performance of finding the documents in the mongodb.
+A bloblang map representing the hint for the MongoDB command, expressed as [extended JSON in canonical form](https://www.mongodb.com/docs/manual/reference/mongodb-extended-json/). This map is optional and is used with all operations except insert-one. It is used to improve performance of finding the documents in the mongodb.
 
 
 Type: `string`  

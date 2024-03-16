@@ -87,6 +87,7 @@ output:
       exclude_prefixes: []
     inject_tracing_map: meta = @.merge(this) # No default (optional)
     max_in_flight: 64
+    idempotent_write: false
     ack_replicas: false
     max_msg_bytes: 1000000
     timeout: 5s
@@ -540,6 +541,14 @@ The maximum number of messages to have in flight at a given time. Increase this 
 
 Type: `int`  
 Default: `64`  
+
+### `idempotent_write`
+
+Enable the idempotent write producer option. This requires the `IDEMPOTENT_WRITE` permission on `CLUSTER` and can be disabled if this permission is not available.
+
+
+Type: `bool`  
+Default: `false`  
 
 ### `ack_replicas`
 

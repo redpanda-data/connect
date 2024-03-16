@@ -2,16 +2,13 @@ package nats
 
 import (
 	"context"
-	"crypto/tls"
 	"errors"
 	"fmt"
-	"strings"
 	"sync"
 
 	"github.com/nats-io/nats.go"
 
 	"github.com/benthosdev/benthos/v4/internal/component/output/span"
-	"github.com/benthosdev/benthos/v4/internal/impl/nats/auth"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
@@ -22,11 +19,8 @@ func natsOutputConfig() *service.ConfigSpec {
 		Summary("Publish to an NATS subject.").
 		Description(`This output will interpolate functions within the subject field, you can find a list of functions [here](/docs/configuration/interpolation#bloblang-queries).
 
-` + ConnectionNameDescription() + auth.Description()).
-		Field(service.NewStringListField("urls").
-			Description("A list of URLs to connect to. If an item of the list contains commas it will be expanded into multiple URLs.").
-			Example([]string{"nats://127.0.0.1:4222"}).
-			Example([]string{"nats://username:password@127.0.0.1:4222"})).
+` + ConnectionNameDescription() + authDescription()).
+		Fields(connectionHeadFields()...).
 		Field(service.NewInterpolatedStringField("subject").
 			Description("The subject to publish to.").
 			Example("foo.bar.baz")).
@@ -43,8 +37,7 @@ func natsOutputConfig() *service.ConfigSpec {
 		Field(service.NewIntField("max_in_flight").
 			Description("The maximum number of messages to have in flight at a given time. Increase this to improve throughput.").
 			Default(64)).
-		Field(service.NewTLSToggledField("tls")).
-		Field(service.NewInternalField(auth.FieldSpec())).
+		Fields(connectionTailFields()...).
 		Field(span.InjectTracingSpanMappingDocs().Version(tracingVersion))
 }
 
@@ -70,17 +63,13 @@ func init() {
 }
 
 type natsWriter struct {
-	label         string
-	urls          string
+	connDetails   connectionDetails
 	headers       map[string]*service.InterpolatedString
 	metaFilter    *service.MetadataFilter
 	subjectStr    *service.InterpolatedString
 	subjectStrRaw string
-	authConf      auth.Config
-	tlsConf       *tls.Config
 
 	log *service.Logger
-	fs  *service.FS
 
 	natsConn *nats.Conn
 	connMut  sync.RWMutex
@@ -88,16 +77,14 @@ type natsWriter struct {
 
 func newNATSWriter(conf *service.ParsedConfig, mgr *service.Resources) (*natsWriter, error) {
 	n := natsWriter{
-		label:   mgr.Label(),
 		log:     mgr.Logger(),
-		fs:      mgr.FS(),
 		headers: make(map[string]*service.InterpolatedString),
 	}
-	urlList, err := conf.FieldStringList("urls")
-	if err != nil {
+
+	var err error
+	if n.connDetails, err = connectionDetailsFromParsed(conf, mgr); err != nil {
 		return nil, err
 	}
-	n.urls = strings.Join(urlList, ",")
 
 	if n.subjectStrRaw, err = conf.FieldString("subject"); err != nil {
 		return nil, err
@@ -116,18 +103,6 @@ func newNATSWriter(conf *service.ParsedConfig, mgr *service.Resources) (*natsWri
 			return nil, err
 		}
 	}
-
-	tlsConf, tlsEnabled, err := conf.FieldTLSToggled("tls")
-	if err != nil {
-		return nil, err
-	}
-	if tlsEnabled {
-		n.tlsConf = tlsConf
-	}
-
-	if n.authConf, err = AuthFromParsedConfig(conf.Namespace("auth")); err != nil {
-		return nil, err
-	}
 	return &n, nil
 }
 
@@ -140,23 +115,11 @@ func (n *natsWriter) Connect(ctx context.Context) error {
 	}
 
 	var err error
-	var opts []nats.Option
-
-	if n.tlsConf != nil {
-		opts = append(opts, nats.Secure(n.tlsConf))
-	}
-
-	opts = append(opts, nats.Name(n.label))
-	opts = append(opts, authConfToOptions(n.authConf, n.fs)...)
-	opts = append(opts, errorHandlerOption(n.log))
-
-	if n.natsConn, err = nats.Connect(n.urls, opts...); err != nil {
+	if n.natsConn, err = n.connDetails.get(ctx); err != nil {
 		return err
 	}
 
-	if err == nil {
-		n.log.Infof("Sending NATS messages to subject: %v\n", n.subjectStrRaw)
-	}
+	n.log.Infof("Sending NATS messages to subject: %v\n", n.subjectStrRaw)
 	return err
 }
 

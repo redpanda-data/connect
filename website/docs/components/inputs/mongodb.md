@@ -18,7 +18,7 @@ import TabItem from '@theme/TabItem';
 :::caution EXPERIMENTAL
 This component is experimental and therefore subject to change or removal outside of major version releases.
 :::
-Executes a find query and creates a message for each row received.
+Executes a query and creates a message for each document received.
 
 Introduced in version 3.64.0.
 
@@ -43,6 +43,9 @@ input:
     query: |2 # No default (required)
         root.from = {"$lte": timestamp_unix()}
         root.to = {"$gte": timestamp_unix()}
+    batch_size: 1000 # No default (optional)
+    sort: {} # No default (optional)
+    limit: 0 # No default (optional)
 ```
 
 </TabItem>
@@ -63,12 +66,15 @@ input:
     query: |2 # No default (required)
         root.from = {"$lte": timestamp_unix()}
         root.to = {"$gte": timestamp_unix()}
+    batch_size: 1000 # No default (optional)
+    sort: {} # No default (optional)
+    limit: 0 # No default (optional)
 ```
 
 </TabItem>
 </Tabs>
 
-Once the rows from the query are exhausted this input shuts down, allowing the pipeline to gracefully terminate (or the next input in a [sequence](/docs/components/inputs/sequence) to execute).
+Once the documents from the query are exhausted, this input shuts down, allowing the pipeline to gracefully terminate (or the next input in a [sequence](/docs/components/inputs/sequence) to execute).
 
 ## Fields
 
@@ -157,5 +163,45 @@ query: |2
     root.from = {"$lte": timestamp_unix()}
     root.to = {"$gte": timestamp_unix()}
 ```
+
+### `batch_size`
+
+A explicit number of documents to batch up before flushing them for processing. Must be greater than `0`. Operations: `find`, `aggregate`
+
+
+Type: `int`  
+Requires version 4.26.0 or newer  
+
+```yml
+# Examples
+
+batch_size: 1000
+```
+
+### `sort`
+
+An object specifying fields to sort by, and the respective sort order (`1` ascending, `-1` descending). Note: The driver currently appears to support only one sorting key. Operations: `find`
+
+
+Type: `object`  
+Requires version 4.26.0 or newer  
+
+```yml
+# Examples
+
+sort:
+  name: 1
+
+sort:
+  age: -1
+```
+
+### `limit`
+
+An explicit maximum number of documents to return. Operations: `find`
+
+
+Type: `int`  
+Requires version 4.26.0 or newer  
 
 
