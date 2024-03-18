@@ -39,13 +39,13 @@ benthos -c ./config.yaml`
     label: 'Docker',
     language: 'bash',
     children: `# Pull
-docker pull jeffail/benthos
+docker pull ghcr.io/benthosdev/benthos
 
 # Make a config
-docker run --rm jeffail/benthos create nats/protobuf/aws_sqs > ./config.yaml
+docker run --rm ghcr.io/benthosdev/benthos create nats/protobuf/aws_sqs > ./config.yaml
 
 # Run
-docker run --rm -v $(pwd)/config.yaml:/benthos.yaml jeffail/benthos`
+docker run --rm -v $(pwd)/config.yaml:/benthos.yaml ghcr.io/benthosdev/benthos`
   },
   {
     label: 'Asdf',

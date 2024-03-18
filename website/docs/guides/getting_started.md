@@ -41,8 +41,8 @@ Or you can grab an archive containing Benthos from the [releases page][releases]
 If you have docker installed you can pull the latest official Benthos image with:
 
 ```sh
-docker pull jeffail/benthos
-docker run --rm -v /path/to/your/config.yaml:/benthos.yaml jeffail/benthos
+docker pull ghcr.io/benthosdev/benthos
+docker run --rm -v /path/to/your/config.yaml:/benthos.yaml ghcr.io/benthosdev/benthos
 ```
 
 ### Homebrew

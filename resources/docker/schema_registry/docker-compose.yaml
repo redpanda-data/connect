@@ -14,13 +14,13 @@ services:
       - '--advertise-pandaproxy-addr redpanda:8082'
 
   benthos-in:
-    image: jeffail/benthos
+    image: ghcr.io/benthosdev/benthos
     command: [ '-w', '-c', '/benthos.yaml' ]
     volumes:
       - ./in.yaml:/benthos.yaml
 
   benthos-out:
-    image: jeffail/benthos
+    image: ghcr.io/benthosdev/benthos
     command: [ '-w', '-c', '/benthos.yaml' ]
     volumes:
       - ./out.yaml:/benthos.yaml
