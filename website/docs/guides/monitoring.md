@@ -11,7 +11,7 @@ Benthos serves two HTTP endpoints for health checks:
 
 ## Metrics
 
-Benthos [exposes lots of metrics][metrics.names] either to Statsd, Prometheus, Cloudwatch or for debugging purposes an HTTP endpoint that returns a JSON formatted object.
+Benthos [exposes lots of metrics][metrics.names] either to Statsd, Prometheus, Cloudwatch, Open Telemetry or for debugging purposes an HTTP endpoint that returns a JSON formatted object.
 
 The target destination of Benthos metrics is configurable from the [metrics section][metrics.about], where it's also possible to rename and restrict the metrics that are emitted with mappings.
 

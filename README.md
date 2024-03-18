@@ -107,7 +107,7 @@ Benthos serves two HTTP endpoints for health checks:
 
 ### Metrics
 
-Benthos [exposes lots of metrics][metrics] either to Statsd, Prometheus, a JSON HTTP endpoint, [and more][metrics].
+Benthos [exposes lots of metrics][metrics] either to Statsd, Prometheus, a JSON HTTP endpoint, Open Telemetry, [and more][metrics].
 
 ### Tracing
 
