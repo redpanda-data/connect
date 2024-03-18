@@ -1,5 +1,6 @@
 ---
 title: nats_kv
+slug: nats_kv
 type: cache
 status: experimental
 categories: ["Services"]
@@ -19,7 +20,7 @@ This component is experimental and therefore subject to change or removal outsid
 :::
 Cache key/values in a NATS key-value bucket.
 
-Introduced in version 4.24.0.
+Introduced in version 4.27.0.
 
 
 <Tabs defaultValue="common" values={[
@@ -122,7 +123,7 @@ urls:
 
 ### `bucket`
 
-The name of the KV bucket to watch for updates.
+The name of the KV bucket to store items within.
 
 
 Type: `string`  

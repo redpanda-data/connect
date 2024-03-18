@@ -2,15 +2,12 @@ package nats
 
 import (
 	"context"
-	"crypto/tls"
 	"errors"
-	"strings"
 	"sync"
 	"time"
 
 	"github.com/nats-io/nats.go"
 
-	"github.com/benthosdev/benthos/v4/internal/impl/nats/auth"
 	"github.com/benthosdev/benthos/v4/internal/shutdown"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
@@ -18,18 +15,14 @@ import (
 func natsKVCacheConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Categories("Services").
-		Version("4.24.0").
+		Version("4.27.0").
 		Summary("Cache key/values in a NATS key-value bucket.").
-		Description(ConnectionNameDescription() + auth.Description()).
-		Field(service.NewStringListField("urls").
-			Description("A list of URLs to connect to. If an item of the list contains commas it will be expanded into multiple URLs.").
-			Example([]string{"nats://127.0.0.1:4222"}).
-			Example([]string{"nats://username:password@127.0.0.1:4222"})).
+		Description(ConnectionNameDescription() + authDescription()).
+		Fields(connectionHeadFields()...).
 		Field(service.NewStringField("bucket").
-			Description("The name of the KV bucket to watch for updates.").
+			Description("The name of the KV bucket to store items within.").
 			Example("my_kv_bucket")).
-		Field(service.NewTLSToggledField("tls")).
-		Field(service.NewInternalField(auth.FieldSpec()))
+		Fields(connectionTailFields()...)
 }
 
 func init() {
@@ -45,14 +38,10 @@ func init() {
 }
 
 type kvCache struct {
-	label    string
-	urls     string
-	bucket   string
-	authConf auth.Config
-	tlsConf  *tls.Config
+	connDetails connectionDetails
+	bucket      string
 
 	log *service.Logger
-	fs  *service.FS
 
 	shutSig *shutdown.Signaller
 
@@ -63,36 +52,20 @@ type kvCache struct {
 
 func newKVCache(conf *service.ParsedConfig, mgr *service.Resources) (*kvCache, error) {
 	p := &kvCache{
-		label:   mgr.Label(),
 		log:     mgr.Logger(),
-		fs:      mgr.FS(),
 		shutSig: shutdown.NewSignaller(),
 	}
 
-	urlList, err := conf.FieldStringList("urls")
-	if err != nil {
+	var err error
+	if p.connDetails, err = connectionDetailsFromParsed(conf, mgr); err != nil {
 		return nil, err
 	}
-	p.urls = strings.Join(urlList, ",")
 
 	if p.bucket, err = conf.FieldString("bucket"); err != nil {
 		return nil, err
 	}
 
-	tlsConf, tlsEnabled, err := conf.FieldTLSToggled("tls")
-	if err != nil {
-		return nil, err
-	}
-	if tlsEnabled {
-		p.tlsConf = tlsConf
-	}
-
-	if p.authConf, err = AuthFromParsedConfig(conf.Namespace("auth")); err != nil {
-		return nil, err
-	}
-
 	err = p.connect(context.Background())
-
 	return p, err
 }
 
@@ -119,29 +92,20 @@ func (p *kvCache) connect(ctx context.Context) error {
 
 	defer func() {
 		if err != nil {
-			if p.natsConn != nil {
-				p.natsConn.Close()
-			}
+			p.disconnect()
 		}
 	}()
 
-	var opts []nats.Option
-	if p.tlsConf != nil {
-		opts = append(opts, nats.Secure(p.tlsConf))
-	}
-	opts = append(opts, nats.Name(p.label))
-	opts = append(opts, authConfToOptions(p.authConf, p.fs)...)
-	if p.natsConn, err = nats.Connect(p.urls, opts...); err != nil {
+	if p.natsConn, err = p.connDetails.get(ctx); err != nil {
 		return err
 	}
 
-	js, err := p.natsConn.JetStream()
-	if err != nil {
+	var js nats.JetStreamContext
+	if js, err = p.natsConn.JetStream(); err != nil {
 		return err
 	}
 
-	p.kv, err = js.KeyValue(p.bucket)
-	if err != nil {
+	if p.kv, err = js.KeyValue(p.bucket); err != nil {
 		return err
 	}
 
@@ -155,6 +119,9 @@ func (p *kvCache) Get(ctx context.Context, key string) ([]byte, error) {
 
 	entry, err := p.kv.Get(key)
 	if err != nil {
+		if errors.Is(err, nats.ErrKeyNotFound) {
+			err = service.ErrKeyNotFound
+		}
 		return nil, err
 	}
 	return entry.Value(), nil
