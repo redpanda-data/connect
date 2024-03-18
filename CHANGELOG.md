@@ -3,7 +3,7 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
-## Unreleased
+## 4.26.0 - 2024-03-18
 
 ### Added
 
