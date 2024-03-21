@@ -63,6 +63,7 @@ output:
       root_cas_file: ""
       client_certs: []
     stream: "" # No default (required)
+    entry_id: '*'
     body_key: body
     max_length: 0
     max_in_flight: 64
@@ -292,6 +293,15 @@ This field supports [interpolation functions](/docs/configuration/interpolation#
 
 
 Type: `string`  
+
+### `entry_id`
+
+The entry ID for the message.
+This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
+
+
+Type: `string`  
+Default: `"*"`  
 
 ### `body_key`
 
