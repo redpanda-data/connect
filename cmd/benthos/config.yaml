@@ -21,44 +21,44 @@ pipeline:
         branches:
           A:
             processors:
-              - log:
-                  level: INFO
-                  message: STAGE A STARTED
+            #   - log:
+            #       level: INFO
+            #       message: STAGE A STARTED
               - sleep:
-                  duration: "5s"
+                  duration: "3s"
               - log:
                   level: INFO
                   message: STAGE A FINISHED
 
           B:
             processors:
-              - log:
-                  level: INFO
-                  message: STAGE B STARTED
+              # - log:
+              #     level: INFO
+              #     message: STAGE B STARTED
               - sleep: 
-                  duration: "5s"
+                  duration: "15s"
               - log:
                   level: INFO
                   message: STAGE B FINISHED
 
           C:
             processors:
-              - log:
-                  level: INFO
-                  message: STAGE C STARTED
+              # - log:
+              #     level: INFO
+              #     message: STAGE C STARTED
               - sleep: 
-                  duration: "5s"
+                  duration: "3s"
               - log:
                   level: INFO
                   message: STAGE C FINISHED
 
           D:
             processors:
-              - log:
-                  level: INFO
-                  message: STAGE D STARTED
+              # - log:
+              #     level: INFO
+              #     message: STAGE D STARTED
               - sleep: 
-                  duration: "5s"
+                  duration: "3s"
               - log:
                   level: INFO
                   message: STAGE D FINISHED
@@ -67,22 +67,22 @@ pipeline:
           # no direct dependency on B.
           E: 
             processors:
-              - log:
-                  level: INFO
-                  message: STAGE E STARTED
+              # - log:
+              #     level: INFO
+              #     message: STAGE E STARTED
               - sleep: 
-                  duration: "5s"
+                  duration: "3s"
               - log:
                   level: INFO
                   message: STAGE E FINISHED
 
           F:
             processors:
-              - log:
-                  level: INFO
-                  message: STAGE F STARTED
+              # - log:
+              #     level: INFO
+              #     message: STAGE F STARTED
               - sleep: 
-                  duration: "5s"
+                  duration: "3s"
               - log:
                   level: INFO
                   message: STAGE F FINISHED

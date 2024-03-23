@@ -479,7 +479,7 @@ func (w *WorkflowV2) ProcessBatch(ctx context.Context, msg message.Batch) ([]mes
 	// JEM - end error handling <>
 	defer unlock()
 
-	// JEM : what is this for?
+	// JEM : what is this for? - this is the skip functionality if it is being restarted.
 	skipOnMeta := make([]map[string]struct{}, msg.Len())
 	_ = msg.Iter(func(i int, p *message.Part) error {
 		// TODO: Do we want to evaluate bytes here? And metadata?
@@ -508,7 +508,7 @@ func (w *WorkflowV2) ProcessBatch(ctx context.Context, msg message.Batch) ([]mes
 		wg := sync.WaitGroup{}
 		wg.Add(len(layer))
 		for i, eid := range layer {
-			fmt.Printf("i: %d, eid: %s\n", i, eid)
+			// fmt.Printf("i: %d, eid: %s\n", i, eid)
 			branchMsg, branchSpans := tracing.WithChildSpans(w.tracer, eid, propMsg.ShallowCopy())
 
 			go func(id string, index int) {
