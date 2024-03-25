@@ -10,6 +10,7 @@ All notable changes to this project will be documented in this file.
 - New `nats_kv` cache type.
 - The `nats_jetstream` input now supports `last_per_subject` and `new` deliver fallbacks.
 - Field `error_patterns` added to the `drop_on` output.
+- New `redis_scan` input type.
 
 ## 4.26.0 - 2024-03-18
 

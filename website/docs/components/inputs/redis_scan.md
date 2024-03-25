@@ -1,5 +1,6 @@
 ---
 title: redis_scan
+slug: redis_scan
 type: input
 status: experimental
 categories: ["Services"]
@@ -18,6 +19,8 @@ import TabItem from '@theme/TabItem';
 This component is experimental and therefore subject to change or removal outside of major version releases.
 :::
 Scans the set of keys in the current selected database and gets their values, using the Scan and Get commands.
+
+Introduced in version 4.27.0.
 
 
 <Tabs defaultValue="common" values={[
@@ -55,7 +58,6 @@ input:
       root_cas_file: ""
       client_certs: []
     match: ""
-    max_in_flight: 0
 ```
 
 </TabItem>
@@ -64,8 +66,12 @@ input:
 Optionally, iterates only elements matching a blob-style pattern. For example:
 - `*foo*` iterates only keys which contain `foo` in it.
 - `foo*` iterates only keys starting with `foo`.
-It generates a message for each key value pair in json format. For example:
-- {"key":"foo","value":"bar"}
+
+This input generates a message for each key value pair in the following format:
+
+```json
+{"key":"foo","value":"bar"}
+```
 
 
 ## Fields
@@ -83,6 +89,8 @@ Type: `string`
 url: redis://:6397
 
 url: redis://localhost:6379
+
+url: redis://foousername:foopassword@redisplace:6379
 
 url: redis://:foopassword@redisplace:6379
 
@@ -279,14 +287,5 @@ match: foo
 
 match: '*4*'
 ```
-
-### `max_in_flight`
-
-Optionally sets a limit on the number of messages that can be flowing through a Benthos stream pending acknowledgment from the input at any given time. Once a message has been either acknowledged or rejected (nacked) it is no longer considered pending. If the input produces logical batches then each batch is considered a single count against the maximum. **WARNING**: Batching policies at the output level will stall if this field limits the number of messages below the batching threshold. Zero (default) or lower implies no limit.
-
-
-Type: `int`  
-Default: `0`  
-Requires version 4.9.0 or newer  
 
 

@@ -197,14 +197,21 @@ input:
   redis_scan:
     url: 'tcp://localhost:$PORT'
     match: '*'
+  processors:
+    - mapping: 'root = this.value'
+
+output:
+  cache:
+    target: rcache
+    key: 'foo-${! counter() }'
+
+cache_resources:
+  - label: rcache
+    redis:
+      url: 'tcp://localhost:$PORT'
 `
-		client := redis.NewClient(&redis.Options{
-			Addr:    fmt.Sprintf("localhost:%v", resource.GetPort("6379/tcp")),
-			Network: "tcp",
-		})
-		client.Set(context.Background(), "foo", "hello world", time.Minute)
 		suite := integration.StreamTests(
-			integration.StreamTestFiniteInput(`{"key":"foo","value":"hello world"}`),
+			integration.StreamTestStreamIsolated(1000),
 		)
 		suite.Run(
 			t, template,

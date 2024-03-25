@@ -2,7 +2,6 @@ package redis
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 
 	"github.com/benthosdev/benthos/v4/public/service"
@@ -13,15 +12,11 @@ func init() {
 	err := service.RegisterInput(
 		"redis_scan", redisScanInputConfig(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Input, error) {
-			mInF, err := conf.FieldInt("max_in_flight")
-			if err != nil {
-				return nil, err
-			}
 			i, err := newRedisScanInputFromConfig(conf, mgr)
 			if err != nil {
 				return nil, err
 			}
-			return service.InputWithMaxInFlight(mInF, service.AutoRetryNacks(i)), nil
+			return service.AutoRetryNacks(i), nil
 		})
 	if err != nil {
 		panic(err)
@@ -36,10 +31,15 @@ func redisScanInputConfig() *service.ConfigSpec {
 		Description(`Optionally, iterates only elements matching a blob-style pattern. For example:
 - ` + "`*foo*`" + ` iterates only keys which contain ` + "`foo`" + ` in it.
 - ` + "`foo*`" + ` iterates only keys starting with ` + "`foo`" + `.
-It generates a message for each key value pair in json format. For example:
-- {"key":"foo","value":"bar"}
+
+This input generates a message for each key value pair in the following format:
+
+` + "```json" + `
+{"key":"foo","value":"bar"}
+` + "```" + `
 `).
-		Categories("Services")
+		Categories("Services").
+		Version("4.27.0")
 
 	for _, f := range clientFields() {
 		spec = spec.Field(f)
@@ -53,8 +53,7 @@ It generates a message for each key value pair in json format. For example:
 			Example("foo*").
 			Example("foo").
 			Example("*4*").
-			Default("")).
-		Field(service.NewInputMaxInFlightField().Version("4.9.0"))
+			Default(""))
 }
 
 func newRedisScanInputFromConfig(conf *service.ParsedConfig, mgr *service.Resources) (service.Input, error) {
@@ -93,13 +92,20 @@ func (r *redisScanReader) Connect(ctx context.Context) error {
 func (r *redisScanReader) Read(ctx context.Context) (*service.Message, service.AckFunc, error) {
 	if r.iter.Next(ctx) {
 		key := r.iter.Val()
-		bytes, err := json.Marshal(struct {
-			Key   string `json:"key"`
-			Value string `json:"value"`
-		}{key, r.client.Get(ctx, key).Val()})
-		return service.NewMessage(bytes), func(ctx context.Context, err error) error {
+
+		res := r.client.Get(ctx, key)
+		if err := res.Err(); err != nil {
+			return nil, nil, err
+		}
+
+		msg := service.NewMessage(nil)
+		msg.SetStructuredMut(map[string]any{
+			"key":   key,
+			"value": res.Val(),
+		})
+		return msg, func(ctx context.Context, err error) error {
 			return err
-		}, err
+		}, nil
 	}
 	return nil, nil, service.ErrEndOfInput
 }
