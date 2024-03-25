@@ -375,7 +375,10 @@ function Home() {
                   <div>
                     <a href="https://synadia.com"><img className={styles.synadiaImg} src="/img/sponsors/synadia.svg" /></a>
                   </div>
-                  <div className={classnames(styles.sponsorsBox)}>
+                  <div className={classnames(styles.sponsorsBox, styles.goldSponsors)}>
+                    <a href="https://www.warpstream.com/"><img src="/img/sponsors/warpstream_logo.svg" /></a>
+                  </div>
+                  <div className={classnames(styles.sponsorsBox, styles.silverSponsors)}>
                     <a href="https://www.meltwater.com/"><img src="/img/sponsors/mw_logo.png" /></a>
                     <a href="https://www.humansecurity.com"><img src="/img/sponsors/HUMAN_logo.png" /></a>
                     <a href="https://community.com/"><img src="/img/sponsors/community.svg" /></a>
