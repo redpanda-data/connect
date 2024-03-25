@@ -113,13 +113,14 @@ func (l *Local) GetTimings() map[string]metrics.Timer {
 }
 
 // FlushTimings returns a map of the current state of the metrics paths to
-// counters and then resets the counters to 0.
+// timers and then resets the timers to 0.
 func (l *Local) FlushTimings() map[string]metrics.Timer {
 	return l.getTimings(true)
 }
 
-// FlushTimings returns a map of the current state of the metrics paths to
-// counters and then resets the counters to 0.
+// getTimings returns a map of the current state of the metrics paths to
+// timers before optionally reseting the timers as determined by the reset
+// value passed in.
 func (l *Local) getTimings(reset bool) map[string]metrics.Timer {
 	l.mut.Lock()
 	localFlatTimings := make(map[string]metrics.Timer, len(l.flatTimings))
