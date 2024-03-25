@@ -4,8 +4,9 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/benthosdev/benthos/v4/public/service"
 	"github.com/redis/go-redis/v9"
+
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
 func init() {
