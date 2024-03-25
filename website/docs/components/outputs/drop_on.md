@@ -15,7 +15,7 @@ categories: ["Utility"]
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-Attempts to write messages to a child output and if the write fails for one of a list of configurable reasons the message is dropped instead of being reattempted.
+Attempts to write messages to a child output and if the write fails for one of a list of configurable reasons the message is dropped (acked) instead of being reattempted (or nacked).
 
 ```yml
 # Config fields, showing default values
@@ -23,6 +23,7 @@ output:
   label: ""
   drop_on:
     error: false
+    error_patterns: [] # No default (optional)
     back_pressure: 30s # No default (optional)
     output: null # No default (required)
 ```
@@ -33,15 +34,33 @@ Regular Benthos outputs will apply back pressure when downstream services aren't
 
 ### `error`
 
-Whether messages should be dropped when the child output returns an error. For example, this could be when an http_client output gets a 4XX response code.
+Whether messages should be dropped when the child output returns an error of any type. For example, this could be when an `http_client` output gets a 4XX response code. In order to instead drop only on specific error patterns use the `error_matches` field instead.
 
 
 Type: `bool`  
 Default: `false`  
 
+### `error_patterns`
+
+A list of regular expressions (re2) where if the child output returns an error that matches any part of any of these patterns the message will be dropped.
+
+
+Type: `array`  
+Requires version 4.27.0 or newer  
+
+```yml
+# Examples
+
+error_patterns:
+  - and that was really bad$
+
+error_patterns:
+  - roughly [0-9]+ issues occurred
+```
+
 ### `back_pressure`
 
-An optional duration string that determines the maximum length of time to wait for a given message to be accepted by the child output before the message should be dropped instead. The most common reason for an output to block is when waiting for a lost connection to be re-established. Once a message has been dropped due to back pressure all subsequent messages are dropped immediately until the output is ready to process them again. Note that if `error` is set to `false` and this field is specified then messages dropped due to back pressure will return an error response.
+An optional duration string that determines the maximum length of time to wait for a given message to be accepted by the child output before the message should be dropped instead. The most common reason for an output to block is when waiting for a lost connection to be re-established. Once a message has been dropped due to back pressure all subsequent messages are dropped immediately until the output is ready to process them again. Note that if `error` is set to `false` and this field is specified then messages dropped due to back pressure will return an error response (are nacked or reattempted).
 
 
 Type: `string`  
