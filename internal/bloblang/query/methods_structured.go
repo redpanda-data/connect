@@ -1439,52 +1439,22 @@ func sliceMethod(args *ParsedParams) (simpleMethod, error) {
 	if err != nil {
 		return nil, err
 	}
-	if high != nil && *high > 0 && low >= *high {
-		return nil, fmt.Errorf("lower slice bound %v must be lower than upper (%v)", low, *high)
-	}
-	getBounds := func(l int64) (lowV, highV int64, err error) {
-		highV = l
-		if high != nil {
-			if *high < 0 {
-				highV += *high
-			} else {
-				highV = *high
-			}
-		}
-		if highV > l {
-			highV = l
-		}
-		if highV < 0 {
-			highV = 0
-		}
-		lowV = low
-		if lowV < 0 {
-			lowV = l + lowV
-			if lowV < 0 {
-				lowV = 0
-			}
-		}
-		if lowV > highV {
-			err = fmt.Errorf("lower slice bound %v must be lower than or equal to upper bound (%v) and target length (%v)", lowV, highV, l)
-		}
-		return
-	}
 	return func(v any, ctx FunctionContext) (any, error) {
 		switch t := v.(type) {
 		case string:
-			start, end, err := getBounds(int64(len(t)))
+			start, end, err := getBounds(high, low, int64(len(t)))
 			if err != nil {
 				return nil, err
 			}
 			return t[start:end], nil
 		case []byte:
-			start, end, err := getBounds(int64(len(t)))
+			start, end, err := getBounds(high, low, int64(len(t)))
 			if err != nil {
 				return nil, err
 			}
 			return t[start:end], nil
 		case []any:
-			start, end, err := getBounds(int64(len(t)))
+			start, end, err := getBounds(high, low, int64(len(t)))
 			if err != nil {
 				return nil, err
 			}
@@ -1492,6 +1462,38 @@ func sliceMethod(args *ParsedParams) (simpleMethod, error) {
 		}
 		return nil, value.NewTypeError(v, value.TArray, value.TString)
 	}, nil
+}
+
+func getBounds(high *int64, low, l int64) (lowV, highV int64, err error) {
+	if high != nil && *high > 0 && low >= *high {
+		err = fmt.Errorf("lower slice bound %v must be lower than upper (%v)", low, *high)
+		return
+	}
+	highV = l
+	if high != nil {
+		if *high < 0 {
+			highV += *high
+		} else {
+			highV = *high
+		}
+	}
+	if highV > l {
+		highV = l
+	}
+	if highV < 0 {
+		highV = 0
+	}
+	lowV = low
+	if lowV < 0 {
+		lowV = l + lowV
+		if lowV < 0 {
+			lowV = 0
+		}
+	}
+	if lowV > highV {
+		err = fmt.Errorf("lower slice bound %v must be lower than or equal to upper bound (%v) and target length (%v)", lowV, highV, l)
+	}
+	return
 }
 
 //------------------------------------------------------------------------------

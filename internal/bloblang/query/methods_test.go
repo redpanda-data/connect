@@ -1982,6 +1982,56 @@ func TestMethods(t *testing.T) {
 			},
 			output: []byte("raboof"),
 		},
+		"check length_runes": {
+			input: methods(
+				function(`content`),
+				method("length_runes"),
+			),
+			messages: []easyMsg{
+				{content: `foo bar`},
+			},
+			output: int64(7),
+		},
+		"check length_runes non-latin": {
+			input: methods(
+				function(`content`),
+				method("length_runes"),
+			),
+			messages: []easyMsg{
+				{content: `顧客は顧客に続きます。`},
+			},
+			output: int64(11),
+		},
+		"check slice_runes just low": {
+			input: methods(
+				function(`content`),
+				method("slice_runes", 2),
+			),
+			messages: []easyMsg{
+				{content: `foo bar`},
+			},
+			output: `o bar`,
+		},
+		"check slice_runes high and low": {
+			input: methods(
+				function(`content`),
+				method("slice_runes", 2, 5),
+			),
+			messages: []easyMsg{
+				{content: `foo bar`},
+			},
+			output: `o b`,
+		},
+		"check slice_runes non-latin": {
+			input: methods(
+				function(`content`),
+				method("slice_runes", 3, 10),
+			),
+			messages: []easyMsg{
+				{content: `顧客は非常に重要であり、顧客は顧客に続きます。`},
+			},
+			output: `非常に重要であ`,
+		},
 	}
 
 	for name, test := range tests {

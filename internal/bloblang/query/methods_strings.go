@@ -2022,3 +2022,73 @@ root.description = this.description.trim_suffix("_foobar")`,
 		}, nil
 	},
 )
+
+//------------------------------------------------------------------------------
+
+var _ = registerSimpleMethod(
+	NewMethodSpec(
+		"length_runes", "",
+	).InCategory(
+		MethodCategoryStrings,
+		"Return the number of runes from a string.",
+		NewExampleSpec("",
+			`root.content_length = this.content.length_runes()`,
+			`{"content": "foo bar"}`,
+			`{"content_length":7}`,
+		),
+		NewExampleSpec("",
+			`root.content_length = this.content.length_runes()`,
+			`{"content": "顧客は顧客に続きます。"}`,
+			`{"content_length":11}`,
+		),
+	),
+	func(*ParsedParams) (simpleMethod, error) {
+		return stringMethod(func(v string) (any, error) {
+			return int64(len([]rune(v))), nil
+		}), nil
+	},
+)
+
+//------------------------------------------------------------------------------
+
+var _ = registerSimpleMethod(
+	NewMethodSpec(
+		"slice_runes", "",
+	).InCategory(
+		MethodCategoryStrings,
+		"Extract a slice from a string based on it's runes, rather than held bytes. Operates the same as a regular slice otherwise.",
+		NewExampleSpec("",
+			`root.beginning = this.value.slice(0, 2)
+root.end = this.value.slice_runes(4)`,
+			`{"value":"foo bar"}`,
+			`{"beginning":"fo","end":"bar"}`,
+		),
+		NewNotTestedExampleSpec("", // example test is covered in methods_test
+			`root.content_sliced = this.content.slice(3, 10)`,
+			`{"content":"顧客は非常に重要であり、顧客は顧客に続きます。"}`,
+			`{"content_sliced": "非常に重要であ"}`,
+		),
+	).
+		Param(ParamInt64("low", "The low bound, which is the first element of the selection, or if negative selects from the end.")).
+		Param(ParamInt64("high", "An optional high bound.").Optional()),
+	sliceRunesMethod,
+)
+
+func sliceRunesMethod(args *ParsedParams) (simpleMethod, error) {
+	low, err := args.FieldInt64("low")
+	if err != nil {
+		return nil, err
+	}
+	high, err := args.FieldOptionalInt64("high")
+	if err != nil {
+		return nil, err
+	}
+	return stringMethod(func(v string) (any, error) {
+		runes := []rune(v)
+		start, end, err := getBounds(high, low, int64(len(runes)))
+		if err != nil {
+			return nil, err
+		}
+		return string(runes[start:end]), nil
+	}), nil
+}
