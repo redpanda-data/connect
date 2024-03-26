@@ -15,7 +15,7 @@ const installs = [
     label: 'Curl',
     language: 'bash',
     children: `# Install
-curl -Lsf https://sh.benthos.dev | bash
+curl -Lsf https://www.benthos.dev/sh/install | bash
 
 # Make a config
 benthos create nats/protobuf/aws_sqs > ./config.yaml
