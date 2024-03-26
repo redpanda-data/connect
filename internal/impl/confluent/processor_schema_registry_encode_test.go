@@ -19,6 +19,10 @@ import (
 
 var noopReqSign = func(fs.FS, *http.Request) error { return nil }
 
+const (
+	defaultReadTimeoutDur = 5 * time.Second
+)
+
 func TestSchemaRegistryEncoderConfigParse(t *testing.T) {
 	configTests := []struct {
 		name            string
@@ -126,7 +130,7 @@ func TestSchemaRegistryEncodeAvro(t *testing.T) {
 	subj, err := service.NewInterpolatedString("foo")
 	require.NoError(t, err)
 
-	encoder, err := newSchemaRegistryEncoder(urlStr, noopReqSign, nil, subj, false, time.Minute*10, time.Minute, service.MockResources())
+	encoder, err := newSchemaRegistryEncoder(urlStr, noopReqSign, nil, subj, false, time.Minute*10, time.Minute, defaultReadTimeoutDur, service.MockResources())
 	require.NoError(t, err)
 
 	tests := []struct {
@@ -208,7 +212,7 @@ func TestSchemaRegistryEncodeAvroRawJSON(t *testing.T) {
 	subj, err := service.NewInterpolatedString("foo")
 	require.NoError(t, err)
 
-	encoder, err := newSchemaRegistryEncoder(urlStr, noopReqSign, nil, subj, true, time.Minute*10, time.Minute, service.MockResources())
+	encoder, err := newSchemaRegistryEncoder(urlStr, noopReqSign, nil, subj, true, time.Minute*10, time.Minute, defaultReadTimeoutDur, service.MockResources())
 	require.NoError(t, err)
 
 	tests := []struct {
@@ -290,7 +294,7 @@ func TestSchemaRegistryEncodeAvroLogicalTypes(t *testing.T) {
 	subj, err := service.NewInterpolatedString("foo")
 	require.NoError(t, err)
 
-	encoder, err := newSchemaRegistryEncoder(urlStr, noopReqSign, nil, subj, false, time.Minute*10, time.Minute, service.MockResources())
+	encoder, err := newSchemaRegistryEncoder(urlStr, noopReqSign, nil, subj, false, time.Minute*10, time.Minute, defaultReadTimeoutDur, service.MockResources())
 	require.NoError(t, err)
 
 	tests := []struct {
@@ -367,7 +371,7 @@ func TestSchemaRegistryEncodeAvroRawJSONLogicalTypes(t *testing.T) {
 	subj, err := service.NewInterpolatedString("foo")
 	require.NoError(t, err)
 
-	encoder, err := newSchemaRegistryEncoder(urlStr, noopReqSign, nil, subj, true, time.Minute*10, time.Minute, service.MockResources())
+	encoder, err := newSchemaRegistryEncoder(urlStr, noopReqSign, nil, subj, true, time.Minute*10, time.Minute, defaultReadTimeoutDur, service.MockResources())
 	require.NoError(t, err)
 
 	tests := []struct {
@@ -432,7 +436,7 @@ func TestSchemaRegistryEncodeClearExpired(t *testing.T) {
 	subj, err := service.NewInterpolatedString("foo")
 	require.NoError(t, err)
 
-	encoder, err := newSchemaRegistryEncoder(urlStr, noopReqSign, nil, subj, false, time.Minute*10, time.Minute, service.MockResources())
+	encoder, err := newSchemaRegistryEncoder(urlStr, noopReqSign, nil, subj, false, time.Minute*10, time.Minute, defaultReadTimeoutDur, service.MockResources())
 	require.NoError(t, err)
 	require.NoError(t, encoder.Close(context.Background()))
 
@@ -493,7 +497,7 @@ func TestSchemaRegistryEncodeRefresh(t *testing.T) {
 	subj, err := service.NewInterpolatedString("foo")
 	require.NoError(t, err)
 
-	encoder, err := newSchemaRegistryEncoder(urlStr, noopReqSign, nil, subj, false, time.Minute*10, time.Minute, service.MockResources())
+	encoder, err := newSchemaRegistryEncoder(urlStr, noopReqSign, nil, subj, false, time.Minute*10, time.Minute, defaultReadTimeoutDur, service.MockResources())
 	require.NoError(t, err)
 	require.NoError(t, encoder.Close(context.Background()))
 
@@ -589,7 +593,7 @@ func TestSchemaRegistryEncodeJSON(t *testing.T) {
 	subj, err := service.NewInterpolatedString("foo")
 	require.NoError(t, err)
 
-	encoder, err := newSchemaRegistryEncoder(urlStr, noopReqSign, nil, subj, false, time.Minute*10, time.Minute, service.MockResources())
+	encoder, err := newSchemaRegistryEncoder(urlStr, noopReqSign, nil, subj, false, time.Minute*10, time.Minute, defaultReadTimeoutDur, service.MockResources())
 	require.NoError(t, err)
 
 	tests := []struct {

@@ -33,6 +33,7 @@ Automatically decodes and validates messages with schemas from a Confluent Schem
 label: ""
 schema_registry_decode:
   url: "" # No default (required)
+  read_timeout: 5s
 ```
 
 </TabItem>
@@ -44,6 +45,7 @@ label: ""
 schema_registry_decode:
   avro_raw_json: false
   url: "" # No default (required)
+  read_timeout: 5s
   oauth:
     enabled: false
     consumer_key: ""
@@ -110,6 +112,14 @@ The base URL of the schema registry service.
 
 
 Type: `string`  
+
+### `read_timeout`
+
+The read timeout when calling the schema registry
+
+
+Type: `string`  
+Default: `"5s"`  
 
 ### `oauth`
 

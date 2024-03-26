@@ -46,7 +46,8 @@ This processor decodes protobuf messages to JSON documents, you can read more ab
 		Field(service.NewBoolField("avro_raw_json").
 			Description("Whether Avro messages should be decoded into normal JSON (\"json that meets the expectations of regular internet json\") rather than [Avro JSON](https://avro.apache.org/docs/current/specification/_print/#json-encoding). If `true` the schema returned from the subject should be decoded as [standard json](https://pkg.go.dev/github.com/linkedin/goavro/v2#NewCodecForStandardJSONFull) instead of as [avro json](https://pkg.go.dev/github.com/linkedin/goavro/v2#NewCodec). There is a [comment in goavro](https://github.com/linkedin/goavro/blob/5ec5a5ee7ec82e16e6e2b438d610e1cab2588393/union.go#L224-L249), the [underlining library used for avro serialization](https://github.com/linkedin/goavro), that explains in more detail the difference between the standard json and avro json.").
 			Advanced().Default(false)).
-		Field(service.NewURLField("url").Description("The base URL of the schema registry service."))
+		Field(service.NewURLField("url").Description("The base URL of the schema registry service.")).
+		Field(service.NewStringField("read_timeout").Optional().Default("5s").Description("The read timeout when calling the schema registry"))
 
 	for _, f := range httpclient.AuthFieldSpecs() {
 		spec = spec.Field(f.Version("4.7.0"))
@@ -71,6 +72,7 @@ func init() {
 type schemaRegistryDecoder struct {
 	avroRawJSON bool
 	client      *schemaRegistryClient
+	readTimeout time.Duration
 
 	schemas    map[int]*cachedSchemaDecoder
 	cacheMut   sync.RWMutex
@@ -98,7 +100,15 @@ func newSchemaRegistryDecoderFromConfig(conf *service.ParsedConfig, mgr *service
 	if err != nil {
 		return nil, err
 	}
-	return newSchemaRegistryDecoder(urlStr, authSigner, tlsConf, avroRawJSON, mgr)
+	rT, err := conf.FieldString("read_timeout")
+	if err != nil {
+		return nil, err
+	}
+	readTimeoutDur, err := time.ParseDuration(rT)
+	if err != nil {
+		return nil, err
+	}
+	return newSchemaRegistryDecoder(urlStr, authSigner, tlsConf, avroRawJSON, readTimeoutDur, mgr)
 }
 
 func newSchemaRegistryDecoder(
@@ -106,10 +116,12 @@ func newSchemaRegistryDecoder(
 	reqSigner httpclient.RequestSigner,
 	tlsConf *tls.Config,
 	avroRawJSON bool,
+	readTimeoutDuration time.Duration,
 	mgr *service.Resources,
 ) (*schemaRegistryDecoder, error) {
 	s := &schemaRegistryDecoder{
 		avroRawJSON: avroRawJSON,
+		readTimeout: readTimeoutDuration,
 		schemas:     map[int]*cachedSchemaDecoder{},
 		shutSig:     shutdown.NewSignaller(),
 		logger:      mgr.Logger(),
@@ -244,8 +256,7 @@ func (s *schemaRegistryDecoder) getDecoder(id int) (schemaDecoder, error) {
 		return c.decoder, nil
 	}
 
-	// TODO: Expose this via configuration
-	ctx, done := context.WithTimeout(context.Background(), time.Second*5)
+	ctx, done := context.WithTimeout(context.Background(), s.readTimeout)
 	defer done()
 
 	resPayload, err := s.client.GetSchemaByID(ctx, id)

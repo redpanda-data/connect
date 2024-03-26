@@ -37,6 +37,7 @@ schema_registry_encode:
   url: "" # No default (required)
   subject: foo # No default (required)
   refresh_period: 10m
+  read_timeout: 5s
 ```
 
 </TabItem>
@@ -50,6 +51,7 @@ schema_registry_encode:
   subject: foo # No default (required)
   refresh_period: 10m
   avro_raw_json: false
+  read_timeout: 5s
   oauth:
     enabled: false
     consumer_key: ""
@@ -162,6 +164,14 @@ Whether messages encoded in Avro format should be parsed as normal JSON ("json t
 Type: `bool`  
 Default: `false`  
 Requires version 3.59.0 or newer  
+
+### `read_timeout`
+
+The read timeout when calling the schema registry
+
+
+Type: `string`  
+Default: `"5s"`  
 
 ### `oauth`
 

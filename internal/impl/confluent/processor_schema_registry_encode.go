@@ -68,7 +68,8 @@ We will be considering alternative approaches in future so please [get in touch]
 			Example("1h")).
 		Field(service.NewBoolField("avro_raw_json").
 			Description("Whether messages encoded in Avro format should be parsed as normal JSON (\"json that meets the expectations of regular internet json\") rather than [Avro JSON](https://avro.apache.org/docs/current/specification/_print/#json-encoding). If `true` the schema returned from the subject should be parsed as [standard json](https://pkg.go.dev/github.com/linkedin/goavro/v2#NewCodecForStandardJSONFull) instead of as [avro json](https://pkg.go.dev/github.com/linkedin/goavro/v2#NewCodec). There is a [comment in goavro](https://github.com/linkedin/goavro/blob/5ec5a5ee7ec82e16e6e2b438d610e1cab2588393/union.go#L224-L249), the [underlining library used for avro serialization](https://github.com/linkedin/goavro), that explains in more detail the difference between standard json and avro json.").
-			Advanced().Default(false).Version("3.59.0"))
+			Advanced().Default(false).Version("3.59.0")).
+		Field(service.NewStringField("read_timeout").Optional().Default("5s").Description("The read timeout when calling the schema registry"))
 
 	for _, f := range httpclient.AuthFieldSpecs() {
 		spec = spec.Field(f.Version("4.7.0"))
@@ -95,6 +96,7 @@ type schemaRegistryEncoder struct {
 	subject            *service.InterpolatedString
 	avroRawJSON        bool
 	schemaRefreshAfter time.Duration
+	readTimeout        time.Duration
 
 	schemas    map[string]*cachedSchemaEncoder
 	cacheMut   sync.RWMutex
@@ -139,7 +141,15 @@ func newSchemaRegistryEncoderFromConfig(conf *service.ParsedConfig, mgr *service
 	if err != nil {
 		return nil, err
 	}
-	return newSchemaRegistryEncoder(urlStr, authSigner, tlsConf, subject, avroRawJSON, refreshPeriod, refreshTicker, mgr)
+	rT, err := conf.FieldString("read_timeout")
+	if err != nil {
+		return nil, err
+	}
+	readTimeoutDur, err := time.ParseDuration(rT)
+	if err != nil {
+		return nil, err
+	}
+	return newSchemaRegistryEncoder(urlStr, authSigner, tlsConf, subject, avroRawJSON, refreshPeriod, refreshTicker, readTimeoutDur, mgr)
 }
 
 func newSchemaRegistryEncoder(
@@ -148,13 +158,14 @@ func newSchemaRegistryEncoder(
 	tlsConf *tls.Config,
 	subject *service.InterpolatedString,
 	avroRawJSON bool,
-	schemaRefreshAfter, schemaRefreshTicker time.Duration,
+	schemaRefreshAfter, schemaRefreshTicker time.Duration, readTimeout time.Duration,
 	mgr *service.Resources,
 ) (*schemaRegistryEncoder, error) {
 	s := &schemaRegistryEncoder{
 		subject:            subject,
 		avroRawJSON:        avroRawJSON,
 		schemaRefreshAfter: schemaRefreshAfter,
+		readTimeout:        readTimeout,
 		schemas:            map[string]*cachedSchemaEncoder{},
 		shutSig:            shutdown.NewSignaller(),
 		logger:             mgr.Logger(),
@@ -295,7 +306,7 @@ func (s *schemaRegistryEncoder) refreshEncoders() {
 }
 
 func (s *schemaRegistryEncoder) getLatestEncoder(subject string) (schemaEncoder, int, error) {
-	ctx, done := context.WithTimeout(context.Background(), time.Second*5)
+	ctx, done := context.WithTimeout(context.Background(), s.readTimeout)
 	defer done()
 
 	resPayload, err := s.client.GetSchemaBySubjectAndVersion(ctx, subject, nil)
