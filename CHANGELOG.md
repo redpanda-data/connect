@@ -12,6 +12,10 @@ All notable changes to this project will be documented in this file.
 - Field `error_patterns` added to the `drop_on` output.
 - New `redis_scan` input type.
 
+### Fixed
+
+- The `unarchive` processor no longer yields linting errors when the format `csv:x` is specified. This is a regression introduced in v4.25.0.
+
 ## 4.26.0 - 2024-03-18
 
 ### Added
