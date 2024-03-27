@@ -9,6 +9,7 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/shutdown"
 	"github.com/benthosdev/benthos/v4/public/bloblang"
 	"github.com/benthosdev/benthos/v4/public/service"
+	"go.opentelemetry.io/otel/trace"
 )
 
 // RawProcessorConfig returns a config spec for an sql_raw processor.
@@ -99,6 +100,7 @@ type sqlRawProcessor struct {
 	argsMapping *bloblang.Executor
 
 	logger  *service.Logger
+	tracer  trace.TracerProvider
 	shutSig *shutdown.Signaller
 }
 
@@ -145,11 +147,12 @@ func NewSQLRawProcessorFromConfig(conf *service.ParsedConfig, mgr *service.Resou
 	if err != nil {
 		return nil, err
 	}
-	return newSQLRawProcessor(mgr.Logger(), driverStr, dsnStr, queryStatic, queryDyn, onlyExec, argsMapping, connSettings)
+	return newSQLRawProcessor(mgr.Logger(), mgr.OtelTracer(), driverStr, dsnStr, queryStatic, queryDyn, onlyExec, argsMapping, connSettings)
 }
 
 func newSQLRawProcessor(
 	logger *service.Logger,
+	tracer trace.TracerProvider,
 	driverStr, dsnStr string,
 	queryStatic string,
 	queryDyn *service.InterpolatedString,
@@ -159,6 +162,7 @@ func newSQLRawProcessor(
 ) (*sqlRawProcessor, error) {
 	s := &sqlRawProcessor{
 		logger:      logger,
+		tracer:      tracer,
 		shutSig:     shutdown.NewSignaller(),
 		queryStatic: queryStatic,
 		queryDyn:    queryDyn,
@@ -167,7 +171,7 @@ func newSQLRawProcessor(
 	}
 
 	var err error
-	if s.db, err = sqlOpenWithReworks(logger, driverStr, dsnStr); err != nil {
+	if s.db, err = sqlOpenWithReworks(logger, tracer, driverStr, dsnStr); err != nil {
 		return nil, err
 	}
 	connSettings.apply(context.Background(), s.db, s.logger)

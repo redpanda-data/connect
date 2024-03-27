@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	"github.com/Masterminds/squirrel"
+	"go.opentelemetry.io/otel/trace"
 
 	"github.com/benthosdev/benthos/v4/internal/shutdown"
 	"github.com/benthosdev/benthos/v4/public/bloblang"
@@ -103,12 +104,14 @@ type sqlSelectInput struct {
 	connSettings *connSettings
 
 	logger  *service.Logger
+	tracer  trace.TracerProvider
 	shutSig *shutdown.Signaller
 }
 
 func newSQLSelectInputFromConfig(conf *service.ParsedConfig, mgr *service.Resources) (*sqlSelectInput, error) {
 	s := &sqlSelectInput{
 		logger:  mgr.Logger(),
+		tracer:  mgr.OtelTracer(),
 		shutSig: shutdown.NewSignaller(),
 	}
 
@@ -182,7 +185,7 @@ func (s *sqlSelectInput) Connect(ctx context.Context) (err error) {
 	}
 
 	var db *sql.DB
-	if db, err = sqlOpenWithReworks(s.logger, s.driver, s.dsn); err != nil {
+	if db, err = sqlOpenWithReworks(s.logger, s.tracer, s.driver, s.dsn); err != nil {
 		return
 	}
 	defer func() {

@@ -9,6 +9,7 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/shutdown"
 	"github.com/benthosdev/benthos/v4/public/bloblang"
 	"github.com/benthosdev/benthos/v4/public/service"
+	"go.opentelemetry.io/otel/trace"
 )
 
 func sqlRawInputConfig() *service.ConfigSpec {
@@ -82,12 +83,14 @@ type sqlRawInput struct {
 	connSettings *connSettings
 
 	logger  *service.Logger
+	tracer  trace.TracerProvider
 	shutSig *shutdown.Signaller
 }
 
 func newSQLRawInputFromConfig(conf *service.ParsedConfig, mgr *service.Resources) (*sqlRawInput, error) {
 	s := &sqlRawInput{
 		logger:  mgr.Logger(),
+		tracer:  mgr.OtelTracer(),
 		shutSig: shutdown.NewSignaller(),
 	}
 
@@ -130,7 +133,7 @@ func (s *sqlRawInput) Connect(ctx context.Context) (err error) {
 	}
 
 	var db *sql.DB
-	if db, err = sqlOpenWithReworks(s.logger, s.driver, s.dsn); err != nil {
+	if db, err = sqlOpenWithReworks(s.logger, s.tracer, s.driver, s.dsn); err != nil {
 		return err
 	}
 	defer func() {

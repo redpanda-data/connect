@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	"github.com/Masterminds/squirrel"
+	"go.opentelemetry.io/otel/trace"
 
 	"github.com/benthosdev/benthos/v4/internal/shutdown"
 	"github.com/benthosdev/benthos/v4/public/bloblang"
@@ -104,12 +105,14 @@ type sqlInsertOutput struct {
 	connSettings *connSettings
 
 	logger  *service.Logger
+	tracer  trace.TracerProvider
 	shutSig *shutdown.Signaller
 }
 
 func newSQLInsertOutputFromConfig(conf *service.ParsedConfig, mgr *service.Resources) (*sqlInsertOutput, error) {
 	s := &sqlInsertOutput{
 		logger:  mgr.Logger(),
+		tracer:  mgr.OtelTracer(),
 		shutSig: shutdown.NewSignaller(),
 	}
 
@@ -191,7 +194,7 @@ func (s *sqlInsertOutput) Connect(ctx context.Context) error {
 	}
 
 	var err error
-	if s.db, err = sqlOpenWithReworks(s.logger, s.driver, s.dsn); err != nil {
+	if s.db, err = sqlOpenWithReworks(s.logger, s.tracer, s.driver, s.dsn); err != nil {
 		return err
 	}
 
