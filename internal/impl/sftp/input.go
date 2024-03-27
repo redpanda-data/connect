@@ -368,10 +368,13 @@ func (w *watcherPathProvider) Next(ctx context.Context, client *sftp.Client) (st
 					continue
 				}
 
-				// If we couldnt obtain a marker for this path from the cache
-				// then we process it. We also process it if the marker is a
-				// pending symbol (!) and we're polling for the first time.
-				if v, err := cache.Get(ctx, path); err != nil || (!w.followUpPoll && string(v) == "!") {
+				// We process it if the marker is a pending symbol (!) and we're
+				// polling for the first time, or if the path isn't found in the
+				// cache.
+				// If we got an unexpected error obtaining a marker for this path
+				// from the cache then we skip that path because the watcher will
+				//  eventually poll again, and the cache.Get operation will re-run.
+				if v, err := cache.Get(ctx, path); errors.Is(err, service.ErrKeyNotFound) || (!w.followUpPoll && string(v) == "!") {
 					w.expandedPaths = append(w.expandedPaths, path)
 					if err = cache.Set(ctx, path, []byte("!"), nil); err != nil {
 						// Mark the file target as pending so that we do not reprocess it
