@@ -9,9 +9,11 @@ import (
 	"sync"
 	"time"
 
+	"github.com/XSAM/otelsql"
 	"github.com/benthosdev/benthos/v4/internal/filepath"
 	"github.com/benthosdev/benthos/v4/internal/filepath/ifs"
 	"github.com/benthosdev/benthos/v4/public/service"
+	"go.opentelemetry.io/otel/trace"
 )
 
 var driverField = service.NewStringEnumField("driver", "mysql", "postgres", "clickhouse", "mssql", "sqlite", "oracle", "snowflake", "trino", "gocosmos").
@@ -211,7 +213,7 @@ func connSettingsFromParsed(
 	return
 }
 
-func sqlOpenWithReworks(logger *service.Logger, driver, dsn string) (*sql.DB, error) {
+func sqlOpenWithReworks(logger *service.Logger, tp trace.TracerProvider, driver, dsn string) (*sql.DB, error) {
 	if driver == "clickhouse" && strings.HasPrefix(dsn, "tcp") {
 		u, err := url.Parse(dsn)
 		if err != nil {
@@ -240,5 +242,5 @@ func sqlOpenWithReworks(logger *service.Logger, driver, dsn string) (*sql.DB, er
 		logger.Warnf("Detected old-style Clickhouse Data Source Name: '%v', replacing with new style: '%v'", dsn, newDSN)
 		dsn = newDSN
 	}
-	return sql.Open(driver, dsn)
+	return otelsql.Open(driver, dsn, otelsql.WithTracerProvider(tp))
 }
