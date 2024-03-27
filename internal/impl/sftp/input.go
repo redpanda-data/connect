@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"sync"
 	"time"
 
@@ -179,26 +180,39 @@ func (s *sftpReader) Connect(ctx context.Context) (err error) {
 	}
 
 	var nextPath string
-	if nextPath, err = s.pathProvider.Next(ctx, s.client); err != nil {
-		if errors.Is(err, sftp.ErrSshFxConnectionLost) {
-			_ = s.client.Close()
-			s.client = nil
+	var file *sftp.File
+	for {
+		if nextPath, err = s.pathProvider.Next(ctx, s.client); err != nil {
+			if errors.Is(err, sftp.ErrSshFxConnectionLost) {
+				_ = s.client.Close()
+				s.client = nil
+				return
+			}
+			if errors.Is(err, errEndOfPaths) {
+				err = service.ErrEndOfInput
+			}
 			return
 		}
-		if errors.Is(err, errEndOfPaths) {
-			err = service.ErrEndOfInput
-		}
-		return
-	}
 
-	var file *sftp.File
-	if file, err = s.client.Open(nextPath); err != nil {
-		if errors.Is(err, sftp.ErrSshFxConnectionLost) {
-			_ = s.client.Close()
-			s.client = nil
+		if file, err = s.client.Open(nextPath); err != nil {
+			if errors.Is(err, sftp.ErrSshFxConnectionLost) {
+				_ = s.client.Close()
+				s.client = nil
+			}
+
+			s.log.With("path", nextPath, "err", err.Error()).Warn("Unable to open previously identified file")
+			if os.IsNotExist(err) {
+				// If we failed to open the file because it no longer exists
+				// then we can "ack" the path as we're done with it.
+				_ = s.pathProvider.Ack(ctx, nextPath, nil)
+			} else {
+				// Otherwise we "nack" it with the error as we'll want to
+				// reprocess it again later.
+				_ = s.pathProvider.Ack(ctx, nextPath, err)
+			}
+		} else {
+			break
 		}
-		_ = s.pathProvider.Ack(ctx, nextPath, err)
-		return
 	}
 
 	if s.scanner, err = s.scannerCtor.Create(file, func(ctx context.Context, aErr error) (outErr error) {
@@ -371,9 +385,11 @@ func (w *watcherPathProvider) Next(ctx context.Context, client *sftp.Client) (st
 				// We process it if the marker is a pending symbol (!) and we're
 				// polling for the first time, or if the path isn't found in the
 				// cache.
-				// If we got an unexpected error obtaining a marker for this path
-				// from the cache then we skip that path because the watcher will
-				//  eventually poll again, and the cache.Get operation will re-run.
+				//
+				// If we got an unexpected error obtaining a marker for this
+				// path from the cache then we skip that path because the
+				// watcher will eventually poll again, and the cache.Get
+				// operation will re-run.
 				if v, err := cache.Get(ctx, path); errors.Is(err, service.ErrKeyNotFound) || (!w.followUpPoll && string(v) == "!") {
 					w.expandedPaths = append(w.expandedPaths, path)
 					if err = cache.Set(ctx, path, []byte("!"), nil); err != nil {
@@ -403,7 +419,7 @@ func (w *watcherPathProvider) Ack(ctx context.Context, name string, err error) (
 	return
 }
 
-func (s *sftpReader) getFilePathProvider(ctx context.Context) pathProvider {
+func (s *sftpReader) getFilePathProvider(_ context.Context) pathProvider {
 	if !s.watcherEnabled {
 		var filepaths []string
 		for _, p := range s.paths {

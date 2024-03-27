@@ -15,6 +15,7 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 
 - The `unarchive` processor no longer yields linting errors when the format `csv:x` is specified. This is a regression introduced in v4.25.0.
+- The `sftp` input will no longer consume files when the watcher cache returns an error. Instead, it will reattempt the file upon the next poll.
 
 ## 4.26.0 - 2024-03-18
 
