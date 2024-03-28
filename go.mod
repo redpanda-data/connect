@@ -23,6 +23,7 @@ require (
 	github.com/OneOfOne/xxhash v1.2.8
 	github.com/PaesslerAG/gval v1.2.2
 	github.com/PaesslerAG/jsonpath v0.1.1
+	github.com/XSAM/otelsql v0.29.0
 	github.com/apache/pulsar-client-go v0.12.0
 	github.com/aws/aws-lambda-go v1.46.0
 	github.com/aws/aws-sdk-go-v2 v1.25.0
