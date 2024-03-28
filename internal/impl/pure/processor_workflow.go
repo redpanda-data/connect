@@ -527,6 +527,10 @@ func (w *Workflow) ProcessBatch(ctx context.Context, msg message.Batch) ([]messa
 		}
 		wg.Wait()
 
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+
 		for i, id := range layer {
 			var failed []branchMapError
 			err := errors[i]
