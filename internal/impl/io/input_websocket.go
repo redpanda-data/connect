@@ -48,6 +48,7 @@ func websocketInputSpec() *service.ConfigSpec {
 				string(wsOpenMsgTypeText):   "Text data open_message. The text message payload is interpreted as UTF-8 encoded text data.",
 			}).Description("An optional flag to indicate the data type of open_message.").
 				Advanced().Default(string(wsOpenMsgTypeBinary)),
+			service.NewAutoRetryNacksToggleField(),
 			service.NewTLSToggledField("tls"),
 		).
 		Fields(config.AsyncOptsFields()...).
@@ -59,7 +60,7 @@ func init() {
 		"websocket", websocketInputSpec(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (in service.BatchInput, err error) {
 			oldMgr := interop.UnwrapManagement(mgr)
-			var r *websocketReader
+			var r input.Async
 			if r, err = newWebsocketReaderFromParsed(conf, oldMgr); err != nil {
 				return
 			}
@@ -69,8 +70,12 @@ func init() {
 				return
 			}
 
+			if autoRetry, _ := conf.FieldBool(service.AutoRetryNacksToggleFieldName); autoRetry {
+				r = input.NewAsyncPreserver(r)
+			}
+
 			var i input.Streamed
-			if i, err = input.NewAsyncReader("websocket", input.NewAsyncPreserver(r), oldMgr, opts...); err != nil {
+			if i, err = input.NewAsyncReader("websocket", r, oldMgr, opts...); err != nil {
 				return
 			}
 			in = interop.NewUnwrapInternalInput(i)

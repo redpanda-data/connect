@@ -35,6 +35,7 @@ Use `+"`\\`"+` to escape special characters if you want to match them verbatim.`
 			service.NewBoolField(psiFieldUsePatterns).
 				Description("Whether to use the PSUBSCRIBE command, allowing for glob-style patterns within target channel names.").
 				Default(false),
+			service.NewAutoRetryNacksToggleField(),
 		)
 }
 
@@ -46,7 +47,7 @@ func init() {
 			if err != nil {
 				return nil, err
 			}
-			return service.AutoRetryNacks(r), nil
+			return service.AutoRetryNacksToggled(conf, r)
 		})
 	if err != nil {
 		panic(err)

@@ -29,8 +29,10 @@ func socketInputSpec() *service.ConfigSpec {
 			service.NewStringField(isFieldAddress).
 				Description("The address to connect to.").
 				Examples("/tmp/benthos.sock", "127.0.0.1:6000"),
+			service.NewAutoRetryNacksToggleField(),
 		).
 		Fields(interop.OldReaderCodecFields("lines")...)
+
 }
 
 func init() {
@@ -40,7 +42,7 @@ func init() {
 			return nil, err
 		}
 		// TODO: Inject async cut off?
-		return service.AutoRetryNacksBatched(i), nil
+		return service.AutoRetryNacksBatchedToggled(conf, i)
 	})
 	if err != nil {
 		panic(err)

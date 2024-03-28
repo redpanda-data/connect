@@ -25,7 +25,8 @@ func sqlRawInputConfig() *service.ConfigSpec {
 			Description("A [Bloblang mapping](/docs/guides/bloblang/about) which should evaluate to an array of values matching in size to the number of columns specified.").
 			Example("root = [ this.cat.meow, this.doc.woofs[0] ]").
 			Example(`root = [ meta("user.id") ]`).
-			Optional())
+			Optional()).
+		Field(service.NewAutoRetryNacksToggleField())
 	for _, f := range connFields() {
 		spec = spec.Field(f)
 	}
@@ -58,7 +59,7 @@ func init() {
 			if err != nil {
 				return nil, err
 			}
-			return service.AutoRetryNacks(i), nil
+			return service.AutoRetryNacksToggled(conf, i)
 		})
 	if err != nil {
 		panic(err)

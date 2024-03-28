@@ -48,6 +48,7 @@ func crdbChangefeedInputConfig() *service.ConfigSpec {
 				Example([]string{`virtual_columns="omitted"`}).
 				Advanced().
 				Optional(),
+			service.NewAutoRetryNacksToggleField(),
 		)
 }
 
@@ -152,7 +153,7 @@ func init() {
 			if err != nil {
 				return nil, err
 			}
-			return service.AutoRetryNacks(i), nil
+			return service.AutoRetryNacksToggled(conf, i)
 		})
 
 	if err != nil {

@@ -126,6 +126,7 @@ Use the `+"`batching`"+` fields to configure an optional [batching policy](/docs
 		service.NewIntField(kiFieldCheckpointLimit).
 			Description("The maximum gap between the in flight sequence versus the latest acknowledged sequence at a given time. Increasing this limit enables parallel processing and batching at the output level to work on individual shards. Any given sequence will not be committed unless all messages under that offset are delivered in order to preserve at least once delivery guarantees.").
 			Default(1024),
+		service.NewAutoRetryNacksToggleField(),
 		service.NewDurationField(kiFieldCommitPeriod).
 			Description("The period of time between each update to the checkpoint table.").
 			Default("5s"),
@@ -153,7 +154,7 @@ func init() {
 			if err != nil {
 				return nil, err
 			}
-			return service.AutoRetryNacksBatched(r), nil
+			return service.AutoRetryNacksBatchedToggled(conf, r)
 		})
 	if err != nil {
 		panic(err)

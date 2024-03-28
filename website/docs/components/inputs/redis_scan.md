@@ -36,6 +36,7 @@ input:
   label: ""
   redis_scan:
     url: redis://:6397 # No default (required)
+    auto_replay_nacks: true
     match: ""
 ```
 
@@ -57,6 +58,7 @@ input:
       root_cas: ""
       root_cas_file: ""
       client_certs: []
+    auto_replay_nacks: true
     match: ""
 ```
 
@@ -265,6 +267,14 @@ password: foo
 
 password: ${KEY_PASSWORD}
 ```
+
+### `auto_replay_nacks`
+
+Whether messages that are rejected (nacked) at the output level should be automatically replayed indefinitely, eventually resulting in back pressure if the cause of the rejections is persistent. If set to `false` these messages will instead be deleted. Disabling auto replays can greatly improve memory efficiency of high throughput streams as the original shape of the data can be discarded immediately upon consumption and mutation.
+
+
+Type: `bool`  
+Default: `true`  
 
 ### `match`
 

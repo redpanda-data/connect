@@ -17,7 +17,7 @@ func init() {
 			if err != nil {
 				return nil, err
 			}
-			return service.AutoRetryNacks(i), nil
+			return service.AutoRetryNacksToggled(conf, i)
 		})
 	if err != nil {
 		panic(err)
@@ -47,6 +47,7 @@ This input generates a message for each key value pair in the following format:
 	}
 
 	return spec.
+		Field(service.NewAutoRetryNacksToggleField()).
 		Field(service.NewStringField(matchFieldName).
 			Description("Iterates only elements matching the optional glob-style pattern. By default, it matches all elements.").
 			Example("*").

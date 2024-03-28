@@ -44,7 +44,8 @@ func sqlSelectInputConfig() *service.ConfigSpec {
 		Field(service.NewStringField("suffix").
 			Description("An optional suffix to append to the select query.").
 			Optional().
-			Advanced())
+			Advanced()).
+		Field(service.NewAutoRetryNacksToggleField())
 
 	for _, f := range connFields() {
 		spec = spec.Field(f)
@@ -80,7 +81,7 @@ func init() {
 			if err != nil {
 				return nil, err
 			}
-			return service.AutoRetryNacks(i), nil
+			return service.AutoRetryNacksToggled(conf, i)
 		})
 	if err != nil {
 		panic(err)

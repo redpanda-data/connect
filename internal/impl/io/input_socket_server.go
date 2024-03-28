@@ -62,6 +62,7 @@ func socketServerInputSpec() *service.ConfigSpec {
 			).
 				Description("TLS specific configuration, valid when the `network` is set to `tls`.").
 				Optional(),
+			service.NewAutoRetryNacksToggleField(),
 		).
 		Fields(interop.OldReaderCodecFields("lines")...)
 }
@@ -72,7 +73,7 @@ func init() {
 		if err != nil {
 			return nil, err
 		}
-		return service.AutoRetryNacksBatched(i), nil
+		return service.AutoRetryNacksBatchedToggled(conf, i)
 	})
 	if err != nil {
 		panic(err)

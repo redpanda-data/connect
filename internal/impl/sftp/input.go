@@ -51,6 +51,7 @@ You can access these metadata fields using [function interpolation](/docs/config
 				Description("The credentials to use to log into the target server."),
 			service.NewStringListField(siFieldPaths).
 				Description("A list of paths to consume sequentially. Glob patterns are supported."),
+			service.NewAutoRetryNacksToggleField(),
 		).
 		Fields(interop.OldReaderCodecFields("to_the_end")...).
 		Fields(
@@ -84,7 +85,7 @@ func init() {
 		if err != nil {
 			return nil, err
 		}
-		return service.AutoRetryNacksBatched(r), nil
+		return service.AutoRetryNacksBatchedToggled(conf, r)
 	})
 	if err != nil {
 		panic(err)

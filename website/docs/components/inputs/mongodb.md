@@ -43,6 +43,7 @@ input:
     query: |2 # No default (required)
         root.from = {"$lte": timestamp_unix()}
         root.to = {"$gte": timestamp_unix()}
+    auto_replay_nacks: true
     batch_size: 1000 # No default (optional)
     sort: {} # No default (optional)
     limit: 0 # No default (optional)
@@ -66,6 +67,7 @@ input:
     query: |2 # No default (required)
         root.from = {"$lte": timestamp_unix()}
         root.to = {"$gte": timestamp_unix()}
+    auto_replay_nacks: true
     batch_size: 1000 # No default (optional)
     sort: {} # No default (optional)
     limit: 0 # No default (optional)
@@ -163,6 +165,14 @@ query: |2
     root.from = {"$lte": timestamp_unix()}
     root.to = {"$gte": timestamp_unix()}
 ```
+
+### `auto_replay_nacks`
+
+Whether messages that are rejected (nacked) at the output level should be automatically replayed indefinitely, eventually resulting in back pressure if the cause of the rejections is persistent. If set to `false` these messages will instead be deleted. Disabling auto replays can greatly improve memory efficiency of high throughput streams as the original shape of the data can be discarded immediately upon consumption and mutation.
+
+
+Type: `bool`  
+Default: `true`  
 
 ### `batch_size`
 

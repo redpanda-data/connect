@@ -42,6 +42,7 @@ input:
       private_key_file: ""
       private_key_pass: ""
     paths: [] # No default (required)
+    auto_replay_nacks: true
     scanner:
       to_the_end: {}
     watcher:
@@ -66,6 +67,7 @@ input:
       private_key_file: ""
       private_key_pass: ""
     paths: [] # No default (required)
+    auto_replay_nacks: true
     scanner:
       to_the_end: {}
     delete_on_finish: false
@@ -149,6 +151,14 @@ A list of paths to consume sequentially. Glob patterns are supported.
 
 
 Type: `array`  
+
+### `auto_replay_nacks`
+
+Whether messages that are rejected (nacked) at the output level should be automatically replayed indefinitely, eventually resulting in back pressure if the cause of the rejections is persistent. If set to `false` these messages will instead be deleted. Disabling auto replays can greatly improve memory efficiency of high throughput streams as the original shape of the data can be discarded immediately upon consumption and mutation.
+
+
+Type: `bool`  
+Default: `true`  
 
 ### `scanner`
 

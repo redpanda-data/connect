@@ -20,6 +20,7 @@ func inputConfigSpec() *service.ConfigSpec {
 		Fields(clientFields()...).
 		Field(service.NewStringField(ciFieldQuery).
 			Description("A query to execute.")).
+		Field(service.NewAutoRetryNacksToggleField()).
 		Example("Minimal Select (Cassandra/Scylla)",
 			`
 Let's presume that we have 3 Cassandra nodes, like in this tutorial by Sebastian Sigl from freeCodeCamp:
@@ -69,10 +70,10 @@ func newCassandraInput(conf *service.ParsedConfig) (service.Input, error) {
 		return nil, err
 	}
 
-	return service.AutoRetryNacks(&cassandraInput{
+	return service.AutoRetryNacksToggled(conf, &cassandraInput{
 		query:      query,
 		clientConf: clientConf,
-	}), nil
+	})
 }
 
 type cassandraInput struct {

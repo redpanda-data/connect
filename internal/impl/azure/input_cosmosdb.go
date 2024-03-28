@@ -43,6 +43,7 @@ Cross-partition queries are currently not supported by the underlying driver. Fo
 			Description(`The maximum number of messages that should be accumulated into each batch. Use '-1' specify dynamic page size.`).
 			Default(-1).
 			Advanced().LintRule(`root = if this < -1 || this == 0 || this > `+fmt.Sprint(math.MaxInt32)+` { [ "`+cdbiFieldBatchCount+` must be must be > 0 and smaller than `+fmt.Sprint(math.MaxInt32)+` or -1." ] }`)).
+		Field(service.NewAutoRetryNacksToggleField()).
 		LintRule("root = []"+cosmosdb.CommonLintRules).
 		Example("Query container", "Execute a parametrized SQL query to select documents from a container.", `
 input:
@@ -66,7 +67,7 @@ func init() {
 		if err != nil {
 			return nil, err
 		}
-		return service.AutoRetryNacksBatched(r), nil
+		return service.AutoRetryNacksBatchedToggled(conf, r)
 	})
 	if err != nil {
 		panic(err)
