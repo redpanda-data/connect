@@ -128,7 +128,7 @@ func newCRDBChangefeedInputFromConfig(conf *service.ParsedConfig, res *service.R
 
 	changeFeedOptions := ""
 	if len(options) > 0 {
-		changeFeedOptions = fmt.Sprintf(" WITH %s", strings.Join(options, ", "))
+		changeFeedOptions = " WITH " + strings.Join(options, ", ")
 	}
 
 	c.statement = fmt.Sprintf("EXPERIMENTAL CHANGEFEED FOR %s%s", strings.Join(tables, ", "), changeFeedOptions)

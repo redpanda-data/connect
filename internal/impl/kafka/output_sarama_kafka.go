@@ -2,6 +2,7 @@ package kafka
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"hash"
 	"strconv"
@@ -414,9 +415,9 @@ func (k *kafkaWriter) saramaConfigFromParsed(conf *service.ParsedConfig) (*saram
 		return nil, err
 	}
 	if k.partition == nil && partitionerStr == "manual" {
-		return nil, fmt.Errorf("partition field required for 'manual' partitioner")
+		return nil, errors.New("partition field required for 'manual' partitioner")
 	} else if k.partition != nil && partitionerStr != "manual" {
-		return nil, fmt.Errorf("partition field can only be specified for 'manual' partitioner")
+		return nil, errors.New("partition field can only be specified for 'manual' partitioner")
 	}
 	if config.Producer.Partitioner, err = strToPartitioner(partitionerStr); err != nil {
 		return nil, err
@@ -526,7 +527,7 @@ func (k *kafkaWriter) WriteBatch(ctx context.Context, msg service.MessageBatch) 
 				return fmt.Errorf("partition interpolation error: %w", err)
 			}
 			if partitionString == "" {
-				return fmt.Errorf("partition expression failed to produce a value")
+				return errors.New("partition expression failed to produce a value")
 			}
 
 			partitionInt, err := strconv.Atoi(partitionString)

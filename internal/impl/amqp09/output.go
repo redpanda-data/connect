@@ -499,7 +499,7 @@ func (a *amqp09Writer) Write(ctx context.Context, msg *service.Message) error {
 		select {
 		case _, open := <-returnChan:
 			if !open {
-				return fmt.Errorf("acknowledgement not supported, ensure server supports immediate and mandatory flags")
+				return errors.New("acknowledgement not supported, ensure server supports immediate and mandatory flags")
 			}
 			return component.ErrNoAck
 		default:

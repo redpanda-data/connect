@@ -119,7 +119,7 @@ func newJSONSchema(schemaStr, schemaPath string, mgr bundle.NewManagement) (proc
 	// load JSONSchema definition
 	if schemaPath := schemaPath; schemaPath != "" {
 		if !(strings.HasPrefix(schemaPath, "file://") || strings.HasPrefix(schemaPath, "http://")) {
-			return nil, fmt.Errorf("invalid schema_path provided, must start with file:// or http://")
+			return nil, errors.New("invalid schema_path provided, must start with file:// or http://")
 		}
 
 		schema, err = jsonschema.NewSchema(jsonschema.NewReferenceLoaderFileSystem(schemaPath, ifs.ToHTTP(mgr.FS())))
@@ -132,7 +132,7 @@ func newJSONSchema(schemaStr, schemaPath string, mgr bundle.NewManagement) (proc
 			return nil, fmt.Errorf("failed to load JSON schema definition: %v", err)
 		}
 	} else {
-		return nil, fmt.Errorf("either schema or schema_path must be provided")
+		return nil, errors.New("either schema or schema_path must be provided")
 	}
 
 	return &jsonSchemaProc{

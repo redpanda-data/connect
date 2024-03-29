@@ -12,6 +12,7 @@ issues:
     - path: _test.go
       linters:
         - bodyclose
+        - perfsprint
 linters-settings:
   errcheck:
     exclude-functions:
@@ -69,3 +70,4 @@ linters:
     - rowserrcheck
     - mirror
     - predeclared
+    - perfsprint
