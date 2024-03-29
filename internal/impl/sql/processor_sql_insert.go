@@ -96,7 +96,7 @@ type sqlInsertProcessor struct {
 }
 
 // NewSQLInsertProcessorFromConfig returns an internal sql_insert processor.
-// nolint:revive // Not bothered as this is internal anyway
+//nolint:revive // Not bothered as this is internal anyway
 func NewSQLInsertProcessorFromConfig(conf *service.ParsedConfig, mgr *service.Resources) (*sqlInsertProcessor, error) {
 	s := &sqlInsertProcessor{
 		logger:  mgr.Logger(),
