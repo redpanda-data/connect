@@ -68,3 +68,4 @@ linters:
     - bodyclose
     - rowserrcheck
     - mirror
+    - predeclared
