@@ -55,6 +55,7 @@ jobs:
       with:
         version: v1.57.1
         args: --timeout 30m cmd/... internal/... public/...
+        skip-go-installation: true
 
     # TODO: Remove this after https://github.com/golangci/golangci-lint/issues/3094 is addressed
     # - name: Get govulncheck
