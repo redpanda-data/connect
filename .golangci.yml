@@ -67,3 +67,4 @@ linters:
     - tagalign
     - bodyclose
     - rowserrcheck
+    - mirror
