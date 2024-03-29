@@ -6,10 +6,10 @@ import (
 
 // Config contains configuration parameters for a batch policy.
 type Config struct {
-	ByteSize   int                `json:"byte_size" yaml:"byte_size"`
-	Count      int                `json:"count" yaml:"count"`
-	Check      string             `json:"check" yaml:"check"`
-	Period     string             `json:"period" yaml:"period"`
+	ByteSize   int                `json:"byte_size"  yaml:"byte_size"`
+	Count      int                `json:"count"      yaml:"count"`
+	Check      string             `json:"check"      yaml:"check"`
+	Period     string             `json:"period"     yaml:"period"`
 	Processors []processor.Config `json:"processors" yaml:"processors"`
 }
 

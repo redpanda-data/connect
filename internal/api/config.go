@@ -18,14 +18,14 @@ const (
 
 // Config contains the configuration fields for the Benthos API.
 type Config struct {
-	Address        string                     `json:"address" yaml:"address"`
-	Enabled        bool                       `json:"enabled" yaml:"enabled"`
-	RootPath       string                     `json:"root_path" yaml:"root_path"`
+	Address        string                     `json:"address"         yaml:"address"`
+	Enabled        bool                       `json:"enabled"         yaml:"enabled"`
+	RootPath       string                     `json:"root_path"       yaml:"root_path"`
 	DebugEndpoints bool                       `json:"debug_endpoints" yaml:"debug_endpoints"`
-	CertFile       string                     `json:"cert_file" yaml:"cert_file"`
-	KeyFile        string                     `json:"key_file" yaml:"key_file"`
-	CORS           httpserver.CORSConfig      `json:"cors" yaml:"cors"`
-	BasicAuth      httpserver.BasicAuthConfig `json:"basic_auth" yaml:"basic_auth"`
+	CertFile       string                     `json:"cert_file"       yaml:"cert_file"`
+	KeyFile        string                     `json:"key_file"        yaml:"key_file"`
+	CORS           httpserver.CORSConfig      `json:"cors"            yaml:"cors"`
+	BasicAuth      httpserver.BasicAuthConfig `json:"basic_auth"      yaml:"basic_auth"`
 }
 
 // NewConfig creates a new API config with default values.

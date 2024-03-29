@@ -17,7 +17,7 @@ func init() {
 
 // Config is the all encompassing configuration struct for all tracer types.
 type Config struct {
-	Type   string `json:"type" yaml:"type"`
+	Type   string `json:"type"             yaml:"type"`
 	Plugin any    `json:"plugin,omitempty" yaml:"plugin,omitempty"`
 }
 

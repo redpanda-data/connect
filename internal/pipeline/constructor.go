@@ -32,7 +32,7 @@ func ConfigSpec() docs.FieldSpec {
 // number of parallel inputs that matches or surpasses the number of pipeline
 // threads, or use a memory buffer.
 type Config struct {
-	Threads    int                `json:"threads" yaml:"threads"`
+	Threads    int                `json:"threads"    yaml:"threads"`
 	Processors []processor.Config `json:"processors" yaml:"processors"`
 }
 

@@ -11,8 +11,8 @@ import (
 // Config is the all encompassing configuration struct for all metric output
 // types.
 type Config struct {
-	Type    string `json:"type" yaml:"type"`
-	Mapping string `json:"mapping" yaml:"mapping"`
+	Type    string `json:"type"             yaml:"type"`
+	Mapping string `json:"mapping"          yaml:"mapping"`
 	Plugin  any    `json:"plugin,omitempty" yaml:"plugin,omitempty"`
 }
 

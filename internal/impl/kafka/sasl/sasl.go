@@ -6,12 +6,12 @@ import (
 
 // Config contains configuration for SASL based authentication.
 type Config struct {
-	Mechanism   string `json:"mechanism" yaml:"mechanism"`
-	User        string `json:"user" yaml:"user"`
-	Password    string `json:"password" yaml:"password"`
+	Mechanism   string `json:"mechanism"    yaml:"mechanism"`
+	User        string `json:"user"         yaml:"user"`
+	Password    string `json:"password"     yaml:"password"`
 	AccessToken string `json:"access_token" yaml:"access_token"`
-	TokenCache  string `json:"token_cache" yaml:"token_cache"`
-	TokenKey    string `json:"token_key" yaml:"token_key"`
+	TokenCache  string `json:"token_cache"  yaml:"token_cache"`
+	TokenKey    string `json:"token_key"    yaml:"token_key"`
 }
 
 // NewConfig returns a new SASL config for Kafka with default values.
