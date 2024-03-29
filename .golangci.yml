@@ -60,3 +60,4 @@ linters:
     # - misspell
     # - prealloc
     - godot
+    - nolintlint
