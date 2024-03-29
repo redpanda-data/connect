@@ -11,9 +11,7 @@ import (
 	"github.com/benthosdev/benthos/v4/public/bloblang"
 )
 
-var (
-	errJWTIncorrectMethod = errors.New("incorrect signing method")
-)
+var errJWTIncorrectMethod = errors.New("incorrect signing method")
 
 func rsaPublicSecretDecoder(secret string) (any, error) {
 	return jwt.ParseRSAPublicKeyFromPEM([]byte(secret))
@@ -47,7 +45,6 @@ func jwtParser(secretDecoder secretDecoderFunc, method jwt.SigningMethod) blobla
 			var claims jwt.MapClaims
 
 			_, err := jwt.ParseWithClaims(encoded, &claims, func(tok *jwt.Token) (interface{}, error) {
-
 				if tok.Method != method {
 					return nil, fmt.Errorf("%w: %v", errJWTIncorrectMethod, tok.Header["alg"])
 				}

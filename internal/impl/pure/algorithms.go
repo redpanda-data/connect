@@ -16,10 +16,12 @@ import (
 	"github.com/pierrec/lz4/v4"
 )
 
-type CompressFunc func(level int, b []byte) ([]byte, error)
-type CompressWriter func(level int, w io.Writer) (io.Writer, error)
-type DecompressFunc func(b []byte) ([]byte, error)
-type DecompressReader func(r io.Reader) (io.Reader, error)
+type (
+	CompressFunc     func(level int, b []byte) ([]byte, error)
+	CompressWriter   func(level int, w io.Writer) (io.Writer, error)
+	DecompressFunc   func(b []byte) ([]byte, error)
+	DecompressReader func(r io.Reader) (io.Reader, error)
+)
 
 type KnownCompressionAlgorithm struct {
 	CompressFunc     CompressFunc
