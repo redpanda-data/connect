@@ -323,7 +323,7 @@ func (s *sessionTracker) ReadFile(ctx context.Context, name string, headOnly boo
 		method = "HEAD"
 	}
 
-	res, err := s.doRateLimitedReq(ctx, func() (*http.Request, error) {
+	res, err := s.doRateLimitedReq(ctx, func() (*http.Request, error) { //nolint: bodyclose
 		req, err := http.NewRequest(method, fileURLStr, http.NoBody)
 		if err != nil {
 			return nil, err
@@ -338,8 +338,6 @@ func (s *sessionTracker) ReadFile(ctx context.Context, name string, headOnly boo
 		}
 		return nil, err
 	}
-
-	defer res.Body.Close()
 
 	modTimeMillis := 0
 	if modifiedStr := res.Header.Get("X-Bstdio-Updated-Millis"); modifiedStr != "" {
