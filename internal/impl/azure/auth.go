@@ -70,7 +70,7 @@ const (
 	blobEndpointExp = "https://%s.blob.core.windows.net"
 )
 
-func getBlobStorageClient(storageConnectionString, storageAccount, storageAccessKey, storageSASToken string, container string) (*azblob.Client, bool, error) {
+func getBlobStorageClient(storageConnectionString, storageAccount, storageAccessKey, storageSASToken, container string) (*azblob.Client, bool, error) {
 	var client *azblob.Client
 	var err error
 	var containerSASToken bool
