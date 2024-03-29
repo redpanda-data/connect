@@ -58,7 +58,7 @@ func Fail[T any](err *Error, input []rune) Result[T] {
 	}
 }
 
-func ResultInto[T any, L any](from Result[L]) Result[T] {
+func ResultInto[T, L any](from Result[L]) Result[T] {
 	return Result[T]{
 		Err:       from.Err,
 		Remaining: from.Remaining,
