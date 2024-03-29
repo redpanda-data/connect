@@ -61,3 +61,4 @@ linters:
     # - prealloc
     - godot
     - nolintlint
+    - tagalign

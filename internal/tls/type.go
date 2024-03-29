@@ -16,19 +16,19 @@ import (
 // ClientCertConfig contains config fields for a client certificate.
 type ClientCertConfig struct {
 	CertFile string `json:"cert_file" yaml:"cert_file"`
-	KeyFile  string `json:"key_file" yaml:"key_file"`
-	Cert     string `json:"cert" yaml:"cert"`
-	Key      string `json:"key" yaml:"key"`
-	Password string `json:"password" yaml:"password"`
+	KeyFile  string `json:"key_file"  yaml:"key_file"`
+	Cert     string `json:"cert"      yaml:"cert"`
+	Key      string `json:"key"       yaml:"key"`
+	Password string `json:"password"  yaml:"password"`
 }
 
 // Config contains configuration params for TLS.
 type Config struct {
-	Enabled             bool               `json:"enabled" yaml:"enabled"`
-	RootCAs             string             `json:"root_cas" yaml:"root_cas"`
-	RootCAsFile         string             `json:"root_cas_file" yaml:"root_cas_file"`
-	InsecureSkipVerify  bool               `json:"skip_cert_verify" yaml:"skip_cert_verify"`
-	ClientCertificates  []ClientCertConfig `json:"client_certs" yaml:"client_certs"`
+	Enabled             bool               `json:"enabled"              yaml:"enabled"`
+	RootCAs             string             `json:"root_cas"             yaml:"root_cas"`
+	RootCAsFile         string             `json:"root_cas_file"        yaml:"root_cas_file"`
+	InsecureSkipVerify  bool               `json:"skip_cert_verify"     yaml:"skip_cert_verify"`
+	ClientCertificates  []ClientCertConfig `json:"client_certs"         yaml:"client_certs"`
 	EnableRenegotiation bool               `json:"enable_renegotiation" yaml:"enable_renegotiation"`
 }
 

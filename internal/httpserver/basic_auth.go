@@ -34,12 +34,12 @@ const (
 
 // BasicAuthConfig contains struct based fields for basic authentication.
 type BasicAuthConfig struct {
-	Enabled      bool   `json:"enabled" yaml:"enabled"`
-	Username     string `json:"username" yaml:"username"`
+	Enabled      bool   `json:"enabled"       yaml:"enabled"`
+	Username     string `json:"username"      yaml:"username"`
 	PasswordHash string `json:"password_hash" yaml:"password_hash"`
-	Realm        string `json:"realm" yaml:"realm"`
-	Algorithm    string `json:"algorithm" yaml:"algorithm"`
-	Salt         string `json:"salt" yaml:"salt"`
+	Realm        string `json:"realm"         yaml:"realm"`
+	Algorithm    string `json:"algorithm"     yaml:"algorithm"`
+	Salt         string `json:"salt"          yaml:"salt"`
 }
 
 // NewBasicAuthConfig returns a BasicAuthConfig with default values.

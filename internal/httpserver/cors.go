@@ -17,7 +17,7 @@ const (
 
 // CORSConfig contains struct configuration for allowing CORS headers.
 type CORSConfig struct {
-	Enabled        bool     `json:"enabled" yaml:"enabled"`
+	Enabled        bool     `json:"enabled"         yaml:"enabled"`
 	AllowedOrigins []string `json:"allowed_origins" yaml:"allowed_origins"`
 }
 

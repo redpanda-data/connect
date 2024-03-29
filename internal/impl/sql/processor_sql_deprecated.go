@@ -49,6 +49,7 @@ func init() {
 }
 
 // NewSQLDeprecatedProcessorFromConfig returns an internal sql processor.
+//
 //nolint:revive // Not bothered as this is internal anyway
 func NewSQLDeprecatedProcessorFromConfig(conf *service.ParsedConfig, mgr *service.Resources) (*sqlRawProcessor, error) {
 	driverStr, err := conf.FieldString("driver")
