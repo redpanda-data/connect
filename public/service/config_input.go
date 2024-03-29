@@ -9,6 +9,19 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/docs"
 )
 
+const AutoRetryNacksToggleFieldName = "auto_replay_nacks"
+
+// NewAutoRetryNacksToggleField creates a configuration field for toggling the
+// behaviour of an input where nacks (rejections) of data results in the
+// automatic replay of that data (the default). This field should be used for
+// conditionally wrapping inputs with AutoRetryNacksToggled or
+// AutoRetryNacksBatchedToggled.
+func NewAutoRetryNacksToggleField() *ConfigField {
+	return NewBoolField(AutoRetryNacksToggleFieldName).
+		Description("Whether messages that are rejected (nacked) at the output level should be automatically replayed indefinitely, eventually resulting in back pressure if the cause of the rejections is persistent. If set to `false` these messages will instead be deleted. Disabling auto replays can greatly improve memory efficiency of high throughput streams as the original shape of the data can be discarded immediately upon consumption and mutation.").
+		Default(true)
+}
+
 // NewInputField defines a new input field, it is then possible to extract an
 // OwnedInput from the resulting parsed config with the method FieldInput.
 func NewInputField(name string) *ConfigField {

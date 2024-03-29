@@ -1,8 +1,8 @@
 ---
-title: redis_pubsub
-slug: redis_pubsub
+title: redis_scan
+slug: redis_scan
 type: input
-status: stable
+status: experimental
 categories: ["Services"]
 ---
 
@@ -15,7 +15,12 @@ categories: ["Services"]
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-Consume from a Redis publish/subscribe channel using either the SUBSCRIBE or PSUBSCRIBE commands.
+:::caution EXPERIMENTAL
+This component is experimental and therefore subject to change or removal outside of major version releases.
+:::
+Scans the set of keys in the current selected database and gets their values, using the Scan and Get commands.
+
+Introduced in version 4.27.0.
 
 
 <Tabs defaultValue="common" values={[
@@ -29,11 +34,10 @@ Consume from a Redis publish/subscribe channel using either the SUBSCRIBE or PSU
 # Common config fields, showing default values
 input:
   label: ""
-  redis_pubsub:
+  redis_scan:
     url: redis://:6397 # No default (required)
-    channels: [] # No default (required)
-    use_patterns: false
     auto_replay_nacks: true
+    match: ""
 ```
 
 </TabItem>
@@ -43,7 +47,7 @@ input:
 # All config fields, showing default values
 input:
   label: ""
-  redis_pubsub:
+  redis_scan:
     url: redis://:6397 # No default (required)
     kind: simple
     master: ""
@@ -54,21 +58,23 @@ input:
       root_cas: ""
       root_cas_file: ""
       client_certs: []
-    channels: [] # No default (required)
-    use_patterns: false
     auto_replay_nacks: true
+    match: ""
 ```
 
 </TabItem>
 </Tabs>
 
-In order to subscribe to channels using the `PSUBSCRIBE` command set the field `use_patterns` to `true`, then you can include glob-style patterns in your channel names. For example:
+Optionally, iterates only elements matching a blob-style pattern. For example:
+- `*foo*` iterates only keys which contain `foo` in it.
+- `foo*` iterates only keys starting with `foo`.
 
-- `h?llo` subscribes to hello, hallo and hxllo
-- `h*llo` subscribes to hllo and heeeello
-- `h[ae]llo` subscribes to hello and hallo, but not hillo
+This input generates a message for each key value pair in the following format:
 
-Use `\` to escape special characters if you want to match them verbatim.
+```json
+{"key":"foo","value":"bar"}
+```
+
 
 ## Fields
 
@@ -262,21 +268,6 @@ password: foo
 password: ${KEY_PASSWORD}
 ```
 
-### `channels`
-
-A list of channels to consume from.
-
-
-Type: `array`  
-
-### `use_patterns`
-
-Whether to use the PSUBSCRIBE command, allowing for glob-style patterns within target channel names.
-
-
-Type: `bool`  
-Default: `false`  
-
 ### `auto_replay_nacks`
 
 Whether messages that are rejected (nacked) at the output level should be automatically replayed indefinitely, eventually resulting in back pressure if the cause of the rejections is persistent. If set to `false` these messages will instead be deleted. Disabling auto replays can greatly improve memory efficiency of high throughput streams as the original shape of the data can be discarded immediately upon consumption and mutation.
@@ -284,5 +275,27 @@ Whether messages that are rejected (nacked) at the output level should be automa
 
 Type: `bool`  
 Default: `true`  
+
+### `match`
+
+Iterates only elements matching the optional glob-style pattern. By default, it matches all elements.
+
+
+Type: `string`  
+Default: `""`  
+
+```yml
+# Examples
+
+match: '*'
+
+match: 1*
+
+match: foo*
+
+match: foo
+
+match: '*4*'
+```
 
 

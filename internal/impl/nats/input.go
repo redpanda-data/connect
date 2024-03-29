@@ -37,6 +37,7 @@ You can access these metadata fields using [function interpolation](/docs/config
 		Field(service.NewStringField("queue").
 			Description("An optional queue group to consume as.").
 			Optional()).
+		Field(service.NewAutoRetryNacksToggleField()).
 		Field(service.NewDurationField("nak_delay").
 			Description("An optional delay duration on redelivering a message when negatively acknowledged.").
 			Example("1m").
@@ -59,7 +60,12 @@ func init() {
 			if err != nil {
 				return nil, err
 			}
-			return span.NewInput("nats", conf, service.AutoRetryNacks(input), mgr)
+
+			r, err := service.AutoRetryNacksToggled(conf, input)
+			if err != nil {
+				return nil, err
+			}
+			return span.NewInput("nats", conf, r, mgr)
 		},
 	)
 	if err != nil {

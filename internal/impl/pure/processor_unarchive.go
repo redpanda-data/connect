@@ -38,7 +38,7 @@ The metadata found on the messages handled by this processor will be copied into
 			`json_map`:       `Attempt to parse the message as a JSON map and for each element of the map expands its contents into a new message. A metadata field is added to each message called ` + "`archive_key`" + ` with the relevant key from the top-level map.`,
 			`csv`:            `Attempt to parse the message as a csv file (header required) and for each row in the file expands its contents into a json object in a new message.`,
 			`csv:x`:          `Attempt to parse the message as a csv file (header required) and for each row in the file expands its contents into a json object in a new message using a custom delimiter. The custom delimiter must be a single character, e.g. the format "csv:\t" would consume a tab delimited file.`,
-		}).Description("The unarchiving format to apply."))
+		}).Description("The unarchiving format to apply.").LintRule(``)) // NOTE: We disable the linter here because `csv:x` is a dynamic pattern
 }
 
 func init() {

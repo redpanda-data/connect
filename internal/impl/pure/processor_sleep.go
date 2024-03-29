@@ -66,26 +66,27 @@ func newSleep(sleepStr string, mgr bundle.NewManagement) (*sleepProc, error) {
 }
 
 func (s *sleepProc) ProcessBatch(ctx *processor.BatchProcContext, msg message.Batch) ([]message.Batch, error) {
-	_ = msg.Iter(func(i int, p *message.Part) error {
+	for i := range msg {
 		periodStr, err := s.durationStr.String(i, msg)
 		if err != nil {
 			s.log.Error("Period interpolation error: %v", err)
-			return nil
+			continue
 		}
+
 		period, err := time.ParseDuration(periodStr)
 		if err != nil {
 			s.log.Error("Failed to parse duration: %v", err)
-			return nil
+			continue
 		}
+
 		select {
 		case <-time.After(period):
 		case <-ctx.Context().Done():
-			return errors.New("stop")
+			return nil, ctx.Context().Err()
 		case <-s.closeChan:
-			return errors.New("stop")
+			return nil, errors.New("processor stopped")
 		}
-		return nil
-	})
+	}
 	return []message.Batch{msg}, nil
 }
 

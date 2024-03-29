@@ -29,6 +29,7 @@ input:
       cert_file: "" # No default (optional)
       key_file: "" # No default (optional)
       self_signed: false
+    auto_replay_nacks: true
     scanner:
       lines: {}
 ```
@@ -94,6 +95,14 @@ Whether to generate self signed certificates.
 
 Type: `bool`  
 Default: `false`  
+
+### `auto_replay_nacks`
+
+Whether messages that are rejected (nacked) at the output level should be automatically replayed indefinitely, eventually resulting in back pressure if the cause of the rejections is persistent. If set to `false` these messages will instead be deleted. Disabling auto replays can greatly improve memory efficiency of high throughput streams as the original shape of the data can be discarded immediately upon consumption and mutation.
+
+
+Type: `bool`  
+Default: `true`  
 
 ### `scanner`
 

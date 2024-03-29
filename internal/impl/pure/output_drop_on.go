@@ -3,6 +3,7 @@ package pure
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"time"
 
 	"github.com/benthosdev/benthos/v4/internal/component"
@@ -15,16 +16,17 @@ import (
 )
 
 const (
-	dooFieldError        = "error"
-	dooFieldBackPressure = "back_pressure"
-	dooFieldOutput       = "output"
+	dooFieldError         = "error"
+	dooFieldErrorPatterns = "error_patterns"
+	dooFieldBackPressure  = "back_pressure"
+	dooFieldOutput        = "output"
 )
 
 func dropOnOutputSpec() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Stable().
 		Categories("Utility").
-		Summary(`Attempts to write messages to a child output and if the write fails for one of a list of configurable reasons the message is dropped instead of being reattempted.`).
+		Summary(`Attempts to write messages to a child output and if the write fails for one of a list of configurable reasons the message is dropped (acked) instead of being reattempted (or nacked).`).
 		Description(`Regular Benthos outputs will apply back pressure when downstream services aren't accessible, and Benthos retries (or nacks) all messages that fail to be delivered. However, in some circumstances, or for certain output types, we instead might want to relax these mechanisms, which is when this output becomes useful.`).
 		Example(
 			"Dropping failed HTTP requests",
@@ -59,10 +61,19 @@ output:
 		).
 		Fields(
 			service.NewBoolField(dooFieldError).
-				Description("Whether messages should be dropped when the child output returns an error. For example, this could be when an http_client output gets a 4XX response code.").
+				Description("Whether messages should be dropped when the child output returns an error of any type. For example, this could be when an `http_client` output gets a 4XX response code. In order to instead drop only on specific error patterns use the `error_matches` field instead.").
 				Default(false),
+			service.NewStringListField(dooFieldErrorPatterns).
+				Description("A list of regular expressions (re2) where if the child output returns an error that matches any part of any of these patterns the message will be dropped.").
+				Optional().
+				Version("4.27.0").
+				Examples([]any{
+					"and that was really bad$",
+				}, []any{
+					"roughly [0-9]+ issues occurred",
+				}),
 			service.NewDurationField(dooFieldBackPressure).
-				Description("An optional duration string that determines the maximum length of time to wait for a given message to be accepted by the child output before the message should be dropped instead. The most common reason for an output to block is when waiting for a lost connection to be re-established. Once a message has been dropped due to back pressure all subsequent messages are dropped immediately until the output is ready to process them again. Note that if `error` is set to `false` and this field is specified then messages dropped due to back pressure will return an error response.").
+				Description("An optional duration string that determines the maximum length of time to wait for a given message to be accepted by the child output before the message should be dropped instead. The most common reason for an output to block is when waiting for a lost connection to be re-established. Once a message has been dropped due to back pressure all subsequent messages are dropped immediately until the output is ready to process them again. Note that if `error` is set to `false` and this field is specified then messages dropped due to back pressure will return an error response (are nacked or reattempted).").
 				Examples("30s", "1m").
 				Optional(),
 			service.NewOutputField(dooFieldOutput).
@@ -93,6 +104,7 @@ type dropOnWriter struct {
 	log log.Modular
 
 	onError        bool
+	onErrorMatches []*regexp.Regexp
 	onBackpressure time.Duration
 	wrapped        output.Streamed
 
@@ -106,6 +118,20 @@ func newDropOnWriter(conf *service.ParsedConfig, log log.Modular) (*dropOnWriter
 	onError, err := conf.FieldBool(dooFieldError)
 	if err != nil {
 		return nil, err
+	}
+
+	var onErrMatchesPatterns []*regexp.Regexp
+	if onErrMatches, _ := conf.FieldStringList(dooFieldErrorPatterns); len(onErrMatches) > 0 {
+		if onError {
+			return nil, fmt.Errorf("field '%v' is ineffective when '%v' is set to `true`", dooFieldErrorPatterns, dooFieldError)
+		}
+		for i, str := range onErrMatches {
+			tmp, err := regexp.Compile(str)
+			if err != nil {
+				return nil, fmt.Errorf("error pattern %v failed to compile: %w", i, err)
+			}
+			onErrMatchesPatterns = append(onErrMatchesPatterns, tmp)
+		}
 	}
 
 	var backPressure time.Duration
@@ -127,6 +153,7 @@ func newDropOnWriter(conf *service.ParsedConfig, log log.Modular) (*dropOnWriter
 		transactionsOut: make(chan message.Transaction),
 
 		onError:        onError,
+		onErrorMatches: onErrMatchesPatterns,
 		onBackpressure: backPressure,
 
 		shutSig: shutdown.NewSignaller(),
@@ -224,8 +251,19 @@ func (d *dropOnWriter) loop() {
 		}
 
 		if res != nil && d.onError {
-			d.log.Warn("Message dropped due to: %v\n", res)
+			d.log.Warn("Message dropped due to: %v", res)
 			res = nil
+		}
+
+		if res != nil && len(d.onErrorMatches) > 0 {
+			errStr := res.Error()
+			for i, m := range d.onErrorMatches {
+				if m.MatchString(errStr) {
+					d.log.Warn("Message dropped due to error matching pattern %v: %v", i, res)
+					res = nil
+					break
+				}
+			}
 		}
 
 		if err := ts.Ack(cnCtx, res); err != nil && cnCtx.Err() != nil {

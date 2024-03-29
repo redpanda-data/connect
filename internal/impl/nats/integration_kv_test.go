@@ -89,6 +89,37 @@ input:
 		integration.StreamTestOptPort(resource.GetPort("4222/tcp")),
 	)
 
+	t.Run("cache", func(t *testing.T) {
+		template := `
+cache_resources:
+  - label: testcache
+    nats_kv:
+      bucket: bucket-$ID
+      urls: [ tcp://localhost:$PORT ]`
+		suite := integration.CacheTests(
+			integration.CacheTestOpenClose(),
+			integration.CacheTestMissingKey(),
+			integration.CacheTestDoubleAdd(),
+			integration.CacheTestDelete(),
+			integration.CacheTestGetAndSet(50),
+		)
+		suite.Run(
+			t, template,
+			integration.CacheTestOptPreTest(func(t testing.TB, _ context.Context, testID string, _ *integration.CacheTestConfigVars) {
+				js, err := natsConn.JetStream()
+				require.NoError(t, err)
+
+				bucketName := "bucket-" + testID
+
+				_, err = js.CreateKeyValue(&nats.KeyValueConfig{
+					Bucket: bucketName,
+				})
+				require.NoError(t, err)
+			}),
+			integration.CacheTestOptPort(resource.GetPort("4222/tcp")),
+		)
+	})
+
 	t.Run("processor", func(t *testing.T) {
 		createBucket := func(t *testing.T) (nats.KeyValue, string) {
 			u4, err := uuid.NewV4()

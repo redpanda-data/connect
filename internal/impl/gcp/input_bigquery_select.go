@@ -91,6 +91,7 @@ func newBigQuerySelectInputConfig() *service.ConfigSpec {
 			Example("user_id = ?").
 			Optional(),
 		).
+		Field(service.NewAutoRetryNacksToggleField()).
 		Field(service.NewStringMapField("job_labels").Description("A list of labels to add to the query job.").Default(map[string]any{})).
 		Field(service.NewStringField("priority").Description("The priority with which to schedule the query.").Default("")).
 		Field(service.NewBloblangField("args_mapping").
@@ -241,7 +242,7 @@ func init() {
 			if err != nil {
 				return nil, err
 			}
-			return service.AutoRetryNacks(i), nil
+			return service.AutoRetryNacksToggled(conf, i)
 		})
 	if err != nil {
 		panic(err)

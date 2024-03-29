@@ -39,6 +39,7 @@ input:
     dsn: clickhouse://username:password@host1:9000,host2:9000/database?dial_timeout=200ms&max_execution_time=60 # No default (required)
     query: SELECT * FROM footable WHERE user_id = $1; # No default (required)
     args_mapping: root = [ this.cat.meow, this.doc.woofs[0] ] # No default (optional)
+    auto_replay_nacks: true
 ```
 
 </TabItem>
@@ -53,6 +54,7 @@ input:
     dsn: clickhouse://username:password@host1:9000,host2:9000/database?dial_timeout=200ms&max_execution_time=60 # No default (required)
     query: SELECT * FROM footable WHERE user_id = $1; # No default (required)
     args_mapping: root = [ this.cat.meow, this.doc.woofs[0] ] # No default (optional)
+    auto_replay_nacks: true
     init_files: [] # No default (optional)
     init_statement: | # No default (optional)
       CREATE TABLE IF NOT EXISTS some_table (
@@ -188,6 +190,14 @@ args_mapping: root = [ this.cat.meow, this.doc.woofs[0] ]
 
 args_mapping: root = [ meta("user.id") ]
 ```
+
+### `auto_replay_nacks`
+
+Whether messages that are rejected (nacked) at the output level should be automatically replayed indefinitely, eventually resulting in back pressure if the cause of the rejections is persistent. If set to `false` these messages will instead be deleted. Disabling auto replays can greatly improve memory efficiency of high throughput streams as the original shape of the data can be discarded immediately upon consumption and mutation.
+
+
+Type: `bool`  
+Default: `true`  
 
 ### `init_files`
 

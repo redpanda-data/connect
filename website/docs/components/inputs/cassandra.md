@@ -36,6 +36,7 @@ input:
     addresses: [] # No default (required)
     timeout: 600ms
     query: "" # No default (required)
+    auto_replay_nacks: true
 ```
 
 </TabItem>
@@ -65,6 +66,7 @@ input:
       max_interval: 5s
     timeout: 600ms
     query: "" # No default (required)
+    auto_replay_nacks: true
 ```
 
 </TabItem>
@@ -355,5 +357,13 @@ A query to execute.
 
 
 Type: `string`  
+
+### `auto_replay_nacks`
+
+Whether messages that are rejected (nacked) at the output level should be automatically replayed indefinitely, eventually resulting in back pressure if the cause of the rejections is persistent. If set to `false` these messages will instead be deleted. Disabling auto replays can greatly improve memory efficiency of high throughput streams as the original shape of the data can be discarded immediately upon consumption and mutation.
+
+
+Type: `bool`  
+Default: `true`  
 
 

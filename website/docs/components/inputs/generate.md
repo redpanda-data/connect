@@ -28,7 +28,59 @@ input:
     interval: 1s
     count: 0
     batch_size: 1
+    auto_replay_nacks: true
 ```
+
+## Examples
+
+<Tabs defaultValue="Cron Scheduled Processing" values={[
+{ label: 'Cron Scheduled Processing', value: 'Cron Scheduled Processing', },
+{ label: 'Generate 100 Rows', value: 'Generate 100 Rows', },
+]}>
+
+<TabItem value="Cron Scheduled Processing">
+
+A common use case for the generate input is to trigger processors on a schedule so that the processors themselves can behave similarly to an input. The following configuration reads rows from a PostgreSQL table every 5 minutes.
+
+```yaml
+input:
+  generate:
+    interval: '@every 5m'
+    mapping: 'root = {}'
+  processors:
+    - sql_select:
+        driver: postgres
+        dsn: postgres://foouser:foopass@localhost:5432/testdb?sslmode=disable
+        table: foo
+        columns: [ "*" ]
+```
+
+</TabItem>
+<TabItem value="Generate 100 Rows">
+
+The generate input can be used as a convenient way to generate test data. The following example generates 100 rows of structured data by setting an explicit count. The interval field is set to empty, which means data is generated as fast as the downstream components can consume it.
+
+```yaml
+input:
+  generate:
+    count: 100
+    interval: ""
+    mapping: |
+      root = if random_int() % 2 == 0 {
+        {
+          "type": "foo",
+          "foo": "is yummy"
+        }
+      } else {
+        {
+          "type": "bar",
+          "bar": "is gross"
+        }
+      }
+```
+
+</TabItem>
+</Tabs>
 
 ## Fields
 
@@ -87,55 +139,12 @@ The number of generated messages that should be accumulated into each batch flus
 Type: `int`  
 Default: `1`  
 
-## Examples
+### `auto_replay_nacks`
 
-<Tabs defaultValue="Cron Scheduled Processing" values={[
-{ label: 'Cron Scheduled Processing', value: 'Cron Scheduled Processing', },
-{ label: 'Generate 100 Rows', value: 'Generate 100 Rows', },
-]}>
+Whether messages that are rejected (nacked) at the output level should be automatically replayed indefinitely, eventually resulting in back pressure if the cause of the rejections is persistent. If set to `false` these messages will instead be deleted. Disabling auto replays can greatly improve memory efficiency of high throughput streams as the original shape of the data can be discarded immediately upon consumption and mutation.
 
-<TabItem value="Cron Scheduled Processing">
 
-A common use case for the generate input is to trigger processors on a schedule so that the processors themselves can behave similarly to an input. The following configuration reads rows from a PostgreSQL table every 5 minutes.
-
-```yaml
-input:
-  generate:
-    interval: '@every 5m'
-    mapping: 'root = {}'
-  processors:
-    - sql_select:
-        driver: postgres
-        dsn: postgres://foouser:foopass@localhost:5432/testdb?sslmode=disable
-        table: foo
-        columns: [ "*" ]
-```
-
-</TabItem>
-<TabItem value="Generate 100 Rows">
-
-The generate input can be used as a convenient way to generate test data. The following example generates 100 rows of structured data by setting an explicit count. The interval field is set to empty, which means data is generated as fast as the downstream components can consume it.
-
-```yaml
-input:
-  generate:
-    count: 100
-    interval: ""
-    mapping: |
-      root = if random_int() % 2 == 0 {
-        {
-          "type": "foo",
-          "foo": "is yummy"
-        }
-      } else {
-        {
-          "type": "bar",
-          "bar": "is gross"
-        }
-      }
-```
-
-</TabItem>
-</Tabs>
+Type: `bool`  
+Default: `true`  
 
 

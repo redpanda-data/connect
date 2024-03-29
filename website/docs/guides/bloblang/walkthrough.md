@@ -9,8 +9,8 @@ Bloblang is the most advanced mapping language that you'll learn from this walkt
 In this walkthrough you'll learn how to make new friends by mapping their documents, and lose old friends as they grow jealous and bitter of your mapping abilities. There are a few ways to execute Bloblang but the way we'll do it in this guide is to pull a Benthos docker image and run the command `benthos blobl server`, which opens up an interactive Bloblang editor:
 
 ```sh
-docker pull jeffail/benthos:latest
-docker run -p 4195:4195 --rm jeffail/benthos blobl server --no-open --host 0.0.0.0
+docker pull ghcr.io/benthosdev/benthos:latest
+docker run -p 4195:4195 --rm ghcr.io/benthosdev/benthos blobl server --no-open --host 0.0.0.0
 ```
 
 :::note Alternatives

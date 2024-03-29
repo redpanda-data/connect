@@ -15,7 +15,7 @@ const installs = [
     label: 'Curl',
     language: 'bash',
     children: `# Install
-curl -Lsf https://sh.benthos.dev | bash
+curl -Lsf https://www.benthos.dev/sh/install | bash
 
 # Make a config
 benthos create nats/protobuf/aws_sqs > ./config.yaml
@@ -39,13 +39,13 @@ benthos -c ./config.yaml`
     label: 'Docker',
     language: 'bash',
     children: `# Pull
-docker pull jeffail/benthos
+docker pull ghcr.io/benthosdev/benthos
 
 # Make a config
-docker run --rm jeffail/benthos create nats/protobuf/aws_sqs > ./config.yaml
+docker run --rm ghcr.io/benthosdev/benthos create nats/protobuf/aws_sqs > ./config.yaml
 
 # Run
-docker run --rm -v $(pwd)/config.yaml:/benthos.yaml jeffail/benthos`
+docker run --rm -v $(pwd)/config.yaml:/benthos.yaml ghcr.io/benthosdev/benthos`
   },
   {
     label: 'Asdf',
@@ -375,7 +375,10 @@ function Home() {
                   <div>
                     <a href="https://synadia.com"><img className={styles.synadiaImg} src="/img/sponsors/synadia.svg" /></a>
                   </div>
-                  <div className={classnames(styles.sponsorsBox)}>
+                  <div className={classnames(styles.sponsorsBox, styles.goldSponsors)}>
+                    <a href="https://www.warpstream.com/"><img src="/img/sponsors/warpstream_logo.svg" /></a>
+                  </div>
+                  <div className={classnames(styles.sponsorsBox, styles.silverSponsors)}>
                     <a href="https://www.meltwater.com/"><img src="/img/sponsors/mw_logo.png" /></a>
                     <a href="https://www.humansecurity.com"><img src="/img/sponsors/HUMAN_logo.png" /></a>
                     <a href="https://community.com/"><img src="/img/sponsors/community.svg" /></a>

@@ -68,7 +68,8 @@ rate_limit_resources:
 			service.NewInterpolatedStringField("payload").Description("An optional payload to deliver for each request.").Optional(),
 			service.NewBoolField("drop_empty_bodies").Description("Whether empty payloads received from the target server should be dropped.").Default(true).Advanced(),
 			streamField,
-		))
+		)).
+		Field(service.NewAutoRetryNacksToggleField())
 }
 
 func init() {
@@ -79,7 +80,7 @@ func init() {
 			if err != nil {
 				return nil, err
 			}
-			return service.AutoRetryNacksBatched(rdr), nil
+			return service.AutoRetryNacksBatchedToggled(conf, rdr)
 		})
 	if err != nil {
 		panic(err)

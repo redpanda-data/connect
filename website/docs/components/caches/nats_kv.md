@@ -1,8 +1,8 @@
 ---
 title: nats_kv
 slug: nats_kv
-type: input
-status: beta
+type: cache
+status: experimental
 categories: ["Services"]
 ---
 
@@ -15,12 +15,12 @@ categories: ["Services"]
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-:::caution BETA
-This component is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with the component is found.
+:::caution EXPERIMENTAL
+This component is experimental and therefore subject to change or removal outside of major version releases.
 :::
-Watches for updates in a NATS key-value bucket.
+Cache key/values in a NATS key-value bucket.
 
-Introduced in version 4.12.0.
+Introduced in version 4.27.0.
 
 
 <Tabs defaultValue="common" values={[
@@ -32,13 +32,10 @@ Introduced in version 4.12.0.
 
 ```yml
 # Common config fields, showing default values
-input:
-  label: ""
-  nats_kv:
-    urls: [] # No default (required)
-    bucket: my_kv_bucket # No default (required)
-    key: '>'
-    auto_replay_nacks: true
+label: ""
+nats_kv:
+  urls: [] # No default (required)
+  bucket: my_kv_bucket # No default (required)
 ```
 
 </TabItem>
@@ -46,45 +43,26 @@ input:
 
 ```yml
 # All config fields, showing default values
-input:
-  label: ""
-  nats_kv:
-    urls: [] # No default (required)
-    bucket: my_kv_bucket # No default (required)
-    key: '>'
-    auto_replay_nacks: true
-    ignore_deletes: false
-    include_history: false
-    meta_only: false
-    tls:
-      enabled: false
-      skip_cert_verify: false
-      enable_renegotiation: false
-      root_cas: ""
-      root_cas_file: ""
-      client_certs: []
-    auth:
-      nkey_file: ./seed.nk # No default (optional)
-      user_credentials_file: ./user.creds # No default (optional)
-      user_jwt: "" # No default (optional)
-      user_nkey_seed: "" # No default (optional)
+label: ""
+nats_kv:
+  urls: [] # No default (required)
+  bucket: my_kv_bucket # No default (required)
+  tls:
+    enabled: false
+    skip_cert_verify: false
+    enable_renegotiation: false
+    root_cas: ""
+    root_cas_file: ""
+    client_certs: []
+  auth:
+    nkey_file: ./seed.nk # No default (optional)
+    user_credentials_file: ./user.creds # No default (optional)
+    user_jwt: "" # No default (optional)
+    user_nkey_seed: "" # No default (optional)
 ```
 
 </TabItem>
 </Tabs>
-
-### Metadata
-
-This input adds the following metadata fields to each message:
-
-``` text
-- nats_kv_key
-- nats_kv_bucket
-- nats_kv_revision
-- nats_kv_delta
-- nats_kv_operation
-- nats_kv_created
-```
 
 ### Connection Name
 
@@ -145,7 +123,7 @@ urls:
 
 ### `bucket`
 
-The name of the KV bucket to watch for updates.
+The name of the KV bucket to store items within.
 
 
 Type: `string`  
@@ -155,58 +133,6 @@ Type: `string`
 
 bucket: my_kv_bucket
 ```
-
-### `key`
-
-Key to watch for updates, can include wildcards.
-
-
-Type: `string`  
-Default: `"\u003e"`  
-
-```yml
-# Examples
-
-key: foo.bar.baz
-
-key: foo.*.baz
-
-key: foo.bar.*
-
-key: foo.>
-```
-
-### `auto_replay_nacks`
-
-Whether messages that are rejected (nacked) at the output level should be automatically replayed indefinitely, eventually resulting in back pressure if the cause of the rejections is persistent. If set to `false` these messages will instead be deleted. Disabling auto replays can greatly improve memory efficiency of high throughput streams as the original shape of the data can be discarded immediately upon consumption and mutation.
-
-
-Type: `bool`  
-Default: `true`  
-
-### `ignore_deletes`
-
-Do not send delete markers as messages.
-
-
-Type: `bool`  
-Default: `false`  
-
-### `include_history`
-
-Include all the history per key, not just the last one.
-
-
-Type: `bool`  
-Default: `false`  
-
-### `meta_only`
-
-Retrieve only the metadata of the entry
-
-
-Type: `bool`  
-Default: `false`  
 
 ### `tls`
 

@@ -189,6 +189,38 @@ input:
 		})
 	})
 
+	// SCAN
+	t.Run("scan", func(t *testing.T) {
+		t.Parallel()
+		template := `
+input:
+  redis_scan:
+    url: 'tcp://localhost:$PORT'
+    match: '*'
+  processors:
+    - mapping: 'root = this.value'
+
+output:
+  cache:
+    target: rcache
+    key: 'foo-${! counter() }'
+
+cache_resources:
+  - label: rcache
+    redis:
+      url: 'tcp://localhost:$PORT'
+`
+		suite := integration.StreamTests(
+			integration.StreamTestStreamIsolated(1000),
+		)
+		suite.Run(
+			t, template,
+			integration.StreamTestOptSleepAfterInput(100*time.Millisecond),
+			integration.StreamTestOptSleepAfterOutput(100*time.Millisecond),
+			integration.StreamTestOptPort(resource.GetPort("6379/tcp")),
+		)
+	})
+
 	// HASH
 	t.Run("hash", func(t *testing.T) {
 		t.Parallel()

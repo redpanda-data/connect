@@ -74,6 +74,25 @@ func (i *mockBatchInput) Close(ctx context.Context) error {
 	return <-i.closeChan
 }
 
+func TestBatchAutoRetryConfig(t *testing.T) {
+	spec := NewConfigSpec().Field(NewAutoRetryNacksToggleField())
+	for conf, shouldRetry := range map[string]bool{
+		`{}`:                       true,
+		`auto_replay_nacks: false`: false,
+		`auto_replay_nacks: true`:  true,
+	} {
+		inConf, err := spec.ParseYAML(conf, nil)
+		require.NoError(t, err, conf)
+
+		readerImpl := newMockBatchInput()
+		pres, err := AutoRetryNacksBatchedToggled(inConf, readerImpl)
+		require.NoError(t, err, conf)
+
+		_, isWrapped := pres.(*autoRetryInputBatched)
+		assert.Equal(t, shouldRetry, isWrapped, conf)
+	}
+}
+
 func TestBatchAutoRetryClose(t *testing.T) {
 	t.Parallel()
 
