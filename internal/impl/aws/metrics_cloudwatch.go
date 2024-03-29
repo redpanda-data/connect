@@ -17,7 +17,7 @@ import (
 )
 
 const (
-	// CW Metrics Fields
+	// CW Metrics Fields.
 	cwmFieldNamespace   = "namespace"
 	cwmFieldFlushPeriod = "flush_period"
 )

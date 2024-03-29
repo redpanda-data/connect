@@ -16,7 +16,7 @@ import (
 )
 
 const (
-	// Blob Storage Output Fields
+	// Blob Storage Output Fields.
 	bsoFieldContainer         = "container"
 	bsoFieldPath              = "path"
 	bsoFieldBlobType          = "blob_type"

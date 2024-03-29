@@ -325,7 +325,7 @@ func (a *amqp09Writer) disconnect() error {
 	return nil
 }
 
-// declareExchange declare and memoize the declaration of an AMQP exchange
+// declareExchange declare and memoize the declaration of an AMQP exchange.
 func (a *amqp09Writer) declareExchange(exchange string) error {
 	if !a.exchangeDeclare {
 		return nil

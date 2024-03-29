@@ -20,7 +20,7 @@ import (
 )
 
 const (
-	// SNS Output Fields
+	// SNS Output Fields.
 	snsoFieldTopicARN        = "topic_arn"
 	snsoFieldMessageGroupID  = "message_group_id"
 	snsoFieldMessageDedupeID = "message_deduplication_id"

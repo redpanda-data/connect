@@ -16,7 +16,7 @@ import (
 )
 
 const (
-	// Table Storage Output Fields
+	// Table Storage Output Fields.
 	tsoFieldTableName       = "table_name"
 	tsoFieldPartitionKey    = "partition_key"
 	tsoFieldRowKey          = "row_key"

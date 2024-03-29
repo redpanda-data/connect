@@ -20,7 +20,7 @@ import (
 )
 
 const (
-	// Cloud Storage Input Fields
+	// Cloud Storage Input Fields.
 	csiFieldBucket        = "bucket"
 	csiFieldPrefix        = "prefix"
 	csiFieldDeleteObjects = "delete_objects"

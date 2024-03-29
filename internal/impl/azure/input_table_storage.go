@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	// Table Storage Input Fields
+	// Table Storage Input Fields.
 	tsiFieldTableName = "table_name"
 	tsiFieldFilter    = "filter"
 	tsiFieldSelect    = "select"
@@ -171,7 +171,7 @@ func (a *azureTableStorage) ReadBatch(ctx context.Context) (batch service.Messag
 	return nil, nil, component.ErrTypeClosed
 }
 
-// Close is called when the pipeline ends
+// Close is called when the pipeline ends.
 func (a *azureTableStorage) Close(ctx context.Context) (err error) {
 	return
 }

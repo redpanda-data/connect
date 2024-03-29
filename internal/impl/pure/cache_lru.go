@@ -17,20 +17,20 @@ const (
 	lruCacheFieldCapDefaultValue = 1000
 	lruCacheFieldInitValuesLabel = "init_values"
 
-	// specific to algorithm
+	// specific to algorithm.
 	lruCacheFieldAlgorithmLabel         = "algorithm"
 	lruCacheFieldAlgorithmValueStandard = "standard"
 	lruCacheFieldAlgorithmValueARC      = "arc"
 	lruCacheFieldAlgorithmValue2Q       = "two_queues"
 	lruCacheFieldAlgorithmDefaultValue  = lruCacheFieldAlgorithmValueStandard
 
-	// specific to algorithm two queues
+	// specific to algorithm two queues.
 	lruCacheField2QRecentRatioLabel        = "two_queues_recent_ratio"
 	lruCacheField2QGhostRatioLabel         = "two_queues_ghost_ratio"
 	lruCacheField2QRecentRatioDefaultValue = lruv2.Default2QRecentRatio
 	lruCacheField2QGhostRatioDefaultValue  = lruv2.Default2QGhostEntries
 
-	// optimistic
+	// optimistic.
 	lruCacheFieldOptimisticLabel        = "optimistic"
 	lruCacheFieldOptimisticDefaultValue = false
 )

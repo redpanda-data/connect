@@ -15,7 +15,7 @@ import (
 )
 
 const (
-	// Common fields for blob storage components
+	// Common fields for blob storage components.
 	bscFieldStorageAccount          = "storage_account"
 	bscFieldStorageAccessKey        = "storage_access_key"
 	bscFieldStorageSASToken         = "storage_sas_token"

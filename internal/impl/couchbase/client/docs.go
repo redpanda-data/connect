@@ -4,7 +4,7 @@ import (
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
-// NewConfigSpec constructs a new Couchbase ConfigSpec with common config fields
+// NewConfigSpec constructs a new Couchbase ConfigSpec with common config fields.
 func NewConfigSpec() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		// TODO Stable().

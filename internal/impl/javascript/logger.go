@@ -7,17 +7,17 @@ type Logger struct {
 	l *service.Logger
 }
 
-// Log will be used for "console.log()" in JS
+// Log will be used for "console.log()" in JS.
 func (l *Logger) Log(message string) {
 	l.l.Info(message)
 }
 
-// Warn will be used for "console.warn()" in JS
+// Warn will be used for "console.warn()" in JS.
 func (l *Logger) Warn(message string) {
 	l.l.Warn(message)
 }
 
-// Error will be used for "console.error()" in JS
+// Error will be used for "console.error()" in JS.
 func (l *Logger) Error(message string) {
 	l.l.Error(message)
 }

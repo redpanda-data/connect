@@ -27,7 +27,7 @@ import (
 )
 
 const (
-	// S3 Input SQS Fields
+	// S3 Input SQS Fields.
 	s3iSQSFieldURL             = "url"
 	s3iSQSFieldEndpoint        = "endpoint"
 	s3iSQSFieldEnvelopePath    = "envelope_path"
@@ -37,7 +37,7 @@ const (
 	s3iSQSFieldMaxMessages     = "max_messages"
 	s3iSQSFieldWaitTimeSeconds = "wait_time_seconds"
 
-	// S3 Input Fields
+	// S3 Input Fields.
 	s3iFieldBucket             = "bucket"
 	s3iFieldPrefix             = "prefix"
 	s3iFieldForcePathStyleURLs = "force_path_style_urls"

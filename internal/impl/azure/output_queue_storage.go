@@ -14,7 +14,7 @@ import (
 )
 
 const (
-	// Queue Storage Output Fields
+	// Queue Storage Output Fields.
 	qsoFieldQueueName = "queue_name"
 	qsoFieldTTL       = "ttl"
 	qsoFieldBatching  = "batching"

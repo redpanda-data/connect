@@ -21,7 +21,7 @@ import (
 )
 
 const (
-	// DynamoDB Output Fields
+	// DynamoDB Output Fields.
 	ddboField               = "namespace"
 	ddboFieldTable          = "table"
 	ddboFieldStringColumns  = "string_columns"

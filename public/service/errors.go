@@ -51,7 +51,7 @@ type ErrBackOff struct {
 // - Input.Connect
 // - BatchInput.Connect
 // - Output.Connect
-// - BatchOutput.Connect
+// - BatchOutput.Connect.
 func NewErrBackOff(err error, wait time.Duration) *ErrBackOff {
 	return &ErrBackOff{err, wait}
 }
@@ -154,7 +154,7 @@ func (err *BatchError) IndexedErrors() int {
 	return err.wrapped.IndexedErrors()
 }
 
-// Error returns the underlying error message
+// Error returns the underlying error message.
 func (err *BatchError) Error() string {
 	return err.wrapped.Error()
 }

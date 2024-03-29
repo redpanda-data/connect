@@ -17,7 +17,7 @@ import (
 )
 
 const (
-	// Stream Output Fields
+	// Stream Output Fields.
 	soFieldURLs      = "urls"
 	soFieldClusterID = "cluster_id"
 	soFieldSubject   = "subject"

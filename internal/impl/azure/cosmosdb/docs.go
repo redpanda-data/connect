@@ -27,21 +27,21 @@ const (
 	fieldItemID           = "item_id"
 )
 
-// OperationType operation type
+// OperationType operation type.
 type OperationType string
 
 const (
-	// OperationCreate Create operation
+	// OperationCreate Create operation.
 	OperationCreate OperationType = "Create"
-	// OperationDelete Delete operation
+	// OperationDelete Delete operation.
 	OperationDelete OperationType = "Delete"
-	// OperationReplace Replace operation
+	// OperationReplace Replace operation.
 	OperationReplace OperationType = "Replace"
-	// OperationUpsert Upsert operation
+	// OperationUpsert Upsert operation.
 	OperationUpsert OperationType = "Upsert"
-	// OperationRead Read operation
+	// OperationRead Read operation.
 	OperationRead OperationType = "Read"
-	// OperationPatch Patch operation
+	// OperationPatch Patch operation.
 	OperationPatch OperationType = "Patch"
 )
 
@@ -61,7 +61,7 @@ type patchOperation struct {
 	Value     *bloblang.Executor
 }
 
-// CRUDConfig contains the configuration fields required for CRUD operations
+// CRUDConfig contains the configuration fields required for CRUD operations.
 type CRUDConfig struct {
 	PartitionKeys   *bloblang.Executor
 	Operation       OperationType
@@ -71,7 +71,7 @@ type CRUDConfig struct {
 	PatchOperations []patchOperation
 }
 
-// CredentialsDocs credentials docs
+// CredentialsDocs credentials docs.
 var CredentialsDocs = `
 
 ## Credentials
@@ -83,7 +83,7 @@ You can use one of the following authentication mechanisms:
 - Set the ` + "`connection_string`" + ` field
 `
 
-// MetadataDocs metadata docs
+// MetadataDocs metadata docs.
 var MetadataDocs = `
 
 ## Metadata
@@ -97,7 +97,7 @@ This component adds the following metadata fields to each message:
 You can access these metadata fields using [function interpolation](/docs/configuration/interpolation#bloblang-queries).
 `
 
-// BatchingDocs batching docs
+// BatchingDocs batching docs.
 var BatchingDocs = `
 
 ## Batching
@@ -105,7 +105,7 @@ var BatchingDocs = `
 CosmosDB limits the maximum batch size to 100 messages and the payload must not exceed 2MB (details [here](https://learn.microsoft.com/en-us/azure/cosmos-db/concepts-limits#per-request-limits)).
 `
 
-// EmulatorDocs emulator docs
+// EmulatorDocs emulator docs.
 var EmulatorDocs = `
 
 ## CosmosDB Emulator
@@ -127,7 +127,7 @@ Additionally, instead of installing the container self-signed certificate which 
 Then you can access the CosmosDB UI via ` + "`http://localhost:8080/_explorer/index.html`" + ` and use ` + "`http://localhost:8080`" + ` as the CosmosDB endpoint.
 `
 
-// CommonLintRules contains the lint rules for common fields
+// CommonLintRules contains the lint rules for common fields.
 var CommonLintRules = `
 let hasEndpoint = this.endpoint.or("") != ""
 let hasConnectionString = this.connection_string.or("") != ""
@@ -137,7 +137,7 @@ root."-" = if !$hasEndpoint && !$hasConnectionString {
 }
 `
 
-// CRUDLintRules contains the lint rules for CRUD fields
+// CRUDLintRules contains the lint rules for CRUD fields.
 var CRUDLintRules = `
 let hasItemID = this.item_id.or("") != ""
 let hasPatchOperations = this.patch_operations.length().or(0) > 0
@@ -166,7 +166,7 @@ root."-" = if this.operation == "Patch" && this.patch_operations.any(o -> o.oper
 
 //------------------------------------------------------------------------------
 
-// ContainerClientConfigFields returns the container client config fields
+// ContainerClientConfigFields returns the container client config fields.
 func ContainerClientConfigFields() []*service.ConfigField {
 	return []*service.ConfigField{
 		service.NewStringField(fieldEndpoint).Description("CosmosDB endpoint.").Optional().Example("https://localhost:8081"),
@@ -177,7 +177,7 @@ func ContainerClientConfigFields() []*service.ConfigField {
 	}
 }
 
-// PartitionKeysField returns the partition keys field definition
+// PartitionKeysField returns the partition keys field definition.
 func PartitionKeysField(isInputField bool) *service.ConfigField {
 	// TODO: Add examples for hierarchical / empty Partition Keys this when the following issues are addressed:
 	// - https://github.com/Azure/azure-sdk-for-go/issues/18578
@@ -191,7 +191,7 @@ func PartitionKeysField(isInputField bool) *service.ConfigField {
 	return field.Example(`root = now().ts_format("2006-01-02")`)
 }
 
-// CRUDFields returns the CRUD field definitions
+// CRUDFields returns the CRUD field definitions.
 func CRUDFields(hasReadOperation bool) []*service.ConfigField {
 	operations := map[string]string{
 		string(OperationCreate):  "Create operation.",
@@ -223,7 +223,7 @@ func CRUDFields(hasReadOperation bool) []*service.ConfigField {
 	}
 }
 
-// ContainerClientFromParsed creates the container client from a parsed config
+// ContainerClientFromParsed creates the container client from a parsed config.
 func ContainerClientFromParsed(conf *service.ParsedConfig) (*azcosmos.ContainerClient, error) {
 	var endpoint string
 	var err error
@@ -293,7 +293,7 @@ func ContainerClientFromParsed(conf *service.ParsedConfig) (*azcosmos.ContainerC
 	return containerClient, nil
 }
 
-// CRUDConfigFromParsed extracts the CRUD config from the parsed config
+// CRUDConfigFromParsed extracts the CRUD config from the parsed config.
 func CRUDConfigFromParsed(conf *service.ParsedConfig) (CRUDConfig, error) {
 	var c CRUDConfig
 	var err error

@@ -22,7 +22,7 @@ import (
 )
 
 const (
-	// S3 Output Fields
+	// S3 Output Fields.
 	s3oFieldBucket                  = "bucket"
 	s3oFieldForcePathStyleURLs      = "force_path_style_urls"
 	s3oFieldPath                    = "path"

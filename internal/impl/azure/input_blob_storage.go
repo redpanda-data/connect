@@ -21,7 +21,7 @@ import (
 )
 
 const (
-	// Blob Storage Input Fields
+	// Blob Storage Input Fields.
 	bsiFieldContainer     = "container"
 	bsiFieldPrefix        = "prefix"
 	bsiFieldDeleteObjects = "delete_objects"

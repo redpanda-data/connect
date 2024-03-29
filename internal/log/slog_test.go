@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// Clear slog's time attribute for easier testing
+// Clear slog's time attribute for easier testing.
 var clearTimeAttr = func(_ []string, a slog.Attr) slog.Attr {
 	if a.Key == "time" {
 		return slog.String("time", "")
