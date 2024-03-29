@@ -12,7 +12,7 @@ import (
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
-// Connection fields
+// Connection fields.
 const (
 	fieldConn           = "connection"
 	fieldConnMaxRetries = "max_retries"

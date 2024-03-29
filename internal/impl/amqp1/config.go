@@ -9,7 +9,7 @@ import (
 )
 
 const (
-	// Shared
+	// Shared.
 	urlField      = "url"
 	urlsField     = "urls"
 	tlsField      = "tls"
@@ -18,13 +18,13 @@ const (
 	saslUserField = "user"
 	saslPassField = "password"
 
-	// Input
+	// Input.
 	sourceAddrField       = "source_address"
 	azureRenewLockField   = "azure_renew_lock"
 	getMessageHeaderField = "read_header"
 	creditField           = "credit"
 
-	// Output
+	// Output.
 	targetAddrField  = "target_address"
 	appPropsMapField = "application_properties_map"
 	metaFilterField  = "metadata"

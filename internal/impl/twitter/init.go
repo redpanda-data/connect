@@ -3,7 +3,7 @@ package twitter
 import (
 	_ "embed"
 	// bloblang functions are registered in init functions under this package
-	// so ensure they are loaded first
+	// so ensure they are loaded first.
 	_ "github.com/benthosdev/benthos/v4/internal/impl/pure"
 
 	"github.com/benthosdev/benthos/v4/internal/bundle"

@@ -30,7 +30,7 @@ const (
 //------------------------------------------------------------------------------
 
 const (
-	// Common Client Fields
+	// Common Client Fields.
 	commonFieldClientURL      = "url"
 	commonFieldClientDatabase = "database"
 	commonFieldClientUsername = "username"
@@ -188,7 +188,7 @@ func NewOperation(op string) Operation {
 }
 
 const (
-	// Common Operation Fields
+	// Common Operation Fields.
 	commonFieldOperation = "operation"
 )
 
@@ -225,7 +225,7 @@ func operationFromParsed(pConf *service.ParsedConfig) (operation Operation, err 
 //------------------------------------------------------------------------------
 
 const (
-	// Common Write Concern Fields
+	// Common Write Concern Fields.
 	commonFieldWriteConcern         = "write_concern"
 	commonFieldWriteConcernW        = "w"
 	commonFieldWriteConcernJ        = "j"
@@ -277,7 +277,7 @@ func writeConcernCollectionOptionFromParsed(pConf *service.ParsedConfig) (opt *o
 //------------------------------------------------------------------------------
 
 const (
-	// Common Write Map Fields
+	// Common Write Map Fields.
 	commonFieldDocumentMap = "document_map"
 	commonFieldFilterMap   = "filter_map"
 	commonFieldHintMap     = "hint_map"

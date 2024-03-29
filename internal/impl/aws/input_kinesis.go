@@ -21,14 +21,14 @@ import (
 )
 
 const (
-	// Kinesis Input DynDB Fields
+	// Kinesis Input DynDB Fields.
 	kiddbFieldTable              = "table"
 	kiddbFieldCreate             = "create"
 	kiddbFieldReadCapacityUnits  = "read_capacity_units"
 	kiddbFieldWriteCapacityUnits = "write_capacity_units"
 	kiddbFieldBillingMode        = "billing_mode"
 
-	// Kinesis Input Fields
+	// Kinesis Input Fields.
 	kiFieldDynamoDB        = "dynamodb"
 	kiFieldStreams         = "streams"
 	kiFieldCheckpointLimit = "checkpoint_limit"

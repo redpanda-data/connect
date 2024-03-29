@@ -125,7 +125,7 @@ type FS struct {
 }
 
 // NewFS provides a new instance of a filesystem. The fs.FS passed in can
-// optionally implement methods from benthos ifs.FS
+// optionally implement methods from benthos ifs.FS.
 func NewFS(filesystem fs.FS) *FS {
 	if fsimpl, ok := filesystem.(ifs.FS); ok {
 		return &FS{fsimpl}

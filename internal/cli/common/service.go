@@ -84,7 +84,7 @@ func RunService(c *cli.Context, version, dateBuilt string, streamsMode bool) int
 // DelayShutdown attempts to block until either:
 // - The delay period ends
 // - The provided context is cancelled
-// - The process receives an interrupt or sigterm
+// - The process receives an interrupt or sigterm.
 func DelayShutdown(ctx context.Context, duration time.Duration) error {
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)

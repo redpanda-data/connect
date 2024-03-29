@@ -606,7 +606,7 @@ func Delimited[P, D any](primary Func[P], delimiter Func[D]) Func[DelimitedResul
 }
 
 // TakeOnly wraps an array based combinator with one that only extracts a single
-// element of the resulting values. NOTE: If the index is
+// element of the resulting values. NOTE: If the index is.
 func TakeOnly[T any](index int, p Func[[]T]) Func[T] {
 	return func(input []rune) Result[T] {
 		res := p(input)

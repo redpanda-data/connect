@@ -19,7 +19,7 @@ import (
 )
 
 const (
-	// Kinesis Output Fields
+	// Kinesis Output Fields.
 	koFieldStream       = "stream"
 	koFieldHashKey      = "hash_key"
 	koFieldPartitionKey = "partition_key"

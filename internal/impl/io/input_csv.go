@@ -14,7 +14,7 @@ import (
 )
 
 var (
-	// CSV Input Fields
+	// CSV Input Fields.
 	csviFieldPaths          = "paths"
 	csviFieldParseHeaderRow = "parse_header_row"
 	csviFieldDelim          = "delimiter"

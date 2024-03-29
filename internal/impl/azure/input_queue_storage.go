@@ -13,7 +13,7 @@ import (
 )
 
 const (
-	// Queue Storage Input Fields
+	// Queue Storage Input Fields.
 	qsiFieldQueueName                = "queue_name"
 	qsiFieldDequeueVisibilityTimeout = "dequeue_visibility_timeout"
 	qsiFieldTrackProperties          = "track_properties"

@@ -49,7 +49,7 @@ var (
 	ErrFailedSend = errors.New("message failed to reach a target destination")
 )
 
-// ErrBackOff is an error returned that allows for a back off duration to be specified
+// ErrBackOff is an error returned that allows for a back off duration to be specified.
 type ErrBackOff struct {
 	Err  error
 	Wait time.Duration

@@ -16,7 +16,7 @@ import (
 )
 
 const (
-	// Stream Input Fields
+	// Stream Input Fields.
 	siFieldURLs            = "urls"
 	siFieldClusterID       = "cluster_id"
 	siFieldClientID        = "client_id"

@@ -41,7 +41,7 @@ func (j *javascriptProcessor) newVM() (*vmRunner, error) {
 	return vr, nil
 }
 
-// The namespace within all our function definitions
+// The namespace within all our function definitions.
 const fnCtxName = "benthos"
 
 func setFunction(vr *vmRunner, name string, function jsFunction) error {

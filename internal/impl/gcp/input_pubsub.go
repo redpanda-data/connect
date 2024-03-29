@@ -14,7 +14,7 @@ import (
 )
 
 const (
-	// Pubsub Input Fields
+	// Pubsub Input Fields.
 	pbiFieldProjectID              = "project"
 	pbiFieldSubscriptionID         = "subscription"
 	pbiFieldEndpoint               = "endpoint"

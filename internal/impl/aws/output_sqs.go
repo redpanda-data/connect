@@ -24,7 +24,7 @@ import (
 )
 
 const (
-	// SQS Output Fields
+	// SQS Output Fields.
 	sqsoFieldURL             = "url"
 	sqsoFieldMessageGroupID  = "message_group_id"
 	sqsoFieldMessageDedupeID = "message_deduplication_id"

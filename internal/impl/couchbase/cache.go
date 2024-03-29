@@ -36,7 +36,7 @@ func init() {
 
 //------------------------------------------------------------------------------
 
-// Cache stores or retrieves data from couchbase to be used as a cache
+// Cache stores or retrieves data from couchbase to be used as a cache.
 type Cache struct {
 	*couchbaseClient
 

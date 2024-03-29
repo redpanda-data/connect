@@ -16,7 +16,7 @@ import (
 // 1. The service shuts down gracefully due to the inputs closing
 // 2. A termination signal is received
 // 3. The provided context has a deadline that is reached, triggering graceful termination
-// 4. The provided context is cancelled (WARNING, this prevents graceful termination)
+// 4. The provided context is cancelled (WARNING, this prevents graceful termination).
 func RunCLIWithArgs(ctx context.Context, args ...string) {
 	_ = cli.App().RunContext(ctx, args)
 }

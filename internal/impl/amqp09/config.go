@@ -1,11 +1,11 @@
 package amqp09
 
 const (
-	// Shared
+	// Shared.
 	urlsField = "urls"
 	tlsField  = "tls"
 
-	// Input
+	// Input.
 	queueField                   = "queue"
 	queueDeclareField            = "queue_declare"
 	queueDeclareEnabledField     = "enabled"
@@ -20,7 +20,7 @@ const (
 	prefetchCountField           = "prefetch_count"
 	prefetchSizeField            = "prefetch_size"
 
-	// Output
+	// Output.
 	exchangeField               = "exchange"
 	exchangeDeclareField        = "exchange_declare"
 	exchangeDeclareEnabledField = "enabled"

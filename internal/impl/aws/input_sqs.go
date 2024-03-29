@@ -18,7 +18,7 @@ import (
 )
 
 const (
-	// SQS Input Fields
+	// SQS Input Fields.
 	sqsiFieldURL                 = "url"
 	sqsiFieldWaitTimeSeconds     = "wait_time_seconds"
 	sqsiFieldDeleteMessage       = "delete_message"

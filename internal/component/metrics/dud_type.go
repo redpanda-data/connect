@@ -17,13 +17,13 @@ func (d DudStat) Timing(delta int64) {}
 // Set does nothing.
 func (d DudStat) Set(value int64) {}
 
-// SetFloat64 does nothing
+// SetFloat64 does nothing.
 func (d DudStat) SetFloat64(value float64) {}
 
-// IncrFloat64 does nothing
+// IncrFloat64 does nothing.
 func (d DudStat) IncrFloat64(count float64) {}
 
-// DecrFloat64 does nothing
+// DecrFloat64 does nothing.
 func (d DudStat) DecrFloat64(count float64) {}
 
 //------------------------------------------------------------------------------

@@ -17,7 +17,7 @@ import (
 )
 
 const (
-	// Cloud Storage Output Fields
+	// Cloud Storage Output Fields.
 	csoFieldBucket          = "bucket"
 	csoFieldPath            = "path"
 	csoFieldContentType     = "content_type"

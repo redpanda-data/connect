@@ -6,7 +6,7 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/data/azcosmos"
 )
 
-// GetTypedPartitionKeyValue returns a typed partition key value
+// GetTypedPartitionKeyValue returns a typed partition key value.
 func GetTypedPartitionKeyValue(pkValue any) (azcosmos.PartitionKey, error) {
 	switch val := pkValue.(type) {
 	case string:

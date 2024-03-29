@@ -59,7 +59,7 @@ func newV4SigningClientWithHTTPClient(creds aws.Credentials, region string, http
 	}
 }
 
-// Transport is a RoundTripper that will sign requests with AWS V4 Signing
+// Transport is a RoundTripper that will sign requests with AWS V4 Signing.
 type Transport struct {
 	client *http.Client
 	creds  aws.Credentials
@@ -67,7 +67,7 @@ type Transport struct {
 	region string
 }
 
-// RoundTrip uses the underlying RoundTripper transport, but signs request first with AWS V4 Signing
+// RoundTrip uses the underlying RoundTripper transport, but signs request first with AWS V4 Signing.
 func (st Transport) RoundTrip(req *http.Request) (*http.Response, error) {
 	if h, ok := req.Header["Authorization"]; ok && len(h) > 0 && strings.HasPrefix(h[0], "AWS4") {
 		// Received a signed request, just pass it on.

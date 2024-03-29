@@ -17,7 +17,7 @@ import (
 // and here: https://github.com/Azure/azure-cosmos-dotnet-v3/issues/1057
 const maxTransactionalBatchSize = 100
 
-// ExecMessageBatch creates a CosmosDB TransactionalBatch from the provided message batch and executes it
+// ExecMessageBatch creates a CosmosDB TransactionalBatch from the provided message batch and executes it.
 func ExecMessageBatch(ctx context.Context, batch service.MessageBatch, client *azcosmos.ContainerClient,
 	config CRUDConfig, enableContentResponseOnWrite bool,
 ) (azcosmos.TransactionalBatchResponse, error) {

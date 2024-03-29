@@ -17,7 +17,7 @@ import (
 )
 
 const (
-	// Kinesis Firehose Output Fields
+	// Kinesis Firehose Output Fields.
 	kfoFieldStream   = "stream"
 	kfoFieldBatching = "batching"
 )
