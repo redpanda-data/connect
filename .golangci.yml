@@ -8,7 +8,15 @@ issues:
   include:
     - EXC0012
     - EXC0014
+<<<<<<< HEAD
 
+=======
+  exclude-rules:
+    - path: _test.go
+      linters:
+        - bodyclose
+        - perfsprint
+>>>>>>> 35589be1c (add linter perfsprint)
 linters-settings:
   errcheck:
     exclude-functions:
@@ -59,3 +67,4 @@ linters:
     # - gosec
     # - misspell
     # - prealloc
+    - perfsprint

@@ -415,7 +415,7 @@ func (a *amqp1Reader) startRenewJob(amqpMsg *amqp.Message) chan struct{} {
 
 func uuidFromLockTokenBytes(bytes []byte) (*amqp.UUID, error) {
 	if len(bytes) != 16 {
-		return nil, fmt.Errorf("invalid lock token, token was not 16 bytes long")
+		return nil, errors.New("invalid lock token, token was not 16 bytes long")
 	}
 
 	swapIndex := func(indexOne, indexTwo int, array *[16]byte) {

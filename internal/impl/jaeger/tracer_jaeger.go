@@ -1,6 +1,7 @@
 package jaeger
 
 import (
+	"errors"
 	"fmt"
 	"net"
 	"strings"
@@ -110,11 +111,11 @@ func NewJaeger(config jaegerConfig) (trace.TracerProvider, error) {
 		case "const":
 			sampler = tracesdk.TraceIDRatioBased(config.SamplerParam)
 		case "probabilistic":
-			return nil, fmt.Errorf("probabalistic sampling is no longer available")
+			return nil, errors.New("probabalistic sampling is no longer available")
 		case "ratelimiting":
-			return nil, fmt.Errorf("rate limited sampling is no longer available")
+			return nil, errors.New("rate limited sampling is no longer available")
 		case "remote":
-			return nil, fmt.Errorf("remote sampling is no longer available")
+			return nil, errors.New("remote sampling is no longer available")
 		default:
 			return nil, fmt.Errorf("unrecognised sampler type: %v", sType)
 		}
