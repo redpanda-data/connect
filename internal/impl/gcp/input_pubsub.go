@@ -152,7 +152,6 @@ func createSubscription(conf pbiConfig, client *pubsub.Client, log *service.Logg
 
 	log.Infof("Creating subscription '%v' on topic '%v'\n", conf.SubscriptionID, conf.CreateTopicID)
 	_, err = client.CreateSubscription(context.Background(), conf.SubscriptionID, pubsub.SubscriptionConfig{Topic: client.Topic(conf.CreateTopicID)})
-
 	if err != nil {
 		log.Errorf("Error creating subscription %v", err)
 	}

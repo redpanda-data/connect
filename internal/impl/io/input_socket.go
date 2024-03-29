@@ -32,7 +32,6 @@ func socketInputSpec() *service.ConfigSpec {
 			service.NewAutoRetryNacksToggleField(),
 		).
 		Fields(interop.OldReaderCodecFields("lines")...)
-
 }
 
 func init() {

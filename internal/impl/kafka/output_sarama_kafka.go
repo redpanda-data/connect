@@ -172,7 +172,6 @@ func init() {
 		o, err = span.NewBatchOutput("kafka", conf, o, mgr)
 		return
 	})
-
 	if err != nil {
 		panic(err)
 	}
