@@ -231,6 +231,8 @@ func (s *sessionTracker) init(ctx context.Context) error {
 		return err
 	}
 
+	defer res.Body.Close()
+
 	response := struct {
 		DeploymentID              string `json:"deployment_id"`
 		DeploymentName            string `json:"deployment_name"`
@@ -283,7 +285,7 @@ func (s *sessionTracker) Leave(ctx context.Context) error {
 		return err
 	}
 
-	_, err = s.doRateLimitedReq(ctx, func() (*http.Request, error) {
+	res, err := s.doRateLimitedReq(ctx, func() (*http.Request, error) {
 		req, err := http.NewRequest("POST", leaveURL.String(), bytes.NewReader(requestBytes))
 		if err != nil {
 			return nil, err
@@ -291,6 +293,12 @@ func (s *sessionTracker) Leave(ctx context.Context) error {
 		addAuthHeaders(s.token, s.secret, req)
 		return req, err
 	})
+	if err != nil {
+		return err
+	}
+
+	defer res.Body.Close()
+
 	return err
 }
 
@@ -330,6 +338,8 @@ func (s *sessionTracker) ReadFile(ctx context.Context, name string, headOnly boo
 		}
 		return nil, err
 	}
+
+	defer res.Body.Close()
 
 	modTimeMillis := 0
 	if modifiedStr := res.Header.Get("X-Bstdio-Updated-Millis"); modifiedStr != "" {
@@ -442,6 +452,8 @@ func (s *sessionTracker) Sync(
 	}); err != nil {
 		return
 	}
+
+	defer res.Body.Close()
 
 	var response pullSessionSyncResponse
 	responseDec := json.NewDecoder(res.Body)
