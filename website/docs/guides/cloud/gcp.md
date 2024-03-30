@@ -16,4 +16,9 @@ to manually create one. Once you have a service account set up which has the req
 as a JSON file. Then all you need to do set the path to this JSON file in the `GOOGLE_APPLICATION_CREDENTIALS`
 environment variable.
 
+Among the advanced settings there are two more options for setting credentials: a customized path to a Service Account
+Key JSON file, or through explicit declaration of the credential's fields. The order of precedence will always be: custom
+path, explicit credentials and default path (or one configured through `GOOGLE_APPLICATION_CREDENTIALS` environment
+variable).
+
 Please refer to [this document](https://cloud.google.com/docs/authentication/production) for details.
