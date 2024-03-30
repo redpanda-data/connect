@@ -397,7 +397,7 @@ func (m *Type) HandleStreamCRUD(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = w.Write(bodyBytes)
 		}
-	case "PUT":
+	case http.MethodPut:
 		if conf, lints, requestErr = readConfig(); requestErr != nil {
 			return
 		}
