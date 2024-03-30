@@ -13,6 +13,7 @@ import (
 	"net/http/httptest"
 	"net/textproto"
 	"net/url"
+	"strconv"
 	"sync"
 	"testing"
 	"time"
@@ -79,7 +80,7 @@ http_server:
 			)
 			if err != nil {
 				t.Error(err)
-			} else if res.StatusCode != 200 {
+			} else if res.StatusCode != http.StatusOK {
 				t.Errorf("Wrong error code returned: %v", res.StatusCode)
 			}
 			resBytes, err := io.ReadAll(res.Body)
@@ -128,7 +129,7 @@ http_server:
 				bytes.NewBufferString(testStr),
 			); err != nil {
 				t.Error(err)
-			} else if res.StatusCode != 200 {
+			} else if res.StatusCode != http.StatusOK {
 				t.Errorf("Wrong error code returned: %v", res.StatusCode)
 			}
 		}()
@@ -158,14 +159,14 @@ http_server:
 		// Send it as single part
 		go func(input, output string) {
 			req, err := http.NewRequest(
-				"POST", server.URL+"/testpost", bytes.NewBufferString(input))
+				http.MethodPost, server.URL+"/testpost", bytes.NewBufferString(input))
 			if err != nil {
 				t.Error(err)
 			}
 			res, err := client.Do(req)
 			if err != nil {
 				t.Error(err)
-			} else if res.StatusCode != 200 {
+			} else if res.StatusCode != http.StatusOK {
 				t.Errorf("Wrong error code returned: %v", res.StatusCode)
 			}
 			resBytes, err := io.ReadAll(res.Body)
@@ -351,7 +352,7 @@ http_server:
 
 	part := msg.Get(0)
 	assert.Equal(t, dummyPath, part.MetaGetStr("http_server_request_path"))
-	assert.Equal(t, "POST", part.MetaGetStr("http_server_verb"))
+	assert.Equal(t, http.MethodPost, part.MetaGetStr("http_server_verb"))
 	assert.Regexp(t, "^Go-http-client/", part.MetaGetStr("http_server_user_agent"))
 	assert.Equal(t, "127.0.0.1", part.MetaGetStr("http_server_remote_ip"))
 	// Make sure query params are set in the metadata
@@ -369,7 +370,7 @@ func TestHTTPServerPathParameters(t *testing.T) {
 	conf := parseYAMLInputConf(t, `
 http_server:
   path: /test/{foo}/{bar}
-  allowed_verbs: [ "POST", http.MethodPut ]
+  allowed_verbs: [ POST, PUT ]
 `)
 
 	server, err := mgr.NewInput(conf)
@@ -436,7 +437,7 @@ func TestHTTPServerPathIsPrefix(t *testing.T) {
 	conf := parseYAMLInputConf(t, `
 http_server:
   path: /test/{foo}/{bar}/
-  allowed_verbs: [ "POST", http.MethodPut ]
+  allowed_verbs: [ POST, PUT ]
 `)
 	server, err := mgr.NewInput(conf)
 	require.NoError(t, err)
@@ -522,7 +523,7 @@ http_server:
 	dummyData := []byte("a bunch of jolly leprechauns await")
 	go func() {
 		assert.Eventually(t, func() (succeeded bool) {
-			req, cerr := http.NewRequest("POST", serverURL.String(), bytes.NewReader(dummyData))
+			req, cerr := http.NewRequest(http.MethodPost, serverURL.String(), bytes.NewReader(dummyData))
 			require.NoError(t, cerr)
 			req.Header.Set("Content-Type", "text/plain")
 
@@ -552,7 +553,7 @@ http_server:
 	part := msg.Get(0)
 
 	assert.Equal(t, dummyPath, part.MetaGetStr("http_server_request_path"))
-	assert.Equal(t, "POST", part.MetaGetStr("http_server_verb"))
+	assert.Equal(t, http.MethodPost, part.MetaGetStr("http_server_verb"))
 	assert.Equal(t, "foo1", part.MetaGetStr("foo"))
 	assert.Equal(t, "bar1", part.MetaGetStr("bar"))
 	assert.Equal(t, "will go on", part.MetaGetStr("mylove"))
@@ -589,7 +590,7 @@ http_server:
 	dummyData := []byte("a bunch of jolly leprechauns await")
 	go func() {
 		require.Eventually(t, func() (succeeded bool) {
-			req, cerr := http.NewRequest("POST", serverURL.String(), bytes.NewReader(dummyData))
+			req, cerr := http.NewRequest(http.MethodPost, serverURL.String(), bytes.NewReader(dummyData))
 			require.NoError(t, cerr)
 			req.Header.Set("Content-Type", "text/plain")
 
@@ -619,7 +620,7 @@ http_server:
 	part := msg.Get(0)
 
 	assert.Equal(t, dummyPath, part.MetaGetStr("http_server_request_path"))
-	assert.Equal(t, "POST", part.MetaGetStr("http_server_verb"))
+	assert.Equal(t, http.MethodPost, part.MetaGetStr("http_server_verb"))
 	assert.Equal(t, "foo1", part.MetaGetStr("foo"))
 	assert.Equal(t, "bar1", part.MetaGetStr("bar"))
 	assert.Equal(t, "will go on", part.MetaGetStr("mylove"))
@@ -1002,7 +1003,7 @@ http_server:
 		res, err := http.DefaultClient.Do(req)
 		if err != nil {
 			t.Error(err)
-		} else if res.StatusCode != 200 {
+		} else if res.StatusCode != http.StatusOK {
 			t.Errorf("Wrong error code returned: %v", res.StatusCode)
 		}
 		resBytes, err := io.ReadAll(res.Body)
@@ -1150,7 +1151,7 @@ http_server:
 
 		res, err := http.Post(server.URL+"/testpost", hdr, bytes.NewReader(body))
 		require.NoError(t, err)
-		require.Equal(t, 200, res.StatusCode)
+		require.Equal(t, http.StatusOK, res.StatusCode)
 
 		act, err := readMultipart(res)
 		require.NoError(t, err)
@@ -1195,7 +1196,7 @@ func TestHTTPSyncResponseHeadersStatus(t *testing.T) {
 http_server:
   path: /testpost
   sync_response:
-    status: '${! meta("status").or("200") }'
+    status: '${! meta("status").or("http.StatusOK") }'
     headers:
       Content-Type: application/json
       foo: '${!json("field1")}'
@@ -1221,7 +1222,7 @@ http_server:
 		)
 		if err != nil {
 			t.Error(err)
-		} else if res.StatusCode != 200 {
+		} else if res.StatusCode != http.StatusOK {
 			t.Errorf("Wrong error code returned: %v", res.StatusCode)
 		}
 		resBytes, err := io.ReadAll(res.Body)
@@ -1243,7 +1244,7 @@ http_server:
 		)
 		if err != nil {
 			t.Error(err)
-		} else if res.StatusCode != 400 {
+		} else if res.StatusCode != http.StatusBadRequest {
 			t.Errorf("Wrong error code returned: %v", res.StatusCode)
 		}
 		resBytes, err = io.ReadAll(res.Body)
@@ -1278,7 +1279,7 @@ http_server:
 		if res := string(ts.Payload.Get(0).AsBytes()); res != input {
 			t.Errorf("Wrong result, %v != %v", ts.Payload, res)
 		}
-		ts.Payload.Get(0).MetaSetMut("status", "400")
+		ts.Payload.Get(0).MetaSetMut("status", strconv.Itoa(http.StatusBadRequest))
 		require.NoError(t, transaction.SetAsResponse(ts.Payload))
 	case <-time.After(time.Second):
 		t.Fatal("Timed out waiting for message")
@@ -1319,11 +1320,11 @@ http_server:
 
 	var resp *http.Response
 	require.Eventually(t, func() (succeeded bool) {
-		req, cerr := http.NewRequest("OPTIONS", fmt.Sprintf("http://localhost:%v/test/foo1/bar1", freePort), http.NoBody)
+		req, cerr := http.NewRequest(http.MethodOptions, fmt.Sprintf("http://localhost:%v/test/foo1/bar1", freePort), http.NoBody)
 		require.NoError(t, cerr)
 
 		req.Header.Add("Origin", "foo")
-		req.Header.Add("Access-Control-Request-Method", "POST")
+		req.Header.Add("Access-Control-Request-Method", http.MethodPost)
 		req.Header.Set("Content-Type", "text/plain")
 
 		if resp, cerr = http.DefaultClient.Do(req); cerr == nil {
@@ -1333,6 +1334,6 @@ http_server:
 		return
 	}, time.Second, 50*time.Millisecond)
 
-	assert.Equal(t, "200 OK", resp.Status)
+	assert.Equal(t, "http.StatusOK OK", resp.Status)
 	assert.Equal(t, "foo", resp.Header.Get("Access-Control-Allow-Origin"))
 }

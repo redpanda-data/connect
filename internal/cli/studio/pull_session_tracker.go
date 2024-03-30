@@ -219,7 +219,7 @@ func (s *sessionTracker) init(ctx context.Context) error {
 	}
 
 	res, err := s.doRateLimitedReq(ctx, func() (*http.Request, error) {
-		req, err := http.NewRequest("POST", initURL.String(), bytes.NewReader(requestBytes))
+		req, err := http.NewRequest(http.MethodPost, initURL.String(), bytes.NewReader(requestBytes))
 		if err != nil {
 			return nil, err
 		}
@@ -286,7 +286,7 @@ func (s *sessionTracker) Leave(ctx context.Context) error {
 	}
 
 	res, err := s.doRateLimitedReq(ctx, func() (*http.Request, error) {
-		req, err := http.NewRequest("POST", leaveURL.String(), bytes.NewReader(requestBytes))
+		req, err := http.NewRequest(http.MethodPost, leaveURL.String(), bytes.NewReader(requestBytes))
 		if err != nil {
 			return nil, err
 		}
@@ -441,7 +441,7 @@ func (s *sessionTracker) Sync(
 
 	var res *http.Response
 	if res, err = s.doRateLimitedReq(ctx, func() (*http.Request, error) {
-		req, err := http.NewRequest("POST", syncURL.String(), bytes.NewReader(requestBytes))
+		req, err := http.NewRequest(http.MethodPost, syncURL.String(), bytes.NewReader(requestBytes))
 		if err != nil {
 			return nil, err
 		}

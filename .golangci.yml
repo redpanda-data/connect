@@ -72,3 +72,4 @@ linters:
     - predeclared
     - perfsprint
     - thelper
+    - usestdlibvars

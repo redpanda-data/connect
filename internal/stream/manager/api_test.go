@@ -202,12 +202,12 @@ func TestTypeAPIBasicOperations(t *testing.T) {
 	r.ServeHTTP(response, request)
 	assert.Equal(t, http.StatusNotFound, response.Code)
 
-	request = genRequest("POST", "/streams/foo", conf)
+	request = genRequest(http.MethodPost, "/streams/foo", conf)
 	response = httptest.NewRecorder()
 	r.ServeHTTP(response, request)
 	assert.Equal(t, http.StatusOK, response.Code)
 
-	request = genRequest("POST", "/streams/foo", conf)
+	request = genRequest(http.MethodPost, "/streams/foo", conf)
 	response = httptest.NewRecorder()
 	r.ServeHTTP(response, request)
 	assert.Equal(t, http.StatusBadRequest, response.Code)
@@ -272,7 +272,7 @@ func TestTypeAPIBasicOperations(t *testing.T) {
 	}()
 	_ = os.Setenv(testVar, `root.meow = 5`)
 
-	request = genRequest("POST", "/streams/fooEnv?chilled=true", map[string]any{
+	request = genRequest(http.MethodPost, "/streams/fooEnv?chilled=true", map[string]any{
 		"input": map[string]any{
 			"generate": map[string]any{
 				"mapping": "${__TEST_INPUT_MAPPING}",
@@ -318,7 +318,7 @@ func TestTypeAPIPatch(t *testing.T) {
 		t.Errorf("Unexpected result: %v != %v", act, exp)
 	}
 
-	request = genRequest("POST", "/streams/foo?chilled=true", conf)
+	request = genRequest(http.MethodPost, "/streams/foo?chilled=true", conf)
 	response = httptest.NewRecorder()
 	r.ServeHTTP(response, request)
 	require.Equal(t, http.StatusOK, response.Code, response.Body.String())
@@ -370,12 +370,12 @@ func TestTypeAPIBasicOperationsYAML(t *testing.T) {
 	r.ServeHTTP(response, request)
 	assert.Equal(t, http.StatusNotFound, response.Code)
 
-	request = genYAMLRequest("POST", "/streams/foo?chilled=true", conf)
+	request = genYAMLRequest(http.MethodPost, "/streams/foo?chilled=true", conf)
 	response = httptest.NewRecorder()
 	r.ServeHTTP(response, request)
 	assert.Equal(t, http.StatusOK, response.Code)
 
-	request = genYAMLRequest("POST", "/streams/foo", conf)
+	request = genYAMLRequest(http.MethodPost, "/streams/foo", conf)
 	response = httptest.NewRecorder()
 	r.ServeHTTP(response, request)
 	assert.Equal(t, http.StatusBadRequest, response.Code)
@@ -507,7 +507,7 @@ output:
 	streamsBody["bar2"] = bar2Conf
 	streamsBody["baz"] = bazConf
 
-	request = genRequest("POST", "/streams", streamsBody)
+	request = genRequest(http.MethodPost, "/streams", streamsBody)
 	response = httptest.NewRecorder()
 	r.ServeHTTP(response, request)
 	assert.Equal(t, http.StatusOK, response.Code, response.Body.String())
@@ -586,7 +586,7 @@ func TestTypeAPIStreamsDefaultConf(t *testing.T) {
 	}
 }`)
 
-	request, err := http.NewRequest("POST", "/streams", bytes.NewReader(body))
+	request, err := http.NewRequest(http.MethodPost, "/streams", bytes.NewReader(body))
 	require.NoError(t, err)
 
 	response := httptest.NewRecorder()
@@ -634,7 +634,7 @@ func TestTypeAPIStreamsLinting(t *testing.T) {
 	}
 }`)
 
-	request, err := http.NewRequest("POST", "/streams", bytes.NewReader(body))
+	request, err := http.NewRequest(http.MethodPost, "/streams", bytes.NewReader(body))
 	require.NoError(t, err)
 
 	response := httptest.NewRecorder()
@@ -652,7 +652,7 @@ func TestTypeAPIStreamsLinting(t *testing.T) {
 	require.NoError(t, json.Unmarshal(response.Body.Bytes(), &actLints))
 	assert.ElementsMatch(t, expLints, actLints.LintErrors)
 
-	request, err = http.NewRequest("POST", "/streams?chilled=true", bytes.NewReader(body))
+	request, err = http.NewRequest(http.MethodPost, "/streams?chilled=true", bytes.NewReader(body))
 	require.NoError(t, err)
 
 	response = httptest.NewRecorder()
@@ -679,7 +679,7 @@ func TestTypeAPIDefaultConf(t *testing.T) {
 	}
 }`)
 
-	request, err := http.NewRequest("POST", "/streams/foo", bytes.NewReader(body))
+	request, err := http.NewRequest(http.MethodPost, "/streams/foo", bytes.NewReader(body))
 	require.NoError(t, err)
 
 	response := httptest.NewRecorder()
@@ -716,7 +716,7 @@ func TestTypeAPILinting(t *testing.T) {
 	]
 }`)
 
-	request, err := http.NewRequest("POST", "/streams/foo", bytes.NewReader(body))
+	request, err := http.NewRequest(http.MethodPost, "/streams/foo", bytes.NewReader(body))
 	require.NoError(t, err)
 
 	response := httptest.NewRecorder()
@@ -727,7 +727,7 @@ func TestTypeAPILinting(t *testing.T) {
 	expLints := `{"lint_errors":["(9,1) field inproc is invalid when the component type is drop (output)","(11,1) field cache_resources not recognised"]}`
 	assert.Equal(t, expLints, response.Body.String())
 
-	request, err = http.NewRequest("POST", "/streams/foo?chilled=true", bytes.NewReader(body))
+	request, err = http.NewRequest(http.MethodPost, "/streams/foo?chilled=true", bytes.NewReader(body))
 	require.NoError(t, err)
 
 	response = httptest.NewRecorder()
@@ -808,7 +808,7 @@ func TestResourceAPILinting(t *testing.T) {
 			url := fmt.Sprintf("/resources/%v/foo", test.ctype)
 			body := []byte(test.config)
 
-			request, err := http.NewRequest("POST", url, bytes.NewReader(body))
+			request, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(body))
 			require.NoError(t, err)
 
 			response := httptest.NewRecorder()
@@ -825,7 +825,7 @@ func TestResourceAPILinting(t *testing.T) {
 
 			assert.Equal(t, string(expLints), response.Body.String())
 
-			request, err = http.NewRequest("POST", url+"?chilled=true", bytes.NewReader(body))
+			request, err = http.NewRequest(http.MethodPost, url+"?chilled=true", bytes.NewReader(body))
 			require.NoError(t, err)
 
 			response = httptest.NewRecorder()
@@ -862,7 +862,7 @@ output:
 	r.ServeHTTP(response, request)
 	assert.Equal(t, http.StatusNotFound, response.Code)
 
-	request = genRequest("POST", "/streams/foo/stats", nil)
+	request = genRequest(http.MethodPost, "/streams/foo/stats", nil)
 	response = httptest.NewRecorder()
 	r.ServeHTTP(response, request)
 	assert.Equal(t, http.StatusBadRequest, response.Code)
@@ -897,7 +897,7 @@ func TestTypeAPISetResources(t *testing.T) {
 
 	r := router(mgr)
 
-	request := genYAMLRequest("POST", "/resources/cache/foocache?chilled=true", fmt.Sprintf(`
+	request := genYAMLRequest(http.MethodPost, "/resources/cache/foocache?chilled=true", fmt.Sprintf(`
 file:
   directory: %v
 `, dir1))
@@ -915,7 +915,7 @@ output:
 `)
 	require.NoError(t, err)
 
-	request = genYAMLRequest("POST", "/streams/foo?chilled=true", streamConf)
+	request = genYAMLRequest(http.MethodPost, "/streams/foo?chilled=true", streamConf)
 	hResponse = httptest.NewRecorder()
 	r.ServeHTTP(hResponse, request)
 	assert.Equal(t, http.StatusOK, hResponse.Code, hResponse.Body.String())
@@ -932,7 +932,7 @@ output:
 		t.Fatal("timed out")
 	}
 
-	request = genYAMLRequest("POST", "/resources/cache/foocache?chilled=true", fmt.Sprintf(`
+	request = genYAMLRequest(http.MethodPost, "/resources/cache/foocache?chilled=true", fmt.Sprintf(`
 file:
   directory: %v
 `, dir2))
@@ -976,7 +976,7 @@ func TestAPIReady(t *testing.T) {
 
 	r := router(mgr)
 
-	request := genRequest("POST", "/streams/foo", `
+	request := genRequest(http.MethodPost, "/streams/foo", `
 input:
   generate:
     count: 1
@@ -997,7 +997,7 @@ output:
 		return response.Code == http.StatusOK
 	}, time.Second*10, time.Millisecond*50)
 
-	request = genRequest("POST", "/streams/bar", `
+	request = genRequest(http.MethodPost, "/streams/bar", `
 input:
   generate:
     count: 1

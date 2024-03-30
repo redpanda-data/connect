@@ -298,11 +298,11 @@ func (d *Dynamic) HandleCRUD(w http.ResponseWriter, r *http.Request) {
 	}
 
 	switch r.Method {
-	case "POST":
+	case http.MethodPost:
 		httpErr = d.handlePOSTInput(w, r)
-	case "GET":
+	case http.MethodGet:
 		httpErr = d.handleGETInput(w, r)
-	case "DELETE":
+	case http.MethodDelete:
 		httpErr = d.handleDELInput(w, r)
 	default:
 		httpErr = fmt.Errorf("verb not supported: %v", r.Method)
