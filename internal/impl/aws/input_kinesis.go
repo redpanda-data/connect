@@ -813,7 +813,7 @@ func (k *kinesisReader) waitUntilStreamsExists(ctx context.Context) error {
 		go func(info *streamInfo) {
 			waiter := kinesis.NewStreamExistsWaiter(k.svc)
 			input := &kinesis.DescribeStreamInput{}
-			if strings.HasPrefix("arn:", info.id) {
+			if strings.HasPrefix(info.id, "arn:") {
 				input.StreamARN = &info.id
 			} else {
 				input.StreamName = &info.id
