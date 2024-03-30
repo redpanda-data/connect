@@ -285,7 +285,7 @@ func (a *sqsWriter) WriteBatch(ctx context.Context, batch service.MessageBatch) 
 		Entries:  entries,
 	}
 
-	// trim input input length to max sqs batch size
+	// trim input length to max sqs batch size
 	if len(entries) > sqsMaxRecordsCount {
 		input.Entries, entries = entries[:sqsMaxRecordsCount], entries[sqsMaxRecordsCount:]
 	} else {
