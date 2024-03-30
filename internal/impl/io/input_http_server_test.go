@@ -369,7 +369,7 @@ func TestHTTPServerPathParameters(t *testing.T) {
 	conf := parseYAMLInputConf(t, `
 http_server:
   path: /test/{foo}/{bar}
-  allowed_verbs: [ "POST", "PUT" ]
+  allowed_verbs: [ "POST", http.MethodPut ]
 `)
 
 	server, err := mgr.NewInput(conf)
@@ -393,7 +393,7 @@ http_server:
 
 	dummyData := []byte("a bunch of jolly leprechauns await")
 	go func() {
-		req, cerr := http.NewRequest("PUT", serverURL.String(), bytes.NewReader(dummyData))
+		req, cerr := http.NewRequest(http.MethodPut, serverURL.String(), bytes.NewReader(dummyData))
 		require.NoError(t, cerr)
 		req.Header.Set("Content-Type", "text/plain")
 		resp, cerr := http.DefaultClient.Do(req)
@@ -419,7 +419,7 @@ http_server:
 	part := msg.Get(0)
 
 	assert.Equal(t, dummyPath, part.MetaGetStr("http_server_request_path"))
-	assert.Equal(t, "PUT", part.MetaGetStr("http_server_verb"))
+	assert.Equal(t, http.MethodPut, part.MetaGetStr("http_server_verb"))
 	assert.Equal(t, "foo1", part.MetaGetStr("foo"))
 	assert.Equal(t, "bar1", part.MetaGetStr("bar"))
 	assert.Equal(t, "will go on", part.MetaGetStr("mylove"))
@@ -436,7 +436,7 @@ func TestHTTPServerPathIsPrefix(t *testing.T) {
 	conf := parseYAMLInputConf(t, `
 http_server:
   path: /test/{foo}/{bar}/
-  allowed_verbs: [ "POST", "PUT" ]
+  allowed_verbs: [ "POST", http.MethodPut ]
 `)
 	server, err := mgr.NewInput(conf)
 	require.NoError(t, err)
@@ -459,7 +459,7 @@ http_server:
 
 	dummyData := []byte("a bunch of jolly leprechauns await")
 	go func() {
-		req, cerr := http.NewRequest("PUT", serverURL.String(), bytes.NewReader(dummyData))
+		req, cerr := http.NewRequest(http.MethodPut, serverURL.String(), bytes.NewReader(dummyData))
 		require.NoError(t, cerr)
 		req.Header.Set("Content-Type", "text/plain")
 		resp, cerr := http.DefaultClient.Do(req)
@@ -485,7 +485,7 @@ http_server:
 	part := msg.Get(0)
 
 	assert.Equal(t, dummyPath, part.MetaGetStr("http_server_request_path"))
-	assert.Equal(t, "PUT", part.MetaGetStr("http_server_verb"))
+	assert.Equal(t, http.MethodPut, part.MetaGetStr("http_server_verb"))
 	assert.Equal(t, "foo1", part.MetaGetStr("foo"))
 	assert.Equal(t, "bar1", part.MetaGetStr("bar"))
 	assert.Equal(t, "will go on", part.MetaGetStr("mylove"))
