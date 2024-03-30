@@ -159,6 +159,10 @@ dsn: postgres://foouser:foopass@localhost:5432/foodb?sslmode=disable
 dsn: oracle://foouser:foopass@localhost:1521/service_name
 ```
 
+Alternatively for mssql the ADO string method can be used, like it is described in the [go-mssqldb](https://github.com/denisenkom/go-mssqldb#the-connection-string-can-be-specified-in-one-of-three-formats) documentation.
+
+In case the password contains special characters the password can be URL-encode and then inserted in the DSN.
+
 ### `table`
 
 The table to select from.
