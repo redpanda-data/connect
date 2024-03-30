@@ -201,6 +201,11 @@ func (c *crdbChangefeedInput) closeConnection() {
 	defer c.dbMut.Unlock()
 
 	if c.rows != nil {
+		err := c.rows.Err()
+		if err != nil {
+			c.logger.With("err", err).Warn("unexpected error from cockroachdb before closing")
+		}
+
 		c.rows.Close()
 		c.rows = nil
 	}
