@@ -36,7 +36,10 @@ linters-settings:
   #     main:
   #       deny:
   #         - pkg: "io/ioutil"
-
+  testifylint:
+    disable-all: true
+    enable:
+      - nil-compare
 linters:
   disable-all: true
   enable:
@@ -73,3 +76,4 @@ linters:
     - perfsprint
     - thelper
     - usestdlibvars
+    - testifylint
