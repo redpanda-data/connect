@@ -188,7 +188,7 @@ func TestBloblangFilterAll(t *testing.T) {
 
 	outMsgs, res := proc.ProcessBatch(context.Background(), msg)
 	assert.Empty(t, outMsgs)
-	assert.Equal(t, nil, res)
+	assert.Nil(t, res)
 }
 
 func TestBloblangJSONError(t *testing.T) {
