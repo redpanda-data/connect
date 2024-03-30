@@ -1196,7 +1196,7 @@ func TestHTTPSyncResponseHeadersStatus(t *testing.T) {
 http_server:
   path: /testpost
   sync_response:
-    status: '${! meta("status").or("http.StatusOK") }'
+    status: '${! meta("status").or(200) }'
     headers:
       Content-Type: application/json
       foo: '${!json("field1")}'
@@ -1334,6 +1334,6 @@ http_server:
 		return
 	}, time.Second, 50*time.Millisecond)
 
-	assert.Equal(t, "http.StatusOK OK", resp.Status)
+	assert.Equal(t, "200 OK", resp.Status)
 	assert.Equal(t, "foo", resp.Header.Get("Access-Control-Allow-Origin"))
 }
