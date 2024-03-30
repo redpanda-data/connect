@@ -29,7 +29,7 @@ func doSetupAndAssertions(setQueueDeclareAutoDelete bool, t *testing.T) {
 
 		url := fmt.Sprintf("http://localhost:%v/api/queues", resource.GetPort("15672/tcp"))
 
-		req, err := http.NewRequest("GET", url, http.NoBody)
+		req, err := http.NewRequest(http.MethodGet, url, http.NoBody)
 		require.NoError(t, err)
 
 		req.SetBasicAuth("guest", "guest")

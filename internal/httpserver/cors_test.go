@@ -22,9 +22,9 @@ func TestAPIEnableCORS(t *testing.T) {
 	handler, err := conf.WrapHandler(tmpHandler)
 	require.NoError(t, err)
 
-	request, _ := http.NewRequest("OPTIONS", "/version", http.NoBody)
+	request, _ := http.NewRequest(http.MethodOptions, "/version", http.NoBody)
 	request.Header.Add("Origin", "meow")
-	request.Header.Add("Access-Control-Request-Method", "POST")
+	request.Header.Add("Access-Control-Request-Method", http.MethodPost)
 
 	response := httptest.NewRecorder()
 	handler.ServeHTTP(response, request)
@@ -46,9 +46,9 @@ func TestAPIEnableCORSOrigins(t *testing.T) {
 	handler, err := conf.WrapHandler(tmpHandler)
 	require.NoError(t, err)
 
-	request, _ := http.NewRequest("OPTIONS", "/version", http.NoBody)
+	request, _ := http.NewRequest(http.MethodOptions, "/version", http.NoBody)
 	request.Header.Add("Origin", "foo")
-	request.Header.Add("Access-Control-Request-Method", "POST")
+	request.Header.Add("Access-Control-Request-Method", http.MethodPost)
 
 	response := httptest.NewRecorder()
 	handler.ServeHTTP(response, request)
@@ -56,9 +56,9 @@ func TestAPIEnableCORSOrigins(t *testing.T) {
 	assert.Equal(t, http.StatusOK, response.Code)
 	assert.Equal(t, "foo", response.Header().Get("Access-Control-Allow-Origin"))
 
-	request, _ = http.NewRequest("OPTIONS", "/version", http.NoBody)
+	request, _ = http.NewRequest(http.MethodOptions, "/version", http.NoBody)
 	request.Header.Add("Origin", "bar")
-	request.Header.Add("Access-Control-Request-Method", "POST")
+	request.Header.Add("Access-Control-Request-Method", http.MethodPost)
 
 	response = httptest.NewRecorder()
 	handler.ServeHTTP(response, request)
@@ -66,9 +66,9 @@ func TestAPIEnableCORSOrigins(t *testing.T) {
 	assert.Equal(t, http.StatusOK, response.Code)
 	assert.Equal(t, "bar", response.Header().Get("Access-Control-Allow-Origin"))
 
-	request, _ = http.NewRequest("OPTIONS", "/version", http.NoBody)
+	request, _ = http.NewRequest(http.MethodOptions, "/version", http.NoBody)
 	request.Header.Add("Origin", "baz")
-	request.Header.Add("Access-Control-Request-Method", "POST")
+	request.Header.Add("Access-Control-Request-Method", http.MethodPost)
 
 	response = httptest.NewRecorder()
 	handler.ServeHTTP(response, request)

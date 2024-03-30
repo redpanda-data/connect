@@ -25,9 +25,9 @@ func TestAPIEnableCORS(t *testing.T) {
 
 	handler := s.Handler()
 
-	request, _ := http.NewRequest("OPTIONS", "/version", http.NoBody)
+	request, _ := http.NewRequest(http.MethodOptions, "/version", http.NoBody)
 	request.Header.Add("Origin", "meow")
-	request.Header.Add("Access-Control-Request-Method", "POST")
+	request.Header.Add("Access-Control-Request-Method", http.MethodPost)
 
 	response := httptest.NewRecorder()
 	handler.ServeHTTP(response, request)
@@ -46,9 +46,9 @@ func TestAPIEnableCORSOrigins(t *testing.T) {
 
 	handler := s.Handler()
 
-	request, _ := http.NewRequest("OPTIONS", "/version", http.NoBody)
+	request, _ := http.NewRequest(http.MethodOptions, "/version", http.NoBody)
 	request.Header.Add("Origin", "foo")
-	request.Header.Add("Access-Control-Request-Method", "POST")
+	request.Header.Add("Access-Control-Request-Method", http.MethodPost)
 
 	response := httptest.NewRecorder()
 	handler.ServeHTTP(response, request)
@@ -56,9 +56,9 @@ func TestAPIEnableCORSOrigins(t *testing.T) {
 	assert.Equal(t, http.StatusOK, response.Code)
 	assert.Equal(t, "foo", response.Header().Get("Access-Control-Allow-Origin"))
 
-	request, _ = http.NewRequest("OPTIONS", "/version", http.NoBody)
+	request, _ = http.NewRequest(http.MethodOptions, "/version", http.NoBody)
 	request.Header.Add("Origin", "bar")
-	request.Header.Add("Access-Control-Request-Method", "POST")
+	request.Header.Add("Access-Control-Request-Method", http.MethodPost)
 
 	response = httptest.NewRecorder()
 	handler.ServeHTTP(response, request)
@@ -66,9 +66,9 @@ func TestAPIEnableCORSOrigins(t *testing.T) {
 	assert.Equal(t, http.StatusOK, response.Code)
 	assert.Equal(t, "bar", response.Header().Get("Access-Control-Allow-Origin"))
 
-	request, _ = http.NewRequest("OPTIONS", "/version", http.NoBody)
+	request, _ = http.NewRequest(http.MethodOptions, "/version", http.NoBody)
 	request.Header.Add("Origin", "baz")
-	request.Header.Add("Access-Control-Request-Method", "POST")
+	request.Header.Add("Access-Control-Request-Method", http.MethodPost)
 
 	response = httptest.NewRecorder()
 	handler.ServeHTTP(response, request)
@@ -171,7 +171,7 @@ func TestAPIBasicAuth(t *testing.T) {
 
 				handler := s.Handler()
 
-				request, _ := http.NewRequest("GET", "/version", http.NoBody)
+				request, _ := http.NewRequest(http.MethodGet, "/version", http.NoBody)
 				if tc.givenUser != "" || tc.givenPass != "" {
 					request.SetBasicAuth(tc.givenUser, tc.givenPass)
 				}

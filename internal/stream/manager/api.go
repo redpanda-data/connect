@@ -117,14 +117,14 @@ func (m *Type) HandleStreamsCRUD(w http.ResponseWriter, r *http.Request) {
 	m.lock.Unlock()
 
 	switch r.Method {
-	case "GET":
+	case http.MethodGet:
 		var resBytes []byte
 		if resBytes, serverErr = json.Marshal(infos); serverErr == nil {
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = w.Write(resBytes)
 		}
 		return
-	case "POST":
+	case http.MethodPost:
 	default:
 		requestErr = errors.New("method not supported")
 		return
@@ -359,7 +359,7 @@ func (m *Type) HandleStreamCRUD(w http.ResponseWriter, r *http.Request) {
 	var conf stream.Config
 	var lints []string
 	switch r.Method {
-	case "POST":
+	case http.MethodPost:
 		if conf, lints, requestErr = readConfig(); requestErr != nil {
 			return
 		}
@@ -373,7 +373,7 @@ func (m *Type) HandleStreamCRUD(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		serverErr = m.Create(id, conf)
-	case "GET":
+	case http.MethodGet:
 		var info *StreamStatus
 		if info, serverErr = m.Read(id); serverErr == nil {
 			conf := info.Config()
@@ -411,9 +411,9 @@ func (m *Type) HandleStreamCRUD(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		serverErr = m.Update(r.Context(), id, conf)
-	case "DELETE":
+	case http.MethodDelete:
 		serverErr = m.Delete(r.Context(), id)
-	case "PATCH":
+	case http.MethodPatch:
 		var info *StreamStatus
 		if info, serverErr = m.Read(id); serverErr == nil {
 			if conf, requestErr = patchConfig(info.Config()); requestErr != nil {
@@ -457,7 +457,7 @@ func (m *Type) HandleResourceCRUD(w http.ResponseWriter, r *http.Request) {
 		}
 	}()
 
-	if r.Method != "POST" {
+	if r.Method != http.MethodPost {
 		requestErr = fmt.Errorf("verb not supported: %v", r.Method)
 		return
 	}
@@ -591,7 +591,7 @@ func (m *Type) HandleStreamStats(w http.ResponseWriter, r *http.Request) {
 	}
 
 	switch r.Method {
-	case "GET":
+	case http.MethodGet:
 		var info *StreamStatus
 		if info, serverErr = m.Read(id); serverErr == nil {
 			values := map[string]any{}
