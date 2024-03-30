@@ -517,7 +517,7 @@ func (h *httpServerInput) extractMessageFromRequest(r *http.Request) (message.Ba
 		}
 	}
 
-	_ = tracing.InitSpansFromParentTextMap(h.mgr.Tracer(), "input_http_server_post", textMapGeneric, msg)
+	_ = tracing.InitSpansFromParentTextMap(h.mgr.Tracer(), "input_http_server", h.mgr.Label(), textMapGeneric, msg)
 	return msg, nil
 }
 
@@ -794,7 +794,7 @@ func (h *httpServerInput) wsHandler(w http.ResponseWriter, r *http.Request) {
 		for _, c := range r.Cookies() {
 			part.MetaSetMut(c.Name, c.Value)
 		}
-		tracing.InitSpans(h.mgr.Tracer(), "input_http_server_websocket", msg)
+		tracing.InitSpans(h.mgr.Tracer(), "input_http_server_websocket", h.mgr.Label(), msg)
 
 		store := transaction.NewResultStore()
 		transaction.AddResultStore(msg, store)

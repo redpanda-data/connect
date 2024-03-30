@@ -305,7 +305,7 @@ func (h *Client) checkStatus(code int) (succeeded bool, retStrat retryStrategy) 
 func (h *Client) SendToResponse(ctx context.Context, sendMsg service.MessageBatch) (res *http.Response, err error) {
 	var spans []*tracing.Span
 	if sendMsg != nil {
-		sendMsg, spans = tracing.WithChildSpans(h.mgr.OtelTracer(), "http_request", sendMsg)
+		sendMsg, spans = tracing.WithChildSpans(h.mgr.OtelTracer(), "http_request", h.mgr.Label(), sendMsg)
 		defer func() {
 			for _, s := range spans {
 				s.Finish()

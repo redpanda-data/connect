@@ -43,6 +43,7 @@ type AsyncWriter struct {
 	isConnected int32
 
 	typeStr     string
+	label       string
 	maxInflight int
 	writer      AsyncSink
 
@@ -64,6 +65,7 @@ func NewAsyncWriter(typeStr string, maxInflight int, w AsyncSink, mgr component.
 		log:          mgr.Logger(),
 		stats:        mgr.Metrics(),
 		tracer:       mgr.Tracer(),
+		label:        mgr.Label(),
 		transactions: nil,
 		shutSig:      shutdown.NewSignaller(),
 	}
@@ -93,7 +95,7 @@ func (w *AsyncWriter) loop() {
 		mFailedConn = w.stats.GetCounter("output_connection_failed")
 		mLostConn   = w.stats.GetCounter("output_connection_lost")
 
-		traceName = "output_" + w.typeStr
+		spanName = "output_" + w.typeStr
 	)
 
 	defer func() {
@@ -197,7 +199,7 @@ func (w *AsyncWriter) loop() {
 			}
 
 			w.log.Trace("Attempting to write %v messages to '%v'.\n", ts.Payload.Len(), w.typeStr)
-			_, spans := tracing.WithChildSpans(w.tracer, traceName, ts.Payload)
+			_, spans := tracing.WithChildSpans(w.tracer, spanName, w.label, ts.Payload)
 
 			latency, err := w.latencyMeasuringWrite(closeLeisureCtx, ts.Payload)
 

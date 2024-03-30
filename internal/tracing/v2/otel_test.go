@@ -26,7 +26,7 @@ func TestInitSpansFromParentTextMap(t *testing.T) {
 		otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}))
 		tp := noop.NewTracerProvider()
 
-		err := InitSpansFromParentTextMap(tp, "test", textMap, batch)
+		err := InitSpansFromParentTextMap(tp, "test", "", textMap, batch)
 		assert.Nil(t, err)
 
 		spanOne := trace.SpanFromContext(batch[0].Context())

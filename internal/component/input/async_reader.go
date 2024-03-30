@@ -85,7 +85,7 @@ func (r *AsyncReader) loop() {
 		mLostConn   = r.mgr.Metrics().GetCounter("input_connection_lost")
 		mLatency    = r.mgr.Metrics().GetTimer("input_latency_ns")
 
-		traceName = "input_" + r.typeStr
+		spanName = "input_" + r.typeStr
 	)
 
 	closeAtLeisureCtx, calDone := r.shutSig.CloseAtLeisureCtx(context.Background())
@@ -197,7 +197,7 @@ func (r *AsyncReader) loop() {
 		startedAt := time.Now()
 
 		resChan := make(chan error, 1)
-		tracing.InitSpans(r.mgr.Tracer(), traceName, msg)
+		tracing.InitSpans(r.mgr.Tracer(), spanName, r.mgr.Label(), msg)
 		select {
 		case r.transactions <- message.NewTransaction(msg, resChan):
 		case <-r.shutSig.CloseAtLeisureChan():

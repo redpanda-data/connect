@@ -53,7 +53,7 @@ func TestFunctionExamples(t *testing.T) {
 						"traceparent": "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01",
 					}
 					otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}))
-					require.NoError(t, tracing.InitSpansFromParentTextMap(noop.NewTracerProvider(), "test", textMap, msg))
+					require.NoError(t, tracing.InitSpansFromParentTextMap(noop.NewTracerProvider(), "test", "", textMap, msg))
 
 					p, err := m.MapPart(0, msg)
 					exp := io[1]

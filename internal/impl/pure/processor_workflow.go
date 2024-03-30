@@ -271,6 +271,7 @@ func init() {
 type Workflow struct {
 	log    log.Modular
 	tracer trace.TracerProvider
+	label  string
 
 	children  *workflowBranchMap
 	allStages map[string]struct{}
@@ -291,6 +292,7 @@ func NewWorkflow(conf *service.ParsedConfig, mgr bundle.NewManagement) (*Workflo
 	w := &Workflow{
 		log:    mgr.Logger(),
 		tracer: mgr.Tracer(),
+		label:  mgr.Label(),
 
 		metaPath:  nil,
 		allStages: map[string]struct{}{},
@@ -482,7 +484,7 @@ func (w *Workflow) ProcessBatch(ctx context.Context, msg message.Batch) ([]messa
 		return nil
 	})
 
-	propMsg, _ := tracing.WithChildSpans(w.tracer, "workflow", msg)
+	propMsg, _ := tracing.WithChildSpans(w.tracer, "workflow", w.label, msg)
 
 	records := make([]*resultTracker, msg.Len())
 	for i := range records {
@@ -496,7 +498,7 @@ func (w *Workflow) ProcessBatch(ctx context.Context, msg message.Batch) ([]messa
 		wg := sync.WaitGroup{}
 		wg.Add(len(layer))
 		for i, eid := range layer {
-			branchMsg, branchSpans := tracing.WithChildSpans(w.tracer, eid, propMsg.ShallowCopy())
+			branchMsg, branchSpans := tracing.WithChildSpans(w.tracer, "branch", eid, propMsg.ShallowCopy())
 			go func(id string, index int) {
 				branchParts := make([]*message.Part, branchMsg.Len())
 				_ = branchMsg.Iter(func(partIndex int, part *message.Part) error {
