@@ -2,6 +2,7 @@ package studio
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -61,7 +62,16 @@ page within the studio application.`[1:],
 				os.Exit(1)
 			}
 
-			res, err := http.Post(u.String(), "application/json", bytes.NewReader(schemaBytes))
+			req, err := http.NewRequestWithContext(context.Background(),
+				http.MethodPost, u.String(), bytes.NewReader(schemaBytes))
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Build request failed: %v\n", err)
+				os.Exit(1)
+			}
+
+			req.Header.Add("Content-Type", "application/json")
+
+			res, err := http.DefaultClient.Do(req)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Sync request failed: %v\n", err)
 				os.Exit(1)
