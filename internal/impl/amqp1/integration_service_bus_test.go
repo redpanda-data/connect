@@ -31,14 +31,16 @@ func TestIntegrationAzureServiceBus(t *testing.T) {
 	}
 
 	t.Run("TestAMQP1Connected", func(t *testing.T) {
-		testAMQP1Connected(url, sourceAddress, t)
+		testAMQP1Connected(t, url, sourceAddress)
 	})
 	t.Run("TestAMQP1Disconnected", func(t *testing.T) {
-		testAMQP1Disconnected(url, sourceAddress, t)
+		testAMQP1Disconnected(t, url, sourceAddress)
 	})
 }
 
-func testAMQP1Connected(url, sourceAddress string, t *testing.T) {
+func testAMQP1Connected(t *testing.T, url, sourceAddress string) {
+	t.Helper()
+
 	ctx := context.Background()
 
 	conf, err := amqp1InputSpec().ParseYAML(fmt.Sprintf(`
@@ -143,7 +145,9 @@ azure_renew_lock: true
 	assert.Error(t, err, "got unexpected message (redelivery?)")
 }
 
-func testAMQP1Disconnected(url, sourceAddress string, t *testing.T) {
+func testAMQP1Disconnected(t *testing.T, url, sourceAddress string) {
+	t.Helper()
+
 	ctx := context.Background()
 
 	conf, err := amqp1InputSpec().ParseYAML(fmt.Sprintf(`

@@ -161,6 +161,8 @@ func CacheTests(tests ...CacheTestDefinition) CacheTestList {
 
 // Run all the tests against a config template. Tests are run in parallel.
 func (i CacheTestList) Run(t *testing.T, configTemplate string, opts ...CacheTestOptFunc) {
+	t.Helper()
+
 	for _, test := range i {
 		env := newCacheTestEnvironment(t, configTemplate)
 		for _, opt := range opts {
@@ -180,6 +182,8 @@ func (i CacheTestList) Run(t *testing.T, configTemplate string, opts ...CacheTes
 func namedCacheTest(name string, test cacheTestDefinitionFn) CacheTestDefinition {
 	return CacheTestDefinition{
 		fn: func(t *testing.T, env *cacheTestEnvironment) {
+			t.Helper()
+
 			t.Run(name, func(t *testing.T) {
 				t.Parallel()
 				if env.preTest != nil {
@@ -220,5 +224,7 @@ func initCache(t *testing.T, env *cacheTestEnvironment) cache.V1 {
 }
 
 func closeCache(t *testing.T, cache cache.V1) {
+	t.Helper()
+
 	require.NoError(t, cache.Close(context.Background()))
 }

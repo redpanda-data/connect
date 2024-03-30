@@ -17,13 +17,13 @@ import (
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
-func msgEqual(t testing.TB, expected string, m *service.Message) {
-	t.Helper()
+func msgEqual(tb testing.TB, expected string, m *service.Message) {
+	tb.Helper()
 
 	mBytes, err := m.AsBytes()
-	require.NoError(t, err)
+	require.NoError(tb, err)
 
-	assert.Equal(t, expected, string(mBytes))
+	assert.Equal(tb, expected, string(mBytes))
 }
 
 func memBufFromConf(t *testing.T, conf string) *memoryBuffer {

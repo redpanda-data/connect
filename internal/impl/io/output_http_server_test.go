@@ -15,11 +15,12 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/message"
 )
 
-func parseYAMLOutputConf(t testing.TB, formatStr string, args ...any) (conf output.Config) {
-	t.Helper()
+func parseYAMLOutputConf(tb testing.TB, formatStr string, args ...any) (conf output.Config) {
+	tb.Helper()
+
 	var err error
 	conf, err = testutil.OutputFromYAML(fmt.Sprintf(formatStr, args...))
-	require.NoError(t, err)
+	require.NoError(tb, err)
 	return
 }
 

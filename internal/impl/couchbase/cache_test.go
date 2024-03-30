@@ -40,7 +40,10 @@ cache_resources:
 		integration.CacheTestOptVarOne(username),
 		integration.CacheTestOptVarTwo(password),
 		integration.CacheTestOptPreTest(func(tb testing.TB, ctx context.Context, testID string, vars *integration.CacheTestConfigVars) {
+			tb.Helper()
+
 			require.NoError(tb, createBucket(ctx, tb, servicePort, testID))
+
 			tb.Cleanup(func() {
 				require.NoError(tb, removeBucket(ctx, tb, servicePort, testID))
 			})
@@ -49,6 +52,8 @@ cache_resources:
 }
 
 func removeBucket(ctx context.Context, tb testing.TB, port, bucket string) error {
+	tb.Helper()
+
 	cluster, err := gocb.Connect(fmt.Sprintf("couchbase://localhost:%v", port), gocb.ClusterOptions{
 		Authenticator: gocb.PasswordAuthenticator{
 			Username: username,
@@ -64,7 +69,9 @@ func removeBucket(ctx context.Context, tb testing.TB, port, bucket string) error
 	})
 }
 
-func createBucket(ctx context.Context, tb testing.TB, port, bucket string) error {
+func createBucket(_ context.Context, tb testing.TB, port, bucket string) error {
+	tb.Helper()
+
 	cluster, err := gocb.Connect(fmt.Sprintf("couchbase://localhost:%v", port), gocb.ClusterOptions{
 		Authenticator: gocb.PasswordAuthenticator{
 			Username: username,

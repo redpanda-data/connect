@@ -27,6 +27,8 @@ headers:
   foo2: bar2
 `,
 			validator: func(t *testing.T, o *OldConfig) {
+				t.Helper()
+
 				sURL, _ := o.URL.Static()
 				assert.Equal(t, "example.com/foo1", sURL)
 				assert.Equal(t, "PUT", o.Verb)
@@ -49,6 +51,8 @@ rate_limit: nah
 `,
 			verbOverride: "GET",
 			validator: func(t *testing.T, o *OldConfig) {
+				t.Helper()
+
 				sURL, _ := o.URL.Static()
 				assert.Equal(t, "example.com/foo2", sURL)
 				assert.Equal(t, "GET", o.Verb)
@@ -64,6 +68,8 @@ backoff_on: [ 4, 5, 6 ]
 drop_on: [ 7, 8, 9 ]
 `,
 			validator: func(t *testing.T, o *OldConfig) {
+				t.Helper()
+
 				sURL, _ := o.URL.Static()
 				assert.Equal(t, "example.com/foo3", sURL)
 				assert.Equal(t, []int{1, 2, 3}, o.SuccessfulOn)
@@ -93,6 +99,8 @@ oauth2:
   client_key: moo
 `,
 			validator: func(t *testing.T, o *OldConfig) {
+				t.Helper()
+
 				sURL, _ := o.URL.Static()
 				assert.Equal(t, "example.com/foo4", sURL)
 				assert.True(t, o.TLSEnabled)

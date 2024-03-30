@@ -20,6 +20,8 @@ import (
 )
 
 func initTestFiles(t *testing.T, files map[string]string) (string, error) {
+	t.Helper()
+
 	testDir := t.TempDir()
 
 	for k, v := range files {

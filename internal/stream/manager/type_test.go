@@ -14,8 +14,8 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/stream"
 )
 
-func harmlessConf(t testing.TB) stream.Config {
-	t.Helper()
+func harmlessConf(tb testing.TB) stream.Config {
+	tb.Helper()
 
 	c, err := testutil.StreamFromYAML(`
 input:
@@ -24,7 +24,7 @@ input:
 output:
   drop: {}
 `)
-	require.NoError(t, err)
+	require.NoError(tb, err)
 
 	return c
 }

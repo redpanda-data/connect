@@ -15,7 +15,9 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/integration"
 )
 
-func doSetupAndAssertions(setQueueDeclareAutoDelete bool, t *testing.T) {
+func doSetupAndAssertions(t *testing.T, setQueueDeclareAutoDelete bool) {
+	t.Helper()
+
 	assertQueueStateFromRabbitMQManagementAPI := func(resource *dockertest.Resource) {
 		require.NotNil(t, resource)
 
@@ -155,9 +157,9 @@ input:
 }
 
 func TestIntegrationAMQP09WithoutQueueDeclareAutoDelete(t *testing.T) {
-	doSetupAndAssertions(false, t)
+	doSetupAndAssertions(t, false)
 }
 
 func TestIntegrationAMQP09WithQueueDeclareAutoDelete(t *testing.T) {
-	doSetupAndAssertions(true, t)
+	doSetupAndAssertions(t, true)
 }

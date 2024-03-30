@@ -11,14 +11,16 @@ import (
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
-func batchEquals(t testing.TB, exp []string, act service.MessageBatch) {
+func batchEquals(tb testing.TB, exp []string, act service.MessageBatch) {
+	tb.Helper()
+
 	actStrs := make([]string, len(exp))
 	for i, msg := range act {
 		actBytes, err := msg.AsBytes()
-		require.NoError(t, err)
+		require.NoError(tb, err)
 		actStrs[i] = string(actBytes)
 	}
-	assert.Equal(t, exp, actStrs)
+	assert.Equal(tb, exp, actStrs)
 }
 
 func TestBatchedInputBasic(t *testing.T) {

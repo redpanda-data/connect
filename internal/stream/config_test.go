@@ -38,13 +38,15 @@ output:
   label: c
   reject: "c rejected"
 `,
-			validateFn: func(t testing.TB, v stream.Config) {
-				assert.Equal(t, v.Input.Label, "a")
-				assert.Equal(t, v.Input.Type, "generate")
-				assert.Equal(t, v.Buffer.Type, "memory")
-				assert.Equal(t, v.Pipeline.Threads, 123)
-				assert.Equal(t, v.Output.Label, "c")
-				assert.Equal(t, v.Output.Type, "reject")
+			validateFn: func(tb testing.TB, v stream.Config) {
+				tb.Helper()
+
+				assert.Equal(tb, v.Input.Label, "a")
+				assert.Equal(tb, v.Input.Type, "generate")
+				assert.Equal(tb, v.Buffer.Type, "memory")
+				assert.Equal(tb, v.Pipeline.Threads, 123)
+				assert.Equal(tb, v.Output.Label, "c")
+				assert.Equal(tb, v.Output.Type, "reject")
 			},
 		},
 	}

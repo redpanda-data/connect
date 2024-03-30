@@ -261,21 +261,23 @@ message bar {
 	}
 }
 
-func runEncoderAgainstInputsMultiple(t testing.TB, urlStr, subject string, inputs [][]byte) {
+func runEncoderAgainstInputsMultiple(tb testing.TB, urlStr, subject string, inputs [][]byte) {
+	tb.Helper()
+
 	tCtx, done := context.WithTimeout(context.Background(), time.Second*10)
 	defer done()
 
 	subj, err := service.NewInterpolatedString(subject)
-	require.NoError(t, err)
+	require.NoError(tb, err)
 
 	encoder, err := newSchemaRegistryEncoder(urlStr, noopReqSign, nil, subj, true, time.Minute*10, time.Minute, service.MockResources())
-	require.NoError(t, err)
-	t.Cleanup(func() {
+	require.NoError(tb, err)
+	tb.Cleanup(func() {
 		_ = encoder.Close(tCtx)
 	})
 
 	n := 10
-	if b, ok := t.(*testing.B); ok {
+	if b, ok := tb.(*testing.B); ok {
 		b.ReportAllocs()
 		b.ResetTimer()
 		n = b.N
@@ -284,10 +286,10 @@ func runEncoderAgainstInputsMultiple(t testing.TB, urlStr, subject string, input
 	for i := 0; i < n; i++ {
 		inMsg := service.NewMessage(inputs[i%len(inputs)])
 		encodedMsgs, err := encoder.ProcessBatch(tCtx, service.MessageBatch{inMsg})
-		require.NoError(t, err)
-		require.Len(t, encodedMsgs, 1)
-		require.Len(t, encodedMsgs[0], 1)
-		require.NoError(t, encodedMsgs[0][0].GetError())
+		require.NoError(tb, err)
+		require.Len(tb, encodedMsgs, 1)
+		require.Len(tb, encodedMsgs[0], 1)
+		require.NoError(tb, encodedMsgs[0][0].GetError())
 	}
 }
 

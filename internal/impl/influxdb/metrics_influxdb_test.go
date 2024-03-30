@@ -7,14 +7,14 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func fromYAML(t testing.TB, conf string, args ...any) *influxDBMetrics {
-	t.Helper()
+func fromYAML(tb testing.TB, conf string, args ...any) *influxDBMetrics {
+	tb.Helper()
 
 	pConf, err := ConfigSpec().ParseYAML(fmt.Sprintf(conf, args...), nil)
-	require.NoError(t, err)
+	require.NoError(tb, err)
 
 	i, err := fromParsed(pConf, nil)
-	require.NoError(t, err)
+	require.NoError(tb, err)
 	return i
 }
 

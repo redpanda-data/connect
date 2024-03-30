@@ -38,15 +38,15 @@ retry:
 	}
 }
 
-func assertEqualMsg(t testing.TB, left, right message.Batch) {
-	t.Helper()
+func assertEqualMsg(tb testing.TB, left, right message.Batch) {
+	tb.Helper()
 
-	require.Equal(t, left.Len(), right.Len())
+	require.Equal(tb, left.Len(), right.Len())
 	for i := 0; i < left.Len(); i++ {
 		pLeft, pRight := left.Get(i), right.Get(i)
 
 		leftBytes, rightBytes := pLeft.AsBytes(), pRight.AsBytes()
-		assert.Equal(t, string(leftBytes), string(rightBytes))
+		assert.Equal(tb, string(leftBytes), string(rightBytes))
 	}
 }
 
@@ -194,9 +194,9 @@ retry:
 }
 
 func expectFromRetry(
+	t *testing.T,
 	resReturn error,
 	tChan <-chan message.Transaction,
-	t *testing.T,
 	responsesSlice ...string,
 ) {
 	t.Helper()
@@ -232,10 +232,10 @@ func expectFromRetry(
 }
 
 func sendForRetry(
+	t *testing.T,
 	value string,
 	tChan chan message.Transaction,
 	resChan chan error,
-	t *testing.T,
 ) {
 	t.Helper()
 
@@ -249,9 +249,9 @@ func sendForRetry(
 }
 
 func ackForRetry(
+	t *testing.T,
 	exp error,
 	resChan <-chan error,
-	t *testing.T,
 ) {
 	t.Helper()
 
@@ -297,30 +297,30 @@ retry:
 	}
 
 	resChan1, resChan2 := make(chan error), make(chan error)
-	sendForRetry("first", tChan, resChan1, t)
-	expectFromRetry(component.ErrFailedSend, mOut.TChan, t, "first")
+	sendForRetry(t, "first", tChan, resChan1)
+	expectFromRetry(t, component.ErrFailedSend, mOut.TChan, "first")
 
-	sendForRetry("second", tChan, resChan2, t)
-	expectFromRetry(component.ErrFailedSend, mOut.TChan, t, "first", "second")
+	sendForRetry(t, "second", tChan, resChan2)
+	expectFromRetry(t, component.ErrFailedSend, mOut.TChan, "first", "second")
 
 	select {
 	case tChan <- message.NewTransaction(nil, nil):
 		t.Fatal("Accepted transaction during retry loop")
 	default:
 	}
-	expectFromRetry(nil, mOut.TChan, t, "first", "second")
-	ackForRetry(nil, resChan1, t)
-	ackForRetry(nil, resChan2, t)
+	expectFromRetry(t, nil, mOut.TChan, "first", "second")
+	ackForRetry(t, nil, resChan1)
+	ackForRetry(t, nil, resChan2)
 
-	sendForRetry("third", tChan, resChan1, t)
-	expectFromRetry(nil, mOut.TChan, t, "third")
-	ackForRetry(nil, resChan1, t)
+	sendForRetry(t, "third", tChan, resChan1)
+	expectFromRetry(t, nil, mOut.TChan, "third")
+	ackForRetry(t, nil, resChan1)
 
-	sendForRetry("fourth", tChan, resChan2, t)
-	expectFromRetry(component.ErrFailedSend, mOut.TChan, t, "fourth")
+	sendForRetry(t, "fourth", tChan, resChan2)
+	expectFromRetry(t, component.ErrFailedSend, mOut.TChan, "fourth")
 
-	expectFromRetry(nil, mOut.TChan, t, "fourth")
-	ackForRetry(nil, resChan2, t)
+	expectFromRetry(t, nil, mOut.TChan, "fourth")
+	ackForRetry(t, nil, resChan2)
 
 	output.TriggerCloseNow()
 	require.NoError(t, output.WaitForClose(ctx))

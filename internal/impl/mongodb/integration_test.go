@@ -108,10 +108,11 @@ output:
 		suite.Run(
 			t, template,
 			integration.StreamTestOptPort(resource.GetPort("27017/tcp")),
-			integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, testID string, vars *integration.StreamTestConfigVars) {
+			integration.StreamTestOptPreTest(func(tb testing.TB, ctx context.Context, testID string, vars *integration.StreamTestConfigVars) {
+				tb.Helper()
 				cName := generateCollectionName(testID)
 				vars.Var1 = cName
-				require.NoError(t, mongoClient.Database("TestDB").CreateCollection(ctx, cName))
+				require.NoError(tb, mongoClient.Database("TestDB").CreateCollection(ctx, cName))
 			}),
 		)
 	})
@@ -139,10 +140,11 @@ cache_resources:
 		cacheSuite.Run(
 			t, cacheTemplate,
 			integration.CacheTestOptPort(resource.GetPort("27017/tcp")),
-			integration.CacheTestOptPreTest(func(t testing.TB, ctx context.Context, testID string, vars *integration.CacheTestConfigVars) {
+			integration.CacheTestOptPreTest(func(tb testing.TB, ctx context.Context, testID string, vars *integration.CacheTestConfigVars) {
+				tb.Helper()
 				cName := generateCollectionName(testID)
 				vars.Var1 = cName
-				require.NoError(t, mongoClient.Database("TestDB").CreateCollection(ctx, cName))
+				require.NoError(tb, mongoClient.Database("TestDB").CreateCollection(ctx, cName))
 			}),
 		)
 	})

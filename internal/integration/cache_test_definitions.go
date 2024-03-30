@@ -18,6 +18,8 @@ func CacheTestOpenClose() CacheTestDefinition {
 	return namedCacheTest(
 		"can open and close",
 		func(t *testing.T, env *cacheTestEnvironment) {
+			t.Helper()
+
 			cache := initCache(t, env)
 			t.Cleanup(func() {
 				closeCache(t, cache)
@@ -37,6 +39,8 @@ func CacheTestMissingKey() CacheTestDefinition {
 	return namedCacheTest(
 		"return consistent error on missing key",
 		func(t *testing.T, env *cacheTestEnvironment) {
+			t.Helper()
+
 			cache := initCache(t, env)
 			t.Cleanup(func() {
 				closeCache(t, cache)
@@ -53,6 +57,8 @@ func CacheTestDoubleAdd() CacheTestDefinition {
 	return namedCacheTest(
 		"add with duplicate key fails",
 		func(t *testing.T, env *cacheTestEnvironment) {
+			t.Helper()
+
 			cache := initCache(t, env)
 			t.Cleanup(func() {
 				closeCache(t, cache)
@@ -76,6 +82,8 @@ func CacheTestDelete() CacheTestDefinition {
 	return namedCacheTest(
 		"can set and delete keys",
 		func(t *testing.T, env *cacheTestEnvironment) {
+			t.Helper()
+
 			cache := initCache(t, env)
 			t.Cleanup(func() {
 				closeCache(t, cache)
@@ -100,6 +108,8 @@ func CacheTestGetAndSet(n int) CacheTestDefinition {
 	return namedCacheTest(
 		"can get and set",
 		func(t *testing.T, env *cacheTestEnvironment) {
+			t.Helper()
+
 			cache := initCache(t, env)
 			t.Cleanup(func() {
 				closeCache(t, cache)

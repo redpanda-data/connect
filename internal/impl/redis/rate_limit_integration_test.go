@@ -66,6 +66,8 @@ func TestIntegrationRedisRateLimit(t *testing.T) {
 }
 
 func testRedisRateLimitBasic(t *testing.T, url string) {
+	t.Helper()
+
 	conf, err := redisRatelimitConfig().ParseYAML(`
 key: rate_limit_basic
 count: 10
@@ -94,6 +96,8 @@ url: `+url, nil)
 }
 
 func testRedisRateLimitRefresh(t *testing.T, url string) {
+	t.Helper()
+
 	conf, err := redisRatelimitConfig().ParseYAML(`
 key: rate_limit_refresh
 count: 10

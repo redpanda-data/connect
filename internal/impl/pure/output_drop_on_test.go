@@ -23,10 +23,11 @@ import (
 	_ "github.com/benthosdev/benthos/v4/public/components/pure"
 )
 
-func parseYAMLOutputConf(t testing.TB, formatStr string, args ...any) output.Config {
-	t.Helper()
+func parseYAMLOutputConf(tb testing.TB, formatStr string, args ...any) output.Config {
+	tb.Helper()
+
 	conf, err := testutil.OutputFromYAML(fmt.Sprintf(formatStr, args...))
-	require.NoError(t, err)
+	require.NoError(tb, err)
 	return conf
 }
 

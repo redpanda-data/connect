@@ -12,12 +12,14 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 )
 
-func testGenReader(t testing.TB, confStr string, args ...any) *generateReader {
+func testGenReader(tb testing.TB, confStr string, args ...any) *generateReader {
+	tb.Helper()
+
 	pConf, err := genInputSpec().ParseYAML(fmt.Sprintf(confStr, args...), nil)
-	require.NoError(t, err)
+	require.NoError(tb, err)
 
 	r, err := newGenerateReaderFromParsed(pConf, mock.NewManager())
-	require.NoError(t, err)
+	require.NoError(tb, err)
 
 	return r
 }

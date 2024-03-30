@@ -420,6 +420,8 @@ type checkpointTester struct {
 }
 
 func newCheckpointTester(t *testing.T, capacity int64, timeout time.Duration) (*checkpointTester, func()) { //nolint: gocritic // Ignore unnamedResult false positive
+	t.Helper()
+
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 
 	return &checkpointTester{

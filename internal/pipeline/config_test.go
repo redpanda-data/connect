@@ -28,13 +28,15 @@ processors:
   - label: b
     mapping: 'root = "b"'
 `,
-			validateFn: func(t testing.TB, v pipeline.Config) {
-				assert.Equal(t, v.Threads, 123)
-				require.Len(t, v.Processors, 2)
-				assert.Equal(t, v.Processors[0].Label, "a")
-				assert.Equal(t, v.Processors[0].Type, "mapping")
-				assert.Equal(t, v.Processors[1].Label, "b")
-				assert.Equal(t, v.Processors[1].Type, "mapping")
+			validateFn: func(tb testing.TB, v pipeline.Config) {
+				tb.Helper()
+
+				assert.Equal(tb, v.Threads, 123)
+				require.Len(tb, v.Processors, 2)
+				assert.Equal(tb, v.Processors[0].Label, "a")
+				assert.Equal(tb, v.Processors[0].Type, "mapping")
+				assert.Equal(tb, v.Processors[1].Label, "b")
+				assert.Equal(tb, v.Processors[1].Type, "mapping")
 			},
 		},
 	}

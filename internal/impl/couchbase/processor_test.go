@@ -117,32 +117,32 @@ func TestIntegrationCouchbaseProcessor(t *testing.T) {
 	payload := fmt.Sprintf(`{"id": %q, "data": %q}`, uid, faker.Sentence())
 
 	t.Run("Insert", func(t *testing.T) {
-		testCouchbaseProcessorInsert(uid, payload, bucket, servicePort, t)
+		testCouchbaseProcessorInsert(t, uid, payload, bucket, servicePort)
 	})
 	t.Run("Get", func(t *testing.T) {
-		testCouchbaseProcessorGet(uid, payload, bucket, servicePort, t)
+		testCouchbaseProcessorGet(t, uid, payload, bucket, servicePort)
 	})
 	t.Run("Remove", func(t *testing.T) {
-		testCouchbaseProcessorRemove(uid, bucket, servicePort, t)
+		testCouchbaseProcessorRemove(t, uid, bucket, servicePort)
 	})
 	t.Run("GetMissing", func(t *testing.T) {
-		testCouchbaseProcessorGetMissing(uid, bucket, servicePort, t)
+		testCouchbaseProcessorGetMissing(t, uid, bucket, servicePort)
 	})
 
 	payload = fmt.Sprintf(`{"id": %q, "data": %q}`, uid, faker.Sentence())
 	t.Run("Upsert", func(t *testing.T) {
-		testCouchbaseProcessorUpsert(uid, payload, bucket, servicePort, t)
+		testCouchbaseProcessorUpsert(t, uid, payload, bucket, servicePort)
 	})
 	t.Run("Get", func(t *testing.T) {
-		testCouchbaseProcessorGet(uid, payload, bucket, servicePort, t)
+		testCouchbaseProcessorGet(t, uid, payload, bucket, servicePort)
 	})
 
 	payload = fmt.Sprintf(`{"id": %q, "data": %q}`, uid, faker.Sentence())
 	t.Run("Replace", func(t *testing.T) {
-		testCouchbaseProcessorReplace(uid, payload, bucket, servicePort, t)
+		testCouchbaseProcessorReplace(t, uid, payload, bucket, servicePort)
 	})
 	t.Run("Get", func(t *testing.T) {
-		testCouchbaseProcessorGet(uid, payload, bucket, servicePort, t)
+		testCouchbaseProcessorGet(t, uid, payload, bucket, servicePort)
 	})
 }
 
@@ -161,7 +161,9 @@ func getProc(tb testing.TB, config string) *couchbase.Processor {
 	return proc
 }
 
-func testCouchbaseProcessorInsert(uid, payload, bucket, port string, t *testing.T) {
+func testCouchbaseProcessorInsert(t *testing.T, _, payload, bucket, port string) {
+	t.Helper()
+
 	config := fmt.Sprintf(`
 url: 'couchbase://localhost:%s'
 bucket: %s
@@ -187,7 +189,9 @@ operation: 'insert'
 	assert.JSONEq(t, payload, string(dataOut))
 }
 
-func testCouchbaseProcessorUpsert(uid, payload, bucket, port string, t *testing.T) {
+func testCouchbaseProcessorUpsert(t *testing.T, _, payload, bucket, port string) {
+	t.Helper()
+
 	config := fmt.Sprintf(`
 url: 'couchbase://localhost:%s'
 bucket: %s
@@ -213,7 +217,9 @@ operation: 'upsert'
 	assert.JSONEq(t, payload, string(dataOut))
 }
 
-func testCouchbaseProcessorReplace(uid, payload, bucket, port string, t *testing.T) {
+func testCouchbaseProcessorReplace(t *testing.T, _, payload, bucket, port string) {
+	t.Helper()
+
 	config := fmt.Sprintf(`
 url: 'couchbase://localhost:%s'
 bucket: %s
@@ -239,7 +245,9 @@ operation: 'replace'
 	assert.JSONEq(t, payload, string(dataOut))
 }
 
-func testCouchbaseProcessorGet(uid, payload, bucket, port string, t *testing.T) {
+func testCouchbaseProcessorGet(t *testing.T, uid, payload, bucket, port string) {
+	t.Helper()
+
 	config := fmt.Sprintf(`
 url: 'couchbase://localhost:%s'
 bucket: %s
@@ -264,7 +272,9 @@ operation: 'get'
 	assert.JSONEq(t, payload, string(dataOut))
 }
 
-func testCouchbaseProcessorRemove(uid, bucket, port string, t *testing.T) {
+func testCouchbaseProcessorRemove(t *testing.T, uid, bucket, port string) {
+	t.Helper()
+
 	config := fmt.Sprintf(`
 url: 'couchbase://localhost:%s'
 bucket: %s
@@ -289,7 +299,9 @@ operation: 'remove'
 	assert.Equal(t, uid, string(dataOut))
 }
 
-func testCouchbaseProcessorGetMissing(uid, bucket, port string, t *testing.T) {
+func testCouchbaseProcessorGetMissing(t *testing.T, uid, bucket, port string) {
+	t.Helper()
+
 	config := fmt.Sprintf(`
 url: 'couchbase://localhost:%s'
 bucket: %s

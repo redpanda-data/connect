@@ -12,6 +12,8 @@ import (
 )
 
 func sqsIntegrationSuite(t *testing.T, lsPort string) {
+	t.Helper()
+
 	template := `
 output:
   aws_sqs:
@@ -45,8 +47,10 @@ input:
 		integration.StreamTestStreamParallelLossyThroughReconnect(50),
 	).Run(
 		t, template,
-		integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, testID string, vars *integration.StreamTestConfigVars) {
-			require.NoError(t, createBucketQueue(ctx, "", lsPort, testID))
+		integration.StreamTestOptPreTest(func(tb testing.TB, ctx context.Context, testID string, vars *integration.StreamTestConfigVars) {
+			tb.Helper()
+
+			require.NoError(tb, createBucketQueue(ctx, "", lsPort, testID))
 		}),
 		integration.StreamTestOptPort(lsPort),
 	)

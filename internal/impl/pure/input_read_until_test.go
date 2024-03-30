@@ -56,18 +56,20 @@ read_until:
       paths: [ "%v" ]
 `, tmpfile.Name())
 
-	t.Run("ReadUntilBasic", func(te *testing.T) {
-		testReadUntilBasic(inConfStr, te)
+	t.Run("ReadUntilBasic", func(t *testing.T) {
+		testReadUntilBasic(t, inConfStr)
 	})
-	t.Run("ReadUntilRestart", func(te *testing.T) {
-		testReadUntilRestart(inConfStr, te)
+	t.Run("ReadUntilRestart", func(t *testing.T) {
+		testReadUntilRestart(t, inConfStr)
 	})
-	t.Run("ReadUntilRetry", func(te *testing.T) {
-		testReadUntilRetry(inConfStr, te)
+	t.Run("ReadUntilRetry", func(t *testing.T) {
+		testReadUntilRetry(t, inConfStr)
 	})
 }
 
-func testReadUntilBasic(inConf string, t *testing.T) {
+func testReadUntilBasic(t *testing.T, inConf string) {
+	t.Helper()
+
 	ctx, done := context.WithTimeout(context.Background(), time.Second*5)
 	defer done()
 
@@ -126,7 +128,9 @@ func testReadUntilBasic(inConf string, t *testing.T) {
 	}
 }
 
-func testReadUntilRestart(inConf string, t *testing.T) {
+func testReadUntilRestart(t *testing.T, inConf string) {
+	t.Helper()
+
 	ctx, done := context.WithTimeout(context.Background(), time.Second*5)
 	defer done()
 
@@ -166,7 +170,9 @@ func testReadUntilRestart(inConf string, t *testing.T) {
 	require.NoError(t, in.WaitForClose(ctx))
 }
 
-func testReadUntilRetry(inConf string, t *testing.T) {
+func testReadUntilRetry(t *testing.T, inConf string) {
+	t.Helper()
+
 	ctx, done := context.WithTimeout(context.Background(), time.Second*5)
 	defer done()
 

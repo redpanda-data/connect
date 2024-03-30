@@ -71,3 +71,4 @@ linters:
     - mirror
     - predeclared
     - perfsprint
+    - thelper

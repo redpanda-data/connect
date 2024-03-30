@@ -66,9 +66,11 @@ input:
 	)
 	suite.Run(
 		t, template,
-		integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, testID string, vars *integration.StreamTestConfigVars) {
+		integration.StreamTestOptPreTest(func(tb testing.TB, ctx context.Context, testID string, vars *integration.StreamTestConfigVars) {
+			tb.Helper()
+
 			js, err := natsConn.JetStream()
-			require.NoError(t, err)
+			require.NoError(tb, err)
 
 			streamName := "stream-" + testID
 
@@ -76,7 +78,7 @@ input:
 				Name:     streamName,
 				Subjects: []string{"subject-" + testID},
 			})
-			require.NoError(t, err)
+			require.NoError(tb, err)
 		}),
 		integration.StreamTestOptSleepAfterInput(100*time.Millisecond),
 		integration.StreamTestOptSleepAfterOutput(100*time.Millisecond),
@@ -137,9 +139,11 @@ input:
 	)
 	suite.Run(
 		t, template,
-		integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, testID string, vars *integration.StreamTestConfigVars) {
+		integration.StreamTestOptPreTest(func(tb testing.TB, ctx context.Context, testID string, vars *integration.StreamTestConfigVars) {
+			tb.Helper()
+
 			js, err := natsConn.JetStream()
-			require.NoError(t, err)
+			require.NoError(tb, err)
 
 			streamName := "stream-" + testID
 
@@ -147,14 +151,14 @@ input:
 				Name:     streamName,
 				Subjects: []string{"subject-" + testID},
 			})
-			require.NoError(t, err)
+			require.NoError(tb, err)
 
 			_, err = js.AddConsumer(streamName, &nats.ConsumerConfig{
 				Durable:       "durable-" + testID,
 				DeliverPolicy: nats.DeliverAllPolicy,
 				AckPolicy:     nats.AckExplicitPolicy,
 			})
-			require.NoError(t, err)
+			require.NoError(tb, err)
 		}),
 		integration.StreamTestOptSleepAfterInput(100*time.Millisecond),
 		integration.StreamTestOptSleepAfterOutput(100*time.Millisecond),

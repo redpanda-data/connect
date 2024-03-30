@@ -73,16 +73,18 @@ input:
 	)
 	suite.Run(
 		t, template,
-		integration.StreamTestOptPreTest(func(t testing.TB, _ context.Context, testID string, _ *integration.StreamTestConfigVars) {
+		integration.StreamTestOptPreTest(func(tb testing.TB, _ context.Context, testID string, _ *integration.StreamTestConfigVars) {
+			tb.Helper()
+
 			js, err := natsConn.JetStream()
-			require.NoError(t, err)
+			require.NoError(tb, err)
 
 			bucketName := "bucket-" + testID
 
 			_, err = js.CreateKeyValue(&nats.KeyValueConfig{
 				Bucket: bucketName,
 			})
-			require.NoError(t, err)
+			require.NoError(tb, err)
 		}),
 		integration.StreamTestOptSleepAfterInput(100*time.Millisecond),
 		integration.StreamTestOptSleepAfterOutput(100*time.Millisecond),
@@ -105,16 +107,18 @@ cache_resources:
 		)
 		suite.Run(
 			t, template,
-			integration.CacheTestOptPreTest(func(t testing.TB, _ context.Context, testID string, _ *integration.CacheTestConfigVars) {
+			integration.CacheTestOptPreTest(func(tb testing.TB, _ context.Context, testID string, _ *integration.CacheTestConfigVars) {
+				tb.Helper()
+
 				js, err := natsConn.JetStream()
-				require.NoError(t, err)
+				require.NoError(tb, err)
 
 				bucketName := "bucket-" + testID
 
 				_, err = js.CreateKeyValue(&nats.KeyValueConfig{
 					Bucket: bucketName,
 				})
-				require.NoError(t, err)
+				require.NoError(tb, err)
 			}),
 			integration.CacheTestOptPort(resource.GetPort("4222/tcp")),
 		)
@@ -122,6 +126,8 @@ cache_resources:
 
 	t.Run("processor", func(t *testing.T) {
 		createBucket := func(t *testing.T) (nats.KeyValue, string) {
+			t.Helper()
+
 			u4, err := uuid.NewV4()
 			require.NoError(t, err)
 			js, err := natsConn.JetStream()

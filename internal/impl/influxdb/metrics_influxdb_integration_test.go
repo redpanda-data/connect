@@ -93,6 +93,8 @@ tags:
 }
 
 func testInfluxConnect(t *testing.T, i *influxDBMetrics, c client.Client) {
+	t.Helper()
+
 	i.NewGaugeCtor("testing")().Set(31337)
 	i.Close(context.Background())
 

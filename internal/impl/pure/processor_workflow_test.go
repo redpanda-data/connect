@@ -233,8 +233,9 @@ func newMockProcProvider(t *testing.T, confs map[string]processor.Config) bundle
 	return mgr
 }
 
-func quickTestBranches(t testing.TB, branches ...[4]string) map[string]processor.Config {
-	t.Helper()
+func quickTestBranches(tb testing.TB, branches ...[4]string) map[string]processor.Config {
+	tb.Helper()
+
 	m := map[string]processor.Config{}
 	for _, b := range branches {
 		conf, err := testutil.ProcessorFromYAML(fmt.Sprintf(`
@@ -251,7 +252,7 @@ branch:
 			strings.ReplaceAll(b[2], "\n", "\n        "),
 			strings.ReplaceAll(b[3], "\n", "\n    "),
 		))
-		require.NoError(t, err)
+		require.NoError(tb, err)
 
 		m[b[0]] = conf
 	}

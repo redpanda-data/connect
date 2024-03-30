@@ -255,22 +255,22 @@ func TestIntegrationCosmosDB(t *testing.T) {
 	dummyPartitionKeyField := "Ifing"
 	dummyPartitionKeyValue := "Jotunheim"
 
-	dbSetup := func(t testing.TB, ctx context.Context, databaseID string) {
-		t.Helper()
+	dbSetup := func(tb testing.TB, ctx context.Context, databaseID string) {
+		tb.Helper()
 
 		cred, err := azcosmos.NewKeyCredential(emulatorKey)
-		require.NoError(t, err)
+		require.NoError(tb, err)
 
 		client, err := azcosmos.NewClientWithKey("http://localhost:"+servicePort, cred, nil)
-		require.NoError(t, err)
+		require.NoError(tb, err)
 
 		_, err = client.CreateDatabase(ctx, azcosmos.DatabaseProperties{
 			ID: databaseID,
 		}, nil)
-		require.NoError(t, err)
+		require.NoError(tb, err)
 
 		db, err := client.NewDatabase(databaseID)
-		require.NoError(t, err)
+		require.NoError(tb, err)
 
 		_, err = db.CreateContainer(ctx, azcosmos.ContainerProperties{
 			ID: dummyContainer,
@@ -278,7 +278,7 @@ func TestIntegrationCosmosDB(t *testing.T) {
 				Paths: []string{"/" + dummyPartitionKeyField},
 			},
 		}, nil)
-		require.NoError(t, err)
+		require.NoError(tb, err)
 	}
 
 	t.Run("cosmosdb output -> input roundtrip", func(t *testing.T) {
@@ -326,8 +326,9 @@ input:
 			integration.StreamTestOptVarThree(dummyContainer),
 			integration.StreamTestOptVarFour(dummyPartitionKeyField),
 			integration.StreamTestOptVarFive(dummyPartitionKeyValue),
-			integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, testID string, _ *integration.StreamTestConfigVars) {
-				dbSetup(t, ctx, fmt.Sprintf("%s-%s", dummyDatabase, testID))
+			integration.StreamTestOptPreTest(func(tb testing.TB, ctx context.Context, testID string, _ *integration.StreamTestConfigVars) {
+				tb.Helper()
+				dbSetup(tb, ctx, fmt.Sprintf("%s-%s", dummyDatabase, testID))
 			}),
 		)
 	})

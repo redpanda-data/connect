@@ -1046,6 +1046,7 @@ func TestYAMLLintYAMLMerge(t *testing.T) {
 	lConf.DocsProvider = prov
 
 	lintConf := func(t *testing.T, name, conf string, expected []docs.Lint) {
+		t.Helper()
 		t.Run(name, func(t *testing.T) {
 			var node yaml.Node
 			require.NoError(t, yaml.Unmarshal([]byte(conf), &node))

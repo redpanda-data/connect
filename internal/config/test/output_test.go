@@ -18,17 +18,17 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/message"
 )
 
-func condsFromYAML(t testing.TB, str string, args ...any) OutputConditionsMap {
-	t.Helper()
+func condsFromYAML(tb testing.TB, str string, args ...any) OutputConditionsMap {
+	tb.Helper()
 
 	node, err := docs.UnmarshalYAML(fmt.Appendf(nil, str, args...))
-	require.NoError(t, err)
+	require.NoError(tb, err)
 
 	pConf, err := outputFields().ParsedConfigFromAny(node)
-	require.NoError(t, err)
+	require.NoError(tb, err)
 
 	m, err := OutputConditionsFromParsed(pConf)
-	require.NoError(t, err)
+	require.NoError(tb, err)
 
 	return m
 }

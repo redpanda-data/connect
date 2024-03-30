@@ -66,30 +66,30 @@ func TestProcessorIntegration(t *testing.T) {
 
 	port := resource.GetPort("27017/tcp")
 	t.Run("insert", func(t *testing.T) {
-		testMongoDBProcessorInsert(mongoClient, port, t)
+		testMongoDBProcessorInsert(t, mongoClient, port)
 	})
 	t.Run("delete one", func(t *testing.T) {
-		testMongoDBProcessorDeleteOne(mongoClient, port, t)
+		testMongoDBProcessorDeleteOne(t, mongoClient, port)
 	})
 	t.Run("delete many", func(t *testing.T) {
-		testMongoDBProcessorDeleteMany(mongoClient, port, t)
+		testMongoDBProcessorDeleteMany(t, mongoClient, port)
 	})
 	t.Run("replace one", func(t *testing.T) {
-		testMongoDBProcessorReplaceOne(mongoClient, port, t)
+		testMongoDBProcessorReplaceOne(t, mongoClient, port)
 	})
 	t.Run("update one", func(t *testing.T) {
-		testMongoDBProcessorUpdateOne(mongoClient, port, t)
+		testMongoDBProcessorUpdateOne(t, mongoClient, port)
 	})
 	t.Run("find one", func(t *testing.T) {
-		testMongoDBProcessorFindOne(mongoClient, port, t)
+		testMongoDBProcessorFindOne(t, mongoClient, port)
 	})
 	t.Run("upsert", func(t *testing.T) {
-		testMongoDBProcessorUpsert(mongoClient, port, t)
+		testMongoDBProcessorUpsert(t, mongoClient, port)
 	})
 }
 
-func testMProc(t testing.TB, port, collection, configYAML string) *mongodb.Processor {
-	t.Helper()
+func testMProc(tb testing.TB, port, collection, configYAML string) *mongodb.Processor {
+	tb.Helper()
 
 	if collection == "" {
 		collection = "TestCollection"
@@ -102,25 +102,26 @@ collection: %v
 username: mongoadmin
 password: secret
 `, port, collection)+configYAML, nil)
-	require.NoError(t, err)
+	require.NoError(tb, err)
 
 	proc, err := mongodb.ProcessorFromParsed(conf, service.MockResources())
-	require.NoError(t, err)
+	require.NoError(tb, err)
 
 	return proc
 }
 
-func assertMessagesEqual(t testing.TB, batch service.MessageBatch, to []string) {
-	t.Helper()
-	require.Len(t, batch, len(to))
+func assertMessagesEqual(tb testing.TB, batch service.MessageBatch, to []string) {
+	tb.Helper()
+	require.Len(tb, batch, len(to))
 	for i, exp := range to {
 		mBytes, err := batch[i].AsBytes()
-		require.NoError(t, err)
-		assert.Equal(t, exp, string(mBytes))
+		require.NoError(tb, err)
+		assert.Equal(tb, exp, string(mBytes))
 	}
 }
 
-func testMongoDBProcessorInsert(mongoClient *mongo.Client, port string, t *testing.T) {
+func testMongoDBProcessorInsert(t *testing.T, mongoClient *mongo.Client, port string) {
+	t.Helper()
 	tCtx := context.Background()
 	m := testMProc(t, port, "", `
 write_concern:
@@ -163,7 +164,8 @@ document_map: |
 	assert.Equal(t, `"bar2"`, bVal.String())
 }
 
-func testMongoDBProcessorDeleteOne(mongoClient *mongo.Client, port string, t *testing.T) {
+func testMongoDBProcessorDeleteOne(t *testing.T, mongoClient *mongo.Client, port string) {
+	t.Helper()
 	tCtx := context.Background()
 	m := testMProc(t, port, "", `
 write_concern:
@@ -196,7 +198,8 @@ filter_map: |
 	assert.Error(t, err, "mongo: no documents in result")
 }
 
-func testMongoDBProcessorDeleteMany(mongoClient *mongo.Client, port string, t *testing.T) {
+func testMongoDBProcessorDeleteMany(t *testing.T, mongoClient *mongo.Client, port string) {
+	t.Helper()
 	tCtx := context.Background()
 	m := testMProc(t, port, "", `
 write_concern:
@@ -234,7 +237,8 @@ filter_map: |
 	assert.Error(t, err, "mongo: no documents in result")
 }
 
-func testMongoDBProcessorReplaceOne(mongoClient *mongo.Client, port string, t *testing.T) {
+func testMongoDBProcessorReplaceOne(t *testing.T, mongoClient *mongo.Client, port string) {
+	t.Helper()
 	tCtx := context.Background()
 	m := testMProc(t, port, "", `
 write_concern:
@@ -275,7 +279,8 @@ filter_map: |
 	assert.Equal(t, bson.RawValue{}, cVal)
 }
 
-func testMongoDBProcessorUpdateOne(mongoClient *mongo.Client, port string, t *testing.T) {
+func testMongoDBProcessorUpdateOne(t *testing.T, mongoClient *mongo.Client, port string) {
+	t.Helper()
 	tCtx := context.Background()
 	m := testMProc(t, port, "", `
 write_concern:
@@ -315,7 +320,8 @@ filter_map: |
 	assert.Equal(t, `"c1"`, cVal.String())
 }
 
-func testMongoDBProcessorUpsert(mongoClient *mongo.Client, port string, t *testing.T) {
+func testMongoDBProcessorUpsert(t *testing.T, mongoClient *mongo.Client, port string) {
+	t.Helper()
 	tCtx := context.Background()
 	m := testMProc(t, port, "", `
 write_concern:
@@ -397,7 +403,8 @@ upsert: true
 	assert.Equal(t, `"bar4"`, bVal.String())
 }
 
-func testMongoDBProcessorFindOne(mongoClient *mongo.Client, port string, t *testing.T) {
+func testMongoDBProcessorFindOne(t *testing.T, mongoClient *mongo.Client, port string) {
+	t.Helper()
 	tCtx := context.Background()
 	collection := mongoClient.Database("TestDB").Collection("TestCollection")
 

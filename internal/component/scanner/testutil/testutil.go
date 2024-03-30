@@ -35,6 +35,8 @@ func (n microReader) Read(p []byte) (int, error) {
 }
 
 func ScannerTestSuite(t *testing.T, codec *service.OwnedScannerCreator, details *service.ScannerSourceDetails, data []byte, expected ...string) {
+	t.Helper()
+
 	if details == nil {
 		details = &service.ScannerSourceDetails{}
 	}

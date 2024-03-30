@@ -83,9 +83,11 @@ output:
 			integration.StreamTestOptPort(resource.GetPort("9042/tcp")),
 			integration.StreamTestOptSleepAfterInput(time.Second*10),
 			integration.StreamTestOptSleepAfterOutput(time.Second*10),
-			integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, testID string, vars *integration.StreamTestConfigVars) {
+			integration.StreamTestOptPreTest(func(tb testing.TB, ctx context.Context, testID string, vars *integration.StreamTestConfigVars) {
+				tb.Helper()
+
 				vars.ID = strings.ReplaceAll(testID, "-", "")
-				require.NoError(t, session.Query(
+				require.NoError(tb, session.Query(
 					fmt.Sprintf(
 						"CREATE TABLE testspace.table%v (id int primary key, content text, created_at timestamp);",
 						vars.ID,
@@ -130,9 +132,11 @@ output:
 			integration.StreamTestOptPort(resource.GetPort("9042/tcp")),
 			integration.StreamTestOptSleepAfterInput(time.Second*10),
 			integration.StreamTestOptSleepAfterOutput(time.Second*10),
-			integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, testID string, vars *integration.StreamTestConfigVars) {
+			integration.StreamTestOptPreTest(func(tb testing.TB, ctx context.Context, testID string, vars *integration.StreamTestConfigVars) {
+				tb.Helper()
+
 				vars.ID = strings.ReplaceAll(testID, "-", "")
-				require.NoError(t, session.Query(
+				require.NoError(tb, session.Query(
 					fmt.Sprintf(
 						"CREATE TABLE testspace.table%v (id int primary key, content text, created_at timestamp, meows list<text>);",
 						vars.ID,

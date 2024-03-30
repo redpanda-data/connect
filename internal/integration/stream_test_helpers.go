@@ -29,16 +29,20 @@ import (
 
 // CheckSkip marks a test to be skipped unless the integration test has been
 // specifically requested using the -run flag.
-func CheckSkip(t testing.TB) {
-	if m := flag.Lookup("test.run").Value.String(); m == "" || regexp.MustCompile(strings.Split(m, "/")[0]).FindString(t.Name()) == "" {
-		t.Skip("Skipping as execution was not requested explicitly using go test -run ^Test.*Integration.*$")
+func CheckSkip(tb testing.TB) {
+	tb.Helper()
+
+	if m := flag.Lookup("test.run").Value.String(); m == "" || regexp.MustCompile(strings.Split(m, "/")[0]).FindString(tb.Name()) == "" {
+		tb.Skip("Skipping as execution was not requested explicitly using go test -run ^Test.*Integration.*$")
 	}
 }
 
 // CheckSkipExact skips a test unless the -run flag specifically targets it.
-func CheckSkipExact(t testing.TB) {
-	if m := flag.Lookup("test.run").Value.String(); m == "" || m != t.Name() {
-		t.Skipf("Skipping as execution was not requested explicitly using go test -run %v", t.Name())
+func CheckSkipExact(tb testing.TB) {
+	tb.Helper()
+
+	if m := flag.Lookup("test.run").Value.String(); m == "" || m != tb.Name() {
+		tb.Skipf("Skipping as execution was not requested explicitly using go test -run %v", tb.Name())
 	}
 }
 
@@ -119,11 +123,11 @@ type streamTestEnvironment struct {
 	sleepAfterOutput time.Duration
 }
 
-func newStreamTestEnvironment(t testing.TB, confTemplate string) streamTestEnvironment {
-	t.Helper()
+func newStreamTestEnvironment(tb testing.TB, confTemplate string) streamTestEnvironment {
+	tb.Helper()
 
 	u4, err := uuid.NewV4()
-	require.NoError(t, err)
+	require.NoError(tb, err)
 
 	return streamTestEnvironment{
 		configTemplate: confTemplate,
@@ -301,6 +305,8 @@ func StreamTests(tests ...StreamTestDefinition) StreamTestList {
 
 // Run all the tests against a config template. Tests are run in parallel.
 func (i StreamTestList) Run(t *testing.T, configTemplate string, opts ...StreamTestOptFunc) {
+	t.Helper()
+
 	envs := make([]streamTestEnvironment, len(i))
 
 	for j := range i {
@@ -336,6 +342,8 @@ func (i StreamTestList) Run(t *testing.T, configTemplate string, opts ...StreamT
 func namedStreamTest(name string, test streamTestDefinitionFn) StreamTestDefinition {
 	return StreamTestDefinition{
 		fn: func(t *testing.T, env *streamTestEnvironment) {
+			t.Helper()
+
 			t.Run(name, func(t *testing.T) {
 				t.Parallel()
 				if env.preTest != nil {
@@ -369,6 +377,7 @@ func StreamBenchs(tests ...StreamBenchDefinition) StreamBenchList {
 
 // Run the benchmarks against a config template.
 func (i StreamBenchList) Run(b *testing.B, configTemplate string, opts ...StreamTestOptFunc) {
+	b.Helper()
 	for _, bench := range i {
 		env := newStreamTestEnvironment(b, configTemplate)
 		for _, opt := range opts {
@@ -385,6 +394,7 @@ func (i StreamBenchList) Run(b *testing.B, configTemplate string, opts ...Stream
 func namedBench(name string, test streamBenchDefinitionFn) StreamBenchDefinition {
 	return StreamBenchDefinition{
 		fn: func(b *testing.B, env *streamTestEnvironment) {
+			b.Helper()
 			b.Run(name, func(b *testing.B) {
 				test(b, env)
 			})
@@ -395,22 +405,22 @@ func namedBench(name string, test streamBenchDefinitionFn) StreamBenchDefinition
 //------------------------------------------------------------------------------
 
 func initConnectors(
-	t testing.TB,
+	tb testing.TB,
 	trans <-chan message.Transaction,
 	env *streamTestEnvironment,
 ) (input input.Streamed, output output.Streamed) {
-	t.Helper()
+	tb.Helper()
 
-	out := initOutput(t, trans, env)
-	in := initInput(t, env)
+	out := initOutput(tb, trans, env)
+	in := initInput(tb, env)
 	return in, out
 }
 
-func initInput(t testing.TB, env *streamTestEnvironment) input.Streamed {
-	t.Helper()
+func initInput(tb testing.TB, env *streamTestEnvironment) input.Streamed {
+	tb.Helper()
 
 	node, err := docs.UnmarshalYAML([]byte(env.RenderConfig()))
-	require.NoError(t, err)
+	require.NoError(tb, err)
 
 	spec := docs.FieldSpecs{
 		docs.FieldAnything("output", "").Optional(),
@@ -419,27 +429,27 @@ func initInput(t testing.TB, env *streamTestEnvironment) input.Streamed {
 	spec = append(spec, manager.Spec()...)
 
 	lints := spec.LintYAML(docs.NewLintContext(docs.NewLintConfig(bundle.GlobalEnvironment)), node)
-	assert.Empty(t, lints)
+	assert.Empty(tb, lints)
 
 	pConf, err := spec.ParsedConfigFromAny(node)
-	require.NoError(t, err)
+	require.NoError(tb, err)
 
 	pVal, err := pConf.FieldAny("input")
-	require.NoError(t, err)
+	require.NoError(tb, err)
 
 	iConf, err := input.FromAny(bundle.GlobalEnvironment, pVal)
-	require.NoError(t, err)
+	require.NoError(tb, err)
 
 	mConf, err := manager.FromParsed(bundle.GlobalEnvironment, pConf)
-	require.NoError(t, err)
+	require.NoError(tb, err)
 
 	if env.mgr == nil {
 		env.mgr, err = manager.New(mConf, manager.OptSetLogger(env.log), manager.OptSetMetrics(env.stats))
-		require.NoError(t, err)
+		require.NoError(tb, err)
 	}
 
 	input, err := env.mgr.NewInput(iConf)
-	require.NoError(t, err)
+	require.NoError(tb, err)
 
 	if env.sleepAfterInput > 0 {
 		time.Sleep(env.sleepAfterInput)
@@ -448,11 +458,11 @@ func initInput(t testing.TB, env *streamTestEnvironment) input.Streamed {
 	return input
 }
 
-func initOutput(t testing.TB, trans <-chan message.Transaction, env *streamTestEnvironment) output.Streamed {
-	t.Helper()
+func initOutput(tb testing.TB, trans <-chan message.Transaction, env *streamTestEnvironment) output.Streamed {
+	tb.Helper()
 
 	node, err := docs.UnmarshalYAML([]byte(env.RenderConfig()))
-	require.NoError(t, err)
+	require.NoError(tb, err)
 
 	spec := docs.FieldSpecs{
 		docs.FieldAnything("input", "").Optional(),
@@ -461,29 +471,29 @@ func initOutput(t testing.TB, trans <-chan message.Transaction, env *streamTestE
 	spec = append(spec, manager.Spec()...)
 
 	lints := spec.LintYAML(docs.NewLintContext(docs.NewLintConfig(bundle.GlobalEnvironment)), node)
-	assert.Empty(t, lints)
+	assert.Empty(tb, lints)
 
 	pConf, err := spec.ParsedConfigFromAny(node)
-	require.NoError(t, err)
+	require.NoError(tb, err)
 
 	pVal, err := pConf.FieldAny("output")
-	require.NoError(t, err)
+	require.NoError(tb, err)
 
 	oConf, err := output.FromAny(bundle.GlobalEnvironment, pVal)
-	require.NoError(t, err)
+	require.NoError(tb, err)
 
 	mConf, err := manager.FromParsed(bundle.GlobalEnvironment, pConf)
-	require.NoError(t, err)
+	require.NoError(tb, err)
 
 	if env.mgr == nil {
 		env.mgr, err = manager.New(mConf, manager.OptSetLogger(env.log), manager.OptSetMetrics(env.stats))
-		require.NoError(t, err)
+		require.NoError(tb, err)
 	}
 
 	output, err := env.mgr.NewOutput(oConf)
-	require.NoError(t, err)
+	require.NoError(tb, err)
 
-	require.NoError(t, output.Consume(trans))
+	require.NoError(tb, output.Consume(trans))
 
 	if env.sleepAfterOutput > 0 {
 		time.Sleep(env.sleepAfterOutput)
@@ -492,25 +502,27 @@ func initOutput(t testing.TB, trans <-chan message.Transaction, env *streamTestE
 	return output
 }
 
-func closeConnectors(t testing.TB, env *streamTestEnvironment, input input.Streamed, output output.Streamed) {
+func closeConnectors(tb testing.TB, env *streamTestEnvironment, input input.Streamed, output output.Streamed) {
+	tb.Helper()
+
 	if output != nil {
 		output.TriggerCloseNow()
-		require.NoError(t, output.WaitForClose(env.ctx))
+		require.NoError(tb, output.WaitForClose(env.ctx))
 	}
 	if input != nil {
 		input.TriggerStopConsuming()
-		require.NoError(t, input.WaitForClose(env.ctx))
+		require.NoError(tb, input.WaitForClose(env.ctx))
 	}
 }
 
 func sendMessage(
 	ctx context.Context,
-	t testing.TB,
+	tb testing.TB,
 	tranChan chan message.Transaction,
 	content string,
 	metadata ...string,
 ) error {
-	t.Helper()
+	tb.Helper()
 
 	p := message.NewPart([]byte(content))
 	for i := 0; i < len(metadata); i += 2 {
@@ -522,7 +534,7 @@ func sendMessage(
 	select {
 	case tranChan <- message.NewTransaction(msg, resChan):
 	case <-ctx.Done():
-		t.Fatal("timed out on send")
+		tb.Fatal("timed out on send")
 	}
 
 	select {
@@ -530,17 +542,17 @@ func sendMessage(
 		return res
 	case <-ctx.Done():
 	}
-	t.Fatal("timed out on response")
+	tb.Fatal("timed out on response")
 	return nil
 }
 
 func sendBatch(
 	ctx context.Context,
-	t testing.TB,
+	tb testing.TB,
 	tranChan chan message.Transaction,
 	content []string,
 ) error {
-	t.Helper()
+	tb.Helper()
 
 	msg := message.QuickBatch(nil)
 	for _, payload := range content {
@@ -552,7 +564,7 @@ func sendBatch(
 	select {
 	case tranChan <- message.NewTransaction(msg, resChan):
 	case <-ctx.Done():
-		t.Fatal("timed out on send")
+		tb.Fatal("timed out on send")
 	}
 
 	select {
@@ -561,66 +573,66 @@ func sendBatch(
 	case <-ctx.Done():
 	}
 
-	t.Fatal("timed out on response")
+	tb.Fatal("timed out on response")
 	return nil
 }
 
 func receiveMessage(
 	ctx context.Context,
-	t testing.TB,
+	tb testing.TB,
 	tranChan <-chan message.Transaction,
 	err error,
 ) *message.Part {
-	t.Helper()
+	tb.Helper()
 
-	b, ackFn := receiveBatchNoRes(ctx, t, tranChan)
-	require.NoError(t, ackFn(ctx, err))
-	require.Len(t, b, 1)
+	b, ackFn := receiveBatchNoRes(ctx, tb, tranChan)
+	require.NoError(tb, ackFn(ctx, err))
+	require.Len(tb, b, 1)
 
 	return b.Get(0)
 }
 
 func receiveBatch(
 	ctx context.Context,
-	t testing.TB,
+	tb testing.TB,
 	tranChan <-chan message.Transaction,
 	err error,
 ) message.Batch {
-	t.Helper()
+	tb.Helper()
 
-	b, ackFn := receiveBatchNoRes(ctx, t, tranChan)
-	require.NoError(t, ackFn(ctx, err))
+	b, ackFn := receiveBatchNoRes(ctx, tb, tranChan)
+	require.NoError(tb, ackFn(ctx, err))
 	return b
 }
 
-func receiveBatchNoRes(ctx context.Context, t testing.TB, tranChan <-chan message.Transaction) (message.Batch, func(context.Context, error) error) { //nolint: gocritic // Ignore unnamedResult false positive
-	t.Helper()
+func receiveBatchNoRes(ctx context.Context, tb testing.TB, tranChan <-chan message.Transaction) (message.Batch, func(context.Context, error) error) { //nolint: gocritic // Ignore unnamedResult false positive
+	tb.Helper()
 
 	var tran message.Transaction
 	var open bool
 	select {
 	case tran, open = <-tranChan:
 	case <-ctx.Done():
-		t.Fatal("timed out on receive")
+		tb.Fatal("timed out on receive")
 	}
 
-	require.True(t, open)
+	require.True(tb, open)
 	return tran.Payload, tran.Ack
 }
 
-func receiveMessageNoRes(ctx context.Context, t testing.TB, tranChan <-chan message.Transaction) (*message.Part, func(context.Context, error) error) { //nolint: gocritic // Ignore unnamedResult false positive
-	t.Helper()
+func receiveMessageNoRes(ctx context.Context, tb testing.TB, tranChan <-chan message.Transaction) (*message.Part, func(context.Context, error) error) { //nolint: gocritic // Ignore unnamedResult false positive
+	tb.Helper()
 
-	b, fn := receiveBatchNoRes(ctx, t, tranChan)
-	require.Len(t, b, 1)
+	b, fn := receiveBatchNoRes(ctx, tb, tranChan)
+	require.Len(tb, b, 1)
 
 	return b.Get(0), fn
 }
 
-func messageMatch(t testing.TB, p *message.Part, content string, metadata ...string) {
-	t.Helper()
+func messageMatch(tb testing.TB, p *message.Part, content string, metadata ...string) {
+	tb.Helper()
 
-	assert.Equal(t, content, string(p.AsBytes()))
+	assert.Equal(tb, content, string(p.AsBytes()))
 
 	allMetadata := map[string]string{}
 	_ = p.MetaIterStr(func(k, v string) error {
@@ -629,22 +641,22 @@ func messageMatch(t testing.TB, p *message.Part, content string, metadata ...str
 	})
 
 	for i := 0; i < len(metadata); i += 2 {
-		assert.Equal(t, metadata[i+1], p.MetaGetStr(metadata[i]), fmt.Sprintf("metadata: %v", allMetadata))
+		assert.Equal(tb, metadata[i+1], p.MetaGetStr(metadata[i]), fmt.Sprintf("metadata: %v", allMetadata))
 	}
 }
 
-func messagesInSet(t testing.TB, pop, allowDupes bool, b message.Batch, set map[string][]string) {
-	t.Helper()
+func messagesInSet(tb testing.TB, pop, allowDupes bool, b message.Batch, set map[string][]string) {
+	tb.Helper()
 
 	for _, p := range b {
 		metadata, exists := set[string(p.AsBytes())]
 		if allowDupes && !exists {
 			return
 		}
-		require.True(t, exists, "in set: %v, set: %v", string(p.AsBytes()), set)
+		require.True(tb, exists, "in set: %v, set: %v", string(p.AsBytes()), set)
 
 		for i := 0; i < len(metadata); i += 2 {
-			assert.Equal(t, metadata[i+1], p.MetaGetStr(metadata[i]))
+			assert.Equal(tb, metadata[i+1], p.MetaGetStr(metadata[i]))
 		}
 
 		if pop {

@@ -178,6 +178,8 @@ func createBucketQueue(ctx context.Context, s3Port, sqsPort, id string) error {
 }
 
 func s3IntegrationSuite(t *testing.T, lsPort string) {
+	t.Helper()
+
 	t.Run("via_sqs", func(t *testing.T) {
 		template := `
 output:
@@ -221,8 +223,10 @@ input:
 			integration.StreamTestStreamParallelLossyThroughReconnect(10),
 		).Run(
 			t, template,
-			integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, testID string, vars *integration.StreamTestConfigVars) {
-				require.NoError(t, createBucketQueue(ctx, lsPort, lsPort, testID))
+			integration.StreamTestOptPreTest(func(tb testing.TB, ctx context.Context, testID string, vars *integration.StreamTestConfigVars) {
+				tb.Helper()
+
+				require.NoError(tb, createBucketQueue(ctx, lsPort, lsPort, testID))
 			}),
 			integration.StreamTestOptPort(lsPort),
 			integration.StreamTestOptAllowDupes(),
@@ -273,11 +277,12 @@ input:
 			integration.StreamTestStreamParallelLossyThroughReconnect(20),
 		).Run(
 			t, template,
-			integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, testID string, vars *integration.StreamTestConfigVars) {
+			integration.StreamTestOptPreTest(func(tb testing.TB, ctx context.Context, testID string, vars *integration.StreamTestConfigVars) {
+				tb.Helper()
 				if vars.OutputBatchCount == 0 {
 					vars.OutputBatchCount = 1
 				}
-				require.NoError(t, createBucketQueue(ctx, lsPort, lsPort, testID))
+				require.NoError(tb, createBucketQueue(ctx, lsPort, lsPort, testID))
 			}),
 			integration.StreamTestOptPort(lsPort),
 			integration.StreamTestOptAllowDupes(),
@@ -328,11 +333,12 @@ input:
 			integration.StreamTestStreamParallelLossyThroughReconnect(20),
 		).Run(
 			t, template,
-			integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, testID string, vars *integration.StreamTestConfigVars) {
+			integration.StreamTestOptPreTest(func(tb testing.TB, ctx context.Context, testID string, vars *integration.StreamTestConfigVars) {
+				tb.Helper()
 				if vars.OutputBatchCount == 0 {
 					vars.OutputBatchCount = 1
 				}
-				require.NoError(t, createBucketQueue(ctx, lsPort, lsPort, testID))
+				require.NoError(tb, createBucketQueue(ctx, lsPort, lsPort, testID))
 			}),
 			integration.StreamTestOptPort(lsPort),
 			integration.StreamTestOptAllowDupes(),
@@ -372,8 +378,9 @@ input:
 			integration.StreamTestStreamIsolated(10),
 		).Run(
 			t, template,
-			integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, testID string, vars *integration.StreamTestConfigVars) {
-				require.NoError(t, createBucketQueue(ctx, lsPort, "", testID))
+			integration.StreamTestOptPreTest(func(tb testing.TB, ctx context.Context, testID string, vars *integration.StreamTestConfigVars) {
+				tb.Helper()
+				require.NoError(tb, createBucketQueue(ctx, lsPort, "", testID))
 			}),
 			integration.StreamTestOptPort(lsPort),
 			integration.StreamTestOptVarOne("false"),
@@ -404,8 +411,10 @@ cache_resources:
 		suite.Run(
 			t, template,
 			integration.CacheTestOptPort(lsPort),
-			integration.CacheTestOptPreTest(func(t testing.TB, ctx context.Context, testID string, vars *integration.CacheTestConfigVars) {
-				require.NoError(t, createBucket(ctx, lsPort, testID))
+			integration.CacheTestOptPreTest(func(tb testing.TB, ctx context.Context, testID string, vars *integration.CacheTestConfigVars) {
+				tb.Helper()
+
+				require.NoError(tb, createBucket(ctx, lsPort, testID))
 			}),
 		)
 	})

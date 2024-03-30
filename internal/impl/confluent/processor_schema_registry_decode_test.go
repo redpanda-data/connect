@@ -76,8 +76,8 @@ basic_auth:
 	}
 }
 
-func runSchemaRegistryServer(t testing.TB, fn func(path string) ([]byte, error)) string {
-	t.Helper()
+func runSchemaRegistryServer(tb testing.TB, fn func(path string) ([]byte, error)) string {
+	tb.Helper()
 
 	var reqMut sync.Mutex
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -95,7 +95,7 @@ func runSchemaRegistryServer(t testing.TB, fn func(path string) ([]byte, error))
 		}
 		_, _ = w.Write(b)
 	}))
-	t.Cleanup(ts.Close)
+	tb.Cleanup(ts.Close)
 
 	return ts.URL
 }
@@ -200,10 +200,11 @@ const testJSONSchema = `{
 	"required": ["Name"]
 }`
 
-func mustJBytes(t testing.TB, obj any) []byte {
-	t.Helper()
+func mustJBytes(tb testing.TB, obj any) []byte {
+	tb.Helper()
+
 	b, err := json.Marshal(obj)
-	require.NoError(t, err)
+	require.NoError(tb, err)
 	return b
 }
 

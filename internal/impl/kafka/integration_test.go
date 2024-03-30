@@ -127,9 +127,10 @@ input:
 
 	suite.Run(
 		t, template,
-		integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, testID string, vars *integration.StreamTestConfigVars) {
+		integration.StreamTestOptPreTest(func(tb testing.TB, ctx context.Context, testID string, vars *integration.StreamTestConfigVars) {
+			tb.Helper()
 			vars.Var4 = "group" + testID
-			require.NoError(t, createKafkaTopic(ctx, "localhost:"+kafkaPortStr, testID, 4))
+			require.NoError(tb, createKafkaTopic(ctx, "localhost:"+kafkaPortStr, testID, 4))
 		}),
 		integration.StreamTestOptPort(kafkaPortStr),
 	)
@@ -138,9 +139,10 @@ input:
 		t.Parallel()
 		suiteExt.Run(
 			t, template,
-			integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, testID string, vars *integration.StreamTestConfigVars) {
+			integration.StreamTestOptPreTest(func(tb testing.TB, ctx context.Context, testID string, vars *integration.StreamTestConfigVars) {
+				tb.Helper()
 				vars.Var4 = "group" + testID
-				require.NoError(t, createKafkaTopic(ctx, "localhost:"+kafkaPortStr, testID, 1))
+				require.NoError(tb, createKafkaTopic(ctx, "localhost:"+kafkaPortStr, testID, 1))
 			}),
 			integration.StreamTestOptPort(kafkaPortStr),
 		)
@@ -150,10 +152,11 @@ input:
 		t.Parallel()
 		suite.Run(
 			t, template,
-			integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, testID string, vars *integration.StreamTestConfigVars) {
+			integration.StreamTestOptPreTest(func(tb testing.TB, ctx context.Context, testID string, vars *integration.StreamTestConfigVars) {
+				tb.Helper()
 				topicName := "topic-" + testID
 				vars.Var1 = fmt.Sprintf(":0,%v:1,%v:2,%v:3", topicName, topicName, topicName)
-				require.NoError(t, createKafkaTopic(ctx, "localhost:"+kafkaPortStr, testID, 4))
+				require.NoError(tb, createKafkaTopic(ctx, "localhost:"+kafkaPortStr, testID, 4))
 			}),
 			integration.StreamTestOptPort(kafkaPortStr),
 			integration.StreamTestOptSleepAfterInput(time.Second*3),
@@ -163,8 +166,9 @@ input:
 			t.Parallel()
 			suite.Run(
 				t, template,
-				integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, testID string, vars *integration.StreamTestConfigVars) {
-					require.NoError(t, createKafkaTopic(ctx, "localhost:"+kafkaPortStr, testID, 4))
+				integration.StreamTestOptPreTest(func(tb testing.TB, ctx context.Context, testID string, vars *integration.StreamTestConfigVars) {
+					tb.Helper()
+					require.NoError(tb, createKafkaTopic(ctx, "localhost:"+kafkaPortStr, testID, 4))
 				}),
 				integration.StreamTestOptPort(kafkaPortStr),
 				integration.StreamTestOptSleepAfterInput(time.Second*3),
@@ -198,9 +202,10 @@ input:
 	t.Run("manual_partitioner", func(t *testing.T) {
 		suite.Run(
 			t, manualPartitionTemplate,
-			integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, testID string, vars *integration.StreamTestConfigVars) {
+			integration.StreamTestOptPreTest(func(tb testing.TB, ctx context.Context, testID string, vars *integration.StreamTestConfigVars) {
+				tb.Helper()
 				vars.Var4 = "group" + testID
-				require.NoError(t, createKafkaTopic(context.Background(), "localhost:"+kafkaPortStr, testID, 1))
+				require.NoError(tb, createKafkaTopic(context.Background(), "localhost:"+kafkaPortStr, testID, 1))
 			}),
 			integration.StreamTestOptPort(kafkaPortStr),
 		)
@@ -343,9 +348,10 @@ input:
 
 	suite.Run(
 		t, template,
-		integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, testID string, vars *integration.StreamTestConfigVars) {
+		integration.StreamTestOptPreTest(func(tb testing.TB, ctx context.Context, testID string, vars *integration.StreamTestConfigVars) {
+			tb.Helper()
 			vars.Var4 = "group" + testID
-			require.NoError(t, createKafkaTopicSasl("localhost:"+kafkaPortStr, testID, 4))
+			require.NoError(tb, createKafkaTopicSasl("localhost:"+kafkaPortStr, testID, 4))
 		}),
 		integration.StreamTestOptPort(kafkaPortStr),
 	)

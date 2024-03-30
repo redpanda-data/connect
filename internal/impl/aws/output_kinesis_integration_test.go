@@ -102,6 +102,8 @@ credentials:
 }
 
 func testKinesisConnect(t *testing.T, c koConfig, client *kinesis.Client) {
+	t.Helper()
+
 	r, err := newKinesisWriter(c, service.MockResources())
 	if err != nil {
 		t.Fatal(err)
@@ -156,6 +158,8 @@ func testKinesisConnect(t *testing.T, c koConfig, client *kinesis.Client) {
 }
 
 func testKinesisConnectWithInvalidStream(t *testing.T, c koConfig, client *kinesis.Client) {
+	t.Helper()
+
 	r, err := newKinesisWriter(c, service.MockResources())
 	if err != nil {
 		t.Fatal(err)

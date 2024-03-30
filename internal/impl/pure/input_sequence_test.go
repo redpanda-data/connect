@@ -25,12 +25,14 @@ func writeFiles(t *testing.T, dir string, nameToContent map[string]string) {
 	}
 }
 
-func testInput(t testing.TB, confPattern string, args ...any) input.Streamed {
+func testInput(tb testing.TB, confPattern string, args ...any) input.Streamed {
+	tb.Helper()
+
 	iConf, err := testutil.InputFromYAML(fmt.Sprintf(confPattern, args...))
-	require.NoError(t, err)
+	require.NoError(tb, err)
 
 	i, err := mock.NewManager().NewInput(iConf)
-	require.NoError(t, err)
+	require.NoError(tb, err)
 
 	return i
 }

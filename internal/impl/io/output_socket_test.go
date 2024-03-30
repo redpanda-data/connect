@@ -15,14 +15,14 @@ import (
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
-func socketWriterFromConf(t testing.TB, confStr string, bits ...any) *socketWriter {
-	t.Helper()
+func socketWriterFromConf(tb testing.TB, confStr string, bits ...any) *socketWriter {
+	tb.Helper()
 
 	conf, err := socketOutputSpec().ParseYAML(fmt.Sprintf(confStr, bits...), nil)
-	require.NoError(t, err)
+	require.NoError(tb, err)
 
 	w, err := newSocketWriterFromParsed(conf, service.MockResources())
-	require.NoError(t, err)
+	require.NoError(tb, err)
 
 	return w
 }

@@ -19,11 +19,12 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/message"
 )
 
-func parseYAMLProcConf(t testing.TB, formatStr string, args ...any) (conf processor.Config) {
-	t.Helper()
+func parseYAMLProcConf(tb testing.TB, formatStr string, args ...any) (conf processor.Config) {
+	tb.Helper()
+
 	var err error
 	conf, err = testutil.ProcessorFromYAML(fmt.Sprintf(formatStr, args...))
-	require.NoError(t, err)
+	require.NoError(tb, err)
 	return
 }
 

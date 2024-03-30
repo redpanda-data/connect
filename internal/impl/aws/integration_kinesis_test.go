@@ -15,31 +15,33 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/integration"
 )
 
-func createKinesisShards(ctx context.Context, t testing.TB, awsPort, id string, numShards int32) ([]string, error) {
+func createKinesisShards(ctx context.Context, tb testing.TB, awsPort, id string, numShards int32) ([]string, error) {
+	tb.Helper()
+
 	endpoint := fmt.Sprintf("http://localhost:%v", awsPort)
 
 	conf, err := config.LoadDefaultConfig(ctx,
 		config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider("xxxxx", "xxxxx", "xxxxx")),
 		config.WithRegion("us-east-1"),
 	)
-	require.NoError(t, err)
+	require.NoError(tb, err)
 
 	conf.BaseEndpoint = &endpoint
 	client := kinesis.NewFromConfig(conf)
 
 	strmID := "stream-" + id
 	for {
-		t.Logf("Creating stream '%v'", id)
+		tb.Logf("Creating stream '%v'", id)
 		_, err := client.CreateStream(ctx, &kinesis.CreateStreamInput{
 			ShardCount: &numShards,
 			StreamName: &strmID,
 		})
 		if err == nil {
-			t.Logf("Created stream '%v'", id)
+			tb.Logf("Created stream '%v'", id)
 			break
 		}
 
-		t.Logf("Failed to create stream '%v': %v", id, err)
+		tb.Logf("Failed to create stream '%v': %v", id, err)
 		select {
 		case <-ctx.Done():
 			return nil, ctx.Err()
@@ -70,6 +72,8 @@ func createKinesisShards(ctx context.Context, t testing.TB, awsPort, id string, 
 }
 
 func kinesisIntegrationSuite(t *testing.T, lsPort string) {
+	t.Helper()
+
 	template := `
 output:
   aws_kinesis:
@@ -114,10 +118,12 @@ input:
 	t.Run("with static shards", func(t *testing.T) {
 		suite.Run(
 			t, template,
-			integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, testID string, vars *integration.StreamTestConfigVars) {
+			integration.StreamTestOptPreTest(func(tb testing.TB, ctx context.Context, testID string, vars *integration.StreamTestConfigVars) {
+				tb.Helper()
+
 				streamName := "stream-" + testID
-				shards, err := createKinesisShards(ctx, t, lsPort, testID, 2)
-				require.NoError(t, err)
+				shards, err := createKinesisShards(ctx, tb, lsPort, testID, 2)
+				require.NoError(tb, err)
 
 				for i, shard := range shards {
 					if i == 0 {
@@ -136,9 +142,11 @@ input:
 	t.Run("with balanced shards", func(t *testing.T) {
 		suite.Run(
 			t, template,
-			integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, testID string, vars *integration.StreamTestConfigVars) {
-				_, err := createKinesisShards(ctx, t, lsPort, testID, 2)
-				require.NoError(t, err)
+			integration.StreamTestOptPreTest(func(tb testing.TB, ctx context.Context, testID string, vars *integration.StreamTestConfigVars) {
+				tb.Helper()
+
+				_, err := createKinesisShards(ctx, tb, lsPort, testID, 2)
+				require.NoError(tb, err)
 			}),
 			integration.StreamTestOptPort(lsPort),
 			integration.StreamTestOptAllowDupes(),
@@ -151,9 +159,11 @@ input:
 			integration.StreamTestCheckpointCapture(),
 		).Run(
 			t, template,
-			integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, testID string, vars *integration.StreamTestConfigVars) {
-				shards, err := createKinesisShards(ctx, t, lsPort, testID, 1)
-				require.NoError(t, err)
+			integration.StreamTestOptPreTest(func(tb testing.TB, ctx context.Context, testID string, vars *integration.StreamTestConfigVars) {
+				tb.Helper()
+
+				shards, err := createKinesisShards(ctx, tb, lsPort, testID, 1)
+				require.NoError(tb, err)
 				vars.Var1 = ":" + shards[0]
 			}),
 			integration.StreamTestOptPort(lsPort),
