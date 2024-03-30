@@ -14,14 +14,14 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func promFromYAML(t testing.TB, conf string, args ...any) *Metrics {
-	t.Helper()
+func promFromYAML(tb testing.TB, conf string, args ...any) *Metrics {
+	tb.Helper()
 
 	pConf, err := ConfigSpec().ParseYAML(fmt.Sprintf(conf, args...), nil)
-	require.NoError(t, err)
+	require.NoError(tb, err)
 
 	p, err := FromParsed(pConf, nil)
-	require.NoError(t, err)
+	require.NoError(tb, err)
 
 	return p
 }
@@ -216,6 +216,8 @@ func applyTestMetrics(nm *Metrics) {
 }
 
 func assertContainsTestMetrics(t *testing.T, body string) {
+	t.Helper()
+
 	assert.Contains(t, body, "\ncounterone 21")
 	assert.Contains(t, body, "\ngaugeone 12")
 	assert.Contains(t, body, "\ncountertwo{label1=\"value1\"} 10")

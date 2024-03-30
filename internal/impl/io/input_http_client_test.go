@@ -25,11 +25,12 @@ import (
 	_ "github.com/benthosdev/benthos/v4/internal/impl/io"
 )
 
-func parseYAMLInputConf(t testing.TB, formatStr string, args ...any) (conf input.Config) {
-	t.Helper()
+func parseYAMLInputConf(tb testing.TB, formatStr string, args ...any) (conf input.Config) {
+	tb.Helper()
+
 	var err error
 	conf, err = testutil.InputFromYAML(fmt.Sprintf(formatStr, args...))
-	require.NoError(t, err)
+	require.NoError(tb, err)
 	return
 }
 

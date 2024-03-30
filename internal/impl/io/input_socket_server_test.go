@@ -22,20 +22,20 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/message"
 )
 
-func socketServerInputFromConf(t testing.TB, confStr string, bits ...any) (input.Streamed, string) {
-	t.Helper()
+func socketServerInputFromConf(tb testing.TB, confStr string, bits ...any) (input.Streamed, string) {
+	tb.Helper()
 
 	mgr := mock.NewManager()
 	mgr.Caches["testcache"] = map[string]mock.CacheItem{}
 
 	conf, err := testutil.InputFromYAML(fmt.Sprintf(confStr+"\n  address_cache: testcache", bits...))
-	require.NoError(t, err)
+	require.NoError(tb, err)
 
 	s, err := mgr.NewInput(conf)
-	require.NoError(t, err)
+	require.NoError(tb, err)
 
 	addr := ""
-	require.Eventually(t, func() bool {
+	require.Eventually(tb, func() bool {
 		_ = mgr.AccessCache(context.Background(), "testcache", func(v cache.V1) {
 			res, _ := v.Get(context.Background(), "socket_server_address")
 			addr = string(res)

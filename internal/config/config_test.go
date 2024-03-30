@@ -24,19 +24,21 @@ import (
 	_ "github.com/benthosdev/benthos/v4/public/components/pure"
 )
 
-func testConfToAny(t testing.TB, conf any) any {
+func testConfToAny(tb testing.TB, conf any) any {
+	tb.Helper()
+
 	var node yaml.Node
 	err := node.Encode(conf)
-	require.NoError(t, err)
+	require.NoError(tb, err)
 
 	sanitConf := docs.NewSanitiseConfig(bundle.GlobalEnvironment)
 	sanitConf.RemoveTypeField = true
 	sanitConf.ScrubSecrets = true
 	err = config.Spec().SanitiseYAML(&node, sanitConf)
-	require.NoError(t, err)
+	require.NoError(tb, err)
 
 	var v any
-	require.NoError(t, node.Decode(&v))
+	require.NoError(tb, node.Decode(&v))
 	return v
 }
 
@@ -86,10 +88,13 @@ func TestSetOverrideErrors(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		rdr := config.NewReader("", nil, config.OptAddOverrides(test.input))
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			rdr := config.NewReader("", nil, config.OptAddOverrides(test.input))
 
-		_, _, err := rdr.Read()
-		assert.Contains(t, err.Error(), test.err)
+			_, _, err := rdr.Read()
+			assert.Contains(t, err.Error(), test.err)
+		})
 	}
 }
 

@@ -17,14 +17,16 @@ import (
 	_ "github.com/benthosdev/benthos/v4/internal/impl/pure"
 )
 
-func getLocalStack(t testing.TB) (port string) {
+func getLocalStack(tb testing.TB) (port string) {
+	tb.Helper()
+
 	portInt, err := integration.GetFreePort()
-	require.NoError(t, err)
+	require.NoError(tb, err)
 
 	port = strconv.Itoa(portInt)
 
 	pool, err := dockertest.NewPool("")
-	require.NoError(t, err)
+	require.NoError(tb, err)
 
 	pool.MaxWait = time.Minute
 
@@ -40,17 +42,17 @@ func getLocalStack(t testing.TB) (port string) {
 			fmt.Sprintf("GATEWAY_LISTEN=0.0.0.0:%v", port),
 		},
 	})
-	require.NoError(t, err)
-	t.Cleanup(func() {
-		assert.NoError(t, pool.Purge(resource))
+	require.NoError(tb, err)
+	tb.Cleanup(func() {
+		assert.NoError(tb, pool.Purge(resource))
 	})
 
 	_ = resource.Expire(900)
 
-	require.NoError(t, pool.Retry(func() (err error) {
+	require.NoError(tb, pool.Retry(func() (err error) {
 		defer func() {
 			if err != nil {
-				t.Logf("localstack probe error: %v", err)
+				tb.Logf("localstack probe error: %v", err)
 			}
 		}()
 		return createBucket(context.Background(), port, "test-bucket")

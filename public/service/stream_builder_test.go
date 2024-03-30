@@ -1134,6 +1134,8 @@ func (n *noopOutput) Close(ctx context.Context) error {
 }
 
 func benchmarkStreamRunOutputNX(b *testing.B, size int) {
+	b.Helper()
+
 	var outputsBuf bytes.Buffer
 	for i := 0; i < size; i++ {
 		outputsBuf.WriteString("      - custom: {}\n")

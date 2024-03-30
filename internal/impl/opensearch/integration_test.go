@@ -23,14 +23,14 @@ import (
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
-func outputFromConf(t testing.TB, confStr string, args ...any) *opensearch.Output {
-	t.Helper()
+func outputFromConf(tb testing.TB, confStr string, args ...any) *opensearch.Output {
+	tb.Helper()
 
 	pConf, err := opensearch.OutputSpec().ParseYAML(fmt.Sprintf(confStr, args...), nil)
-	require.NoError(t, err)
+	require.NoError(tb, err)
 
 	o, err := opensearch.OutputFromParsed(pConf, service.MockResources())
-	require.NoError(t, err)
+	require.NoError(tb, err)
 
 	return o
 }
@@ -107,40 +107,42 @@ func TestIntegration(t *testing.T) {
 	}()
 
 	t.Run("TestOpenSearchNoIndex", func(te *testing.T) {
-		testOpenSearchNoIndex(urls, client, te)
+		testOpenSearchNoIndex(te, urls, client)
 	})
 
 	t.Run("TestOpenSearchParallelWrites", func(te *testing.T) {
-		testOpenSearchParallelWrites(urls, client, te)
+		testOpenSearchParallelWrites(te, urls, client)
 	})
 
 	t.Run("TestOpenSearchErrorHandling", func(te *testing.T) {
-		testOpenSearchErrorHandling(urls, client, te)
+		testOpenSearchErrorHandling(te, urls, client)
 	})
 
 	t.Run("TestOpenSearchConnect", func(te *testing.T) {
-		testOpenSearchConnect(urls, client, te)
+		testOpenSearchConnect(te, urls, client)
 	})
 
 	t.Run("TestOpenSearchIndexInterpolation", func(te *testing.T) {
-		testOpenSearchIndexInterpolation(urls, client, te)
+		testOpenSearchIndexInterpolation(te, urls, client)
 	})
 
 	t.Run("TestOpenSearchBatch", func(te *testing.T) {
-		testOpenSearchBatch(urls, client, te)
+		testOpenSearchBatch(te, urls, client)
 	})
 
 	t.Run("TestOpenSearchBatchDelete", func(te *testing.T) {
-		testOpenSearchBatchDelete(urls, client, te)
+		testOpenSearchBatchDelete(te, urls, client)
 	})
 
 	t.Run("TestOpenSearchBatchIDCollision", func(te *testing.T) {
-		testOpenSearchBatchIDCollision(urls, client, te)
+		testOpenSearchBatchIDCollision(te, urls, client)
 	})
 
 }
 
-func testOpenSearchNoIndex(urls []string, client *os.Client, t *testing.T) {
+func testOpenSearchNoIndex(t *testing.T, urls []string, client *os.Client) {
+	t.Helper()
+
 	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
 	defer done()
 
@@ -176,17 +178,19 @@ action: index
 	}
 }
 
-func resEqualsJSON(t testing.TB, res *os.Response, exp string) {
-	t.Helper()
+func resEqualsJSON(tb testing.TB, res *os.Response, exp string) {
+	tb.Helper()
 	var tmp struct {
 		Source json.RawMessage `json:"_source"`
 	}
 	dec := json.NewDecoder(res.Body)
-	require.NoError(t, dec.Decode(&tmp))
-	assert.JSONEq(t, exp, string(tmp.Source))
+	require.NoError(tb, dec.Decode(&tmp))
+	assert.JSONEq(tb, exp, string(tmp.Source))
 }
 
-func testOpenSearchParallelWrites(urls []string, client *os.Client, t *testing.T) {
+func testOpenSearchParallelWrites(t *testing.T, urls []string, client *os.Client) {
+	t.Helper()
+
 	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
 	defer done()
 
@@ -237,7 +241,9 @@ action: index
 	}
 }
 
-func testOpenSearchErrorHandling(urls []string, client *os.Client, t *testing.T) {
+func testOpenSearchErrorHandling(t *testing.T, urls []string, _ *os.Client) {
+	t.Helper()
+
 	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
 	defer done()
 
@@ -263,7 +269,9 @@ action: index
 	}))
 }
 
-func testOpenSearchConnect(urls []string, client *os.Client, t *testing.T) {
+func testOpenSearchConnect(t *testing.T, urls []string, client *os.Client) {
+	t.Helper()
+
 	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
 	defer done()
 
@@ -304,7 +312,9 @@ action: index
 	}
 }
 
-func testOpenSearchIndexInterpolation(urls []string, client *os.Client, t *testing.T) {
+func testOpenSearchIndexInterpolation(t *testing.T, urls []string, client *os.Client) {
+	t.Helper()
+
 	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
 	defer done()
 
@@ -344,7 +354,9 @@ action: index
 	}
 }
 
-func testOpenSearchBatch(urls []string, client *os.Client, t *testing.T) {
+func testOpenSearchBatch(t *testing.T, urls []string, client *os.Client) {
+	t.Helper()
+
 	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
 	defer done()
 
@@ -385,7 +397,9 @@ action: index
 	}
 }
 
-func testOpenSearchBatchDelete(urls []string, client *os.Client, t *testing.T) {
+func testOpenSearchBatchDelete(t *testing.T, urls []string, client *os.Client) {
+	t.Helper()
+
 	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
 	defer done()
 
@@ -453,7 +467,9 @@ action: ${! @elastic_action }
 	}
 }
 
-func testOpenSearchBatchIDCollision(urls []string, client *os.Client, t *testing.T) {
+func testOpenSearchBatchIDCollision(t *testing.T, urls []string, client *os.Client) {
+	t.Helper()
+
 	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
 	defer done()
 

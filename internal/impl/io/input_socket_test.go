@@ -20,14 +20,14 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/message"
 )
 
-func inputFromConf(t testing.TB, confStr string, bits ...any) input.Streamed {
-	t.Helper()
+func inputFromConf(tb testing.TB, confStr string, bits ...any) input.Streamed {
+	tb.Helper()
 
 	conf, err := testutil.InputFromYAML(fmt.Sprintf(confStr, bits...))
-	require.NoError(t, err)
+	require.NoError(tb, err)
 
 	s, err := mock.NewManager().NewInput(conf)
-	require.NoError(t, err)
+	require.NoError(tb, err)
 	return s
 }
 

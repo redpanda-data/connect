@@ -747,6 +747,8 @@ func (r *mockStaticReader) Close(ctx context.Context) error {
 }
 
 func benchmarkAsyncReaderGenerateN(b *testing.B, capacity int) {
+	b.Helper()
+
 	tCtx, done := context.WithTimeout(context.Background(), time.Second*5)
 	defer done()
 

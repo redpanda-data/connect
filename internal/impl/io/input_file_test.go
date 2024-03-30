@@ -191,6 +191,8 @@ file:
 }
 
 func assertValidMetaData(t *testing.T, res *message.Part, tmpFile *os.File) {
+	t.Helper()
+
 	assert.Equal(t, tmpFile.Name(), res.MetaGetStr("path"))
 	assert.Equal(t, mockTime().Format(time.RFC3339), res.MetaGetStr("mod_time"))
 	assert.Equal(t, strconv.Itoa(int(mockTime().Unix())), res.MetaGetStr("mod_time_unix"))

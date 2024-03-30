@@ -17,6 +17,8 @@ import (
 )
 
 func executeLintSubcmd(t *testing.T, args []string) (exitCode int, printedErr string) {
+	t.Helper()
+
 	cliApp := icli.App()
 	for _, c := range cliApp.Commands {
 		if c.Name == "lint" {

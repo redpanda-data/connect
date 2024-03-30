@@ -101,6 +101,8 @@ byte_array_as_string: true
 }
 
 func testParquetEncodeDecodeRoundTrip(t *testing.T, encodeProc *parquetEncodeProcessor, decodeProc *parquetDecodeProcessor) {
+	t.Helper()
+
 	tctx := context.Background()
 
 	for _, test := range []struct {

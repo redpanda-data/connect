@@ -17,16 +17,16 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/message"
 )
 
-func newSwitch(t testing.TB, mockOutputs []*mock.OutputChanneled, confStr string, args ...any) *switchOutput {
-	t.Helper()
+func newSwitch(tb testing.TB, mockOutputs []*mock.OutputChanneled, confStr string, args ...any) *switchOutput {
+	tb.Helper()
 
 	mgr := mock.NewManager()
 
 	pConf, err := switchOutputSpec().ParseYAML(fmt.Sprintf(confStr, args...), nil)
-	require.NoError(t, err)
+	require.NoError(tb, err)
 
 	s, err := switchOutputFromParsed(pConf, mgr)
-	require.NoError(t, err)
+	require.NoError(tb, err)
 
 	for i := 0; i < len(mockOutputs); i++ {
 		close(s.outputTSChans[i])

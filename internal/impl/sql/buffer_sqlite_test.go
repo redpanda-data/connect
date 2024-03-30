@@ -20,23 +20,23 @@ import (
 	_ "github.com/benthosdev/benthos/v4/public/components/pure/extended"
 )
 
-func msgEqualStr(t testing.TB, expected string, m *service.Message) {
-	t.Helper()
+func msgEqualStr(tb testing.TB, expected string, m *service.Message) {
+	tb.Helper()
 
 	mBytes, err := m.AsBytes()
-	require.NoError(t, err)
+	require.NoError(tb, err)
 
-	assert.Equal(t, expected, string(mBytes))
+	assert.Equal(tb, expected, string(mBytes))
 }
 
-func msgEqual(t testing.TB, exp, act *service.Message) {
-	t.Helper()
+func msgEqual(tb testing.TB, exp, act *service.Message) {
+	tb.Helper()
 
 	expBytes, err := exp.AsBytes()
-	require.NoError(t, err)
+	require.NoError(tb, err)
 
 	actBytes, err := act.AsBytes()
-	require.NoError(t, err)
+	require.NoError(tb, err)
 
 	expectedKeys := map[string]any{}
 	_ = exp.MetaWalkMut(func(key string, value any) error {
@@ -45,24 +45,24 @@ func msgEqual(t testing.TB, exp, act *service.Message) {
 	})
 	_ = act.MetaWalkMut(func(key string, actV any) error {
 		expV, exists := expectedKeys[key]
-		assert.True(t, exists, "meta key %v expected", key)
-		assert.Equal(t, expV, actV, "meta key %v matches", key)
+		assert.True(tb, exists, "meta key %v expected", key)
+		assert.Equal(tb, expV, actV, "meta key %v matches", key)
 		delete(expectedKeys, key)
 		return nil
 	})
-	assert.Empty(t, expectedKeys, "metadata keys in message")
+	assert.Empty(tb, expectedKeys, "metadata keys in message")
 
-	assert.Equal(t, string(expBytes), string(actBytes), "content matches")
+	assert.Equal(tb, string(expBytes), string(actBytes), "content matches")
 }
 
-func memBufFromConf(t testing.TB, conf string) *sql.SQLiteBuffer {
-	t.Helper()
+func memBufFromConf(tb testing.TB, conf string) *sql.SQLiteBuffer {
+	tb.Helper()
 
 	parsedConf, err := sql.SQLiteBufferConfig().ParseYAML(conf, nil)
-	require.NoError(t, err)
+	require.NoError(tb, err)
 
 	buf, err := sql.NewSQLiteBufferFromConfig(parsedConf, service.MockResources())
-	require.NoError(t, err)
+	require.NoError(tb, err)
 
 	return buf
 }
@@ -592,6 +592,8 @@ func BenchmarkBufferSQLiteBatch100(b *testing.B) {
 }
 
 func benchmarkBufferSQLiteProcsBatchedN(b *testing.B, n int) {
+	b.Helper()
+
 	tmpDir := b.TempDir()
 
 	ctx := context.Background()

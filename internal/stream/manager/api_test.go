@@ -547,19 +547,21 @@ output:
 	assert.Equal(t, "root = this.BAZ_ONE", gabs.Wrap(conf.Config).S("input", "generate", "mapping").Data())
 }
 
-func testConfToAny(t testing.TB, conf any) any {
+func testConfToAny(tb testing.TB, conf any) any {
+	tb.Helper()
+
 	var node yaml.Node
 	err := node.Encode(conf)
-	require.NoError(t, err)
+	require.NoError(tb, err)
 
 	sanitConf := docs.NewSanitiseConfig(bundle.GlobalEnvironment)
 	sanitConf.RemoveTypeField = true
 	sanitConf.ScrubSecrets = true
 	err = config.Spec().SanitiseYAML(&node, sanitConf)
-	require.NoError(t, err)
+	require.NoError(tb, err)
 
 	var v any
-	require.NoError(t, node.Decode(&v))
+	require.NoError(tb, node.Decode(&v))
 	return v
 }
 

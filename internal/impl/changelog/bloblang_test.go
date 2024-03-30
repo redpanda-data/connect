@@ -120,6 +120,8 @@ type diffArgs struct {
 }
 
 func runDiff(t *testing.T, arg diffArgs) {
+	t.Helper()
+
 	mapping := `
 root = this.before.diff(this.after)
 `
@@ -239,6 +241,8 @@ type patchArgs struct {
 }
 
 func runPatch(t *testing.T, arg patchArgs) {
+	t.Helper()
+
 	mapping := `
 root = this.input.patch(this.changelog)
 `

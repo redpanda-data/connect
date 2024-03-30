@@ -92,12 +92,13 @@ cache_resources:
 	suite.Run(
 		t, template,
 		integration.CacheTestOptVarOne(dsn),
-		integration.CacheTestOptPreTest(func(t testing.TB, ctx context.Context, testID string, vars *integration.CacheTestConfigVars) {
+		integration.CacheTestOptPreTest(func(tb testing.TB, ctx context.Context, testID string, vars *integration.CacheTestConfigVars) {
+			tb.Helper()
 			tableName := strings.ReplaceAll(testID, "-", "_")
 			tableName = "table_" + tableName
 			vars.Var2 = tableName
 			_, err := createTable(tableName)
-			require.NoError(t, err)
+			require.NoError(tb, err)
 		}),
 	)
 }

@@ -20,12 +20,14 @@ import (
 	_ "github.com/benthosdev/benthos/v4/public/components/pure"
 )
 
-func testCacheOutput(t testing.TB, res bundle.NewManagement, confPattern string, args ...any) *pure.CacheWriter {
+func testCacheOutput(tb testing.TB, res bundle.NewManagement, confPattern string, args ...any) *pure.CacheWriter {
+	tb.Helper()
+
 	pConf, err := pure.CacheOutputSpec().ParseYAML(fmt.Sprintf(confPattern, args...), nil)
-	require.NoError(t, err)
+	require.NoError(tb, err)
 
 	w, err := pure.NewCacheWriter(pConf, res)
-	require.NoError(t, err)
+	require.NoError(tb, err)
 
 	return w
 }

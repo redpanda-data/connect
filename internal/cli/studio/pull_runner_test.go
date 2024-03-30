@@ -44,6 +44,8 @@ func testServerForPullRunner(
 	args []string,
 	expectedRequests ...tExpectedRequest,
 ) (pr *studio.PullRunner, waitFn func(context.Context)) {
+	t.Helper()
+
 	if nowFn == nil {
 		nowFn = time.Now
 	}
@@ -169,6 +171,8 @@ func TestPullRunnerHappyPath(t *testing.T) {
 	pr, waitFn := testServerForPullRunner(t, nil,
 		[]string{"benthos", "--log.level", "none", "studio", "pull", "--name", "foobarnode", "--session", "foosession"},
 		expectedRequest("/api/v1/node/session/foosession/init", func(t *testing.T, w http.ResponseWriter, r *http.Request) {
+			t.Helper()
+
 			require.Equal(t, "POST", r.Method)
 			jsonRequestEqual(t, r, obj{
 				"name": "foobarnode",
@@ -184,6 +188,8 @@ func TestPullRunnerHappyPath(t *testing.T) {
 			})
 		}),
 		expectedRequest("/api/v1/node/session/foosession/download/main%20a.yaml", func(t *testing.T, w http.ResponseWriter, r *http.Request) {
+			t.Helper()
+
 			require.Equal(t, "GET", r.Method)
 			stringResponse(t, w, `
 http:
@@ -200,9 +206,13 @@ output:
 `)
 		}),
 		expectedRequest("/api/v1/node/session/foosession/download/resa.yaml", func(t *testing.T, w http.ResponseWriter, r *http.Request) {
+			t.Helper()
+
 			require.Equal(t, "HEAD", r.Method)
 		}),
 		expectedRequest("/api/v1/node/session/foosession/download/resa.yaml", func(t *testing.T, w http.ResponseWriter, r *http.Request) {
+			t.Helper()
+
 			require.Equal(t, "GET", r.Method)
 			stringResponse(t, w, replacePaths(tmpDir, `
 output_resources:
@@ -213,6 +223,8 @@ output_resources:
 `))
 		}),
 		expectedRequest("/api/v1/node/session/foosession/deployment/depaid/sync", func(t *testing.T, w http.ResponseWriter, r *http.Request) {
+			t.Helper()
+
 			require.Equal(t, "POST", r.Method)
 			jsonRequestSupersetMatch(t, r, obj{
 				"name":        "foobarnode",
@@ -228,6 +240,8 @@ output_resources:
 			})
 		}),
 		expectedRequest("/api/v1/node/session/foosession/download/resa.yaml", func(t *testing.T, w http.ResponseWriter, r *http.Request) {
+			t.Helper()
+
 			require.Equal(t, "GET", r.Method)
 			stringResponse(t, w, replacePaths(tmpDir, `
 output_resources:
@@ -238,6 +252,8 @@ output_resources:
 `))
 		}),
 		expectedRequest("/api/v1/node/session/foosession/leave", func(t *testing.T, w http.ResponseWriter, r *http.Request) {
+			t.Helper()
+
 			require.Equal(t, "POST", r.Method)
 		}),
 	)
@@ -267,6 +283,8 @@ func TestPullRunnerBadConfig(t *testing.T) {
 	pr, waitFn := testServerForPullRunner(t, nil,
 		[]string{"benthos", "--log.level", "none", "studio", "pull", "--name", "foobarnode", "--session", "foosession"},
 		expectedRequest("/api/v1/node/session/foosession/init", func(t *testing.T, w http.ResponseWriter, r *http.Request) {
+			t.Helper()
+
 			require.Equal(t, "POST", r.Method)
 			jsonRequestEqual(t, r, obj{
 				"name": "foobarnode",
@@ -279,6 +297,8 @@ func TestPullRunnerBadConfig(t *testing.T) {
 			})
 		}),
 		expectedRequest("/api/v1/node/session/foosession/download/maina.yaml", func(t *testing.T, w http.ResponseWriter, r *http.Request) {
+			t.Helper()
+
 			require.Equal(t, "GET", r.Method)
 			stringResponse(t, w, replacePaths(tmpDir, `
 http:
@@ -293,6 +313,8 @@ output:
 `))
 		}),
 		expectedRequest("/api/v1/node/session/foosession/deployment/depaid/sync", func(t *testing.T, w http.ResponseWriter, r *http.Request) {
+			t.Helper()
+
 			require.Equal(t, "POST", r.Method)
 			jsonRequestSupersetMatch(t, r, obj{
 				"name":        "foobarnode",
@@ -302,6 +324,8 @@ output:
 			jsonResponse(t, w, obj{})
 		}),
 		expectedRequest("/api/v1/node/session/foosession/deployment/depaid/sync", func(t *testing.T, w http.ResponseWriter, r *http.Request) {
+			t.Helper()
+
 			require.Equal(t, "POST", r.Method)
 			jsonRequestSupersetMatch(t, r, obj{
 				"name":        "foobarnode",
@@ -313,6 +337,8 @@ output:
 			})
 		}),
 		expectedRequest("/api/v1/node/session/foosession/download/maina.yaml", func(t *testing.T, w http.ResponseWriter, r *http.Request) {
+			t.Helper()
+
 			require.Equal(t, "GET", r.Method)
 			stringResponse(t, w, replacePaths(tmpDir, `
 http:
@@ -329,6 +355,8 @@ output:
 `))
 		}),
 		expectedRequest("/api/v1/node/session/foosession/leave", func(t *testing.T, w http.ResponseWriter, r *http.Request) {
+			t.Helper()
+
 			require.Equal(t, "POST", r.Method)
 		}),
 	)
@@ -354,6 +382,8 @@ func TestPullRunnerBlockedShutdown(t *testing.T) {
 	pr, waitFn := testServerForPullRunner(t, nil,
 		[]string{"benthos", "--log.level", "none", "studio", "pull", "--name", "foobarnode", "--session", "foosession"},
 		expectedRequest("/api/v1/node/session/foosession/init", func(t *testing.T, w http.ResponseWriter, r *http.Request) {
+			t.Helper()
+
 			require.Equal(t, "POST", r.Method)
 			jsonRequestEqual(t, r, obj{
 				"name": "foobarnode",
@@ -366,6 +396,8 @@ func TestPullRunnerBlockedShutdown(t *testing.T) {
 			})
 		}),
 		expectedRequest("/api/v1/node/session/foosession/download/maina.yaml", func(t *testing.T, w http.ResponseWriter, r *http.Request) {
+			t.Helper()
+
 			require.Equal(t, "GET", r.Method)
 			stringResponse(t, w, replacePaths(tmpDir, `
 http:
@@ -384,6 +416,8 @@ shutdown_timeout: 2s
 `))
 		}),
 		expectedRequest("/api/v1/node/session/foosession/deployment/depaid/sync", func(t *testing.T, w http.ResponseWriter, r *http.Request) {
+			t.Helper()
+
 			require.Equal(t, "POST", r.Method)
 			jsonRequestEqual(t, r, obj{
 				"name":        "foobarnode",
@@ -394,6 +428,8 @@ shutdown_timeout: 2s
 			})
 		}),
 		expectedRequest("/api/v1/node/session/foosession/download/maina.yaml", func(t *testing.T, w http.ResponseWriter, r *http.Request) {
+			t.Helper()
+
 			require.Equal(t, "GET", r.Method)
 			stringResponse(t, w, replacePaths(tmpDir, `
 http:
@@ -410,6 +446,8 @@ output:
 `))
 		}),
 		expectedRequest("/api/v1/node/session/foosession/leave", func(t *testing.T, w http.ResponseWriter, r *http.Request) {
+			t.Helper()
+
 			require.Equal(t, "POST", r.Method)
 		}),
 	)
@@ -435,6 +473,8 @@ func TestPullRunnerSetOverride(t *testing.T) {
 	pr, waitFn := testServerForPullRunner(t, nil,
 		[]string{"benthos", "--set", `input.generate.mapping=root.id = "second"`, "--log.level", "none", "studio", "pull", "--name", "foobarnode", "--session", "foosession"},
 		expectedRequest("/api/v1/node/session/foosession/init", func(t *testing.T, w http.ResponseWriter, r *http.Request) {
+			t.Helper()
+
 			require.Equal(t, "POST", r.Method)
 			jsonRequestEqual(t, r, obj{
 				"name": "foobarnode",
@@ -447,6 +487,8 @@ func TestPullRunnerSetOverride(t *testing.T) {
 			})
 		}),
 		expectedRequest("/api/v1/node/session/foosession/download/maina.yaml", func(t *testing.T, w http.ResponseWriter, r *http.Request) {
+			t.Helper()
+
 			require.Equal(t, "GET", r.Method)
 			stringResponse(t, w, replacePaths(tmpDir, `
 http:
@@ -463,6 +505,8 @@ output:
 `))
 		}),
 		expectedRequest("/api/v1/node/session/foosession/leave", func(t *testing.T, w http.ResponseWriter, r *http.Request) {
+			t.Helper()
+
 			require.Equal(t, "POST", r.Method)
 		}),
 	)
@@ -485,6 +529,8 @@ func TestPullRunnerReassignment(t *testing.T) {
 	pr, waitFn := testServerForPullRunner(t, nil,
 		[]string{"benthos", "--log.level", "none", "studio", "pull", "--name", "foobarnode", "--session", "foosession"},
 		expectedRequest("/api/v1/node/session/foosession/init", func(t *testing.T, w http.ResponseWriter, r *http.Request) {
+			t.Helper()
+
 			require.Equal(t, "POST", r.Method)
 			jsonRequestEqual(t, r, obj{
 				"name": "foobarnode",
@@ -497,6 +543,8 @@ func TestPullRunnerReassignment(t *testing.T) {
 			})
 		}),
 		expectedRequest("/api/v1/node/session/foosession/download/maina.yaml", func(t *testing.T, w http.ResponseWriter, r *http.Request) {
+			t.Helper()
+
 			require.Equal(t, "GET", r.Method)
 			stringResponse(t, w, replacePaths(tmpDir, `
 http:
@@ -513,6 +561,8 @@ output:
 `))
 		}),
 		expectedRequest("/api/v1/node/session/foosession/deployment/depaid/sync", func(t *testing.T, w http.ResponseWriter, r *http.Request) {
+			t.Helper()
+
 			require.Equal(t, "POST", r.Method)
 			jsonRequestSupersetMatch(t, r, obj{
 				"name":        "foobarnode",
@@ -526,6 +576,8 @@ output:
 			})
 		}),
 		expectedRequest("/api/v1/node/session/foosession/deployment/depbid/sync", func(t *testing.T, w http.ResponseWriter, r *http.Request) {
+			t.Helper()
+
 			require.Equal(t, "POST", r.Method)
 			jsonRequestSupersetMatch(t, r, obj{
 				"name":        "foobarnode",
@@ -536,6 +588,8 @@ output:
 			})
 		}),
 		expectedRequest("/api/v1/node/session/foosession/download/mainb.yaml", func(t *testing.T, w http.ResponseWriter, r *http.Request) {
+			t.Helper()
+
 			require.Equal(t, "GET", r.Method)
 			stringResponse(t, w, replacePaths(tmpDir, `
 http:
@@ -552,6 +606,8 @@ output:
 `))
 		}),
 		expectedRequest("/api/v1/node/session/foosession/leave", func(t *testing.T, w http.ResponseWriter, r *http.Request) {
+			t.Helper()
+
 			require.Equal(t, "POST", r.Method)
 		}),
 	)
@@ -590,6 +646,8 @@ output:
 	pr, waitFn := testServerForPullRunner(t, nil,
 		[]string{"benthos", "-c", filepath.Join(tmpDir, "diskmain.yaml"), "--log.level", "none", "studio", "pull", "--name", "foobarnode", "--session", "foosession"},
 		expectedRequest("/api/v1/node/session/foosession/init", func(t *testing.T, w http.ResponseWriter, r *http.Request) {
+			t.Helper()
+
 			require.Equal(t, "POST", r.Method)
 			jsonRequestEqual(t, r, obj{
 				"name": "foobarnode",
@@ -602,6 +660,8 @@ output:
 			})
 		}),
 		expectedRequest("/api/v1/node/session/foosession/download/maina.yaml", func(t *testing.T, w http.ResponseWriter, r *http.Request) {
+			t.Helper()
+
 			require.Equal(t, "GET", r.Method)
 			stringResponse(t, w, replacePaths(tmpDir, `
 input:
@@ -612,6 +672,8 @@ input:
 `))
 		}),
 		expectedRequest("/api/v1/node/session/foosession/leave", func(t *testing.T, w http.ResponseWriter, r *http.Request) {
+			t.Helper()
+
 			require.Equal(t, "POST", r.Method)
 		}),
 	)
@@ -643,6 +705,8 @@ output:
 	pr, waitFn := testServerForPullRunner(t, nil,
 		[]string{"benthos", "-c", filepath.Join(tmpDir, "diskmain.yaml"), "--set", `input.generate.mapping=root.id = "second"`, "--log.level", "none", "studio", "pull", "--name", "foobarnode", "--session", "foosession"},
 		expectedRequest("/api/v1/node/session/foosession/init", func(t *testing.T, w http.ResponseWriter, r *http.Request) {
+			t.Helper()
+
 			require.Equal(t, "POST", r.Method)
 			jsonRequestEqual(t, r, obj{
 				"name": "foobarnode",
@@ -655,6 +719,8 @@ output:
 			})
 		}),
 		expectedRequest("/api/v1/node/session/foosession/download/maina.yaml", func(t *testing.T, w http.ResponseWriter, r *http.Request) {
+			t.Helper()
+
 			require.Equal(t, "GET", r.Method)
 			stringResponse(t, w, replacePaths(tmpDir, `
 input:
@@ -665,6 +731,8 @@ input:
 `))
 		}),
 		expectedRequest("/api/v1/node/session/foosession/leave", func(t *testing.T, w http.ResponseWriter, r *http.Request) {
+			t.Helper()
+
 			require.Equal(t, "POST", r.Method)
 		}),
 	)
@@ -694,6 +762,8 @@ func TestPullRunnerMetrics(t *testing.T) {
 	},
 		[]string{"benthos", "--log.level", "none", "studio", "pull", "--name", "foobarnode", "--session", "foosession"},
 		expectedRequest("/api/v1/node/session/foosession/init", func(t *testing.T, w http.ResponseWriter, r *http.Request) {
+			t.Helper()
+
 			require.Equal(t, "POST", r.Method)
 			jsonRequestEqual(t, r, obj{
 				"name": "foobarnode",
@@ -706,6 +776,8 @@ func TestPullRunnerMetrics(t *testing.T) {
 			})
 		}),
 		expectedRequest("/api/v1/node/session/foosession/download/maina.yaml", func(t *testing.T, w http.ResponseWriter, r *http.Request) {
+			t.Helper()
+
 			require.Equal(t, "GET", r.Method)
 			stringResponse(t, w, replacePaths(tmpDir, `
 http:
@@ -723,6 +795,8 @@ output:
 `))
 		}),
 		expectedRequest("/api/v1/node/session/foosession/deployment/depaid/sync", func(t *testing.T, w http.ResponseWriter, r *http.Request) {
+			t.Helper()
+
 			require.Equal(t, "POST", r.Method)
 			jsonRequestEqual(t, r, obj{
 				"name":        "foobarnode",
@@ -731,6 +805,8 @@ output:
 			jsonResponse(t, w, obj{})
 		}),
 		expectedRequest("/api/v1/node/session/foosession/deployment/depaid/sync", func(t *testing.T, w http.ResponseWriter, r *http.Request) {
+			t.Helper()
+
 			require.Equal(t, "POST", r.Method)
 			jsonRequestEqual(t, r, obj{
 				"name":        "foobarnode",
@@ -753,6 +829,8 @@ output:
 			})
 		}),
 		expectedRequest("/api/v1/node/session/foosession/download/maina.yaml", func(t *testing.T, w http.ResponseWriter, r *http.Request) {
+			t.Helper()
+
 			require.Equal(t, "GET", r.Method)
 			stringResponse(t, w, replacePaths(tmpDir, `
 http:
@@ -770,6 +848,8 @@ output:
 `))
 		}),
 		expectedRequest("/api/v1/node/session/foosession/deployment/depaid/sync", func(t *testing.T, w http.ResponseWriter, r *http.Request) {
+			t.Helper()
+
 			require.Equal(t, "POST", r.Method)
 			jsonRequestEqual(t, r, obj{
 				"name":        "foobarnode",
@@ -778,6 +858,8 @@ output:
 			jsonResponse(t, w, obj{})
 		}),
 		expectedRequest("/api/v1/node/session/foosession/deployment/depaid/sync", func(t *testing.T, w http.ResponseWriter, r *http.Request) {
+			t.Helper()
+
 			require.Equal(t, "POST", r.Method)
 			jsonRequestEqual(t, r, obj{
 				"name":        "foobarnode",
@@ -798,6 +880,8 @@ output:
 			jsonResponse(t, w, obj{})
 		}),
 		expectedRequest("/api/v1/node/session/foosession/leave", func(t *testing.T, w http.ResponseWriter, r *http.Request) {
+			t.Helper()
+
 			require.Equal(t, "POST", r.Method)
 		}),
 	)
@@ -850,6 +934,8 @@ func TestPullRunnerRateLimit(t *testing.T) {
 	},
 		[]string{"benthos", "--log.level", "none", "studio", "pull", "--name", "foobarnode", "--session", "foosession"},
 		expectedRequest("/api/v1/node/session/foosession/init", func(t *testing.T, w http.ResponseWriter, r *http.Request) {
+			t.Helper()
+
 			require.Equal(t, "POST", r.Method)
 			jsonRequestEqual(t, r, obj{
 				"name": "foobarnode",
@@ -862,6 +948,8 @@ func TestPullRunnerRateLimit(t *testing.T) {
 			})
 		}),
 		expectedRequest("/api/v1/node/session/foosession/download/maina.yaml", func(t *testing.T, w http.ResponseWriter, r *http.Request) {
+			t.Helper()
+
 			require.Equal(t, "GET", r.Method)
 			stringResponse(t, w, replacePaths(tmpDir, `
 http:
@@ -879,6 +967,8 @@ output:
 `))
 		}),
 		expectedRequest("/api/v1/node/session/foosession/deployment/depaid/sync", func(t *testing.T, w http.ResponseWriter, r *http.Request) {
+			t.Helper()
+
 			require.Equal(t, "POST", r.Method)
 			jsonRequestEqual(t, r, obj{
 				"name":        "foobarnode",
@@ -888,6 +978,8 @@ output:
 			w.WriteHeader(http.StatusTooManyRequests)
 		}),
 		expectedRequest("/api/v1/node/session/foosession/deployment/depaid/sync", func(t *testing.T, w http.ResponseWriter, r *http.Request) {
+			t.Helper()
+
 			require.Equal(t, "POST", r.Method)
 			jsonRequestEqual(t, r, obj{
 				"name":        "foobarnode",
@@ -896,6 +988,8 @@ output:
 			jsonResponse(t, w, obj{})
 		}),
 		expectedRequest("/api/v1/node/session/foosession/leave", func(t *testing.T, w http.ResponseWriter, r *http.Request) {
+			t.Helper()
+
 			require.Equal(t, "POST", r.Method)
 		}),
 	)
@@ -924,6 +1018,8 @@ func TestPullRunnerTracesDisabled(t *testing.T) {
 	pr, waitFn := testServerForPullRunner(t, nil,
 		[]string{"benthos", "--log.level", "none", "studio", "pull", "--name", "foobarnode", "--session", "foosession"},
 		expectedRequest("/api/v1/node/session/foosession/init", func(t *testing.T, w http.ResponseWriter, r *http.Request) {
+			t.Helper()
+
 			require.Equal(t, "POST", r.Method)
 			jsonRequestEqual(t, r, obj{
 				"name": "foobarnode",
@@ -935,6 +1031,8 @@ func TestPullRunnerTracesDisabled(t *testing.T) {
 			})
 		}),
 		expectedRequest("/api/v1/node/session/foosession/download/maina.yaml", func(t *testing.T, w http.ResponseWriter, r *http.Request) {
+			t.Helper()
+
 			require.Equal(t, "GET", r.Method)
 			stringResponse(t, w, replacePaths(tmpDir, `
 http:
@@ -953,6 +1051,8 @@ output:
 `))
 		}),
 		expectedRequest("/api/v1/node/session/foosession/deployment/depaid/sync", func(t *testing.T, w http.ResponseWriter, r *http.Request) {
+			t.Helper()
+
 			require.Equal(t, "POST", r.Method)
 			jsonRequestEqual(t, r, obj{
 				"name":        "foobarnode",
@@ -969,6 +1069,8 @@ output:
 			})
 		}),
 		expectedRequest("/api/v1/node/session/foosession/download/maina.yaml", func(t *testing.T, w http.ResponseWriter, r *http.Request) {
+			t.Helper()
+
 			require.Equal(t, "GET", r.Method)
 			stringResponse(t, w, replacePaths(tmpDir, `
 http:
@@ -987,6 +1089,8 @@ output:
 `))
 		}),
 		expectedRequest("/api/v1/node/session/foosession/deployment/depaid/sync", func(t *testing.T, w http.ResponseWriter, r *http.Request) {
+			t.Helper()
+
 			require.Equal(t, "POST", r.Method)
 			jsonRequestEqual(t, r, obj{
 				"name":        "foobarnode",
@@ -1000,6 +1104,8 @@ output:
 			jsonResponse(t, w, obj{})
 		}),
 		expectedRequest("/api/v1/node/session/foosession/leave", func(t *testing.T, w http.ResponseWriter, r *http.Request) {
+			t.Helper()
+
 			require.Equal(t, "POST", r.Method)
 		}),
 	)
@@ -1035,6 +1141,8 @@ func TestPullRunnerTracesEnabled(t *testing.T) {
 	pr, waitFn := testServerForPullRunner(t, nil,
 		[]string{"benthos", "--log.level", "none", "studio", "pull", "--name", "foobarnode", "--session", "foosession", "--send-traces"},
 		expectedRequest("/api/v1/node/session/foosession/init", func(t *testing.T, w http.ResponseWriter, r *http.Request) {
+			t.Helper()
+
 			require.Equal(t, "POST", r.Method)
 			jsonRequestEqual(t, r, obj{
 				"name": "foobarnode",
@@ -1046,6 +1154,8 @@ func TestPullRunnerTracesEnabled(t *testing.T) {
 			})
 		}),
 		expectedRequest("/api/v1/node/session/foosession/download/maina.yaml", func(t *testing.T, w http.ResponseWriter, r *http.Request) {
+			t.Helper()
+
 			require.Equal(t, "GET", r.Method)
 			stringResponse(t, w, replacePaths(tmpDir, `
 http:
@@ -1064,6 +1174,8 @@ output:
 `))
 		}),
 		expectedRequest("/api/v1/node/session/foosession/deployment/depaid/sync", func(t *testing.T, w http.ResponseWriter, r *http.Request) {
+			t.Helper()
+
 			require.Equal(t, "POST", r.Method)
 			jsonRequestEqual(t, r, obj{
 				"name":        "foobarnode",
@@ -1080,6 +1192,8 @@ output:
 			})
 		}),
 		expectedRequest("/api/v1/node/session/foosession/download/maina.yaml", func(t *testing.T, w http.ResponseWriter, r *http.Request) {
+			t.Helper()
+
 			require.Equal(t, "GET", r.Method)
 			stringResponse(t, w, replacePaths(tmpDir, `
 http:
@@ -1098,6 +1212,8 @@ output:
 `))
 		}),
 		expectedRequest("/api/v1/node/session/foosession/deployment/depaid/sync", func(t *testing.T, w http.ResponseWriter, r *http.Request) {
+			t.Helper()
+
 			require.Equal(t, "POST", r.Method)
 			jsonRequestEqual(t, r, obj{
 				"name":        "foobarnode",
@@ -1141,6 +1257,8 @@ output:
 			jsonResponse(t, w, obj{})
 		}),
 		expectedRequest("/api/v1/node/session/foosession/leave", func(t *testing.T, w http.ResponseWriter, r *http.Request) {
+			t.Helper()
+
 			require.Equal(t, "POST", r.Method)
 		}),
 	)
@@ -1179,6 +1297,8 @@ map a {
 	pr, waitFn := testServerForPullRunner(t, nil,
 		[]string{"benthos", "--log.level", "none", "studio", "pull", "--name", "foobarnode", "--session", "foosession"},
 		expectedRequest("/api/v1/node/session/foosession/init", func(t *testing.T, w http.ResponseWriter, r *http.Request) {
+			t.Helper()
+
 			require.Equal(t, "POST", r.Method)
 			jsonRequestEqual(t, r, obj{
 				"name": "foobarnode",
@@ -1191,6 +1311,8 @@ map a {
 			})
 		}),
 		expectedRequest("/api/v1/node/session/foosession/download/maina.yaml", func(t *testing.T, w http.ResponseWriter, r *http.Request) {
+			t.Helper()
+
 			require.Equal(t, "GET", r.Method)
 			stringResponse(t, w, replacePaths(tmpDir, `
 http:
@@ -1217,10 +1339,14 @@ output:
 		expectedRequest(
 			fmt.Sprintf("/api/v1/node/session/foosession/download/%v", url.PathEscape(filepath.Join(tmpDir, "a.blobl"))),
 			func(t *testing.T, w http.ResponseWriter, r *http.Request) {
+				t.Helper()
+
 				require.Equal(t, "GET", r.Method)
 				http.Error(w, "Nah", http.StatusNotFound)
 			}),
 		expectedRequest("/api/v1/node/session/foosession/download/b.blobl", func(t *testing.T, w http.ResponseWriter, r *http.Request) {
+			t.Helper()
+
 			require.Equal(t, "GET", r.Method)
 			stringResponse(t, w, `
 map b {
@@ -1231,10 +1357,14 @@ map b {
 		expectedRequest(
 			fmt.Sprintf("/api/v1/node/session/foosession/download/%v", url.PathEscape(filepath.Join(tmpDir, "a.blobl"))),
 			func(t *testing.T, w http.ResponseWriter, r *http.Request) {
+				t.Helper()
+
 				require.Equal(t, "GET", r.Method)
 				http.Error(w, "Nah", http.StatusNotFound)
 			}),
 		expectedRequest("/api/v1/node/session/foosession/download/b.blobl", func(t *testing.T, w http.ResponseWriter, r *http.Request) {
+			t.Helper()
+
 			require.Equal(t, "GET", r.Method)
 			stringResponse(t, w, `
 map b {
@@ -1243,6 +1373,8 @@ map b {
 `)
 		}),
 		expectedRequest("/api/v1/node/session/foosession/leave", func(t *testing.T, w http.ResponseWriter, r *http.Request) {
+			t.Helper()
+
 			require.Equal(t, "POST", r.Method)
 		}),
 	)

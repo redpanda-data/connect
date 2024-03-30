@@ -26,6 +26,8 @@ type testFn func(t *testing.T, driver, dsn, table string)
 
 func testProcessors(name string, fn func(t *testing.T, insertProc, selectProc service.BatchProcessor)) testFn {
 	return func(t *testing.T, driver, dsn, table string) {
+		t.Helper()
+
 		colList := `[ "foo", "bar", "baz" ]`
 		if driver == "oracle" {
 			colList = `[ "\"foo\"", "\"bar\"", "\"baz\"" ]`
@@ -71,6 +73,8 @@ args_mapping: 'root = [ this.id ]'
 
 func testRawProcessors(name string, fn func(t *testing.T, insertProc, selectProc service.BatchProcessor)) testFn {
 	return func(t *testing.T, driver, dsn, table string) {
+		t.Helper()
+
 		t.Run(name, func(t *testing.T) {
 			valuesStr := `(?, ?, ?)`
 			if driver == "postgres" || driver == "clickhouse" {
@@ -122,6 +126,8 @@ args_mapping: 'root = [ this.id ]'
 
 func testRawDeprecatedProcessors(name string, fn func(t *testing.T, insertProc, selectProc service.BatchProcessor)) testFn {
 	return func(t *testing.T, driver, dsn, table string) {
+		t.Helper()
+
 		t.Run(name, func(t *testing.T) {
 			valuesStr := `(?, ?, ?)`
 			if driver == "postgres" || driver == "clickhouse" {
@@ -172,6 +178,8 @@ result_codec: json_array
 }
 
 var testBatchProcessorBasic = testProcessors("basic", func(t *testing.T, insertProc, selectProc service.BatchProcessor) {
+	t.Helper()
+
 	var insertBatch service.MessageBatch
 	for i := 0; i < 10; i++ {
 		insertBatch = append(insertBatch, service.NewMessage([]byte(fmt.Sprintf(`{
@@ -210,6 +218,8 @@ var testBatchProcessorBasic = testProcessors("basic", func(t *testing.T, insertP
 })
 
 var testBatchProcessorParallel = testProcessors("parallel", func(t *testing.T, insertProc, selectProc service.BatchProcessor) {
+	t.Helper()
+
 	nParallel, nLoops := 10, 50
 
 	startChan := make(chan struct{})
@@ -268,6 +278,8 @@ var testBatchProcessorParallel = testProcessors("parallel", func(t *testing.T, i
 })
 
 var testRawProcessorsBasic = testRawProcessors("raw", func(t *testing.T, insertProc, selectProc service.BatchProcessor) {
+	t.Helper()
+
 	var insertBatch service.MessageBatch
 	for i := 0; i < 10; i++ {
 		insertBatch = append(insertBatch, service.NewMessage([]byte(fmt.Sprintf(`{
@@ -306,6 +318,8 @@ var testRawProcessorsBasic = testRawProcessors("raw", func(t *testing.T, insertP
 })
 
 var testDeprecatedProcessorsBasic = testRawDeprecatedProcessors("deprecated", func(t *testing.T, insertProc, selectProc service.BatchProcessor) {
+	t.Helper()
+
 	var insertBatch service.MessageBatch
 	for i := 0; i < 10; i++ {
 		insertBatch = append(insertBatch, service.NewMessage([]byte(fmt.Sprintf(`{
@@ -344,6 +358,8 @@ var testDeprecatedProcessorsBasic = testRawDeprecatedProcessors("deprecated", fu
 })
 
 func testBatchInputOutputBatch(t *testing.T, driver, dsn, table string) {
+	t.Helper()
+
 	colList := `[ "foo", "bar", "baz" ]`
 	if driver == "oracle" {
 		colList = `[ "\"foo\"", "\"bar\"", "\"baz\"" ]`
@@ -437,6 +453,8 @@ processors:
 }
 
 func testBatchInputOutputRaw(t *testing.T, driver, dsn, table string) {
+	t.Helper()
+
 	t.Run("raw_input_output", func(t *testing.T) {
 		confReplacer := strings.NewReplacer(
 			"$driver", driver,
@@ -529,6 +547,8 @@ processors:
 }
 
 func testSuite(t *testing.T, driver, dsn string, createTableFn func(string) (string, error)) {
+	t.Helper()
+
 	for _, fn := range []testFn{
 		testBatchProcessorBasic,
 		testBatchProcessorParallel,

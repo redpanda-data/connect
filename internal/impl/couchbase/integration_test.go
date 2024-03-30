@@ -34,6 +34,8 @@ func TestMain(m *testing.M) {
 }
 
 func requireCouchbase(tb testing.TB) string {
+	tb.Helper()
+
 	integrationOnce.Do(func() {
 		pool, resource, err := setupCouchbase(tb)
 		require.NoError(tb, err)
@@ -48,6 +50,8 @@ func requireCouchbase(tb testing.TB) string {
 }
 
 func setupCouchbase(tb testing.TB) (*dockertest.Pool, *dockertest.Resource, error) {
+	tb.Helper()
+
 	tb.Log("setup couchbase cluster")
 
 	pool, err := dockertest.NewPool("")

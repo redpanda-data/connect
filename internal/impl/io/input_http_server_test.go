@@ -194,17 +194,17 @@ http_server:
 	h.TriggerStopConsuming()
 }
 
-func getFreePort(t testing.TB) int {
-	t.Helper()
+func getFreePort(tb testing.TB) int {
+	tb.Helper()
 
 	addr, err := net.ResolveTCPAddr("tcp", "localhost:0")
-	require.NoError(t, err)
+	require.NoError(tb, err)
 
 	listener, err := net.ListenTCP("tcp", addr)
-	require.NoError(t, err)
+	require.NoError(tb, err)
 
 	port := listener.Addr().(*net.TCPAddr).Port
-	require.NoError(t, listener.Close())
+	require.NoError(tb, listener.Close())
 	return port
 }
 

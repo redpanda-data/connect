@@ -80,12 +80,14 @@ input:
 		integration.StreamTestOptSleepAfterInput(100 * time.Millisecond),
 		integration.StreamTestOptSleepAfterOutput(100 * time.Millisecond),
 		integration.StreamTestOptTimeout(time.Minute * 5),
-		integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, testID string, vars *integration.StreamTestConfigVars) {
+		integration.StreamTestOptPreTest(func(tb testing.TB, ctx context.Context, testID string, vars *integration.StreamTestConfigVars) {
+			tb.Helper()
+
 			client, err := pubsub.NewClient(ctx, "benthos-test-project")
-			require.NoError(t, err)
+			require.NoError(tb, err)
 
 			_, err = client.CreateTopic(ctx, fmt.Sprintf("topic-%v", testID))
-			require.NoError(t, err)
+			require.NoError(tb, err)
 
 			client.Close()
 		}),

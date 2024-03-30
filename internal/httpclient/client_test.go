@@ -24,15 +24,15 @@ import (
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
-func clientConfig(t testing.TB, confStr string, args ...any) OldConfig {
-	t.Helper()
+func clientConfig(tb testing.TB, confStr string, args ...any) OldConfig {
+	tb.Helper()
 
 	spec := service.NewConfigSpec().Field(ConfigField("GET", false))
 	parsed, err := spec.ParseYAML(fmt.Sprintf(confStr, args...), nil)
-	require.NoError(t, err)
+	require.NoError(tb, err)
 
 	conf, err := ConfigFromParsed(parsed)
-	require.NoError(t, err)
+	require.NoError(tb, err)
 	return conf
 }
 

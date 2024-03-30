@@ -56,6 +56,8 @@ type transactionFnRes struct {
 }
 
 func benchmarkTransactionsChannelBased(b *testing.B, buffered int) {
+	b.Helper()
+
 	tChan := make(chan transactionChanRes)
 
 	b.ReportAllocs()
@@ -106,6 +108,8 @@ func benchmarkTransactionsChannelBased(b *testing.B, buffered int) {
 }
 
 func benchmarkTransactionsFuncBased(b *testing.B, buffered int) {
+	b.Helper()
+
 	tChan := make(chan transactionFnRes)
 
 	b.ReportAllocs()

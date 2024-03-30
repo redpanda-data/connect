@@ -18,7 +18,9 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/integration"
 )
 
-func createTable(ctx context.Context, t testing.TB, dynamoPort, id string) error {
+func createTable(ctx context.Context, tb testing.TB, dynamoPort, id string) error {
+	tb.Helper()
+
 	endpoint := fmt.Sprintf("http://localhost:%v", dynamoPort)
 
 	table := id
@@ -28,7 +30,7 @@ func createTable(ctx context.Context, t testing.TB, dynamoPort, id string) error
 		config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider("xxxxx", "xxxxx", "xxxxx")),
 		config.WithRegion("us-east-1"),
 	)
-	require.NoError(t, err)
+	require.NoError(tb, err)
 
 	conf.BaseEndpoint = &endpoint
 	client := dynamodb.NewFromConfig(conf)
@@ -51,7 +53,7 @@ func createTable(ctx context.Context, t testing.TB, dynamoPort, id string) error
 		return &i
 	}
 
-	t.Logf("Creating table: %v\n", table)
+	tb.Logf("Creating table: %v\n", table)
 	_, _ = client.CreateTable(ctx, &dynamodb.CreateTableInput{
 		AttributeDefinitions: []types.AttributeDefinition{
 			{
@@ -126,8 +128,10 @@ cache_resources:
 	suite.Run(
 		t, template,
 		integration.CacheTestOptPort(resource.GetPort("8000/tcp")),
-		integration.CacheTestOptPreTest(func(t testing.TB, ctx context.Context, testID string, vars *integration.CacheTestConfigVars) {
-			require.NoError(t, createTable(ctx, t, resource.GetPort("8000/tcp"), testID))
+		integration.CacheTestOptPreTest(func(tb testing.TB, ctx context.Context, testID string, vars *integration.CacheTestConfigVars) {
+			tb.Helper()
+
+			require.NoError(tb, createTable(ctx, tb, resource.GetPort("8000/tcp"), testID))
 		}),
 	)
 }

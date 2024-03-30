@@ -152,6 +152,8 @@ func filterFunction() Function {
 }
 
 func benchFilterIter(b *testing.B, n, m int) {
+	b.Helper()
+
 	startingArray := make([]any, n)
 	for i := range startingArray {
 		startingArray[i] = fmt.Sprintf("foo%v", i)
@@ -177,6 +179,8 @@ func benchFilterIter(b *testing.B, n, m int) {
 }
 
 func benchFilterNoIter(b *testing.B, n, m int) {
+	b.Helper()
+
 	startingArray := make([]any, n)
 	for i := range startingArray {
 		startingArray[i] = fmt.Sprintf("foo%v", i)

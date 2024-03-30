@@ -19,14 +19,14 @@ import (
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
-func outputFromConf(t testing.TB, confStr string, args ...any) *elasticsearch.Output {
-	t.Helper()
+func outputFromConf(tb testing.TB, confStr string, args ...any) *elasticsearch.Output {
+	tb.Helper()
 
 	pConf, err := elasticsearch.OutputSpec().ParseYAML(fmt.Sprintf(confStr, args...), nil)
-	require.NoError(t, err)
+	require.NoError(tb, err)
 
 	o, err := elasticsearch.OutputFromParsed(pConf, service.MockResources())
-	require.NoError(t, err)
+	require.NoError(tb, err)
 
 	return o
 }
@@ -108,40 +108,42 @@ func TestIntegrationWriter(t *testing.T) {
 		}
 	}()
 
-	t.Run("TestElasticNoIndex", func(te *testing.T) {
-		testElasticNoIndex(urls, client, te)
+	t.Run("TestElasticNoIndex", func(t *testing.T) {
+		testElasticNoIndex(t, urls, client)
 	})
 
-	t.Run("TestElasticParallelWrites", func(te *testing.T) {
-		testElasticParallelWrites(urls, client, te)
+	t.Run("TestElasticParallelWrites", func(t *testing.T) {
+		testElasticParallelWrites(t, urls, client)
 	})
 
-	t.Run("TestElasticErrorHandling", func(te *testing.T) {
-		testElasticErrorHandling(urls, client, te)
+	t.Run("TestElasticErrorHandling", func(t *testing.T) {
+		testElasticErrorHandling(t, urls, client)
 	})
 
 	t.Run("TestElasticConnect", func(te *testing.T) {
-		testElasticConnect(urls, client, te)
+		testElasticConnect(te, urls, client)
 	})
 
 	t.Run("TestElasticIndexInterpolation", func(te *testing.T) {
-		testElasticIndexInterpolation(urls, client, te)
+		testElasticIndexInterpolation(te, urls, client)
 	})
 
-	t.Run("TestElasticBatch", func(te *testing.T) {
-		testElasticBatch(urls, client, te)
+	t.Run("TestElasticBatch", func(t *testing.T) {
+		testElasticBatch(t, urls, client)
 	})
 
-	t.Run("TestElasticBatchDelete", func(te *testing.T) {
-		testElasticBatchDelete(urls, client, te)
+	t.Run("TestElasticBatchDelete", func(t *testing.T) {
+		testElasticBatchDelete(t, urls, client)
 	})
 
-	t.Run("TestElasticBatchIDCollision", func(te *testing.T) {
-		testElasticBatchIDCollision(urls, client, te)
+	t.Run("TestElasticBatchIDCollision", func(t *testing.T) {
+		testElasticBatchIDCollision(t, urls, client)
 	})
 }
 
-func testElasticNoIndex(urls []string, client *elastic.Client, t *testing.T) {
+func testElasticNoIndex(t *testing.T, urls []string, client *elastic.Client) {
+	t.Helper()
+
 	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
 	defer done()
 
@@ -181,7 +183,9 @@ sniff: false
 	}
 }
 
-func testElasticParallelWrites(urls []string, client *elastic.Client, t *testing.T) {
+func testElasticParallelWrites(t *testing.T, urls []string, client *elastic.Client) {
+	t.Helper()
+
 	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
 	defer done()
 
@@ -240,7 +244,9 @@ sniff: false
 	}
 }
 
-func testElasticErrorHandling(urls []string, client *elastic.Client, t *testing.T) {
+func testElasticErrorHandling(t *testing.T, urls []string, _ *elastic.Client) {
+	t.Helper()
+
 	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
 	defer done()
 
@@ -268,7 +274,9 @@ sniff: false
 	}))
 }
 
-func testElasticConnect(urls []string, client *elastic.Client, t *testing.T) {
+func testElasticConnect(t *testing.T, urls []string, client *elastic.Client) {
+	t.Helper()
+
 	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
 	defer done()
 
@@ -315,7 +323,9 @@ sniff: false
 	}
 }
 
-func testElasticIndexInterpolation(urls []string, client *elastic.Client, t *testing.T) {
+func testElasticIndexInterpolation(t *testing.T, urls []string, client *elastic.Client) {
+	t.Helper()
+
 	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
 	defer done()
 
@@ -361,7 +371,9 @@ sniff: false
 	}
 }
 
-func testElasticBatch(urls []string, client *elastic.Client, t *testing.T) {
+func testElasticBatch(t *testing.T, urls []string, client *elastic.Client) {
+	t.Helper()
+
 	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
 	defer done()
 
@@ -408,7 +420,9 @@ sniff: false
 	}
 }
 
-func testElasticBatchDelete(urls []string, client *elastic.Client, t *testing.T) {
+func testElasticBatchDelete(t *testing.T, urls []string, client *elastic.Client) {
+	t.Helper()
+
 	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
 	defer done()
 
@@ -483,7 +497,9 @@ sniff: false
 	}
 }
 
-func testElasticBatchIDCollision(urls []string, client *elastic.Client, t *testing.T) {
+func testElasticBatchIDCollision(t *testing.T, urls []string, client *elastic.Client) {
+	t.Helper()
+
 	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
 	defer done()
 

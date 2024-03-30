@@ -62,6 +62,8 @@ func (n microReader) Read(p []byte) (int, error) {
 }
 
 func testReaderSuite(t *testing.T, codec, path string, data []byte, expected ...string) {
+	t.Helper()
+
 	t.Run("close before reading", func(t *testing.T) {
 		buf := noopCloser{bytes.NewReader(data), false}
 
@@ -391,6 +393,8 @@ func TestCSVSafeCustomDelimiterReader(t *testing.T) {
 }
 
 func assertPartMetadataEqual[T any](t *testing.T, p *message.Part, key string, value T) {
+	t.Helper()
+
 	rawVal, ok := p.MetaGetMut(key)
 	assert.True(t, ok)
 	typedVal, ok := rawVal.(T)
@@ -697,6 +701,8 @@ func strsFromParts(ps []*message.Part) []string {
 }
 
 func testMultipartReaderSuite(t *testing.T, codec, path string, data []byte, expected ...[]string) {
+	t.Helper()
+
 	t.Run("close before reading", func(t *testing.T) {
 		buf := noopCloser{bytes.NewReader(data), false}
 

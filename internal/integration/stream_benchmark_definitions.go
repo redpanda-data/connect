@@ -18,6 +18,8 @@ func StreamBenchSend(batchSize, parallelism int) StreamBenchDefinition {
 	return namedBench(
 		fmt.Sprintf("send message batches %v with parallelism %v", batchSize, parallelism),
 		func(b *testing.B, env *streamTestEnvironment) {
+			b.Helper()
+
 			require.Greater(b, parallelism, 0)
 
 			tranChan := make(chan message.Transaction)
@@ -84,6 +86,8 @@ func StreamBenchWrite(batchSize int) StreamBenchDefinition {
 	return namedBench(
 		fmt.Sprintf("write message batches %v without reading", batchSize),
 		func(b *testing.B, env *streamTestEnvironment) {
+			b.Helper()
+
 			tranChan := make(chan message.Transaction)
 			output := initOutput(b, tranChan, env)
 			b.Cleanup(func() {
