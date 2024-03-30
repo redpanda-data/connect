@@ -99,7 +99,7 @@ func newBrokerInputFromParsed(conf *service.ParsedConfig, mgr *service.Resources
 		return nil, err
 	}
 
-	if len(children) <= 0 {
+	if len(children) == 0 {
 		return nil, ErrBrokerNoInputs
 	}
 
