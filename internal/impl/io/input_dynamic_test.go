@@ -36,7 +36,7 @@ func TestDynamicInputAPI(t *testing.T) {
 	i, err := mgr.NewInput(conf)
 	require.NoError(t, err)
 
-	req := httptest.NewRequest(http.MethodGet, "/inputs", nil)
+	req := httptest.NewRequest(http.MethodGet, "/inputs", http.NoBody)
 	res := httptest.NewRecorder()
 	gMux.ServeHTTP(res, req)
 
@@ -63,7 +63,7 @@ generate:
 		t.Fatal(ctx.Err())
 	}
 
-	req = httptest.NewRequest(http.MethodGet, "/inputs/foo", nil)
+	req = httptest.NewRequest(http.MethodGet, "/inputs/foo", http.NoBody)
 	res = httptest.NewRecorder()
 	gMux.ServeHTTP(res, req)
 
@@ -74,7 +74,7 @@ generate:
     interval: 100ms
 `, res.Body.String())
 
-	req = httptest.NewRequest(http.MethodGet, "/inputs/foo/uptime", nil)
+	req = httptest.NewRequest(http.MethodGet, "/inputs/foo/uptime", http.NoBody)
 	res = httptest.NewRecorder()
 	gMux.ServeHTTP(res, req)
 
@@ -127,7 +127,7 @@ generate:
 	}
 
 	assert.Eventually(t, func() bool {
-		req = httptest.NewRequest(http.MethodGet, "/inputs/foo/uptime", nil)
+		req = httptest.NewRequest(http.MethodGet, "/inputs/foo/uptime", http.NoBody)
 		res = httptest.NewRecorder()
 		gMux.ServeHTTP(res, req)
 
