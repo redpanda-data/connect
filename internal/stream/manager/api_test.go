@@ -873,7 +873,7 @@ output:
 	stats, err := gabs.ParseJSON(response.Body.Bytes())
 	require.NoError(t, err)
 
-	assert.Greater(t, len(stats.ChildrenMap()), 0, response.Body.String())
+	assert.NotEmpty(t, stats.ChildrenMap(), response.Body.String())
 }
 
 func TestTypeAPISetResources(t *testing.T) {

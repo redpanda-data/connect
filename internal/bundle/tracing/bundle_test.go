@@ -130,7 +130,7 @@ generate:
 	// Now it's flushed
 	inEvents = summary.InputEvents(true)
 	require.Contains(t, inEvents, "foo")
-	require.Len(t, inEvents["foo"], 0)
+	require.Empty(t, inEvents["foo"])
 
 	// Run more stuff
 	inConfig, err = testutil.InputFromYAML(`
@@ -213,7 +213,7 @@ generate:
 	require.Contains(t, inEvents, "foo")
 
 	events := inEvents["foo"]
-	require.Len(t, events, 0)
+	require.Empty(t, events)
 }
 
 func TestBundleOutputTracing(t *testing.T) {
@@ -321,7 +321,7 @@ func TestBundleOutputTracingDisabled(t *testing.T) {
 	require.Contains(t, outEvents, "foo")
 
 	events := outEvents["foo"]
-	require.Len(t, events, 0)
+	require.Empty(t, events)
 }
 
 func TestBundleOutputWithProcessorsTracing(t *testing.T) {
@@ -631,5 +631,5 @@ meta bar = "new bar value"
 	require.Contains(t, procEvents, "foo")
 
 	events := procEvents["foo"]
-	require.Len(t, events, 0)
+	require.Empty(t, events)
 }
