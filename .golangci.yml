@@ -42,6 +42,7 @@ linters-settings:
       - empty
       - len
       - expected-actual
+      - error-nil
 linters:
   disable-all: true
   enable:

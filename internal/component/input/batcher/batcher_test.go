@@ -221,9 +221,9 @@ func TestBatcherErrorTracking(t *testing.T) {
 	}
 
 	require.Len(t, resErrs, 3)
-	assert.Nil(t, resErrs[0])
+	assert.NoError(t, resErrs[0])
 	assert.EqualError(t, resErrs[1], "message specific error")
-	assert.Nil(t, resErrs[2])
+	assert.NoError(t, resErrs[2])
 
 	mockInput.TriggerStopConsuming()
 	require.NoError(t, batcher.WaitForClose(tCtx))

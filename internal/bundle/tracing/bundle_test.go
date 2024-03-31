@@ -521,7 +521,7 @@ meta bar = "new bar value"
 		part := message.NewPart([]byte(strconv.Itoa(i)))
 		part.MetaSetMut("foo", fmt.Sprintf("foo value %v", i))
 		batch, res := proc.ProcessBatch(tCtx, message.Batch{part})
-		require.Nil(t, res)
+		require.NoError(t, res)
 		require.Len(t, batch, 1)
 		assert.Equal(t, 1, batch[0].Len())
 	}
@@ -616,7 +616,7 @@ meta bar = "new bar value"
 		part := message.NewPart([]byte(strconv.Itoa(i)))
 		part.MetaSetMut("foo", fmt.Sprintf("foo value %v", i))
 		batch, res := proc.ProcessBatch(tCtx, message.Batch{part})
-		require.Nil(t, res)
+		require.NoError(t, res)
 		require.Len(t, batch, 1)
 		assert.Equal(t, 1, batch[0].Len())
 	}
