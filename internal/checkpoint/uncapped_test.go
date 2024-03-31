@@ -139,8 +139,8 @@ func TestSequentialRandomLarge(t *testing.T) {
 			assert.Equal(t, v, c.Highest())
 			if v != nil {
 				for k := range indexes {
-					assert.False(t, k < *v)
-					assert.False(t, k < *c.Highest())
+					assert.GreaterOrEqual(t, k, *v)
+					assert.GreaterOrEqual(t, k, *c.Highest())
 				}
 			}
 		}

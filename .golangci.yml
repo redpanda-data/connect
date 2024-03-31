@@ -36,6 +36,7 @@ linters-settings:
     disable-all: true
     enable:
       - nil-compare
+      - compares
 linters:
   disable-all: true
   enable:

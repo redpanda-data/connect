@@ -367,7 +367,7 @@ func TestSystemWindowCreationSliding(t *testing.T) {
 
 	assertBatchIndex := func(i int, batch service.MessageBatch, exp string) {
 		t.Helper()
-		require.True(t, len(batch) > i)
+		require.Greater(t, len(batch), i)
 		msgBytes, err := batch[i].AsBytes()
 		require.NoError(t, err)
 		assert.Equal(t, exp, string(msgBytes))
