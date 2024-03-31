@@ -126,27 +126,27 @@ processors:
 
 	resBytes, err := resBatchA1[0].AsBytes()
 	require.NoError(t, err)
-	assert.Equal(t, string(resBytes), `"valuea FOO"`)
+	assert.Equal(t, `"valuea FOO"`, string(resBytes))
 
 	resBytes, err = resBatchA1[1].AsBytes()
 	require.NoError(t, err)
-	assert.Equal(t, string(resBytes), `"valueb FOO"`)
+	assert.Equal(t, `"valueb FOO"`, string(resBytes))
 
 	resBytes, err = resBatchA1[2].AsBytes()
 	require.NoError(t, err)
-	assert.Equal(t, string(resBytes), `"valuec FOO"`)
+	assert.Equal(t, `"valuec FOO"`, string(resBytes))
 
 	resBytes, err = resBatchA2[0].AsBytes()
 	require.NoError(t, err)
-	assert.Equal(t, string(resBytes), `"valuea FOO"`)
+	assert.Equal(t, `"valuea FOO"`, string(resBytes))
 
 	resBytes, err = resBatchA2[1].AsBytes()
 	require.NoError(t, err)
-	assert.Equal(t, string(resBytes), `"valueb FOO"`)
+	assert.Equal(t, `"valueb FOO"`, string(resBytes))
 
 	resBytes, err = resBatchA2[2].AsBytes()
 	require.NoError(t, err)
-	assert.Equal(t, string(resBytes), `"valuec FOO"`)
+	assert.Equal(t, `"valuec FOO"`, string(resBytes))
 
 	assert.NoError(t, proc.Close(tCtx))
 }
@@ -184,12 +184,12 @@ processors:
 
 	resBytesA1, err := resBatchA1[0].AsBytes()
 	require.NoError(t, err)
-	assert.Equal(t, string(resBytesA1), "keya FOO 1")
+	assert.Equal(t, "keya FOO 1", string(resBytesA1))
 
 	resBytesA2, err := resBatchA2[0].AsBytes()
 	require.NoError(t, err)
 	// Since caching is skipped, the second message runs through processors
-	assert.Equal(t, string(resBytesA2), "keya FOO 2")
+	assert.Equal(t, "keya FOO 2", string(resBytesA2))
 
 	require.NoError(t, mRes.AccessCache(tCtx, "foo", func(c service.Cache) {
 		val, err := c.Get(tCtx, "keya")

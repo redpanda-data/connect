@@ -476,7 +476,7 @@ func TestRandomIntWithinRange(t *testing.T) {
 		res, err := e.Exec(FunctionContext{})
 		require.NoError(t, err)
 		require.IsType(t, int64(0), res)
-		assert.Equal(t, res.(int64), int64(10))
+		assert.Equal(t, int64(10), res.(int64))
 	}
 
 	// Create a new random_int function with an invalid range

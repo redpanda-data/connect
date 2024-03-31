@@ -39,12 +39,12 @@ output:
   reject: "c rejected"
 `,
 			validateFn: func(t testing.TB, v stream.Config) {
-				assert.Equal(t, v.Input.Label, "a")
-				assert.Equal(t, v.Input.Type, "generate")
-				assert.Equal(t, v.Buffer.Type, "memory")
-				assert.Equal(t, v.Pipeline.Threads, 123)
-				assert.Equal(t, v.Output.Label, "c")
-				assert.Equal(t, v.Output.Type, "reject")
+				assert.Equal(t, "a", v.Input.Label)
+				assert.Equal(t, "generate", v.Input.Type)
+				assert.Equal(t, "memory", v.Buffer.Type)
+				assert.Equal(t, 123, v.Pipeline.Threads)
+				assert.Equal(t, "c", v.Output.Label)
+				assert.Equal(t, "reject", v.Output.Type)
 			},
 		},
 	}

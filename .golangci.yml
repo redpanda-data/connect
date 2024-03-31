@@ -41,6 +41,7 @@ linters-settings:
       - bool-compare
       - empty
       - len
+      - expected-actual
 linters:
   disable-all: true
   enable:

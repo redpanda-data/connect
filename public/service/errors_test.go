@@ -67,7 +67,7 @@ func TestMockWalkableError_OmitSuccessfulMessages(t *testing.T) {
 		Failed(0, errors.New("a error")).
 		Failed(2, errors.New("c error"))
 
-	require.Equal(t, err.IndexedErrors(), 2, "indexed errors did not match size of batch")
+	require.Equal(t, 2, err.IndexedErrors(), "indexed errors did not match size of batch")
 }
 
 func TestBatchErrorIndexedBy(t *testing.T) {
