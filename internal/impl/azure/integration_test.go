@@ -144,7 +144,7 @@ input:
 		)
 	})
 
-	os.Setenv("AZURITE_QUEUE_ENDPOINT_PORT", resource.GetPort("10001/tcp"))
+	os.Setenv("AZURITE_QUEUE_ENDPOINT_PORT", resource.GetPort("10001/tcp")) //nolint: tenv // this test runs in parallel
 	dummyQueue := "foo"
 	t.Run("queue_storage", func(t *testing.T) {
 		template := `
