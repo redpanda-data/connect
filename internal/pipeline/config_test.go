@@ -31,12 +31,12 @@ processors:
 			validateFn: func(tb testing.TB, v pipeline.Config) {
 				tb.Helper()
 
-				assert.Equal(tb, v.Threads, 123)
+				assert.Equal(tb, 123, v.Threads)
 				require.Len(tb, v.Processors, 2)
-				assert.Equal(tb, v.Processors[0].Label, "a")
-				assert.Equal(tb, v.Processors[0].Type, "mapping")
-				assert.Equal(tb, v.Processors[1].Label, "b")
-				assert.Equal(tb, v.Processors[1].Type, "mapping")
+				assert.Equal(tb, "a", v.Processors[0].Label)
+				assert.Equal(tb, "mapping", v.Processors[0].Type)
+				assert.Equal(tb, "b", v.Processors[1].Label)
+				assert.Equal(tb, "mapping", v.Processors[1].Type)
 			},
 		},
 	}

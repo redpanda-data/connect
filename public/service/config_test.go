@@ -416,11 +416,11 @@ func TestConfigFields(t *testing.T) {
 
 	a, err := parsed.FieldString("a")
 	require.NoError(t, err)
-	assert.Equal(t, a, "sample value")
+	assert.Equal(t, "sample value", a)
 
 	b, err := parsed.FieldInt("b")
 	require.NoError(t, err)
-	assert.Equal(t, b, 11)
+	assert.Equal(t, 11, b)
 
 	c := parsed.Namespace("c")
 
@@ -430,5 +430,5 @@ func TestConfigFields(t *testing.T) {
 
 	e, err := c.FieldString("e")
 	require.NoError(t, err)
-	assert.Equal(t, e, "evalue")
+	assert.Equal(t, "evalue", e)
 }

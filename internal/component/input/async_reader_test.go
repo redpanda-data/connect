@@ -500,7 +500,7 @@ func TestAsyncReaderCloseWithPendingAcks(t *testing.T) {
 	select {
 	case ts, open = <-r.TransactionChan():
 		require.True(t, open)
-		assert.Equal(t, message.GetAllBytes(ts.Payload), exp)
+		assert.Equal(t, exp, message.GetAllBytes(ts.Payload))
 	case <-time.After(time.Second):
 		t.Fatal("Timed out")
 	}

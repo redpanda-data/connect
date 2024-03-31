@@ -41,12 +41,12 @@ output:
 			validateFn: func(tb testing.TB, v stream.Config) {
 				tb.Helper()
 
-				assert.Equal(tb, v.Input.Label, "a")
-				assert.Equal(tb, v.Input.Type, "generate")
-				assert.Equal(tb, v.Buffer.Type, "memory")
-				assert.Equal(tb, v.Pipeline.Threads, 123)
-				assert.Equal(tb, v.Output.Label, "c")
-				assert.Equal(tb, v.Output.Type, "reject")
+				assert.Equal(tb, "a", v.Input.Label)
+				assert.Equal(tb, "generate", v.Input.Type)
+				assert.Equal(tb, "memory", v.Buffer.Type)
+				assert.Equal(tb, 123, v.Pipeline.Threads)
+				assert.Equal(tb, "c", v.Output.Label)
+				assert.Equal(tb, "reject", v.Output.Type)
 			},
 		},
 	}
