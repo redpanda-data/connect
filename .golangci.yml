@@ -42,6 +42,7 @@ linters-settings:
       - nil-compare
       - compares
       - error-is-as
+      - bool-compare
 linters:
   disable-all: true
   enable:

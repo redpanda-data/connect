@@ -179,7 +179,7 @@ c:
 
 	b, err := parsedConfig.FieldBool("c", "d")
 	assert.NoError(t, err)
-	assert.Equal(t, true, b)
+	assert.True(t, b)
 
 	i, err = parsedConfig.FieldInt("c", "f", "g")
 	assert.NoError(t, err)
@@ -212,7 +212,7 @@ c:
 
 	b, err = nsC.FieldBool("d")
 	assert.NoError(t, err)
-	assert.Equal(t, true, b)
+	assert.True(t, b)
 
 	i, err = nsFOne.FieldInt("g")
 	assert.NoError(t, err)
@@ -426,7 +426,7 @@ func TestConfigFields(t *testing.T) {
 
 	d, err := c.FieldBool("d")
 	require.NoError(t, err)
-	assert.Equal(t, d, false)
+	assert.False(t, d)
 
 	e, err := c.FieldString("e")
 	require.NoError(t, err)
