@@ -22,7 +22,7 @@ func TestMockWalkableError(t *testing.T) {
 		Failed(1, errors.New("b error")).
 		Failed(2, errors.New("c error"))
 
-	require.Equal(t, err.IndexedErrors(), len(batch), "indexed errors did not match size of batch")
+	require.Len(t, batch, err.IndexedErrors(), "indexed errors did not match size of batch")
 	require.ErrorIs(t, err, batchError, "headline error is not propagated")
 
 	runs := 0
