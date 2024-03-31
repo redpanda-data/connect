@@ -43,6 +43,7 @@ linters-settings:
       - compares
       - error-is-as
       - bool-compare
+      - empty
 linters:
   disable-all: true
   enable:

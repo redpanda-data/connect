@@ -96,7 +96,7 @@ func TestConditionCheckAll(t *testing.T) {
 	part := message.NewPart([]byte("foo bar"))
 	part.MetaSetMut("foo", "bar")
 	errs := conds.CheckAll(ifs.OS(), "", part)
-	require.Len(t, errs, 0)
+	require.Empty(t, errs)
 
 	part = message.NewPart([]byte("nope"))
 	errs = conds.CheckAll(ifs.OS(), "", part)
