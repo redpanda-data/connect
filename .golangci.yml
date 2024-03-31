@@ -40,6 +40,7 @@ linters-settings:
       - error-is-as
       - bool-compare
       - empty
+      - len
 linters:
   disable-all: true
   enable:

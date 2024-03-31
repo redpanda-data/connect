@@ -339,7 +339,7 @@ key: foo*
 	require.NoError(t, response)
 
 	require.Len(t, resMsgs, 1)
-	require.Equal(t, 1, len(resMsgs[0]))
+	require.Len(t, resMsgs[0], 1)
 
 	exp := []string{"fooa", "foob", "fooc"}
 
