@@ -78,3 +78,4 @@ linters:
     - thelper
     - usestdlibvars
     - testifylint
+    - tenv
