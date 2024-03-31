@@ -89,7 +89,7 @@ discard_unknown: %t
 			require.NoError(t, err)
 
 			msgs, res := proc.Process(context.Background(), service.NewMessage([]byte(test.input)))
-			require.Nil(t, res)
+			require.NoError(t, res)
 			require.Len(t, msgs, 1)
 
 			mBytes, err := msgs[0].AsBytes()
@@ -190,7 +190,7 @@ use_proto_names: %t
 			require.NoError(t, err)
 
 			msgs, res := proc.Process(context.Background(), service.NewMessage(test.input))
-			require.Nil(t, res)
+			require.NoError(t, res)
 			require.Len(t, msgs, 1)
 
 			mBytes, err := msgs[0].AsBytes()

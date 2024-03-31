@@ -20,10 +20,10 @@ func TestEnvFunctionCaching(t *testing.T) {
 	})
 
 	eCached, err := query.InitFunctionHelper("env", key)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	eNotCached, err := query.InitFunctionHelper("env", key, true)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	res, err := eCached.Exec(query.FunctionContext{})
 	require.NoError(t, err)
@@ -48,7 +48,7 @@ func TestHostname(t *testing.T) {
 	hostname, _ := os.Hostname()
 
 	e, err := query.InitFunctionHelper("hostname")
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	res, err := e.Exec(query.FunctionContext{})
 	require.NoError(t, err)

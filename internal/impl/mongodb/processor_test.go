@@ -185,7 +185,7 @@ filter_map: |
 	resMsgs, response := m.ProcessBatch(tCtx, service.MessageBatch{
 		service.NewMessage([]byte(`{"foo":"foo_delete","bar":"bar_delete"}`)),
 	})
-	require.Nil(t, response)
+	require.NoError(t, response)
 	require.Len(t, resMsgs, 1)
 	assertMessagesEqual(t, resMsgs[0], []string{
 		`{"foo":"foo_delete","bar":"bar_delete"}`,
