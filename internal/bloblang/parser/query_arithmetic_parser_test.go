@@ -392,3 +392,47 @@ func TestArithmeticLiteralsParser(t *testing.T) {
 		assert.Equal(t, v, res, k)
 	}
 }
+
+func TestArithmeticLiteralsParserErrors(t *testing.T) {
+	tests := map[string]string{
+		`false == "false"`:   "line 1 char 1: expected bool value, got string (\"false\")",
+		`"false" == false`:   "line 1 char 1: expected string value, got bool (false)",
+		`true == "true"`:     "line 1 char 1: expected bool value, got string (\"true\")",
+		`"true" == true`:     "line 1 char 1: expected string value, got bool (true)",
+		`420 == "420"`:       "line 1 char 1: expected number value, got string (\"420\")",
+		`"420" == 420`:       "line 1 char 1: expected string value, got number (420)",
+		`420.69 == "420.69"`: "line 1 char 1: expected number value, got string (\"420.69\")",
+		`"420.69" == 420.69`: "line 1 char 1: expected string value, got number (420.69)",
+		`false >= "false"`:   "line 1 char 1: cannot compare types bool (from bool literal) and string (from string literal)",
+		`"false" <= false`:   "line 1 char 1: cannot compare types string (from string literal) and bool (from bool literal)",
+		`true <= "true"`:     "line 1 char 1: cannot compare types bool (from bool literal) and string (from string literal)",
+		`"true" >= true`:     "line 1 char 1: cannot compare types string (from string literal) and bool (from bool literal)",
+		`420 <= "420"`:       "line 1 char 1: cannot compare types number (from number literal) and string (from string literal)",
+		`"420" >= 420`:       "line 1 char 1: cannot compare types string (from string literal) and number (from number literal)",
+		`420.69 >= "420.69"`: "line 1 char 1: cannot compare types number (from number literal) and string (from string literal)",
+		`"420.69" <= 420.69`: "line 1 char 1: cannot compare types string (from string literal) and number (from number literal)",
+		`false > "false"`:    "line 1 char 1: cannot compare types bool (from bool literal) and string (from string literal)",
+		`"false" < false`:    "line 1 char 1: cannot compare types string (from string literal) and bool (from bool literal)",
+		`true > "true"`:      "line 1 char 1: cannot compare types bool (from bool literal) and string (from string literal)",
+		`"true" < true`:      "line 1 char 1: cannot compare types string (from string literal) and bool (from bool literal)",
+		`420 > "420"`:        "line 1 char 1: cannot compare types number (from number literal) and string (from string literal)",
+		`"420" < 420`:        "line 1 char 1: cannot compare types string (from string literal) and number (from number literal)",
+		`420.69 > "420.69"`:  "line 1 char 1: cannot compare types number (from number literal) and string (from string literal)",
+		`"420.69" < 420.69`:  "line 1 char 1: cannot compare types string (from string literal) and number (from number literal)",
+		`false != "false"`:   "line 1 char 1: expected bool value, got string (\"false\")",
+		`"false" != false`:   "line 1 char 1: expected string value, got bool (false)",
+		`true != "true"`:     "line 1 char 1: expected bool value, got string (\"true\")",
+		`"true" != true`:     "line 1 char 1: expected string value, got bool (true)",
+		`420 != "420"`:       "line 1 char 1: expected number value, got string (\"420\")",
+		`"420" != 420`:       "line 1 char 1: expected string value, got number (420)",
+		`420.69 != "420.69"`: "line 1 char 1: expected number value, got string (\"420.69\")",
+		`"420.69" != 420.69`: "line 1 char 1: expected string value, got number (420.69)",
+	}
+
+	for test, err := range tests {
+		test := test
+		_, pErr := tryParseQuery(test)
+		require.NotNil(t, pErr)
+		assert.Equal(t, err, pErr.ErrorAtPosition([]rune(test)))
+	}
+}

@@ -49,7 +49,7 @@ func matchCaseParser(pCtx Context) Func[query.MatchCase] {
 				if v == nil {
 					return false, nil
 				}
-				return value.ICompare(*v, lit.Value), nil
+				return value.ICompare(*v, lit.Value)
 			}, nil)
 		} else {
 			caseFn = p

@@ -221,15 +221,11 @@ var _ = registerSimpleMethod(
 				return bytes.Contains(t, bsub), nil
 			case []any:
 				for _, compareLeft := range t {
-					if value.ICompare(compareRight, compareLeft) {
-						return true, nil
-					}
+					return value.ICompare(compareRight, compareLeft)
 				}
 			case map[string]any:
 				for _, compareLeft := range t {
-					if value.ICompare(compareRight, compareLeft) {
-						return true, nil
-					}
+					return value.ICompare(compareRight, compareLeft)
 				}
 			default:
 				return nil, value.NewTypeError(v, value.TString, value.TArray, value.TObject)
@@ -458,7 +454,7 @@ var _ = registerSimpleMethod(
 			}
 
 			for i, elem := range array {
-				if value.ICompare(val, elem) {
+				if val, _ := value.ICompare(val, elem); val {
 					return i, nil
 				}
 			}
@@ -500,7 +496,7 @@ var _ = registerSimpleMethod(
 
 			output := []any{}
 			for i, elem := range array {
-				if value.ICompare(val, elem) {
+				if val, _ := value.ICompare(val, elem); val {
 					output = append(output, i)
 				}
 			}
