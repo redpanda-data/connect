@@ -488,7 +488,7 @@ var awkFunctionsMap = map[string]any{
 	},
 	"timestamp_format": func(unix int64, formatArg string) string {
 		format := time.RFC3339
-		if len(formatArg) > 0 {
+		if formatArg != "" {
 			format = formatArg
 		}
 		t := time.Unix(unix, 0).In(time.UTC)
@@ -496,7 +496,7 @@ var awkFunctionsMap = map[string]any{
 	},
 	"timestamp_format_nano": func(unixNano int64, formatArg string) string {
 		format := time.RFC3339
-		if len(formatArg) > 0 {
+		if formatArg != "" {
 			format = formatArg
 		}
 		s := unixNano / 1000000000
@@ -598,7 +598,7 @@ func flattenForAWK(path string, data any) map[string]string {
 	case map[string]any:
 		for k, v := range t {
 			newPath := k
-			if len(path) > 0 {
+			if path != "" {
 				newPath = path + "." + k
 			}
 			for k2, v2 := range flattenForAWK(newPath, v) {

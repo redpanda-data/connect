@@ -371,7 +371,7 @@ func newHTTPServerInput(conf hsiConfig, mgr bundle.NewManagement) (input.Streame
 	var server *http.Server
 
 	var err error
-	if len(conf.Address) > 0 {
+	if conf.Address != "" {
 		gMux = mux.NewRouter()
 		server = &http.Server{Addr: conf.Address}
 		if server.Handler, err = conf.CORS.WrapHandler(gMux); err != nil {
@@ -397,19 +397,19 @@ func newHTTPServerInput(conf hsiConfig, mgr bundle.NewManagement) (input.Streame
 	postHdlr := gzipHandler(h.postHandler)
 	wsHdlr := gzipHandler(h.wsHandler)
 	if gMux != nil {
-		if len(h.conf.Path) > 0 {
+		if h.conf.Path != "" {
 			api.GetMuxRoute(gMux, h.conf.Path).Handler(postHdlr)
 		}
-		if len(h.conf.WSPath) > 0 {
+		if h.conf.WSPath != "" {
 			api.GetMuxRoute(gMux, h.conf.WSPath).Handler(wsHdlr)
 		}
 	} else {
-		if len(h.conf.Path) > 0 {
+		if h.conf.Path != "" {
 			mgr.RegisterEndpoint(
 				h.conf.Path, "Post a message into Benthos.", postHdlr,
 			)
 		}
-		if len(h.conf.WSPath) > 0 {
+		if h.conf.WSPath != "" {
 			mgr.RegisterEndpoint(
 				h.conf.WSPath, "Post messages via websocket into Benthos.", wsHdlr,
 			)
@@ -737,7 +737,7 @@ func (h *httpServerInput) wsHandler(w http.ResponseWriter, r *http.Request) {
 	resChan := make(chan error, 1)
 	throt := throttle.New(throttle.OptCloseChan(h.shutSig.CloseAtLeisureChan()))
 
-	if welMsg := h.conf.WSWelcomeMessage; len(welMsg) > 0 {
+	if welMsg := h.conf.WSWelcomeMessage; welMsg != "" {
 		if err = ws.WriteMessage(websocket.BinaryMessage, []byte(welMsg)); err != nil {
 			h.log.Error("Failed to send welcome message: %v\n", err)
 		}
@@ -764,7 +764,7 @@ func (h *httpServerInput) wsHandler(w http.ResponseWriter, r *http.Request) {
 				if err != nil {
 					h.log.Warn("Failed to access rate limit: %v\n", err)
 				}
-				if rlMsg := h.conf.WSRateLimitMessage; len(rlMsg) > 0 {
+				if rlMsg := h.conf.WSRateLimitMessage; rlMsg != "" {
 					if err = ws.WriteMessage(websocket.BinaryMessage, []byte(rlMsg)); err != nil {
 						h.log.Error("Failed to send rate limit message: %v\n", err)
 					}
@@ -854,12 +854,12 @@ func (h *httpServerInput) loop() {
 				case <-h.shutSig.CloseNowChan():
 				}
 
-				if len(h.conf.Path) > 0 {
+				if h.conf.Path != "" {
 					h.mgr.RegisterEndpoint(h.conf.Path, "Endpoint disabled.", func(w http.ResponseWriter, r *http.Request) {
 						http.Error(w, "Service unavailable", http.StatusServiceUnavailable)
 					})
 				}
-				if len(h.conf.WSPath) > 0 {
+				if h.conf.WSPath != "" {
 					h.mgr.RegisterEndpoint(h.conf.WSPath, "Endpoint disabled.", func(w http.ResponseWriter, r *http.Request) {
 						http.Error(w, "Service unavailable", http.StatusServiceUnavailable)
 					})
@@ -875,7 +875,7 @@ func (h *httpServerInput) loop() {
 
 	if h.server != nil {
 		go func() {
-			if len(h.conf.KeyFile) > 0 || len(h.conf.CertFile) > 0 {
+			if h.conf.KeyFile != "" || h.conf.CertFile != "" {
 				h.log.Info(
 					"Receiving HTTPS messages at: https://%s\n",
 					h.conf.Address+h.conf.Path,

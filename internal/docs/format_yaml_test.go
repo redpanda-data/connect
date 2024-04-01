@@ -1394,7 +1394,7 @@ processors:
 			sanitConf.RemoveDeprecated = false
 
 			err := docs.SanitiseYAML(test.inputType, &node, sanitConf)
-			if len(test.err) > 0 {
+			if test.err != "" {
 				assert.EqualError(t, err, test.err)
 			} else {
 				assert.NoError(t, err)

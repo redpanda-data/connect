@@ -146,7 +146,7 @@ func (n *natsReader) Connect(ctx context.Context) error {
 
 	natsChan := make(chan *nats.Msg, n.prefetchCount)
 
-	if len(n.queue) > 0 {
+	if n.queue != "" {
 		natsSub, err = natsConn.ChanQueueSubscribe(n.subject, n.queue, natsChan)
 	} else {
 		natsSub, err = natsConn.ChanSubscribe(n.subject, natsChan)

@@ -126,7 +126,7 @@ func TestTypedMethods(t *testing.T) {
 		test := test
 		t.Run(test.name, func(t *testing.T) {
 			out, err := test.fn(test.in)
-			if len(test.err) > 0 {
+			if test.err != "" {
 				assert.EqualError(t, err, test.err)
 			} else {
 				require.NoError(t, err)

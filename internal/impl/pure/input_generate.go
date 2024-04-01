@@ -142,7 +142,7 @@ func newGenerateReaderFromParsed(conf *service.ParsedConfig, mgr bundle.NewManag
 		return nil, err
 	}
 
-	if len(intervalStr) > 0 {
+	if intervalStr != "" {
 		if duration, err = time.ParseDuration(intervalStr); err != nil {
 			// interval is not a duration so try to parse as a cron expression
 			var cerr error

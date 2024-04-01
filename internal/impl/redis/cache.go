@@ -117,7 +117,7 @@ func (r *redisCache) Get(ctx context.Context, key string) ([]byte, error) {
 		r.boffPool.Put(boff)
 	}()
 
-	if len(r.prefix) > 0 {
+	if r.prefix != "" {
 		key = r.prefix + key
 	}
 
@@ -150,7 +150,7 @@ func (r *redisCache) Set(ctx context.Context, key string, value []byte, ttl *tim
 		r.boffPool.Put(boff)
 	}()
 
-	if len(r.prefix) > 0 {
+	if r.prefix != "" {
 		key = r.prefix + key
 	}
 
@@ -186,7 +186,7 @@ func (r *redisCache) Add(ctx context.Context, key string, value []byte, ttl *tim
 		r.boffPool.Put(boff)
 	}()
 
-	if len(r.prefix) > 0 {
+	if r.prefix != "" {
 		key = r.prefix + key
 	}
 
@@ -226,7 +226,7 @@ func (r *redisCache) Delete(ctx context.Context, key string) error {
 		r.boffPool.Put(boff)
 	}()
 
-	if len(r.prefix) > 0 {
+	if r.prefix != "" {
 		key = r.prefix + key
 	}
 

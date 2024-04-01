@@ -86,7 +86,7 @@ args_mapping: '[ "-n" ]'
 			require.NoError(t, err)
 
 			res, err := cmdProc.Process(tCtx, service.NewMessage([]byte(test.input)))
-			if len(test.errContains) > 0 {
+			if test.errContains != "" {
 				require.Error(t, err)
 				assert.Contains(t, err.Error(), test.errContains)
 			} else {

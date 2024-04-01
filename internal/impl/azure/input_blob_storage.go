@@ -190,7 +190,7 @@ func newAzureTargetReader(ctx context.Context, conf bsiConfig) (*azureTargetRead
 	params := &azblob.ListBlobsFlatOptions{
 		MaxResults: &maxResults,
 	}
-	if len(conf.Prefix) > 0 {
+	if conf.Prefix != "" {
 		params.Prefix = &conf.Prefix
 	}
 	output := conf.client.NewListBlobsFlatPager(conf.Container, params)
@@ -218,7 +218,7 @@ func (s *azureTargetReader) Pop(ctx context.Context) (*azureObjectTarget, error)
 			MaxResults: &maxResults,
 			Marker:     &s.startAfter,
 		}
-		if len(s.conf.Prefix) > 0 {
+		if s.conf.Prefix != "" {
 			params.Prefix = &s.conf.Prefix
 		}
 		output := s.conf.client.NewListBlobsFlatPager(s.conf.Container, params)

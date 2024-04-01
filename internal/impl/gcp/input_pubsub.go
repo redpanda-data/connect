@@ -173,7 +173,7 @@ type gcpPubSubReader struct {
 
 func newGCPPubSubReader(conf pbiConfig, res *service.Resources) (*gcpPubSubReader, error) {
 	var opt []option.ClientOption
-	if len(strings.TrimSpace(conf.Endpoint)) > 0 {
+	if strings.TrimSpace(conf.Endpoint) != "" {
 		opt = []option.ClientOption{option.WithEndpoint(conf.Endpoint)}
 	}
 
