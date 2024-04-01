@@ -59,3 +59,4 @@ linters:
     # - gosec
     # - misspell
     # - prealloc
+    - exportloopref
