@@ -277,7 +277,7 @@ func newKinesisReaderFromConfig(conf kiConfig, batcher service.BatchPolicy, sess
 	for _, t := range conf.Streams {
 		for _, splitStreams := range strings.Split(t, ",") {
 			trimmed := strings.TrimSpace(splitStreams)
-			if len(trimmed) == 0 {
+			if trimmed == "" {
 				continue
 			}
 

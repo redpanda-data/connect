@@ -130,8 +130,8 @@ func newPulsarReaderFromParsed(conf *service.ParsedConfig, log *service.Logger) 
 		err = errors.New("field url must not be empty")
 		return
 	}
-	if len(p.topics) == 0 && len(p.topicsPattern) == 0 ||
-		len(p.topics) != 0 && len(p.topicsPattern) != 0 {
+	if (len(p.topics) == 0 && p.topicsPattern == "") ||
+		(len(p.topics) > 0 && p.topicsPattern != "") {
 		err = errors.New("exactly one of fields topics and topics_pattern must be set")
 		return
 	}
