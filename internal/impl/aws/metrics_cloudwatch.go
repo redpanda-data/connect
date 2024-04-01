@@ -233,7 +233,7 @@ func (c *cloudWatchStatVec) with(labelValues ...string) *cloudWatchStat {
 		if len(labelValues) <= i || i >= maxCloudWatchDimensions {
 			break
 		}
-		if len(labelValues[i]) == 0 {
+		if labelValues[i] == "" {
 			continue
 		}
 		dimensions = append(dimensions, types.Dimension{
