@@ -300,7 +300,7 @@ func (r *PullRunner) bootstrapConfigReader(ctx context.Context) (bootstrapErr er
 
 	// Extract shutdown timeout values
 	var exitDelay time.Duration
-	if td := conf.SystemCloseDelay; len(td) > 0 {
+	if td := conf.SystemCloseDelay; td != "" {
 		var err error
 		if exitDelay, err = time.ParseDuration(td); err != nil {
 			return fmt.Errorf("failed to parse shutdown delay period string: %w", err)
@@ -308,7 +308,7 @@ func (r *PullRunner) bootstrapConfigReader(ctx context.Context) (bootstrapErr er
 	}
 
 	var exitTimeout time.Duration
-	if tout := conf.SystemCloseTimeout; len(tout) > 0 {
+	if tout := conf.SystemCloseTimeout; tout != "" {
 		var err error
 		if exitTimeout, err = time.ParseDuration(tout); err != nil {
 			return fmt.Errorf("failed to parse shutdown timeout period string: %w", err)

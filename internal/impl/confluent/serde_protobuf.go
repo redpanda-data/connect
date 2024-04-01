@@ -202,7 +202,7 @@ func (c *cachedMessageTypes) TryParseMsg(data []byte) (*dynamicpb.Message, []byt
 	lastSuccessful := c.lastSuccessful
 	c.cacheMut.Unlock()
 
-	if len(lastSuccessful) > 0 {
+	if lastSuccessful != "" {
 		if msgDesc, ok := c.msgTypeMap[lastSuccessful]; ok {
 			if dynMsg, err := c.tryDesc(data, msgDesc); err == nil {
 				// Happy path: We had a cached message index that worked with a

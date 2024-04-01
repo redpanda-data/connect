@@ -107,7 +107,7 @@ func TestArithmeticNumberDegradation(t *testing.T) {
 		test := test
 		t.Run(test.name, func(t *testing.T) {
 			res, err := fn(NewLiteralFunction("left", test.left), NewLiteralFunction("right", test.right), test.left, test.right)
-			if len(test.err) > 0 {
+			if test.err != "" {
 				assert.EqualError(t, err, test.err)
 			} else {
 				require.NoError(t, err)
@@ -260,7 +260,7 @@ func TestArithmeticComparisons(t *testing.T) {
 			require.NoError(t, err)
 
 			res, err := fn.Exec(FunctionContext{})
-			if len(test.errContains) > 0 {
+			if test.errContains != "" {
 				require.Error(t, err)
 				assert.Contains(t, err.Error(), test.errContains)
 			} else {

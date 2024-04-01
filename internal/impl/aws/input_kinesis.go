@@ -336,7 +336,7 @@ func (k *kinesisReader) getIter(info streamInfo, shardID, sequence string) (stri
 		iterType = types.ShardIteratorTypeLatest
 	}
 	var startingSequence *string
-	if len(sequence) > 0 {
+	if sequence != "" {
 		iterType = types.ShardIteratorTypeAfterSequenceNumber
 		startingSequence = &sequence
 	}

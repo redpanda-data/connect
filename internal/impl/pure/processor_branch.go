@@ -206,12 +206,12 @@ func newBranchFromParsed(conf *service.ParsedConfig, mgr bundle.NewManagement) (
 		b.children[i] = interop.UnwrapOwnedProcessor(c)
 	}
 
-	if reqMapStr, _ := conf.FieldString(branchProcFieldReqMap); len(reqMapStr) > 0 {
+	if reqMapStr, _ := conf.FieldString(branchProcFieldReqMap); reqMapStr != "" {
 		if b.requestMap, err = mgr.BloblEnvironment().NewMapping(reqMapStr); err != nil {
 			return nil, fmt.Errorf("failed to parse request mapping: %w", err)
 		}
 	}
-	if resMapStr, _ := conf.FieldString(branchProcFieldResMap); len(resMapStr) > 0 {
+	if resMapStr, _ := conf.FieldString(branchProcFieldResMap); resMapStr != "" {
 		if b.resultMap, err = mgr.BloblEnvironment().NewMapping(resMapStr); err != nil {
 			return nil, fmt.Errorf("failed to parse result mapping: %w", err)
 		}

@@ -130,7 +130,7 @@ func (a *azureTableStorage) Connect(ctx context.Context) error {
 }
 
 func stringOrNil(val string) *string {
-	if len(val) > 0 {
+	if val != "" {
 		return &val
 	}
 	return nil

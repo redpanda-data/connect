@@ -174,7 +174,7 @@ func amqp09ReaderFromParsed(conf *service.ParsedConfig, mgr *service.Resources) 
 	}
 	for _, u := range urlStrs {
 		for _, splitURL := range strings.Split(u, ",") {
-			if trimmed := strings.TrimSpace(splitURL); len(trimmed) > 0 {
+			if trimmed := strings.TrimSpace(splitURL); trimmed != "" {
 				a.urls = append(a.urls, trimmed)
 			}
 		}

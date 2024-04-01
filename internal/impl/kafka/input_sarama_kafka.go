@@ -222,7 +222,7 @@ func newKafkaReaderFromParsed(conf *service.ParsedConfig, mgr *service.Resources
 	}
 	for _, addr := range cAddresses {
 		for _, splitAddr := range strings.Split(addr, ",") {
-			if trimmed := strings.TrimSpace(splitAddr); len(trimmed) > 0 {
+			if trimmed := strings.TrimSpace(splitAddr); trimmed != "" {
 				k.addresses = append(k.addresses, trimmed)
 			}
 		}

@@ -132,7 +132,7 @@ func newLogProcessor(messageStr, levelStr, fieldsMappingStr string, depFields ma
 			}
 		}
 	}
-	if len(fieldsMappingStr) > 0 {
+	if fieldsMappingStr != "" {
 		if l.fieldsMapping, err = mgr.BloblEnvironment().NewMapping(fieldsMappingStr); err != nil {
 			return nil, fmt.Errorf("failed to parse fields mapping: %w", err)
 		}

@@ -20,7 +20,7 @@ func addExpression(conf map[string]any, expression string) error {
 	componentTypes := strings.Split(expression, "/")
 	for i, str := range componentTypes {
 		for _, t := range strings.Split(str, ",") {
-			if t = strings.TrimSpace(t); len(t) > 0 {
+			if t = strings.TrimSpace(t); t != "" {
 				switch i {
 				case 0:
 					inputTypes = append(inputTypes, t)
@@ -142,7 +142,7 @@ If the expression is omitted a default config is created.`[1:],
 					"stdout": map[string]any{},
 				},
 			}
-			if expression := c.Args().First(); len(expression) > 0 {
+			if expression := c.Args().First(); expression != "" {
 				if err := addExpression(conf, expression); err != nil {
 					fmt.Fprintf(os.Stderr, "Generate error: %v\n", err)
 					os.Exit(1)

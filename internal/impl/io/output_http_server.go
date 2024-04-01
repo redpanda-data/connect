@@ -205,7 +205,7 @@ func newHTTPServerOutput(conf hsoConfig, mgr bundle.NewManagement) (output.Strea
 	var server *http.Server
 
 	var err error
-	if len(conf.Address) > 0 {
+	if conf.Address != "" {
 		gMux = mux.NewRouter()
 		server = &http.Server{Addr: conf.Address}
 		if server.Handler, err = conf.CORS.WrapHandler(gMux); err != nil {
@@ -238,30 +238,30 @@ func newHTTPServerOutput(conf hsoConfig, mgr bundle.NewManagement) (output.Strea
 	}
 
 	if gMux != nil {
-		if len(h.conf.Path) > 0 {
+		if h.conf.Path != "" {
 			api.GetMuxRoute(gMux, h.conf.Path).HandlerFunc(h.getHandler)
 		}
-		if len(h.conf.StreamPath) > 0 {
+		if h.conf.StreamPath != "" {
 			api.GetMuxRoute(gMux, h.conf.StreamPath).HandlerFunc(h.streamHandler)
 		}
-		if len(h.conf.WSPath) > 0 {
+		if h.conf.WSPath != "" {
 			api.GetMuxRoute(gMux, h.conf.WSPath).HandlerFunc(h.wsHandler)
 		}
 	} else {
-		if len(h.conf.Path) > 0 {
+		if h.conf.Path != "" {
 			mgr.RegisterEndpoint(
 				h.conf.Path, "Read a single message from Benthos.",
 				h.getHandler,
 			)
 		}
-		if len(h.conf.StreamPath) > 0 {
+		if h.conf.StreamPath != "" {
 			mgr.RegisterEndpoint(
 				h.conf.StreamPath,
 				"Read a continuous stream of messages from Benthos.",
 				h.streamHandler,
 			)
 		}
-		if len(h.conf.WSPath) > 0 {
+		if h.conf.WSPath != "" {
 			mgr.RegisterEndpoint(
 				h.conf.WSPath,
 				"Read messages from Benthos via websockets.",
@@ -445,7 +445,7 @@ func (h *httpServerOutput) Consume(ts <-chan message.Transaction) error {
 
 	if h.server != nil {
 		go func() {
-			if len(h.conf.KeyFile) > 0 || len(h.conf.CertFile) > 0 {
+			if h.conf.KeyFile != "" || h.conf.CertFile != "" {
 				h.log.Info(
 					"Serving messages through HTTPS GET request at: https://%s\n",
 					h.conf.Address+h.conf.Path,

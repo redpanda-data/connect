@@ -273,10 +273,10 @@ func (p *pulsarReader) Read(ctx context.Context) (*service.Message, service.AckF
 	msg.MetaSet("pulsar_topic", pulMsg.Topic())
 	msg.MetaSet("pulsar_publish_time_unix", strconv.FormatInt(pulMsg.PublishTime().Unix(), 10))
 	msg.MetaSet("pulsar_redelivery_count", strconv.FormatInt(int64(pulMsg.RedeliveryCount()), 10))
-	if key := pulMsg.Key(); len(key) > 0 {
+	if key := pulMsg.Key(); key != "" {
 		msg.MetaSet("pulsar_key", key)
 	}
-	if orderingKey := pulMsg.OrderingKey(); len(orderingKey) > 0 {
+	if orderingKey := pulMsg.OrderingKey(); orderingKey != "" {
 		msg.MetaSet("pulsar_ordering_key", orderingKey)
 	}
 	if !pulMsg.EventTime().IsZero() {

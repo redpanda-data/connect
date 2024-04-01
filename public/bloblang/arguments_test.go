@@ -86,7 +86,7 @@ func TestArgumentTypes(t *testing.T) {
 		test := test
 		t.Run(test.name, func(t *testing.T) {
 			err := set.Extract(test.args)
-			if len(test.err) > 0 {
+			if test.err != "" {
 				assert.EqualError(t, err, test.err)
 			} else {
 				assert.NoError(t, err)

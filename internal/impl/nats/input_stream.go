@@ -260,7 +260,7 @@ func (n *natsStreamReader) Connect(ctx context.Context) error {
 	options := []stan.SubscriptionOption{
 		stan.SetManualAckMode(),
 	}
-	if len(n.conf.DurableName) > 0 {
+	if n.conf.DurableName != "" {
 		options = append(options, stan.DurableName(n.conf.DurableName))
 	}
 	if n.conf.StartFromOldest {
@@ -276,7 +276,7 @@ func (n *natsStreamReader) Connect(ctx context.Context) error {
 	}
 
 	var natsSub stan.Subscription
-	if len(n.conf.QueueID) > 0 {
+	if n.conf.QueueID != "" {
 		natsSub, err = stanConn.QueueSubscribe(
 			n.conf.Subject,
 			n.conf.QueueID,

@@ -154,7 +154,7 @@ func (k *kafkaReader) connectExplicitTopics(ctx context.Context, config *sarama.
 	if client, err = sarama.NewClient(k.addresses, config); err != nil {
 		return err
 	}
-	if len(k.consumerGroup) > 0 {
+	if k.consumerGroup != "" {
 		if coordinator, err = client.Coordinator(k.consumerGroup); err != nil {
 			return err
 		}
