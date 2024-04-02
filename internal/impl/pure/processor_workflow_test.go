@@ -512,7 +512,7 @@ workflow:
 
 			msgs, res := p.ProcessBatch(context.Background(), inputMsg.ShallowCopy())
 			if test.err != "" {
-				require.NotNil(t, res)
+				require.Error(t, res)
 				require.EqualError(t, res, test.err)
 			} else {
 				require.Len(t, msgs, 1)
@@ -706,7 +706,7 @@ workflow:
 
 			msgs, res := p.ProcessBatch(context.Background(), message.QuickBatch(parts))
 			if test.err != "" {
-				require.NotNil(t, res)
+				require.Error(t, res)
 				require.EqualError(t, res, test.err)
 			} else {
 				require.Len(t, msgs, 1)
@@ -977,7 +977,7 @@ workflow:
 
 			msgs, res := p.ProcessBatch(context.Background(), message.QuickBatch(parts))
 			if test.err != "" {
-				require.NotNil(t, res)
+				require.Error(t, res)
 				require.EqualError(t, res, test.err)
 			} else {
 				require.Len(t, msgs, 1)
