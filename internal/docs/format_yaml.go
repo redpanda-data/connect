@@ -237,9 +237,9 @@ func SanitiseYAML(cType Type, node *yaml.Node, conf SanitiseConfig) error {
 				newNodes = append(newNodes, node.Content[i], node.Content[i+1])
 			}
 			break
-		} else {
-			keys = append(keys, node.Content[i].Value)
 		}
+
+		keys = append(keys, node.Content[i].Value)
 	}
 	if name == "" {
 		if len(node.Content) == 0 {
@@ -515,9 +515,9 @@ func LintYAML(ctx LintContext, cType Type, node *yaml.Node) []Lint {
 		if node.Content[i].Value == "type" {
 			name = node.Content[i+1].Value
 			break
-		} else {
-			keys = append(keys, node.Content[i].Value)
 		}
+
+		keys = append(keys, node.Content[i].Value)
 	}
 	if name == "" {
 		if len(node.Content) == 0 {
