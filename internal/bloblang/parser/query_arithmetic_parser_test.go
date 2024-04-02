@@ -393,7 +393,7 @@ func TestArithmeticLiteralsParser(t *testing.T) {
 	}
 }
 
-func TestArithmeticLiteralsParserErrors(t *testing.T) {
+func TestArithmeticParserErrors(t *testing.T) {
 	tests := map[string]string{
 		`false == "false"`:   "line 1 char 1: expected bool value, got string (\"false\")",
 		`"false" == false`:   "line 1 char 1: expected string value, got bool (false)",

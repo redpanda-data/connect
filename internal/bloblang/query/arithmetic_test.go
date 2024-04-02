@@ -127,94 +127,10 @@ func TestArithmeticComparisons(t *testing.T) {
 		errContains string
 	}{
 		{
-			name:   "right null equal to int",
-			left:   int64(12),
-			right:  nil,
-			op:     ArithmeticEq,
-			result: false,
-		},
-		{
-			name:   "right null not equal to int",
-			left:   int64(12),
-			right:  nil,
-			op:     ArithmeticNeq,
-			result: true,
-		},
-		{
-			name:   "left null equal to int",
-			left:   nil,
-			right:  int64(10),
-			op:     ArithmeticEq,
-			result: false,
-		},
-		{
-			name:   "left null not equal to int",
-			left:   nil,
-			right:  int64(12),
-			op:     ArithmeticNeq,
-			result: true,
-		},
-		{
 			name:   "null equal to null",
 			left:   nil,
 			right:  nil,
 			op:     ArithmeticEq,
-			result: true,
-		},
-		{
-			name:   "right null equal to string",
-			left:   "foo",
-			right:  nil,
-			op:     ArithmeticEq,
-			result: false,
-		},
-		{
-			name:   "right null not equal to string",
-			left:   "foo",
-			right:  nil,
-			op:     ArithmeticNeq,
-			result: true,
-		},
-		{
-			name:   "left null equal to string",
-			left:   nil,
-			right:  "foo",
-			op:     ArithmeticEq,
-			result: false,
-		},
-		{
-			name:   "left null not equal to string",
-			left:   nil,
-			right:  "foo",
-			op:     ArithmeticNeq,
-			result: true,
-		},
-		{
-			name:   "right null equal to bool",
-			left:   true,
-			right:  nil,
-			op:     ArithmeticEq,
-			result: false,
-		},
-		{
-			name:   "right null not equal to bool",
-			left:   true,
-			right:  nil,
-			op:     ArithmeticNeq,
-			result: true,
-		},
-		{
-			name:   "left null equal to bool",
-			left:   nil,
-			right:  true,
-			op:     ArithmeticEq,
-			result: false,
-		},
-		{
-			name:   "left null not equal to bool",
-			left:   nil,
-			right:  true,
-			op:     ArithmeticNeq,
 			result: true,
 		},
 		{
@@ -899,6 +815,104 @@ func TestArithmeticTargets(t *testing.T) {
 				Maps: map[string]Function{},
 			})
 			assert.Equal(t, test.output, res)
+		})
+	}
+}
+
+func TestArithmeticComparisonsErrors(t *testing.T) {
+	testCases := []struct {
+		name        string
+		left        any
+		right       any
+		op          ArithmeticOperator
+		result      any
+		errContains string
+	}{
+		{
+			name:  "right null equal to int",
+			left:  int64(12),
+			right: nil,
+			op:    ArithmeticEq,
+		},
+		{
+			name:  "right null not equal to int",
+			left:  int64(12),
+			right: nil,
+			op:    ArithmeticNeq,
+		},
+		{
+			name:  "left null equal to int",
+			left:  nil,
+			right: int64(10),
+			op:    ArithmeticEq,
+		},
+		{
+			name:  "left null not equal to int",
+			left:  nil,
+			right: int64(12),
+			op:    ArithmeticNeq,
+		},
+		{
+			name:  "right null equal to string",
+			left:  "foo",
+			right: nil,
+			op:    ArithmeticEq,
+		},
+		{
+			name:  "right null not equal to string",
+			left:  "foo",
+			right: nil,
+			op:    ArithmeticNeq,
+		},
+		{
+			name:  "left null equal to string",
+			left:  nil,
+			right: "foo",
+			op:    ArithmeticEq,
+		},
+		{
+			name:  "left null not equal to string",
+			left:  nil,
+			right: "foo",
+			op:    ArithmeticNeq,
+		},
+		{
+			name:  "right null equal to bool",
+			left:  true,
+			right: nil,
+			op:    ArithmeticEq,
+		},
+		{
+			name:  "right null not equal to bool",
+			left:  true,
+			right: nil,
+			op:    ArithmeticNeq,
+		},
+		{
+			name:  "left null equal to bool",
+			left:  nil,
+			right: true,
+			op:    ArithmeticEq,
+		},
+		{
+			name:  "left null not equal to bool",
+			left:  nil,
+			right: true,
+			op:    ArithmeticNeq,
+		},
+	}
+
+	for _, test := range testCases {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			_, err := NewArithmeticExpression(
+				[]Function{
+					NewLiteralFunction("left", test.left),
+					NewLiteralFunction("right", test.right),
+				},
+				[]ArithmeticOperator{test.op},
+			)
+			require.Error(t, err)
 		})
 	}
 }
