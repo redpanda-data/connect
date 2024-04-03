@@ -42,7 +42,6 @@ You can access these metadata fields using
 			service.NewStringField(iFieldDirectory).
 				Description("The directory to consume from."),
 		)
-
 }
 
 func init() {

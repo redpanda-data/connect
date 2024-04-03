@@ -129,7 +129,6 @@ func init() {
 		w, err := amqp09WriterFromParsed(conf, mgr)
 		return w, maxInFlight, err
 	})
-
 	if err != nil {
 		panic(err)
 	}

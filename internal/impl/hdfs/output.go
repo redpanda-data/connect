@@ -41,7 +41,6 @@ func outputSpec() *service.ConfigSpec {
 			service.NewOutputMaxInFlightField(),
 			service.NewBatchPolicyField(oFieldBatching),
 		)
-
 }
 
 func init() {
