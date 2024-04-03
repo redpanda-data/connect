@@ -89,16 +89,16 @@ func (p *kvCache) connect(ctx context.Context) error {
 	}
 
 	var err error
-
-	defer func() {
-		if err != nil {
-			p.disconnect()
-		}
-	}()
-
 	if p.natsConn, err = p.connDetails.get(ctx); err != nil {
 		return err
 	}
+
+	defer func() {
+		if err != nil {
+			p.natsConn.Close()
+			p.natsConn = nil
+		}
+	}()
 
 	var js nats.JetStreamContext
 	if js, err = p.natsConn.JetStream(); err != nil {
