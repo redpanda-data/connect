@@ -15,7 +15,7 @@ categories: ["Services"]
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-Publishes messages into an Elasticsearch index. If the index does not exist then it is created with a dynamic mapping.
+Publishes messages into an opensearch index. If the index does not exist then it is created with a dynamic mapping.
 
 
 <Tabs defaultValue="common" values={[
@@ -86,6 +86,11 @@ output:
         from_ec2_role: false
         role: ""
         role_external_id: ""
+    oauth2:
+      enabled: false
+      access_token: ""
+      token_cache: ""
+      token_key: ""
 ```
 
 </TabItem>
@@ -564,6 +569,48 @@ Default: `""`
 ### `aws.credentials.role_external_id`
 
 An external ID to provide when assuming a role.
+
+
+Type: `string`  
+Default: `""`  
+
+### `oauth2`
+
+Allows you to specify OAuth2 authentication.
+
+
+Type: `object`  
+
+### `oauth2.enabled`
+
+Whether to use OAuth2 authentication.
+
+
+Type: `bool`  
+Default: `false`  
+
+### `oauth2.access_token`
+
+A static access token to use for authentication.
+:::warning Secret
+This field contains sensitive information that usually shouldn't be added to a config directly, read our [secrets page for more info](/docs/configuration/secrets).
+:::
+
+
+Type: `string`  
+Default: `""`  
+
+### `oauth2.token_cache`
+
+Instead of using a static `access_token` allows you to query a [`cache`](/docs/components/caches/about) resource to fetch tokens from.
+
+
+Type: `string`  
+Default: `""`  
+
+### `oauth2.token_key`
+
+Required when using a `token_cache`, the key to query the cache with for tokens.
 
 
 Type: `string`  
