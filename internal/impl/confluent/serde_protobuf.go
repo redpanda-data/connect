@@ -16,7 +16,7 @@ import (
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
-func (s *schemaRegistryDecoder) getProtobufDecoder(ctx context.Context, info SchemaInfo) (schemaDecoder, error) {
+func (s *schemaRegistryDecoder) getProtobufDecoder(ctx context.Context, useProtoNames bool, info SchemaInfo) (schemaDecoder, error) {
 	regMap := map[string]string{
 		".": info.Schema,
 	}
@@ -70,7 +70,7 @@ func (s *schemaRegistryDecoder) getProtobufDecoder(ctx context.Context, info Sch
 			return fmt.Errorf("failed to unmarshal protobuf message: %w", err)
 		}
 
-		data, err := protojson.MarshalOptions{Resolver: types}.Marshal(dynMsg)
+		data, err := protojson.MarshalOptions{Resolver: types, UseProtoNames: useProtoNames}.Marshal(dynMsg)
 		if err != nil {
 			return fmt.Errorf("failed to marshal JSON protobuf message: %w", err)
 		}
