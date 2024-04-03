@@ -43,7 +43,7 @@ By default the retry backoff has a specified [`max_elapsed_time`](#backoffmax_el
 In order to avoid permanent loops any error associated with messages as they first enter a retry processor will be cleared.
 
 :::caution Batching
-Message batches are ignored by this processor, if you wish to wrap a batch-aware series of processors then take a look at the [batching section](#batching) below.
+If you wish to wrap a batch-aware series of processors then take a look at the [batching section](#batching) below.
 :::
 
 
