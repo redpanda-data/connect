@@ -12,6 +12,7 @@ All notable changes to this project will be documented in this file.
 - Field `error_patterns` added to the `drop_on` output.
 - New `redis_scan` input type.
 - Field `auto_replay_nacks` added to all inputs that traditionally automatically retry nacked messages as a toggle for this behaviour.
+- New `retry` processor.
 
 ### Fixed
 
