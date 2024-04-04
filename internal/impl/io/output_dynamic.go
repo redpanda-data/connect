@@ -57,7 +57,6 @@ Returns the uptime of an output as a duration string (of the form "72h3m0.5s").`
 				Description("A path prefix for HTTP endpoints that are registered.").
 				Default(""),
 		)
-
 }
 
 func init() {

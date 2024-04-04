@@ -245,7 +245,6 @@ It's possible to enable AWS connectivity with this output using the `+"`aws`"+` 
 				Advanced().
 				Default(false),
 		)
-
 }
 
 func init() {

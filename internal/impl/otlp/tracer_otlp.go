@@ -188,7 +188,6 @@ func newOtlp(config *otlp) (trace.TracerProvider, error) {
 	}
 
 	opts, err = addHTTPCollectors(ctx, config.http, opts)
-
 	if err != nil {
 		return nil, err
 	}
