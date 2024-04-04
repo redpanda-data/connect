@@ -283,7 +283,7 @@ func (a *awsSQSReader) ackLoop(wg *sync.WaitGroup, inFlightTracker *sqsInFlightT
 			return
 		}
 		if err := a.updateVisibilityMessages(closeNowCtx, timeoutSeconds, currentHandles...); err != nil {
-			a.log.Errorf("Failed to update messages visibility timeout: %v", err)
+			a.log.Debugf("Failed to update messages visibility timeout: %v", err)
 		}
 	}
 
@@ -468,7 +468,7 @@ func (a *awsSQSReader) updateVisibilityMessages(ctx context.Context, timeout int
 			return err
 		}
 		for _, fail := range response.Failed {
-			a.log.Errorf("Failed to update consumed SQS message '%v' visibility, response code: %v\n", *fail.Id, *fail.Code)
+			a.log.Debugf("Failed to update consumed SQS message '%v' visibility, response code: %v\n", *fail.Id, *fail.Code)
 		}
 	}
 	return nil
