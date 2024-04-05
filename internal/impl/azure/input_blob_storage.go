@@ -193,10 +193,10 @@ func newAzureTargetReader(ctx context.Context, conf bsiConfig) (*azureTargetRead
 	if conf.Prefix != "" {
 		params.Prefix = &conf.Prefix
 	}
-	output := conf.client.NewListBlobsFlatPager(conf.Container, params)
+	pager := conf.client.NewListBlobsFlatPager(conf.Container, params)
 	staticKeys := azureTargetReader{conf: conf}
-	for output.More() {
-		page, err := output.NextPage(ctx)
+	if pager.More() {
+		page, err := pager.NextPage(ctx)
 		if err != nil {
 			return nil, fmt.Errorf("error getting page of blobs: %w", err)
 		}
@@ -213,17 +213,16 @@ func newAzureTargetReader(ctx context.Context, conf bsiConfig) (*azureTargetRead
 func (s *azureTargetReader) Pop(ctx context.Context) (*azureObjectTarget, error) {
 	if len(s.pending) == 0 && s.startAfter != "" {
 		s.pending = nil
-		var maxResults int32 = 100
 		params := &azblob.ListBlobsFlatOptions{
-			MaxResults: &maxResults,
+			MaxResults: &maxAzureBlobStorageListObjectsResults,
 			Marker:     &s.startAfter,
 		}
 		if s.conf.Prefix != "" {
 			params.Prefix = &s.conf.Prefix
 		}
-		output := s.conf.client.NewListBlobsFlatPager(s.conf.Container, params)
-		for output.More() {
-			page, err := output.NextPage(ctx)
+		pager := s.conf.client.NewListBlobsFlatPager(s.conf.Container, params)
+		if pager.More() {
+			page, err := pager.NextPage(ctx)
 			if err != nil {
 				return nil, fmt.Errorf("error getting page of blobs: %w", err)
 			}
