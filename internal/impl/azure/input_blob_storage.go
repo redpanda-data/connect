@@ -150,7 +150,6 @@ func newAzureObjectTarget(key string, ackFn codec.ReaderAckFn) *azureObjectTarge
 //------------------------------------------------------------------------------
 
 func deleteAzureObjectAckFn(
-	ctx context.Context,
 	client *azblob.Client,
 	containerName string,
 	key string,
@@ -202,7 +201,7 @@ func newAzureTargetReader(ctx context.Context, conf bsiConfig) (*azureTargetRead
 			return nil, fmt.Errorf("error getting page of blobs: %w", err)
 		}
 		for _, blob := range page.Segment.BlobItems {
-			ackFn := deleteAzureObjectAckFn(ctx, conf.client, conf.Container, *blob.Name, conf.DeleteObjects, nil)
+			ackFn := deleteAzureObjectAckFn(conf.client, conf.Container, *blob.Name, conf.DeleteObjects, nil)
 			staticKeys.pending = append(staticKeys.pending, newAzureObjectTarget(*blob.Name, ackFn))
 		}
 		staticKeys.pager = pager
@@ -219,7 +218,7 @@ func (s *azureTargetReader) Pop(ctx context.Context) (*azureObjectTarget, error)
 			return nil, fmt.Errorf("error getting page of blobs: %w", err)
 		}
 		for _, blob := range page.Segment.BlobItems {
-			ackFn := deleteAzureObjectAckFn(ctx, s.conf.client, s.conf.Container, *blob.Name, s.conf.DeleteObjects, nil)
+			ackFn := deleteAzureObjectAckFn(s.conf.client, s.conf.Container, *blob.Name, s.conf.DeleteObjects, nil)
 			s.pending = append(s.pending, newAzureObjectTarget(*blob.Name, ackFn))
 		}
 	}
