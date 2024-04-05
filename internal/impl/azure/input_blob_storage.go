@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/runtime"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
 
 	"github.com/benthosdev/benthos/v4/internal/codec"
@@ -180,9 +181,9 @@ type azurePendingObject struct {
 }
 
 type azureTargetReader struct {
-	pending    []*azureObjectTarget
-	conf       bsiConfig
-	startAfter string
+	pending []*azureObjectTarget
+	conf    bsiConfig
+	pager   *runtime.Pager[azblob.ListBlobsFlatResponse]
 }
 
 func newAzureTargetReader(ctx context.Context, conf bsiConfig) (*azureTargetReader, error) {
@@ -204,33 +205,22 @@ func newAzureTargetReader(ctx context.Context, conf bsiConfig) (*azureTargetRead
 			ackFn := deleteAzureObjectAckFn(ctx, conf.client, conf.Container, *blob.Name, conf.DeleteObjects, nil)
 			staticKeys.pending = append(staticKeys.pending, newAzureObjectTarget(*blob.Name, ackFn))
 		}
-		staticKeys.startAfter = *page.NextMarker
+		staticKeys.pager = pager
 	}
 
 	return &staticKeys, nil
 }
 
 func (s *azureTargetReader) Pop(ctx context.Context) (*azureObjectTarget, error) {
-	if len(s.pending) == 0 && s.startAfter != "" {
+	if len(s.pending) == 0 && s.pager.More() {
 		s.pending = nil
-		params := &azblob.ListBlobsFlatOptions{
-			MaxResults: &maxAzureBlobStorageListObjectsResults,
-			Marker:     &s.startAfter,
+		page, err := s.pager.NextPage(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("error getting page of blobs: %w", err)
 		}
-		if s.conf.Prefix != "" {
-			params.Prefix = &s.conf.Prefix
-		}
-		pager := s.conf.client.NewListBlobsFlatPager(s.conf.Container, params)
-		if pager.More() {
-			page, err := pager.NextPage(ctx)
-			if err != nil {
-				return nil, fmt.Errorf("error getting page of blobs: %w", err)
-			}
-			for _, blob := range page.Segment.BlobItems {
-				ackFn := deleteAzureObjectAckFn(ctx, s.conf.client, s.conf.Container, *blob.Name, s.conf.DeleteObjects, nil)
-				s.pending = append(s.pending, newAzureObjectTarget(*blob.Name, ackFn))
-			}
-			s.startAfter = *page.NextMarker
+		for _, blob := range page.Segment.BlobItems {
+			ackFn := deleteAzureObjectAckFn(ctx, s.conf.client, s.conf.Container, *blob.Name, s.conf.DeleteObjects, nil)
+			s.pending = append(s.pending, newAzureObjectTarget(*blob.Name, ackFn))
 		}
 	}
 	if len(s.pending) == 0 {
