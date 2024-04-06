@@ -135,7 +135,7 @@ func (a *snsWriter) Connect(ctx context.Context) error {
 	}
 	a.sns = sns.NewFromConfig(a.conf.aconf)
 
-	a.log.Infof("Sending messages to Amazon SNS ARN: %v\n", a.conf.TopicArn)
+	a.log.Debugf("Sending messages to Amazon SNS ARN: %v\n", a.conf.TopicArn)
 	return nil
 }
 

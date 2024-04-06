@@ -158,7 +158,7 @@ func (a *sqsWriter) Connect(ctx context.Context) error {
 	}
 
 	a.sqs = sqs.NewFromConfig(a.conf.aconf)
-	a.log.Infof("Sending messages to Amazon SQS URL: %v\n", a.conf.URL)
+	a.log.Debugf("Sending messages to Amazon SQS URL: %v\n", a.conf.URL)
 	return nil
 }
 
