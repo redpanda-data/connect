@@ -174,7 +174,7 @@ message bar {
 					},
 				},
 			}), nil
-		case "/subjects/stuffs%2Fthething.proto/versions/10", "/schemas/ids/2":
+		case "/subjects/stuffs/thething.proto/versions/10", "/schemas/ids/2":
 			return mustJBytes(t, map[string]any{
 				"id":         2,
 				"version":    10,
