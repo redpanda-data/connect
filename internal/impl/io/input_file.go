@@ -180,7 +180,7 @@ func (f *fileConsumer) getReader(ctx context.Context) (scannerInfo, error) {
 
 	f.paths = f.paths[1:]
 
-	f.log.Infof("Consuming from file '%v'\n", nextPath)
+	f.log.Debugf("Consuming from file '%v'\n", nextPath)
 	return *f.scannerInfo, nil
 }
 

@@ -179,8 +179,6 @@ func (a *awsSQSReader) Connect(ctx context.Context) error {
 		wg.Wait()
 		a.closeSignal.ShutdownComplete()
 	}()
-
-	a.log.Infof("Receiving Amazon SQS messages from URL: %v\n", a.conf.URL)
 	return nil
 }
 

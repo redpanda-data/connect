@@ -280,8 +280,6 @@ func (r *redisStreamsReader) Connect(ctx context.Context) error {
 			return fmt.Errorf("failed to create group %v for stream %v: %v", r.consumerGroup, s, err)
 		}
 	}
-
-	r.log.Infof("Receiving messages from Redis streams: %v\n", r.streams)
 	r.client = client
 	return nil
 }

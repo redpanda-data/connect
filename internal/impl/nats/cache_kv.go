@@ -108,8 +108,6 @@ func (p *kvCache) connect(ctx context.Context) error {
 	if p.kv, err = js.KeyValue(p.bucket); err != nil {
 		return err
 	}
-
-	p.log.Infof("Caching on NATS KV bucket: %s", p.bucket)
 	return nil
 }
 

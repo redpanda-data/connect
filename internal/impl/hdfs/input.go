@@ -104,8 +104,6 @@ func (h *hdfsReader) Connect(ctx context.Context) error {
 			h.targets = append(h.targets, info.Name())
 		}
 	}
-
-	h.log.Infof("Receiving files from HDFS directory: %v\n", h.directory)
 	return nil
 }
 

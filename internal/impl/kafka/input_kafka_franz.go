@@ -728,7 +728,6 @@ func (f *franzKafkaReader) Connect(ctx context.Context) error {
 	}()
 
 	f.storeBatchChan(batchChan)
-	f.log.Infof("Receiving messages from Kafka topics: %v", f.topics)
 	return nil
 }
 

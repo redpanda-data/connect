@@ -464,10 +464,6 @@ func (k *kafkaWriter) Connect(ctx context.Context) error {
 
 	var err error
 	k.producer, err = sarama.NewSyncProducer(k.addresses, k.saramConf)
-
-	if err == nil {
-		k.mgr.Logger().Infof("Sending Kafka messages to addresses: %s\n", k.addresses)
-	}
 	return err
 }
 

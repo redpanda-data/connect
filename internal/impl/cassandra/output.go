@@ -176,7 +176,6 @@ func (c *cassandraWriter) Connect(ctx context.Context) error {
 	}
 
 	c.session = session
-	c.log.Infof("Sending messages to Cassandra: %v\n", c.clientConf.addresses)
 	return nil
 }
 

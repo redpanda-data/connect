@@ -20,6 +20,10 @@ All notable changes to this project will be documented in this file.
 - The `sftp` input will no longer consume files when the watcher cache returns an error. Instead, it will reattempt the file upon the next poll.
 - The `aws_sqs` input no longer logs error level logs for visibility timeout refreshing errors.
 
+### Changed
+
+- The log events from all inputs and outputs when they first connect have been made more consistent and no longer contain any information regarding the nature of their connections.
+
 ## 4.26.0 - 2024-03-18
 
 ### Added

@@ -299,12 +299,7 @@ func (a *amqp09Writer) Connect(ctx context.Context) error {
 		if err := a.declareExchange(sExchange); err != nil {
 			a.log.Errorf("Failed to declare exchange: %w", err)
 		}
-
-		a.log.Infof("Sending AMQP messages to exchange: %s", sExchange)
-	} else {
-		a.log.Infof("Sending AMQP messages to dynamic interpolated exchange")
 	}
-
 	return nil
 }
 
