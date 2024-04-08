@@ -2,6 +2,7 @@ package nats
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"testing"
 	"time"
@@ -344,7 +345,13 @@ cache_resources:
 			result, err := process(yaml)
 			require.NoError(t, err)
 
-			assert.Len(t, result, 2)
+			assert.Len(t, result, 1)
+
+			msg, err := result[0].AsBytes()
+			require.NoError(t, err)
+			expected, err := json.Marshal([]any{"blob", "bobs"})
+			require.NoError(t, err)
+			assert.JSONEq(t, string(expected), string(msg))
 		})
 	})
 }

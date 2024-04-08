@@ -10,6 +10,13 @@ import (
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
+const (
+	kviFieldKey            = "key"
+	kviFieldIgnoreDeletes  = "ignore_deletes"
+	kviFieldIncludeHistory = "include_history"
+	kviFieldMetaOnly       = "meta_only"
+)
+
 func natsKVInputConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Beta().
@@ -30,29 +37,26 @@ This input adds the following metadata fields to each message:
 - nats_kv_created
 ` + "```" + `
 
-` + ConnectionNameDescription() + authDescription()).
-		Fields(connectionHeadFields()...).
-		Field(service.NewStringField("bucket").
-			Description("The name of the KV bucket to watch for updates.").
-			Example("my_kv_bucket")).
-		Field(service.NewStringField("key").
-			Description("Key to watch for updates, can include wildcards.").
-			Default(">").
-			Example("foo.bar.baz").Example("foo.*.baz").Example("foo.bar.*").Example("foo.>")).
-		Field(service.NewAutoRetryNacksToggleField()).
-		Field(service.NewBoolField("ignore_deletes").
-			Description("Do not send delete markers as messages.").
-			Default(false).
-			Advanced()).
-		Field(service.NewBoolField("include_history").
-			Description("Include all the history per key, not just the last one.").
-			Default(false).
-			Advanced()).
-		Field(service.NewBoolField("meta_only").
-			Description("Retrieve only the metadata of the entry").
-			Default(false).
-			Advanced()).
-		Fields(connectionTailFields()...)
+` + connectionNameDescription() + authDescription()).
+		Fields(kvDocs([]*service.ConfigField{
+			service.NewStringField(kviFieldKey).
+				Description("Key to watch for updates, can include wildcards.").
+				Default(">").
+				Example("foo.bar.baz").Example("foo.*.baz").Example("foo.bar.*").Example("foo.>"),
+			service.NewAutoRetryNacksToggleField(),
+			service.NewBoolField(kviFieldIgnoreDeletes).
+				Description("Do not send delete markers as messages.").
+				Default(false).
+				Advanced(),
+			service.NewBoolField(kviFieldIncludeHistory).
+				Description("Include all the history per key, not just the last one.").
+				Default(false).
+				Advanced(),
+			service.NewBoolField(kviFieldMetaOnly).
+				Description("Retrieve only the metadata of the entry").
+				Default(false).
+				Advanced(),
+		}...)...)
 }
 
 func init() {
@@ -99,25 +103,26 @@ func newKVReader(conf *service.ParsedConfig, mgr *service.Resources) (*kvReader,
 		return nil, err
 	}
 
-	if r.bucket, err = conf.FieldString("bucket"); err != nil {
+	if r.bucket, err = conf.FieldString(kvFieldBucket); err != nil {
 		return nil, err
 	}
 
-	if r.ignoreDeletes, err = conf.FieldBool("ignore_deletes"); err != nil {
+	if r.key, err = conf.FieldString(kviFieldKey); err != nil {
 		return nil, err
 	}
 
-	if r.includeHistory, err = conf.FieldBool("include_history"); err != nil {
+	if r.ignoreDeletes, err = conf.FieldBool(kviFieldIgnoreDeletes); err != nil {
 		return nil, err
 	}
 
-	if r.metaOnly, err = conf.FieldBool("meta_only"); err != nil {
+	if r.includeHistory, err = conf.FieldBool(kviFieldIncludeHistory); err != nil {
 		return nil, err
 	}
 
-	if r.key, err = conf.FieldString("key"); err != nil {
+	if r.metaOnly, err = conf.FieldBool(kviFieldMetaOnly); err != nil {
 		return nil, err
 	}
+
 	return r, nil
 }
 

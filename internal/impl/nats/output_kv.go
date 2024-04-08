@@ -10,6 +10,10 @@ import (
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
+const (
+	kvoFieldKey = "key"
+)
+
 func natsKVOutputConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Beta().
@@ -21,20 +25,15 @@ The field ` + "`key`" + ` supports
 [interpolation functions](/docs/configuration/interpolation#bloblang-queries), allowing
 you to create a unique key for each message.
 
-` + ConnectionNameDescription() + authDescription()).
-		Fields(connectionHeadFields()...).
-		Field(service.NewStringField("bucket").
-			Description("The name of the KV bucket to operate on.").
-			Example("my_kv_bucket")).
-		Field(service.NewInterpolatedStringField("key").
-			Description("The key for each message.").
-			Example("foo").
-			Example("foo.bar.baz").
-			Example(`foo.${! json("meta.type") }`)).
-		Field(service.NewIntField("max_in_flight").
-			Description("The maximum number of messages to have in flight at a given time. Increase this to improve throughput.").
-			Default(1024)).
-		Fields(connectionTailFields()...)
+` + connectionNameDescription() + authDescription()).
+		Fields(kvDocs([]*service.ConfigField{
+			service.NewInterpolatedStringField(kvoFieldKey).
+				Description("The key for each message.").
+				Example("foo").
+				Example("foo.bar.baz").
+				Example(`foo.${! json("meta.type") }`),
+			service.NewOutputMaxInFlightField().Default(1024),
+		}...)...)
 }
 
 func init() {
@@ -81,15 +80,15 @@ func newKVOutput(conf *service.ParsedConfig, mgr *service.Resources) (*kvOutput,
 		return nil, err
 	}
 
-	if kv.bucket, err = conf.FieldString("bucket"); err != nil {
+	if kv.bucket, err = conf.FieldString(kvFieldBucket); err != nil {
 		return nil, err
 	}
 
-	if kv.keyRaw, err = conf.FieldString("key"); err != nil {
+	if kv.keyRaw, err = conf.FieldString(kvoFieldKey); err != nil {
 		return nil, err
 	}
 
-	if kv.key, err = conf.FieldInterpolatedString("key"); err != nil {
+	if kv.key, err = conf.FieldInterpolatedString(kvoFieldKey); err != nil {
 		return nil, err
 	}
 	return &kv, nil

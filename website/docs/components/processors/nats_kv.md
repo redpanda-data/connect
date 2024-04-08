@@ -52,6 +52,7 @@ nats_kv:
   operation: "" # No default (required)
   key: ""
   revision: "42" # No default (optional)
+  keys_filter: foo # No default (optional)
   tls:
     enabled: false
     skip_cert_verify: false
@@ -159,7 +160,7 @@ urls:
 
 ### `bucket`
 
-The name of the KV bucket to watch for updates.
+The name of the KV bucket.
 
 
 Type: `string`  
@@ -184,7 +185,7 @@ Type: `string`
 | `get` | Returns the latest value for `key`. |
 | `get_revision` | Returns the value of `key` for the specified `revision`. |
 | `history` | Returns historical values of `key` as a batch. |
-| `keys` | Returns all the keys in the `bucket` as a batch. |
+| `keys` | Returns the keys in the `bucket` which match the `keys_filter` as an array of strings. |
 | `purge` | Deletes the key/value pair and all historical values. |
 | `put` | Places a new value for the key into the store. |
 | `update` | Updates the value for `key` only if the `revision` matches the latest revision. |
@@ -223,6 +224,26 @@ Type: `string`
 revision: "42"
 
 revision: ${! @nats_kv_revision }
+```
+
+### `keys_filter`
+
+The filter to apply when using the `keys` operation. Supports [wildcards](https://docs.nats.io/nats-concepts/subjects#wildcards). All keys are selected when not set.
+This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
+
+
+Type: `string`  
+
+```yml
+# Examples
+
+keys_filter: foo
+
+keys_filter: foo.*
+
+keys_filter: foo.>
+
+keys_filter: ${! json("foo") }.bar
 ```
 
 ### `tls`
