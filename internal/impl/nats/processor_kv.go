@@ -315,7 +315,9 @@ func (p *kvProcessor) Process(ctx context.Context, msg *service.Message) (servic
 			return nil, err
 		}
 		defer func() {
-			_ = watcher.Stop()
+			if err := watcher.Stop(); err != nil {
+				p.log.Debugf("Failed to close key watcher: %s", err)
+			}
 		}()
 
 		var keys []any
