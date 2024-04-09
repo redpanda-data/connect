@@ -198,7 +198,7 @@ type v2BatchedToV1Processor struct {
 	mLatency       metrics.StatTimer
 }
 
-// NewAutoObservedBatchProcessor wraps an AutoObservedBatched processor with an
+// NewAutoObservedBatchedProcessor wraps an AutoObservedBatched processor with an
 // implementation of V1 which handles observability information.
 func NewAutoObservedBatchedProcessor(typeStr string, p AutoObservedBatched, mgr component.Observability) V1 {
 	return &v2BatchedToV1Processor{
