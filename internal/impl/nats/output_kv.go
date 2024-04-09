@@ -5,6 +5,7 @@ import (
 	"sync"
 
 	"github.com/nats-io/nats.go"
+	"github.com/nats-io/nats.go/jetstream"
 
 	"github.com/benthosdev/benthos/v4/internal/shutdown"
 	"github.com/benthosdev/benthos/v4/public/service"
@@ -64,7 +65,7 @@ type kvOutput struct {
 
 	connMut  sync.Mutex
 	natsConn *nats.Conn
-	keyValue nats.KeyValue
+	keyValue jetstream.KeyValue
 
 	shutSig *shutdown.Signaller
 }
@@ -116,12 +117,12 @@ func (kv *kvOutput) Connect(ctx context.Context) (err error) {
 		return err
 	}
 
-	jsc, err := natsConn.JetStream()
+	jsc, err := jetstream.New(natsConn)
 	if err != nil {
 		return err
 	}
 
-	kv.keyValue, err = jsc.KeyValue(kv.bucket)
+	kv.keyValue, err = jsc.KeyValue(ctx, kv.bucket)
 	if err != nil {
 		return err
 	}
@@ -161,7 +162,7 @@ func (kv *kvOutput) Write(ctx context.Context, msg *service.Message) error {
 		return err
 	}
 
-	rev, err := keyValue.Put(key, value)
+	rev, err := keyValue.Put(ctx, key, value)
 	if err != nil {
 		return err
 	}

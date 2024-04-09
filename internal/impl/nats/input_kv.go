@@ -5,6 +5,7 @@ import (
 	"sync"
 
 	"github.com/nats-io/nats.go"
+	"github.com/nats-io/nats.go/jetstream"
 
 	"github.com/benthosdev/benthos/v4/internal/shutdown"
 	"github.com/benthosdev/benthos/v4/public/service"
@@ -89,7 +90,7 @@ type kvReader struct {
 
 	connMut  sync.Mutex
 	natsConn *nats.Conn
-	watcher  nats.KeyWatcher
+	watcher  jetstream.KeyWatcher
 }
 
 func newKVReader(conf *service.ParsedConfig, mgr *service.Resources) (*kvReader, error) {
@@ -149,28 +150,28 @@ func (r *kvReader) Connect(ctx context.Context) (err error) {
 		return err
 	}
 
-	js, err := r.natsConn.JetStream()
+	js, err := jetstream.New(r.natsConn)
 	if err != nil {
 		return err
 	}
 
-	kv, err := js.KeyValue(r.bucket)
+	kv, err := js.KeyValue(ctx, r.bucket)
 	if err != nil {
 		return err
 	}
 
-	var watchOpts []nats.WatchOpt
+	var watchOpts []jetstream.WatchOpt
 	if r.ignoreDeletes {
-		watchOpts = append(watchOpts, nats.IgnoreDeletes())
+		watchOpts = append(watchOpts, jetstream.IgnoreDeletes())
 	}
 	if r.includeHistory {
-		watchOpts = append(watchOpts, nats.IncludeHistory())
+		watchOpts = append(watchOpts, jetstream.IncludeHistory())
 	}
 	if r.metaOnly {
-		watchOpts = append(watchOpts, nats.MetaOnly())
+		watchOpts = append(watchOpts, jetstream.MetaOnly())
 	}
 
-	r.watcher, err = kv.Watch(r.key, watchOpts...)
+	r.watcher, err = kv.Watch(ctx, r.key, watchOpts...)
 	if err != nil {
 		return err
 	}
@@ -201,7 +202,7 @@ func (r *kvReader) Read(ctx context.Context) (*service.Message, service.AckFunc,
 	}
 
 	for {
-		var entry nats.KeyValueEntry
+		var entry jetstream.KeyValueEntry
 		var open bool
 		select {
 		case entry, open = <-watcher.Updates():

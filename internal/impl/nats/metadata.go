@@ -1,9 +1,8 @@
 package nats
 
 import (
-	"github.com/nats-io/nats.go"
-
 	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/nats-io/nats.go/jetstream"
 )
 
 const (
@@ -15,7 +14,7 @@ const (
 	metaKVCreated   = "nats_kv_created"
 )
 
-func newMessageFromKVEntry(entry nats.KeyValueEntry) *service.Message {
+func newMessageFromKVEntry(entry jetstream.KeyValueEntry) *service.Message {
 	msg := service.NewMessage(entry.Value())
 	msg.MetaSetMut(metaKVKey, entry.Key())
 	msg.MetaSetMut(metaKVBucket, entry.Bucket())

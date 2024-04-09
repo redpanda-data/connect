@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	"github.com/nats-io/nats.go"
+	"github.com/nats-io/nats.go/jetstream"
 
 	"github.com/benthosdev/benthos/v4/internal/shutdown"
 	"github.com/benthosdev/benthos/v4/public/service"
@@ -145,7 +146,7 @@ type kvProcessor struct {
 
 	connMut  sync.Mutex
 	natsConn *nats.Conn
-	kv       nats.KeyValue
+	kv       jetstream.KeyValue
 }
 
 func newKVProcessor(conf *service.ParsedConfig, mgr *service.Resources) (*kvProcessor, error) {
@@ -218,7 +219,7 @@ func (p *kvProcessor) Process(ctx context.Context, msg *service.Message) (servic
 	switch p.operation {
 
 	case kvpOperationGet:
-		entry, err := kv.Get(key)
+		entry, err := kv.Get(ctx, key)
 		if err != nil {
 			return nil, err
 		}
@@ -229,14 +230,14 @@ func (p *kvProcessor) Process(ctx context.Context, msg *service.Message) (servic
 		if err != nil {
 			return nil, err
 		}
-		entry, err := kv.GetRevision(key, revision)
+		entry, err := kv.GetRevision(ctx, key, revision)
 		if err != nil {
 			return nil, err
 		}
 		return service.MessageBatch{newMessageFromKVEntry(entry)}, nil
 
 	case kvpOperationCreate:
-		revision, err := kv.Create(key, bytes)
+		revision, err := kv.Create(ctx, key, bytes)
 		if err != nil {
 			return nil, err
 		}
@@ -246,7 +247,7 @@ func (p *kvProcessor) Process(ctx context.Context, msg *service.Message) (servic
 		return service.MessageBatch{m}, nil
 
 	case kvpOperationPut:
-		revision, err := kv.Put(key, bytes)
+		revision, err := kv.Put(ctx, key, bytes)
 		if err != nil {
 			return nil, err
 		}
@@ -260,7 +261,7 @@ func (p *kvProcessor) Process(ctx context.Context, msg *service.Message) (servic
 		if err != nil {
 			return nil, err
 		}
-		revision, err = kv.Update(key, bytes, revision)
+		revision, err = kv.Update(ctx, key, bytes, revision)
 		if err != nil {
 			return nil, err
 		}
@@ -271,7 +272,7 @@ func (p *kvProcessor) Process(ctx context.Context, msg *service.Message) (servic
 
 	case kvpOperationDelete:
 		// TODO: Support revision here?
-		err := kv.Delete(key)
+		err := kv.Delete(ctx, key)
 		if err != nil {
 			return nil, err
 		}
@@ -281,7 +282,7 @@ func (p *kvProcessor) Process(ctx context.Context, msg *service.Message) (servic
 		return service.MessageBatch{m}, nil
 
 	case kvpOperationPurge:
-		err := kv.Purge(key)
+		err := kv.Purge(ctx, key)
 		if err != nil {
 			return nil, err
 		}
@@ -291,7 +292,7 @@ func (p *kvProcessor) Process(ctx context.Context, msg *service.Message) (servic
 		return service.MessageBatch{m}, nil
 
 	case kvpOperationHistory:
-		entries, err := kv.History(key)
+		entries, err := kv.History(ctx, key)
 		if err != nil {
 			return nil, err
 		}
@@ -310,7 +311,7 @@ func (p *kvProcessor) Process(ctx context.Context, msg *service.Message) (servic
 		}
 
 		// `kv.ListKeys()` does not allow users to specify a key filter, so we call `kv.Watch()` directly.
-		watcher, err := kv.Watch(keysFilter, []nats.WatchOpt{nats.IgnoreDeletes(), nats.MetaOnly()}...)
+		watcher, err := kv.Watch(ctx, keysFilter, []jetstream.WatchOpt{jetstream.IgnoreDeletes(), jetstream.MetaOnly()}...)
 		if err != nil {
 			return nil, err
 		}
@@ -380,12 +381,12 @@ func (p *kvProcessor) Connect(ctx context.Context) (err error) {
 		return err
 	}
 
-	js, err := p.natsConn.JetStream()
+	js, err := jetstream.New(p.natsConn)
 	if err != nil {
 		return err
 	}
 
-	p.kv, err = js.KeyValue(p.bucket)
+	p.kv, err = js.KeyValue(ctx, p.bucket)
 	if err != nil {
 		return err
 	}
