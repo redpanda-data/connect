@@ -25,6 +25,7 @@ func cloudTraceSpec() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Version("4.2.0").
 		Summary(`Send tracing events to a [Google Cloud Trace](https://cloud.google.com/trace).`).
+		Description(gcpDescription("")).
 		Fields(
 			service.NewStringField(ctFieldProject).
 				Description("The google project with Cloud Trace API enabled. If this is omitted then the Google Cloud SDK will attempt auto-detect it from the environment."),

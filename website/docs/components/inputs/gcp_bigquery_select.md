@@ -40,6 +40,10 @@ input:
 ```
 
 Once the rows from the query are exhausted, this input shuts down, allowing the pipeline to gracefully terminate (or the next input in a [sequence](/docs/components/inputs/sequence) to execute).
+	### Credentials
+
+	By default Benthos will use a shared credentials file when connecting to GCP services. You can find out more [in this document](/docs/guides/cloud/gcp).
+	
 
 ## Examples
 

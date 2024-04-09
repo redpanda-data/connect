@@ -28,6 +28,10 @@ gcp_cloud_storage:
 ```
 
 It is not possible to atomically upload cloud storage objects exclusively when the target does not already exist, therefore this cache is not suitable for deduplication.
+	### Credentials
+
+	By default Benthos will use a shared credentials file when connecting to GCP services. You can find out more [in this document](/docs/guides/cloud/gcp).
+	
 
 ## Fields
 

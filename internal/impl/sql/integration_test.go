@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"net/url"
 	"strings"
 	"sync"
 	"testing"
@@ -26,27 +27,42 @@ type testFn func(t *testing.T, driver, dsn, table string)
 
 func testProcessors(name string, fn func(t *testing.T, insertProc, selectProc service.BatchProcessor)) testFn {
 	return func(t *testing.T, driver, dsn, table string) {
-		colList := `[ "foo", "bar", "baz" ]`
-		if driver == "oracle" {
-			colList = `[ "\"foo\"", "\"bar\"", "\"baz\"" ]`
+		columns := `"foo", "bar", "baz"`
+		filterColumn := `"foo"`
+		placeholderStr := "?"
+		if driver == "postgres" || driver == "clickhouse" {
+			placeholderStr = "$1"
+		} else if driver == "oracle" {
+			columns = `"\"foo\"", "\"bar\"", "\"baz\""`
+			placeholderStr = ":1"
+		} else if driver == "bigquery" {
+			columns = "\"`foo`\", \"`bar`\", \"`baz`\""
+			filterColumn = "`foo`"
 		}
+		confReplacer := strings.NewReplacer(
+			"$driver", driver,
+			"$dsn", dsn,
+			"$table", table,
+			"$columns", columns,
+			"$filterColumn", filterColumn,
+		)
 		t.Run(name, func(t *testing.T) {
-			insertConf := fmt.Sprintf(`
-driver: %s
-dsn: %s
-table: %s
-columns: %s
+			insertConf := confReplacer.Replace(`
+driver: $driver
+dsn: $dsn
+table: $table
+columns: [ $columns ]
 args_mapping: 'root = [ this.foo, this.bar.floor(), this.baz ]'
-`, driver, dsn, table, colList)
+`)
 
-			queryConf := fmt.Sprintf(`
-driver: %s
-dsn: %s
-table: %s
+			queryConf := confReplacer.Replace(`
+driver: $driver
+dsn: $dsn
+table: $table
 columns: [ "*" ]
-where: '"foo" = ?'
+where: ' $filterColumn = ` + placeholderStr + `'
 args_mapping: 'root = [ this.id ]'
-`, driver, dsn, table)
+`)
 
 			env := service.NewEnvironment()
 
@@ -71,33 +87,44 @@ args_mapping: 'root = [ this.id ]'
 
 func testRawProcessors(name string, fn func(t *testing.T, insertProc, selectProc service.BatchProcessor)) testFn {
 	return func(t *testing.T, driver, dsn, table string) {
+		columns := `"foo", "bar", "baz"`
+		values := "?, ?, ?"
+		filterColumn := `"foo"`
+		placeholderStr := "?"
+		if driver == "postgres" || driver == "clickhouse" {
+			values = `$1, $2, $3`
+			placeholderStr = "$1"
+		} else if driver == "oracle" {
+			values = `:1, :2, :3`
+			placeholderStr = ":1"
+		} else if driver == "bigquery" {
+			columns = "`foo`, `bar`, `baz`"
+			filterColumn = "`foo`"
+		}
+		confReplacer := strings.NewReplacer(
+			"$driver", driver,
+			"$dsn", dsn,
+			"$table", table,
+			"$columns", columns,
+			"$values", values,
+			"$filterColumn", filterColumn,
+		)
+
 		t.Run(name, func(t *testing.T) {
-			valuesStr := `(?, ?, ?)`
-			if driver == "postgres" || driver == "clickhouse" {
-				valuesStr = `($1, $2, $3)`
-			} else if driver == "oracle" {
-				valuesStr = `(:1, :2, :3)`
-			}
-			insertConf := fmt.Sprintf(`
-driver: %s
-dsn: %s
-query: insert into %s ( "foo", "bar", "baz" ) values `+valuesStr+`
+			insertConf := confReplacer.Replace(`
+driver: $driver
+dsn: $dsn
+query: insert into $table ( $columns ) values ( $values )
 args_mapping: 'root = [ this.foo, this.bar.floor(), this.baz ]'
 exec_only: true
-`, driver, dsn, table)
+`)
 
-			placeholderStr := "?"
-			if driver == "postgres" || driver == "clickhouse" {
-				placeholderStr = "$1"
-			} else if driver == "oracle" {
-				placeholderStr = ":1"
-			}
-			queryConf := fmt.Sprintf(`
-driver: %s
-dsn: %s
-query: select "foo", "bar", "baz" from %s where "foo" = `+placeholderStr+`
+			queryConf := confReplacer.Replace(`
+driver: $driver
+dsn: $dsn
+query: select $columns from $table where $filterColumn = ` + placeholderStr + `
 args_mapping: 'root = [ this.id ]'
-`, driver, dsn, table)
+`)
 
 			env := service.NewEnvironment()
 
@@ -122,33 +149,44 @@ args_mapping: 'root = [ this.id ]'
 
 func testRawDeprecatedProcessors(name string, fn func(t *testing.T, insertProc, selectProc service.BatchProcessor)) testFn {
 	return func(t *testing.T, driver, dsn, table string) {
-		t.Run(name, func(t *testing.T) {
-			valuesStr := `(?, ?, ?)`
-			if driver == "postgres" || driver == "clickhouse" {
-				valuesStr = `($1, $2, $3)`
-			} else if driver == "oracle" {
-				valuesStr = `(:1, :2, :3)`
-			}
-			insertConf := fmt.Sprintf(`
-driver: %s
-data_source_name: %s
-query: insert into %s ( "foo", "bar", "baz" ) values `+valuesStr+`
-args_mapping: 'root = [ this.foo, this.bar.floor(), this.baz ]'
-`, driver, dsn, table)
+		columns := `"foo", "bar", "baz"`
+		values := "?, ?, ?"
+		placeholderStr := "?"
+		filterColumn := `"foo"`
+		if driver == "postgres" || driver == "clickhouse" {
+			values = `$1, $2, $3`
+			placeholderStr = "$1"
+		} else if driver == "oracle" {
+			values = `:1, :2, :3`
+			placeholderStr = ":1"
+		} else if driver == "bigquery" {
+			columns = "`foo`, `bar`, `baz`"
+			filterColumn = "`foo`"
+		}
+		confReplacer := strings.NewReplacer(
+			"$driver", driver,
+			"$dsn", dsn,
+			"$table", table,
+			"$columns", columns,
+			"$values", values,
+			"$filterColumn", filterColumn,
+		)
 
-			placeholderStr := "?"
-			if driver == "postgres" || driver == "clickhouse" {
-				placeholderStr = "$1"
-			} else if driver == "oracle" {
-				placeholderStr = ":1"
-			}
-			queryConf := fmt.Sprintf(`
-driver: %s
-data_source_name: %s
-query: select "foo", "bar", "baz" from %s where "foo" = `+placeholderStr+`
+		t.Run(name, func(t *testing.T) {
+			insertConf := confReplacer.Replace(`
+driver: $driver
+data_source_name: $dsn
+query: insert into $table ( $columns ) values ($values)
+args_mapping: 'root = [ this.foo, this.bar.floor(), this.baz ]'
+`)
+
+			queryConf := confReplacer.Replace(`
+driver: $driver
+data_source_name: $dsn
+query: select $columns from $table where $filterColumn = ` + placeholderStr + `
 args_mapping: 'root = [ this.id ]'
 result_codec: json_array
-`, driver, dsn, table)
+`)
 
 			env := service.NewEnvironment()
 
@@ -344,24 +382,29 @@ var testDeprecatedProcessorsBasic = testRawDeprecatedProcessors("deprecated", fu
 })
 
 func testBatchInputOutputBatch(t *testing.T, driver, dsn, table string) {
-	colList := `[ "foo", "bar", "baz" ]`
+	columns := `"foo", "bar", "baz"`
+	orderByColumn := `"bar"`
 	if driver == "oracle" {
-		colList = `[ "\"foo\"", "\"bar\"", "\"baz\"" ]`
+		columns = `"\"foo\"", "\"bar\"", "\"baz\""`
+	} else if driver == "bigquery" {
+		columns = "\"`foo`\", \"`bar`\", \"`baz`\""
+		orderByColumn = "`bar`"
 	}
-	t.Run("batch_input_output", func(t *testing.T) {
-		confReplacer := strings.NewReplacer(
-			"$driver", driver,
-			"$dsn", dsn,
-			"$table", table,
-			"$columnlist", colList,
-		)
+	confReplacer := strings.NewReplacer(
+		"$driver", driver,
+		"$dsn", dsn,
+		"$table", table,
+		"$columns", columns,
+		"$orderByColumn", orderByColumn,
+	)
 
+	t.Run("batch_input_output", func(t *testing.T) {
 		outputConf := confReplacer.Replace(`
 sql_insert:
   driver: $driver
   dsn: $dsn
   table: $table
-  columns: $columnlist
+  columns: [ $columns ]
   args_mapping: 'root = [ this.foo, this.bar.floor(), this.baz ]'
 `)
 
@@ -371,7 +414,7 @@ sql_select:
   dsn: $dsn
   table: $table
   columns: [ "*" ]
-  suffix: ' ORDER BY "bar" ASC'
+  suffix: ' ORDER BY $orderByColumn ASC'
 processors:
   # For some reason MySQL driver doesn't resolve to integer by default.
   - bloblang: |
@@ -437,25 +480,32 @@ processors:
 }
 
 func testBatchInputOutputRaw(t *testing.T, driver, dsn, table string) {
+	columns := `"foo", "bar", "baz"`
+	values := `?, ?, ?`
+	orderByClause := `ORDER BY "bar" ASC`
+	if driver == "postgres" || driver == "clickhouse" {
+		values = `$1, $2, $3`
+	} else if driver == "oracle" {
+		values = `:1, :2, :3`
+	} else if driver == "bigquery" {
+		columns = "`foo`, `bar`, `baz`"
+		orderByClause = "ORDER BY `bar` ASC"
+	}
+	confReplacer := strings.NewReplacer(
+		"$driver", driver,
+		"$dsn", dsn,
+		"$table", table,
+		"$columns", columns,
+		"$values", values,
+		"$orderByClause", orderByClause,
+	)
+
 	t.Run("raw_input_output", func(t *testing.T) {
-		confReplacer := strings.NewReplacer(
-			"$driver", driver,
-			"$dsn", dsn,
-			"$table", table,
-		)
-
-		valuesStr := `(?, ?, ?)`
-		if driver == "postgres" || driver == "clickhouse" {
-			valuesStr = `($1, $2, $3)`
-		} else if driver == "oracle" {
-			valuesStr = `(:1, :2, :3)`
-		}
-
 		outputConf := confReplacer.Replace(`
 sql_raw:
   driver: $driver
   dsn: $dsn
-  query: insert into $table ("foo", "bar", "baz") values ` + valuesStr + `
+  query: insert into $table ($columns) values ($values)
   args_mapping: 'root = [ this.foo, this.bar.floor(), this.baz ]'
 `)
 
@@ -463,7 +513,7 @@ sql_raw:
 sql_raw:
   driver: $driver
   dsn: $dsn
-  query: 'select * from $table ORDER BY "bar" ASC'
+  query: 'select * from $table $orderByClause'
 processors:
   # For some reason MySQL driver doesn't resolve to integer by default.
   - bloblang: |
@@ -1145,4 +1195,67 @@ args_mapping: 'root = [ this.foo ]'
 	actBytes, err := m.AsBytes()
 	require.NoError(t, err)
 	assert.JSONEq(t, `[{"foo": "blobfish", "bar": "ARE REALLY COOL", "baz": 41}]`, string(actBytes))
+}
+
+func TestIntegrationBigQuery(t *testing.T) {
+	integration.CheckSkip(t)
+	t.Parallel()
+
+	pool, err := dockertest.NewPool("")
+	if err != nil {
+		t.Skipf("Could not connect to docker: %s", err)
+	}
+	pool.MaxWait = 3 * time.Minute
+
+	dummyProject := "testproj"
+	dummyDataset := "testds"
+	resource, err := pool.RunWithOptions(&dockertest.RunOptions{
+		Repository:   "ghcr.io/goccy/bigquery-emulator",
+		ExposedPorts: []string{"9050/tcp"},
+		Cmd: []string{
+			"--project=" + dummyProject,
+			"--dataset=" + dummyDataset,
+		},
+	})
+	require.NoError(t, err)
+
+	var db *sql.DB
+	t.Cleanup(func() {
+		if err = pool.Purge(resource); err != nil {
+			t.Logf("Failed to clean up docker resource: %s", err)
+		}
+		if db != nil {
+			db.Close()
+		}
+	})
+
+	createTable := func(name string) (string, error) {
+		_, err := db.Exec(fmt.Sprintf(`create table `+"`%s`"+` (
+  `+"`foo`"+` string not null,
+  `+"`bar`"+` int64 not null,
+  `+"`baz`"+` string not null
+		)`, name))
+		return name, err
+	}
+
+	dsn := fmt.Sprintf("bigquery://%s/%s?disable_auth=true&endpoint=%s",
+		dummyProject, dummyDataset, url.QueryEscape("http://localhost:"+resource.GetPort("9050/tcp")),
+	)
+	require.NoError(t, pool.Retry(func() error {
+		db, err = sql.Open("bigquery", dsn)
+		if err != nil {
+			return err
+		}
+		if err = db.Ping(); err != nil {
+			db.Close()
+			db = nil
+			return err
+		}
+		if _, err := createTable("test"); err != nil {
+			return err
+		}
+		return nil
+	}))
+
+	testSuite(t, "bigquery", dsn, createTable)
 }

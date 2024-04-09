@@ -15,7 +15,7 @@ func gcpCloudStorageCacheConfig() *service.ConfigSpec {
 	spec := service.NewConfigSpec().
 		Beta().
 		Summary(`Use a Google Cloud Storage bucket as a cache.`).
-		Description(`It is not possible to atomically upload cloud storage objects exclusively when the target does not already exist, therefore this cache is not suitable for deduplication.`).
+		Description(gcpDescription(`It is not possible to atomically upload cloud storage objects exclusively when the target does not already exist, therefore this cache is not suitable for deduplication.`)).
 		Field(service.NewStringField("bucket").
 			Description("The Google Cloud Storage bucket to store items in.")).
 		Field(service.NewStringField("content_type").

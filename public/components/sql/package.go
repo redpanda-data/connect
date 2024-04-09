@@ -16,4 +16,5 @@ import (
 	_ "github.com/microsoft/gocosmos"
 	_ "github.com/sijms/go-ora/v2"
 	_ "github.com/trinodb/trino-go-client/trino"
+	_ "gorm.io/driver/bigquery"
 )

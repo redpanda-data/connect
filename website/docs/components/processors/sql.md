@@ -73,7 +73,7 @@ A database [driver](#drivers) to use.
 
 
 Type: `string`  
-Options: `mysql`, `postgres`, `clickhouse`, `mssql`, `sqlite`, `oracle`, `snowflake`, `trino`, `gocosmos`.
+Options: `mysql`, `postgres`, `clickhouse`, `mssql`, `sqlite`, `oracle`, `snowflake`, `trino`, `gocosmos`, `bigquery`.
 
 ### `data_source_name`
 

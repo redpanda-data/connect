@@ -80,16 +80,30 @@ In order to have a different path for each object you should use function interp
 ### Metadata
 
 Metadata fields on messages will be sent as headers, in order to mutate these values (or remove them) check out the [metadata docs](/docs/configuration/metadata).
+	### Credentials
 
-### Credentials
+	By default Benthos will use a shared credentials file when connecting to GCP services. You can find out more [in this document](/docs/guides/cloud/gcp).
+	
 
-By default Benthos will use a shared credentials file when connecting to GCP services. You can find out more [in this document](/docs/guides/cloud/gcp).
+## Performance
 
-### Batching
+This output benefits from sending multiple messages in flight in parallel for
+improved performance. You can tune the max number of in flight messages (or
+message batches) with the field `max_in_flight`.
 
-It's common to want to upload messages to Google Cloud Storage as batched archives, the easiest way to do this is to batch your messages at the output level and join the batch of messages with an [`archive`](/docs/components/processors/archive) and/or [`compress`](/docs/components/processors/compress) processor.
+This output benefits from sending messages as a batch for improved performance.
+Batches can be formed at both the input and output level. You can find out more
+[in this doc](/docs/configuration/batching).
 
-For example, if we wished to upload messages as a .tar.gz archive of documents we could achieve that with the following config:
+## Examples
+
+<Tabs defaultValue="Upload messages as a .tar.gz archive" values={[
+{ label: 'Upload messages as a .tar.gz archive', value: 'Upload messages as a .tar.gz archive', },
+{ label: 'Upload messages as a JSON array', value: 'Upload messages as a JSON array', },
+]}>
+
+<TabItem value="Upload messages as a .tar.gz archive">
+
 
 ```yaml
 output:
@@ -100,13 +114,15 @@ output:
       count: 100
       period: 10s
       processors:
-        - archive:
-            format: tar
-        - compress:
-            algorithm: gzip
+      - archive:
+          format: tar
+      - compress:
+           algorithm: gzip
 ```
 
-Alternatively, if we wished to upload JSON documents as a single large document containing an array of objects we can do that with:
+</TabItem>
+<TabItem value="Upload messages as a JSON array">
+
 
 ```yaml
 output:
@@ -120,15 +136,8 @@ output:
             format: json_array
 ```
 
-## Performance
-
-This output benefits from sending multiple messages in flight in parallel for
-improved performance. You can tune the max number of in flight messages (or
-message batches) with the field `max_in_flight`.
-
-This output benefits from sending messages as a batch for improved performance.
-Batches can be formed at both the input and output level. You can find out more
-[in this doc](/docs/configuration/batching).
+</TabItem>
+</Tabs>
 
 ## Fields
 

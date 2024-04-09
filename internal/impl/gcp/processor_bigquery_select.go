@@ -76,6 +76,7 @@ func newBigQuerySelectProcessorConfig() *service.ConfigSpec {
 		Version("3.64.0").
 		Categories("Integration").
 		Summary("Executes a `SELECT` query against BigQuery and replaces messages with the rows returned.").
+		Description(gcpDescription("")).
 		Field(service.NewStringField("project").Description("GCP project where the query job will execute.")).
 		Field(service.NewStringField("table").Description("Fully-qualified BigQuery table name to query.").Example("bigquery-public-data.samples.shakespeare")).
 		Field(service.NewStringListField("columns").Description("A list of columns to query.")).

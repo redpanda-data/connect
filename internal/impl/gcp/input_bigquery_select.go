@@ -81,7 +81,7 @@ func newBigQuerySelectInputConfig() *service.ConfigSpec {
 		Version("3.63.0").
 		Categories("Services", "GCP").
 		Summary("Executes a `SELECT` query against BigQuery and creates a message for each row received.").
-		Description(`Once the rows from the query are exhausted, this input shuts down, allowing the pipeline to gracefully terminate (or the next input in a [sequence](/docs/components/inputs/sequence) to execute).`).
+		Description(gcpDescription(`Once the rows from the query are exhausted, this input shuts down, allowing the pipeline to gracefully terminate (or the next input in a [sequence](/docs/components/inputs/sequence) to execute).`)).
 		Field(service.NewStringField("project").Description("GCP project where the query job will execute.")).
 		Field(service.NewStringField("table").Description("Fully-qualified BigQuery table name to query.").Example("bigquery-public-data.samples.shakespeare")).
 		Field(service.NewStringListField("columns").Description("A list of columns to query.")).
@@ -104,10 +104,8 @@ func newBigQuerySelectInputConfig() *service.ConfigSpec {
 		Field(service.NewStringField("suffix").
 			Description("An optional suffix to append to the select query.").
 			Optional()).
-		Example("Word counts",
-			`
-Here we query the public corpus of Shakespeare's works to generate a stream of the top 10 words that are 3 or more characters long:`,
-			`
+		Example("Word counts", `
+Here we query the public corpus of Shakespeare's works to generate a stream of the top 10 words that are 3 or more characters long:`, `
 input:
   gcp_bigquery_select:
     project: sample-project
@@ -122,8 +120,7 @@ input:
       LIMIT 10
     args_mapping: |
       root = [ 3 ]
-`,
-		)
+`)
 }
 
 type bigQuerySelectInput struct {

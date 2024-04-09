@@ -82,51 +82,12 @@ func csoSpec() *service.ConfigSpec {
 		Version("3.43.0").
 		Categories("Services", "GCP").
 		Summary(`Sends message parts as objects to a Google Cloud Storage bucket. Each object is uploaded with the path specified with the `+"`path`"+` field.`).
-		Description(output.Description(true, true, `
+		Description(output.Description(true, true, gcpDescription(`
 In order to have a different path for each object you should use function interpolations described [here](/docs/configuration/interpolation#bloblang-queries), which are calculated per message of a batch.
 
 ### Metadata
 
-Metadata fields on messages will be sent as headers, in order to mutate these values (or remove them) check out the [metadata docs](/docs/configuration/metadata).
-
-### Credentials
-
-By default Benthos will use a shared credentials file when connecting to GCP services. You can find out more [in this document](/docs/guides/cloud/gcp).
-
-### Batching
-
-It's common to want to upload messages to Google Cloud Storage as batched archives, the easiest way to do this is to batch your messages at the output level and join the batch of messages with an `+"[`archive`](/docs/components/processors/archive)"+` and/or `+"[`compress`](/docs/components/processors/compress)"+` processor.
-
-For example, if we wished to upload messages as a .tar.gz archive of documents we could achieve that with the following config:
-
-`+"```yaml"+`
-output:
-  gcp_cloud_storage:
-    bucket: TODO
-    path: ${!count("files")}-${!timestamp_unix_nano()}.tar.gz
-    batching:
-      count: 100
-      period: 10s
-      processors:
-        - archive:
-            format: tar
-        - compress:
-            algorithm: gzip
-`+"```"+`
-
-Alternatively, if we wished to upload JSON documents as a single large document containing an array of objects we can do that with:
-
-`+"```yaml"+`
-output:
-  gcp_cloud_storage:
-    bucket: TODO
-    path: ${!count("files")}-${!timestamp_unix_nano()}.json
-    batching:
-      count: 100
-      processors:
-        - archive:
-            format: json_array
-`+"```"+``)).
+Metadata fields on messages will be sent as headers, in order to mutate these values (or remove them) check out the [metadata docs](/docs/configuration/metadata).`))).
 		Fields(
 			service.NewStringField(csoFieldBucket).
 				Description("The bucket to upload messages to."),
@@ -164,7 +125,30 @@ output:
 			service.NewOutputMaxInFlightField().
 				Description("The maximum number of message batches to have in flight at a given time. Increase this to improve throughput."),
 			service.NewBatchPolicyField(csoFieldBatching),
-		)
+		).Example("Upload messages as a .tar.gz archive", "", `
+output:
+  gcp_cloud_storage:
+    bucket: TODO
+    path: ${!count("files")}-${!timestamp_unix_nano()}.tar.gz
+    batching:
+      count: 100
+      period: 10s
+      processors:
+      - archive:
+          format: tar
+      - compress:
+           algorithm: gzip
+`).Example("Upload messages as a JSON array", "", `
+output:
+  gcp_cloud_storage:
+    bucket: TODO
+    path: ${!count("files")}-${!timestamp_unix_nano()}.json
+    batching:
+      count: 100
+      processors:
+        - archive:
+            format: json_array
+`)
 }
 
 func init() {

@@ -88,10 +88,6 @@ output:
 </TabItem>
 </Tabs>
 
-## Credentials
-
-By default Benthos will use a shared credentials file when connecting to GCP services. You can find out more [in this document](/docs/guides/cloud/gcp).
-
 ## Format
 
 This output currently supports only CSV and NEWLINE_DELIMITED_JSON formats. Learn more about how to use GCP BigQuery with them here:
@@ -122,6 +118,10 @@ The same is true for the CSV format.
 ### CSV
 
 For the CSV format when the field `csv.header` is specified a header row will be inserted as the first line of each message batch. If this field is not provided then the first message of each message batch must include a header line.
+	### Credentials
+
+	By default Benthos will use a shared credentials file when connecting to GCP services. You can find out more [in this document](/docs/guides/cloud/gcp).
+	
 
 ## Performance
 

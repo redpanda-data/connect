@@ -1,0 +1,11 @@
+go 1.18
+
+use .
+
+// replace github.com/linkedin/goavro/v2 => ./../../oss/goavro
+
+// replace github.com/sijms/go-ora/v2 => /Users/mihaitodor/Projects/oss/sijms/go-ora/v2
+
+// replace gorm.io/driver/bigquery => /Users/mihaitodor/Projects/oss/go-orm/bigquery
+
+replace github.com/twmb/franz-go => /Users/mihaitodor/Projects/oss/franz-go

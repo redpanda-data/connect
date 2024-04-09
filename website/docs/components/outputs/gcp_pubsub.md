@@ -80,8 +80,6 @@ output:
 </TabItem>
 </Tabs>
 
-For information on how to set up credentials check out [this guide](https://cloud.google.com/docs/authentication/production).
-
 ### Troubleshooting
 
 If you're consistently seeing `Failed to send message to gcp_pubsub: context deadline exceeded` error logs without any further information it is possible that you are encountering https://github.com/benthosdev/benthos/issues/1042, which occurs when metadata values contain characters that are not valid utf-8. This can frequently occur when consuming from Kafka as the key metadata field may be populated with an arbitrary binary value, but this issue is not exclusive to Kafka.
@@ -102,6 +100,10 @@ pipeline:
   processors:
     - mapping: meta = deleted()
 ```
+	### Credentials
+
+	By default Benthos will use a shared credentials file when connecting to GCP services. You can find out more [in this document](/docs/guides/cloud/gcp).
+	
 
 ## Fields
 

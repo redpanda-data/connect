@@ -55,7 +55,7 @@ func csiSpec() *service.ConfigSpec {
 		Version("3.43.0").
 		Categories("Services", "GCP").
 		Summary(`Downloads objects within a Google Cloud Storage bucket, optionally filtered by a prefix.`).
-		Description(`
+		Description(gcpDescription(`
 ## Metadata
 
 This input adds the following metadata fields to each message:
@@ -72,9 +72,7 @@ This input adds the following metadata fields to each message:
 
 You can access these metadata fields using [function interpolation](/docs/configuration/interpolation#bloblang-queries).
 
-### Credentials
-
-By default Benthos will use a shared credentials file when connecting to GCP services. You can find out more [in this document](/docs/guides/cloud/gcp).`).
+`)).
 		Fields(
 			service.NewStringField(csiFieldBucket).
 				Description("The name of the bucket from which to download objects."),
