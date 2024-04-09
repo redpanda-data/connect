@@ -320,8 +320,6 @@ func (a *amqp09Reader) Connect(ctx context.Context) (err error) {
 	a.conn = conn
 	a.amqpChan = amqpChan
 	a.consumerChan = consumerChan
-
-	a.log.Infof("Receiving AMQP 0.9 messages from queue: %s", a.queue)
 	return
 }
 

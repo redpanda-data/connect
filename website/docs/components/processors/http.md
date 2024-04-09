@@ -144,6 +144,8 @@ pipeline:
           - http:
               url: https://hub.docker.com/v2/repositories/jeffail/benthos
               verb: GET
+              headers:
+                Content-Type: application/json
         result_map: 'root.repo.status = this'
 ```
 

@@ -45,7 +45,6 @@ func testKFO(t *testing.T, m *mockKinesisFirehose) *kinesisFirehoseWriter {
 		},
 		firehose: m,
 	}
-
 }
 
 func TestKinesisFirehoseWriteSinglePartMessage(t *testing.T) {
