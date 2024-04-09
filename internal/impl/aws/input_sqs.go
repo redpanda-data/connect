@@ -259,12 +259,12 @@ func (a *awsSQSReader) ackLoop(wg *sync.WaitGroup, inFlightTracker *sqsInFlightT
 	closeNowCtx, done := a.closeSignal.CloseNowCtx(context.Background())
 	defer done()
 
-	flushFinishedHandles := func(m map[string]string, delete bool) {
+	flushFinishedHandles := func(m map[string]string, erase bool) {
 		handles := flushMapToHandles(m)
 		if len(handles) == 0 {
 			return
 		}
-		if delete {
+		if erase {
 			if err := a.deleteMessages(closeNowCtx, handles...); err != nil {
 				a.log.Errorf("Failed to delete messages: %v", err)
 			}
