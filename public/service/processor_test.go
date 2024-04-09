@@ -55,7 +55,7 @@ func TestProcessorAirGapOneToOne(t *testing.T) {
 
 	msg := message.QuickBatch([][]byte{[]byte("unchanged")})
 	msgs, res := agrp.ProcessBatch(tCtx, msg.ShallowCopy())
-	require.Nil(t, res)
+	require.NoError(t, res)
 	require.Len(t, msgs, 1)
 	assert.Equal(t, 1, msgs[0].Len())
 	assert.Equal(t, "changed", string(msgs[0].Get(0).AsBytes()))
@@ -75,7 +75,7 @@ func TestProcessorAirGapOneToError(t *testing.T) {
 
 	msg := message.QuickBatch([][]byte{[]byte("not a structured doc")})
 	msgs, res := agrp.ProcessBatch(tCtx, msg)
-	require.Nil(t, res)
+	require.NoError(t, res)
 	require.Len(t, msgs, 1)
 	assert.Equal(t, 1, msgs[0].Len())
 	assert.Equal(t, "not a structured doc", string(msgs[0].Get(0).AsBytes()))
@@ -103,7 +103,7 @@ func TestProcessorAirGapOneToMany(t *testing.T) {
 
 	msg := message.QuickBatch([][]byte{[]byte("unchanged")})
 	msgs, res := agrp.ProcessBatch(tCtx, msg.ShallowCopy())
-	require.Nil(t, res)
+	require.NoError(t, res)
 	require.Len(t, msgs, 1)
 	assert.Equal(t, 3, msgs[0].Len())
 	assert.Equal(t, "changed 1", string(msgs[0].Get(0).AsBytes()))
@@ -156,7 +156,7 @@ func TestBatchProcessorAirGapOneToOne(t *testing.T) {
 
 	msg := message.QuickBatch([][]byte{[]byte("unchanged")})
 	msgs, res := agrp.ProcessBatch(tCtx, msg.ShallowCopy())
-	require.Nil(t, res)
+	require.NoError(t, res)
 	require.Len(t, msgs, 1)
 	assert.Equal(t, 1, msgs[0].Len())
 	assert.Equal(t, "changed", string(msgs[0].Get(0).AsBytes()))
@@ -176,7 +176,7 @@ func TestBatchProcessorAirGapOneToError(t *testing.T) {
 
 	msg := message.QuickBatch([][]byte{[]byte("not a structured doc")})
 	msgs, res := agrp.ProcessBatch(tCtx, msg)
-	require.Nil(t, res)
+	require.NoError(t, res)
 	require.Len(t, msgs, 1)
 	assert.Equal(t, 1, msgs[0].Len())
 	assert.Equal(t, "not a structured doc", string(msgs[0].Get(0).AsBytes()))
@@ -204,7 +204,7 @@ func TestBatchProcessorAirGapOneToMany(t *testing.T) {
 
 	msg := message.QuickBatch([][]byte{[]byte("unchanged")})
 	msgs, res := agrp.ProcessBatch(tCtx, msg.ShallowCopy())
-	require.Nil(t, res)
+	require.NoError(t, res)
 	require.Len(t, msgs, 2)
 	assert.Equal(t, "unchanged", string(msg.Get(0).AsBytes()))
 

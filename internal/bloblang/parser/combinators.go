@@ -58,7 +58,7 @@ func Fail[T any](err *Error, input []rune) Result[T] {
 	}
 }
 
-func ResultInto[T any, L any](from Result[L]) Result[T] {
+func ResultInto[T, L any](from Result[L]) Result[T] {
 	return Result[T]{
 		Err:       from.Err,
 		Remaining: from.Remaining,
@@ -77,20 +77,22 @@ func Char(c rune) Func[string] {
 	}
 }
 
-var charBracketOpen = Char('(')
-var charBracketClose = Char(')')
-var charSquigOpen = Char('{')
-var charSquigClose = Char('}')
-var charSquareOpen = Char('[')
-var charSquareClose = Char(']')
-var charDot = Char('.')
-var charUnderscore = Char('_')
-var charMinus = Char('-')
-var charEquals = Char('=')
-var charComma = Char(',')
-var charColon = Char(':')
-var charDollar = Char('$')
-var charHash = Char('#')
+var (
+	charBracketOpen  = Char('(')
+	charBracketClose = Char(')')
+	charSquigOpen    = Char('{')
+	charSquigClose   = Char('}')
+	charSquareOpen   = Char('[')
+	charSquareClose  = Char(']')
+	charDot          = Char('.')
+	charUnderscore   = Char('_')
+	charMinus        = Char('-')
+	charEquals       = Char('=')
+	charComma        = Char(',')
+	charColon        = Char(':')
+	charDollar       = Char('$')
+	charHash         = Char('#')
+)
 
 // NotChar parses any number of characters until they match a single candidate.
 func NotChar(c rune) Func[string] {

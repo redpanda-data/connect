@@ -55,7 +55,7 @@ func TestIntegrationGCP(t *testing.T) {
 
 	_ = resource.Expire(900)
 
-	os.Setenv("STORAGE_EMULATOR_HOST", "localhost:"+resource.GetPort("4443/tcp"))
+	os.Setenv("STORAGE_EMULATOR_HOST", "localhost:"+resource.GetPort("4443/tcp")) //nolint: tenv // this test runs in parallel
 	t.Cleanup(func() {
 		defer os.Unsetenv("STORAGE_EMULATOR_HOST")
 	})

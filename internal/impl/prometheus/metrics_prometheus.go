@@ -114,7 +114,6 @@ If the Push Gateway requires HTTP Basic Authentication it can be configured with
 				Advanced().
 				Default(""),
 		)
-
 }
 
 func init() {

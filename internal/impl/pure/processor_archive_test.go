@@ -260,5 +260,5 @@ format: json_array
 
 	batches, err := proc.ProcessBatch(context.Background(), msg)
 	require.NoError(t, err)
-	require.Len(t, batches, 0)
+	require.Empty(t, batches)
 }

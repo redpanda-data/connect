@@ -172,7 +172,6 @@ func init() {
 		o, err = span.NewBatchOutput("kafka", conf, o, mgr)
 		return
 	})
-
 	if err != nil {
 		panic(err)
 	}
@@ -344,7 +343,7 @@ func strToPartitioner(str string) (sarama.PartitionerConstructor, error) {
 func (k *kafkaWriter) buildSystemHeaders(part *service.Message) []sarama.RecordHeader {
 	if k.saramConf.Version.IsAtLeast(sarama.V0_11_0_0) {
 		out := []sarama.RecordHeader{}
-		_ = k.metaFilter.Walk(part, func(k string, v string) error {
+		_ = k.metaFilter.Walk(part, func(k, v string) error {
 			out = append(out, sarama.RecordHeader{
 				Key:   []byte(k),
 				Value: []byte(value.IToString(v)),
@@ -465,10 +464,6 @@ func (k *kafkaWriter) Connect(ctx context.Context) error {
 
 	var err error
 	k.producer, err = sarama.NewSyncProducer(k.addresses, k.saramConf)
-
-	if err == nil {
-		k.mgr.Logger().Infof("Sending Kafka messages to addresses: %s\n", k.addresses)
-	}
 	return err
 }
 

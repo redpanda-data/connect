@@ -716,12 +716,6 @@ func (a *awsS3Reader) Connect(ctx context.Context) error {
 		a.sqs = nil
 		return err
 	}
-
-	if a.conf.SQS.URL == "" {
-		a.log.Infof("Downloading S3 objects from bucket: %s\n", a.conf.Bucket)
-	} else {
-		a.log.Infof("Downloading S3 objects found in messages from SQS: %s\n", a.conf.SQS.URL)
-	}
 	return nil
 }
 

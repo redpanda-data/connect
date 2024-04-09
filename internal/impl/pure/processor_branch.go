@@ -56,6 +56,8 @@ pipeline:
           - http:
               url: https://hub.docker.com/v2/repositories/jeffail/benthos
               verb: GET
+              headers:
+                Content-Type: application/json
         result_map: root.image.pull_count = this.pull_count
 
 # Example input:  {"id":"foo","some":"pre-existing data"}

@@ -11,7 +11,7 @@ import (
 )
 
 func TestReMatchScannerSuite(t *testing.T) {
-	testREPattern := func(pattern string, input string, expected ...string) {
+	testREPattern := func(pattern, input string, expected ...string) {
 		confSpec := service.NewConfigSpec().Field(service.NewScannerField("test"))
 		pConf, err := confSpec.ParseYAML(fmt.Sprintf(`
 test:

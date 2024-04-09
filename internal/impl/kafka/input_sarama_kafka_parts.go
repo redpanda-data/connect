@@ -244,8 +244,6 @@ func (k *kafkaReader) connectExplicitTopics(ctx context.Context, config *sarama.
 			partConsumers = append(partConsumers, partConsumer)
 			go k.runPartitionConsumer(ctx, &consumerWG, topic, partition, partConsumer)
 		}
-
-		k.mgr.Logger().Infof("Consuming kafka topic %v, partitions %v from brokers %s as group '%v'\n", topic, partitions, k.addresses, k.consumerGroup)
 	}
 
 	doneCtx, doneFn := context.WithCancel(context.Background())

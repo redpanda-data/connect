@@ -194,7 +194,6 @@ func (n *nsqReader) Connect(ctx context.Context) (err error) {
 	}
 
 	n.consumer = consumer
-	n.log.Infof("Receiving NSQ messages from addresses: %s\n", n.addresses)
 	return
 }
 

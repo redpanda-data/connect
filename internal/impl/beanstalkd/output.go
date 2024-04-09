@@ -71,7 +71,6 @@ func (bs *beanstalkdWriter) Connect(ctx context.Context) error {
 	}
 
 	bs.connection = conn
-	bs.log.Infof("Sending Beanstalkd messages to address: %s\n", bs.address)
 	return nil
 }
 

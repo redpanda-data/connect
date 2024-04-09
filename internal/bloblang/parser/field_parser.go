@@ -33,9 +33,11 @@ func aFunction(pCtx Context) Func[field.Resolver] {
 	}
 }
 
-var interpEscapedStart = Term("${{!")
-var interpEscapedEnd = Term("}}")
-var untilInterpEscapedEnd = UntilTerm("}}")
+var (
+	interpEscapedStart    = Term("${{!")
+	interpEscapedEnd      = Term("}}")
+	untilInterpEscapedEnd = UntilTerm("}}")
+)
 
 var escapedBlock = func() Func[field.Resolver] {
 	pattern := TakeOnly(1, Sequence(

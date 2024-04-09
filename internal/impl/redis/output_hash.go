@@ -138,8 +138,6 @@ func (r *redisHashWriter) Connect(ctx context.Context) error {
 	if _, err = client.Ping(ctx).Result(); err != nil {
 		return err
 	}
-
-	r.log.Info("Setting messages as hash objects to Redis")
 	r.client = client
 	return nil
 }

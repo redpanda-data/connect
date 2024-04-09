@@ -200,7 +200,7 @@ func TestDynamicFanOutAtLeastOnce(t *testing.T) {
 	oTM, err := newDynamicFanOutOutputBroker(outputs, log.Noop(), nil, nil)
 	require.NoError(t, err)
 	require.NoError(t, oTM.Consume(readChan))
-	assert.NotNil(t, oTM.Consume(readChan), "Expected error on duplicate receive call")
+	assert.Error(t, oTM.Consume(readChan), "Expected error on duplicate receive call")
 
 	wg := sync.WaitGroup{}
 	wg.Add(2)
@@ -262,7 +262,7 @@ func TestDynamicFanOutStartEmpty(t *testing.T) {
 	require.NoError(t, err)
 
 	require.NoError(t, oTM.Consume(readChan))
-	assert.NotNil(t, oTM.Consume(readChan), "Expected error on duplicate receive call")
+	assert.Error(t, oTM.Consume(readChan), "Expected error on duplicate receive call")
 
 	wg := sync.WaitGroup{}
 	wg.Add(2)

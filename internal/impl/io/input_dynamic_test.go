@@ -48,7 +48,7 @@ generate:
   interval: 100ms
   mapping: 'root.source = "foo"'
 `
-	req = httptest.NewRequest("POST", "/inputs/foo", bytes.NewBuffer([]byte(fooConf)))
+	req = httptest.NewRequest("POST", "/inputs/foo", bytes.NewBufferString(fooConf))
 	res = httptest.NewRecorder()
 	gMux.ServeHTTP(res, req)
 
@@ -111,7 +111,7 @@ generate:
   count: 1
   mapping: 'root.source = "foo"'
 `
-	req := httptest.NewRequest("POST", "/inputs/foo", bytes.NewBuffer([]byte(fooConf)))
+	req := httptest.NewRequest("POST", "/inputs/foo", bytes.NewBufferString(fooConf))
 	res := httptest.NewRecorder()
 	gMux.ServeHTTP(res, req)
 

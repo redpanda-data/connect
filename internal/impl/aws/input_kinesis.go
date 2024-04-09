@@ -224,7 +224,7 @@ func newKinesisReaderFromParsed(pConf *service.ParsedConfig, mgr *service.Resour
 	return newKinesisReaderFromConfig(conf, batcher, sess, mgr)
 }
 
-func parseStreamID(id string) (remaining string, shard string, err error) {
+func parseStreamID(id string) (remaining, shard string, err error) {
 	if streamStartsAt := strings.LastIndex(id, "/"); streamStartsAt > 0 {
 		remaining = id[0:streamStartsAt]
 		id = id[streamStartsAt:]
@@ -800,9 +800,9 @@ func (k *kinesisReader) runExplicitShards() {
 		}
 		if len(pendingShards) == 0 {
 			break
-		} else {
-			<-time.After(time.Second)
 		}
+
+		<-time.After(time.Second)
 	}
 }
 

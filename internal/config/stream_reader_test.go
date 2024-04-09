@@ -52,7 +52,7 @@ cache_resources:
 
 	_, lints, err := rdr.Read()
 	require.NoError(t, err)
-	require.Len(t, lints, 0)
+	require.Empty(t, lints)
 
 	streamConfs := map[string]stream.Config{}
 	lints, err = rdr.ReadStreams(streamConfs)
@@ -100,12 +100,12 @@ pipeline:
 
 	_, lints, err := rdr.Read()
 	require.NoError(t, err)
-	require.Len(t, lints, 0)
+	require.Empty(t, lints)
 
 	streamConfs := map[string]stream.Config{}
 	lints, err = rdr.ReadStreams(streamConfs)
 	require.NoError(t, err)
-	require.Len(t, lints, 0)
+	require.Empty(t, lints)
 
 	require.Len(t, streamConfs, 3)
 	require.Contains(t, streamConfs, "first")

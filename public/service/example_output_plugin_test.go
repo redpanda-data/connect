@@ -58,6 +58,9 @@ input:
 
 output:
   blue_stdout: {}
+
+logger:
+  level: off
 `)
 	if err != nil {
 		panic(err)

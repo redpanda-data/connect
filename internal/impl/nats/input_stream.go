@@ -299,7 +299,6 @@ func (n *natsStreamReader) Connect(ctx context.Context) error {
 	n.stanConn = stanConn
 	n.natsSub = natsSub
 	n.msgChan = newMsgChan
-	n.log.Infof("Receiving NATS Streaming messages from subject: %v\n", n.conf.Subject)
 	return nil
 }
 

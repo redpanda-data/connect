@@ -156,8 +156,6 @@ func (n *natsReader) Connect(ctx context.Context) error {
 		return err
 	}
 
-	n.log.Infof("Receiving NATS messages from subject: %v\n", n.subject)
-
 	n.natsConn = natsConn
 	n.natsSub = natsSub
 	n.natsChan = natsChan

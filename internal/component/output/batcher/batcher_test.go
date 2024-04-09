@@ -333,7 +333,7 @@ func TestBatcherBatchError(t *testing.T) {
 		case 2:
 			assert.EqualError(t, act, "third error")
 		default:
-			assert.Nil(t, act)
+			assert.NoError(t, act)
 		}
 	}
 

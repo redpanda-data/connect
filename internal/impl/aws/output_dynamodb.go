@@ -234,7 +234,6 @@ func (d *dynamoDBWriter) Connect(ctx context.Context) error {
 	}
 
 	d.client = client
-	d.log.Infof("Sending messages to DynamoDB table: %v\n", d.conf.Table)
 	return nil
 }
 

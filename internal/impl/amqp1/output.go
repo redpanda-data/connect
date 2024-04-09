@@ -189,8 +189,6 @@ func (a *amqp1Writer) Connect(ctx context.Context) (err error) {
 	a.client = client
 	a.session = session
 	a.sender = sender
-
-	a.log.Infof("Sending AMQP 1.0 messages to target: %v\n", a.targetAddr)
 	return nil
 }
 

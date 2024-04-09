@@ -70,7 +70,7 @@ const (
 	blobEndpointExp = "https://%s.blob.core.windows.net"
 )
 
-func getBlobStorageClient(storageConnectionString, storageAccount, storageAccessKey, storageSASToken string, container string) (*azblob.Client, bool, error) {
+func getBlobStorageClient(storageConnectionString, storageAccount, storageAccessKey, storageSASToken, container string) (*azblob.Client, bool, error) {
 	var client *azblob.Client
 	var err error
 	var containerSASToken bool
@@ -125,7 +125,7 @@ const (
 
 func parseStorageConnectionString(storageConnectionString, storageAccount string) string {
 	if strings.Contains(storageConnectionString, "UseDevelopmentStorage=true;") {
-		var azuriteDefaultPorts = map[string]string{
+		azuriteDefaultPorts := map[string]string{
 			azuriteBlobPortEnv:  "10000",
 			azuriteQueuePortEnv: "10001",
 			azuriteTablePortEnv: "10002",

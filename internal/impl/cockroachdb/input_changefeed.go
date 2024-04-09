@@ -19,13 +19,11 @@ import (
 	_ "github.com/lib/pq"
 )
 
-var (
-	sampleString = `{
+var sampleString = `{
 	"primary_key": "[\"1a7ff641-3e3b-47ee-94fe-a0cadb56cd8f\", 2]", // stringifed JSON array
 	"row": "{\"after\": {\"k\": \"1a7ff641-3e3b-47ee-94fe-a0cadb56cd8f\", \"v\": 2}, \"updated\": \"1637953249519902405.0000000000\"}", // stringified JSON object
 	"table": "strm_2"
 }`
-)
 
 func crdbChangefeedInputConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
@@ -155,7 +153,6 @@ func init() {
 			}
 			return service.AutoRetryNacksToggled(conf, i)
 		})
-
 	if err != nil {
 		panic(err)
 	}
