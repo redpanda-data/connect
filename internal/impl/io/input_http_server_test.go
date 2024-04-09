@@ -1071,7 +1071,7 @@ func createMultipart(payloads []string, contentType string) (hdr string, bodyByt
 func readMultipart(res *http.Response) ([]string, error) {
 	var params map[string]string
 	var err error
-	if contentType := res.Header.Get("Content-Type"); len(contentType) > 0 {
+	if contentType := res.Header.Get("Content-Type"); contentType != "" {
 		if _, params, err = mime.ParseMediaType(contentType); err != nil {
 			return nil, err
 		}

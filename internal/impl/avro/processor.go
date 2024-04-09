@@ -159,7 +159,12 @@ func loadSchema(schemaPath string) (string, error) {
 	t.RegisterProtocol("file", http.NewFileTransport(http.Dir("/")))
 	c := &http.Client{Transport: t}
 
-	response, err := c.Get(schemaPath)
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, schemaPath, http.NoBody)
+	if err != nil {
+		return "", err
+	}
+
+	response, err := c.Do(req)
 	if err != nil {
 		return "", err
 	}

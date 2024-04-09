@@ -277,7 +277,7 @@ func newKinesisReaderFromConfig(conf kiConfig, batcher service.BatchPolicy, sess
 	for _, t := range conf.Streams {
 		for _, splitStreams := range strings.Split(t, ",") {
 			trimmed := strings.TrimSpace(splitStreams)
-			if len(trimmed) == 0 {
+			if trimmed == "" {
 				continue
 			}
 
@@ -336,7 +336,7 @@ func (k *kinesisReader) getIter(info streamInfo, shardID, sequence string) (stri
 		iterType = types.ShardIteratorTypeLatest
 	}
 	var startingSequence *string
-	if len(sequence) > 0 {
+	if sequence != "" {
 		iterType = types.ShardIteratorTypeAfterSequenceNumber
 		startingSequence = &sequence
 	}
@@ -813,7 +813,7 @@ func (k *kinesisReader) waitUntilStreamsExists(ctx context.Context) error {
 		go func(info *streamInfo) {
 			waiter := kinesis.NewStreamExistsWaiter(k.svc)
 			input := &kinesis.DescribeStreamInput{}
-			if strings.HasPrefix("arn:", info.id) {
+			if strings.HasPrefix(info.id, "arn:") {
 				input.StreamARN = &info.id
 			} else {
 				input.StreamName = &info.id

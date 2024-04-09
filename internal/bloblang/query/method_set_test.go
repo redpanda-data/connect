@@ -117,7 +117,7 @@ func TestMethodBadName(t *testing.T) {
 		t.Run(k, func(t *testing.T) {
 			setOne := AllMethods.Without()
 			err := setOne.Add(NewMethodSpec(k, ""), nil)
-			if len(v) > 0 {
+			if v != "" {
 				assert.EqualError(t, err, v)
 			} else {
 				assert.NoError(t, err)

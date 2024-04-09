@@ -32,10 +32,10 @@ func (p Config) IsNoop() bool {
 	if p.Count > 1 {
 		return false
 	}
-	if len(p.Check) > 0 {
+	if p.Check != "" {
 		return false
 	}
-	if len(p.Period) > 0 {
+	if p.Period != "" {
 		return false
 	}
 	if len(p.Processors) > 0 {
@@ -52,10 +52,10 @@ func (p Config) IsLimited() bool {
 	if p.Count > 0 {
 		return true
 	}
-	if len(p.Period) > 0 {
+	if p.Period != "" {
 		return true
 	}
-	if len(p.Check) > 0 {
+	if p.Check != "" {
 		return true
 	}
 	return false
@@ -70,7 +70,7 @@ func (p Config) IsHardLimited() bool {
 	if p.Count > 0 {
 		return true
 	}
-	if len(p.Period) > 0 {
+	if p.Period != "" {
 		return true
 	}
 	return false

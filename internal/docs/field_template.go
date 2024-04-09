@@ -87,7 +87,7 @@ func (f FieldSpec) FlattenChildrenForDocs() []FieldSpecCtx {
 				Spec: v,
 			}
 			newV.FullName = newV.Spec.Name
-			if len(path) > 0 {
+			if path != "" {
 				newV.FullName = path + newV.Spec.Name
 			}
 			if len(v.Examples) > 0 {

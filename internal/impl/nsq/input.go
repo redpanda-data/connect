@@ -109,7 +109,7 @@ func newNSQReaderFromParsed(conf *service.ParsedConfig, mgr *service.Resources) 
 	}
 	for _, addr := range addresses {
 		for _, splitAddr := range strings.Split(addr, ",") {
-			if len(splitAddr) > 0 {
+			if splitAddr != "" {
 				n.addresses = append(n.addresses, splitAddr)
 			}
 		}
@@ -120,7 +120,7 @@ func newNSQReaderFromParsed(conf *service.ParsedConfig, mgr *service.Resources) 
 	}
 	for _, addr := range addresses {
 		for _, splitAddr := range strings.Split(addr, ",") {
-			if len(splitAddr) > 0 {
+			if splitAddr != "" {
 				n.lookupAddresses = append(n.lookupAddresses, splitAddr)
 			}
 		}

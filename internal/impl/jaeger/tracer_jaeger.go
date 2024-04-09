@@ -104,7 +104,7 @@ func init() {
 // NewJaeger creates and returns a new Jaeger object.
 func NewJaeger(config jaegerConfig) (trace.TracerProvider, error) {
 	var sampler tracesdk.Sampler
-	if sType := config.SamplerType; len(sType) > 0 {
+	if sType := config.SamplerType; sType != "" {
 		// TODO: https://github.com/open-telemetry/opentelemetry-go-contrib/pull/936
 		switch strings.ToLower(sType) {
 		case "const":
@@ -154,7 +154,7 @@ func NewJaeger(config jaegerConfig) (trace.TracerProvider, error) {
 	}
 
 	var batchOpts []tracesdk.BatchSpanProcessorOption
-	if i := config.FlushInterval; len(i) > 0 {
+	if i := config.FlushInterval; i != "" {
 		flushInterval, err := time.ParseDuration(i)
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse flush interval '%s': %v", i, err)

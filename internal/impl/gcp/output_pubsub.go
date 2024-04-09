@@ -178,7 +178,7 @@ func newPubSubOutput(conf *service.ParsedConfig) (*pubsubOutput, error) {
 	}
 
 	var opt []option.ClientOption
-	if len(endpoint) > 0 {
+	if endpoint != "" {
 		opt = []option.ClientOption{option.WithEndpoint(endpoint)}
 	}
 

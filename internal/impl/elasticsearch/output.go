@@ -63,7 +63,7 @@ func esoConfigFromParsed(pConf *service.ParsedConfig) (conf esoConfig, err error
 	}
 	for _, u := range tmpURLs {
 		for _, splitURL := range strings.Split(u, ",") {
-			if len(splitURL) > 0 {
+			if splitURL != "" {
 				conf.urls = append(conf.urls, splitURL)
 			}
 		}

@@ -167,7 +167,7 @@ func TestFunctions(t *testing.T) {
 					MsgBatch: msg,
 					NewMeta:  msg.Get(test.index),
 				})
-				if len(test.err) > 0 {
+				if test.err != "" {
 					require.EqualError(t, err, test.err)
 				} else {
 					require.NoError(t, err)

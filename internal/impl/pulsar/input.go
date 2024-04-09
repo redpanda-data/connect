@@ -129,8 +129,8 @@ func newPulsarReaderFromParsed(conf *service.ParsedConfig, log *service.Logger) 
 		err = errors.New("field url must not be empty")
 		return
 	}
-	if len(p.topics) == 0 && len(p.topicsPattern) == 0 ||
-		len(p.topics) != 0 && len(p.topicsPattern) != 0 {
+	if (len(p.topics) == 0 && p.topicsPattern == "") ||
+		(len(p.topics) > 0 && p.topicsPattern != "") {
 		err = errors.New("exactly one of fields topics and topics_pattern must be set")
 		return
 	}
@@ -270,10 +270,10 @@ func (p *pulsarReader) Read(ctx context.Context) (*service.Message, service.AckF
 	msg.MetaSet("pulsar_topic", pulMsg.Topic())
 	msg.MetaSet("pulsar_publish_time_unix", strconv.FormatInt(pulMsg.PublishTime().Unix(), 10))
 	msg.MetaSet("pulsar_redelivery_count", strconv.FormatInt(int64(pulMsg.RedeliveryCount()), 10))
-	if key := pulMsg.Key(); len(key) > 0 {
+	if key := pulMsg.Key(); key != "" {
 		msg.MetaSet("pulsar_key", key)
 	}
-	if orderingKey := pulMsg.OrderingKey(); len(orderingKey) > 0 {
+	if orderingKey := pulMsg.OrderingKey(); orderingKey != "" {
 		msg.MetaSet("pulsar_ordering_key", orderingKey)
 	}
 	if !pulMsg.EventTime().IsZero() {

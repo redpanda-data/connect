@@ -221,8 +221,8 @@ func run(c *cli.Context) error {
 	file := c.String("file")
 	m := c.Args().First()
 
-	if len(file) > 0 {
-		if len(m) > 0 {
+	if file != "" {
+		if m != "" {
 			fmt.Fprintln(os.Stderr, red("invalid flags, unable to execute both a file mapping and an inline mapping"))
 			os.Exit(1)
 		}
