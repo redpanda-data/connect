@@ -48,7 +48,7 @@ func TestDynamicOutputAPI(t *testing.T) {
 	assert.Equal(t, `{}`, res.Body.String())
 
 	fooConf := `drop: {}`
-	req = httptest.NewRequest("POST", "/outputs/foo", bytes.NewBuffer([]byte(fooConf)))
+	req = httptest.NewRequest("POST", "/outputs/foo", bytes.NewBufferString(fooConf))
 	res = httptest.NewRecorder()
 	gMux.ServeHTTP(res, req)
 

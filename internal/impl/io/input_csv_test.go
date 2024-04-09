@@ -24,8 +24,8 @@ func TestCSVReaderHappy(t *testing.T) {
 		"bar1,bar2,bar3",
 		"baz1,baz2,baz3",
 	} {
-		handle.Write([]byte(msg))
-		handle.Write([]byte("\n"))
+		handle.WriteString(msg)
+		handle.WriteString("\n")
 	}
 
 	dummyFile := "foo/bar.csv"
@@ -96,8 +96,8 @@ func TestCSVReaderGroupCount(t *testing.T) {
 		"foo6,bar6,baz6",
 		"foo7,bar7,baz7",
 	} {
-		handle.Write([]byte(msg))
-		handle.Write([]byte("\n"))
+		handle.WriteString(msg)
+		handle.WriteString("\n")
 	}
 
 	ctored := false
@@ -165,8 +165,8 @@ func TestCSVReadersTwoFiles(t *testing.T) {
 		"bar1,bar2,bar3",
 		"baz1,baz2,baz3",
 	} {
-		handleOne.Write([]byte(msg))
-		handleOne.Write([]byte("\n"))
+		handleOne.WriteString(msg)
+		handleOne.WriteString("\n")
 	}
 
 	for _, msg := range []string{
@@ -175,8 +175,8 @@ func TestCSVReadersTwoFiles(t *testing.T) {
 		"bar1,bar2,bar3",
 		"baz1,baz2,baz3",
 	} {
-		handleTwo.Write([]byte(msg))
-		handleTwo.Write([]byte("\n"))
+		handleTwo.WriteString(msg)
+		handleTwo.WriteString("\n")
 	}
 
 	consumedFirst, consumedSecond := false, false
@@ -243,8 +243,8 @@ func TestCSVReaderCustomComma(t *testing.T) {
 		"bar1|bar2|bar3",
 		"baz1|baz2|baz3",
 	} {
-		handle.Write([]byte(msg))
-		handle.Write([]byte("\n"))
+		handle.WriteString(msg)
+		handle.WriteString("\n")
 	}
 
 	ctored := false
@@ -301,8 +301,8 @@ func TestCSVReaderRelaxed(t *testing.T) {
 		"baz1,baz2,baz3",
 		"buz1,buz2",
 	} {
-		handle.Write([]byte(msg))
-		handle.Write([]byte("\n"))
+		handle.WriteString(msg)
+		handle.WriteString("\n")
 	}
 
 	ctored := false
@@ -360,8 +360,8 @@ func TestCSVReaderStrict(t *testing.T) {
 		"baz1,baz2,baz3",
 		"buz1,buz2",
 	} {
-		handle.Write([]byte(msg))
-		handle.Write([]byte("\n"))
+		handle.WriteString(msg)
+		handle.WriteString("\n")
 	}
 
 	ctored := false
@@ -464,7 +464,7 @@ func TestCSVReaderLazyQuotes(t *testing.T) {
 	for _, test := range tests {
 		var handle bytes.Buffer
 
-		handle.Write([]byte(test.input))
+		handle.WriteString(test.input)
 
 		f, err := newCSVReader(
 			func(ctx context.Context) (csvScannerInfo, error) {
