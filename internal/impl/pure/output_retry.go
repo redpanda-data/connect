@@ -283,9 +283,10 @@ func (r *indefiniteRetry) loop() {
 						r.log.Error("Failed to send message: %v\n", res)
 						resOut = errors.New("message failed to reach a target destination")
 						break
-					} else {
-						r.log.Warn("Failed to send message: %v\n", res)
 					}
+
+					r.log.Warn("Failed to send message: %v\n", res)
+
 					select {
 					case <-time.After(nextBackoff):
 					case <-r.shutSig.CloseNowChan():

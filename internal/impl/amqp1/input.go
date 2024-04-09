@@ -206,7 +206,6 @@ func (a *amqp1Reader) Connect(ctx context.Context) (err error) {
 	}
 
 	a.conn = conn
-	a.log.Infof("Receiving AMQP 1.0 messages from source: %v\n", a.sourceAddr)
 	return nil
 }
 

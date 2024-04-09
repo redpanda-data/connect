@@ -117,7 +117,6 @@ func (p *pusherWriter) Connect(ctx context.Context) error {
 		Cluster: p.cluster,
 		Secure:  p.secure,
 	}
-	p.log.Infof("Pusher client connected")
 	return nil
 }
 
@@ -153,6 +152,6 @@ func (p *pusherWriter) Close(ctx context.Context) error {
 	if p.client.HTTPClient != nil {
 		p.client.HTTPClient.CloseIdleConnections()
 	}
-	p.log.Infof("Pusher connection closed")
+	p.log.Debug("Pusher connection closed")
 	return nil
 }

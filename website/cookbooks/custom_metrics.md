@@ -88,7 +88,7 @@ pipeline:
         verb: GET
 
     - metric:
-        type: gauge 
+        type: gauge
         name: downloads
         labels:
           source: homebrew
@@ -139,6 +139,8 @@ Easy! The Dockerhub API is also pretty simple, and adding it to our pipeline is 
 +    - http:
 +        url: https://hub.docker.com/v2/repositories/jeffail/benthos/
 +        verb: GET
++        headers:
++          Content-Type: application/json
 +
 +    - metric:
 +        type: gauge
@@ -169,7 +171,7 @@ pipeline:
         verb: GET
 
     - metric:
-        type: gauge 
+        type: gauge
         name: downloads
         labels:
           source: homebrew
@@ -180,6 +182,8 @@ pipeline:
     - http:
         url: https://hub.docker.com/v2/repositories/jeffail/benthos/
         verb: GET
+        headers:
+          Content-Type: application/json
 
     - metric:
         type: gauge
@@ -305,6 +309,8 @@ processor_resources:
           - http:
               url: https://hub.docker.com/v2/repositories/jeffail/benthos/
               verb: GET
+              headers:
+                Content-Type: application/json
           - mapping: |
               root.source = "docker"
               root.dist = "docker"

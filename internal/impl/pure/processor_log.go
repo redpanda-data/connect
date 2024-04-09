@@ -87,9 +87,6 @@ func init() {
 			}
 
 			depFields, _ := conf.FieldStringMap(logPFieldFields)
-			if err != nil {
-				return nil, err
-			}
 
 			fieldsMappingStr, _ := conf.FieldString(logPFieldFieldsMapping)
 

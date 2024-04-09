@@ -220,7 +220,7 @@ type ContentMatchesCondition string
 
 func (c ContentMatchesCondition) Check(fs fs.FS, dir string, p *message.Part) error {
 	re := regexp.MustCompile(string(c))
-	if !re.MatchString(string(p.AsBytes())) {
+	if !re.Match(p.AsBytes()) {
 		return fmt.Errorf("pattern mismatch\n   pattern: %v\n  received: %v", blue(string(c)), red(string(p.AsBytes())))
 	}
 	return nil

@@ -82,6 +82,9 @@ output:
   batched_json_stdout:
     batching:
       count: 5
+
+logger:
+  level: off
 `)
 	if err != nil {
 		panic(err)

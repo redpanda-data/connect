@@ -247,7 +247,7 @@ func (s *sftpReader) Connect(ctx context.Context) (err error) {
 	}
 	s.currentPath = nextPath
 
-	s.log.Infof("Consuming from file '%v'", nextPath)
+	s.log.Debugf("Consuming from file '%v'", nextPath)
 	return
 }
 
