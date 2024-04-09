@@ -171,8 +171,6 @@ func (z *zmqOutput) Connect(_ context.Context) (err error) {
 	z.socket = socket
 	z.poller = zmq4.NewPoller()
 	z.poller.Add(z.socket, zmq4.POLLOUT)
-
-	z.log.Infof("Sending zmqOutput messages to URLs: %s\n", z.urls)
 	return nil
 }
 

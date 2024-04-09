@@ -197,6 +197,9 @@ input:
 
 output:
   stdout: {}
+
+logger:
+  level: off
 `)
 	panicOnErr(err)
 
@@ -222,6 +225,9 @@ input:
 
 output:
   stdout: {}
+
+logger:
+  level: off
 `)
 	panicOnErr(err)
 

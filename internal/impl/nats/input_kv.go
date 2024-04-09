@@ -169,9 +169,6 @@ func (r *kvReader) Connect(ctx context.Context) (err error) {
 	if err != nil {
 		return err
 	}
-
-	r.log.Infof("Watching NATS KV bucket: %s for key(s): %s", r.bucket, r.key)
-
 	return nil
 }
 

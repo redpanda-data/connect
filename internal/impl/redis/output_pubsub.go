@@ -93,8 +93,6 @@ func (r *redisPubSubWriter) Connect(ctx context.Context) error {
 	if _, err = client.Ping(ctx).Result(); err != nil {
 		return err
 	}
-
-	r.log.Infof("Pushing messages to Redis channel: %v\n", r.channelStr)
 	r.client = client
 	return nil
 }

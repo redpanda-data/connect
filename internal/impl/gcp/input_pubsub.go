@@ -234,8 +234,6 @@ func (c *gcpPubSubReader) Connect(ignored context.Context) error {
 		c.closeFunc = nil
 		c.subMut.Unlock()
 	}()
-
-	c.log.Infof("Receiving GCP Cloud Pub/Sub messages from project '%v' and subscription '%v'\n", c.conf.ProjectID, c.conf.SubscriptionID)
 	return nil
 }
 

@@ -349,8 +349,6 @@ func (p *kvProcessor) Connect(ctx context.Context) (err error) {
 	if err != nil {
 		return err
 	}
-
-	p.log.Infof("Performing operation `%s` on NATS KV bucket: %s", p.operation, p.bucket)
 	return nil
 }
 

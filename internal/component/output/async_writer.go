@@ -141,6 +141,8 @@ func (w *AsyncWriter) loop() {
 	if !initConnection() {
 		return
 	}
+
+	w.log.Info("Output type %v is now active", w.typeStr)
 	mConn.Incr(1)
 	atomic.StoreInt32(&w.isConnected, 1)
 

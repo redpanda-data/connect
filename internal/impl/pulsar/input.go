@@ -221,8 +221,6 @@ func (p *pulsarReader) Connect(ctx context.Context) error {
 
 	p.client = client
 	p.consumer = consumer
-
-	p.log.Infof("Receiving Pulsar messages to URL: %v\n", p.url)
 	return nil
 }
 
