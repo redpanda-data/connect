@@ -89,16 +89,16 @@ func (p *kvCache) connect(ctx context.Context) error {
 	}
 
 	var err error
-
-	defer func() {
-		if err != nil {
-			p.disconnect()
-		}
-	}()
-
 	if p.natsConn, err = p.connDetails.get(ctx); err != nil {
 		return err
 	}
+
+	defer func() {
+		if err != nil {
+			p.natsConn.Close()
+			p.natsConn = nil
+		}
+	}()
 
 	var js nats.JetStreamContext
 	if js, err = p.natsConn.JetStream(); err != nil {
@@ -108,8 +108,6 @@ func (p *kvCache) connect(ctx context.Context) error {
 	if p.kv, err = js.KeyValue(p.bucket); err != nil {
 		return err
 	}
-
-	p.log.Infof("Caching on NATS KV bucket: %s", p.bucket)
 	return nil
 }
 

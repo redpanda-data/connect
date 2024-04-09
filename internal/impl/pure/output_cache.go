@@ -139,7 +139,6 @@ func NewCacheWriter(conf *service.ParsedConfig, mgr bundle.NewManagement) (*Cach
 
 // Connect does nothing.
 func (c *CacheWriter) Connect(ctx context.Context) error {
-	c.log.Info("Writing message parts as items in cache: %v\n", c.target)
 	return nil
 }
 

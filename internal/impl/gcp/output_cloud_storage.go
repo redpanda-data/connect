@@ -221,8 +221,6 @@ func (g *gcpCloudStorageOutput) Connect(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-
-	g.log.Infof("Uploading message parts as objects to GCP Cloud Storage bucket: %v\n", g.conf.Bucket)
 	return nil
 }
 

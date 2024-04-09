@@ -63,3 +63,4 @@ linters:
     # - misspell
     # - prealloc
     - bodyclose
+    - nolintlint

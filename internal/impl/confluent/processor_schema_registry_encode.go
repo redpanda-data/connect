@@ -96,7 +96,7 @@ type schemaRegistryEncoder struct {
 	avroRawJSON        bool
 	schemaRefreshAfter time.Duration
 
-	schemas    map[string]*cachedSchemaEncoder
+	schemas    map[string]cachedSchemaEncoder
 	cacheMut   sync.RWMutex
 	requestMut sync.Mutex
 	shutSig    *shutdown.Signaller
@@ -155,7 +155,7 @@ func newSchemaRegistryEncoder(
 		subject:            subject,
 		avroRawJSON:        avroRawJSON,
 		schemaRefreshAfter: schemaRefreshAfter,
-		schemas:            map[string]*cachedSchemaEncoder{},
+		schemas:            map[string]cachedSchemaEncoder{},
 		shutSig:            shutdown.NewSignaller(),
 		logger:             mgr.Logger(),
 		mgr:                mgr,
@@ -284,9 +284,12 @@ func (s *schemaRegistryEncoder) refreshEncoders() {
 				s.logger.Errorf("Failed to refresh schema subject '%v': %v", k, err)
 			} else {
 				s.cacheMut.Lock()
-				s.schemas[k].encoder = encoder
-				s.schemas[k].id = id
-				s.schemas[k].lastUpdatedUnixSeconds = s.nowFn().Unix()
+				s.schemas[k] = cachedSchemaEncoder{
+					encoder:                encoder,
+					id:                     id,
+					lastUpdatedUnixSeconds: s.nowFn().Unix(),
+					lastUsedUnixSeconds:    s.schemas[k].lastUsedUnixSeconds,
+				}
 				s.cacheMut.Unlock()
 			}
 		}
@@ -351,7 +354,7 @@ func (s *schemaRegistryEncoder) getEncoder(subject string) (schemaEncoder, int, 
 	}
 
 	s.cacheMut.Lock()
-	s.schemas[subject] = &cachedSchemaEncoder{
+	s.schemas[subject] = cachedSchemaEncoder{
 		lastUsedUnixSeconds:    s.nowFn().Unix(),
 		lastUpdatedUnixSeconds: s.nowFn().Unix(),
 		id:                     id,

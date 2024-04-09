@@ -150,8 +150,6 @@ func (a *kinesisFirehoseWriter) Connect(ctx context.Context) error {
 	}); err != nil {
 		return err
 	}
-
-	a.log.Infof("Sending messages to Kinesis Firehose delivery stream: %v\n", a.conf.Stream)
 	return nil
 }
 

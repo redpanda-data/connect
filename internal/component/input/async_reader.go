@@ -147,6 +147,8 @@ func (r *AsyncReader) loop() {
 	if !initConnection() {
 		return
 	}
+
+	r.mgr.Logger().Info("Input type %v is now active", r.typeStr)
 	mConn.Incr(1)
 	atomic.StoreInt32(&r.connected, 1)
 

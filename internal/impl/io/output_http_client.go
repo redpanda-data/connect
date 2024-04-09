@@ -133,7 +133,6 @@ func newHTTPClientOutputFromParsed(conf *service.ParsedConfig, mgr *service.Reso
 }
 
 func (h *httpClientWriter) Connect(ctx context.Context) error {
-	h.log.Infof("Sending messages via HTTP requests to: %s\n", h.logURL)
 	return nil
 }
 

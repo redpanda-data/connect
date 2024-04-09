@@ -65,7 +65,6 @@ func (bs *beanstalkdReader) Connect(ctx context.Context) error {
 	}
 
 	bs.connection = conn
-	bs.log.Infof("Receiving Beanstalkd messages from address: %s\n", bs.address)
 	return nil
 }
 
