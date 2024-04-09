@@ -159,7 +159,6 @@ func (a *sqsWriter) Connect(ctx context.Context) error {
 	}
 
 	a.sqs = sqs.NewFromConfig(a.conf.aconf)
-	a.log.Infof("Sending messages to Amazon SQS URL: %v\n", a.conf.URL)
 	return nil
 }
 
@@ -285,7 +284,7 @@ func (a *sqsWriter) WriteBatch(ctx context.Context, batch service.MessageBatch) 
 		Entries:  entries,
 	}
 
-	// trim input input length to max sqs batch size
+	// trim input length to max sqs batch size
 	if len(entries) > sqsMaxRecordsCount {
 		input.Entries, entries = entries[:sqsMaxRecordsCount], entries[sqsMaxRecordsCount:]
 	} else {

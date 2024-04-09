@@ -100,8 +100,6 @@ func (h *hdfsWriter) Connect(ctx context.Context) error {
 	}
 
 	h.client = client
-
-	h.log.Infof("Writing message parts as files to HDFS directory: %v\n", h.directory)
 	return nil
 }
 

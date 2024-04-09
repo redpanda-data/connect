@@ -174,7 +174,7 @@ func amqp09ReaderFromParsed(conf *service.ParsedConfig, mgr *service.Resources) 
 	}
 	for _, u := range urlStrs {
 		for _, splitURL := range strings.Split(u, ",") {
-			if trimmed := strings.TrimSpace(splitURL); len(trimmed) > 0 {
+			if trimmed := strings.TrimSpace(splitURL); trimmed != "" {
 				a.urls = append(a.urls, trimmed)
 			}
 		}
@@ -320,8 +320,6 @@ func (a *amqp09Reader) Connect(ctx context.Context) (err error) {
 	a.conn = conn
 	a.amqpChan = amqpChan
 	a.consumerChan = consumerChan
-
-	a.log.Infof("Receiving AMQP 0.9 messages from queue: %s", a.queue)
 	return
 }
 

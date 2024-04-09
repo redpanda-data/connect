@@ -28,24 +28,24 @@ sampling:
 	cConf, err := oltpConfigFromParsed(pConf)
 	require.NoError(t, err)
 
-	assert.Equal(t, true, cConf.sampling.enabled)
+	assert.True(t, cConf.sampling.enabled)
 	assert.Equal(t, 0.55, cConf.sampling.ratio)
 
 	require.Len(t, cConf.http, 3)
 	assert.Equal(t, "foo:123", cConf.http[0].address)
-	assert.Equal(t, false, cConf.http[0].secure)
+	assert.False(t, cConf.http[0].secure)
 	assert.Equal(t, "foo:456", cConf.http[1].address)
-	assert.Equal(t, true, cConf.http[1].secure)
+	assert.True(t, cConf.http[1].secure)
 	assert.Equal(t, "localhost:4318", cConf.http[2].address)
-	assert.Equal(t, false, cConf.http[2].secure)
+	assert.False(t, cConf.http[2].secure)
 
 	require.Len(t, cConf.grpc, 3)
 	assert.Equal(t, "bar:123", cConf.grpc[0].address)
-	assert.Equal(t, false, cConf.grpc[0].secure)
+	assert.False(t, cConf.grpc[0].secure)
 	assert.Equal(t, "bar:456", cConf.grpc[1].address)
-	assert.Equal(t, true, cConf.grpc[1].secure)
+	assert.True(t, cConf.grpc[1].secure)
 	assert.Equal(t, "localhost:4317", cConf.grpc[2].address)
-	assert.Equal(t, false, cConf.grpc[2].secure)
+	assert.False(t, cConf.grpc[2].secure)
 }
 
 func TestConfigParsingDeprecated(t *testing.T) {
@@ -69,22 +69,22 @@ sampling:
 	cConf, err := oltpConfigFromParsed(pConf)
 	require.NoError(t, err)
 
-	assert.Equal(t, true, cConf.sampling.enabled)
+	assert.True(t, cConf.sampling.enabled)
 	assert.Equal(t, 0.55, cConf.sampling.ratio)
 
 	require.Len(t, cConf.http, 3)
 	assert.Equal(t, "foo:123", cConf.http[0].address)
-	assert.Equal(t, false, cConf.http[0].secure)
+	assert.False(t, cConf.http[0].secure)
 	assert.Equal(t, "foo:456", cConf.http[1].address)
-	assert.Equal(t, true, cConf.http[1].secure)
+	assert.True(t, cConf.http[1].secure)
 	assert.Equal(t, "localhost:4318", cConf.http[2].address)
-	assert.Equal(t, false, cConf.http[2].secure)
+	assert.False(t, cConf.http[2].secure)
 
 	require.Len(t, cConf.grpc, 3)
 	assert.Equal(t, "bar:123", cConf.grpc[0].address)
-	assert.Equal(t, false, cConf.grpc[0].secure)
+	assert.False(t, cConf.grpc[0].secure)
 	assert.Equal(t, "bar:456", cConf.grpc[1].address)
-	assert.Equal(t, true, cConf.grpc[1].secure)
+	assert.True(t, cConf.grpc[1].secure)
 	assert.Equal(t, "localhost:4317", cConf.grpc[2].address)
-	assert.Equal(t, false, cConf.grpc[2].secure)
+	assert.False(t, cConf.grpc[2].secure)
 }

@@ -189,13 +189,14 @@ func initNormalMode(
 		}))
 	}
 
-	var stoppableStream *SwappableStopper
-	if initStream, err := streamInit(); err != nil {
+	initStream, err := streamInit()
+	if err != nil {
 		logger.Error("Service closing due to: %v\n", err)
 		os.Exit(1)
-	} else {
-		stoppableStream = NewSwappableStopper(initStream)
 	}
+
+	stoppableStream := NewSwappableStopper(initStream)
+
 	logger.Info("Launching a benthos instance, use CTRL+C to close")
 
 	if err := confReader.SubscribeConfigChanges(func(newStreamConf *config.Type) error {

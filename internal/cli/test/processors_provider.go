@@ -200,7 +200,7 @@ func resolveProcessorsPointer(targetFile, jsonPtr string) (filePath, procPath st
 		return
 	}
 
-	if len(u.Fragment) > 0 {
+	if u.Fragment != "" {
 		procPath = u.Fragment
 		filePath = filepath.Join(filepath.Dir(targetFile), u.Path)
 	} else {

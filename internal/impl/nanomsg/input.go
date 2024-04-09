@@ -182,13 +182,6 @@ func (s *nanomsgReader) Connect(ctx context.Context) (err error) {
 			return err
 		}
 	}
-
-	if s.bind {
-		s.log.Infof("Receiving Scalability Protocols messages at bound URLs: %s", s.urls)
-	} else {
-		s.log.Infof("Receiving Scalability Protocols messages at connected URLs: %s", s.urls)
-	}
-
 	s.socket = socket
 	return nil
 }

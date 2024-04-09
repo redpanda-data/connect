@@ -138,8 +138,6 @@ func (j *jetStreamOutput) Connect(ctx context.Context) (err error) {
 		return err
 	}
 
-	j.log.Infof("Sending NATS messages to JetStream subject: %v", j.subjectStrRaw)
-
 	j.natsConn = natsConn
 	j.jCtx = jCtx
 	return nil

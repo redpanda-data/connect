@@ -215,7 +215,7 @@ func NewKafkaWriterFromParsed(conf *service.ParsedConfig, mgr *service.Resources
 	}
 	for _, addr := range cAddresses {
 		for _, splitAddr := range strings.Split(addr, ",") {
-			if trimmed := strings.TrimSpace(splitAddr); len(trimmed) > 0 {
+			if trimmed := strings.TrimSpace(splitAddr); trimmed != "" {
 				k.addresses = append(k.addresses, trimmed)
 			}
 		}
@@ -465,10 +465,6 @@ func (k *kafkaWriter) Connect(ctx context.Context) error {
 
 	var err error
 	k.producer, err = sarama.NewSyncProducer(k.addresses, k.saramConf)
-
-	if err == nil {
-		k.mgr.Logger().Infof("Sending Kafka messages to addresses: %s\n", k.addresses)
-	}
 	return err
 }
 

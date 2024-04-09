@@ -118,8 +118,6 @@ func (n *natsWriter) Connect(ctx context.Context) error {
 	if n.natsConn, err = n.connDetails.get(ctx); err != nil {
 		return err
 	}
-
-	n.log.Infof("Sending NATS messages to subject: %v\n", n.subjectStrRaw)
 	return err
 }
 

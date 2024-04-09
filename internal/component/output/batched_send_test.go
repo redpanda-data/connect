@@ -23,7 +23,7 @@ func TestBatchedSendHappy(t *testing.T) {
 
 	seen := []string{}
 	assert.NoError(t, IterateBatchedSend(msg, func(i int, p *message.Part) error {
-		assert.Equal(t, i, len(seen))
+		assert.Len(t, seen, i)
 		seen = append(seen, string(p.AsBytes()))
 		return nil
 	}))
@@ -45,7 +45,7 @@ func TestBatchedSendALittleSad(t *testing.T) {
 
 	seen := []string{}
 	err := IterateBatchedSend(msg, func(i int, p *message.Part) error {
-		assert.Equal(t, i, len(seen))
+		assert.Len(t, seen, i)
 		seen = append(seen, string(p.AsBytes()))
 		if i == 1 {
 			return errFirst
@@ -73,7 +73,7 @@ func TestBatchedSendFatal(t *testing.T) {
 
 	seen := []string{}
 	err := IterateBatchedSend(msg, func(i int, p *message.Part) error {
-		assert.Equal(t, i, len(seen))
+		assert.Len(t, seen, i)
 		seen = append(seen, string(p.AsBytes()))
 		if i == 1 {
 			return component.ErrTypeClosed
@@ -86,7 +86,7 @@ func TestBatchedSendFatal(t *testing.T) {
 
 	seen = []string{}
 	err = IterateBatchedSend(msg, func(i int, p *message.Part) error {
-		assert.Equal(t, i, len(seen))
+		assert.Len(t, seen, i)
 		seen = append(seen, string(p.AsBytes()))
 		if i == 1 {
 			return component.ErrNotConnected
@@ -99,7 +99,7 @@ func TestBatchedSendFatal(t *testing.T) {
 
 	seen = []string{}
 	err = IterateBatchedSend(msg, func(i int, p *message.Part) error {
-		assert.Equal(t, i, len(seen))
+		assert.Len(t, seen, i)
 		seen = append(seen, string(p.AsBytes()))
 		if i == 1 {
 			return component.ErrTimeout

@@ -307,7 +307,7 @@ func NewWorkflow(conf *service.ParsedConfig, mgr bundle.NewManagement) (*Workflo
 	if err != nil {
 		return nil, err
 	}
-	if len(metaStr) > 0 {
+	if metaStr != "" {
 		w.metaPath = gabs.DotPathToSlice(metaStr)
 	}
 

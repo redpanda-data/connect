@@ -4,9 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"flag"
 	"fmt"
 	"io/fs"
 	"net/http"
+	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -184,7 +187,7 @@ func TestSchemaRegistryEncodeAvro(t *testing.T) {
 
 	require.NoError(t, encoder.Close(context.Background()))
 	encoder.cacheMut.Lock()
-	assert.Len(t, encoder.schemas, 0)
+	assert.Empty(t, encoder.schemas)
 	encoder.cacheMut.Unlock()
 }
 
@@ -266,7 +269,7 @@ func TestSchemaRegistryEncodeAvroRawJSON(t *testing.T) {
 
 	require.NoError(t, encoder.Close(context.Background()))
 	encoder.cacheMut.Lock()
-	assert.Len(t, encoder.schemas, 0)
+	assert.Empty(t, encoder.schemas)
 	encoder.cacheMut.Unlock()
 }
 
@@ -343,7 +346,7 @@ func TestSchemaRegistryEncodeAvroLogicalTypes(t *testing.T) {
 
 	require.NoError(t, encoder.Close(context.Background()))
 	encoder.cacheMut.Lock()
-	assert.Len(t, encoder.schemas, 0)
+	assert.Empty(t, encoder.schemas)
 	encoder.cacheMut.Unlock()
 }
 
@@ -420,7 +423,7 @@ func TestSchemaRegistryEncodeAvroRawJSONLogicalTypes(t *testing.T) {
 
 	require.NoError(t, encoder.Close(context.Background()))
 	encoder.cacheMut.Lock()
-	assert.Len(t, encoder.schemas, 0)
+	assert.Empty(t, encoder.schemas)
 	encoder.cacheMut.Unlock()
 }
 
@@ -441,7 +444,7 @@ func TestSchemaRegistryEncodeClearExpired(t *testing.T) {
 	tNearlyStale := time.Now().Add(-(schemaStaleAfter / 2)).Unix()
 
 	encoder.cacheMut.Lock()
-	encoder.schemas = map[string]*cachedSchemaEncoder{
+	encoder.schemas = map[string]cachedSchemaEncoder{
 		"5":  {lastUsedUnixSeconds: tStale, lastUpdatedUnixSeconds: tNotStale},
 		"10": {lastUsedUnixSeconds: tNotStale, lastUpdatedUnixSeconds: tNotStale},
 		"15": {lastUsedUnixSeconds: tNearlyStale, lastUpdatedUnixSeconds: tNotStale},
@@ -451,7 +454,7 @@ func TestSchemaRegistryEncodeClearExpired(t *testing.T) {
 	encoder.refreshEncoders()
 
 	encoder.cacheMut.Lock()
-	assert.Equal(t, map[string]*cachedSchemaEncoder{
+	assert.Equal(t, map[string]cachedSchemaEncoder{
 		"10": {lastUsedUnixSeconds: tNotStale, lastUpdatedUnixSeconds: tNotStale},
 		"15": {lastUsedUnixSeconds: tNearlyStale, lastUpdatedUnixSeconds: tNotStale},
 	}, encoder.schemas)
@@ -506,7 +509,7 @@ func TestSchemaRegistryEncodeRefresh(t *testing.T) {
 	}
 
 	encoder.cacheMut.Lock()
-	encoder.schemas = map[string]*cachedSchemaEncoder{
+	encoder.schemas = map[string]cachedSchemaEncoder{
 		"foo": {
 			lastUsedUnixSeconds:    tNotStale,
 			lastUpdatedUnixSeconds: tStale,
@@ -526,8 +529,10 @@ func TestSchemaRegistryEncodeRefresh(t *testing.T) {
 	encoder.refreshEncoders()
 
 	encoder.cacheMut.Lock()
-	encoder.schemas["foo"].encoder = nil
-	assert.Equal(t, map[string]*cachedSchemaEncoder{
+	tmpFoo := encoder.schemas["foo"]
+	tmpFoo.encoder = nil
+	encoder.schemas["foo"] = tmpFoo
+	assert.Equal(t, map[string]cachedSchemaEncoder{
 		"foo": {
 			lastUsedUnixSeconds:    tNotStale,
 			lastUpdatedUnixSeconds: tNotStale,
@@ -539,7 +544,9 @@ func TestSchemaRegistryEncodeRefresh(t *testing.T) {
 			id:                     11,
 		},
 	}, encoder.schemas)
-	encoder.schemas["bar"].lastUpdatedUnixSeconds = tStale
+	tmpBar := encoder.schemas["bar"]
+	tmpBar.lastUpdatedUnixSeconds = tStale
+	encoder.schemas["bar"] = tmpBar
 	encoder.cacheMut.Unlock()
 
 	assert.Equal(t, int32(1), atomic.LoadInt32(&fooReqs))
@@ -548,8 +555,10 @@ func TestSchemaRegistryEncodeRefresh(t *testing.T) {
 	encoder.refreshEncoders()
 
 	encoder.cacheMut.Lock()
-	encoder.schemas["bar"].encoder = nil
-	assert.Equal(t, map[string]*cachedSchemaEncoder{
+	tmpBar = encoder.schemas["bar"]
+	tmpBar.encoder = nil
+	encoder.schemas["bar"] = tmpBar
+	assert.Equal(t, map[string]cachedSchemaEncoder{
 		"foo": {
 			lastUsedUnixSeconds:    tNotStale,
 			lastUpdatedUnixSeconds: tNotStale,
@@ -647,6 +656,83 @@ func TestSchemaRegistryEncodeJSON(t *testing.T) {
 
 	require.NoError(t, encoder.Close(context.Background()))
 	encoder.cacheMut.Lock()
-	assert.Len(t, encoder.schemas, 0)
+	assert.Empty(t, encoder.schemas)
+	encoder.cacheMut.Unlock()
+}
+
+func TestSchemaRegistryEncodeJSONConstantRefreshes(t *testing.T) {
+	if m := flag.Lookup("test.run").Value.String(); m != t.Name() {
+		t.Skip()
+	}
+
+	fooID := int64(1)
+	nextFoo := func() []byte {
+		t.Helper()
+		fooData, err := json.Marshal(struct {
+			Schema     string `json:"schema"`
+			SchemaType string `json:"schemaType"`
+			ID         int64  `json:"id"`
+		}{
+			Schema:     testJSONSchema,
+			SchemaType: "JSON",
+			ID:         atomic.AddInt64(&fooID, 1),
+		})
+		require.NoError(t, err)
+		return fooData
+	}
+
+	urlStr := runSchemaRegistryServer(t, func(path string) ([]byte, error) {
+		if path == "/subjects/foo/versions/latest" {
+			return nextFoo(), nil
+		}
+		return nil, errors.New("nope")
+	})
+
+	subj, err := service.NewInterpolatedString("foo")
+	require.NoError(t, err)
+
+	encoder, err := newSchemaRegistryEncoder(urlStr, noopReqSign, nil, subj, false, time.Millisecond, time.Millisecond*10, service.MockResources())
+	require.NoError(t, err)
+
+	input := `{"Address":{"City":"foo","State":"bar"},"Name":"foo","MaybeHobby":"dancing"}`
+	outputPrefix := "\x00\x00\x00"
+	outputSuffix := "{\"Address\":{\"City\":\"foo\",\"State\":\"bar\"},\"Name\":\"foo\",\"MaybeHobby\":\"dancing\"}"
+
+	tStarted := time.Now()
+
+	var wg sync.WaitGroup
+	for i := 0; i < 10; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for {
+				if time.Since(tStarted) > (time.Second * 300) {
+					break
+				}
+
+				outBatches, err := encoder.ProcessBatch(
+					context.Background(),
+					service.MessageBatch{service.NewMessage([]byte(input))},
+				)
+				require.NoError(t, err)
+				require.Len(t, outBatches, 1)
+				require.Len(t, outBatches[0], 1)
+
+				err = outBatches[0][0].GetError()
+				require.NoError(t, err)
+
+				b, err := outBatches[0][0].AsBytes()
+				require.NoError(t, err)
+				require.True(t, strings.HasPrefix(string(b), outputPrefix), string(b))
+				require.True(t, strings.HasSuffix(string(b), outputSuffix), string(b))
+			}
+		}()
+	}
+
+	wg.Wait()
+
+	require.NoError(t, encoder.Close(context.Background()))
+	encoder.cacheMut.Lock()
+	assert.Empty(t, encoder.schemas)
 	encoder.cacheMut.Unlock()
 }

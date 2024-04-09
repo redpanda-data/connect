@@ -86,8 +86,6 @@ func (s *socketWriter) Connect(ctx context.Context) error {
 	if s.writer, err = net.Dial(s.network, s.address); err != nil {
 		return err
 	}
-
-	s.log.Infof("Sending messages over %v socket to: %s\n", s.network, s.address)
 	return nil
 }
 

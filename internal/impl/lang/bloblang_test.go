@@ -12,7 +12,7 @@ import (
 
 func TestFakeFunction_Invalid(t *testing.T) {
 	e, err := query.InitFunctionHelper("fake", "foo")
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	res, err := e.Exec(query.FunctionContext{})
 	require.Error(t, err, "invalid faker function: foo")
@@ -41,7 +41,7 @@ func TestFieldsFromNode(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			e, err := query.InitFunctionHelper("fake", test.function)
-			require.Nil(t, err)
+			require.NoError(t, err)
 
 			res, err := e.Exec(query.FunctionContext{})
 			require.NoError(t, err)

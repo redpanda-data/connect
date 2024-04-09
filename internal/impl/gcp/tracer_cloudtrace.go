@@ -81,7 +81,7 @@ func cloudTraceFromParsed(conf *service.ParsedConfig) (trace.TracerProvider, err
 	}
 
 	var batchOpts []tracesdk.BatchSpanProcessorOption
-	if i, _ := conf.FieldString(ctFieldFlushInterval); len(i) > 0 {
+	if i, _ := conf.FieldString(ctFieldFlushInterval); i != "" {
 		flushInterval, err := time.ParseDuration(i)
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse flush interval '%s': %v", i, err)

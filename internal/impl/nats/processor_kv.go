@@ -120,9 +120,7 @@ type kvProcessor struct {
 	bucket      string
 	operation   string
 	key         *service.InterpolatedString
-	keyRaw      string
 	revision    *service.InterpolatedString
-	revisionRaw string
 
 	log *service.Logger
 
@@ -152,19 +150,11 @@ func newKVProcessor(conf *service.ParsedConfig, mgr *service.Resources) (*kvProc
 		return nil, err
 	}
 
-	if p.keyRaw, err = conf.FieldString("key"); err != nil {
-		return nil, err
-	}
-
 	if p.key, err = conf.FieldInterpolatedString("key"); err != nil {
 		return nil, err
 	}
 
 	if conf.Contains("revision") {
-		if p.revisionRaw, err = conf.FieldString("revision"); err != nil {
-			return nil, err
-		}
-
 		if p.revision, err = conf.FieldInterpolatedString("revision"); err != nil {
 			return nil, err
 		}
@@ -349,8 +339,6 @@ func (p *kvProcessor) Connect(ctx context.Context) (err error) {
 	if err != nil {
 		return err
 	}
-
-	p.log.Infof("Performing operation `%s` on NATS KV bucket: %s", p.operation, p.bucket)
 	return nil
 }
 

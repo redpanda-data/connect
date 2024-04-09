@@ -84,7 +84,7 @@ bounds_check:
 
 	for _, parts := range badParts {
 		msgs, res := proc.ProcessBatch(context.Background(), message.QuickBatch(parts))
-		assert.Len(t, msgs, 0)
-		assert.Nil(t, res)
+		assert.Empty(t, msgs)
+		assert.NoError(t, res)
 	}
 }

@@ -288,8 +288,6 @@ func (j *jetStreamReader) Connect(ctx context.Context) (err error) {
 		return err
 	}
 
-	j.log.Infof("Receiving NATS messages from JetStream subject: %v", j.subject)
-
 	j.natsConn = natsConn
 	j.natsSub = natsSub
 	return nil

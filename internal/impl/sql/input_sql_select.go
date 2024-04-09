@@ -215,6 +215,8 @@ func (s *sqlSelectInput) Connect(ctx context.Context) (err error) {
 	var rows *sql.Rows
 	if rows, err = queryBuilder.RunWith(db).Query(); err != nil {
 		return
+	} else if err = rows.Err(); err != nil {
+		s.logger.With("err", err).Warn("unexpected error while execute raw select")
 	}
 
 	s.db = db
