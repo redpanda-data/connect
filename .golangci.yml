@@ -72,6 +72,7 @@ linters:
     # - gosec
     # - misspell
     # - prealloc
+    - tenv
     - predeclared
     - mirror
     - rowserrcheck
