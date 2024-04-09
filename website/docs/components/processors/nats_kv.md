@@ -77,7 +77,7 @@ The NATS KV processor supports a multitude of KV operations via the [operation](
 
 This processor adds the following metadata fields to each message, depending on the chosen `operation`:
 
-#### get, get_revision, history
+#### get, get_revision
 ``` text
 - nats_kv_key
 - nats_kv_bucket
@@ -183,7 +183,7 @@ Type: `string`
 | `delete` | Deletes the key/value pair, but keeps historical values. |
 | `get` | Returns the latest value for `key`. |
 | `get_revision` | Returns the value of `key` for the specified `revision`. |
-| `history` | Returns historical values of `key` as a batch. |
+| `history` | Returns historical values of `key` as an array of objects containing the following fields: `key`, `value`, `bucket`, `revision`, `delta`, `operation`, `created`. |
 | `keys` | Returns the keys in the `bucket` which match the `keys_filter` as an array of strings. |
 | `purge` | Deletes the key/value pair and all historical values. |
 | `put` | Places a new value for the key into the store. |

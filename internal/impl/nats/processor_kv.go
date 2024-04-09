@@ -41,7 +41,7 @@ var kvpOperations = map[string]string{
 	string(kvpOperationUpdate):      "Updates the value for `key` only if the `revision` matches the latest revision.",
 	string(kvpOperationDelete):      "Deletes the key/value pair, but keeps historical values.",
 	string(kvpOperationPurge):       "Deletes the key/value pair and all historical values.",
-	string(kvpOperationHistory):     "Returns historical values of `key` as a batch.",
+	string(kvpOperationHistory):     "Returns historical values of `key` as an array of objects containing the following fields: `key`, `value`, `bucket`, `revision`, `delta`, `operation`, `created`.",
 	string(kvpOperationKeys):        "Returns the keys in the `bucket` which match the `keys_filter` as an array of strings.",
 }
 
@@ -60,7 +60,7 @@ The NATS KV processor supports a multitude of KV operations via the [operation](
 
 This processor adds the following metadata fields to each message, depending on the chosen ` + "`operation`" + `:
 
-#### get, get_revision, history
+#### get, get_revision
 ` + "``` text" + `
 - nats_kv_key
 - nats_kv_bucket
@@ -277,11 +277,22 @@ func (p *kvProcessor) Process(ctx context.Context, msg *service.Message) (servic
 		if err != nil {
 			return nil, err
 		}
-		batch := service.MessageBatch{}
+		var records []any
 		for _, entry := range entries {
-			batch = append(batch, newMessageFromKVEntry(entry))
+			records = append(records, map[string]any{
+				"key":       entry.Key(),
+				"value":     entry.Value(),
+				"bucket":    entry.Bucket(),
+				"revision":  entry.Revision(),
+				"delta":     entry.Delta(),
+				"operation": entry.Operation().String(),
+				"created":   entry.Created(),
+			})
 		}
-		return batch, nil
+
+		m := service.NewMessage(nil)
+		m.SetStructuredMut(records)
+		return service.MessageBatch{m}, nil
 
 	case kvpOperationKeys:
 		// `kv.ListKeys()` does not allow users to specify a key filter, so we call `kv.Watch()` directly.
