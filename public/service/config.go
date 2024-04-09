@@ -683,9 +683,9 @@ func (p *ParsedConfig) FieldFloat(path ...string) (float64, error) {
 	return p.i.FieldFloat(path...)
 }
 
-// FieldIntList accesses a field that is a list of integers from the parsed
+// FieldFloatList accesses a field that is a list of floats from the parsed
 // config by its name and returns the value. Returns an error if the field is
-// not found, or is not a list of integers.
+// not found, or is not a list of floats.
 func (p *ParsedConfig) FieldFloatList(path ...string) ([]float64, error) {
 	return p.i.FieldFloatList(path...)
 }

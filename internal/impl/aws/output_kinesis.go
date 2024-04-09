@@ -196,8 +196,6 @@ func (a *kinesisWriter) Connect(ctx context.Context) error {
 
 	a.streamARN = *out.StreamDescription.StreamARN
 	a.kinesis = k
-	a.log.Infof("Sending messages to Kinesis stream: %v\n", a.conf.Stream)
-
 	return nil
 }
 

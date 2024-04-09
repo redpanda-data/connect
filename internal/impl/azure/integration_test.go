@@ -60,7 +60,6 @@ func TestIntegrationAzure(t *testing.T) {
 		client, err := azblob.NewClientFromConnectionString(connString, nil)
 		if err != nil {
 			return err
-
 		}
 
 		ctx, done := context.WithTimeout(context.Background(), 1*time.Second)
@@ -70,7 +69,6 @@ func TestIntegrationAzure(t *testing.T) {
 			return err
 		}
 		return nil
-
 	})
 	require.NoError(t, err, "Failed to start Azurite")
 
@@ -144,7 +142,7 @@ input:
 		)
 	})
 
-	os.Setenv("AZURITE_QUEUE_ENDPOINT_PORT", resource.GetPort("10001/tcp"))
+	os.Setenv("AZURITE_QUEUE_ENDPOINT_PORT", resource.GetPort("10001/tcp")) //nolint: tenv // this test runs in parallel
 	dummyQueue := "foo"
 	t.Run("queue_storage", func(t *testing.T) {
 		template := `

@@ -147,8 +147,6 @@ func (p *pulsarWriter) Connect(ctx context.Context) error {
 
 	p.client = client
 	p.producer = producer
-
-	p.log.Infof("Writing Pulsar messages to URL: %v\n", p.url)
 	return nil
 }
 

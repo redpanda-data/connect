@@ -88,7 +88,7 @@ func TestProcessorIntegration(t *testing.T) {
 	})
 }
 
-func testMProc(t testing.TB, port, collection string, configYAML string) *mongodb.Processor {
+func testMProc(t testing.TB, port, collection, configYAML string) *mongodb.Processor {
 	t.Helper()
 
 	if collection == "" {

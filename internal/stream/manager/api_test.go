@@ -263,14 +263,8 @@ func TestTypeAPIBasicOperations(t *testing.T) {
 	assert.Equal(t, http.StatusNotFound, response.Code, response.Body.String())
 
 	testVar := "__TEST_INPUT_MAPPING"
-	originalEnv, orignalSet := os.LookupEnv(testVar)
-	defer func() {
-		_ = os.Unsetenv(testVar)
-		if orignalSet {
-			_ = os.Setenv(testVar, originalEnv)
-		}
-	}()
-	_ = os.Setenv(testVar, `root.meow = 5`)
+
+	t.Setenv(testVar, `root.meow = 5`)
 
 	request = genRequest("POST", "/streams/fooEnv?chilled=true", map[string]any{
 		"input": map[string]any{

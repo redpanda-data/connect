@@ -119,8 +119,6 @@ func (r *redisListReader) Connect(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-
-	r.log.Infof("Receiving messages from Redis list: %v\n", r.key)
 	return nil
 }
 

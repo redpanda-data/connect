@@ -201,7 +201,6 @@ func (r *reader) Connect(ctx context.Context) error {
 	}()
 
 	r.msgChan = msgChan
-	r.log.Infof("Receiving discord messages from channel %s", r.channelID)
 	return nil
 }
 

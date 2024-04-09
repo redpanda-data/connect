@@ -243,7 +243,7 @@ func newProtobufFromJSONOperator(f ifs.FS, msg string, importPaths []string, dis
 	}, nil
 }
 
-func strToProtobufOperator(f ifs.FS, opStr, message string, importPaths []string, discardUnknown bool, useProtoNames bool) (protobufOperator, error) {
+func strToProtobufOperator(f ifs.FS, opStr, message string, importPaths []string, discardUnknown, useProtoNames bool) (protobufOperator, error) {
 	switch opStr {
 	case "to_json":
 		return newProtobufToJSONOperator(f, message, importPaths, useProtoNames)
