@@ -16,7 +16,7 @@ If the query fails to execute then the message will remain unchanged and the err
 
 ## Alternatives
 
-For basic inserts or select queries use use either the ` + "[`sql_insert`](/docs/components/processors/sql_insert)" + ` or the ` + "[`sql_select`](/docs/components/processors/sql_select)" + ` processor. For more complex queries use the ` + "[`sql_raw`](/docs/components/processors/sql_raw)" + ` processor.`).
+For basic inserts or select queries use either the ` + "[`sql_insert`](/docs/components/processors/sql_insert)" + ` or the ` + "[`sql_select`](/docs/components/processors/sql_select)" + ` processor. For more complex queries use the ` + "[`sql_raw`](/docs/components/processors/sql_raw)" + ` processor.`).
 		Field(driverField).
 		Field(service.NewStringField("data_source_name").Description("Data source name.")).
 		Field(rawQueryField().

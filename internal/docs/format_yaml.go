@@ -899,7 +899,7 @@ func (f FieldSpec) YAMLToValue(node *yaml.Node, conf ToValueConfig) (any, error)
 
 	if conf.FallbackToAny {
 		// We don't know what the field actually is (likely a component
-		// type), so if we we can either decode into a generic interface
+		// type), so if we can either decode into a generic interface
 		// or return the raw node itself.
 		var v any
 		if err := node.Decode(&v); err != nil {
