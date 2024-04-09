@@ -13,6 +13,10 @@ issues:
       linters:
         - bodyclose
 linters-settings:
+  revive:
+    enable-all-rules: false
+    rules:
+      - name: superfluous-else
   errcheck:
     exclude-functions:
       - (*github.com/benthosdev/benthos/v4/internal/batch.Error).Failed
@@ -60,7 +64,7 @@ linters:
     - goimports
     # gocritic is very slow (golangci-lint v1.52.0)
     # - gocritic
-    # - revive
+    - revive
     - unconvert
     - durationcheck
     # - depguard

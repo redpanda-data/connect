@@ -800,9 +800,9 @@ func (k *kinesisReader) runExplicitShards() {
 		}
 		if len(pendingShards) == 0 {
 			break
-		} else {
-			<-time.After(time.Second)
 		}
+
+		<-time.After(time.Second)
 	}
 }
 

@@ -562,10 +562,10 @@ runLoop:
 				}
 				r.resetTargets()
 				continue runLoop
-			} else {
-				r.log.Info("Exhausted all sequence inputs, shutting down.")
-				return
 			}
+
+			r.log.Info("Exhausted all sequence inputs, shutting down.")
+			return
 		}
 
 		var tran message.Transaction

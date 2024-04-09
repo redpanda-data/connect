@@ -190,11 +190,11 @@ func (r *AsyncReader) loop() {
 				return
 			}
 			continue
-		} else {
-			r.readBackoff.Reset()
-			mRcvd.Incr(int64(msg.Len()))
-			r.mgr.Logger().Trace("Consumed %v messages from '%v'.\n", msg.Len(), r.typeStr)
 		}
+
+		r.readBackoff.Reset()
+		mRcvd.Incr(int64(msg.Len()))
+		r.mgr.Logger().Trace("Consumed %v messages from '%v'.\n", msg.Len(), r.typeStr)
 
 		startedAt := time.Now()
 

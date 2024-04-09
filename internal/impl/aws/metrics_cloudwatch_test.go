@@ -49,15 +49,16 @@ func checkInput(i cloudwatch.PutMetricDataInput) map[string]checkedDatum {
 	for _, datum := range i.MetricData {
 		if datum.Timestamp == nil {
 			panic("Timestamp not set")
-		} else {
-			tSince := time.Since(*datum.Timestamp)
-			if tSince < 0 {
-				panic("Timestamp from the future")
-			}
-			if tSince > time.Minute {
-				panic("Timestamp from ages ago")
-			}
 		}
+
+		tSince := time.Since(*datum.Timestamp)
+		if tSince < 0 {
+			panic("Timestamp from the future")
+		}
+		if tSince > time.Minute {
+			panic("Timestamp from ages ago")
+		}
+
 		d := checkedDatum{
 			unit: string(datum.Unit),
 		}
