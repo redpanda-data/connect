@@ -110,12 +110,11 @@ func newPulsarReaderFromParsed(conf *service.ParsedConfig, log *service.Logger) 
 	if p.url, err = conf.FieldString("url"); err != nil {
 		return
 	}
-	if p.topics, err = conf.FieldStringList("topics"); err != nil {
-		log.With("error", err, "field", "topics").Debug("unable to parse input pulsar configuration field, ignoring")
-	}
-	if p.topicsPattern, err = conf.FieldString("topics_pattern"); err != nil {
-		log.With("error", err, "field", "topics_pattern").Debug("unable to parse input pulsar configuration field, ignoring")
-	}
+	
+	p.topics, _ = conf.FieldStringList("topics")
+	
+	p.topicsPattern, _ = conf.FieldString("topics_pattern")
+	
 	if p.subName, err = conf.FieldString("subscription_name"); err != nil {
 		return
 	}
