@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strconv"
 	"sync"
+	"time"
 
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
@@ -17,6 +18,7 @@ const (
 	kvpFieldOperation = "operation"
 	kvpFieldKey       = "key"
 	kvpFieldRevision  = "revision"
+	kvpFieldTimeout   = "timeout"
 )
 
 type kvpOperationType string
@@ -101,6 +103,9 @@ This processor adds the following metadata fields to each message, depending on 
 				Example(`${! @nats_kv_revision }`).
 				Optional().
 				Advanced(),
+			service.NewDurationField(kvpFieldTimeout).
+				Description("The maximum period to wait on an operation before aborting and returning an error.").
+				Advanced().Default("5s"),
 		}...)...).
 		LintRule(`root = match {
       ["get_revision", "update"].contains(this.operation) && !this.exists("revision") => [ "'revision' must be set when operation is '" + this.operation + "'" ],
@@ -126,6 +131,7 @@ type kvProcessor struct {
 	operation   kvpOperationType
 	key         *service.InterpolatedString
 	revision    *service.InterpolatedString
+	timeout     time.Duration
 
 	log *service.Logger
 
@@ -167,6 +173,10 @@ func newKVProcessor(conf *service.ParsedConfig, mgr *service.Resources) (*kvProc
 		}
 	}
 
+	if p.timeout, err = conf.FieldDuration(kvpFieldTimeout); err != nil {
+		return nil, err
+	}
+
 	err = p.Connect(context.Background())
 	return p, err
 }
@@ -196,6 +206,9 @@ func (p *kvProcessor) Process(ctx context.Context, msg *service.Message) (servic
 	if err != nil {
 		return nil, err
 	}
+
+	ctx, done := context.WithTimeout(ctx, p.timeout)
+	defer done()
 
 	switch p.operation {
 

@@ -52,6 +52,7 @@ nats_kv:
   operation: "" # No default (required)
   key: foo # No default (required)
   revision: "42" # No default (optional)
+  timeout: 5s
   tls:
     enabled: false
     skip_cert_verify: false
@@ -227,6 +228,14 @@ revision: "42"
 
 revision: ${! @nats_kv_revision }
 ```
+
+### `timeout`
+
+The maximum period to wait on an operation before aborting and returning an error.
+
+
+Type: `string`  
+Default: `"5s"`  
 
 ### `tls`
 
