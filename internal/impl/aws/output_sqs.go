@@ -2,6 +2,7 @@ package aws
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"regexp"
 	"sort"
@@ -230,7 +231,7 @@ func (a *sqsWriter) getSQSAttributes(batch service.MessageBatch, i int) (sqsAttr
 			return sqsAttributes{}, fmt.Errorf("delay seconds invalid input: %w", err)
 		}
 		if delaySecondsInt64 < 0 || delaySecondsInt64 > 900 {
-			return sqsAttributes{}, fmt.Errorf("delay seconds must be between 0 and 900")
+			return sqsAttributes{}, errors.New("delay seconds must be between 0 and 900")
 		}
 		delaySeconds = int32(delaySecondsInt64)
 	}

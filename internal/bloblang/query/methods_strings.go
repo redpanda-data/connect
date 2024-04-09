@@ -335,7 +335,7 @@ root.encrypted = this.value.encrypt_aes("ctr", $key, $vector).encode("hex")`,
 		case "cbc":
 			schemeFn = func(b []byte) (string, error) {
 				if len(b)%aes.BlockSize != 0 {
-					return "", fmt.Errorf("plaintext is not a multiple of the block size")
+					return "", errors.New("plaintext is not a multiple of the block size")
 				}
 
 				ciphertext := make([]byte, len(b))
@@ -424,7 +424,7 @@ root.decrypted = this.value.decode("hex").decrypt_aes("ctr", $key, $vector).stri
 		case "cbc":
 			schemeFn = func(b []byte) ([]byte, error) {
 				if len(b)%aes.BlockSize != 0 {
-					return nil, fmt.Errorf("ciphertext is not a multiple of the block size")
+					return nil, errors.New("ciphertext is not a multiple of the block size")
 				}
 				stream := cipher.NewCBCDecrypter(block, iv)
 				stream.CryptBlocks(b, b)
@@ -1043,7 +1043,7 @@ func parseCSVMethod(args *ParsedParams) (simpleMethod, error) {
 			records = make([]any, 0, len(strRecords)-1)
 			headers := strRecords[0]
 			if len(headers) == 0 {
-				return nil, fmt.Errorf("no headers found on first row")
+				return nil, errors.New("no headers found on first row")
 			}
 			for j, strRecord := range strRecords[1:] {
 				if len(headers) != len(strRecord) {
@@ -1619,7 +1619,7 @@ var _ = registerSimpleMethod(
 		groups := re.SubexpNames()
 		for i, k := range groups {
 			if k == "" {
-				groups[i] = fmt.Sprintf("%v", i)
+				groups[i] = strconv.Itoa(i)
 			}
 		}
 		return func(v any, ctx FunctionContext) (any, error) {
@@ -1676,7 +1676,7 @@ var _ = registerSimpleMethod(
 		groups := re.SubexpNames()
 		for i, k := range groups {
 			if k == "" {
-				groups[i] = fmt.Sprintf("%v", i)
+				groups[i] = strconv.Itoa(i)
 			}
 		}
 		return func(v any, ctx FunctionContext) (any, error) {

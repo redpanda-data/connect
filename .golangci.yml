@@ -12,6 +12,7 @@ issues:
     - path: _test.go
       linters:
         - bodyclose
+        - perfsprint
 linters-settings:
   revive:
     enable-all-rules: false
@@ -82,6 +83,7 @@ linters:
     # - gosec
     # - misspell
     # - prealloc
+    - perfsprint
     - testifylint
     - tenv
     - predeclared
