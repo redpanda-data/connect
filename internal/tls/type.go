@@ -64,11 +64,11 @@ func (c *Config) GetNonToggled(f ifs.FS) (*tls.Config, error) {
 		tlsConf = defaultTLSConfig()
 	}
 
-	if len(c.RootCAs) > 0 && len(c.RootCAsFile) > 0 {
+	if c.RootCAs != "" && c.RootCAsFile != "" {
 		return nil, errors.New("only one field between root_cas and root_cas_file can be specified")
 	}
 
-	if len(c.RootCAsFile) > 0 {
+	if c.RootCAsFile != "" {
 		caCert, err := ifs.ReadFile(f, c.RootCAsFile)
 		if err != nil {
 			return nil, err
@@ -78,7 +78,7 @@ func (c *Config) GetNonToggled(f ifs.FS) (*tls.Config, error) {
 		tlsConf.RootCAs.AppendCertsFromPEM(caCert)
 	}
 
-	if len(c.RootCAs) > 0 {
+	if c.RootCAs != "" {
 		initConf()
 		tlsConf.RootCAs = x509.NewCertPool()
 		tlsConf.RootCAs.AppendCertsFromPEM([]byte(c.RootCAs))

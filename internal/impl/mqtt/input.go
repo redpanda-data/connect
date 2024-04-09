@@ -167,7 +167,6 @@ func (m *mqttReader) Connect(ctx context.Context) error {
 		return err
 	}
 
-	m.log.Infof("Receiving MQTT messages from topics: %v", m.topics)
 	go func() {
 		for {
 			select {

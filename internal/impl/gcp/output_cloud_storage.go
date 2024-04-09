@@ -221,8 +221,6 @@ func (g *gcpCloudStorageOutput) Connect(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-
-	g.log.Infof("Uploading message parts as objects to GCP Cloud Storage bucket: %v\n", g.conf.Bucket)
 	return nil
 }
 
@@ -275,7 +273,7 @@ func (g *gcpCloudStorageOutput) WriteBatch(ctx context.Context, batch service.Me
 			}
 
 			dir := path.Dir(outputPath)
-			tempFileName := fmt.Sprintf("%s.tmp", tempUUID.String())
+			tempFileName := tempUUID.String() + ".tmp"
 			tempPath = path.Join(dir, tempFileName)
 
 			g.log.Tracef("creating temporary file for the merge %q", tempPath)

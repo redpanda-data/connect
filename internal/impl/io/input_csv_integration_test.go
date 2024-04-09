@@ -2,7 +2,6 @@ package io_test
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io/fs"
 	"os"
@@ -111,7 +110,7 @@ csv:
 	}
 
 	_, err := os.Stat(dummyCSVFile)
-	require.True(t, errors.Is(err, fs.ErrNotExist))
+	require.ErrorIs(t, err, fs.ErrNotExist)
 }
 
 func TestCSVInputGlobPaths(t *testing.T) {

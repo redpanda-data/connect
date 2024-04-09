@@ -300,7 +300,6 @@ func (f *franzKafkaWriter) Connect(ctx context.Context) error {
 	}
 
 	f.client = cl
-	f.log.Infof("Writing messages to Kafka topic: %v", f.topicStr)
 	return nil
 }
 

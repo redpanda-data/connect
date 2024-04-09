@@ -118,8 +118,6 @@ func (r *redisStreamsWriter) Connect(ctx context.Context) error {
 	if _, err = client.Ping(ctx).Result(); err != nil {
 		return err
 	}
-
-	r.log.Infof("Pushing messages to Redis stream: %v\n", r.streamStr)
 	r.client = client
 	return nil
 }

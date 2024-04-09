@@ -152,7 +152,6 @@ func createSubscription(conf pbiConfig, client *pubsub.Client, log *service.Logg
 
 	log.Infof("Creating subscription '%v' on topic '%v'\n", conf.SubscriptionID, conf.CreateTopicID)
 	_, err = client.CreateSubscription(context.Background(), conf.SubscriptionID, pubsub.SubscriptionConfig{Topic: client.Topic(conf.CreateTopicID)})
-
 	if err != nil {
 		log.Errorf("Error creating subscription %v", err)
 	}
@@ -173,7 +172,7 @@ type gcpPubSubReader struct {
 
 func newGCPPubSubReader(conf pbiConfig, res *service.Resources) (*gcpPubSubReader, error) {
 	var opt []option.ClientOption
-	if len(strings.TrimSpace(conf.Endpoint)) > 0 {
+	if strings.TrimSpace(conf.Endpoint) != "" {
 		opt = []option.ClientOption{option.WithEndpoint(conf.Endpoint)}
 	}
 
@@ -235,8 +234,6 @@ func (c *gcpPubSubReader) Connect(ignored context.Context) error {
 		c.closeFunc = nil
 		c.subMut.Unlock()
 	}()
-
-	c.log.Infof("Receiving GCP Cloud Pub/Sub messages from project '%v' and subscription '%v'\n", c.conf.ProjectID, c.conf.SubscriptionID)
 	return nil
 }
 

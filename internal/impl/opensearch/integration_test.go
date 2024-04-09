@@ -58,7 +58,8 @@ func TestIntegration(t *testing.T) {
 	var client *os.Client
 
 	if err = pool.Retry(func() error {
-		opts := os.Config{Addresses: urls,
+		opts := os.Config{
+			Addresses: urls,
 			Transport: http.DefaultTransport,
 		}
 
@@ -137,7 +138,6 @@ func TestIntegration(t *testing.T) {
 	t.Run("TestOpenSearchBatchIDCollision", func(te *testing.T) {
 		testOpenSearchBatchIDCollision(urls, client, te)
 	})
-
 }
 
 func testOpenSearchNoIndex(urls []string, client *os.Client, t *testing.T) {

@@ -63,7 +63,7 @@ func esoConfigFromParsed(pConf *service.ParsedConfig) (conf esoConfig, err error
 	}
 	for _, u := range tmpURLs {
 		for _, splitURL := range strings.Split(u, ",") {
-			if len(splitURL) > 0 {
+			if splitURL != "" {
 				conf.urls = append(conf.urls, splitURL)
 			}
 		}
@@ -245,7 +245,6 @@ It's possible to enable AWS connectivity with this output using the `+"`aws`"+` 
 				Advanced().
 				Default(false),
 		)
-
 }
 
 func init() {
@@ -298,7 +297,6 @@ func (e *Output) Connect(ctx context.Context) error {
 	}
 
 	e.client = client
-	e.log.Infof("Sending messages to Elasticsearch index at urls: %s\n", e.conf.urls)
 	return nil
 }
 

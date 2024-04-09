@@ -40,7 +40,7 @@ func TestDynamicOutputAPI(t *testing.T) {
 	resChan := make(chan error, 1)
 	require.NoError(t, o.Consume(tChan))
 
-	req := httptest.NewRequest(http.MethodGet, "/outputs", nil)
+	req := httptest.NewRequest(http.MethodGet, "/outputs", http.NoBody)
 	res := httptest.NewRecorder()
 	gMux.ServeHTTP(res, req)
 
@@ -66,7 +66,7 @@ func TestDynamicOutputAPI(t *testing.T) {
 		t.Fatal(ctx.Err())
 	}
 
-	req = httptest.NewRequest(http.MethodGet, "/outputs/foo", nil)
+	req = httptest.NewRequest(http.MethodGet, "/outputs/foo", http.NoBody)
 	res = httptest.NewRecorder()
 	gMux.ServeHTTP(res, req)
 

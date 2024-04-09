@@ -14,7 +14,7 @@ import (
 // https://github.com/golang/go/issues/61410 is available, and that'll allow us
 // to make all paths explicit.
 func GetMuxRoute(gMux *mux.Router, path string) *mux.Route {
-	if len(path) > 0 && path[len(path)-1] == '/' {
+	if path != "" && path[len(path)-1] == '/' {
 		return gMux.PathPrefix(path)
 	}
 	return gMux.Path(path)

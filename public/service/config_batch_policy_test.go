@@ -80,7 +80,7 @@ a:
 
 	batch, err = pol.Flush(context.Background())
 	require.NoError(t, err)
-	require.Len(t, batch, 0)
+	require.Empty(t, batch)
 
 	require.NoError(t, pol.Close(context.Background()))
 }
@@ -134,7 +134,7 @@ a:
 
 	batch, err = pol.Flush(context.Background())
 	require.NoError(t, err)
-	require.Len(t, batch, 0)
+	require.Empty(t, batch)
 
 	require.NoError(t, pol.Close(context.Background()))
 }

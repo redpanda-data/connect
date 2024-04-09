@@ -2,6 +2,7 @@ package sentry
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -247,7 +248,7 @@ func (proc *captureProcessor) Process(ctx context.Context, msg *service.Message)
 
 func (proc *captureProcessor) Close(ctx context.Context) error {
 	if flushed := proc.hub.Flush(proc.flushTimeout); !flushed {
-		return fmt.Errorf("failed to flush sentry events before timeout")
+		return errors.New("failed to flush sentry events before timeout")
 	}
 
 	return nil

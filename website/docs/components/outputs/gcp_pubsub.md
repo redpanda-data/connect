@@ -243,7 +243,7 @@ Options: `ignore`, `block`, `signal_error`.
 
 ### `batching`
 
-Configures a batching policy on this output. While the PubSub client maintains its own internal buffering mechanism, preparing larger batches of messages can futher trade-off some latency for throughput.
+Configures a batching policy on this output. While the PubSub client maintains its own internal buffering mechanism, preparing larger batches of messages can further trade-off some latency for throughput.
 
 
 Type: `object`  

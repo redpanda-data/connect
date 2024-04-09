@@ -232,7 +232,7 @@ branch:
 
 			outMsgs, res := proc.ProcessBatch(context.Background(), msg.ShallowCopy())
 
-			require.Nil(t, res)
+			require.NoError(t, res)
 			require.Len(t, outMsgs, 1)
 
 			assert.Equal(t, len(test.output), outMsgs[0].Len())

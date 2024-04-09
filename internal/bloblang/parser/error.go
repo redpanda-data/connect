@@ -77,14 +77,14 @@ func (e *Error) errorMsg(includeGot bool) string {
 			}
 		}
 		if includeGot {
-			if len(inputSnippet) > 0 {
+			if inputSnippet != "" {
 				msg += fmt.Sprintf(": %v", inputSnippet)
 			}
 		}
 		return msg
 	}
 
-	if len(msg) > 0 {
+	if msg != "" {
 		msg += ": "
 	}
 
@@ -117,7 +117,7 @@ func (e *Error) errorMsg(includeGot bool) string {
 	}
 
 	if includeGot {
-		if len(inputSnippet) > 0 {
+		if inputSnippet != "" {
 			msg += fmt.Sprintf(", got: %v", inputSnippet)
 		} else {
 			msg += ", but reached end of input"
@@ -222,7 +222,7 @@ func (e *Error) ErrorAtPositionStructured(filepath string, input []rune) string 
 	linePadding := strings.Repeat(" ", len(lineStr))
 
 	filepathStr := ""
-	if len(filepath) > 0 {
+	if filepath != "" {
 		filepathStr = filepath + ": "
 	}
 

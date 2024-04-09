@@ -167,7 +167,7 @@ func TestFunctions(t *testing.T) {
 					MsgBatch: msg,
 					NewMeta:  msg.Get(test.index),
 				})
-				if len(test.err) > 0 {
+				if test.err != "" {
 					require.EqualError(t, err, test.err)
 				} else {
 					require.NoError(t, err)
@@ -243,7 +243,7 @@ func TestFunctionTargets(t *testing.T) {
 
 func TestNanoidFunction(t *testing.T) {
 	e, err := InitFunctionHelper("nanoid")
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	res, err := e.Exec(FunctionContext{})
 	require.NoError(t, err)
@@ -252,7 +252,7 @@ func TestNanoidFunction(t *testing.T) {
 
 func TestNanoidFunctionLength(t *testing.T) {
 	e, err := InitFunctionHelper("nanoid", int64(54))
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	res, err := e.Exec(FunctionContext{})
 	require.NoError(t, err)
@@ -261,7 +261,7 @@ func TestNanoidFunctionLength(t *testing.T) {
 
 func TestNanoidFunctionAlphabet(t *testing.T) {
 	e, err := InitFunctionHelper("nanoid", int64(1), "a")
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	res, err := e.Exec(FunctionContext{})
 	require.NoError(t, err)
@@ -270,7 +270,7 @@ func TestNanoidFunctionAlphabet(t *testing.T) {
 
 func TestKsuidFunction(t *testing.T) {
 	e, err := InitFunctionHelper("ksuid")
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	res, err := e.Exec(FunctionContext{})
 	require.NoError(t, err)
@@ -279,7 +279,7 @@ func TestKsuidFunction(t *testing.T) {
 
 func TestRandomInt(t *testing.T) {
 	e, err := InitFunctionHelper("random_int")
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	tallies := map[int64]int64{}
 
@@ -458,7 +458,7 @@ func TestRandomIntWithinRange(t *testing.T) {
 	require.NoError(t, err)
 	var min, max int64 = 10, 20
 	e, err := InitFunctionHelper("random_int", tsFn, min, max)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	for i := 0; i < 1000; i++ {
 		res, err := e.Exec(FunctionContext{})
@@ -476,7 +476,7 @@ func TestRandomIntWithinRange(t *testing.T) {
 		res, err := e.Exec(FunctionContext{})
 		require.NoError(t, err)
 		require.IsType(t, int64(0), res)
-		assert.Equal(t, res.(int64), int64(10))
+		assert.Equal(t, int64(10), res.(int64))
 	}
 
 	// Create a new random_int function with an invalid range

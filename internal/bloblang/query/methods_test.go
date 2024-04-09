@@ -2006,7 +2006,7 @@ func TestMethods(t *testing.T) {
 					Index:    test.index,
 					MsgBatch: msg,
 				}.WithValueFunc(func() *any { return test.value }))
-				if len(test.err) > 0 {
+				if test.err != "" {
 					require.EqualError(t, err, test.err)
 				} else {
 					require.NoError(t, err)

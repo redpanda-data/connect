@@ -2,6 +2,7 @@ package pure
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -150,15 +151,14 @@ func lruMemCacheFromConfig(conf *service.ParsedConfig) (*lruCacheAdapter, error)
 
 //------------------------------------------------------------------------------
 
-var (
-	errInvalidLRUCacheCapacityValue = fmt.Errorf("invalid lru cache parameter capacity: must be bigger than 0")
-)
+var errInvalidLRUCacheCapacityValue = errors.New("invalid lru cache parameter capacity: must be bigger than 0")
 
 func lruMemCache(capacity int,
 	algorithm string,
 	initValues map[string]string,
 	recentRatio, ghostRatio *float64,
-	optimistic bool) (ca *lruCacheAdapter, err error) {
+	optimistic bool,
+) (ca *lruCacheAdapter, err error) {
 	if capacity <= 0 {
 		return nil, errInvalidLRUCacheCapacityValue
 	}

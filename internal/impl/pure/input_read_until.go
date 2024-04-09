@@ -141,14 +141,14 @@ func newReadUntilInputFromParsed(conf *service.ParsedConfig, res *service.Resour
 	}
 
 	var check *mapping.Executor
-	if checkStr, _ := conf.FieldString(ruiFieldCheck); len(checkStr) > 0 {
+	if checkStr, _ := conf.FieldString(ruiFieldCheck); checkStr != "" {
 		if check, err = mgr.BloblEnvironment().NewMapping(checkStr); err != nil {
 			return nil, fmt.Errorf("failed to parse check query: %w", err)
 		}
 	}
 
 	var idleTimeout time.Duration = -1
-	if idleTimeoutStr, _ := conf.FieldString(ruiFieldIdleTimeout); len(idleTimeoutStr) > 0 {
+	if idleTimeoutStr, _ := conf.FieldString(ruiFieldIdleTimeout); idleTimeoutStr != "" {
 		if idleTimeout, err = time.ParseDuration(idleTimeoutStr); err != nil {
 			return nil, fmt.Errorf("failed to parse idle_timeout string: %v", err)
 		}

@@ -311,8 +311,6 @@ func (a *amazonS3Writer) Connect(ctx context.Context) error {
 		o.UsePathStyle = a.conf.UsePathStyle
 	})
 	a.uploader = manager.NewUploader(client)
-
-	a.log.Infof("Uploading message parts as objects to Amazon S3 bucket: %v\n", a.conf.Bucket)
 	return nil
 }
 
@@ -336,35 +334,35 @@ func (a *amazonS3Writer) WriteBatch(wctx context.Context, msg service.MessageBat
 		if err != nil {
 			return fmt.Errorf("content encoding interpolation: %w", err)
 		}
-		if len(ce) > 0 {
+		if ce != "" {
 			contentEncoding = aws.String(ce)
 		}
 		var cacheControl *string
 		if ce, err = msg.TryInterpolatedString(i, a.conf.CacheControl); err != nil {
 			return fmt.Errorf("cache control interpolation: %w", err)
 		}
-		if len(ce) > 0 {
+		if ce != "" {
 			cacheControl = aws.String(ce)
 		}
 		var contentDisposition *string
 		if ce, err = msg.TryInterpolatedString(i, a.conf.ContentDisposition); err != nil {
 			return fmt.Errorf("content disposition interpolation: %w", err)
 		}
-		if len(ce) > 0 {
+		if ce != "" {
 			contentDisposition = aws.String(ce)
 		}
 		var contentLanguage *string
 		if ce, err = msg.TryInterpolatedString(i, a.conf.ContentLanguage); err != nil {
 			return fmt.Errorf("content language interpolation: %w", err)
 		}
-		if len(ce) > 0 {
+		if ce != "" {
 			contentLanguage = aws.String(ce)
 		}
 		var websiteRedirectLocation *string
 		if ce, err = msg.TryInterpolatedString(i, a.conf.WebsiteRedirectLocation); err != nil {
 			return fmt.Errorf("website redirect location interpolation: %w", err)
 		}
-		if len(ce) > 0 {
+		if ce != "" {
 			websiteRedirectLocation = aws.String(ce)
 		}
 
