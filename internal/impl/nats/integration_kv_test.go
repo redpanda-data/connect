@@ -350,7 +350,7 @@ cache_resources:
 
 			msg, err := result[0].AsBytes()
 			require.NoError(t, err)
-			expected, err := json.Marshal([]any{"blob", "bobs"})
+			expected, err := json.Marshal([]any{"blob"})
 			require.NoError(t, err)
 			assert.JSONEq(t, string(expected), string(msg))
 		})

@@ -14,10 +14,9 @@ import (
 )
 
 const (
-	kvpFieldOperation  = "operation"
-	kvpFieldKey        = "key"
-	kvpFieldRevision   = "revision"
-	kvpFieldKeysFilter = "keys_filter"
+	kvpFieldOperation = "operation"
+	kvpFieldKey       = "key"
+	kvpFieldRevision  = "revision"
 )
 
 type kvpOperationType string
@@ -90,33 +89,22 @@ This processor adds the following metadata fields to each message, depending on 
 			service.NewStringAnnotatedEnumField(kvpFieldOperation, kvpOperations).
 				Description("The operation to perform on the KV bucket."),
 			service.NewInterpolatedStringField(kvpFieldKey).
-				Description("The key for each message.").
-				Default("").
+				Description("The key for each message. Supports [wildcards](https://docs.nats.io/nats-concepts/subjects#wildcards) for the `history` and `keys` operations.").
 				Example("foo").
 				Example("foo.bar.baz").
-				Example(`foo.${! json("meta.type") }`),
+				Example("foo.*").
+				Example("foo.>").
+				Example(`foo.${! json("meta.type") }`).LintRule(`if this == "" {[ "'key' must be set to a non-empty string" ]}`),
 			service.NewInterpolatedStringField(kvpFieldRevision).
 				Description("The revision of the key to operate on. Used for `get_revision` and `update` operations.").
 				Example("42").
 				Example(`${! @nats_kv_revision }`).
 				Optional().
 				Advanced(),
-			service.NewInterpolatedStringField(kvpFieldKeysFilter).
-				Description("The filter to apply when using the `keys` operation. Supports [wildcards](https://docs.nats.io/nats-concepts/subjects#wildcards). All keys are selected when not set.").
-				Example("foo").
-				Example("foo.*").
-				Example("foo.>").
-				Example(`${! json("foo") }.bar`).
-				Optional().
-				Advanced(),
 		}...)...).
 		LintRule(`root = match {
       ["get_revision", "update"].contains(this.operation) && !this.exists("revision") => [ "'revision' must be set when operation is '" + this.operation + "'" ],
       !["get_revision", "update"].contains(this.operation) && this.exists("revision") => [ "'revision' cannot be set when operation is '" + this.operation + "'" ],
-      this.key == "" && this.operation != "keys" => [ "'key' must be set when operation is '" + this.operation + "'" ],
-      this.key != "" && this.operation == "keys" => [ "'key' cannot be set when operation is '" + this.operation + "'" ],
-	  this.exists("keys_filter") && this.keys_filter == "" => [ "'keys_filter' cannot be set to an empty string" ],
-	  this.exists("keys_filter") && this.keys_filter != "" && this.operation != "keys" => [ "'keys_filter' cannot be set when operation is '" + this.operation + "'" ],
     }`)
 }
 
@@ -138,7 +126,6 @@ type kvProcessor struct {
 	operation   kvpOperationType
 	key         *service.InterpolatedString
 	revision    *service.InterpolatedString
-	keysFilter  *service.InterpolatedString
 
 	log *service.Logger
 
@@ -176,12 +163,6 @@ func newKVProcessor(conf *service.ParsedConfig, mgr *service.Resources) (*kvProc
 
 	if conf.Contains(kvpFieldRevision) {
 		if p.revision, err = conf.FieldInterpolatedString(kvpFieldRevision); err != nil {
-			return nil, err
-		}
-	}
-
-	if conf.Contains(kvpFieldKeysFilter) {
-		if p.keysFilter, err = conf.FieldInterpolatedString(kvpFieldKeysFilter); err != nil {
 			return nil, err
 		}
 	}
@@ -303,15 +284,8 @@ func (p *kvProcessor) Process(ctx context.Context, msg *service.Message) (servic
 		return batch, nil
 
 	case kvpOperationKeys:
-		keysFilter := ">" // Select all keys by default
-		if p.keysFilter != nil {
-			if keysFilter, err = p.keysFilter.TryString(msg); err != nil {
-				return nil, err
-			}
-		}
-
 		// `kv.ListKeys()` does not allow users to specify a key filter, so we call `kv.Watch()` directly.
-		watcher, err := kv.Watch(ctx, keysFilter, []jetstream.WatchOpt{jetstream.IgnoreDeletes(), jetstream.MetaOnly()}...)
+		watcher, err := kv.Watch(ctx, key, []jetstream.WatchOpt{jetstream.IgnoreDeletes(), jetstream.MetaOnly()}...)
 		if err != nil {
 			return nil, err
 		}

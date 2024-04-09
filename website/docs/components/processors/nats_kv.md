@@ -37,7 +37,7 @@ nats_kv:
   urls: [] # No default (required)
   bucket: my_kv_bucket # No default (required)
   operation: "" # No default (required)
-  key: ""
+  key: foo # No default (required)
 ```
 
 </TabItem>
@@ -50,9 +50,8 @@ nats_kv:
   urls: [] # No default (required)
   bucket: my_kv_bucket # No default (required)
   operation: "" # No default (required)
-  key: ""
+  key: foo # No default (required)
   revision: "42" # No default (optional)
-  keys_filter: foo # No default (optional)
   tls:
     enabled: false
     skip_cert_verify: false
@@ -193,12 +192,11 @@ Type: `string`
 
 ### `key`
 
-The key for each message.
+The key for each message. Supports [wildcards](https://docs.nats.io/nats-concepts/subjects#wildcards) for the `history` and `keys` operations.
 This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
 
 
 Type: `string`  
-Default: `""`  
 
 ```yml
 # Examples
@@ -206,6 +204,10 @@ Default: `""`
 key: foo
 
 key: foo.bar.baz
+
+key: foo.*
+
+key: foo.>
 
 key: foo.${! json("meta.type") }
 ```
@@ -224,26 +226,6 @@ Type: `string`
 revision: "42"
 
 revision: ${! @nats_kv_revision }
-```
-
-### `keys_filter`
-
-The filter to apply when using the `keys` operation. Supports [wildcards](https://docs.nats.io/nats-concepts/subjects#wildcards). All keys are selected when not set.
-This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
-
-
-Type: `string`  
-
-```yml
-# Examples
-
-keys_filter: foo
-
-keys_filter: foo.*
-
-keys_filter: foo.>
-
-keys_filter: ${! json("foo") }.bar
 ```
 
 ### `tls`
