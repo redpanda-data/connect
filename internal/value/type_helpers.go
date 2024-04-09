@@ -817,59 +817,59 @@ func IClone(root any) any {
 // - The types are both either a string or byte slice and the underlying data is the same
 // - The types are both numerical and have the same value
 // - Both types are a matching slice or map containing values matching these same conditions.
-func ICompare(left, right any) bool {
+func ICompare(left, right any) (bool, error) {
 	if left == nil && right == nil {
-		return true
+		return true, nil
 	}
 	switch lhs := RestrictForComparison(left).(type) {
 	case string:
 		rhs, err := IGetString(right)
 		if err != nil {
-			return false
+			return false, err
 		}
-		return lhs == rhs
+		return lhs == rhs, nil
 	case float64:
 		rhs, err := IGetNumber(right)
 		if err != nil {
-			return false
+			return false, err
 		}
-		return lhs == rhs
+		return lhs == rhs, nil
 	case bool:
 		rhs, err := IGetBool(right)
 		if err != nil {
-			return false
+			return false, err
 		}
-		return lhs == rhs
+		return lhs == rhs, nil
 	case []any:
 		rhs, matches := right.([]any)
 		if !matches {
-			return false
+			return false, NewTypeError(rhs, ITypeOf(rhs))
 		}
 		if len(lhs) != len(rhs) {
-			return false
+			return false, errors.New("length mismatch")
 		}
 		for i, vl := range lhs {
-			if !ICompare(vl, rhs[i]) {
-				return false
+			if val, err := ICompare(vl, rhs[i]); !val {
+				return false, err
 			}
 		}
-		return true
+		return true, nil
 	case map[string]any:
 		rhs, matches := right.(map[string]any)
 		if !matches {
-			return false
+			return false, NewTypeError(rhs, ITypeOf(rhs))
 		}
 		if len(lhs) != len(rhs) {
-			return false
+			return false, errors.New("length mismatch")
 		}
 		for k, vl := range lhs {
-			if !ICompare(vl, rhs[k]) {
-				return false
+			if val, err := ICompare(vl, rhs[k]); !val {
+				return false, err
 			}
 		}
-		return true
+		return true, nil
 	}
-	return false
+	return false, NewTypeError(left, ITypeOf(left))
 }
 
 func IGetStringMap(v any) (map[string]string, error) {

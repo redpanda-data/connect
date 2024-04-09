@@ -300,7 +300,7 @@ func (m MetadataEqualsCondition) Check(fs fs.FS, dir string, p *message.Part) er
 		if !exists {
 			return fmt.Errorf("metadata key '%v' expected but not found", k)
 		}
-		if !value.ICompare(exp, act) {
+		if val, _ := value.ICompare(exp, act); !val {
 			return fmt.Errorf("metadata key '%v' mismatch\n  expected: %v\n  received: %v", k, blue(exp), red(act))
 		}
 	}
