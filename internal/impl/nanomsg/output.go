@@ -152,12 +152,6 @@ func (s *nanomsgWriter) Connect(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-
-	if s.bind {
-		s.log.Infof("Sending nanomsg messages to bound URLs: %s", s.urls)
-	} else {
-		s.log.Infof("Sending nanomsg messages to connected URLs: %s", s.urls)
-	}
 	s.socket = socket
 	return nil
 }

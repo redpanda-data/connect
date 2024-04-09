@@ -10,7 +10,6 @@ import (
 )
 
 func init() {
-
 	maxUint := ^uint64(0)
 	maxInt := maxUint >> 1
 

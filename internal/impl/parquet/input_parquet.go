@@ -162,7 +162,7 @@ func (r *parquetReader) getOpenFile() (*openParquetFile, error) {
 		rdr:    rdr,
 	}
 
-	r.log.Infof("Consuming parquet data from file '%v'", path)
+	r.log.Debugf("Consuming parquet data from file '%v'", path)
 	return r.openFile, nil
 }
 

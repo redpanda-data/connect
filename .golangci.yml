@@ -8,7 +8,10 @@ issues:
   include:
     - EXC0012
     - EXC0014
-
+  exclude-rules:
+    - path: _test.go
+      linters:
+        - bodyclose
 linters-settings:
   errcheck:
     exclude-functions:
@@ -60,3 +63,6 @@ linters:
     # - misspell
     # - prealloc
     - mirror
+    - rowserrcheck
+    - bodyclose
+    - nolintlint

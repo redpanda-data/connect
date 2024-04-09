@@ -230,7 +230,7 @@ func (l *List[T]) Close(ctx context.Context) error {
 // TODO: Ensure docs around auto retry and all implementations are okay with
 // nacks on termination, otherwise we leave them.
 //
-// nolint:unused // Keeping this around for now.
+//nolint:unused // Keeping this around for now.
 func (l *List[T]) nackAllPending() error {
 	l.cond.L.Lock()
 	defer l.cond.L.Unlock()

@@ -109,7 +109,6 @@ func (n *nsqWriter) Connect(ctx context.Context) error {
 		return err
 	}
 	n.producer = producer
-	n.log.Infof("Sending NSQ messages to address: %s", n.address)
 	return nil
 }
 

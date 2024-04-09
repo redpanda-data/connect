@@ -76,22 +76,20 @@ pipeline:
 
 ## Attempt Until Success
 
-It's possible to reattempt a processor for a particular message until it is successful with a [`while`][processor.while] processor:
+It's possible to reattempt a processor for a particular message until it is successful with a [`retry`][processor.retry] processor:
 
 ```yaml
 pipeline:
   processors:
-    - for_each:
-      - while:
-          at_least_once: true
-          max_loops: 0 # Set this greater than zero to cap the number of attempts
-          check: errored()
-          processors:
-            - catch: [] # Wipe any previous error
-            - resource: foo # Attempt this processor until success
+    - retry:
+        backoff:
+          initial_interval: 1s
+          max_interval: 5s
+          max_elapsed_time: 30s
+        processors:
+          # Attempt this processor until success, or the maximum elapsed time is reached.
+          - resource: foo
 ```
-
-This loop will block the pipeline and prevent the blocking message from being acknowledged. It is therefore usually a good idea in practice to use the `max_loops` field to set a limit to the number of attempts to make so that the pipeline can unblock itself without intervention.
 
 ## Drop Failed Messages
 
@@ -144,7 +142,7 @@ When the source of a rejected message is a sequential input without support for 
 [processors]: /docs/components/processors/about
 [processor.mapping]: /docs/components/processors/mapping
 [processor.switch]: /docs/components/processors/switch
-[processor.while]: /docs/components/processors/while
+[processor.retry]: /docs/components/processors/retry
 [processor.for_each]: /docs/components/processors/for_each
 [processor.catch]: /docs/components/processors/catch
 [processor.try]: /docs/components/processors/try

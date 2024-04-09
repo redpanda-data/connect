@@ -70,6 +70,9 @@ pipeline:
 
 output:
   stdout: {}
+
+logger:
+  level: off
 `)
 	if err != nil {
 		panic(err)

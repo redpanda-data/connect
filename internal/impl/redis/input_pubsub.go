@@ -95,8 +95,6 @@ func (r *redisPubSubReader) Connect(ctx context.Context) error {
 		return err
 	}
 
-	r.log.Infof("Receiving Redis pub/sub messages from channels: %v\n", r.channels)
-
 	if r.usePatterns {
 		r.pubsub = r.client.PSubscribe(ctx, r.channels...)
 	} else {
