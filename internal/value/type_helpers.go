@@ -187,6 +187,17 @@ func IGetInt(v any) (int64, error) {
 	return 0, NewTypeError(v, TNumber)
 }
 
+// IGetUInt takes a boxed value and attempts to extract an unsigned integer
+// (uint64) from it.
+func IGetUInt(v any) (uint64, error) {
+	switch v.(type) {
+	case int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64, float32, float64, json.Number:
+		// We're passing through here because it handles out of bounds issues.
+		return IToUint(v)
+	}
+	return 0, NewTypeError(v, TNumber)
+}
+
 // IGetBool takes a boxed value and attempts to extract a boolean from it.
 func IGetBool(v any) (bool, error) {
 	switch t := v.(type) {
