@@ -67,6 +67,8 @@ page within the studio application.`[1:],
 				os.Exit(1)
 			}
 
+			defer res.Body.Close()
+
 			if res.StatusCode < 200 || res.StatusCode > 299 {
 				resBytes, _ := io.ReadAll(res.Body)
 				fmt.Fprintf(os.Stderr, "Sync request failed (%v): %v\n", res.StatusCode, string(resBytes))

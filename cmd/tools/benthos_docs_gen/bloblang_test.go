@@ -31,10 +31,7 @@ func TestFunctionExamples(t *testing.T) {
 	require.NoError(t, err)
 
 	key := "BENTHOS_TEST_BLOBLANG_FILE"
-	os.Setenv(key, tmpJSONFile.Name())
-	t.Cleanup(func() {
-		os.Unsetenv(key)
-	})
+	t.Setenv(key, tmpJSONFile.Name())
 
 	for _, spec := range query.FunctionDocs() {
 		spec := spec
@@ -89,10 +86,7 @@ func TestMethodExamples(t *testing.T) {
 	require.NoError(t, err)
 
 	key := "BENTHOS_TEST_BLOBLANG_SCHEMA_FILE"
-	os.Setenv(key, tmpJSONFile.Name())
-	t.Cleanup(func() {
-		os.Unsetenv(key)
-	})
+	t.Setenv(key, tmpJSONFile.Name())
 
 	for _, spec := range query.MethodDocs() {
 		spec := spec

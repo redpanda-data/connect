@@ -187,7 +187,7 @@ func amqp09WriterFromParsed(conf *service.ParsedConfig, mgr *service.Resources) 
 	}
 	for _, u := range urlStrs {
 		for _, splitURL := range strings.Split(u, ",") {
-			if trimmed := strings.TrimSpace(splitURL); len(trimmed) > 0 {
+			if trimmed := strings.TrimSpace(splitURL); trimmed != "" {
 				a.urls = append(a.urls, trimmed)
 			}
 		}
@@ -299,12 +299,7 @@ func (a *amqp09Writer) Connect(ctx context.Context) error {
 		if err := a.declareExchange(sExchange); err != nil {
 			a.log.Errorf("Failed to declare exchange: %w", err)
 		}
-
-		a.log.Infof("Sending AMQP messages to exchange: %s", sExchange)
-	} else {
-		a.log.Infof("Sending AMQP messages to dynamic interpolated exchange")
 	}
-
 	return nil
 }
 
@@ -499,7 +494,7 @@ func (a *amqp09Writer) Write(ctx context.Context, msg *service.Message) error {
 		select {
 		case _, open := <-returnChan:
 			if !open {
-				return fmt.Errorf("acknowledgement not supported, ensure server supports immediate and mandatory flags")
+				return errors.New("acknowledgement not supported, ensure server supports immediate and mandatory flags")
 			}
 			return component.ErrNoAck
 		default:

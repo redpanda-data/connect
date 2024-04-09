@@ -306,7 +306,7 @@ func TestSystemWindowCreation(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, `{"id":"4","ts":10.5}`, string(msgBytes))
 
-	assert.Len(t, w.pending, 0)
+	assert.Empty(t, w.pending)
 	assert.Equal(t, "1970-01-01T00:00:11Z", w.latestFlushedWindowEnd.Format(time.RFC3339Nano))
 
 	currentTS = time.Unix(11, 999999100).UTC()
@@ -315,7 +315,7 @@ func TestSystemWindowCreation(t *testing.T) {
 	resBatch, _, err = w.ReadBatch(smallWaitCtx)
 	done()
 	require.Error(t, err)
-	assert.Len(t, resBatch, 0)
+	assert.Empty(t, resBatch)
 	assert.Equal(t, "1970-01-01T00:00:12Z", w.latestFlushedWindowEnd.Format(time.RFC3339Nano))
 
 	err = w.WriteBatch(context.Background(), service.MessageBatch{
@@ -367,7 +367,7 @@ func TestSystemWindowCreationSliding(t *testing.T) {
 
 	assertBatchIndex := func(i int, batch service.MessageBatch, exp string) {
 		t.Helper()
-		require.True(t, len(batch) > i)
+		require.Greater(t, len(batch), i)
 		msgBytes, err := batch[i].AsBytes()
 		require.NoError(t, err)
 		assert.Equal(t, exp, string(msgBytes))

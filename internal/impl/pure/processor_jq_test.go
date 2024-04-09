@@ -31,7 +31,7 @@ jq:
 		[]byte(`{"foo":{"bar":2}}`),
 	})
 	msgs, res := jSet.ProcessBatch(context.Background(), msgIn)
-	require.Nil(t, res)
+	require.NoError(t, res)
 	require.Len(t, msgs, 1)
 	for i, part := range message.GetAllBytes(msgs[0]) {
 		assert.Equal(t, strconv.Itoa(i), string(part))
@@ -51,7 +51,7 @@ jq:
 	msgIn := message.QuickBatch([][]byte{[]byte("this is bad json")})
 	msgs, res := jSet.ProcessBatch(context.Background(), msgIn)
 
-	require.Nil(t, res)
+	require.NoError(t, res)
 	require.Len(t, msgs, 1)
 
 	assert.Equal(t, "this is bad json", string(message.GetAllBytes(msgs[0])[0]))
@@ -75,7 +75,7 @@ jq:
 	msgIn := message.QuickBatch(make([][]byte, 1))
 	msgIn.Get(0).SetStructured(ogObj.Data())
 	msgs, res := jSet.ProcessBatch(context.Background(), msgIn)
-	require.Nil(t, res)
+	require.NoError(t, res)
 	require.Len(t, msgs, 1)
 
 	assert.Equal(t, `{"foo":{"bar":"baz","original":{"content":"is this"}}}`, string(message.GetAllBytes(msgs[0])[0]))

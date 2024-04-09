@@ -118,7 +118,7 @@ func TestLiteralParser(t *testing.T) {
 				Functions: query.AllFunctions,
 				Methods:   query.AllMethods,
 			})([]rune(test.mapping))
-			if len(test.parseErr) > 0 {
+			if test.parseErr != "" {
 				assert.Equal(t, test.parseErr, res.Err.Error())
 				return
 			}
@@ -129,7 +129,7 @@ func TestLiteralParser(t *testing.T) {
 			result, err := q.Exec(query.FunctionContext{
 				Index: 0, MsgBatch: message.QuickBatch(nil),
 			}.WithValueFunc(func() *any { return test.value }))
-			if len(test.err) > 0 {
+			if test.err != "" {
 				assert.EqualError(t, err, test.err)
 			} else {
 				assert.Equal(t, test.result, result)

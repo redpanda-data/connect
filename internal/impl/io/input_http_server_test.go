@@ -75,7 +75,7 @@ http_server:
 			res, err := http.Post(
 				server.URL+"/testpost",
 				"application/octet-stream",
-				bytes.NewBuffer([]byte(input)),
+				bytes.NewBufferString(input),
 			)
 			if err != nil {
 				t.Error(err)
@@ -125,7 +125,7 @@ http_server:
 			if res, err := http.Post(
 				server.URL+"/testpost",
 				"multipart/mixed; boundary=foo",
-				bytes.NewBuffer([]byte(testStr)),
+				bytes.NewBufferString(testStr),
 			); err != nil {
 				t.Error(err)
 			} else if res.StatusCode != 200 {
@@ -158,7 +158,7 @@ http_server:
 		// Send it as single part
 		go func(input, output string) {
 			req, err := http.NewRequest(
-				"POST", server.URL+"/testpost", bytes.NewBuffer([]byte(input)))
+				"POST", server.URL+"/testpost", bytes.NewBufferString(input))
 			if err != nil {
 				t.Error(err)
 			}
@@ -689,7 +689,7 @@ http_server:
 	res, err = http.Post(
 		server.URL+"/testpost",
 		"application/octet-stream",
-		bytes.NewBuffer([]byte("hello world")),
+		bytes.NewBufferString("hello world"),
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -752,7 +752,7 @@ http_server:
 	res, err = http.Post(
 		server.URL+"/testpost",
 		"application/octet-stream",
-		bytes.NewBuffer([]byte("hello world")),
+		bytes.NewBufferString("hello world"),
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -764,7 +764,7 @@ http_server:
 	res, err = http.Post(
 		server.URL+"/testpost",
 		"application/octet-stream",
-		bytes.NewBuffer([]byte("hello world")),
+		bytes.NewBufferString("hello world"),
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -991,7 +991,7 @@ http_server:
 	go func() {
 		defer wg.Done()
 
-		req, err := http.NewRequest(http.MethodPost, server.URL+"/testpost", bytes.NewBuffer([]byte(input)))
+		req, err := http.NewRequest(http.MethodPost, server.URL+"/testpost", bytes.NewBufferString(input))
 		if err != nil {
 			t.Error(err)
 		}
@@ -1071,7 +1071,7 @@ func createMultipart(payloads []string, contentType string) (hdr string, bodyByt
 func readMultipart(res *http.Response) ([]string, error) {
 	var params map[string]string
 	var err error
-	if contentType := res.Header.Get("Content-Type"); len(contentType) > 0 {
+	if contentType := res.Header.Get("Content-Type"); contentType != "" {
 		if _, params, err = mime.ParseMediaType(contentType); err != nil {
 			return nil, err
 		}
@@ -1217,7 +1217,7 @@ http_server:
 		res, err := http.Post(
 			server.URL+"/testpost",
 			"application/octet-stream",
-			bytes.NewBuffer([]byte(input)),
+			bytes.NewBufferString(input),
 		)
 		if err != nil {
 			t.Error(err)
@@ -1239,7 +1239,7 @@ http_server:
 		res, err = http.Post(
 			server.URL+"/testpost",
 			"application/octet-stream",
-			bytes.NewBuffer([]byte(input)),
+			bytes.NewBufferString(input),
 		)
 		if err != nil {
 			t.Error(err)

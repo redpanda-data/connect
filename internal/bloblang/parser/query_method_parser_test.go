@@ -569,7 +569,7 @@ func TestMethodMaps(t *testing.T) {
 				Index:    test.index,
 				MsgBatch: msg,
 			})
-			if len(test.err) > 0 {
+			if test.err != "" {
 				require.EqualError(t, err, test.err)
 			} else {
 				require.NoError(t, err)

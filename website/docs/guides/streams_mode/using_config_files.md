@@ -121,7 +121,7 @@ $ curl http://localhost:4195/streams/foo | jq '.'
 }
 ```
 
-You can then send data to the stream via it's namespaced URL:
+You can then send data to the stream via its namespaced URL:
 
 ```
 $ curl http://localhost:4195/foo/post -d '{"user":{"id":"foo"},"body":{"content":"bar"}}'

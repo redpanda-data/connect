@@ -203,7 +203,7 @@ workflow:
 			require.NoError(t, err)
 
 			p, err := mock.NewManager().NewProcessor(conf)
-			if len(test.errContains) > 0 {
+			if test.errContains != "" {
 				require.Error(t, err)
 				assert.Contains(t, err.Error(), test.errContains)
 			} else {
@@ -511,8 +511,8 @@ workflow:
 			}
 
 			msgs, res := p.ProcessBatch(context.Background(), inputMsg.ShallowCopy())
-			if len(test.err) > 0 {
-				require.NotNil(t, res)
+			if test.err != "" {
+				require.Error(t, res)
 				require.EqualError(t, res, test.err)
 			} else {
 				require.Len(t, msgs, 1)
@@ -705,8 +705,8 @@ workflow:
 			}
 
 			msgs, res := p.ProcessBatch(context.Background(), message.QuickBatch(parts))
-			if len(test.err) > 0 {
-				require.NotNil(t, res)
+			if test.err != "" {
+				require.Error(t, res)
 				require.EqualError(t, res, test.err)
 			} else {
 				require.Len(t, msgs, 1)
@@ -788,7 +788,7 @@ workflow:
 					}
 
 					msgs, res := p.ProcessBatch(context.Background(), message.QuickBatch(parts))
-					require.Nil(t, res)
+					require.NoError(t, res)
 					require.Len(t, msgs, 1)
 					var actual []string
 					for _, b := range message.GetAllBytes(msgs[0]) {
@@ -976,8 +976,8 @@ workflow:
 			}
 
 			msgs, res := p.ProcessBatch(context.Background(), message.QuickBatch(parts))
-			if len(test.err) > 0 {
-				require.NotNil(t, res)
+			if test.err != "" {
+				require.Error(t, res)
 				require.EqualError(t, res, test.err)
 			} else {
 				require.Len(t, msgs, 1)

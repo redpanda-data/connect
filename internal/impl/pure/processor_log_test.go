@@ -230,7 +230,7 @@ log:
 	)})
 	expMsgs := []message.Batch{input}
 	actMsgs, res := l.ProcessBatch(context.Background(), input)
-	require.Nil(t, res)
+	require.NoError(t, res)
 	assert.Equal(t, expMsgs, actMsgs)
 
 	assert.Equal(t, []string{"hello world"}, logMock.infos)

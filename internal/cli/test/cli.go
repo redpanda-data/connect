@@ -44,7 +44,7 @@ https://benthos.dev/docs/configuration/unit_testing`[1:],
 				fmt.Printf("Failed to resolve resource glob pattern: %v\n", err)
 				os.Exit(1)
 			}
-			if logLevel := c.String("log"); len(logLevel) > 0 {
+			if logLevel := c.String("log"); logLevel != "" {
 				logConf := log.NewConfig()
 				logConf.LogLevel = logLevel
 				logger, err := log.New(os.Stdout, ifs.OS(), logConf)

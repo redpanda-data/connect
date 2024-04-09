@@ -38,7 +38,7 @@ func Run() {
 		os.Exit(1)
 	}
 
-	if confStr := os.Getenv("BENTHOS_CONFIG"); len(confStr) > 0 {
+	if confStr := os.Getenv("BENTHOS_CONFIG"); confStr != "" {
 		confBytes, err := config.ReplaceEnvVariables([]byte(confStr), os.LookupEnv)
 		if err != nil {
 			// TODO: Make this configurable somehow maybe, along with linting

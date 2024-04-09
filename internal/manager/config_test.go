@@ -46,26 +46,20 @@ rate_limit_resources:
 			validateFn: func(tb testing.TB, v manager.ResourceConfig) {
 				tb.Helper()
 
-				require.Len(tb, v.ResourceCaches, 1)
-				require.Len(tb, v.ResourceRateLimits, 1)
-				require.Len(tb, v.ResourceInputs, 1)
-				require.Len(tb, v.ResourceOutputs, 1)
-				require.Len(tb, v.ResourceProcessors, 1)
+				assert.Equal(tb, "a", v.ResourceInputs[0].Label)
+				assert.Equal(tb, "generate", v.ResourceInputs[0].Type)
 
-				assert.Equal(tb, v.ResourceInputs[0].Label, "a")
-				assert.Equal(tb, v.ResourceInputs[0].Type, "generate")
+				assert.Equal(tb, "b", v.ResourceProcessors[0].Label)
+				assert.Equal(tb, "mapping", v.ResourceProcessors[0].Type)
 
-				assert.Equal(tb, v.ResourceProcessors[0].Label, "b")
-				assert.Equal(tb, v.ResourceProcessors[0].Type, "mapping")
+				assert.Equal(tb, "c", v.ResourceOutputs[0].Label)
+				assert.Equal(tb, "reject", v.ResourceOutputs[0].Type)
 
-				assert.Equal(tb, v.ResourceOutputs[0].Label, "c")
-				assert.Equal(tb, v.ResourceOutputs[0].Type, "reject")
+				assert.Equal(tb, "d", v.ResourceCaches[0].Label)
+				assert.Equal(tb, "memory", v.ResourceCaches[0].Type)
 
-				assert.Equal(tb, v.ResourceCaches[0].Label, "d")
-				assert.Equal(tb, v.ResourceCaches[0].Type, "memory")
-
-				assert.Equal(tb, v.ResourceRateLimits[0].Label, "e")
-				assert.Equal(tb, v.ResourceRateLimits[0].Type, "local")
+				assert.Equal(tb, "e", v.ResourceRateLimits[0].Label)
+				assert.Equal(tb, "local", v.ResourceRateLimits[0].Type)
 			},
 		},
 	}

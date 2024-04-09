@@ -220,10 +220,10 @@ func (c *ComponentSpec) AsMarkdown(prov Provider, nest bool, fullConfigExample a
 		return nil, err
 	}
 
-	if len(c.Description) > 0 && c.Description[0] == '\n' {
+	if c.Description != "" && c.Description[0] == '\n' {
 		ctx.Description = c.Description[1:]
 	}
-	if len(c.Footnotes) > 0 && c.Footnotes[0] == '\n' {
+	if c.Footnotes != "" && c.Footnotes[0] == '\n' {
 		ctx.Footnotes = c.Footnotes[1:]
 	}
 

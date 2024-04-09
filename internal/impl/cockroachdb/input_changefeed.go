@@ -128,7 +128,7 @@ func newCRDBChangefeedInputFromConfig(conf *service.ParsedConfig, res *service.R
 
 	changeFeedOptions := ""
 	if len(options) > 0 {
-		changeFeedOptions = fmt.Sprintf(" WITH %s", strings.Join(options, ", "))
+		changeFeedOptions = " WITH " + strings.Join(options, ", ")
 	}
 
 	c.statement = fmt.Sprintf("EXPERIMENTAL CHANGEFEED FOR %s%s", strings.Join(tables, ", "), changeFeedOptions)
@@ -198,6 +198,11 @@ func (c *crdbChangefeedInput) closeConnection() {
 	defer c.dbMut.Unlock()
 
 	if c.rows != nil {
+		err := c.rows.Err()
+		if err != nil {
+			c.logger.With("err", err).Warn("unexpected error from cockroachdb before closing")
+		}
+
 		c.rows.Close()
 		c.rows = nil
 	}

@@ -204,7 +204,7 @@ pipeline:
 	require.Len(t, procs, 4)
 
 	msgs, res := processor.ExecuteAll(tCtx, procs, message.QuickBatch([][]byte{[]byte("starts with")}))
-	require.Nil(t, res)
+	require.NoError(t, res)
 	require.Len(t, msgs, 1)
 	require.Equal(t, 1, msgs[0].Len())
 
@@ -254,7 +254,7 @@ pipeline:
 	require.Len(t, procs, 4)
 
 	msgs, res := processor.ExecuteAll(tCtx, procs, message.QuickBatch([][]byte{[]byte("starts with")}))
-	require.Nil(t, res)
+	require.NoError(t, res)
 	require.Len(t, msgs, 1)
 	require.Equal(t, 1, msgs[0].Len())
 
@@ -304,7 +304,7 @@ pipeline:
 	require.Len(t, procs, 4)
 
 	msgs, res := processor.ExecuteAll(tCtx, procs, message.QuickBatch([][]byte{[]byte("starts with")}))
-	require.Nil(t, res)
+	require.NoError(t, res)
 	require.Len(t, msgs, 1)
 	require.Equal(t, 1, msgs[0].Len())
 

@@ -221,7 +221,7 @@ func (h *Client) ResponseToBatch(res *http.Response) (service.MessageBatch, erro
 	var mediaType string
 	var params map[string]string
 	var err error
-	if contentType := res.Header.Get("Content-Type"); len(contentType) > 0 {
+	if contentType := res.Header.Get("Content-Type"); contentType != "" {
 		if mediaType, params, err = mime.ParseMediaType(contentType); err != nil {
 			h.log.Warnf("Failed to parse media type from Content-Type header: %v\n", err)
 		}

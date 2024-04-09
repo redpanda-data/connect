@@ -154,7 +154,7 @@ func (k *kafkaReader) connectExplicitTopics(ctx context.Context, config *sarama.
 	if client, err = sarama.NewClient(k.addresses, config); err != nil {
 		return err
 	}
-	if len(k.consumerGroup) > 0 {
+	if k.consumerGroup != "" {
 		if coordinator, err = client.Coordinator(k.consumerGroup); err != nil {
 			return err
 		}
@@ -244,8 +244,6 @@ func (k *kafkaReader) connectExplicitTopics(ctx context.Context, config *sarama.
 			partConsumers = append(partConsumers, partConsumer)
 			go k.runPartitionConsumer(ctx, &consumerWG, topic, partition, partConsumer)
 		}
-
-		k.mgr.Logger().Infof("Consuming kafka topic %v, partitions %v from brokers %s as group '%v'\n", topic, partitions, k.addresses, k.consumerGroup)
 	}
 
 	doneCtx, doneFn := context.WithCancel(context.Background())

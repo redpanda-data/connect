@@ -100,7 +100,7 @@ func getTestProm(t *testing.T) (*Metrics, http.HandlerFunc) {
 func getPage(t *testing.T, handler http.HandlerFunc) string {
 	t.Helper()
 
-	req := httptest.NewRequest("GET", "http://example.com/foo", nil)
+	req := httptest.NewRequest(http.MethodGet, "http://example.com/foo", http.NoBody)
 	w := httptest.NewRecorder()
 	handler(w, req)
 

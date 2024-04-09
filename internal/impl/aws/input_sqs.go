@@ -179,8 +179,6 @@ func (a *awsSQSReader) Connect(ctx context.Context) error {
 		wg.Wait()
 		a.closeSignal.ShutdownComplete()
 	}()
-
-	a.log.Infof("Receiving Amazon SQS messages from URL: %v\n", a.conf.URL)
 	return nil
 }
 
@@ -261,12 +259,12 @@ func (a *awsSQSReader) ackLoop(wg *sync.WaitGroup, inFlightTracker *sqsInFlightT
 	closeNowCtx, done := a.closeSignal.CloseNowCtx(context.Background())
 	defer done()
 
-	flushFinishedHandles := func(m map[string]string, delete bool) {
+	flushFinishedHandles := func(m map[string]string, erase bool) {
 		handles := flushMapToHandles(m)
 		if len(handles) == 0 {
 			return
 		}
-		if delete {
+		if erase {
 			if err := a.deleteMessages(closeNowCtx, handles...); err != nil {
 				a.log.Errorf("Failed to delete messages: %v", err)
 			}
@@ -283,7 +281,7 @@ func (a *awsSQSReader) ackLoop(wg *sync.WaitGroup, inFlightTracker *sqsInFlightT
 			return
 		}
 		if err := a.updateVisibilityMessages(closeNowCtx, timeoutSeconds, currentHandles...); err != nil {
-			a.log.Errorf("Failed to update messages visibility timeout: %v", err)
+			a.log.Debugf("Failed to update messages visibility timeout: %v", err)
 		}
 	}
 
@@ -468,7 +466,7 @@ func (a *awsSQSReader) updateVisibilityMessages(ctx context.Context, timeout int
 			return err
 		}
 		for _, fail := range response.Failed {
-			a.log.Errorf("Failed to update consumed SQS message '%v' visibility, response code: %v\n", *fail.Id, *fail.Code)
+			a.log.Debugf("Failed to update consumed SQS message '%v' visibility, response code: %v\n", *fail.Id, *fail.Code)
 		}
 	}
 	return nil

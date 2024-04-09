@@ -497,7 +497,7 @@ func TestExec(t *testing.T) {
 			res, err := test.mapping.Exec(query.FunctionContext{
 				MsgBatch: message.QuickBatch(nil),
 			}.WithValue(test.input))
-			if len(test.err) > 0 {
+			if test.err != "" {
 				require.EqualError(t, err, test.err)
 			} else {
 				assert.Equal(t, test.output, res)
@@ -506,7 +506,7 @@ func TestExec(t *testing.T) {
 			resString, err := test.mapping.ToString(query.FunctionContext{
 				MsgBatch: message.QuickBatch(nil),
 			}.WithValue(test.input))
-			if len(test.err) > 0 {
+			if test.err != "" {
 				require.EqualError(t, err, test.err)
 			} else {
 				require.NoError(t, err)
@@ -516,7 +516,7 @@ func TestExec(t *testing.T) {
 			resBytes, err := test.mapping.ToBytes(query.FunctionContext{
 				MsgBatch: message.QuickBatch(nil),
 			}.WithValue(test.input))
-			if len(test.err) > 0 {
+			if test.err != "" {
 				require.EqualError(t, err, test.err)
 			} else {
 				require.NoError(t, err)

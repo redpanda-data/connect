@@ -164,8 +164,8 @@ file:
 }
 
 func TestStreamBuilderEnvVarInterpolation(t *testing.T) {
-	os.Setenv("BENTHOS_TEST_ONE", "foo")
-	os.Setenv("BENTHOS_TEST_TWO", "warn")
+	t.Setenv("BENTHOS_TEST_ONE", "foo")
+	t.Setenv("BENTHOS_TEST_TWO", "warn")
 
 	b := service.NewStreamBuilder()
 	require.NoError(t, b.AddInputYAML(`

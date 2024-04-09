@@ -1,13 +1,14 @@
 package jaeger
 
 import (
+	"errors"
 	"fmt"
 	"net"
 	"strings"
 	"time"
 
 	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/exporters/jaeger" // nolint:staticcheck
+	"go.opentelemetry.io/otel/exporters/jaeger" //nolint:staticcheck
 	"go.opentelemetry.io/otel/sdk/resource"
 	tracesdk "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.7.0"
@@ -104,17 +105,17 @@ func init() {
 // NewJaeger creates and returns a new Jaeger object.
 func NewJaeger(config jaegerConfig) (trace.TracerProvider, error) {
 	var sampler tracesdk.Sampler
-	if sType := config.SamplerType; len(sType) > 0 {
+	if sType := config.SamplerType; sType != "" {
 		// TODO: https://github.com/open-telemetry/opentelemetry-go-contrib/pull/936
 		switch strings.ToLower(sType) {
 		case "const":
 			sampler = tracesdk.TraceIDRatioBased(config.SamplerParam)
 		case "probabilistic":
-			return nil, fmt.Errorf("probabalistic sampling is no longer available")
+			return nil, errors.New("probabalistic sampling is no longer available")
 		case "ratelimiting":
-			return nil, fmt.Errorf("rate limited sampling is no longer available")
+			return nil, errors.New("rate limited sampling is no longer available")
 		case "remote":
-			return nil, fmt.Errorf("remote sampling is no longer available")
+			return nil, errors.New("remote sampling is no longer available")
 		default:
 			return nil, fmt.Errorf("unrecognised sampler type: %v", sType)
 		}
@@ -154,7 +155,7 @@ func NewJaeger(config jaegerConfig) (trace.TracerProvider, error) {
 	}
 
 	var batchOpts []tracesdk.BatchSpanProcessorOption
-	if i := config.FlushInterval; len(i) > 0 {
+	if i := config.FlushInterval; i != "" {
 		flushInterval, err := time.ParseDuration(i)
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse flush interval '%s': %v", i, err)
