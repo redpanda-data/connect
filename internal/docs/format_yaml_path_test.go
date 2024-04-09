@@ -558,7 +558,7 @@ func TestGetPathDocs(t *testing.T) {
 				assert.Equal(t, test.resName, docs.Name)
 				assert.Equal(t, test.resType, string(docs.Type))
 				assert.Equal(t, test.resKind, string(docs.Kind))
-				assert.Equal(t, test.resChildren, len(docs.Children))
+				assert.Len(t, docs.Children, test.resChildren)
 			}
 		})
 	}

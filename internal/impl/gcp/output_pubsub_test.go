@@ -127,7 +127,7 @@ func TestPubSubOutput_MessageAttr(t *testing.T) {
 	require.NoError(t, err, "publish failed")
 
 	require.Len(t, fooTopic.Calls, 3)
-	require.Equal(t, fooTopic.Calls[2].Method, "Publish")
+	require.Equal(t, "Publish", fooTopic.Calls[2].Method)
 	require.Len(t, fooTopic.Calls[2].Arguments, 2)
 	psmsg := fooTopic.Calls[2].Arguments[1].(*pubsub.Message)
 	require.Equal(t, map[string]string{"keep_a": "good stuff"}, psmsg.Attributes)

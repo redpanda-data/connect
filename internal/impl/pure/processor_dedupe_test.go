@@ -38,7 +38,7 @@ dedupe:
 	msgIn = message.QuickBatch([][]byte{doc2})
 	msgOut, err = proc.ProcessBatch(context.Background(), msgIn)
 	require.NoError(t, err)
-	require.Len(t, msgOut, 0)
+	require.Empty(t, msgOut)
 
 	msgIn = message.QuickBatch([][]byte{doc3})
 	msgOut, err = proc.ProcessBatch(context.Background(), msgIn)
@@ -87,7 +87,7 @@ dedupe:
 
 	msgs, err := proc.ProcessBatch(context.Background(), message.QuickBatch([][]byte{[]byte("foo"), []byte("bar")}))
 	require.NoError(t, err)
-	assert.Len(t, msgs, 0)
+	assert.Empty(t, msgs)
 
 	conf, err = testutil.ProcessorFromYAML(`
 dedupe:

@@ -254,7 +254,7 @@ func TestCappedSequentialRandomLarge(t *testing.T) {
 		} else {
 			// Assert that the remaining offsets are all higher
 			for _, k := range indexes[index+1:] {
-				assert.True(t, k > *highestI)
+				assert.Greater(t, k, *highestI)
 			}
 		}
 	}

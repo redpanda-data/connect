@@ -187,7 +187,7 @@ func TestSchemaRegistryEncodeAvro(t *testing.T) {
 
 	require.NoError(t, encoder.Close(context.Background()))
 	encoder.cacheMut.Lock()
-	assert.Len(t, encoder.schemas, 0)
+	assert.Empty(t, encoder.schemas)
 	encoder.cacheMut.Unlock()
 }
 
@@ -269,7 +269,7 @@ func TestSchemaRegistryEncodeAvroRawJSON(t *testing.T) {
 
 	require.NoError(t, encoder.Close(context.Background()))
 	encoder.cacheMut.Lock()
-	assert.Len(t, encoder.schemas, 0)
+	assert.Empty(t, encoder.schemas)
 	encoder.cacheMut.Unlock()
 }
 
@@ -346,7 +346,7 @@ func TestSchemaRegistryEncodeAvroLogicalTypes(t *testing.T) {
 
 	require.NoError(t, encoder.Close(context.Background()))
 	encoder.cacheMut.Lock()
-	assert.Len(t, encoder.schemas, 0)
+	assert.Empty(t, encoder.schemas)
 	encoder.cacheMut.Unlock()
 }
 
@@ -423,7 +423,7 @@ func TestSchemaRegistryEncodeAvroRawJSONLogicalTypes(t *testing.T) {
 
 	require.NoError(t, encoder.Close(context.Background()))
 	encoder.cacheMut.Lock()
-	assert.Len(t, encoder.schemas, 0)
+	assert.Empty(t, encoder.schemas)
 	encoder.cacheMut.Unlock()
 }
 
@@ -656,7 +656,7 @@ func TestSchemaRegistryEncodeJSON(t *testing.T) {
 
 	require.NoError(t, encoder.Close(context.Background()))
 	encoder.cacheMut.Lock()
-	assert.Len(t, encoder.schemas, 0)
+	assert.Empty(t, encoder.schemas)
 	encoder.cacheMut.Unlock()
 }
 

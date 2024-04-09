@@ -134,7 +134,7 @@ func TestCloudWatchBasic(t *testing.T) {
 
 	cw.flush()
 
-	assert.Equal(t, 2, len(mockSvc.inputs))
+	assert.Len(t, mockSvc.inputs, 2)
 
 	assert.Equal(t, "Benthos", *mockSvc.inputs[0].Namespace)
 	assert.Equal(t, "Benthos", *mockSvc.inputs[1].Namespace)
@@ -221,9 +221,9 @@ func TestCloudWatchMoreThan20Items(t *testing.T) {
 
 	cw.flush()
 
-	assert.Equal(t, 2, len(mockSvc.inputs))
-	assert.Equal(t, 20, len(mockSvc.inputs[0].MetricData))
-	assert.Equal(t, 10, len(mockSvc.inputs[1].MetricData))
+	assert.Len(t, mockSvc.inputs, 2)
+	assert.Len(t, mockSvc.inputs[0].MetricData, 20)
+	assert.Len(t, mockSvc.inputs[1].MetricData, 10)
 
 	assert.Equal(t, "Benthos", *mockSvc.inputs[0].Namespace)
 	assert.Equal(t, "Benthos", *mockSvc.inputs[1].Namespace)
@@ -259,12 +259,12 @@ func TestCloudWatchMoreThan150Values(t *testing.T) {
 
 	cw.flush()
 
-	assert.Equal(t, 1, len(mockSvc.inputs))
-	assert.Equal(t, 1, len(mockSvc.inputs[0].MetricData))
+	assert.Len(t, mockSvc.inputs, 1)
+	assert.Len(t, mockSvc.inputs[0].MetricData, 1)
 
 	assert.Equal(t, "Benthos", *mockSvc.inputs[0].Namespace)
 
-	assert.Equal(t, 150, len(mockSvc.inputs[0].MetricData[0].Values))
+	assert.Len(t, mockSvc.inputs[0].MetricData[0].Values, 150)
 	assert.Equal(t, map[string]checkedDatum{
 		"foo": exp,
 	}, checkInput(mockSvc.inputs[0]))
@@ -282,12 +282,12 @@ func TestCloudWatchMoreThan150RandomReduce(t *testing.T) {
 
 	cw.flush()
 
-	assert.Equal(t, 1, len(mockSvc.inputs))
-	assert.Equal(t, 1, len(mockSvc.inputs[0].MetricData))
+	assert.Len(t, mockSvc.inputs, 1)
+	assert.Len(t, mockSvc.inputs[0].MetricData, 1)
 
 	assert.Equal(t, "Benthos", *mockSvc.inputs[0].Namespace)
 
-	assert.Equal(t, 150, len(mockSvc.inputs[0].MetricData[0].Values))
+	assert.Len(t, mockSvc.inputs[0].MetricData[0].Values, 150)
 }
 
 func TestCloudWatchMoreThan150LiveReduce(t *testing.T) {
@@ -302,12 +302,12 @@ func TestCloudWatchMoreThan150LiveReduce(t *testing.T) {
 
 	cw.flush()
 
-	assert.Equal(t, 1, len(mockSvc.inputs))
-	assert.Equal(t, 1, len(mockSvc.inputs[0].MetricData))
+	assert.Len(t, mockSvc.inputs, 1)
+	assert.Len(t, mockSvc.inputs[0].MetricData, 1)
 
 	assert.Equal(t, "Benthos", *mockSvc.inputs[0].Namespace)
 
-	assert.Equal(t, 150, len(mockSvc.inputs[0].MetricData[0].Values))
+	assert.Len(t, mockSvc.inputs[0].MetricData[0].Values, 150)
 }
 
 func TestCloudWatchTags(t *testing.T) {
@@ -325,7 +325,7 @@ func TestCloudWatchTags(t *testing.T) {
 
 	cw.flush()
 
-	assert.Equal(t, 1, len(mockSvc.inputs))
+	assert.Len(t, mockSvc.inputs, 1)
 	assert.Equal(t, "Benthos", *mockSvc.inputs[0].Namespace)
 	assert.Equal(t, map[string]checkedDatum{
 		"counter.bar:map[foo:one]": {
@@ -383,10 +383,10 @@ func TestCloudWatchTagsMoreThan20(t *testing.T) {
 
 	expKey := fmt.Sprintf("counter.foo:%v", expTagMap)
 
-	assert.Equal(t, 1, len(mockSvc.inputs))
+	assert.Len(t, mockSvc.inputs, 1)
 	assert.Equal(t, "Benthos", *mockSvc.inputs[0].Namespace)
-	assert.Equal(t, 1, len(mockSvc.inputs[0].MetricData))
-	assert.Equal(t, 10, len(mockSvc.inputs[0].MetricData[0].Dimensions))
+	assert.Len(t, mockSvc.inputs[0].MetricData, 1)
+	assert.Len(t, mockSvc.inputs[0].MetricData[0].Dimensions, 10)
 	assert.Equal(t, map[string]checkedDatum{
 		expKey: {
 			unit:       "Count",

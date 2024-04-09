@@ -325,7 +325,7 @@ cache_resources:
 			result, err := process(yaml)
 			require.NoError(t, err)
 
-			assert.Equal(t, 2, len(result))
+			assert.Len(t, result, 2)
 		})
 
 		t.Run("keys operation", func(t *testing.T) {
@@ -344,7 +344,7 @@ cache_resources:
 			result, err := process(yaml)
 			require.NoError(t, err)
 
-			assert.Equal(t, 2, len(result))
+			assert.Len(t, result, 2)
 		})
 	})
 }

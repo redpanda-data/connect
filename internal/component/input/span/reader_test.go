@@ -87,7 +87,7 @@ func TestSpanBatchReader(t *testing.T) {
 			}, service.MockResources())
 			require.NoError(t, err)
 
-			assert.Nil(t, r.Connect(context.Background()))
+			assert.NoError(t, r.Connect(context.Background()))
 
 			res, _, err := r.ReadBatch(context.Background())
 			require.NoError(t, err)
@@ -180,7 +180,7 @@ func TestSpanReader(t *testing.T) {
 			}, service.MockResources())
 			require.NoError(t, err)
 
-			assert.Nil(t, r.Connect(context.Background()))
+			assert.NoError(t, r.Connect(context.Background()))
 
 			msg, _, err := r.Read(context.Background())
 			require.NoError(t, err)

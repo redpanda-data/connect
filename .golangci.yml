@@ -45,7 +45,17 @@ linters-settings:
   #     main:
   #       deny:
   #         - pkg: "io/ioutil"
-
+  testifylint:
+    disable-all: true
+    enable:
+      - nil-compare
+      - compares
+      - error-is-as
+      - bool-compare
+      - empty
+      - len
+      - expected-actual
+      - error-nil
 linters:
   disable-all: true
   enable:
@@ -72,6 +82,7 @@ linters:
     # - gosec
     # - misspell
     # - prealloc
+    - testifylint
     - tenv
     - predeclared
     - mirror

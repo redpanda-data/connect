@@ -690,7 +690,7 @@ func TestAsyncPreserverErrorBackoff(t *testing.T) {
 	for {
 		_, aFn, actErr := pres.ReadBatch(ctx)
 		if actErr != nil {
-			assert.Error(t, ctx.Err(), actErr)
+			assert.ErrorIs(t, ctx.Err(), actErr)
 			break
 		}
 		require.NoError(t, aFn(ctx, errors.New("no thanks")))
