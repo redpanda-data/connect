@@ -32,7 +32,6 @@ func socketInputSpec() *service.ConfigSpec {
 			service.NewAutoRetryNacksToggleField(),
 		).
 		Fields(interop.OldReaderCodecFields("lines")...)
-
 }
 
 func init() {
@@ -95,8 +94,6 @@ func (s *socketReader) Connect(ctx context.Context) error {
 		conn.Close()
 		return err
 	}
-
-	s.log.Infof("Consuming from socket at '%v://%v'", s.network, s.address)
 	return nil
 }
 

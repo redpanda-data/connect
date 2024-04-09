@@ -4,9 +4,8 @@ package log
 
 import (
 	"fmt"
-	"os"
-
 	"log/slog"
+	"os"
 )
 
 type logHandler struct {

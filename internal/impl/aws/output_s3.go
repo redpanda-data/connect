@@ -311,8 +311,6 @@ func (a *amazonS3Writer) Connect(ctx context.Context) error {
 		o.UsePathStyle = a.conf.UsePathStyle
 	})
 	a.uploader = manager.NewUploader(client)
-
-	a.log.Infof("Uploading message parts as objects to Amazon S3 bucket: %v\n", a.conf.Bucket)
 	return nil
 }
 

@@ -119,15 +119,25 @@ func (w *websocketWriter) Connect(ctx context.Context) error {
 		return err
 	}
 
-	var client *websocket.Conn
+	var (
+		client *websocket.Conn
+		res    *http.Response
+	)
+
+	defer func() {
+		if res != nil {
+			res.Body.Close()
+		}
+	}()
+
 	if w.tlsEnabled {
 		dialer := websocket.Dialer{
 			TLSClientConfig: w.tlsConf,
 		}
-		if client, _, err = dialer.Dial(w.urlStr, headers); err != nil {
+		if client, res, err = dialer.Dial(w.urlStr, headers); err != nil {
 			return err
 		}
-	} else if client, _, err = websocket.DefaultDialer.Dial(w.urlStr, headers); err != nil {
+	} else if client, res, err = websocket.DefaultDialer.Dial(w.urlStr, headers); err != nil {
 		return err
 	}
 

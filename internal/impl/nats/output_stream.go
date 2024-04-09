@@ -156,7 +156,6 @@ func (n *natsStreamWriter) Connect(ctx context.Context) error {
 
 	n.stanConn = stanConn
 	n.natsConn = natsConn
-	n.log.Infof("Sending NATS messages to subject: %v", n.conf.Subject)
 	return nil
 }
 

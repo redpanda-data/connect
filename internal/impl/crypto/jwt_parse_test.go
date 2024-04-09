@@ -1,6 +1,7 @@
 package crypto
 
 import (
+	"crypto/rsa"
 	"fmt"
 	"testing"
 
@@ -8,8 +9,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/benthosdev/benthos/v4/public/bloblang"
-
-	"crypto/rsa"
 )
 
 const dummySecretRSA = `-----BEGIN PUBLIC KEY-----
