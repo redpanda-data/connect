@@ -110,12 +110,11 @@ func newPulsarReaderFromParsed(conf *service.ParsedConfig, log *service.Logger) 
 	if p.url, err = conf.FieldString("url"); err != nil {
 		return
 	}
-	if p.topics, _ = conf.FieldStringList("topics"); err != nil {
-		return
-	}
-	if p.topicsPattern, _ = conf.FieldString("topics_pattern"); err != nil {
-		return
-	}
+	
+	p.topics, _ = conf.FieldStringList("topics")
+	
+	p.topicsPattern, _ = conf.FieldString("topics_pattern")
+	
 	if p.subName, err = conf.FieldString("subscription_name"); err != nil {
 		return
 	}
