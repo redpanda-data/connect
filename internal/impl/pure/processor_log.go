@@ -86,10 +86,7 @@ func init() {
 				return nil, err
 			}
 
-			depFields, err := conf.FieldStringMap(logPFieldFields)
-			if err != nil {
-				res.Logger().With("error", err, "field", logPFieldFields).Debug("unable to parse log configuration field, ignoring")
-			}
+			depFields, _ := conf.FieldStringMap(logPFieldFields)
 
 			fieldsMappingStr, _ := conf.FieldString(logPFieldFieldsMapping)
 
