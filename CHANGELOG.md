@@ -13,6 +13,7 @@ All notable changes to this project will be documented in this file.
 - New `redis_scan` input type.
 - Field `auto_replay_nacks` added to all inputs that traditionally automatically retry nacked messages as a toggle for this behaviour.
 - New `retry` processor.
+- New `noop` cache.
 
 ### Fixed
 

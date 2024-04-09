@@ -16,6 +16,8 @@ import TabItem from '@theme/TabItem';
 
 Noop is a cache that stores nothing, all gets returns not found. Why? Sometimes doing nothing is the braver option.
 
+Introduced in version 4.27.0.
+
 ```yml
 # Config fields, showing default values
 label: ""
