@@ -101,25 +101,26 @@ func esoConfigFromParsed(pConf *service.ParsedConfig, mgr *service.Resources) (c
 
 	oauth2conf, err := oAuthFromParsed(pConf)
 	if err != nil {
+		mgr.Logger().Error("Failed to parse OAuth2 configuration")
 		return
 	}
 
 	if oauth2conf.Enabled {
-		token, _ := oauth2conf.GetToken(mgr)
-		if err != nil {
-			return
-			//return conf, err
-		}
+
+		mgr.Logger().Debug("Using OAuth2 authentication for OpenSearch")
+
 		conf.clientOpts.Client.Transport = &oauth2.Transport{
-			Source: oauth2.StaticTokenSource(&oauth2.Token{AccessToken: token}),
-			Base:   http.DefaultTransport,
+			Source: oauth2.ReuseTokenSource(nil, &OsTokenProvider{
+				Mgr:        mgr,
+				OAuth2Conf: oauth2conf,
+				Logger:     mgr.Logger(),
+			}),
+			Base: http.DefaultTransport,
 		}
 	}
 
 	var tlsConf *tls.Config
 	var tlsEnabled bool
-
-	conf.clientOpts.Client.Transport = http.DefaultTransport
 
 	if tlsConf, tlsEnabled, err = pConf.FieldTLSToggled(esoFieldTLS); err != nil {
 		return

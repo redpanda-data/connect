@@ -89,6 +89,10 @@ output:
     oauth2:
       enabled: false
       access_token: ""
+      tokenEndpoint: ""
+      clientId: ""
+      clientSecret: ""
+      scope: ""
       token_cache: ""
       token_key: ""
 ```
@@ -595,6 +599,41 @@ A static access token to use for authentication.
 :::warning Secret
 This field contains sensitive information that usually shouldn't be added to a config directly, read our [secrets page for more info](/docs/configuration/secrets).
 :::
+
+
+Type: `string`  
+Default: `""`  
+
+### `oauth2.tokenEndpoint`
+
+The endpoint to use for OAUTHBEARER token acquisition.
+
+
+Type: `string`  
+Default: `""`  
+
+### `oauth2.clientId`
+
+The client ID to use for OAUTHBEARER token acquisition.
+
+
+Type: `string`  
+Default: `""`  
+
+### `oauth2.clientSecret`
+
+The client secret to use for OAUTHBEARER token acquisition.
+:::warning Secret
+This field contains sensitive information that usually shouldn't be added to a config directly, read our [secrets page for more info](/docs/configuration/secrets).
+:::
+
+
+Type: `string`  
+Default: `""`  
+
+### `oauth2.scope`
+
+The scope to use for OAUTHBEARER token acquisition.
 
 
 Type: `string`  

@@ -1,0 +1,28 @@
+logger:
+  level: TRACE
+
+http:
+  enabled: false
+
+input:
+  generate:
+    interval: 5m
+    mapping: |
+      root.ID = uuid_v4()
+      root.Name = [ "frosty", "spot", "oodles" ].index(random_int() % 3)
+      root.Gooeyness = (random_int() % 100) / 100
+      root.Bouncing = random_int() % 2 == 0
+
+output:
+  label: sink
+  opensearch:
+    urls: ["http://localhost:9200"]
+    index: benthos_oauth2_test2
+    action: "index"
+    id: ${!counter()}-${!timestamp_unix()}
+    oauth2:
+      enabled: true
+      tokenEndpoint: "http://localhost:1852/realms/local-development/protocol/openid-connect/token"
+      clientId: "default-access"
+      clientSecret: "default-access-secret"
+      scope: "opensearch"
