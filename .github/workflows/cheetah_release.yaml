@@ -1,0 +1,128 @@
+name: Release Cheetah cheetah-benthos
+
+on:
+  workflow_dispatch:
+
+  push:
+    branches: ["main"]
+    tags:
+      - "v*"
+  pull_request:
+    branches: ["main"]
+
+env:
+  IMAGE_NAME: cheetah-benthos
+  DOCKERFILE_PATH: ./resources/docker/Dockerfile
+  CONTEXT: ./
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  push_plugins:
+    name: "Build and push backend plugin"
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4
+
+      - name: Build and push
+        uses: trifork/cheetah-infrastructure-utils-workflows/.github/actions/build-image/default@main
+        with:
+          read_package_pat: ${{ secrets.PACKAGE_PAT }} # we need this, as GITHUB_TOKEN only have permission to its own repo
+          context: ${{ env.CONTEXT }}
+          image_name: ${{ env.IMAGE_NAME }}
+          github_run_id: ${{ github.run_id }}
+          dockerfile_path: ${{ env.DOCKERFILE_PATH }}
+          push_image: ${{ (github.ref_type == 'tag' || github.event_name == 'workflow_dispatch') && 'true' || 'false' }}
+          upload_image: ${{ (github.event_name == 'pull_request' || github.ref_name == 'main' || github.event_name == 'workflow_dispatch') && 'true' || 'false' }}
+
+  trivy-container-scan-pr:
+    name: trivy (PR report)
+    needs: [push_plugins]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    if: ${{ github.event_name == 'pull_request' }}
+    permissions:
+      contents: read
+      packages: read
+      pull-requests: write
+      issues: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download Docker image artifact
+        uses: actions/download-artifact@f44cd7b40bfd40b6aa1cc1b9b5b7bf03d3c67110 # v4
+        with:
+          name: dockerimage
+          path: ${{ github.workspace }}/tmp
+
+      - name: Update pull request
+        uses: trifork/cheetah-infrastructure-utils/.github/actions/trivy-report@main
+        env:
+          GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
+          WORKSPACE_PATH: ${{ github.workspace }}
+        with:
+          image_name: ${{ env.IMAGE_NAME }}
+          base-tag: "latest" # "pr-${{ github.event.pull_request.number }}"
+          orga: "trifork"
+          repo: ${{ github.repository }}
+          pr-nb: ${{ github.event.pull_request.number }}
+          topic: ${{ env.IMAGE_NAME }}
+
+  trivy-container-scan:
+    name: trivy (container scan)
+    needs: [push_plugins]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    if: github.ref_name == 'main' && github.event_name == 'push'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download Docker image artifact
+        uses: actions/download-artifact@f44cd7b40bfd40b6aa1cc1b9b5b7bf03d3c67110 # v4
+        with:
+          name: dockerimage
+          path: ${{ github.workspace }}/tmp
+
+      - name: Run Trivy vulnerability scanner for containers
+        uses: aquasecurity/trivy-action@master
+        with:
+          input: /github/workspace/tmp/image.tar # -v "/home/runner/work/cheetah-backstage/cheetah-backstage":"/github/workspace"
+          format: "sarif"
+          #exit-code: "0"
+          output: "trivy-container-results.sarif"
+          github-pat: ${{ secrets.GITHUB_TOKEN }}
+
+      #- name: Upload Trivy scan results to GitHub Security tab
+      #  uses: github/codeql-action/upload-sarif@v2
+      #  if: never()
+      #  with:
+      #    sarif_file: 'trivy-results.sarif'
+
+      - name: Publish container report
+        id: import-container-scan
+        uses: trifork/cheetah-infrastructure-utils/.github/actions/defectdojo-import-scan@main
+        if: github.ref_name == 'main' && github.event_name == 'push'
+        with:
+          token: ${{ secrets.DEFECTDOJO_TOKEN }}
+          defectdojo_url: "https://defectdojo.cheetah.trifork.dev"
+          defectdojo_endpoint: "/api/v2/reimport-scan/"
+          file: "trivy-container-results.sarif"
+          scan_type: SARIF # Trivy Scan
+          engagement_name: import-container-scan
+          product_name: ${{ env.IMAGE_NAME }}
+          branch_tag: ${{ github.ref_name }}
+          #commit_hash: ${{ github.sha }}
+          #minimum_severity: Info, Low, Medium, High, Critical. Default value: Info
+
+      - name: Show response
+        if: github.ref_name == 'main' && github.event_name == 'push'
+        run: |
+          set -e
+          printf '%s\n' '${{ steps.import-container-scan.outputs.response }}'
