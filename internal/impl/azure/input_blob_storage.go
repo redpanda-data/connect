@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/runtime"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
 
 	"github.com/benthosdev/benthos/v4/internal/codec"
@@ -149,7 +150,6 @@ func newAzureObjectTarget(key string, ackFn codec.ReaderAckFn) *azureObjectTarge
 //------------------------------------------------------------------------------
 
 func deleteAzureObjectAckFn(
-	ctx context.Context,
 	client *azblob.Client,
 	containerName string,
 	key string,
@@ -180,9 +180,9 @@ type azurePendingObject struct {
 }
 
 type azureTargetReader struct {
-	pending    []*azureObjectTarget
-	conf       bsiConfig
-	startAfter string
+	pending []*azureObjectTarget
+	conf    bsiConfig
+	pager   *runtime.Pager[azblob.ListBlobsFlatResponse]
 }
 
 func newAzureTargetReader(ctx context.Context, conf bsiConfig) (*azureTargetReader, error) {
@@ -193,45 +193,33 @@ func newAzureTargetReader(ctx context.Context, conf bsiConfig) (*azureTargetRead
 	if conf.Prefix != "" {
 		params.Prefix = &conf.Prefix
 	}
-	output := conf.client.NewListBlobsFlatPager(conf.Container, params)
+	pager := conf.client.NewListBlobsFlatPager(conf.Container, params)
 	staticKeys := azureTargetReader{conf: conf}
-	for output.More() {
-		page, err := output.NextPage(ctx)
+	if pager.More() {
+		page, err := pager.NextPage(ctx)
 		if err != nil {
 			return nil, fmt.Errorf("error getting page of blobs: %w", err)
 		}
 		for _, blob := range page.Segment.BlobItems {
-			ackFn := deleteAzureObjectAckFn(ctx, conf.client, conf.Container, *blob.Name, conf.DeleteObjects, nil)
+			ackFn := deleteAzureObjectAckFn(conf.client, conf.Container, *blob.Name, conf.DeleteObjects, nil)
 			staticKeys.pending = append(staticKeys.pending, newAzureObjectTarget(*blob.Name, ackFn))
 		}
-		staticKeys.startAfter = *page.NextMarker
+		staticKeys.pager = pager
 	}
 
 	return &staticKeys, nil
 }
 
 func (s *azureTargetReader) Pop(ctx context.Context) (*azureObjectTarget, error) {
-	if len(s.pending) == 0 && s.startAfter != "" {
+	if len(s.pending) == 0 && s.pager.More() {
 		s.pending = nil
-		var maxResults int32 = 100
-		params := &azblob.ListBlobsFlatOptions{
-			MaxResults: &maxResults,
-			Marker:     &s.startAfter,
+		page, err := s.pager.NextPage(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("error getting page of blobs: %w", err)
 		}
-		if s.conf.Prefix != "" {
-			params.Prefix = &s.conf.Prefix
-		}
-		output := s.conf.client.NewListBlobsFlatPager(s.conf.Container, params)
-		for output.More() {
-			page, err := output.NextPage(ctx)
-			if err != nil {
-				return nil, fmt.Errorf("error getting page of blobs: %w", err)
-			}
-			for _, blob := range page.Segment.BlobItems {
-				ackFn := deleteAzureObjectAckFn(ctx, s.conf.client, s.conf.Container, *blob.Name, s.conf.DeleteObjects, nil)
-				s.pending = append(s.pending, newAzureObjectTarget(*blob.Name, ackFn))
-			}
-			s.startAfter = *page.NextMarker
+		for _, blob := range page.Segment.BlobItems {
+			ackFn := deleteAzureObjectAckFn(s.conf.client, s.conf.Container, *blob.Name, s.conf.DeleteObjects, nil)
+			s.pending = append(s.pending, newAzureObjectTarget(*blob.Name, ackFn))
 		}
 	}
 	if len(s.pending) == 0 {
