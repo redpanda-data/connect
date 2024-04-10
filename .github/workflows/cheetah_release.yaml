@@ -1,14 +1,14 @@
-name: Release Cheetah cheetah-benthos
+name: Release cheetah-benthos
 
 on:
   workflow_dispatch:
 
   push:
-    branches: ["main"]
+    branches: ["cheetah-main"]
     tags:
       - "v*"
   pull_request:
-    branches: ["main"]
+    branches: ["cheetah-main"]
 
 env:
   IMAGE_NAME: cheetah-benthos
@@ -20,7 +20,7 @@ permissions:
   packages: write
 
 jobs:
-  push_plugins:
+  push_image:
     name: "Build and push backend plugin"
     runs-on: ubuntu-latest
     timeout-minutes: 15
