@@ -11,7 +11,7 @@ on:
     branches: ["cheetah-main"]
 
 env:
-  IMAGE_NAME: cheetah-benthos
+  IMAGE_NAME: ${{ github.repository }}
   DOCKERFILE_PATH: ./resources/docker/Dockerfile
   CONTEXT: ./
 
@@ -21,7 +21,7 @@ permissions:
 
 jobs:
   push_image:
-    name: "Build and push backend plugin"
+    name: "Build and push image"
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
