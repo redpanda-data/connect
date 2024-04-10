@@ -1,7 +1,7 @@
 FROM mcr.microsoft.com/vscode/devcontainers/go:1.21
 
 ARG NODE_VERSION="16"
-ARG GOLANGCI_LINT_VERSION="1.46.2"
+ARG GOLANGCI_LINT_VERSION="1.57.1"
 
 # https://github.com/microsoft/vscode-dev-containers/blob/main/containers/go/.devcontainer/base.Dockerfile
 ENV USERNAME=vscode
