@@ -1,7 +1,7 @@
 package couchbase
 
 import (
-	"fmt"
+	"errors"
 
 	"github.com/couchbase/gocb/v2"
 )
@@ -24,7 +24,7 @@ func valueFromOp(op gocb.BulkOp) (out any, err error) {
 		return nil, o.Err
 	}
 
-	return nil, fmt.Errorf("type not supported")
+	return nil, errors.New("type not supported")
 }
 
 func get(key string, _ []byte) gocb.BulkOp {

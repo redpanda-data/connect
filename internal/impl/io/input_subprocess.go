@@ -50,7 +50,6 @@ The execution environment of the subprocess is the same as the Benthos instance,
 				Advanced().
 				Default(bufio.MaxScanTokenSize),
 		)
-
 }
 
 func init() {

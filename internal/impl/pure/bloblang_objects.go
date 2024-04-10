@@ -1,6 +1,7 @@
 package pure
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/Jeffail/gabs/v2"
@@ -111,8 +112,8 @@ If a key within a nested path does not exist then it is ignored.`).
 				},
 			),
 		func(args *bloblang.ParsedParams) (bloblang.Method, error) {
-			sizeError := fmt.Errorf("can't zip different length array values")
-			argError := fmt.Errorf("zip requires at least one argument")
+			sizeError := errors.New("can't zip different length array values")
+			argError := errors.New("zip requires at least one argument")
 
 			argAnys := args.AsSlice()
 			argSlices := make([][]any, len(argAnys))

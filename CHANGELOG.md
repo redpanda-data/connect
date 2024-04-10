@@ -3,7 +3,30 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
-## Unreleased
+## 4.27.0 - TBD
+
+### Added
+
+- New `nats_kv` cache type.
+- The `nats_jetstream` input now supports `last_per_subject` and `new` deliver fallbacks.
+- Field `error_patterns` added to the `drop_on` output.
+- New `redis_scan` input type.
+- Field `auto_replay_nacks` added to all inputs that traditionally automatically retry nacked messages as a toggle for this behaviour.
+- New `retry` processor.
+- New `noop` cache.
+
+### Fixed
+
+- The `unarchive` processor no longer yields linting errors when the format `csv:x` is specified. This is a regression introduced in v4.25.0.
+- The `sftp` input will no longer consume files when the watcher cache returns an error. Instead, it will reattempt the file upon the next poll.
+- The `aws_sqs` input no longer logs error level logs for visibility timeout refreshing errors.
+- Bloblang comparison operators (`>`, `<`, `<=`, `>=`) now match the precision of the compared integers when applicable.
+
+### Changed
+
+- The log events from all inputs and outputs when they first connect have been made more consistent and no longer contain any information regarding the nature of their connections.
+
+## 4.26.0 - 2024-03-18
 
 ### Added
 

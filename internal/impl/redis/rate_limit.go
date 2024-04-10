@@ -2,6 +2,7 @@ package redis
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -76,7 +77,7 @@ func newRedisRatelimitFromConfig(conf *service.ParsedConfig) (*redisRatelimit, e
 	}
 
 	if count <= 0 {
-		return nil, fmt.Errorf("count must be larger than zero")
+		return nil, errors.New("count must be larger than zero")
 	}
 
 	return &redisRatelimit{

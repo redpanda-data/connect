@@ -3,6 +3,7 @@ package confluent
 import (
 	"context"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"sync"
 
@@ -201,7 +202,7 @@ func (c *cachedMessageTypes) TryParseMsg(data []byte) (*dynamicpb.Message, []byt
 	lastSuccessful := c.lastSuccessful
 	c.cacheMut.Unlock()
 
-	if len(lastSuccessful) > 0 {
+	if lastSuccessful != "" {
 		if msgDesc, ok := c.msgTypeMap[lastSuccessful]; ok {
 			if dynMsg, err := c.tryDesc(data, msgDesc); err == nil {
 				// Happy path: We had a cached message index that worked with a
@@ -254,7 +255,7 @@ func (c *cachedMessageTypes) tryDesc(data []byte, desc protoreflect.MessageDescr
 func readMessageIndexes(payload []byte) (int, []int, error) {
 	arrayLen, bytesRead := binary.Varint(payload)
 	if bytesRead <= 0 {
-		return bytesRead, nil, fmt.Errorf("unable to read message indexes")
+		return bytesRead, nil, errors.New("unable to read message indexes")
 	}
 	if arrayLen == 0 {
 		// Handle the optimization for the first message in the schema
@@ -264,7 +265,7 @@ func readMessageIndexes(payload []byte) (int, []int, error) {
 	for i := 0; i < int(arrayLen); i++ {
 		idx, read := binary.Varint(payload[bytesRead:])
 		if read <= 0 {
-			return bytesRead, nil, fmt.Errorf("unable to read message indexes")
+			return bytesRead, nil, errors.New("unable to read message indexes")
 		}
 		bytesRead += read
 		msgIndexes[i] = int(idx)

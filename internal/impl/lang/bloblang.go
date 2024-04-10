@@ -2,6 +2,7 @@ package lang
 
 import (
 	"crypto/rand"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"strings"
@@ -250,7 +251,7 @@ func registerULID() error {
 		Param(
 			bloblang.NewStringParam("encoding").
 				Default("crockford").
-				Description(fmt.Sprintf("The format to encode a ULID into. Valid options are: %s", strings.Join(encodings, ", "))),
+				Description("The format to encode a ULID into. Valid options are: "+strings.Join(encodings, ", ")),
 		).
 		Param(
 			bloblang.NewStringParam("random_source").
@@ -322,7 +323,7 @@ func registerULID() error {
 				if err != nil {
 					return nil, err
 				}
-				return fmt.Sprintf("%x", bs), nil
+				return hex.EncodeToString(bs), nil
 			default:
 				return nil, fmt.Errorf("could not encode ULID with %s", encoding)
 			}

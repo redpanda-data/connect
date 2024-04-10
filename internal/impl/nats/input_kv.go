@@ -39,6 +39,7 @@ This input adds the following metadata fields to each message:
 			Description("Key to watch for updates, can include wildcards.").
 			Default(">").
 			Example("foo.bar.baz").Example("foo.*.baz").Example("foo.bar.*").Example("foo.>")).
+		Field(service.NewAutoRetryNacksToggleField()).
 		Field(service.NewBoolField("ignore_deletes").
 			Description("Do not send delete markers as messages.").
 			Default(false).
@@ -59,7 +60,10 @@ func init() {
 		"nats_kv", natsKVInputConfig(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Input, error) {
 			reader, err := newKVReader(conf, mgr)
-			return service.AutoRetryNacks(reader), err
+			if err != nil {
+				return nil, err
+			}
+			return service.AutoRetryNacksToggled(conf, reader)
 		},
 	)
 	if err != nil {
@@ -165,9 +169,6 @@ func (r *kvReader) Connect(ctx context.Context) (err error) {
 	if err != nil {
 		return err
 	}
-
-	r.log.Infof("Watching NATS KV bucket: %s for key(s): %s", r.bucket, r.key)
-
 	return nil
 }
 

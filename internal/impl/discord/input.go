@@ -30,6 +30,7 @@ func inputConfig() *service.ConfigSpec {
 				Description("The key identifier used when storing the ID of the last message received.").
 				Default("last_message_id").
 				Advanced(),
+			service.NewAutoRetryNacksToggleField(),
 
 			// Deprecated
 			service.NewDurationField("poll_period").
@@ -52,7 +53,10 @@ func init() {
 		"discord", inputConfig(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Input, error) {
 			reader, err := newReader(conf, mgr)
-			return service.AutoRetryNacks(reader), err
+			if err != nil {
+				return nil, err
+			}
+			return service.AutoRetryNacksToggled(conf, reader)
 		},
 	)
 	if err != nil {
@@ -197,7 +201,6 @@ func (r *reader) Connect(ctx context.Context) error {
 	}()
 
 	r.msgChan = msgChan
-	r.log.Infof("Receiving discord messages from channel %s", r.channelID)
 	return nil
 }
 

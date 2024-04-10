@@ -58,6 +58,7 @@ input:
 				Description("Whether to delete input files from the disk once they are fully consumed.").
 				Advanced().
 				Default(false),
+			service.NewAutoRetryNacksToggleField(),
 		)
 }
 
@@ -68,7 +69,7 @@ func init() {
 			if err != nil {
 				return nil, err
 			}
-			return service.AutoRetryNacksBatched(r), nil
+			return service.AutoRetryNacksBatchedToggled(pConf, r)
 		})
 	if err != nil {
 		panic(err)
@@ -179,7 +180,7 @@ func (f *fileConsumer) getReader(ctx context.Context) (scannerInfo, error) {
 
 	f.paths = f.paths[1:]
 
-	f.log.Infof("Consuming from file '%v'\n", nextPath)
+	f.log.Debugf("Consuming from file '%v'\n", nextPath)
 	return *f.scannerInfo, nil
 }
 

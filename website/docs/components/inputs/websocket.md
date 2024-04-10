@@ -31,6 +31,7 @@ input:
   label: ""
   websocket:
     url: ws://localhost:4195/get/ws # No default (required)
+    auto_replay_nacks: true
 ```
 
 </TabItem>
@@ -44,6 +45,7 @@ input:
     url: ws://localhost:4195/get/ws # No default (required)
     open_message: "" # No default (optional)
     open_message_type: binary
+    auto_replay_nacks: true
     tls:
       enabled: false
       skip_cert_verify: false
@@ -111,6 +113,14 @@ Default: `"binary"`
 | `binary` | Binary data open_message. |
 | `text` | Text data open_message. The text message payload is interpreted as UTF-8 encoded text data. |
 
+
+### `auto_replay_nacks`
+
+Whether messages that are rejected (nacked) at the output level should be automatically replayed indefinitely, eventually resulting in back pressure if the cause of the rejections is persistent. If set to `false` these messages will instead be deleted. Disabling auto replays can greatly improve memory efficiency of high throughput streams as the original shape of the data can be discarded immediately upon consumption and mutation.
+
+
+Type: `bool`  
+Default: `true`  
 
 ### `tls`
 

@@ -89,7 +89,7 @@ pipeline:
 				Description("For a given topic, configures the PubSub client's internal buffer for messages to be published.").
 				Advanced(),
 			service.NewBatchPolicyField("batching").
-				Description("Configures a batching policy on this output. While the PubSub client maintains its own internal buffering mechanism, preparing larger batches of messages can futher trade-off some latency for throughput."),
+				Description("Configures a batching policy on this output. While the PubSub client maintains its own internal buffering mechanism, preparing larger batches of messages can further trade-off some latency for throughput."),
 		)
 }
 
@@ -178,7 +178,7 @@ func newPubSubOutput(conf *service.ParsedConfig) (*pubsubOutput, error) {
 	}
 
 	var opt []option.ClientOption
-	if len(endpoint) > 0 {
+	if endpoint != "" {
 		opt = []option.ClientOption{option.WithEndpoint(endpoint)}
 	}
 

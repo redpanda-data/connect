@@ -307,7 +307,7 @@ func NewWorkflow(conf *service.ParsedConfig, mgr bundle.NewManagement) (*Workflo
 	if err != nil {
 		return nil, err
 	}
-	if len(metaStr) > 0 {
+	if metaStr != "" {
 		w.metaPath = gabs.DotPathToSlice(metaStr)
 	}
 
@@ -526,6 +526,10 @@ func (w *Workflow) ProcessBatch(ctx context.Context, msg message.Batch) ([]messa
 			}(eid, i)
 		}
 		wg.Wait()
+
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 
 		for i, id := range layer {
 			var failed []branchMapError

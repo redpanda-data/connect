@@ -202,7 +202,7 @@ func addGrokPatternsFromPath(fs ifs.FS, path string, patterns map[string]string)
 
 		for scanner.Scan() {
 			l := scanner.Text()
-			if len(l) > 0 && l[0] != '#' {
+			if l != "" && l[0] != '#' {
 				names := strings.SplitN(l, " ", 2)
 				patterns[names[0]] = names[1]
 			}

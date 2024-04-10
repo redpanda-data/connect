@@ -47,7 +47,7 @@ while:
 	}
 
 	msg, res := c.ProcessBatch(context.Background(), message.QuickBatch([][]byte{[]byte("bar")}))
-	require.Nil(t, res)
+	require.NoError(t, res)
 
 	assert.Equal(t, exp, message.GetAllBytes(msg[0]))
 }

@@ -94,6 +94,8 @@ func TestIntegrationExploration(t *testing.T) {
 		assert.Equal(t, float64(j), gObj.S("after", "a").Data(), gObj.String())
 	}
 
+	require.NoError(t, rows.Err(), "checking rows.Err()")
+
 	done()
 
 	cfdb.Close()
@@ -128,6 +130,8 @@ func TestIntegrationExploration(t *testing.T) {
 	}
 
 	done()
+
+	require.NoError(t, rows.Err(), "checking rows.Err()")
 
 	cfdb.Close()
 	rows.Close()

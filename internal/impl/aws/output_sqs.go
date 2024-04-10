@@ -2,6 +2,7 @@ package aws
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"regexp"
 	"sort"
@@ -158,7 +159,6 @@ func (a *sqsWriter) Connect(ctx context.Context) error {
 	}
 
 	a.sqs = sqs.NewFromConfig(a.conf.aconf)
-	a.log.Infof("Sending messages to Amazon SQS URL: %v\n", a.conf.URL)
 	return nil
 }
 
@@ -231,7 +231,7 @@ func (a *sqsWriter) getSQSAttributes(batch service.MessageBatch, i int) (sqsAttr
 			return sqsAttributes{}, fmt.Errorf("delay seconds invalid input: %w", err)
 		}
 		if delaySecondsInt64 < 0 || delaySecondsInt64 > 900 {
-			return sqsAttributes{}, fmt.Errorf("delay seconds must be between 0 and 900")
+			return sqsAttributes{}, errors.New("delay seconds must be between 0 and 900")
 		}
 		delaySeconds = int32(delaySecondsInt64)
 	}
@@ -284,7 +284,7 @@ func (a *sqsWriter) WriteBatch(ctx context.Context, batch service.MessageBatch) 
 		Entries:  entries,
 	}
 
-	// trim input input length to max sqs batch size
+	// trim input length to max sqs batch size
 	if len(entries) > sqsMaxRecordsCount {
 		input.Entries, entries = entries[:sqsMaxRecordsCount], entries[sqsMaxRecordsCount:]
 	} else {

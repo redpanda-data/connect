@@ -70,21 +70,21 @@ const (
 	blobEndpointExp = "https://%s.blob.core.windows.net"
 )
 
-func getBlobStorageClient(storageConnectionString, storageAccount, storageAccessKey, storageSASToken string, container string) (*azblob.Client, bool, error) {
+func getBlobStorageClient(storageConnectionString, storageAccount, storageAccessKey, storageSASToken, container string) (*azblob.Client, bool, error) {
 	var client *azblob.Client
 	var err error
 	var containerSASToken bool
-	if len(storageConnectionString) > 0 {
+	if storageConnectionString != "" {
 		storageConnectionString := parseStorageConnectionString(storageConnectionString, storageAccount)
 		client, err = azblob.NewClientFromConnectionString(storageConnectionString, nil)
-	} else if len(storageAccessKey) > 0 {
+	} else if storageAccessKey != "" {
 		cred, credErr := azblob.NewSharedKeyCredential(storageAccount, storageAccessKey)
 		if credErr != nil {
 			return nil, false, fmt.Errorf("error creating shared key credential: %w", credErr)
 		}
 		serviceURL := fmt.Sprintf(blobEndpointExp, storageAccount)
 		client, err = azblob.NewClientWithSharedKeyCredential(serviceURL, cred, nil)
-	} else if len(storageSASToken) > 0 {
+	} else if storageSASToken != "" {
 		var serviceURL string
 		if strings.HasPrefix(storageSASToken, "sp=") {
 			// container SAS token
@@ -125,7 +125,7 @@ const (
 
 func parseStorageConnectionString(storageConnectionString, storageAccount string) string {
 	if strings.Contains(storageConnectionString, "UseDevelopmentStorage=true;") {
-		var azuriteDefaultPorts = map[string]string{
+		azuriteDefaultPorts := map[string]string{
 			azuriteBlobPortEnv:  "10000",
 			azuriteQueuePortEnv: "10001",
 			azuriteTablePortEnv: "10002",

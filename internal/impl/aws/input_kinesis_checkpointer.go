@@ -251,7 +251,7 @@ func (k *awsKinesisCheckpointer) Claim(ctx context.Context, streamID, shardID, f
 		},
 	}
 
-	if len(fromClientID) > 0 {
+	if fromClientID != "" {
 		conditionalExpression = "ClientID = :old_client_id"
 		expressionAttributeValues[":old_client_id"] = &types.AttributeValueMemberS{
 			Value: fromClientID,
@@ -301,7 +301,7 @@ func (k *awsKinesisCheckpointer) Claim(ctx context.Context, streamID, shardID, f
 	//
 	// This allows the victim client to update the checkpoint with the final
 	// sequence as it yields the shard.
-	if len(fromClientID) > 0 && time.Since(currentLease) < k.leaseDuration {
+	if fromClientID != "" && time.Since(currentLease) < k.leaseDuration {
 		// Wait for the estimated next checkpoint time plus a grace period of
 		// one second.
 		waitFor := k.leaseDuration - time.Since(currentLease) + time.Second
@@ -339,7 +339,7 @@ func (k *awsKinesisCheckpointer) Checkpoint(ctx context.Context, streamID, shard
 		},
 	}
 
-	if len(sequenceNumber) > 0 {
+	if sequenceNumber != "" {
 		item["SequenceNumber"] = &types.AttributeValueMemberS{
 			Value: sequenceNumber,
 		}

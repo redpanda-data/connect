@@ -110,7 +110,7 @@ func amqp1WriterFromParsed(conf *service.ParsedConfig, mgr *service.Resources) (
 
 	for _, u := range urlStrs {
 		for _, splitURL := range strings.Split(u, ",") {
-			if trimmed := strings.TrimSpace(splitURL); len(trimmed) > 0 {
+			if trimmed := strings.TrimSpace(splitURL); trimmed != "" {
 				a.urls = append(a.urls, trimmed)
 			}
 		}
@@ -189,8 +189,6 @@ func (a *amqp1Writer) Connect(ctx context.Context) (err error) {
 	a.client = client
 	a.session = session
 	a.sender = sender
-
-	a.log.Infof("Sending AMQP 1.0 messages to target: %v\n", a.targetAddr)
 	return nil
 }
 

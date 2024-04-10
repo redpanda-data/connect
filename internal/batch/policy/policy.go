@@ -48,13 +48,13 @@ func New(conf batchconfig.Config, mgr bundle.NewManagement) (*Batcher, error) {
 	}
 	var err error
 	var check *mapping.Executor
-	if len(conf.Check) > 0 {
+	if conf.Check != "" {
 		if check, err = mgr.BloblEnvironment().NewMapping(conf.Check); err != nil {
 			return nil, fmt.Errorf("failed to parse check: %v", err)
 		}
 	}
 	var period time.Duration
-	if len(conf.Period) > 0 {
+	if conf.Period != "" {
 		if period, err = time.ParseDuration(conf.Period); err != nil {
 			return nil, fmt.Errorf("failed to parse duration string: %v", err)
 		}

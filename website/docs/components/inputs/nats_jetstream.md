@@ -213,6 +213,8 @@ Default: `"all"`
 |---|---|
 | `all` | Deliver all available messages. |
 | `last` | Deliver starting with the last published messages. |
+| `last_per_subject` | Deliver starting with the last published message per subject. |
+| `new` | Deliver starting from now, not taking into account any previous messages. |
 
 
 ### `ack_wait`

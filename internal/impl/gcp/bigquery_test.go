@@ -65,13 +65,13 @@ func TestParseQueryPriority(t *testing.T) {
 	require.NoError(t, err)
 	priority, err := parseQueryPriority(conf, "foo")
 	require.NoError(t, err)
-	require.Equal(t, priority, bigquery.BatchPriority)
+	require.Equal(t, bigquery.BatchPriority, priority)
 
 	conf, err = spec.ParseYAML(`foo: interactive`, nil)
 	require.NoError(t, err)
 	priority, err = parseQueryPriority(conf, "foo")
 	require.NoError(t, err)
-	require.Equal(t, priority, bigquery.InteractivePriority)
+	require.Equal(t, bigquery.InteractivePriority, priority)
 }
 
 func TestParseQueryPriority_Empty(t *testing.T) {

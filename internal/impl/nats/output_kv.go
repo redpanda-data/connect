@@ -127,8 +127,6 @@ func (kv *kvOutput) Connect(ctx context.Context) (err error) {
 		return err
 	}
 
-	kv.log.Infof("Setting values on NATS KV bucket: %s and key: %s", kv.bucket, kv.keyRaw)
-
 	kv.natsConn = natsConn
 	return nil
 }

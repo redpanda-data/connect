@@ -234,7 +234,6 @@ func (d *dynamoDBWriter) Connect(ctx context.Context) error {
 	}
 
 	d.client = client
-	d.log.Infof("Sending messages to DynamoDB table: %v\n", d.conf.Table)
 	return nil
 }
 
@@ -292,7 +291,7 @@ func anyToAttributeValue(root any) types.AttributeValue {
 
 func jsonToMap(path string, root any) (types.AttributeValue, error) {
 	gObj := gabs.Wrap(root)
-	if len(path) > 0 {
+	if path != "" {
 		gObj = gObj.Path(path)
 	}
 	return anyToAttributeValue(gObj.Data()), nil

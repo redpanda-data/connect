@@ -19,13 +19,11 @@ import (
 	_ "github.com/lib/pq"
 )
 
-var (
-	sampleString = `{
+var sampleString = `{
 	"primary_key": "[\"1a7ff641-3e3b-47ee-94fe-a0cadb56cd8f\", 2]", // stringifed JSON array
 	"row": "{\"after\": {\"k\": \"1a7ff641-3e3b-47ee-94fe-a0cadb56cd8f\", \"v\": 2}, \"updated\": \"1637953249519902405.0000000000\"}", // stringified JSON object
 	"table": "strm_2"
 }`
-)
 
 func crdbChangefeedInputConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
@@ -48,6 +46,7 @@ func crdbChangefeedInputConfig() *service.ConfigSpec {
 				Example([]string{`virtual_columns="omitted"`}).
 				Advanced().
 				Optional(),
+			service.NewAutoRetryNacksToggleField(),
 		)
 }
 
@@ -129,7 +128,7 @@ func newCRDBChangefeedInputFromConfig(conf *service.ParsedConfig, res *service.R
 
 	changeFeedOptions := ""
 	if len(options) > 0 {
-		changeFeedOptions = fmt.Sprintf(" WITH %s", strings.Join(options, ", "))
+		changeFeedOptions = " WITH " + strings.Join(options, ", ")
 	}
 
 	c.statement = fmt.Sprintf("EXPERIMENTAL CHANGEFEED FOR %s%s", strings.Join(tables, ", "), changeFeedOptions)
@@ -152,9 +151,8 @@ func init() {
 			if err != nil {
 				return nil, err
 			}
-			return service.AutoRetryNacks(i), nil
+			return service.AutoRetryNacksToggled(conf, i)
 		})
-
 	if err != nil {
 		panic(err)
 	}
@@ -200,6 +198,11 @@ func (c *crdbChangefeedInput) closeConnection() {
 	defer c.dbMut.Unlock()
 
 	if c.rows != nil {
+		err := c.rows.Err()
+		if err != nil {
+			c.logger.With("err", err).Warn("unexpected error from cockroachdb before closing")
+		}
+
 		c.rows.Close()
 		c.rows = nil
 	}

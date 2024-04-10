@@ -42,6 +42,7 @@ func inputConfigSpec() *service.ConfigSpec {
 			service.NewStringEnumField(niFieldSocketType, "PULL", "SUB").
 				Description("The socket type to use.").
 				Default("PULL"),
+			service.NewAutoRetryNacksToggleField(),
 			service.NewStringListField(niFieldSubFilters).
 				Description("A list of subscription topic filters to use when consuming from a SUB socket. Specifying a single sub_filter of `''` will subscribe to everything.").
 				Default([]any{}),
@@ -58,7 +59,7 @@ func init() {
 		if err != nil {
 			return nil, err
 		}
-		return service.AutoRetryNacks(rdr), nil
+		return service.AutoRetryNacksToggled(conf, rdr)
 	})
 	if err != nil {
 		panic(err)
@@ -181,13 +182,6 @@ func (s *nanomsgReader) Connect(ctx context.Context) (err error) {
 			return err
 		}
 	}
-
-	if s.bind {
-		s.log.Infof("Receiving Scalability Protocols messages at bound URLs: %s", s.urls)
-	} else {
-		s.log.Infof("Receiving Scalability Protocols messages at connected URLs: %s", s.urls)
-	}
-
 	s.socket = socket
 	return nil
 }

@@ -39,7 +39,7 @@ func TestBloblangCompareBCrypt(t *testing.T) {
 		t.Run(testCase.title, func(t *testing.T) {
 			res, err := exe.Query(testCase.input)
 			require.NoError(t, err)
-			require.Equal(t, res, testCase.expected)
+			require.Equal(t, testCase.expected, res)
 		})
 	}
 }

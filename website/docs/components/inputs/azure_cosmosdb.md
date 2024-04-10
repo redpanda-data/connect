@@ -46,6 +46,7 @@ input:
       root = [
         { "Name": "@name", "Value": "benthos" },
       ]
+    auto_replay_nacks: true
 ```
 
 </TabItem>
@@ -68,6 +69,7 @@ input:
         { "Name": "@name", "Value": "benthos" },
       ]
     batch_count: -1
+    auto_replay_nacks: true
 ```
 
 </TabItem>
@@ -256,6 +258,14 @@ The maximum number of messages that should be accumulated into each batch. Use '
 
 Type: `int`  
 Default: `-1`  
+
+### `auto_replay_nacks`
+
+Whether messages that are rejected (nacked) at the output level should be automatically replayed indefinitely, eventually resulting in back pressure if the cause of the rejections is persistent. If set to `false` these messages will instead be deleted. Disabling auto replays can greatly improve memory efficiency of high throughput streams as the original shape of the data can be discarded immediately upon consumption and mutation.
+
+
+Type: `bool`  
+Default: `true`  
 
 
 ## CosmosDB Emulator

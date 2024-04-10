@@ -512,8 +512,8 @@ processor_resources:
 	require.Empty(t, lints)
 
 	require.Len(t, conf.ResourceProcessors, 2)
-	require.Equal(t, conf.ResourceProcessors[0].Label, "a")
-	require.Equal(t, conf.ResourceProcessors[1].Label, "c")
+	require.Equal(t, "a", conf.ResourceProcessors[0].Label)
+	require.Equal(t, "c", conf.ResourceProcessors[1].Label)
 
 	// Ignore
 	require.NoError(t, rdr.SubscribeConfigChanges(func(conf *Type) error {

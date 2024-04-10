@@ -110,7 +110,7 @@ func newWhile(maxLoops int, atLeastOnce bool, checkStr string, children []proces
 	var check *mapping.Executor
 	var err error
 
-	if len(checkStr) > 0 {
+	if checkStr != "" {
 		if check, err = mgr.BloblEnvironment().NewMapping(checkStr); err != nil {
 			return nil, fmt.Errorf("failed to parse check query: %w", err)
 		}

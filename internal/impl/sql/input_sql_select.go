@@ -44,7 +44,8 @@ func sqlSelectInputConfig() *service.ConfigSpec {
 		Field(service.NewStringField("suffix").
 			Description("An optional suffix to append to the select query.").
 			Optional().
-			Advanced())
+			Advanced()).
+		Field(service.NewAutoRetryNacksToggleField())
 
 	for _, f := range connFields() {
 		spec = spec.Field(f)
@@ -80,7 +81,7 @@ func init() {
 			if err != nil {
 				return nil, err
 			}
-			return service.AutoRetryNacks(i), nil
+			return service.AutoRetryNacksToggled(conf, i)
 		})
 	if err != nil {
 		panic(err)
@@ -214,6 +215,8 @@ func (s *sqlSelectInput) Connect(ctx context.Context) (err error) {
 	var rows *sql.Rows
 	if rows, err = queryBuilder.RunWith(db).Query(); err != nil {
 		return
+	} else if err = rows.Err(); err != nil {
+		s.logger.With("err", err).Warn("unexpected error while execute raw select")
 	}
 
 	s.db = db

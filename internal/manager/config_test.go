@@ -50,20 +50,20 @@ rate_limit_resources:
 				require.Len(t, v.ResourceOutputs, 1)
 				require.Len(t, v.ResourceProcessors, 1)
 
-				assert.Equal(t, v.ResourceInputs[0].Label, "a")
-				assert.Equal(t, v.ResourceInputs[0].Type, "generate")
+				assert.Equal(t, "a", v.ResourceInputs[0].Label)
+				assert.Equal(t, "generate", v.ResourceInputs[0].Type)
 
-				assert.Equal(t, v.ResourceProcessors[0].Label, "b")
-				assert.Equal(t, v.ResourceProcessors[0].Type, "mapping")
+				assert.Equal(t, "b", v.ResourceProcessors[0].Label)
+				assert.Equal(t, "mapping", v.ResourceProcessors[0].Type)
 
-				assert.Equal(t, v.ResourceOutputs[0].Label, "c")
-				assert.Equal(t, v.ResourceOutputs[0].Type, "reject")
+				assert.Equal(t, "c", v.ResourceOutputs[0].Label)
+				assert.Equal(t, "reject", v.ResourceOutputs[0].Type)
 
-				assert.Equal(t, v.ResourceCaches[0].Label, "d")
-				assert.Equal(t, v.ResourceCaches[0].Type, "memory")
+				assert.Equal(t, "d", v.ResourceCaches[0].Label)
+				assert.Equal(t, "memory", v.ResourceCaches[0].Type)
 
-				assert.Equal(t, v.ResourceRateLimits[0].Label, "e")
-				assert.Equal(t, v.ResourceRateLimits[0].Type, "local")
+				assert.Equal(t, "e", v.ResourceRateLimits[0].Label)
+				assert.Equal(t, "local", v.ResourceRateLimits[0].Type)
 			},
 		},
 	}

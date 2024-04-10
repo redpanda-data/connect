@@ -61,6 +61,17 @@
   height: 200px;
 }
 
+.goldSponsors {
+  --logo-height: 100px;
+  --basis: calc(100% - 10px);
+  margin: 10px 0 50px 0;
+}
+
+.silverSponsors {
+  --logo-height: 50px;
+  --basis: calc(50% - 10px);
+}
+
 .sponsorsBox {
   display: flex;
   flex-wrap: wrap;
@@ -70,13 +81,17 @@
 }
 
 .sponsorsBox > a {
-  flex-basis: calc(50% - 10px);
+  flex-basis: var(--basis);
   flex-grow: 0;
 }
 
-.sponsorsBox > a > img {
+.goldSponsors > a > img {
   width: 100%;
-  max-height: 150px;
+}
+
+.sponsorsBox > a > img {
+  max-width: 100%;
+  max-height: var(--logo-height);
 }
 
 .synadiaImg {

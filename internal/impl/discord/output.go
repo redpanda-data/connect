@@ -83,8 +83,6 @@ func (w *writer) Connect(ctx context.Context) error {
 	if w.sess, w.done, err = getGlobalSession(w.botToken); err != nil {
 		return err
 	}
-
-	w.log.Infof("Writing discord messages to channel %s", w.channelID)
 	return nil
 }
 

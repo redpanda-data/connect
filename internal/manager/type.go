@@ -354,7 +354,7 @@ func (t *Type) WithAddedMetrics(m metrics.Type) bundle.NewManagement {
 
 // RegisterEndpoint registers a server wide HTTP endpoint.
 func (t *Type) RegisterEndpoint(apiPath, desc string, h http.HandlerFunc) {
-	if len(t.stream) > 0 && t.namespaceStreamEndpoints {
+	if t.stream != "" && t.namespaceStreamEndpoints {
 		apiPath = path.Join("/", t.stream, apiPath)
 	}
 	if t.apiReg != nil {

@@ -118,6 +118,7 @@ Unfortunately this error message will appear for a wide range of connection prob
 			service.NewIntField(iskFieldCheckpointLimit).
 				Description("The maximum number of messages of the same topic and partition that can be processed at a given time. Increasing this limit enables parallel processing and batching at the output level to work on individual partitions. Any given offset will not be committed unless all messages under that offset are delivered in order to preserve at least once delivery guarantees.").
 				Version("3.33.0").Default(1024),
+			service.NewAutoRetryNacksToggleField(),
 			service.NewDurationField(iskFieldCommitPeriod).
 				Description("The period of time between each commit of the current partition offsets. Offsets are always committed during shutdown.").
 				Advanced().Default("1s"),
@@ -154,7 +155,13 @@ func init() {
 		if err != nil {
 			return nil, err
 		}
-		return span.NewBatchInput("kafka", conf, service.AutoRetryNacksBatched(i), mgr)
+
+		r, err := service.AutoRetryNacksBatchedToggled(conf, i)
+		if err != nil {
+			return nil, err
+		}
+
+		return span.NewBatchInput("kafka", conf, r, mgr)
 	})
 	if err != nil {
 		panic(err)
@@ -215,7 +222,7 @@ func newKafkaReaderFromParsed(conf *service.ParsedConfig, mgr *service.Resources
 	}
 	for _, addr := range cAddresses {
 		for _, splitAddr := range strings.Split(addr, ",") {
-			if trimmed := strings.TrimSpace(splitAddr); len(trimmed) > 0 {
+			if trimmed := strings.TrimSpace(splitAddr); trimmed != "" {
 				k.addresses = append(k.addresses, trimmed)
 			}
 		}

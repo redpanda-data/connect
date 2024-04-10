@@ -40,6 +40,7 @@ func redisStreamsInputConfig() *service.ConfigSpec {
 				Default("body"),
 			service.NewStringListField(siFieldStreams).
 				Description("A list of streams to consume from."),
+			service.NewAutoRetryNacksToggleField(),
 			service.NewIntField(siFieldLimit).
 				Description("The maximum number of messages to consume from a single request.").
 				Default(10),
@@ -76,7 +77,7 @@ func init() {
 			if err != nil {
 				return nil, err
 			}
-			return service.AutoRetryNacksBatched(r), nil
+			return service.AutoRetryNacksBatchedToggled(conf, r)
 		})
 	if err != nil {
 		panic(err)
@@ -279,8 +280,6 @@ func (r *redisStreamsReader) Connect(ctx context.Context) error {
 			return fmt.Errorf("failed to create group %v for stream %v: %v", r.consumerGroup, s, err)
 		}
 	}
-
-	r.log.Infof("Receiving messages from Redis streams: %v\n", r.streams)
 	r.client = client
 	return nil
 }

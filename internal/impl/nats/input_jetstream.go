@@ -62,8 +62,10 @@ You can access these metadata fields using
 			Description("Indicates that the subscription should use an existing consumer.").
 			Optional()).
 		Field(service.NewStringAnnotatedEnumField("deliver", map[string]string{
-			"all":  "Deliver all available messages.",
-			"last": "Deliver starting with the last published messages.",
+			"all":              "Deliver all available messages.",
+			"last":             "Deliver starting with the last published messages.",
+			"last_per_subject": "Deliver starting with the last published message per subject.",
+			"new":              "Deliver starting from now, not taking into account any previous messages.",
 		}).
 			Description("Determines which messages to deliver when consuming without a durable subscriber.").
 			Default("all")).
@@ -139,6 +141,10 @@ func newJetStreamReaderFromConfig(conf *service.ParsedConfig, mgr *service.Resou
 		j.deliverOpt = nats.DeliverAll()
 	case "last":
 		j.deliverOpt = nats.DeliverLast()
+	case "last_per_subject":
+		j.deliverOpt = nats.DeliverLastPerSubject()
+	case "new":
+		j.deliverOpt = nats.DeliverNew()
 	default:
 		return nil, fmt.Errorf("deliver option %v was not recognised", deliver)
 	}
@@ -171,11 +177,11 @@ func newJetStreamReaderFromConfig(conf *service.ParsedConfig, mgr *service.Resou
 	}
 	if j.bind {
 		if j.stream == "" && j.durable == "" {
-			return nil, fmt.Errorf("stream or durable is required, when bind is true")
+			return nil, errors.New("stream or durable is required, when bind is true")
 		}
 	} else {
 		if j.subject == "" {
-			return nil, fmt.Errorf("subject is empty")
+			return nil, errors.New("subject is empty")
 		}
 	}
 
@@ -281,8 +287,6 @@ func (j *jetStreamReader) Connect(ctx context.Context) (err error) {
 	if err != nil {
 		return err
 	}
-
-	j.log.Infof("Receiving NATS messages from JetStream subject: %v", j.subject)
 
 	j.natsConn = natsConn
 	j.natsSub = natsSub

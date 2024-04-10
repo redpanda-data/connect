@@ -29,6 +29,7 @@ func parquetInputConfig() *service.ConfigSpec {
 			Description(`Optionally process records in batches. This can help to speed up the consumption of exceptionally large files. When the end of the file is reached the remaining records are processed as a (potentially smaller) batch.`).
 			Default(1).
 			Advanced()).
+		Field(service.NewAutoRetryNacksToggleField()).
 		Description(`
 This input uses [https://github.com/parquet-go/parquet-go](https://github.com/parquet-go/parquet-go), which is itself experimental. Therefore changes could be made into how this processor functions outside of major version releases.
 
@@ -46,7 +47,7 @@ func init() {
 			if err != nil {
 				return nil, err
 			}
-			return service.AutoRetryNacksBatched(in), nil
+			return service.AutoRetryNacksBatchedToggled(conf, in)
 		})
 	if err != nil {
 		panic(err)
@@ -161,7 +162,7 @@ func (r *parquetReader) getOpenFile() (*openParquetFile, error) {
 		rdr:    rdr,
 	}
 
-	r.log.Infof("Consuming parquet data from file '%v'", path)
+	r.log.Debugf("Consuming parquet data from file '%v'", path)
 	return r.openFile, nil
 }
 

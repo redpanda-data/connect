@@ -319,7 +319,7 @@ func lintsFromAny(line int, v any) (lints []Lint) {
 		_ = bloblang.NewArgSpec().Int64Var(&typeInt).Extract([]any{t["type"]})
 		lints = append(lints, NewLintError(line, LintType(typeInt), errors.New(t["what"].(string))))
 	case string:
-		if len(t) > 0 {
+		if t != "" {
 			lints = append(lints, NewLintError(line, LintCustom, errors.New(t)))
 		}
 	}
@@ -433,7 +433,7 @@ func (f FieldSpec) ScrubValue(v any) (any, error) {
 
 func (f FieldSpec) GetLintFunc() LintFunc {
 	fn := f.customLintFn
-	if fn == nil && len(f.Linter) > 0 {
+	if fn == nil && f.Linter != "" {
 		fn = f.LinterBlobl(f.Linter).customLintFn
 	}
 	if f.Interpolated {
