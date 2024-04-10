@@ -42,7 +42,7 @@ jobs:
 
   trivy-container-scan-pr:
     name: trivy (PR report)
-    needs: [push_plugins]
+    needs: [push_image]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     if: ${{ github.event_name == 'pull_request' }}
@@ -76,7 +76,7 @@ jobs:
 
   trivy-container-scan:
     name: trivy (container scan)
-    needs: [push_plugins]
+    needs: [push_image]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     if: github.ref_name == 'main' && github.event_name == 'push'
