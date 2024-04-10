@@ -150,9 +150,6 @@ func oauthSaslFromConfig(c *service.ParsedConfig) (sasl.Mechanism, error) {
 	token, err := c.FieldString("token")
 
 	if err != nil && token != "" {
-		if err != nil {
-			return nil, err
-		}
 		var extensions map[string]string
 		if c.Contains("extensions") {
 			if extensions, err = c.FieldStringMap("extensions"); err != nil {
@@ -181,7 +178,7 @@ func acquireToken(ctx context.Context, c *service.ParsedConfig) (string, error) 
 		return "", err
 	}
 
-	clientId, err := c.FieldString("clientId")
+	clientID, err := c.FieldString("clientId")
 	if err != nil {
 		return "", err
 	}
@@ -196,7 +193,7 @@ func acquireToken(ctx context.Context, c *service.ParsedConfig) (string, error) 
 		return "", err
 	}
 
-	authHeaderValue := base64.StdEncoding.EncodeToString([]byte(clientId + ":" + clientSecret))
+	authHeaderValue := base64.StdEncoding.EncodeToString([]byte(clientID + ":" + clientSecret))
 
 	queryParams := url.Values{}
 	queryParams.Set("grant_type", "client_credentials")
@@ -239,7 +236,7 @@ func acquireToken(ctx context.Context, c *service.ParsedConfig) (string, error) 
 
 	accessToken, ok := tokenResponse["access_token"].(string)
 	if !ok {
-		return "", fmt.Errorf("access_token not found in token response")
+		return "", errors.New("access_token not found in token response")
 	}
 
 	return accessToken, nil

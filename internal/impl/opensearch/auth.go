@@ -24,7 +24,7 @@ const (
 	aFieldAuthTokenCache        = "token_cache"
 	aFieldAuthTokenKey          = "token_key"
 	aFieldAuthTokenEndpoint     = "tokenEndpoint"
-	aFieldAuthTokenClientId     = "clientId"
+	aFieldAuthTokenClientID     = "clientId"
 	aFieldAuthTokenClientSecret = "clientSecret"
 	aFieldAuthTokenScope        = "scope"
 )
@@ -44,7 +44,7 @@ func OAuthAuthField() *service.ConfigField {
 		service.NewStringField(aFieldAuthTokenEndpoint).
 			Description("The endpoint to use for OAUTHBEARER token acquisition.").
 			Default(""),
-		service.NewStringField(aFieldAuthTokenClientId).
+		service.NewStringField(aFieldAuthTokenClientID).
 			Description("The client ID to use for OAUTHBEARER token acquisition.").
 			Default(""),
 		service.NewStringField(aFieldAuthTokenClientSecret).
@@ -84,7 +84,7 @@ func oAuthFromParsed(conf *service.ParsedConfig) (res OAuthConfig, err error) {
 		if res.TokenEndpoint, err = conf.FieldString(aFieldAuthTokenEndpoint); err != nil {
 			return
 		}
-		if res.ClientId, err = conf.FieldString(aFieldAuthTokenClientId); err != nil {
+		if res.ClientID, err = conf.FieldString(aFieldAuthTokenClientID); err != nil {
 			return
 		}
 		if res.ClientSecret, err = conf.FieldString(aFieldAuthTokenClientSecret); err != nil {
@@ -103,7 +103,7 @@ type OAuthConfig struct {
 	TokenCacheName    string
 	TokenCacheKey     string
 	TokenEndpoint     string
-	ClientId          string
+	ClientID          string
 	ClientSecret      string
 	Scope             string
 }
@@ -132,7 +132,7 @@ func (c *OAuthConfig) GetCachedToken(mgr *service.Resources) (*oauth2.Token, err
 
 func (c *OAuthConfig) GetToken(ctx context.Context) (*oauth2.Token, error) {
 
-	authHeaderValue := base64.StdEncoding.EncodeToString([]byte(c.ClientId + ":" + c.ClientSecret))
+	authHeaderValue := base64.StdEncoding.EncodeToString([]byte(c.ClientID + ":" + c.ClientSecret))
 
 	queryParams := url.Values{}
 	queryParams.Set("grant_type", "client_credentials")
@@ -188,7 +188,7 @@ func NewOAuth2Config() OAuthConfig {
 		TokenCacheName:    "",
 		TokenCacheKey:     "",
 		TokenEndpoint:     "",
-		ClientId:          "",
+		ClientID:          "",
 		ClientSecret:      "",
 		Scope:             "",
 	}
