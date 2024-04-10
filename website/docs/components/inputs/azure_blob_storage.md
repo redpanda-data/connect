@@ -43,6 +43,7 @@ input:
     prefix: ""
     scanner:
       to_the_end: {}
+    targets_input: null # No default (optional)
 ```
 
 </TabItem>
@@ -62,6 +63,7 @@ input:
     scanner:
       to_the_end: {}
     delete_objects: false
+    targets_input: null # No default (optional)
 ```
 
 </TabItem>
@@ -80,7 +82,11 @@ If the `storage_connection_string` does not contain the `AccountName` parameter,
 
 ## Downloading Large Files
 
-When downloading large files it's often necessary to process it in streamed parts in order to avoid loading the entire file in memory at a given time. In order to do this a [`codec`](#codec) can be specified that determines how to break the input into smaller individual messages.
+When downloading large files it's often necessary to process it in streamed parts in order to avoid loading the entire file in memory at a given time. In order to do this a [`scanner`](#scanner) can be specified that determines how to break the input into smaller individual messages.
+
+## Streaming New Files
+
+By default this input will consume all files found within the target container and will then gracefully terminate. This is referred to as a "batch" mode of operation. However, it's possible to instead configure a container as [an Event Grid source](https://learn.microsoft.com/en-gb/azure/event-grid/event-schema-blob-storage) and then use this as a [`targets_input`](#targetsinput), in which case new files are consumed as they're uploaded and Benthos will continue listening for and downloading files as they arrive. This is referred to as a "streamed" mode of operation.
 
 ## Metadata
 
@@ -163,5 +169,33 @@ Whether to delete downloaded objects from the blob once they are processed.
 
 Type: `bool`  
 Default: `false`  
+
+### `targets_input`
+
+EXPERIMENTAL: An optional source of download targets, configured as a [regular Benthos input](/docs/components/inputs/about). Each message yielded by this input should be a single structured object containing a field `name`, which represents the blob to be downloaded.
+
+
+Type: `input`  
+Requires version 4.27.0 or newer  
+
+```yml
+# Examples
+
+targets_input:
+  mqtt:
+    topics:
+      - some-topic
+    urls:
+      - example.westeurope-1.ts.eventgrid.azure.net:8883
+  processors:
+    - unarchive:
+        format: json_array
+    - mapping: |-
+        if this.eventType == "Microsoft.Storage.BlobCreated" {
+          root.name = this.data.url.parse_url().path.trim_prefix("/foocontainer/")
+        } else {
+          root = deleted()
+        }
+```
 
 

@@ -14,6 +14,7 @@ All notable changes to this project will be documented in this file.
 - Field `auto_replay_nacks` added to all inputs that traditionally automatically retry nacked messages as a toggle for this behaviour.
 - New `retry` processor.
 - New `noop` cache.
+- Field `targets_input` added to the `azure_blob_storage` input.
 
 ### Fixed
 
