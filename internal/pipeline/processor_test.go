@@ -352,3 +352,111 @@ func TestProcessorMultiMsgsBatchError(t *testing.T) {
 		t.Error("Expected mockproc to have waited for close")
 	}
 }
+
+type mockPhantomProcessor struct {
+	hasClosedAsync    bool
+	hasWaitedForClose bool
+	mut               sync.Mutex
+}
+
+func (m *mockPhantomProcessor) ProcessBatch(ctx context.Context, msg message.Batch) ([]message.Batch, error) {
+	var msgs []message.Batch
+	for _, p := range msg {
+		tmpMsg := p.ShallowCopy()
+		tmpMsg.SetBytes(fmt.Appendf(nil, "%s test", p.AsBytes()))
+		msgs = append(msgs, message.Batch{tmpMsg})
+	}
+	msgs = append(msgs, message.Batch{
+		message.NewPart([]byte("phantom message")),
+	})
+	return msgs, nil
+}
+
+func (m *mockPhantomProcessor) Close(ctx context.Context) error {
+	m.mut.Lock()
+	m.hasClosedAsync = true
+	m.hasWaitedForClose = true
+	m.mut.Unlock()
+	return nil
+}
+
+func TestProcessorMultiMsgsBatchUnknownError(t *testing.T) {
+	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+	defer done()
+
+	mockProc := &mockPhantomProcessor{}
+	proc := pipeline.NewProcessor(mockProc)
+
+	tChan, resChan := make(chan message.Transaction), make(chan error)
+
+	require.NoError(t, proc.Consume(tChan))
+
+	_, inputBatch := message.NewSortGroup(message.Batch{
+		message.NewPart([]byte("foo")),
+		message.NewPart([]byte("bar")),
+		message.NewPart([]byte("baz")),
+	})
+
+	// Send message
+	select {
+	case tChan <- message.NewTransaction(inputBatch, resChan):
+	case <-time.After(time.Second):
+		t.Error("Timed out")
+	}
+
+	expMsgs := map[string]struct{}{
+		"foo test":        {},
+		"bar test":        {},
+		"baz test":        {},
+		"phantom message": {},
+	}
+
+	resFns := []func(context.Context, error) error{}
+
+	// Receive expected messages
+	for i := 0; i < 4; i++ {
+		select {
+		case procT, open := <-proc.TransactionChan():
+			require.True(t, open)
+
+			act := string(procT.Payload.Get(0).AsBytes())
+			if _, exists := expMsgs[act]; !exists {
+				t.Errorf("Unexpected result: %v", act)
+			} else {
+				delete(expMsgs, act)
+			}
+			resFns = append(resFns, procT.Ack)
+		case <-time.After(time.Second):
+			t.Error("Timed out")
+		}
+	}
+
+	assert.Empty(t, expMsgs)
+	require.Len(t, resFns, 4)
+
+	require.NoError(t, resFns[0](ctx, nil))
+	require.NoError(t, resFns[1](ctx, nil))
+	require.NoError(t, resFns[2](ctx, nil))
+	require.NoError(t, resFns[3](ctx, errors.New("oh no")))
+
+	// Receive overall ack
+	select {
+	case err, open := <-resChan:
+		require.True(t, open)
+		require.EqualError(t, err, "oh no")
+
+		var batchErr *batch.Error
+		require.False(t, errors.As(err, &batchErr))
+	case <-time.After(time.Second):
+		t.Error("Timed out")
+	}
+
+	proc.TriggerCloseNow()
+	require.NoError(t, proc.WaitForClose(ctx))
+	if !mockProc.hasClosedAsync {
+		t.Error("Expected mockproc to have closed asynchronously")
+	}
+	if !mockProc.hasWaitedForClose {
+		t.Error("Expected mockproc to have waited for close")
+	}
+}

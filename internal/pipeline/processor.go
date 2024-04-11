@@ -85,9 +85,12 @@ func (p *Processor) loop() {
 			continue
 		}
 
-		var batchErrMut sync.Mutex
-		var batchErr *batch.Error
-		var batchWG sync.WaitGroup
+		var (
+			errMut     sync.Mutex
+			batchErr   *batch.Error
+			generalErr error
+			batchWG    sync.WaitGroup
+		)
 
 		for _, b := range resultBatches {
 			var wgOnce sync.Once
@@ -96,15 +99,22 @@ func (p *Processor) loop() {
 
 			select {
 			case p.messagesOut <- message.NewTransactionFunc(tmpBatch, func(ctx context.Context, err error) error {
-				batchErrMut.Lock()
-				defer batchErrMut.Unlock()
-
 				if err != nil {
+					errMut.Lock()
+					defer errMut.Unlock()
+
 					if batchErr == nil {
 						batchErr = batch.NewError(sortBatch, err)
 					}
 					for _, m := range tmpBatch {
-						batchErr.Failed(sorter.GetIndex(m), err)
+						if bIndex := sorter.GetIndex(m); bIndex >= 0 {
+							batchErr.Failed(bIndex, err)
+						} else {
+							// We are unable to link this message with an origin
+							// and therefore we must provide a general
+							// batch-wide error instead.
+							generalErr = err
+						}
 					}
 				}
 
@@ -120,7 +130,9 @@ func (p *Processor) loop() {
 
 		batchWG.Wait()
 
-		if batchErr != nil {
+		if generalErr != nil {
+			_ = tran.Ack(closeNowCtx, generalErr)
+		} else if batchErr != nil {
 			_ = tran.Ack(closeNowCtx, batchErr)
 		} else {
 			_ = tran.Ack(closeNowCtx, nil)
