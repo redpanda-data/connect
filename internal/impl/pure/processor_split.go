@@ -24,7 +24,8 @@ func init() {
 			Description(`
 This processor is for breaking batches down into smaller ones. In order to break a single message out into multiple messages use the `+"[`unarchive` processor](/docs/components/processors/unarchive)"+`.
 
-If there is a remainder of messages after splitting a batch the remainder is also sent as a single batch. For example, if your target size was 10, and the processor received a batch of 95 message parts, the result would be 9 batches of 10 messages followed by a batch of 5 messages.`).
+If there is a remainder of messages after splitting a batch the remainder is also sent as a single batch. For example, if your target size was 10, and the processor received a batch of 95 message parts, the result would be 9 batches of 10 messages followed by a batch of 5 messages.
+`).
 			Fields(
 				service.NewIntField(splitPFieldSize).
 					Description("The target number of messages.").
