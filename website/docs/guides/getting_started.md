@@ -45,6 +45,17 @@ docker pull ghcr.io/benthosdev/benthos
 docker run --rm -v /path/to/your/config.yaml:/benthos.yaml ghcr.io/benthosdev/benthos
 ```
 
+### Helm
+
+If you're using Kubernetes, you can install Benthos using [Helm](https://helm.sh/). You can find more information on configuring the Helm Chart, [here](https://github.com/benthosdev/benthos-helm-chart/).
+
+```sh
+helm repo add benthos https://benthosdev.github.io/charts/
+helm repo update
+
+helm install benthos/benthos
+```
+
 ### Homebrew
 
 On macOS, Benthos can be installed via Homebrew:
