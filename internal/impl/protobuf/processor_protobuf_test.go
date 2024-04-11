@@ -106,12 +106,14 @@ discard_unknown: %t
 
 func TestProtobufToJSON(t *testing.T) {
 	type testCase struct {
-		name          string
-		message       string
-		importPath    string
-		input         []byte
-		output        string
-		useProtoNames bool
+		name              string
+		message           string
+		importPath        string
+		input             []byte
+		output            string
+		useProtoNames     bool
+		emitUnpopulated   bool
+		emitDefaultValues bool
 	}
 
 	tests := []testCase{
@@ -174,6 +176,32 @@ func TestProtobufToJSON(t *testing.T) {
 			},
 			output: `{"id":747,"content":{"@type":"type.googleapis.com/testing.House","address":"123"}}`,
 		},
+		{
+			name:              "protobuf to json with use_proto_names and emit_default_values",
+			message:           "testing.Person",
+			importPath:        "../../../config/test/protobuf/schema",
+			useProtoNames:     true,
+			emitDefaultValues: true,
+			input: []byte{
+				0x0a, 0x05, 0x63, 0x61, 0x6c, 0x65, 0x62, 0x12, 0x05, 0x71, 0x75, 0x61, 0x79, 0x65, 0x32, 0x11,
+				0x63, 0x61, 0x6c, 0x65, 0x62, 0x40, 0x6d, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x2e, 0x63, 0x6f,
+				0x6d,
+			},
+			output: `{"first_name":"caleb","last_name":"quaye","email":"caleb@myspace.com","full_name":"", "age": 0, "id": 0}`,
+		},
+		{
+			name:            "protobuf to json with use_proto_names and emit_default_values",
+			message:         "testing.Person",
+			importPath:      "../../../config/test/protobuf/schema",
+			useProtoNames:   true,
+			emitUnpopulated: true,
+			input: []byte{
+				0x0a, 0x05, 0x63, 0x61, 0x6c, 0x65, 0x62, 0x12, 0x05, 0x71, 0x75, 0x61, 0x79, 0x65, 0x32, 0x11,
+				0x63, 0x61, 0x6c, 0x65, 0x62, 0x40, 0x6d, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x2e, 0x63, 0x6f,
+				0x6d,
+			},
+			output: `{"first_name":"caleb","last_name":"quaye","email":"caleb@myspace.com","full_name":"", "age": 0, "id": 0, "last_updated": null}`,
+		},
 	}
 
 	for i, test := range tests {
@@ -183,7 +211,9 @@ operator: to_json
 message: %v
 import_paths: [ %v ]
 use_proto_names: %t
-`, test.message, test.importPath, test.useProtoNames), nil)
+emit_unpopulated: %t
+emit_default_values: %t
+`, test.message, test.importPath, test.useProtoNames, test.emitUnpopulated, test.emitDefaultValues), nil)
 			require.NoError(t, err)
 
 			proc, err := newProtobuf(conf, service.MockResources())
