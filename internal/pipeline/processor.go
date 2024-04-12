@@ -4,10 +4,10 @@ import (
 	"context"
 	"sync"
 
+	"github.com/benthosdev/benthos/v4/internal/batch"
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	"github.com/benthosdev/benthos/v4/internal/old/util/throttle"
 	"github.com/benthosdev/benthos/v4/internal/shutdown"
 )
 
@@ -66,79 +66,78 @@ func (p *Processor) loop() {
 			return
 		}
 
-		resultMsgs, resultRes := processor.ExecuteAll(closeNowCtx, p.msgProcessors, tran.Payload)
-		if len(resultMsgs) == 0 {
-			if err := tran.Ack(closeNowCtx, resultRes); err != nil && closeNowCtx.Err() != nil {
+		sorter, sortBatch := message.NewSortGroup(tran.Payload)
+
+		resultBatches, err := processor.ExecuteAll(closeNowCtx, p.msgProcessors, sortBatch)
+		if len(resultBatches) == 0 || err != nil {
+			if _ = tran.Ack(closeNowCtx, err); closeNowCtx.Err() != nil {
 				return
 			}
 			continue
 		}
 
-		if len(resultMsgs) > 1 {
-			p.dispatchMessages(closeNowCtx, resultMsgs, tran.Ack)
-		} else {
+		if len(resultBatches) == 1 {
 			select {
-			case p.messagesOut <- message.NewTransactionFunc(resultMsgs[0], tran.Ack):
+			case p.messagesOut <- message.NewTransactionFunc(resultBatches[0], tran.Ack):
+			case <-p.shutSig.CloseNowChan():
+				return
+			}
+			continue
+		}
+
+		var (
+			errMut     sync.Mutex
+			batchErr   *batch.Error
+			generalErr error
+			batchWG    sync.WaitGroup
+		)
+
+		for _, b := range resultBatches {
+			var wgOnce sync.Once
+			batchWG.Add(1)
+			tmpBatch := b.ShallowCopy()
+
+			select {
+			case p.messagesOut <- message.NewTransactionFunc(tmpBatch, func(ctx context.Context, err error) error {
+				if err != nil {
+					errMut.Lock()
+					defer errMut.Unlock()
+
+					if batchErr == nil {
+						batchErr = batch.NewError(sortBatch, err)
+					}
+					for _, m := range tmpBatch {
+						if bIndex := sorter.GetIndex(m); bIndex >= 0 {
+							batchErr.Failed(bIndex, err)
+						} else {
+							// We are unable to link this message with an origin
+							// and therefore we must provide a general
+							// batch-wide error instead.
+							generalErr = err
+						}
+					}
+				}
+
+				wgOnce.Do(func() {
+					batchWG.Done()
+				})
+				return nil
+			}):
 			case <-p.shutSig.CloseNowChan():
 				return
 			}
 		}
-	}
-}
 
-// dispatchMessages attempts to send a multiple messages results of processors
-// over the shared messages channel. This send is retried until success.
-func (p *Processor) dispatchMessages(ctx context.Context, msgs []message.Batch, ackFn func(context.Context, error) error) {
-	throt := throttle.New(throttle.OptCloseChan(p.shutSig.CloseAtLeisureChan()))
+		batchWG.Wait()
 
-	pending := msgs
-	for len(pending) > 0 {
-		doneChan := make(chan struct{}, len(pending))
-
-		var newPending []message.Batch
-		var newPendingMut sync.Mutex
-
-		for _, b := range pending {
-			b := b
-			transac := message.NewTransactionFunc(b.ShallowCopy(), func(ctx context.Context, err error) error {
-				if err != nil {
-					newPendingMut.Lock()
-					newPending = append(newPending, b)
-					newPendingMut.Unlock()
-				}
-				select {
-				case doneChan <- struct{}{}:
-				default:
-				}
-				return nil
-			})
-
-			select {
-			case p.messagesOut <- transac:
-			case <-ctx.Done():
-				select {
-				case doneChan <- struct{}{}:
-				default:
-				}
-				return
-			}
-		}
-
-		for i := 0; i < len(pending); i++ {
-			select {
-			case <-doneChan:
-			case <-ctx.Done():
-				return
-			}
-		}
-
-		if pending = newPending; len(pending) > 0 && !throt.Retry() {
-			return
+		if generalErr != nil {
+			_ = tran.Ack(closeNowCtx, generalErr)
+		} else if batchErr != nil {
+			_ = tran.Ack(closeNowCtx, batchErr)
+		} else {
+			_ = tran.Ack(closeNowCtx, nil)
 		}
 	}
-
-	throt.Reset()
-	_ = ackFn(ctx, nil)
 }
 
 //------------------------------------------------------------------------------

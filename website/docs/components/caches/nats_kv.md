@@ -123,7 +123,7 @@ urls:
 
 ### `bucket`
 
-The name of the KV bucket to store items within.
+The name of the KV bucket.
 
 
 Type: `string`  

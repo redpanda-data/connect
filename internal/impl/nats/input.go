@@ -29,7 +29,7 @@ This input adds the following metadata fields to each message:
 
 You can access these metadata fields using [function interpolation](/docs/configuration/interpolation#bloblang-queries).
 
-` + ConnectionNameDescription() + authDescription()).
+` + connectionNameDescription() + authDescription()).
 		Fields(connectionHeadFields()...).
 		Field(service.NewStringField("subject").
 			Description("A subject to consume from. Supports wildcards for consuming multiple subjects. Either a subject or stream must be specified.").
@@ -49,7 +49,7 @@ You can access these metadata fields using [function interpolation](/docs/config
 			Default(nats.DefaultSubPendingMsgsLimit).
 			LintRule(`root = if this < 0 { ["prefetch count must be greater than or equal to zero"] }`)).
 		Fields(connectionTailFields()...).
-		Field(span.ExtractTracingSpanMappingDocs().Version(tracingVersion))
+		Field(inputTracingDocs())
 }
 
 func init() {

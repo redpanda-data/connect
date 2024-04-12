@@ -17,12 +17,8 @@ func natsKVCacheConfig() *service.ConfigSpec {
 		Categories("Services").
 		Version("4.27.0").
 		Summary("Cache key/values in a NATS key-value bucket.").
-		Description(ConnectionNameDescription() + authDescription()).
-		Fields(connectionHeadFields()...).
-		Field(service.NewStringField("bucket").
-			Description("The name of the KV bucket to store items within.").
-			Example("my_kv_bucket")).
-		Fields(connectionTailFields()...)
+		Description(connectionNameDescription() + authDescription()).
+		Fields(kvDocs()...)
 }
 
 func init() {
@@ -61,7 +57,7 @@ func newKVCache(conf *service.ParsedConfig, mgr *service.Resources) (*kvCache, e
 		return nil, err
 	}
 
-	if p.bucket, err = conf.FieldString("bucket"); err != nil {
+	if p.bucket, err = conf.FieldString(kvFieldBucket); err != nil {
 		return nil, err
 	}
 

@@ -2,12 +2,14 @@ package nats
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"testing"
 	"time"
 
 	"github.com/gofrs/uuid"
 	"github.com/nats-io/nats.go"
+	"github.com/nats-io/nats.go/jetstream"
 	"github.com/ory/dockertest/v3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -81,7 +83,7 @@ input:
 
 			bucketName := "bucket-" + testID
 
-			_, err = js.CreateKeyValue(&nats.KeyValueConfig{
+			_, err = js.CreateKeyValue(context.Background(), jetstream.KeyValueConfig{
 				Bucket: bucketName,
 			})
 			require.NoError(tb, err)
@@ -115,7 +117,7 @@ cache_resources:
 
 				bucketName := "bucket-" + testID
 
-				_, err = js.CreateKeyValue(&nats.KeyValueConfig{
+				_, err = js.CreateKeyValue(context.Background(), jetstream.KeyValueConfig{
 					Bucket: bucketName,
 				})
 				require.NoError(tb, err)
@@ -130,12 +132,12 @@ cache_resources:
 
 			u4, err := uuid.NewV4()
 			require.NoError(t, err)
-			js, err := natsConn.JetStream()
+			js, err := jetstream.New(natsConn)
 			require.NoError(t, err)
 
 			bucketName := "bucket-" + u4.String()
 
-			bucket, err := js.CreateKeyValue(&nats.KeyValueConfig{
+			bucket, err := js.CreateKeyValue(context.Background(), jetstream.KeyValueConfig{
 				Bucket:  bucketName,
 				History: 5,
 			})
@@ -160,7 +162,7 @@ cache_resources:
 
 		t.Run("get operation", func(t *testing.T) {
 			bucket, url := createBucket(t)
-			_, err := bucket.PutString("blob", "lawblog")
+			_, err := bucket.PutString(context.Background(), "blob", "lawblog")
 			require.NoError(t, err)
 
 			yaml := fmt.Sprintf(`
@@ -180,7 +182,7 @@ cache_resources:
 
 		t.Run("get_revision operation", func(t *testing.T) {
 			bucket, url := createBucket(t)
-			revision, err := bucket.PutString("blob", "lawblog")
+			revision, err := bucket.PutString(context.Background(), "blob", "lawblog")
 			require.NoError(t, err)
 
 			yaml := fmt.Sprintf(`
@@ -218,7 +220,7 @@ cache_resources:
 
 		t.Run("create operation (error)", func(t *testing.T) {
 			bucket, url := createBucket(t)
-			_, err := bucket.PutString("blob", "lawblog")
+			_, err := bucket.PutString(context.Background(), "blob", "lawblog")
 			require.NoError(t, err)
 
 			yaml := fmt.Sprintf(`
@@ -250,7 +252,7 @@ cache_resources:
 
 		t.Run("update operation", func(t *testing.T) {
 			bucket, url := createBucket(t)
-			revision, err := bucket.PutString("blob", "lawblog")
+			revision, err := bucket.PutString(context.Background(), "blob", "lawblog")
 			require.NoError(t, err)
 
 			yaml := fmt.Sprintf(`
@@ -271,7 +273,7 @@ cache_resources:
 
 		t.Run("delete operation", func(t *testing.T) {
 			bucket, url := createBucket(t)
-			_, err := bucket.PutString("blob", "lawblog")
+			_, err := bucket.PutString(context.Background(), "blob", "lawblog")
 			require.NoError(t, err)
 
 			yaml := fmt.Sprintf(`
@@ -288,13 +290,13 @@ cache_resources:
 			require.NoError(t, err)
 			assert.Equal(t, []byte("hello"), bytes)
 
-			_, err = bucket.Get("blob")
+			_, err = bucket.Get(context.Background(), "blob")
 			require.Error(t, err)
 		})
 
 		t.Run("purge operation", func(t *testing.T) {
 			bucket, url := createBucket(t)
-			_, err := bucket.PutString("blob", "lawblog")
+			_, err := bucket.PutString(context.Background(), "blob", "lawblog")
 			require.NoError(t, err)
 
 			yaml := fmt.Sprintf(`
@@ -311,15 +313,15 @@ cache_resources:
 			require.NoError(t, err)
 			assert.Equal(t, []byte("hello"), bytes)
 
-			_, err = bucket.Get("blob")
+			_, err = bucket.Get(context.Background(), "blob")
 			require.Error(t, err)
 		})
 
 		t.Run("history operation", func(t *testing.T) {
 			bucket, url := createBucket(t)
-			_, err := bucket.PutString("blob", "lawblog")
+			_, err := bucket.PutString(context.Background(), "blob", "lawblog")
 			require.NoError(t, err)
-			_, err = bucket.PutString("blob", "sawedlog")
+			_, err = bucket.PutString(context.Background(), "blob", "sawedlog")
 			require.NoError(t, err)
 
 			yaml := fmt.Sprintf(`
@@ -331,14 +333,31 @@ cache_resources:
 			result, err := process(yaml)
 			require.NoError(t, err)
 
-			assert.Len(t, result, 2)
+			require.Len(t, result, 1)
+
+			msg, err := result[0].AsStructured()
+			require.NoError(t, err)
+			require.IsType(t, []any{}, msg)
+			records := msg.([]any)
+			require.Len(t, records, 2)
+			record := records[1]
+			require.IsType(t, map[string]any{}, record)
+			assert.Contains(t, record, "created")
+			assert.Subset(t, record, map[string]any{
+				"key":       "blob",
+				"value":     []byte("sawedlog"),
+				"bucket":    bucket.Bucket(),
+				"revision":  uint64(2),
+				"delta":     uint64(0),
+				"operation": "KeyValuePutOp",
+			})
 		})
 
 		t.Run("keys operation", func(t *testing.T) {
 			bucket, url := createBucket(t)
-			_, err := bucket.PutString("blob", "lawblog")
+			_, err := bucket.PutString(context.Background(), "blob", "lawblog")
 			require.NoError(t, err)
-			_, err = bucket.PutString("bobs", "sawedlog")
+			_, err = bucket.PutString(context.Background(), "bobs", "sawedlog")
 			require.NoError(t, err)
 
 			yaml := fmt.Sprintf(`
@@ -350,7 +369,13 @@ cache_resources:
 			result, err := process(yaml)
 			require.NoError(t, err)
 
-			assert.Len(t, result, 2)
+			require.Len(t, result, 1)
+
+			msg, err := result[0].AsBytes()
+			require.NoError(t, err)
+			expected, err := json.Marshal([]any{"blob"})
+			require.NoError(t, err)
+			assert.JSONEq(t, string(expected), string(msg))
 		})
 	})
 }

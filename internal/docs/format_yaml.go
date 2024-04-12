@@ -725,6 +725,8 @@ func (f FieldSpec) ToYAML(recurse bool) (*yaml.Node, error) {
 		}
 		return &node, nil
 	}
+
+	_, isCore := f.Type.IsCoreComponent()
 	if f.Kind == KindArray || f.Kind == Kind2DArray {
 		s := []any{}
 		if err := node.Encode(s); err != nil {
@@ -736,6 +738,10 @@ func (f FieldSpec) ToYAML(recurse bool) (*yaml.Node, error) {
 		}
 		s := map[string]any{}
 		if err := node.Encode(s); err != nil {
+			return nil, err
+		}
+	} else if isCore {
+		if err := node.Encode(nil); err != nil {
 			return nil, err
 		}
 	} else {
