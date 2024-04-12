@@ -214,14 +214,9 @@ func TestFallbackHappyishPath(t *testing.T) {
 	resChan := make(chan error)
 
 	oTM, err := newFallbackBroker(outputs)
-	if err != nil {
-		t.Error(err)
-		return
-	}
-	if err = oTM.Consume(readChan); err != nil {
-		t.Error(err)
-		return
-	}
+	require.NoError(t, err)
+
+	require.NoError(t, oTM.Consume(readChan))
 
 	for i := 0; i < 10; i++ {
 		content := [][]byte{[]byte(fmt.Sprintf("hello world %v", i))}
