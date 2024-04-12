@@ -14,6 +14,7 @@ All notable changes to this project will be documented in this file.
 - Field `auto_replay_nacks` added to all inputs that traditionally automatically retry nacked messages as a toggle for this behaviour.
 - New `retry` processor.
 - New `noop` cache.
+- Field `targets_input` added to the `azure_blob_storage` input.
 
 ### Fixed
 
@@ -24,10 +25,12 @@ All notable changes to this project will be documented in this file.
 - The `nats_kv` processor `keys` operation now returns a single message with an array of found keys instead of a batch of messages.
 - The `nats_kv` processor `history` operation now returns a single message with an array of objects containing the record fields instead of a batch of messages.
 - Field `timeout` added to the `nats_kv` processor to specify the maximum period to wait on an operation before aborting and returning an error.
+- Bloblang comparison operators (`>`, `<`, `<=`, `>=`) now match the precision of the compared integers when applicable.
 
 ### Changed
 
 - The log events from all inputs and outputs when they first connect have been made more consistent and no longer contain any information regarding the nature of their connections.
+- Splitting message batches with a `split` processor (or custom plugins) no longer results in downstream error handling loops around nacks. This was previously implemented as a feature to ensure unbounded expanded and split batches don't flood downstream services in the event of a minority of errors. However, introducing more clever origin tracking of errored messages has eliminated the need for this undocumented behaviour.
 
 ## 4.26.0 - 2024-03-18
 
