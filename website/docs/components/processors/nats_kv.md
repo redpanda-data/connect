@@ -37,7 +37,7 @@ nats_kv:
   urls: [] # No default (required)
   bucket: my_kv_bucket # No default (required)
   operation: "" # No default (required)
-  key: ""
+  key: foo # No default (required)
 ```
 
 </TabItem>
@@ -50,8 +50,9 @@ nats_kv:
   urls: [] # No default (required)
   bucket: my_kv_bucket # No default (required)
   operation: "" # No default (required)
-  key: ""
+  key: foo # No default (required)
   revision: "42" # No default (optional)
+  timeout: 5s
   tls:
     enabled: false
     skip_cert_verify: false
@@ -77,7 +78,7 @@ The NATS KV processor supports a multitude of KV operations via the [operation](
 
 This processor adds the following metadata fields to each message, depending on the chosen `operation`:
 
-#### get, get_revision, history
+#### get, get_revision
 ``` text
 - nats_kv_key
 - nats_kv_bucket
@@ -159,7 +160,7 @@ urls:
 
 ### `bucket`
 
-The name of the KV bucket to watch for updates.
+The name of the KV bucket.
 
 
 Type: `string`  
@@ -183,8 +184,8 @@ Type: `string`
 | `delete` | Deletes the key/value pair, but keeps historical values. |
 | `get` | Returns the latest value for `key`. |
 | `get_revision` | Returns the value of `key` for the specified `revision`. |
-| `history` | Returns historical values of `key` as a batch. |
-| `keys` | Returns all the keys in the `bucket` as a batch. |
+| `history` | Returns historical values of `key` as an array of objects containing the following fields: `key`, `value`, `bucket`, `revision`, `delta`, `operation`, `created`. |
+| `keys` | Returns the keys in the `bucket` which match the `keys_filter` as an array of strings. |
 | `purge` | Deletes the key/value pair and all historical values. |
 | `put` | Places a new value for the key into the store. |
 | `update` | Updates the value for `key` only if the `revision` matches the latest revision. |
@@ -192,12 +193,11 @@ Type: `string`
 
 ### `key`
 
-The key for each message.
+The key for each message. Supports [wildcards](https://docs.nats.io/nats-concepts/subjects#wildcards) for the `history` and `keys` operations.
 This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
 
 
 Type: `string`  
-Default: `""`  
 
 ```yml
 # Examples
@@ -205,6 +205,10 @@ Default: `""`
 key: foo
 
 key: foo.bar.baz
+
+key: foo.*
+
+key: foo.>
 
 key: foo.${! json("meta.type") }
 ```
@@ -224,6 +228,14 @@ revision: "42"
 
 revision: ${! @nats_kv_revision }
 ```
+
+### `timeout`
+
+The maximum period to wait on an operation before aborting and returning an error.
+
+
+Type: `string`  
+Default: `"5s"`  
 
 ### `tls`
 

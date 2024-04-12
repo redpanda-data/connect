@@ -145,7 +145,7 @@ urls:
 
 ### `bucket`
 
-The name of the KV bucket to watch for updates.
+The name of the KV bucket.
 
 
 Type: `string`  

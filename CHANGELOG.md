@@ -21,6 +21,10 @@ All notable changes to this project will be documented in this file.
 - The `unarchive` processor no longer yields linting errors when the format `csv:x` is specified. This is a regression introduced in v4.25.0.
 - The `sftp` input will no longer consume files when the watcher cache returns an error. Instead, it will reattempt the file upon the next poll.
 - The `aws_sqs` input no longer logs error level logs for visibility timeout refreshing errors.
+- The `nats_kv` processor now allows [nats wildcards](https://docs.nats.io/nats-concepts/subjects#wildcards) for the `keys` operation.
+- The `nats_kv` processor `keys` operation now returns a single message with an array of found keys instead of a batch of messages.
+- The `nats_kv` processor `history` operation now returns a single message with an array of objects containing the record fields instead of a batch of messages.
+- Field `timeout` added to the `nats_kv` processor to specify the maximum period to wait on an operation before aborting and returning an error.
 - Bloblang comparison operators (`>`, `<`, `<=`, `>=`) now match the precision of the compared integers when applicable.
 
 ### Changed

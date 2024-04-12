@@ -137,9 +137,7 @@ You can access these metadata fields using [function interpolation](/docs/config
 				Default("30s"),
 		).
 		Fields(connectionTailFields()...).
-		Fields(
-			span.ExtractTracingSpanMappingDocs().Version(tracingVersion),
-		)
+		Field(inputTracingDocs())
 }
 
 func init() {
