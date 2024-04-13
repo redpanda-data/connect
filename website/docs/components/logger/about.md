@@ -93,7 +93,7 @@ Default: `"time"`
 
 ### `message_name`
 
-The name of the message field added to logs when the the `format` is `json`.
+The name of the message field added to logs when the `format` is `json`.
 
 
 Type: `string`  
