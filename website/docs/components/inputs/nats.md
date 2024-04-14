@@ -74,6 +74,7 @@ This input adds the following metadata fields to each message:
 
 ``` text
 - nats_subject
+- nats_reply_subject
 - All message headers (when supported by the connection)
 ```
 
