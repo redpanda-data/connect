@@ -336,14 +336,43 @@ func (w *WorkflowV2) ProcessBatch(ctx context.Context, msg message.Batch) ([]mes
 		fmt.Print("records[i]", records[i], "\n")
 	}
 
+	fmt.Println("HERE _ 5.55")
+
+	// error collector :
+	type collector struct {
+		eid     string
+		results [][]*message.Part
+	}
+
+	done := make(chan collector)
+
+	go func() {
+		mssge := <-done
+		errors := make([]error, 1)
+
+		var failed []branchMapError
+		err := errors[0]
+		if err == nil {
+			failed, err = children[mssge.eid].overlayResult(msg, mssge.results[0])
+		}
+		if err != nil {
+			w.mError.Incr(1)
+			w.log.Error("Failed to perform enrichment '%v': %v\n", mssge.eid, err)
+			for j := range records {
+				records[j].FailedV2(mssge.eid, err.Error())
+			}
+		}
+		for _, e := range failed {
+			records[e.index].FailedV2(mssge.eid, e.err.Error())
+		}
+
+	}()
+
 	fmt.Println("HERE _ 5.6")
 
 	for len(records[0].notStarted) != 0 {
 		for eid, _ := range records[0].notStarted {
 			fmt.Printf("eid: %s, col: %d \n", eid, int(eid[0]-'A'))
-
-			wg := sync.WaitGroup{}
-			wg.Add(1)
 
 			results := make([][]*message.Part, 1)
 			errors := make([]error, 1)
@@ -380,31 +409,12 @@ func (w *WorkflowV2) ProcessBatch(ctx context.Context, msg message.Batch) ([]mes
 						records[e.index].FailedV2(id, e.err.Error())
 					}
 					records[0].Finished(id)
-					wg.Done()
+					asdf := collector{
+						eid:     eid,
+						results: results,
+					}
+					done <- asdf
 				}(eid, int(eid[0]-'A'))
-			}
-
-			wg.Wait()
-
-			if err := ctx.Err(); err != nil {
-				return nil, err
-			}
-
-			var failed []branchMapError
-			err := errors[0]
-			if err == nil {
-				failed, err = children[eid].overlayResult(msg, results[0])
-			}
-			if err != nil {
-				w.mError.Incr(1)
-				w.log.Error("Failed to perform enrichment '%v': %v\n", eid, err)
-				for j := range records {
-					records[j].FailedV2(eid, err.Error())
-				}
-				continue
-			}
-			for _, e := range failed {
-				records[e.index].FailedV2(eid, e.err.Error())
 			}
 		}
 	}
