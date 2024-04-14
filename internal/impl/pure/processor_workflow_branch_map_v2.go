@@ -110,25 +110,9 @@ func newWorkflowBranchMapV2(conf *service.ParsedConfig, mgr bundle.NewManagement
 		staticBranches[k] = child
 	}
 
-	branchResources, err := conf.FieldStringList(wflowProcFieldBranchResourcesV2)
-	if err != nil {
-		return nil, err
-	}
-	for _, k := range branchResources {
-		if _, exists := dynamicBranches[k]; exists {
-			return nil, fmt.Errorf("branch resource name '%v' collides with an explicit branch", k)
-		}
-		if !mgr.ProbeProcessor(k) {
-			return nil, fmt.Errorf("processor resource '%v' was not found", k)
-		}
-		dynamicBranches[k] = &resourcedBranchV2{
-			name: k,
-			mgr:  mgr,
-		}
-	}
-
 	// When order is specified we infer that names missing from our explicit
 	// branches are resources.
+
 	order, err := conf.FieldStringListOfLists(wflowProcFieldOrderV2)
 	if err != nil {
 		return nil, err
