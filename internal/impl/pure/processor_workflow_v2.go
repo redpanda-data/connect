@@ -138,18 +138,19 @@ type resultTrackerV2 struct {
 	sync.Mutex
 }
 
-func trackerFromTreeV2(tree [][]string) *resultTrackerV2 {
+func trackerFromDagV2(dag [][]string) *resultTrackerV2 {
 	r := &resultTrackerV2{
 		succeeded: map[string]struct{}{},
 		skipped:   map[string]struct{}{},
 		failed:    map[string]string{},
 	}
-	for _, layer := range tree {
-		for _, k := range layer {
-			r.succeeded[k] = struct{}{}
-			fmt.Printf("Stage added to Succeeded Array: %s \n", k)
-		}
+
+	for i := range dag {
+		node_name := string(byte('A' + i))
+		r.succeeded[node_name] = struct{}{}
+		fmt.Printf("Stage added to Succeeded Array: %s \n", node_name)
 	}
+
 	return r
 }
 
@@ -255,9 +256,13 @@ func (w *WorkflowV2) skipFromMetaV2(root any) map[string]struct{} {
 
 // ProcessBatch applies workflow stages to each part of a message type.
 func (w *WorkflowV2) ProcessBatch(ctx context.Context, msg message.Batch) ([]message.Batch, error) {
+	fmt.Println("HERE _ 5")
 	// JEM ?gubbins
 	w.mReceived.Incr(int64(msg.Len()))
 	w.mBatchReceived.Incr(1)
+
+	fmt.Println("HERE _ 5.1")
+
 	//JEM log time
 	startedAt := time.Now()
 
@@ -265,6 +270,8 @@ func (w *WorkflowV2) ProcessBatch(ctx context.Context, msg message.Batch) ([]mes
 
 	// JEM - go get the things from w.children (*workflowBranchMap)
 	dag, children, unlock, err := w.children.LockV2()
+
+	fmt.Println("HERE _ 5.2")
 
 	// JEM - error handling <>
 	if err != nil {
@@ -279,8 +286,12 @@ func (w *WorkflowV2) ProcessBatch(ctx context.Context, msg message.Batch) ([]mes
 		w.mBatchSent.Incr(1)
 		return []message.Batch{msg}, nil
 	}
+	fmt.Println("HERE _ 5.3")
+
 	// JEM - end error handling <>
 	defer unlock()
+
+	fmt.Println("HERE _ 5.4")
 
 	// JEM : what is this for? - this is the skip functionality if it is being restarted.
 	skipOnMeta := make([]map[string]struct{}, msg.Len())
@@ -294,14 +305,18 @@ func (w *WorkflowV2) ProcessBatch(ctx context.Context, msg message.Batch) ([]mes
 		return nil
 	})
 
+	fmt.Println("HERE _ 5.5")
+
 	propMsg, _ := tracing.WithChildSpans(w.tracer, "workflow", msg)
 
 	// result tracker created:
 	records := make([]*resultTrackerV2, msg.Len())
 	for i := range records {
-		records[i] = trackerFromTreeV2(dag)
+		records[i] = trackerFromDagV2(dag)
 		fmt.Print("records[i]", records[i], "\n")
 	}
+
+	fmt.Println("HERE _ 5.6")
 
 	// JEM - this loop logic:
 	for _, layer := range dag {
@@ -366,6 +381,8 @@ func (w *WorkflowV2) ProcessBatch(ctx context.Context, msg message.Batch) ([]mes
 		}
 	}
 
+	fmt.Println("HERE _ 5.7")
+
 	// Finally, set the meta records of each document.
 	if len(w.metaPath) > 0 {
 		_ = msg.Iter(func(i int, p *message.Part) error {
@@ -402,11 +419,16 @@ func (w *WorkflowV2) ProcessBatch(ctx context.Context, msg message.Batch) ([]mes
 		})
 	}
 
+	fmt.Println("HERE _ 5.8")
+
 	tracing.FinishSpans(propMsg)
 
 	w.mSent.Incr(int64(msg.Len()))
 	w.mBatchSent.Incr(1)
 	w.mLatency.Timing(time.Since(startedAt).Nanoseconds())
+
+	fmt.Println("HERE _ 5.9")
+
 	return []message.Batch{msg}, nil
 }
 
