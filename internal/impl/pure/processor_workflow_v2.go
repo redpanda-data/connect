@@ -166,6 +166,22 @@ func (r *resultTrackerV2) SkippedV2(k string) {
 	r.Unlock()
 }
 
+func (r *resultTrackerV2) Finished(k string) {
+	r.Lock()
+	delete(r.running, k)
+
+	r.succeeded[k] = struct{}{}
+	r.Unlock()
+}
+
+func (r *resultTrackerV2) Started(k string) {
+	r.Lock()
+	delete(r.notStarted, k)
+
+	r.running[k] = struct{}{}
+	r.Unlock()
+}
+
 func (r *resultTrackerV2) FailedV2(k, why string) {
 	r.Lock()
 	delete(r.succeeded, k)
@@ -322,64 +338,73 @@ func (w *WorkflowV2) ProcessBatch(ctx context.Context, msg message.Batch) ([]mes
 
 	fmt.Println("HERE _ 5.6")
 
-	// JEM - this loop logic:
-	for _, layer := range dag {
-		results := make([][]*message.Part, len(layer))
-		errors := make([]error, len(layer))
+	for len(records[0].notStarted) != 0 {
+		for eid, _ := range records[0].notStarted {
+			fmt.Printf("eid: %s, col: %d \n", eid, int(eid[0]-'A'))
 
-		wg := sync.WaitGroup{}
-		wg.Add(len(layer))
+			wg := sync.WaitGroup{}
+			wg.Add(1)
 
-		for i, eid := range layer {
-			branchMsg, branchSpans := tracing.WithChildSpans(w.tracer, eid, propMsg.ShallowCopy())
+			results := make([][]*message.Part, 1)
+			errors := make([]error, 1)
 
-			go func(id string, index int) {
-				branchParts := make([]*message.Part, branchMsg.Len())
-				_ = branchMsg.Iter(func(partIndex int, part *message.Part) error {
-					// Remove errors so that they aren't propagated into the
-					// branch.
-					part.ErrorSet(nil)
-					if _, exists := skipOnMeta[partIndex][id]; !exists {
-						branchParts[partIndex] = part
+			if isColumnAllZeros(dag, int(eid[0]-'A')) {
+
+				branchMsg, branchSpans := tracing.WithChildSpans(w.tracer, eid, propMsg.ShallowCopy())
+
+				go func(id string, index int) {
+					records[index].Started(id)
+
+					branchParts := make([]*message.Part, branchMsg.Len())
+					_ = branchMsg.Iter(func(partIndex int, part *message.Part) error {
+						// Remove errors so that they aren't propagated into the
+						// branch.
+						part.ErrorSet(nil)
+						if _, exists := skipOnMeta[partIndex][id]; !exists {
+							branchParts[partIndex] = part
+						}
+						return nil
+					})
+
+					var mapErrs []branchMapError
+					results[index], mapErrs, errors[index] = children[id].createResult(ctx, branchParts, propMsg.ShallowCopy())
+					for _, s := range branchSpans {
+						s.Finish()
 					}
-					return nil
-				})
-
-				var mapErrs []branchMapError
-				results[index], mapErrs, errors[index] = children[id].createResult(ctx, branchParts, propMsg.ShallowCopy())
-				for _, s := range branchSpans {
-					s.Finish()
-				}
-				for j, p := range results[index] {
-					if p == nil {
-						records[j].SkippedV2(id)
+					for j, p := range results[index] {
+						if p == nil {
+							records[j].SkippedV2(id)
+						}
 					}
-				}
-				for _, e := range mapErrs {
-					records[e.index].FailedV2(id, e.err.Error())
-				}
-				wg.Done()
-			}(eid, i)
-		}
+					for _, e := range mapErrs {
+						records[e.index].FailedV2(id, e.err.Error())
+					}
+					records[0].Finished(id)
+					wg.Done()
+				}(eid, int(eid[0]-'A'))
+			}
 
-		wg.Wait()
+			wg.Wait()
 
-		for i, id := range layer {
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
+
 			var failed []branchMapError
-			err := errors[i]
+			err := errors[0]
 			if err == nil {
-				failed, err = children[id].overlayResult(msg, results[i])
+				failed, err = children[eid].overlayResult(msg, results[0])
 			}
 			if err != nil {
 				w.mError.Incr(1)
-				w.log.Error("Failed to perform enrichment '%v': %v\n", id, err)
+				w.log.Error("Failed to perform enrichment '%v': %v\n", eid, err)
 				for j := range records {
-					records[j].FailedV2(id, err.Error())
+					records[j].FailedV2(eid, err.Error())
 				}
 				continue
 			}
 			for _, e := range failed {
-				records[e.index].FailedV2(id, e.err.Error())
+				records[e.index].FailedV2(eid, e.err.Error())
 			}
 		}
 	}
@@ -438,4 +463,13 @@ func (w *WorkflowV2) ProcessBatch(ctx context.Context, msg message.Batch) ([]mes
 // Close shuts down the processor and stops processing requests.
 func (w *WorkflowV2) Close(ctx context.Context) error {
 	return w.children.Close(ctx)
+}
+
+func isColumnAllZeros(matrix [][]string, columnIdx int) bool {
+	for i := 0; i < len(matrix); i++ {
+		if matrix[i][columnIdx] != "0" {
+			return false
+		}
+	}
+	return true
 }

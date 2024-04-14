@@ -1,0 +1,29 @@
+input: 
+  stdin: {}
+
+pipeline:
+  processors:
+    - workflow_v2:
+        # meta_path: meta.workflow
+        # order: [ [ A ] ]
+
+        # change this so that it is ints.
+
+        adjacency_matrix: [
+          ["0"]
+          ]
+        
+        branches:
+          A:
+            processors:
+            #   - log:
+            #       level: INFO
+            #       message: STAGE A STARTED
+              - sleep:
+                  duration: "3s"
+              - log:
+                  level: INFO
+                  message: STAGE A FINISHED
+
+output:
+  stdout: {}
