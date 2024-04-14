@@ -371,6 +371,7 @@ func (w *WorkflowV2) ProcessBatch(ctx context.Context, msg message.Batch) ([]mes
 	fmt.Println("HERE _ 5.6")
 
 	for len(records[0].notStarted) != 0 {
+		time.Sleep(100 * time.Millisecond)
 		for eid, _ := range records[0].notStarted {
 			fmt.Printf("eid: %s, col: %d \n", eid, int(eid[0]-'A'))
 
