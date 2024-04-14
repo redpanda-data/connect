@@ -74,6 +74,25 @@ func (i *mockInput) Close(ctx context.Context) error {
 	return <-i.closeChan
 }
 
+func TestAutoRetryConfig(t *testing.T) {
+	spec := NewConfigSpec().Field(NewAutoRetryNacksToggleField())
+	for conf, shouldRetry := range map[string]bool{
+		`{}`:                       true,
+		`auto_replay_nacks: false`: false,
+		`auto_replay_nacks: true`:  true,
+	} {
+		inConf, err := spec.ParseYAML(conf, nil)
+		require.NoError(t, err, conf)
+
+		readerImpl := newMockInput()
+		pres, err := AutoRetryNacksToggled(inConf, readerImpl)
+		require.NoError(t, err, conf)
+
+		_, isWrapped := pres.(*autoRetryInput)
+		assert.Equal(t, shouldRetry, isWrapped, conf)
+	}
+}
+
 func TestAutoRetryClose(t *testing.T) {
 	t.Parallel()
 

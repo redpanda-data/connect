@@ -316,7 +316,7 @@ func newStaticTargetReader(
 		Bucket:  &conf.Bucket,
 		MaxKeys: &maxKeys,
 	}
-	if len(conf.Prefix) > 0 {
+	if conf.Prefix != "" {
 		listInput.Prefix = &conf.Prefix
 	}
 	output, err := s3Client.ListObjectsV2(ctx, listInput)
@@ -346,7 +346,7 @@ func (s *staticTargetReader) Pop(ctx context.Context) (*s3ObjectTarget, error) {
 			MaxKeys:    &maxKeys,
 			StartAfter: s.startAfter,
 		}
-		if len(s.conf.Prefix) > 0 {
+		if s.conf.Prefix != "" {
 			listInput.Prefix = &s.conf.Prefix
 		}
 		output, err := s.s3.ListObjectsV2(ctx, listInput)
@@ -455,7 +455,7 @@ func (s *sqsTargetReader) parseObjectPaths(sqsMsg *string) ([]s3ObjectTarget, er
 		return nil, fmt.Errorf("failed to parse SQS message: %v", err)
 	}
 
-	if len(s.conf.SQS.EnvelopePath) > 0 {
+	if s.conf.SQS.EnvelopePath != "" {
 		d := gObj.Path(s.conf.SQS.EnvelopePath).Data()
 		if str, ok := d.(string); ok {
 			if gObj, err = gabs.ParseJSON([]byte(str)); err != nil {
@@ -475,7 +475,7 @@ func (s *sqsTargetReader) parseObjectPaths(sqsMsg *string) ([]s3ObjectTarget, er
 	case []any:
 		keys = digStrsFromSlices(t)
 	}
-	if len(s.conf.SQS.BucketPath) > 0 {
+	if s.conf.SQS.BucketPath != "" {
 		switch t := gObj.Path(s.conf.SQS.BucketPath).Data().(type) {
 		case string:
 			buckets = []string{t}
@@ -676,7 +676,7 @@ func newAmazonS3Reader(conf s3iConfig, awsConf aws.Config, nm *service.Resources
 		log:               nm.Logger(),
 		objectScannerCtor: conf.CodecCtor,
 	}
-	if len(conf.SQS.DelayPeriod) > 0 {
+	if conf.SQS.DelayPeriod != "" {
 		var err error
 		if s.gracePeriod, err = time.ParseDuration(conf.SQS.DelayPeriod); err != nil {
 			return nil, fmt.Errorf("failed to parse grace period: %w", err)
@@ -704,7 +704,7 @@ func (a *awsS3Reader) Connect(ctx context.Context) error {
 	})
 	if a.conf.SQS.URL != "" {
 		sqsConf := a.awsConf.Copy()
-		if len(a.conf.SQS.Endpoint) > 0 {
+		if a.conf.SQS.Endpoint != "" {
 			sqsConf.BaseEndpoint = &a.conf.SQS.Endpoint
 		}
 		a.sqs = sqs.NewFromConfig(sqsConf)
@@ -715,12 +715,6 @@ func (a *awsS3Reader) Connect(ctx context.Context) error {
 		a.s3 = nil
 		a.sqs = nil
 		return err
-	}
-
-	if a.conf.SQS.URL == "" {
-		a.log.Infof("Downloading S3 objects from bucket: %s\n", a.conf.Bucket)
-	} else {
-		a.log.Infof("Downloading S3 objects found in messages from SQS: %s\n", a.conf.SQS.URL)
 	}
 	return nil
 }

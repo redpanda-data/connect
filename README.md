@@ -60,7 +60,7 @@ Do you like looking at stuff? Get angry and smash things when you're forced to r
 Grab a binary for your OS from [here.][releases] Or use this script:
 
 ```shell
-curl -Lsf https://sh.benthos.dev | bash
+curl -Lsf https://www.benthos.dev/sh/install | bash
 ```
 
 Or pull the docker image:

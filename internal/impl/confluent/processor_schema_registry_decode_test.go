@@ -296,7 +296,7 @@ func TestSchemaRegistryDecodeAvro(t *testing.T) {
 
 	require.NoError(t, decoder.Close(context.Background()))
 	decoder.cacheMut.Lock()
-	assert.Len(t, decoder.schemas, 0)
+	assert.Empty(t, decoder.schemas)
 	decoder.cacheMut.Unlock()
 }
 
@@ -399,7 +399,7 @@ func TestSchemaRegistryDecodeAvroRawJson(t *testing.T) {
 
 	require.NoError(t, decoder.Close(context.Background()))
 	decoder.cacheMut.Lock()
-	assert.Len(t, decoder.schemas, 0)
+	assert.Empty(t, decoder.schemas)
 	decoder.cacheMut.Unlock()
 }
 
@@ -497,7 +497,7 @@ func TestSchemaRegistryDecodeProtobuf(t *testing.T) {
 
 	require.NoError(t, decoder.Close(context.Background()))
 	decoder.cacheMut.Lock()
-	assert.Len(t, decoder.schemas, 0)
+	assert.Empty(t, decoder.schemas)
 	decoder.cacheMut.Unlock()
 }
 
@@ -567,6 +567,6 @@ func TestSchemaRegistryDecodeJson(t *testing.T) {
 
 	require.NoError(t, decoder.Close(context.Background()))
 	decoder.cacheMut.Lock()
-	assert.Len(t, decoder.schemas, 0)
+	assert.Empty(t, decoder.schemas)
 	decoder.cacheMut.Unlock()
 }

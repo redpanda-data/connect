@@ -14,6 +14,6 @@ func TestGetConfig(t *testing.T) {
 	conf, _, err := lambda.DefaultConfigAndSpec()
 	require.NoError(t, err)
 
-	assert.Equal(t, conf.Metrics.Type, "none")
-	assert.Equal(t, conf.Logger.Format, "json")
+	assert.Equal(t, "none", conf.Metrics.Type)
+	assert.Equal(t, "json", conf.Logger.Format)
 }

@@ -36,7 +36,7 @@ func TestStaticExpressionOptimization(t *testing.T) {
 		t.Run(test.output, func(t *testing.T) {
 			e := NewExpression(test.input...)
 			assert.Equal(t, test.output, e.static)
-			assert.Equal(t, 0, len(e.resolvers))
+			assert.Empty(t, e.resolvers)
 		})
 	}
 }

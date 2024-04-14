@@ -104,7 +104,7 @@ switch:
 				msg = append(msg, message.NewPart([]byte(s)))
 			}
 			msgs, res := c.ProcessBatch(context.Background(), msg)
-			require.Nil(t, res)
+			require.NoError(t, res)
 
 			resStrs := []string{}
 			for _, b := range message.GetAllBytes(msgs[0]) {
@@ -143,7 +143,7 @@ switch:
 	}
 
 	msgs, res := c.ProcessBatch(context.Background(), msg)
-	require.Nil(t, res)
+	require.NoError(t, res)
 
 	assert.Len(t, msgs, 1)
 	assert.Equal(t, 3, msgs[0].Len())
@@ -218,7 +218,7 @@ switch:
 
 	for i := 0; i < b.N; i++ {
 		msgs, res := c.ProcessBatch(context.Background(), msg)
-		require.Nil(b, res)
+		require.NoError(b, res)
 		assert.Equal(b, exp, message.GetAllBytes(msgs[0]))
 	}
 }
@@ -277,7 +277,7 @@ switch:
 
 	for i := 0; i < b.N; i++ {
 		resMsgs, res := c.ProcessBatch(context.Background(), msgs[i%len(msgs)])
-		require.Nil(b, res)
+		require.NoError(b, res)
 		assert.Equal(b, [][]byte{exp[i%len(exp)]}, message.GetAllBytes(resMsgs[0]))
 	}
 }

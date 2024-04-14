@@ -237,9 +237,9 @@ func SanitiseYAML(cType Type, node *yaml.Node, conf SanitiseConfig) error {
 				newNodes = append(newNodes, node.Content[i], node.Content[i+1])
 			}
 			break
-		} else {
-			keys = append(keys, node.Content[i].Value)
 		}
+
+		keys = append(keys, node.Content[i].Value)
 	}
 	if name == "" {
 		if len(node.Content) == 0 {
@@ -261,7 +261,7 @@ func SanitiseYAML(cType Type, node *yaml.Node, conf SanitiseConfig) error {
 		if node.Content[i].Value == "plugin" && cSpec.Plugin {
 			if !yamlIsNil(node.Content[i+1]) {
 				// Plugin conf is here but the value is null because it's
-				// non-existant. This can happen in cases where a config is
+				// non-existent. This can happen in cases where a config is
 				// parsed out with `{type: foo}` form.
 				node.Content[i].Value = name
 			}
@@ -515,9 +515,9 @@ func LintYAML(ctx LintContext, cType Type, node *yaml.Node) []Lint {
 		if node.Content[i].Value == "type" {
 			name = node.Content[i+1].Value
 			break
-		} else {
-			keys = append(keys, node.Content[i].Value)
 		}
+
+		keys = append(keys, node.Content[i].Value)
 	}
 	if name == "" {
 		if len(node.Content) == 0 {
@@ -725,6 +725,8 @@ func (f FieldSpec) ToYAML(recurse bool) (*yaml.Node, error) {
 		}
 		return &node, nil
 	}
+
+	_, isCore := f.Type.IsCoreComponent()
 	if f.Kind == KindArray || f.Kind == Kind2DArray {
 		s := []any{}
 		if err := node.Encode(s); err != nil {
@@ -736,6 +738,10 @@ func (f FieldSpec) ToYAML(recurse bool) (*yaml.Node, error) {
 		}
 		s := map[string]any{}
 		if err := node.Encode(s); err != nil {
+			return nil, err
+		}
+	} else if isCore {
+		if err := node.Encode(nil); err != nil {
 			return nil, err
 		}
 	} else {
@@ -899,7 +905,7 @@ func (f FieldSpec) YAMLToValue(node *yaml.Node, conf ToValueConfig) (any, error)
 
 	if conf.FallbackToAny {
 		// We don't know what the field actually is (likely a component
-		// type), so if we we can either decode into a generic interface
+		// type), so if we can either decode into a generic interface
 		// or return the raw node itself.
 		var v any
 		if err := node.Decode(&v); err != nil {

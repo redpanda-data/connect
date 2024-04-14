@@ -286,7 +286,7 @@ subprocess:
 
 		msgs, res := proc.ProcessBatch(context.Background(), msgIn)
 		require.Len(t, msgs, 1)
-		require.Nil(t, res)
+		require.NoError(t, res)
 
 		for i := 0; i < msgIn.Len(); i++ {
 			assert.NoError(t, msgs[0].Get(i).ErrorGet())

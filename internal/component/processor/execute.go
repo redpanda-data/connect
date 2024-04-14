@@ -22,6 +22,9 @@ func ExecuteAll(ctx context.Context, procs []V1, msgs ...message.Batch) ([]messa
 				// error on a message.
 				return nil, err
 			}
+			if ctx.Err() != nil {
+				return nil, ctx.Err()
+			}
 			nextResultMsgs = append(nextResultMsgs, rMsgs...)
 		}
 		resultMsgs = nextResultMsgs
@@ -52,6 +55,9 @@ func ExecuteTryAll(ctx context.Context, procs []V1, msgs ...message.Batch) ([]me
 				// We immediately return if a processor hits an unrecoverable
 				// error on a message.
 				return nil, err
+			}
+			if ctx.Err() != nil {
+				return nil, ctx.Err()
 			}
 			nextResultMsgs = append(nextResultMsgs, rMsgs...)
 		}
@@ -94,6 +100,9 @@ func ExecuteCatchAll(ctx context.Context, procs []V1, msgs ...message.Batch) ([]
 					// We immediately return if a processor hits an unrecoverable
 					// error on a message.
 					return nil, resultRes
+				}
+				if ctx.Err() != nil {
+					return nil, ctx.Err()
 				}
 				nextResultBatches = append(nextResultBatches, rMsgs...)
 			}

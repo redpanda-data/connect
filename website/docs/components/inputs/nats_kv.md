@@ -38,6 +38,7 @@ input:
     urls: [] # No default (required)
     bucket: my_kv_bucket # No default (required)
     key: '>'
+    auto_replay_nacks: true
 ```
 
 </TabItem>
@@ -51,6 +52,7 @@ input:
     urls: [] # No default (required)
     bucket: my_kv_bucket # No default (required)
     key: '>'
+    auto_replay_nacks: true
     ignore_deletes: false
     include_history: false
     meta_only: false
@@ -143,7 +145,7 @@ urls:
 
 ### `bucket`
 
-The name of the KV bucket to watch for updates.
+The name of the KV bucket.
 
 
 Type: `string`  
@@ -173,6 +175,14 @@ key: foo.bar.*
 
 key: foo.>
 ```
+
+### `auto_replay_nacks`
+
+Whether messages that are rejected (nacked) at the output level should be automatically replayed indefinitely, eventually resulting in back pressure if the cause of the rejections is persistent. If set to `false` these messages will instead be deleted. Disabling auto replays can greatly improve memory efficiency of high throughput streams as the original shape of the data can be discarded immediately upon consumption and mutation.
+
+
+Type: `bool`  
+Default: `true`  
 
 ### `ignore_deletes`
 

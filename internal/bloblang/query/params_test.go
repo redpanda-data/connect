@@ -689,7 +689,7 @@ func TestParsedParams(t *testing.T) {
 
 	b, err := parsed.FieldBool("fourth")
 	require.NoError(t, err)
-	assert.Equal(t, true, b)
+	assert.True(t, b)
 
 	q, err := parsed.FieldQuery("fifth")
 	require.NoError(t, err)
@@ -725,7 +725,7 @@ func TestParsedParamsOptional(t *testing.T) {
 	b, err := parsed.FieldOptionalBool("fourth")
 	require.NoError(t, err)
 	require.NotNil(t, b)
-	assert.Equal(t, true, *b)
+	assert.True(t, *b)
 
 	q, err := parsed.FieldOptionalQuery("fifth")
 	require.NoError(t, err)

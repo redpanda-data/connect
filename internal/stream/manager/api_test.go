@@ -263,14 +263,8 @@ func TestTypeAPIBasicOperations(t *testing.T) {
 	assert.Equal(t, http.StatusNotFound, response.Code, response.Body.String())
 
 	testVar := "__TEST_INPUT_MAPPING"
-	originalEnv, orignalSet := os.LookupEnv(testVar)
-	defer func() {
-		_ = os.Unsetenv(testVar)
-		if orignalSet {
-			_ = os.Setenv(testVar, originalEnv)
-		}
-	}()
-	_ = os.Setenv(testVar, `root.meow = 5`)
+
+	t.Setenv(testVar, `root.meow = 5`)
 
 	request = genRequest("POST", "/streams/fooEnv?chilled=true", map[string]any{
 		"input": map[string]any{
@@ -596,7 +590,7 @@ func TestTypeAPIStreamsDefaultConf(t *testing.T) {
 
 	v := testConfToAny(t, status.Config())
 
-	assert.Equal(t, nil, gabs.Wrap(v).S("input", "generate", "interval").Data())
+	assert.Nil(t, gabs.Wrap(v).S("input", "generate", "interval").Data())
 }
 
 func TestTypeAPIStreamsLinting(t *testing.T) {
@@ -688,7 +682,7 @@ func TestTypeAPIDefaultConf(t *testing.T) {
 	require.NoError(t, err)
 
 	v := testConfToAny(t, status.Config())
-	assert.Equal(t, nil, gabs.Wrap(v).S("input", "generate", "interval").Data())
+	assert.Nil(t, gabs.Wrap(v).S("input", "generate", "interval").Data())
 }
 
 func TestTypeAPILinting(t *testing.T) {
@@ -873,7 +867,7 @@ output:
 	stats, err := gabs.ParseJSON(response.Body.Bytes())
 	require.NoError(t, err)
 
-	assert.Greater(t, len(stats.ChildrenMap()), 0, response.Body.String())
+	assert.NotEmpty(t, stats.ChildrenMap(), response.Body.String())
 }
 
 func TestTypeAPISetResources(t *testing.T) {

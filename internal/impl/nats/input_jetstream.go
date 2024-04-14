@@ -43,7 +43,7 @@ This input adds the following metadata fields to each message:
 You can access these metadata fields using
 [function interpolation](/docs/configuration/interpolation#bloblang-queries).
 
-` + ConnectionNameDescription() + authDescription()).
+` + connectionNameDescription() + authDescription()).
 		Fields(connectionHeadFields()...).
 		Field(service.NewStringField("queue").
 			Description("An optional queue group to consume as.").
@@ -80,7 +80,7 @@ You can access these metadata fields using
 			Advanced().
 			Default(1024)).
 		Fields(connectionTailFields()...).
-		Field(span.ExtractTracingSpanMappingDocs().Version(tracingVersion))
+		Field(inputTracingDocs())
 }
 
 func init() {
@@ -177,11 +177,11 @@ func newJetStreamReaderFromConfig(conf *service.ParsedConfig, mgr *service.Resou
 	}
 	if j.bind {
 		if j.stream == "" && j.durable == "" {
-			return nil, fmt.Errorf("stream or durable is required, when bind is true")
+			return nil, errors.New("stream or durable is required, when bind is true")
 		}
 	} else {
 		if j.subject == "" {
-			return nil, fmt.Errorf("subject is empty")
+			return nil, errors.New("subject is empty")
 		}
 	}
 
@@ -287,8 +287,6 @@ func (j *jetStreamReader) Connect(ctx context.Context) (err error) {
 	if err != nil {
 		return err
 	}
-
-	j.log.Infof("Receiving NATS messages from JetStream subject: %v", j.subject)
 
 	j.natsConn = natsConn
 	j.natsSub = natsSub

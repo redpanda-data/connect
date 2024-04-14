@@ -5,35 +5,46 @@ import (
 	"fmt"
 	"strconv"
 	"sync"
+	"time"
 
 	"github.com/nats-io/nats.go"
+	"github.com/nats-io/nats.go/jetstream"
 
 	"github.com/benthosdev/benthos/v4/internal/shutdown"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
 const (
-	kvGet         = "get"
-	kvGetRevision = "get_revision"
-	kvCreate      = "create"
-	kvPut         = "put"
-	kvUpdate      = "update"
-	kvDelete      = "delete"
-	kvPurge       = "purge"
-	kvHistory     = "history"
-	kvKeys        = "keys"
+	kvpFieldOperation = "operation"
+	kvpFieldKey       = "key"
+	kvpFieldRevision  = "revision"
+	kvpFieldTimeout   = "timeout"
 )
 
-var kvOps = map[string]string{
-	kvGet:         "Returns the latest value for `key`.",
-	kvGetRevision: "Returns the value of `key` for the specified `revision`.",
-	kvCreate:      "Adds the key/value pair if it does not exist. Returns an error if it already exists.",
-	kvPut:         "Places a new value for the key into the store.",
-	kvUpdate:      "Updates the value for `key` only if the `revision` matches the latest revision.",
-	kvDelete:      "Deletes the key/value pair, but keeps historical values.",
-	kvPurge:       "Deletes the key/value pair and all historical values.",
-	kvHistory:     "Returns historical values of `key` as a batch.",
-	kvKeys:        "Returns all the keys in the `bucket` as a batch.",
+type kvpOperationType string
+
+const (
+	kvpOperationGet         kvpOperationType = "get"
+	kvpOperationGetRevision kvpOperationType = "get_revision"
+	kvpOperationCreate      kvpOperationType = "create"
+	kvpOperationPut         kvpOperationType = "put"
+	kvpOperationUpdate      kvpOperationType = "update"
+	kvpOperationDelete      kvpOperationType = "delete"
+	kvpOperationPurge       kvpOperationType = "purge"
+	kvpOperationHistory     kvpOperationType = "history"
+	kvpOperationKeys        kvpOperationType = "keys"
+)
+
+var kvpOperations = map[string]string{
+	string(kvpOperationGet):         "Returns the latest value for `key`.",
+	string(kvpOperationGetRevision): "Returns the value of `key` for the specified `revision`.",
+	string(kvpOperationCreate):      "Adds the key/value pair if it does not exist. Returns an error if it already exists.",
+	string(kvpOperationPut):         "Places a new value for the key into the store.",
+	string(kvpOperationUpdate):      "Updates the value for `key` only if the `revision` matches the latest revision.",
+	string(kvpOperationDelete):      "Deletes the key/value pair, but keeps historical values.",
+	string(kvpOperationPurge):       "Deletes the key/value pair and all historical values.",
+	string(kvpOperationHistory):     "Returns historical values of `key` as an array of objects containing the following fields: `key`, `value`, `bucket`, `revision`, `delta`, `operation`, `created`.",
+	string(kvpOperationKeys):        "Returns the keys in the `bucket` which match the `keys_filter` as an array of strings.",
 }
 
 func natsKVProcessorConfig() *service.ConfigSpec {
@@ -51,7 +62,7 @@ The NATS KV processor supports a multitude of KV operations via the [operation](
 
 This processor adds the following metadata fields to each message, depending on the chosen ` + "`operation`" + `:
 
-#### get, get_revision, history
+#### get, get_revision
 ` + "``` text" + `
 - nats_kv_key
 - nats_kv_bucket
@@ -74,32 +85,31 @@ This processor adds the following metadata fields to each message, depending on 
 - nats_kv_bucket
 ` + "```" + `
 
-` + ConnectionNameDescription() + authDescription()).
+` + connectionNameDescription() + authDescription()).
 		Fields(connectionHeadFields()...).
-		Field(service.NewStringField("bucket").
-			Description("The name of the KV bucket to watch for updates.").
-			Example("my_kv_bucket")).
-		Field(service.NewStringAnnotatedEnumField("operation", kvOps).
-			Description(`The operation to perform on the KV bucket.
-`)).
-		Field(service.NewInterpolatedStringField("key").
-			Description("The key for each message.").
-			Default("").
-			Example("foo").
-			Example("foo.bar.baz").
-			Example(`foo.${! json("meta.type") }`)).
-		Field(service.NewInterpolatedStringField("revision").
-			Description("The revision of the key to operate on. Used for `get_revision` and `update` operations.").
-			Example("42").
-			Example(`${! @nats_kv_revision }`).
-			Optional().
-			Advanced()).
-		Fields(connectionTailFields()...).
+		Fields(kvDocs([]*service.ConfigField{
+			service.NewStringAnnotatedEnumField(kvpFieldOperation, kvpOperations).
+				Description("The operation to perform on the KV bucket."),
+			service.NewInterpolatedStringField(kvpFieldKey).
+				Description("The key for each message. Supports [wildcards](https://docs.nats.io/nats-concepts/subjects#wildcards) for the `history` and `keys` operations.").
+				Example("foo").
+				Example("foo.bar.baz").
+				Example("foo.*").
+				Example("foo.>").
+				Example(`foo.${! json("meta.type") }`).LintRule(`if this == "" {[ "'key' must be set to a non-empty string" ]}`),
+			service.NewInterpolatedStringField(kvpFieldRevision).
+				Description("The revision of the key to operate on. Used for `get_revision` and `update` operations.").
+				Example("42").
+				Example(`${! @nats_kv_revision }`).
+				Optional().
+				Advanced(),
+			service.NewDurationField(kvpFieldTimeout).
+				Description("The maximum period to wait on an operation before aborting and returning an error.").
+				Advanced().Default("5s"),
+		}...)...).
 		LintRule(`root = match {
       ["get_revision", "update"].contains(this.operation) && !this.exists("revision") => [ "'revision' must be set when operation is '" + this.operation + "'" ],
       !["get_revision", "update"].contains(this.operation) && this.exists("revision") => [ "'revision' cannot be set when operation is '" + this.operation + "'" ],
-      this.key == "" && this.operation != "keys" => [ "'key' must be set when operation is '" + this.operation + "'" ],
-      this.key != "" && this.operation == "keys" => [ "'key' cannot be set when operation is '" + this.operation + "'" ],
     }`)
 }
 
@@ -118,11 +128,10 @@ func init() {
 type kvProcessor struct {
 	connDetails connectionDetails
 	bucket      string
-	operation   string
+	operation   kvpOperationType
 	key         *service.InterpolatedString
-	keyRaw      string
 	revision    *service.InterpolatedString
-	revisionRaw string
+	timeout     time.Duration
 
 	log *service.Logger
 
@@ -130,7 +139,7 @@ type kvProcessor struct {
 
 	connMut  sync.Mutex
 	natsConn *nats.Conn
-	kv       nats.KeyValue
+	kv       jetstream.KeyValue
 }
 
 func newKVProcessor(conf *service.ParsedConfig, mgr *service.Resources) (*kvProcessor, error) {
@@ -144,30 +153,28 @@ func newKVProcessor(conf *service.ParsedConfig, mgr *service.Resources) (*kvProc
 		return nil, err
 	}
 
-	if p.bucket, err = conf.FieldString("bucket"); err != nil {
+	if p.bucket, err = conf.FieldString(kvFieldBucket); err != nil {
 		return nil, err
 	}
 
-	if p.operation, err = conf.FieldString("operation"); err != nil {
+	if operation, err := conf.FieldString(kvpFieldOperation); err != nil {
+		return nil, err
+	} else {
+		p.operation = kvpOperationType(operation)
+	}
+
+	if p.key, err = conf.FieldInterpolatedString(kvpFieldKey); err != nil {
 		return nil, err
 	}
 
-	if p.keyRaw, err = conf.FieldString("key"); err != nil {
-		return nil, err
-	}
-
-	if p.key, err = conf.FieldInterpolatedString("key"); err != nil {
-		return nil, err
-	}
-
-	if conf.Contains("revision") {
-		if p.revisionRaw, err = conf.FieldString("revision"); err != nil {
+	if conf.Contains(kvpFieldRevision) {
+		if p.revision, err = conf.FieldInterpolatedString(kvpFieldRevision); err != nil {
 			return nil, err
 		}
+	}
 
-		if p.revision, err = conf.FieldInterpolatedString("revision"); err != nil {
-			return nil, err
-		}
+	if p.timeout, err = conf.FieldDuration(kvpFieldTimeout); err != nil {
+		return nil, err
 	}
 
 	err = p.Connect(context.Background())
@@ -185,7 +192,7 @@ func (p *kvProcessor) disconnect() {
 	p.kv = nil
 }
 
-func (p *kvProcessor) Process(c context.Context, msg *service.Message) (service.MessageBatch, error) {
+func (p *kvProcessor) Process(ctx context.Context, msg *service.Message) (service.MessageBatch, error) {
 	p.connMut.Lock()
 	kv := p.kv
 	p.connMut.Unlock()
@@ -200,28 +207,31 @@ func (p *kvProcessor) Process(c context.Context, msg *service.Message) (service.
 		return nil, err
 	}
 
+	ctx, done := context.WithTimeout(ctx, p.timeout)
+	defer done()
+
 	switch p.operation {
 
-	case kvGet:
-		entry, err := kv.Get(key)
+	case kvpOperationGet:
+		entry, err := kv.Get(ctx, key)
 		if err != nil {
 			return nil, err
 		}
 		return service.MessageBatch{newMessageFromKVEntry(entry)}, nil
 
-	case kvGetRevision:
+	case kvpOperationGetRevision:
 		revision, err := p.parseRevision(msg)
 		if err != nil {
 			return nil, err
 		}
-		entry, err := kv.GetRevision(key, revision)
+		entry, err := kv.GetRevision(ctx, key, revision)
 		if err != nil {
 			return nil, err
 		}
 		return service.MessageBatch{newMessageFromKVEntry(entry)}, nil
 
-	case kvCreate:
-		revision, err := kv.Create(key, bytes)
+	case kvpOperationCreate:
+		revision, err := kv.Create(ctx, key, bytes)
 		if err != nil {
 			return nil, err
 		}
@@ -230,8 +240,8 @@ func (p *kvProcessor) Process(c context.Context, msg *service.Message) (service.
 		p.addMetadata(m, key, revision, nats.KeyValuePut)
 		return service.MessageBatch{m}, nil
 
-	case kvPut:
-		revision, err := kv.Put(key, bytes)
+	case kvpOperationPut:
+		revision, err := kv.Put(ctx, key, bytes)
 		if err != nil {
 			return nil, err
 		}
@@ -240,12 +250,12 @@ func (p *kvProcessor) Process(c context.Context, msg *service.Message) (service.
 		p.addMetadata(m, key, revision, nats.KeyValuePut)
 		return service.MessageBatch{m}, nil
 
-	case kvUpdate:
+	case kvpOperationUpdate:
 		revision, err := p.parseRevision(msg)
 		if err != nil {
 			return nil, err
 		}
-		revision, err = kv.Update(key, bytes, revision)
+		revision, err = kv.Update(ctx, key, bytes, revision)
 		if err != nil {
 			return nil, err
 		}
@@ -254,9 +264,9 @@ func (p *kvProcessor) Process(c context.Context, msg *service.Message) (service.
 		p.addMetadata(m, key, revision, nats.KeyValuePut)
 		return service.MessageBatch{m}, nil
 
-	case kvDelete:
+	case kvpOperationDelete:
 		// TODO: Support revision here?
-		err := kv.Delete(key)
+		err := kv.Delete(ctx, key)
 		if err != nil {
 			return nil, err
 		}
@@ -265,8 +275,8 @@ func (p *kvProcessor) Process(c context.Context, msg *service.Message) (service.
 		p.addMetadata(m, key, 0, nats.KeyValueDelete)
 		return service.MessageBatch{m}, nil
 
-	case kvPurge:
-		err := kv.Purge(key)
+	case kvpOperationPurge:
+		err := kv.Purge(ctx, key)
 		if err != nil {
 			return nil, err
 		}
@@ -275,29 +285,58 @@ func (p *kvProcessor) Process(c context.Context, msg *service.Message) (service.
 		p.addMetadata(m, key, 0, nats.KeyValuePurge)
 		return service.MessageBatch{m}, nil
 
-	case kvHistory:
-		entries, err := kv.History(key)
+	case kvpOperationHistory:
+		entries, err := kv.History(ctx, key)
 		if err != nil {
 			return nil, err
 		}
-		batch := service.MessageBatch{}
+		var records []any
 		for _, entry := range entries {
-			batch = append(batch, newMessageFromKVEntry(entry))
+			records = append(records, map[string]any{
+				"key":       entry.Key(),
+				"value":     entry.Value(),
+				"bucket":    entry.Bucket(),
+				"revision":  entry.Revision(),
+				"delta":     entry.Delta(),
+				"operation": entry.Operation().String(),
+				"created":   entry.Created(),
+			})
 		}
-		return batch, nil
 
-	case kvKeys:
-		keys, err := kv.Keys()
+		m := service.NewMessage(nil)
+		m.SetStructuredMut(records)
+		return service.MessageBatch{m}, nil
+
+	case kvpOperationKeys:
+		// `kv.ListKeys()` does not allow users to specify a key filter, so we call `kv.Watch()` directly.
+		watcher, err := kv.Watch(ctx, key, []jetstream.WatchOpt{jetstream.IgnoreDeletes(), jetstream.MetaOnly()}...)
 		if err != nil {
 			return nil, err
 		}
-		batch := service.MessageBatch{}
-		for _, key := range keys {
-			m := service.NewMessage([]byte(key))
-			m.MetaSetMut(metaKVBucket, p.bucket)
-			batch = append(batch, m)
+		defer func() {
+			if err := watcher.Stop(); err != nil {
+				p.log.Debugf("Failed to close key watcher: %s", err)
+			}
+		}()
+
+		var keys []any
+	loop:
+		for {
+			select {
+			case entry := <-watcher.Updates():
+				if entry == nil {
+					break loop
+				}
+				keys = append(keys, entry.Key())
+			case <-ctx.Done():
+				return nil, fmt.Errorf("watcher update loop exited prematurely: %s", ctx.Err())
+			}
 		}
-		return batch, nil
+
+		m := service.NewMessage(nil)
+		m.SetStructuredMut(keys)
+		m.MetaSetMut(metaKVBucket, p.bucket)
+		return service.MessageBatch{m}, nil
 
 	default:
 		return nil, fmt.Errorf("invalid kv operation: %s", p.operation)
@@ -340,17 +379,15 @@ func (p *kvProcessor) Connect(ctx context.Context) (err error) {
 		return err
 	}
 
-	js, err := p.natsConn.JetStream()
+	js, err := jetstream.New(p.natsConn)
 	if err != nil {
 		return err
 	}
 
-	p.kv, err = js.KeyValue(p.bucket)
+	p.kv, err = js.KeyValue(ctx, p.bucket)
 	if err != nil {
 		return err
 	}
-
-	p.log.Infof("Performing operation `%s` on NATS KV bucket: %s", p.operation, p.bucket)
 	return nil
 }
 

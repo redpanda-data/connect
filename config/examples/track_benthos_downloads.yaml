@@ -1,7 +1,7 @@
 pipeline:
   threads: 20
   processors:
-    - bloblang: 'root = {}'
+    - mapping: 'root = {}'
     - workflow:
         meta_path: results
         order: [ [ dockerhub, github, homebrew ] ]
@@ -17,7 +17,9 @@ processor_resources:
               url: https://hub.docker.com/v2/repositories/jeffail/benthos/
               verb: GET
               retries: 0
-          - bloblang: |
+              headers:
+                Content-Type: application/json
+          - mapping: |
               root.source = "docker"
               root.dist = "docker"
               root.download_count = this.pull_count
@@ -34,7 +36,7 @@ processor_resources:
               url: https://api.github.com/repos/benthosdev/benthos/releases
               verb: GET
               retries: 0
-          - bloblang: |
+          - mapping: |
               root = this.map_each(release -> release.assets.map_each(asset -> {
                 "source":         "github",
                 "dist":           asset.name.re_replace_all("^benthos-?((lambda_)|_)[0-9\\.]+(-rc[0-9]+)?_([^\\.]+).*", "$2$4"),
@@ -44,7 +46,7 @@ processor_resources:
           - unarchive:
               format: json_array
           - resource: metric_gauge
-          - bloblang: 'root = if batch_index() != 0 { deleted() }'
+          - mapping: 'root = if batch_index() != 0 { deleted() }'
 
   - label: homebrew
     branch:
@@ -55,7 +57,7 @@ processor_resources:
               url: https://formulae.brew.sh/api/formula/benthos.json
               verb: GET
               retries: 0
-          - bloblang: |
+          - mapping: |
               root.source = "homebrew"
               root.dist = "brew"
               root.download_count = this.analytics.install.30d.benthos

@@ -73,9 +73,7 @@ The NATS Streaming Server is being deprecated. Critical bug fixes and security f
 				Description("The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
 		).
 		Fields(connectionTailFields()...).
-		Fields(
-			span.InjectTracingSpanMappingDocs().Version(tracingVersion),
-		)
+		Field(outputTracingDocs())
 }
 
 func init() {
@@ -156,7 +154,6 @@ func (n *natsStreamWriter) Connect(ctx context.Context) error {
 
 	n.stanConn = stanConn
 	n.natsConn = natsConn
-	n.log.Infof("Sending NATS messages to subject: %v", n.conf.Subject)
 	return nil
 }
 

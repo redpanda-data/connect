@@ -147,6 +147,8 @@ func (r *AsyncReader) loop() {
 	if !initConnection() {
 		return
 	}
+
+	r.mgr.Logger().Info("Input type %v is now active", r.typeStr)
 	mConn.Incr(1)
 	atomic.StoreInt32(&r.connected, 1)
 
@@ -188,11 +190,11 @@ func (r *AsyncReader) loop() {
 				return
 			}
 			continue
-		} else {
-			r.readBackoff.Reset()
-			mRcvd.Incr(int64(msg.Len()))
-			r.mgr.Logger().Trace("Consumed %v messages from '%v'.\n", msg.Len(), r.typeStr)
 		}
+
+		r.readBackoff.Reset()
+		mRcvd.Incr(int64(msg.Len()))
+		r.mgr.Logger().Trace("Consumed %v messages from '%v'.\n", msg.Len(), r.typeStr)
 
 		startedAt := time.Now()
 

@@ -10,6 +10,20 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/message"
 )
 
+// AutoRetryNacksBatchedToggled wraps an input implementation with
+// AutoRetryNacksBatched only if a field defined by NewAutoRetryNacksToggleField
+// has been set to true.
+func AutoRetryNacksBatchedToggled(c *ParsedConfig, i BatchInput) (BatchInput, error) {
+	b, err := c.FieldBool(AutoRetryNacksToggleFieldName)
+	if err != nil {
+		return nil, err
+	}
+	if b {
+		return AutoRetryNacksBatched(i), nil
+	}
+	return i, nil
+}
+
 // AutoRetryNacksBatched wraps a batched input implementation with a component
 // that automatically reattempts messages that fail downstream. This is useful
 // for inputs that do not support nacks, and therefore don't have an answer for

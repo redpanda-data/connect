@@ -50,6 +50,7 @@ func genInputSpec() *service.ConfigSpec {
 			service.NewIntField(giFieldBatchSize).
 				Description("The number of generated messages that should be accumulated into each batch flushed at the specified interval.").
 				Default(1),
+			service.NewAutoRetryNacksToggleField(),
 		).
 		Example("Cron Scheduled Processing", "A common use case for the generate input is to trigger processors on a schedule so that the processors themselves can behave similarly to an input. The following configuration reads rows from a PostgreSQL table every 5 minutes.", `
 input:
@@ -86,10 +87,17 @@ input:
 func init() {
 	err := service.RegisterBatchInput("generate", genInputSpec(), func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchInput, error) {
 		nm := interop.UnwrapManagement(mgr)
-		b, err := newGenerateReaderFromParsed(conf, nm)
-		if err != nil {
+
+		var b input.Async
+		var err error
+		if b, err = newGenerateReaderFromParsed(conf, nm); err != nil {
 			return nil, err
 		}
+
+		if autoRetry, _ := conf.FieldBool(service.AutoRetryNacksToggleFieldName); autoRetry {
+			b = input.NewAsyncPreserver(b)
+		}
+
 		i, err := input.NewAsyncReader("generate", input.NewAsyncPreserver(b), nm)
 		if err != nil {
 			return nil, err
@@ -134,7 +142,7 @@ func newGenerateReaderFromParsed(conf *service.ParsedConfig, mgr bundle.NewManag
 		return nil, err
 	}
 
-	if len(intervalStr) > 0 {
+	if intervalStr != "" {
 		if duration, err = time.ParseDuration(intervalStr); err != nil {
 			// interval is not a duration so try to parse as a cron expression
 			var cerr error

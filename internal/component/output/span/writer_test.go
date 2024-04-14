@@ -81,7 +81,7 @@ func TestSpanBatchWriter(t *testing.T) {
 			}, service.MockResources())
 			require.NoError(t, err)
 
-			assert.Nil(t, r.Connect(context.Background()))
+			assert.NoError(t, r.Connect(context.Background()))
 
 			require.NoError(t, r.WriteBatch(context.Background(), service.MessageBatch{service.NewMessage([]byte(`{}`))}))
 
@@ -163,7 +163,7 @@ func TestSpanWriter(t *testing.T) {
 			}, service.MockResources())
 			require.NoError(t, err)
 
-			assert.Nil(t, r.Connect(context.Background()))
+			assert.NoError(t, r.Connect(context.Background()))
 
 			require.NoError(t, r.Write(context.Background(), service.NewMessage([]byte(`{}`))))
 

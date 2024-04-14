@@ -185,12 +185,6 @@ func (z *zmqInput) Connect(ignored context.Context) (err error) {
 	z.socket = socket
 	z.poller = zmq4.NewPoller()
 	z.poller.Add(z.socket, zmq4.POLLIN)
-
-	if z.bind {
-		z.log.Infof("Receiving zmqInput messages on bound URLs: %s\n", z.urls)
-	} else {
-		z.log.Infof("Receiving zmqInput messages on connected URLs: %s\n", z.urls)
-	}
 	return nil
 }
 

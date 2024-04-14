@@ -35,6 +35,7 @@ input:
     target_version: 2.1.0 # No default (optional)
     consumer_group: ""
     checkpoint_limit: 1024
+    auto_replay_nacks: true
 ```
 
 </TabItem>
@@ -67,6 +68,7 @@ input:
     rack_id: ""
     start_from_oldest: true
     checkpoint_limit: 1024
+    auto_replay_nacks: true
     commit_period: 1s
     max_processing_period: 100ms
     extract_tracing_map: root = @ # No default (optional)
@@ -453,6 +455,14 @@ The maximum number of messages of the same topic and partition that can be proce
 Type: `int`  
 Default: `1024`  
 Requires version 3.33.0 or newer  
+
+### `auto_replay_nacks`
+
+Whether messages that are rejected (nacked) at the output level should be automatically replayed indefinitely, eventually resulting in back pressure if the cause of the rejections is persistent. If set to `false` these messages will instead be deleted. Disabling auto replays can greatly improve memory efficiency of high throughput streams as the original shape of the data can be discarded immediately upon consumption and mutation.
+
+
+Type: `bool`  
+Default: `true`  
 
 ### `commit_period`
 

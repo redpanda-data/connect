@@ -40,7 +40,7 @@ processors:
 		[]byte(` hello bar world 2 `),
 	})
 	msgs, res := proc.ProcessBatch(context.Background(), input)
-	require.Nil(t, res)
+	require.NoError(t, res)
 
 	for _, msg := range msgs {
 		act = append(act, message.GetAllBytes(msg))

@@ -21,14 +21,14 @@ import TabItem from '@theme/TabItem';
 <TabItem value="latest">
 
 ```sh
-curl -Lsf https://sh.benthos.dev | bash
+curl -Lsf https://www.benthos.dev/sh/install | bash
 ```
 
 </TabItem>
 <TabItem value="version">
 
 ```sh
-curl -Lsf https://sh.benthos.dev | bash -s -- 3.56.0
+curl -Lsf https://www.benthos.dev/sh/install | bash -s -- 3.56.0
 ```
 
 </TabItem>

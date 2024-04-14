@@ -183,7 +183,7 @@ func LintAction(c *cli.Context, stderr io.Writer) int {
 		fmt.Fprintf(stderr, "Lint paths error: %v\n", err)
 		return 1
 	}
-	if conf := c.String("config"); len(conf) > 0 {
+	if conf := c.String("config"); conf != "" {
 		targets = append(targets, conf)
 	}
 	targets = append(targets, c.StringSlice("resources")...)

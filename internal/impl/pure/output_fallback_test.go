@@ -214,14 +214,9 @@ func TestFallbackHappyishPath(t *testing.T) {
 	resChan := make(chan error)
 
 	oTM, err := newFallbackBroker(outputs)
-	if err != nil {
-		t.Error(err)
-		return
-	}
-	if err = oTM.Consume(readChan); err != nil {
-		t.Error(err)
-		return
-	}
+	require.NoError(t, err)
+
+	require.NoError(t, oTM.Consume(readChan))
 
 	for i := 0; i < 10; i++ {
 		content := [][]byte{[]byte(fmt.Sprintf("hello world %v", i))}
@@ -258,7 +253,7 @@ func TestFallbackHappyishPath(t *testing.T) {
 				if !bytes.Equal(ts.Payload.Get(0).AsBytes(), content[0]) {
 					t.Errorf("Wrong content returned %s != %s", ts.Payload.Get(0).AsBytes(), content[0])
 				}
-				assert.Equal(t, ts.Payload.Get(0).MetaGetStr("fallback_error"), "test err")
+				assert.Equal(t, "test err", ts.Payload.Get(0).MetaGetStr("fallback_error"))
 			case <-mockOutputs[0].TChan:
 				t.Error("Received message in wrong order")
 				return

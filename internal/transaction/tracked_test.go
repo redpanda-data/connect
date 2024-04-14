@@ -22,7 +22,7 @@ func TestTaggingErrorsSinglePart(t *testing.T) {
 	tran := NewTracked(msg, nil)
 
 	// No error
-	assert.Equal(t, nil, tran.resFromError(nil))
+	assert.NoError(t, tran.resFromError(nil))
 
 	// Static error
 	assert.Equal(t, errTest1, tran.resFromError(errTest1))
@@ -45,7 +45,7 @@ func TestTaggingErrorsSinglePart(t *testing.T) {
 	batchErr = batch.NewError(newMsg, errTest1)
 	batchErr.Failed(0, errTest2)
 
-	assert.Equal(t, nil, tran.resFromError(batchErr))
+	assert.NoError(t, tran.resFromError(batchErr))
 
 	// Create batch error for tran part
 	batchErr.Failed(1, errTest3)
@@ -66,7 +66,7 @@ func TestTaggingErrorsMultiplePart(t *testing.T) {
 	tran := NewTracked(msg, nil)
 
 	// No error
-	assert.Equal(t, nil, tran.resFromError(nil))
+	assert.NoError(t, tran.resFromError(nil))
 
 	// Static error
 	assert.Equal(t, errTest1, tran.resFromError(errTest1))
@@ -97,13 +97,13 @@ func TestTaggingErrorsMultiplePart(t *testing.T) {
 	batchErr = batch.NewError(newMsg, errTest1)
 	batchErr.Failed(0, errTest2)
 
-	assert.Equal(t, nil, tran.resFromError(batchErr))
+	assert.NoError(t, tran.resFromError(batchErr))
 
 	// Create batch error with error on non-tran part
 	batchErr = batch.NewError(newMsg, errTest1)
 	batchErr.Failed(0, errTest2)
 
-	assert.Equal(t, nil, tran.resFromError(batchErr))
+	assert.NoError(t, tran.resFromError(batchErr))
 
 	// Create batch error for tran part
 	batchErr.Failed(1, errTest3)
@@ -126,8 +126,8 @@ func TestTaggingErrorsNestedOverlap(t *testing.T) {
 	tranTwo := NewTracked(msgTwo, nil)
 
 	// No error
-	assert.Equal(t, nil, tranOne.resFromError(nil))
-	assert.Equal(t, nil, tranTwo.resFromError(nil))
+	assert.NoError(t, tranOne.resFromError(nil))
+	assert.NoError(t, tranTwo.resFromError(nil))
 
 	// Static error
 	assert.Equal(t, errTest1, tranOne.resFromError(errTest1))
@@ -169,8 +169,8 @@ func TestTaggingErrorsNestedSerial(t *testing.T) {
 	}
 
 	// No error
-	assert.Equal(t, nil, tranOne.resFromError(nil))
-	assert.Equal(t, nil, tranTwo.resFromError(nil))
+	assert.NoError(t, tranOne.resFromError(nil))
+	assert.NoError(t, tranTwo.resFromError(nil))
 
 	// Static error
 	assert.Equal(t, errTest1, tranOne.resFromError(errTest1))
@@ -181,7 +181,7 @@ func TestTaggingErrorsNestedSerial(t *testing.T) {
 	batchErr.Failed(0, errTest2)
 
 	assert.Equal(t, errTest2, tranOne.resFromError(batchErr))
-	assert.Equal(t, nil, tranTwo.resFromError(batchErr))
+	assert.NoError(t, tranTwo.resFromError(batchErr))
 }
 
 func BenchmarkErrorWithTagging(b *testing.B) {

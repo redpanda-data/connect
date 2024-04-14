@@ -28,6 +28,7 @@ func redisListInputConfig() *service.ConfigSpec {
 		Fields(
 			service.NewStringField("key").
 				Description("The key of a list to read from."),
+			service.NewAutoRetryNacksToggleField(),
 			service.NewInputMaxInFlightField().Version("4.9.0"),
 			service.NewDurationField("timeout").
 				Description("The length of time to poll for new messages before reattempting.").
@@ -55,7 +56,11 @@ func init() {
 				return nil, err
 			}
 
-			return service.InputWithMaxInFlight(mInF, service.AutoRetryNacks(i)), nil
+			if i, err = service.AutoRetryNacksToggled(conf, i); err != nil {
+				return nil, err
+			}
+
+			return service.InputWithMaxInFlight(mInF, i), nil
 		})
 	if err != nil {
 		panic(err)
@@ -114,8 +119,6 @@ func (r *redisListReader) Connect(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-
-	r.log.Infof("Receiving messages from Redis list: %v\n", r.key)
 	return nil
 }
 

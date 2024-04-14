@@ -166,14 +166,12 @@ func (g *groupByProc) ProcessBatch(ctx *processor.BatchProcContext, msg message.
 			continue
 		}
 
-		resultMsgs, res := processor.ExecuteAll(ctx.Context(), g.groups[i].Processors, gmsg)
+		resultMsgs, err := processor.ExecuteAll(ctx.Context(), g.groups[i].Processors, gmsg)
+		if err != nil {
+			return nil, err
+		}
 		if len(resultMsgs) > 0 {
 			msgs = append(msgs, resultMsgs...)
-		}
-		if res != nil {
-			if err := res; err != nil {
-				g.log.Error("Processor error: %v\n", err)
-			}
 		}
 	}
 	if groupless.Len() > 0 {

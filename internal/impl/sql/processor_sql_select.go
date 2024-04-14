@@ -104,7 +104,6 @@ type sqlSelectProcessor struct {
 }
 
 // NewSQLSelectProcessorFromConfig returns an internal sql_select processor.
-// nolint:revive // Not bothered as this is internal anyway
 func NewSQLSelectProcessorFromConfig(conf *service.ParsedConfig, mgr *service.Resources) (*sqlSelectProcessor, error) {
 	s := &sqlSelectProcessor{
 		logger:  mgr.Logger(),

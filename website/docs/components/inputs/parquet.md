@@ -36,6 +36,7 @@ input:
   label: ""
   parquet:
     paths: [] # No default (required)
+    auto_replay_nacks: true
 ```
 
 </TabItem>
@@ -48,6 +49,7 @@ input:
   parquet:
     paths: [] # No default (required)
     batch_count: 1
+    auto_replay_nacks: true
 ```
 
 </TabItem>
@@ -85,5 +87,13 @@ Optionally process records in batches. This can help to speed up the consumption
 
 Type: `int`  
 Default: `1`  
+
+### `auto_replay_nacks`
+
+Whether messages that are rejected (nacked) at the output level should be automatically replayed indefinitely, eventually resulting in back pressure if the cause of the rejections is persistent. If set to `false` these messages will instead be deleted. Disabling auto replays can greatly improve memory efficiency of high throughput streams as the original shape of the data can be discarded immediately upon consumption and mutation.
+
+
+Type: `bool`  
+Default: `true`  
 
 

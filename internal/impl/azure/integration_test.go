@@ -60,7 +60,6 @@ func TestIntegrationAzure(t *testing.T) {
 		client, err := azblob.NewClientFromConnectionString(connString, nil)
 		if err != nil {
 			return err
-
 		}
 
 		ctx, done := context.WithTimeout(context.Background(), 1*time.Second)
@@ -70,7 +69,6 @@ func TestIntegrationAzure(t *testing.T) {
 			return err
 		}
 		return nil
-
 	})
 	require.NoError(t, err, "Failed to start Azurite")
 
@@ -92,6 +90,41 @@ input:
     container: $VAR1-$ID
     prefix: $VAR2
     storage_connection_string: $VAR3
+`
+		integration.StreamTests(
+			integration.StreamTestOpenCloseIsolated(),
+			integration.StreamTestStreamIsolated(10),
+		).Run(
+			t, template,
+			integration.StreamTestOptVarOne(dummyContainer),
+			integration.StreamTestOptVarTwo(dummyPrefix),
+			integration.StreamTestOptVarThree(connString),
+		)
+	})
+
+	t.Run("blob_storage_streamed", func(t *testing.T) {
+		template := `
+output:
+  azure_blob_storage:
+    blob_type: BLOCK
+    container: $VAR1-$ID
+    max_in_flight: 1
+    path: $VAR2/${!count("$ID")}.txt
+    public_access_level: PRIVATE
+    storage_connection_string: $VAR3
+
+input:
+  azure_blob_storage:
+    container: $VAR1-$ID
+    prefix: $VAR2
+    storage_connection_string: $VAR3
+    targets_input:
+      azure_blob_storage:
+        container: $VAR1-$ID
+        prefix: $VAR2
+        storage_connection_string: $VAR3
+      processors:
+        - mapping: 'root.name = @blob_storage_key'
 `
 		integration.StreamTests(
 			integration.StreamTestOpenCloseIsolated(),
@@ -144,7 +177,7 @@ input:
 		)
 	})
 
-	os.Setenv("AZURITE_QUEUE_ENDPOINT_PORT", resource.GetPort("10001/tcp"))
+	os.Setenv("AZURITE_QUEUE_ENDPOINT_PORT", resource.GetPort("10001/tcp")) //nolint: tenv // this test runs in parallel
 	dummyQueue := "foo"
 	t.Run("queue_storage", func(t *testing.T) {
 		template := `

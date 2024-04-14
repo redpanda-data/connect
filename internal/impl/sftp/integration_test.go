@@ -32,7 +32,8 @@ func TestIntegration(t *testing.T) {
 		Repository: "atmoz/sftp",
 		Tag:        "alpine",
 		Cmd: []string{
-			sftpUsername + ":" + sftpPassword + ":1001:100:upload",
+			// https://github.com/atmoz/sftp/issues/401
+			"/bin/sh", "-c", "ulimit -n 65535 && exec /entrypoint " + sftpUsername + ":" + sftpPassword + ":1001:100:upload",
 		},
 	})
 	require.NoError(t, err)

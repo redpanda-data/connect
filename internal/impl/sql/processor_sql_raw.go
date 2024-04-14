@@ -103,7 +103,6 @@ type sqlRawProcessor struct {
 }
 
 // NewSQLRawProcessorFromConfig returns an internal sql_raw processor.
-// nolint:revive // Not bothered as this is internal anyway
 func NewSQLRawProcessorFromConfig(conf *service.ParsedConfig, mgr *service.Resources) (*sqlRawProcessor, error) {
 	driverStr, err := conf.FieldString("driver")
 	if err != nil {

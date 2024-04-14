@@ -43,6 +43,7 @@ input:
     dsn: postgres://user:password@example.com:26257/defaultdb?sslmode=require # No default (required)
     tables: [] # No default (required)
     cursor_cache: "" # No default (optional)
+    auto_replay_nacks: true
 ```
 
 </TabItem>
@@ -63,6 +64,7 @@ input:
     tables: [] # No default (required)
     cursor_cache: "" # No default (optional)
     options: [] # No default (optional)
+    auto_replay_nacks: true
 ```
 
 </TabItem>
@@ -255,5 +257,13 @@ Type: `array`
 options:
   - virtual_columns="omitted"
 ```
+
+### `auto_replay_nacks`
+
+Whether messages that are rejected (nacked) at the output level should be automatically replayed indefinitely, eventually resulting in back pressure if the cause of the rejections is persistent. If set to `false` these messages will instead be deleted. Disabling auto replays can greatly improve memory efficiency of high throughput streams as the original shape of the data can be discarded immediately upon consumption and mutation.
+
+
+Type: `bool`  
+Default: `true`  
 
 

@@ -139,7 +139,7 @@ url: %v
 	res, err := h.Send(context.Background(), testMsg)
 	require.NoError(t, err)
 
-	require.Equal(t, 1, len(res))
+	require.Len(t, res, 1)
 
 	mBytes, err := res[0].AsBytes()
 	require.NoError(t, err)
@@ -333,7 +333,7 @@ url: %v
 		resMsg, err := h.Send(context.Background(), nil)
 		require.NoError(t, err)
 
-		assert.Equal(t, 1, len(resMsg))
+		assert.Len(t, resMsg, 1)
 
 		mBytes, err := resMsg[0].AsBytes()
 		require.NoError(t, err)
@@ -382,7 +382,7 @@ metadata:
 	resMsg, err := h.Send(context.Background(), sendMsg)
 	require.NoError(t, err)
 
-	assert.Equal(t, 1, len(resMsg))
+	assert.Len(t, resMsg, 1)
 
 	mBytes, err := resMsg[0].AsBytes()
 	require.NoError(t, err)
@@ -513,7 +513,7 @@ url: %v
 		resMsg, err := h.Send(context.Background(), nil)
 		require.NoError(t, err)
 
-		assert.Equal(t, 2, len(resMsg))
+		assert.Len(t, resMsg, 2)
 
 		mBytes, err := resMsg[0].AsBytes()
 		require.NoError(t, err)

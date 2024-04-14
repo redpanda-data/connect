@@ -133,7 +133,7 @@ urls:
 
 ### `bucket`
 
-The name of the KV bucket to operate on.
+The name of the KV bucket.
 
 
 Type: `string`  

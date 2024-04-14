@@ -114,7 +114,6 @@ If the Push Gateway requires HTTP Basic Authentication it can be configured with
 				Advanced().
 				Default(""),
 		)
-
 }
 
 func init() {
@@ -316,19 +315,19 @@ func FromParsed(conf *service.ParsedConfig, log *service.Logger) (p *Metrics, er
 		}
 	}
 
-	if pushURL, _ := conf.FieldString(pmFieldPushURL); len(pushURL) > 0 {
+	if pushURL, _ := conf.FieldString(pmFieldPushURL); pushURL != "" {
 		pushJobName, _ := conf.FieldString(pmFieldPushJobName)
 		p.pusher = push.New(pushURL, pushJobName).Gatherer(p.reg)
 
 		basicAuthUsername, _ := conf.FieldString(pmFieldPushBasicAuth, pmFieldPushBasicAuthUsername)
 		basicAuthPassword, _ := conf.FieldString(pmFieldPushBasicAuth, pmFieldPushBasicAuthPassword)
 
-		if len(basicAuthUsername) > 0 && len(basicAuthPassword) > 0 {
+		if basicAuthUsername != "" && basicAuthPassword != "" {
 			p.pusher = p.pusher.BasicAuth(basicAuthUsername, basicAuthPassword)
 		}
 
 		pushInterval, _ := conf.FieldString(pmFieldPushInterval)
-		if len(pushInterval) > 0 {
+		if pushInterval != "" {
 			interval, err := time.ParseDuration(pushInterval)
 			if err != nil {
 				return nil, fmt.Errorf("failed to parse push interval: %v", err)

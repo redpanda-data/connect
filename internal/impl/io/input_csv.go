@@ -128,6 +128,7 @@ output:
 				Description(`Optionally process records in batches. This can help to speed up the consumption of exceptionally large CSV files. When the end of the file is reached the remaining records are processed as a (potentially smaller) batch.`).
 				Advanced().
 				Default(1),
+			service.NewAutoRetryNacksToggleField(),
 		)
 }
 
@@ -230,7 +231,7 @@ func init() {
 				return nil, err
 			}
 
-			return service.AutoRetryNacksBatched(rdr), nil
+			return service.AutoRetryNacksBatchedToggled(conf, rdr)
 		})
 	if err != nil {
 		panic(err)

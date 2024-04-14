@@ -23,13 +23,13 @@ func init() {
 			Stable().
 			Categories("Local").
 			Summary(`Consumes data piped to stdin, chopping it into individual messages according to the specified scanner.`).
-			Fields(interop.OldReaderCodecFields("lines")...),
+			Fields(interop.OldReaderCodecFields("lines")...).Field(service.NewAutoRetryNacksToggleField()),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchInput, error) {
 			rdr, err := newStdinConsumerFromParsed(conf)
 			if err != nil {
 				return nil, err
 			}
-			return service.AutoRetryNacksBatched(rdr), nil
+			return service.AutoRetryNacksBatchedToggled(conf, rdr)
 		})
 	if err != nil {
 		panic(err)

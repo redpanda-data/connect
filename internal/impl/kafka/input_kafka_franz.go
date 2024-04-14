@@ -78,6 +78,7 @@ Finally, it's also possible to specify an explicit offset to consume from by add
 			Description("Determines how many messages of the same partition can be processed in parallel before applying back pressure. When a message of a given offset is delivered to the output the offset is only allowed to be committed when all messages of prior offsets have also been delivered, this ensures at-least-once delivery guarantees. However, this mechanism also increases the likelihood of duplicates in the event of crashes or server faults, reducing the checkpoint limit will mitigate this.").
 			Default(1024).
 			Advanced()).
+		Field(service.NewAutoRetryNacksToggleField()).
 		Field(service.NewDurationField("commit_period").
 			Description("The period of time between each commit of the current partition offsets. Offsets are always committed during shutdown.").
 			Default("5s").
@@ -111,7 +112,7 @@ func init() {
 			if err != nil {
 				return nil, err
 			}
-			return service.AutoRetryNacksBatched(rdr), nil
+			return service.AutoRetryNacksBatchedToggled(conf, rdr)
 		})
 	if err != nil {
 		panic(err)
@@ -727,7 +728,6 @@ func (f *franzKafkaReader) Connect(ctx context.Context) error {
 	}()
 
 	f.storeBatchChan(batchChan)
-	f.log.Infof("Receiving messages from Kafka topics: %v", f.topics)
 	return nil
 }
 

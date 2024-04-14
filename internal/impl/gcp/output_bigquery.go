@@ -335,7 +335,6 @@ func (g *gcpBigQueryOutput) Connect(ctx context.Context) (err error) {
 	}
 
 	g.client = client
-	g.log.Infof("Inserting messages as objects to GCP BigQuery: %v:%v:%v\n", client.Project(), g.conf.DatasetID, g.conf.TableID)
 	return nil
 }
 

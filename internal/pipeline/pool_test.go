@@ -2,7 +2,6 @@ package pipeline_test
 
 import (
 	"context"
-	"fmt"
 	"reflect"
 	"testing"
 	"time"
@@ -119,12 +118,10 @@ func TestPoolMultiMsgs(t *testing.T) {
 	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
 	defer done()
 
-	mockProc := &mockMultiMsgProcessor{N: 3}
+	mockProc := &mockSplitProcessor{}
 
 	proc, err := pipeline.NewPool(1, log.Noop(), mockProc)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	tChan, resChan := make(chan message.Transaction), make(chan error)
 	if err := proc.Consume(tChan); err != nil {
@@ -132,19 +129,24 @@ func TestPoolMultiMsgs(t *testing.T) {
 	}
 
 	for j := 0; j < 10; j++ {
-		expMsgs := map[string]struct{}{}
-		for i := 0; i < mockProc.N; i++ {
-			expMsgs[fmt.Sprintf("test%v", i)] = struct{}{}
+		expMsgs := map[string]struct{}{
+			"foo test": {},
+			"bar test": {},
+			"baz test": {},
 		}
 
 		// Send message
 		select {
-		case tChan <- message.NewTransaction(message.QuickBatch(nil), resChan):
+		case tChan <- message.NewTransaction(message.Batch{
+			message.NewPart([]byte(`foo`)),
+			message.NewPart([]byte(`bar`)),
+			message.NewPart([]byte(`baz`)),
+		}, resChan):
 		case <-time.After(time.Second * 5):
 			t.Fatal("Timed out")
 		}
 
-		for i := 0; i < mockProc.N; i++ {
+		for i := 0; i < 3; i++ {
 			// Receive messages
 			var procT message.Transaction
 			var open bool

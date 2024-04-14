@@ -3,6 +3,7 @@ package pure_test
 import (
 	"context"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -308,4 +309,66 @@ drop_on:
 	<-time.After(time.Second)
 
 	assert.Equal(t, []string{"first", "second"}, wsReceived)
+}
+
+func TestDropOnErrorMatches(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		msgBody, _ := io.ReadAll(r.Body)
+		http.Error(w, string(msgBody), http.StatusForbidden)
+	}))
+	t.Cleanup(func() {
+		ts.Close()
+	})
+
+	dropConf := parseYAMLOutputConf(t, `
+drop_on:
+  error_patterns:
+    - foobar
+  output:
+    http_client:
+      url: %v
+      drop_on: [ %v ]
+`, ts.URL, http.StatusForbidden)
+
+	d, err := bmock.NewManager().NewOutput(dropConf)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+		d.TriggerCloseNow()
+		assert.NoError(t, d.WaitForClose(ctx))
+		done()
+	})
+
+	tChan := make(chan message.Transaction)
+	rChan := make(chan error)
+
+	require.NoError(t, d.Consume(tChan))
+
+	select {
+	case tChan <- message.NewTransaction(message.QuickBatch([][]byte{[]byte("error doesnt match")}), rChan):
+	case <-time.After(time.Second):
+		t.Fatal("timed out")
+	}
+
+	var res error
+	select {
+	case res = <-rChan:
+	case <-time.After(time.Second):
+		t.Fatal("timed out")
+	}
+	require.Error(t, res)
+	assert.Contains(t, res.Error(), "error doesnt match")
+
+	select {
+	case tChan <- message.NewTransaction(message.QuickBatch([][]byte{[]byte("foobar")}), rChan):
+	case <-time.After(time.Second):
+		t.Fatal("timed out")
+	}
+
+	select {
+	case res = <-rChan:
+	case <-time.After(time.Second):
+		t.Fatal("timed out")
+	}
+	assert.NoError(t, res)
 }

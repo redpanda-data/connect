@@ -76,7 +76,7 @@ metric:
 	for _, i := range inputs {
 		msg, res := proc.ProcessBatch(context.Background(), message.QuickBatch(i))
 		assert.Len(t, msg, 1)
-		assert.Nil(t, res)
+		assert.NoError(t, res)
 	}
 
 	assert.Equal(t, expMetrics, mockMetrics.FlushCounters())
@@ -128,7 +128,7 @@ metric:
 	for _, i := range inputs {
 		msg, res := proc.ProcessBatch(context.Background(), message.QuickBatch(i))
 		assert.Len(t, msg, 1)
-		assert.Nil(t, res)
+		assert.NoError(t, res)
 	}
 
 	assert.Equal(t, expMetrics, mockMetrics.FlushCounters())
@@ -180,7 +180,7 @@ metric:
 	for _, i := range inputs {
 		msg, res := proc.ProcessBatch(context.Background(), message.QuickBatch(i))
 		assert.Len(t, msg, 1)
-		assert.Nil(t, res)
+		assert.NoError(t, res)
 	}
 
 	assert.Equal(t, expMetrics, mockMetrics.FlushCounters())
@@ -228,7 +228,7 @@ metric:
 	for _, i := range inputs {
 		msg, res := proc.ProcessBatch(context.Background(), message.QuickBatch(i))
 		assert.Len(t, msg, 1)
-		assert.Nil(t, res)
+		assert.NoError(t, res)
 	}
 
 	expTimingAvgs := map[string]float64{

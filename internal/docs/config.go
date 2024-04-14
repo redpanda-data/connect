@@ -101,7 +101,7 @@ func getInferenceCandidateFromList(docProvider Provider, t Type, l []string) (st
 		}
 		candidates = append(candidates, k)
 		if spec, exists := docProvider.GetDocs(k, t); exists {
-			if len(inferred) > 0 {
+			if inferred != "" {
 				candidates = []string{inferred, k}
 				sort.Strings(candidates)
 				return "", ComponentSpec{}, fmt.Errorf(

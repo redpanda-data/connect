@@ -18,7 +18,7 @@ func natsJetStreamOutputConfig() *service.ConfigSpec {
 		Categories("Services").
 		Version("3.46.0").
 		Summary("Write messages to a NATS JetStream subject.").
-		Description(ConnectionNameDescription() + authDescription()).
+		Description(connectionNameDescription() + authDescription()).
 		Fields(connectionHeadFields()...).
 		Field(service.NewInterpolatedStringField("subject").
 			Description("A subject to write to.").
@@ -35,11 +35,9 @@ func natsJetStreamOutputConfig() *service.ConfigSpec {
 		Field(service.NewMetadataFilterField("metadata").
 			Description("Determine which (if any) metadata values should be added to messages as headers.").
 			Optional()).
-		Field(service.NewIntField("max_in_flight").
-			Description("The maximum number of messages to have in flight at a given time. Increase this to improve throughput.").
-			Default(1024)).
+		Field(service.NewOutputMaxInFlightField().Default(1024)).
 		Fields(connectionTailFields()...).
-		Field(span.InjectTracingSpanMappingDocs().Version(tracingVersion))
+		Field(outputTracingDocs())
 }
 
 func init() {
@@ -137,8 +135,6 @@ func (j *jetStreamOutput) Connect(ctx context.Context) (err error) {
 	if jCtx, err = natsConn.JetStream(); err != nil {
 		return err
 	}
-
-	j.log.Infof("Sending NATS messages to JetStream subject: %v", j.subjectStrRaw)
 
 	j.natsConn = natsConn
 	j.jCtx = jCtx

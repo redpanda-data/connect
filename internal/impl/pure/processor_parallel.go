@@ -79,9 +79,13 @@ func (p *parallelProc) ProcessBatch(ctx *processor.BatchProcContext, msg message
 
 	for i := 0; i < max; i++ {
 		go func() {
-			// TODO: V4 Handle processor errors when we migrate to service APIs
+			defer wg.Done()
+
 			for index := range reqChan {
-				resMsgs, _ := processor.ExecuteAll(ctx.Context(), p.children, resultMsgs[index])
+				resMsgs, err := processor.ExecuteAll(ctx.Context(), p.children, resultMsgs[index])
+				if err != nil {
+					return
+				}
 				resultParts := []*message.Part{}
 				for _, m := range resMsgs {
 					_ = m.Iter(func(i int, p *message.Part) error {
@@ -91,7 +95,6 @@ func (p *parallelProc) ProcessBatch(ctx *processor.BatchProcContext, msg message
 				}
 				resultMsgs[index] = resultParts
 			}
-			wg.Done()
 		}()
 	}
 	for i := 0; i < msg.Len(); i++ {
@@ -99,6 +102,10 @@ func (p *parallelProc) ProcessBatch(ctx *processor.BatchProcContext, msg message
 	}
 	close(reqChan)
 	wg.Wait()
+
+	if err := ctx.Context().Err(); err != nil {
+		return nil, err
+	}
 
 	resMsg := message.QuickBatch(nil)
 	for _, m := range resultMsgs {

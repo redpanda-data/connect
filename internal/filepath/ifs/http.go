@@ -43,8 +43,10 @@ func (f asHTTPFile) Close() error               { return f.file.Close() }
 func (f asHTTPFile) Read(b []byte) (int, error) { return f.file.Read(b) }
 func (f asHTTPFile) Stat() (fs.FileInfo, error) { return f.file.Stat() }
 
-var errMissingSeek = errors.New("io.File missing Seek method")
-var errMissingReadDir = errors.New("io.File directory missing ReadDir method")
+var (
+	errMissingSeek    = errors.New("io.File missing Seek method")
+	errMissingReadDir = errors.New("io.File directory missing ReadDir method")
+)
 
 func (f asHTTPFile) Seek(offset int64, whence int) (int64, error) {
 	s, ok := f.file.(io.Seeker)

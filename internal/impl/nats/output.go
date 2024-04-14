@@ -19,7 +19,7 @@ func natsOutputConfig() *service.ConfigSpec {
 		Summary("Publish to an NATS subject.").
 		Description(`This output will interpolate functions within the subject field, you can find a list of functions [here](/docs/configuration/interpolation#bloblang-queries).
 
-` + ConnectionNameDescription() + authDescription()).
+` + connectionNameDescription() + authDescription()).
 		Fields(connectionHeadFields()...).
 		Field(service.NewInterpolatedStringField("subject").
 			Description("The subject to publish to.").
@@ -38,7 +38,7 @@ func natsOutputConfig() *service.ConfigSpec {
 			Description("The maximum number of messages to have in flight at a given time. Increase this to improve throughput.").
 			Default(64)).
 		Fields(connectionTailFields()...).
-		Field(span.InjectTracingSpanMappingDocs().Version(tracingVersion))
+		Field(outputTracingDocs())
 }
 
 func init() {
@@ -118,8 +118,6 @@ func (n *natsWriter) Connect(ctx context.Context) error {
 	if n.natsConn, err = n.connDetails.get(ctx); err != nil {
 		return err
 	}
-
-	n.log.Infof("Sending NATS messages to subject: %v\n", n.subjectStrRaw)
 	return err
 }
 

@@ -101,7 +101,7 @@ func TestParsedParams(t *testing.T) {
 
 	b, err := parsed.GetBool("fourth")
 	require.NoError(t, err)
-	assert.Equal(t, true, b)
+	assert.True(t, b)
 
 	ts, err := parsed.GetTimestamp("fifth")
 	require.NoError(t, err)
@@ -139,7 +139,7 @@ func TestParsedParamsOptional(t *testing.T) {
 	b, err := parsed.GetOptionalBool("fourth")
 	require.NoError(t, err)
 	require.NotNil(t, b)
-	assert.Equal(t, true, *b)
+	assert.True(t, *b)
 
 	ts, err := parsed.GetOptionalTimestamp("fifth")
 	require.NoError(t, err)
