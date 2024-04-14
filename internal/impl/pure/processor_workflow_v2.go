@@ -2,6 +2,7 @@ package pure
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
 	"sync"
@@ -20,18 +21,14 @@ import (
 )
 
 const (
-	wflowProcFieldMetaPathV2 = "meta_path"
-	wflowProcFieldOrderV2    = "order" // adjacency_matrix
-	wflowProcFieldBranchesV2 = "branches"
+	wflowProcFieldAdjacencyMatrixV2 = "adjacency_matrix" // adjacency_matrix
+	wflowProcFieldBranchesV2        = "branches"
 )
 
 func workflowProcSpecV2() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Fields(
-			service.NewStringField(wflowProcFieldMetaPathV2).
-				Description("A [dot path](/docs/configuration/field_paths) indicating where to store and reference [structured metadata](#structured-metadata) about the workflow execution.").
-				Default("meta.workflow"),
-			service.NewStringListOfListsField(wflowProcFieldOrderV2).
+			service.NewStringListOfListsField(wflowProcFieldAdjacencyMatrixV2).
 				Description("An explicit declaration of branch ordered tiers, which describes the order in which parallel tiers of branches should be executed. Branches should be identified by the name as they are configured in the field `branches`. It's also possible to specify branch processors configured [as a resource](#resources).").
 				Examples(
 					[]any{[]any{"foo", "bar"}, []any{"baz"}},
@@ -106,16 +103,14 @@ func NewWorkflowV2(conf *service.ParsedConfig, mgr bundle.NewManagement) (*Workf
 
 	fmt.Println("HERE _ 3.1")
 
-	metaStr, err := conf.FieldString(wflowProcFieldMetaPathV2)
-	if err != nil {
-		return nil, err
-	}
+	metaStr := "meta.workflow"
 	if len(metaStr) > 0 {
 		w.metaPath = gabs.DotPathToSlice(metaStr)
 	}
 
 	fmt.Println("HERE _ 3.2")
 
+	err := errors.New("")
 	if w.children, err = newWorkflowBranchMapV2(conf, mgr); err != nil {
 		return nil, err
 	}
@@ -129,9 +124,10 @@ func NewWorkflowV2(conf *service.ParsedConfig, mgr bundle.NewManagement) (*Workf
 }
 
 // Flow returns the calculated workflow as a 2D slice.
-func (w *WorkflowV2) FlowV2() [][]string {
-	return w.children.dag
-}
+// seemingly unreferenced function FlowV2()
+// func (w *WorkflowV2) FlowV2() [][]string {
+// 	return w.children.dag
+// }
 
 //------------------------------------------------------------------------------
 

@@ -5,12 +5,10 @@ import (
 	"fmt"
 	"regexp"
 	"sort"
-	"sync"
 
 	"github.com/quipo/dependencysolver"
 
 	"github.com/benthosdev/benthos/v4/internal/bundle"
-	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
@@ -110,42 +108,12 @@ func newWorkflowBranchMapV2(conf *service.ParsedConfig, mgr bundle.NewManagement
 		staticBranches[k] = child
 	}
 
-	// When order is specified we infer that names missing from our explicit
-	// branches are resources.
-
-	order, err := conf.FieldStringListOfLists(wflowProcFieldOrderV2)
-	if err != nil {
-		return nil, err
-	}
-	for _, tier := range order {
-		for _, k := range tier {
-			if _, exists := dynamicBranches[k]; !exists {
-				if !mgr.ProbeProcessor(k) {
-					return nil, fmt.Errorf("processor resource '%v' was not found", k)
-				}
-				dynamicBranches[k] = &resourcedBranchV2{
-					name: k,
-					mgr:  mgr,
-				}
-			}
-		}
-	}
+	adj_matrix, err := conf.FieldStringListOfLists(wflowProcFieldAdjacencyMatrixV2)
 
 	static := len(dynamicBranches) == len(staticBranches)
 
 	var dag [][]string
-	if len(order) > 0 {
-		dag = order
-		if err := verifyStaticBranchDAGV2(dag, dynamicBranches); err != nil {
-			return nil, err
-		}
-	} else if static {
-		var err error
-		if dag, err = resolveDynamicBranchDAGV2(staticBranches); err != nil {
-			return nil, err
-		}
-		mgr.Logger().Info("Automatically resolved workflow DAG: %v", dag)
-	}
+	dag = adj_matrix
 
 	return &workflowBranchMapV2{
 		static:          static,
@@ -153,39 +121,6 @@ func newWorkflowBranchMapV2(conf *service.ParsedConfig, mgr bundle.NewManagement
 		staticBranches:  staticBranches,
 		dynamicBranches: dynamicBranches,
 	}, nil
-}
-
-//------------------------------------------------------------------------------
-
-type resourcedBranchV2 struct {
-	name string
-	mgr  bundle.NewManagement
-}
-
-func (r *resourcedBranchV2) lock() (branch *Branch, unlockFn func()) {
-	var openOnce, releaseOnce sync.Once
-	open, release := make(chan struct{}), make(chan struct{})
-	unlockFn = func() {
-		releaseOnce.Do(func() {
-			close(release)
-		})
-	}
-
-	go func() {
-		_ = r.mgr.AccessProcessor(context.Background(), r.name, func(p processor.V1) {
-			branch, _ = processor.Unwrap(p).(*Branch)
-			openOnce.Do(func() {
-				close(open)
-			})
-			<-release
-		})
-		openOnce.Do(func() {
-			close(open)
-		})
-	}()
-
-	<-open
-	return
 }
 
 //------------------------------------------------------------------------------
