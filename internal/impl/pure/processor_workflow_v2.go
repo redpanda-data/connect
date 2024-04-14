@@ -132,23 +132,27 @@ func NewWorkflowV2(conf *service.ParsedConfig, mgr bundle.NewManagement) (*Workf
 //------------------------------------------------------------------------------
 
 type resultTrackerV2 struct {
-	succeeded map[string]struct{}
-	skipped   map[string]struct{}
-	failed    map[string]string
+	notStarted map[string]struct{}
+	running    map[string]struct{}
+	succeeded  map[string]struct{}
+	skipped    map[string]struct{}
+	failed     map[string]string
 	sync.Mutex
 }
 
 func trackerFromDagV2(dag [][]string) *resultTrackerV2 {
 	r := &resultTrackerV2{
-		succeeded: map[string]struct{}{},
-		skipped:   map[string]struct{}{},
-		failed:    map[string]string{},
+		notStarted: map[string]struct{}{},
+		running:    map[string]struct{}{},
+		succeeded:  map[string]struct{}{},
+		skipped:    map[string]struct{}{},
+		failed:     map[string]string{},
 	}
 
 	for i := range dag {
 		node_name := string(byte('A' + i))
-		r.succeeded[node_name] = struct{}{}
-		fmt.Printf("Stage added to Succeeded Array: %s \n", node_name)
+		r.notStarted[node_name] = struct{}{}
+		fmt.Printf("Stage added to notStarted Array: %s \n", node_name)
 	}
 
 	return r
@@ -293,7 +297,7 @@ func (w *WorkflowV2) ProcessBatch(ctx context.Context, msg message.Batch) ([]mes
 
 	fmt.Println("HERE _ 5.4")
 
-	// JEM : what is this for? - this is the skip functionality if it is being restarted.
+	// this is the skip functionality if it is being restarted.
 	skipOnMeta := make([]map[string]struct{}, msg.Len())
 	_ = msg.Iter(func(i int, p *message.Part) error {
 		// TODO: Do we want to evaluate bytes here? And metadata?
@@ -327,7 +331,6 @@ func (w *WorkflowV2) ProcessBatch(ctx context.Context, msg message.Batch) ([]mes
 		wg.Add(len(layer))
 
 		for i, eid := range layer {
-			// fmt.Printf("i: %d, eid: %s\n", i, eid)
 			branchMsg, branchSpans := tracing.WithChildSpans(w.tracer, eid, propMsg.ShallowCopy())
 
 			go func(id string, index int) {
