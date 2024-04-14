@@ -112,12 +112,9 @@ func newWorkflowBranchMapV2(conf *service.ParsedConfig, mgr bundle.NewManagement
 
 	static := len(dynamicBranches) == len(staticBranches)
 
-	var dag [][]string
-	dag = adj_matrix
-
 	return &workflowBranchMapV2{
 		static:          static,
-		dag:             dag,
+		dag:             adj_matrix,
 		staticBranches:  staticBranches,
 		dynamicBranches: dynamicBranches,
 	}, nil
