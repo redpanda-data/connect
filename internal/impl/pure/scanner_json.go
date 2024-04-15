@@ -2,55 +2,37 @@ package pure
 
 import (
 	"context"
-	json "encoding/json"
-	"errors"
+	"encoding/json"
 	"io"
 
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
-const (
-	sjsonFieldContinueOnError = "continue_on_error"
-)
-
 func jsonDocumentScannerSpec() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Stable().
+		Version("4.27.0").
 		Summary("Consumes a stream of one or more JSON documents.").
-		Fields(
-			service.NewBoolField(sjsonFieldContinueOnError).
-				Description("If a JSON decoding fails due to any error emit an empty message marked with the error and then continue consuming subsequent documents when possible.").
-				Default(false),
-		)
+		// Just a placeholder empty object as we don't have any fields yet
+		Field(service.NewObjectField("").Default(map[string]any{}))
 }
 
 func init() {
 	err := service.RegisterBatchScannerCreator("json_documents", jsonDocumentScannerSpec(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchScannerCreator, error) {
-			return jsonDocumentScannerFromParsed(conf)
+			return &jsonDocumentScannerCreator{}, nil
 		})
 	if err != nil {
 		panic(err)
 	}
 }
 
-func jsonDocumentScannerFromParsed(conf *service.ParsedConfig) (l *jsonDocumentScannerCreator, err error) {
-	l = &jsonDocumentScannerCreator{}
-	if l.continueOnError, err = conf.FieldBool(sjsonFieldContinueOnError); err != nil {
-		return
-	}
-	return
-}
-
-type jsonDocumentScannerCreator struct {
-	continueOnError bool
-}
+type jsonDocumentScannerCreator struct{}
 
 func (js *jsonDocumentScannerCreator) Create(rdr io.ReadCloser, aFn service.AckFunc, details *service.ScannerSourceDetails) (service.BatchScanner, error) {
 	return service.AutoAggregateBatchScannerAcks(&jsonDocumentScanner{
-		d:               json.NewDecoder(rdr),
-		r:               rdr,
-		continueOnError: js.continueOnError,
+		d: json.NewDecoder(rdr),
+		r: rdr,
 	}, aFn), nil
 }
 
@@ -61,8 +43,6 @@ func (js *jsonDocumentScannerCreator) Close(context.Context) error {
 type jsonDocumentScanner struct {
 	d *json.Decoder
 	r io.ReadCloser
-
-	continueOnError bool
 }
 
 func (js *jsonDocumentScanner) NextBatch(ctx context.Context) (service.MessageBatch, error) {
@@ -70,18 +50,14 @@ func (js *jsonDocumentScanner) NextBatch(ctx context.Context) (service.MessageBa
 		return nil, io.EOF
 	}
 
-	msg := service.NewMessage(nil)
-
 	var jsonDocObj any
-
 	if err := js.d.Decode(&jsonDocObj); err != nil {
-		msg.SetError(err)
-		if errors.Is(err, io.EOF) || !js.continueOnError {
-			return nil, err
-		}
+		_ = js.r.Close()
+		js.r = nil
+		return nil, err
 	}
 
-	// Decode will determine whether a the jsonObj is of type map[string]interface{} or []interface{}
+	msg := service.NewMessage(nil)
 	msg.SetStructuredMut(jsonDocObj)
 
 	return service.MessageBatch{msg}, nil

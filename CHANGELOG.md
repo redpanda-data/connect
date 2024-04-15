@@ -17,6 +17,7 @@ All notable changes to this project will be documented in this file.
 - Field `targets_input` added to the `azure_blob_storage` input.
 - New `reject_errored` output.
 - New `nats_request_reply` processor.
+- New `json_documents` scanner.
 
 ### Fixed
 

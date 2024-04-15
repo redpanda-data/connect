@@ -1,8 +1,12 @@
 package pure_test
 
 import (
+	"context"
+	"io"
+	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/benthosdev/benthos/v4/internal/component/scanner/testutil"
@@ -32,6 +36,45 @@ test:
 		`{"a":"a3"}`,
 		`{"a":"a4"}`,
 	)
+}
+
+func TestJSONScannerBadData(t *testing.T) {
+	confSpec := service.NewConfigSpec().Field(service.NewScannerField("test"))
+	pConf, err := confSpec.ParseYAML(`
+test:
+  json_documents: {}
+`, nil)
+	require.NoError(t, err)
+
+	rdr, err := pConf.FieldScanner("test")
+	require.NoError(t, err)
+
+	var ack error
+
+	scanner, err := rdr.Create(io.NopCloser(strings.NewReader(`{"a":"a0"}
+nope !@ not good json
+{"a":"a1"}
+`)), func(ctx context.Context, err error) error {
+		ack = err
+		return nil
+	}, &service.ScannerSourceDetails{})
+	require.NoError(t, err)
+
+	resBatch, aFn, err := scanner.NextBatch(context.Background())
+	require.NoError(t, err)
+	require.NoError(t, aFn(context.Background(), nil))
+	require.Len(t, resBatch, 1)
+	mBytes, err := resBatch[0].AsBytes()
+	require.NoError(t, err)
+	assert.Equal(t, `{"a":"a0"}`, string(mBytes))
+
+	_, _, err = scanner.NextBatch(context.Background())
+	assert.Error(t, err)
+
+	_, _, err = scanner.NextBatch(context.Background())
+	assert.ErrorIs(t, err, io.EOF)
+
+	assert.ErrorContains(t, ack, "invalid character")
 }
 
 func TestJSONScannerFormatted(t *testing.T) {

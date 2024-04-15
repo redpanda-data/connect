@@ -16,20 +16,11 @@ import TabItem from '@theme/TabItem';
 
 Consumes a stream of one or more JSON documents.
 
+Introduced in version 4.27.0.
+
 ```yml
 # Config fields, showing default values
-json_documents:
-  continue_on_error: false
+json_documents: {}
 ```
-
-## Fields
-
-### `continue_on_error`
-
-If a JSON decoding fails due to any error emit an empty message marked with the error and then continue consuming subsequent documents when possible.
-
-
-Type: `bool`  
-Default: `false`  
 
 
