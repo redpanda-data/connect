@@ -62,6 +62,7 @@ output:
       password: ""
     metadata:
       exclude_prefixes: []
+    persistent: false
 ```
 
 </TabItem>
@@ -338,5 +339,13 @@ Provide a list of explicit metadata key prefixes to be excluded when adding meta
 
 Type: `array`  
 Default: `[]`  
+
+### `persistent`
+
+Whether message delivery should be persistent (transient by default).
+
+
+Type: `bool`  
+Default: `false`  
 
 

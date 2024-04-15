@@ -18,6 +18,7 @@ All notable changes to this project will be documented in this file.
 - New `reject_errored` output.
 - New `nats_request_reply` processor.
 - New `json_documents` scanner.
+- Field `persistent` added to the `amqp_1` output to specify whether message delivery should be persistent.
 
 ### Fixed
 
