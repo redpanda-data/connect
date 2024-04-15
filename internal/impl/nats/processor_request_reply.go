@@ -2,22 +2,19 @@ package nats
 
 import (
 	"context"
-	"crypto/tls"
 	"fmt"
-	"strings"
 	"sync"
 	"time"
 
 	"github.com/nats-io/nats.go"
 
-	"github.com/benthosdev/benthos/v4/internal/impl/nats/auth"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
 func natsRequestReplyConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Categories("Services").
-		Version("4.24.0").
+		Version("4.27.0").
 		Summary("Sends a message to a NATS subject and expects a reply, from a NATS subscriber acting as a responder, back.").
 		Description(`
 ### Metadata
@@ -34,14 +31,10 @@ This input adds the following metadata fields to each message:
 - nats_timestamp_unix_nano
 ` + "```" + `
 
-You can access these metadata fields using
-[function interpolation](/docs/configuration/interpolation#bloblang-queries).
+You can access these metadata fields using [function interpolation](/docs/configuration/interpolation#bloblang-queries).
 
-` + ConnectionNameDescription() + auth.Description()).
-		Field(service.NewStringListField("urls").
-			Description("A list of URLs to connect to. If an item of the list contains commas it will be expanded into multiple URLs.").
-			Example([]string{"nats://127.0.0.1:4222"}).
-			Example([]string{"nats://username:password@127.0.0.1:4222"})).
+` + connectionNameDescription() + authDescription()).
+		Fields(connectionHeadFields()...).
 		Field(service.NewInterpolatedStringField("subject").
 			Description("A subject to write to.").
 			Example("foo.bar.baz").
@@ -66,8 +59,7 @@ You can access these metadata fields using
 			Description("A duration string is a possibly signed sequence of decimal numbers, each with optional fraction and a unit suffix, such as 300ms, -1.5h or 2h45m. Valid time units are ns, us (or µs), ms, s, m, h.").
 			Optional().
 			Default("3s")).
-		Field(service.NewTLSToggledField("tls")).
-		Field(service.NewInternalField(auth.FieldSpec()))
+		Fields(connectionTailFields()...)
 }
 
 func init() {
@@ -78,18 +70,14 @@ func init() {
 }
 
 type requestReplyProcessor struct {
-	label       string
-	urls        string
+	connDetails connectionDetails
 	headers     map[string]*service.InterpolatedString
 	metaFilter  *service.MetadataFilter
 	subject     *service.InterpolatedString
 	inboxPrefix string
 	timeout     time.Duration
-	tlsConf     *tls.Config
-	authConf    auth.Config
 
 	log *service.Logger
-	fs  *service.FS
 
 	natsConn *nats.Conn
 	connMut  sync.RWMutex
@@ -97,15 +85,13 @@ type requestReplyProcessor struct {
 
 func newRequestReplyProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {
 	p := &requestReplyProcessor{
-		label: mgr.Label(),
-		log:   mgr.Logger(),
-		fs:    mgr.FS(),
+		log: mgr.Logger(),
 	}
-	urlList, err := conf.FieldStringList("urls")
-	if err != nil {
+
+	var err error
+	if p.connDetails, err = connectionDetailsFromParsed(conf, mgr); err != nil {
 		return nil, err
 	}
-	p.urls = strings.Join(urlList, ",")
 
 	if p.subject, err = conf.FieldInterpolatedString("subject"); err != nil {
 		return nil, err
@@ -128,43 +114,32 @@ func newRequestReplyProcessor(conf *service.ParsedConfig, mgr *service.Resources
 		return nil, err
 	}
 
-	tlsConf, tlsEnabled, err := conf.FieldTLSToggled("tls")
-	if err != nil {
-		return nil, err
-	}
-	if tlsEnabled {
-		p.tlsConf = tlsConf
-	}
-
-	if p.authConf, err = AuthFromParsedConfig(conf.Namespace("auth")); err != nil {
-		return nil, err
-	}
-
-	if err = p.connect(context.Background()); err != nil {
-		return nil, err
-	}
-	return p, nil
+	err = p.connect(context.Background())
+	return p, err
 }
 
-func (p *requestReplyProcessor) connect(ctx context.Context) (err error) {
-	p.connMut.Lock()
-	defer p.connMut.Unlock()
+func (r *requestReplyProcessor) connect(ctx context.Context) (err error) {
+	r.connMut.Lock()
+	defer r.connMut.Unlock()
 
-	var opts []nats.Option
-	if p.tlsConf != nil {
-		opts = append(opts, nats.Secure(p.tlsConf))
+	if r.natsConn != nil {
+		return nil
 	}
 
-	if p.inboxPrefix != "" {
-		opts = append(opts, nats.CustomInboxPrefix(p.inboxPrefix))
+	defer func() {
+		if err != nil {
+			if r.natsConn != nil {
+				r.natsConn.Close()
+			}
+		}
+	}()
+
+	var extraOpts []nats.Option
+	if r.inboxPrefix != "" {
+		extraOpts = append(extraOpts, nats.CustomInboxPrefix(r.inboxPrefix))
 	}
 
-	opts = append(opts, nats.Name(p.label))
-	opts = append(opts, authConfToOptions(p.authConf, p.fs)...)
-	opts = append(opts, errorHandlerOption(p.log))
-	opts = append(opts, nats.Timeout(p.timeout))
-
-	if p.natsConn, err = nats.Connect(p.urls, opts...); err != nil {
+	if r.natsConn, err = r.connDetails.get(ctx, extraOpts...); err != nil {
 		return err
 	}
 	return nil

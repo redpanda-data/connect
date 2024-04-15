@@ -1,5 +1,6 @@
 ---
 title: nats_request_reply
+slug: nats_request_reply
 type: processor
 status: experimental
 categories: ["Services"]
@@ -19,7 +20,7 @@ This component is experimental and therefore subject to change or removal outsid
 :::
 Sends a message to a NATS subject and expects a reply, from a NATS subscriber acting as a responder, back.
 
-Introduced in version 4.24.0.
+Introduced in version 4.27.0.
 
 
 <Tabs defaultValue="common" values={[
@@ -88,8 +89,7 @@ This input adds the following metadata fields to each message:
 - nats_timestamp_unix_nano
 ```
 
-You can access these metadata fields using
-[function interpolation](/docs/configuration/interpolation#bloblang-queries).
+You can access these metadata fields using [function interpolation](/docs/configuration/interpolation#bloblang-queries).
 
 ### Connection Name
 

@@ -107,6 +107,7 @@ This processor adds the following metadata fields to each message, depending on 
 				Description("The maximum period to wait on an operation before aborting and returning an error.").
 				Advanced().Default("5s"),
 		}...)...).
+		Fields(connectionTailFields()...).
 		LintRule(`root = match {
       ["get_revision", "update"].contains(this.operation) && !this.exists("revision") => [ "'revision' must be set when operation is '" + this.operation + "'" ],
       !["get_revision", "update"].contains(this.operation) && this.exists("revision") => [ "'revision' cannot be set when operation is '" + this.operation + "'" ],

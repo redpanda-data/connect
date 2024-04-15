@@ -63,7 +63,7 @@ func connectionDetailsFromParsed(conf *service.ParsedConfig, mgr *service.Resour
 	return
 }
 
-func (c *connectionDetails) get(_ context.Context) (*nats.Conn, error) {
+func (c *connectionDetails) get(_ context.Context, extraOpts ...nats.Option) (*nats.Conn, error) {
 	var opts []nats.Option
 	if c.tlsConf != nil {
 		opts = append(opts, nats.Secure(c.tlsConf))
@@ -71,5 +71,6 @@ func (c *connectionDetails) get(_ context.Context) (*nats.Conn, error) {
 	opts = append(opts, nats.Name(c.label))
 	opts = append(opts, errorHandlerOption(c.logger))
 	opts = append(opts, authConfToOptions(c.authConf, c.fs)...)
+	opts = append(opts, extraOpts...)
 	return nats.Connect(c.urls, opts...)
 }
