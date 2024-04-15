@@ -203,7 +203,7 @@ type kafkaWriter struct {
 	topicCache syncmap.Map
 }
 
-// NewKafkaWriteFromParsed returns a kafka output from a parsed config.
+// NewKafkaWriterFromParsed returns a kafka output from a parsed config.
 func NewKafkaWriterFromParsed(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchOutput, error) {
 	k := kafkaWriter{
 		mgr: mgr,

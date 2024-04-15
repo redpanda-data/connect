@@ -19,7 +19,7 @@ func Spec() docs.FieldSpecs {
 		docs.FieldBool(fieldAddTimeStamp, "Whether to include timestamps in logs.").HasDefault(false),
 		docs.FieldString(fieldLevelName, "The name of the level field added to logs when the `format` is `json`.").HasDefault("level"),
 		docs.FieldString(fieldTimestampName, "The name of the timestamp field added to logs when `add_timestamp` is set to `true` and the `format` is `json`.").HasDefault("time"),
-		docs.FieldString(fieldMessageName, "The name of the message field added to logs when the the `format` is `json`.").HasDefault("msg"),
+		docs.FieldString(fieldMessageName, "The name of the message field added to logs when the `format` is `json`.").HasDefault("msg"),
 		docs.FieldString(fieldStaticFields, "A map of key/value pairs to add to each structured log.").Map().HasDefault(map[string]any{
 			"@service": "benthos",
 		}),
