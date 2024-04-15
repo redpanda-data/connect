@@ -27,6 +27,7 @@ All notable changes to this project will be documented in this file.
 - The `nats_kv` processor `history` operation now returns a single message with an array of objects containing the record fields instead of a batch of messages.
 - Field `timeout` added to the `nats_kv` processor to specify the maximum period to wait on an operation before aborting and returning an error.
 - Bloblang comparison operators (`>`, `<`, `<=`, `>=`) now match the precision of the compared integers when applicable.
+- The `parse_form_url_encoded` Bloblang method no longer produces results with an unknown data type for repeated query parameters.
 
 ### Changed
 
