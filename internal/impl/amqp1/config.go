@@ -28,6 +28,7 @@ const (
 	targetAddrField  = "target_address"
 	appPropsMapField = "application_properties_map"
 	metaFilterField  = "metadata"
+	persistentField  = "persistent"
 )
 
 // ErrSASLMechanismNotSupported is returned if a SASL mechanism was not recognized.

@@ -55,6 +55,10 @@ This output benefits from sending multiple messages in flight in parallel for im
 			saslFieldSpec(),
 			service.NewMetadataExcludeFilterField(metaFilterField).
 				Description("Specify criteria for which metadata values are attached to messages as headers."),
+			service.NewBoolField(persistentField).
+				Description("Whether message delivery should be persistent (transient by default).").
+				Advanced().
+				Default(false),
 		).LintRule(`
 root = if this.url.or("") == "" && this.urls.or([]).length() == 0 {
   "field 'urls' must be set"
@@ -92,6 +96,7 @@ type amqp1Writer struct {
 	metaFilter               *service.MetadataExcludeFilter
 	applicationPropertiesMap *bloblang.Executor
 	connOpts                 *amqp.ConnOptions
+	persistent               bool
 
 	log      *service.Logger
 	connLock sync.RWMutex
@@ -151,6 +156,11 @@ func amqp1WriterFromParsed(conf *service.ParsedConfig, mgr *service.Resources) (
 	if a.metaFilter, err = conf.FieldMetadataExcludeFilter(metaFilterField); err != nil {
 		return nil, err
 	}
+
+	if a.persistent, err = conf.FieldBool(persistentField); err != nil {
+		return nil, err
+	}
+
 	return &a, nil
 }
 
@@ -180,7 +190,11 @@ func (a *amqp1Writer) Connect(ctx context.Context) (err error) {
 	}
 
 	// Create a sender
-	if sender, err = session.NewSender(ctx, a.targetAddr, nil); err != nil {
+	var opts *amqp.SenderOptions
+	if a.persistent {
+		opts = &amqp.SenderOptions{SettlementMode: amqp.SenderSettleModeUnsettled.Ptr()}
+	}
+	if sender, err = session.NewSender(ctx, a.targetAddr, opts); err != nil {
 		_ = session.Close(ctx)
 		_ = client.Close()
 		return
@@ -266,6 +280,10 @@ func (a *amqp1Writer) Write(ctx context.Context, msg *service.Message) error {
 		m.Annotations[k] = v
 		return nil
 	})
+
+	if a.persistent {
+		m.Header = &amqp.MessageHeader{Durable: true}
+	}
 
 	if err = s.Send(ctx, m, nil); err != nil {
 		if ctx.Err() != nil {
