@@ -160,7 +160,7 @@ func trackerFromDagV2(dag [][]string) *resultTrackerV2 {
 
 func (r *resultTrackerV2) SkippedV2(k string) {
 	r.Lock()
-	delete(r.succeeded, k)
+	delete(r.notStarted, k)
 
 	r.skipped[k] = struct{}{}
 	r.Unlock()
@@ -184,7 +184,7 @@ func (r *resultTrackerV2) Started(k string) {
 
 func (r *resultTrackerV2) FailedV2(k, why string) {
 	r.Lock()
-	delete(r.succeeded, k)
+	delete(r.notStarted, k)
 	delete(r.skipped, k)
 
 	r.failed[k] = why
@@ -194,6 +194,8 @@ func (r *resultTrackerV2) FailedV2(k, why string) {
 func (r *resultTrackerV2) ToObjectV2() map[string]any {
 	succeeded := make([]any, 0, len(r.succeeded))
 	skipped := make([]any, 0, len(r.skipped))
+	notStarted := make([]any, 0, len(r.notStarted))
+	started := make([]any, 0, len(r.running))
 	failed := make(map[string]any, len(r.failed))
 
 	for k := range r.succeeded {
@@ -204,6 +206,12 @@ func (r *resultTrackerV2) ToObjectV2() map[string]any {
 	})
 	for k := range r.skipped {
 		skipped = append(skipped, k)
+	}
+	for k := range r.notStarted {
+		notStarted = append(notStarted, k)
+	}
+	for k := range r.running {
+		started = append(started, k)
 	}
 	sort.Slice(skipped, func(i, j int) bool {
 		return skipped[i].(string) < skipped[j].(string)
@@ -370,7 +378,7 @@ func (w *WorkflowV2) ProcessBatch(ctx context.Context, msg message.Batch) ([]mes
 
 	fmt.Println("HERE _ 5.6")
 
-	for len(records[0].notStarted) != 0 {
+	for len(records[0].succeeded) == 0 { // amount we need to have succeeded -- terminal check
 		time.Sleep(100 * time.Millisecond)
 		for eid, _ := range records[0].notStarted {
 			fmt.Printf("eid: %s, col: %d \n", eid, int(eid[0]-'A'))
@@ -419,7 +427,6 @@ func (w *WorkflowV2) ProcessBatch(ctx context.Context, msg message.Batch) ([]mes
 			}
 		}
 	}
-
 	fmt.Println("HERE _ 5.7")
 
 	// Finally, set the meta records of each document.
