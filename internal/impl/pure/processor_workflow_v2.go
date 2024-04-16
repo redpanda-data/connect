@@ -389,50 +389,47 @@ func (w *WorkflowV2) ProcessBatch(ctx context.Context, msg message.Batch) ([]mes
 			if isColumnAllZeros(dag, int(eid[0]-'A')) {
 				fmt.Printf("eid: %s, col: %d \n", eid, int(eid[0]-'A'))
 
-				if isColumnAllZeros(dag, int(eid[0]-'A')) {
+				branchMsg, branchSpans := tracing.WithChildSpans(w.tracer, eid, propMsg.ShallowCopy())
 
-					branchMsg, branchSpans := tracing.WithChildSpans(w.tracer, eid, propMsg.ShallowCopy())
+				go func(id string, index int) {
+					for j := range results[index] {
+						records[j].Started(id)
+					}
 
-					go func(id string, index int) {
-						for j := range results[index] {
-							records[j].Started(id)
+					branchParts := make([]*message.Part, branchMsg.Len())
+					_ = branchMsg.Iter(func(partIndex int, part *message.Part) error {
+						// Remove errors so that they aren't propagated into the
+						// branch.
+						part.ErrorSet(nil)
+						if _, exists := skipOnMeta[partIndex][id]; !exists {
+							branchParts[partIndex] = part
 						}
+						return nil
+					})
 
-						branchParts := make([]*message.Part, branchMsg.Len())
-						_ = branchMsg.Iter(func(partIndex int, part *message.Part) error {
-							// Remove errors so that they aren't propagated into the
-							// branch.
-							part.ErrorSet(nil)
-							if _, exists := skipOnMeta[partIndex][id]; !exists {
-								branchParts[partIndex] = part
-							}
-							return nil
-						})
-
-						var mapErrs []branchMapError
-						results[index], mapErrs, errors[index] = children[id].createResult(ctx, branchParts, propMsg.ShallowCopy())
-						for _, s := range branchSpans {
-							s.Finish()
+					var mapErrs []branchMapError
+					results[index], mapErrs, errors[index] = children[id].createResult(ctx, branchParts, propMsg.ShallowCopy())
+					for _, s := range branchSpans {
+						s.Finish()
+					}
+					for j, p := range results[index] {
+						if p == nil {
+							records[j].SkippedV2(id)
 						}
-						for j, p := range results[index] {
-							if p == nil {
-								records[j].SkippedV2(id)
-							}
-						}
-						for _, e := range mapErrs {
-							records[e.index].FailedV2(id, e.err.Error())
-						}
-						for j := range results[index] {
-							records[j].Finished((id))
-						}
-						dag = zeroOutRow(dag, index)
-						asdf := collector{
-							eid:     eid,
-							results: results,
-						}
-						done <- asdf
-					}(eid, int(eid[0]-'A'))
-				}
+					}
+					for _, e := range mapErrs {
+						records[e.index].FailedV2(id, e.err.Error())
+					}
+					for j := range results[index] {
+						records[j].Finished((id))
+					}
+					dag = zeroOutRow(dag, index)
+					asdf := collector{
+						eid:     eid,
+						results: results,
+					}
+					done <- asdf
+				}(eid, int(eid[0]-'A'))
 			}
 		}
 	}
