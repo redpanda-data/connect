@@ -22,8 +22,8 @@ func opensearchCacheConfig() *service.ConfigSpec {
 		Fields(httpclient.BasicAuthField()).
 		Fields(OAuthAuthField()).
 		Fields(
-			service.NewStringField("collection").
-				Description("The name of the target collection."),
+			service.NewStringField("index").
+				Description("The name of the target index."),
 			service.NewStringField("key_field").
 				Description("The field in the document that is used as the key."),
 			service.NewStringField("value_field").
@@ -48,7 +48,7 @@ func newOpensearchCacheFromConfig(parsedConf *service.ParsedConfig, mgr *service
 		return nil, err
 	}
 
-	collectionName, err := parsedConf.FieldString("collection")
+	indexName, err := parsedConf.FieldString("index")
 	if err != nil {
 		return nil, err
 	}
@@ -63,20 +63,20 @@ func newOpensearchCacheFromConfig(parsedConf *service.ParsedConfig, mgr *service
 		return nil, err
 	}
 
-	return newOpensearchCache(collectionName, keyField, valueField, conf)
+	return newOpensearchCache(indexName, keyField, valueField, conf)
 }
 
 //------------------------------------------------------------------------------
 
 type opensearchCache struct {
-	client     *opensearchapi.Client
-	collection string
+	client    *opensearchapi.Client
+	indexName string
 
 	keyField   string
 	valueField string
 }
 
-func newOpensearchCache(collectionName, keyField, valueField string, conf esoConfig) (*opensearchCache, error) {
+func newOpensearchCache(indexName, keyField, valueField string, conf esoConfig) (*opensearchCache, error) {
 
 	client, err := opensearchapi.NewClient(conf.clientOpts)
 	if err != nil {
@@ -85,7 +85,7 @@ func newOpensearchCache(collectionName, keyField, valueField string, conf esoCon
 
 	return &opensearchCache{
 		client:     client,
-		collection: collectionName,
+		indexName:  indexName,
 		keyField:   keyField,
 		valueField: valueField,
 	}, nil
@@ -93,15 +93,17 @@ func newOpensearchCache(collectionName, keyField, valueField string, conf esoCon
 
 func (m *opensearchCache) Get(ctx context.Context, key string) ([]byte, error) {
 	query := fmt.Sprintf(`{
-        "query": {
-            "term": {
-                "%s": "%s"
-            }
-        }
-    }`, m.keyField, key)
+		"query": {
+		  "term": {
+			"%s": {
+			  "value": "%s"
+			}
+		  }
+		}
+	  }`, m.keyField, key)
 
 	search := &opensearchapi.SearchReq{
-		Indices: []string{m.collection},
+		Indices: []string{m.indexName},
 		Body:    strings.NewReader(query),
 		Params: opensearchapi.SearchParams{
 			Size: opensearchapi.ToPointer(1),

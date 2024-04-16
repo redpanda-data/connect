@@ -34,7 +34,7 @@ Introduced in version 1.0.0.
 label: ""
 opensearch:
   urls: [] # No default (required)
-  collection: "" # No default (required)
+  index: "" # No default (required)
   key_field: "" # No default (required)
   value_field: "" # No default (optional)
 ```
@@ -60,7 +60,7 @@ opensearch:
     scope: ""
     token_cache: ""
     token_key: ""
-  collection: "" # No default (required)
+  index: "" # No default (required)
   key_field: "" # No default (required)
   value_field: "" # No default (optional)
 ```
@@ -188,9 +188,9 @@ Required when using a `token_cache`, the key to query the cache with for tokens.
 Type: `string`  
 Default: `""`  
 
-### `collection`
+### `index`
 
-The name of the target collection.
+The name of the target index.
 
 
 Type: `string`  
