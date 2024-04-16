@@ -377,8 +377,9 @@ func (w *WorkflowV2) ProcessBatch(ctx context.Context, msg message.Batch) ([]mes
 	}()
 
 	fmt.Println("HERE _ 5.6")
+	numberOfBranches := len(records[0].notStarted)
 
-	for len(records[0].succeeded) == 0 { // amount we need to have succeeded -- terminal check
+	for len(records[0].succeeded) != numberOfBranches { // amount we need to have succeeded -- terminal check
 		time.Sleep(100 * time.Millisecond)
 		for eid, _ := range records[0].notStarted {
 			fmt.Printf("eid: %s, col: %d \n", eid, int(eid[0]-'A'))
