@@ -137,6 +137,16 @@ func (m *opensearchCache) Get(ctx context.Context, key string) ([]byte, error) {
 
 func (m *opensearchCache) Set(ctx context.Context, key string, value []byte, _ *time.Duration) error {
 	return errors.New("not implemented")
+	// document := map[string]interface{}{
+	// 	m.keyField:   key,
+	// 	m.valueField: string(value),
+	// }
+
+	// req := &opensearchapi.IndexReq{
+	// 	Index: m.collection,
+	// 	Body:  bytes.NewReader(encodeJSON(document)),
+	// }
+	// m.client.Index(ctx, req)
 }
 
 func (m *opensearchCache) Add(ctx context.Context, key string, value []byte, _ *time.Duration) error {
