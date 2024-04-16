@@ -380,51 +380,59 @@ func (w *WorkflowV2) ProcessBatch(ctx context.Context, msg message.Batch) ([]mes
 	numberOfBranches := len(records[0].notStarted)
 
 	for len(records[0].succeeded) != numberOfBranches { // amount we need to have succeeded -- terminal check
-		time.Sleep(100 * time.Millisecond)
+		time.Sleep(5000 * time.Millisecond)
 		for eid, _ := range records[0].notStarted {
-			fmt.Printf("eid: %s, col: %d \n", eid, int(eid[0]-'A'))
 
-			results := make([][]*message.Part, 1)
-			errors := make([]error, 1)
+			results := make([][]*message.Part, len(records[0].notStarted))
+			errors := make([]error, len(records[0].notStarted))
 
 			if isColumnAllZeros(dag, int(eid[0]-'A')) {
+				fmt.Printf("eid: %s, col: %d \n", eid, int(eid[0]-'A'))
 
-				branchMsg, branchSpans := tracing.WithChildSpans(w.tracer, eid, propMsg.ShallowCopy())
+				if isColumnAllZeros(dag, int(eid[0]-'A')) {
 
-				go func(id string, index int) {
-					records[index].Started(id)
+					branchMsg, branchSpans := tracing.WithChildSpans(w.tracer, eid, propMsg.ShallowCopy())
 
-					branchParts := make([]*message.Part, branchMsg.Len())
-					_ = branchMsg.Iter(func(partIndex int, part *message.Part) error {
-						// Remove errors so that they aren't propagated into the
-						// branch.
-						part.ErrorSet(nil)
-						if _, exists := skipOnMeta[partIndex][id]; !exists {
-							branchParts[partIndex] = part
+					go func(id string, index int) {
+						for j := range results[index] {
+							records[j].Started(id)
 						}
-						return nil
-					})
 
-					var mapErrs []branchMapError
-					results[index], mapErrs, errors[index] = children[id].createResult(ctx, branchParts, propMsg.ShallowCopy())
-					for _, s := range branchSpans {
-						s.Finish()
-					}
-					for j, p := range results[index] {
-						if p == nil {
-							records[j].SkippedV2(id)
+						branchParts := make([]*message.Part, branchMsg.Len())
+						_ = branchMsg.Iter(func(partIndex int, part *message.Part) error {
+							// Remove errors so that they aren't propagated into the
+							// branch.
+							part.ErrorSet(nil)
+							if _, exists := skipOnMeta[partIndex][id]; !exists {
+								branchParts[partIndex] = part
+							}
+							return nil
+						})
+
+						var mapErrs []branchMapError
+						results[index], mapErrs, errors[index] = children[id].createResult(ctx, branchParts, propMsg.ShallowCopy())
+						for _, s := range branchSpans {
+							s.Finish()
 						}
-					}
-					for _, e := range mapErrs {
-						records[e.index].FailedV2(id, e.err.Error())
-					}
-					records[0].Finished(id)
-					asdf := collector{
-						eid:     eid,
-						results: results,
-					}
-					done <- asdf
-				}(eid, int(eid[0]-'A'))
+						for j, p := range results[index] {
+							if p == nil {
+								records[j].SkippedV2(id)
+							}
+						}
+						for _, e := range mapErrs {
+							records[e.index].FailedV2(id, e.err.Error())
+						}
+						for j := range results[index] {
+							records[j].Finished((id))
+						}
+						dag = zeroOutRow(dag, index)
+						asdf := collector{
+							eid:     eid,
+							results: results,
+						}
+						done <- asdf
+					}(eid, int(eid[0]-'A'))
+				}
 			}
 		}
 	}
@@ -491,4 +499,11 @@ func isColumnAllZeros(matrix [][]string, columnIdx int) bool {
 		}
 	}
 	return true
+}
+
+func zeroOutRow(matrix [][]string, rowIdx int) [][]string {
+	for i := 0; i < len(matrix); i++ {
+		matrix[rowIdx][i] = "0"
+	}
+	return matrix
 }
