@@ -42,7 +42,6 @@ func workflowProcSpecV2() *service.ConfigSpec {
 }
 
 func init() {
-	fmt.Println("HERE _ 1")
 	err := service.RegisterBatchProcessor(
 		"workflow_v2", workflowProcSpecV2(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchProcessor, error) {
@@ -55,7 +54,6 @@ func init() {
 	if err != nil {
 		panic(err)
 	}
-	fmt.Println("HERE _ 2")
 
 }
 
@@ -83,7 +81,6 @@ type WorkflowV2 struct {
 
 // NewWorkflow instanciates a new workflow processor.
 func NewWorkflowV2(conf *service.ParsedConfig, mgr bundle.NewManagement) (*WorkflowV2, error) {
-	fmt.Println("HERE _ 3")
 
 	stats := mgr.Metrics()
 	w := &WorkflowV2{
@@ -101,14 +98,10 @@ func NewWorkflowV2(conf *service.ParsedConfig, mgr bundle.NewManagement) (*Workf
 		mLatency:       stats.GetTimer("processor_latency_ns"),
 	}
 
-	fmt.Println("HERE _ 3.1")
-
 	metaStr := "meta.workflow"
 	if len(metaStr) > 0 {
 		w.metaPath = gabs.DotPathToSlice(metaStr)
 	}
-
-	fmt.Println("HERE _ 3.2")
 
 	err := errors.New("")
 	if w.children, err = newWorkflowBranchMapV2(conf, mgr); err != nil {
@@ -118,7 +111,6 @@ func NewWorkflowV2(conf *service.ParsedConfig, mgr bundle.NewManagement) (*Workf
 		w.allStages[k] = struct{}{}
 	}
 
-	fmt.Println("HERE _ 4")
 	return w, nil
 
 }
@@ -152,7 +144,7 @@ func trackerFromDagV2(dag [][]string) *resultTrackerV2 {
 	for i := range dag {
 		node_name := string(byte('A' + i))
 		r.notStarted[node_name] = struct{}{}
-		fmt.Printf("Stage added to notStarted Array: %s \n", node_name)
+		//fmt.Printf("Stage added to notStarted Array: %s \n", node_name)
 	}
 
 	return r
@@ -284,12 +276,9 @@ func (w *WorkflowV2) skipFromMetaV2(root any) map[string]struct{} {
 
 // ProcessBatch applies workflow stages to each part of a message type.
 func (w *WorkflowV2) ProcessBatch(ctx context.Context, msg message.Batch) ([]message.Batch, error) {
-	fmt.Println("HERE _ 5")
 	// JEM ?gubbins
 	w.mReceived.Incr(int64(msg.Len()))
 	w.mBatchReceived.Incr(1)
-
-	fmt.Println("HERE _ 5.1")
 
 	//JEM log time
 	startedAt := time.Now()
@@ -298,8 +287,6 @@ func (w *WorkflowV2) ProcessBatch(ctx context.Context, msg message.Batch) ([]mes
 
 	// JEM - go get the things from w.children (*workflowBranchMap)
 	dag, children, unlock, err := w.children.LockV2()
-
-	fmt.Println("HERE _ 5.2")
 
 	// JEM - error handling <>
 	if err != nil {
@@ -314,12 +301,9 @@ func (w *WorkflowV2) ProcessBatch(ctx context.Context, msg message.Batch) ([]mes
 		w.mBatchSent.Incr(1)
 		return []message.Batch{msg}, nil
 	}
-	fmt.Println("HERE _ 5.3")
 
 	// JEM - end error handling <>
 	defer unlock()
-
-	fmt.Println("HERE _ 5.4")
 
 	// this is the skip functionality if it is being restarted.
 	skipOnMeta := make([]map[string]struct{}, msg.Len())
@@ -333,8 +317,6 @@ func (w *WorkflowV2) ProcessBatch(ctx context.Context, msg message.Batch) ([]mes
 		return nil
 	})
 
-	fmt.Println("HERE _ 5.5")
-
 	propMsg, _ := tracing.WithChildSpans(w.tracer, "workflow", msg)
 
 	// result tracker created:
@@ -343,8 +325,6 @@ func (w *WorkflowV2) ProcessBatch(ctx context.Context, msg message.Batch) ([]mes
 		records[i] = trackerFromDagV2(dag)
 		fmt.Print("records[i]", records[i], "\n")
 	}
-
-	fmt.Println("HERE _ 5.55")
 
 	// error collector :
 	type collector struct {
@@ -376,7 +356,6 @@ func (w *WorkflowV2) ProcessBatch(ctx context.Context, msg message.Batch) ([]mes
 
 	}()
 
-	fmt.Println("HERE _ 5.6")
 	numberOfBranches := len(records[0].notStarted)
 
 	for len(records[0].succeeded) != numberOfBranches { // amount we need to have succeeded -- terminal check
@@ -387,7 +366,7 @@ func (w *WorkflowV2) ProcessBatch(ctx context.Context, msg message.Batch) ([]mes
 			errors := make([]error, len(records[0].notStarted))
 
 			if isColumnAllZeros(dag, int(eid[0]-'A')) {
-				fmt.Printf("eid: %s, col: %d \n", eid, int(eid[0]-'A'))
+				//fmt.Printf("eid: %s, col: %d \n", eid, int(eid[0]-'A'))
 
 				branchMsg, branchSpans := tracing.WithChildSpans(w.tracer, eid, propMsg.ShallowCopy())
 
@@ -424,6 +403,7 @@ func (w *WorkflowV2) ProcessBatch(ctx context.Context, msg message.Batch) ([]mes
 						records[j].Finished((id))
 					}
 					dag = zeroOutRow(dag, index)
+					dag = updateColumnDone(dag, index)
 					asdf := collector{
 						eid:     eid,
 						results: results,
@@ -433,7 +413,6 @@ func (w *WorkflowV2) ProcessBatch(ctx context.Context, msg message.Batch) ([]mes
 			}
 		}
 	}
-	fmt.Println("HERE _ 5.7")
 
 	// Finally, set the meta records of each document.
 	if len(w.metaPath) > 0 {
@@ -471,15 +450,11 @@ func (w *WorkflowV2) ProcessBatch(ctx context.Context, msg message.Batch) ([]mes
 		})
 	}
 
-	fmt.Println("HERE _ 5.8")
-
 	tracing.FinishSpans(propMsg)
 
 	w.mSent.Incr(int64(msg.Len()))
 	w.mBatchSent.Incr(1)
 	w.mLatency.Timing(time.Since(startedAt).Nanoseconds())
-
-	fmt.Println("HERE _ 5.9")
 
 	return []message.Batch{msg}, nil
 }
@@ -502,5 +477,10 @@ func zeroOutRow(matrix [][]string, rowIdx int) [][]string {
 	for i := 0; i < len(matrix); i++ {
 		matrix[rowIdx][i] = "0"
 	}
+	return matrix
+}
+
+func updateColumnDone(matrix [][]string, rowIdx int) [][]string {
+	matrix[rowIdx][rowIdx] = "1"
 	return matrix
 }
