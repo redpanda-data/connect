@@ -1,8 +1,8 @@
 ---
-title: nats
-slug: nats
-type: input
-status: stable
+title: nats_request_reply
+slug: nats_request_reply
+type: processor
+status: experimental
 categories: ["Services"]
 ---
 
@@ -15,7 +15,12 @@ categories: ["Services"]
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-Subscribe to a NATS subject.
+:::caution EXPERIMENTAL
+This component is experimental and therefore subject to change or removal outside of major version releases.
+:::
+Sends a message to a NATS subject and expects a reply, from a NATS subscriber acting as a responder, back.
+
+Introduced in version 4.27.0.
 
 
 <Tabs defaultValue="common" values={[
@@ -27,13 +32,15 @@ Subscribe to a NATS subject.
 
 ```yml
 # Common config fields, showing default values
-input:
-  label: ""
-  nats:
-    urls: [] # No default (required)
-    subject: foo.bar.baz # No default (required)
-    queue: "" # No default (optional)
-    auto_replay_nacks: true
+label: ""
+nats_request_reply:
+  urls: [] # No default (required)
+  subject: foo.bar.baz # No default (required)
+  headers: {}
+  metadata:
+    include_prefixes: []
+    include_patterns: []
+  timeout: 3s
 ```
 
 </TabItem>
@@ -41,28 +48,28 @@ input:
 
 ```yml
 # All config fields, showing default values
-input:
-  label: ""
-  nats:
-    urls: [] # No default (required)
-    subject: foo.bar.baz # No default (required)
-    queue: "" # No default (optional)
-    auto_replay_nacks: true
-    nak_delay: 1m # No default (optional)
-    prefetch_count: 524288
-    tls:
-      enabled: false
-      skip_cert_verify: false
-      enable_renegotiation: false
-      root_cas: ""
-      root_cas_file: ""
-      client_certs: []
-    auth:
-      nkey_file: ./seed.nk # No default (optional)
-      user_credentials_file: ./user.creds # No default (optional)
-      user_jwt: "" # No default (optional)
-      user_nkey_seed: "" # No default (optional)
-    extract_tracing_map: root = @ # No default (optional)
+label: ""
+nats_request_reply:
+  urls: [] # No default (required)
+  subject: foo.bar.baz # No default (required)
+  inbox_prefix: _INBOX_joe # No default (optional)
+  headers: {}
+  metadata:
+    include_prefixes: []
+    include_patterns: []
+  timeout: 3s
+  tls:
+    enabled: false
+    skip_cert_verify: false
+    enable_renegotiation: false
+    root_cas: ""
+    root_cas_file: ""
+    client_certs: []
+  auth:
+    nkey_file: ./seed.nk # No default (optional)
+    user_credentials_file: ./user.creds # No default (optional)
+    user_jwt: "" # No default (optional)
+    user_nkey_seed: "" # No default (optional)
 ```
 
 </TabItem>
@@ -72,10 +79,14 @@ input:
 
 This input adds the following metadata fields to each message:
 
-``` text
+```text
 - nats_subject
-- nats_reply_subject
-- All message headers (when supported by the connection)
+- nats_sequence_stream
+- nats_sequence_consumer
+- nats_num_delivered
+- nats_num_pending
+- nats_domain
+- nats_timestamp_unix_nano
 ```
 
 You can access these metadata fields using [function interpolation](/docs/configuration/interpolation#bloblang-queries).
@@ -139,7 +150,8 @@ urls:
 
 ### `subject`
 
-A subject to consume from. Supports wildcards for consuming multiple subjects. Either a subject or stream must be specified.
+A subject to write to.
+This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
 
 
 Type: `string`  
@@ -149,31 +161,14 @@ Type: `string`
 
 subject: foo.bar.baz
 
-subject: foo.*.baz
+subject: ${! meta("kafka_topic") }
 
-subject: foo.bar.*
-
-subject: foo.>
+subject: foo.${! json("meta.type") }
 ```
 
-### `queue`
+### `inbox_prefix`
 
-An optional queue group to consume as.
-
-
-Type: `string`  
-
-### `auto_replay_nacks`
-
-Whether messages that are rejected (nacked) at the output level should be automatically replayed indefinitely, eventually resulting in back pressure if the cause of the rejections is persistent. If set to `false` these messages will instead be deleted. Disabling auto replays can greatly improve memory efficiency of high throughput streams as the original shape of the data can be discarded immediately upon consumption and mutation.
-
-
-Type: `bool`  
-Default: `true`  
-
-### `nak_delay`
-
-An optional delay duration on redelivering a message when negatively acknowledged.
+Set an explicit inbox prefix for the response subject
 
 
 Type: `string`  
@@ -181,16 +176,80 @@ Type: `string`
 ```yml
 # Examples
 
-nak_delay: 1m
+inbox_prefix: _INBOX_joe
 ```
 
-### `prefetch_count`
+### `headers`
 
-The maximum number of messages to pull at a time.
+Explicit message headers to add to messages.
+This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
 
 
-Type: `int`  
-Default: `524288`  
+Type: `object`  
+Default: `{}`  
+
+```yml
+# Examples
+
+headers:
+  Content-Type: application/json
+  Timestamp: ${!meta("Timestamp")}
+```
+
+### `metadata`
+
+Determine which (if any) metadata values should be added to messages as headers.
+
+
+Type: `object`  
+
+### `metadata.include_prefixes`
+
+Provide a list of explicit metadata key prefixes to match against.
+
+
+Type: `array`  
+Default: `[]`  
+
+```yml
+# Examples
+
+include_prefixes:
+  - foo_
+  - bar_
+
+include_prefixes:
+  - kafka_
+
+include_prefixes:
+  - content-
+```
+
+### `metadata.include_patterns`
+
+Provide a list of explicit metadata key regular expression (re2) patterns to match against.
+
+
+Type: `array`  
+Default: `[]`  
+
+```yml
+# Examples
+
+include_patterns:
+  - .*
+
+include_patterns:
+  - _timestamp_unix$
+```
+
+### `timeout`
+
+A duration string is a possibly signed sequence of decimal numbers, each with optional fraction and a unit suffix, such as 300ms, -1.5h or 2h45m. Valid time units are ns, us (or µs), ms, s, m, h.
+
+
+Type: `string`  
+Default: `"3s"`  
 
 ### `tls`
 
@@ -384,21 +443,5 @@ This field contains sensitive information that usually shouldn't be added to a c
 
 
 Type: `string`  
-
-### `extract_tracing_map`
-
-EXPERIMENTAL: A [Bloblang mapping](/docs/guides/bloblang/about) that attempts to extract an object containing tracing propagation information, which will then be used as the root tracing span for the message. The specification of the extracted fields must match the format used by the service wide tracer.
-
-
-Type: `string`  
-Requires version 4.23.0 or newer  
-
-```yml
-# Examples
-
-extract_tracing_map: root = @
-
-extract_tracing_map: root = this.meta.span
-```
 
 
