@@ -138,7 +138,8 @@ func (m *opensearchCache) Get(ctx context.Context, key string) ([]byte, error) {
 	}
 
 	if m.valueField == "" {
-		return searchHit, nil // return the entire document
+		json, _ := searchHit.MarshalJSON()
+		return json, nil
 	}
 
 	var message map[string]interface{}

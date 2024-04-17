@@ -12,11 +12,11 @@ cache_resources:
       urls: ["https://osproxy-saptest.cheetah.trifork.dev"]
       index: sap-salesorders_s4hanacloud
       key_field: SalesOrder
-      #value_field: CreatedByUser
+      value_field: "" # CreatedByUser
       basic_auth:
         enabled: true
         username: "apikey"
-        password: "${SAPHANA_APIKEY}"
+        password: "${OS_API_KEY}"
 
 tests:
   - name: Example test case fieldvalue_cache
