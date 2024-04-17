@@ -165,16 +165,16 @@ func (f FieldSpec) Optional() FieldSpec {
 	return f
 }
 
-const bloblREEnvVar = "\\${[0-9A-Za-z_.]+(:((\\${[^}]+})|[^}])*)?}"
+const bloblREEnvVar = `\${[0-9A-Za-z_.]+(:((\${[^}]+})|[^}])*)?}`
 
 // Secret marks this field as being a secret, which means it represents
 // information that is generally considered sensitive such as passwords or
 // access tokens.
 func (f FieldSpec) Secret() FieldSpec {
 	f.IsSecret = true
-	f.Scrubber = fmt.Sprintf(`root = if this != "" && !this.trim().re_match("""^%v$""") {
+	f.Scrubber = fmt.Sprintf(`root = if this != null && this != "" && !this.trim().re_match("""^%v$""") {
   "!!!SECRET_SCRUBBED!!!"
-}`, bloblREEnvVar)
+} else if this == null { "" }`, bloblREEnvVar)
 	return f
 }
 
