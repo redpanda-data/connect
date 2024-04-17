@@ -1,0 +1,28 @@
+pipeline:
+  processors:
+    - label: fieldvalue_cache
+      cache:
+        resource: opensearch
+        operator: get
+        key: "1"
+
+cache_resources:
+  - label: opensearch
+    opensearch: 
+      urls: ["https://osproxy-saptest.cheetah.trifork.dev"]
+      index: sap-salesorders_s4hanacloud
+      key_field: SalesOrder
+      value_field: CreatedByUser
+      basic_auth:
+        enabled: true
+        username: "apikey"
+        password: "Bb4Lf4ZLS3uN4bRE^2DGSJ5Ju4CMCB5x6m2pujo5"
+
+tests:
+  - name: Example test case fieldvalue_cache
+    environment: {}
+    target_processors: fieldvalue_cache #/pipeline/processors
+    input_batch:
+      - content: 'ignored value'
+    output_batches:
+      - - content_equals: 'CB9980000027'

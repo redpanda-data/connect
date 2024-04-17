@@ -21,6 +21,7 @@ func opensearchCacheConfig() *service.ConfigSpec {
 		Fields(service.NewStringListField(esoFieldURLs)).
 		Fields(httpclient.BasicAuthField()).
 		Fields(OAuthAuthField()).
+		Fields(service.NewTLSToggledField(esoFieldTLS)).
 		Fields(
 			service.NewStringField("index").
 				Description("The name of the target index."),
@@ -43,7 +44,7 @@ func init() {
 }
 
 func newOpensearchCacheFromConfig(parsedConf *service.ParsedConfig, mgr *service.Resources) (*opensearchCache, error) {
-	conf, err := esoConfigFromParsed(parsedConf, mgr)
+	conf, err := esoClientConfigFromParsed(parsedConf, mgr)
 	if err != nil {
 		return nil, err
 	}
@@ -76,9 +77,9 @@ type opensearchCache struct {
 	valueField string
 }
 
-func newOpensearchCache(indexName, keyField, valueField string, conf esoConfig) (*opensearchCache, error) {
+func newOpensearchCache(indexName, keyField, valueField string, clientOpts opensearchapi.Config) (*opensearchCache, error) {
 
-	client, err := opensearchapi.NewClient(conf.clientOpts)
+	client, err := opensearchapi.NewClient(clientOpts)
 	if err != nil {
 		return nil, err
 	}
