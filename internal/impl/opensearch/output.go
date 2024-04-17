@@ -77,13 +77,14 @@ func esoClientConfigFromParsed(pConf *service.ParsedConfig, mgr *service.Resourc
 	clientOpts := opensearchapi.Config{}
 
 	var tmpURLs []string
+	var err error
 	if tmpURLs, err = pConf.FieldStringList(esoFieldURLs); err != nil {
-		return
+		return clientOpts, nil
 	}
 	for _, u := range tmpURLs {
 		for _, splitURL := range strings.Split(u, ",") {
 			if splitURL != "" {
-				clientOpts.Client.Addresses = append(conf.clientOpts.Client.Addresses, splitURL)
+				clientOpts.Client.Addresses = append(clientOpts.Client.Addresses, splitURL)
 			}
 		}
 	}
@@ -92,17 +93,17 @@ func esoClientConfigFromParsed(pConf *service.ParsedConfig, mgr *service.Resourc
 	if enabled, _ := authConf.FieldBool(esoFieldAuthEnabled); enabled {
 
 		if clientOpts.Client.Username, err = authConf.FieldString(esoFieldAuthUsername); err != nil {
-			return
+			return clientOpts, nil
 		}
 		if clientOpts.Client.Password, err = authConf.FieldString(esoFieldAuthPassword); err != nil {
-			return
+			return clientOpts, nil
 		}
 	}
 
 	oauth2conf, err := oAuthFromParsed(pConf)
 	if err != nil {
 		mgr.Logger().Error("Failed to parse OAuth2 configuration")
-		return
+		return clientOpts, err
 	}
 
 	if oauth2conf.Enabled {
@@ -123,18 +124,18 @@ func esoClientConfigFromParsed(pConf *service.ParsedConfig, mgr *service.Resourc
 	var tlsEnabled bool
 
 	if tlsConf, tlsEnabled, err = pConf.FieldTLSToggled(esoFieldTLS); err != nil {
-		return
+		return clientOpts, nil
 	} else if tlsEnabled {
-		if _, ok := conf.clientOpts.Client.Transport.(*oauth2.Transport).Base.(*http.Transport); ok {
-			conf.clientOpts.Client.Transport.(*oauth2.Transport).Base.(*http.Transport).TLSClientConfig = tlsConf
+		if _, ok := clientOpts.Client.Transport.(*oauth2.Transport).Base.(*http.Transport); ok {
+			clientOpts.Client.Transport.(*oauth2.Transport).Base.(*http.Transport).TLSClientConfig = tlsConf
 		} else {
-			conf.clientOpts.Client.Transport = &http.Transport{
+			clientOpts.Client.Transport = &http.Transport{
 				TLSClientConfig: tlsConf,
 			}
 		}
 	}
 
-	return clientOpts
+	return clientOpts, nil
 }
 
 func esoConfigFromParsed(pConf *service.ParsedConfig, mgr *service.Resources) (conf esoConfig, err error) {
