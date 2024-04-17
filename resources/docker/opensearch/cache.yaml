@@ -12,7 +12,7 @@ cache_resources:
       urls: ["https://osproxy-saptest.cheetah.trifork.dev"]
       index: sap-salesorders_s4hanacloud
       key_field: SalesOrder
-      value_field: CreatedByUser
+      #value_field: CreatedByUser
       basic_auth:
         enabled: true
         username: "apikey"
@@ -25,4 +25,5 @@ tests:
     input_batch:
       - content: 'ignored value'
     output_batches:
-      - - content_equals: 'CB9980000027'
+      - - json_contains: 
+            CreatedByUser: 'CB9980000027'

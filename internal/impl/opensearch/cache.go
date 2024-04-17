@@ -26,9 +26,11 @@ func opensearchCacheConfig() *service.ConfigSpec {
 			service.NewStringField("index").
 				Description("The name of the target index."),
 			service.NewStringField("key_field").
-				Description("The field in the document that is used as the key."),
+				Description("The field in the document that is used as the key. If not set, it will use the _id on the document.").
+				Optional(),
 			service.NewStringField("value_field").
-				Description("The field in the document that is used as the value.").Optional(),
+				Description("The field in the document that is used as the value. If not set, it will retrieve the entire document").
+				Optional(),
 		)
 }
 
@@ -54,15 +56,9 @@ func newOpensearchCacheFromConfig(parsedConf *service.ParsedConfig, mgr *service
 		return nil, err
 	}
 
-	keyField, err := parsedConf.FieldString("key_field")
-	if err != nil {
-		return nil, err
-	}
+	keyField, _ := parsedConf.FieldString("key_field")
 
-	valueField, err := parsedConf.FieldString("value_field")
-	if err != nil {
-		return nil, err
-	}
+	valueField, _ := parsedConf.FieldString("value_field")
 
 	return newOpensearchCache(indexName, keyField, valueField, conf)
 }
@@ -93,7 +89,23 @@ func newOpensearchCache(indexName, keyField, valueField string, clientOpts opens
 }
 
 func (m *opensearchCache) Get(ctx context.Context, key string) ([]byte, error) {
-	query := fmt.Sprintf(`{
+	var searchHit json.RawMessage
+	if m.keyField == "" {
+		documentResponse, err := m.client.Document.Get(ctx, opensearchapi.DocumentGetReq{
+			Index:      m.indexName,
+			DocumentID: key,
+		})
+
+		if !documentResponse.Found {
+			return nil, service.ErrKeyNotFound
+		}
+		if err != nil {
+			return nil, fmt.Errorf("error getting document %s: %v", key, err)
+		}
+		searchHit = documentResponse.Source
+	} else {
+
+		query := fmt.Sprintf(`{
 		"query": {
 		  "term": {
 			"%s": {
@@ -103,38 +115,40 @@ func (m *opensearchCache) Get(ctx context.Context, key string) ([]byte, error) {
 		}
 	  }`, m.keyField, key)
 
-	search := &opensearchapi.SearchReq{
-		Indices: []string{m.indexName},
-		Body:    strings.NewReader(query),
-		Params: opensearchapi.SearchParams{
-			Size: opensearchapi.ToPointer(1),
-		},
-	}
+		search := &opensearchapi.SearchReq{
+			Indices: []string{m.indexName},
+			Body:    strings.NewReader(query),
+			Params: opensearchapi.SearchParams{
+				Size: opensearchapi.ToPointer(1),
+			},
+		}
 
-	searchResponse, err := m.client.Search(ctx, search)
+		searchResponse, err := m.client.Search(ctx, search)
 
-	if err != nil {
-		return nil, fmt.Errorf("error searching for key %s: %v", key, err)
-	}
-
-	if searchResponse.Hits.Total.Value == 0 {
-		return nil, service.ErrKeyNotFound
-	}
-
-	if m.valueField != "" {
-		var message map[string]interface{}
-		err = json.Unmarshal(searchResponse.Hits.Hits[0].Source, &message)
 		if err != nil {
-			return nil, fmt.Errorf("error getting field from document %s: %v", m.valueField, err)
+			return nil, fmt.Errorf("error searching for key %s: %v", key, err)
 		}
-		var val, ok = message[m.valueField].(string)
-		if ok {
-			return []byte(val), nil
+
+		if searchResponse.Hits.Total.Value == 0 {
+			return nil, service.ErrKeyNotFound
 		}
-		return nil, fmt.Errorf("error getting field from document %s: %v", m.valueField, val)
-	} else {
-		return searchResponse.Hits.Hits[0].Source, nil // return the entire document
+		searchHit = searchResponse.Hits.Hits[0].Source
 	}
+
+	if m.valueField == "" {
+		return searchHit, nil // return the entire document
+	}
+
+	var message map[string]interface{}
+	err := json.Unmarshal(searchHit, &message)
+	if err != nil {
+		return nil, fmt.Errorf("error getting field from document %s: %v", m.valueField, err)
+	}
+	var val, ok = message[m.valueField].(string)
+	if ok {
+		return []byte(val), nil
+	}
+	return nil, fmt.Errorf("error getting field from document %s: %v", m.valueField, val)
 
 }
 
