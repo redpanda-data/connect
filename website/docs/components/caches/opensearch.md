@@ -17,7 +17,7 @@ import TabItem from '@theme/TabItem';
 :::caution BETA
 This component is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with the component is found.
 :::
-Use a OpenSearch instance as a cache. Only GET is supported
+Use a OpenSearch instance as a cache. The get operator can be used to look into any existing document in Opensearch
 
 Introduced in version 1.0.0.
 
@@ -35,8 +35,7 @@ label: ""
 opensearch:
   urls: [] # No default (required)
   index: "" # No default (required)
-  key_field: "" # No default (required)
-  value_field: "" # No default (optional)
+  value_field: value
 ```
 
 </TabItem>
@@ -68,8 +67,8 @@ opensearch:
     root_cas_file: ""
     client_certs: []
   index: "" # No default (required)
-  key_field: "" # No default (required)
-  value_field: "" # No default (optional)
+  key_field: "" # No default (optional)
+  value_field: value
 ```
 
 </TabItem>
@@ -344,16 +343,17 @@ Type: `string`
 
 ### `key_field`
 
-The field in the document that is used as the key.
+Not used together with get,set and delete operatior. The field in the document that is used as the key. If not set, it will use the _id on the document.
 
 
 Type: `string`  
 
 ### `value_field`
 
-The field in the document that is used as the value.
+The field in the document that is used as the value. If set to empty, it will retrieve the entire document
 
 
 Type: `string`  
+Default: `"value"`  
 
 
