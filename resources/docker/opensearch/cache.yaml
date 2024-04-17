@@ -16,7 +16,7 @@ cache_resources:
       basic_auth:
         enabled: true
         username: "apikey"
-        password: "Bb4Lf4ZLS3uN4bRE^2DGSJ5Ju4CMCB5x6m2pujo5"
+        password: "${SAPHANA_APIKEY}"
 
 tests:
   - name: Example test case fieldvalue_cache
