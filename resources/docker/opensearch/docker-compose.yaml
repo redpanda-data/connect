@@ -21,16 +21,3 @@ services:
     environment:
       - USERNAME=apikey
       - PASSWORD=${OS_API_KEY}
-
-  benthos-opensearch-cache:
-    image: jeffail/benthos:local
-    build:
-      context: ../../../
-      dockerfile: ./resources/docker/Dockerfile.cgo
-    command: [ '-c', '/benthos.yaml' ]
-    volumes:
-      - ./cache.yaml:/benthos.yaml
-    network_mode: host
-    environment:
-      - USERNAME=apikey
-      - PASSWORD=${OS_API_KEY}

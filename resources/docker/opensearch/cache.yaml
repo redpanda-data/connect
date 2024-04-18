@@ -14,10 +14,20 @@ pipeline:
         operator: get
         key: "1"
     - label: leveled_cache
-      cache:
-        resource: opensearch_entiredoc
-        operator: get
-        key: "1"
+      processors:
+        - cache:
+            resource: opensearch_entiredoc
+            operator: get
+            key: "1"
+        - cache:
+            resource: hot
+            operator: get
+            key: "1"
+        - cached:
+            key: "1"
+            cache: hot
+            processors:
+              - mapping: throw("hot cache not found")
 
 cache_resources:
   - label: opensearch_entiredoc
