@@ -3,7 +3,34 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
-## Unreleased
+## 4.26.0 - 2024-03-18
+
+### Added
+
+- Field `credit` added to the `amqp_1` input to specify the maximum number of unacknowledged messages the sender can transmit.
+- Bloblang now supports root-level `if` statements.
+- New experimental `sql` cache.
+- Fields `batch_size`, `sort` and `limit` added to the `mongodb` input.
+- Field `idemponent_write` added to the `kafka` output.
+
+### Changed
+
+- The default value of the `amqp_1.credit` input has changed from `1` to `64`.
+- The `mongodb` processor and output now support extended JSON in canonical form for document, filter and hint mappings.
+- The `open_telemetry_collector` tracer has had the `url` field of gRPC and HTTP collectors deprecated in favour of `address`, which more accurately describes the intended format of endpoints. The old style will continue to work, but eventually will have its default value removed and an explicit value will be required.
+
+### Fixed
+
+- Resource config imports containing `%` characters were being incorrectly parsed during unit test execution. This was a regression introduced in v4.25.0.
+- Dynamic input and output config updates containing `%` characters were being incorrectly parsed. This was a regression introduced in v4.25.0.
+
+## 4.25.1 - 2024-03-01
+
+### Fixed
+
+- Fixed a regression in v4.25.0 where [template based components](https://www.benthos.dev/docs/configuration/templating) were not parsing correctly from configs.
+
+## 4.25.0 - 2024-03-01
 
 ### Added
 

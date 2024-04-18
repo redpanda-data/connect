@@ -10,8 +10,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/kinesis"
-	"github.com/ory/dockertest/v3"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/benthosdev/benthos/v4/internal/integration"
@@ -71,35 +69,7 @@ func createKinesisShards(ctx context.Context, t testing.TB, awsPort, id string, 
 	return shards, nil
 }
 
-func TestIntegrationAWSKinesis(t *testing.T) {
-	integration.CheckSkip(t)
-	t.Parallel()
-
-	pool, err := dockertest.NewPool("")
-	require.NoError(t, err)
-
-	pool.MaxWait = time.Minute * 2
-	if dline, ok := t.Deadline(); ok && time.Until(dline) < pool.MaxWait {
-		pool.MaxWait = time.Until(dline)
-	}
-
-	resource, err := pool.RunWithOptions(&dockertest.RunOptions{
-		Repository:   "localstack/localstack",
-		ExposedPorts: []string{"4566/tcp"},
-		Env:          []string{"SERVICES=dynamodb,kinesis"},
-	})
-	require.NoError(t, err)
-	t.Cleanup(func() {
-		assert.NoError(t, pool.Purge(resource))
-	})
-
-	_ = resource.Expire(900)
-
-	require.NoError(t, pool.Retry(func() error {
-		_, err := createKinesisShards(context.Background(), t, resource.GetPort("4566/tcp"), "testtable", 2)
-		return err
-	}))
-
+func kinesisIntegrationSuite(t *testing.T, lsPort string) {
 	template := `
 output:
   aws_kinesis:
@@ -146,7 +116,7 @@ input:
 			t, template,
 			integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, testID string, vars *integration.StreamTestConfigVars) {
 				streamName := "stream-" + testID
-				shards, err := createKinesisShards(ctx, t, resource.GetPort("4566/tcp"), testID, 2)
+				shards, err := createKinesisShards(ctx, t, lsPort, testID, 2)
 				require.NoError(t, err)
 
 				for i, shard := range shards {
@@ -157,7 +127,7 @@ input:
 					}
 				}
 			}),
-			integration.StreamTestOptPort(resource.GetPort("4566/tcp")),
+			integration.StreamTestOptPort(lsPort),
 			integration.StreamTestOptAllowDupes(),
 			integration.StreamTestOptVarTwo("10"),
 		)
@@ -167,10 +137,10 @@ input:
 		suite.Run(
 			t, template,
 			integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, testID string, vars *integration.StreamTestConfigVars) {
-				_, err := createKinesisShards(ctx, t, resource.GetPort("4566/tcp"), testID, 2)
+				_, err := createKinesisShards(ctx, t, lsPort, testID, 2)
 				require.NoError(t, err)
 			}),
-			integration.StreamTestOptPort(resource.GetPort("4566/tcp")),
+			integration.StreamTestOptPort(lsPort),
 			integration.StreamTestOptAllowDupes(),
 			integration.StreamTestOptVarTwo("10"),
 		)
@@ -182,11 +152,11 @@ input:
 		).Run(
 			t, template,
 			integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, testID string, vars *integration.StreamTestConfigVars) {
-				shards, err := createKinesisShards(ctx, t, resource.GetPort("4566/tcp"), testID, 1)
+				shards, err := createKinesisShards(ctx, t, lsPort, testID, 1)
 				require.NoError(t, err)
 				vars.Var1 = ":" + shards[0]
 			}),
-			integration.StreamTestOptPort(resource.GetPort("4566/tcp")),
+			integration.StreamTestOptPort(lsPort),
 			integration.StreamTestOptAllowDupes(),
 			integration.StreamTestOptVarTwo("10"),
 		)

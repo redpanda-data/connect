@@ -11,7 +11,6 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component/input"
 	"github.com/benthosdev/benthos/v4/internal/component/interop"
-	"github.com/benthosdev/benthos/v4/internal/component/testutil"
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
@@ -143,7 +142,12 @@ func newDynamicInputFromParsed(conf *service.ParsedConfig, res *service.Resource
 	}
 
 	dynAPI.OnUpdate(func(ctx context.Context, id string, c []byte) error {
-		newConf, err := testutil.InputFromYAML(string(c))
+		confNode, err := docs.UnmarshalYAML(c)
+		if err != nil {
+			return err
+		}
+
+		newConf, err := input.FromAny(bundle.GlobalEnvironment, confNode)
 		if err != nil {
 			return err
 		}

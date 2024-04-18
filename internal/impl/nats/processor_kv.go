@@ -2,15 +2,12 @@ package nats
 
 import (
 	"context"
-	"crypto/tls"
 	"fmt"
 	"strconv"
-	"strings"
 	"sync"
 
 	"github.com/nats-io/nats.go"
 
-	"github.com/benthosdev/benthos/v4/internal/impl/nats/auth"
 	"github.com/benthosdev/benthos/v4/internal/shutdown"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
@@ -77,11 +74,8 @@ This processor adds the following metadata fields to each message, depending on 
 - nats_kv_bucket
 ` + "```" + `
 
-` + ConnectionNameDescription() + auth.Description()).
-		Field(service.NewStringListField("urls").
-			Description("A list of URLs to connect to. If an item of the list contains commas it will be expanded into multiple URLs.").
-			Example([]string{"nats://127.0.0.1:4222"}).
-			Example([]string{"nats://username:password@127.0.0.1:4222"})).
+` + ConnectionNameDescription() + authDescription()).
+		Fields(connectionHeadFields()...).
 		Field(service.NewStringField("bucket").
 			Description("The name of the KV bucket to watch for updates.").
 			Example("my_kv_bucket")).
@@ -100,8 +94,7 @@ This processor adds the following metadata fields to each message, depending on 
 			Example(`${! @nats_kv_revision }`).
 			Optional().
 			Advanced()).
-		Field(service.NewTLSToggledField("tls")).
-		Field(service.NewInternalField(auth.FieldSpec())).
+		Fields(connectionTailFields()...).
 		LintRule(`root = match {
       ["get_revision", "update"].contains(this.operation) && !this.exists("revision") => [ "'revision' must be set when operation is '" + this.operation + "'" ],
       !["get_revision", "update"].contains(this.operation) && this.exists("revision") => [ "'revision' cannot be set when operation is '" + this.operation + "'" ],
@@ -123,19 +116,15 @@ func init() {
 }
 
 type kvProcessor struct {
-	label       string
-	urls        string
+	connDetails connectionDetails
 	bucket      string
 	operation   string
 	key         *service.InterpolatedString
 	keyRaw      string
 	revision    *service.InterpolatedString
 	revisionRaw string
-	authConf    auth.Config
-	tlsConf     *tls.Config
 
 	log *service.Logger
-	fs  *service.FS
 
 	shutSig *shutdown.Signaller
 
@@ -146,17 +135,14 @@ type kvProcessor struct {
 
 func newKVProcessor(conf *service.ParsedConfig, mgr *service.Resources) (*kvProcessor, error) {
 	p := &kvProcessor{
-		label:   mgr.Label(),
 		log:     mgr.Logger(),
-		fs:      mgr.FS(),
 		shutSig: shutdown.NewSignaller(),
 	}
 
-	urlList, err := conf.FieldStringList("urls")
-	if err != nil {
+	var err error
+	if p.connDetails, err = connectionDetailsFromParsed(conf, mgr); err != nil {
 		return nil, err
 	}
-	p.urls = strings.Join(urlList, ",")
 
 	if p.bucket, err = conf.FieldString("bucket"); err != nil {
 		return nil, err
@@ -184,20 +170,7 @@ func newKVProcessor(conf *service.ParsedConfig, mgr *service.Resources) (*kvProc
 		}
 	}
 
-	tlsConf, tlsEnabled, err := conf.FieldTLSToggled("tls")
-	if err != nil {
-		return nil, err
-	}
-	if tlsEnabled {
-		p.tlsConf = tlsConf
-	}
-
-	if p.authConf, err = AuthFromParsedConfig(conf.Namespace("auth")); err != nil {
-		return nil, err
-	}
-
 	err = p.Connect(context.Background())
-
 	return p, err
 }
 
@@ -363,13 +336,7 @@ func (p *kvProcessor) Connect(ctx context.Context) (err error) {
 		}
 	}()
 
-	var opts []nats.Option
-	if p.tlsConf != nil {
-		opts = append(opts, nats.Secure(p.tlsConf))
-	}
-	opts = append(opts, nats.Name(p.label))
-	opts = append(opts, authConfToOptions(p.authConf, p.fs)...)
-	if p.natsConn, err = nats.Connect(p.urls, opts...); err != nil {
+	if p.natsConn, err = p.connDetails.get(ctx); err != nil {
 		return err
 	}
 

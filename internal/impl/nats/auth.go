@@ -12,11 +12,61 @@ import (
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nkeys"
 
-	"github.com/benthosdev/benthos/v4/internal/impl/nats/auth"
+	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
-func authConfToOptions(auth auth.Config, fs *service.FS) []nats.Option {
+func authDescription() string {
+	return `### Authentication
+
+There are several components within Benthos which utilise NATS services. You will find that each of these components
+support optional advanced authentication parameters for [NKeys](https://docs.nats.io/nats-server/configuration/securing_nats/auth_intro/nkey_auth)
+and [User Credentials](https://docs.nats.io/developing-with-nats/security/creds).
+
+An in depth tutorial can be found [here](https://docs.nats.io/developing-with-nats/tutorials/jwt).
+
+#### NKey file
+
+The NATS server can use these NKeys in several ways for authentication. The simplest is for the server to be configured
+with a list of known public keys and for the clients to respond to the challenge by signing it with its private NKey
+configured in the ` + "`nkey_file`" + ` field.
+
+More details [here](https://docs.nats.io/developing-with-nats/security/nkey).
+
+#### User Credentials
+
+NATS server supports decentralized authentication based on JSON Web Tokens (JWT). Clients need an [user JWT](https://docs.nats.io/nats-server/configuration/securing_nats/jwt#json-web-tokens)
+and a corresponding [NKey secret](https://docs.nats.io/developing-with-nats/security/nkey) when connecting to a server
+which is configured to use this authentication scheme.
+
+The ` + "`user_credentials_file`" + ` field should point to a file containing both the private key and the JWT and can be
+generated with the [nsc tool](https://docs.nats.io/nats-tools/nsc).
+
+Alternatively, the ` + "`user_jwt`" + ` field can contain a plain text JWT and the ` + "`user_nkey_seed`" + `can contain
+the plain text NKey Seed.
+
+More details [here](https://docs.nats.io/developing-with-nats/security/creds).`
+}
+
+func authFieldSpec() docs.FieldSpec {
+	return docs.FieldObject("auth", "Optional configuration of NATS authentication parameters.").WithChildren(
+		docs.FieldString("nkey_file", "An optional file containing a NKey seed.", "./seed.nk").Optional(),
+		docs.FieldString("user_credentials_file", "An optional file containing user credentials which consist of an user JWT and corresponding NKey seed.", "./user.creds").Optional(),
+		docs.FieldString("user_jwt", "An optional plain text user JWT (given along with the corresponding user NKey Seed).").Secret().Optional(),
+		docs.FieldString("user_nkey_seed", "An optional plain text user NKey Seed (given along with the corresponding user JWT).").Secret().Optional(),
+	).Advanced()
+}
+
+type authConfig struct {
+	NKeyFile            string
+	UserCredentialsFile string
+	UserJWT             string
+	UserNkeySeed        string
+}
+
+//------------------------------------------------------------------------------
+
+func authConfToOptions(auth authConfig, fs *service.FS) []nats.Option {
 	var opts []nats.Option
 	if auth.NKeyFile != "" {
 		if opt, err := nats.NkeyOptionFromSeed(auth.NKeyFile); err != nil {
@@ -48,8 +98,7 @@ func authConfToOptions(auth auth.Config, fs *service.FS) []nats.Option {
 }
 
 // AuthFromParsedConfig attempts to extract an auth config from a ParsedConfig.
-func AuthFromParsedConfig(p *service.ParsedConfig) (c auth.Config, err error) {
-	c = auth.New()
+func AuthFromParsedConfig(p *service.ParsedConfig) (c authConfig, err error) {
 	if p.Contains("nkey_file") {
 		if c.NKeyFile, err = p.FieldString("nkey_file"); err != nil {
 			return

@@ -2,13 +2,10 @@ package nats
 
 import (
 	"context"
-	"crypto/tls"
-	"strings"
 	"sync"
 
 	"github.com/nats-io/nats.go"
 
-	"github.com/benthosdev/benthos/v4/internal/impl/nats/auth"
 	"github.com/benthosdev/benthos/v4/internal/shutdown"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
@@ -33,11 +30,8 @@ This input adds the following metadata fields to each message:
 - nats_kv_created
 ` + "```" + `
 
-` + ConnectionNameDescription() + auth.Description()).
-		Field(service.NewStringListField("urls").
-			Description("A list of URLs to connect to. If an item of the list contains commas it will be expanded into multiple URLs.").
-			Example([]string{"nats://127.0.0.1:4222"}).
-			Example([]string{"nats://username:password@127.0.0.1:4222"})).
+` + ConnectionNameDescription() + authDescription()).
+		Fields(connectionHeadFields()...).
 		Field(service.NewStringField("bucket").
 			Description("The name of the KV bucket to watch for updates.").
 			Example("my_kv_bucket")).
@@ -57,8 +51,7 @@ This input adds the following metadata fields to each message:
 			Description("Retrieve only the metadata of the entry").
 			Default(false).
 			Advanced()).
-		Field(service.NewTLSToggledField("tls")).
-		Field(service.NewInternalField(auth.FieldSpec()))
+		Fields(connectionTailFields()...)
 }
 
 func init() {
@@ -75,18 +68,14 @@ func init() {
 }
 
 type kvReader struct {
-	label          string
-	urls           string
+	connDetails    connectionDetails
 	bucket         string
 	key            string
 	ignoreDeletes  bool
 	includeHistory bool
 	metaOnly       bool
-	authConf       auth.Config
-	tlsConf        *tls.Config
 
 	log *service.Logger
-	fs  *service.FS
 
 	shutSig *shutdown.Signaller
 
@@ -97,17 +86,14 @@ type kvReader struct {
 
 func newKVReader(conf *service.ParsedConfig, mgr *service.Resources) (*kvReader, error) {
 	r := &kvReader{
-		label:   mgr.Label(),
 		log:     mgr.Logger(),
-		fs:      mgr.FS(),
 		shutSig: shutdown.NewSignaller(),
 	}
 
-	urlList, err := conf.FieldStringList("urls")
-	if err != nil {
+	var err error
+	if r.connDetails, err = connectionDetailsFromParsed(conf, mgr); err != nil {
 		return nil, err
 	}
-	r.urls = strings.Join(urlList, ",")
 
 	if r.bucket, err = conf.FieldString("bucket"); err != nil {
 		return nil, err
@@ -128,19 +114,6 @@ func newKVReader(conf *service.ParsedConfig, mgr *service.Resources) (*kvReader,
 	if r.key, err = conf.FieldString("key"); err != nil {
 		return nil, err
 	}
-
-	tlsConf, tlsEnabled, err := conf.FieldTLSToggled("tls")
-	if err != nil {
-		return nil, err
-	}
-	if tlsEnabled {
-		r.tlsConf = tlsConf
-	}
-
-	if r.authConf, err = AuthFromParsedConfig(conf.Namespace("auth")); err != nil {
-		return nil, err
-	}
-
 	return r, nil
 }
 
@@ -163,13 +136,7 @@ func (r *kvReader) Connect(ctx context.Context) (err error) {
 		}
 	}()
 
-	var opts []nats.Option
-	if r.tlsConf != nil {
-		opts = append(opts, nats.Secure(r.tlsConf))
-	}
-	opts = append(opts, nats.Name(r.label))
-	opts = append(opts, authConfToOptions(r.authConf, r.fs)...)
-	if r.natsConn, err = nats.Connect(r.urls, opts...); err != nil {
+	if r.natsConn, err = r.connDetails.get(ctx); err != nil {
 		return err
 	}
 
