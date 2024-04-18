@@ -29,6 +29,8 @@ const (
 	appPropsMapField = "application_properties_map"
 	metaFilterField  = "metadata"
 	persistentField  = "persistent"
+	targetCapsField  = "target_capabilities"
+	messagePropsTo   = "message_properties_to"
 )
 
 // ErrSASLMechanismNotSupported is returned if a SASL mechanism was not recognized.
