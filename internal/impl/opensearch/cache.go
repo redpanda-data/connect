@@ -73,11 +73,16 @@ type opensearchCache struct {
 	valueField string
 }
 
-func newOpensearchCache(indexName, keyField, valueField string, clientOpts opensearchapi.Config) (*opensearchCache, error) {
+func newOpensearchCache(indexName string, keyField string, valueField string, clientOpts opensearchapi.Config) (*opensearchCache, error) {
 
 	client, err := opensearchapi.NewClient(clientOpts)
 	if err != nil {
 		return nil, err
+	}
+
+	_, err = client.Ping(context.Background(), &opensearchapi.PingReq{})
+	if err != nil {
+		return nil, fmt.Errorf("error pinging opensearch: %v", err)
 	}
 
 	return &opensearchCache{
@@ -126,7 +131,6 @@ func (m *opensearchCache) Get(ctx context.Context, key string) ([]byte, error) {
 		}
 
 		searchResponse, err := m.client.Search(ctx, search)
-
 		if err != nil {
 			return nil, fmt.Errorf("error searching for key %s: %v", key, err)
 		}

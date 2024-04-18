@@ -1,29 +1,75 @@
+logger:
+  level: VERBOSE
+
 pipeline:
   processors:
+    - label: doclevel_cache
+      cache:
+        resource: opensearch_entiredoc
+        operator: get
+        key: "1"
     - label: fieldvalue_cache
       cache:
-        resource: opensearch
+        resource: opensearch_fieldvalue
+        operator: get
+        key: "1"
+    - label: leveled_cache
+      cache:
+        resource: opensearch_entiredoc
         operator: get
         key: "1"
 
 cache_resources:
-  - label: opensearch
-    opensearch: 
+  - label: opensearch_entiredoc
+    opensearch:
       urls: ["https://osproxy-saptest.cheetah.trifork.dev"]
       index: sap-salesorders_s4hanacloud
       key_field: SalesOrder
       value_field: "" # CreatedByUser
       basic_auth:
         enabled: true
-        username: "apikey"
-        password: "${OS_API_KEY}"
+        username: ${USERNAME}
+        password: ${PASSWORD}
+  - label: opensearch_fieldvalue
+    opensearch:
+      urls: ["https://osproxy-saptest.cheetah.trifork.dev"]
+      index: sap-salesorders_s4hanacloud
+      key_field: SalesOrder
+      value_field: "CreatedByUser"
+      basic_auth:
+        enabled: true
+        username: ${USERNAME}
+        password: ${PASSWORD}
+  - label: leveled
+    multilevel: [hot, opensearch_entiredoc]
+  - label: hot
+    memory:
+      default_ttl: 60s
 
 tests:
+  - name: Example test case doclevel_cache
+    environment: {}
+    target_processors: doclevel_cache #/pipeline/processors
+    input_batch:
+      - content: "ignored value"
+    output_batches:
+      - - json_contains:
+            CreatedByUser: "CB9980000027"
   - name: Example test case fieldvalue_cache
     environment: {}
     target_processors: fieldvalue_cache #/pipeline/processors
     input_batch:
-      - content: 'ignored value'
+      - content: "ignored value"
     output_batches:
-      - - json_contains: 
-            CreatedByUser: 'CB9980000027'
+      - - content_equals: "CB9980000027"
+  - name: Example test case leveled_cache
+    environment: {}
+    target_processors: leveled_cache #/pipeline/processors
+    input_batch:
+      - content: "ignored value"
+      - content: "ignored value"
+    output_batches:
+      - - json_contains:
+            CreatedByUser: "CB9980000027"
+        - json_contains:
+            CreatedByUser: "CB9980000027"
