@@ -60,7 +60,7 @@ This output benefits from sending multiple messages in flight in parallel for im
 				Advanced().
 				Default(false),
 			service.NewStringListField(targetCapsField).
-				Description("TargetCapabilities is the list of extension capabilities the sender desires.").
+				Description("List of extension capabilities the sender desires.").
 				Optional().
 				Advanced().
 				Example([]string{"queue"}).

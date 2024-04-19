@@ -23,6 +23,7 @@ const (
 	azureRenewLockField   = "azure_renew_lock"
 	getMessageHeaderField = "read_header"
 	creditField           = "credit"
+	sourceCapsField       = "source_capabilities"
 
 	// Output
 	targetAddrField  = "target_address"
