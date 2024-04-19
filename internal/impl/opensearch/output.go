@@ -267,6 +267,11 @@ func (e *Output) Connect(ctx context.Context) error {
 		return err
 	}
 
+	_, err = client.Ping(context.Background(), &opensearchapi.PingReq{})
+	if err != nil {
+		return fmt.Errorf("error pinging opensearch: %v", err)
+	}
+
 	e.client = client
 	e.log.Infof("Sending messages to opensearch index at urls: %s\n", e.conf.clientOpts.Client.Addresses)
 	return nil
