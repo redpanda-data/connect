@@ -410,7 +410,7 @@ root.doc = json()
 
 ### `metadata`
 
-Returns the value of a metadata key from the input message, or `null` if the key does not exist. Since values are extracted from the read-only input message they do NOT reflect changes made from within the map, in order to query metadata mutations made within a mapping use the `@.foo` syntax. This function supports extracting metadata from other messages of a batch with the `from` method.
+Returns the value of a metadata key from the input message, or `null` if the key does not exist. Since values are extracted from the read-only input message they do NOT reflect changes made from within the map, in order to query metadata mutations made within a mapping use the [`@` operator](/docs/guides/bloblang/about#metadata). This function supports extracting metadata from other messages of a batch with the `from` method.
 
 #### Parameters
 

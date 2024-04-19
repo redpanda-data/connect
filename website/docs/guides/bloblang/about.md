@@ -106,11 +106,11 @@ root.new_doc.type = $foo
 
 ### Metadata
 
-Benthos messages contain metadata that is separate from the main payload, in Bloblang you can modify the metadata of the resulting message with the `meta` assignment keyword. Metadata values of the resulting message are referenced within queries with `@`:
+Benthos messages contain metadata that is separate from the main payload, in Bloblang you can modify the metadata of the resulting message with the `meta` assignment keyword. Metadata values of the resulting message are referenced within queries with the `@` operator or the [`metadata()` function][blobl.functions.metadata]:
 
 ```coffee
 # Reference a metadata value
-root.new_doc.bar = @kafka_topic
+root.new_doc.bar = @kafka_topic # Or `@.kafka_topic` or `metadata("kafka_topic")`
 
 # Delete all metadata
 meta = deleted()
@@ -122,7 +122,7 @@ meta baz = {
 }
 
 # Get an object of key/values for all metadata
-root.meta_obj = @
+root.meta_obj = @ # Or `metadata()`
 ```
 
 ## Coalesce
@@ -418,6 +418,7 @@ Why? That's a good question. Bloblang supports non-JSON formats too, so it can't
 [blobl.interp]: /docs/configuration/interpolation#bloblang-queries
 [blobl.functions]: /docs/guides/bloblang/functions
 [blobl.functions.content]: /docs/guides/bloblang/functions#content
+[blobl.functions.metadata]: /docs/guides/bloblang/functions#metadata
 [blobl.methods]: /docs/guides/bloblang/methods
 [blobl.methods.apply]: /docs/guides/bloblang/methods#apply
 [blobl.methods.catch]: /docs/guides/bloblang/methods#catch
