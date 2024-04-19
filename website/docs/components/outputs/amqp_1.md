@@ -83,8 +83,8 @@ This output benefits from sending multiple messages in flight in parallel for im
 A list of URLs to connect to. The first URL to successfully establish a connection will be used until the connection is closed. If an item of the list contains commas it will be expanded into multiple URLs.
 
 
-Type: `array`  
-Requires version 4.23.0 or newer  
+Type: `array`
+Requires version 4.23.0 or newer
 
 ```yml
 # Examples
@@ -105,7 +105,7 @@ urls:
 The target address to write to.
 
 
-Type: `string`  
+Type: `string`
 
 ```yml
 # Examples
@@ -122,40 +122,40 @@ target_address: topic:/baz
 The maximum number of messages to have in flight at a given time. Increase this to improve throughput.
 
 
-Type: `int`  
-Default: `64`  
+Type: `int`
+Default: `64`
 
 ### `tls`
 
 Custom TLS settings can be used to override system defaults.
 
 
-Type: `object`  
+Type: `object`
 
 ### `tls.enabled`
 
 Whether custom TLS settings are enabled.
 
 
-Type: `bool`  
-Default: `false`  
+Type: `bool`
+Default: `false`
 
 ### `tls.skip_cert_verify`
 
 Whether to skip server side certificate verification.
 
 
-Type: `bool`  
-Default: `false`  
+Type: `bool`
+Default: `false`
 
 ### `tls.enable_renegotiation`
 
 Whether to allow the remote server to repeatedly request renegotiation. Enable this option if you're seeing the error message `local error: tls: no renegotiation`.
 
 
-Type: `bool`  
-Default: `false`  
-Requires version 3.45.0 or newer  
+Type: `bool`
+Default: `false`
+Requires version 3.45.0 or newer
 
 ### `tls.root_cas`
 
@@ -165,8 +165,8 @@ This field contains sensitive information that usually shouldn't be added to a c
 :::
 
 
-Type: `string`  
-Default: `""`  
+Type: `string`
+Default: `""`
 
 ```yml
 # Examples
@@ -182,8 +182,8 @@ root_cas: |-
 An optional path of a root certificate authority file to use. This is a file, often with a .pem extension, containing a certificate chain from the parent trusted root certificate, to possible intermediate signing certificates, to the host certificate.
 
 
-Type: `string`  
-Default: `""`  
+Type: `string`
+Default: `""`
 
 ```yml
 # Examples
@@ -196,8 +196,8 @@ root_cas_file: ./root_cas.pem
 A list of client certificates to use. For each certificate either the fields `cert` and `key`, or `cert_file` and `key_file` should be specified, but not both.
 
 
-Type: `array`  
-Default: `[]`  
+Type: `array`
+Default: `[]`
 
 ```yml
 # Examples
@@ -216,8 +216,8 @@ client_certs:
 A plain text certificate to use.
 
 
-Type: `string`  
-Default: `""`  
+Type: `string`
+Default: `""`
 
 ### `tls.client_certs[].key`
 
@@ -227,24 +227,24 @@ This field contains sensitive information that usually shouldn't be added to a c
 :::
 
 
-Type: `string`  
-Default: `""`  
+Type: `string`
+Default: `""`
 
 ### `tls.client_certs[].cert_file`
 
 The path of a certificate to use.
 
 
-Type: `string`  
-Default: `""`  
+Type: `string`
+Default: `""`
 
 ### `tls.client_certs[].key_file`
 
 The path of a certificate key to use.
 
 
-Type: `string`  
-Default: `""`  
+Type: `string`
+Default: `""`
 
 ### `tls.client_certs[].password`
 
@@ -254,8 +254,8 @@ This field contains sensitive information that usually shouldn't be added to a c
 :::
 
 
-Type: `string`  
-Default: `""`  
+Type: `string`
+Default: `""`
 
 ```yml
 # Examples
@@ -270,22 +270,22 @@ password: ${KEY_PASSWORD}
 An optional Bloblang mapping that can be defined in order to set the `application-properties` on output messages.
 
 
-Type: `string`  
+Type: `string`
 
 ### `sasl`
 
 Enables SASL authentication.
 
 
-Type: `object`  
+Type: `object`
 
 ### `sasl.mechanism`
 
 The SASL authentication mechanism to use.
 
 
-Type: `string`  
-Default: `"none"`  
+Type: `string`
+Default: `"none"`
 
 | Option | Summary |
 |---|---|
@@ -299,8 +299,8 @@ Default: `"none"`
 A SASL plain text username. It is recommended that you use environment variables to populate this field.
 
 
-Type: `string`  
-Default: `""`  
+Type: `string`
+Default: `""`
 
 ```yml
 # Examples
@@ -316,8 +316,8 @@ This field contains sensitive information that usually shouldn't be added to a c
 :::
 
 
-Type: `string`  
-Default: `""`  
+Type: `string`
+Default: `""`
 
 ```yml
 # Examples
@@ -330,22 +330,55 @@ password: ${PASSWORD}
 Specify criteria for which metadata values are attached to messages as headers.
 
 
-Type: `object`  
+Type: `object`
 
 ### `metadata.exclude_prefixes`
 
 Provide a list of explicit metadata key prefixes to be excluded when adding metadata to sent messages.
 
 
-Type: `array`  
-Default: `[]`  
+Type: `array`
+Default: `[]`
 
 ### `persistent`
 
 Whether message delivery should be persistent (transient by default).
 
 
-Type: `bool`  
-Default: `false`  
+Type: `bool`
+Default: `false`
 
+
+### `target_capabilities`
+
+List of extension capabilities the sender desires.
+
+
+Type: `array`
+Default: `[]`
+
+```yml
+# Examples
+
+target_capabilities: [ "queue" ]
+
+target_capabilities: [ "topic" ]
+
+target_capabilities: [ "queue", "topic" ]
+
+```
+
+
+### `message_properties_to`
+
+Identifies the node that is the intended destination of the message.
+
+
+Type: `string`
+
+```yml
+# Examples
+
+message_properties_to: amqp://127.0.0.1:5672/
+```
 

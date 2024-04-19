@@ -19,6 +19,10 @@ All notable changes to this project will be documented in this file.
 - New `nats_request_reply` processor.
 - New `json_documents` scanner.
 - Field `persistent` added to the `amqp_1` output to specify whether message delivery should be persistent.
+- Add IBM amqp support
+  - Field `target_capabilities` added to the `amqp_1` output to specify sender extension capabilities.
+  - Field `message_properties_to` added to the `amqp_1` output to specify the intended destination of the message.
+  - Field `source_capabilities` added to the `amqp_1` input to specify receiver extension capabilities.
 
 ### Fixed
 

@@ -88,7 +88,7 @@ By setting `read_header` to `true`, additional message header properties will be
 
 ## Performance
 
-This input benefits from receiving multiple messages in flight in parallel for improved performance. 
+This input benefits from receiving multiple messages in flight in parallel for improved performance.
 You can tune the max number of in flight messages with the field `credit`.
 
 
@@ -99,8 +99,8 @@ You can tune the max number of in flight messages with the field `credit`.
 A list of URLs to connect to. The first URL to successfully establish a connection will be used until the connection is closed. If an item of the list contains commas it will be expanded into multiple URLs.
 
 
-Type: `array`  
-Requires version 4.23.0 or newer  
+Type: `array`
+Requires version 4.23.0 or newer
 
 ```yml
 # Examples
@@ -121,7 +121,7 @@ urls:
 The source address to consume from.
 
 
-Type: `string`  
+Type: `string`
 
 ```yml
 # Examples
@@ -138,59 +138,59 @@ source_address: topic:/baz
 Experimental: Azure service bus specific option to renew lock if processing takes more then configured lock time
 
 
-Type: `bool`  
-Default: `false`  
-Requires version 3.45.0 or newer  
+Type: `bool`
+Default: `false`
+Requires version 3.45.0 or newer
 
 ### `read_header`
 
 Read additional message header fields into `amqp_*` metadata properties.
 
 
-Type: `bool`  
-Default: `false`  
-Requires version 4.25.0 or newer  
+Type: `bool`
+Default: `false`
+Requires version 4.25.0 or newer
 
 ### `credit`
 
 Specifies the maximum number of unacknowledged messages the sender can transmit. Once this limit is reached, no more messages will arrive until messages are acknowledged and settled.
 
 
-Type: `int`  
-Default: `64`  
-Requires version 4.26.0 or newer  
+Type: `int`
+Default: `64`
+Requires version 4.26.0 or newer
 
 ### `tls`
 
 Custom TLS settings can be used to override system defaults.
 
 
-Type: `object`  
+Type: `object`
 
 ### `tls.enabled`
 
 Whether custom TLS settings are enabled.
 
 
-Type: `bool`  
-Default: `false`  
+Type: `bool`
+Default: `false`
 
 ### `tls.skip_cert_verify`
 
 Whether to skip server side certificate verification.
 
 
-Type: `bool`  
-Default: `false`  
+Type: `bool`
+Default: `false`
 
 ### `tls.enable_renegotiation`
 
 Whether to allow the remote server to repeatedly request renegotiation. Enable this option if you're seeing the error message `local error: tls: no renegotiation`.
 
 
-Type: `bool`  
-Default: `false`  
-Requires version 3.45.0 or newer  
+Type: `bool`
+Default: `false`
+Requires version 3.45.0 or newer
 
 ### `tls.root_cas`
 
@@ -200,8 +200,8 @@ This field contains sensitive information that usually shouldn't be added to a c
 :::
 
 
-Type: `string`  
-Default: `""`  
+Type: `string`
+Default: `""`
 
 ```yml
 # Examples
@@ -217,8 +217,8 @@ root_cas: |-
 An optional path of a root certificate authority file to use. This is a file, often with a .pem extension, containing a certificate chain from the parent trusted root certificate, to possible intermediate signing certificates, to the host certificate.
 
 
-Type: `string`  
-Default: `""`  
+Type: `string`
+Default: `""`
 
 ```yml
 # Examples
@@ -231,8 +231,8 @@ root_cas_file: ./root_cas.pem
 A list of client certificates to use. For each certificate either the fields `cert` and `key`, or `cert_file` and `key_file` should be specified, but not both.
 
 
-Type: `array`  
-Default: `[]`  
+Type: `array`
+Default: `[]`
 
 ```yml
 # Examples
@@ -251,8 +251,8 @@ client_certs:
 A plain text certificate to use.
 
 
-Type: `string`  
-Default: `""`  
+Type: `string`
+Default: `""`
 
 ### `tls.client_certs[].key`
 
@@ -262,24 +262,24 @@ This field contains sensitive information that usually shouldn't be added to a c
 :::
 
 
-Type: `string`  
-Default: `""`  
+Type: `string`
+Default: `""`
 
 ### `tls.client_certs[].cert_file`
 
 The path of a certificate to use.
 
 
-Type: `string`  
-Default: `""`  
+Type: `string`
+Default: `""`
 
 ### `tls.client_certs[].key_file`
 
 The path of a certificate key to use.
 
 
-Type: `string`  
-Default: `""`  
+Type: `string`
+Default: `""`
 
 ### `tls.client_certs[].password`
 
@@ -289,8 +289,8 @@ This field contains sensitive information that usually shouldn't be added to a c
 :::
 
 
-Type: `string`  
-Default: `""`  
+Type: `string`
+Default: `""`
 
 ```yml
 # Examples
@@ -305,15 +305,15 @@ password: ${KEY_PASSWORD}
 Enables SASL authentication.
 
 
-Type: `object`  
+Type: `object`
 
 ### `sasl.mechanism`
 
 The SASL authentication mechanism to use.
 
 
-Type: `string`  
-Default: `"none"`  
+Type: `string`
+Default: `"none"`
 
 | Option | Summary |
 |---|---|
@@ -327,8 +327,8 @@ Default: `"none"`
 A SASL plain text username. It is recommended that you use environment variables to populate this field.
 
 
-Type: `string`  
-Default: `""`  
+Type: `string`
+Default: `""`
 
 ```yml
 # Examples
@@ -344,13 +344,32 @@ This field contains sensitive information that usually shouldn't be added to a c
 :::
 
 
-Type: `string`  
-Default: `""`  
+Type: `string`
+Default: `""`
 
 ```yml
 # Examples
 
 password: ${PASSWORD}
+```
+
+
+### `source_capabilities`
+
+List of extension capabilities the receiver desires.
+
+
+Type: `array`
+Default: `[]`
+
+```yml
+# Examples
+
+source_capabilities: [ "queue" ]
+
+source_capabilities: [ "topic" ]
+
+source_capabilities: [ "queue", "topic" ]
 ```
 
 
