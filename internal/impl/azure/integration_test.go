@@ -23,10 +23,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/benthosdev/benthos/v4/internal/integration"
 	"github.com/benthosdev/benthos/v4/public/bloblang"
 	_ "github.com/benthosdev/benthos/v4/public/components/pure"
 	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/benthosdev/benthos/v4/public/service/integration"
 )
 
 func TestIntegrationAzure(t *testing.T) {
@@ -96,9 +96,9 @@ input:
 			integration.StreamTestStreamIsolated(10),
 		).Run(
 			t, template,
-			integration.StreamTestOptVarOne(dummyContainer),
-			integration.StreamTestOptVarTwo(dummyPrefix),
-			integration.StreamTestOptVarThree(connString),
+			integration.StreamTestOptVarSet("VAR1", dummyContainer),
+			integration.StreamTestOptVarSet("VAR2", dummyPrefix),
+			integration.StreamTestOptVarSet("VAR3", connString),
 		)
 	})
 
@@ -131,9 +131,9 @@ input:
 			integration.StreamTestStreamIsolated(10),
 		).Run(
 			t, template,
-			integration.StreamTestOptVarOne(dummyContainer),
-			integration.StreamTestOptVarTwo(dummyPrefix),
-			integration.StreamTestOptVarThree(connString),
+			integration.StreamTestOptVarSet("VAR1", dummyContainer),
+			integration.StreamTestOptVarSet("VAR2", dummyPrefix),
+			integration.StreamTestOptVarSet("VAR3", connString),
 		)
 	})
 
@@ -171,9 +171,9 @@ input:
 			integration.StreamTestOpenCloseIsolated(),
 		).Run(
 			t, template,
-			integration.StreamTestOptVarOne(dummyContainer),
-			integration.StreamTestOptVarTwo(dummyPrefix),
-			integration.StreamTestOptVarThree(connString),
+			integration.StreamTestOptVarSet("VAR1", dummyContainer),
+			integration.StreamTestOptVarSet("VAR2", dummyPrefix),
+			integration.StreamTestOptVarSet("VAR3", connString),
 		)
 	})
 
@@ -196,8 +196,8 @@ input:
 			integration.StreamTestStreamIsolated(10),
 		).Run(
 			t, template,
-			integration.StreamTestOptVarOne(dummyQueue),
-			integration.StreamTestOptVarTwo("UseDevelopmentStorage=true;"),
+			integration.StreamTestOptVarSet("VAR1", dummyQueue),
+			integration.StreamTestOptVarSet("VAR2", "UseDevelopmentStorage=true;"),
 		)
 	})
 }
@@ -356,13 +356,13 @@ input:
 		).Run(
 			t, template,
 			integration.StreamTestOptPort(servicePort),
-			integration.StreamTestOptVarOne(emulatorKey),
-			integration.StreamTestOptVarTwo(dummyDatabase),
-			integration.StreamTestOptVarThree(dummyContainer),
-			integration.StreamTestOptVarFour(dummyPartitionKeyField),
-			integration.StreamTestOptVarFive(dummyPartitionKeyValue),
-			integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, testID string, _ *integration.StreamTestConfigVars) {
-				dbSetup(t, ctx, fmt.Sprintf("%s-%s", dummyDatabase, testID))
+			integration.StreamTestOptVarSet("VAR1", emulatorKey),
+			integration.StreamTestOptVarSet("VAR2", dummyDatabase),
+			integration.StreamTestOptVarSet("VAR3", dummyContainer),
+			integration.StreamTestOptVarSet("VAR4", dummyPartitionKeyField),
+			integration.StreamTestOptVarSet("VAR5", dummyPartitionKeyValue),
+			integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, vars *integration.StreamTestConfigVars) {
+				dbSetup(t, ctx, fmt.Sprintf("%s-%s", dummyDatabase, vars.ID))
 			}),
 		)
 	})

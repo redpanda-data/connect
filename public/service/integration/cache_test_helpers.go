@@ -31,15 +31,14 @@ type CacheTestConfigVars struct {
 	// potentially enables tests that check for faulty connections by bridging.
 	Port string
 
-	// Generic variables.
-	Var1 string
-	Var2 string
+	// General variables.
+	General map[string]string
 }
 
 // CachePreTestFn is an optional closure to be called before tests are run, this
 // is an opportunity to mutate test config variables and mess with the
 // environment.
-type CachePreTestFn func(t testing.TB, ctx context.Context, testID string, vars *CacheTestConfigVars)
+type CachePreTestFn func(t testing.TB, ctx context.Context, vars *CacheTestConfigVars)
 
 type cacheTestEnvironment struct {
 	configTemplate string
@@ -62,7 +61,8 @@ func newCacheTestEnvironment(t *testing.T, confTemplate string) cacheTestEnviron
 	return cacheTestEnvironment{
 		configTemplate: confTemplate,
 		configVars: CacheTestConfigVars{
-			ID: u4.String(),
+			ID:      u4.String(),
+			General: map[string]string{},
 		},
 		timeout: time.Second * 90,
 		ctx:     context.Background(),
@@ -72,12 +72,14 @@ func newCacheTestEnvironment(t *testing.T, confTemplate string) cacheTestEnviron
 }
 
 func (e cacheTestEnvironment) RenderConfig() string {
-	return strings.NewReplacer(
+	vars := []string{
 		"$ID", e.configVars.ID,
 		"$PORT", e.configVars.Port,
-		"$VAR1", e.configVars.Var1,
-		"$VAR2", e.configVars.Var2,
-	).Replace(e.configTemplate)
+	}
+	for k, v := range e.configVars.General {
+		vars = append(vars, "$"+k, v)
+	}
+	return strings.NewReplacer(vars...).Replace(e.configTemplate)
 }
 
 //------------------------------------------------------------------------------
@@ -116,19 +118,11 @@ func CacheTestOptPort(port string) CacheTestOptFunc {
 	}
 }
 
-// CacheTestOptVarOne sets an arbitrary variable for the test that can be
+// CacheTestOptVarSet sets an arbitrary variable for the test that can be
 // injected into templated configs.
-func CacheTestOptVarOne(v string) CacheTestOptFunc {
+func CacheTestOptVarSet(key, value string) CacheTestOptFunc {
 	return func(env *cacheTestEnvironment) {
-		env.configVars.Var1 = v
-	}
-}
-
-// CacheTestOptVarTwo sets an arbitrary variable for the test that can be
-// injected into templated configs.
-func CacheTestOptVarTwo(v string) CacheTestOptFunc {
-	return func(env *cacheTestEnvironment) {
-		env.configVars.Var2 = v
+		env.configVars.General[key] = value
 	}
 }
 
@@ -183,7 +177,7 @@ func namedCacheTest(name string, test cacheTestDefinitionFn) CacheTestDefinition
 			t.Run(name, func(t *testing.T) {
 				t.Parallel()
 				if env.preTest != nil {
-					env.preTest(t, env.ctx, env.configVars.ID, &env.configVars)
+					env.preTest(t, env.ctx, &env.configVars)
 				}
 				test(t, env)
 			})

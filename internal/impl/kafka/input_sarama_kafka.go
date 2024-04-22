@@ -9,7 +9,8 @@ import (
 
 	"github.com/IBM/sarama"
 
-	"github.com/benthosdev/benthos/v4/internal/checkpoint"
+	"github.com/Jeffail/checkpoint"
+
 	"github.com/benthosdev/benthos/v4/internal/component/input/span"
 	"github.com/benthosdev/benthos/v4/public/service"
 )

@@ -6,7 +6,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/benthosdev/benthos/v4/internal/integration"
+	"github.com/benthosdev/benthos/v4/public/service/integration"
 
 	_ "github.com/benthosdev/benthos/v4/internal/impl/pure"
 )
@@ -45,8 +45,8 @@ input:
 		integration.StreamTestStreamParallelLossyThroughReconnect(50),
 	).Run(
 		t, template,
-		integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, testID string, vars *integration.StreamTestConfigVars) {
-			require.NoError(t, createBucketQueue(ctx, "", lsPort, testID))
+		integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, vars *integration.StreamTestConfigVars) {
+			require.NoError(t, createBucketQueue(ctx, "", lsPort, vars.ID))
 		}),
 		integration.StreamTestOptPort(lsPort),
 	)
