@@ -745,9 +745,9 @@ extract_headers:
 
 	xHeader, exists := resBatch[0].MetaGet("x-demo")
 	require.True(exists)
-	assert.Equal(xHeader, "Hello")
+	assert.Equal("Hello", xHeader)
 
 	resCookie, exists := resBatch[0].MetaGet("Cookie")
 	require.True(exists)
-	assert.Equal(resCookie, "a=b; x=y; foo=bar")
+	assert.Equal("a=b; x=y; foo=bar", resCookie)
 }
