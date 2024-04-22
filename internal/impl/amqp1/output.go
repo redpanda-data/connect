@@ -176,9 +176,6 @@ func amqp1WriterFromParsed(conf *service.ParsedConfig, mgr *service.Resources) (
 	if a.persistent, err = conf.FieldBool(persistentField); err != nil {
 		return nil, err
 	}
-	if a.persistent {
-		a.senderOpts.SettlementMode = amqp.SenderSettleModeUnsettled.Ptr()
-	}
 
 	a.targetCaps, err = conf.FieldStringList(targetCapsField)
 	if err != nil {
