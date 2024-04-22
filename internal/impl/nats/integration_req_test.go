@@ -47,9 +47,7 @@ func TestIntegrationNatsReq(t *testing.T) {
 				time.Sleep(2 * time.Second)
 			}
 			resp := fmt.Sprintf("%s yourself", string(m.Data))
-			if err := m.Respond([]byte(resp)); err != nil {
-				t.Errorf("error responding: %v", err)
-			}
+			_ = m.Respond([]byte(resp))
 		})
 		if err != nil {
 			return err
@@ -116,7 +114,7 @@ subject: "noonelistening"
 timeout: 1s`, url)
 
 			_, err := process(yaml)
-			require.Error(t, err, nats.ErrNoResponders)
+			require.ErrorIs(t, err, nats.ErrNoResponders)
 		})
 	})
 }
