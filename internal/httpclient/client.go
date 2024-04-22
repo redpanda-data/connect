@@ -208,6 +208,15 @@ func (h *Client) ResponseToBatch(res *http.Response) (service.MessageBatch, erro
 				}
 			}
 		}
+		// Handle cookies returned by the server. Create a Cookie header to be used by the client for subsequent requests
+		if len(res.Cookies()) > 0 {
+			var cookie strings.Builder
+			for _, c := range res.Cookies() {
+				// We're not checkig expiration or other properties like Domain here
+				cookie.WriteString(fmt.Sprintf("%s=%s; ", c.Name, c.Value))
+			}
+			p.MetaSetMut("Cookie", strings.TrimSuffix(cookie.String(), "; "))
+		}
 	}
 
 	if res.Body == nil {
