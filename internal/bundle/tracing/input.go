@@ -4,9 +4,10 @@ import (
 	"context"
 	"sync/atomic"
 
+	"github.com/Jeffail/shutdown"
+
 	"github.com/benthosdev/benthos/v4/internal/component/input"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	"github.com/benthosdev/benthos/v4/internal/shutdown"
 )
 
 type tracedInput struct {
@@ -44,7 +45,7 @@ func (t *tracedInput) loop() {
 			if !open {
 				return
 			}
-		case <-t.shutSig.CloseNowChan():
+		case <-t.shutSig.HardStopChan():
 			return
 		}
 		if t.e.IsEnabled() {
@@ -56,7 +57,7 @@ func (t *tracedInput) loop() {
 		}
 		select {
 		case t.tChan <- tran:
-		case <-t.shutSig.CloseNowChan():
+		case <-t.shutSig.HardStopChan():
 			// Stop flushing if we fully timed out
 			return
 		}
@@ -77,11 +78,11 @@ func (t *tracedInput) TriggerStopConsuming() {
 
 func (t *tracedInput) TriggerCloseNow() {
 	t.wrapped.TriggerCloseNow()
-	t.shutSig.CloseNow()
+	t.shutSig.TriggerHardStop()
 }
 
 func (t *tracedInput) WaitForClose(ctx context.Context) error {
 	err := t.wrapped.WaitForClose(ctx)
-	t.shutSig.CloseNow()
+	t.shutSig.TriggerHardStop()
 	return err
 }

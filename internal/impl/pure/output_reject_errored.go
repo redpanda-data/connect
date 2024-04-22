@@ -5,12 +5,13 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/Jeffail/shutdown"
+
 	"github.com/benthosdev/benthos/v4/internal/batch"
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/interop"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	"github.com/benthosdev/benthos/v4/internal/shutdown"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
@@ -149,10 +150,10 @@ func (t *rejectErroredBroker) loop() {
 		close(t.outputTSChan)
 		t.output.TriggerCloseNow()
 		_ = t.output.WaitForClose(context.Background())
-		t.shutSig.ShutdownComplete()
+		t.shutSig.TriggerHasStopped()
 	}()
 
-	closeNowCtx, done := t.shutSig.CloseNowCtx(context.Background())
+	closeNowCtx, done := t.shutSig.HardStopCtx(context.Background())
 	defer done()
 
 	for {
@@ -164,7 +165,7 @@ func (t *rejectErroredBroker) loop() {
 			if !open {
 				return
 			}
-		case <-t.shutSig.CloseAtLeisureChan():
+		case <-t.shutSig.SoftStopChan():
 			return
 		}
 
@@ -178,7 +179,7 @@ func (t *rejectErroredBroker) loop() {
 			} else {
 				select {
 				case t.outputTSChan <- tran:
-				case <-t.shutSig.CloseNowChan():
+				case <-t.shutSig.HardStopChan():
 					return
 				}
 			}
@@ -203,7 +204,7 @@ func (t *rejectErroredBroker) loop() {
 		if batchErr == nil {
 			select {
 			case t.outputTSChan <- tran:
-			case <-t.shutSig.CloseNowChan():
+			case <-t.shutSig.HardStopChan():
 				return
 			}
 			continue
@@ -259,19 +260,19 @@ func (t *rejectErroredBroker) loop() {
 			}
 			return tran.Ack(ctx, batchErr)
 		}):
-		case <-t.shutSig.CloseNowChan():
+		case <-t.shutSig.HardStopChan():
 			return
 		}
 	}
 }
 
 func (t *rejectErroredBroker) TriggerCloseNow() {
-	t.shutSig.CloseNow()
+	t.shutSig.TriggerHardStop()
 }
 
 func (t *rejectErroredBroker) WaitForClose(ctx context.Context) error {
 	select {
-	case <-t.shutSig.HasClosedChan():
+	case <-t.shutSig.HasStoppedChan():
 	case <-ctx.Done():
 		return ctx.Err()
 	}

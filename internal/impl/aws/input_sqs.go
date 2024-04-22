@@ -11,9 +11,10 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/sqs/types"
 	"github.com/cenkalti/backoff/v4"
 
+	"github.com/Jeffail/shutdown"
+
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/impl/aws/config"
-	"github.com/benthosdev/benthos/v4/internal/shutdown"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
@@ -177,7 +178,7 @@ func (a *awsSQSReader) Connect(ctx context.Context) error {
 	go a.ackLoop(&wg, ift)
 	go func() {
 		wg.Wait()
-		a.closeSignal.ShutdownComplete()
+		a.closeSignal.TriggerHasStopped()
 	}()
 	return nil
 }
@@ -256,7 +257,7 @@ func flushMapToHandles(m map[string]string) (s []sqsMessageHandle) {
 func (a *awsSQSReader) ackLoop(wg *sync.WaitGroup, inFlightTracker *sqsInFlightTracker) {
 	defer wg.Done()
 
-	closeNowCtx, done := a.closeSignal.CloseNowCtx(context.Background())
+	closeNowCtx, done := a.closeSignal.HardStopCtx(context.Background())
 	defer done()
 
 	flushFinishedHandles := func(m map[string]string, erase bool) {
@@ -311,7 +312,7 @@ ackLoop:
 			flushFinishedHandles(pendingAcks, true)
 			flushFinishedHandles(pendingNacks, false)
 			refreshCurrentHandles()
-		case <-a.closeSignal.CloseAtLeisureChan():
+		case <-a.closeSignal.SoftStopChan():
 			break ackLoop
 		}
 	}
@@ -336,7 +337,7 @@ func (a *awsSQSReader) readLoop(wg *sync.WaitGroup, inFlightTracker *sqsInFlight
 					receiptHandle: *m.ReceiptHandle,
 				})
 			}
-			ctx, done := a.closeSignal.CloseNowCtx(context.Background())
+			ctx, done := a.closeSignal.HardStopCtx(context.Background())
 			defer done()
 			if err := a.resetMessages(ctx, tmpNacks...); err != nil {
 				a.log.Errorf("Failed to reset visibility timeout for pending messages: %v", err)
@@ -344,7 +345,7 @@ func (a *awsSQSReader) readLoop(wg *sync.WaitGroup, inFlightTracker *sqsInFlight
 		}
 	}()
 
-	closeAtLeisureCtx, done := a.closeSignal.CloseAtLeisureCtx(context.Background())
+	closeAtLeisureCtx, done := a.closeSignal.SoftStopCtx(context.Background())
 	defer done()
 
 	backoff := backoff.NewExponentialBackOff()
@@ -384,7 +385,7 @@ func (a *awsSQSReader) readLoop(wg *sync.WaitGroup, inFlightTracker *sqsInFlight
 			if len(pendingMsgs) == 0 {
 				select {
 				case <-time.After(backoff.NextBackOff()):
-				case <-a.closeSignal.CloseAtLeisureChan():
+				case <-a.closeSignal.SoftStopChan():
 					return
 				}
 				continue
@@ -393,7 +394,7 @@ func (a *awsSQSReader) readLoop(wg *sync.WaitGroup, inFlightTracker *sqsInFlight
 		select {
 		case a.messagesChan <- pendingMsgs[0]:
 			pendingMsgs = pendingMsgs[1:]
-		case <-a.closeSignal.CloseAtLeisureChan():
+		case <-a.closeSignal.SoftStopChan():
 			return
 		}
 	}
@@ -498,7 +499,7 @@ func (a *awsSQSReader) Read(ctx context.Context) (*service.Message, service.AckF
 		if !open {
 			return nil, nil, component.ErrTypeClosed
 		}
-	case <-a.closeSignal.CloseAtLeisureChan():
+	case <-a.closeSignal.SoftStopChan():
 		return nil, nil, component.ErrTypeClosed
 	case <-ctx.Done():
 		return nil, nil, ctx.Err()
@@ -529,7 +530,7 @@ func (a *awsSQSReader) Read(ctx context.Context) (*service.Message, service.AckF
 			select {
 			case <-rctx.Done():
 				return rctx.Err()
-			case <-a.closeSignal.CloseAtLeisureChan():
+			case <-a.closeSignal.SoftStopChan():
 				return a.deleteMessages(rctx, mHandle)
 			case a.ackMessagesChan <- mHandle:
 			}
@@ -539,7 +540,7 @@ func (a *awsSQSReader) Read(ctx context.Context) (*service.Message, service.AckF
 		select {
 		case <-rctx.Done():
 			return rctx.Err()
-		case <-a.closeSignal.CloseAtLeisureChan():
+		case <-a.closeSignal.SoftStopChan():
 			return a.resetMessages(rctx, mHandle)
 		case a.nackMessagesChan <- mHandle:
 		}
@@ -548,21 +549,21 @@ func (a *awsSQSReader) Read(ctx context.Context) (*service.Message, service.AckF
 }
 
 func (a *awsSQSReader) Close(ctx context.Context) error {
-	a.closeSignal.CloseAtLeisure()
+	a.closeSignal.TriggerSoftStop()
 
 	var closeNowAt time.Duration
 	if dline, ok := ctx.Deadline(); ok {
 		if closeNowAt = time.Until(dline) - time.Second; closeNowAt <= 0 {
-			a.closeSignal.CloseNow()
+			a.closeSignal.TriggerHardStop()
 		}
 	}
 	if closeNowAt > 0 {
 		select {
 		case <-time.After(closeNowAt):
-			a.closeSignal.CloseNow()
+			a.closeSignal.TriggerHardStop()
 		case <-ctx.Done():
 			return ctx.Err()
-		case <-a.closeSignal.HasClosedChan():
+		case <-a.closeSignal.HasStoppedChan():
 			return nil
 		}
 	}
@@ -570,7 +571,7 @@ func (a *awsSQSReader) Close(ctx context.Context) error {
 	select {
 	case <-ctx.Done():
 		return ctx.Err()
-	case <-a.closeSignal.HasClosedChan():
+	case <-a.closeSignal.HasStoppedChan():
 	}
 	return nil
 }

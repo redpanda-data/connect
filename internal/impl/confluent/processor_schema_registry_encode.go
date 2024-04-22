@@ -10,8 +10,9 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/Jeffail/shutdown"
+
 	"github.com/benthosdev/benthos/v4/internal/httpclient"
-	"github.com/benthosdev/benthos/v4/internal/shutdown"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
@@ -171,7 +172,7 @@ func newSchemaRegistryEncoder(
 			select {
 			case <-time.After(schemaRefreshTicker):
 				s.refreshEncoders()
-			case <-s.shutSig.CloseAtLeisureChan():
+			case <-s.shutSig.SoftStopChan():
 				return
 			}
 		}
@@ -216,7 +217,7 @@ func (s *schemaRegistryEncoder) ProcessBatch(ctx context.Context, batch service.
 }
 
 func (s *schemaRegistryEncoder) Close(ctx context.Context) error {
-	s.shutSig.CloseNow()
+	s.shutSig.TriggerHardStop()
 	s.cacheMut.Lock()
 	defer s.cacheMut.Unlock()
 	if ctx.Err() != nil {

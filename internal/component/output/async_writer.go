@@ -10,12 +10,13 @@ import (
 	"github.com/cenkalti/backoff/v4"
 	"go.opentelemetry.io/otel/trace"
 
+	"github.com/Jeffail/shutdown"
+
 	"github.com/benthosdev/benthos/v4/internal/batch"
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	"github.com/benthosdev/benthos/v4/internal/shutdown"
 	"github.com/benthosdev/benthos/v4/internal/tracing"
 )
 
@@ -100,7 +101,7 @@ func (w *AsyncWriter) loop() {
 		_ = w.writer.Close(context.Background())
 
 		atomic.StoreInt32(&w.isConnected, 0)
-		w.shutSig.ShutdownComplete()
+		w.shutSig.TriggerHasStopped()
 	}()
 
 	connBackoff := backoff.NewExponentialBackOff()
@@ -108,13 +109,13 @@ func (w *AsyncWriter) loop() {
 	connBackoff.MaxInterval = time.Second
 	connBackoff.MaxElapsedTime = 0
 
-	closeLeisureCtx, done := w.shutSig.CloseAtLeisureCtx(context.Background())
+	closeLeisureCtx, done := w.shutSig.SoftStopCtx(context.Background())
 	defer done()
 
 	initConnection := func() bool {
 		for {
 			if err := w.writer.Connect(closeLeisureCtx); err != nil {
-				if w.shutSig.ShouldCloseAtLeisure() || errors.Is(err, component.ErrTypeClosed) {
+				if w.shutSig.IsSoftStopSignalled() || errors.Is(err, component.ErrTypeClosed) {
 					return false
 				}
 				w.log.Error("Failed to connect to %v: %v\n", w.typeStr, err)
@@ -194,7 +195,7 @@ func (w *AsyncWriter) loop() {
 				if !open {
 					return
 				}
-			case <-w.shutSig.CloseAtLeisureChan():
+			case <-w.shutSig.SoftStopChan():
 				return
 			}
 
@@ -262,13 +263,13 @@ func (w *AsyncWriter) Connected() bool {
 
 // TriggerCloseNow shuts down the output and stops processing messages.
 func (w *AsyncWriter) TriggerCloseNow() {
-	w.shutSig.CloseNow()
+	w.shutSig.TriggerHardStop()
 }
 
 // WaitForClose blocks until the File output has closed down.
 func (w *AsyncWriter) WaitForClose(ctx context.Context) error {
 	select {
-	case <-w.shutSig.HasClosedChan():
+	case <-w.shutSig.HasStoppedChan():
 	case <-ctx.Done():
 		return ctx.Err()
 	}

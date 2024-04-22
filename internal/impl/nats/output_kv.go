@@ -7,7 +7,8 @@ import (
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
 
-	"github.com/benthosdev/benthos/v4/internal/shutdown"
+	"github.com/Jeffail/shutdown"
+
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
@@ -179,10 +180,10 @@ func (kv *kvOutput) Write(ctx context.Context, msg *service.Message) error {
 func (kv *kvOutput) Close(ctx context.Context) error {
 	go func() {
 		kv.disconnect()
-		kv.shutSig.ShutdownComplete()
+		kv.shutSig.TriggerHasStopped()
 	}()
 	select {
-	case <-kv.shutSig.HasClosedChan():
+	case <-kv.shutSig.HasStoppedChan():
 	case <-ctx.Done():
 		return ctx.Err()
 	}

@@ -8,12 +8,13 @@ import (
 
 	"go.opentelemetry.io/otel/trace"
 
+	"github.com/Jeffail/shutdown"
+
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
 	"github.com/benthosdev/benthos/v4/internal/old/util/throttle"
-	"github.com/benthosdev/benthos/v4/internal/shutdown"
 	"github.com/benthosdev/benthos/v4/internal/tracing"
 )
 
@@ -78,7 +79,7 @@ func NewStream(typeStr string, buffer ReaderWriter, mgr component.Observability)
 		shutSig:     shutdown.NewSignaller(),
 		messagesOut: make(chan message.Transaction),
 	}
-	m.errThrottle = throttle.New(throttle.OptCloseChan(m.shutSig.CloseAtLeisureChan()))
+	m.errThrottle = throttle.New(throttle.OptCloseChan(m.shutSig.SoftStopChan()))
 	return &m
 }
 
@@ -99,10 +100,10 @@ func (m *Stream) inputLoop() {
 		mReceivedBatchCount = m.stats.GetCounter("buffer_batch_received")
 	)
 
-	closeAtLeisureCtx, doneLeisure := m.shutSig.CloseAtLeisureCtx(context.Background())
+	closeAtLeisureCtx, doneLeisure := m.shutSig.SoftStopCtx(context.Background())
 	defer doneLeisure()
 
-	closeNowCtx, doneNow := m.shutSig.CloseNowCtx(context.Background())
+	closeNowCtx, doneNow := m.shutSig.HardStopCtx(context.Background())
 	defer doneNow()
 
 	for {
@@ -113,7 +114,7 @@ func (m *Stream) inputLoop() {
 			if !open {
 				return
 			}
-		case <-m.shutSig.CloseAtLeisureChan():
+		case <-m.shutSig.SoftStopChan():
 			return
 		}
 
@@ -144,7 +145,7 @@ func (m *Stream) inputLoop() {
 func (m *Stream) outputLoop() {
 	var ackGroup sync.WaitGroup
 
-	closeNowCtx, done := m.shutSig.CloseNowCtx(context.Background())
+	closeNowCtx, done := m.shutSig.HardStopCtx(context.Background())
 	defer done()
 
 	defer func() {
@@ -184,7 +185,7 @@ func (m *Stream) outputLoop() {
 		resChan := make(chan error, 1)
 		select {
 		case m.messagesOut <- message.NewTransaction(msg, resChan):
-		case <-m.shutSig.CloseNowChan():
+		case <-m.shutSig.HardStopChan():
 			return
 		}
 
@@ -208,7 +209,7 @@ func (m *Stream) outputLoop() {
 						m.log.Error("Failed to ack buffer message: %v\n", ackErr)
 					}
 				}
-			case <-m.shutSig.CloseNowChan():
+			case <-m.shutSig.HardStopChan():
 				return
 			}
 		}()
@@ -227,7 +228,7 @@ func (m *Stream) Consume(msgs <-chan message.Transaction) error {
 	go m.outputLoop()
 	go func() {
 		m.closedWG.Wait()
-		m.shutSig.ShutdownComplete()
+		m.shutSig.TriggerHasStopped()
 	}()
 	return nil
 }
@@ -241,18 +242,18 @@ func (m *Stream) TransactionChan() <-chan message.Transaction {
 // TriggerStopConsuming instructs the buffer to stop consuming messages and
 // close once the buffer is empty.
 func (m *Stream) TriggerStopConsuming() {
-	m.shutSig.CloseAtLeisure()
+	m.shutSig.TriggerSoftStop()
 }
 
 // TriggerCloseNow shuts down the Stream and stops processing messages.
 func (m *Stream) TriggerCloseNow() {
-	m.shutSig.CloseNow()
+	m.shutSig.TriggerHardStop()
 }
 
 // WaitForClose blocks until the Stream output has closed down.
 func (m *Stream) WaitForClose(ctx context.Context) error {
 	select {
-	case <-m.shutSig.HasClosedChan():
+	case <-m.shutSig.HasStoppedChan():
 	case <-ctx.Done():
 		return ctx.Err()
 	}

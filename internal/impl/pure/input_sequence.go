@@ -10,10 +10,11 @@ import (
 	"github.com/Jeffail/gabs/v2"
 	"github.com/OneOfOne/xxhash"
 
+	"github.com/Jeffail/shutdown"
+
 	"github.com/benthosdev/benthos/v4/internal/component/input"
 	"github.com/benthosdev/benthos/v4/internal/component/interop"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	"github.com/benthosdev/benthos/v4/internal/shutdown"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
@@ -482,7 +483,7 @@ func (r *sequenceInput) dispatchJoinedMessage(wg *sync.WaitGroup, msg message.Ba
 	tran := message.NewTransaction(msg, resChan)
 	select {
 	case r.transactions <- tran:
-	case <-r.shutSig.CloseNowChan():
+	case <-r.shutSig.HardStopChan():
 		return
 	}
 	wg.Add(1)
@@ -495,17 +496,17 @@ func (r *sequenceInput) dispatchJoinedMessage(wg *sync.WaitGroup, msg message.Ba
 					return
 				}
 				r.log.Errorf("Failed to send joined message: %v\n", res)
-			case <-r.shutSig.CloseNowChan():
+			case <-r.shutSig.HardStopChan():
 				return
 			}
 			select {
 			case <-time.After(time.Second):
-			case <-r.shutSig.CloseNowChan():
+			case <-r.shutSig.HardStopChan():
 				return
 			}
 			select {
 			case r.transactions <- tran:
-			case <-r.shutSig.CloseNowChan():
+			case <-r.shutSig.HardStopChan():
 				return
 			}
 		}
@@ -513,7 +514,7 @@ func (r *sequenceInput) dispatchJoinedMessage(wg *sync.WaitGroup, msg message.Ba
 }
 
 func (r *sequenceInput) loop() {
-	shutNowCtx, done := r.shutSig.CloseNowCtx(context.Background())
+	shutNowCtx, done := r.shutSig.HardStopCtx(context.Background())
 	defer done()
 
 	var shardJoinWG sync.WaitGroup
@@ -525,7 +526,7 @@ func (r *sequenceInput) loop() {
 			t.TriggerCloseNow()
 		}
 		close(r.transactions)
-		r.shutSig.ShutdownComplete()
+		r.shutSig.TriggerHasStopped()
 	}()
 
 	target, finalInSequence := r.getTarget()
@@ -538,7 +539,7 @@ runLoop:
 				r.log.Errorf("Unable to start next sequence: %v\n", err)
 				select {
 				case <-time.After(time.Second):
-				case <-r.shutSig.CloseAtLeisureChan():
+				case <-r.shutSig.SoftStopChan():
 					return
 				}
 				continue runLoop
@@ -576,7 +577,7 @@ runLoop:
 				target = nil
 				continue runLoop
 			}
-		case <-r.shutSig.CloseAtLeisureChan():
+		case <-r.shutSig.SoftStopChan():
 			return
 		}
 
@@ -590,7 +591,7 @@ runLoop:
 		} else {
 			select {
 			case r.transactions <- tran:
-			case <-r.shutSig.CloseNowChan():
+			case <-r.shutSig.HardStopChan():
 				return
 			}
 		}
@@ -609,16 +610,16 @@ func (r *sequenceInput) Connected() bool {
 }
 
 func (r *sequenceInput) TriggerStopConsuming() {
-	r.shutSig.CloseAtLeisure()
+	r.shutSig.TriggerSoftStop()
 }
 
 func (r *sequenceInput) TriggerCloseNow() {
-	r.shutSig.CloseNow()
+	r.shutSig.TriggerHardStop()
 }
 
 func (r *sequenceInput) WaitForClose(ctx context.Context) error {
 	select {
-	case <-r.shutSig.HasClosedChan():
+	case <-r.shutSig.HasStoppedChan():
 	case <-ctx.Done():
 		return ctx.Err()
 	}

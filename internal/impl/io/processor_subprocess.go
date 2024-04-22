@@ -14,13 +14,14 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Jeffail/shutdown"
+
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/interop"
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	"github.com/benthosdev/benthos/v4/internal/shutdown"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
@@ -247,7 +248,7 @@ func newSubprocWrapper(name string, args []string, maxBuf int, codecRecv string,
 	go func() {
 		defer func() {
 			_ = s.stop()
-			s.shutSig.ShutdownComplete()
+			s.shutSig.TriggerHasStopped()
 		}()
 		for {
 			select {
@@ -272,7 +273,7 @@ func newSubprocWrapper(name string, args []string, maxBuf int, codecRecv string,
 				}
 
 				_ = s.start()
-			case <-s.shutSig.CloseAtLeisureChan():
+			case <-s.shutSig.SoftStopChan():
 				return
 			}
 		}
@@ -511,9 +512,9 @@ func (e *subprocessProc) Process(ctx context.Context, msg *message.Part) ([]*mes
 }
 
 func (e *subprocessProc) Close(ctx context.Context) error {
-	e.subproc.shutSig.CloseNow()
+	e.subproc.shutSig.TriggerHardStop()
 	select {
-	case <-e.subproc.shutSig.HasClosedChan():
+	case <-e.subproc.shutSig.HasStoppedChan():
 	case <-ctx.Done():
 		return ctx.Err()
 	}

@@ -7,8 +7,9 @@ import (
 
 	gmetrics "github.com/rcrowley/go-metrics"
 
+	"github.com/Jeffail/shutdown"
+
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
-	"github.com/benthosdev/benthos/v4/internal/shutdown"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
@@ -72,7 +73,7 @@ func newLoggerFromParsed(conf *service.ParsedConfig, log *service.Logger) (l *lo
 		go func() {
 			for {
 				select {
-				case <-l.shutSig.CloseAtLeisureChan():
+				case <-l.shutSig.SoftStopChan():
 					return
 				case <-time.After(interval):
 					l.publishMetrics()
@@ -150,7 +151,7 @@ func (s *loggerMetrics) HandlerFunc() http.HandlerFunc {
 }
 
 func (s *loggerMetrics) Close(context.Context) error {
-	s.shutSig.CloseNow()
+	s.shutSig.TriggerHardStop()
 	s.publishMetrics()
 	return nil
 }

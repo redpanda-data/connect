@@ -6,12 +6,13 @@ import (
 	"regexp"
 	"time"
 
+	"github.com/Jeffail/shutdown"
+
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/interop"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	"github.com/benthosdev/benthos/v4/internal/shutdown"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
@@ -161,14 +162,14 @@ func newDropOnWriter(conf *service.ParsedConfig, log log.Modular) (*dropOnWriter
 }
 
 func (d *dropOnWriter) loop() {
-	cnCtx, cnDone := d.shutSig.CloseNowCtx(context.Background())
+	cnCtx, cnDone := d.shutSig.HardStopCtx(context.Background())
 	defer func() {
 		close(d.transactionsOut)
 
 		d.wrapped.TriggerCloseNow()
 		_ = d.wrapped.WaitForClose(context.Background())
 
-		d.shutSig.ShutdownComplete()
+		d.shutSig.TriggerHasStopped()
 		cnDone()
 	}()
 
@@ -183,7 +184,7 @@ func (d *dropOnWriter) loop() {
 			if !open {
 				return
 			}
-		case <-d.shutSig.CloseNowChan():
+		case <-d.shutSig.HardStopChan():
 			return
 		}
 
@@ -205,7 +206,7 @@ func (d *dropOnWriter) loop() {
 					case d.transactionsOut <- message.NewTransaction(ts.Payload, resChan):
 					case <-ticker.C:
 						gotBackPressure = true
-					case <-d.shutSig.CloseNowChan():
+					case <-d.shutSig.HardStopChan():
 						return false
 					}
 				}
@@ -219,7 +220,7 @@ func (d *dropOnWriter) loop() {
 							// the component isn't being shut down.
 							<-resChan
 						}()
-					case <-d.shutSig.CloseNowChan():
+					case <-d.shutSig.HardStopChan():
 						return false
 					}
 				}
@@ -240,12 +241,12 @@ func (d *dropOnWriter) loop() {
 			// we wait as long as it takes.
 			select {
 			case d.transactionsOut <- message.NewTransaction(ts.Payload, resChan):
-			case <-d.shutSig.CloseNowChan():
+			case <-d.shutSig.HardStopChan():
 				return
 			}
 			select {
 			case res = <-resChan:
-			case <-d.shutSig.CloseNowChan():
+			case <-d.shutSig.HardStopChan():
 				return
 			}
 		}
@@ -289,12 +290,12 @@ func (d *dropOnWriter) Connected() bool {
 }
 
 func (d *dropOnWriter) TriggerCloseNow() {
-	d.shutSig.CloseNow()
+	d.shutSig.TriggerHardStop()
 }
 
 func (d *dropOnWriter) WaitForClose(ctx context.Context) error {
 	select {
-	case <-d.shutSig.HasClosedChan():
+	case <-d.shutSig.HasStoppedChan():
 	case <-ctx.Done():
 		return ctx.Err()
 	}

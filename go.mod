@@ -20,6 +20,7 @@ require (
 	github.com/Jeffail/checkpoint v1.0.1
 	github.com/Jeffail/gabs/v2 v2.7.0
 	github.com/Jeffail/grok v1.1.0
+	github.com/Jeffail/shutdown v1.0.0
 	github.com/Masterminds/squirrel v1.5.4
 	github.com/OneOfOne/xxhash v1.2.8
 	github.com/PaesslerAG/gval v1.2.2

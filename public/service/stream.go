@@ -8,11 +8,12 @@ import (
 
 	"go.opentelemetry.io/otel/trace"
 
+	"github.com/Jeffail/shutdown"
+
 	"github.com/benthosdev/benthos/v4/internal/api"
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/manager"
-	"github.com/benthosdev/benthos/v4/internal/shutdown"
 	"github.com/benthosdev/benthos/v4/internal/stream"
 )
 
@@ -62,7 +63,7 @@ func (s *Stream) Run(ctx context.Context) (err error) {
 	} else {
 		s.strm, err = stream.New(s.conf, s.mgr,
 			stream.OptOnClose(func() {
-				s.shutSig.ShutdownComplete()
+				s.shutSig.TriggerHasStopped()
 			}))
 	}
 	s.strmMut.Unlock()
@@ -78,7 +79,7 @@ func (s *Stream) Run(ctx context.Context) (err error) {
 	go s.onStart()
 
 	select {
-	case <-s.shutSig.HasClosedChan():
+	case <-s.shutSig.HasStoppedChan():
 		return s.Stop(ctx)
 	case <-ctx.Done():
 	}

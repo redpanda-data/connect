@@ -14,7 +14,8 @@ import (
 
 	"github.com/Jeffail/checkpoint"
 
-	"github.com/benthosdev/benthos/v4/internal/shutdown"
+	"github.com/Jeffail/shutdown"
+
 	"github.com/benthosdev/benthos/v4/public/service"
 
 	_ "github.com/lib/pq"
@@ -136,10 +137,10 @@ func newCRDBChangefeedInputFromConfig(conf *service.ParsedConfig, res *service.R
 	res.Logger().Debug("Creating changefeed: " + c.statement)
 
 	go func() {
-		<-c.shutSig.CloseAtLeisureChan()
+		<-c.shutSig.SoftStopChan()
 
 		c.closeConnection()
-		c.shutSig.ShutdownComplete()
+		c.shutSig.TriggerHasStopped()
 	}()
 	return c, nil
 }
@@ -167,7 +168,7 @@ func (c *crdbChangefeedInput) Connect(ctx context.Context) (err error) {
 		return
 	}
 
-	if c.shutSig.ShouldCloseAtLeisure() {
+	if c.shutSig.IsSoftStopSignalled() {
 		return service.ErrEndOfInput
 	}
 
@@ -224,7 +225,7 @@ func (c *crdbChangefeedInput) Read(ctx context.Context) (*service.Message, servi
 
 	if !rows.Next() {
 		go c.closeConnection()
-		if c.shutSig.ShouldCloseAtLeisure() {
+		if c.shutSig.IsSoftStopSignalled() {
 			return nil, nil, service.ErrNotConnected
 		}
 
@@ -280,9 +281,9 @@ func (c *crdbChangefeedInput) Read(ctx context.Context) (*service.Message, servi
 }
 
 func (c *crdbChangefeedInput) Close(ctx context.Context) error {
-	c.shutSig.CloseNow()
+	c.shutSig.TriggerHardStop()
 	select {
-	case <-c.shutSig.HasClosedChan():
+	case <-c.shutSig.HasStoppedChan():
 	case <-ctx.Done():
 		return ctx.Err()
 	}

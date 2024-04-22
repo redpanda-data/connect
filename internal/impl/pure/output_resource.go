@@ -5,13 +5,14 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/Jeffail/shutdown"
+
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/interop"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	"github.com/benthosdev/benthos/v4/internal/shutdown"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
@@ -95,11 +96,11 @@ type resourceOutput struct {
 }
 
 func (r *resourceOutput) loop() {
-	cnCtx, cnDone := r.shutSig.CloseNowCtx(context.Background())
+	cnCtx, cnDone := r.shutSig.HardStopCtx(context.Background())
 	defer cnDone()
 
 	defer func() {
-		r.shutSig.ShutdownComplete()
+		r.shutSig.TriggerHasStopped()
 	}()
 
 	var ts *message.Transaction
@@ -111,7 +112,7 @@ func (r *resourceOutput) loop() {
 					return
 				}
 				ts = &t
-			case <-r.shutSig.CloseNowChan():
+			case <-r.shutSig.HardStopChan():
 				return
 			}
 		}
@@ -126,7 +127,7 @@ func (r *resourceOutput) loop() {
 			r.log.Error("Failed to obtain output resource '%v': %v", r.name, err)
 			select {
 			case <-time.After(time.Second):
-			case <-r.shutSig.CloseNowChan():
+			case <-r.shutSig.HardStopChan():
 				return
 			}
 		} else {
@@ -155,12 +156,12 @@ func (r *resourceOutput) Connected() (isConnected bool) {
 }
 
 func (r *resourceOutput) TriggerCloseNow() {
-	r.shutSig.CloseNow()
+	r.shutSig.TriggerHardStop()
 }
 
 func (r *resourceOutput) WaitForClose(ctx context.Context) error {
 	select {
-	case <-r.shutSig.HasClosedChan():
+	case <-r.shutSig.HasStoppedChan():
 	case <-ctx.Done():
 		return ctx.Err()
 	}

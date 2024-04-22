@@ -14,7 +14,8 @@ import (
 
 	"github.com/Jeffail/checkpoint"
 
-	"github.com/benthosdev/benthos/v4/internal/shutdown"
+	"github.com/Jeffail/shutdown"
+
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
@@ -322,7 +323,7 @@ func (p *partitionTracker) loop() {
 		if p.batcher != nil {
 			p.batcher.Close(context.Background())
 		}
-		p.shutSig.ShutdownComplete()
+		p.shutSig.TriggerHasStopped()
 	}()
 
 	// No need to loop when there's no batcher for async writes.
@@ -354,7 +355,7 @@ func (p *partitionTracker) loop() {
 		flushBatch = flushBatchTicker.C
 	}
 
-	closeAtLeisureCtx, done := p.shutSig.CloseAtLeisureCtx(context.Background())
+	closeAtLeisureCtx, done := p.shutSig.SoftStopCtx(context.Background())
 	defer done()
 
 	for {
@@ -389,7 +390,7 @@ func (p *partitionTracker) loop() {
 					return
 				}
 			}
-		case <-p.shutSig.CloseAtLeisureChan():
+		case <-p.shutSig.SoftStopChan():
 			return
 		}
 	}
@@ -462,11 +463,11 @@ func (p *partitionTracker) pauseFetch(limit int) (pauseFetch bool) {
 }
 
 func (p *partitionTracker) close(ctx context.Context) error {
-	p.shutSig.CloseAtLeisure()
+	p.shutSig.TriggerSoftStop()
 	select {
 	case <-ctx.Done():
 		return ctx.Err()
-	case <-p.shutSig.HasClosedChan():
+	case <-p.shutSig.HasStoppedChan():
 	}
 	return nil
 }
@@ -580,8 +581,8 @@ func (f *franzKafkaReader) Connect(ctx context.Context) error {
 		return nil
 	}
 
-	if f.shutSig.ShouldCloseAtLeisure() {
-		f.shutSig.ShutdownComplete()
+	if f.shutSig.IsSoftStopSignalled() {
+		f.shutSig.TriggerHasStopped()
 		return service.ErrEndOfInput
 	}
 
@@ -654,12 +655,12 @@ func (f *franzKafkaReader) Connect(ctx context.Context) error {
 			checkpoints.close()
 			f.storeBatchChan(nil)
 			close(batchChan)
-			if f.shutSig.ShouldCloseAtLeisure() {
-				f.shutSig.ShutdownComplete()
+			if f.shutSig.IsSoftStopSignalled() {
+				f.shutSig.TriggerHasStopped()
 			}
 		}()
 
-		closeCtx, done := f.shutSig.CloseAtLeisureCtx(context.Background())
+		closeCtx, done := f.shutSig.SoftStopCtx(context.Background())
 		defer done()
 
 		for {
@@ -758,15 +759,15 @@ func (f *franzKafkaReader) ReadBatch(ctx context.Context) (service.MessageBatch,
 
 func (f *franzKafkaReader) Close(ctx context.Context) error {
 	go func() {
-		f.shutSig.CloseAtLeisure()
+		f.shutSig.TriggerSoftStop()
 		if f.getBatchChan() == nil {
 			// If the record chan is already nil then we might've not been
 			// connected, so force the shutdown complete signal.
-			f.shutSig.ShutdownComplete()
+			f.shutSig.TriggerHasStopped()
 		}
 	}()
 	select {
-	case <-f.shutSig.HasClosedChan():
+	case <-f.shutSig.HasStoppedChan():
 	case <-ctx.Done():
 		return ctx.Err()
 	}

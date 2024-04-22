@@ -6,7 +6,8 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/benthosdev/benthos/v4/internal/shutdown"
+	"github.com/Jeffail/shutdown"
+
 	"github.com/benthosdev/benthos/v4/public/bloblang"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
@@ -167,7 +168,7 @@ func (s *sqlRawInput) Connect(ctx context.Context) (err error) {
 	s.rows = rows
 
 	go func() {
-		<-s.shutSig.CloseNowChan()
+		<-s.shutSig.HardStopChan()
 
 		s.dbMut.Lock()
 		if s.rows != nil {
@@ -180,7 +181,7 @@ func (s *sqlRawInput) Connect(ctx context.Context) (err error) {
 		}
 		s.dbMut.Unlock()
 
-		s.shutSig.ShutdownComplete()
+		s.shutSig.TriggerHasStopped()
 	}()
 	return nil
 }
@@ -224,7 +225,7 @@ func (s *sqlRawInput) Read(ctx context.Context) (*service.Message, service.AckFu
 }
 
 func (s *sqlRawInput) Close(ctx context.Context) error {
-	s.shutSig.CloseNow()
+	s.shutSig.TriggerHardStop()
 	s.dbMut.Lock()
 	isNil := s.db == nil
 	s.dbMut.Unlock()
@@ -232,7 +233,7 @@ func (s *sqlRawInput) Close(ctx context.Context) error {
 		return nil
 	}
 	select {
-	case <-s.shutSig.HasClosedChan():
+	case <-s.shutSig.HasStoppedChan():
 	case <-ctx.Done():
 		return ctx.Err()
 	}

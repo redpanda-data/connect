@@ -9,6 +9,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/Jeffail/shutdown"
+
 	"github.com/benthosdev/benthos/v4/internal/batch"
 	"github.com/benthosdev/benthos/v4/internal/bloblang/mapping"
 	"github.com/benthosdev/benthos/v4/internal/bundle"
@@ -17,7 +19,6 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	"github.com/benthosdev/benthos/v4/internal/shutdown"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
@@ -335,7 +336,7 @@ func (o *switchOutput) dispatchToTargets(
 		pendingResponses++
 	}
 	if pendingResponses == 0 {
-		ctx, done := o.shutSig.CloseNowCtx(context.Background())
+		ctx, done := o.shutSig.HardStopCtx(context.Background())
 		defer done()
 		_ = ackFn(ctx, nil)
 	}
@@ -370,7 +371,7 @@ func (o *switchOutput) dispatchToTargets(
 			}
 			return nil
 		}):
-		case <-o.shutSig.CloseNowChan():
+		case <-o.shutSig.HardStopChan():
 			setErr(component.ErrTypeClosed)
 			return
 		}
@@ -389,7 +390,7 @@ func (o *switchOutput) loop() {
 			case <-ackInterruptChan:
 			case <-time.After(time.Millisecond * 100):
 				// Just incase an interrupt doesn't arrive.
-			case <-o.shutSig.CloseNowChan():
+			case <-o.shutSig.HardStopChan():
 				break ackWaitLoop
 			}
 		}
@@ -402,13 +403,13 @@ func (o *switchOutput) loop() {
 		for _, output := range o.outputs {
 			_ = output.WaitForClose(context.Background())
 		}
-		o.shutSig.ShutdownComplete()
+		o.shutSig.TriggerHasStopped()
 	}()
 
-	shutCtx, done := o.shutSig.CloseNowCtx(context.Background())
+	shutCtx, done := o.shutSig.HardStopCtx(context.Background())
 	defer done()
 
-	for !o.shutSig.ShouldCloseNow() {
+	for !o.shutSig.IsHardStopSignalled() {
 		var ts message.Transaction
 		var open bool
 
@@ -417,7 +418,7 @@ func (o *switchOutput) loop() {
 			if !open {
 				return
 			}
-		case <-o.shutSig.CloseNowChan():
+		case <-o.shutSig.HardStopChan():
 			return
 		}
 
@@ -469,12 +470,12 @@ func (o *switchOutput) loop() {
 }
 
 func (o *switchOutput) TriggerCloseNow() {
-	o.shutSig.CloseNow()
+	o.shutSig.TriggerHardStop()
 }
 
 func (o *switchOutput) WaitForClose(ctx context.Context) error {
 	select {
-	case <-o.shutSig.HasClosedChan():
+	case <-o.shutSig.HasStoppedChan():
 	case <-ctx.Done():
 		return ctx.Err()
 	}

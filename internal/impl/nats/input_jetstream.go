@@ -10,8 +10,9 @@ import (
 
 	"github.com/nats-io/nats.go"
 
+	"github.com/Jeffail/shutdown"
+
 	"github.com/benthosdev/benthos/v4/internal/component/input/span"
-	"github.com/benthosdev/benthos/v4/internal/shutdown"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
@@ -349,10 +350,10 @@ func (j *jetStreamReader) Read(ctx context.Context) (*service.Message, service.A
 func (j *jetStreamReader) Close(ctx context.Context) error {
 	go func() {
 		j.disconnect()
-		j.shutSig.ShutdownComplete()
+		j.shutSig.TriggerHasStopped()
 	}()
 	select {
-	case <-j.shutSig.HasClosedChan():
+	case <-j.shutSig.HasStoppedChan():
 	case <-ctx.Done():
 		return ctx.Err()
 	}

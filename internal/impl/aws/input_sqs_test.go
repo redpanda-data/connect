@@ -154,7 +154,7 @@ func TestSQSInput(t *testing.T) {
 	r.sqs = mockInput
 	go mockInput.TimeoutLoop(tCtx)
 
-	defer r.closeSignal.CloseNow()
+	defer r.closeSignal.TriggerHardStop()
 	err = r.Connect(tCtx)
 	require.NoError(t, err)
 

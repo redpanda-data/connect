@@ -4,12 +4,13 @@ import (
 	"context"
 	"errors"
 
+	"github.com/Jeffail/shutdown"
+
 	"github.com/benthosdev/benthos/v4/internal/batch"
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/interop"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	"github.com/benthosdev/benthos/v4/internal/shutdown"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
@@ -165,7 +166,7 @@ func (t *fallbackBroker) loop() {
 			close(c)
 		}
 		_ = closeAllOutputs(context.Background(), t.outputs)
-		t.shutSig.ShutdownComplete()
+		t.shutSig.TriggerHasStopped()
 	}()
 
 	for {
@@ -177,7 +178,7 @@ func (t *fallbackBroker) loop() {
 			if !open {
 				return
 			}
-		case <-t.shutSig.CloseAtLeisureChan():
+		case <-t.shutSig.SoftStopChan():
 			return
 		}
 
@@ -240,19 +241,19 @@ func (t *fallbackBroker) loop() {
 
 		select {
 		case t.outputTSChans[i] <- message.NewTransactionFunc(outBatch.ShallowCopy(), ackFn):
-		case <-t.shutSig.CloseAtLeisureChan():
+		case <-t.shutSig.SoftStopChan():
 			return
 		}
 	}
 }
 
 func (t *fallbackBroker) TriggerCloseNow() {
-	t.shutSig.CloseNow()
+	t.shutSig.TriggerHardStop()
 }
 
 func (t *fallbackBroker) WaitForClose(ctx context.Context) error {
 	select {
-	case <-t.shutSig.HasClosedChan():
+	case <-t.shutSig.HasStoppedChan():
 	case <-ctx.Done():
 		return ctx.Err()
 	}
