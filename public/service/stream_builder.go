@@ -102,6 +102,8 @@ func (s *StreamBuilder) DisableLinting() {
 // SetEnvVarLookupFunc changes the behaviour of the stream builder so that the
 // value of environment variable interpolations (of the form `${FOO}`) are
 // obtained via a provided function rather than the default of os.LookupEnv.
+//
+// TODO V5: Add context here, Travis is onto us.
 func (s *StreamBuilder) SetEnvVarLookupFunc(fn func(string) (string, bool)) {
 	s.envVarLookupFn = fn
 }
