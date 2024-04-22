@@ -15,8 +15,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/benthosdev/benthos/v4/internal/impl/kafka"
-	"github.com/benthosdev/benthos/v4/internal/integration"
 	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/benthosdev/benthos/v4/public/service/integration"
 )
 
 func TestIntegrationSaramaCheckpointOneLockUp(t *testing.T) {
@@ -264,26 +264,28 @@ input:
 		t.Parallel()
 		suite.Run(
 			t, template,
-			integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, testID string, vars *integration.StreamTestConfigVars) {
-				vars.Var4 = "group" + testID
-				require.NoError(t, createKafkaTopic(ctx, "localhost:"+kafkaPortStr, testID, 4))
+			integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, vars *integration.StreamTestConfigVars) {
+				vars.General["VAR4"] = "group" + vars.ID
+				require.NoError(t, createKafkaTopic(ctx, "localhost:"+kafkaPortStr, vars.ID, 4))
 			}),
 			integration.StreamTestOptPort(kafkaPortStr),
-			integration.StreamTestOptVarTwo("1"),
-			integration.StreamTestOptVarThree("false"),
+			integration.StreamTestOptVarSet("VAR1", ""),
+			integration.StreamTestOptVarSet("VAR2", "1"),
+			integration.StreamTestOptVarSet("VAR3", "false"),
 		)
 
 		t.Run("only one partition", func(t *testing.T) {
 			t.Parallel()
 			suiteExt.Run(
 				t, template,
-				integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, testID string, vars *integration.StreamTestConfigVars) {
-					vars.Var4 = "group" + testID
-					require.NoError(t, createKafkaTopic(ctx, "localhost:"+kafkaPortStr, testID, 1))
+				integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, vars *integration.StreamTestConfigVars) {
+					vars.General["VAR4"] = "group" + vars.ID
+					require.NoError(t, createKafkaTopic(ctx, "localhost:"+kafkaPortStr, vars.ID, 1))
 				}),
 				integration.StreamTestOptPort(kafkaPortStr),
-				integration.StreamTestOptVarTwo("1"),
-				integration.StreamTestOptVarThree("false"),
+				integration.StreamTestOptVarSet("VAR1", ""),
+				integration.StreamTestOptVarSet("VAR2", "1"),
+				integration.StreamTestOptVarSet("VAR3", "false"),
 			)
 		})
 
@@ -291,13 +293,14 @@ input:
 			t.Parallel()
 			suite.Run(
 				t, template,
-				integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, testID string, vars *integration.StreamTestConfigVars) {
-					vars.Var4 = "group" + testID
-					require.NoError(t, createKafkaTopic(ctx, "localhost:"+kafkaPortStr, testID, 4))
+				integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, vars *integration.StreamTestConfigVars) {
+					vars.General["VAR4"] = "group" + vars.ID
+					require.NoError(t, createKafkaTopic(ctx, "localhost:"+kafkaPortStr, vars.ID, 4))
 				}),
 				integration.StreamTestOptPort(kafkaPortStr),
-				integration.StreamTestOptVarTwo("1000"),
-				integration.StreamTestOptVarThree("false"),
+				integration.StreamTestOptVarSet("VAR1", ""),
+				integration.StreamTestOptVarSet("VAR2", "1000"),
+				integration.StreamTestOptVarSet("VAR3", "false"),
 			)
 		})
 
@@ -305,13 +308,14 @@ input:
 			t.Parallel()
 			suite.Run(
 				t, template,
-				integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, testID string, vars *integration.StreamTestConfigVars) {
-					vars.Var4 = "group" + testID
-					require.NoError(t, createKafkaTopic(ctx, "localhost:"+kafkaPortStr, testID, 4))
+				integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, vars *integration.StreamTestConfigVars) {
+					vars.General["VAR4"] = "group" + vars.ID
+					require.NoError(t, createKafkaTopic(ctx, "localhost:"+kafkaPortStr, vars.ID, 4))
 				}),
 				integration.StreamTestOptPort(kafkaPortStr),
-				integration.StreamTestOptVarTwo("1"),
-				integration.StreamTestOptVarThree("true"),
+				integration.StreamTestOptVarSet("VAR1", ""),
+				integration.StreamTestOptVarSet("VAR2", "1"),
+				integration.StreamTestOptVarSet("VAR3", "true"),
 			)
 		})
 	})
@@ -320,31 +324,31 @@ input:
 		t.Parallel()
 		suite.Run(
 			t, template,
-			integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, testID string, vars *integration.StreamTestConfigVars) {
-				vars.Var4 = "group" + testID
-				topicName := "topic-" + testID
-				vars.Var1 = fmt.Sprintf(":0,%v:1,%v:2,%v:3", topicName, topicName, topicName)
-				require.NoError(t, createKafkaTopic(ctx, "localhost:"+kafkaPortStr, testID, 4))
+			integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, vars *integration.StreamTestConfigVars) {
+				vars.General["VAR4"] = "group" + vars.ID
+				topicName := "topic-" + vars.ID
+				vars.General["VAR1"] = fmt.Sprintf(":0,%v:1,%v:2,%v:3", topicName, topicName, topicName)
+				require.NoError(t, createKafkaTopic(ctx, "localhost:"+kafkaPortStr, vars.ID, 4))
 			}),
 			integration.StreamTestOptPort(kafkaPortStr),
 			integration.StreamTestOptSleepAfterInput(time.Second*3),
-			integration.StreamTestOptVarTwo("1"),
-			integration.StreamTestOptVarThree("false"),
+			integration.StreamTestOptVarSet("VAR2", "1"),
+			integration.StreamTestOptVarSet("VAR3", "false"),
 		)
 
 		t.Run("range of partitions", func(t *testing.T) {
 			t.Parallel()
 			suite.Run(
 				t, template,
-				integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, testID string, vars *integration.StreamTestConfigVars) {
-					vars.Var4 = "group" + testID
-					require.NoError(t, createKafkaTopic(ctx, "localhost:"+kafkaPortStr, testID, 4))
+				integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, vars *integration.StreamTestConfigVars) {
+					vars.General["VAR4"] = "group" + vars.ID
+					require.NoError(t, createKafkaTopic(ctx, "localhost:"+kafkaPortStr, vars.ID, 4))
 				}),
 				integration.StreamTestOptPort(kafkaPortStr),
 				integration.StreamTestOptSleepAfterInput(time.Second*3),
-				integration.StreamTestOptVarOne(":0-3"),
-				integration.StreamTestOptVarTwo("1"),
-				integration.StreamTestOptVarThree("false"),
+				integration.StreamTestOptVarSet("VAR1", ":0-3"),
+				integration.StreamTestOptVarSet("VAR2", "1"),
+				integration.StreamTestOptVarSet("VAR3", "false"),
 			)
 		})
 
@@ -352,15 +356,15 @@ input:
 			t.Parallel()
 			suiteSingleCheckpointedStream.Run(
 				t, template,
-				integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, testID string, vars *integration.StreamTestConfigVars) {
-					vars.Var4 = "group" + testID
-					require.NoError(t, createKafkaTopic(ctx, "localhost:"+kafkaPortStr, testID, 1))
+				integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, vars *integration.StreamTestConfigVars) {
+					vars.General["VAR4"] = "group" + vars.ID
+					require.NoError(t, createKafkaTopic(ctx, "localhost:"+kafkaPortStr, vars.ID, 1))
 				}),
 				integration.StreamTestOptPort(kafkaPortStr),
 				integration.StreamTestOptSleepAfterInput(time.Second*3),
-				integration.StreamTestOptVarOne(":0"),
-				integration.StreamTestOptVarTwo("1000"),
-				integration.StreamTestOptVarThree("false"),
+				integration.StreamTestOptVarSet("VAR1", ":0"),
+				integration.StreamTestOptVarSet("VAR2", "1000"),
+				integration.StreamTestOptVarSet("VAR3", "false"),
 			)
 		})
 	})
@@ -369,14 +373,14 @@ input:
 		t.Parallel()
 		suite.Run(
 			t, template,
-			integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, testID string, vars *integration.StreamTestConfigVars) {
-				require.NoError(t, createKafkaTopic(ctx, "localhost:"+kafkaPortStr, testID, 4))
+			integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, vars *integration.StreamTestConfigVars) {
+				require.NoError(t, createKafkaTopic(ctx, "localhost:"+kafkaPortStr, vars.ID, 4))
 			}),
 			integration.StreamTestOptPort(kafkaPortStr),
 			integration.StreamTestOptSleepAfterInput(time.Second*3),
-			integration.StreamTestOptVarOne(":0-3"),
-			integration.StreamTestOptVarTwo("1"),
-			integration.StreamTestOptVarThree("false"),
+			integration.StreamTestOptVarSet("VAR1", ":0-3"),
+			integration.StreamTestOptVarSet("VAR2", "1"),
+			integration.StreamTestOptVarSet("VAR3", "false"),
 		)
 	})
 
@@ -409,13 +413,14 @@ input:
 		t.Parallel()
 		suite.Run(
 			t, templateManualPartitioner,
-			integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, testID string, vars *integration.StreamTestConfigVars) {
-				vars.Var4 = "group" + testID
-				require.NoError(t, createKafkaTopic(ctx, "localhost:"+kafkaPortStr, testID, 4))
+			integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, vars *integration.StreamTestConfigVars) {
+				vars.General["VAR4"] = "group" + vars.ID
+				require.NoError(t, createKafkaTopic(ctx, "localhost:"+kafkaPortStr, vars.ID, 4))
 			}),
 			integration.StreamTestOptPort(kafkaPortStr),
-			integration.StreamTestOptVarTwo("1"),
-			integration.StreamTestOptVarThree("false"),
+			integration.StreamTestOptVarSet("VAR1", ""),
+			integration.StreamTestOptVarSet("VAR2", "1"),
+			integration.StreamTestOptVarSet("VAR3", "false"),
 		)
 	})
 }
@@ -530,18 +535,18 @@ input:
 		t.Parallel()
 		suiteExt.Run(
 			t, template,
-			integration.StreamTestOptVarOne(""),
-			integration.StreamTestOptVarTwo("1"),
-			integration.StreamTestOptVarThree("false"),
+			integration.StreamTestOptVarSet("VAR1", ""),
+			integration.StreamTestOptVarSet("VAR2", "1"),
+			integration.StreamTestOptVarSet("VAR3", "false"),
 		)
 
 		t.Run("checkpointed", func(t *testing.T) {
 			t.Parallel()
 			suiteSingleCheckpointedStream.Run(
 				t, template,
-				integration.StreamTestOptVarOne(""),
-				integration.StreamTestOptVarTwo("1000"),
-				integration.StreamTestOptVarThree("false"),
+				integration.StreamTestOptVarSet("VAR1", ""),
+				integration.StreamTestOptVarSet("VAR2", "1000"),
+				integration.StreamTestOptVarSet("VAR3", "false"),
 			)
 		})
 
@@ -549,9 +554,9 @@ input:
 			t.Parallel()
 			suiteExt.Run(
 				t, template,
-				integration.StreamTestOptVarOne(""),
-				integration.StreamTestOptVarTwo("1"),
-				integration.StreamTestOptVarThree("true"),
+				integration.StreamTestOptVarSet("VAR1", ""),
+				integration.StreamTestOptVarSet("VAR2", "1"),
+				integration.StreamTestOptVarSet("VAR3", "true"),
 			)
 		})
 
@@ -559,24 +564,24 @@ input:
 			t.Parallel()
 			suite.Run(
 				t, template,
-				integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, testID string, vars *integration.StreamTestConfigVars) {
-					require.NoError(t, createKafkaTopic(ctx, address, testID, 4))
+				integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, vars *integration.StreamTestConfigVars) {
+					require.NoError(t, createKafkaTopic(ctx, address, vars.ID, 4))
 				}),
-				integration.StreamTestOptVarOne(""),
-				integration.StreamTestOptVarTwo("1"),
-				integration.StreamTestOptVarThree("false"),
+				integration.StreamTestOptVarSet("VAR1", ""),
+				integration.StreamTestOptVarSet("VAR2", "1"),
+				integration.StreamTestOptVarSet("VAR3", "false"),
 			)
 
 			t.Run("checkpointed", func(t *testing.T) {
 				t.Parallel()
 				suite.Run(
 					t, template,
-					integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, testID string, vars *integration.StreamTestConfigVars) {
-						require.NoError(t, createKafkaTopic(ctx, address, testID, 4))
+					integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, vars *integration.StreamTestConfigVars) {
+						require.NoError(t, createKafkaTopic(ctx, address, vars.ID, 4))
 					}),
-					integration.StreamTestOptVarOne(""),
-					integration.StreamTestOptVarTwo("1000"),
-					integration.StreamTestOptVarThree("false"),
+					integration.StreamTestOptVarSet("VAR1", ""),
+					integration.StreamTestOptVarSet("VAR2", "1000"),
+					integration.StreamTestOptVarSet("VAR3", "false"),
 				)
 			})
 		})
@@ -586,21 +591,21 @@ input:
 		t.Parallel()
 		suiteExt.Run(
 			t, template,
-			integration.StreamTestOptVarOne(":0"),
-			integration.StreamTestOptVarTwo("1"),
-			integration.StreamTestOptVarThree("false"),
+			integration.StreamTestOptVarSet("VAR1", ":0"),
+			integration.StreamTestOptVarSet("VAR2", "1"),
+			integration.StreamTestOptVarSet("VAR3", "false"),
 		)
 
 		t.Run("checkpointed", func(t *testing.T) {
 			t.Parallel()
 			suiteSingleCheckpointedStream.Run(
 				t, template,
-				integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, testID string, vars *integration.StreamTestConfigVars) {
-					require.NoError(t, createKafkaTopic(ctx, "localhost:"+kafkaPortStr, testID, 1))
+				integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, vars *integration.StreamTestConfigVars) {
+					require.NoError(t, createKafkaTopic(ctx, "localhost:"+kafkaPortStr, vars.ID, 1))
 				}),
-				integration.StreamTestOptVarOne(":0"),
-				integration.StreamTestOptVarTwo("1000"),
-				integration.StreamTestOptVarThree("false"),
+				integration.StreamTestOptVarSet("VAR1", ":0"),
+				integration.StreamTestOptVarSet("VAR2", "1000"),
+				integration.StreamTestOptVarSet("VAR3", "false"),
 			)
 		})
 
@@ -608,28 +613,28 @@ input:
 			t.Parallel()
 			suite.Run(
 				t, template,
-				integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, testID string, vars *integration.StreamTestConfigVars) {
-					topicName := "topic-" + testID
-					vars.Var1 = fmt.Sprintf(":0,%v:1,%v:2,%v:3", topicName, topicName, topicName)
-					require.NoError(t, createKafkaTopic(ctx, address, testID, 4))
+				integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, vars *integration.StreamTestConfigVars) {
+					topicName := "topic-" + vars.ID
+					vars.General["VAR1"] = fmt.Sprintf(":0,%v:1,%v:2,%v:3", topicName, topicName, topicName)
+					require.NoError(t, createKafkaTopic(ctx, address, vars.ID, 4))
 				}),
 				integration.StreamTestOptSleepAfterInput(time.Second*3),
-				integration.StreamTestOptVarTwo("1"),
-				integration.StreamTestOptVarThree("false"),
+				integration.StreamTestOptVarSet("VAR2", "1"),
+				integration.StreamTestOptVarSet("VAR3", "false"),
 			)
 
 			t.Run("checkpointed", func(t *testing.T) {
 				t.Parallel()
 				suite.Run(
 					t, template,
-					integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, testID string, vars *integration.StreamTestConfigVars) {
-						topicName := "topic-" + testID
-						vars.Var1 = fmt.Sprintf(":0,%v:1,%v:2,%v:3", topicName, topicName, topicName)
-						require.NoError(t, createKafkaTopic(ctx, address, testID, 4))
+					integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, vars *integration.StreamTestConfigVars) {
+						topicName := "topic-" + vars.ID
+						vars.General["VAR1"] = fmt.Sprintf(":0,%v:1,%v:2,%v:3", topicName, topicName, topicName)
+						require.NoError(t, createKafkaTopic(ctx, address, vars.ID, 4))
 					}),
 					integration.StreamTestOptSleepAfterInput(time.Second*3),
-					integration.StreamTestOptVarTwo("1000"),
-					integration.StreamTestOptVarThree("false"),
+					integration.StreamTestOptVarSet("VAR2", "1000"),
+					integration.StreamTestOptVarSet("VAR3", "false"),
 				)
 			})
 		})

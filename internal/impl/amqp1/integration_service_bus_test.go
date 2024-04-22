@@ -13,8 +13,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/benthosdev/benthos/v4/internal/component"
-	"github.com/benthosdev/benthos/v4/internal/integration"
 	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/benthosdev/benthos/v4/public/service/integration"
 )
 
 func TestIntegrationAzureServiceBus(t *testing.T) {

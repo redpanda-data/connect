@@ -94,7 +94,7 @@ func StreamTestMetadataFilter() StreamTestDefinition {
 	return namedStreamTest(
 		"can send and receive metadata filtered",
 		func(t *testing.T, env *streamTestEnvironment) {
-			env.configVars.OutputMetaExcludePrefix = "f"
+			env.configVars.General["OUTPUT_META_EXCLUDE_PREFIX"] = "f"
 
 			tranChan := make(chan message.Transaction)
 			input, output := initConnectors(t, tranChan, env)
@@ -211,7 +211,7 @@ func StreamTestSendBatchCount(n int) StreamTestDefinition {
 	return namedStreamTest(
 		"can send messages with an output batch count",
 		func(t *testing.T, env *streamTestEnvironment) {
-			env.configVars.OutputBatchCount = n
+			env.configVars.General["OUTPUT_BATCH_COUNT"] = strconv.Itoa(n)
 
 			tranChan := make(chan message.Transaction)
 			input, output := initConnectors(t, tranChan, env)
@@ -259,7 +259,7 @@ func StreamTestSendBatchCountIsolated(n int) StreamTestDefinition {
 	return namedStreamTest(
 		"can send messages with an output batch count isolated",
 		func(t *testing.T, env *streamTestEnvironment) {
-			env.configVars.OutputBatchCount = n
+			env.configVars.General["OUTPUT_BATCH_COUNT"] = strconv.Itoa(n)
 
 			tranChan := make(chan message.Transaction)
 			output := initOutput(t, tranChan, env)
@@ -307,12 +307,13 @@ func StreamTestSendBatchCountIsolated(n int) StreamTestDefinition {
 }
 
 // StreamTestReceiveBatchCount tests that batches can be consumed with an input
-// configured batch count.
+// configured batch count. The batch count should be inserted with the variable
+// $INPUT_BATCH_COUNT.
 func StreamTestReceiveBatchCount(n int) StreamTestDefinition {
 	return namedStreamTest(
 		"can send messages with an input batch count",
 		func(t *testing.T, env *streamTestEnvironment) {
-			env.configVars.InputBatchCount = n
+			env.configVars.General["INPUT_BATCH_COUNT"] = strconv.Itoa(n)
 
 			tranChan := make(chan message.Transaction)
 			input, output := initConnectors(t, tranChan, env)

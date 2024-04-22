@@ -14,8 +14,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/benthosdev/benthos/v4/internal/integration"
 	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/benthosdev/benthos/v4/public/service/integration"
 )
 
 func TestIntegrationNatsKV(t *testing.T) {
@@ -75,11 +75,11 @@ input:
 	)
 	suite.Run(
 		t, template,
-		integration.StreamTestOptPreTest(func(t testing.TB, _ context.Context, testID string, _ *integration.StreamTestConfigVars) {
+		integration.StreamTestOptPreTest(func(t testing.TB, _ context.Context, vars *integration.StreamTestConfigVars) {
 			js, err := jetstream.New(natsConn)
 			require.NoError(t, err)
 
-			bucketName := "bucket-" + testID
+			bucketName := "bucket-" + vars.ID
 
 			_, err = js.CreateKeyValue(context.Background(), jetstream.KeyValueConfig{
 				Bucket: bucketName,
@@ -107,11 +107,11 @@ cache_resources:
 		)
 		suite.Run(
 			t, template,
-			integration.CacheTestOptPreTest(func(t testing.TB, _ context.Context, testID string, _ *integration.CacheTestConfigVars) {
+			integration.CacheTestOptPreTest(func(t testing.TB, _ context.Context, vars *integration.CacheTestConfigVars) {
 				js, err := jetstream.New(natsConn)
 				require.NoError(t, err)
 
-				bucketName := "bucket-" + testID
+				bucketName := "bucket-" + vars.ID
 
 				_, err = js.CreateKeyValue(context.Background(), jetstream.KeyValueConfig{
 					Bucket: bucketName,

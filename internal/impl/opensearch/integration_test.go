@@ -18,9 +18,9 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/benthosdev/benthos/v4/internal/impl/opensearch"
-	"github.com/benthosdev/benthos/v4/internal/integration"
 	_ "github.com/benthosdev/benthos/v4/public/components/pure"
 	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/benthosdev/benthos/v4/public/service/integration"
 )
 
 func outputFromConf(t testing.TB, confStr string, args ...any) *opensearch.Output {
