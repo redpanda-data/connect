@@ -12,7 +12,8 @@ import (
 	"github.com/jackc/pgx/v4"
 	"github.com/jackc/pgx/v4/pgxpool"
 
-	"github.com/benthosdev/benthos/v4/internal/checkpoint"
+	"github.com/Jeffail/checkpoint"
+
 	"github.com/benthosdev/benthos/v4/internal/shutdown"
 	"github.com/benthosdev/benthos/v4/public/service"
 
