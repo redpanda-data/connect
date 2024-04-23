@@ -81,6 +81,11 @@ var (
 	ErrMessageTooLarge = errors.New("message body larger than buffer space")
 )
 
+// sqlite errors.
+var (
+	ErrMaxPageCountTooSmall = errors.New("sqlite max page count is less than or equal to current page count")
+)
+
 //------------------------------------------------------------------------------
 
 // ErrUnexpectedHTTPRes is an error returned when an HTTP request returned an

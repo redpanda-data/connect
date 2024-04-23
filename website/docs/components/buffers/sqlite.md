@@ -24,6 +24,7 @@ buffer:
     path: "" # No default (required)
     pre_processors: [] # No default (optional)
     post_processors: [] # No default (optional)
+    max_page_count: 0 # No default (optional)
 ```
 
 Stored messages are then consumed as a stream from the database and deleted only once they are successfully sent at the output level. If the service is restarted Benthos will make a best attempt to finish delivering messages that are already read from the database, and when it starts again it will consume from the oldest message that has not yet been delivered.
@@ -59,6 +60,13 @@ An optional list of processors to apply to messages after they are consumed from
 
 
 Type: `array`  
+
+### `max_page_count`
+
+An optional integer to set the max_page_count for SQLite, limiting the database size. It cannot be lower than the current page_count. The maximum value is 4294967294 (2^32-2)[max_page_count](https://www.sqlite.org/pragma.html#pragma_max_page_count).
+
+
+Type: `int`  
 
 ## Examples
 

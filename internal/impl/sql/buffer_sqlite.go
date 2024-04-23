@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"math"
 	"strings"
 	"sync"
@@ -42,6 +43,9 @@ Messages that are logically batched at the point where they are added to the buf
 			Optional()).
 		Field(service.NewProcessorListField("post_processors").
 			Description("An optional list of processors to apply to messages after they are consumed from the buffer. These processors are useful for undoing any compression, archiving, etc that may have been done by your `pre_processors`.").
+			Optional()).
+		Field(service.NewIntField("max_page_count").
+			Description("An optional integer to set the max_page_count for SQLite, limiting the database size. It cannot be lower than the current page_count. The maximum value is 4294967294 (2^32-2)[max_page_count](https://www.sqlite.org/pragma.html#pragma_max_page_count).").
 			Optional()).
 		Example("Batching for optimisation", "Batching at the input level greatly increases the throughput of this buffer. If logical batches aren't needed for processing add a [`split` processor](/docs/components/processors/split) to the `post_processors`.", `
 input:
@@ -96,7 +100,14 @@ func NewSQLiteBufferFromConfig(conf *service.ParsedConfig, res *service.Resource
 		}
 	}
 
-	return newSQLiteBuffer(path, preProcs, postProcs)
+	maxPageCount := math.MinInt
+	if conf.Contains("max_page_count") {
+		if maxPageCount, err = conf.FieldInt("max_page_count"); err != nil {
+			return nil, err
+		}
+	}
+
+	return newSQLiteBuffer(path, preProcs, postProcs, maxPageCount)
 }
 
 //------------------------------------------------------------------------------
@@ -115,7 +126,7 @@ type SQLiteBuffer struct {
 	closed      bool
 }
 
-func newSQLiteBuffer(path string, preProcs, postProcs []*service.OwnedProcessor) (*SQLiteBuffer, error) {
+func newSQLiteBuffer(path string, preProcs, postProcs []*service.OwnedProcessor, maxPageCount int) (*SQLiteBuffer, error) {
 	db, err := sql.Open("sqlite", path)
 	if err != nil {
 		return nil, err
@@ -131,6 +142,20 @@ CREATE TABLE IF NOT EXISTS messages (
 )
 `); err != nil {
 		return nil, err
+	}
+
+	var curPageCount int
+	if err = db.QueryRow(`PRAGMA page_count`).Scan(&curPageCount); err != nil {
+		return nil, err
+	}
+
+	if maxPageCount != math.MinInt {
+		if maxPageCount <= curPageCount {
+			return nil, component.ErrMaxPageCountTooSmall
+		}
+		if _, err = db.Exec(fmt.Sprintf("PRAGMA max_page_count=%d", maxPageCount)); err != nil {
+			return nil, err
+		}
 	}
 
 	return &SQLiteBuffer{

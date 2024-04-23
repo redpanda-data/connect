@@ -14,6 +14,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/impl/sql"
 	"github.com/benthosdev/benthos/v4/public/service"
 
@@ -633,4 +634,39 @@ post_processors:
 	}()
 
 	wg.Wait()
+}
+
+func TestBufferSQLiteLessMaxPageCount(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Helper()
+
+	conf := fmt.Sprintf(`
+path: "%v"
+max_page_count: 0
+`, filepath.Join(tmpDir, "foo.db"))
+
+	parsedConf, err := sql.SQLiteBufferConfig().ParseYAML(conf, nil)
+	require.NoError(t, err)
+	_, err = sql.NewSQLiteBufferFromConfig(parsedConf, service.MockResources())
+	require.Error(t, err)
+	assert.Equal(t, component.ErrMaxPageCountTooSmall, err)
+}
+
+func TestSqliteMaxPageCountLimit(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	ctx := context.Background()
+	block := memBufFromConf(t, fmt.Sprintf(`
+path: "%v"
+max_page_count: 4
+`, filepath.Join(tmpDir, "foo.db")))
+	defer block.Close(ctx)
+
+	err := block.WriteBatch(ctx, service.MessageBatch{
+		service.NewMessage([]byte(strings.Repeat("hello world this message is too long!", 500))),
+	}, func(ctx context.Context, err error) error { return nil })
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "database or disk is full")
+
+	require.NoError(t, block.Close(ctx))
 }
