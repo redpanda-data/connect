@@ -1679,8 +1679,11 @@ root.created_at_unix = this.created_at.ts_unix_nano()
 
 Marshal a value into an array. If the value is already an array it is unchanged.
 
+#### Examples
+
+
 ```coffee
-root.my_array = this.name.arry()
+root.my_array = this.name.array()
 
 # In:  {"name":"foobar bazson"}
 # Out: {"my_array":["foobar bazson"]}
