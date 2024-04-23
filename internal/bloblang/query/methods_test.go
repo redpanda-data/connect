@@ -492,6 +492,34 @@ func TestMethods(t *testing.T) {
 			),
 			output: false,
 		},
+		"check array": {
+			input: methods(
+				literalFn([]any{1}),
+				method("array"),
+			),
+			output: []any{1},
+		},
+		"check array 2": {
+			input: methods(
+				literalFn(1),
+				method("array"),
+			),
+			output: []any{1},
+		},
+		"check array 3": {
+			input: methods(
+				literalFn(nil),
+				method("array"),
+			),
+			output: []any{nil},
+		},
+		"check array 4": {
+			input: methods(
+				literalFn([]any{}),
+				method("array"),
+			),
+			output: []any{},
+		},
 		"check bool": {
 			input: methods(
 				literalFn("true"),

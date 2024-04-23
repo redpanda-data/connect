@@ -78,6 +78,33 @@ func applyMethod(target Function, args *ParsedParams) (Function, error) {
 
 //------------------------------------------------------------------------------
 
+var _ = registerSimpleMethod(
+	NewMethodSpec(
+		"array", "",
+	).InCategory(
+		MethodCategoryCoercion,
+		"Marshal a value into an array. If the value is already an array it is unchanged.",
+		NewExampleSpec("",
+			`root.my_array = this.name.array()`,
+			`{"name":"foobar bazson"}`,
+			`{"my_array":["foobar bazson"]}`,
+		),
+	),
+	func(*ParsedParams) (simpleMethod, error) {
+		return func(v any, ctx FunctionContext) (any, error) {
+			switch v.(type) {
+				case []any:
+					return v, nil
+			}
+			arr := make([]any, 1)
+			arr[0] = v
+			return arr, nil
+		}, nil
+	},
+)
+
+//------------------------------------------------------------------------------
+
 var _ = registerMethod(
 	NewMethodSpec("bool", "").InCategory(
 		MethodCategoryCoercion,
