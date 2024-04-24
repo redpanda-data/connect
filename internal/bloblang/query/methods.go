@@ -93,8 +93,8 @@ var _ = registerSimpleMethod(
 	func(*ParsedParams) (simpleMethod, error) {
 		return func(v any, ctx FunctionContext) (any, error) {
 			switch v.(type) {
-				case []any:
-					return v, nil
+			case []any:
+				return v, nil
 			}
 			arr := make([]any, 1)
 			arr[0] = v
