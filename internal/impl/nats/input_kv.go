@@ -81,6 +81,7 @@ type kvReader struct {
 	connDetails    connectionDetails
 	bucket         string
 	key            string
+	domain         string
 	ignoreDeletes  bool
 	includeHistory bool
 	metaOnly       bool
@@ -125,6 +126,12 @@ func newKVReader(conf *service.ParsedConfig, mgr *service.Resources) (*kvReader,
 		return nil, err
 	}
 
+	if conf.Contains(kvJetstreamDomain) {
+		if r.domain, err = conf.FieldString(kvJetstreamDomain); err != nil {
+			return nil, err
+		}
+	}
+
 	return r, nil
 }
 
@@ -151,7 +158,13 @@ func (r *kvReader) Connect(ctx context.Context) (err error) {
 		return err
 	}
 
-	js, err := jetstream.New(r.natsConn)
+	var js jetstream.JetStream
+	if r.domain != "" {
+		js, err = jetstream.NewWithDomain(r.natsConn, r.domain)
+	} else {
+		js, err = jetstream.New(r.natsConn)
+	}
+
 	if err != nil {
 		return err
 	}

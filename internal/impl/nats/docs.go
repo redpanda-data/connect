@@ -7,7 +7,8 @@ import (
 )
 
 const (
-	kvFieldBucket = "bucket"
+	kvFieldBucket     = "bucket"
+	kvJetstreamDomain = "domain"
 )
 
 const (
@@ -39,6 +40,8 @@ func kvDocs(extraFields ...*service.ConfigField) []*service.ConfigField {
 		[]*service.ConfigField{
 			service.NewStringField(kvFieldBucket).
 				Description("The name of the KV bucket.").Example("my_kv_bucket"),
+			service.NewStringField(kvJetstreamDomain).
+				Description("An optional jetstream domain").Example("my_js_domain").Advanced().Optional(),
 		}...,
 	)
 	fields = append(fields, extraFields...)

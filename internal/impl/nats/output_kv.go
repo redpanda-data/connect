@@ -61,6 +61,7 @@ type kvOutput struct {
 	bucket      string
 	key         *service.InterpolatedString
 	keyRaw      string
+	domain      string
 
 	log *service.Logger
 
@@ -93,6 +94,12 @@ func newKVOutput(conf *service.ParsedConfig, mgr *service.Resources) (*kvOutput,
 	if kv.key, err = conf.FieldInterpolatedString(kvoFieldKey); err != nil {
 		return nil, err
 	}
+	if conf.Contains(kvJetstreamDomain) {
+		if kv.domain, err = conf.FieldString(kvJetstreamDomain); err != nil {
+			return nil, err
+		}
+	}
+
 	return &kv, nil
 }
 
@@ -118,9 +125,11 @@ func (kv *kvOutput) Connect(ctx context.Context) (err error) {
 		return err
 	}
 
-	jsc, err := jetstream.New(natsConn)
-	if err != nil {
-		return err
+	var jsc jetstream.JetStream
+	if kv.domain != "" {
+		jsc, err = jetstream.NewWithDomain(natsConn, kv.domain)
+	} else {
+		jsc, err = jetstream.New(natsConn)
 	}
 
 	kv.keyValue, err = jsc.KeyValue(ctx, kv.bucket)
