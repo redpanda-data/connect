@@ -45,7 +45,14 @@ generated with the [nsc tool](https://docs.nats.io/nats-tools/nsc).
 Alternatively, the ` + "`user_jwt`" + ` field can contain a plain text JWT and the ` + "`user_nkey_seed`" + `can contain
 the plain text NKey Seed.
 
-More details [here](https://docs.nats.io/developing-with-nats/security/creds).`
+More details [here](https://docs.nats.io/developing-with-nats/security/creds).
+
+#### Username/Password
+NATS server supports basic ` + "`username`" + ` and (optionally bcrypted) ` + "`password`" + `. Authentication models noted above might be better suited for productional use.
+Consider using TLS encryption if used in a non-sandboxed enviroment.
+
+More details [here](https://docs.nats.io/running-a-nats-service/configuration/securing_nats/auth_intro/username_password)
+`
 }
 
 func authFieldSpec() docs.FieldSpec {
@@ -54,6 +61,8 @@ func authFieldSpec() docs.FieldSpec {
 		docs.FieldString("user_credentials_file", "An optional file containing user credentials which consist of an user JWT and corresponding NKey seed.", "./user.creds").Optional(),
 		docs.FieldString("user_jwt", "An optional plain text user JWT (given along with the corresponding user NKey Seed).").Secret().Optional(),
 		docs.FieldString("user_nkey_seed", "An optional plain text user NKey Seed (given along with the corresponding user JWT).").Secret().Optional(),
+		docs.FieldString("username", "An optional username (given along with the corresponding password).").Optional(),
+		docs.FieldString("password", "An optional password (given along with the corresponding username).").Secret().Optional(),
 	).Advanced()
 }
 
@@ -62,6 +71,8 @@ type authConfig struct {
 	UserCredentialsFile string
 	UserJWT             string
 	UserNkeySeed        string
+	UserName            string
+	Password            string
 }
 
 //------------------------------------------------------------------------------
@@ -94,6 +105,10 @@ func authConfToOptions(auth authConfig, fs *service.FS) []nats.Option {
 		))
 	}
 
+	if auth.UserName != "" && auth.Password != "" {
+		opts = append(opts, nats.UserInfo(auth.UserName, auth.Password))
+	}
+
 	return opts
 }
 
@@ -122,6 +137,22 @@ func AuthFromParsedConfig(p *service.ParsedConfig) (c authConfig, err error) {
 			return
 		}
 		if c.UserNkeySeed, err = p.FieldString("user_nkey_seed"); err != nil {
+			return
+		}
+	}
+	if p.Contains("username") || p.Contains("password") {
+		if !p.Contains("username") {
+			err = errors.New("missing auth.username config field")
+			return
+		}
+		if !p.Contains("password") {
+			err = errors.New("missing auth.password config field")
+			return
+		}
+		if c.UserName, err = p.FieldString("username"); err != nil {
+			return
+		}
+		if c.Password, err = p.FieldString("password"); err != nil {
 			return
 		}
 	}

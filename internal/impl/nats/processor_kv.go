@@ -128,6 +128,7 @@ func init() {
 type kvProcessor struct {
 	connDetails connectionDetails
 	bucket      string
+	domain      string
 	operation   kvpOperationType
 	key         *service.InterpolatedString
 	revision    *service.InterpolatedString
@@ -165,6 +166,12 @@ func newKVProcessor(conf *service.ParsedConfig, mgr *service.Resources) (*kvProc
 
 	if p.key, err = conf.FieldInterpolatedString(kvpFieldKey); err != nil {
 		return nil, err
+	}
+
+	if conf.Contains(kvJetstreamDomain) {
+		if p.domain, err = conf.FieldString(kvJetstreamDomain); err != nil {
+			return nil, err
+		}
 	}
 
 	if conf.Contains(kvpFieldRevision) {
@@ -379,9 +386,11 @@ func (p *kvProcessor) Connect(ctx context.Context) (err error) {
 		return err
 	}
 
-	js, err := jetstream.New(p.natsConn)
-	if err != nil {
-		return err
+	var js jetstream.JetStream
+	if p.domain != "" {
+		js, err = jetstream.NewWithDomain(p.natsConn, p.domain)
+	} else {
+		js, err = jetstream.New(p.natsConn)
 	}
 
 	p.kv, err = js.KeyValue(ctx, p.bucket)
