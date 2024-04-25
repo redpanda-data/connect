@@ -241,7 +241,8 @@ func (a *kinesisWriter) WriteBatch(ctx context.Context, batch service.MessageBat
 			continue
 		}
 
-		// requeue any individual records that failed due to throttling
+		// requeue any individual records that failed due to throttling, or encountered an internal failure
+		// AWS states that 5xx errors can occur for several minutes, and should be retired: https://aws.amazon.com/blogs/big-data/implementing-efficient-and-reliable-producers-with-the-amazon-kinesis-producer-library/
 		failed = nil
 		if output.FailedRecordCount != nil {
 			for i, entry := range output.Records {
@@ -252,6 +253,8 @@ func (a *kinesisWriter) WriteBatch(ctx context.Context, batch service.MessageBat
 						a.log.Errorf("Kinesis record write request rate too high, either the frequency or the size of the data exceeds your available throughput.")
 					case "KMSThrottlingException":
 						a.log.Errorf("Kinesis record write request throttling exception, the send traffic exceeds your request quota.")
+					case "InternalFailure":
+						a.log.Errorf("Kinesis record write request failed with an internal service failure: %s", *entry.ErrorMessage)
 					default:
 						err = fmt.Errorf("record failed with code [%s] %s: %+v", *entry.ErrorCode, *entry.ErrorMessage, input.Records[i])
 						a.log.Errorf("kinesis record write error: %v\n", err)
