@@ -20,6 +20,7 @@ import (
 	_ "github.com/benthosdev/benthos/v4/public/components/dgraph"
 	_ "github.com/benthosdev/benthos/v4/public/components/discord"
 	_ "github.com/benthosdev/benthos/v4/public/components/elasticsearch"
+	_ "github.com/benthosdev/benthos/v4/public/components/etcd"
 	_ "github.com/benthosdev/benthos/v4/public/components/gcp"
 	_ "github.com/benthosdev/benthos/v4/public/components/hdfs"
 	_ "github.com/benthosdev/benthos/v4/public/components/influxdb"
