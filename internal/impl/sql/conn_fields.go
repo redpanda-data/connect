@@ -9,8 +9,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/benthosdev/benthos/v4/internal/filepath"
-	"github.com/benthosdev/benthos/v4/internal/filepath/ifs"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
@@ -194,13 +192,13 @@ func connSettingsFromParsed(
 		if tmpFiles, err = conf.FieldStringList("init_files"); err != nil {
 			return
 		}
-		if tmpFiles, err = filepath.Globs(mgr.FS(), tmpFiles); err != nil {
+		if tmpFiles, err = service.Globs(mgr.FS(), tmpFiles...); err != nil {
 			err = fmt.Errorf("failed to expand init_files glob patterns: %w", err)
 			return
 		}
 		for _, p := range tmpFiles {
 			var statementBytes []byte
-			if statementBytes, err = ifs.ReadFile(mgr.FS(), p); err != nil {
+			if statementBytes, err = service.ReadFile(mgr.FS(), p); err != nil {
 				return
 			}
 			c.initFileStatements = append(c.initFileStatements, [2]string{

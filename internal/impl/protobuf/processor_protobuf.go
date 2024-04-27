@@ -8,7 +8,6 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/benthosdev/benthos/v4/internal/filepath/ifs"
 	"github.com/benthosdev/benthos/v4/public/service"
 
 	"google.golang.org/protobuf/encoding/protojson"
@@ -153,7 +152,7 @@ func init() {
 
 type protobufOperator func(part *service.Message) error
 
-func newProtobufToJSONOperator(f ifs.FS, msg string, importPaths []string, useProtoNames bool) (protobufOperator, error) {
+func newProtobufToJSONOperator(f fs.FS, msg string, importPaths []string, useProtoNames bool) (protobufOperator, error) {
 	if msg == "" {
 		return nil, errors.New("message field must not be empty")
 	}
@@ -198,7 +197,7 @@ func newProtobufToJSONOperator(f ifs.FS, msg string, importPaths []string, usePr
 	}, nil
 }
 
-func newProtobufFromJSONOperator(f ifs.FS, msg string, importPaths []string, discardUnknown bool) (protobufOperator, error) {
+func newProtobufFromJSONOperator(f fs.FS, msg string, importPaths []string, discardUnknown bool) (protobufOperator, error) {
 	if msg == "" {
 		return nil, errors.New("message field must not be empty")
 	}
@@ -243,7 +242,7 @@ func newProtobufFromJSONOperator(f ifs.FS, msg string, importPaths []string, dis
 	}, nil
 }
 
-func strToProtobufOperator(f ifs.FS, opStr, message string, importPaths []string, discardUnknown, useProtoNames bool) (protobufOperator, error) {
+func strToProtobufOperator(f fs.FS, opStr, message string, importPaths []string, discardUnknown, useProtoNames bool) (protobufOperator, error) {
 	switch opStr {
 	case "to_json":
 		return newProtobufToJSONOperator(f, message, importPaths, useProtoNames)
@@ -253,7 +252,7 @@ func strToProtobufOperator(f ifs.FS, opStr, message string, importPaths []string
 	return nil, fmt.Errorf("operator not recognised: %v", opStr)
 }
 
-func loadDescriptors(f ifs.FS, importPaths []string) (*protoregistry.Files, *protoregistry.Types, error) {
+func loadDescriptors(f fs.FS, importPaths []string) (*protoregistry.Files, *protoregistry.Types, error) {
 	files := map[string]string{}
 	for _, importPath := range importPaths {
 		if err := fs.WalkDir(f, importPath, func(path string, info fs.DirEntry, ferr error) error {

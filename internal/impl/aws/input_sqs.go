@@ -13,7 +13,6 @@ import (
 
 	"github.com/Jeffail/shutdown"
 
-	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/impl/aws/config"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
@@ -497,16 +496,16 @@ func (a *awsSQSReader) Read(ctx context.Context) (*service.Message, service.AckF
 	select {
 	case next, open = <-a.messagesChan:
 		if !open {
-			return nil, nil, component.ErrTypeClosed
+			return nil, nil, service.ErrEndOfInput
 		}
 	case <-a.closeSignal.SoftStopChan():
-		return nil, nil, component.ErrTypeClosed
+		return nil, nil, service.ErrEndOfInput
 	case <-ctx.Done():
 		return nil, nil, ctx.Err()
 	}
 
 	if next.Body == nil {
-		return nil, nil, component.ErrTimeout
+		return nil, nil, context.Canceled
 	}
 
 	msg := service.NewMessage([]byte(*next.Body))

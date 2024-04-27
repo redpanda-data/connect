@@ -8,7 +8,6 @@ import (
 
 	"github.com/beanstalkd/go-beanstalk"
 
-	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
@@ -89,7 +88,7 @@ func (bs *beanstalkdReader) Read(ctx context.Context) (*service.Message, service
 	id, body, err := bs.connection.Reserve(time.Millisecond * 200)
 	if err != nil {
 		if errors.Is(err, beanstalk.ErrTimeout) {
-			err = component.ErrTimeout
+			err = context.Canceled
 		}
 		return nil, nil, err
 	}

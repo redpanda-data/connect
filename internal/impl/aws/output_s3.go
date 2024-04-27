@@ -14,10 +14,9 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 
-	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/impl/aws/config"
-	"github.com/benthosdev/benthos/v4/internal/value"
+	"github.com/benthosdev/benthos/v4/public/bloblang"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
@@ -316,7 +315,7 @@ func (a *amazonS3Writer) Connect(ctx context.Context) error {
 
 func (a *amazonS3Writer) WriteBatch(wctx context.Context, msg service.MessageBatch) error {
 	if a.uploader == nil {
-		return component.ErrNotConnected
+		return service.ErrNotConnected
 	}
 
 	ctx, cancel := context.WithTimeout(wctx, a.conf.Timeout)
@@ -325,7 +324,7 @@ func (a *amazonS3Writer) WriteBatch(wctx context.Context, msg service.MessageBat
 	return msg.WalkWithBatchedErrors(func(i int, m *service.Message) error {
 		metadata := map[string]string{}
 		_ = a.conf.Metadata.WalkMut(m, func(k string, v any) error {
-			metadata[k] = value.IToString(v)
+			metadata[k] = bloblang.ValueToString(v)
 			return nil
 		})
 

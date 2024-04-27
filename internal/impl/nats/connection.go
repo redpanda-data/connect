@@ -25,7 +25,7 @@ func connectionHeadFields() []*service.ConfigField {
 func connectionTailFields() []*service.ConfigField {
 	return []*service.ConfigField{
 		service.NewTLSToggledField("tls"),
-		service.NewInternalField(authFieldSpec()),
+		authFieldSpec(),
 	}
 }
 

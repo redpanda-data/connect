@@ -11,9 +11,7 @@ import (
 
 	"github.com/gocql/gocql"
 
-	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
-	"github.com/benthosdev/benthos/v4/internal/value"
 	"github.com/benthosdev/benthos/v4/public/bloblang"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
@@ -185,7 +183,7 @@ func (c *cassandraWriter) WriteBatch(ctx context.Context, batch service.MessageB
 	c.connLock.RUnlock()
 
 	if c.session == nil {
-		return component.ErrNotConnected
+		return service.ErrNotConnected
 	}
 
 	if len(batch) == 1 {
@@ -307,28 +305,28 @@ type genericValue struct {
 func (g genericValue) MarshalCQL(info gocql.TypeInfo) ([]byte, error) {
 	switch info.Type() {
 	case gocql.TypeTimestamp:
-		t, err := value.IGetTimestamp(g.v)
+		t, err := bloblang.ValueAsTimestamp(g.v)
 		if err != nil {
 			return nil, err
 		}
 		return gocql.Marshal(info, t)
 	case gocql.TypeDouble:
-		f, err := value.IGetNumber(g.v)
+		f, err := bloblang.ValueAsFloat64(g.v)
 		if err != nil {
 			return nil, err
 		}
 		return gocql.Marshal(info, f)
 	case gocql.TypeFloat:
-		f, err := value.IGetFloat32(g.v)
+		f, err := bloblang.ValueAsFloat32(g.v)
 		if err != nil {
 			return nil, err
 		}
 		return gocql.Marshal(info, f)
 	case gocql.TypeVarchar:
-		return gocql.Marshal(info, value.IToString(g.v))
+		return gocql.Marshal(info, bloblang.ValueToString(g.v))
 	}
 	if _, isJSONNum := g.v.(json.Number); isJSONNum {
-		i, err := value.IGetInt(g.v)
+		i, err := bloblang.ValueAsInt64(g.v)
 		if err != nil {
 			return nil, err
 		}

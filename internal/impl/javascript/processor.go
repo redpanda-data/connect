@@ -17,7 +17,6 @@ import (
 	"github.com/dop251/goja_nodejs/console"
 	"github.com/dop251/goja_nodejs/require"
 
-	"github.com/benthosdev/benthos/v4/internal/filepath/ifs"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
@@ -167,7 +166,7 @@ func newJavascriptProcessorFromConfig(conf *service.ParsedConfig, mgr *service.R
 	filename := "main.js"
 	if file != "" {
 		// Open file and read code
-		codeBytes, err := ifs.ReadFile(mgr.FS(), file)
+		codeBytes, err := service.ReadFile(mgr.FS(), file)
 		if err != nil {
 			return nil, fmt.Errorf("failed to open target file: %w", err)
 		}

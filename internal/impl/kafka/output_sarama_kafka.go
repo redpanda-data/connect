@@ -16,7 +16,7 @@ import (
 
 	"github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/component/output/span"
-	"github.com/benthosdev/benthos/v4/internal/value"
+	"github.com/benthosdev/benthos/v4/public/bloblang"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
@@ -347,7 +347,7 @@ func (k *kafkaWriter) buildSystemHeaders(part *service.Message) []sarama.RecordH
 		_ = k.metaFilter.Walk(part, func(k, v string) error {
 			out = append(out, sarama.RecordHeader{
 				Key:   []byte(k),
-				Value: []byte(value.IToString(v)),
+				Value: []byte(bloblang.ValueToString(v)),
 			})
 			return nil
 		})

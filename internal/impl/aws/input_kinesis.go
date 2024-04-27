@@ -15,7 +15,6 @@ import (
 	"github.com/cenkalti/backoff/v4"
 	"github.com/gofrs/uuid"
 
-	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/impl/aws/config"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
@@ -403,7 +402,6 @@ func (k *kinesisReader) getRecords(info streamInfo, shardID, shardIter string) (
 func awsErrIsTimeout(err error) bool {
 	return errors.Is(err, context.Canceled) ||
 		errors.Is(err, context.DeadlineExceeded) ||
-		errors.Is(err, component.ErrTimeout) ||
 		(err != nil && strings.HasSuffix(err.Error(), "context canceled"))
 }
 
@@ -884,8 +882,8 @@ func (k *kinesisReader) ReadBatch(ctx context.Context) (service.MessageBatch, se
 		}
 		return m.msg, m.ackFn, nil
 	case <-ctx.Done():
+		return nil, nil, ctx.Err()
 	}
-	return nil, nil, component.ErrTimeout
 }
 
 // CloseAsync shuts down the Kinesis input and stops processing requests.

@@ -11,7 +11,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/kinesis/types"
 	"github.com/cenkalti/backoff/v4"
 
-	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/impl/aws/config"
 	"github.com/benthosdev/benthos/v4/internal/impl/pure"
@@ -154,8 +153,9 @@ func (a *kinesisWriter) toRecords(batch service.MessageBatch) ([]types.PutRecord
 		}
 
 		if len(entry.Data) > mebibyte {
-			a.log.Errorf("part %d exceeds the maximum Kinesis payload limit of 1 MiB\n", i)
-			return component.ErrMessageTooLarge
+			err = fmt.Errorf("batch message %d exceeds the maximum Kinesis payload limit of 1 MiB", i)
+			a.log.With("error", err).Error("Failed to prepare record")
+			return err
 		}
 
 		var hashKey string
@@ -201,7 +201,7 @@ func (a *kinesisWriter) Connect(ctx context.Context) error {
 
 func (a *kinesisWriter) WriteBatch(ctx context.Context, batch service.MessageBatch) error {
 	if a.kinesis == nil {
-		return component.ErrNotConnected
+		return service.ErrNotConnected
 	}
 
 	backOff := a.conf.backoffCtor()
@@ -265,7 +265,7 @@ func (a *kinesisWriter) WriteBatch(ctx context.Context, batch service.MessageBat
 		if l > 0 {
 			a.log.Warnf("scheduling retry of throttled records (%d)\n", l)
 			if wait == backoff.Stop {
-				return component.ErrTimeout
+				return fmt.Errorf("%v records failed to be delivered within backoff policy", l)
 			}
 			time.Sleep(wait)
 		}
@@ -279,7 +279,7 @@ func (a *kinesisWriter) WriteBatch(ctx context.Context, batch service.MessageBat
 			}
 		}
 	}
-	return err
+	return nil
 }
 
 func (a *kinesisWriter) Close(context.Context) error {

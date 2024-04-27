@@ -11,7 +11,6 @@ import (
 	"github.com/cenkalti/backoff/v4"
 	"github.com/redis/go-redis/v9"
 
-	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
@@ -323,7 +322,7 @@ func (r *redisStreamsReader) read(ctx context.Context) (pendingRedisStreamMsg, e
 
 	if err != nil && err != redis.Nil {
 		if strings.Contains(err.Error(), "i/o timeout") {
-			return msg, component.ErrTimeout
+			return msg, context.Canceled
 		}
 		_ = r.disconnect(ctx)
 		r.log.Errorf("Error from redis: %v\n", err)
@@ -385,7 +384,7 @@ func (r *redisStreamsReader) read(ctx context.Context) (pendingRedisStreamMsg, e
 
 	r.pendingMsgs = pendingMsgs
 	if msg.payload == nil {
-		return msg, component.ErrTimeout
+		return msg, context.Canceled
 	}
 	return msg, nil
 }
@@ -393,7 +392,7 @@ func (r *redisStreamsReader) read(ctx context.Context) (pendingRedisStreamMsg, e
 func (r *redisStreamsReader) ReadBatch(ctx context.Context) (service.MessageBatch, service.AckFunc, error) {
 	msg, err := r.read(ctx)
 	if err != nil {
-		if errors.Is(err, component.ErrTimeout) {
+		if errors.Is(err, context.Canceled) {
 			// Allow for one more attempt in case we asked for backlog.
 			select {
 			case <-ctx.Done():

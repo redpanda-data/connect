@@ -10,7 +10,6 @@ import (
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/stan.go"
 
-	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/input/span"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
@@ -309,11 +308,11 @@ func (n *natsStreamReader) read(ctx context.Context) (*stan.Msg, error) {
 			return nil, service.ErrNotConnected
 		}
 	case <-ctx.Done():
-		return nil, component.ErrTimeout
+		return nil, ctx.Err()
 	case <-n.interruptChan:
 		n.unAckMsgs = nil
 		n.disconnect()
-		return nil, component.ErrTypeClosed
+		return nil, service.ErrEndOfInput
 	}
 	return msg, nil
 }

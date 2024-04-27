@@ -14,7 +14,6 @@ import (
 	"github.com/opensearch-project/opensearch-go/v3/opensearchapi"
 	"github.com/opensearch-project/opensearch-go/v3/opensearchutil"
 
-	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/httpclient"
 	"github.com/benthosdev/benthos/v4/internal/impl/aws/config"
@@ -245,7 +244,7 @@ type pendingBulkIndex struct {
 
 func (e *Output) WriteBatch(ctx context.Context, msg service.MessageBatch) error {
 	if e.client == nil {
-		return component.ErrNotConnected
+		return service.ErrNotConnected
 	}
 
 	requests := make([]*pendingBulkIndex, len(msg))

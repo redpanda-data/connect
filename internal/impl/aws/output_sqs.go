@@ -16,11 +16,10 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/sqs/types"
 	"github.com/cenkalti/backoff/v4"
 
-	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/impl/aws/config"
 	"github.com/benthosdev/benthos/v4/internal/impl/pure"
-	"github.com/benthosdev/benthos/v4/internal/value"
+	"github.com/benthosdev/benthos/v4/public/bloblang"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
@@ -180,7 +179,7 @@ func (a *sqsWriter) getSQSAttributes(batch service.MessageBatch, i int) (sqsAttr
 	msg := batch[i]
 	keys := []string{}
 	_ = a.conf.Metadata.WalkMut(msg, func(k string, v any) error {
-		if isValidSQSAttribute(k, value.IToString(v)) {
+		if isValidSQSAttribute(k, bloblang.ValueToString(v)) {
 			keys = append(keys, k)
 		} else {
 			a.log.Debugf("Rejecting metadata key '%v' due to invalid characters\n", k)
@@ -305,7 +304,7 @@ func (a *sqsWriter) WriteBatch(ctx context.Context, batch service.MessageBatch) 
 			select {
 			case <-time.After(wait):
 			case <-ctx.Done():
-				return component.ErrTimeout
+				return ctx.Err()
 			case <-a.closeChan:
 				return err
 			}
@@ -341,7 +340,7 @@ func (a *sqsWriter) WriteBatch(ctx context.Context, batch service.MessageBatch) 
 			select {
 			case <-time.After(wait):
 			case <-ctx.Done():
-				return component.ErrTimeout
+				return ctx.Err()
 			case <-a.closeChan:
 				return err
 			}

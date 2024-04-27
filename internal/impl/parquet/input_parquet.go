@@ -11,7 +11,6 @@ import (
 
 	"github.com/parquet-go/parquet-go"
 
-	"github.com/benthosdev/benthos/v4/internal/filepath"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
@@ -61,7 +60,7 @@ func newParquetInputFromConfig(conf *service.ParsedConfig, mgr *service.Resource
 	if err != nil {
 		return nil, err
 	}
-	pathsRemaining, err := filepath.Globs(mgr.FS(), pathsList)
+	pathsRemaining, err := service.Globs(mgr.FS(), pathsList...)
 	if err != nil {
 		return nil, err
 	}

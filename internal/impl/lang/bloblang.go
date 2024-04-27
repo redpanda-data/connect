@@ -14,7 +14,6 @@ import (
 	"github.com/oklog/ulid"
 	frand "golang.org/x/exp/rand"
 
-	"github.com/benthosdev/benthos/v4/internal/bloblang/query"
 	"github.com/benthosdev/benthos/v4/public/bloblang"
 )
 
@@ -57,7 +56,7 @@ func init() {
 
 	fakerSpec := bloblang.NewPluginSpec().
 		Beta().
-		Category(query.FunctionCategoryFakeData).
+		Category("Fake Data Generation").
 		Description("Takes in a string that maps to a [faker](https://github.com/go-faker/faker) function and returns the result from that faker function. "+
 			"Returns an error if the given string doesn't match a supported faker function. Supported functions: `latitude`, `longitude`, `unix_time`, "+
 			"`date`, `time_string`, `month_name`, `year_string`, `day_of_week`, `day_of_month`, `timestamp`, `century`, `timezone`, `time_period`, "+
@@ -93,7 +92,7 @@ func init() {
 	}
 
 	snowflakeidSpec := bloblang.NewPluginSpec().
-		Category(query.FunctionCategoryGeneral).
+		Category("General").
 		Description("Generate a new snowflake ID each time it is invoked and prints a string representation. I.e.: 1559229974454472704").
 		Param(bloblang.NewInt64Param("node_id").Description("It is possible to specify the node_id.").Default(int64(1))).
 		Example("", `root.id = snowflake_id()`).
@@ -246,7 +245,7 @@ func registerULID() error {
 	randSources := []string{"secure_random", "fast_random"}
 	spec := bloblang.NewPluginSpec().
 		Experimental().
-		Category(query.FunctionCategoryGeneral).
+		Category("General").
 		Description("Generate a random ULID.").
 		Param(
 			bloblang.NewStringParam("encoding").

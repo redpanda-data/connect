@@ -30,8 +30,8 @@ func outputSpec() *service.ConfigSpec {
 		Fields(
 			service.NewStringField(moFieldCollection).
 				Description("The name of the target collection."),
-			service.NewInternalField(outputOperationDocs(OperationUpdateOne)),
-			service.NewInternalField(writeConcernDocs()),
+			outputOperationDocs(OperationUpdateOne),
+			writeConcernDocs(),
 		).
 		Fields(writeMapsFields()...).
 		Fields(

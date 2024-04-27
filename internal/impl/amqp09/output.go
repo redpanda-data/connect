@@ -13,7 +13,6 @@ import (
 
 	amqp "github.com/rabbitmq/amqp091-go"
 
-	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
@@ -355,6 +354,8 @@ func (a *amqp09Writer) declareExchange(exchange string) error {
 	return nil
 }
 
+var errNoAck = errors.New("failed to receive acknowledgement")
+
 func (a *amqp09Writer) Write(ctx context.Context, msg *service.Message) error {
 	a.connLock.RLock()
 	conn := a.conn
@@ -488,7 +489,7 @@ func (a *amqp09Writer) Write(ctx context.Context, msg *service.Message) error {
 	}
 	if !conf.Wait() {
 		a.log.Error("Failed to acknowledge message.")
-		return component.ErrNoAck
+		return errNoAck
 	}
 	if returnChan != nil {
 		select {
@@ -496,7 +497,7 @@ func (a *amqp09Writer) Write(ctx context.Context, msg *service.Message) error {
 			if !open {
 				return errors.New("acknowledgement not supported, ensure server supports immediate and mandatory flags")
 			}
-			return component.ErrNoAck
+			return errNoAck
 		default:
 		}
 	}

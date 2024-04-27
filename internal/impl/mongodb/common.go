@@ -12,7 +12,6 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"go.mongodb.org/mongo-driver/mongo/writeconcern"
 
-	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/public/bloblang"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
@@ -192,22 +191,27 @@ const (
 	commonFieldOperation = "operation"
 )
 
-func processorOperationDocs(defaultOperation Operation) docs.FieldSpec {
-	fs := outputOperationDocs(defaultOperation)
-	return fs.HasOptions(append(fs.Options, string(OperationFindOne))...)
-}
-
-func outputOperationDocs(defaultOperation Operation) docs.FieldSpec {
-	return docs.FieldString(
-		"operation",
-		"The mongodb operation to perform.",
-	).HasOptions(
+func processorOperationDocs(defaultOperation Operation) *service.ConfigField {
+	return service.NewStringEnumField("operation",
 		string(OperationInsertOne),
 		string(OperationDeleteOne),
 		string(OperationDeleteMany),
 		string(OperationReplaceOne),
 		string(OperationUpdateOne),
-	).HasDefault(string(defaultOperation))
+		string(OperationFindOne),
+	).Description("The mongodb operation to perform.").
+		Default(string(defaultOperation))
+}
+
+func outputOperationDocs(defaultOperation Operation) *service.ConfigField {
+	return service.NewStringEnumField("operation",
+		string(OperationInsertOne),
+		string(OperationDeleteOne),
+		string(OperationDeleteMany),
+		string(OperationReplaceOne),
+		string(OperationUpdateOne),
+	).Description("The mongodb operation to perform.").
+		Default(string(defaultOperation))
 }
 
 func operationFromParsed(pConf *service.ParsedConfig) (operation Operation, err error) {
@@ -232,13 +236,18 @@ const (
 	commonFieldWriteConcernWTimeout = "w_timeout"
 )
 
-func writeConcernDocs() docs.FieldSpec {
-	return docs.FieldObject(commonFieldWriteConcern, "The write concern settings for the mongo connection.").
-		WithChildren(
-			docs.FieldString(commonFieldWriteConcernW, "W requests acknowledgement that write operations propagate to the specified number of mongodb instances.").HasDefault(""),
-			docs.FieldBool(commonFieldWriteConcernJ, "J requests acknowledgement from MongoDB that write operations are written to the journal.").HasDefault(false),
-			docs.FieldString(commonFieldWriteConcernWTimeout, "The write concern timeout.").HasDefault(""),
-		)
+func writeConcernDocs() *service.ConfigField {
+	return service.NewObjectField(commonFieldWriteConcern,
+		service.NewStringField(commonFieldWriteConcernW).
+			Description("W requests acknowledgement that write operations propagate to the specified number of mongodb instances.").
+			Default(""),
+		service.NewBoolField(commonFieldWriteConcernJ).
+			Description("J requests acknowledgement from MongoDB that write operations are written to the journal.").
+			Default(false),
+		service.NewStringField(commonFieldWriteConcernWTimeout).
+			Description("The write concern timeout.").
+			Default(""),
+	).Description("The write concern settings for the mongo connection.")
 }
 
 func writeConcernCollectionOptionFromParsed(pConf *service.ParsedConfig) (opt *options.CollectionOptions, err error) {

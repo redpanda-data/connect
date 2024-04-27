@@ -12,7 +12,6 @@ import (
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nkeys"
 
-	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
@@ -48,13 +47,26 @@ the plain text NKey Seed.
 More details [here](https://docs.nats.io/developing-with-nats/security/creds).`
 }
 
-func authFieldSpec() docs.FieldSpec {
-	return docs.FieldObject("auth", "Optional configuration of NATS authentication parameters.").WithChildren(
-		docs.FieldString("nkey_file", "An optional file containing a NKey seed.", "./seed.nk").Optional(),
-		docs.FieldString("user_credentials_file", "An optional file containing user credentials which consist of an user JWT and corresponding NKey seed.", "./user.creds").Optional(),
-		docs.FieldString("user_jwt", "An optional plain text user JWT (given along with the corresponding user NKey Seed).").Secret().Optional(),
-		docs.FieldString("user_nkey_seed", "An optional plain text user NKey Seed (given along with the corresponding user JWT).").Secret().Optional(),
-	).Advanced()
+func authFieldSpec() *service.ConfigField {
+	return service.NewObjectField("auth",
+		service.NewStringField("nkey_file").
+			Description("An optional file containing a NKey seed.").
+			Example("./seed.nk").
+			Optional(),
+		service.NewStringField("user_credentials_file").
+			Description("An optional file containing user credentials which consist of an user JWT and corresponding NKey seed.").
+			Example("./user.creds").
+			Optional(),
+		service.NewStringField("user_jwt").
+			Description("An optional plain text user JWT (given along with the corresponding user NKey Seed).").
+			Secret().
+			Optional(),
+		service.NewStringField("user_nkey_seed").
+			Description("An optional plain text user NKey Seed (given along with the corresponding user JWT).").
+			Secret().
+			Optional(),
+	).Description("Optional configuration of NATS authentication parameters.").
+		Advanced()
 }
 
 type authConfig struct {

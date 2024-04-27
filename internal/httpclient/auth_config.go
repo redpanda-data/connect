@@ -19,7 +19,7 @@ import (
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/clientcredentials"
 
-	"github.com/benthosdev/benthos/v4/internal/filepath/ifs"
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
 // AuthConfig contains configuration params for various HTTP auth strategies.
@@ -153,7 +153,7 @@ func (j JWTConfig) parsePrivateKey(fs fs.FS) error {
 		return nil
 	}
 
-	privateKey, err := ifs.ReadFile(fs, j.PrivateKeyFile)
+	privateKey, err := service.ReadFile(fs, j.PrivateKeyFile)
 	if err != nil {
 		return fmt.Errorf("failed to read private key: %v", err)
 	}

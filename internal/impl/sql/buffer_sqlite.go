@@ -14,7 +14,6 @@ import (
 	"github.com/cenkalti/backoff/v4"
 	"github.com/vmihailenco/msgpack/v5"
 
-	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
@@ -293,7 +292,7 @@ func (m *SQLiteBuffer) WriteBatch(ctx context.Context, msgBatch service.MessageB
 	defer m.cond.L.Unlock()
 
 	if m.closed {
-		return component.ErrTypeClosed
+		return service.ErrEndOfBuffer
 	}
 
 	msgBatches := []service.MessageBatch{msgBatch}

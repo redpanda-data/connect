@@ -20,7 +20,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/benthosdev/benthos/v4/internal/message"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
@@ -77,17 +76,17 @@ retries: 3
 func TestHTTPClientSendBasic(t *testing.T) {
 	nTestLoops := 1000
 
-	resultChan := make(chan message.Batch, 1)
+	resultChan := make(chan string, 1)
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		msg := message.QuickBatch(nil)
+		var s string
 		defer func() {
-			resultChan <- msg
+			resultChan <- s
 		}()
 
 		b, err := io.ReadAll(r.Body)
 		require.NoError(t, err)
 
-		msg = append(msg, message.NewPart(b))
+		s = string(b)
 	}))
 	defer ts.Close()
 
@@ -109,8 +108,7 @@ url: %v
 
 		select {
 		case resMsg := <-resultChan:
-			require.Equal(t, 1, resMsg.Len())
-			assert.Equal(t, testStr, string(resMsg.Get(0).AsBytes()))
+			assert.Equal(t, testStr, resMsg)
 		case <-time.After(time.Second):
 			t.Fatal("Action timed out")
 		}
@@ -197,22 +195,21 @@ successful_on: [ 400 ]
 func TestHTTPClientSendInterpolate(t *testing.T) {
 	nTestLoops := 1000
 
-	resultChan := make(chan message.Batch, 1)
+	resultChan := make(chan string, 1)
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "/firstvar", r.URL.Path)
 		assert.Equal(t, "hdr-secondvar", r.Header.Get("dynamic"))
 		assert.Equal(t, "foo", r.Header.Get("static"))
 		assert.Equal(t, "simpleHost.com", r.Host)
 
-		msg := message.QuickBatch(nil)
+		var s string
 		defer func() {
-			resultChan <- msg
+			resultChan <- s
 		}()
 
 		b, err := io.ReadAll(r.Body)
 		require.NoError(t, err)
-
-		msg = append(msg, message.NewPart(b))
+		s = string(b)
 	}))
 	defer ts.Close()
 
@@ -236,8 +233,7 @@ headers:
 
 		select {
 		case resMsg := <-resultChan:
-			require.Equal(t, 1, resMsg.Len())
-			assert.Equal(t, testStr, string(resMsg.Get(0).AsBytes()))
+			assert.Equal(t, testStr, resMsg)
 		case <-time.After(time.Second):
 			t.Fatal("Action timed out")
 		}
@@ -247,11 +243,11 @@ headers:
 func TestHTTPClientSendMultipart(t *testing.T) {
 	nTestLoops := 1000
 
-	resultChan := make(chan message.Batch, 1)
+	resultChan := make(chan []string, 1)
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		msg := message.QuickBatch(nil)
+		var batch []string
 		defer func() {
-			resultChan <- msg
+			resultChan <- batch
 		}()
 
 		mediaType, params, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
@@ -269,13 +265,13 @@ func TestHTTPClientSendMultipart(t *testing.T) {
 				msgBytes, err := io.ReadAll(p)
 				require.NoError(t, err)
 
-				msg = append(msg, message.NewPart(msgBytes))
+				batch = append(batch, string(msgBytes))
 			}
 		} else {
 			b, err := io.ReadAll(r.Body)
 			require.NoError(t, err)
 
-			msg = append(msg, message.NewPart(b))
+			batch = append(batch, string(b))
 		}
 	}))
 	defer ts.Close()
@@ -299,9 +295,9 @@ url: %v
 
 		select {
 		case resMsg := <-resultChan:
-			assert.Equal(t, 2, resMsg.Len())
-			assert.Equal(t, testStr+"PART-A", string(resMsg.Get(0).AsBytes()))
-			assert.Equal(t, testStr+"PART-B", string(resMsg.Get(1).AsBytes()))
+			assert.Len(t, resMsg, 2)
+			assert.Equal(t, testStr+"PART-A", resMsg[0])
+			assert.Equal(t, testStr+"PART-B", resMsg[1])
 		case <-time.After(time.Second):
 			t.Fatal("Action timed out")
 		}

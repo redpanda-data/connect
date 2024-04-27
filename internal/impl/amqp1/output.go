@@ -9,7 +9,6 @@ import (
 
 	"github.com/Azure/go-amqp"
 
-	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/public/bloblang"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
@@ -268,9 +267,7 @@ func (a *amqp1Writer) Write(ctx context.Context, msg *service.Message) error {
 	})
 
 	if err = s.Send(ctx, m, nil); err != nil {
-		if ctx.Err() != nil {
-			err = component.ErrTimeout
-		} else {
+		if ctx.Err() == nil {
 			a.log.Errorf("Lost connection due to: %v\n", err)
 			_ = a.disconnect(ctx)
 			err = service.ErrNotConnected

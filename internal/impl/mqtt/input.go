@@ -7,7 +7,6 @@ import (
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 
-	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
@@ -194,7 +193,7 @@ func (m *mqttReader) Read(ctx context.Context) (*service.Message, service.AckFun
 	m.cMut.Unlock()
 
 	if msgChan == nil {
-		return nil, nil, component.ErrNotConnected
+		return nil, nil, service.ErrNotConnected
 	}
 
 	select {

@@ -12,7 +12,6 @@ import (
 	"github.com/cenkalti/backoff/v4"
 	"github.com/olivere/elastic/v7"
 
-	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/httpclient"
 	"github.com/benthosdev/benthos/v4/internal/impl/aws/config"
@@ -319,7 +318,7 @@ type pendingBulkIndex struct {
 
 func (e *Output) WriteBatch(ctx context.Context, msg service.MessageBatch) error {
 	if e.client == nil {
-		return component.ErrNotConnected
+		return service.ErrNotConnected
 	}
 
 	boff := e.conf.backoffCtor()

@@ -10,7 +10,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/firehose/types"
 	"github.com/cenkalti/backoff/v4"
 
-	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/impl/aws/config"
 	"github.com/benthosdev/benthos/v4/internal/impl/pure"
 	"github.com/benthosdev/benthos/v4/public/service"
@@ -125,8 +124,9 @@ func (a *kinesisFirehoseWriter) toRecords(batch service.MessageBatch) ([]types.R
 		}
 
 		if len(entry.Data) > mebibyte {
-			a.log.Errorf("batch message %d exceeds the maximum Kinesis Firehose payload limit of 1 MiB", i)
-			return nil, component.ErrMessageTooLarge
+			err = fmt.Errorf("batch message %d exceeds the maximum Kinesis Firehose payload limit of 1 MiB", i)
+			a.log.With("error", err).Error("Failed to prepare record")
+			return nil, err
 		}
 
 		entries[i] = entry
@@ -216,7 +216,7 @@ func (a *kinesisFirehoseWriter) WriteBatch(ctx context.Context, batch service.Me
 		if l > 0 {
 			a.log.Warnf("scheduling retry of throttled records (%d)\n", l)
 			if wait == backoff.Stop {
-				return component.ErrTimeout
+				return fmt.Errorf("%v records failed to be delivered within backoff policy", l)
 			}
 			time.Sleep(wait)
 		}

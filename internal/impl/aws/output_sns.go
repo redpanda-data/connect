@@ -12,10 +12,9 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/sns"
 	"github.com/aws/aws-sdk-go-v2/service/sns/types"
 
-	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/impl/aws/config"
-	"github.com/benthosdev/benthos/v4/internal/value"
+	"github.com/benthosdev/benthos/v4/public/bloblang"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
@@ -152,7 +151,7 @@ func isValidSNSAttribute(k, v string) bool {
 func (a *snsWriter) getSNSAttributes(msg *service.Message) (snsAttributes, error) {
 	keys := []string{}
 	_ = a.conf.Metadata.WalkMut(msg, func(k string, v any) error {
-		if isValidSNSAttribute(k, value.IToString(v)) {
+		if isValidSNSAttribute(k, bloblang.ValueToString(v)) {
 			keys = append(keys, k)
 		} else {
 			a.log.Debugf("Rejecting metadata key '%v' due to invalid characters\n", k)
@@ -198,7 +197,7 @@ func (a *snsWriter) getSNSAttributes(msg *service.Message) (snsAttributes, error
 
 func (a *snsWriter) Write(wctx context.Context, msg *service.Message) error {
 	if a.sns == nil {
-		return component.ErrNotConnected
+		return service.ErrNotConnected
 	}
 
 	ctx, cancel := context.WithTimeout(wctx, a.conf.Timeout)
