@@ -12,12 +12,14 @@ import (
 	clientv3 "go.etcd.io/etcd/client/v3"
 )
 
-func etcdCacheConfig() *service.ConfigSpec {
-	retriesDefaults := backoff.NewExponentialBackOff()
-	retriesDefaults.InitialInterval = time.Millisecond * 500
-	retriesDefaults.MaxInterval = time.Second
-	retriesDefaults.MaxElapsedTime = time.Second * 5
+type etcdCache struct {
+	cli    clientv3.Client
+	prefix string
 
+	boffPool sync.Pool
+}
+
+func etcdCacheConfig() *service.ConfigSpec {
 	spec := service.NewConfigSpec().
 		Beta().
 		Summary(`Use etcd as a cache.`)
@@ -25,28 +27,28 @@ func etcdCacheConfig() *service.ConfigSpec {
 	for _, f := range clientFields() {
 		spec = spec.Field(f)
 	}
-
 	spec = spec.
 		Field(service.NewStringField("prefix").
 			Description("An optional string to prefix item keys with in order to prevent collisions with similar services.").
 			Optional().
-			Example("prefix-")).
-		Field(service.NewBackOffField("retries", false, retriesDefaults).
+			Example("prefix-").
 			Advanced())
 
 	return spec
 }
-func init() {
-	err := service.RegisterCache(
-		"etcd", etcdCacheConfig(),
-		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Cache, error) {
-			return newEtcdCacheFromConfig(conf)
-		})
-	if err != nil {
-		panic(err)
-	}
+func newEtcdCache(prefix string, cli clientv3.Client, backOff *backoff.ExponentialBackOff) (*etcdCache, error) {
+	return &etcdCache{
+		cli:    cli,
+		prefix: prefix,
+		boffPool: sync.Pool{
+			New: func() any {
+				bo := *backOff
+				bo.Reset()
+				return &bo
+			},
+		},
+	}, nil
 }
-
 func newEtcdCacheFromConfig(conf *service.ParsedConfig) (*etcdCache, error) {
 	cli, err := getClient(conf)
 	if err != nil {
@@ -66,30 +68,15 @@ func newEtcdCacheFromConfig(conf *service.ParsedConfig) (*etcdCache, error) {
 	}
 	return newEtcdCache(prefix, *cli, backOff)
 }
-
-type etcdCache struct {
-	cli    clientv3.Client
-	prefix string
-
-	boffPool sync.Pool
-}
-
-func newEtcdCache(
-	prefix string,
-	cli clientv3.Client,
-	backOff *backoff.ExponentialBackOff,
-) (*etcdCache, error) {
-	return &etcdCache{
-		cli:    cli,
-		prefix: prefix,
-		boffPool: sync.Pool{
-			New: func() any {
-				bo := *backOff
-				bo.Reset()
-				return &bo
-			},
-		},
-	}, nil
+func init() {
+	err := service.RegisterCache(
+		"etcd", etcdCacheConfig(),
+		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Cache, error) {
+			return newEtcdCacheFromConfig(conf)
+		})
+	if err != nil {
+		panic(err)
+	}
 }
 
 func (e *etcdCache) Delete(ctx context.Context, key string) error {

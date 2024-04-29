@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/cenkalti/backoff/v4"
 	clientv3 "go.etcd.io/etcd/client/v3"
 )
 
@@ -133,6 +134,11 @@ func getClient(parsedConf *service.ParsedConfig) (*clientv3.Client, error) {
 	return cli, err
 }
 func clientFields() []*service.ConfigField {
+	retriesDefaults := backoff.NewExponentialBackOff()
+	retriesDefaults.InitialInterval = time.Millisecond * 500
+	retriesDefaults.MaxInterval = time.Second
+	retriesDefaults.MaxElapsedTime = time.Second * 5
+
 	return []*service.ConfigField{
 		service.NewStringListField("endpoints").
 			Description("Endpoints is a list of urls to connect to.").
@@ -211,5 +217,7 @@ func clientFields() []*service.ConfigField {
 			Advanced().
 			Example("im-sure-this-key-is-readable").
 			Optional(),
+		service.NewBackOffField("retries", false, retriesDefaults).
+			Advanced(),
 	}
 }
