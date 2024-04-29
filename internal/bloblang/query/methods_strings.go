@@ -1876,6 +1876,7 @@ var _ = registerSimpleMethod(
 
 //------------------------------------------------------------------------------
 
+// TODO: V5 remove this
 var _ = registerSimpleMethod(
 	NewMethodSpec(
 		"strip_html", "",
