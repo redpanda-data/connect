@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/google/uuid"
 	"math/rand"
 	"sync"
 	"time"
@@ -109,6 +110,10 @@ type natsStreamWriter struct {
 	connMut  sync.RWMutex
 
 	conf soConfig
+
+	// The pool caller id. This is a unique identifier we will provide when calling methods on the pool. This is used by
+	// the pool to do reference counting and ensure that connections are only closed when they are no longer in use.
+	pcid string
 }
 
 func newNATSStreamWriter(conf soConfig, mgr *service.Resources) (*natsStreamWriter, error) {
@@ -125,6 +130,7 @@ func newNATSStreamWriter(conf soConfig, mgr *service.Resources) (*natsStreamWrit
 		log:  mgr.Logger(),
 		fs:   service.NewFS(mgr.FS()),
 		conf: conf,
+		pcid: uuid.New().String(),
 	}
 	return &n, nil
 }
@@ -137,7 +143,7 @@ func (n *natsStreamWriter) Connect(ctx context.Context) error {
 		return nil
 	}
 
-	natsConn, err := n.conf.connDetails.get(ctx)
+	natsConn, err := pool.Get(ctx, n.pcid, n.conf.connDetails)
 	if err != nil {
 		return err
 	}
@@ -148,7 +154,7 @@ func (n *natsStreamWriter) Connect(ctx context.Context) error {
 		stan.NatsConn(natsConn),
 	)
 	if err != nil {
-		natsConn.Close()
+		_ = pool.Release(n.pcid, n.conf.connDetails)
 		return err
 	}
 
@@ -176,7 +182,7 @@ func (n *natsStreamWriter) Write(ctx context.Context, msg *service.Message) erro
 		conn.Close()
 		n.connMut.Lock()
 		n.stanConn = nil
-		n.natsConn.Close()
+		_ = pool.Release(n.pcid, n.conf.connDetails)
 		n.natsConn = nil
 		n.connMut.Unlock()
 		return service.ErrNotConnected
@@ -189,7 +195,7 @@ func (n *natsStreamWriter) Close(context.Context) (err error) {
 	defer n.connMut.Unlock()
 
 	if n.natsConn != nil {
-		n.natsConn.Close()
+		_ = pool.Release(n.pcid, n.conf.connDetails)
 		n.natsConn = nil
 	}
 	if n.stanConn != nil {

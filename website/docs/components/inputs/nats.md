@@ -31,6 +31,7 @@ input:
   label: ""
   nats:
     urls: [] # No default (required)
+    name: ""
     subject: foo.bar.baz # No default (required)
     queue: "" # No default (optional)
     auto_replay_nacks: true
@@ -45,6 +46,7 @@ input:
   label: ""
   nats:
     urls: [] # No default (required)
+    name: ""
     subject: foo.bar.baz # No default (required)
     queue: "" # No default (optional)
     auto_replay_nacks: true
@@ -136,6 +138,14 @@ urls:
 urls:
   - nats://username:password@127.0.0.1:4222
 ```
+
+### `name`
+
+An optional name to assign to the connection. If not set, will default to the label
+
+
+Type: `string`  
+Default: `""`  
 
 ### `subject`
 

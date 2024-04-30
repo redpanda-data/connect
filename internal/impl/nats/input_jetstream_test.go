@@ -30,7 +30,7 @@ auth:
 		e, err := newJetStreamReaderFromConfig(conf, service.MockResources())
 		require.NoError(t, err)
 
-		assert.Equal(t, "url1,url2", e.connDetails.urls)
+		assert.Equal(t, "url1,url2", e.connDetails.Urls)
 		assert.Equal(t, "testsubject", e.subject)
 		assert.Equal(t, "test auth n key file", e.connDetails.authConf.NKeyFile)
 		assert.Equal(t, "test auth user creds file", e.connDetails.authConf.UserCredentialsFile)

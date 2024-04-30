@@ -35,6 +35,7 @@ Introduced in version 4.12.0.
 label: ""
 nats_kv:
   urls: [] # No default (required)
+  name: ""
   bucket: my_kv_bucket # No default (required)
   operation: "" # No default (required)
   key: foo # No default (required)
@@ -48,6 +49,7 @@ nats_kv:
 label: ""
 nats_kv:
   urls: [] # No default (required)
+  name: ""
   bucket: my_kv_bucket # No default (required)
   operation: "" # No default (required)
   key: foo # No default (required)
@@ -157,6 +159,14 @@ urls:
 urls:
   - nats://username:password@127.0.0.1:4222
 ```
+
+### `name`
+
+An optional name to assign to the connection. If not set, will default to the label
+
+
+Type: `string`  
+Default: `""`  
 
 ### `bucket`
 

@@ -33,6 +33,7 @@ input:
   label: ""
   nats_jetstream:
     urls: [] # No default (required)
+    name: ""
     queue: "" # No default (optional)
     subject: foo.bar.baz # No default (optional)
     durable: "" # No default (optional)
@@ -50,6 +51,7 @@ input:
   label: ""
   nats_jetstream:
     urls: [] # No default (required)
+    name: ""
     queue: "" # No default (optional)
     subject: foo.bar.baz # No default (optional)
     durable: "" # No default (optional)
@@ -153,6 +155,14 @@ urls:
 urls:
   - nats://username:password@127.0.0.1:4222
 ```
+
+### `name`
+
+An optional name to assign to the connection. If not set, will default to the label
+
+
+Type: `string`  
+Default: `""`  
 
 ### `queue`
 

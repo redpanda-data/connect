@@ -35,7 +35,7 @@ auth:
 
 		msg := service.NewMessage((nil))
 		msg.MetaSet("Timestamp", "1651485106")
-		assert.Equal(t, "url1,url2", e.connDetails.urls)
+		assert.Equal(t, "url1,url2", e.connDetails.Urls)
 
 		subject, err := e.subjectStr.TryString(msg)
 		require.NoError(t, err)

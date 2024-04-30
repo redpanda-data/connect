@@ -35,6 +35,7 @@ Introduced in version 4.27.0.
 label: ""
 nats_request_reply:
   urls: [] # No default (required)
+  name: ""
   subject: foo.bar.baz # No default (required)
   headers: {}
   metadata:
@@ -51,6 +52,7 @@ nats_request_reply:
 label: ""
 nats_request_reply:
   urls: [] # No default (required)
+  name: ""
   subject: foo.bar.baz # No default (required)
   inbox_prefix: _INBOX_joe # No default (optional)
   headers: {}
@@ -147,6 +149,14 @@ urls:
 urls:
   - nats://username:password@127.0.0.1:4222
 ```
+
+### `name`
+
+An optional name to assign to the connection. If not set, will default to the label
+
+
+Type: `string`  
+Default: `""`  
 
 ### `subject`
 

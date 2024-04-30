@@ -3,6 +3,7 @@ package nats
 import (
 	"context"
 	"errors"
+	"github.com/google/uuid"
 	"sync"
 	"time"
 
@@ -90,12 +91,17 @@ type natsReader struct {
 	natsChan      chan *nats.Msg
 	interruptChan chan struct{}
 	interruptOnce sync.Once
+
+	// The pool caller id. This is a unique identifier we will provide when calling methods on the pool. This is used by
+	// the pool to do reference counting and ensure that connections are only closed when they are no longer in use.
+	pcid string
 }
 
 func newNATSReader(conf *service.ParsedConfig, mgr *service.Resources) (*natsReader, error) {
 	n := natsReader{
 		log:           mgr.Logger(),
 		interruptChan: make(chan struct{}),
+		pcid:          uuid.New().String(),
 	}
 
 	var err error
@@ -141,7 +147,7 @@ func (n *natsReader) Connect(ctx context.Context) error {
 	var natsSub *nats.Subscription
 	var err error
 
-	if natsConn, err = n.connDetails.get(ctx); err != nil {
+	if natsConn, err = pool.Get(ctx, n.pcid, n.connDetails); err != nil {
 		return err
 	}
 
@@ -172,7 +178,7 @@ func (n *natsReader) disconnect() {
 		n.natsSub = nil
 	}
 	if n.natsConn != nil {
-		n.natsConn.Close()
+		_ = pool.Release(n.pcid, n.connDetails)
 		n.natsConn = nil
 	}
 	n.natsChan = nil

@@ -31,6 +31,7 @@ input:
   label: ""
   nats_stream:
     urls: [] # No default (required)
+    name: ""
     cluster_id: "" # No default (required)
     client_id: ""
     queue: ""
@@ -48,6 +49,7 @@ input:
   label: ""
   nats_stream:
     urls: [] # No default (required)
+    name: ""
     cluster_id: "" # No default (required)
     client_id: ""
     queue: ""
@@ -142,6 +144,14 @@ urls:
 urls:
   - nats://username:password@127.0.0.1:4222
 ```
+
+### `name`
+
+An optional name to assign to the connection. If not set, will default to the label
+
+
+Type: `string`  
+Default: `""`  
 
 ### `cluster_id`
 

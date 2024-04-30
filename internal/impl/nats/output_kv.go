@@ -2,6 +2,7 @@ package nats
 
 import (
 	"context"
+	"github.com/google/uuid"
 	"sync"
 
 	"github.com/nats-io/nats.go"
@@ -69,12 +70,17 @@ type kvOutput struct {
 	keyValue jetstream.KeyValue
 
 	shutSig *shutdown.Signaller
+
+	// The pool caller id. This is a unique identifier we will provide when calling methods on the pool. This is used by
+	// the pool to do reference counting and ensure that connections are only closed when they are no longer in use.
+	pcid string
 }
 
 func newKVOutput(conf *service.ParsedConfig, mgr *service.Resources) (*kvOutput, error) {
 	kv := kvOutput{
 		log:     mgr.Logger(),
 		shutSig: shutdown.NewSignaller(),
+		pcid:    uuid.New().String(),
 	}
 
 	var err error
@@ -110,11 +116,11 @@ func (kv *kvOutput) Connect(ctx context.Context) (err error) {
 
 	defer func() {
 		if err != nil && natsConn != nil {
-			natsConn.Close()
+			_ = pool.Release(kv.pcid, kv.connDetails)
 		}
 	}()
 
-	if natsConn, err = kv.connDetails.get(ctx); err != nil {
+	if natsConn, err = pool.Get(ctx, kv.pcid, kv.connDetails); err != nil {
 		return err
 	}
 
@@ -137,7 +143,7 @@ func (kv *kvOutput) disconnect() {
 	defer kv.connMut.Unlock()
 
 	if kv.natsConn != nil {
-		kv.natsConn.Close()
+		_ = pool.Release(kv.pcid, kv.connDetails)
 		kv.natsConn = nil
 	}
 	kv.keyValue = nil

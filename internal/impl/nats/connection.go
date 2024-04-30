@@ -19,6 +19,9 @@ func connectionHeadFields() []*service.ConfigField {
 			Description("A list of URLs to connect to. If an item of the list contains commas it will be expanded into multiple URLs.").
 			Example([]string{"nats://127.0.0.1:4222"}).
 			Example([]string{"nats://username:password@127.0.0.1:4222"}),
+		service.NewStringField("name").
+			Description("An optional name to assign to the connection. If not set, will default to the label").
+			Default(""),
 	}
 }
 
@@ -30,47 +33,47 @@ func connectionTailFields() []*service.ConfigField {
 }
 
 type connectionDetails struct {
-	label    string
-	logger   *service.Logger
-	tlsConf  *tls.Config
+	Urls     string
+	Opts     []nats.Option
 	authConf authConfig
-	fs       *service.FS
-	urls     string
 }
 
-func connectionDetailsFromParsed(conf *service.ParsedConfig, mgr *service.Resources) (c connectionDetails, err error) {
-	c.label = mgr.Label()
-	c.fs = mgr.FS()
-	c.logger = mgr.Logger()
-
+func connectionDetailsFromParsed(conf *service.ParsedConfig, mgr *service.Resources, extraOpts ...nats.Option) (c connectionDetails, err error) {
 	var urlList []string
 	if urlList, err = conf.FieldStringList("urls"); err != nil {
 		return
 	}
-	c.urls = strings.Join(urlList, ",")
+	c.Urls = strings.Join(urlList, ",")
 
-	var tlsEnabled bool
-	if c.tlsConf, tlsEnabled, err = conf.FieldTLSToggled("tls"); err != nil {
+	var name string
+	if name, err = conf.FieldString("name"); err != nil {
 		return
 	}
-	if !tlsEnabled {
-		c.tlsConf = nil
+	if name == "" {
+		name = mgr.Label()
+	}
+	c.Opts = append(c.Opts, nats.Name(name))
+
+	var tlsEnabled bool
+	var tlsConf *tls.Config
+	if tlsConf, tlsEnabled, err = conf.FieldTLSToggled("tls"); err != nil {
+		return
+	}
+	if tlsEnabled && tlsConf != nil {
+		c.Opts = append(c.Opts, nats.Secure(tlsConf))
 	}
 
 	if c.authConf, err = AuthFromParsedConfig(conf.Namespace("auth")); err != nil {
 		return
 	}
+	c.Opts = append(c.Opts, authConfToOptions(c.authConf, mgr.FS())...)
+
+	c.Opts = append(c.Opts, errorHandlerOption(mgr.Logger()))
+	c.Opts = append(c.Opts, extraOpts...)
+
 	return
 }
 
-func (c *connectionDetails) get(_ context.Context, extraOpts ...nats.Option) (*nats.Conn, error) {
-	var opts []nats.Option
-	if c.tlsConf != nil {
-		opts = append(opts, nats.Secure(c.tlsConf))
-	}
-	opts = append(opts, nats.Name(c.label))
-	opts = append(opts, errorHandlerOption(c.logger))
-	opts = append(opts, authConfToOptions(c.authConf, c.fs)...)
-	opts = append(opts, extraOpts...)
-	return nats.Connect(c.urls, opts...)
+func (c *connectionDetails) get(_ context.Context) (*nats.Conn, error) {
+	return nats.Connect(c.Urls, c.Opts...)
 }

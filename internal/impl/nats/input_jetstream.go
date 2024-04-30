@@ -120,6 +120,10 @@ type jetStreamReader struct {
 	natsSub  *nats.Subscription
 
 	shutSig *shutdown.Signaller
+
+	// The pool caller id. This is a unique identifier we will provide when calling methods on the pool. This is used by
+	// the pool to do reference counting and ensure that connections are only closed when they are no longer in use.
+	pcid string
 }
 
 func newJetStreamReaderFromConfig(conf *service.ParsedConfig, mgr *service.Resources) (*jetStreamReader, error) {
@@ -222,12 +226,12 @@ func (j *jetStreamReader) Connect(ctx context.Context) (err error) {
 				_ = natsSub.Drain()
 			}
 			if natsConn != nil {
-				natsConn.Close()
+				_ = pool.Release(j.pcid, j.connDetails)
 			}
 		}
 	}()
 
-	if natsConn, err = j.connDetails.get(ctx); err != nil {
+	if natsConn, err = pool.Get(ctx, j.pcid, j.connDetails); err != nil {
 		return err
 	}
 
@@ -303,7 +307,10 @@ func (j *jetStreamReader) disconnect() {
 		j.natsSub = nil
 	}
 	if j.natsConn != nil {
-		j.natsConn.Close()
+		if err := pool.Release(j.pcid, j.connDetails); err != nil {
+			j.log.Errorf("Failed to release NATS connection: %v", err)
+		}
+
 		j.natsConn = nil
 	}
 }

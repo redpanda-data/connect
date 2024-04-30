@@ -34,7 +34,7 @@ auth:
 		e, err := newKVReader(conf, service.MockResources())
 		require.NoError(t, err)
 
-		assert.Equal(t, "url1,url2", e.connDetails.urls)
+		assert.Equal(t, "url1,url2", e.connDetails.Urls)
 		assert.Equal(t, "testbucket", e.bucket)
 		assert.Equal(t, "testkey", e.key)
 		assert.True(t, e.ignoreDeletes)
