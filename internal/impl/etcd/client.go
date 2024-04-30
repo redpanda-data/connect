@@ -147,59 +147,48 @@ func clientFields() []*service.ConfigField {
 		service.NewDurationField("auto_sync_interval").
 			Description("This is the interval to update endpoints with its latest members. 0 disables auto-sync. By default auto-sync is disabled.").
 			Advanced().
-			Example("10s").
 			Optional(),
 		service.NewDurationField("dial_timeout").
 			Description("This is the timeout for failing to establish a connection.").
 			Advanced().
-			Example("500ms").
 			Optional(),
 		service.NewDurationField("dial_keep_alive_time").
 			Description("This is the time after which client pings the server to see if transport is alive").
 			Advanced().
-			Example("5s").
 			Optional(),
 		service.NewDurationField("dial_keep_alive_timeout").
 			Description("This is the time that the client waits for a response for the keep-alive probe. If the response is not received in this time, the connection is closed.").
 			Advanced().
-			Example("5s").
 			Optional(),
 		service.NewIntField("max_call_send_msg_size").
 			Description("This is the client-side request send limit in bytes. If 0, it defaults to 2.0 MiB (2 * 1024 * 1024). Make sure that 'MaxCallSendMsgSize' < server-side default send/recv limit.").
-			Default(0).
 			Advanced().
 			Optional(),
 		service.NewIntField("max_call_recv_msg_size").
 			Description("MaxCallRecvMsgSize is the client-side response receive limit. If 0, it defaults to 'math.MaxInt32', because range response can easily exceed request send limits. Make sure that 'MaxCallRecvMsgSize' >= server-side default send/recv limit.").
-			Default(0).
 			Advanced().
 			Optional(),
 		service.NewTLSToggledField("tls").
 			Description("Custom TLS settings can be used to override system defaults.").Optional().Advanced(),
 		service.NewStringField("username").
 			Description("Username is a user name for authentication.").
-			Default("").
 			Advanced().
 			Optional(),
 		service.NewStringField("password").
 			Description("Password is a password name for authentication.").
-			Default("").
 			Optional().
 			Advanced().
 			Secret(),
 		service.NewBoolField("reject_old_cluster").
 			Description("RejectOldCluster when set will refuse to create a client against an outdated cluster.").
-			Default(false).
 			Advanced().
 			Optional(),
 		service.NewBoolField("permit_without_stream").
 			Description("PermitWithoutStream when set will allow client to send keepalive pings to server without any active streams(RPCs).").
-			Default(false).
 			Advanced().
 			Optional(),
 		service.NewIntField("max_unary_retries").
 			Description("MaxUnaryRetries is the maximum number of retries for unary RPCs.").
-			Default(0).
 			Advanced().
 			Optional(),
 		service.NewDurationField("back_off_wait_between").
@@ -208,7 +197,6 @@ func clientFields() []*service.ConfigField {
 			Optional(),
 		service.NewFloatField("back_off_jitter_fraction").
 			Description("BackoffJitterFraction is the jitter fraction to randomize backoff wait time.").
-			Default(0).
 			Advanced().
 			Optional(),
 		service.NewStringField("health_check_key").
