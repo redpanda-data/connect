@@ -4,10 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/google/uuid"
 	"math/rand"
 	"sync"
 	"time"
+
+	"github.com/google/uuid"
 
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/stan.go"

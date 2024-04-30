@@ -3,10 +3,11 @@ package nats
 import (
 	"context"
 	"fmt"
-	"github.com/google/uuid"
 	"strconv"
 	"sync"
 	"time"
+
+	"github.com/google/uuid"
 
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"

@@ -3,8 +3,9 @@ package nats
 import (
 	"context"
 	"fmt"
-	"github.com/google/uuid"
 	"sync"
+
+	"github.com/google/uuid"
 
 	"github.com/nats-io/nats.go"
 

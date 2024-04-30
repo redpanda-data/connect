@@ -2,10 +2,11 @@ package nats
 
 import (
 	"context"
+	"testing"
+
 	"github.com/mitchellh/hashstructure"
 	"github.com/nats-io/nats.go"
 	"github.com/stretchr/testify/assert"
-	"testing"
 )
 
 func TestGet(t *testing.T) {

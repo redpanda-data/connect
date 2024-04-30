@@ -3,10 +3,11 @@ package nats
 import (
 	"context"
 	"fmt"
-	"github.com/mitchellh/hashstructure"
-	"github.com/nats-io/nats.go"
 	"slices"
 	"sync"
+
+	"github.com/mitchellh/hashstructure"
+	"github.com/nats-io/nats.go"
 )
 
 var pool = &connectionPool{
