@@ -42,16 +42,12 @@ func etcdInputConfig() *service.ConfigSpec {
 	spec := service.NewConfigSpec().
 		Beta().
 		Summary("Use etcd as a input and watch a key.")
-
+	spec = spec.
+		Field(service.NewStringField("key").Description("The key you want to watch."))
 	for _, f := range clientFields() {
 		spec = spec.Field(f)
 	}
 
-	spec = spec.
-		Field(service.NewStringField("key").
-			Description("The key you want to watch.").
-			Optional().
-			Advanced())
 	spec = spec.Field(service.NewAutoRetryNacksToggleField())
 	return spec
 }
