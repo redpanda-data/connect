@@ -13,6 +13,7 @@ import (
 
 const (
 	soFieldStream       = "stream"
+	soFieldEntryID      = "entry_id"
 	soFieldBodyKey      = "body_key"
 	soFieldMaxLenApprox = "max_length"
 	soFieldMetadata     = "metadata"
@@ -32,6 +33,9 @@ Redis stream entries are key/value pairs, as such it is necessary to specify the
 		Fields(
 			service.NewInterpolatedStringField(soFieldStream).
 				Description("The stream to add messages to."),
+			service.NewInterpolatedStringField(soFieldEntryID).
+				Description("The entry ID for the message.").
+				Default("*").Advanced(),
 			service.NewStringField(soFieldBodyKey).
 				Description("A key to set the raw body of the message to.").
 				Default("body"),
@@ -68,6 +72,8 @@ type redisStreamsWriter struct {
 
 	stream     *service.InterpolatedString
 	streamStr  string
+	entryID    *service.InterpolatedString
+	entryIDStr string
 	bodyKey    string
 	maxLen     int
 	metaFilter *service.MetadataExcludeFilter
@@ -89,6 +95,12 @@ func newRedisStreamsWriter(conf *service.ParsedConfig, mgr *service.Resources) (
 		return
 	}
 	if r.streamStr, err = conf.FieldString(soFieldStream); err != nil {
+		return
+	}
+	if r.entryID, err = conf.FieldInterpolatedString(soFieldEntryID); err != nil {
+		return
+	}
+	if r.entryIDStr, err = conf.FieldString(soFieldEntryID); err != nil {
 		return
 	}
 	if r.bodyKey, err = conf.FieldString(soFieldBodyKey); err != nil {
@@ -146,6 +158,10 @@ func (r *redisStreamsWriter) WriteBatch(ctx context.Context, batch service.Messa
 		if err != nil {
 			return fmt.Errorf("stream interpolation error: %w", err)
 		}
+		entryID, err := batch.TryInterpolatedString(0, r.entryID)
+		if err != nil {
+			return fmt.Errorf("stream interpolation error: %w", err)
+		}
 
 		values, err := partToMap(batch[0])
 		if err != nil {
@@ -153,7 +169,7 @@ func (r *redisStreamsWriter) WriteBatch(ctx context.Context, batch service.Messa
 		}
 
 		if err := client.XAdd(ctx, &redis.XAddArgs{
-			ID:     "*",
+			ID:     entryID,
 			Stream: stream,
 			MaxLen: int64(r.maxLen),
 			Approx: true,
@@ -173,13 +189,18 @@ func (r *redisStreamsWriter) WriteBatch(ctx context.Context, batch service.Messa
 			return fmt.Errorf("stream interpolation error: %w", err)
 		}
 
+		entryID, err := batch.TryInterpolatedString(i, r.entryID)
+		if err != nil {
+			return fmt.Errorf("stream interpolation error: %w", err)
+		}
+
 		values, err := partToMap(batch[i])
 		if err != nil {
 			return err
 		}
 
 		_ = pipe.XAdd(ctx, &redis.XAddArgs{
-			ID:     "*",
+			ID:     entryID,
 			Stream: stream,
 			MaxLen: int64(r.maxLen),
 			Approx: true,
