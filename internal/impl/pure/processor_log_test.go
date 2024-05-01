@@ -27,6 +27,10 @@ type mockLog struct {
 
 func (m *mockLog) NewModule(prefix string) log.Modular { return m }
 func (m *mockLog) WithFields(fields map[string]string) log.Modular {
+	if len(fields) == 0 {
+		return m
+	}
+
 	m.fields = append(m.fields, fields)
 	return m
 }

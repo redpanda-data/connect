@@ -17,6 +17,10 @@ func NewBenthosLogAdapter(l *slog.Logger) *logHandler {
 }
 
 func (l *logHandler) WithFields(fields map[string]string) Modular {
+	if len(fields) == 0 {
+		return l
+	}
+
 	tmp := l.slog
 	for k, v := range fields {
 		tmp = tmp.With(slog.String(k, v))

@@ -13,6 +13,7 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
+	"github.com/benthosdev/benthos/v4/internal/tracing/v2"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
@@ -168,7 +169,7 @@ func (l *logProcessor) levelToLogFn(level string) (func(logger log.Modular, msg 
 }
 
 func (l *logProcessor) ProcessBatch(ctx *processor.BatchProcContext, msg message.Batch) ([]message.Batch, error) {
-	_ = msg.Iter(func(i int, _ *message.Part) error {
+	_ = msg.Iter(func(i int, msgPart *message.Part) error {
 		targetLog := l.logger
 		if l.fieldsMapping != nil {
 			fieldsMsg, err := l.fieldsMapping.MapPart(i, msg)
@@ -218,7 +219,7 @@ func (l *logProcessor) ProcessBatch(ctx *processor.BatchProcContext, msg message
 			l.logger.Error("Message interpolation error: %v", err)
 			return nil
 		}
-		l.printFn(targetLog, logMsg)
+		l.printFn(targetLog.WithFields(tracing.LogFields(msgPart.GetContext())), logMsg)
 		return nil
 	})
 

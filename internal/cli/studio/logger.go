@@ -17,6 +17,10 @@ func (h *hotSwapLogger) swap(l log.Modular) {
 }
 
 func (h *hotSwapLogger) WithFields(fields map[string]string) log.Modular {
+	if len(fields) == 0 {
+		return h
+	}
+
 	return (*h.lPtr.Load()).WithFields(fields)
 }
 
