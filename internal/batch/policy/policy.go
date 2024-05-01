@@ -59,14 +59,16 @@ func New(conf batchconfig.Config, mgr bundle.NewManagement) (*Batcher, error) {
 			return nil, fmt.Errorf("failed to parse duration string: %v", err)
 		}
 	}
-	var procs []iprocessor.V1
+
+	procs := make([]iprocessor.V1, len(conf.Processors))
+
 	for i, pconf := range conf.Processors {
 		pMgr := mgr.IntoPath("processors", strconv.Itoa(i))
 		proc, err := pMgr.NewProcessor(pconf)
 		if err != nil {
 			return nil, err
 		}
-		procs = append(procs, proc)
+		procs[i] = proc
 	}
 
 	batchOn := mgr.Metrics().GetCounterVec("batch_created", "mechanism")
@@ -93,37 +95,49 @@ func New(conf batchconfig.Config, mgr bundle.NewManagement) (*Batcher, error) {
 // Add a new message part to this batch policy. Returns true if this part
 // triggers the conditions of the policy.
 func (p *Batcher) Add(part *message.Part) bool {
+	p.parts = append(p.parts, part)
+
 	if p.byteSize > 0 {
 		// This calculation (serialisation into bytes) is potentially expensive
 		// so we only do it when there's a byte size based trigger.
 		p.sizeTally += len(part.AsBytes())
-	}
-	p.parts = append(p.parts, part)
 
-	if !p.triggered && p.count > 0 && len(p.parts) >= p.count {
-		p.triggered = true
+		if p.sizeTally >= p.byteSize {
+			p.mSizeBatch.Incr(1)
+			p.log.Traceln("Batching based on byte_size")
+			p.triggered = true
+			return true
+		}
+	}
+
+	if p.count > 0 && len(p.parts) >= p.count {
 		p.mCountBatch.Incr(1)
 		p.log.Trace("Batching based on count")
-	}
-	if !p.triggered && p.byteSize > 0 && p.sizeTally >= p.byteSize {
 		p.triggered = true
-		p.mSizeBatch.Incr(1)
-		p.log.Trace("Batching based on byte_size")
+		return true
 	}
-	if p.check != nil && !p.triggered {
+
+	if p.check != nil {
 		tmpMsg := message.Batch(p.parts)
 		test, err := p.check.QueryPart(tmpMsg.Len()-1, tmpMsg)
 		if err != nil {
-			test = false
 			p.log.Error("Failed to execute batch check query: %v\n", err)
+			return false
 		}
 		if test {
-			p.triggered = true
 			p.mCheckBatch.Incr(1)
 			p.log.Trace("Batching based on check query")
+			p.triggered = true
+			return true
 		}
 	}
-	return p.triggered || (p.period > 0 && time.Since(p.lastBatch) > p.period)
+
+	if p.period > 0 && time.Since(p.lastBatch) > p.period {
+		p.triggered = true
+		return true
+	}
+
+	return false
 }
 
 // Flush clears all messages stored by this batch policy. Returns nil if the
@@ -133,13 +147,11 @@ func (p *Batcher) Flush(ctx context.Context) message.Batch {
 
 	resultMsgs := p.flushAny(ctx)
 	if len(resultMsgs) == 1 {
-		newMsg = resultMsgs[0]
+		return resultMsgs[0]
 	} else if len(resultMsgs) > 1 {
+		newMsg = make(message.Batch, 0, len(resultMsgs))
 		for _, m := range resultMsgs {
-			_ = m.Iter(func(_ int, p *message.Part) error {
-				newMsg = append(newMsg, p)
-				return nil
-			})
+			newMsg = append(newMsg, m...)
 		}
 	}
 	return newMsg
