@@ -64,6 +64,7 @@ output:
       user_credentials_file: ./user.creds # No default (optional)
       user_jwt: "" # No default (optional)
       user_nkey_seed: "" # No default (optional)
+    pool_key: default
     inject_tracing_map: meta = @.merge(this) # No default (optional)
 ```
 
@@ -359,6 +360,14 @@ This field contains sensitive information that usually shouldn't be added to a c
 
 
 Type: `string`  
+
+### `pool_key`
+
+The connection pool key to use. Components using the same poolKey will share their connection
+
+
+Type: `string`  
+Default: `"default"`  
 
 ### `inject_tracing_map`
 

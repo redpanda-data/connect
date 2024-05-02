@@ -66,7 +66,7 @@ func (c *connectionPool) Release(caller string, cd connectionDetails) error {
 		return nil
 	}
 
-	slices.Delete(res.References, idx, idx+1)
+	_ = slices.Delete(res.References, idx, idx+1)
 
 	if len(res.References) == 0 {
 		res.Nc.Close()
