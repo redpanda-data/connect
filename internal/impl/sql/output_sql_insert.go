@@ -22,6 +22,7 @@ func sqlInsertOutputConfig() *service.ConfigSpec {
 		Description(``).
 		Field(driverField).
 		Field(dsnField).
+		Field(dynamicCredentialsField).
 		Field(service.NewStringField("table").
 			Description("The table to insert to.").
 			Example("foo")).
@@ -106,12 +107,14 @@ type sqlInsertOutput struct {
 
 	logger  *service.Logger
 	shutSig *shutdown.Signaller
+	manager *service.Resources
 }
 
 func newSQLInsertOutputFromConfig(conf *service.ParsedConfig, mgr *service.Resources) (*sqlInsertOutput, error) {
 	s := &sqlInsertOutput{
 		logger:  mgr.Logger(),
 		shutSig: shutdown.NewSignaller(),
+		manager: mgr,
 	}
 
 	var err error
@@ -192,7 +195,7 @@ func (s *sqlInsertOutput) Connect(ctx context.Context) error {
 	}
 
 	var err error
-	if s.db, err = sqlOpenWithReworks(s.logger, s.driver, s.dsn); err != nil {
+	if s.db, err = sqlOpenWithReworks(s.manager, s.driver, s.dsn, &s.connSettings.dynamicCredentials); err != nil {
 		return err
 	}
 

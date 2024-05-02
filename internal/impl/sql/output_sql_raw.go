@@ -20,6 +20,7 @@ func sqlRawOutputConfig() *service.ConfigSpec {
 		Description(``).
 		Field(driverField).
 		Field(dsnField).
+		Field(dynamicCredentialsField).
 		Field(rawQueryField().
 			Example("INSERT INTO footable (foo, bar, baz) VALUES (?, ?, ?);")).
 		Field(service.NewBoolField("unsafe_dynamic_query").
@@ -96,6 +97,7 @@ type sqlRawOutput struct {
 
 	logger  *service.Logger
 	shutSig *shutdown.Signaller
+	manager *service.Resources
 }
 
 func newSQLRawOutputFromConfig(conf *service.ParsedConfig, mgr *service.Resources) (*sqlRawOutput, error) {
@@ -134,11 +136,11 @@ func newSQLRawOutputFromConfig(conf *service.ParsedConfig, mgr *service.Resource
 	if err != nil {
 		return nil, err
 	}
-	return newSQLRawOutput(mgr.Logger(), driverStr, dsnStr, queryStatic, queryDyn, argsMapping, connSettings), nil
+	return newSQLRawOutput(mgr, driverStr, dsnStr, queryStatic, queryDyn, argsMapping, connSettings), nil
 }
 
 func newSQLRawOutput(
-	logger *service.Logger,
+	manager *service.Resources,
 	driverStr, dsnStr string,
 	queryStatic string,
 	queryDyn *service.InterpolatedString,
@@ -146,7 +148,8 @@ func newSQLRawOutput(
 	connSettings *connSettings,
 ) *sqlRawOutput {
 	return &sqlRawOutput{
-		logger:       logger,
+		manager:      manager,
+		logger:       manager.Logger(),
 		shutSig:      shutdown.NewSignaller(),
 		driver:       driverStr,
 		dsn:          dsnStr,
@@ -166,7 +169,7 @@ func (s *sqlRawOutput) Connect(ctx context.Context) error {
 	}
 
 	var err error
-	if s.db, err = sqlOpenWithReworks(s.logger, s.driver, s.dsn); err != nil {
+	if s.db, err = sqlOpenWithReworks(s.manager, s.driver, s.dsn, &s.connSettings.dynamicCredentials); err != nil {
 		return err
 	}
 

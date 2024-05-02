@@ -4,6 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"github.com/jackc/pgx/v4"
+	"github.com/jackc/pgx/v4/pgxpool"
 	"net/url"
 	"strings"
 	"sync"
@@ -11,6 +13,20 @@ import (
 
 	"github.com/benthosdev/benthos/v4/public/service"
 )
+
+type DynamicCredentials struct {
+	cache            string
+	usernameCacheKey string
+	passwordCacheKey string
+}
+
+var dynamicCredentialsField = service.NewObjectField("dynamic_credentials",
+	service.NewStringField("cache"),
+	service.NewStringField("username_cache_key").Optional(),
+	service.NewStringField("password_cache_key"),
+).
+	Advanced().
+	Optional()
 
 var driverField = service.NewStringEnumField("driver", "mysql", "postgres", "clickhouse", "mssql", "sqlite", "oracle", "snowflake", "trino", "gocosmos").
 	Description("A database [driver](#drivers) to use.")
@@ -125,6 +141,7 @@ type connSettings struct {
 	initOnce           sync.Once
 	initFileStatements [][2]string // (path,statement)
 	initStatement      string
+	dynamicCredentials DynamicCredentials
 }
 
 func (c *connSettings) apply(ctx context.Context, db *sql.DB, log *service.Logger) {
@@ -206,10 +223,24 @@ func connSettingsFromParsed(
 			})
 		}
 	}
+
+	if conf.Contains("dynamic_credentials") {
+		var creds DynamicCredentials
+		if creds.cache, err = conf.FieldString("dynamic_credentials.cache"); err != nil {
+			return
+		}
+		if creds.usernameCacheKey, err = conf.FieldString("dynamic_credentials.username_cache_key"); err != nil {
+			return
+		}
+		if creds.passwordCacheKey, err = conf.FieldString("dynamic_credentials.password_cache_key"); err != nil {
+			return
+		}
+		c.dynamicCredentials = creds
+	}
 	return
 }
 
-func sqlOpenWithReworks(logger *service.Logger, driver, dsn string) (*sql.DB, error) {
+func sqlOpenWithReworks(manager *service.Resources, driver, dsn string, dynamicCredentials *DynamicCredentials) (*sql.DB, error) {
 	if driver == "clickhouse" && strings.HasPrefix(dsn, "tcp") {
 		u, err := url.Parse(dsn)
 		if err != nil {
@@ -235,8 +266,65 @@ func sqlOpenWithReworks(logger *service.Logger, driver, dsn string) (*sql.DB, er
 		u.RawQuery = uq.Encode()
 		newDSN := u.String()
 
-		logger.Warnf("Detected old-style Clickhouse Data Source Name: '%v', replacing with new style: '%v'", dsn, newDSN)
+		manager.Logger().Warnf("Detected old-style Clickhouse Data Source Name: '%v', replacing with new style: '%v'", dsn, newDSN)
 		dsn = newDSN
 	}
+
+	getDynamicCreds := func() (username *string, password *string, err error) {
+		if err := manager.AccessCache(context.Background(), dynamicCredentials.cache, func(c service.Cache) {
+			if dynamicCredentials.usernameCacheKey != "" {
+				if usernameBytes, err := c.Get(context.Background(), dynamicCredentials.usernameCacheKey); err != nil {
+					manager.Logger().Warnf("Failed to fetch dynamic username from cache: %v", err)
+				} else {
+					usernameStr := string(usernameBytes)
+					username = &usernameStr
+				}
+			}
+			if passwordBytes, err := c.Get(context.Background(), dynamicCredentials.passwordCacheKey); err != nil {
+				manager.Logger().Warnf("Failed to fetch dynamic password from cache: %v", err)
+			} else {
+				passwordStr := string(passwordBytes)
+				password = &passwordStr
+			}
+		}); err != nil {
+			return nil, nil, err
+		}
+		return
+	}
+
+	if dynamicCredentials != nil {
+		if driver != "pgx" {
+			return nil, fmt.Errorf("dynamic credentials are only supported for the 'pgx' driver")
+		}
+
+		pgxConf, err := pgxpool.ParseConfig(dsn)
+		if err != nil {
+			return nil, err
+		}
+		pgxConf.LazyConnect = true
+		pgxConf.AfterRelease = func(conn *pgx.Conn) bool {
+			username, password, err := getDynamicCreds()
+			if err != nil {
+				// If we can't fetch the dynamic credentials we don't want to kill the connection
+				return true
+			}
+			if (username != nil && *username != conn.Config().User) || (password != nil && *password != conn.Config().Password) {
+				return false
+			}
+			return true
+		}
+		pgxConf.BeforeConnect = func(ctx context.Context, config *pgx.ConnConfig) error {
+			// We ignore any returned errors here so that we use the credentials in the DSN as the default
+			username, password, _ := getDynamicCreds()
+			if username != nil {
+				config.User = *username
+			}
+			if password != nil {
+				config.Password = *password
+			}
+			return nil
+		}
+	}
+
 	return sql.Open(driver, dsn)
 }
