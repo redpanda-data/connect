@@ -4,8 +4,9 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"github.com/jackc/pgx/v4"
-	"github.com/jackc/pgx/v4/pgxpool"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/jackc/pgx/v5/stdlib"
 	"net/url"
 	"strings"
 	"sync"
@@ -15,16 +16,21 @@ import (
 )
 
 type DynamicCredentials struct {
-	cache            string
-	usernameCacheKey string
-	passwordCacheKey string
+	cache    string
+	cacheKey string
 }
 
 var dynamicCredentialsField = service.NewObjectField("dynamic_credentials",
-	service.NewStringField("cache"),
-	service.NewStringField("username_cache_key").Optional(),
-	service.NewStringField("password_cache_key"),
+	service.NewStringField("cache").
+		Description(`Specifies the cache resource to use for looking up dynamic credentials.`),
+	service.NewStringField("cache_key").
+		Description(`Specifies the key to use when looking up dynamic credentials in the cache.`),
 ).
+	Description(`Specifies a cache resource for looking up credentials dynamically.
+This can be useful in situations where credentials are rotated frequently, allowing re-authentication without a restart.
+Credentials should be stored in the cache as a string in the format ` + "`username:password`" + `.
+Currently, this behaviour is only supported for the ` + "`pgx`" + ` driver.
+`).
 	Advanced().
 	Optional()
 
@@ -141,13 +147,18 @@ type connSettings struct {
 	initOnce           sync.Once
 	initFileStatements [][2]string // (path,statement)
 	initStatement      string
-	dynamicCredentials DynamicCredentials
+	dynamicCredentials *DynamicCredentials
 }
 
 func (c *connSettings) apply(ctx context.Context, db *sql.DB, log *service.Logger) {
 	db.SetConnMaxIdleTime(c.connMaxIdleTime)
 	db.SetConnMaxLifetime(c.connMaxLifetime)
-	db.SetMaxIdleConns(c.maxIdleConns)
+	if c.dynamicCredentials == nil {
+		db.SetMaxIdleConns(c.maxIdleConns)
+	} else {
+		// If we're using dynamic credentials we don't want to keep any idle connections
+		db.SetMaxIdleConns(0)
+	}
 	db.SetMaxOpenConns(c.maxOpenConns)
 
 	c.initOnce.Do(func() {
@@ -226,16 +237,13 @@ func connSettingsFromParsed(
 
 	if conf.Contains("dynamic_credentials") {
 		var creds DynamicCredentials
-		if creds.cache, err = conf.FieldString("dynamic_credentials.cache"); err != nil {
+		if creds.cache, err = conf.FieldString("dynamic_credentials", "cache"); err != nil {
 			return
 		}
-		if creds.usernameCacheKey, err = conf.FieldString("dynamic_credentials.username_cache_key"); err != nil {
+		if creds.cacheKey, err = conf.FieldString("dynamic_credentials", "cache_key"); err != nil {
 			return
 		}
-		if creds.passwordCacheKey, err = conf.FieldString("dynamic_credentials.password_cache_key"); err != nil {
-			return
-		}
-		c.dynamicCredentials = creds
+		c.dynamicCredentials = &creds
 	}
 	return
 }
@@ -270,21 +278,19 @@ func sqlOpenWithReworks(manager *service.Resources, driver, dsn string, dynamicC
 		dsn = newDSN
 	}
 
+	// Returns the dynamic credentials from the cache, if they exist
 	getDynamicCreds := func() (username *string, password *string, err error) {
 		if err := manager.AccessCache(context.Background(), dynamicCredentials.cache, func(c service.Cache) {
-			if dynamicCredentials.usernameCacheKey != "" {
-				if usernameBytes, err := c.Get(context.Background(), dynamicCredentials.usernameCacheKey); err != nil {
-					manager.Logger().Warnf("Failed to fetch dynamic username from cache: %v", err)
-				} else {
-					usernameStr := string(usernameBytes)
-					username = &usernameStr
-				}
-			}
-			if passwordBytes, err := c.Get(context.Background(), dynamicCredentials.passwordCacheKey); err != nil {
-				manager.Logger().Warnf("Failed to fetch dynamic password from cache: %v", err)
+			if credBytes, err := c.Get(context.Background(), dynamicCredentials.cacheKey); err != nil {
+				manager.Logger().Warnf("Failed to fetch dynamic credentials from cache: %v", err)
 			} else {
-				passwordStr := string(passwordBytes)
-				password = &passwordStr
+				creds := strings.Split(string(credBytes), ":")
+				if len(creds) == 2 {
+					username = &creds[0]
+					password = &creds[1]
+				} else {
+					err = fmt.Errorf("expected dynamic credentials to be in the format 'username:password', received: %v", string(credBytes))
+				}
 			}
 		}); err != nil {
 			return nil, nil, err
@@ -292,38 +298,48 @@ func sqlOpenWithReworks(manager *service.Resources, driver, dsn string, dynamicC
 		return
 	}
 
+	// Handle dynamic credentials if they are specified
 	if dynamicCredentials != nil {
-		if driver != "pgx" {
-			return nil, fmt.Errorf("dynamic credentials are only supported for the 'pgx' driver")
+		switch driver {
+		case "pgx":
+			pgxConf, err := pgxpool.ParseConfig(dsn)
+			if err != nil {
+				return nil, err
+			}
+			pgxConf.AfterRelease = func(conn *pgx.Conn) bool {
+				username, password, err := getDynamicCreds()
+				if err != nil {
+					// If we can't fetch the dynamic credentials we don't want to kill the connection
+					return true
+				}
+				return !((username != nil && *username != conn.Config().User) || (password != nil && *password != conn.Config().Password))
+			}
+			pgxConf.BeforeAcquire = func(ctx context.Context, conn *pgx.Conn) bool {
+				username, password, err := getDynamicCreds()
+				if err != nil {
+					// If we can't fetch the dynamic credentials we don't want to kill the connection
+					return true
+				}
+				return !((username != nil && *username != conn.Config().User) || (password != nil && *password != conn.Config().Password))
+			}
+			pgxConf.BeforeConnect = func(ctx context.Context, config *pgx.ConnConfig) error {
+				// We ignore any returned errors here so that we use the credentials in the DSN as the default
+				username, password, _ := getDynamicCreds()
+				if username != nil && password != nil {
+					config.User = *username
+					config.Password = *password
+				}
+				return nil
+			}
+			if pool, err := pgxpool.NewWithConfig(context.Background(), pgxConf); err != nil {
+				return nil, err
+			} else {
+				return stdlib.OpenDBFromPool(pool), nil
+			}
+		default:
+			return nil, fmt.Errorf("dynamic credentials are only supported for the specified driver '%s'", driver)
 		}
 
-		pgxConf, err := pgxpool.ParseConfig(dsn)
-		if err != nil {
-			return nil, err
-		}
-		pgxConf.LazyConnect = true
-		pgxConf.AfterRelease = func(conn *pgx.Conn) bool {
-			username, password, err := getDynamicCreds()
-			if err != nil {
-				// If we can't fetch the dynamic credentials we don't want to kill the connection
-				return true
-			}
-			if (username != nil && *username != conn.Config().User) || (password != nil && *password != conn.Config().Password) {
-				return false
-			}
-			return true
-		}
-		pgxConf.BeforeConnect = func(ctx context.Context, config *pgx.ConnConfig) error {
-			// We ignore any returned errors here so that we use the credentials in the DSN as the default
-			username, password, _ := getDynamicCreds()
-			if username != nil {
-				config.User = *username
-			}
-			if password != nil {
-				config.Password = *password
-			}
-			return nil
-		}
 	}
 
 	return sql.Open(driver, dsn)

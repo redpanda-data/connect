@@ -162,7 +162,7 @@ func newSQLCacheFromConfig(conf *service.ParsedConfig, mgr *service.Resources) (
 		return nil, err
 	}
 
-	if s.db, err = sqlOpenWithReworks(mgr, s.driver, s.dsn, &connSettings.dynamicCredentials); err != nil {
+	if s.db, err = sqlOpenWithReworks(mgr, s.driver, s.dsn, connSettings.dynamicCredentials); err != nil {
 		return nil, err
 	}
 	connSettings.apply(context.Background(), s.db, s.logger)

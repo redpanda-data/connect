@@ -172,7 +172,7 @@ func NewSQLInsertProcessorFromConfig(conf *service.ParsedConfig, mgr *service.Re
 		return nil, err
 	}
 
-	if s.db, err = sqlOpenWithReworks(mgr, driverStr, dsnStr, &connSettings.dynamicCredentials); err != nil {
+	if s.db, err = sqlOpenWithReworks(mgr, driverStr, dsnStr, connSettings.dynamicCredentials); err != nil {
 		return nil, err
 	}
 

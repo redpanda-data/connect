@@ -195,7 +195,7 @@ func (s *sqlInsertOutput) Connect(ctx context.Context) error {
 	}
 
 	var err error
-	if s.db, err = sqlOpenWithReworks(s.manager, s.driver, s.dsn, &s.connSettings.dynamicCredentials); err != nil {
+	if s.db, err = sqlOpenWithReworks(s.manager, s.driver, s.dsn, s.connSettings.dynamicCredentials); err != nil {
 		return err
 	}
 

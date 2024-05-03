@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -22,10 +23,69 @@ import (
 	_ "github.com/benthosdev/benthos/v4/public/components/sql"
 )
 
-type testFn func(t *testing.T, driver, dsn, table string)
+type testFn func(t *testing.T, driver, dsn, table string, dynamicCredentials *dynamicCredentialsSet)
+
+const dynamicCredentialsCacheKey = "db_creds"
+const dynamicCredentialsCacheName = "test_cache"
+
+var dynamicCredentialsConfig = fmt.Sprintf(`dynamic_credentials:
+  cache: %s
+  cache_key: %s
+`, dynamicCredentialsCacheName, dynamicCredentialsCacheKey)
+
+func createDynamicCredentialsMockResources() *service.Resources {
+	return service.MockResources(
+		service.MockResourcesOptAddCache(dynamicCredentialsCacheName),
+	)
+}
+
+func rotateDynamicCredentials(testing *testing.T, manager *service.Resources, credentials dynamicCredentials) {
+	require.NoError(testing, manager.AccessCache(context.Background(), dynamicCredentialsCacheName, func(c service.Cache) {
+		_ = c.Set(context.Background(), dynamicCredentialsCacheKey, []byte(fmt.Sprintf("%s:%s", credentials.username, credentials.password)), nil)
+	}))
+}
+
+type dynamicCredentials struct {
+	username string
+	password string
+}
+
+type dynamicCredentialsSet struct {
+	LastUsedCredentials *dynamicCredentials
+	DropUser            func(credentials dynamicCredentials) error
+	CreateUser          func(credentials dynamicCredentials) error
+	TruncateTable       func(table string) error
+}
+
+func (d *dynamicCredentialsSet) RotateCredentials(t *testing.T, table string, resources ...*service.Resources) dynamicCredentials {
+	if d.LastUsedCredentials != nil {
+		require.NoError(t, d.DropUser(*d.LastUsedCredentials))
+	}
+	credBase, _ := gonanoid.Generate("abcdefghijklmnopqrstuvwxyz", 8)
+	newCredentials := dynamicCredentials{
+		username: fmt.Sprintf("%s_user_%s", table, credBase),
+		password: fmt.Sprintf("pass_%s", credBase),
+	}
+	require.NoError(t, d.CreateUser(newCredentials))
+	d.LastUsedCredentials = &newCredentials
+	for _, r := range resources {
+		rotateDynamicCredentials(t, r, newCredentials)
+	}
+	require.NoError(t, d.TruncateTable(table))
+	return newCredentials
+}
+
+func (d *dynamicCredentialsSet) Clone() *dynamicCredentialsSet {
+	return &dynamicCredentialsSet{
+		LastUsedCredentials: nil,
+		DropUser:            d.DropUser,
+		CreateUser:          d.CreateUser,
+		TruncateTable:       d.TruncateTable,
+	}
+}
 
 func testProcessors(name string, fn func(t *testing.T, insertProc, selectProc service.BatchProcessor)) testFn {
-	return func(t *testing.T, driver, dsn, table string) {
+	return func(t *testing.T, driver, dsn, table string, dynamicCredentials *dynamicCredentialsSet) {
 		colList := `[ "foo", "bar", "baz" ]`
 		if driver == "oracle" {
 			colList = `[ "\"foo\"", "\"bar\"", "\"baz\"" ]`
@@ -48,6 +108,11 @@ where: '"foo" = ?'
 args_mapping: 'root = [ this.id ]'
 `, driver, dsn, table)
 
+			if dynamicCredentials != nil {
+				insertConf = fmt.Sprintf("%s%s", insertConf, dynamicCredentialsConfig)
+				queryConf = fmt.Sprintf("%s%s", queryConf, dynamicCredentialsConfig)
+			}
+
 			env := service.NewEnvironment()
 
 			insertConfig, err := isql.InsertProcessorConfig().ParseYAML(insertConf, env)
@@ -56,21 +121,31 @@ args_mapping: 'root = [ this.id ]'
 			selectConfig, err := isql.SelectProcessorConfig().ParseYAML(queryConf, env)
 			require.NoError(t, err)
 
-			insertProc, err := isql.NewSQLInsertProcessorFromConfig(insertConfig, service.MockResources())
+			insertResources := createDynamicCredentialsMockResources()
+			insertProc, err := isql.NewSQLInsertProcessorFromConfig(insertConfig, insertResources)
 			require.NoError(t, err)
 			t.Cleanup(func() { insertProc.Close(context.Background()) })
 
-			selectProc, err := isql.NewSQLSelectProcessorFromConfig(selectConfig, service.MockResources())
+			selectResources := createDynamicCredentialsMockResources()
+			selectProc, err := isql.NewSQLSelectProcessorFromConfig(selectConfig, selectResources)
 			require.NoError(t, err)
 			t.Cleanup(func() { selectProc.Close(context.Background()) })
 
+			if dynamicCredentials != nil {
+				dynamicCredentials.RotateCredentials(t, table, insertResources, selectResources)
+			}
 			fn(t, insertProc, selectProc)
+
+			if dynamicCredentials != nil {
+				dynamicCredentials.RotateCredentials(t, table, insertResources, selectResources)
+				fn(t, insertProc, selectProc)
+			}
 		})
 	}
 }
 
 func testRawProcessors(name string, fn func(t *testing.T, insertProc, selectProc service.BatchProcessor)) testFn {
-	return func(t *testing.T, driver, dsn, table string) {
+	return func(t *testing.T, driver, dsn, table string, dynamicCredentials *dynamicCredentialsSet) {
 		t.Run(name, func(t *testing.T) {
 			valuesStr := `(?, ?, ?)`
 			if driver == "postgres" || driver == "clickhouse" {
@@ -99,6 +174,11 @@ query: select "foo", "bar", "baz" from %s where "foo" = `+placeholderStr+`
 args_mapping: 'root = [ this.id ]'
 `, driver, dsn, table)
 
+			if dynamicCredentials != nil {
+				insertConf = fmt.Sprintf("%s%s", insertConf, dynamicCredentialsConfig)
+				queryConf = fmt.Sprintf("%s%s", queryConf, dynamicCredentialsConfig)
+			}
+
 			env := service.NewEnvironment()
 
 			insertConfig, err := isql.RawProcessorConfig().ParseYAML(insertConf, env)
@@ -107,21 +187,31 @@ args_mapping: 'root = [ this.id ]'
 			selectConfig, err := isql.RawProcessorConfig().ParseYAML(queryConf, env)
 			require.NoError(t, err)
 
-			insertProc, err := isql.NewSQLRawProcessorFromConfig(insertConfig, service.MockResources())
+			insertResources := createDynamicCredentialsMockResources()
+			insertProc, err := isql.NewSQLRawProcessorFromConfig(insertConfig, insertResources)
 			require.NoError(t, err)
 			t.Cleanup(func() { insertProc.Close(context.Background()) })
 
-			selectProc, err := isql.NewSQLRawProcessorFromConfig(selectConfig, service.MockResources())
+			selectResources := createDynamicCredentialsMockResources()
+			selectProc, err := isql.NewSQLRawProcessorFromConfig(selectConfig, selectResources)
 			require.NoError(t, err)
 			t.Cleanup(func() { selectProc.Close(context.Background()) })
 
+			if dynamicCredentials != nil {
+				dynamicCredentials.RotateCredentials(t, table, insertResources, selectResources)
+			}
 			fn(t, insertProc, selectProc)
+
+			if dynamicCredentials != nil {
+				dynamicCredentials.RotateCredentials(t, table, insertResources, selectResources)
+				fn(t, insertProc, selectProc)
+			}
 		})
 	}
 }
 
 func testRawDeprecatedProcessors(name string, fn func(t *testing.T, insertProc, selectProc service.BatchProcessor)) testFn {
-	return func(t *testing.T, driver, dsn, table string) {
+	return func(t *testing.T, driver, dsn, table string, dynamicCredentials *dynamicCredentialsSet) {
 		t.Run(name, func(t *testing.T) {
 			valuesStr := `(?, ?, ?)`
 			if driver == "postgres" || driver == "clickhouse" {
@@ -158,11 +248,13 @@ result_codec: json_array
 			selectConfig, err := isql.DeprecatedProcessorConfig().ParseYAML(queryConf, env)
 			require.NoError(t, err)
 
-			insertProc, err := isql.NewSQLDeprecatedProcessorFromConfig(insertConfig, service.MockResources())
+			insertResources := createDynamicCredentialsMockResources()
+			insertProc, err := isql.NewSQLDeprecatedProcessorFromConfig(insertConfig, insertResources)
 			require.NoError(t, err)
 			t.Cleanup(func() { insertProc.Close(context.Background()) })
 
-			selectProc, err := isql.NewSQLDeprecatedProcessorFromConfig(selectConfig, service.MockResources())
+			selectResources := createDynamicCredentialsMockResources()
+			selectProc, err := isql.NewSQLDeprecatedProcessorFromConfig(selectConfig, selectResources)
 			require.NoError(t, err)
 			t.Cleanup(func() { selectProc.Close(context.Background()) })
 
@@ -343,7 +435,7 @@ var testDeprecatedProcessorsBasic = testRawDeprecatedProcessors("deprecated", fu
 	}
 })
 
-func testBatchInputOutputBatch(t *testing.T, driver, dsn, table string) {
+func testBatchInputOutputBatch(t *testing.T, driver, dsn, table string, dynamicCredentials *dynamicCredentialsSet) {
 	colList := `[ "foo", "bar", "baz" ]`
 	if driver == "oracle" {
 		colList = `[ "\"foo\"", "\"bar\"", "\"baz\"" ]`
@@ -366,22 +458,43 @@ sql_insert:
 `)
 
 		inputConf := confReplacer.Replace(`
+processors:
+  # For some reason MySQL driver doesn't resolve to integer by default.
+  - bloblang: |
+      root = this
+      root.bar = this.bar.number()
+
 sql_select:
   driver: $driver
   dsn: $dsn
   table: $table
   columns: [ "*" ]
   suffix: ' ORDER BY "bar" ASC'
-processors:
-  # For some reason MySQL driver doesn't resolve to integer by default.
-  - bloblang: |
-      root = this
-      root.bar = this.bar.number()
 `)
+
+		if dynamicCredentials != nil {
+			indentedDynamicCredentialConfig := fmt.Sprintf(`  dynamic_credentials:
+    cache: %s
+    cache_key: %s
+`, dynamicCredentialsCacheName, dynamicCredentialsCacheKey)
+			outputConf = fmt.Sprintf("%s%s", outputConf, indentedDynamicCredentialConfig)
+			inputConf = fmt.Sprintf("%s%s", inputConf, indentedDynamicCredentialConfig)
+		}
 
 		streamInBuilder := service.NewStreamBuilder()
 		require.NoError(t, streamInBuilder.SetLoggerYAML(`level: OFF`))
 		require.NoError(t, streamInBuilder.AddOutputYAML(outputConf))
+
+		if dynamicCredentials != nil {
+			credentials := dynamicCredentials.RotateCredentials(t, table)
+			cacheConf := fmt.Sprintf(`
+label: %s
+memory:
+  init_values:
+    %s: "%s:%s"
+`, dynamicCredentialsCacheName, dynamicCredentialsCacheKey, credentials.username, credentials.password)
+			require.NoError(t, streamInBuilder.AddCacheYAML(cacheConf))
+		}
 
 		inFn, err := streamInBuilder.AddBatchProducerFunc()
 		require.NoError(t, err)
@@ -396,6 +509,16 @@ processors:
 		streamOutBuilder := service.NewStreamBuilder()
 		require.NoError(t, streamOutBuilder.SetLoggerYAML(`level: OFF`))
 		require.NoError(t, streamOutBuilder.AddInputYAML(inputConf))
+
+		if dynamicCredentials != nil {
+			cacheConf := fmt.Sprintf(`
+label: %s
+memory:
+  init_values:
+    %s: "%s:%s"
+`, dynamicCredentialsCacheName, dynamicCredentialsCacheKey, dynamicCredentials.LastUsedCredentials.username, dynamicCredentials.LastUsedCredentials.password)
+			require.NoError(t, streamOutBuilder.AddCacheYAML(cacheConf))
+		}
 
 		var outBatches []string
 		require.NoError(t, streamOutBuilder.AddBatchConsumerFunc(func(c context.Context, mb service.MessageBatch) error {
@@ -436,7 +559,7 @@ processors:
 	})
 }
 
-func testBatchInputOutputRaw(t *testing.T, driver, dsn, table string) {
+func testBatchInputOutputRaw(t *testing.T, driver, dsn, table string, dynamicCredentials *dynamicCredentialsSet) {
 	t.Run("raw_input_output", func(t *testing.T) {
 		confReplacer := strings.NewReplacer(
 			"$driver", driver,
@@ -460,20 +583,41 @@ sql_raw:
 `)
 
 		inputConf := confReplacer.Replace(`
-sql_raw:
-  driver: $driver
-  dsn: $dsn
-  query: 'select * from $table ORDER BY "bar" ASC'
 processors:
   # For some reason MySQL driver doesn't resolve to integer by default.
   - bloblang: |
       root = this
       root.bar = this.bar.number()
+sql_raw:
+  driver: $driver
+  dsn: $dsn
+  query: 'select * from $table ORDER BY "bar" ASC'
 `)
+
+		if dynamicCredentials != nil {
+			indentedDynamicCredentialConfig := fmt.Sprintf(`
+  dynamic_credentials:
+    cache: %s
+    cache_key: %s
+`, dynamicCredentialsCacheName, dynamicCredentialsCacheKey)
+			outputConf = fmt.Sprintf("%s%s", outputConf, indentedDynamicCredentialConfig)
+			inputConf = fmt.Sprintf("%s%s", inputConf, indentedDynamicCredentialConfig)
+		}
 
 		streamInBuilder := service.NewStreamBuilder()
 		require.NoError(t, streamInBuilder.SetLoggerYAML(`level: OFF`))
 		require.NoError(t, streamInBuilder.AddOutputYAML(outputConf))
+
+		if dynamicCredentials != nil {
+			credentials := dynamicCredentials.RotateCredentials(t, table)
+			cacheConf := fmt.Sprintf(`
+label: %s
+memory:
+  init_values:
+    %s: "%s:%s"
+`, dynamicCredentialsCacheName, dynamicCredentialsCacheKey, credentials.username, credentials.password)
+			require.NoError(t, streamInBuilder.AddCacheYAML(cacheConf))
+		}
 
 		inFn, err := streamInBuilder.AddBatchProducerFunc()
 		require.NoError(t, err)
@@ -488,6 +632,16 @@ processors:
 		streamOutBuilder := service.NewStreamBuilder()
 		require.NoError(t, streamOutBuilder.SetLoggerYAML(`level: OFF`))
 		require.NoError(t, streamOutBuilder.AddInputYAML(inputConf))
+
+		if dynamicCredentials != nil {
+			cacheConf := fmt.Sprintf(`
+label: %s
+memory:
+  init_values:
+    %s: "%s:%s"
+`, dynamicCredentialsCacheName, dynamicCredentialsCacheKey, dynamicCredentials.LastUsedCredentials.username, dynamicCredentials.LastUsedCredentials.password)
+			require.NoError(t, streamOutBuilder.AddCacheYAML(cacheConf))
+		}
 
 		var outBatches []string
 		require.NoError(t, streamOutBuilder.AddBatchConsumerFunc(func(c context.Context, mb service.MessageBatch) error {
@@ -528,22 +682,31 @@ processors:
 	})
 }
 
-func testSuite(t *testing.T, driver, dsn string, createTableFn func(string) (string, error)) {
-	for _, fn := range []testFn{
+func testSuite(t *testing.T, driver, dsn string, createTableFn func(string) (string, error), dynamicCredentials *dynamicCredentialsSet) {
+	tests := []testFn{
 		testBatchProcessorBasic,
 		testBatchProcessorParallel,
 		testBatchInputOutputBatch,
 		testBatchInputOutputRaw,
 		testRawProcessorsBasic,
-		testDeprecatedProcessorsBasic,
-	} {
+	}
+
+	if dynamicCredentials == nil {
+		tests = append(tests, testDeprecatedProcessorsBasic)
+	}
+
+	for _, fn := range tests {
 		tableName, err := gonanoid.Generate("abcdefghijklmnopqrstuvwxyz", 40)
 		require.NoError(t, err)
 
 		tableName, err = createTableFn(tableName)
 		require.NoError(t, err)
+		var dynamicCredentialsClone *dynamicCredentialsSet
+		if dynamicCredentials != nil {
+			dynamicCredentialsClone = dynamicCredentials.Clone()
+		}
 
-		fn(t, driver, dsn, tableName)
+		fn(t, driver, dsn, tableName, dynamicCredentialsClone)
 	}
 }
 
@@ -599,7 +762,7 @@ func TestIntegrationClickhouse(t *testing.T) {
 		return nil
 	}))
 
-	testSuite(t, "clickhouse", dsn, createTable)
+	testSuite(t, "clickhouse", dsn, createTable, nil)
 }
 
 func TestIntegrationOldClickhouse(t *testing.T) {
@@ -654,7 +817,7 @@ func TestIntegrationOldClickhouse(t *testing.T) {
 		return nil
 	}))
 
-	testSuite(t, "clickhouse", dsn, createTable)
+	testSuite(t, "clickhouse", dsn, createTable, nil)
 }
 
 func TestIntegrationPostgres(t *testing.T) {
@@ -683,10 +846,27 @@ func TestIntegrationPostgres(t *testing.T) {
 		if err = pool.Purge(resource); err != nil {
 			t.Logf("Failed to clean up docker resource: %s", err)
 		}
-		if db != nil {
-			db.Close()
-		}
-	})
+	},
+	)
+
+	for _, driverConfig := range []struct {
+		Driver                string
+		UseDynamicCredentials bool
+	}{
+		{"postgres", false},
+		{"pgx", false},
+		{"pgx", true},
+	} {
+		driver := driverConfig.Driver
+		useDynamicCredentials := driverConfig.UseDynamicCredentials
+		t.Run(fmt.Sprintf("driver %s useDynamicCredentials %s", driver, strconv.FormatBool(useDynamicCredentials)), func(t *testing.T) {
+			var db *sql.DB
+
+			t.Cleanup(func() {
+				if db != nil {
+					db.Close()
+				}
+			})
 
 	createTable := func(name string) (string, error) {
 		_, err := db.Exec(fmt.Sprintf(`create table %s (
@@ -698,22 +878,47 @@ func TestIntegrationPostgres(t *testing.T) {
 		return name, err
 	}
 
-	dsn := fmt.Sprintf("postgres://testuser:testpass@localhost:%s/testdb?sslmode=disable", resource.GetPort("5432/tcp"))
-	require.NoError(t, pool.Retry(func() error {
-		db, err = sql.Open("postgres", dsn)
-		if err != nil {
-			return err
-		}
-		if err = db.Ping(); err != nil {
-			db.Close()
-			db = nil
-			return err
-		}
-		if _, err := createTable("footable"); err != nil {
-			return err
-		}
-		return nil
-	}))
+			truncateTable := func(table string) error {
+				_, err := db.Exec(fmt.Sprintf(`truncate table %s`, table))
+				return err
+			}
+
+			createUser := func(user dynamicCredentials) error {
+				_, err := db.Exec(fmt.Sprintf(`create user %s with password '%s' SUPERUSER`, user.username, user.password))
+				return err
+			}
+
+			dropUser := func(user dynamicCredentials) error {
+				_, err := db.Exec(fmt.Sprintf(`drop user %s`, user.username))
+				return err
+			}
+
+			dsn := fmt.Sprintf("postgres://testuser:testpass@localhost:%s/testdb?sslmode=disable", resource.GetPort("5432/tcp"))
+			require.NoError(t, pool.Retry(func() error {
+				db, err = sql.Open(driver, dsn)
+				if err != nil {
+					return err
+				}
+				if err = db.Ping(); err != nil {
+					db.Close()
+					db = nil
+					return err
+				}
+				if _, err := createTable(fmt.Sprintf("footable_%s_%s", driver, strconv.FormatBool(useDynamicCredentials))); err != nil {
+					return err
+				}
+				return nil
+			}))
+			if useDynamicCredentials {
+				testSuite(t, driver, strings.Replace(dsn, "testuser:testpass", ":", 1), createTable, &dynamicCredentialsSet{
+					TruncateTable: truncateTable,
+					CreateUser:    createUser,
+					DropUser:      dropUser,
+				})
+			} else {
+				testSuite(t, driver, dsn, createTable, nil)
+			}
+		})
 
 	testSuite(t, "postgres", dsn, createTable)
 }
@@ -779,7 +984,7 @@ func TestIntegrationMySQL(t *testing.T) {
 		return nil
 	}))
 
-	testSuite(t, "mysql", dsn, createTable)
+	testSuite(t, "mysql", dsn, createTable, nil)
 }
 
 func TestIntegrationMSSQL(t *testing.T) {
@@ -840,7 +1045,7 @@ func TestIntegrationMSSQL(t *testing.T) {
 		return nil
 	}))
 
-	testSuite(t, "mssql", dsn, createTable)
+	testSuite(t, "mssql", dsn, createTable, nil)
 }
 
 func TestIntegrationSQLite(t *testing.T) {
@@ -883,7 +1088,7 @@ func TestIntegrationSQLite(t *testing.T) {
 		return nil
 	}())
 
-	testSuite(t, "sqlite", dsn, createTable)
+	testSuite(t, "sqlite", dsn, createTable, nil)
 }
 
 func TestIntegrationOracle(t *testing.T) {
@@ -945,7 +1150,7 @@ func TestIntegrationOracle(t *testing.T) {
 		return nil
 	}))
 
-	testSuite(t, "oracle", dsn, createTable)
+	testSuite(t, "oracle", dsn, createTable, nil)
 }
 
 func TestIntegrationTrino(t *testing.T) {
@@ -1006,7 +1211,7 @@ create table %s (
 		return nil
 	}))
 
-	testSuite(t, "trino", dsn, createTable)
+	testSuite(t, "trino", dsn, createTable, nil)
 }
 
 func TestIntegrationCosmosDB(t *testing.T) {
