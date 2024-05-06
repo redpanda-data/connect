@@ -83,6 +83,9 @@ func TestProcessorIntegration(t *testing.T) {
 	t.Run("find one", func(t *testing.T) {
 		testMongoDBProcessorFindOne(mongoClient, port, t)
 	})
+	t.Run("find many", func(t *testing.T) {
+		testMongoDBProcessorFindMany(mongoClient, port, t)
+	})
 	t.Run("upsert", func(t *testing.T) {
 		testMongoDBProcessorUpsert(mongoClient, port, t)
 	})
@@ -466,6 +469,75 @@ json_marshal_mode: %v
 
 		jdopts := jsondiff.DefaultJSONOptions()
 		diff, explanation := jsondiff.Compare(mBytes, []byte(tt.expected), &jdopts)
+		assert.Equalf(t, jsondiff.SupersetMatch.String(), diff.String(), "%s: %s", tt.name, explanation)
+	}
+}
+
+func testMongoDBProcessorFindMany(mongoClient *mongo.Client, port string, t *testing.T) {
+	tCtx := context.Background()
+	collection := mongoClient.Database("TestDB").Collection("TestCollection")
+
+	_, err := collection.InsertOne(context.Background(), bson.M{"a": "foo", "b": "bar", "c": "baz", "answer_to_everything": 42})
+	assert.NoError(t, err)
+
+	for _, tt := range []struct {
+		name        string
+		message     string
+		marshalMode mongodb.JSONMarshalMode
+		collection  string
+		expected    string
+	}{
+		{
+			name:        "canonical marshal mode",
+			marshalMode: mongodb.JSONMarshalModeCanonical,
+			message:     `{"a":"foo","x":"ignore_me_via_filter_map"}`,
+			expected:    `[{"a":"foo","b":"bar","c":"baz","answer_to_everything":{"$numberInt":"42"}}]`,
+		},
+		{
+			name:        "relaxed marshal mode",
+			marshalMode: mongodb.JSONMarshalModeRelaxed,
+			message:     `{"a":"foo","x":"ignore_me_via_filter_map"}`,
+			expected:    `[{"a":"foo","b":"bar","c":"baz","answer_to_everything":42}]`,
+		},
+		{
+			name:     "no documents found",
+			message:  `{"a":"notfound"}`,
+			expected: `[]`,
+		},
+		{
+			name:        "collection interpolation",
+			marshalMode: mongodb.JSONMarshalModeCanonical,
+			collection:  `${!json("col")}`,
+			message:     `{"col":"TestCollection","a":"foo"}`,
+			expected:    `[{"a":"foo","b":"bar","c":"baz","answer_to_everything":{"$numberInt":"42"}}]`,
+		},
+	} {
+		m := testMProc(t, port, tt.collection, fmt.Sprintf(`
+write_concern:
+  w: "1"
+  j: false
+  timeout: 100s
+operation: find-many
+filter_map: |
+  root.a = this.a
+json_marshal_mode: %v
+`, tt.marshalMode))
+
+		resMsgs, err := m.ProcessBatch(tCtx, service.MessageBatch{
+			service.NewMessage([]byte(tt.message)),
+		})
+		require.NoError(t, err)
+		require.Len(t, resMsgs, 1)
+
+		mBytes, err := resMsgs[0][0].AsBytes()
+		require.NoError(t, err)
+
+		jdopts := jsondiff.DefaultJSONOptions()
+		diff, explanation := jsondiff.Compare(mBytes, []byte(tt.expected), &jdopts)
+		if tt.name == "no documents found" {
+			assert.Equalf(t, jsondiff.FullMatch.String(), diff.String(), "%s: %s", tt.name, explanation)
+			continue
+		}
 		assert.Equalf(t, jsondiff.SupersetMatch.String(), diff.String(), "%s: %s", tt.name, explanation)
 	}
 }
