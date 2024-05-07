@@ -56,7 +56,7 @@ func newSQLDeprecatedOutputFromConfig(conf *service.ParsedConfig, mgr *service.R
 		return nil, err
 	}
 
-	dsnStr, err := conf.FieldString("data_source_name")
+	dsnStr, err := conf.FieldInterpolatedString("data_source_name")
 	if err != nil {
 		return nil, err
 	}

@@ -94,7 +94,7 @@ func init() {
 
 type sqlSelectInput struct {
 	driver  string
-	dsn     string
+	dsn     *service.InterpolatedString
 	db      *sql.DB
 	rows    *sql.Rows
 	builder squirrel.SelectBuilder
@@ -123,7 +123,7 @@ func newSQLSelectInputFromConfig(conf *service.ParsedConfig, mgr *service.Resour
 		return nil, err
 	}
 
-	if s.dsn, err = conf.FieldString("dsn"); err != nil {
+	if s.dsn, err = conf.FieldInterpolatedString("dsn"); err != nil {
 		return nil, err
 	}
 

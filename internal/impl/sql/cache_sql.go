@@ -88,8 +88,8 @@ func init() {
 
 type sqlCache struct {
 	driver string
-	dsn    string
 	db     *sql.DB
+	dsn    *service.InterpolatedString
 
 	keyColumn string
 
@@ -114,7 +114,7 @@ func newSQLCacheFromConfig(conf *service.ParsedConfig, mgr *service.Resources) (
 		return nil, err
 	}
 
-	if s.dsn, err = conf.FieldString("dsn"); err != nil {
+	if s.dsn, err = conf.FieldInterpolatedString("dsn"); err != nil {
 		return nil, err
 	}
 

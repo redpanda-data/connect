@@ -72,7 +72,7 @@ func init() {
 
 type sqlRawInput struct {
 	driver string
-	dsn    string
+	dsn    *service.InterpolatedString
 	db     *sql.DB
 	dbMut  sync.Mutex
 
@@ -102,7 +102,7 @@ func newSQLRawInputFromConfig(conf *service.ParsedConfig, mgr *service.Resources
 		return nil, err
 	}
 
-	if s.dsn, err = conf.FieldString("dsn"); err != nil {
+	if s.dsn, err = conf.FieldInterpolatedString("dsn"); err != nil {
 		return nil, err
 	}
 

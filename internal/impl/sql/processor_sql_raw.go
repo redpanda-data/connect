@@ -112,7 +112,7 @@ func NewSQLRawProcessorFromConfig(conf *service.ParsedConfig, mgr *service.Resou
 		return nil, err
 	}
 
-	dsnStr, err := conf.FieldString("dsn")
+	dsnStr, err := conf.FieldInterpolatedString("dsn")
 	if err != nil {
 		return nil, err
 	}
@@ -152,7 +152,8 @@ func NewSQLRawProcessorFromConfig(conf *service.ParsedConfig, mgr *service.Resou
 
 func newSQLRawProcessor(
 	manager *service.Resources,
-	driverStr, dsnStr string,
+	driverStr string,
+	dsnStr *service.InterpolatedString,
 	queryStatic string,
 	queryDyn *service.InterpolatedString,
 	onlyExec bool,

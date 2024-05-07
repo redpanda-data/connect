@@ -95,7 +95,7 @@ func init() {
 
 type sqlInsertOutput struct {
 	driver  string
-	dsn     string
+	dsn     *service.InterpolatedString
 	db      *sql.DB
 	builder squirrel.InsertBuilder
 	dbMut   sync.RWMutex
@@ -129,7 +129,7 @@ func newSQLInsertOutputFromConfig(conf *service.ParsedConfig, mgr *service.Resou
 		s.useTxStmt = true
 	}
 
-	if s.dsn, err = conf.FieldString("dsn"); err != nil {
+	if s.dsn, err = conf.FieldInterpolatedString("dsn"); err != nil {
 		return nil, err
 	}
 

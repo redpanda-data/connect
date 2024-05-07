@@ -116,7 +116,7 @@ func NewSQLSelectProcessorFromConfig(conf *service.ParsedConfig, mgr *service.Re
 		return nil, err
 	}
 
-	dsnStr, err := conf.FieldString("dsn")
+	dsnStr, err := conf.FieldInterpolatedString("dsn")
 	if err != nil {
 		return nil, err
 	}

@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -39,40 +38,57 @@ func createDynamicCredentialsMockResources() *service.Resources {
 	)
 }
 
-func rotateDynamicCredentials(testing *testing.T, manager *service.Resources, credentials dynamicCredentials) {
+func rotateDynamicCredentials(testing *testing.T, manager *service.Resources, credentials map[string]string) {
 	require.NoError(testing, manager.AccessCache(context.Background(), dynamicCredentialsCacheName, func(c service.Cache) {
-		_ = c.Set(context.Background(), dynamicCredentialsCacheKey, []byte(fmt.Sprintf("%s:%s", credentials.username, credentials.password)), nil)
+		msg := service.NewMessage(nil)
+		msg.SetStructured(credentials)
+		bytes, err := msg.AsBytes()
+		require.NoError(testing, err)
+		_ = c.Set(context.Background(), dynamicCredentialsCacheKey, bytes, nil)
 	}))
 }
 
-type dynamicCredentials struct {
-	username string
-	password string
+type dynamicCredentials map[string]string
+
+func (d dynamicCredentials) ToMessage() *service.Message {
+	msg := service.NewMessage(nil)
+	msg.SetStructured(d)
+	return msg
+}
+
+func (d dynamicCredentials) ToBytes() []byte {
+	msg := d.ToMessage()
+	bytes, err := msg.AsBytes()
+	if err != nil {
+		panic(err)
+	}
+	return bytes
+}
+
+func (d dynamicCredentials) ToString() string {
+	return string(d.ToBytes())
 }
 
 type dynamicCredentialsSet struct {
 	LastUsedCredentials *dynamicCredentials
 	DropUser            func(credentials dynamicCredentials) error
-	CreateUser          func(credentials dynamicCredentials) error
+	CreateUser          func(credBass string) (dynamicCredentials, error)
 	TruncateTable       func(table string) error
 }
 
-func (d *dynamicCredentialsSet) RotateCredentials(t *testing.T, table string, resources ...*service.Resources) dynamicCredentials {
+func (d *dynamicCredentialsSet) RotateCredentials(t *testing.T, table string, resources ...*service.Resources) *dynamicCredentials {
 	if d.LastUsedCredentials != nil {
 		require.NoError(t, d.DropUser(*d.LastUsedCredentials))
 	}
 	credBase, _ := gonanoid.Generate("abcdefghijklmnopqrstuvwxyz", 8)
-	newCredentials := dynamicCredentials{
-		username: fmt.Sprintf("%s_user_%s", table, credBase),
-		password: fmt.Sprintf("pass_%s", credBase),
-	}
-	require.NoError(t, d.CreateUser(newCredentials))
+	newCredentials, err := d.CreateUser(credBase)
+	require.NoError(t, err)
 	d.LastUsedCredentials = &newCredentials
 	for _, r := range resources {
 		rotateDynamicCredentials(t, r, newCredentials)
 	}
 	require.NoError(t, d.TruncateTable(table))
-	return newCredentials
+	return d.LastUsedCredentials
 }
 
 func (d *dynamicCredentialsSet) Clone() *dynamicCredentialsSet {
@@ -90,12 +106,17 @@ func testProcessors(name string, fn func(t *testing.T, insertProc, selectProc se
 		if driver == "oracle" {
 			colList = `[ "\"foo\"", "\"bar\"", "\"baz\"" ]`
 		}
+		name := name
+		if dynamicCredentials != nil {
+			name = fmt.Sprintf("%s_dynamic_credentials", name)
+		}
 		t.Run(name, func(t *testing.T) {
 			insertConf := fmt.Sprintf(`
 driver: %s
 dsn: %s
 table: %s
 columns: %s
+conn_max_idle: 0
 args_mapping: 'root = [ this.foo, this.bar.floor(), this.baz ]'
 `, driver, dsn, table, colList)
 
@@ -105,6 +126,7 @@ dsn: %s
 table: %s
 columns: [ "*" ]
 where: '"foo" = ?'
+conn_max_idle: 0
 args_mapping: 'root = [ this.id ]'
 `, driver, dsn, table)
 
@@ -146,7 +168,12 @@ args_mapping: 'root = [ this.id ]'
 
 func testRawProcessors(name string, fn func(t *testing.T, insertProc, selectProc service.BatchProcessor)) testFn {
 	return func(t *testing.T, driver, dsn, table string, dynamicCredentials *dynamicCredentialsSet) {
+		name := name
+		if dynamicCredentials != nil {
+			name = fmt.Sprintf("%s_dynamic_credentials", name)
+		}
 		t.Run(name, func(t *testing.T) {
+
 			valuesStr := `(?, ?, ?)`
 			if driver == "postgres" || driver == "clickhouse" {
 				valuesStr = `($1, $2, $3)`
@@ -156,6 +183,7 @@ func testRawProcessors(name string, fn func(t *testing.T, insertProc, selectProc
 			insertConf := fmt.Sprintf(`
 driver: %s
 dsn: %s
+conn_max_idle: 0
 query: insert into %s ( "foo", "bar", "baz" ) values `+valuesStr+`
 args_mapping: 'root = [ this.foo, this.bar.floor(), this.baz ]'
 exec_only: true
@@ -170,6 +198,7 @@ exec_only: true
 			queryConf := fmt.Sprintf(`
 driver: %s
 dsn: %s
+conn_max_idle: 0
 query: select "foo", "bar", "baz" from %s where "foo" = `+placeholderStr+`
 args_mapping: 'root = [ this.id ]'
 `, driver, dsn, table)
@@ -212,6 +241,10 @@ args_mapping: 'root = [ this.id ]'
 
 func testRawDeprecatedProcessors(name string, fn func(t *testing.T, insertProc, selectProc service.BatchProcessor)) testFn {
 	return func(t *testing.T, driver, dsn, table string, dynamicCredentials *dynamicCredentialsSet) {
+		name := name
+		if dynamicCredentials != nil {
+			name = fmt.Sprintf("%s_dynamic_credentials", name)
+		}
 		t.Run(name, func(t *testing.T) {
 			valuesStr := `(?, ?, ?)`
 			if driver == "postgres" || driver == "clickhouse" {
@@ -222,6 +255,7 @@ func testRawDeprecatedProcessors(name string, fn func(t *testing.T, insertProc, 
 			insertConf := fmt.Sprintf(`
 driver: %s
 data_source_name: %s
+conn_max_idle: 0
 query: insert into %s ( "foo", "bar", "baz" ) values `+valuesStr+`
 args_mapping: 'root = [ this.foo, this.bar.floor(), this.baz ]'
 `, driver, dsn, table)
@@ -234,6 +268,7 @@ args_mapping: 'root = [ this.foo, this.bar.floor(), this.baz ]'
 			}
 			queryConf := fmt.Sprintf(`
 driver: %s
+conn_max_idle: 0
 data_source_name: %s
 query: select "foo", "bar", "baz" from %s where "foo" = `+placeholderStr+`
 args_mapping: 'root = [ this.id ]'
@@ -440,7 +475,11 @@ func testBatchInputOutputBatch(t *testing.T, driver, dsn, table string, dynamicC
 	if driver == "oracle" {
 		colList = `[ "\"foo\"", "\"bar\"", "\"baz\"" ]`
 	}
-	t.Run("batch_input_output", func(t *testing.T) {
+	name := "batch_input_output"
+	if dynamicCredentials != nil {
+		name = fmt.Sprintf("%s_dynamic_credentials", name)
+	}
+	t.Run(name, func(t *testing.T) {
 		confReplacer := strings.NewReplacer(
 			"$driver", driver,
 			"$dsn", dsn,
@@ -452,6 +491,7 @@ func testBatchInputOutputBatch(t *testing.T, driver, dsn, table string, dynamicC
 sql_insert:
   driver: $driver
   dsn: $dsn
+  conn_max_idle: 0
   table: $table
   columns: $columnlist
   args_mapping: 'root = [ this.foo, this.bar.floor(), this.baz ]'
@@ -467,6 +507,7 @@ processors:
 sql_select:
   driver: $driver
   dsn: $dsn
+  conn_max_idle: 0
   table: $table
   columns: [ "*" ]
   suffix: ' ORDER BY "bar" ASC'
@@ -491,8 +532,8 @@ sql_select:
 label: %s
 memory:
   init_values:
-    %s: "%s:%s"
-`, dynamicCredentialsCacheName, dynamicCredentialsCacheKey, credentials.username, credentials.password)
+    %s: '%s'
+`, dynamicCredentialsCacheName, dynamicCredentialsCacheKey, credentials.ToString())
 			require.NoError(t, streamInBuilder.AddCacheYAML(cacheConf))
 		}
 
@@ -515,8 +556,8 @@ memory:
 label: %s
 memory:
   init_values:
-    %s: "%s:%s"
-`, dynamicCredentialsCacheName, dynamicCredentialsCacheKey, dynamicCredentials.LastUsedCredentials.username, dynamicCredentials.LastUsedCredentials.password)
+    %s: '%s'
+`, dynamicCredentialsCacheName, dynamicCredentialsCacheKey, dynamicCredentials.LastUsedCredentials.ToString())
 			require.NoError(t, streamOutBuilder.AddCacheYAML(cacheConf))
 		}
 
@@ -560,7 +601,11 @@ memory:
 }
 
 func testBatchInputOutputRaw(t *testing.T, driver, dsn, table string, dynamicCredentials *dynamicCredentialsSet) {
-	t.Run("raw_input_output", func(t *testing.T) {
+	name := "raw_input_output"
+	if dynamicCredentials != nil {
+		name = fmt.Sprintf("%s_dynamic_credentials", name)
+	}
+	t.Run(name, func(t *testing.T) {
 		confReplacer := strings.NewReplacer(
 			"$driver", driver,
 			"$dsn", dsn,
@@ -578,6 +623,7 @@ func testBatchInputOutputRaw(t *testing.T, driver, dsn, table string, dynamicCre
 sql_raw:
   driver: $driver
   dsn: $dsn
+  conn_max_idle: 0
   query: insert into $table ("foo", "bar", "baz") values ` + valuesStr + `
   args_mapping: 'root = [ this.foo, this.bar.floor(), this.baz ]'
 `)
@@ -591,6 +637,7 @@ processors:
 sql_raw:
   driver: $driver
   dsn: $dsn
+  conn_max_idle: 0
   query: 'select * from $table ORDER BY "bar" ASC'
 `)
 
@@ -614,8 +661,8 @@ sql_raw:
 label: %s
 memory:
   init_values:
-    %s: "%s:%s"
-`, dynamicCredentialsCacheName, dynamicCredentialsCacheKey, credentials.username, credentials.password)
+    %s: '%s'
+`, dynamicCredentialsCacheName, dynamicCredentialsCacheKey, credentials.ToString())
 			require.NoError(t, streamInBuilder.AddCacheYAML(cacheConf))
 		}
 
@@ -638,8 +685,8 @@ memory:
 label: %s
 memory:
   init_values:
-    %s: "%s:%s"
-`, dynamicCredentialsCacheName, dynamicCredentialsCacheKey, dynamicCredentials.LastUsedCredentials.username, dynamicCredentials.LastUsedCredentials.password)
+    %s: '%s'
+`, dynamicCredentialsCacheName, dynamicCredentialsCacheKey, dynamicCredentials.LastUsedCredentials.ToString())
 			require.NoError(t, streamOutBuilder.AddCacheYAML(cacheConf))
 		}
 
@@ -849,17 +896,8 @@ func TestIntegrationPostgres(t *testing.T) {
 	},
 	)
 
-	for _, driverConfig := range []struct {
-		Driver                string
-		UseDynamicCredentials bool
-	}{
-		{"postgres", false},
-		{"pgx", false},
-		{"pgx", true},
-	} {
-		driver := driverConfig.Driver
-		useDynamicCredentials := driverConfig.UseDynamicCredentials
-		t.Run(fmt.Sprintf("driver %s useDynamicCredentials %s", driver, strconv.FormatBool(useDynamicCredentials)), func(t *testing.T) {
+	for _, driver := range []string{"postgres", "pgx"} {
+		t.Run(fmt.Sprintf("driver %s", driver), func(t *testing.T) {
 			var db *sql.DB
 
 			t.Cleanup(func() {
@@ -883,17 +921,29 @@ func TestIntegrationPostgres(t *testing.T) {
 				return err
 			}
 
-			createUser := func(user dynamicCredentials) error {
-				_, err := db.Exec(fmt.Sprintf(`create user %s with password '%s' SUPERUSER`, user.username, user.password))
-				return err
+			createUser := func(credBase string) (dynamicCredentials, error) {
+				username := fmt.Sprintf("user_%s", credBase)
+				password := fmt.Sprintf("pass_%s", credBase)
+				credentials := map[string]string{
+					"username": username,
+					"password": password,
+				}
+
+				_, err := db.Exec(fmt.Sprintf(`create user %s with password '%s' SUPERUSER`, username, password))
+				if err != nil {
+					return nil, err
+				}
+				return credentials, nil
 			}
 
 			dropUser := func(user dynamicCredentials) error {
-				_, err := db.Exec(fmt.Sprintf(`drop user %s`, user.username))
+				username := user["username"]
+				_, err := db.Exec(fmt.Sprintf(`drop user %s`, username))
 				return err
 			}
 
 			dsn := fmt.Sprintf("postgres://testuser:testpass@localhost:%s/testdb?sslmode=disable", resource.GetPort("5432/tcp"))
+			dynamicDsn := strings.Replace(dsn, "testuser:testpass", "${! username }:${! password }", 1)
 			require.NoError(t, pool.Retry(func() error {
 				db, err = sql.Open(driver, dsn)
 				if err != nil {
@@ -904,20 +954,19 @@ func TestIntegrationPostgres(t *testing.T) {
 					db = nil
 					return err
 				}
-				if _, err := createTable(fmt.Sprintf("footable_%s_%s", driver, strconv.FormatBool(useDynamicCredentials))); err != nil {
+				if _, err := createTable(fmt.Sprintf("footable_%s", driver)); err != nil {
 					return err
 				}
 				return nil
 			}))
-			if useDynamicCredentials {
-				testSuite(t, driver, strings.Replace(dsn, "testuser:testpass", ":", 1), createTable, &dynamicCredentialsSet{
-					TruncateTable: truncateTable,
-					CreateUser:    createUser,
-					DropUser:      dropUser,
-				})
-			} else {
-				testSuite(t, driver, dsn, createTable, nil)
-			}
+			// static credential tests
+			testSuite(t, driver, dsn, createTable, nil)
+			// dynamic credential tests
+			testSuite(t, driver, dynamicDsn, createTable, &dynamicCredentialsSet{
+				TruncateTable: truncateTable,
+				CreateUser:    createUser,
+				DropUser:      dropUser,
+			})
 		})
 
 	testSuite(t, "postgres", dsn, createTable)
@@ -943,7 +992,7 @@ func TestIntegrationMySQL(t *testing.T) {
 			"MYSQL_USER=testuser",
 			"MYSQL_PASSWORD=testpass",
 			"MYSQL_DATABASE=testdb",
-			"MYSQL_RANDOM_ROOT_PASSWORD=yes",
+			"MYSQL_ROOT_PASSWORD=rootpass",
 		},
 	})
 	require.NoError(t, err)
@@ -969,8 +1018,9 @@ func TestIntegrationMySQL(t *testing.T) {
 	}
 
 	dsn := fmt.Sprintf("testuser:testpass@tcp(localhost:%s)/testdb", resource.GetPort("3306/tcp"))
+	dynamicDsn := strings.Replace(dsn, "testuser:testpass", "${! username }:${! password }", 1)
 	require.NoError(t, pool.Retry(func() error {
-		if db, err = sql.Open("mysql", dsn); err != nil {
+		if db, err = sql.Open("mysql", fmt.Sprintf("root:rootpass@tcp(localhost:%s)/testdb", resource.GetPort("3306/tcp"))); err != nil {
 			return err
 		}
 		if err = db.Ping(); err != nil {
@@ -984,7 +1034,38 @@ func TestIntegrationMySQL(t *testing.T) {
 		return nil
 	}))
 
+	// static credentials tests
 	testSuite(t, "mysql", dsn, createTable, nil)
+	// dynamic credentials tests
+	testSuite(t, "mysql", dynamicDsn, createTable, &dynamicCredentialsSet{
+		TruncateTable: func(table string) error {
+			_, err := db.Exec(fmt.Sprintf(`truncate table %s`, table))
+			return err
+		},
+		CreateUser: func(credBase string) (dynamicCredentials, error) {
+			username := fmt.Sprintf("user_%s", credBase)
+			password := fmt.Sprintf("pass_%s", credBase)
+			credentials := map[string]string{
+				"username": username,
+				"password": password,
+			}
+
+			_, err := db.Exec(fmt.Sprintf(`create user %s identified by '%s'`, username, password))
+			if err != nil {
+				return nil, err
+			}
+			_, err = db.Exec(fmt.Sprintf(`grant all on *.* to %s`, username))
+			if err != nil {
+				return nil, err
+			}
+			return credentials, nil
+		},
+		DropUser: func(user dynamicCredentials) error {
+			username := user["username"]
+			_, err := db.Exec(fmt.Sprintf(`drop user %s`, username))
+			return err
+		},
+	})
 }
 
 func TestIntegrationMSSQL(t *testing.T) {
@@ -1029,6 +1110,7 @@ func TestIntegrationMSSQL(t *testing.T) {
 	}
 
 	dsn := fmt.Sprintf("sqlserver://sa:"+testPassword+"@localhost:%s?database=master", resource.GetPort("1433/tcp"))
+	dynamicDsn := strings.Replace(dsn, "sa:"+testPassword, "${! username }:${! password }", 1)
 	require.NoError(t, pool.Retry(func() error {
 		db, err = sql.Open("mssql", dsn)
 		if err != nil {
@@ -1045,7 +1127,42 @@ func TestIntegrationMSSQL(t *testing.T) {
 		return nil
 	}))
 
+	// static credentials tests
 	testSuite(t, "mssql", dsn, createTable, nil)
+
+	// dynamic credentials tests
+	testSuite(t, "mssql", dynamicDsn, createTable, &dynamicCredentialsSet{
+		TruncateTable: func(table string) error {
+			_, err := db.Exec(fmt.Sprintf(`truncate table %s`, table))
+			return err
+		},
+		CreateUser: func(credBase string) (dynamicCredentials, error) {
+			username := fmt.Sprintf("user_%s", credBase)
+			password := fmt.Sprintf("pass_%s", credBase)
+			credentials := map[string]string{
+				"username": username,
+				"password": password,
+			}
+			_, err := db.Exec(fmt.Sprintf(`create login %s with password = '%s', check_policy = off`, username, password))
+			if err != nil {
+				return nil, err
+			}
+			_, err = db.Exec(fmt.Sprintf(`create user %s for login %s`, username, username))
+			if err != nil {
+				return nil, err
+			}
+			_, err = db.Exec(fmt.Sprintf(`grant all to %s`, username))
+			if err != nil {
+				return nil, err
+			}
+			return credentials, nil
+		},
+		DropUser: func(user dynamicCredentials) error {
+			username := user["username"]
+			_, err := db.Exec(fmt.Sprintf(`drop user %s`, username))
+			return err
+		},
+	})
 }
 
 func TestIntegrationSQLite(t *testing.T) {
@@ -1132,6 +1249,7 @@ func TestIntegrationOracle(t *testing.T) {
 	}
 
 	dsn := fmt.Sprintf("oracle://system:testpass@localhost:%s/FREEPDB1", resource.GetPort("1521/tcp"))
+	dynamicDsn := strings.Replace(dsn, "system:testpass", "${! username }:${! password }", 1)
 	require.NoError(t, pool.Retry(func() error {
 		db, err = sql.Open("oracle", dsn)
 		if err != nil {
@@ -1150,7 +1268,38 @@ func TestIntegrationOracle(t *testing.T) {
 		return nil
 	}))
 
+	// static credentials tests
 	testSuite(t, "oracle", dsn, createTable, nil)
+
+	// dynamic credentials tests
+	testSuite(t, "oracle", dynamicDsn, createTable, &dynamicCredentialsSet{
+		TruncateTable: func(table string) error {
+			_, err := db.Exec(fmt.Sprintf(`truncate table %s`, table))
+			return err
+		},
+		CreateUser: func(credBase string) (dynamicCredentials, error) {
+			username := fmt.Sprintf("user_%s", credBase)
+			password := fmt.Sprintf("pass_%s", credBase)
+			credentials := map[string]string{
+				"username": username,
+				"password": password,
+			}
+			_, err := db.Exec(fmt.Sprintf(`create user %s identified by %s`, username, password))
+			if err != nil {
+				return nil, err
+			}
+			_, err = db.Exec(fmt.Sprintf(`grant all privileges to %s`, username))
+			if err != nil {
+				return nil, err
+			}
+			return credentials, nil
+		},
+		DropUser: func(user dynamicCredentials) error {
+			username := user["username"]
+			_, err := db.Exec(fmt.Sprintf(`drop user %s`, username))
+			return err
+		},
+	})
 }
 
 func TestIntegrationTrino(t *testing.T) {
@@ -1195,6 +1344,7 @@ create table %s (
 	}
 
 	dsn := fmt.Sprintf("http://trinouser:"+testPassword+"@localhost:%s", resource.GetPort("8080/tcp"))
+	dynamicDsn := strings.Replace(dsn, "trinouser:"+testPassword, "${! username }:${! password }", 1)
 	require.NoError(t, pool.Retry(func() error {
 		db, err = sql.Open("trino", dsn)
 		if err != nil {
@@ -1211,7 +1361,38 @@ create table %s (
 		return nil
 	}))
 
+	// static credentials tests
 	testSuite(t, "trino", dsn, createTable, nil)
+
+	// dynamic credentials tests
+	testSuite(t, "trino", dynamicDsn, createTable, &dynamicCredentialsSet{
+		TruncateTable: func(table string) error {
+			_, err := db.Exec(fmt.Sprintf(`truncate table %s`, table))
+			return err
+		},
+		CreateUser: func(credBase string) (dynamicCredentials, error) {
+			username := fmt.Sprintf("user_%s", credBase)
+			password := fmt.Sprintf("pass_%s", credBase)
+			credentials := map[string]string{
+				"username": username,
+				"password": password,
+			}
+			_, err := db.Exec(fmt.Sprintf(`create user %s identified by %s`, username, password))
+			if err != nil {
+				return nil, err
+			}
+			_, err = db.Exec(fmt.Sprintf(`grant all privileges to %s`, username))
+			if err != nil {
+				return nil, err
+			}
+			return credentials, nil
+		},
+		DropUser: func(user dynamicCredentials) error {
+			username := user["username"]
+			_, err := db.Exec(fmt.Sprintf(`drop user %s`, username))
+			return err
+		},
+	})
 }
 
 func TestIntegrationCosmosDB(t *testing.T) {

@@ -55,7 +55,7 @@ func NewSQLDeprecatedProcessorFromConfig(conf *service.ParsedConfig, mgr *servic
 		return nil, err
 	}
 
-	dsnStr, err := conf.FieldString("data_source_name")
+	dsnStr, err := conf.FieldInterpolatedString("data_source_name")
 	if err != nil {
 		return nil, err
 	}

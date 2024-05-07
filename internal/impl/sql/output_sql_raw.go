@@ -84,7 +84,7 @@ func init() {
 
 type sqlRawOutput struct {
 	driver string
-	dsn    string
+	dsn    *service.InterpolatedString
 	db     *sql.DB
 	dbMut  sync.RWMutex
 
@@ -106,7 +106,7 @@ func newSQLRawOutputFromConfig(conf *service.ParsedConfig, mgr *service.Resource
 		return nil, err
 	}
 
-	dsnStr, err := conf.FieldString("dsn")
+	dsnStr, err := conf.FieldInterpolatedString("dsn")
 	if err != nil {
 		return nil, err
 	}
@@ -141,7 +141,8 @@ func newSQLRawOutputFromConfig(conf *service.ParsedConfig, mgr *service.Resource
 
 func newSQLRawOutput(
 	manager *service.Resources,
-	driverStr, dsnStr string,
+	driverStr string,
+	dsnStr *service.InterpolatedString,
 	queryStatic string,
 	queryDyn *service.InterpolatedString,
 	argsMapping *bloblang.Executor,

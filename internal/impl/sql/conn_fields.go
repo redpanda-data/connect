@@ -4,11 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/jackc/pgx/v5/stdlib"
-	"net/url"
-	"strings"
 	"sync"
 	"time"
 
@@ -37,7 +32,7 @@ Currently, this behaviour is only supported for the ` + "`pgx`" + ` driver.
 var driverField = service.NewStringEnumField("driver", "mysql", "postgres", "clickhouse", "mssql", "sqlite", "oracle", "snowflake", "trino", "gocosmos").
 	Description("A database [driver](#drivers) to use.")
 
-var dsnField = service.NewStringField("dsn").
+var dsnField = service.NewInterpolatedStringField("dsn").
 	Description(`A Data Source Name to identify the target database.
 
 #### Drivers
@@ -153,12 +148,7 @@ type connSettings struct {
 func (c *connSettings) apply(ctx context.Context, db *sql.DB, log *service.Logger) {
 	db.SetConnMaxIdleTime(c.connMaxIdleTime)
 	db.SetConnMaxLifetime(c.connMaxLifetime)
-	if c.dynamicCredentials == nil {
-		db.SetMaxIdleConns(c.maxIdleConns)
-	} else {
-		// If we're using dynamic credentials we don't want to keep any idle connections
-		db.SetMaxIdleConns(0)
-	}
+	db.SetMaxIdleConns(c.maxIdleConns)
 	db.SetMaxOpenConns(c.maxOpenConns)
 
 	c.initOnce.Do(func() {
@@ -248,99 +238,110 @@ func connSettingsFromParsed(
 	return
 }
 
-func sqlOpenWithReworks(manager *service.Resources, driver, dsn string, dynamicCredentials *DynamicCredentials) (*sql.DB, error) {
-	if driver == "clickhouse" && strings.HasPrefix(dsn, "tcp") {
-		u, err := url.Parse(dsn)
-		if err != nil {
-			return nil, err
-		}
+func sqlOpenWithReworks(manager *service.Resources, driver string, dsn *service.InterpolatedString, dynamicCredentials *DynamicCredentials) (*sql.DB, error) {
 
-		u.Scheme = "clickhouse"
+	//if driver == "clickhouse" && strings.HasPrefix(dsn, "tcp") {
+	//	u, err := url.Parse(dsn)
+	//	if err != nil {
+	//		return nil, err
+	//	}
+	//
+	//	u.Scheme = "clickhouse"
+	//
+	//	uq := u.Query()
+	//	u.Path = uq.Get("database")
+	//	if username, password := uq.Get("username"), uq.Get("password"); username != "" {
+	//		if password != "" {
+	//			u.User = url.User(username)
+	//		} else {
+	//			u.User = url.UserPassword(username, password)
+	//		}
+	//	}
+	//
+	//	uq.Del("database")
+	//	uq.Del("username")
+	//	uq.Del("password")
+	//
+	//	u.RawQuery = uq.Encode()
+	//	newDSN := u.String()
+	//
+	//	manager.Logger().Warnf("Detected old-style Clickhouse Data Source Name: '%v', replacing with new style: '%v'", dsn, newDSN)
+	//	dsn = newDSN
+	//}
+	//
+	//// Returns the dynamic credentials from the cache, if they exist
+	//getDynamicCreds := func() (username *string, password *string, err error) {
+	//	if err := manager.AccessCache(context.Background(), dynamicCredentials.cache, func(c service.Cache) {
+	//		if credBytes, err := c.Get(context.Background(), dynamicCredentials.cacheKey); err != nil {
+	//			manager.Logger().Warnf("Failed to fetch dynamic credentials from cache: %v", err)
+	//		} else {
+	//			creds := strings.Split(string(credBytes), ":")
+	//			if len(creds) == 2 {
+	//				username = &creds[0]
+	//				password = &creds[1]
+	//			} else {
+	//				err = fmt.Errorf("expected dynamic credentials to be in the format 'username:password', received: %v", string(credBytes))
+	//			}
+	//		}
+	//	}); err != nil {
+	//		return nil, nil, err
+	//	}
+	//	return
+	//}
+	//
+	//// Handle dynamic credentials if they are specified
+	//if dynamicCredentials != nil {
+	//	switch driver {
+	//	case "pgx":
+	//		pgxConf, err := pgxpool.ParseConfig(dsn)
+	//		if err != nil {
+	//			return nil, err
+	//		}
+	//		pgxConf.AfterRelease = func(conn *pgx.Conn) bool {
+	//			username, password, err := getDynamicCreds()
+	//			if err != nil {
+	//				// If we can't fetch the dynamic credentials we don't want to kill the connection
+	//				return true
+	//			}
+	//			return !((username != nil && *username != conn.Config().User) || (password != nil && *password != conn.Config().Password))
+	//		}
+	//		pgxConf.BeforeAcquire = func(ctx context.Context, conn *pgx.Conn) bool {
+	//			username, password, err := getDynamicCreds()
+	//			if err != nil {
+	//				// If we can't fetch the dynamic credentials we don't want to kill the connection
+	//				return true
+	//			}
+	//			return !((username != nil && *username != conn.Config().User) || (password != nil && *password != conn.Config().Password))
+	//		}
+	//		pgxConf.BeforeConnect = func(ctx context.Context, config *pgx.ConnConfig) error {
+	//			// We ignore any returned errors here so that we use the credentials in the DSN as the default
+	//			username, password, _ := getDynamicCreds()
+	//			if username != nil && password != nil {
+	//				config.User = *username
+	//				config.Password = *password
+	//			}
+	//			return nil
+	//		}
+	//		if pool, err := pgxpool.NewWithConfig(context.Background(), pgxConf); err != nil {
+	//			return nil, err
+	//		} else {
+	//			return stdlib.OpenDBFromPool(pool), nil
+	//		}
+	//	default:
+	//		return nil, fmt.Errorf("dynamic credentials are only supported for the specified driver '%s'", driver)
+	//	}
+	//
+	//}
 
-		uq := u.Query()
-		u.Path = uq.Get("database")
-		if username, password := uq.Get("username"), uq.Get("password"); username != "" {
-			if password != "" {
-				u.User = url.User(username)
-			} else {
-				u.User = url.UserPassword(username, password)
-			}
-		}
-
-		uq.Del("database")
-		uq.Del("username")
-		uq.Del("password")
-
-		u.RawQuery = uq.Encode()
-		newDSN := u.String()
-
-		manager.Logger().Warnf("Detected old-style Clickhouse Data Source Name: '%v', replacing with new style: '%v'", dsn, newDSN)
-		dsn = newDSN
+	connector, err := NewDynamicCredentialConnector(
+		manager,
+		driver,
+		dsn,
+		dynamicCredentials,
+	)
+	if err != nil {
+		return nil, err
 	}
 
-	// Returns the dynamic credentials from the cache, if they exist
-	getDynamicCreds := func() (username *string, password *string, err error) {
-		if err := manager.AccessCache(context.Background(), dynamicCredentials.cache, func(c service.Cache) {
-			if credBytes, err := c.Get(context.Background(), dynamicCredentials.cacheKey); err != nil {
-				manager.Logger().Warnf("Failed to fetch dynamic credentials from cache: %v", err)
-			} else {
-				creds := strings.Split(string(credBytes), ":")
-				if len(creds) == 2 {
-					username = &creds[0]
-					password = &creds[1]
-				} else {
-					err = fmt.Errorf("expected dynamic credentials to be in the format 'username:password', received: %v", string(credBytes))
-				}
-			}
-		}); err != nil {
-			return nil, nil, err
-		}
-		return
-	}
-
-	// Handle dynamic credentials if they are specified
-	if dynamicCredentials != nil {
-		switch driver {
-		case "pgx":
-			pgxConf, err := pgxpool.ParseConfig(dsn)
-			if err != nil {
-				return nil, err
-			}
-			pgxConf.AfterRelease = func(conn *pgx.Conn) bool {
-				username, password, err := getDynamicCreds()
-				if err != nil {
-					// If we can't fetch the dynamic credentials we don't want to kill the connection
-					return true
-				}
-				return !((username != nil && *username != conn.Config().User) || (password != nil && *password != conn.Config().Password))
-			}
-			pgxConf.BeforeAcquire = func(ctx context.Context, conn *pgx.Conn) bool {
-				username, password, err := getDynamicCreds()
-				if err != nil {
-					// If we can't fetch the dynamic credentials we don't want to kill the connection
-					return true
-				}
-				return !((username != nil && *username != conn.Config().User) || (password != nil && *password != conn.Config().Password))
-			}
-			pgxConf.BeforeConnect = func(ctx context.Context, config *pgx.ConnConfig) error {
-				// We ignore any returned errors here so that we use the credentials in the DSN as the default
-				username, password, _ := getDynamicCreds()
-				if username != nil && password != nil {
-					config.User = *username
-					config.Password = *password
-				}
-				return nil
-			}
-			if pool, err := pgxpool.NewWithConfig(context.Background(), pgxConf); err != nil {
-				return nil, err
-			} else {
-				return stdlib.OpenDBFromPool(pool), nil
-			}
-		default:
-			return nil, fmt.Errorf("dynamic credentials are only supported for the specified driver '%s'", driver)
-		}
-
-	}
-
-	return sql.Open(driver, dsn)
+	return sql.OpenDB(connector), nil
 }
