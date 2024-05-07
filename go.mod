@@ -50,7 +50,6 @@ require (
 	github.com/clbanning/mxj/v2 v2.7.0
 	github.com/colinmarc/hdfs v1.1.3
 	github.com/couchbase/gocb/v2 v2.8.0
-	github.com/davepgreene/go-db-credential-refresh v1.0.0
 	github.com/denisenkom/go-mssqldb v0.12.3
 	github.com/dgraph-io/ristretto v0.1.1
 	github.com/dop251/goja v0.0.0-20231014103939-873a1496dc8e
