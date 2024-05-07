@@ -23,8 +23,12 @@ var dynamicCredentialsField = service.NewObjectField("dynamic_credentials",
 ).
 	Description(`Specifies a cache resource for looking up credentials dynamically.
 This can be useful in situations where credentials are rotated frequently, allowing re-authentication without a restart.
-Credentials should be stored in the cache as a string in the format ` + "`username:password`" + `.
-Currently, this behaviour is only supported for the ` + "`pgx`" + ` driver.
+The value is read from the cache as a JSON message and is used to template the DSN.
+
+Credentials are fetched when a new connection is created meaning that stale connections will persist unless` + "`conn_max_idle`" + ` is set to zero.
+Similarly, if ` + "`conn_max_idle_time`" + ` is set to a low value then connections will be closed and re-authenticated more frequently
+
+The specified init statement and files are executed only once overall and not per re-authentication.
 `).
 	Advanced().
 	Optional()
@@ -52,6 +56,10 @@ The following is a list of supported drivers, their placeholder style, and their
 ` + "| `gocosmos` | [`AccountEndpoint=<cosmosdb-endpoint>;AccountKey=<cosmosdb-account-key>[;TimeoutMs=<timeout-in-ms>][;Version=<cosmosdb-api-version>][;DefaultDb/Db=<db-name>][;AutoId=<true/false>][;InsecureSkipVerify=<true/false>]`](https://pkg.go.dev/github.com/microsoft/gocosmos#readme-example-usage) |" + `
 
 Please note that the ` + "`postgres`" + ` driver enforces SSL by default, you can override this with the parameter ` + "`sslmode=disable`" + ` if required.
+
+This value supports interpolations, but they are not evaluated on a per message basis.
+Instead, you can use the ` + "`dynamic_credentials`" + ` configuration field to pull a message from a cache resource that will be used to provide templating fields.
+New connections will use the latest values from the cache.
 
 The ` + "`snowflake`" + ` driver supports multiple DSN formats. Please consult [the docs](https://pkg.go.dev/github.com/snowflakedb/gosnowflake#hdr-Connection_String) for more details. For [key pair authentication](https://docs.snowflake.com/en/user-guide/key-pair-auth.html#configuring-key-pair-authentication), the DSN has the following format: ` + "`<snowflake_user>@<snowflake_account>/<db_name>/<schema_name>?warehouse=<warehouse>&role=<role>&authenticator=snowflake_jwt&privateKey=<base64_url_encoded_private_key>`" + `, where the value for the ` + "`privateKey`" + ` parameter can be constructed from an unencrypted RSA private key file ` + "`rsa_key.p8`" + ` using ` + "`openssl enc -d -base64 -in rsa_key.p8 | basenc --base64url -w0`" + ` (you can use ` + "`gbasenc`" + ` insted of ` + "`basenc`" + ` on OSX if you install ` + "`coreutils`" + ` via Homebrew). If you have a password-encrypted private key, you can decrypt it using ` + "`openssl pkcs8 -in rsa_key_encrypted.p8 -out rsa_key.p8`" + `. Also, make sure fields such as the username are URL-encoded.
 
@@ -239,100 +247,6 @@ func connSettingsFromParsed(
 }
 
 func sqlOpenWithReworks(manager *service.Resources, driver string, dsn *service.InterpolatedString, dynamicCredentials *DynamicCredentials) (*sql.DB, error) {
-
-	//if driver == "clickhouse" && strings.HasPrefix(dsn, "tcp") {
-	//	u, err := url.Parse(dsn)
-	//	if err != nil {
-	//		return nil, err
-	//	}
-	//
-	//	u.Scheme = "clickhouse"
-	//
-	//	uq := u.Query()
-	//	u.Path = uq.Get("database")
-	//	if username, password := uq.Get("username"), uq.Get("password"); username != "" {
-	//		if password != "" {
-	//			u.User = url.User(username)
-	//		} else {
-	//			u.User = url.UserPassword(username, password)
-	//		}
-	//	}
-	//
-	//	uq.Del("database")
-	//	uq.Del("username")
-	//	uq.Del("password")
-	//
-	//	u.RawQuery = uq.Encode()
-	//	newDSN := u.String()
-	//
-	//	manager.Logger().Warnf("Detected old-style Clickhouse Data Source Name: '%v', replacing with new style: '%v'", dsn, newDSN)
-	//	dsn = newDSN
-	//}
-	//
-	//// Returns the dynamic credentials from the cache, if they exist
-	//getDynamicCreds := func() (username *string, password *string, err error) {
-	//	if err := manager.AccessCache(context.Background(), dynamicCredentials.cache, func(c service.Cache) {
-	//		if credBytes, err := c.Get(context.Background(), dynamicCredentials.cacheKey); err != nil {
-	//			manager.Logger().Warnf("Failed to fetch dynamic credentials from cache: %v", err)
-	//		} else {
-	//			creds := strings.Split(string(credBytes), ":")
-	//			if len(creds) == 2 {
-	//				username = &creds[0]
-	//				password = &creds[1]
-	//			} else {
-	//				err = fmt.Errorf("expected dynamic credentials to be in the format 'username:password', received: %v", string(credBytes))
-	//			}
-	//		}
-	//	}); err != nil {
-	//		return nil, nil, err
-	//	}
-	//	return
-	//}
-	//
-	//// Handle dynamic credentials if they are specified
-	//if dynamicCredentials != nil {
-	//	switch driver {
-	//	case "pgx":
-	//		pgxConf, err := pgxpool.ParseConfig(dsn)
-	//		if err != nil {
-	//			return nil, err
-	//		}
-	//		pgxConf.AfterRelease = func(conn *pgx.Conn) bool {
-	//			username, password, err := getDynamicCreds()
-	//			if err != nil {
-	//				// If we can't fetch the dynamic credentials we don't want to kill the connection
-	//				return true
-	//			}
-	//			return !((username != nil && *username != conn.Config().User) || (password != nil && *password != conn.Config().Password))
-	//		}
-	//		pgxConf.BeforeAcquire = func(ctx context.Context, conn *pgx.Conn) bool {
-	//			username, password, err := getDynamicCreds()
-	//			if err != nil {
-	//				// If we can't fetch the dynamic credentials we don't want to kill the connection
-	//				return true
-	//			}
-	//			return !((username != nil && *username != conn.Config().User) || (password != nil && *password != conn.Config().Password))
-	//		}
-	//		pgxConf.BeforeConnect = func(ctx context.Context, config *pgx.ConnConfig) error {
-	//			// We ignore any returned errors here so that we use the credentials in the DSN as the default
-	//			username, password, _ := getDynamicCreds()
-	//			if username != nil && password != nil {
-	//				config.User = *username
-	//				config.Password = *password
-	//			}
-	//			return nil
-	//		}
-	//		if pool, err := pgxpool.NewWithConfig(context.Background(), pgxConf); err != nil {
-	//			return nil, err
-	//		} else {
-	//			return stdlib.OpenDBFromPool(pool), nil
-	//		}
-	//	default:
-	//		return nil, fmt.Errorf("dynamic credentials are only supported for the specified driver '%s'", driver)
-	//	}
-	//
-	//}
-
 	connector, err := NewDynamicCredentialConnector(
 		manager,
 		driver,
