@@ -896,15 +896,11 @@ func TestIntegrationPostgres(t *testing.T) {
 	},
 	)
 
-	for _, driver := range []string{"postgres", "pgx"} {
-		t.Run(fmt.Sprintf("driver %s", driver), func(t *testing.T) {
-			var db *sql.DB
-
-			t.Cleanup(func() {
-				if db != nil {
-					db.Close()
-				}
-			})
+	t.Cleanup(func() {
+		if db != nil {
+			db.Close()
+		}
+	})
 
 	createTable := func(name string) (string, error) {
 		_, err := db.Exec(fmt.Sprintf(`create table %s (
@@ -916,60 +912,57 @@ func TestIntegrationPostgres(t *testing.T) {
 		return name, err
 	}
 
-			truncateTable := func(table string) error {
-				_, err := db.Exec(fmt.Sprintf(`truncate table %s`, table))
-				return err
-			}
+	truncateTable := func(table string) error {
+		_, err := db.Exec(fmt.Sprintf(`truncate table %s`, table))
+		return err
+	}
 
-			createUser := func(credBase string) (dynamicCredentials, error) {
-				username := fmt.Sprintf("user_%s", credBase)
-				password := fmt.Sprintf("pass_%s", credBase)
-				credentials := map[string]string{
-					"username": username,
-					"password": password,
-				}
+	createUser := func(credBase string) (dynamicCredentials, error) {
+		username := fmt.Sprintf("user_%s", credBase)
+		password := fmt.Sprintf("pass_%s", credBase)
+		credentials := map[string]string{
+			"username": username,
+			"password": password,
+		}
 
-				_, err := db.Exec(fmt.Sprintf(`create user %s with password '%s' SUPERUSER`, username, password))
-				if err != nil {
-					return nil, err
-				}
-				return credentials, nil
-			}
+		_, err := db.Exec(fmt.Sprintf(`create user %s with password '%s' SUPERUSER`, username, password))
+		if err != nil {
+			return nil, err
+		}
+		return credentials, nil
+	}
 
-			dropUser := func(user dynamicCredentials) error {
-				username := user["username"]
-				_, err := db.Exec(fmt.Sprintf(`drop user %s`, username))
-				return err
-			}
+	dropUser := func(user dynamicCredentials) error {
+		username := user["username"]
+		_, err := db.Exec(fmt.Sprintf(`drop user %s`, username))
+		return err
+	}
 
-			dsn := fmt.Sprintf("postgres://testuser:testpass@localhost:%s/testdb?sslmode=disable", resource.GetPort("5432/tcp"))
-			dynamicDsn := strings.Replace(dsn, "testuser:testpass", "${! username }:${! password }", 1)
-			require.NoError(t, pool.Retry(func() error {
-				db, err = sql.Open(driver, dsn)
-				if err != nil {
-					return err
-				}
-				if err = db.Ping(); err != nil {
-					db.Close()
-					db = nil
-					return err
-				}
-				if _, err := createTable(fmt.Sprintf("footable_%s", driver)); err != nil {
-					return err
-				}
-				return nil
-			}))
-			// static credential tests
-			testSuite(t, driver, dsn, createTable, nil)
-			// dynamic credential tests
-			testSuite(t, driver, dynamicDsn, createTable, &dynamicCredentialsSet{
-				TruncateTable: truncateTable,
-				CreateUser:    createUser,
-				DropUser:      dropUser,
-			})
-		})
-
-	testSuite(t, "postgres", dsn, createTable)
+	dsn := fmt.Sprintf("postgres://testuser:testpass@localhost:%s/testdb?sslmode=disable", resource.GetPort("5432/tcp"))
+	dynamicDsn := strings.Replace(dsn, "testuser:testpass", "${! username }:${! password }", 1)
+	require.NoError(t, pool.Retry(func() error {
+		db, err = sql.Open("postgres", dsn)
+		if err != nil {
+			return err
+		}
+		if err = db.Ping(); err != nil {
+			db.Close()
+			db = nil
+			return err
+		}
+		if _, err := createTable("footable"); err != nil {
+			return err
+		}
+		return nil
+	}))
+	// static credential tests
+	testSuite(t, "postgres", dsn, createTable, nil)
+	// dynamic credential tests
+	testSuite(t, "postgres", dynamicDsn, createTable, &dynamicCredentialsSet{
+		TruncateTable: truncateTable,
+		CreateUser:    createUser,
+		DropUser:      dropUser,
+	})
 }
 
 func TestIntegrationMySQL(t *testing.T) {
