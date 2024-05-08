@@ -102,6 +102,23 @@ compaction_interval: 1ns
 
 	_, err = c.Get(ctx, "bar")
 	assert.Equal(t, service.ErrKeyNotFound, err)
+
+	// Add with static keys should trigger completion after exdpiry.
+	d := time.Millisecond * 50
+	err = c.Add(ctx, "foo", []byte("3"), &d)
+	require.NoError(t, err)
+
+	_, err = c.Get(ctx, "foo")
+	require.NoError(t, err)
+
+	err = c.Add(ctx, "foo", []byte("4"), &d)
+	assert.Equal(t, service.ErrKeyAlreadyExists, err)
+
+	<-time.After(time.Millisecond * 50)
+
+	err = c.Add(ctx, "foo", []byte("4"), &d)
+	require.NoError(t, err)
+
 }
 
 func TestMemoryCacheInitValues(t *testing.T) {
