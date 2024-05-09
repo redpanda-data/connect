@@ -35,7 +35,7 @@ func TestIntegrationSaramaCheckpointOneLockUp(t *testing.T) {
 	kafkaPortStr := strconv.Itoa(kafkaPort)
 
 	options := &dockertest.RunOptions{
-		Repository:   "docker.vectorized.io/vectorized/redpanda",
+		Repository:   "docker.redpanda.com/redpandadata/redpanda",
 		Tag:          "latest",
 		Hostname:     "redpanda",
 		ExposedPorts: []string{"9092"},
@@ -193,7 +193,7 @@ func TestIntegrationSaramaRedpanda(t *testing.T) {
 	kafkaPortStr := strconv.Itoa(kafkaPort)
 
 	options := &dockertest.RunOptions{
-		Repository:   "docker.vectorized.io/vectorized/redpanda",
+		Repository:   "docker.redpanda.com/redpandadata/redpanda",
 		Tag:          "latest",
 		Hostname:     "redpanda",
 		ExposedPorts: []string{"9092"},
