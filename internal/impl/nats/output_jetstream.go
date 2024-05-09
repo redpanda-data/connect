@@ -9,7 +9,6 @@ import (
 
 	"github.com/Jeffail/shutdown"
 
-	"github.com/benthosdev/benthos/v4/internal/component/output/span"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
@@ -53,7 +52,7 @@ func init() {
 			if err != nil {
 				return nil, 0, err
 			}
-			spanOutput, err := span.NewOutput("nats_jetstream", conf, w, mgr)
+			spanOutput, err := conf.WrapOutputExtractTracingSpanMapping("nats_jetstream", w)
 			return spanOutput, maxInFlight, err
 		})
 	if err != nil {

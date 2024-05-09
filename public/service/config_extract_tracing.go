@@ -1,4 +1,4 @@
-package span
+package service
 
 import (
 	"context"
@@ -8,17 +8,18 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/propagation"
 
+	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/public/bloblang"
-	"github.com/benthosdev/benthos/v4/public/service"
 )
 
 const (
 	etsField = "extract_tracing_map"
 )
 
-// ExtractTracingSpanMappingDocs returns a docs spec for a mapping field.
-func ExtractTracingSpanMappingDocs() *service.ConfigField {
-	return service.NewBloblangField(etsField).
+// NewExtractTracingSpanMappingDocs returns a config field for mapping messages
+// in order to extract distributed tracing information.
+func NewExtractTracingSpanMappingField() *ConfigField {
+	return NewBloblangField(etsField).
 		Description("EXPERIMENTAL: A [Bloblang mapping](/docs/guides/bloblang/about) that attempts to extract an object containing tracing propagation information, which will then be used as the root tracing span for the message. The specification of the extracted fields must match the format used by the service wide tracer.").
 		Examples(`root = @`, `root = this.meta.span`).
 		Version("3.45.0").
@@ -26,33 +27,34 @@ func ExtractTracingSpanMappingDocs() *service.ConfigField {
 		Advanced()
 }
 
-// NewBatchInput wraps a service.BatchInput with a mechanism for extracting
-// tracing spans from the consumed message using a Bloblang mapping.
-func NewBatchInput(inputName string, pConf *service.ParsedConfig, rdr service.BatchInput, mgr *service.Resources) (service.BatchInput, error) {
-	if str, _ := pConf.FieldString(etsField); str == "" {
-		return rdr, nil
+// WrapBatchInputExtractTracingSpanMapping wraps a BatchInput with a mechanism
+// for extracting tracing spans using a bloblang mapping.
+func (p *ParsedConfig) WrapBatchInputExtractTracingSpanMapping(inputName string, i BatchInput) (
+	BatchInput, error) {
+	if str, _ := p.FieldString(etsField); str == "" {
+		return i, nil
 	}
-	exe, err := pConf.FieldBloblang(etsField)
+	exe, err := p.FieldBloblang(etsField)
 	if err != nil {
 		return nil, err
 	}
-	return &spanInjectBatchInput{inputName: inputName, mgr: mgr, mapping: exe, rdr: rdr}, nil
+	return &spanInjectBatchInput{inputName: inputName, mgr: p.mgr, mapping: exe, rdr: i}, nil
 }
 
-// NewInput wraps a service.Input with a mechanism for extracting tracing spans
-// from the consumed message using a Bloblang mapping.
-func NewInput(inputName string, pConf *service.ParsedConfig, rdr service.Input, mgr *service.Resources) (service.Input, error) {
-	if str, _ := pConf.FieldString(etsField); str == "" {
-		return rdr, nil
+// WrapInputExtractTracingSpanMapping wraps a Input with a mechanism for
+// extracting tracing spans from the consumed message using a Bloblang mapping.
+func (p *ParsedConfig) WrapInputExtractTracingSpanMapping(inputName string, i Input) (Input, error) {
+	if str, _ := p.FieldString(etsField); str == "" {
+		return i, nil
 	}
-	exe, err := pConf.FieldBloblang(etsField)
+	exe, err := p.FieldBloblang(etsField)
 	if err != nil {
 		return nil, err
 	}
-	return &spanInjectInput{inputName: inputName, mgr: mgr, mapping: exe, rdr: rdr}, nil
+	return &spanInjectInput{inputName: inputName, mgr: p.mgr, mapping: exe, rdr: i}, nil
 }
 
-func getPropMapCarrier(spanPart *service.Message) (propagation.MapCarrier, error) {
+func getPropMapCarrier(spanPart *Message) (propagation.MapCarrier, error) {
 	structured, err := spanPart.AsStructured()
 	if err != nil {
 		return nil, err
@@ -72,21 +74,21 @@ func getPropMapCarrier(spanPart *service.Message) (propagation.MapCarrier, error
 	return c, nil
 }
 
-// spanInjectBatchInput wraps a service.BatchInput with a mechanism for
+// spanInjectBatchInput wraps a BatchInput with a mechanism for
 // extracting tracing spans from the consumed message using a Bloblang mapping.
 type spanInjectBatchInput struct {
 	inputName string
-	mgr       *service.Resources
+	mgr       bundle.NewManagement
 
 	mapping *bloblang.Executor
-	rdr     service.BatchInput
+	rdr     BatchInput
 }
 
 func (s *spanInjectBatchInput) Connect(ctx context.Context) error {
 	return s.rdr.Connect(ctx)
 }
 
-func (s *spanInjectBatchInput) ReadBatch(ctx context.Context) (service.MessageBatch, service.AckFunc, error) {
+func (s *spanInjectBatchInput) ReadBatch(ctx context.Context) (MessageBatch, AckFunc, error) {
 	m, afn, err := s.rdr.ReadBatch(ctx)
 	if err != nil {
 		return nil, nil, err
@@ -94,17 +96,17 @@ func (s *spanInjectBatchInput) ReadBatch(ctx context.Context) (service.MessageBa
 
 	spanPart, err := m.BloblangQuery(0, s.mapping)
 	if err != nil {
-		s.mgr.Logger().Errorf("Mapping failed for tracing span: %v", err)
+		s.mgr.Logger().Error("Mapping failed for tracing span: %v", err)
 		return m, afn, nil
 	}
 
 	c, err := getPropMapCarrier(spanPart)
 	if err != nil {
-		s.mgr.Logger().Errorf("Mapping failed for tracing span: %v", err)
+		s.mgr.Logger().Error("Mapping failed for tracing span: %v", err)
 		return m, afn, nil
 	}
 
-	prov := s.mgr.OtelTracer()
+	prov := s.mgr.Tracer()
 	operationName := "input_" + s.inputName
 
 	textProp := otel.GetTextMapPropagator()
@@ -120,21 +122,21 @@ func (s *spanInjectBatchInput) Close(ctx context.Context) error {
 	return s.rdr.Close(ctx)
 }
 
-// spanInjectInput wraps a service.Input with a mechanism for extracting tracing
+// spanInjectInput wraps a Input with a mechanism for extracting tracing
 // spans from the consumed message using a Bloblang mapping.
 type spanInjectInput struct {
 	inputName string
-	mgr       *service.Resources
+	mgr       bundle.NewManagement
 
 	mapping *bloblang.Executor
-	rdr     service.Input
+	rdr     Input
 }
 
 func (s *spanInjectInput) Connect(ctx context.Context) error {
 	return s.rdr.Connect(ctx)
 }
 
-func (s *spanInjectInput) Read(ctx context.Context) (*service.Message, service.AckFunc, error) {
+func (s *spanInjectInput) Read(ctx context.Context) (*Message, AckFunc, error) {
 	m, afn, err := s.rdr.Read(ctx)
 	if err != nil {
 		return nil, nil, err
@@ -142,17 +144,17 @@ func (s *spanInjectInput) Read(ctx context.Context) (*service.Message, service.A
 
 	spanPart, err := m.BloblangQuery(s.mapping)
 	if err != nil {
-		s.mgr.Logger().Errorf("Mapping failed for tracing span: %v", err)
+		s.mgr.Logger().Error("Mapping failed for tracing span: %v", err)
 		return m, afn, nil
 	}
 
 	c, err := getPropMapCarrier(spanPart)
 	if err != nil {
-		s.mgr.Logger().Errorf("Mapping failed for tracing span: %v", err)
+		s.mgr.Logger().Error("Mapping failed for tracing span: %v", err)
 		return m, afn, nil
 	}
 
-	prov := s.mgr.OtelTracer()
+	prov := s.mgr.Tracer()
 	operationName := "input_" + s.inputName
 
 	textProp := otel.GetTextMapPropagator()

@@ -12,7 +12,6 @@ import (
 
 	"github.com/Jeffail/shutdown"
 
-	"github.com/benthosdev/benthos/v4/internal/component/input/span"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
@@ -92,7 +91,7 @@ func init() {
 			if err != nil {
 				return nil, err
 			}
-			return span.NewInput("nats_jetstream", conf, input, mgr)
+			return conf.WrapInputExtractTracingSpanMapping("nats_jetstream", input)
 		})
 	if err != nil {
 		panic(err)

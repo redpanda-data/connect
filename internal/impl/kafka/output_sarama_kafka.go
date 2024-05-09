@@ -15,7 +15,6 @@ import (
 	"golang.org/x/sync/syncmap"
 
 	"github.com/benthosdev/benthos/v4/internal/component/output"
-	"github.com/benthosdev/benthos/v4/internal/component/output/span"
 	"github.com/benthosdev/benthos/v4/public/bloblang"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
@@ -126,7 +125,7 @@ Unfortunately this error message will appear for a wide range of connection prob
 				Optional(),
 			service.NewMetadataExcludeFilterField(oskFieldMetadata).
 				Description("Specify criteria for which metadata values are sent with messages as headers."),
-			span.InjectTracingSpanMappingDocs(),
+			service.NewInjectTracingSpanMappingField(),
 			service.NewOutputMaxInFlightField(),
 			service.NewBoolField(oskFieldIdempotentWrite).
 				Description("Enable the idempotent write producer option. This requires the `IDEMPOTENT_WRITE` permission on `CLUSTER` and can be disabled if this permission is not available.").
@@ -170,7 +169,7 @@ func init() {
 			return
 		}
 
-		o, err = span.NewBatchOutput("kafka", conf, o, mgr)
+		o, err = conf.WrapBatchOutputExtractTracingSpanMapping("kafka", o)
 		return
 	})
 	if err != nil {

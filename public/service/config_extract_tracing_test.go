@@ -1,4 +1,4 @@
-package span
+package service
 
 import (
 	"context"
@@ -7,13 +7,11 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"github.com/benthosdev/benthos/v4/public/service"
 )
 
 type fnBatchReader struct {
 	connectWithContext   func(ctx context.Context) error
-	readBatchWithContext func(ctx context.Context) (service.MessageBatch, service.AckFunc, error)
+	readBatchWithContext func(ctx context.Context) (MessageBatch, AckFunc, error)
 	close                func(ctx context.Context) error
 }
 
@@ -21,7 +19,7 @@ func (f *fnBatchReader) Connect(ctx context.Context) error {
 	return f.connectWithContext(ctx)
 }
 
-func (f *fnBatchReader) ReadBatch(ctx context.Context) (service.MessageBatch, service.AckFunc, error) {
+func (f *fnBatchReader) ReadBatch(ctx context.Context) (MessageBatch, AckFunc, error) {
 	return f.readBatchWithContext(ctx)
 }
 
@@ -62,18 +60,18 @@ func TestSpanBatchReader(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			var connCalled, closeCalled, waitCalled bool
 
-			spec := service.NewConfigSpec().Field(ExtractTracingSpanMappingDocs())
+			spec := NewConfigSpec().Field(NewExtractTracingSpanMappingField())
 			pConf, err := spec.ParseYAML(fmt.Sprintf(`extract_tracing_map: '%v'`, test.mapping), nil)
 			require.NoError(t, err)
 
-			r, err := NewBatchInput("foo", pConf, &fnBatchReader{
+			r, err := pConf.WrapBatchInputExtractTracingSpanMapping("foo", &fnBatchReader{
 				connectWithContext: func(ctx context.Context) error {
 					connCalled = true
 					return nil
 				},
-				readBatchWithContext: func(ctx context.Context) (service.MessageBatch, service.AckFunc, error) {
-					m := service.MessageBatch{
-						service.NewMessage([]byte(test.contents)),
+				readBatchWithContext: func(ctx context.Context) (MessageBatch, AckFunc, error) {
+					m := MessageBatch{
+						NewMessage([]byte(test.contents)),
 					}
 					return m, func(context.Context, error) error {
 						return nil
@@ -84,7 +82,7 @@ func TestSpanBatchReader(t *testing.T) {
 					waitCalled = true
 					return nil
 				},
-			}, service.MockResources())
+			})
 			require.NoError(t, err)
 
 			assert.NoError(t, r.Connect(context.Background()))
@@ -108,7 +106,7 @@ func TestSpanBatchReader(t *testing.T) {
 
 type fnReader struct {
 	connectWithContext func(ctx context.Context) error
-	readWithContext    func(ctx context.Context) (*service.Message, service.AckFunc, error)
+	readWithContext    func(ctx context.Context) (*Message, AckFunc, error)
 	close              func(ctx context.Context) error
 }
 
@@ -116,7 +114,7 @@ func (f *fnReader) Connect(ctx context.Context) error {
 	return f.connectWithContext(ctx)
 }
 
-func (f *fnReader) Read(ctx context.Context) (*service.Message, service.AckFunc, error) {
+func (f *fnReader) Read(ctx context.Context) (*Message, AckFunc, error) {
 	return f.readWithContext(ctx)
 }
 
@@ -157,17 +155,17 @@ func TestSpanReader(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			var connCalled, closeCalled, waitCalled bool
 
-			spec := service.NewConfigSpec().Field(ExtractTracingSpanMappingDocs())
+			spec := NewConfigSpec().Field(NewExtractTracingSpanMappingField())
 			pConf, err := spec.ParseYAML(fmt.Sprintf(`extract_tracing_map: '%v'`, test.mapping), nil)
 			require.NoError(t, err)
 
-			r, err := NewInput("foo", pConf, &fnReader{
+			r, err := pConf.WrapInputExtractTracingSpanMapping("foo", &fnReader{
 				connectWithContext: func(ctx context.Context) error {
 					connCalled = true
 					return nil
 				},
-				readWithContext: func(ctx context.Context) (*service.Message, service.AckFunc, error) {
-					m := service.NewMessage([]byte(test.contents))
+				readWithContext: func(ctx context.Context) (*Message, AckFunc, error) {
+					m := NewMessage([]byte(test.contents))
 					return m, func(context.Context, error) error {
 						return nil
 					}, nil
@@ -177,7 +175,7 @@ func TestSpanReader(t *testing.T) {
 					waitCalled = true
 					return nil
 				},
-			}, service.MockResources())
+			})
 			require.NoError(t, err)
 
 			assert.NoError(t, r.Connect(context.Background()))

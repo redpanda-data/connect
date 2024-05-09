@@ -1,4 +1,4 @@
-package span
+package service
 
 import (
 	"context"
@@ -7,13 +7,11 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"github.com/benthosdev/benthos/v4/public/service"
 )
 
 type fnBatchWriter struct {
 	connectWithContext    func(ctx context.Context) error
-	writeBatchWithContext func(ctx context.Context, b service.MessageBatch) error
+	writeBatchWithContext func(ctx context.Context, b MessageBatch) error
 	close                 func(ctx context.Context) error
 }
 
@@ -21,7 +19,7 @@ func (f *fnBatchWriter) Connect(ctx context.Context) error {
 	return f.connectWithContext(ctx)
 }
 
-func (f *fnBatchWriter) WriteBatch(ctx context.Context, msg service.MessageBatch) error {
+func (f *fnBatchWriter) WriteBatch(ctx context.Context, msg MessageBatch) error {
 	return f.writeBatchWithContext(ctx, msg)
 }
 
@@ -57,16 +55,16 @@ func TestSpanBatchWriter(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			var connCalled, closeCalled, waitCalled bool
 
-			spec := service.NewConfigSpec().Field(InjectTracingSpanMappingDocs())
+			spec := NewConfigSpec().Field(NewInjectTracingSpanMappingField())
 			pConf, err := spec.ParseYAML(fmt.Sprintf(`inject_tracing_map: '%v'`, test.mapping), nil)
 			require.NoError(t, err)
 
-			r, err := NewBatchOutput("foo", pConf, &fnBatchWriter{
+			r, err := pConf.WrapBatchOutputExtractTracingSpanMapping("foo", &fnBatchWriter{
 				connectWithContext: func(ctx context.Context) error {
 					connCalled = true
 					return nil
 				},
-				writeBatchWithContext: func(ctx context.Context, b service.MessageBatch) error {
+				writeBatchWithContext: func(ctx context.Context, b MessageBatch) error {
 					assert.Len(t, b, 1)
 					msgBytes, err := b[0].AsBytes()
 					require.NoError(t, err)
@@ -78,12 +76,12 @@ func TestSpanBatchWriter(t *testing.T) {
 					waitCalled = true
 					return nil
 				},
-			}, service.MockResources())
+			})
 			require.NoError(t, err)
 
 			assert.NoError(t, r.Connect(context.Background()))
 
-			require.NoError(t, r.WriteBatch(context.Background(), service.MessageBatch{service.NewMessage([]byte(`{}`))}))
+			require.NoError(t, r.WriteBatch(context.Background(), MessageBatch{NewMessage([]byte(`{}`))}))
 
 			assert.NoError(t, r.Close(context.Background()))
 
@@ -96,7 +94,7 @@ func TestSpanBatchWriter(t *testing.T) {
 
 type fnWriter struct {
 	connectWithContext func(ctx context.Context) error
-	writeWithContext   func(ctx context.Context, m *service.Message) error
+	writeWithContext   func(ctx context.Context, m *Message) error
 	close              func(ctx context.Context) error
 }
 
@@ -104,7 +102,7 @@ func (f *fnWriter) Connect(ctx context.Context) error {
 	return f.connectWithContext(ctx)
 }
 
-func (f *fnWriter) Write(ctx context.Context, m *service.Message) error {
+func (f *fnWriter) Write(ctx context.Context, m *Message) error {
 	return f.writeWithContext(ctx, m)
 }
 
@@ -140,16 +138,16 @@ func TestSpanWriter(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			var connCalled, closeCalled, waitCalled bool
 
-			spec := service.NewConfigSpec().Field(InjectTracingSpanMappingDocs())
+			spec := NewConfigSpec().Field(NewInjectTracingSpanMappingField())
 			pConf, err := spec.ParseYAML(fmt.Sprintf(`inject_tracing_map: '%v'`, test.mapping), nil)
 			require.NoError(t, err)
 
-			r, err := NewOutput("foo", pConf, &fnWriter{
+			r, err := pConf.WrapOutputExtractTracingSpanMapping("foo", &fnWriter{
 				connectWithContext: func(ctx context.Context) error {
 					connCalled = true
 					return nil
 				},
-				writeWithContext: func(ctx context.Context, m *service.Message) error {
+				writeWithContext: func(ctx context.Context, m *Message) error {
 					msgBytes, err := m.AsBytes()
 					require.NoError(t, err)
 					assert.Equal(t, test.outContents, string(msgBytes))
@@ -160,12 +158,12 @@ func TestSpanWriter(t *testing.T) {
 					waitCalled = true
 					return nil
 				},
-			}, service.MockResources())
+			})
 			require.NoError(t, err)
 
 			assert.NoError(t, r.Connect(context.Background()))
 
-			require.NoError(t, r.Write(context.Background(), service.NewMessage([]byte(`{}`))))
+			require.NoError(t, r.Write(context.Background(), NewMessage([]byte(`{}`))))
 
 			assert.NoError(t, r.Close(context.Background()))
 

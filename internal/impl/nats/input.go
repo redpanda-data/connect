@@ -8,7 +8,6 @@ import (
 
 	"github.com/nats-io/nats.go"
 
-	"github.com/benthosdev/benthos/v4/internal/component/input/span"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
@@ -66,7 +65,7 @@ func init() {
 			if err != nil {
 				return nil, err
 			}
-			return span.NewInput("nats", conf, r, mgr)
+			return conf.WrapInputExtractTracingSpanMapping("nats", r)
 		},
 	)
 	if err != nil {
