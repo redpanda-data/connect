@@ -89,9 +89,9 @@ Finally, it's also possible to specify an explicit offset to consume from by add
 			Description("Determines the minimum amount of data that to receive from the broker when fetching records").
 			Default(1).
 			Advanced()).
-		Field(service.NewIntField("fetch_max_wait_ms").
-			Description("Determines how long in milliseconds for the broker to wait until it has enough data to send before responding").
-			Default(500).
+		Field(service.NewDurationField("fetch_max_wait_duration").
+			Description("Determines how long in for the broker to wait until it has enough data to send before responding").
+			Default(time.Duration.Milliseconds(500)).
 			Advanced()).
 		Field(service.NewIntField("max_partition_fetch_bytes").
 			Description("Determines the maximum amount of data to receive from a single partition in a single fetch request").
