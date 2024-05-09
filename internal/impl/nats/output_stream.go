@@ -11,7 +11,6 @@ import (
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/stan.go"
 
-	"github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
@@ -58,7 +57,7 @@ func soSpec() *service.ConfigSpec {
 The NATS Streaming Server is being deprecated. Critical bug fixes and security fixes will be applied until June of 2023. NATS-enabled applications requiring persistence should use [JetStream](https://docs.nats.io/nats-concepts/jetstream).
 :::
 
-`+output.Description(true, false, authDescription())).
+`+authDescription()+service.OutputPerformanceDocs(true, false)).
 		Fields(connectionHeadFields()...).
 		Fields(
 			service.NewStringField(soFieldClusterID).

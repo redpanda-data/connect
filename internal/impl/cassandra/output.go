@@ -11,7 +11,6 @@ import (
 
 	"github.com/gocql/gocql"
 
-	"github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/public/bloblang"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
@@ -28,10 +27,10 @@ func outputSpec() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Beta().
 		Summary("Runs a query against a Cassandra database for each message in order to insert data.").
-		Description(output.Description(true, true, `
+		Description(`
 Query arguments can be set using a bloblang array for the fields using the `+"`args_mapping`"+` field.
 
-When populating timestamp columns the value must either be a string in ISO 8601 format (2006-01-02T15:04:05Z07:00), or an integer representing unix time in seconds.`)).
+When populating timestamp columns the value must either be a string in ISO 8601 format (2006-01-02T15:04:05Z07:00), or an integer representing unix time in seconds.`+service.OutputPerformanceDocs(true, true)).
 		Example(
 			"Basic Inserts",
 			"If we were to create a table with some basic columns with `CREATE TABLE foo.bar (id int primary key, content text, created_at timestamp);`, and were processing JSON documents of the form `{\"id\":\"342354354\",\"content\":\"hello world\",\"timestamp\":1605219406}` using logged batches, we could populate our table with the following config:",

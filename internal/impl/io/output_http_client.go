@@ -3,7 +3,6 @@ package io
 import (
 	"context"
 
-	"github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/httpclient"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
@@ -13,16 +12,16 @@ func httpClientOutputSpec() *service.ConfigSpec {
 		Stable().
 		Categories("Network").
 		Summary("Sends messages to an HTTP server.").
-		Description(output.Description(true, true, `
+		Description(`
 When the number of retries expires the output will reject the message, the behaviour after this will depend on the pipeline but usually this simply means the send is attempted again until successful whilst applying back pressure.
 
 The URL and header values of this type can be dynamically set using function interpolations described [here](/docs/configuration/interpolation#bloblang-queries).
 
-The body of the HTTP request is the raw contents of the message payload. If the message has multiple parts (is a batch) the request will be sent according to [RFC1341](https://www.w3.org/Protocols/rfc1341/7_2_Multipart.html). This behaviour can be disabled by setting the field `+"[`batch_as_multipart`](#batch_as_multipart) to `false`"+`.
+The body of the HTTP request is the raw contents of the message payload. If the message has multiple parts (is a batch) the request will be sent according to [RFC1341](https://www.w3.org/Protocols/rfc1341/7_2_Multipart.html). This behaviour can be disabled by setting the field ` + "[`batch_as_multipart`](#batch_as_multipart) to `false`" + `.
 
 ### Propagating Responses
 
-It's possible to propagate the response from each HTTP request back to the input source by setting `+"`propagate_response` to `true`"+`. Only inputs that support [synchronous responses](/docs/guides/sync_responses) are able to make use of these propagated responses.`)).
+It's possible to propagate the response from each HTTP request back to the input source by setting ` + "`propagate_response` to `true`" + `. Only inputs that support [synchronous responses](/docs/guides/sync_responses) are able to make use of these propagated responses.` + service.OutputPerformanceDocs(true, true)).
 		Field(httpclient.ConfigField("POST", true,
 			service.NewBoolField("batch_as_multipart").
 				Description("Send message batches as a single request using [RFC1341](https://www.w3.org/Protocols/rfc1341/7_2_Multipart.html). If disabled messages in batches will be sent as individual requests.").

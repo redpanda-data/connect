@@ -11,7 +11,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/kinesis/types"
 	"github.com/cenkalti/backoff/v4"
 
-	"github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/impl/aws/config"
 	"github.com/benthosdev/benthos/v4/internal/impl/pure"
 	"github.com/benthosdev/benthos/v4/public/service"
@@ -61,12 +60,12 @@ func koOutputSpec() *service.ConfigSpec {
 		Version("3.36.0").
 		Categories("Services", "AWS").
 		Summary(`Sends messages to a Kinesis stream.`).
-		Description(output.Description(true, true, `
+		Description(`
 Both the `+"`partition_key`"+`(required) and `+"`hash_key`"+` (optional) fields can be dynamically set using function interpolations described [here](/docs/configuration/interpolation#bloblang-queries). When sending batched messages the interpolations are performed per message part.
 
 ### Credentials
 
-By default Benthos will use a shared credentials file when connecting to AWS services. It's also possible to set them explicitly at the component level, allowing you to transfer data across accounts. You can find out more [in this document](/docs/guides/cloud/aws).`)).
+By default Benthos will use a shared credentials file when connecting to AWS services. It's also possible to set them explicitly at the component level, allowing you to transfer data across accounts. You can find out more [in this document](/docs/guides/cloud/aws).`+service.OutputPerformanceDocs(true, true)).
 		Fields(
 			service.NewStringField(koFieldStream).
 				Description("The stream to publish messages to. Streams can either be specified by their name or full ARN.").

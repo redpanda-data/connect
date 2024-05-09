@@ -14,7 +14,6 @@ import (
 	"github.com/opensearch-project/opensearch-go/v3/opensearchapi"
 	"github.com/opensearch-project/opensearch-go/v3/opensearchutil"
 
-	"github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/httpclient"
 	"github.com/benthosdev/benthos/v4/internal/impl/aws/config"
 	"github.com/benthosdev/benthos/v4/public/service"
@@ -137,8 +136,8 @@ func OutputSpec() *service.ConfigSpec {
 		Stable().
 		Categories("Services").
 		Summary(`Publishes messages into an Elasticsearch index. If the index does not exist then it is created with a dynamic mapping.`).
-		Description(output.Description(true, true, `
-Both the `+"`id` and `index`"+` fields can be dynamically set using function interpolations described [here](/docs/configuration/interpolation#bloblang-queries). When sending batched messages these interpolations are performed per message part.`)).
+		Description(`
+Both the `+"`id` and `index`"+` fields can be dynamically set using function interpolations described [here](/docs/configuration/interpolation#bloblang-queries). When sending batched messages these interpolations are performed per message part.`+service.OutputPerformanceDocs(true, true)).
 		Fields(
 			service.NewStringListField(esoFieldURLs).
 				Description("A list of URLs to connect to. If an item of the list contains commas it will be expanded into multiple URLs.").

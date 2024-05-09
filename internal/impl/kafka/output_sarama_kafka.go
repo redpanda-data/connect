@@ -14,7 +14,6 @@ import (
 	"github.com/cenkalti/backoff/v4"
 	"golang.org/x/sync/syncmap"
 
-	"github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/public/bloblang"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
@@ -52,7 +51,7 @@ func OSKConfigSpec() *service.ConfigSpec {
 		Stable().
 		Categories("Services").
 		Summary(`The kafka output type writes a batch of messages to Kafka brokers and waits for acknowledgement before propagating it back to the input.`).
-		Description(output.Description(true, true, `
+		Description(`
 The config field `+"`ack_replicas`"+` determines whether we wait for acknowledgement from all replicas or just a single broker.
 
 Both the `+"`key` and `topic`"+` fields can be dynamically set using function interpolations described [here](/docs/configuration/interpolation#bloblang-queries).
@@ -73,7 +72,7 @@ If you're seeing issues writing to or reading from Kafka with this component the
 
 - I'm seeing logs that report `+"`Failed to connect to kafka: kafka: client has run out of available brokers to talk to (Is your cluster reachable?)`"+`, but the brokers are definitely reachable.
 
-Unfortunately this error message will appear for a wide range of connection problems even when the broker endpoint can be reached. Double check your authentication configuration and also ensure that you have [enabled TLS](#tlsenabled) if applicable.`)).
+Unfortunately this error message will appear for a wide range of connection problems even when the broker endpoint can be reached. Double check your authentication configuration and also ensure that you have [enabled TLS](#tlsenabled) if applicable.`+service.OutputPerformanceDocs(true, true)).
 		Fields(
 			service.NewStringListField(oskFieldAddresses).
 				Description("A list of broker addresses to connect to. If an item of the list contains commas it will be expanded into multiple addresses.").

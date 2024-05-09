@@ -11,7 +11,6 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/bloberror"
 
-	"github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
@@ -64,7 +63,7 @@ func bsoSpec() *service.ConfigSpec {
 		Beta().
 		Version("3.36.0").
 		Summary(`Sends message parts as objects to an Azure Blob Storage Account container. Each object is uploaded with the filename specified with the `+"`container`"+` field.`).
-		Description(output.Description(true, false, `
+		Description(`
 In order to have a different path for each object you should use function
 interpolations described [here](/docs/configuration/interpolation#bloblang-queries), which are
 calculated per message of a batch.
@@ -78,7 +77,7 @@ Supports multiple authentication methods but only one of the following is requir
 If multiple are set then the `+"`storage_connection_string`"+` is given priority.
 
 If the `+"`storage_connection_string`"+` does not contain the `+"`AccountName`"+` parameter, please specify it in the
-`+"`storage_account`"+` field.`)).
+`+"`storage_account`"+` field.`+service.OutputPerformanceDocs(true, false)).
 		Fields(
 			service.NewInterpolatedStringField(bsoFieldContainer).
 				Description("The container for uploading the messages to.").

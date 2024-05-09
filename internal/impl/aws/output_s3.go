@@ -14,7 +14,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 
-	"github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/impl/aws/config"
 	"github.com/benthosdev/benthos/v4/public/bloblang"
 	"github.com/benthosdev/benthos/v4/public/service"
@@ -137,7 +136,7 @@ func s3oOutputSpec() *service.ConfigSpec {
 		Version("3.36.0").
 		Categories("Services", "AWS").
 		Summary(`Sends message parts as objects to an Amazon S3 bucket. Each object is uploaded with the path specified with the `+"`path`"+` field.`).
-		Description(output.Description(true, false, `
+		Description(`
 In order to have a different path for each object you should use function interpolations described [here](/docs/configuration/interpolation#bloblang-queries), which are calculated per message of a batch.
 
 ### Metadata
@@ -195,7 +194,7 @@ output:
       processors:
         - archive:
             format: json_array
-`+"```"+``)).
+`+"```"+``+service.OutputPerformanceDocs(true, false)).
 		Fields(
 			service.NewStringField(s3oFieldBucket).
 				Description("The bucket to upload messages to."),
