@@ -145,20 +145,24 @@ type batchWithAckFn struct {
 }
 
 type franzKafkaReader struct {
-	seedBrokers     []string
-	topics          []string
-	topicPartitions map[string]map[int32]kgo.Offset
-	clientID        string
-	rackID          string
-	consumerGroup   string
-	tlsConf         *tls.Config
-	saslConfs       []sasl.Mechanism
-	checkpointLimit int
-	startFromOldest bool
-	commitPeriod    time.Duration
-	regexPattern    bool
-	multiHeader     bool
-	batchPolicy     service.BatchPolicy
+	seedBrokers            []string
+	topics                 []string
+	topicPartitions        map[string]map[int32]kgo.Offset
+	clientID               string
+	rackID                 string
+	consumerGroup          string
+	tlsConf                *tls.Config
+	saslConfs              []sasl.Mechanism
+	checkpointLimit        int
+	startFromOldest        bool
+	commitPeriod           time.Duration
+	fetchMinBytes          int
+	fetchMaxWaitDuration   time.Duration
+	maxPartitionFetchBytes int
+	maxPollRecords         int
+	regexPattern           bool
+	multiHeader            bool
+	batchPolicy            service.BatchPolicy
 
 	batchChan atomic.Value
 	res       *service.Resources
@@ -240,6 +244,22 @@ func newFranzKafkaReaderFromConfig(conf *service.ParsedConfig, res *service.Reso
 	}
 
 	if f.commitPeriod, err = conf.FieldDuration("commit_period"); err != nil {
+		return nil, err
+	}
+
+	if f.fetchMinBytes, err = conf.FieldInt("fetch_min_bytes"); err != nil {
+		return nil, err
+	}
+
+	if f.fetchMaxWaitDuration, err = conf.FieldDuration("fetch_max_wait_duration"); err != nil {
+		return nil, err
+	}
+
+	if f.maxPartitionFetchBytes, err = conf.FieldInt("max_partition_fetch_bytes"); err != nil {
+		return nil, err
+	}
+
+	if f.maxPollRecords, err = conf.FieldInt("max_poll_records"); err != nil {
 		return nil, err
 	}
 
