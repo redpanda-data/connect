@@ -155,7 +155,6 @@ type franzKafkaReader struct {
 	fetchMinBytes          int
 	fetchMaxWaitDuration   time.Duration
 	maxPartitionFetchBytes int
-	maxPollRecords         int
 	regexPattern           bool
 	multiHeader            bool
 	batchPolicy            service.BatchPolicy
