@@ -97,10 +97,6 @@ Finally, it's also possible to specify an explicit offset to consume from by add
 			Description("Determines the maximum amount of data to receive from a single partition in a single fetch request").
 			Default(1000000).
 			Advanced()).
-		Field(service.NewIntField("max_poll_records").
-			Description("Determines the maximum number of records to return in a single poll").
-			Default(500).
-			Advanced()).
 		Field(service.NewBoolField("start_from_oldest").
 			Description("Determines whether to consume from the oldest available offset, otherwise messages are consumed from the latest offset. The setting is applied when creating a new consumer group or the saved offset no longer exists.").
 			Default(true).
@@ -256,10 +252,6 @@ func newFranzKafkaReaderFromConfig(conf *service.ParsedConfig, res *service.Reso
 	}
 
 	if f.maxPartitionFetchBytes, err = conf.FieldInt("max_partition_fetch_bytes"); err != nil {
-		return nil, err
-	}
-
-	if f.maxPollRecords, err = conf.FieldInt("max_poll_records"); err != nil {
 		return nil, err
 	}
 
@@ -652,6 +644,9 @@ func (f *franzKafkaReader) Connect(ctx context.Context) error {
 		kgo.ConsumerGroup(f.consumerGroup),
 		kgo.ClientID(f.clientID),
 		kgo.Rack(f.rackID),
+		kgo.FetchMinBytes(int32(f.fetchMinBytes)),
+		kgo.FetchMaxWait(f.fetchMaxWaitDuration),
+		kgo.FetchMaxPartitionBytes(int32(f.maxPartitionFetchBytes)),
 	}
 
 	if f.consumerGroup != "" {
