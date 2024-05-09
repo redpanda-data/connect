@@ -27,6 +27,8 @@ import (
 // Manager provides a mock benthos manager that components can use to test
 // interactions with fake resources.
 type Manager struct {
+	Version string
+
 	Inputs     map[string]*Input
 	Caches     map[string]map[string]CacheItem
 	RateLimits map[string]RateLimit
@@ -48,6 +50,7 @@ type Manager struct {
 // NewManager provides a new mock manager.
 func NewManager() *Manager {
 	return &Manager{
+		Version:    "mock",
 		Inputs:     map[string]*Input{},
 		Caches:     map[string]map[string]CacheItem{},
 		RateLimits: map[string]RateLimit{},
@@ -59,6 +62,10 @@ func NewManager() *Manager {
 		L:          log.Noop(),
 		T:          noop.NewTracerProvider(),
 	}
+}
+
+func (m *Manager) EngineVersion() string {
+	return m.Version
 }
 
 // ForStream returns the same mock manager.

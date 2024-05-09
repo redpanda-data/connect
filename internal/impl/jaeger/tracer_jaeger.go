@@ -14,7 +14,6 @@ import (
 	semconv "go.opentelemetry.io/otel/semconv/v1.7.0"
 	"go.opentelemetry.io/otel/trace"
 
-	"github.com/benthosdev/benthos/v4/internal/cli"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
@@ -28,6 +27,7 @@ const (
 )
 
 type jaegerConfig struct {
+	engineVersion string
 	AgentAddress  string
 	CollectorURL  string
 	SamplerType   string
@@ -76,7 +76,9 @@ var exporterInitFn = func(epOpt jaeger.EndpointOption) (tracesdk.SpanExporter, e
 
 func init() {
 	err := service.RegisterOtelTracerProvider("jaeger", jaegerConfigSpec(), func(conf *service.ParsedConfig) (p trace.TracerProvider, err error) {
-		jConf := jaegerConfig{}
+		jConf := jaegerConfig{
+			engineVersion: conf.EngineVersion(),
+		}
 		if jConf.AgentAddress, err = conf.FieldString(jtFieldAgentAddress); err != nil {
 			return
 		}
@@ -150,7 +152,7 @@ func NewJaeger(config jaegerConfig) (trace.TracerProvider, error) {
 		// Only set the default service version tag if the user doesn't provide
 		// a custom service name tag.
 		if _, ok := config.Tags[string(semconv.ServiceVersionKey)]; !ok {
-			attrs = append(attrs, semconv.ServiceVersionKey.String(cli.Version))
+			attrs = append(attrs, semconv.ServiceVersionKey.String(config.engineVersion))
 		}
 	}
 

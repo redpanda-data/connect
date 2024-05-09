@@ -130,7 +130,7 @@ func (r *reader) Connect(ctx context.Context) error {
 		return fmt.Errorf("failed to obtain latest seen message ID: %v", err)
 	}
 
-	sess, doneWithSessFn, err := getGlobalSession(r.botToken)
+	sess, doneWithSessFn, err := getGlobalSession(r.botToken, r.mgr.EngineVersion())
 	if err != nil {
 		return err
 	}

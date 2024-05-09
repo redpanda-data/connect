@@ -57,6 +57,7 @@ func CreateManager(
 	// to revise in future.
 	tmpMgr := mock.NewManager()
 	tmpMgr.L = logger
+	tmpMgr.Version = version
 
 	// Create our metrics type.
 	if stats, err = bundle.AllMetrics.Init(conf.Metrics, tmpMgr); err != nil {
@@ -95,6 +96,7 @@ func CreateManager(
 
 	mgrOpts = append([]manager.OptFunc{
 		manager.OptSetAPIReg(httpServer),
+		manager.OptSetEngineVersion(version),
 		manager.OptSetStreamHTTPNamespacing(c.Bool("prefix-stream-endpoints")),
 		manager.OptSetLogger(logger),
 		manager.OptSetMetrics(stats),

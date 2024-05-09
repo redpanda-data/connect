@@ -15,6 +15,7 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/api"
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/bundle/tracing"
+	"github.com/benthosdev/benthos/v4/internal/cli"
 	"github.com/benthosdev/benthos/v4/internal/component/buffer"
 	"github.com/benthosdev/benthos/v4/internal/component/cache"
 	"github.com/benthosdev/benthos/v4/internal/component/input"
@@ -43,6 +44,8 @@ import (
 // in order to provide an explicit HTTP multiplexer for registering those
 // endpoints.
 type StreamBuilder struct {
+	engineVersion string
+
 	http       api.Config
 	threads    int
 	inputs     []input.Config
@@ -72,6 +75,7 @@ func NewStreamBuilder() *StreamBuilder {
 	httpConf := api.NewConfig()
 	httpConf.Enabled = false
 	return &StreamBuilder{
+		engineVersion:  cli.Version,
 		http:           httpConf,
 		buffer:         buffer.NewConfig(),
 		resources:      manager.NewResourceConfig(),
@@ -91,6 +95,13 @@ func (s *StreamBuilder) getLintContext() docs.LintContext {
 }
 
 //------------------------------------------------------------------------------
+
+// SetEngineVersion sets the version string representing the Benthos engine that
+// components will see. By default a best attempt will be made to determine a
+// version either from the benthos module import or a build-time flag.
+func (s *StreamBuilder) SetEngineVersion(ev string) {
+	s.engineVersion = ev
+}
 
 // DisableLinting configures the stream builder to no longer lint YAML configs,
 // allowing you to add snippets of config to the builder without failing on
@@ -836,6 +847,7 @@ func (s *StreamBuilder) buildWithEnv(env *bundle.Environment) (*Stream, error) {
 	// resource constructors until after this metrics exporter is initialised.
 	tmpMgr, err := manager.New(
 		manager.NewResourceConfig(),
+		manager.OptSetEngineVersion(s.engineVersion),
 		manager.OptSetLogger(logger),
 		manager.OptSetEnvironment(env),
 		manager.OptSetBloblangEnvironment(s.env.getBloblangParserEnv()),
@@ -878,6 +890,7 @@ func (s *StreamBuilder) buildWithEnv(env *bundle.Environment) (*Stream, error) {
 	mgr, err := manager.New(
 		conf.ResourceConfig,
 		manager.OptSetAPIReg(apiMut),
+		manager.OptSetEngineVersion(s.engineVersion),
 		manager.OptSetLogger(logger),
 		manager.OptSetMetrics(stats),
 		manager.OptSetTracer(tracer),

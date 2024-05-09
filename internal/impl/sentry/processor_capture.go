@@ -8,7 +8,6 @@ import (
 
 	"github.com/getsentry/sentry-go"
 
-	"github.com/benthosdev/benthos/v4/internal/cli"
 	"github.com/benthosdev/benthos/v4/public/bloblang"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
@@ -169,7 +168,7 @@ func newCaptureProcessor(conf *service.ParsedConfig, mgr *service.Resources, opt
 		return nil, fmt.Errorf("failed to create sentry client: %w", err)
 	}
 
-	version := cli.Version
+	version := mgr.EngineVersion()
 	if len(version) > 200 {
 		version = version[:200]
 	}

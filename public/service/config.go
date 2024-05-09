@@ -561,6 +561,13 @@ type ParsedConfig struct {
 	mgr bundle.NewManagement
 }
 
+// EngineVersion returns the version stamp associated with the underlying
+// benthos engine. The version string is not guaranteed to match any particular
+// scheme.
+func (p *ParsedConfig) EngineVersion() string {
+	return p.mgr.EngineVersion()
+}
+
 // Namespace returns a version of the parsed config at a given field namespace.
 // This is useful for extracting multiple fields under the same grouping.
 func (p *ParsedConfig) Namespace(path ...string) *ParsedConfig {
