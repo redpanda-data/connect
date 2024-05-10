@@ -180,8 +180,8 @@ func newJetStreamReaderFromConfig(conf *service.ParsedConfig, mgr *service.Resou
 			return nil, errors.New("stream or durable is required, when bind is true")
 		}
 	} else {
-		if j.subject == "" {
-			return nil, errors.New("subject is empty")
+		if j.subject == "" && j.stream == "" {
+			return nil, errors.New("subject and stream is empty")
 		}
 	}
 
