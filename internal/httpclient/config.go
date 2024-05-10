@@ -157,6 +157,9 @@ func ConfigFromParsed(pConf *service.ParsedConfig) (conf OldConfig, err error) {
 	if conf.OAuth2, err = oauth2FromParsed(pConf); err != nil {
 		return
 	}
+	if conf.AWSV4, err = awsV4FromParsed(pConf); err != nil {
+		return
+	}
 	return
 }
 
@@ -181,4 +184,5 @@ type OldConfig struct {
 	ProxyURL            string
 	Auth                AuthConfig
 	OAuth2              OAuth2Config
+	AWSV4               AWSV4Config
 }

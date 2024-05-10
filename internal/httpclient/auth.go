@@ -1,6 +1,9 @@
 package httpclient
 
 import (
+	"context"
+	"github.com/benthosdev/benthos/v4/internal/impl/aws"
+	"github.com/benthosdev/benthos/v4/internal/impl/aws/config"
 	"io/fs"
 	"net/http"
 
@@ -35,6 +38,7 @@ func AuthFieldSpecsExpanded() []*service.ConfigField {
 		oAuth2FieldSpec(),
 		BasicAuthField(),
 		jwtFieldSpec(),
+		awsV4FieldSpec(),
 	}
 }
 
@@ -336,5 +340,52 @@ func jwtAuthFromParsed(conf *service.ParsedConfig) (res JWTConfig, err error) {
 	if res.PrivateKeyFile, err = conf.FieldString(ajFieldPrivateKeyFile); err != nil {
 		return
 	}
+	return
+}
+
+//------------------------------------------------------------------------------
+
+const (
+	av4Field        = "aws_v4"
+	av4FieldEnabled = "enabled"
+	av4FieldService = "service"
+)
+
+func awsV4FieldSpec() *service.ConfigField {
+	awsSessionFields := config.SessionFields()
+	regionField := awsSessionFields[0]
+	credentialsField := awsSessionFields[2]
+
+	return service.NewObjectField("aws_v4",
+		service.NewBoolField(av4FieldEnabled).
+			Description("Whether to use AWS V4 authentication in requests.").
+			Default(false),
+		regionField,
+		credentialsField,
+		service.NewStringField(av4FieldService).
+			Description("Optional service name to use for the request").
+			Default(""),
+	).Advanced().
+		Description("Allows you to specify AWS V4 authentication.")
+}
+
+func awsV4FromParsed(conf *service.ParsedConfig) (res AWSV4Config, err error) {
+	res = NewAWSV4Config()
+	if !conf.Contains(av4Field) {
+		return
+	}
+	conf = conf.Namespace(av4Field)
+	if res.Enabled, err = conf.FieldBool(av4FieldEnabled); err != nil {
+		return
+	}
+	session, err := aws.GetSession(context.Background(), conf)
+	if err != nil {
+		return
+	}
+	if res.Service, err = conf.FieldString(av4FieldService); err != nil {
+		return
+	}
+	res.Region = session.Region
+	res.Creds, err = session.Credentials.Retrieve(context.Background())
 	return
 }

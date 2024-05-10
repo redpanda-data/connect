@@ -708,3 +708,40 @@ tls:
 	require.NoError(t, err)
 	assert.Equal(t, "HELLO WORLD", string(mBytes))
 }
+
+func TestHTTPClientWithAWSV4Auth(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Check the Authorization header
+		// We only care that it exists and looks generally correct
+		assert.Regexp(t, "AWS4-HMAC-SHA256 Credential=foo\\/\\d{8}\\/us-west-1\\/test-service\\/aws4_request, SignedHeaders=content-length;content-type;host;x-amz-content-sha256;x-amz-date, Signature=.*", r.Header.Get("Authorization"))
+		b, err := io.ReadAll(r.Body)
+		require.NoError(t, err)
+		_, _ = w.Write(bytes.ToUpper(b))
+	}))
+	defer ts.Close()
+
+	conf := clientConfig(t, `
+url: %v
+aws_v4:
+  enabled: true
+  region: us-west-1
+  service: test-service
+  credentials:
+    id: foo
+    secret: bar
+`, ts.URL)
+
+	h, err := NewClientFromOldConfig(conf, service.MockResources())
+	require.NoError(t, err)
+
+	resBatch, err := h.Send(context.Background(), service.MessageBatch{
+		service.NewMessage([]byte("hello world")),
+	})
+
+	require.NoError(t, err)
+	require.Len(t, resBatch, 1)
+
+	mBytes, err := resBatch[0].AsBytes()
+	require.NoError(t, err)
+	assert.Equal(t, "HELLO WORLD", string(mBytes))
+}

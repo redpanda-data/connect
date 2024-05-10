@@ -1,17 +1,24 @@
 package httpclient
 
 import (
+	"bytes"
 	"context"
 	"crypto"
 	"crypto/hmac"
 	"crypto/sha1"
+	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"fmt"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	v4 "github.com/aws/aws-sdk-go-v2/aws/signer/v4"
+	"io"
 	"io/fs"
 	"math/rand"
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -297,4 +304,96 @@ func (oauth OAuth2Config) Client(ctx context.Context, base *http.Client) *http.C
 	}
 
 	return conf.Client(context.WithValue(ctx, oauth2.HTTPClient, base))
+}
+
+//------------------------------------------------------------------------------
+
+// AWSV4Config holds the configuration parameters for an AWS V4 exchange.
+type AWSV4Config struct {
+	Enabled bool
+	Region  string
+	Creds   aws.Credentials
+	Service string
+}
+
+// NewAWSV4Config returns a new AWSV4Config with default values.
+func NewAWSV4Config() AWSV4Config {
+	return AWSV4Config{
+		Enabled: false,
+		Region:  "",
+		Creds:   aws.Credentials{},
+		Service: "",
+	}
+}
+
+func (awsv4 AWSV4Config) Client(ctx context.Context, base *http.Client) *http.Client {
+	if !awsv4.Enabled {
+		return base
+	}
+
+	return &http.Client{
+		Transport: AWSV4Transport{
+			client:  base,
+			creds:   awsv4.Creds,
+			signer:  v4.NewSigner(),
+			region:  awsv4.Region,
+			service: awsv4.Service,
+		},
+	}
+}
+
+// AWSV4Transport Transport is a RoundTripper that will sign requests with AWS V4 Signing
+type AWSV4Transport struct {
+	client  *http.Client
+	creds   aws.Credentials
+	signer  *v4.Signer
+	region  string
+	service string
+}
+
+// RoundTrip uses the underlying RoundTripper transport, but signs request first with AWS V4 Signing
+func (st AWSV4Transport) RoundTrip(req *http.Request) (*http.Response, error) {
+	if h, ok := req.Header["Authorization"]; ok && len(h) > 0 && strings.HasPrefix(h[0], "AWS4") {
+		// Received a signed request, just pass it on.
+		return st.client.Do(req)
+	}
+
+	if strings.Contains(req.URL.RawPath, "%2C") {
+		// Escaping path
+		req.URL.RawPath = url.PathEscape(req.URL.RawPath)
+	}
+
+	hash, err := hexEncodedSha256OfRequest(req)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("X-Amz-Content-Sha256", hash)
+
+	if err := st.signer.SignHTTP(req.Context(), st.creds, req, hash, st.service, st.region, time.Now().UTC()); err != nil {
+		return nil, err
+	}
+	return st.client.Do(req)
+}
+
+func hexEncodedSha256OfRequest(r *http.Request) (string, error) {
+	if r.Body == nil {
+		return "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", nil
+	}
+
+	hasher := sha256.New()
+
+	reqBodyBytes, err := io.ReadAll(r.Body)
+	if err != nil {
+		return "", err
+	}
+
+	if err := r.Body.Close(); err != nil {
+		return "", err
+	}
+
+	r.Body = io.NopCloser(bytes.NewBuffer(reqBodyBytes))
+	hasher.Write(reqBodyBytes)
+	digest := hasher.Sum(nil)
+
+	return hex.EncodeToString(digest), nil
 }
