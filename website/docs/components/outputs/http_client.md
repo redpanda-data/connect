@@ -33,9 +33,6 @@ output:
     url: "" # No default (required)
     verb: POST
     headers: {}
-    aws_v4:
-      enabled: false
-      service: ""
     rate_limit: "" # No default (optional)
     timeout: 5s
     max_in_flight: 64
@@ -456,7 +453,7 @@ Default: `{}`
 
 ### `aws_v4`
 
-Sorry! This field is missing documentation.
+Allows you to specify AWS V4 authentication.
 
 
 Type: `object`  

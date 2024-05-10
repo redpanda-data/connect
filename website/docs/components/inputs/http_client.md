@@ -33,9 +33,6 @@ input:
     url: "" # No default (required)
     verb: GET
     headers: {}
-    aws_v4:
-      enabled: false
-      service: ""
     rate_limit: "" # No default (optional)
     timeout: 5s
     payload: "" # No default (optional)
@@ -484,7 +481,7 @@ Default: `{}`
 
 ### `aws_v4`
 
-Sorry! This field is missing documentation.
+Allows you to specify AWS V4 authentication.
 
 
 Type: `object`  

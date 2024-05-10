@@ -365,7 +365,8 @@ func awsV4FieldSpec() *service.ConfigField {
 		service.NewStringField(av4FieldService).
 			Description("Optional service name to use for the request").
 			Default(""),
-	)
+	).Advanced().
+		Description("Allows you to specify AWS V4 authentication.")
 }
 
 func awsV4FromParsed(conf *service.ParsedConfig) (res AWSV4Config, err error) {
