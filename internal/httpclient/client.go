@@ -112,6 +112,9 @@ func NewClientFromOldConfig(conf OldConfig, mgr *service.Resources, opts ...Requ
 
 	h.client = conf.OAuth2.Client(h.clientCtx, h.client)
 
+	// If AWSV4 is enabled we need to create a new client with the signing
+	h.client = conf.AWSV4.Client(h.clientCtx, h.client)
+
 	for _, c := range conf.BackoffOn {
 		h.backoffOn[c] = struct{}{}
 	}

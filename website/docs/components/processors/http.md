@@ -32,6 +32,9 @@ http:
   url: "" # No default (required)
   verb: POST
   headers: {}
+  aws_v4:
+    enabled: false
+    service: ""
   rate_limit: "" # No default (optional)
   timeout: 5s
   parallel: false
@@ -74,6 +77,18 @@ http:
     signing_method: ""
     claims: {}
     headers: {}
+  aws_v4:
+    enabled: false
+    region: ""
+    credentials:
+      profile: ""
+      id: ""
+      secret: ""
+      token: ""
+      from_ec2_role: false
+      role: ""
+      role_external_id: ""
+    service: ""
   tls:
     enabled: false
     skip_cert_verify: false
@@ -458,6 +473,104 @@ Add optional key/value headers to the JWT.
 
 Type: `object`  
 Default: `{}`  
+
+### `aws_v4`
+
+Sorry! This field is missing documentation.
+
+
+Type: `object`  
+
+### `aws_v4.enabled`
+
+Whether to use AWS V4 authentication in requests.
+
+
+Type: `bool`  
+Default: `false`  
+
+### `aws_v4.region`
+
+The AWS region to target.
+
+
+Type: `string`  
+Default: `""`  
+
+### `aws_v4.credentials`
+
+Optional manual configuration of AWS credentials to use. More information can be found [in this document](/docs/guides/cloud/aws).
+
+
+Type: `object`  
+
+### `aws_v4.credentials.profile`
+
+A profile from `~/.aws/credentials` to use.
+
+
+Type: `string`  
+Default: `""`  
+
+### `aws_v4.credentials.id`
+
+The ID of credentials to use.
+
+
+Type: `string`  
+Default: `""`  
+
+### `aws_v4.credentials.secret`
+
+The secret for the credentials being used.
+:::warning Secret
+This field contains sensitive information that usually shouldn't be added to a config directly, read our [secrets page for more info](/docs/configuration/secrets).
+:::
+
+
+Type: `string`  
+Default: `""`  
+
+### `aws_v4.credentials.token`
+
+The token for the credentials being used, required when using short term credentials.
+
+
+Type: `string`  
+Default: `""`  
+
+### `aws_v4.credentials.from_ec2_role`
+
+Use the credentials of a host EC2 machine configured to assume [an IAM role associated with the instance](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_use_switch-role-ec2.html).
+
+
+Type: `bool`  
+Default: `false`  
+Requires version 4.2.0 or newer  
+
+### `aws_v4.credentials.role`
+
+A role ARN to assume.
+
+
+Type: `string`  
+Default: `""`  
+
+### `aws_v4.credentials.role_external_id`
+
+An external ID to provide when assuming a role.
+
+
+Type: `string`  
+Default: `""`  
+
+### `aws_v4.service`
+
+Optional service name to use for the request
+
+
+Type: `string`  
+Default: `""`  
 
 ### `tls`
 

@@ -100,3 +100,30 @@ oauth2:
 		"third":  {"and those"},
 	}, authConf.EndpointParams)
 }
+
+func TestAuthConfigAWSV4Parsing(t *testing.T) {
+	spec := service.NewConfigSpec().Field(awsV4FieldSpec())
+
+	parsedConf, err := spec.ParseYAML(`
+aws_v4:
+  enabled: true
+  region: eu-west-1
+  service: test-service
+  credentials:
+    id: foo
+    secret: bar
+    token: baz
+`, service.NewEnvironment())
+
+	require.NoError(t, err)
+
+	authConf, err := awsV4FromParsed(parsedConf)
+	require.NoError(t, err)
+
+	assert.True(t, authConf.Enabled)
+	assert.Equal(t, "eu-west-1", authConf.Region)
+	assert.Equal(t, "foo", authConf.Creds.AccessKeyID)
+	assert.Equal(t, "bar", authConf.Creds.SecretAccessKey)
+	assert.Equal(t, "baz", authConf.Creds.SessionToken)
+	assert.Equal(t, "test-service", authConf.Service)
+}

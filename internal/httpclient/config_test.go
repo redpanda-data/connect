@@ -91,6 +91,12 @@ jwt:
 oauth2:
   enabled: true
   client_key: moo
+aws_v4:
+  enabled: true
+  region: us-west-1
+  credentials:
+    id: foo
+    secret: bar
 `,
 			validator: func(t *testing.T, o *OldConfig) {
 				sURL, _ := o.URL.Static()
@@ -111,6 +117,11 @@ oauth2:
 
 				assert.True(t, o.OAuth2.Enabled)
 				assert.Equal(t, "moo", o.OAuth2.ClientKey)
+
+				assert.True(t, o.AWSV4.Enabled)
+				assert.Equal(t, "us-west-1", o.AWSV4.Region)
+				assert.Equal(t, "foo", o.AWSV4.Creds.AccessKeyID)
+				assert.Equal(t, "bar", o.AWSV4.Creds.SecretAccessKey)
 			},
 		},
 	}
