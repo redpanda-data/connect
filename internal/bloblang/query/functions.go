@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/gabs/v2"
-	"github.com/gofrs/uuid"
+	"github.com/google/uuid"
 	gonanoid "github.com/matoous/go-nanoid/v2"
 	"github.com/segmentio/ksuid"
 
@@ -860,11 +860,45 @@ var _ = registerSimpleFunction(
 		NewExampleSpec("", `root.id = uuid_v4()`),
 	),
 	func(_ FunctionContext) (any, error) {
-		u4, err := uuid.NewV4()
+		u4, err := uuid.NewRandom()
 		if err != nil {
 			panic(err)
 		}
 		return u4.String(), nil
+	},
+)
+
+//------------------------------------------------------------------------------
+
+var _ = registerSimpleFunction(
+	NewFunctionSpec(
+		FunctionCategoryGeneral, "uuid_v6",
+		"Generates a new RFC-4122 UUIDv6 each time it is invoked and prints a string representation.",
+		NewExampleSpec("", `root.id = uuid_v6()`),
+	),
+	func(_ FunctionContext) (any, error) {
+		u6, err := uuid.NewV6()
+		if err != nil {
+			panic(err)
+		}
+		return u6.String(), nil
+	},
+)
+
+//------------------------------------------------------------------------------
+
+var _ = registerSimpleFunction(
+	NewFunctionSpec(
+		FunctionCategoryGeneral, "uuid_v7",
+		"Generates a new RFC-4122 UUIDv7 each time it is invoked and prints a string representation.",
+		NewExampleSpec("", `root.id = uuid_v7()`),
+	),
+	func(_ FunctionContext) (any, error) {
+		u7, err := uuid.NewV7()
+		if err != nil {
+			panic(err)
+		}
+		return u7.String(), nil
 	},
 )
 
