@@ -1,6 +1,8 @@
 package service
 
-import "go.opentelemetry.io/otel/trace"
+import (
+	"go.opentelemetry.io/otel/trace"
+)
 
 // BatchBufferConstructor is a func that's provided a configuration type and
 // access to a service manager and must return an instantiation of a buffer
@@ -195,4 +197,11 @@ type BatchScannerCreatorConstructor func(conf *ParsedConfig, mgr *Resources) (Ba
 // each instantiation of the component within a config.
 func RegisterBatchScannerCreator(name string, spec *ConfigSpec, ctor BatchScannerCreatorConstructor) error {
 	return globalEnvironment.RegisterBatchScannerCreator(name, spec, ctor)
+}
+
+// RegisterTemplateYAML attempts to register a template to the global
+// environment, defined as a YAML document, to the environment such that it may
+// be used similarly to any other component plugin.
+func RegisterTemplateYAML(yamlStr string) error {
+	return globalEnvironment.RegisterTemplateYAML(yamlStr)
 }

@@ -12,7 +12,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/public/service"
 	"github.com/benthosdev/benthos/v4/public/service/integration"
 )
@@ -166,8 +165,8 @@ azure_renew_lock: true
 		wg.Done()
 	}()
 
-	if _, _, err = m.ReadBatch(ctx); err != component.ErrTypeClosed && err != component.ErrNotConnected {
-		t.Errorf("Wrong error: %v != %v", err, component.ErrTypeClosed)
+	if _, _, err = m.ReadBatch(ctx); err != service.ErrNotConnected {
+		t.Errorf("Wrong error: %v != %v", err, service.ErrNotConnected)
 	}
 
 	wg.Wait()

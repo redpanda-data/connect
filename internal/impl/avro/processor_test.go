@@ -1,19 +1,15 @@
-package avro_test
+package avro
 
 import (
 	"context"
 	"fmt"
 	"os"
-	"reflect"
-	"strconv"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/benthosdev/benthos/v4/internal/component/testutil"
-	"github.com/benthosdev/benthos/v4/internal/manager/mock"
-	"github.com/benthosdev/benthos/v4/internal/message"
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
 func TestAvroBasic(t *testing.T) {
@@ -21,8 +17,8 @@ func TestAvroBasic(t *testing.T) {
 		name     string
 		operator string
 		encoding string
-		input    []string
-		output   []string
+		input    string
+		output   string
 	}
 
 	tests := []testCase{
@@ -30,84 +26,31 @@ func TestAvroBasic(t *testing.T) {
 			name:     "textual to json 1",
 			operator: "to_json",
 			encoding: "textual",
-			input: []string{
-				`{"Name":"foo","Address":{"my.namespace.com.address":{"City":"foo","State":"bar"}}}`,
-			},
-			output: []string{
-				`{"Address":{"my.namespace.com.address":{"City":"foo","State":"bar"}},"Name":"foo"}`,
-			},
+			input:    `{"Name":"foo","Address":{"my.namespace.com.address":{"City":"foo","State":"bar"}}}`,
+			output:   `{"Address":{"my.namespace.com.address":{"City":"foo","State":"bar"}},"Name":"foo"}`,
 		},
 		{
 			name:     "binary to json 1",
 			operator: "to_json",
 			encoding: "binary",
-			input: []string{
-				"\x06foo\x02\x06foo\x06bar",
-			},
-			output: []string{
-				`{"Address":{"my.namespace.com.address":{"City":"foo","State":"bar"}},"Name":"foo"}`,
-			},
+			input:    "\x06foo\x02\x06foo\x06bar",
+			output:   `{"Address":{"my.namespace.com.address":{"City":"foo","State":"bar"}},"Name":"foo"}`,
 		},
-		/*
-			{
-				name:     "single to json 1",
-				operator: "to_json",
-				encoding: "single",
-				input: []string{
-					"\xc3\x01\x84>\xe0\xee\xbb\xf1ǋ\x06foo\x02\x06foo\x06bar",
-				},
-				output: []string{
-					`{"Address":{"my.namespace.com.address":{"City":"foo","State":"bar"}},"Name":"foo"}`,
-				},
-			},
-		*/
-		/*
-			// TODO: Unfortunately this serialisation is non-deterministic
-			{
-				name:     "json to textual 1",
-				operator: "from_json",
-				encoding: "textual",
-				input: []string{
-					`{"Name":"foo","Address":{"my.namespace.com.address":{"City":"foo","State":"bar"}}}`,
-				},
-				output: []string{
-					`{"Name":"foo","Address":{"my.namespace.com.address":{"City":"foo","State":"bar"}}}`,
-				},
-			},
-		*/
 		{
 			name:     "json to binary 1",
 			operator: "from_json",
 			encoding: "binary",
-			input: []string{
-				`{"Name":"foo","Address":{"my.namespace.com.address":{"City":"foo","State":"bar"}}}`,
-			},
-			output: []string{
-				"\x06foo\x02\x06foo\x06bar",
-			},
+			input:    `{"Name":"foo","Address":{"my.namespace.com.address":{"City":"foo","State":"bar"}}}`,
+			output:   "\x06foo\x02\x06foo\x06bar",
 		},
-		/*
-			{
-				name:     "json to single 1",
-				operator: "from_json",
-				encoding: "single",
-				input: []string{
-					`{"Name":"foo","Address":{"my.namespace.com.address":{"City":"foo","State":"bar"}}}`,
-				},
-				output: []string{
-					"\xc3\x01\x84>\xe0\xee\xbb\xf1ǋ\x06foo\x02\x06foo\x06bar",
-				},
-			},
-		*/
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(tt *testing.T) {
-			conf, err := testutil.ProcessorFromYAML(`
-avro:
-  operator: %v
-  encoding: %v
-  schema: |
+			conf, err := avroConfigSpec().ParseYAML(fmt.Sprintf(`
+operator: %v
+encoding: %v
+schema: |
     {
       "namespace": "foo.namespace.com",
       "type": "record",
@@ -125,40 +68,20 @@ avro:
         } ], "default": null }
       ]
     }
-`, test.operator, test.encoding)
+`, test.operator, test.encoding), nil)
 			require.NoError(t, err)
 
-			proc, err := mock.NewManager().NewProcessor(conf)
-			if err != nil {
-				tt.Fatal(err)
-			}
+			proc, err := newAvroFromConfig(conf, service.MockResources())
+			require.NoError(t, err)
 
-			input := message.QuickBatch(nil)
-			for _, p := range test.input {
-				input = append(input, message.NewPart([]byte(p)))
-			}
+			msgs, err := proc.Process(context.Background(), service.NewMessage([]byte(test.input)))
+			require.NoError(t, err)
+			require.Len(t, msgs, 1)
 
-			exp := make([][]byte, len(test.output))
-			for i, p := range test.output {
-				exp[i] = []byte(p)
-			}
+			mBytes, err := msgs[0].AsBytes()
+			require.NoError(t, err)
 
-			msgs, res := proc.ProcessBatch(context.Background(), input)
-			if res != nil {
-				tt.Fatal(res)
-			}
-
-			if len(msgs) != 1 {
-				tt.Fatalf("Expected one message, received: %v", len(msgs))
-			}
-			if act := message.GetAllBytes(msgs[0]); !reflect.DeepEqual(act, exp) {
-				tt.Errorf("Unexpected output: %s != %s", exp, act)
-				tt.Logf("Part 0: %v", strconv.Quote(string(act[0])))
-			}
-			_ = msgs[0].Iter(func(i int, part *message.Part) error {
-				assert.NoError(t, part.ErrorGet())
-				return nil
-			})
+			assert.Equal(t, test.output, string(mBytes))
 		})
 	}
 }
@@ -183,22 +106,20 @@ func TestAvroSchemaPath(t *testing.T) {
 }`
 
 	tmpSchemaFile, err := os.CreateTemp("", "benthos_avro_test")
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
+
 	defer os.Remove(tmpSchemaFile.Name())
 
 	// write schema definition to tmpfile
-	if _, err := tmpSchemaFile.WriteString(schema); err != nil {
-		t.Fatal(err)
-	}
+	_, err = tmpSchemaFile.WriteString(schema)
+	require.NoError(t, err)
 
 	type testCase struct {
 		name     string
 		operator string
 		encoding string
-		input    []string
-		output   []string
+		input    string
+		output   string
 	}
 
 	tests := []testCase{
@@ -206,131 +127,52 @@ func TestAvroSchemaPath(t *testing.T) {
 			name:     "textual to json 1",
 			operator: "to_json",
 			encoding: "textual",
-			input: []string{
-				`{"Name":"foo","Address":{"my.namespace.com.address":{"City":"foo","State":"bar"}}}`,
-			},
-			output: []string{
-				`{"Address":{"my.namespace.com.address":{"City":"foo","State":"bar"}},"Name":"foo"}`,
-			},
+			input:    `{"Name":"foo","Address":{"my.namespace.com.address":{"City":"foo","State":"bar"}}}`,
+			output:   `{"Address":{"my.namespace.com.address":{"City":"foo","State":"bar"}},"Name":"foo"}`,
 		},
 		{
 			name:     "binary to json 1",
 			operator: "to_json",
 			encoding: "binary",
-			input: []string{
-				"\x06foo\x02\x06foo\x06bar",
-			},
-			output: []string{
-				`{"Address":{"my.namespace.com.address":{"City":"foo","State":"bar"}},"Name":"foo"}`,
-			},
+			input:    "\x06foo\x02\x06foo\x06bar",
+			output:   `{"Address":{"my.namespace.com.address":{"City":"foo","State":"bar"}},"Name":"foo"}`,
 		},
-		/*
-			{
-				name:     "single to json 1",
-				operator: "to_json",
-				encoding: "single",
-				input: []string{
-					"\xc3\x01\x84>\xe0\xee\xbb\xf1ǋ\x06foo\x02\x06foo\x06bar",
-				},
-				output: []string{
-					`{"Address":{"my.namespace.com.address":{"City":"foo","State":"bar"}},"Name":"foo"}`,
-				},
-			},
-		*/
-		/*
-			// TODO: Unfortunately this serialisation is non-deterministic
-			{
-				name:     "json to textual 1",
-				operator: "from_json",
-				encoding: "textual",
-				input: []string{
-					`{"Name":"foo","Address":{"my.namespace.com.address":{"City":"foo","State":"bar"}}}`,
-				},
-				output: []string{
-					`{"Name":"foo","Address":{"my.namespace.com.address":{"City":"foo","State":"bar"}}}`,
-				},
-			},
-		*/
 		{
 			name:     "json to binary 1",
 			operator: "from_json",
 			encoding: "binary",
-			input: []string{
-				`{"Name":"foo","Address":{"my.namespace.com.address":{"City":"foo","State":"bar"}}}`,
-			},
-			output: []string{
-				"\x06foo\x02\x06foo\x06bar",
-			},
+			input:    `{"Name":"foo","Address":{"my.namespace.com.address":{"City":"foo","State":"bar"}}}`,
+			output:   "\x06foo\x02\x06foo\x06bar",
 		},
-		/*
-			{
-				name:     "json to single 1",
-				operator: "from_json",
-				encoding: "single",
-				input: []string{
-					`{"Name":"foo","Address":{"my.namespace.com.address":{"City":"foo","State":"bar"}}}`,
-				},
-				output: []string{
-					"\xc3\x01\x84>\xe0\xee\xbb\xf1ǋ\x06foo\x02\x06foo\x06bar",
-				},
-			},
-		*/
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(tt *testing.T) {
-			conf, err := testutil.ProcessorFromYAML(`
-avro:
-  operator: %v
-  encoding: %v
-  schema_path: %v
-`, test.operator, test.encoding, fmt.Sprintf("file://%s", tmpSchemaFile.Name()))
+			conf, err := avroConfigSpec().ParseYAML(fmt.Sprintf(`
+operator: %v
+encoding: %v
+schema_path: %v
+`, test.operator, test.encoding, fmt.Sprintf("file://%s", tmpSchemaFile.Name())), nil)
 			require.NoError(t, err)
 
-			proc, err := mock.NewManager().NewProcessor(conf)
-			if err != nil {
-				tt.Fatal(err)
-			}
+			proc, err := newAvroFromConfig(conf, service.MockResources())
+			require.NoError(t, err)
 
-			input := message.QuickBatch(nil)
-			for _, p := range test.input {
-				input = append(input, message.NewPart([]byte(p)))
-			}
+			msgs, err := proc.Process(context.Background(), service.NewMessage([]byte(test.input)))
+			require.NoError(t, err)
+			require.Len(t, msgs, 1)
 
-			exp := make([][]byte, len(test.output))
-			for i, p := range test.output {
-				exp[i] = []byte(p)
-			}
+			mBytes, err := msgs[0].AsBytes()
+			require.NoError(t, err)
 
-			msgs, res := proc.ProcessBatch(context.Background(), input)
-			if res != nil {
-				tt.Fatal(res)
-			}
-
-			if len(msgs) != 1 {
-				tt.Fatalf("Expected one message, received: %v", len(msgs))
-			}
-			if act := message.GetAllBytes(msgs[0]); !reflect.DeepEqual(act, exp) {
-				tt.Errorf("Unexpected output: %s != %s", exp, act)
-				tt.Logf("Part 0: %v", strconv.Quote(string(act[0])))
-			}
-			_ = msgs[0].Iter(func(i int, part *message.Part) error {
-				assert.NoError(t, part.ErrorGet())
-				return nil
-			})
+			assert.Equal(t, test.output, string(mBytes))
 		})
 	}
 }
 
 func TestAvroSchemaPathNotExist(t *testing.T) {
-	conf, err := testutil.ProcessorFromYAML(`
-avro:
-  schema_path: "file://path_does_not_exist"
-`)
-	require.NoError(t, err)
-
-	_, err = mock.NewManager().NewProcessor(conf)
-	if err == nil {
-		t.Error("expected error from loading non existent schema file")
-	}
+	_, err := avroConfigSpec().ParseYAML(`
+schema_path: "file://path_does_not_exist"
+`, nil)
+	require.Error(t, err)
 }
