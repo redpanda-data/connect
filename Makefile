@@ -7,7 +7,6 @@ INSTALL_DIR        ?= $(GOPATH)/bin
 WEBSITE_DIR        ?= ./website
 DEST_DIR           ?= ./target
 PATHINSTBIN        = $(DEST_DIR)/bin
-PATHINSTTOOLS      = $(DEST_DIR)/tools
 PATHINSTSERVERLESS = $(DEST_DIR)/serverless
 PATHINSTDOCKER     = $(DEST_DIR)/docker
 DOCKER_IMAGE       ?= ghcr.io/benthosdev/benthos
@@ -45,14 +44,6 @@ $(PATHINSTBIN)/%: $(SOURCE_FILES)
 	@go build $(GO_FLAGS) -tags "$(TAGS)" -ldflags "$(LD_FLAGS) $(VER_FLAGS)" -o $@ ./cmd/$*
 
 $(APPS): %: $(PATHINSTBIN)/%
-
-TOOLS = benthos_docs_gen
-tools: $(TOOLS)
-
-$(PATHINSTTOOLS)/%: $(SOURCE_FILES)
-	@go build $(GO_FLAGS) -tags "$(TAGS)" -ldflags "$(LD_FLAGS) $(VER_FLAGS)" -o $@ ./cmd/tools/$*
-
-$(TOOLS): %: $(PATHINSTTOOLS)/%
 
 SERVERLESS = benthos-lambda
 serverless: $(SERVERLESS)
@@ -105,12 +96,11 @@ test-integration:
 clean:
 	rm -rf $(PATHINSTBIN)
 	rm -rf $(DEST_DIR)/dist
-	rm -rf $(DEST_DIR)/tools
 	rm -rf $(DEST_DIR)/serverless
 	rm -rf $(PATHINSTDOCKER)
 
-docs: $(APPS) $(TOOLS)
-	@$(PATHINSTTOOLS)/benthos_docs_gen $(DOCS_FLAGS)
+docs: $(APPS)
+	@$(PATHINSTBIN)/benthos docs $(DOCS_FLAGS)
 	@$(PATHINSTBIN)/benthos lint --deprecated "./config/examples/*.yaml" \
 		"$(WEBSITE_DIR)/cookbooks/**/*.md" \
 		"$(WEBSITE_DIR)/docs/**/*.md"
