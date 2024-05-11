@@ -3,23 +3,15 @@ input:
 
 pipeline:
   processors:
-    - workflow_v2:
+    - workflow:
+        # meta_path: meta.workflow
+        order: [ [ A ], [ B, C ], [ E ], [ D, F ] ]
 
         #       /--> B -------------|--> D
         #      /                   /
         # A --|          /--> E --|
         #      \--> C --|          \
         #                \----------|--> F
-        
-
-        adjacency_matrix: [
-          ["0","1","1","0","0","0"],
-          ["0","0","0","1","0","0"],
-          ["0","0","0","0","1","1"],
-          ["0","0","0","0","0","0"],
-          ["0","0","0","1","0","1"],
-          ["0","0","0","0","0","0"],
-          ]
         
         branches:
           A:
@@ -42,7 +34,7 @@ pipeline:
                   duration: "15s"
               - log:
                   level: INFO
-                  message: STAGE B FINISHED`
+                  message: STAGE B FINISHED
 
           C:
             processors:

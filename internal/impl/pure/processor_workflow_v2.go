@@ -144,7 +144,6 @@ func trackerFromDagV2(dag [][]string) *resultTrackerV2 {
 	for i := range dag {
 		node_name := string(byte('A' + i))
 		r.notStarted[node_name] = struct{}{}
-		//fmt.Printf("Stage added to notStarted Array: %s \n", node_name)
 	}
 
 	return r
@@ -187,7 +186,7 @@ func (r *resultTrackerV2) ToObjectV2() map[string]any {
 	succeeded := make([]any, 0, len(r.succeeded))
 	skipped := make([]any, 0, len(r.skipped))
 	notStarted := make([]any, 0, len(r.notStarted))
-	started := make([]any, 0, len(r.running))
+	running := make([]any, 0, len(r.running))
 	failed := make(map[string]any, len(r.failed))
 
 	for k := range r.succeeded {
@@ -203,7 +202,7 @@ func (r *resultTrackerV2) ToObjectV2() map[string]any {
 		notStarted = append(notStarted, k)
 	}
 	for k := range r.running {
-		started = append(started, k)
+		running = append(running, k)
 	}
 	sort.Slice(skipped, func(i, j int) bool {
 		return skipped[i].(string) < skipped[j].(string)
@@ -218,6 +217,12 @@ func (r *resultTrackerV2) ToObjectV2() map[string]any {
 	}
 	if len(skipped) > 0 {
 		m["skipped"] = skipped
+	}
+	if len(notStarted) > 0 {
+		m["notStarted"] = notStarted
+	}
+	if len(running) > 0 {
+		m["running"] = running
 	}
 	if len(failed) > 0 {
 		m["failed"] = failed
@@ -323,7 +328,6 @@ func (w *WorkflowV2) ProcessBatch(ctx context.Context, msg message.Batch) ([]mes
 	records := make([]*resultTrackerV2, msg.Len())
 	for i := range records {
 		records[i] = trackerFromDagV2(dag)
-		fmt.Print("records[i]", records[i], "\n")
 	}
 
 	// error collector :
@@ -337,7 +341,6 @@ func (w *WorkflowV2) ProcessBatch(ctx context.Context, msg message.Batch) ([]mes
 	go func() {
 		mssge := <-done
 		errors := make([]error, 1)
-
 		var failed []branchMapError
 		err := errors[0]
 		if err == nil {
@@ -358,22 +361,22 @@ func (w *WorkflowV2) ProcessBatch(ctx context.Context, msg message.Batch) ([]mes
 
 	numberOfBranches := len(records[0].notStarted)
 
-	for len(records[0].succeeded) != numberOfBranches { // amount we need to have succeeded -- terminal check
-		time.Sleep(5000 * time.Millisecond)
+	for len(records[0].succeeded) != numberOfBranches {
+		//time.Sleep(5000 * time.Millisecond)
 		for eid, _ := range records[0].notStarted {
 
-			results := make([][]*message.Part, len(records[0].notStarted))
-			errors := make([]error, len(records[0].notStarted))
+			results := make([][]*message.Part, 6)
+			errors := make([]error, 6)
 
-			if isColumnAllZeros(dag, int(eid[0]-'A')) {
-				//fmt.Printf("eid: %s, col: %d \n", eid, int(eid[0]-'A'))
+			if isColumnAllZeros(dag, int(eid[0]-'A')) { // TODO: get rid of this branch name -> matrix column conversion
+				records[0].Started(eid)
 
 				branchMsg, branchSpans := tracing.WithChildSpans(w.tracer, eid, propMsg.ShallowCopy())
 
 				go func(id string, index int) {
-					for j := range results[index] {
-						records[j].Started(id)
-					}
+					// for j := range results[index] {
+					// 	records[j].Started(id)
+					// }
 
 					branchParts := make([]*message.Part, branchMsg.Len())
 					_ = branchMsg.Iter(func(partIndex int, part *message.Part) error {
