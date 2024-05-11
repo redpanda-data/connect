@@ -16,34 +16,8 @@ type workflowBranchV2 interface {
 //------------------------------------------------------------------------------
 
 type workflowBranchMapV2 struct {
-	dag            [][]string
-	staticBranches map[string]*Branch
-
-	dynamicBranches map[string]workflowBranchV2
-}
-
-func lockAllV2(dynBranches map[string]workflowBranchV2) (branches map[string]*Branch, unlockFn func(), err error) {
-	unlocks := make([]func(), 0, len(dynBranches))
-	unlockFn = func() {
-		for _, u := range unlocks {
-			if u != nil {
-				u()
-			}
-		}
-	}
-
-	branches = make(map[string]*Branch, len(dynBranches))
-	for k, v := range dynBranches {
-		var branchUnlock func()
-		branches[k], branchUnlock = v.lock()
-		unlocks = append(unlocks, branchUnlock)
-		if branches[k] == nil {
-			err = fmt.Errorf("missing branch resource: %v", k)
-			unlockFn()
-			return
-		}
-	}
-	return
+	dag      [][]string
+	Branches map[string]*Branch
 }
 
 // Locks all branches contained in the branch map and returns the latest DAG, a
@@ -51,11 +25,11 @@ func lockAllV2(dynBranches map[string]workflowBranchV2) (branches map[string]*Br
 // any error occurs in locked each branch (the resource is missing, or the DAG
 // is malformed) then an error is returned instead.
 func (w *workflowBranchMapV2) LockV2() (dag [][]string, branches map[string]*Branch, unlockFn func(), err error) {
-	return w.dag, w.staticBranches, func() {}, nil
+	return w.dag, w.Branches, func() {}, nil
 }
 
 func (w *workflowBranchMapV2) Close(ctx context.Context) error {
-	for _, c := range w.staticBranches {
+	for _, c := range w.Branches {
 		if err := c.Close(ctx); err != nil {
 			return err
 		}
@@ -73,7 +47,7 @@ func newWorkflowBranchMapV2(conf *service.ParsedConfig, mgr bundle.NewManagement
 		return nil, err
 	}
 
-	staticBranches := map[string]*Branch{}
+	Branches := map[string]*Branch{}
 	for k, v := range branchObjMap {
 		if len(processDAGStageNameV2.FindString(k)) != len(k) {
 			return nil, fmt.Errorf("workflow branch name '%v' contains invalid characters", k)
@@ -83,7 +57,7 @@ func newWorkflowBranchMapV2(conf *service.ParsedConfig, mgr bundle.NewManagement
 		if err != nil {
 			return nil, err
 		}
-		staticBranches[k] = child
+		Branches[k] = child
 	}
 
 	dag, err := conf.FieldStringListOfLists(wflowProcFieldAdjacencyMatrixV2)
@@ -92,7 +66,7 @@ func newWorkflowBranchMapV2(conf *service.ParsedConfig, mgr bundle.NewManagement
 	}
 
 	return &workflowBranchMapV2{
-		dag:            dag,
-		staticBranches: staticBranches,
+		dag:      dag,
+		Branches: Branches,
 	}, nil
 }

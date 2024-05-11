@@ -112,7 +112,7 @@ func NewWorkflowV2(conf *service.ParsedConfig, mgr bundle.NewManagement) (*Workf
 	if w.children, err = newWorkflowBranchMapV2(conf, mgr); err != nil {
 		return nil, err
 	}
-	for k := range w.children.dynamicBranches {
+	for k := range w.children.Branches {
 		w.allStages[k] = struct{}{}
 	}
 
