@@ -2,7 +2,6 @@ package pure
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"sort"
 	"sync"
@@ -21,13 +20,17 @@ import (
 )
 
 const (
-	wflowProcFieldAdjacencyMatrixV2 = "adjacency_matrix" // adjacency_matrix
+	wflowProcFieldMetaPathV2        = "metapath"
+	wflowProcFieldAdjacencyMatrixV2 = "adjacency_matrix"
 	wflowProcFieldBranchesV2        = "branches"
 )
 
 func workflowProcSpecV2() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Fields(
+			service.NewStringField(wflowProcFieldMetaPathV2).
+				Description("A [dot path](/docs/configuration/field_paths) indicating where to store and reference [structured metadata](#structured-metadata) about the workflow execution.").
+				Default("meta.workflow"),
 			service.NewStringListOfListsField(wflowProcFieldAdjacencyMatrixV2).
 				Description("An explicit declaration of branch ordered tiers, which describes the order in which parallel tiers of branches should be executed. Branches should be identified by the name as they are configured in the field `branches`. It's also possible to specify branch processors configured [as a resource](#resources).").
 				Examples(
@@ -98,12 +101,14 @@ func NewWorkflowV2(conf *service.ParsedConfig, mgr bundle.NewManagement) (*Workf
 		mLatency:       stats.GetTimer("processor_latency_ns"),
 	}
 
-	metaStr := "meta.workflow"
-	if len(metaStr) > 0 {
+	metaStr, err := conf.FieldString(wflowProcFieldMetaPathV2)
+	if err != nil {
+		return nil, err
+	}
+	if metaStr != "" {
 		w.metaPath = gabs.DotPathToSlice(metaStr)
 	}
 
-	err := errors.New("")
 	if w.children, err = newWorkflowBranchMapV2(conf, mgr); err != nil {
 		return nil, err
 	}
@@ -281,19 +286,15 @@ func (w *WorkflowV2) skipFromMetaV2(root any) map[string]struct{} {
 
 // ProcessBatch applies workflow stages to each part of a message type.
 func (w *WorkflowV2) ProcessBatch(ctx context.Context, msg message.Batch) ([]message.Batch, error) {
-	// JEM ?gubbins
 	w.mReceived.Incr(int64(msg.Len()))
 	w.mBatchReceived.Incr(1)
 
-	//JEM log time
 	startedAt := time.Now()
 
 	// Prevent resourced branches from being updated mid-flow.
 
-	// JEM - go get the things from w.children (*workflowBranchMap)
 	dag, children, unlock, err := w.children.LockV2()
 
-	// JEM - error handling <>
 	if err != nil {
 		w.mError.Incr(1)
 		w.log.Error("Failed to establish workflow: %v\n", err)
@@ -307,13 +308,11 @@ func (w *WorkflowV2) ProcessBatch(ctx context.Context, msg message.Batch) ([]mes
 		return []message.Batch{msg}, nil
 	}
 
-	// JEM - end error handling <>
 	defer unlock()
 
-	// this is the skip functionality if it is being restarted.
 	skipOnMeta := make([]map[string]struct{}, msg.Len())
 	_ = msg.Iter(func(i int, p *message.Part) error {
-		// TODO: Do we want to evaluate bytes here? And metadata?
+		// TODO: Do we want to evaluate bytes here? And metadata? (TODO from original workflow processor)
 		if jObj, err := p.AsStructured(); err == nil {
 			skipOnMeta[i] = w.skipFromMetaV2(jObj)
 		} else {
@@ -324,13 +323,11 @@ func (w *WorkflowV2) ProcessBatch(ctx context.Context, msg message.Batch) ([]mes
 
 	propMsg, _ := tracing.WithChildSpans(w.tracer, "workflow", msg)
 
-	// result tracker created:
 	records := make([]*resultTrackerV2, msg.Len())
 	for i := range records {
 		records[i] = trackerFromDagV2(dag)
 	}
 
-	// error collector :
 	type collector struct {
 		eid     string
 		results [][]*message.Part
@@ -356,17 +353,15 @@ func (w *WorkflowV2) ProcessBatch(ctx context.Context, msg message.Batch) ([]mes
 		for _, e := range failed {
 			records[e.index].FailedV2(mssge.eid, e.err.Error())
 		}
-
 	}()
 
 	numberOfBranches := len(records[0].notStarted)
 
 	for len(records[0].succeeded) != numberOfBranches {
-		//time.Sleep(5000 * time.Millisecond)
 		for eid, _ := range records[0].notStarted {
 
-			results := make([][]*message.Part, 6)
-			errors := make([]error, 6)
+			results := make([][]*message.Part, 6) // TODO: remove literal int
+			errors := make([]error, 6)            // TODO: remove literal int
 
 			if isColumnAllZeros(dag, int(eid[0]-'A')) { // TODO: get rid of this branch name -> matrix column conversion
 				records[0].Started(eid)
