@@ -42,7 +42,7 @@ pipeline:
                   duration: "15s"
               - log:
                   level: INFO
-                  message: STAGE B FINISHED`
+                  message: STAGE B FINISHED
 
           C:
             processors:
