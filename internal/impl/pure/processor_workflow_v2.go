@@ -349,7 +349,7 @@ func (w *WorkflowV2) ProcessBatch(ctx context.Context, msg message.Batch) ([]mes
 			errors := make([]error, 6)            // TODO: remove literal int
 
 			if isColumnAllZeros(dag, int(eid[0]-'A')) { // TODO: get rid of this branch name -> matrix column conversion
-				records[0].Started(eid)
+				records[0].Started(eid) // TODO: remove literal
 
 				branchMsg, branchSpans := tracing.WithChildSpans(w.tracer, eid, propMsg.ShallowCopy())
 
@@ -385,7 +385,7 @@ func (w *WorkflowV2) ProcessBatch(ctx context.Context, msg message.Batch) ([]mes
 					dag = zeroOutRow(dag, index)
 					dag = updateColumnDone(dag, index)
 					asdf := collector{
-						eid:     eid,
+						eid:     id,
 						results: results,
 					}
 					done <- asdf
