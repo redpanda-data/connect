@@ -47,7 +47,7 @@ func newWorkflowBranchMapV2(conf *service.ParsedConfig, mgr bundle.NewManagement
 		return nil, err
 	}
 
-	Branches := map[string]*Branch{}
+	branches := map[string]*Branch{}
 	for k, v := range branchObjMap {
 		if len(processDAGStageNameV2.FindString(k)) != len(k) {
 			return nil, fmt.Errorf("workflow branch name '%v' contains invalid characters", k)
@@ -57,7 +57,7 @@ func newWorkflowBranchMapV2(conf *service.ParsedConfig, mgr bundle.NewManagement
 		if err != nil {
 			return nil, err
 		}
-		Branches[k] = child
+		branches[k] = child
 	}
 
 	dag, err := conf.FieldStringListOfLists(wflowProcFieldAdjacencyMatrixV2)
@@ -67,6 +67,6 @@ func newWorkflowBranchMapV2(conf *service.ParsedConfig, mgr bundle.NewManagement
 
 	return &workflowBranchMapV2{
 		dag:      dag,
-		Branches: Branches,
+		Branches: branches,
 	}, nil
 }
