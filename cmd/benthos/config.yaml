@@ -10,7 +10,6 @@ pipeline:
         # A --|          /--> E --|
         #      \--> C --|          \
         #                \----------|--> F
-        
 
         adjacency_matrix: [
           ["0","1","1","0","0","0"],
@@ -23,10 +22,8 @@ pipeline:
         
         branches:
           A:
+            dependency_list: []
             processors:
-            #   - log:
-            #       level: INFO
-            #       message: STAGE A STARTED
               - sleep:
                   duration: "3s"
               - log:
@@ -34,10 +31,8 @@ pipeline:
                   message: STAGE A FINISHED
 
           B:
+            dependency_list: ["A"]
             processors:
-              # - log:
-              #     level: INFO
-              #     message: STAGE B STARTED
               - sleep: 
                   duration: "15s"
               - log:
@@ -45,10 +40,8 @@ pipeline:
                   message: STAGE B FINISHED
 
           C:
+            dependency_list: ["A"]
             processors:
-              # - log:
-              #     level: INFO
-              #     message: STAGE C STARTED
               - sleep: 
                   duration: "3s"
               - log:
@@ -56,23 +49,17 @@ pipeline:
                   message: STAGE C FINISHED
 
           D:
+            dependency_list: ["B", "E"]
             processors:
-              # - log:
-              #     level: INFO
-              #     message: STAGE D STARTED
               - sleep: 
                   duration: "3s"
               - log:
                   level: INFO
                   message: STAGE D FINISHED
 
-          # Stage E won't exec until B has finished even though there is 
-          # no direct dependency on B.
-          E: 
+          E:
+            dependency_list: ["C"]
             processors:
-              # - log:
-              #     level: INFO
-              #     message: STAGE E STARTED
               - sleep: 
                   duration: "3s"
               - log:
@@ -80,10 +67,8 @@ pipeline:
                   message: STAGE E FINISHED
 
           F:
+            dependency_list: ["C", "E"]
             processors:
-              # - log:
-              #     level: INFO
-              #     message: STAGE F STARTED
               - sleep: 
                   duration: "3s"
               - log:

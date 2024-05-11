@@ -52,6 +52,18 @@ func newWorkflowBranchMapV2(conf *service.ParsedConfig, mgr bundle.NewManagement
 		branches[k] = child
 	}
 
+	fmt.Println("**********************")
+
+	for k, v := range branchObjMap {
+		fmt.Printf("Branch Name: '%v'\n", k)
+		dep_list, _ := v.FieldStringList("dependency_list")
+		for _, value := range dep_list {
+			fmt.Println(value)
+		}
+	}
+
+	fmt.Println("**********************")
+
 	dag, err := conf.FieldStringListOfLists(wflowProcFieldAdjacencyMatrixV2)
 	if err != nil {
 		return nil, err
