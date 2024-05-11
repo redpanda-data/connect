@@ -343,7 +343,7 @@ func (w *WorkflowV2) ProcessBatch(ctx context.Context, msg message.Batch) ([]mes
 	numberOfBranches := len(records[0].notStarted)
 
 	for len(records[0].succeeded) != numberOfBranches {
-		for eid, _ := range records[0].notStarted {
+		for eid := range records[0].notStarted {
 
 			results := make([][]*message.Part, 6) // TODO: remove literal int
 			errors := make([]error, 6)            // TODO: remove literal int
