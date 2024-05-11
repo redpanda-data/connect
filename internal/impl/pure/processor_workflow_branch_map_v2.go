@@ -108,13 +108,16 @@ func newWorkflowBranchMapV2(conf *service.ParsedConfig, mgr bundle.NewManagement
 		staticBranches[k] = child
 	}
 
-	adj_matrix, err := conf.FieldStringListOfLists(wflowProcFieldAdjacencyMatrixV2)
+	dag, err := conf.FieldStringListOfLists(wflowProcFieldAdjacencyMatrixV2)
+	if err != nil {
+		return nil, err
+	}
 
 	static := len(dynamicBranches) == len(staticBranches)
 
 	return &workflowBranchMapV2{
 		static:          static,
-		dag:             adj_matrix,
+		dag:             dag,
 		staticBranches:  staticBranches,
 		dynamicBranches: dynamicBranches,
 	}, nil
