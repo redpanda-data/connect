@@ -36,12 +36,9 @@ func workflowProcSpecV2() *service.ConfigSpec {
 				Examples(
 					[]any{[]any{"foo", "bar"}, []any{"baz"}},
 					[]any{[]any{"foo"}, []any{"bar"}, []any{"baz"}},
-				).
-				Default([]any{}),
+				),
 			service.NewObjectMapField(wflowProcFieldBranchesV2, branchSpecFields()...).
-				Description("An object of named [`branch` processors](/docs/components/processors/branch) that make up the workflow. The order and parallelism in which branches are executed can either be made explicit with the field `order`, or if omitted an attempt is made to automatically resolve an ordering based on the mappings of each branch.").
-				Default(map[string]any{}),
-		)
+				Description("An object of named [`branch` processors](/docs/components/processors/branch) that make up the workflow. The order and parallelism in which branches are executed can either be made explicit with the field `order`, or if omitted an attempt is made to automatically resolve an ordering based on the mappings of each branch."))
 }
 
 func init() {
