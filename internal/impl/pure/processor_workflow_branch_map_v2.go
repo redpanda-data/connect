@@ -9,12 +9,6 @@ import (
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
-type workflowBranchV2 interface {
-	lock() (*Branch, func())
-}
-
-//------------------------------------------------------------------------------
-
 type workflowBranchMapV2 struct {
 	dag      [][]string
 	Branches map[string]*Branch
@@ -36,8 +30,6 @@ func (w *workflowBranchMapV2) Close(ctx context.Context) error {
 	}
 	return nil
 }
-
-//------------------------------------------------------------------------------
 
 var processDAGStageNameV2 = regexp.MustCompile("[a-zA-Z0-9-_]+")
 
