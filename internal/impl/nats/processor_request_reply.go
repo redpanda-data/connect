@@ -6,6 +6,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/nats-io/nats.go"
 
 	"github.com/benthosdev/benthos/v4/public/service"
@@ -74,33 +76,40 @@ type requestReplyProcessor struct {
 	headers     map[string]*service.InterpolatedString
 	metaFilter  *service.MetadataFilter
 	subject     *service.InterpolatedString
-	inboxPrefix string
 	timeout     time.Duration
 
 	log *service.Logger
 
 	natsConn *nats.Conn
 	connMut  sync.RWMutex
+
+	// The pool caller id. This is a unique identifier we will provide when calling methods on the pool. This is used by
+	// the pool to do reference counting and ensure that connections are only closed when they are no longer in use.
+	pcid string
 }
 
 func newRequestReplyProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {
 	p := &requestReplyProcessor{
-		log: mgr.Logger(),
+		log:  mgr.Logger(),
+		pcid: uuid.New().String(),
 	}
 
 	var err error
-	if p.connDetails, err = connectionDetailsFromParsed(conf, mgr); err != nil {
+	var extraOpts []nats.Option
+	if conf.Contains("inbox_prefix") {
+		var inboxPrefix string
+		if inboxPrefix, err = conf.FieldString("inbox_prefix"); err != nil {
+			return nil, err
+		}
+		extraOpts = append(extraOpts, nats.CustomInboxPrefix(inboxPrefix))
+	}
+
+	if p.connDetails, err = connectionDetailsFromParsed(conf, mgr, extraOpts...); err != nil {
 		return nil, err
 	}
 
 	if p.subject, err = conf.FieldInterpolatedString("subject"); err != nil {
 		return nil, err
-	}
-
-	if conf.Contains("inbox_prefix") {
-		if p.inboxPrefix, err = conf.FieldString("inbox_prefix"); err != nil {
-			return nil, err
-		}
 	}
 
 	if p.headers, err = conf.FieldInterpolatedStringMap("headers"); err != nil {
@@ -129,17 +138,12 @@ func (r *requestReplyProcessor) connect(ctx context.Context) (err error) {
 	defer func() {
 		if err != nil {
 			if r.natsConn != nil {
-				r.natsConn.Close()
+				_ = pool.Release(r.pcid, r.connDetails)
 			}
 		}
 	}()
 
-	var extraOpts []nats.Option
-	if r.inboxPrefix != "" {
-		extraOpts = append(extraOpts, nats.CustomInboxPrefix(r.inboxPrefix))
-	}
-
-	if r.natsConn, err = r.connDetails.get(ctx, extraOpts...); err != nil {
+	if r.natsConn, err = pool.Get(ctx, r.pcid, r.connDetails); err != nil {
 		return err
 	}
 	return nil
@@ -197,7 +201,7 @@ func (r *requestReplyProcessor) Close(ctx context.Context) error {
 	defer r.connMut.Unlock()
 
 	if r.natsConn != nil {
-		r.natsConn.Close()
+		_ = pool.Release(r.pcid, r.connDetails)
 		r.natsConn = nil
 	}
 	return nil

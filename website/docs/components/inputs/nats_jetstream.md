@@ -33,6 +33,7 @@ input:
   label: ""
   nats_jetstream:
     urls: [] # No default (required)
+    name: ""
     queue: "" # No default (optional)
     subject: foo.bar.baz # No default (optional)
     durable: "" # No default (optional)
@@ -50,6 +51,7 @@ input:
   label: ""
   nats_jetstream:
     urls: [] # No default (required)
+    name: ""
     queue: "" # No default (optional)
     subject: foo.bar.baz # No default (optional)
     durable: "" # No default (optional)
@@ -70,6 +72,7 @@ input:
       user_credentials_file: ./user.creds # No default (optional)
       user_jwt: "" # No default (optional)
       user_nkey_seed: "" # No default (optional)
+    pool_key: default
     extract_tracing_map: root = @ # No default (optional)
 ```
 
@@ -153,6 +156,14 @@ urls:
 urls:
   - nats://username:password@127.0.0.1:4222
 ```
+
+### `name`
+
+An optional name to assign to the connection. If not set, will default to the label
+
+
+Type: `string`  
+Default: `""`  
 
 ### `queue`
 
@@ -433,6 +444,14 @@ This field contains sensitive information that usually shouldn't be added to a c
 
 
 Type: `string`  
+
+### `pool_key`
+
+The connection pool key to use. Components using the same poolKey will share their connection
+
+
+Type: `string`  
+Default: `"default"`  
 
 ### `extract_tracing_map`
 

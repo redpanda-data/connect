@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/google/uuid"
+
 	"github.com/nats-io/nats.go"
 
 	"github.com/Jeffail/shutdown"
@@ -76,12 +78,17 @@ type jetStreamOutput struct {
 	jCtx     nats.JetStreamContext
 
 	shutSig *shutdown.Signaller
+
+	// The pool caller id. This is a unique identifier we will provide when calling methods on the pool. This is used by
+	// the pool to do reference counting and ensure that connections are only closed when they are no longer in use.
+	pcid string
 }
 
 func newJetStreamWriterFromConfig(conf *service.ParsedConfig, mgr *service.Resources) (*jetStreamOutput, error) {
 	j := jetStreamOutput{
 		log:     mgr.Logger(),
 		shutSig: shutdown.NewSignaller(),
+		pcid:    uuid.New().String(),
 	}
 
 	var err error
@@ -124,11 +131,11 @@ func (j *jetStreamOutput) Connect(ctx context.Context) (err error) {
 
 	defer func() {
 		if err != nil && natsConn != nil {
-			natsConn.Close()
+			_ = pool.Release(j.pcid, j.connDetails)
 		}
 	}()
 
-	if natsConn, err = j.connDetails.get(ctx); err != nil {
+	if natsConn, err = pool.Get(ctx, j.pcid, j.connDetails); err != nil {
 		return err
 	}
 
@@ -146,7 +153,7 @@ func (j *jetStreamOutput) disconnect() {
 	defer j.connMut.Unlock()
 
 	if j.natsConn != nil {
-		j.natsConn.Close()
+		_ = pool.Release(j.pcid, j.connDetails)
 		j.natsConn = nil
 	}
 	j.jCtx = nil

@@ -6,6 +6,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/nats-io/nats.go"
 
 	"github.com/Jeffail/shutdown"
@@ -45,12 +47,17 @@ type kvCache struct {
 	connMut  sync.RWMutex
 	natsConn *nats.Conn
 	kv       nats.KeyValue
+
+	// The pool caller id. This is a unique identifier we will provide when calling methods on the pool. This is used by
+	// the pool to do reference counting and ensure that connections are only closed when they are no longer in use.
+	pcid string
 }
 
 func newKVCache(conf *service.ParsedConfig, mgr *service.Resources) (*kvCache, error) {
 	p := &kvCache{
 		log:     mgr.Logger(),
 		shutSig: shutdown.NewSignaller(),
+		pcid:    uuid.New().String(),
 	}
 
 	var err error
@@ -71,7 +78,7 @@ func (p *kvCache) disconnect() {
 	defer p.connMut.Unlock()
 
 	if p.natsConn != nil {
-		p.natsConn.Close()
+		_ = pool.Release(p.pcid, p.connDetails)
 		p.natsConn = nil
 	}
 	p.kv = nil
@@ -86,13 +93,13 @@ func (p *kvCache) connect(ctx context.Context) error {
 	}
 
 	var err error
-	if p.natsConn, err = p.connDetails.get(ctx); err != nil {
+	if p.natsConn, err = pool.Get(ctx, p.pcid, p.connDetails); err != nil {
 		return err
 	}
 
 	defer func() {
 		if err != nil {
-			p.natsConn.Close()
+			_ = pool.Release(p.pcid, p.connDetails)
 			p.natsConn = nil
 		}
 	}()

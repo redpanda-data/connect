@@ -171,6 +171,10 @@ type natsStreamReader struct {
 	msgChan       chan *stan.Msg
 	interruptChan chan struct{}
 	interruptOnce sync.Once
+
+	// The pool caller id. This is a unique identifier we will provide when calling methods on the pool. This is used by
+	// the pool to do reference counting and ensure that connections are only closed when they are no longer in use.
+	pcid string
 }
 
 func newNATSStreamReader(conf siConfig, mgr *service.Resources) (*natsStreamReader, error) {
@@ -187,6 +191,7 @@ func newNATSStreamReader(conf siConfig, mgr *service.Resources) (*natsStreamRead
 		log:           mgr.Logger(),
 		msgChan:       make(chan *stan.Msg),
 		interruptChan: make(chan struct{}),
+		pcid:          uuid.Must(uuid.NewV4()).String(),
 	}
 
 	close(n.msgChan)
@@ -201,7 +206,7 @@ func (n *natsStreamReader) disconnect() {
 		if n.conf.UnsubOnClose {
 			_ = n.natsSub.Unsubscribe()
 		}
-		n.natsConn.Close()
+		_ = pool.Release(n.pcid, n.conf.connDetails)
 		n.stanConn.Close()
 
 		n.natsSub = nil
@@ -218,7 +223,7 @@ func (n *natsStreamReader) Connect(ctx context.Context) error {
 		return nil
 	}
 
-	natsConn, err := n.conf.connDetails.get(ctx)
+	natsConn, err := pool.Get(ctx, n.pcid, n.conf.connDetails)
 	if err != nil {
 		return err
 	}
@@ -287,7 +292,7 @@ func (n *natsStreamReader) Connect(ctx context.Context) error {
 		)
 	}
 	if err != nil {
-		natsConn.Close()
+		_ = pool.Release(n.pcid, n.conf.connDetails)
 		return err
 	}
 

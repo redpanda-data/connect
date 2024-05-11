@@ -1,7 +1,6 @@
 package nats
 
 import (
-	"context"
 	"crypto/tls"
 	"strings"
 
@@ -19,6 +18,9 @@ func connectionHeadFields() []*service.ConfigField {
 			Description("A list of URLs to connect to. If an item of the list contains commas it will be expanded into multiple URLs.").
 			Example([]string{"nats://127.0.0.1:4222"}).
 			Example([]string{"nats://username:password@127.0.0.1:4222"}),
+		service.NewStringField("name").
+			Description("An optional name to assign to the connection. If not set, will default to the label").
+			Default(""),
 	}
 }
 
@@ -26,51 +28,56 @@ func connectionTailFields() []*service.ConfigField {
 	return []*service.ConfigField{
 		service.NewTLSToggledField("tls"),
 		authFieldSpec(),
+		service.NewStringField("pool_key").
+			Description("The connection pool key to use. Components using the same poolKey will share their connection").
+			Default("default").
+			Advanced(),
 	}
 }
 
 type connectionDetails struct {
-	label    string
-	logger   *service.Logger
-	tlsConf  *tls.Config
-	authConf authConfig
-	fs       *service.FS
+	poolKey  string
 	urls     string
+	opts     []nats.Option
+	authConf authConfig
 }
 
-func connectionDetailsFromParsed(conf *service.ParsedConfig, mgr *service.Resources) (c connectionDetails, err error) {
-	c.label = mgr.Label()
-	c.fs = mgr.FS()
-	c.logger = mgr.Logger()
-
+func connectionDetailsFromParsed(conf *service.ParsedConfig, mgr *service.Resources, extraOpts ...nats.Option) (c connectionDetails, err error) {
 	var urlList []string
 	if urlList, err = conf.FieldStringList("urls"); err != nil {
 		return
 	}
 	c.urls = strings.Join(urlList, ",")
 
-	var tlsEnabled bool
-	if c.tlsConf, tlsEnabled, err = conf.FieldTLSToggled("tls"); err != nil {
+	if c.poolKey, err = conf.FieldString("pool_key"); err != nil {
 		return
 	}
-	if !tlsEnabled {
-		c.tlsConf = nil
+
+	var name string
+	if name, err = conf.FieldString("name"); err != nil {
+		return
+	}
+	if name == "" {
+		name = mgr.Label()
+	}
+	c.opts = append(c.opts, nats.Name(name))
+
+	var tlsEnabled bool
+	var tlsConf *tls.Config
+	if tlsConf, tlsEnabled, err = conf.FieldTLSToggled("tls"); err != nil {
+		return
+	}
+	if tlsEnabled && tlsConf != nil {
+		c.opts = append(c.opts, nats.Secure(tlsConf))
 	}
 
 	if c.authConf, err = AuthFromParsedConfig(conf.Namespace("auth")); err != nil {
 		return
 	}
-	return
-}
+	c.opts = append(c.opts, authConfToOptions(c.authConf, mgr.FS())...)
 
-func (c *connectionDetails) get(_ context.Context, extraOpts ...nats.Option) (*nats.Conn, error) {
-	var opts []nats.Option
-	if c.tlsConf != nil {
-		opts = append(opts, nats.Secure(c.tlsConf))
-	}
-	opts = append(opts, nats.Name(c.label))
-	opts = append(opts, errorHandlerOption(c.logger))
-	opts = append(opts, authConfToOptions(c.authConf, c.fs)...)
-	opts = append(opts, extraOpts...)
-	return nats.Connect(c.urls, opts...)
+	c.opts = append(c.opts, errorHandlerOption(mgr.Logger()))
+	c.opts = append(c.opts, extraOpts...)
+
+	return
 }

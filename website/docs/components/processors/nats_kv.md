@@ -35,6 +35,7 @@ Introduced in version 4.12.0.
 label: ""
 nats_kv:
   urls: [] # No default (required)
+  name: ""
   bucket: my_kv_bucket # No default (required)
   operation: "" # No default (required)
   key: foo # No default (required)
@@ -48,6 +49,7 @@ nats_kv:
 label: ""
 nats_kv:
   urls: [] # No default (required)
+  name: ""
   bucket: my_kv_bucket # No default (required)
   operation: "" # No default (required)
   key: foo # No default (required)
@@ -65,6 +67,7 @@ nats_kv:
     user_credentials_file: ./user.creds # No default (optional)
     user_jwt: "" # No default (optional)
     user_nkey_seed: "" # No default (optional)
+  pool_key: default
 ```
 
 </TabItem>
@@ -157,6 +160,14 @@ urls:
 urls:
   - nats://username:password@127.0.0.1:4222
 ```
+
+### `name`
+
+An optional name to assign to the connection. If not set, will default to the label
+
+
+Type: `string`  
+Default: `""`  
 
 ### `bucket`
 
@@ -429,5 +440,13 @@ This field contains sensitive information that usually shouldn't be added to a c
 
 
 Type: `string`  
+
+### `pool_key`
+
+The connection pool key to use. Components using the same poolKey will share their connection
+
+
+Type: `string`  
+Default: `"default"`  
 
 
