@@ -288,13 +288,10 @@ func (w *WorkflowV2) skipFromMetaV2(root any) map[string]struct{} {
 func (w *WorkflowV2) ProcessBatch(ctx context.Context, msg message.Batch) ([]message.Batch, error) {
 	w.mReceived.Incr(int64(msg.Len()))
 	w.mBatchReceived.Incr(1)
-
 	startedAt := time.Now()
 
 	// Prevent resourced branches from being updated mid-flow.
-
 	dag, children, unlock, err := w.children.LockV2()
-
 	if err != nil {
 		w.mError.Incr(1)
 		w.log.Error("Failed to establish workflow: %v\n", err)
@@ -307,7 +304,6 @@ func (w *WorkflowV2) ProcessBatch(ctx context.Context, msg message.Batch) ([]mes
 		w.mBatchSent.Incr(1)
 		return []message.Batch{msg}, nil
 	}
-
 	defer unlock()
 
 	skipOnMeta := make([]map[string]struct{}, msg.Len())
