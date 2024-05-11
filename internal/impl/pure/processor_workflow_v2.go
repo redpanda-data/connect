@@ -117,14 +117,6 @@ func NewWorkflowV2(conf *service.ParsedConfig, mgr bundle.NewManagement) (*Workf
 
 }
 
-// Flow returns the calculated workflow as a 2D slice.
-// seemingly unreferenced function FlowV2()
-// func (w *WorkflowV2) FlowV2() [][]string {
-// 	return w.children.dag
-// }
-
-//------------------------------------------------------------------------------
-
 type resultTrackerV2 struct {
 	notStarted map[string]struct{}
 	running    map[string]struct{}
