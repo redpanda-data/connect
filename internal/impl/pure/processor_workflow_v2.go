@@ -157,7 +157,7 @@ func (r *resultTrackerV2) SkippedV2(k string) {
 	r.Unlock()
 }
 
-func (r *resultTrackerV2) Finished(k string) {
+func (r *resultTrackerV2) Succeeded(k string) {
 	r.Lock()
 	delete(r.running, k)
 
@@ -175,7 +175,7 @@ func (r *resultTrackerV2) Started(k string) {
 
 func (r *resultTrackerV2) FailedV2(k, why string) {
 	r.Lock()
-	delete(r.notStarted, k)
+	delete(r.running, k)
 	delete(r.skipped, k)
 
 	r.failed[k] = why
@@ -374,9 +374,6 @@ func (w *WorkflowV2) ProcessBatch(ctx context.Context, msg message.Batch) ([]mes
 				branchMsg, branchSpans := tracing.WithChildSpans(w.tracer, eid, propMsg.ShallowCopy())
 
 				go func(id string, index int) {
-					// for j := range results[index] {
-					// 	records[j].Started(id)
-					// }
 
 					branchParts := make([]*message.Part, branchMsg.Len())
 					_ = branchMsg.Iter(func(partIndex int, part *message.Part) error {
@@ -403,7 +400,7 @@ func (w *WorkflowV2) ProcessBatch(ctx context.Context, msg message.Batch) ([]mes
 						records[e.index].FailedV2(id, e.err.Error())
 					}
 					for j := range results[index] {
-						records[j].Finished((id))
+						records[j].Succeeded((id))
 					}
 					dag = zeroOutRow(dag, index)
 					dag = updateColumnDone(dag, index)
