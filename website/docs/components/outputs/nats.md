@@ -159,7 +159,7 @@ Default: `{}`
 
 headers:
   Content-Type: application/json
-  Timestamp: ${!meta("Timestamp")}
+  Timestamp: ${!metadata("Timestamp")}
 ```
 
 ### `metadata`

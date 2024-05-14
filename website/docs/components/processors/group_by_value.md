@@ -21,7 +21,7 @@ Splits a batch of messages into N batches, where each resulting batch contains a
 # Config fields, showing default values
 label: ""
 group_by_value:
-  value: ${! meta("kafka_key") } # No default (required)
+  value: ${! metadata("kafka_key") } # No default (required)
 ```
 
 This allows you to group messages using arbitrary fields within their content or metadata, process them individually, and send them to unique locations as per their group.
@@ -41,9 +41,9 @@ Type: `string`
 ```yml
 # Examples
 
-value: ${! meta("kafka_key") }
+value: ${! metadata("kafka_key") }
 
-value: ${! json("foo.bar") }-${! meta("baz") }
+value: ${! json("foo.bar") }-${! memetadataa("baz") }
 ```
 
 ## Examples
@@ -54,7 +54,7 @@ If we were consuming Kafka messages and needed to group them by their key, archi
 pipeline:
   processors:
     - group_by_value:
-        value: ${! meta("kafka_key") }
+        value: ${! metadata("kafka_key") }
     - archive:
         format: tar
     - compress:
@@ -62,6 +62,6 @@ pipeline:
 output:
   aws_s3:
     bucket: TODO
-    path: docs/${! meta("kafka_key") }/${! count("files") }-${! timestamp_unix_nano() }.tar.gz
+    path: docs/${! metadata("kafka_key") }/${! count("files") }-${! timestamp_unix_nano() }.tar.gz
 ```
 

@@ -161,7 +161,7 @@ Type: `string`
 
 subject: foo.bar.baz
 
-subject: ${! meta("kafka_topic") }
+subject: ${! metadata("kafka_topic") }
 
 subject: foo.${! json("meta.type") }
 ```
@@ -193,7 +193,7 @@ Default: `{}`
 
 headers:
   Content-Type: application/json
-  Timestamp: ${!meta("Timestamp")}
+  Timestamp: ${!metadata("Timestamp")}
 ```
 
 ### `metadata`

@@ -28,7 +28,7 @@ For basic inserts or select queries use either the ` + "[`sql_insert`](/docs/com
 		Field(service.NewBloblangField("args_mapping").
 			Description("An optional [Bloblang mapping](/docs/guides/bloblang/about) which should evaluate to an array of values matching in size to the number of placeholder arguments in the field `query`.").
 			Example("root = [ this.cat.meow, this.doc.woofs[0] ]").
-			Example(`root = [ meta("user.id") ]`).
+			Example(`root = [ metadata("user.id") ]`).
 			Optional()).
 		Field(service.NewStringField("result_codec").
 			Description("Result codec.").

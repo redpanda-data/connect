@@ -101,7 +101,7 @@ key: ${!count("items")}-${!timestamp_unix_nano()}
 
 key: ${!json("doc.id")}
 
-key: ${!meta("kafka_key")}
+key: ${!metadata("kafka_key")}
 ```
 
 ### `ttl`

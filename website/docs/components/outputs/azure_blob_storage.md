@@ -147,7 +147,7 @@ Default: `"${!count(\"files\")}-${!timestamp_unix_nano()}.txt"`
 
 path: ${!count("files")}-${!timestamp_unix_nano()}.json
 
-path: ${!meta("kafka_key")}.json
+path: ${!metadata("kafka_key")}.json
 
 path: ${!json("doc.namespace")}/${!json("doc.id")}.json
 ```

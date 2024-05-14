@@ -135,7 +135,7 @@ Type: `string`
 
 subject: foo
 
-subject: ${! meta("kafka_topic") }
+subject: ${! metadata("kafka_topic") }
 ```
 
 ### `refresh_period`

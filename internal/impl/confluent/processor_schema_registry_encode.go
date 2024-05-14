@@ -61,7 +61,7 @@ We will be considering alternative approaches in future so please [get in touch]
 		Field(service.NewURLField("url").Description("The base URL of the schema registry service.")).
 		Field(service.NewInterpolatedStringField("subject").Description("The schema subject to derive schemas from.").
 			Example("foo").
-			Example(`${! meta("kafka_topic") }`)).
+			Example(`${! metadata("kafka_topic") }`)).
 		Field(service.NewStringField("refresh_period").
 			Description("The period after which a schema is refreshed for each subject, this is done by polling the schema registry service.").
 			Default("10m").

@@ -134,7 +134,7 @@ root.result = this.foo.exists("bar.baz")
 
 ### `from`
 
-Modifies a target query such that certain functions are executed from the perspective of another message in the batch. This allows you to mutate events based on the contents of other messages. Functions that support this behaviour are `content`, `json` and `meta`.
+Modifies a target query such that certain functions are executed from the perspective of another message in the batch. This allows you to mutate events based on the contents of other messages. Functions that support this behaviour are `content()`, `json()`, `metadata()` and `meta()`. It cannot be used with the `@` operator.
 
 #### Parameters
 
@@ -152,10 +152,12 @@ root.foo = json("foo").from(1)
 
 ### `from_all`
 
-Modifies a target query such that certain functions are executed from the perspective of each message in the batch, and returns the set of results as an array. Functions that support this behaviour are `content`, `json` and `meta`.
+Modifies a target query such that certain functions are executed from the perspective of each message in the batch, and returns the set of results as an array. Functions that support this behaviour are `content()`, `json()`, `metadata()` and `meta()`. It cannot be used with the `@` operator.
 
 #### Examples
 
+
+Sum all the message `foo`s from the current batch:
 
 ```coffee
 root = this

@@ -54,12 +54,12 @@ pipeline:
     - branch:
         processors:
           - cached:
-              key: '${! meta("kafka_topic") }-${! meta("kafka_partition") }'
+              key: '${! metadata("kafka_topic") }-${! metadata("kafka_partition") }'
               cache: foo_cache
               processors:
                 - mapping: 'root = ""'
                 - http:
-                    url: http://example.com/enrichment/${! meta("kafka_topic") }/${! meta("kafka_partition") }
+                    url: http://example.com/enrichment/${! metadata("kafka_topic") }/${! metadata("kafka_partition") }
                     verb: GET
         result_map: 'root.enrichment = this'
 
@@ -136,9 +136,9 @@ key: my_foo_result
 
 key: ${! this.document.id }
 
-key: ${! meta("kafka_key") }
+key: ${! metadata("kafka_key") }
 
-key: ${! meta("kafka_topic") }
+key: ${! metadata("kafka_topic") }
 ```
 
 ### `ttl`

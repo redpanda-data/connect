@@ -80,7 +80,7 @@ pipeline:
           - aws_lambda:
               function: foo
         result_map: |
-          root = if meta().exists("lambda_function_error") {
+          root = if metadata().exists("lambda_function_error") {
             throw("Invocation failed due to %v: %v".format(this.errorType, this.errorMessage))
           } else {
             this

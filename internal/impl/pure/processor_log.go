@@ -45,7 +45,7 @@ pipeline:
           root.reason = "cus I wana"
           root.id = this.id
           root.age = this.user.age
-          root.kafka_topic = meta("kafka_topic")
+          root.kafka_topic = metadata("kafka_topic")
 `+"```"+`
 `).
 		Fields(
@@ -59,7 +59,7 @@ pipeline:
 					`root.reason = "cus I wana"
 root.id = this.id
 root.age = this.user.age.number()
-root.kafka_topic = meta("kafka_topic")`,
+root.kafka_topic = metadata("kafka_topic")`,
 				).
 				Optional(),
 			service.NewInterpolatedStringField(logPFieldMessage).

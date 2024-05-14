@@ -110,7 +110,7 @@ properties:
 		Fields(
 			service.NewInterpolatedStringField(tsoFieldTableName).
 				Description("The table to store messages into.").
-				Example(`${! meta("kafka_topic") }`).Example(`${! json("table") }`),
+				Example(`${! metadata("kafka_topic") }`).Example(`${! json("table") }`),
 			service.NewInterpolatedStringField(tsoFieldPartitionKey).
 				Description("The partition key.").
 				Example(`${! json("date") }`).
@@ -124,12 +124,12 @@ properties:
 				Default(map[string]any{}),
 			service.NewInterpolatedStringEnumField(tsoFieldInsertType, `INSERT`, `INSERT_MERGE`, `INSERT_REPLACE`).
 				Description("Type of insert operation. Valid options are `INSERT`, `INSERT_MERGE` and `INSERT_REPLACE`").
-				Example(`${! json("operation") }`).Example(`${! meta("operation") }`).Example(`INSERT`).
+				Example(`${! json("operation") }`).Example(`${! metadata("operation") }`).Example(`INSERT`).
 				Advanced().Deprecated().
 				Default(""),
 			service.NewInterpolatedStringEnumField(tsoFieldTransactionType, `INSERT`, `INSERT_MERGE`, `INSERT_REPLACE`, `UPDATE_MERGE`, `UPDATE_REPLACE`, `DELETE`).
 				Description("Type of transaction operation.").
-				Example(`${! json("operation") }`).Example(`${! meta("operation") }`).Example(`INSERT`).
+				Example(`${! json("operation") }`).Example(`${! metadata("operation") }`).Example(`INSERT`).
 				Advanced().
 				Default("INSERT"),
 			service.NewOutputMaxInFlightField().

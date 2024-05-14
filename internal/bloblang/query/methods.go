@@ -158,7 +158,7 @@ func catchMethod(fn Function, args *ParsedParams) (Function, error) {
 var _ = registerMethod(
 	NewMethodSpec(
 		"from",
-		"Modifies a target query such that certain functions are executed from the perspective of another message in the batch. This allows you to mutate events based on the contents of other messages. Functions that support this behaviour are `content`, `json` and `meta`.",
+		"Modifies a target query such that certain functions are executed from the perspective of another message in the batch. This allows you to mutate events based on the contents of other messages. Functions that support this behaviour are `content()`, `json()`, `metadata()` and `meta()`. It cannot be used with the `@` operator.",
 		NewExampleSpec("For example, the following map extracts the contents of the JSON field `foo` specifically from message index `1` of a batch, effectively overriding the field `foo` for all messages of a batch to that of message 1:",
 			`root = this
 root.foo = json("foo").from(1)`,
@@ -200,8 +200,8 @@ func (f *fromMethod) QueryTargets(ctx TargetsContext) (TargetsContext, []TargetP
 var _ = registerMethod(
 	NewMethodSpec(
 		"from_all",
-		"Modifies a target query such that certain functions are executed from the perspective of each message in the batch, and returns the set of results as an array. Functions that support this behaviour are `content`, `json` and `meta`.",
-		NewExampleSpec("",
+		"Modifies a target query such that certain functions are executed from the perspective of each message in the batch, and returns the set of results as an array. Functions that support this behaviour are `content()`, `json()`, `metadata()` and `meta()`. It cannot be used with the `@` operator.",
+		NewExampleSpec("Sum all the message `foo`s from the current batch:",
 			`root = this
 root.foo_summed = json("foo").from_all().sum()`,
 		),

@@ -32,11 +32,11 @@ In order to merge the result into the original message compose this processor wi
 		Field(service.NewBloblangField("args_mapping").
 			Description("A [Bloblang mapping](/docs/guides/bloblang/about) which should evaluate to an array of values matching in size to the number of arguments required for the specified Redis script.").
 			Example("root = [ this.key ]").
-			Example(`root = [ meta("kafka_key"), "hardcoded_value" ]`)).
+			Example(`root = [ metadata("kafka_key"), "hardcoded_value" ]`)).
 		Field(service.NewBloblangField("keys_mapping").
 			Description("A [Bloblang mapping](/docs/guides/bloblang/about) which should evaluate to an array of keys matching in size to the number of arguments required for the specified Redis script.").
 			Example("root = [ this.key ]").
-			Example(`root = [ meta("kafka_key"), this.count ]`)).
+			Example(`root = [ metadata("kafka_key"), this.count ]`)).
 		Field(service.NewIntField("retries").
 			Description("The maximum number of retries before abandoning a request.").
 			Default(3).
@@ -62,7 +62,7 @@ pipeline:
           redis.call("ZADD", "XX", KEYS[1], ARGV[1], value)
 
           return value
-        keys_mapping: 'root = [ meta("key") ]'
+        keys_mapping: 'root = [ metadata("key") ]'
         args_mapping: 'root = [ timestamp_unix_nano() ]'
 `)
 }

@@ -96,7 +96,7 @@ pipeline:
           redis.call("ZADD", "XX", KEYS[1], ARGV[1], value)
 
           return value
-        keys_mapping: 'root = [ meta("key") ]'
+        keys_mapping: 'root = [ metadata("key") ]'
         args_mapping: 'root = [ timestamp_unix_nano() ]'
 ```
 
@@ -320,7 +320,7 @@ Type: `string`
 
 args_mapping: root = [ this.key ]
 
-args_mapping: root = [ meta("kafka_key"), "hardcoded_value" ]
+args_mapping: root = [ metadata("kafka_key"), "hardcoded_value" ]
 ```
 
 ### `keys_mapping`
@@ -335,7 +335,7 @@ Type: `string`
 
 keys_mapping: root = [ this.key ]
 
-keys_mapping: root = [ meta("kafka_key"), this.count ]
+keys_mapping: root = [ metadata("kafka_key"), this.count ]
 ```
 
 ### `retries`

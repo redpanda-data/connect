@@ -80,7 +80,7 @@ pipeline:
           - redis:
               url: TODO
               command: scard
-              args_mapping: 'root = [ meta("set_key") ]'
+              args_mapping: 'root = [ metadata("set_key") ]'
         result_map: 'root.cardinality = this'
 ```
 
@@ -330,7 +330,7 @@ command: scard
 
 command: incrby
 
-command: ${! meta("command") }
+command: ${! metadata("command") }
 ```
 
 ### `args_mapping`
@@ -346,7 +346,7 @@ Requires version 4.3.0 or newer
 
 args_mapping: root = [ this.key ]
 
-args_mapping: root = [ meta("kafka_key"), this.count ]
+args_mapping: root = [ metadata("kafka_key"), this.count ]
 ```
 
 ### `retries`

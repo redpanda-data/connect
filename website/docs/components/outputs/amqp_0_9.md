@@ -274,7 +274,7 @@ Default: `""`
 
 priority: "0"
 
-priority: ${! meta("amqp_priority") }
+priority: ${! metadata("amqp_priority") }
 
 priority: ${! json("doc.priority") }
 ```

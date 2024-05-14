@@ -39,7 +39,7 @@ output:
     storage_access_key: ""
     storage_connection_string: ""
     storage_sas_token: ""
-    table_name: ${! meta("kafka_topic") } # No default (required)
+    table_name: ${! metadata("kafka_topic") } # No default (required)
     partition_key: ""
     row_key: ""
     properties: {}
@@ -63,7 +63,7 @@ output:
     storage_access_key: ""
     storage_connection_string: ""
     storage_sas_token: ""
-    table_name: ${! meta("kafka_topic") } # No default (required)
+    table_name: ${! metadata("kafka_topic") } # No default (required)
     partition_key: ""
     row_key: ""
     properties: {}
@@ -169,7 +169,7 @@ Type: `string`
 ```yml
 # Examples
 
-table_name: ${! meta("kafka_topic") }
+table_name: ${! metadata("kafka_topic") }
 
 table_name: ${! json("table") }
 ```
@@ -228,7 +228,7 @@ Options: `INSERT`, `INSERT_MERGE`, `INSERT_REPLACE`, `UPDATE_MERGE`, `UPDATE_REP
 
 transaction_type: ${! json("operation") }
 
-transaction_type: ${! meta("operation") }
+transaction_type: ${! metadata("operation") }
 
 transaction_type: INSERT
 ```

@@ -83,7 +83,7 @@ pipeline:
         args_mapping: |
           root = [
             { "S": this.foo },
-            { "S": meta("kafka_topic") },
+            { "S": metadata("kafka_topic") },
             { "S": this.document.content },
           ]
 ```

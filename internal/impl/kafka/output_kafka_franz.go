@@ -46,7 +46,7 @@ This output often out-performs the traditional ` + "`kafka`" + ` output as well 
 			Advanced().Optional()).
 		Field(service.NewInterpolatedStringField("partition").
 			Description("An optional explicit partition to set for each message. This field is only relevant when the `partitioner` is set to `manual`. The provided interpolation string must be a valid integer.").
-			Example(`${! meta("partition") }`).
+			Example(`${! metadata("partition") }`).
 			Optional()).
 		Field(service.NewStringField("client_id").
 			Description("An identifier for the client connection.").

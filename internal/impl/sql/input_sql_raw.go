@@ -25,7 +25,7 @@ func sqlRawInputConfig() *service.ConfigSpec {
 		Field(service.NewBloblangField("args_mapping").
 			Description("A [Bloblang mapping](/docs/guides/bloblang/about) which should evaluate to an array of values matching in size to the number of columns specified.").
 			Example("root = [ this.cat.meow, this.doc.woofs[0] ]").
-			Example(`root = [ meta("user.id") ]`).
+			Example(`root = [ metadata("user.id") ]`).
 			Optional()).
 		Field(service.NewAutoRetryNacksToggleField())
 	for _, f := range connFields() {

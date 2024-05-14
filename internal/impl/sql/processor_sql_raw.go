@@ -32,7 +32,7 @@ If the query fails to execute then the message will remain unchanged and the err
 		Field(service.NewBloblangField("args_mapping").
 			Description("An optional [Bloblang mapping](/docs/guides/bloblang/about) which should evaluate to an array of values matching in size to the number of placeholder arguments in the field `query`.").
 			Example("root = [ this.cat.meow, this.doc.woofs[0] ]").
-			Example(`root = [ meta("user.id") ]`).
+			Example(`root = [ metadata("user.id") ]`).
 			Optional()).
 		Field(service.NewBoolField("exec_only").
 			Description("Whether the query result should be discarded. When set to `true` the message contents will remain unchanged, which is useful in cases where you are executing inserts, updates, etc.").
@@ -53,7 +53,7 @@ pipeline:
         driver: mysql
         dsn: foouser:foopassword@tcp(localhost:3306)/foodb
         query: "INSERT INTO footable (foo, bar, baz) VALUES (?, ?, ?);"
-        args_mapping: '[ document.foo, document.bar, meta("kafka_topic") ]'
+        args_mapping: '[ document.foo, document.bar, metadata("kafka_topic") ]'
         exec_only: true
 `,
 		).
