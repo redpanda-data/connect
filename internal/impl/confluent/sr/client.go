@@ -25,8 +25,13 @@ import (
 	"io/fs"
 	"net/http"
 	"net/url"
+	"regexp"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
+)
+
+var (
+	EscapedSepRegexp = regexp.MustCompile("(?i)%2F")
 )
 
 // Client is used to make requests to a schema registry.
@@ -194,8 +199,17 @@ func (c *Client) doRequest(ctx context.Context, verb, reqPath string) (resCode i
 		return
 	}
 
+	reqUrlString := reqURL.String()
+	if match := EscapedSepRegexp.MatchString(reqPath); match {
+		// Supporting '%2f' in the request url bypassing
+		// Workaround for Golang issue https://github.com/golang/go/issues/3659
+		if reqUrlString, err = url.PathUnescape(reqUrlString); err != nil {
+			return
+		}
+	}
+
 	var req *http.Request
-	if req, err = http.NewRequestWithContext(ctx, verb, reqURL.String(), http.NoBody); err != nil {
+	if req, err = http.NewRequestWithContext(ctx, verb, reqUrlString, http.NoBody); err != nil {
 		return
 	}
 	req.Header.Add("Accept", "application/vnd.schemaregistry.v1+json")

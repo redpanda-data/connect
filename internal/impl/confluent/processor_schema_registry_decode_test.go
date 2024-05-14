@@ -98,7 +98,7 @@ func runSchemaRegistryServer(t testing.TB, fn func(path string) ([]byte, error))
 		reqMut.Lock()
 		defer reqMut.Unlock()
 
-		b, err := fn(r.URL.Path)
+		b, err := fn(r.URL.EscapedPath())
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
