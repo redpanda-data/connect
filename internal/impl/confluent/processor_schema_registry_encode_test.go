@@ -134,13 +134,13 @@ func TestSchemaRegistryEncodeAvro(t *testing.T) {
 	require.NoError(t, err)
 
 	urlStr := runSchemaRegistryServer(t, func(path string) ([]byte, error) {
-		if path == "/subjects/foo/versions/latest" {
+		if path == "/subjects/foo%2Fbar/versions/latest" {
 			return fooFirst, nil
 		}
 		return nil, errors.New("nope")
 	})
 
-	subj, err := service.NewInterpolatedString("foo")
+	subj, err := service.NewInterpolatedString("foo/bar")
 	require.NoError(t, err)
 
 	encoder, err := newSchemaRegistryEncoder(urlStr, noopReqSign, nil, subj, false, time.Minute*10, time.Minute, service.MockResources())

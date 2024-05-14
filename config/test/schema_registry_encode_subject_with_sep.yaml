@@ -1,0 +1,6 @@
+pipeline:
+  processors:
+    - schema_registry_encode:
+        url: http://my-url
+        subject: "main/common"
+        refresh_period: 10m
