@@ -340,7 +340,7 @@ root.bar = this.value_two.apply("things")
 
 Within a map the keyword `root` refers to a newly created document that will replace the target of the map, and `this` refers to the original value of the target. The argument of `apply` is a string, which allows you to dynamically resolve the mapping to apply.
 
-## Import Maps
+## Import Maps or Mappings
 
 It's possible to import maps defined in a file with an `import` statement:
 
@@ -351,7 +351,13 @@ root.foo = this.value_one.apply("things")
 root.bar = this.value_two.apply("things")
 ```
 
-Imports from a Bloblang mapping within a Benthos config are relative to the process running the config. Imports from an imported file are relative to the file that is importing it.
+Additionally, you can use the `from` statement to import an entire mapping:
+
+```coffee
+from "./mapping.blobl"
+```
+
+The files referenced by both `import` and `from` in a Bloblang mapping within a Benthos config are relative to the process running the config. Imports from an imported file are relative to the file that is importing it.
 
 ## Filtering
 
