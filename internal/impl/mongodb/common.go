@@ -138,6 +138,8 @@ const (
 	OperationFindOne Operation = "find-one"
 	// OperationAggregate Execute Aggregation Pipeline operation.
 	OperationAggregate Operation = "aggregate"
+	// OperationFindMany Find many operation.
+	OperationFindMany Operation = "find-many"
 	// OperationInvalid Invalid operation.
 	OperationInvalid Operation = "invalid"
 )
@@ -160,7 +162,8 @@ func (op Operation) isFilterAllowed() bool {
 		OperationDeleteMany,
 		OperationReplaceOne,
 		OperationUpdateOne,
-		OperationFindOne:
+		OperationFindOne,
+		OperationFindMany:
 		return true
 	default:
 		return false
@@ -173,7 +176,8 @@ func (op Operation) isHintAllowed() bool {
 		OperationDeleteMany,
 		OperationReplaceOne,
 		OperationUpdateOne,
-		OperationFindOne:
+		OperationFindOne,
+		OperationFindMany:
 		return true
 	default:
 		return false
@@ -207,6 +211,8 @@ func NewOperation(op string) Operation {
 		return OperationFindOne
 	case "aggregate":
 		return OperationAggregate
+	case "find-many":
+		return OperationFindMany
 	default:
 		return OperationInvalid
 	}

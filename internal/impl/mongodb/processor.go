@@ -239,6 +239,48 @@ func (m *Processor) ProcessBatch(ctx context.Context, batch service.MessageBatch
 
 			msg.SetBytes(m)
 			return nil
+
+		case OperationFindMany:
+
+			findOptions := options.Find()
+			if hintJSON != nil {
+				findOptions.SetHint(hintJSON)
+			}
+			collection := m.database.Collection(collectionStr, m.writeConcernSpec.options)
+
+			var cursor *mongo.Cursor
+			var decoded []any
+			cursor, err = collection.Find(context.Background(), filterJSON, findOptions)
+			if err != nil {
+				m.log.Errorf("Error executing mongo db cursor, filter = %v: %s", filterJSON, err)
+				return err
+			}
+			defer cursor.Close(context.Background())
+
+			err = cursor.All(context.Background(), &decoded)
+			if err != nil {
+				m.log.Errorf("Error decoding mongo db cursor result, filter = %v: %s", filterJSON, err)
+				return err
+			}
+
+			m.log.Debugf("Got %d documents from '%s' collection", len(decoded), collectionStr)
+
+			var rawMessages = make([]json.RawMessage, 0)
+			for _, bsonObj := range decoded {
+				data, err := bson.MarshalExtJSON(bsonObj, m.marshalMode == JSONMarshalModeCanonical, false)
+				if err != nil {
+					return err
+				}
+				rawMessages = append(rawMessages, json.RawMessage(data))
+			}
+
+			data, err := json.Marshal(rawMessages)
+			if err != nil {
+				return err
+			}
+
+			msg.SetBytes(data)
+			return nil
 		}
 
 		if writeModel != nil {
