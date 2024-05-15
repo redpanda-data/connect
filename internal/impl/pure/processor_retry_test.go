@@ -45,6 +45,14 @@ retry:
 
 	var resMsgs []string
 	for _, m := range resBatches[0] {
+		retryCount, ok := m.MetaGetMut("retry_count")
+		require.True(t, ok)
+		assert.Equal(t, 0, retryCount)
+
+		backoffDuration, ok := m.MetaGetMut("backoff_duration")
+		require.True(t, ok)
+		assert.Equal(t, backoffDuration, time.Duration(0))
+
 		resMsgs = append(resMsgs, string(m.AsBytes()))
 	}
 	assert.Equal(t, []string{
@@ -150,6 +158,58 @@ retry:
 	}, resMsgs)
 
 	assert.Greater(t, fooCalls, uint32(1))
+
+	require.NoError(t, p.Close(context.Background()))
+}
+
+func TestRetryMaxRetriesFailure(t *testing.T) {
+	conf, err := testutil.ProcessorFromYAML(`
+retry:
+  max_retries: 2
+  processors:
+    - resource: foo
+`)
+	require.NoError(t, err)
+
+	mockMgr := mock.NewManager()
+
+	var fooCalls uint32
+	mockMgr.Processors["foo"] = func(b message.Batch) ([]message.Batch, error) {
+		b[0].SetBytes([]byte(string(b[0].AsBytes()) + " updated"))
+		atomic.AddUint32(&fooCalls, 1)
+		b[0].ErrorSet(errors.New("nope"))
+		return []message.Batch{
+			{b[0]},
+		}, nil
+	}
+
+	p, err := mockMgr.NewProcessor(conf)
+	require.NoError(t, err)
+
+	resBatches, err := p.ProcessBatch(context.Background(), message.Batch{
+		message.NewPart([]byte("hello world a")),
+	})
+	require.NoError(t, err)
+	require.Len(t, resBatches, 1)
+	require.Len(t, resBatches[0], 1)
+
+	var resMsgs []string
+	for _, m := range resBatches[0] {
+		retryCount, ok := m.MetaGetMut("retry_count")
+		require.True(t, ok)
+		assert.Equal(t, 2, retryCount)
+
+		backoffDuration, ok := m.MetaGetMut("backoff_duration")
+		require.True(t, ok)
+		assert.Greater(t, backoffDuration, time.Duration(0))
+
+		resMsgs = append(resMsgs, string(m.AsBytes()))
+	}
+	assert.Equal(t, []string{
+		"hello world a updated",
+	}, resMsgs)
+
+	assert.Equal(t, uint32(2), fooCalls)
 
 	require.NoError(t, p.Close(context.Background()))
 }

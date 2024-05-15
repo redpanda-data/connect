@@ -32,6 +32,7 @@ retry:
     max_elapsed_time: 1m
   processors: [] # No default (required)
   parallel: false
+  max_retries: 0
 ```
 
 Executes child processors and if a resulting message is errored then, after a specified backoff period, the same original message will be attempted again through those same processors. If the child processors result in more than one message then the retry mechanism will kick in if _any_ of the resulting messages are errored.
@@ -41,6 +42,14 @@ It is important to note that any mutations performed on the message during these
 By default the retry backoff has a specified [`max_elapsed_time`](#backoffmax_elapsed_time), if this time period is reached during retries and an error still occurs these errored messages will proceed through to the next processor after the retry (or your outputs). Normal [error handling patterns](/docs/configuration/error_handling) can be used on these messages.
 
 In order to avoid permanent loops any error associated with messages as they first enter a retry processor will be cleared.
+
+### Metadata
+
+This processor adds the following metadata fields to each message:
+```
+- retry_count - The number of retry attempts.
+- backoff_duration - The total time elapsed while performing retries.
+```
 
 :::caution Batching
 If you wish to wrap a batch-aware series of processors then take a look at the [batching section](#batching) below.
@@ -157,6 +166,14 @@ When processing batches of messages these batches are ignored and the processors
 
 Type: `bool`  
 Default: `false`  
+
+### `max_retries`
+
+The maximum number of retry attempts before the request is aborted. Setting this value to `0` will result in unbounded number of retries.
+
+
+Type: `int`  
+Default: `0`  
 
 ## Batching
 

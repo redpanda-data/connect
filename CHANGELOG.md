@@ -3,6 +3,13 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+## 4.28.0 - TBD
+
+### Added
+
+- Field `max_retries` added to the `retry` processor
+- Metadata fields `retry_count` and `backoff_duration` added to the `retry` processor.
+
 ## 4.27.0 - 2024-04-23
 
 ### Added

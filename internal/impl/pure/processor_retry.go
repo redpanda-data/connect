@@ -19,6 +19,7 @@ const (
 	rpFieldProcessors = "processors"
 	rpFieldBackoff    = "backoff"
 	rpFieldParallel   = "parallel"
+	rpFieldMaxRetries = "max_retries"
 )
 
 func retryProcSpec() *service.ConfigSpec {
@@ -35,6 +36,14 @@ It is important to note that any mutations performed on the message during these
 By default the retry backoff has a specified `+"[`max_elapsed_time`](#backoffmax_elapsed_time)"+`, if this time period is reached during retries and an error still occurs these errored messages will proceed through to the next processor after the retry (or your outputs). Normal [error handling patterns](/docs/configuration/error_handling) can be used on these messages.
 
 In order to avoid permanent loops any error associated with messages as they first enter a retry processor will be cleared.
+
+### Metadata
+
+This processor adds the following metadata fields to each message:
+`+"```"+`
+- retry_count - The number of retry attempts.
+- backoff_duration - The total time elapsed while performing retries.
+`+"```"+`
 
 :::caution Batching
 If you wish to wrap a batch-aware series of processors then take a look at the [batching section](#batching) below.
@@ -97,6 +106,9 @@ output:
 			service.NewBoolField(rpFieldParallel).
 				Description("When processing batches of messages these batches are ignored and the processors apply to each message sequentially. However, when this field is set to `true` each message will be processed in parallel. Caution should be made to ensure that batch sizes do not surpass a point where this would cause resource (CPU, memory, API limits) contention.").
 				Default(false),
+			service.NewIntField(rpFieldMaxRetries).
+				Description("The maximum number of retry attempts before the request is aborted. Setting this value to `0` will result in unbounded number of retries.").
+				Default(0),
 		)
 }
 
@@ -128,6 +140,10 @@ func init() {
 				return nil, err
 			}
 
+			if p.maxRetries, err = conf.FieldInt(rpFieldMaxRetries); err != nil {
+				return nil, err
+			}
+
 			return interop.NewUnwrapInternalBatchProcessor(processor.NewAutoObservedBatchedProcessor("retry", p, mgr)), nil
 		})
 	if err != nil {
@@ -136,10 +152,11 @@ func init() {
 }
 
 type retryProc struct {
-	children []processor.V1
-	boff     *backoff.ExponentialBackOff
-	parallel bool
-	log      log.Modular
+	children   []processor.V1
+	boff       *backoff.ExponentialBackOff
+	parallel   bool
+	maxRetries int
+	log        log.Modular
 }
 
 func (r *retryProc) ProcessBatch(ctx *processor.BatchProcContext, msgs message.Batch) ([]message.Batch, error) {
@@ -184,16 +201,28 @@ func (r *retryProc) ProcessBatch(ctx *processor.BatchProcContext, msgs message.B
 	return []message.Batch{resMsg}, nil
 }
 
-func (r *retryProc) dispatchMessage(ctx context.Context, p *message.Part) ([]message.Batch, error) {
+func (r *retryProc) dispatchMessage(ctx context.Context, p *message.Part) (resBatches []message.Batch, err error) {
 	// NOTE: We always ensure we start off with a copy of the reference backoff.
 	boff := *r.boff
 	boff.Reset()
+
+	retries := 0
+	var backoffDuration time.Duration
+
+	defer func() {
+		for _, b := range resBatches {
+			for _, m := range b {
+				m.MetaSetMut("retry_count", retries)
+				m.MetaSetMut("backoff_duration", backoffDuration)
+			}
+		}
+	}()
 
 	// Ensure we do not start off with an error.
 	p.ErrorSet(nil)
 
 	for {
-		resBatches, err := processor.ExecuteAll(ctx, r.children, message.Batch{p.ShallowCopy()})
+		resBatches, err = processor.ExecuteAll(ctx, r.children, message.Batch{p.ShallowCopy()})
 		if err != nil {
 			return nil, err
 		}
@@ -214,13 +243,20 @@ func (r *retryProc) dispatchMessage(ctx context.Context, p *message.Part) ([]mes
 			return resBatches, nil
 		}
 
-		nextSleep := boff.NextBackOff()
-		if nextSleep == backoff.Stop {
-			r.log.With("error", err).Debug("Error occured and maximum wait period was reached.")
+		retries++
+		if retries == r.maxRetries {
+			r.log.With("error", err).Debug("Error occurred and maximum number of retries was reached.")
 			return resBatches, nil
 		}
 
-		r.log.With("error", err, "backoff", nextSleep).Debug("Error occured, sleeping for next backoff period.")
+		nextSleep := boff.NextBackOff()
+		backoffDuration += nextSleep
+		if nextSleep == backoff.Stop {
+			r.log.With("error", err).Debug("Error occurred and maximum wait period was reached.")
+			return resBatches, nil
+		}
+
+		r.log.With("error", err, "backoff", nextSleep).Debug("Error occurred, sleeping for next backoff period.")
 		select {
 		case <-time.After(nextSleep):
 		case <-ctx.Done():
