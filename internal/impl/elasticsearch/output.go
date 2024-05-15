@@ -12,7 +12,6 @@ import (
 	"github.com/cenkalti/backoff/v4"
 	"github.com/olivere/elastic/v7"
 
-	"github.com/benthosdev/benthos/v4/internal/httpclient"
 	"github.com/benthosdev/benthos/v4/internal/impl/aws/config"
 	"github.com/benthosdev/benthos/v4/internal/impl/pure"
 	"github.com/benthosdev/benthos/v4/public/service"
@@ -235,7 +234,19 @@ It's possible to enable AWS connectivity with this output using the `+"`aws`"+` 
 		).
 		Fields(pure.CommonRetryBackOffFields(0, "1s", "5s", "30s")...).
 		Fields(
-			httpclient.BasicAuthField(),
+			service.NewObjectField(esoFieldAuth,
+				service.NewBoolField(esoFieldAuthEnabled).
+					Description("Whether to use basic authentication in requests.").
+					Default(false),
+				service.NewStringField(esoFieldAuthUsername).
+					Description("A username to authenticate as.").
+					Default(""),
+				service.NewStringField(esoFieldAuthPassword).
+					Description("A password to authenticate with.").
+					Default("").Secret(),
+			).Description("Allows you to specify basic authentication.").
+				Advanced().
+				Optional(),
 			service.NewBatchPolicyField(esoFieldBatching),
 			AWSField(),
 			service.NewBoolField(esoFieldGzipCompression).

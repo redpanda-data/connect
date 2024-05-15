@@ -1,7 +1,10 @@
 package httpclient
 
 import (
+	"context"
 	"crypto/tls"
+	"io/fs"
+	"net/http"
 	"time"
 
 	"github.com/benthosdev/benthos/v4/public/service"
@@ -151,10 +154,10 @@ func ConfigFromParsed(pConf *service.ParsedConfig) (conf OldConfig, err error) {
 		return
 	}
 	conf.ProxyURL, _ = pConf.FieldString(hcFieldProxyURL)
-	if conf.Auth, err = authConfFromParsed(pConf); err != nil {
+	if conf.authSigner, err = pConf.HTTPRequestAuthSignerFromParsed(); err != nil {
 		return
 	}
-	if conf.OAuth2, err = oauth2FromParsed(pConf); err != nil {
+	if conf.clientCtor, err = oauth2ClientCtorFromParsed(pConf); err != nil {
 		return
 	}
 	return
@@ -179,6 +182,6 @@ type OldConfig struct {
 	TLSEnabled          bool
 	TLSConf             *tls.Config
 	ProxyURL            string
-	Auth                AuthConfig
-	OAuth2              OAuth2Config
+	authSigner          func(f fs.FS, req *http.Request) error
+	clientCtor          func(context.Context, *http.Client) *http.Client
 }

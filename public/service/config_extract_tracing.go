@@ -16,7 +16,7 @@ const (
 	etsField = "extract_tracing_map"
 )
 
-// NewExtractTracingSpanMappingDocs returns a config field for mapping messages
+// NewExtractTracingSpanMappingField returns a config field for mapping messages
 // in order to extract distributed tracing information.
 func NewExtractTracingSpanMappingField() *ConfigField {
 	return NewBloblangField(etsField).

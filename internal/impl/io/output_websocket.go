@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"errors"
+	"io/fs"
 	"net/http"
 	"net/url"
 	"sync"
@@ -14,7 +15,6 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/interop"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
-	"github.com/benthosdev/benthos/v4/internal/httpclient"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
 	"github.com/benthosdev/benthos/v4/public/service"
@@ -28,7 +28,7 @@ func websocketOutputSpec() *service.ConfigSpec {
 		Field(service.NewURLField("url").Description("The URL to connect to.")).
 		Field(service.NewTLSToggledField("tls"))
 
-	for _, f := range httpclient.AuthFieldSpecs() {
+	for _, f := range service.NewHTTPRequestAuthSignerFields() {
 		spec = spec.Field(f)
 	}
 
@@ -68,7 +68,7 @@ type websocketWriter struct {
 	urlStr     string
 	tlsEnabled bool
 	tlsConf    *tls.Config
-	reqSigner  httpclient.RequestSigner
+	reqSigner  func(f fs.FS, req *http.Request) error
 }
 
 func newWebsocketWriterFromParsed(conf *service.ParsedConfig, mgr bundle.NewManagement) (*websocketWriter, error) {
@@ -88,7 +88,7 @@ func newWebsocketWriterFromParsed(conf *service.ParsedConfig, mgr bundle.NewMana
 	if ws.tlsConf, ws.tlsEnabled, err = conf.FieldTLSToggled("tls"); err != nil {
 		return nil, err
 	}
-	if ws.reqSigner, err = httpclient.AuthSignerFromParsed(conf); err != nil {
+	if ws.reqSigner, err = conf.HTTPRequestAuthSignerFromParsed(); err != nil {
 		return nil, err
 	}
 	return ws, nil

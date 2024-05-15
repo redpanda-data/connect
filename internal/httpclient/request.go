@@ -32,7 +32,7 @@ type RequestCreator struct {
 	explicitMultiparts []MultipartExpressions
 
 	fs        fs.FS
-	reqSigner RequestSigner
+	reqSigner func(f fs.FS, req *http.Request) error
 
 	url              *service.InterpolatedString
 	host             *service.InterpolatedString
@@ -51,7 +51,7 @@ func RequestCreatorFromOldConfig(conf OldConfig, mgr *service.Resources, opts ..
 	r := &RequestCreator{
 		fs:               mgr.FS(),
 		url:              conf.URL,
-		reqSigner:        conf.Auth.Sign,
+		reqSigner:        conf.authSigner,
 		verb:             conf.Verb,
 		headers:          conf.Headers,
 		metaInsertFilter: conf.Metadata,

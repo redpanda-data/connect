@@ -14,7 +14,6 @@ import (
 	"github.com/opensearch-project/opensearch-go/v3/opensearchapi"
 	"github.com/opensearch-project/opensearch-go/v3/opensearchutil"
 
-	"github.com/benthosdev/benthos/v4/internal/httpclient"
 	"github.com/benthosdev/benthos/v4/internal/impl/aws/config"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
@@ -161,7 +160,19 @@ Both the `+"`id` and `index`"+` fields can be dynamically set using function int
 			service.NewOutputMaxInFlightField(),
 		).
 		Fields(
-			httpclient.BasicAuthField(),
+			service.NewObjectField(esoFieldAuth,
+				service.NewBoolField(esoFieldAuthEnabled).
+					Description("Whether to use basic authentication in requests.").
+					Default(false),
+				service.NewStringField(esoFieldAuthUsername).
+					Description("A username to authenticate as.").
+					Default(""),
+				service.NewStringField(esoFieldAuthPassword).
+					Description("A password to authenticate with.").
+					Default("").Secret(),
+			).Description("Allows you to specify basic authentication.").
+				Advanced().
+				Optional(),
 			service.NewBatchPolicyField(esoFieldBatching),
 			AWSField(),
 		).

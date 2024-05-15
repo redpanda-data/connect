@@ -110,7 +110,7 @@ func NewClientFromOldConfig(conf OldConfig, mgr *service.Resources, opts ...Requ
 		return nil, fmt.Errorf("failed to config logger for request dump: %v", err)
 	}
 
-	h.client = conf.OAuth2.Client(h.clientCtx, h.client)
+	h.client = conf.clientCtor(h.clientCtx, h.client)
 
 	for _, c := range conf.BackoffOn {
 		h.backoffOn[c] = struct{}{}

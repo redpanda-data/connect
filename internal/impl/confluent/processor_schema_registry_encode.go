@@ -6,13 +6,14 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"io/fs"
+	"net/http"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/Jeffail/shutdown"
 
-	"github.com/benthosdev/benthos/v4/internal/httpclient"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
@@ -71,7 +72,7 @@ We will be considering alternative approaches in future so please [get in touch]
 			Description("Whether messages encoded in Avro format should be parsed as normal JSON (\"json that meets the expectations of regular internet json\") rather than [Avro JSON](https://avro.apache.org/docs/current/specification/_print/#json-encoding). If `true` the schema returned from the subject should be parsed as [standard json](https://pkg.go.dev/github.com/linkedin/goavro/v2#NewCodecForStandardJSONFull) instead of as [avro json](https://pkg.go.dev/github.com/linkedin/goavro/v2#NewCodec). There is a [comment in goavro](https://github.com/linkedin/goavro/blob/5ec5a5ee7ec82e16e6e2b438d610e1cab2588393/union.go#L224-L249), the [underlining library used for avro serialization](https://github.com/linkedin/goavro), that explains in more detail the difference between standard json and avro json.").
 			Advanced().Default(false).Version("3.59.0"))
 
-	for _, f := range httpclient.AuthFieldSpecs() {
+	for _, f := range service.NewHTTPRequestAuthSignerFields() {
 		spec = spec.Field(f.Version("4.7.0"))
 	}
 
@@ -132,7 +133,7 @@ func newSchemaRegistryEncoderFromConfig(conf *service.ParsedConfig, mgr *service
 	if refreshTicker < time.Second {
 		refreshTicker = time.Second
 	}
-	authSigner, err := httpclient.AuthSignerFromParsed(conf)
+	authSigner, err := conf.HTTPRequestAuthSignerFromParsed()
 	if err != nil {
 		return nil, err
 	}
@@ -145,7 +146,7 @@ func newSchemaRegistryEncoderFromConfig(conf *service.ParsedConfig, mgr *service
 
 func newSchemaRegistryEncoder(
 	urlStr string,
-	reqSigner httpclient.RequestSigner,
+	reqSigner func(f fs.FS, req *http.Request) error,
 	tlsConf *tls.Config,
 	subject *service.InterpolatedString,
 	avroRawJSON bool,

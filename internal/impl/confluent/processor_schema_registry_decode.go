@@ -6,13 +6,14 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"io/fs"
+	"net/http"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/Jeffail/shutdown"
 
-	"github.com/benthosdev/benthos/v4/internal/httpclient"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
@@ -49,7 +50,7 @@ This processor decodes protobuf messages to JSON documents, you can read more ab
 			Advanced().Default(false)).
 		Field(service.NewURLField("url").Description("The base URL of the schema registry service."))
 
-	for _, f := range httpclient.AuthFieldSpecs() {
+	for _, f := range service.NewHTTPRequestAuthSignerFields() {
 		spec = spec.Field(f.Version("4.7.0"))
 	}
 
@@ -91,7 +92,7 @@ func newSchemaRegistryDecoderFromConfig(conf *service.ParsedConfig, mgr *service
 	if err != nil {
 		return nil, err
 	}
-	authSigner, err := httpclient.AuthSignerFromParsed(conf)
+	authSigner, err := conf.HTTPRequestAuthSignerFromParsed()
 	if err != nil {
 		return nil, err
 	}
@@ -104,7 +105,7 @@ func newSchemaRegistryDecoderFromConfig(conf *service.ParsedConfig, mgr *service
 
 func newSchemaRegistryDecoder(
 	urlStr string,
-	reqSigner httpclient.RequestSigner,
+	reqSigner func(f fs.FS, req *http.Request) error,
 	tlsConf *tls.Config,
 	avroRawJSON bool,
 	mgr *service.Resources,

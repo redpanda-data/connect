@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"io/fs"
 	"net/http"
 	"net/url"
 	"sync"
@@ -15,7 +16,6 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/component/input"
 	"github.com/benthosdev/benthos/v4/internal/component/input/config"
 	"github.com/benthosdev/benthos/v4/internal/component/interop"
-	"github.com/benthosdev/benthos/v4/internal/httpclient"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
 	"github.com/benthosdev/benthos/v4/public/service"
@@ -52,7 +52,7 @@ func websocketInputSpec() *service.ConfigSpec {
 			service.NewTLSToggledField("tls"),
 		).
 		Fields(config.AsyncOptsFields()...).
-		Fields(httpclient.AuthFieldSpecs()...)
+		Fields(service.NewHTTPRequestAuthSignerFields()...)
 }
 
 func init() {
@@ -97,7 +97,7 @@ type websocketReader struct {
 	urlStr     string
 	tlsEnabled bool
 	tlsConf    *tls.Config
-	reqSigner  httpclient.RequestSigner
+	reqSigner  func(f fs.FS, req *http.Request) error
 
 	openMsgType wsOpenMsgType
 	openMsg     []byte
@@ -119,7 +119,7 @@ func newWebsocketReaderFromParsed(conf *service.ParsedConfig, mgr bundle.NewMana
 	if ws.tlsConf, ws.tlsEnabled, err = conf.FieldTLSToggled("tls"); err != nil {
 		return nil, err
 	}
-	if ws.reqSigner, err = httpclient.AuthSignerFromParsed(conf); err != nil {
+	if ws.reqSigner, err = conf.HTTPRequestAuthSignerFromParsed(); err != nil {
 		return nil, err
 	}
 	var openMsgStr, openMsgTypeStr string
