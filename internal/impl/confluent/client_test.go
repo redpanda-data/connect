@@ -22,6 +22,8 @@ func TestSchemaRegistryClient_GetSchemaBySubjectAndVersion(t *testing.T) {
 	})
 	require.NoError(t, err)
 
+	version := 4
+
 	type args struct {
 		subject string
 		version *int
@@ -52,6 +54,32 @@ func TestSchemaRegistryClient_GetSchemaBySubjectAndVersion(t *testing.T) {
 			args: args{
 				subject: "main/common",
 				version: nil,
+			},
+			wantResPayload: SchemaInfo{
+				ID:     3,
+				Schema: testSchema,
+			},
+			wantErr: assert.NoError,
+		},
+		{
+			name:                    "sanity with version",
+			schemaRegistryServerUrl: "/subjects/foo/versions/4",
+			args: args{
+				subject: "foo",
+				version: &version,
+			},
+			wantResPayload: SchemaInfo{
+				ID:     3,
+				Schema: testSchema,
+			},
+			wantErr: assert.NoError,
+		},
+		{
+			name:                    "contains sep (%2F)  with version",
+			schemaRegistryServerUrl: "/subjects/main%2Fcommon/versions/4",
+			args: args{
+				subject: "main/common",
+				version: &version,
 			},
 			wantResPayload: SchemaInfo{
 				ID:     3,
