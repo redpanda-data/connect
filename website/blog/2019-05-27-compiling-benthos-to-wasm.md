@@ -162,7 +162,7 @@ There weren't any.
 ## Final Words
 
 It took a day for me to get a working application together and soon I'll be
-blogging about the resulting product. Web assembly with Go is dope.
+blogging about the resulting product. Web assembly with Go is yummy.
 
 Kudos to both the W3C and the Go team for taking their time to build something
 to completion without rushing the conclusion. Yes, I'm still bitter about Game
