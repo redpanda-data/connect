@@ -132,7 +132,7 @@ The mongodb operation to perform.
 
 Type: `string`  
 Default: `"insert-one"`  
-Options: `insert-one`, `delete-one`, `delete-many`, `replace-one`, `update-one`, `find-one`.
+Options: `insert-one`, `delete-one`, `delete-many`, `replace-one`, `update-one`, `find-one`, `find-many`.
 
 ### `write_concern`
 
