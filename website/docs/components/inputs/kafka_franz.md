@@ -59,6 +59,9 @@ input:
     checkpoint_limit: 1024
     auto_replay_nacks: true
     commit_period: 5s
+    fetch_min_bytes: 1
+    fetch_max_wait_duration: 5e-09
+    max_partition_fetch_bytes: 1000000
     start_from_oldest: true
     tls:
       enabled: false
@@ -212,6 +215,30 @@ The period of time between each commit of the current partition offsets. Offsets
 
 Type: `string`  
 Default: `"5s"`  
+
+### `fetch_min_bytes`
+
+Determines the minimum amount of data that to receive from the broker when fetching records
+
+
+Type: `int`  
+Default: `1`  
+
+### `fetch_max_wait_duration`
+
+Determines how long in for the broker to wait until it has enough data to send before responding
+
+
+Type: `string`  
+Default: `5e-9`  
+
+### `max_partition_fetch_bytes`
+
+Determines the maximum amount of data to receive from a single partition in a single fetch request
+
+
+Type: `int`  
+Default: `1000000`  
 
 ### `start_from_oldest`
 
