@@ -16,10 +16,6 @@ pipeline:
             processors:
               - sleep:
                   duration: "3s"
-              - http: 
-                  url: "http://www.awebsitethatdoesnotexist.com/"
-                  verb: GET
-                  timeout: 5s
               - log:
                   level: INFO
                   message: STAGE A FINISHED
@@ -45,6 +41,10 @@ pipeline:
           D:
             dependency_list: ["B", "E"]
             processors:
+              - http: 
+                  url: "http://www.awebsitethatdoesnotexist.com/"
+                  verb: GET
+                  timeout: 5s
               - sleep: 
                   duration: "3s"
               - log:

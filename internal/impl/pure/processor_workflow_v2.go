@@ -35,6 +35,42 @@ func workflowProcSpecV2() *service.ConfigSpec {
 				Description("An object of named [`branch` processors](/docs/components/processors/branch) that make up the workflow. The order and parallelism in which branches are executed can either be made explicit with the field `order`, or if omitted an attempt is made to automatically resolve an ordering based on the mappings of each branch."))
 }
 
+// Copy from processor_branch.go
+func branchSpecFieldsV2() []*service.ConfigField {
+	return []*service.ConfigField{
+		service.NewBloblangField(branchProcFieldReqMap).
+			Description("A [Bloblang mapping](/docs/guides/bloblang/about) that describes how to create a request payload suitable for the child processors of this branch. If left empty then the branch will begin with an exact copy of the origin message (including metadata).").
+			Examples(`root = {
+	"id": this.doc.id,
+	"content": this.doc.body.text
+}`,
+				`root = if this.type == "foo" {
+	this.foo.request
+} else {
+	deleted()
+}`).
+			Default(""),
+		service.NewStringListField(wflowProcFieldDependencyListV2).
+			Description("TODO"),
+		service.NewProcessorListField(branchProcFieldProcs).
+			Description("A list of processors to apply to mapped requests. When processing message batches the resulting batch must match the size and ordering of the input batch, therefore filtering, grouping should not be performed within these processors."),
+		service.NewBloblangField(branchProcFieldResMap).
+			Description("A [Bloblang mapping](/docs/guides/bloblang/about) that describes how the resulting messages from branched processing should be mapped back into the original payload. If left empty the origin message will remain unchanged (including metadata).").
+			Examples(`meta foo_code = meta("code")
+root.foo_result = this`,
+				`meta = meta()
+root.bar.body = this.body
+root.bar.id = this.user.id`,
+				`root.raw_result = content().string()`,
+				`root.enrichments.foo = if meta("request_failed") != null {
+  throw(meta("request_failed"))
+} else {
+  this
+}`).
+			Default(""),
+	}
+}
+
 func init() {
 	err := service.RegisterBatchProcessor(
 		"workflow_v2", workflowProcSpecV2(),
@@ -115,46 +151,28 @@ type resultTrackerV2 struct {
 	notStarted        map[string]struct{}
 	started           map[string]struct{}
 	succeeded         map[string]struct{}
-	skipped           map[string]struct{}
 	failed            map[string]string
 	dependencyTracker map[string][]string
 	numberOfBranches  int
-	branchIndexes     map[string]int
 	sync.Mutex
 }
 
-func createTrackerDependencies(dependencies map[string][]string) *resultTrackerV2 {
+func createTrackerFromDependencies(dependencies map[string][]string) *resultTrackerV2 {
 	r := &resultTrackerV2{
 		notStarted: map[string]struct{}{},
 		started:    map[string]struct{}{},
 		succeeded:  map[string]struct{}{},
-		skipped:    map[string]struct{}{},
 		failed:     map[string]string{},
 	}
 
-	r.branchIndexes = make(map[string]int)
-
-	index := 0
 	for k := range dependencies {
 		r.notStarted[k] = struct{}{}
-		r.branchIndexes[k] = index
-		index++
 	}
 
 	r.numberOfBranches = len(dependencies)
 	r.dependencyTracker = dependencies
 
 	return r
-}
-
-func (r *resultTrackerV2) SkippedV2(k string) {
-	r.Lock()
-	delete(r.notStarted, k)
-
-	r.skipped[k] = struct{}{}
-	r.RemoveFromDepTracker(k)
-
-	r.Unlock()
 }
 
 func (r *resultTrackerV2) Succeeded(k string) {
@@ -177,7 +195,6 @@ func (r *resultTrackerV2) Started(k string) {
 func (r *resultTrackerV2) FailedV2(k, why string) {
 	r.Lock()
 	delete(r.started, k)
-	delete(r.skipped, k)
 	delete(r.succeeded, k)
 	r.failed[k] = why
 	r.Unlock()
@@ -201,15 +218,8 @@ func (r *resultTrackerV2) isReadyToStart(k string) bool {
 	return len(r.dependencyTracker[k]) == 0
 }
 
-func (r *resultTrackerV2) getIndexOfNode(k string) int {
-	r.Lock()
-	defer r.Unlock()
-	return r.branchIndexes[k]
-}
-
 func (r *resultTrackerV2) ToObjectV2() map[string]any {
 	succeeded := make([]any, 0, len(r.succeeded))
-	skipped := make([]any, 0, len(r.skipped))
 	notStarted := make([]any, 0, len(r.notStarted))
 	started := make([]any, 0, len(r.started))
 	failed := make(map[string]any, len(r.failed))
@@ -220,18 +230,12 @@ func (r *resultTrackerV2) ToObjectV2() map[string]any {
 	sort.Slice(succeeded, func(i, j int) bool {
 		return succeeded[i].(string) < succeeded[j].(string)
 	})
-	for k := range r.skipped {
-		skipped = append(skipped, k)
-	}
 	for k := range r.notStarted {
 		notStarted = append(notStarted, k)
 	}
 	for k := range r.started {
 		started = append(started, k)
 	}
-	sort.Slice(skipped, func(i, j int) bool {
-		return skipped[i].(string) < skipped[j].(string)
-	})
 	for k, v := range r.failed {
 		failed[k] = v
 	}
@@ -239,9 +243,6 @@ func (r *resultTrackerV2) ToObjectV2() map[string]any {
 	m := map[string]any{}
 	if len(succeeded) > 0 {
 		m["succeeded"] = succeeded
-	}
-	if len(skipped) > 0 {
-		m["skipped"] = skipped
 	}
 	if len(notStarted) > 0 {
 		m["notStarted"] = notStarted
@@ -253,55 +254,6 @@ func (r *resultTrackerV2) ToObjectV2() map[string]any {
 		m["failed"] = failed
 	}
 	return m
-}
-
-// Returns a map of enrichment IDs that should be skipped for this payload.
-func (w *WorkflowV2) skipFromMetaV2(root any) map[string]struct{} {
-	skipList := map[string]struct{}{}
-	if len(w.metaPath) == 0 {
-		return skipList
-	}
-
-	gObj := gabs.Wrap(root)
-
-	// If a whitelist is provided for this flow then skip stages that aren't
-	// within it.
-	if apply, ok := gObj.S(append(w.metaPath, "apply")...).Data().([]any); ok {
-		if len(apply) > 0 {
-			for k := range w.allStages {
-				skipList[k] = struct{}{}
-			}
-			for _, id := range apply {
-				if idStr, isString := id.(string); isString {
-					delete(skipList, idStr)
-				}
-			}
-		}
-	}
-
-	// Skip stages that already succeeded in a previous run of this workflow.
-	if succeeded, ok := gObj.S(append(w.metaPath, "succeeded")...).Data().([]any); ok {
-		for _, id := range succeeded {
-			if idStr, isString := id.(string); isString {
-				if _, exists := w.allStages[idStr]; exists {
-					skipList[idStr] = struct{}{}
-				}
-			}
-		}
-	}
-
-	// Skip stages that were already skipped in a previous run of this workflow.
-	if skipped, ok := gObj.S(append(w.metaPath, "skipped")...).Data().([]any); ok {
-		for _, id := range skipped {
-			if idStr, isString := id.(string); isString {
-				if _, exists := w.allStages[idStr]; exists {
-					skipList[idStr] = struct{}{}
-				}
-			}
-		}
-	}
-
-	return skipList
 }
 
 // ProcessBatch applies workflow stages to each part of a message type.
@@ -328,21 +280,13 @@ func (w *WorkflowV2) ProcessBatch(ctx context.Context, msg message.Batch) ([]mes
 
 	skipOnMeta := make([]map[string]struct{}, msg.Len())
 	_ = msg.Iter(func(i int, p *message.Part) error {
-		// TODO: Do we want to evaluate bytes here? And metadata? (TODO from original workflow processor)
-		if jObj, err := p.AsStructured(); err == nil {
-			skipOnMeta[i] = w.skipFromMetaV2(jObj)
-		} else {
-			skipOnMeta[i] = map[string]struct{}{}
-		}
+		skipOnMeta[i] = map[string]struct{}{}
 		return nil
 	})
 
 	propMsg, _ := tracing.WithChildSpans(w.tracer, "workflow", msg)
 
-	records := make([]*resultTrackerV2, msg.Len())
-	for i := range records {
-		records[i] = createTrackerDependencies(dependencies)
-	}
+	records := createTrackerFromDependencies(dependencies)
 
 	type collector struct {
 		eid     string
@@ -350,10 +294,10 @@ func (w *WorkflowV2) ProcessBatch(ctx context.Context, msg message.Batch) ([]mes
 		errors  []error
 	}
 
-	done := make(chan collector)
+	batch_result_chan := make(chan collector)
 
 	go func() {
-		mssge := <-done
+		mssge := <-batch_result_chan
 		var failed []branchMapError
 		err := mssge.errors[0]
 		if err == nil {
@@ -362,52 +306,50 @@ func (w *WorkflowV2) ProcessBatch(ctx context.Context, msg message.Batch) ([]mes
 		if err != nil {
 			w.mError.Incr(1)
 			w.log.Error("Failed to perform enrichment '%v': %v\n", mssge.eid, err)
-			records[0].FailedV2(mssge.eid, err.Error()) // TODO: remove [0]
+			records.FailedV2(mssge.eid, err.Error())
 		}
 		for _, e := range failed {
-			records[e.index].FailedV2(mssge.eid, e.err.Error())
+			records.FailedV2(mssge.eid, e.err.Error())
 		}
 	}()
 
-	for len(records[0].succeeded)+len(records[0].failed) != records[0].numberOfBranches { // TODO: remove [0]
-		for eid := range records[0].notStarted { // TODO: remove [0]
+	for len(records.succeeded)+len(records.failed) != records.numberOfBranches {
+		for eid := range records.notStarted {
 
-			results := make([][]*message.Part, records[0].numberOfBranches) // TODO: remove [0]
-			errors := make([]error, records[0].numberOfBranches)            // TODO: remove [0]
+			results := make([][]*message.Part, records.numberOfBranches)
+			errors := make([]error, records.numberOfBranches)
 
-			if records[0].isReadyToStart(eid) {
-				records[0].Started(eid) // TODO: remove [0]
+			if records.isReadyToStart(eid) {
+				records.Started(eid)
 
 				branchMsg, branchSpans := tracing.WithChildSpans(w.tracer, eid, propMsg.ShallowCopy())
-				go func(id string, index int) {
+
+				go func(id string) {
 					branchParts := make([]*message.Part, branchMsg.Len())
 					_ = branchMsg.Iter(func(partIndex int, part *message.Part) error {
 						// Remove errors so that they aren't propagated into the
 						// branch.
 						part.ErrorSet(nil)
-						if _, exists := skipOnMeta[partIndex][id]; !exists {
-							branchParts[partIndex] = part
-						}
+						branchParts[partIndex] = part
 						return nil
 					})
 
 					var mapErrs []branchMapError
-					results[index], mapErrs, errors[index] = children[id].createResult(ctx, branchParts, propMsg.ShallowCopy())
+					results[0], mapErrs, errors[0] = children[id].createResult(ctx, branchParts, propMsg.ShallowCopy())
 					for _, s := range branchSpans {
 						s.Finish()
 					}
-					records[0].Succeeded((id))
+					records.Succeeded((id))
 					for _, e := range mapErrs {
-						records[e.index].FailedV2(id, e.err.Error())
+						records.FailedV2(id, e.err.Error())
 					}
-					// TODO: remove [0]
-					asdf := collector{ // TODO: rename this
+					batch_result := collector{
 						eid:     id,
 						results: results,
 						errors:  errors,
 					}
-					done <- asdf
-				}(eid, int(eid[0]-'A')) // int(eid[0]-'A')  r.branchIndexes[k]  records[0].getIndexOfNode(eid)
+					batch_result_chan <- batch_result
+				}(eid)
 			}
 		}
 	}
@@ -425,7 +367,7 @@ func (w *WorkflowV2) ProcessBatch(ctx context.Context, msg message.Batch) ([]mes
 
 			gObj := gabs.Wrap(pJSON)
 			previous := gObj.S(w.metaPath...).Data()
-			current := records[i].ToObjectV2()
+			current := records.ToObjectV2()
 			if previous != nil {
 				current["previous"] = previous
 			}
@@ -436,9 +378,9 @@ func (w *WorkflowV2) ProcessBatch(ctx context.Context, msg message.Batch) ([]mes
 		})
 	} else {
 		_ = msg.Iter(func(i int, p *message.Part) error {
-			if lf := len(records[i].failed); lf > 0 {
+			if lf := len(records.failed); lf > 0 {
 				failed := make([]string, 0, lf)
-				for k := range records[i].failed {
+				for k := range records.failed {
 					failed = append(failed, k)
 				}
 				sort.Strings(failed)
@@ -460,39 +402,4 @@ func (w *WorkflowV2) ProcessBatch(ctx context.Context, msg message.Batch) ([]mes
 // Close shuts down the processor and stops processing requests.
 func (w *WorkflowV2) Close(ctx context.Context) error {
 	return w.children.Close(ctx)
-}
-
-func branchSpecFieldsV2() []*service.ConfigField {
-	return []*service.ConfigField{
-		service.NewBloblangField(branchProcFieldReqMap).
-			Description("A [Bloblang mapping](/docs/guides/bloblang/about) that describes how to create a request payload suitable for the child processors of this branch. If left empty then the branch will begin with an exact copy of the origin message (including metadata).").
-			Examples(`root = {
-	"id": this.doc.id,
-	"content": this.doc.body.text
-}`,
-				`root = if this.type == "foo" {
-	this.foo.request
-} else {
-	deleted()
-}`).
-			Default(""),
-		service.NewStringListField(wflowProcFieldDependencyListV2).
-			Description("TODO"),
-		service.NewProcessorListField(branchProcFieldProcs).
-			Description("A list of processors to apply to mapped requests. When processing message batches the resulting batch must match the size and ordering of the input batch, therefore filtering, grouping should not be performed within these processors."),
-		service.NewBloblangField(branchProcFieldResMap).
-			Description("A [Bloblang mapping](/docs/guides/bloblang/about) that describes how the resulting messages from branched processing should be mapped back into the original payload. If left empty the origin message will remain unchanged (including metadata).").
-			Examples(`meta foo_code = meta("code")
-root.foo_result = this`,
-				`meta = meta()
-root.bar.body = this.body
-root.bar.id = this.user.id`,
-				`root.raw_result = content().string()`,
-				`root.enrichments.foo = if meta("request_failed") != null {
-  throw(meta("request_failed"))
-} else {
-  this
-}`).
-			Default(""),
-	}
 }
