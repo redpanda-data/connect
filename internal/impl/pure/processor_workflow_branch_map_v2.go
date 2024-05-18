@@ -19,8 +19,8 @@ type workflowBranchMapV2 struct {
 // map of resources, and a func to unlock the resources that were locked. If
 // any error occurs in locked each branch (the resource is missing, or the DAG
 // is malformed) then an error is returned instead.
-func (w *workflowBranchMapV2) LockV2() (dag [][]string, branches map[string]*Branch, dependencies map[string][]string, unlockFn func(), err error) {
-	return w.dag, w.Branches, w.dependencies, func() {}, nil
+func (w *workflowBranchMapV2) LockV2() (branches map[string]*Branch, dependencies map[string][]string, unlockFn func(), err error) {
+	return w.Branches, w.dependencies, func() {}, nil
 }
 
 func (w *workflowBranchMapV2) Close(ctx context.Context) error {

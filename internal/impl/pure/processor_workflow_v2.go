@@ -304,7 +304,7 @@ func (w *WorkflowV2) ProcessBatch(ctx context.Context, msg message.Batch) ([]mes
 	startedAt := time.Now()
 
 	// Prevent resourced branches from being updated mid-flow.
-	_, children, dependencies, unlock, err := w.children.LockV2()
+	children, dependencies, unlock, err := w.children.LockV2()
 	if err != nil {
 		w.mError.Incr(1)
 		w.log.Error("Failed to establish workflow: %v\n", err)
@@ -464,27 +464,6 @@ func (w *WorkflowV2) ProcessBatch(ctx context.Context, msg message.Batch) ([]mes
 // Close shuts down the processor and stops processing requests.
 func (w *WorkflowV2) Close(ctx context.Context) error {
 	return w.children.Close(ctx)
-}
-
-func isColumnAllZeros(matrix [][]string, columnIdx int) bool {
-	for i := 0; i < len(matrix); i++ {
-		if matrix[i][columnIdx] != "0" {
-			return false
-		}
-	}
-	return true
-}
-
-func zeroOutRow(matrix [][]string, rowIdx int) [][]string {
-	for i := 0; i < len(matrix); i++ {
-		matrix[rowIdx][i] = "0"
-	}
-	return matrix
-}
-
-func updateColumnDone(matrix [][]string, rowIdx int) [][]string {
-	matrix[rowIdx][rowIdx] = "1"
-	return matrix
 }
 
 func branchSpecFieldsV2() []*service.ConfigField {
