@@ -355,7 +355,6 @@ func (w *WorkflowV2) ProcessBatch(ctx context.Context, msg message.Batch) ([]mes
 	go func() {
 		mssge := <-done
 		var failed []branchMapError
-		//errors := make([]error, 1)
 		err := mssge.errors[0]
 		if err == nil {
 			failed, err = children[mssge.eid].overlayResult(msg, mssge.results[0])
