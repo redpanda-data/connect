@@ -14,7 +14,6 @@ import (
 
 	amqp "github.com/rabbitmq/amqp091-go"
 
-	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
@@ -467,8 +466,8 @@ func (a *amqp09Reader) Read(ctx context.Context) (*service.Message, service.AckF
 			return data.Ack(false)
 		}, nil
 	case <-ctx.Done():
+		return nil, nil, ctx.Err()
 	}
-	return nil, nil, component.ErrTimeout
 }
 
 func (a *amqp09Reader) Close(ctx context.Context) error {

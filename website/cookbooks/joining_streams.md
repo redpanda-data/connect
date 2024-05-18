@@ -15,8 +15,8 @@ Articles are received over the topic `articles` and look like this:
   "type": "article",
   "article": {
     "id": "123foo",
-    "title": "Dope article",
-    "content": "this is a totally dope article"
+    "title": "Good article",
+    "content": "this is a totally good article"
   },
   "user": {
     "id": "user1"
@@ -32,7 +32,7 @@ Comments can either be posted on an article or a parent comment, are received ov
   "comment": {
     "id": "456bar",
     "parent_id": "123foo",
-    "content": "this article sucks"
+    "content": "this article is bad"
   },
   "user": {
     "id": "user2"
@@ -48,11 +48,11 @@ Our goal is to end up with a single stream of comments, where information about 
   "comment": {
     "id": "456bar",
     "parent_id": "123foo",
-    "content": "this article sucks"
+    "content": "this article is bad"
   },
   "article": {
-    "title": "Dope article",
-    "content": "this is a totally dope article"
+    "title": "Good article",
+    "content": "this is a totally good article"
   },
   "user": {
     "id": "user2"

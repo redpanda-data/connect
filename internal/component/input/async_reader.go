@@ -9,9 +9,10 @@ import (
 
 	"github.com/cenkalti/backoff/v4"
 
+	"github.com/Jeffail/shutdown"
+
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	"github.com/benthosdev/benthos/v4/internal/shutdown"
 	"github.com/benthosdev/benthos/v4/internal/tracing"
 )
 
@@ -88,10 +89,10 @@ func (r *AsyncReader) loop() {
 		traceName = "input_" + r.typeStr
 	)
 
-	closeAtLeisureCtx, calDone := r.shutSig.CloseAtLeisureCtx(context.Background())
+	closeAtLeisureCtx, calDone := r.shutSig.SoftStopCtx(context.Background())
 	defer calDone()
 
-	closeNowCtx, cnDone := r.shutSig.CloseNowCtx(context.Background())
+	closeNowCtx, cnDone := r.shutSig.HardStopCtx(context.Background())
 	defer cnDone()
 
 	defer func() {
@@ -100,7 +101,7 @@ func (r *AsyncReader) loop() {
 		atomic.StoreInt32(&r.connected, 0)
 
 		close(r.transactions)
-		r.shutSig.ShutdownComplete()
+		r.shutSig.TriggerHasStopped()
 	}()
 
 	pendingAcks := sync.WaitGroup{}
@@ -112,11 +113,11 @@ func (r *AsyncReader) loop() {
 
 	initConnection := func() bool {
 		for {
-			if r.shutSig.ShouldCloseAtLeisure() {
+			if r.shutSig.IsSoftStopSignalled() {
 				return false
 			}
 			if err := r.reader.Connect(closeAtLeisureCtx); err != nil {
-				if r.shutSig.ShouldCloseAtLeisure() || errors.Is(err, component.ErrTypeClosed) {
+				if r.shutSig.IsSoftStopSignalled() || errors.Is(err, component.ErrTypeClosed) {
 					return false
 				}
 				r.mgr.Logger().Error("Failed to connect to %v: %v\n", r.typeStr, err)
@@ -170,12 +171,12 @@ func (r *AsyncReader) loop() {
 		}
 
 		// Close immediately if our reader is closed.
-		if r.shutSig.ShouldCloseAtLeisure() || errors.Is(err, component.ErrTypeClosed) {
+		if r.shutSig.IsSoftStopSignalled() || errors.Is(err, component.ErrTypeClosed) {
 			return
 		}
 
 		if err != nil || len(msg) == 0 {
-			if err != nil && !errors.Is(err, component.ErrTimeout) && !errors.Is(err, component.ErrNotConnected) {
+			if err != nil && !errors.Is(err, context.Canceled) && !errors.Is(err, component.ErrTimeout) && !errors.Is(err, component.ErrNotConnected) {
 				r.mgr.Logger().Error("Failed to read message: %v\n", err)
 			}
 
@@ -186,7 +187,7 @@ func (r *AsyncReader) loop() {
 			}
 			select {
 			case <-time.After(nextBoff):
-			case <-r.shutSig.CloseAtLeisureChan():
+			case <-r.shutSig.SoftStopChan():
 				return
 			}
 			continue
@@ -202,7 +203,7 @@ func (r *AsyncReader) loop() {
 		tracing.InitSpans(r.mgr.Tracer(), traceName, msg)
 		select {
 		case r.transactions <- message.NewTransaction(msg, resChan):
-		case <-r.shutSig.CloseAtLeisureChan():
+		case <-r.shutSig.SoftStopChan():
 			return
 		}
 
@@ -217,7 +218,7 @@ func (r *AsyncReader) loop() {
 			var res error
 			select {
 			case res = <-rChan:
-			case <-r.shutSig.CloseNowChan():
+			case <-r.shutSig.HardStopChan():
 				// Even if the pipeline is terminating we still want to attempt
 				// to propagate an acknowledgement from in-transit messages.
 				return
@@ -249,20 +250,20 @@ func (r *AsyncReader) Connected() bool {
 // once all pending messages are delivered and acknowledged. This call does
 // not block.
 func (r *AsyncReader) TriggerStopConsuming() {
-	r.shutSig.CloseAtLeisure()
+	r.shutSig.TriggerSoftStop()
 }
 
 // TriggerCloseNow triggers the shut down of this component but should not block
 // the calling goroutine.
 func (r *AsyncReader) TriggerCloseNow() {
-	r.shutSig.CloseNow()
+	r.shutSig.TriggerHardStop()
 }
 
 // WaitForClose is a blocking call to wait until the component has finished
 // shutting down and cleaning up resources.
 func (r *AsyncReader) WaitForClose(ctx context.Context) error {
 	select {
-	case <-r.shutSig.HasClosedChan():
+	case <-r.shutSig.HasStoppedChan():
 	case <-ctx.Done():
 		return ctx.Err()
 	}

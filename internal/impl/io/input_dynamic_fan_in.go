@@ -3,11 +3,12 @@ package io
 import (
 	"context"
 
+	"github.com/Jeffail/shutdown"
+
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/input"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	"github.com/benthosdev/benthos/v4/internal/shutdown"
 )
 
 // wrappedInput is a struct that wraps a input.Streamed with an identifying name.
@@ -75,7 +76,7 @@ func newDynamicFanInInput(
 // A nil input is safe and will simply remove the previous input under the
 // indentifier, if there was one.
 func (d *dynamicFanInInput) SetInput(ctx context.Context, ident string, input input.Streamed) error {
-	if d.shutSig.ShouldCloseAtLeisure() {
+	if d.shutSig.IsSoftStopSignalled() {
 		return component.ErrTypeClosed
 	}
 	resChan := make(chan error)
@@ -86,7 +87,7 @@ func (d *dynamicFanInInput) SetInput(ctx context.Context, ident string, input in
 		Input:   input,
 		ResChan: resChan,
 	}:
-	case <-d.shutSig.CloseAtLeisureChan():
+	case <-d.shutSig.SoftStopChan():
 		return component.ErrTypeClosed
 	}
 	return <-resChan
@@ -156,7 +157,7 @@ func (d *dynamicFanInInput) managerLoop() {
 			i.TriggerStopConsuming()
 		}
 
-		closeNowCtx, done := d.shutSig.CloseNowCtx(context.Background())
+		closeNowCtx, done := d.shutSig.HardStopCtx(context.Background())
 		for key := range d.inputs {
 			_ = d.removeInput(closeNowCtx, key)
 		}
@@ -167,7 +168,7 @@ func (d *dynamicFanInInput) managerLoop() {
 
 		done()
 		close(d.transactionChan)
-		d.shutSig.ShutdownComplete()
+		d.shutSig.TriggerHasStopped()
 	}()
 
 	for {
@@ -190,27 +191,27 @@ func (d *dynamicFanInInput) managerLoop() {
 			}
 			select {
 			case wrappedInput.ResChan <- err:
-			case <-d.shutSig.CloseAtLeisureChan():
+			case <-d.shutSig.SoftStopChan():
 				close(wrappedInput.ResChan)
 				return
 			}
-		case <-d.shutSig.CloseAtLeisureChan():
+		case <-d.shutSig.SoftStopChan():
 			return
 		}
 	}
 }
 
 func (d *dynamicFanInInput) TriggerStopConsuming() {
-	d.shutSig.CloseAtLeisure()
+	d.shutSig.TriggerSoftStop()
 }
 
 func (d *dynamicFanInInput) TriggerCloseNow() {
-	d.shutSig.CloseNow()
+	d.shutSig.TriggerHardStop()
 }
 
 func (d *dynamicFanInInput) WaitForClose(ctx context.Context) error {
 	select {
-	case <-d.shutSig.HasClosedChan():
+	case <-d.shutSig.HasStoppedChan():
 	case <-ctx.Done():
 		return ctx.Err()
 	}

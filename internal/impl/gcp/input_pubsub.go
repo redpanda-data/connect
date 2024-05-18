@@ -9,7 +9,6 @@ import (
 	"cloud.google.com/go/pubsub"
 	"google.golang.org/api/option"
 
-	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
@@ -250,7 +249,7 @@ func (c *gcpPubSubReader) Read(ctx context.Context) (*service.Message, service.A
 	select {
 	case gmsg, open = <-msgsChan:
 	case <-ctx.Done():
-		return nil, nil, component.ErrTimeout
+		return nil, nil, ctx.Err()
 	}
 	if !open {
 		return nil, nil, service.ErrNotConnected

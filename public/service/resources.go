@@ -57,6 +57,13 @@ func MockResourcesOptAddRateLimit(name string, fn func(context.Context) (time.Du
 	}
 }
 
+// EngineVersion returns the version stamp associated with the underlying
+// benthos engine. The version string is not guaranteed to match any particular
+// scheme.
+func (r *Resources) EngineVersion() string {
+	return r.mgr.EngineVersion()
+}
+
 // Label returns a label that identifies the component instantiation. This could
 // be an explicit label set in config, or is otherwise a generated label based
 // on the position of the component within a config.

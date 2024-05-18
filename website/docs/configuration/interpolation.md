@@ -30,10 +30,10 @@ Some Benthos fields also support [Bloblang][bloblang] function interpolations, w
 output:
   kafka:
     addresses: [ "TODO:6379" ]
-    topic: 'dope-${! json("topic") }'
+    topic: 'meow-${! json("topic") }'
 ```
 
-A message with the contents `{"topic":"foo","message":"hello world"}` would be routed to the Kafka topic `dope-foo`.
+A message with the contents `{"topic":"foo","message":"hello world"}` would be routed to the Kafka topic `meow-foo`.
 
 If a literal string is required that matches this pattern (`${!foo}`) then, similar to environment variables, you can escape it with double brackets. For example, the string `${{!foo}}` would be read as the literal `${!foo}`.
 

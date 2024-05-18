@@ -9,12 +9,13 @@ import (
 
 	"github.com/cenkalti/backoff/v4"
 
+	"github.com/Jeffail/shutdown"
+
 	"github.com/benthosdev/benthos/v4/internal/bloblang/mapping"
 	"github.com/benthosdev/benthos/v4/internal/component/input"
 	"github.com/benthosdev/benthos/v4/internal/component/interop"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	"github.com/benthosdev/benthos/v4/internal/shutdown"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
@@ -189,7 +190,7 @@ func (r *readUntilInput) loop() {
 		}
 
 		close(r.transactions)
-		r.shutSig.ShutdownComplete()
+		r.shutSig.TriggerHasStopped()
 	}()
 
 	// Prevents busy loop when an input never yields messages.
@@ -200,18 +201,18 @@ func (r *readUntilInput) loop() {
 
 	var open bool
 
-	closeCtx, done := r.shutSig.CloseAtLeisureCtx(context.Background())
+	closeCtx, done := r.shutSig.SoftStopCtx(context.Background())
 	defer done()
 
 runLoop:
-	for !r.shutSig.ShouldCloseAtLeisure() {
+	for !r.shutSig.IsSoftStopSignalled() {
 		var wrapped input.Streamed
 		wrappedP := r.wrappedInputLocked.Load()
 		if wrappedP == nil {
 			if r.restart {
 				select {
 				case <-time.After(restartBackoff.NextBackOff()):
-				case <-r.shutSig.CloseAtLeisureChan():
+				case <-r.shutSig.SoftStopChan():
 					return
 				}
 				var err error
@@ -238,7 +239,7 @@ runLoop:
 					continue runLoop
 				}
 				restartBackoff.Reset()
-			case <-r.shutSig.CloseAtLeisureChan():
+			case <-r.shutSig.SoftStopChan():
 				timeoutDone()
 				return
 			case <-timeoutChan:
@@ -260,7 +261,7 @@ runLoop:
 		if !check {
 			select {
 			case r.transactions <- tran:
-			case <-r.shutSig.CloseAtLeisureChan():
+			case <-r.shutSig.SoftStopChan():
 				return
 			}
 			continue
@@ -272,7 +273,7 @@ runLoop:
 		tmpRes := make(chan error)
 		select {
 		case r.transactions <- message.NewTransaction(tran.Payload, tmpRes):
-		case <-r.shutSig.CloseAtLeisureChan():
+		case <-r.shutSig.SoftStopChan():
 			return
 		}
 
@@ -283,13 +284,13 @@ runLoop:
 				return
 			}
 			streamEnds := res == nil
-			if err := tran.Ack(closeCtx, res); err != nil && r.shutSig.ShouldCloseAtLeisure() {
+			if err := tran.Ack(closeCtx, res); err != nil && r.shutSig.IsSoftStopSignalled() {
 				return
 			}
 			if streamEnds {
 				return
 			}
-		case <-r.shutSig.CloseAtLeisureChan():
+		case <-r.shutSig.SoftStopChan():
 			return
 		}
 	}
@@ -313,16 +314,16 @@ func (r *readUntilInput) Connected() bool {
 }
 
 func (r *readUntilInput) TriggerStopConsuming() {
-	r.shutSig.CloseAtLeisure()
+	r.shutSig.TriggerSoftStop()
 }
 
 func (r *readUntilInput) TriggerCloseNow() {
-	r.shutSig.CloseNow()
+	r.shutSig.TriggerHardStop()
 }
 
 func (r *readUntilInput) WaitForClose(ctx context.Context) error {
 	select {
-	case <-r.shutSig.HasClosedChan():
+	case <-r.shutSig.HasStoppedChan():
 	case <-ctx.Done():
 		return ctx.Err()
 	}

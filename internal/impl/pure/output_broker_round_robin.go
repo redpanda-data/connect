@@ -3,10 +3,11 @@ package pure
 import (
 	"context"
 
+	"github.com/Jeffail/shutdown"
+
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	"github.com/benthosdev/benthos/v4/internal/shutdown"
 )
 
 type roundRobinOutputBroker struct {
@@ -59,7 +60,7 @@ func (o *roundRobinOutputBroker) loop() {
 			close(c)
 		}
 		_ = closeAllOutputs(context.Background(), o.outputs)
-		o.shutSig.ShutdownComplete()
+		o.shutSig.TriggerHasStopped()
 	}()
 
 	i := 0
@@ -71,12 +72,12 @@ func (o *roundRobinOutputBroker) loop() {
 			if !open {
 				return
 			}
-		case <-o.shutSig.CloseNowChan():
+		case <-o.shutSig.HardStopChan():
 			return
 		}
 		select {
 		case o.outputTSChans[i] <- ts:
-		case <-o.shutSig.CloseNowChan():
+		case <-o.shutSig.HardStopChan():
 			return
 		}
 
@@ -88,12 +89,12 @@ func (o *roundRobinOutputBroker) loop() {
 }
 
 func (o *roundRobinOutputBroker) TriggerCloseNow() {
-	o.shutSig.CloseNow()
+	o.shutSig.TriggerHardStop()
 }
 
 func (o *roundRobinOutputBroker) WaitForClose(ctx context.Context) error {
 	select {
-	case <-o.shutSig.HasClosedChan():
+	case <-o.shutSig.HasStoppedChan():
 	case <-ctx.Done():
 		return ctx.Err()
 	}

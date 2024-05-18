@@ -4,11 +4,12 @@ import (
 	"context"
 	"sync"
 
+	"github.com/Jeffail/shutdown"
+
 	"github.com/benthosdev/benthos/v4/internal/batch"
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	"github.com/benthosdev/benthos/v4/internal/shutdown"
 )
 
 // Processor is a pipeline that supports both Consumer and Producer interfaces.
@@ -39,7 +40,7 @@ func NewProcessor(msgProcessors ...processor.V1) *Processor {
 
 // loop is the processing loop of this pipeline.
 func (p *Processor) loop() {
-	closeNowCtx, cnDone := p.shutSig.CloseNowCtx(context.Background())
+	closeNowCtx, cnDone := p.shutSig.HardStopCtx(context.Background())
 	defer cnDone()
 
 	defer func() {
@@ -51,18 +52,18 @@ func (p *Processor) loop() {
 		}
 
 		close(p.messagesOut)
-		p.shutSig.ShutdownComplete()
+		p.shutSig.TriggerHasStopped()
 	}()
 
 	var open bool
-	for !p.shutSig.ShouldCloseAtLeisure() {
+	for !p.shutSig.IsSoftStopSignalled() {
 		var tran message.Transaction
 		select {
 		case tran, open = <-p.messagesIn:
 			if !open {
 				return
 			}
-		case <-p.shutSig.CloseNowChan():
+		case <-p.shutSig.HardStopChan():
 			return
 		}
 
@@ -79,7 +80,7 @@ func (p *Processor) loop() {
 		if len(resultBatches) == 1 {
 			select {
 			case p.messagesOut <- message.NewTransactionFunc(resultBatches[0], tran.Ack):
-			case <-p.shutSig.CloseNowChan():
+			case <-p.shutSig.HardStopChan():
 				return
 			}
 			continue
@@ -123,7 +124,7 @@ func (p *Processor) loop() {
 				})
 				return nil
 			}):
-			case <-p.shutSig.CloseNowChan():
+			case <-p.shutSig.HardStopChan():
 				return
 			}
 		}
@@ -160,7 +161,7 @@ func (p *Processor) TransactionChan() <-chan message.Transaction {
 
 // TriggerCloseNow signals that the processor pipeline should close immediately.
 func (p *Processor) TriggerCloseNow() {
-	p.shutSig.CloseNow()
+	p.shutSig.TriggerHardStop()
 }
 
 // WaitForClose blocks until the component has closed down or the context is
@@ -168,7 +169,7 @@ func (p *Processor) TriggerCloseNow() {
 // and messages are flushed (and acked), or when CloseNowAsync is called.
 func (p *Processor) WaitForClose(ctx context.Context) error {
 	select {
-	case <-p.shutSig.HasClosedChan():
+	case <-p.shutSig.HasStoppedChan():
 	case <-ctx.Done():
 		return ctx.Err()
 	}

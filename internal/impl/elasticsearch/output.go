@@ -12,9 +12,6 @@ import (
 	"github.com/cenkalti/backoff/v4"
 	"github.com/olivere/elastic/v7"
 
-	"github.com/benthosdev/benthos/v4/internal/component"
-	"github.com/benthosdev/benthos/v4/internal/component/output"
-	"github.com/benthosdev/benthos/v4/internal/httpclient"
 	"github.com/benthosdev/benthos/v4/internal/impl/aws/config"
 	"github.com/benthosdev/benthos/v4/internal/impl/pure"
 	"github.com/benthosdev/benthos/v4/public/service"
@@ -190,12 +187,12 @@ func OutputSpec() *service.ConfigSpec {
 		Stable().
 		Categories("Services").
 		Summary(`Publishes messages into an Elasticsearch index. If the index does not exist then it is created with a dynamic mapping.`).
-		Description(output.Description(true, true, `
+		Description(`
 Both the `+"`id` and `index`"+` fields can be dynamically set using function interpolations described [here](/docs/configuration/interpolation#bloblang-queries). When sending batched messages these interpolations are performed per message part.
 
 ### AWS
 
-It's possible to enable AWS connectivity with this output using the `+"`aws`"+` fields. However, you may need to set `+"`sniff` and `healthcheck`"+` to false for connections to succeed.`)).
+It's possible to enable AWS connectivity with this output using the `+"`aws`"+` fields. However, you may need to set `+"`sniff` and `healthcheck`"+` to false for connections to succeed.`+service.OutputPerformanceDocs(true, true)).
 		Fields(
 			service.NewStringListField(esoFieldURLs).
 				Description("A list of URLs to connect to. If an item of the list contains commas it will be expanded into multiple URLs.").
@@ -237,7 +234,19 @@ It's possible to enable AWS connectivity with this output using the `+"`aws`"+` 
 		).
 		Fields(pure.CommonRetryBackOffFields(0, "1s", "5s", "30s")...).
 		Fields(
-			httpclient.BasicAuthField(),
+			service.NewObjectField(esoFieldAuth,
+				service.NewBoolField(esoFieldAuthEnabled).
+					Description("Whether to use basic authentication in requests.").
+					Default(false),
+				service.NewStringField(esoFieldAuthUsername).
+					Description("A username to authenticate as.").
+					Default(""),
+				service.NewStringField(esoFieldAuthPassword).
+					Description("A password to authenticate with.").
+					Default("").Secret(),
+			).Description("Allows you to specify basic authentication.").
+				Advanced().
+				Optional(),
 			service.NewBatchPolicyField(esoFieldBatching),
 			AWSField(),
 			service.NewBoolField(esoFieldGzipCompression).
@@ -319,7 +328,7 @@ type pendingBulkIndex struct {
 
 func (e *Output) WriteBatch(ctx context.Context, msg service.MessageBatch) error {
 	if e.client == nil {
-		return component.ErrNotConnected
+		return service.ErrNotConnected
 	}
 
 	boff := e.conf.backoffCtor()

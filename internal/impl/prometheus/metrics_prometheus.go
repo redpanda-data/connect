@@ -14,7 +14,6 @@ import (
 	"github.com/prometheus/client_golang/prometheus/push"
 	"github.com/prometheus/common/model"
 
-	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
@@ -189,7 +188,7 @@ type promCounterVec struct {
 	count int
 }
 
-func (p *promCounterVec) With(labelValues ...string) metrics.StatCounter {
+func (p *promCounterVec) With(labelValues ...string) service.MetricsExporterCounter {
 	return &promCounter{
 		ctr: p.ctr.WithLabelValues(labelValues...),
 	}
@@ -200,7 +199,7 @@ type promTimingVec struct {
 	count int
 }
 
-func (p *promTimingVec) With(labelValues ...string) metrics.StatTimer {
+func (p *promTimingVec) With(labelValues ...string) service.MetricsExporterTimer {
 	return &promTiming{
 		sum: p.sum.WithLabelValues(labelValues...),
 	}
@@ -211,7 +210,7 @@ type promTimingHistVec struct {
 	count int
 }
 
-func (p *promTimingHistVec) With(labelValues ...string) metrics.StatTimer {
+func (p *promTimingHistVec) With(labelValues ...string) service.MetricsExporterTimer {
 	return &promTiming{
 		asSeconds: true,
 		sum:       p.sum.WithLabelValues(labelValues...),
@@ -223,7 +222,7 @@ type promGaugeVec struct {
 	count int
 }
 
-func (p *promGaugeVec) With(labelValues ...string) metrics.StatGauge {
+func (p *promGaugeVec) With(labelValues ...string) service.MetricsExporterGauge {
 	return &promGauge{
 		ctr: p.ctr.WithLabelValues(labelValues...),
 	}
@@ -363,7 +362,7 @@ func (p *Metrics) NewCounterCtor(path string, labelNames ...string) service.Metr
 	if !model.IsValidMetricName(model.LabelValue(path)) {
 		p.log.Errorf("Ignoring metric '%v' due to invalid name", path)
 		return func(labelValues ...string) service.MetricsExporterCounter {
-			return metrics.DudStat{}
+			return noopStat{}
 		}
 	}
 
@@ -389,7 +388,7 @@ func (p *Metrics) NewCounterCtor(path string, labelNames ...string) service.Metr
 	if pv.count != len(labelNames) {
 		p.log.Errorf("Metrics label mismatch %v versus %v %v for name '%v', skipping metric", pv.count, len(labelNames), labelNames, path)
 		return func(labelValues ...string) service.MetricsExporterCounter {
-			return metrics.DudStat{}
+			return noopStat{}
 		}
 	}
 	return func(labelValues ...string) service.MetricsExporterCounter {
@@ -401,7 +400,7 @@ func (p *Metrics) NewTimerCtor(path string, labelNames ...string) service.Metric
 	if !model.IsValidMetricName(model.LabelValue(path)) {
 		p.log.Errorf("Ignoring metric '%v' due to invalid name", path)
 		return func(labelValues ...string) service.MetricsExporterTimer {
-			return metrics.DudStat{}
+			return noopStat{}
 		}
 	}
 
@@ -432,7 +431,7 @@ func (p *Metrics) NewTimerCtor(path string, labelNames ...string) service.Metric
 	if pv.count != len(labelNames) {
 		p.log.Errorf("Metrics label mismatch %v versus %v %v for name '%v', skipping metric", pv.count, len(labelNames), labelNames, path)
 		return func(labelValues ...string) service.MetricsExporterTimer {
-			return metrics.DudStat{}
+			return noopStat{}
 		}
 	}
 	return func(labelValues ...string) service.MetricsExporterTimer {
@@ -464,7 +463,7 @@ func (p *Metrics) getTimerHistVec(path string, labelNames ...string) service.Met
 	if pv.count != len(labelNames) {
 		p.log.Errorf("Metrics label mismatch %v versus %v %v for name '%v', skipping metric", pv.count, len(labelNames), labelNames, path)
 		return func(labelValues ...string) service.MetricsExporterTimer {
-			return metrics.DudStat{}
+			return noopStat{}
 		}
 	}
 	return func(labelValues ...string) service.MetricsExporterTimer {
@@ -476,7 +475,7 @@ func (p *Metrics) NewGaugeCtor(path string, labelNames ...string) service.Metric
 	if !model.IsValidMetricName(model.LabelValue(path)) {
 		p.log.Errorf("Ignoring metric '%v' due to invalid name", path)
 		return func(labelValues ...string) service.MetricsExporterGauge {
-			return &metrics.DudStat{}
+			return &noopStat{}
 		}
 	}
 
@@ -502,7 +501,7 @@ func (p *Metrics) NewGaugeCtor(path string, labelNames ...string) service.Metric
 	if pv.count != len(labelNames) {
 		p.log.Errorf("Metrics label mismatch %v versus %v %v for name '%v', skipping metric", pv.count, len(labelNames), labelNames, path)
 		return func(labelValues ...string) service.MetricsExporterGauge {
-			return metrics.DudStat{}
+			return noopStat{}
 		}
 	}
 	return func(labelValues ...string) service.MetricsExporterGauge {
@@ -526,3 +525,15 @@ func (p *Metrics) Close(context.Context) error {
 
 	return nil
 }
+
+//------------------------------------------------------------------------------
+
+type noopStat struct{}
+
+func (n noopStat) Incr(count int64)          {}
+func (n noopStat) Decr(count int64)          {}
+func (n noopStat) Timing(delta int64)        {}
+func (n noopStat) Set(value int64)           {}
+func (n noopStat) SetFloat64(value float64)  {}
+func (n noopStat) IncrFloat64(count float64) {}
+func (n noopStat) DecrFloat64(count float64) {}

@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/Jeffail/shutdown"
+
 	"github.com/benthosdev/benthos/v4/internal/batch/policy"
 	"github.com/benthosdev/benthos/v4/internal/batch/policy/batchconfig"
 	"github.com/benthosdev/benthos/v4/internal/bundle"
@@ -13,7 +15,6 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	"github.com/benthosdev/benthos/v4/internal/shutdown"
 	"github.com/benthosdev/benthos/v4/internal/transaction"
 )
 
@@ -61,7 +62,7 @@ func New(batcher *policy.Batcher, child output.Streamed, mgr bundle.NewManagemen
 //------------------------------------------------------------------------------
 
 func (m *Impl) loop() {
-	closeNowCtx, cnDone := m.shutSig.CloseNowCtx(context.Background())
+	closeNowCtx, cnDone := m.shutSig.HardStopCtx(context.Background())
 	defer cnDone()
 
 	defer func() {
@@ -72,7 +73,7 @@ func (m *Impl) loop() {
 
 		_ = m.batcher.Close(context.Background())
 
-		m.shutSig.ShutdownComplete()
+		m.shutSig.TriggerHasStopped()
 	}()
 
 	var nextTimedBatchChan <-chan time.Time
@@ -81,7 +82,7 @@ func (m *Impl) loop() {
 	}
 
 	var pendingTrans []*transaction.Tracked
-	for !m.shutSig.ShouldCloseAtLeisure() {
+	for !m.shutSig.IsSoftStopSignalled() {
 		if nextTimedBatchChan == nil {
 			if tNext := m.batcher.UntilNext(); tNext > 0 {
 				nextTimedBatchChan = time.After(tNext)
@@ -100,7 +101,7 @@ func (m *Impl) loop() {
 				if nextTimedBatchChan != nil {
 					select {
 					case <-nextTimedBatchChan:
-					case <-m.shutSig.CloseAtLeisureChan():
+					case <-m.shutSig.SoftStopChan():
 					}
 				}
 			} else {
@@ -116,7 +117,7 @@ func (m *Impl) loop() {
 		case <-nextTimedBatchChan:
 			flushBatch = true
 			nextTimedBatchChan = nil
-		case <-m.shutSig.CloseAtLeisureChan():
+		case <-m.shutSig.SoftStopChan():
 			flushBatch = true
 		}
 
@@ -132,19 +133,19 @@ func (m *Impl) loop() {
 		resChan := make(chan error)
 		select {
 		case m.messagesOut <- message.NewTransaction(sendMsg, resChan):
-		case <-m.shutSig.CloseAtLeisureChan():
+		case <-m.shutSig.SoftStopChan():
 			return
 		}
 
 		go func(rChan chan error, upstreamTrans []*transaction.Tracked) {
 			select {
-			case <-m.shutSig.CloseAtLeisureChan():
+			case <-m.shutSig.SoftStopChan():
 				return
 			case res, open := <-rChan:
 				if !open {
 					return
 				}
-				closeLeisureCtx, done := m.shutSig.CloseAtLeisureCtx(context.Background())
+				closeLeisureCtx, done := m.shutSig.SoftStopCtx(context.Background())
 				for _, t := range upstreamTrans {
 					if err := t.Ack(closeLeisureCtx, res); err != nil {
 						done()
@@ -179,13 +180,13 @@ func (m *Impl) Consume(msgs <-chan message.Transaction) error {
 
 // TriggerCloseNow shuts down the Batcher and stops processing messages.
 func (m *Impl) TriggerCloseNow() {
-	m.shutSig.CloseNow()
+	m.shutSig.TriggerHardStop()
 }
 
 // WaitForClose blocks until the Batcher output has closed down.
 func (m *Impl) WaitForClose(ctx context.Context) error {
 	select {
-	case <-m.shutSig.HasClosedChan():
+	case <-m.shutSig.HasStoppedChan():
 	case <-ctx.Done():
 		return ctx.Err()
 	}

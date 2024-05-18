@@ -61,6 +61,10 @@ type Type struct {
 	// stream should be prefixed with the stream name.
 	namespaceStreamEndpoints bool
 
+	// We allow this version string to be dynamic, as plugin authors might want
+	// their own custom versioning scheme.
+	engineVersion string
+
 	// Keeps track of the full configuration path of the component that holds
 	// the manager. This value is used only in observability and therefore it
 	// is acceptable that this does not fully represent reality.
@@ -106,6 +110,14 @@ func OptSetAPIReg(r APIReg) OptFunc {
 func OptSetStreamHTTPNamespacing(enabled bool) OptFunc {
 	return func(t *Type) {
 		t.namespaceStreamEndpoints = enabled
+	}
+}
+
+// OptSetEngineVersion sets the engine version reported to components. This
+// can be any scheme, or no scheme at all.
+func OptSetEngineVersion(v string) OptFunc {
+	return func(t *Type) {
+		t.engineVersion = v
 	}
 }
 
@@ -280,6 +292,12 @@ func New(conf ResourceConfig, opts ...OptFunc) (*Type, error) {
 	}
 
 	return t, nil
+}
+
+// EngineVersion returns the stored version string for the engine. This version
+// string could be any format.
+func (t *Type) EngineVersion() string {
+	return t.engineVersion
 }
 
 //------------------------------------------------------------------------------

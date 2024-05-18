@@ -5,10 +5,11 @@ import (
 	"errors"
 	"sync"
 
+	"github.com/Jeffail/shutdown"
+
 	"github.com/benthosdev/benthos/v4/internal/batch"
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	"github.com/benthosdev/benthos/v4/internal/shutdown"
 )
 
 type notBatchedOutput struct {
@@ -59,7 +60,7 @@ func (n *notBatchedOutput) breakMessageOut(msg message.Batch) error {
 
 		select {
 		case n.outChan <- message.NewTransaction(tmpMsg, tmpResChan):
-		case <-n.shutSig.CloseNowChan():
+		case <-n.shutSig.HardStopChan():
 			if index == 0 {
 				return component.ErrTypeClosed
 			}
@@ -74,7 +75,7 @@ func (n *notBatchedOutput) breakMessageOut(msg message.Batch) error {
 			select {
 			case res := <-tmpResChan:
 				err = res
-			case <-n.shutSig.CloseNowChan():
+			case <-n.shutSig.HardStopChan():
 				err = component.ErrTypeClosed
 			}
 			addBatchErr(index, err)
@@ -92,14 +93,14 @@ func (n *notBatchedOutput) breakMessageOut(msg message.Batch) error {
 }
 
 func (n *notBatchedOutput) loop() {
-	ctx, done := n.shutSig.CloseNowCtx(context.Background())
+	ctx, done := n.shutSig.HardStopCtx(context.Background())
 	defer done()
 
 	defer func() {
 		close(n.outChan)
 		n.out.TriggerCloseNow()
 		_ = n.out.WaitForClose(ctx)
-		n.shutSig.ShutdownComplete()
+		n.shutSig.TriggerHasStopped()
 	}()
 
 	for {
@@ -110,14 +111,14 @@ func (n *notBatchedOutput) loop() {
 			if !open {
 				return
 			}
-		case <-n.shutSig.CloseAtLeisureChan():
+		case <-n.shutSig.SoftStopChan():
 			return
 		}
 
 		if tran.Payload.Len() == 1 {
 			select {
 			case n.outChan <- tran:
-			case <-n.shutSig.CloseNowChan():
+			case <-n.shutSig.HardStopChan():
 				return
 			}
 		} else {
@@ -152,13 +153,13 @@ func (n *notBatchedOutput) Connected() bool {
 }
 
 func (n *notBatchedOutput) TriggerCloseNow() {
-	n.shutSig.CloseNow()
+	n.shutSig.TriggerHardStop()
 }
 
 // WaitForClose blocks until the File output has closed down.
 func (n *notBatchedOutput) WaitForClose(ctx context.Context) error {
 	select {
-	case <-n.shutSig.HasClosedChan():
+	case <-n.shutSig.HasStoppedChan():
 	case <-ctx.Done():
 		return ctx.Err()
 	}

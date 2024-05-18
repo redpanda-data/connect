@@ -6,11 +6,12 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"github.com/Jeffail/shutdown"
+
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	"github.com/benthosdev/benthos/v4/internal/shutdown"
 )
 
 // Pool is a pool of pipelines. Each pipeline reads from a shared transaction
@@ -55,7 +56,7 @@ func (p *Pool) loop() {
 	// shutdown mechanism. This puts trust in individual processor pipelines, if
 	// that's not realistic we can consider adding a close now to the
 	// TriggerCloseNow method.
-	closeNowCtx, cnDone := p.shutSig.CloseNowCtx(context.Background())
+	closeNowCtx, cnDone := p.shutSig.HardStopCtx(context.Background())
 	defer cnDone()
 
 	defer func() {
@@ -66,7 +67,7 @@ func (p *Pool) loop() {
 		}
 
 		close(p.messagesOut)
-		p.shutSig.ShutdownComplete()
+		p.shutSig.TriggerHasStopped()
 	}()
 
 	internalMessages := make(chan message.Transaction)
@@ -96,12 +97,12 @@ func (p *Pool) loop() {
 					if !open {
 						return
 					}
-				case <-p.shutSig.CloseNowChan():
+				case <-p.shutSig.HardStopChan():
 					return
 				}
 				select {
 				case internalMessages <- t:
-				case <-p.shutSig.CloseNowChan():
+				case <-p.shutSig.HardStopChan():
 					return
 				}
 			}
@@ -116,10 +117,10 @@ func (p *Pool) loop() {
 			}
 			select {
 			case p.messagesOut <- t:
-			case <-p.shutSig.CloseNowChan():
+			case <-p.shutSig.HardStopChan():
 				return
 			}
-		case <-p.shutSig.CloseNowChan():
+		case <-p.shutSig.HardStopChan():
 			return
 		}
 	}
@@ -149,7 +150,7 @@ func (p *Pool) TriggerCloseNow() {
 	for _, w := range p.workers {
 		w.TriggerCloseNow()
 	}
-	p.shutSig.CloseNow()
+	p.shutSig.TriggerHardStop()
 }
 
 // WaitForClose blocks until the component has closed down or the context is
@@ -158,7 +159,7 @@ func (p *Pool) TriggerCloseNow() {
 // called.
 func (p *Pool) WaitForClose(ctx context.Context) error {
 	select {
-	case <-p.shutSig.HasClosedChan():
+	case <-p.shutSig.HasStoppedChan():
 	case <-ctx.Done():
 		return ctx.Err()
 	}

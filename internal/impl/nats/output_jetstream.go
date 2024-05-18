@@ -7,8 +7,8 @@ import (
 
 	"github.com/nats-io/nats.go"
 
-	"github.com/benthosdev/benthos/v4/internal/component/output/span"
-	"github.com/benthosdev/benthos/v4/internal/shutdown"
+	"github.com/Jeffail/shutdown"
+
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
@@ -52,7 +52,7 @@ func init() {
 			if err != nil {
 				return nil, 0, err
 			}
-			spanOutput, err := span.NewOutput("nats_jetstream", conf, w, mgr)
+			spanOutput, err := conf.WrapOutputExtractTracingSpanMapping("nats_jetstream", w)
 			return spanOutput, maxInFlight, err
 		})
 	if err != nil {
@@ -194,10 +194,10 @@ func (j *jetStreamOutput) Write(ctx context.Context, msg *service.Message) error
 func (j *jetStreamOutput) Close(ctx context.Context) error {
 	go func() {
 		j.disconnect()
-		j.shutSig.ShutdownComplete()
+		j.shutSig.TriggerHasStopped()
 	}()
 	select {
-	case <-j.shutSig.HasClosedChan():
+	case <-j.shutSig.HasStoppedChan():
 	case <-ctx.Done():
 		return ctx.Err()
 	}

@@ -2,19 +2,19 @@ package twitter
 
 import (
 	_ "embed"
+
+	"github.com/benthosdev/benthos/v4/public/service"
+
 	// bloblang functions are registered in init functions under this package
 	// so ensure they are loaded first
-	_ "github.com/benthosdev/benthos/v4/internal/impl/pure"
-
-	"github.com/benthosdev/benthos/v4/internal/bundle"
-	"github.com/benthosdev/benthos/v4/internal/template"
+	_ "github.com/benthosdev/benthos/v4/public/components/pure"
 )
 
 //go:embed template_search_input.yaml
 var searchInputTemplate []byte
 
 func init() {
-	if err := template.RegisterTemplateYAML(bundle.GlobalEnvironment, searchInputTemplate); err != nil {
+	if err := service.RegisterTemplateYAML(string(searchInputTemplate)); err != nil {
 		panic(err)
 	}
 }

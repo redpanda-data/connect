@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -18,7 +17,6 @@ import (
 
 	"github.com/benthosdev/benthos/v4/internal/codec"
 	"github.com/benthosdev/benthos/v4/internal/codec/interop"
-	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/scanner"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
@@ -471,10 +469,6 @@ func (a *azureBlobStorage) ReadBatch(ctx context.Context) (msg service.MessageBa
 		} else if serr, ok := err.(*azcore.ResponseError); ok && serr.StatusCode == http.StatusForbidden {
 			a.log.Warnf("error downloading blob: %v", err)
 			err = service.ErrEndOfInput
-		} else if errors.Is(err, context.Canceled) ||
-			errors.Is(err, context.DeadlineExceeded) ||
-			(err != nil && strings.HasSuffix(err.Error(), "context canceled")) {
-			err = component.ErrTimeout
 		}
 	}()
 

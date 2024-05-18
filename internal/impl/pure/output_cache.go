@@ -26,7 +26,7 @@ func CacheOutputSpec() *service.ConfigSpec {
 		Stable().
 		Categories("Services").
 		Summary(`Stores each message in a [cache](/docs/components/caches/about).`).
-		Description(output.Description(true, false, `Caches are configured as [resources](/docs/components/caches/about), where there's a wide variety to choose from.
+		Description(`Caches are configured as [resources](/docs/components/caches/about), where there's a wide variety to choose from.
 
 The `+"`target`"+` field must reference a configured cache resource label like follows:
 
@@ -44,7 +44,7 @@ cache_resources:
       default_ttl: 60s
 `+"```"+`
 
-In order to create a unique `+"`key`"+` value per item you should use function interpolations described [here](/docs/configuration/interpolation#bloblang-queries).`)).
+In order to create a unique `+"`key`"+` value per item you should use function interpolations described [here](/docs/configuration/interpolation#bloblang-queries).`+service.OutputPerformanceDocs(true, false)).
 		Fields(
 			service.NewStringField(coFieldTarget).
 				Description("The target cache to store messages in."),

@@ -9,7 +9,6 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 
-	"github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/impl/pure"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
@@ -25,13 +24,13 @@ func outputSpec() *service.ConfigSpec {
 		Version("3.43.0").
 		Categories("Services").
 		Summary("Inserts items into a MongoDB collection.").
-		Description(output.Description(true, true, "")).
+		Description(service.OutputPerformanceDocs(true, true)).
 		Fields(clientFields()...).
 		Fields(
 			service.NewStringField(moFieldCollection).
 				Description("The name of the target collection."),
-			service.NewInternalField(outputOperationDocs(OperationUpdateOne)),
-			service.NewInternalField(writeConcernDocs()),
+			outputOperationDocs(OperationUpdateOne),
+			writeConcernDocs(),
 		).
 		Fields(writeMapsFields()...).
 		Fields(

@@ -7,7 +7,6 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/runtime"
 	"github.com/Azure/azure-sdk-for-go/sdk/data/aztables"
 
-	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
@@ -151,7 +150,7 @@ func (a *azureTableStorage) ReadBatch(ctx context.Context) (batch service.Messag
 			if ctx.Err() == nil {
 				a.log.Warnf("error fetching next page: %v", err)
 			}
-			return nil, nil, component.ErrTypeClosed
+			return nil, nil, service.ErrEndOfInput
 		}
 		if len(resp.Entities) == 0 {
 			continue
@@ -168,7 +167,7 @@ func (a *azureTableStorage) ReadBatch(ctx context.Context) (batch service.Messag
 			return nil
 		}, err
 	}
-	return nil, nil, component.ErrTypeClosed
+	return nil, nil, service.ErrEndOfInput
 }
 
 // Close is called when the pipeline ends

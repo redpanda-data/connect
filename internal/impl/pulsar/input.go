@@ -10,7 +10,6 @@ import (
 
 	"github.com/apache/pulsar-client-go/pulsar"
 
-	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
@@ -248,18 +247,16 @@ func (p *pulsarReader) Read(ctx context.Context) (*service.Message, service.AckF
 	p.m.RUnlock()
 
 	if r == nil {
-		return nil, nil, component.ErrNotConnected
+		return nil, nil, service.ErrNotConnected
 	}
 
 	// Receive next message
 	pulMsg, err := r.Receive(ctx)
 	if err != nil {
-		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
-			err = component.ErrTimeout
-		} else {
+		if ctx.Err() == nil {
 			p.log.Errorf("Lost connection due to: %v\n", err)
 			_ = p.disconnect(ctx)
-			err = component.ErrNotConnected
+			err = service.ErrNotConnected
 		}
 		return nil, nil, err
 	}

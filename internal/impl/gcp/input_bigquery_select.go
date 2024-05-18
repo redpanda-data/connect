@@ -9,7 +9,8 @@ import (
 	"cloud.google.com/go/bigquery"
 	"google.golang.org/api/iterator"
 
-	"github.com/benthosdev/benthos/v4/internal/shutdown"
+	"github.com/Jeffail/shutdown"
+
 	"github.com/benthosdev/benthos/v4/public/bloblang"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
@@ -154,7 +155,7 @@ func newBigQuerySelectInput(inConf *service.ParsedConfig, logger *service.Logger
 }
 
 func (inp *bigQuerySelectInput) Connect(ctx context.Context) error {
-	jobctx, _ := inp.shutdownSig.CloseAtLeisureCtx(context.Background())
+	jobctx, _ := inp.shutdownSig.SoftStopCtx(context.Background())
 
 	if inp.client == nil {
 		client, err := bigquery.NewClient(jobctx, inp.config.project)
@@ -225,7 +226,7 @@ func (inp *bigQuerySelectInput) Read(ctx context.Context) (*service.Message, ser
 }
 
 func (inp *bigQuerySelectInput) Close(ctx context.Context) error {
-	inp.shutdownSig.CloseNow()
+	inp.shutdownSig.TriggerHardStop()
 
 	if inp.client != nil {
 		return inp.client.Close()

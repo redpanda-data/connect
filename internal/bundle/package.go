@@ -43,6 +43,8 @@ type NewManagement interface {
 	IntoPath(segments ...string) NewManagement
 	WithAddedMetrics(m metrics.Type) NewManagement
 
+	EngineVersion() string
+
 	Path() []string
 	Label() string
 

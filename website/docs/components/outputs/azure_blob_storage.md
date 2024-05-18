@@ -83,9 +83,7 @@ If the `storage_connection_string` does not contain the `AccountName` parameter,
 
 ## Performance
 
-This output benefits from sending multiple messages in flight in parallel for
-improved performance. You can tune the max number of in flight messages (or
-message batches) with the field `max_in_flight`.
+This output benefits from sending multiple messages in flight in parallel for improved performance. You can tune the max number of in flight messages (or message batches) with the field `max_in_flight`.
 
 ## Fields
 

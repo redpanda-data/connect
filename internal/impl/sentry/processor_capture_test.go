@@ -58,7 +58,7 @@ func TestCaptureProcessor(t *testing.T) {
 	require.Equal(t, "testing", event.Environment, "event has wrong environment")
 	require.Equal(t, "benthos-sentry", event.Release, "event has wrong release")
 	require.Equal(t, map[string]any{"country": "us"}, event.Contexts["profile"])
-	require.Equal(t, map[string]string{"app": "test 0.1.0", "pipeline": "test-pipeline", "benthos": "unknown"}, event.Tags)
+	require.Equal(t, map[string]string{"app": "test 0.1.0", "pipeline": "test-pipeline", "benthos": "mock"}, event.Tags)
 }
 
 func TestCaptureProcessor_Sync(t *testing.T) {

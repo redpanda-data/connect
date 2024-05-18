@@ -13,7 +13,6 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component/interop"
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
-	"github.com/benthosdev/benthos/v4/internal/filepath"
 	"github.com/benthosdev/benthos/v4/internal/filepath/ifs"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
@@ -187,7 +186,7 @@ func addGrokPatternsFromPath(fs ifs.FS, path string, patterns map[string]string)
 		path += "/*"
 	}
 
-	files, err := filepath.Globs(fs, []string{path})
+	files, err := service.Globs(fs, path)
 	if err != nil {
 		return err
 	}

@@ -8,23 +8,23 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"net/http"
 	"net/url"
 
-	"github.com/benthosdev/benthos/v4/internal/httpclient"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
 type schemaRegistryClient struct {
 	client                *http.Client
 	schemaRegistryBaseURL *url.URL
-	requestSigner         httpclient.RequestSigner
+	requestSigner         func(f fs.FS, req *http.Request) error
 	mgr                   *service.Resources
 }
 
 func newSchemaRegistryClient(
 	urlStr string,
-	reqSigner httpclient.RequestSigner,
+	reqSigner func(f fs.FS, req *http.Request) error,
 	tlsConf *tls.Config,
 	mgr *service.Resources,
 ) (*schemaRegistryClient, error) {

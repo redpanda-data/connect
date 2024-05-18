@@ -23,6 +23,7 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/config"
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/filepath/ifs"
+	"github.com/benthosdev/benthos/v4/internal/template"
 	"github.com/benthosdev/benthos/v4/public/bloblang"
 )
 
@@ -533,6 +534,13 @@ func (e *Environment) WalkScanners(fn func(name string, config *ConfigView)) {
 			component: v,
 		})
 	}
+}
+
+// RegisterTemplateYAML attempts to register a template, defined as a YAML
+// document, to the environment such that it may be used similarly to any other
+// component plugin.
+func (e *Environment) RegisterTemplateYAML(yamlStr string) error {
+	return template.RegisterTemplateYAML(e.internal, []byte(yamlStr))
 }
 
 // XFormatConfigJSON returns a byte slice of the Benthos configuration spec

@@ -8,7 +8,8 @@ import (
 
 	"github.com/Masterminds/squirrel"
 
-	"github.com/benthosdev/benthos/v4/internal/shutdown"
+	"github.com/Jeffail/shutdown"
+
 	"github.com/benthosdev/benthos/v4/public/bloblang"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
@@ -223,7 +224,7 @@ func (s *sqlSelectInput) Connect(ctx context.Context) (err error) {
 	s.rows = rows
 
 	go func() {
-		<-s.shutSig.CloseNowChan()
+		<-s.shutSig.HardStopChan()
 
 		s.dbMut.Lock()
 		if s.rows != nil {
@@ -235,7 +236,7 @@ func (s *sqlSelectInput) Connect(ctx context.Context) (err error) {
 		}
 		s.dbMut.Unlock()
 
-		s.shutSig.ShutdownComplete()
+		s.shutSig.TriggerHasStopped()
 	}()
 	return nil
 }
@@ -279,7 +280,7 @@ func (s *sqlSelectInput) Read(ctx context.Context) (*service.Message, service.Ac
 }
 
 func (s *sqlSelectInput) Close(ctx context.Context) error {
-	s.shutSig.CloseNow()
+	s.shutSig.TriggerHardStop()
 	s.dbMut.Lock()
 	isNil := s.db == nil
 	s.dbMut.Unlock()
@@ -287,7 +288,7 @@ func (s *sqlSelectInput) Close(ctx context.Context) error {
 		return nil
 	}
 	select {
-	case <-s.shutSig.HasClosedChan():
+	case <-s.shutSig.HasStoppedChan():
 	case <-ctx.Done():
 		return ctx.Err()
 	}

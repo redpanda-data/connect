@@ -5,8 +5,6 @@ import (
 	"sync/atomic"
 
 	"github.com/bwmarrin/discordgo"
-
-	"github.com/benthosdev/benthos/v4/internal/cli"
 )
 
 type refCountedSession struct {
@@ -37,7 +35,7 @@ func (r *refCountedSessions) done(botToken string) {
 	delete(r.sessions, botToken)
 }
 
-func (r *refCountedSessions) Get(botToken string) (sess *discordgo.Session, done func(), err error) {
+func (r *refCountedSessions) Get(botToken, benthosVersion string) (sess *discordgo.Session, done func(), err error) {
 	done = func() {
 		r.done(botToken)
 	}
@@ -55,7 +53,7 @@ func (r *refCountedSessions) Get(botToken string) (sess *discordgo.Session, done
 	if sess, err = discordgo.New("Bot " + botToken); err != nil {
 		return
 	}
-	sess.UserAgent = "Benthos " + cli.Version
+	sess.UserAgent = "Benthos " + benthosVersion
 	sess.Identify.Intents |= discordgo.IntentMessageContent
 	if err = sess.Open(); err != nil {
 		return
@@ -72,6 +70,6 @@ var globalSessions = &refCountedSessions{
 	sessions: map[string]*refCountedSession{},
 }
 
-func getGlobalSession(botToken string) (*discordgo.Session, func(), error) {
-	return globalSessions.Get(botToken)
+func getGlobalSession(botToken, benthosVersion string) (*discordgo.Session, func(), error) {
+	return globalSessions.Get(botToken, benthosVersion)
 }

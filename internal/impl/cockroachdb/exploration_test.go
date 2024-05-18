@@ -15,9 +15,9 @@ import (
 
 	_ "github.com/lib/pq"
 
-	"github.com/benthosdev/benthos/v4/internal/integration"
 	_ "github.com/benthosdev/benthos/v4/public/components/io"
 	_ "github.com/benthosdev/benthos/v4/public/components/pure"
+	"github.com/benthosdev/benthos/v4/public/service/integration"
 )
 
 func TestIntegrationExploration(t *testing.T) {

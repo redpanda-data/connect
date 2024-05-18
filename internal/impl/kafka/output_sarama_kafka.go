@@ -14,9 +14,7 @@ import (
 	"github.com/cenkalti/backoff/v4"
 	"golang.org/x/sync/syncmap"
 
-	"github.com/benthosdev/benthos/v4/internal/component/output"
-	"github.com/benthosdev/benthos/v4/internal/component/output/span"
-	"github.com/benthosdev/benthos/v4/internal/value"
+	"github.com/benthosdev/benthos/v4/public/bloblang"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
@@ -53,7 +51,7 @@ func OSKConfigSpec() *service.ConfigSpec {
 		Stable().
 		Categories("Services").
 		Summary(`The kafka output type writes a batch of messages to Kafka brokers and waits for acknowledgement before propagating it back to the input.`).
-		Description(output.Description(true, true, `
+		Description(`
 The config field `+"`ack_replicas`"+` determines whether we wait for acknowledgement from all replicas or just a single broker.
 
 Both the `+"`key` and `topic`"+` fields can be dynamically set using function interpolations described [here](/docs/configuration/interpolation#bloblang-queries).
@@ -74,7 +72,7 @@ If you're seeing issues writing to or reading from Kafka with this component the
 
 - I'm seeing logs that report `+"`Failed to connect to kafka: kafka: client has run out of available brokers to talk to (Is your cluster reachable?)`"+`, but the brokers are definitely reachable.
 
-Unfortunately this error message will appear for a wide range of connection problems even when the broker endpoint can be reached. Double check your authentication configuration and also ensure that you have [enabled TLS](#tlsenabled) if applicable.`)).
+Unfortunately this error message will appear for a wide range of connection problems even when the broker endpoint can be reached. Double check your authentication configuration and also ensure that you have [enabled TLS](#tlsenabled) if applicable.`+service.OutputPerformanceDocs(true, true)).
 		Fields(
 			service.NewStringListField(oskFieldAddresses).
 				Description("A list of broker addresses to connect to. If an item of the list contains commas it will be expanded into multiple addresses.").
@@ -126,7 +124,7 @@ Unfortunately this error message will appear for a wide range of connection prob
 				Optional(),
 			service.NewMetadataExcludeFilterField(oskFieldMetadata).
 				Description("Specify criteria for which metadata values are sent with messages as headers."),
-			span.InjectTracingSpanMappingDocs(),
+			service.NewInjectTracingSpanMappingField(),
 			service.NewOutputMaxInFlightField(),
 			service.NewBoolField(oskFieldIdempotentWrite).
 				Description("Enable the idempotent write producer option. This requires the `IDEMPOTENT_WRITE` permission on `CLUSTER` and can be disabled if this permission is not available.").
@@ -170,7 +168,7 @@ func init() {
 			return
 		}
 
-		o, err = span.NewBatchOutput("kafka", conf, o, mgr)
+		o, err = conf.WrapBatchOutputExtractTracingSpanMapping("kafka", o)
 		return
 	})
 	if err != nil {
@@ -347,7 +345,7 @@ func (k *kafkaWriter) buildSystemHeaders(part *service.Message) []sarama.RecordH
 		_ = k.metaFilter.Walk(part, func(k, v string) error {
 			out = append(out, sarama.RecordHeader{
 				Key:   []byte(k),
-				Value: []byte(value.IToString(v)),
+				Value: []byte(bloblang.ValueToString(v)),
 			})
 			return nil
 		})

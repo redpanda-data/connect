@@ -12,6 +12,7 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"io/fs"
 	"net/http"
 	"net/url"
 	"path"
@@ -20,13 +21,11 @@ import (
 	"time"
 
 	"github.com/gofrs/uuid"
-	"github.com/golang-jwt/jwt/v4"
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/snowflakedb/gosnowflake"
 	"github.com/youmark/pkcs8"
 	"golang.org/x/crypto/ssh"
 
-	"github.com/benthosdev/benthos/v4/internal/component/output"
-	"github.com/benthosdev/benthos/v4/internal/filepath/ifs"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
@@ -58,7 +57,7 @@ func snowflakePutOutputConfig() *service.ConfigSpec {
 		Categories("Services").
 		Version("4.0.0").
 		Summary("Sends messages to Snowflake stages and, optionally, calls Snowpipe to load this data into one or more tables.").
-		Description(output.Description(true, true, `
+		Description(`
 In order to use a different stage and / or Snowpipe for each message, you can use function interpolations as described
 [here](/docs/configuration/interpolation#bloblang-queries). When using batching, messages are grouped by the calculated
 stage and Snowpipe and are streamed to individual files in their corresponding stage and, optionally, a Snowpipe
@@ -181,7 +180,7 @@ A silent failure can occur due to [this issue](https://github.com/snowflakedb/go
 underlying [`+"`gosnowflake`"+` driver](https://github.com/snowflakedb/gosnowflake) doesn't return an error and doesn't
 log a failure if it can't figure out the current username. One way to trigger this behaviour is by running Benthos in a
 Docker container with a non-existent user ID (such as `+"`--user 1000:1000`"+`).
-`)).
+`+service.OutputPerformanceDocs(true, true)).
 		Field(service.NewStringField("account").Description(`Account name, which is the same as the Account Identifier
 as described [here](https://docs.snowflake.com/en/user-guide/admin-account-identifier.html#where-are-account-identifiers-used).
 However, when using an [Account Locator](https://docs.snowflake.com/en/user-guide/admin-account-identifier.html#using-an-account-locator-as-an-identifier),
@@ -409,8 +408,8 @@ func init() {
 
 // getPrivateKey reads and parses the private key
 // Inspired from https://github.com/chanzuckerberg/terraform-provider-snowflake/blob/c07d5820bea7ac3d8a5037b0486c405fdf58420e/pkg/provider/provider.go#L367
-func getPrivateKey(f ifs.FS, path, passphrase string) (*rsa.PrivateKey, error) {
-	privateKeyBytes, err := ifs.ReadFile(f, path)
+func getPrivateKey(f fs.FS, path, passphrase string) (*rsa.PrivateKey, error) {
+	privateKeyBytes, err := service.ReadFile(f, path)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read private key %s: %s", path, err)
 	}

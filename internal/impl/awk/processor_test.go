@@ -1,4 +1,4 @@
-package awk_test
+package awk
 
 import (
 	"context"
@@ -10,151 +10,58 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/benthosdev/benthos/v4/internal/component/testutil"
-	"github.com/benthosdev/benthos/v4/internal/manager/mock"
-	"github.com/benthosdev/benthos/v4/internal/message"
-
-	_ "github.com/benthosdev/benthos/v4/internal/impl/awk"
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
-func TestAWKValidation(t *testing.T) {
-	conf, err := testutil.ProcessorFromYAML(`
-awk:
-  codec: json
-  program: "{ print foo_bar }"
-`)
-	require.NoError(t, err)
-
-	a, err := mock.NewManager().NewProcessor(conf)
+func testAwk(confStr string, args ...any) (service.Processor, error) {
+	pConf, err := awkSpec().ParseYAML(fmt.Sprintf(confStr, args...), nil)
 	if err != nil {
-		t.Fatal(err)
+		return nil, err
 	}
+	return newAWKProcFromConfig(pConf, service.MockResources())
+}
 
-	msgIn := message.QuickBatch([][]byte{[]byte("this is bad json")})
-	msgs, res := a.ProcessBatch(context.Background(), msgIn)
-	if len(msgs) != 1 {
-		t.Fatal("No passthrough for bad input data")
-	}
-	if res != nil {
-		t.Fatal("Non-nil result")
-	}
-	if exp, act := "this is bad json", string(message.GetAllBytes(msgs[0])[0]); exp != act {
-		t.Errorf("Wrong output from bad json: %v != %v", act, exp)
-	}
-	if msgs[0].Get(0).ErrorGet() == nil {
-		t.Error("Expected fail flag on message part")
-	}
-
-	conf, err = testutil.ProcessorFromYAML(`
-awk:
-  codec: not valid
-  program: |
-    {
-      json_set("foo.bar", json_get("init.val"));
-      json_set("foo.bar", json_get("foo.bar") " extra");
-    }
+func TestAWKValidation(t *testing.T) {
+	a, err := testAwk(`
+codec: json
+program: "{ print foo_bar }"
 `)
 	require.NoError(t, err)
 
-	if _, err = mock.NewManager().NewProcessor(conf); err == nil {
-		t.Error("Expected error from bad codec")
-	}
+	_, err = a.Process(context.Background(), service.NewMessage([]byte("this is bad json")))
+	require.Error(t, err)
+
+	_, err = testAwk(`
+codec: not valid
+program: |
+  {
+    json_set("foo.bar", json_get("init.val"));
+    json_set("foo.bar", json_get("foo.bar") " extra");
+  }
+`)
+	require.Error(t, err)
 }
 
 func TestAWKBadExitStatus(t *testing.T) {
-	conf, err := testutil.ProcessorFromYAML(`
-awk:
-  codec: none
-  program: "{ exit 1; print foo }"
+	a, err := testAwk(`
+codec: none
+program: "{ exit 1; print foo }"
 `)
 	require.NoError(t, err)
 
-	a, err := mock.NewManager().NewProcessor(conf)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	msgIn := message.QuickBatch([][]byte{[]byte("this will fail")})
-	msgs, res := a.ProcessBatch(context.Background(), msgIn)
-	if len(msgs) != 1 {
-		t.Fatal("No passthrough for bad input data")
-	}
-	if res != nil {
-		t.Fatal("Non-nil result")
-	}
-	if exp, act := "this will fail", string(message.GetAllBytes(msgs[0])[0]); exp != act {
-		t.Errorf("Wrong output from exit status 1: %v != %v", act, exp)
-	}
-	if msgs[0].Get(0).ErrorGet() == nil {
-		t.Error("Expected fail flag on message part")
-	}
+	_, err = a.Process(context.Background(), service.NewMessage([]byte("this will fail")))
+	require.Error(t, err)
 }
 
 func TestAWKBadDateString(t *testing.T) {
-	conf, err := testutil.ProcessorFromYAML(`
-awk:
-  codec: none
-  program: '{ print timestamp_unix("this isnt a date string") }'
+	a, err := testAwk(`
+codec: none
+program: '{ print timestamp_unix("this isnt a date string") }'
 `)
 	require.NoError(t, err)
 
-	a, err := mock.NewManager().NewProcessor(conf)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	msgIn := message.QuickBatch([][]byte{[]byte("this is a value")})
-	msgs, res := a.ProcessBatch(context.Background(), msgIn)
-	if len(msgs) != 1 {
-		t.Fatal("No passthrough on error")
-	}
-	if res != nil {
-		t.Fatal("Non-nil result")
-	}
-	if exp, act := "this is a value", string(message.GetAllBytes(msgs[0])[0]); exp != act {
-		t.Errorf("Wrong output from bad function call: %v != %v", act, exp)
-	}
-}
-
-func TestAWKJSONParts(t *testing.T) {
-	conf, err := testutil.ProcessorFromYAML(`
-awk:
-  codec: none
-  program: |
-    {
-      json_set("foo.bar", json_get("init.val"));
-      json_set("foo.bar", json_get("foo.bar") " extra");
-    }
-`)
-	require.NoError(t, err)
-
-	a, err := mock.NewManager().NewProcessor(conf)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	msgIn := message.QuickBatch([][]byte{
-		[]byte(`{"init":{"val":"first"}}`),
-		[]byte(`{"init":{"val":"second"}}`),
-		[]byte(`{"init":{"val":"third"}}`),
-		[]byte(`{"init":{"val":"fourth"}}`),
-	})
-	msgs, res := a.ProcessBatch(context.Background(), msgIn)
-	if len(msgs) != 1 {
-		t.Fatal("No passthrough on error")
-	}
-	if res != nil {
-		t.Fatalf("Non-nil result: %v", res)
-	}
-	exp := [][]byte{
-		[]byte(`{"foo":{"bar":"first extra"},"init":{"val":"first"}}`),
-		[]byte(`{"foo":{"bar":"second extra"},"init":{"val":"second"}}`),
-		[]byte(`{"foo":{"bar":"third extra"},"init":{"val":"third"}}`),
-		[]byte(`{"foo":{"bar":"fourth extra"},"init":{"val":"fourth"}}`),
-	}
-	if act := message.GetAllBytes(msgs[0]); !reflect.DeepEqual(exp, act) {
-		t.Errorf("Wrong output from json functions: %s != %s", act, exp)
-	}
+	_, err = a.Process(context.Background(), service.NewMessage([]byte("this is a value")))
+	require.Error(t, err)
 }
 
 func TestAWK(t *testing.T) {
@@ -636,33 +543,31 @@ func TestAWK(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		conf, err := testutil.ProcessorFromYAML(fmt.Sprintf(`
-awk:
-  codec: %v
-  program: %v
-`, test.codec, strconv.Quote(test.program)))
-		require.NoError(t, err, "Test '%s' failed", test.name)
+		a, err := testAwk(`
+codec: %v
+program: %v
+`, test.codec, strconv.Quote(test.program))
+		require.NoError(t, err)
 
-		a, err := mock.NewManager().NewProcessor(conf)
-		require.NoError(t, err, "Test '%s' failed", test.name)
-
-		inMsg := message.QuickBatch(
-			[][]byte{
-				[]byte(test.input),
-			},
-		)
+		msg := service.NewMessage([]byte(test.input))
 		for k, v := range test.metadata {
-			inMsg.Get(0).MetaSetMut(k, v)
+			msg.MetaSetMut(k, v)
 		}
-		msgs, err := a.ProcessBatch(context.Background(), inMsg)
-		require.NoError(t, err, "Test '%s' failed", test.name)
-		if len(msgs) != 1 {
-			t.Fatalf("Test '%s' did not succeed", test.name)
+
+		msgs, err := a.Process(context.Background(), msg)
+		if err != nil {
+			if test.errContains != "" {
+				assert.ErrorContains(t, err, test.errContains, "Test '%s' failed", test.name)
+			} else {
+				assert.NoError(t, err, "Test '%s' failed", test.name)
+			}
+			return
 		}
+		require.Len(t, msgs, 1)
 
 		if exp := test.metadataAfter; len(exp) > 0 {
 			act := map[string]string{}
-			_ = msgs[0].Get(0).MetaIterStr(func(k, v string) error {
+			_ = msgs[0].MetaWalk(func(k, v string) error {
 				act[k] = v
 				return nil
 			})
@@ -671,15 +576,8 @@ awk:
 			}
 		}
 
-		if err := msgs[0].Get(0).ErrorGet(); err != nil {
-			if test.errContains != "" {
-				assert.ErrorContains(t, err, test.errContains, "Test '%s' failed", test.name)
-			} else {
-				assert.NoError(t, err, "Test '%s' failed", test.name)
-			}
-		}
-		if exp, act := test.output, string(message.GetAllBytes(msgs[0])[0]); exp != act {
-			t.Errorf("Wrong result '%v': %v != %v", test.name, act, exp)
-		}
+		mBytes, err := msgs[0].AsBytes()
+		require.NoError(t, err)
+		assert.Equal(t, string(mBytes), test.output)
 	}
 }

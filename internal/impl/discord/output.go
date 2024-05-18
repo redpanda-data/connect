@@ -47,6 +47,7 @@ func init() {
 }
 
 type writer struct {
+	mgr *service.Resources
 	log *service.Logger
 
 	// Config
@@ -60,6 +61,7 @@ type writer struct {
 
 func newWriter(conf *service.ParsedConfig, mgr *service.Resources) (*writer, error) {
 	w := &writer{
+		mgr: mgr,
 		log: mgr.Logger(),
 	}
 	var err error
@@ -80,7 +82,7 @@ func (w *writer) Connect(ctx context.Context) error {
 	}
 
 	var err error
-	if w.sess, w.done, err = getGlobalSession(w.botToken); err != nil {
+	if w.sess, w.done, err = getGlobalSession(w.botToken, w.mgr.EngineVersion()); err != nil {
 		return err
 	}
 	return nil

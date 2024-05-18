@@ -2,15 +2,14 @@ package aws
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"sync"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/service/kinesis/types"
 
-	"github.com/benthosdev/benthos/v4/internal/checkpoint"
-	"github.com/benthosdev/benthos/v4/internal/component"
+	"github.com/Jeffail/checkpoint"
+
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
@@ -79,7 +78,7 @@ func (a *awsKinesisRecordBatcher) FlushMessage(ctx context.Context) (asyncMessag
 
 	resolveFn, err := a.checkpointer.Track(ctx, a.batchedSequence, int64(len(a.flushedMessage)))
 	if err != nil {
-		if ctx.Err() != nil || errors.Is(err, component.ErrTimeout) {
+		if ctx.Err() != nil {
 			// No need to log this error, just continue with no message.
 			err = nil
 		}

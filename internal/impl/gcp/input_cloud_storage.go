@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"strings"
 	"sync"
 	"time"
 
@@ -14,7 +13,6 @@ import (
 
 	"github.com/benthosdev/benthos/v4/internal/codec"
 	"github.com/benthosdev/benthos/v4/internal/codec/interop"
-	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/scanner"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
@@ -327,10 +325,6 @@ func (g *gcpCloudStorageInput) ReadBatch(ctx context.Context) (msg service.Messa
 	defer func() {
 		if errors.Is(err, io.EOF) {
 			err = service.ErrEndOfInput
-		} else if errors.Is(err, context.Canceled) ||
-			errors.Is(err, context.DeadlineExceeded) ||
-			(err != nil && strings.HasSuffix(err.Error(), "context canceled")) {
-			err = component.ErrTimeout
 		}
 	}()
 

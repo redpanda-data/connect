@@ -12,7 +12,6 @@ import (
 	"github.com/pkg/sftp"
 
 	"github.com/benthosdev/benthos/v4/internal/codec"
-	"github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
@@ -28,7 +27,7 @@ func sftpOutputSpec() *service.ConfigSpec {
 		Categories("Network").
 		Version("3.39.0").
 		Summary(`Writes files to an SFTP server.`).
-		Description(output.Description(true, false, `In order to have a different path for each object you should use function interpolations described [here](/docs/configuration/interpolation#bloblang-queries).`)).
+		Description(`In order to have a different path for each object you should use function interpolations described [here](/docs/configuration/interpolation#bloblang-queries).`+service.OutputPerformanceDocs(true, false)).
 		Fields(
 			service.NewStringField(soFieldAddress).
 				Description("The address of the server to connect to."),

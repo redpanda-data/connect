@@ -6,14 +6,13 @@ import (
 
 	"github.com/clbanning/mxj/v2"
 
-	"github.com/benthosdev/benthos/v4/internal/bloblang/query"
 	"github.com/benthosdev/benthos/v4/public/bloblang"
 )
 
 func init() {
 	if err := bloblang.RegisterMethodV2("parse_xml",
 		bloblang.NewPluginSpec().
-			Category(query.MethodCategoryParsing).
+			Category("Parsing").
 			Description(`
 Attempts to parse a string as an XML document and returns a structured result, where elements appear as keys of an object according to the following rules:
 
@@ -60,7 +59,7 @@ Attempts to parse a string as an XML document and returns a structured result, w
 
 	if err := bloblang.RegisterMethodV2("format_xml",
 		bloblang.NewPluginSpec().
-			Category(query.MethodCategoryParsing).
+			Category("Parsing").
 			Description(`
 Serializes a target value into an XML byte array.
 `).

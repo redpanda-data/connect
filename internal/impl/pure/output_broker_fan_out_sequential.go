@@ -6,10 +6,11 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/Jeffail/shutdown"
+
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	"github.com/benthosdev/benthos/v4/internal/shutdown"
 )
 
 type fanOutSequentialOutputBroker struct {
@@ -74,7 +75,7 @@ func (o *fanOutSequentialOutputBroker) loop() {
 			close(c)
 		}
 		_ = closeAllOutputs(context.Background(), o.outputs)
-		o.shutSig.ShutdownComplete()
+		o.shutSig.TriggerHasStopped()
 	}()
 
 	for {
@@ -86,7 +87,7 @@ func (o *fanOutSequentialOutputBroker) loop() {
 			if !open {
 				return
 			}
-		case <-o.shutSig.CloseNowChan():
+		case <-o.shutSig.HardStopChan():
 			return
 		}
 
@@ -107,7 +108,7 @@ func (o *fanOutSequentialOutputBroker) loop() {
 			}
 			select {
 			case o.outputTSChans[i] <- message.NewTransactionFunc(ts.Payload, ackFn):
-			case <-o.shutSig.CloseNowChan():
+			case <-o.shutSig.HardStopChan():
 				return errors.New("component is shutting down")
 			case <-ctx.Done():
 				return ctx.Err()
@@ -117,19 +118,19 @@ func (o *fanOutSequentialOutputBroker) loop() {
 
 		select {
 		case o.outputTSChans[i] <- message.NewTransactionFunc(ts.Payload, ackFn):
-		case <-o.shutSig.CloseNowChan():
+		case <-o.shutSig.HardStopChan():
 			return
 		}
 	}
 }
 
 func (o *fanOutSequentialOutputBroker) TriggerCloseNow() {
-	o.shutSig.CloseNow()
+	o.shutSig.TriggerHardStop()
 }
 
 func (o *fanOutSequentialOutputBroker) WaitForClose(ctx context.Context) error {
 	select {
-	case <-o.shutSig.HasClosedChan():
+	case <-o.shutSig.HasStoppedChan():
 	case <-ctx.Done():
 		return ctx.Err()
 	}

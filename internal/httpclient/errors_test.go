@@ -1,4 +1,4 @@
-package component
+package httpclient
 
 import "testing"
 

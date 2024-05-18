@@ -14,7 +14,6 @@ import (
 
 	"github.com/Azure/go-amqp"
 
-	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
@@ -232,9 +231,7 @@ func (a *amqp1Reader) ReadBatch(ctx context.Context) (service.MessageBatch, serv
 	// Receive next message
 	amqpMsg, err := conn.receiver.Receive(ctx, nil)
 	if err != nil {
-		if ctx.Err() != nil {
-			err = component.ErrTimeout
-		} else {
+		if ctx.Err() == nil {
 			a.log.Errorf("Lost connection due to: %v", err)
 			_ = a.disconnect(ctx)
 			err = service.ErrNotConnected
@@ -440,7 +437,7 @@ func (a *amqp1Reader) renewWithContext(ctx context.Context, msg *amqp.Message) (
 	a.m.RUnlock()
 
 	if conn == nil {
-		return time.Time{}, component.ErrNotConnected
+		return time.Time{}, service.ErrNotConnected
 	}
 
 	lockToken, err := uuidFromLockTokenBytes(msg.DeliveryTag)

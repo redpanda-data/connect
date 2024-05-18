@@ -20,10 +20,8 @@ import (
 
 var varInvalidRegexp *regexp.Regexp
 
-func init() {
-	varInvalidRegexp = regexp.MustCompile(`[^a-zA-Z0-9_]`)
-
-	err := service.RegisterProcessor("awk", service.NewConfigSpec().
+func awkSpec() *service.ConfigSpec {
+	return service.NewConfigSpec().
 		Stable().
 		Categories("Mapping").
 		Summary(`Executes an AWK program on messages. This processor is very powerful as it offers a range of [custom functions](#awk-functions) for querying and mutating message contents and metadata.`).
@@ -366,7 +364,13 @@ pipeline:
             }
           }
         }
-`), newAWKProcFromConfig)
+`)
+}
+
+func init() {
+	varInvalidRegexp = regexp.MustCompile(`[^a-zA-Z0-9_]`)
+
+	err := service.RegisterProcessor("awk", awkSpec(), newAWKProcFromConfig)
 	if err != nil {
 		panic(err)
 	}

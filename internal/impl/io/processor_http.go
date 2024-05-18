@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/httpclient"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
@@ -119,7 +118,7 @@ func (h *httpProc) ProcessBatch(ctx context.Context, msg service.MessageBatch) (
 		resultMsg, err := h.client.Send(context.Background(), msg)
 		if err != nil {
 			var code int
-			var hErr component.ErrUnexpectedHTTPRes
+			var hErr httpclient.ErrUnexpectedHTTPRes
 			if ok := errors.As(err, &hErr); ok {
 				code = hErr.Code
 			}
@@ -159,7 +158,7 @@ func (h *httpProc) ProcessBatch(ctx context.Context, msg service.MessageBatch) (
 				h.log.Errorf("HTTP request to '%v' failed: %v", h.rawURL, err)
 
 				errPart := p.Copy()
-				var hErr component.ErrUnexpectedHTTPRes
+				var hErr httpclient.ErrUnexpectedHTTPRes
 				if ok := errors.As(err, &hErr); ok {
 					errPart.MetaSetMut("http_status_code", hErr.Code)
 				}
@@ -205,7 +204,7 @@ func (h *httpProc) ProcessBatch(ctx context.Context, msg service.MessageBatch) (
 							return nil
 						})
 					} else {
-						var hErr component.ErrUnexpectedHTTPRes
+						var hErr httpclient.ErrUnexpectedHTTPRes
 						if ok := errors.As(err, &hErr); ok {
 							results[index].MetaSetMut("http_status_code", hErr.Code)
 						}

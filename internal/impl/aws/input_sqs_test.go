@@ -2,6 +2,7 @@ package aws
 
 import (
 	"context"
+	"fmt"
 	"strconv"
 	"testing"
 	"time"
@@ -11,7 +12,10 @@ import (
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/sqs"
 	"github.com/aws/aws-sdk-go-v2/service/sqs/types"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
 type mockSqsInput struct {
@@ -81,6 +85,8 @@ func (m *mockSqsInput) ChangeMessageVisibilityBatch(ctx context.Context, input *
 	for _, entry := range input.Entries {
 		if _, found := m.mesTimeouts[*entry.Id]; found {
 			m.mesTimeouts[*entry.Id] = entry.VisibilityTimeout
+		} else {
+			panic("nope")
 		}
 	}
 
@@ -154,7 +160,7 @@ func TestSQSInput(t *testing.T) {
 	r.sqs = mockInput
 	go mockInput.TimeoutLoop(tCtx)
 
-	defer r.closeSignal.CloseNow()
+	defer r.closeSignal.TriggerHardStop()
 	err = r.Connect(tCtx)
 	require.NoError(t, err)
 
@@ -190,6 +196,85 @@ func TestSQSInput(t *testing.T) {
 	// Ack all messages and ensure that they are deleted from SQS
 	for _, message := range receivedMessages {
 		r.ackMessagesChan <- sqsMessageHandle{id: *message.MessageId, receiptHandle: *message.ReceiptHandle}
+	}
+
+	require.Eventually(t, func() bool {
+		msgsLen := 0
+		mockInput.do(func() {
+			msgsLen = len(mockInput.messages)
+		})
+		return msgsLen == 0
+	}, 5*time.Second, time.Second)
+}
+
+func TestSQSInputBatchAck(t *testing.T) {
+	tCtx := context.Background()
+	defer tCtx.Done()
+
+	messages := []types.Message{}
+	for i := 0; i < 101; i++ {
+		messages = append(messages, types.Message{
+			Body:          aws.String(fmt.Sprintf("message-%v", i)),
+			MessageId:     aws.String(fmt.Sprintf("id-%v", i)),
+			ReceiptHandle: aws.String(fmt.Sprintf("h-%v", i)),
+		})
+	}
+	expectedMessages := len(messages)
+
+	conf, err := config.LoadDefaultConfig(context.Background(),
+		config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider("xxxxx", "xxxxx", "xxxxx")),
+	)
+	require.NoError(t, err)
+
+	r, err := newAWSSQSReader(
+		sqsiConfig{
+			URL:                 "http://foo.example.com",
+			WaitTimeSeconds:     0,
+			DeleteMessage:       true,
+			ResetVisibility:     true,
+			MaxNumberOfMessages: 10,
+		},
+		conf,
+		nil,
+	)
+	require.NoError(t, err)
+
+	mockInput := &mockSqsInput{
+		mtx:          make(chan struct{}, 1),
+		queueTimeout: 10,
+		messages:     messages,
+		mesTimeouts:  make(map[string]int32, expectedMessages),
+	}
+	mockInput.mtx <- struct{}{}
+	r.sqs = mockInput
+	go mockInput.TimeoutLoop(tCtx)
+
+	defer r.closeSignal.TriggerHardStop()
+	err = r.Connect(tCtx)
+	require.NoError(t, err)
+
+	receivedMessageAcks := map[string]service.AckFunc{}
+
+	for _, eMsg := range messages {
+		m, aFn, err := r.Read(tCtx)
+		require.NoError(t, err)
+
+		mBytes, err := m.AsBytes()
+		require.NoError(t, err)
+
+		assert.Equal(t, *eMsg.Body, string(mBytes))
+		receivedMessageAcks[string(mBytes)] = aFn
+	}
+
+	// Check that messages haven't been deleted from the queue
+	mockInput.do(func() {
+		require.Len(t, mockInput.messages, expectedMessages)
+		require.Len(t, mockInput.mesTimeouts, expectedMessages)
+	})
+
+	// Ack all messages as a batch
+	for _, aFn := range receivedMessageAcks {
+		require.NoError(t, aFn(tCtx, err))
 	}
 
 	require.Eventually(t, func() bool {

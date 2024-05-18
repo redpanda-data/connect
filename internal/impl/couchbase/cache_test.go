@@ -9,7 +9,7 @@ import (
 	"github.com/couchbase/gocb/v2"
 	"github.com/stretchr/testify/require"
 
-	"github.com/benthosdev/benthos/v4/internal/integration"
+	"github.com/benthosdev/benthos/v4/public/service/integration"
 )
 
 func TestIntegrationCouchbaseCache(t *testing.T) {
@@ -22,8 +22,8 @@ cache_resources:
   - label: testcache
     couchbase:
       url: couchbase://localhost:$PORT
-      username: $VAR1
-      password: $VAR2
+      username: $USER
+      password: $PASS
       bucket: $ID
 `
 
@@ -37,12 +37,12 @@ cache_resources:
 	suite.Run(
 		t, template,
 		integration.CacheTestOptPort(servicePort),
-		integration.CacheTestOptVarOne(username),
-		integration.CacheTestOptVarTwo(password),
-		integration.CacheTestOptPreTest(func(tb testing.TB, ctx context.Context, testID string, vars *integration.CacheTestConfigVars) {
-			require.NoError(tb, createBucket(ctx, tb, servicePort, testID))
+		integration.CacheTestOptVarSet("USER", username),
+		integration.CacheTestOptVarSet("PASS", password),
+		integration.CacheTestOptPreTest(func(tb testing.TB, ctx context.Context, vars *integration.CacheTestConfigVars) {
+			require.NoError(tb, createBucket(ctx, tb, servicePort, vars.ID))
 			tb.Cleanup(func() {
-				require.NoError(tb, removeBucket(ctx, tb, servicePort, testID))
+				require.NoError(tb, removeBucket(ctx, tb, servicePort, vars.ID))
 			})
 		}),
 	)

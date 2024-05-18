@@ -1,8 +1,6 @@
 package nats
 
 import (
-	ispan "github.com/benthosdev/benthos/v4/internal/component/input/span"
-	ospan "github.com/benthosdev/benthos/v4/internal/component/output/span"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
@@ -27,10 +25,10 @@ NATS component, so that monitoring tools between NATS and benthos can stay in sy
 }
 
 func inputTracingDocs() *service.ConfigField {
-	return ispan.ExtractTracingSpanMappingDocs().Version(tracingVersion)
+	return service.NewExtractTracingSpanMappingField().Version(tracingVersion)
 }
 func outputTracingDocs() *service.ConfigField {
-	return ospan.InjectTracingSpanMappingDocs().Version(tracingVersion)
+	return service.NewInjectTracingSpanMappingField().Version(tracingVersion)
 }
 func kvDocs(extraFields ...*service.ConfigField) []*service.ConfigField {
 	// TODO: Use `slices.Concat()` after switching to Go 1.22

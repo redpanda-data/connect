@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/benthosdev/benthos/v4/internal/integration"
+	"github.com/benthosdev/benthos/v4/public/service/integration"
 )
 
 func TestIntegrationMQTT(t *testing.T) {
@@ -91,7 +91,7 @@ input:
 			integration.StreamTestOptSleepAfterOutput(100*time.Millisecond),
 			integration.StreamTestOptPort(resource.GetPort("1883/tcp")),
 			integration.StreamTestOptMaxInFlight(10),
-			integration.StreamTestOptVarOne("nanoid"),
+			integration.StreamTestOptVarSet("VAR1", "nanoid"),
 		)
 	})
 }

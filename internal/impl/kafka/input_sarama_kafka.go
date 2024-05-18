@@ -9,8 +9,8 @@ import (
 
 	"github.com/IBM/sarama"
 
-	"github.com/benthosdev/benthos/v4/internal/checkpoint"
-	"github.com/benthosdev/benthos/v4/internal/component/input/span"
+	"github.com/Jeffail/checkpoint"
+
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
@@ -125,7 +125,7 @@ Unfortunately this error message will appear for a wide range of connection prob
 			service.NewDurationField(iskFieldMaxProcessingPeriod).
 				Description("A maximum estimate for the time taken to process a message, this is used for tuning consumer group synchronization.").
 				Advanced().Default("100ms"),
-			span.ExtractTracingSpanMappingDocs(),
+			service.NewExtractTracingSpanMappingField(),
 			service.NewObjectField(iskFieldGroup,
 				service.NewDurationField(iskFieldGroupSessionTimeout).
 					Description("A period after which a consumer of the group is kicked after no heartbeats.").
@@ -161,7 +161,7 @@ func init() {
 			return nil, err
 		}
 
-		return span.NewBatchInput("kafka", conf, r, mgr)
+		return conf.WrapBatchInputExtractTracingSpanMapping("kafka", r)
 	})
 	if err != nil {
 		panic(err)

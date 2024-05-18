@@ -155,7 +155,8 @@ func (r *requestReplyProcessor) Process(ctx context.Context, msg *service.Messag
 	}
 
 	nMsg := nats.NewMsg(subject)
-	nMsg.Data, err = msg.AsBytes()
+	m := msg.Copy()
+	nMsg.Data, err = m.AsBytes()
 	if err != nil {
 		return nil, err
 	}
@@ -176,15 +177,19 @@ func (r *requestReplyProcessor) Process(ctx context.Context, msg *service.Messag
 
 	callCtx, cancel := context.WithTimeout(ctx, r.timeout)
 	defer cancel()
+	r.log.Debugf("Sending NATS message to subject %s", subject)
 	resp, err := r.natsConn.RequestMsgWithContext(callCtx, nMsg)
 	if err != nil {
 		return nil, err
 	}
-	msg, _, err = convertMessage(resp)
-	if err != nil {
-		return nil, err
+	m.SetBytes(resp.Data)
+	if r.natsConn.HeadersSupported() {
+		for key := range resp.Header {
+			value := resp.Header.Get(key)
+			m.MetaSetMut(key, value)
+		}
 	}
-	return service.MessageBatch{msg}, nil
+	return service.MessageBatch{m}, nil
 }
 
 func (r *requestReplyProcessor) Close(ctx context.Context) error {

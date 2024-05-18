@@ -11,7 +11,7 @@ import (
 	"github.com/ory/dockertest/v3"
 	"github.com/stretchr/testify/require"
 
-	"github.com/benthosdev/benthos/v4/internal/integration"
+	"github.com/benthosdev/benthos/v4/public/service/integration"
 )
 
 func TestIntegrationCache(t *testing.T) {
@@ -91,11 +91,11 @@ cache_resources:
 	)
 	suite.Run(
 		t, template,
-		integration.CacheTestOptVarOne(dsn),
-		integration.CacheTestOptPreTest(func(t testing.TB, ctx context.Context, testID string, vars *integration.CacheTestConfigVars) {
-			tableName := strings.ReplaceAll(testID, "-", "_")
+		integration.CacheTestOptVarSet("VAR1", dsn),
+		integration.CacheTestOptPreTest(func(t testing.TB, ctx context.Context, vars *integration.CacheTestConfigVars) {
+			tableName := strings.ReplaceAll(vars.ID, "-", "_")
 			tableName = "table_" + tableName
-			vars.Var2 = tableName
+			vars.General["VAR2"] = tableName
 			_, err := createTable(tableName)
 			require.NoError(t, err)
 		}),

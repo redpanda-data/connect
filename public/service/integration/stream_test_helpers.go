@@ -49,8 +49,9 @@ func GetFreePort() (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	defer listener.Close()
-	return listener.Addr().(*net.TCPAddr).Port, nil
+	port := listener.Addr().(*net.TCPAddr).Port
+	_ = listener.Close()
+	return port, nil
 }
 
 // StreamTestConfigVars defines variables that will be accessed by test
@@ -62,43 +63,18 @@ type StreamTestConfigVars struct {
 	// Usually used to access a different topic, consumer group, directory, etc.
 	ID string
 
-	// A port to use in connector URLs. Allowing tests to override this
+	// A Port to use in connector URLs. Allowing tests to override this
 	// potentially enables tests that check for faulty connections by bridging.
-	port string
+	Port string
 
-	// A second port to use in secondary connector URLs.
-	portTwo string
-
-	// A third port to use in tertiary connector URLs.
-	portThree string
-
-	// A fourth port to use in quarternary connector URLs.
-	portFour string
-
-	// Used by batching testers to check the input honours batching fields.
-	InputBatchCount int
-
-	// Used by batching testers to check the output honours batching fields.
-	OutputBatchCount int
-
-	// Used by metadata filter tests to check that filters work.
-	OutputMetaExcludePrefix string
-
-	// Used by testers to check the max in flight option of outputs.
-	MaxInFlight int
-
-	// Generic variables.
-	Var1 string
-	Var2 string
-	Var3 string
-	Var4 string
-	Var5 string
+	// General variables.
+	General map[string]string
 }
 
 // StreamPreTestFn is an optional closure to be called before tests are run,
 // this is an opportunity to mutate test config variables and mess with the
 // environment.
-type StreamPreTestFn func(t testing.TB, ctx context.Context, testID string, vars *StreamTestConfigVars)
+type StreamPreTestFn func(t testing.TB, ctx context.Context, vars *StreamTestConfigVars)
 
 type streamTestEnvironment struct {
 	configTemplate string
@@ -128,8 +104,13 @@ func newStreamTestEnvironment(t testing.TB, confTemplate string) streamTestEnvir
 	return streamTestEnvironment{
 		configTemplate: confTemplate,
 		configVars: StreamTestConfigVars{
-			ID:          u4.String(),
-			MaxInFlight: 1,
+			ID: u4.String(),
+			General: map[string]string{
+				"MAX_IN_FLIGHT":              "1",
+				"INPUT_BATCH_COUNT":          "0",
+				"OUTPUT_BATCH_COUNT":         "0",
+				"OUTPUT_META_EXCLUDE_PREFIX": "",
+			},
 		},
 		timeout: time.Second * 90,
 		ctx:     context.Background(),
@@ -139,22 +120,14 @@ func newStreamTestEnvironment(t testing.TB, confTemplate string) streamTestEnvir
 }
 
 func (e streamTestEnvironment) RenderConfig() string {
-	return strings.NewReplacer(
+	vars := []string{
 		"$ID", e.configVars.ID,
-		"$PORT_TWO", e.configVars.portTwo,
-		"$PORT_THREE", e.configVars.portThree,
-		"$PORT_FOUR", e.configVars.portFour,
-		"$PORT", e.configVars.port,
-		"$VAR1", e.configVars.Var1,
-		"$VAR2", e.configVars.Var2,
-		"$VAR3", e.configVars.Var3,
-		"$VAR4", e.configVars.Var4,
-		"$VAR5", e.configVars.Var5,
-		"$INPUT_BATCH_COUNT", strconv.Itoa(e.configVars.InputBatchCount),
-		"$OUTPUT_BATCH_COUNT", strconv.Itoa(e.configVars.OutputBatchCount),
-		"$OUTPUT_META_EXCLUDE_PREFIX", e.configVars.OutputMetaExcludePrefix,
-		"$MAX_IN_FLIGHT", strconv.Itoa(e.configVars.MaxInFlight),
-	).Replace(e.configTemplate)
+		"$PORT", e.configVars.Port,
+	}
+	for k, v := range e.configVars.General {
+		vars = append(vars, "$"+k, v)
+	}
+	return strings.NewReplacer(vars...).Replace(e.configTemplate)
 }
 
 //------------------------------------------------------------------------------
@@ -184,7 +157,7 @@ func StreamTestOptAllowDupes() StreamTestOptFunc {
 // the config template) for all tests.
 func StreamTestOptMaxInFlight(n int) StreamTestOptFunc {
 	return func(env *streamTestEnvironment) {
-		env.configVars.MaxInFlight = n
+		env.configVars.General["MAX_IN_FLIGHT"] = strconv.Itoa(n)
 	}
 }
 
@@ -205,54 +178,15 @@ func StreamTestOptLogging(level string) StreamTestOptFunc {
 // StreamTestOptPort defines the port of the integration service.
 func StreamTestOptPort(port string) StreamTestOptFunc {
 	return func(env *streamTestEnvironment) {
-		env.configVars.port = port
+		env.configVars.Port = port
 	}
 }
 
-// StreamTestOptPortTwo defines a secondary port of the integration service.
-func StreamTestOptPortTwo(portTwo string) StreamTestOptFunc {
-	return func(env *streamTestEnvironment) {
-		env.configVars.portTwo = portTwo
-	}
-}
-
-// StreamTestOptVarOne sets an arbitrary variable for the test that can be
-// injected into templated configs.
-func StreamTestOptVarOne(v string) StreamTestOptFunc {
-	return func(env *streamTestEnvironment) {
-		env.configVars.Var1 = v
-	}
-}
-
-// StreamTestOptVarTwo sets a second arbitrary variable for the test that can be
-// injected into templated configs.
-func StreamTestOptVarTwo(v string) StreamTestOptFunc {
-	return func(env *streamTestEnvironment) {
-		env.configVars.Var2 = v
-	}
-}
-
-// StreamTestOptVarThree sets a third arbitrary variable for the test that can
+// StreamTestOptVarSet sets an arbitrary variable for the test that can
 // be injected into templated configs.
-func StreamTestOptVarThree(v string) StreamTestOptFunc {
+func StreamTestOptVarSet(key, value string) StreamTestOptFunc {
 	return func(env *streamTestEnvironment) {
-		env.configVars.Var3 = v
-	}
-}
-
-// StreamTestOptVarFour sets a third arbitrary variable for the test that can
-// be injected into templated configs.
-func StreamTestOptVarFour(v string) StreamTestOptFunc {
-	return func(env *streamTestEnvironment) {
-		env.configVars.Var4 = v
-	}
-}
-
-// StreamTestOptVarFive sets a third arbitrary variable for the test that can
-// be injected into templated configs.
-func StreamTestOptVarFive(v string) StreamTestOptFunc {
-	return func(env *streamTestEnvironment) {
-		env.configVars.Var5 = v
+		env.configVars.General[key] = value
 	}
 }
 
@@ -320,12 +254,12 @@ func (i StreamTestList) Run(t *testing.T, configTemplate string, opts ...StreamT
 	}
 
 	for j, test := range i {
-		if envs[j].configVars.port == "" {
+		if envs[j].configVars.Port == "" {
 			p, err := GetFreePort()
 			if err != nil {
 				t.Fatal(err)
 			}
-			envs[j].configVars.port = strconv.Itoa(p)
+			envs[j].configVars.Port = strconv.Itoa(p)
 		}
 		test.fn(t, &envs[j])
 	}
@@ -339,7 +273,7 @@ func namedStreamTest(name string, test streamTestDefinitionFn) StreamTestDefinit
 			t.Run(name, func(t *testing.T) {
 				t.Parallel()
 				if env.preTest != nil {
-					env.preTest(t, env.ctx, env.configVars.ID, &env.configVars)
+					env.preTest(t, env.ctx, &env.configVars)
 				}
 				test(t, env)
 			})
@@ -376,7 +310,7 @@ func (i StreamBenchList) Run(b *testing.B, configTemplate string, opts ...Stream
 		}
 
 		if env.preTest != nil {
-			env.preTest(b, env.ctx, env.configVars.ID, &env.configVars)
+			env.preTest(b, env.ctx, &env.configVars)
 		}
 		bench.fn(b, &env)
 	}

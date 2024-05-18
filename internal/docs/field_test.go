@@ -156,6 +156,12 @@ func TestSecretScrubbing(t *testing.T) {
 			output: "!!!SECRET_SCRUBBED!!!",
 		},
 		{
+			name:   "raw secret with empty value",
+			f:      docs.FieldString("foo", "").Secret(),
+			input:  "",
+			output: "",
+		},
+		{
 			name:   "env var secret",
 			f:      docs.FieldString("foo", "").Secret(),
 			input:  "${FOO}",
@@ -190,6 +196,12 @@ func TestSecretScrubbing(t *testing.T) {
 			f:      docs.FieldURL("foo", ""),
 			input:  "tcp://admin:${FOO}@example.com",
 			output: "tcp://admin:${FOO}@example.com",
+		},
+		{
+			name:   "url user with empty password",
+			f:      docs.FieldURL("foo", ""),
+			input:  "tcp://admin:@example.com",
+			output: "tcp://admin:@example.com",
 		},
 	}
 	for _, test := range tests {

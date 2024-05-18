@@ -11,7 +11,6 @@ import (
 	"github.com/xitongsys/parquet-go/reader"
 	"github.com/xitongsys/parquet-go/writer"
 
-	"github.com/benthosdev/benthos/v4/internal/filepath/ifs"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
@@ -134,7 +133,7 @@ func newParquetProcessorFromConfig(conf *service.ParsedConfig, mgr *service.Reso
 			return nil, err
 		}
 		if schemaFile != "" {
-			rawSchemaBytes, err := ifs.ReadFile(mgr.FS(), schemaFile)
+			rawSchemaBytes, err := service.ReadFile(mgr.FS(), schemaFile)
 			if err != nil {
 				return nil, fmt.Errorf("failed to read schema file: %w", err)
 			}

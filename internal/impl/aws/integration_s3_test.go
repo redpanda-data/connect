@@ -2,9 +2,7 @@ package aws
 
 import (
 	"context"
-	"crypto/rand"
 	"fmt"
-	"sync"
 	"testing"
 	"time"
 
@@ -15,16 +13,11 @@ import (
 	s3types "github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/aws/aws-sdk-go-v2/service/sqs"
 	sqstypes "github.com/aws/aws-sdk-go-v2/service/sqs/types"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/benthosdev/benthos/v4/internal/bundle"
-	"github.com/benthosdev/benthos/v4/internal/component/output"
-	"github.com/benthosdev/benthos/v4/internal/integration"
-	"github.com/benthosdev/benthos/v4/internal/manager"
-	"github.com/benthosdev/benthos/v4/internal/message"
+	"github.com/benthosdev/benthos/v4/public/service/integration"
 
-	_ "github.com/benthosdev/benthos/v4/internal/impl/pure"
+	_ "github.com/benthosdev/benthos/v4/public/components/pure"
 )
 
 func createBucket(ctx context.Context, s3Port, bucket string) error {
@@ -221,8 +214,8 @@ input:
 			integration.StreamTestStreamParallelLossyThroughReconnect(10),
 		).Run(
 			t, template,
-			integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, testID string, vars *integration.StreamTestConfigVars) {
-				require.NoError(t, createBucketQueue(ctx, lsPort, lsPort, testID))
+			integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, vars *integration.StreamTestConfigVars) {
+				require.NoError(t, createBucketQueue(ctx, lsPort, lsPort, vars.ID))
 			}),
 			integration.StreamTestOptPort(lsPort),
 			integration.StreamTestOptAllowDupes(),
@@ -273,11 +266,11 @@ input:
 			integration.StreamTestStreamParallelLossyThroughReconnect(20),
 		).Run(
 			t, template,
-			integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, testID string, vars *integration.StreamTestConfigVars) {
-				if vars.OutputBatchCount == 0 {
-					vars.OutputBatchCount = 1
+			integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, vars *integration.StreamTestConfigVars) {
+				if tmp := vars.General["OUTPUT_BATCH_COUNT"]; tmp == "0" || tmp == "" {
+					vars.General["OUTPUT_BATCH_COUNT"] = "1"
 				}
-				require.NoError(t, createBucketQueue(ctx, lsPort, lsPort, testID))
+				require.NoError(t, createBucketQueue(ctx, lsPort, lsPort, vars.ID))
 			}),
 			integration.StreamTestOptPort(lsPort),
 			integration.StreamTestOptAllowDupes(),
@@ -328,11 +321,11 @@ input:
 			integration.StreamTestStreamParallelLossyThroughReconnect(20),
 		).Run(
 			t, template,
-			integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, testID string, vars *integration.StreamTestConfigVars) {
-				if vars.OutputBatchCount == 0 {
-					vars.OutputBatchCount = 1
+			integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, vars *integration.StreamTestConfigVars) {
+				if tmp := vars.General["OUTPUT_BATCH_COUNT"]; tmp == "0" || tmp == "" {
+					vars.General["OUTPUT_BATCH_COUNT"] = "1"
 				}
-				require.NoError(t, createBucketQueue(ctx, lsPort, lsPort, testID))
+				require.NoError(t, createBucketQueue(ctx, lsPort, lsPort, vars.ID))
 			}),
 			integration.StreamTestOptPort(lsPort),
 			integration.StreamTestOptAllowDupes(),
@@ -372,11 +365,10 @@ input:
 			integration.StreamTestStreamIsolated(10),
 		).Run(
 			t, template,
-			integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, testID string, vars *integration.StreamTestConfigVars) {
-				require.NoError(t, createBucketQueue(ctx, lsPort, "", testID))
+			integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, vars *integration.StreamTestConfigVars) {
+				require.NoError(t, createBucketQueue(ctx, lsPort, "", vars.ID))
 			}),
 			integration.StreamTestOptPort(lsPort),
-			integration.StreamTestOptVarOne("false"),
 		)
 	})
 
@@ -404,82 +396,9 @@ cache_resources:
 		suite.Run(
 			t, template,
 			integration.CacheTestOptPort(lsPort),
-			integration.CacheTestOptPreTest(func(t testing.TB, ctx context.Context, testID string, vars *integration.CacheTestConfigVars) {
-				require.NoError(t, createBucket(ctx, lsPort, testID))
+			integration.CacheTestOptPreTest(func(t testing.TB, ctx context.Context, vars *integration.CacheTestConfigVars) {
+				require.NoError(t, createBucket(ctx, lsPort, vars.ID))
 			}),
 		)
 	})
-}
-
-func TestS3OutputThroughput(t *testing.T) {
-	// Skipping as this test was only put together out of curiosity
-	t.Skip()
-
-	servicePort := getLocalStack(t)
-
-	ctx, done := context.WithTimeout(context.Background(), time.Minute)
-	defer done()
-
-	bucketName := "bench-test-bucket"
-	require.NoError(t, createBucket(context.Background(), servicePort, bucketName))
-
-	dataTarget := 1024 * 1024 * 1024 * 1 // 1GB
-	dataFiles := 1000
-
-	testData := make([]byte, dataTarget/dataFiles)
-	_, err := rand.Read(testData)
-	require.NoError(t, err)
-
-	outConf, err := output.FromAny(bundle.GlobalEnvironment, map[string]any{
-		"aws_s3": map[string]any{
-			"bucket":                bucketName,
-			"endpoint":              fmt.Sprintf("http://localhost:%v", servicePort),
-			"force_path_style_urls": true,
-			"region":                "eu-west-1",
-			"path":                  `${!counter()}.txt`,
-			"credentials": map[string]any{
-				"id":     "xxxxx",
-				"secret": "xxxxx",
-				"token":  "xxxxx",
-			},
-			"batching": map[string]any{
-				"count": 1,
-			},
-		},
-	})
-	require.NoError(t, err)
-
-	mgr, err := manager.New(manager.NewResourceConfig())
-	require.NoError(t, err)
-
-	out, err := mgr.NewOutput(outConf)
-	require.NoError(t, err)
-
-	tStarted := time.Now()
-
-	tChan := make(chan message.Transaction)
-	require.NoError(t, out.Consume(tChan))
-
-	var wg sync.WaitGroup
-	wg.Add(dataFiles)
-
-	for i := 0; i < dataFiles; i++ {
-		select {
-		case tChan <- message.NewTransactionFunc(message.Batch{
-			message.NewPart(testData),
-		}, func(ctx context.Context, err error) error {
-			wg.Done()
-			assert.NoError(t, err)
-			return nil
-		}):
-		case <-ctx.Done():
-			t.Fatal("timed out")
-		}
-	}
-
-	wg.Wait()
-	t.Logf("Delivery took %v total", time.Since(tStarted))
-
-	out.TriggerCloseNow()
-	require.NoError(t, out.WaitForClose(ctx))
 }

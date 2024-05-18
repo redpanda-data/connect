@@ -465,6 +465,7 @@ func plainMappingStatementParser(pCtx Context) Func[mapping.Statement] {
 		resSlice := res.Payload
 		path := resSlice[0].([]string)
 
+		// TODO V5: Enforce root here
 		if len(path) > 0 && path[0] == "root" {
 			path = path[1:]
 		}

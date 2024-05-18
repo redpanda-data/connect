@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/benthosdev/benthos/v4/internal/integration"
+	"github.com/benthosdev/benthos/v4/public/service/integration"
 )
 
 func doSetupAndAssertions(setQueueDeclareAutoDelete bool, t *testing.T) {
@@ -140,7 +140,7 @@ input:
 		integration.StreamTestOptSleepAfterInput(500 * time.Millisecond),
 		integration.StreamTestOptSleepAfterOutput(500 * time.Millisecond),
 		integration.StreamTestOptPort(resource.GetPort("5672/tcp")),
-		integration.StreamTestOptVarOne("false"),
+		integration.StreamTestOptVarSet("VAR1", "false"),
 	}
 
 	suite.Run(

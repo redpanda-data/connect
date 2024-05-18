@@ -7,7 +7,6 @@ import (
 	"io"
 	"net/url"
 	"strconv"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -20,7 +19,6 @@ import (
 
 	"github.com/benthosdev/benthos/v4/internal/codec"
 	"github.com/benthosdev/benthos/v4/internal/codec/interop"
-	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/scanner"
 	"github.com/benthosdev/benthos/v4/internal/impl/aws/config"
 	"github.com/benthosdev/benthos/v4/public/service"
@@ -418,7 +416,7 @@ func (s *sqsTargetReader) Pop(ctx context.Context) (*s3ObjectTarget, error) {
 	}
 	if len(s.pending) == 0 {
 		s.nextRequest = time.Now().Add(time.Millisecond * 500)
-		return nil, component.ErrTimeout
+		return nil, context.Canceled
 	}
 	s.nextRequest = time.Time{}
 	t := s.pending[0]
@@ -804,10 +802,6 @@ func (a *awsS3Reader) ReadBatch(ctx context.Context) (msg service.MessageBatch, 
 	defer func() {
 		if errors.Is(err, io.EOF) {
 			err = service.ErrEndOfInput
-		} else if errors.Is(err, context.Canceled) ||
-			errors.Is(err, context.DeadlineExceeded) ||
-			(err != nil && strings.HasSuffix(err.Error(), "context canceled")) {
-			err = component.ErrTimeout
 		}
 	}()
 

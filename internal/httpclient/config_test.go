@@ -71,48 +71,6 @@ drop_on: [ 7, 8, 9 ]
 				assert.Equal(t, []int{7, 8, 9}, o.DropOn)
 			},
 		},
-		{
-			name: "tls and auth overrides",
-			inputYAML: `
-url: example.com/foo4
-tls:
-  enabled: true
-  skip_cert_verify: true
-oauth:
-  enabled: true
-  consumer_key: woof
-basic_auth:
-  enabled: true
-  username: quack
-jwt:
-  enabled: true
-  headers:
-    this: tweet
-oauth2:
-  enabled: true
-  client_key: moo
-`,
-			validator: func(t *testing.T, o *OldConfig) {
-				sURL, _ := o.URL.Static()
-				assert.Equal(t, "example.com/foo4", sURL)
-				assert.True(t, o.TLSEnabled)
-				assert.True(t, o.TLSConf.InsecureSkipVerify)
-
-				assert.True(t, o.Auth.BasicAuth.Enabled)
-				assert.Equal(t, "quack", o.Auth.BasicAuth.Username)
-
-				assert.True(t, o.Auth.OAuth.Enabled)
-				assert.Equal(t, "woof", o.Auth.OAuth.ConsumerKey)
-
-				assert.True(t, o.Auth.JWT.Enabled)
-				assert.Equal(t, map[string]any{
-					"this": "tweet",
-				}, o.Auth.JWT.Headers)
-
-				assert.True(t, o.OAuth2.Enabled)
-				assert.Equal(t, "moo", o.OAuth2.ClientKey)
-			},
-		},
 	}
 
 	for _, test := range tests {

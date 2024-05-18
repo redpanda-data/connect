@@ -3,6 +3,7 @@ package httpclient
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"mime"
@@ -13,7 +14,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/old/util/throttle"
 	"github.com/benthosdev/benthos/v4/internal/tracing/v2"
 	"github.com/benthosdev/benthos/v4/public/service"
@@ -110,7 +110,7 @@ func NewClientFromOldConfig(conf OldConfig, mgr *service.Resources, opts ...Requ
 		return nil, fmt.Errorf("failed to config logger for request dump: %v", err)
 	}
 
-	h.client = conf.OAuth2.Client(h.clientCtx, h.client)
+	h.client = conf.clientCtor(h.clientCtx, h.client)
 
 	for _, c := range conf.BackoffOn {
 		h.backoffOn[c] = struct{}{}
@@ -299,6 +299,8 @@ func (h *Client) checkStatus(code int) (succeeded bool, retStrat retryStrategy) 
 	return true, noRetry
 }
 
+var errTimedOut = errors.New("timed out waiting for next request")
+
 // SendToResponse attempts to create an HTTP request from a provided message,
 // performs it, and then returns the *http.Response, allowing the raw response
 // to be consumed.
@@ -334,7 +336,10 @@ func (h *Client) SendToResponse(ctx context.Context, sendMsg service.MessageBatc
 	}()
 
 	if !h.waitForAccess(ctx) {
-		return nil, component.ErrTypeClosed
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
+		return nil, errTimedOut
 	}
 
 	rateLimited := false
@@ -364,15 +369,24 @@ func (h *Client) SendToResponse(ctx context.Context, sendMsg service.MessageBatc
 		}
 		if rateLimited {
 			if !h.retryThrottle.ExponentialRetryWithContext(ctx) {
-				return nil, component.ErrTypeClosed
+				if ctx.Err() != nil {
+					return nil, ctx.Err()
+				}
+				return nil, errTimedOut
 			}
 		} else {
 			if !h.retryThrottle.RetryWithContext(ctx) {
-				return nil, component.ErrTypeClosed
+				if ctx.Err() != nil {
+					return nil, ctx.Err()
+				}
+				return nil, errTimedOut
 			}
 		}
 		if !h.waitForAccess(ctx) {
-			return nil, component.ErrTypeClosed
+			if ctx.Err() != nil {
+				return nil, ctx.Err()
+			}
+			return nil, errTimedOut
 		}
 		rateLimited = false
 
@@ -407,7 +421,7 @@ func unexpectedErr(res *http.Response) error {
 	if err != nil {
 		return err
 	}
-	return component.ErrUnexpectedHTTPRes{Code: res.StatusCode, S: res.Status, Body: body}
+	return ErrUnexpectedHTTPRes{Code: res.StatusCode, S: res.Status, Body: body}
 }
 
 // Send creates an HTTP request from the client config, a provided message to be

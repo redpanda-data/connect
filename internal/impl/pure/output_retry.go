@@ -9,13 +9,14 @@ import (
 
 	"github.com/cenkalti/backoff/v4"
 
+	"github.com/Jeffail/shutdown"
+
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/interop"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	"github.com/benthosdev/benthos/v4/internal/shutdown"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
@@ -200,16 +201,16 @@ func (r *indefiniteRetry) loop() {
 		close(r.transactionsOut)
 		r.wrapped.TriggerCloseNow()
 		_ = r.wrapped.WaitForClose(context.Background())
-		r.shutSig.ShutdownComplete()
+		r.shutSig.TriggerHasStopped()
 	}()
 
-	cnCtx, cnDone := r.shutSig.CloseNowCtx(context.Background())
+	cnCtx, cnDone := r.shutSig.HardStopCtx(context.Background())
 	defer cnDone()
 
 	errInterruptChan := make(chan struct{})
 	var errLooped int64
 
-	for !r.shutSig.ShouldCloseAtLeisure() {
+	for !r.shutSig.IsSoftStopSignalled() {
 		// Do not consume another message while pending messages are being
 		// reattempted.
 		for atomic.LoadInt64(&errLooped) > 0 {
@@ -217,7 +218,7 @@ func (r *indefiniteRetry) loop() {
 			case <-errInterruptChan:
 			case <-time.After(time.Millisecond * 100):
 				// Just incase an interrupt doesn't arrive.
-			case <-r.shutSig.CloseNowChan():
+			case <-r.shutSig.HardStopChan():
 				return
 			}
 		}
@@ -229,14 +230,14 @@ func (r *indefiniteRetry) loop() {
 			if !open {
 				return
 			}
-		case <-r.shutSig.CloseNowChan():
+		case <-r.shutSig.HardStopChan():
 			return
 		}
 
 		rChan := make(chan error)
 		select {
 		case r.transactionsOut <- message.NewTransaction(tran.Payload.ShallowCopy(), rChan):
-		case <-r.shutSig.CloseNowChan():
+		case <-r.shutSig.HardStopChan():
 			return
 		}
 
@@ -260,11 +261,11 @@ func (r *indefiniteRetry) loop() {
 				}
 			}()
 
-			for !r.shutSig.ShouldCloseNow() {
+			for !r.shutSig.IsHardStopSignalled() {
 				var res error
 				select {
 				case res = <-resChan:
-				case <-r.shutSig.CloseNowChan():
+				case <-r.shutSig.HardStopChan():
 					return
 				}
 
@@ -289,13 +290,13 @@ func (r *indefiniteRetry) loop() {
 
 					select {
 					case <-time.After(nextBackoff):
-					case <-r.shutSig.CloseNowChan():
+					case <-r.shutSig.HardStopChan():
 						return
 					}
 
 					select {
 					case r.transactionsOut <- message.NewTransaction(ts.Payload.ShallowCopy(), resChan):
-					case <-r.shutSig.CloseNowChan():
+					case <-r.shutSig.HardStopChan():
 						return
 					}
 				} else {
@@ -332,13 +333,13 @@ func (r *indefiniteRetry) Connected() bool {
 
 // CloseAsync shuts down the Retry input and stops processing requests.
 func (r *indefiniteRetry) TriggerCloseNow() {
-	r.shutSig.CloseNow()
+	r.shutSig.TriggerHardStop()
 }
 
 // WaitForClose blocks until the Retry input has closed down.
 func (r *indefiniteRetry) WaitForClose(ctx context.Context) error {
 	select {
-	case <-r.shutSig.HasClosedChan():
+	case <-r.shutSig.HasStoppedChan():
 	case <-ctx.Done():
 		return ctx.Err()
 	}

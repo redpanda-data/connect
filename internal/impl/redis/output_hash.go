@@ -8,7 +8,6 @@ import (
 
 	"github.com/redis/go-redis/v9"
 
-	"github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
@@ -23,7 +22,7 @@ func redisHashOutputConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Stable().
 		Summary(`Sets Redis hash objects using the HMSET command.`).
-		Description(output.Description(true, false, `
+		Description(`
 The field `+"`key`"+` supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries), allowing you to create a unique key for each message.
 
 The field `+"`fields`"+` allows you to specify an explicit map of field names to interpolated values, also evaluated per message of a batch:
@@ -49,7 +48,7 @@ The order of hash field extraction is as follows:
 2. JSON object (if enabled)
 3. Explicit fields
 
-Where latter stages will overwrite matching field names of a former stage.`)).
+Where latter stages will overwrite matching field names of a former stage.`+service.OutputPerformanceDocs(true, false)).
 		Categories("Services").
 		Fields(clientFields()...).
 		Fields(

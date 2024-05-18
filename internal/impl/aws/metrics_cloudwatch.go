@@ -11,7 +11,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/cloudwatch"
 	"github.com/aws/aws-sdk-go-v2/service/cloudwatch/types"
 
-	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/internal/impl/aws/config"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
@@ -254,7 +253,7 @@ type cloudWatchCounterVec struct {
 	cloudWatchStatVec
 }
 
-func (c *cloudWatchCounterVec) With(labelValues ...string) metrics.StatCounter {
+func (c *cloudWatchCounterVec) With(labelValues ...string) service.MetricsExporterCounter {
 	return c.with(labelValues...)
 }
 
@@ -262,7 +261,7 @@ type cloudWatchTimerVec struct {
 	cloudWatchStatVec
 }
 
-func (c *cloudWatchTimerVec) With(labelValues ...string) metrics.StatTimer {
+func (c *cloudWatchTimerVec) With(labelValues ...string) service.MetricsExporterTimer {
 	return c.with(labelValues...)
 }
 
@@ -270,7 +269,7 @@ type cloudWatchGaugeVec struct {
 	cloudWatchStatVec
 }
 
-func (c *cloudWatchGaugeVec) With(labelValues ...string) metrics.StatGauge {
+func (c *cloudWatchGaugeVec) With(labelValues ...string) service.MetricsExporterGauge {
 	return c.with(labelValues...)
 }
 

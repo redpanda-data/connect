@@ -11,7 +11,6 @@ import (
 
 	"github.com/pebbe/zmq4"
 
-	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
@@ -199,7 +198,7 @@ func (z *zmqInput) ReadBatch(ctx context.Context) (service.MessageBatch, service
 		if polled, err = z.poller.Poll(z.pollTimeout); len(polled) == 1 {
 			data, err = z.socket.RecvMessageBytes(0)
 		} else if err == nil {
-			return nil, nil, component.ErrTimeout
+			return nil, nil, context.Canceled
 		}
 	}
 	if err != nil {

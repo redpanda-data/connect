@@ -6,10 +6,11 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/Jeffail/shutdown"
+
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/input"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	"github.com/benthosdev/benthos/v4/internal/shutdown"
 )
 
 var _ input.Streamed = &InputWrapper{}
@@ -92,7 +93,7 @@ func (w *InputWrapper) loop() {
 		}
 
 		close(w.tranChan)
-		w.shutSig.ShutdownComplete()
+		w.shutSig.TriggerHasStopped()
 	}()
 
 	for {
@@ -117,7 +118,7 @@ func (w *InputWrapper) loop() {
 				if !open && atomic.LoadInt32(closedForSwap) == 0 {
 					return
 				}
-			case <-w.shutSig.CloseAtLeisureChan():
+			case <-w.shutSig.SoftStopChan():
 				return
 			}
 		}
@@ -125,7 +126,7 @@ func (w *InputWrapper) loop() {
 		if !open {
 			select {
 			case <-time.After(time.Millisecond * 100):
-			case <-w.shutSig.CloseAtLeisureChan():
+			case <-w.shutSig.SoftStopChan():
 				return
 			}
 			continue
@@ -133,8 +134,8 @@ func (w *InputWrapper) loop() {
 
 		select {
 		case w.tranChan <- t:
-		case <-w.shutSig.CloseAtLeisureChan():
-			ctx, done := w.shutSig.CloseNowCtx(context.Background())
+		case <-w.shutSig.SoftStopChan():
+			ctx, done := w.shutSig.HardStopCtx(context.Background())
 			_ = t.Ack(ctx, component.ErrTypeClosed)
 			done()
 			return
@@ -143,16 +144,16 @@ func (w *InputWrapper) loop() {
 }
 
 func (w *InputWrapper) TriggerStopConsuming() {
-	w.shutSig.CloseAtLeisure()
+	w.shutSig.TriggerSoftStop()
 }
 
 func (w *InputWrapper) TriggerCloseNow() {
-	w.shutSig.CloseNow()
+	w.shutSig.TriggerHardStop()
 }
 
 func (w *InputWrapper) WaitForClose(ctx context.Context) error {
 	select {
-	case <-w.shutSig.HasClosedChan():
+	case <-w.shutSig.HasStoppedChan():
 	case <-ctx.Done():
 		return ctx.Err()
 	}

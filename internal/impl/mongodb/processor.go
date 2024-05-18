@@ -30,8 +30,8 @@ func ProcessorSpec() *service.ConfigSpec {
 		Fields(
 			service.NewStringField(mpFieldCollection).
 				Description("The name of the target collection."),
-			service.NewInternalField(processorOperationDocs(OperationInsertOne)),
-			service.NewInternalField(writeConcernDocs()),
+			processorOperationDocs(OperationInsertOne),
+			writeConcernDocs(),
 		).
 		Fields(writeMapsFields()...).
 		Field(service.NewStringAnnotatedEnumField(mpFieldJSONMarshalMode, map[string]string{
