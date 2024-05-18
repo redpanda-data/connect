@@ -13,7 +13,6 @@ pipeline:
 
         branches:
           A:
-            # dependency_list: []
             processors:
               - sleep:
                   duration: "3s"
