@@ -10,16 +10,17 @@ import (
 )
 
 type workflowBranchMapV2 struct {
-	dag      [][]string
-	Branches map[string]*Branch
+	dag          [][]string
+	Branches     map[string]*Branch
+	dependencies map[string][]string
 }
 
 // Locks all branches contained in the branch map and returns the latest DAG, a
 // map of resources, and a func to unlock the resources that were locked. If
 // any error occurs in locked each branch (the resource is missing, or the DAG
 // is malformed) then an error is returned instead.
-func (w *workflowBranchMapV2) LockV2() (dag [][]string, branches map[string]*Branch, unlockFn func(), err error) {
-	return w.dag, w.Branches, func() {}, nil
+func (w *workflowBranchMapV2) LockV2() (dag [][]string, branches map[string]*Branch, dependencies map[string][]string, unlockFn func(), err error) {
+	return w.dag, w.Branches, w.dependencies, func() {}, nil
 }
 
 func (w *workflowBranchMapV2) Close(ctx context.Context) error {
@@ -53,14 +54,23 @@ func newWorkflowBranchMapV2(conf *service.ParsedConfig, mgr bundle.NewManagement
 	}
 
 	fmt.Println("**********************")
+	dependencies := make(map[string][]string)
 
 	for k, v := range branchObjMap {
-		fmt.Printf("Branch Name: '%v'\n", k)
 		dep_list, _ := v.FieldStringList("dependency_list")
-		for _, value := range dep_list {
-			fmt.Println(value)
+		dependencies[k] = append(dependencies[k], dep_list...)
+		if len(dep_list) == 0 {
+			dependencies[k] = nil
 		}
 	}
+
+	// Print dependencies
+	// for key, values := range dependencies {
+	// 	fmt.Printf("Key: %s\n", key)
+	// 	for i, value := range values {
+	// 		fmt.Printf("  Value[%d]: %s\n", i, value)
+	// 	}
+	// }
 
 	fmt.Println("**********************")
 
@@ -70,7 +80,8 @@ func newWorkflowBranchMapV2(conf *service.ParsedConfig, mgr bundle.NewManagement
 	}
 
 	return &workflowBranchMapV2{
-		dag:      dag,
-		Branches: branches,
+		dag:          dag,
+		Branches:     branches,
+		dependencies: dependencies,
 	}, nil
 }

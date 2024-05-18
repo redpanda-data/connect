@@ -119,27 +119,29 @@ func NewWorkflowV2(conf *service.ParsedConfig, mgr bundle.NewManagement) (*Workf
 }
 
 type resultTrackerV2 struct {
-	notStarted map[string]struct{}
-	running    map[string]struct{}
-	succeeded  map[string]struct{}
-	skipped    map[string]struct{}
-	failed     map[string]string
+	notStarted        map[string]struct{}
+	started           map[string]struct{}
+	succeeded         map[string]struct{}
+	skipped           map[string]struct{}
+	failed            map[string]string
+	dependencyTracker map[string][]string
 	sync.Mutex
 }
 
-func trackerFromDagV2(dag [][]string) *resultTrackerV2 {
+func createTrackerDependencies(dependencies map[string][]string) *resultTrackerV2 {
 	r := &resultTrackerV2{
 		notStarted: map[string]struct{}{},
-		running:    map[string]struct{}{},
+		started:    map[string]struct{}{},
 		succeeded:  map[string]struct{}{},
 		skipped:    map[string]struct{}{},
 		failed:     map[string]string{},
 	}
 
-	for i := range dag {
-		node_name := string(byte('A' + i))
-		r.notStarted[node_name] = struct{}{}
+	for k := range dependencies {
+		r.notStarted[k] = struct{}{}
 	}
+
+	r.dependencyTracker = dependencies
 
 	return r
 }
@@ -149,14 +151,17 @@ func (r *resultTrackerV2) SkippedV2(k string) {
 	delete(r.notStarted, k)
 
 	r.skipped[k] = struct{}{}
+	r.RemoveFromDepTracker(k)
+
 	r.Unlock()
 }
 
 func (r *resultTrackerV2) Succeeded(k string) {
 	r.Lock()
-	delete(r.running, k)
+	delete(r.started, k)
 
 	r.succeeded[k] = struct{}{}
+	r.RemoveFromDepTracker(k)
 	r.Unlock()
 }
 
@@ -164,24 +169,42 @@ func (r *resultTrackerV2) Started(k string) {
 	r.Lock()
 	delete(r.notStarted, k)
 
-	r.running[k] = struct{}{}
+	r.started[k] = struct{}{}
 	r.Unlock()
 }
 
 func (r *resultTrackerV2) FailedV2(k, why string) {
 	r.Lock()
-	delete(r.running, k)
+	delete(r.started, k)
 	delete(r.skipped, k)
 
 	r.failed[k] = why
 	r.Unlock()
 }
 
+func (r *resultTrackerV2) RemoveFromDepTracker(k string) {
+	for key, values := range r.dependencyTracker {
+		var updatedValues []string
+		for _, value := range values {
+			if value != k {
+				updatedValues = append(updatedValues, value)
+			}
+		}
+		r.dependencyTracker[key] = updatedValues
+	}
+}
+
+func (r *resultTrackerV2) isReadyToStart(k string) bool {
+	r.Lock()
+	defer r.Unlock()
+	return len(r.dependencyTracker[k]) == 0
+}
+
 func (r *resultTrackerV2) ToObjectV2() map[string]any {
 	succeeded := make([]any, 0, len(r.succeeded))
 	skipped := make([]any, 0, len(r.skipped))
 	notStarted := make([]any, 0, len(r.notStarted))
-	running := make([]any, 0, len(r.running))
+	started := make([]any, 0, len(r.started))
 	failed := make(map[string]any, len(r.failed))
 
 	for k := range r.succeeded {
@@ -196,8 +219,8 @@ func (r *resultTrackerV2) ToObjectV2() map[string]any {
 	for k := range r.notStarted {
 		notStarted = append(notStarted, k)
 	}
-	for k := range r.running {
-		running = append(running, k)
+	for k := range r.started {
+		started = append(started, k)
 	}
 	sort.Slice(skipped, func(i, j int) bool {
 		return skipped[i].(string) < skipped[j].(string)
@@ -216,8 +239,8 @@ func (r *resultTrackerV2) ToObjectV2() map[string]any {
 	if len(notStarted) > 0 {
 		m["notStarted"] = notStarted
 	}
-	if len(running) > 0 {
-		m["running"] = running
+	if len(started) > 0 {
+		m["started"] = started
 	}
 	if len(failed) > 0 {
 		m["failed"] = failed
@@ -281,7 +304,7 @@ func (w *WorkflowV2) ProcessBatch(ctx context.Context, msg message.Batch) ([]mes
 	startedAt := time.Now()
 
 	// Prevent resourced branches from being updated mid-flow.
-	dag, children, unlock, err := w.children.LockV2()
+	_, children, dependencies, unlock, err := w.children.LockV2()
 	if err != nil {
 		w.mError.Incr(1)
 		w.log.Error("Failed to establish workflow: %v\n", err)
@@ -311,7 +334,7 @@ func (w *WorkflowV2) ProcessBatch(ctx context.Context, msg message.Batch) ([]mes
 
 	records := make([]*resultTrackerV2, msg.Len())
 	for i := range records {
-		records[i] = trackerFromDagV2(dag)
+		records[i] = createTrackerDependencies(dependencies)
 	}
 
 	type collector struct {
@@ -341,16 +364,16 @@ func (w *WorkflowV2) ProcessBatch(ctx context.Context, msg message.Batch) ([]mes
 		}
 	}()
 
-	numberOfBranches := len(records[0].notStarted)
+	numberOfBranches := len(records[0].notStarted) // TODO: remove [0]
 
 	for len(records[0].succeeded) != numberOfBranches {
-		for eid := range records[0].notStarted {
+		for eid := range records[0].notStarted { // TODO: remove [0]
 
 			results := make([][]*message.Part, 6) // TODO: remove literal int
 			errors := make([]error, 6)            // TODO: remove literal int
 
-			if isColumnAllZeros(dag, int(eid[0]-'A')) { // TODO: get rid of this branch name -> matrix column conversion
-				records[0].Started(eid) // TODO: remove literal
+			if records[0].isReadyToStart(eid) { // TODO: get rid of this branch name -> matrix column conversion
+				records[0].Started(eid) // TODO: remove [0]
 
 				branchMsg, branchSpans := tracing.WithChildSpans(w.tracer, eid, propMsg.ShallowCopy())
 
@@ -383,9 +406,7 @@ func (w *WorkflowV2) ProcessBatch(ctx context.Context, msg message.Batch) ([]mes
 					for j := range results[index] {
 						records[j].Succeeded((id))
 					}
-					dag = zeroOutRow(dag, index)
-					dag = updateColumnDone(dag, index)
-					asdf := collector{
+					asdf := collector{ // TODO: rename this
 						eid:     id,
 						results: results,
 					}
