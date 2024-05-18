@@ -20,10 +20,9 @@ import (
 )
 
 const (
-	wflowProcFieldMetaPathV2        = "metapath"
-	wflowProcFieldAdjacencyMatrixV2 = "adjacency_matrix"
-	wflowProcFieldDependencyListV2  = "dependency_list"
-	wflowProcFieldBranchesV2        = "branches"
+	wflowProcFieldMetaPathV2       = "metapath"
+	wflowProcFieldDependencyListV2 = "dependency_list"
+	wflowProcFieldBranchesV2       = "branches"
 )
 
 func workflowProcSpecV2() *service.ConfigSpec {
@@ -32,12 +31,6 @@ func workflowProcSpecV2() *service.ConfigSpec {
 			service.NewStringField(wflowProcFieldMetaPathV2).
 				Description("A [dot path](/docs/configuration/field_paths) indicating where to store and reference [structured metadata](#structured-metadata) about the workflow execution.").
 				Default("meta.workflow"),
-			service.NewStringListOfListsField(wflowProcFieldAdjacencyMatrixV2).
-				Description("An explicit declaration of branch ordered tiers, which describes the order in which parallel tiers of branches should be executed. Branches should be identified by the name as they are configured in the field `branches`. It's also possible to specify branch processors configured [as a resource](#resources).").
-				Examples(
-					[]any{[]any{"foo", "bar"}, []any{"baz"}},
-					[]any{[]any{"foo"}, []any{"bar"}, []any{"baz"}},
-				),
 			service.NewObjectMapField(wflowProcFieldBranchesV2, branchSpecFieldsV2()...).
 				Description("An object of named [`branch` processors](/docs/components/processors/branch) that make up the workflow. The order and parallelism in which branches are executed can either be made explicit with the field `order`, or if omitted an attempt is made to automatically resolve an ordering based on the mappings of each branch."))
 }
@@ -125,6 +118,8 @@ type resultTrackerV2 struct {
 	skipped           map[string]struct{}
 	failed            map[string]string
 	dependencyTracker map[string][]string
+	numberOfBranches  int
+	branchIndexes     map[string]int
 	sync.Mutex
 }
 
@@ -137,10 +132,16 @@ func createTrackerDependencies(dependencies map[string][]string) *resultTrackerV
 		failed:     map[string]string{},
 	}
 
+	r.branchIndexes = make(map[string]int)
+
+	index := 0
 	for k := range dependencies {
 		r.notStarted[k] = struct{}{}
+		r.branchIndexes[k] = index
+		index++
 	}
 
+	r.numberOfBranches = len(dependencies)
 	r.dependencyTracker = dependencies
 
 	return r
@@ -177,7 +178,7 @@ func (r *resultTrackerV2) FailedV2(k, why string) {
 	r.Lock()
 	delete(r.started, k)
 	delete(r.skipped, k)
-
+	delete(r.succeeded, k)
 	r.failed[k] = why
 	r.Unlock()
 }
@@ -198,6 +199,12 @@ func (r *resultTrackerV2) isReadyToStart(k string) bool {
 	r.Lock()
 	defer r.Unlock()
 	return len(r.dependencyTracker[k]) == 0
+}
+
+func (r *resultTrackerV2) getIndexOfNode(k string) int {
+	r.Lock()
+	defer r.Unlock()
+	return r.branchIndexes[k]
 }
 
 func (r *resultTrackerV2) ToObjectV2() map[string]any {
@@ -340,45 +347,40 @@ func (w *WorkflowV2) ProcessBatch(ctx context.Context, msg message.Batch) ([]mes
 	type collector struct {
 		eid     string
 		results [][]*message.Part
+		errors  []error
 	}
 
 	done := make(chan collector)
 
 	go func() {
 		mssge := <-done
-		errors := make([]error, 1)
 		var failed []branchMapError
-		err := errors[0]
+		//errors := make([]error, 1)
+		err := mssge.errors[0]
 		if err == nil {
 			failed, err = children[mssge.eid].overlayResult(msg, mssge.results[0])
 		}
 		if err != nil {
 			w.mError.Incr(1)
 			w.log.Error("Failed to perform enrichment '%v': %v\n", mssge.eid, err)
-			for j := range records {
-				records[j].FailedV2(mssge.eid, err.Error())
-			}
+			records[0].FailedV2(mssge.eid, err.Error()) // TODO: remove [0]
 		}
 		for _, e := range failed {
 			records[e.index].FailedV2(mssge.eid, e.err.Error())
 		}
 	}()
 
-	numberOfBranches := len(records[0].notStarted) // TODO: remove [0]
-
-	for len(records[0].succeeded) != numberOfBranches {
+	for len(records[0].succeeded)+len(records[0].failed) != records[0].numberOfBranches { // TODO: remove [0]
 		for eid := range records[0].notStarted { // TODO: remove [0]
 
-			results := make([][]*message.Part, 6) // TODO: remove literal int
-			errors := make([]error, 6)            // TODO: remove literal int
+			results := make([][]*message.Part, records[0].numberOfBranches) // TODO: remove [0]
+			errors := make([]error, records[0].numberOfBranches)            // TODO: remove [0]
 
-			if records[0].isReadyToStart(eid) { // TODO: get rid of this branch name -> matrix column conversion
+			if records[0].isReadyToStart(eid) {
 				records[0].Started(eid) // TODO: remove [0]
 
 				branchMsg, branchSpans := tracing.WithChildSpans(w.tracer, eid, propMsg.ShallowCopy())
-
 				go func(id string, index int) {
-
 					branchParts := make([]*message.Part, branchMsg.Len())
 					_ = branchMsg.Iter(func(partIndex int, part *message.Part) error {
 						// Remove errors so that they aren't propagated into the
@@ -395,23 +397,18 @@ func (w *WorkflowV2) ProcessBatch(ctx context.Context, msg message.Batch) ([]mes
 					for _, s := range branchSpans {
 						s.Finish()
 					}
-					for j, p := range results[index] {
-						if p == nil {
-							records[j].SkippedV2(id)
-						}
-					}
+					records[0].Succeeded((id))
 					for _, e := range mapErrs {
 						records[e.index].FailedV2(id, e.err.Error())
 					}
-					for j := range results[index] {
-						records[j].Succeeded((id))
-					}
+					// TODO: remove [0]
 					asdf := collector{ // TODO: rename this
 						eid:     id,
 						results: results,
+						errors:  errors,
 					}
 					done <- asdf
-				}(eid, int(eid[0]-'A'))
+				}(eid, int(eid[0]-'A')) // int(eid[0]-'A')  r.branchIndexes[k]  records[0].getIndexOfNode(eid)
 			}
 		}
 	}

@@ -53,7 +53,6 @@ func newWorkflowBranchMapV2(conf *service.ParsedConfig, mgr bundle.NewManagement
 		branches[k] = child
 	}
 
-	fmt.Println("**********************")
 	dependencies := make(map[string][]string)
 
 	for k, v := range branchObjMap {
@@ -64,23 +63,7 @@ func newWorkflowBranchMapV2(conf *service.ParsedConfig, mgr bundle.NewManagement
 		}
 	}
 
-	// Print dependencies
-	// for key, values := range dependencies {
-	// 	fmt.Printf("Key: %s\n", key)
-	// 	for i, value := range values {
-	// 		fmt.Printf("  Value[%d]: %s\n", i, value)
-	// 	}
-	// }
-
-	fmt.Println("**********************")
-
-	dag, err := conf.FieldStringListOfLists(wflowProcFieldAdjacencyMatrixV2)
-	if err != nil {
-		return nil, err
-	}
-
 	return &workflowBranchMapV2{
-		dag:          dag,
 		Branches:     branches,
 		dependencies: dependencies,
 	}, nil

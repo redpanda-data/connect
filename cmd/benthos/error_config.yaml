@@ -1,0 +1,73 @@
+input: 
+  stdin: {}
+
+pipeline:
+  processors:
+    - workflow_v2:
+
+        #       /--> B -------------|--> D
+        #      /                   /
+        # A --|          /--> E --|
+        #      \--> C --|          \
+        #                \----------|--> F
+
+        branches:
+          A:
+            processors:
+              - sleep:
+                  duration: "3s"
+              - http: 
+                  url: "http://www.awebsitethatdoesnotexist.com/"
+                  verb: GET
+                  timeout: 5s
+              - log:
+                  level: INFO
+                  message: STAGE A FINISHED
+
+          B:
+            dependency_list: ["A"]
+            processors:
+              - sleep: 
+                  duration: "15s"
+              - log:
+                  level: INFO
+                  message: STAGE B FINISHED
+
+          C:
+            dependency_list: ["A"]
+            processors:
+              - sleep: 
+                  duration: "3s"
+              - log:
+                  level: INFO
+                  message: STAGE C FINISHED
+
+          D:
+            dependency_list: ["B", "E"]
+            processors:
+              - sleep: 
+                  duration: "3s"
+              - log:
+                  level: INFO
+                  message: STAGE D FINISHED
+
+          E:
+            dependency_list: ["C"]
+            processors:
+              - sleep: 
+                  duration: "3s"
+              - log:
+                  level: INFO
+                  message: STAGE E FINISHED
+
+          F:
+            dependency_list: ["C", "E"]
+            processors:
+              - sleep: 
+                  duration: "3s"
+              - log:
+                  level: INFO
+                  message: STAGE F FINISHED
+
+output:
+  stdout: {}
