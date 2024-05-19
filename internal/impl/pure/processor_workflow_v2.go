@@ -316,8 +316,8 @@ func (w *WorkflowV2) ProcessBatch(ctx context.Context, msg message.Batch) ([]mes
 	for len(records.succeeded)+len(records.failed) != records.numberOfBranches {
 		for eid := range records.notStarted {
 
-			results := make([][]*message.Part, records.numberOfBranches)
-			errors := make([]error, records.numberOfBranches)
+			results := make([][]*message.Part, 1)
+			errors := make([]error, 1)
 
 			if records.isReadyToStart(eid) {
 				records.Started(eid)
