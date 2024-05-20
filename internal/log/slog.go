@@ -58,31 +58,6 @@ func (l *logHandler) Trace(format string, v ...any) {
 	l.slog.Debug(fmt.Sprintf(format, v...))
 }
 
-func (l *logHandler) Fatalln(message string) {
-	l.slog.Error(message)
-	os.Exit(1)
-}
-
-func (l *logHandler) Errorln(message string) {
-	l.slog.Error(message)
-}
-
-func (l *logHandler) Warnln(message string) {
-	l.slog.Warn(message)
-}
-
-func (l *logHandler) Infoln(message string) {
-	l.slog.Info(message)
-}
-
-func (l *logHandler) Debugln(message string) {
-	l.slog.Debug(message)
-}
-
-func (l *logHandler) Traceln(message string) {
-	l.slog.Debug(message)
-}
-
 func (l *logHandler) clone() *logHandler {
 	c := *l
 	return &c

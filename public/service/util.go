@@ -30,3 +30,16 @@ func ReadFile(f fs.FS, name string) ([]byte, error) {
 func Globs(f fs.FS, paths ...string) ([]string, error) {
 	return filepath.Globs(f, paths)
 }
+
+// GlobsAndSuperPaths attempts to expand a list of paths, which may include glob
+// patterns and super paths (the ... thing) to a list of explicit file paths.
+// Extensions must be provided, and limit the file types that are captured with
+// a super path.
+func GlobsAndSuperPaths(f fs.FS, paths []string, extensions ...string) ([]string, error) {
+	return filepath.GlobsAndSuperPaths(f, paths)
+}
+
+// OSFS provides an fs.FS implementation that simply calls into the os.
+func OSFS() fs.FS {
+	return ifs.OS()
+}

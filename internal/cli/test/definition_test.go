@@ -8,6 +8,7 @@ import (
 	"github.com/fatih/color"
 
 	"github.com/benthosdev/benthos/v4/internal/cli/test"
+	"github.com/benthosdev/benthos/v4/internal/config"
 	dtest "github.com/benthosdev/benthos/v4/internal/config/test"
 	"github.com/benthosdev/benthos/v4/internal/log"
 )
@@ -67,7 +68,7 @@ pipeline:
 		},
 	}
 
-	failures, err := test.Execute(def, filepath.Join(testDir, "config1.yaml"), nil, log.Noop())
+	failures, err := test.Execute(config.Spec(), def, filepath.Join(testDir, "config1.yaml"), nil, log.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -151,7 +152,7 @@ pipeline:
 		},
 	}
 
-	failures, err := test.Execute(def, filepath.Join(testDir, "config1.yaml"), nil, log.Noop())
+	failures, err := test.Execute(config.Spec(), def, filepath.Join(testDir, "config1.yaml"), nil, log.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}

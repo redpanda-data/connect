@@ -10,7 +10,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/benthosdev/benthos/v4/internal/bundle"
-	"github.com/benthosdev/benthos/v4/internal/config"
+	"github.com/benthosdev/benthos/v4/internal/cli/common"
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/stream"
 )
@@ -108,7 +108,7 @@ func addExpression(conf map[string]any, expression string) error {
 	return nil
 }
 
-func createCliCommand() *cli.Command {
+func createCliCommand(cliOpts *common.CLIOpts) *cli.Command {
 	return &cli.Command{
 		Name:  "create",
 		Usage: "Create a new Benthos config",
@@ -149,7 +149,7 @@ If the expression is omitted a default config is created.`[1:],
 				}
 			}
 
-			spec := config.Spec()
+			spec := cliOpts.MainConfigSpecCtor()
 			var filter docs.FieldFilter
 			if c.Bool("small") {
 				spec = stream.Spec()

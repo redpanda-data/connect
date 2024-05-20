@@ -10,9 +10,11 @@ import (
 	"time"
 
 	"github.com/urfave/cli/v2"
+
+	"github.com/benthosdev/benthos/v4/internal/cli/common"
 )
 
-func pullCommand(version, dateBuilt string) *cli.Command {
+func pullCommand(cliOpts *common.CLIOpts) *cli.Command {
 	return &cli.Command{
 		Name:  "pull",
 		Usage: "Run deployments configured within a Benthos Studio session",
@@ -76,7 +78,7 @@ files and execute them, replacing the previous stream running.`[1:],
 				os.Exit(1)
 			}
 
-			pullRunner, err := NewPullRunner(c, version, dateBuilt, token, secret)
+			pullRunner, err := NewPullRunner(c, cliOpts, token, secret)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Error encountered whilst initiating studio sync: %v\n", err)
 				os.Exit(1)

@@ -10,7 +10,7 @@ import (
 // ReadConfig attempts to read a general service wide config via a returned
 // config.Reader based on input CLI flags. This includes applying any config
 // overrides expressed by the --set flag.
-func ReadConfig(c *cli.Context, streamsMode bool) (mainPath string, inferred bool, conf *config.Reader) {
+func ReadConfig(c *cli.Context, cliOpts *CLIOpts, streamsMode bool) (mainPath string, inferred bool, conf *config.Reader) {
 	path := c.String("config")
 	if path == "" {
 		// Iterate default config paths
@@ -27,6 +27,7 @@ func ReadConfig(c *cli.Context, streamsMode bool) (mainPath string, inferred boo
 		}
 	}
 	opts := []config.OptFunc{
+		config.OptSetFullSpec(cliOpts.MainConfigSpecCtor),
 		config.OptAddOverrides(c.StringSlice("set")...),
 		config.OptTestSuffix("_benthos_test"),
 	}

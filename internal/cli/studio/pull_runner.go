@@ -68,6 +68,7 @@ type PullRunner struct {
 	exitTimeout time.Duration
 
 	cliContext  *cli.Context
+	cliOpts     *common.CLIOpts
 	strictMode  bool
 	version     string
 	dateBuilt   string
@@ -95,16 +96,17 @@ func OptSetNowFn(fn func() time.Time) func(*PullRunner) {
 // pushed deep into things like the manager constructor, and as cli options are
 // expanded it'd be a drag to have to update every single constructor signature
 // that calls into it.
-func NewPullRunner(c *cli.Context, version, dateBuilt, token, secret string, opts ...func(p *PullRunner)) (*PullRunner, error) {
+func NewPullRunner(c *cli.Context, cliOpts *common.CLIOpts, token, secret string, opts ...func(p *PullRunner)) (*PullRunner, error) {
 	r := &PullRunner{
-		confReaderSpec:     config.Spec(),
+		confReaderSpec:     cliOpts.MainConfigSpecCtor(),
 		metricsFlushPeriod: time.Second * 30,
 		stoppableStream:    common.NewSwappableStopper(&noopStopper{}),
 		logger:             &hotSwapLogger{},
 		cliContext:         c,
+		cliOpts:            cliOpts,
 		strictMode:         !c.Bool("chilled"),
-		version:            version,
-		dateBuilt:          dateBuilt,
+		version:            cliOpts.Version,
+		dateBuilt:          cliOpts.DateBuilt,
 		nowFn:              time.Now,
 		allowTraces:        c.Bool("send-traces"),
 	}
@@ -133,12 +135,12 @@ func NewPullRunner(c *cli.Context, version, dateBuilt, token, secret string, opt
 	// that gets replaced each time a new config is loaded.
 	{
 		confPath, confResPaths, setSlice := c.String("config"), c.StringSlice("resources"), c.StringSlice("set")
-		tmpConf, localLints, err := config.NewReader(confPath, confResPaths, config.OptAddOverrides(setSlice...)).Read()
+		tmpConf, _, localLints, err := config.NewReader(confPath, confResPaths, config.OptAddOverrides(setSlice...)).Read()
 		if err != nil {
 			return nil, fmt.Errorf("failed to create initial logger: %w", err)
 		}
 
-		logger, err := common.CreateLogger(c, tmpConf, false)
+		logger, err := common.CreateLogger(c, cliOpts, tmpConf, false)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create initial logger: %w", err)
 		}
@@ -150,7 +152,7 @@ func NewPullRunner(c *cli.Context, version, dateBuilt, token, secret string, opt
 				return nil, errors.New("linter errors were found in local configuration files, to ignore these errors run Benthos with --chilled")
 			}
 
-			newSpec := config.Spec()
+			newSpec := cliOpts.MainConfigSpecCtor()
 			sanitObj, _ := tmpConf.GetRawSource().(map[string]any)
 			for _, k := range []string{
 				"http", "input", "buffer", "output", "logger", "metrics", "tracer",
@@ -212,7 +214,7 @@ func (r *PullRunner) setStreamDisabled(ctx context.Context, toDisabled bool) err
 
 func (r *PullRunner) triggerStreamReset(ctx context.Context, conf *config.Type, mgr bundle.NewManagement) error {
 	r.latestMainConf = &conf.Config
-	if logger, err := common.CreateLogger(r.cliContext, *conf, false); err == nil {
+	if logger, err := common.CreateLogger(r.cliContext, r.cliOpts, *conf, false); err == nil {
 		r.logger.swap(logger)
 	}
 
@@ -254,7 +256,9 @@ func (r *PullRunner) bootstrapConfigReader(ctx context.Context) (bootstrapErr er
 		config.OptTestSuffix("_benthos_test"),
 		config.OptUseFS(sessFS),
 		config.OptSetLintConfig(lintConf),
-		config.OptSetFullSpec(r.confReaderSpec),
+		config.OptSetFullSpec(func() docs.FieldSpecs {
+			return r.confReaderSpec
+		}),
 	)
 
 	defer func() {
@@ -265,7 +269,7 @@ func (r *PullRunner) bootstrapConfigReader(ctx context.Context) (bootstrapErr er
 		}
 	}()
 
-	conf, lints, err := confReaderTmp.Read()
+	conf, _, lints, err := confReaderTmp.Read()
 	if err != nil {
 		return fmt.Errorf("failed bootstrap config read: %w", err)
 	}
@@ -278,7 +282,7 @@ func (r *PullRunner) bootstrapConfigReader(ctx context.Context) (bootstrapErr er
 	tmpTracingSummary.SetEnabled(false)
 
 	stopMgrTmp, err := common.CreateManager(
-		r.cliContext, r.logger, false, r.version, r.dateBuilt, conf,
+		r.cliContext, r.cliOpts, r.logger, false, conf,
 		manager.OptSetEnvironment(tmpEnv),
 		manager.OptSetBloblangEnvironment(bloblEnv),
 		manager.OptSetFS(sessFS))

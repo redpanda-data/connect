@@ -20,10 +20,10 @@ import (
 
 // RunService runs a service command (either the default or the streams
 // subcommand).
-func RunService(c *cli.Context, version, dateBuilt string, streamsMode bool) int {
-	mainPath, inferredMainPath, confReader := ReadConfig(c, streamsMode)
+func RunService(c *cli.Context, cliOpts *CLIOpts, streamsMode bool) int {
+	mainPath, inferredMainPath, confReader := ReadConfig(c, cliOpts, streamsMode)
 
-	conf, lints, err := confReader.Read()
+	conf, pConf, lints, err := confReader.Read()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Configuration file read error: %v\n", err)
 		return 1
@@ -32,13 +32,13 @@ func RunService(c *cli.Context, version, dateBuilt string, streamsMode bool) int
 		_ = confReader.Close(c.Context)
 	}()
 
-	logger, err := CreateLogger(c, conf, streamsMode)
+	logger, err := CreateLogger(c, cliOpts, conf, streamsMode)
 	if err != nil {
 		fmt.Printf("Failed to create logger: %v\n", err)
 		return 1
 	}
 
-	verLogger := logger.With("benthos_version", version)
+	verLogger := logger.With("benthos_version", cliOpts.Version)
 	if mainPath == "" {
 		verLogger.Info("Running without a main config file")
 	} else if inferredMainPath {
@@ -60,8 +60,13 @@ func RunService(c *cli.Context, version, dateBuilt string, streamsMode bool) int
 		return 1
 	}
 
-	stoppableManager, err := CreateManager(c, logger, streamsMode, version, dateBuilt, conf)
+	stoppableManager, err := CreateManager(c, cliOpts, logger, streamsMode, conf)
 	if err != nil {
+		logger.Error(err.Error())
+		return 1
+	}
+
+	if err := cliOpts.OnManagerInitialised(stoppableManager.mgr, pConf); err != nil {
 		logger.Error(err.Error())
 		return 1
 	}

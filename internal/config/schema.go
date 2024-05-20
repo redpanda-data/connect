@@ -73,11 +73,19 @@ func Spec() docs.FieldSpecs {
 }
 
 // SpecWithoutStream describes a stream config without the core stream fields.
-func SpecWithoutStream() docs.FieldSpecs {
-	fields := docs.FieldSpecs{httpField}
-	fields = append(fields, manager.Spec()...)
-	fields = append(fields, observabilityFields()...)
-	fields = append(fields, test.ConfigSpec())
+func SpecWithoutStream(spec docs.FieldSpecs) docs.FieldSpecs {
+	streamFields := map[string]struct{}{}
+	for _, f := range stream.Spec() {
+		streamFields[f.Name] = struct{}{}
+	}
+
+	var fields docs.FieldSpecs
+	for _, f := range spec {
+		if _, exists := streamFields[f.Name]; exists {
+			continue
+		}
+		fields = append(fields, f)
+	}
 	return fields
 }
 

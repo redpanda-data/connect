@@ -57,6 +57,15 @@ func NewEnvironment() *Environment {
 	return globalEnvironment.Clone()
 }
 
+// NewEmptyEnvironment creates a new environment with zero registered plugins.
+func NewEmptyEnvironment() *Environment {
+	return &Environment{
+		internal:    bundle.NewEnvironment(),
+		bloblangEnv: bloblang.NewEmptyEnvironment(),
+		fs:          ifs.OS(),
+	}
+}
+
 // Clone an environment, creating a new environment containing the same plugins
 // that can be modified independently of the source.
 func (e *Environment) Clone() *Environment {
@@ -148,6 +157,20 @@ func (e *Environment) WalkBuffers(fn func(name string, config *ConfigView)) {
 	}
 }
 
+// GetBufferConfig attempts to obtain a buffer configuration spec by the
+// component name. Returns a nil ConfigView and false if the component is
+// unknown.
+func (e *Environment) GetBufferConfig(name string) (*ConfigView, bool) {
+	c, exists := bundle.AllBuffers.DocsFor(name)
+	if !exists {
+		return nil, false
+	}
+	return &ConfigView{
+		prov:      e.internal,
+		component: c,
+	}, true
+}
+
 // RegisterCache attempts to register a new cache plugin by providing a
 // description of the configuration for the plugin as well as a constructor for
 // the cache itself. The constructor will be called for each instantiation of
@@ -178,6 +201,20 @@ func (e *Environment) WalkCaches(fn func(name string, config *ConfigView)) {
 			component: v,
 		})
 	}
+}
+
+// GetCacheConfig attempts to obtain a cache configuration spec by the
+// component name. Returns a nil ConfigView and false if the component is
+// unknown.
+func (e *Environment) GetCacheConfig(name string) (*ConfigView, bool) {
+	c, exists := bundle.AllCaches.DocsFor(name)
+	if !exists {
+		return nil, false
+	}
+	return &ConfigView{
+		prov:      e.internal,
+		component: c,
+	}, true
 }
 
 // RegisterInput attempts to register a new input plugin by providing a
@@ -247,6 +284,20 @@ func (e *Environment) WalkInputs(fn func(name string, config *ConfigView)) {
 			component: v,
 		})
 	}
+}
+
+// GetInputConfig attempts to obtain an input configuration spec by the
+// component name. Returns a nil ConfigView and false if the component is
+// unknown.
+func (e *Environment) GetInputConfig(name string) (*ConfigView, bool) {
+	c, exists := bundle.AllInputs.DocsFor(name)
+	if !exists {
+		return nil, false
+	}
+	return &ConfigView{
+		prov:      e.internal,
+		component: c,
+	}, true
 }
 
 // RegisterOutput attempts to register a new output plugin by providing a
@@ -337,6 +388,20 @@ func (e *Environment) WalkOutputs(fn func(name string, config *ConfigView)) {
 	}
 }
 
+// GetOutputConfig attempts to obtain an output configuration spec by the
+// component name. Returns a nil ConfigView and false if the component is
+// unknown.
+func (e *Environment) GetOutputConfig(name string) (*ConfigView, bool) {
+	c, exists := bundle.AllOutputs.DocsFor(name)
+	if !exists {
+		return nil, false
+	}
+	return &ConfigView{
+		prov:      e.internal,
+		component: c,
+	}, true
+}
+
 // RegisterProcessor attempts to register a new processor plugin by providing
 // a description of the configuration for the processor and a constructor for
 // the processor itself. The constructor will be called for each instantiation
@@ -402,6 +467,20 @@ func (e *Environment) WalkProcessors(fn func(name string, config *ConfigView)) {
 	}
 }
 
+// GetProcessorConfig attempts to obtain a processor configuration spec by the
+// component name. Returns a nil ConfigView and false if the component is
+// unknown.
+func (e *Environment) GetProcessorConfig(name string) (*ConfigView, bool) {
+	c, exists := bundle.AllProcessors.DocsFor(name)
+	if !exists {
+		return nil, false
+	}
+	return &ConfigView{
+		prov:      e.internal,
+		component: c,
+	}, true
+}
+
 // RegisterRateLimit attempts to register a new rate limit plugin by providing
 // a description of the configuration for the plugin as well as a constructor
 // for the rate limit itself. The constructor will be called for each
@@ -434,6 +513,20 @@ func (e *Environment) WalkRateLimits(fn func(name string, config *ConfigView)) {
 	}
 }
 
+// GetRateLimitConfig attempts to obtain a rate limit configuration spec by the
+// component name. Returns a nil ConfigView and false if the component is
+// unknown.
+func (e *Environment) GetRateLimitConfig(name string) (*ConfigView, bool) {
+	c, exists := bundle.AllRateLimits.DocsFor(name)
+	if !exists {
+		return nil, false
+	}
+	return &ConfigView{
+		prov:      e.internal,
+		component: c,
+	}, true
+}
+
 // RegisterMetricsExporter attempts to register a new metrics exporter plugin by
 // providing a description of the configuration for the plugin as well as a
 // constructor for the metrics exporter itself.
@@ -464,6 +557,20 @@ func (e *Environment) WalkMetrics(fn func(name string, config *ConfigView)) {
 			component: v,
 		})
 	}
+}
+
+// GetMetricsConfig attempts to obtain a metrics exporter configuration spec by
+// the component name. Returns a nil ConfigView and false if the component is
+// unknown.
+func (e *Environment) GetMetricsConfig(name string) (*ConfigView, bool) {
+	c, exists := bundle.AllMetrics.DocsFor(name)
+	if !exists {
+		return nil, false
+	}
+	return &ConfigView{
+		prov:      e.internal,
+		component: c,
+	}, true
 }
 
 // RegisterOtelTracerProvider attempts to register a new open telemetry tracer
@@ -503,6 +610,20 @@ func (e *Environment) WalkTracers(fn func(name string, config *ConfigView)) {
 	}
 }
 
+// GetTracerConfig attempts to obtain a tracer configuration spec by the
+// component name. Returns a nil ConfigView and false if the component is
+// unknown.
+func (e *Environment) GetTracerConfig(name string) (*ConfigView, bool) {
+	c, exists := bundle.AllTracers.DocsFor(name)
+	if !exists {
+		return nil, false
+	}
+	return &ConfigView{
+		prov:      e.internal,
+		component: c,
+	}, true
+}
+
 // RegisterBatchScannerCreator attempts to register a new batched scanner plugin
 // by providing a description of the configuration for the plugin as well as a
 // constructor for the scanner creator itself. The constructor will be called
@@ -534,6 +655,20 @@ func (e *Environment) WalkScanners(fn func(name string, config *ConfigView)) {
 			component: v,
 		})
 	}
+}
+
+// GetScannerConfig attempts to obtain a scanner configuration spec by the
+// component name. Returns a nil ConfigView and false if the component is
+// unknown.
+func (e *Environment) GetScannerConfig(name string) (*ConfigView, bool) {
+	c, exists := bundle.AllScanners.DocsFor(name)
+	if !exists {
+		return nil, false
+	}
+	return &ConfigView{
+		prov:      e.internal,
+		component: c,
+	}, true
 }
 
 // RegisterTemplateYAML attempts to register a template, defined as a YAML

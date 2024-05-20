@@ -37,6 +37,7 @@ type ProcessorsProvider struct {
 	resourcesPaths []string
 	cachedConfigs  map[string]cachedConfig
 
+	spec   docs.FieldSpecs
 	logger log.Modular
 }
 
@@ -45,12 +46,20 @@ func NewProcessorsProvider(targetPath string, opts ...func(*ProcessorsProvider))
 	p := &ProcessorsProvider{
 		targetPath:    targetPath,
 		cachedConfigs: map[string]cachedConfig{},
+		spec:          config.Spec(),
 		logger:        log.Noop(),
 	}
 	for _, opt := range opts {
 		opt(p)
 	}
 	return p
+}
+
+// OptSetConfigSpec sets the config spec used for linting.
+func OptSetConfigSpec(spec docs.FieldSpecs) func(*ProcessorsProvider) {
+	return func(p *ProcessorsProvider) {
+		p.spec = spec
+	}
 }
 
 // OptAddResourcesPaths adds paths to files where resources should be parsed.
@@ -296,9 +305,10 @@ func (p *ProcessorsProvider) getConfs(jsonPtr string, environment map[string]str
 		return confs, fmt.Errorf("failed to parse config file '%v': %v", targetPath, err)
 	}
 
+	confSpec := p.spec
+
 	// Replace mock components, starting with all absolute paths in JSON pointer
 	// form, then parsing remaining mock targets as label names.
-	confSpec := config.Spec()
 	for k, v := range remainingMocks {
 		if !strings.HasPrefix(k, "/") {
 			continue

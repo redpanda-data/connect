@@ -107,7 +107,7 @@ func NewReader(mainPath string, resourcePaths []string, opts ...OptFunc) *Reader
 
 		specFullConfig:    Spec(),
 		specStreamOnly:    stream.Spec(),
-		specObservability: SpecWithoutStream(),
+		specObservability: SpecWithoutStream(Spec()),
 		specResources:     manager.Spec(),
 	}
 	for _, opt := range opts {
@@ -123,9 +123,10 @@ type OptFunc func(*Reader)
 
 // OptSetFullSpec overrides the default general config spec with the provided
 // one.
-func OptSetFullSpec(spec docs.FieldSpecs) OptFunc {
+func OptSetFullSpec(spec func() docs.FieldSpecs) OptFunc {
 	return func(r *Reader) {
-		r.specFullConfig = spec
+		r.specFullConfig = spec()
+		r.specObservability = SpecWithoutStream(spec())
 	}
 }
 
@@ -178,8 +179,8 @@ func (r *Reader) lintCtx() docs.LintContext {
 }
 
 // Read a Benthos config from the files and options specified.
-func (r *Reader) Read() (conf Type, lints []string, err error) {
-	if conf, lints, err = r.readMain(r.mainPath); err != nil {
+func (r *Reader) Read() (conf Type, pConf *docs.ParsedConfig, lints []string, err error) {
+	if conf, pConf, lints, err = r.readMain(r.mainPath); err != nil {
 		return
 	}
 	r.configFileInfo = resInfoFromConfig(&conf.ResourceConfig)
@@ -276,7 +277,7 @@ func applyOverrides(specs docs.FieldSpecs, root *yaml.Node, overrides ...string)
 	return nil
 }
 
-func (r *Reader) readMain(mainPath string) (conf Type, lints []string, err error) {
+func (r *Reader) readMain(mainPath string) (conf Type, pConf *docs.ParsedConfig, lints []string, err error) {
 	defer func() {
 		if err != nil && mainPath != "" {
 			err = fmt.Errorf("%v: %w", mainPath, err)
@@ -327,7 +328,6 @@ func (r *Reader) readMain(mainPath string) (conf Type, lints []string, err error
 	var rawSource any
 	_ = rawNode.Decode(&rawSource)
 
-	var pConf *docs.ParsedConfig
 	if pConf, err = confSpec.ParsedConfigFromAny(rawNode); err != nil {
 		return
 	}
@@ -345,7 +345,7 @@ func (r *Reader) readMain(mainPath string) (conf Type, lints []string, err error
 // the provided main update func, and apply changes to resources to the provided
 // manager as appropriate.
 func (r *Reader) TriggerMainUpdate(mgr bundle.NewManagement, strict bool, newPath string) error {
-	conf, lints, err := r.readMain(newPath)
+	conf, _, lints, err := r.readMain(newPath)
 	if errors.Is(err, fs.ErrNotExist) {
 		if r.mainPath != newPath {
 			mgr.Logger().Error("Failed to read changed main config: %v", err)

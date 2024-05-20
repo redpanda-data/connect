@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"runtime/debug"
@@ -16,7 +15,6 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/cli/studio"
 	clitemplate "github.com/benthosdev/benthos/v4/internal/cli/template"
 	"github.com/benthosdev/benthos/v4/internal/cli/test"
-	"github.com/benthosdev/benthos/v4/internal/config"
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/filepath"
 	"github.com/benthosdev/benthos/v4/internal/filepath/ifs"
@@ -62,7 +60,7 @@ func init() {
 
 // App returns the full CLI app definition, this is useful for writing unit
 // tests around the CLI.
-func App() *cli.App {
+func App(opts *common.CLIOpts) *cli.App {
 	flags := []cli.Flag{
 		&cli.BoolFlag{
 			Name:    "version",
@@ -172,7 +170,7 @@ Either run Benthos as a stream processor or choose a command:
 		},
 		Action: func(c *cli.Context) error {
 			if c.Bool("version") {
-				fmt.Printf("Version: %v\nDate: %v\n", Version, DateBuilt)
+				fmt.Printf("Version: %v\nDate: %v\n", opts.Version, opts.DateBuilt)
 				os.Exit(0)
 			}
 			if c.Args().Len() > 0 {
@@ -181,7 +179,7 @@ Either run Benthos as a stream processor or choose a command:
 				os.Exit(1)
 			}
 
-			if code := common.RunService(c, Version, DateBuilt, false); code != 0 {
+			if code := common.RunService(c, opts, false); code != 0 {
 				os.Exit(code)
 			}
 			return nil
@@ -197,8 +195,8 @@ variables have been resolved:
 
   benthos -c ./config.yaml echo | less`[1:],
 				Action: func(c *cli.Context) error {
-					_, _, confReader := common.ReadConfig(c, false)
-					conf, _, err := confReader.Read()
+					_, _, confReader := common.ReadConfig(c, opts, false)
+					conf, _, _, err := confReader.Read()
 					if err != nil {
 						fmt.Fprintf(os.Stderr, "Configuration file read error: %v\n", err)
 						os.Exit(1)
@@ -208,7 +206,7 @@ variables have been resolved:
 						sanitConf := docs.NewSanitiseConfig(bundle.GlobalEnvironment)
 						sanitConf.RemoveTypeField = true
 						sanitConf.ScrubSecrets = true
-						err = config.Spec().SanitiseYAML(&node, sanitConf)
+						err = opts.MainConfigSpecCtor().SanitiseYAML(&node, sanitConf)
 					}
 					if err == nil {
 						var configYAML []byte
@@ -223,7 +221,7 @@ variables have been resolved:
 					return nil
 				},
 			},
-			lintCliCommand(),
+			lintCliCommand(opts),
 			{
 				Name:  "streams",
 				Usage: "Run Benthos in streams mode",
@@ -256,16 +254,16 @@ https://benthos.dev/docs/guides/streams_mode/about`[1:],
 					},
 				},
 				Action: func(c *cli.Context) error {
-					os.Exit(common.RunService(c, Version, DateBuilt, true))
+					os.Exit(common.RunService(c, opts, true))
 					return nil
 				},
 			},
-			listCliCommand(),
-			createCliCommand(),
-			test.CliCommand(),
+			listCliCommand(opts),
+			createCliCommand(opts),
+			test.CliCommand(opts),
 			clitemplate.CliCommand(),
 			blobl.CliCommand(),
-			studio.CliCommand(Version, DateBuilt),
+			studio.CliCommand(opts),
 		},
 	}
 
@@ -275,11 +273,4 @@ https://benthos.dev/docs/guides/streams_mode/about`[1:],
 		return err
 	}
 	return app
-}
-
-// Run the Benthos service, if the pipeline is started successfully then this
-// call blocks until either the pipeline shuts down or a termination signal is
-// received.
-func Run(ctx context.Context) {
-	_ = App().RunContext(ctx, os.Args)
 }

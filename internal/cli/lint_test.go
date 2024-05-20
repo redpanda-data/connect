@@ -11,18 +11,20 @@ import (
 	"github.com/urfave/cli/v2"
 
 	icli "github.com/benthosdev/benthos/v4/internal/cli"
+	"github.com/benthosdev/benthos/v4/internal/cli/common"
 
 	_ "github.com/benthosdev/benthos/v4/public/components/io"
 	_ "github.com/benthosdev/benthos/v4/public/components/pure"
 )
 
 func executeLintSubcmd(t *testing.T, args []string) (exitCode int, printedErr string) {
-	cliApp := icli.App()
+	opts := common.NewCLIOpts("1.2.3", "now")
+	cliApp := icli.App(opts)
 	for _, c := range cliApp.Commands {
 		if c.Name == "lint" {
 			c.Action = func(ctx *cli.Context) error {
 				var buf bytes.Buffer
-				exitCode = icli.LintAction(ctx, &buf)
+				exitCode = icli.LintAction(ctx, opts, &buf)
 				printedErr = buf.String()
 				return nil
 			}

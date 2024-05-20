@@ -6,13 +6,14 @@ import (
 
 	"github.com/urfave/cli/v2"
 
+	"github.com/benthosdev/benthos/v4/internal/cli/common"
 	"github.com/benthosdev/benthos/v4/internal/filepath"
 	"github.com/benthosdev/benthos/v4/internal/filepath/ifs"
 	"github.com/benthosdev/benthos/v4/internal/log"
 )
 
 // CliCommand is a cli.Command definition for unit testing.
-func CliCommand() *cli.Command {
+func CliCommand(cliOpts *common.CLIOpts) *cli.Command {
 	return &cli.Command{
 		Name:  "test",
 		Usage: "Execute Benthos unit tests",
@@ -52,10 +53,10 @@ https://benthos.dev/docs/configuration/unit_testing`[1:],
 					fmt.Printf("Failed to init logger: %v\n", err)
 					os.Exit(1)
 				}
-				if RunAll(c.Args().Slice(), "_benthos_test", true, logger, resourcesPaths) {
+				if RunAll(c.Args().Slice(), cliOpts.MainConfigSpecCtor(), "_benthos_test", true, logger, resourcesPaths) {
 					os.Exit(0)
 				}
-			} else if RunAll(c.Args().Slice(), "_benthos_test", true, log.Noop(), resourcesPaths) {
+			} else if RunAll(c.Args().Slice(), cliOpts.MainConfigSpecCtor(), "_benthos_test", true, log.Noop(), resourcesPaths) {
 				os.Exit(0)
 			}
 			os.Exit(1)

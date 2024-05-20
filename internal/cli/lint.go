@@ -14,6 +14,7 @@ import (
 	"github.com/urfave/cli/v2"
 
 	"github.com/benthosdev/benthos/v4/internal/bundle"
+	"github.com/benthosdev/benthos/v4/internal/cli/common"
 	"github.com/benthosdev/benthos/v4/internal/config"
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	ifilepath "github.com/benthosdev/benthos/v4/internal/filepath"
@@ -30,8 +31,8 @@ type pathLint struct {
 	lint   docs.Lint
 }
 
-func lintFile(path string, skipEnvVarCheck bool, lConf docs.LintConfig) (pathLints []pathLint) {
-	_, lints, err := config.ReadYAMLFileLinted(ifs.OS(), config.Spec(), path, skipEnvVarCheck, lConf)
+func lintFile(path string, skipEnvVarCheck bool, spec docs.FieldSpecs, lConf docs.LintConfig) (pathLints []pathLint) {
+	_, lints, err := config.ReadYAMLFileLinted(ifs.OS(), spec, path, skipEnvVarCheck, lConf)
 	if err != nil {
 		pathLints = append(pathLints, pathLint{
 			source: path,
@@ -48,7 +49,7 @@ func lintFile(path string, skipEnvVarCheck bool, lConf docs.LintConfig) (pathLin
 	return
 }
 
-func lintMDSnippets(path string, lConf docs.LintConfig) (pathLints []pathLint) {
+func lintMDSnippets(path string, spec docs.FieldSpecs, lConf docs.LintConfig) (pathLints []pathLint) {
 	rawBytes, err := ifs.ReadFile(ifs.OS(), path)
 	if err != nil {
 		pathLints = append(pathLints, pathLint{
@@ -90,7 +91,6 @@ func lintMDSnippets(path string, lConf docs.LintConfig) (pathLints []pathLint) {
 			continue
 		}
 
-		spec := config.Spec()
 		pConf, err := spec.ParsedConfigFromAny(cNode)
 		if err != nil {
 			var l docs.Lint
@@ -135,7 +135,7 @@ func lintMDSnippets(path string, lConf docs.LintConfig) (pathLints []pathLint) {
 	return
 }
 
-func lintCliCommand() *cli.Command {
+func lintCliCommand(cliOpts *common.CLIOpts) *cli.Command {
 	return &cli.Command{
 		Name:  "lint",
 		Usage: "Parse Benthos configs and report any linting errors",
@@ -167,7 +167,7 @@ files with the .yaml or .yml extension.`[1:],
 			},
 		},
 		Action: func(c *cli.Context) error {
-			if code := LintAction(c, os.Stderr); code != 0 {
+			if code := LintAction(c, cliOpts, os.Stderr); code != 0 {
 				os.Exit(code)
 			}
 			return nil
@@ -177,7 +177,7 @@ files with the .yaml or .yml extension.`[1:],
 
 // LintAction performs the benthos lint subcommand and returns the appropriate
 // exit code. This function is exported for testing purposes only.
-func LintAction(c *cli.Context, stderr io.Writer) int {
+func LintAction(c *cli.Context, opts *common.CLIOpts, stderr io.Writer) int {
 	targets, err := ifilepath.GlobsAndSuperPaths(ifs.OS(), c.Args().Slice(), "yaml", "yml")
 	if err != nil {
 		fmt.Fprintf(stderr, "Lint paths error: %v\n", err)
@@ -192,6 +192,8 @@ func LintAction(c *cli.Context, stderr io.Writer) int {
 	lConf.RejectDeprecated = c.Bool("deprecated")
 	lConf.RequireLabels = c.Bool("labels")
 	skipEnvVarCheck := c.Bool("skip-env-var-check")
+
+	spec := opts.MainConfigSpecCtor()
 
 	var pathLintMut sync.Mutex
 	var pathLints []pathLint
@@ -210,9 +212,9 @@ func LintAction(c *cli.Context, stderr io.Writer) int {
 				}
 				var lints []pathLint
 				if path.Ext(target) == ".md" {
-					lints = lintMDSnippets(target, lConf)
+					lints = lintMDSnippets(target, spec, lConf)
 				} else {
-					lints = lintFile(target, skipEnvVarCheck, lConf)
+					lints = lintFile(target, skipEnvVarCheck, spec, lConf)
 				}
 				if len(lints) > 0 {
 					pathLintMut.Lock()

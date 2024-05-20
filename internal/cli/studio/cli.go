@@ -2,10 +2,12 @@ package studio
 
 import (
 	"github.com/urfave/cli/v2"
+
+	"github.com/benthosdev/benthos/v4/internal/cli/common"
 )
 
 // CliCommand is a cli.Command definition for interacting with Benthos studio.
-func CliCommand(version, dateBuilt string) *cli.Command {
+func CliCommand(cliOpts *common.CLIOpts) *cli.Command {
 	return &cli.Command{
 		Name:  "studio",
 		Usage: "Interact with Benthos studio (https://studio.benthos.dev)",
@@ -21,8 +23,8 @@ change outside of major version releases.`[1:],
 			},
 		},
 		Subcommands: []*cli.Command{
-			syncSchemaCommand(version, dateBuilt),
-			pullCommand(version, dateBuilt),
+			syncSchemaCommand(cliOpts),
+			pullCommand(cliOpts),
 		},
 	}
 }

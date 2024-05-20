@@ -21,6 +21,7 @@ import (
 	"github.com/urfave/cli/v2"
 
 	icli "github.com/benthosdev/benthos/v4/internal/cli"
+	"github.com/benthosdev/benthos/v4/internal/cli/common"
 	"github.com/benthosdev/benthos/v4/internal/cli/studio"
 
 	_ "github.com/benthosdev/benthos/v4/public/components/io"
@@ -89,14 +90,16 @@ func testServerForPullRunner(
 		}
 	}
 
-	cliApp := icli.App()
+	cliOpts := common.NewCLIOpts("1.2.3", "justnow")
+
+	cliApp := icli.App(cliOpts)
 	for _, c := range cliApp.Commands {
 		if c.Name == "studio" {
 			for _, sc := range c.Subcommands {
 				if sc.Name == "pull" {
 					sc.Action = func(ctx *cli.Context) error {
 						var err error
-						pr, err = studio.NewPullRunner(ctx, "1.2.3", "justnow", "aaa", "bbb", studio.OptSetNowFn(nowFn))
+						pr, err = studio.NewPullRunner(ctx, cliOpts, "aaa", "bbb", studio.OptSetNowFn(nowFn))
 						require.NoError(t, err)
 						return nil
 					}

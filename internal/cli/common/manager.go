@@ -27,9 +27,9 @@ import (
 // CreateManager from a CLI context and a stream config.
 func CreateManager(
 	c *cli.Context,
+	cliOpts *CLIOpts,
 	logger log.Modular,
 	streamsMode bool,
-	version, dateBuilt string,
 	conf config.Type,
 	mgrOpts ...manager.OptFunc,
 ) (stoppableMgr *StoppableManager, err error) {
@@ -57,7 +57,7 @@ func CreateManager(
 	// to revise in future.
 	tmpMgr := mock.NewManager()
 	tmpMgr.L = logger
-	tmpMgr.Version = version
+	tmpMgr.Version = cliOpts.Version
 
 	// Create our metrics type.
 	if stats, err = bundle.AllMetrics.Init(conf.Metrics, tmpMgr); err != nil {
@@ -77,9 +77,9 @@ func CreateManager(
 		sanitConf := docs.NewSanitiseConfig(bundle.GlobalEnvironment)
 		sanitConf.RemoveTypeField = true
 		sanitConf.ScrubSecrets = true
-		sanitSpec := config.Spec()
+		sanitSpec := cliOpts.MainConfigSpecCtor()
 		if streamsMode {
-			sanitSpec = config.SpecWithoutStream()
+			sanitSpec = config.SpecWithoutStream(cliOpts.MainConfigSpecCtor())
 		}
 		err = sanitSpec.SanitiseYAML(&sanitNode, sanitConf)
 	}
@@ -89,14 +89,14 @@ func CreateManager(
 	}
 
 	var httpServer *api.Type
-	if httpServer, err = api.New(version, dateBuilt, conf.HTTP, sanitNode, logger, stats); err != nil {
+	if httpServer, err = api.New(cliOpts.Version, cliOpts.DateBuilt, conf.HTTP, sanitNode, logger, stats); err != nil {
 		err = fmt.Errorf("failed to initialise API: %w", err)
 		return
 	}
 
 	mgrOpts = append([]manager.OptFunc{
 		manager.OptSetAPIReg(httpServer),
-		manager.OptSetEngineVersion(version),
+		manager.OptSetEngineVersion(cliOpts.Version),
 		manager.OptSetStreamHTTPNamespacing(c.Bool("prefix-stream-endpoints")),
 		manager.OptSetLogger(logger),
 		manager.OptSetMetrics(stats),

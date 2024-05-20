@@ -6,6 +6,7 @@ import (
 	"context"
 
 	"github.com/benthosdev/benthos/v4/internal/cli"
+	"github.com/benthosdev/benthos/v4/internal/cli/common"
 )
 
 // RunCLIWithArgs executes Benthos as a CLI with an explicit set of arguments.
@@ -18,5 +19,5 @@ import (
 // 3. The provided context has a deadline that is reached, triggering graceful termination
 // 4. The provided context is cancelled (WARNING, this prevents graceful termination)
 func RunCLIWithArgs(ctx context.Context, args ...string) {
-	_ = cli.App().RunContext(ctx, args)
+	_ = cli.App(common.NewCLIOpts(cli.Version, cli.DateBuilt)).RunContext(ctx, args)
 }

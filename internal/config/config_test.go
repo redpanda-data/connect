@@ -47,7 +47,7 @@ func TestSetOverridesOnNothing(t *testing.T) {
 		"output.type=drop",
 	))
 
-	conf, lints, err := rdr.Read()
+	conf, _, lints, err := rdr.Read()
 	require.NoError(t, err)
 	assert.Empty(t, lints)
 
@@ -88,7 +88,7 @@ func TestSetOverrideErrors(t *testing.T) {
 	for _, test := range tests {
 		rdr := config.NewReader("", nil, config.OptAddOverrides(test.input))
 
-		_, _, err := rdr.Read()
+		_, _, _, err := rdr.Read()
 		assert.Contains(t, err.Error(), test.err)
 	}
 }
@@ -110,7 +110,7 @@ input:
 		"output.type=drop",
 	))
 
-	conf, lints, err := rdr.Read()
+	conf, _, lints, err := rdr.Read()
 	require.NoError(t, err)
 	assert.Empty(t, lints)
 
@@ -166,7 +166,7 @@ tests:
 
 	rdr := config.NewReader(fullPath, []string{resourceOnePath, resourceTwoPath, resourceThreePath})
 
-	conf, lints, err := rdr.Read()
+	conf, _, lints, err := rdr.Read()
 	require.NoError(t, err)
 	assert.Empty(t, lints)
 
@@ -218,7 +218,7 @@ cache_resources:
 
 	rdr := config.NewReader(fullPath, []string{resourceOnePath, resourceTwoPath})
 
-	conf, lints, err := rdr.Read()
+	conf, _, lints, err := rdr.Read()
 	require.NoError(t, err)
 	require.Len(t, lints, 3)
 	assert.Contains(t, lints[0], "/main.yaml(3,1) field meow1 ")

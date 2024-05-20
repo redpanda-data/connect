@@ -169,35 +169,3 @@ func (l *Logger) Debug(format string, v ...any) {
 func (l *Logger) Trace(format string, v ...any) {
 	l.entry.Tracef(strings.TrimSuffix(format, "\n"), v...)
 }
-
-//------------------------------------------------------------------------------
-
-// Fatalln prints a fatal message to the console. Does NOT cause panic.
-func (l *Logger) Fatalln(message string) {
-	l.entry.Fatalln(message)
-}
-
-// Errorln prints an error message to the console.
-func (l *Logger) Errorln(message string) {
-	l.entry.Errorln(message)
-}
-
-// Warnln prints a warning message to the console.
-func (l *Logger) Warnln(message string) {
-	l.entry.Warnln(message)
-}
-
-// Infoln prints an information message to the console.
-func (l *Logger) Infoln(message string) {
-	l.entry.Infoln(message)
-}
-
-// Debugln prints a debug message to the console.
-func (l *Logger) Debugln(message string) {
-	l.entry.Debugln(message)
-}
-
-// Traceln prints a trace message to the console.
-func (l *Logger) Traceln(message string) {
-	l.entry.Traceln(message)
-}

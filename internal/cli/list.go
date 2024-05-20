@@ -10,11 +10,12 @@ import (
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
 
+	"github.com/benthosdev/benthos/v4/internal/cli/common"
 	"github.com/benthosdev/benthos/v4/internal/config/schema"
 	"github.com/benthosdev/benthos/v4/internal/cuegen"
 )
 
-func listCliCommand() *cli.Command {
+func listCliCommand(opts *common.CLIOpts) *cli.Command {
 	return &cli.Command{
 		Name:  "list",
 		Usage: "List all Benthos component types",
@@ -38,23 +39,24 @@ components will be shown.
 			},
 		},
 		Action: func(c *cli.Context) error {
-			listComponents(c)
+			listComponents(c, opts)
 			os.Exit(0)
 			return nil
 		},
 	}
 }
 
-func listComponents(c *cli.Context) {
+func listComponents(c *cli.Context, opts *common.CLIOpts) {
 	ofTypes := map[string]struct{}{}
 	for _, k := range c.Args().Slice() {
 		ofTypes[k] = struct{}{}
 	}
 
-	schema := schema.New(Version, DateBuilt)
+	schema := schema.New(opts.Version, opts.DateBuilt)
 	if status := c.String("status"); status != "" {
 		schema.ReduceToStatus(status)
 	}
+	schema.Config = opts.MainConfigSpecCtor()
 
 	switch c.String("format") {
 	case "text":

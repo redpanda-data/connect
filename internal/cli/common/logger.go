@@ -12,7 +12,7 @@ import (
 )
 
 // CreateLogger from a CLI context and a stream config.
-func CreateLogger(c *cli.Context, conf config.Type, streamsMode bool) (logger log.Modular, err error) {
+func CreateLogger(c *cli.Context, opts *CLIOpts, conf config.Type, streamsMode bool) (logger log.Modular, err error) {
 	if overrideLogLevel := c.String("log.level"); overrideLogLevel != "" {
 		conf.Logger.LogLevel = strings.ToUpper(overrideLogLevel)
 	}
@@ -21,6 +21,11 @@ func CreateLogger(c *cli.Context, conf config.Type, streamsMode bool) (logger lo
 	if !streamsMode && conf.Output.Type == "stdout" {
 		defaultStream = os.Stderr
 	}
-	logger, err = log.New(defaultStream, ifs.OS(), conf.Logger)
+	if logger, err = log.New(defaultStream, ifs.OS(), conf.Logger); err != nil {
+		return
+	}
+	if logger, err = opts.OnLoggerInit(logger); err != nil {
+		return
+	}
 	return
 }

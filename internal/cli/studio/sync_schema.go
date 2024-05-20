@@ -12,10 +12,11 @@ import (
 
 	"github.com/urfave/cli/v2"
 
+	"github.com/benthosdev/benthos/v4/internal/cli/common"
 	"github.com/benthosdev/benthos/v4/internal/config/schema"
 )
 
-func syncSchemaCommand(version, dateBuilt string) *cli.Command {
+func syncSchemaCommand(cliOpts *common.CLIOpts) *cli.Command {
 	return &cli.Command{
 		Name:  "sync-schema",
 		Usage: "Synchronizes the schema of this Benthos instance with a studio session",
@@ -53,7 +54,8 @@ page within the studio application.`[1:],
 			}
 			u.Path = path.Join(u.Path, fmt.Sprintf("/api/v1/token/%v/session/%v/schema", tokenID, sessionID))
 
-			schema := schema.New(version, dateBuilt)
+			schema := schema.New(cliOpts.Version, cliOpts.DateBuilt)
+			schema.Config = cliOpts.MainConfigSpecCtor()
 			schema.Scrub()
 			schemaBytes, err := json.Marshal(schema)
 			if err != nil {
