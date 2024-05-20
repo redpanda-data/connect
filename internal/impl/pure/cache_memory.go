@@ -220,7 +220,7 @@ func (m *memoryCache) Add(_ context.Context, key string, value []byte, ttl *time
 	}
 	shard := m.getShard(key)
 	shard.Lock()
-	if _, exists := shard.items[key]; exists {
+	if k, exists := shard.items[key]; exists && !shard.isExpired(k) {
 		shard.Unlock()
 		return service.ErrKeyAlreadyExists
 	}
