@@ -194,11 +194,13 @@ func expandBloblEnvWithSchema(schema *rawMessageSchema, bEnv *bloblang.Environme
 		if _, exists := hasPlug[name]; exists {
 			continue
 		}
-		_ = bEnv.RegisterFunctionV2(name, pluginSpec, func(args *bloblang.ParsedParams) (bloblang.Function, error) {
+		if err = bEnv.RegisterFunctionV2(name, pluginSpec, func(args *bloblang.ParsedParams) (bloblang.Function, error) {
 			return func() (interface{}, error) {
 				return nil, fmt.Errorf("function %v not enabled", name)
 			}, nil
-		})
+		}); err != nil {
+			return err
+		}
 	}
 
 	hasPlug = map[string]struct{}{}
@@ -211,11 +213,13 @@ func expandBloblEnvWithSchema(schema *rawMessageSchema, bEnv *bloblang.Environme
 		if _, exists := hasPlug[name]; exists {
 			continue
 		}
-		_ = bEnv.RegisterMethodV2(name, pluginSpec, func(args *bloblang.ParsedParams) (bloblang.Method, error) {
+		if err = bEnv.RegisterMethodV2(name, pluginSpec, func(args *bloblang.ParsedParams) (bloblang.Method, error) {
 			return func(v interface{}) (interface{}, error) {
 				return nil, fmt.Errorf("method %v not enabled", name)
 			}, nil
-		})
+		}); err != nil {
+			return err
+		}
 	}
 	return nil
 }

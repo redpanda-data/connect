@@ -8,11 +8,19 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/benthosdev/benthos/v4/public/bloblang"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
 func TestStreamLinter(t *testing.T) {
+	blobl := bloblang.NewEmptyEnvironment()
+
+	require.NoError(t, blobl.RegisterFunction("cow", func(args ...any) (bloblang.Function, error) {
+		return nil, errors.New("nope")
+	}))
+
 	env := service.NewEmptyEnvironment()
+	env.UseBloblangEnvironment(blobl)
 
 	require.NoError(t, env.RegisterInput("dog", service.NewConfigSpec().Fields(
 		service.NewStringField("woof").Example("WOOF"),
@@ -23,6 +31,11 @@ func TestStreamLinter(t *testing.T) {
 
 	require.NoError(t, env.RegisterBatchBuffer("none", service.NewConfigSpec(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchBuffer, error) {
+			return nil, errors.New("nope")
+		}))
+
+	require.NoError(t, env.RegisterProcessor("testprocessor", service.NewConfigSpec().Field(service.NewBloblangField("mapfield")),
+		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {
 			return nil, errors.New("nope")
 		}))
 
@@ -48,6 +61,27 @@ input:
   dog:
     woof: wooooowooof
 `,
+		},
+		{
+			name: "good bloblang",
+			config: `
+pipeline:
+  processors:
+    - testprocessor:
+        mapfield: 'root = cow("test")'
+`,
+		},
+		{
+			name: "bad bloblang",
+			config: `
+pipeline:
+  processors:
+    - testprocessor:
+        mapfield: 'root = meow("test")'
+`,
+			lintContains: []string{
+				"unrecognised function",
+			},
 		},
 		{
 			name: "unknown field lint",

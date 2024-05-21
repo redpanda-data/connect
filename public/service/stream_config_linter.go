@@ -27,6 +27,7 @@ type StreamConfigLinter struct {
 // formats.
 func (s *ConfigSchema) NewStreamConfigLinter() *StreamConfigLinter {
 	lintConf := docs.NewLintConfig(s.env.internal)
+	lintConf.BloblangEnv = s.env.bloblangEnv.Deactivated()
 	return &StreamConfigLinter{
 		env:            s.env,
 		spec:           s.fields,
