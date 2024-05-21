@@ -22,6 +22,7 @@ func RawProcessorConfig() *service.ConfigSpec {
 If the query fails to execute then the message will remain unchanged and the error can be caught using error handling methods outlined [here](/docs/configuration/error_handling).`).
 		Field(driverField).
 		Field(dsnField).
+		Field(dynamicCredentialsField).
 		Field(rawQueryField().
 			Example("INSERT INTO footable (foo, bar, baz) VALUES (?, ?, ?);").
 			Example("SELECT * FROM footable WHERE user_id = $1;")).
@@ -101,6 +102,7 @@ type sqlRawProcessor struct {
 
 	logger  *service.Logger
 	shutSig *shutdown.Signaller
+	manager *service.Resources
 }
 
 // NewSQLRawProcessorFromConfig returns an internal sql_raw processor.
@@ -110,7 +112,7 @@ func NewSQLRawProcessorFromConfig(conf *service.ParsedConfig, mgr *service.Resou
 		return nil, err
 	}
 
-	dsnStr, err := conf.FieldString("dsn")
+	dsnStr, err := conf.FieldInterpolatedString("dsn")
 	if err != nil {
 		return nil, err
 	}
@@ -145,12 +147,13 @@ func NewSQLRawProcessorFromConfig(conf *service.ParsedConfig, mgr *service.Resou
 	if err != nil {
 		return nil, err
 	}
-	return newSQLRawProcessor(mgr.Logger(), driverStr, dsnStr, queryStatic, queryDyn, onlyExec, argsMapping, connSettings)
+	return newSQLRawProcessor(mgr, driverStr, dsnStr, queryStatic, queryDyn, onlyExec, argsMapping, connSettings)
 }
 
 func newSQLRawProcessor(
-	logger *service.Logger,
-	driverStr, dsnStr string,
+	manager *service.Resources,
+	driverStr string,
+	dsnStr *service.InterpolatedString,
 	queryStatic string,
 	queryDyn *service.InterpolatedString,
 	onlyExec bool,
@@ -158,7 +161,8 @@ func newSQLRawProcessor(
 	connSettings *connSettings,
 ) (*sqlRawProcessor, error) {
 	s := &sqlRawProcessor{
-		logger:      logger,
+		logger:      manager.Logger(),
+		manager:     manager,
 		shutSig:     shutdown.NewSignaller(),
 		queryStatic: queryStatic,
 		queryDyn:    queryDyn,
@@ -167,7 +171,7 @@ func newSQLRawProcessor(
 	}
 
 	var err error
-	if s.db, err = sqlOpenWithReworks(logger, driverStr, dsnStr); err != nil {
+	if s.db, err = sqlOpenWithReworks(manager, driverStr, dsnStr, connSettings.dynamicCredentials); err != nil {
 		return nil, err
 	}
 	connSettings.apply(context.Background(), s.db, s.logger)

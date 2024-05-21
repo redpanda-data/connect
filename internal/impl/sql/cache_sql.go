@@ -50,6 +50,7 @@ The ` + "`add`" + ` operation is performed with a traditional ` + "`insert`" + `
 `).
 		Field(driverField).
 		Field(dsnField).
+		Field(dynamicCredentialsField).
 		Field(service.NewStringField("table").
 			Description("The table to insert/read/delete cache items.").
 			Example("foo")).
@@ -87,8 +88,8 @@ func init() {
 
 type sqlCache struct {
 	driver string
-	dsn    string
 	db     *sql.DB
+	dsn    *service.InterpolatedString
 
 	keyColumn string
 
@@ -113,7 +114,7 @@ func newSQLCacheFromConfig(conf *service.ParsedConfig, mgr *service.Resources) (
 		return nil, err
 	}
 
-	if s.dsn, err = conf.FieldString("dsn"); err != nil {
+	if s.dsn, err = conf.FieldInterpolatedString("dsn"); err != nil {
 		return nil, err
 	}
 
@@ -161,7 +162,7 @@ func newSQLCacheFromConfig(conf *service.ParsedConfig, mgr *service.Resources) (
 		return nil, err
 	}
 
-	if s.db, err = sqlOpenWithReworks(s.logger, s.driver, s.dsn); err != nil {
+	if s.db, err = sqlOpenWithReworks(mgr, s.driver, s.dsn, connSettings.dynamicCredentials); err != nil {
 		return nil, err
 	}
 	connSettings.apply(context.Background(), s.db, s.logger)

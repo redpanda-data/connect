@@ -4,18 +4,39 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"net/url"
-	"strings"
 	"sync"
 	"time"
 
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
+type DynamicCredentials struct {
+	cache    string
+	cacheKey string
+}
+
+var dynamicCredentialsField = service.NewObjectField("dynamic_credentials",
+	service.NewStringField("cache").
+		Description(`Specifies the cache resource to use for looking up dynamic credentials.`),
+	service.NewStringField("cache_key").
+		Description(`Specifies the key to use when looking up dynamic credentials in the cache.`),
+).
+	Description(`Specifies a cache resource for looking up credentials dynamically.
+This can be useful in situations where credentials are rotated frequently, allowing re-authentication without a restart.
+The value is read from the cache as a JSON message and is used to template the DSN.
+
+Credentials are fetched when a new connection is created meaning that stale connections will persist unless` + "`conn_max_idle`" + ` is set to zero.
+Similarly, if ` + "`conn_max_idle_time`" + ` is set to a low value then connections will be closed and re-authenticated more frequently
+
+The specified init statement and files are executed only once overall and not per re-authentication.
+`).
+	Advanced().
+	Optional()
+
 var driverField = service.NewStringEnumField("driver", "mysql", "postgres", "clickhouse", "mssql", "sqlite", "oracle", "snowflake", "trino", "gocosmos").
 	Description("A database [driver](#drivers) to use.")
 
-var dsnField = service.NewStringField("dsn").
+var dsnField = service.NewInterpolatedStringField("dsn").
 	Description(`A Data Source Name to identify the target database.
 
 #### Drivers
@@ -35,6 +56,10 @@ The following is a list of supported drivers, their placeholder style, and their
 ` + "| `gocosmos` | [`AccountEndpoint=<cosmosdb-endpoint>;AccountKey=<cosmosdb-account-key>[;TimeoutMs=<timeout-in-ms>][;Version=<cosmosdb-api-version>][;DefaultDb/Db=<db-name>][;AutoId=<true/false>][;InsecureSkipVerify=<true/false>]`](https://pkg.go.dev/github.com/microsoft/gocosmos#readme-example-usage) |" + `
 
 Please note that the ` + "`postgres`" + ` driver enforces SSL by default, you can override this with the parameter ` + "`sslmode=disable`" + ` if required.
+
+This value supports interpolations, but they are not evaluated on a per message basis.
+Instead, you can use the ` + "`dynamic_credentials`" + ` configuration field to pull a message from a cache resource that will be used to provide templating fields.
+New connections will use the latest values from the cache.
 
 The ` + "`snowflake`" + ` driver supports multiple DSN formats. Please consult [the docs](https://pkg.go.dev/github.com/snowflakedb/gosnowflake#hdr-Connection_String) for more details. For [key pair authentication](https://docs.snowflake.com/en/user-guide/key-pair-auth.html#configuring-key-pair-authentication), the DSN has the following format: ` + "`<snowflake_user>@<snowflake_account>/<db_name>/<schema_name>?warehouse=<warehouse>&role=<role>&authenticator=snowflake_jwt&privateKey=<base64_url_encoded_private_key>`" + `, where the value for the ` + "`privateKey`" + ` parameter can be constructed from an unencrypted RSA private key file ` + "`rsa_key.p8`" + ` using ` + "`openssl enc -d -base64 -in rsa_key.p8 | basenc --base64url -w0`" + ` (you can use ` + "`gbasenc`" + ` insted of ` + "`basenc`" + ` on OSX if you install ` + "`coreutils`" + ` via Homebrew). If you have a password-encrypted private key, you can decrypt it using ` + "`openssl pkcs8 -in rsa_key_encrypted.p8 -out rsa_key.p8`" + `. Also, make sure fields such as the username are URL-encoded.
 
@@ -125,6 +150,7 @@ type connSettings struct {
 	initOnce           sync.Once
 	initFileStatements [][2]string // (path,statement)
 	initStatement      string
+	dynamicCredentials *DynamicCredentials
 }
 
 func (c *connSettings) apply(ctx context.Context, db *sql.DB, log *service.Logger) {
@@ -206,37 +232,30 @@ func connSettingsFromParsed(
 			})
 		}
 	}
+
+	if conf.Contains("dynamic_credentials") {
+		var creds DynamicCredentials
+		if creds.cache, err = conf.FieldString("dynamic_credentials", "cache"); err != nil {
+			return
+		}
+		if creds.cacheKey, err = conf.FieldString("dynamic_credentials", "cache_key"); err != nil {
+			return
+		}
+		c.dynamicCredentials = &creds
+	}
 	return
 }
 
-func sqlOpenWithReworks(logger *service.Logger, driver, dsn string) (*sql.DB, error) {
-	if driver == "clickhouse" && strings.HasPrefix(dsn, "tcp") {
-		u, err := url.Parse(dsn)
-		if err != nil {
-			return nil, err
-		}
-
-		u.Scheme = "clickhouse"
-
-		uq := u.Query()
-		u.Path = uq.Get("database")
-		if username, password := uq.Get("username"), uq.Get("password"); username != "" {
-			if password != "" {
-				u.User = url.User(username)
-			} else {
-				u.User = url.UserPassword(username, password)
-			}
-		}
-
-		uq.Del("database")
-		uq.Del("username")
-		uq.Del("password")
-
-		u.RawQuery = uq.Encode()
-		newDSN := u.String()
-
-		logger.Warnf("Detected old-style Clickhouse Data Source Name: '%v', replacing with new style: '%v'", dsn, newDSN)
-		dsn = newDSN
+func sqlOpenWithReworks(manager *service.Resources, driver string, dsn *service.InterpolatedString, dynamicCredentials *DynamicCredentials) (*sql.DB, error) {
+	connector, err := NewDynamicCredentialConnector(
+		manager,
+		driver,
+		dsn,
+		dynamicCredentials,
+	)
+	if err != nil {
+		return nil, err
 	}
-	return sql.Open(driver, dsn)
+
+	return sql.OpenDB(connector), nil
 }

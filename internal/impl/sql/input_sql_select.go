@@ -22,6 +22,7 @@ func sqlSelectInputConfig() *service.ConfigSpec {
 		Description(`Once the rows from the query are exhausted this input shuts down, allowing the pipeline to gracefully terminate (or the next input in a [sequence](/docs/components/inputs/sequence) to execute).`).
 		Field(driverField).
 		Field(dsnField).
+		Field(dynamicCredentialsField).
 		Field(service.NewStringField("table").
 			Description("The table to select from.").
 			Example("foo")).
@@ -93,7 +94,7 @@ func init() {
 
 type sqlSelectInput struct {
 	driver  string
-	dsn     string
+	dsn     *service.InterpolatedString
 	db      *sql.DB
 	rows    *sql.Rows
 	builder squirrel.SelectBuilder
@@ -106,12 +107,14 @@ type sqlSelectInput struct {
 
 	logger  *service.Logger
 	shutSig *shutdown.Signaller
+	manager *service.Resources
 }
 
 func newSQLSelectInputFromConfig(conf *service.ParsedConfig, mgr *service.Resources) (*sqlSelectInput, error) {
 	s := &sqlSelectInput{
 		logger:  mgr.Logger(),
 		shutSig: shutdown.NewSignaller(),
+		manager: mgr,
 	}
 
 	var err error
@@ -120,7 +123,7 @@ func newSQLSelectInputFromConfig(conf *service.ParsedConfig, mgr *service.Resour
 		return nil, err
 	}
 
-	if s.dsn, err = conf.FieldString("dsn"); err != nil {
+	if s.dsn, err = conf.FieldInterpolatedString("dsn"); err != nil {
 		return nil, err
 	}
 
@@ -184,7 +187,7 @@ func (s *sqlSelectInput) Connect(ctx context.Context) (err error) {
 	}
 
 	var db *sql.DB
-	if db, err = sqlOpenWithReworks(s.logger, s.driver, s.dsn); err != nil {
+	if db, err = sqlOpenWithReworks(s.manager, s.driver, s.dsn, s.connSettings.dynamicCredentials); err != nil {
 		return
 	}
 	defer func() {

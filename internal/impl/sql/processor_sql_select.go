@@ -116,7 +116,7 @@ func NewSQLSelectProcessorFromConfig(conf *service.ParsedConfig, mgr *service.Re
 		return nil, err
 	}
 
-	dsnStr, err := conf.FieldString("dsn")
+	dsnStr, err := conf.FieldInterpolatedString("dsn")
 	if err != nil {
 		return nil, err
 	}
@@ -171,7 +171,7 @@ func NewSQLSelectProcessorFromConfig(conf *service.ParsedConfig, mgr *service.Re
 		return nil, err
 	}
 
-	if s.db, err = sqlOpenWithReworks(mgr.Logger(), driverStr, dsnStr); err != nil {
+	if s.db, err = sqlOpenWithReworks(mgr, driverStr, dsnStr, connSettings.dynamicCredentials); err != nil {
 		return nil, err
 	}
 	connSettings.apply(context.Background(), s.db, s.logger)

@@ -20,6 +20,7 @@ func sqlRawInputConfig() *service.ConfigSpec {
 		Description(`Once the rows from the query are exhausted this input shuts down, allowing the pipeline to gracefully terminate (or the next input in a [sequence](/docs/components/inputs/sequence) to execute).`).
 		Field(driverField).
 		Field(dsnField).
+		Field(dynamicCredentialsField).
 		Field(rawQueryField().
 			Example("SELECT * FROM footable WHERE user_id = $1;")).
 		Field(service.NewBloblangField("args_mapping").
@@ -71,7 +72,7 @@ func init() {
 
 type sqlRawInput struct {
 	driver string
-	dsn    string
+	dsn    *service.InterpolatedString
 	db     *sql.DB
 	dbMut  sync.Mutex
 
@@ -85,12 +86,14 @@ type sqlRawInput struct {
 
 	logger  *service.Logger
 	shutSig *shutdown.Signaller
+	manager *service.Resources
 }
 
 func newSQLRawInputFromConfig(conf *service.ParsedConfig, mgr *service.Resources) (*sqlRawInput, error) {
 	s := &sqlRawInput{
 		logger:  mgr.Logger(),
 		shutSig: shutdown.NewSignaller(),
+		manager: mgr,
 	}
 
 	var err error
@@ -99,7 +102,7 @@ func newSQLRawInputFromConfig(conf *service.ParsedConfig, mgr *service.Resources
 		return nil, err
 	}
 
-	if s.dsn, err = conf.FieldString("dsn"); err != nil {
+	if s.dsn, err = conf.FieldInterpolatedString("dsn"); err != nil {
 		return nil, err
 	}
 
@@ -132,7 +135,7 @@ func (s *sqlRawInput) Connect(ctx context.Context) (err error) {
 	}
 
 	var db *sql.DB
-	if db, err = sqlOpenWithReworks(s.logger, s.driver, s.dsn); err != nil {
+	if db, err = sqlOpenWithReworks(s.manager, s.driver, s.dsn, s.connSettings.dynamicCredentials); err != nil {
 		return err
 	}
 	defer func() {

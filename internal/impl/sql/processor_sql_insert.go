@@ -24,6 +24,7 @@ func InsertProcessorConfig() *service.ConfigSpec {
 If the insert fails to execute then the message will still remain unchanged and the error can be caught using error handling methods outlined [here](/docs/configuration/error_handling).`).
 		Field(driverField).
 		Field(dsnField).
+		Field(dynamicCredentialsField).
 		Field(service.NewStringField("table").
 			Description("The table to insert to.").
 			Example("foo")).
@@ -114,7 +115,7 @@ func NewSQLInsertProcessorFromConfig(conf *service.ParsedConfig, mgr *service.Re
 		s.useTxStmt = true
 	}
 
-	dsnStr, err := conf.FieldString("dsn")
+	dsnStr, err := conf.FieldInterpolatedString("dsn")
 	if err != nil {
 		return nil, err
 	}
@@ -171,7 +172,7 @@ func NewSQLInsertProcessorFromConfig(conf *service.ParsedConfig, mgr *service.Re
 		return nil, err
 	}
 
-	if s.db, err = sqlOpenWithReworks(mgr.Logger(), driverStr, dsnStr); err != nil {
+	if s.db, err = sqlOpenWithReworks(mgr, driverStr, dsnStr, connSettings.dynamicCredentials); err != nil {
 		return nil, err
 	}
 

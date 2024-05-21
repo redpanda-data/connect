@@ -55,6 +55,9 @@ output:
   sql_insert:
     driver: "" # No default (required)
     dsn: clickhouse://username:password@host1:9000,host2:9000/database?dial_timeout=200ms&max_execution_time=60 # No default (required)
+    dynamic_credentials:
+      cache: "" # No default (required)
+      cache_key: "" # No default (required)
     table: foo # No default (required)
     columns: [] # No default (required)
     args_mapping: root = [ this.cat.meow, this.doc.woofs[0] ] # No default (required)
@@ -145,9 +148,14 @@ The following is a list of supported drivers, their placeholder style, and their
 
 Please note that the `postgres` driver enforces SSL by default, you can override this with the parameter `sslmode=disable` if required.
 
+This value supports interpolations, but they are not evaluated on a per message basis.
+Instead, you can use the `dynamic_credentials` configuration field to pull a message from a cache resource that will be used to provide templating fields.
+New connections will use the latest values from the cache.
+
 The `snowflake` driver supports multiple DSN formats. Please consult [the docs](https://pkg.go.dev/github.com/snowflakedb/gosnowflake#hdr-Connection_String) for more details. For [key pair authentication](https://docs.snowflake.com/en/user-guide/key-pair-auth.html#configuring-key-pair-authentication), the DSN has the following format: `<snowflake_user>@<snowflake_account>/<db_name>/<schema_name>?warehouse=<warehouse>&role=<role>&authenticator=snowflake_jwt&privateKey=<base64_url_encoded_private_key>`, where the value for the `privateKey` parameter can be constructed from an unencrypted RSA private key file `rsa_key.p8` using `openssl enc -d -base64 -in rsa_key.p8 | basenc --base64url -w0` (you can use `gbasenc` insted of `basenc` on OSX if you install `coreutils` via Homebrew). If you have a password-encrypted private key, you can decrypt it using `openssl pkcs8 -in rsa_key_encrypted.p8 -out rsa_key.p8`. Also, make sure fields such as the username are URL-encoded.
 
 The [`gocosmos`](https://pkg.go.dev/github.com/microsoft/gocosmos) driver is still experimental, but it has support for [hierarchical partition keys](https://learn.microsoft.com/en-us/azure/cosmos-db/hierarchical-partition-keys) as well as [cross-partition queries](https://learn.microsoft.com/en-us/azure/cosmos-db/nosql/how-to-query-container#cross-partition-query). Please refer to the [SQL notes](https://github.com/microsoft/gocosmos/blob/main/SQL.md) for details.
+This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
 
 
 Type: `string`  
@@ -163,6 +171,34 @@ dsn: postgres://foouser:foopass@localhost:5432/foodb?sslmode=disable
 
 dsn: oracle://foouser:foopass@localhost:1521/service_name
 ```
+
+### `dynamic_credentials`
+
+Specifies a cache resource for looking up credentials dynamically.
+This can be useful in situations where credentials are rotated frequently, allowing re-authentication without a restart.
+The value is read from the cache as a JSON message and is used to template the DSN.
+
+Credentials are fetched when a new connection is created meaning that stale connections will persist unless`conn_max_idle` is set to zero.
+Similarly, if `conn_max_idle_time` is set to a low value then connections will be closed and re-authenticated more frequently
+
+The specified init statement and files are executed only once overall and not per re-authentication.
+
+
+Type: `object`  
+
+### `dynamic_credentials.cache`
+
+Specifies the cache resource to use for looking up dynamic credentials.
+
+
+Type: `string`  
+
+### `dynamic_credentials.cache_key`
+
+Specifies the key to use when looking up dynamic credentials in the cache.
+
+
+Type: `string`  
 
 ### `table`
 
