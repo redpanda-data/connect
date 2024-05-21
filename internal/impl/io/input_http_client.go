@@ -7,11 +7,10 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/benthosdev/benthos/v4/internal/codec/interop"
 	"github.com/benthosdev/benthos/v4/internal/component"
-	"github.com/benthosdev/benthos/v4/internal/component/scanner"
 	"github.com/benthosdev/benthos/v4/internal/httpclient"
 	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/benthosdev/benthos/v4/public/service/codec"
 )
 
 func httpClientInputSpec() *service.ConfigSpec {
@@ -19,7 +18,7 @@ func httpClientInputSpec() *service.ConfigSpec {
 		service.NewBoolField("enabled").Description("Enables streaming mode.").Default(false),
 		service.NewBoolField("reconnect").Description("Sets whether to re-establish the connection once it is lost.").Default(true),
 	}
-	streamFields = append(streamFields, interop.OldReaderCodecFields("lines")...)
+	streamFields = append(streamFields, codec.DeprecatedCodecFields("lines")...)
 
 	streamField := service.NewObjectField("stream", streamFields...).
 		Description("Allows you to set streaming mode, where requests are kept open and messages are processed line-by-line.").
@@ -93,12 +92,12 @@ type httpClientInput struct {
 	client       *httpclient.Client
 	prevResponse service.MessageBatch
 
-	codecCtor       interop.FallbackReaderCodec
+	codecCtor       codec.DeprecatedFallbackCodec
 	reconnectStream bool
 	dropEmptyBodies bool
 
 	codecMut sync.Mutex
-	codec    interop.FallbackReaderStream
+	codec    codec.DeprecatedFallbackStream
 }
 
 func newHTTPClientInputFromParsed(conf *service.ParsedConfig, mgr *service.Resources) (*httpClientInput, error) {
@@ -107,7 +106,7 @@ func newHTTPClientInputFromParsed(conf *service.ParsedConfig, mgr *service.Resou
 		return nil, err
 	}
 
-	var codecCtor interop.FallbackReaderCodec
+	var codecCtor codec.DeprecatedFallbackCodec
 
 	streamEnabled, err := conf.FieldBool("stream", "enabled")
 	if err != nil {
@@ -116,7 +115,7 @@ func newHTTPClientInputFromParsed(conf *service.ParsedConfig, mgr *service.Resou
 	if streamEnabled {
 		// Timeout should be left at zero if we are streaming.
 		oldConf.Timeout = 0
-		if codecCtor, err = interop.OldReaderCodecFromParsed(conf.Namespace("stream")); err != nil {
+		if codecCtor, err = codec.DeprecatedCodecFromParsed(conf.Namespace("stream")); err != nil {
 			return nil, err
 		}
 	}
@@ -180,7 +179,7 @@ func (h *httpClientInput) Connect(ctx context.Context) (err error) {
 
 	if h.codec, err = h.codecCtor.Create(res.Body, func(ctx context.Context, err error) error {
 		return nil
-	}, scanner.SourceDetails{}); err != nil {
+	}, service.NewScannerSourceDetails()); err != nil {
 		res.Body.Close()
 		return err
 	}

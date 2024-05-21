@@ -17,11 +17,9 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/sqs"
 	sqstypes "github.com/aws/aws-sdk-go-v2/service/sqs/types"
 
-	"github.com/benthosdev/benthos/v4/internal/codec"
-	"github.com/benthosdev/benthos/v4/internal/codec/interop"
-	"github.com/benthosdev/benthos/v4/internal/component/scanner"
 	"github.com/benthosdev/benthos/v4/internal/impl/aws/config"
 	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/benthosdev/benthos/v4/public/service/codec"
 )
 
 const (
@@ -88,7 +86,7 @@ type s3iConfig struct {
 	ForcePathStyleURLs bool
 	DeleteObjects      bool
 	SQS                s3iSQSConfig
-	CodecCtor          interop.FallbackReaderCodec
+	CodecCtor          codec.DeprecatedFallbackCodec
 }
 
 func s3iConfigFromParsed(pConf *service.ParsedConfig) (conf s3iConfig, err error) {
@@ -98,7 +96,7 @@ func s3iConfigFromParsed(pConf *service.ParsedConfig) (conf s3iConfig, err error
 	if conf.Prefix, err = pConf.FieldString(s3iFieldPrefix); err != nil {
 		return
 	}
-	if conf.CodecCtor, err = interop.OldReaderCodecFromParsed(pConf); err != nil {
+	if conf.CodecCtor, err = codec.DeprecatedCodecFromParsed(pConf); err != nil {
 		return
 	}
 	if conf.ForcePathStyleURLs, err = pConf.FieldBool(s3iFieldForcePathStyleURLs); err != nil {
@@ -174,7 +172,7 @@ You can access these metadata fields using [function interpolation](/docs/config
 				Default(false).
 				Advanced(),
 		).
-		Fields(interop.OldReaderCodecFields("to_the_end")...).
+		Fields(codec.DeprecatedCodecFields("to_the_end")...).
 		Fields(
 			service.NewObjectField(s3iFieldSQS,
 				service.NewStringField(s3iSQSFieldURL).
@@ -255,7 +253,7 @@ type s3ObjectTarget struct {
 	ackFn func(context.Context, error) error
 }
 
-func newS3ObjectTarget(key, bucket string, notificationAt time.Time, ackFn codec.ReaderAckFn) *s3ObjectTarget {
+func newS3ObjectTarget(key, bucket string, notificationAt time.Time, ackFn service.AckFunc) *s3ObjectTarget {
 	if ackFn == nil {
 		ackFn = func(context.Context, error) error {
 			return nil
@@ -275,8 +273,8 @@ func deleteS3ObjectAckFn(
 	s3Client *s3.Client,
 	bucket, key string,
 	del bool,
-	prev codec.ReaderAckFn,
-) codec.ReaderAckFn {
+	prev service.AckFunc,
+) service.AckFunc {
 	return func(ctx context.Context, err error) error {
 		if prev != nil {
 			if aerr := prev(ctx, err); aerr != nil {
@@ -638,7 +636,7 @@ func (s *sqsTargetReader) ackSQSMessage(ctx context.Context, msg sqstypes.Messag
 type awsS3Reader struct {
 	conf s3iConfig
 
-	objectScannerCtor interop.FallbackReaderCodec
+	objectScannerCtor codec.DeprecatedFallbackCodec
 	keyReader         s3ObjectTargetReader
 
 	awsConf aws.Config
@@ -657,7 +655,7 @@ type s3PendingObject struct {
 	target    *s3ObjectTarget
 	obj       *s3.GetObjectOutput
 	extracted int
-	scanner   interop.FallbackReaderStream
+	scanner   codec.DeprecatedFallbackStream
 }
 
 // NewAmazonS3 creates a new Amazon S3 bucket reader.Type.
@@ -774,9 +772,9 @@ func (a *awsS3Reader) getObjectTarget(ctx context.Context) (*s3PendingObject, er
 		target: target,
 		obj:    obj,
 	}
-	if object.scanner, err = a.objectScannerCtor.Create(obj.Body, target.ackFn, scanner.SourceDetails{
-		Name: target.key,
-	}); err != nil {
+	details := service.NewScannerSourceDetails()
+	details.SetName(target.key)
+	if object.scanner, err = a.objectScannerCtor.Create(obj.Body, target.ackFn, details); err != nil {
 		// Warning: NEVER return io.EOF from a scanner constructor, as this will
 		// falsely indicate that we've reached the end of our list of object
 		// targets when running an SQS feed.

@@ -15,10 +15,9 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
 	"github.com/Jeffail/gabs/v2"
 
-	"github.com/benthosdev/benthos/v4/internal/codec"
-	"github.com/benthosdev/benthos/v4/internal/codec/interop"
 	"github.com/benthosdev/benthos/v4/internal/component/scanner"
 	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/benthosdev/benthos/v4/public/service/codec"
 )
 
 const (
@@ -35,7 +34,7 @@ type bsiConfig struct {
 	Prefix        string
 	DeleteObjects bool
 	FileReader    *service.OwnedInput
-	Codec         interop.FallbackReaderCodec
+	Codec         codec.DeprecatedFallbackCodec
 }
 
 func bsiConfigFromParsed(pConf *service.ParsedConfig) (conf bsiConfig, err error) {
@@ -53,7 +52,7 @@ func bsiConfigFromParsed(pConf *service.ParsedConfig) (conf bsiConfig, err error
 	if conf.Prefix, err = pConf.FieldString(bsiFieldPrefix); err != nil {
 		return
 	}
-	if conf.Codec, err = interop.OldReaderCodecFromParsed(pConf); err != nil {
+	if conf.Codec, err = codec.DeprecatedCodecFromParsed(pConf); err != nil {
 		return
 	}
 	if conf.DeleteObjects, err = pConf.FieldBool(bsiFieldDeleteObjects); err != nil {
@@ -114,7 +113,7 @@ You can access these metadata fields using [function interpolation](/docs/config
 				Description("An optional path prefix, if set only objects with the prefix are consumed.").
 				Default(""),
 		).
-		Fields(interop.OldReaderCodecFields("to_the_end")...).
+		Fields(codec.DeprecatedCodecFields("to_the_end")...).
 		Fields(
 			service.NewBoolField(bsiFieldDeleteObjects).
 				Description("Whether to delete downloaded objects from the blob once they are processed.").
@@ -181,7 +180,7 @@ type azureObjectTarget struct {
 	ackFn func(context.Context, error) error
 }
 
-func newAzureObjectTarget(key string, ackFn codec.ReaderAckFn) *azureObjectTarget {
+func newAzureObjectTarget(key string, ackFn service.AckFunc) *azureObjectTarget {
 	if ackFn == nil {
 		ackFn = func(context.Context, error) error {
 			return nil
@@ -198,7 +197,7 @@ func deleteAzureObjectAckFn(
 	key string,
 	del bool,
 	prev scanner.AckFn,
-) codec.ReaderAckFn {
+) service.AckFunc {
 	return func(ctx context.Context, err error) error {
 		if prev != nil {
 			if aerr := prev(ctx, err); aerr != nil {
@@ -219,7 +218,7 @@ type azurePendingObject struct {
 	target    *azureObjectTarget
 	obj       azblob.DownloadStreamResponse
 	extracted int
-	scanner   interop.FallbackReaderStream
+	scanner   codec.DeprecatedFallbackStream
 }
 
 type azureTargetReader interface {
@@ -386,7 +385,7 @@ func (s azureTargetBatchReader) Close(context.Context) error {
 type azureBlobStorage struct {
 	conf bsiConfig
 
-	objectScannerCtor interop.FallbackReaderCodec
+	objectScannerCtor codec.DeprecatedFallbackCodec
 	keyReader         azureTargetReader
 
 	objectMut sync.Mutex
@@ -429,7 +428,9 @@ func (a *azureBlobStorage) getObjectTarget(ctx context.Context) (*azurePendingOb
 		target: target,
 		obj:    obj,
 	}
-	if object.scanner, err = a.objectScannerCtor.Create(obj.NewRetryReader(ctx, nil), target.ackFn, scanner.SourceDetails{Name: target.key}); err != nil {
+	details := service.NewScannerSourceDetails()
+	details.SetName(target.key)
+	if object.scanner, err = a.objectScannerCtor.Create(obj.NewRetryReader(ctx, nil), target.ackFn, details); err != nil {
 		_ = target.ackFn(ctx, err)
 		return nil, err
 	}

@@ -19,10 +19,9 @@ import (
 
 	"github.com/Jeffail/shutdown"
 
-	"github.com/benthosdev/benthos/v4/internal/codec/interop"
 	"github.com/benthosdev/benthos/v4/internal/component"
-	"github.com/benthosdev/benthos/v4/internal/component/scanner"
 	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/benthosdev/benthos/v4/public/service/codec"
 )
 
 const (
@@ -65,7 +64,7 @@ func socketServerInputSpec() *service.ConfigSpec {
 				Optional(),
 			service.NewAutoRetryNacksToggleField(),
 		).
-		Fields(interop.OldReaderCodecFields("lines")...)
+		Fields(codec.DeprecatedCodecFields("lines")...)
 }
 
 func init() {
@@ -100,7 +99,7 @@ type socketServerInput struct {
 	tlsCert       string
 	tlsKey        string
 	tlsSelfSigned bool
-	codecCtor     interop.FallbackReaderCodec
+	codecCtor     codec.DeprecatedFallbackCodec
 
 	messages chan service.MessageBatch
 	shutSig  *shutdown.Signaller
@@ -127,7 +126,7 @@ func newSocketServerInputFromParsed(conf *service.ParsedConfig, mgr *service.Res
 	t.tlsKey, _ = tlsConf.FieldString(issFieldTLSKeyFile)
 	t.tlsSelfSigned, _ = tlsConf.FieldBool(issFieldTLSSelfSigned)
 
-	if t.codecCtor, err = interop.OldReaderCodecFromParsed(conf); err != nil {
+	if t.codecCtor, err = codec.DeprecatedCodecFromParsed(conf); err != nil {
 		return
 	}
 	return &t, nil
@@ -248,7 +247,7 @@ acceptLoop:
 
 			codec, err := t.codecCtor.Create(c, func(ctx context.Context, err error) error {
 				return nil
-			}, scanner.SourceDetails{})
+			}, service.NewScannerSourceDetails())
 			if err != nil {
 				t.log.Errorf("Failed to create codec for new connection: %v", err)
 				return
@@ -294,7 +293,7 @@ func (t *socketServerInput) udpLoop(conn net.PacketConn) {
 
 	codec, err := t.codecCtor.Create(&wrapPacketConn{PacketConn: conn}, func(ctx context.Context, err error) error {
 		return nil
-	}, scanner.SourceDetails{})
+	}, service.NewScannerSourceDetails())
 	if err != nil {
 		t.log.Errorf("Connection error due to: %v", err)
 		return

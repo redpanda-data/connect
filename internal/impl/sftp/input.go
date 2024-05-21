@@ -11,9 +11,8 @@ import (
 
 	"github.com/pkg/sftp"
 
-	"github.com/benthosdev/benthos/v4/internal/codec/interop"
-	"github.com/benthosdev/benthos/v4/internal/component/scanner"
 	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/benthosdev/benthos/v4/public/service/codec"
 )
 
 const (
@@ -53,7 +52,7 @@ You can access these metadata fields using [function interpolation](/docs/config
 				Description("A list of paths to consume sequentially. Glob patterns are supported."),
 			service.NewAutoRetryNacksToggleField(),
 		).
-		Fields(interop.OldReaderCodecFields("to_the_end")...).
+		Fields(codec.DeprecatedCodecFields("to_the_end")...).
 		Fields(
 			service.NewBoolField(siFieldDeleteOnFinish).
 				Description("Whether to delete files from the server once they are processed.").
@@ -102,7 +101,7 @@ type sftpReader struct {
 	address        string
 	paths          []string
 	creds          Credentials
-	scannerCtor    interop.FallbackReaderCodec
+	scannerCtor    codec.DeprecatedFallbackCodec
 	deleteOnFinish bool
 
 	watcherEnabled      bool
@@ -115,7 +114,7 @@ type sftpReader struct {
 	// State
 	scannerMut  sync.Mutex
 	client      *sftp.Client
-	scanner     interop.FallbackReaderStream
+	scanner     codec.DeprecatedFallbackStream
 	currentPath string
 }
 
@@ -134,7 +133,7 @@ func newSFTPReaderFromParsed(conf *service.ParsedConfig, mgr *service.Resources)
 	if s.creds, err = credentialsFromParsed(conf.Namespace(siFieldCredentials)); err != nil {
 		return
 	}
-	if s.scannerCtor, err = interop.OldReaderCodecFromParsed(conf); err != nil {
+	if s.scannerCtor, err = codec.DeprecatedCodecFromParsed(conf); err != nil {
 		return
 	}
 	if s.deleteOnFinish, err = conf.FieldBool(siFieldDeleteOnFinish); err != nil {
@@ -216,6 +215,8 @@ func (s *sftpReader) Connect(ctx context.Context) (err error) {
 		}
 	}
 
+	details := service.NewScannerSourceDetails()
+	details.SetName(nextPath)
 	if s.scanner, err = s.scannerCtor.Create(file, func(ctx context.Context, aErr error) (outErr error) {
 		_ = s.pathProvider.Ack(ctx, nextPath, aErr)
 		if aErr != nil {
@@ -240,7 +241,7 @@ func (s *sftpReader) Connect(ctx context.Context) (err error) {
 			s.scannerMut.Unlock()
 		}
 		return
-	}, scanner.SourceDetails{Name: nextPath}); err != nil {
+	}, details); err != nil {
 		_ = file.Close()
 		_ = s.pathProvider.Ack(ctx, nextPath, err)
 		return err

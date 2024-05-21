@@ -1,11 +1,10 @@
-package interop
+package codec
 
 import (
 	"context"
 	"io"
 
 	"github.com/benthosdev/benthos/v4/internal/codec"
-	"github.com/benthosdev/benthos/v4/internal/component/scanner"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
@@ -15,7 +14,11 @@ const (
 	crFieldMaxBuffer     = "max_buffer"
 )
 
-func OldReaderCodecFields(defaultScanner string) []*service.ConfigField {
+// DeprecatedCodecFields contain definitions for deprecated codec fields that
+// allow backwards compatible migration towards the new scanner field.
+//
+// New plugins should instead use the new scanner fields.
+func DeprecatedCodecFields(defaultScanner string) []*service.ConfigField {
 	return []*service.ConfigField{
 		service.NewInternalField(codec.NewReaderDocs(fieldCodecFromString)).Deprecated().Optional(),
 		service.NewIntField(crFieldMaxBuffer).Deprecated().Default(1000000),
@@ -27,17 +30,23 @@ func OldReaderCodecFields(defaultScanner string) []*service.ConfigField {
 	}
 }
 
-type FallbackReaderCodec interface {
-	Create(rdr io.ReadCloser, aFn service.AckFunc, details scanner.SourceDetails) (FallbackReaderStream, error)
+// DeprecatedFallbackCodec provides a common interface that abstracts either an
+// old codec implementation or a new scanner.
+type DeprecatedFallbackCodec interface {
+	Create(rdr io.ReadCloser, aFn service.AckFunc, details *service.ScannerSourceDetails) (DeprecatedFallbackStream, error)
 	Close(context.Context) error
 }
 
-type FallbackReaderStream interface {
+// DeprecatedFallbackStream provides a common interface that abstracts either an
+// old codec implementation or a new scanner.
+type DeprecatedFallbackStream interface {
 	NextBatch(ctx context.Context) (service.MessageBatch, service.AckFunc, error)
 	Close(context.Context) error
 }
 
-func OldReaderCodecFromParsed(conf *service.ParsedConfig) (FallbackReaderCodec, error) {
+// DeprecatedCodecFromParsed attempts to create a deprecated fallback codec from
+// a parsed config.
+func DeprecatedCodecFromParsed(conf *service.ParsedConfig) (DeprecatedFallbackCodec, error) {
 	if conf.Contains(fieldCodecFromString) {
 		codecName, err := conf.FieldString(fieldCodecFromString)
 		if err != nil {
@@ -69,8 +78,8 @@ type codecRInternal struct {
 	oldCtor codec.ReaderConstructor
 }
 
-func (r *codecRInternal) Create(rdr io.ReadCloser, aFn service.AckFunc, details scanner.SourceDetails) (FallbackReaderStream, error) {
-	oldR, err := r.oldCtor(details.Name, rdr, codec.ReaderAckFn(aFn))
+func (r *codecRInternal) Create(rdr io.ReadCloser, aFn service.AckFunc, details *service.ScannerSourceDetails) (DeprecatedFallbackStream, error) {
+	oldR, err := r.oldCtor(details.Name(), rdr, codec.ReaderAckFn(aFn))
 	if err != nil {
 		return nil, err
 	}
@@ -106,9 +115,9 @@ type codecRPublic struct {
 	newCtor *service.OwnedScannerCreator
 }
 
-func (r *codecRPublic) Create(rdr io.ReadCloser, aFn service.AckFunc, details scanner.SourceDetails) (FallbackReaderStream, error) {
+func (r *codecRPublic) Create(rdr io.ReadCloser, aFn service.AckFunc, details *service.ScannerSourceDetails) (DeprecatedFallbackStream, error) {
 	sDetails := service.NewScannerSourceDetails()
-	sDetails.SetName(details.Name)
+	sDetails.SetName(details.Name())
 	return r.newCtor.Create(rdr, aFn, sDetails)
 }
 

@@ -6,10 +6,9 @@ import (
 	"io"
 	"os"
 
-	"github.com/benthosdev/benthos/v4/internal/codec/interop"
 	"github.com/benthosdev/benthos/v4/internal/component"
-	"github.com/benthosdev/benthos/v4/internal/component/scanner"
 	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/benthosdev/benthos/v4/public/service/codec"
 )
 
 // TODO: Fan this out when appropriate?
@@ -23,7 +22,7 @@ func init() {
 			Stable().
 			Categories("Local").
 			Summary(`Consumes data piped to stdin, chopping it into individual messages according to the specified scanner.`).
-			Fields(interop.OldReaderCodecFields("lines")...).Field(service.NewAutoRetryNacksToggleField()),
+			Fields(codec.DeprecatedCodecFields("lines")...).Field(service.NewAutoRetryNacksToggleField()),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchInput, error) {
 			rdr, err := newStdinConsumerFromParsed(conf)
 			if err != nil {
@@ -37,18 +36,18 @@ func init() {
 }
 
 type stdinConsumer struct {
-	scanner interop.FallbackReaderStream
+	scanner codec.DeprecatedFallbackStream
 }
 
 func newStdinConsumerFromParsed(conf *service.ParsedConfig) (*stdinConsumer, error) {
-	c, err := interop.OldReaderCodecFromParsed(conf)
+	c, err := codec.DeprecatedCodecFromParsed(conf)
 	if err != nil {
 		return nil, err
 	}
 
 	s, err := c.Create(getStdinReader(), func(_ context.Context, err error) error {
 		return nil
-	}, scanner.SourceDetails{})
+	}, service.NewScannerSourceDetails())
 	if err != nil {
 		return nil, err
 	}

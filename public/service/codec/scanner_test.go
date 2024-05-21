@@ -1,4 +1,4 @@
-package interop_test
+package codec_test
 
 import (
 	"bytes"
@@ -9,22 +9,21 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/benthosdev/benthos/v4/internal/codec/interop"
-	"github.com/benthosdev/benthos/v4/internal/component/scanner"
 	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/benthosdev/benthos/v4/public/service/codec"
 
 	_ "github.com/benthosdev/benthos/v4/public/components/pure"
 )
 
 func TestInteropCodecOldStyle(t *testing.T) {
-	confSpec := service.NewConfigSpec().Fields(interop.OldReaderCodecFields("lines")...)
+	confSpec := service.NewConfigSpec().Fields(codec.DeprecatedCodecFields("lines")...)
 	pConf, err := confSpec.ParseYAML(`
 codec: lines
 max_buffer: 1000000
 `, nil)
 	require.NoError(t, err)
 
-	rdr, err := interop.OldReaderCodecFromParsed(pConf)
+	rdr, err := codec.DeprecatedCodecFromParsed(pConf)
 	require.NoError(t, err)
 
 	buf := bytes.NewReader([]byte(`first
@@ -34,7 +33,7 @@ third`))
 	strm, err := rdr.Create(io.NopCloser(buf), func(ctx context.Context, err error) error {
 		acked = true
 		return nil
-	}, scanner.SourceDetails{})
+	}, service.NewScannerSourceDetails())
 	require.NoError(t, err)
 
 	for _, s := range []string{
@@ -58,7 +57,7 @@ third`))
 }
 
 func TestInteropCodecNewStyle(t *testing.T) {
-	confSpec := service.NewConfigSpec().Fields(interop.OldReaderCodecFields("lines")...)
+	confSpec := service.NewConfigSpec().Fields(codec.DeprecatedCodecFields("lines")...)
 	pConf, err := confSpec.ParseYAML(`
 scanner:
   lines:
@@ -67,7 +66,7 @@ scanner:
 `, nil)
 	require.NoError(t, err)
 
-	rdr, err := interop.OldReaderCodecFromParsed(pConf)
+	rdr, err := codec.DeprecatedCodecFromParsed(pConf)
 	require.NoError(t, err)
 
 	buf := bytes.NewReader([]byte(`firstXsecondXthird`))
@@ -75,7 +74,7 @@ scanner:
 	strm, err := rdr.Create(io.NopCloser(buf), func(ctx context.Context, err error) error {
 		acked = true
 		return nil
-	}, scanner.SourceDetails{})
+	}, service.NewScannerSourceDetails())
 	require.NoError(t, err)
 
 	for _, s := range []string{
@@ -99,11 +98,11 @@ scanner:
 }
 
 func TestInteropCodecDefault(t *testing.T) {
-	confSpec := service.NewConfigSpec().Fields(interop.OldReaderCodecFields("lines")...)
+	confSpec := service.NewConfigSpec().Fields(codec.DeprecatedCodecFields("lines")...)
 	pConf, err := confSpec.ParseYAML(`{}`, nil)
 	require.NoError(t, err)
 
-	rdr, err := interop.OldReaderCodecFromParsed(pConf)
+	rdr, err := codec.DeprecatedCodecFromParsed(pConf)
 	require.NoError(t, err)
 
 	buf := bytes.NewReader([]byte("first\nsecond\nthird"))
@@ -111,7 +110,7 @@ func TestInteropCodecDefault(t *testing.T) {
 	strm, err := rdr.Create(io.NopCloser(buf), func(ctx context.Context, err error) error {
 		acked = true
 		return nil
-	}, scanner.SourceDetails{})
+	}, service.NewScannerSourceDetails())
 	require.NoError(t, err)
 
 	for _, s := range []string{

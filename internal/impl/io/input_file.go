@@ -7,11 +7,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/benthosdev/benthos/v4/internal/codec/interop"
 	"github.com/benthosdev/benthos/v4/internal/component"
-	"github.com/benthosdev/benthos/v4/internal/component/scanner"
 	"github.com/benthosdev/benthos/v4/internal/filepath"
 	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/benthosdev/benthos/v4/public/service/codec"
 )
 
 const (
@@ -52,7 +51,7 @@ input:
 			service.NewStringListField(fileInputFieldPaths).
 				Description("A list of paths to consume sequentially. Glob patterns are supported, including super globs (double star)."),
 		).
-		Fields(interop.OldReaderCodecFields("lines")...).
+		Fields(codec.DeprecatedCodecFields("lines")...).
 		Fields(
 			service.NewBoolField(fileInputFieldDeleteOnFinish).
 				Description("Whether to delete input files from the disk once they are fully consumed.").
@@ -79,7 +78,7 @@ func init() {
 //------------------------------------------------------------------------------
 
 type scannerInfo struct {
-	scanner     interop.FallbackReaderStream
+	scanner     codec.DeprecatedFallbackStream
 	currentPath string
 	modTimeUTC  time.Time
 }
@@ -89,7 +88,7 @@ type fileConsumer struct {
 	nm  *service.Resources
 
 	paths       []string
-	scannerCtor interop.FallbackReaderCodec
+	scannerCtor codec.DeprecatedFallbackCodec
 
 	scannerMut  sync.Mutex
 	scannerInfo *scannerInfo
@@ -113,7 +112,7 @@ func fileConsumerFromParsed(conf *service.ParsedConfig, nm *service.Resources) (
 		return nil, err
 	}
 
-	ctor, err := interop.OldReaderCodecFromParsed(conf)
+	ctor, err := codec.DeprecatedCodecFromParsed(conf)
 	if err != nil {
 		return nil, err
 	}
@@ -150,9 +149,8 @@ func (f *fileConsumer) getReader(ctx context.Context) (scannerInfo, error) {
 		return scannerInfo{}, err
 	}
 
-	details := scanner.SourceDetails{
-		Name: nextPath,
-	}
+	details := service.NewScannerSourceDetails()
+	details.SetName(nextPath)
 
 	scanner, err := f.scannerCtor.Create(file, func(ctx context.Context, err error) error {
 		if err == nil && f.delete {

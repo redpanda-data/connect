@@ -7,10 +7,9 @@ import (
 	"net"
 	"sync"
 
-	"github.com/benthosdev/benthos/v4/internal/codec/interop"
 	"github.com/benthosdev/benthos/v4/internal/component"
-	"github.com/benthosdev/benthos/v4/internal/component/scanner"
 	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/benthosdev/benthos/v4/public/service/codec"
 )
 
 const (
@@ -31,7 +30,7 @@ func socketInputSpec() *service.ConfigSpec {
 				Examples("/tmp/benthos.sock", "127.0.0.1:6000"),
 			service.NewAutoRetryNacksToggleField(),
 		).
-		Fields(interop.OldReaderCodecFields("lines")...)
+		Fields(codec.DeprecatedCodecFields("lines")...)
 }
 
 func init() {
@@ -53,10 +52,10 @@ type socketReader struct {
 
 	address   string
 	network   string
-	codecCtor interop.FallbackReaderCodec
+	codecCtor codec.DeprecatedFallbackCodec
 
 	codecMut sync.Mutex
-	codec    interop.FallbackReaderStream
+	codec    codec.DeprecatedFallbackStream
 }
 
 func newSocketReaderFromParsed(pConf *service.ParsedConfig, mgr *service.Resources) (rdr *socketReader, err error) {
@@ -69,7 +68,7 @@ func newSocketReaderFromParsed(pConf *service.ParsedConfig, mgr *service.Resourc
 	if rdr.network, err = pConf.FieldString(isFieldNetwork); err != nil {
 		return
 	}
-	if rdr.codecCtor, err = interop.OldReaderCodecFromParsed(pConf); err != nil {
+	if rdr.codecCtor, err = codec.DeprecatedCodecFromParsed(pConf); err != nil {
 		return
 	}
 	return
@@ -90,7 +89,7 @@ func (s *socketReader) Connect(ctx context.Context) error {
 
 	if s.codec, err = s.codecCtor.Create(conn, func(ctx context.Context, err error) error {
 		return nil
-	}, scanner.SourceDetails{}); err != nil {
+	}, service.NewScannerSourceDetails()); err != nil {
 		conn.Close()
 		return err
 	}
