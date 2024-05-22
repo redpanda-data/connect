@@ -40,6 +40,16 @@ func MockResources(opts ...MockResourcesOptFn) *Resources {
 // MockResourcesOptFn provides a func based optional argument to MockResources.
 type MockResourcesOptFn func(*mock.Manager)
 
+// MockResourcesOptUseLogger sets the logger to be used by components
+// referencing these resources.
+func MockResourcesOptUseLogger(l *Logger) MockResourcesOptFn {
+	return func(m *mock.Manager) {
+		if l != nil {
+			m.L = l.m
+		}
+	}
+}
+
 // MockResourcesOptAddCache instantiates the resources type with a mock cache
 // with a given name. Cached items are held in memory.
 func MockResourcesOptAddCache(name string) MockResourcesOptFn {
