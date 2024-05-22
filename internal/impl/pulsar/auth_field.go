@@ -18,6 +18,9 @@ func authField() *service.ConfigField {
 			service.NewURLField("issuer_url").
 				Description("OAuth2 issuer URL.").
 				Default(""),
+			service.NewURLField("scope").
+				Description("OAuth2 scope to request.").
+				Default(""),
 			service.NewStringField("private_key_file").
 				Description("The path to a file containing a private key.").
 				Default(""),
@@ -48,6 +51,7 @@ type oAuth2Config struct {
 	Audience       string
 	IssuerURL      string
 	PrivateKeyFile string
+	Scope          string
 }
 
 type tokenConfig struct {
@@ -69,6 +73,9 @@ func authFromParsed(p *service.ParsedConfig) (c authConfig, err error) {
 			return
 		}
 		if c.OAuth2.IssuerURL, err = p.FieldString("oauth2", "issuer_url"); err != nil {
+			return
+		}
+		if c.OAuth2.Scope, err = p.FieldString("oauth2", "scope"); err != nil {
 			return
 		}
 		if c.OAuth2.PrivateKeyFile, err = p.FieldString("oauth2", "private_key_file"); err != nil {
@@ -123,6 +130,7 @@ func (c *oAuth2Config) ToMap() map[string]string {
 		"issuerUrl":  c.IssuerURL,
 		"audience":   c.Audience,
 		"privateKey": c.PrivateKeyFile,
+		"scope":      c.Scope,
 	}
 }
 
