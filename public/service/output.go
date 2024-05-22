@@ -7,6 +7,7 @@ import (
 	"sync/atomic"
 
 	"github.com/benthosdev/benthos/v4/internal/component/output"
+	"github.com/benthosdev/benthos/v4/internal/component/output/batcher"
 	"github.com/benthosdev/benthos/v4/internal/message"
 )
 
@@ -182,6 +183,14 @@ func newOwnedOutput(o output.Streamed) (*OwnedOutput, error) {
 	return &OwnedOutput{
 		o: o,
 	}, nil
+}
+
+// BatchedWith returns a copy of the OwnedOutput where messages will be batched
+// according to the provided batcher.
+func (o *OwnedOutput) BatchedWith(b *Batcher) *OwnedOutput {
+	return &OwnedOutput{
+		o: batcher.New(b.p, o.o, b.mgr),
+	}
 }
 
 // Prime attempts to establish the output connection ready for consuming data.
