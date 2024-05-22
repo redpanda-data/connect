@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"sync/atomic"
 
@@ -199,6 +200,23 @@ func (o *OwnedOutput) Prime() error {
 	return nil
 }
 
+// PrimeBuffered performs the same output preparation as Prime but the internal
+// transaction channel used for delivering data is buffered with the provided
+// size. This allows for multiple write transactions to be written to the buffer
+// and may improve the chance of delivery when using the WriteBatchNonBlocking
+// method.
+func (o *OwnedOutput) PrimeBuffered(n int) error {
+	o.primeMut.Lock()
+	defer o.primeMut.Unlock()
+
+	tChan := make(chan message.Transaction, n)
+	if err := o.o.Consume(tChan); err != nil {
+		return err
+	}
+	o.t.Store(&tChan)
+	return nil
+}
+
 func (o *OwnedOutput) getTChan() (chan message.Transaction, error) {
 	if t := o.t.Load(); t != nil {
 		return *t, nil
@@ -260,6 +278,41 @@ func (o *OwnedOutput) WriteBatch(ctx context.Context, b MessageBatch) error {
 	case <-ctx.Done():
 		return ctx.Err()
 	}
+}
+
+// ErrBlockingWrite is returned when a non-blocking write is aborted
+var ErrBlockingWrite = errors.New("a blocking write attempt was aborted")
+
+// WriteBatchNonBlocking attempts to write a message batch to the output, but if
+// the write is blocked (the read channel is full or not being listened to) then
+// the write is aborted immediately in order to prevent blocking the caller.
+//
+// Instead of blocking until an acknowledgement of delivery is returned this
+// method returns immediately and the provided acknowledgement function is
+// called when appropriate.
+//
+// If the write is aborted then ErrBlockingWrite is returned. An error may also
+// be returned if the output cannot be primed.
+func (o *OwnedOutput) WriteBatchNonBlocking(b MessageBatch, aFn AckFunc) error {
+	t, err := o.getTChan()
+	if err != nil {
+		return err
+	}
+
+	payload := make(message.Batch, len(b))
+	for i, m := range b {
+		payload[i] = m.part
+	}
+
+	select {
+	case t <- message.NewTransactionFunc(payload, func(ctx context.Context, err error) error {
+		err = toPublicBatchError(err)
+		return aFn(ctx, err)
+	}):
+	default:
+		return ErrBlockingWrite
+	}
+	return nil
 }
 
 // Close the output.

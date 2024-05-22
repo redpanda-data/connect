@@ -72,6 +72,14 @@ func CLIOptOnLoggerInit(fn func(*Logger)) CLIOptFunc {
 	}
 }
 
+// CLIOptAddTeeLogger adds another logger to receive all log events from the
+// service initialised via the CLI.
+func CLIOptAddTeeLogger(l *slog.Logger) CLIOptFunc {
+	return func(c *CLIOptBuilder) {
+		c.teeLogger = l
+	}
+}
+
 // CLIOptSetMainSchemaFrom overrides the default Benthos configuration schema
 // for another. A constructor is provided such that downstream components can
 // still modify copies of the schema when needed.

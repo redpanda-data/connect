@@ -3,10 +3,13 @@ package service
 import (
 	"context"
 	"errors"
+	"strconv"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/message"
@@ -170,4 +173,136 @@ func TestBatchOutputAirGapHappy(t *testing.T) {
 	assert.NoError(t, err)
 
 	assert.Equal(t, "hello world", wroteMsg)
+}
+
+func TestOutputOwnedNonBlockingNonBuffered(t *testing.T) {
+	bChan := make(chan struct{})
+
+	var received []string
+	var mut sync.Mutex
+
+	o := &fnBatchOutput{
+		connect: func() error {
+			return nil
+		},
+		writeBatch: func(b MessageBatch) error {
+			<-bChan
+			mut.Lock()
+			defer mut.Unlock()
+			for _, m := range b {
+				mBytes, _ := m.AsBytes()
+				received = append(received, string(mBytes))
+			}
+			return nil
+		},
+	}
+
+	mo, err := MockResources().ManagedBatchOutput("foo", 1, o)
+	require.NoError(t, err)
+
+	require.NoError(t, mo.Prime())
+
+	assert.Eventually(t, func() bool {
+		tmpErr := mo.WriteBatchNonBlocking(MessageBatch{
+			NewMessage([]byte("first")),
+		}, func(ctx context.Context, err error) error {
+			return nil
+		})
+		return tmpErr == nil
+	}, time.Second, time.Millisecond*10)
+
+	for i := 0; i < 3; i++ {
+		require.Error(t, mo.WriteBatchNonBlocking(MessageBatch{
+			NewMessage([]byte("first")),
+		}, func(ctx context.Context, err error) error {
+			return nil
+		}))
+	}
+
+	close(bChan)
+
+	assert.Eventually(t, func() bool {
+		tmpErr := mo.WriteBatchNonBlocking(MessageBatch{
+			NewMessage([]byte("second")),
+		}, func(ctx context.Context, err error) error {
+			return nil
+		})
+		return tmpErr == nil
+	}, time.Second, time.Millisecond*10)
+
+	assert.Eventually(t, func() bool {
+		mut.Lock()
+		l := len(received)
+		mut.Unlock()
+		return l == 2
+	}, time.Second, time.Millisecond*50)
+
+	assert.Equal(t, []string{"first", "second"}, received)
+}
+
+func TestOutputOwnedNonBlockingBuffered(t *testing.T) {
+	bChan := make(chan struct{})
+
+	var received []string
+	var mut sync.Mutex
+
+	o := &fnBatchOutput{
+		connect: func() error {
+			return nil
+		},
+		writeBatch: func(b MessageBatch) error {
+			<-bChan
+			mut.Lock()
+			defer mut.Unlock()
+			for _, m := range b {
+				mBytes, _ := m.AsBytes()
+				received = append(received, string(mBytes))
+			}
+			return nil
+		},
+	}
+
+	mo, err := MockResources().ManagedBatchOutput("foo", 1, o)
+	require.NoError(t, err)
+
+	require.NoError(t, mo.PrimeBuffered(5))
+
+	for i := 0; i < 6; i++ {
+		assert.Eventually(t, func() bool {
+			tmpErr := mo.WriteBatchNonBlocking(MessageBatch{
+				NewMessage(strconv.AppendInt(nil, int64(i), 10)),
+			}, func(ctx context.Context, err error) error {
+				return nil
+			})
+			return tmpErr == nil
+		}, time.Second, time.Millisecond*10)
+	}
+
+	for i := 0; i < 3; i++ {
+		require.Error(t, mo.WriteBatchNonBlocking(MessageBatch{
+			NewMessage([]byte("another")),
+		}, func(ctx context.Context, err error) error {
+			return nil
+		}))
+	}
+
+	close(bChan)
+
+	assert.Eventually(t, func() bool {
+		tmpErr := mo.WriteBatchNonBlocking(MessageBatch{
+			NewMessage([]byte("last message")),
+		}, func(ctx context.Context, err error) error {
+			return nil
+		})
+		return tmpErr == nil
+	}, time.Second, time.Millisecond*10)
+
+	assert.Eventually(t, func() bool {
+		mut.Lock()
+		l := len(received)
+		mut.Unlock()
+		return l == 7
+	}, time.Second, time.Millisecond*50)
+
+	assert.Equal(t, []string{"0", "1", "2", "3", "4", "5", "last message"}, received)
 }

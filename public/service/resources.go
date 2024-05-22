@@ -254,3 +254,18 @@ func (r resourcesUnwrapper) Unwrap() bundle.NewManagement {
 func (r *Resources) XUnwrapper() any {
 	return resourcesUnwrapper{mgr: r.mgr}
 }
+
+//------------------------------------------------------------------------------
+
+// ManagedBatchOutput takes a BatchOutput implementation and wraps it within a
+// mechanism that automatically manages QOL details such as connect/reconnect
+// looping, max in flight, back pressure, and so on. This is similar to how an
+// output would be executed within a standard Benthos pipeline.
+func (r *Resources) ManagedBatchOutput(typeName string, maxInFlight int, b BatchOutput) (*OwnedOutput, error) {
+	w := newAirGapBatchWriter(b)
+	o, err := output.NewAsyncWriter(typeName, maxInFlight, w, r.mgr)
+	if err != nil {
+		return nil, err
+	}
+	return newOwnedOutput(o)
+}
