@@ -10,5 +10,5 @@ package io
 
 import (
 	// Import only io packages.
-	_ "github.com/benthosdev/benthos/v4/internal/impl/io"
+	_ "github.com/benthosdev/benthos/v4/public/components/io"
 )

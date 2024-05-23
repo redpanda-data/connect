@@ -4,13 +4,13 @@ TAGS ?=
 
 GOMAXPROCS         ?= 1
 INSTALL_DIR        ?= $(GOPATH)/bin
-WEBSITE_DIR        ?= ./website
+WEBSITE_DIR        ?= ./docs/modules
 DEST_DIR           ?= ./target
 PATHINSTBIN        = $(DEST_DIR)/bin
 PATHINSTTOOLS      = $(DEST_DIR)/tools
 PATHINSTSERVERLESS = $(DEST_DIR)/serverless
 PATHINSTDOCKER     = $(DEST_DIR)/docker
-DOCKER_IMAGE       ?= ghcr.io/benthosdev/benthos
+DOCKER_IMAGE       ?= ghcr.io/redpanda-data/connect
 
 VERSION   := $(shell git describe --tags || echo "v0.0.0")
 VER_CUT   := $(shell echo $(VERSION) | cut -c2-)
@@ -20,14 +20,13 @@ VER_PATCH := $(shell echo $(VER_CUT) | cut -f3 -d.)
 VER_RC    := $(shell echo $(VER_PATCH) | cut -f2 -d-)
 DATE      := $(shell date +"%Y-%m-%dT%H:%M:%SZ")
 
-VER_FLAGS = -X github.com/benthosdev/benthos/v4/internal/cli.Version=$(VERSION) \
-	-X github.com/benthosdev/benthos/v4/internal/cli.DateBuilt=$(DATE)
+VER_FLAGS = -X main.Version=$(VERSION) -X main.DateBuilt=$(DATE)
 
 LD_FLAGS   ?= -w -s
 GO_FLAGS   ?=
 DOCS_FLAGS ?=
 
-APPS = benthos
+APPS = redpanda-connect
 all: $(APPS)
 
 install: $(APPS)
@@ -46,16 +45,16 @@ $(PATHINSTBIN)/%: $(SOURCE_FILES)
 
 $(APPS): %: $(PATHINSTBIN)/%
 
-TOOLS = benthos_docs_gen
-tools: $(TOOLS)
+# TOOLS = redpanda-docs TODO
+# tools: $(TOOLS)
 
 $(PATHINSTTOOLS)/%: $(SOURCE_FILES)
 	@go build $(GO_FLAGS) -tags "$(TAGS)" -ldflags "$(LD_FLAGS) $(VER_FLAGS)" -o $@ ./cmd/tools/$*
 
 $(TOOLS): %: $(PATHINSTTOOLS)/%
 
-SERVERLESS = benthos-lambda
-serverless: $(SERVERLESS)
+# SERVERLESS = redpanda-connect-lambda TODO
+# serverless: $(SERVERLESS)
 
 $(PATHINSTSERVERLESS)/%: $(SOURCE_FILES)
 	@CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
@@ -83,7 +82,7 @@ docker-cgo:
 
 fmt:
 	@go list -f {{.Dir}} ./... | xargs -I{} gofmt -w -s {}
-	@go list -f {{.Dir}} ./... | xargs -I{} goimports -w -local github.com/benthosdev/benthos/v4 {}
+	@go list -f {{.Dir}} ./... | xargs -I{} goimports -w -local github.com/redpanda-data/connect/v4 {}
 	@go mod tidy
 
 lint:
@@ -92,8 +91,8 @@ lint:
 
 test: $(APPS)
 	@go test $(GO_FLAGS) -ldflags "$(LD_FLAGS)" -timeout 3m ./...
-	@$(PATHINSTBIN)/benthos template lint $(TEMPLATE_FILES)
-	@$(PATHINSTBIN)/benthos test ./config/test/...
+	@$(PATHINSTBIN)/redpanda-connect template lint $(TEMPLATE_FILES)
+	@$(PATHINSTBIN)/redpanda-connect test ./config/test/...
 
 test-race: $(APPS)
 	@go test $(GO_FLAGS) -ldflags "$(LD_FLAGS)" -timeout 3m -race ./...
@@ -109,9 +108,7 @@ clean:
 	rm -rf $(DEST_DIR)/serverless
 	rm -rf $(PATHINSTDOCKER)
 
-docs: $(APPS) $(TOOLS)
-	@$(PATHINSTTOOLS)/benthos_docs_gen $(DOCS_FLAGS)
-	@$(PATHINSTBIN)/benthos lint --deprecated "./config/examples/*.yaml" \
-		"$(WEBSITE_DIR)/cookbooks/**/*.md" \
-		"$(WEBSITE_DIR)/docs/**/*.md"
-	@$(PATHINSTBIN)/benthos template lint "./config/template_examples/*.yaml"
+docs: $(APPS) $(TOOLS) # TODO: Add docs generation back in
+	@$(PATHINSTBIN)/redpanda-connect lint --deprecated "./config/examples/*.yaml" \
+		"$(WEBSITE_DIR)/**/*.md"
+	@$(PATHINSTBIN)/redpanda-connect template lint "./config/template_examples/*.yaml"
