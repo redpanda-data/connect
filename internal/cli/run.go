@@ -196,13 +196,13 @@ variables have been resolved:
   benthos -c ./config.yaml echo | less`[1:],
 				Action: func(c *cli.Context) error {
 					_, _, confReader := common.ReadConfig(c, opts, false)
-					conf, _, _, err := confReader.Read()
+					_, pConf, _, err := confReader.Read()
 					if err != nil {
 						fmt.Fprintf(os.Stderr, "Configuration file read error: %v\n", err)
 						os.Exit(1)
 					}
 					var node yaml.Node
-					if err = node.Encode(conf); err == nil {
+					if err = node.Encode(pConf.Raw()); err == nil {
 						sanitConf := docs.NewSanitiseConfig(bundle.GlobalEnvironment)
 						sanitConf.RemoveTypeField = true
 						sanitConf.ScrubSecrets = true
