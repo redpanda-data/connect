@@ -67,6 +67,10 @@ input:
     deliver: all
     ack_wait: 30s
     max_ack_pending: 1024
+    create_if_not_exists: false
+    storage_type: memory
+    nak_delay: 1m # No default (optional)
+    nak_delay_until_header: nak_delay_until
     tls:
       enabled: false
       skip_cert_verify: false
@@ -267,6 +271,52 @@ The maximum number of outstanding acks to be allowed before consuming is halted.
 *Type*: `int`
 
 *Default*: `1024`
+
+=== `create_if_not_exists`
+
+Create the `stream` and `subject` if do not exist.
+
+
+*Type*: `bool`
+
+*Default*: `false`
+
+=== `storage_type`
+
+Storage type to use when the stream does not exist and is created when `create_if_not_exists` is set to true. Can be `memory` or `file` storage
+
+
+*Type*: `string`
+
+*Default*: `"memory"`
+
+Options:
+`memory`
+, `file`
+.
+
+=== `nak_delay`
+
+An optional delay duration on redelivering the messages when negatively acknowledged.
+
+
+*Type*: `string`
+
+
+```yml
+# Examples
+
+nak_delay: 1m
+```
+
+=== `nak_delay_until_header`
+
+An optional header name on which will come a unix epoch timestamp in seconds until when the message delivery should be delayed. By default is `nak_delay_until`
+
+
+*Type*: `string`
+
+*Default*: `"nak_delay_until"`
 
 === `tls`
 
