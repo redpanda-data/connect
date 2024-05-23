@@ -12,7 +12,7 @@ import (
 	"github.com/cenkalti/backoff/v4"
 
 	"github.com/benthosdev/benthos/v4/internal/impl/aws/config"
-	"github.com/benthosdev/benthos/v4/internal/impl/pure"
+	"github.com/benthosdev/benthos/v4/internal/retries"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
@@ -48,7 +48,7 @@ func koConfigFromParsed(pConf *service.ParsedConfig) (conf koConfig, err error) 
 	if conf.aconf, err = GetSession(context.TODO(), pConf); err != nil {
 		return
 	}
-	if conf.backoffCtor, err = pure.CommonRetryBackOffCtorFromParsed(pConf); err != nil {
+	if conf.backoffCtor, err = retries.CommonRetryBackOffCtorFromParsed(pConf); err != nil {
 		return
 	}
 	return
@@ -81,7 +81,7 @@ By default Benthos will use a shared credentials file when connecting to AWS ser
 			service.NewBatchPolicyField(koFieldBatching),
 		).
 		Fields(config.SessionFields()...).
-		Fields(pure.CommonRetryBackOffFields(0, "1s", "5s", "30s")...)
+		Fields(retries.CommonRetryBackOffFields(0, "1s", "5s", "30s")...)
 }
 
 func init() {

@@ -17,86 +17,9 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
+	"github.com/benthosdev/benthos/v4/internal/retries"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
-
-const (
-	crboFieldMaxRetries     = "max_retries"
-	crboFieldBackOff        = "backoff"
-	crboFieldInitInterval   = "initial_interval"
-	crboFieldMaxInterval    = "max_interval"
-	crboFieldMaxElapsedTime = "max_elapsed_time"
-)
-
-func CommonRetryBackOffFields(
-	defaultMaxRetries int,
-	defaultInitInterval string,
-	defaultMaxInterval string,
-	defaultMaxElapsed string,
-) []*service.ConfigField {
-	return []*service.ConfigField{
-		service.NewIntField(crboFieldMaxRetries).
-			Description("The maximum number of retries before giving up on the request. If set to zero there is no discrete limit.").
-			Default(defaultMaxRetries).
-			Advanced(),
-		service.NewObjectField(crboFieldBackOff,
-			service.NewDurationField(crboFieldInitInterval).
-				Description("The initial period to wait between retry attempts.").
-				Default(defaultInitInterval),
-			service.NewDurationField(crboFieldMaxInterval).
-				Description("The maximum period to wait between retry attempts.").
-				Default(defaultMaxInterval),
-			service.NewDurationField(crboFieldMaxElapsedTime).
-				Description("The maximum period to wait before retry attempts are abandoned. If zero then no limit is used.").
-				Default(defaultMaxElapsed),
-		).
-			Description("Control time intervals between retry attempts.").
-			Advanced(),
-	}
-}
-
-func fieldDurationOrEmptyStr(pConf *service.ParsedConfig, path ...string) (time.Duration, error) {
-	if dStr, err := pConf.FieldString(path...); err == nil && dStr == "" {
-		return 0, nil
-	}
-	return pConf.FieldDuration(path...)
-}
-
-func CommonRetryBackOffCtorFromParsed(pConf *service.ParsedConfig) (ctor func() backoff.BackOff, err error) {
-	var maxRetries int
-	if maxRetries, err = pConf.FieldInt(crboFieldMaxRetries); err != nil {
-		return
-	}
-
-	var initInterval, maxInterval, maxElapsed time.Duration
-	if pConf.Contains(crboFieldBackOff) {
-		bConf := pConf.Namespace(crboFieldBackOff)
-		if initInterval, err = fieldDurationOrEmptyStr(bConf, crboFieldInitInterval); err != nil {
-			return
-		}
-		if maxInterval, err = fieldDurationOrEmptyStr(bConf, crboFieldMaxInterval); err != nil {
-			return
-		}
-		if maxElapsed, err = fieldDurationOrEmptyStr(bConf, crboFieldMaxElapsedTime); err != nil {
-			return
-		}
-	}
-
-	return func() backoff.BackOff {
-		boff := backoff.NewExponentialBackOff()
-
-		boff.InitialInterval = initInterval
-		boff.MaxInterval = maxInterval
-		boff.MaxElapsedTime = maxElapsed
-
-		if maxRetries > 0 {
-			return backoff.WithMaxRetries(boff, uint64(maxRetries))
-		}
-		return boff
-	}, nil
-}
-
-//------------------------------------------------------------------------------
 
 const roFieldOutput = "output"
 
@@ -111,7 +34,7 @@ All messages in Benthos are always retried on an output error, but this would us
 This output type is useful whenever we wish to avoid reprocessing a message on the event of a failed send. We might, for example, have a dedupe processor that we want to avoid reapplying to the same message more than once in the pipeline.
 
 Rather than retrying the same output you may wish to retry the send using a different output target (a dead letter queue). In which case you should instead use the ` + "[`fallback`](/docs/components/outputs/fallback)" + ` output type.`).
-		Fields(CommonRetryBackOffFields(0, "500ms", "3s", "0s")...).
+		Fields(retries.CommonRetryBackOffFields(0, "500ms", "3s", "0s")...).
 		Fields(
 			service.NewOutputField(roFieldOutput).
 				Description("A child output."),
@@ -152,7 +75,7 @@ func retryOutputFromConfig(conf *service.ParsedConfig, mgr bundle.NewManagement)
 	}
 
 	var boffCtor func() backoff.BackOff
-	if boffCtor, err = CommonRetryBackOffCtorFromParsed(conf); err != nil {
+	if boffCtor, err = retries.CommonRetryBackOffCtorFromParsed(conf); err != nil {
 		return nil, err
 	}
 

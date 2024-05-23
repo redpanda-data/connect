@@ -15,7 +15,6 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
 	"github.com/Jeffail/gabs/v2"
 
-	"github.com/benthosdev/benthos/v4/internal/component/scanner"
 	"github.com/benthosdev/benthos/v4/public/service"
 	"github.com/benthosdev/benthos/v4/public/service/codec"
 )
@@ -196,7 +195,7 @@ func deleteAzureObjectAckFn(
 	containerName string,
 	key string,
 	del bool,
-	prev scanner.AckFn,
+	prev service.AckFunc,
 ) service.AckFunc {
 	return func(ctx context.Context, err error) error {
 		if prev != nil {

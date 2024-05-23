@@ -9,7 +9,7 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 
-	"github.com/benthosdev/benthos/v4/internal/impl/pure"
+	"github.com/benthosdev/benthos/v4/internal/retries"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
@@ -42,7 +42,7 @@ func ProcessorSpec() *service.ConfigSpec {
 			Advanced().
 			Version("3.60.0").
 			Default(string(JSONMarshalModeCanonical)))
-	for _, f := range pure.CommonRetryBackOffFields(3, "1s", "5s", "30s") {
+	for _, f := range retries.CommonRetryBackOffFields(3, "1s", "5s", "30s") {
 		spec = spec.Field(f.Deprecated())
 	}
 	return spec

@@ -13,7 +13,7 @@ import (
 	"github.com/olivere/elastic/v7"
 
 	"github.com/benthosdev/benthos/v4/internal/impl/aws/config"
-	"github.com/benthosdev/benthos/v4/internal/impl/pure"
+	"github.com/benthosdev/benthos/v4/internal/retries"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
@@ -129,7 +129,7 @@ func esoConfigFromParsed(pConf *service.ParsedConfig) (conf esoConfig, err error
 		conf.clientOpts = append(conf.clientOpts, elastic.SetGzip(true))
 	}
 
-	if conf.backoffCtor, err = pure.CommonRetryBackOffCtorFromParsed(pConf); err != nil {
+	if conf.backoffCtor, err = retries.CommonRetryBackOffCtorFromParsed(pConf); err != nil {
 		return
 	}
 
@@ -232,7 +232,7 @@ It's possible to enable AWS connectivity with this output using the `+"`aws`"+` 
 			service.NewTLSToggledField(esoFieldTLS),
 			service.NewOutputMaxInFlightField(),
 		).
-		Fields(pure.CommonRetryBackOffFields(0, "1s", "5s", "30s")...).
+		Fields(retries.CommonRetryBackOffFields(0, "1s", "5s", "30s")...).
 		Fields(
 			service.NewObjectField(esoFieldAuth,
 				service.NewBoolField(esoFieldAuthEnabled).
