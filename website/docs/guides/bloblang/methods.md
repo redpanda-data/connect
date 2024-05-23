@@ -2500,6 +2500,35 @@ Introduced in version 4.25.0.
 
 **`changelog`** &lt;unknown&gt; The changelog to apply.  
 
+### `rename_key`
+
+Rename a key via [dot path][field_paths] if it exists in an object. Else, this doesn't do anything
+
+#### Parameters
+
+**`old`** &lt;string&gt; A [dot path][field_paths] key to replace if exist.  
+**`new`** &lt;string&gt; A [dot path][field_paths] key to replace with.  
+
+#### Examples
+
+
+```coffee
+root = this.rename_key("name","user_name")
+
+# In:  {"age":27,"name":"abc"}
+# Out: {"age":27,"user_name":"abc"}
+
+# In:  {"age":27,"first_name":"abc"}
+# Out: {"age":27,"first_name":"abc"}
+```
+
+```coffee
+root = this.rename_key("details.name","details.first_name")
+
+# In:  {"details":{"age":27,"name":"abc"}}
+# Out: {"details":{"age":27,"first_name":"abc"}}
+```
+
 ### `slice`
 
 Extract a slice from an array by specifying two indices, a low and high bound, which selects a half-open range that includes the first element, but excludes the last one. If the second index is omitted then it defaults to the length of the input sequence.
