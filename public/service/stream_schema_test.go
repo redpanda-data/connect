@@ -2,12 +2,13 @@ package service_test
 
 import (
 	"errors"
-	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel/trace"
+
+	jsonschema "github.com/xeipuuv/gojsonschema"
 
 	"github.com/benthosdev/benthos/v4/public/bloblang"
 	"github.com/benthosdev/benthos/v4/public/service"
@@ -56,6 +57,11 @@ func testEnvWithPlugins(t testing.TB) *service.Environment {
 
 	require.NoError(t, env.RegisterOtelTracerProvider("testtracer", service.NewConfigSpec().Field(service.NewStringField("tracerfield")),
 		func(conf *service.ParsedConfig) (trace.TracerProvider, error) {
+			return nil, errors.New("nope")
+		}))
+
+	require.NoError(t, env.RegisterBatchScannerCreator("testscanner", service.NewConfigSpec().Field(service.NewStringField("scannerfield")),
+		func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchScannerCreator, error) {
 			return nil, errors.New("nope")
 		}))
 
@@ -194,5 +200,23 @@ func TestJSONSchema(t *testing.T) {
 	testSchema, err := env.FullConfigSchema("xxx", "yyy").MarshalJSONSchema()
 	require.NoError(t, err)
 
-	fmt.Println(string(testSchema))
+	schema, err := jsonschema.NewSchema(jsonschema.NewStringLoader(string(testSchema)))
+	require.NoError(t, err)
+
+	res, err := schema.Validate(jsonschema.NewGoLoader(map[string]any{
+		"input": map[string]any{
+			"testinput": map[string]any{
+				"woof": "uhhhhh, woof!",
+			},
+			"processors": []any{
+				map[string]any{
+					"testprocessor": map[string]any{
+						"mapfield": "hello world",
+					},
+				},
+			},
+		},
+	}))
+	require.NoError(t, err)
+	require.Empty(t, res.Errors())
 }
