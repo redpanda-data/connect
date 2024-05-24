@@ -17,13 +17,13 @@ func sqlRawInputConfig() *service.ConfigSpec {
 		Beta().
 		Categories("Services").
 		Summary("Executes a select query and creates a message for each row received.").
-		Description(`Once the rows from the query are exhausted this input shuts down, allowing the pipeline to gracefully terminate (or the next input in a [sequence](/docs/components/inputs/sequence) to execute).`).
+		Description(`Once the rows from the query are exhausted this input shuts down, allowing the pipeline to gracefully terminate (or the next input in a xref:components:inputs/sequence.adoc[sequence] to execute).`).
 		Field(driverField).
 		Field(dsnField).
 		Field(rawQueryField().
 			Example("SELECT * FROM footable WHERE user_id = $1;")).
 		Field(service.NewBloblangField("args_mapping").
-			Description("A [Bloblang mapping](/docs/guides/bloblang/about) which should evaluate to an array of values matching in size to the number of columns specified.").
+			Description("A xref:guides:bloblang/about.adoc[Bloblang mapping] which should evaluate to an array of values matching in size to the number of columns specified.").
 			Example("root = [ this.cat.meow, this.doc.woofs[0] ]").
 			Example(`root = [ meta("user.id") ]`).
 			Optional()).

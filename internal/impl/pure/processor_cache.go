@@ -28,37 +28,37 @@ func cacheProcSpec() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Categories("Integration").
 		Stable().
-		Summary("Performs operations against a [cache resource](/docs/components/caches/about) for each message, allowing you to store or retrieve data within message payloads.").
+		Summary("Performs operations against a xref:components:caches/about.adoc[cache resource] for each message, allowing you to store or retrieve data within message payloads.").
 		Description(`
-For use cases where you wish to cache the result of processors consider using the `+"[`cached` processor](/docs/components/processors/cached)"+` instead.
+For use cases where you wish to cache the result of processors consider using the `+"xref:components:processors/cached.adoc[`cached` processor]"+` instead.
 
-This processor will interpolate functions within the `+"`key` and `value`"+` fields individually for each message. This allows you to specify dynamic keys and values based on the contents of the message payloads and metadata. You can find a list of functions [here](/docs/configuration/interpolation#bloblang-queries).`).
+This processor will interpolate functions within the `+"`key` and `value`"+` fields individually for each message. This allows you to specify dynamic keys and values based on the contents of the message payloads and metadata. You can find a list of functions in xref:configuration:interpolation.adoc#bloblang-queries[Bloblang queries].`).
 		Footnotes(`
-## Operators
+== Operators
 
-### `+"`set`"+`
+=== `+"`set`"+`
 
 Set a key in the cache to a value. If the key already exists the contents are
 overridden.
 
-### `+"`add`"+`
+=== `+"`add`"+`
 
 Set a key in the cache to a value. If the key already exists the action fails
 with a 'key already exists' error, which can be detected with
-[processor error handling](/docs/configuration/error_handling).
+xref:configuration:error_handling.adoc[processor error handling].
 
-### `+"`get`"+`
+=== `+"`get`"+`
 
 Retrieve the contents of a cached key and replace the original message payload
 with the result. If the key does not exist the action fails with an error, which
-can be detected with [processor error handling](/docs/configuration/error_handling).
+can be detected with xref:configuration:error_handling.adoc[processor error handling].
 
-### `+"`delete`"+`
+=== `+"`delete`"+`
 
-Delete a key and its contents from the cache.  If the key does not exist the
+Delete a key and its contents from the cache. If the key does not exist the
 action is a no-op and will not fail with an error.`).
 		Example("Deduplication", `
-Deduplication can be done using the add operator with a key extracted from the message payload, since it fails when a key already exists we can remove the duplicates using a [`+"`mapping` processor"+`](/docs/components/processors/mapping):`,
+Deduplication can be done using the add operator with a key extracted from the message payload, since it fails when a key already exists we can remove the duplicates using a xref:components:processors/mapping.adoc[`+"`mapping` processor"+`]:`,
 			`
 pipeline:
   processors:
@@ -75,7 +75,7 @@ cache_resources:
       url: tcp://TODO:6379
 `).
 		Example("Deduplication Batch-Wide", `
-Sometimes it's necessary to deduplicate a batch of messages (AKA a window) by a single identifying value. This can be done by introducing a `+"[`branch` processor](/docs/components/processors/branch)"+`, which executes the cache only once on behalf of the batch, in this case with a value make from a field extracted from the first and last messages of the batch:`,
+Sometimes it's necessary to deduplicate a batch of messages (also known as a window) by a single identifying value. This can be done by introducing a `+"xref:components:processors/branch.adoc[`branch` processor]"+`, which executes the cache only once on behalf of the batch, in this case with a value make from a field extracted from the first and last messages of the batch:`,
 			`
 pipeline:
   processors:
@@ -98,7 +98,7 @@ pipeline:
         }
 `).
 		Example("Hydration", `
-It's possible to enrich payloads with content previously stored in a cache by using the [`+"`branch`"+`](/docs/components/processors/branch) processor:`,
+It's possible to enrich payloads with content previously stored in a cache by using the xref:components:processors/branch.adoc[`+"`branch`"+`] processor:`,
 			`
 pipeline:
   processors:
@@ -121,9 +121,9 @@ cache_resources:
 `).
 		Fields(
 			service.NewStringField(cachePFieldResource).
-				Description("The [`cache` resource](/docs/components/caches/about) to target with this processor."),
+				Description("The xref:components:caches/about.adoc[`cache` resource] to target with this processor."),
 			service.NewStringEnumField(cachePFieldOperator, "set", "add", "get", "delete").
-				Description("The [operation](#operators) to perform with the cache."),
+				Description("The <<operators, operation>> to perform with the cache."),
 			service.NewInterpolatedStringField(cachePFieldKey).
 				Description("A key to use with the cache."),
 			service.NewInterpolatedStringField(cachePFieldValue).

@@ -19,37 +19,37 @@ func init() {
 			Version("4.5.0").
 			Categories("Mapping", "Parsing").
 			Field(service.NewBloblangField("")).
-			Summary("Executes a [Bloblang](/docs/guides/bloblang/about) mapping and directly transforms the contents of messages, mutating (or deleting) them.").
+			Summary("Executes a xref:guides:bloblang/about.adoc[Bloblang] mapping and directly transforms the contents of messages, mutating (or deleting) them.").
 			Description(`
-Bloblang is a powerful language that enables a wide range of mapping, transformation and filtering tasks. For more information [check out the docs](/docs/guides/bloblang/about).
+Bloblang is a powerful language that enables a wide range of mapping, transformation and filtering tasks. For more information, see xref:guides:bloblang/about.adoc[].
 
 If your mapping is large and you'd prefer for it to live in a separate file then you can execute a mapping directly from a file with the expression `+"`from \"<path>\"`"+`, where the path must be absolute, or relative from the location that Benthos is executed from.
 
-## Input Document Mutability
+== Input document mutability
 
 A mutation is a mapping that transforms input documents directly, this has the advantage of reducing the need to copy the data fed into the mapping. However, this also means that the referenced document is mutable and therefore changes throughout the mapping. For example, with the following Bloblang:
 
-`+"```coffee"+`
+`+"```coffeescript"+`
 root.rejected = this.invitees.filter(i -> i.mood < 0.5)
 root.invitees = this.invitees.filter(i -> i.mood >= 0.5)
 `+"```"+`
 
 Notice that we create a field `+"`rejected`"+` by copying the array field `+"`invitees`"+` and filtering out objects with a high mood. We then overwrite the field `+"`invitees`"+` by filtering out objects with a low mood, resulting in two array fields that are each a subset of the original. If we were to reverse the ordering of these assignments like so:
 
-`+"```coffee"+`
+`+"```coffeescript"+`
 root.invitees = this.invitees.filter(i -> i.mood >= 0.5)
 root.rejected = this.invitees.filter(i -> i.mood < 0.5)
 `+"```"+`
 
 Then the new field `+"`rejected`"+` would be empty as we have already mutated `+"`invitees`"+` to exclude the objects that it would be populated by. We can solve this problem either by carefully ordering our assignments or by capturing the original array using a variable (`+"`let invitees = this.invitees`"+`).
 
-Mutations are advantageous over a standard mapping in situations where the result is a document with mostly the same shape as the input document, since we can avoid unnecessarily copying data from the referenced input document. However, in situations where we are creating an entirely new document shape it can be more convenient to use the traditional `+"[`mapping` processor](/docs/components/processors/mapping)"+` instead.
+Mutations are advantageous over a standard mapping in situations where the result is a document with mostly the same shape as the input document, since we can avoid unnecessarily copying data from the referenced input document. However, in situations where we are creating an entirely new document shape it can be more convenient to use the traditional `+"xref:components:processors/mapping.adoc[`mapping` processor]"+` instead.
 
-## Error Handling
+== Error handling
 
-Bloblang mappings can fail, in which case the error is logged and the message is flagged as having failed, allowing you to use [standard processor error handling patterns](/docs/configuration/error_handling).
+Bloblang mappings can fail, in which case the error is logged and the message is flagged as having failed, allowing you to use xref:configuration:error_handling.adoc[standard processor error handling patterns].
 
-However, Bloblang itself also provides powerful ways of ensuring your mappings do not fail by specifying desired fallback behaviour, which you can read about [in this section](/docs/guides/bloblang/about#error-handling).
+However, Bloblang itself also provides powerful ways of ensuring your mappings do not fail by specifying desired xref:guides:bloblang/about.adoc#error-handling[fallback behavior].
 			`).
 			Example("Mapping", `
 Given JSON documents containing an array of fans:

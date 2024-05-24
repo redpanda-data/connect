@@ -265,7 +265,7 @@ func (m *Message) SetStructuredMut(i any) {
 
 // SetError marks the message as having failed a processing step and adds the
 // error to it as context. Messages marked with errors can be handled using a
-// range of methods outlined in https://www.benthos.dev/docs/configuration/error_handling.
+// range of methods outlined in https://www.docs.redpanda.com/redpanda-connect/configuration/error_handling.
 func (m *Message) SetError(err error) {
 	if m.onErr != nil {
 		m.onErr(err)
@@ -275,7 +275,7 @@ func (m *Message) SetError(err error) {
 
 // GetError returns an error associated with a message, or nil if there isn't
 // one. Messages marked with errors can be handled using a range of methods
-// outlined in https://www.benthos.dev/docs/configuration/error_handling.
+// outlined in https://www.docs.redpanda.com/redpanda-connect/configuration/error_handling.
 func (m *Message) GetError() error {
 	return m.part.ErrorGet()
 }

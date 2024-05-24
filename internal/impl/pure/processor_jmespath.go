@@ -23,11 +23,13 @@ func jmpProcSpec() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Categories("Mapping").
 		Stable().
-		Summary("Executes a [JMESPath query](http://jmespath.org/) on JSON documents and replaces the message with the resulting document.").
+		Summary("Executes a http://jmespath.org/[JMESPath query] on JSON documents and replaces the message with the resulting document.").
 		Description(`
-:::note Try out Bloblang
-For better performance and improved capabilities try out native Benthos mapping with the [`+"`mapping`"+` processor](/docs/components/processors/mapping).
-:::
+[TIP]
+.Try out Bloblang
+====
+For better performance and improved capabilities try native Benthos mapping with the xref:components:processors/mapping.adoc[`+"`mapping`"+` processor].
+====
 `).
 		Example("Mapping", `
 When receiving JSON documents of the form:

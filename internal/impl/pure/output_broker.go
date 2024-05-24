@@ -22,9 +22,9 @@ func brokerOutputSpec() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Stable().
 		Categories("Utility").
-		Summary(`Allows you to route messages to multiple child outputs using a range of brokering [patterns](#patterns).`).
+		Summary(`Allows you to route messages to multiple child outputs using a range of brokering <<patterns>>.`).
 		Description(`
-[Processors](/docs/components/processors/about) can be listed to apply across individual outputs or all outputs:
+xref:components:processors/about.adoc[Processors] can be listed to apply across individual outputs or all outputs:
 
 `+"```yaml"+`
 output:
@@ -42,37 +42,37 @@ output:
     - resource: general_processor
 `+"```"+``).
 		Footnotes(`
-## Patterns
+== Patterns
 
 The broker pattern determines the way in which messages are allocated and can be chosen from the following:
 
-### `+"`fan_out`"+`
+=== `+"`fan_out`"+`
 
 With the fan out pattern all outputs will be sent every message that passes through Benthos in parallel.
 
 If an output applies back pressure it will block all subsequent messages, and if an output fails to send a message it will be retried continuously until completion or service shut down. This mechanism is in place in order to prevent one bad output from causing a larger retry loop that results in a good output from receiving unbounded message duplicates.
 
-Sometimes it is useful to disable the back pressure or retries of certain fan out outputs and instead drop messages that have failed or were blocked. In this case you can wrap outputs with a `+"[`drop_on` output](/docs/components/outputs/drop_on)"+`.
+Sometimes it is useful to disable the back pressure or retries of certain fan out outputs and instead drop messages that have failed or were blocked. In this case you can wrap outputs with a `+"xref:components:outputs/drop_on.adoc[`drop_on` output]"+`.
 
-### `+"`fan_out_fail_fast`"+`
+=== `+"`fan_out_fail_fast`"+`
 
 The same as the `+"`fan_out`"+` pattern, except that output failures will not be automatically retried. This pattern should be used with caution as busy retry loops could result in unlimited duplicates being introduced into the non-failure outputs.
 
-### `+"`fan_out_sequential`"+`
+=== `+"`fan_out_sequential`"+`
 
 Similar to the fan out pattern except outputs are written to sequentially, meaning an output is only written to once the preceding output has confirmed receipt of the same message.
 
 If an output applies back pressure it will block all subsequent messages, and if an output fails to send a message it will be retried continuously until completion or service shut down. This mechanism is in place in order to prevent one bad output from causing a larger retry loop that results in a good output from receiving unbounded message duplicates.
 
-### `+"`fan_out_sequential_fail_fast`"+`
+=== `+"`fan_out_sequential_fail_fast`"+`
 
 The same as the `+"`fan_out_sequential`"+` pattern, except that output failures will not be automatically retried. This pattern should be used with caution as busy retry loops could result in unlimited duplicates being introduced into the non-failure outputs.
 
-### `+"`round_robin`"+`
+=== `+"`round_robin`"+`
 
 With the round robin pattern each message will be assigned a single output following their order. If an output applies back pressure it will block all subsequent messages. If an output fails to send a message then the message will be re-attempted with the next input, and so on.
 
-### `+"`greedy`"+`
+=== `+"`greedy`"+`
 
 The greedy pattern results in higher output throughput at the cost of potentially disproportionate message allocations to those outputs. Each message is sent to a single output, which is determined by allowing outputs to claim messages as soon as they are able to process them. This results in certain faster outputs potentially processing more messages at the cost of slower outputs.`).
 		Fields(

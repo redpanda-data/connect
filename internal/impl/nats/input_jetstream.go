@@ -22,11 +22,11 @@ func natsJetStreamInputConfig() *service.ConfigSpec {
 		Version("3.46.0").
 		Summary("Reads messages from NATS JetStream subjects.").
 		Description(`
-### Consuming Mirrored Streams
+== Consume mirrored streams
 
 In the case where a stream being consumed is mirrored from a different JetStream domain the stream cannot be resolved from the subject name alone, and so the stream name as well as the subject (if applicable) must both be specified.
 
-### Metadata
+== Metadata
 
 This input adds the following metadata fields to each message:
 
@@ -41,7 +41,7 @@ This input adds the following metadata fields to each message:
 ` + "```" + `
 
 You can access these metadata fields using
-[function interpolation](/docs/configuration/interpolation#bloblang-queries).
+xref:configuration:interpolation.adoc#bloblang-queries[function interpolation].
 
 ` + connectionNameDescription() + authDescription()).
 		Fields(connectionHeadFields()...).

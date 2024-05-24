@@ -106,11 +106,11 @@ func hsoSpec() *service.ConfigSpec {
 		Stable().
 		Categories("Network").
 		Summary(`Sets up an HTTP server that will send messages over HTTP(S) GET requests. HTTP 2.0 is supported when using TLS, which is enabled when key and cert files are specified.`).
-		Description(`Sets up an HTTP server that will send messages over HTTP(S) GET requests. If the `+"`address`"+` config field is left blank the [service-wide HTTP server](/docs/components/http/about) will be used.
+		Description(`Sets up an HTTP server that will send messages over HTTP(S) GET requests. If the `+"`address`"+` config field is left blank the xref:components:http/about.adoc[service-wide HTTP server] will be used.
 
 Three endpoints will be registered at the paths specified by the fields `+"`path`, `stream_path` and `ws_path`"+`. Which allow you to consume a single message batch, a continuous stream of line delimited messages, or a websocket of messages for each request respectively.
 
-When messages are batched the `+"`path`"+` endpoint encodes the batch according to [RFC1341](https://www.w3.org/Protocols/rfc1341/7_2_Multipart.html). This behaviour can be overridden by [archiving your batches](/docs/configuration/batching#post-batch-processing).
+When messages are batched the `+"`path`"+` endpoint encodes the batch according to https://www.w3.org/Protocols/rfc1341/7_2_Multipart.html[RFC1341]. This behavior can be overridden by xref:configuration:batching.adoc#post-batch-processing[archiving your batches].
 
 Please note, messages are considered delivered as soon as the data is written to the client. There is no concept of at least once delivery on this output.
 

@@ -24,7 +24,7 @@ func (e *errInvalidType) Error() string {
 }
 
 // ErrInvalidType creates an error that describes a component type being
-// initialised with an unrecognised implementation.
+// initialized with an unrecognised implementation.
 func ErrInvalidType(typeStr, tried string) error {
 	return &errInvalidType{
 		typeStr: typeStr,

@@ -20,7 +20,7 @@ const (
 func newCaptureProcessorConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Version("4.16.0").
-		Summary("Captures log events from messages and submits them to [Sentry](https://sentry.io/).").
+		Summary("Captures log events from messages and submits them to https://sentry.io/[Sentry].").
 		Fields(
 			service.NewStringField("dsn").
 				Default("").
@@ -316,7 +316,7 @@ func mapLevel(raw string) (sentry.Level, error) {
 	case "FATAL":
 		return sentry.LevelFatal, nil
 	default:
-		return sentry.Level(""), fmt.Errorf("unrecognized sentry level: %s", raw)
+		return sentry.Level(""), fmt.Errorf("unrecognised sentry level: %s", raw)
 	}
 }
 

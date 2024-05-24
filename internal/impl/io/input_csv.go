@@ -29,7 +29,7 @@ func csviFieldSpec() *service.ConfigSpec {
 		Categories("Local").
 		Summary("Reads one or more CSV files as structured records following the format described in RFC 4180.").
 		Description(`
-This input offers more control over CSV parsing than the `+"[`file` input](/docs/components/inputs/file)"+`.
+This input offers more control over CSV parsing than the `+"xref:components:inputs/file.adoc[`file` input]"+`.
 
 When parsing with a header row each line of the file will be consumed as a structured object, where the key names are determined from the header now. For example, the following CSV file:
 
@@ -53,7 +53,7 @@ If, however, the field `+"`parse_header_row` is set to `false`"+` then arrays ar
 ["second foo","second bar","second baz"]
 `+"```"+`
 
-### Metadata
+== Metadata
 
 This input adds the following metadata fields to each message:
 
@@ -64,13 +64,13 @@ This input adds the following metadata fields to each message:
 - mod_time (RFC3339)
 `+"```"+`
 
-You can access these metadata fields using [function interpolation](/docs/configuration/interpolation#bloblang-queries).
+You can access these metadata fields using xref:configuration:interpolation.adoc#bloblang-queries[function interpolation].
 
 Note: The `+"`header`"+` field is only set when `+"`parse_header_row`"+` is `+"`true`"+`.
 
-### Output CSV column order
+=== Output CSV column order
 
-When [creating CSV](/docs/guides/bloblang/advanced#creating-csv) from Benthos messages, the columns must be sorted lexicographically to make the output deterministic. Alternatively, when using the `+"`csv`"+` input, one can leverage the `+"`header`"+` metadata field to retrieve the column order:
+When xref:guides:bloblang/advanced.adoc#creating-csv[creating CSV] from Benthos messages, the columns must be sorted lexicographically to make the output deterministic. Alternatively, when using the `+"`csv`"+` input, one can leverage the `+"`header`"+` metadata field to retrieve the column order:
 
 `+"```yaml"+`
 input:
@@ -101,7 +101,7 @@ output:
     path: ./output/${! @path.filepath_split().index(-1) }
 `+"```"+`
 `).
-		Footnotes(`This input is particularly useful when consuming CSV from files too large to parse entirely within memory. However, in cases where CSV is consumed from other input types it's also possible to parse them using the `+"[Bloblang `parse_csv` method](/docs/guides/bloblang/methods#parse_csv)"+`.`).
+		Footnotes(`This input is particularly useful when consuming CSV from files too large to parse entirely within memory. However, in cases where CSV is consumed from other input types it's also possible to parse them using the `+"xref:guides:bloblang/methods.adoc#parse_csv[Bloblang `parse_csv` method]"+`.`).
 		Fields(
 			service.NewStringListField(csviFieldPaths).
 				Description("A list of file paths to read from. Each file will be read sequentially until the list is exhausted, at which point the input will close. Glob patterns are supported, including super globs (double star).").

@@ -16,9 +16,9 @@ func init() {
 		Stable().
 		Summary("Adds the payload in its current state as a synchronous response to the input source, where it is dealt with according to that specific input type.").
 		Description(`
-For most inputs this mechanism is ignored entirely, in which case the sync response is dropped without penalty. It is therefore safe to use this processor even when combining input types that might not have support for sync responses. An example of an input able to utilise this is the `+"`http_server`"+`.
+For most inputs this mechanism is ignored entirely, in which case the sync response is dropped without penalty. It is therefore safe to use this processor even when combining input types that might not have support for sync responses. An example of an input able to utilize this is the `+"`http_server`"+`.
 
-For more information please read [Synchronous Responses](/docs/guides/sync_responses).`).
+For more information please read xref:guides:sync_responses.adoc[synchronous responses].`).
 		Field(service.NewObjectField("").Default(map[string]any{})),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchProcessor, error) {
 			p := &syncResponseProc{log: interop.UnwrapManagement(mgr).Logger()}

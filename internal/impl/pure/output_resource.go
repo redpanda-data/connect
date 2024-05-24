@@ -57,9 +57,9 @@ output_resources:
     gcp_pubsub:
       project: bar
       topic: baz
- `+"```"+`
+`+"```"+`
 
-You can find out more about resources [in this document.](/docs/configuration/resources)`).
+You can find out more about resources in xref:configuration:resources.adoc[]`).
 			Field(service.NewStringField("").Default("")),
 		func(conf *service.ParsedConfig, res *service.Resources) (out service.BatchOutput, batchPolicy service.BatchPolicy, maxInFlight int, err error) {
 			var resName string

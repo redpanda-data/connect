@@ -20,16 +20,16 @@ func archiveProcConfig() *service.ConfigSpec {
 		Categories("Parsing", "Utility").
 		Summary("Archives all the messages of a batch into a single message according to the selected archive format.").
 		Description(`
-Some archive formats (such as tar, zip) treat each archive item (message part) as a file with a path. Since message parts only contain raw data a unique path must be generated for each part. This can be done by using function interpolations on the 'path' field as described [here](/docs/configuration/interpolation#bloblang-queries). For types that aren't file based (such as binary) the file field is ignored.
+Some archive formats (such as tar, zip) treat each archive item (message part) as a file with a path. Since message parts only contain raw data a unique path must be generated for each part. This can be done by using function interpolations on the 'path' field as described in xref:configuration:interpolation.adoc#bloblang-queries[Bloblang queries]. For types that aren't file based (such as binary) the file field is ignored.
 
 The resulting archived message adopts the metadata of the _first_ message part of the batch.
 
-The functionality of this processor depends on being applied across messages that are batched. You can find out more about batching [in this doc](/docs/configuration/batching).`).
+The functionality of this processor depends on being applied across messages that are batched. You can find out more about batching xref:configuration:batching.adoc[in this doc].`).
 		Field(service.NewStringAnnotatedEnumField("format", map[string]string{
 			`concatenate`: `Join the raw contents of each message into a single binary message.`,
 			`tar`:         `Archive messages to a unix standard tape archive.`,
 			`zip`:         `Archive messages to a zip file.`,
-			`binary`:      `Archive messages to a [binary blob format](https://github.com/benthosdev/benthos/blob/main/internal/message/message.go#L96).`,
+			`binary`:      `Archive messages to a https://github.com/benthosdev/benthos/blob/main/internal/message/message.go#L96[binary blob format].`,
 			`lines`:       `Join the raw contents of each message and insert a line break between each one.`,
 			`json_array`:  `Attempt to parse each message as a JSON document and append the result to an array, which becomes the contents of the resulting message.`,
 		}).Description("The archiving format to apply.")).

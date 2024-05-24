@@ -20,11 +20,11 @@ func init() {
 		"parallel", service.NewConfigSpec().
 			Categories("Composition").
 			Stable().
-			Summary(`A processor that applies a list of child processors to messages of a batch as though they were each a batch of one message (similar to the `+"[`for_each`](/docs/components/processors/for_each)"+` processor), but where each message is processed in parallel.`).
+			Summary(`A processor that applies a list of child processors to messages of a batch as though they were each a batch of one message (similar to the `+"xref:components:processors/for_each.adoc[`for_each`]"+` processor), but where each message is processed in parallel.`).
 			Description(`
 The field `+"`cap`"+`, if greater than zero, caps the maximum number of parallel processing threads.
 
-The functionality of this processor depends on being applied across messages that are batched. You can find out more about batching [in this doc](/docs/configuration/batching).`).
+The functionality of this processor depends on being applied across messages that are batched. You can find out more about batching in xref:configuration:batching.adoc[].`).
 			Fields(
 				service.NewIntField(parProcFieldCap).
 					Description("The maximum number of messages to have processing at a given time.").

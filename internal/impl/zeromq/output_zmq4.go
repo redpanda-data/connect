@@ -22,7 +22,7 @@ func zmqOutputConfig() *service.ConfigSpec {
 		Description(`
 By default Benthos does not build with components that require linking to external libraries. If you wish to build Benthos locally with this component then set the build tag ` + "`x_benthos_extra`" + `:
 
-` + "```shell" + `
+` + "```bash" + `
 # With go
 go install -tags "x_benthos_extra" github.com/benthosdev/benthos/v4/cmd/benthos@latest
 

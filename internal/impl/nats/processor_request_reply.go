@@ -17,7 +17,7 @@ func natsRequestReplyConfig() *service.ConfigSpec {
 		Version("4.27.0").
 		Summary("Sends a message to a NATS subject and expects a reply, from a NATS subscriber acting as a responder, back.").
 		Description(`
-### Metadata
+== Metadata
 
 This input adds the following metadata fields to each message:
 
@@ -31,7 +31,7 @@ This input adds the following metadata fields to each message:
 - nats_timestamp_unix_nano
 ` + "```" + `
 
-You can access these metadata fields using [function interpolation](/docs/configuration/interpolation#bloblang-queries).
+You can access these metadata fields using xref:configuration:interpolation.adoc#bloblang-queries[function interpolation].
 
 ` + connectionNameDescription() + authDescription()).
 		Fields(connectionHeadFields()...).

@@ -21,7 +21,7 @@ func csvScannerSpec() *service.ConfigSpec {
 		Stable().
 		Summary("Consume comma-separated values row by row, including support for custom delimiters.").
 		Description(`
-### Metadata
+== Metadata
 
 This scanner adds the following metadata to each message:
 

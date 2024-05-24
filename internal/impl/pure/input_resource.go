@@ -22,7 +22,7 @@ func resourceInputSpec() *service.ConfigSpec {
 		Categories("Utility").
 		Summary(`Resource is an input type that channels messages from a resource input, identified by its name.`).
 		Description(`Resources allow you to tidy up deeply nested configs. For example, the config:
-		
+
 ` + "```yaml" + `
 input:
   broker:
@@ -56,11 +56,11 @@ input_resources:
     gcp_pubsub:
       project: bar
       subscription: baz
- ` + "```" + `
+` + "```" + `
 
 Resources also allow you to reference a single input in multiple places, such as multiple streams mode configs, or multiple entries in a broker input. However, when a resource is referenced more than once the messages it produces are distributed across those references, so each message will only be directed to a single reference, not all of them.
 
-You can find out more about resources [in this document.](/docs/configuration/resources)`).
+You can find out more about resources in xref:configuration:resources.adoc[].`).
 		Field(service.NewStringField("").Default(""))
 }
 

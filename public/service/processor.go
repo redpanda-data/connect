@@ -18,7 +18,7 @@ type Processor interface {
 	// When an error is returned the input message will continue down the
 	// pipeline but will be marked with the error with *message.SetError, and
 	// metrics and logs will be emitted. The failed message can then be handled
-	// with the patterns outlined in https://www.benthos.dev/docs/configuration/error_handling.
+	// with the patterns outlined in https://www.docs.redpanda.com/redpanda-connect/configuration/error_handling.
 	//
 	// The Message types returned MUST be derived from the provided message, and
 	// CANNOT be custom implementations of Message. In order to copy the

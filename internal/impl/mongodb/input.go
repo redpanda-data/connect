@@ -24,7 +24,7 @@ func mongoConfigSpec() *service.ConfigSpec {
 		Version("3.64.0").
 		Categories("Services").
 		Summary("Executes a query and creates a message for each document received.").
-		Description(`Once the documents from the query are exhausted, this input shuts down, allowing the pipeline to gracefully terminate (or the next input in a [sequence](/docs/components/inputs/sequence) to execute).`).
+		Description(`Once the documents from the query are exhausted, this input shuts down, allowing the pipeline to gracefully terminate (or the next input in a xref:components:inputs/sequence.adoc[sequence] to execute).`).
 		Fields(clientFields()...).
 		Field(service.NewStringField("collection").Description("The collection to select from.")).
 		Field(service.NewStringEnumField("operation", FindInputOperation, AggregateInputOperation).

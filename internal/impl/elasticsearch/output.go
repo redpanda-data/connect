@@ -188,9 +188,9 @@ func OutputSpec() *service.ConfigSpec {
 		Categories("Services").
 		Summary(`Publishes messages into an Elasticsearch index. If the index does not exist then it is created with a dynamic mapping.`).
 		Description(`
-Both the `+"`id` and `index`"+` fields can be dynamically set using function interpolations described [here](/docs/configuration/interpolation#bloblang-queries). When sending batched messages these interpolations are performed per message part.
+Both the `+"`id` and `index`"+` fields can be dynamically set using function interpolations described in xref:configuration:interpolation.adoc#bloblang-queries[Bloblang queries]. When sending batched messages these interpolations are performed per message part.
 
-### AWS
+== AWS
 
 It's possible to enable AWS connectivity with this output using the `+"`aws`"+` fields. However, you may need to set `+"`sniff` and `healthcheck`"+` to false for connections to succeed.`+service.OutputPerformanceDocs(true, true)).
 		Fields(

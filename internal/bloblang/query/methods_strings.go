@@ -89,7 +89,7 @@ var _ = registerSimpleMethod(
 		"encode", "",
 	).InCategory(
 		MethodCategoryEncoding,
-		"Encodes a string or byte array target according to a chosen scheme and returns a string result. Available schemes are: `base64`, `base64url` [(RFC 4648 with padding characters)](https://rfc-editor.org/rfc/rfc4648.html), `base64rawurl` [(RFC 4648 without padding characters)](https://rfc-editor.org/rfc/rfc4648.html), `hex`, `ascii85`.",
+		"Encodes a string or byte array target according to a chosen scheme and returns a string result. Available schemes are: `base64`, `base64url` https://rfc-editor.org/rfc/rfc4648.html[(RFC 4648 with padding characters)], `base64rawurl` https://rfc-editor.org/rfc/rfc4648.html[(RFC 4648 without padding characters)], `hex`, `ascii85`.",
 		// NOTE: z85 has been removed from the list until we can support
 		// misaligned data automatically. It'll still be supported for backwards
 		// compatibility, but given it behaves differently to `ascii85` I think
@@ -195,7 +195,7 @@ var _ = registerSimpleMethod(
 		"decode", "",
 	).InCategory(
 		MethodCategoryEncoding,
-		"Decodes an encoded string target according to a chosen scheme and returns the result as a byte array. When mapping the result to a JSON field the value should be cast to a string using the method [`string`][methods.string], or encoded using the method [`encode`][methods.encode], otherwise it will be base64 encoded by default.\n\nAvailable schemes are: `base64`, `base64url` [(RFC 4648 with padding characters)](https://rfc-editor.org/rfc/rfc4648.html), `base64rawurl` [(RFC 4648 without padding characters)](https://rfc-editor.org/rfc/rfc4648.html), `hex`, `ascii85`.",
+		"Decodes an encoded string target according to a chosen scheme and returns the result as a byte array. When mapping the result to a JSON field the value should be cast to a string using the method `string`, or encoded using the method `encode`, otherwise it will be base64 encoded by default.\n\nAvailable schemes are: `base64`, `base64url` https://rfc-editor.org/rfc/rfc4648.html[(RFC 4648 with padding characters)], `base64rawurl` https://rfc-editor.org/rfc/rfc4648.html[(RFC 4648 without padding characters)], `hex`, `ascii85`.",
 		// NOTE: z85 has been removed from the list until we can support
 		// misaligned data automatically. It'll still be supported for backwards
 		// compatibility, but given it behaves differently to `ascii85` I think
@@ -631,7 +631,7 @@ var _ = registerSimpleMethod(
 		"format", "",
 	).InCategory(
 		MethodCategoryStrings,
-		"Use a value string as a format specifier in order to produce a new string, using any number of provided arguments. Please refer to the Go [`fmt` package documentation](https://pkg.go.dev/fmt) for the list of valid format verbs.",
+		"Use a value string as a format specifier in order to produce a new string, using any number of provided arguments. Please refer to the Go https://pkg.go.dev/fmt[`fmt` package documentation] for the list of valid format verbs.",
 		NewExampleSpec("",
 			`root.foo = "%s(%v): %v".format(this.name, this.age, this.fingers)`,
 			`{"name":"lance","age":37,"fingers":13}`,
@@ -719,7 +719,7 @@ var _ = registerSimpleMethod(
 	).InCategory(
 		MethodCategoryEncoding,
 		`
-Hashes a string or byte array according to a chosen algorithm and returns the result as a byte array. When mapping the result to a JSON field the value should be cast to a string using the method `+"[`string`][methods.string], or encoded using the method [`encode`][methods.encode]"+`, otherwise it will be base64 encoded by default.
+Hashes a string or byte array according to a chosen algorithm and returns the result as a byte array. When mapping the result to a JSON field the value should be cast to a string using the method `+"xref:guides:bloblang/methods.adoc#string[`string`], or encoded using the method xref:guides:bloblang/methods.adoc#encode[`encode`]"+`, otherwise it will be base64 encoded by default.
 
 Available algorithms are: `+"`hmac_sha1`, `hmac_sha256`, `hmac_sha512`, `md5`, `sha1`, `sha256`, `sha512`, `xxhash64`, `crc32`"+`.
 
@@ -1247,8 +1247,8 @@ var _ = registerSimpleMethod(
 		MethodCategoryParsing, "",
 		NewExampleSpec("",
 			`root.foo_url = this.foo_url.parse_url()`,
-			`{"foo_url":"https://www.benthos.dev/docs/guides/bloblang/about"}`,
-			`{"foo_url":{"fragment":"","host":"www.benthos.dev","opaque":"","path":"/docs/guides/bloblang/about","raw_fragment":"","raw_path":"","raw_query":"","scheme":"https"}}`,
+			`{"foo_url":"https://www.docs.redpanda.com/redpanda-connect/guides/bloblang/about/"}`,
+			`{"foo_url":{"fragment":"","host":"www.docs.redpanda.com","opaque":"","path":"/redpanda-connect/guides/bloblang/about/","raw_fragment":"","raw_path":"","raw_query":"","scheme":"https"}}`,
 		),
 		NewExampleSpec("",
 			`root.username = this.url.parse_url().user.name | "unknown"`,

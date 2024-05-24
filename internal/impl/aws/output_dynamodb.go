@@ -74,7 +74,7 @@ func ddboOutputSpec() *service.ConfigSpec {
 		Categories("Services", "AWS").
 		Summary(`Inserts items into a DynamoDB table.`).
 		Description(`
-The field `+"`string_columns`"+` is a map of column names to string values, where the values are [function interpolated](/docs/configuration/interpolation#bloblang-queries) per message of a batch. This allows you to populate string columns of an item by extracting fields within the document payload or metadata like follows:
+The field `+"`string_columns`"+` is a map of column names to string values, where the values are xref:configuration:interpolation.adoc#bloblang-queries[function interpolated] per message of a batch. This allows you to populate string columns of an item by extracting fields within the document payload or metadata like follows:
 
 `+"```yml"+`
 string_columns:
@@ -84,7 +84,7 @@ string_columns:
   full_content: ${!content()}
 `+"```"+`
 
-The field `+"`json_map_columns`"+` is a map of column names to json paths, where the [dot path](/docs/configuration/field_paths) is extracted from each document and converted into a map value. Both an empty path and the path `+"`.`"+` are interpreted as the root of the document. This allows you to populate map columns of an item like follows:
+The field `+"`json_map_columns`"+` is a map of column names to json paths, where the xref:configuration:field_paths.adoc[dot path] is extracted from each document and converted into a map value. Both an empty path and the path `+"`.`"+` are interpreted as the root of the document. This allows you to populate map columns of an item like follows:
 
 `+"```yml"+`
 json_map_columns:
@@ -101,15 +101,15 @@ json_map_columns:
 
 In which case the top level document fields will be written at the root of the item, potentially overwriting previously defined column values. If a path is not found within a document the column will not be populated.
 
-### Credentials
+== Credentials
 
-By default Benthos will use a shared credentials file when connecting to AWS services. It's also possible to set them explicitly at the component level, allowing you to transfer data across accounts. You can find out more [in this document](/docs/guides/cloud/aws).
+By default Benthos will use a shared credentials file when connecting to AWS services. It's also possible to set them explicitly at the component level, allowing you to transfer data across accounts. You can find out more in xref:guides:cloud/aws.adoc[].
 
-## Performance
+== Performance
 
 This output benefits from sending multiple messages in flight in parallel for improved performance. You can tune the max number of in flight messages (or message batches) with the field `+"`max_in_flight`"+`.
 
-This output benefits from sending messages as a batch for improved performance. Batches can be formed at both the input and output level. You can find out more [in this doc](/docs/configuration/batching).
+This output benefits from sending messages as a batch for improved performance. Batches can be formed at both the input and output level. You can find out more xref:configuration:batching.adoc[in this doc].
 `).
 		Fields(
 			service.NewStringField(ddboFieldTable).
@@ -124,7 +124,7 @@ This output benefits from sending messages as a batch for improved performance. 
 					"full_content": "${!content()}",
 				}),
 			service.NewStringMapField(ddboFieldJSONMapColumns).
-				Description("A map of column keys to [field paths](/docs/configuration/field_paths) pointing to value data within messages.").
+				Description("A map of column keys to xref:configuration:field_paths.adoc[field paths] pointing to value data within messages.").
 				Default(map[string]any{}).
 				Example(map[string]any{
 					"user":           "path.to.user",

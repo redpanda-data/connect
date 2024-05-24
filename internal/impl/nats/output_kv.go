@@ -24,7 +24,7 @@ func natsKVOutputConfig() *service.ConfigSpec {
 		Summary("Put messages in a NATS key-value bucket.").
 		Description(`
 The field ` + "`key`" + ` supports
-[interpolation functions](/docs/configuration/interpolation#bloblang-queries), allowing
+xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions], allowing
 you to create a unique key for each message.
 
 ` + connectionNameDescription() + authDescription()).

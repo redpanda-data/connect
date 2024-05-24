@@ -210,12 +210,12 @@ func (proc *cachedProcessor) Process(ctx context.Context, msg *service.Message) 
 		return collapsedBatch, nil
 	}
 
-	// Any errors in creating a serialised batch or caching are non-fatal and
+	// Any errors in creating a serialized batch or caching are non-fatal and
 	// should be logged but otherwise regarded as insignificant to the flowing
 	// messages.
 	result, err := cachedProcSerialiseBatch(collapsedBatch)
 	if err != nil {
-		proc.manager.Logger().Errorf("failed to serialise resulting batch for caching: %w", err)
+		proc.manager.Logger().Errorf("failed to serialize resulting batch for caching: %w", err)
 		return collapsedBatch, nil
 	}
 
@@ -355,7 +355,7 @@ func cachedProcV1DeserialiseBatch(msg *service.Message, data []byte) (resBatch s
 func cachedProcResultToBatch(msg *service.Message, cachedResult []byte) (service.MessageBatch, error) {
 	verID, remaining, err := cachedProcExtractUint32(cachedResult)
 	if err != nil {
-		return nil, fmt.Errorf("failed to extract serialisation format version: %w", err)
+		return nil, fmt.Errorf("failed to extract serialization format version: %w", err)
 	}
 	if verID == 1 {
 		return cachedProcV1DeserialiseBatch(msg, remaining)

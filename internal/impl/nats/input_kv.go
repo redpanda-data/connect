@@ -26,7 +26,7 @@ func natsKVInputConfig() *service.ConfigSpec {
 		Version("4.12.0").
 		Summary("Watches for updates in a NATS key-value bucket.").
 		Description(`
-### Metadata
+== Metadata
 
 This input adds the following metadata fields to each message:
 

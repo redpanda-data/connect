@@ -205,7 +205,7 @@ func SaramaSASLField() *service.ConfigField {
 		service.NewStringAnnotatedEnumField(saramaFieldSASLMechanism,
 			map[string]string{
 				"none":          "Default, no SASL authentication.",
-				"PLAIN":         "Plain text authentication. NOTE: When using plain text auth it is extremely likely that you'll also need to [enable TLS](#tlsenabled).",
+				"PLAIN":         "Plain text authentication. NOTE: When using plain text auth it is extremely likely that you'll also need to <<tls-enabled, enable TLS>>.",
 				"OAUTHBEARER":   "OAuth Bearer based authentication.",
 				"SCRAM-SHA-256": "Authentication using the SCRAM-SHA-256 mechanism.",
 				"SCRAM-SHA-512": "Authentication using the SCRAM-SHA-512 mechanism.",
@@ -225,7 +225,7 @@ func SaramaSASLField() *service.ConfigField {
 			Description("A static OAUTHBEARER access token").
 			Default(""),
 		service.NewStringField(saramaFieldSASLTokenCache).
-			Description("Instead of using a static `access_token` allows you to query a [`cache`](/docs/components/caches/about) resource to fetch OAUTHBEARER tokens from").
+			Description("Instead of using a static `access_token` allows you to query a xref:components:caches/about.adoc[`cache`] resource to fetch OAUTHBEARER tokens from").
 			Default(""),
 		service.NewStringField(saramaFieldSASLTokenKey).
 			Description("Required when using a `token_cache`, the key to query the cache with for tokens.").

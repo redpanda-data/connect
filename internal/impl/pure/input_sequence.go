@@ -40,7 +40,7 @@ func sequenceInputSpec() *service.ConfigSpec {
 					Description("The type of join to perform. A `full-outer` ensures that all identifiers seen in any of the input sequences are sent, and is performed by consuming all input sequences before flushing the joined results. An `outer` join consumes all input sequences but only writes data joined from the last input in the sequence, similar to a left or right outer join. With an `outer` join if an identifier appears multiple times within the final sequence input it will be flushed each time it appears. `full-outter` and `outter` have been deprecated in favour of `full-outer` and `outer`.").
 					Default("none"),
 				service.NewStringField(siFieldShardedJoinIDPath).
-					Description("A [dot path](/docs/configuration/field_paths) that points to a common field within messages of each fragmented data set and can be used to join them. Messages that are not structured or are missing this field will be dropped. This field must be set in order to enable joins.").
+					Description("A xref:configuration:field_paths.adoc[dot path] that points to a common field within messages of each fragmented data set and can be used to join them. Messages that are not structured or are missing this field will be dropped. This field must be set in order to enable joins.").
 					Default(""),
 				service.NewIntField(siFieldShardedJoinIterations).
 					Description("The total number of iterations (shards), increasing this number will increase the overall time taken to process the data, but reduces the memory used in the process. The real memory usage required is significantly higher than the real size of the data and therefore the number of iterations should be at least an order of magnitude higher than the available memory divided by the overall size of the dataset.").
@@ -401,7 +401,7 @@ func shardedConfigFromParsed(conf *service.ParsedConfig) (*messageJoiner, error)
 	case "outer", "outter":
 		flushOnLast = true
 	default:
-		return nil, fmt.Errorf("join type '%v' was not recognized", typeStr)
+		return nil, fmt.Errorf("join type '%v' was not recognised", typeStr)
 	}
 
 	idPath, _ := conf.FieldString(siFieldShardedJoinIDPath)

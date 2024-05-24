@@ -74,19 +74,19 @@ type CRUDConfig struct {
 // CredentialsDocs credentials docs
 var CredentialsDocs = `
 
-## Credentials
+== Credentials
 
 You can use one of the following authentication mechanisms:
 
 - Set the ` + "`endpoint`" + ` field and the ` + "`account_key`" + ` field
-- Set only the ` + "`endpoint`" + ` field to use [DefaultAzureCredential](https://pkg.go.dev/github.com/Azure/azure-sdk-for-go/sdk/azidentity#DefaultAzureCredential)
+- Set only the ` + "`endpoint`" + ` field to use https://pkg.go.dev/github.com/Azure/azure-sdk-for-go/sdk/azidentity#DefaultAzureCredential[DefaultAzureCredential]
 - Set the ` + "`connection_string`" + ` field
 `
 
 // MetadataDocs metadata docs
 var MetadataDocs = `
 
-## Metadata
+== Metadata
 
 This component adds the following metadata fields to each message:
 ` + "```" + `
@@ -94,33 +94,33 @@ This component adds the following metadata fields to each message:
 - request_charge
 ` + "```" + `
 
-You can access these metadata fields using [function interpolation](/docs/configuration/interpolation#bloblang-queries).
+You can access these metadata fields using xref:configuration:interpolation.adoc#bloblang-queries[function interpolation].
 `
 
 // BatchingDocs batching docs
 var BatchingDocs = `
 
-## Batching
+== Batching
 
-CosmosDB limits the maximum batch size to 100 messages and the payload must not exceed 2MB (details [here](https://learn.microsoft.com/en-us/azure/cosmos-db/concepts-limits#per-request-limits)).
+CosmosDB limits the maximum batch size to 100 messages and the payload must not exceed 2MB (https://learn.microsoft.com/en-us/azure/cosmos-db/concepts-limits#per-request-limits[details here]).
 `
 
 // EmulatorDocs emulator docs
 var EmulatorDocs = `
 
-## CosmosDB Emulator
+== CosmosDB emulator
 
-If you wish to run the CosmosDB emulator that is referenced in the documentation [here](https://learn.microsoft.com/en-us/azure/cosmos-db/linux-emulator), the following Docker command should do the trick:
+If you wish to run the CosmosDB emulator that is referenced in the documentation https://learn.microsoft.com/en-us/azure/cosmos-db/linux-emulator[here], the following Docker command should do the trick:
 
-` + "```shell" + `
+` + "```bash" + `
 > docker run --rm -it -p 8081:8081 --name=cosmosdb -e AZURE_COSMOS_EMULATOR_PARTITION_COUNT=10 -e AZURE_COSMOS_EMULATOR_ENABLE_DATA_PERSISTENCE=false mcr.microsoft.com/cosmosdb/linux/azure-cosmos-emulator
 ` + "```" + `
 
 Note: ` + "`AZURE_COSMOS_EMULATOR_PARTITION_COUNT`" + ` controls the number of partitions that will be supported by the emulator. The bigger the value, the longer it takes for the container to start up.
 
-Additionally, instead of installing the container self-signed certificate which is exposed via ` + "`https://localhost:8081/_explorer/emulator.pem`" + `, you can run [mitmproxy](https://mitmproxy.org/) like so:
+Additionally, instead of installing the container self-signed certificate which is exposed via ` + "`https://localhost:8081/_explorer/emulator.pem`" + `, you can run https://mitmproxy.org/[mitmproxy] like so:
 
-` + "```shell" + `
+` + "```bash" + `
 > mitmproxy -k --mode "reverse:https://localhost:8081"
 ` + "```" + `
 
@@ -182,7 +182,7 @@ func PartitionKeysField(isInputField bool) *service.ConfigField {
 	// TODO: Add examples for hierarchical / empty Partition Keys this when the following issues are addressed:
 	// - https://github.com/Azure/azure-sdk-for-go/issues/18578
 	// - https://github.com/Azure/azure-sdk-for-go/issues/21063
-	field := service.NewBloblangField(FieldPartitionKeys).Description("A [Bloblang mapping](/docs/guides/bloblang/about) which should evaluate to a single partition key value or an array of partition key values of type string, integer or boolean. Currently, hierarchical partition keys are not supported so only one value may be provided.").Example(`root = "blobfish"`).Example(`root = 41`).Example(`root = true`).Example(`root = null`)
+	field := service.NewBloblangField(FieldPartitionKeys).Description("A xref:guides:bloblang/about.adoc[Bloblang mapping] which should evaluate to a single partition key value or an array of partition key values of type string, integer or boolean. Currently, hierarchical partition keys are not supported so only one value may be provided.").Example(`root = "blobfish"`).Example(`root = 41`).Example(`root = true`).Example(`root = null`)
 
 	// Add dynamic examples
 	if !isInputField {
@@ -215,7 +215,7 @@ func CRUDFields(hasReadOperation bool) []*service.ConfigField {
 				string(patchOperationSet):       "Set patch operation.",
 			}).Description("Operation.").Default(string(patchOperationAdd)),
 			service.NewStringField(fieldPatchPath).Description("Path.").Example("/foo/bar/baz"),
-			service.NewBloblangField(fieldPatchValue).Description("A [Bloblang mapping](/docs/guides/bloblang/about) which should evaluate to a value of any type that is supported by CosmosDB.").Example(`root = "blobfish"`).Example(`root = 41`).Example(`root = true`).Example(`root = json("blobfish").depth`).Example(`root = [1, 2, 3]`).Optional(),
+			service.NewBloblangField(fieldPatchValue).Description("A xref:guides:bloblang/about.adoc[Bloblang mapping] which should evaluate to a value of any type that is supported by CosmosDB.").Example(`root = "blobfish"`).Example(`root = 41`).Example(`root = true`).Example(`root = json("blobfish").depth`).Example(`root = [1, 2, 3]`).Optional(),
 		}...).Description("Patch operations to be performed when `" + fieldOperation + ": " + string(OperationPatch) + "` .").Optional().Advanced(),
 		service.NewInterpolatedStringField(fieldPatchCondition).Description("Patch operation condition.").Optional().Advanced().Example(`from c where not is_defined(c.blobfish)`),
 		service.NewBoolField(fieldAutoID).Description("Automatically set the item `id` field to a random UUID v4. If the `id` field is already set, then it will not be overwritten. Setting this to `false` can improve performance, since the messages will not have to be parsed.").Default(true).Advanced(),

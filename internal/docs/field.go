@@ -83,7 +83,7 @@ type FieldSpec struct {
 	// Kind of the field.
 	Kind FieldKind `json:"kind"`
 
-	// Description of the field purpose (in markdown).
+	// Description of the field purpose (in Asciidoc).
 	Description string `json:"description,omitempty"`
 
 	// IsAdvanced is true for optional fields that will not be present in most

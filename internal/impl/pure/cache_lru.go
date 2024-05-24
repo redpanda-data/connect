@@ -42,7 +42,7 @@ func lruCacheConfig() *service.ConfigSpec {
 		Summary(`Stores key/value pairs in a lru in-memory cache. This cache is therefore reset every time the service restarts.`).
 		Description(`This provides the lru package which implements a fixed-size thread safe LRU cache.
 
-It uses the package ` + "[`lru`](https://github.com/hashicorp/golang-lru/v2)" + `
+It uses the package ` + "https://github.com/hashicorp/golang-lru/v2[`lru`]" + `
 
 The field ` + lruCacheFieldInitValuesLabel + ` can be used to pre-populate the memory cache with any number of key/value pairs:
 

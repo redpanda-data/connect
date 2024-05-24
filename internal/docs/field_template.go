@@ -30,33 +30,45 @@ func FieldsTemplate(lintableExamples bool) string {
 	if lintableExamples {
 		exampleHint = "yaml"
 	}
-	// Use trailing whitespace below to render line breaks in Markdown
+	// Use trailing whitespace below to render line breaks in Asciidoc
 	return `{{define "field_docs" -}}
 {{range $i, $field := .Fields -}}
-### ` + "`{{$field.FullName}}`" + `
+=== ` + "`{{$field.FullName}}`" + `
 
 {{$field.Spec.Description}}
 {{if $field.Spec.IsSecret -}}
-:::warning Secret
-This field contains sensitive information that usually shouldn't be added to a config directly, read our [secrets page for more info](/docs/configuration/secrets).
-:::
+
+[WARNING]
+.Secret
+====
+This field contains sensitive information that usually shouldn't be added to a config directly, read our xref:configuration:secrets.adoc[secrets page for more info].
+====
+
 {{end -}}
 {{if $field.Spec.Interpolated -}}
-This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
+This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
 {{end}}
 
-Type: {{if eq $field.Spec.Kind "array"}}list of {{end}}{{if eq $field.Spec.Kind "map"}}map of {{end}}` + "`{{$field.Spec.Type}}`" + `  
-{{if gt (len $field.DefaultMarshalled) 0}}Default: ` + "`{{$field.DefaultMarshalled}}`" + `  
+*Type*: {{if eq $field.Spec.Kind "array"}}list of {{end}}{{if eq $field.Spec.Kind "map"}}map of {{end}}` + "`{{$field.Spec.Type}}`" + `
+
+{{if gt (len $field.DefaultMarshalled) 0}}*Default*: ` + "`{{$field.DefaultMarshalled}}`" + `
 {{end -}}
-{{if gt (len $field.Spec.Version) 0}}Requires version {{$field.Spec.Version}} or newer  
+{{if gt (len $field.Spec.Version) 0}}Requires version {{$field.Spec.Version}} or newer
 {{end -}}
 {{if gt (len $field.Spec.AnnotatedOptions) 0}}
-| Option | Summary |
-|---|---|
-{{range $j, $option := $field.Spec.AnnotatedOptions -}}` + "| `" + `{{index $option 0}}` + "` |" + ` {{index $option 1}} |
+|===
+| Option | Summary
+
+{{range $j, $option := $field.Spec.AnnotatedOptions -}}
+| ` + "`{{index $option 0}}`" + `
+| {{index $option 1}}
 {{end}}
-{{else if gt (len $field.Spec.Options) 0}}Options: {{range $j, $option := $field.Spec.Options -}}
-{{if ne $j 0}}, {{end}}` + "`" + `{{$option}}` + "`" + `{{end}}.
+|===
+{{else if gt (len $field.Spec.Options) 0}}
+Options:
+{{range $j, $option := $field.Spec.Options -}}
+{{if ne $j 0}}, {{end}}` + "`{{$option}}`" + `
+{{end}}.
 {{end}}
 {{if gt (len $field.Spec.Examples) 0 -}}
 ` + "```" + exampleHint + `

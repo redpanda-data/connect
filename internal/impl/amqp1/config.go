@@ -30,7 +30,7 @@ const (
 	metaFilterField  = "metadata"
 )
 
-// ErrSASLMechanismNotSupported is returned if a SASL mechanism was not recognized.
+// ErrSASLMechanismNotSupported is returned if a SASL mechanism was not recognised.
 type ErrSASLMechanismNotSupported string
 
 // Error implements the standard error interface.

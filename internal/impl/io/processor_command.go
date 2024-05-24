@@ -24,13 +24,13 @@ func commandProcSpec() *service.ConfigSpec {
 		Description(`
 The specified command is executed for each message processed, with the raw bytes of the message being fed into the stdin of the command process, and the resulting message having its contents replaced with the stdout of it.
 
-## Performance
+== Performance
 
-Since this processor executes a new process for each message performance will likely be an issue for high throughput streams. If this is the case then consider using the [`+"`subprocess` processor"+`](/docs/components/processors/subprocess) instead as it keeps the underlying process alive long term and uses codecs to insert and extract inputs and outputs to it via stdin/stdout.
+Since this processor executes a new process for each message performance will likely be an issue for high throughput streams. If this is the case then consider using the xref:components:processors/subprocess.adoc[`+"`subprocess` processor"+`] instead as it keeps the underlying process alive long term and uses codecs to insert and extract inputs and outputs to it via stdin/stdout.
 
-## Error Handling
+== Error handling
 
-If a non-zero error code is returned by the command then an error containing the entirety of stderr (or a generic message if nothing is written) is set on the message. These failed messages will continue through the pipeline unchanged, but can be dropped or placed in a dead letter queue according to your config, you can read about these patterns [here](/docs/configuration/error_handling).
+If a non-zero error code is returned by the command then an error containing the entirety of stderr (or a generic message if nothing is written) is set on the message. These failed messages will continue through the pipeline unchanged, but can be dropped or placed in a dead letter queue according to your config, you can read about xref:configuration:error_handling.adoc[these patterns].
 
 If the command is successful but stderr is written to then a metadata field `+"`command_stderr`"+` is populated with its contents.
 `).
@@ -39,13 +39,13 @@ If the command is successful but stderr is written to then a metadata field `+"`
 				Description("The name of the command to execute.").
 				Examples("bash", "go", "${! @command }"),
 			service.NewBloblangField(cpArgsField).
-				Description("An optional [Bloblang mapping](/docs/guides/bloblang/about) that, when specified, should resolve into an array of arguments to pass to the command. Command arguments are expressed this way in order to support dynamic behaviour.").
+				Description("An optional xref:guides:bloblang/about.adoc[Bloblang mapping] that, when specified, should resolve into an array of arguments to pass to the command. Command arguments are expressed this way in order to support dynamic behavior.").
 				Optional().
 				Examples(`[ "-c", this.script_path ]`),
 		).
 		Example(
 			"Cron Scheduled Command",
-			`This example uses a [`+"`generate`"+` input](/docs/components/inputs/generate) to trigger a command on a cron schedule:`,
+			`This example uses a xref:components:inputs/generate.adoc[`+"`generate`"+` input] to trigger a command on a cron schedule:`,
 			`
 input:
   generate:

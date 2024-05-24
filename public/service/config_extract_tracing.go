@@ -20,7 +20,7 @@ const (
 // in order to extract distributed tracing information.
 func NewExtractTracingSpanMappingField() *ConfigField {
 	return NewBloblangField(etsField).
-		Description("EXPERIMENTAL: A [Bloblang mapping](/docs/guides/bloblang/about) that attempts to extract an object containing tracing propagation information, which will then be used as the root tracing span for the message. The specification of the extracted fields must match the format used by the service wide tracer.").
+		Description("EXPERIMENTAL: A xref:guides:bloblang/about.adoc[Bloblang mapping] that attempts to extract an object containing tracing propagation information, which will then be used as the root tracing span for the message. The specification of the extracted fields must match the format used by the service wide tracer.").
 		Examples(`root = @`, `root = this.meta.span`).
 		Version("3.45.0").
 		Optional().

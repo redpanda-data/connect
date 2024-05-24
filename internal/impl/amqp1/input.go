@@ -17,7 +17,7 @@ import (
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
-//go:embed input_description.md
+//go:embed input_description.adoc
 var inputDescription string
 
 func amqp1InputSpec() *service.ConfigSpec {
@@ -421,7 +421,7 @@ func uuidFromLockTokenBytes(bytes []byte) (*amqp.UUID, error) {
 	// Get lock token from the deliveryTag
 	var lockTokenBytes [16]byte
 	copy(lockTokenBytes[:], bytes[:16])
-	// translate from .net guid byte serialisation format to amqp rfc standard
+	// translate from .net guid byte serialization format to amqp rfc standard
 	swapIndex(0, 3, &lockTokenBytes)
 	swapIndex(1, 2, &lockTokenBytes)
 	swapIndex(4, 5, &lockTokenBytes)

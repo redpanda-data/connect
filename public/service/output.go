@@ -353,7 +353,7 @@ var docsAsync = `
 This output benefits from sending multiple messages in flight in parallel for improved performance. You can tune the max number of in flight messages (or message batches) with the field ` + "`max_in_flight`" + `.`
 
 var docsBatches = `
-This output benefits from sending messages as a batch for improved performance. Batches can be formed at both the input and output level. You can find out more [in this doc](/docs/configuration/batching).`
+This output benefits from sending messages as a batch for improved performance. Batches can be formed at both the input and output level. You can find out more xref:configuration:batching.adoc[in this doc].`
 
 // OutputPerformanceDocs returns a string of markdown documentation that can be
 // added to outputs as standard performance advice based on whether the output
@@ -362,7 +362,7 @@ func OutputPerformanceDocs(benefitsFromMaxInFlight, benefitsFromBatching bool) (
 	if !benefitsFromMaxInFlight && !benefitsFromBatching {
 		return
 	}
-	content += "\n\n## Performance"
+	content += "\n\n== Performance"
 	if benefitsFromMaxInFlight {
 		content += "\n" + docsAsync
 	}

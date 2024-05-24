@@ -33,7 +33,7 @@ func (c *Case) Line() int {
 
 func caseFields() docs.FieldSpecs {
 	return docs.FieldSpecs{
-		docs.FieldString(fieldCaseName, "The name of the test, this should be unique and give a rough indication of what behaviour is being tested."),
+		docs.FieldString(fieldCaseName, "The name of the test, this should be unique and give a rough indication of what behavior is being tested."),
 		docs.FieldString(fieldCaseEnvironment, "An optional map of environment variables to set for the duration of the test.").Map().Optional(),
 		docs.FieldString(fieldCaseTargetProcessors, `
 A [JSON Pointer][json-pointer] that identifies the specific processors which should be executed by the test. The target can either be a single processor or an array of processors. Alternatively a resource label can be used to identify a processor.

@@ -16,7 +16,7 @@ func init() {
 		Categories("Composition").
 		Summary("A processor that applies a list of child processors to messages of a batch as though they were each a batch of one message.").
 		Description(`
-This is useful for forcing batch wide processors such as `+"[`dedupe`](/docs/components/processors/dedupe)"+` or interpolations such as the `+"`value`"+` field of the `+"`metadata`"+` processor to execute on individual message parts of a batch instead.
+This is useful for forcing batch wide processors such as `+"xref:components:processors/dedupe.adoc[`dedupe`]"+` or interpolations such as the `+"`value`"+` field of the `+"`metadata`"+` processor to execute on individual message parts of a batch instead.
 
 Please note that most processors already process per message of a batch, and this processor is not needed in those cases.`).
 		Field(service.NewProcessorListField("").Default([]any{})),

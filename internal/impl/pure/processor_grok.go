@@ -34,15 +34,15 @@ func grokProcSpec() *service.ConfigSpec {
 		Stable().
 		Summary("Parses messages into a structured format by attempting to apply a list of Grok expressions, the first expression to result in at least one value replaces the original message with a JSON object containing the values.").
 		Description(`
-Type hints within patterns are respected, therefore with the pattern `+"`%{WORD:first},%{INT:second:int}`"+` and a payload of `+"`foo,1`"+` the resulting payload would be `+"`{\"first\":\"foo\",\"second\":1}`"+`.
+Type hints within patterns are respected, therefore with the pattern `+"`%\\{WORD:first},%{INT:second:int}`"+` and a payload of `+"`foo,1`"+` the resulting payload would be `+"`\\{\"first\":\"foo\",\"second\":1}`"+`.
 
-### Performance
+== Performance
 
-This processor currently uses the [Go RE2](https://golang.org/s/re2syntax) regular expression engine, which is guaranteed to run in time linear to the size of the input. However, this property often makes it less performant than PCRE based implementations of grok. For more information see [https://swtch.com/~rsc/regexp/regexp1.html](https://swtch.com/~rsc/regexp/regexp1.html).`).
+This processor currently uses the https://golang.org/s/re2syntax[Go RE2] regular expression engine, which is guaranteed to run in time linear to the size of the input. However, this property often makes it less performant than PCRE based implementations of grok. For more information, see https://swtch.com/~rsc/regexp/regexp1.html.`).
 		Footnotes(`
-## Default Patterns
+== Default patterns
 
-A summary of the default patterns on offer can be [found here](https://github.com/Jeffail/grok/blob/master/patterns.go#L5).`).
+For summary of the default patterns on offer, see https://github.com/Jeffail/grok/blob/master/patterns.go#L5.`).
 		Example("VPC Flow Logs", `
 Grok can be used to parse unstructured logs such as VPC flow logs that look like this:
 
@@ -81,7 +81,7 @@ pipeline:
 				Advanced().
 				Default(true),
 			service.NewBoolField(gpFieldUseDefaults).
-				Description("Whether to use a [default set of patterns](#default-patterns).").
+				Description("Whether to use a <<default-patterns, default set of patterns>>.").
 				Advanced().
 				Default(true),
 			service.NewBoolField(gpFieldRemoveEmpty).

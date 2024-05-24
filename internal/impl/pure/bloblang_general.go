@@ -76,7 +76,7 @@ root.woof_id = null.apply("foos")
 				},
 			).
 			Example(
-				"The `set` parameter can also be utilised to peek at the counter without mutating it by returning `null`.",
+				"The `set` parameter can also be utilized to peek at the counter without mutating it by returning `null`.",
 				`root.things = counter(set: if this.id == null { null })`,
 				[2]string{`{"id":"a"}`, `{"things":1}`},
 				[2]string{`{"id":"b"}`, `{"things":2}`},

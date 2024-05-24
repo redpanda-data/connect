@@ -32,7 +32,7 @@ root.d = this.d.$NAME().catch(0)
 			Description(replacer.Replace(`
 Converts a numerical type into a $LONGNAME, this is for advanced use cases where a specific data type is needed for a given component (such as the ClickHouse SQL driver).
 
-If the value is a string then an attempt will be made to parse it as a $LONGNAME. If the target value exceeds the capacity of an integer or contains decimal values then this method will throw an error. In order to convert a floating point number containing decimals first use `+"[`.round()`](#round)"+` on the value. Please refer to the [`+"`strconv.ParseInt`"+` documentation](https://pkg.go.dev/strconv#ParseInt) for details regarding the supported formats.`)).
+If the value is a string then an attempt will be made to parse it as a $LONGNAME. If the target value exceeds the capacity of an integer or contains decimal values then this method will throw an error. In order to convert a floating point number containing decimals first use <<round, `+"`.round()`"+`>> on the value. Please refer to the https://pkg.go.dev/strconv#ParseInt[`+"`strconv.ParseInt`"+` documentation] for details regarding the supported formats.`)).
 			Example("", exampleOneBody, exampleOneIO).
 			Example("", replacer.Replace(`
 root = this.$NAME()
@@ -109,7 +109,7 @@ func init() {
 			Description(`
 Converts a numerical type into a 64-bit floating point number, this is for advanced use cases where a specific data type is needed for a given component (such as the ClickHouse SQL driver).
 
-If the value is a string then an attempt will be made to parse it as a 64-bit floating point number. Please refer to the [`+"`strconv.ParseFloat`"+` documentation](https://pkg.go.dev/strconv#ParseFloat) for details regarding the supported formats.`).
+If the value is a string then an attempt will be made to parse it as a 64-bit floating point number. Please refer to the https://pkg.go.dev/strconv#ParseFloat[`+"`strconv.ParseFloat`"+` documentation] for details regarding the supported formats.`).
 			Example("", `
 root.out = this.in.float64()
 `,
@@ -129,7 +129,7 @@ root.out = this.in.float64()
 			Description(`
 Converts a numerical type into a 32-bit floating point number, this is for advanced use cases where a specific data type is needed for a given component (such as the ClickHouse SQL driver).
 
-If the value is a string then an attempt will be made to parse it as a 32-bit floating point number. Please refer to the [`+"`strconv.ParseFloat`"+` documentation](https://pkg.go.dev/strconv#ParseFloat) for details regarding the supported formats.`).
+If the value is a string then an attempt will be made to parse it as a 32-bit floating point number. Please refer to the https://pkg.go.dev/strconv#ParseFloat[`+"`strconv.ParseFloat`"+` documentation] for details regarding the supported formats.`).
 			Example("", `
 root.out = this.in.float32()
 `,

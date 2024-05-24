@@ -29,7 +29,7 @@ func whileProcSpec() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Categories("Composition").
 		Stable().
-		Summary("A processor that checks a [Bloblang query](/docs/guides/bloblang/about/) against each batch of messages and executes child processors on them for as long as the query resolves to true.").
+		Summary("A processor that checks a xref:guides:bloblang/about.adoc[Bloblang query] against each batch of messages and executes child processors on them for as long as the query resolves to true.").
 		Description(`
 The field `+"`at_least_once`"+`, if true, ensures that the child processors are always executed at least one time (like a do .. while loop.)
 
@@ -37,7 +37,7 @@ The field `+"`max_loops`"+`, if greater than zero, caps the number of loops for 
 
 If following a loop execution the number of messages in a batch is reduced to zero the loop is exited regardless of the condition result. If following a loop execution there are more than 1 message batches the query is checked against the first batch only.
 
-The conditions of this processor are applied across entire message batches. You can find out more about batching [in this doc](/docs/configuration/batching).`).
+The conditions of this processor are applied across entire message batches. You can find out more about batching xref:configuration:batching.adoc[in this doc].`).
 		Fields(
 
 			service.NewBoolField(wpFieldAtLeastOnce).
@@ -48,7 +48,7 @@ The conditions of this processor are applied across entire message batches. You 
 				Advanced().
 				Default(0),
 			service.NewBloblangField(wpFieldCheck).
-				Description("A [Bloblang query](/docs/guides/bloblang/about/) that should return a boolean value indicating whether the while loop should execute again.").
+				Description("A xref:guides:bloblang/about.adoc[Bloblang query] that should return a boolean value indicating whether the while loop should execute again.").
 				Examples(`errored()`, `this.urls.unprocessed.length() > 0`).
 				Default(""),
 			service.NewProcessorListField(wpFieldProcessors).

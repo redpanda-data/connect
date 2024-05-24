@@ -20,7 +20,7 @@ func init() {
 		"reject_errored", service.NewConfigSpec().
 			Stable().
 			Categories("Utility").
-			Summary(`Rejects messages that have failed their processing steps, resulting in nack behaviour at the input level, otherwise sends them to a child output.`).
+			Summary(`Rejects messages that have failed their processing steps, resulting in nack behavior at the input level, otherwise sends them to a child output.`).
 			Description(`
 The routing of messages rejected by this output depends on the type of input it came from. For inputs that support propagating nacks upstream such as AMQP or NATS the message will be nacked. However, for inputs that are sequential such as files or Kafka the messages will simply be reprocessed from scratch.`).
 			Example(
@@ -47,7 +47,7 @@ output:
 			Example(
 				"DLQing Failed Messages",
 				`
-Another use case for this output is to send failed messages straight into a dead-letter queue. We use it within a [fallback output](/docs/components/outputs/fallback) that allows us to specify where these failed messages should go to next.`,
+Another use case for this output is to send failed messages straight into a dead-letter queue. You use it within a xref:components:outputs/fallback.adoc[fallback output] that allows you to specify where these failed messages should go to next.`,
 				`
 pipeline:
   processors:

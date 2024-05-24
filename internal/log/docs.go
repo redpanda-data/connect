@@ -31,7 +31,7 @@ func Spec() docs.FieldSpecs {
 	}
 }
 
-//go:embed docs.md
+//go:embed docs.adoc
 var loggerDocs string
 
 type loggerContext struct {

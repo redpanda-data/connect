@@ -13,7 +13,7 @@ func processorConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Beta().
 		Categories("Parsing").
-		Summary("Converts messages to or from the [MessagePack](https://msgpack.org/) format.").
+		Summary("Converts messages to or from the https://msgpack.org/[MessagePack] format.").
 		Field(service.NewStringAnnotatedEnumField("operator", map[string]string{
 			"to_json":   "Convert MessagePack messages to JSON format",
 			"from_json": "Convert JSON messages to MessagePack format",

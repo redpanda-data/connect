@@ -11,15 +11,15 @@ func sqlDeprecatedOutputConfig() *service.ConfigSpec {
 		Categories("Services").
 		Summary("Executes an arbitrary SQL query for each message.").
 		Description(`
-## Alternatives
+== Alternatives
 
-For basic inserts use the ` + "[`sql_insert`](/docs/components/outputs/sql)" + ` output. For more complex queries use the ` + "[`sql_raw`](/docs/components/outputs/sql_raw)" + ` output.`).
+For basic inserts use the ` + "xref:components:outputs/sql.adoc[`sql_insert`]" + ` output. For more complex queries use the ` + "xref:components:outputs/sql_raw.adoc[`sql_raw`]" + ` output.`).
 		Field(driverField).
 		Field(service.NewStringField("data_source_name").Description("Data source name.")).
 		Field(rawQueryField().
 			Example("INSERT INTO footable (foo, bar, baz) VALUES (?, ?, ?);")).
 		Field(service.NewBloblangField("args_mapping").
-			Description("An optional [Bloblang mapping](/docs/guides/bloblang/about) which should evaluate to an array of values matching in size to the number of placeholder arguments in the field `query`.").
+			Description("An optional xref:guides:bloblang/about.adoc[Bloblang mapping] which should evaluate to an array of values matching in size to the number of placeholder arguments in the field `query`.").
 			Example("root = [ this.cat.meow, this.doc.woofs[0] ]").
 			Example(`root = [ meta("user.id") ]`).
 			Optional()).

@@ -40,7 +40,7 @@ func init() {
 		bloblang.NewPluginSpec().
 			Category(query.MethodCategoryObjectAndArray).
 			Variadic().
-			Description(`Returns an object where all but one or more [field path][field_paths] arguments are removed. Each path specifies a specific field to be retained from the input object, allowing for nested fields.
+			Description(`Returns an object where all but one or more xref:configuration:field_paths.adoc[field path] arguments are removed. Each path specifies a specific field to be retained from the input object, allowing for nested fields.
 
 If a key within a nested path does not exist then it is ignored.`).
 			Example("", `root = this.with("inner.a","inner.c","d")`,

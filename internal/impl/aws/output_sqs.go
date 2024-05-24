@@ -85,11 +85,11 @@ func sqsoOutputSpec() *service.ConfigSpec {
 		Description(`
 Metadata values are sent along with the payload as attributes with the data type String. If the number of metadata values in a message exceeds the message attribute limit (10) then the top ten keys ordered alphabetically will be selected.
 
-The fields `+"`message_group_id`, `message_deduplication_id` and `delay_seconds`"+` can be set dynamically using [function interpolations](/docs/configuration/interpolation#bloblang-queries), which are resolved individually for each message of a batch.
+The fields `+"`message_group_id`, `message_deduplication_id` and `delay_seconds`"+` can be set dynamically using xref:configuration:interpolation.adoc#bloblang-queries[function interpolations], which are resolved individually for each message of a batch.
 
-### Credentials
+== Credentials
 
-By default Benthos will use a shared credentials file when connecting to AWS services. It's also possible to set them explicitly at the component level, allowing you to transfer data across accounts. You can find out more [in this document](/docs/guides/cloud/aws).`+service.OutputPerformanceDocs(true, true)).
+By default Benthos will use a shared credentials file when connecting to AWS services. It's also possible to set them explicitly at the component level, allowing you to transfer data across accounts. You can find out more in xref:guides:cloud/aws.adoc[].`+service.OutputPerformanceDocs(true, true)).
 		Fields(
 			service.NewStringField(sqsoFieldURL).Description("The URL of the target SQS queue."),
 			service.NewInterpolatedStringField(sqsoFieldMessageGroupID).

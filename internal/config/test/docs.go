@@ -14,7 +14,7 @@ import (
 
 const fieldTests = "tests"
 
-//go:embed docs.md
+//go:embed docs.adoc
 var testDocs string
 
 type testContext struct {

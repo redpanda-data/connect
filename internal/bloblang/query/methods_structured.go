@@ -276,7 +276,7 @@ var _ = registerSimpleMethod(
 var _ = registerSimpleMethod(
 	NewMethodSpec(
 		"exists",
-		"Checks that a field, identified via a [dot path][field_paths], exists in an object.",
+		"Checks that a field, identified via a xref:configuration:field_paths.adoc[dot path], exists in an object.",
 		NewExampleSpec("",
 			`root.result = this.foo.exists("bar.baz")`,
 			`{"foo":{"bar":{"baz":"yep, I exist"}}}`,
@@ -286,7 +286,7 @@ var _ = registerSimpleMethod(
 			`{"foo":{}}`,
 			`{"result":false}`,
 		),
-	).Param(ParamString("path", "A [dot path][field_paths] to a field.")),
+	).Param(ParamString("path", "A xref:configuration:field_paths.adoc[dot path] to a field.")),
 	func(args *ParsedParams) (simpleMethod, error) {
 		pathStr, err := args.FieldString("path")
 		if err != nil {
@@ -306,7 +306,7 @@ var _ = registerSimpleMethod(
 		"explode", "",
 	).InCategory(
 		MethodCategoryObjectAndArray,
-		"Explodes an array or object at a [field path][field_paths].",
+		"Explodes an array or object at a xref:configuration:field_paths.adoc[field path].",
 		NewExampleSpec(`##### On arrays
 
 Exploding arrays results in an array containing elements matching the original document, where the target field of each element is an element of the exploded array:`,
@@ -321,7 +321,7 @@ Exploding objects results in an object where the keys match the target object, a
 			`{"id":1,"value":{"foo":2,"bar":[3,4],"baz":{"bev":5}}}`,
 			`{"bar":{"id":1,"value":[3,4]},"baz":{"id":1,"value":{"bev":5}},"foo":{"id":1,"value":2}}`,
 		),
-	).Param(ParamString("path", "A [dot path][field_paths] to a field to explode.")),
+	).Param(ParamString("path", "A xref:configuration:field_paths.adoc[dot path] to a field to explode.")),
 	func(args *ParsedParams) (simpleMethod, error) {
 		pathRaw, err := args.FieldString("path")
 		if err != nil {
@@ -747,7 +747,7 @@ var _ = registerSimpleMethod(
 var _ = registerSimpleMethod(
 	NewMethodSpec(
 		"json_schema",
-		"Checks a [JSON schema](https://json-schema.org/) against a value and returns the value if it matches or throws and error if it does not.",
+		"Checks a https://json-schema.org/[JSON schema] against a value and returns the value if it matches or throws and error if it does not.",
 	).InCategory(
 		MethodCategoryObjectAndArray,
 		"",
@@ -1045,7 +1045,7 @@ var _ = registerSimpleMethod(
 
 var _ = registerMethod(
 	NewMethodSpec(
-		"merge", "Merge a source object into an existing destination object. When a collision is found within the merged structures (both a source and destination object contain the same non-object keys) the result will be an array containing both values, where values that are already arrays will be expanded into the resulting array. In order to simply override destination fields on collision use the [`assign`](#assign) method.",
+		"merge", "Merge a source object into an existing destination object. When a collision is found within the merged structures (both a source and destination object contain the same non-object keys) the result will be an array containing both values, where values that are already arrays will be expanded into the resulting array. In order to simply override destination fields on collision use the <<assign, `assign`>> method.",
 	).InCategory(
 		MethodCategoryObjectAndArray, "",
 		NewExampleSpec(``,
@@ -1095,7 +1095,7 @@ func mergeMethod(target Function, args *ParsedParams) (Function, error) {
 
 var _ = registerMethod(
 	NewMethodSpec(
-		"assign", "Merge a source object into an existing destination object. When a collision is found within the merged structures (both a source and destination object contain the same non-object keys) the value in the destination object will be overwritten by that of source object. In order to preserve both values on collision use the [`merge`](#merge) method.",
+		"assign", "Merge a source object into an existing destination object. When a collision is found within the merged structures (both a source and destination object contain the same non-object keys) the value in the destination object will be overwritten by that of source object. In order to preserve both values on collision use the <<merge, `merge`>> method.",
 	).InCategory(
 		MethodCategoryObjectAndArray, "",
 		NewExampleSpec(``,
@@ -1676,7 +1676,7 @@ var _ = registerSimpleMethod(
 		"without", "",
 	).InCategory(
 		MethodCategoryObjectAndArray,
-		`Returns an object where one or more [field path][field_paths] arguments are removed. Each path specifies a specific field to be deleted from the input object, allowing for nested fields.
+		`Returns an object where one or more xref:configuration:field_paths.adoc[field path] arguments are removed. Each path specifies a specific field to be deleted from the input object, allowing for nested fields.
 
 If a key within a nested path does not exist or is not an object then it is not removed.`,
 		NewExampleSpec("",

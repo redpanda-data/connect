@@ -65,14 +65,14 @@ func bsoSpec() *service.ConfigSpec {
 		Summary(`Sends message parts as objects to an Azure Blob Storage Account container. Each object is uploaded with the filename specified with the `+"`container`"+` field.`).
 		Description(`
 In order to have a different path for each object you should use function
-interpolations described [here](/docs/configuration/interpolation#bloblang-queries), which are
+interpolations described xref:configuration:interpolation.adoc#bloblang-queries[here], which are
 calculated per message of a batch.
 
 Supports multiple authentication methods but only one of the following is required:
 - `+"`storage_connection_string`"+`
 - `+"`storage_account` and `storage_access_key`"+`
 - `+"`storage_account` and `storage_sas_token`"+`
-- `+"`storage_account` to access via [DefaultAzureCredential](https://pkg.go.dev/github.com/Azure/azure-sdk-for-go/sdk/azidentity#DefaultAzureCredential)"+`
+- `+"`storage_account` to access via https://pkg.go.dev/github.com/Azure/azure-sdk-for-go/sdk/azidentity#DefaultAzureCredential[DefaultAzureCredential]"+`
 
 If multiple are set then the `+"`storage_connection_string`"+` is given priority.
 
@@ -89,7 +89,7 @@ If the `+"`storage_connection_string`"+` does not contain the `+"`AccountName`"+
 				Example(`${!json("doc.namespace")}/${!json("doc.id")}.json`).
 				Default(`${!count("files")}-${!timestamp_unix_nano()}.txt`),
 			service.NewInterpolatedStringEnumField(bsoFieldBlobType, "BLOCK", "APPEND").
-				Description("Block and Append blobs are comprised of blocks, and each blob can support up to 50,000 blocks. The default value is `+\"`BLOCK`\"+`.`").
+				Description("Block and Append blobs are comprized of blocks, and each blob can support up to 50,000 blocks. The default value is `+\"`BLOCK`\"+`.`").
 				Advanced().
 				Default("BLOCK"),
 			service.NewInterpolatedStringEnumField(bsoFieldPublicAccessLevel, "PRIVATE", "BLOB", "CONTAINER").

@@ -28,7 +28,7 @@ func Spec() docs.FieldSpecs {
 	}
 }
 
-//go:embed docs.md
+//go:embed docs.adoc
 var httpDocs string
 
 type templateContext struct {
@@ -78,7 +78,10 @@ http:
 // some of the caveats in registering endpoints due to their non-deterministic
 // ordering and lack of explicit path terminators.
 func EndpointCaveats() string {
-	return `:::caution Endpoint Caveats
+	return `
+[CAUTION]
+.Endpoint caveats
+====
 Components within a Benthos config will register their respective endpoints in a non-deterministic order. This means that establishing precedence of endpoints that are registered via multiple ` + "`http_server`" + ` inputs or outputs (either within brokers or from cohabiting streams) is not possible in a predictable way.
 
 This ambiguity makes it difficult to ensure that paths which are both a subset of a path registered by a separate component, and end in a slash (` + "`/`" + `) and will therefore match against all extensions of that path, do not prevent the more specific path from matching against requests.
@@ -86,5 +89,5 @@ This ambiguity makes it difficult to ensure that paths which are both a subset o
 It is therefore recommended that you ensure paths of separate components do not collide unless they are explicitly non-competing.
 
 For example, if you were to deploy two separate ` + "`http_server`" + ` inputs, one with a path ` + "`/foo/`" + ` and the other with a path ` + "`/foo/bar`" + `, it would not be possible to ensure that the path ` + "`/foo/`" + ` does not swallow requests made to ` + "`/foo/bar`" + `.
-:::`
+====`
 }

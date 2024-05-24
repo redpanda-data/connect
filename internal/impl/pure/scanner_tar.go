@@ -14,7 +14,7 @@ func tarScannerSpec() *service.ConfigSpec {
 		Stable().
 		Summary("Consume a tar archive file by file.").
 		Description(`
-### Metadata
+== Metadata
 
 This scanner adds the following metadata to each message:
 

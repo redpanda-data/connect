@@ -13,21 +13,21 @@ func httpClientOutputSpec() *service.ConfigSpec {
 		Categories("Network").
 		Summary("Sends messages to an HTTP server.").
 		Description(`
-When the number of retries expires the output will reject the message, the behaviour after this will depend on the pipeline but usually this simply means the send is attempted again until successful whilst applying back pressure.
+When the number of retries expires the output will reject the message, the behavior after this will depend on the pipeline but usually this simply means the send is attempted again until successful whilst applying back pressure.
 
-The URL and header values of this type can be dynamically set using function interpolations described [here](/docs/configuration/interpolation#bloblang-queries).
+The URL and header values of this type can be dynamically set using function interpolations described in xref:configuration:interpolation.adoc#bloblang-queries[Bloblang queries].
 
-The body of the HTTP request is the raw contents of the message payload. If the message has multiple parts (is a batch) the request will be sent according to [RFC1341](https://www.w3.org/Protocols/rfc1341/7_2_Multipart.html). This behaviour can be disabled by setting the field ` + "[`batch_as_multipart`](#batch_as_multipart) to `false`" + `.
+The body of the HTTP request is the raw contents of the message payload. If the message has multiple parts (is a batch) the request will be sent according to https://www.w3.org/Protocols/rfc1341/7_2_Multipart.html[RFC1341]. This behavior can be disabled by setting the field ` + "<<batch_as_multipart, `batch_as_multipart`>> to `false`" + `.
 
-### Propagating Responses
+== Propagate responses
 
-It's possible to propagate the response from each HTTP request back to the input source by setting ` + "`propagate_response` to `true`" + `. Only inputs that support [synchronous responses](/docs/guides/sync_responses) are able to make use of these propagated responses.` + service.OutputPerformanceDocs(true, true)).
+It's possible to propagate the response from each HTTP request back to the input source by setting ` + "`propagate_response` to `true`" + `. Only inputs that support xref:guides:sync_responses.adoc[synchronous responses] are able to make use of these propagated responses.` + service.OutputPerformanceDocs(true, true)).
 		Field(httpclient.ConfigField("POST", true,
 			service.NewBoolField("batch_as_multipart").
-				Description("Send message batches as a single request using [RFC1341](https://www.w3.org/Protocols/rfc1341/7_2_Multipart.html). If disabled messages in batches will be sent as individual requests.").
+				Description("Send message batches as a single request using https://www.w3.org/Protocols/rfc1341/7_2_Multipart.html[RFC1341]. If disabled messages in batches will be sent as individual requests.").
 				Advanced().Default(false),
 			service.NewBoolField("propagate_response").
-				Description("Whether responses from the server should be [propagated back](/docs/guides/sync_responses) to the input.").
+				Description("Whether responses from the server should be xref:guides:sync_responses.adoc[propagated back] to the input.").
 				Advanced().Default(false),
 			service.NewIntField("max_in_flight").
 				Description("The maximum number of parallel message batches to have in flight at any given time.").
@@ -46,7 +46,7 @@ It's possible to propagate the response from each HTTP request back to the input
 					Description("The body of the individual message part.").
 					Example(`${! this.data.part1 }`).
 					Default(""),
-			).Description("EXPERIMENTAL: Create explicit multipart HTTP requests by specifying an array of parts to add to the request, each part specified consists of content headers and a data field that can be populated dynamically. If this field is populated it will override the default request creation behaviour.").
+			).Description("EXPERIMENTAL: Create explicit multipart HTTP requests by specifying an array of parts to add to the request, each part specified consists of content headers and a data field that can be populated dynamically. If this field is populated it will override the default request creation behavior.").
 				Advanced().Version("3.63.0").Default([]any{}),
 		))
 }

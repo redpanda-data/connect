@@ -35,7 +35,7 @@ func ttlruCacheConfig() *service.ConfigSpec {
 
 This TTL is reset on both modification and access of the value. As a result, if the cache is full, and no items have expired, when adding a new item, the item with the soonest expiration will be evicted.
 
-It uses the package ` + "[`expirable`](https://github.com/hashicorp/golang-lru/v2/expirable)" + `
+It uses the package ` + "https://github.com/hashicorp/golang-lru/v2/expirable[`expirable`]" + `
 
 The field ` + ttlruCacheFieldInitValuesLabel + ` can be used to pre-populate the memory cache with any number of key/value pairs:
 

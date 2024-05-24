@@ -26,25 +26,25 @@ func dynInputSpec() *service.ConfigSpec {
 		Categories("Utility").
 		Summary(`A special broker type where the inputs are identified by unique labels and can be created, changed and removed during runtime via a REST HTTP interface.`).
 		Footnotes(`
-## Endpoints
+== Endpoints
 
-### GET `+"`/inputs`"+`
+=== GET `+"`/inputs`"+`
 
 Returns a JSON object detailing all dynamic inputs, providing information such as their current uptime and configuration.
 
-### GET `+"`/inputs/{id}`"+`
+=== GET `+"`/inputs/\\{id}`"+`
 
 Returns the configuration of an input.
 
-### POST `+"`/inputs/{id}`"+`
+=== POST `+"`/inputs/\\{id}`"+`
 
 Creates or updates an input with a configuration provided in the request body (in YAML or JSON format).
 
-### DELETE `+"`/inputs/{id}`"+`
+=== DELETE `+"`/inputs/\\{id}`"+`
 
 Stops and removes an input.
 
-### GET `+"`/inputs/{id}/uptime`"+`
+=== GET `+"`/inputs/\\{id}/uptime`"+`
 
 Returns the uptime of an input as a duration string (of the form "72h3m0.5s"), or "stopped" in the case where the input has gracefully terminated.`).
 		Fields(

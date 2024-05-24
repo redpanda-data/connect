@@ -31,18 +31,18 @@ func metProcSpec() *service.ConfigSpec {
 		Stable().
 		Summary("Emit custom metrics by extracting values from messages.").
 		Description(`
-This processor works by evaluating an [interpolated field `+"`value`"+`](/docs/configuration/interpolation#bloblang-queries) for each message and updating a emitted metric according to the [type](#types).
+This processor works by evaluating an xref:configuration:interpolation.adoc#bloblang-queries[interpolated field `+"`value`"+`] for each message and updating a emitted metric according to the <<types, type>>.
 
-Custom metrics such as these are emitted along with Benthos internal metrics, where you can customize where metrics are sent, which metric names are emitted and rename them as/when appropriate. For more information check out the [metrics docs here](/docs/components/metrics/about).`).
+Custom metrics such as these are emitted along with Benthos internal metrics, where you can customize where metrics are sent, which metric names are emitted and rename them as/when appropriate. For more information see the xref:components:metrics/about.adoc[metrics docs].`).
 		Footnotes(`
-## Types
+== Types
 
-### `+"`counter`"+`
+=== `+"`counter`"+`
 
 Increments a counter by exactly 1, the contents of `+"`value`"+` are ignored
 by this type.
 
-### `+"`counter_by`"+`
+=== `+"`counter_by`"+`
 
 If the contents of `+"`value`"+` can be parsed as a positive integer value
 then the counter is incremented by this value.
@@ -59,7 +59,7 @@ pipeline:
         value: ${!json("field.some.value")}
 `+"```"+`
 
-### `+"`gauge`"+`
+=== `+"`gauge`"+`
 
 If the contents of `+"`value`"+` can be parsed as a positive integer value
 then the gauge is set to this value.
@@ -76,7 +76,7 @@ pipeline:
         value: ${!json("field.some.value")}
 `+"```"+`
 
-### `+"`timing`"+`
+=== `+"`timing`"+`
 
 Equivalent to `+"`gauge`"+` where instead the metric is a timing. It is recommended that timing values are recorded in nanoseconds in order to be consistent with standard Benthos timing metrics, as in some cases these values are automatically converted into other units such as when exporting timings as histograms with Prometheus metrics.`).
 		Example(
@@ -124,7 +124,7 @@ metrics:
 		).
 		Fields(
 			service.NewStringEnumField(metProcFieldType, "counter", "counter_by", "gauge", "timing").
-				Description("The metric [type](#types) to create."),
+				Description("The metric <<types, type>> to create."),
 			service.NewStringField(metProcFieldName).
 				Description("The name of the metric to create, this must be unique across all Benthos components otherwise it will overwrite those other metrics."),
 			service.NewInterpolatedStringMapField(metProcFieldLabels).

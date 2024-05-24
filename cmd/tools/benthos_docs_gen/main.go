@@ -31,7 +31,7 @@ func create(t, path string, resBytes []byte) {
 }
 
 func main() {
-	docsDir := "./website/docs/components"
+	docsDir := "./docs/modules/components/pages"
 	flag.StringVar(&docsDir, "dir", docsDir, "The directory to write docs to")
 	flag.Parse()
 
@@ -63,61 +63,61 @@ func main() {
 
 func viewForDir(docsDir string) func(name string, config *service.ConfigView) {
 	return func(name string, config *service.ConfigView) {
-		mdSpec, err := config.RenderDocs()
+		adocSpec, err := config.RenderDocs()
 		if err != nil {
 			panic(fmt.Sprintf("Failed to generate docs for '%v': %v", name, err))
 		}
-		create(name, path.Join(docsDir, name+".md"), mdSpec)
+		create(name, path.Join(docsDir, name+".adoc"), adocSpec)
 	}
 }
 
 func doBloblang(dir string) {
-	mdSpec, err := docs.BloblangFunctionsMarkdown()
+	adocSpec, err := docs.BloblangFunctionsMarkdown()
 	if err != nil {
 		panic(fmt.Sprintf("Failed to generate docs for bloblang functions: %v", err))
 	}
 
-	create("bloblang functions", filepath.Join(dir, "..", "guides", "bloblang", "functions.md"), mdSpec)
+	create("bloblang functions", filepath.Join(dir, "../..", "guides", "pages", "bloblang", "functions.adoc"), adocSpec)
 
-	if mdSpec, err = docs.BloblangMethodsMarkdown(); err != nil {
+	if adocSpec, err = docs.BloblangMethodsMarkdown(); err != nil {
 		panic(fmt.Sprintf("Failed to generate docs for bloblang methods: %v", err))
 	}
 
-	create("bloblang methods", filepath.Join(dir, "..", "guides", "bloblang", "methods.md"), mdSpec)
+	create("bloblang methods", filepath.Join(dir, "../..", "guides", "pages", "bloblang", "methods.adoc"), adocSpec)
 }
 
 func doTestDocs(dir string) {
-	mdSpec, err := test.DocsMarkdown()
+	adocSpec, err := test.DocsMarkdown()
 	if err != nil {
 		panic(fmt.Sprintf("Failed to generate docs for unit tests: %v", err))
 	}
 
-	create("test docs", filepath.Join(dir, "..", "configuration", "unit_testing.md"), mdSpec)
+	create("test docs", filepath.Join(dir, "../..", "configuration", "pages", "unit_testing.adoc"), adocSpec)
 }
 
 func doHTTP(dir string) {
-	mdSpec, err := api.DocsMarkdown()
+	adocSpec, err := api.DocsMarkdown()
 	if err != nil {
 		panic(fmt.Sprintf("Failed to generate docs for http: %v", err))
 	}
 
-	create("http docs", filepath.Join(dir, "http", "about.md"), mdSpec)
+	create("http docs", filepath.Join(dir, "http", "about.adoc"), adocSpec)
 }
 
 func doLogger(dir string) {
-	mdSpec, err := log.DocsMarkdown()
+	adocSpec, err := log.DocsMarkdown()
 	if err != nil {
 		panic(fmt.Sprintf("Failed to generate docs for logger: %v", err))
 	}
 
-	create("logger docs", filepath.Join(dir, "logger", "about.md"), mdSpec)
+	create("logger docs", filepath.Join(dir, "logger", "about.adoc"), adocSpec)
 }
 
 func doTemplates(dir string) {
-	mdSpec, err := template.DocsMarkdown()
+	adocSpec, err := template.DocsMarkdown()
 	if err != nil {
 		panic(fmt.Sprintf("Failed to generate docs for templates: %v", err))
 	}
 
-	create("template docs", filepath.Join(dir, "..", "configuration", "templating.md"), mdSpec)
+	create("template docs", filepath.Join(dir, "../..", "configuration", "pages", "templating.adoc"), adocSpec)
 }

@@ -26,7 +26,7 @@ func init() {
 		Beta().
 		Static().
 		Category(query.MethodCategoryTime).
-		Description(`Returns the result of rounding a timestamp to the nearest multiple of the argument duration (nanoseconds). The rounding behavior for halfway values is to round up. Timestamp values can either be a numerical unix time in seconds (with up to nanosecond precision via decimals), or a string in RFC 3339 format. The `+"[`ts_parse`](#ts_parse)"+` method can be used in order to parse different timestamp formats.`).
+		Description(`Returns the result of rounding a timestamp to the nearest multiple of the argument duration (nanoseconds). The rounding behavior for halfway values is to round up. Timestamp values can either be a numerical unix time in seconds (with up to nanosecond precision via decimals), or a string in RFC 3339 format. The `+"<<ts_parse, `ts_parse`>>"+` method can be used in order to parse different timestamp formats.`).
 		Param(bloblang.NewInt64Param("duration").Description("A duration measured in nanoseconds to round by.")).
 		Version("4.2.0").
 		Example("Use the method `parse_duration` to convert a duration string into an integer argument.",
@@ -55,7 +55,7 @@ func init() {
 		Beta().
 		Static().
 		Category(query.MethodCategoryTime).
-		Description(`Returns the result of converting a timestamp to a specified timezone. Timestamp values can either be a numerical unix time in seconds (with up to nanosecond precision via decimals), or a string in RFC 3339 format. The `+"[`ts_parse`](#ts_parse)"+` method can be used in order to parse different timestamp formats.`).
+		Description(`Returns the result of converting a timestamp to a specified timezone. Timestamp values can either be a numerical unix time in seconds (with up to nanosecond precision via decimals), or a string in RFC 3339 format. The `+"<<ts_parse, `ts_parse`>>"+` method can be used in order to parse different timestamp formats.`).
 		Param(bloblang.NewStringParam("tz").Description(`The timezone to change to. If set to "UTC" then the timezone will be UTC. If set to "Local" then the local timezone will be used. Otherwise, the argument is taken to be a location name corresponding to a file in the IANA Time Zone database, such as "America/New_York".`)).
 		Version("4.3.0").
 		Example("",
@@ -214,9 +214,9 @@ func init() {
 		Category(query.MethodCategoryTime).
 		Beta().
 		Static().
-		Description(`Attempts to parse a string as a timestamp following a specified format and outputs a timestamp, which can then be fed into methods such as ` + "[`ts_format`](#ts_format)" + `.
+		Description(`Attempts to parse a string as a timestamp following a specified format and outputs a timestamp, which can then be fed into methods such as ` + "<<ts_format, `ts_format`>>" + `.
 
-The input format is defined by showing how the reference time, defined to be Mon Jan 2 15:04:05 -0700 MST 2006, would be displayed if it were the value. For an alternative way to specify formats check out the ` + "[`ts_strptime`](#ts_strptime)" + ` method.`).
+The input format is defined by showing how the reference time, defined to be Mon Jan 2 15:04:05 -0700 MST 2006, would be displayed if it were the value. For an alternative way to specify formats check out the ` + "<<ts_strptime, `ts_strptime`>>" + ` method.`).
 		Param(bloblang.NewStringParam("format").Description("The format of the target string."))
 
 	parseTSSpecDep := asDeprecated(parseTSSpec)
@@ -261,14 +261,14 @@ The input format is defined by showing how the reference time, defined to be Mon
 		Category(query.MethodCategoryTime).
 		Beta().
 		Static().
-		Description("Attempts to parse a string as a timestamp following a specified strptime-compatible format and outputs a timestamp, which can then be fed into [`ts_format`](#ts_format).").
+		Description("Attempts to parse a string as a timestamp following a specified strptime-compatible format and outputs a timestamp, which can then be fed into <<ts_format, `ts_format`>>.").
 		Param(bloblang.NewStringParam("format").Description("The format of the target string."))
 
 	parseTSStrptimeSpecDep := asDeprecated(parseTSStrptimeSpec)
 
 	parseTSStrptimeSpec = parseTSStrptimeSpec.
 		Example(
-			"The format consists of zero or more conversion specifiers and ordinary characters (except `%`). All ordinary characters are copied to the output string without modification. Each conversion specification begins with a `%` character followed by the character that determines the behaviour of the specifier. Please refer to [man 3 strptime](https://linux.die.net/man/3/strptime) for the list of format specifiers.",
+			"The format consists of zero or more conversion specifiers and ordinary characters (except `%`). All ordinary characters are copied to the output string without modification. Each conversion specification begins with a `%` character followed by the character that determines the behavior of the specifier. Please refer to https://linux.die.net/man/3/strptime[man 3 strptime] for the list of format specifiers.",
 			`root.doc.timestamp = this.doc.timestamp.ts_strptime("%Y-%b-%d")`,
 			[2]string{
 				`{"doc":{"timestamp":"2020-Aug-14"}}`,
@@ -276,7 +276,7 @@ The input format is defined by showing how the reference time, defined to be Mon
 			},
 		).
 		Example(
-			"As an extension provided by the underlying formatting library, [itchyny/timefmt-go](https://github.com/itchyny/timefmt-go), the `%f` directive is supported for zero-padded microseconds, which originates from Python. Note that E and O modifier characters are not supported.",
+			"As an extension provided by the underlying formatting library, https://github.com/itchyny/timefmt-go[itchyny/timefmt-go], the `%f` directive is supported for zero-padded microseconds, which originates from Python. Note that E and O modifier characters are not supported.",
 			`root.doc.timestamp = this.doc.timestamp.ts_strptime("%Y-%b-%d %H:%M:%S.%f")`,
 			[2]string{
 				`{"doc":{"timestamp":"2020-Aug-14 11:50:26.371000"}}`,
@@ -319,7 +319,7 @@ The input format is defined by showing how the reference time, defined to be Mon
 		Static().
 		Description(`Attempts to format a timestamp value as a string according to a specified format, or RFC 3339 by default. Timestamp values can either be a numerical unix time in seconds (with up to nanosecond precision via decimals), or a string in RFC 3339 format.
 
-The output format is defined by showing how the reference time, defined to be Mon Jan 2 15:04:05 -0700 MST 2006, would be displayed if it were the value. For an alternative way to specify formats check out the ` + "[`ts_strftime`](#ts_strftime)" + ` method.`).
+The output format is defined by showing how the reference time, defined to be Mon Jan 2 15:04:05 -0700 MST 2006, would be displayed if it were the value. For an alternative way to specify formats check out the ` + "<<ts_strftime, `ts_strftime`>>" + ` method.`).
 		Param(bloblang.NewStringParam("format").Description("The output format to use.").Default(time.RFC3339Nano)).
 		Param(bloblang.NewStringParam("tz").Description("An optional timezone to use, otherwise the timezone of the input string is used, or in the case of unix timestamps the local timezone is used.").Optional())
 
@@ -405,7 +405,7 @@ The output format is defined by showing how the reference time, defined to be Mo
 
 	formatTSStrftimeSpec = formatTSStrftimeSpec.
 		Example(
-			"The format consists of zero or more conversion specifiers and ordinary characters (except `%`). All ordinary characters are copied to the output string without modification. Each conversion specification begins with `%` character followed by the character that determines the behaviour of the specifier. Please refer to [man 3 strftime](https://linux.die.net/man/3/strftime) for the list of format specifiers.",
+			"The format consists of zero or more conversion specifiers and ordinary characters (except `%`). All ordinary characters are copied to the output string without modification. Each conversion specification begins with `%` character followed by the character that determines the behavior of the specifier. Please refer to https://linux.die.net/man/3/strftime[man 3 strftime] for the list of format specifiers.",
 			`root.something_at = (this.created_at + 300).ts_strftime("%Y-%b-%d %H:%M:%S")`,
 			// `{"created_at":1597405526}`,
 			// `{"something_at":"2020-Aug-14 11:50:26"}`,
@@ -423,7 +423,7 @@ The output format is defined by showing how the reference time, defined to be Mo
 			},
 		).
 		Example(
-			"As an extension provided by the underlying formatting library, [itchyny/timefmt-go](https://github.com/itchyny/timefmt-go), the `%f` directive is supported for zero-padded microseconds, which originates from Python. Note that E and O modifier characters are not supported.",
+			"As an extension provided by the underlying formatting library, https://github.com/itchyny/timefmt-go[itchyny/timefmt-go], the `%f` directive is supported for zero-padded microseconds, which originates from Python. Note that E and O modifier characters are not supported.",
 			`root.something_at = this.created_at.ts_strftime("%Y-%b-%d %H:%M:%S.%f", "UTC")`,
 			[2]string{
 				`{"created_at":1597405526}`,
@@ -470,7 +470,7 @@ The output format is defined by showing how the reference time, defined to be Mo
 		Category(query.MethodCategoryTime).
 		Beta().
 		Static().
-		Description("Attempts to format a timestamp value as a unix timestamp. Timestamp values can either be a numerical unix time in seconds (with up to nanosecond precision via decimals), or a string in RFC 3339 format. The [`ts_parse`](#ts_parse) method can be used in order to parse different timestamp formats.")
+		Description("Attempts to format a timestamp value as a unix timestamp. Timestamp values can either be a numerical unix time in seconds (with up to nanosecond precision via decimals), or a string in RFC 3339 format. The <<ts_parse, `ts_parse`>> method can be used in order to parse different timestamp formats.")
 
 	formatTSUnixSpecDep := asDeprecated(formatTSUnixSpec)
 
@@ -501,7 +501,7 @@ The output format is defined by showing how the reference time, defined to be Mo
 		Category(query.MethodCategoryTime).
 		Beta().
 		Static().
-		Description("Attempts to format a timestamp value as a unix timestamp with millisecond precision. Timestamp values can either be a numerical unix time in seconds (with up to nanosecond precision via decimals), or a string in RFC 3339 format. The [`ts_parse`](#ts_parse) method can be used in order to parse different timestamp formats.")
+		Description("Attempts to format a timestamp value as a unix timestamp with millisecond precision. Timestamp values can either be a numerical unix time in seconds (with up to nanosecond precision via decimals), or a string in RFC 3339 format. The <<ts_parse, `ts_parse`>> method can be used in order to parse different timestamp formats.")
 
 	formatTSUnixMilliSpecDep := asDeprecated(formatTSUnixMilliSpec)
 
@@ -532,7 +532,7 @@ The output format is defined by showing how the reference time, defined to be Mo
 		Category(query.MethodCategoryTime).
 		Beta().
 		Static().
-		Description("Attempts to format a timestamp value as a unix timestamp with microsecond precision. Timestamp values can either be a numerical unix time in seconds (with up to nanosecond precision via decimals), or a string in RFC 3339 format. The [`ts_parse`](#ts_parse) method can be used in order to parse different timestamp formats.")
+		Description("Attempts to format a timestamp value as a unix timestamp with microsecond precision. Timestamp values can either be a numerical unix time in seconds (with up to nanosecond precision via decimals), or a string in RFC 3339 format. The <<ts_parse, `ts_parse`>> method can be used in order to parse different timestamp formats.")
 
 	formatTSUnixMicroSpecDep := asDeprecated(formatTSUnixMicroSpec)
 
@@ -563,7 +563,7 @@ The output format is defined by showing how the reference time, defined to be Mo
 		Category(query.MethodCategoryTime).
 		Beta().
 		Static().
-		Description("Attempts to format a timestamp value as a unix timestamp with nanosecond precision. Timestamp values can either be a numerical unix time in seconds (with up to nanosecond precision via decimals), or a string in RFC 3339 format. The [`ts_parse`](#ts_parse) method can be used in order to parse different timestamp formats.")
+		Description("Attempts to format a timestamp value as a unix timestamp with nanosecond precision. Timestamp values can either be a numerical unix time in seconds (with up to nanosecond precision via decimals), or a string in RFC 3339 format. The <<ts_parse, `ts_parse`>> method can be used in order to parse different timestamp formats.")
 
 	formatTSUnixNanoSpecDep := asDeprecated(formatTSUnixNanoSpec)
 
@@ -594,7 +594,7 @@ The output format is defined by showing how the reference time, defined to be Mo
 		Beta().
 		Static().
 		Category(query.MethodCategoryTime).
-		Description(`Returns the difference in nanoseconds between the target timestamp (t1) and the timestamp provided as a parameter (t2). The `+"[`ts_parse`](#ts_parse)"+` method can be used in order to parse different timestamp formats.`).
+		Description(`Returns the difference in nanoseconds between the target timestamp (t1) and the timestamp provided as a parameter (t2). The `+"<<ts_parse, `ts_parse`>>"+` method can be used in order to parse different timestamp formats.`).
 		Param(bloblang.NewTimestampParam("t2").Description("The second timestamp to be subtracted from the method target.")).
 		Version("4.23.0").
 		Example("Use the `.abs()` method in order to calculate an absolute duration between two timestamps.",

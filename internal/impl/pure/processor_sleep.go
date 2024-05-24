@@ -24,7 +24,7 @@ func init() {
 	err := service.RegisterBatchProcessor("sleep", service.NewConfigSpec().
 		Categories("Utility").
 		Stable().
-		Summary(`Sleep for a period of time specified as a duration string for each message. This processor will interpolate functions within the `+"`duration`"+` field, you can find a list of functions [here](/docs/configuration/interpolation#bloblang-queries).`).
+		Summary(`Sleep for a period of time specified as a duration string for each message. This processor will interpolate functions within the `+"`duration`"+` field, you can find a list of functions xref:configuration:interpolation.adoc#bloblang-queries[here].`).
 		Field(service.NewInterpolatedStringField(spFieldDuration).
 			Description("The duration of time to sleep for each execution.")),
 		func(conf *service.ParsedConfig, res *service.Resources) (service.BatchProcessor, error) {

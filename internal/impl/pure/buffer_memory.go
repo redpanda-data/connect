@@ -38,13 +38,13 @@ This buffer is appropriate when consuming messages from inputs that do not grace
 
 This buffer has a configurable limit, where consumption will be stopped with back pressure upstream if the total size of messages in the buffer reaches this amount. Since this calculation is only an estimate, and the real size of messages in RAM is always higher, it is recommended to set the limit significantly below the amount of RAM available.
 
-## Delivery Guarantees
+== Delivery guarantees
 
 This buffer intentionally weakens the delivery guarantees of the pipeline and therefore should never be used in places where data loss is unacceptable.
 
-## Batching
+== Batching
 
-It is possible to batch up messages sent from this buffer using a [batch policy](/docs/configuration/batching#batch-policy).`).
+It is possible to batch up messages sent from this buffer using a xref:configuration:batching.adoc#batch-policy[batch policy].`).
 		Field(service.NewIntField("limit").
 			Description(`The maximum buffer size (in bytes) to allow before applying backpressure upstream.`).
 			Default(524288000)).

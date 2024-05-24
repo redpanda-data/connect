@@ -8,7 +8,7 @@ func FieldSpec() docs.FieldSpec {
 		Name: "batching",
 		Type: docs.FieldTypeObject,
 		Description: `
-Allows you to configure a [batching policy](/docs/configuration/batching).`,
+Allows you to configure a xref:configuration:batching.adoc[batching policy].`,
 		Examples: []any{
 			map[string]any{
 				"count":     0,
@@ -41,12 +41,12 @@ Allows you to configure a [batching policy](/docs/configuration/batching).`,
 			).HasDefault(""),
 			docs.FieldBloblang(
 				"check",
-				"A [Bloblang query](/docs/guides/bloblang/about/) that should return a boolean value indicating whether a message should end a batch.",
+				"A xref:guides:bloblang/about.adoc[Bloblang query] that should return a boolean value indicating whether a message should end a batch.",
 				`this.type == "end_of_transaction"`,
 			).HasDefault(""),
 			docs.FieldProcessor(
 				"processors",
-				"A list of [processors](/docs/components/processors/about) to apply to a batch as it is flushed. This allows you to aggregate and archive the batch however you see fit. Please note that all resulting messages are flushed as a single batch, therefore splitting the batch into smaller batches using these processors is a no-op.",
+				"A list of xref:components:processors/about.adoc[processors] to apply to a batch as it is flushed. This allows you to aggregate and archive the batch however you see fit. Please note that all resulting messages are flushed as a single batch, therefore splitting the batch into smaller batches using these processors is a no-op.",
 				[]map[string]any{
 					{
 						"archive": map[string]any{

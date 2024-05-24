@@ -30,21 +30,21 @@ func workflowProcSpec() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Categories("Composition").
 		Stable().
-		Summary(`Executes a topology of `+"[`branch` processors][processors.branch]"+`, performing them in parallel where possible.`).
+		Summary(`Executes a topology of `+"xref:components:processors/branch.adoc[`branch` processors]"+`, performing them in parallel where possible.`).
 		Description(`
-## Why Use a Workflow
+== Why use a workflow
 
-### Performance
+=== Performance
 
-Most of the time the best way to compose processors is also the simplest, just configure them in series. This is because processors are often CPU bound, low-latency, and you can gain vertical scaling by increasing the number of processor pipeline threads, allowing Benthos to process [multiple messages in parallel][configuration.pipelines].
+Most of the time the best way to compose processors is also the simplest, just configure them in series. This is because processors are often CPU bound, low-latency, and you can gain vertical scaling by increasing the number of processor pipeline threads, allowing Benthos to process xref:configuration:processing_pipelines.adoc[multiple messages in parallel].
 
-However, some processors such as `+"[`http`][processors.http], [`aws_lambda`][processors.aws_lambda] or [`cache`][processors.cache]"+` interact with external services and therefore spend most of their time waiting for a response. These processors tend to be high-latency and low CPU activity, which causes messages to process slowly.
+However, some processors such as `+"xref:components:processors/http.adoc[`http`], xref:components:processors/aws_lambda.adoc[`aws_lambda`] or xref:components:processors/cache.adoc[`cache`]"+` interact with external services and therefore spend most of their time waiting for a response. These processors tend to be high-latency and low CPU activity, which causes messages to process slowly.
 
 When a processing pipeline contains multiple network processors that aren't dependent on each other we can benefit from performing these processors in parallel for each individual message, reducing the overall message processing latency.
 
-### Simplifying Processor Topology
+=== Simplifying processor topology
 
-A workflow is often expressed as a [DAG][dag_wiki] of processing stages, where each stage can result in N possible next stages, until finally the flow ends at an exit node.
+A workflow is often expressed as a https://en.wikipedia.org/wiki/Directed_acyclic_graph[DAG] of processing stages, where each stage can result in N possible next stages, until finally the flow ends at an exit node.
 
 For example, if we had processing stages A, B, C and D, where stage A could result in either stage B or C being next, always followed by D, it might look something like this:
 
@@ -54,7 +54,7 @@ A --|          |--> D
      \--> C --/
 `+"```"+`
 
-This flow would be easy to express in a standard Benthos config, we could simply use a `+"[`switch` processor][processors.switch]"+` to route to either B or C depending on a condition on the result of A. However, this method of flow control quickly becomes unfeasible as the DAG gets more complicated, imagine expressing this flow using switch processors:
+This flow would be easy to express in a standard Benthos config, we could simply use a `+"xref:components:processors/switch.adoc[`switch` processor]"+` to route to either B or C depending on a condition on the result of A. However, this method of flow control quickly becomes unfeasible as the DAG gets more complicated, imagine expressing this flow using switch processors:
 
 `+"```text"+`
       /--> B -------------|--> D
@@ -66,7 +66,7 @@ A --|          /--> E --|
 
 And imagine doing so knowing that the diagram is subject to change over time. Yikes! Instead, with a workflow we can either trust it to automatically resolve the DAG or express it manually as simply as `+"`order: [ [ A ], [ B, C ], [ E ], [ D, F ] ]`"+`, and the conditional logic for determining if a stage is executed is defined as part of the branch itself.`).
 		Footnotes(`
-## Structured Metadata
+== Structured metadata
 
 When the field `+"`meta_path`"+` is non-empty the workflow processor creates an object describing which workflows were successful, skipped or failed for each message and stores the object within the message at the end.
 
@@ -90,38 +90,28 @@ The previous meta object will also be preserved in the field `+"`<meta_path>.pre
 
 If a field `+"`<meta_path>.apply`"+` exists in the meta object for a message and is an array then it will be used as an explicit list of stages to apply, all other stages will be skipped.
 
-## Resources
+== Resources
 
-It's common to configure processors (and other components) [as resources][configuration.resources] in order to keep the pipeline configuration cleaner. With the workflow processor you can include branch processors configured as resources within your workflow either by specifying them by name in the field `+"`order`"+`, if Benthos doesn't find a branch within the workflow configuration of that name it'll refer to the resources.
+It's common to configure processors (and other components) xref:configuration:resources.adoc[as resources] in order to keep the pipeline configuration cleaner. With the workflow processor you can include branch processors configured as resources within your workflow either by specifying them by name in the field `+"`order`"+`, if Benthos doesn't find a branch within the workflow configuration of that name it'll refer to the resources.
 
 Alternatively, if you do not wish to have an explicit ordering, you can add resource names to the field `+"`branch_resources`"+` and they will be included in the workflow with automatic DAG resolution along with any branches configured in the `+"`branches`"+` field.
 
-### Resource Error Conditions
+=== Resource error conditions
 
 There are two error conditions that could potentially occur when resources included in your workflow are mutated, and if you are planning to mutate resources in your workflow it is important that you understand them.
 
 The first error case is that a resource in the workflow is removed and not replaced, when this happens the workflow will still be executed but the individual branch will fail. This should only happen if you explicitly delete a branch resource, as any mutation operation will create the new resource before removing the old one.
 
-The second error case is when automatic DAG resolution is being used and a resource in the workflow is changed in a way that breaks the DAG (circular dependencies, etc). When this happens it is impossible to execute the workflow and therefore the processor will fail, which is possible to capture and handle using [standard error handling patterns][configuration.error-handling].
+The second error case is when automatic DAG resolution is being used and a resource in the workflow is changed in a way that breaks the DAG (circular dependencies, etc). When this happens it is impossible to execute the workflow and therefore the processor will fail, which is possible to capture and handle using xref:configuration:error_handling.adoc[standard error handling patterns].
 
-## Error Handling
+== Error handling
 
-The recommended approach to handle failures within a workflow is to query against the [structured metadata](#structured-metadata) it provides, as it provides granular information about exactly which branches failed and which ones succeeded and therefore aren't necessary to perform again.
+The recommended approach to handle failures within a workflow is to query against the <<structured-metadata, structured metadata>> it provides, as it provides granular information about exactly which branches failed and which ones succeeded and therefore aren't necessary to perform again.
 
-For example, if our meta object is stored at the path `+"`meta.workflow`"+` and we wanted to check whether a message has failed for any branch we can do that using a [Bloblang query][guides.bloblang] like `+"`this.meta.workflow.failed.length() | 0 > 0`"+`, or to check whether a specific branch failed we can use `+"`this.exists(\"meta.workflow.failed.foo\")`"+`.
+For example, if our meta object is stored at the path `+"`meta.workflow`"+` and we wanted to check whether a message has failed for any branch we can do that using a xref:guides:bloblang/about.adoc[Bloblang query] like `+"`this.meta.workflow.failed.length() | 0 > 0`"+`, or to check whether a specific branch failed we can use `+"`this.exists(\"meta.workflow.failed.foo\")`"+`.
 
-However, if structured metadata is disabled by setting the field `+"`meta_path`"+` to empty then the workflow processor instead adds a general error flag to messages when any executed branch fails. In this case it's possible to handle failures using [standard error handling patterns][configuration.error-handling].
+However, if structured metadata is disabled by setting the field `+"`meta_path`"+` to empty then the workflow processor instead adds a general error flag to messages when any executed branch fails. In this case it's possible to handle failures using xref:configuration:error_handling.adoc[standard error handling patterns].
 
-[dag_wiki]: https://en.wikipedia.org/wiki/Directed_acyclic_graph
-[processors.switch]: /docs/components/processors/switch
-[processors.http]: /docs/components/processors/http
-[processors.aws_lambda]: /docs/components/processors/aws_lambda
-[processors.cache]: /docs/components/processors/cache
-[processors.branch]: /docs/components/processors/branch
-[guides.bloblang]: /docs/guides/bloblang/about
-[configuration.pipelines]: /docs/configuration/processing_pipelines
-[configuration.error-handling]: /docs/configuration/error_handling
-[configuration.resources]: /docs/configuration/resources
 `).
 		Example("Automatic Ordering", `
 When the field `+"`order`"+` is omitted a best attempt is made to determine a dependency tree between branches based on their request and result mappings. In the following example the branches foo and bar will be executed first in parallel, and afterwards the branch baz will be executed.`, `
@@ -192,7 +182,7 @@ pipeline:
             result_map: 'root.tmp.result = this'
 `).
 		Example("Resources", `
-The `+"`order`"+` field can be used in order to refer to [branch processor resources](#resources), this can sometimes make your pipeline configuration cleaner, as well as allowing you to reuse branch configurations in order places. It's also possible to mix and match branches configured within the workflow and configured as resources.`, `
+The `+"`order`"+` field can be used in order to refer to <<resources, branch processor resources>>, this can sometimes make your pipeline configuration cleaner, as well as allowing you to reuse branch configurations in order places. It's also possible to mix and match branches configured within the workflow and configured as resources.`, `
 pipeline:
   processors:
     - workflow:
@@ -228,22 +218,22 @@ processor_resources:
 `).
 		Fields(
 			service.NewStringField(wflowProcFieldMetaPath).
-				Description("A [dot path](/docs/configuration/field_paths) indicating where to store and reference [structured metadata](#structured-metadata) about the workflow execution.").
+				Description("A xref:configuration:field_paths.adoc[dot path] indicating where to store and reference <<structured-metadata, structured metadata>> about the workflow execution.").
 				Default("meta.workflow"),
 			service.NewStringListOfListsField(wflowProcFieldOrder).
-				Description("An explicit declaration of branch ordered tiers, which describes the order in which parallel tiers of branches should be executed. Branches should be identified by the name as they are configured in the field `branches`. It's also possible to specify branch processors configured [as a resource](#resources).").
+				Description("An explicit declaration of branch ordered tiers, which describes the order in which parallel tiers of branches should be executed. Branches should be identified by the name as they are configured in the field `branches`. It's also possible to specify branch processors configured <<resources, as a resource>>.").
 				Examples(
 					[]any{[]any{"foo", "bar"}, []any{"baz"}},
 					[]any{[]any{"foo"}, []any{"bar"}, []any{"baz"}},
 				).
 				Default([]any{}),
 			service.NewStringListField(wflowProcFieldBranchResources).
-				Description("An optional list of [`branch` processor](/docs/components/processors/branch) names that are configured as [resources](#resources). These resources will be included in the workflow with any branches configured inline within the [`branches`](#branches) field. The order and parallelism in which branches are executed is automatically resolved based on the mappings of each branch. When using resources with an explicit order it is not necessary to list resources in this field.").
+				Description("An optional list of xref:components:processors/branch.adoc[`branch` processor] names that are configured as <<resources>>. These resources will be included in the workflow with any branches configured inline within the <<branches, `branches`>> field. The order and parallelism in which branches are executed is automatically resolved based on the mappings of each branch. When using resources with an explicit order it is not necessary to list resources in this field.").
 				Version("3.38.0").
 				Advanced().
 				Default([]any{}),
 			service.NewObjectMapField(wflowProcFieldBranches, branchSpecFields()...).
-				Description("An object of named [`branch` processors](/docs/components/processors/branch) that make up the workflow. The order and parallelism in which branches are executed can either be made explicit with the field `order`, or if omitted an attempt is made to automatically resolve an ordering based on the mappings of each branch.").
+				Description("An object of named xref:components:processors/branch.adoc[`branch` processors] that make up the workflow. The order and parallelism in which branches are executed can either be made explicit with the field `order`, or if omitted an attempt is made to automatically resolve an ordering based on the mappings of each branch.").
 				Default(map[string]any{}),
 		)
 }

@@ -36,7 +36,7 @@ func switchOutputSpec() *service.ConfigSpec {
 		Categories("Utility").
 		Stable().
 		Summary(`The switch output type allows you to route messages to different outputs based on their contents.`).
-		Description(`Messages that do not pass the check of a single output case are effectively dropped. In order to prevent this outcome set the field `+"[`strict_mode`](#strict_mode) to `true`"+`, in which case messages that do not pass at least one case are considered failed and will be nacked and/or reprocessed depending on your input.`).
+		Description(`Messages that do not pass the check of a single output case are effectively dropped. In order to prevent this outcome set the field `+"<<strict_mode, `strict_mode`>> to `true`"+`, in which case messages that do not pass at least one case are considered failed and will be nacked and/or reprocessed depending on your input.`).
 		Example(
 			"Basic Multiplexing",
 			`
@@ -111,14 +111,14 @@ If a message can be routed to >1 outputs it is usually best to set this to true 
 				Default(false),
 			service.NewObjectListField(soFieldCases,
 				service.NewBloblangField(soFieldCasesCheck).
-					Description("A [Bloblang query](/docs/guides/bloblang/about/) that should return a boolean value indicating whether a message should be routed to the case output. If left empty the case always passes.").
+					Description("A xref:guides:bloblang/about.adoc[Bloblang query] that should return a boolean value indicating whether a message should be routed to the case output. If left empty the case always passes.").
 					Examples(
 						`this.type == "foo"`,
 						`this.contents.urls.contains("https://benthos.dev/")`,
 					).
 					Default(""),
 				service.NewOutputField(soFieldCasesOutput).
-					Description("An [output](/docs/components/outputs/about/) for messages that pass the check to be routed to."),
+					Description("An xref:components:outputs/about.adoc[output] for messages that pass the check to be routed to."),
 				service.NewBoolField(soFieldCasesContinue).
 					Description("Indicates whether, if this case passes for a message, the next case should also be tested.").
 					Default(false).

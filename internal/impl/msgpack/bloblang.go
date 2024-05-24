@@ -12,7 +12,7 @@ func init() {
 
 	msgpackParseSpec := bloblang.NewPluginSpec().
 		Category("Parsing").
-		Description("Parses a [MessagePack](https://msgpack.org/) message into a structured document.").
+		Description("Parses a https://msgpack.org/[MessagePack] message into a structured document.").
 		Example("",
 			`root = content().decode("hex").parse_msgpack()`,
 			[2]string{
@@ -47,7 +47,7 @@ func init() {
 
 	msgpackFormatSpec := bloblang.NewPluginSpec().
 		Category("Parsing").
-		Description("Formats data as a [MessagePack](https://msgpack.org/) message in bytes format.").
+		Description("Formats data as a https://msgpack.org/[MessagePack] message in bytes format.").
 		Example("",
 			`root = this.format_msgpack().encode("hex")`,
 			[2]string{

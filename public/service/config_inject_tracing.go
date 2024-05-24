@@ -16,7 +16,7 @@ const (
 // tracing span mapping.
 func NewInjectTracingSpanMappingField() *ConfigField {
 	return NewBloblangField(itsField).
-		Description("EXPERIMENTAL: A [Bloblang mapping](/docs/guides/bloblang/about) used to inject an object containing tracing propagation information into outbound messages. The specification of the injected fields will match the format used by the service wide tracer.").
+		Description("EXPERIMENTAL: A xref:guides:bloblang/about.adoc[Bloblang mapping] used to inject an object containing tracing propagation information into outbound messages. The specification of the injected fields will match the format used by the service wide tracer.").
 		Examples(
 			`meta = @.merge(this)`,
 			`root.meta.span = this`,

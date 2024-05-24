@@ -44,7 +44,7 @@ processor_resources:
       root.user.age = this.user.age.number()
 `+"```"+`
 
-You can find out more about resources [in this document.](/docs/configuration/resources)`).
+You can find out more about resources in xref:configuration:resources.adoc[]`).
 		Field(service.NewStringField("").Default("")),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchProcessor, error) {
 			name, err := conf.FieldString()

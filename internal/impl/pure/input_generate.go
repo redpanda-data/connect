@@ -30,10 +30,10 @@ func genInputSpec() *service.ConfigSpec {
 		Stable().
 		Categories("Utility").
 		Version("3.40.0").
-		Summary("Generates messages at a given interval using a [Bloblang](/docs/guides/bloblang/about) mapping executed without a context. This allows you to generate messages for testing your pipeline configs.").
+		Summary("Generates messages at a given interval using a xref:guides:bloblang/about.adoc[Bloblang] mapping executed without a context. This allows you to generate messages for testing your pipeline configs.").
 		Fields(
 			service.NewBloblangField(giFieldMapping).
-				Description("A [bloblang](/docs/guides/bloblang/about) mapping to use for generating messages.").
+				Description("A xref:guides:bloblang/about.adoc[Bloblang] mapping to use for generating messages.").
 				Examples(
 					`root = "hello world"`,
 					`root = {"test":"message","id":uuid_v4()}`,

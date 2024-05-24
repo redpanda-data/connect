@@ -29,7 +29,7 @@ func SessionFields() []*service.ConfigField {
 				Description("The token for the credentials being used, required when using short term credentials.").
 				Default("").Advanced(),
 			service.NewBoolField("from_ec2_role").
-				Description("Use the credentials of a host EC2 machine configured to assume [an IAM role associated with the instance](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_use_switch-role-ec2.html).").
+				Description("Use the credentials of a host EC2 machine configured to assume https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_use_switch-role-ec2.html[an IAM role associated with the instance].").
 				Default(false).Version("4.2.0"),
 			service.NewStringField("role").
 				Description("A role ARN to assume.").
@@ -38,6 +38,6 @@ func SessionFields() []*service.ConfigField {
 				Description("An external ID to provide when assuming a role.").
 				Default("").Advanced()).
 			Advanced().
-			Description("Optional manual configuration of AWS credentials to use. More information can be found [in this document](/docs/guides/cloud/aws)."),
+			Description("Optional manual configuration of AWS credentials to use. More information can be found in xref:guides:cloud/aws.adoc[]."),
 	}
 }

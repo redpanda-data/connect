@@ -28,25 +28,25 @@ func dynOutputSpec() *service.ConfigSpec {
 		Summary(`A special broker type where the outputs are identified by unique labels and can be created, changed and removed during runtime via a REST API.`).
 		Description(`The broker pattern used is always `+"`fan_out`"+`, meaning each message will be delivered to each dynamic output.`).
 		Footnotes(`
-## Endpoints
+== Endpoints
 
-### GET `+"`/outputs`"+`
+=== GET `+"`/outputs`"+`
 
 Returns a JSON object detailing all dynamic outputs, providing information such as their current uptime and configuration.
 
-### GET `+"`/outputs/{id}`"+`
+=== GET `+"`/outputs/\\{id}`"+`
 
 Returns the configuration of an output.
 
-### POST `+"`/outputs/{id}`"+`
+=== POST `+"`/outputs/\\{id}`"+`
 
 Creates or updates an output with a configuration provided in the request body (in YAML or JSON format).
 
-### DELETE `+"`/outputs/{id}`"+`
+=== DELETE `+"`/outputs/\\{id}`"+`
 
 Stops and removes an output.
 
-### GET `+"`/outputs/{id}/uptime`"+`
+=== GET `+"`/outputs/\\{id}/uptime`"+`
 
 Returns the uptime of an output as a duration string (of the form "72h3m0.5s").`).
 		Fields(

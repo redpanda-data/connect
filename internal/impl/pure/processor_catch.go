@@ -15,7 +15,7 @@ func init() {
 		Categories("Composition").
 		Summary("Applies a list of child processors _only_ when a previous processing step has failed.").
 		Description(`
-Behaves similarly to the `+"[`for_each`](/docs/components/processors/for_each)"+` processor, where a list of child processors are applied to individual messages of a batch. However, processors are only applied to messages that failed a processing step prior to the catch.
+Behaves similarly to the `+"xref:components:processors/for_each.adoc[`for_each`]"+` processor, where a list of child processors are applied to individual messages of a batch. However, processors are only applied to messages that failed a processing step prior to the catch.
 
 For example, with the following config:
 
@@ -32,9 +32,9 @@ If the processor `+"`foo`"+` fails for a particular message, that message will b
 
 When messages leave the catch block their fail flags are cleared. This processor is useful for when it's possible to recover failed messages, or when special actions (such as logging/metrics) are required before dropping them.
 
-More information about error handling can be found [here](/docs/configuration/error_handling).`).
+More information about error handling can be found in xref:configuration:error_handling.adoc[].`).
 		LintRule(`if this.or([]).any(pconf -> pconf.type.or("") == "try" || pconf.try.type() == "array" ) {
-  "'catch' block contains a 'try' block which will never execute due to errors only being cleared at the end of the 'catch', for more information about nesting 'try' within 'catch' read: https://www.benthos.dev/docs/components/processors/try#nesting-within-a-catch-block"
+  "'catch' block contains a 'try' block which will never execute due to errors only being cleared at the end of the 'catch', for more information about nesting 'try' within 'catch' read: https://www.docs.redpanda.com/redpanda-connect/components/processors/try#nesting-within-a-catch-block"
 }`).
 		Field(service.NewProcessorListField("").Default([]any{})),
 		func(conf *service.ParsedConfig, res *service.Resources) (service.BatchProcessor, error) {

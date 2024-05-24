@@ -28,7 +28,7 @@ The index can be negative, and if so the message will be inserted from the end c
 
 The new message will have metadata copied from the first pre-existing message of the batch.
 
-This processor will interpolate functions within the 'content' field, you can find a list of functions [here](/docs/configuration/interpolation#bloblang-queries).`).
+This processor will interpolate functions within the 'content' field, you can find a list of functions xref:configuration:interpolation.adoc#bloblang-queries[here].`).
 		Fields(
 			service.NewIntField(ippFieldIndex).
 				Description("The index within the batch to insert the message at.").

@@ -119,15 +119,15 @@ func gcpBigQueryConfig() *service.ConfigSpec {
 		Version("3.55.0").
 		Summary(`Sends messages as new rows to a Google Cloud BigQuery table.`).
 		Description(`
-## Credentials
+== Credentials
 
-By default Benthos will use a shared credentials file when connecting to GCP services. You can find out more [in this document](/docs/guides/cloud/gcp).
+By default Benthos will use a shared credentials file when connecting to GCP services. You can find out more in xref:guides:cloud/gcp.adoc[].
 
-## Format
+== Format
 
 This output currently supports only CSV and NEWLINE_DELIMITED_JSON formats. Learn more about how to use GCP BigQuery with them here:
-- ` + "[`NEWLINE_DELIMITED_JSON`](https://cloud.google.com/bigquery/docs/loading-data-cloud-storage-json)" + `
-- ` + "[`CSV`](https://cloud.google.com/bigquery/docs/loading-data-cloud-storage-csv)" + `
+- ` + "https://cloud.google.com/bigquery/docs/loading-data-cloud-storage-json[`NEWLINE_DELIMITED_JSON`]" + `
+- ` + "https://cloud.google.com/bigquery/docs/loading-data-cloud-storage-csv[`CSV`]" + `
 
 Each message may contain multiple elements separated by newlines. For example a single message containing:
 
@@ -150,7 +150,7 @@ And:
 
 The same is true for the CSV format.
 
-### CSV
+=== CSV
 
 For the CSV format when the field ` + "`csv.header`" + ` is specified a header row will be inserted as the first line of each message batch. If this field is not provided then the first message of each message batch must include a header line.` + service.OutputPerformanceDocs(true, true)).
 		Field(service.NewStringField("project").Description("The project ID of the dataset to insert data to. If not set, it will be inferred from the credentials or read from the GOOGLE_CLOUD_PROJECT environment variable.").Default("")).

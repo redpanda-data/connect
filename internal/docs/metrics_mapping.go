@@ -11,6 +11,6 @@ func MetricsMappingFieldSpec(name string) FieldSpec {
   "output_sent"
 ].contains(this) { deleted() }`,
 	}
-	summary := "An optional [Bloblang mapping](/docs/guides/bloblang/about) that allows you to rename or prevent certain metrics paths from being exported. For more information check out the [metrics documentation](/docs/components/metrics/about#metric-mapping). When metric paths are created, renamed and dropped a trace log is written, enabling TRACE level logging is therefore a good way to diagnose path mappings."
+	summary := "An optional xref:guides:bloblang/about.adoc[Bloblang mapping] that allows you to rename or prevent certain metrics paths from being exported. For more information check out the xref:components:metrics/about.adoc#metric-mapping[metrics documentation]. When metric paths are created, renamed and dropped a trace log is written, enabling TRACE level logging is therefore a good way to diagnose path mappings."
 	return FieldBloblang(name, summary, examples...).HasDefault("")
 }

@@ -29,15 +29,15 @@ func httpClientInputSpec() *service.ConfigSpec {
 		Categories("Network").
 		Summary("Connects to a server and continuously performs requests for a single message.").
 		Description(`
-The URL and header values of this type can be dynamically set using function interpolations described [here](/docs/configuration/interpolation#bloblang-queries).
+The URL and header values of this type can be dynamically set using function interpolations described xref:configuration:interpolation.adoc#bloblang-queries[here].
 
-### Streaming
+== Streaming
 
 If you enable streaming then Benthos will consume the body of the response as a continuous stream of data, breaking messages out following a chosen scanner. This allows you to consume APIs that provide long lived streamed data feeds (such as Twitter).
 
-### Pagination
+== Pagination
 
-This input supports interpolation functions in the `+"`url` and `headers`"+` fields where data from the previous successfully consumed message (if there was one) can be referenced. This can be used in order to support basic levels of pagination. However, in cases where pagination depends on logic it is recommended that you use an `+"[`http` processor](/docs/components/processors/http) instead, often combined with a [`generate` input](/docs/components/inputs/generate)"+` in order to schedule the processor.`).
+This input supports interpolation functions in the `+"`url` and `headers`"+` fields where data from the previous successfully consumed message (if there was one) can be referenced. This can be used in order to support basic levels of pagination. However, in cases where pagination depends on logic it is recommended that you use an `+"xref:components:processors/http.adoc[`http` processor] instead, often combined with a xref:components:inputs/generate.adoc[`generate` input]"+` in order to schedule the processor.`).
 		Example(
 			"Basic Pagination",
 			"Interpolation functions within the `url` and `headers` fields can be used to reference the previously consumed message, which allows simple pagination.",

@@ -19,18 +19,18 @@ func RawProcessorConfig() *service.ConfigSpec {
 		Categories("Integration").
 		Summary("Runs an arbitrary SQL query against a database and (optionally) returns the result as an array of objects, one for each row returned.").
 		Description(`
-If the query fails to execute then the message will remain unchanged and the error can be caught using error handling methods outlined [here](/docs/configuration/error_handling).`).
+If the query fails to execute then the message will remain unchanged and the error can be caught using xref:configuration:error_handling.adoc[error handling methods].`).
 		Field(driverField).
 		Field(dsnField).
 		Field(rawQueryField().
 			Example("INSERT INTO footable (foo, bar, baz) VALUES (?, ?, ?);").
 			Example("SELECT * FROM footable WHERE user_id = $1;")).
 		Field(service.NewBoolField("unsafe_dynamic_query").
-			Description("Whether to enable [interpolation functions](/docs/configuration/interpolation/#bloblang-queries) in the query. Great care should be made to ensure your queries are defended against injection attacks.").
+			Description("Whether to enable xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions] in the query. Great care should be made to ensure your queries are defended against injection attacks.").
 			Advanced().
 			Default(false)).
 		Field(service.NewBloblangField("args_mapping").
-			Description("An optional [Bloblang mapping](/docs/guides/bloblang/about) which should evaluate to an array of values matching in size to the number of placeholder arguments in the field `query`.").
+			Description("An optional xref:guides:bloblang/about.adoc[Bloblang mapping] which should evaluate to an array of values matching in size to the number of placeholder arguments in the field `query`.").
 			Example("root = [ this.cat.meow, this.doc.woofs[0] ]").
 			Example(`root = [ meta("user.id") ]`).
 			Optional()).
@@ -59,7 +59,7 @@ pipeline:
 		).
 		Example(
 			"Table Query (PostgreSQL)",
-			`Here we query a database for columns of footable that share a `+"`user_id`"+` with the message field `+"`user.id`"+`. A `+"[`branch` processor](/docs/components/processors/branch)"+` is used in order to insert the resulting array into the original message at the path `+"`foo_rows`"+`.`,
+			`Here we query a database for columns of footable that share a `+"`user_id`"+` with the message field `+"`user.id`"+`. A `+"xref:components:processors/branch.adoc[`branch` processor]"+` is used in order to insert the resulting array into the original message at the path `+"`foo_rows`"+`.`,
 			`
 pipeline:
   processors:

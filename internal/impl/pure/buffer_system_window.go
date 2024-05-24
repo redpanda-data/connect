@@ -20,25 +20,25 @@ func tumblingWindowBufferConfig() *service.ConfigSpec {
 		Categories("Windowing").
 		Summary("Chops a stream of messages into tumbling or sliding windows of fixed temporal size, following the system clock.").
 		Description(`
-A window is a grouping of messages that fit within a discrete measure of time following the system clock. Messages are allocated to a window either by the processing time (the time at which they're ingested) or by the event time, and this is controlled via the `+"[`timestamp_mapping` field](#timestamp_mapping)"+`.
+A window is a grouping of messages that fit within a discrete measure of time following the system clock. Messages are allocated to a window either by the processing time (the time at which they're ingested) or by the event time, and this is controlled via the `+"<<timestamp_mapping, `timestamp_mapping` field>>"+`.
 
 In tumbling mode (default) the beginning of a window immediately follows the end of a prior window. When the buffer is initialized the first window to be created and populated is aligned against the zeroth minute of the zeroth hour of the day by default, and may therefore be open for a shorter period than the specified size.
 
-A window is flushed only once the system clock surpasses its scheduled end. If an `+"[`allowed_lateness`](#allowed_lateness)"+` is specified then the window will not be flushed until the scheduled end plus that length of time.
+A window is flushed only once the system clock surpasses its scheduled end. If an `+"<<allowed_lateness, `allowed_lateness`>>"+` is specified then the window will not be flushed until the scheduled end plus that length of time.
 
 When a message is added to a window it has a metadata field `+"`window_end_timestamp`"+` added to it containing the timestamp of the end of the window as an RFC3339 string.
 
-## Sliding Windows
+== Sliding windows
 
-Sliding windows begin from an offset of the prior windows' beginning rather than its end, and therefore messages may belong to multiple windows. In order to produce sliding windows specify a `+"[`slide` duration](#slide)"+`.
+Sliding windows begin from an offset of the prior windows' beginning rather than its end, and therefore messages may belong to multiple windows. In order to produce sliding windows specify a `+"<<slide, `slide` duration>>"+`.
 
-## Back Pressure
+== Back pressure
 
 If back pressure is applied to this buffer either due to output services being unavailable or resources being saturated, windows older than the current and last according to the system clock will be dropped in order to prevent unbounded resource usage. This means you should ensure that under the worst case scenario you have enough system memory to store two windows' worth of data at a given time (plus extra for redundancy and other services).
 
 If messages could potentially arrive with event timestamps in the future (according to the system clock) then you should also factor in these extra messages in memory usage estimates.
 
-## Delivery Guarantees
+== Delivery guarantees
 
 This buffer honours the transaction model within Benthos in order to ensure that messages are not acknowledged until they are either intentionally dropped or successfully delivered to outputs. However, since messages belonging to an expired window are intentionally dropped there are circumstances where not all messages entering the system will be delivered.
 
@@ -48,7 +48,7 @@ During graceful termination if the current window is partially populated with me
 `).
 		Field(service.NewBloblangField("timestamp_mapping").
 			Description(`
-A [Bloblang mapping](/docs/guides/bloblang/about) applied to each message during ingestion that provides the timestamp to use for allocating it a window. By default the function `+"`now()`"+` is used in order to generate a fresh timestamp at the time of ingestion (the processing time), whereas this mapping can instead extract a timestamp from the message itself (the event time).
+A xref:guides:bloblang/about.adoc[Bloblang mapping] applied to each message during ingestion that provides the timestamp to use for allocating it a window. By default the function `+"`now()`"+` is used in order to generate a fresh timestamp at the time of ingestion (the processing time), whereas this mapping can instead extract a timestamp from the message itself (the event time).
 
 The timestamp value assigned to `+"`root`"+` must either be a numerical unix time in seconds (with up to nanosecond precision via decimals), or a string in ISO 8601 format. If the mapping fails or provides an invalid result the message will be dropped (with logging to describe the problem).
 `).
@@ -80,7 +80,7 @@ The timestamp value assigned to `+"`root`"+` must either be a numerical unix tim
 }
 `+"```"+`
 
-We can use a window buffer in order to create periodic messages summarising the traffic for a period of time of this form:
+We can use a window buffer in order to create periodic messages summarizing the traffic for a period of time of this form:
 
 `+"```json"+`
 {

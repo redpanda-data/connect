@@ -9,7 +9,7 @@ import (
 	_ "embed"
 )
 
-//go:embed docs.md
+//go:embed docs.adoc
 var templateDocs string
 
 type templateContext struct {

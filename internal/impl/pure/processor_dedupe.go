@@ -28,19 +28,19 @@ func dedupeProcSpec() *service.ConfigSpec {
 		Stable().
 		Summary(`Deduplicates messages by storing a key value in a cache using the `+"`add`"+` operator. If the key already exists within the cache it is dropped.`).
 		Description(`
-Caches must be configured as resources, for more information check out the [cache documentation here](/docs/components/caches/about).
+Caches must be configured as resources, for more information check out the xref:components:caches/about.adoc[cache documentation].
 
-When using this processor with an output target that might fail you should always wrap the output within an indefinite `+"[`retry`](/docs/components/outputs/retry)"+` block. This ensures that during outages your messages aren't reprocessed after failures, which would result in messages being dropped.
+When using this processor with an output target that might fail you should always wrap the output within an indefinite `+"xref:components:outputs/retry.adoc[`retry`]"+` block. This ensures that during outages your messages aren't reprocessed after failures, which would result in messages being dropped.
 
-## Batch Deduplication
+== Batch deduplication
 
-This processor enacts on individual messages only, in order to perform a deduplication on behalf of a batch (or window) of messages instead use the `+"[`cache` processor](/docs/components/processors/cache#examples)"+`.
+This processor enacts on individual messages only, in order to perform a deduplication on behalf of a batch (or window) of messages instead use the `+"xref:components:processors/cache.adoc#examples[`cache` processor]"+`.
 
-## Delivery Guarantees
+== Delivery guarantees
 
 Performing deduplication on a stream using a distributed cache voids any at-least-once guarantees that it previously had. This is because the cache will preserve message signatures even if the message fails to leave the Benthos pipeline, which would cause message loss in the event of an outage at the output sink followed by a restart of the Benthos instance (or a server crash, etc).
 
-This problem can be mitigated by using an in-memory cache and distributing messages to horizontally scaled Benthos pipelines partitioned by the deduplication key. However, in situations where at-least-once delivery guarantees are important it is worth avoiding deduplication in favour of implement idempotent behaviour at the edge of your stream pipelines.`).
+This problem can be mitigated by using an in-memory cache and distributing messages to horizontally scaled Benthos pipelines partitioned by the deduplication key. However, in situations where at-least-once delivery guarantees are important it is worth avoiding deduplication in favour of implement idempotent behavior at the edge of your stream pipelines.`).
 		Example(
 			"Deduplicate based on Kafka key",
 			"The following configuration demonstrates a pipeline that deduplicates messages based on the Kafka key.",
@@ -59,7 +59,7 @@ cache_resources:
 		).
 		Fields(
 			service.NewStringField(dedupFieldCache).
-				Description("The [`cache` resource](/docs/components/caches/about) to target with this processor."),
+				Description("The xref:components:caches/about.adoc[`cache` resource] to target with this processor."),
 			service.NewInterpolatedStringField(dedupFieldKey).
 				Description("An interpolated string yielding the key to deduplicate by for each message.").
 				Examples(`${! meta("kafka_key") }`, `${! content().hash("xxhash64") }`),

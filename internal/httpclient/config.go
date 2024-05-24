@@ -68,7 +68,7 @@ func ConfigField(defaultVerb string, forOutput bool, extraChildren ...*service.C
 			Description(extractHeadersDesc).
 			Advanced(),
 		service.NewStringField(hcFieldRateLimit).
-			Description("An optional [rate limit](/docs/components/rate_limits/about) to throttle requests by.").
+			Description("An optional xref:components:rate_limits/about.adoc[rate limit] to throttle requests by.").
 			Optional(),
 		service.NewDurationField(hcFieldTimeout).
 			Description("A static timeout to apply to requests.").

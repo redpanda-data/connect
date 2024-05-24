@@ -53,9 +53,11 @@ func soSpec() *service.ConfigSpec {
 		Categories("Services").
 		Summary(`Publish to a NATS Stream subject.`).
 		Description(`
-:::caution Deprecation Notice
-The NATS Streaming Server is being deprecated. Critical bug fixes and security fixes will be applied until June of 2023. NATS-enabled applications requiring persistence should use [JetStream](https://docs.nats.io/nats-concepts/jetstream).
-:::
+[CAUTION]
+.Deprecation notice
+====
+The NATS Streaming Server is being deprecated. Critical bug fixes and security fixes will be applied until June of 2023. NATS-enabled applications requiring persistence should use https://docs.nats.io/nats-concepts/jetstream[JetStream].
+====
 
 `+authDescription()+service.OutputPerformanceDocs(true, false)).
 		Fields(connectionHeadFields()...).

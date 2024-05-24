@@ -19,11 +19,11 @@ func amqp1OutputSpec() *service.ConfigSpec {
 		Categories("Services").
 		Summary("Sends messages to an AMQP (1.0) server.").
 		Description(`
-### Metadata
+== Metadata
 
 Message metadata is added to each AMQP message as string annotations. In order to control which metadata keys are added use the `+"`metadata`"+` config field.
 
-## Performance
+== Performance
 
 This output benefits from sending multiple messages in flight in parallel for improved performance. You can tune the max number of in flight messages (or message batches) with the field `+"`max_in_flight`"+`.`).
 		Fields(

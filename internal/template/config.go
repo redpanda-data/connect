@@ -249,7 +249,7 @@ func ConfigSpec() docs.FieldSpecs {
 			"cache", "input", "output", "processor", "rate_limit",
 		),
 		docs.FieldString(
-			"status", "The stability of the template describing the likelihood that the configuration spec of the template, or it's behaviour, will change.",
+			"status", "The stability of the template describing the likelihood that the configuration spec of the template, or it's behavior, will change.",
 		).HasAnnotatedOptions(
 			"stable", "This template is stable and will therefore not change in a breaking way outside of major version releases.",
 			"beta", "This template is beta and will therefore not change in a breaking way unless a major problem is found.",
@@ -262,7 +262,7 @@ func ConfigSpec() docs.FieldSpecs {
 		docs.FieldString("description", "A longer form description of the component and how to use it.").HasDefault(""),
 		docs.FieldObject("fields", "The configuration fields of the template, fields specified here will be parsed from a Benthos config and will be accessible from the template mapping.").Array().WithChildren(FieldConfigSpec()...),
 		docs.FieldBloblang(
-			"mapping", "A [Bloblang](/docs/guides/bloblang/about) mapping that translates the fields of the template into a valid Benthos configuration for the target component type.",
+			"mapping", "A xref:guides:bloblang/about.adoc[Bloblang] mapping that translates the fields of the template into a valid Benthos configuration for the target component type.",
 		),
 		templateMetricsMappingDocs(),
 		docs.FieldObject(

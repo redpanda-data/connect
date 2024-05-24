@@ -24,7 +24,7 @@ func fileInputSpec() *service.ConfigSpec {
 		Categories("Local").
 		Summary(`Consumes data from files on disk, emitting messages according to a chosen codec.`).
 		Description(`
-### Metadata
+== Metadata
 
 This input adds the following metadata fields to each message:
 
@@ -35,7 +35,7 @@ This input adds the following metadata fields to each message:
 `+"```"+`
 
 You can access these metadata fields using
-[function interpolation](/docs/configuration/interpolation#bloblang-queries).`).
+xref:configuration:interpolation.adoc#bloblang-queries[function interpolation].`).
 		Example(
 			"Read a Bunch of CSVs",
 			"If we wished to consume a directory of CSV files as structured documents we can use a glob pattern and the `csv` scanner:",

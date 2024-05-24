@@ -214,7 +214,7 @@ var _ = registerSimpleFunction(
 var _ = registerSimpleFunction(
 	NewFunctionSpec(
 		FunctionCategoryMessage, "content",
-		"Returns the full raw contents of the mapping target message as a byte array. When mapping to a JSON field the value should be encoded using the method [`encode`][methods.encode], or cast to a string directly using the method [`string`][methods.string], otherwise it will be base64 encoded by default.",
+		"Returns the full raw contents of the mapping target message as a byte array. When mapping to a JSON field the value should be encoded using the method xref:guides:bloblang/methods.adoc#encode[`encode`], or cast to a string directly using the method xref:guides:bloblang/methods.adoc#string[`string`], otherwise it will be base64 encoded by default.",
 		NewExampleSpec("",
 			`root.doc = content().string()`,
 			`{"foo":"bar"}`,
@@ -231,7 +231,7 @@ var _ = registerSimpleFunction(
 var _ = registerSimpleFunction(
 	NewFunctionSpec(
 		FunctionCategoryMessage, "tracing_span",
-		"Provides the message tracing span [(created via Open Telemetry APIs)](/docs/components/tracers/about) as an object serialised via text map formatting. The returned value will be `null` if the message does not have a span.",
+		"Provides the message tracing span xref:components:tracers/about.adoc[(created via Open Telemetry APIs)] as an object serialized via text map formatting. The returned value will be `null` if the message does not have a span.",
 		NewExampleSpec("",
 			`root.headers.traceparent = tracing_span().traceparent`,
 			`{"some_stuff":"just can't be explained by science"}`,
@@ -314,7 +314,7 @@ func countFunction(args *ParsedParams) (Function, error) {
 var _ = registerFunction(
 	NewFunctionSpec(
 		FunctionCategoryGeneral, "deleted",
-		"A function that returns a result indicating that the mapping target should be deleted. Deleting, also known as dropping, messages will result in them being acknowledged as successfully processed to inputs in a Benthos pipeline. For more information about error handling patterns read [here][error_handling].",
+		"A function that returns a result indicating that the mapping target should be deleted. Deleting, also known as dropping, messages will result in them being acknowledged as successfully processed to inputs in a Benthos pipeline. For more information about error handling patterns read xref:configuration:error_handling.adoc[].",
 		NewExampleSpec("",
 			`root = this
 root.bar = deleted()`,
@@ -338,7 +338,7 @@ root.bar = deleted()`,
 var _ = registerSimpleFunction(
 	NewFunctionSpec(
 		FunctionCategoryMessage, "error",
-		"If an error has occurred during the processing of a message this function returns the reported cause of the error as a string, otherwise `null`. For more information about error handling patterns read [here][error_handling].",
+		"If an error has occurred during the processing of a message this function returns the reported cause of the error as a string, otherwise `null`. For more information about error handling patterns read xref:configuration:error_handling.adoc[].",
 		NewExampleSpec("",
 			`root.doc.error = error()`,
 		),
@@ -355,7 +355,7 @@ var _ = registerSimpleFunction(
 var _ = registerSimpleFunction(
 	NewFunctionSpec(
 		FunctionCategoryMessage, "errored",
-		"Returns a boolean value indicating whether an error has occurred during the processing of a message. For more information about error handling patterns read [here][error_handling].",
+		"Returns a boolean value indicating whether an error has occurred during the processing of a message. For more information about error handling patterns read xref:configuration:error_handling.adoc[].",
 		NewExampleSpec("",
 			`root.doc.status = if errored() { 400 } else { 200 }`,
 		),
@@ -508,7 +508,7 @@ func NewMetaFunction(key string) Function {
 var _ = registerFunction(
 	NewFunctionSpec(
 		FunctionCategoryMessage, "metadata",
-		"Returns the value of a metadata key from the input message, or `null` if the key does not exist. Since values are extracted from the read-only input message they do NOT reflect changes made from within the map, in order to query metadata mutations made within a mapping use the [`@` operator](/docs/guides/bloblang/about#metadata). This function supports extracting metadata from other messages of a batch with the `from` method.",
+		"Returns the value of a metadata key from the input message, or `null` if the key does not exist. Since values are extracted from the read-only input message they do NOT reflect changes made from within the map, in order to query metadata mutations made within a mapping use the xref:guides:bloblang/about.adoc#metadata[`@` operator]. This function supports extracting metadata from other messages of a batch with the `from` method.",
 		NewExampleSpec("", `root.topic = metadata("kafka_topic")`),
 		NewExampleSpec(
 			"The key parameter is optional and if omitted the entire metadata contents are returned as an object.",
@@ -555,7 +555,7 @@ var _ = registerFunction(
 var _ = registerFunction(
 	NewDeprecatedFunctionSpec(
 		"meta",
-		"Returns the value of a metadata key from the input message as a string, or `null` if the key does not exist. Since values are extracted from the read-only input message they do NOT reflect changes made from within the map. In order to query metadata mutations made within a mapping use the [`root_meta` function](#root_meta). This function supports extracting metadata from other messages of a batch with the `from` method.",
+		"Returns the value of a metadata key from the input message as a string, or `null` if the key does not exist. Since values are extracted from the read-only input message they do NOT reflect changes made from within the map. In order to query metadata mutations made within a mapping use the <<root_meta, `root_meta` function>>. This function supports extracting metadata from other messages of a batch with the `from` method.",
 		NewExampleSpec("",
 			`root.topic = meta("kafka_topic")`,
 			`root.topic = meta("nope") | meta("also nope") | "default"`,

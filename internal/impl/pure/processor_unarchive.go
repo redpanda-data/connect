@@ -20,18 +20,18 @@ func unarchiveProcConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Stable().
 		Categories("Parsing", "Utility").
-		Summary("Unarchives messages according to the selected archive format into multiple messages within a [batch](/docs/configuration/batching).").
+		Summary("Unarchives messages according to the selected archive format into multiple messages within a xref:configuration:batching.adoc[batch].").
 		Description(`
-When a message is unarchived the new messages replace the original message in the batch. Messages that are selected but fail to unarchive (invalid format) will remain unchanged in the message batch but will be flagged as having failed, allowing you to [error handle them](/docs/configuration/error_handling).
+When a message is unarchived the new messages replace the original message in the batch. Messages that are selected but fail to unarchive (invalid format) will remain unchanged in the message batch but will be flagged as having failed, allowing you to xref:configuration:error_handling.adoc[error handle them].
 
-## Metadata
+== Metadata
 
 The metadata found on the messages handled by this processor will be copied into the resulting messages. For the unarchive formats that contain file information (tar, zip), a metadata field is also added to each message called ` + "`archive_filename`" + ` with the extracted filename.
 `).
 		Field(service.NewStringAnnotatedEnumField("format", map[string]string{
 			`tar`:            `Extract messages from a unix standard tape archive.`,
 			`zip`:            `Extract messages from a zip file.`,
-			`binary`:         `Extract messages from a [binary blob format](https://github.com/benthosdev/benthos/blob/main/internal/message/message.go#L96).`,
+			`binary`:         `Extract messages from a https://github.com/benthosdev/benthos/blob/main/internal/message/message.go#L96[binary blob format].`,
 			`lines`:          `Extract the lines of a message each into their own message.`,
 			`json_documents`: `Attempt to parse a message as a stream of concatenated JSON documents. Each parsed document is expanded into a new message.`,
 			`json_array`:     `Attempt to parse a message as a JSON array, and extract each element into its own message.`,

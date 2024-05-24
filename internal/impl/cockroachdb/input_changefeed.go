@@ -30,8 +30,8 @@ var sampleString = `{
 func crdbChangefeedInputConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Categories("Integration").
-		Summary(fmt.Sprintf("Listens to a [CockroachDB Core Changefeed](https://www.cockroachlabs.com/docs/stable/changefeed-examples) and creates a message for each row received. Each message is a json object looking like: \n```json\n%s\n```", sampleString)).
-		Description("This input will continue to listen to the changefeed until shutdown. A backfill of the full current state of the table will be delivered upon each run unless a cache is configured for storing cursor timestamps, as this is how Benthos keeps track as to which changes have been successfully delivered.\n\nNote: You must have `SET CLUSTER SETTING kv.rangefeed.enabled = true;` on your CRDB cluster, for more information refer to [the official CockroachDB documentation.](https://www.cockroachlabs.com/docs/stable/changefeed-examples?filters=core)").
+		Summary(fmt.Sprintf("Listens to a https://www.cockroachlabs.com/docs/stable/changefeed-examples[CockroachDB Core Changefeed] and creates a message for each row received. Each message is a json object looking like: \n```json\n%s\n```", sampleString)).
+		Description("This input will continue to listen to the changefeed until shutdown. A backfill of the full current state of the table will be delivered upon each run unless a cache is configured for storing cursor timestamps, as this is how Benthos keeps track as to which changes have been successfully delivered.\n\nNote: You must have `SET CLUSTER SETTING kv.rangefeed.enabled = true;` on your CRDB cluster, for more information refer to https://www.cockroachlabs.com/docs/stable/changefeed-examples?filters=core[the official CockroachDB documentation].").
 		Fields(
 			service.NewStringField("dsn").
 				Description(`A Data Source Name to identify the target database.`).
@@ -41,7 +41,7 @@ func crdbChangefeedInputConfig() *service.ConfigSpec {
 				Description("CSV of tables to be included in the changefeed").
 				Example([]string{"table1", "table2"}),
 			service.NewStringField("cursor_cache").
-				Description("A [cache resource](https://www.benthos.dev/docs/components/caches/about) to use for storing the current latest cursor that has been successfully delivered, this allows Benthos to continue from that cursor upon restart, rather than consume the entire state of the table.").
+				Description("A https://www.docs.redpanda.com/redpanda-connect/components/caches/about[cache resource] to use for storing the current latest cursor that has been successfully delivered, this allows Benthos to continue from that cursor upon restart, rather than consume the entire state of the table.").
 				Optional(),
 			service.NewStringListField("options").
 				Description("A list of options to be included in the changefeed (WITH X, Y...).\n**NOTE: Both the CURSOR option and UPDATED will be ignored from these options when a `cursor_cache` is specified, as they are set explicitly by Benthos in this case.**").

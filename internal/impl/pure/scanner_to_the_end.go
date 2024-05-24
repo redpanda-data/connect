@@ -12,9 +12,10 @@ func toTheEndScannerSpec() *service.ConfigSpec {
 		Stable().
 		Summary("Read the input stream all the way until the end and deliver it as a single message.").
 		Description(`
-:::caution
+[CAUTION]
+====
 Some sources of data may not have a logical end, therefore caution should be made to exclusively use this scanner when the end of an input stream is clearly defined (and well within memory).
-:::
+====
 `).
 		Field(service.NewObjectField("").Default(map[string]any{}))
 }

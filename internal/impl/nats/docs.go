@@ -13,7 +13,7 @@ const (
 )
 
 func connectionNameDescription() string {
-	return `### Connection Name
+	return `== Connection name
 
 When monitoring and managing a production NATS system, it is often useful to
 know which connection a message was send/received from. This can be achieved by

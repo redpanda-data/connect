@@ -31,17 +31,17 @@ func parseLogSpec() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Categories("Parsing").
 		Stable().
-		Summary(`Parses common log [formats](#formats) into [structured data](#codecs). This is easier and often much faster than `+"[`grok`](/docs/components/processors/grok)"+`.`).
+		Summary(`Parses common log <<formats>> into <<codecs, structured data>>. This is easier and often much faster than `+"xref:components:processors/grok.adoc[`grok`]"+`.`).
 		Footnotes(`
-## Codecs
+== Codecs
 
 Currently the only supported structured data codec is `+"`json`"+`.
 
-## Formats
+== Formats
 
-### `+"`syslog_rfc5424`"+`
+=== `+"`syslog_rfc5424`"+`
 
-Attempts to parse a log following the [Syslog rfc5424](https://tools.ietf.org/html/rfc5424) spec. The resulting structured document may contain any of the following fields:
+Attempts to parse a log following the https://tools.ietf.org/html/rfc5424[Syslog rfc5424] spec. The resulting structured document may contain any of the following fields:
 
 - `+"`message`"+` (string)
 - `+"`timestamp`"+` (string, RFC3339)
@@ -55,9 +55,9 @@ Attempts to parse a log following the [Syslog rfc5424](https://tools.ietf.org/ht
 - `+"`msgid`"+` (string)
 - `+"`structureddata`"+` (object)
 
-### `+"`syslog_rfc3164`"+`
+=== `+"`syslog_rfc3164`"+`
 
-Attempts to parse a log following the [Syslog rfc3164](https://tools.ietf.org/html/rfc3164) spec. The resulting structured document may contain any of the following fields:
+Attempts to parse a log following the https://tools.ietf.org/html/rfc3164[Syslog rfc3164] spec. The resulting structured document may contain any of the following fields:
 
 - `+"`message`"+` (string)
 - `+"`timestamp`"+` (string, RFC3339)
@@ -71,7 +71,7 @@ Attempts to parse a log following the [Syslog rfc3164](https://tools.ietf.org/ht
 `).
 		Fields(
 			service.NewStringEnumField(plpFieldFormat, "syslog_rfc5424", "syslog_rfc3164").
-				Description("A common log [format](#formats) to parse."),
+				Description("A common log <<formats, format>> to parse."),
 			service.NewBoolField(plpFieldBestEffort).
 				Description("Still returns partially parsed messages even if an error occurs.").
 				Advanced().
@@ -85,7 +85,7 @@ Attempts to parse a log following the [Syslog rfc3164](https://tools.ietf.org/ht
 				Advanced().
 				Default("current"),
 			service.NewStringField(plpFieldWithTimezone).
-				Description("Sets the strategy to decide the timezone for rfc3164 timestamps. Applicable to format `syslog_rfc3164`. This value should follow the [time.LoadLocation](https://golang.org/pkg/time/#LoadLocation) format.").
+				Description("Sets the strategy to decide the timezone for rfc3164 timestamps. Applicable to format `syslog_rfc3164`. This value should follow the https://golang.org/pkg/time/#LoadLocation[time.LoadLocation] format.").
 				Advanced().
 				Default("UTC"),
 			service.NewStringField(plpFieldCodec).Deprecated(),

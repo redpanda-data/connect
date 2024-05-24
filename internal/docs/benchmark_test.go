@@ -23,7 +23,7 @@ func BenchmarkFields(b *testing.B) {
 				Type:   docs.TypeMetrics,
 				Status: docs.StatusStable,
 				Summary: `
-Pushes metrics using the [StatsD protocol](https://github.com/statsd/statsd).
+Pushes metrics using the https://github.com/statsd/statsd[StatsD protocol].
 Supported tagging formats are 'none', 'datadog' and 'influxdb'.`,
 				Description: `
 The underlying client library has recently been updated in order to support
@@ -50,7 +50,7 @@ tagging.`,
 				Type:   docs.TypeMetrics,
 				Status: docs.StatusStable,
 				Summary: `
-Pushes metrics using the [StatsD protocol](https://github.com/statsd/statsd).
+Pushes metrics using the https://github.com/statsd/statsd[StatsD protocol].
 Supported tagging formats are 'none', 'datadog' and 'influxdb'.`,
 				Description: `
 The underlying client library has recently been updated in order to support

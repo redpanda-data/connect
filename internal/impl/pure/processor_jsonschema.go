@@ -26,10 +26,10 @@ func jschemaProcSpec() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Categories("Mapping").
 		Stable().
-		Summary(`Checks messages against a provided JSONSchema definition but does not change the payload under any circumstances. If a message does not match the schema it can be caught using error handling methods outlined [here](/docs/configuration/error_handling).`).
-		Description(`Please refer to the [JSON Schema website](https://json-schema.org/) for information and tutorials regarding the syntax of the schema.`).
+		Summary(`Checks messages against a provided JSONSchema definition but does not change the payload under any circumstances. If a message does not match the schema it can be caught using xref:configuration:error_handling.adoc[error handling methods].`).
+		Description(`Please refer to the https://json-schema.org/[JSON Schema website] for information and tutorials regarding the syntax of the schema.`).
 		Footnotes(`
-## Examples
+== Examples
 
 With the following JSONSchema document:
 

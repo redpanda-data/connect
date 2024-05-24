@@ -16,7 +16,7 @@ func processorsProcSpec() *service.ConfigSpec {
 		Categories("Composition").
 		Stable().
 		Summary(`A processor grouping several sub-processors.`).
-		Description("This processor is useful in situations where you want to collect several processors under a single resource identifier, whether it is for making your configuration easier to read and navigate, or for improving the testability of your configuration. The behaviour of child processors will match exactly the behaviour they would have under any other processors block.").
+		Description("This processor is useful in situations where you want to collect several processors under a single resource identifier, whether it is for making your configuration easier to read and navigate, or for improving the testability of your configuration. The behavior of child processors will match exactly the behavior they would have under any other processors block.").
 		Example(
 			"Grouped Processing",
 			"Imagine we have a collection of processors who cover a specific functionality. We could use this processor to group them together and make it easier to read and mock during testing by giving the whole block a label:",

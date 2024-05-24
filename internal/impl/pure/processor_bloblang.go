@@ -18,22 +18,22 @@ func init() {
 	err := service.RegisterBatchProcessor("bloblang", service.NewConfigSpec().
 		Stable().
 		Categories("Mapping", "Parsing").
-		Summary("Executes a [Bloblang](/docs/guides/bloblang/about) mapping on messages.").
+		Summary("Executes a xref:guides:bloblang/about.adoc[Bloblang] mapping on messages.").
 		Description(`
-Bloblang is a powerful language that enables a wide range of mapping, transformation and filtering tasks. For more information [check out the docs](/docs/guides/bloblang/about).
+Bloblang is a powerful language that enables a wide range of mapping, transformation and filtering tasks. For more information see xref:guides:bloblang/about.adoc[].
 
 If your mapping is large and you'd prefer for it to live in a separate file then you can execute a mapping directly from a file with the expression `+"`from \"<path>\"`"+`, where the path must be absolute, or relative from the location that Benthos is executed from.
 
-## Component Rename
+== Component rename
 
-This processor was recently renamed to the `+"[`mapping` processor](/docs/components/processors/mapping)"+` in order to make the purpose of the processor more prominent. It is still valid to use the existing `+"`bloblang`"+` name but eventually it will be deprecated and replaced by the new name in example configs.`).
+This processor was recently renamed to the `+"xref:components:processors/mapping.adoc[`mapping` processor]"+` in order to make the purpose of the processor more prominent. It is still valid to use the existing `+"`bloblang`"+` name but eventually it will be deprecated and replaced by the new name in example configs.`).
 		Footnotes(`
-## Error Handling
+== Error handling
 
 Bloblang mappings can fail, in which case the message remains unchanged, errors are logged, and the message is flagged as having failed, allowing you to use
-[standard processor error handling patterns](/docs/configuration/error_handling).
+xref:configuration:error_handling.adoc[standard processor error handling patterns].
 
-However, Bloblang itself also provides powerful ways of ensuring your mappings do not fail by specifying desired fallback behaviour, which you can read about [in this section](/docs/guides/bloblang/about#error-handling).`).
+However, Bloblang itself also provides powerful ways of ensuring your mappings do not fail by specifying desired fallback behavior, which you can read about in xref:guides:bloblang/about#error-handling.adoc[Error handling].`).
 		Example("Mapping", `
 Given JSON documents containing an array of fans:
 

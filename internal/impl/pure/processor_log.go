@@ -27,13 +27,13 @@ func logProcSpec() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Categories("Utility").
 		Stable().
-		Summary(`Prints a log event for each message. Messages always remain unchanged. The log message can be set using function interpolations described [here](/docs/configuration/interpolation#bloblang-queries) which allows you to log the contents and metadata of messages.`).
+		Summary(`Prints a log event for each message. Messages always remain unchanged. The log message can be set using function interpolations described in  xref:configuration:interpolation.adoc#bloblang-queries[Bloblang queries] which allows you to log the contents and metadata of messages.`).
 		Description(`
 The `+"`level`"+` field determines the log level of the printed events and can be any of the following values: TRACE, DEBUG, INFO, WARN, ERROR.
 
-### Structured Fields
+== Structured fields
 
-It's also possible add custom fields to logs when the format is set to a structured form such as `+"`json` or `logfmt`"+` with the config field `+"[`fields_mapping`](#fields_mapping)"+`:
+It's also possible add custom fields to logs when the format is set to a structured form such as `+"`json` or `logfmt`"+` with the config field `+"<<fields_mapping, `fields_mapping`>>"+`:
 
 `+"```yaml"+`
 pipeline:
@@ -54,7 +54,7 @@ pipeline:
 				LintRule(``).
 				Default("INFO"),
 			service.NewBloblangField(logPFieldFieldsMapping).
-				Description("An optional [Bloblang mapping](/docs/guides/bloblang/about) that can be used to specify extra fields to add to the log. If log fields are also added with the `fields` field then those values will override matching keys from this mapping.").
+				Description("An optional xref:guides:bloblang/about.adoc[Bloblang mapping] that can be used to specify extra fields to add to the log. If log fields are also added with the `fields` field then those values will override matching keys from this mapping.").
 				Examples(
 					`root.reason = "cus I wana"
 root.id = this.id

@@ -158,7 +158,7 @@ func catchMethod(fn Function, args *ParsedParams) (Function, error) {
 var _ = registerMethod(
 	NewMethodSpec(
 		"from",
-		"Modifies a target query such that certain functions are executed from the perspective of another message in the batch. This allows you to mutate events based on the contents of other messages. Functions that support this behaviour are `content`, `json` and `meta`.",
+		"Modifies a target query such that certain functions are executed from the perspective of another message in the batch. This allows you to mutate events based on the contents of other messages. Functions that support this behavior are `content`, `json` and `meta`.",
 		NewExampleSpec("For example, the following map extracts the contents of the JSON field `foo` specifically from message index `1` of a batch, effectively overriding the field `foo` for all messages of a batch to that of message 1:",
 			`root = this
 root.foo = json("foo").from(1)`,
@@ -200,7 +200,7 @@ func (f *fromMethod) QueryTargets(ctx TargetsContext) (TargetsContext, []TargetP
 var _ = registerMethod(
 	NewMethodSpec(
 		"from_all",
-		"Modifies a target query such that certain functions are executed from the perspective of each message in the batch, and returns the set of results as an array. Functions that support this behaviour are `content`, `json` and `meta`.",
+		"Modifies a target query such that certain functions are executed from the perspective of each message in the batch, and returns the set of results as an array. Functions that support this behavior are `content`, `json` and `meta`.",
 		NewExampleSpec("",
 			`root = this
 root.foo_summed = json("foo").from_all().sum()`,
@@ -229,7 +229,7 @@ func fromAllMethod(target Function, _ *ParsedParams) (Function, error) {
 var _ = registerMethod(
 	NewMethodSpec(
 		"get",
-		"Extract a field value, identified via a [dot path][field_paths], from an object.",
+		"Extract a field value, identified via a xref:configuration:field_paths.adoc[dot path], from an object.",
 	).InCategory(
 		MethodCategoryObjectAndArray, "",
 		NewExampleSpec("",
@@ -239,7 +239,7 @@ var _ = registerMethod(
 			`{"foo":{"bar":"from bar","baz":"from baz"},"target":"baz"}`,
 			`{"result":"from baz"}`,
 		),
-	).Param(ParamString("path", "A [dot path][field_paths] identifying a field to obtain.")),
+	).Param(ParamString("path", "A xref:configuration:field_paths.adoc[dot path] identifying a field to obtain.")),
 	getMethodCtor,
 )
 

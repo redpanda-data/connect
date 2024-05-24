@@ -42,11 +42,11 @@ func cwMetricsSpec() *service.ConfigSpec {
 		Version("3.36.0").
 		Summary(`Send metrics to AWS CloudWatch using the PutMetricData endpoint.`).
 		Description(`
-### Timing Metrics
+== Timing metrics
 
 The smallest timing unit that CloudWatch supports is microseconds, therefore timing metrics are automatically downgraded to microseconds (by dividing delta values by 1000). This conversion will also apply to custom timing metrics produced with a `+"`metric`"+` processor.
 
-### Billing
+== Billing
 
 AWS bills per metric series exported, it is therefore STRONGLY recommended that you reduce the metrics that are exposed with a `+"`mapping`"+` like this:
 
