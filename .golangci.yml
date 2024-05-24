@@ -18,6 +18,10 @@ linters-settings:
     enable-all-rules: false
     rules:
       - name: superfluous-else
+  errcheck:
+    exclude-functions:
+      - (*github.com/benthosdev/benthos/v4/internal/batch.Error).Failed
+      - (*github.com/benthosdev/benthos/v4/public/service.BatchError).Failed
   govet:
     enable-all: true
     disable:
