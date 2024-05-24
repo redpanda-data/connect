@@ -45,21 +45,23 @@ func (f FieldSpec) JSONSchema() any {
 			}
 			spec["additionalProperties"] = false
 		case FieldTypeInput:
-			spec["$ref"] = "#/$defs/input"
+			spec["$ref"] = "#/definitions/input"
 		case FieldTypeBuffer:
-			spec["$ref"] = "#/$defs/buffer"
+			spec["$ref"] = "#/definitions/buffer"
 		case FieldTypeCache:
-			spec["$ref"] = "#/$defs/cache"
+			spec["$ref"] = "#/definitions/cache"
 		case FieldTypeProcessor:
-			spec["$ref"] = "#/$defs/processor"
+			spec["$ref"] = "#/definitions/processor"
 		case FieldTypeRateLimit:
-			spec["$ref"] = "#/$defs/rate_limit"
+			spec["$ref"] = "#/definitions/rate_limit"
 		case FieldTypeOutput:
-			spec["$ref"] = "#/$defs/output"
+			spec["$ref"] = "#/definitions/output"
 		case FieldTypeMetrics:
-			spec["$ref"] = "#/$defs/metrics"
+			spec["$ref"] = "#/definitions/metrics"
 		case FieldTypeTracer:
-			spec["$ref"] = "#/$defs/tracer"
+			spec["$ref"] = "#/definitions/tracer"
+		case FieldTypeScanner:
+			spec["$ref"] = "#/definitions/scanner"
 		}
 	}
 	return spec

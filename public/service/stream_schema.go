@@ -124,6 +124,60 @@ func (s *ConfigSchema) MarshalJSONV0() ([]byte, error) {
 	return json.Marshal(iSchema)
 }
 
+func compSpecsToDefinition(specs []docs.ComponentSpec, typeFields map[string]docs.FieldSpec) map[string]any {
+	generalFields := map[string]any{}
+	for k, v := range typeFields {
+		generalFields[k] = v.JSONSchema()
+	}
+
+	var componentDefs []any
+	for _, s := range specs {
+		componentDefs = append(componentDefs, map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				s.Name: s.Config.JSONSchema(),
+			},
+		})
+	}
+
+	return map[string]any{
+		"allOf": []any{
+			map[string]any{
+				"oneOf": componentDefs,
+			},
+			map[string]any{
+				"type":       "object",
+				"properties": generalFields,
+			},
+		},
+	}
+}
+
+// MarshalJSONSchema attempts to marshal a JSON Schema definition containing the
+// entire config and plugin ecosystem such that other applications can
+// potentially execute their own linting and generation tools with it.
+func (s *ConfigSchema) MarshalJSONSchema() ([]byte, error) {
+	s.env.internal.BufferDocs()
+	defs := map[string]any{
+		"input":      compSpecsToDefinition(s.env.internal.InputDocs(), docs.ReservedFieldsByType(docs.TypeInput)),
+		"buffer":     compSpecsToDefinition(s.env.internal.BufferDocs(), docs.ReservedFieldsByType(docs.TypeBuffer)),
+		"cache":      compSpecsToDefinition(s.env.internal.CacheDocs(), docs.ReservedFieldsByType(docs.TypeCache)),
+		"processor":  compSpecsToDefinition(s.env.internal.ProcessorDocs(), docs.ReservedFieldsByType(docs.TypeProcessor)),
+		"rate_limit": compSpecsToDefinition(s.env.internal.RateLimitDocs(), docs.ReservedFieldsByType(docs.TypeRateLimit)),
+		"output":     compSpecsToDefinition(s.env.internal.OutputDocs(), docs.ReservedFieldsByType(docs.TypeOutput)),
+		"metrics":    compSpecsToDefinition(s.env.internal.MetricsDocs(), docs.ReservedFieldsByType(docs.TypeMetrics)),
+		"tracer":     compSpecsToDefinition(s.env.internal.TracersDocs(), docs.ReservedFieldsByType(docs.TypeTracer)),
+		"scanner":    compSpecsToDefinition(s.env.internal.ScannerDocs(), docs.ReservedFieldsByType(docs.TypeScanner)),
+	}
+
+	schemaObj := map[string]any{
+		"properties":  s.fields.JSONSchema(),
+		"definitions": defs,
+	}
+
+	return json.Marshal(schemaObj)
+}
+
 // SetVersion sets the version and date-built stamp associated with the schema.
 func (s *ConfigSchema) SetVersion(version, dateBuilt string) *ConfigSchema {
 	s.version = version

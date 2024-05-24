@@ -2,6 +2,7 @@ package service_test
 
 import (
 	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -12,18 +13,10 @@ import (
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
-func TestStreamSchemaInteropCore(t *testing.T) {
-	bEnv := bloblang.NewEmptyEnvironment()
-
-	require.NoError(t, bEnv.RegisterFunction("cow", func(args ...any) (bloblang.Function, error) {
-		return nil, errors.New("nope")
-	}))
-	require.NoError(t, bEnv.RegisterMethod("sheep", func(args ...any) (bloblang.Method, error) {
-		return nil, errors.New("nope")
-	}))
+func testEnvWithPlugins(t testing.TB) *service.Environment {
+	t.Helper()
 
 	env := service.NewEmptyEnvironment()
-	env.UseBloblangEnvironment(bEnv)
 
 	require.NoError(t, env.RegisterInput("testinput", service.NewConfigSpec().Field(service.NewStringField("woof").Example("WOOF")),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Input, error) {
@@ -65,6 +58,22 @@ func TestStreamSchemaInteropCore(t *testing.T) {
 		func(conf *service.ParsedConfig) (trace.TracerProvider, error) {
 			return nil, errors.New("nope")
 		}))
+
+	return env
+}
+
+func TestStreamSchemaInteropCore(t *testing.T) {
+	bEnv := bloblang.NewEmptyEnvironment()
+
+	require.NoError(t, bEnv.RegisterFunction("cow", func(args ...any) (bloblang.Function, error) {
+		return nil, errors.New("nope")
+	}))
+	require.NoError(t, bEnv.RegisterMethod("sheep", func(args ...any) (bloblang.Method, error) {
+		return nil, errors.New("nope")
+	}))
+
+	env := testEnvWithPlugins(t)
+	env.UseBloblangEnvironment(bEnv)
 
 	schemaSource := env.FullConfigSchema("aaa", "bbb").Field(service.NewStringField("foo").Default("test default"))
 
@@ -150,49 +159,8 @@ func TestStreamSchemaInteropLinter(t *testing.T) {
 		return nil, errors.New("nope")
 	}))
 
-	env := service.NewEmptyEnvironment()
+	env := testEnvWithPlugins(t)
 	env.UseBloblangEnvironment(bEnv)
-
-	require.NoError(t, env.RegisterInput("testinput", service.NewConfigSpec().Field(service.NewStringField("woof").Example("WOOF")),
-		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Input, error) {
-			return nil, errors.New("nope")
-		}))
-
-	require.NoError(t, env.RegisterBatchBuffer("testbuffer", service.NewConfigSpec(),
-		func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchBuffer, error) {
-			return nil, errors.New("nope")
-		}))
-
-	require.NoError(t, env.RegisterProcessor("testprocessor", service.NewConfigSpec().Field(service.NewBloblangField("mapfield")),
-		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {
-			return nil, errors.New("nope")
-		}))
-
-	require.NoError(t, env.RegisterOutput("testoutput", service.NewConfigSpec().Field(service.NewStringField("meow").Example("MEOW")),
-		func(conf *service.ParsedConfig, mgr *service.Resources) (out service.Output, maxInFlight int, err error) {
-			err = errors.New("nope")
-			return
-		}))
-
-	require.NoError(t, env.RegisterCache("testcache", service.NewConfigSpec().Field(service.NewStringField("cachefield")),
-		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Cache, error) {
-			return nil, errors.New("nope")
-		}))
-
-	require.NoError(t, env.RegisterRateLimit("testratelimit", service.NewConfigSpec().Field(service.NewStringField("ratelimitfield")),
-		func(conf *service.ParsedConfig, mgr *service.Resources) (service.RateLimit, error) {
-			return nil, errors.New("nope")
-		}))
-
-	require.NoError(t, env.RegisterMetricsExporter("testmetrics", service.NewConfigSpec().Field(service.NewStringField("metricsfield")),
-		func(conf *service.ParsedConfig, log *service.Logger) (service.MetricsExporter, error) {
-			return nil, errors.New("nope")
-		}))
-
-	require.NoError(t, env.RegisterOtelTracerProvider("testtracer", service.NewConfigSpec().Field(service.NewStringField("tracerfield")),
-		func(conf *service.ParsedConfig) (trace.TracerProvider, error) {
-			return nil, errors.New("nope")
-		}))
 
 	schemaSource := env.FullConfigSchema("aaa", "bbb").Field(service.NewStringField("foo").Default("test default"))
 
@@ -218,4 +186,13 @@ output:
 `))
 	require.NoError(t, err)
 	assert.Empty(t, lints)
+}
+
+func TestJSONSchema(t *testing.T) {
+	env := testEnvWithPlugins(t)
+
+	testSchema, err := env.FullConfigSchema("xxx", "yyy").MarshalJSONSchema()
+	require.NoError(t, err)
+
+	fmt.Println(string(testSchema))
 }
