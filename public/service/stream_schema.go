@@ -143,7 +143,7 @@ func compSpecsToDefinition(specs []docs.ComponentSpec, typeFields map[string]doc
 	return map[string]any{
 		"allOf": []any{
 			map[string]any{
-				"oneOf": componentDefs,
+				"anyOf": componentDefs, // TODO: Convert this to oneOf once issues are resolved.
 			},
 			map[string]any{
 				"type":       "object",

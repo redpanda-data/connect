@@ -24,6 +24,11 @@ func testEnvWithPlugins(t testing.TB) *service.Environment {
 			return nil, errors.New("nope")
 		}))
 
+	require.NoError(t, env.RegisterInput("anothertestinput", service.NewConfigSpec().Field(service.NewStringField("moo").Example("MOO")),
+		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Input, error) {
+			return nil, errors.New("nope")
+		}))
+
 	require.NoError(t, env.RegisterBatchBuffer("testbuffer", service.NewConfigSpec(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchBuffer, error) {
 			return nil, errors.New("nope")
