@@ -84,3 +84,12 @@ func NewTypeMismatch(operation string, lfn, rfn Function, left, right any) *Type
 		Operation: operation,
 	}
 }
+
+type ContextualError struct {
+	message string
+	Context map[string]any
+}
+
+func (ce *ContextualError) Error() string {
+	return ce.message
+}

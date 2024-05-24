@@ -354,6 +354,30 @@ var _ = registerSimpleFunction(
 
 var _ = registerSimpleFunction(
 	NewFunctionSpec(
+		FunctionCategoryMessage, "error_with_context",
+		"If an error has occurred during the processing of a message this function returns the reported cause of the error as a string, otherwise `null`. For more information about error handling patterns read [here][error_handling].",
+		NewExampleSpec("",
+			`root.doc.error = error_with_context()`,
+		),
+	),
+	func(ctx FunctionContext) (any, error) {
+		v := ctx.MsgBatch.Get(ctx.Index).ErrorGet()
+		if v == nil {
+			return nil, nil
+		}
+
+		var ce *ContextualError
+		ok := errors.As(v, &ce)
+		if !ok {
+			return map[string]any{"message": v.Error()}, nil
+		}
+
+		return map[string]any{"message": v.Error(), "context": ce.Context}, nil
+	},
+)
+
+var _ = registerSimpleFunction(
+	NewFunctionSpec(
 		FunctionCategoryMessage, "errored",
 		"Returns a boolean value indicating whether an error has occurred during the processing of a message. For more information about error handling patterns read [here][error_handling].",
 		NewExampleSpec("",
@@ -839,14 +863,26 @@ root.doc.contents = (this.body.content | this.thing.body)`,
 			`{"nothing":"matches"}`,
 			`Error("failed assignment (line 1): unknown type")`,
 		),
-	).Param(ParamString("why", "A string explanation for why an error was thrown, this will be added to the resulting error message.")),
+	).
+		Param(ParamString("why", "A string explanation for why an error was thrown, this will be added to the resulting error message.")).
+		Param(ParamObject("context", "Additional data that can be associated with the error and later retrieved.").Optional()),
 	func(args *ParsedParams) (Function, error) {
 		msg, err := args.FieldString("why")
 		if err != nil {
 			return nil, err
 		}
+
+		context, err := args.FieldOptionalObject("context")
+		if err != nil {
+			return nil, err
+		}
+
 		return ClosureFunction("function throw", func(_ FunctionContext) (any, error) {
-			return nil, errors.New(msg)
+			if context == nil {
+				return nil, errors.New(msg)
+			}
+
+			return nil, &ContextualError{message: msg, Context: *context}
 		}, nil), nil
 	},
 )
