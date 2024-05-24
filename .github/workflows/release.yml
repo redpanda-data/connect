@@ -26,7 +26,7 @@ jobs:
     - name: Install Go
       uses: actions/setup-go@v5
       with:
-        go-version: 1.21.x
+        go-version: 1.22.x
         check-latest: true
 
     - name: Release Notes
@@ -78,8 +78,7 @@ jobs:
       uses: docker/metadata-action@v5
       with:
         images: |
-          jeffail/benthos
-          ghcr.io/${{ github.repository_owner }}/benthos
+          ghcr.io/${{ github.repository_owner }}/connect
         flavor: |
           latest=auto
           suffix=-cgo
@@ -101,8 +100,7 @@ jobs:
       uses: docker/metadata-action@v5
       with:
         images: |
-          jeffail/benthos
-          ghcr.io/${{ github.repository_owner }}/benthos
+          ghcr.io/${{ github.repository_owner }}/connect
         tags: |
           type=semver,pattern={{version}}
           type=semver,pattern={{major}}.{{minor}}

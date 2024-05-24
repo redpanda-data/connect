@@ -1,7 +1,7 @@
 builds:
-  - id: benthos
-    main: cmd/benthos/main.go
-    binary: benthos
+  - id: connect
+    main: cmd/redpanda-connect/main.go
+    binary: redpanda-connect
     goos: [ windows, darwin, linux, freebsd, openbsd ]
     goarch: [ amd64, arm, arm64 ]
     goarm: [ 6, 7 ]
@@ -14,42 +14,42 @@ builds:
       - CGO_ENABLED=0
     ldflags: >
       -s -w
-      -X github.com/benthosdev/benthos/v4/internal/cli.Version={{.Version}}
-      -X github.com/benthosdev/benthos/v4/internal/cli.DateBuilt={{.Date}}
-  - id: benthos-lambda
-    main: cmd/serverless/benthos-lambda/main.go
-    binary: benthos-lambda
-    env:
-      - CGO_ENABLED=0
-    goos: [ linux ]
-    goarch: [ amd64 ]
-  - id: benthos-lambda-al2
-    main: cmd/serverless/benthos-lambda/main.go
-    binary: bootstrap
-    env:
-      - CGO_ENABLED=0
-    goos: [ linux ]
-    goarch: [ amd64, arm64 ]
+      -X main.Version={{.Version}}
+      -X main.DateBuilt={{.Date}}
+  # - id: connect-lambda
+  #   main: cmd/serverless/connect-lambda/main.go
+  #   binary: redpanda-connect-lambda
+  #   env:
+  #     - CGO_ENABLED=0
+  #   goos: [ linux ]
+  #   goarch: [ amd64 ]
+  # - id: connect-lambda-al2
+  #   main: cmd/serverless/connect-lambda/main.go
+  #   binary: bootstrap
+  #   env:
+  #     - CGO_ENABLED=0
+  #   goos: [ linux ]
+  #   goarch: [ amd64, arm64 ]
 archives:
-  - id: benthos
-    builds: [ benthos ]
+  - id: connect
+    builds: [ connect ]
     format: tar.gz
     files:
       - README.md
       - CHANGELOG.md
       - LICENSE
-  - id: benthos-lambda
-    builds: [ benthos-lambda ]
-    format: zip
-    name_template: "{{ .Binary }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
-  - id: benthos-lambda-al2
-    builds: [ benthos-lambda-al2 ]
-    format: zip
-    name_template: "benthos-lambda-al2_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+  # - id: connect-lambda
+  #   builds: [ connect-lambda ]
+  #   format: zip
+  #   name_template: "{{ .Binary }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+  # - id: connect-lambda-al2
+  #   builds: [ connect-lambda-al2 ]
+  #   format: zip
+  #   name_template: "connect-lambda-al2_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
 dist: target/dist
 release:
   github:
-    owner: benthosdev
-    name: benthos
+    owner: redpanda-data
+    name: connect
   prerelease: auto
   disable: false
