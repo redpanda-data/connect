@@ -91,7 +91,7 @@ When using SQS please make sure you have sensible values for `sqs.max_messages` 
 
 ## Downloading Large Files
 
-When downloading large files it's often necessary to process it in streamed parts in order to avoid loading the entire file in memory at a given time. In order to do this a [`codec`](#codec) can be specified that determines how to break the input into smaller individual messages.
+When downloading large files it's often necessary to process it in streamed parts in order to avoid loading the entire file in memory at a given time. In order to do this a [`scanner`](#scanner) can be specified that determines how to break the input into smaller individual messages.
 
 ## Credentials
 
