@@ -1,3 +1,4 @@
+project_name: redpanda-connect
 builds:
   - id: connect
     main: cmd/redpanda-connect/main.go

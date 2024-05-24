@@ -129,9 +129,9 @@ install_redpanda_connect()
 	########################
 
 	echo "Downloading Redpanda Connect for ${connect_os}/${connect_arch}${connect_arm}..."
-	connect_file="connect_${connect_os}_${connect_arch}${connect_arm}${connect_dl_ext}"
+	connect_file="redpanda-connect_${connect_os}_${connect_arch}${connect_arm}${connect_dl_ext}"
 
-	connect_url="https://github.com/redpanda-data/connect/releases/download/${connect_tag}/connect_${connect_version}_${connect_os}_${connect_arch}${connect_arm}.tar.gz"
+	connect_url="https://github.com/redpanda-data/connect/releases/download/${connect_tag}/redpanda-connect_${connect_version}_${connect_os}_${connect_arch}${connect_arm}.tar.gz"
 
 	dl="/tmp/$connect_file"
 	rm -rf -- "$dl"
