@@ -37,7 +37,7 @@ archives:
     files:
       - README.md
       - CHANGELOG.md
-      - LICENSE
+      - licenses
   # - id: connect-lambda
   #   builds: [ connect-lambda ]
   #   format: zip
