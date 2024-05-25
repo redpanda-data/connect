@@ -10,7 +10,6 @@ import (
 )
 
 type workflowBranchMapV2 struct {
-	dag          [][]string
 	Branches     map[string]*Branch
 	dependencies map[string][]string
 }
@@ -56,9 +55,9 @@ func newWorkflowBranchMapV2(conf *service.ParsedConfig, mgr bundle.NewManagement
 	dependencies := make(map[string][]string)
 
 	for k, v := range branchObjMap {
-		dep_list, _ := v.FieldStringList("dependency_list")
-		dependencies[k] = append(dependencies[k], dep_list...)
-		if len(dep_list) == 0 {
+		depList, _ := v.FieldStringList("dependency_list")
+		dependencies[k] = append(dependencies[k], depList...)
+		if len(depList) == 0 {
 			dependencies[k] = nil
 		}
 	}

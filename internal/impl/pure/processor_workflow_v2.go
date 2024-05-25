@@ -294,10 +294,10 @@ func (w *WorkflowV2) ProcessBatch(ctx context.Context, msg message.Batch) ([]mes
 		errors  []error
 	}
 
-	batch_result_chan := make(chan collector)
+	batchResultChan := make(chan collector)
 
 	go func() {
-		mssge := <-batch_result_chan
+		mssge := <-batchResultChan
 		var failed []branchMapError
 		err := mssge.errors[0]
 		if err == nil {
@@ -343,12 +343,12 @@ func (w *WorkflowV2) ProcessBatch(ctx context.Context, msg message.Batch) ([]mes
 					for _, e := range mapErrs {
 						records.FailedV2(id, e.err.Error())
 					}
-					batch_result := collector{
+					batchResult := collector{
 						eid:     id,
 						results: results,
 						errors:  errors,
 					}
-					batch_result_chan <- batch_result
+					batchResultChan <- batchResult
 				}(eid)
 			}
 		}
