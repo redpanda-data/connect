@@ -33,7 +33,7 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
-func franzKafkaInputConfig() *service.ConfigSpec {
+func FranzKafkaInputConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Beta().
 		Categories("Services").
@@ -122,9 +122,9 @@ root = if $has_topic_partitions {
 }
 
 func init() {
-	err := service.RegisterBatchInput("kafka_franz", franzKafkaInputConfig(),
+	err := service.RegisterBatchInput("kafka_franz", FranzKafkaInputConfig(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchInput, error) {
-			rdr, err := newFranzKafkaReaderFromConfig(conf, mgr)
+			rdr, err := NewFranzKafkaReaderFromConfig(conf, mgr)
 			if err != nil {
 				return nil, err
 			}
@@ -142,14 +142,14 @@ type batchWithAckFn struct {
 	batch service.MessageBatch
 }
 
-type franzKafkaReader struct {
-	seedBrokers     []string
+type FranzKafkaReader struct {
+	SeedBrokers     []string
 	topics          []string
 	topicPartitions map[string]map[int32]kgo.Offset
 	clientID        string
 	rackID          string
 	consumerGroup   string
-	tlsConf         *tls.Config
+	TLSConf         *tls.Config
 	saslConfs       []sasl.Mechanism
 	checkpointLimit int
 	startFromOldest bool
@@ -164,17 +164,17 @@ type franzKafkaReader struct {
 	shutSig   *shutdown.Signaller
 }
 
-func (f *franzKafkaReader) getBatchChan() chan batchWithAckFn {
+func (f *FranzKafkaReader) getBatchChan() chan batchWithAckFn {
 	c, _ := f.batchChan.Load().(chan batchWithAckFn)
 	return c
 }
 
-func (f *franzKafkaReader) storeBatchChan(c chan batchWithAckFn) {
+func (f *FranzKafkaReader) storeBatchChan(c chan batchWithAckFn) {
 	f.batchChan.Store(c)
 }
 
-func newFranzKafkaReaderFromConfig(conf *service.ParsedConfig, res *service.Resources) (*franzKafkaReader, error) {
-	f := franzKafkaReader{
+func NewFranzKafkaReaderFromConfig(conf *service.ParsedConfig, res *service.Resources) (*FranzKafkaReader, error) {
+	f := FranzKafkaReader{
 		res:     res,
 		log:     res.Logger(),
 		shutSig: shutdown.NewSignaller(),
@@ -185,7 +185,7 @@ func newFranzKafkaReaderFromConfig(conf *service.ParsedConfig, res *service.Reso
 		return nil, err
 	}
 	for _, b := range brokerList {
-		f.seedBrokers = append(f.seedBrokers, strings.Split(b, ",")...)
+		f.SeedBrokers = append(f.SeedBrokers, strings.Split(b, ",")...)
 	}
 
 	if f.startFromOldest, err = conf.FieldBool("start_from_oldest"); err != nil {
@@ -250,7 +250,7 @@ func newFranzKafkaReaderFromConfig(conf *service.ParsedConfig, res *service.Reso
 		return nil, err
 	}
 	if tlsEnabled {
-		f.tlsConf = tlsConf
+		f.TLSConf = tlsConf
 	}
 	if f.multiHeader, err = conf.FieldBool("multi_header"); err != nil {
 		return nil, err
@@ -267,7 +267,7 @@ type msgWithRecord struct {
 	r   *kgo.Record
 }
 
-func (f *franzKafkaReader) recordToMessage(record *kgo.Record) *msgWithRecord {
+func (f *FranzKafkaReader) recordToMessage(record *kgo.Record) *msgWithRecord {
 	msg := service.NewMessage(record.Value)
 	msg.MetaSetMut("kafka_key", string(record.Key))
 	msg.MetaSetMut("kafka_topic", record.Topic)
@@ -590,7 +590,7 @@ func (c *checkpointTracker) removeTopicPartitions(ctx context.Context, m map[str
 
 //------------------------------------------------------------------------------
 
-func (f *franzKafkaReader) Connect(ctx context.Context) error {
+func (f *FranzKafkaReader) Connect(ctx context.Context) error {
 	if f.getBatchChan() != nil {
 		return nil
 	}
@@ -622,7 +622,7 @@ func (f *franzKafkaReader) Connect(ctx context.Context) error {
 	checkpoints := newCheckpointTracker(f.res, batchChan, commitFn, f.batchPolicy)
 
 	clientOpts := []kgo.Opt{
-		kgo.SeedBrokers(f.seedBrokers...),
+		kgo.SeedBrokers(f.SeedBrokers...),
 		kgo.ConsumeTopics(f.topics...),
 		kgo.ConsumePartitions(f.topicPartitions),
 		kgo.ConsumeResetOffset(initialOffset),
@@ -650,8 +650,8 @@ func (f *franzKafkaReader) Connect(ctx context.Context) error {
 		)
 	}
 
-	if f.tlsConf != nil {
-		clientOpts = append(clientOpts, kgo.DialTLSConfig(f.tlsConf))
+	if f.TLSConf != nil {
+		clientOpts = append(clientOpts, kgo.DialTLSConfig(f.TLSConf))
 	}
 
 	if f.regexPattern {
@@ -747,7 +747,7 @@ func (f *franzKafkaReader) Connect(ctx context.Context) error {
 	return nil
 }
 
-func (f *franzKafkaReader) ReadBatch(ctx context.Context) (service.MessageBatch, service.AckFunc, error) {
+func (f *FranzKafkaReader) ReadBatch(ctx context.Context) (service.MessageBatch, service.AckFunc, error) {
 	batchChan := f.getBatchChan()
 	if batchChan == nil {
 		return nil, nil, service.ErrNotConnected
@@ -771,7 +771,7 @@ func (f *franzKafkaReader) ReadBatch(ctx context.Context) (service.MessageBatch,
 	}, nil
 }
 
-func (f *franzKafkaReader) Close(ctx context.Context) error {
+func (f *FranzKafkaReader) Close(ctx context.Context) error {
 	go func() {
 		f.shutSig.TriggerSoftStop()
 		if f.getBatchChan() == nil {
