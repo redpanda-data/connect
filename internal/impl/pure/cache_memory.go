@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/OneOfOne/xxhash"
+	"github.com/dolthub/swiss"
 
 	"github.com/benthosdev/benthos/v4/public/service"
 )
@@ -100,7 +101,7 @@ type item struct {
 }
 
 type shard struct {
-	items map[string]item
+	items *swiss.Map[string, item]
 
 	compInterval   time.Duration
 	lastCompaction time.Time
@@ -125,15 +126,23 @@ func (s *shard) compaction() {
 	if time.Since(s.lastCompaction) < s.compInterval {
 		return
 	}
-	for k, v := range s.items {
+
+	var keysToRemove []string
+	s.items.Iter(func(k string, v item) (stop bool) {
 		if s.isExpired(v) {
-			delete(s.items, k)
+			keysToRemove = append(keysToRemove, k)
 		}
+		return
+	})
+	for _, k := range keysToRemove {
+		s.items.Delete(k)
 	}
 	s.lastCompaction = time.Now()
 }
 
 //------------------------------------------------------------------------------
+
+const initialMapSize = 128
 
 func newMemCache(ttl, compInterval time.Duration, nShards int, initValues map[string]string) *memoryCache {
 	m := &memoryCache{
@@ -143,7 +152,7 @@ func newMemCache(ttl, compInterval time.Duration, nShards int, initValues map[st
 	if nShards <= 1 {
 		m.shards = []*shard{
 			{
-				items:          map[string]item{},
+				items:          swiss.NewMap[string, item](initialMapSize),
 				compInterval:   compInterval,
 				lastCompaction: time.Now(),
 			},
@@ -151,7 +160,7 @@ func newMemCache(ttl, compInterval time.Duration, nShards int, initValues map[st
 	} else {
 		for i := 0; i < nShards; i++ {
 			m.shards = append(m.shards, &shard{
-				items:          map[string]item{},
+				items:          swiss.NewMap[string, item](initialMapSize),
 				compInterval:   compInterval,
 				lastCompaction: time.Now(),
 			})
@@ -159,10 +168,10 @@ func newMemCache(ttl, compInterval time.Duration, nShards int, initValues map[st
 	}
 
 	for k, v := range initValues {
-		m.getShard(k).items[k] = item{
+		m.getShard(k).items.Put(k, item{
 			value:   []byte(v),
 			expires: time.Time{},
-		}
+		})
 	}
 
 	return m
@@ -184,7 +193,7 @@ func (m *memoryCache) getShard(key string) *shard {
 func (m *memoryCache) Get(_ context.Context, key string) ([]byte, error) {
 	shard := m.getShard(key)
 	shard.RLock()
-	k, exists := shard.items[key]
+	k, exists := shard.items.Get(key)
 	shard.RUnlock()
 	if !exists {
 		return nil, service.ErrKeyNotFound
@@ -206,7 +215,7 @@ func (m *memoryCache) Set(_ context.Context, key string, value []byte, ttl *time
 	shard := m.getShard(key)
 	shard.Lock()
 	shard.compaction()
-	shard.items[key] = item{value: value, expires: expires}
+	shard.items.Put(key, item{value: value, expires: expires})
 	shard.Unlock()
 	return nil
 }
@@ -220,12 +229,12 @@ func (m *memoryCache) Add(_ context.Context, key string, value []byte, ttl *time
 	}
 	shard := m.getShard(key)
 	shard.Lock()
-	if _, exists := shard.items[key]; exists {
+	if exists := shard.items.Has(key); exists {
 		shard.Unlock()
 		return service.ErrKeyAlreadyExists
 	}
 	shard.compaction()
-	shard.items[key] = item{value: value, expires: expires}
+	shard.items.Put(key, item{value: value, expires: expires})
 	shard.Unlock()
 	return nil
 }
@@ -234,7 +243,7 @@ func (m *memoryCache) Delete(_ context.Context, key string) error {
 	shard := m.getShard(key)
 	shard.Lock()
 	shard.compaction()
-	delete(shard.items, key)
+	_ = shard.items.Delete(key)
 	shard.Unlock()
 	return nil
 }
