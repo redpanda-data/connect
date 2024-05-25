@@ -16,7 +16,7 @@ import (
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
-func franzKafkaOutputConfig() *service.ConfigSpec {
+func FranzKafkaOutputConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Beta().
 		Categories("Services").
@@ -94,7 +94,7 @@ root = if this.partitioner == "manual" {
 }
 
 func init() {
-	err := service.RegisterBatchOutput("kafka_franz", franzKafkaOutputConfig(),
+	err := service.RegisterBatchOutput("kafka_franz", FranzKafkaOutputConfig(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (
 			output service.BatchOutput,
 			batchPolicy service.BatchPolicy,
@@ -107,7 +107,7 @@ func init() {
 			if batchPolicy, err = conf.FieldBatchPolicy("batching"); err != nil {
 				return
 			}
-			output, err = newFranzKafkaWriterFromConfig(conf, mgr.Logger())
+			output, err = NewFranzKafkaWriterFromConfig(conf, mgr.Logger())
 			return
 		})
 	if err != nil {
@@ -117,8 +117,8 @@ func init() {
 
 //------------------------------------------------------------------------------
 
-type franzKafkaWriter struct {
-	seedBrokers      []string
+type FranzKafkaWriter struct {
+	SeedBrokers      []string
 	topicStr         string
 	topic            *service.InterpolatedString
 	key              *service.InterpolatedString
@@ -139,8 +139,8 @@ type franzKafkaWriter struct {
 	log *service.Logger
 }
 
-func newFranzKafkaWriterFromConfig(conf *service.ParsedConfig, log *service.Logger) (*franzKafkaWriter, error) {
-	f := franzKafkaWriter{
+func NewFranzKafkaWriterFromConfig(conf *service.ParsedConfig, log *service.Logger) (*FranzKafkaWriter, error) {
+	f := FranzKafkaWriter{
 		log: log,
 	}
 
@@ -149,7 +149,7 @@ func newFranzKafkaWriterFromConfig(conf *service.ParsedConfig, log *service.Logg
 		return nil, err
 	}
 	for _, b := range brokerList {
-		f.seedBrokers = append(f.seedBrokers, strings.Split(b, ",")...)
+		f.SeedBrokers = append(f.SeedBrokers, strings.Split(b, ",")...)
 	}
 
 	if f.topic, err = conf.FieldInterpolatedString("topic"); err != nil {
@@ -266,13 +266,13 @@ func newFranzKafkaWriterFromConfig(conf *service.ParsedConfig, log *service.Logg
 
 //------------------------------------------------------------------------------
 
-func (f *franzKafkaWriter) Connect(ctx context.Context) error {
+func (f *FranzKafkaWriter) Connect(ctx context.Context) error {
 	if f.client != nil {
 		return nil
 	}
 
 	clientOpts := []kgo.Opt{
-		kgo.SeedBrokers(f.seedBrokers...),
+		kgo.SeedBrokers(f.SeedBrokers...),
 		kgo.SASL(f.saslConfs...),
 		kgo.AllowAutoTopicCreation(), // TODO: Configure this
 		kgo.ProducerBatchMaxBytes(f.produceMaxBytes),
@@ -303,7 +303,7 @@ func (f *franzKafkaWriter) Connect(ctx context.Context) error {
 	return nil
 }
 
-func (f *franzKafkaWriter) WriteBatch(ctx context.Context, b service.MessageBatch) (err error) {
+func (f *FranzKafkaWriter) WriteBatch(ctx context.Context, b service.MessageBatch) (err error) {
 	if f.client == nil {
 		return service.ErrNotConnected
 	}
@@ -351,7 +351,7 @@ func (f *franzKafkaWriter) WriteBatch(ctx context.Context, b service.MessageBatc
 	return
 }
 
-func (f *franzKafkaWriter) disconnect() {
+func (f *FranzKafkaWriter) disconnect() {
 	if f.client == nil {
 		return
 	}
@@ -359,7 +359,7 @@ func (f *franzKafkaWriter) disconnect() {
 	f.client = nil
 }
 
-func (f *franzKafkaWriter) Close(ctx context.Context) error {
+func (f *FranzKafkaWriter) Close(ctx context.Context) error {
 	f.disconnect()
 	return nil
 }
