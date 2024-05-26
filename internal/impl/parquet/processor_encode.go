@@ -15,7 +15,7 @@ func parquetEncodeProcessorConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		// Stable(). TODO
 		Categories("Parsing").
-		Summary("Encodes https://parquet.apache.org/docs/[Parquet files] from a batch of structured messages.").
+		Summary("Encodes https://parquet.apache.org/docs/[Parquet files^] from a batch of structured messages.").
 		Field(parquetSchemaConfig()).
 		Field(service.NewStringEnumField("default_compression",
 			"uncompressed", "snappy", "gzip", "brotli", "zstd", "lz4raw",
@@ -30,7 +30,7 @@ func parquetEncodeProcessorConfig() *service.ConfigSpec {
 			Advanced().
 			Version("4.11.0")).
 		Description(`
-This processor uses https://github.com/parquet-go/parquet-go[https://github.com/parquet-go/parquet-go], which is itself experimental. Therefore changes could be made into how this processor functions outside of major version releases.
+This processor uses https://github.com/parquet-go/parquet-go[https://github.com/parquet-go/parquet-go^], which is itself experimental. Therefore changes could be made into how this processor functions outside of major version releases.
 `).
 		Version("4.4.0").
 		// TODO: Add an example that demonstrates error handling

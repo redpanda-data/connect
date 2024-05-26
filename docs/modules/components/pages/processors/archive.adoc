@@ -45,7 +45,7 @@ The archiving format to apply.
 | Option | Summary
 
 | `binary`
-| Archive messages to a https://github.com/benthosdev/benthos/blob/main/internal/message/message.go#L96[binary blob format].
+| Archive messages to a https://github.com/{project-github}/blob/main/internal/message/message.go#L96[binary blob format^].
 | `concatenate`
 | Join the raw contents of each message into a single binary message.
 | `json_array`

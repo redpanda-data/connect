@@ -139,7 +139,7 @@ Specify the subscription name for this consumer.
 
 Specify the subscription type for this consumer.
 
-> NOTE: Using a `key_shared` subscription type will __allow out-of-order delivery__ since nack-ing messages sets non-zero nack delivery delay - this can potentially cause consumers to stall. See https://pulsar.apache.org/docs/en/2.8.1/concepts-messaging/#negative-acknowledgement[Pulsar documentation] and https://github.com/apache/pulsar/issues/12208[this Github issue] for more details.
+> NOTE: Using a `key_shared` subscription type will __allow out-of-order delivery__ since nack-ing messages sets non-zero nack delivery delay - this can potentially cause consumers to stall. See https://pulsar.apache.org/docs/en/2.8.1/concepts-messaging/#negative-acknowledgement[Pulsar documentation^] and https://github.com/apache/pulsar/issues/12208[this Github issue^] for more details.
 
 
 *Type*: `string`

@@ -93,8 +93,8 @@ By default Benthos will use a shared credentials file when connecting to GCP ser
 == Format
 
 This output currently supports only CSV and NEWLINE_DELIMITED_JSON formats. Learn more about how to use GCP BigQuery with them here:
-- https://cloud.google.com/bigquery/docs/loading-data-cloud-storage-json[`NEWLINE_DELIMITED_JSON`]
-- https://cloud.google.com/bigquery/docs/loading-data-cloud-storage-csv[`CSV`]
+- https://cloud.google.com/bigquery/docs/loading-data-cloud-storage-json[`NEWLINE_DELIMITED_JSON`^]
+- https://cloud.google.com/bigquery/docs/loading-data-cloud-storage-csv[`CSV`^]
 
 Each message may contain multiple elements separated by newlines. For example a single message containing:
 

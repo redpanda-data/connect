@@ -15,7 +15,7 @@
 component_type_dropdown::[]
 
 
-Executes a SQL query against https://learn.microsoft.com/en-us/azure/cosmos-db/introduction[Azure CosmosDB] and creates a batch of messages from each page of items.
+Executes a SQL query against https://learn.microsoft.com/en-us/azure/cosmos-db/introduction[Azure CosmosDB^] and creates a batch of messages from each page of items.
 
 Introduced in version v4.25.0.
 
@@ -75,7 +75,7 @@ input:
 
 == Cross-partition queries
 
-Cross-partition queries are currently not supported by the underlying driver. For every query, the PartitionKey values must be known in advance and specified in the config. https://github.com/Azure/azure-sdk-for-go/issues/18578#issuecomment-1222510989[See details].
+Cross-partition queries are currently not supported by the underlying driver. For every query, the PartitionKey values must be known in advance and specified in the config. https://github.com/Azure/azure-sdk-for-go/issues/18578#issuecomment-1222510989[See details^].
 
 
 == Credentials
@@ -83,7 +83,7 @@ Cross-partition queries are currently not supported by the underlying driver. Fo
 You can use one of the following authentication mechanisms:
 
 - Set the `endpoint` field and the `account_key` field
-- Set only the `endpoint` field to use https://pkg.go.dev/github.com/Azure/azure-sdk-for-go/sdk/azidentity#DefaultAzureCredential[DefaultAzureCredential]
+- Set only the `endpoint` field to use https://pkg.go.dev/github.com/Azure/azure-sdk-for-go/sdk/azidentity#DefaultAzureCredential[DefaultAzureCredential^]
 - Set the `connection_string` field
 
 
@@ -145,8 +145,7 @@ endpoint: https://localhost:8081
 === `account_key`
 
 Account key.
-[WARNING]
-.Secret
+[CAUTION]
 ====
 This field contains sensitive information that usually shouldn't be added to a config directly, read our xref:configuration:secrets.adoc[secrets page for more info].
 ====
@@ -165,8 +164,7 @@ account_key: C2y6yDjf5/R+ob0N8A7Cgv30VRDJIWEHLM+4QDU5DE2nQ9nDuVTqobD4b8mGGyPMbIZ
 === `connection_string`
 
 Connection string.
-[WARNING]
-.Secret
+[CAUTION]
 ====
 This field contains sensitive information that usually shouldn't be added to a config directly, read our xref:configuration:secrets.adoc[secrets page for more info].
 ====
@@ -284,7 +282,7 @@ Whether messages that are rejected (nacked) at the output level should be automa
 
 == CosmosDB emulator
 
-If you wish to run the CosmosDB emulator that is referenced in the documentation https://learn.microsoft.com/en-us/azure/cosmos-db/linux-emulator[here], the following Docker command should do the trick:
+If you wish to run the CosmosDB emulator that is referenced in the documentation https://learn.microsoft.com/en-us/azure/cosmos-db/linux-emulator[here^], the following Docker command should do the trick:
 
 ```bash
 > docker run --rm -it -p 8081:8081 --name=cosmosdb -e AZURE_COSMOS_EMULATOR_PARTITION_COUNT=10 -e AZURE_COSMOS_EMULATOR_ENABLE_DATA_PERSISTENCE=false mcr.microsoft.com/cosmosdb/linux/azure-cosmos-emulator
@@ -292,7 +290,7 @@ If you wish to run the CosmosDB emulator that is referenced in the documentation
 
 Note: `AZURE_COSMOS_EMULATOR_PARTITION_COUNT` controls the number of partitions that will be supported by the emulator. The bigger the value, the longer it takes for the container to start up.
 
-Additionally, instead of installing the container self-signed certificate which is exposed via `https://localhost:8081/_explorer/emulator.pem`, you can run https://mitmproxy.org/[mitmproxy] like so:
+Additionally, instead of installing the container self-signed certificate which is exposed via `https://localhost:8081/_explorer/emulator.pem`, you can run https://mitmproxy.org/[mitmproxy^] like so:
 
 ```bash
 > mitmproxy -k --mode "reverse:https://localhost:8081"

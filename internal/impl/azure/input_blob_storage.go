@@ -75,7 +75,7 @@ Supports multiple authentication methods but only one of the following is requir
 - `+"`storage_connection_string`"+`
 - `+"`storage_account` and `storage_access_key`"+`
 - `+"`storage_account` and `storage_sas_token`"+`
-- `+"`storage_account` to access via https://pkg.go.dev/github.com/Azure/azure-sdk-for-go/sdk/azidentity#DefaultAzureCredential[DefaultAzureCredential]"+`
+- `+"`storage_account` to access via https://pkg.go.dev/github.com/Azure/azure-sdk-for-go/sdk/azidentity#DefaultAzureCredential[DefaultAzureCredential^]"+`
 
 If multiple are set then the `+"`storage_connection_string`"+` is given priority.
 
@@ -88,7 +88,7 @@ When downloading large files it's often necessary to process it in streamed part
 
 == Stream new files
 
-By default this input will consume all files found within the target container and will then gracefully terminate. This is referred to as a "batch" mode of operation. However, it's possible to instead configure a container as https://learn.microsoft.com/en-gb/azure/event-grid/event-schema-blob-storage[an Event Grid source] and then use this as a `+"<<targetsinput, `targets_input`>>"+`, in which case new files are consumed as they're uploaded and Benthos will continue listening for and downloading files as they arrive. This is referred to as a "streamed" mode of operation.
+By default this input will consume all files found within the target container and will then gracefully terminate. This is referred to as a "batch" mode of operation. However, it's possible to instead configure a container as https://learn.microsoft.com/en-gb/azure/event-grid/event-schema-blob-storage[an Event Grid source^] and then use this as a `+"<<targetsinput, `targets_input`>>"+`, in which case new files are consumed as they're uploaded and Benthos will continue listening for and downloading files as they arrive. This is referred to as a "streamed" mode of operation.
 
 == Metadata
 

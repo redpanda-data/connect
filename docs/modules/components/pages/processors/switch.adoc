@@ -66,14 +66,14 @@ Indicates whether, if this case passes for a message, the next case should also 
 
 [tabs]
 ======
-I Hate George::
+Ignore George::
 +
 --
 
 
-We have a system where we're counting a metric for all messages that pass through our system. However, occasionally we get messages from George where he's rambling about dumb stuff we don't care about.
+We have a system where we're counting a metric for all messages that pass through our system. However, occasionally we get messages from George that we don't care about.
 
-For Georges messages we want to instead emit a metric that gauges how angry he is about being ignored and then we drop it.
+For George's messages we want to instead emit a metric that gauges how angry he is about being ignored and then we drop it.
 
 ```yaml
 pipeline:

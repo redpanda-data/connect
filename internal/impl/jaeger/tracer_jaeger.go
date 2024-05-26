@@ -39,7 +39,7 @@ type jaegerConfig struct {
 func jaegerConfigSpec() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Stable().
-		Summary("Send tracing events to a https://www.jaegertracing.io/[Jaeger] agent or collector.").
+		Summary("Send tracing events to a https://www.jaegertracing.io/[Jaeger^] agent or collector.").
 		Fields(
 			service.NewStringField(jtFieldAgentAddress).
 				Description("The address of a Jaeger agent to send tracing events to.").

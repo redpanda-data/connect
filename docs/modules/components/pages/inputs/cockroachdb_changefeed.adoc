@@ -15,7 +15,7 @@
 component_type_dropdown::[]
 
 
-Listens to a https://www.cockroachlabs.com/docs/stable/changefeed-examples[CockroachDB Core Changefeed] and creates a message for each row received. Each message is a json object looking like: 
+Listens to a https://www.cockroachlabs.com/docs/stable/changefeed-examples[CockroachDB Core Changefeed^] and creates a message for each row received. Each message is a json object looking like: 
 ```json
 {
 	"primary_key": "[\"1a7ff641-3e3b-47ee-94fe-a0cadb56cd8f\", 2]", // stringifed JSON array
@@ -70,7 +70,7 @@ input:
 
 This input will continue to listen to the changefeed until shutdown. A backfill of the full current state of the table will be delivered upon each run unless a cache is configured for storing cursor timestamps, as this is how Benthos keeps track as to which changes have been successfully delivered.
 
-Note: You must have `SET CLUSTER SETTING kv.rangefeed.enabled = true;` on your CRDB cluster, for more information refer to https://www.cockroachlabs.com/docs/stable/changefeed-examples?filters=core[the official CockroachDB documentation].
+Note: You must have `SET CLUSTER SETTING kv.rangefeed.enabled = true;` on your CRDB cluster, for more information refer to https://www.cockroachlabs.com/docs/stable/changefeed-examples?filters=core[the official CockroachDB documentation^].
 
 == Fields
 
@@ -118,8 +118,7 @@ Requires version 3.45.0 or newer
 === `tls.root_cas`
 
 An optional root certificate authority to use. This is a string, representing a certificate chain from the parent trusted root certificate, to possible intermediate signing certificates, to the host certificate.
-[WARNING]
-.Secret
+[CAUTION]
 ====
 This field contains sensitive information that usually shouldn't be added to a config directly, read our xref:configuration:secrets.adoc[secrets page for more info].
 ====
@@ -187,8 +186,7 @@ A plain text certificate to use.
 === `tls.client_certs[].key`
 
 A plain text certificate key to use.
-[WARNING]
-.Secret
+[CAUTION]
 ====
 This field contains sensitive information that usually shouldn't be added to a config directly, read our xref:configuration:secrets.adoc[secrets page for more info].
 ====
@@ -219,9 +217,11 @@ The path of a certificate key to use.
 
 === `tls.client_certs[].password`
 
-A plain text password for when the private key is password encrypted in PKCS#1 or PKCS#8 format. The obsolete `pbeWithMD5AndDES-CBC` algorithm is not supported for the PKCS#8 format. Warning: Since it does not authenticate the ciphertext, it is vulnerable to padding oracle attacks that can let an attacker recover the plaintext.
+A plain text password for when the private key is password encrypted in PKCS#1 or PKCS#8 format. The obsolete `pbeWithMD5AndDES-CBC` algorithm is not supported for the PKCS#8 format.
+
+Because the obsolete pbeWithMD5AndDES-CBC algorithm does not authenticate the ciphertext, it is vulnerable to padding oracle attacks that can let an attacker recover the plaintext.
+
 [WARNING]
-.Secret
 ====
 This field contains sensitive information that usually shouldn't be added to a config directly, read our xref:configuration:secrets.adoc[secrets page for more info].
 ====
@@ -258,7 +258,7 @@ tables:
 
 === `cursor_cache`
 
-A https://www.docs.redpanda.com/redpanda-connect/components/caches/about[cache resource] to use for storing the current latest cursor that has been successfully delivered, this allows Benthos to continue from that cursor upon restart, rather than consume the entire state of the table.
+A https://www.docs.redpanda.com/redpanda-connect/components/caches/about[cache resource^] to use for storing the current latest cursor that has been successfully delivered, this allows Benthos to continue from that cursor upon restart, rather than consume the entire state of the table.
 
 
 *Type*: `string`
@@ -267,7 +267,8 @@ A https://www.docs.redpanda.com/redpanda-connect/components/caches/about[cache r
 === `options`
 
 A list of options to be included in the changefeed (WITH X, Y...).
-**NOTE: Both the CURSOR option and UPDATED will be ignored from these options when a `cursor_cache` is specified, as they are set explicitly by Benthos in this case.**
+
+NOTE: Both the CURSOR option and UPDATED will be ignored from these options when a `cursor_cache` is specified, as they are set explicitly by Benthos in this case.
 
 
 *Type*: `array`

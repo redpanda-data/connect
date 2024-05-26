@@ -79,7 +79,7 @@ var CredentialsDocs = `
 You can use one of the following authentication mechanisms:
 
 - Set the ` + "`endpoint`" + ` field and the ` + "`account_key`" + ` field
-- Set only the ` + "`endpoint`" + ` field to use https://pkg.go.dev/github.com/Azure/azure-sdk-for-go/sdk/azidentity#DefaultAzureCredential[DefaultAzureCredential]
+- Set only the ` + "`endpoint`" + ` field to use https://pkg.go.dev/github.com/Azure/azure-sdk-for-go/sdk/azidentity#DefaultAzureCredential[DefaultAzureCredential^]
 - Set the ` + "`connection_string`" + ` field
 `
 
@@ -102,7 +102,7 @@ var BatchingDocs = `
 
 == Batching
 
-CosmosDB limits the maximum batch size to 100 messages and the payload must not exceed 2MB (https://learn.microsoft.com/en-us/azure/cosmos-db/concepts-limits#per-request-limits[details here]).
+CosmosDB limits the maximum batch size to 100 messages and the payload must not exceed 2MB (https://learn.microsoft.com/en-us/azure/cosmos-db/concepts-limits#per-request-limits[details here^]).
 `
 
 // EmulatorDocs emulator docs
@@ -110,7 +110,7 @@ var EmulatorDocs = `
 
 == CosmosDB emulator
 
-If you wish to run the CosmosDB emulator that is referenced in the documentation https://learn.microsoft.com/en-us/azure/cosmos-db/linux-emulator[here], the following Docker command should do the trick:
+If you wish to run the CosmosDB emulator that is referenced in the documentation https://learn.microsoft.com/en-us/azure/cosmos-db/linux-emulator[here^], the following Docker command should do the trick:
 
 ` + "```bash" + `
 > docker run --rm -it -p 8081:8081 --name=cosmosdb -e AZURE_COSMOS_EMULATOR_PARTITION_COUNT=10 -e AZURE_COSMOS_EMULATOR_ENABLE_DATA_PERSISTENCE=false mcr.microsoft.com/cosmosdb/linux/azure-cosmos-emulator
@@ -118,7 +118,7 @@ If you wish to run the CosmosDB emulator that is referenced in the documentation
 
 Note: ` + "`AZURE_COSMOS_EMULATOR_PARTITION_COUNT`" + ` controls the number of partitions that will be supported by the emulator. The bigger the value, the longer it takes for the container to start up.
 
-Additionally, instead of installing the container self-signed certificate which is exposed via ` + "`https://localhost:8081/_explorer/emulator.pem`" + `, you can run https://mitmproxy.org/[mitmproxy] like so:
+Additionally, instead of installing the container self-signed certificate which is exposed via ` + "`https://localhost:8081/_explorer/emulator.pem`" + `, you can run https://mitmproxy.org/[mitmproxy^] like so:
 
 ` + "```bash" + `
 > mitmproxy -k --mode "reverse:https://localhost:8081"

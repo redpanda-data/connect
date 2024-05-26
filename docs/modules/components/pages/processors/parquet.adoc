@@ -20,7 +20,7 @@ component_type_dropdown::[]
 ====
 This component is deprecated and will be removed in the next major version release. Please consider moving onto <<alternatives,alternative components>>.
 ====
-Converts batches of documents to or from https://parquet.apache.org/docs/[Parquet files].
+Converts batches of documents to or from https://parquet.apache.org/docs/[Parquet files^].
 
 Introduced in version 3.62.0.
 

@@ -9,8 +9,7 @@
      internal/template/docs.adoc
 ////
 
-[WARNING]
-.Experimental
+[CAUTION]
 ====
 Templates are an experimental feature and therefore subject to change outside of major version releases.
 ====

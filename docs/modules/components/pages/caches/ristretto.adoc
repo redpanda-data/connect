@@ -14,7 +14,7 @@
 component_type_dropdown::[]
 
 
-Stores key/value pairs in a map held in the memory-bound https://github.com/dgraph-io/ristretto[Ristretto cache].
+Stores key/value pairs in a map held in the memory-bound https://github.com/dgraph-io/ristretto[Ristretto cache^].
 
 
 [tabs]

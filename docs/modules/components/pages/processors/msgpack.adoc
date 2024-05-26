@@ -15,7 +15,7 @@
 component_type_dropdown::[]
 
 
-Converts messages to or from the https://msgpack.org/[MessagePack] format.
+Converts messages to or from the https://msgpack.org/[MessagePack^] format.
 
 Introduced in version 3.59.0.
 

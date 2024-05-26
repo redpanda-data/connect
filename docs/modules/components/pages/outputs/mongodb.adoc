@@ -132,8 +132,7 @@ The username to connect to the database.
 === `password`
 
 The password to connect to the database.
-[WARNING]
-.Secret
+[CAUTION]
 ====
 This field contains sensitive information that usually shouldn't be added to a config directly, read our xref:configuration:secrets.adoc[secrets page for more info].
 ====
@@ -206,7 +205,7 @@ The write concern timeout.
 
 === `document_map`
 
-A bloblang map representing a document to store within MongoDB, expressed as https://www.mongodb.com/docs/manual/reference/mongodb-extended-json/[extended JSON in canonical form]. The document map is required for the operations insert-one, replace-one and update-one.
+A bloblang map representing a document to store within MongoDB, expressed as https://www.mongodb.com/docs/manual/reference/mongodb-extended-json/[extended JSON in canonical form^]. The document map is required for the operations insert-one, replace-one and update-one.
 
 
 *Type*: `string`
@@ -223,7 +222,7 @@ document_map: |-
 
 === `filter_map`
 
-A bloblang map representing a filter for a MongoDB command, expressed as https://www.mongodb.com/docs/manual/reference/mongodb-extended-json/[extended JSON in canonical form]. The filter map is required for all operations except insert-one. It is used to find the document(s) for the operation. For example in a delete-one case, the filter map should have the fields required to locate the document to delete.
+A bloblang map representing a filter for a MongoDB command, expressed as https://www.mongodb.com/docs/manual/reference/mongodb-extended-json/[extended JSON in canonical form^]. The filter map is required for all operations except insert-one. It is used to find the document(s) for the operation. For example in a delete-one case, the filter map should have the fields required to locate the document to delete.
 
 
 *Type*: `string`
@@ -240,7 +239,7 @@ filter_map: |-
 
 === `hint_map`
 
-A bloblang map representing the hint for the MongoDB command, expressed as https://www.mongodb.com/docs/manual/reference/mongodb-extended-json/[extended JSON in canonical form]. This map is optional and is used with all operations except insert-one. It is used to improve performance of finding the documents in the mongodb.
+A bloblang map representing the hint for the MongoDB command, expressed as https://www.mongodb.com/docs/manual/reference/mongodb-extended-json/[extended JSON in canonical form^]. This map is optional and is used with all operations except insert-one. It is used to improve performance of finding the documents in the mongodb.
 
 
 *Type*: `string`

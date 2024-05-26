@@ -44,11 +44,11 @@ func javascriptProcessorConfig() *service.ConfigSpec {
 		Version("4.14.0").
 		Summary("Executes a provided JavaScript code block or file for each message.").
 		Description(`
-The https://github.com/dop251/goja[execution engine] behind this processor provides full ECMAScript 5.1 support (including regex and strict mode). Most of the ECMAScript 6 spec is implemented but this is a work in progress.
+The https://github.com/dop251/goja[execution engine^] behind this processor provides full ECMAScript 5.1 support (including regex and strict mode). Most of the ECMAScript 6 spec is implemented but this is a work in progress.
 
-Imports via `+"`require`"+` should work similarly to NodeJS, and access to the console is supported which will print via the Benthos logger. More caveats can be found on https://github.com/dop251/goja#known-incompatibilities-and-caveats[GitHub].
+Imports via `+"`require`"+` should work similarly to NodeJS, and access to the console is supported which will print via the Benthos logger. More caveats can be found on https://github.com/dop251/goja#known-incompatibilities-and-caveats[GitHub^].
 
-This processor is implemented using the https://github.com/dop251/goja[github.com/dop251/goja] library.`).
+This processor is implemented using the https://github.com/dop251/goja[github.com/dop251/goja^] library.`).
 		Footnotes(`
 == Runtime
 

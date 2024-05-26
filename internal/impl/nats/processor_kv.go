@@ -91,7 +91,7 @@ This processor adds the following metadata fields to each message, depending on 
 			service.NewStringAnnotatedEnumField(kvpFieldOperation, kvpOperations).
 				Description("The operation to perform on the KV bucket."),
 			service.NewInterpolatedStringField(kvpFieldKey).
-				Description("The key for each message. Supports https://docs.nats.io/nats-concepts/subjects#wildcards[wildcards] for the `history` and `keys` operations.").
+				Description("The key for each message. Supports https://docs.nats.io/nats-concepts/subjects#wildcards[wildcards^] for the `history` and `keys` operations.").
 				Example("foo").
 				Example("foo.bar.baz").
 				Example("foo.*").

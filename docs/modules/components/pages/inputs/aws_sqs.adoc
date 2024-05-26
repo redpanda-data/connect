@@ -177,8 +177,7 @@ The ID of credentials to use.
 === `credentials.secret`
 
 The secret for the credentials being used.
-[WARNING]
-.Secret
+[CAUTION]
 ====
 This field contains sensitive information that usually shouldn't be added to a config directly, read our xref:configuration:secrets.adoc[secrets page for more info].
 ====
@@ -200,7 +199,7 @@ The token for the credentials being used, required when using short term credent
 
 === `credentials.from_ec2_role`
 
-Use the credentials of a host EC2 machine configured to assume https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_use_switch-role-ec2.html[an IAM role associated with the instance].
+Use the credentials of a host EC2 machine configured to assume https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_use_switch-role-ec2.html[an IAM role associated with the instance^].
 
 
 *Type*: `bool`

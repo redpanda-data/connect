@@ -121,7 +121,7 @@ When the number of retries expires the output will reject the message, the behav
 
 The URL and header values of this type can be dynamically set using function interpolations described in xref:configuration:interpolation.adoc#bloblang-queries[Bloblang queries].
 
-The body of the HTTP request is the raw contents of the message payload. If the message has multiple parts (is a batch) the request will be sent according to https://www.w3.org/Protocols/rfc1341/7_2_Multipart.html[RFC1341]. This behavior can be disabled by setting the field <<batch_as_multipart, `batch_as_multipart`>> to `false`.
+The body of the HTTP request is the raw contents of the message payload. If the message has multiple parts (is a batch) the request will be sent according to https://www.w3.org/Protocols/rfc1341/7_2_Multipart.html[RFC1341^]. This behavior can be disabled by setting the field <<batch_as_multipart, `batch_as_multipart`>> to `false`.
 
 == Propagate responses
 
@@ -280,8 +280,7 @@ A value used to identify the client to the service provider.
 === `oauth.consumer_secret`
 
 A secret used to establish ownership of the consumer key.
-[WARNING]
-.Secret
+[CAUTION]
 ====
 This field contains sensitive information that usually shouldn't be added to a config directly, read our xref:configuration:secrets.adoc[secrets page for more info].
 ====
@@ -304,8 +303,7 @@ A value used to gain access to the protected resources on behalf of the user.
 === `oauth.access_token_secret`
 
 A secret provided in order to establish ownership of a given access token.
-[WARNING]
-.Secret
+[CAUTION]
 ====
 This field contains sensitive information that usually shouldn't be added to a config directly, read our xref:configuration:secrets.adoc[secrets page for more info].
 ====
@@ -345,8 +343,7 @@ A value used to identify the client to the token provider.
 === `oauth2.client_secret`
 
 A secret used to establish ownership of the client key.
-[WARNING]
-.Secret
+[CAUTION]
 ====
 This field contains sensitive information that usually shouldn't be added to a config directly, read our xref:configuration:secrets.adoc[secrets page for more info].
 ====
@@ -426,8 +423,7 @@ A username to authenticate as.
 === `basic_auth.password`
 
 A password to authenticate with.
-[WARNING]
-.Secret
+[CAUTION]
 ====
 This field contains sensitive information that usually shouldn't be added to a config directly, read our xref:configuration:secrets.adoc[secrets page for more info].
 ====
@@ -530,8 +526,7 @@ Requires version 3.45.0 or newer
 === `tls.root_cas`
 
 An optional root certificate authority to use. This is a string, representing a certificate chain from the parent trusted root certificate, to possible intermediate signing certificates, to the host certificate.
-[WARNING]
-.Secret
+[CAUTION]
 ====
 This field contains sensitive information that usually shouldn't be added to a config directly, read our xref:configuration:secrets.adoc[secrets page for more info].
 ====
@@ -599,8 +594,7 @@ A plain text certificate to use.
 === `tls.client_certs[].key`
 
 A plain text certificate key to use.
-[WARNING]
-.Secret
+[CAUTION]
 ====
 This field contains sensitive information that usually shouldn't be added to a config directly, read our xref:configuration:secrets.adoc[secrets page for more info].
 ====
@@ -631,9 +625,11 @@ The path of a certificate key to use.
 
 === `tls.client_certs[].password`
 
-A plain text password for when the private key is password encrypted in PKCS#1 or PKCS#8 format. The obsolete `pbeWithMD5AndDES-CBC` algorithm is not supported for the PKCS#8 format. Warning: Since it does not authenticate the ciphertext, it is vulnerable to padding oracle attacks that can let an attacker recover the plaintext.
+A plain text password for when the private key is password encrypted in PKCS#1 or PKCS#8 format. The obsolete `pbeWithMD5AndDES-CBC` algorithm is not supported for the PKCS#8 format.
+
+Because the obsolete pbeWithMD5AndDES-CBC algorithm does not authenticate the ciphertext, it is vulnerable to padding oracle attacks that can let an attacker recover the plaintext.
+
 [WARNING]
-.Secret
 ====
 This field contains sensitive information that usually shouldn't be added to a config directly, read our xref:configuration:secrets.adoc[secrets page for more info].
 ====
@@ -783,7 +779,7 @@ An optional HTTP proxy URL.
 
 === `batch_as_multipart`
 
-Send message batches as a single request using https://www.w3.org/Protocols/rfc1341/7_2_Multipart.html[RFC1341]. If disabled messages in batches will be sent as individual requests.
+Send message batches as a single request using https://www.w3.org/Protocols/rfc1341/7_2_Multipart.html[RFC1341^]. If disabled messages in batches will be sent as individual requests.
 
 
 *Type*: `bool`

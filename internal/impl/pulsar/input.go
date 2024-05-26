@@ -68,7 +68,7 @@ xref:configuration:interpolation.adoc#bloblang-queries[function interpolation].
 		Field(service.NewStringField("subscription_name").
 			Description("Specify the subscription name for this consumer.")).
 		Field(service.NewStringEnumField("subscription_type", "shared", "key_shared", "failover", "exclusive").
-			Description("Specify the subscription type for this consumer.\n\n> NOTE: Using a `key_shared` subscription type will __allow out-of-order delivery__ since nack-ing messages sets non-zero nack delivery delay - this can potentially cause consumers to stall. See https://pulsar.apache.org/docs/en/2.8.1/concepts-messaging/#negative-acknowledgement[Pulsar documentation] and https://github.com/apache/pulsar/issues/12208[this Github issue] for more details.").
+			Description("Specify the subscription type for this consumer.\n\n> NOTE: Using a `key_shared` subscription type will __allow out-of-order delivery__ since nack-ing messages sets non-zero nack delivery delay - this can potentially cause consumers to stall. See https://pulsar.apache.org/docs/en/2.8.1/concepts-messaging/#negative-acknowledgement[Pulsar documentation^] and https://github.com/apache/pulsar/issues/12208[this Github issue^] for more details.").
 			Default(defaultSubscriptionType)).
 		Field(service.NewObjectField("tls",
 			service.NewStringField("root_cas_file").

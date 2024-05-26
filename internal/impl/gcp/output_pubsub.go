@@ -20,7 +20,7 @@ func newPubSubOutputConfig() *service.ConfigSpec {
 		Categories("Services", "GCP").
 		Summary("Sends messages to a GCP Cloud Pub/Sub topic. xref:configuration:metadata.adoc[Metadata] from messages are sent as attributes.").
 		Description(`
-For information on how to set up credentials, see https://cloud.google.com/docs/authentication/production[this guide].
+For information on how to set up credentials, see https://cloud.google.com/docs/authentication/production[this guide^].
 
 == Troubleshooting
 
@@ -49,7 +49,7 @@ pipeline:
 				Default("").
 				Example("us-central1-pubsub.googleapis.com:443").
 				Example("us-west3-pubsub.googleapis.com:443").
-				Description("An optional endpoint to override the default of `pubsub.googleapis.com:443`. This can be used to connect to a region specific pubsub endpoint. For a list of valid values, see https://cloud.google.com/pubsub/docs/reference/service_apis_overview#list_of_regional_endpoints[this document]."),
+				Description("An optional endpoint to override the default of `pubsub.googleapis.com:443`. This can be used to connect to a region specific pubsub endpoint. For a list of valid values, see https://cloud.google.com/pubsub/docs/reference/service_apis_overview#list_of_regional_endpoints[this document^]."),
 			service.NewInterpolatedStringField("ordering_key").
 				Optional().
 				Description("The ordering key to use for publishing messages.").

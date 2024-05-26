@@ -188,8 +188,7 @@ The Basic Authentication username.
 === `push_basic_auth.password`
 
 The Basic Authentication password.
-[WARNING]
-.Secret
+[CAUTION]
 ====
 This field contains sensitive information that usually shouldn't be added to a config directly, read our xref:configuration:secrets.adoc[secrets page for more info].
 ====
@@ -211,7 +210,7 @@ An optional file path to write all prometheus metrics on service shutdown.
 
 == Push gateway
 
-The field `push_url` is optional and when set will trigger a push of metrics to a https://prometheus.io/docs/instrumenting/pushing/[Prometheus Push Gateway] once Benthos shuts down. It is also possible to specify a `push_interval` which results in periodic pushes.
+The field `push_url` is optional and when set will trigger a push of metrics to a https://prometheus.io/docs/instrumenting/pushing/[Prometheus Push Gateway^] once Benthos shuts down. It is also possible to specify a `push_interval` which results in periodic pushes.
 
 The Push Gateway is useful for when Benthos instances are short lived. Do not include the "/metrics/jobs/..." path in the push URL.
 

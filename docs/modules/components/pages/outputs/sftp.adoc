@@ -113,8 +113,7 @@ The username to connect to the SFTP server.
 === `credentials.password`
 
 The password for the username to connect to the SFTP server.
-[WARNING]
-.Secret
+[CAUTION]
 ====
 This field contains sensitive information that usually shouldn't be added to a config directly, read our xref:configuration:secrets.adoc[secrets page for more info].
 ====
@@ -137,8 +136,7 @@ The private key for the username to connect to the SFTP server.
 === `credentials.private_key_pass`
 
 Optional passphrase for private key.
-[WARNING]
-.Secret
+[CAUTION]
 ====
 This field contains sensitive information that usually shouldn't be added to a config directly, read our xref:configuration:secrets.adoc[secrets page for more info].
 ====

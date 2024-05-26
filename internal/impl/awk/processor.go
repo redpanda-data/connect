@@ -32,7 +32,7 @@ Comes with a wide range of <<awk-functions,custom functions>> for accessing mess
 
 Check out the <<examples,examples section>> in order to see how this processor can be used.
 
-This processor uses https://github.com/benhoyt/goawk[GoAWK], in order to understand the differences in how the program works you can read more about it in https://github.com/benhoyt/goawk#differences-from-awk[goawk.differences].`).
+This processor uses https://github.com/benhoyt/goawk[GoAWK^], in order to understand the differences in how the program works you can read more about it in https://github.com/benhoyt/goawk#differences-from-awk[goawk.differences^].`).
 		Footnotes(`
 == Codecs
 

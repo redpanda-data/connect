@@ -21,10 +21,10 @@ func authDescription() string {
 == Authentication
 
 There are several components within Benthos which uses NATS services. You will find that each of these components
-support optional advanced authentication parameters for https://docs.nats.io/nats-server/configuration/securing_nats/auth_intro/nkey_auth[NKeys]
-and https://docs.nats.io/developing-with-nats/security/creds[User Credentials].
+support optional advanced authentication parameters for https://docs.nats.io/nats-server/configuration/securing_nats/auth_intro/nkey_auth[NKeys^]
+and https://docs.nats.io/using-nats/developer/connecting/creds[User Credentials^].
 
-See an https://docs.nats.io/running-a-nats-service/nats_admin/security/jwt[in-depth tutorial].
+See an https://docs.nats.io/running-a-nats-service/nats_admin/security/jwt[in-depth tutorial^].
 
 === NKey file
 
@@ -32,21 +32,21 @@ The NATS server can use these NKeys in several ways for authentication. The simp
 with a list of known public keys and for the clients to respond to the challenge by signing it with its private NKey
 configured in the ` + "`nkey_file`" + ` field.
 
-https://docs.nats.io/developing-with-nats/security/nkey[More details].
+https://docs.nats.io/running-a-nats-service/configuration/securing_nats/auth_intro/nkey_auth[More details^].
 
 === User credentials
 
-NATS server supports decentralized authentication based on JSON Web Tokens (JWT). Clients need an https://docs.nats.io/nats-server/configuration/securing_nats/jwt#json-web-tokens[user JWT]
-and a corresponding https://docs.nats.io/developing-with-nats/security/nkey[NKey secret] when connecting to a server
+NATS server supports decentralized authentication based on JSON Web Tokens (JWT). Clients need an https://docs.nats.io/nats-server/configuration/securing_nats/jwt#json-web-tokens[user JWT^]
+and a corresponding https://docs.nats.io/running-a-nats-service/configuration/securing_nats/auth_intro/nkey_auth[NKey secret^] when connecting to a server
 which is configured to use this authentication scheme.
 
 The ` + "`user_credentials_file`" + ` field should point to a file containing both the private key and the JWT and can be
-generated with the https://docs.nats.io/nats-tools/nsc[nsc tool].
+generated with the https://docs.nats.io/nats-tools/nsc[nsc tool^].
 
 Alternatively, the ` + "`user_jwt`" + ` field can contain a plain text JWT and the ` + "`user_nkey_seed`" + `can contain
 the plain text NKey Seed.
 
-https://docs.nats.io/developing-with-nats/security/creds[More details].`
+https://docs.nats.io/using-nats/developer/connecting/creds[More details^].`
 }
 
 func authFieldSpec() *service.ConfigField {

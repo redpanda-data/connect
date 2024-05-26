@@ -27,11 +27,11 @@ func cosmosDBInputSpec() *service.ConfigSpec {
 		// Beta().
 		Categories("Azure").
 		Version("v4.25.0").
-		Summary(`Executes a SQL query against https://learn.microsoft.com/en-us/azure/cosmos-db/introduction[Azure CosmosDB] and creates a batch of messages from each page of items.`).
+		Summary(`Executes a SQL query against https://learn.microsoft.com/en-us/azure/cosmos-db/introduction[Azure CosmosDB^] and creates a batch of messages from each page of items.`).
 		Description(`
 == Cross-partition queries
 
-Cross-partition queries are currently not supported by the underlying driver. For every query, the PartitionKey values must be known in advance and specified in the config. https://github.com/Azure/azure-sdk-for-go/issues/18578#issuecomment-1222510989[See details].
+Cross-partition queries are currently not supported by the underlying driver. For every query, the PartitionKey values must be known in advance and specified in the config. https://github.com/Azure/azure-sdk-for-go/issues/18578#issuecomment-1222510989[See details^].
 `+cosmosdb.CredentialsDocs+cosmosdb.MetadataDocs).
 		Footnotes(cosmosdb.EmulatorDocs).
 		Fields(cosmosdb.ContainerClientConfigFields()...).

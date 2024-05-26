@@ -15,7 +15,7 @@ func redisScriptProcConfig() *service.ConfigSpec {
 	spec := service.NewConfigSpec().
 		Beta().
 		Version("4.11.0").
-		Summary(`Performs actions against Redis using https://redis.io/docs/manual/programmability/eval-intro/[LUA scripts].`).
+		Summary(`Performs actions against Redis using https://redis.io/docs/manual/programmability/eval-intro/[LUA scripts^].`).
 		Description(`Actions are performed for each message and the message contents are replaced with the result.
 
 In order to merge the result into the original message compose this processor within a ` + "xref:components:processors/branch.adoc[`branch` processor]" + `.`).

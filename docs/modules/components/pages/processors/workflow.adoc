@@ -63,7 +63,7 @@ When a processing pipeline contains multiple network processors that aren't depe
 
 === Simplifying processor topology
 
-A workflow is often expressed as a https://en.wikipedia.org/wiki/Directed_acyclic_graph[DAG] of processing stages, where each stage can result in N possible next stages, until finally the flow ends at an exit node.
+A workflow is often expressed as a https://en.wikipedia.org/wiki/Directed_acyclic_graph[DAG^] of processing stages, where each stage can result in N possible next stages, until finally the flow ends at an exit node.
 
 For example, if we had processing stages A, B, C and D, where stage A could result in either stage B or C being next, always followed by D, it might look something like this:
 

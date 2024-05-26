@@ -85,7 +85,7 @@ func siSpec() *service.ConfigSpec {
 [CAUTION]
 .Deprecation notice
 ====
-The NATS Streaming Server is being deprecated. Critical bug fixes and security fixes will be applied until June of 2023. NATS-enabled applications requiring persistence should use https://docs.nats.io/nats-concepts/jetstream[JetStream].
+The NATS Streaming Server is being deprecated. Critical bug fixes and security fixes will be applied until June of 2023. NATS-enabled applications requiring persistence should use https://docs.nats.io/nats-concepts/jetstream[JetStream^].
 ====
 
 Tracking and persisting offsets through a durable name is also optional and works with or without a queue. If a durable name is not provided then subjects are consumed from the most recently published message.

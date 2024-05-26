@@ -14,7 +14,7 @@
 component_type_dropdown::[]
 
 
-Send tracing events to an https://opentelemetry.io/docs/collector/[Open Telemetry collector].
+Send tracing events to an https://opentelemetry.io/docs/collector/[Open Telemetry collector^].
 
 
 [tabs]

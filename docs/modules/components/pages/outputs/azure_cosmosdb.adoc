@@ -15,7 +15,7 @@
 component_type_dropdown::[]
 
 
-Creates or updates messages as JSON documents in https://learn.microsoft.com/en-us/azure/cosmos-db/introduction[Azure CosmosDB].
+Creates or updates messages as JSON documents in https://learn.microsoft.com/en-us/azure/cosmos-db/introduction[Azure CosmosDB^].
 
 Introduced in version v4.25.0.
 
@@ -80,7 +80,7 @@ output:
 --
 ======
 
-When creating documents, each message must have the `id` property (case-sensitive) set (or use `auto_id: true`). It is the unique name that identifies the document, that is, no two documents share the same `id` within a logical partition. The `id` field must not exceed 255 characters. https://learn.microsoft.com/en-us/rest/api/cosmos-db/documents[See details].
+When creating documents, each message must have the `id` property (case-sensitive) set (or use `auto_id: true`). It is the unique name that identifies the document, that is, no two documents share the same `id` within a logical partition. The `id` field must not exceed 255 characters. https://learn.microsoft.com/en-us/rest/api/cosmos-db/documents[See details^].
 
 The `partition_keys` field must resolve to the same value(s) across the entire message batch.
 
@@ -90,13 +90,13 @@ The `partition_keys` field must resolve to the same value(s) across the entire m
 You can use one of the following authentication mechanisms:
 
 - Set the `endpoint` field and the `account_key` field
-- Set only the `endpoint` field to use https://pkg.go.dev/github.com/Azure/azure-sdk-for-go/sdk/azidentity#DefaultAzureCredential[DefaultAzureCredential]
+- Set only the `endpoint` field to use https://pkg.go.dev/github.com/Azure/azure-sdk-for-go/sdk/azidentity#DefaultAzureCredential[DefaultAzureCredential^]
 - Set the `connection_string` field
 
 
 == Batching
 
-CosmosDB limits the maximum batch size to 100 messages and the payload must not exceed 2MB (https://learn.microsoft.com/en-us/azure/cosmos-db/concepts-limits#per-request-limits[details here]).
+CosmosDB limits the maximum batch size to 100 messages and the payload must not exceed 2MB (https://learn.microsoft.com/en-us/azure/cosmos-db/concepts-limits#per-request-limits[details here^]).
 
 
 == Performance
@@ -179,8 +179,7 @@ endpoint: https://localhost:8081
 === `account_key`
 
 Account key.
-[WARNING]
-.Secret
+[CAUTION]
 ====
 This field contains sensitive information that usually shouldn't be added to a config directly, read our xref:configuration:secrets.adoc[secrets page for more info].
 ====
@@ -199,8 +198,7 @@ account_key: C2y6yDjf5/R+ob0N8A7Cgv30VRDJIWEHLM+4QDU5DE2nQ9nDuVTqobD4b8mGGyPMbIZ
 === `connection_string`
 
 Connection string.
-[WARNING]
-.Secret
+[CAUTION]
 ====
 This field contains sensitive information that usually shouldn't be added to a config directly, read our xref:configuration:secrets.adoc[secrets page for more info].
 ====
@@ -513,7 +511,7 @@ The maximum number of messages to have in flight at a given time. Increase this 
 
 == CosmosDB emulator
 
-If you wish to run the CosmosDB emulator that is referenced in the documentation https://learn.microsoft.com/en-us/azure/cosmos-db/linux-emulator[here], the following Docker command should do the trick:
+If you wish to run the CosmosDB emulator that is referenced in the documentation https://learn.microsoft.com/en-us/azure/cosmos-db/linux-emulator[here^], the following Docker command should do the trick:
 
 ```bash
 > docker run --rm -it -p 8081:8081 --name=cosmosdb -e AZURE_COSMOS_EMULATOR_PARTITION_COUNT=10 -e AZURE_COSMOS_EMULATOR_ENABLE_DATA_PERSISTENCE=false mcr.microsoft.com/cosmosdb/linux/azure-cosmos-emulator
@@ -521,7 +519,7 @@ If you wish to run the CosmosDB emulator that is referenced in the documentation
 
 Note: `AZURE_COSMOS_EMULATOR_PARTITION_COUNT` controls the number of partitions that will be supported by the emulator. The bigger the value, the longer it takes for the container to start up.
 
-Additionally, instead of installing the container self-signed certificate which is exposed via `https://localhost:8081/_explorer/emulator.pem`, you can run https://mitmproxy.org/[mitmproxy] like so:
+Additionally, instead of installing the container self-signed certificate which is exposed via `https://localhost:8081/_explorer/emulator.pem`, you can run https://mitmproxy.org/[mitmproxy^] like so:
 
 ```bash
 > mitmproxy -k --mode "reverse:https://localhost:8081"

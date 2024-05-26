@@ -73,7 +73,7 @@ func pbiSpec() *service.ConfigSpec {
 		Categories("Services", "GCP").
 		Summary(`Consumes messages from a GCP Cloud Pub/Sub subscription.`).
 		Description(`
-For information on how to set up credentials see https://cloud.google.com/docs/authentication/production[this guide].
+For information on how to set up credentials see https://cloud.google.com/docs/authentication/production[this guide^].
 
 == Metadata
 
@@ -93,7 +93,7 @@ You can access these metadata fields using xref:configuration:interpolation.adoc
 			service.NewStringField(pbiFieldSubscriptionID).
 				Description("The target subscription ID."),
 			service.NewStringField(pbiFieldEndpoint).
-				Description("An optional endpoint to override the default of `pubsub.googleapis.com:443`. This can be used to connect to a region specific pubsub endpoint. For a list of valid values, see https://cloud.google.com/pubsub/docs/reference/service_apis_overview#list_of_regional_endpoints[this document].").
+				Description("An optional endpoint to override the default of `pubsub.googleapis.com:443`. This can be used to connect to a region specific pubsub endpoint. For a list of valid values, see https://cloud.google.com/pubsub/docs/reference/service_apis_overview#list_of_regional_endpoints[this document^].").
 				Example("us-central1-pubsub.googleapis.com:443").
 				Example("us-west3-pubsub.googleapis.com:443").
 				Default(""),

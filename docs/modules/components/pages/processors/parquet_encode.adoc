@@ -15,7 +15,7 @@
 component_type_dropdown::[]
 
 
-Encodes https://parquet.apache.org/docs/[Parquet files] from a batch of structured messages.
+Encodes https://parquet.apache.org/docs/[Parquet files^] from a batch of structured messages.
 
 Introduced in version 4.4.0.
 
@@ -51,7 +51,7 @@ parquet_encode:
 --
 ======
 
-This processor uses https://github.com/parquet-go/parquet-go[https://github.com/parquet-go/parquet-go], which is itself experimental. Therefore changes could be made into how this processor functions outside of major version releases.
+This processor uses https://github.com/parquet-go/parquet-go[https://github.com/parquet-go/parquet-go^], which is itself experimental. Therefore changes could be made into how this processor functions outside of major version releases.
 
 
 == Examples

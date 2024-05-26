@@ -24,7 +24,7 @@ func init() {
 	slugSpec := bloblang.NewPluginSpec().
 		Beta().
 		Category("String Manipulation").
-		Description(`Creates a "slug" from a given string. Wraps the github.com/gosimple/slug package. See its https://pkg.go.dev/github.com/gosimple/slug[docs] for more information.`).
+		Description(`Creates a "slug" from a given string. Wraps the github.com/gosimple/slug package. See its https://pkg.go.dev/github.com/gosimple/slug[docs^] for more information.`).
 		Version("4.2.0").
 		Example("Creates a slug from an English string",
 			`root.slug = this.value.slug()`,
@@ -57,13 +57,13 @@ func init() {
 	fakerSpec := bloblang.NewPluginSpec().
 		Beta().
 		Category("Fake Data Generation").
-		Description("Takes in a string that maps to a https://github.com/go-faker/faker[faker] function and returns the result from that faker function. "+
+		Description("Takes in a string that maps to a https://github.com/go-faker/faker[faker^] function and returns the result from that faker function. "+
 			"Returns an error if the given string doesn't match a supported faker function. Supported functions: `latitude`, `longitude`, `unix_time`, "+
 			"`date`, `time_string`, `month_name`, `year_string`, `day_of_week`, `day_of_month`, `timestamp`, `century`, `timezone`, `time_period`, "+
 			"`email`, `mac_address`, `domain_name`, `url`, `username`, `ipv4`, `ipv6`, `password`, `jwt`, `word`, `sentence`, `paragraph`, "+
 			"`cc_type`, `cc_number`, `currency`, `amount_with_currency`, `title_male`, `title_female`, `first_name`, `first_name_male`, "+
 			"`first_name_female`, `last_name`, `name`, `gender`, `chinese_first_name`, `chinese_last_name`, `chinese_name`, `phone_number`, "+
-			"`toll_free_phone_number`, `e164_phone_number`, `uuid_hyphenated`, `uuid_digit`. Refer to the https://github.com/go-faker/faker[faker] docs "+
+			"`toll_free_phone_number`, `e164_phone_number`, `uuid_hyphenated`, `uuid_digit`. Refer to the https://github.com/go-faker/faker[faker^] docs "+
 			"for details on these functions.").
 		Param(bloblang.NewStringParam("function").Description("The name of the function to use to generate the value.").Default("")).
 		Example("Use `time_string` to generate a time in the format `00:00:00`:",

@@ -72,7 +72,7 @@ Supports multiple authentication methods but only one of the following is requir
 - `+"`storage_connection_string`"+`
 - `+"`storage_account` and `storage_access_key`"+`
 - `+"`storage_account` and `storage_sas_token`"+`
-- `+"`storage_account` to access via https://pkg.go.dev/github.com/Azure/azure-sdk-for-go/sdk/azidentity#DefaultAzureCredential[DefaultAzureCredential]"+`
+- `+"`storage_account` to access via https://pkg.go.dev/github.com/Azure/azure-sdk-for-go/sdk/azidentity#DefaultAzureCredential[DefaultAzureCredential^]"+`
 
 If multiple are set then the `+"`storage_connection_string`"+` is given priority.
 

@@ -14,7 +14,7 @@
 component_type_dropdown::[]
 
 
-Captures log events from messages and submits them to https://sentry.io/[Sentry].
+Captures log events from messages and submits them to https://sentry.io/[Sentry^].
 
 Introduced in version 4.16.0.
 

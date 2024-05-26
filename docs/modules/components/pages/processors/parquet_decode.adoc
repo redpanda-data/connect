@@ -15,7 +15,7 @@
 component_type_dropdown::[]
 
 
-Decodes https://parquet.apache.org/docs/[Parquet files] into a batch of structured messages.
+Decodes https://parquet.apache.org/docs/[Parquet files^] into a batch of structured messages.
 
 Introduced in version 4.4.0.
 
@@ -25,7 +25,7 @@ label: ""
 parquet_decode: {}
 ```
 
-This processor uses https://github.com/parquet-go/parquet-go[https://github.com/parquet-go/parquet-go], which is itself experimental. Therefore changes could be made into how this processor functions outside of major version releases.
+This processor uses https://github.com/parquet-go/parquet-go[https://github.com/parquet-go/parquet-go^], which is itself experimental. Therefore changes could be made into how this processor functions outside of major version releases.
 
 == Examples
 

@@ -69,7 +69,7 @@ output:
 --
 ======
 
-This output POSTs messages to a Splunk HTTP Endpoint Collector (HEC) using token based authentication. The format of the message must be a [valid event JSON](https://docs.splunk.com/Documentation/SplunkCloud/latest/Data/FormateventsforHTTPEventCollector). Raw is not supported.
+This output POSTs messages to a Splunk HTTP Endpoint Collector (HEC) using token based authentication. The format of the message must be a https://docs.splunk.com/Documentation/SplunkCloud/latest/Data/FormateventsforHTTPEventCollector[valid event JSON^]. Raw is not supported.
 
 
 == Fields

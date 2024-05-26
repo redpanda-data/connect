@@ -25,7 +25,7 @@ json_schema:
   schema_path: "" # No default (optional)
 ```
 
-Please refer to the https://json-schema.org/[JSON Schema website] for information and tutorials regarding the syntax of the schema.
+Please refer to the https://json-schema.org/[JSON Schema website^] for information and tutorials regarding the syntax of the schema.
 
 == Fields
 

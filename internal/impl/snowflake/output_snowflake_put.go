@@ -77,10 +77,10 @@ Snowpipe.
 === Key pair authentication
 
 This authentication mechanism allows Snowpipe functionality, but it does require configuring an SSH Private Key
-beforehand. Please consult the https://docs.snowflake.com/en/user-guide/key-pair-auth.html#configuring-key-pair-authentication[documentation]
+beforehand. Please consult the https://docs.snowflake.com/en/user-guide/key-pair-auth.html#configuring-key-pair-authentication[documentation^]
 for details on how to set it up and assign the Public Key to your user.
 
-Note that the Snowflake documentation https://twitter.com/felipehoffa/status/1560811785606684672[used to suggest]
+Note that the Snowflake documentation https://twitter.com/felipehoffa/status/1560811785606684672[used to suggest^]
 using this command:
 
 `+"```bash"+`
@@ -102,7 +102,7 @@ If you have an existing key encrypted with PKCS#5 v1.5, you can re-encrypt it wi
 openssl pkcs8 -in rsa_key_original.p8 -topk8 -v2 des3 -out rsa_key.p8
 `+"```"+`
 
-Please consult the https://linux.die.net/man/1/pkcs8[pkcs8 command documentation] for details on PKCS#5 algorithms.
+Please consult the https://linux.die.net/man/1/pkcs8[pkcs8 command documentation^] for details on PKCS#5 algorithms.
 
 == Batching
 
@@ -111,7 +111,7 @@ messages at the output level and join the batch of messages with an
 `+"xref:components:processors/archive.adoc[`archive`]"+` and/or `+"xref:components:processors/compress.adoc[`compress`]"+`
 processor.
 
-For the optimal batch size, please consult the Snowflake https://docs.snowflake.com/en/user-guide/data-load-considerations-prepare.html[documentation].
+For the optimal batch size, please consult the Snowflake https://docs.snowflake.com/en/user-guide/data-load-considerations-prepare.html[documentation^].
 
 == Snowpipe
 
@@ -131,7 +131,7 @@ you can configure Benthos to use the implicit table stage `+"`@%BENTHOS_TBL`"+` 
 `+"`BENTHOS_PIPE`"+` as the `+"`snowpipe`"+`. In this case, you must set `+"`compression`"+` to `+"`AUTO`"+` and, if
 using message batching, you'll need to configure an xref:components:processors/archive.adoc[`+"`archive`"+`] processor
 with the `+"`concatenate`"+` format. Since the `+"`compression`"+` is set to `+"`AUTO`"+`, the
-https://github.com/snowflakedb/gosnowflake[gosnowflake] client library will compress the messages automatically so you
+https://github.com/snowflakedb/gosnowflake[gosnowflake^] client library will compress the messages automatically so you
 don't need to add a `+"xref:components:processors/compress.adoc[`compress`]"+` processor for message batches.
 
 If you add `+"`STRIP_OUTER_ARRAY = TRUE`"+` in your Snowpipe `+"`FILE_FORMAT`"+`
@@ -141,17 +141,17 @@ NOTE: Only Snowpipes with `+"`FILE_FORMAT`"+` `+"`TYPE`"+` `+"`JSON`"+` are curr
 
 == Snowpipe troubleshooting
 
-Snowpipe https://docs.snowflake.com/en/user-guide/data-load-snowpipe-rest-apis.html[provides] the `+"`insertReport`"+`
+Snowpipe https://docs.snowflake.com/en/user-guide/data-load-snowpipe-rest-apis.html[provides^] the `+"`insertReport`"+`
 and `+"`loadHistoryScan`"+` REST API endpoints which can be used to get information about recent Snowpipe calls. In
 order to query them, you'll first need to generate a valid JWT token for your Snowflake account. There are two methods
 for doing so:
-- Using the `+"`snowsql`"+` https://docs.snowflake.com/en/user-guide/snowsql.html[utility]:
+- Using the `+"`snowsql`"+` https://docs.snowflake.com/en/user-guide/snowsql.html[utility^]:
 
 `+"```bash"+`
 snowsql --private-key-path rsa_key.p8 --generate-jwt -a <account> -u <user>
 `+"```"+`
 
-- Using the Python `+"`sql-api-generate-jwt`"+` https://docs.snowflake.com/en/developer-guide/sql-api/authenticating.html#generating-a-jwt-in-python[utility]:
+- Using the Python `+"`sql-api-generate-jwt`"+` https://docs.snowflake.com/en/developer-guide/sql-api/authenticating.html#generating-a-jwt-in-python[utility^]:
 
 `+"```bash"+`
 python3 sql-api-generate-jwt.py --private_key_file_path=rsa_key.p8 --account=<account> --user=<user>
@@ -172,27 +172,27 @@ then configure `+"`request_id: ${ @request_id }`"+` ). Alternatively, you can xr
 
 == General troubleshooting
 
-The underlying https://github.com/snowflakedb/gosnowflake[`+"`gosnowflake`"+` driver] requires write access to
-the default directory to use for temporary files. Please consult the https://pkg.go.dev/os#TempDir[`+"`os.TempDir`"+`]
+The underlying https://github.com/snowflakedb/gosnowflake[`+"`gosnowflake`"+` driver^] requires write access to
+the default directory to use for temporary files. Please consult the https://pkg.go.dev/os#TempDir[`+"`os.TempDir`"+`^]
 docs for details on how to change this directory via environment variables.
 
-A silent failure can occur due to https://github.com/snowflakedb/gosnowflake/issues/701[this issue], where the
-underlying https://github.com/snowflakedb/gosnowflake[`+"`gosnowflake`"+` driver] doesn't return an error and doesn't
+A silent failure can occur due to https://github.com/snowflakedb/gosnowflake/issues/701[this issue^], where the
+underlying https://github.com/snowflakedb/gosnowflake[`+"`gosnowflake`"+` driver^] doesn't return an error and doesn't
 log a failure if it can't figure out the current username. One way to trigger this behavior is by running Benthos in a
 Docker container with a non-existent user ID (such as `+"`--user 1000:1000`"+`).
 `+service.OutputPerformanceDocs(true, true)).
-		Field(service.NewStringField("account").Description(`Account name, which is the same as the https://docs.snowflake.com/en/user-guide/admin-account-identifier.html#where-are-account-identifiers-used[Account Identifier].
-However, when using an https://docs.snowflake.com/en/user-guide/admin-account-identifier.html#using-an-account-locator-as-an-identifier[Account Locator],
+		Field(service.NewStringField("account").Description(`Account name, which is the same as the https://docs.snowflake.com/en/user-guide/admin-account-identifier.html#where-are-account-identifiers-used[Account Identifier^].
+However, when using an https://docs.snowflake.com/en/user-guide/admin-account-identifier.html#using-an-account-locator-as-an-identifier[Account Locator^],
 the Account Identifier is formatted as `+"`<account_locator>.<region_id>.<cloud>`"+` and this field needs to be
 populated using the `+"`<account_locator>`"+` part.
 `)).
 		Field(service.NewStringField("region").Description(`Optional region field which needs to be populated when using
-an https://docs.snowflake.com/en/user-guide/admin-account-identifier.html#using-an-account-locator-as-an-identifier[Account Locator]
+an https://docs.snowflake.com/en/user-guide/admin-account-identifier.html#using-an-account-locator-as-an-identifier[Account Locator^]
 and it must be set to the `+"`<region_id>`"+` part of the Account Identifier
 (`+"`<account_locator>.<region_id>.<cloud>`"+`).
 `).Example("us-west-2").Optional()).
 		Field(service.NewStringField("cloud").Description(`Optional cloud platform field which needs to be populated
-when using an https://docs.snowflake.com/en/user-guide/admin-account-identifier.html#using-an-account-locator-as-an-identifier[Account Locator]
+when using an https://docs.snowflake.com/en/user-guide/admin-account-identifier.html#using-an-account-locator-as-an-identifier[Account Locator^]
 and it must be set to the `+"`<cloud>`"+` part of the Account Identifier
 (`+"`<account_locator>.<region_id>.<cloud>`"+`).
 `).Example("aws").Example("gcp").Example("azure").Optional()).
@@ -205,7 +205,7 @@ and it must be set to the `+"`<cloud>`"+` part of the Account Identifier
 		Field(service.NewStringField("warehouse").Description("Warehouse.")).
 		Field(service.NewStringField("schema").Description("Schema.")).
 		Field(service.NewInterpolatedStringField("stage").Description(`Stage name. Use either one of the
-		https://docs.snowflake.com/en/user-guide/data-load-local-file-system-create-stage.html[supported] stage types.`)).
+		https://docs.snowflake.com/en/user-guide/data-load-local-file-system-create-stage.html[supported^] stage types.`)).
 		Field(service.NewInterpolatedStringField("path").Description("Stage path.").Default("")).
 		Field(service.NewInterpolatedStringField("file_name").Description("Stage file name. Will be equal to the Request ID if not set or empty.").Optional().Default("").Version("v4.12.0")).
 		Field(service.NewInterpolatedStringField("file_extension").Description("Stage file extension. Will be derived from the configured `compression` if not set or empty.").Optional().Default("").Example("csv").Example("parquet").Version("v4.12.0")).
@@ -227,7 +227,7 @@ and it must be set to the `+"`<cloud>`"+` part of the Account Identifier
   this.exists("password") && this.password != "" && this.exists("private_key_file") && this.private_key_file != "" => [ "both `+"`password`"+` and `+"`private_key_file`"+` can't be set simultaneously" ],
   this.exists("snowpipe") && this.snowpipe != "" && (!this.exists("private_key_file") || this.private_key_file == "") => [ "`+"`private_key_file`"+` is required when setting `+"`snowpipe`"+`" ],
 }`).
-		Example("Kafka / realtime brokers", "Upload message batches from realtime brokers such as Kafka persisting the batch partition and offsets in the stage path and filename similarly to the https://docs.snowflake.com/en/user-guide/kafka-connector-ts.html#step-1-view-the-copy-history-for-the-table[Kafka Connector scheme] and call Snowpipe to load them into a table. When batching is configured at the input level, it is done per-partition.", `
+		Example("Kafka / realtime brokers", "Upload message batches from realtime brokers such as Kafka persisting the batch partition and offsets in the stage path and filename similarly to the https://docs.snowflake.com/en/user-guide/kafka-connector-ts.html#step-1-view-the-copy-history-for-the-table[Kafka Connector scheme^] and call Snowpipe to load them into a table. When batching is configured at the input level, it is done per-partition.", `
 input:
   kafka:
     addresses:

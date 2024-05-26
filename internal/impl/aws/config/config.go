@@ -29,7 +29,7 @@ func SessionFields() []*service.ConfigField {
 				Description("The token for the credentials being used, required when using short term credentials.").
 				Default("").Advanced(),
 			service.NewBoolField("from_ec2_role").
-				Description("Use the credentials of a host EC2 machine configured to assume https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_use_switch-role-ec2.html[an IAM role associated with the instance].").
+				Description("Use the credentials of a host EC2 machine configured to assume https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_use_switch-role-ec2.html[an IAM role associated with the instance^].").
 				Default(false).Version("4.2.0"),
 			service.NewStringField("role").
 				Description("A role ARN to assume.").

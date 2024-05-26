@@ -18,7 +18,7 @@ func parquetProcessorConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Deprecated().
 		Categories("Parsing").
-		Summary("Converts batches of documents to or from https://parquet.apache.org/docs/[Parquet files].").
+		Summary("Converts batches of documents to or from https://parquet.apache.org/docs/[Parquet files^].").
 		Description(`
 == Alternatives
 

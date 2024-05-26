@@ -177,7 +177,7 @@ Both the `+"`id` and `index`"+` fields can be dynamically set using function int
 			service.NewBatchPolicyField(esoFieldBatching),
 			AWSField(),
 		).
-		Example("Updating Documents", "When https://opensearch.org/docs/latest/api-reference/document-apis/update-document/[updating documents] the request body should contain a combination of a `doc`, `upsert`, and/or `script` fields at the top level, this should be done via mapping processors.", `
+		Example("Updating Documents", "When https://opensearch.org/docs/latest/api-reference/document-apis/update-document/[updating documents^] the request body should contain a combination of a `doc`, `upsert`, and/or `script` fields at the top level, this should be done via mapping processors.", `
 output:
   processors:
     - mapping: |

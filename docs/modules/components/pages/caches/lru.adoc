@@ -53,7 +53,7 @@ lru:
 
 This provides the lru package which implements a fixed-size thread safe LRU cache.
 
-It uses the package https://github.com/hashicorp/golang-lru/v2[`lru`]
+It uses the package https://github.com/hashicorp/golang-lru/v2[`lru`^]
 
 The field init_values can be used to pre-populate the memory cache with any number of key/value pairs:
 

@@ -18,7 +18,7 @@ func parquetInputConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		// Stable(). TODO
 		Categories("Local").
-		Summary("Reads and decodes https://parquet.apache.org/docs/[Parquet files] into a stream of structured messages.").
+		Summary("Reads and decodes https://parquet.apache.org/docs/[Parquet files^] into a stream of structured messages.").
 		Field(service.NewStringListField("paths").
 			Description("A list of file paths to read from. Each file will be read sequentially until the list is exhausted, at which point the input will close. Glob patterns are supported, including super globs (double star).").
 			Example("/tmp/foo.parquet").
@@ -30,7 +30,7 @@ func parquetInputConfig() *service.ConfigSpec {
 			Advanced()).
 		Field(service.NewAutoRetryNacksToggleField()).
 		Description(`
-This input uses https://github.com/parquet-go/parquet-go[https://github.com/parquet-go/parquet-go], which is itself experimental. Therefore changes could be made into how this processor functions outside of major version releases.
+This input uses https://github.com/parquet-go/parquet-go[https://github.com/parquet-go/parquet-go^], which is itself experimental. Therefore changes could be made into how this processor functions outside of major version releases.
 
 By default any BYTE_ARRAY or FIXED_LEN_BYTE_ARRAY value will be extracted as a byte slice (` + "`[]byte`" + `) unless the logical type is UTF8, in which case they are extracted as a string (` + "`string`" + `).
 

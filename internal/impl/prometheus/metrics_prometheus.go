@@ -41,7 +41,7 @@ func ConfigSpec() *service.ConfigSpec {
 		Footnotes(`
 == Push gateway
 
-The field `+"`push_url`"+` is optional and when set will trigger a push of metrics to a https://prometheus.io/docs/instrumenting/pushing/[Prometheus Push Gateway] once Benthos shuts down. It is also possible to specify a `+"`push_interval`"+` which results in periodic pushes.
+The field `+"`push_url`"+` is optional and when set will trigger a push of metrics to a https://prometheus.io/docs/instrumenting/pushing/[Prometheus Push Gateway^] once Benthos shuts down. It is also possible to specify a `+"`push_interval`"+` which results in periodic pushes.
 
 The Push Gateway is useful for when Benthos instances are short lived. Do not include the "/metrics/jobs/..." path in the push URL.
 
