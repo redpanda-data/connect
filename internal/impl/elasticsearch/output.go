@@ -494,19 +494,19 @@ func (e *Output) WriteBatch(ctx context.Context, msg service.MessageBatch) error
 
 				e.log.Errorf("Elasticsearch message '%v' rejected with status [%v]: %v\n", item.Id, item.Status, reason)
 				if !shouldRetry(item.Status) {
-					return fmt.Errorf("failed to send message '%v': %v", item.Id, reason)
+					msg[i].SetError(fmt.Errorf("failed to send message '%v': %v", item.Id, reason))
+				} else {
+					// IMPORTANT: i exactly matches the index of our source requests
+					// and when we re-run our bulk request with errored requests
+					// that must remain true.
+					sourceReq := requests[i]
+					bulkReq, err := e.buildBulkableRequest(sourceReq)
+					if err != nil {
+						return err
+					}
+					b.Add(bulkReq)
+					newRequests = append(newRequests, sourceReq)
 				}
-
-				// IMPORTANT: i exactly matches the index of our source requests
-				// and when we re-run our bulk request with errored requests
-				// that must remain true.
-				sourceReq := requests[i]
-				bulkReq, err := e.buildBulkableRequest(sourceReq)
-				if err != nil {
-					return err
-				}
-				b.Add(bulkReq)
-				newRequests = append(newRequests, sourceReq)
 			}
 		}
 		requests = newRequests
