@@ -30,7 +30,7 @@ func ockamKafkaInputConfig() *service.ConfigSpec {
 		Field(service.NewStringField("ockam_identity_name").Optional()).
 		Field(service.NewStringField("ockam_node_address").Default("127.0.0.1:6262")).
 		Field(service.NewStringField("ockam_allow_producer").Default("self")).
-		Field(service.NewStringField("ockam_enrollement_ticket").Optional()).
+		Field(service.NewStringField("ockam_enrollment_ticket").Optional()).
 		Field(service.NewStringField("ockam_relay").Optional())
 }
 
@@ -50,8 +50,8 @@ func newOckamKafkaInput(conf *service.ParsedConfig, mgr *service.Resources) (*oc
 	// --- Create Ockam Node ----
 
 	var ticket string
-	if conf.Contains("ockam_enrollement_ticket") {
-		ticket, err = conf.FieldString("ockam_enrollement_ticket")
+	if conf.Contains("ockam_enrollment_ticket") {
+		ticket, err = conf.FieldString("ockam_enrollment_ticket")
 		if err != nil {
 			return nil, err
 		}

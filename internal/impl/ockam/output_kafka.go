@@ -35,7 +35,7 @@ func init() {
 func ockamKafkaOutputConfig() *service.ConfigSpec {
 	return kafka.FranzKafkaOutputConfig().
 		Summary("Ockam").
-		Field(service.NewStringField("ockam_enrollement_ticket").Optional()).
+		Field(service.NewStringField("ockam_enrollment_ticket").Optional()).
 		Field(service.NewStringField("ockam_identity_name").Optional()).
 		Field(service.NewStringField("ockam_allow_consumer").Default("self")).
 		Field(service.NewStringField("ockam_route_to_consumer").Default("/ip4/127.0.0.1/tcp/6262"))
@@ -57,8 +57,8 @@ func newOckamKafkaOutput(conf *service.ParsedConfig, log *service.Logger) (*ocka
 	// --- Create Ockam Node ----
 
 	var ticket string
-	if conf.Contains("ockam_enrollement_ticket") {
-		ticket, err = conf.FieldString("ockam_enrollement_ticket")
+	if conf.Contains("ockam_enrollment_ticket") {
+		ticket, err = conf.FieldString("ockam_enrollment_ticket")
 		if err != nil {
 			return nil, err
 		}
