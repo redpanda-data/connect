@@ -1,5 +1,20 @@
 package docs
 
+func jSchemaIsRequired(f *FieldSpec) bool {
+	if f.IsOptional || f.Default != nil {
+		return false
+	}
+	if len(f.Children) == 0 {
+		return true
+	}
+	for _, f := range f.Children {
+		if jSchemaIsRequired(&f) {
+			return true
+		}
+	}
+	return false
+}
+
 // JSONSchema serializes a field spec into a JSON schema structure.
 func (f FieldSpec) JSONSchema() any {
 	spec := map[string]any{}
@@ -36,7 +51,7 @@ func (f FieldSpec) JSONSchema() any {
 			spec["properties"] = f.Children.JSONSchema()
 			var required []string
 			for _, child := range f.Children {
-				if !child.IsOptional && child.Default == nil {
+				if jSchemaIsRequired(&child) {
 					required = append(required, child.Name)
 				}
 			}

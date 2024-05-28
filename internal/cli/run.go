@@ -72,7 +72,7 @@ func traverseHelp(cmd *cli.Command, pieces []string) []pluginHelp {
 	pieces = append(pieces, cmd.Name)
 	var args []string
 	for _, a := range cmd.Flags {
-		args = append(args, a.Names()[0])
+		args = append(args, "--"+a.Names()[0])
 	}
 	help := []pluginHelp{{
 		Path:  strings.Join(pieces, "_"),
