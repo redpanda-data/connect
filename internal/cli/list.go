@@ -18,14 +18,14 @@ import (
 func listCliCommand(opts *common.CLIOpts) *cli.Command {
 	return &cli.Command{
 		Name:  "list",
-		Usage: "List all Benthos component types",
-		Description: `
+		Usage: opts.ExecTemplate("List all {{.ProductName}} component types"),
+		Description: opts.ExecTemplate(`
 If any component types are explicitly listed then only types of those
 components will be shown.
 
-  benthos list
-  benthos list --format json inputs output
-  benthos list rate-limits buffers`[1:],
+  {{.BinaryName}} list
+  {{.BinaryName}} list --format json inputs output
+  {{.BinaryName}} list rate-limits buffers`)[1:],
 		Flags: []cli.Flag{
 			&cli.StringFlag{
 				Name:  "format",

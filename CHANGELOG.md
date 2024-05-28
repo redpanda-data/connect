@@ -3,6 +3,13 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+## 4.28.0 - TBD
+
+### Added
+
+- Go API: Variadic options added to the public `service.RunCLI` function for customising CLI behaviour.
+- Go API: New schema APIs added with linting, generation and marshalling capabilities.
+
 ## 4.27.0 - 2024-04-23
 
 ### Added

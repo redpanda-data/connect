@@ -63,6 +63,21 @@ func CLIOptSetVersion(version, dateBuilt string) CLIOptFunc {
 	}
 }
 
+// CLIOptSetProductName overrides the default product name in CLI help docs.
+func CLIOptSetProductName(n string) CLIOptFunc {
+	return func(c *CLIOptBuilder) {
+		c.opts.ProductName = n
+	}
+}
+
+// CLIOptSetDocumentationURL overrides the default documentation URL in CLI help
+// docs.
+func CLIOptSetDocumentationURL(n string) CLIOptFunc {
+	return func(c *CLIOptBuilder) {
+		c.opts.DocumentationURL = n
+	}
+}
+
 // CLIOptOnLoggerInit sets a closure to be called when the service-wide logger
 // is initialised. A modified version can be returned, allowing you to mutate
 // the fields and settings that it has.

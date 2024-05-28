@@ -111,23 +111,23 @@ func addExpression(conf map[string]any, expression string) error {
 func createCliCommand(cliOpts *common.CLIOpts) *cli.Command {
 	return &cli.Command{
 		Name:  "create",
-		Usage: "Create a new Benthos config",
-		Description: `
-Prints a new Benthos config to stdout containing specified components
+		Usage: cliOpts.ExecTemplate("Create a new {{.ProductName}} config"),
+		Description: cliOpts.ExecTemplate(`
+Prints a new {{.ProductName}} config to stdout containing specified components
 according to an expression. The expression must take the form of three
 comma-separated lists of inputs, processors and outputs, divided by
 forward slashes:
 
-  benthos create stdin/bloblang,awk/nats
-  benthos create file,http_server/protobuf/http_client
+  {{.BinaryName}} create stdin/bloblang,awk/nats
+  {{.BinaryName}} create file,http_server/protobuf/http_client
 
-If the expression is omitted a default config is created.`[1:],
+If the expression is omitted a default config is created.`)[1:],
 		Flags: []cli.Flag{
 			&cli.BoolFlag{
 				Name:    "small",
 				Aliases: []string{"s"},
 				Value:   false,
-				Usage:   "Print only the main components of a Benthos config (input, pipeline, output) and omit all fields marked as advanced.",
+				Usage:   cliOpts.ExecTemplate("Print only the main components of a {{.ProductName}} config (input, pipeline, output) and omit all fields marked as advanced."),
 			},
 		},
 		Action: func(c *cli.Context) error {

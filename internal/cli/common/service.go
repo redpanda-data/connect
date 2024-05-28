@@ -56,7 +56,7 @@ func RunService(c *cli.Context, cliOpts *CLIOpts, streamsMode bool) int {
 		}
 	}
 	if strict && len(lints) > 0 {
-		logger.Error("Shutting down due to linter errors, to prevent shutdown run Benthos with --chilled")
+		logger.Error(cliOpts.ExecTemplate("Shutting down due to linter errors, to prevent shutdown run {{.ProductName}} with --chilled"))
 		return 1
 	}
 
@@ -78,9 +78,9 @@ func RunService(c *cli.Context, cliOpts *CLIOpts, streamsMode bool) int {
 	watching := c.Bool("watcher")
 	if streamsMode {
 		enableStreamsAPI := !c.Bool("no-api")
-		stoppableStream = initStreamsMode(strict, watching, enableStreamsAPI, confReader, stoppableManager.Manager())
+		stoppableStream = initStreamsMode(cliOpts, strict, watching, enableStreamsAPI, confReader, stoppableManager.Manager())
 	} else {
-		stoppableStream, dataStreamClosedChan = initNormalMode(conf, strict, watching, confReader, stoppableManager.Manager())
+		stoppableStream, dataStreamClosedChan = initNormalMode(cliOpts, conf, strict, watching, confReader, stoppableManager.Manager())
 	}
 
 	return RunManagerUntilStopped(c, conf, stoppableManager, stoppableStream, dataStreamClosedChan)
@@ -111,6 +111,7 @@ func DelayShutdown(ctx context.Context, duration time.Duration) error {
 }
 
 func initStreamsMode(
+	opts *CLIOpts,
 	strict, watching, enableAPI bool,
 	confReader *config.Reader,
 	mgr *manager.Type,
@@ -133,7 +134,7 @@ func initStreamsMode(
 		}
 	}
 	if strict && len(lints) > 0 {
-		logger.Error("Shutting down due to stream linter errors, to prevent shutdown run Benthos with --chilled")
+		logger.Error(opts.ExecTemplate("Shutting down due to stream linter errors, to prevent shutdown run {{.ProductName}} with --chilled"))
 		os.Exit(1)
 	}
 
@@ -143,7 +144,7 @@ func initStreamsMode(
 			os.Exit(1)
 		}
 	}
-	logger.Info("Launching benthos in streams mode, use CTRL+C to close")
+	logger.Info(opts.ExecTemplate("Launching {{.ProductName}} in streams mode, use CTRL+C to close"))
 
 	if err := confReader.SubscribeStreamChanges(func(id string, newStreamConf *stream.Config) error {
 		ctx, done := context.WithTimeout(context.Background(), time.Second*30)
@@ -175,6 +176,7 @@ func initStreamsMode(
 }
 
 func initNormalMode(
+	opts *CLIOpts,
 	conf config.Type,
 	strict, watching bool,
 	confReader *config.Reader,
@@ -202,7 +204,7 @@ func initNormalMode(
 
 	stoppableStream := NewSwappableStopper(initStream)
 
-	logger.Info("Launching a benthos instance, use CTRL+C to close")
+	logger.Info(opts.ExecTemplate("Launching a {{.ProductName}} instance, use CTRL+C to close"))
 
 	if err := confReader.SubscribeConfigChanges(func(newStreamConf *config.Type) error {
 		ctx, done := context.WithTimeout(context.Background(), 30*time.Second)
