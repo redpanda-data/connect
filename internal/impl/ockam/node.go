@@ -42,7 +42,7 @@ func newNode(identityName string, address string, ticket string, relay string) (
 		return nil, fmt.Errorf("failed to marshal node config to json string: %v", err)
 	}
 
-	node := &node{name: name, identity: identity, identifier: identifier, config: string(j)}
+	node := &node{name: name, address: address, identity: identity, identifier: identifier, config: string(j)}
 
 	err = node.create()
 	if err != nil {
