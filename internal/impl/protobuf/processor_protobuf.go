@@ -18,11 +18,13 @@ import (
 )
 
 const (
-	fieldOperator       = "operator"
-	fieldMessage        = "message"
-	fieldImportPaths    = "import_paths"
-	fieldDiscardUnknown = "discard_unknown"
-	fieldUseProtoNames  = "use_proto_names"
+	fieldOperator          = "operator"
+	fieldMessage           = "message"
+	fieldImportPaths       = "import_paths"
+	fieldDiscardUnknown    = "discard_unknown"
+	fieldUseProtoNames     = "use_proto_names"
+	fieldEmitUnpopulated   = "emit_unpopulated"
+	fieldEmitDefaultValues = "emit_default_values"
 )
 
 func protobufProcessorSpec() *service.ConfigSpec {
@@ -55,6 +57,12 @@ Attempts to create a target protobuf message from a generic JSON structure.
 			Default(false),
 		service.NewBoolField(fieldUseProtoNames).
 			Description("If `true`, the `to_json` operator deserializes fields exactly as named in schema file.").
+			Default(false),
+		service.NewBoolField(fieldEmitUnpopulated).
+			Description("If `true`, the `to_json` operator adds unpopulated fields to JSON message.").
+			Default(false),
+		service.NewBoolField(fieldEmitDefaultValues).
+			Description("If `true`, the `to_json` operator adds default-valued fields to JSON message. if also set, `emit_unpopulated` takes precedence.").
 			Default(false),
 		service.NewStringListField(fieldImportPaths).
 			Description("A list of directories containing .proto files, including all definitions required for parsing the target message. If left empty the current directory is used. Each directory listed will be walked with all found .proto files imported.").
@@ -152,7 +160,7 @@ func init() {
 
 type protobufOperator func(part *service.Message) error
 
-func newProtobufToJSONOperator(f fs.FS, msg string, importPaths []string, useProtoNames bool) (protobufOperator, error) {
+func newProtobufToJSONOperator(f fs.FS, msg string, importPaths []string, useProtoNames, emitUnpopulated, emitDefaultValues bool) (protobufOperator, error) {
 	if msg == "" {
 		return nil, errors.New("message field must not be empty")
 	}
@@ -184,8 +192,10 @@ func newProtobufToJSONOperator(f fs.FS, msg string, importPaths []string, usePro
 		}
 
 		opts := protojson.MarshalOptions{
-			Resolver:      types,
-			UseProtoNames: useProtoNames,
+			Resolver:          types,
+			UseProtoNames:     useProtoNames,
+			EmitUnpopulated:   emitUnpopulated,
+			EmitDefaultValues: emitDefaultValues,
 		}
 		data, err := opts.Marshal(dynMsg)
 		if err != nil {
@@ -242,10 +252,10 @@ func newProtobufFromJSONOperator(f fs.FS, msg string, importPaths []string, disc
 	}, nil
 }
 
-func strToProtobufOperator(f fs.FS, opStr, message string, importPaths []string, discardUnknown, useProtoNames bool) (protobufOperator, error) {
+func strToProtobufOperator(f fs.FS, opStr, message string, importPaths []string, discardUnknown, useProtoNames, emitUnpopulated, emitDefaultValues bool) (protobufOperator, error) {
 	switch opStr {
 	case "to_json":
-		return newProtobufToJSONOperator(f, message, importPaths, useProtoNames)
+		return newProtobufToJSONOperator(f, message, importPaths, useProtoNames, emitUnpopulated, emitDefaultValues)
 	case "from_json":
 		return newProtobufFromJSONOperator(f, message, importPaths, discardUnknown)
 	}
@@ -315,7 +325,17 @@ func newProtobuf(conf *service.ParsedConfig, mgr *service.Resources) (*protobufP
 		return nil, err
 	}
 
-	if p.operator, err = strToProtobufOperator(mgr.FS(), operatorStr, message, importPaths, discardUnknown, useProtoNames); err != nil {
+	var emitUnpopulated bool
+	if emitUnpopulated, err = conf.FieldBool(fieldEmitUnpopulated); err != nil {
+		return nil, err
+	}
+
+	var emitDefaultValues bool
+	if emitDefaultValues, err = conf.FieldBool(fieldEmitDefaultValues); err != nil {
+		return nil, err
+	}
+
+	if p.operator, err = strToProtobufOperator(mgr.FS(), operatorStr, message, importPaths, discardUnknown, useProtoNames, emitUnpopulated, emitDefaultValues); err != nil {
 		return nil, err
 	}
 	return p, nil

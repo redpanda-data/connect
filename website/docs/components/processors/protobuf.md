@@ -27,6 +27,8 @@ protobuf:
   message: "" # No default (required)
   discard_unknown: false
   use_proto_names: false
+  emit_unpopulated: false
+  emit_default_values: false
   import_paths: []
 ```
 
@@ -151,7 +153,7 @@ pipeline:
 The [operator](#operators) to execute
 
 
-Type: `string`  
+Type: `string`
 Options: `to_json`, `from_json`.
 
 ### `message`
@@ -159,30 +161,46 @@ Options: `to_json`, `from_json`.
 The fully qualified name of the protobuf message to convert to/from.
 
 
-Type: `string`  
+Type: `string`
 
 ### `discard_unknown`
 
 If `true`, the `from_json` operator discards fields that are unknown to the schema.
 
 
-Type: `bool`  
-Default: `false`  
+Type: `bool`
+Default: `false`
 
 ### `use_proto_names`
 
 If `true`, the `to_json` operator deserializes fields exactly as named in schema file.
 
 
-Type: `bool`  
-Default: `false`  
+Type: `bool`
+Default: `false`
+
+### `emit_unpopulated`
+
+If `true`, the `to_json` operator adds unpopulated fields to JSON message.
+
+
+Type: `bool`
+Default: `false`
+
+### `emit_default_values`
+
+If `true`, the `to_json` operator adds default-valued fields to JSON message. if also set, `emit_unpopulated` takes precedence.
+
+
+Type: `bool`
+Default: `false`
 
 ### `import_paths`
 
 A list of directories containing .proto files, including all definitions required for parsing the target message. If left empty the current directory is used. Each directory listed will be walked with all found .proto files imported.
 
 
-Type: `array`  
-Default: `[]`  
+Type: `array`
+Default: `[]`
 
 
