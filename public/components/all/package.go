@@ -37,6 +37,7 @@ import (
 	_ "github.com/benthosdev/benthos/v4/public/components/nsq"
 	_ "github.com/benthosdev/benthos/v4/public/components/opensearch"
 	_ "github.com/benthosdev/benthos/v4/public/components/otlp"
+	_ "github.com/benthosdev/benthos/v4/public/components/peerdb"
 	_ "github.com/benthosdev/benthos/v4/public/components/prometheus"
 	_ "github.com/benthosdev/benthos/v4/public/components/pulsar"
 	_ "github.com/benthosdev/benthos/v4/public/components/pure"
