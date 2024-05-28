@@ -115,6 +115,8 @@ const (
 	OperationUpdateOne Operation = "update-one"
 	// OperationFindOne Find one operation.
 	OperationFindOne Operation = "find-one"
+	// OperationFindMany Find many operation.
+	OperationFindMany Operation = "find-many"
 	// OperationInvalid Invalid operation.
 	OperationInvalid Operation = "invalid"
 )
@@ -136,7 +138,8 @@ func (op Operation) isFilterAllowed() bool {
 		OperationDeleteMany,
 		OperationReplaceOne,
 		OperationUpdateOne,
-		OperationFindOne:
+		OperationFindOne,
+		OperationFindMany:
 		return true
 	default:
 		return false
@@ -149,7 +152,8 @@ func (op Operation) isHintAllowed() bool {
 		OperationDeleteMany,
 		OperationReplaceOne,
 		OperationUpdateOne,
-		OperationFindOne:
+		OperationFindOne,
+		OperationFindMany:
 		return true
 	default:
 		return false
@@ -181,6 +185,8 @@ func NewOperation(op string) Operation {
 		return OperationUpdateOne
 	case "find-one":
 		return OperationFindOne
+	case "find-many":
+		return OperationFindMany
 	default:
 		return OperationInvalid
 	}
@@ -199,6 +205,7 @@ func processorOperationDocs(defaultOperation Operation) *service.ConfigField {
 		string(OperationReplaceOne),
 		string(OperationUpdateOne),
 		string(OperationFindOne),
+		string(OperationFindMany),
 	).Description("The mongodb operation to perform.").
 		Default(string(defaultOperation))
 }
