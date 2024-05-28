@@ -295,3 +295,12 @@ func findAvailableLocalTCPAddress() (string, error) {
 
 	return address, nil
 }
+
+func localTCPAddressIsTaken(address string) bool {
+	listener, err := net.Listen("tcp", address)
+	if err != nil {
+		return true
+	}
+	_ = listener.Close()
+	return false
+}

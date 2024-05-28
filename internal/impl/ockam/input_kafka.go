@@ -77,6 +77,9 @@ func newOckamKafkaInput(conf *service.ParsedConfig, mgr *service.Resources) (*oc
 	if err != nil {
 		return nil, err
 	}
+	if localTCPAddressIsTaken(address) {
+		return nil, errors.New("ockam_node_address '" + address + "' is already in use")
+	}
 
 	n, err := newNode(identityName, address, ticket, relay)
 	if err != nil {
