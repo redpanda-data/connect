@@ -59,6 +59,8 @@ func runCommand(capture bool, arg ...string) (string, string, error) {
 	return stdout, stderr, nil
 }
 
+// Returns the path to the Ockam Command binary.
+// If it's not found, it will be downloaded and installed.
 func setupCommand() (string, error) {
 	bin, err := findCommandBinary()
 	if err == nil {
@@ -70,12 +72,7 @@ func setupCommand() (string, error) {
 		return "", fmt.Errorf("failed to install Ockam Command: %v", err)
 	}
 
-	bin, err = findCommandBinary()
-	if err != nil {
-		return "", fmt.Errorf("failed to find Ockam Command: %v", err)
-	}
-
-	return bin, nil
+	return findCommandBinary()
 }
 
 // Returns the path to the Ockam Command binary or an error if it can't find the binary.
