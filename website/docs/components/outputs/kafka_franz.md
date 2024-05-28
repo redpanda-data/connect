@@ -38,7 +38,7 @@ output:
     seed_brokers: [] # No default (required)
     topic: "" # No default (required)
     key: "" # No default (optional)
-    partition: ${! meta("partition") } # No default (optional)
+    partition: ${! metadata("partition") } # No default (optional)
     metadata:
       include_prefixes: []
       include_patterns: []
@@ -62,7 +62,7 @@ output:
     topic: "" # No default (required)
     key: "" # No default (optional)
     partitioner: "" # No default (optional)
-    partition: ${! meta("partition") } # No default (optional)
+    partition: ${! metadata("partition") } # No default (optional)
     client_id: benthos
     rack_id: ""
     idempotent_write: true
@@ -162,7 +162,7 @@ Type: `string`
 ```yml
 # Examples
 
-partition: ${! meta("partition") }
+partition: ${! metadata("partition") }
 ```
 
 ### `client_id`

@@ -38,7 +38,7 @@ You can access these metadata fields using [function interpolation](/docs/config
 		Field(service.NewInterpolatedStringField("subject").
 			Description("A subject to write to.").
 			Example("foo.bar.baz").
-			Example(`${! meta("kafka_topic") }`).
+			Example(`${! metadata("kafka_topic") }`).
 			Example(`foo.${! json("meta.type") }`)).
 		Field(service.NewStringField("inbox_prefix").
 			Description("Set an explicit inbox prefix for the response subject").
@@ -50,7 +50,7 @@ You can access these metadata fields using [function interpolation](/docs/config
 			Default(map[string]any{}).
 			Example(map[string]any{
 				"Content-Type": "application/json",
-				"Timestamp":    `${!meta("Timestamp")}`,
+				"Timestamp":    `${!metadata("Timestamp")}`,
 			})).
 		Field(service.NewMetadataFilterField("metadata").
 			Description("Determine which (if any) metadata values should be added to messages as headers.").

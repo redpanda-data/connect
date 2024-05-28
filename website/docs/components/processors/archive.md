@@ -64,7 +64,7 @@ Default: `""`
 
 path: ${!count("files")}-${!timestamp_unix_nano()}.txt
 
-path: ${!meta("kafka_key")}-${!json("id")}.json
+path: ${!metadata("kafka_key")}-${!json("id")}.json
 ```
 
 ## Examples

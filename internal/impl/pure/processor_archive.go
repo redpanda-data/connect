@@ -36,7 +36,7 @@ The functionality of this processor depends on being applied across messages tha
 		Field(service.NewInterpolatedStringField("path").
 			Description("The path to set for each message in the archive (when applicable).").
 			Example("${!count(\"files\")}-${!timestamp_unix_nano()}.txt").
-			Example("${!meta(\"kafka_key\")}-${!json(\"id\")}.json").
+			Example("${!metadata(\"kafka_key\")}-${!json(\"id\")}.json").
 			Default("")).
 		Example("Tar Archive", `
 If we had JSON messages in a batch each of the form:

@@ -60,7 +60,7 @@ Type: `object`
 # Examples
 
 labels:
-  topic: ${! meta("kafka_topic") }
+  topic: ${! metadata("kafka_topic") }
   type: ${! json("doc.type") }
 ```
 
@@ -91,8 +91,8 @@ pipeline:
         name: Foos
         type: counter
         labels:
-          topic: ${! meta("kafka_topic") }
-          partition: ${! meta("kafka_partition") }
+          topic: ${! metadata("kafka_topic") }
+          partition: ${! metadata("kafka_partition") }
           type: ${! json("document.type").or("unknown") }
 
 metrics:
@@ -118,7 +118,7 @@ pipeline:
         name: FooSize
         type: gauge
         labels:
-          topic: ${! meta("kafka_topic") }
+          topic: ${! metadata("kafka_topic") }
         value: ${! json("foo.size") }
 
 metrics:

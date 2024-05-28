@@ -53,7 +53,7 @@ In order to create a unique `+"`key`"+` value per item you should use function i
 				Examples(
 					`${!count("items")}-${!timestamp_unix_nano()}`,
 					`${!json("doc.id")}`,
-					`${!meta("kafka_key")}`,
+					`${!metadata("kafka_key")}`,
 				).
 				Default(`${!count("items")}-${!timestamp_unix_nano()}`),
 			service.NewInterpolatedStringField(coFieldTTL).

@@ -26,7 +26,7 @@ log:
     root.reason = "cus I wana"
     root.id = this.id
     root.age = this.user.age.number()
-    root.kafka_topic = meta("kafka_topic")
+    root.kafka_topic = metadata("kafka_topic")
   message: ""
 ```
 
@@ -46,7 +46,7 @@ pipeline:
           root.reason = "cus I wana"
           root.id = this.id
           root.age = this.user.age
-          root.kafka_topic = meta("kafka_topic")
+          root.kafka_topic = metadata("kafka_topic")
 ```
 
 
@@ -75,7 +75,7 @@ fields_mapping: |-
   root.reason = "cus I wana"
   root.id = this.id
   root.age = this.user.age.number()
-  root.kafka_topic = meta("kafka_topic")
+  root.kafka_topic = metadata("kafka_topic")
 ```
 
 ### `message`

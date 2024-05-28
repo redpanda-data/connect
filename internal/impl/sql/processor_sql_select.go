@@ -39,7 +39,7 @@ If the query fails to execute then the message will remain unchanged and the err
 		Field(service.NewBloblangField("args_mapping").
 			Description("An optional [Bloblang mapping](/docs/guides/bloblang/about) which should evaluate to an array of values matching in size to the number of placeholder arguments in the field `where`.").
 			Example("root = [ this.cat.meow, this.doc.woofs[0] ]").
-			Example(`root = [ meta("user.id") ]`).
+			Example(`root = [ metadata("user.id") ]`).
 			Optional()).
 		Field(service.NewStringField("prefix").
 			Description("An optional prefix to prepend to the query (before SELECT).").

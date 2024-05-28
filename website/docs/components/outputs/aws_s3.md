@@ -109,7 +109,7 @@ output:
     path: ${!count("files")}-${!timestamp_unix_nano()}.tar.gz
     tags:
       Key1: Value1
-      Timestamp: ${!meta("Timestamp")}
+      Timestamp: ${!metadata("Timestamp")}
 ```
 
 ### Credentials
@@ -178,7 +178,7 @@ Default: `"${!count(\"files\")}-${!timestamp_unix_nano()}.txt"`
 
 path: ${!count("files")}-${!timestamp_unix_nano()}.txt
 
-path: ${!meta("kafka_key")}.json
+path: ${!metadata("kafka_key")}.json
 
 path: ${!json("doc.namespace")}/${!json("doc.id")}.json
 ```
@@ -197,7 +197,7 @@ Default: `{}`
 
 tags:
   Key1: Value1
-  Timestamp: ${!meta("Timestamp")}
+  Timestamp: ${!metadata("Timestamp")}
 ```
 
 ### `content_type`

@@ -85,7 +85,7 @@ If the `+"`storage_connection_string`"+` does not contain the `+"`AccountName`"+
 			service.NewInterpolatedStringField(bsoFieldPath).
 				Description("The path of each message to upload.").
 				Example(`${!count("files")}-${!timestamp_unix_nano()}.json`).
-				Example(`${!meta("kafka_key")}.json`).
+				Example(`${!metadata("kafka_key")}.json`).
 				Example(`${!json("doc.namespace")}/${!json("doc.id")}.json`).
 				Default(`${!count("files")}-${!timestamp_unix_nano()}.txt`),
 			service.NewInterpolatedStringEnumField(bsoFieldBlobType, "BLOCK", "APPEND").

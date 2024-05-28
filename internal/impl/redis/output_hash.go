@@ -33,8 +33,8 @@ output:
     url: tcp://localhost:6379
     key: ${!json("id")}
     fields:
-      topic: ${!meta("kafka_topic")}
-      partition: ${!meta("kafka_partition")}
+      topic: ${!metadata("kafka_topic")}
+      partition: ${!metadata("kafka_partition")}
       content: ${!json("document.text")}
 `+"```"+`
 

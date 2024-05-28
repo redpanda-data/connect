@@ -53,7 +53,7 @@ A [Bloblang mapping](/docs/guides/bloblang/about) applied to each message during
 The timestamp value assigned to `+"`root`"+` must either be a numerical unix time in seconds (with up to nanosecond precision via decimals), or a string in ISO 8601 format. If the mapping fails or provides an invalid result the message will be dropped (with logging to describe the problem).
 `).
 			Default("root = now()").
-			Example("root = this.created_at").Example(`root = meta("kafka_timestamp_unix").number()`)).
+			Example("root = this.created_at").Example(`root = metadata("kafka_timestamp_unix")`)).
 		Field(service.NewStringField("size").
 			Description("A duration string describing the size of each window. By default windows are aligned to the zeroth minute and zeroth hour on the UTC clock, meaning windows of 1 hour duration will match the turn of each hour in the day, this can be adjusted with the `offset` field.").
 			Example("30s").Example("10m")).
@@ -110,7 +110,7 @@ pipeline:
         root = if batch_index() == 0 {
           {
             "traffic_light": this.traffic_light,
-            "created_at": meta("window_end_timestamp"),
+            "created_at": metadata("window_end_timestamp"),
             "total_cars": json("registration_plate").from_all().unique().length(),
             "passengers": json("passengers").from_all().sum(),
           }

@@ -154,7 +154,7 @@ output:
     path: ${!count("files")}-${!timestamp_unix_nano()}.tar.gz
     tags:
       Key1: Value1
-      Timestamp: ${!meta("Timestamp")}
+      Timestamp: ${!metadata("Timestamp")}
 `+"```"+`
 
 ### Credentials
@@ -202,14 +202,14 @@ output:
 				Description("The path of each message to upload.").
 				Default(`${!count("files")}-${!timestamp_unix_nano()}.txt`).
 				Example(`${!count("files")}-${!timestamp_unix_nano()}.txt`).
-				Example(`${!meta("kafka_key")}.json`).
+				Example(`${!metadata("kafka_key")}.json`).
 				Example(`${!json("doc.namespace")}/${!json("doc.id")}.json`),
 			service.NewInterpolatedStringMapField(s3oFieldTags).
 				Description("Key/value pairs to store with the object as tags.").
 				Default(map[string]any{}).
 				Example(map[string]any{
 					"Key1":      "Value1",
-					"Timestamp": `${!meta("Timestamp")}`,
+					"Timestamp": `${!metadata("Timestamp")}`,
 				}),
 			service.NewInterpolatedStringField(s3oFieldContentType).
 				Description("The content type to set for each object.").

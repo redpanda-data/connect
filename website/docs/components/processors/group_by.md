@@ -79,7 +79,7 @@ pipeline:
 output:
   switch:
     cases:
-      - check: meta("grouping") == "foo"
+      - check: metadata("grouping") == "foo"
         output:
           gcp_pubsub:
             project: foo_prod

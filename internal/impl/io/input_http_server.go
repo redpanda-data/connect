@@ -255,7 +255,7 @@ You can access these metadata fields using [function interpolation](/docs/config
 			service.NewObjectField(hsiFieldResponse,
 				service.NewInterpolatedStringField(hsiFieldResponseStatus).
 					Description("Specify the status code to return with synchronous responses. This is a string value, which allows you to customize it based on resulting payloads and their metadata.").
-					Examples(`${! json("status") }`, `${! meta("status") }`).
+					Examples(`${! json("status") }`, `${! metadata("status") }`).
 					Default("200"),
 				service.NewInterpolatedStringMapField(hsiFieldResponseHeaders).
 					Description("Specify headers to return with synchronous responses.").

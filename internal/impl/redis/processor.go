@@ -31,14 +31,14 @@ performed for each message and the message contents are replaced with the result
 			Version("4.3.0").
 			Example("scard").
 			Example("incrby").
-			Example(`${! meta("command") }`).
+			Example(`${! metadata("command") }`).
 			Optional()).
 		Field(service.NewBloblangField("args_mapping").
 			Description("A [Bloblang mapping](/docs/guides/bloblang/about) which should evaluate to an array of values matching in size to the number of arguments required for the specified Redis command.").
 			Version("4.3.0").
 			Optional().
 			Example("root = [ this.key ]").
-			Example(`root = [ meta("kafka_key"), this.count ]`)).
+			Example(`root = [ metadata("kafka_key"), this.count ]`)).
 		Field(service.NewStringAnnotatedEnumField("operator", map[string]string{
 			"keys":   `Returns an array of strings containing all the keys that match the pattern specified by the ` + "`key` field" + `.`,
 			"scard":  `Returns the cardinality of a set, or ` + "`0`" + ` if the key does not exist.`,
@@ -74,7 +74,7 @@ pipeline:
           - redis:
               url: TODO
               command: scard
-              args_mapping: 'root = [ meta("set_key") ]'
+              args_mapping: 'root = [ metadata("set_key") ]'
         result_map: 'root.cardinality = this'
 `).
 		Example("Running Total",
