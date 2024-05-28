@@ -115,6 +115,9 @@ func newOckamKafkaOutput(conf *service.ParsedConfig, log *service.Logger) (*ocka
 	if err != nil {
 		return nil, err
 	}
+	if len(seedBrokers) > 1 {
+		log.Warn("ockam_kafka output only supports one seed broker")
+	}
 	bootstrapServer := strings.Split(seedBrokers[0], ",")[0]
 	// TODO: Handle more that one seed brokers
 

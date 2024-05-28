@@ -120,6 +120,9 @@ func newOckamKafkaInput(conf *service.ParsedConfig, mgr *service.Resources) (*oc
 	if err != nil {
 		return nil, err
 	}
+	if len(seedBrokers) > 1 {
+		mgr.Logger().Warn("ockam_kafka input only supports one seed broker")
+	}
 	bootstrapServer := strings.Split(seedBrokers[0], ",")[0]
 	// TODO: Handle more that one seed brokers
 
