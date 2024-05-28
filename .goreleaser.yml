@@ -6,6 +6,16 @@ builds:
     goos: [ windows, darwin, linux, freebsd, openbsd ]
     goarch: [ amd64, arm, arm64 ]
     goarm: [ 6, 7 ]
+    hooks:
+      post:
+        # The binary is signed and notarized when running a production release, but for snapshot builds notarization is
+        # skipped and only ad-hoc signing is performed (not cryptographic material is needed).
+        #
+        # note: environment variables required for signing and notarization (set in CI) but are not needed for snapshot builds
+        #    QUILL_SIGN_P12, QUILL_SIGN_PASSWORD, QUILL_NOTARY_KEY, QUILL_NOTARY_KEY_ID, QUILL_NOTARY_ISSUER
+        - cmd: ./resources/scripts/sign_for_darwin.sh "{{ .Os }}" "{{ .Path }}" "{{ .IsSnapshot }}"
+          env:
+            - QUILL_LOG_FILE=target/dist/quill-{{ .Target }}.log
     ignore:
       - goos: windows
         goarch: arm
