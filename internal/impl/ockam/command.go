@@ -155,6 +155,12 @@ func downloadAndInstall() error {
 		return fmt.Errorf("got HTTP response with status code != 200, while downloading %s: %v", url, resp.StatusCode)
 	}
 
+	binaryPath := ockamHome() + "/bin"
+	err = os.MkdirAll(binaryPath, 0700)
+	if err != nil {
+		return fmt.Errorf("failed to create directories in this path %s: %v", binaryPath, err)
+	}
+
 	binary := ockamHome() + "/bin/ockam"
 	out, err := os.Create(binary)
 	if err != nil {
