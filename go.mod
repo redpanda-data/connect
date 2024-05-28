@@ -39,7 +39,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/sts v1.26.7
 	github.com/beanstalkd/go-beanstalk v0.2.0
 	github.com/benhoyt/goawk v1.25.0
-	github.com/benthosdev/benthos/v4 v4.27.1-0.20240522131344-c11a4d51792f
+	github.com/benthosdev/benthos/v4 v4.27.1-0.20240528110950-b2a748722d18
 	github.com/bradfitz/gomemcache v0.0.0-20230124162541-5f7a7d875746
 	github.com/bwmarrin/discordgo v0.27.1
 	github.com/bwmarrin/snowflake v0.3.0

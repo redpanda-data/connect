@@ -241,8 +241,8 @@ github.com/beanstalkd/go-beanstalk v0.2.0/go.mod h1:/G8YTyChOtpOArwLTQPY1CHB+i21
 github.com/benbjohnson/clock v1.1.0/go.mod h1:J11/hYXuz8f4ySSvYwY0FKfm+ezbsZBKZxNJlLklBHA=
 github.com/benhoyt/goawk v1.25.0 h1:DW4DCn2IrVp6FUar2W404G1YyQDXseWAVDwb11PUL+I=
 github.com/benhoyt/goawk v1.25.0/go.mod h1:FjIAicXvrv3wbqAhSTo5bn4mIM5y1iy3lcnIynlJvoI=
-github.com/benthosdev/benthos/v4 v4.27.1-0.20240522131344-c11a4d51792f h1:1nuINiKbTpJUhKSTBTzTrbDHElAwXDa1mr9K/7qldWg=
-github.com/benthosdev/benthos/v4 v4.27.1-0.20240522131344-c11a4d51792f/go.mod h1:KbKrzlHGhf67eIdUqk4pjT5yaD8nTPb7vczP5/twTOc=
+github.com/benthosdev/benthos/v4 v4.27.1-0.20240528110950-b2a748722d18 h1:W1lcLEREKp4dSiNaTuH9M4U9q9dAf8UWCBpas5UfVPo=
+github.com/benthosdev/benthos/v4 v4.27.1-0.20240528110950-b2a748722d18/go.mod h1:KbKrzlHGhf67eIdUqk4pjT5yaD8nTPb7vczP5/twTOc=
 github.com/beorn7/perks v0.0.0-20180321164747-3a771d992973/go.mod h1:Dwedo/Wpr24TaqPxmxbtue+5NUziq4I4S80YR8gNf3Q=
 github.com/beorn7/perks v1.0.1 h1:VlbKKnNfV8bJzeqoa4cOKqO6bYr3WgKZxO8Z16+hsOM=
 github.com/beorn7/perks v1.0.1/go.mod h1:G2ZrVWU2WbWT9wwq4/hrbKbnv/1ERSJQ0ibhJ6rlkpw=

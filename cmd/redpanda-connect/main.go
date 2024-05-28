@@ -26,6 +26,8 @@ func main() {
 	service.RunCLI(
 		context.Background(),
 		service.CLIOptSetVersion(Version, DateBuilt),
+		service.CLIOptSetProductName("Redpanda Connect"),
+		service.CLIOptSetDocumentationURL("https://docs.redpanda.com/redpanda-connect"),
 		service.CLIOptSetMainSchemaFrom(func() *service.ConfigSchema {
 			return service.NewEnvironment().FullConfigSchema(Version, DateBuilt).
 				Field(redpandaTopLevelConfigField())
