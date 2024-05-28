@@ -17,7 +17,7 @@ func init() {
 			if err != nil {
 				return nil, err
 			}
-			return service.AutoRetryNacksBatchedToggled(conf, i.kafkaReader)
+			return service.AutoRetryNacksBatchedToggled(conf, i)
 		})
 	if err != nil {
 		panic(err)
