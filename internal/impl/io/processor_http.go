@@ -35,6 +35,11 @@ If the request returns an error response code this processor sets a metadata fie
 
 Use the field `+"`extract_headers`"+` to specify rules for which other headers should be copied into the resulting message from the response.
 
+### Cookies
+
+If the server returns cookies in the response header, this processor sets a metadata field `+"`Cookie`"+` on the resulting message.
+This metadata field can be used in subsequent calls to the same server as http header, containing all received cookies in the format `+"`name=value; name=value`"+`
+
 ## Error Handling
 
 When all retry attempts for a message are exhausted the processor cancels the attempt. These failed messages will continue through the pipeline unchanged, but can be dropped or placed in a dead letter queue according to your config, you can read about these patterns [here](/docs/configuration/error_handling).`).

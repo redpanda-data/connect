@@ -708,3 +708,46 @@ tls:
 	require.NoError(t, err)
 	assert.Equal(t, "HELLO WORLD", string(mBytes))
 }
+
+func TestHTTPClientExtensiveCookies(t *testing.T) {
+	require := require.New(t)
+	assert := assert.New(t)
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Add("Content-Type", "application/json")
+		w.Header().Add("x-demo", "Hello")
+		http.SetCookie(w, &http.Cookie{Name: "a", Value: "b", Path: "/", HttpOnly: true, Secure: true})
+		http.SetCookie(w, &http.Cookie{Name: "x", Value: "y"})
+		http.SetCookie(w, &http.Cookie{Name: "foo", Value: "bar"})
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"json": "content"}`))
+	}))
+	defer ts.Close()
+
+	conf := clientConfig(t, `
+url: %v
+extract_headers:
+  include_patterns: [".*"]
+`, ts.URL+"/testpost")
+
+	h, err := NewClientFromOldConfig(conf, service.MockResources())
+	require.NoError(err)
+
+	resBatch, err := h.Send(context.Background(), service.MessageBatch{
+		service.NewMessage([]byte("hello world")),
+	})
+	require.NoError(err)
+	require.Len(resBatch, 1)
+
+	mBytes, err := resBatch[0].AsBytes()
+	require.NoError(err)
+	assert.Equal(`{"json": "content"}`, string(mBytes))
+
+	xHeader, exists := resBatch[0].MetaGet("x-demo")
+	require.True(exists)
+	assert.Equal("Hello", xHeader)
+
+	resCookie, exists := resBatch[0].MetaGet("Cookie")
+	require.True(exists)
+	assert.Equal("a=b; x=y; foo=bar", resCookie)
+}
