@@ -9,8 +9,8 @@ import (
 
 	"github.com/redpanda-data/connect/v4/internal/impl/kafka"
 
-	_ "github.com/benthosdev/benthos/v4/public/components/pure"
-	"github.com/benthosdev/benthos/v4/public/service"
+	_ "github.com/redpanda-data/benthos/v4/public/components/pure"
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 func TestApplyPlaintext(t *testing.T) {

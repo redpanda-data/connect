@@ -6,7 +6,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/benthosdev/benthos/v4/public/service/integration"
+	"github.com/redpanda-data/benthos/v4/public/service/integration"
 
 	_ "github.com/redpanda-data/connect/v4/public/components/pure"
 )

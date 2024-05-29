@@ -3,7 +3,7 @@ package pulsar
 import (
 	"errors"
 
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 func authField() *service.ConfigField {

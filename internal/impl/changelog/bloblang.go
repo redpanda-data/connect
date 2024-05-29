@@ -5,7 +5,7 @@ import (
 	"github.com/r3labs/diff/v3"
 	"go.uber.org/multierr"
 
-	"github.com/benthosdev/benthos/v4/public/bloblang"
+	"github.com/redpanda-data/benthos/v4/public/bloblang"
 )
 
 func init() {

@@ -10,7 +10,7 @@ package extended
 
 import (
 	// Import pure but larger packages.
-	_ "github.com/benthosdev/benthos/v4/public/components/pure/extended"
+	_ "github.com/redpanda-data/benthos/v4/public/components/pure/extended"
 
 	_ "github.com/redpanda-data/connect/v4/internal/impl/awk"
 	_ "github.com/redpanda-data/connect/v4/internal/impl/jsonpath"

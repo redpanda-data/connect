@@ -11,7 +11,7 @@ import (
 
 	"github.com/nsqio/go-nsq"
 
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 const (

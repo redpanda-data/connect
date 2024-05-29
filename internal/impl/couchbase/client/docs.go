@@ -1,7 +1,7 @@
 package client
 
 import (
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 // NewConfigSpec constructs a new Couchbase ConfigSpec with common config fields

@@ -14,7 +14,7 @@ import (
 
 	"github.com/Azure/go-amqp"
 
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 //go:embed input_description.adoc

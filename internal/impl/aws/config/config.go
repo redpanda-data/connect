@@ -1,6 +1,6 @@
 package config
 
-import "github.com/benthosdev/benthos/v4/public/service"
+import "github.com/redpanda-data/benthos/v4/public/service"
 
 // SessionFields defines a re-usable set of config fields for an AWS session
 // that is compatible with the public service APIs and avoids importing the full

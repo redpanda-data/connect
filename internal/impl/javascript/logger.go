@@ -1,6 +1,6 @@
 package javascript
 
-import "github.com/benthosdev/benthos/v4/public/service"
+import "github.com/redpanda-data/benthos/v4/public/service"
 
 // Logger wraps the service.Logger so that we can define the below methods.
 type Logger struct {

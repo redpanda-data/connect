@@ -31,7 +31,7 @@ all: $(APPS)
 
 install: $(APPS)
 	@install -d $(INSTALL_DIR)
-	@rm -f $(INSTALL_DIR)/benthos
+	@rm -f $(INSTALL_DIR)/redpanda-connect
 	@cp $(PATHINSTBIN)/* $(INSTALL_DIR)/
 
 deps:
