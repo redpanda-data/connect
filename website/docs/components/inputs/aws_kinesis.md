@@ -33,6 +33,9 @@ input:
   label: ""
   aws_kinesis:
     streams: [] # No default (required)
+    enhanced_fanout:
+      consumer_name: ""
+      create: false
     dynamodb:
       table: ""
       create: false
@@ -56,6 +59,9 @@ input:
   label: ""
   aws_kinesis:
     streams: [] # No default (required)
+    enhanced_fanout:
+      consumer_name: ""
+      create: false
     dynamodb:
       table: ""
       create: false
@@ -122,6 +128,29 @@ streams:
   - foo
   - arn:aws:kinesis:*:111122223333:stream/my-stream
 ```
+
+### `enhanced_fanout`
+
+Sorry! This field is missing documentation.
+
+
+Type: `object`  
+
+### `enhanced_fanout.consumer_name`
+
+The name of consumer. Will register a new consumer with this name if it isnt already registered.
+
+
+Type: `string`  
+Default: `""`  
+
+### `enhanced_fanout.create`
+
+Whether the consumer should be registered if it doesnt already exist.
+
+
+Type: `bool`  
+Default: `false`  
 
 ### `dynamodb`
 

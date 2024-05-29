@@ -1,0 +1,19 @@
+input:
+  aws_kinesis:
+    streams: ["foo2"]
+    enhanced_fanout:
+      consumer_name: bar
+    dynamodb:
+      table: "foo"
+      create: true
+    checkpoint_limit: 1024
+    commit_period: 5s
+    start_from_oldest: false
+    batching:
+      count: 10
+      period: "1m"
+
+output:
+  label: ""
+  stdout:
+    codec: lines
