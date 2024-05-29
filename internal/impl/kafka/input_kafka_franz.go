@@ -85,6 +85,18 @@ Finally, it's also possible to specify an explicit offset to consume from by add
 			Description("The period of time between each commit of the current partition offsets. Offsets are always committed during shutdown.").
 			Default("5s").
 			Advanced()).
+		Field(service.NewIntField("fetch_min_bytes").
+			Description("Determines the minimum amount of data that to receive from the broker when fetching records").
+			Default(1).
+			Advanced()).
+		Field(service.NewDurationField("fetch_max_wait_duration").
+			Description("Determines how long in for the broker to wait until it has enough data to send before responding").
+			Default(time.Duration.Seconds(5)).
+			Advanced()).
+		Field(service.NewIntField("max_partition_fetch_bytes").
+			Description("Determines the maximum amount of data to receive from a single partition in a single fetch request").
+			Default(1000000).
+			Advanced()).
 		Field(service.NewBoolField("start_from_oldest").
 			Description("Determines whether to consume from the oldest available offset, otherwise messages are consumed from the latest offset. The setting is applied when creating a new consumer group or the saved offset no longer exists.").
 			Default(true).
@@ -129,20 +141,23 @@ type batchWithAckFn struct {
 }
 
 type franzKafkaReader struct {
-	seedBrokers     []string
-	topics          []string
-	topicPartitions map[string]map[int32]kgo.Offset
-	clientID        string
-	rackID          string
-	consumerGroup   string
-	tlsConf         *tls.Config
-	saslConfs       []sasl.Mechanism
-	checkpointLimit int
-	startFromOldest bool
-	commitPeriod    time.Duration
-	regexPattern    bool
-	multiHeader     bool
-	batchPolicy     service.BatchPolicy
+	seedBrokers            []string
+	topics                 []string
+	topicPartitions        map[string]map[int32]kgo.Offset
+	clientID               string
+	rackID                 string
+	consumerGroup          string
+	tlsConf                *tls.Config
+	saslConfs              []sasl.Mechanism
+	checkpointLimit        int
+	startFromOldest        bool
+	commitPeriod           time.Duration
+	fetchMinBytes          int
+	fetchMaxWaitDuration   time.Duration
+	maxPartitionFetchBytes int
+	regexPattern           bool
+	multiHeader            bool
+	batchPolicy            service.BatchPolicy
 
 	batchChan atomic.Value
 	res       *service.Resources
@@ -224,6 +239,18 @@ func newFranzKafkaReaderFromConfig(conf *service.ParsedConfig, res *service.Reso
 	}
 
 	if f.commitPeriod, err = conf.FieldDuration("commit_period"); err != nil {
+		return nil, err
+	}
+
+	if f.fetchMinBytes, err = conf.FieldInt("fetch_min_bytes"); err != nil {
+		return nil, err
+	}
+
+	if f.fetchMaxWaitDuration, err = conf.FieldDuration("fetch_max_wait_duration"); err != nil {
+		return nil, err
+	}
+
+	if f.maxPartitionFetchBytes, err = conf.FieldInt("max_partition_fetch_bytes"); err != nil {
 		return nil, err
 	}
 
@@ -616,6 +643,9 @@ func (f *franzKafkaReader) Connect(ctx context.Context) error {
 		kgo.ConsumerGroup(f.consumerGroup),
 		kgo.ClientID(f.clientID),
 		kgo.Rack(f.rackID),
+		kgo.FetchMinBytes(int32(f.fetchMinBytes)),
+		kgo.FetchMaxWait(f.fetchMaxWaitDuration),
+		kgo.FetchMaxPartitionBytes(int32(f.maxPartitionFetchBytes)),
 	}
 
 	if f.consumerGroup != "" {
