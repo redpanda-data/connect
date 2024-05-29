@@ -13,6 +13,7 @@ import (
 	_ "github.com/redpanda-data/benthos/v4/public/components/pure/extended"
 
 	_ "github.com/redpanda-data/connect/v4/internal/impl/awk"
+	_ "github.com/redpanda-data/connect/v4/internal/impl/html"
 	_ "github.com/redpanda-data/connect/v4/internal/impl/jsonpath"
 	_ "github.com/redpanda-data/connect/v4/internal/impl/lang"
 	_ "github.com/redpanda-data/connect/v4/internal/impl/msgpack"

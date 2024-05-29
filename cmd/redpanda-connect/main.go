@@ -12,8 +12,9 @@ import (
 )
 
 var (
-	Version   string
-	DateBuilt string
+	Version    string
+	DateBuilt  string
+	BinaryName string = "redpanda-connect"
 )
 
 func redpandaTopLevelConfigField() *service.ConfigField {
@@ -26,6 +27,7 @@ func main() {
 	service.RunCLI(
 		context.Background(),
 		service.CLIOptSetVersion(Version, DateBuilt),
+		service.CLIOptSetBinaryName(BinaryName),
 		service.CLIOptSetProductName("Redpanda Connect"),
 		service.CLIOptSetDocumentationURL("https://docs.redpanda.com/redpanda-connect"),
 		service.CLIOptSetMainSchemaFrom(func() *service.ConfigSchema {
