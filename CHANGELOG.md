@@ -3,12 +3,11 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
-## 4.28.0 - TBD
+## 4.28.0 - 2024-05-30
 
-### Added
+### Changed
 
-- Go API: Variadic options added to the public `service.RunCLI` function for customising CLI behaviour.
-- Go API: New schema APIs added with linting, generation and marshalling capabilities.
+- The repository has been moved to `redpanda-data/connect` and no longer contains the core Benthos engine, which is now broken out into `redpanda-data/benthos`.
 
 ## 4.27.0 - 2024-04-23
 
