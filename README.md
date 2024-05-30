@@ -72,7 +72,7 @@ For more information check out the [getting started guide][getting-started].
 ## Run
 
 ```shell
-rpk connect -c ./config.yaml
+rpk connect run ./config.yaml
 ```
 
 Or, with docker:
