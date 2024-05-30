@@ -27,6 +27,7 @@ builds:
       -s -w
       -X main.Version={{.Version}}
       -X main.DateBuilt={{.Date}}
+      -X main.BinaryName=redpanda-connect
   # - id: connect-lambda
   #   main: cmd/serverless/connect-lambda/main.go
   #   binary: redpanda-connect-lambda

@@ -29,7 +29,24 @@ func main() {
 		service.CLIOptSetVersion(Version, DateBuilt),
 		service.CLIOptSetBinaryName(BinaryName),
 		service.CLIOptSetProductName("Redpanda Connect"),
+		service.CLIOptSetDefaultConfigPaths(
+			"redpanda-connect.yaml",
+			"/redpanda-connect.yaml",
+			"/etc/redpanda-connect/config.yaml",
+			"/etc/redpanda-connect.yaml",
+
+			"connect.yaml",
+			"/connect.yaml",
+			"/etc/connect/config.yaml",
+			"/etc/connect.yaml",
+
+			// Keep these for now, for backwards compatibility
+			"/benthos.yaml",
+			"/etc/benthos/config.yaml",
+			"/etc/benthos.yaml",
+		),
 		service.CLIOptSetDocumentationURL("https://docs.redpanda.com/redpanda-connect"),
+		service.CLIOptSetShowRunCommand(true),
 		service.CLIOptSetMainSchemaFrom(func() *service.ConfigSchema {
 			return service.NewEnvironment().FullConfigSchema(Version, DateBuilt).
 				Field(redpandaTopLevelConfigField())
