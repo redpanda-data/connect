@@ -12,7 +12,7 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
-var driverField = service.NewStringEnumField("driver", "mysql", "postgres", "clickhouse", "mssql", "sqlite", "oracle", "snowflake", "trino", "gocosmos").
+var driverField = service.NewStringEnumField("driver", "mysql", "postgres", "clickhouse", "mssql", "sqlite", "oracle", "snowflake", "trino", "gocosmos", "flightsql").
 	Description("A database <<drivers, driver>> to use.")
 
 var dsnField = service.NewStringField("dsn").
@@ -27,6 +27,9 @@ The following is a list of supported drivers, their placeholder style, and their
 
 ` + "| `clickhouse` " + `
 ` + "| https://github.com/ClickHouse/clickhouse-go#dsn[`clickhouse://[username[:password\\]@\\][netloc\\][:port\\]/dbname[?param1=value1&...&paramN=valueN\\]`^] " + `
+
+` + "| `flightsql` " + `
+` + "| `flightsql://[user[:password]@]<address>[:port][?param1=value1&...&paramN=valueN`" + `
 
 ` + "| `mysql` " + `
 ` + "| `[username[:password]@][protocol[(address)]]/dbname[?param1=value1&...&paramN=valueN]` " + `
@@ -61,7 +64,8 @@ The ` + "https://pkg.go.dev/github.com/microsoft/gocosmos[`gocosmos`^]" + ` driv
 	Example("clickhouse://username:password@host1:9000,host2:9000/database?dial_timeout=200ms&max_execution_time=60").
 	Example("foouser:foopassword@tcp(localhost:3306)/foodb").
 	Example("postgres://foouser:foopass@localhost:5432/foodb?sslmode=disable").
-	Example("oracle://foouser:foopass@localhost:1521/service_name")
+	Example("oracle://foouser:foopass@localhost:1521/service_name").
+	Example("flightsql://localhost:12345/foodb?token=bar")
 
 func connFields() []*service.ConfigField {
 	return []*service.ConfigField{
@@ -124,6 +128,7 @@ func rawQueryField() *service.ConfigField {
 | Driver | Placeholder Style |
 |---|---|
 ` + "| `clickhouse` | Dollar sign |" + `
+` + "| `flightsql` | Dollar sign |" + `
 ` + "| `mysql` | Question mark |" + `
 ` + "| `postgres` | Dollar sign |" + `
 ` + "| `mssql` | Question mark |" + `
