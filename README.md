@@ -64,7 +64,7 @@ brew install redpanda-data/tap/redpanda
 Or pull the docker image:
 
 ```shell
-docker pull ghcr.io/redpanda-data/connect
+docker pull docker.redpanda.com/redpandadata/redpanda
 ```
 
 For more information check out the [getting started guide][getting-started].
@@ -79,10 +79,10 @@ Or, with docker:
 
 ```shell
 # Using a config file
-docker run --rm -v /path/to/your/config.yaml:/connect.yaml ghcr.io/redpanda-data/connect
+docker run --rm -v /path/to/your/config.yaml:/connect.yaml docker.redpanda.com/redpandadata/redpanda connect run
 
 # Using a series of -s flags
-docker run --rm -p 4195:4195 ghcr.io/redpanda-data/connect \
+docker run --rm -p 4195:4195 docker.redpanda.com/redpandadata/redpanda connect run \
   -s "input.type=http_server" \
   -s "output.type=kafka" \
   -s "output.kafka.addresses=kafka-server:9092" \
