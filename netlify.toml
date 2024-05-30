@@ -1,0 +1,5 @@
+[[redirects]]
+  from = "/sh/install"
+  to = "https://docs.redpanda.com/redpanda-connect/_attachments/deprecated/install.sh"
+  status = 301
+  force = true
