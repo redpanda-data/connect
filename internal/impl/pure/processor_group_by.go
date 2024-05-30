@@ -147,14 +147,14 @@ func (g *groupByProc) ProcessBatch(ctx *processor.BatchProcContext, msg message.
 			}
 			if res {
 				groupStr := strconv.Itoa(j)
-				ctx.Span(i).LogKV("event", "grouped", "type", groupStr)
+				ctx.Span(i).LogKV("grouped", "type", groupStr)
 				ctx.Span(i).SetTag("group", groupStr)
 				groups[j] = append(groups[j], p)
 				return nil
 			}
 		}
 
-		ctx.Span(i).LogKV("event", "grouped", "type", "default")
+		ctx.Span(i).LogKV("grouped", "type", "default")
 		ctx.Span(i).SetTag("group", "default")
 		groupless = append(groupless, p)
 		return nil

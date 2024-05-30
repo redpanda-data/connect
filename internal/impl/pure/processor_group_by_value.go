@@ -99,7 +99,7 @@ func (g *groupByValueProc) ProcessBatch(ctx *processor.BatchProcContext, batch m
 			ctx.OnError(err, i, p)
 		}
 
-		ctx.Span(i).LogKV("event", "grouped", "type", v)
+		ctx.Span(i).LogKV("grouped", "type", v)
 		ctx.Span(i).SetTag("group", v)
 		if group, exists := groupMap[v]; exists {
 			groupMap[v] = append(group, p)

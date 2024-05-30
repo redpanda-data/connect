@@ -154,7 +154,7 @@ func (w *whileProc) ProcessBatch(ctx *processor.BatchProcContext, msg message.Ba
 
 		w.log.Trace("Looped")
 		for i := range msg {
-			ctx.Span(i).LogKV("event", "loop")
+			ctx.Span(i).LogKV("loop")
 		}
 
 		msgs, res = processor.ExecuteAll(ctx.Context(), w.children, msgs...)

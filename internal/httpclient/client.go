@@ -316,10 +316,7 @@ func (h *Client) SendToResponse(ctx context.Context, sendMsg service.MessageBatc
 	}
 	logErr := func(e error) {
 		for _, s := range spans {
-			s.LogKV(
-				"event", "error",
-				"type", e.Error(),
-			)
+			s.RecordError(e, true)
 		}
 	}
 
