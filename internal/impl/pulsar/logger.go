@@ -3,7 +3,7 @@ package pulsar
 import (
 	plog "github.com/apache/pulsar-client-go/pulsar/log"
 
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 // DefaultLogger returns a logger that wraps Benthos Modular logger.

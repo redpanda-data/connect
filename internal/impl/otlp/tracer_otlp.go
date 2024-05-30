@@ -15,12 +15,12 @@ import (
 	tracesdk "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/trace"
 
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 func oltpSpec() *service.ConfigSpec {
 	return service.NewConfigSpec().
-		Summary("Send tracing events to an [Open Telemetry collector](https://opentelemetry.io/docs/collector/).").
+		Summary("Send tracing events to an https://opentelemetry.io/docs/collector/[Open Telemetry collector^].").
 		Field(service.NewObjectListField("http",
 			service.NewStringField("address").
 				Description("The endpoint of a collector to send tracing events to.").

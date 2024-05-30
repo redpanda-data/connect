@@ -12,39 +12,41 @@ import (
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nkeys"
 
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 func authDescription() string {
-	return `### Authentication
+	return `
 
-There are several components within Benthos which utilise NATS services. You will find that each of these components
-support optional advanced authentication parameters for [NKeys](https://docs.nats.io/nats-server/configuration/securing_nats/auth_intro/nkey_auth)
-and [User Credentials](https://docs.nats.io/developing-with-nats/security/creds).
+== Authentication
 
-An in depth tutorial can be found [here](https://docs.nats.io/running-a-nats-service/nats_admin/security/jwt).
+There are several components within Benthos which uses NATS services. You will find that each of these components
+support optional advanced authentication parameters for https://docs.nats.io/nats-server/configuration/securing_nats/auth_intro/nkey_auth[NKeys^]
+and https://docs.nats.io/using-nats/developer/connecting/creds[User Credentials^].
 
-#### NKey file
+See an https://docs.nats.io/running-a-nats-service/nats_admin/security/jwt[in-depth tutorial^].
+
+=== NKey file
 
 The NATS server can use these NKeys in several ways for authentication. The simplest is for the server to be configured
 with a list of known public keys and for the clients to respond to the challenge by signing it with its private NKey
 configured in the ` + "`nkey_file`" + ` field.
 
-More details [here](https://docs.nats.io/developing-with-nats/security/nkey).
+https://docs.nats.io/running-a-nats-service/configuration/securing_nats/auth_intro/nkey_auth[More details^].
 
-#### User Credentials
+=== User credentials
 
-NATS server supports decentralized authentication based on JSON Web Tokens (JWT). Clients need an [user JWT](https://docs.nats.io/nats-server/configuration/securing_nats/jwt#json-web-tokens)
-and a corresponding [NKey secret](https://docs.nats.io/developing-with-nats/security/nkey) when connecting to a server
+NATS server supports decentralized authentication based on JSON Web Tokens (JWT). Clients need an https://docs.nats.io/nats-server/configuration/securing_nats/jwt#json-web-tokens[user JWT^]
+and a corresponding https://docs.nats.io/running-a-nats-service/configuration/securing_nats/auth_intro/nkey_auth[NKey secret^] when connecting to a server
 which is configured to use this authentication scheme.
 
 The ` + "`user_credentials_file`" + ` field should point to a file containing both the private key and the JWT and can be
-generated with the [nsc tool](https://docs.nats.io/nats-tools/nsc).
+generated with the https://docs.nats.io/nats-tools/nsc[nsc tool^].
 
 Alternatively, the ` + "`user_jwt`" + ` field can contain a plain text JWT and the ` + "`user_nkey_seed`" + `can contain
 the plain text NKey Seed.
 
-More details [here](https://docs.nats.io/developing-with-nats/security/creds).`
+https://docs.nats.io/using-nats/developer/connecting/creds[More details^].`
 }
 
 func authFieldSpec() *service.ConfigField {
@@ -90,7 +92,7 @@ func authConfToOptions(auth authConfig, fs *service.FS) []nats.Option {
 
 	// Previously we used nats.UserCredentials to authenticate. In order to
 	// support a custom FS implementation in our NATS components, we needed to
-	// switch to the nats.UserJWT option, while still preserving the behavior
+	// switch to the nats.UserJWT option, while still preserving the behaviour
 	// of the nats.UserCredentials option, which includes things like path
 	// expansing, home directory support and wiping credentials held in memory
 	if auth.UserCredentialsFile != "" {

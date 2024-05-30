@@ -11,7 +11,7 @@ import (
 
 	"github.com/Jeffail/checkpoint"
 
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 const (
@@ -43,17 +43,17 @@ func iskConfigSpec() *service.ConfigSpec {
 		Description(`
 Offsets are managed within Kafka under the specified consumer group, and partitions for each topic are automatically balanced across members of the consumer group.
 
-The Kafka input allows parallel processing of messages from different topic partitions, and messages of the same topic partition are processed with a maximum parallelism determined by the field `+"[`checkpoint_limit`](#checkpoint_limit)"+`.
+The Kafka input allows parallel processing of messages from different topic partitions, and messages of the same topic partition are processed with a maximum parallelism determined by the field `+"<<checkpoint_limit,`checkpoint_limit`>>"+`.
 
-In order to enforce ordered processing of partition messages set the `+"[`checkpoint_limit`](#checkpoint_limit) to `1`"+` and this will force partitions to be processed in lock-step, where a message will only be processed once the prior message is delivered.
+In order to enforce ordered processing of partition messages set the `+"<checkpoint_limit,`checkpoint_limit`>> to `1`"+` and this will force partitions to be processed in lock-step, where a message will only be processed once the prior message is delivered.
 
-Batching messages before processing can be enabled using the `+"[`batching`](#batching)"+` field, and this batching is performed per-partition such that messages of a batch will always originate from the same partition. This batching mechanism is capable of creating batches of greater size than the `+"[`checkpoint_limit`](#checkpoint_limit)"+`, in which case the next batch will only be created upon delivery of the current one.
+Batching messages before processing can be enabled using the `+"<<batching,`batching`>>"+` field, and this batching is performed per-partition such that messages of a batch will always originate from the same partition. This batching mechanism is capable of creating batches of greater size than the `+"<<checkpoint_limit,`checkpoint_limit`>>"+`, in which case the next batch will only be created upon delivery of the current one.
 
-### Metadata
+== Metadata
 
 This input adds the following metadata fields to each message:
 
-`+"``` text"+`
+`+"```text"+`
 - kafka_key
 - kafka_topic
 - kafka_partition
@@ -66,19 +66,19 @@ This input adds the following metadata fields to each message:
 
 The field `+"`kafka_lag`"+` is the calculated difference between the high water mark offset of the partition at the time of ingestion and the current message offset.
 
-You can access these metadata fields using [function interpolation](/docs/configuration/interpolation#bloblang-queries).
+You can access these metadata fields using xref:configuration:interpolation.adoc#bloblang-queries[function interpolation].
 
-### Ordering
+== Ordering
 
 By default messages of a topic partition can be processed in parallel, up to a limit determined by the field `+"`checkpoint_limit`"+`. However, if strict ordered processing is required then this value must be set to 1 in order to process shard messages in lock-step. When doing so it is recommended that you perform batching at this component for performance as it will not be possible to batch lock-stepped messages at the output level.
 
-### Troubleshooting
+== Troubleshooting
 
-If you're seeing issues writing to or reading from Kafka with this component then it's worth trying out the newer `+"[`kafka_franz` input](/docs/components/inputs/kafka_franz)"+`.
+If you're seeing issues writing to or reading from Kafka with this component then it's worth trying out the newer `+"xref:components:inputs/kafka_franz.adoc[`kafka_franz` input]"+`.
 
 - I'm seeing logs that report `+"`Failed to connect to kafka: kafka: client has run out of available brokers to talk to (Is your cluster reachable?)`"+`, but the brokers are definitely reachable.
 
-Unfortunately this error message will appear for a wide range of connection problems even when the broker endpoint can be reached. Double check your authentication configuration and also ensure that you have [enabled TLS](#tlsenabled) if applicable.`).
+Unfortunately this error message will appear for a wide range of connection problems even when the broker endpoint can be reached. Double check your authentication configuration and also ensure that you have <<tlsenabled, enabled TLS>> if applicable.`).
 		Fields(
 			service.NewStringListField(iskFieldAddresses).
 				Description("A list of broker addresses to connect to. If an item of the list contains commas it will be expanded into multiple addresses.").

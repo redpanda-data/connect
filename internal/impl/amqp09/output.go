@@ -13,7 +13,7 @@ import (
 
 	amqp "github.com/rabbitmq/amqp091-go"
 
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 func amqp09OutputSpec() *service.ConfigSpec {
@@ -27,7 +27,7 @@ It's possible for this output type to create the target exchange by setting `+"`
 
 TLS is automatic when connecting to an `+"`amqps`"+` URL, but custom settings can be enabled in the `+"`tls`"+` section.
 
-The fields 'key', 'exchange' and 'type' can be dynamically set using function interpolations described [here](/docs/configuration/interpolation#bloblang-queries).`).
+The fields 'key', 'exchange' and 'type' can be dynamically set using xref:configuration:interpolation.adoc#bloblang-queries[function interpolations].`).
 		Fields(
 			service.NewURLListField(urlsField).
 				Description("A list of URLs to connect to. The first URL to successfully establish a connection will be used until the connection is closed. If an item of the list contains commas it will be expanded into multiple URLs.").

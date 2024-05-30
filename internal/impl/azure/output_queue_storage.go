@@ -9,7 +9,7 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azqueue"
 
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 const (
@@ -46,7 +46,7 @@ func qsoSpec() *service.ConfigSpec {
 		Description(`
 Only one authentication method is required, `+"`storage_connection_string`"+` or `+"`storage_account` and `storage_access_key`"+`. If both are set then the `+"`storage_connection_string`"+` is given priority.
 
-In order to set the `+"`queue_name`"+` you can use function interpolations described [here](/docs/configuration/interpolation#bloblang-queries), which are calculated per message of a batch.`+service.OutputPerformanceDocs(true, true)).
+In order to set the `+"`queue_name`"+` you can use function interpolations described xref:configuration:interpolation.adoc#bloblang-queries[here], which are calculated per message of a batch.`+service.OutputPerformanceDocs(true, true)).
 		Fields(
 			service.NewInterpolatedStringField(qsoFieldQueueName).
 				Description("The name of the target Queue Storage queue."),

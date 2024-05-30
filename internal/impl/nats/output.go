@@ -8,7 +8,7 @@ import (
 
 	"github.com/nats-io/nats.go"
 
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 func natsOutputConfig() *service.ConfigSpec {
@@ -16,7 +16,7 @@ func natsOutputConfig() *service.ConfigSpec {
 		Stable().
 		Categories("Services").
 		Summary("Publish to an NATS subject.").
-		Description(`This output will interpolate functions within the subject field, you can find a list of functions [here](/docs/configuration/interpolation#bloblang-queries).
+		Description(`This output will interpolate functions within the subject field, you can find a list of functions xref:configuration:interpolation.adoc#bloblang-queries[here].
 
 ` + connectionNameDescription() + authDescription()).
 		Fields(connectionHeadFields()...).

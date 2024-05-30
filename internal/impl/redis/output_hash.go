@@ -8,7 +8,7 @@ import (
 
 	"github.com/redis/go-redis/v9"
 
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 const (
@@ -23,7 +23,7 @@ func redisHashOutputConfig() *service.ConfigSpec {
 		Stable().
 		Summary(`Sets Redis hash objects using the HMSET command.`).
 		Description(`
-The field `+"`key`"+` supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries), allowing you to create a unique key for each message.
+The field `+"`key`"+` supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions], allowing you to create a unique key for each message.
 
 The field `+"`fields`"+` allows you to specify an explicit map of field names to interpolated values, also evaluated per message of a batch:
 

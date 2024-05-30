@@ -5,14 +5,14 @@ import (
 	"github.com/r3labs/diff/v3"
 	"go.uber.org/multierr"
 
-	"github.com/benthosdev/benthos/v4/public/bloblang"
+	"github.com/redpanda-data/benthos/v4/public/bloblang"
 )
 
 func init() {
 	diffSpec := bloblang.NewPluginSpec().
 		Beta().
 		Category("Object & Array Manipulation").
-		Description(`Create a diff by comparing the current value with the given one. Wraps the github.com/r3labs/diff/v3 package. See its [docs](https://pkg.go.dev/github.com/r3labs/diff/v3) for more information.`).
+		Description(`Create a diff by comparing the current value with the given one. Wraps the github.com/r3labs/diff/v3 package. See its https://pkg.go.dev/github.com/r3labs/diff/v3[docs^] for more information.`).
 		Version("4.25.0").
 		Param(bloblang.NewAnyParam("other").Description("The value to compare against."))
 
@@ -45,7 +45,7 @@ func init() {
 	patchSpec := bloblang.NewPluginSpec().
 		Beta().
 		Category("Object & Array Manipulation").
-		Description(`Create a diff by comparing the current value with the given one. Wraps the github.com/r3labs/diff/v3 package. See its [docs](https://pkg.go.dev/github.com/r3labs/diff/v3) for more information.`).
+		Description(`Create a diff by comparing the current value with the given one. Wraps the github.com/r3labs/diff/v3 package. See its https://pkg.go.dev/github.com/r3labs/diff/v3[docs^] for more information.`).
 		Version("4.25.0").
 		Param(bloblang.NewAnyParam("changelog").Description("The changelog to apply."))
 

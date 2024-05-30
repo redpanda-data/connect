@@ -14,7 +14,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/push"
 	"github.com/prometheus/common/model"
 
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 const (
@@ -39,9 +39,9 @@ func ConfigSpec() *service.ConfigSpec {
 		Stable().
 		Summary("Host endpoints (`/metrics` and `/stats`) for Prometheus scraping.").
 		Footnotes(`
-## Push Gateway
+== Push gateway
 
-The field `+"`push_url`"+` is optional and when set will trigger a push of metrics to a [Prometheus Push Gateway](https://prometheus.io/docs/instrumenting/pushing/) once Benthos shuts down. It is also possible to specify a `+"`push_interval`"+` which results in periodic pushes.
+The field `+"`push_url`"+` is optional and when set will trigger a push of metrics to a https://prometheus.io/docs/instrumenting/pushing/[Prometheus Push Gateway^] once Benthos shuts down. It is also possible to specify a `+"`push_interval`"+` which results in periodic pushes.
 
 The Push Gateway is useful for when Benthos instances are short lived. Do not include the "/metrics/jobs/..." path in the push URL.
 
@@ -87,7 +87,7 @@ If the Push Gateway requires HTTP Basic Authentication it can be configured with
 				Advanced().
 				Default(false),
 			service.NewURLField(pmFieldPushURL).
-				Description("An optional [Push Gateway URL](#push-gateway) to push metrics to.").
+				Description("An optional <<push-gateway, Push Gateway URL>> to push metrics to.").
 				Advanced().
 				Optional(),
 			service.NewDurationField(pmFieldPushInterval).

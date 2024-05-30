@@ -2,5 +2,5 @@ resources
 icon.png
 LICENSE
 README.md
-target/bin/benthos
+target/bin
 target/dist

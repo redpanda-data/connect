@@ -10,7 +10,7 @@ on:
 
 jobs:
   test:
-    if: ${{ github.repository == 'benthosdev/benthos' || github.event_name != 'schedule' }}
+    if: ${{ github.repository == 'redpanda-data/connect' || github.event_name != 'schedule' }}
     runs-on: ubuntu-latest
     env:
       CGO_ENABLED: 0
@@ -22,20 +22,21 @@ jobs:
     - name: Install Go
       uses: actions/setup-go@v5
       with:
-        go-version: 1.21.x
+        go-version: 1.22.x
         check-latest: true
 
     - name: Deps
       run: make deps && git diff-index --quiet HEAD || { >&2 echo "Stale go.{mod,sum} detected. This can be fixed with 'make deps'."; exit 1; }
 
-    - name: Docs
-      run: make docs && git diff-index --quiet HEAD || { >&2 echo "Stale docs detected. This can be fixed with 'make docs'."; exit 1; }
+    # TODO
+    # - name: Docs
+    #   run: make docs && git diff-index --quiet HEAD || { >&2 echo "Stale docs detected. This can be fixed with 'make docs'."; exit 1; }
 
     - name: Test
       run: make test
 
   golangci-lint:
-    if: ${{ github.repository == 'benthosdev/benthos' || github.event_name != 'schedule' }}
+    if: ${{ github.repository == 'redpanda-data/connect' || github.event_name != 'schedule' }}
     runs-on: ubuntu-latest
     env:
       CGO_ENABLED: 0

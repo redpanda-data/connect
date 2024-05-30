@@ -14,7 +14,7 @@ import (
 	"github.com/cenkalti/backoff/v4"
 	"github.com/vmihailenco/msgpack/v5"
 
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 // SQLiteBufferConfig returns a config spec for an SQLite buffer.
@@ -26,11 +26,11 @@ func SQLiteBufferConfig() *service.ConfigSpec {
 		Description(`
 Stored messages are then consumed as a stream from the database and deleted only once they are successfully sent at the output level. If the service is restarted Benthos will make a best attempt to finish delivering messages that are already read from the database, and when it starts again it will consume from the oldest message that has not yet been delivered.
 
-## Delivery Guarantees
+== Delivery guarantees
 
 Messages are not acknowledged at the input level until they have been added to the SQLite database, and they are not removed from the SQLite database until they have been successfully delivered. This means at-least-once delivery guarantees are preserved in cases where the service is shut down unexpectedly. However, since this process relies on interaction with the disk (wherever the SQLite DB is stored) these delivery guarantees are not resilient to disk corruption or loss.
 
-## Batching
+== Batching
 
 Messages that are logically batched at the point where they are added to the buffer will continue to be associated with that batch when they are consumed. This buffer is also more efficient when storing messages within batches, and therefore it is recommended to use batching at the input level in high-throughput use cases even if they are not required for processing.
 `).
@@ -42,7 +42,7 @@ Messages that are logically batched at the point where they are added to the buf
 		Field(service.NewProcessorListField("post_processors").
 			Description("An optional list of processors to apply to messages after they are consumed from the buffer. These processors are useful for undoing any compression, archiving, etc that may have been done by your `pre_processors`.").
 			Optional()).
-		Example("Batching for optimisation", "Batching at the input level greatly increases the throughput of this buffer. If logical batches aren't needed for processing add a [`split` processor](/docs/components/processors/split) to the `post_processors`.", `
+		Example("Batching for optimization", "Batching at the input level greatly increases the throughput of this buffer. If logical batches aren't needed for processing add a xref:components:processors/split.adoc[`split` processor] to the `post_processors`.", `
 input:
   batched:
     child:

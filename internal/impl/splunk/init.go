@@ -3,7 +3,7 @@ package splunk
 import (
 	_ "embed"
 
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 //go:embed template_output.yaml

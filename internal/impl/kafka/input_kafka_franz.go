@@ -16,7 +16,7 @@ import (
 
 	"github.com/Jeffail/shutdown"
 
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 func franzKafkaInputConfig() *service.ConfigSpec {
@@ -24,17 +24,17 @@ func franzKafkaInputConfig() *service.ConfigSpec {
 		Beta().
 		Categories("Services").
 		Version("3.61.0").
-		Summary(`A Kafka input using the [Franz Kafka client library](https://github.com/twmb/franz-go).`).
+		Summary(`A Kafka input using the https://github.com/twmb/franz-go[Franz Kafka client library^].`).
 		Description(`
 When a consumer group is specified this input consumes one or more topics where partitions will automatically balance across any other connected clients with the same consumer group. When a consumer group is not specified topics can either be consumed in their entirety or with explicit partitions.
 
 This input often out-performs the traditional ` + "`kafka`" + ` input as well as providing more useful logs and error messages.
 
-### Metadata
+== Metadata
 
 This input adds the following metadata fields to each message:
 
-` + "``` text" + `
+` + "```text" + `
 - kafka_key
 - kafka_topic
 - kafka_partition
@@ -93,7 +93,7 @@ Finally, it's also possible to specify an explicit offset to consume from by add
 		Field(saslField()).
 		Field(service.NewBoolField("multi_header").Description("Decode headers into lists to allow handling of multiple values with the same key").Default(false).Advanced()).
 		Field(service.NewBatchPolicyField("batching").
-			Description("Allows you to configure a [batching policy](/docs/configuration/batching) that applies to individual topic partitions in order to batch messages together before flushing them for processing. Batching can be beneficial for performance as well as useful for windowed processing, and doing so this way preserves the ordering of topic partitions.").
+			Description("Allows you to configure a xref:configuration:batching.adoc[batching policy] that applies to individual topic partitions in order to batch messages together before flushing them for processing. Batching can be beneficial for performance as well as useful for windowed processing, and doing so this way preserves the ordering of topic partitions.").
 			Advanced()).
 		LintRule(`
 let has_topic_partitions = this.topics.any(t -> t.contains(":"))

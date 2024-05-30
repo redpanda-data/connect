@@ -11,8 +11,8 @@ import (
 
 	"github.com/pkg/sftp"
 
-	"github.com/benthosdev/benthos/v4/public/service"
-	"github.com/benthosdev/benthos/v4/public/service/codec"
+	"github.com/redpanda-data/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/service/codec"
 )
 
 const (
@@ -34,7 +34,7 @@ func sftpInputSpec() *service.ConfigSpec {
 		Version("3.39.0").
 		Summary(`Consumes files from an SFTP server.`).
 		Description(`
-## Metadata
+== Metadata
 
 This input adds the following metadata fields to each message:
 
@@ -42,7 +42,7 @@ This input adds the following metadata fields to each message:
 - sftp_path
 `+"```"+`
 
-You can access these metadata fields using [function interpolation](/docs/configuration/interpolation#bloblang-queries).`).
+You can access these metadata fields using xref:configuration:interpolation.adoc#bloblang-queries[function interpolation].`).
 		Fields(
 			service.NewStringField(siFieldAddress).
 				Description("The address of the server to connect to."),
@@ -71,7 +71,7 @@ You can access these metadata fields using [function interpolation](/docs/config
 					Default("1s").
 					Examples("100ms", "1s"),
 				service.NewStringField(siFieldWatcherCache).
-					Description("A [cache resource](/docs/components/caches/about) for storing the paths of files already consumed.").
+					Description("A xref:components:caches/about.adoc[cache resource] for storing the paths of files already consumed.").
 					Default(""),
 			).Description("An experimental mode whereby the input will periodically scan the target paths for new files and consume them, when all files are consumed the input will continue polling for new files.").
 				Version("3.42.0"),

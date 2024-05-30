@@ -7,7 +7,7 @@ import (
 
 	"github.com/redis/go-redis/v9"
 
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 const (
@@ -26,7 +26,7 @@ func redisListOutputConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Stable().
 		Summary(`Pushes messages onto the end of a Redis list (which is created if it doesn't already exist) using the RPUSH command.`).
-		Description(`The field `+"`key`"+` supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries), allowing you to create a unique key for each message.`+service.OutputPerformanceDocs(true, true)).
+		Description(`The field `+"`key`"+` supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions], allowing you to create a unique key for each message.`+service.OutputPerformanceDocs(true, true)).
 		Categories("Services").
 		Fields(clientFields()...).
 		Fields(

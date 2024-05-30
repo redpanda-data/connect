@@ -11,8 +11,9 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/data/azcosmos"
 	"github.com/mitchellh/mapstructure"
 
-	"github.com/benthosdev/benthos/v4/internal/impl/azure/cosmosdb"
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/service"
+
+	"github.com/redpanda-data/connect/v4/internal/impl/azure/cosmosdb"
 )
 
 const (
@@ -26,18 +27,18 @@ func cosmosDBInputSpec() *service.ConfigSpec {
 		// Beta().
 		Categories("Azure").
 		Version("v4.25.0").
-		Summary(`Executes a SQL query against [Azure CosmosDB](https://learn.microsoft.com/en-us/azure/cosmos-db/introduction) and creates a batch of messages from each page of items.`).
+		Summary(`Executes a SQL query against https://learn.microsoft.com/en-us/azure/cosmos-db/introduction[Azure CosmosDB^] and creates a batch of messages from each page of items.`).
 		Description(`
-## Cross-partition Queries
+== Cross-partition queries
 
-Cross-partition queries are currently not supported by the underlying driver. For every query, the PartitionKey value(s) must be known in advance and specified in the config. See details [here](https://github.com/Azure/azure-sdk-for-go/issues/18578#issuecomment-1222510989).
+Cross-partition queries are currently not supported by the underlying driver. For every query, the PartitionKey values must be known in advance and specified in the config. https://github.com/Azure/azure-sdk-for-go/issues/18578#issuecomment-1222510989[See details^].
 `+cosmosdb.CredentialsDocs+cosmosdb.MetadataDocs).
 		Footnotes(cosmosdb.EmulatorDocs).
 		Fields(cosmosdb.ContainerClientConfigFields()...).
 		Field(cosmosdb.PartitionKeysField(true)).
 		Field(service.NewStringField(cdbiFieldQuery).Description("The query to execute").Example(`SELECT c.foo FROM testcontainer AS c WHERE c.bar = "baz" AND c.timestamp < @timestamp`)).
 		Field(service.NewBloblangField(cdbiFieldArgsMapping).
-			Description("A [Bloblang mapping](/docs/guides/bloblang/about) that, for each message, creates a list of arguments to use with the query.").Optional().Example(`root = [
+			Description("A xref:guides:bloblang/about.adoc[Bloblang mapping] that, for each message, creates a list of arguments to use with the query.").Optional().Example(`root = [
   { "Name": "@name", "Value": "benthos" },
 ]`)).
 		Field(service.NewIntField(cdbiFieldBatchCount).

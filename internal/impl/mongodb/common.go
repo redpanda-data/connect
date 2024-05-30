@@ -12,8 +12,8 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"go.mongodb.org/mongo-driver/mongo/writeconcern"
 
-	"github.com/benthosdev/benthos/v4/public/bloblang"
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/bloblang"
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 // JSONMarshalMode represents the way in which BSON should be marshalled to JSON.
@@ -296,18 +296,18 @@ const (
 func writeMapsFields() []*service.ConfigField {
 	return []*service.ConfigField{
 		service.NewBloblangField(commonFieldDocumentMap).
-			Description("A bloblang map representing a document to store within MongoDB, expressed as [extended JSON in canonical form](https://www.mongodb.com/docs/manual/reference/mongodb-extended-json/). The document map is required for the operations " +
+			Description("A bloblang map representing a document to store within MongoDB, expressed as https://www.mongodb.com/docs/manual/reference/mongodb-extended-json/[extended JSON in canonical form^]. The document map is required for the operations " +
 				"insert-one, replace-one and update-one.").
 			Examples(mapExamples()...).
 			Default(""),
 		service.NewBloblangField(commonFieldFilterMap).
-			Description("A bloblang map representing a filter for a MongoDB command, expressed as [extended JSON in canonical form](https://www.mongodb.com/docs/manual/reference/mongodb-extended-json/). The filter map is required for all operations except " +
+			Description("A bloblang map representing a filter for a MongoDB command, expressed as https://www.mongodb.com/docs/manual/reference/mongodb-extended-json/[extended JSON in canonical form^]. The filter map is required for all operations except " +
 				"insert-one. It is used to find the document(s) for the operation. For example in a delete-one case, the filter map should " +
 				"have the fields required to locate the document to delete.").
 			Examples(mapExamples()...).
 			Default(""),
 		service.NewBloblangField(commonFieldHintMap).
-			Description("A bloblang map representing the hint for the MongoDB command, expressed as [extended JSON in canonical form](https://www.mongodb.com/docs/manual/reference/mongodb-extended-json/). This map is optional and is used with all operations " +
+			Description("A bloblang map representing the hint for the MongoDB command, expressed as https://www.mongodb.com/docs/manual/reference/mongodb-extended-json/[extended JSON in canonical form^]. This map is optional and is used with all operations " +
 				"except insert-one. It is used to improve performance of finding the documents in the mongodb.").
 			Examples(mapExamples()...).
 			Default(""),

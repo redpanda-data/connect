@@ -9,7 +9,7 @@ import (
 	"github.com/cenkalti/backoff/v4"
 	"github.com/dgraph-io/ristretto"
 
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 func ristrettoCacheConfig() *service.ConfigSpec {
@@ -20,7 +20,7 @@ func ristrettoCacheConfig() *service.ConfigSpec {
 
 	spec := service.NewConfigSpec().
 		Stable().
-		Summary(`Stores key/value pairs in a map held in the memory-bound [Ristretto cache](https://github.com/dgraph-io/ristretto).`).
+		Summary(`Stores key/value pairs in a map held in the memory-bound https://github.com/dgraph-io/ristretto[Ristretto cache^].`).
 		Description(`This cache is more efficient and appropriate for high-volume use cases than the standard memory cache. However, the add command is non-atomic, and therefore this cache is not suitable for deduplication.`).
 		Field(service.NewDurationField("default_ttl").
 			Description("A default TTL to set for items, calculated from the moment the item is cached. Set to an empty string or zero duration to disable TTLs.").
