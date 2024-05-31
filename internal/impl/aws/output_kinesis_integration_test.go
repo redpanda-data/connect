@@ -17,11 +17,12 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/benthosdev/benthos/v4/public/service"
-	"github.com/benthosdev/benthos/v4/public/service/integration"
+	"github.com/redpanda-data/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/service/integration"
 )
 
 func TestKinesisIntegration(t *testing.T) {
+	t.Skip("The docker image we're using here is old and deprecated")
 	integration.CheckSkip(t)
 
 	if testing.Short() {

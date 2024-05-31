@@ -14,9 +14,10 @@ import (
 
 	"github.com/olivere/elastic/v7"
 
-	baws "github.com/benthosdev/benthos/v4/internal/impl/aws"
-	"github.com/benthosdev/benthos/v4/internal/impl/elasticsearch"
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/service"
+
+	baws "github.com/redpanda-data/connect/v4/internal/impl/aws"
+	"github.com/redpanda-data/connect/v4/internal/impl/elasticsearch"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	v4 "github.com/aws/aws-sdk-go-v2/aws/signer/v4"

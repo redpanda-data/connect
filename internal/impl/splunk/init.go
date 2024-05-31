@@ -3,15 +3,14 @@ package splunk
 import (
 	_ "embed"
 
-	"github.com/benthosdev/benthos/v4/internal/bundle"
-	"github.com/benthosdev/benthos/v4/internal/template"
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 //go:embed template_output.yaml
 var outputTemplate []byte
 
 func init() {
-	if err := template.RegisterTemplateYAML(bundle.GlobalEnvironment, outputTemplate); err != nil {
+	if err := service.RegisterTemplateYAML(string(outputTemplate)); err != nil {
 		panic(err)
 	}
 }

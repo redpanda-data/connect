@@ -12,7 +12,7 @@ import (
 
 	"github.com/Jeffail/shutdown"
 
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 const (
@@ -55,15 +55,15 @@ func natsKVProcessorConfig() *service.ConfigSpec {
 		Version("4.12.0").
 		Summary("Perform operations on a NATS key-value bucket.").
 		Description(`
-### KV Operations
+== KV operations
 
-The NATS KV processor supports a multitude of KV operations via the [operation](#operation) field. Along with ` + "`get`" + `, ` + "`put`" + `, and ` + "`delete`" + `, this processor supports atomic operations like ` + "`update`" + ` and ` + "`create`" + `, as well as utility operations like ` + "`purge`" + `, ` + "`history`" + `, and ` + "`keys`" + `.
+The NATS KV processor supports a multitude of KV operations via the <<operation>> field. Along with ` + "`get`" + `, ` + "`put`" + `, and ` + "`delete`" + `, this processor supports atomic operations like ` + "`update`" + ` and ` + "`create`" + `, as well as utility operations like ` + "`purge`" + `, ` + "`history`" + `, and ` + "`keys`" + `.
 
-### Metadata
+== Metadata
 
 This processor adds the following metadata fields to each message, depending on the chosen ` + "`operation`" + `:
 
-#### get, get_revision
+=== get, get_revision
 ` + "``` text" + `
 - nats_kv_key
 - nats_kv_bucket
@@ -73,7 +73,7 @@ This processor adds the following metadata fields to each message, depending on 
 - nats_kv_created
 ` + "```" + `
 
-#### create, update, delete, purge
+=== create, update, delete, purge
 ` + "``` text" + `
 - nats_kv_key
 - nats_kv_bucket
@@ -81,7 +81,7 @@ This processor adds the following metadata fields to each message, depending on 
 - nats_kv_operation
 ` + "```" + `
 
-#### keys
+=== keys
 ` + "``` text" + `
 - nats_kv_bucket
 ` + "```" + `
@@ -91,7 +91,7 @@ This processor adds the following metadata fields to each message, depending on 
 			service.NewStringAnnotatedEnumField(kvpFieldOperation, kvpOperations).
 				Description("The operation to perform on the KV bucket."),
 			service.NewInterpolatedStringField(kvpFieldKey).
-				Description("The key for each message. Supports [wildcards](https://docs.nats.io/nats-concepts/subjects#wildcards) for the `history` and `keys` operations.").
+				Description("The key for each message. Supports https://docs.nats.io/nats-concepts/subjects#wildcards[wildcards^] for the `history` and `keys` operations.").
 				Example("foo").
 				Example("foo.bar.baz").
 				Example("foo.*").

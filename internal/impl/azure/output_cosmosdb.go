@@ -7,9 +7,9 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/sdk/data/azcosmos"
 
-	"github.com/benthosdev/benthos/v4/internal/component/output"
-	"github.com/benthosdev/benthos/v4/internal/impl/azure/cosmosdb"
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/service"
+
+	"github.com/redpanda-data/connect/v4/internal/impl/azure/cosmosdb"
 )
 
 const (
@@ -21,12 +21,12 @@ func cosmosDBOutputConfig() *service.ConfigSpec {
 		// Stable(). TODO
 		Categories("Azure").
 		Version("v4.25.0").
-		Summary("Creates or updates messages as JSON documents in [Azure CosmosDB](https://learn.microsoft.com/en-us/azure/cosmos-db/introduction).").
-		Description(output.Description(true, true, `
-When creating documents, each message must have the `+"`id`"+` property (case-sensitive) set (or use `+"`auto_id: true`"+`). It is the unique name that identifies the document, that is, no two documents share the same `+"`id`"+` within a logical partition. The `+"`id`"+` field must not exceed 255 characters. More details can be found [here](https://learn.microsoft.com/en-us/rest/api/cosmos-db/documents).
+		Summary("Creates or updates messages as JSON documents in https://learn.microsoft.com/en-us/azure/cosmos-db/introduction[Azure CosmosDB^].").
+		Description(`
+When creating documents, each message must have the `+"`id`"+` property (case-sensitive) set (or use `+"`auto_id: true`"+`). It is the unique name that identifies the document, that is, no two documents share the same `+"`id`"+` within a logical partition. The `+"`id`"+` field must not exceed 255 characters. https://learn.microsoft.com/en-us/rest/api/cosmos-db/documents[See details^].
 
 The `+"`partition_keys`"+` field must resolve to the same value(s) across the entire message batch.
-`+cosmosdb.CredentialsDocs+cosmosdb.BatchingDocs)).
+`+cosmosdb.CredentialsDocs+cosmosdb.BatchingDocs+service.OutputPerformanceDocs(true, true)).
 		Footnotes(cosmosdb.EmulatorDocs).
 		Fields(cosmosdb.ContainerClientConfigFields()...).
 		Field(cosmosdb.PartitionKeysField(false)).

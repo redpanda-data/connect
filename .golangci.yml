@@ -20,8 +20,8 @@ linters-settings:
       - name: superfluous-else
   errcheck:
     exclude-functions:
-      - (*github.com/benthosdev/benthos/v4/internal/batch.Error).Failed
-      - (*github.com/benthosdev/benthos/v4/public/service.BatchError).Failed
+      - (*github.com/redpanda-data/benthos/v4/internal/batch.Error).Failed
+      - (*github.com/redpanda-data/benthos/v4/public/service.BatchError).Failed
   govet:
     enable-all: true
     disable:

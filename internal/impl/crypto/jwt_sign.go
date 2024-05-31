@@ -4,10 +4,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/golang-jwt/jwt/v4"
+	"github.com/golang-jwt/jwt/v5"
 
-	"github.com/benthosdev/benthos/v4/internal/bloblang/query"
-	"github.com/benthosdev/benthos/v4/public/bloblang"
+	"github.com/redpanda-data/benthos/v4/public/bloblang"
 )
 
 type secretDecoderFunc func(secret string) (any, error)
@@ -58,7 +57,7 @@ type signJwtMethodSpec struct {
 
 func registerSignJwtMethod(m signJwtMethodSpec) error {
 	spec := bloblang.NewPluginSpec().
-		Category(query.MethodCategoryJWT).
+		Category("JSON Web Tokens").
 		Description(fmt.Sprintf("Hash and sign an object representing JSON Web Token (JWT) claims using %s.", m.method.Alg())).
 		Param(bloblang.NewStringParam("signing_secret").Description("The secret to use for signing the token.")).
 		Version(m.version)

@@ -11,9 +11,7 @@ import (
 
 	"github.com/pkg/sftp"
 
-	"github.com/benthosdev/benthos/v4/internal/codec"
-	"github.com/benthosdev/benthos/v4/internal/component/output"
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 const (
@@ -28,13 +26,22 @@ func sftpOutputSpec() *service.ConfigSpec {
 		Categories("Network").
 		Version("3.39.0").
 		Summary(`Writes files to an SFTP server.`).
-		Description(output.Description(true, false, `In order to have a different path for each object you should use function interpolations described [here](/docs/configuration/interpolation#bloblang-queries).`)).
+		Description(`In order to have a different path for each object you should use function interpolations described xref:configuration:interpolation.adoc#bloblang-queries[here].`+service.OutputPerformanceDocs(true, false)).
 		Fields(
 			service.NewStringField(soFieldAddress).
 				Description("The address of the server to connect to."),
 			service.NewInterpolatedStringField(soFieldPath).
 				Description("The file to save the messages to on the server."),
-			service.NewInternalField(codec.NewWriterDocs("codec").HasDefault("all-bytes")),
+			service.NewStringAnnotatedEnumField("codec", map[string]string{
+				"all-bytes": "Only applicable to file based outputs. Writes each message to a file in full, if the file already exists the old content is deleted.",
+				"append":    "Append each message to the output stream without any delimiter or special encoding.",
+				"lines":     "Append each message to the output stream followed by a line break.",
+				"delim:x":   "Append each message to the output stream followed by a custom delimiter.",
+			}).
+				Description("The way in which the bytes of messages should be written out into the output data stream. It's possible to write lines using a custom delimiter with the `delim:x` codec, where x is the character sequence custom delimiter.").
+				LintRule("").
+				Examples("lines", "delim:\t", "delim:foobar").
+				Default("all-bytes"),
 			service.NewObjectField(soFieldCredentials, credentialsFields()...).
 				Description("The credentials to use to log into the target server."),
 			service.NewOutputMaxInFlightField(),
@@ -65,7 +72,7 @@ type sftpWriter struct {
 	address    string
 	creds      Credentials
 	path       *service.InterpolatedString
-	suffixFn   codec.SuffixFn
+	suffixFn   codecSuffixFn
 	appendMode bool
 
 	handleMut  sync.Mutex
@@ -84,7 +91,7 @@ func newWriterFromParsed(conf *service.ParsedConfig, mgr *service.Resources) (s 
 	if codecStr, err = conf.FieldString("codec"); err != nil {
 		return
 	}
-	if s.suffixFn, s.appendMode, err = codec.GetWriter(codecStr); err != nil {
+	if s.suffixFn, s.appendMode, err = codecGetWriter(codecStr); err != nil {
 		return nil, err
 	}
 

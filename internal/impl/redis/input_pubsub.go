@@ -6,8 +6,7 @@ import (
 
 	"github.com/redis/go-redis/v9"
 
-	"github.com/benthosdev/benthos/v4/internal/component"
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 const (
@@ -118,15 +117,14 @@ func (r *redisPubSubReader) Read(ctx context.Context) (*service.Message, service
 	case rMsg, open := <-pubsub.Channel():
 		if !open {
 			_ = r.disconnect()
-			return nil, nil, component.ErrTypeClosed
+			return nil, nil, service.ErrEndOfInput
 		}
 		return service.NewMessage([]byte(rMsg.Payload)), func(ctx context.Context, err error) error {
 			return nil
 		}, nil
 	case <-ctx.Done():
+		return nil, nil, ctx.Err()
 	}
-
-	return nil, nil, component.ErrTimeout
 }
 
 func (r *redisPubSubReader) disconnect() error {

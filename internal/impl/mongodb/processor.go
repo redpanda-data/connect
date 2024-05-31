@@ -9,8 +9,9 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 
-	"github.com/benthosdev/benthos/v4/internal/impl/pure"
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/service"
+
+	"github.com/redpanda-data/connect/v4/internal/retries"
 )
 
 const (
@@ -30,8 +31,8 @@ func ProcessorSpec() *service.ConfigSpec {
 		Fields(
 			service.NewStringField(mpFieldCollection).
 				Description("The name of the target collection."),
-			service.NewInternalField(processorOperationDocs(OperationInsertOne)),
-			service.NewInternalField(writeConcernDocs()),
+			processorOperationDocs(OperationInsertOne),
+			writeConcernDocs(),
 		).
 		Fields(writeMapsFields()...).
 		Field(service.NewStringAnnotatedEnumField(mpFieldJSONMarshalMode, map[string]string{
@@ -42,7 +43,7 @@ func ProcessorSpec() *service.ConfigSpec {
 			Advanced().
 			Version("3.60.0").
 			Default(string(JSONMarshalModeCanonical)))
-	for _, f := range pure.CommonRetryBackOffFields(3, "1s", "5s", "30s") {
+	for _, f := range retries.CommonRetryBackOffFields(3, "1s", "5s", "30s") {
 		spec = spec.Field(f.Deprecated())
 	}
 	return spec

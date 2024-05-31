@@ -11,11 +11,8 @@ import (
 
 	"github.com/gocql/gocql"
 
-	"github.com/benthosdev/benthos/v4/internal/component"
-	"github.com/benthosdev/benthos/v4/internal/component/output"
-	"github.com/benthosdev/benthos/v4/internal/value"
-	"github.com/benthosdev/benthos/v4/public/bloblang"
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/bloblang"
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 const (
@@ -30,10 +27,10 @@ func outputSpec() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Beta().
 		Summary("Runs a query against a Cassandra database for each message in order to insert data.").
-		Description(output.Description(true, true, `
+		Description(`
 Query arguments can be set using a bloblang array for the fields using the `+"`args_mapping`"+` field.
 
-When populating timestamp columns the value must either be a string in ISO 8601 format (2006-01-02T15:04:05Z07:00), or an integer representing unix time in seconds.`)).
+When populating timestamp columns the value must either be a string in ISO 8601 format (2006-01-02T15:04:05Z07:00), or an integer representing unix time in seconds.`+service.OutputPerformanceDocs(true, true)).
 		Example(
 			"Basic Inserts",
 			"If we were to create a table with some basic columns with `CREATE TABLE foo.bar (id int primary key, content text, created_at timestamp);`, and were processing JSON documents of the form `{\"id\":\"342354354\",\"content\":\"hello world\",\"timestamp\":1605219406}` using logged batches, we could populate our table with the following config:",
@@ -74,7 +71,7 @@ output:
 			service.NewStringField(coFieldQuery).
 				Description("A query to execute for each message."),
 			service.NewBloblangField(coFieldArgsMapping).
-				Description("A [Bloblang mapping](/docs/guides/bloblang/about) that can be used to provide arguments to Cassandra queries. The result of the query must be an array containing a matching number of elements to the query arguments.").
+				Description("A xref:guides:bloblang/about.adoc[Bloblang mapping] that can be used to provide arguments to Cassandra queries. The result of the query must be an array containing a matching number of elements to the query arguments.").
 				Version("3.55.0").
 				Optional(),
 			service.NewStringEnumField(coFieldConsistency,
@@ -185,7 +182,7 @@ func (c *cassandraWriter) WriteBatch(ctx context.Context, batch service.MessageB
 	c.connLock.RUnlock()
 
 	if c.session == nil {
-		return component.ErrNotConnected
+		return service.ErrNotConnected
 	}
 
 	if len(batch) == 1 {
@@ -307,28 +304,28 @@ type genericValue struct {
 func (g genericValue) MarshalCQL(info gocql.TypeInfo) ([]byte, error) {
 	switch info.Type() {
 	case gocql.TypeTimestamp:
-		t, err := value.IGetTimestamp(g.v)
+		t, err := bloblang.ValueAsTimestamp(g.v)
 		if err != nil {
 			return nil, err
 		}
 		return gocql.Marshal(info, t)
 	case gocql.TypeDouble:
-		f, err := value.IGetNumber(g.v)
+		f, err := bloblang.ValueAsFloat64(g.v)
 		if err != nil {
 			return nil, err
 		}
 		return gocql.Marshal(info, f)
 	case gocql.TypeFloat:
-		f, err := value.IGetFloat32(g.v)
+		f, err := bloblang.ValueAsFloat32(g.v)
 		if err != nil {
 			return nil, err
 		}
 		return gocql.Marshal(info, f)
 	case gocql.TypeVarchar:
-		return gocql.Marshal(info, value.IToString(g.v))
+		return gocql.Marshal(info, bloblang.ValueToString(g.v))
 	}
 	if _, isJSONNum := g.v.(json.Number); isJSONNum {
-		i, err := value.IGetInt(g.v)
+		i, err := bloblang.ValueAsInt64(g.v)
 		if err != nil {
 			return nil, err
 		}

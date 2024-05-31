@@ -9,8 +9,7 @@ import (
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 
-	"github.com/benthosdev/benthos/v4/internal/component/output"
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 const (
@@ -26,8 +25,8 @@ func outputConfigSpec() *service.ConfigSpec {
 		Stable().
 		Categories("Services").
 		Summary("Pushes messages to an MQTT broker.").
-		Description(output.Description(true, false, `
-The `+"`topic`"+` field can be dynamically set using function interpolations described [here](/docs/configuration/interpolation#bloblang-queries). When sending batched messages these interpolations are performed per message part.`)).
+		Description(`
+The `+"`topic`"+` field can be dynamically set using function interpolations described xref:configuration:interpolation.adoc#bloblang-queries[here]. When sending batched messages these interpolations are performed per message part.`+service.OutputPerformanceDocs(true, false)).
 		Fields(ClientFields()...).
 		Fields(
 			service.NewInterpolatedStringField(moFieldTopic).

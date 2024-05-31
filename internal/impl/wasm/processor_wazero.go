@@ -11,7 +11,7 @@ import (
 	"github.com/tetratelabs/wazero/api"
 	"github.com/tetratelabs/wazero/imports/wasi_snapshot_preview1"
 
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 func wazeroAllocProcessorConfig() *service.ConfigSpec {
@@ -20,15 +20,15 @@ func wazeroAllocProcessorConfig() *service.ConfigSpec {
 		Categories("Utility").
 		Summary("Executes a function exported by a WASM module for each message.").
 		Description(`
-This processor uses [Wazero](https://github.com/tetratelabs/wazero) to execute a WASM module (with support for WASI), calling a specific function for each message being processed. From within the WASM module it is possible to query and mutate the message being processed via a suite of functions exported to the module.
+This processor uses https://github.com/tetratelabs/wazero[Wazero^] to execute a WASM module (with support for WASI), calling a specific function for each message being processed. From within the WASM module it is possible to query and mutate the message being processed via a suite of functions exported to the module.
 
-This ecosystem is delicate as WASM doesn't have a single clearly defined way to pass strings back and forth between the host and the module. In order to remedy this we're gradually working on introducing libraries and examples for multiple languages which can be found in [the codebase](https://github.com/benthosdev/benthos/tree/main/public/wasm/README.md).
+This ecosystem is delicate as WASM doesn't have a single clearly defined way to pass strings back and forth between the host and the module. In order to remedy this we're gradually working on introducing libraries and examples for multiple languages which can be found in https://github.com/{project-github}/tree/main/public/wasm/README.md[the codebase^].
 
 These examples, as well as the processor itself, is a work in progress.
 
-### Parallelism
+== Parallelism
 
-It's not currently possible to execute a single WASM runtime across parallel threads with this processor. Therefore, in order to support parallel processing this processor implements pooling of module runtimes. Ideally your WASM module shouldn't depend on any global state, but if it does then you need to ensure the processor [is only run on a single thread](/docs/configuration/processing_pipelines).
+It's not currently possible to execute a single WASM runtime across parallel threads with this processor. Therefore, in order to support parallel processing this processor implements pooling of module runtimes. Ideally your WASM module shouldn't depend on any global state, but if it does then you need to ensure the processor xref:configuration:processing_pipelines.adoc[is only run on a single thread].
 `).
 		Field(service.NewStringField("module_path").
 			Description("The path of the target WASM module to execute.")).

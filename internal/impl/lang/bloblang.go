@@ -14,8 +14,7 @@ import (
 	"github.com/oklog/ulid"
 	frand "golang.org/x/exp/rand"
 
-	"github.com/benthosdev/benthos/v4/internal/bloblang/query"
-	"github.com/benthosdev/benthos/v4/public/bloblang"
+	"github.com/redpanda-data/benthos/v4/public/bloblang"
 )
 
 func init() {
@@ -25,7 +24,7 @@ func init() {
 	slugSpec := bloblang.NewPluginSpec().
 		Beta().
 		Category("String Manipulation").
-		Description(`Creates a "slug" from a given string. Wraps the github.com/gosimple/slug package. See its [docs](https://pkg.go.dev/github.com/gosimple/slug) for more information.`).
+		Description(`Creates a "slug" from a given string. Wraps the github.com/gosimple/slug package. See its https://pkg.go.dev/github.com/gosimple/slug[docs^] for more information.`).
 		Version("4.2.0").
 		Example("Creates a slug from an English string",
 			`root.slug = this.value.slug()`,
@@ -57,14 +56,14 @@ func init() {
 
 	fakerSpec := bloblang.NewPluginSpec().
 		Beta().
-		Category(query.FunctionCategoryFakeData).
-		Description("Takes in a string that maps to a [faker](https://github.com/go-faker/faker) function and returns the result from that faker function. "+
+		Category("Fake Data Generation").
+		Description("Takes in a string that maps to a https://github.com/go-faker/faker[faker^] function and returns the result from that faker function. "+
 			"Returns an error if the given string doesn't match a supported faker function. Supported functions: `latitude`, `longitude`, `unix_time`, "+
 			"`date`, `time_string`, `month_name`, `year_string`, `day_of_week`, `day_of_month`, `timestamp`, `century`, `timezone`, `time_period`, "+
 			"`email`, `mac_address`, `domain_name`, `url`, `username`, `ipv4`, `ipv6`, `password`, `jwt`, `word`, `sentence`, `paragraph`, "+
 			"`cc_type`, `cc_number`, `currency`, `amount_with_currency`, `title_male`, `title_female`, `first_name`, `first_name_male`, "+
 			"`first_name_female`, `last_name`, `name`, `gender`, `chinese_first_name`, `chinese_last_name`, `chinese_name`, `phone_number`, "+
-			"`toll_free_phone_number`, `e164_phone_number`, `uuid_hyphenated`, `uuid_digit`. Refer to the [faker](https://github.com/go-faker/faker) docs "+
+			"`toll_free_phone_number`, `e164_phone_number`, `uuid_hyphenated`, `uuid_digit`. Refer to the https://github.com/go-faker/faker[faker^] docs "+
 			"for details on these functions.").
 		Param(bloblang.NewStringParam("function").Description("The name of the function to use to generate the value.").Default("")).
 		Example("Use `time_string` to generate a time in the format `00:00:00`:",
@@ -73,7 +72,7 @@ func init() {
 			`root.email = fake("email")`).
 		Example("Use `jwt` to generate a JWT token:",
 			`root.jwt = fake("jwt")`).
-		Example("Use `uuid_hyphenated` to generate a hypenated UUID:",
+		Example("Use `uuid_hyphenated` to generate a hyphenated UUID:",
 			`root.uuid = fake("uuid_hyphenated")`)
 
 	if err := bloblang.RegisterFunctionV2(
@@ -93,7 +92,7 @@ func init() {
 	}
 
 	snowflakeidSpec := bloblang.NewPluginSpec().
-		Category(query.FunctionCategoryGeneral).
+		Category("General").
 		Description("Generate a new snowflake ID each time it is invoked and prints a string representation. I.e.: 1559229974454472704").
 		Param(bloblang.NewInt64Param("node_id").Description("It is possible to specify the node_id.").Default(int64(1))).
 		Example("", `root.id = snowflake_id()`).
@@ -246,7 +245,7 @@ func registerULID() error {
 	randSources := []string{"secure_random", "fast_random"}
 	spec := bloblang.NewPluginSpec().
 		Experimental().
-		Category(query.FunctionCategoryGeneral).
+		Category("General").
 		Description("Generate a random ULID.").
 		Param(
 			bloblang.NewStringParam("encoding").

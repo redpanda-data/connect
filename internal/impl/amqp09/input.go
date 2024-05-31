@@ -14,8 +14,7 @@ import (
 
 	amqp "github.com/rabbitmq/amqp091-go"
 
-	"github.com/benthosdev/benthos/v4/internal/component"
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 func amqp09InputSpec() *service.ConfigSpec {
@@ -26,7 +25,7 @@ func amqp09InputSpec() *service.ConfigSpec {
 		Description(`
 TLS is automatic when connecting to an `+"`amqps`"+` URL, but custom settings can be enabled in the `+"`tls`"+` section.
 
-### Metadata
+== Metadata
 
 This input adds the following metadata fields to each message:
 
@@ -51,7 +50,7 @@ This input adds the following metadata fields to each message:
 - All existing message headers, including nested headers prefixed with the key of their respective parent.
 `+"```"+`
 
-You can access these metadata fields using [function interpolation](/docs/configuration/interpolation#bloblang-queries).`).Fields(
+You can access these metadata fields using xref:configuration:interpolation.adoc#bloblang-queries[function interpolations].`).Fields(
 		service.NewURLListField(urlsField).
 			Description("A list of URLs to connect to. The first URL to successfully establish a connection will be used until the connection is closed. If an item of the list contains commas it will be expanded into multiple URLs.").
 			Example([]string{"amqp://guest:guest@127.0.0.1:5672/"}).
@@ -467,8 +466,8 @@ func (a *amqp09Reader) Read(ctx context.Context) (*service.Message, service.AckF
 			return data.Ack(false)
 		}, nil
 	case <-ctx.Done():
+		return nil, nil, ctx.Err()
 	}
-	return nil, nil, component.ErrTimeout
 }
 
 func (a *amqp09Reader) Close(ctx context.Context) error {

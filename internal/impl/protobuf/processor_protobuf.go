@@ -8,8 +8,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/benthosdev/benthos/v4/internal/filepath/ifs"
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/service"
 
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
@@ -33,22 +32,22 @@ func protobufProcessorSpec() *service.ConfigSpec {
 		Summary(`
 Performs conversions to or from a protobuf message. This processor uses reflection, meaning conversions can be made directly from the target .proto files.
 `).Description(`
-The main functionality of this processor is to map to and from JSON documents, you can read more about JSON mapping of protobuf messages here: [https://developers.google.com/protocol-buffers/docs/proto3#json](https://developers.google.com/protocol-buffers/docs/proto3#json)
+The main functionality of this processor is to map to and from JSON documents, you can read more about JSON mapping of protobuf messages here: https://developers.google.com/protocol-buffers/docs/proto3#json[https://developers.google.com/protocol-buffers/docs/proto3#json^]
 
-Using reflection for processing protobuf messages in this way is less performant than generating and using native code. Therefore when performance is critical it is recommended that you use Benthos plugins instead for processing protobuf messages natively, you can find an example of Benthos plugins at [https://github.com/benthosdev/benthos-plugin-example](https://github.com/benthosdev/benthos-plugin-example)
+Using reflection for processing protobuf messages in this way is less performant than generating and using native code. Therefore when performance is critical it is recommended that you use Benthos plugins instead for processing protobuf messages natively, you can find an example of Benthos plugins at https://github.com/benthosdev/benthos-plugin-example[https://github.com/benthosdev/benthos-plugin-example^]
 
-## Operators
+== Operators
 
-### `+"`to_json`"+`
+=== `+"`to_json`"+`
 
 Converts protobuf messages into a generic JSON structure. This makes it easier to manipulate the contents of the document within Benthos.
 
-### `+"`from_json`"+`
+=== `+"`from_json`"+`
 
 Attempts to create a target protobuf message from a generic JSON structure.
 `).Fields(
 		service.NewStringEnumField(fieldOperator, "to_json", "from_json").
-			Description("The [operator](#operators) to execute"),
+			Description("The <<operators, operator>> to execute"),
 		service.NewStringField(fieldMessage).
 			Description("The fully qualified name of the protobuf message to convert to/from."),
 		service.NewBoolField(fieldDiscardUnknown).
@@ -153,7 +152,7 @@ func init() {
 
 type protobufOperator func(part *service.Message) error
 
-func newProtobufToJSONOperator(f ifs.FS, msg string, importPaths []string, useProtoNames bool) (protobufOperator, error) {
+func newProtobufToJSONOperator(f fs.FS, msg string, importPaths []string, useProtoNames bool) (protobufOperator, error) {
 	if msg == "" {
 		return nil, errors.New("message field must not be empty")
 	}
@@ -198,7 +197,7 @@ func newProtobufToJSONOperator(f ifs.FS, msg string, importPaths []string, usePr
 	}, nil
 }
 
-func newProtobufFromJSONOperator(f ifs.FS, msg string, importPaths []string, discardUnknown bool) (protobufOperator, error) {
+func newProtobufFromJSONOperator(f fs.FS, msg string, importPaths []string, discardUnknown bool) (protobufOperator, error) {
 	if msg == "" {
 		return nil, errors.New("message field must not be empty")
 	}
@@ -243,7 +242,7 @@ func newProtobufFromJSONOperator(f ifs.FS, msg string, importPaths []string, dis
 	}, nil
 }
 
-func strToProtobufOperator(f ifs.FS, opStr, message string, importPaths []string, discardUnknown, useProtoNames bool) (protobufOperator, error) {
+func strToProtobufOperator(f fs.FS, opStr, message string, importPaths []string, discardUnknown, useProtoNames bool) (protobufOperator, error) {
 	switch opStr {
 	case "to_json":
 		return newProtobufToJSONOperator(f, message, importPaths, useProtoNames)
@@ -253,7 +252,7 @@ func strToProtobufOperator(f ifs.FS, opStr, message string, importPaths []string
 	return nil, fmt.Errorf("operator not recognised: %v", opStr)
 }
 
-func loadDescriptors(f ifs.FS, importPaths []string) (*protoregistry.Files, *protoregistry.Types, error) {
+func loadDescriptors(f fs.FS, importPaths []string) (*protoregistry.Files, *protoregistry.Types, error) {
 	files := map[string]string{}
 	for _, importPath := range importPaths {
 		if err := fs.WalkDir(f, importPath, func(path string, info fs.DirEntry, ferr error) error {

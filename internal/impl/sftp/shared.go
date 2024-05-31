@@ -8,8 +8,7 @@ import (
 	"github.com/pkg/sftp"
 	"golang.org/x/crypto/ssh"
 
-	"github.com/benthosdev/benthos/v4/internal/filepath/ifs"
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 const (
@@ -85,7 +84,7 @@ func (c Credentials) GetClient(fs fs.FS, address string) (*sftp.Client, error) {
 	if c.PrivateKeyFile != "" {
 		// read private key file
 		var privateKey []byte
-		privateKey, err = ifs.ReadFile(fs, c.PrivateKeyFile)
+		privateKey, err = service.ReadFile(fs, c.PrivateKeyFile)
 		if err != nil {
 			return nil, fmt.Errorf("failed to read private key: %v", err)
 		}

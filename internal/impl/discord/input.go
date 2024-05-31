@@ -13,7 +13,7 @@ import (
 
 	"github.com/Jeffail/shutdown"
 
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 func inputConfig() *service.ConfigSpec {
@@ -130,7 +130,7 @@ func (r *reader) Connect(ctx context.Context) error {
 		return fmt.Errorf("failed to obtain latest seen message ID: %v", err)
 	}
 
-	sess, doneWithSessFn, err := getGlobalSession(r.botToken)
+	sess, doneWithSessFn, err := getGlobalSession(r.botToken, r.mgr.EngineVersion())
 	if err != nil {
 		return err
 	}

@@ -1,4 +1,4 @@
-package kafka_test
+package kafka
 
 import (
 	"fmt"
@@ -8,18 +8,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/benthosdev/benthos/v4/internal/component/input"
-	"github.com/benthosdev/benthos/v4/internal/component/testutil"
-	"github.com/benthosdev/benthos/v4/internal/manager/mock"
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
-
-func parseYAMLInputConf(t testing.TB, formatStr string, args ...any) (conf input.Config) {
-	t.Helper()
-	var err error
-	conf, err = testutil.InputFromYAML(fmt.Sprintf(formatStr, args...))
-	require.NoError(t, err)
-	return
-}
 
 func TestKafkaBadParams(t *testing.T) {
 	testCases := []struct {
@@ -47,13 +37,13 @@ func TestKafkaBadParams(t *testing.T) {
 	for _, test := range testCases {
 		test := test
 		t.Run(test.name, func(t *testing.T) {
-			conf := parseYAMLInputConf(t, `
-kafka:
-  addresses: [ example.com:1234 ]
-  topics: %v
-`, gabs.Wrap(test.topics).String())
+			pConf, err := iskConfigSpec().ParseYAML(fmt.Sprintf(`
+addresses: [ example.com:1234 ]
+topics: %v
+`, gabs.Wrap(test.topics).String()), nil)
+			require.NoError(t, err)
 
-			_, err := mock.NewManager().NewInput(conf)
+			_, err = newKafkaReaderFromParsed(pConf, service.MockResources())
 			require.Error(t, err)
 			assert.Contains(t, err.Error(), test.errStr)
 		})

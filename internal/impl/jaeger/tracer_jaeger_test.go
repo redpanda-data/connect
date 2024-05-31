@@ -11,8 +11,6 @@ import (
 	tracesdk "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 	semconv "go.opentelemetry.io/otel/semconv/v1.7.0"
-
-	"github.com/benthosdev/benthos/v4/internal/cli"
 )
 
 func TestGetAgentOps(t *testing.T) {
@@ -56,11 +54,6 @@ func TestNewJaeger(t *testing.T) {
 
 	dummyVersion := "v1.0"
 
-	// Naughty global value reassignment
-	origCliVersion := cli.Version
-	cli.Version = dummyVersion
-	defer func() { cli.Version = origCliVersion }()
-
 	tests := []struct {
 		Name           string
 		ServiceName    string
@@ -93,7 +86,8 @@ func TestNewJaeger(t *testing.T) {
 		exporter.Reset()
 
 		jaegerProvider, err := NewJaeger(jaegerConfig{
-			Tags: test.Tags,
+			engineVersion: dummyVersion,
+			Tags:          test.Tags,
 		})
 		require.NoError(t, err, test.Name)
 

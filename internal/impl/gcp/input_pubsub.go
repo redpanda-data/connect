@@ -9,8 +9,7 @@ import (
 	"cloud.google.com/go/pubsub"
 	"google.golang.org/api/option"
 
-	"github.com/benthosdev/benthos/v4/internal/component"
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 const (
@@ -74,19 +73,19 @@ func pbiSpec() *service.ConfigSpec {
 		Categories("Services", "GCP").
 		Summary(`Consumes messages from a GCP Cloud Pub/Sub subscription.`).
 		Description(`
-For information on how to set up credentials check out [this guide](https://cloud.google.com/docs/authentication/production).
+For information on how to set up credentials see https://cloud.google.com/docs/authentication/production[this guide^].
 
-### Metadata
+== Metadata
 
 This input adds the following metadata fields to each message:
 
-`+"``` text"+`
+`+"```text"+`
 - gcp_pubsub_publish_time_unix - The time at which the message was published to the topic.
 - gcp_pubsub_delivery_attempt - When dead lettering is enabled, this is set to the number of times PubSub has attempted to deliver a message.
 - All message attributes
 `+"```"+`
 
-You can access these metadata fields using [function interpolation](/docs/configuration/interpolation#bloblang-queries).
+You can access these metadata fields using xref:configuration:interpolation.adoc#bloblang-queries[function interpolation].
 `).
 		Fields(
 			service.NewStringField(pbiFieldProjectID).
@@ -94,7 +93,7 @@ You can access these metadata fields using [function interpolation](/docs/config
 			service.NewStringField(pbiFieldSubscriptionID).
 				Description("The target subscription ID."),
 			service.NewStringField(pbiFieldEndpoint).
-				Description("An optional endpoint to override the default of `pubsub.googleapis.com:443`. This can be used to connect to a region specific pubsub endpoint. For a list of valid values check out [this document.](https://cloud.google.com/pubsub/docs/reference/service_apis_overview#list_of_regional_endpoints)").
+				Description("An optional endpoint to override the default of `pubsub.googleapis.com:443`. This can be used to connect to a region specific pubsub endpoint. For a list of valid values, see https://cloud.google.com/pubsub/docs/reference/service_apis_overview#list_of_regional_endpoints[this document^].").
 				Example("us-central1-pubsub.googleapis.com:443").
 				Example("us-west3-pubsub.googleapis.com:443").
 				Default(""),
@@ -250,7 +249,7 @@ func (c *gcpPubSubReader) Read(ctx context.Context) (*service.Message, service.A
 	select {
 	case gmsg, open = <-msgsChan:
 	case <-ctx.Done():
-		return nil, nil, component.ErrTimeout
+		return nil, nil, ctx.Err()
 	}
 	if !open {
 		return nil, nil, service.ErrNotConnected

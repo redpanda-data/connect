@@ -1,0 +1,166 @@
+#!/usr/bin/env bash
+#
+# Installs Redpanda Connect the quick way, for adventurers that want to spend
+# more time grooming their cats.
+#
+# Requires curl, grep, cut, tar, uname, chmod, mv, rm.
+
+[[ $- = *i* ]] && echo "Don't source this script!" && return 10
+
+header() {
+		cat 1>&2 <<EOF
+Redpanda Connect Installer
+
+Website: https://www.redpanda.com
+Docs: https://www.docs.redpanda.com/redpanda-connect
+Repo: https://github.com/redpanda-data/connect
+
+EOF
+}
+
+check_cmd() {
+	command -v "$1" > /dev/null 2>&1
+}
+
+check_tools() {
+	Tools=("curl" "grep" "cut" "tar" "uname" "chmod" "mv" "rm")
+
+	for tool in ${Tools[*]}; do
+		if ! check_cmd $tool; then
+			echo "Aborted, missing $tool, sorry!"
+			exit 6
+		fi
+	done
+}
+
+install_redpanda_connect()
+{
+	trap 'echo -e "Aborted, error $? in command: $BASH_COMMAND"; trap ERR; exit 1' ERR
+
+	# Process the command line
+	if [[ "$#" -eq 2 ]]; then
+		connect_tag="v$1"
+		connect_version="$1"
+		connect_install_path="$2"
+	elif [[ "$#" -eq 1 ]]; then
+		connect_tag="v$1"
+		connect_version=$1
+		connect_install_path="/usr/local/bin"
+	elif [[ "$#" -eq 0 ]]; then
+		connect_tag=$(curl -s https://api.github.com/repos/redpanda-data/connect/releases/latest | grep 'tag_name' | cut -d\" -f4)
+		connect_version=$(echo ${connect_tag} | cut -c2-)
+		connect_install_path="/usr/local/bin"
+	else
+		echo "Too many arguments."
+		exit 1
+	fi
+
+	connect_os="unsupported"
+	connect_arch="unknown"
+	connect_arm=""
+
+	header
+	check_tools
+
+	if [[ -n "$PREFIX" ]]; then
+		connect_install_path="$PREFIX/bin"
+	fi
+
+	# Fall back to /usr/bin if necessary
+	if [[ ! -d $connect_install_path ]]; then
+		connect_install_path="/usr/bin"
+	fi
+
+	# Not every platform has or needs sudo (https://termux.com/linux.html)
+	((EUID)) && sudo_cmd="sudo"
+
+	#########################
+	# Which OS and version? #
+	#########################
+
+	connect_bin="redpanda-connect"
+	connect_dl_ext=".tar.gz"
+
+	# NOTE: `uname -m` is more accurate and universal than `arch`
+	# See https://en.wikipedia.org/wiki/Uname
+	unamem="$(uname -m)"
+	if [[ $unamem == *aarch64* ]]; then
+		connect_arch="arm64"
+	elif [[ $unamem == *arm64* ]]; then
+		connect_arch="arm64"
+	elif [[ $unamem == *64* ]]; then
+		connect_arch="amd64"
+	elif [[ $unamem == *armv5* ]]; then
+		connect_arch="arm"
+		connect_arm="v5"
+	elif [[ $unamem == *armv6l* ]]; then
+		connect_arch="arm"
+		connect_arm="v6"
+	elif [[ $unamem == *armv7l* ]]; then
+		connect_arch="arm"
+		connect_arm="v7"
+	else
+		echo "Aborted, unsupported or unknown architecture: $unamem"
+		return 2
+	fi
+
+	unameu="$(tr '[:lower:]' '[:upper:]' <<<$(uname))"
+	if [[ $unameu == *DARWIN* ]]; then
+		connect_os="darwin"
+		version=${vers##*ProductVersion:}
+	elif [[ $unameu == *LINUX* ]]; then
+		connect_os="linux"
+	elif [[ $unameu == *FREEBSD* ]]; then
+		connect_os="freebsd"
+	elif [[ $unameu == *OPENBSD* ]]; then
+		connect_os="openbsd"
+	elif [[ $unameu == *WIN* || $unameu == MSYS* ]]; then
+		# Should catch cygwin
+		sudo_cmd=""
+		connect_os="windows"
+		connect_bin=$connect_bin.exe
+	else
+		echo "Aborted, unsupported or unknown os: $uname"
+		return 6
+	fi
+
+	########################
+	# Download and extract #
+	########################
+
+	echo "Downloading Redpanda Connect for ${connect_os}/${connect_arch}${connect_arm}..."
+	connect_file="redpanda-connect_${connect_os}_${connect_arch}${connect_arm}${connect_dl_ext}"
+
+	connect_url="https://github.com/redpanda-data/connect/releases/download/${connect_tag}/redpanda-connect_${connect_version}_${connect_os}_${connect_arch}${connect_arm}.tar.gz"
+
+	dl="/tmp/$connect_file"
+	rm -rf -- "$dl"
+
+	curl -fsSL "$connect_url" -o "$dl"
+
+	echo "Extracting..."
+	case "$connect_file" in
+		*.tar.gz) tar -xzf "$dl" -C "$PREFIX/tmp/" "$connect_bin" ;;
+	esac
+	chmod +x "$PREFIX/tmp/$connect_bin"
+
+	echo "Putting redpanda-connect in $connect_install_path (may require password)"
+	if [ -n "$sudo_cmd" ] && [ -n "$(find "$connect_install_path" -prune -user "$(id -u)")" ]; then
+		# Skip sudo if the current user is the owner of the Benthos install path
+		sudo_cmd=""
+	fi
+	$sudo_cmd mv "$PREFIX/tmp/$connect_bin" "$connect_install_path/$connect_bin"
+	$sudo_cmd rm -- "$dl"
+
+	# check installation
+	$connect_install_path/$connect_bin -version
+	if ! check_cmd redpanda-connect; then
+		echo "Do not forget to add $connect_install_path to your PATH!"
+	fi
+
+	echo "Successfully installed"
+	trap ERR
+	return 0
+}
+
+install_redpanda_connect $@

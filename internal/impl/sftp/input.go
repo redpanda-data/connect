@@ -11,9 +11,8 @@ import (
 
 	"github.com/pkg/sftp"
 
-	"github.com/benthosdev/benthos/v4/internal/codec/interop"
-	"github.com/benthosdev/benthos/v4/internal/component/scanner"
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/service/codec"
 )
 
 const (
@@ -35,7 +34,7 @@ func sftpInputSpec() *service.ConfigSpec {
 		Version("3.39.0").
 		Summary(`Consumes files from an SFTP server.`).
 		Description(`
-## Metadata
+== Metadata
 
 This input adds the following metadata fields to each message:
 
@@ -43,7 +42,7 @@ This input adds the following metadata fields to each message:
 - sftp_path
 `+"```"+`
 
-You can access these metadata fields using [function interpolation](/docs/configuration/interpolation#bloblang-queries).`).
+You can access these metadata fields using xref:configuration:interpolation.adoc#bloblang-queries[function interpolation].`).
 		Fields(
 			service.NewStringField(siFieldAddress).
 				Description("The address of the server to connect to."),
@@ -53,7 +52,7 @@ You can access these metadata fields using [function interpolation](/docs/config
 				Description("A list of paths to consume sequentially. Glob patterns are supported."),
 			service.NewAutoRetryNacksToggleField(),
 		).
-		Fields(interop.OldReaderCodecFields("to_the_end")...).
+		Fields(codec.DeprecatedCodecFields("to_the_end")...).
 		Fields(
 			service.NewBoolField(siFieldDeleteOnFinish).
 				Description("Whether to delete files from the server once they are processed.").
@@ -72,7 +71,7 @@ You can access these metadata fields using [function interpolation](/docs/config
 					Default("1s").
 					Examples("100ms", "1s"),
 				service.NewStringField(siFieldWatcherCache).
-					Description("A [cache resource](/docs/components/caches/about) for storing the paths of files already consumed.").
+					Description("A xref:components:caches/about.adoc[cache resource] for storing the paths of files already consumed.").
 					Default(""),
 			).Description("An experimental mode whereby the input will periodically scan the target paths for new files and consume them, when all files are consumed the input will continue polling for new files.").
 				Version("3.42.0"),
@@ -102,7 +101,7 @@ type sftpReader struct {
 	address        string
 	paths          []string
 	creds          Credentials
-	scannerCtor    interop.FallbackReaderCodec
+	scannerCtor    codec.DeprecatedFallbackCodec
 	deleteOnFinish bool
 
 	watcherEnabled      bool
@@ -115,7 +114,7 @@ type sftpReader struct {
 	// State
 	scannerMut  sync.Mutex
 	client      *sftp.Client
-	scanner     interop.FallbackReaderStream
+	scanner     codec.DeprecatedFallbackStream
 	currentPath string
 }
 
@@ -134,7 +133,7 @@ func newSFTPReaderFromParsed(conf *service.ParsedConfig, mgr *service.Resources)
 	if s.creds, err = credentialsFromParsed(conf.Namespace(siFieldCredentials)); err != nil {
 		return
 	}
-	if s.scannerCtor, err = interop.OldReaderCodecFromParsed(conf); err != nil {
+	if s.scannerCtor, err = codec.DeprecatedCodecFromParsed(conf); err != nil {
 		return
 	}
 	if s.deleteOnFinish, err = conf.FieldBool(siFieldDeleteOnFinish); err != nil {
@@ -216,6 +215,8 @@ func (s *sftpReader) Connect(ctx context.Context) (err error) {
 		}
 	}
 
+	details := service.NewScannerSourceDetails()
+	details.SetName(nextPath)
 	if s.scanner, err = s.scannerCtor.Create(file, func(ctx context.Context, aErr error) (outErr error) {
 		_ = s.pathProvider.Ack(ctx, nextPath, aErr)
 		if aErr != nil {
@@ -240,7 +241,7 @@ func (s *sftpReader) Connect(ctx context.Context) (err error) {
 			s.scannerMut.Unlock()
 		}
 		return
-	}, scanner.SourceDetails{Name: nextPath}); err != nil {
+	}, details); err != nil {
 		_ = file.Close()
 		_ = s.pathProvider.Ack(ctx, nextPath, err)
 		return err

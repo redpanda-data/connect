@@ -14,11 +14,9 @@ import (
 	"github.com/opensearch-project/opensearch-go/v3/opensearchapi"
 	"github.com/opensearch-project/opensearch-go/v3/opensearchutil"
 
-	"github.com/benthosdev/benthos/v4/internal/component"
-	"github.com/benthosdev/benthos/v4/internal/component/output"
-	"github.com/benthosdev/benthos/v4/internal/httpclient"
-	"github.com/benthosdev/benthos/v4/internal/impl/aws/config"
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/service"
+
+	"github.com/redpanda-data/connect/v4/internal/impl/aws/config"
 )
 
 const (
@@ -138,8 +136,8 @@ func OutputSpec() *service.ConfigSpec {
 		Stable().
 		Categories("Services").
 		Summary(`Publishes messages into an Elasticsearch index. If the index does not exist then it is created with a dynamic mapping.`).
-		Description(output.Description(true, true, `
-Both the `+"`id` and `index`"+` fields can be dynamically set using function interpolations described [here](/docs/configuration/interpolation#bloblang-queries). When sending batched messages these interpolations are performed per message part.`)).
+		Description(`
+Both the `+"`id` and `index`"+` fields can be dynamically set using function interpolations described xref:configuration:interpolation.adoc#bloblang-queries[here]. When sending batched messages these interpolations are performed per message part.`+service.OutputPerformanceDocs(true, true)).
 		Fields(
 			service.NewStringListField(esoFieldURLs).
 				Description("A list of URLs to connect to. If an item of the list contains commas it will be expanded into multiple URLs.").
@@ -163,11 +161,23 @@ Both the `+"`id` and `index`"+` fields can be dynamically set using function int
 			service.NewOutputMaxInFlightField(),
 		).
 		Fields(
-			httpclient.BasicAuthField(),
+			service.NewObjectField(esoFieldAuth,
+				service.NewBoolField(esoFieldAuthEnabled).
+					Description("Whether to use basic authentication in requests.").
+					Default(false),
+				service.NewStringField(esoFieldAuthUsername).
+					Description("A username to authenticate as.").
+					Default(""),
+				service.NewStringField(esoFieldAuthPassword).
+					Description("A password to authenticate with.").
+					Default("").Secret(),
+			).Description("Allows you to specify basic authentication.").
+				Advanced().
+				Optional(),
 			service.NewBatchPolicyField(esoFieldBatching),
 			AWSField(),
 		).
-		Example("Updating Documents", "When [updating documents](https://opensearch.org/docs/latest/api-reference/document-apis/update-document/) the request body should contain a combination of a `doc`, `upsert`, and/or `script` fields at the top level, this should be done via mapping processors.", `
+		Example("Updating Documents", "When https://opensearch.org/docs/latest/api-reference/document-apis/update-document/[updating documents^] the request body should contain a combination of a `doc`, `upsert`, and/or `script` fields at the top level, this should be done via mapping processors.", `
 output:
   processors:
     - mapping: |
@@ -245,7 +255,7 @@ type pendingBulkIndex struct {
 
 func (e *Output) WriteBatch(ctx context.Context, msg service.MessageBatch) error {
 	if e.client == nil {
-		return component.ErrNotConnected
+		return service.ErrNotConnected
 	}
 
 	requests := make([]*pendingBulkIndex, len(msg))

@@ -12,8 +12,7 @@ import (
 	"go.nanomsg.org/mangos/v3/protocol/pull"
 	"go.nanomsg.org/mangos/v3/protocol/sub"
 
-	"github.com/benthosdev/benthos/v4/internal/component"
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/service"
 
 	// Import all transport types.
 	_ "go.nanomsg.org/mangos/v3/transport/all"
@@ -197,7 +196,7 @@ func (s *nanomsgReader) Read(ctx context.Context) (*service.Message, service.Ack
 	data, err := socket.Recv()
 	if err != nil {
 		if errors.Is(err, mangos.ErrRecvTimeout) {
-			return nil, nil, component.ErrTimeout
+			return nil, nil, context.Canceled
 		}
 		return nil, nil, err
 	}

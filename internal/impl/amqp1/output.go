@@ -9,9 +9,8 @@ import (
 
 	"github.com/Azure/go-amqp"
 
-	"github.com/benthosdev/benthos/v4/internal/component"
-	"github.com/benthosdev/benthos/v4/public/bloblang"
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/bloblang"
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 func amqp1OutputSpec() *service.ConfigSpec {
@@ -20,11 +19,11 @@ func amqp1OutputSpec() *service.ConfigSpec {
 		Categories("Services").
 		Summary("Sends messages to an AMQP (1.0) server.").
 		Description(`
-### Metadata
+== Metadata
 
 Message metadata is added to each AMQP message as string annotations. In order to control which metadata keys are added use the `+"`metadata`"+` config field.
 
-## Performance
+== Performance
 
 This output benefits from sending multiple messages in flight in parallel for improved performance. You can tune the max number of in flight messages (or message batches) with the field `+"`max_in_flight`"+`.`).
 		Fields(
@@ -268,9 +267,7 @@ func (a *amqp1Writer) Write(ctx context.Context, msg *service.Message) error {
 	})
 
 	if err = s.Send(ctx, m, nil); err != nil {
-		if ctx.Err() != nil {
-			err = component.ErrTimeout
-		} else {
+		if ctx.Err() == nil {
 			a.log.Errorf("Lost connection due to: %v\n", err)
 			_ = a.disconnect(ctx)
 			err = service.ErrNotConnected

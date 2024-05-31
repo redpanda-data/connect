@@ -11,8 +11,7 @@ import (
 
 	"github.com/pebbe/zmq4"
 
-	"github.com/benthosdev/benthos/v4/internal/component"
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 func zmqOutputConfig() *service.ConfigSpec {
@@ -23,9 +22,9 @@ func zmqOutputConfig() *service.ConfigSpec {
 		Description(`
 By default Benthos does not build with components that require linking to external libraries. If you wish to build Benthos locally with this component then set the build tag ` + "`x_benthos_extra`" + `:
 
-` + "```shell" + `
+` + "```bash" + `
 # With go
-go install -tags "x_benthos_extra" github.com/benthosdev/benthos/v4/cmd/benthos@latest
+go install -tags "x_benthos_extra" github.com/redpanda-data/benthos/v4/cmd/benthos@latest
 
 # Using make
 make TAGS=x_benthos_extra
@@ -194,7 +193,7 @@ func (z *zmqOutput) WriteBatch(_ context.Context, batch service.MessageBatch) er
 		if polled, err = z.poller.Poll(z.pollTimeout); len(polled) == 1 {
 			_, err = z.socket.SendMessage(parts...)
 		} else if err == nil {
-			return component.ErrTimeout
+			return context.Canceled
 		}
 	}
 	return err

@@ -10,8 +10,8 @@ import (
 
 	"github.com/Jeffail/shutdown"
 
-	"github.com/benthosdev/benthos/v4/public/bloblang"
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/bloblang"
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 // SelectProcessorConfig returns a config spec for an sql_select processor.
@@ -21,7 +21,7 @@ func SelectProcessorConfig() *service.ConfigSpec {
 		Categories("Integration").
 		Summary("Runs an SQL select query against a database and returns the result as an array of objects, one for each row returned, containing a key for each column queried and its value.").
 		Description(`
-If the query fails to execute then the message will remain unchanged and the error can be caught using error handling methods outlined [here](/docs/configuration/error_handling).`).
+If the query fails to execute then the message will remain unchanged and the error can be caught using xref:configuration:error_handling.adoc[error handling methods].`).
 		Field(driverField).
 		Field(dsnField).
 		Field(service.NewStringField("table").
@@ -37,7 +37,7 @@ If the query fails to execute then the message will remain unchanged and the err
 			Example("user_id = ?").
 			Optional()).
 		Field(service.NewBloblangField("args_mapping").
-			Description("An optional [Bloblang mapping](/docs/guides/bloblang/about) which should evaluate to an array of values matching in size to the number of placeholder arguments in the field `where`.").
+			Description("An optional xref:guides:bloblang/about.adoc[Bloblang mapping] which should evaluate to an array of values matching in size to the number of placeholder arguments in the field `where`.").
 			Example("root = [ this.cat.meow, this.doc.woofs[0] ]").
 			Example(`root = [ meta("user.id") ]`).
 			Optional()).
@@ -58,7 +58,7 @@ If the query fails to execute then the message will remain unchanged and the err
 		Example("Table Query (PostgreSQL)",
 			`
 Here we query a database for columns of footable that share a `+"`user_id`"+`
-with the message `+"`user.id`"+`. A `+"[`branch` processor](/docs/components/processors/branch)"+`
+with the message `+"`user.id`"+`. A `+"xref:components:processors/branch.adoc[`branch` processor]"+`
 is used in order to insert the resulting array into the original message at the
 path `+"`foo_rows`"+`:`,
 			`

@@ -3,6 +3,12 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+## 4.28.0 - 2024-05-30
+
+### Changed
+
+- The repository has been moved to `redpanda-data/connect` and no longer contains the core Benthos engine, which is now broken out into `redpanda-data/benthos`.
+
 ## 4.27.0 - 2024-04-23
 
 ### Added

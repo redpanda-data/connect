@@ -8,8 +8,7 @@ import (
 
 	"github.com/redis/go-redis/v9"
 
-	"github.com/benthosdev/benthos/v4/internal/component"
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 type redisPopCommand string
@@ -129,7 +128,7 @@ func (r *redisListReader) Read(ctx context.Context) (*service.Message, service.A
 	}
 
 	if len(res) < 2 {
-		return nil, nil, component.ErrTimeout
+		return nil, nil, context.Canceled
 	}
 
 	return service.NewMessage([]byte(res[1])),

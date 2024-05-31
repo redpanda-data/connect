@@ -26,7 +26,7 @@ jobs:
     - name: Install Go
       uses: actions/setup-go@v5
       with:
-        go-version: 1.21.x
+        go-version: 1.22.x
         check-latest: true
 
     - name: Release Notes
@@ -60,12 +60,6 @@ jobs:
         sudo rm -rf "/usr/local/share/boost"
         sudo rm -rf "$AGENT_TOOLSDIRECTORY"
 
-    - name: Login to Docker Hub
-      uses: docker/login-action@v3
-      with:
-        username: ${{ secrets.DOCKER_HUB_USERNAME }}
-        password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
-
     - name: Log in to registry
       run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u $ --password-stdin
 
@@ -78,8 +72,7 @@ jobs:
       uses: docker/metadata-action@v5
       with:
         images: |
-          jeffail/benthos
-          ghcr.io/${{ github.repository_owner }}/benthos
+          ghcr.io/${{ github.repository_owner }}/connect
         flavor: |
           latest=auto
           suffix=-cgo
@@ -101,8 +94,7 @@ jobs:
       uses: docker/metadata-action@v5
       with:
         images: |
-          jeffail/benthos
-          ghcr.io/${{ github.repository_owner }}/benthos
+          ghcr.io/${{ github.repository_owner }}/connect
         tags: |
           type=semver,pattern={{version}}
           type=semver,pattern={{major}}.{{minor}}

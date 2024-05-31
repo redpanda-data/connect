@@ -5,10 +5,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/golang-jwt/jwt/v4"
+	"github.com/golang-jwt/jwt/v5"
 
-	"github.com/benthosdev/benthos/v4/internal/bloblang/query"
-	"github.com/benthosdev/benthos/v4/public/bloblang"
+	"github.com/redpanda-data/benthos/v4/public/bloblang"
 )
 
 var errJWTIncorrectMethod = errors.New("incorrect signing method")
@@ -62,7 +61,7 @@ func jwtParser(secretDecoder secretDecoderFunc, method jwt.SigningMethod) blobla
 
 func registerParseJwtMethod(m parseJwtMethodSpec) error {
 	spec := bloblang.NewPluginSpec().
-		Category(query.MethodCategoryJWT).
+		Category("JSON Web Tokens").
 		Description(fmt.Sprintf("Parses a claims object from a JWT string encoded with %s. This method does not validate JWT claims.", m.method.Alg())).
 		Param(bloblang.NewStringParam("signing_secret").Description(fmt.Sprintf("The %s secret that was used for signing the token.", m.method.Alg()))).
 		Version(m.version)

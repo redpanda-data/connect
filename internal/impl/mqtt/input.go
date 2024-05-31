@@ -7,8 +7,7 @@ import (
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 
-	"github.com/benthosdev/benthos/v4/internal/component"
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 const (
@@ -23,11 +22,11 @@ func inputConfigSpec() *service.ConfigSpec {
 		Categories("Services").
 		Summary("Subscribe to topics on MQTT brokers.").
 		Description(`
-### Metadata
+== Metadata
 
 This input adds the following metadata fields to each message:
 
-`+"``` text"+`
+`+"```text"+`
 - mqtt_duplicate
 - mqtt_qos
 - mqtt_retained
@@ -35,7 +34,7 @@ This input adds the following metadata fields to each message:
 - mqtt_message_id
 `+"```"+`
 
-You can access these metadata fields using [function interpolation](/docs/configuration/interpolation#bloblang-queries).`).
+You can access these metadata fields using xref:configuration:interpolation.adoc#bloblang-queries[function interpolation].`).
 		Fields(ClientFields()...).
 		Fields(
 			service.NewStringListField(miFieldTopics).
@@ -194,7 +193,7 @@ func (m *mqttReader) Read(ctx context.Context) (*service.Message, service.AckFun
 	m.cMut.Unlock()
 
 	if msgChan == nil {
-		return nil, nil, component.ErrNotConnected
+		return nil, nil, service.ErrNotConnected
 	}
 
 	select {

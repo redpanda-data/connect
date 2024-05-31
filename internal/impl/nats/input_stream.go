@@ -10,9 +10,7 @@ import (
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/stan.go"
 
-	"github.com/benthosdev/benthos/v4/internal/component"
-	"github.com/benthosdev/benthos/v4/internal/component/input/span"
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 const (
@@ -84,24 +82,26 @@ func siSpec() *service.ConfigSpec {
 		Categories("Services").
 		Summary(`Subscribe to a NATS Stream subject. Joining a queue is optional and allows multiple clients of a subject to consume using queue semantics.`).
 		Description(`
-:::caution Deprecation Notice
-The NATS Streaming Server is being deprecated. Critical bug fixes and security fixes will be applied until June of 2023. NATS-enabled applications requiring persistence should use [JetStream](https://docs.nats.io/nats-concepts/jetstream).
-:::
+[CAUTION]
+.Deprecation notice
+====
+The NATS Streaming Server is being deprecated. Critical bug fixes and security fixes will be applied until June of 2023. NATS-enabled applications requiring persistence should use https://docs.nats.io/nats-concepts/jetstream[JetStream^].
+====
 
 Tracking and persisting offsets through a durable name is also optional and works with or without a queue. If a durable name is not provided then subjects are consumed from the most recently published message.
 
 When a consumer closes its connection it unsubscribes, when all consumers of a durable queue do this the offsets are deleted. In order to avoid this you can stop the consumers from unsubscribing by setting the field `+"`unsubscribe_on_close` to `false`"+`.
 
-### Metadata
+== Metadata
 
 This input adds the following metadata fields to each message:
 
-`+"``` text"+`
+`+"```text"+`
 - nats_stream_subject
 - nats_stream_sequence
 `+"```"+`
 
-You can access these metadata fields using [function interpolation](/docs/configuration/interpolation#bloblang-queries).
+You can access these metadata fields using xref:configuration:interpolation.adoc#bloblang-queries[function interpolation].
 
 `+authDescription()).
 		Fields(connectionHeadFields()...).
@@ -152,7 +152,7 @@ func init() {
 			if err != nil {
 				return nil, err
 			}
-			return span.NewInput("nats_stream", conf, input, mgr)
+			return conf.WrapInputExtractTracingSpanMapping("nats_stream", input)
 		})
 	if err != nil {
 		panic(err)
@@ -309,11 +309,11 @@ func (n *natsStreamReader) read(ctx context.Context) (*stan.Msg, error) {
 			return nil, service.ErrNotConnected
 		}
 	case <-ctx.Done():
-		return nil, component.ErrTimeout
+		return nil, ctx.Err()
 	case <-n.interruptChan:
 		n.unAckMsgs = nil
 		n.disconnect()
-		return nil, component.ErrTypeClosed
+		return nil, service.ErrEndOfInput
 	}
 	return msg, nil
 }
