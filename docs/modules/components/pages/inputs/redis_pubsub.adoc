@@ -29,7 +29,7 @@ Common::
 input:
   label: ""
   redis_pubsub:
-    url: redis://:6397 # No default (required)
+    url: redis://:6379 # No default (required)
     channels: [] # No default (required)
     use_patterns: false
     auto_replay_nacks: true
@@ -45,7 +45,7 @@ Advanced::
 input:
   label: ""
   redis_pubsub:
-    url: redis://:6397 # No default (required)
+    url: redis://:6379 # No default (required)
     kind: simple
     master: ""
     tls:
@@ -84,7 +84,7 @@ The URL of the target Redis server. Database is optional and is supplied as the 
 ```yml
 # Examples
 
-url: redis://:6397
+url: redis://:6379
 
 url: redis://localhost:6379
 
