@@ -1,8 +1,11 @@
 Redpanda Connect
 ================
 
-[![godoc for redpanda-data/connect][godoc-badge]][godoc-url]
 [![Build Status][actions-badge]][actions-url]
+
+API for Apache V2 builds: [![godoc for redpanda-data/connect ASL][godoc-badge]][godoc-url-apache]
+
+API for Enterprise builds: [![godoc for redpanda-data/connect RCL][godoc-badge]][godoc-url-enterprise]
 
 Redpanda Connect is a high performance and resilient stream processor, able to connect various [sources][inputs] and [sinks][outputs] in a range of brokering patterns and perform [hydration, enrichments, transformations and filters][processors] on payloads.
 
@@ -187,7 +190,8 @@ Contributions are welcome, please [read the guidelines](CONTRIBUTING.md).
 [benthos-studio]: https://studio.benthos.dev
 
 [godoc-badge]: https://pkg.go.dev/badge/github.com/redpanda-data/benthos/v4/public
-[godoc-url]: https://pkg.go.dev/github.com/redpanda-data/benthos/v4/public
+[godoc-url-apache]: https://pkg.go.dev/github.com/redpanda-data/connect/public/bundle/free/v4
+[godoc-url-enterprise]: https://pkg.go.dev/github.com/redpanda-data/connect/public/bundle/enterprise/v4
 [actions-badge]: https://github.com/redpanda-data/connect/actions/workflows/test.yml/badge.svg
 [actions-url]: https://github.com/redpanda-data/connect/actions/workflows/test.yml
 
