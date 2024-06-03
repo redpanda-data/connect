@@ -62,6 +62,7 @@ input:
         enabled: false
         audience: ""
         issuer_url: ""
+        scope: ""
         private_key_file: ""
       token:
         enabled: false
@@ -220,6 +221,14 @@ OAuth2 issuer URL.
 
 *Default*: `""`
 
+=== `auth.oauth2.scope`
+
+OAuth2 scope to request.
+
+
+Type: `string`
+Default: `""`
+
 === `auth.oauth2.private_key_file`
 
 The path to a file containing a private key.
@@ -254,5 +263,3 @@ Actual base64 encoded token.
 *Type*: `string`
 
 *Default*: `""`
-
-
