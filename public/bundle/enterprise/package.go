@@ -1,7 +1,8 @@
-// Package all imports all component implementations that ship with the open
-// source Benthos repo. This is a convenient way of importing every single
-// connector at the cost of a larger dependency tree for your application.
-package all
+// Package enterprise imports all enterprise licensed plugin implementations
+// that ship with Redpanda Connect, along with all free plugin implementations.
+// This is a convenient way of importing every single connector at the cost of a
+// larger dependency tree for your application.
+package enterprise
 
 import (
 	// Import all public sub-categories.
