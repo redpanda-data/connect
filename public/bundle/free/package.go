@@ -1,7 +1,7 @@
-// Package all imports all component implementations that ship with the open
-// source Benthos repo. This is a convenient way of importing every single
-// connector at the cost of a larger dependency tree for your application.
-package all
+// Package free imports all free, open source plugin implementations that ship
+// with Redpanda Connect. This is a convenient way of importing every single
+// free connector at the cost of a larger dependency tree for your application.
+package free
 
 import (
 	// Import all public sub-categories.
@@ -45,8 +45,6 @@ import (
 	_ "github.com/redpanda-data/connect/v4/public/components/redis"
 	_ "github.com/redpanda-data/connect/v4/public/components/sentry"
 	_ "github.com/redpanda-data/connect/v4/public/components/sftp"
-	_ "github.com/redpanda-data/connect/v4/public/components/snowflake"
-	_ "github.com/redpanda-data/connect/v4/public/components/splunk"
 	_ "github.com/redpanda-data/connect/v4/public/components/sql"
 	_ "github.com/redpanda-data/connect/v4/public/components/statsd"
 	_ "github.com/redpanda-data/connect/v4/public/components/twitter"
