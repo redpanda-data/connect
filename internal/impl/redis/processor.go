@@ -351,6 +351,19 @@ func (r *redisProc) execRaw(ctx context.Context, index int, inBatch service.Mess
 		return err
 	}
 
+	if structured, ok := res.(map[any]any); ok {
+		m2 := make(map[string]any, len(structured))
+
+		for key, value := range structured {
+			typeCast, ok := key.(string)
+			if !ok {
+				return fmt.Errorf("expected a string, got: %T", key)
+			}
+			m2[typeCast] = value
+		}
+		res = m2
+	}
+
 	msg.SetStructuredMut(res)
 	return nil
 }
