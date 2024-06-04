@@ -3,16 +3,20 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
-## 4.29.0 - TBD
+## 4.29.0 - 2024-06-04
 
 ### Added
 
 - Go API: New packages `public/bundle/free` and `public/bundle/enterprise` with explicit licensing for bundles of component imports.
-- Field `auth.oauth2.scope` added to the `pulsar` input and output.
+- Field `auth.oauth2.scope` added to the `pulsar` input and output. (@srenatus)
+- Field `subscription_initial_position` added to the `pulsar` input. (@srenatus)
 
 ### Fixed
 
-- The `pulsar` input and output should no longer ignore `auth.oauth2` fields.
+- The `pulsar` input and output should no longer ignore `auth.oauth2` fields. (@srenatus)
+- Creating builds using `make` no longer prints warnings when the repository does not contain a tag. (@mkysel)
+- Messages resulting from the `redis` processor are no longer invalid when using hash commands. (@mkysel)
+- The `nats_jetstream` input no longer fails to initialise when a stream is specified and a subject is not. (@maxarndt)
 
 ## 4.28.0 - 2024-05-30
 
