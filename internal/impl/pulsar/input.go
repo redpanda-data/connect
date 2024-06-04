@@ -14,7 +14,8 @@ import (
 )
 
 const (
-	defaultSubscriptionType = "shared"
+	defaultSubscriptionType            = "shared"
+	defaultSubscriptionInitialPosition = "latest"
 )
 
 func init() {
@@ -70,6 +71,9 @@ xref:configuration:interpolation.adoc#bloblang-queries[function interpolation].
 		Field(service.NewStringEnumField("subscription_type", "shared", "key_shared", "failover", "exclusive").
 			Description("Specify the subscription type for this consumer.\n\n> NOTE: Using a `key_shared` subscription type will __allow out-of-order delivery__ since nack-ing messages sets non-zero nack delivery delay - this can potentially cause consumers to stall. See https://pulsar.apache.org/docs/en/2.8.1/concepts-messaging/#negative-acknowledgement[Pulsar documentation^] and https://github.com/apache/pulsar/issues/12208[this Github issue^] for more details.").
 			Default(defaultSubscriptionType)).
+		Field(service.NewStringEnumField("subscription_initial_position", "latest", "earliest").
+			Description("Specify the subscription initial position for this consumer.").
+			Default(defaultSubscriptionInitialPosition)).
 		Field(service.NewObjectField("tls",
 			service.NewStringField("root_cas_file").
 				Description("An optional path of a root certificate authority file to use. This is a file, often with a .pem extension, containing a certificate chain from the parent trusted root certificate, to possible intermediate signing certificates, to the host certificate.").
@@ -94,6 +98,7 @@ type pulsarReader struct {
 	topicsPattern string
 	subName       string
 	subType       string
+	subInitial    string
 	rootCasFile   string
 }
 
@@ -120,6 +125,9 @@ func newPulsarReaderFromParsed(conf *service.ParsedConfig, log *service.Logger) 
 	if p.subType, err = conf.FieldString("subscription_type"); err != nil {
 		return
 	}
+	if p.subInitial, err = conf.FieldString("subscription_initial_position"); err != nil {
+		return
+	}
 	if p.rootCasFile, err = conf.FieldString("tls", "root_cas_file"); err != nil {
 		return
 	}
@@ -144,6 +152,13 @@ func newPulsarReaderFromParsed(conf *service.ParsedConfig, log *service.Logger) 
 		err = fmt.Errorf("field subscription_type is invalid: %v", err)
 		return
 	}
+	if p.subInitial == "" {
+		p.subInitial = defaultSubscriptionInitialPosition
+	}
+	if _, err = parseSubscriptionInitialPosition(p.subInitial); err != nil {
+		err = fmt.Errorf("field subscription_initial_position is invalid: %v", err)
+		return
+	}
 	if err = p.authConf.Validate(); err != nil {
 		err = fmt.Errorf("field auth is invalid: %v", err)
 	}
@@ -151,7 +166,7 @@ func newPulsarReaderFromParsed(conf *service.ParsedConfig, log *service.Logger) 
 }
 
 func parseSubscriptionType(subType string) (pulsar.SubscriptionType, error) {
-	// Pulsar docs: https://pulsar.apache.org/docs/en/2.8.0/concepts-messaging/#subscriptions
+	// Pulsar docs: https://pulsar.apache.org/docs/3.2.x/concepts-messaging/#subscription-types
 	switch subType {
 	case "shared":
 		return pulsar.Shared, nil
@@ -165,6 +180,16 @@ func parseSubscriptionType(subType string) (pulsar.SubscriptionType, error) {
 	return pulsar.Shared, fmt.Errorf("could not parse subscription type: %s", subType)
 }
 
+func parseSubscriptionInitialPosition(subInitial string) (pulsar.SubscriptionInitialPosition, error) {
+	switch subInitial {
+	case "latest":
+		return pulsar.SubscriptionPositionLatest, nil
+	case "earliest":
+		return pulsar.SubscriptionPositionEarliest, nil
+	}
+	return pulsar.SubscriptionPositionLatest, fmt.Errorf("could not parse subscription initial position: %s", subInitial)
+}
+
 //------------------------------------------------------------------------------
 
 func (p *pulsarReader) Connect(ctx context.Context) error {
@@ -176,10 +201,11 @@ func (p *pulsarReader) Connect(ctx context.Context) error {
 	}
 
 	var (
-		client   pulsar.Client
-		consumer pulsar.Consumer
-		subType  pulsar.SubscriptionType
-		err      error
+		client     pulsar.Client
+		consumer   pulsar.Consumer
+		subType    pulsar.SubscriptionType
+		subInitial pulsar.SubscriptionInitialPosition
+		err        error
 	)
 
 	opts := pulsar.ClientOptions{
@@ -203,11 +229,16 @@ func (p *pulsarReader) Connect(ctx context.Context) error {
 		return err
 	}
 
+	if subInitial, err = parseSubscriptionInitialPosition(p.subInitial); err != nil {
+		return err
+	}
+
 	options := pulsar.ConsumerOptions{
-		Topics:           p.topics,
-		TopicsPattern:    p.topicsPattern,
-		SubscriptionName: p.subName,
-		Type:             subType,
+		Topics:                      p.topics,
+		TopicsPattern:               p.topicsPattern,
+		SubscriptionName:            p.subName,
+		SubscriptionInitialPosition: subInitial,
+		Type:                        subType,
 		KeySharedPolicy: &pulsar.KeySharedPolicy{
 			AllowOutOfOrderDelivery: true,
 		},
