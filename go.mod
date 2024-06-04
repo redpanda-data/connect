@@ -90,11 +90,7 @@ require (
 	github.com/rcrowley/go-metrics v0.0.0-20201227073835-cf1acfcdf475
 	github.com/redis/go-redis/v9 v9.4.0
 	github.com/redpanda-data/benthos/v4 v4.28.1
-	github.com/rickb777/date v1.20.5
-	github.com/robfig/cron/v3 v3.0.1
-	github.com/segmentio/ksuid v1.0.4
 	github.com/sijms/go-ora/v2 v2.8.19
-	github.com/sirupsen/logrus v1.9.3
 	github.com/smira/go-statsd v1.3.3
 	github.com/snowflakedb/gosnowflake v1.7.2
 	github.com/sourcegraph/conc v0.3.0
