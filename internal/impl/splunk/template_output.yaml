@@ -1,10 +1,18 @@
+# Copyright 2024 Redpanda Data, Inc.
+#
+# Licensed as a Redpanda Enterprise file under the Redpanda Community
+# License (the "License"); you may not use this file except in compliance with
+# the License. You may obtain a copy of the License at
+#
+# https://github.com/redpanda-data/connect/blob/main/licenses/rcl.md
+
 name: splunk_hec
 type: output
 status: experimental
 categories: [ Services ]
 summary: Writes messages to a Splunk HTTP Endpoint Collector.
 description: |
-  This output POSTs messages to a Splunk HTTP Endpoint Collector (HEC) using token based authentication. The format of the message must be a [valid event JSON](https://docs.splunk.com/Documentation/SplunkCloud/latest/Data/FormateventsforHTTPEventCollector). Raw is not supported.
+  This output POSTs messages to a Splunk HTTP Endpoint Collector (HEC) using token based authentication. The format of the message must be a https://docs.splunk.com/Documentation/SplunkCloud/latest/Data/FormateventsforHTTPEventCollector[valid event JSON^]. Raw is not supported.
 fields:
   - name: url
     description: Full HTTP Endpoint Collector (HEC) URL, ie. https://foobar.splunkcloud.com/services/collector/event

@@ -1,12 +1,12 @@
 // Package sql brings in the sql components and _all_ officially supported
 // drivers. In order to hand-pick which drivers are included import
-// github.com/benthosdev/benthos/v4/public/components/sql/base instead along
+// github.com/redpanda-data/benthos/v4/public/components/sql/base instead along
 // with the specific drivers you want.
 package sql
 
 import (
 	// Bring in the base plugin definitions.
-	_ "github.com/benthosdev/benthos/v4/public/components/sql/base"
+	_ "github.com/redpanda-data/connect/v4/public/components/sql/base"
 
 	// Import all (supported) sql drivers.
 	_ "github.com/ClickHouse/clickhouse-go/v2"

@@ -7,7 +7,7 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/runtime"
 	"github.com/Azure/azure-sdk-for-go/sdk/data/aztables"
 
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 const (
@@ -56,13 +56,13 @@ func tsiSpec() *service.ConfigSpec {
 		Summary(`Queries an Azure Storage Account Table, optionally with multiple filters.`).
 		Description(`
 Queries an Azure Storage Account Table, optionally with multiple filters.
-## Metadata
+== Metadata
 This input adds the following metadata fields to each message:
 `+"```"+`
 - table_storage_name
 - row_num
 `+"```"+`
-You can access these metadata fields using [function interpolation](/docs/configuration/interpolation#bloblang-queries).`).
+You can access these metadata fields using xref:configuration:interpolation.adoc#bloblang-queries[function interpolation].`).
 		Fields(
 			service.NewStringField(tsiFieldTableName).
 				Description("The table to read messages from.").

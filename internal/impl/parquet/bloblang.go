@@ -5,7 +5,7 @@ import (
 	"errors"
 	"io"
 
-	"github.com/benthosdev/benthos/v4/public/bloblang"
+	"github.com/redpanda-data/benthos/v4/public/bloblang"
 )
 
 func init() {
@@ -14,7 +14,7 @@ func init() {
 
 	parquetParseSpec := bloblang.NewPluginSpec().
 		Category("Parsing").
-		Description("Decodes a [Parquet file](https://parquet.apache.org/docs/) into an array of objects, one for each row within the file.").
+		Description("Decodes a https://parquet.apache.org/docs/[Parquet file^] into an array of objects, one for each row within the file.").
 		Param(bloblang.NewBoolParam("byte_array_as_string").
 			Description("Deprecated: This parameter is no longer used.").Default(false)).
 		Example("", `root = content().parse_parquet()`)

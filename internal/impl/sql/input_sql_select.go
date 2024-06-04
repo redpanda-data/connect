@@ -10,8 +10,8 @@ import (
 
 	"github.com/Jeffail/shutdown"
 
-	"github.com/benthosdev/benthos/v4/public/bloblang"
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/bloblang"
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 func sqlSelectInputConfig() *service.ConfigSpec {
@@ -19,7 +19,7 @@ func sqlSelectInputConfig() *service.ConfigSpec {
 		Beta().
 		Categories("Services").
 		Summary("Executes a select query and creates a message for each row received.").
-		Description(`Once the rows from the query are exhausted this input shuts down, allowing the pipeline to gracefully terminate (or the next input in a [sequence](/docs/components/inputs/sequence) to execute).`).
+		Description(`Once the rows from the query are exhausted this input shuts down, allowing the pipeline to gracefully terminate (or the next input in a xref:components:inputs/sequence.adoc[sequence] to execute).`).
 		Field(driverField).
 		Field(dsnField).
 		Field(service.NewStringField("table").
@@ -35,7 +35,7 @@ func sqlSelectInputConfig() *service.ConfigSpec {
 			Example("user_id = ?").
 			Optional()).
 		Field(service.NewBloblangField("args_mapping").
-			Description("An optional [Bloblang mapping](/docs/guides/bloblang/about) which should evaluate to an array of values matching in size to the number of placeholder arguments in the field `where`.").
+			Description("An optional xref:guides:bloblang/about.adoc[Bloblang mapping] which should evaluate to an array of values matching in size to the number of placeholder arguments in the field `where`.").
 			Example(`root = [ "article", now().ts_format("2006-01-02") ]`).
 			Optional()).
 		Field(service.NewStringField("prefix").

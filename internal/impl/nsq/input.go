@@ -11,7 +11,7 @@ import (
 
 	"github.com/nsqio/go-nsq"
 
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 const (
@@ -31,7 +31,7 @@ func inputConfigSpec() *service.ConfigSpec {
 		Categories("Services").
 		Summary(`Subscribe to an NSQ instance topic and channel.`).
 		Description(`
-### Metadata
+== Metadata
 
 This input adds the following metadata fields to each message:
 
@@ -42,7 +42,7 @@ This input adds the following metadata fields to each message:
 - nsq_timestamp
 `+"```"+`
 
-You can access these metadata fields using [function interpolation](/docs/configuration/interpolation#bloblang-queries).
+You can access these metadata fields using xref:configuration:interpolation.adoc#bloblang-queries[function interpolation].
 `).
 		Fields(
 			service.NewStringListField(niFieldNSQDAddrs).

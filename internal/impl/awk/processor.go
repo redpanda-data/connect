@@ -15,7 +15,7 @@ import (
 	"github.com/benhoyt/goawk/interp"
 	"github.com/benhoyt/goawk/parser"
 
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 var varInvalidRegexp *regexp.Regexp
@@ -24,23 +24,23 @@ func awkSpec() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Stable().
 		Categories("Mapping").
-		Summary(`Executes an AWK program on messages. This processor is very powerful as it offers a range of [custom functions](#awk-functions) for querying and mutating message contents and metadata.`).
+		Summary(`Executes an AWK program on messages. This processor is very powerful as it offers a range of <<awk-functions,custom functions>> for querying and mutating message contents and metadata.`).
 		Description(`
-Works by feeding message contents as the program input based on a chosen [codec](#codecs) and replaces the contents of each message with the result. If the result is empty (nothing is printed by the program) then the original message contents remain unchanged.
+Works by feeding message contents as the program input based on a chosen <<codecs,codec>> and replaces the contents of each message with the result. If the result is empty (nothing is printed by the program) then the original message contents remain unchanged.
 
-Comes with a wide range of [custom functions](#awk-functions) for accessing message metadata, json fields, printing logs, etc. These functions can be overridden by functions within the program.
+Comes with a wide range of <<awk-functions,custom functions>> for accessing message metadata, json fields, printing logs, etc. These functions can be overridden by functions within the program.
 
-Check out the [examples section](#examples) in order to see how this processor can be used.
+Check out the <<examples,examples section>> in order to see how this processor can be used.
 
-This processor uses [GoAWK][goawk], in order to understand the differences in how the program works you can [read more about it here][goawk.differences].`).
+This processor uses https://github.com/benhoyt/goawk[GoAWK^], in order to understand the differences in how the program works you can read more about it in https://github.com/benhoyt/goawk#differences-from-awk[goawk.differences^].`).
 		Footnotes(`
-## Codecs
+== Codecs
 
 The chosen codec determines how the contents of the message are fed into the
-program. Codecs only impact the input string and variables initialised for your
+program. Codecs only impact the input string and variables initialized for your
 program, they do not change the range of custom functions available.
 
-### `+"`none`"+`
+=== `+"`none`"+`
 
 An empty string is fed into the program. Functions can still be used in order to
 extract and mutate metadata and message contents.
@@ -49,23 +49,23 @@ This is useful for when your program only uses functions and doesn't need the
 full text of the message to be parsed by the program, as it is significantly
 faster.
 
-### `+"`text`"+`
+=== `+"`text`"+`
 
 The full contents of the message are fed into the program as a string, allowing
-you to reference tokenised segments of the message with variables ($0, $1, etc).
+you to reference tokenized segments of the message with variables ($0, $1, etc).
 Custom functions can still be used with this codec.
 
 This is the default codec as it behaves most similar to typical usage of the awk
 command line tool.
 
-### `+"`json`"+`
+=== `+"`json`"+`
 
 An empty string is fed into the program, and variables are automatically
-initialised before execution of your program by walking the flattened JSON
+initialized before execution of your program by walking the flattened JSON
 structure. Each value is converted into a variable by taking its full path,
 e.g. the object:
 
-`+"``` json"+`
+`+"```json"+`
 {
 	"foo": {
 		"bar": {
@@ -85,21 +85,21 @@ foo_created_at = "2018-12-18T11:57:32"
 
 Custom functions can also still be used with this codec.
 
-## AWK Functions
+== AWK functions
 
-`+"### `json_get`"+`
+`+"=== `json_get`"+`
 
 Signature: `+"`json_get(path)`"+`
 
 Attempts to find a JSON value in the input message payload by a
-[dot separated path](/docs/configuration/field_paths) and returns it as a string.
+xref:configuration:field_paths.adoc[dot separated path] and returns it as a string.
 
-`+"### `json_set`"+`
+`+"=== `json_set`"+`
 
 Signature: `+"`json_set(path, value)`"+`
 
 Attempts to set a JSON value in the input message payload identified by a
-[dot separated path](/docs/configuration/field_paths), the value argument will be interpreted
+xref:configuration:field_paths.adoc[dot separated path], the value argument will be interpreted
 as a string.
 
 In order to set non-string values use one of the following typed varieties:
@@ -108,12 +108,12 @@ In order to set non-string values use one of the following typed varieties:
 `+"- `json_set_float(path, value)`"+`
 `+"- `json_set_bool(path, value)`"+`
 
-`+"### `json_append`"+`
+`+"=== `json_append`"+`
 
 Signature: `+"`json_append(path, value)`"+`
 
 Attempts to append a value to an array identified by a
-[dot separated path](/docs/configuration/field_paths). If the target does not
+xref:configuration:field_paths.adoc[dot separated path]. If the target does not
 exist it will be created. If the target exists but is not already an array then
 it will be converted into one, with its original contents set to the first
 element of the array.
@@ -125,34 +125,34 @@ non-string values use one of the following typed varieties:
 `+"- `json_append_float(path, value)`"+`
 `+"- `json_append_bool(path, value)`"+`
 
-`+"### `json_delete`"+`
+`+"=== `json_delete`"+`
 
 Signature: `+"`json_delete(path)`"+`
 
 Attempts to delete a JSON field from the input message payload identified by a
-[dot separated path](/docs/configuration/field_paths).
+xref:configuration:field_paths.adoc[dot separated path].
 
-`+"### `json_length`"+`
+`+"=== `json_length`"+`
 
 Signature: `+"`json_length(path)`"+`
 
 Returns the size of the string or array value of JSON field from the input
-message payload identified by a [dot separated path](/docs/configuration/field_paths).
+message payload identified by a xref:configuration:field_paths.adoc[dot separated path].
 
 If the target field does not exist, or is not a string or array type, then zero
 is returned. In order to explicitly check the type of a field use `+"`json_type`"+`.
 
-`+"### `json_type`"+`
+`+"=== `json_type`"+`
 
 Signature: `+"`json_type(path)`"+`
 
 Returns the type of a JSON field from the input message payload identified by a
-[dot separated path](/docs/configuration/field_paths).
+xref:configuration:field_paths.adoc[dot separated path].
 
 Possible values are: "string", "int", "float", "bool", "undefined", "null",
 "array", "object".
 
-`+"### `create_json_object`"+`
+`+"=== `create_json_object`"+`
 
 Signature: `+"`create_json_object(key1, val1, key2, val2, ...)`"+`
 
@@ -164,9 +164,9 @@ resolve to a string regardless of the value type. E.g. the following call:
 
 Would result in this string:
 
-`+"`{\"a\":\"1\",\"b\":\"2\",\"c\":\"3\"}`"+`
+`+"`\\{\"a\":\"1\",\"b\":\"2\",\"c\":\"3\"}`"+`
 
-`+"### `create_json_array`"+`
+`+"=== `create_json_array`"+`
 
 Signature: `+"`create_json_array(val1, val2, ...)`"+`
 
@@ -180,33 +180,33 @@ Would result in this string:
 
 `+"`[\"1\",\"2\",\"3\"]`"+`
 
-`+"### `metadata_set`"+`
+`+"=== `metadata_set`"+`
 
 Signature: `+"`metadata_set(key, value)`"+`
 
 Set a metadata key for the message to a value. The value will always resolve to
 a string regardless of the value type.
 
-`+"### `metadata_get`"+`
+`+"=== `metadata_get`"+`
 
 Signature: `+"`metadata_get(key) string`"+`
 
 Get the value of a metadata key from the message.
 
-`+"### `timestamp_unix`"+`
+`+"=== `timestamp_unix`"+`
 
 Signature: `+"`timestamp_unix() int`"+`
 
 Returns the current unix timestamp (the number of seconds since 01-01-1970).
 
-`+"### `timestamp_unix`"+`
+`+"=== `timestamp_unix`"+`
 
 Signature: `+"`timestamp_unix(date) int`"+`
 
 Attempts to parse a date string by detecting its format and returns the
 equivalent unix timestamp (the number of seconds since 01-01-1970).
 
-`+"### `timestamp_unix`"+`
+`+"=== `timestamp_unix`"+`
 
 Signature: `+"`timestamp_unix(date, format) int`"+`
 
@@ -216,14 +216,14 @@ unix timestamp (the number of seconds since 01-01-1970).
 The format is defined by showing how the reference time, defined to be
 `+"`Mon Jan 2 15:04:05 -0700 MST 2006`"+` would be displayed if it were the value.
 
-`+"### `timestamp_unix_nano`"+`
+`+"=== `timestamp_unix_nano`"+`
 
 Signature: `+"`timestamp_unix_nano() int`"+`
 
 Returns the current unix timestamp in nanoseconds (the number of nanoseconds
 since 01-01-1970).
 
-`+"### `timestamp_unix_nano`"+`
+`+"=== `timestamp_unix_nano`"+`
 
 Signature: `+"`timestamp_unix_nano(date) int`"+`
 
@@ -231,7 +231,7 @@ Attempts to parse a date string by detecting its format and returns the
 equivalent unix timestamp in nanoseconds (the number of nanoseconds since
 01-01-1970).
 
-`+"### `timestamp_unix_nano`"+`
+`+"=== `timestamp_unix_nano`"+`
 
 Signature: `+"`timestamp_unix_nano(date, format) int`"+`
 
@@ -241,7 +241,7 @@ unix timestamp in nanoseconds (the number of nanoseconds since 01-01-1970).
 The format is defined by showing how the reference time, defined to be
 `+"`Mon Jan 2 15:04:05 -0700 MST 2006`"+` would be displayed if it were the value.
 
-`+"### `timestamp_format`"+`
+`+"=== `timestamp_format`"+`
 
 Signature: `+"`timestamp_format(unix, format) string`"+`
 
@@ -252,7 +252,7 @@ were the value.
 The format is optional, and if omitted RFC3339 (`+"`2006-01-02T15:04:05Z07:00`"+`)
 will be used.
 
-`+"### `timestamp_format_nano`"+`
+`+"=== `timestamp_format_nano`"+`
 
 Signature: `+"`timestamp_format_nano(unixNano, format) string`"+`
 
@@ -263,31 +263,29 @@ displayed if it were the value.
 The format is optional, and if omitted RFC3339 (`+"`2006-01-02T15:04:05Z07:00`"+`)
 will be used.
 
-`+"### `print_log`"+`
+`+"=== `print_log`"+`
 
 Signature: `+"`print_log(message, level)`"+`
 
 Prints a Benthos log message at a particular log level. The log level is
 optional, and if omitted the level `+"`INFO`"+` will be used.
 
-`+"### `base64_encode`"+`
+`+"=== `base64_encode`"+`
 
 Signature: `+"`base64_encode(data)`"+`
 
 Encodes the input data to a base64 string.
 
-`+"### `base64_decode`"+`
+`+"=== `base64_decode`"+`
 
 Signature: `+"`base64_decode(data)`"+`
 
 Attempts to base64-decode the input data and returns the decoded string if
 successful. It will emit an error otherwise.
 
-[goawk]: https://github.com/benhoyt/goawk
-[goawk.differences]: https://github.com/benhoyt/goawk#differences-from-awk
 `).
 		Field(service.NewStringEnumField("codec", "none", "text", "json").
-			Description("A [codec](#codecs) defines how messages should be inserted into the AWK program as variables. The codec does not change which [custom Benthos functions](#awk-functions) are available. The `text` codec is the closest to a typical AWK use case.")).
+			Description("A <<codecs,codec>> defines how messages should be inserted into the AWK program as variables. The codec does not change which <<awk-functions,custom Benthos functions>> are available. The `text` codec is the closest to a typical AWK use case.")).
 		Field(service.NewStringField("program").
 			Description("An AWK program to execute")).
 		Example("JSON Mapping and Arithmetic", `

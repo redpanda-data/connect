@@ -7,18 +7,18 @@ import (
 
 	"github.com/redis/go-redis/v9"
 
-	"github.com/benthosdev/benthos/v4/public/bloblang"
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/bloblang"
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 func redisScriptProcConfig() *service.ConfigSpec {
 	spec := service.NewConfigSpec().
 		Beta().
 		Version("4.11.0").
-		Summary(`Performs actions against Redis using [LUA scripts](https://redis.io/docs/manual/programmability/eval-intro/).`).
+		Summary(`Performs actions against Redis using https://redis.io/docs/manual/programmability/eval-intro/[LUA scripts^].`).
 		Description(`Actions are performed for each message and the message contents are replaced with the result.
 
-In order to merge the result into the original message compose this processor within a ` + "[`branch` processor](/docs/components/processors/branch)" + `.`).
+In order to merge the result into the original message compose this processor within a ` + "xref:components:processors/branch.adoc[`branch` processor]" + `.`).
 		Categories("Integration")
 
 	for _, f := range clientFields() {
@@ -30,11 +30,11 @@ In order to merge the result into the original message compose this processor wi
 			Description("A script to use for the target operator. It has precedence over the 'command' field.").
 			Example("return redis.call('set', KEYS[1], ARGV[1])")).
 		Field(service.NewBloblangField("args_mapping").
-			Description("A [Bloblang mapping](/docs/guides/bloblang/about) which should evaluate to an array of values matching in size to the number of arguments required for the specified Redis script.").
+			Description("A xref:guides:bloblang/about.adoc[Bloblang mapping] which should evaluate to an array of values matching in size to the number of arguments required for the specified Redis script.").
 			Example("root = [ this.key ]").
 			Example(`root = [ meta("kafka_key"), "hardcoded_value" ]`)).
 		Field(service.NewBloblangField("keys_mapping").
-			Description("A [Bloblang mapping](/docs/guides/bloblang/about) which should evaluate to an array of keys matching in size to the number of arguments required for the specified Redis script.").
+			Description("A xref:guides:bloblang/about.adoc[Bloblang mapping] which should evaluate to an array of keys matching in size to the number of arguments required for the specified Redis script.").
 			Example("root = [ this.key ]").
 			Example(`root = [ meta("kafka_key"), this.count ]`)).
 		Field(service.NewIntField("retries").

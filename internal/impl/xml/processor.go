@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 const (
@@ -18,9 +18,9 @@ func xmlProcSpec() *service.ConfigSpec {
 		Beta().
 		Summary(`Parses messages as an XML document, performs a mutation on the data, and then overwrites the previous contents with the new value.`).
 		Description(`
-## Operators
+== Operators
 
-### `+"`to_json`"+`
+=== `+"`to_json`"+`
 
 Converts an XML document into a JSON structure, where elements appear as keys of an object according to the following rules:
 
@@ -80,7 +80,7 @@ With cast set to true, the resulting JSON structure would look like this:
 `+"```").
 		Fields(
 			service.NewStringEnumField(pFieldOperator, "to_json").
-				Description("An XML [operation](#operators) to apply to messages.").
+				Description("An XML <<operators, operation>> to apply to messages.").
 				Default(""),
 			service.NewBoolField(pFieldCast).
 				Description("Whether to try to cast values that are numbers and booleans to the right type. Default: all values are strings.").

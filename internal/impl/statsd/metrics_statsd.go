@@ -8,7 +8,7 @@ import (
 
 	statsd "github.com/smira/go-statsd"
 
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 const (
@@ -20,7 +20,7 @@ const (
 func statsdSpec() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Stable().
-		Summary("Pushes metrics using the [StatsD protocol](https://github.com/statsd/statsd). Supported tagging formats are 'none', 'datadog' and 'influxdb'.").
+		Summary("Pushes metrics using the https://github.com/statsd/statsd[StatsD protocol^]. Supported tagging formats are 'none', 'datadog' and 'influxdb'.").
 		Fields(
 			service.NewStringField(smFieldAddress).
 				Description("The address to send metrics to."),

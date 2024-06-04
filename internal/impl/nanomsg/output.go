@@ -12,7 +12,7 @@ import (
 	"go.nanomsg.org/mangos/v3/protocol/pub"
 	"go.nanomsg.org/mangos/v3/protocol/push"
 
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/service"
 
 	// Import all transport types.
 	_ "go.nanomsg.org/mangos/v3/transport/all"

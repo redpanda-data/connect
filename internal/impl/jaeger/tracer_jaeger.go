@@ -14,7 +14,7 @@ import (
 	semconv "go.opentelemetry.io/otel/semconv/v1.7.0"
 	"go.opentelemetry.io/otel/trace"
 
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 const (
@@ -39,7 +39,7 @@ type jaegerConfig struct {
 func jaegerConfigSpec() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Stable().
-		Summary("Send tracing events to a [Jaeger](https://www.jaegertracing.io/) agent or collector.").
+		Summary("Send tracing events to a https://www.jaegertracing.io/[Jaeger^] agent or collector.").
 		Fields(
 			service.NewStringField(jtFieldAgentAddress).
 				Description("The address of a Jaeger agent to send tracing events to.").

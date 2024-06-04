@@ -3,6 +3,23 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+## 4.29.0 - TBD
+
+### Added
+
+- Go API: New packages `public/bundle/free` and `public/bundle/enterprise` with explicit licensing for bundles of component imports.
+- Field `auth.oauth2.scope` added to the `pulsar` input and output.
+
+### Fixed
+
+- The `pulsar` input and output should no longer ignore `auth.oauth2` fields.
+
+## 4.28.0 - 2024-05-30
+
+### Changed
+
+- The repository has been moved to `redpanda-data/connect` and no longer contains the core Benthos engine, which is now broken out into `redpanda-data/benthos`.
+
 ## 4.27.0 - 2024-04-23
 
 ### Added

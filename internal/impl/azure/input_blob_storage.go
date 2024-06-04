@@ -15,8 +15,8 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
 	"github.com/Jeffail/gabs/v2"
 
-	"github.com/benthosdev/benthos/v4/public/service"
-	"github.com/benthosdev/benthos/v4/public/service/codec"
+	"github.com/redpanda-data/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/service/codec"
 )
 
 const (
@@ -75,22 +75,22 @@ Supports multiple authentication methods but only one of the following is requir
 - `+"`storage_connection_string`"+`
 - `+"`storage_account` and `storage_access_key`"+`
 - `+"`storage_account` and `storage_sas_token`"+`
-- `+"`storage_account` to access via [DefaultAzureCredential](https://pkg.go.dev/github.com/Azure/azure-sdk-for-go/sdk/azidentity#DefaultAzureCredential)"+`
+- `+"`storage_account` to access via https://pkg.go.dev/github.com/Azure/azure-sdk-for-go/sdk/azidentity#DefaultAzureCredential[DefaultAzureCredential^]"+`
 
 If multiple are set then the `+"`storage_connection_string`"+` is given priority.
 
 If the `+"`storage_connection_string`"+` does not contain the `+"`AccountName`"+` parameter, please specify it in the
 `+"`storage_account`"+` field.
 
-## Downloading Large Files
+== Download large files
 
-When downloading large files it's often necessary to process it in streamed parts in order to avoid loading the entire file in memory at a given time. In order to do this a `+"[`scanner`](#scanner)"+` can be specified that determines how to break the input into smaller individual messages.
+When downloading large files it's often necessary to process it in streamed parts in order to avoid loading the entire file in memory at a given time. In order to do this a `+"<<scanner, `scanner`>>"+` can be specified that determines how to break the input into smaller individual messages.
 
-## Streaming New Files
+== Stream new files
 
-By default this input will consume all files found within the target container and will then gracefully terminate. This is referred to as a "batch" mode of operation. However, it's possible to instead configure a container as [an Event Grid source](https://learn.microsoft.com/en-gb/azure/event-grid/event-schema-blob-storage) and then use this as a `+"[`targets_input`](#targetsinput)"+`, in which case new files are consumed as they're uploaded and Benthos will continue listening for and downloading files as they arrive. This is referred to as a "streamed" mode of operation.
+By default this input will consume all files found within the target container and will then gracefully terminate. This is referred to as a "batch" mode of operation. However, it's possible to instead configure a container as https://learn.microsoft.com/en-gb/azure/event-grid/event-schema-blob-storage[an Event Grid source^] and then use this as a `+"<<targetsinput, `targets_input`>>"+`, in which case new files are consumed as they're uploaded and Benthos will continue listening for and downloading files as they arrive. This is referred to as a "streamed" mode of operation.
 
-## Metadata
+== Metadata
 
 This input adds the following metadata fields to each message:
 
@@ -104,7 +104,7 @@ This input adds the following metadata fields to each message:
 - All user defined metadata
 `+"```"+`
 
-You can access these metadata fields using [function interpolation](/docs/configuration/interpolation#bloblang-queries).`).
+You can access these metadata fields using xref:configuration:interpolation.adoc#bloblang-queries[function interpolation].`).
 		Fields(
 			service.NewStringField(bsiFieldContainer).
 				Description("The name of the container from which to download blobs."),
@@ -119,7 +119,7 @@ You can access these metadata fields using [function interpolation](/docs/config
 				Advanced().
 				Default(false),
 			service.NewInputField(bsiFieldTargetsInput).
-				Description("EXPERIMENTAL: An optional source of download targets, configured as a [regular Benthos input](/docs/components/inputs/about). Each message yielded by this input should be a single structured object containing a field `name`, which represents the blob to be downloaded.").
+				Description("EXPERIMENTAL: An optional source of download targets, configured as a xref:components:inputs/about.adoc[regular Benthos input]. Each message yielded by this input should be a single structured object containing a field `name`, which represents the blob to be downloaded.").
 				Optional().
 				Version("4.27.0").
 				Example(map[string]any{

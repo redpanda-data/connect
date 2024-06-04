@@ -13,8 +13,9 @@ import (
 
 	"github.com/Jeffail/shutdown"
 
-	"github.com/benthosdev/benthos/v4/internal/impl/aws/config"
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/service"
+
+	"github.com/redpanda-data/connect/v4/internal/impl/aws/config"
 )
 
 const (
@@ -61,14 +62,14 @@ func sqsInputSpec() *service.ConfigSpec {
 		Categories("Services", "AWS").
 		Summary(`Consume messages from an AWS SQS URL.`).
 		Description(`
-### Credentials
+== Credentials
 
 By default Benthos will use a shared credentials file when connecting to AWS
 services. It's also possible to set them explicitly at the component level,
-allowing you to transfer data across accounts. You can find out more
-[in this document](/docs/guides/cloud/aws).
+allowing you to transfer data across accounts. You can find out more in
+xref:guides:cloud/aws.adoc[].
 
-### Metadata
+== Metadata
 
 This input adds the following metadata fields to each message:
 
@@ -80,7 +81,7 @@ This input adds the following metadata fields to each message:
 `+"```"+`
 
 You can access these metadata fields using
-[function interpolation](/docs/configuration/interpolation#bloblang-queries).`).
+xref:configuration:interpolation.adoc#bloblang-queries[function interpolation].`).
 		Fields(
 			service.NewURLField(sqsiFieldURL).
 				Description("The SQS URL to consume from."),

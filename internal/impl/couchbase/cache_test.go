@@ -9,7 +9,7 @@ import (
 	"github.com/couchbase/gocb/v2"
 	"github.com/stretchr/testify/require"
 
-	"github.com/benthosdev/benthos/v4/public/service/integration"
+	"github.com/redpanda-data/benthos/v4/public/service/integration"
 )
 
 func TestIntegrationCouchbaseCache(t *testing.T) {

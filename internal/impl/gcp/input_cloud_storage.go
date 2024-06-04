@@ -11,8 +11,8 @@ import (
 	"cloud.google.com/go/storage"
 	"google.golang.org/api/iterator"
 
-	"github.com/benthosdev/benthos/v4/public/service"
-	"github.com/benthosdev/benthos/v4/public/service/codec"
+	"github.com/redpanda-data/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/service/codec"
 )
 
 const (
@@ -52,7 +52,7 @@ func csiSpec() *service.ConfigSpec {
 		Categories("Services", "GCP").
 		Summary(`Downloads objects within a Google Cloud Storage bucket, optionally filtered by a prefix.`).
 		Description(`
-## Metadata
+== Metadata
 
 This input adds the following metadata fields to each message:
 
@@ -66,11 +66,11 @@ This input adds the following metadata fields to each message:
 - All user defined metadata
 `+"```"+`
 
-You can access these metadata fields using [function interpolation](/docs/configuration/interpolation#bloblang-queries).
+You can access these metadata fields using xref:configuration:interpolation.adoc#bloblang-queries[function interpolation].
 
-### Credentials
+=== Credentials
 
-By default Benthos will use a shared credentials file when connecting to GCP services. You can find out more [in this document](/docs/guides/cloud/gcp).`).
+By default Benthos will use a shared credentials file when connecting to GCP services. You can find out more in xref:guides:cloud/gcp.adoc[].`).
 		Fields(
 			service.NewStringField(csiFieldBucket).
 				Description("The name of the bucket from which to download objects."),

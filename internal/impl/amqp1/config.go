@@ -5,7 +5,7 @@ import (
 
 	"github.com/Azure/go-amqp"
 
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 const (
@@ -30,7 +30,7 @@ const (
 	metaFilterField  = "metadata"
 )
 
-// ErrSASLMechanismNotSupported is returned if a SASL mechanism was not recognized.
+// ErrSASLMechanismNotSupported is returned if a SASL mechanism was not recognised.
 type ErrSASLMechanismNotSupported string
 
 // Error implements the standard error interface.

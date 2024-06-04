@@ -11,8 +11,8 @@ import (
 
 	"github.com/gocql/gocql"
 
-	"github.com/benthosdev/benthos/v4/public/bloblang"
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/bloblang"
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 const (
@@ -71,7 +71,7 @@ output:
 			service.NewStringField(coFieldQuery).
 				Description("A query to execute for each message."),
 			service.NewBloblangField(coFieldArgsMapping).
-				Description("A [Bloblang mapping](/docs/guides/bloblang/about) that can be used to provide arguments to Cassandra queries. The result of the query must be an array containing a matching number of elements to the query arguments.").
+				Description("A xref:guides:bloblang/about.adoc[Bloblang mapping] that can be used to provide arguments to Cassandra queries. The result of the query must be an array containing a matching number of elements to the query arguments.").
 				Version("3.55.0").
 				Optional(),
 			service.NewStringEnumField(coFieldConsistency,

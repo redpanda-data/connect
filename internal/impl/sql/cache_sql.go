@@ -11,7 +11,7 @@ import (
 
 	"github.com/Jeffail/shutdown"
 
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 const (
@@ -30,21 +30,21 @@ Each cache key/value pair will exist as a row within the specified table. Curren
 
 Cache operations are translated into SQL statements as follows:
 
-### Get
+== Get
 
 All ` + "`get`" + ` operations are performed with a traditional ` + "`select`" + ` statement.
 
-### Delete
+== Delete
 
 All ` + "`delete`" + ` operations are performed with a traditional ` + "`delete`" + ` statement.
 
-### Set
+== Set
 
 The ` + "`set`" + ` operation is performed with a traditional ` + "`insert`" + ` statement.
 
 This will behave as an ` + "`add`" + ` operation by default, and so ideally needs to be adapted in order to provide updates instead of failing on collision	s. Since different SQL engines implement upserts differently it is necessary to specify a ` + "`set_suffix`" + ` that modifies an ` + "`insert`" + ` statement in order to perform updates on conflict.
 
-### Add
+== Add
 
 The ` + "`add`" + ` operation is performed with a traditional ` + "`insert`" + ` statement.
 `).

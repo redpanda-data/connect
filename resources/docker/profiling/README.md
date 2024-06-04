@@ -7,7 +7,7 @@ This docker compose sets a Benthos instance up with a custom config, [Prometheus
 
 - Run Grafana and Prometheus with `docker-compose up`.
 - Edit `config.yaml` and add whatever components you want to profile with.
-- Run Benthos with `benthos -c ./config.yaml`.
+- Run Redpanda Connect with `redpanda-connect -c ./config.yaml`.
 - Open up Grafana at [http://localhost:3000/d/PHrVlmniz/benthos-dash](http://localhost:3000/d/PHrVlmniz/benthos-dash)
 - Go to [http://localhost:16686](http://localhost:16686) in order to observe opentracing events with Jaeger.
 - Use `go tool pprof http://localhost:4195/debug/pprof/profile` and similar endpoints to get profiling data.

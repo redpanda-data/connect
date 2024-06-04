@@ -14,8 +14,8 @@ import (
 	"github.com/cenkalti/backoff/v4"
 	"golang.org/x/sync/syncmap"
 
-	"github.com/benthosdev/benthos/v4/public/bloblang"
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/bloblang"
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 const (
@@ -54,25 +54,25 @@ func OSKConfigSpec() *service.ConfigSpec {
 		Description(`
 The config field `+"`ack_replicas`"+` determines whether we wait for acknowledgement from all replicas or just a single broker.
 
-Both the `+"`key` and `topic`"+` fields can be dynamically set using function interpolations described [here](/docs/configuration/interpolation#bloblang-queries).
+Both the `+"`key` and `topic`"+` fields can be dynamically set using function interpolations described in xref:configuration:interpolation.adoc#bloblang-queries[Bloblang queries].
 
-[Metadata](/docs/configuration/metadata) will be added to each message sent as headers (version 0.11+), but can be restricted using the field `+"[`metadata`](#metadata)"+`.
+xref:configuration:metadata.adoc[Metadata] will be added to each message sent as headers (version 0.11+), but can be restricted using the field `+"<<metadata, `metadata`>>"+`.
 
-### Strict Ordering and Retries
+== Strict ordering and retries
 
 When strict ordering is required for messages written to topic partitions it is important to ensure that both the field `+"`max_in_flight` is set to `1` and that the field `retry_as_batch` is set to `true`"+`.
 
 You must also ensure that failed batches are never rerouted back to the same output. This can be done by setting the field `+"`max_retries` to `0` and `backoff.max_elapsed_time`"+` to empty, which will apply back pressure indefinitely until the batch is sent successfully.
 
-However, this also means that manual intervention will eventually be required in cases where the batch cannot be sent due to configuration problems such as an incorrect `+"`max_msg_bytes`"+` estimate. A less strict but automated alternative would be to route failed batches to a dead letter queue using a `+"[`fallback` broker](/docs/components/outputs/fallback)"+`, but this would allow subsequent batches to be delivered in the meantime whilst those failed batches are dealt with.
+However, this also means that manual intervention will eventually be required in cases where the batch cannot be sent due to configuration problems such as an incorrect `+"`max_msg_bytes`"+` estimate. A less strict but automated alternative would be to route failed batches to a dead letter queue using a `+"xref:components:outputs/fallback.adoc[`fallback` broker]"+`, but this would allow subsequent batches to be delivered in the meantime whilst those failed batches are dealt with.
 
-### Troubleshooting
+== Troubleshooting
 
-If you're seeing issues writing to or reading from Kafka with this component then it's worth trying out the newer `+"[`kafka_franz` output](/docs/components/outputs/kafka_franz)"+`.
+If you're seeing issues writing to or reading from Kafka with this component then it's worth trying out the newer `+"xref:components:outputs/kafka_franz.adoc[`kafka_franz` output]"+`.
 
 - I'm seeing logs that report `+"`Failed to connect to kafka: kafka: client has run out of available brokers to talk to (Is your cluster reachable?)`"+`, but the brokers are definitely reachable.
 
-Unfortunately this error message will appear for a wide range of connection problems even when the broker endpoint can be reached. Double check your authentication configuration and also ensure that you have [enabled TLS](#tlsenabled) if applicable.`+service.OutputPerformanceDocs(true, true)).
+Unfortunately this error message will appear for a wide range of connection problems even when the broker endpoint can be reached. Double check your authentication configuration and also ensure that you have <<tlsenabled, enabled TLS>> if applicable.`+service.OutputPerformanceDocs(true, true)).
 		Fields(
 			service.NewStringListField(oskFieldAddresses).
 				Description("A list of broker addresses to connect to. If an item of the list contains commas it will be expanded into multiple addresses.").

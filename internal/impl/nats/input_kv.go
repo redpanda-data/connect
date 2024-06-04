@@ -9,7 +9,7 @@ import (
 
 	"github.com/Jeffail/shutdown"
 
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 const (
@@ -26,7 +26,7 @@ func natsKVInputConfig() *service.ConfigSpec {
 		Version("4.12.0").
 		Summary("Watches for updates in a NATS key-value bucket.").
 		Description(`
-### Metadata
+== Metadata
 
 This input adds the following metadata fields to each message:
 
