@@ -53,7 +53,7 @@ func qsoConfigFromParsed(pConf *service.ParsedConfig) (conf qsoConfig, err error
 }
 
 func qsoSpec() *service.ConfigSpec {
-	return azureComponentSpec(false).
+	return azureComponentSpec().
 		Beta().
 		Version("3.36.0").
 		Summary(`Sends messages to an Azure Storage Queue.`).

@@ -28,6 +28,7 @@ azure_blob_storage        ,output    ,azure_blob_storage        ,3.36.0  ,certif
 azure_cosmosdb            ,input     ,azure_cosmosdb            ,4.25.0  ,certified  ,n          ,y     ,y
 azure_cosmosdb            ,output    ,azure_cosmosdb            ,4.25.0  ,certified  ,n          ,y     ,y
 azure_cosmosdb            ,processor ,azure_cosmosdb            ,4.25.0  ,certified  ,n          ,y     ,y
+azure_file_share          ,output    ,azure_file_share          ,0.0.0   ,community  ,n          ,n     ,n
 azure_queue_storage       ,input     ,azure_queue_storage       ,3.42.0  ,certified  ,n          ,y     ,y
 azure_queue_storage       ,output    ,azure_queue_storage       ,3.36.0  ,certified  ,n          ,y     ,y
 azure_table_storage       ,input     ,azure_table_storage       ,4.10.0  ,certified  ,n          ,y     ,y
