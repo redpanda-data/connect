@@ -110,4 +110,45 @@ bind: true
 		_, err = newJetStreamReaderFromConfig(conf, service.MockResources())
 		require.NoError(t, err)
 	})
+
+	t.Run("Stream set without subject", func(t *testing.T) {
+		inputConfig := `
+urls: [ url1 ]
+stream: foostream
+bind: false
+`
+
+		conf, err := spec.ParseYAML(inputConfig, env)
+		require.NoError(t, err)
+
+		_, err = newJetStreamReaderFromConfig(conf, service.MockResources())
+		require.NoError(t, err)
+	})
+
+	t.Run("Subject set without stream", func(t *testing.T) {
+		inputConfig := `
+urls: [ url1 ]
+subject: testsubject
+bind: false
+`
+
+		conf, err := spec.ParseYAML(inputConfig, env)
+		require.NoError(t, err)
+
+		_, err = newJetStreamReaderFromConfig(conf, service.MockResources())
+		require.NoError(t, err)
+	})
+
+	t.Run("Stream and subject empty", func(t *testing.T) {
+		inputConfig := `
+urls: [ url1 ]
+bind: false
+`
+
+		conf, err := spec.ParseYAML(inputConfig, env)
+		require.NoError(t, err)
+
+		_, err = newJetStreamReaderFromConfig(conf, service.MockResources())
+		require.Error(t, err)
+	})
 }
