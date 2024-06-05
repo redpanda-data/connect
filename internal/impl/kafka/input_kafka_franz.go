@@ -90,7 +90,7 @@ Finally, it's also possible to specify an explicit offset to consume from by add
 			Default(true).
 			Advanced()).
 		Field(service.NewTLSToggledField("tls")).
-		Field(saslField()).
+		Field(SASLField()).
 		Field(service.NewBoolField("multi_header").Description("Decode headers into lists to allow handling of multiple values with the same key").Default(false).Advanced()).
 		Field(service.NewBatchPolicyField("batching").
 			Description("Allows you to configure a xref:configuration:batching.adoc[batching policy] that applies to individual topic partitions in order to batch messages together before flushing them for processing. Batching can be beneficial for performance as well as useful for windowed processing, and doing so this way preserves the ordering of topic partitions.").
@@ -241,7 +241,7 @@ func newFranzKafkaReaderFromConfig(conf *service.ParsedConfig, res *service.Reso
 	if f.multiHeader, err = conf.FieldBool("multi_header"); err != nil {
 		return nil, err
 	}
-	if f.saslConfs, err = saslMechanismsFromConfig(conf); err != nil {
+	if f.saslConfs, err = SASLMechanismsFromConfig(conf); err != nil {
 		return nil, err
 	}
 
@@ -632,7 +632,7 @@ func (f *franzKafkaReader) Connect(ctx context.Context) error {
 			}),
 			kgo.AutoCommitMarks(),
 			kgo.AutoCommitInterval(f.commitPeriod),
-			kgo.WithLogger(&kgoLogger{f.log}),
+			kgo.WithLogger(&KGoLogger{f.log}),
 		)
 	}
 

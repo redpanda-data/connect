@@ -5,8 +5,7 @@ import (
 	"log/slog"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
-
-	"github.com/redpanda-data/connect/v4/internal/impl/kafka"
+	"github.com/redpanda-data/connect/v4/internal/impl/kafka/enterprise"
 
 	_ "github.com/redpanda-data/connect/v4/public/components/all"
 )
@@ -18,11 +17,11 @@ var (
 )
 
 func redpandaTopLevelConfigField() *service.ConfigField {
-	return service.NewObjectField("redpanda", kafka.TopicLoggerFields()...)
+	return service.NewObjectField("redpanda", enterprise.TopicLoggerFields()...)
 }
 
 func main() {
-	rpLogger := kafka.NewTopicLogger()
+	rpLogger := enterprise.NewTopicLogger()
 
 	service.RunCLI(
 		context.Background(),

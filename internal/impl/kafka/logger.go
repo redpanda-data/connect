@@ -6,18 +6,20 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
-type kgoLogger struct {
-	l *service.Logger
+// KGoLogger wraps a service.Logger with an implementation that works within
+// the kgo library.
+type KGoLogger struct {
+	L *service.Logger
 }
 
-func (k *kgoLogger) Level() kgo.LogLevel {
+func (k *KGoLogger) Level() kgo.LogLevel {
 	return kgo.LogLevelDebug
 }
 
-func (k *kgoLogger) Log(level kgo.LogLevel, msg string, keyvals ...any) {
-	tmpL := k.l
+func (k *KGoLogger) Log(level kgo.LogLevel, msg string, keyvals ...any) {
+	tmpL := k.L
 	if len(keyvals) > 0 {
-		tmpL = k.l.With(keyvals...)
+		tmpL = k.L.With(keyvals...)
 	}
 
 	switch level {

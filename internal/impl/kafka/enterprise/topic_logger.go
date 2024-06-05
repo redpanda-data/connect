@@ -6,7 +6,7 @@
 //
 // https://github.com/redpanda-data/connect/blob/main/licenses/rcl.md
 
-package kafka
+package enterprise
 
 import (
 	"context"
@@ -23,6 +23,7 @@ import (
 	"github.com/twmb/franz-go/pkg/sasl"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
+	"github.com/redpanda-data/connect/v4/internal/impl/kafka"
 )
 
 func TopicLoggerFields() []*service.ConfigField {
@@ -56,7 +57,7 @@ func TopicLoggerFields() []*service.ConfigField {
 			Example("100MB").
 			Example("50mib"),
 		service.NewTLSToggledField("tls"),
-		saslField(),
+		kafka.SASLField(),
 	}
 }
 
@@ -310,7 +311,7 @@ func newTopicLoggerWriterFromConfig(conf *service.ParsedConfig, log *service.Log
 	if tlsEnabled {
 		f.tlsConf = tlsConf
 	}
-	if f.saslConfs, err = saslMechanismsFromConfig(conf); err != nil {
+	if f.saslConfs, err = kafka.SASLMechanismsFromConfig(conf); err != nil {
 		return nil, err
 	}
 
@@ -332,7 +333,7 @@ func (f *franzTopicLoggerWriter) Connect(ctx context.Context) error {
 		kgo.ProduceRequestTimeout(f.timeout),
 		kgo.ClientID(f.clientID),
 		kgo.Rack(f.rackID),
-		kgo.WithLogger(&kgoLogger{f.log}),
+		kgo.WithLogger(&kafka.KGoLogger{L: f.log}),
 	}
 	if f.tlsConf != nil {
 		clientOpts = append(clientOpts, kgo.DialTLSConfig(f.tlsConf))
