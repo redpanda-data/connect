@@ -10,7 +10,7 @@ import (
 
 	// Import all (supported) sql drivers.
 	_ "github.com/ClickHouse/clickhouse-go/v2"
-	_ "github.com/apache/arrow/go/v14/arrow/flight/flightsql/driver"
+	_ "github.com/apache/arrow/go/v16/arrow/flight/flightsql/driver"
 	_ "github.com/denisenkom/go-mssqldb"
 	_ "github.com/go-sql-driver/mysql"
 	_ "github.com/lib/pq"
