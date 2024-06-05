@@ -82,7 +82,7 @@ This output often out-performs the traditional ` + "`kafka`" + ` output as well 
 			Optional().
 			Advanced()).
 		Field(service.NewTLSToggledField("tls")).
-		Field(saslField()).
+		Field(SASLField()).
 		LintRule(`
 root = if this.partitioner == "manual" {
   if this.partition.or("") == "" {
@@ -257,7 +257,7 @@ func newFranzKafkaWriterFromConfig(conf *service.ParsedConfig, log *service.Logg
 	if tlsEnabled {
 		f.tlsConf = tlsConf
 	}
-	if f.saslConfs, err = saslMechanismsFromConfig(conf); err != nil {
+	if f.saslConfs, err = SASLMechanismsFromConfig(conf); err != nil {
 		return nil, err
 	}
 
@@ -279,7 +279,7 @@ func (f *franzKafkaWriter) Connect(ctx context.Context) error {
 		kgo.ProduceRequestTimeout(f.timeout),
 		kgo.ClientID(f.clientID),
 		kgo.Rack(f.rackID),
-		kgo.WithLogger(&kgoLogger{f.log}),
+		kgo.WithLogger(&KGoLogger{f.log}),
 	}
 	if f.tlsConf != nil {
 		clientOpts = append(clientOpts, kgo.DialTLSConfig(f.tlsConf))
