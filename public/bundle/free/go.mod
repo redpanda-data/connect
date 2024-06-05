@@ -2,7 +2,7 @@ module github.com/redpanda-data/connect/public/bundle/free/v4
 
 go 1.22.3
 
-require github.com/redpanda-data/connect/v4 v4.28.1-0.20240603161855-9f6190c6325c
+require github.com/redpanda-data/connect/v4 v4.29.0
 
 require (
 	cloud.google.com/go v0.112.0 // indirect
