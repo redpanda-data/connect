@@ -18,6 +18,7 @@ linters-settings:
     enable-all-rules: false
     rules:
       - name: superfluous-else
+      - name: exported
   errcheck:
     exclude-functions:
       - (*github.com/redpanda-data/benthos/v4/internal/batch.Error).Failed

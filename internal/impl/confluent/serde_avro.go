@@ -10,13 +10,13 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
-func resolveAvroReferences(ctx context.Context, client *schemaRegistryClient, info SchemaInfo) (string, error) {
+func resolveAvroReferences(ctx context.Context, client *schemaRegistryClient, info schemaInfo) (string, error) {
 	if len(info.References) == 0 {
 		return info.Schema, nil
 	}
 
 	refsMap := map[string]string{}
-	if err := client.WalkReferences(ctx, info.References, func(ctx context.Context, name string, info SchemaInfo) error {
+	if err := client.WalkReferences(ctx, info.References, func(ctx context.Context, name string, info schemaInfo) error {
 		refsMap[name] = info.Schema
 		return nil
 	}); err != nil {
@@ -45,7 +45,7 @@ func resolveAvroReferences(ctx context.Context, client *schemaRegistryClient, in
 	return string(schemaHydratedBytes), nil
 }
 
-func (s *schemaRegistryEncoder) getAvroEncoder(ctx context.Context, info SchemaInfo) (schemaEncoder, error) {
+func (s *schemaRegistryEncoder) getAvroEncoder(ctx context.Context, info schemaInfo) (schemaEncoder, error) {
 	schema, err := resolveAvroReferences(ctx, s.client, info)
 	if err != nil {
 		return nil, err
@@ -83,7 +83,7 @@ func (s *schemaRegistryEncoder) getAvroEncoder(ctx context.Context, info SchemaI
 	}, nil
 }
 
-func (s *schemaRegistryDecoder) getAvroDecoder(ctx context.Context, info SchemaInfo) (schemaDecoder, error) {
+func (s *schemaRegistryDecoder) getAvroDecoder(ctx context.Context, info schemaInfo) (schemaDecoder, error) {
 	schema, err := resolveAvroReferences(ctx, s.client, info)
 	if err != nil {
 		return nil, err

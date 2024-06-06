@@ -70,7 +70,7 @@ type sftpWriter struct {
 	mgr *service.Resources
 
 	address    string
-	creds      Credentials
+	creds      credentials
 	path       *service.InterpolatedString
 	suffixFn   codecSuffixFn
 	appendMode bool

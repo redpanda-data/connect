@@ -27,7 +27,7 @@ func outputConfigSpec() *service.ConfigSpec {
 		Summary("Pushes messages to an MQTT broker.").
 		Description(`
 The `+"`topic`"+` field can be dynamically set using function interpolations described xref:configuration:interpolation.adoc#bloblang-queries[here]. When sending batched messages these interpolations are performed per message part.`+service.OutputPerformanceDocs(true, false)).
-		Fields(ClientFields()...).
+		Fields(clientFields()...).
 		Fields(
 			service.NewInterpolatedStringField(moFieldTopic).
 				Description("The topic to publish messages to."),

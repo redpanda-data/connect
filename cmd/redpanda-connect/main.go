@@ -11,8 +11,11 @@ import (
 )
 
 var (
-	Version    string
-	DateBuilt  string
+	// Version version set at compile time.
+	Version string
+	// DateBuilt date built set at compile time.
+	DateBuilt string
+	// BinaryName binary name.
 	BinaryName string = "redpanda-connect"
 )
 

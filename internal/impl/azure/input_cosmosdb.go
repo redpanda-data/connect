@@ -83,13 +83,13 @@ type cosmosDBReader struct {
 	pager *runtime.Pager[azcosmos.QueryItemsResponse]
 }
 
-func newCosmosDBReaderFromParsed(conf *service.ParsedConfig, mgr *service.Resources) (*cosmosDBReader, error) {
+func newCosmosDBReaderFromParsed(conf *service.ParsedConfig, _ *service.Resources) (*cosmosDBReader, error) {
 	containerClient, err := cosmosdb.ContainerClientFromParsed(conf)
 	if err != nil {
 		return nil, err
 	}
 
-	partitionKeysMapping, err := conf.FieldBloblang(cosmosdb.FieldPartitionKeys)
+	partitionKeysMapping, err := conf.FieldBloblang(cosmosdb.FieldPartitionKeysMap)
 	if err != nil {
 		return nil, err
 	}

@@ -19,22 +19,23 @@ import (
 )
 
 const (
-	esoFieldURLs            = "urls"
-	esoFieldSniff           = "sniff"
-	esoFieldHealthcheck     = "healthcheck"
-	esoFieldID              = "id"
-	esoFieldAction          = "action"
-	esoFieldIndex           = "index"
-	esoFieldPipeline        = "pipeline"
-	esoFieldRouting         = "routing"
-	esoFieldType            = "type"
-	esoFieldTimeout         = "timeout"
-	esoFieldTLS             = "tls"
-	esoFieldAuth            = "basic_auth"
-	esoFieldAuthEnabled     = "enabled"
-	esoFieldAuthUsername    = "username"
-	esoFieldAuthPassword    = "password"
-	esoFieldAWS             = "aws"
+	esoFieldURLs         = "urls"
+	esoFieldSniff        = "sniff"
+	esoFieldHealthcheck  = "healthcheck"
+	esoFieldID           = "id"
+	esoFieldAction       = "action"
+	esoFieldIndex        = "index"
+	esoFieldPipeline     = "pipeline"
+	esoFieldRouting      = "routing"
+	esoFieldType         = "type"
+	esoFieldTimeout      = "timeout"
+	esoFieldTLS          = "tls"
+	esoFieldAuth         = "basic_auth"
+	esoFieldAuthEnabled  = "enabled"
+	esoFieldAuthUsername = "username"
+	esoFieldAuthPassword = "password"
+	esoFieldAWS          = "aws"
+	// ESOFieldAWSEnabled enabled field.
 	ESOFieldAWSEnabled      = "enabled"
 	esoFieldGzipCompression = "gzip_compression"
 	esoFieldBatching        = "batching"
@@ -296,6 +297,7 @@ func OutputFromParsed(pConf *service.ParsedConfig, mgr *service.Resources) (*Out
 
 //------------------------------------------------------------------------------
 
+// Connect attempts to connect to the server.
 func (e *Output) Connect(ctx context.Context) error {
 	if e.client != nil {
 		return nil
@@ -327,6 +329,7 @@ type pendingBulkIndex struct {
 	ID       string
 }
 
+// WriteBatch writes a message batch to the output.
 func (e *Output) WriteBatch(ctx context.Context, msg service.MessageBatch) error {
 	if e.client == nil {
 		return service.ErrNotConnected
@@ -430,6 +433,7 @@ func (e *Output) WriteBatch(ctx context.Context, msg service.MessageBatch) error
 	return nil
 }
 
+// Close closes the output.
 func (e *Output) Close(context.Context) error {
 	return nil
 }

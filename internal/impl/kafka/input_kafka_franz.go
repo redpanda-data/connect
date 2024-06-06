@@ -90,7 +90,7 @@ Finally, it's also possible to specify an explicit offset to consume from by add
 			Default(true).
 			Advanced()).
 		Field(service.NewTLSToggledField("tls")).
-		Field(SASLField()).
+		Field(SASLFields()).
 		Field(service.NewBoolField("multi_header").Description("Decode headers into lists to allow handling of multiple values with the same key").Default(false).Advanced()).
 		Field(service.NewBatchPolicyField("batching").
 			Description("Allows you to configure a xref:configuration:batching.adoc[batching policy] that applies to individual topic partitions in order to batch messages together before flushing them for processing. Batching can be beneficial for performance as well as useful for windowed processing, and doing so this way preserves the ordering of topic partitions.").

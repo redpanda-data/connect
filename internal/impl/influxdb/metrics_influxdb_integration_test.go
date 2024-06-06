@@ -72,7 +72,7 @@ func TestInfluxIntegration(t *testing.T) {
 		t.Fatalf("Could not connect to influxdb docker container: %s", err)
 	}
 
-	pConf, err := ConfigSpec().ParseYAML(fmt.Sprintf(`
+	pConf, err := configSpec().ParseYAML(fmt.Sprintf(`
 url: %v
 db: db0
 interval: 1s

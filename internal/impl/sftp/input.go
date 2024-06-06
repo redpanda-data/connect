@@ -100,7 +100,7 @@ type sftpReader struct {
 	// Config
 	address        string
 	paths          []string
-	creds          Credentials
+	creds          credentials
 	scannerCtor    codec.DeprecatedFallbackCodec
 	deleteOnFinish bool
 

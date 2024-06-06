@@ -44,7 +44,7 @@ func TestIntegration(t *testing.T) {
 
 	_ = resource.Expire(900)
 
-	creds := Credentials{
+	creds := credentials{
 		Username: sftpUsername,
 		Password: sftpPassword,
 	}

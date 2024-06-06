@@ -32,7 +32,7 @@ const (
 	imFieldTags             = "tags"
 )
 
-func ConfigSpec() *service.ConfigSpec {
+func configSpec() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Beta().
 		Version("3.36.0").
@@ -102,7 +102,7 @@ func ConfigSpec() *service.ConfigSpec {
 
 func init() {
 	err := service.RegisterMetricsExporter(
-		"influxdb", ConfigSpec(),
+		"influxdb", configSpec(),
 		func(conf *service.ParsedConfig, log *service.Logger) (service.MetricsExporter, error) {
 			return fromParsed(conf, log)
 		})
