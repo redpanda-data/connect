@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/nats-io/nats.go"
+	"github.com/nats-io/nats.go/jetstream"
 
 	"github.com/Jeffail/shutdown"
 
@@ -44,7 +45,7 @@ type kvCache struct {
 
 	connMut  sync.RWMutex
 	natsConn *nats.Conn
-	kv       nats.KeyValue
+	kv       jetstream.KeyValue
 }
 
 func newKVCache(conf *service.ParsedConfig, mgr *service.Resources) (*kvCache, error) {
@@ -97,12 +98,12 @@ func (p *kvCache) connect(ctx context.Context) error {
 		}
 	}()
 
-	var js nats.JetStreamContext
-	if js, err = p.natsConn.JetStream(); err != nil {
+	var js jetstream.JetStream
+	if js, err = jetstream.New(p.natsConn); err != nil {
 		return err
 	}
 
-	if p.kv, err = js.KeyValue(p.bucket); err != nil {
+	if p.kv, err = js.KeyValue(ctx, p.bucket); err != nil {
 		return err
 	}
 	return nil
@@ -112,9 +113,9 @@ func (p *kvCache) Get(ctx context.Context, key string) ([]byte, error) {
 	p.connMut.RLock()
 	defer p.connMut.RUnlock()
 
-	entry, err := p.kv.Get(key)
+	entry, err := p.kv.Get(ctx, key)
 	if err != nil {
-		if errors.Is(err, nats.ErrKeyNotFound) {
+		if errors.Is(err, jetstream.ErrKeyNotFound) {
 			err = service.ErrKeyNotFound
 		}
 		return nil, err
@@ -126,15 +127,15 @@ func (p *kvCache) Set(ctx context.Context, key string, value []byte, _ *time.Dur
 	p.connMut.RLock()
 	defer p.connMut.RUnlock()
 
-	_, err := p.kv.Put(key, value)
+	_, err := p.kv.Put(ctx, key, value)
 	return err
 }
 
 func (p *kvCache) Add(ctx context.Context, key string, value []byte, _ *time.Duration) error {
 	p.connMut.RLock()
 	defer p.connMut.RUnlock()
-	_, err := p.kv.Create(key, value)
-	if errors.Is(err, nats.ErrKeyExists) {
+	_, err := p.kv.Create(ctx, key, value)
+	if errors.Is(err, jetstream.ErrKeyExists) {
 		return service.ErrKeyAlreadyExists
 	}
 	return err
@@ -143,7 +144,7 @@ func (p *kvCache) Add(ctx context.Context, key string, value []byte, _ *time.Dur
 func (p *kvCache) Delete(ctx context.Context, key string) error {
 	p.connMut.RLock()
 	defer p.connMut.RUnlock()
-	return p.kv.Delete(key)
+	return p.kv.Delete(ctx, key)
 }
 
 func (p *kvCache) Close(ctx context.Context) error {
