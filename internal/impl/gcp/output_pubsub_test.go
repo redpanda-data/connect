@@ -293,3 +293,25 @@ func TestPubSubOutput_PublishErrors(t *testing.T) {
 	})
 	require.ElementsMatch(t, []string{"simulated foo error", "simulated bar error"}, errs)
 }
+
+func TestEnsureAttrValuesValidUTF8(t *testing.T) {
+	cases := []struct {
+		attr map[string]string
+		err  string
+	}{
+		{map[string]string{"valid": "fine"}, ""},
+		{map[string]string{"valid": "nope", "control": string("\xc0\x80")}, "attribute control contains non-UTF-8 data"},
+		{map[string]string{"valid": "nope", "high": string("\xed\xa0\x80")}, "attribute high contains non-UTF-8 data"},
+		{map[string]string{"valid": "nope", "low": string("\xed\xbf\xbf")}, "attribute low contains non-UTF-8 data"},
+	}
+
+	for _, tc := range cases {
+		err := ensureAttrValuesValidUTF8(tc.attr)
+		if err == nil {
+			err = errors.New("")
+		}
+		if err.Error() != tc.err {
+			t.Errorf("expected error %v but got: %v", tc.err, err)
+		}
+	}
+}
