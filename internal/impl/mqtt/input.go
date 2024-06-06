@@ -35,7 +35,7 @@ This input adds the following metadata fields to each message:
 `+"```"+`
 
 You can access these metadata fields using xref:configuration:interpolation.adoc#bloblang-queries[function interpolation].`).
-		Fields(ClientFields()...).
+		Fields(clientFields()...).
 		Fields(
 			service.NewStringListField(miFieldTopics).
 				Description("A list of topics to consume from."),

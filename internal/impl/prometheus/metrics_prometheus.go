@@ -34,7 +34,7 @@ const (
 	pmFieldFileOutputPath              = "file_output_path"
 )
 
-func ConfigSpec() *service.ConfigSpec {
+func configSpec() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Stable().
 		Summary("Host endpoints (`/metrics` and `/stats`) for Prometheus scraping.").
@@ -117,9 +117,9 @@ If the Push Gateway requires HTTP Basic Authentication it can be configured with
 
 func init() {
 	err := service.RegisterMetricsExporter(
-		"prometheus", ConfigSpec(),
+		"prometheus", configSpec(),
 		func(conf *service.ParsedConfig, log *service.Logger) (service.MetricsExporter, error) {
-			return FromParsed(conf, log)
+			return fromParsed(conf, log)
 		})
 	if err != nil {
 		panic(err)
@@ -230,7 +230,7 @@ func (p *promGaugeVec) With(labelValues ...string) service.MetricsExporterGauge 
 
 //------------------------------------------------------------------------------
 
-type Metrics struct {
+type metrics struct {
 	log        *service.Logger
 	closedChan chan struct{}
 	running    int32
@@ -268,8 +268,8 @@ func quantilesAsFloatMapFromParsed(confs []*service.ParsedConfig) (map[float64]f
 	return resultFloatMap, nil
 }
 
-func FromParsed(conf *service.ParsedConfig, log *service.Logger) (p *Metrics, err error) {
-	p = &Metrics{
+func fromParsed(conf *service.ParsedConfig, log *service.Logger) (p *metrics, err error) {
+	p = &metrics{
 		log:        log,
 		running:    1,
 		closedChan: make(chan struct{}),
@@ -352,13 +352,13 @@ func FromParsed(conf *service.ParsedConfig, log *service.Logger) (p *Metrics, er
 
 //------------------------------------------------------------------------------
 
-func (p *Metrics) HandlerFunc() http.HandlerFunc {
+func (p *metrics) HandlerFunc() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		promhttp.HandlerFor(p.reg, promhttp.HandlerOpts{}).ServeHTTP(w, r)
 	}
 }
 
-func (p *Metrics) NewCounterCtor(path string, labelNames ...string) service.MetricsExporterCounterCtor {
+func (p *metrics) NewCounterCtor(path string, labelNames ...string) service.MetricsExporterCounterCtor {
 	if !model.IsValidMetricName(model.LabelValue(path)) {
 		p.log.Errorf("Ignoring metric '%v' due to invalid name", path)
 		return func(labelValues ...string) service.MetricsExporterCounter {
@@ -396,7 +396,7 @@ func (p *Metrics) NewCounterCtor(path string, labelNames ...string) service.Metr
 	}
 }
 
-func (p *Metrics) NewTimerCtor(path string, labelNames ...string) service.MetricsExporterTimerCtor {
+func (p *metrics) NewTimerCtor(path string, labelNames ...string) service.MetricsExporterTimerCtor {
 	if !model.IsValidMetricName(model.LabelValue(path)) {
 		p.log.Errorf("Ignoring metric '%v' due to invalid name", path)
 		return func(labelValues ...string) service.MetricsExporterTimer {
@@ -439,7 +439,7 @@ func (p *Metrics) NewTimerCtor(path string, labelNames ...string) service.Metric
 	}
 }
 
-func (p *Metrics) getTimerHistVec(path string, labelNames ...string) service.MetricsExporterTimerCtor {
+func (p *metrics) getTimerHistVec(path string, labelNames ...string) service.MetricsExporterTimerCtor {
 	var pv *promTimingHistVec
 
 	p.mut.Lock()
@@ -471,7 +471,7 @@ func (p *Metrics) getTimerHistVec(path string, labelNames ...string) service.Met
 	}
 }
 
-func (p *Metrics) NewGaugeCtor(path string, labelNames ...string) service.MetricsExporterGaugeCtor {
+func (p *metrics) NewGaugeCtor(path string, labelNames ...string) service.MetricsExporterGaugeCtor {
 	if !model.IsValidMetricName(model.LabelValue(path)) {
 		p.log.Errorf("Ignoring metric '%v' due to invalid name", path)
 		return func(labelValues ...string) service.MetricsExporterGauge {
@@ -509,7 +509,7 @@ func (p *Metrics) NewGaugeCtor(path string, labelNames ...string) service.Metric
 	}
 }
 
-func (p *Metrics) Close(context.Context) error {
+func (p *metrics) Close(context.Context) error {
 	if atomic.CompareAndSwapInt32(&p.running, 1, 0) {
 		close(p.closedChan)
 	}

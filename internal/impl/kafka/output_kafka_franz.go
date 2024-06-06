@@ -82,7 +82,7 @@ This output often out-performs the traditional ` + "`kafka`" + ` output as well 
 			Optional().
 			Advanced()).
 		Field(service.NewTLSToggledField("tls")).
-		Field(SASLField()).
+		Field(SASLFields()).
 		LintRule(`
 root = if this.partitioner == "manual" {
   if this.partition.or("") == "" {

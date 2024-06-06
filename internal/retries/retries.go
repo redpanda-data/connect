@@ -16,6 +16,7 @@ const (
 	crboFieldMaxElapsedTime = "max_elapsed_time"
 )
 
+// CommonRetryBackOffFields returns the common retry with backoff fields.
 func CommonRetryBackOffFields(
 	defaultMaxRetries int,
 	defaultInitInterval string,
@@ -50,6 +51,7 @@ func fieldDurationOrEmptyStr(pConf *service.ParsedConfig, path ...string) (time.
 	return pConf.FieldDuration(path...)
 }
 
+// CommonRetryBackOffCtorFromParsed extracts the common retry with backoff fields from a parsed config.
 func CommonRetryBackOffCtorFromParsed(pConf *service.ParsedConfig) (ctor func() backoff.BackOff, err error) {
 	var maxRetries int
 	if maxRetries, err = pConf.FieldInt(crboFieldMaxRetries); err != nil {

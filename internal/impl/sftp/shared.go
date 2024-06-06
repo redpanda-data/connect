@@ -27,7 +27,7 @@ func credentialsFields() []*service.ConfigField {
 	}
 }
 
-func credentialsFromParsed(pConf *service.ParsedConfig) (creds Credentials, err error) {
+func credentialsFromParsed(pConf *service.ParsedConfig) (creds credentials, err error) {
 	if creds.Username, err = pConf.FieldString(scFieldCredentialsUsername); err != nil {
 		return
 	}
@@ -43,14 +43,14 @@ func credentialsFromParsed(pConf *service.ParsedConfig) (creds Credentials, err 
 	return
 }
 
-type Credentials struct {
+type credentials struct {
 	Username       string
 	Password       string
 	PrivateKeyFile string
 	PrivateKeyPass string
 }
 
-func (c Credentials) GetClient(fs fs.FS, address string) (*sftp.Client, error) {
+func (c credentials) GetClient(fs fs.FS, address string) (*sftp.Client, error) {
 	host, port, err := net.SplitHostPort(address)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse address: %v", err)

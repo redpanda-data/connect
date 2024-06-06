@@ -18,11 +18,11 @@ import (
 	"github.com/redpanda-data/connect/v4/internal/impl/protobuf"
 )
 
-func (s *schemaRegistryDecoder) getProtobufDecoder(ctx context.Context, info SchemaInfo) (schemaDecoder, error) {
+func (s *schemaRegistryDecoder) getProtobufDecoder(ctx context.Context, info schemaInfo) (schemaDecoder, error) {
 	regMap := map[string]string{
 		".": info.Schema,
 	}
-	if err := s.client.WalkReferences(ctx, info.References, func(ctx context.Context, name string, si SchemaInfo) error {
+	if err := s.client.WalkReferences(ctx, info.References, func(ctx context.Context, name string, si schemaInfo) error {
 		regMap[name] = si.Schema
 		return nil
 	}); err != nil {
@@ -82,11 +82,11 @@ func (s *schemaRegistryDecoder) getProtobufDecoder(ctx context.Context, info Sch
 	}, nil
 }
 
-func (s *schemaRegistryEncoder) getProtobufEncoder(ctx context.Context, info SchemaInfo) (schemaEncoder, error) {
+func (s *schemaRegistryEncoder) getProtobufEncoder(ctx context.Context, info schemaInfo) (schemaEncoder, error) {
 	regMap := map[string]string{
 		".": info.Schema,
 	}
-	if err := s.client.WalkReferences(ctx, info.References, func(ctx context.Context, name string, si SchemaInfo) error {
+	if err := s.client.WalkReferences(ctx, info.References, func(ctx context.Context, name string, si schemaInfo) error {
 		regMap[name] = si.Schema
 		return nil
 	}); err != nil {

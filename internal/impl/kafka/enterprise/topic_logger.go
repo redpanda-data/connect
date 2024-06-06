@@ -26,6 +26,7 @@ import (
 	"github.com/redpanda-data/connect/v4/internal/impl/kafka"
 )
 
+// TopicLoggerFields returns the topic logger config fields.
 func TopicLoggerFields() []*service.ConfigField {
 	return []*service.ConfigField{
 		service.NewStringListField("seed_brokers").
@@ -57,7 +58,7 @@ func TopicLoggerFields() []*service.ConfigField {
 			Example("100MB").
 			Example("50mib"),
 		service.NewTLSToggledField("tls"),
-		kafka.SASLField(),
+		kafka.SASLFields(),
 	}
 }
 
@@ -71,6 +72,7 @@ type TopicLogger struct {
 	attrs          []slog.Attr
 }
 
+// NewTopicLogger constructs a new topic logger.
 func NewTopicLogger() *TopicLogger {
 	return &TopicLogger{
 		fallbackLogger: &atomic.Pointer[service.Logger]{},
@@ -79,10 +81,12 @@ func NewTopicLogger() *TopicLogger {
 	}
 }
 
+// SetFallbackLogger configures a fallback logger.
 func (l *TopicLogger) SetFallbackLogger(fLogger *service.Logger) {
 	l.fallbackLogger.Store(fLogger)
 }
 
+// InitOutputFromParsed initialises the underlying output from the input config.
 func (l *TopicLogger) InitOutputFromParsed(pConf *service.ParsedConfig) error {
 	w, err := newTopicLoggerWriterFromConfig(pConf, l.fallbackLogger.Load())
 	if err != nil {
@@ -135,6 +139,7 @@ func (l *TopicLogger) InitOutputFromParsed(pConf *service.ParsedConfig) error {
 	return nil
 }
 
+// Enabled returns true if the logger is enabled and false otherwise.
 func (l *TopicLogger) Enabled(ctx context.Context, atLevel slog.Level) bool {
 	lvl := l.level.Load()
 	if lvl == nil {
@@ -143,6 +148,7 @@ func (l *TopicLogger) Enabled(ctx context.Context, atLevel slog.Level) bool {
 	return atLevel >= *lvl
 }
 
+// Handle invokes the logger for the input record.
 func (l *TopicLogger) Handle(ctx context.Context, r slog.Record) error {
 	tmpO := l.o.Load()
 	if tmpO == nil {
@@ -175,6 +181,7 @@ func (l *TopicLogger) Handle(ctx context.Context, r slog.Record) error {
 	return nil
 }
 
+// WithAttrs returns a new handle with the input attributes.
 func (l *TopicLogger) WithAttrs(attrs []slog.Attr) slog.Handler {
 	newL := *l
 	newAttributes := make([]slog.Attr, 0, len(attrs)+len(l.attrs))
@@ -184,6 +191,7 @@ func (l *TopicLogger) WithAttrs(attrs []slog.Attr) slog.Handler {
 	return &newL
 }
 
+// WithGroup TODO
 func (l *TopicLogger) WithGroup(name string) slog.Handler {
 	return l // TODO
 }

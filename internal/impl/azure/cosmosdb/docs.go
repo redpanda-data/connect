@@ -16,7 +16,8 @@ const (
 	fieldConnectionString = "connection_string"
 	fieldDatabase         = "database"
 	fieldContainer        = "container"
-	FieldPartitionKeys    = "partition_keys_map"
+	// FieldPartitionKeysMap partition_keys_map field.
+	FieldPartitionKeysMap = "partition_keys_map"
 	fieldOperation        = "operation"
 	fieldPatchOperations  = "patch_operations"
 	fieldPatchCondition   = "patch_condition"
@@ -182,7 +183,7 @@ func PartitionKeysField(isInputField bool) *service.ConfigField {
 	// TODO: Add examples for hierarchical / empty Partition Keys this when the following issues are addressed:
 	// - https://github.com/Azure/azure-sdk-for-go/issues/18578
 	// - https://github.com/Azure/azure-sdk-for-go/issues/21063
-	field := service.NewBloblangField(FieldPartitionKeys).Description("A xref:guides:bloblang/about.adoc[Bloblang mapping] which should evaluate to a single partition key value or an array of partition key values of type string, integer or boolean. Currently, hierarchical partition keys are not supported so only one value may be provided.").Example(`root = "blobfish"`).Example(`root = 41`).Example(`root = true`).Example(`root = null`)
+	field := service.NewBloblangField(FieldPartitionKeysMap).Description("A xref:guides:bloblang/about.adoc[Bloblang mapping] which should evaluate to a single partition key value or an array of partition key values of type string, integer or boolean. Currently, hierarchical partition keys are not supported so only one value may be provided.").Example(`root = "blobfish"`).Example(`root = 41`).Example(`root = true`).Example(`root = null`)
 
 	// Add dynamic examples
 	if !isInputField {
@@ -223,7 +224,7 @@ func CRUDFields(hasReadOperation bool) []*service.ConfigField {
 	}
 }
 
-// ContainerClientFromParsed creates the container client from a parsed config
+// ContainerClientFromParsed creates the container client from a parsed config.
 func ContainerClientFromParsed(conf *service.ParsedConfig) (*azcosmos.ContainerClient, error) {
 	var endpoint string
 	var err error
@@ -293,12 +294,12 @@ func ContainerClientFromParsed(conf *service.ParsedConfig) (*azcosmos.ContainerC
 	return containerClient, nil
 }
 
-// CRUDConfigFromParsed extracts the CRUD config from the parsed config
+// CRUDConfigFromParsed extracts the CRUD config from a parsed config.
 func CRUDConfigFromParsed(conf *service.ParsedConfig) (CRUDConfig, error) {
 	var c CRUDConfig
 	var err error
 
-	if c.PartitionKeys, err = conf.FieldBloblang(FieldPartitionKeys); err != nil {
+	if c.PartitionKeys, err = conf.FieldBloblang(FieldPartitionKeysMap); err != nil {
 		return CRUDConfig{}, err
 	}
 

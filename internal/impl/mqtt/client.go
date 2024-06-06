@@ -30,7 +30,7 @@ const (
 	msFieldClientTLS               = "tls"
 )
 
-func ClientFields() []*service.ConfigField {
+func clientFields() []*service.ConfigField {
 	return []*service.ConfigField{
 		service.NewURLListField(msFieldClientURLs).
 			Description("A list of URLs to connect to. If an item of the list contains commas it will be expanded into multiple URLs.").

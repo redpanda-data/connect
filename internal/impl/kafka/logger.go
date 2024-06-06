@@ -12,10 +12,12 @@ type KGoLogger struct {
 	L *service.Logger
 }
 
+// Level returns the logger level.
 func (k *KGoLogger) Level() kgo.LogLevel {
 	return kgo.LogLevelDebug
 }
 
+// Log calls the underlying logger implementation using the appropriate log level.
 func (k *KGoLogger) Log(level kgo.LogLevel, msg string, keyvals ...any) {
 	tmpL := k.L
 	if len(keyvals) > 0 {
