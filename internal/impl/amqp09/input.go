@@ -29,7 +29,6 @@ TLS is automatic when connecting to an `+"`amqps`"+` URL, but custom settings ca
 
 This input adds the following metadata fields to each message:
 
-`+"``` text"+`
 - amqp_content_type
 - amqp_content_encoding
 - amqp_delivery_mode
@@ -48,7 +47,6 @@ This input adds the following metadata fields to each message:
 - amqp_exchange
 - amqp_routing_key
 - All existing message headers, including nested headers prefixed with the key of their respective parent.
-`+"```"+`
 
 You can access these metadata fields using xref:configuration:interpolation.adoc#bloblang-queries[function interpolations].`).Fields(
 		service.NewURLListField(urlsField).

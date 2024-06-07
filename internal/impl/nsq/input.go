@@ -35,12 +35,10 @@ func inputConfigSpec() *service.ConfigSpec {
 
 This input adds the following metadata fields to each message:
 
-`+"``` text"+`
 - nsq_attempts
 - nsq_id
 - nsq_nsqd_address
 - nsq_timestamp
-`+"```"+`
 
 You can access these metadata fields using xref:configuration:interpolation.adoc#bloblang-queries[function interpolation].
 `).

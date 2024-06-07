@@ -26,13 +26,11 @@ func inputConfigSpec() *service.ConfigSpec {
 
 This input adds the following metadata fields to each message:
 
-`+"```text"+`
 - mqtt_duplicate
 - mqtt_qos
 - mqtt_retained
 - mqtt_topic
 - mqtt_message_id
-`+"```"+`
 
 You can access these metadata fields using xref:configuration:interpolation.adoc#bloblang-queries[function interpolation].`).
 		Fields(ClientFields()...).

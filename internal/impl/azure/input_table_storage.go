@@ -58,10 +58,10 @@ func tsiSpec() *service.ConfigSpec {
 Queries an Azure Storage Account Table, optionally with multiple filters.
 == Metadata
 This input adds the following metadata fields to each message:
-`+"```"+`
+
 - table_storage_name
 - row_num
-`+"```"+`
+
 You can access these metadata fields using xref:configuration:interpolation.adoc#bloblang-queries[function interpolation].`).
 		Fields(
 			service.NewStringField(tsiFieldTableName).

@@ -79,11 +79,9 @@ For information on how to set up credentials see https://cloud.google.com/docs/a
 
 This input adds the following metadata fields to each message:
 
-`+"```text"+`
 - gcp_pubsub_publish_time_unix - The time at which the message was published to the topic.
 - gcp_pubsub_delivery_attempt - When dead lettering is enabled, this is set to the number of times PubSub has attempted to deliver a message.
 - All message attributes
-`+"```"+`
 
 You can access these metadata fields using xref:configuration:interpolation.adoc#bloblang-queries[function interpolation].
 `).

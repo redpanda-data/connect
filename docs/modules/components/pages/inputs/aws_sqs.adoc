@@ -73,12 +73,10 @@ xref:guides:cloud/aws.adoc[].
 
 This input adds the following metadata fields to each message:
 
-```text
 - sqs_message_id
 - sqs_receipt_handle
 - sqs_approximate_receive_count
 - All message attributes
-```
 
 You can access these metadata fields using
 xref:configuration:interpolation.adoc#bloblang-queries[function interpolation].
