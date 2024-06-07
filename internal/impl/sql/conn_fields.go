@@ -20,6 +20,8 @@ var dsnField = service.NewStringField("dsn").
 
 ==== Drivers
 
+:driver-support: mysql=certified, postgres=certified, clickhouse=community, mssql=community, sqlite=certified, oracle=certified, snowflake=community, trino=community, gocosmos=community
+
 The following is a list of supported drivers, their placeholder style, and their respective DSN formats:
 
 |===

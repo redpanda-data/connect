@@ -201,8 +201,9 @@ OAuth2 issuer URL.
 OAuth2 scope to request.
 
 
-Type: `string`
-Default: `""`
+*Type*: `string`
+
+*Default*: `""`
 
 === `auth.oauth2.private_key_file`
 
@@ -238,3 +239,5 @@ Actual base64 encoded token.
 *Type*: `string`
 
 *Default*: `""`
+
+

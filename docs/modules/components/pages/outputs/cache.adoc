@@ -55,6 +55,8 @@ output:
 
 Caches are configured as xref:components:caches/about.adoc[resources], where there's a wide variety to choose from.
 
+:cache-support: aws_dynamodb=certified, aws_s3=certified, file=certified, memcached=certified, memory=certified, nats_kv=certified, redis=certified, ristretto=certified, couchbase=community, mongodb=community, sql=community, multilevel=community, ttlru=community, gcp_cloud_storage=community, lru=community, noop=community
+
 The `target` field must reference a configured cache resource label like follows:
 
 ```yaml

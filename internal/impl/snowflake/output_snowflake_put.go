@@ -66,14 +66,15 @@ func snowflakePutOutputConfig() *service.ConfigSpec {
 		Version("4.0.0").
 		Summary("Sends messages to Snowflake stages and, optionally, calls Snowpipe to load this data into one or more tables.").
 		Description(`
-In order to use a different stage and / or Snowpipe for each message, you can use function interpolations as described
-xref:configuration:interpolation.adoc#bloblang-queries[here]. When using batching, messages are grouped by the calculated
+In order to use a different stage and / or Snowpipe for each message, you can use function interpolations as described in
+xref:configuration:interpolation.adoc#bloblang-queries[Bloblang queries]. When using batching, messages are grouped by the calculated
 stage and Snowpipe and are streamed to individual files in their corresponding stage and, optionally, a Snowpipe
 `+"`insertFiles`"+` REST API call will be made for each individual file.
 
 == Credentials
 
 Two authentication mechanisms are supported:
+
 - User/password
 - Key Pair Authentication
 
@@ -153,6 +154,7 @@ Snowpipe https://docs.snowflake.com/en/user-guide/data-load-snowpipe-rest-apis.h
 and `+"`loadHistoryScan`"+` REST API endpoints which can be used to get information about recent Snowpipe calls. In
 order to query them, you'll first need to generate a valid JWT token for your Snowflake account. There are two methods
 for doing so:
+
 - Using the `+"`snowsql`"+` https://docs.snowflake.com/en/user-guide/snowsql.html[utility^]:
 
 `+"```bash"+`
