@@ -122,7 +122,7 @@ func s3InputSpec() *service.ConfigSpec {
 		Description(`
 == Stream objects on upload with SQS
 
-A common pattern for consuming S3 objects is to emit upload notification events from the bucket either directly to an SQS queue, or to an SNS topic that is consumed by an SQS queue, and then have your consumer listen for events which prompt it to download the newly uploaded objects. More information about this pattern and how to set it up can be found at: https://docs.aws.amazon.com/AmazonS3/latest/dev/ways-to-add-notification-config-to-bucket.html.
+A common pattern for consuming S3 objects is to emit upload notification events from the bucket either directly to an SQS queue, or to an SNS topic that is consumed by an SQS queue, and then have your consumer listen for events which prompt it to download the newly uploaded objects. More information about this pattern and how to set it up can be found at in the https://docs.aws.amazon.com/AmazonS3/latest/dev/ways-to-add-notification-config-to-bucket.html[Amazon S3 docs].
 
 Benthos is able to follow this pattern when you configure an `+"`sqs.url`"+`, where it consumes events from SQS and only downloads object keys received within those events. In order for this to work Benthos needs to know where within the event the key and bucket names can be found, specified as xref:configuration:field_paths.adoc[dot paths] with the fields `+"`sqs.key_path` and `sqs.bucket_path`"+`. The default values for these fields should already be correct when following the guide above.
 

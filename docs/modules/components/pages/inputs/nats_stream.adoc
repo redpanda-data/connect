@@ -90,10 +90,8 @@ When a consumer closes its connection it unsubscribes, when all consumers of a d
 
 This input adds the following metadata fields to each message:
 
-```text
 - nats_stream_subject
 - nats_stream_sequence
-```
 
 You can access these metadata fields using xref:configuration:interpolation.adoc#bloblang-queries[function interpolation].
 

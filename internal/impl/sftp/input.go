@@ -38,9 +38,7 @@ func sftpInputSpec() *service.ConfigSpec {
 
 This input adds the following metadata fields to each message:
 
-`+"```"+`
 - sftp_path
-`+"```"+`
 
 You can access these metadata fields using xref:configuration:interpolation.adoc#bloblang-queries[function interpolation].`).
 		Fields(

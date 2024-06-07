@@ -95,7 +95,6 @@ By default this input will consume all files found within the target container a
 
 This input adds the following metadata fields to each message:
 
-`+"```"+`
 - blob_storage_key
 - blob_storage_container
 - blob_storage_last_modified
@@ -103,7 +102,6 @@ This input adds the following metadata fields to each message:
 - blob_storage_content_type
 - blob_storage_content_encoding
 - All user defined metadata
-`+"```"+`
 
 You can access these metadata fields using xref:configuration:interpolation.adoc#bloblang-queries[function interpolation].`).
 		Fields(
