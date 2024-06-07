@@ -20,7 +20,7 @@ func zmqInputConfig() *service.ConfigSpec {
 		Categories("Network").
 		Summary("Consumes messages from a ZeroMQ socket.").
 		Description(`
-By default Benthos does not build with components that require linking to external libraries. If you wish to build Benthos locally with this component then set the build tag ` + "`x_benthos_extra`" + `:
+By default Redpanda Connect does not build with components that require linking to external libraries. If you wish to build Redpanda Connect locally with this component then set the build tag ` + "`x_benthos_extra`" + `:
 
 ` + "```bash" + `
 # With go

@@ -70,7 +70,7 @@ You can access these metadata fields using xref:configuration:interpolation.adoc
 
 === Credentials
 
-By default Benthos will use a shared credentials file when connecting to GCP services. You can find out more in xref:guides:cloud/gcp.adoc[].`).
+By default Redpanda Connect will use a shared credentials file when connecting to GCP services. You can find out more in xref:guides:cloud/gcp.adoc[].`).
 		Fields(
 			service.NewStringField(csiFieldBucket).
 				Description("The name of the bucket from which to download objects."),

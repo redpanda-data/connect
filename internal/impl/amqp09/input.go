@@ -96,7 +96,7 @@ You can access these metadata fields using xref:configuration:interpolation.adoc
 			Default(false).
 			Advanced(),
 		service.NewStringListField(nackRejectPattensField).
-			Description("A list of regular expression patterns whereby if a message that has failed to be delivered by Benthos has an error that matches it will be dropped (or delivered to a dead-letter queue if one exists). By default failed messages are nacked with requeue enabled.").
+			Description("A list of regular expression patterns whereby if a message that has failed to be delivered by Redpanda Connect has an error that matches it will be dropped (or delivered to a dead-letter queue if one exists). By default failed messages are nacked with requeue enabled.").
 			Example([]string{"^reject me please:.+$"}).
 			Advanced().
 			Version("3.64.0").

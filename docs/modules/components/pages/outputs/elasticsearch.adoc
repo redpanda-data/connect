@@ -192,7 +192,7 @@ This field supports xref:configuration:interpolation.adoc#bloblang-queries[inter
 
 === `sniff`
 
-Prompts Benthos to sniff for brokers to connect to when establishing a connection.
+Prompts Redpanda Connect to sniff for brokers to connect to when establishing a connection.
 
 
 *Type*: `bool`

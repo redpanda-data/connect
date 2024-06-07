@@ -121,7 +121,7 @@ func gcpBigQueryConfig() *service.ConfigSpec {
 		Description(`
 == Credentials
 
-By default Benthos will use a shared credentials file when connecting to GCP services. You can find out more in xref:guides:cloud/gcp.adoc[].
+By default Redpanda Connect will use a shared credentials file when connecting to GCP services. You can find out more in xref:guides:cloud/gcp.adoc[].
 
 == Format
 
@@ -205,7 +205,7 @@ For the CSV format when the field ` + "`csv.header`" + ` is specified a header r
 				Advanced().
 				Default(string(bigquery.UTF_8)),
 			service.NewIntField("skip_leading_rows").
-				Description("The number of rows at the top of a CSV file that BigQuery will skip when reading data. The default value is 1 since Benthos will add the specified header in the first line of each batch sent to BigQuery.").
+				Description("The number of rows at the top of a CSV file that BigQuery will skip when reading data. The default value is 1 since Redpanda Connect will add the specified header in the first line of each batch sent to BigQuery.").
 				Advanced().
 				Default(1),
 		).Description("Specify how CSV data should be interpretted.")).

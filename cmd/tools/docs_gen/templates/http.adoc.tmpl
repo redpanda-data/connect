@@ -58,7 +58,7 @@ If the certificate is signed by a certificate authority, the `cert_file` should 
 By default {page-component-title} does not do any sort of authentication for the service-wide HTTP server. However, it's possible to configure basic authentication with the <<basic-auth,`basic_auth`>> field. Passwords configured must be hashed according to the specified algorithm and base64 encoded, for some hashing algorithms you can do this using {page-component-title} itself:
 
 ```sh
-echo mynewpassword | benthos blobl 'root = content().hash("sha256").encode("base64")'
+echo mynewpassword | rpk connect blobl 'root = content().hash("sha256").encode("base64")'
 ```
 
 == Endpoints

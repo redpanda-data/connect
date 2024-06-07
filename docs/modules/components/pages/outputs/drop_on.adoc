@@ -28,7 +28,7 @@ output:
     output: null # No default (required)
 ```
 
-Regular Benthos outputs will apply back pressure when downstream services aren't accessible, and Benthos retries (or nacks) all messages that fail to be delivered. However, in some circumstances, or for certain output types, we instead might want to relax these mechanisms, which is when this output becomes useful.
+Regular Redpanda Connect outputs will apply back pressure when downstream services aren't accessible, and Redpanda Connect retries (or nacks) all messages that fail to be delivered. However, in some circumstances, or for certain output types, we instead might want to relax these mechanisms, which is when this output becomes useful.
 
 == Fields
 

@@ -66,7 +66,7 @@ Both the `+"`partition_key`"+`(required) and `+"`hash_key`"+` (optional) fields 
 
 == Credentials
 
-By default Benthos will use a shared credentials file when connecting to AWS services. It's also possible to set them explicitly at the component level, allowing you to transfer data across accounts. You can find out more in xref:guides:cloud/aws.adoc[].`+service.OutputPerformanceDocs(true, true)).
+By default Redpanda Connect will use a shared credentials file when connecting to AWS services. It's also possible to set them explicitly at the component level, allowing you to transfer data across accounts. You can find out more in xref:guides:cloud/aws.adoc[].`+service.OutputPerformanceDocs(true, true)).
 		Fields(
 			service.NewStringField(koFieldStream).
 				Description("The stream to publish messages to. Streams can either be specified by their name or full ARN.").

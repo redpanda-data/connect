@@ -115,7 +115,7 @@ An identifier for the client connection.
 
 === `dynamic_client_id_suffix`
 
-Append a dynamically generated suffix to the specified `client_id` on each run of the pipeline. This can be useful when clustering Benthos producers.
+Append a dynamically generated suffix to the specified `client_id` on each run of the pipeline. This can be useful when clustering Redpanda Connect producers.
 
 
 *Type*: `string`
@@ -149,7 +149,7 @@ connect_timeout: 500ms
 
 === `will`
 
-Set last will message in case of Benthos failure
+Set last will message in case of Redpanda Connect failure
 
 
 *Type*: `object`
