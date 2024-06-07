@@ -126,13 +126,15 @@ A Data Source Name to identify the target database.
 
 ==== Drivers
 
+:driver-support: mysql=certified, postgres=certified, clickhouse=community, mssql=community, sqlite=certified, oracle=certified, snowflake=community, trino=community, gocosmos=community
+
 The following is a list of supported drivers, their placeholder style, and their respective DSN formats:
 
 |===
 | Driver | Data Source Name Format
 
 | `clickhouse` 
-| https://github.com/ClickHouse/clickhouse-go#dsn[`clickhouse://[username[:password]@][netloc][:port]/dbname[?param1=value1&...&paramN=valueN]`] 
+| https://github.com/ClickHouse/clickhouse-go#dsn[`clickhouse://[username[:password\]@\][netloc\][:port\]/dbname[?param1=value1&...&paramN=valueN\]`^] 
 
 | `mysql` 
 | `[username[:password]@][protocol[(address)]]/dbname[?param1=value1&...&paramN=valueN]` 
@@ -153,10 +155,10 @@ The following is a list of supported drivers, their placeholder style, and their
 | `username[:password]@account_identifier/dbname/schemaname[?param1=value&...&paramN=valueN]` 
 
 | `trino` 
-| https://github.com/trinodb/trino-go-client#dsn-data-source-name[`http[s]://user[:pass]@host[:port][?parameters]`] 
+| https://github.com/trinodb/trino-go-client#dsn-data-source-name[`http[s\]://user[:pass\]@host[:port\][?parameters\]`^] 
 
 | `gocosmos` 
-| https://pkg.go.dev/github.com/microsoft/gocosmos#readme-example-usage[`AccountEndpoint=<cosmosdb-endpoint>;AccountKey=<cosmosdb-account-key>[;TimeoutMs=<timeout-in-ms>][;Version=<cosmosdb-api-version>][;DefaultDb/Db=<db-name>][;AutoId=<true/false>][;InsecureSkipVerify=<true/false>]`] 
+| https://pkg.go.dev/github.com/microsoft/gocosmos#readme-example-usage[`AccountEndpoint=<cosmosdb-endpoint>;AccountKey=<cosmosdb-account-key>[;TimeoutMs=<timeout-in-ms>\][;Version=<cosmosdb-api-version>\][;DefaultDb/Db=<db-name>\][;AutoId=<true/false>\][;InsecureSkipVerify=<true/false>\]`^] 
 |===
 
 Please note that the `postgres` driver enforces SSL by default, you can override this with the parameter `sslmode=disable` if required.

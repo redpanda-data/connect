@@ -109,7 +109,7 @@ Currently the only supported structured data codec is `json`.
 
 === `syslog_rfc5424`
 
-Attempts to parse a log following the https://tools.ietf.org/html/rfc5424[Syslog rfc5424^] spec. The resulting structured document may contain any of the following fields:
+Attempts to parse a log following the https://tools.ietf.org/html/rfc5424[Syslog RFC5424^] spec. The resulting structured document may contain any of the following fields:
 
 - `message` (string)
 - `timestamp` (string, RFC3339)
@@ -125,7 +125,7 @@ Attempts to parse a log following the https://tools.ietf.org/html/rfc5424[Syslog
 
 === `syslog_rfc3164`
 
-Attempts to parse a log following the https://tools.ietf.org/html/rfc3164[Syslog rfc3164^] spec. The resulting structured document may contain any of the following fields:
+Attempts to parse a log following the https://tools.ietf.org/html/rfc3164[Syslog rfc3164] spec. The resulting structured document may contain any of the following fields:
 
 - `message` (string)
 - `timestamp` (string, RFC3339)

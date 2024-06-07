@@ -72,6 +72,7 @@ func bsiSpec() *service.ConfigSpec {
 		Summary(`Downloads objects within an Azure Blob Storage container, optionally filtered by a prefix.`).
 		Description(`
 Supports multiple authentication methods but only one of the following is required:
+
 - `+"`storage_connection_string`"+`
 - `+"`storage_account` and `storage_access_key`"+`
 - `+"`storage_account` and `storage_sas_token`"+`

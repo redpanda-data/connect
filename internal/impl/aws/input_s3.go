@@ -132,7 +132,7 @@ When using SQS please make sure you have sensible values for `+"`sqs.max_message
 
 == Download large files
 
-When downloading large files it's often necessary to process it in streamed parts in order to avoid loading the entire file in memory at a given time. In order to do this a `+"<<codec, `codec`>>"+` can be specified that determines how to break the input into smaller individual messages.
+When downloading large files it's often necessary to process it in streamed parts in order to avoid loading the entire file in memory at a given time. In order to do this a `+"<<scanner, `scanner`>>"+` can be specified that determines how to break the input into smaller individual messages.
 
 == Credentials
 
@@ -142,7 +142,6 @@ By default Benthos will use a shared credentials file when connecting to AWS ser
 
 This input adds the following metadata fields to each message:
 
-`+"```"+`
 - s3_key
 - s3_bucket
 - s3_last_modified_unix
@@ -151,7 +150,6 @@ This input adds the following metadata fields to each message:
 - s3_content_encoding
 - s3_version_id
 - All user defined metadata
-`+"```"+`
 
 You can access these metadata fields using xref:configuration:interpolation.adoc#bloblang-queries[function interpolation]. Note that user defined metadata is case insensitive within AWS, and it is likely that the keys will be received in a capitalized form, if you wish to make them consistent you can map all metadata keys to lower or uppercase using a Bloblang mapping such as `+"`meta = meta().map_each_key(key -> key.lowercase())`"+`.`).
 		Fields(
