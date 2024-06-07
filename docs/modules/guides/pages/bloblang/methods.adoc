@@ -534,7 +534,7 @@ root.the_rest = this.value.slice(0, -4)
 === `slug`
 
 [CAUTION]
-.Beta
+
 ====
 This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
 ====
@@ -1320,7 +1320,7 @@ root.delay_for_s = this.delay_for.parse_duration() / 1000000000
 === `parse_duration_iso8601`
 
 [CAUTION]
-.Beta
+
 ====
 This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
 ====
@@ -1359,7 +1359,7 @@ root.delay_for_s = this.delay_for.parse_duration_iso8601() / 1000000000
 === `ts_add_iso8601`
 
 [CAUTION]
-.Beta
+
 ====
 This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
 ====
@@ -1372,7 +1372,7 @@ Parse parameter string as ISO 8601 period and add it to value with high precisio
 === `ts_format`
 
 [CAUTION]
-.Beta
+
 ====
 This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
 ====
@@ -1425,7 +1425,7 @@ root.something_at = this.created_at.ts_format("2006-Jan-02 15:04:05.999999", "UT
 === `ts_parse`
 
 [CAUTION]
-.Beta
+
 ====
 This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
 ====
@@ -1450,7 +1450,7 @@ root.doc.timestamp = this.doc.timestamp.ts_parse("2006-Jan-02")
 === `ts_round`
 
 [CAUTION]
-.Beta
+
 ====
 This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
 ====
@@ -1478,7 +1478,7 @@ root.created_at_hour = this.created_at.ts_round("1h".parse_duration())
 === `ts_strftime`
 
 [CAUTION]
-.Beta
+
 ====
 This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
 ====
@@ -1525,7 +1525,7 @@ root.something_at = this.created_at.ts_strftime("%Y-%b-%d %H:%M:%S.%f", "UTC")
 === `ts_strptime`
 
 [CAUTION]
-.Beta
+
 ====
 This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
 ====
@@ -1559,7 +1559,7 @@ root.doc.timestamp = this.doc.timestamp.ts_strptime("%Y-%b-%d %H:%M:%S.%f")
 === `ts_sub`
 
 [CAUTION]
-.Beta
+
 ====
 This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
 ====
@@ -1587,7 +1587,7 @@ root.between = this.started_at.ts_sub("2020-08-14T05:54:23Z").abs()
 === `ts_sub_iso8601`
 
 [CAUTION]
-.Beta
+
 ====
 This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
 ====
@@ -1600,7 +1600,7 @@ Parse parameter string as ISO 8601 period and subtract it from value with high p
 === `ts_tz`
 
 [CAUTION]
-.Beta
+
 ====
 This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
 ====
@@ -1626,7 +1626,7 @@ root.created_at_utc = this.created_at.ts_tz("UTC")
 === `ts_unix`
 
 [CAUTION]
-.Beta
+
 ====
 This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
 ====
@@ -1645,7 +1645,7 @@ root.created_at_unix = this.created_at.ts_unix()
 === `ts_unix_micro`
 
 [CAUTION]
-.Beta
+
 ====
 This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
 ====
@@ -1664,7 +1664,7 @@ root.created_at_unix = this.created_at.ts_unix_micro()
 === `ts_unix_milli`
 
 [CAUTION]
-.Beta
+
 ====
 This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
 ====
@@ -1683,7 +1683,7 @@ root.created_at_unix = this.created_at.ts_unix_milli()
 === `ts_unix_nano`
 
 [CAUTION]
-.Beta
+
 ====
 This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
 ====
@@ -2016,7 +2016,7 @@ root.has_bar = this.thing.contains(20)
 === `diff`
 
 [CAUTION]
-.Beta
+
 ====
 This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
 ====
@@ -2108,7 +2108,7 @@ root.new_dict = this.dict.filter(item -> item.value.contains("foo"))
 === `find`
 
 [CAUTION]
-.Beta
+
 ====
 This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
 ====
@@ -2138,7 +2138,7 @@ root.index = this.things.find(this.goal)
 === `find_all`
 
 [CAUTION]
-.Beta
+
 ====
 This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
 ====
@@ -2168,7 +2168,7 @@ root.indexes = this.things.find_all(this.goal)
 === `find_all_by`
 
 [CAUTION]
-.Beta
+
 ====
 This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
 ====
@@ -2191,7 +2191,7 @@ root.index = this.find_all_by(v -> v != "bar")
 === `find_by`
 
 [CAUTION]
-.Beta
+
 ====
 This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
 ====
@@ -2365,7 +2365,7 @@ root.text_objects = this.json_path("$.body[?(@.type=='text')]")
 === `json_schema`
 
 [CAUTION]
-.Beta
+
 ====
 This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
 ====
@@ -2529,7 +2529,7 @@ root = this.foo.merge(this.bar)
 === `patch`
 
 [CAUTION]
-.Beta
+
 ====
 This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
 ====
@@ -2728,7 +2728,7 @@ root.foo = this.foo.zip(this.bar, this.baz)
 === `bloblang`
 
 [CAUTION]
-.Beta
+
 ====
 This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
 ====
@@ -2754,7 +2754,7 @@ root.body = this.body.bloblang(this.mapping)
 === `format_json`
 
 [CAUTION]
-.Beta
+
 ====
 This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
 ====

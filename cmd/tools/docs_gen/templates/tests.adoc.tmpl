@@ -12,7 +12,7 @@
      https://github.com/redpanda-data/benthos/tree/main/internal/config/test/docs.adoc
 ////
 
-The {page-component-title} service offers a command `benthos test` for running unit tests on sections of a configuration file. This makes it easy to protect your config files from regressions over time.
+The {page-component-title} service offers a command `rpk connect test` for running unit tests on sections of a configuration file. This makes it easy to protect your config files from regressions over time.
 
 == Writing a test
 
@@ -106,7 +106,7 @@ tests:
         - json_equals: {"Cities": "Bellevue, Olympia, Seattle"}
 ```
 
-And execute this test the same way we execute other {page-component-title} tests (`benthos test ./dir/cities_test.yaml`, `benthos test ./dir/...`, etc).
+And execute this test the same way we execute other {page-component-title} tests (`rpk connect test ./dir/cities_test.yaml`, `rpk connect test ./dir/...`, etc).
 
 === Fragmented tests
 
@@ -234,12 +234,12 @@ Checks that both the message and the condition are valid JSON documents, and tha
 
 == Running tests
 
-Executing tests for a specific config can be done by pointing the subcommand `test` at either the config to be tested or its test definition, e.g. `benthos test ./config.yaml` and `benthos test ./config_benthos_test.yaml` are equivalent.
+Executing tests for a specific config can be done by pointing the subcommand `test` at either the config to be tested or its test definition, e.g. `rpk connect test ./config.yaml` and `rpk connect test ./config_benthos_test.yaml` are equivalent.
 
-The `test` subcommand also supports wildcard patterns e.g. `benthos test ./foo/*.yaml` will execute all tests within matching files. In order to walk a directory tree and execute all tests found you can use the shortcut `./...`, e.g. `benthos test ./...` will execute all tests found in the current directory, any child directories, and so on.
+The `test` subcommand also supports wildcard patterns e.g. `rpk connect test ./foo/*.yaml` will execute all tests within matching files. In order to walk a directory tree and execute all tests found you can use the shortcut `./...`, e.g. `rpk connect test ./...` will execute all tests found in the current directory, any child directories, and so on.
 
 If you want to allow components to write logs at a provided level to stdout when running the tests, you can use
-`benthos test --log <level>`. Please consult the {logger-url}[logger docs] for further details.
+`rpk connect test --log <level>`. Please consult the {logger-url}[logger docs] for further details.
 
 == Mocking processors
 
