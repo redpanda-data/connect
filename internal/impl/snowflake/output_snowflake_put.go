@@ -97,7 +97,7 @@ openssl genrsa 2048 | openssl pkcs8 -topk8 -inform PEM -out rsa_key.p8
 `+"```"+`
 
 to generate an encrypted SSH private key. However, in this case, it uses an encryption algorithm called
-`+"`pbeWithMD5AndDES-CBC`"+`, which is part of the PKCS#5 v1.5 and is considered insecure. Due to this, Benthos does not
+`+"`pbeWithMD5AndDES-CBC`"+`, which is part of the PKCS#5 v1.5 and is considered insecure. Due to this, Redpanda Connect does not
 support it and, if you wish to use password-protected keys directly, you must use PKCS#5 v2.0 to encrypt them by using
 the following command (as the current Snowflake docs suggest):
 
@@ -136,7 +136,7 @@ and the following `+"`BENTHOS_PIPE`"+` Snowpipe:
 CREATE OR REPLACE PIPE BENTHOS_DB.PUBLIC.BENTHOS_PIPE AUTO_INGEST = FALSE AS COPY INTO BENTHOS_DB.PUBLIC.BENTHOS_TBL FROM (SELECT * FROM @%BENTHOS_TBL) FILE_FORMAT = (TYPE = JSON COMPRESSION = AUTO)
 `+"```"+`
 
-you can configure Benthos to use the implicit table stage `+"`@%BENTHOS_TBL`"+` as the `+"`stage`"+` and
+you can configure Redpanda Connect to use the implicit table stage `+"`@%BENTHOS_TBL`"+` as the `+"`stage`"+` and
 `+"`BENTHOS_PIPE`"+` as the `+"`snowpipe`"+`. In this case, you must set `+"`compression`"+` to `+"`AUTO`"+` and, if
 using message batching, you'll need to configure an xref:components:processors/archive.adoc[`+"`archive`"+`] processor
 with the `+"`concatenate`"+` format. Since the `+"`compression`"+` is set to `+"`AUTO`"+`, the
@@ -178,7 +178,7 @@ If you need to pass in a valid `+"`requestId`"+` to any of these Snowpipe REST A
 xref:guides:bloblang/functions.adoc#uuid_v4[uuid_v4()] string in a metadata field called
 `+"`request_id`"+`, log it via the xref:components:processors/log.adoc[`+"`log`"+`] processor and
 then configure `+"`request_id: ${ @request_id }`"+` ). Alternatively, you can xref:components:logger/about.adoc[enable debug logging]
- and Benthos will print the Request IDs that it sends to Snowpipe.
+ and Redpanda Connect will print the Request IDs that it sends to Snowpipe.
 
 == General troubleshooting
 
@@ -188,7 +188,7 @@ docs for details on how to change this directory via environment variables.
 
 A silent failure can occur due to https://github.com/snowflakedb/gosnowflake/issues/701[this issue^], where the
 underlying https://github.com/snowflakedb/gosnowflake[`+"`gosnowflake`"+` driver^] doesn't return an error and doesn't
-log a failure if it can't figure out the current username. One way to trigger this behavior is by running Benthos in a
+log a failure if it can't figure out the current username. One way to trigger this behavior is by running Redpanda Connect in a
 Docker container with a non-existent user ID (such as `+"`--user 1000:1000`"+`).
 `+service.OutputPerformanceDocs(true, true)).
 		Field(service.NewStringField("account").Description(`Account name, which is the same as the https://docs.snowflake.com/en/user-guide/admin-account-identifier.html#where-are-account-identifiers-used[Account Identifier^].

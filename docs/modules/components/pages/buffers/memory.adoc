@@ -15,7 +15,7 @@
 component_type_dropdown::[]
 
 
-Stores consumed messages in memory and acknowledges them at the input level. During shutdown Benthos will make a best attempt at flushing all remaining messages before exiting cleanly.
+Stores consumed messages in memory and acknowledges them at the input level. During shutdown Redpanda Connect will make a best attempt at flushing all remaining messages before exiting cleanly.
 
 
 [tabs]

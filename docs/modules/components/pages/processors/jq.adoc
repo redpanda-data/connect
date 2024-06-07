@@ -51,7 +51,7 @@ jq:
 [TIP]
 .Try out Bloblang
 ====
-For better performance and improved capabilities try out native Benthos mapping with the xref:components:processors/mapping.adoc[`mapping` processor].
+For better performance and improved capabilities try out native Redpanda Connect mapping with the xref:components:processors/mapping.adoc[`mapping` processor].
 ====
 
 The provided query is executed on each message, targeting either the contents as a structured JSON value or as a raw string using the field `raw`, and the message is replaced with the query result.

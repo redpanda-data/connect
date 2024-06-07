@@ -41,9 +41,9 @@ func ConfigSpec() *service.ConfigSpec {
 		Footnotes(`
 == Push gateway
 
-The field `+"`push_url`"+` is optional and when set will trigger a push of metrics to a https://prometheus.io/docs/instrumenting/pushing/[Prometheus Push Gateway^] once Benthos shuts down. It is also possible to specify a `+"`push_interval`"+` which results in periodic pushes.
+The field `+"`push_url`"+` is optional and when set will trigger a push of metrics to a https://prometheus.io/docs/instrumenting/pushing/[Prometheus Push Gateway^] once Redpanda Connect shuts down. It is also possible to specify a `+"`push_interval`"+` which results in periodic pushes.
 
-The Push Gateway is useful for when Benthos instances are short lived. Do not include the "/metrics/jobs/..." path in the push URL.
+The Push Gateway is useful for when Redpanda Connect instances are short lived. Do not include the "/metrics/jobs/..." path in the push URL.
 
 If the Push Gateway requires HTTP Basic Authentication it can be configured with `+"`push_basic_auth`.").
 		Fields(
@@ -79,11 +79,11 @@ If the Push Gateway requires HTTP Basic Authentication it can be configured with
 					{"quantile": 0.99, "error": 0.001},
 				}),
 			service.NewBoolField(pmFieldAddProcessMetrics).
-				Description("Whether to export process metrics such as CPU and memory usage in addition to Benthos metrics.").
+				Description("Whether to export process metrics such as CPU and memory usage in addition to Redpanda Connect metrics.").
 				Advanced().
 				Default(false),
 			service.NewBoolField(pmFieldAddGoMetrics).
-				Description("Whether to export Go runtime metrics such as GC pauses in addition to Benthos metrics.").
+				Description("Whether to export Go runtime metrics such as GC pauses in addition to Redpanda Connect metrics.").
 				Advanced().
 				Default(false),
 			service.NewURLField(pmFieldPushURL).

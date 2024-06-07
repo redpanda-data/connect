@@ -89,7 +89,7 @@ When downloading large files it's often necessary to process it in streamed part
 
 == Stream new files
 
-By default this input will consume all files found within the target container and will then gracefully terminate. This is referred to as a "batch" mode of operation. However, it's possible to instead configure a container as https://learn.microsoft.com/en-gb/azure/event-grid/event-schema-blob-storage[an Event Grid source^] and then use this as a `+"<<targetsinput, `targets_input`>>"+`, in which case new files are consumed as they're uploaded and Benthos will continue listening for and downloading files as they arrive. This is referred to as a "streamed" mode of operation.
+By default this input will consume all files found within the target container and will then gracefully terminate. This is referred to as a "batch" mode of operation. However, it's possible to instead configure a container as https://learn.microsoft.com/en-gb/azure/event-grid/event-schema-blob-storage[an Event Grid source^] and then use this as a `+"<<targetsinput, `targets_input`>>"+`, in which case new files are consumed as they're uploaded and Redpanda Connect will continue listening for and downloading files as they arrive. This is referred to as a "streamed" mode of operation.
 
 == Metadata
 
@@ -118,7 +118,7 @@ You can access these metadata fields using xref:configuration:interpolation.adoc
 				Advanced().
 				Default(false),
 			service.NewInputField(bsiFieldTargetsInput).
-				Description("EXPERIMENTAL: An optional source of download targets, configured as a xref:components:inputs/about.adoc[regular Benthos input]. Each message yielded by this input should be a single structured object containing a field `name`, which represents the blob to be downloaded.").
+				Description("EXPERIMENTAL: An optional source of download targets, configured as a xref:components:inputs/about.adoc[regular Redpanda Connect input]. Each message yielded by this input should be a single structured object containing a field `name`, which represents the blob to be downloaded.").
 				Optional().
 				Version("4.27.0").
 				Example(map[string]any{

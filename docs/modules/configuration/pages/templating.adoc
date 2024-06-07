@@ -20,10 +20,10 @@ A template is defined in a YAML file that can be imported when {page-component-t
 
 [source,bash]
 ----
-benthos -t "./templates/*.yaml" -c ./config.yaml
+rpk connect run -t "./templates/*.yaml" -c ./config.yaml
 ----
 
-The template describes the type of the component and configuration fields that can be used to customize it, followed by a xref:guides:bloblang/about.adoc[Bloblang mapping] that translates an object containing those fields into a benthos config structure. This allows you to use logic to generate more complex configurations:
+The template describes the type of the component and configuration fields that can be used to customize it, followed by a xref:guides:bloblang/about.adoc[Bloblang mapping] that translates an object containing those fields into a Redpanda Connect config structure. This allows you to use logic to generate more complex configurations:
 
 [tabs]
 ======
@@ -179,7 +179,7 @@ A longer form description of the component and how to use it.
 
 === `fields`
 
-The configuration fields of the template, fields specified here will be parsed from a Benthos config and will be accessible from the template mapping.
+The configuration fields of the template, fields specified here will be parsed from a Redpanda Connect config and will be accessible from the template mapping.
 
 
 *Type*: `array`
@@ -260,7 +260,7 @@ Whether this field is considered advanced.
 
 === `mapping`
 
-A xref:guides:bloblang/about.adoc[Bloblang] mapping that translates the fields of the template into a valid Benthos configuration for the target component type.
+A xref:guides:bloblang/about.adoc[Bloblang] mapping that translates the fields of the template into a valid Redpanda Connect configuration for the target component type.
 
 
 *Type*: `string`

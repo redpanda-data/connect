@@ -219,7 +219,7 @@ It's possible to enable AWS connectivity with this output using the `+"`aws`"+` 
 				Advanced().
 				Default(""),
 			service.NewBoolField(esoFieldSniff).
-				Description("Prompts Benthos to sniff for brokers to connect to when establishing a connection.").
+				Description("Prompts Redpanda Connect to sniff for brokers to connect to when establishing a connection.").
 				Advanced().
 				Default(true),
 			service.NewBoolField(esoFieldHealthcheck).

@@ -8,7 +8,7 @@ description: |
 
   Each tweet received is emitted as a JSON object message, with a field `id` and `text` by default. Extra fields https://developer.twitter.com/en/docs/twitter-api/fields[can be obtained from the search API^] when listed with the `tweet_fields` field.
 
-  In order to paginate requests that are made the ID of the latest received tweet is stored in a xref:components:caches/about.adoc[cache resource], which is then used by subsequent requests to ensure only tweets after it are consumed. It is recommended that the cache you use is persistent so that Benthos can resume searches at the correct place on a restart.
+  In order to paginate requests that are made the ID of the latest received tweet is stored in a xref:components:caches/about.adoc[cache resource], which is then used by subsequent requests to ensure only tweets after it are consumed. It is recommended that the cache you use is persistent so that Redpanda Connect can resume searches at the correct place on a restart.
 
   Authentication is done using OAuth 2.0 credentials which can be generated within the https://developer.twitter.com[Twitter developer portal^].
 

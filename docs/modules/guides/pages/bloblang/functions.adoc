@@ -112,7 +112,7 @@ root.things = counter(set: if this.id == null { null })
 
 === `deleted`
 
-A function that returns a result indicating that the mapping target should be deleted. Deleting, also known as dropping, messages will result in them being acknowledged as successfully processed to inputs in a Benthos pipeline. For more information about error handling patterns read xref:configuration:error_handling.adoc[].
+A function that returns a result indicating that the mapping target should be deleted. Deleting, also known as dropping, messages will result in them being acknowledged as successfully processed to inputs in a Redpanda Connect pipeline. For more information about error handling patterns read xref:configuration:error_handling.adoc[].
 
 ==== Examples
 
@@ -619,7 +619,6 @@ root.received_at = timestamp_unix_nano()
 === `fake`
 
 [NOTE]
-
 ====
 This function is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
 ====

@@ -20,7 +20,7 @@ func authDescription() string {
 
 == Authentication
 
-There are several components within Benthos which uses NATS services. You will find that each of these components
+There are several components within Redpanda Connect which uses NATS services. You will find that each of these components
 support optional advanced authentication parameters for https://docs.nats.io/nats-server/configuration/securing_nats/auth_intro/nkey_auth[NKeys^]
 and https://docs.nats.io/using-nats/developer/connecting/creds[User Credentials^].
 

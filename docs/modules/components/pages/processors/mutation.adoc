@@ -27,7 +27,7 @@ mutation: "" # No default (required)
 
 Bloblang is a powerful language that enables a wide range of mapping, transformation and filtering tasks. For more information, see xref:guides:bloblang/about.adoc[].
 
-If your mapping is large and you'd prefer for it to live in a separate file then you can execute a mapping directly from a file with the expression `from "<path>"`, where the path must be absolute, or relative from the location that Benthos is executed from.
+If your mapping is large and you'd prefer for it to live in a separate file then you can execute a mapping directly from a file with the expression `from "<path>"`, where the path must be absolute, or relative from the location that Redpanda Connect is executed from.
 
 == Input document mutability
 
