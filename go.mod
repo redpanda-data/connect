@@ -89,7 +89,7 @@ require (
 	github.com/rabbitmq/amqp091-go v1.9.0
 	github.com/rcrowley/go-metrics v0.0.0-20201227073835-cf1acfcdf475
 	github.com/redis/go-redis/v9 v9.4.0
-	github.com/redpanda-data/benthos/v4 v4.28.1
+	github.com/redpanda-data/benthos/v4 v4.29.0
 	github.com/sijms/go-ora/v2 v2.8.19
 	github.com/smira/go-statsd v1.3.3
 	github.com/snowflakedb/gosnowflake v1.7.2

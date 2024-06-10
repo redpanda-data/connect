@@ -108,7 +108,8 @@ clean:
 	rm -rf $(DEST_DIR)/serverless
 	rm -rf $(PATHINSTDOCKER)
 
-docs: $(APPS) $(TOOLS) # TODO: Add docs generation back in
+docs: $(APPS) $(TOOLS)
+	@go run ./cmd/tools/docs_gen
 	@$(PATHINSTBIN)/redpanda-connect lint --deprecated "./config/examples/*.yaml" \
 		"$(WEBSITE_DIR)/**/*.md"
 	@$(PATHINSTBIN)/redpanda-connect template lint "./config/template_examples/*.yaml"
