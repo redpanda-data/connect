@@ -534,7 +534,6 @@ root.the_rest = this.value.slice(0, -4)
 === `slug`
 
 [CAUTION]
-
 ====
 This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
 ====
@@ -1153,6 +1152,31 @@ root.new_value = [10,this.value].min()
 # Out: {"new_value":10}
 ```
 
+=== `pow`
+
+Returns the number raised to the specified exponent.
+
+==== Parameters
+
+*`exponent`* &lt;float&gt; The exponent you want to raise to the power of.  
+
+==== Examples
+
+
+```coffeescript
+root.new_value = this.value * 10.pow(-2)
+
+# In:  {"value":2}
+# Out: {"new_value":0.02}
+```
+
+```coffeescript
+root.new_value = this.value.pow(-2)
+
+# In:  {"value":2}
+# Out: {"new_value":0.25}
+```
+
 === `round`
 
 Rounds numbers to the nearest integer, rounding half away from zero. If the resulting value fits within a 64-bit integer then that is returned, otherwise a new floating point number is returned.
@@ -1320,7 +1344,6 @@ root.delay_for_s = this.delay_for.parse_duration() / 1000000000
 === `parse_duration_iso8601`
 
 [CAUTION]
-
 ====
 This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
 ====
@@ -1359,7 +1382,6 @@ root.delay_for_s = this.delay_for.parse_duration_iso8601() / 1000000000
 === `ts_add_iso8601`
 
 [CAUTION]
-
 ====
 This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
 ====
@@ -1372,7 +1394,6 @@ Parse parameter string as ISO 8601 period and add it to value with high precisio
 === `ts_format`
 
 [CAUTION]
-
 ====
 This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
 ====
@@ -1425,7 +1446,6 @@ root.something_at = this.created_at.ts_format("2006-Jan-02 15:04:05.999999", "UT
 === `ts_parse`
 
 [CAUTION]
-
 ====
 This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
 ====
@@ -1450,7 +1470,6 @@ root.doc.timestamp = this.doc.timestamp.ts_parse("2006-Jan-02")
 === `ts_round`
 
 [CAUTION]
-
 ====
 This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
 ====
@@ -1478,7 +1497,6 @@ root.created_at_hour = this.created_at.ts_round("1h".parse_duration())
 === `ts_strftime`
 
 [CAUTION]
-
 ====
 This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
 ====
@@ -1525,7 +1543,6 @@ root.something_at = this.created_at.ts_strftime("%Y-%b-%d %H:%M:%S.%f", "UTC")
 === `ts_strptime`
 
 [CAUTION]
-
 ====
 This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
 ====
@@ -1559,7 +1576,6 @@ root.doc.timestamp = this.doc.timestamp.ts_strptime("%Y-%b-%d %H:%M:%S.%f")
 === `ts_sub`
 
 [CAUTION]
-
 ====
 This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
 ====
@@ -1587,7 +1603,6 @@ root.between = this.started_at.ts_sub("2020-08-14T05:54:23Z").abs()
 === `ts_sub_iso8601`
 
 [CAUTION]
-
 ====
 This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
 ====
@@ -1600,7 +1615,6 @@ Parse parameter string as ISO 8601 period and subtract it from value with high p
 === `ts_tz`
 
 [CAUTION]
-
 ====
 This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
 ====
@@ -1626,7 +1640,6 @@ root.created_at_utc = this.created_at.ts_tz("UTC")
 === `ts_unix`
 
 [CAUTION]
-
 ====
 This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
 ====
@@ -1645,7 +1658,6 @@ root.created_at_unix = this.created_at.ts_unix()
 === `ts_unix_micro`
 
 [CAUTION]
-
 ====
 This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
 ====
@@ -1664,7 +1676,6 @@ root.created_at_unix = this.created_at.ts_unix_micro()
 === `ts_unix_milli`
 
 [CAUTION]
-
 ====
 This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
 ====
@@ -1683,7 +1694,6 @@ root.created_at_unix = this.created_at.ts_unix_milli()
 === `ts_unix_nano`
 
 [CAUTION]
-
 ====
 This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
 ====
@@ -2016,7 +2026,6 @@ root.has_bar = this.thing.contains(20)
 === `diff`
 
 [CAUTION]
-
 ====
 This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
 ====
@@ -2108,7 +2117,6 @@ root.new_dict = this.dict.filter(item -> item.value.contains("foo"))
 === `find`
 
 [CAUTION]
-
 ====
 This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
 ====
@@ -2138,7 +2146,6 @@ root.index = this.things.find(this.goal)
 === `find_all`
 
 [CAUTION]
-
 ====
 This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
 ====
@@ -2168,7 +2175,6 @@ root.indexes = this.things.find_all(this.goal)
 === `find_all_by`
 
 [CAUTION]
-
 ====
 This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
 ====
@@ -2191,7 +2197,6 @@ root.index = this.find_all_by(v -> v != "bar")
 === `find_by`
 
 [CAUTION]
-
 ====
 This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
 ====
@@ -2365,7 +2370,6 @@ root.text_objects = this.json_path("$.body[?(@.type=='text')]")
 === `json_schema`
 
 [CAUTION]
-
 ====
 This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
 ====
@@ -2529,7 +2533,6 @@ root = this.foo.merge(this.bar)
 === `patch`
 
 [CAUTION]
-
 ====
 This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
 ====
@@ -2728,7 +2731,6 @@ root.foo = this.foo.zip(this.bar, this.baz)
 === `bloblang`
 
 [CAUTION]
-
 ====
 This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
 ====
@@ -2754,7 +2756,6 @@ root.body = this.body.bloblang(this.mapping)
 === `format_json`
 
 [CAUTION]
-
 ====
 This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
 ====
@@ -3044,8 +3045,8 @@ Attempts to parse a URL from a string value, returning a structured result that 
 ```coffeescript
 root.foo_url = this.foo_url.parse_url()
 
-# In:  {"foo_url":"https://www.docs.redpanda.com/redpanda-connect/guides/bloblang/about/"}
-# Out: {"foo_url":{"fragment":"","host":"www.docs.redpanda.com","opaque":"","path":"/redpanda-connect/guides/bloblang/about/","raw_fragment":"","raw_path":"","raw_query":"","scheme":"https"}}
+# In:  {"foo_url":"https://docs.redpanda.com/redpanda-connect/guides/bloblang/about/"}
+# Out: {"foo_url":{"fragment":"","host":"docs.redpanda.com","opaque":"","path":"/redpanda-connect/guides/bloblang/about/","raw_fragment":"","raw_path":"","raw_query":"","scheme":"https"}}
 ```
 
 ```coffeescript
@@ -3199,11 +3200,11 @@ root.result = this.compressed.decode("base64").decompress("lz4").string()
 
 === `decrypt_aes`
 
-Decrypts an encrypted string or byte array target according to a chosen AES encryption method and returns the result as a byte array. The algorithms require a key and an initialization vector / nonce. Available schemes are: `ctr`, `ofb`, `cbc`.
+Decrypts an encrypted string or byte array target according to a chosen AES encryption method and returns the result as a byte array. The algorithms require a key and an initialization vector / nonce. Available schemes are: `ctr`, `gcm`, `ofb`, `cbc`.
 
 ==== Parameters
 
-*`scheme`* &lt;string&gt; The scheme to use for decryption, one of `ctr`, `ofb`, `cbc`.  
+*`scheme`* &lt;string&gt; The scheme to use for decryption, one of `ctr`, `gcm`, `ofb`, `cbc`.  
 *`key`* &lt;string&gt; A key to decrypt with.  
 *`iv`* &lt;string&gt; An initialization vector / nonce.  
 
@@ -3246,11 +3247,11 @@ root.encoded = content().encode("ascii85")
 
 === `encrypt_aes`
 
-Encrypts a string or byte array target according to a chosen AES encryption method and returns a string result. The algorithms require a key and an initialization vector / nonce. Available schemes are: `ctr`, `ofb`, `cbc`.
+Encrypts a string or byte array target according to a chosen AES encryption method and returns a string result. The algorithms require a key and an initialization vector / nonce. Available schemes are: `ctr`, `gcm`, `ofb`, `cbc`.
 
 ==== Parameters
 
-*`scheme`* &lt;string&gt; The scheme to use for encryption, one of `ctr`, `ofb`, `cbc`.  
+*`scheme`* &lt;string&gt; The scheme to use for encryption, one of `ctr`, `gcm`, `ofb`, `cbc`.  
 *`key`* &lt;string&gt; A key to encrypt with.  
 *`iv`* &lt;string&gt; An initialization vector / nonce.  
 
