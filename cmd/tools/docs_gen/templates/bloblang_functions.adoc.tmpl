@@ -3,7 +3,7 @@
 ==== Parameters
 
 {{range $i, $param := .Definitions -}}
-*`{{$param.Name}}`* &lt;{{if $param.IsOptional}}(optional) {{end}}{{$param.ValueType}}{{if $param.DefaultMarshalled}}, default `{{$param.DefaultMarshalled}}`{{end}}&gt; {{$param.Description}}  
+- *`{{$param.Name}}`* &lt;{{if $param.IsOptional}}(optional) {{end}}{{$param.ValueType}}{{if $param.DefaultMarshalled}}, default `{{$param.DefaultMarshalled}}`{{end}}&gt; {{$param.Description}}  
 {{end -}}
 {{end -}}
 {{end -}}
@@ -54,7 +54,7 @@ Introduced in version {{.Version}}.
 {{end -}}
 
 = Bloblang Functions
-:description: A list of Bloblang functions
+:description: A list of Bloblang functions.
 
 
 ////
@@ -63,6 +63,7 @@ Introduced in version {{.Version}}.
      To make changes please edit the contents of:
      https://github.com/redpanda-data/benthos/tree/main/internal/bloblang/query/functions.go
      https://github.com/redpanda-data/benthos/tree/main/internal/docs/bloblang.go
+     https://github.com/redpanda-data/benthos/tree/main/cmd/tools/docs_gen/templates/bloblang_functions.adoc.tmpl
 ////
 
 
