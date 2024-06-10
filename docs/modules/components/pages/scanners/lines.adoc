@@ -21,6 +21,7 @@ Split an input stream into a message per line of data.
 lines:
   custom_delimiter: "" # No default (optional)
   max_buffer_size: 65536
+  omit_empty: false
 ```
 
 == Fields
@@ -41,5 +42,14 @@ Set the maximum buffer size for storing line data, this limits the maximum size 
 *Type*: `int`
 
 *Default*: `65536`
+
+=== `omit_empty`
+
+Omit empty lines.
+
+
+*Type*: `bool`
+
+*Default*: `false`
 
 
