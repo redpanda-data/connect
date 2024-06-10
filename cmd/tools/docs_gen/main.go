@@ -161,7 +161,7 @@ func doBloblangFunctions(dir string) {
 	}
 
 	var buf bytes.Buffer
-	if err := template.Must(template.New("functions").Parse(templateBloblFunctionsRaw)).Execute(&buf, ctx); err != nil {
+	if err := templateBloblFunctions.Execute(&buf, ctx); err != nil {
 		panic(fmt.Sprintf("Failed to generate docs for bloblang functions: %v", err))
 	}
 
@@ -256,7 +256,7 @@ func doBloblangMethods(dir string) {
 	}
 
 	var buf bytes.Buffer
-	err := template.Must(template.New("methods").Parse(templateBloblMethodsRaw)).Execute(&buf, ctx)
+	err := templateBloblMethods.Execute(&buf, ctx)
 	if err != nil {
 		panic(fmt.Sprintf("Failed to generate docs for bloblang methods: %v", err))
 	}
