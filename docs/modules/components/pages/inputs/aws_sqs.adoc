@@ -64,7 +64,7 @@ input:
 
 == Credentials
 
-By default Benthos will use a shared credentials file when connecting to AWS
+By default Redpanda Connect will use a shared credentials file when connecting to AWS
 services. It's also possible to set them explicitly at the component level,
 allowing you to transfer data across accounts. You can find out more in
 xref:guides:cloud/aws.adoc[].
@@ -73,12 +73,10 @@ xref:guides:cloud/aws.adoc[].
 
 This input adds the following metadata fields to each message:
 
-```text
 - sqs_message_id
 - sqs_receipt_handle
 - sqs_approximate_receive_count
 - All message attributes
-```
 
 You can access these metadata fields using
 xref:configuration:interpolation.adoc#bloblang-queries[function interpolation].

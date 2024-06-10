@@ -13,7 +13,7 @@ Consumes messages from a ZeroMQ socket.
 
 [tabs]
 =====
-.common::
+Common::
 +
 --
 [,yml]
@@ -29,7 +29,7 @@ input:
 ----
 
 --
-.advanced::
+Advanced::
 +
 --
 [,yml]

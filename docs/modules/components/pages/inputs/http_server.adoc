@@ -92,7 +92,7 @@ The following fields specify endpoints that are registered for sending messages,
 
 This endpoint expects POST requests where the entire request body is consumed as a single message.
 
-If the request contains a multipart `content-type` header as per https://www.w3.org/Protocols/rfc1341/7_2_Multipart.html[rfc1341^] then the multiple parts are consumed as a batch of messages, where each body part is a message of the batch.
+If the request contains a multipart `content-type` header as per https://www.w3.org/Protocols/rfc1341/7_2_Multipart.html[RFC1341^] then the multiple parts are consumed as a batch of messages, where each body part is a message of the batch.
 
 === `ws_path` (defaults to `/post/ws`)
 
@@ -102,7 +102,7 @@ Creates a websocket connection, where payloads received on the socket are passed
 [CAUTION]
 .Endpoint caveats
 ====
-Components within a Benthos config will register their respective endpoints in a non-deterministic order. This means that establishing precedence of endpoints that are registered via multiple `http_server` inputs or outputs (either within brokers or from cohabiting streams) is not possible in a predictable way.
+Components within a Redpanda Connect config will register their respective endpoints in a non-deterministic order. This means that establishing precedence of endpoints that are registered via multiple `http_server` inputs or outputs (either within brokers or from cohabiting streams) is not possible in a predictable way.
 
 This ambiguity makes it difficult to ensure that paths which are both a subset of a path registered by a separate component, and end in a slash (`/`) and will therefore match against all extensions of that path, do not prevent the more specific path from matching against requests.
 

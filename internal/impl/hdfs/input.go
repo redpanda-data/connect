@@ -25,10 +25,8 @@ func inputSpec() *service.ConfigSpec {
 
 This input adds the following metadata fields to each message:
 
-`+"```text"+`
 - hdfs_name
 - hdfs_path
-`+"```"+`
 
 You can access these metadata fields using
 xref:configuration:interpolation.adoc#bloblang-queries[function interpolation].`).

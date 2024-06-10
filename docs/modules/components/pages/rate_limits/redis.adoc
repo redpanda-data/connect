@@ -14,7 +14,7 @@
 component_type_dropdown::[]
 
 
-A rate limit implementation using Redis. It works by using a simple token bucket algorithm to limit the number of requests to a given count within a given time period. The rate limit is shared across all instances of Benthos that use the same Redis instance, which must all have a consistent count and interval.
+A rate limit implementation using Redis. It works by using a simple token bucket algorithm to limit the number of requests to a given count within a given time period. The rate limit is shared across all instances of Redpanda Connect that use the same Redis instance, which must all have a consistent count and interval.
 
 Introduced in version 4.12.0.
 
@@ -263,8 +263,7 @@ The path of a certificate key to use.
 A plain text password for when the private key is password encrypted in PKCS#1 or PKCS#8 format. The obsolete `pbeWithMD5AndDES-CBC` algorithm is not supported for the PKCS#8 format.
 
 Because the obsolete pbeWithMD5AndDES-CBC algorithm does not authenticate the ciphertext, it is vulnerable to padding oracle attacks that can let an attacker recover the plaintext.
-
-[WARNING]
+[CAUTION]
 ====
 This field contains sensitive information that usually shouldn't be added to a config directly, read our xref:configuration:secrets.adoc[secrets page for more info].
 ====

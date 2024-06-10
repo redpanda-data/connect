@@ -88,11 +88,12 @@ output:
 
 == Credentials
 
-By default Benthos will use a shared credentials file when connecting to GCP services. You can find out more in xref:guides:cloud/gcp.adoc[].
+By default Redpanda Connect will use a shared credentials file when connecting to GCP services. You can find out more in xref:guides:cloud/gcp.adoc[].
 
 == Format
 
 This output currently supports only CSV and NEWLINE_DELIMITED_JSON formats. Learn more about how to use GCP BigQuery with them here:
+
 - https://cloud.google.com/bigquery/docs/loading-data-cloud-storage-json[`NEWLINE_DELIMITED_JSON`^]
 - https://cloud.google.com/bigquery/docs/loading-data-cloud-storage-csv[`CSV`^]
 
@@ -302,7 +303,7 @@ Options:
 
 === `csv.skip_leading_rows`
 
-The number of rows at the top of a CSV file that BigQuery will skip when reading data. The default value is 1 since Benthos will add the specified header in the first line of each batch sent to BigQuery.
+The number of rows at the top of a CSV file that BigQuery will skip when reading data. The default value is 1 since Redpanda Connect will add the specified header in the first line of each batch sent to BigQuery.
 
 
 *Type*: `int`

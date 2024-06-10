@@ -81,15 +81,15 @@ When monitoring and managing a production NATS system, it is often useful to
 know which connection a message was send/received from. This can be achieved by
 setting the connection name option when creating a NATS connection.
 
-Benthos will automatically set the connection name based off the label of the given
-NATS component, so that monitoring tools between NATS and benthos can stay in sync.
+Redpanda Connect will automatically set the connection name based off the label of the given
+NATS component, so that monitoring tools between NATS and Redpanda Connect can stay in sync.
 
 
 == Authentication
 
-There are several components within Benthos which uses NATS services. You will find that each of these components
+There are several components within Redpanda Connect which uses NATS services. You will find that each of these components
 support optional advanced authentication parameters for https://docs.nats.io/nats-server/configuration/securing_nats/auth_intro/nkey_auth[NKeys^]
-and https://docs.nats.io/developing-with-nats/security/creds[User Credentials^].
+and https://docs.nats.io/using-nats/developer/connecting/creds[User Credentials^].
 
 See an https://docs.nats.io/running-a-nats-service/nats_admin/security/jwt[in-depth tutorial^].
 
@@ -99,12 +99,12 @@ The NATS server can use these NKeys in several ways for authentication. The simp
 with a list of known public keys and for the clients to respond to the challenge by signing it with its private NKey
 configured in the `nkey_file` field.
 
-https://docs.nats.io/developing-with-nats/security/nkey[More details^].
+https://docs.nats.io/running-a-nats-service/configuration/securing_nats/auth_intro/nkey_auth[More details^].
 
 === User credentials
 
 NATS server supports decentralized authentication based on JSON Web Tokens (JWT). Clients need an https://docs.nats.io/nats-server/configuration/securing_nats/jwt#json-web-tokens[user JWT^]
-and a corresponding https://docs.nats.io/developing-with-nats/security/nkey[NKey secret^] when connecting to a server
+and a corresponding https://docs.nats.io/running-a-nats-service/configuration/securing_nats/auth_intro/nkey_auth[NKey secret^] when connecting to a server
 which is configured to use this authentication scheme.
 
 The `user_credentials_file` field should point to a file containing both the private key and the JWT and can be
@@ -113,7 +113,7 @@ generated with the https://docs.nats.io/nats-tools/nsc[nsc tool^].
 Alternatively, the `user_jwt` field can contain a plain text JWT and the `user_nkey_seed`can contain
 the plain text NKey Seed.
 
-https://docs.nats.io/developing-with-nats/security/creds[More details^].
+https://docs.nats.io/using-nats/developer/connecting/creds[More details^].
 
 == Fields
 
@@ -368,8 +368,7 @@ The path of a certificate key to use.
 A plain text password for when the private key is password encrypted in PKCS#1 or PKCS#8 format. The obsolete `pbeWithMD5AndDES-CBC` algorithm is not supported for the PKCS#8 format.
 
 Because the obsolete pbeWithMD5AndDES-CBC algorithm does not authenticate the ciphertext, it is vulnerable to padding oracle attacks that can let an attacker recover the plaintext.
-
-[WARNING]
+[CAUTION]
 ====
 This field contains sensitive information that usually shouldn't be added to a config directly, read our xref:configuration:secrets.adoc[secrets page for more info].
 ====

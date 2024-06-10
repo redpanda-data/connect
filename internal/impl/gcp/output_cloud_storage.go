@@ -90,7 +90,7 @@ Metadata fields on messages will be sent as headers, in order to mutate these va
 
 == Credentials
 
-By default Benthos will use a shared credentials file when connecting to GCP services. You can find out more in xref:guides:cloud/gcp.adoc[].
+By default Redpanda Connect will use a shared credentials file when connecting to GCP services. You can find out more in xref:guides:cloud/gcp.adoc[].
 
 == Batching
 

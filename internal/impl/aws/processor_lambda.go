@@ -25,7 +25,7 @@ In order to map or encode the payload to a specific request body, and map the re
 
 == Error handling
 
-When Benthos is unable to connect to the AWS endpoint or is otherwise unable to invoke the target lambda function it will retry the request according to the configured number of retries. Once these attempts have been exhausted the failed message will continue through the pipeline with it's contents unchanged, but flagged as having failed, allowing you to use xref:configuration:error_handling.adoc[standard processor error handling patterns].
+When Redpanda Connect is unable to connect to the AWS endpoint or is otherwise unable to invoke the target lambda function it will retry the request according to the configured number of retries. Once these attempts have been exhausted the failed message will continue through the pipeline with it's contents unchanged, but flagged as having failed, allowing you to use xref:configuration:error_handling.adoc[standard processor error handling patterns].
 
 However, if the invocation of the function is successful but the function itself throws an error, then the message will have it's contents updated with a JSON payload describing the reason for the failure, and a metadata field `+"`lambda_function_error`"+` will be added to the message allowing you to detect and handle function errors with a `+"xref:components:processors/branch.adoc[`branch`]"+`:
 
@@ -55,7 +55,7 @@ output:
 
 == Credentials
 
-By default Benthos will use a shared credentials file when connecting to AWS services. It's also possible to set them explicitly at the component level, allowing you to transfer data across accounts. You can find out more in xref:guides:cloud/aws.adoc[].`).
+By default Redpanda Connect will use a shared credentials file when connecting to AWS services. It's also possible to set them explicitly at the component level, allowing you to transfer data across accounts. You can find out more in xref:guides:cloud/aws.adoc[].`).
 		Categories("Integration").
 		Version("3.36.0").
 		Example(

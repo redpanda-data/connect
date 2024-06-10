@@ -68,6 +68,7 @@ input:
 ======
 
 Supports multiple authentication methods but only one of the following is required:
+
 - `storage_connection_string`
 - `storage_account` and `storage_access_key`
 - `storage_account` and `storage_sas_token`
@@ -84,13 +85,12 @@ When downloading large files it's often necessary to process it in streamed part
 
 == Stream new files
 
-By default this input will consume all files found within the target container and will then gracefully terminate. This is referred to as a "batch" mode of operation. However, it's possible to instead configure a container as https://learn.microsoft.com/en-gb/azure/event-grid/event-schema-blob-storage[an Event Grid source^] and then use this as a <<targetsinput, `targets_input`>>, in which case new files are consumed as they're uploaded and Benthos will continue listening for and downloading files as they arrive. This is referred to as a "streamed" mode of operation.
+By default this input will consume all files found within the target container and will then gracefully terminate. This is referred to as a "batch" mode of operation. However, it's possible to instead configure a container as https://learn.microsoft.com/en-gb/azure/event-grid/event-schema-blob-storage[an Event Grid source^] and then use this as a <<targetsinput, `targets_input`>>, in which case new files are consumed as they're uploaded and Redpanda Connect will continue listening for and downloading files as they arrive. This is referred to as a "streamed" mode of operation.
 
 == Metadata
 
 This input adds the following metadata fields to each message:
 
-```
 - blob_storage_key
 - blob_storage_container
 - blob_storage_last_modified
@@ -98,7 +98,6 @@ This input adds the following metadata fields to each message:
 - blob_storage_content_type
 - blob_storage_content_encoding
 - All user defined metadata
-```
 
 You can access these metadata fields using xref:configuration:interpolation.adoc#bloblang-queries[function interpolation].
 
@@ -178,7 +177,7 @@ Whether to delete downloaded objects from the blob once they are processed.
 
 === `targets_input`
 
-EXPERIMENTAL: An optional source of download targets, configured as a xref:components:inputs/about.adoc[regular Benthos input]. Each message yielded by this input should be a single structured object containing a field `name`, which represents the blob to be downloaded.
+EXPERIMENTAL: An optional source of download targets, configured as a xref:components:inputs/about.adoc[regular Redpanda Connect input]. Each message yielded by this input should be a single structured object containing a field `name`, which represents the blob to be downloaded.
 
 
 *Type*: `input`

@@ -122,27 +122,26 @@ func s3InputSpec() *service.ConfigSpec {
 		Description(`
 == Stream objects on upload with SQS
 
-A common pattern for consuming S3 objects is to emit upload notification events from the bucket either directly to an SQS queue, or to an SNS topic that is consumed by an SQS queue, and then have your consumer listen for events which prompt it to download the newly uploaded objects. More information about this pattern and how to set it up can be found at: https://docs.aws.amazon.com/AmazonS3/latest/dev/ways-to-add-notification-config-to-bucket.html.
+A common pattern for consuming S3 objects is to emit upload notification events from the bucket either directly to an SQS queue, or to an SNS topic that is consumed by an SQS queue, and then have your consumer listen for events which prompt it to download the newly uploaded objects. More information about this pattern and how to set it up can be found at in the https://docs.aws.amazon.com/AmazonS3/latest/dev/ways-to-add-notification-config-to-bucket.html[Amazon S3 docs].
 
-Benthos is able to follow this pattern when you configure an `+"`sqs.url`"+`, where it consumes events from SQS and only downloads object keys received within those events. In order for this to work Benthos needs to know where within the event the key and bucket names can be found, specified as xref:configuration:field_paths.adoc[dot paths] with the fields `+"`sqs.key_path` and `sqs.bucket_path`"+`. The default values for these fields should already be correct when following the guide above.
+Redpanda Connect is able to follow this pattern when you configure an `+"`sqs.url`"+`, where it consumes events from SQS and only downloads object keys received within those events. In order for this to work Redpanda Connect needs to know where within the event the key and bucket names can be found, specified as xref:configuration:field_paths.adoc[dot paths] with the fields `+"`sqs.key_path` and `sqs.bucket_path`"+`. The default values for these fields should already be correct when following the guide above.
 
 If your notification events are being routed to SQS via an SNS topic then the events will be enveloped by SNS, in which case you also need to specify the field `+"`sqs.envelope_path`"+`, which in the case of SNS to SQS will usually be `+"`Message`"+`.
 
-When using SQS please make sure you have sensible values for `+"`sqs.max_messages`"+` and also the visibility timeout of the queue itself. When Benthos consumes an S3 object the SQS message that triggered it is not deleted until the S3 object has been sent onwards. This ensures at-least-once crash resiliency, but also means that if the S3 object takes longer to process than the visibility timeout of your queue then the same objects might be processed multiple times.
+When using SQS please make sure you have sensible values for `+"`sqs.max_messages`"+` and also the visibility timeout of the queue itself. When Redpanda Connect consumes an S3 object the SQS message that triggered it is not deleted until the S3 object has been sent onwards. This ensures at-least-once crash resiliency, but also means that if the S3 object takes longer to process than the visibility timeout of your queue then the same objects might be processed multiple times.
 
 == Download large files
 
-When downloading large files it's often necessary to process it in streamed parts in order to avoid loading the entire file in memory at a given time. In order to do this a `+"<<codec, `codec`>>"+` can be specified that determines how to break the input into smaller individual messages.
+When downloading large files it's often necessary to process it in streamed parts in order to avoid loading the entire file in memory at a given time. In order to do this a `+"<<scanner, `scanner`>>"+` can be specified that determines how to break the input into smaller individual messages.
 
 == Credentials
 
-By default Benthos will use a shared credentials file when connecting to AWS services. It's also possible to set them explicitly at the component level, allowing you to transfer data across accounts. You can find out more  in xref:guides:cloud/aws.adoc[].
+By default Redpanda Connect will use a shared credentials file when connecting to AWS services. It's also possible to set them explicitly at the component level, allowing you to transfer data across accounts. You can find out more  in xref:guides:cloud/aws.adoc[].
 
 == Metadata
 
 This input adds the following metadata fields to each message:
 
-`+"```"+`
 - s3_key
 - s3_bucket
 - s3_last_modified_unix
@@ -151,7 +150,6 @@ This input adds the following metadata fields to each message:
 - s3_content_encoding
 - s3_version_id
 - All user defined metadata
-`+"```"+`
 
 You can access these metadata fields using xref:configuration:interpolation.adoc#bloblang-queries[function interpolation]. Note that user defined metadata is case insensitive within AWS, and it is likely that the keys will be received in a capitalized form, if you wish to make them consistent you can map all metadata keys to lower or uppercase using a Bloblang mapping such as `+"`meta = meta().map_each_key(key -> key.lowercase())`"+`.`).
 		Fields(

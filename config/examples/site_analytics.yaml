@@ -19,7 +19,7 @@ input:
 
 metrics:
   mapping: |
-    # Only emit our custom metric, and no internal Benthos metrics.
+    # Only emit our custom metric, and no internal Redpanda Connect metrics.
     root = if ![
       "site_visit",
     ].contains($path) { deleted() } else { $path }

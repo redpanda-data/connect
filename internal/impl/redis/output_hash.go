@@ -38,9 +38,9 @@ output:
       content: ${!json("document.text")}
 `+"```"+`
 
-If the field `+"`walk_metadata`"+` is set to `+"`true`"+` then Benthos will walk all metadata fields of messages and add them to the list of hash fields to set.
+If the field `+"`walk_metadata`"+` is set to `+"`true`"+` then Redpanda Connect will walk all metadata fields of messages and add them to the list of hash fields to set.
 
-If the field `+"`walk_json_object`"+` is set to `+"`true`"+` then Benthos will walk each message as a JSON object, extracting keys and the string representation of their value and adds them to the list of hash fields to set.
+If the field `+"`walk_json_object`"+` is set to `+"`true`"+` then Redpanda Connect will walk each message as a JSON object, extracting keys and the string representation of their value and adds them to the list of hash fields to set.
 
 The order of hash field extraction is as follows:
 

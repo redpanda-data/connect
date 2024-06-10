@@ -110,7 +110,7 @@ In order to map or encode the payload to a specific request body, and map the re
 
 == Response codes
 
-Benthos considers any response code between 200 and 299 inclusive to indicate a successful response, you can add more success status codes with the field `successful_on`.
+Redpanda Connect considers any response code between 200 and 299 inclusive to indicate a successful response, you can add more success status codes with the field `successful_on`.
 
 When a request returns a response code within the `backoff_on` field it will be retried after increasing intervals.
 
@@ -648,8 +648,7 @@ The path of a certificate key to use.
 A plain text password for when the private key is password encrypted in PKCS#1 or PKCS#8 format. The obsolete `pbeWithMD5AndDES-CBC` algorithm is not supported for the PKCS#8 format.
 
 Because the obsolete pbeWithMD5AndDES-CBC algorithm does not authenticate the ciphertext, it is vulnerable to padding oracle attacks that can let an attacker recover the plaintext.
-
-[WARNING]
+[CAUTION]
 ====
 This field contains sensitive information that usually shouldn't be added to a config directly, read our xref:configuration:secrets.adoc[secrets page for more info].
 ====
