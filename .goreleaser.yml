@@ -28,20 +28,20 @@ builds:
       -X main.Version={{.Version}}
       -X main.DateBuilt={{.Date}}
       -X main.BinaryName=redpanda-connect
-  # - id: connect-lambda
-  #   main: cmd/serverless/connect-lambda/main.go
-  #   binary: redpanda-connect-lambda
-  #   env:
-  #     - CGO_ENABLED=0
-  #   goos: [ linux ]
-  #   goarch: [ amd64 ]
-  # - id: connect-lambda-al2
-  #   main: cmd/serverless/connect-lambda/main.go
-  #   binary: bootstrap
-  #   env:
-  #     - CGO_ENABLED=0
-  #   goos: [ linux ]
-  #   goarch: [ amd64, arm64 ]
+  - id: connect-lambda
+    main: cmd/serverless/connect-lambda/main.go
+    binary: redpanda-connect-lambda
+    env:
+      - CGO_ENABLED=0
+    goos: [ linux ]
+    goarch: [ amd64 ]
+  - id: connect-lambda-al2
+    main: cmd/serverless/connect-lambda/main.go
+    binary: bootstrap
+    env:
+      - CGO_ENABLED=0
+    goos: [ linux ]
+    goarch: [ amd64, arm64 ]
 archives:
   - id: connect
     builds: [ connect ]
@@ -50,14 +50,14 @@ archives:
       - README.md
       - CHANGELOG.md
       - licenses
-  # - id: connect-lambda
-  #   builds: [ connect-lambda ]
-  #   format: zip
-  #   name_template: "{{ .Binary }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
-  # - id: connect-lambda-al2
-  #   builds: [ connect-lambda-al2 ]
-  #   format: zip
-  #   name_template: "connect-lambda-al2_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+  - id: connect-lambda
+    builds: [ connect-lambda ]
+    format: zip
+    name_template: "{{ .Binary }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+  - id: connect-lambda-al2
+    builds: [ connect-lambda-al2 ]
+    format: zip
+    name_template: "connect-lambda-al2_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
 dist: target/dist
 release:
   github:
