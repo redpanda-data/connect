@@ -23,6 +23,8 @@ cloud.google.com/go/datacatalog v1.19.3 h1:A0vKYCQdxQuV4Pi0LL9p39Vwvg4jH5yYveMv5
 cloud.google.com/go/datacatalog v1.19.3/go.mod h1:ra8V3UAsciBpJKQ+z9Whkxzxv7jmQg1hfODr3N3YPJ4=
 cloud.google.com/go/datastore v1.0.0/go.mod h1:LXYbyblFSglQ5pkeyhO+Qmw7ukd3C+pD7TKLgZqpHYE=
 cloud.google.com/go/datastore v1.1.0/go.mod h1:umbIZjpQpHh4hmRpGhH4tLFup+FVzqBi1b3c64qFpCk=
+cloud.google.com/go/errorreporting v0.3.0 h1:kj1XEWMu8P0qlLhm3FwcaFsUvXChV/OraZwA70trRR0=
+cloud.google.com/go/errorreporting v0.3.0/go.mod h1:xsP2yaAp+OAW4OIm60An2bbLpqIhKXdWR/tawvl7QzU=
 cloud.google.com/go/iam v1.1.6 h1:bEa06k05IO4f4uJonbB5iAgKTPpABy1ayxaIZV/GHVc=
 cloud.google.com/go/iam v1.1.6/go.mod h1:O0zxdPeGBoFdWW3HWmBxJsk0pfvNM/p/qa82rWOGTwI=
 cloud.google.com/go/kms v1.15.5 h1:pj1sRfut2eRbD9pFRjNnPNg/CzJPuQAzUujMIM1vVeM=

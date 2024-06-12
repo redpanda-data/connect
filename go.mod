@@ -4,6 +4,7 @@ replace github.com/99designs/keyring => github.com/Jeffail/keyring v1.2.3
 
 require (
 	cloud.google.com/go/bigquery v1.59.0
+	cloud.google.com/go/errorreporting v0.3.0
 	cloud.google.com/go/pubsub v1.36.1
 	cloud.google.com/go/storage v1.37.0
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.9.2
