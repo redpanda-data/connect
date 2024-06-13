@@ -894,6 +894,26 @@ root.new_value = this.value.ceil()
 # Out: {"new_value":-5}
 ```
 
+=== `cos`
+
+Calculates the cosine of a given angle specified in radians.
+
+==== Examples
+
+
+```coffeescript
+root.new_value = (this.value * (pi() / 180)).cos()
+
+# In:  {"value":45}
+# Out: {"new_value":0.7071067811865476}
+
+# In:  {"value":0}
+# Out: {"new_value":1}
+
+# In:  {"value":180}
+# Out: {"new_value":-1}
+```
+
 === `float32`
 
 
@@ -1192,6 +1212,46 @@ root.new_value = this.value.round()
 
 # In:  {"value":5.9}
 # Out: {"new_value":6}
+```
+
+=== `sin`
+
+Calculates the sine of a given angle specified in radians.
+
+==== Examples
+
+
+```coffeescript
+root.new_value = (this.value * (pi() / 180)).sin()
+
+# In:  {"value":45}
+# Out: {"new_value":0.7071067811865475}
+
+# In:  {"value":0}
+# Out: {"new_value":0}
+
+# In:  {"value":90}
+# Out: {"new_value":1}
+```
+
+=== `tan`
+
+Calculates the tangent of a given angle specified in radians.
+
+==== Examples
+
+
+```coffeescript
+root.new_value = "%f".format((this.value * (pi() / 180)).tan())
+
+# In:  {"value":0}
+# Out: {"new_value":"0.000000"}
+
+# In:  {"value":45}
+# Out: {"new_value":"1.000000"}
+
+# In:  {"value":180}
+# Out: {"new_value":"-0.000000"}
 ```
 
 === `uint16`

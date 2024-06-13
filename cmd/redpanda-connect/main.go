@@ -5,6 +5,7 @@ import (
 	"log/slog"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
+
 	"github.com/redpanda-data/connect/v4/internal/impl/kafka/enterprise"
 
 	_ "github.com/redpanda-data/connect/v4/public/components/all"

@@ -16,10 +16,11 @@ import (
 	"time"
 
 	"github.com/ory/dockertest/v3"
-	_ "github.com/redpanda-data/benthos/v4/public/components/pure"
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	_ "github.com/redpanda-data/benthos/v4/public/components/pure"
 )
 
 func TestIntegrationSplunk(t *testing.T) {
