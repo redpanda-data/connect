@@ -118,6 +118,10 @@ func viewForDir(docsDir string) func(string, *service.ConfigView) {
 			panic(fmt.Sprintf("Failed to generate docs for '%v': %v", name, err))
 		}
 
+		if err := os.MkdirAll(docsDir, 0755); err != nil {
+			panic(fmt.Sprintf("Failed to create docs directory path '%v': %v", docsDir, err))
+		}
+
 		create(name, path.Join(docsDir, name+".adoc"), buf.Bytes())
 	}
 }
