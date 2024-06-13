@@ -3,15 +3,25 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
-## 4.29.1 - TBD
+## 4.30.0 - 2024-06-13
 
 ### Added
 
-- New experimental `splunk` input.
+- (Benthos) Field `omit_empty` added to the `lines` scanner. (@mihaitodor)
+- (Benthos) New scheme `gcm` added to the `encrypt_aes` and `decrypy_aes` Bloblang methods. (@abergmeier)
+- (Benthos) New Bloblang method `pow`. (@mfamador)
+- (Benthos) New `sin`, `cos`, `tan` and `pi` bloblang methods. (@mfamador)
+- (Benthos) Field `proxy_url` added to the `websocket` input and output. (@mihaitodor)
+- New experimental `splunk` input. (@mihaitodor)
+
+### Fixed
+
+- The `sql_insert` and `sql_raw` components no longer fail when inserting large binary blobs into Oracle `BLOB` columns. (@mihaitodor)
+- (Benthos) The `websocket` input and output now obey the `HTTP_PROXY`, `HTTPS_PROXY` and `NO_PROXY` environment variables. (@mihaitodor)
 
 ### Changed
 
-- The `splunk_hec` output is now implemented as a native Go component.
+- The `splunk_hec` output is now implemented as a native Go component. (@mihaitodor)
 
 ## 4.29.0 - 2024-06-04
 
