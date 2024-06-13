@@ -3,6 +3,16 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+## 4.29.1 - TBD
+
+### Added
+
+- New experimental `splunk` input.
+
+### Changed
+
+- The `splunk_hec` output is now implemented as a native Go component.
+
 ## 4.29.0 - 2024-06-04
 
 ### Added
