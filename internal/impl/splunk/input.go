@@ -35,8 +35,8 @@ const (
 
 func inputSpec() *service.ConfigSpec {
 	return service.NewConfigSpec().
-		// Stable().
-		Version("4.29.1").
+		Beta().
+		Version("4.30.0").
 		Categories("Services").
 		Summary(`Consumes messages from Splunk.`).
 		Fields(

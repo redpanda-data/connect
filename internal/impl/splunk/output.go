@@ -31,6 +31,12 @@ const (
 	soFieldEventIndex      = "event_index"
 	soFieldSkipCertVerify  = "skip_cert_verify"
 	soFieldBatching        = "batching"
+
+	// Deprecated fields
+	soFieldBatchCount    = "batching_count"
+	soFieldBatchPeriod   = "batching_period"
+	soFieldBatchByteSize = "batching_byte_size"
+	soFieldRateLimit     = "rate_limit"
 )
 
 //------------------------------------------------------------------------------
@@ -38,7 +44,7 @@ const (
 func outputSpec() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Beta().
-		Version("4.29.1").
+		Version("4.30.0").
 		Categories("Services").
 		Summary(`Publishes messages to a Splunk HTTP Endpoint Collector (HEC).`).
 		Description(service.OutputPerformanceDocs(true, true)).
@@ -53,6 +59,20 @@ func outputSpec() *service.ConfigSpec {
 			service.NewBoolField(soFieldSkipCertVerify).Description("Whether to skip server side certificate verification.").Advanced().Default(false),
 			service.NewOutputMaxInFlightField(),
 			service.NewBatchPolicyField(soFieldBatching),
+
+			// Old deprecated fields
+			service.NewIntField(soFieldBatchCount).
+				Optional().
+				Deprecated(),
+			service.NewStringField(soFieldBatchPeriod).
+				Optional().
+				Deprecated(),
+			service.NewIntField(soFieldBatchByteSize).
+				Optional().
+				Deprecated(),
+			service.NewStringField(soFieldRateLimit).
+				Optional().
+				Deprecated(),
 		)
 }
 
@@ -65,6 +85,18 @@ func init() {
 			if batchPolicy, err = conf.FieldBatchPolicy(soFieldBatching); err != nil {
 				return
 			}
+
+			// Check for presence of deprecated fields
+			if conf.Contains(soFieldBatchCount) {
+				batchPolicy.Count, _ = conf.FieldInt(soFieldBatchCount)
+			}
+			if conf.Contains(soFieldBatchPeriod) {
+				batchPolicy.Period, _ = conf.FieldString(soFieldBatchPeriod)
+			}
+			if conf.Contains(soFieldBatchByteSize) {
+				batchPolicy.ByteSize, _ = conf.FieldInt(soFieldBatchByteSize)
+			}
+
 			out, err = outputFromParsed(conf, mgr.Logger())
 			return
 		})
