@@ -109,7 +109,7 @@ clean:
 	rm -rf $(PATHINSTDOCKER)
 
 docs: $(APPS) $(TOOLS)
-	@go run ./cmd/tools/docs_gen
+	@go run -tags "$(TAGS)" ./cmd/tools/docs_gen
 	@$(PATHINSTBIN)/redpanda-connect lint --deprecated "./config/examples/*.yaml" \
 		"$(WEBSITE_DIR)/**/*.md"
 	@$(PATHINSTBIN)/redpanda-connect template lint "./config/template_examples/*.yaml"

@@ -25,11 +25,14 @@ jobs:
         go-version: 1.22.x
         check-latest: true
 
+    - name: Install dependencies for x_benthos_extra
+      run: sudo apt install -y --no-install-recommends libzmq3-dev
+
     - name: Deps
       run: make deps && git diff-index --quiet HEAD || { >&2 echo "Stale go.{mod,sum} detected. This can be fixed with 'make deps'."; exit 1; }
 
     - name: Docs
-      run: make docs && test -z "$(git ls-files --others --modified --exclude-standard)" || { >&2 echo "Stale docs detected. This can be fixed with 'make docs'."; exit 1; }
+      run: CGO_ENABLED=1 make docs TAGS=x_benthos_extra && test -z "$(git ls-files --others --modified --exclude-standard)" || { >&2 echo "Stale docs detected. This can be fixed with 'make docs'."; exit 1; }
 
     - name: Test
       run: make test
