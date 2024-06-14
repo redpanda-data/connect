@@ -40,6 +40,7 @@ func ockamKafkaOutputConfig() *service.ConfigSpec {
 			Example([]string{"localhost:9092"}).
 			Example([]string{"foo:9092", "bar:9092"}).
 			Example([]string{"foo:9092,bar:9092"})).
+		Field(service.NewBoolField("disable_content_encryption").Default(false).Optional()).
 		Field(service.NewStringField("ockam_enrollment_ticket").Optional()).
 		Field(service.NewStringField("ockam_identity_name").Optional()).
 		Field(service.NewStringField("ockam_allow_consumer").Default("self").Optional()).
@@ -118,7 +119,13 @@ func newOckamKafkaOutput(conf *service.ParsedConfig, log *service.Logger) (*ocka
 		return nil, err
 	}
 
-	err = n.createKafkaInlet("redpanda-connect-kafka-inlet", kafkaInletAddress, routeToKafkaOutlet, true, routeToConsumer, allowOutlet, "", allowConsumer)
+	var disableContentEncryption bool
+	disableContentEncryption, err = conf.FieldBool("disable_content_encryption")
+	if err != nil {
+		return nil, err
+	}
+
+	err = n.createKafkaInlet("redpanda-connect-kafka-inlet", kafkaInletAddress, routeToKafkaOutlet, true, routeToConsumer, allowOutlet, "", allowConsumer, disableContentEncryption)
 	if err != nil {
 		return nil, err
 	}
