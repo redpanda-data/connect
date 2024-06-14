@@ -63,7 +63,7 @@ func (n *node) delete() error {
 }
 
 // TODO: improve this function's interface
-func (n *node) createKafkaInlet(name string, from string, to string, avoidPublishing bool, routeToConsumer string, allowOutlet string, allowProducer string, allowConsumer string) error {
+func (n *node) createKafkaInlet(name string, from string, to string, avoidPublishing bool, routeToConsumer string, allowOutlet string, allowProducer string, allowConsumer string, disableContentEncryption bool) error {
 	args := []string{"kafka-inlet", "create", "--addr", name, "--at", n.name, "--from", from, "--to", to}
 	if routeToConsumer != "" {
 		args = append(args, "--consumer", routeToConsumer)
@@ -71,6 +71,10 @@ func (n *node) createKafkaInlet(name string, from string, to string, avoidPublis
 
 	if avoidPublishing {
 		args = append(args, "--avoid-publishing")
+	}
+
+	if disableContentEncryption {
+		args = append(args, "--disable-content-encryption")
 	}
 
 	args = appendAllowArgs(args, "--allow", allowOutlet, n.identifier)
